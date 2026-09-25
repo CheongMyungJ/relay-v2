@@ -1,0 +1,51 @@
+# <RELAY_HOME>/pipelines/bugfix.yaml (앱 기본 제공)
+schema_version: 1
+id: bugfix
+version: 1
+title: 버그 수정
+applies_to: { type: bugfix }
+nodes:
+  - id: intake
+    skill: work-start
+    description: 의도를 정돈해 intent 초안 작성
+  - id: g-intent
+    gate: human
+    description: 의도 승인 (항상 수동)
+    on_pass: [intent.approve]
+  - id: evidence
+    skill: evidence
+    description: 재현하고 재현 테스트를 고정
+    when: "intent.size != 'S'"
+    requires: [intent]
+    approval: auto_if_checks
+    auto_checks: ["repro:fails", "tree:clean"]    # 재현 테스트가 없으면(repro.kind != test) repro:fails가 성립하지 않아 수동 승인
+  - id: rca
+    skill: root-cause
+    description: 증거로 원인을 확정
+    when: "intent.size != 'S'"
+    requires: [intent, evidence/evidence.md]
+    approval: manual                              # 이 승인 화면에서 고정된 재현 테스트도 함께 검토
+  - id: fix
+    skill: fix
+    description: 원인을 수정하고 커밋
+    requires: [intent, "rca/rca.md?", "evidence/evidence.md?"]
+    approval: auto_if_checks
+    auto_checks: ["repro:passes", "repro:intact", "tests:unchanged", "cmd:test", "tree:clean", "diff:within_limit"]
+  - id: g-tests
+    gate: check
+    description: 전체 테스트 (결정론적 판정)
+    run: ["cmd:test", "repro:passes", "repro:intact"]
+    on_fail: fix
+  - id: verify
+    skill: final-verify
+    description: 완료조건별 최종 검증
+    requires: [intent, "evidence/evidence.md?", "rca/rca.md?"]
+    approval: manual
+  - id: g-done
+    gate: human
+    description: Work 완료 (항상 수동). delivery 수행
+    on_pass: [work.deliver, work.complete]
+transitions:
+  rca: [evidence]             # 증거 부족
+  fix: [rca, evidence]        # S로 시작했는데 원인이 불명확함 (유형/규모 오분류 탈출구)
+  verify: [fix, rca]

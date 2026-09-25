@@ -1,0 +1,1229 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://relay.local/schemas/event.v1.json",
+  "title": "Lifecycle event (v1)",
+  "description": "works/<work-id>/events.jsonl 한 줄. 파일에 추가(append + fsync)한 뒤 앱 내부 이벤트 버스로 발행한다. 구독자(알림, 통계, 향후 지식 추출)는 이 형식만 의존한다. 새 이벤트 추가는 호환(minor), 기존 payload 필드 삭제/의미 변경은 schema_version 증가.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "seq",
+    "ts",
+    "work_id",
+    "type",
+    "payload"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Work 안에서 단조 증가. 복구 시 중복 적용 방지"
+    },
+    "ts": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "work_id": {
+      "type": "string",
+      "pattern": "^w-[0-9]{8}-[0-9]{3}$"
+    },
+    "step_id": {
+      "type": "string",
+      "pattern": "^t-[0-9]{2,3}$"
+    },
+    "type": {
+      "enum": [
+        "work.created",
+        "work.setup_failed",
+        "work.paused",
+        "work.resumed",
+        "work.needs_attention",
+        "work.completed",
+        "work.abandoned",
+        "work.cleaned",
+        "task.started",
+        "task.resumed",
+        "task.awaiting_approval",
+        "task.handoff_invalid",
+        "task.approved",
+        "task.abandoned",
+        "task.interrupted",
+        "task.ended_no_handoff",
+        "task.rerouted",
+        "approval.evaluated",
+        "approval.countdown_started",
+        "approval.countdown_cancelled",
+        "gate.started",
+        "gate.passed",
+        "gate.failed",
+        "repro.locked",
+        "repro.lock_failed",
+        "repro.released",
+        "intent.approved",
+        "intent.revised",
+        "delivery.succeeded",
+        "delivery.failed",
+        "artifact.modified_after_approval"
+      ]
+    },
+    "payload": {
+      "type": "object"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "work.created"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/work_created"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "work.setup_failed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/work_setup_failed"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "work.paused"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/work_paused"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "work.resumed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/work_resumed"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "work.needs_attention"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/work_needs_attention"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "work.completed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/work_completed"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "work.abandoned"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/work_abandoned"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "work.cleaned"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/work_cleaned"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "task.started"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/task_started"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "task.resumed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/task_resumed"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "task.awaiting_approval"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/task_awaiting_approval"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "task.handoff_invalid"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/task_handoff_invalid"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "task.approved"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/task_approved"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "task.abandoned"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/task_abandoned"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "task.interrupted"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/task_interrupted"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "task.ended_no_handoff"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/task_ended_no_handoff"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "task.rerouted"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/task_rerouted"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "approval.evaluated"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/approval_evaluated"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "approval.countdown_started"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/approval_countdown_started"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "approval.countdown_cancelled"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/approval_countdown_cancelled"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "gate.started"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/gate_started"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "gate.passed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/gate_passed"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "gate.failed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/gate_failed"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "repro.locked"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/repro_locked"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "repro.lock_failed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/repro_lock_failed"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "repro.released"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/repro_released"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "intent.approved"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/intent_approved"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "intent.revised"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/intent_revised"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "delivery.succeeded"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/delivery_succeeded"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "delivery.failed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/delivery_failed"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "artifact.modified_after_approval"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/artifact_modified_after_approval"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "work_created": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "project_id",
+        "pipeline_id",
+        "pipeline_version",
+        "branch",
+        "base_commit"
+      ],
+      "properties": {
+        "project_id": {
+          "type": "string"
+        },
+        "pipeline_id": {
+          "type": "string"
+        },
+        "pipeline_version": {
+          "type": "integer"
+        },
+        "branch": {
+          "type": "string"
+        },
+        "base_commit": {
+          "type": "string"
+        }
+      }
+    },
+    "work_setup_failed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exit_code",
+        "log"
+      ],
+      "properties": {
+        "exit_code": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "log": {
+          "type": "string"
+        }
+      }
+    },
+    "work_paused": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cause"
+      ],
+      "properties": {
+        "cause": {
+          "enum": [
+            "user",
+            "session_limit"
+          ]
+        }
+      }
+    },
+    "work_resumed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {}
+    },
+    "work_needs_attention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reason",
+        "message"
+      ],
+      "properties": {
+        "reason": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "work_completed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "delivery_mode"
+      ],
+      "properties": {
+        "delivery_mode": {
+          "enum": [
+            "none",
+            "push",
+            "pr"
+          ]
+        }
+      }
+    },
+    "work_abandoned": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "at_node"
+      ],
+      "properties": {
+        "at_node": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "note": {
+          "type": "string"
+        }
+      }
+    },
+    "work_cleaned": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "worktree_removed",
+        "branch_deleted"
+      ],
+      "properties": {
+        "worktree_removed": {
+          "type": "boolean"
+        },
+        "branch_deleted": {
+          "type": "boolean"
+        },
+        "uncommitted_discarded": {
+          "type": "boolean"
+        }
+      }
+    },
+    "task_started": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "node_id",
+        "skill",
+        "reason",
+        "session_id",
+        "manifest"
+      ],
+      "properties": {
+        "node_id": {
+          "type": "string"
+        },
+        "skill": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "session_id": {
+          "type": "string"
+        },
+        "manifest": {
+          "type": "string",
+          "description": "context.manifest.json 경로"
+        },
+        "temporary": {
+          "type": "boolean"
+        }
+      }
+    },
+    "task_resumed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "session_id",
+        "cause"
+      ],
+      "properties": {
+        "session_id": {
+          "type": "string"
+        },
+        "cause": {
+          "enum": [
+            "app_restart",
+            "crash",
+            "handoff_missing",
+            "user"
+          ]
+        }
+      }
+    },
+    "task_awaiting_approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "handoff_sha256",
+        "valid"
+      ],
+      "properties": {
+        "handoff_sha256": {
+          "type": "string"
+        },
+        "valid": {
+          "type": "boolean"
+        },
+        "status": {
+          "enum": [
+            "awaiting_approval",
+            "blocked"
+          ]
+        }
+      }
+    },
+    "task_handoff_invalid": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "errors",
+        "feedback_sent",
+        "attempt"
+      ],
+      "properties": {
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "feedback_sent": {
+          "type": "boolean"
+        },
+        "attempt": {
+          "type": "integer"
+        }
+      }
+    },
+    "task_approved": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "by",
+        "next_node"
+      ],
+      "properties": {
+        "by": {
+          "enum": [
+            "human",
+            "auto"
+          ]
+        },
+        "next_node": {
+          "type": "string"
+        },
+        "forced_invalid": {
+          "type": "boolean"
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "task_abandoned": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cause"
+      ],
+      "properties": {
+        "cause": {
+          "enum": [
+            "user_reroute",
+            "work_abandoned",
+            "intent_revise",
+            "user_stop"
+          ]
+        }
+      }
+    },
+    "task_interrupted": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cause"
+      ],
+      "properties": {
+        "cause": {
+          "enum": [
+            "app_exit",
+            "app_crash",
+            "pty_exit"
+          ]
+        },
+        "exit_code": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      }
+    },
+    "task_ended_no_handoff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exit_code"
+      ],
+      "properties": {
+        "exit_code": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      }
+    },
+    "task_rerouted": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from_node",
+        "to_node",
+        "group",
+        "during_task"
+      ],
+      "properties": {
+        "from_node": {
+          "type": "string"
+        },
+        "to_node": {
+          "type": "string"
+        },
+        "group": {
+          "enum": [
+            "default",
+            "transition",
+            "recommended",
+            "other"
+          ]
+        },
+        "temporary": {
+          "type": "boolean"
+        },
+        "during_task": {
+          "type": "boolean"
+        },
+        "missing_requires": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "approval_evaluated": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "eligible",
+        "blocking"
+      ],
+      "properties": {
+        "eligible": {
+          "type": "boolean"
+        },
+        "blocking": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "https://relay.local/schemas/work.v1.json#/$defs/checkResult"
+          }
+        }
+      }
+    },
+    "approval_countdown_started": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "seconds"
+      ],
+      "properties": {
+        "seconds": {
+          "type": "integer"
+        }
+      }
+    },
+    "approval_countdown_cancelled": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "remaining_sec",
+        "by"
+      ],
+      "properties": {
+        "remaining_sec": {
+          "type": "integer"
+        },
+        "by": {
+          "enum": [
+            "user",
+            "input",
+            "condition_changed"
+          ]
+        }
+      }
+    },
+    "gate_started": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "node_id",
+        "gate"
+      ],
+      "properties": {
+        "node_id": {
+          "type": "string"
+        },
+        "gate": {
+          "enum": [
+            "human",
+            "check",
+            "review"
+          ]
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "gate_passed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "node_id"
+      ],
+      "properties": {
+        "node_id": {
+          "type": "string"
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "https://relay.local/schemas/work.v1.json#/$defs/checkResult"
+          }
+        },
+        "by": {
+          "enum": [
+            "app",
+            "human"
+          ]
+        }
+      }
+    },
+    "gate_failed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "node_id",
+        "consecutive",
+        "on_fail"
+      ],
+      "properties": {
+        "node_id": {
+          "type": "string"
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "https://relay.local/schemas/work.v1.json#/$defs/checkResult"
+          }
+        },
+        "consecutive": {
+          "type": "integer"
+        },
+        "on_fail": {
+          "type": "string"
+        },
+        "halted": {
+          "type": "boolean",
+          "description": "연속 실패 상한 도달로 자동 복귀를 멈췄는지"
+        }
+      }
+    },
+    "repro_locked": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "sha256",
+        "commit",
+        "fail_exit_code"
+      ],
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "commit": {
+          "type": "string"
+        },
+        "fail_exit_code": {
+          "type": "integer"
+        }
+      }
+    },
+    "repro_lock_failed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "cause"
+      ],
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "cause": {
+          "enum": [
+            "passed_unexpectedly",
+            "not_committed",
+            "file_missing",
+            "no_test_file_command",
+            "timeout"
+          ]
+        }
+      }
+    },
+    "repro_released": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "note": {
+          "type": "string"
+        }
+      }
+    },
+    "intent_approved": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version"
+      ],
+      "properties": {
+        "version": {
+          "type": "integer"
+        },
+        "size": {
+          "enum": [
+            "S",
+            "M",
+            "L"
+          ]
+        },
+        "delivery": {
+          "enum": [
+            "none",
+            "push",
+            "pr"
+          ]
+        }
+      }
+    },
+    "intent_revised": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from_version",
+        "to_version",
+        "stale_artifacts",
+        "resume_node"
+      ],
+      "properties": {
+        "from_version": {
+          "type": "integer"
+        },
+        "to_version": {
+          "type": "integer"
+        },
+        "stale_artifacts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "resume_node": {
+          "type": "string"
+        }
+      }
+    },
+    "delivery_succeeded": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "push",
+            "pr"
+          ]
+        },
+        "remote_ref": {
+          "type": "string"
+        },
+        "pr_url": {
+          "type": "string"
+        }
+      }
+    },
+    "delivery_failed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "error"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "push",
+            "pr"
+          ]
+        },
+        "error": {
+          "type": "string"
+        }
+      }
+    },
+    "artifact_modified_after_approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file"
+      ],
+      "properties": {
+        "file": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://relay.local/schemas/hook-ipc.v1.json",
+  "title": "Hook ↔ app IPC message (v1)",
+  "description": "relay-hook.js가 로컬 IPC(Windows named pipe \\\\.\\pipe\\relay-<user>, 그 밖은 <RELAY_HOME>/run/relay.sock)로 보내는 요청과 앱의 응답. 한 줄 JSON(개행 종료) 요청 1개, 응답 1개 후 연결 종료. 훅 스크립트는 PTY 환경 변수 RELAY_IPC, RELAY_IPC_TOKEN, RELAY_WORK_ID, RELAY_STEP_ID로 자기가 어느 task인지 안다.",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["v", "token", "hook", "work_id", "step_id", "ts", "input"],
+      "properties": {
+        "v": { "const": 1 },
+        "token": { "type": "string", "description": "앱 실행마다 새로 만든 무작위 값. 다른 프로세스의 위조 신호 차단" },
+        "hook": { "enum": ["SessionStart", "Stop", "Notification", "SessionEnd"] },
+        "work_id": { "type": "string" },
+        "step_id": { "type": "string" },
+        "ts": { "type": "string", "format": "date-time" },
+        "input": {
+          "type": "object",
+          "description": "Claude Code가 훅 stdin으로 준 JSON에서 필요한 필드만 옮긴 것",
+          "properties": {
+            "session_id": { "type": "string" },
+            "transcript_path": { "type": "string" },
+            "stop_hook_active": { "type": "boolean" },
+            "message": { "type": "string", "description": "Notification 문구" },
+            "source": { "type": "string", "description": "SessionStart source: startup | resume | clear | compact" }
+          }
+        }
+      }
+    },
+    "response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["v", "action"],
+      "properties": {
+        "v": { "const": 1 },
+        "action": { "enum": ["none", "block"], "description": "block은 Stop 훅에만 유효. 훅 스크립트가 {\"decision\":\"block\",\"reason\":...}를 stdout으로 출력해 에이전트에게 오류를 되돌린다 (D21)" },
+        "reason": { "type": "string", "maxLength": 2000 }
+      },
+      "allOf": [ { "if": { "properties": { "action": { "const": "block" } } }, "then": { "required": ["reason"] } } ]
+    }
+  },
+  "oneOf": [ { "$ref": "#/$defs/request" }, { "$ref": "#/$defs/response" } ]
+}

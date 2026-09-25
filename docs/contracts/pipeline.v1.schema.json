@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://relay.local/schemas/pipeline.v1.json",
+  "title": "Pipeline template (v1)",
+  "description": "<RELAY_HOME>/pipelines/<id>.yaml. Work 생성 시 works/<work-id>/pipeline.yaml로 스냅숏을 복사하고, 실행 중인 Work는 스냅숏만 본다. 참조 무결성(노드 id 유일, on_fail/transitions 대상 존재, 스킬 존재)은 스키마 밖에서 앱이 로드 시 검사한다(state-machine.md 1절).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "version", "title", "applies_to", "nodes"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "id": { "$ref": "#/$defs/id" },
+    "version": { "type": "integer", "minimum": 1 },
+    "title": { "type": "string", "maxLength": 60 },
+    "applies_to": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": { "type": { "enum": ["bugfix", "feature", "refactor", "analysis"] } }
+    },
+    "nodes": {
+      "type": "array",
+      "minItems": 2,
+      "items": { "oneOf": [ { "$ref": "#/$defs/skillNode" }, { "$ref": "#/$defs/gateNode" } ] }
+    },
+    "transitions": {
+      "type": "object",
+      "description": "recommended_next와 [다음 단계 변경] '허용된 전이' 그룹에 쓰는 비순차 전이. 키는 출발 노드.",
+      "propertyNames": { "$ref": "#/$defs/id" },
+      "additionalProperties": { "type": "array", "items": { "$ref": "#/$defs/id" }, "uniqueItems": true }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,31}$" },
+    "when": {
+      "type": "string",
+      "description": "intent 머리글 필드만 참조하는 비교식. 문법: cond ('and' cond)* / cond := intent.<field> (== | !=) '<v>' | intent.<field> in ['<v>', ...]",
+      "pattern": "^intent\\.[a-z_]+ (==|!=|in) .+$"
+    },
+    "checkRef": {
+      "type": "string",
+      "description": "앱 내장 검사 이름. cmd:<key>는 project.json checks.<key>를 실행한다. 목록과 의미는 state-machine.md 4절.",
+      "pattern": "^(cmd:[a-z][a-z0-9_-]*|repro:(fails|passes|intact)|tests:unchanged|tree:clean|diff:within_limit)$"
+    },
+    "skillNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "skill"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "skill": { "$ref": "#/$defs/id" },
+        "description": { "type": "string", "maxLength": 80, "description": "next-options와 스텝퍼에 쓰는 한 줄 설명" },
+        "when": { "$ref": "#/$defs/when" },
+        "requires": {
+          "type": "array",
+          "description": "필요 입력. 'intent' 또는 '<node-id>/<file>'. 끝에 '?'가 붙으면 선택 입력(없어도 경고하지 않음).",
+          "items": { "type": "string", "pattern": "^(intent|[a-z][a-z0-9-]*/[^/?]+)\\??$" }
+        },
+        "approval": { "enum": ["manual", "auto_if_checks"], "default": "manual" },
+        "auto_checks": {
+          "type": "array",
+          "description": "approval: auto_if_checks일 때 공통 조건에 더해 앱이 실행할 검사. 비어 있으면 자동 승인하지 않는다(빈 조건으로 통과하는 구멍 차단).",
+          "items": { "$ref": "#/$defs/checkRef" }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "approval": { "const": "auto_if_checks" } }, "required": ["approval"] },
+          "then": { "required": ["auto_checks"], "properties": { "auto_checks": { "minItems": 1 } } }
+        }
+      ]
+    },
+    "gateNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "gate"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "gate": { "enum": ["human", "check", "review"] },
+        "description": { "type": "string", "maxLength": 80 },
+        "when": { "$ref": "#/$defs/when" },
+        "run": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/checkRef" } },
+        "on_fail": { "$ref": "#/$defs/id" },
+        "max_consecutive_failures": { "type": "integer", "minimum": 1, "description": "생략 시 config.gates.max_consecutive_failures" },
+        "on_pass": {
+          "type": "array",
+          "description": "통과 시 앱이 수행할 내장 동작. intent.approve: 초안 intent를 확정. work.deliver: intent.delivery 수행. work.complete: Work 완료 처리.",
+          "items": { "enum": ["intent.approve", "work.deliver", "work.complete"] },
+          "uniqueItems": true
+        },
+        "review": {
+          "type": "object",
+          "description": "gate: review 전용. v1은 인터페이스만 정의하고 실행하지 않는다.",
+          "additionalProperties": false,
+          "required": ["skill"],
+          "properties": {
+            "skill": { "$ref": "#/$defs/id" },
+            "vendor": { "enum": ["claude", "codex"] },
+            "pass_if": { "enum": ["no_blocking_findings"] }
+          }
+        }
+      },
+      "allOf": [
+        { "if": { "properties": { "gate": { "const": "check" } } }, "then": { "required": ["run", "on_fail"] } },
+        { "if": { "properties": { "gate": { "const": "review" } } }, "then": { "required": ["review", "on_fail"] } },
+        { "if": { "properties": { "gate": { "const": "human" } } }, "then": { "not": { "required": ["run"] } } }
+      ]
+    }
+  }
+}

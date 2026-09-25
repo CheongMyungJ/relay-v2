@@ -1,0 +1,203 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://relay.local/schemas/handoff.v1.json",
+  "title": "Handoff front matter (v1)",
+  "description": "tasks/<nn>-<node>/handoff.md 의 YAML 머리글. 에이전트가 작성하고 앱이 검증한다. 앱이 직접 확인할 수 있는 사실(git 커밋, 검사 결과, 승인 상태)은 넣지 않는다. 그런 값은 work.json에 앱이 기록한다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "work_id", "task_id", "node", "skill", "status",
+    "intent_version", "artifacts", "decisions", "assumptions", "rejected",
+    "open_questions", "intent_deviation", "risks", "recommended_next"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "work_id": { "type": "string", "pattern": "^w-[0-9]{8}-[0-9]{3}$" },
+    "task_id": { "type": "string", "pattern": "^t-[0-9]{2,3}$" },
+    "node": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "파이프라인 노드 id. 임시 노드는 x-<skill>."
+    },
+    "skill": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "status": {
+      "enum": ["awaiting_approval", "blocked"],
+      "description": "에이전트가 쓸 수 있는 값은 두 가지뿐이다. approved/abandoned 같은 상태는 앱이 work.json에 기록한다."
+    },
+    "blocked_reason": {
+      "type": "string",
+      "minLength": 1,
+      "description": "status가 blocked일 때 필수. 무엇이 없어서 진행할 수 없는지."
+    },
+    "intent_version": { "type": "integer", "minimum": 1 },
+    "artifacts": {
+      "type": "array",
+      "description": "task 디렉터리 기준 상대 경로. handoff.md 자체는 넣지 않는다.",
+      "items": { "$ref": "#/$defs/relpath" },
+      "uniqueItems": true
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["what", "why", "by", "requires_human"],
+        "properties": {
+          "what": { "type": "string", "minLength": 1, "maxLength": 300 },
+          "why": { "type": "string", "minLength": 1, "maxLength": 500 },
+          "by": { "enum": ["human", "ai"] },
+          "requires_human": {
+            "type": "boolean",
+            "description": "사람이 정해야 할 결정인가. true이면서 by: ai이면 자동 승인 금지."
+          }
+        }
+      }
+    },
+    "assumptions": { "type": "array", "items": { "$ref": "#/$defs/line" } },
+    "rejected": {
+      "type": "array",
+      "description": "시도했으나 기각한 것과 기각 근거. 필수 필드(빈 배열 허용). 모든 이후 task에 누적 주입된다.",
+      "items": { "$ref": "#/$defs/line" }
+    },
+    "open_questions": {
+      "type": "array",
+      "description": "비어 있지 않으면 자동 승인 금지.",
+      "items": { "$ref": "#/$defs/line" }
+    },
+    "intent_deviation": {
+      "description": "의도와 달라진 점. null이 아니면 자동 승인 금지, 승인 화면에 [의도 수정] 버튼을 강조한다.",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["summary", "evidence"],
+          "properties": {
+            "summary": { "type": "string", "minLength": 1, "maxLength": 500 },
+            "evidence": { "type": "string", "minLength": 1, "maxLength": 500 }
+          }
+        }
+      ]
+    },
+    "risks": { "type": "array", "items": { "$ref": "#/$defs/line" } },
+    "self_checks": {
+      "type": "array",
+      "description": "에이전트가 직접 돌려 본 검사. 표시용일 뿐 판정에 쓰지 않는다. 판정은 파이프라인 노드의 auto_checks를 앱이 실행해서 한다.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "result"],
+        "properties": {
+          "name": { "type": "string" },
+          "result": { "enum": ["pass", "fail", "skipped"] },
+          "note": { "type": "string", "maxLength": 300 }
+        }
+      }
+    },
+    "recommended_next": {
+      "description": "주입된 next-options 중 하나. 기본 다음 노드로 가면 null.",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["node", "reason"],
+          "properties": {
+            "node": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+            "reason": { "type": "string", "minLength": 1, "maxLength": 300 }
+          }
+        }
+      ]
+    },
+    "knowledge_candidates": {
+      "type": "array",
+      "description": "향후 지식 추출의 입력. v1에서는 저장만 한다.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["statement"],
+        "properties": {
+          "statement": { "type": "string", "maxLength": 300 },
+          "scope": { "enum": ["project", "global"] },
+          "evidence": { "type": "string", "maxLength": 300 }
+        }
+      }
+    },
+    "pipeline_fit": {
+      "description": "work-start 전용 확장. 이 work가 선택된 파이프라인(v1: bugfix)에 맞는가. misfit이면 g-intent에서 경고한다.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verdict", "note"],
+      "properties": {
+        "verdict": { "enum": ["fit", "doubt", "misfit"] },
+        "note": { "type": "string", "maxLength": 300 }
+      }
+    },
+    "repro": {
+      "description": "evidence 전용 확장. 재현 방법. kind: test이면 앱이 이 테스트를 고정(repro lock)한다.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["test", "manual", "none"] },
+        "file": {
+          "$ref": "#/$defs/relpath",
+          "description": "worktree 기준 재현 테스트 파일 경로. kind: test일 때 필수."
+        },
+        "test_name": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "파일 안의 특정 테스트 이름(표시용). 실행은 파일 단위다."
+        },
+        "steps_ref": {
+          "type": "string",
+          "description": "kind: manual일 때 evidence.md 안 재현 절차 절 제목."
+        }
+      },
+      "allOf": [
+        { "if": { "properties": { "kind": { "const": "test" } } }, "then": { "required": ["file"] } }
+      ]
+    },
+    "intent_revision": {
+      "description": "intent-revise 전용 확장.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["draft", "diff", "stale_artifacts", "resume_node"],
+      "properties": {
+        "draft": { "$ref": "#/$defs/relpath", "description": "새 버전 intent 초안 (task 디렉터리 기준, 보통 intent.draft.md)" },
+        "diff": { "$ref": "#/$defs/relpath", "description": "변경 전후 차이 설명 (보통 intent.diff.md)" },
+        "stale_artifacts": {
+          "type": "array",
+          "description": "무효가 되는 승인된 산출물. <node-id>/<file> 형식.",
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*/[^/].*$" }
+        },
+        "resume_node": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" }
+      }
+    },
+    "delivery_draft": {
+      "description": "final-verify 전용 확장. intent.delivery가 pr이면 PR 제목과 본문 파일.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pr_title", "pr_body"],
+      "properties": {
+        "pr_title": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "pr_body": { "$ref": "#/$defs/relpath" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "blocked" } } },
+      "then": { "required": ["blocked_reason"] }
+    }
+  ],
+  "$defs": {
+    "line": { "type": "string", "minLength": 1, "maxLength": 500 },
+    "relpath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?![/\\\\])(?![A-Za-z]:)(?!.*(^|[/\\\\])\\.\\.([/\\\\]|$)).+$",
+      "description": "상대 경로. 절대 경로, 드라이브 문자, .. 금지."
+    }
+  }
+}

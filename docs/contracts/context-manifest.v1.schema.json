@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://relay.local/schemas/context-manifest.v1.json",
+  "title": "context.manifest.json (v1)",
+  "description": "tasks/<nn>-<node>/context.manifest.json. 이 task에 무엇이 주입됐는지 기록한다. UI의 '주입된 컨텍스트' 탭과 S6 실측의 원천.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "step_id", "assembled_at", "budget_tokens", "inline_tokens", "context_file", "first_prompt", "fragments"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "step_id": { "type": "string" },
+    "assembled_at": { "type": "string", "format": "date-time" },
+    "budget_tokens": { "type": "integer" },
+    "inline_tokens": { "type": "integer", "description": "inline 조각 추정 토큰 합계" },
+    "context_file": { "type": "string", "const": "context.md", "description": "inline 조각을 이어 붙이고 path 조각 목록을 덧붙인 파일 (D18)" },
+    "first_prompt": { "type": "string", "maxLength": 2000, "description": "CLI 인자로 실제 전달한 짧은 첫 프롬프트 원문" },
+    "fragments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["provider", "source", "mode", "tokens", "demoted"],
+        "properties": {
+          "provider": { "type": "string" },
+          "priority": { "type": "integer" },
+          "source": { "type": "string", "description": "예: intent@v2, tasks/03-rca/rca.md" },
+          "mode": { "enum": ["inline", "path"] },
+          "tokens": { "type": "integer", "description": "inline이면 본문 추정 토큰, path면 파일 전체 추정 토큰(참고용)" },
+          "demoted": { "type": "boolean", "description": "예산 초과로 inline에서 path로 강등됐는지" },
+          "stale": { "type": "boolean", "description": "intent 개정으로 무효 표시된 산출물" },
+          "missing": { "type": "boolean", "description": "requires에 있지만 아직 없는 산출물" }
+        }
+      }
+    }
+  }
+}
