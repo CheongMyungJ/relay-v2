@@ -304,15 +304,103 @@ intake(work-start) → 의도 승인 → evidence → rca → fix → verify →
 
 ### 5.2 handoff (`tasks/<nn>-<node>/handoff.md`)
 
-YAML 머리글 + 본문. v0.1.1에서 바뀐 점:
-- `status`: `awaiting_approval` | `blocked` (앱 상태는 넣지 않음)
-- 삭제: `git`, `checks` (앱이 직접 확인할 수 있는 사실은 에이전트에게 쓰게 하지 않음)
-- `intent_version`: 입력으로 받은 **승인된** intent 버전. 최초 intake는 0.
-- 유지: `decisions`, `assumptions`, `rejected`(필수), `open_questions`, `intent_deviation`, `risks`, `recommended_next`, `knowledge_candidates`
+에이전트가 task를 마무리하며 쓰는 파일이다. YAML 머리글은 앱이 파싱하고 검증하며, 본문은 사람과 다음 에이전트가 읽는다. 앱이 직접 확인할 수 있는 사실(git 커밋, 테스트 결과, 승인 여부)은 에이전트에게 쓰게 하지 않는다.
+
+```markdown
+---
+schema_version: 1
+work_id: w-20260925-001
+task_id: t-04
+node: rca
+skill: root-cause
+status: awaiting_approval
+intent_version: 1
+artifacts: [rca.md]
+decisions:
+  - what: "원인은 토큰 만료 시각 비교의 타임존 불일치"
+    why: "재현 로그의 차이가 UTC/KST 9시간과 정확히 일치"
+    by: human
+    requires_human: true
+assumptions:
+  - "운영 서버 TZ도 Asia/Seoul이다 (확인 안 됨)"
+rejected:
+  - "캐시 TTL 가설: 캐시를 끄고도 같은 값으로 재현됨"
+open_questions: []
+intent_deviation: null
+risks:
+  - "같은 비교 함수를 쓰는 refresh 경로도 영향 가능"
+recommended_next: null
+knowledge_candidates: []
+---
+## 요약
+만료 판정이 로컬 시각 문자열 비교라 KST에서 9시간 일찍 만료된다.
+
+## 다음 task가 알아야 할 것
+- 수정 지점: `src/auth/token.ts` `isExpired()`. refresh 경로(`refresh.ts:42`)도 같은 함수를 쓴다.
+```
+
+| 필드 | 필수 | 뜻 | 앱이 쓰는 곳 |
+|---|---|---|---|
+| `schema_version` | ✅ | 형식 버전, 현재 1 | 검증 |
+| `work_id`, `task_id`, `node`, `skill` | ✅ | 이 task의 식별자. `context.md`에 적힌 값을 그대로 쓴다 | 검증(다르면 오류) |
+| `status` | ✅ | `awaiting_approval`(검토해 달라) 또는 `blocked`(진행할 수 없음). 승인 상태는 앱이 `work.json`에 기록하므로 넣지 않는다 | 승인 대기 전환 |
+| `blocked_reason` | blocked일 때 | 무엇이 없어서 진행할 수 없는지 | 승인 화면 표시 |
+| `intent_version` | ✅ | 입력으로 받은 **승인된** intent 버전. 최초 intake는 0 | 검증 |
+| `artifacts` | ✅ | task 디렉터리 기준 산출물 파일 목록 | 승인 화면, 다음 task 입력 |
+| `decisions` | ✅ | 이 task에서 정한 것. `by`: human/ai, `requires_human`: 사람이 정할 결정인가 | `decisions.md`에 추가, 승인 화면 |
+| `assumptions` | ✅ | 확인하지 않고 가정한 것 | 승인 화면 |
+| `rejected` | ✅ | 시도했지만 기각한 것과 이유. 빈 배열 허용 | 이후 모든 task에 누적 주입 |
+| `open_questions` | ✅ | 사람 답이 필요한데 아직 없는 것 | 비어 있지 않으면 자동 승인 안 함 |
+| `intent_deviation` | ✅ | 의도와 어긋나는 사실을 발견하면 `{summary, evidence}`, 없으면 null | 있으면 자동 승인 안 함, 승인 화면에서 강조 |
+| `risks` | ✅ | 남은 위험 | 승인 화면 |
+| `recommended_next` | ✅ | 기본 다음 단계로 가면 null. 다른 단계를 권하면 `{node, reason}` (`context.md`의 선택 가능한 다음 단계 중에서) | 이전 단계면 멈추고 알림(D25). 기본 경로가 아니면 자동 승인 안 함 |
+| `knowledge_candidates` | 선택 | 다음에도 쓸 만한 사실. 향후 지식 추출용 | 저장만 |
+
+- 본문의 `## 요약`과 `## 다음 task가 알아야 할 것`은 필수다. 두 번째 절에는 경로와 줄, 명령, 수치처럼 다시 찾기 비싼 사실을 적는다.
+- 본문 분량 기준은 약 1,500자다(기본값). 넘으면 경고만 한다.
+- 형식 **오류**는 필수 필드 누락, 타입, 허용되지 않은 값, 식별자 불일치, 산출물 파일 없음이다. 오류가 있으면 승인 버튼이 비활성화되고 Stop 훅으로 되돌린다(D23).
 
 ### 5.3 intent (`intent.md`)
 
-v0.1.1에서 `delivery` 필드를 뺀다. `type`(bugfix 고정), `size`(S/M/L, S면 빠른 경로), `version`은 유지한다. 완료조건에는 push/PR을 쓰지 않는다.
+Work의 의도다. intake(work-start)가 `tasks/01-intake/intent.draft.md`에 초안을 쓰고, [의도 승인]을 누르면 앱이 `works/<work-id>/intent.md`로 확정한다. 이전 버전은 `intent.history/v<N>.md`에 둔다. 모든 task의 `context.md`에 본문 그대로 들어간다.
+
+```markdown
+---
+schema_version: 1
+version: 1
+type: bugfix
+size: M
+---
+## 목표
+KST 서버에서 액세스 토큰이 발급 직후 만료로 판정되는 문제를 고친다.
+
+## 비목표
+- 토큰 수명 정책 변경
+
+## 원하는 결과
+서버 타임존과 관계없이 만료 판정이 발급 시 정한 수명과 일치한다.
+
+## 완료조건
+- [ ] 재현 절차가 더 이상 실패하지 않는다
+- [ ] 테스트 스위트가 통과한다
+- [ ] 기존 테스트 파일을 약화하거나 삭제하지 않는다
+
+## 제약
+- 외부 라이브러리 추가 금지
+
+## 추가 의견
+```
+
+| 필드 | 뜻 |
+|---|---|
+| `schema_version` | 형식 버전, 현재 1 |
+| `version` | intent 버전. 초안에는 현재 버전 + 1(처음이면 1)을 쓰고, 앱이 확정 시 확인한다 |
+| `type` | 업무 유형. MVP는 `bugfix` 고정 |
+| `size` | `S` / `M` / `L`. S면 evidence와 rca를 건너뛴다. MVP에서 L은 M과 같다. work-start가 제안하고 의도 승인 화면에서 사람이 확정한다 |
+
+- **본문 절:** `목표`, `비목표`(없으면 "없음"), `원하는 결과`, `완료조건`은 필수다. `제약`과 `추가 의견`은 선택이다.
+- **완료조건:** `- [ ] `로 시작하는 목록이고, 한 줄에 검증 가능한 문장 하나를 쓴다. push/PR은 쓰지 않는다. verify보다 뒤에 일어나는 일이라 verify가 판정할 수 없기 때문이다(D15).
+- **분량 기준:** 약 1,500자(기본값). 모든 task에 주입되기 때문이다. 넘으면 경고만 한다.
 
 ### 5.4 이벤트 (`events.jsonl`)
 
