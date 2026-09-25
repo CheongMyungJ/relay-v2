@@ -104,6 +104,9 @@ relay-v2는 Claude Code CLI를 **앱 안의 터미널(node-pty + xterm.js)에 �
 | D64 | S에서는 fix가 먼저 재현을 확인하고 원인을 짧게 적은 뒤 고친다. `fix.md`의 `rca와 달라진 점` 대신 `원인과 재현` 절을 쓴다 | S에서도 재현과 원인은 필요함. 한 절에 모아 두면 verify와 사람이 볼 곳이 생김 | ✅ |
 | D65 | S에서 verify는 `fix.md`의 `원인과 재현` 절의 재현 절차로 판정한다. 재현 절차도 재현 테스트도 없으면 첫 완료조건은 판정 불가다 | M과 같은 판정 방식을 쓰고 재현 절차를 읽는 곳만 바꿈 | ✅ |
 | D66 | S로 진행하던 fix가 재현이 안 되거나 원인을 좁히지 못하면, 발견 사실을 `fix.md`에 적고 `recommended_next`에 evidence나 rca를 적어 마무리한다. intent의 `size`는 바꾸지 않는다 | rca가 틀렸을 때(D55)와 같은 장치. 의도 변경은 intake 되감기로만 함 | ✅ |
+| D67 | 프로젝트 등록 때 git 레포 루트, `claude auth status`, 중복 등록을 확인해 실패하면 막는다. `origin` 원격과 `gh auth status`는 경고만 하고 해당 전달 버튼을 비활성화한다 | Work를 만든 뒤에야 claude 로그인 문제가 드러나면 헛수고가 됨. push/PR은 Work 완료 때 쓰는 것이라 막을 이유가 없음 | ✅ |
+| D68 | relay는 "권한 확인 없이 실행한다"는 동의를 따로 받지 않는다. Claude Code가 처음 실행할 때 띄우는 자체 경고 창에 맡긴다 | 같은 내용을 두 번 확인받지 않음. Claude Code의 경고 창은 사용자당 한 번 뜨고, 거절하면 실행되지 않음 | ✅ |
+| D69 | Claude Code의 첫 실행 창(권한 확인 끈 모드 경고, 폴더 신뢰)은 앱이 미리 설정하지 않는다. 창이 뜨면 사람이 터미널에서 수락한다 | 사람이 봐야 할 경고를 앱이 대신 넘기지 않음. 미리 넣은 설정이 창을 건너뛰는지는 공식 문서에 없음 | ✅ |
 
 ---
 
@@ -186,6 +189,25 @@ S 크기는 `intake → fix → verify`로 간다. evidence와 rca의 일 중 �
 ---
 
 ## 4. 유저 시나리오
+
+### 시나리오 0. 프로젝트 등록
+
+1. **사용자:** 사이드바의 [프로젝트 추가] → 레포 폴더 선택
+2. **앱:** 레포를 점검한다(D67).
+
+   | 항목 | 실패하면 |
+   |---|---|
+   | git 레포의 루트인가 | 등록을 막는다 |
+   | `claude auth status`가 성공하는가(종료 코드 0) | 등록을 막는다 |
+   | 같은 경로가 이미 등록되었나 | 등록을 막는다 |
+   | `origin` 원격이 있는가 | 경고. [push]와 [PR 생성]을 비활성화한다 |
+   | `gh auth status`가 성공하는가 | 경고. [PR 생성]만 비활성화한다 |
+
+3. **앱:** 기본 브랜치를 `origin/HEAD`로 채운다. 없으면 현재 브랜치로 채운다. 사람이 고칠 수 있다.
+4. **앱:** `project.json`을 만든다.
+5. **권한 확인 없이 실행한다는 동의:** relay는 따로 받지 않는다(D68). Claude Code가 처음 실행될 때 자체 경고 창을 띄우고, 사람이 수락해야 실행된다. 수락은 사용자 설정에 저장되어 한 번만 뜬다.
+6. **Claude Code의 첫 실행 창:** 권한 확인 끈 모드 경고와 폴더 신뢰 창은 앱이 미리 설정하지 않는다. 첫 task의 터미널에 뜨면 사람이 수락한다(D69).
+7. 등록 해제는 MVP에 없다.
 
 ### 시나리오 1. Work 생성
 
@@ -353,7 +375,7 @@ S 크기는 `intake → fix → verify`로 간다. evidence와 rca의 일 중 �
    - 원격은 `origin`, PR 대상 브랜치는 Work를 만들 때 고른 기준 브랜치다.
    - PR 제목은 `pr.md`의 첫 줄, 본문은 나머지다(D62).
    - draft PR로 만들지 일반 PR로 만들지는 앱 설정에서 정한다. 기본은 draft.
-   - `gh`가 없거나 로그인되지 않았으면 [PR 생성]을 이유와 함께 비활성화한다. [push] 후에는 브라우저에서 PR을 만들 수 있는 비교 URL을 보여 준다.
+   - `origin` 원격이 없으면 [push]와 [PR 생성]을 이유와 함께 비활성화한다. `gh`가 없거나 로그인되지 않았으면 [PR 생성]을 이유와 함께 비활성화한다. [push] 후에는 브라우저에서 PR을 만들 수 있는 비교 URL을 보여 준다.
    - 같은 브랜치의 PR이 이미 열려 있으면 새로 만들지 않고 링크만 기록한다(기본값).
 5. **커밋 안 된 변경이 있으면** push/PR을 막고 이유를 보여 준 뒤 셋 중에서 고르게 한다.
    - **[변경 버리고 진행]:** 변경 파일 목록을 보여 주고, `git stash -u`로 백업한 뒤 진행한다.
@@ -392,7 +414,7 @@ S 크기는 `intake → fix → verify`로 간다. evidence와 rca의 일 중 �
   skills/<name>/SKILL.md
   skills/_close.md                     # 공통 종료 절차 원본. 배포할 때 각 SKILL.md 끝에 붙인다 (5.6.2)
   projects/<project-id>/               # <레포 폴더 이름>-<레포 절대 경로 해시 6자>
-    project.json                       # 레포 경로, 기본 브랜치
+    project.json                       # 레포 경로, 기본 브랜치, 등록 점검 결과(origin·gh 여부)
     worktrees/<work-id>/
     works/<work-id>/
       work.json                        # Work 상태, 현재 단계, 승인 기록, Work별 설정
@@ -864,7 +886,7 @@ intent의 완료조건마다 판정하고 `verification.md`와 PR 초안 `pr.md`
 - 첫 프롬프트는 짧게 유지한다(D19).
 - 세션 종료는 프로세스 트리 단위로 한다.
 - worktree 경로가 길어질 수 있으므로 worktree를 만들 때 `core.longpaths=true`를 설정한다.
-- 권한 확인을 끈 모드는 조직 관리 설정(`disableBypassPermissionsMode`)으로 막혀 있을 수 있다. 이 경우 첫 실행 점검에서 안내한다.
+- 권한 확인을 끈 모드는 조직 관리 설정(`permissions.disableBypassPermissionsMode: "disable"`)으로 막혀 있을 수 있다. 이 경우 task 실행이 실패한다. 이때의 출력과 종료 코드는 스파이크 S4로 확인하고, 그 결과로 안내 문구를 정한다.
 - 배포는 electron-builder NSIS로 하고, 코드 서명은 이후 과제로 둔다.
 - WSL은 범위 밖이다.
 
@@ -874,12 +896,11 @@ intent의 완료조건마다 판정하고 `verification.md`와 PR 초안 `pr.md`
 
 같은 방식(시나리오 → 질문 → 결정)으로 하나씩 정한다.
 
-1. **프로젝트 등록:** 필요한 정보(레포 경로, 기본 브랜치, `gh` 확인), 권한 확인 없이 실행한다는 안내와 동의
-2. **앱 설정 항목과 기본값:** `config.json`
-3. **장애와 복구:** 앱 충돌 후 재시작 시 상태 조정, 고아 프로세스
-4. **화면:** 레이아웃, 상태 배지, 승인 화면, 단계 선택 대화상자
-5. **handoff와 intent의 JSON Schema** (MVP 범위)
-6. **스파이크:** S1 터미널 임베드(한글 IME 포함), S2 HTTP 훅(AskUserQuestion의 PreToolUse·PostToolUse 포함)과 Stop 되돌림, S3 첫 프롬프트 스킬 트리거(`--add-dir` 디렉터리의 스킬, `disable-model-invocation: true`)와 재개, S4 권한 확인을 끈 모드에서 deny 규칙이 앱 소유 파일 편집과 `git push`를 막는지
+1. **앱 설정 항목과 기본값:** `config.json`
+2. **장애와 복구:** 앱 충돌 후 재시작 시 상태 조정, 고아 프로세스
+3. **화면:** 레이아웃, 상태 배지, 승인 화면, 단계 선택 대화상자
+4. **handoff와 intent의 JSON Schema** (MVP 범위)
+5. **스파이크:** S1 터미널 임베드(한글 IME 포함), S2 HTTP 훅(AskUserQuestion의 PreToolUse·PostToolUse 포함)과 Stop 되돌림, S3 첫 프롬프트 스킬 트리거(`--add-dir` 디렉터리의 스킬, `disable-model-invocation: true`)와 재개, S4 권한 확인을 끈 모드에서 deny 규칙이 앱 소유 파일 편집과 `git push`를 막는지, 조직 설정으로 이 모드가 막혔을 때의 출력과 종료 코드, S5 권한 확인을 끈 모드에서도 폴더 신뢰 창이 worktree마다 뜨는지와 `--add-dir` 디렉터리에도 적용되는지
 
 ## 9. 추가 후보 (필요가 확인되면)
 
@@ -893,6 +914,8 @@ intent의 완료조건마다 판정하고 `verification.md`와 PR 초안 `pr.md`
 | 다른 업무 유형 파이프라인 | 버그 수정이 안정된 뒤 |
 | Codex | v1 이후 |
 | PR 머지 감지 후 정리 제안 | 정리 버튼을 자주 잊음 |
+| 프로젝트 등록 해제 | 쓰지 않는 프로젝트가 사이드바에 쌓임 |
+| 폴더 신뢰 창 자동 처리 | 스파이크 S5에서 worktree마다 창이 떠서 불편이 확인됨 |
 
 ---
 
