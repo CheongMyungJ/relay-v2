@@ -399,8 +399,6 @@ v1 제공자:
 | 제공자 | 우선순위 | 방식 |
 |---|---|---|
 | gate-policy (이 task의 승인 방식) | 100 | inline |
-| intent (최신 버전) | 90 | inline |
-| decisions | 80 | inline |
 | next-options (이 노드에서 갈 수 있는 다음 노드) | 100 | inline |
 | intent (최신 버전) | 90 | inline |
 | gate-failure (게이트 실패로 돌아온 경우만) | 85 | inline (출력은 끝부분만) |
