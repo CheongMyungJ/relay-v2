@@ -1,6 +1,6 @@
 # relay-v2 설계 문서
 
-- 상태: 초안 (v0.1)
+- 상태: 초안 (v0.1.1)
 - 범위: v1 (MVP)
 
 ---
@@ -43,6 +43,10 @@ CLI의 사용성은 CLI 자체가 제공한다. relay는 CLI를 다시 구현하
 | D10 | 산출물 저장소는 **레포 밖의 중앙 저장소**. 프로젝트/워크별 디렉터리로 구분 | work마다 git worktree를 쓰므로, 레포 안에 두면 워크트리 삭제 시 함께 사라짐. 레포에 잡음도 남기지 않음 |
 | D11 | 첫 파이프라인: **버그 수정** | 짧고 완료조건이 명확해서 구조의 효과를 가장 빨리 검증할 수 있음 |
 | D12 | 1차 지원 플랫폼: **Windows 네이티브** (macOS/Linux도 동작하도록 작성) | 주 사용 환경 |
+| D13 | worktree 기본 위치는 **중앙 저장소 아래** | 산출물과 작업 공간을 한곳에서 관리 |
+| D14 | 스킬은 파이프라인을 모른다. 이 노드에서 허용되는 다음 스킬 목록은 앱이 주입한다 | 파이프라인을 바꿀 때 스킬을 수정하지 않기 위함 (D4와 같은 원칙) |
+| D15 | 브랜치 처리(push/PR)는 intent의 완료조건에 포함될 때만 한다. 코드를 수정하는 work라면 `work-start`가 이를 묻고 초안에 넣는다 | 외부로 나가는 동작은 사람이 의도한 경우에만 |
+| D16 | 완료/포기한 Work는 [Work 정리] 버튼으로 worktree를 제거한다. 산출물은 보존한다 | 디스크와 브랜치 목록 정리. 기록은 남김 |
 
 ---
 
@@ -89,18 +93,80 @@ Project (레포 1개)
 │     └─ gate 노드: human / check / review 실행 → 통과 시 진행, 실패 시 지정 노드로 복귀
 └─── 반복
    ↓
-[앱] final-verify 스킬 실행 → 사용자 [Work 완료] → `work.completed`
+[앱] final-verify 스킬 실행 → (intent.delivery가 있으면 deliver 스킬) → 사용자 [Work 완료] → `work.completed`
+   ↓
+[사용자] [Work 정리] → worktree 제거 → `work.cleaned`
 ```
 
-### 4.1 반려와 되돌아가기
+### 4.1 반려, 되돌아가기, 경로 변경
 
-- 승인 전 수정 요청은 같은 세션에서 대화로 처리한다(에이전트가 산출물 파일을 고침).
-- 게이트 실패나 최종검증 실패 시에는 파이프라인의 지정 노드로 돌아가 **새 task**를 연다.
-- 사용자는 언제든 다음 스킬을 직접 고를 수 있다(파이프라인 경로 변경).
+승인 전 수정 요청은 같은 세션에서 대화로 처리한다(에이전트가 산출물 파일을 고침). 그 밖에 다음 노드가 바뀌는 경우는 세 가지다.
 
-### 4.2 의도 개정
+**(1) 게이트 실패 → 자동 복귀**
 
-어떤 task의 handoff에 `intent_deviation`이 있으면 자동 승인이 금지된다. 사용자가 승인하면 앱이 `intent-revise` 스킬 task를 끼워 넣어 intent 버전을 올린다. 이후 task에는 최신 버전만 주입한다.
+- 파이프라인 노드의 `on_fail`에 지정한 노드로 돌아가 **새 task**를 연다.
+- 실패 정보(실행한 명령, 종료 코드, 출력 끝부분)는 `gate-failure` 컨텍스트 제공자가 새 task에 주입한다.
+- 같은 게이트가 연속으로 실패하면(기본 3회) 자동 복귀를 멈추고 사용자를 부른다.
+
+**(2) 최종검증 실패 → 되돌아갈 노드 추천**
+
+- `final-verify`의 handoff에 있는 `recommended_next`(예: `fix`)가 파이프라인의 `transitions`에 허용된 노드면 그 노드로 돌아간다.
+
+**(3) 사용자가 직접 선택**
+
+task와 task 사이, 그리고 task 진행 중에도 [다음 단계 변경] 메뉴를 쓸 수 있다. 메뉴는 세 그룹으로 보여 준다.
+
+| 그룹 | 내용 | 선택 시 동작 |
+|---|---|---|
+| 기본 | 파이프라인의 다음 노드 | 정상 진행 |
+| 허용된 전이 | `transitions`에 정의된 노드 (예: rca → evidence) | 해당 노드로 이동 |
+| 기타 스킬 | 등록된 모든 스킬 | **임시 노드**로 끼워 넣음. 끝나면 "원래 위치로 복귀 / 다른 노드 선택"을 묻는다 |
+
+- 선택한 스킬의 `requires`(필요 산출물)가 아직 없으면 경고를 표시한다. 진행은 막지 않는다.
+- task 진행 중에 경로를 바꾸면 현재 task는 `abandoned` 상태가 되고 터미널은 읽기 전용이 된다. 작성 중이던 산출물은 보존한다.
+- 모든 경로 변경은 `task.rerouted` 이벤트로 기록한다. 나중에 파이프라인 템플릿을 개선하는 근거가 된다(자주 쓰는 우회 경로 → 정식 전이로 승격).
+
+### 4.2 의도 개정 (`intent-revise`)
+
+의도가 바뀌어야 하는 경우는 두 가지다.
+- 어떤 task의 handoff에 `intent_deviation`이 기록됨(이 경우 자동 승인 금지)
+- 사용자가 직접 [의도 수정]을 요청함
+
+그러면 앱이 `intent-revise` 스킬 task를 끼워 넣는다. 이 스킬이 하는 일은 다음과 같다.
+
+1. **입력:** 현재 intent, 개정 계기(deviation 내용과 근거 산출물), 지금까지의 결정 로그
+2. **사람과 논의:** 무엇을 바꿀지(목표 축소, 비목표 추가, 완료조건 수정 등)를 묻고 정리한다.
+3. **영향 분석:** 바뀐 의도 때문에 **이미 승인된 산출물 중 무효가 되는 것**을 찾는다. 예를 들어 비목표가 바뀌면 설계를 다시 해야 할 수 있다.
+4. **산출물:** 새 버전 intent 초안, 변경 전후 차이, 영향 받는 산출물 목록, 재개할 노드 추천
+5. **승인:** 항상 수동이다.
+
+승인되면 앱은 다음을 처리한다.
+- intent 버전을 올리고 이전 버전은 `intent.history/`로 옮긴다.
+- 영향 받는 산출물에 `stale` 표시를 한다.
+- 추천된 노드부터 재개한다. 이후 task에는 최신 intent만 주입한다.
+
+`work-start`와 템플릿을 공유하지만 별도 스킬로 둔다. 처음부터 묻는 것과 차이와 영향을 다루는 것은 대화 흐름이 다르기 때문이다.
+
+### 4.3 Work 완료와 정리
+
+**Work 완료** (`g-done` 게이트, 항상 수동)
+- 최종검증 결과를 확인한 사용자가 [Work 완료]를 누른다.
+- 브랜치 처리(push/PR)는 intent의 `delivery`가 `none`이 아닐 때만, 완료 전에 `deliver` 스킬 노드에서 처리한다(10절). `delivery: none`이면 브랜치 `relay/<work-id>`는 로컬에 그대로 둔다.
+
+**Work 정리** (완료 또는 포기한 Work에서 활성화)
+
+앱은 먼저 다음을 확인하고, 결과를 요약해서 보여 준다.
+
+| 확인 항목 | 문제가 있을 때 |
+|---|---|
+| worktree에 커밋하지 않은 변경 | 경고, 사용자가 명시적으로 확인해야 진행 |
+| 브랜치의 커밋이 원격이나 기본 브랜치에 없음 | "브랜치는 유지, worktree만 제거"를 기본값으로 선택 |
+
+정리 동작:
+- `git worktree remove`로 worktree를 제거한다.
+- 브랜치 삭제는 선택 사항이다. 기본값은 **유지**이고, 병합되었거나 push된 경우에만 삭제를 제안한다.
+- 중앙 저장소의 산출물(`works/<work-id>/`)은 **삭제하지 않는다.** work 상태만 `archived`로 바꾼다. 산출물은 향후 지식 추출의 원천이다.
+- `work.cleaned` 이벤트를 기록한다.
 
 ---
 
@@ -122,6 +188,8 @@ Project (레포 1개)
     <project-id>/                     # 예: my-api-3f9a2c (레포 이름 + 경로 해시)
       project.json                    # 레포 경로, 기본 브랜치, 테스트 명령 등
       knowledge/                      # (향후) 승인된 지식
+      worktrees/
+        <work-id>/                    # git worktree (5.2)
       works/
         <work-id>/                    # 예: w-20260925-001
           work.json                   # 상태, 파이프라인, 현재 노드, worktree 경로
@@ -143,9 +211,10 @@ Project (레포 1개)
 
 ### 5.2 worktree
 
-- 위치: `<RELAY_HOME>/projects/<project-id>/worktrees/<work-id>/` (기본값. 설정으로 변경 가능)
-- 브랜치: `relay/<work-id>`
-- work가 완료되어도 worktree는 자동 삭제하지 않는다. 브랜치를 병합하거나 PR을 만든 뒤 사용자가 정리한다.
+- 위치: `<RELAY_HOME>/projects/<project-id>/worktrees/<work-id>/` (D13)
+- 브랜치: `relay/<work-id>`, 기준은 `project.json`의 기본 브랜치
+- work가 완료되어도 worktree는 자동 삭제하지 않는다. 사용자가 [Work 정리]로 제거한다(4.3).
+- Windows 경로 길이 제한(260자)에 걸릴 수 있다. 앱이 worktree를 만들 때 해당 레포에 `core.longpaths=true`를 설정한다.
 
 ### 5.3 에이전트의 저장소 접근
 
@@ -172,7 +241,7 @@ schema_version: 1
 work_id: w-20260925-001
 task_id: t-03
 skill: root-cause
-status: awaiting_approval          # awaiting_approval | approved | blocked | needs_rework
+status: awaiting_approval          # awaiting_approval | approved | blocked | needs_rework | abandoned
 intent_version: 1
 artifacts: [rca.md]                # task 디렉터리 기준 상대 경로
 git: { base: a1b2c3d, head: d4e5f6a }
@@ -187,7 +256,7 @@ open_questions: []                 # 비어 있지 않으면 자동 승인 금�
 intent_deviation: null             # 의도와 달라진 점. 있으면 자동 승인 금지
 checks: {}                         # 예: { tests: pass, lint: pass } (앱이 재실행해서 확인)
 risks: []
-recommended_next: { skill: fix, reason: "원인 확정" }
+recommended_next: { node: fix, reason: "원인 확정" }   # 주입된 next_options 중에서 고름. 없으면 null
 knowledge_candidates: []           # 향후 지식 추출 입력
 ---
 ## 요약
@@ -198,6 +267,18 @@ knowledge_candidates: []           # 향후 지식 추출 입력
 - 앱은 검증에 실패하면 승인 버튼을 비활성화하고 오류를 패널에 표시한다. 수정은 사용자가 같은 세션에서 요청한다.
 - `rejected`(시도했으나 기각한 것)는 필수 필드다. 세션 중에 알게 된 부정적 지식을 보존하기 위함이다.
 
+**`recommended_next`의 동작 (D14)**
+
+- 스킬 문서에는 다음 스킬 정보를 넣지 않는다. 스킬은 파이프라인을 모른다.
+- 앱이 task를 시작할 때 `next-options` 컨텍스트 제공자가 **이 노드에서 갈 수 있는 노드 목록**을 주입한다. 목록은 파이프라인의 기본 다음 노드와 `transitions`로 만들고, 노드 id와 한 줄 설명을 담는다.
+  ```
+  이 task 이후 선택 가능한 다음 단계:
+  - fix (기본): 확정된 원인을 수정
+  - evidence: 증거가 부족하면 수집 단계로 복귀
+  ```
+- 스킬은 이 중 하나를 고르고 이유를 적는다. 기본 노드로 가면 되는 경우에는 `null`이어도 된다.
+- 목록 밖의 노드를 적으면 앱은 자동으로 진행하지 않는다. 사용자에게 [다음 단계 변경] 메뉴를 열어 보여 주고, 그 추천은 참고용으로만 표시한다.
+
 ### 6.2 Intent (`intent.md`)
 
 ```yaml
@@ -206,6 +287,7 @@ schema_version: 1
 version: 1
 type: bugfix                       # bugfix | feature | refactor | analysis
 size: M                            # S | M | L (파이프라인 빠른 경로 선택에 사용)
+delivery: none                     # none | push | pr (D15)
 ---
 ## 목표
 ## 비목표
@@ -217,6 +299,7 @@ size: M                            # S | M | L (파이프라인 빠른 경로 �
 
 - 분량 상한: 본문 약 1,500자. 모든 task에 주입되기 때문이다.
 - `work-start` 스킬은 완료조건이 검증 가능한 문장이 될 때까지 되묻는다.
+- **`delivery`:** 코드를 수정하는 work(bugfix, feature, refactor)라면 `work-start`가 "작업이 끝나면 push하거나 PR을 만들까요?"라고 묻는다. 답을 들으면 `delivery`와 완료조건에 반영한다(예: "`relay/<work-id>` 브랜치로 PR 생성"). 사용자가 답하지 않으면 초안은 `none`으로 둔다. analysis 유형은 묻지 않고 `none`으로 둔다.
 
 ### 6.3 Pipeline (`pipelines/<type>.yaml`)
 
@@ -248,14 +331,20 @@ nodes:
   - id: verify
     skill: final-verify
     requires: [intent, evidence/evidence.md, rca/rca.md]
+  - id: deliver
+    skill: deliver
+    when: "intent.delivery != 'none'"   # 조건이 거짓이면 건너뜀
+    approval: manual               # 외부로 나가는 동작이므로 항상 수동
   - id: g-done
     gate: human                    # Work 완료
 transitions:                       # recommended_next로 허용되는 비순차 전이
   rca: [evidence]                  # 증거 부족 시 수집 단계로 복귀 허용
   verify: [fix, rca]
 fast_path:
-  S: [intake, g-intent, fix, g-tests, verify, g-done]
+  S: [intake, g-intent, fix, g-tests, verify, deliver, g-done]
 ```
+
+- `when` 조건은 intent 머리글 필드만 참조할 수 있는 단순 비교식으로 제한한다(임의 코드 실행 금지).
 
 게이트 종류:
 
@@ -267,11 +356,20 @@ fast_path:
 
 skill 노드의 `approval` 필드는 그 task 자체의 완료 승인 방식이다(7절).
 
+**`check` 게이트의 결정론**
+
+- **판정은 결정론적이다.** 앱이 정해진 명령을 직접 실행하고, 종료 코드 0이면 통과, 아니면 실패로 판정한다. LLM은 판정에 관여하지 않는다.
+- 명령은 `project.json`에 등록된 것만 실행한다. 에이전트가 고른 명령이나 handoff에 적힌 명령은 실행하지 않는다. 그래서 에이전트가 판정을 조작할 수 없다.
+- 실행 조건: worktree에서 실행, 타임아웃(기본 10분), 출력은 `tasks/<nn>-<gate>/check.log`에 저장.
+- **다만 결과 자체는 결정론적이지 않을 수 있다.** 불안정한(flaky) 테스트나 환경 차이 때문이다. 앱은 자동 재시도를 하지 않는다(기본 `retry: 0`). 재시도가 실패를 가릴 수 있기 때문이다. 실패하면 `on_fail` 노드로 돌아가고, 에이전트가 원인을 판단한다.
+- **한계:** check는 "명령이 통과했는가"만 보장한다. "올바르게 고쳤는가"는 보장하지 않는다. 예를 들어 에이전트가 테스트를 약하게 고쳐서 통과시킨 경우는 잡지 못한다. 이것은 `final-verify`와 사람 승인의 몫이다. `final-verify`는 diff에서 테스트 파일 변경 여부를 반드시 점검 항목에 넣는다.
+
 ### 6.4 수명주기 이벤트 (`events.jsonl`)
 
 ```
-work.created | work.completed | work.abandoned
-task.started | task.awaiting_approval | task.approved | task.rejected
+work.created | work.completed | work.abandoned | work.cleaned
+task.started | task.awaiting_approval | task.approved | task.rejected | task.abandoned
+task.rerouted
 gate.passed  | gate.failed
 intent.revised
 ```
@@ -303,10 +401,15 @@ v1 제공자:
 | gate-policy (이 task의 승인 방식) | 100 | inline |
 | intent (최신 버전) | 90 | inline |
 | decisions | 80 | inline |
+| next-options (이 노드에서 갈 수 있는 다음 노드) | 100 | inline |
+| intent (최신 버전) | 90 | inline |
+| gate-failure (게이트 실패로 돌아온 경우만) | 85 | inline (출력은 끝부분만) |
+| decisions | 80 | inline |
 | prev-handoff | 70 | inline |
 | required-artifacts (`requires`) | 60 | path |
 
-- 조립기는 우선순위 순으로 채우고, 토큰 예산을 넘으면 낮은 우선순위부터 `path` 모드로 강등한다.
+- 조립기는 우선순위 순으로 채우고, 토큰 예산을 넘으면 낮은 우선순위부터 `path` 모드로 강등한다. 우선순위 85 이상은 강등하지 않는다.
+- **토큰 예산(inline 합계):** 잠정값 **8,000 토큰**. 스파이크 S6에서 실측한 뒤 확정한다.
 - 결과는 `context.manifest.json`에 기록하고 UI에 "이번 세션에 주입된 것"으로 표시한다.
 - 지식 주입은 이후 `knowledge` 제공자 하나를 추가해서 구현한다.
 
@@ -327,6 +430,7 @@ skill 노드의 `approval`:
 
 안전장치:
 - 연속 자동 승인 상한(기본 3회)을 넘으면 수동 승인으로 전환한다.
+- 카운트다운(15초)과 연속 상한(3회)은 `config.json`의 설정값이다. 정해진 근거가 없는 초기값이므로, 쓰면서 불편하면 바꾼다. 조정 판단에 쓸 수 있도록 앱은 두 가지를 기록한다: 카운트다운 도중 취소한 횟수, 자동 승인된 task가 이후 되돌아가기 대상이 된 횟수.
 - 의도 승인(`g-intent`)과 Work 완료(`g-done`)는 설정과 관계없이 항상 수동이다.
 - 세션 도중 에이전트의 질문에는 절대 자동으로 답하지 않는다(비목표에 따라 task 내부는 관여하지 않음).
 
@@ -368,8 +472,9 @@ skill 노드의 `approval`:
 | `evidence` | 재현 조건 확인 | `evidence.md` | 재현 성공 여부와 재현 절차 명시 |
 | `root-cause` | 가설 채택 | `rca.md` | 원인이 증거로 뒷받침되고, 기각된 가설이 기록됨 |
 | `fix` | 계획에서 벗어날 때만 | 코드 커밋 | 재현 절차가 더 이상 실패하지 않고, 테스트 통과 |
-| `final-verify` | 최종 승인 | `verification.md` | 완료조건마다 통과/실패와 증거 |
-| `intent-revise` | 변경 승인 | `intent.md` 새 버전 | — |
+| `final-verify` | 최종 승인 | `verification.md` | 완료조건마다 통과/실패와 증거. 테스트 파일 변경 여부 점검 |
+| `deliver` | push/PR 실행 승인, PR 제목과 본문 검토 | `delivery.md` (브랜치, 커밋, PR 링크) | intent의 `delivery`대로 처리됨. `delivery: none`이면 노드를 건너뜀 |
+| `intent-revise` | 변경 내용 승인 | `intent.md` 새 버전 + 변경 전후 차이 + 영향 받는 산출물 목록 | 영향 분석과 재개 노드 추천이 있음 (4.2) |
 | (공통) `_close` | — | `handoff.md` | 스키마 준수 |
 
 공통 종료 절차(`_close`): 산출물 확정 → handoff 작성(`status: awaiting_approval`) → 게이트 정책에 맞는 안내 문구 출력("산출물을 검토하고 Task 완료를 눌러 주세요" 또는 "검사 통과 시 자동으로 다음 단계로 진행합니다").
@@ -385,6 +490,14 @@ skill 노드의 `approval`:
 | S3 | `--add-dir` + 권한 사전 허용으로 레포 밖 산출물 쓰기 | 승인 프롬프트 없이 `RELAY_TASK_DIR`에 파일 생성 |
 | S4 | 첫 프롬프트 인자로 스킬 호출 + 컨텍스트 전달 | 스킬이 트리거되고 컨텍스트를 인지함 |
 | S5 | (선택) Codex CLI 동일 항목 | Codex v1 포함 여부 결정 |
+| S6 | 컨텍스트 토큰 예산 실측 | 아래 절차로 기본값 확정 |
+
+**S6 절차 (토큰 예산)**
+
+1. 실제 버그 2~3건으로 버그 수정 파이프라인을 수동으로 끝까지 진행한다. 앱 없이 스킬과 템플릿만으로 해도 된다.
+2. task마다 제공자별 inline 크기를 기록한다(intent, decisions, prev-handoff 등).
+3. 같은 task를 예산 4k / 8k / 16k로 시작해 비교한다. 비교 항목은 에이전트가 산출물을 다시 읽으려고 도구를 호출한 횟수, 이전 결정을 다시 묻는 빈도, 첫 응답의 방향 정확도다.
+4. 품질 차이가 없는 가장 작은 값을 기본값으로 정한다.
 
 S3가 실패하면 대안은 다음과 같다: worktree 내부의 `.relay/`(exclude 처리)에 쓰게 하고, 승인 시 앱이 중앙 저장소로 옮긴다.
 
@@ -392,18 +505,18 @@ S3가 실패하면 대안은 다음과 같다: worktree 내부의 `.relay/`(excl
 
 ## 12. 열린 질문
 
-- worktree 기본 위치를 중앙 저장소 아래로 둘지, 레포 옆(`<repo>-worktrees/`)에 둘지
-- work 완료 후 브랜치 처리(PR 생성 연동 여부)
 - `check` 게이트의 테스트 명령을 프로젝트별로 어떻게 등록할지(`project.json` 수동 입력 / 자동 탐지)
-- 토큰 예산의 기본값
-- 자동 승인 카운트다운과 연속 상한의 기본값 검증
+- `deliver`의 PR 생성 방식(`gh` CLI 필요 여부, 인증 확인)
+- 토큰 예산 기본값: 스파이크 S6에서 확정
+
+해결됨 (v0.1.1): worktree 위치 → D13, 브랜치 처리 → D15, 카운트다운과 연속 상한 → 설정값으로 두고 사용하며 조정(7절)
 
 ---
 
 ## 13. 로드맵
 
-1. **M0:** 스파이크 S1~S4 → 이 문서에 반영
-2. **M1:** Project/Work 생성, worktree, PTY 터미널, 훅 신호, 상태 배지
-3. **M2:** 버그 수정 파이프라인 전체(스킬 6종, handoff 검증, human/check 게이트, 승인 정책)
+1. **M0:** 스파이크 S1~S4, S6 → 이 문서에 반영
+2. **M1:** Project/Work 생성, worktree, PTY 터미널, 훅 신호, 상태 배지, Work 정리
+3. **M2:** 버그 수정 파이프라인 전체(스킬 7종, handoff 검증, human/check 게이트, 승인 정책, 경로 변경 메뉴)
 4. **M3:** 실제 사용 → 스킬 개선, 승인 정책 기본값 조정
 5. **이후:** 지식 추출(`task.approved` 구독) + `knowledge` 제공자, `review` 게이트, 추가 파이프라인(기능 개발 등), Codex
