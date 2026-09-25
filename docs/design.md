@@ -66,6 +66,9 @@ relay-v2는 Claude Code CLI를 **앱 안의 터미널(node-pty + xterm.js)에 �
 | D26 | **질문 방식은 앱 설정에서 스킬마다 고른다.** 초안 우선(기본값)은 모르면 진행할 수 없는 정보와 사람이 정할 결정만 묻는다. 결정마다 확인은 스킬의 결정 지점도 정하기 전에 묻는다(5.6.1) | 단계마다 사람이 관여하고 싶은 정도가 다름. 기본을 초안 우선으로 둔 것은 확정을 승인 화면에서 하므로 같은 확인을 두 번 받지 않기 위함 | ✅ |
 | D27 | 질문은 모아서 `AskUserQuestion` 한 번에 묻는다(최대 4개). 추천 선택지를 맨 앞에 두고 "(추천)"을 붙인다. 횟수 상한은 없다 | 흐름이 덜 끊김. 상한은 질문이 실제로 많아지면 넣음 | ✅ |
 | D28 | **사람이 정할 결정은 초안으로 두지 않고 task 안에서 바로 묻는다.** handoff의 결정에는 누가 정했는지(`by`)만 적고, 자동 승인 조건(4.3)은 늘리지 않는다 | 자동 승인이 켜진 단계에서는 사람이 승인 화면을 보지 않으므로, 초안으로 둔 사람 몫의 결정이 사람 모르게 넘어갈 수 있음. 바로 물으면 조건을 늘리지 않고 막을 수 있음 | ✅ |
+| D29 | handoff 형식 검사는 앱만 한다. 에이전트용 검증 명령은 두지 않고, 에이전트는 템플릿과 대조만 한다. 오류는 Stop 훅으로 되돌린다(D21) | D21이 같은 일을 함. 검증 명령을 따로 두면 실행 파일 경로와 인용 처리 같은 구현 부담이 생김 | ✅ |
+| D30 | `awaiting_approval`인 handoff에서 노드별 필수 산출물(3.1 표)이 없으면 형식 오류로 처리한다 | 에이전트가 산출물을 빠뜨려도 통과하면, 자동 승인 단계에서 다음 단계가 입력 없이 시작됨. 고정된 표 하나로 확인할 수 있음 | ✅ |
+| D31 | 공통 종료 절차는 원본 한 파일로 두고, 앱이 스킬을 배포할 때 각 `SKILL.md` 끝에 붙인다. 합친 `SKILL.md`는 5,000토큰 안에 둔다 | 에이전트가 처음부터 전체 절차를 알고 작업함. Claude Code는 자동 압축 뒤 스킬 본문을 앞 5,000토큰까지만 다시 붙이므로, 한도를 지켜야 압축 뒤에도 절차가 남음 | ✅ |
 
 ---
 
@@ -157,7 +160,7 @@ intake(work-start) → 의도 승인 → evidence → rca → fix → verify →
 **언제:** Work 생성 직후, 또는 이전 task 승인 후
 
 1. **앱:** task 디렉터리 `tasks/<순번>-<노드>/`를 만들고, 현재 HEAD를 이 task의 시작 커밋으로 `work.json`에 기록한다(되감기 기준, 6.2).
-2. **앱:** 스킬을 worktree의 `.claude/skills/relay-<이름>/`에 복사하고 `.git/info/exclude`로 추적에서 제외한다.
+2. **앱:** 스킬을 worktree의 `.claude/skills/relay-<이름>/`에 복사하고 `.git/info/exclude`로 추적에서 제외한다. 복사할 때 공통 종료 절차를 각 `SKILL.md` 끝에 붙인다(5.6.2).
 3. **앱:** task 전용 설정 파일을 만든다.
    - HTTP 훅: UserPromptSubmit, Stop, Notification, SessionEnd, PreToolUse(`AskUserQuestion`만)
    - deny 규칙: `git push`, `gh pr` 계열, 앱 소유 파일(`work.json`, `intent.md`, `decisions.md`, 이전 task 디렉터리) 편집
@@ -165,6 +168,7 @@ intake(work-start) → 의도 승인 → evidence → rca → fix → verify →
 
    | 내용 | 방식 |
    |---|---|
+   | task 정보: work_id, task_id, node, skill, 승인된 intent 버전, task 디렉터리 경로 | 본문 |
    | 승인 방식(수동/자동)과 마무리 안내 문구 | 본문 |
    | 질문 방식(초안 우선 / 결정마다 확인, 5.6.1) | 본문 |
    | 선택 가능한 다음 단계(3.2) | 본문 |
@@ -207,7 +211,7 @@ intake(work-start) → 의도 승인 → evidence → rca → fix → verify →
 
 ### 시나리오 4. handoff와 승인
 
-1. **에이전트:** 산출물과 `handoff.md`를 쓰고, 검증 명령으로 스스로 확인하고, 안내 문구를 출력한 뒤 턴을 끝낸다.
+1. **에이전트:** 공통 종료 절차(5.6.2)에 따라 산출물과 `handoff.md`를 쓰고, 안내 문구를 출력한 뒤 턴을 끝낸다. 형식 검사는 앱이 한다(시나리오 3-3, D29).
 2. **앱:** Stop을 받고 handoff가 유효하면 "승인 대기"로 바꾸고 검토 화면을 띄운다.
    - handoff 요약, 결정 목록, 열린 질문, 위험
    - 산출물(마크다운으로 보기)
@@ -335,6 +339,7 @@ intake(work-start) → 의도 승인 → evidence → rca → fix → verify →
 <RELAY_HOME>/                          # 기본 %USERPROFILE%\.relay, macOS/Linux ~/.relay
   config.json                          # 앱 설정 (세션 상한, 자동 승인 단계별 기본값, 스킬별 질문 방식, PR draft 여부 등)
   skills/<name>/SKILL.md
+  skills/_close.md                     # 공통 종료 절차 원본. 배포할 때 각 SKILL.md 끝에 붙인다 (5.6.2)
   projects/<project-id>/               # <레포 폴더 이름>-<레포 절대 경로 해시 6자>
     project.json                       # 레포 경로, 기본 브랜치
     worktrees/<work-id>/
@@ -411,7 +416,8 @@ knowledge_candidates: []
 
 - 본문의 `## 요약`과 `## 다음 task가 알아야 할 것`은 필수다. 두 번째 절에는 경로와 줄, 명령, 수치처럼 다시 찾기 비싼 사실을 적는다.
 - 본문 분량 기준은 약 1,500자다(기본값). 넘으면 경고만 한다.
-- 형식 **오류**는 필수 필드 누락, 타입, 허용되지 않은 값, 식별자 불일치, 산출물 파일 없음이다. 오류가 있으면 승인 버튼이 비활성화되고 Stop 훅으로 되돌린다(D21).
+- 형식 **오류**는 필수 필드 누락, 타입, 허용되지 않은 값, 식별자 불일치, 산출물 파일 없음, 필수 산출물 누락이다. 오류가 있으면 승인 버튼이 비활성화되고 Stop 훅으로 되돌린다(D21).
+- **필수 산출물**은 노드별로 3.1 표의 산출물 파일이다. `status: awaiting_approval`일 때만 확인한다. 파일이 task 디렉터리에 있고 `artifacts`에 적혀 있어야 한다(D30).
 
 ### 5.3 intent (`intent.md`)
 
@@ -488,7 +494,7 @@ delivery.succeeded | delivery.failed
 
 ### 5.6 스킬
 
-스킬은 task 하나에서 에이전트가 따르는 절차다. 이 절에는 모든 스킬에 공통인 규칙을 적는다. 공통 종료 절차와 스킬별 명세(입력, 결정 지점, 완료조건, 산출물 템플릿)는 8절 1번에서 정해 이 절에 더한다.
+스킬은 task 하나에서 에이전트가 따르는 절차다. 이 절에는 모든 스킬에 공통인 규칙(질문 규칙, 공통 종료 절차)을 적는다. 스킬별 명세(입력, 결정 지점, 완료조건, 산출물 템플릿)는 8절 1번에서 정해 이 절에 더한다.
 
 #### 5.6.1 질문 규칙
 
@@ -520,6 +526,30 @@ delivery.succeeded | delivery.failed
 
 - 사람이 정할 결정은 task 안에서 이미 물었으므로 자동 승인 조건(4.3)에 따로 두지 않는다. 답이 없으면 `open_questions`가 남아 자동 승인되지 않는다.
 
+#### 5.6.2 공통 종료 절차
+
+모든 스킬이 마지막에 똑같이 따르는 절차다. 원본은 `skills/_close.md` 한 파일이고, 앱이 스킬을 배포할 때 각 `SKILL.md` 끝에 붙인다(D31). 합친 `SKILL.md`는 5,000토큰 안에 둔다. Claude Code는 자동 압축 뒤 스킬 본문을 앞 5,000토큰까지만 다시 붙이기 때문이다.
+
+**실행하는 때**
+
+| 때 | 마무리 |
+|---|---|
+| 스킬의 완료조건을 모두 채웠을 때 | `status: awaiting_approval` |
+| 더 진행할 수 없을 때 | `status: blocked`와 `blocked_reason` |
+| 사람이 마무리를 요청했을 때 | 그때까지의 결과로 마무리한다. 못 한 것은 `open_questions`나 `risks`에 적는다 |
+| 사람의 수정 요청을 반영했을 때 | 절차를 다시 실행한다(시나리오 4-3) |
+
+**순서**
+
+1. **산출물 확인:** 스킬의 필수 산출물이 task 디렉터리에 있고, 템플릿의 절을 모두 갖췄는지 확인한다.
+2. **git 정리**
+   - 코드를 바꾸는 단계는 변경을 모두 커밋한다. 어느 단계가 코드를 바꾸는지는 스킬별 명세에 적는다.
+   - 그 밖의 단계는 에이전트가 만든 실험용 변경(디버그 출력 등)을 되돌린다. 사람이 직접 바꾼 파일은 건드리지 않는다. 남은 변경은 `risks`에 적는다.
+3. **handoff 작성:** task 디렉터리의 `handoff.md`에 5.2 형식으로 쓴다. `artifacts`에는 필수 산출물을 포함한다. 다 쓰면 템플릿과 대조한다(D29). `_close.md`에는 5.2의 필드를 빈 값으로 둔 템플릿을 싣는다.
+4. **안내:** `context.md`의 마무리 안내 문구를 그대로 출력하고 턴을 끝낸다. `blocked`이면 `blocked_reason`과 사람이 해 줄 일을 출력한다.
+
+**형식 오류가 되돌아오면:** 앱이 Stop 때 형식을 검사해 오류를 되돌린다(D21). 에이전트는 형식만 고치고 3~4를 다시 한다. 내용은 바꾸지 않는다.
+
 ---
 
 ## 6. 벤더 연동 (Claude Code)
@@ -529,7 +559,7 @@ delivery.succeeded | delivery.failed
 | 실행 | `claude --dangerously-skip-permissions --session-id <uuid> --add-dir <work dir> --settings <task 설정> "<짧은 첫 프롬프트>"` |
 | 재개 | 같은 옵션 + `--resume <uuid>` (이전 옵션이 복원된다고 가정하지 않음) |
 | 컨텍스트 | `tasks/<nn>/context.md` + 첫 프롬프트에 경로 |
-| 스킬 배포 | worktree `.claude/skills/relay-<name>/`로 복사, `.git/info/exclude` |
+| 스킬 배포 | worktree `.claude/skills/relay-<name>/`로 복사, `.git/info/exclude`. 복사할 때 공통 종료 절차를 `SKILL.md` 끝에 붙임 |
 | 상태 신호 | 내장 HTTP 훅 → 앱 로컬 서버: UserPromptSubmit, Stop, Notification, SessionEnd, PreToolUse(`AskUserQuestion`) |
 | 형식 오류 되돌림 | Stop 훅 응답 `{"decision":"block","reason":…}`, 연속 2회까지 |
 | 제한 | deny 규칙: `Bash(git push*)`, `Bash(gh pr*)`, 앱 소유 파일 `Edit(//…)` |
@@ -552,7 +582,7 @@ delivery.succeeded | delivery.failed
 
 같은 방식(시나리오 → 질문 → 결정)으로 하나씩 정한다.
 
-1. **스킬 명세(5.6):** 공통 종료 절차, 공통 입력, 스킬 배포 위치. work-start, evidence, root-cause, fix, final-verify 각각의 입력, 결정 지점(사람이 정할 결정 포함), 완료조건, 산출물 템플릿
+1. **스킬 명세(5.6):** 공통 입력, 스킬 배포 위치. work-start, evidence, root-cause, fix, final-verify 각각의 입력, 결정 지점(사람이 정할 결정 포함), 완료조건, 산출물 템플릿
 2. **S 빠른 경로:** 규모 판정 기준, 건너뛴 단계의 산출물을 요구하는 단계(fix, verify)의 입력 규칙
 3. **프로젝트 등록:** 필요한 정보(레포 경로, 기본 브랜치, `gh` 확인), 권한 확인 없이 실행한다는 안내와 동의
 4. **앱 설정 항목과 기본값:** `config.json`
