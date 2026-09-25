@@ -69,6 +69,10 @@ relay-v2는 Claude Code CLI를 **앱 안의 터미널(node-pty + xterm.js)에 �
 | D29 | handoff 형식 검사는 앱만 한다. 에이전트용 검증 명령은 두지 않고, 에이전트는 템플릿과 대조만 한다. 오류는 Stop 훅으로 되돌린다(D21) | D21이 같은 일을 함. 검증 명령을 따로 두면 실행 파일 경로와 인용 처리 같은 구현 부담이 생김 | ✅ |
 | D30 | `awaiting_approval`인 handoff에서 노드별 필수 산출물(3.1 표)이 없으면 형식 오류로 처리한다 | 에이전트가 산출물을 빠뜨려도 통과하면, 자동 승인 단계에서 다음 단계가 입력 없이 시작됨. 고정된 표 하나로 확인할 수 있음 | ✅ |
 | D31 | 공통 종료 절차는 원본 한 파일로 두고, 앱이 스킬을 배포할 때 각 `SKILL.md` 끝에 붙인다. 합친 `SKILL.md`는 5,000토큰 안에 둔다 | 에이전트가 처음부터 전체 절차를 알고 작업함. Claude Code는 자동 압축 뒤 스킬 본문을 앞 5,000토큰까지만 다시 붙이므로, 한도를 지켜야 압축 뒤에도 절차가 남음 | ✅ |
+| D32 | **스킬은 Work 디렉터리의 `.claude/skills/relay-<이름>/`에 복사한다.** Claude Code는 `--add-dir`로 추가한 디렉터리의 스킬도 읽으므로 worktree에는 두지 않는다 | worktree 루트에 `.claude/skills`가 생기면 Claude Code가 그 폴더만 읽어서, 사용자가 메인 체크아웃에만 둔 프로젝트 스킬이 보이지 않음. worktree에 파일을 두지 않으므로 git 추적에서 빼는 처리도 필요 없음 | ✅ |
+| D33 | relay 스킬은 모두 `disable-model-invocation: true`로 둔다. 스킬은 첫 프롬프트로만 시작한다 | 에이전트가 다른 단계의 스킬을 스스로 불러오면 단계 경계가 무너짐 | |
+| D34 | Work 요청 원문은 `request.md`로 저장한다. intake에는 본문을, 이후 task에는 경로만 넣는다 | intent는 요청을 줄인 것이라 붙여 넣은 로그가 빠질 수 있음. 경로만 주면 필요한 단계가 읽고, 컨텍스트는 늘지 않음 | ✅ |
+| D35 | 사람이 질문에 답하면 PostToolUse(`AskUserQuestion`) 훅으로 상태를 "작업 중"으로 되돌린다 | 답한 뒤에도 다음 Stop까지 "질문 대기"로 남으면, 사람이 이 Work가 계속 입력을 기다린다고 오해함 | ✅ |
 
 ---
 
@@ -150,6 +154,7 @@ intake(work-start) → 의도 승인 → evidence → rca → fix → verify →
    - work-id를 만든다(`w-YYYYMMDD-NNN`).
    - `relay/<work-id>` 브랜치와 worktree를 만든다.
    - `works/<work-id>/`와 `work.json`을 만든다.
+   - 요청 원문을 `works/<work-id>/request.md`로 저장한다(D34).
    - `work.created` 이벤트를 기록한다.
    - 의존성 설치(`npm ci` 등)는 하지 않는다. 필요하면 에이전트가 세션 안에서 한다.
 3. **앱:** intake task를 자동으로 시작한다(시나리오 2).
@@ -160,10 +165,10 @@ intake(work-start) → 의도 승인 → evidence → rca → fix → verify →
 **언제:** Work 생성 직후, 또는 이전 task 승인 후
 
 1. **앱:** task 디렉터리 `tasks/<순번>-<노드>/`를 만들고, 현재 HEAD를 이 task의 시작 커밋으로 `work.json`에 기록한다(되감기 기준, 6.2).
-2. **앱:** 스킬을 worktree의 `.claude/skills/relay-<이름>/`에 복사하고 `.git/info/exclude`로 추적에서 제외한다. 복사할 때 공통 종료 절차를 각 `SKILL.md` 끝에 붙인다(5.6.2).
+2. **앱:** 스킬을 Work 디렉터리의 `.claude/skills/relay-<이름>/`에 복사하고, 공통 종료 절차를 각 `SKILL.md` 끝에 붙인다(5.6.3). worktree는 건드리지 않는다.
 3. **앱:** task 전용 설정 파일을 만든다.
-   - HTTP 훅: UserPromptSubmit, Stop, Notification, SessionEnd, PreToolUse(`AskUserQuestion`만)
-   - deny 규칙: `git push`, `gh pr` 계열, 앱 소유 파일(`work.json`, `intent.md`, `decisions.md`, 이전 task 디렉터리) 편집
+   - HTTP 훅: UserPromptSubmit, Stop, Notification, SessionEnd, PreToolUse·PostToolUse(`AskUserQuestion`만)
+   - deny 규칙: `git push`, `gh pr` 계열, 앱 소유 파일(`work.json`, `request.md`, `intent.md`, `decisions.md`, 이전 task 디렉터리, Work 디렉터리의 `.claude/`) 편집
 4. **앱:** `context.md`를 조립한다.
 
    | 내용 | 방식 |
@@ -173,6 +178,7 @@ intake(work-start) → 의도 승인 → evidence → rca → fix → verify →
    | 질문 방식(초안 우선 / 결정마다 확인, 5.6.1) | 본문 |
    | 선택 가능한 다음 단계(3.2) | 본문 |
    | intent(최신 승인 버전) | 본문 |
+   | Work 요청 원문(`request.md`) | intake는 본문, 이후 task는 경로 |
    | 결정 로그 | 본문 |
    | 누적 기각 목록 (이전 모든 handoff의 `rejected`) | 본문 |
    | 직전 handoff | 본문 |
@@ -196,6 +202,7 @@ intake(work-start) → 의도 승인 → evidence → rca → fix → verify →
    |---|---|
    | UserPromptSubmit | 작업 중 (사용자가 새 요청을 보냈다는 기록도 남김) |
    | PreToolUse(`AskUserQuestion`) | 질문 대기 (입력 필요, 백그라운드 Work면 알림) |
+   | PostToolUse(`AskUserQuestion`) | 작업 중 (사람이 답함) |
    | Stop + 유효한 handoff 없음 | 대기 |
    | Stop + 유효한 handoff 있음(`awaiting_approval`) | 승인 대기 (시나리오 4) |
    | Stop + 유효한 handoff 있음(`blocked`) | 막힘 (4.4) |
@@ -285,7 +292,7 @@ intake(work-start) → 의도 승인 → evidence → rca → fix → verify →
 
 - 의도 승인 전에는 [intake 다시]와 [Work 포기]만 할 수 있다.
 - Work 완료는 메뉴에 없다. verify를 거치거나 [Work 포기]를 쓴다.
-- **의도 변경:** intake로 되감는 것만 가능하다. 모든 산출물을 폐기하고, 원래 요청 + 추가 지시로 다시 시작한다.
+- **의도 변경:** intake로 되감는 것만 가능하다. 모든 산출물을 폐기하고, 원래 요청(`request.md`) + 추가 지시로 다시 시작한다.
 - 단계 선택 목록에는 파이프라인의 단계만 있다.
 
 ### 시나리오 7. 최종 검증 → Work 완료 → push/PR
@@ -345,6 +352,8 @@ intake(work-start) → 의도 승인 → evidence → rca → fix → verify →
     worktrees/<work-id>/
     works/<work-id>/
       work.json                        # Work 상태, 현재 단계, 승인 기록, Work별 설정
+      request.md                       # Work 생성 때 받은 요청 원문
+      .claude/skills/relay-<name>/SKILL.md   # 배포본. task를 시작할 때 앱이 복사 (5.6.3)
       intent.md                        # 승인된 최신 의도
       intent.history/v1.md …
       decisions.md                     # 승인 시 앱이 추가
@@ -494,7 +503,7 @@ delivery.succeeded | delivery.failed
 
 ### 5.6 스킬
 
-스킬은 task 하나에서 에이전트가 따르는 절차다. 이 절에는 모든 스킬에 공통인 규칙(질문 규칙, 공통 종료 절차)을 적는다. 스킬별 명세(입력, 결정 지점, 완료조건, 산출물 템플릿)는 8절 1번에서 정해 이 절에 더한다.
+스킬은 task 하나에서 에이전트가 따르는 절차다. 이 절에는 모든 스킬에 공통인 규칙(질문 규칙, 공통 종료 절차, 배포와 입력)을 적는다. 스킬별 명세(입력, 결정 지점, 완료조건, 산출물 템플릿)는 8절 1번에서 정해 이 절에 더한다.
 
 #### 5.6.1 질문 규칙
 
@@ -550,6 +559,14 @@ delivery.succeeded | delivery.failed
 
 **형식 오류가 되돌아오면:** 앱이 Stop 때 형식을 검사해 오류를 되돌린다(D21). 에이전트는 형식만 고치고 3~4를 다시 한다. 내용은 바꾸지 않는다.
 
+#### 5.6.3 배포와 입력
+
+- **원본:** `<RELAY_HOME>/skills/<name>/SKILL.md`와 공통 종료 절차 `skills/_close.md`.
+- **배포:** task를 시작할 때 앱이 Work 디렉터리(`works/<work-id>/`)의 `.claude/skills/relay-<name>/`에 복사하고, `_close.md`를 `SKILL.md` 끝에 붙인다. relay는 `--add-dir <work 디렉터리>`로 실행하고, Claude Code는 추가한 디렉터리의 `.claude/skills/`도 읽는다. 그래서 worktree에는 두지 않는다(D32). 이 경로는 deny 규칙으로 편집을 막는다.
+- **호출:** 모든 relay 스킬은 `disable-model-invocation: true`로 둔다. 스킬은 첫 프롬프트로만 시작한다(D33).
+- **입력:** 첫 프롬프트는 `/relay-<스킬> 이 task의 컨텍스트: <context.md 경로>`다. 스킬은 `context.md`부터 읽는다. `context.md`의 구성은 시나리오 2-4의 표를 따른다. 스킬별로 더 읽는 파일은 스킬별 명세에 적는다.
+- **요청 원문:** `request.md`는 intake에는 본문으로, 이후 task에는 경로로 들어간다(D34).
+
 ---
 
 ## 6. 벤더 연동 (Claude Code)
@@ -559,8 +576,8 @@ delivery.succeeded | delivery.failed
 | 실행 | `claude --dangerously-skip-permissions --session-id <uuid> --add-dir <work dir> --settings <task 설정> "<짧은 첫 프롬프트>"` |
 | 재개 | 같은 옵션 + `--resume <uuid>` (이전 옵션이 복원된다고 가정하지 않음) |
 | 컨텍스트 | `tasks/<nn>/context.md` + 첫 프롬프트에 경로 |
-| 스킬 배포 | worktree `.claude/skills/relay-<name>/`로 복사, `.git/info/exclude`. 복사할 때 공통 종료 절차를 `SKILL.md` 끝에 붙임 |
-| 상태 신호 | 내장 HTTP 훅 → 앱 로컬 서버: UserPromptSubmit, Stop, Notification, SessionEnd, PreToolUse(`AskUserQuestion`) |
+| 스킬 배포 | Work 디렉터리 `.claude/skills/relay-<name>/`로 복사(`--add-dir`로 읽힘). 복사할 때 공통 종료 절차를 `SKILL.md` 끝에 붙임. `disable-model-invocation: true` |
+| 상태 신호 | 내장 HTTP 훅 → 앱 로컬 서버: UserPromptSubmit, Stop, Notification, SessionEnd, PreToolUse·PostToolUse(`AskUserQuestion`) |
 | 형식 오류 되돌림 | Stop 훅 응답 `{"decision":"block","reason":…}`, 연속 2회까지 |
 | 제한 | deny 규칙: `Bash(git push*)`, `Bash(gh pr*)`, 앱 소유 파일 `Edit(//…)` |
 | 산출물 감지 | 실행 중 task 디렉터리 감시 |
@@ -582,14 +599,14 @@ delivery.succeeded | delivery.failed
 
 같은 방식(시나리오 → 질문 → 결정)으로 하나씩 정한다.
 
-1. **스킬 명세(5.6):** 공통 입력, 스킬 배포 위치. work-start, evidence, root-cause, fix, final-verify 각각의 입력, 결정 지점(사람이 정할 결정 포함), 완료조건, 산출물 템플릿
+1. **스킬 명세(5.6):** work-start, evidence, root-cause, fix, final-verify 각각의 입력, 결정 지점(사람이 정할 결정 포함), 완료조건, 산출물 템플릿
 2. **S 빠른 경로:** 규모 판정 기준, 건너뛴 단계의 산출물을 요구하는 단계(fix, verify)의 입력 규칙
 3. **프로젝트 등록:** 필요한 정보(레포 경로, 기본 브랜치, `gh` 확인), 권한 확인 없이 실행한다는 안내와 동의
 4. **앱 설정 항목과 기본값:** `config.json`
 5. **장애와 복구:** 앱 충돌 후 재시작 시 상태 조정, 고아 프로세스
 6. **화면:** 레이아웃, 상태 배지, 승인 화면, 단계 선택 대화상자
 7. **handoff와 intent의 JSON Schema** (MVP 범위)
-8. **스파이크:** S1 터미널 임베드(한글 IME 포함), S2 HTTP 훅과 AskUserQuestion·Stop 되돌림, S3 첫 프롬프트 스킬 트리거와 재개, S4 권한 확인을 끈 모드에서 deny 규칙이 앱 소유 파일 편집과 `git push`를 막는지
+8. **스파이크:** S1 터미널 임베드(한글 IME 포함), S2 HTTP 훅(AskUserQuestion의 PreToolUse·PostToolUse 포함)과 Stop 되돌림, S3 첫 프롬프트 스킬 트리거(`--add-dir` 디렉터리의 스킬, `disable-model-invocation: true`)와 재개, S4 권한 확인을 끈 모드에서 deny 규칙이 앱 소유 파일 편집과 `git push`를 막는지
 
 ## 9. 추가 후보 (필요가 확인되면)
 
