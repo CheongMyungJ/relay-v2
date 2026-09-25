@@ -7,38 +7,131 @@
     "request": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["v", "token", "hook", "work_id", "step_id", "ts", "input"],
+      "required": [
+        "v",
+        "token",
+        "hook",
+        "work_id",
+        "step_id",
+        "ts",
+        "input",
+        "attempt_id"
+      ],
       "properties": {
-        "v": { "const": 1 },
-        "token": { "type": "string", "description": "앱 실행마다 새로 만든 무작위 값. 다른 프로세스의 위조 신호 차단" },
-        "hook": { "enum": ["SessionStart", "Stop", "Notification", "SessionEnd"] },
-        "work_id": { "type": "string" },
-        "step_id": { "type": "string" },
-        "ts": { "type": "string", "format": "date-time" },
+        "v": {
+          "const": 1
+        },
+        "token": {
+          "type": "string",
+          "description": "앱 실행마다 새로 만든 무작위 값. 다른 프로세스의 위조 신호 차단"
+        },
+        "hook": {
+          "enum": [
+            "SessionStart",
+            "UserPromptSubmit",
+            "Stop",
+            "Notification",
+            "SessionEnd"
+          ]
+        },
+        "work_id": {
+          "type": "string"
+        },
+        "step_id": {
+          "type": "string"
+        },
+        "ts": {
+          "type": "string",
+          "format": "date-time"
+        },
         "input": {
           "type": "object",
           "description": "Claude Code가 훅 stdin으로 준 JSON에서 필요한 필드만 옮긴 것",
           "properties": {
-            "session_id": { "type": "string" },
-            "transcript_path": { "type": "string" },
-            "stop_hook_active": { "type": "boolean" },
-            "message": { "type": "string", "description": "Notification 문구" },
-            "source": { "type": "string", "description": "SessionStart source: startup | resume | clear | compact" }
+            "session_id": {
+              "type": "string"
+            },
+            "transcript_path": {
+              "type": "string"
+            },
+            "stop_hook_active": {
+              "type": "boolean"
+            },
+            "message": {
+              "type": "string",
+              "description": "Notification 문구"
+            },
+            "source": {
+              "type": "string",
+              "description": "SessionStart source: startup | resume | clear | compact"
+            },
+            "notification_type": {
+              "type": "string",
+              "description": "permission_prompt(권한 확인 약 6초 후) | idle_prompt(응답 후 약 60초) | 기타. 화면 표시에만 쓴다"
+            },
+            "background_tasks_count": {
+              "type": "integer",
+              "description": "Stop 입력의 background_tasks 길이. 0보다 크면 턴 종료로 보지 않는다(C1)"
+            },
+            "reason": {
+              "type": "string",
+              "description": "SessionEnd reason"
+            }
           }
+        },
+        "attempt_id": {
+          "type": "string",
+          "description": "세션 시작 시 RELAY_ATTEMPT_ID 환경 변수로 받은 값"
         }
       }
     },
     "response": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["v", "action"],
+      "required": [
+        "v",
+        "action"
+      ],
       "properties": {
-        "v": { "const": 1 },
-        "action": { "enum": ["none", "block"], "description": "block은 Stop 훅에만 유효. 훅 스크립트가 {\"decision\":\"block\",\"reason\":...}를 stdout으로 출력해 에이전트에게 오류를 되돌린다 (D21)" },
-        "reason": { "type": "string", "maxLength": 2000 }
+        "v": {
+          "const": 1
+        },
+        "action": {
+          "enum": [
+            "none",
+            "block"
+          ],
+          "description": "block은 Stop 훅에만 유효. 훅 스크립트가 {\"decision\":\"block\",\"reason\":...}를 stdout으로 출력해 에이전트에게 오류를 되돌린다 (D21)"
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 2000
+        }
       },
-      "allOf": [ { "if": { "properties": { "action": { "const": "block" } } }, "then": { "required": ["reason"] } } ]
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "block"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "reason"
+            ]
+          }
+        }
+      ]
     }
   },
-  "oneOf": [ { "$ref": "#/$defs/request" }, { "$ref": "#/$defs/response" } ]
+  "oneOf": [
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/response"
+    }
+  ]
 }

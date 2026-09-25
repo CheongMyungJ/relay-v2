@@ -37,15 +37,19 @@
     "type": {
       "enum": [
         "work.created",
-        "work.setup_failed",
         "work.paused",
         "work.resumed",
         "work.needs_attention",
+        "work.attention_cleared",
+        "work.path_escalated",
         "work.completed",
         "work.abandoned",
+        "work.reopened",
         "work.cleaned",
         "task.started",
         "task.resumed",
+        "task.session_changed",
+        "task.input",
         "task.awaiting_approval",
         "task.handoff_invalid",
         "task.approved",
@@ -53,20 +57,26 @@
         "task.interrupted",
         "task.ended_no_handoff",
         "task.rerouted",
+        "approval.candidate_created",
+        "approval.candidate_discarded",
         "approval.evaluated",
         "approval.countdown_started",
         "approval.countdown_cancelled",
         "gate.started",
         "gate.passed",
         "gate.failed",
+        "checks.discarded",
         "repro.locked",
         "repro.lock_failed",
+        "repro.relocked",
         "repro.released",
         "intent.approved",
         "intent.revised",
+        "delivery.started",
         "delivery.succeeded",
         "delivery.failed",
-        "artifact.modified_after_approval"
+        "artifact.modified_after_approval",
+        "state.external_change_ignored"
       ]
     },
     "payload": {
@@ -86,22 +96,6 @@
         "properties": {
           "payload": {
             "$ref": "#/$defs/work_created"
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "type": {
-            "const": "work.setup_failed"
-          }
-        }
-      },
-      "then": {
-        "properties": {
-          "payload": {
-            "$ref": "#/$defs/work_setup_failed"
           }
         }
       }
@@ -158,6 +152,38 @@
       "if": {
         "properties": {
           "type": {
+            "const": "work.attention_cleared"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/work_attention_cleared"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "work.path_escalated"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/work_path_escalated"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
             "const": "work.completed"
           }
         }
@@ -182,6 +208,22 @@
         "properties": {
           "payload": {
             "$ref": "#/$defs/work_abandoned"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "work.reopened"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/work_reopened"
           }
         }
       }
@@ -230,6 +272,38 @@
         "properties": {
           "payload": {
             "$ref": "#/$defs/task_resumed"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "task.session_changed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/task_session_changed"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "task.input"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/task_input"
           }
         }
       }
@@ -350,6 +424,38 @@
       "if": {
         "properties": {
           "type": {
+            "const": "approval.candidate_created"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/approval_candidate_created"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "approval.candidate_discarded"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/approval_candidate_discarded"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
             "const": "approval.evaluated"
           }
         }
@@ -446,6 +552,22 @@
       "if": {
         "properties": {
           "type": {
+            "const": "checks.discarded"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/checks_discarded"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
             "const": "repro.locked"
           }
         }
@@ -470,6 +592,22 @@
         "properties": {
           "payload": {
             "$ref": "#/$defs/repro_lock_failed"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "repro.relocked"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/repro_relocked"
           }
         }
       }
@@ -526,6 +664,22 @@
       "if": {
         "properties": {
           "type": {
+            "const": "delivery.started"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/delivery_started"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
             "const": "delivery.succeeded"
           }
         }
@@ -569,6 +723,22 @@
           }
         }
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "state.external_change_ignored"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/state_external_change_ignored"
+          }
+        }
+      }
     }
   ],
   "$defs": {
@@ -596,25 +766,6 @@
           "type": "string"
         },
         "base_commit": {
-          "type": "string"
-        }
-      }
-    },
-    "work_setup_failed": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "exit_code",
-        "log"
-      ],
-      "properties": {
-        "exit_code": {
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "log": {
           "type": "string"
         }
       }
@@ -653,6 +804,33 @@
         },
         "message": {
           "type": "string"
+        },
+        "step_id": {
+          "type": "string"
+        }
+      }
+    },
+    "work_attention_cleared": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reason"
+      ],
+      "properties": {
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "work_path_escalated": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "via_node"
+      ],
+      "properties": {
+        "via_node": {
+          "type": "string"
         }
       }
     },
@@ -690,6 +868,12 @@
         }
       }
     },
+    "work_reopened": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {}
+    },
     "work_cleaned": {
       "type": "object",
       "additionalProperties": false,
@@ -717,6 +901,7 @@
         "skill",
         "reason",
         "session_id",
+        "attempt_id",
         "manifest"
       ],
       "properties": {
@@ -730,6 +915,18 @@
           "type": "string"
         },
         "session_id": {
+          "type": "string"
+        },
+        "attempt_id": {
+          "type": "string"
+        },
+        "pid": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "process_started_at": {
           "type": "string"
         },
         "manifest": {
@@ -746,10 +943,23 @@
       "additionalProperties": false,
       "required": [
         "session_id",
+        "attempt_id",
         "cause"
       ],
       "properties": {
         "session_id": {
+          "type": "string"
+        },
+        "attempt_id": {
+          "type": "string"
+        },
+        "pid": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "process_started_at": {
           "type": "string"
         },
         "cause": {
@@ -757,8 +967,45 @@
             "app_restart",
             "crash",
             "handoff_missing",
+            "invalid_exit",
             "user"
           ]
+        },
+        "prompt": {
+          "type": "string"
+        }
+      }
+    },
+    "task_session_changed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "session_id",
+        "source"
+      ],
+      "properties": {
+        "session_id": {
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "clear",
+            "resume",
+            "fork",
+            "compact"
+          ]
+        }
+      }
+    },
+    "task_input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "input_generation"
+      ],
+      "properties": {
+        "input_generation": {
+          "type": "integer"
         }
       }
     },
@@ -781,6 +1028,12 @@
             "awaiting_approval",
             "blocked"
           ]
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -812,7 +1065,14 @@
       "additionalProperties": false,
       "required": [
         "by",
-        "next_node"
+        "next_node",
+        "candidate_id",
+        "handoff_sha256",
+        "artifact_hashes",
+        "head",
+        "intent_version",
+        "decisions",
+        "rejected"
       ],
       "properties": {
         "by": {
@@ -824,16 +1084,47 @@
         "next_node": {
           "type": "string"
         },
+        "candidate_id": {
+          "type": "string"
+        },
+        "handoff_sha256": {
+          "type": "string"
+        },
+        "artifact_hashes": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "head": {
+          "type": "string"
+        },
+        "clean": {
+          "type": "boolean"
+        },
+        "intent_version": {
+          "type": "integer"
+        },
+        "merged_gate": {
+          "type": "boolean"
+        },
         "forced_invalid": {
           "type": "boolean"
         },
-        "artifacts": {
+        "decisions": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "rejected": {
           "type": "array",
           "items": {
             "type": "string"
           }
         }
-      }
+      },
+      "description": "decisions.md와 rejected-log는 이 payload에서 재생성한다(C2)"
     },
     "task_abandoned": {
       "type": "object",
@@ -847,8 +1138,15 @@
             "user_reroute",
             "work_abandoned",
             "intent_revise",
-            "user_stop"
+            "user_stop",
+            "retry"
           ]
+        },
+        "rejected": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -863,7 +1161,8 @@
           "enum": [
             "app_exit",
             "app_crash",
-            "pty_exit"
+            "pty_exit",
+            "user_pause"
           ]
         },
         "exit_code": {
@@ -910,7 +1209,8 @@
             "default",
             "transition",
             "recommended",
-            "other"
+            "other",
+            "suggested"
           ]
         },
         "temporary": {
@@ -924,6 +1224,69 @@
           "items": {
             "type": "string"
           }
+        },
+        "reason_ref": {
+          "type": "string",
+          "description": "원인이 된 검사 로그·handoff·추천 참조"
+        },
+        "note": {
+          "type": "string",
+          "description": "사용자가 남긴 선택 메모(필수 아님)"
+        }
+      }
+    },
+    "approval_candidate_created": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_id",
+        "input_generation",
+        "handoff_sha256",
+        "head",
+        "config_fingerprint"
+      ],
+      "properties": {
+        "candidate_id": {
+          "type": "string"
+        },
+        "input_generation": {
+          "type": "integer"
+        },
+        "handoff_sha256": {
+          "type": "string"
+        },
+        "head": {
+          "type": "string"
+        },
+        "clean": {
+          "type": "boolean"
+        },
+        "config_fingerprint": {
+          "type": "string"
+        }
+      }
+    },
+    "approval_candidate_discarded": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_id",
+        "cause"
+      ],
+      "properties": {
+        "candidate_id": {
+          "type": "string"
+        },
+        "cause": {
+          "enum": [
+            "new_input",
+            "handoff_changed",
+            "artifact_changed",
+            "head_changed",
+            "config_changed",
+            "resumed",
+            "mismatch_on_approve"
+          ]
         }
       }
     },
@@ -931,10 +1294,14 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "candidate_id",
         "eligible",
         "blocking"
       ],
       "properties": {
+        "candidate_id": {
+          "type": "string"
+        },
         "eligible": {
           "type": "boolean"
         },
@@ -956,9 +1323,13 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "candidate_id",
         "seconds"
       ],
       "properties": {
+        "candidate_id": {
+          "type": "string"
+        },
         "seconds": {
           "type": "integer"
         }
@@ -978,7 +1349,6 @@
         "by": {
           "enum": [
             "user",
-            "input",
             "condition_changed"
           ]
         }
@@ -989,7 +1359,8 @@
       "additionalProperties": false,
       "required": [
         "node_id",
-        "gate"
+        "gate",
+        "attempt_id"
       ],
       "properties": {
         "node_id": {
@@ -1001,6 +1372,9 @@
             "check",
             "review"
           ]
+        },
+        "attempt_id": {
+          "type": "string"
         },
         "checks": {
           "type": "array",
@@ -1014,7 +1388,8 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "node_id"
+        "node_id",
+        "by"
       ],
       "properties": {
         "node_id": {
@@ -1031,6 +1406,9 @@
             "app",
             "human"
           ]
+        },
+        "role": {
+          "type": "string"
         }
       }
     },
@@ -1039,11 +1417,13 @@
       "additionalProperties": false,
       "required": [
         "node_id",
-        "consecutive",
-        "on_fail"
+        "attempt_id"
       ],
       "properties": {
         "node_id": {
+          "type": "string"
+        },
+        "attempt_id": {
           "type": "string"
         },
         "checks": {
@@ -1052,15 +1432,30 @@
             "$ref": "https://relay.local/schemas/work.v1.json#/$defs/checkResult"
           }
         },
-        "consecutive": {
-          "type": "integer"
-        },
-        "on_fail": {
+        "suggest": {
+          "type": "string",
+          "description": "on_fail 제안 노드"
+        }
+      }
+    },
+    "checks_discarded": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempt_id",
+        "cause"
+      ],
+      "properties": {
+        "attempt_id": {
           "type": "string"
         },
-        "halted": {
-          "type": "boolean",
-          "description": "연속 실패 상한 도달로 자동 복귀를 멈췄는지"
+        "cause": {
+          "enum": [
+            "rerouted",
+            "paused",
+            "abandoned",
+            "superseded"
+          ]
         }
       }
     },
@@ -1071,7 +1466,8 @@
         "file",
         "sha256",
         "commit",
-        "fail_exit_code"
+        "fail_exit_code",
+        "locked_by_step"
       ],
       "properties": {
         "file": {
@@ -1085,6 +1481,9 @@
         },
         "fail_exit_code": {
           "type": "integer"
+        },
+        "locked_by_step": {
+          "type": "string"
         }
       }
     },
@@ -1110,6 +1509,26 @@
         }
       }
     },
+    "repro_relocked": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sha256",
+        "commit",
+        "by_step"
+      ],
+      "properties": {
+        "sha256": {
+          "type": "string"
+        },
+        "commit": {
+          "type": "string"
+        },
+        "by_step": {
+          "type": "string"
+        }
+      }
+    },
     "repro_released": {
       "type": "object",
       "additionalProperties": false,
@@ -1124,18 +1543,18 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "version"
+        "version",
+        "title"
       ],
       "properties": {
         "version": {
           "type": "integer"
         },
+        "title": {
+          "type": "string"
+        },
         "size": {
-          "enum": [
-            "S",
-            "M",
-            "L"
-          ]
+          "type": "string"
         },
         "delivery": {
           "enum": [
@@ -1152,6 +1571,7 @@
       "required": [
         "from_version",
         "to_version",
+        "title",
         "stale_artifacts",
         "resume_node"
       ],
@@ -1162,13 +1582,47 @@
         "to_version": {
           "type": "integer"
         },
+        "title": {
+          "type": "string"
+        },
         "stale_artifacts": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "object"
           }
         },
         "resume_node": {
+          "type": "string"
+        }
+      }
+    },
+    "delivery_started": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "run_id",
+        "mode",
+        "head",
+        "remote",
+        "base"
+      ],
+      "properties": {
+        "run_id": {
+          "type": "string"
+        },
+        "mode": {
+          "enum": [
+            "push",
+            "pr"
+          ]
+        },
+        "head": {
+          "type": "string"
+        },
+        "remote": {
+          "type": "string"
+        },
+        "base": {
           "type": "string"
         }
       }
@@ -1177,9 +1631,13 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "run_id",
         "mode"
       ],
       "properties": {
+        "run_id": {
+          "type": "string"
+        },
         "mode": {
           "enum": [
             "push",
@@ -1198,10 +1656,14 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "run_id",
         "mode",
         "error"
       ],
       "properties": {
+        "run_id": {
+          "type": "string"
+        },
         "mode": {
           "enum": [
             "push",
@@ -1214,6 +1676,18 @@
       }
     },
     "artifact_modified_after_approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file"
+      ],
+      "properties": {
+        "file": {
+          "type": "string"
+        }
+      }
+    },
+    "state_external_change_ignored": {
       "type": "object",
       "additionalProperties": false,
       "required": [

@@ -27,11 +27,10 @@
    - `intent_deviation`: 의도의 목표, 비목표, 완료조건과 어긋나는 사실을 발견했으면 요약과 근거.
    - `recommended_next`: context.md의 next-options 중 기본 아닌 곳으로 가야 할 때만. 기본이면 `null`.
    - `knowledge_candidates`: 이 프로젝트에서 다음에도 쓸 만한 사실(선택).
-3. **검증** — context.md에 적힌 검증 명령을 실행한다. 오류가 있으면 고치고 다시 실행한다. 앱도 Stop 시점에 같은 검증을 하고, 형식 오류면 최대 2회까지 오류 목록을 되돌려 준다(D21). 되돌아온 오류는 **형식만** 고친다. 내용을 바꾸라는 뜻이 아니다.
+3. **검증** — context.md에 적힌 검증 명령 한 줄을 그대로 실행한다. 오류가 있으면 고치고 다시 실행한다. 앱도 Stop 시점에 같은 검증을 하고, 형식 오류면 최대 2회까지 오류 목록을 되돌려 준다(D21). 되돌아온 오류는 **형식만** 고친다. 내용을 바꾸라는 뜻이 아니다.
 4. **안내 문구 출력** — context.md의 gate-policy 절에 따라 한 가지를 출력하고 턴을 끝낸다.
-   - manual: "산출물을 검토하고 [Task 완료]를 눌러 주세요. 고칠 점이 있으면 여기에 말씀해 주세요."
-   - auto_if_checks: "검사가 통과하면 15초 뒤 자동으로 다음 단계로 진행합니다. 멈추려면 [취소]를 누르세요."
-   - blocked: "진행할 수 없습니다: <blocked_reason>. 오른쪽 패널에서 다음 단계를 골라 주세요."
+   - context.md의 gate-policy 절에 **앱이 만든 안내 문구**가 있다. 그 문구를 그대로 출력한다(카운트다운 초, 자동 승인 여부가 설정에 따라 다르므로 스킬이 문구를 만들지 않는다).
+   - blocked이면: "진행할 수 없습니다: <blocked_reason>. 필요한 정보를 여기에 알려 주시면 이어서 하겠습니다."
 
 ## handoff 템플릿
 
@@ -43,7 +42,7 @@ task_id: <context.md의 step>
 node: <context.md의 node>
 skill: <스킬 이름>
 status: awaiting_approval
-intent_version: <context.md의 intent 버전>
+intent_version: <context.md의 승인된 intent 버전. 최초 intake는 0>
 artifacts: [<산출물 파일명>]
 decisions: []
 assumptions: []
@@ -54,7 +53,7 @@ risks: []
 self_checks: []
 recommended_next: null
 knowledge_candidates: []
-# 스킬별 확장 필드 (스킬 명세 참고)
+extensions: {}          # 스킬별 확장 (스킬 명세의 "handoff 확장" 참고)
 ---
 ## 요약
 <3~5문장. 이 task에서 무엇을 알아냈거나 바꿨는가>
@@ -66,7 +65,7 @@ knowledge_candidates: []
 - <산출물의 어느 절, 어떤 커밋>
 ```
 
-본문 전체 분량 기준: 약 1,500자(기본값). prev-handoff 제공자가 inline으로 주입하기 때문이다.
+본문 전체 분량 기준: 약 1,500자(기본값). prev-handoff 제공자가 inline으로 주입하기 때문이다. 넘으면 경고만 한다(오류 아님, D49). 형식 **오류**는 필수 필드·타입·경로·상태 값·필수 산출물 누락뿐이다.
 
 ## 하지 말 것
 

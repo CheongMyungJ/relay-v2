@@ -6,14 +6,15 @@
 
 ## 입력 (context.md)
 
-intent, decisions, rejected-log, prev-handoff(evidence), `evidence/evidence.md`(path), 고정된 재현 테스트 정보(repro-lock 조각: 파일, 고정 커밋, 실패 출력 끝부분), gate-policy, next-options.
+intent, decisions, rejected-log, prev-handoff(evidence), `evidence/evidence.md?`(path, 선택 — S 경로에서 fix가 돌려보낸 경우 없을 수 있음), 고정된 재현 테스트 정보(repro-lock 조각: 파일, 고정 커밋, 실패 출력 끝부분), gate-policy, next-options.
 
-## 결정 지점 (질문 예산: 최대 2개)
+## 결정 지점 (질문 예산: **최대** 1개)
 
-| # | 결정 | `requires_human` | 언제 |
+원인 채택은 **rca 승인 화면에서 사람이 확정**한다(D46). 터미널에서 "이 원인으로 확정할까요?"를 따로 묻지 않고, 채택한 원인을 `decisions`에 `requires_human: true`로 적는다.
+
+| # | 물어도 되는 것 | `requires_human` | 언제 |
 |---|---|---|---|
-| 1 | 가설 채택: 이 원인으로 확정해도 되는가 (근거 요약과 함께) | ✅ | 항상 |
-| 2 | 수정 방향: 후보가 여럿이면 어느 쪽인가 (추천 포함) | ✅ | 방향 후보가 2개 이상이고 트레이드오프가 있을 때만 |
+| 1 | 수정 방향: 후보가 여럿이고 사람의 선호가 필요한가 (추천 포함) | ✅ | 트레이드오프가 제품 판단일 때만 (예: 호환성 vs 단순함) |
 
 ## 절차
 
@@ -22,7 +23,7 @@ intent, decisions, rejected-log, prev-handoff(evidence), `evidence/evidence.md`(
 3. 살아남은 가설 하나를 원인으로 정리한다. 증거가 부족하면 확정하지 않고 `recommended_next: evidence`.
 4. 영향 범위(같은 원인을 공유하는 다른 경로)를 확인한다.
 5. 수정 방향을 1~2개 제안한다. 방향이 intent의 비목표나 제약과 충돌하면 `intent_deviation`.
-6. 결정 지점을 묻고 반영한다.
+6. 사람의 선호가 필요한 방향 선택이 있을 때만 묻는다.
 7. `_close`.
 
 ## 완료조건
@@ -30,7 +31,7 @@ intent, decisions, rejected-log, prev-handoff(evidence), `evidence/evidence.md`(
 - 원인이 한 문장으로 적혀 있고, 그 원인을 뒷받침하는 증거(실험과 결과)가 1개 이상 있다.
 - 기각한 가설마다 기각 근거가 있다(`rejected`와 rca.md 모두).
 - 수정 지점(파일, 함수)과 영향 범위가 적혀 있다.
-- 결정 지점 1의 답이 `decisions`에 있다.
+- 채택한 원인과 추천 수정 방향이 `decisions`에 `requires_human: true`로 있다.
 
 ## 산출물 템플릿 — `rca.md`
 

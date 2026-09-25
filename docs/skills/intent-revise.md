@@ -36,7 +36,7 @@
    - 목표/비목표가 바뀌어 원인 범위가 달라지면 → rca 무효 가능
    - 재현 대상 동작이 바뀌면 → evidence 무효, 재현 테스트 고정 해제 필요를 `risks`에 적음
 4. 재개 노드를 추천한다. 무효가 된 산출물 중 **가장 앞 노드**가 기본 추천이다.
-5. 결정 지점을 한 번에 묻고 반영한다.
+5. 결정 지점 중 초안만으로 정할 수 없는 것을 한 번에 묻는다(최종 확정은 승인 화면).
 6. `_close`.
 
 ## 완료조건
@@ -72,11 +72,14 @@
 
 ```yaml
 artifacts: [intent.draft.md, intent.diff.md]
-intent_revision:
-  draft: intent.draft.md
-  diff: intent.diff.md
-  stale_artifacts: [rca/rca.md]
-  resume_node: rca
+extensions:
+  intent_revision:
+    draft: intent.draft.md
+    diff: intent.diff.md
+    stale_artifacts:
+      - { ref: rca/rca.md, status: review }          # review: 재검토 필요 / obsolete: 새 의도에서 불필요
+      - { ref: verify/verification.md, status: obsolete }
+    resume_node: rca
 ```
 
 ## 승인 후 앱이 하는 일 (참고)
@@ -96,5 +99,6 @@ intent 버전 증가와 이전 버전 보관, `stale_artifacts` 표시, `resume_
   "produces": [
     { "path": "intent.draft.md", "required": true, "required_headings": ["목표", "비목표", "원하는 결과", "완료조건"] },
     { "path": "intent.diff.md", "required": true, "required_headings": ["계기", "바뀐 절", "영향 분석", "재개 노드"] } ],
-  "handoff_extensions": ["intent_revision"], "writes_code": false }
+  "handoff_extensions": [ { "name": "intent_revision", "schema": "https://relay.local/schemas/handoff.v1.json#/$defs/ext_intent_revision" } ],
+  "writes_code": false }
 ```

@@ -4,103 +4,238 @@
   "title": "config.json (v1)",
   "description": "<RELAY_HOME>/config.json. 파일이 없거나 키가 빠지면 default 값을 쓴다. 모든 기본값은 근거가 약한 초기값이며 M3에서 조정한다. 앱은 모르는 키를 보존한다(additionalProperties 허용은 최상위만).",
   "type": "object",
-  "required": ["schema_version"],
+  "required": [
+    "schema_version"
+  ],
   "properties": {
-    "schema_version": { "const": 1 },
+    "schema_version": {
+      "const": 1
+    },
     "tools": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "claude_path": { "type": ["string", "null"], "default": null, "description": "null이면 PATH에서 찾는다" },
-        "git_path": { "type": ["string", "null"], "default": null },
-        "gh_path": { "type": ["string", "null"], "default": null, "description": "delivery: pr에만 필요" },
-        "claude_extra_args": { "type": "array", "items": { "type": "string" }, "default": [], "description": "모든 세션에 추가할 인자 (예: --model). relay가 쓰는 인자와 겹치면 relay 쪽이 우선" }
+        "claude_path": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null,
+          "description": "null이면 PATH에서 찾는다"
+        },
+        "git_path": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "gh_path": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null,
+          "description": "delivery: pr에만 필요"
+        },
+        "claude_extra_args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "모든 세션에 추가할 인자 (예: --model). relay가 쓰는 인자와 겹치면 relay 쪽이 우선"
+        }
       }
     },
     "sessions": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "max_live": { "type": "integer", "minimum": 1, "maximum": 10, "default": 3, "description": "동시에 살아 있는 CLI 세션 상한 (모든 Work 합계, D20)" },
-        "kill_on_approval": { "type": "boolean", "default": true, "description": "승인 후 CLI 프로세스를 종료한다. 끄면 사용자가 직접 /exit 할 때까지 두되 입력은 막는다" },
-        "exit_grace_sec": { "type": "integer", "minimum": 1, "default": 5 }
+        "max_live": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "default": 3,
+          "description": "동시에 살아 있는 CLI 세션 상한 (모든 Work 합계, D20). 세션마다 RELAY_SLOT(0부터) 환경 변수를 주어 프로젝트가 포트·DB 이름을 분리할 수 있게 한다(I17)"
+        },
+        "exit_grace_sec": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 5
+        }
       }
     },
     "approval": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "countdown_sec": { "type": "integer", "minimum": 0, "maximum": 120, "default": 15 },
-        "pause_on_input_sec": { "type": "integer", "minimum": 0, "default": 10, "description": "터미널에 키 입력이 있으면 이 시간 동안 카운트다운을 멈춘다" },
-        "max_consecutive_auto": { "type": "integer", "minimum": 0, "default": 3, "description": "Work 안에서 연속 자동 승인 상한. 0이면 자동 승인 끔" },
-        "max_diff_lines": { "type": "integer", "minimum": 1, "default": 300, "description": "diff:within_limit 기준 (추가+삭제 줄, 테스트 파일 포함)" },
-        "max_diff_files": { "type": "integer", "minimum": 1, "default": 10 }
-      }
-    },
-    "gates": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "max_consecutive_failures": { "type": "integer", "minimum": 1, "default": 3 }
+        "countdown_sec": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 120,
+          "default": 15
+        },
+        "pause_on_input_sec": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 10,
+          "description": "터미널에 키를 입력하면 이 시간 동안 카운트다운을 멈춘다. 프롬프트를 제출하면(UserPromptSubmit) 후보 자체가 폐기된다"
+        },
+        "max_consecutive_auto": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 3,
+          "description": "Work 안에서 연속 자동 승인 상한. 0이면 자동 승인 끔"
+        },
+        "max_diff_lines": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 300,
+          "description": "diff:within_limit 기준 (추가+삭제 줄, 테스트 파일 포함)"
+        },
+        "max_diff_files": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 10
+        }
       }
     },
     "checks": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "default_timeout_sec": { "type": "integer", "minimum": 10, "default": 600 },
-        "log_tail_lines": { "type": "integer", "minimum": 10, "default": 80, "description": "gate-failure 제공자가 주입하는 출력 끝부분 줄 수" },
-        "serialize_per_project": { "type": "boolean", "default": true, "description": "같은 프로젝트의 check 명령은 한 번에 하나씩 실행 (포트, DB 충돌 방지)" }
+        "default_timeout_sec": {
+          "type": "integer",
+          "minimum": 10,
+          "default": 600
+        },
+        "log_tail_lines": {
+          "type": "integer",
+          "minimum": 10,
+          "default": 80,
+          "description": "check-failure 제공자가 주입하는 출력 끝부분 줄 수"
+        },
+        "serialize_per_project": {
+          "type": "boolean",
+          "default": true,
+          "description": "같은 프로젝트의 check 명령은 한 번에 하나씩 실행 (포트, DB 충돌 방지)"
+        }
       }
     },
     "context": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "token_budget": { "type": "integer", "minimum": 1000, "default": 8000, "description": "inline 합계 예산. S6에서 확정" },
-        "chars_per_token": { "type": "number", "default": 2.5, "description": "토큰 추정 계수 (한국어 섞인 문서 기준 보수적 값)" }
+        "token_budget": {
+          "type": "integer",
+          "minimum": 1000,
+          "default": 8000,
+          "description": "inline 합계 예산. S6에서 확정"
+        },
+        "chars_per_token": {
+          "type": "number",
+          "default": 2.5,
+          "description": "토큰 추정 계수 (한국어 섞인 문서 기준 보수적 값)"
+        }
       }
     },
     "hooks": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "ipc_timeout_ms": { "type": "integer", "minimum": 100, "default": 3000, "description": "훅 스크립트가 앱 응답을 기다리는 시간. 넘으면 아무것도 막지 않고 종료" },
-        "stop_validation_retries": { "type": "integer", "minimum": 0, "maximum": 5, "default": 2, "description": "handoff 형식 오류를 Stop 훅으로 되돌려 주는 연속 횟수 (D21)" }
+        "ipc_timeout_ms": {
+          "type": "integer",
+          "minimum": 100,
+          "default": 3000,
+          "description": "훅 스크립트가 앱 응답을 기다리는 시간. 넘으면 아무것도 막지 않고 종료"
+        },
+        "stop_validation_retries": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5,
+          "default": 2,
+          "description": "handoff 형식 오류를 Stop 훅으로 되돌려 주는 연속 횟수 (D21)"
+        }
       }
     },
     "recovery": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "reconcile_interval_sec": { "type": "integer", "minimum": 5, "default": 30, "description": "훅 유실 대비, 실행 중 task의 handoff 파일과 프로세스 상태를 다시 확인하는 주기" },
-        "handoff_missing_prompt_after_exit": { "type": "boolean", "default": true }
+        "reconcile_interval_sec": {
+          "type": "integer",
+          "minimum": 5,
+          "default": 30,
+          "description": "훅 유실 대비, 실행 중 task의 handoff 파일과 프로세스 상태를 다시 확인하는 주기"
+        },
+        "handoff_missing_prompt_after_exit": {
+          "type": "boolean",
+          "default": true
+        }
       }
     },
     "terminal": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "font_family": { "type": "string", "default": "Cascadia Mono, D2Coding, Consolas, monospace" },
-        "font_size": { "type": "integer", "minimum": 8, "maximum": 32, "default": 14 },
-        "scrollback": { "type": "integer", "minimum": 1000, "default": 10000 },
-        "pty_log_max_mb": { "type": "integer", "minimum": 1, "default": 20, "description": "읽기 전용 재생용 tasks/<nn>/pty.log 상한. 넘으면 앞부분을 버린다" }
+        "font_family": {
+          "type": "string",
+          "default": "Cascadia Mono, D2Coding, Consolas, monospace"
+        },
+        "font_size": {
+          "type": "integer",
+          "minimum": 8,
+          "maximum": 32,
+          "default": 14
+        },
+        "scrollback": {
+          "type": "integer",
+          "minimum": 1000,
+          "default": 10000
+        },
+        "pty_log_max_mb": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 20,
+          "description": "읽기 전용 재생용 tasks/<nn>/pty.log 상한. 넘으면 앞부분을 버린다"
+        }
       }
     },
     "notifications": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "os": { "type": "boolean", "default": true, "description": "창이 비활성일 때 승인 대기, 입력 대기, 검사 실패를 OS 알림으로" },
-        "sound": { "type": "boolean", "default": false }
+        "os": {
+          "type": "boolean",
+          "default": true,
+          "description": "창이 비활성일 때 승인 대기, 입력 대기, 검사 실패를 OS 알림으로"
+        },
+        "sound": {
+          "type": "boolean",
+          "default": false
+        }
       }
     },
     "ui": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "language": { "enum": ["ko", "en"], "default": "ko" },
-        "theme": { "enum": ["system", "light", "dark"], "default": "system" }
+        "language": {
+          "enum": [
+            "ko",
+            "en"
+          ],
+          "default": "ko"
+        },
+        "theme": {
+          "enum": [
+            "system",
+            "light",
+            "dark"
+          ],
+          "default": "system"
+        }
       }
     }
   }

@@ -5,68 +5,191 @@
   "description": "<RELAY_HOME>/projects/<project-id>/project.json. 프로젝트 등록 시 앱이 자동 탐지한 후보를 사용자가 확인해 저장한다. check 게이트와 auto_checks가 실행하는 명령은 여기에 등록된 것뿐이다.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "project_id", "name", "repo_path", "default_branch", "checks", "created_at"],
+  "required": [
+    "schema_version",
+    "project_id",
+    "name",
+    "repo_path",
+    "default_branch",
+    "checks",
+    "created_at"
+  ],
   "properties": {
-    "schema_version": { "const": 1 },
-    "project_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,40}-[0-9a-f]{6}$", "description": "<레포 폴더 이름 소문자화>-<정규화된 절대 경로 sha256 앞 6자리>" },
-    "name": { "type": "string", "minLength": 1, "maxLength": 60 },
-    "repo_path": { "type": "string", "minLength": 1, "description": "메인 체크아웃 절대 경로" },
-    "default_branch": { "type": "string", "minLength": 1, "description": "worktree 기준 브랜치. 등록 시 origin/HEAD → main → master 순으로 탐지" },
-    "remote": { "type": ["string", "null"], "description": "delivery에 쓸 원격 이름. 없으면 null이고 delivery는 none만 가능", "default": "origin" },
+    "schema_version": {
+      "const": 1
+    },
+    "project_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,40}-[0-9a-f]{6}$",
+      "description": "<레포 폴더 이름 소문자화>-<정규화된 절대 경로 sha256 앞 6자리>"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 60
+    },
+    "repo_path": {
+      "type": "string",
+      "minLength": 1,
+      "description": "메인 체크아웃 절대 경로"
+    },
+    "default_branch": {
+      "type": "string",
+      "minLength": 1,
+      "description": "worktree 기준 브랜치. 등록 시 origin/HEAD → main → master 순으로 탐지"
+    },
+    "remote": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "delivery에 쓸 원격 이름. 없으면 null이고 delivery는 none만 가능",
+      "default": "origin"
+    },
     "setup": {
       "description": "worktree를 만든 직후 한 번 실행하는 준비 명령 (예: npm ci). 실패하면 Work를 만들지 않고 로그를 보여 준다",
-      "oneOf": [ { "type": "null" }, { "$ref": "#/$defs/command" } ]
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/command"
+        }
+      ]
     },
     "checks": {
       "type": "object",
-      "description": "이름 → 명령. cmd:<이름>으로 참조한다. test는 필수. test_file은 재현 테스트 고정(repro lock)에 필요하며, 없으면 repro lock을 쓰지 않는다",
-      "required": ["test"],
-      "propertyNames": { "pattern": "^[a-z][a-z0-9_-]*$" },
+      "description": "이름 → 명령. cmd:<이름>으로 참조한다. 어떤 이름이 필요한지는 파이프라인이 정한다(Work 생성 시 P8로 확인). bugfix는 test가 필요하고, test_file이 있으면 재현 테스트 고정을 쓴다",
+      "required": [],
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_-]*$"
+      },
       "properties": {
-        "test": { "$ref": "#/$defs/command" },
+        "test": {
+          "$ref": "#/$defs/command"
+        },
         "test_file": {
           "allOf": [
-            { "$ref": "#/$defs/command" },
-            { "properties": { "cmd": { "pattern": "\\{file\\}" } } }
+            {
+              "$ref": "#/$defs/command"
+            },
+            {
+              "properties": {
+                "cmd": {
+                  "pattern": "\\{file\\}"
+                }
+              }
+            }
           ],
           "description": "파일 하나만 실행하는 명령. {file} 자리에 worktree 기준 상대 경로가 따옴표로 감싸져 들어간다"
         }
       },
-      "additionalProperties": { "$ref": "#/$defs/command" }
+      "additionalProperties": {
+        "$ref": "#/$defs/command"
+      }
     },
     "test_globs": {
       "type": "array",
       "description": "테스트 파일 판별 glob (tests:unchanged 검사에 사용). 등록 시 언어별 기본값을 채운다",
-      "items": { "type": "string" },
-      "default": ["**/*.test.*", "**/*.spec.*", "**/test_*.py", "**/*_test.py", "**/*_test.go", "**/tests/**", "**/__tests__/**"]
+      "items": {
+        "type": "string"
+      },
+      "default": [
+        "**/*.test.*",
+        "**/*.spec.*",
+        "**/test_*.py",
+        "**/*_test.py",
+        "**/*_test.go",
+        "**/tests/**",
+        "**/__tests__/**"
+      ]
     },
     "delivery": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "default": { "enum": ["none", "push", "pr", "ask"], "default": "ask", "description": "work-start가 delivery를 물을지 정한다. ask가 아니면 묻지 않고 이 값을 초안에 넣는다" },
-        "pr_base": { "type": ["string", "null"], "description": "PR 대상 브랜치. null이면 default_branch" },
-        "pr_draft": { "type": "boolean", "default": true }
+        "default": {
+          "enum": [
+            "none",
+            "push",
+            "pr",
+            "ask"
+          ],
+          "default": "ask",
+          "description": "work-start가 delivery를 물을지 정한다. ask가 아니면 묻지 않고 이 값을 초안에 넣는다"
+        },
+        "pr_base": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "PR 대상 브랜치. null이면 default_branch"
+        },
+        "pr_draft": {
+          "type": "boolean",
+          "default": true
+        }
       }
     },
     "env": {
       "type": "object",
       "description": "모든 check 명령과 CLI 세션에 추가할 환경 변수. 비밀 값은 넣지 않는다(평문 저장)",
-      "additionalProperties": { "type": "string" }
+      "additionalProperties": {
+        "type": "string"
+      }
     },
-    "created_at": { "type": "string", "format": "date-time" },
-    "updated_at": { "type": "string", "format": "date-time" }
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "check_config_globs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "테스트 실행 방식을 바꾸는 파일(runner 설정, 공통 fixture 등). tests:unchanged가 test_globs와 함께 검사한다(I2). 예: vitest.config.*, jest.config.*, pytest.ini, conftest.py, tox.ini. package.json의 scripts 변경은 기본으로 잡지 않으므로 필요하면 추가한다",
+      "default": [
+        "**/vitest.config.*",
+        "**/jest.config.*",
+        "**/pytest.ini",
+        "**/conftest.py",
+        "**/tox.ini",
+        "**/setup.cfg"
+      ]
+    }
   },
   "$defs": {
     "command": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["cmd"],
+      "required": [
+        "cmd"
+      ],
       "properties": {
-        "cmd": { "type": "string", "minLength": 1, "description": "셸 명령 한 줄. Windows는 cmd.exe /d /s /c, 그 밖은 /bin/sh -c 로 실행" },
-        "cwd": { "type": "string", "description": "worktree 기준 상대 경로. 기본값 '.'", "default": "." },
-        "timeout_sec": { "type": "integer", "minimum": 10, "maximum": 7200, "description": "생략 시 config.checks.default_timeout_sec" },
-        "detected": { "type": "boolean", "description": "자동 탐지로 채워졌는지(표시용)" }
+        "cmd": {
+          "type": "string",
+          "minLength": 1,
+          "description": "셸 명령 한 줄. Windows는 cmd.exe /d /s /c, 그 밖은 /bin/sh -c 로 실행"
+        },
+        "cwd": {
+          "type": "string",
+          "description": "worktree 기준 상대 경로. 기본값 '.'",
+          "default": "."
+        },
+        "timeout_sec": {
+          "type": "integer",
+          "minimum": 10,
+          "maximum": 7200,
+          "description": "생략 시 config.checks.default_timeout_sec"
+        },
+        "detected": {
+          "type": "boolean",
+          "description": "자동 탐지로 채워졌는지(표시용)"
+        }
       }
     }
   }

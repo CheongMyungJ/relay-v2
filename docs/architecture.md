@@ -24,6 +24,7 @@ design.md의 결정을 코드 구조로 옮긴 것이다. 언어는 TypeScript, 
 └────────────────────────────────────────────────────────────────────────────────┘
 
 외부 프로세스:  claude (PTY 안)  ──훅──▶  relay-hook.js (ELECTRON_RUN_AS_NODE) ──named pipe──▶ HookServer
+               (S2 대안: Stop·UserPromptSubmit·Notification·SessionEnd는 Claude Code 내장 HTTP 훅으로 직접 전송, SessionStart만 command)
                check 명령, git, gh (CheckRunner / GitService / DeliveryService가 실행)
 ```
 
@@ -53,9 +54,9 @@ design.md의 결정을 코드 구조로 옮긴 것이다. 언어는 TypeScript, 
 
 | 모듈 | 책임 |
 |---|---|
-| `Store` | `RELAY_HOME` 읽기/쓰기. 쓰기 순서: `events.jsonl` 추가(fsync) → `work.json` 임시 파일 쓰기 → rename. 시작 시 `work.json`의 마지막 seq보다 뒤에 있는 이벤트를 재적용 |
+| `Store` | `RELAY_HOME` 읽기/쓰기. 쓰기 순서: `events.jsonl` 추가(fsync) → `work.json` 임시 파일 쓰기 → rename. 시작 시 `work.json`의 `applied_event_seq`보다 뒤에 있는 이벤트를 재적용 |
 | `GitService` | worktree 생성/제거, `core.longpaths`, `.git/info/exclude` 관리, status/diff/hash 계산, 브랜치 병합·push 여부 확인 |
-| `CheckRunner` | 셸로 등록 명령 실행, 타임아웃, 프로세스 트리 종료(Windows `taskkill /T /F`), 로그 저장, 결과 캐시, 프로젝트별 직렬 큐 |
+| `CheckRunner` | 셸로 등록 명령 실행, 타임아웃, 프로세스 트리 종료(Windows `taskkill /T /F`), 로그 저장, 프로젝트별 직렬 큐, attempt 단위 취소. 결과 캐시는 두지 않는다(D36 철회). 긴 검사는 WorkController 큐 밖에서 돌고 `checks_done` 신호로 돌아온다 |
 | `SessionManager` | node-pty spawn/kill, 환경 변수(`RELAY_*`), `pty.log` 기록, MessagePort 연결, 살아 있는 세션 수 상한, 종료 감지 |
 | `VendorAdapter` | 벤더별 차이를 가두는 인터페이스: 실행 인자 만들기, 재개 인자, 훅 설정 파일 생성, 권한 설정 생성, transcript 경로 찾기. v1 구현은 `ClaudeCodeAdapter` 하나 |
 | `HookServer` | named pipe/유닉스 소켓 서버, 토큰 검사, `hook-ipc.v1` 메시지 처리, Stop 요청에 대해 WorkController에 동기 질의 후 `none`/`block` 응답 |
@@ -89,21 +90,26 @@ design.md의 결정을 코드 구조로 옮긴 것이다. 언어는 TypeScript, 
 
 ```ts
 // core
+// 모든 외부 신호는 attemptId를 달고 온다. 현재 활성 attempt와 다르면 엔진이 버린다 (R4)
 type Signal =
-  | { kind: "handoff_changed"; stepId: string; parsed: ParsedHandoff; mtime: string }
-  | { kind: "turn_stopped"; stepId: string; at: string }          // Stop 훅
-  | { kind: "input_waiting"; stepId: string; at: string }         // Notification 훅
-  | { kind: "pty_exited"; stepId: string; exitCode: number | null }
-  | { kind: "checks_done"; stepId: string; results: CheckResult[] }
-  | { kind: "user"; action: UserAction };                          // 버튼, 메뉴
+  | { kind: "handoff_changed"; stepId: string; attemptId: string; parsed: ParsedHandoff; sha256: string }
+  | { kind: "prompt_submitted"; stepId: string; attemptId: string; at: string }      // UserPromptSubmit 훅
+  | { kind: "turn_stopped"; stepId: string; attemptId: string; backgroundTasks: number; at: string }  // Stop 훅
+  | { kind: "notification"; stepId: string; attemptId: string; type: string; at: string }  // 표시 전용
+  | { kind: "session_changed"; stepId: string; attemptId: string; sessionId: string; source: string }
+  | { kind: "pty_exited"; stepId: string; attemptId: string; exitCode: number | null }
+  | { kind: "checks_done"; stepId: string; attemptId: string; results: CheckResult[] }
+  | { kind: "user"; action: UserAction };      // 승인 명령은 candidateId, mergeGate, nextNode를 포함
 
 type Effect =
-  | { kind: "StartSession"; stepId: string; resume?: { sessionId: string; prompt?: string } }
-  | { kind: "KillSession"; stepId: string }
-  | { kind: "RunChecks"; stepId: string; checks: CheckRef[] }
+  | { kind: "StartSession"; stepId: string; attemptId: string; resume?: { sessionId: string; prompt?: string } }
+  | { kind: "KillSession"; stepId: string; wait: boolean }       // 승인 확정 전에는 wait: true (3.1.2)
+  | { kind: "CaptureCandidate"; stepId: string }                  // 해시·HEAD·clean 계산 → 신호로 돌아옴
+  | { kind: "RunChecks"; stepId: string; attemptId: string; checks: CheckRef[] }
+  | { kind: "CancelChecks"; attemptId: string }
   | { kind: "LockRepro"; stepId: string; file: string }
   | { kind: "StartCountdown" | "CancelCountdown"; stepId: string }
-  | { kind: "Deliver"; mode: "push" | "pr" }
+  | { kind: "Deliver"; runId: string; mode: "push" | "pr"; head: string }
   | { kind: "RemoveWorktree"; deleteBranch: boolean }
   | { kind: "Notify"; level: "info" | "attention"; message: string };
 
@@ -160,7 +166,7 @@ test/
 | 단위 | WhenParser, ApprovalEvaluator, ContextAssembler | 경계값(예산 초과 강등, 85 이상 강등 금지, 빈 auto_checks) | 매 커밋 |
 | 계약 | 스키마 | 모든 `*.schema.json` 컴파일, `examples/`와 `test/fixtures/`의 유효/무효 샘플 검증, 스킬 `relay.json` 검증, bugfix.yaml P1~P9 | 매 커밋 |
 | 계약 | 문서 일치 | 스킬 명세의 relay.json 블록과 `resources/skills/*/relay.json`이 같은지 | 매 커밋 |
-| 통합 | GitService, CheckRunner | 임시 git 레포 실제 생성. 타임아웃·트리 종료·캐시·CRLF 해시 | 매 커밋, **Windows + Linux** CI |
+| 통합 | GitService, CheckRunner | 임시 git 레포 실제 생성. 타임아웃·트리 종료·attempt 취소·CRLF 해시 | 매 커밋, **Windows + Linux** CI |
 | 통합 | HookServer ↔ relay-hook.js | 실제 스크립트 프로세스로 요청/응답, 토큰 오류, 앱 무응답 시간 초과 | 매 커밋, Windows + Linux |
 | 통합 | Store 복구 | 이벤트 추가와 work.json 쓰기 사이에서 강제 종료(오류 주입) → 재시작 후 상태 일치 | 매 커밋 |
 | E2E | 앱 전체 | Playwright `_electron` + **fake-claude** + 임시 `RELAY_HOME` | PR마다 |
@@ -186,13 +192,17 @@ settings 파일에서 훅 명령을 읽어 실제로 실행하므로, HookServer
 ### 5.2 E2E 시나리오 (최소)
 
 1. M 크기 정상 경로(자동 승인 2회 포함) → Work 완료(delivery: none)
-2. g-tests 3회 연속 실패 → `needs_attention` → [다른 노드 선택]
+2. fix 검사 실패 → 같은 세션에서 수정 제출(후보 폐기) → 새 후보 통과 → 자동 승인
 3. handoff 형식 오류 → Stop 훅 되돌림 2회 → 3번째에 패널 오류 표시 → [형식 오류 무시하고 승인]
 4. task 실행 중 앱 강제 종료 → 재시작 → `interrupted` → [재개]
 5. CLI가 handoff 없이 종료 → [세션 재개해 마무리]
 6. 실행 중 [다음 단계 변경] → 기타 스킬 임시 노드 → 원래 위치로 복귀
 7. intent_deviation → [의도 수정] → stale 표시 → resume_node에서 재개
 8. 두 Work 동시 실행 + 세션 상한 도달 시 대기
+9. 카운트다운 중 프롬프트 제출 → 후보 폐기, 이전 결과가 승인되지 않음 (C1 회귀)
+10. 검사 실행 중 경로 변경 → 늦게 끝난 검사 결과가 무시됨 (C3)
+11. `task.approved` 추가 직후 강제 종료 → 재시작 시 이벤트 재적용으로 같은 상태 (C2)
+12. S에서 evidence로 돌아가 새 재현 테스트 고정 실패 → 이전 고정으로 자동 승인되지 않음 (C4)
 
 ### 5.3 하지 않는 것
 

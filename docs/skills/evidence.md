@@ -40,7 +40,7 @@ intent(inline), decisions, rejected-log, prev-handoff(work-start), project-profi
 
 ## 앱이 이어서 하는 일 (참고)
 
-handoff의 `repro.kind: test`를 보고 앱이 테스트를 다시 실행해 실패를 확인하고 파일 해시를 고정한다(state-machine.md 4.1). 고정이 되면 이후 fix/g-tests는 이 테스트가 통과해야 하고, 파일이 바뀌면 자동 승인되지 않는다. `test_file` 명령이 없는 프로젝트는 고정하지 않으며 이 task는 수동 승인이 된다.
+handoff의 `extensions.repro.kind: test`를 보고 앱이 테스트를 다시 실행해 실패를 확인하고 파일 해시를 고정한다(state-machine.md 4.1). 고정이 되면 이후 fix는 이 테스트가 통과해야 자동 승인되고, 파일이 바뀌면 사람이 원복·재고정·해제 중에서 고른다. 고정한 evidence 다음에는 항상 rca(사람 검토)가 온다. `test_file` 명령이 없는 프로젝트는 고정하지 않으며 이 task는 수동 승인이 된다.
 
 ## 산출물 템플릿 — `evidence.md`
 
@@ -75,10 +75,11 @@ handoff의 `repro.kind: test`를 보고 앱이 테스트를 다시 실행해 실
 
 ```yaml
 artifacts: [evidence.md]
-repro:
-  kind: test                      # test | manual | none
-  file: tests/auth/expiry.test.ts # kind: test일 때 필수, worktree 기준
-  test_name: "expires tokens with server TZ offset"
+extensions:
+  repro:
+    kind: test                      # test | manual | none
+    file: tests/auth/expiry.test.ts # kind: test일 때 필수, worktree 기준
+    test_name: "expires tokens with server TZ offset"
 ```
 
 ## 하지 말 것
@@ -93,5 +94,6 @@ repro:
   "summary": "버그를 재현하고 실패하는 테스트로 고정",
   "produces": [ { "path": "evidence.md", "required": true,
                   "required_headings": ["기대 동작과 실제 동작", "재현 결과", "재현 방법", "관찰 사실"] } ],
-  "handoff_extensions": ["repro"], "writes_code": true }
+  "handoff_extensions": [ { "name": "repro", "schema": "https://relay.local/schemas/handoff.v1.json#/$defs/ext_repro" } ],
+  "capabilities": ["repro_lock"], "writes_code": true }
 ```

@@ -10,7 +10,7 @@
 |---|---|
 | 장비 | Windows 11 23H2 이상 1대(주), Windows 10 22H2 1대(ConPTY 차이 확인용), macOS 또는 Linux 1대(보조) |
 | 도구 | Node LTS, Electron 최신 안정판, `node-pty`(electron-rebuild로 빌드), `@xterm/xterm` + `addon-fit`, `addon-unicode11`, `addon-webgl`, `addon-serialize` |
-| CLI | Claude Code 최신 안정판(Windows 네이티브 설치), Git for Windows, `gh`(S1~S4에는 불필요) |
+| CLI | Claude Code 최신 안정판(Windows 네이티브 설치), Git for Windows(Claude Code에는 선택이지만 relay의 worktree 기능에 필요. 없는 경우 Claude Code가 PowerShell을 쓰는지도 확인), `gh`(S1~S4에는 불필요) |
 | 입력기 | Windows 기본 Microsoft 한국어 IME |
 | 샘플 레포 | 테스트가 있는 작은 Node 레포 1개(vitest), Python 레포 1개(pytest). 알려진 버그를 심은 브랜치 포함 |
 | 기록 | 각 스파이크 시작 시 `claude --version`, OS 빌드, Electron/node-pty 버전을 결과에 적는다 |
@@ -68,7 +68,7 @@
 
 ## S2. 훅 → Node 스크립트 → 앱 IPC
 
-**가정:** Claude Code 훅으로 턴 종료(Stop), 입력 대기(Notification), 세션 시작(SessionStart)을 1초 이내에 앱이 받고, Stop 훅으로 형식 오류를 에이전트에게 되돌릴 수 있다. (D2, D21, 8절)
+**가정:** Claude Code 훅(SessionStart, UserPromptSubmit, Stop, Notification, SessionEnd)이 **발생한 뒤** 1초 이내에 앱에 전달되고(Notification 자체는 permission_prompt 약 6초, idle_prompt 약 60초 뒤에 발생하므로 그 지연은 측정에서 뺀다), Stop 훅으로 형식 오류를 에이전트에게 되돌릴 수 있다. (D2, D21, 8절)
 
 **준비:** named pipe 서버를 여는 최소 앱(또는 S1 앱에 추가), `relay-hook.js`(의존성 없음, stdin JSON 읽기 → 파이프로 전송 → 응답 대기 → stdout), 샘플 레포 worktree.
 
@@ -79,9 +79,12 @@
 | 1 | 훅 설정 주입 방식 A | `claude --settings <task 전용 settings 파일>`로 훅을 넣었을 때 동작 여부 |
 | 2 | 훅 설정 주입 방식 B | worktree의 `.claude/settings.local.json`에 넣었을 때 동작 여부. 프로젝트 자체 `.claude/settings.json` 훅과 함께 실행되는지 |
 | 3 | 훅 실행 런타임 | 사용자 PC에 Node가 없는 경우: 훅 명령을 `ELECTRON_RUN_AS_NODE=1 "<relay.exe>" "<relay-hook.js>"`로 실행 가능한지 (Windows에서 훅 명령이 어느 셸로 실행되는지 함께 확인) |
-| 4 | 신호 지연 | 턴 종료 → 앱 수신 시각 차이 50회 측정 (p50, p95) |
-| 5 | 입력 필드 | stdin의 `session_id`, `transcript_path`, `stop_hook_active`, Notification `message` 확인 |
-| 6 | Notification 발생 조건 | 권한 프롬프트, 일정 시간 입력 없음 각각에서 오는지 |
+| 4 | 전달 지연 | 훅 프로세스 시작 → 앱 수신 시각 차이 50회 측정 (p50, p95) |
+| 4b | 전달 방식 비교 | (A) command 훅 + relay-hook.js (B) Claude Code 내장 `type: "http"` 훅으로 앱의 127.0.0.1 서버에 직접 POST(헤더에 토큰, `allowedEnvVars`). B는 Node가 필요 없고 Stop `block` 응답도 JSON 본문으로 가능. SessionStart는 command만 지원하므로 B여도 SessionStart만 A |
+| 5 | 입력 필드 | `session_id`, `transcript_path`, `stop_hook_active`, Stop `background_tasks`, Notification `notification_type`, SessionStart `source`, SessionEnd `reason` 확인 |
+| 6 | Notification 발생 조건 | `permission_prompt`, `idle_prompt`가 문서대로의 지연과 "입력하면 연기" 조건으로 오는지 |
+| 6b | UserPromptSubmit | 프롬프트 제출마다 즉시 오는지(C1 후보 폐기의 근거). 붙여넣기·슬래시 명령도 포함되는지 |
+| 6c | /clear, /compact | SessionStart `source`와 바뀐 `session_id`, SessionEnd `reason` |
 | 7 | SessionStart | 새 세션과 `--resume` 각각의 `source` 값 |
 | 8 | **Stop 차단(D21)** | Stop 훅이 `{"decision":"block","reason":"..."}`를 출력하면 에이전트가 이유를 받아 작업을 이어 가는지. `stop_hook_active`로 무한 반복이 막히는지 |
 | 9 | 앱이 꺼져 있을 때 | 파이프 연결 실패 시 훅이 `ipc_timeout_ms` 안에 조용히 끝나고 CLI를 막지 않는지 |
@@ -112,7 +115,7 @@
 | # | 항목 |
 |---|---|
 | 1 | `--add-dir <work dir>`만 준 상태에서 쓰기 시 권한 프롬프트가 뜨는지 |
-| 2 | 권한 허용 규칙(`Write`, `Edit` + work 디렉터리 경로)을 task 전용 settings에 넣었을 때 프롬프트 없이 써지는지. **Windows 절대 경로 표기**(드라이브 문자, 구분자)가 규칙에서 어떻게 해석되는지 |
+| 2 | 권한 허용 규칙을 task 전용 settings에 넣었을 때 프롬프트 없이 써지는지. 경로 규칙은 `Edit(...)`만 판정에 쓰인다(`Write(path)`는 무시됨). 형식: `Edit(//c/Users/<me>/.relay/projects/<pid>/works/<wid>/tasks/<현재 task>/**)`. 앱 소유 파일(work.json, events.jsonl, intent.md, decisions.md, pipeline.yaml, intent.history/, 이전 task 디렉터리)은 `deny`로 막히는지. **Windows 절대 경로 표기**(드라이브 문자, 구분자)가 규칙에서 어떻게 해석되는지 |
 | 3 | 규칙 범위: 다른 Work 디렉터리 쓰기는 여전히 프롬프트가 뜨는지 |
 | 4 | 긴 경로: `C:\Users\<긴 이름>\.relay\projects\<id>\works\<wid>\tasks\12-final-verify\verification.md` 길이에서 문제가 없는지 |
 | 5 | 한글이 들어간 사용자 이름 경로 |
@@ -149,6 +152,8 @@
 | 4 | 인자 전달 | 공백, 한글, 따옴표가 든 경로가 Windows에서 깨지지 않는가 |
 | 5 | 세션 ID | `--session-id`로 준 UUID로 기록이 남고 `--resume <uuid>`로 이어지는가 |
 | 6 | 재개 + 프롬프트 | `claude --resume <uuid> "/relay-close"`가 마무리 스킬을 트리거하는가 (8.3 복구 흐름) |
+| 6b | 재개 시 설정 복원 | `--resume`만 줬을 때 이전 `--settings`, `--add-dir`가 복원되는지. 문서상 보장이 없으므로 relay는 항상 같은 실행 옵션을 다시 넘긴다. 다시 넘겼을 때 문제가 없는지 확인 |
+| 6c | 승인 확정 순서 | 세션 프로세스 트리를 종료한 뒤 파일이 더 바뀌지 않는지, 종료에 걸리는 시간(p95) |
 | 7 | 이전 기록 접근 | 다른 세션의 transcript 경로를 path 조각으로 주면 필요할 때 검색하는가 |
 
 **판정 기준:** 한 방식 이상이 1·2에서 10/10, 3에서 8/10 이상, 4·5·6 동작.

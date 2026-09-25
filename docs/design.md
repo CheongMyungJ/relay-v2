@@ -1,8 +1,8 @@
 # relay-v2 설계 문서
 
-- 상태: 초안 (v0.2)
+- 상태: 초안 (v0.3)
 - 범위: v1 (MVP)
-- 이전 버전: v0.1.1 (변경 요약은 17절)
+- 이전 버전: v0.2 (변경 요약은 17절). v0.3은 외부 검토 결과를 반영했다(3.4절)
 
 ## 0. 문서 지도
 
@@ -65,27 +65,39 @@ CLI의 사용성은 CLI 자체가 제공한다. relay는 CLI를 다시 구현하
 | D14 | 스킬은 파이프라인을 모른다. 이 노드에서 허용되는 다음 노드 목록은 앱이 주입한다 | 파이프라인을 바꿀 때 스킬을 수정하지 않기 위함 | 유지 |
 | D15 | 전달(push/PR) 여부는 intent의 `delivery`로 정한다. `work-start`가 묻되, `project.json`에 기본값이 있으면 묻지 않는다 | 외부로 나가는 동작은 사람이 의도한 경우에만. 매번 같은 질문을 하지 않도록(질문 피로) | 개정 |
 | D16 | 완료/포기한 Work는 [Work 정리]로 worktree를 제거한다. 산출물은 보존한다 | 디스크와 브랜치 목록 정리. 기록은 남김 | 유지 |
-| D17 | 승인하면 앱이 그 task의 CLI 프로세스를 종료한다 (`sessions.kill_on_approval`, 기본 true) | "읽기 전용"의 실체. 승인 후 에이전트가 산출물이나 코드를 계속 바꾸는 것을 막음 | 신규 |
+| D17 | 승인을 확정하기 **전에** 앱이 그 task의 CLI 프로세스를 종료한다. 설정으로 끌 수 없다 | "읽기 전용"의 실체. 종료 후에 후보를 다시 확인하므로 확인과 기록 사이에 파일이 바뀌지 않음(D39). 세션을 남기는 옵션은 슬롯 점유·종료 UI 문제만 늘림 | 개정(v0.3) |
 | D18 | 조립한 컨텍스트는 task 디렉터리의 `context.md` 파일로 쓰고, 첫 프롬프트는 스킬 호출 + 그 파일 경로만 담는다 | Windows 명령줄 길이 한도(32,767자)와 인용 문제. 8천 토큰 컨텍스트는 인자로 넘기기에 위험함. 사람도 같은 파일을 볼 수 있음 | 신규 |
 | D19 | **push/PR은 앱이 `g-done`에서 결정론적으로 수행한다. `deliver` 스킬은 없앤다.** PR 제목/본문 초안은 `final-verify`가 쓴다. `gh`가 없거나 인증이 안 되어 있으면 intake 승인 때 경고하고 push + 비교 URL로 대체 | 세션과 승인이 하나 줄고, 외부로 나가는 동작이 결정론적이 됨. 에이전트에게 push 권한이 필요 없음 | 신규 · 사용자 결정 |
 | D20 | 여러 Work를 동시에 진행할 수 있다. 살아 있는 CLI 세션 상한 3(기본값, 설정 가능), 같은 프로젝트의 check 명령은 직렬 실행. 백그라운드 Work의 대기 상태는 배지와 OS 알림으로 알림 | 검사가 도는 동안 다른 일을 할 수 있어야 함. 포트/DB 충돌 방지 | 신규 · 사용자 결정 |
 | D21 | 이번 턴에 handoff가 작성/수정됐는데 스키마 검증에 실패하면, Stop 훅으로 오류 목록을 에이전트에게 되돌린다(연속 2회까지). 진행 여부나 내용 품질은 판단하지 않는다 | "검증이 계속 실패" 장애의 대부분을 사람 개입 없이 해소. 형식만 다루므로 task 내부 게이트가 아님 | 신규 · 사용자 결정 |
 | D22 | Work 생성 시 파이프라인 템플릿을 `works/<id>/pipeline.yaml`로 스냅숏한다 | 템플릿을 고쳐도 진행 중인 Work가 깨지지 않게 | 신규 |
-| D23 | **재현 테스트 고정(repro lock)**: evidence가 실패하는 재현 테스트를 커밋하면 앱이 `test_file` 명령으로 실패를 확인하고 파일 해시를 고정한다. 이후 fix/g-tests는 그 테스트가 통과해야 하고, 파일이 바뀌면 자동 승인하지 않는다 | D7을 실제로 작동시키는 장치. "테스트를 고쳐서 통과"를 결정론적으로 잡음. `test_file` 명령이 없거나 자동 재현이 안 되는 버그는 수동 승인으로 자연 강등 | 신규 · 사용자 결정 |
+| D23 | **재현 테스트 고정(repro lock)**: evidence가 실패하는 재현 테스트를 커밋하면 앱이 `test_file` 명령으로 실패를 확인하고 파일 해시를 고정한다. 이후 fix는 그 테스트가 통과해야 자동 승인되고, 파일이 바뀌면 사람이 원복·재고정·해제 중에서 고른다(D47) | D7을 실제로 작동시키는 장치. "테스트를 고쳐서 통과"를 결정론적으로 잡음. `test_file` 명령이 없거나 자동 재현이 안 되는 버그는 수동 승인으로 자연 강등 | 신규 · 사용자 결정 |
 | D24 | relay 스킬은 worktree의 `.claude/skills/relay-<name>/`으로 배포한다 | 프로젝트 자체 스킬과 이름 충돌 방지 | 신규 |
 | D25 | 훅 스크립트와 검증 스크립트는 relay 실행 파일을 Node로 실행한다(`ELECTRON_RUN_AS_NODE=1`) | Claude Code 네이티브 설치 환경에는 Node가 없을 수 있음. S2에서 확인 | 신규 |
 | D26 | 자동 승인에서 앱이 실행하는 검사는 **파이프라인 노드의 `auto_checks`**가 정한다. handoff의 검사 결과(`self_checks`)는 표시용이다. `auto_checks`가 비어 있으면 자동 승인하지 않는다 | v0.1은 "handoff `checks`에 적힌 항목을 재실행"이라 에이전트가 `checks: {}`를 쓰면 조건이 공허하게 충족되는 구멍이 있었음 | 신규 |
 | D27 | `fast_path`를 없애고 노드별 `when`(intent 필드 비교식)으로 통일한다. `requires`에 선택 입력(`?`)을 둔다 | S 경로에서 verify가 evidence/rca를 요구해 항상 경고가 뜨는 모순 해소. 의도 개정으로 size가 바뀌면 경로도 자연히 바뀜 | 신규 |
 | D28 | 파이프라인은 Work 생성 시 사용자가 고른다(v1은 버그 수정 하나). `work-start`는 적합성만 판단해 `pipeline_fit`으로 알린다 | v0.1은 intent.type으로 파이프라인을 고르는데 intent는 파이프라인의 첫 노드가 만든다(순환). 유형 오분류는 사람 선택 + 경고로 다룸 | 신규 |
 | D29 | 기본 경로가 아닌 `recommended_next`가 있으면 자동 승인하지 않는다 | 경로 변경은 판단이므로 사람이 한 번 봐야 함 | 신규 |
-| D30 | 자동 승인은 handoff의 마지막 수정 **이후에** Stop 신호가 도착했을 때만 시작한다 | 에이전트가 handoff를 쓴 뒤에도 턴이 이어지는 경우 방지. 훅이 유실되면 수동 승인으로 떨어질 뿐 진행은 막히지 않음 | 신규 |
+| D30 | 자동 승인은 유효 handoff 이후 **턴 종료 Stop**(백그라운드 작업 없음)이 왔을 때만 후보를 만들어 시작한다 | 에이전트가 handoff를 쓴 뒤에도 턴이 이어지는 경우 방지. 훅이 유실되면 수동 승인으로 떨어질 뿐 진행은 막히지 않음. 세부는 D39가 대체 | 개정(v0.3) |
 | D31 | evidence는 `auto_if_checks`(`repro:fails`)를 유지한다. 재현 테스트가 올바른 이유로 실패하는지는 rca 수동 승인 화면에서 사람이 함께 확인한다 | "실패한다"는 결정론적으로 확인되지만 "옳게 실패한다"는 아님. 승인 횟수를 늘리지 않고 사람의 눈을 한 번 거치게 함 | 신규 |
 | D32 | 앱은 단일 인스턴스로 실행한다 | 두 인스턴스가 같은 `RELAY_HOME`을 쓰면 상태가 깨짐 | 신규 |
 | D33 | check 명령은 프로젝트 등록 시 **자동 탐지 후 사용자 확인**으로 등록한다. `setup`(worktree 준비 명령)과 `test_file`(파일 단위 실행)도 함께 등록한다 | v0.1 열린 질문 1 해소. 새 worktree에는 의존성이 없으므로 setup이 필요함 | 신규 |
-| D34 | `decisions.md`는 앱이 task 승인 시 handoff의 `decisions`를 추가해서 만든다 | v0.1에 작성 주체가 없었음. 에이전트는 앱 소유 파일을 쓰지 않음 | 신규 |
-| D35 | 인수인계 정보 손실 대책: `rejected`를 모든 이후 task에 누적 주입(`rejected-log`), 이전 모든 handoff 요약(`handoff-chain`), 이전 세션 기록 경로(`transcripts`)를 제공한다 | 직전 handoff만 주입하면 두 단계 전의 기각 가설과 결정이 사라짐 | 신규 |
-| D36 | check 결과는 `(검사, HEAD 커밋, worktree 깨끗함)`이 같으면 재사용한다 | fix의 auto_checks와 바로 뒤 g-tests가 같은 테스트를 두 번 도는 낭비 제거 | 신규 |
-| D37 | 사람이 승인한 skill task 바로 다음이 human 게이트면 한 번 클릭으로 둘 다 통과한다(intake → [의도 승인], verify → [Work 완료]) | 같은 내용을 두 번 승인하는 절차 과잉 제거. 기록은 둘 다 남고, 자동 승인에는 적용하지 않으므로 D7 유지 | 신규 |
+| D34 | `decisions.md`는 앱이 `task.approved` 이벤트들로부터 **재생성**한다 | v0.1에 작성 주체가 없었음. 파일에 덧붙이면 충돌 복구 때 중복이 생김(검토 C2) | 개정(v0.3) |
+| D35 | 인수인계 정보 손실 대책: `rejected`를 모든 이후 task에 누적 주입(`rejected-log`, 포기된 시도의 유효 handoff 포함, 출처·상태 표시), 이전 모든 handoff 요약(`handoff-chain`), 이전 세션 기록 경로(`transcripts`)를 제공한다 | 직전 handoff만 주입하면 두 단계 전의 기각 가설과 결정이 사라짐 | 신규 |
+| ~~D36~~ | ~~check 결과 캐시~~ **철회(v0.3)** | g-tests 제거(D38)로 중복 실행 원인이 사라짐. 캐시 키가 명령·설정 변경을 놓치는 문제(검토 I1)도 함께 없어짐 | 철회 |
+| D37 | 사람이 승인한 skill task 바로 다음이 human 게이트면 한 번 클릭으로 둘 다 통과한다(intake → [의도 승인], verify → [Work 완료]). 승인 명령의 명시적 옵션(`merge_gate`)이며 "승인만"도 고를 수 있다 | 같은 내용을 두 번 승인하는 절차 과잉 제거. 자동 승인에는 적용하지 않으므로 D7 유지 | 신규 |
+| D38 | **자동 복귀를 없앤다.** 기본 파이프라인에서 g-tests 게이트를 빼고, 검사는 fix의 승인 조건으로 세션이 살아 있을 때 돈다. 실패하면 같은 세션에서 고친다. check 게이트 실패와 verify의 되돌림 추천은 사람이 고른다(`on_fail`은 기본 선택으로만) | g-tests는 fix auto_checks와 중복이었고, 자동 복귀는 연속 실패 카운터·상한·대기 상태·캐시를 끌고 옴. 같은 세션에서 고치는 편이 맥락도 덜 잃음. v1은 사람이 터미널 앞에 있다는 전제라 무인 루프의 가치가 낮음 | 신규(v0.3) |
+| D39 | **승인 후보**: 턴 종료 시점의 입력 세대·handoff/산출물 해시·HEAD·intent 버전·검사 설정 해시를 묶은 후보를 만들고, 승인은 후보 id에 결속한다. 프롬프트 제출(UserPromptSubmit 훅)·재개·파일 변경 시 폐기. 확정 순서: 세션 종료 → 후보 재확인 → `task.approved` 기록 | 카운트다운 중 사용자가 새 요청을 해도 이전 결과가 승인되던 경쟁 조건(검토 C1). task 내부 주입이나 게이트 없이 해결 | 신규(v0.3) |
+| D40 | 상태 복구 계약: work.json에 `applied_event_seq`, 모든 상태 변경은 이벤트 payload만으로 재현(승인 이벤트에 후보 해시·HEAD·다음 노드·결정 포함). 외부 동작(delivery)은 `started`/결과 이벤트 쌍과 run id | 이벤트 추가와 work.json 교체 사이 충돌을 복원할 수 없던 문제(검토 C2) | 신규(v0.3) |
+| D41 | **경로 승격**: `when` 때문에 건너뛰는 노드에 명시 전이로 들어가면 이후 그 Work는 `when`을 무시하고 전체 경로로 진행한다 | S에서 evidence로 돌아가 새 재현 테스트를 고정했는데 rca(사람 검토)가 생략되던 문제(검토 I5). "S를 벗어나면 끝까지 전체 경로"가 이해하기도 쉬움 | 신규(v0.3) |
+| D42 | 세션 시작·재개·검사 실행마다 `attempt_id`를 발급하고, 신호와 검사 결과는 현재 attempt와 같을 때만 반영한다. 긴 검사는 Work 명령 큐 밖에서 돈다 | 경로 변경 후 늦게 끝난 검사가 새 흐름을 덮는 문제(검토 C3) | 신규(v0.3) |
+| D43 | **D7이 보장하는 범위**: 에이전트의 실수, 잘못된 보고, 타이밍 경쟁. 동일 사용자 권한으로 도는 임의 프로세스의 의도적 조작은 v1 범위 밖이다(Windows에서는 Claude sandbox도 없음) | 결정론 검사의 한계를 문서로 명확히 해 과도한 기대와 과한 제약을 함께 피함(검토 I2·I4) | 신규(v0.3) · 사용자 결정 위임(추천안 채택) |
+| D44 | human 게이트의 효과는 `role`(intent_approval / completion / checkpoint)이 정하고 파이프라인이 임의 동작을 붙일 수 없다. 의도 산출물은 노드 이름이 아니라 `role: intent`로 찾는다. 실행 시점 불변 조건 R1~R4(의도 승인 전 다른 노드 진입 금지 등) | 잘못 배치된 `on_pass`가 의도 승인·전달을 우회할 수 있던 문제(검토 C5)와 첫 노드 이름 결합(I13) | 신규(v0.3) |
+| D45 | handoff의 스킬별 데이터는 `extensions` 아래 두고, 스킬 manifest가 확장 이름과 스키마를 선언한다. 앱의 특수 처리는 스킬 이름이 아니라 `capabilities`(예: `repro_lock`)로 켠다. 업무 유형(`type`)은 enum으로 닫지 않는다 | 새 업무 유형·스킬을 공통 스키마 수정 없이 추가(검토 I13) | 신규(v0.3) |
+| D46 | **질문과 승인의 역할 분담**: 터미널 질문은 진행에 필요한 정보가 없을 때만, 확정은 앱 승인 화면에서. 질문 예산은 상한이지 채울 목록이 아니다. work-start는 목표·완료조건·규모를 초안으로 내고 의도 승인 화면에서 확정받는다 | 같은 내용을 대화로 확인하고 버튼으로 다시 승인하던 중복(검토 I15) | 신규(v0.3) · 사용자 결정 위임(추천안 채택) |
+| D47 | 고정된 재현 테스트가 바뀌면 승인 화면에서 [원복 요청 / 변경된 테스트로 재고정 / 고정 해제]를 고른다. 재고정은 사람이 변경 diff를 본 뒤에만 가능하다 | 정당한 테스트 수정이 반복 실패 루프에 빠지던 문제(검토 I8). D23은 유지 | 신규(v0.3) · 사용자 결정 위임(추천안 채택) |
+| D48 | 의도 개정의 stale은 `review`(재검토 필요)와 `obsolete`(불필요)로 나누고, 현재 노드가 `requires`로 쓰는 `review` 산출물만 자동 승인을 막는다 | 전역 stale 하나가 무관한 단계까지 수동으로 만들고 영구 대기를 만들던 문제(검토 I7) | 신규(v0.3) |
+| D49 | 검증 결과를 **오류**와 **경고**로 나눈다. 오류: 필수 필드·타입·경로·상태 값·참조·필수 산출물. 경고: 분량, 권장 제목, 본문 형식 | 편집 규칙 때문에 형식 수정이 반복되는 문제(검토 P3). 승인 근거 검사는 완화하지 않음 | 신규(v0.3) |
 
 ---
 
@@ -111,7 +123,7 @@ CLI의 사용성은 CLI 자체가 제공한다. relay는 CLI를 다시 구현하
 | 14 | handoff `status: needs_rework`의 의미와 처리가 정의되지 않음 | 제거 |
 | 15 | handoff의 `git` 필드: 앱이 직접 알 수 있는 사실을 에이전트에게 쓰게 함 | 제거. 앱이 work.json에 기록 |
 | 16 | 새 worktree에는 의존성이 설치되어 있지 않아 첫 check가 실패함 | `project.setup` (D33) |
-| 17 | fix의 자동 승인 검사와 g-tests가 같은 테스트를 두 번 실행 | D36 |
+| 17 | fix의 자동 승인 검사와 g-tests가 같은 테스트를 두 번 실행 | D36 → v0.3에서 D38(g-tests 제거)로 대체 |
 | 18 | 앱을 두 번 실행하면 상태 파일이 깨짐 | D32 |
 | 19 | 비기본 추천이 자동 승인과 함께 진행되면 사람이 경로 변경을 못 봄 | D29 |
 | 20 | intake 승인 뒤 g-intent 승인, verify 승인 뒤 g-done 승인이 같은 내용의 이중 클릭 | D37 |
@@ -129,15 +141,57 @@ CLI의 사용성은 CLI 자체가 제공한다. relay는 CLI를 다시 구현하
 | 위험 | 대책 | 남은 위험 |
 |---|---|---|
 | **작은 work의 절차 과잉** | S 크기는 evidence/rca 생략(`when`). 연속 수동 승인 합치기(D37). S 경로 사람 클릭 2회(의도 승인, Work 완료), M 경로 3회. fix는 조건 충족 시 자동 승인 | "한 줄 수정"에도 intake와 verify 세션이 열림. M3에서 불편하면 intake+fix 한 세션인 `quickfix` 파이프라인을 추가(설정만으로 가능한지 검증 과제) |
-| **질문 피로** | 스킬마다 질문 예산과 결정 지점 고정, 한 번에 묶어서 추천안과 함께 질문, "추천대로"로 답 가능(skills/README.md 3.2). delivery는 프로젝트 기본값(D15). evidence/fix는 보통 질문 0개 | 결정 지점 목록이 실제로 적절한지는 M3에서 확인 |
-| **파이프라인 경직성** | `transitions`, 언제든 [다음 단계 변경] (기타 스킬을 임시 노드로), 의도 개정, `when`으로 경로가 intent를 따름. 모든 우회는 `task.rerouted`로 기록해 템플릿 개선 근거로 씀 | 임시 노드의 산출물은 파이프라인 노드의 `requires`에 연결되지 않음(경로만 전달) |
-| **유형 오분류** | 파이프라인은 사람이 고름(D28), `pipeline_fit` 경고. 규모 오분류는 fix → rca/evidence 전이로 탈출, 애매하면 M 추천 | v1 파이프라인이 하나라 misfit이면 포기 후 수동 작업 외 선택지 없음 |
+| **질문 피로** | 질문은 없는 정보만, 확정은 승인 화면에서(D46). 질문 예산은 상한. delivery는 프로젝트 기본값(D15). 정상 경로에서 질문 0개가 기본 | 결정 지점 목록이 실제로 적절한지는 M3에서 확인 |
+| **파이프라인 경직성** | `transitions`, 언제든 [다음 단계 변경] (기타 스킬을 임시 노드로), 의도 개정, `when`으로 경로가 intent를 따름. 모든 우회는 `task.rerouted`로 기록해 템플릿 개선 근거로 씀 | 임시 노드 결과는 같은 스킬 노드의 승인 step이 없을 때만 `requires`로 연결됨(state-machine.md 3.3) |
+| **유형 오분류** | 파이프라인은 사람이 고름(D28), `pipeline_fit` 경고. 규모 오분류는 fix → rca/evidence 전이로 탈출하고 이후 전체 경로(D41), 애매하면 M 추천 | v1 파이프라인이 하나라 misfit이면 포기 후 수동 작업 외 선택지 없음 |
 | **task 사이 정보 손실** | handoff 필수 `rejected`, 누적 `rejected-log`, `handoff-chain`, `transcripts` 경로, 결정 로그, "다음 task가 알아야 할 것" 작성 규칙, stale 표시, 주입 내역을 UI에 표시, S6에서 예산 실측 | 요약 과정의 손실 자체는 없앨 수 없음. transcript 검색은 에이전트의 판단에 맡김 |
 
 추가로 확인한 위험:
 - 재현 테스트가 "잘못된 이유로" 실패하는 경우 → D31(rca에서 사람 확인), final-verify의 테스트 약화 점검.
-- 불안정한(flaky) 테스트 → 자동 재시도 없음(v0.1 유지). 연속 실패 상한에서 사람을 부른다.
+- 불안정한(flaky) 테스트 → 자동 재시도 없음(v0.1 유지). 검사 실패는 사람이 본다(D38). [다시 실행]은 사람의 선택으로만.
 - Claude Code의 플래그/훅 형식 변경 → `VendorAdapter`에 격리하고 릴리스 전 스모크(architecture.md 5절).
+
+### 3.4 v0.2 외부 검토 반영 (v0.3)
+
+다른 AI 세션의 독립 검토(기준 커밋 59030de) 결과를 하나씩 따져서 반영했다. 판정: ✅ 수용, ◐ 일부 수용(다르게 해결), ✕ 기각.
+
+| 지적 | 판정 | 반영 |
+|---|---|---|
+| C1 카운트다운 중 새 요청을 해도 이전 결과가 자동 승인됨 | ✅ | D39 승인 후보, UserPromptSubmit 훅 추가, 세션 종료 후 재확인 |
+| C2 이벤트로 상태를 복구할 수 없음 | ✅ | D40, D34 개정 |
+| C3 경로 변경 후 늦은 검사 결과가 새 흐름을 덮음 | ✅ | D42 |
+| C4 새 재현 고정 실패를 이전 고정으로 대신 통과 | ✅ | `repro:fails`는 이번 step의 고정만 인정, 활성 고정은 evidence 승인 시 결정(state-machine.md 4.1) |
+| C5 필수 사람 승인·delivery 위치가 보호되지 않음 | ✅ | D44, 로드 규칙 P2~P5·P10, 실행 불변 조건 R1~R4 |
+| C6 최초 intake handoff가 스키마 오류 | ✅ | `intent_version` 최소 0 (확인됨: 실제 버그였음) |
+| I1 검사 캐시 키 불완전 | ◐ | 캐시 자체를 없앰(D36 철회) |
+| I2 테스트 설정 변경으로 검사 약화 | ◐ | `check_config_globs`를 `tests:unchanged`에 포함. 완전 방어는 범위 밖으로 명시(D43). 실행 테스트 수 확인은 runner마다 달라 보류 |
+| I3 "사람이 결정"을 에이전트 표기로 인정 | ✅ | `requires_human`이면 `by`와 무관하게 자동 승인 금지, UI는 "에이전트 보고"로 표시, 사람의 확정은 수동 승인 기록 |
+| I4 앱 소유 파일 규칙과 쓰기 범위 불일치 | ✅ | 쓰기 허용은 현재 task 디렉터리만, 앱 파일은 deny, 외부 변경은 무시하고 기록(6.4절), D43 |
+| I5 S→evidence 경로에서 rca 검토 생략 | ✅ | D41 |
+| I6 의도 개정 승인 분기 누락 | ✅ | state-machine.md 5.2·5.7 명시 분기, intent_version·title 갱신 |
+| I7 전역 stale 조건 | ✅ | D48 |
+| I8 정당한 재현 테스트 수정의 반복 실패 | ✅ | D47. g-tests 제거로 루프 자체도 사라짐 |
+| I9 PR 생성 완료조건을 verify가 판정할 수 없음 | ✅ | 완료조건에서 delivery 제거, 앱이 결과를 따로 기록. (v0.2 작성 시 발견해 놓고 work-start 명세에 다시 넣은 실수였음) |
+| I10 세션 복구가 모든 생존 상태를 다루지 않음 | ✅ | 모든 live 세션 조정, pid+시작 시각으로 식별, 재개도 공통 실행 옵션, /clear 세션 변경 추적 |
+| I11 blocked·invalid 종료 전이 불완전 | ✅ | state-machine.md 3.1·3.4, blocked 기본 행동은 "터미널에서 정보 제공" |
+| I12 다음 노드 조회가 이력을 바꿈 | ✅ | 순수 `nextNode()` + 이동 확정 시 한 번 기록 |
+| I13 확장 범위 과장 | ✅ | D44, D45, `checks.test` 전역 필수 제거 |
+| I14 승인 diff 범위 불명확 | ✅ | 후보 head 기준 세 범위 탭, 최종 화면 기본은 전체 Work 변경 |
+| I15 질문 예산이 필수 목록처럼 작동 | ✅ | D46 |
+| I16 Notification을 입력 대기로 해석 | ✅ | `notification_type` 구분, S2 목표를 전달 지연으로 한정 |
+| I17 에이전트 테스트와의 자원 충돌 | ◐ | `RELAY_SLOT` 환경 변수로 프로젝트가 분리하도록 안내. 공통 잠금 래퍼는 v1에서 하지 않음(에이전트 명령을 감싸면 CLI 사용성을 건드림) |
+| I18 실패한 시도의 정보 손실 | ✅ | 포기된 시도의 `rejected` 보존, 경로 변경에 원인 참조·선택 메모 |
+| M1~M6 | ✅ | 검증 명령 주입, rca 입력 선택화, review 로드 거절, `merge_gate` 옵션, 안내 문구를 앱이 생성, 읽기 관대·쓰기 엄격 버전 규칙 |
+| P1 승인 후 세션 유지 옵션 제거 | ✅ | D17 개정 |
+| P2 캐시·review 축소 | ✅ | D36 철회, P10 |
+| P3 구조 오류와 편집 경고 분리 | ✅ | D49 |
+| 관점 7 Git for Windows는 Claude Code에 선택 사항 | ✅ | 11절 수정(relay 자체는 git 필요) |
+| 관점 7 `Write(path)` 규칙은 무시됨 | ✅ | 권한 규칙을 `Edit(//c/...)` 형식으로 통일 |
+| 관점 8 카운트다운 기본값 축소 | ✕(보류) | 근거가 아직 없음. 15초 유지, M3 기록(취소 수)으로 조정 |
+| 관점 8 tree:clean·diff 한도 완화 | ✕(보류) | 버그 수정 범위에서는 적절하다고 판단. 프로젝트별 `approval_overrides`는 필요해지면 추가 |
+| 관점 9 "사람이 직접 산출물을 만드는 단계", 병렬 | ✕(v2) | v1은 단일 cursor 순차 계약임을 state-machine.md 머리에 명시. human은 승인 게이트로만 쓴다 |
+
+검토에서 짚지 않았지만 반영 과정에서 추가로 바꾼 것: SessionStart 외 훅은 Claude Code 내장 HTTP 훅으로 보낼 수 있어 Node 의존을 없앨 수 있다는 점을 S2 비교 항목에 넣었다.
 
 ---
 
@@ -183,9 +237,10 @@ Project (레포 1개, project.json)
 │     │    4) 사용자가 터미널에서 에이전트와 작업
 │     │    5) 스킬이 산출물 + handoff(status: awaiting_approval) 작성 → 검증 명령 실행
 │     │    6) 턴 종료(Stop 훅) → 앱이 검증. 형식 오류면 Stop 훅으로 되돌림(D21)
-│     │    7) 유효하면 승인 대기. 자동 승인 조건 평가(9절) → 카운트다운 또는 수동
-│     │    8) 승인 → work.json 기록, 세션 종료(D17), decisions.md 추가, task.approved
-│     └─ gate 노드: check는 앱이 실행·판정 / human은 버튼 (직전 수동 승인과 합칠 수 있음, D37)
+│     │    7) 유효하면 승인 후보 생성(D39) → 자동 승인 평가(9절) → 카운트다운 또는 수동
+│     │       (사용자가 새 프롬프트를 제출하면 후보 폐기, 다음 턴 종료에서 다시)
+│     │    8) 승인 → 세션 종료 → 후보 재확인 → task.approved (decisions.md 재생성)
+│     └─ gate 노드: human은 버튼(직전 수동 승인과 합칠 수 있음, D37) / check는 앱이 실행·판정, 실패 시 사람이 선택(D38)
 └─── 반복
    ↓
 [사용자] verify 승인 = [Work 완료] → [앱] delivery 수행(push/PR, D19) → work.completed
@@ -199,18 +254,18 @@ Project (레포 1개, project.json)
 
 | 경우 | 동작 |
 |---|---|
-| 게이트 실패 | `on_fail` 노드로 새 task. 실패 정보는 `gate-failure` 제공자가 주입. 같은 게이트 연속 실패 상한(기본값 3)에서 사람을 부름 |
+| 검사 실패 | skill 노드의 승인 검사 실패는 같은 세션에서 고친다(새 task 없음). check 게이트 실패는 `needs_attention(check_failed)`: 사람이 `on_fail` 제안 노드나 다른 노드를 고르고, 실패 정보는 `check-failure` 제공자가 주입(D38) |
 | handoff 추천 | `recommended_next`가 허용 목록 안이면 승인 버튼이 그 노드를 가리킴(자동 승인은 안 됨, D29). 목록 밖이면 [다음 단계 변경] 메뉴 |
-| blocked | 승인 대신 `blocked_reason`과 다음 단계 선택지를 보여 줌 |
-| 사용자 선택 | 언제든 [다음 단계 변경]: 기본 / 허용된 전이 / 기타 스킬(임시 노드). 실행 중 task는 `abandoned`, 산출물 보존. `requires` 미충족은 경고만 |
+| blocked | 세션이 살아 있으면 "터미널에서 정보를 주고 계속"이 기본. 세션이 끝났으면 [재개해 정보 제공] / 다음 단계 선택 |
+| 사용자 선택 | 언제든 [다음 단계 변경]: 기본 / 허용된 전이 / 기타 스킬(임시 노드). 실행 중 task는 `abandoned`, 산출물과 기각 정보 보존. `requires` 미충족은 경고만. 의도 승인 전에는 intake 다시/포기만(R1) |
 
-모든 경로 변경은 `task.rerouted`로 기록한다(자주 쓰는 우회 → 정식 전이로 승격하는 근거).
+모든 경로 변경은 `task.rerouted`(원인 참조, 선택 메모)로 기록한다(자주 쓰는 우회 → 정식 전이로 승격하는 근거). `when`으로 건너뛴 노드에 들어가면 이후 전체 경로로 진행한다(D41).
 
 ### 5.2 의도 개정 (`intent-revise`)
 
 - 계기: handoff의 `intent_deviation`(자동 승인 금지, 승인 화면에서 [의도 수정] 강조) 또는 사용자의 [의도 수정].
 - 앱이 `x-intent-revise` 임시 노드로 task를 연다. 스킬은 새 intent 초안, 변경 전후 차이, 무효가 되는 승인된 산출물, 재개 노드 추천을 만든다([skills/intent-revise.md](skills/intent-revise.md)). 승인은 항상 수동.
-- 승인되면 앱이 intent 버전을 올리고(이전 버전은 `intent.history/`), 산출물에 stale 표시를 하고, 재개 노드에서 이어 간다. stale이 남아 있는 동안 자동 승인은 멈춘다.
+- 승인되면 앱이 intent 버전과 제목을 올리고(이전 버전은 `intent.history/`), 산출물에 `review`/`obsolete` 표시를 하고, 재개 노드에서 이어 간다. `review` 산출물을 입력으로 쓰는 노드만 자동 승인이 멈춘다(D48).
 
 ---
 
@@ -234,11 +289,11 @@ Project (레포 1개, project.json)
       worktrees/<work-id>/            # git worktree
       works/
         <work-id>/                    # 예: w-20260925-001
-          work.json                   # 상태의 단일 원천 (contracts/work.v1.schema.json)
+          work.json                   # events.jsonl의 projection (applied_event_seq 포함, D40)
           pipeline.yaml               # 생성 시 스냅숏 (D22)
           intent.md                   # 승인된 최신 의도
           intent.history/v1.md …
-          decisions.md                # 승인 시 앱이 추가 (D34)
+          decisions.md                # task.approved 이벤트들로부터 재생성 (D34)
           events.jsonl                # 수명주기 이벤트 (contracts/event.v1.schema.json)
           tasks/
             01-intake/                # <순번>-<노드 id>
@@ -249,8 +304,8 @@ Project (레포 1개, project.json)
               intent.draft.md
               handoff.md
             02-g-intent/              # human 게이트는 디렉터리를 만들지 않아도 됨(기록은 work.json)
-            03-evidence/  evidence.md  handoff.md  checks/repro-fails.log …
-            06-g-tests/   checks/cmd-test.log …
+            03-evidence/  evidence.md  handoff.md  checks/<attempt>/repro-fails.log …
+            05-fix/       fix.md  handoff.md  checks/<attempt>/cmd-test.log …
 ```
 
 ### 6.2 worktree
@@ -263,26 +318,31 @@ Project (레포 1개, project.json)
 
 ### 6.3 결정 로그 (`decisions.md`)
 
-앱이 task 승인 시 추가한다. 에이전트는 읽기만 한다.
+앱이 `task.approved` 이벤트의 `decisions`로 재생성한다(덧붙이지 않으므로 충돌 복구 시 중복이 없다). 사람의 확정은 "사람 승인" 표기로, 에이전트가 적은 주체는 "에이전트 보고"로 구분한다. 에이전트는 읽기만 한다.
 
 ```markdown
 ## t-04 rca — 2026-09-25 10:42 (사람 승인)
-- [사람] 원인은 토큰 만료 시각 비교의 타임존 불일치 — 재현 테스트 실패 값의 차이가 정확히 9시간
-- [AI] 수정 방향은 epoch 비교 — 라이브러리 추가 없이 가능
+- [에이전트 보고: 사람] 원인은 토큰 만료 시각 비교의 타임존 불일치 — 재현 테스트 실패 값의 차이가 정확히 9시간
+- [에이전트 보고: AI] 수정 방향은 epoch 비교 — 라이브러리 추가 없이 가능
 ```
 
 ### 6.4 task 시작 절차
 
 1. **세션 슬롯 확인:** 살아 있는 세션이 `sessions.max_live` 이상이면 Work를 `paused(session_limit)`로 두고 대기열에 넣는다. 슬롯이 나면 먼저 들어온 순서로 자동 시작하고 알린다(기본값).
 2. **스킬 배포:** `<RELAY_HOME>/skills/<skill>/` → `<worktree>/.claude/skills/relay-<skill>/` (+ `relay-close`).
-3. **task 설정 파일:** `tasks/<nn>/session.settings.json`에 훅(`SessionStart`, `Stop`, `Notification`, `SessionEnd`) 명령과 work 디렉터리 쓰기 허용 규칙을 쓴다. 적용 방식은 S2 결과에 따라 `claude --settings <파일>`(우선) 또는 worktree의 `.claude/settings.local.json`.
+3. **task 설정 파일:** `tasks/<nn>/session.settings.json`에 다음을 쓴다. 적용 방식은 S2 결과에 따라 `claude --settings <파일>`(우선) 또는 worktree의 `.claude/settings.local.json`.
+   - 훅: `SessionStart`, `UserPromptSubmit`, `Stop`, `Notification`, `SessionEnd`
+   - 권한 허용: `Edit(//<POSIX 절대 경로>/tasks/<현재 task>/**)`만. Windows 경로는 `//c/Users/...` 형식. 경로 규칙은 `Edit`/`Read`만 판정에 쓰인다
+   - 권한 거부: work 디렉터리의 `work.json`, `events.jsonl`, `intent.md`, `intent.history/**`, `decisions.md`, `pipeline.yaml`, 이전 task 디렉터리들(시작 시점에 알 수 있으므로 나열)
+   - 앱은 앱 소유 파일의 외부 변경을 상태로 받아들이지 않는다(변경 감지 시 이벤트로 재생성하고 `state.external_change_ignored` 기록). 방어 범위는 D43
 4. **컨텍스트 조립:** 제공자 실행 → `context.md`, `context.manifest.json` (6.5절).
 5. **실행:**
    ```
    claude --session-id <uuid> --add-dir <work 디렉터리> [--settings <task 설정>] [config.tools.claude_extra_args…]
           "/relay-<skill> 이 task의 컨텍스트: <context.md 절대 경로>"
    ```
-   cwd = worktree. 환경 변수: `RELAY_HOME`, `RELAY_WORK_ID`, `RELAY_STEP_ID`, `RELAY_WORK_DIR`, `RELAY_TASK_DIR`, `RELAY_IPC`, `RELAY_IPC_TOKEN` + `project.env`.
+   cwd = worktree. 환경 변수: `RELAY_HOME`, `RELAY_WORK_ID`, `RELAY_STEP_ID`, `RELAY_ATTEMPT_ID`, `RELAY_WORK_DIR`, `RELAY_TASK_DIR`, `RELAY_IPC`, `RELAY_IPC_TOKEN`, `RELAY_SLOT`(0부터, 프로젝트가 포트·DB 분리에 쓸 수 있음) + `project.env`.
+   재개도 같은 빌더로 만든다: `claude --resume <session-id> --add-dir … --settings … [프롬프트]`(이전 옵션이 복원된다고 가정하지 않음, 검토 I10).
 6. **확인:** 10초 안에 `SessionStart` 신호가 오지 않으면 "훅 신호가 없습니다(자동 승인 불가)" 경고를 머리 띠에 표시한다. 진행은 계속한다.
 
 ### 6.5 컨텍스트 제공자
@@ -296,15 +356,16 @@ Project (레포 1개, project.json)
 | intent (최신 버전) | 90 | inline | intent 승인 후 |
 | revise-trigger | 88 | inline (계기, 승인된 산출물 목록, 노드 목록) | intent-revise |
 | initial-request | 86 | inline(work-start) / path(그 외) | 항상 |
-| gate-failure | 85 | inline (로그 끝 `log_tail_lines`줄) | 게이트 실패로 돌아온 경우 |
+| check-failure | 85 | inline (실행한 검사, 종료 코드, 로그 끝 `log_tail_lines`줄) | 사용자가 check 실패 후 이 노드를 고른 경우 |
 | repro-lock | 82 | inline (파일, 고정 커밋, 실패 출력 끝부분) | 고정이 있을 때 |
 | project-profile | 80 | inline | work-start, evidence |
 | decisions | 80 | inline | 항상 |
-| rejected-log | 75 | inline (모든 승인된 handoff의 `rejected` 누적, D35) | 항상 |
+| rejected-log | 75 | inline (승인·포기된 모든 유효 handoff의 `rejected` 누적, 출처와 상태 표시, D35) | 항상 |
 | prev-handoff | 70 | inline | 직전 skill step이 있을 때 |
-| git-diff | 65 | inline (파일 목록, 줄 수, 테스트 파일 변경) | fix 재진입, final-verify |
+| git-diff | 65 | inline (`base_commit..HEAD` 파일 목록, 줄 수, 테스트·테스트 설정 파일 변경) | fix 재진입, final-verify |
 | check-results | 65 | inline | final-verify |
-| required-artifacts (`requires`) | 60 | path (stale/missing 표시) | 노드에 requires가 있을 때 |
+| required-artifacts (`requires`) | 60 | path (review/missing 표시, obsolete는 제외) | 노드에 requires가 있을 때 |
+| reroute-note | 55 | inline (직전 경로 변경의 원인 참조와 사용자 메모) | 경로 변경으로 들어온 경우 |
 | handoff-chain | 50 | inline (직전 제외 모든 handoff의 "요약" 절) | 항상 |
 | transcripts | 10 | path (이전 task 세션 기록 파일) | 항상 |
 
@@ -333,7 +394,7 @@ Project (레포 1개, project.json)
    | `gradlew` / `pom.xml` | `./gradlew test` / `mvn -q test` | 없음 | 없음 |
 
    `test_file`이 없으면 repro lock을 쓰지 않는다는 안내를 보여 준다. 사용자가 직접 입력할 수 있다.
-4. **확인과 수정:** 탐지 결과 표를 편집 가능한 폼으로 보여 준다. `test`는 필수.
+4. **확인과 수정:** 탐지 결과 표를 편집 가능한 폼으로 보여 준다. 어떤 명령이 필요한지는 파이프라인이 정한다(bugfix는 `test` 필요, P8). `test_globs`, `check_config_globs`(테스트 설정 파일)도 탐지값을 보여 준다.
 5. **시험 실행(선택, 권장):** 임시 worktree를 만들어 `setup` → `test`를 실행하고 결과를 보여 준 뒤 임시 worktree를 지운다. 메인 체크아웃을 건드리지 않기 위함이다.
 6. **delivery 기본값:** `ask`(기본값) / `none` / `push` / `pr`. 원격이 없으면 `none` 고정.
 7. **저장:** `project.json`, `core.longpaths=true`.
@@ -357,17 +418,20 @@ Project (레포 1개, project.json)
 **동시 Work (D20)**
 - 서로 다른 Work는 서로 다른 worktree와 브랜치를 쓰므로 파일 충돌은 없다.
 - 살아 있는 세션 합계가 상한을 넘으면 새 task는 대기열에 들어간다(6.4절 1).
-- 같은 프로젝트의 check 명령은 프로젝트 단위 큐로 하나씩 실행한다(`checks.serialize_per_project`).
+- 같은 프로젝트의 check 명령은 프로젝트 단위 큐로 하나씩 실행한다(`checks.serialize_per_project`). 에이전트가 CLI에서 직접 돌리는 테스트와의 충돌은 막지 않는다. 대신 세션마다 `RELAY_SLOT`을 주어 프로젝트가 포트·DB 이름을 나눌 수 있게 한다(검토 I17).
+- 세션 상한으로 대기 중이면 헤더에 "세션 대기: 3/3 사용 중 — <Work 목록>"을 보여 주고, 사용자가 다른 Work를 일시 정지해 슬롯을 비울 수 있다.
 - 선택되지 않은 Work의 승인 대기, 입력 대기, 검사 실패, needs_attention은 사이드바 배지와 OS 알림으로 알린다. 자동 승인 카운트다운은 백그라운드 Work에서도 진행한다.
 - 같은 버그를 다루는 Work가 둘 생기는 것은 막지 않는다.
 
 ### 7.4 Work 완료와 정리
 
-**Work 완료** (`g-done`, 항상 수동. 보통 verify 승인과 합쳐서 한 번 클릭, D37)
+**Work 완료** (`role: completion` 게이트, 항상 수동. 보통 verify 승인과 합쳐서 한 번 클릭, D37)
 - 사전 조건: intent.delivery가 `none`이 아니면 worktree가 깨끗해야 한다(아니면 버튼 비활성, 이유 표시).
 - 앱이 `delivery`를 수행한다(D19): `push`는 `git push -u <remote> relay/<work-id>`, `pr`은 push 후 `gh pr create`(제목/본문은 final-verify의 `delivery_draft`, `project.delivery.pr_draft`면 draft). 같은 브랜치의 PR이 이미 있으면 새로 만들지 않고 링크만 기록한다.
 - `gh`가 없거나 인증이 안 되어 있으면: intake 승인 화면에서 미리 경고하고, 완료 시에는 push 후 비교 URL을 보여 준다.
+- 순서는 항상 delivery → 완료 기록이다(R3). 시작 시 `delivery.started {run_id, head, remote, base}`를 먼저 기록하므로, 도중에 앱이 죽어도 원격 상태를 조회해 이어 간다.
 - 실패하면 Work는 `needs_attention(delivery_failed)`: [다시 시도] [delivery 없이 완료].
+- delivery 결과는 intent 완료조건이 아니라 Work 기록(`work.delivery`)에 남는다(검토 I9).
 
 **Work 정리** (completed, abandoned에서 활성화)
 
@@ -390,12 +454,10 @@ Project (레포 1개, project.json)
 | `tools.claude_path` / `git_path` / `gh_path` | null (PATH 탐색) | 도구 경로 |
 | `tools.claude_extra_args` | `[]` | 모든 세션에 추가할 인자 |
 | `sessions.max_live` | 3 | 살아 있는 CLI 세션 상한 (D20) |
-| `sessions.kill_on_approval` | true | 승인 시 세션 종료 (D17) |
 | `approval.countdown_sec` | 15 | 자동 승인 카운트다운 |
 | `approval.pause_on_input_sec` | 10 | 터미널 입력 시 카운트다운 정지 시간 |
 | `approval.max_consecutive_auto` | 3 | 연속 자동 승인 상한 (0이면 자동 승인 끔) |
 | `approval.max_diff_lines` / `max_diff_files` | 300 / 10 | `diff:within_limit` 기준 |
-| `gates.max_consecutive_failures` | 3 | 게이트 연속 실패 상한 |
 | `checks.default_timeout_sec` | 600 | check 명령 타임아웃 |
 | `checks.log_tail_lines` | 80 | 실패 로그 주입 줄 수 |
 | `checks.serialize_per_project` | true | 프로젝트별 check 직렬 실행 |
@@ -416,7 +478,7 @@ Project (레포 1개, project.json)
 ## 8. 장애와 복구
 
 원칙:
-1. **상태의 단일 원천은 `work.json`과 `events.jsonl`이다.** 쓰기 순서는 이벤트 추가(fsync) → work.json 원자적 교체. 시작 시 work.json보다 뒤의 이벤트를 재적용한다.
+1. **상태의 원천은 `events.jsonl`이고 `work.json`은 그 projection이다(D40).** 쓰기 순서는 이벤트 추가(fsync) → work.json 원자적 교체. 시작 시 `applied_event_seq`보다 뒤의 이벤트를 재적용한다. 파일을 다시 해싱해서 과거 승인 내용을 복원하지 않는다(승인 이벤트가 해시를 담음).
 2. **훅은 편의 신호다.** 진행을 막는 결정에는 훅 없이도 성립하는 신호(PTY 종료, 파일 존재, git 상태)를 함께 쓴다. 훅이 없으면 자동화가 줄 뿐 멈추지 않는다.
 3. **복구는 사람에게 선택지를 준다.** 앱이 추측해서 진행하지 않는다(`needs_attention`).
 
@@ -426,15 +488,18 @@ Project (레포 1개, project.json)
 |---|---|
 | 정상 종료 (창 닫기) | 실행 중 세션이 있으면 확인 대화상자("N개 세션이 중단됩니다. 다음 실행 때 이어서 할 수 있습니다"). 확인하면 각 세션의 프로세스 트리를 종료하고 step `interrupted(app_exit)` 기록 |
 | 충돌 / 강제 종료 | 기록할 기회가 없다. 다음 시작 때 조정 |
-| 시작 시 조정 | Work마다: ① 이벤트 재적용 ② `running`/`launching` step → 기록된 pid가 살아 있고 명령이 `claude`면 종료(PTY를 다시 붙일 수 없으므로) → `interrupted(app_crash)` ③ task 디렉터리의 handoff를 다시 검증해 유효하면 `awaiting_approval`로 표시(Stop 신호가 없으므로 자동 승인은 안 됨, D30) ④ `running` check gate → 다시 실행(검사는 멱등, 기본값) ⑤ delivery 진행 중이었으면 원격 브랜치와 기존 PR을 확인해 끝난 단계는 건너뜀 ⑥ worktree가 사라졌으면 `git worktree prune` 후 Work를 `needs_attention(session_crashed)`로, 메시지 "worktree가 없습니다" |
-| 중단된 task 재개 | [재개] = `claude --resume <session-id>` (화면에는 `pty.log`를 먼저 재생해 이전 맥락을 보여 줌). 재개가 2회 연속 실패하면 `needs_attention(session_crashed)`: [새 세션으로 이 노드 다시] |
+| 시작 시 조정 | Work마다: ① 이벤트 재적용 ② **세션이 있던 모든 step**(running, awaiting_approval, approving 포함) → 기록된 pid와 프로세스 시작 시각이 **둘 다** 맞을 때만 프로세스 트리 종료(pid 재사용 오인 방지) → `interrupted(app_crash)`. `approving`이었으면 후보 재확인부터 다시 ③ handoff를 다시 검증해 유효하면 `awaiting_approval`로 표시(턴 종료 Stop이 없으므로 자동 승인 안 함) ④ 실행 중이던 검사는 `checks.discarded`로 기록하고, check 게이트였으면 새 attempt로 다시 실행 ⑤ `delivery.started`만 있고 결과가 없으면 원격 브랜치 HEAD와 기존 PR을 조회해 끝난 단계는 건너뛰고 이어 감 ⑥ worktree가 사라졌으면 `git worktree prune` 후 `needs_attention(worktree_missing)` |
+| 중단된 task 재개 | [재개] = 공통 실행 옵션 + `--resume <session-id>`, 새 attempt, 입력 세대 +1(이전 후보 폐기). 화면에는 `pty.log`를 먼저 재생해 이전 맥락을 보여 줌. 재개가 2회 연속 실패하면 `needs_attention(session_crashed)`: [새 세션으로 이 노드 다시] |
+| 세션 안에서 `/clear`, `/resume` | SessionStart `source`와 새 `session_id`를 받아 step의 세션 목록에 추가(`task.session_changed`). 다른 task의 세션으로 전환한 것이 확인되면 경고. 이후 재개는 마지막 session id로 |
 
 ### 8.2 CLI 프로세스 종료
 
 | 상황 | 처리 |
 |---|---|
-| 승인 후 앱이 종료 (D17) | 정상. `exit_grace_sec` 뒤에도 살아 있으면 트리 종료 |
-| 사용자가 `/exit` 등으로 종료, 유효 handoff 있음 | `awaiting_approval`. 세션 없이 승인 가능 |
+| 승인 확정 과정의 종료 (D17) | 정상. `exit_grace_sec` 뒤에도 살아 있으면 트리 종료. 종료가 끝난 뒤 후보를 재확인(D39) |
+| 사용자가 `/exit` 등으로 종료, 유효 handoff 있음 | `awaiting_approval`. 세션 없이 수동 승인 가능 |
+| 종료, 형식 오류 handoff | `needs_attention(handoff_invalid_exit)`: [재개해 수정](기본) [형식 오류 무시하고 승인…] |
+| 종료, blocked handoff | `needs_attention(blocked_exit)`: [재개해 정보 제공](기본) [추천 노드로] [다른 노드 선택] |
 | 종료, handoff 없음 | `ended_no_handoff` → `needs_attention(handoff_missing)` (8.3) |
 | 비정상 종료 코드 | 위와 같되 메시지에 종료 코드. 시작 직후(5초 이내) 종료가 반복되면 `session_crashed`(claude 로그인, 버전 확인 안내) |
 | `claude` 실행 파일 없음 | step `interrupted`, 도구 점검 화면 안내 |
@@ -455,7 +520,8 @@ Project (레포 1개, project.json)
 1. 에이전트는 `_close`에서 `relay-validate`로 스스로 검사한다.
 2. Stop 시점에 앱이 검증하고, 이번 턴에 handoff가 바뀌었는데 형식 오류면 Stop 훅으로 오류를 되돌린다(최대 `stop_validation_retries`회, D21).
 3. 그래도 실패하면 승인 버튼을 비활성화하고 [검토] 탭에 오류(필드 경로 + 한국어 설명)를 보여 준다. 사용자는 터미널에서 고쳐 달라고 하거나, [외부 편집기로 열기]로 직접 고친다(파일 변경 감지 → 재검증).
-4. 최후 수단 [형식 오류 무시하고 승인…]: `forced_invalid: true`, 자동 승인 불가. 파싱 가능한 필드는 반영하고(decisions 등), 다음 task의 prev-handoff에는 원문을 경고와 함께 주입한다.
+4. 최후 수단 [형식 오류 무시하고 승인…]: `forced_invalid: true`, 자동 승인 불가. 파싱 가능한 필드는 반영하고(decisions 등), 다음 task의 prev-handoff에는 원문을 경고와 함께 주입한다. 이것으로도 우회되지 않는 것: intent 초안 스키마(의도 승인 불가), 재현 테스트 고정, PR 제목(없으면 intent.title로 대체).
+5. 오류를 줄이는 설계: 형식 **오류**는 필수 필드·타입·경로·상태 값·참조·필수 산출물로 한정하고, 분량·권장 제목은 **경고**로만 보인다(D49).
 
 ### 8.5 사용자가 터미널을 직접 닫음
 
@@ -467,8 +533,9 @@ Project (레포 1개, project.json)
 
 | 잃는 것 | 영향 | 보완 |
 |---|---|---|
-| Stop | 자동 승인이 시작되지 않음(D30), D21 되돌림 없음 | handoff가 유효하면 [지금 검토]로 수동 승인. 주기 조정(`reconcile_interval_sec`)에서 "handoff가 있는데 턴 종료 신호가 60초 넘게 없음"이면 머리 띠에 안내 |
-| Notification | "입력 대기" 배지 부정확 | 없음(표시만의 문제) |
+| Stop | 후보가 생기지 않아 자동 승인이 시작되지 않음(D30·D39), D21 되돌림 없음 | handoff가 유효하면 [지금 검토]로 수동 승인. 주기 조정(`reconcile_interval_sec`)에서 "handoff가 있는데 턴 종료 신호가 60초 넘게 없음"이면 머리 띠에 안내 |
+| UserPromptSubmit | 새 요청 후에도 이전 후보가 남을 수 있음 | 승인 확정 직전 재확인(세션 종료 후 해시·HEAD 비교)이 마지막 방어선. 파일이 안 바뀐 채 새 요청만 한 경우는 못 막으므로, 이 훅이 없는 환경에서는 자동 승인을 끈다(S2 6b에서 확인) |
+| Notification | "입력 필요" 배지 부정확 | 없음(표시만의 문제). 유형별 지연이 원래 있음(permission 약 6초, idle 약 60초) |
 | SessionStart | 세션 ID 확인 불가 | 세션 ID는 앱이 `--session-id`로 정하므로 영향 적음. 10초 내 미수신 시 "훅 미설치" 경고(6.4절 6) |
 | 앱 미실행 중 신호 | 훅이 타임아웃 후 조용히 종료, CLI는 막히지 않음 | 시작 시 조정(8.1) |
 
@@ -483,7 +550,7 @@ PTY 출력의 유무(활동 시각)는 안내 문구에만 쓰고 어떤 결정�
 | 사용자가 worktree 폴더를 삭제 | 8.1 ⑥과 같음 |
 | 산출물을 승인 후 수정 | `artifact.modified_after_approval` 경고, 다음 task에 알림 |
 | `RELAY_HOME` 디스크 부족 | 쓰기 실패 시 진행을 멈추고 알림. 이벤트 추가가 실패하면 상태를 바꾸지 않는다 |
-| 파이프라인 템플릿/스킬이 깨짐 | 로드 검증(P1~P9) 실패 → 그 파이프라인으로 새 Work 생성 불가. 진행 중 Work는 스냅숏을 쓰므로 영향 없음(스킬은 영향 있음 → 세션 시작 전에 relay.json 검증) |
+| 파이프라인 템플릿/스킬이 깨짐 | 로드 검증(P1~P10) 실패 → 그 파이프라인으로 새 Work 생성 불가. 진행 중 Work는 스냅숏을 쓰므로 영향 없음(스킬은 영향 있음 → 세션 시작 전에 relay.json 검증) |
 
 ---
 
@@ -491,16 +558,17 @@ PTY 출력의 유무(활동 시각)는 안내 문구에만 쓰고 어떤 결정�
 
 skill 노드의 `approval`:
 
-- `manual`: 사용자가 [Task 완료]를 눌러야 한다.
-- `auto_if_checks`: 아래를 **모두** 만족하면 카운트다운(기본값 15초, 취소 가능) 뒤 자동 승인한다. 판정 절차는 [state-machine.md](contracts/state-machine.md) 6절.
-  - handoff 스키마 검증 통과, `status: awaiting_approval`
+- `manual`: 사용자가 승인 버튼을 눌러야 한다.
+- `auto_if_checks`: **현재 승인 후보**(D39)가 아래를 **모두** 만족하면 카운트다운(기본값 15초, 취소 가능) 뒤 자동 승인한다. 판정 절차는 [state-machine.md](contracts/state-machine.md) 6절.
+  - handoff 스키마 검증 통과(오류 없음), `status: awaiting_approval`
   - `open_questions` 비어 있음, `intent_deviation` null
-  - `requires_human: true`이면서 `by: ai`인 결정 없음
+  - `requires_human: true`인 결정 없음(`by`와 무관, 검토 I3)
   - `recommended_next`가 null이거나 기본 노드 (D29)
-  - handoff 마지막 수정 이후 Stop 신호 수신 (D30)
+  - 후보가 턴 종료 Stop에서 만들어졌고 그 뒤 프롬프트 제출·파일 변경이 없음 (D30, D39)
   - 코드를 쓰는 스킬이면 worktree가 깨끗함
-  - 의도 개정 후 stale 산출물이 남아 있지 않음
+  - 이 노드가 입력으로 쓰는 산출물 중 `review` stale이 없음 (D48)
   - **노드의 `auto_checks`를 앱이 실행해 모두 통과** (D26). 비어 있으면 자동 승인 없음
+- 에이전트의 진술(open_questions, requires_human 등)은 자동 승인을 **막을 수만** 있고 허락할 수는 없다. 허락은 앱의 결정론적 검사만 한다(D7, 범위는 D43).
 
 bugfix 파이프라인 기본값([contracts/examples/bugfix.pipeline.yaml](contracts/examples/bugfix.pipeline.yaml)):
 
@@ -514,7 +582,7 @@ bugfix 파이프라인 기본값([contracts/examples/bugfix.pipeline.yaml](contr
 
 안전장치:
 - 연속 자동 승인 상한(기본값 3회)을 넘으면 수동 승인으로 전환한다.
-- 카운트다운 중 터미널에 입력하면 멈춘다. 조건이 바뀌면 취소하고 다음 Stop에서 재평가한다.
+- 카운트다운 중 터미널에 키를 누르면 멈추고, 프롬프트를 제출하면 후보와 카운트다운이 사라진다. 카운트다운이 끝나도 세션 종료 후 후보를 다시 확인해 다르면 승인하지 않는다.
 - 의도 승인(`g-intent`)과 Work 완료(`g-done`)는 설정과 관계없이 항상 사람이 누른다.
 - 세션 도중 에이전트의 질문에는 절대 자동으로 답하지 않는다.
 - 자동 승인이 안 되는 이유는 항상 조건별로 화면에 보인다(ui.md 2.5).
@@ -530,13 +598,13 @@ bugfix 파이프라인 기본값([contracts/examples/bugfix.pipeline.yaml](contr
 | 실행 | node-pty로 `claude --session-id <uuid> --add-dir <work dir> [--settings <task 설정>] "<짧은 첫 프롬프트>"` (6.4절) | S1, S4 |
 | 컨텍스트 | `tasks/<nn>/context.md` 파일 + 첫 프롬프트에 경로 (D18) | S4 |
 | 스킬 배포 | `<worktree>/.claude/skills/relay-<name>/`로 복사 (D24) | S4 |
-| 상태 신호 | 훅 `SessionStart`, `Stop`, `Notification`, `SessionEnd` → `relay-hook.js` | S2 |
+| 상태 신호 | 훅 `SessionStart`(세션 id 변경), `UserPromptSubmit`(입력 세대, 후보 폐기), `Stop`(턴 종료, `background_tasks` 확인), `Notification`(`notification_type`, 표시 전용), `SessionEnd` → `relay-hook.js` | S2 |
 | 훅 → 앱 통신 | 로컬 IPC(Windows named pipe, 그 밖은 유닉스 소켓), 한 줄 JSON 요청/응답, 실행마다 새 토큰 ([contracts/hook-ipc.v1.schema.json](contracts/hook-ipc.v1.schema.json)) | S2 |
-| 훅 런타임 | `ELECTRON_RUN_AS_NODE=1 "<relay 실행 파일>" relay-hook.js` (D25) | S2 |
+| 훅 런타임 | `ELECTRON_RUN_AS_NODE=1 "<relay 실행 파일>" relay-hook.js` (D25). 대안: SessionStart 외에는 Claude Code 내장 `type: "http"` 훅으로 앱 로컬 서버에 직접 POST(Node 불필요) | S2 |
 | 형식 오류 되돌림 | Stop 훅 응답 `{"decision":"block","reason":...}`, `stop_hook_active`로 반복 방지 (D21) | S2 |
-| 레포 밖 쓰기 | `--add-dir` + task 설정의 쓰기 허용 규칙 | S3 |
+| 레포 밖 쓰기 | `--add-dir <work dir>` + 현재 task 디렉터리만 `Edit(//…)` 허용, 앱 파일은 deny (6.4절) | S3 |
 | 산출물 감지 | 실행 중 task 디렉터리 감시(디바운스 300ms) + 주기 조정 | — |
-| 세션 재개 | `claude --resume <uuid>` / 마무리 `claude --resume <uuid> "/relay-close"` | S4 |
+| 세션 재개 | 공통 실행 옵션 + `--resume <uuid>` / 마무리 `… --resume <uuid> "/relay-close"` | S4 |
 | 이전 기록 | 세션 transcript 파일 경로를 `transcripts` 제공자로 전달 | S4 |
 
 relay 파일(`.claude/skills/relay-*`, `.claude/settings.local.json`)은 `.git/info/exclude`로 커밋되지 않게 한다.
@@ -546,10 +614,11 @@ relay 파일(`.claude/skills/relay-*`, `.claude/settings.local.json`)은 `.git/i
 ## 11. Windows 고려사항
 
 - **PTY:** node-pty는 Windows 10 1809+의 ConPTY를 사용한다(VS Code 통합 터미널과 동일).
-- **Claude Code:** Windows 네이티브 실행 시 Git for Windows가 필요하다. 첫 실행 도구 점검 화면에서 `claude`, `git`, `gh` 설치와 로그인 여부를 확인하고 안내한다.
+- **Claude Code / git:** Claude Code 자체는 Git for Windows가 선택 사항이다(없으면 PowerShell을 셸로 씀). relay는 worktree 기능 때문에 `git`이 필수다. 첫 실행 도구 점검 화면에서 `claude`, `git`, `gh` 설치와 로그인 여부를 확인하고 안내한다. 훅의 command 형식은 Git Bash가 있으면 bash, 없으면 PowerShell로 실행되므로 훅 명령은 셸 문법에 의존하지 않는 exec 형식(`command` + `args`)으로 쓴다.
 - **경로:** 모든 경로는 Node `path` API로 다룬다. 훅과 스크립트는 셸 의존 없이 작성한다. 한글 사용자 이름 경로를 S3에서 확인한다.
 - **명령줄:** 첫 프롬프트는 짧게 유지한다(D18). check 명령은 `cmd.exe /d /s /c`로 실행하고, `{file}` 치환 값은 worktree 안 상대 경로인지 검사한 뒤 따옴표로 감싼다.
-- **프로세스 종료:** 세션과 check 명령은 프로세스 트리 단위로 종료한다(`taskkill /T /F`).
+- **프로세스 종료:** 세션과 check 명령은 프로세스 트리 단위로 종료한다(`taskkill /T /F`). 종료 대상은 pid와 프로세스 시작 시각이 모두 맞을 때만 확정한다.
+- **샌드박스:** Claude Code의 OS 수준 sandbox는 Windows 네이티브에서 지원되지 않는다. 권한 규칙은 내장 도구와 인식 가능한 셸 명령에만 적용되므로, 방어 범위를 D43으로 한정한다.
 - **줄바꿈:** 재현 테스트 해시는 LF로 정규화해 계산한다(`core.autocrlf` 영향 제거).
 - **배포:** electron-builder로 NSIS 설치 파일. 코드 서명이 없으면 SmartScreen 경고가 표시되므로 v1은 사용 안내 문서로 대응하고 서명은 이후 과제로 둔다.
 - **WSL:** v1 지원 범위 밖이다.
@@ -578,16 +647,16 @@ relay 파일(`.claude/skills/relay-*`, `.claude/settings.local.json`)은 `.git/i
 
 ## 13. v1 스킬 (버그 수정 파이프라인)
 
-명세: [`docs/skills/`](skills/README.md). 모든 스킬은 같은 골격(목적 / 입력 / 결정 지점 / 절차 / 완료조건 / 산출물 템플릿 / handoff 확장 / 하지 말 것 / relay.json)을 따른다.
+명세: [`docs/skills/`](skills/README.md). 질문 예산은 **상한**이다(D46). 모든 스킬은 같은 골격(목적 / 입력 / 결정 지점 / 절차 / 완료조건 / 산출물 템플릿 / handoff 확장 / 하지 말 것 / relay.json)을 따른다.
 
 | 스킬 | 사람에게 묻는 결정 (질문 예산) | 산출물 | 완료조건 |
 |---|---|---|---|
-| `work-start` | 목표 이해, 완료조건, 비목표, 규모, delivery, 제약 (≤6, 한 번에) | `intent.draft.md` | 스키마 통과, 완료조건이 검증 가능 |
+| `work-start` | 없는 정보만: 기대 동작, delivery, 제약 (≤3). 목표·완료조건·규모는 초안으로 내고 의도 승인 화면에서 확정 | `intent.draft.md` | 스키마 통과, 완료조건이 검증 가능 |
 | `evidence` | 재현에 필요한 정보, 수동 재현 허용 (≤2, 필요할 때만) | `evidence.md` + 재현 테스트 커밋 | 재현 여부 명시, 재현 테스트는 커밋되고 실패함 |
-| `root-cause` | 가설 채택, 수정 방향 (≤2) | `rca.md` | 원인이 증거로 뒷받침, 기각 가설과 근거 |
+| `root-cause` | 수정 방향의 제품 판단이 필요할 때만 (≤1). 원인 채택은 rca 승인 화면에서 | `rca.md` | 원인이 증거로 뒷받침, 기각 가설과 근거 |
 | `fix` | 계획 이탈 시에만 (≤1) | 코드 커밋 + `fix.md` | 재현 테스트 통과·무변경, 테스트 통과, 커밋 완료 |
 | `final-verify` | 판정 애매한 완료조건 (≤1) | `verification.md` (+ `pr.md`) | 완료조건별 판정과 증거, 테스트 약화 점검 |
-| `intent-revise` | 변경 내용, 무효 산출물, 재개 노드 (≤3) | `intent.draft.md` + `intent.diff.md` | 영향 분석이 승인된 산출물 전부를 다룸 |
+| `intent-revise` | 초안으로 정할 수 없는 변경 내용, 무효 산출물, 재개 노드 (≤3) | `intent.draft.md` + `intent.diff.md` | 영향 분석이 승인된 산출물 전부를 다룸 |
 | (공통) `_close` | — | `handoff.md` | 스키마 준수, 검증 명령 통과 |
 
 ---
@@ -599,9 +668,9 @@ relay 파일(`.claude/skills/relay-*`, `.claude/settings.local.json`)은 `.git/i
 | # | 확인할 것 | 결과가 바꾸는 것 |
 |---|---|---|
 | S1 | Windows에서 Electron + node-pty + xterm.js로 `claude` TUI 사용(한글 IME 포함) | D1/D8 전제. 실패 시 외부 터미널 방식 재검토 |
-| S2 | 훅 주입 방식(`--settings` / settings.local.json), Node 없는 환경의 훅 실행, 신호 지연, Stop 차단 | 6.4절 3, D21, D25 |
-| S3 | 레포 밖 산출물 쓰기(권한 규칙의 Windows 경로 표기) | D10 구현 방식(대안: 정션) |
-| S4 | 짧은 첫 프롬프트로 스킬 트리거 + context.md 인지, 재개 + 프롬프트 | D18, 8.3 복구 흐름 |
+| S2 | 훅 주입 방식(`--settings` / settings.local.json), command 훅 vs 내장 HTTP 훅, UserPromptSubmit·Stop `background_tasks`, 전달 지연, Stop 차단 | 6.4절 3, D21, D25, D39 |
+| S3 | 현재 task 디렉터리만 `Edit(//c/...)` 허용 + 앱 파일 deny가 동작하는지 | D10 구현 방식(대안: 정션) |
+| S4 | 짧은 첫 프롬프트로 스킬 트리거 + context.md 인지, 재개 + 프롬프트, 재개 시 옵션 재지정, 세션 종료 시간 | D18, D39, 8.3 복구 흐름 |
 | S5 | (선택) Codex CLI 동일 항목 | D9 |
 | S6 | 컨텍스트 토큰 예산 실측 | `context.token_budget` |
 
@@ -616,8 +685,12 @@ relay 파일(`.claude/skills/relay-*`, `.claude/settings.local.json`)은 `.git/i
 - Codex v1 포함 여부 → S5
 - 기본 브랜치가 앞서 나간 경우의 정책(알림만 / verify 전 병합 제안) → M3 사용 후
 - 작은 work용 `quickfix` 파이프라인(intake와 fix를 한 세션에서) 필요 여부 → M3 사용 후
-- 버그 수정 다음 파이프라인(기능 개발)의 노드 구성 → M3 이후
+- 버그 수정 다음 파이프라인(기능 개발)의 노드 구성 → M3 이후 (v0.3 계약으로 설정·템플릿만으로 표현 가능한지 외부 검토에서 모의 확인됨)
+- 자동 승인 카운트다운 기본값(활성 Work와 백그라운드 Work를 다르게 할지) → M3 기록(취소 수)으로
+- UserPromptSubmit 훅이 없는 환경에서 자동 승인을 끌지 → S2
+- 에이전트가 CLI에서 돌리는 테스트와 앱 검사의 자원 충돌이 실제로 잦은지(`RELAY_SLOT`로 충분한지) → M3
 
+해결됨 (v0.3): D7 보장 범위 → D43, 질문과 승인 역할 → D46, 정당한 재현 테스트 변경 → D47, S에서 evidence 진입 시 검토 → D41, 승인 후 세션 유지 → 항상 종료(D17), 확장 준비 범위 → D44·D45
 해결됨 (v0.2): check 명령 등록 → D33, PR 생성 방식과 `gh` → D19, 여러 Work 동시 실행 → D20, 스키마 오류 되돌림 → D21, 재현 테스트 고정 → D23
 해결됨 (v0.1.1): worktree 위치 → D13, 브랜치 처리 → D15, 카운트다운과 연속 상한 → 설정값(7.5절)
 
@@ -627,13 +700,25 @@ relay 파일(`.claude/skills/relay-*`, `.claude/settings.local.json`)은 `.git/i
 
 1. **M0:** 스파이크 S1~S4, S6 → 이 문서에 반영 (S5는 선택)
 2. **M1:** 프로젝트 등록(자동 탐지), Work 생성(worktree, setup), PTY 터미널과 `pty.log` 재생, 훅 신호, 상태 배지, 동시 Work와 세션 상한, 앱 종료/충돌 복구, Work 정리
-3. **M2:** 버그 수정 파이프라인 전체(스킬 6종 + `_close`, handoff 검증과 Stop 되돌림, human/check 게이트, 재현 테스트 고정, 승인 정책과 카운트다운, 경로 변경 메뉴, 의도 개정, delivery)
+3. **M2:** 버그 수정 파이프라인 전체(스킬 6종 + `_close`, handoff 검증과 Stop 되돌림, human 게이트와 역할, 승인 후보와 카운트다운, 재현 테스트 고정·재고정, 경로 변경 메뉴, 의도 개정, delivery). check 게이트는 계약만 구현하고 기본 파이프라인에서는 쓰지 않음
 4. **M3:** 실제 사용 → 스킬 개선, 기본값 조정(카운트다운, 연속 상한, diff 한도, 질문 예산), 우회 경로 집계로 transitions 보강
 5. **이후:** 지식 추출(`task.approved` 구독) + `knowledge` 제공자, `review` 게이트, 추가 파이프라인, Codex
 
 ---
 
 ## 17. 변경 이력
+
+### v0.3 (2026-09-25)
+
+- 외부 독립 검토(치명 6, 중요 18, 경미 6, 제안 3)를 판정해 반영 (3.4절)
+- 자동 복귀 제거: 기본 파이프라인에서 g-tests 삭제, 검사 실패는 같은 세션에서 수정, check 게이트 실패는 사람이 선택(D38). 검사 캐시 철회(D36)
+- 승인 후보와 확정 순서(D39), 이벤트 기반 복구 계약(D40), attempt id(D42), 경로 승격(D41)
+- human 게이트 역할과 실행 불변 조건(D44), handoff `extensions`와 스킬 `capabilities`(D45)
+- 질문은 없는 정보만, 확정은 승인 화면(D46). 재현 테스트 재고정(D47), stale 세분화(D48), 검증 오류/경고 분리(D49), D7 범위(D43)
+- 버그 수정: 최초 intake `intent_version: 0` 허용, PR 생성을 완료조건에서 제거
+- 스키마: work(`applied_event_seq`, candidate, attempt, `repro_lock_history`), event(후보·delivery·세션 변경 이벤트, 생성 스크립트 `tools/gen_event_schema.py`), pipeline(`role`), project(`check_config_globs`, test 필수 제거), config(`kill_on_approval`, `gates` 제거), hook IPC(UserPromptSubmit, `notification_type`, `background_tasks_count`)
+- UI: 주 상태 문장, "내 조치 필요" 목록, 행동 배지와 단계 표시 분리, 승인 요약 띠(고정 순서), diff 세 범위, blocked 기본 행동
+- 사실 정정: Git for Windows는 Claude Code에 선택 사항, 경로 권한 규칙은 `Edit`만 유효
 
 ### v0.2 (2026-09-25)
 

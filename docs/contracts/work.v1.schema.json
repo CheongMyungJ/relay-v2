@@ -2,196 +2,681 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://relay.local/schemas/work.v1.json",
   "title": "work.json (v1)",
-  "description": "works/<work-id>/work.json. Work 상태의 단일 원천(source of truth). 앱만 쓴다. 쓰기는 임시 파일 + rename으로 원자적으로 하고, 매 쓰기 전에 events.jsonl에 이벤트를 먼저 추가한다(장애 복구 시 이벤트로 재구성 가능).",
+  "description": "works/<work-id>/work.json. events.jsonl을 순서대로 적용한 결과(projection)이며 앱만 쓴다. 쓰기 순서: 이벤트 추가(fsync) → work.json 임시 파일 쓰기 → rename. 시작 시 applied_event_seq보다 뒤의 이벤트를 재적용한다. 모든 상태 변경은 이벤트 payload만으로 재현 가능해야 한다(파일을 다시 해싱해서 복원하지 않음, C2).",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "work_id", "project_id", "title", "state", "pipeline", "worktree", "intent_version", "cursor", "steps", "counters", "created_at", "updated_at"],
+  "required": [
+    "schema_version",
+    "work_id",
+    "project_id",
+    "title",
+    "state",
+    "pipeline",
+    "worktree",
+    "intent_version",
+    "cursor",
+    "steps",
+    "counters",
+    "created_at",
+    "updated_at",
+    "applied_event_seq"
+  ],
   "properties": {
-    "schema_version": { "const": 1 },
-    "work_id": { "type": "string", "pattern": "^w-[0-9]{8}-[0-9]{3}$" },
-    "project_id": { "type": "string" },
-    "title": { "type": "string", "maxLength": 80, "description": "생성 시 사용자 입력 첫 줄. intent 승인 후 intent.title로 갱신" },
-    "initial_request": { "type": "string", "maxLength": 4000, "description": "Work 생성 시 사용자가 적은 원문. work-start에 주입" },
+    "schema_version": {
+      "const": 1
+    },
+    "work_id": {
+      "type": "string",
+      "pattern": "^w-[0-9]{8}-[0-9]{3}$"
+    },
+    "project_id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string",
+      "maxLength": 80,
+      "description": "생성 시 사용자 입력 첫 줄. intent 승인 후 intent.title로 갱신"
+    },
+    "initial_request": {
+      "type": "string",
+      "maxLength": 4000,
+      "description": "Work 생성 시 사용자가 적은 원문. work-start에 주입"
+    },
     "state": {
-      "enum": ["active", "needs_attention", "paused", "completed", "abandoned", "archived"],
+      "enum": [
+        "active",
+        "needs_attention",
+        "paused",
+        "completed",
+        "abandoned",
+        "archived"
+      ],
       "description": "state-machine.md 2절"
     },
     "attention": {
-      "type": ["object", "null"],
+      "type": [
+        "object",
+        "null"
+      ],
       "description": "state가 needs_attention일 때 이유",
       "additionalProperties": false,
-      "required": ["reason", "message"],
+      "required": [
+        "reason",
+        "message"
+      ],
       "properties": {
-        "reason": { "enum": ["gate_failure_limit", "handoff_missing", "handoff_invalid", "blocked", "out_of_options_recommendation", "delivery_failed", "setup_failed", "session_crashed", "stale_intent_pending"] },
-        "message": { "type": "string" },
-        "step_id": { "type": "string" }
+        "reason": {
+          "enum": [
+            "check_failed",
+            "handoff_missing",
+            "handoff_invalid_exit",
+            "blocked_exit",
+            "out_of_options_recommendation",
+            "delivery_failed",
+            "session_crashed",
+            "resume_target_invalid",
+            "worktree_missing"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "step_id": {
+          "type": "string"
+        }
       }
     },
     "pipeline": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "version", "snapshot"],
+      "required": [
+        "id",
+        "version",
+        "snapshot"
+      ],
       "properties": {
-        "id": { "type": "string" },
-        "version": { "type": "integer" },
-        "snapshot": { "type": "string", "const": "pipeline.yaml", "description": "생성 시 복사한 템플릿. 템플릿이 바뀌어도 실행 중 Work는 영향받지 않음 (D22)" }
+        "id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        },
+        "snapshot": {
+          "type": "string",
+          "const": "pipeline.yaml",
+          "description": "생성 시 복사한 템플릿. 템플릿이 바뀌어도 실행 중 Work는 영향받지 않음 (D22)"
+        }
       }
     },
     "worktree": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["path", "branch", "base_commit", "exists"],
+      "required": [
+        "path",
+        "branch",
+        "base_commit",
+        "exists"
+      ],
       "properties": {
-        "path": { "type": "string" },
-        "branch": { "type": "string", "pattern": "^relay/w-[0-9]{8}-[0-9]{3}$" },
-        "base_commit": { "$ref": "#/$defs/sha" },
-        "exists": { "type": "boolean", "description": "Work 정리 후 false" }
+        "path": {
+          "type": "string"
+        },
+        "branch": {
+          "type": "string",
+          "pattern": "^relay/w-[0-9]{8}-[0-9]{3}$"
+        },
+        "base_commit": {
+          "$ref": "#/$defs/sha"
+        },
+        "exists": {
+          "type": "boolean",
+          "description": "Work 정리 후 false"
+        }
       }
     },
-    "intent_version": { "type": "integer", "minimum": 0, "description": "0 = 아직 승인된 intent 없음" },
+    "intent_version": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "0 = 아직 승인된 intent 없음"
+    },
     "cursor": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["node_id", "step_id"],
+      "required": [
+        "node_id",
+        "step_id"
+      ],
       "description": "현재 위치. node_id가 null이면 완료/포기",
       "properties": {
-        "node_id": { "type": ["string", "null"] },
-        "step_id": { "type": ["string", "null"], "description": "현재 진행 중이거나 마지막 step" },
+        "node_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "step_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "현재 진행 중이거나 마지막 step"
+        },
         "detour": {
-          "type": ["object", "null"],
+          "type": [
+            "object",
+            "null"
+          ],
           "description": "기타 스킬을 임시 노드로 끼워 넣었을 때 복귀 위치",
           "additionalProperties": false,
-          "required": ["return_to"],
-          "properties": { "return_to": { "type": "string" } }
+          "required": [
+            "return_to"
+          ],
+          "properties": {
+            "return_to": {
+              "type": "string"
+            }
+          }
         }
       }
     },
     "steps": {
       "type": "array",
       "description": "실행 이력. skill task와 gate 실행을 같은 순번 체계로 기록한다. 디렉터리: tasks/<seq 2자리>-<node_id>/",
-      "items": { "$ref": "#/$defs/step" }
-    },
-    "repro_lock": {
-      "type": ["object", "null"],
-      "additionalProperties": false,
-      "required": ["file", "sha256", "commit", "locked_by_step", "fail_exit_code"],
-      "properties": {
-        "file": { "type": "string" },
-        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "LF 정규화 후 파일 내용 해시" },
-        "commit": { "$ref": "#/$defs/sha" },
-        "locked_by_step": { "type": "string" },
-        "fail_exit_code": { "type": "integer" },
-        "released": { "type": "boolean", "default": false, "description": "사용자가 [재현 테스트 고정 해제]를 누르면 true. 이후 repro:* 검사는 n/a" }
+      "items": {
+        "$ref": "#/$defs/step"
       }
     },
-    "stale_artifacts": { "type": "array", "items": { "type": "string" }, "description": "<node-id>/<file>. intent-revise 승인 시 추가, 해당 노드 재승인 시 제거" },
+    "repro_lock": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "sha256",
+        "commit",
+        "locked_by_step",
+        "fail_exit_code"
+      ],
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "LF 정규화 후 파일 내용 해시"
+        },
+        "commit": {
+          "$ref": "#/$defs/sha"
+        },
+        "locked_by_step": {
+          "type": "string"
+        },
+        "fail_exit_code": {
+          "type": "integer"
+        },
+        "released": {
+          "type": "boolean",
+          "default": false,
+          "description": "사용자가 [고정 해제]를 누르면 true. 이후 repro:passes/intact는 n/a"
+        },
+        "relocked_by": {
+          "type": "string",
+          "description": "사용자가 [재고정]한 step. 재고정 시 sha256과 commit을 갱신한다(D47)"
+        }
+      }
+    },
+    "stale_artifacts": {
+      "type": "array",
+      "description": "의도 개정으로 영향받은 산출물. review: 재검토 필요(현재 노드가 이 산출물을 requires로 쓰면 자동 승인 금지), obsolete: 새 의도에서 불필요(컨텍스트에서 제외). 해당 노드가 다시 승인되면 제거(D48)",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ref",
+          "status",
+          "since_intent"
+        ],
+        "properties": {
+          "ref": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*/[^/].*$"
+          },
+          "status": {
+            "enum": [
+              "review",
+              "obsolete"
+            ]
+          },
+          "since_intent": {
+            "type": "integer"
+          }
+        }
+      }
+    },
     "counters": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["consecutive_auto_approvals", "gate_failures", "stop_validation_feedback"],
+      "required": [
+        "consecutive_auto_approvals",
+        "stop_validation_feedback",
+        "input_generation"
+      ],
       "properties": {
-        "consecutive_auto_approvals": { "type": "integer", "minimum": 0 },
-        "gate_failures": { "type": "object", "additionalProperties": { "type": "integer" }, "description": "게이트 노드별 연속 실패 수. 통과하면 0" },
-        "stop_validation_feedback": { "type": "integer", "minimum": 0, "description": "현재 task에서 Stop 훅으로 형식 오류를 되돌려 준 연속 횟수" }
+        "consecutive_auto_approvals": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "stop_validation_feedback": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "현재 task에서 Stop 훅으로 형식 오류를 되돌려 준 연속 횟수"
+        },
+        "input_generation": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "현재 step에서 사용자 프롬프트 제출(UserPromptSubmit 훅)과 세션 재개마다 1 증가. 승인 후보를 무효화하는 데 쓴다(C1)"
+        }
       }
     },
     "delivery": {
-      "type": ["object", "null"],
+      "type": [
+        "object",
+        "null"
+      ],
       "additionalProperties": false,
-      "required": ["mode", "status"],
+      "required": [
+        "mode",
+        "status"
+      ],
       "properties": {
-        "mode": { "enum": ["none", "push", "pr"] },
-        "status": { "enum": ["pending", "done", "failed", "skipped"] },
-        "remote_ref": { "type": "string" },
-        "pr_url": { "type": "string" },
-        "error": { "type": "string" }
+        "mode": {
+          "enum": [
+            "none",
+            "push",
+            "pr"
+          ]
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "running",
+            "done",
+            "failed",
+            "skipped"
+          ]
+        },
+        "remote_ref": {
+          "type": "string"
+        },
+        "pr_url": {
+          "type": "string"
+        },
+        "error": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "head": {
+          "$ref": "#/$defs/sha"
+        },
+        "remote": {
+          "type": "string"
+        },
+        "base": {
+          "type": "string"
+        }
       }
     },
-    "created_at": { "$ref": "#/$defs/ts" },
-    "updated_at": { "$ref": "#/$defs/ts" }
+    "created_at": {
+      "$ref": "#/$defs/ts"
+    },
+    "updated_at": {
+      "$ref": "#/$defs/ts"
+    },
+    "applied_event_seq": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "이 파일에 반영된 마지막 이벤트 seq"
+    },
+    "path_escalated": {
+      "type": "boolean",
+      "default": false,
+      "description": "when 때문에 건너뛴 노드에 명시 전이로 들어가면 true. 이후 기본 경로 계산에서 when을 무시한다(D41)"
+    },
+    "repro_lock_history": {
+      "type": "array",
+      "description": "대체되거나 해제된 이전 고정. 새 evidence의 근거로 재사용하지 않는다(C4)",
+      "items": {
+        "type": "object"
+      }
+    }
   },
   "$defs": {
-    "ts": { "type": "string", "format": "date-time" },
-    "sha": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
+    "ts": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{7,40}$"
+    },
     "checkResult": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["check", "result"],
+      "required": [
+        "check",
+        "result"
+      ],
       "properties": {
-        "check": { "type": "string" },
-        "result": { "enum": ["pass", "fail", "n/a", "timeout", "error"] },
-        "exit_code": { "type": ["integer", "null"] },
-        "head": { "$ref": "#/$defs/sha" },
-        "cached": { "type": "boolean" },
-        "log": { "type": "string", "description": "step 디렉터리 기준 로그 파일" },
-        "duration_ms": { "type": "integer" }
+        "check": {
+          "type": "string"
+        },
+        "result": {
+          "enum": [
+            "pass",
+            "fail",
+            "n/a",
+            "timeout",
+            "error"
+          ]
+        },
+        "exit_code": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "head": {
+          "$ref": "#/$defs/sha"
+        },
+        "log": {
+          "type": "string",
+          "description": "step 디렉터리 기준 로그 파일"
+        },
+        "duration_ms": {
+          "type": "integer"
+        },
+        "attempt_id": {
+          "type": "string"
+        }
       }
     },
     "step": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["step_id", "seq", "node_id", "kind", "state", "dir", "started_at"],
+      "required": [
+        "step_id",
+        "seq",
+        "node_id",
+        "kind",
+        "state",
+        "dir",
+        "started_at"
+      ],
       "properties": {
-        "step_id": { "type": "string", "pattern": "^t-[0-9]{2,3}$" },
-        "seq": { "type": "integer", "minimum": 1 },
-        "node_id": { "type": "string" },
-        "kind": { "enum": ["skill", "gate"] },
-        "skill": { "type": "string" },
-        "gate": { "enum": ["human", "check", "review"] },
-        "temporary": { "type": "boolean", "description": "기타 스킬로 끼워 넣은 임시 노드" },
-        "state": {
-          "enum": ["launching", "running", "awaiting_approval", "approved", "abandoned", "interrupted", "ended_no_handoff", "passed", "failed", "waiting_human", "skipped"],
-          "description": "skill: launching→running→awaiting_approval→approved|abandoned, 예외 interrupted/ended_no_handoff. gate: running→passed|failed, human은 waiting_human→passed. when이 거짓인 노드는 skipped로 기록"
+        "step_id": {
+          "type": "string",
+          "pattern": "^t-[0-9]{2,3}$"
         },
-        "dir": { "type": "string", "description": "tasks/03-rca" },
-        "reason": { "type": "string", "description": "이 step이 열린 이유: default | gate_failure | recommended_next | user_reroute | intent_revise | detour | resume_after_revise" },
+        "seq": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "node_id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "skill",
+            "gate"
+          ]
+        },
+        "skill": {
+          "type": "string"
+        },
+        "gate": {
+          "enum": [
+            "human",
+            "check",
+            "review"
+          ]
+        },
+        "temporary": {
+          "type": "boolean",
+          "description": "기타 스킬로 끼워 넣은 임시 노드"
+        },
+        "state": {
+          "enum": [
+            "launching",
+            "running",
+            "awaiting_approval",
+            "approving",
+            "approved",
+            "abandoned",
+            "interrupted",
+            "ended_no_handoff",
+            "passed",
+            "failed",
+            "waiting_human",
+            "skipped"
+          ],
+          "description": "skill: launching→running→awaiting_approval→approving(세션 종료·후보 확인 중)→approved|abandoned. 예외 interrupted/ended_no_handoff. gate: running→passed|failed, human은 waiting_human→passed. when이 거짓인 노드는 skipped"
+        },
+        "dir": {
+          "type": "string",
+          "description": "tasks/03-rca"
+        },
+        "reason": {
+          "type": "string",
+          "description": "이 step이 열린 이유: default | check_failed | recommended_next | user_reroute | intent_revise | detour | resume_after_revise | retry"
+        },
         "session": {
-          "type": ["object", "null"],
+          "type": [
+            "object",
+            "null"
+          ],
           "additionalProperties": false,
-          "required": ["session_id"],
+          "required": [
+            "session_id"
+          ],
           "properties": {
-            "session_id": { "type": "string", "format": "uuid" },
-            "pid": { "type": ["integer", "null"] },
-            "resumed_count": { "type": "integer", "minimum": 0 },
-            "last_stop_at": { "$ref": "#/$defs/ts" },
-            "last_input_wait_at": { "$ref": "#/$defs/ts" }
+            "session_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "resumed_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "last_stop_at": {
+              "$ref": "#/$defs/ts"
+            },
+            "last_input_wait_at": {
+              "$ref": "#/$defs/ts"
+            },
+            "session_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "/clear 등으로 바뀐 세션 id 이력. 마지막이 현재"
+            },
+            "pid": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "process_started_at": {
+              "$ref": "#/$defs/ts",
+              "description": "pid 재사용 오인 방지. 복구 시 pid와 시작 시각이 모두 맞을 때만 종료"
+            },
+            "last_prompt_at": {
+              "$ref": "#/$defs/ts"
+            }
           }
         },
         "git": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "start_head": { "$ref": "#/$defs/sha" },
-            "end_head": { "$ref": "#/$defs/sha" },
-            "dirty_at_end": { "type": "boolean" }
+            "start_head": {
+              "$ref": "#/$defs/sha"
+            },
+            "end_head": {
+              "$ref": "#/$defs/sha"
+            },
+            "dirty_at_end": {
+              "type": "boolean"
+            }
           }
         },
         "handoff": {
-          "type": ["object", "null"],
+          "type": [
+            "object",
+            "null"
+          ],
           "additionalProperties": false,
-          "required": ["valid"],
+          "required": [
+            "valid"
+          ],
           "properties": {
-            "valid": { "type": "boolean" },
-            "errors": { "type": "array", "items": { "type": "string" } },
-            "sha256": { "type": "string" },
-            "mtime": { "$ref": "#/$defs/ts" }
+            "valid": {
+              "type": "boolean"
+            },
+            "errors": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "sha256": {
+              "type": "string"
+            },
+            "mtime": {
+              "$ref": "#/$defs/ts"
+            }
           }
         },
-        "checks": { "type": "array", "items": { "$ref": "#/$defs/checkResult" } },
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/checkResult"
+          }
+        },
         "approval": {
-          "type": ["object", "null"],
+          "type": [
+            "object",
+            "null"
+          ],
           "additionalProperties": false,
-          "required": ["by", "at"],
+          "required": [
+            "by",
+            "at"
+          ],
           "properties": {
-            "by": { "enum": ["human", "auto"] },
-            "at": { "$ref": "#/$defs/ts" },
-            "forced_invalid": { "type": "boolean", "description": "형식 오류를 무시하고 수동 승인했는지" },
-            "next_node": { "type": "string", "description": "승인 시 확정된 다음 노드" },
-            "artifact_hashes": { "type": "object", "additionalProperties": { "type": "string" }, "description": "승인 시점 산출물 해시. 이후 변경 감지용" }
+            "by": {
+              "enum": [
+                "human",
+                "auto"
+              ]
+            },
+            "at": {
+              "$ref": "#/$defs/ts"
+            },
+            "forced_invalid": {
+              "type": "boolean",
+              "description": "형식 오류를 무시하고 수동 승인했는지"
+            },
+            "next_node": {
+              "type": "string",
+              "description": "승인 시 확정된 다음 노드"
+            },
+            "artifact_hashes": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "승인 시점 산출물 해시. 이후 변경 감지용"
+            },
+            "candidate_id": {
+              "type": "string"
+            },
+            "head": {
+              "$ref": "#/$defs/sha"
+            },
+            "merged_gate": {
+              "type": "boolean",
+              "description": "다음 human 게이트를 같은 클릭으로 통과시켰는지(D37)"
+            }
           }
         },
-        "started_at": { "$ref": "#/$defs/ts" },
-        "ended_at": { "$ref": "#/$defs/ts" }
+        "started_at": {
+          "$ref": "#/$defs/ts"
+        },
+        "ended_at": {
+          "$ref": "#/$defs/ts"
+        },
+        "attempt_id": {
+          "type": "string",
+          "description": "세션 시작·재개·검사 실행마다 새로 발급하는 ULID. 늦게 도착한 신호와 검사 결과는 현재 attempt_id와 같을 때만 반영(C3)"
+        },
+        "candidate": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "현재 승인 후보. 승인 클릭과 자동 승인은 이 후보에 결속된다(C1). 입력 세대·handoff·산출물·HEAD·검사 설정이 바뀌면 폐기",
+          "additionalProperties": false,
+          "required": [
+            "candidate_id",
+            "input_generation",
+            "handoff_sha256",
+            "artifact_hashes",
+            "head",
+            "clean",
+            "intent_version",
+            "config_fingerprint"
+          ],
+          "properties": {
+            "candidate_id": {
+              "type": "string"
+            },
+            "input_generation": {
+              "type": "integer"
+            },
+            "handoff_sha256": {
+              "type": "string"
+            },
+            "artifact_hashes": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "head": {
+              "$ref": "#/$defs/sha"
+            },
+            "clean": {
+              "type": "boolean"
+            },
+            "intent_version": {
+              "type": "integer"
+            },
+            "config_fingerprint": {
+              "type": "string",
+              "description": "auto_checks에 쓰인 실제 명령·cwd·env·repro lock·한도 설정의 해시"
+            },
+            "stop_seen": {
+              "type": "boolean",
+              "description": "후보 생성 이후 background_tasks 없는 Stop 신호를 받았는지"
+            }
+          }
+        }
       }
     }
   }

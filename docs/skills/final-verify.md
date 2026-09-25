@@ -8,7 +8,7 @@ intent의 **완료조건 하나하나**에 대해 통과/실패를 증거와 함
 
 ## 입력 (context.md)
 
-intent(완료조건이 채점 기준), decisions, rejected-log, handoff-chain(모든 이전 단계 요약), git-diff 조각(`base_commit..HEAD`의 파일 목록, 줄 수, 테스트 파일 변경 목록 — 앱이 계산), 최근 check 결과 조각(g-tests 결과), `evidence/evidence.md?`, `rca/rca.md?`, `fix/fix.md`(path), gate-policy, next-options.
+intent(완료조건이 채점 기준), decisions, rejected-log, handoff-chain(모든 이전 단계 요약), git-diff 조각(`base_commit..HEAD`의 파일 목록, 줄 수, 테스트 파일 변경 목록 — 앱이 계산), 최근 check 결과 조각(fix 승인 시 앱이 돌린 검사 결과), `evidence/evidence.md?`, `rca/rca.md?`, `fix/fix.md`(path), gate-policy, next-options.
 
 ## 결정 지점 (질문 예산: 최대 1개)
 
@@ -28,14 +28,14 @@ intent(완료조건이 채점 기준), decisions, rejected-log, handoff-chain(�
    - 모두 통과 → `recommended_next: null` (기본: g-done)
    - 수정 필요 → `recommended_next: { node: fix, reason }`
    - 원인이 틀렸음 → `recommended_next: { node: rca, reason }`
-6. intent.delivery가 `pr`이면 `pr.md`(PR 본문)를 쓰고 `delivery_draft`를 채운다.
+6. intent.delivery가 `pr`이면 `pr.md`(PR 본문)를 쓰고 `extensions.delivery_draft`를 채운다. push/PR 자체는 판정 대상이 아니다(앱이 Work 완료 시 수행).
 7. `_close`.
 
 ## 완료조건
 
 - 모든 완료조건에 판정(통과/실패/사람 확인 필요)과 증거가 있다.
 - 테스트 약화 점검 절이 있고, 테스트 파일 변경이 하나도 빠짐없이 언급되어 있다.
-- delivery가 pr이면 `pr.md`와 `delivery_draft`가 있다.
+- delivery가 pr이면 `pr.md`와 `extensions.delivery_draft`가 있다.
 
 ## 산출물 템플릿 — `verification.md`
 
@@ -45,7 +45,7 @@ intent(완료조건이 채점 기준), decisions, rejected-log, handoff-chain(�
 ## 완료조건별 판정
 | # | 완료조건 | 판정 | 증거 |
 |---|---|---|---|
-| 1 | 고정된 재현 테스트가 통과한다 | 통과 | g-tests check 로그 `tasks/06-g-tests/checks/repro-passes.log` |
+| 1 | 고정된 재현 테스트가 통과한다 | 통과 | fix 승인 검사 로그 `tasks/05-fix/checks/<attempt>/repro-passes.log` |
 
 ## 테스트 약화 점검
 | 파일 | 변경 종류 | 판단 |
@@ -75,7 +75,8 @@ intent(완료조건이 채점 기준), decisions, rejected-log, handoff-chain(�
 
 ```yaml
 artifacts: [verification.md, pr.md]
-delivery_draft: { pr_title: "fix(auth): compare token expiry in UTC epoch", pr_body: pr.md }
+extensions:
+  delivery_draft: { pr_title: "fix(auth): compare token expiry in UTC epoch", pr_body: pr.md }
 ```
 
 ## 하지 말 것
@@ -92,7 +93,7 @@ delivery_draft: { pr_title: "fix(auth): compare token expiry in UTC epoch", pr_b
     { "path": "verification.md", "required": true,
       "required_headings": ["완료조건별 판정", "테스트 약화 점검", "결론"] },
     { "path": "pr.md", "required": true, "when": "intent.delivery == 'pr'" } ],
-  "handoff_extensions": [], "writes_code": false }
+  "handoff_extensions": [ { "name": "delivery_draft", "schema": "https://relay.local/schemas/handoff.v1.json#/$defs/ext_delivery_draft", "when": "intent.delivery == 'pr'" } ],
+  "writes_code": false }
 ```
 
-`delivery_draft`는 delivery가 pr일 때만 필수라 `handoff_extensions`에 넣지 않고, 앱이 `pr.md`의 `when`과 같은 조건으로 따로 검사한다.
