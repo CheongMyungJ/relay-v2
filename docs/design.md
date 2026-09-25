@@ -498,8 +498,8 @@ Project (레포 1개, project.json)
 |---|---|
 | 승인 확정 과정의 종료 (D17) | 정상. `exit_grace_sec` 뒤에도 살아 있으면 트리 종료. 종료가 끝난 뒤 후보를 재확인(D39) |
 | 사용자가 `/exit` 등으로 종료, 유효 handoff 있음 | `awaiting_approval`. 세션 없이 수동 승인 가능 |
-| 종료, 형식 오류 handoff | `needs_attention(handoff_invalid_exit)`: [재개해 수정](기본) [형식 오류 무시하고 승인…] |
-| 종료, blocked handoff | `needs_attention(blocked_exit)`: [재개해 정보 제공](기본) [추천 노드로] [다른 노드 선택] |
+| 종료, 형식 오류 handoff | `needs_attention(handoff_invalid_exit)`: [재개해 수정] (기본) [형식 오류 무시하고 승인…] |
+| 종료, blocked handoff | `needs_attention(blocked_exit)`: [재개해 정보 제공] (기본) [추천 노드로] [다른 노드 선택] |
 | 종료, handoff 없음 | `ended_no_handoff` → `needs_attention(handoff_missing)` (8.3) |
 | 비정상 종료 코드 | 위와 같되 메시지에 종료 코드. 시작 직후(5초 이내) 종료가 반복되면 `session_crashed`(claude 로그인, 버전 확인 안내) |
 | `claude` 실행 파일 없음 | step `interrupted`, 도구 점검 화면 안내 |
