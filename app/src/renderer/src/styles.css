@@ -1,0 +1,66 @@
+:root {
+  --bg: #1e1e1e;
+  --bg-side: #252526;
+  --border: #3c3c3c;
+  --text: #cccccc;
+  --text-dim: #808080;
+  color-scheme: dark;
+  font-family: system-ui, 'Segoe UI', 'Malgun Gothic', sans-serif;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 240px 1fr 320px;
+  height: 100%;
+}
+
+.sidebar,
+.panel {
+  background: var(--bg-side);
+  overflow: auto;
+}
+
+.sidebar {
+  border-right: 1px solid var(--border);
+}
+
+.panel {
+  border-left: 1px solid var(--border);
+}
+
+.center {
+  display: grid;
+  grid-template-rows: 32px 1fr 40px;
+  min-width: 0;
+}
+
+.tabs {
+  border-bottom: 1px solid var(--border);
+}
+
+.terminal {
+  min-height: 0;
+}
+
+.action-bar {
+  border-top: 1px solid var(--border);
+}
+
+.placeholder {
+  padding: 12px;
+  color: var(--text-dim);
+}
