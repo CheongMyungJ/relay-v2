@@ -11,15 +11,21 @@ function subscribe<T>(channel: string, cb: (value: T) => void): () => void {
 
 const api: RelayApi = {
   appInfo: () => ipcRenderer.invoke(IPC.appInfo),
+  snapshot: () => ipcRenderer.invoke(IPC.snapshot),
+  onWork: (cb) => subscribe(IPC.work, cb),
+  onProjects: (cb) => subscribe(IPC.projects, cb),
+  pickFolder: () => ipcRenderer.invoke(IPC.pickFolder),
+  inspectProject: (path) => ipcRenderer.invoke(IPC.inspectProject, path),
+  registerProject: (path, branch) => ipcRenderer.invoke(IPC.registerProject, path, branch),
+  branches: (projectId) => ipcRenderer.invoke(IPC.branches, projectId),
+  createWork: (projectId, input) => ipcRenderer.invoke(IPC.createWork, projectId, input),
+  review: (workKey, taskId) => ipcRenderer.invoke(IPC.review, workKey, taskId),
+  approve: (workKey, taskId, opts) => ipcRenderer.invoke(IPC.approve, workKey, taskId, opts),
   terminal: {
-    pickFolder: () => ipcRenderer.invoke(IPC.pickFolder),
-    create: (cwd) => ipcRenderer.invoke(IPC.create, cwd),
-    start: (id, cols, rows) => ipcRenderer.invoke(IPC.start, id, cols, rows),
-    write: (id, data) => ipcRenderer.invoke(IPC.write, id, data),
-    resize: (id, cols, rows) => ipcRenderer.invoke(IPC.resize, id, cols, rows),
-    close: (id) => ipcRenderer.invoke(IPC.close, id),
-    onData: (id, cb) => subscribe(IPC.data(id), cb),
-    onExit: (id, cb) => subscribe(IPC.exit(id), cb),
+    attach: (key) => ipcRenderer.invoke(IPC.terminalAttach, key),
+    write: (key, data) => ipcRenderer.invoke(IPC.terminalWrite, key, data),
+    resize: (key, cols, rows) => ipcRenderer.invoke(IPC.terminalResize, key, cols, rows),
+    onData: (key, cb) => subscribe(IPC.terminalData(key), cb),
   },
 }
 
