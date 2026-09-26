@@ -1,0 +1,92 @@
+# [실제] 실제 claude로 M 경로와 S 경로가 Work 완료까지 가는지 본다 (docs/implementation.md I29, 8.3, 8.4).
+# 수동으로만 실행한다. Claude 사용량이 든다. 마일스톤을 마칠 때와 Claude Code를 올릴 때 돌린다.
+# 인증: spikes 워크플로와 같은 레포 secret CLAUDE_CODE_OAUTH_TOKEN 또는 ANTHROPIC_API_KEY.
+# 결과는 실행 요약과 claude-results 결과물에 올라가고, 사람이 docs/checks.md에 옮긴다 (I30).
+name: app-claude
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Claude Code 모델 (별칭 또는 모델 이름)"
+        required: false
+        default: "sonnet"
+      effort:
+        description: "effort 수준 (low / medium / high / xhigh). 비용을 아끼려고 기본은 low"
+        required: false
+        default: "low"
+
+permissions:
+  contents: read
+
+jobs:
+  claude:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      # 둘 다 있으면 구독 토큰만 쓴다. API 키가 함께 있으면 Claude Code가 키 승인 창을 띄울 수 있다.
+      ANTHROPIC_API_KEY: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN == '' && secrets.ANTHROPIC_API_KEY || '' }}
+      # 앱이 PTY에 넘기는 환경 변수로 모델과 effort를 정한다 (Claude Code 문서 model-config, env-vars)
+      ANTHROPIC_MODEL: ${{ inputs.model }}
+      CLAUDE_CODE_EFFORT_LEVEL: ${{ inputs.effort }}
+      RELAY_REAL_CLAUDE: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 인증 secret 확인
+        run: |
+          if (-not $env:CLAUDE_CODE_OAUTH_TOKEN -and -not $env:ANTHROPIC_API_KEY) {
+            Write-Error "CLAUDE_CODE_OAUTH_TOKEN 또는 ANTHROPIC_API_KEY secret이 필요합니다."
+            exit 1
+          }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Claude Code 설치 (네이티브 설치 스크립트)
+        run: |
+          irm https://claude.ai/install.ps1 | iex
+          "$env:USERPROFILE\.local\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+
+      - name: Claude Code 버전
+        run: claude --version
+
+      - name: 인증 상태 (등록 점검 D67과 같은 명령)
+        # 실패해도 다음 단계에서 등록 점검이 막으며 이유를 남긴다
+        continue-on-error: true
+        run: claude auth status
+
+      - name: 앱 의존성 설치
+        working-directory: app
+        env:
+          # [실제]는 Node에서 돌아 Electron 바이너리가 필요 없다 (I26)
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+        run: npm ci --no-audit --no-fund
+
+      - name: "[실제]"
+        working-directory: app
+        run: npm run test:claude
+
+      - name: 결과 요약
+        if: always()
+        working-directory: app
+        run: |
+          $file = 'test-results/claude/summary.md'
+          if (Test-Path $file) {
+            Get-Content $file -Raw -Encoding utf8 | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          }
+
+      - name: 결과 올리기
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-results-${{ github.sha }}
+          path: app/test-results/claude/
+          if-no-files-found: warn

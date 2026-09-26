@@ -59,6 +59,7 @@
 | I29 | 실제 `claude` 흐름 시험은 수동 워크플로로, 마일스톤 완료 때와 Claude Code를 올릴 때 돌린다. 시험 레포 두 개(M 경로, S 경로)를 시험 때 만들고 **(기본값)**, 질문에는 첫 선택지로 답한다. 모델과 effort는 입력으로 받고 기본은 `sonnet`, `low`다 **(기본값)**. 끝까지 갔는지, task마다 되돌림 횟수, 걸린 시간을 판정한다 | 한 번에 세션이 8개 돌아 Claude 사용량이 가장 큰 시험임. 스킬이나 Claude Code가 바뀔 때만 의미가 있음. 되돌림 횟수는 스킬 템플릿이 잘 맞는지 보는 지표도 됨 | ✅ |
 | I30 | 마일스톤마다 실기 확인 항목을 7절에 두고, 실제 `claude` 시험과 실기 확인의 결과는 `docs/checks.md`에 날짜, 앱 커밋, Claude Code 버전, OS와 함께 기록한다 | 스파이크 결과(D92)와 같은 방식. Claude Code 버전이 바뀌었을 때 무엇을 다시 확인할지 알 수 있음 | ✅ |
 | I31 | 스파이크 S6(강제 종료 뒤 `--resume`)을 M3 전에 러너에서 돌린다. 계획은 `docs/spikes.md`에 둔다 | [즉시 중단]은 트리 종료인데 S3는 `/exit`로 끝낸 세션만 확인함. 결과에 따라 M3의 설계가 바뀔 수 있어 먼저 알아야 함 | ✅ |
+| I32 | PTY는 `useConpty: true`, `useConptyDll: true`로 띄운다. node-pty에 들어 있는 `conpty.dll`과 `OpenConsole.exe`를 쓰고 Windows 내장 ConPTY는 쓰지 않는다 | DLL 모드는 세션을 시작한 직후 의사 콘솔을 놓아(`ConptyReleasePseudoConsole`) 세션이 끝나면 `OpenConsole.exe`도 스스로 끝남. 내장 ConPTY는 트리 종료 뒤에도 `conhost.exe`가 남을 수 있음(3절). Windows 10과 11에서 같은 ConPTY를 씀. 스파이크 S1~S5는 내장 ConPTY로 확인했으므로 M0의 [실기]에서 다시 확인함 | ✅ |
 
 ## 3. 확인한 사실
 
@@ -69,14 +70,25 @@
 | Electron 프로세스 | 메인 프로세스는 Node.js 환경이라 Node API를 모두 쓴다. 렌더러는 기본으로 Node API가 없다. preload는 렌더러에서 Node 접근을 가진 채 먼저 실행되고, context isolation(기본 켜짐) 아래에서 `contextBridge.exposeInMainWorld()`로 API를 내보낸다. utility process는 메인이 띄우는 Node 자식 프로세스다 | Electron 문서 `docs/tutorial/process-model.md` (2026-09-26) |
 | 네이티브 모듈 | Electron은 Node와 ABI가 달라 네이티브 모듈을 Electron용으로 다시 빌드해야 한다. `@electron/rebuild`가 이를 한다 | Electron 문서 `docs/tutorial/using-native-node-modules.md` (2026-09-26) |
 | node-pty 1.1.0 | `node-addon-api`(N-API) 기반이고, 패키지에 `win32-x64`, `win32-arm64`, `darwin-*` 사전 빌드(`pty.node`, `conpty.node`, `conpty.dll`, `OpenConsole.exe`)가 들어 있다. 설치 때 사전 빌드가 있으면 컴파일하지 않는다. 스레드 안전하지 않아 여러 worker thread에서 쓰지 말라고 한다. Windows는 1809 이상의 ConPTY를 쓴다 | npm 패키지 `node-pty@1.1.0` 내용, README (2026-09-26) |
+| node-pty의 ConPTY 선택 | `useConptyDll`의 기본값은 `false`(Windows 내장 ConPTY)이고 타입 정의에 EXPERIMENTAL로 표시되어 있다. `true`면 네이티브 모듈 폴더 아래의 `conpty\conpty.dll`을 불러 쓰고, 이 DLL이 같은 폴더의 `OpenConsole.exe`를 띄운다. 프로세스가 끝났을 때는 `ClosePseudoConsole`을 부르지 않고 `kill()`에서만 부른다. 그래서 `taskkill`로 트리를 끝내면 내장 ConPTY에서는 `conhost.exe`가 남을 수 있다. DLL 모드는 시작 직후 `ConptyReleasePseudoConsole`을 불러, 연결된 클라이언트가 모두 끝나면 `OpenConsole.exe`가 스스로 끝난다 | npm 패키지 `node-pty@1.1.0`의 `typings/node-pty.d.ts`, `src/win/conpty.cc`, microsoft/terminal `winconpty.cpp` 주석 (2026-09-26) |
 | electron-builder | `npmRebuild`의 기본값은 `true`이고, 패키징 전에 `@electron/rebuild`로 네이티브 모듈을 다시 빌드한다 | electron-builder `app-builder-lib/scheme.json` (2026-09-26) |
 | Playwright의 Electron 지원 | 실험적 지원이다(`_electron`). `launch()`의 `executablePath`로 설치된 앱을 띄울 수 있다. `nodeCliInspect` 퓨즈가 꺼져 있으면 실행이 시간 초과될 수 있다. Electron 기본 대화상자(`dialog`)는 가로채지 못하므로 메인 프로세스에서 바꿔 끼워야 한다 | npm 패키지 `playwright-core@1.63.0` 타입 문서 (2026-09-26) |
 | GitHub Actions 요금 | 공개 레포에서 표준 GitHub 호스트 러너는 무료다. 이 레포는 공개다 | GitHub 문서 billing/github-actions, 레포 정보 (2026-09-26) |
 | 최신 버전 | electron 44.4.5, node-pty 1.1.0, @xterm/xterm 6.0.0, electron-builder 26.15.3, electron-vite 5.0.0, vitest 5.0.2 | npm 레지스트리 (2026-09-26) |
 | Claude Code 동작 | 훅, 스킬, deny 규칙, 첫 실행 창은 `docs/spikes.md`의 S1~S5 결과를 따른다(2.1.283). 강제 종료 뒤 재개(S6)는 M3 전에 확인한다(I31) | `docs/spikes.md` |
 | HTTP 훅 머리글 | HTTP 훅에 `headers`를 줄 수 있다. 값에 `$VAR` 형태로 환경 변수를 넣을 수 있고, `allowedEnvVars`에 적은 변수만 풀린다. 응답 본문은 명령 훅과 같은 JSON 출력 형식이다. 기본 제한 시간은 600초(UserPromptSubmit은 30초)다 | Claude Code 문서 hooks (2026-09-26) |
+| SessionEnd 훅 | 본문의 `reason`은 `clear`(`/clear`), `resume`, `logout`, `prompt_input_exit`, `other`다. `/clear`와 `/resume` 뒤에는 SessionStart(source `clear`, `resume`)로 새 세션이 시작된다 | Claude Code 문서 hooks (2026-09-26) |
+| 훅 본문과 Stop 응답 | UserPromptSubmit은 `prompt`, Notification은 `message`와 `notification_type`, Stop은 `stop_hook_active`와 `last_assistant_message`를 보낸다. Stop을 막는 응답은 최상위 `{"decision":"block","reason":…}`이다. Stop 훅으로 연속 8번 이어 가면 Claude Code가 다음 막음을 무시하고 턴을 끝낸다(`CLAUDE_CODE_STOP_HOOK_BLOCK_CAP`) | Claude Code 문서 hooks (2026-09-26) |
+| 권한 규칙의 경로 | Read·Edit 규칙의 경로는 gitignore 패턴이다. 괄호는 이스케이프할 필요가 없다. "Yes, and don't ask again"으로 만든 규칙은 `[`, `]`, `*`를 이스케이프하지만 사람이 쓴 규칙은 이스케이프하지 않는다 | Claude Code 문서 permissions (2026-09-26) |
+| `claude auth status` | 인증 상태를 JSON으로 보이고, 로그인되어 있으면 종료 코드 0, 아니면 1이다 | Claude Code 문서 cli-reference (2026-09-26) |
+| 모델과 effort 환경 변수 | `ANTHROPIC_MODEL`은 별칭(`sonnet` 등)이나 모델 이름을 받는다. `CLAUDE_CODE_EFFORT_LEVEL`은 `low`~`max`, `auto`를 받고 `--effort`보다 우선한다. [실제] 시험은 앱이 넘기는 환경 변수로 모델과 effort를 정한다 | Claude Code 문서 model-config, env-vars (2026-09-26) |
+| 폴더 신뢰와 훅 | 대화형 세션은 폴더 신뢰 창을 수락하기 전에는 모든 설정 파일의 훅을 실행하지 않는다. 앱이 `--settings`로 주는 훅도 같다(디버그 로그 "Skipping … hook execution - workspace trust not accepted"). `-p`와 SDK 세션은 신뢰한 것으로 본다. 레포에서는 신뢰를 레포 루트에 저장하고, worktree에서는 메인 체크아웃의 루트를 쓴다. 온보딩을 건너뛰는 `IS_DEMO`를 켜면 신뢰 창도 뜨지 않았고 훅이 오지 않았다(2.1.283) | Claude Code 문서 hooks(Workspace trust), permissions, env-vars (2026-09-26), M2 [실제] 준비 중 관찰 |
 
-- N-API 사전 빌드가 Electron 44에서 다시 빌드 없이 로드되는지, 설치 파일(asar)에서 `OpenConsole.exe`와 `.node`가 풀려 나와 동작하는지는 아직 확인하지 않았다. M0의 [스모크]로 확인한다(7절).
+- N-API 사전 빌드가 Electron 44에서 다시 빌드 없이 로드되고, 설치 파일(asar)에서 `.node`와 `conpty\conpty.dll`, `OpenConsole.exe`가 풀려 나와 동작한다. M0의 [스모크]로 러너에서 확인했다(2026-09-26, `docs/checks.md`).
+- Windows의 Node(libuv)는 stdin을 raw 모드로 읽고 있을 때만 콘솔 크기 변경을 알아챈다(libuv `docs/src/signal.rst`). 가짜 `claude`도 stdin을 raw 모드로 읽어야 크기 변경 시험이 맞다(app-ci #1~#5).
+- node-pty의 `kill()`은 내장 ConPTY에서 보조 프로세스(`conpty_console_list_agent`)가 "AttachConsole failed"로 죽는 일이 러너에서 다시 보였다. 앱은 `taskkill`로 트리를 끝낸다(6절).
+- DLL 모드(I32)로 실제 `claude`가 동작하는지는 아직 확인하지 않았다. 스파이크는 내장 ConPTY로 돌렸다. M0의 [실기]는 생략했으므로 다음 실기 때 확인한다.
+- Linux에서 트리 종료(node-pty `kill()`, SIGHUP)를 받은 `claude`는 SessionEnd 훅(`reason: other`)을 보내고 응답을 기다린 뒤 끝났다(응답을 5초 늦추면 5.4초 뒤에 끝남, 2.1.283). SessionEnd 훅은 기본 1.5초까지 기다리고, 훅에 `timeout`을 주면 가장 큰 값(최대 60초)까지 기다린다(Claude Code 문서 hooks). 앱은 훅마다 `timeout` 30초를 주고, Work의 처리 줄 안에서 종료를 기다리며 훅 응답도 같은 줄에서 만든다. 그래서 응답이 종료 대기 시간(10초)만큼 늦어져 M2 [실제](Linux)에서 task 사이마다 10초가 걸렸다. Windows(`taskkill /F`)에서 같은 지연이 있는지는 Windows [실제]나 [실기]에서 본다.
 
 ## 4. 기술 선택
 
@@ -142,7 +154,7 @@ app/src/
 | 옮길 것 | 출처 | 앱 모듈 |
 |---|---|---|
 | `claude` 실행 파일 찾기(`CLAUDE_BIN`, `%USERPROFILE%\.local\bin\claude.exe`, npm `claude.cmd`, PATH. D106) | `spikes/lib/session.mjs` `resolveClaude` | `adapters/claude` |
-| npm `.cmd`를 `cmd.exe /d /s /c`로 감싸 실행, `useConpty: true`, `xterm-256color` | `spikes/lib/session.mjs` `start` | `adapters/pty` |
+| npm `.cmd`를 `cmd.exe /d /s /c`로 감싸 실행, `useConpty: true`, `xterm-256color`. 앱은 `useConptyDll: true`를 더한다(I32) | `spikes/lib/session.mjs` `start` | `adapters/pty` |
 | 프로세스 트리 종료 `taskkill /PID <pid> /T /F`(node-pty `kill()` 대신) | `spikes/lib/session.mjs` `kill`, `util.mjs` `killTree` | `adapters/pty` |
 | 프로세스 ID와 시작 시각 조회(I20) | `spikes/lib/util.mjs` `processes`, `isAlive` | `adapters/pty` |
 | deny 규칙의 절대 경로 변환(`C:\x` → `//c/x`) | `spikes/lib/util.mjs` `ruleAbs` | `core/settings` |
@@ -178,14 +190,15 @@ app/src/
 
 - `app/` 패키지: electron-vite, TypeScript strict, React, Vitest 설정(I1~I7).
 - 3단 레이아웃의 빈 화면(D79).
-- 탭 하나에서 node-pty로 `claude`를 실행하고 xterm.js에 붙인다. 창 크기 변경을 PTY에 전달한다. 탭을 닫으면 프로세스 트리를 종료한다.
+- 탭 하나에서 node-pty(DLL 모드, I32)로 `claude`를 실행하고 xterm.js에 붙인다. 창 크기 변경을 PTY에 전달한다. 탭을 닫으면 프로세스 트리를 종료한다.
 - electron-builder NSIS 설정과 수동 워크플로. Windows 러너에서 설치 파일을 만들어 결과물로 올린다(I8).
 
 **완료 기준**
 
-- [스모크] 러너에서 만든 설치 파일로 설치한 앱이 뜨고, 탭에서 PTY로 띄운 가짜 `claude`의 출력이 보인다. 3절의 확인 필요 항목(N-API 사전 빌드 로드, asar 밖의 `OpenConsole.exe`)이 이것으로 확인된다.
-- [어댑터] PTY 세션을 트리 종료하면 남는 프로세스가 없다.
+- [스모크] 러너에서 만든 설치 파일로 설치한 앱이 뜨고, 탭에서 PTY로 띄운 가짜 `claude`의 출력이 보인다. 3절의 확인 필요 항목(N-API 사전 빌드 로드, asar 밖의 `conpty.dll`과 `OpenConsole.exe`)이 이것으로 확인된다.
+- [어댑터] PTY 세션을 트리 종료하면 남는 프로세스가 없다. `OpenConsole.exe`도 남지 않는다(I32).
 - [실기] 설치한 앱의 탭에서 실제 `claude`가 동작한다. 한글 IME 조합 입력이 일반 터미널과 같다. 스파이크 S1에서 남은 항목이다.
+- [실기] DLL 모드(I32)에서 스파이크 S1의 확인 항목(화면 표시, 한글 문자열, 백스페이스, 창 크기 변경)이 내장 ConPTY 때와 같다.
 
 ### M1. core
 
@@ -269,7 +282,7 @@ app/src/
 
 **내용**
 
-- push와 비교 URL, PR(`pr.md`의 제목과 본문, draft 설정 D71, 이미 열린 PR), 전달 버튼 비활성화(D67).
+- push와 비교 URL, PR(`pr.md`의 제목과 본문, draft 설정 D71, 이미 열린 PR), 전달 버튼 비활성화(D67). verify의 마무리 안내 문구에 `[push]`와 `[PR 생성]`을 더한다(D104).
 - 커밋 안 된 변경의 세 선택지(시나리오 7-5), 실패 때 [다시 시도]·[전달 없이 완료].
 - Work 정리(시나리오 8).
 - 진행 중 작업 기록(D77).
@@ -366,3 +379,6 @@ app/src/
 | G7 | 트리 종료한 세션의 `--resume`을 확인하지 않았다 | I31, 스파이크 S6 |
 | G8 | 배포할 relay 스킬의 범위가 없었다 | D108 |
 | G9 | 노드의 화면 이름이 없었다 | D109 |
+| G10 | SessionEnd가 `/clear`, `/resume`에도 와서, 세션 종료로 보면 CLI가 계속 도는데 신호를 무시하게 된다(M1 구현 중에 찾음) | D110 |
+| G11 | 설정 파일에 직접 쓴 권한 규칙은 경로의 gitignore 패턴 문자를 이스케이프하지 않아, 레포 폴더 이름에 `[`, `]` 등이 있으면 project-id가 든 deny 규칙이 맞지 않는다(M2 구현 중에 찾음) | D111 |
+| G12 | 형식 오류가 끝까지 남은 task는 대기나 세션 종료가 되는데, [오류 무시하고 승인]을 언제 누를 수 있는지, handoff 머리글을 읽지 못하면 결정과 이전 단계 추천을 어떻게 할지 없었다(M2 구현 중에 찾음) | D112 |
