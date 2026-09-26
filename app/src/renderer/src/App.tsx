@@ -44,6 +44,9 @@ export function App() {
     void window.relay.snapshot().then((s) => {
       setProjects(s.projects)
       setWarnings(s.warnings)
+      // 앱을 켜면 가장 최근 Work를 고른다
+      const newest = [...s.works].sort((a, b) => b.workId.localeCompare(a.workId))[0]
+      if (newest) setSelected((cur) => cur ?? newest.key)
       setWorks((m) => {
         const next = { ...m }
         for (const w of s.works) {

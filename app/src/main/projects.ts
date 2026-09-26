@@ -113,7 +113,7 @@ export async function prepareProject(
   const repo = inspection.path
   const { local, remote } = await branches(repo, { env: o.env })
   if (!local.includes(name) && !remote.includes(name)) {
-    return { ok: false, error: `브랜치 ${name}가 레포에 없습니다` }
+    return { ok: false, error: `레포에 없는 브랜치입니다: ${name}` }
   }
   const check = (id: string) => inspection.checks.find((c) => c.id === id)?.ok === true
   return {

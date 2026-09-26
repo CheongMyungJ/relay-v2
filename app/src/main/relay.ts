@@ -233,7 +233,7 @@ export class Relay {
     try {
       baseCommit = await commitOf(repo, ref, { env })
     } catch {
-      return { ok: false, error: `기준 브랜치 ${ref}를 찾을 수 없습니다` }
+      return { ok: false, error: `기준 브랜치를 찾을 수 없습니다: ${ref}` }
     }
 
     const at = this.at()

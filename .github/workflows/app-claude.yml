@@ -15,18 +15,12 @@ on:
         description: "effort 수준 (low / medium / high / xhigh). 비용을 아끼려고 기본은 low"
         required: false
         default: "low"
-  # 등록용 임시 조건: main에 없는 workflow_dispatch 워크플로는 한 번 돌아야 실행할 수 있다.
-  # push로 돌 때는 작업을 건너뛰어 Claude 사용량이 들지 않는다. 등록한 뒤 지운다.
-  push:
-    paths:
-      - ".github/workflows/app-claude.yml"
 
 permissions:
   contents: read
 
 jobs:
   claude:
-    if: github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     timeout-minutes: 120
     defaults:
