@@ -4,6 +4,11 @@ name: app-build
 
 on:
   workflow_dispatch:
+  # 임시: main에 없는 workflow_dispatch 워크플로는 등록되지 않아 실행할 수 없다.
+  # 이 파일이 바뀐 push로 한 번 실행해 등록한 뒤 지운다.
+  push:
+    paths:
+      - ".github/workflows/app-build.yml"
 
 permissions:
   contents: read
