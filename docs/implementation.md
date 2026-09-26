@@ -1,7 +1,7 @@
 # relay-v2 구현 계획
 
 - 대상 설계: `docs/design.md` v0.4 (MVP)
-- 상태: 작성 중. 주제마다 사람과 문답으로 정한다(설계 부록 A의 진행 규칙).
+- 상태: 정함. 주제마다 사람과 문답으로 정했다(설계 부록 A의 진행 규칙). 바꾸려면 사용자와 다시 정한다.
 
 ## 0. 목표와 범위
 
@@ -22,7 +22,7 @@
 | 3 | 스파이크 코드 재사용 | `spikes/lib`와 `skills/check.mjs`에서 가져다 쓸 것과 새로 쓸 것 | 정함 |
 | 4 | 마일스톤 | 만드는 순서와 마일스톤마다의 완료 기준. 최소 흐름을 먼저 세로로 관통한다 | 정함 |
 | 5 | 테스트 전략 | 단위 테스트, 러너 통합 시험, 실기 확인의 나눔과 비용 | 정함 |
-| 6 | 설계와의 어긋남 | 1~5를 정하며 찾은 설계의 빈 곳과 어긋난 곳(9절 목록) | 질문 중 |
+| 6 | 설계의 빈 곳 | 1~5를 정하며 찾은 설계의 빈 곳과 어긋난 곳(9절) | 정함 |
 
 ## 2. 결정
 
@@ -58,6 +58,7 @@
 | I28 | push와 PR마다 두 작업을 돌린다. Linux: 타입 검사, lint(ESLint, Prettier **(기본값)**), core 단위 시험. Windows: adapters 시험과 가짜 `claude` 흐름 시험. 설치 파일 빌드와 스모크, 실제 `claude` 시험은 수동으로 돌린다 | 공개 레포라 러너가 무료임. core는 Node API를 쓰지 않아 Linux에서 빨리 결과가 나옴. 주 플랫폼 문제는 Windows 작업이 잡음. 설치 파일 빌드는 오래 걸림 | ✅ |
 | I29 | 실제 `claude` 흐름 시험은 수동 워크플로로, 마일스톤 완료 때와 Claude Code를 올릴 때 돌린다. 시험 레포 두 개(M 경로, S 경로)를 시험 때 만들고 **(기본값)**, 질문에는 첫 선택지로 답한다. 모델과 effort는 입력으로 받고 기본은 `sonnet`, `low`다 **(기본값)**. 끝까지 갔는지, task마다 되돌림 횟수, 걸린 시간을 판정한다 | 한 번에 세션이 8개 돌아 Claude 사용량이 가장 큰 시험임. 스킬이나 Claude Code가 바뀔 때만 의미가 있음. 되돌림 횟수는 스킬 템플릿이 잘 맞는지 보는 지표도 됨 | ✅ |
 | I30 | 마일스톤마다 실기 확인 항목을 7절에 두고, 실제 `claude` 시험과 실기 확인의 결과는 `docs/checks.md`에 날짜, 앱 커밋, Claude Code 버전, OS와 함께 기록한다 | 스파이크 결과(D92)와 같은 방식. Claude Code 버전이 바뀌었을 때 무엇을 다시 확인할지 알 수 있음 | ✅ |
+| I31 | 스파이크 S6(강제 종료 뒤 `--resume`)을 M3 전에 러너에서 돌린다. 계획은 `docs/spikes.md`에 둔다 | [즉시 중단]은 트리 종료인데 S3는 `/exit`로 끝낸 세션만 확인함. 결과에 따라 M3의 설계가 바뀔 수 있어 먼저 알아야 함 | ✅ |
 
 ## 3. 확인한 사실
 
@@ -72,10 +73,10 @@
 | Playwright의 Electron 지원 | 실험적 지원이다(`_electron`). `launch()`의 `executablePath`로 설치된 앱을 띄울 수 있다. `nodeCliInspect` 퓨즈가 꺼져 있으면 실행이 시간 초과될 수 있다. Electron 기본 대화상자(`dialog`)는 가로채지 못하므로 메인 프로세스에서 바꿔 끼워야 한다 | npm 패키지 `playwright-core@1.63.0` 타입 문서 (2026-09-26) |
 | GitHub Actions 요금 | 공개 레포에서 표준 GitHub 호스트 러너는 무료다. 이 레포는 공개다 | GitHub 문서 billing/github-actions, 레포 정보 (2026-09-26) |
 | 최신 버전 | electron 44.4.5, node-pty 1.1.0, @xterm/xterm 6.0.0, electron-builder 26.15.3, electron-vite 5.0.0, vitest 5.0.2 | npm 레지스트리 (2026-09-26) |
-| Claude Code 동작 | 훅, 스킬, deny 규칙, 첫 실행 창은 `docs/spikes.md`의 S1~S5 결과를 따른다(2.1.283) | `docs/spikes.md` |
+| Claude Code 동작 | 훅, 스킬, deny 규칙, 첫 실행 창은 `docs/spikes.md`의 S1~S5 결과를 따른다(2.1.283). 강제 종료 뒤 재개(S6)는 M3 전에 확인한다(I31) | `docs/spikes.md` |
 | HTTP 훅 머리글 | HTTP 훅에 `headers`를 줄 수 있다. 값에 `$VAR` 형태로 환경 변수를 넣을 수 있고, `allowedEnvVars`에 적은 변수만 풀린다. 응답 본문은 명령 훅과 같은 JSON 출력 형식이다. 기본 제한 시간은 600초(UserPromptSubmit은 30초)다 | Claude Code 문서 hooks (2026-09-26) |
 
-- N-API 사전 빌드가 Electron 44에서 다시 빌드 없이 로드되는지, 설치 파일(asar)에서 `OpenConsole.exe`와 `.node`가 풀려 나와 동작하는지는 아직 확인하지 않았다. 마일스톤 0의 러너 시험에서 확인한다.
+- N-API 사전 빌드가 Electron 44에서 다시 빌드 없이 로드되는지, 설치 파일(asar)에서 `OpenConsole.exe`와 `.node`가 풀려 나와 동작하는지는 아직 확인하지 않았다. M0의 [스모크]로 확인한다(7절).
 
 ## 4. 기술 선택
 
@@ -91,7 +92,7 @@
 | 배포 | electron-builder NSIS, x64, 사용자별 설치, 서명·자동 업데이트 없음. 수동 워크플로로 러너에서 빌드 | I8 |
 
 - **버전:** 시작할 때의 안정 버전을 정확한 버전으로 고정한다 **(기본값)**. Electron을 올리면 node-pty 로드와 설치 파일 시험(3절의 확인 필요 항목)을 다시 한다.
-- **YAML과 스키마 검사:** `skills/check.mjs`와 같은 `yaml`, `ajv`(draft 2020-12)를 쓴다. 재사용 범위는 주제 3에서 정한다.
+- **YAML과 스키마 검사:** `skills/check.mjs`와 같은 `yaml`, `ajv`(draft 2020-12)를 쓴다. 검사 코드는 앱에서 따로 쓴다(I18).
 
 ## 5. 모듈 구조
 
@@ -113,8 +114,8 @@ app/src/
 |---|---|---|---|
 | core | `pipeline` | 노드 순서, S 빠른 경로, 선택 가능한 다음 단계, 기본 다음 단계 | 3.1, 3.2, 3.4 |
 | core | `machine` | Work와 Task 상태 전이. `(상태, 이벤트) → (새 상태, 할 일)` (I10) | 3.3, 시나리오 3~5 |
-| core | `validate` | handoff와 intent 초안의 머리글 파싱, 스키마 검사, 추가 검사, 되돌림 메시지 | 5.2.1 |
-| core | `context` | `context.md` 조립(입력: 상태, intent, 결정 로그, 누적 기각 목록, 직전 handoff) | 시나리오 2-4 |
+| core | `validate` | handoff와 intent 초안의 머리글 파싱, 스키마 검사, 추가 검사, 되돌림 메시지 | 5.2.1, D107 |
+| core | `context` | `context.md` 조립(입력: 상태, intent, 결정 로그, 누적 기각 목록, 직전 handoff), 마무리 안내 문구(D104) | 시나리오 2-4 |
 | core | `settings` | task 설정 파일 내용(훅, deny 규칙) 만들기, 실행 인자 만들기 | 시나리오 2-3·2-5, 6절 |
 | core | `approval` | 자동 승인 조건 판정, 배지 우선순위 | 4.3, D80 |
 | core | `rewind` | 단계 선택의 결과 계산(폐기할 task, 되돌릴 커밋, 건너뛸 단계) | 6.2, D82 |
@@ -123,7 +124,7 @@ app/src/
 | adapters | `hooks` | 훅 HTTP 서버, 토큰 확인, Stop 응답 (I13) | S2, D20, D21 |
 | adapters | `git`, `gh` | worktree, status, diff, reset, 백업 브랜치, push, `gh pr` (I12) | 시나리오 1·6·7·8 |
 | adapters | `watch` | task 디렉터리 감시 (I15) | 시나리오 3-3 |
-| adapters | `claude` | 실행 파일 찾기, `claude auth status`, 스킬 배포 복사 | 시나리오 0, 5.6.3 |
+| adapters | `claude` | 실행 파일 찾기(D106), `claude auth status`, 버전 기록(D105), 이번 task의 스킬 배포(D103, D108) | 시나리오 0, 2-2, 5.6.3 |
 | main | `app` | 시작 때 재시작 조정(시나리오 9), 종료 확인 | 시나리오 3-6, 9 |
 | main | `runner` | 할 일 실행: task 시작·종료, 세션 상한 대기열 | 시나리오 2, 5, D18 |
 | main | `ipc` | 렌더러 명령 처리, 스냅샷 전송 (I14) | |
@@ -140,7 +141,7 @@ app/src/
 
 | 옮길 것 | 출처 | 앱 모듈 |
 |---|---|---|
-| `claude` 실행 파일 찾기(`CLAUDE_BIN`, `%USERPROFILE%\.local\bin\claude.exe`, npm `claude.cmd`) | `spikes/lib/session.mjs` `resolveClaude` | `adapters/claude` |
+| `claude` 실행 파일 찾기(`CLAUDE_BIN`, `%USERPROFILE%\.local\bin\claude.exe`, npm `claude.cmd`, PATH. D106) | `spikes/lib/session.mjs` `resolveClaude` | `adapters/claude` |
 | npm `.cmd`를 `cmd.exe /d /s /c`로 감싸 실행, `useConpty: true`, `xterm-256color` | `spikes/lib/session.mjs` `start` | `adapters/pty` |
 | 프로세스 트리 종료 `taskkill /PID <pid> /T /F`(node-pty `kill()` 대신) | `spikes/lib/session.mjs` `kill`, `util.mjs` `killTree` | `adapters/pty` |
 | 프로세스 ID와 시작 시각 조회(I20) | `spikes/lib/util.mjs` `processes`, `isAlive` | `adapters/pty` |
@@ -163,9 +164,9 @@ app/src/
 | # | 이름 | 한 줄 요약 | 선행 |
 |---|---|---|---|
 | M0 | 골격과 배포 | 설치한 앱의 탭에서 PTY로 `claude`가 뜬다 | |
-| M1 | core | 설계의 표를 옮긴 순수 로직과 단위 시험 | G3 |
-| M2 | 최소 흐름 | Work 하나가 intake부터 Work 완료까지 간다 | G1 |
-| M3 | 사람 조작과 여러 Work | 중단·재개, 대기열, 배지, 알림, 설정, 재시작 기본 처리 | |
+| M1 | core | 설계의 표를 옮긴 순수 로직과 단위 시험 | |
+| M2 | 최소 흐름 | Work 하나가 intake부터 Work 완료까지 간다 | |
+| M3 | 사람 조작과 여러 Work | 중단·재개, 대기열, 배지, 알림, 설정, 재시작 기본 처리 | 스파이크 S6(I31) |
 | M4 | 되감기와 단계 선택 | 6.2의 되감기 규칙과 단계 선택 대화상자 | |
 | M5 | 전달과 정리 | push, PR, 커밋 안 된 변경 처리, Work 정리 | |
 | M6 | 복구 | 고아 프로세스, 끊긴 작업 알림, 해시 경고 | |
@@ -191,7 +192,7 @@ app/src/
 **내용**
 
 - `shared` 타입(I19), `core/pipeline`, `core/machine`, `core/validate`, `core/context`, `core/settings`.
-- `machine`은 기본 흐름만 담는다: task 시작, 실행 중 표시(작업 중, 질문 대기, 대기, 승인 대기, 막힘, 세션 종료), 승인, 다음 task 결정, 이전 단계 추천에서 멈춤, Work 완료. 중단, 재개, 대기열, 되감기, 자동 승인의 전이는 해당 마일스톤에서 더한다.
+- `machine`은 기본 흐름만 담는다: task 시작, 실행 중 표시(작업 중, 질문 대기, 대기, 승인 대기, 막힘, 세션 종료), 승인, 다음 task 결정, 이전 단계 추천에서 멈춤, 형식 오류 되돌림 횟수(D21, D107), Work 완료. 중단, 재개, 대기열, 되감기, 자동 승인의 전이는 해당 마일스톤에서 더한다.
 
 **완료 기준** (모두 [단위])
 
@@ -199,7 +200,7 @@ app/src/
 - 시나리오 3의 신호 표: 신호마다 표시 상태가 맞다.
 - 형식 검사(5.2.1): 검사 항목마다 통과 예와 실패 예가 있다. 되돌림 메시지에 필드와 어긴 규칙이 들어 있다. 경고(D85, 분량 기준)는 오류로 치지 않는다.
 - `_common.md`와 `work-start`의 템플릿 예시가 앱 검사기를 통과한다(I18, D87).
-- `context.md`에 시나리오 2-4 표의 항목이 모두 들어간다. 되감기 항목은 M4에서 더한다.
+- `context.md`에 시나리오 2-4 표의 항목과 마무리 안내 문구(D104)가 들어간다. 되감기 항목은 M4에서 더한다.
 - task 설정 파일에 훅 여섯 가지(I13의 형식)와 deny 규칙(D17, 시나리오 2-3)이 들어간다.
 
 ### M2. 최소 흐름
@@ -207,11 +208,11 @@ app/src/
 **내용**
 
 - 저장소(5.1): `RELAY_HOME`, `config.json` 기본값, `project.json`, `work.json`(원자적 쓰기), `request.md`, `intent.md`와 `intent.history/`, `decisions.md`, `events.jsonl`.
-- 프로젝트 등록(시나리오 0): 점검 표(D67), 기본 브랜치.
+- 프로젝트 등록(시나리오 0): `claude` 찾기(D106), 점검 표(D67), 기본 브랜치.
 - Work 생성(시나리오 1): work-id, 브랜치와 worktree(`core.longpaths`), 기준 커밋(D97), 로컬·원격 기준 위치.
-- task 시작(시나리오 2): task 디렉터리와 시작 커밋, 스킬 배포(5.6.3), task 설정 파일, `context.md`, PTY 실행, 머리 띠.
+- task 시작(시나리오 2): task 디렉터리와 시작 커밋, 스킬 배포(5.6.3, D103, D108), task 설정 파일, `context.md`, PTY 실행, Claude Code 버전 기록(D105), 머리 띠(D109).
 - 훅 서버(I13), 신호별 표시(시나리오 3), `permission_mode` 경고(D94).
-- handoff와 intent 초안 감시와 검사(I15), Stop 되돌림(D21).
+- handoff와 intent 초안 감시와 검사(I15), Stop 되돌림(D21, D107).
 - 승인 화면(D83): 강조 영역, [요약]·[산출물]·[변경] 탭, [오류 무시하고 승인](4.1, D90).
 - 의도 승인(4.1): `intent.md` 확정, `size` 고치기.
 - 승인 뒤(시나리오 4-4, 5): 세션 트리 종료, `pty.log` 저장, `decisions.md` 추가, 다음 task 자동 시작(S 경로 포함).
@@ -350,17 +351,18 @@ app/src/
 - 마일스톤마다 7절의 [실기] 항목을 Windows 10/11 PC에서 사람이 확인한다.
 - 결과는 `docs/checks.md`에 날짜, 앱 커밋, Claude Code 버전, OS와 함께 한 줄씩 더한다.
 
-## 9. 설계 확인 필요 목록
+## 9. 설계의 빈 곳
 
-주제 1~5를 정하며 찾은 설계의 빈 곳이다. 주제 6에서 한꺼번에 묻는다. 앞 주제를 막는 것은 그 주제에서 먼저 묻는다.
+구현 계획을 정하며 찾은 설계의 빈 곳과, 그것을 정한 결정이다. 설계를 바꾼 결정(D 번호)은 `docs/design.md` 2절에 있다.
 
-| # | 빈 곳 | 관련 설계 |
+| # | 빈 곳 | 정한 곳 |
 |---|---|---|
-| G1 | 스킬 원본을 `<RELAY_HOME>/skills/`에 두는 방법이 없다. 앱에 묶어 배포한 스킬을 첫 실행 때 복사하는지, 앱을 업데이트하면 덮어쓰는지, 사람이 고친 스킬은 어떻게 하는지 | 5.1, 5.6.3 |
-| G3 | `context.md`의 "마무리 안내 문구"의 내용이 정해져 있지 않다 | 시나리오 2-4, 5.6.2 |
-| G4 | 확인한 Claude Code 버전(2.1.283)과 다른 버전이 설치되어 있을 때 앱이 할 일이 없다(경고 여부) | D92, D95 |
-| G5 | 앱이 `claude` 실행 파일을 찾는 방법이 없다(PATH, 네이티브 설치 위치, npm `.cmd`) | 6절, 7절 |
-| G6 | 형식 오류 되돌림의 "연속" 횟수가 언제 0으로 돌아가는지 없다 | D21, 시나리오 3-3 |
-| G7 | 트리 종료한 세션을 `--resume`으로 이어 열 수 있는지 확인하지 않았다. 스파이크 S3는 `/exit`로 끝낸 세션만 확인했고, [즉시 중단]은 트리 종료다 | 시나리오 3-4, 7절, S3 |
-| G8 | task를 시작할 때 Work 디렉터리에 relay 스킬 다섯 개를 모두 둘지, 이번 task의 스킬만 둘지 없다 | 시나리오 2-2, D32, D33 |
-| G9 | 노드의 화면 이름(머리 띠, 사이드바)이 정해져 있지 않다. 예시에는 "원인 분석", "수정"만 있다 | 시나리오 2-5, 화면 구성 |
+| G1 | 스킬 원본을 `<RELAY_HOME>/skills/`에 두는 방법이 없었다 | D103 |
+| G2 | 훅 서버의 보안과 task 구분이 없었다 | I13 |
+| G3 | `context.md`의 마무리 안내 문구의 내용이 없었다 | D104 |
+| G4 | 확인한 버전과 다른 Claude Code가 설치되어 있을 때 할 일이 없었다 | D105 |
+| G5 | 앱이 `claude` 실행 파일을 찾는 방법이 없었다 | D106 |
+| G6 | 형식 오류 되돌림의 연속 횟수가 언제 0으로 돌아가는지 없었다 | D107 |
+| G7 | 트리 종료한 세션의 `--resume`을 확인하지 않았다 | I31, 스파이크 S6 |
+| G8 | 배포할 relay 스킬의 범위가 없었다 | D108 |
+| G9 | 노드의 화면 이름이 없었다 | D109 |

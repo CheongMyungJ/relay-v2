@@ -140,6 +140,13 @@ relay-v2는 Claude Code CLI를 **앱 안의 터미널(node-pty + xterm.js)에 �
 | D100 | 형식 오류가 되돌아오면 에이전트는 오류가 가리키는 파일을 고치고, 빠진 산출물이나 절을 채운다. 판단(결정, 원인, 판정)은 바꾸지 않는다. 그다음 종료 절차의 handoff 작성과 안내를 다시 한다 | 추가 검사(5.2.1)에는 필수 산출물, intent 초안의 절, `pr.md` 첫 줄 같은 산출물 쪽 오류도 있어 handoff만 다시 써서는 고칠 수 없음 | ✅ |
 | D101 | `pr.md`는 레포 관례(최근 커밋과 PR)의 언어로 쓴다. 레포에 PR 템플릿이 있으면 그 구성을 따르고, 없으면 D62의 네 절을 그 언어로 쓴다. 첫 줄 `# 제목` 규칙은 그대로다 | PR은 레포 밖 사람도 읽음. 커밋 메시지가 레포 관례를 따르는 것(D54)과 같은 기준 | ✅ |
 | D102 | 에이전트가 사람에게 내보내는 글(질문과 선택지, 산출물과 handoff의 내용)은 한국어로 쓴다. 절 제목과 머리글 필드는 설계대로 둔다. `pr.md`는 D101을 따른다 | 읽는 사람이 한국어 사용자임. 형식 검사(5.2.1)가 한국어 절 제목을 보므로 템플릿과 검사를 바꾸지 않아도 됨 | ✅ |
+| D103 | 스킬 원본은 앱에 묶어 배포한 `skills/`다. `<RELAY_HOME>`에는 스킬을 두지 않는다. 환경 변수 `RELAY_SKILLS_DIR`로 다른 폴더(예: 레포의 `skills/`)를 원본으로 쓸 수 있다. task마다 배포한 스킬의 해시를 `work.json`에 적는다 | 복사와 덮어쓰기 규칙이 필요 없고 앱과 스킬의 버전이 늘 맞음. 스킬을 고쳐 볼 때는 설치 파일을 다시 만들지 않고 환경 변수로 가리킴(D74와 같은 방식). 해시로 어떤 스킬로 돌렸는지 알 수 있음 | ✅ |
+| D104 | 마무리 안내 문구는 앱이 승인 방식과 노드에 따라 고정 문구로 `context.md`에 넣는다(시나리오 2-4) | 스킬을 고치지 않고, 사람이 어디를 봐야 하는지 매번 같게 안내함 | ✅ |
+| D105 | 앱은 task마다 `claude --version` 결과를 `work.json`에 기록한다. 확인한 버전과 달라도 경고하지 않는다 | Claude Code는 자주 업데이트되어 경고가 거의 늘 뜨게 되고 곧 무시됨. 기록이 있으면 문제가 생겼을 때 버전을 비교할 수 있음. 업데이트 때의 확인은 앱의 실제 `claude` 시험이 맡음 | ✅ |
+| D106 | 앱은 `claude` 실행 파일을 `CLAUDE_BIN` 환경 변수 → 네이티브 설치 위치(`%USERPROFILE%\.local\bin\claude.exe`) → npm 전역 설치 위치(`%APPDATA%\npm\claude.cmd`) → PATH 순서로 찾는다. 못 찾으면 프로젝트 등록을 막고 설치 안내를 보인다. 설정 화면에는 두지 않는다 | 스파이크에서 러너로 확인한 순서임. 등록 점검(D67)의 `claude auth status`가 실행 파일을 쓰므로 같은 자리에서 막음 | ✅ |
+| D107 | 형식 오류 되돌림의 연속 횟수는 사람이 새 요청으로 시작한 턴의 Stop(`stop_hook_active: false`)이나 검사 통과 때 0으로 돌아간다 | 되돌림에 이어진 Stop은 `stop_hook_active: true`로 와서(스파이크 S2) 앱이 추측 없이 "연속"을 구분함. 사람이 고쳐 달라고 한 뒤 생긴 새 오류는 다시 되돌릴 기회를 줌 | ✅ |
+| D108 | task를 시작할 때 Work 디렉터리에는 이번 task의 relay 스킬만 둔다. 다른 relay 스킬 폴더는 지운다 | D33에 더해 다른 단계 스킬을 부를 길이 없어짐. 사람이 다른 `/relay-…`를 잘못 입력하는 일도 막음 | ✅ |
+| D109 | 노드의 화면 이름은 intake "의도 정리", evidence "재현과 관찰", rca "원인 분석", fix "수정", verify "최종 검증"이다. 탭과 사이드바에는 "03 원인 분석"처럼 task 순번과 함께 보인다 | 사람이 읽는 글은 한국어로 씀(D102). 설계 예시와 맞음 | ✅ |
 
 ---
 
@@ -175,6 +182,7 @@ intake(work-start) → 의도 승인 → evidence → rca → fix → verify →
 | 4 | `fix` | `fix` | 코드를 고치고 커밋한다 | 코드 커밋, `fix.md`(변경 요약) |
 | 5 | `verify` | `final-verify` | 완료조건별로 판정하고 PR 초안을 쓴다 | `verification.md`, `pr.md` |
 
+- 화면 이름(D109): intake "의도 정리", evidence "재현과 관찰", rca "원인 분석", fix "수정", verify "최종 검증".
 - 산출물은 모두 task 디렉터리(`tasks/<nn>-<node>/`)에 쓴다. 코드 변경은 worktree에서 에이전트가 커밋한다(push는 막혀 있음, D17).
 - 스킬의 공통 규칙과 스킬별 명세(입력, 결정 지점, 완료조건, 산출물 템플릿)는 5.6에 적는다.
 
@@ -228,7 +236,7 @@ S 크기는 `intake → fix → verify`로 간다. evidence와 rca의 일 중 �
 ### 시나리오 0. 프로젝트 등록
 
 1. **사용자:** 사이드바의 [프로젝트 추가] → 레포 폴더 선택
-2. **앱:** 레포를 점검한다(D67).
+2. **앱:** 레포를 점검한다(D67). `claude` 실행 파일은 `CLAUDE_BIN` 환경 변수 → 네이티브 설치 위치 → npm 전역 설치 위치 → PATH 순서로 찾고, 못 찾으면 설치 안내와 함께 등록을 막는다(D106).
 
    | 항목 | 실패하면 |
    |---|---|
@@ -265,7 +273,7 @@ S 크기는 `intake → fix → verify`로 간다. evidence와 rca의 일 중 �
 **언제:** Work 생성 직후, 또는 이전 task 승인 후
 
 1. **앱:** task 디렉터리 `tasks/<순번>-<노드>/`를 만들고, 현재 HEAD를 이 task의 시작 커밋으로 `work.json`에 기록한다(되감기 기준, 6.2).
-2. **앱:** 스킬을 Work 디렉터리의 `.claude/skills/relay-<이름>/`에 복사하고, 공통 규칙(`_common.md`)을 각 `SKILL.md` 끝에 붙인다(5.6.3). worktree는 건드리지 않는다.
+2. **앱:** 이번 task의 스킬을 Work 디렉터리의 `.claude/skills/relay-<이름>/`에 복사하고, 공통 규칙(`_common.md`)을 `SKILL.md` 끝에 붙인다. 다른 relay 스킬 폴더는 지운다(D108, 5.6.3). worktree는 건드리지 않는다.
 3. **앱:** task 전용 설정 파일을 만든다.
    - HTTP 훅: UserPromptSubmit, Stop, Notification, SessionEnd, PreToolUse·PostToolUse(`AskUserQuestion`만)
    - deny 규칙: `git push`, `gh pr` 계열, 앱 소유 파일(`work.json`, `request.md`, `intent.md`, `decisions.md`, 이전 task 디렉터리, Work 디렉터리의 `.claude/`) 편집
@@ -284,6 +292,13 @@ S 크기는 `intake → fix → verify`로 간다. evidence와 rca의 일 중 �
    | 직전 handoff | 본문 |
    | 되감기로 들어온 경우: 사람 추가 지시, 폐기된 시도 요약 | 본문 (맨 위 강조) |
    | 필요한 산출물 | 경로만 |
+
+   **마무리 안내 문구(D104):** 앱이 아래 문구를 넣는다. `[승인]`은 intake에서 `[의도 승인]`, verify에서 `[Work 완료]`로 바꾼다.
+
+   | 승인 방식 | 문구 |
+   |---|---|
+   | 수동 | 산출물과 handoff를 썼습니다. 오른쪽 패널에서 확인하고 [승인]을 누르세요. 고칠 점은 여기에 말해 주세요. |
+   | 자동 | 산출물과 handoff를 썼습니다. 자동 승인이 켜진 단계라 조건을 만족하면 카운트다운 뒤 승인됩니다. 멈추려면 [취소]를 누르거나 여기에 말해 주세요. |
 
 5. **앱:** 새 탭에서 실행한다.
    ```
@@ -309,7 +324,7 @@ S 크기는 `intake → fix → verify`로 간다. evidence와 rca의 일 중 �
    | Notification(`permission_prompt`) | 입력 필요 (이 모드에서는 드묾) |
    | SessionEnd / PTY 종료 | 세션 종료 |
 
-3. **handoff 감시:** handoff가 생기거나 바뀌면 바로 검증해서 패널에 표시한다. intake에서는 intent 초안도 같은 방식으로 검증한다(D38). Stop 시점에 형식 오류가 있고 이번 턴에 handoff가 바뀌었으면, Stop 훅 응답으로 오류를 에이전트에게 되돌린다(연속 2회까지, 설정 가능, D21).
+3. **handoff 감시:** handoff가 생기거나 바뀌면 바로 검증해서 패널에 표시한다. intake에서는 intent 초안도 같은 방식으로 검증한다(D38). Stop 시점에 형식 오류가 있고 이번 턴에 handoff가 바뀌었으면, Stop 훅 응답으로 오류를 에이전트에게 되돌린다(연속 2회까지, 설정 가능, D21). 연속 횟수는 사람이 새 요청으로 시작한 턴의 Stop(`stop_hook_active: false`)이나 검사 통과 때 0으로 돌아간다(D107).
 4. **중단**
    - **[즉시 중단]:** 세션을 종료하고 task를 "중단됨"으로 남긴다. 탭과 액션 바에 **[재개]** 버튼이 생긴다. [재개]는 같은 실행 옵션 + `--resume <세션 id>`로 대화를 잇고, 이전 터미널 화면을 먼저 보여 준다.
    - **[이 단계 끝나면 멈춤]:** 현재 단계가 승인되면 다음 단계를 시작하지 않고 멈춘다. [재개]를 누르면 다음 단계를 시작한다.
@@ -523,13 +538,11 @@ S 크기는 `intake → fix → verify`로 간다. evidence와 rca의 일 중 �
 ```
 <RELAY_HOME>/                          # 기본 %USERPROFILE%\.relay, macOS/Linux ~/.relay
   config.json                          # 앱 설정 (5.1.1)
-  skills/<name>/SKILL.md
-  skills/_common.md                    # 공통 규칙(질문 규칙, 종료 절차) 원본. 배포할 때 각 SKILL.md 끝에 붙인다 (5.6.1, 5.6.2)
   projects/<project-id>/               # <레포 폴더 이름>-<레포 절대 경로 해시 6자>
     project.json                       # 레포 경로, 기본 브랜치, 등록 점검 결과(origin·gh 여부)
     worktrees/<work-id>/
     works/<work-id>/
-      work.json                        # Work 상태, 현재 단계, 기준 브랜치와 기준 커밋, 승인 기록, Work별 설정(자동 승인, 질문 방식), task별 형식 버전·프로세스 ID·시작 시각, 진행 중 작업
+      work.json                        # Work 상태, 현재 단계, 기준 브랜치와 기준 커밋, 승인 기록, Work별 설정(자동 승인, 질문 방식), task별 형식 버전·프로세스 ID·시작 시각·Claude Code 버전(D105)·배포한 스킬 해시(D103), 진행 중 작업
       request.md                       # Work 생성 때 받은 요청 원문
       .claude/skills/relay-<name>/SKILL.md   # 배포본. task를 시작할 때 앱이 복사 (5.6.3)
       intent.md                        # 승인된 최신 의도
@@ -541,6 +554,7 @@ S 크기는 `intake → fix → verify`로 간다. evidence와 rca의 일 중 �
         <산출물>.md  handoff.md
 ```
 
+- 스킬 원본은 `<RELAY_HOME>`에 두지 않는다. 앱에 묶어 배포한 `skills/`를 쓰고, 환경 변수 `RELAY_SKILLS_DIR`로 바꿀 수 있다(D103, 5.6.3).
 - `project-id`는 레포 폴더 이름과 레포 절대 경로의 해시 앞 6자로 만든다(예: `my-api-3f9a1c`). 같은 이름의 레포가 여러 개여도 겹치지 않는다.
 - 상태 파일(`work.json`)은 임시 파일에 쓰고 이름을 바꾸는 방식으로 원자적으로 저장한다.
 - 이벤트는 기록용이다. MVP에서는 이벤트로 상태를 복원하지 않는다(기본값). 재시작 때의 상태 조정은 시나리오 9를 따른다.
@@ -816,8 +830,8 @@ knowledge_candidates: []  # 선택. 다음에도 쓸 만한 사실
 
 #### 5.6.3 배포와 입력
 
-- **원본:** `<RELAY_HOME>/skills/<name>/SKILL.md`와 공통 규칙 `skills/_common.md`(질문 규칙과 종료 절차, D99).
-- **배포:** task를 시작할 때 앱이 Work 디렉터리(`works/<work-id>/`)의 `.claude/skills/relay-<name>/`에 복사하고, `_common.md`를 `SKILL.md` 끝에 붙인다. relay는 `--add-dir <work 디렉터리>`로 실행하고, Claude Code는 추가한 디렉터리의 `.claude/skills/`도 읽는다. 그래서 worktree에는 두지 않는다(D32). 이 경로는 deny 규칙으로 편집을 막는다.
+- **원본:** 앱에 묶어 배포한 `skills/<name>/SKILL.md`와 공통 규칙 `skills/_common.md`(질문 규칙과 종료 절차, D99). 환경 변수 `RELAY_SKILLS_DIR`가 있으면 그 폴더를 원본으로 쓴다. 앱은 task마다 배포한 스킬의 해시를 `work.json`에 적는다(D103).
+- **배포:** task를 시작할 때 앱이 이번 task의 스킬을 Work 디렉터리(`works/<work-id>/`)의 `.claude/skills/relay-<name>/`에 복사하고, `_common.md`를 `SKILL.md` 끝에 붙인다. 다른 relay 스킬 폴더는 지운다(D108). relay는 `--add-dir <work 디렉터리>`로 실행하고, Claude Code는 추가한 디렉터리의 `.claude/skills/`도 읽는다. 그래서 worktree에는 두지 않는다(D32). 이 경로는 deny 규칙으로 편집을 막는다.
 - **호출:** 모든 relay 스킬은 `disable-model-invocation: true`로 둔다. 스킬은 첫 프롬프트로만 시작한다(D33).
 - **입력:** 첫 프롬프트는 `/relay-<스킬> 이 task의 컨텍스트: <context.md 경로>`다. 스킬은 `context.md`부터 읽는다. `context.md`의 구성은 시나리오 2-4의 표를 따른다. 스킬별로 더 읽는 파일은 스킬별 명세에 적는다.
 - **언어(D98, D102):** 스킬 본문(에이전트에게 주는 지시)은 영어로 쓴다. 에이전트가 사람에게 내보내는 글(질문과 선택지, 산출물과 handoff의 내용)은 한국어로 쓰고, 절 제목과 머리글 필드는 템플릿 그대로 둔다. `pr.md`는 D101을 따른다.
@@ -1064,7 +1078,7 @@ intent의 완료조건마다 판정하고 `verification.md`와 PR 초안 `pr.md`
 | 실행 | `claude --dangerously-skip-permissions --session-id <uuid> --add-dir <work dir> --settings <task 설정> "<짧은 첫 프롬프트>"` |
 | 재개 | 같은 옵션 + `--resume <uuid>` (이전 옵션이 복원된다고 가정하지 않음) |
 | 컨텍스트 | `tasks/<nn>/context.md` + 첫 프롬프트에 경로 |
-| 스킬 배포 | Work 디렉터리 `.claude/skills/relay-<name>/`로 복사(`--add-dir`로 읽힘). 복사할 때 공통 규칙(`_common.md`)을 `SKILL.md` 끝에 붙임. `disable-model-invocation: true` |
+| 스킬 배포 | 이번 task의 스킬만 Work 디렉터리 `.claude/skills/relay-<name>/`로 복사(`--add-dir`로 읽힘, D108). 복사할 때 공통 규칙(`_common.md`)을 `SKILL.md` 끝에 붙임. `disable-model-invocation: true` |
 | 상태 신호 | 내장 HTTP 훅 → 앱 로컬 서버: UserPromptSubmit, Stop, Notification, SessionEnd, PreToolUse·PostToolUse(`AskUserQuestion`) |
 | 형식 오류 되돌림 | Stop 훅 응답 `{"decision":"block","reason":…}`, 연속 2회까지(설정 가능) |
 | 제한 | deny 규칙: `Bash(git push*)`, `Bash(gh pr*)`, 앱 소유 파일 `Edit(//…)`. 실수를 막는 장치이며 우회할 수 있다(6.1) |
@@ -1108,6 +1122,7 @@ intent의 완료조건마다 판정하고 `verification.md`와 PR 초안 `pr.md`
 | S3 | 스킬: `--add-dir` 디렉터리의 스킬이 첫 프롬프트로 시작되는지, `disable-model-invocation: true`, `--resume` 재개 | D32, D33, 시나리오 3-4 |
 | S4 | 권한: 권한 확인 끈 모드에서 deny 규칙이 막는 범위, 조직 설정으로 모드가 막혔을 때의 출력 | D17, D91, 7절 |
 | S5 | 첫 실행 창: 권한 확인 끈 모드 경고와 폴더 신뢰 창이 언제 뜨는지(worktree마다, `--add-dir` 디렉터리) | D68, D69 |
+| S6 | 강제 종료 뒤 재개: 프로세스 트리째 종료한 세션을 같은 옵션과 `--resume`으로 열면 대화가 이어지는지 | 시나리오 3-4, 7절 |
 
 ## 9. 추가 후보 (필요가 확인되면)
 
