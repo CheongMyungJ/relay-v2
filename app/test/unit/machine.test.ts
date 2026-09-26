@@ -320,7 +320,12 @@ describe('시나리오 3의 신호 표: 신호마다 표시 상태', () => {
       { type: 'Notification', taskId: T, at: 'x', notificationType: 'permission_prompt' },
       'input_needed',
     ],
-    ['SessionEnd', 'working', { type: 'SessionEnd', taskId: T, at: 'x' }, 'session_ended'],
+    [
+      'SessionEnd(reason이 clear, resume이 아님)',
+      'working',
+      { type: 'SessionEnd', taskId: T, at: 'x', reason: 'prompt_input_exit' },
+      'session_ended',
+    ],
     ['PTY 종료', 'idle', { type: 'pty.exit', taskId: T, at: 'x' }, 'session_ended'],
   ]
 
@@ -403,6 +408,31 @@ describe('시나리오 3의 신호 표: 신호마다 표시 상태', () => {
     expect(exit.work).toBe(ended.work)
     expect(exit.effects).toEqual([])
     expect(exit.rejected).toBeUndefined()
+  })
+
+  it('SessionEnd의 reason이 clear나 resume이면 CLI가 계속 돌므로 세션 종료가 아니다 (D110)', () => {
+    for (const reason of ['clear', 'resume']) {
+      const work = running('idle')
+      const r = apply(work, { type: 'SessionEnd', taskId: 't-01', at: at(), reason })
+      expect(r.work).toBe(work)
+      expect(r.effects).toEqual([])
+      expect(r.rejected).toBeUndefined()
+      // 새 세션의 신호를 그대로 받는다
+      expect(status(stop(r.work, valid()).work)).toBe('awaiting_approval')
+    }
+  })
+
+  it('그 밖의 reason이나 reason이 없는 SessionEnd는 세션 종료다 (D110)', () => {
+    for (const reason of ['logout', 'prompt_input_exit', 'other', 'new_reason', undefined]) {
+      const r = apply(running('working'), {
+        type: 'SessionEnd',
+        taskId: 't-01',
+        at: at(),
+        ...(reason === undefined ? {} : { reason }),
+      })
+      expect(status(r.work)).toBe('session_ended')
+      expect(currentTask(r.work)?.session?.alive).toBe(false)
+    }
   })
 
   it('끝난 세션의 늦은 신호는 조용히 무시한다', () => {

@@ -70,10 +70,19 @@ export interface Stopped extends TaskEvent {
   check: CheckSummary
 }
 
-/** SessionEnd 훅이나 PTY 종료 */
-export interface SessionEnded extends TaskEvent {
-  type: 'SessionEnd' | 'pty.exit'
+/** SessionEnd 훅 */
+export interface SessionEndHook extends TaskEvent {
+  type: 'SessionEnd'
+  /** 본문의 reason: clear | resume | logout | prompt_input_exit | other (Claude Code 문서 hooks) */
+  reason?: string
 }
+
+/** PTY 종료 */
+export interface PtyExited extends TaskEvent {
+  type: 'pty.exit'
+}
+
+export type SessionEnded = SessionEndHook | PtyExited
 
 /** 감시(I15)가 파일 변경을 보고 다시 한 형식 검사. 패널 표시만 바꾼다 */
 export interface CheckUpdated extends TaskEvent {
@@ -148,6 +157,9 @@ const LIVE: readonly TaskStatus[] = [
 
 const ASK_TOOL = 'AskUserQuestion'
 const PERMISSION_PROMPT = 'permission_prompt'
+
+/** /clear와 /resume도 SessionEnd를 보내지만 CLI는 새 세션으로 계속 돈다. 세션 종료로 보지 않는다 (D110) */
+const SESSION_CONTINUES: readonly string[] = ['clear', 'resume']
 const BYPASS_MODE = 'bypassPermissions'
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -374,8 +386,14 @@ function stop(work: WorkState, task: TaskRecord, e: Stopped, config: AppConfig):
   }
 }
 
-/** SessionEnd나 PTY 종료 (시나리오 3). 승인 대기와 막힘은 그대로 두고, 그 밖에는 세션 종료다 (3.3) */
+/**
+ * SessionEnd나 PTY 종료 (시나리오 3). 승인 대기와 막힘은 그대로 두고, 그 밖에는 세션 종료다 (3.3).
+ * SessionEnd의 reason이 clear나 resume이면 CLI가 계속 돌므로 세션 종료로 보지 않는다 (D110).
+ */
 function sessionEnded(work: WorkState, task: TaskRecord, e: SessionEnded): Transition {
+  if (e.type === 'SessionEnd' && e.reason !== undefined && SESSION_CONTINUES.includes(e.reason)) {
+    return unchanged(work)
+  }
   if (!task.session?.alive) return unchanged(work)
   const session = { ...task.session, alive: false, ended_at: e.at }
   if (task.status === 'awaiting_approval' || task.status === 'blocked') {

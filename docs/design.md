@@ -147,6 +147,7 @@ relay-v2는 Claude Code CLI를 **앱 안의 터미널(node-pty + xterm.js)에 �
 | D107 | 형식 오류 되돌림의 연속 횟수는 사람이 새 요청으로 시작한 턴의 Stop(`stop_hook_active: false`)이나 검사 통과 때 0으로 돌아간다 | 되돌림에 이어진 Stop은 `stop_hook_active: true`로 와서(스파이크 S2) 앱이 추측 없이 "연속"을 구분함. 사람이 고쳐 달라고 한 뒤 생긴 새 오류는 다시 되돌릴 기회를 줌 | ✅ |
 | D108 | task를 시작할 때 Work 디렉터리에는 이번 task의 relay 스킬만 둔다. 다른 relay 스킬 폴더는 지운다 | D33에 더해 다른 단계 스킬을 부를 길이 없어짐. 사람이 다른 `/relay-…`를 잘못 입력하는 일도 막음 | ✅ |
 | D109 | 노드의 화면 이름은 intake "의도 정리", evidence "재현과 관찰", rca "원인 분석", fix "수정", verify "최종 검증"이다. 탭과 사이드바에는 "03 원인 분석"처럼 task 순번과 함께 보인다 | 사람이 읽는 글은 한국어로 씀(D102). 설계 예시와 맞음 | ✅ |
+| D110 | SessionEnd 훅은 본문의 `reason`이 `clear`, `resume`이 아닐 때만 세션 종료로 본다. PTY 종료는 늘 세션 종료다 | `/clear`와 `/resume`도 SessionEnd를 보내지만 CLI는 새 세션으로 계속 돈다(Claude Code 문서 hooks). 세션 종료로 보면 그 뒤의 신호를 무시해 task가 승인 대기가 될 수 없음 | ✅ |
 
 ---
 
@@ -322,7 +323,7 @@ S 크기는 `intake → fix → verify`로 간다. evidence와 rca의 일 중 �
    | Stop + 유효한 handoff 있음(`awaiting_approval`) | 승인 대기 (시나리오 4) |
    | Stop + 유효한 handoff 있음(`blocked`) | 막힘 (4.4) |
    | Notification(`permission_prompt`) | 입력 필요 (이 모드에서는 드묾) |
-   | SessionEnd / PTY 종료 | 세션 종료 |
+   | SessionEnd(`reason`이 `clear`, `resume`이 아님, D110) / PTY 종료 | 세션 종료 |
 
 3. **handoff 감시:** handoff가 생기거나 바뀌면 바로 검증해서 패널에 표시한다. intake에서는 intent 초안도 같은 방식으로 검증한다(D38). Stop 시점에 형식 오류가 있고 이번 턴에 handoff가 바뀌었으면, Stop 훅 응답으로 오류를 에이전트에게 되돌린다(연속 2회까지, 설정 가능, D21). 연속 횟수는 사람이 새 요청으로 시작한 턴의 Stop(`stop_hook_active: false`)이나 검사 통과 때 0으로 돌아간다(D107).
 4. **중단**

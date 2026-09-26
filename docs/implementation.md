@@ -77,6 +77,7 @@
 | 최신 버전 | electron 44.4.5, node-pty 1.1.0, @xterm/xterm 6.0.0, electron-builder 26.15.3, electron-vite 5.0.0, vitest 5.0.2 | npm 레지스트리 (2026-09-26) |
 | Claude Code 동작 | 훅, 스킬, deny 규칙, 첫 실행 창은 `docs/spikes.md`의 S1~S5 결과를 따른다(2.1.283). 강제 종료 뒤 재개(S6)는 M3 전에 확인한다(I31) | `docs/spikes.md` |
 | HTTP 훅 머리글 | HTTP 훅에 `headers`를 줄 수 있다. 값에 `$VAR` 형태로 환경 변수를 넣을 수 있고, `allowedEnvVars`에 적은 변수만 풀린다. 응답 본문은 명령 훅과 같은 JSON 출력 형식이다. 기본 제한 시간은 600초(UserPromptSubmit은 30초)다 | Claude Code 문서 hooks (2026-09-26) |
+| SessionEnd 훅 | 본문의 `reason`은 `clear`(`/clear`), `resume`, `logout`, `prompt_input_exit`, `other`다. `/clear`와 `/resume` 뒤에는 SessionStart(source `clear`, `resume`)로 새 세션이 시작된다 | Claude Code 문서 hooks (2026-09-26) |
 
 - N-API 사전 빌드가 Electron 44에서 다시 빌드 없이 로드되고, 설치 파일(asar)에서 `.node`와 `conpty\conpty.dll`, `OpenConsole.exe`가 풀려 나와 동작한다. M0의 [스모크]로 러너에서 확인했다(2026-09-26, `docs/checks.md`).
 - Windows의 Node(libuv)는 stdin을 raw 모드로 읽고 있을 때만 콘솔 크기 변경을 알아챈다(libuv `docs/src/signal.rst`). 가짜 `claude`도 stdin을 raw 모드로 읽어야 크기 변경 시험이 맞다(app-ci #1~#5).
@@ -372,3 +373,4 @@ app/src/
 | G7 | 트리 종료한 세션의 `--resume`을 확인하지 않았다 | I31, 스파이크 S6 |
 | G8 | 배포할 relay 스킬의 범위가 없었다 | D108 |
 | G9 | 노드의 화면 이름이 없었다 | D109 |
+| G10 | SessionEnd가 `/clear`, `/resume`에도 와서, 세션 종료로 보면 CLI가 계속 도는데 신호를 무시하게 된다(M1 구현 중에 찾음) | D110 |
