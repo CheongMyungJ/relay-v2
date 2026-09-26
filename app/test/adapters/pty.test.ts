@@ -70,6 +70,8 @@ describe('PTY 세션', () => {
   it.runIf(isWin)(
     '트리 종료 뒤 자식, 손자, OpenConsole.exe가 남지 않는다 (I32)',
     async () => {
+      // 다른 시험이 남긴 OpenConsole.exe와 구분하려고 시작 전 목록을 둔다.
+      const existing = new Set((await listProcesses()).map((p) => p.ProcessId))
       const s = startPty({
         bin: process.execPath,
         args: [TREE],
@@ -93,7 +95,10 @@ describe('PTY 세션', () => {
         }
       }
       const conhosts = before.filter(
-        (p) => p.ParentProcessId === process.pid && /^(OpenConsole|conhost)\.exe$/i.test(p.Name),
+        (p) =>
+          p.ParentProcessId === process.pid &&
+          !existing.has(p.ProcessId) &&
+          /^(OpenConsole|conhost)\.exe$/i.test(p.Name),
       )
       const watched = [...before.filter((p) => tree.has(p.ProcessId)), ...conhosts]
       console.log('감시할 프로세스', watched.map((p) => `${p.Name}(${p.ProcessId})`).join(', '))
