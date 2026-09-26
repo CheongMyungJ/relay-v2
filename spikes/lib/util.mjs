@@ -123,10 +123,10 @@ export class Result {
     this.startedAt = new Date().toISOString();
   }
   check(name, ok, detail = '') {
-    this.checks.push({ name, status: ok ? 'pass' : 'fail', detail: String(detail).slice(0, 2000) });
+    this.checks.push({ name, status: ok ? 'pass' : 'fail', detail: String(detail).slice(-4000) });
   }
   observe(name, value) {
-    this.checks.push({ name, status: 'observe', detail: typeof value === 'string' ? value.slice(0, 2000) : JSON.stringify(value).slice(0, 2000) });
+    this.checks.push({ name, status: 'observe', detail: typeof value === 'string' ? value.slice(-4000) : JSON.stringify(value).slice(-4000) });
   }
   error(e) {
     this.checks.push({ name: 'harness_error', status: 'error', detail: String(e?.stack || e).slice(0, 4000) });

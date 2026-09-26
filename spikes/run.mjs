@@ -30,7 +30,11 @@ for (const id of ids) {
   const mod = await import(ALL[id]);
   const res = await mod.default();
   results.push(res);
-  for (const c of res.checks) console.log(`[${c.status}] ${c.name}${c.detail && c.status !== 'pass' ? `\n    ${c.detail.split('\n').slice(0, 6).join('\n    ')}` : ''}`);
+  // 화면은 위쪽이 환영 그림이라 끝부분(빈 줄 제외 25줄)을 보여 준다.
+  for (const c of res.checks) {
+    const lines = (c.detail || '').split('\n').filter((l) => l.trim());
+    console.log(`[${c.status}] ${c.name}${c.detail && c.status !== 'pass' ? `\n    ${lines.slice(-25).join('\n    ')}` : ''}`);
+  }
 }
 
 const icon = { pass: '✅', fail: '❌', observe: '👀', error: '💥' };

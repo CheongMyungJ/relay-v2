@@ -1,6 +1,7 @@
 // Claude Code를 PTY(ConPTY)로 띄우고, 출력을 xterm headless로 재구성해 화면 글자를 읽는다.
 // 첫 실행 창(권한 확인 끈 모드 경고, 폴더 신뢰, API 키 승인 등)은 자동으로 수락하고 화면을 기록한다(S5).
 import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import pty from 'node-pty';
 import xtermHeadless from '@xterm/headless';
 
@@ -12,14 +13,22 @@ export function tail(text, n = 15) {
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // 수락할 창의 판별 규칙. 문구는 Claude Code 버전에 따라 바뀔 수 있으므로 넓게 잡고, 본 화면은 모두 기록한다.
-const DIALOG_RULES = [
+// 첫 실행 창 판별. 문구는 Claude Code 버전에 따라 바뀔 수 있으므로 이름 붙이기에만 쓰고,
+// 처리는 화면 모양(선택 목록, "Enter를 누르라"는 안내)으로 한다. 본 화면은 모두 기록한다(S5).
+const DIALOG_NAMES = [
   { name: 'bypass_permissions_warning', match: /bypass permissions/i },
-  { name: 'folder_trust', match: /trust (the files in )?this folder|do you trust/i },
-  { name: 'api_key_approval', match: /use this api key|custom api key/i },
-  { name: 'theme_or_onboarding', match: /choose the text style|text style|select a theme/i },
-  { name: 'press_enter', match: /press enter to continue/i },
+  { name: 'folder_trust', match: /trust (the files in )?this folder|do you trust|trust this/i },
+  { name: 'api_key_approval', match: /api key/i },
+  { name: 'theme_or_onboarding', match: /text style|theme/i },
+  { name: 'security_notes', match: /security notes/i },
+  { name: 'terminal_setup', match: /terminal setup|shift\s*\+\s*enter/i },
+  { name: 'login', match: /select login method|log in|login/i },
 ];
-const ACCEPT_OPTION = /^\s*[❯>]?\s*(\d)\.\s*(yes|i accept|accept|proceed|trust)/i;
+// 선택 목록의 현재 항목 표시(❯ 1. …)
+const SELECT_CURSOR = /❯\s*\d+\./;
+// 수락 항목(1. Yes, 2. Yes, I accept, 1. Yes, proceed …)
+const ACCEPT_OPTION = /(?:^|[\s│❯>])(\d)\.\s*(yes|i accept|accept|proceed|trust)/i;
+const PRESS_ENTER = /press enter|enter to (continue|confirm)/i;
 
 export function resolveClaude() {
   if (process.env.CLAUDE_BIN) return process.env.CLAUDE_BIN;
@@ -119,27 +128,29 @@ export class Session {
     return this.exit === null;
   }
 
-  // 보이는 창이 첫 실행 창이면 수락한다. 수락했으면 true.
+  // 보이는 창이 첫 실행 창(선택 목록이나 Enter 안내)이면 수락한다. 수락했으면 true.
   async handleDialogs() {
     const scr = this.screen();
-    for (const rule of DIALOG_RULES) {
-      if (!rule.match.test(scr)) continue;
-      const last = this.dialogs[this.dialogs.length - 1];
-      if (last && last.name === rule.name && Date.now() - last.at < 3000) return false;
-      this.dialogs.push({ name: rule.name, screen: scr, at: Date.now() });
-      console.log(`[${this.name}] 첫 실행 창 감지: ${rule.name}\n${tail(scr)}`);
-      const opt = scr.split('\n').map((l) => l.match(ACCEPT_OPTION)).find(Boolean);
-      if (opt) {
-        this.p.write(opt[1]);
-        await sleep(800);
-        if (this.screen() === scr) this.p.write('\r');
-      } else {
-        this.p.write('\r');
-      }
-      await sleep(1500);
-      return true;
+    const isSelect = SELECT_CURSOR.test(scr);
+    const isEnter = PRESS_ENTER.test(scr);
+    if (!isSelect && !isEnter) return false;
+    if (this.lastDialogScreen === scr && Date.now() - this.lastDialogAt < 3000) return false;
+    const name = (DIALOG_NAMES.find((d) => d.match.test(scr)) || { name: 'unknown' }).name;
+    this.dialogs.push({ name, screen: scr, at: Date.now() });
+    const opt = isSelect ? scr.split('\n').map((l) => l.match(ACCEPT_OPTION)).find(Boolean) : null;
+    console.log(`[${this.name}] 첫 실행 창 감지: ${name} → ${opt ? `${opt[1]}번(${opt[2]}) 선택` : 'Enter'}\n${tail(scr, 30)}`);
+    if (opt) {
+      this.p.write(opt[1]);
+      await sleep(800);
+      if (this.screen() === scr) this.p.write('\r');
+    } else {
+      // 기본 항목을 고른다. 권한 확인 끈 모드 경고는 기본이 "종료"라 위의 수락 항목으로 처리된다.
+      this.p.write('\r');
     }
-    return false;
+    this.lastDialogScreen = scr;
+    this.lastDialogAt = Date.now();
+    await sleep(1500);
+    return true;
   }
 
   // 조건이 참이 될 때까지 기다린다. 기다리는 동안 첫 실행 창을 처리한다.
@@ -174,6 +185,14 @@ export class Session {
   }
 
   kill() {
+    if (!this.alive()) return;
+    // Windows에서 node-pty의 kill()은 이미 끝난 콘솔에 붙으려다 보조 프로세스가 죽는 일이 있어 트리 종료를 쓴다.
+    if (process.platform === 'win32') {
+      try {
+        execFileSync('taskkill', ['/PID', String(this.pid), '/T', '/F'], { stdio: 'ignore' });
+        return;
+      } catch {}
+    }
     try {
       this.p.kill();
     } catch {}
