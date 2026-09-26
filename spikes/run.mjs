@@ -22,7 +22,7 @@ try {
 } catch (e) {
   version = `알 수 없음 (${e.message})`;
 }
-const env = { date: new Date().toISOString(), claudeVersion: version, os: `${process.platform} ${process.env.ImageOS || ''} ${process.env.ImageVersion || ''}`.trim(), model: MODEL };
+const env = { date: new Date().toISOString(), claudeVersion: version, os: `${process.platform} ${process.env.ImageOS || ''} ${process.env.ImageVersion || ''}`.trim(), model: MODEL, effort: process.env.CLAUDE_CODE_EFFORT_LEVEL || '(기본)' };
 
 const results = [];
 for (const id of ids) {
@@ -45,6 +45,7 @@ const lines = [
   `- Claude Code 버전: ${env.claudeVersion}`,
   `- OS: ${env.os}`,
   `- 모델: ${env.model}`,
+  `- effort: ${env.effort}`,
   '',
 ];
 for (const r of results) {

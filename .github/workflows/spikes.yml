@@ -13,6 +13,10 @@ on:
         description: "Claude Code 모델 (별칭 또는 모델 이름)"
         required: false
         default: "sonnet"
+      effort:
+        description: "effort 수준 (low / medium / high / xhigh). 비용을 아끼려고 기본은 low"
+        required: false
+        default: "low"
 
 permissions:
   contents: read
@@ -29,6 +33,7 @@ jobs:
       # 둘 다 있으면 구독 토큰만 쓴다. API 키가 함께 있으면 Claude Code가 키 승인 창을 띄울 수 있다.
       ANTHROPIC_API_KEY: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN == '' && secrets.ANTHROPIC_API_KEY || '' }}
       SPIKE_MODEL: ${{ inputs.model }}
+      CLAUDE_CODE_EFFORT_LEVEL: ${{ inputs.effort }}
     steps:
       - uses: actions/checkout@v4
 
