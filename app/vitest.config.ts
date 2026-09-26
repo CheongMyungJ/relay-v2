@@ -5,8 +5,6 @@ import { defineConfig } from 'vitest/config'
 // adapters: 실제 node-pty, 파일, 프로세스를 쓰는 [어댑터]. Windows 러너에서 돈다.
 export default defineConfig({
   test: {
-    // M1 전까지는 core 시험이 없다.
-    passWithNoTests: true,
     projects: [
       {
         test: {
