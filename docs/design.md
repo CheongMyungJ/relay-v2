@@ -68,7 +68,7 @@ relay-v2는 Claude Code CLI를 **앱 안의 터미널(node-pty + xterm.js)에 �
 | D28 | **사람이 정할 결정은 초안으로 두지 않고 task 안에서 바로 묻는다.** handoff의 결정에는 누가 정했는지(`by`)만 적고, 자동 승인 조건(4.3)은 늘리지 않는다 | 자동 승인이 켜진 단계에서는 사람이 승인 화면을 보지 않으므로, 초안으로 둔 사람 몫의 결정이 사람 모르게 넘어갈 수 있음. 바로 물으면 조건을 늘리지 않고 막을 수 있음 | ✅ |
 | D29 | handoff 형식 검사는 앱만 한다. 에이전트용 검증 명령은 두지 않고, 에이전트는 템플릿과 대조만 한다. 오류는 Stop 훅으로 되돌린다(D21) | D21이 같은 일을 함. 검증 명령을 따로 두면 실행 파일 경로와 인용 처리 같은 구현 부담이 생김 | ✅ |
 | D30 | `awaiting_approval`인 handoff에서 노드별 필수 산출물(3.1 표)이 task 디렉터리에 없으면 형식 오류로 처리한다 | 에이전트가 산출물을 빠뜨려도 통과하면, 자동 승인 단계에서 다음 단계가 입력 없이 시작됨. 고정된 표 하나로 확인할 수 있음 | ✅ |
-| D31 | 공통 종료 절차는 원본 한 파일로 두고, 앱이 스킬을 배포할 때 각 `SKILL.md` 끝에 붙인다. 합친 `SKILL.md`는 5,000토큰 안에 두는 것을 목표로 한다. 강제는 아니며, 스킬을 만들다 넘게 되면 사람에게 알린다 | 에이전트가 처음부터 전체 절차를 알고 작업함. Claude Code는 자동 압축 뒤 스킬 본문을 앞 5,000토큰까지만 다시 붙이므로, 넘으면 압축 뒤 끝에 있는 종료 절차가 빠질 수 있음(스파이크 S3, S3b). 다만 스킬마다 필요한 분량이 달라 사람이 판단함 | ✅ |
+| D31 | 공통 규칙(질문 규칙과 종료 절차)은 원본 한 파일(`skills/_common.md`)로 두고, 앱이 스킬을 배포할 때 각 `SKILL.md` 끝에 붙인다. 합친 `SKILL.md`는 5,000토큰 안에 두는 것을 목표로 한다. 강제는 아니며, 스킬을 만들다 넘게 되면 사람에게 알린다 | 에이전트가 처음부터 전체 절차를 알고 작업함. Claude Code는 자동 압축 뒤 스킬 본문을 앞 5,000토큰(Claude Code 어림, D95)까지만 다시 붙이므로, 넘으면 압축 뒤 끝에 있는 종료 절차가 빠질 수 있음(스파이크 S3, S3b). 다만 스킬마다 필요한 분량이 달라 사람이 판단함 | ✅ |
 | D32 | **스킬은 Work 디렉터리의 `.claude/skills/relay-<이름>/`에 복사한다.** Claude Code는 `--add-dir`로 추가한 디렉터리의 스킬도 읽으므로 worktree에는 두지 않는다 | worktree 루트에 `.claude/skills`가 생기면 Claude Code가 그 폴더만 읽어서, 사용자가 메인 체크아웃에만 둔 프로젝트 스킬이 보이지 않음. worktree에 파일을 두지 않으므로 git 추적에서 빼는 처리도 필요 없음 | ✅ |
 | D33 | relay 스킬은 모두 `disable-model-invocation: true`로 둔다. 스킬은 첫 프롬프트로만 시작한다 | 에이전트가 다른 단계의 스킬을 스스로 불러오면 단계 경계가 무너짐 | |
 | D34 | Work 요청 원문은 `request.md`로 저장한다. intake에는 본문을, 이후 task에는 경로만 넣는다 | intent는 요청을 줄인 것이라 붙여 넣은 로그가 빠질 수 있음. 경로만 주면 필요한 단계가 읽고, 컨텍스트는 늘지 않음 | ✅ |
@@ -99,7 +99,7 @@ relay-v2는 Claude Code CLI를 **앱 안의 터미널(node-pty + xterm.js)에 �
 | D59 | 완료조건 판정은 통과 / 실패 / 판정 불가 셋이다. 판정 불가는 이유를 적고, Work 완료 화면에서 실패처럼 경고한다 | 재현하지 못한 버그(D45)나 운영 환경에서만 확인할 조건을 통과로도 실패로도 적을 수 없음 | ✅ |
 | D60 | verify는 기준 커밋과 비교해 바뀐 테스트 파일을 모두 판정한다. 약화 의심이 있으면 사람이 정할 결정으로 그 자리에서 묻는다 | fix가 표시하지 않은 변경도 잡으려고 git diff를 기준으로 봄. 약화인지는 테스트의 의도를 아는 사람이 정함 | ✅ |
 | D61 | 실패나 판정 불가가 있으면 verify는 사람이 정할 결정으로 묻는다: 되돌아가기(`recommended_next`) / 이대로 완료 화면으로(`null`) | 새 버튼 없이 기존 장치로 두 경우를 처리함. 되돌아갈지는 산출물 폐기가 따르는 판단이라 사람 몫(D23) | ✅ |
-| D62 | `verification.md`는 `완료조건 판정`, `테스트 파일 변경`, `남은 위험` 세 절로 쓴다. `pr.md`는 첫 줄이 `# 제목`이고 본문 절은 `요약`, `원인`, `변경`, `테스트`다. 앱은 첫 줄을 PR 제목으로 쓴다 | 제목 위치가 정해져야 앱이 결정론적으로 PR을 만듦(D15) | ✅ |
+| D62 | `verification.md`는 `완료조건 판정`, `테스트 파일 변경`, `남은 위험` 세 절로 쓴다. `pr.md`는 첫 줄이 `# 제목`이고 본문 절은 `요약`, `원인`, `변경`, `테스트`다(언어와 레포 PR 템플릿은 D101). 앱은 첫 줄을 PR 제목으로 쓴다 | 제목 위치가 정해져야 앱이 결정론적으로 PR을 만듦(D15) | ✅ |
 | D63 | work-start는 요청에 재현 방법이 있고, 수정 위치가 한 곳으로 좁혀지고, 비목표·제약에 걸릴 여지가 없을 때만 S를 제안한다(기본값) | work-start는 원인을 추적하지 않으므로 기준은 요청에 이미 있는 정보여야 함. 변경량은 고치기 전에는 알 수 없음 | ✅ |
 | D64 | S에서는 fix가 먼저 재현을 확인하고 원인을 짧게 적은 뒤 고친다. `fix.md`의 `rca와 달라진 점` 대신 `원인과 재현` 절을 쓴다 | S에서도 재현과 원인은 필요함. 한 절에 모아 두면 verify와 사람이 볼 곳이 생김 | ✅ |
 | D65 | S에서 verify는 `fix.md`의 `원인과 재현` 절의 재현 절차로 판정한다. 재현 절차도 재현 테스트도 없으면 첫 완료조건은 판정 불가다 | M과 같은 판정 방식을 쓰고 재현 절차를 읽는 곳만 바꿈 | ✅ |
@@ -132,10 +132,13 @@ relay-v2는 Claude Code CLI를 **앱 안의 터미널(node-pty + xterm.js)에 �
 | D92 | 스파이크 계획과 결과는 `docs/spikes.md`에, 스파이크 코드는 `spikes/`에 둔다. Windows 네이티브에서 확인하는 것을 필수로 하고, 결과에는 날짜, Claude Code 버전, OS를 적는다 | 훅과 스킬 동작은 Claude Code 버전에 따라 바뀔 수 있어 다시 확인할 수 있어야 함. 주 플랫폼 문제는 Windows에서만 드러남(D12) | ✅ |
 | D93 | 스파이크는 GitHub Actions Windows 러너에서 수동으로 돌릴 수 있게 한다. 러너 결과는 예비 확인으로 기록하고, 한글 IME는 실기에서 사람이 확인한다 | 실기 확인 전에 설계 전제를 싸게 걸러 냄. 러너는 Windows Server라 사용자 PC와 다르고, IME 조합 입력은 자동화할 수 없음 | ✅ |
 | D94 | 앱은 첫 훅(UserPromptSubmit)의 `permission_mode`를 확인한다. `bypassPermissions`가 아니면 탭 머리 띠에 경고를 띄우고 task는 계속한다 | 조직 설정으로 권한 확인 끈 모드가 막히면 Claude Code는 실패하지 않고 auto 모드로 실행된다(스파이크 S4). 더 안전한 쪽이라 멈출 이유는 없지만, 막히는 동작이 생길 수 있어 사람이 알아야 함 | ✅ |
-| D95 | 스킬 크기는 `skills/check.mjs`로 잰다. `ANTHROPIC_API_KEY`가 있으면 토큰 계산 API로 재고, 없으면 오프라인에서 넉넉하게 추정한다(한글 음절은 1토큰, 그 밖의 글자는 3자에 1토큰) | Claude Code 문서에 토큰을 세는 방법이 없음. 토큰 계산 API는 모델을 호출하지 않고 가장 정확함. 키가 없어도 누구나 다시 잴 수 있어야 함 | ✅ |
-| D96 | handoff 템플릿의 `blocked_reason` 줄은 주석으로 둔다. 에이전트는 `status: blocked`일 때만 주석을 풀어 쓴다 | 빈 줄을 그대로 두면 YAML에서 null이 되어 `awaiting_approval`일 때도 스키마 오류가 남. 스키마를 바꾸지 않고 기본 경로의 오류를 막음 | ✅ |
+| D95 | D31의 5,000토큰은 Claude Code의 어림(글자 수 ÷ 4, 반올림)으로 판정한다. 모델 토큰 어림(한글 음절은 1토큰, 그 밖의 글자는 4자에 1토큰, **기본값**)은 참고로만 보고한다. `skills/check.mjs`가 둘 다 잰다. 확인한 버전은 Claude Code 2.1.283이다 | D31이 막으려는 것은 압축 뒤 잘림이고, 자르는 기준이 이 어림임(실행 파일에서 확인, 공식 문서에는 세는 방법이 없음). Claude Code를 업데이트하면 다시 확인함 | ✅ |
+| D96 | handoff 스키마는 `blocked_reason`의 null을 허용한다. `status: blocked`일 때는 비어 있지 않은 문자열이어야 한다. 템플릿의 `blocked_reason:` 줄은 빈 값으로 둔다 | 템플릿을 그대로 채우면 `awaiting_approval`일 때 이 줄이 null로 남아 스키마 오류가 나고, 형식 오류 되돌림(D21) 한 번을 헛되이 씀. 스키마를 고치면 템플릿을 자연스럽게 채워도 통과함 | ✅ |
 | D97 | `context.md`의 task 정보에 Work의 기준 브랜치와 기준 커밋을 넣는다. 기준 커밋은 Work를 만들 때 분기한 커밋이며 앱이 `work.json`에 기록한다 | fix는 기존 실패를 구분하고(D57) verify는 바뀐 테스트 파일을 판정하는데(D60), 둘 다 기준 커밋이 필요함. 앱이 아는 값이라 에이전트가 찾게 하지 않음(D88) | ✅ |
 | D98 | 스킬 본문(에이전트에게 주는 지시)은 영어로 쓴다 | 같은 지시를 더 적은 토큰으로 담아 5,000토큰 목표(D31)에 여유가 생김 | ✅ |
+| D99 | 질문 규칙(5.6.1)과 공통 종료 절차(5.6.2)는 `skills/_common.md` 한 파일에 싣는다. 앱은 배포할 때 이 파일을 각 `SKILL.md` 끝에 붙인다 | 두 규칙 모두 다섯 스킬에 똑같음. 원본이 한 곳이면 고칠 곳도 한 곳이고, 파일 이름이 담긴 내용과 맞음 | ✅ |
+| D100 | 형식 오류가 되돌아오면 에이전트는 오류가 가리키는 파일을 고치고, 빠진 산출물이나 절을 채운다. 판단(결정, 원인, 판정)은 바꾸지 않는다. 그다음 종료 절차의 handoff 작성과 안내를 다시 한다 | 추가 검사(5.2.1)에는 필수 산출물, intent 초안의 절, `pr.md` 첫 줄 같은 산출물 쪽 오류도 있어 handoff만 다시 써서는 고칠 수 없음 | ✅ |
+| D101 | `pr.md`는 레포 관례(최근 커밋과 PR)의 언어로 쓴다. 레포에 PR 템플릿이 있으면 그 구성을 따르고, 없으면 D62의 네 절을 그 언어로 쓴다. 첫 줄 `# 제목` 규칙은 그대로다 | PR은 레포 밖 사람도 읽음. 커밋 메시지가 레포 관례를 따르는 것(D54)과 같은 기준 | ✅ |
 
 ---
 
@@ -261,7 +264,7 @@ S 크기는 `intake → fix → verify`로 간다. evidence와 rca의 일 중 �
 **언제:** Work 생성 직후, 또는 이전 task 승인 후
 
 1. **앱:** task 디렉터리 `tasks/<순번>-<노드>/`를 만들고, 현재 HEAD를 이 task의 시작 커밋으로 `work.json`에 기록한다(되감기 기준, 6.2).
-2. **앱:** 스킬을 Work 디렉터리의 `.claude/skills/relay-<이름>/`에 복사하고, 공통 종료 절차를 각 `SKILL.md` 끝에 붙인다(5.6.3). worktree는 건드리지 않는다.
+2. **앱:** 스킬을 Work 디렉터리의 `.claude/skills/relay-<이름>/`에 복사하고, 공통 규칙(`_common.md`)을 각 `SKILL.md` 끝에 붙인다(5.6.3). worktree는 건드리지 않는다.
 3. **앱:** task 전용 설정 파일을 만든다.
    - HTTP 훅: UserPromptSubmit, Stop, Notification, SessionEnd, PreToolUse·PostToolUse(`AskUserQuestion`만)
    - deny 규칙: `git push`, `gh pr` 계열, 앱 소유 파일(`work.json`, `request.md`, `intent.md`, `decisions.md`, 이전 task 디렉터리, Work 디렉터리의 `.claude/`) 편집
@@ -520,7 +523,7 @@ S 크기는 `intake → fix → verify`로 간다. evidence와 rca의 일 중 �
 <RELAY_HOME>/                          # 기본 %USERPROFILE%\.relay, macOS/Linux ~/.relay
   config.json                          # 앱 설정 (5.1.1)
   skills/<name>/SKILL.md
-  skills/_close.md                     # 공통 종료 절차 원본. 배포할 때 각 SKILL.md 끝에 붙인다 (5.6.2)
+  skills/_common.md                    # 공통 규칙(질문 규칙, 종료 절차) 원본. 배포할 때 각 SKILL.md 끝에 붙인다 (5.6.1, 5.6.2)
   projects/<project-id>/               # <레포 폴더 이름>-<레포 절대 경로 해시 6자>
     project.json                       # 레포 경로, 기본 브랜치, 등록 점검 결과(origin·gh 여부)
     worktrees/<work-id>/
@@ -637,7 +640,7 @@ knowledge_candidates: []
 - **스키마 검사:** 머리글을 YAML로 파싱한 뒤 JSON Schema로 검사한다(D84).
   - handoff: `docs/contracts/handoff.v1.schema.json`
   - intent 초안: `docs/contracts/intent-draft.v1.schema.json`
-  - 스키마가 정하는 것: 필수 필드, 타입, 열거값(`status`, `by`, `recommended_next.node`, `type`, `size`), `status: blocked`일 때 `blocked_reason` 필수
+  - 스키마가 정하는 것: 필수 필드, 타입, 열거값(`status`, `by`, `recommended_next.node`, `type`, `size`), `status: blocked`일 때 `blocked_reason` 필수(그 밖에는 null 허용, D96)
 - **추가 검사:** 스키마로 표현할 수 없어 앱 코드가 한다.
   - `recommended_next.node`가 선택 가능한 다음 단계(3.2) 안에 있다
   - 필수 산출물이 task 디렉터리에 있다(`awaiting_approval`일 때, D30)
@@ -734,7 +737,7 @@ delivery.succeeded | delivery.failed
 
 ### 5.6 스킬
 
-스킬은 task 하나에서 에이전트가 따르는 절차다. 이 절에는 모든 스킬에 공통인 규칙(질문 규칙, 공통 종료 절차, 배포와 입력)을 적는다. 스킬별 명세(입력, 결정 지점, 완료조건, 산출물 템플릿)는 5.6.4~5.6.8에 적는다.
+스킬은 task 하나에서 에이전트가 따르는 절차다. 이 절에는 모든 스킬에 공통인 규칙(질문 규칙, 공통 종료 절차, 배포와 입력)을 적는다. 질문 규칙과 공통 종료 절차의 원본은 `skills/_common.md` 한 파일이다(D99). 스킬별 명세(입력, 결정 지점, 완료조건, 산출물 템플릿)는 5.6.4~5.6.8에 적는다.
 
 #### 5.6.1 질문 규칙
 
@@ -768,10 +771,10 @@ delivery.succeeded | delivery.failed
 
 #### 5.6.2 공통 종료 절차
 
-모든 스킬이 마지막에 똑같이 따르는 절차다. 원본은 `skills/_close.md` 한 파일이고, 앱이 스킬을 배포할 때 각 `SKILL.md` 끝에 붙인다(D31). **분량(D31):** 합친 `SKILL.md`는 5,000토큰 안에 두는 것을 목표로 한다.
-- Claude Code는 자동 압축 뒤 스킬 본문을 앞 5,000토큰까지만 다시 붙인다. 넘으면 압축 뒤 끝에 붙인 종료 절차가 빠질 수 있다. 짧은 스킬은 압축 뒤에도 끝부분까지 유지됐고(스파이크 S3b), 긴 스킬은 끝부분을 잊은 사례가 있었다(S3).
+모든 스킬이 마지막에 똑같이 따르는 절차다. 원본은 질문 규칙(5.6.1)과 함께 `skills/_common.md`에 두고, 앱이 스킬을 배포할 때 각 `SKILL.md` 끝에 붙인다(D31, D99). **분량(D31):** 합친 `SKILL.md`는 5,000토큰 안에 두는 것을 목표로 한다.
+- Claude Code는 자동 압축 뒤 스킬 본문을 앞 5,000토큰까지만 다시 붙인다. 토큰은 글자 수를 4로 나눈 어림이라, 앞 약 20,000자까지가 남는다(D95). 넘으면 압축 뒤 끝에 붙인 종료 절차가 빠질 수 있다. 짧은 스킬은 압축 뒤에도 끝부분까지 유지됐고(스파이크 S3b), 긴 스킬은 끝부분을 잊은 사례가 있었다(S3).
 - 강제 한도는 아니다. 스킬을 만들거나 고치다가 5,000토큰을 넘게 되면 사람에게 알리고, 줄일지 그대로 둘지 사람이 정한다.
-- **재는 방법(D95):** `skills/check.mjs`가 스킬마다 합친 크기를 잰다. `ANTHROPIC_API_KEY`가 있으면 토큰 계산 API로 재고, 없으면 오프라인에서 넉넉하게 추정한다(한글 음절은 1토큰, 그 밖의 글자는 3자에 1토큰).
+- **재는 방법(D95):** `skills/check.mjs`가 스킬마다 합친 크기를 Claude Code 어림(글자 수 ÷ 4)으로 재서 판정한다. 모델 토큰 어림(한글 음절은 1토큰, 그 밖의 글자는 4자에 1토큰, **기본값**)은 참고로 함께 보여 준다.
 
 **실행하는 때**
 
@@ -788,13 +791,13 @@ delivery.succeeded | delivery.failed
 2. **git 정리**
    - 코드를 바꾸는 단계는 변경을 모두 커밋한다. 어느 단계가 코드를 바꾸는지는 스킬별 명세에 적는다.
    - 그 밖의 단계는 에이전트가 만든 실험용 변경(디버그 출력 등)을 되돌린다. 사람이 직접 바꾼 파일은 건드리지 않는다. 남은 변경은 `risks`에 적는다.
-3. **handoff 작성:** task 디렉터리의 `handoff.md`에 5.2 형식으로 쓴다. 다 쓰면 템플릿과 대조한다(D29). `_close.md`에는 아래처럼 필드마다 허용값과 조건을 주석으로 단 템플릿과, 5.2.1의 추가 검사 목록을 싣는다(D87).
+3. **handoff 작성:** task 디렉터리의 `handoff.md`에 5.2 형식으로 쓴다. 다 쓰면 템플릿과 대조한다(D29). `_common.md`에는 아래처럼 필드마다 허용값과 조건을 주석으로 단 템플릿과, 5.2.1의 추가 검사 목록을 싣는다(D87).
 4. **안내:** `context.md`의 마무리 안내 문구를 그대로 출력하고 턴을 끝낸다. `blocked`이면 `blocked_reason`과 사람이 해 줄 일을 출력한다.
 
 ```yaml
 ---
 status:              # awaiting_approval | blocked
-# blocked_reason:    # status가 blocked일 때만 주석을 풀어 쓴다(D96). 무엇이 없어서 진행할 수 없는지
+blocked_reason:      # status가 blocked일 때만 필수. 무엇이 없어서 진행할 수 없는지
 decisions: []        # 각 항목 {what, why, by}. by는 human | ai
 assumptions: []      # 확인하지 않고 가정한 것
 rejected: []         # 시도했지만 기각한 것과 이유
@@ -808,12 +811,12 @@ knowledge_candidates: []  # 선택. 다음에도 쓸 만한 사실
 ## 다음 task가 알아야 할 것
 ```
 
-**형식 오류가 되돌아오면:** 앱이 Stop 때 형식을 검사해 오류를 되돌린다(D21). 에이전트는 형식만 고치고 3~4를 다시 한다. 내용은 바꾸지 않는다.
+**형식 오류가 되돌아오면(D100):** 앱이 Stop 때 형식을 검사해 오류를 되돌린다(D21). 에이전트는 오류가 가리키는 파일을 고친다. 빠진 산출물이나 절은 채운다. 판단(결정, 원인, 판정)은 바꾸지 않는다. 그다음 3~4를 다시 한다.
 
 #### 5.6.3 배포와 입력
 
-- **원본:** `<RELAY_HOME>/skills/<name>/SKILL.md`와 공통 종료 절차 `skills/_close.md`.
-- **배포:** task를 시작할 때 앱이 Work 디렉터리(`works/<work-id>/`)의 `.claude/skills/relay-<name>/`에 복사하고, `_close.md`를 `SKILL.md` 끝에 붙인다. relay는 `--add-dir <work 디렉터리>`로 실행하고, Claude Code는 추가한 디렉터리의 `.claude/skills/`도 읽는다. 그래서 worktree에는 두지 않는다(D32). 이 경로는 deny 규칙으로 편집을 막는다.
+- **원본:** `<RELAY_HOME>/skills/<name>/SKILL.md`와 공통 규칙 `skills/_common.md`(질문 규칙과 종료 절차, D99).
+- **배포:** task를 시작할 때 앱이 Work 디렉터리(`works/<work-id>/`)의 `.claude/skills/relay-<name>/`에 복사하고, `_common.md`를 `SKILL.md` 끝에 붙인다. relay는 `--add-dir <work 디렉터리>`로 실행하고, Claude Code는 추가한 디렉터리의 `.claude/skills/`도 읽는다. 그래서 worktree에는 두지 않는다(D32). 이 경로는 deny 규칙으로 편집을 막는다.
 - **호출:** 모든 relay 스킬은 `disable-model-invocation: true`로 둔다. 스킬은 첫 프롬프트로만 시작한다(D33).
 - **입력:** 첫 프롬프트는 `/relay-<스킬> 이 task의 컨텍스트: <context.md 경로>`다. 스킬은 `context.md`부터 읽는다. `context.md`의 구성은 시나리오 2-4의 표를 따른다. 스킬별로 더 읽는 파일은 스킬별 명세에 적는다.
 - **언어(D98):** 스킬 본문(에이전트에게 주는 지시)은 영어로 쓴다.
@@ -1048,6 +1051,7 @@ intent의 완료조건마다 판정하고 `verification.md`와 PR 초안 `pr.md`
 ```
 
 - 앱은 `pr.md`의 첫 줄(`# ` 뒤)을 PR 제목으로, 나머지를 본문으로 쓴다. 첫 줄이 `# `로 시작하지 않으면 형식 오류다.
+- **언어와 구성(D101):** 레포 관례(최근 커밋과 PR)의 언어로 쓴다. 레포에 PR 템플릿이 있으면 그 구성을 따르고, 없으면 위 네 절을 그 언어로 쓴다.
 
 ---
 
@@ -1058,7 +1062,7 @@ intent의 완료조건마다 판정하고 `verification.md`와 PR 초안 `pr.md`
 | 실행 | `claude --dangerously-skip-permissions --session-id <uuid> --add-dir <work dir> --settings <task 설정> "<짧은 첫 프롬프트>"` |
 | 재개 | 같은 옵션 + `--resume <uuid>` (이전 옵션이 복원된다고 가정하지 않음) |
 | 컨텍스트 | `tasks/<nn>/context.md` + 첫 프롬프트에 경로 |
-| 스킬 배포 | Work 디렉터리 `.claude/skills/relay-<name>/`로 복사(`--add-dir`로 읽힘). 복사할 때 공통 종료 절차를 `SKILL.md` 끝에 붙임. `disable-model-invocation: true` |
+| 스킬 배포 | Work 디렉터리 `.claude/skills/relay-<name>/`로 복사(`--add-dir`로 읽힘). 복사할 때 공통 규칙(`_common.md`)을 `SKILL.md` 끝에 붙임. `disable-model-invocation: true` |
 | 상태 신호 | 내장 HTTP 훅 → 앱 로컬 서버: UserPromptSubmit, Stop, Notification, SessionEnd, PreToolUse·PostToolUse(`AskUserQuestion`) |
 | 형식 오류 되돌림 | Stop 훅 응답 `{"decision":"block","reason":…}`, 연속 2회까지(설정 가능) |
 | 제한 | deny 규칙: `Bash(git push*)`, `Bash(gh pr*)`, 앱 소유 파일 `Edit(//…)`. 실수를 막는 장치이며 우회할 수 있다(6.1) |

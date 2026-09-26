@@ -16,7 +16,12 @@
   ],
   "properties": {
     "status": { "enum": ["awaiting_approval", "blocked"] },
-    "blocked_reason": { "type": "string", "minLength": 1 },
+    "blocked_reason": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string", "minLength": 1 }
+      ]
+    },
     "decisions": {
       "type": "array",
       "items": {
@@ -62,5 +67,8 @@
     "knowledge_candidates": { "type": "array", "items": { "type": "string" } }
   },
   "if": { "properties": { "status": { "const": "blocked" } } },
-  "then": { "required": ["blocked_reason"] }
+  "then": {
+    "required": ["blocked_reason"],
+    "properties": { "blocked_reason": { "type": "string", "minLength": 1 } }
+  }
 }
