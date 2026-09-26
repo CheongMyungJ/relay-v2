@@ -2,3 +2,5 @@ node_modules/
 out/
 dist/
 test-results/
+# npm run contracts가 docs/contracts에서 만든다 (I19)
+src/shared/generated/

@@ -5,17 +5,18 @@
   "description": "relay-v2 데스크톱 앱 (docs/implementation.md)",
   "main": "out/main/index.js",
   "scripts": {
-    "dev": "electron-vite dev",
-    "build": "electron-vite build",
-    "typecheck": "tsc -b",
+    "contracts": "node scripts/contracts.mjs",
+    "dev": "npm run contracts && electron-vite dev",
+    "build": "npm run contracts && electron-vite build",
+    "typecheck": "npm run contracts && tsc -b",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "vitest run",
+    "test": "npm run contracts && vitest run",
     "test:smoke": "playwright test",
-    "test:unit": "vitest run --project unit",
-    "test:adapters": "vitest run --project adapters",
-    "dist:win": "electron-vite build && electron-builder --win --x64 --publish never"
+    "test:unit": "npm run contracts && vitest run --project unit",
+    "test:adapters": "npm run contracts && vitest run --project adapters",
+    "dist:win": "npm run build && electron-builder --win --x64 --publish never"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
@@ -26,19 +27,22 @@
     "@vitejs/plugin-react": "5.2.0",
     "@xterm/addon-fit": "0.11.0",
     "@xterm/xterm": "6.0.0",
+    "ajv": "8.20.0",
     "electron": "44.4.5",
     "electron-builder": "26.15.3",
     "electron-vite": "5.0.0",
     "eslint": "10.11.0",
     "eslint-plugin-react-hooks": "7.1.1",
     "globals": "17.12.0",
+    "json-schema-to-typescript": "16.0.0",
     "prettier": "3.9.9",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "typescript": "6.0.3",
     "typescript-eslint": "8.70.1",
     "vite": "7.3.6",
-    "vitest": "5.0.2"
+    "vitest": "5.0.2",
+    "yaml": "2.9.1"
   },
   "dependencies": {
     "node-pty": "1.1.0"

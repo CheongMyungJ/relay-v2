@@ -2,3 +2,4 @@ out/
 dist/
 package-lock.json
 test-results/
+src/shared/generated/
