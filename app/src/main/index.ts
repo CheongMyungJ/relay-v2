@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { app, BrowserWindow } from 'electron'
+import { hasSessions, killAllSessions, registerTerminalIpc } from './terminals'
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -22,6 +23,7 @@ function createWindow(): void {
 }
 
 void app.whenReady().then(() => {
+  registerTerminalIpc()
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -30,4 +32,13 @@ void app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
+})
+
+// 끝내기 전에 살아 있는 세션의 프로세스 트리를 끝낸다 (7절: 세션 종료는 트리 단위).
+let quitting = false
+app.on('before-quit', (event) => {
+  if (quitting || !hasSessions()) return
+  event.preventDefault()
+  quitting = true
+  void killAllSessions().finally(() => app.quit())
 })

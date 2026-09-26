@@ -11,14 +11,18 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:smoke": "playwright test"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@playwright/test": "1.63.0",
     "@types/node": "24.19.0",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "5.2.0",
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/xterm": "6.0.0",
     "electron": "44.4.5",
     "electron-vite": "5.0.0",
     "eslint": "10.11.0",
@@ -31,5 +35,8 @@
     "typescript-eslint": "8.70.1",
     "vite": "7.3.6",
     "vitest": "5.0.2"
+  },
+  "dependencies": {
+    "node-pty": "1.1.0"
   }
 }

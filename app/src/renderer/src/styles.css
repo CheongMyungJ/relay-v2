@@ -44,16 +44,101 @@ body,
 
 .center {
   display: grid;
-  grid-template-rows: 32px 1fr 40px;
+  grid-template-rows: 32px 26px 1fr 40px;
   min-width: 0;
 }
 
 .tabs {
+  display: flex;
+  align-items: stretch;
   border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px 0 12px;
+  border-right: 1px solid var(--border);
+  color: var(--text-dim);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tab.active {
+  background: var(--bg);
+  color: var(--text);
+}
+
+button {
+  font: inherit;
+  color: var(--text);
+  background: #3a3d41;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.tab-close {
+  padding: 0 5px;
+  background: transparent;
+  border: none;
+  color: inherit;
+}
+
+.tab-close:hover {
+  background: #45494e;
+}
+
+.tab-add {
+  margin: 4px 6px;
+  padding: 0 8px;
+}
+
+.band {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.band-status.error {
+  color: #f48771;
+  white-space: normal;
 }
 
 .terminal {
+  position: relative;
   min-height: 0;
+}
+
+.terminal-host {
+  position: absolute;
+  inset: 4px 0 0 8px;
+}
+
+.terminal-host[hidden] {
+  display: none;
+}
+
+.empty {
+  display: grid;
+  place-items: center;
+  height: 100%;
+}
+
+.empty button {
+  padding: 8px 16px;
 }
 
 .action-bar {
