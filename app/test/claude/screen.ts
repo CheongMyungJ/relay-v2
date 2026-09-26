@@ -29,6 +29,9 @@ const ACCEPT_LINE = /^\s*[│|]?\s*(?:[❯>]\s*)?(?:\d+\.\s*)?(yes|i accept|acce
 const PRESS_ENTER = /press enter|enter to continue/i
 const KEY_UP = '\x1b[A'
 const KEY_DOWN = '\x1b[B'
+// 같은 창이 이만큼 그대로일 때만 누른다. 2.1.283(Linux)은 신뢰 창을 처음 그리고 150ms쯤 뒤에
+// 다시 그리며 선택을 기본 항목("No, exit")으로 되돌렸다. 그 사이에 누른 방향키는 사라진다.
+const SETTLE_MS = 1000
 
 /** 로그와 결과에 API 키가 남지 않게 가린다. 출처: spikes/lib/session.mjs redact */
 export function redact(text: string): string {
@@ -39,6 +42,8 @@ export function redact(text: string): string {
 export class ScreenUi extends FakeUi {
   private readonly terms = new Map<string, HeadlessTerminal>()
   private readonly handled = new Map<string, { screen: string; at: number }>()
+  /** 창이 처음 보인 때. 화면이 바뀌면 다시 잰다 */
+  private readonly shown = new Map<string, { screen: string; at: number }>()
   readonly dialogs: { key: string; name: string; action: string; screen: string }[] = []
 
   /** 앱이 새 PTY에 쓰는 크기와 같게 둔다 (main/relay의 기본 크기) */
@@ -71,15 +76,25 @@ export class ScreenUi extends FakeUi {
   /**
    * 보이는 창이 첫 실행 창(선택 목록이나 Enter 안내)이면 수락한다. 수락했으면 true.
    * 선택 목록에 수락 항목이 있으면 화살표로 그 항목까지 옮겨 Enter를 누르고, 없으면 기본 항목에서 Enter를 누른다.
-   * 출처: spikes/lib/session.mjs Session.handleDialogs
+   * 출처: spikes/lib/session.mjs Session.handleDialogs. 창이 SETTLE_MS 동안 그대로일 때만 누르고,
+   * Enter 전에 커서가 수락 항목에 있는지 다시 보는 것은 여기서 더했다.
    */
   async handleDialogs(relay: Relay, key: string): Promise<boolean> {
     const scr = this.screen(key)
     const isSelect = NUMBERED_CURSOR.test(scr) || CONFIRM_HINT.test(scr)
     const isEnter = PRESS_ENTER.test(scr)
-    if (!isSelect && !isEnter) return false
+    if (!isSelect && !isEnter) {
+      this.shown.delete(key)
+      return false
+    }
     const last = this.handled.get(key)
     if (last && last.screen === scr && Date.now() - last.at < 3000) return false
+    const shown = this.shown.get(key)
+    if (shown?.screen !== scr) {
+      this.shown.set(key, { screen: scr, at: Date.now() })
+      return false
+    }
+    if (Date.now() - shown.at < SETTLE_MS) return false
     const name = DIALOG_NAMES.find((d) => d.match.test(scr))?.name ?? 'unknown'
     const lines = scr.split('\n')
     const cursorIdx = lines.findIndex((l) => CURSOR_LINE.test(l))
@@ -90,6 +105,13 @@ export class ScreenUi extends FakeUi {
       for (let i = 0; i < Math.abs(acceptIdx - cursorIdx); i++) {
         relay.terminalWrite(key, k)
         await sleep(300)
+      }
+      // 커서가 수락 항목에 없으면 누르지 않고 다음 차례에 처음부터 다시 한다
+      const moved = this.screen(key).split('\n')
+      const at = moved.find((l) => CURSOR_LINE.test(l)) ?? ''
+      if (!ACCEPT_LINE.test(at)) {
+        this.shown.delete(key)
+        return false
       }
       action = `${lines[acceptIdx]?.trim() ?? ''}로 옮겨 Enter`
     } else if (acceptIdx >= 0) {

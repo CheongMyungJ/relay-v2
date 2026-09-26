@@ -82,6 +82,7 @@
 | 권한 규칙의 경로 | Read·Edit 규칙의 경로는 gitignore 패턴이다. 괄호는 이스케이프할 필요가 없다. "Yes, and don't ask again"으로 만든 규칙은 `[`, `]`, `*`를 이스케이프하지만 사람이 쓴 규칙은 이스케이프하지 않는다 | Claude Code 문서 permissions (2026-09-26) |
 | `claude auth status` | 인증 상태를 JSON으로 보이고, 로그인되어 있으면 종료 코드 0, 아니면 1이다 | Claude Code 문서 cli-reference (2026-09-26) |
 | 모델과 effort 환경 변수 | `ANTHROPIC_MODEL`은 별칭(`sonnet` 등)이나 모델 이름을 받는다. `CLAUDE_CODE_EFFORT_LEVEL`은 `low`~`max`, `auto`를 받고 `--effort`보다 우선한다. [실제] 시험은 앱이 넘기는 환경 변수로 모델과 effort를 정한다 | Claude Code 문서 model-config, env-vars (2026-09-26) |
+| 폴더 신뢰와 훅 | 대화형 세션은 폴더 신뢰 창을 수락하기 전에는 모든 설정 파일의 훅을 실행하지 않는다. 앱이 `--settings`로 주는 훅도 같다(디버그 로그 "Skipping … hook execution - workspace trust not accepted"). `-p`와 SDK 세션은 신뢰한 것으로 본다. 레포에서는 신뢰를 레포 루트에 저장하고, worktree에서는 메인 체크아웃의 루트를 쓴다. 온보딩을 건너뛰는 `IS_DEMO`를 켜면 신뢰 창도 뜨지 않았고 훅이 오지 않았다(2.1.283) | Claude Code 문서 hooks(Workspace trust), permissions, env-vars (2026-09-26), M2 [실제] 준비 중 관찰 |
 
 - N-API 사전 빌드가 Electron 44에서 다시 빌드 없이 로드되고, 설치 파일(asar)에서 `.node`와 `conpty\conpty.dll`, `OpenConsole.exe`가 풀려 나와 동작한다. M0의 [스모크]로 러너에서 확인했다(2026-09-26, `docs/checks.md`).
 - Windows의 Node(libuv)는 stdin을 raw 모드로 읽고 있을 때만 콘솔 크기 변경을 알아챈다(libuv `docs/src/signal.rst`). 가짜 `claude`도 stdin을 raw 모드로 읽어야 크기 변경 시험이 맞다(app-ci #1~#5).
