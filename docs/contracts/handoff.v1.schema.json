@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "relay/handoff.v1.schema.json",
+  "title": "handoff.md YAML 머리글 (형식 버전 1)",
+  "description": "에이전트가 쓰는 판단 필드만 담는다. 식별자와 형식 버전은 앱이 task 디렉터리 위치와 work.json으로 안다. 정의되지 않은 필드는 스키마에서 허용하고, 앱이 경고만 한다.",
+  "type": "object",
+  "required": [
+    "status",
+    "decisions",
+    "assumptions",
+    "rejected",
+    "open_questions",
+    "intent_deviation",
+    "risks",
+    "recommended_next"
+  ],
+  "properties": {
+    "status": { "enum": ["awaiting_approval", "blocked"] },
+    "blocked_reason": { "type": "string", "minLength": 1 },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["what", "why", "by"],
+        "properties": {
+          "what": { "type": "string", "minLength": 1 },
+          "why": { "type": "string", "minLength": 1 },
+          "by": { "enum": ["human", "ai"] }
+        }
+      }
+    },
+    "assumptions": { "type": "array", "items": { "type": "string" } },
+    "rejected": { "type": "array", "items": { "type": "string" } },
+    "open_questions": { "type": "array", "items": { "type": "string" } },
+    "intent_deviation": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["summary", "evidence"],
+          "properties": {
+            "summary": { "type": "string", "minLength": 1 },
+            "evidence": { "type": "string", "minLength": 1 }
+          }
+        }
+      ]
+    },
+    "risks": { "type": "array", "items": { "type": "string" } },
+    "recommended_next": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["node", "reason"],
+          "properties": {
+            "node": { "enum": ["intake", "evidence", "rca", "fix", "verify"] },
+            "reason": { "type": "string", "minLength": 1 }
+          }
+        }
+      ]
+    },
+    "knowledge_candidates": { "type": "array", "items": { "type": "string" } }
+  },
+  "if": { "properties": { "status": { "const": "blocked" } } },
+  "then": { "required": ["blocked_reason"] }
+}

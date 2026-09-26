@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "relay/intent-draft.v1.schema.json",
+  "title": "intent.draft.md YAML 머리글 (형식 버전 1)",
+  "description": "work-start가 쓰는 필드만 담는다. schema_version과 version은 앱이 [의도 승인] 때 붙인다. 정의되지 않은 필드는 스키마에서 허용하고, 앱이 경고만 한다.",
+  "type": "object",
+  "required": ["type", "size"],
+  "properties": {
+    "type": { "enum": ["bugfix"] },
+    "size": { "enum": ["S", "M", "L"] }
+  }
+}

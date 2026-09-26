@@ -67,7 +67,7 @@ relay-v2는 Claude Code CLI를 **앱 안의 터미널(node-pty + xterm.js)에 �
 | D27 | 질문은 모아서 `AskUserQuestion` 한 번에 묻는다(최대 4개). 추천 선택지를 맨 앞에 두고 "(추천)"을 붙인다. 횟수 상한은 없다 | 흐름이 덜 끊김. 상한은 질문이 실제로 많아지면 넣음 | ✅ |
 | D28 | **사람이 정할 결정은 초안으로 두지 않고 task 안에서 바로 묻는다.** handoff의 결정에는 누가 정했는지(`by`)만 적고, 자동 승인 조건(4.3)은 늘리지 않는다 | 자동 승인이 켜진 단계에서는 사람이 승인 화면을 보지 않으므로, 초안으로 둔 사람 몫의 결정이 사람 모르게 넘어갈 수 있음. 바로 물으면 조건을 늘리지 않고 막을 수 있음 | ✅ |
 | D29 | handoff 형식 검사는 앱만 한다. 에이전트용 검증 명령은 두지 않고, 에이전트는 템플릿과 대조만 한다. 오류는 Stop 훅으로 되돌린다(D21) | D21이 같은 일을 함. 검증 명령을 따로 두면 실행 파일 경로와 인용 처리 같은 구현 부담이 생김 | ✅ |
-| D30 | `awaiting_approval`인 handoff에서 노드별 필수 산출물(3.1 표)이 없으면 형식 오류로 처리한다 | 에이전트가 산출물을 빠뜨려도 통과하면, 자동 승인 단계에서 다음 단계가 입력 없이 시작됨. 고정된 표 하나로 확인할 수 있음 | ✅ |
+| D30 | `awaiting_approval`인 handoff에서 노드별 필수 산출물(3.1 표)이 task 디렉터리에 없으면 형식 오류로 처리한다 | 에이전트가 산출물을 빠뜨려도 통과하면, 자동 승인 단계에서 다음 단계가 입력 없이 시작됨. 고정된 표 하나로 확인할 수 있음 | ✅ |
 | D31 | 공통 종료 절차는 원본 한 파일로 두고, 앱이 스킬을 배포할 때 각 `SKILL.md` 끝에 붙인다. 합친 `SKILL.md`는 5,000토큰 안에 둔다 | 에이전트가 처음부터 전체 절차를 알고 작업함. Claude Code는 자동 압축 뒤 스킬 본문을 앞 5,000토큰까지만 다시 붙이므로, 한도를 지켜야 압축 뒤에도 절차가 남음 | ✅ |
 | D32 | **스킬은 Work 디렉터리의 `.claude/skills/relay-<이름>/`에 복사한다.** Claude Code는 `--add-dir`로 추가한 디렉터리의 스킬도 읽으므로 worktree에는 두지 않는다 | worktree 루트에 `.claude/skills`가 생기면 Claude Code가 그 폴더만 읽어서, 사용자가 메인 체크아웃에만 둔 프로젝트 스킬이 보이지 않음. worktree에 파일을 두지 않으므로 git 추적에서 빼는 처리도 필요 없음 | ✅ |
 | D33 | relay 스킬은 모두 `disable-model-invocation: true`로 둔다. 스킬은 첫 프롬프트로만 시작한다 | 에이전트가 다른 단계의 스킬을 스스로 불러오면 단계 경계가 무너짐 | |
@@ -121,6 +121,12 @@ relay-v2는 Claude Code CLI를 **앱 안의 터미널(node-pty + xterm.js)에 �
 | D81 | 사람이 움직여야 하는 상태로 바뀌었는데 그 Work를 보고 있지 않으면 OS 알림을 보낸다. 자동 승인 카운트다운 시작과 대기열 자동 시작도 알린다 | 알림은 사람이 필요할 때만. 카운트다운은 취소할 기회가 있어야 함 | ✅ |
 | D82 | 단계 선택 대화상자는 고른 단계의 결과(폐기될 산출물, 되돌릴 커밋 수와 백업 브랜치, 건너뛸 단계)를 미리 보여 준다 | 폐기와 코드 되돌림은 되돌리기 어려운 조작이라 누르기 전에 보여야 함 | ✅ |
 | D83 | 승인 화면은 강조 영역(사람이 봐야 할 것)과 [요약] / [산출물] / [변경] 탭으로 구성한다 | 대부분 요약만 보고 승인함. 강조 영역이 비어 있으면 빨리 넘어갈 수 있음 | ✅ |
+| D84 | handoff와 intent 초안의 JSON Schema는 `docs/contracts/`에 별도 파일로 둔다. 필드의 뜻은 5.2와 5.3의 표에 적는다 | 스키마는 기계가 읽는 파일이라 앱이 그대로 가져다 씀. 뜻은 표만 읽어도 이해됨 | ✅ |
+| D85 | 정의되지 않은 머리글 필드는 허용하고 경고만 한다. 앱은 그 필드를 무시한다 | 앱 동작에 해가 없고, 오류로 처리하면 되돌림 횟수를 낭비함. 자주 넣는 필드를 보고 필요한 필드를 찾을 수 있음 | ✅ |
+| D86 | 머리글의 문자열 길이와 목록 길이에는 상한을 두지 않는다 | 머리글이 지나치게 길어지는 일이 실제로 생기면 넣음 | ✅ |
+| D87 | 스키마는 앱이 검사하는 데 쓰고, 에이전트에게는 필드마다 허용값과 조건을 YAML 주석으로 단 템플릿을 준다. 되돌림 메시지에는 필드와 어긴 규칙을 적는다. 앱 테스트에서 템플릿 예시가 스키마를 통과하는지 확인한다 | 스킬 본문 5,000토큰 한도 안에서 처음부터 맞게 쓰게 함. 스키마 전문은 길고 에이전트가 읽는다는 보장이 없음 | ✅ |
+| D88 | 앱이 결정론적으로 아는 값은 에이전트가 쓰지 않는다. handoff에서 식별자(`work_id`, `task_id`, `node`, `skill`), `intent_version`, `schema_version`을 뺀다. intent의 `schema_version`과 `version`은 [의도 승인] 때 앱이 붙인다. `type`은 업무 유형이 늘어날 것에 대비해 work-start가 쓴다 | 앱이 아는 값을 쓰게 하면 틀릴 기회만 생김. 앱은 실행 중인 task 디렉터리의 handoff만 읽고 이전 task 디렉터리는 편집이 막혀 있어, 위치가 식별자 역할을 함 | ✅ |
+| D89 | handoff에 `artifacts` 필드를 두지 않는다. 앱은 task 디렉터리의 `.md` 파일(`context.md`, `handoff.md` 제외)을 산출물로 본다 | 필수 산출물은 3.1 표로 고정됨. 목록을 따로 적으면 파일과 목록이 어긋나는 오류만 생김 | ✅ |
 
 ---
 
@@ -507,7 +513,7 @@ S 크기는 `intake → fix → verify`로 간다. evidence와 rca의 일 중 �
     project.json                       # 레포 경로, 기본 브랜치, 등록 점검 결과(origin·gh 여부)
     worktrees/<work-id>/
     works/<work-id>/
-      work.json                        # Work 상태, 현재 단계, 승인 기록, Work별 설정(자동 승인, 질문 방식), task별 프로세스 ID·시작 시각, 진행 중 작업
+      work.json                        # Work 상태, 현재 단계, 승인 기록, Work별 설정(자동 승인, 질문 방식), task별 형식 버전·프로세스 ID·시작 시각, 진행 중 작업
       request.md                       # Work 생성 때 받은 요청 원문
       .claude/skills/relay-<name>/SKILL.md   # 배포본. task를 시작할 때 앱이 복사 (5.6.3)
       intent.md                        # 승인된 최신 의도
@@ -560,18 +566,15 @@ S 크기는 `intake → fix → verify`로 간다. evidence와 rca의 일 중 �
 
 ### 5.2 handoff (`tasks/<nn>-<node>/handoff.md`)
 
-에이전트가 task를 마무리하며 쓰는 파일이다. YAML 머리글은 앱이 파싱하고 검증하며, 본문은 사람과 다음 에이전트가 읽는다. 앱이 직접 확인할 수 있는 사실(git 커밋, 테스트 결과, 승인 여부)은 에이전트에게 쓰게 하지 않는다.
+에이전트가 task를 마무리하며 쓰는 파일이다. YAML 머리글은 앱이 파싱하고 검증하며, 본문은 사람과 다음 에이전트가 읽는다.
+
+머리글에는 에이전트의 판단만 담는다(D88). 앱이 이미 아는 값과 직접 확인할 수 있는 사실은 쓰게 하지 않는다.
+- **앱이 아는 값:** Work와 task의 식별자, 노드, 스킬, 입력 intent 버전, 형식 버전. 앱은 실행 중인 task 디렉터리의 `handoff.md`만 읽으므로 위치가 식별자 역할을 한다. 형식 버전은 task를 시작할 때 `work.json`에 기록한다.
+- **앱이 확인하는 사실:** git 커밋, 테스트 결과, 승인 여부, 산출물 파일 목록(D89).
 
 ```markdown
 ---
-schema_version: 1
-work_id: w-20260925-001
-task_id: t-04
-node: rca
-skill: root-cause
 status: awaiting_approval
-intent_version: 1
-artifacts: [rca.md]
 decisions:
   - what: "원인은 토큰 만료 시각 비교의 타임존 불일치"
     why: "재현 로그의 차이가 UTC/KST 9시간과 정확히 일치"
@@ -599,12 +602,8 @@ knowledge_candidates: []
 
 | 필드 | 필수 | 뜻 | 앱이 쓰는 곳 |
 |---|---|---|---|
-| `schema_version` | ✅ | 형식 버전, 현재 1 | 검증 |
-| `work_id`, `task_id`, `node`, `skill` | ✅ | 이 task의 식별자. `context.md`에 적힌 값을 그대로 쓴다 | 검증(다르면 오류) |
 | `status` | ✅ | `awaiting_approval`(검토해 달라) 또는 `blocked`(진행할 수 없음). 승인 상태는 앱이 `work.json`에 기록하므로 넣지 않는다 | 승인 대기 전환 |
 | `blocked_reason` | blocked일 때 | 무엇이 없어서 진행할 수 없는지 | 승인 화면 표시 |
-| `intent_version` | ✅ | 입력으로 받은 **승인된** intent 버전. 최초 intake는 0 | 검증 |
-| `artifacts` | ✅ | task 디렉터리 기준 산출물 파일 목록 | 승인 화면, 다음 task 입력 |
 | `decisions` | ✅ | 이 task에서 정한 것. `what`(무엇), `why`(이유), `by`(누가 정했나: human/ai, 5.6.1) | `decisions.md`에 추가, 승인 화면 |
 | `assumptions` | ✅ | 확인하지 않고 가정한 것 | 승인 화면 |
 | `rejected` | ✅ | 시도했지만 기각한 것과 이유. 빈 배열 허용 | 이후 모든 task에 누적 주입 |
@@ -616,13 +615,34 @@ knowledge_candidates: []
 
 - 본문의 `## 요약`과 `## 다음 task가 알아야 할 것`은 필수다. 두 번째 절에는 경로와 줄, 명령, 수치처럼 다시 찾기 비싼 사실을 적는다.
 - 본문 분량 기준은 약 1,500자다(기본값, 설정 가능). 넘으면 경고만 한다.
-- 형식 **오류**는 필수 필드 누락, 타입, 허용되지 않은 값, 식별자 불일치, 산출물 파일 없음, 필수 산출물 누락이다. 오류가 있으면 승인 버튼이 비활성화되고 Stop 훅으로 되돌린다(D21).
-- verify의 `pr.md`는 첫 줄이 `# `로 시작해야 한다. 아니면 형식 오류다(D62).
-- **필수 산출물**은 노드별로 3.1 표의 산출물 파일이다. S 경로에서도 같다. `status: awaiting_approval`일 때만 확인한다. 파일이 task 디렉터리에 있고 `artifacts`에 적혀 있어야 한다(D30).
+- **산출물:** 앱은 task 디렉터리의 `.md` 파일 중 `context.md`와 `handoff.md`를 뺀 것을 산출물로 보고, 승인 화면과 다음 task 입력에 쓴다(D89).
+- **필수 산출물**은 노드별로 3.1 표의 산출물 파일이다. S 경로에서도 같다. `status: awaiting_approval`일 때만 task 디렉터리에 있는지 확인한다(D30).
+
+#### 5.2.1 형식 검사
+
+앱이 handoff와 intent 초안에 같은 방식으로 한다(D38). 오류가 있으면 승인 버튼이 비활성화되고 Stop 훅으로 되돌린다(D21). 되돌림 메시지에는 필드와 어긴 규칙을 적는다(예: "`blocked_reason` 없음: `status: blocked`일 때 필수", D87).
+
+- **스키마 검사:** 머리글을 YAML로 파싱한 뒤 JSON Schema로 검사한다(D84).
+  - handoff: `docs/contracts/handoff.v1.schema.json`
+  - intent 초안: `docs/contracts/intent-draft.v1.schema.json`
+  - 스키마가 정하는 것: 필수 필드, 타입, 열거값(`status`, `by`, `recommended_next.node`, `type`, `size`), `status: blocked`일 때 `blocked_reason` 필수
+- **추가 검사:** 스키마로 표현할 수 없어 앱 코드가 한다.
+  - `recommended_next.node`가 선택 가능한 다음 단계(3.2) 안에 있다
+  - 필수 산출물이 task 디렉터리에 있다(`awaiting_approval`일 때, D30)
+  - 본문 필수 절: handoff는 `## 요약`, `## 다음 task가 알아야 할 것`. intent 초안은 `목표`, `비목표`, `원하는 결과`, `완료조건`
+  - intent 초안의 완료조건 줄이 `- [ ] `로 시작한다
+  - verify의 `pr.md` 첫 줄이 `# `로 시작한다(D62)
+- **오류가 아닌 것(경고만):** 정의되지 않은 필드(D85), 본문 분량 기준 초과. 문자열과 목록 길이에는 상한이 없다(D86).
+- **형식 버전:** 앱은 task를 시작할 때 쓰는 형식 버전을 `work.json`에 기록하고, 그 버전의 스키마로 검사한다. 현재는 1이다.
 
 ### 5.3 intent (`intent.md`)
 
 Work의 의도다. intake(work-start)가 `tasks/01-intake/intent.draft.md`에 초안을 쓰고, [의도 승인]을 누르면 앱이 `works/<work-id>/intent.md`로 확정한다. 이전 버전은 `intent.history/v<N>.md`에 둔다. 모든 task의 `context.md`에 본문 그대로 들어간다.
+
+- **초안의 머리글:** work-start는 `type`과 `size`만 쓴다.
+- **확정본의 머리글:** 앱이 [의도 승인] 때 `schema_version`과 `version`을 붙인다(D88). 사람이 승인 화면에서 고친 `size`도 이때 반영한다.
+
+아래는 확정된 `intent.md`의 예시다.
 
 ```markdown
 ---
@@ -653,12 +673,12 @@ KST 서버에서 액세스 토큰이 발급 직후 만료로 판정되는 문제
 - (사람 추정, 확인 안 됨) `Date` 문자열 비교 부분이 의심된다
 ```
 
-| 필드 | 뜻 |
-|---|---|
-| `schema_version` | 형식 버전, 현재 1 |
-| `version` | intent 버전. 초안에는 현재 버전 + 1(처음이면 1)을 쓰고, 앱이 확정 시 확인한다 |
-| `type` | 업무 유형. MVP는 `bugfix` 고정 |
-| `size` | `S` / `M` / `L`. S면 evidence와 rca를 건너뛴다. MVP에서 L은 M과 같다. work-start가 제안하고 의도 승인 화면에서 사람이 확정한다 |
+| 필드 | 쓰는 쪽 | 뜻 |
+|---|---|---|
+| `schema_version` | 앱 | 형식 버전, 현재 1 |
+| `version` | 앱 | intent 버전. 확정할 때마다 1씩 오른다 |
+| `type` | work-start | 업무 유형. MVP에서 허용하는 값은 `bugfix`뿐이다. 업무 유형이 늘어날 것에 대비해 work-start가 요청을 보고 쓴다(D88) |
+| `size` | work-start | `S` / `M` / `L`. S면 evidence와 rca를 건너뛴다. MVP에서 L은 M과 같다. work-start가 제안하고 의도 승인 화면에서 사람이 확정한다 |
 
 - **본문 절:** `목표`, `비목표`(없으면 "없음"), `원하는 결과`, `완료조건`은 필수다. `제약`과 `추가 의견`은 선택이다.
 - **완료조건:** `- [ ] `로 시작하는 목록이고, 한 줄에 검증 가능한 문장 하나를 쓴다. push/PR은 쓰지 않는다. verify보다 뒤에 일어나는 일이라 verify가 판정할 수 없기 때문이다(D15).
@@ -753,8 +773,25 @@ delivery.succeeded | delivery.failed
 2. **git 정리**
    - 코드를 바꾸는 단계는 변경을 모두 커밋한다. 어느 단계가 코드를 바꾸는지는 스킬별 명세에 적는다.
    - 그 밖의 단계는 에이전트가 만든 실험용 변경(디버그 출력 등)을 되돌린다. 사람이 직접 바꾼 파일은 건드리지 않는다. 남은 변경은 `risks`에 적는다.
-3. **handoff 작성:** task 디렉터리의 `handoff.md`에 5.2 형식으로 쓴다. `artifacts`에는 필수 산출물을 포함한다. 다 쓰면 템플릿과 대조한다(D29). `_close.md`에는 5.2의 필드를 빈 값으로 둔 템플릿을 싣는다.
+3. **handoff 작성:** task 디렉터리의 `handoff.md`에 5.2 형식으로 쓴다. 다 쓰면 템플릿과 대조한다(D29). `_close.md`에는 아래처럼 필드마다 허용값과 조건을 주석으로 단 템플릿과, 5.2.1의 추가 검사 목록을 싣는다(D87).
 4. **안내:** `context.md`의 마무리 안내 문구를 그대로 출력하고 턴을 끝낸다. `blocked`이면 `blocked_reason`과 사람이 해 줄 일을 출력한다.
+
+```yaml
+---
+status:              # awaiting_approval | blocked
+blocked_reason:      # status가 blocked일 때만 필수. 무엇이 없어서 진행할 수 없는지
+decisions: []        # 각 항목 {what, why, by}. by는 human | ai
+assumptions: []      # 확인하지 않고 가정한 것
+rejected: []         # 시도했지만 기각한 것과 이유
+open_questions: []   # 사람 답이 필요한데 아직 없는 것
+intent_deviation: null   # 의도와 어긋나는 사실이 있으면 {summary, evidence}
+risks: []            # 남은 위험
+recommended_next: null   # 기본 다음 단계면 null. 아니면 {node, reason}. node는 context.md의 "선택 가능한 다음 단계" 중 하나
+knowledge_candidates: []  # 선택. 다음에도 쓸 만한 사실
+---
+## 요약
+## 다음 task가 알아야 할 것
+```
 
 **형식 오류가 되돌아오면:** 앱이 Stop 때 형식을 검사해 오류를 되돌린다(D21). 에이전트는 형식만 고치고 3~4를 다시 한다. 내용은 바꾸지 않는다.
 
@@ -794,7 +831,14 @@ delivery.succeeded | delivery.failed
 - `size`를 제안했다.
 - 모르면 쓸 수 없는 항목은 물었거나 `open_questions`에 남겼다.
 
-**산출물 템플릿:** `tasks/01-intake/intent.draft.md`. 형식은 5.3의 intent와 같다. `version`에는 현재 버전 + 1(처음이면 1)을 쓴다.
+**산출물 템플릿:** `tasks/01-intake/intent.draft.md`. 본문은 5.3의 intent와 같다. 머리글에는 `type`과 `size`만 쓴다. 템플릿의 머리글은 주석으로 허용값을 단다(D87).
+
+```yaml
+---
+type: bugfix   # MVP에서는 bugfix만
+size:          # S | M | L. S 기준은 3.4
+---
+```
 
 #### 5.6.5 evidence
 
@@ -1021,8 +1065,7 @@ intent의 완료조건마다 판정하고 `verification.md`와 PR 초안 `pr.md`
 
 같은 방식(시나리오 → 질문 → 결정)으로 하나씩 정한다.
 
-1. **handoff와 intent의 JSON Schema** (MVP 범위)
-2. **스파이크:** S1 터미널 임베드(한글 IME 포함), S2 HTTP 훅(AskUserQuestion의 PreToolUse·PostToolUse 포함)과 Stop 되돌림, S3 첫 프롬프트 스킬 트리거(`--add-dir` 디렉터리의 스킬, `disable-model-invocation: true`)와 재개, S4 권한 확인을 끈 모드에서 deny 규칙이 앱 소유 파일 편집과 `git push`를 막는지, 조직 설정으로 이 모드가 막혔을 때의 출력과 종료 코드, S5 권한 확인을 끈 모드에서도 폴더 신뢰 창이 worktree마다 뜨는지와 `--add-dir` 디렉터리에도 적용되는지
+1. **스파이크:** S1 터미널 임베드(한글 IME 포함), S2 HTTP 훅(AskUserQuestion의 PreToolUse·PostToolUse 포함)과 Stop 되돌림, S3 첫 프롬프트 스킬 트리거(`--add-dir` 디렉터리의 스킬, `disable-model-invocation: true`)와 재개, S4 권한 확인을 끈 모드에서 deny 규칙이 앱 소유 파일 편집과 `git push`를 막는지, 조직 설정으로 이 모드가 막혔을 때의 출력과 종료 코드, S5 권한 확인을 끈 모드에서도 폴더 신뢰 창이 worktree마다 뜨는지와 `--add-dir` 디렉터리에도 적용되는지
 
 ## 9. 추가 후보 (필요가 확인되면)
 
