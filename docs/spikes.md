@@ -53,6 +53,15 @@
 
 | 날짜 | Claude Code 버전 | OS | 결과 | 메모 |
 |---|---|---|---|---|
+| 2026-09-26 | 2.1.283 | GitHub Actions windows-latest (win25-vs2026 20260922), 예비 확인 | 통과(IME 제외) | 실행 #6 |
+
+**관찰 (2026-09-26, 러너, 실행 #6)**
+
+- ConPTY 위에서 Claude Code가 정상 동작했다. 한글 문자열 표시와 백스페이스 한 번에 한 글자 삭제가 맞았다(IME 조합 입력은 아님).
+- 크기 변경 뒤에도 세션이 살아 있고 다시 그려졌다. `pty.log`를 다시 재생하면 화면 글자가 나왔다.
+- 프로세스 트리 종료(`taskkill /T /F`) 뒤 남은 프로세스가 없었다.
+- 앱 역할 프로세스만 강제 종료했더니 claude도 함께 끝났다. 고아가 남지 않았다. 시나리오 9의 고아 확인(D76)은 그대로 두되, 실제로는 드물 것으로 보인다.
+- 세션을 자주 강제 종료하면 Claude Code가 "전체 화면 렌더러가 여러 번 시작에 실패했다"며 기본 렌더러로 바꾼다. 기본 렌더러에서는 선택 창의 화살표 키 입력이 창을 닫는 것으로 처리된 일이 있었다(실행 #5).
 
 ---
 
@@ -88,6 +97,15 @@
 
 | 날짜 | Claude Code 버전 | OS | 결과 | 메모 |
 |---|---|---|---|---|
+| 2026-09-26 | 2.1.283 | GitHub Actions windows-latest (win25-vs2026 20260922), 예비 확인 | 통과 | 실행 #6 |
+
+**관찰 (2026-09-26, 러너, 실행 #6)**
+
+- UserPromptSubmit, Stop, PreToolUse·PostToolUse(`AskUserQuestion`), SessionEnd가 모두 기대한 때에 왔다. Notification은 오지 않았다.
+- Stop에 `{"decision":"block","reason":…}`으로 두 번 되돌리자 에이전트가 이유를 받아 이어서 작업했다. 되돌린 뒤 Stop의 `stop_hook_active`는 `false, true, true`였다.
+- 훅 서버를 끈 상태에서도 세션이 계속됐다(연결 실패는 비차단 오류).
+- 본문에 `session_id`, `transcript_path`, `cwd`, `prompt_id`, `permission_mode`, `hook_event_name`이 공통으로 들어 있다. `permission_mode`로 실제 권한 모드를 알 수 있다(S4 참고).
+- `AskUserQuestion` 화면은 번호 목록에 "Type something.", "Chat about this" 항목이 붙고, 아래에 "Enter to select · ↑/↓ to navigate · Esc to cancel"이 나온다.
 
 ---
 
@@ -125,6 +143,15 @@
 
 | 날짜 | Claude Code 버전 | OS | 결과 | 메모 |
 |---|---|---|---|---|
+| 2026-09-26 | 2.1.283 | GitHub Actions windows-latest (win25-vs2026 20260922), 예비 확인 | 일부 실패 | `/compact` 뒤 스킬 끝부분 유지 실패. 실행 #6 |
+
+**관찰 (2026-09-26, 러너, 실행 #6)**
+
+- `--add-dir`로 추가한 Work 디렉터리의 스킬이 첫 프롬프트로 시작됐다.
+- `disable-model-invocation: true` 스킬을 에이전트가 스스로 부르지 않았다(인사를 해도 `relay-other`가 실행되지 않음).
+- 메인 체크아웃에만 둔(커밋하지 않은) 프로젝트 스킬이 worktree 세션에서도 실행됐다. D32의 전제와 맞다.
+- 같은 옵션에 `--resume <id>`를 붙여 다시 열자 대화가 이어졌다.
+- **`/compact` 뒤 스킬 끝부분의 지시를 따르지 못했다.** 끝에 둔 표식(ZEBRA-7731)을 물었더니 다른 답을 했다. 시험용 스킬의 분량(약 60줄의 채움 글)이 5,000토큰을 넘었는지, 압축 뒤 스킬이 다시 붙지 않은 것인지는 아직 구분하지 못했다. D31의 전제와 관련되므로 추가 확인이 필요하다.
 
 ---
 
@@ -164,6 +191,14 @@
 
 | 날짜 | Claude Code 버전 | OS | 결과 | 메모 |
 |---|---|---|---|---|
+| 2026-09-26 | 2.1.283 | GitHub Actions windows-latest (win25-vs2026 20260922), 예비 확인 | 통과(문서와 일치) / 모드 차단 시 동작은 예상과 다름 | 실행 #6 |
+
+**관찰 (2026-09-26, 러너, 실행 #6)**
+
+- `git push`, 파일 도구 편집, `echo > work.json`은 막혔다. Python 스크립트 쓰기와 `sh -c "git push"`는 막히지 않았다. 공식 문서 설명(design 6.1)과 같다.
+- 앱의 해시 확인은 Python 스크립트로 바꾼 `work.json`을 잡아냈다.
+- deny로 막힌 명령도 PreToolUse 훅은 먼저 온다. 막히면 PostToolUse는 오지 않는다. `gh pr create`도 같은 모양이었다(gh 로그인이 없어 확정은 아님).
+- **관리 설정으로 권한 확인 끈 모드를 막으면, 세션이 실패하지 않고 auto 모드로 실행된다.** 화면에 "Auto mode is now Claude Code's default permission mode"가 뜨고 상태 줄이 `auto mode on`이다. design 7절의 "task 실행이 실패한다"는 틀렸다. 앱은 훅 본문의 `permission_mode`로 알아챌 수 있다.
 
 ---
 
