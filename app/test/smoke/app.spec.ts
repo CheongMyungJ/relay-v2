@@ -1,5 +1,5 @@
-// [스모크] 설치한 앱이 뜨고, 가짜 claude로 intake task 하나를 [의도 승인]까지 누른다 (I27, M2).
-// 프로젝트 등록 → 새 Work → intake 탭에 PTY 출력 → 창 크기 변경이 PTY에 전달 → [의도 승인]
+// [스모크] 설치한 앱이 뜨고, 가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화면을 누른다 (I27).
+// M2: 프로젝트 등록 → 새 Work → intake 탭에 PTY 출력 → 창 크기 변경이 PTY에 전달 → [의도 승인]
 // → intent.md 확정, intake 세션 트리 종료, 다음 task 시작.
 // M3: 다음 task를 [즉시 중단]하면 중단됨·읽기 전용이 되고 트리가 끝난다 → [재개]하면 같은 세션을
 // --resume으로 이전 화면 뒤에 잇는다 → 설정 화면에서 세션 상한을 바꾼다 → 앱 종료 확인을 거쳐 끝낸다.
@@ -60,7 +60,7 @@ test.afterAll(async () => {
   fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
 })
 
-test('가짜 claude로 intake task를 [의도 승인]까지 누른다', async () => {
+test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화면을 누른다', async () => {
   const win = await app.firstWindow()
   await expect(win.locator('.layout')).toBeVisible()
   await expect(win.locator('.sidebar')).toBeVisible()
