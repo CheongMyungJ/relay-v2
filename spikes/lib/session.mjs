@@ -24,8 +24,8 @@ const DIALOG_NAMES = [
   { name: 'terminal_setup', match: /terminal setup|shift\s*\+\s*enter/i },
   { name: 'login', match: /select login method|log in|login/i },
 ];
-// 선택 목록의 현재 항목 표시(❯ 1. …)
-const SELECT_CURSOR = /❯\s*\d+\./;
+// 선택 목록의 현재 항목 표시. macOS·Linux는 "❯ 1.", Windows 콘솔은 "> 1."로 그린다.
+const SELECT_CURSOR = /(?:^|\s)[❯>]\s*\d+\.\s/m;
 // 수락 항목(1. Yes, 2. Yes, I accept, 1. Yes, proceed …)
 const ACCEPT_OPTION = /(?:^|[\s│❯>])(\d)\.\s*(yes|i accept|accept|proceed|trust)/i;
 const PRESS_ENTER = /press enter|enter to (continue|confirm)/i;
