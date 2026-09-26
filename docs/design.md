@@ -132,6 +132,10 @@ relay-v2는 Claude Code CLI를 **앱 안의 터미널(node-pty + xterm.js)에 �
 | D92 | 스파이크 계획과 결과는 `docs/spikes.md`에, 스파이크 코드는 `spikes/`에 둔다. Windows 네이티브에서 확인하는 것을 필수로 하고, 결과에는 날짜, Claude Code 버전, OS를 적는다 | 훅과 스킬 동작은 Claude Code 버전에 따라 바뀔 수 있어 다시 확인할 수 있어야 함. 주 플랫폼 문제는 Windows에서만 드러남(D12) | ✅ |
 | D93 | 스파이크는 GitHub Actions Windows 러너에서 수동으로 돌릴 수 있게 한다. 러너 결과는 예비 확인으로 기록하고, 한글 IME는 실기에서 사람이 확인한다 | 실기 확인 전에 설계 전제를 싸게 걸러 냄. 러너는 Windows Server라 사용자 PC와 다르고, IME 조합 입력은 자동화할 수 없음 | ✅ |
 | D94 | 앱은 첫 훅(UserPromptSubmit)의 `permission_mode`를 확인한다. `bypassPermissions`가 아니면 탭 머리 띠에 경고를 띄우고 task는 계속한다 | 조직 설정으로 권한 확인 끈 모드가 막히면 Claude Code는 실패하지 않고 auto 모드로 실행된다(스파이크 S4). 더 안전한 쪽이라 멈출 이유는 없지만, 막히는 동작이 생길 수 있어 사람이 알아야 함 | ✅ |
+| D95 | 스킬 크기는 `skills/check.mjs`로 잰다. `ANTHROPIC_API_KEY`가 있으면 토큰 계산 API로 재고, 없으면 오프라인에서 넉넉하게 추정한다(한글 음절은 1토큰, 그 밖의 글자는 3자에 1토큰) | Claude Code 문서에 토큰을 세는 방법이 없음. 토큰 계산 API는 모델을 호출하지 않고 가장 정확함. 키가 없어도 누구나 다시 잴 수 있어야 함 | ✅ |
+| D96 | handoff 템플릿의 `blocked_reason` 줄은 주석으로 둔다. 에이전트는 `status: blocked`일 때만 주석을 풀어 쓴다 | 빈 줄을 그대로 두면 YAML에서 null이 되어 `awaiting_approval`일 때도 스키마 오류가 남. 스키마를 바꾸지 않고 기본 경로의 오류를 막음 | ✅ |
+| D97 | `context.md`의 task 정보에 Work의 기준 브랜치와 기준 커밋을 넣는다. 기준 커밋은 Work를 만들 때 분기한 커밋이며 앱이 `work.json`에 기록한다 | fix는 기존 실패를 구분하고(D57) verify는 바뀐 테스트 파일을 판정하는데(D60), 둘 다 기준 커밋이 필요함. 앱이 아는 값이라 에이전트가 찾게 하지 않음(D88) | ✅ |
+| D98 | 스킬 본문(에이전트에게 주는 지시)은 영어로 쓴다 | 같은 지시를 더 적은 토큰으로 담아 5,000토큰 목표(D31)에 여유가 생김 | ✅ |
 
 ---
 
@@ -244,7 +248,7 @@ S 크기는 `intake → fix → verify`로 간다. evidence와 rca의 일 중 �
    - 기준 위치: 로컬 / 원격. 원격을 고르면 앱이 `git fetch` 후 `origin/<브랜치>`에서 분기한다. fetch가 실패하면 오류를 보여 주고 Work를 만들지 않는다.
 2. **앱:**
    - work-id를 만든다(`w-YYYYMMDD-NNN`).
-   - `relay/<work-id>` 브랜치와 worktree를 만든다.
+   - `relay/<work-id>` 브랜치와 worktree를 만든다. 분기한 커밋을 기준 커밋으로 `work.json`에 기록한다(D97).
    - `works/<work-id>/`와 `work.json`을 만든다.
    - 요청 원문을 `works/<work-id>/request.md`로 저장한다(D34).
    - `work.created` 이벤트를 기록한다.
@@ -265,7 +269,7 @@ S 크기는 `intake → fix → verify`로 간다. evidence와 rca의 일 중 �
 
    | 내용 | 방식 |
    |---|---|
-   | task 정보: work_id, task_id, node, skill, 승인된 intent 버전, task 디렉터리 경로 | 본문 |
+   | task 정보: work_id, task_id, node, skill, 승인된 intent 버전, task 디렉터리 경로, 기준 브랜치와 기준 커밋(D97) | 본문 |
    | 승인 방식(수동/자동)과 마무리 안내 문구 | 본문 |
    | 질문 방식(초안 우선 / 결정마다 확인, 5.6.1) | 본문 |
    | 선택 가능한 다음 단계(3.2) | 본문 |
@@ -521,7 +525,7 @@ S 크기는 `intake → fix → verify`로 간다. evidence와 rca의 일 중 �
     project.json                       # 레포 경로, 기본 브랜치, 등록 점검 결과(origin·gh 여부)
     worktrees/<work-id>/
     works/<work-id>/
-      work.json                        # Work 상태, 현재 단계, 승인 기록, Work별 설정(자동 승인, 질문 방식), task별 형식 버전·프로세스 ID·시작 시각, 진행 중 작업
+      work.json                        # Work 상태, 현재 단계, 기준 브랜치와 기준 커밋, 승인 기록, Work별 설정(자동 승인, 질문 방식), task별 형식 버전·프로세스 ID·시작 시각, 진행 중 작업
       request.md                       # Work 생성 때 받은 요청 원문
       .claude/skills/relay-<name>/SKILL.md   # 배포본. task를 시작할 때 앱이 복사 (5.6.3)
       intent.md                        # 승인된 최신 의도
@@ -767,6 +771,7 @@ delivery.succeeded | delivery.failed
 모든 스킬이 마지막에 똑같이 따르는 절차다. 원본은 `skills/_close.md` 한 파일이고, 앱이 스킬을 배포할 때 각 `SKILL.md` 끝에 붙인다(D31). **분량(D31):** 합친 `SKILL.md`는 5,000토큰 안에 두는 것을 목표로 한다.
 - Claude Code는 자동 압축 뒤 스킬 본문을 앞 5,000토큰까지만 다시 붙인다. 넘으면 압축 뒤 끝에 붙인 종료 절차가 빠질 수 있다. 짧은 스킬은 압축 뒤에도 끝부분까지 유지됐고(스파이크 S3b), 긴 스킬은 끝부분을 잊은 사례가 있었다(S3).
 - 강제 한도는 아니다. 스킬을 만들거나 고치다가 5,000토큰을 넘게 되면 사람에게 알리고, 줄일지 그대로 둘지 사람이 정한다.
+- **재는 방법(D95):** `skills/check.mjs`가 스킬마다 합친 크기를 잰다. `ANTHROPIC_API_KEY`가 있으면 토큰 계산 API로 재고, 없으면 오프라인에서 넉넉하게 추정한다(한글 음절은 1토큰, 그 밖의 글자는 3자에 1토큰).
 
 **실행하는 때**
 
@@ -789,7 +794,7 @@ delivery.succeeded | delivery.failed
 ```yaml
 ---
 status:              # awaiting_approval | blocked
-blocked_reason:      # status가 blocked일 때만 필수. 무엇이 없어서 진행할 수 없는지
+# blocked_reason:    # status가 blocked일 때만 주석을 풀어 쓴다(D96). 무엇이 없어서 진행할 수 없는지
 decisions: []        # 각 항목 {what, why, by}. by는 human | ai
 assumptions: []      # 확인하지 않고 가정한 것
 rejected: []         # 시도했지만 기각한 것과 이유
@@ -811,6 +816,7 @@ knowledge_candidates: []  # 선택. 다음에도 쓸 만한 사실
 - **배포:** task를 시작할 때 앱이 Work 디렉터리(`works/<work-id>/`)의 `.claude/skills/relay-<name>/`에 복사하고, `_close.md`를 `SKILL.md` 끝에 붙인다. relay는 `--add-dir <work 디렉터리>`로 실행하고, Claude Code는 추가한 디렉터리의 `.claude/skills/`도 읽는다. 그래서 worktree에는 두지 않는다(D32). 이 경로는 deny 규칙으로 편집을 막는다.
 - **호출:** 모든 relay 스킬은 `disable-model-invocation: true`로 둔다. 스킬은 첫 프롬프트로만 시작한다(D33).
 - **입력:** 첫 프롬프트는 `/relay-<스킬> 이 task의 컨텍스트: <context.md 경로>`다. 스킬은 `context.md`부터 읽는다. `context.md`의 구성은 시나리오 2-4의 표를 따른다. 스킬별로 더 읽는 파일은 스킬별 명세에 적는다.
+- **언어(D98):** 스킬 본문(에이전트에게 주는 지시)은 영어로 쓴다.
 - **요청 원문:** `request.md`는 intake에는 본문으로, 이후 task에는 경로로 들어간다(D34).
 
 #### 5.6.4 work-start (intake)
@@ -948,7 +954,7 @@ rca의 수정 방향에 따라 코드를 고치고 커밋한다. 변경 요약�
 - **커밋(D54):** 커밋 수는 제한하지 않고, 메시지는 레포 관례를 따른다. 마무리할 때 변경을 모두 커밋한다(5.6.2).
 - **rca가 틀렸음을 알았을 때(D55):** 발견한 사실을 `fix.md`의 `rca와 달라진 점`에 적고, `recommended_next: {node: rca, reason}`으로 마무리한다. 앱은 멈추고 사람에게 알린다(D23). 원인은 같고 수정 지점만 다르면 fix가 정하고 `decisions`에 적는다.
 - **기존 테스트를 고쳐야 할 때(D56):** 고치고 `risks`에 적는다. `fix.md`의 `변경 요약`에는 기존 테스트 변경을 따로 표시한다. 약화인지는 verify가 완료조건으로 판정한다.
-- **테스트 실행(D57):** intent 완료조건의 테스트 명령을 실행한다. 실패가 있으면 기준 커밋에서도 실패하던 것인지 확인해 구분한다.
+- **테스트 실행(D57):** intent 완료조건의 테스트 명령을 실행한다. 실패가 있으면 기준 커밋(`context.md`, D97)에서도 실패하던 것인지 확인해 구분한다.
 
 **완료조건** (모두 채우면 `awaiting_approval`로 마무리)
 
@@ -998,7 +1004,7 @@ intent의 완료조건마다 판정하고 `verification.md`와 PR 초안 `pr.md`
 - **결정 지점:** 각 완료조건의 판정. 질문 방식이 결정마다 확인이면 판정을 확정하기 전에 묻는다.
 - **판정 방식(D58):** 모든 완료조건을 verify가 직접 다시 실행해 판정한다. 재현 절차, 재현 테스트, 테스트 명령을 모두 실행한다. `fix.md`의 결과는 비교용으로만 본다.
 - **판정 값(D59):** 통과 / 실패 / 판정 불가. 판정 불가에는 이유를 적고, 참고할 사실이 있으면 함께 적는다(예: 재현하지 못한 Work에서 재현 테스트는 통과). 재현 없이 진행한 Work(D45)의 "재현 절차가 더 이상 실패하지 않는다"는 판정 불가다.
-- **테스트 파일 변경(D60):** 기준 커밋과 비교해 바뀐 테스트 파일을 모두 나열하고, 변경마다 약화 아님 / 약화 의심과 이유를 적는다. `fix.md`에 표시되지 않은 변경도 포함한다.
+- **테스트 파일 변경(D60):** 기준 커밋(`context.md`, D97)과 비교해 바뀐 테스트 파일을 모두 나열하고, 변경마다 약화 아님 / 약화 의심과 이유를 적는다. `fix.md`에 표시되지 않은 변경도 포함한다.
 - **사람이 정할 결정**
   - **약화 의심이 있을 때(D60):** 어떤 테스트를 어떻게 바꿨는지 보여 주고 묻는다. 사람이 약화가 아니라고 하면 "기존 테스트를 약화하거나 삭제하지 않는다"는 통과, 약화라고 하면 실패다.
   - **실패나 판정 불가가 있을 때(D61):** 둘 중에서 고르게 한다.
