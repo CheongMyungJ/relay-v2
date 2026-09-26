@@ -1,6 +1,6 @@
 # relay-v2 스파이크 코드
 
-`docs/spikes.md`의 S1~S5를 자동으로 확인하는 코드다. Claude Code를 node-pty(Windows는 ConPTY)로 띄우고, 화면은 xterm headless로 읽고, 상태는 로컬 HTTP 훅 서버로 받는다.
+`docs/spikes.md`의 S1~S6을 자동으로 확인하는 코드다. Claude Code를 node-pty(Windows는 ConPTY)로 띄우고, 화면은 xterm headless로 읽고, 상태는 로컬 HTTP 훅 서버로 받는다.
 
 ## 파일
 
@@ -12,6 +12,7 @@
 | `s3-skills.mjs` | S3 `--add-dir` 스킬, `disable-model-invocation`, `--resume`, `/compact` |
 | `s4-permissions.mjs` | S4 deny 규칙이 막는 범위, 관리 설정으로 모드가 막혔을 때 |
 | `s5-first-run.mjs` | S5 첫 실행 창. 깨끗한 사용자 프로필이 필요해 가장 먼저 돌린다 |
+| `s6-resume.mjs` | S6 강제 종료 뒤 `--resume`. 강제 종료는 Windows는 `taskkill /T /F`, Linux는 프로세스 그룹에 SIGKILL이다 |
 | `lib/` | PTY 세션, 훅 서버, 테스트용 레포와 결과 기록 |
 
 ## 실행
@@ -30,6 +31,16 @@ node run.mjs S2 S3      # 일부
 
 - 환경 변수 `SPIKE_MODEL`로 모델을 바꾼다(기본 `sonnet`).
 - `CLAUDE_BIN`으로 `claude` 실행 파일 경로를 직접 줄 수 있다.
+
+Linux(예: Claude Code 웹 세션의 컨테이너)에서 예비 확인할 때는 세션의 환경 변수가 넘어가지 않게 `env -i`로 필요한 것만 넘긴다. 대화형 온보딩을 마친 적이 없는 환경이면 따로 만든 설정 폴더를 `CLAUDE_CONFIG_DIR`로 주고, 그 폴더로 `claude auth status`를 한 번 돌려 만든 `.claude.json`에 `"hasCompletedOnboarding": true`만 더한다. root에서는 `IS_SANDBOX=1`이 있어야 `--dangerously-skip-permissions`로 뜬다.
+
+```bash
+cd spikes && npm ci
+env -i HOME="$HOME" PATH="$PATH" SHELL=/bin/bash TERM=xterm-256color LANG=C.UTF-8 \
+  HTTPS_PROXY="$HTTPS_PROXY" NO_PROXY="$NO_PROXY" NODE_EXTRA_CA_CERTS="$NODE_EXTRA_CA_CERTS" SSL_CERT_FILE="$SSL_CERT_FILE" \
+  IS_SANDBOX=1 CLAUDE_CONFIG_DIR=<설정 폴더> SPIKE_MODEL=sonnet CLAUDE_CODE_EFFORT_LEVEL=low \
+  node run.mjs S6
+```
 
 ## 결과 읽는 법
 

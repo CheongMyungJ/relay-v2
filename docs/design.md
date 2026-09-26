@@ -150,6 +150,8 @@ relay-v2는 Claude Code CLI를 **앱 안의 터미널(node-pty + xterm.js)에 �
 | D110 | SessionEnd 훅은 본문의 `reason`이 `clear`, `resume`이 아닐 때만 세션 종료로 본다. PTY 종료는 늘 세션 종료다 | `/clear`와 `/resume`도 SessionEnd를 보내지만 CLI는 새 세션으로 계속 돈다(Claude Code 문서 hooks). 세션 종료로 보면 그 뒤의 신호를 무시해 task가 승인 대기가 될 수 없음 | ✅ |
 | D111 | project-id의 폴더 이름 부분에서 권한 규칙의 패턴 문자(`[`, `]`, `*`, `?`, `\`)를 `_`로 바꾼다. 해시는 원래 레포 절대 경로로 계산한다. RELAY_HOME 경로 자체의 이 문자는 다루지 않는다 | 권한 규칙의 경로는 gitignore 패턴이고, 설정 파일에 직접 쓴 규칙은 이스케이프되지 않는다(Claude Code 문서 permissions). 이 문자가 든 경로의 deny 규칙이 맞지 않음. 해시가 원래 경로를 담아 겹치지 않음. RELAY_HOME에 이 문자가 드는 일은 드묾 | ✅ |
 | D112 | [승인]과 [오류 무시하고 승인]은 에이전트가 턴을 끝낸 뒤(승인 대기, 대기, 세션 종료)에만 누를 수 있다. intake에서 사람이 `size`를 고르면 `size` 오류가 풀려 대기에서도 [의도 승인]이 된다. [오류 무시하고 승인]은 intake의 intent 초안 머리글 오류와 초안 없음만 막고(D90) 나머지 형식 오류는 넘긴다. handoff 머리글을 읽지 못해 모르는 값은 없는 것으로 본다: `decisions.md`에는 머리 줄과 "결정을 읽지 못함"만 적고, `recommended_next`는 null로 본다. `status`가 `blocked`로 읽히면 주지 않는다(4.4). 무시한 오류는 `work.json`과 `events.jsonl`에 남긴다 | 형식 오류가 끝까지 남으면 task는 Stop 뒤 대기나 세션 종료로 남아, 승인 대기에서만 누를 수 있으면 4.1의 [오류 무시하고 승인]과 `size`로 풀리는 오류를 쓸 수 없음. 드문 경우라 사람에게 맡기되(0절 3항) 무엇을 넘겼는지 기록으로 남김 | ✅ |
+| D113 | task 세션에서는 Claude Code의 자동 메모리를 끈다. task 설정 파일에 `autoMemoryEnabled: false`를 넣는다 | 자동 메모리는 기본으로 켜져 있고 레포(worktree 공유)마다 쌓여, task와 Work 사이를 `context.md` 밖으로 잇는다. 되감기의 폐기(D22)도 메모리는 입력에서 뺄 수 없다. 스파이크 S6에서 에이전트가 사람이 알려 준 값을 메모리에 적는 것을 봄 | ✅ |
+| D114 | handoff 없이 끝난 세션의 [이 단계 새 세션으로 다시]는 같은 노드의 새 task를 만든다(다음 순번, 새 task 디렉터리와 `context.md`, 새 세션). 앞 task는 세션 종료로 남고 입력에 들어가지 않는다. 머리 띠의 이유는 "재개"다. 코드는 되돌리지 않는다 | task는 CLI 세션 하나다(3절). 같은 디렉터리에 앞 세션의 미완성 산출물과 handoff가 남지 않음. 같은 단계를 다시 실행하는 되감기(6.2)와 모양이 같음 | ✅ |
 
 ---
 
@@ -280,6 +282,7 @@ S 크기는 `intake → fix → verify`로 간다. evidence와 rca의 일 중 �
 3. **앱:** task 전용 설정 파일을 만든다.
    - HTTP 훅: UserPromptSubmit, Stop, Notification, SessionEnd, PreToolUse·PostToolUse(`AskUserQuestion`만)
    - deny 규칙: `git push`, `gh pr` 계열, 앱 소유 파일(`work.json`, `request.md`, `intent.md`, `decisions.md`, 이전 task 디렉터리, Work 디렉터리의 `.claude/`) 편집
+   - 자동 메모리 끔: `autoMemoryEnabled: false` (D113)
 4. **앱:** `context.md`를 조립한다.
 
    | 내용 | 방식 |
@@ -331,7 +334,7 @@ S 크기는 `intake → fix → verify`로 간다. evidence와 rca의 일 중 �
 4. **중단**
    - **[즉시 중단]:** 세션을 종료하고 task를 "중단됨"으로 남긴다. 탭과 액션 바에 **[재개]** 버튼이 생긴다. [재개]는 같은 실행 옵션 + `--resume <세션 id>`로 대화를 잇고, 이전 터미널 화면을 먼저 보여 준다.
    - **[이 단계 끝나면 멈춤]:** 현재 단계가 승인되면 다음 단계를 시작하지 않고 멈춘다. [재개]를 누르면 다음 단계를 시작한다.
-5. **handoff 없이 CLI가 끝나면**(사용자가 `/exit`했거나 크래시): [세션 재개] / [이 단계 새 세션으로 다시]
+5. **handoff 없이 CLI가 끝나면**(사용자가 `/exit`했거나 크래시): [세션 재개] / [이 단계 새 세션으로 다시]. 새 세션으로 다시 하면 같은 노드의 새 task를 만든다(D114).
 6. **앱 종료 (기본값):** 실행 중인 세션이 있으면 확인 창을 띄운다. 확인하면 세션을 "중단됨"으로 남기고, 다음 실행 때 [재개]할 수 있다. 실행 중인 탭에는 닫기 버튼이 없다. 다음 실행 때는 시나리오 9의 규칙을 따른다.
 
 ### 시나리오 4. handoff와 승인
@@ -1087,6 +1090,7 @@ intent의 완료조건마다 판정하고 `verification.md`와 PR 초안 `pr.md`
 | 상태 신호 | 내장 HTTP 훅 → 앱 로컬 서버: UserPromptSubmit, Stop, Notification, SessionEnd, PreToolUse·PostToolUse(`AskUserQuestion`) |
 | 형식 오류 되돌림 | Stop 훅 응답 `{"decision":"block","reason":…}`, 연속 2회까지(설정 가능) |
 | 제한 | deny 규칙: `Bash(git push*)`, `Bash(gh pr*)`, 앱 소유 파일 `Edit(//…)`. 실수를 막는 장치이며 우회할 수 있다(6.1) |
+| 자동 메모리 | task 설정에 `autoMemoryEnabled: false` (D113) |
 | 산출물 감지 | 실행 중 task 디렉터리 감시 |
 
 ### 6.1 deny 규칙의 한계 (D91)
