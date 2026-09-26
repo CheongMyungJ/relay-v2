@@ -19,8 +19,8 @@
 |---|---|---|---|
 | 1 | 기술 선택 | 언어, Electron 프로세스 구성, 빌드 도구, UI 라이브러리, 테스트 도구, 패키지 관리, 레포 배치, 배포 | 정함 |
 | 2 | 모듈 구조 | 저장소(5.1), 상태 기계(3.3), task 실행(PTY, 훅 서버, 설정 파일 생성), 형식 검사(5.2.1), git 작업(worktree, 되감기, 전달), 화면. 모듈 사이 경계와 IPC | 정함 |
-| 3 | 스파이크 코드 재사용 | `spikes/lib`와 `skills/check.mjs`에서 가져다 쓸 것과 새로 쓸 것 | 질문 중 |
-| 4 | 마일스톤 | 만드는 순서와 마일스톤마다의 완료 기준. 최소 흐름을 먼저 세로로 관통한다 | |
+| 3 | 스파이크 코드 재사용 | `spikes/lib`와 `skills/check.mjs`에서 가져다 쓸 것과 새로 쓸 것 | 정함 |
+| 4 | 마일스톤 | 만드는 순서와 마일스톤마다의 완료 기준. 최소 흐름을 먼저 세로로 관통한다 | 질문 중 |
 | 5 | 테스트 전략 | 단위 테스트, 러너 통합 시험, 실기 확인의 나눔과 비용 | |
 | 6 | 설계와의 어긋남 | 1~5를 정하며 찾은 설계의 빈 곳과 어긋난 곳(8절 목록) | |
 
@@ -43,6 +43,11 @@
 | I13 | 훅 서버는 앱 시작 때 `127.0.0.1` 임의 포트에 하나 띄운다. URL은 `/hook/<task-id>/<Event>`이고, task마다 무작위 토큰을 `Authorization` 머리글로 받는다. 토큰은 PTY 환경 변수 `RELAY_HOOK_TOKEN`으로 넘기고 설정 파일에는 변수 이름만 적는다(`headers`, `allowedEnvVars`). 토큰이 틀린 요청은 무시한다 | 다른 프로세스가 가짜 신호를 보낼 수 없고 토큰이 파일에 남지 않음. URL만 보고 task를 알 수 있음. 포트가 바뀌어도 재개할 때 설정 파일을 새로 만들면 됨 | ✅ |
 | I14 | 렌더러는 명령을 `invoke`로 보낸다. 메인은 상태가 바뀔 때마다 Work 단위 스냅샷을 보낸다. 터미널 출력은 task별 채널로 보낸다 | 상태의 기준이 메인 한 곳이고, 화면은 받은 것을 그리기만 해 어긋나지 않음 | ✅ |
 | I15 | 실행 중인 task 디렉터리를 `fs.watch`로 보고 디바운스해 검사한다. Stop을 받으면 감시와 상관없이 다시 읽어 검사한다 | 판정의 기준은 Stop 때의 재검사라 감시는 화면을 빨리 바꾸는 용도임. 놓쳐도 결과가 틀리지 않음 | ✅ |
+| I16 | 앱 코드는 TypeScript로 새로 쓰되, 스파이크에서 확인한 세부는 그대로 옮기고 출처를 주석에 남긴다. `spikes/`는 그대로 둔다 | 스파이크 코드는 시험 편의 코드와 섞여 있음. 러너에서 확인한 세부를 버리면 같은 시행착오를 다시 겪음 | ✅ |
+| I17 | 화면 읽기(xterm headless), 첫 실행 창 자동 수락, 테스트용 레포 만들기는 앱에 넣지 않고 통합 시험 도구(`app/test/`)로만 옮긴다 | 앱은 첫 실행 창을 건드리지 않음(D69). 통합 시험에서 `claude`를 실제로 띄우려면 필요함 | ✅ |
+| I18 | `skills/check.mjs`는 스킬 작성용으로 그대로 둔다. 앱 형식 검사(`core/validate`)는 따로 쓰고, 앱 테스트가 `_common.md`와 `work-start`의 템플릿 예시를 앱 검사기에 넣어 통과를 확인한다(D87) | 두 코드가 보는 대상이 다름. 스킬과 앱이 어긋나면 앱 테스트가 실패해 드러남. 공통 모듈을 두면 `skills/`가 앱 빌드에 묶임 | ✅ |
+| I19 | 스키마 원본은 `docs/contracts/*.schema.json`이다. 빌드 때 앱으로 복사하고 TypeScript 타입은 `json-schema-to-typescript`로 생성한다 | 설계(D84)가 이 파일을 원본으로 정함. 생성하면 타입과 스키마가 어긋나지 않음 | ✅ |
+| I20 | 프로세스 ID의 시작 시각은 PowerShell `Get-CimInstance Win32_Process`로 조회한다. 세션을 띄운 직후와 재시작 때만 부른다 | 러너에서 동작을 확인함(S1). 느리지만(1초 안팎) 드물게 부름 | ✅ |
 
 ## 3. 확인한 사실
 
@@ -119,7 +124,22 @@ app/src/
 
 ## 6. 스파이크 코드 재사용
 
-(주제 3에서 채운다)
+앱은 새로 쓰고, 아래 세부만 옮긴다(I16). 옮긴 코드에는 출처 파일을 주석으로 남긴다.
+
+| 옮길 것 | 출처 | 앱 모듈 |
+|---|---|---|
+| `claude` 실행 파일 찾기(`CLAUDE_BIN`, `%USERPROFILE%\.local\bin\claude.exe`, npm `claude.cmd`) | `spikes/lib/session.mjs` `resolveClaude` | `adapters/claude` |
+| npm `.cmd`를 `cmd.exe /d /s /c`로 감싸 실행, `useConpty: true`, `xterm-256color` | `spikes/lib/session.mjs` `start` | `adapters/pty` |
+| 프로세스 트리 종료 `taskkill /PID <pid> /T /F`(node-pty `kill()` 대신) | `spikes/lib/session.mjs` `kill`, `util.mjs` `killTree` | `adapters/pty` |
+| 프로세스 ID와 시작 시각 조회(I20) | `spikes/lib/util.mjs` `processes`, `isAlive` | `adapters/pty` |
+| deny 규칙의 절대 경로 변환(`C:\x` → `//c/x`) | `spikes/lib/util.mjs` `ruleAbs` | `core/settings` |
+| 훅 설정 모양(이벤트별 `matcher`, `type: http`) | `spikes/lib/hooks.mjs` `settings` | `core/settings` |
+| Stop 되돌림 응답 `{"decision":"block","reason":…}` | `spikes/lib/hooks.mjs` | `adapters/hooks` |
+| 파일 해시(SHA-256) | `spikes/lib/util.mjs` `sha256` | `adapters/store` |
+
+시험 도구로만 옮기는 것(I17): xterm headless 화면 읽기, 첫 실행 창 자동 수락(`handleDialogs`), 입력 대기 판정(`waitReady`), 테스트용 레포와 bare 원격 만들기(`makeFixture`), 결과 기록(`Result`).
+
+새로 쓰는 것: 상태 기계, 저장소, `context.md` 조립, 형식 검사(I18), 되감기, 전달, 정리, 화면.
 
 ## 7. 마일스톤
 
