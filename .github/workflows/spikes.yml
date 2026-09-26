@@ -51,6 +51,11 @@ jobs:
       - name: Claude Code 버전
         run: claude --version
 
+      - name: 인증 확인 (비대화형 한 번)
+        # 인증이 안 되면 스파이크를 돌려도 의미가 없으므로 먼저 확인하고 멈춘다.
+        timeout-minutes: 3
+        run: claude -p "READY 라고만 답해." --model $env:SPIKE_MODEL
+
       - name: 스파이크 의존성 설치
         working-directory: spikes
         run: npm ci --no-audit --no-fund

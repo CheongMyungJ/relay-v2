@@ -5,6 +5,10 @@ import pty from 'node-pty';
 import xtermHeadless from '@xterm/headless';
 
 const { Terminal } = xtermHeadless;
+// 화면의 빈 줄을 빼고 끝부분만 보여 준다(로그용).
+export function tail(text, n = 15) {
+  return text.split('\n').filter((l) => l.trim()).slice(-n).map((l) => `    | ${l}`).join('\n');
+}
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // 수락할 창의 판별 규칙. 문구는 Claude Code 버전에 따라 바뀔 수 있으므로 넓게 잡고, 본 화면은 모두 기록한다.
@@ -69,6 +73,7 @@ export class Session {
     });
     this.p.onExit((e) => {
       this.exit = e;
+      console.log(`[${this.name}] 프로세스 종료 ${JSON.stringify(e)}\n${tail(this.screen())}`);
       this.log?.end();
     });
     return this;
@@ -122,6 +127,7 @@ export class Session {
       const last = this.dialogs[this.dialogs.length - 1];
       if (last && last.name === rule.name && Date.now() - last.at < 3000) return false;
       this.dialogs.push({ name: rule.name, screen: scr, at: Date.now() });
+      console.log(`[${this.name}] 첫 실행 창 감지: ${rule.name}\n${tail(scr)}`);
       const opt = scr.split('\n').map((l) => l.match(ACCEPT_OPTION)).find(Boolean);
       if (opt) {
         this.p.write(opt[1]);
@@ -139,7 +145,13 @@ export class Session {
   // 조건이 참이 될 때까지 기다린다. 기다리는 동안 첫 실행 창을 처리한다.
   async waitUntil(pred, { timeout = 60000, label = 'condition' } = {}) {
     const end = Date.now() + timeout;
+    let nextDump = Date.now() + 30000;
     while (Date.now() < end) {
+      if (Date.now() > nextDump) {
+        // 오래 기다리면 화면을 로그에 남겨 어디서 멈췄는지 볼 수 있게 한다.
+        console.log(`[${this.name}] ${label} 기다리는 중 (alive=${this.alive()})\n${tail(this.screen())}`);
+        nextDump = Date.now() + 30000;
+      }
       if (await pred()) return true;
       await this.handleDialogs();
       if (!this.alive()) return !!(await pred());
