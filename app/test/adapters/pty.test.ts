@@ -20,7 +20,13 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 function collect(s: PtySession) {
   let out = ''
   let exitCode: number | null = null
-  s.onData((d) => (out += d))
+  s.onData((d) => {
+    out += d
+    // ConPTY는 시작할 때 터미널에 DA1(ESC [ c)을 묻는다. 앱에서는 xterm.js가 답하므로
+    // 시험도 xterm.js와 같은 답을 보낸다. 답이 없으면 1.23 ConPTY가 크기 변경을
+    // 처리하지 않는 것으로 보였다 (app-ci #1, #2).
+    if (d.includes('\x1b[c')) s.write('\x1b[?1;2c')
+  })
   s.onExit((c) => (exitCode = c))
   const until = async (pred: () => boolean, label: string, ms = 20000) => {
     const end = Date.now() + ms
