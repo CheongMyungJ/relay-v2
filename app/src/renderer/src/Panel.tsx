@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import type { Size } from '../../shared/contracts'
 import type { ReviewView, TaskView, WorkView } from '../../shared/views'
+import { call } from './commands'
 import { ConfirmDialog } from './dialogs'
 import { Diff, Markdown } from './Markdown'
 
@@ -35,12 +36,20 @@ export function Panel({ work, task, review, onApproved }: Props) {
       {work.stopNotice ? (
         <div className="notice stop">
           {work.stopNotice}
-          <div className="dim">단계 선택은 아직 없습니다(M4). 필요하면 새 Work를 만드세요.</div>
+          <div className="dim">
+            {work.stopKind === 'recommended_back'
+              ? '[재개]하면 추천을 따르지 않고 기본 다음 단계로 갑니다. 추천대로 되돌아가는 단계 선택은 M4에서 넣습니다.'
+              : '[재개]하면 다음 단계를 시작합니다.'}
+          </div>
         </div>
       ) : null}
       {work.status === 'completed' && task.id === work.current ? (
         <div className="notice done">Work 완료 (전달: 완료만)</div>
       ) : null}
+      {work.status === 'abandoned' ? (
+        <div className="notice">Work 포기. 산출물과 worktree는 남아 있습니다.</div>
+      ) : null}
+      {work.status === 'active' && task.id === work.current ? <TaskNotice task={task} /> : null}
       {task.status === 'approved' ? (
         <Review review={review} readOnly />
       ) : review.handoffPresent && review.handoffStatus === 'blocked' ? (
@@ -56,6 +65,36 @@ export function Panel({ work, task, review, onApproved }: Props) {
       )}
     </div>
   )
+}
+
+/** 지금 task가 사람을 기다리는 까닭과 누를 수 있는 버튼 (시나리오 3-4, 3-5, 4.4, D18) */
+function TaskNotice({ task }: { task: TaskView }) {
+  if (task.status === 'queued') {
+    return (
+      <div className="notice">
+        대기열: 살아 있는 세션이 세션 상한만큼 있어 기다립니다. 자리가 나면 자동으로 시작합니다.
+      </div>
+    )
+  }
+  if (task.status === 'interrupted') {
+    return <div className="notice">중단됨. [재개]하면 이어서 합니다.</div>
+  }
+  if (task.status === 'session_ended') {
+    return (
+      <div className="notice">
+        handoff 없이 세션이 끝났습니다. [세션 재개]로 대화를 잇거나 [이 단계 새 세션으로 다시]
+        시작하세요.
+      </div>
+    )
+  }
+  if (task.status === 'blocked' && !task.live) {
+    return (
+      <div className="notice">
+        막힘. 세션이 없습니다. [세션 재개]로 필요한 것을 주거나 [Work 포기]하세요.
+      </div>
+    )
+  }
+  return null
 }
 
 /** 진행 중: handoff 상태, 형식 오류, 산출물 목록 */
@@ -146,10 +185,12 @@ function Review({
   const approve = async (force: boolean) => {
     setBusy(true)
     setError(null)
-    const r = await window.relay.approve(review.workKey, review.taskId, {
-      ...(intake && size ? { size } : {}),
-      ...(force ? { force: true } : {}),
-    })
+    const r = await call(() =>
+      window.relay.approve(review.workKey, review.taskId, {
+        ...(intake && size ? { size } : {}),
+        ...(force ? { force: true } : {}),
+      }),
+    )
     setBusy(false)
     setConfirming(false)
     if (r.ok) onApproved?.()

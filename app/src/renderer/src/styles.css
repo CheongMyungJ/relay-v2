@@ -158,20 +158,21 @@ textarea {
   color: #1e1e1e;
 }
 
-.new-work,
-.add-project {
+.new-work {
   align-self: flex-start;
 }
 
-.add-project {
+.sidebar-foot {
   margin-top: auto;
+  display: flex;
+  gap: 6px;
 }
 
 /* ---------- 가운데 ---------- */
 
 .center {
   display: grid;
-  grid-template-rows: 32px 28px 1fr 30px;
+  grid-template-rows: 32px 28px 1fr 34px;
   min-width: 0;
 }
 
@@ -241,6 +242,18 @@ textarea {
   background: var(--accent);
 }
 
+.s-queued,
+.s-interrupted {
+  background: #4a4a4a;
+}
+
+.readonly {
+  font-size: 11px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
 .s-approved {
   background: #2f4f2f;
 }
@@ -267,12 +280,40 @@ textarea {
 
 .action-bar {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   align-items: center;
   padding: 0 12px;
   border-top: 1px solid var(--border);
   overflow: hidden;
   white-space: nowrap;
+}
+
+.action-bar > * {
+  flex-shrink: 0;
+}
+
+.action-bar button {
+  padding: 1px 8px;
+}
+
+/* 버튼이 먼저 보이고 Work 정보는 남는 자리에서 줄인다 */
+.action-bar .info,
+.action-bar .error {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.action-bar .info {
+  margin-left: auto;
+}
+
+.toggle {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  cursor: pointer;
 }
 
 /* ---------- 오른쪽 패널 ---------- */
@@ -521,4 +562,31 @@ fieldset.field {
 
 .path {
   word-break: break-all;
+}
+
+/* 설정 화면과 Work 설정 (D70, D72) */
+.form-grid {
+  display: grid;
+  gap: 6px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 200px;
+  gap: 12px;
+  align-items: center;
+}
+
+.form-row input[type='checkbox'] {
+  justify-self: start;
+}
+
+.modal h3 {
+  margin: 4px 0 0;
+  font-size: 13px;
+}
+
+details summary {
+  cursor: pointer;
+  color: var(--text-dim);
 }

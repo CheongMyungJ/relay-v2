@@ -9,6 +9,16 @@ export interface UiPort {
   projects(views: ProjectView[]): void
   /** task 터미널 출력 */
   terminal(key: string, chunk: TerminalChunk): void
-  /** OS 알림. M2는 이전 단계 추천으로 멈췄을 때만 알린다 (D23). 나머지 알림은 M3 (D81) */
-  notify(n: { title: string; body: string }): void
+  /**
+   * OS 알림 (D81): 사람이 움직여야 하는 상태로 바뀌었거나 대기열에서 자동으로 시작했다.
+   * 사람이 그 Work를 보고 있으면 보내지 않는다. 보고 있는지는 받는 쪽(창)이 가린다.
+   */
+  notify(n: Notice): void
+}
+
+export interface Notice {
+  /** 알림을 누르면 고를 Work */
+  workKey: string
+  title: string
+  body: string
 }

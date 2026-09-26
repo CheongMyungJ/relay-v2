@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  actions,
   createWork,
   currentTask,
   permissionWarning,
@@ -674,7 +675,7 @@ describe('이전 단계 추천에서 멈춤 (D23)', () => {
     const rec = valid({ recommended_next: { node: 'rca', reason: '원인을 좁히지 못함' } })
     const r = approve(stop(launch(work), rec).work, rec)
     expect(r.work.status).toBe('stopped')
-    expect(r.work.stop?.node).toBe('rca')
+    expect(r.work.stop).toMatchObject({ kind: 'recommended_back', node: 'rca' })
   })
 
   it('기본 다음 단계를 추천하면 그대로 진행한다', () => {
@@ -882,5 +883,538 @@ describe('대기와 세션 종료에서의 승인, [오류 무시하고 승인] 
     const work = idleWith(MISSING)
     expect(forceApprove(work, MISSING).rejected).toMatch(/오류를 무시하고 승인할 수 없음/)
     expect(approve(work, MISSING).rejected).toMatch(/유효하지 않음/)
+  })
+})
+
+// ---------- M3: 사람 조작과 여러 Work ----------
+
+/** intake를 M으로 승인하고 evidence task를 띄운 Work */
+function evidenceLive(): WorkState {
+  const ready = stop(launch(newWork()), valid({}, 'M')).work
+  return launch(approve(ready, valid({}, 'M')).work)
+}
+
+describe('대기열 (D18)', () => {
+  it('세션 상한 때문에 띄우지 못하면 대기열에 넣고, 자리가 나서 띄우면 작업 중이 된다', () => {
+    const work = newWork()
+    const q = apply(work, { type: 'task.queued', taskId: 't-01', at: '2026-09-26T10:00:00+09:00' })
+    expect(q.rejected).toBeUndefined()
+    expect(currentTask(q.work)).toMatchObject({
+      status: 'queued',
+      queued_at: '2026-09-26T10:00:00+09:00',
+      session: null,
+    })
+    const started = launch(q.work)
+    expect(currentTask(started)?.status).toBe('working')
+    expect(currentTask(started)?.queued_at).toBeUndefined()
+    expect(currentTask(started)?.session?.alive).toBe(true)
+  })
+
+  it('살아 있는 세션은 대기열에 넣지 않는다', () => {
+    const r = apply(running(), { type: 'task.queued', taskId: 't-01', at: at() })
+    expect(r.rejected).toBeDefined()
+  })
+
+  it('대기열에서 띄우지 못하면 중단됨이다', () => {
+    const q = apply(newWork(), { type: 'task.queued', taskId: 't-01', at: at() }).work
+    const r = apply(q, { type: 'session.failed', taskId: 't-01', at: at(), error: 'spawn 실패' })
+    expect(currentTask(r.work)).toMatchObject({ status: 'interrupted', error: 'spawn 실패' })
+    expect(currentTask(r.work)?.queued_at).toBeUndefined()
+  })
+})
+
+describe('[즉시 중단] (시나리오 3-4)', () => {
+  const interrupt = (work: WorkState, reason: 'human' | 'app_quit' = 'human') =>
+    apply(work, { type: 'interrupt', taskId: currentTask(work)?.id ?? '', at: at(), reason })
+
+  it('세션을 트리째 끝내고 중단됨으로 남긴다', () => {
+    const r = interrupt(running('working'))
+    expect(r.rejected).toBeUndefined()
+    expect(currentTask(r.work)).toMatchObject({ status: 'interrupted', session: { alive: false } })
+    expect(currentTask(r.work)?.session?.ended_at).toBeDefined()
+    expect(types(r.effects)).toEqual(['log:task.interrupted', 'endSession'])
+    expect(r.effects[0]).toMatchObject({ event: { payload: { reason: 'human' } } })
+  })
+
+  it('질문 대기, 입력 필요, 대기도 중단됨이다', () => {
+    for (const s of ['asking', 'input_needed', 'idle'] as const) {
+      expect(status(interrupt(running(s)).work)).toBe('interrupted')
+    }
+  })
+
+  it('승인 대기와 막힘은 세션이 없어도 남는다 (3.3). 끝낸 뒤에도 승인할 수 있다', () => {
+    for (const s of ['awaiting_approval', 'blocked'] as const) {
+      const r = interrupt(running(s))
+      expect(status(r.work)).toBe(s)
+      expect(currentTask(r.work)?.session?.alive).toBe(false)
+      expect(types(r.effects)).toEqual(['log:task.interrupted', 'endSession'])
+    }
+    const ended = interrupt(stop(launch(newWork()), valid({}, 'M')).work).work
+    const r = approve(ended, valid({}, 'M'))
+    expect(r.rejected).toBeUndefined()
+    expect(types(r.effects)).not.toContain('endSession')
+  })
+
+  it('앱 종료 확인도 같은 전이이고 이유를 남긴다 (시나리오 3-6)', () => {
+    const r = interrupt(running('working'), 'app_quit')
+    expect(r.effects[0]).toMatchObject({ event: { payload: { reason: 'app_quit' } } })
+  })
+
+  it('대기열에서 뺀 task에 유효한 handoff가 있으면 승인 대기로 남는다 (3.3)', () => {
+    const ended = apply(stop(launch(newWork()), valid({}, 'M')).work, {
+      type: 'pty.exit',
+      taskId: 't-01',
+      at: at(),
+    }).work
+    const q = apply(ended, { type: 'task.queued', taskId: 't-01', at: at() }).work
+    expect(status(q)).toBe('queued')
+    const r = apply(q, {
+      type: 'interrupt',
+      taskId: 't-01',
+      at: at(),
+      reason: 'human',
+      check: valid({}, 'M'),
+    })
+    expect(status(r.work)).toBe('awaiting_approval')
+  })
+
+  it('대기열의 task는 대기열에서 빼고 중단됨으로 둔다', () => {
+    const q = apply(newWork(), { type: 'task.queued', taskId: 't-01', at: at() }).work
+    const r = interrupt(q)
+    expect(currentTask(r.work)?.status).toBe('interrupted')
+    expect(r.effects).toEqual([
+      { type: 'dequeue', taskId: 't-01' },
+      expect.objectContaining({ type: 'log' }),
+    ])
+  })
+
+  it('끝낼 세션이 없으면 받지 않는다. 늦게 온 PTY 종료는 무시한다', () => {
+    const ended = interrupt(running('working')).work
+    expect(interrupt(ended).rejected).toMatch(/끝낼 세션이 없음/)
+    const late = apply(ended, { type: 'pty.exit', taskId: 't-01', at: at() })
+    expect(late.work).toBe(ended)
+  })
+})
+
+describe('[재개]와 [세션 재개] (시나리오 3-4, 3-5, 4.4)', () => {
+  const resume = (work: WorkState) =>
+    apply(work, { type: 'resume', taskId: currentTask(work)?.id ?? '', at: at() })
+  const resumed = (work: WorkState, check: TaskCheck = MISSING, pid = 2001) =>
+    apply(work, {
+      type: 'session.resumed',
+      taskId: currentTask(work)?.id ?? '',
+      at: '2026-09-26T11:30:00+09:00',
+      pid,
+      claudeVersion: '2.1.284 (Claude Code)',
+      check,
+    })
+  const interrupted = () =>
+    apply(running('working'), { type: 'interrupt', taskId: 't-01', at: at(), reason: 'human' }).work
+
+  it('중단된 세션은 --resume으로 다시 연다. 표시는 다시 연 결과로 바꾼다', () => {
+    const before = interrupted()
+    const r = resume(before)
+    expect(r.rejected).toBeUndefined()
+    expect(r.effects).toEqual([{ type: 'resumeTask', taskId: 't-01' }])
+    expect(r.work).toBe(before)
+    // 다시 연 뒤에는 세션이 살아 있어 다시 누르면 받지 않는다
+    expect(resume(resumed(r.work).work).rejected).toMatch(/재개할 수 있는 상태가 아님/)
+  })
+
+  it('다시 열면 같은 세션 id로 pid를 바꾸고, handoff가 없으면 대기다', () => {
+    const before = interrupted()
+    const r = resumed(resume(before).work)
+    expect(r.rejected).toBeUndefined()
+    const task = currentTask(r.work)
+    expect(task).toMatchObject({
+      status: 'idle',
+      session: {
+        id: 'session-t-01',
+        pid: 2001,
+        alive: true,
+        resumed_at: '2026-09-26T11:30:00+09:00',
+        started_at: currentTask(before)?.session?.started_at,
+      },
+    })
+    expect(task?.session?.ended_at).toBeUndefined()
+    expect(types(r.effects)).toEqual(['log:task.resumed'])
+    expect(r.effects[0]).toMatchObject({
+      event: {
+        task_id: 't-01',
+        payload: { session_id: 'session-t-01', claude_version: '2.1.284 (Claude Code)' },
+      },
+    })
+    // 다시 연 세션의 신호를 받는다
+    expect(status(stop(r.work, valid({}, 'M')).work)).toBe('awaiting_approval')
+  })
+
+  it('다시 연 때 유효한 handoff가 있으면 승인 대기나 막힘이다 (3.3)', () => {
+    const r = resumed(resume(interrupted()).work, valid({}, 'M'))
+    expect(status(r.work)).toBe('awaiting_approval')
+    expect(types(r.effects)).toEqual(['log:task.resumed', 'log:task.awaiting_approval'])
+    expect(status(resumed(resume(interrupted()).work, BLOCKED).work)).toBe('blocked')
+  })
+
+  it('세션 종료, 세션 없는 승인 대기와 막힘도 다시 연다', () => {
+    const ended = apply(running('idle'), { type: 'pty.exit', taskId: 't-01', at: at() }).work
+    expect(resume(ended).effects).toEqual([{ type: 'resumeTask', taskId: 't-01' }])
+    for (const s of ['awaiting_approval', 'blocked'] as const) {
+      const noSession = apply(running(s), { type: 'pty.exit', taskId: 't-01', at: at() }).work
+      expect(status(noSession)).toBe(s)
+      expect(resume(noSession).effects).toEqual([{ type: 'resumeTask', taskId: 't-01' }])
+    }
+  })
+
+  it('한 번도 띄우지 못한 task는 새 세션으로 시작한다', () => {
+    const failed = apply(newWork(), {
+      type: 'session.failed',
+      taskId: 't-01',
+      at: at(),
+      error: 'claude 없음',
+    }).work
+    const r = resume(failed)
+    expect(r.effects).toEqual([
+      { type: 'startTask', taskId: 't-01', node: 'intake', reason: 'default' },
+    ])
+    // 띄우면 앞의 실패 이유를 지운다
+    const started = currentTask(launch(r.work))
+    expect(started?.session?.alive).toBe(true)
+    expect(started?.error).toBeUndefined()
+  })
+
+  it('승인 대기를 다시 열어도 task.awaiting_approval을 거듭 남기지 않는다', () => {
+    const ended = apply(stop(launch(newWork()), valid({}, 'M')).work, {
+      type: 'pty.exit',
+      taskId: 't-01',
+      at: at(),
+    }).work
+    const r = resumed(resume(ended).work, valid({}, 'M'))
+    expect(status(r.work)).toBe('awaiting_approval')
+    expect(types(r.effects)).toEqual(['log:task.resumed'])
+  })
+
+  it('세션 없는 승인 대기를 다시 열지 못하면 유효한 handoff로 승인 대기에 남는다 (3.3)', () => {
+    const ended = apply(stop(launch(newWork()), valid({}, 'M')).work, {
+      type: 'pty.exit',
+      taskId: 't-01',
+      at: at(),
+    }).work
+    const r = apply(resume(ended).work, {
+      type: 'session.failed',
+      taskId: 't-01',
+      at: at(),
+      error: 'claude 없음',
+      check: valid({}, 'M'),
+    })
+    expect(currentTask(r.work)).toMatchObject({ status: 'awaiting_approval', error: 'claude 없음' })
+    expect(approve(r.work, valid({}, 'M')).rejected).toBeUndefined()
+  })
+
+  it('다시 열지 못하면 중단됨이고 세션 id는 남는다', () => {
+    const r = apply(resume(interrupted()).work, {
+      type: 'session.failed',
+      taskId: 't-01',
+      at: at(),
+      error: 'spawn 실패',
+    })
+    expect(currentTask(r.work)).toMatchObject({
+      status: 'interrupted',
+      error: 'spawn 실패',
+      session: { id: 'session-t-01', alive: false },
+    })
+  })
+
+  it('살아 있는 세션, 작업 중, 승인됨은 재개하지 않는다', () => {
+    for (const s of ['working', 'awaiting_approval', 'idle'] as const) {
+      expect(resume(running(s)).rejected).toMatch(/재개할 수 있는 상태가 아님/)
+    }
+  })
+
+  it('앞 프로세스의 늦은 PTY 종료는 다시 연 세션을 끝내지 않는다', () => {
+    const open = resumed(resume(interrupted()).work).work
+    const late = apply(open, { type: 'pty.exit', taskId: 't-01', at: at(), pid: 1001 })
+    expect(late.work).toBe(open)
+    const own = apply(open, { type: 'pty.exit', taskId: 't-01', at: at(), pid: 2001 })
+    expect(status(own.work)).toBe('session_ended')
+  })
+})
+
+describe('[이 단계 새 세션으로 다시] (시나리오 3-5, D114)', () => {
+  it('handoff 없이 끝난 세션이면 같은 노드의 새 task를 새 세션으로 시작한다', () => {
+    const work = evidenceLive()
+    const ended = apply(work, { type: 'pty.exit', taskId: 't-02', at: at() }).work
+    const r = apply(ended, { type: 'retry', taskId: 't-02', at: '2026-09-26T12:00:00+09:00' })
+    expect(r.rejected).toBeUndefined()
+    expect(r.work.tasks.map((t) => [t.id, t.node, t.status, t.reason])).toEqual([
+      ['t-01', 'intake', 'approved', 'default'],
+      ['t-02', 'evidence', 'session_ended', 'default'],
+      ['t-03', 'evidence', 'working', 'resume'],
+    ])
+    expect(r.effects).toEqual([
+      { type: 'startTask', taskId: 't-03', node: 'evidence', reason: 'resume' },
+    ])
+  })
+
+  it('세션 종료가 아니면 받지 않는다', () => {
+    for (const s of ['working', 'idle', 'interrupted', 'awaiting_approval'] as const) {
+      const work = running(s)
+      expect(apply(work, { type: 'retry', taskId: 't-01', at: at() }).rejected).toMatch(
+        /handoff 없이 끝난 세션이 아님/,
+      )
+    }
+  })
+})
+
+describe('[이 단계 끝나면 멈춤]과 멈춘 Work의 [재개] (시나리오 3-4, 3.3)', () => {
+  const stopAfter = (work: WorkState, on: boolean) =>
+    apply(work, { type: 'stopAfter', at: at(), on })
+
+  it('켜 두면 승인 뒤 다음 단계를 시작하지 않고 멈춘다. 멈춤 표시는 지운다', () => {
+    const on = stopAfter(evidenceLive(), true).work
+    expect(on.stop_after_step).toBe(true)
+    const r = approve(stop(on, valid()).work, valid())
+    expect(r.work).toMatchObject({
+      status: 'stopped',
+      stop: { kind: 'after_step', task_id: 't-02' },
+    })
+    expect(r.work.stop_after_step).toBeUndefined()
+    expect(types(r.effects)).toEqual(['log:task.approved', 'endSession', 'appendDecisions'])
+    expect(r.work.tasks).toHaveLength(2)
+  })
+
+  it('끄면 그대로 진행한다', () => {
+    const off = stopAfter(stopAfter(evidenceLive(), true).work, false).work
+    expect(off.stop_after_step).toBeUndefined()
+    const r = approve(stop(off, valid()).work, valid())
+    expect(r.work.status).toBe('active')
+    expect(currentTask(r.work)?.node).toBe('rca')
+  })
+
+  it('의도 승인 뒤에도 멈춘다. [재개]하면 기본 다음 단계를 시작한다', () => {
+    const on = stopAfter(launch(newWork()), true).work
+    const stopped = approve(stop(on, valid({}, 'S')).work, valid({}, 'S')).work
+    expect(stopped).toMatchObject({ status: 'stopped', intent: { size: 'S' } })
+    const r = apply(stopped, { type: 'resumeWork', at: at() })
+    expect(r.rejected).toBeUndefined()
+    expect(r.work.status).toBe('active')
+    expect(r.work.stop).toBeUndefined()
+    expect(r.effects).toEqual([
+      { type: 'startTask', taskId: 't-02', node: 'fix', reason: 'default' },
+    ])
+  })
+
+  it('verify 승인은 멈춤이 켜져 있어도 Work를 완료한다', () => {
+    let work = newWork()
+    for (const check of [valid({}, 'S'), valid()]) {
+      work = approve(stop(launch(work), check).work, check).work
+    }
+    const on = stopAfter(launch(work), true).work
+    const r = approve(stop(on, valid()).work, valid())
+    expect(r.work.status).toBe('completed')
+  })
+
+  it('이전 단계 추천으로 멈춘 Work를 [재개]하면 추천을 따르지 않고 기본 다음 단계로 간다', () => {
+    const rec = valid({ recommended_next: { node: 'intake', reason: '의도를 다시' } })
+    const stopped = approve(stop(evidenceLive(), rec).work, rec).work
+    expect(stopped.stop).toMatchObject({ kind: 'recommended_back', node: 'intake' })
+    const r = apply(stopped, { type: 'resumeWork', at: at() })
+    expect(r.effects).toEqual([
+      { type: 'startTask', taskId: 't-03', node: 'rca', reason: 'default' },
+    ])
+  })
+
+  it('verify에서 멈춘 Work를 [재개]하면 Work를 완료한다', () => {
+    let work = newWork()
+    for (const check of [valid({}, 'S'), valid()]) {
+      work = approve(stop(launch(work), check).work, check).work
+    }
+    const rec = valid({ recommended_next: { node: 'fix', reason: '완료조건 2 실패' } })
+    const stopped = approve(stop(launch(work), rec).work, rec).work
+    const r = apply(stopped, { type: 'resumeWork', at: at() })
+    expect(r.work.status).toBe('completed')
+    expect(types(r.effects)).toEqual(['log:work.completed'])
+  })
+
+  it('멈추지 않은 Work의 [재개]와 끝난 Work의 멈춤 표시는 받지 않는다', () => {
+    expect(apply(running(), { type: 'resumeWork', at: at() }).rejected).toMatch(/멈춘 Work가 아님/)
+    const done = { ...running(), status: 'completed' as const }
+    expect(stopAfter(done, true).rejected).toBeDefined()
+  })
+})
+
+describe('[Work 포기] (3.3)', () => {
+  const abandon = (work: WorkState) => apply(work, { type: 'abandon', at: at() })
+
+  it('살아 있는 세션을 끝내고 Work를 포기로 둔다', () => {
+    const r = abandon(evidenceLive())
+    expect(r.rejected).toBeUndefined()
+    expect(r.work.status).toBe('abandoned')
+    expect(r.work.abandoned_at).toBeDefined()
+    expect(currentTask(r.work)).toMatchObject({ status: 'interrupted', session: { alive: false } })
+    expect(types(r.effects)).toEqual(['log:task.interrupted', 'endSession', 'log:work.abandoned'])
+    expect(r.effects[0]).toMatchObject({ event: { payload: { reason: 'abandoned' } } })
+  })
+
+  it('승인 대기도 중단됨으로 둔다. 포기한 Work의 task는 승인하지 않는다', () => {
+    const r = abandon(running('awaiting_approval'))
+    expect(status(r.work)).toBe('interrupted')
+    expect(approve(r.work, valid({}, 'M')).rejected).toMatch(/진행 중인 Work가 아님/)
+    // 늦은 신호는 무시한다
+    expect(apply(r.work, { type: 'UserPromptSubmit', taskId: 't-01', at: at() }).work).toBe(r.work)
+  })
+
+  it('대기열의 task는 뺀다. 멈춘 Work도 포기한다', () => {
+    const q = apply(newWork(), { type: 'task.queued', taskId: 't-01', at: at() }).work
+    expect(types(abandon(q).effects)).toEqual([
+      'dequeue',
+      'log:task.interrupted',
+      'log:work.abandoned',
+    ])
+    const on = apply(evidenceLive(), { type: 'stopAfter', at: at(), on: true }).work
+    const stopped = approve(stop(on, valid()).work, valid()).work
+    expect(stopped.status).toBe('stopped')
+    const r = abandon(stopped)
+    expect(r.work.status).toBe('abandoned')
+    expect(r.work.stop).toBeUndefined()
+    expect(types(r.effects)).toEqual(['log:work.abandoned'])
+  })
+
+  it('완료나 포기한 Work는 포기하지 않는다', () => {
+    const done = { ...running('approved'), status: 'completed' as const }
+    expect(abandon(done).rejected).toBeDefined()
+    expect(abandon(abandon(running()).work).rejected).toBeDefined()
+  })
+})
+
+describe('Work별 설정 (D72)', () => {
+  it('질문 방식을 덮어쓴다. 끝난 Work는 바꾸지 않는다', () => {
+    const settings = { question_mode: { evidence: 'confirm_each' as const } }
+    const r = apply(running(), { type: 'settings.update', at: at(), settings })
+    expect(r.work.settings).toEqual(settings)
+    const done = { ...running(), status: 'completed' as const }
+    expect(apply(done, { type: 'settings.update', at: at(), settings }).rejected).toBeDefined()
+  })
+})
+
+describe('재시작 조정 (시나리오 9, D75, D78)', () => {
+  const restart = (work: WorkState, check: TaskCheck | null = MISSING) =>
+    apply(work, { type: 'app.restarted', at: '2026-09-26T13:00:00+09:00', check })
+
+  it('실행 중이던 task는 중단됨이다. 세션은 살아 있지 않다', () => {
+    for (const s of ['working', 'asking', 'input_needed', 'idle'] as const) {
+      const r = restart(running(s))
+      expect(currentTask(r.work)).toMatchObject({
+        status: 'interrupted',
+        session: { alive: false, ended_at: '2026-09-26T13:00:00+09:00' },
+      })
+      expect(r.effects).toEqual([
+        expect.objectContaining({
+          event: expect.objectContaining({
+            type: 'task.interrupted',
+            payload: { reason: 'app_restart' },
+          }),
+        }),
+      ])
+    }
+  })
+
+  it('유효한 handoff가 있으면 승인 대기나 막힘이다. 자동 승인과 자동 재개는 하지 않는다', () => {
+    const r = restart(running('working'), valid({}, 'M'))
+    expect(currentTask(r.work)).toMatchObject({
+      status: 'awaiting_approval',
+      session: { alive: false },
+      check: { handoff_present: true, errors: [] },
+    })
+    expect(types(r.effects)).toEqual(['log:task.awaiting_approval'])
+    expect(r.effects[0]).toMatchObject({ event: { payload: { reason: 'app_restart' } } })
+    expect(status(restart(running('working'), BLOCKED).work)).toBe('blocked')
+    // 이미 승인 대기였으면 기록을 더하지 않는다
+    const kept = restart(running('awaiting_approval'), valid({}, 'M'))
+    expect(status(kept.work)).toBe('awaiting_approval')
+    expect(kept.effects).toEqual([])
+    // 승인 대기였어도 지금 handoff가 유효하지 않으면 중단됨이다
+    expect(status(restart(running('awaiting_approval'), INVALID).work)).toBe('interrupted')
+  })
+
+  it('띄우는 중이던 task도 중단됨이다', () => {
+    const r = restart(newWork())
+    expect(currentTask(r.work)).toMatchObject({ status: 'interrupted', session: null })
+  })
+
+  it('대기열을 비우고 대기 중이던 task를 중단됨으로 바꾼다 (D78)', () => {
+    const q = apply(newWork(), { type: 'task.queued', taskId: 't-01', at: at() }).work
+    const r = restart(q)
+    expect(currentTask(r.work)?.status).toBe('interrupted')
+    expect(currentTask(r.work)?.queued_at).toBeUndefined()
+    expect(r.effects).toEqual([
+      expect.objectContaining({
+        event: expect.objectContaining({
+          type: 'task.interrupted',
+          payload: { reason: 'app_restart', queued: true },
+        }),
+      }),
+    ])
+    // 재시작 뒤 [재개]하면 새 세션으로 시작한다
+    const resumed = apply(r.work, { type: 'resume', taskId: 't-01', at: at() })
+    expect(types(resumed.effects)).toEqual(['startTask'])
+  })
+
+  it('다시 열려고 대기열에 있던 승인 대기는 유효한 handoff로 승인 대기가 된다 (3.3)', () => {
+    const ended = apply(stop(launch(newWork()), valid({}, 'M')).work, {
+      type: 'pty.exit',
+      taskId: 't-01',
+      at: at(),
+    }).work
+    const q = apply(ended, { type: 'task.queued', taskId: 't-01', at: at() }).work
+    const r = restart(q, valid({}, 'M'))
+    expect(status(r.work)).toBe('awaiting_approval')
+    expect(r.effects).toEqual([
+      expect.objectContaining({
+        event: expect.objectContaining({
+          type: 'task.awaiting_approval',
+          payload: { reason: 'app_restart' },
+        }),
+      }),
+    ])
+  })
+
+  it('실행 중이 아니던 task와 끝난 Work는 그대로 둔다', () => {
+    const ended = apply(running('idle'), { type: 'pty.exit', taskId: 't-01', at: at() }).work
+    expect(restart(ended).work).toBe(ended)
+    const interrupted = apply(running(), {
+      type: 'interrupt',
+      taskId: 't-01',
+      at: at(),
+      reason: 'app_quit',
+    }).work
+    expect(restart(interrupted).work).toBe(interrupted)
+  })
+})
+
+describe('액션 바의 조작 (시나리오 3-4, 3-5, 4.4)', () => {
+  it('상태마다 누를 수 있는 버튼', () => {
+    const live = actions(running('working'))
+    expect(live).toMatchObject({ interrupt: true, resume: false, retry: false, stopAfter: true })
+    const q = apply(newWork(), { type: 'task.queued', taskId: 't-01', at: at() }).work
+    expect(actions(q)).toMatchObject({ interrupt: true, resume: false })
+    const ended = apply(running('idle'), { type: 'pty.exit', taskId: 't-01', at: at() }).work
+    expect(actions(ended)).toMatchObject({ interrupt: false, resume: true, retry: true })
+    const interrupted = apply(running(), {
+      type: 'interrupt',
+      taskId: 't-01',
+      at: at(),
+      reason: 'human',
+    }).work
+    expect(actions(interrupted)).toMatchObject({ interrupt: false, resume: true, retry: false })
+    const stopped = { ...running('approved'), status: 'stopped' as const }
+    expect(actions(stopped)).toMatchObject({
+      interrupt: false,
+      resume: false,
+      resumeWork: true,
+      stopAfter: false,
+      abandon: true,
+    })
+    const done = { ...running('approved'), status: 'completed' as const }
+    expect(Object.values(actions(done)).every((v) => !v)).toBe(true)
   })
 })

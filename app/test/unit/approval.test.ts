@@ -1,7 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import { REVIEWABLE, approvalGate, resolvedBySize } from '../../src/core/approval'
+import {
+  BADGE_ORDER,
+  HUMAN_BADGES,
+  REVIEWABLE,
+  approvalGate,
+  badge,
+  resolvedBySize,
+} from '../../src/core/approval'
+import { createWork } from '../../src/core/machine'
 import type { NodeName } from '../../src/shared/contracts'
-import type { CheckSummary, FormatIssue, TaskStatus } from '../../src/shared/work'
+import type {
+  CheckSummary,
+  FormatIssue,
+  TaskStatus,
+  WorkState,
+  WorkStatus,
+} from '../../src/shared/work'
 
 const BODY: FormatIssue = { file: 'handoff.md', part: 'body', field: '요약', message: '요약 없음' }
 const HEADER: FormatIssue = { file: 'handoff.md', part: 'header', field: 'risks', message: '형식' }
@@ -72,5 +86,81 @@ describe('승인 버튼의 판정 (4.1, D90, D112)', () => {
       approve: false,
       force: true,
     })
+  })
+})
+
+describe('사이드바 배지 (D80)', () => {
+  const base = createWork({ workId: 'w', baseBranch: 'main', baseCommit: 'c', at: 'x' }).work
+
+  function work(status: WorkStatus, task: TaskStatus): WorkState {
+    return {
+      ...base,
+      status,
+      tasks: base.tasks.map((t) => ({ ...t, status: task })),
+    }
+  }
+
+  it('우선순위는 질문 대기·입력 필요 > 승인 대기 > 막힘 > 멈춤 > 세션 종료 > 작업 중 > 대기 > 대기열 > 중단됨 > 완료·포기', () => {
+    expect(BADGE_ORDER).toEqual([
+      'asking',
+      'awaiting_approval',
+      'blocked',
+      'stopped',
+      'session_ended',
+      'working',
+      'idle',
+      'queued',
+      'interrupted',
+      'done',
+    ])
+    // 사람이 필요한 상태(앞의 다섯)만 강조한다
+    expect(HUMAN_BADGES).toEqual([
+      'asking',
+      'awaiting_approval',
+      'blocked',
+      'stopped',
+      'session_ended',
+    ])
+  })
+
+  it('진행 중인 Work는 지금 task의 표시를 보인다', () => {
+    const rows: [TaskStatus, string, string, boolean][] = [
+      ['asking', 'asking', '질문 대기', true],
+      ['input_needed', 'asking', '입력 필요', true],
+      ['awaiting_approval', 'awaiting_approval', '승인 대기', true],
+      ['blocked', 'blocked', '막힘', true],
+      ['session_ended', 'session_ended', '세션 종료', true],
+      ['working', 'working', '작업 중', false],
+      ['idle', 'idle', '대기', false],
+      ['queued', 'queued', '대기열', false],
+      ['interrupted', 'interrupted', '중단됨', false],
+    ]
+    for (const [status, kind, label, hot] of rows) {
+      expect(badge(work('active', status))).toEqual({ kind, label, hot })
+    }
+  })
+
+  it('멈춘 Work는 멈춤이다. 완료와 포기는 지금 task와 상관없이 끝난 상태를 보인다', () => {
+    expect(badge(work('stopped', 'approved'))).toEqual({
+      kind: 'stopped',
+      label: '멈춤',
+      hot: true,
+    })
+    expect(badge(work('completed', 'approved'))).toEqual({
+      kind: 'done',
+      label: '완료',
+      hot: false,
+    })
+    expect(badge(work('abandoned', 'interrupted'))).toEqual({
+      kind: 'done',
+      label: '포기',
+      hot: false,
+    })
+  })
+
+  it('상태가 겹치면 앞의 것을 보인다', () => {
+    // 멈춘 Work에 사람이 필요한 task가 있으면 그 task가 앞선다
+    expect(badge(work('stopped', 'awaiting_approval')).kind).toBe('awaiting_approval')
+    expect(badge(work('stopped', 'interrupted')).kind).toBe('stopped')
   })
 })

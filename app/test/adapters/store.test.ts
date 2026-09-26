@@ -47,6 +47,16 @@ describe('[어댑터] 저장소 (5.1)', () => {
     expect(config.session_limit).toBe(3)
   })
 
+  it('값이 틀린 키는 기본값을 쓰고 경고한다 (core/config)', async () => {
+    fs.writeFileSync(
+      path.join(root, 'config.json'),
+      JSON.stringify({ session_limit: 0, format_error_bounce_max: 1 }),
+    )
+    const r = await loadConfig(root)
+    expect(r.config).toEqual({ ...DEFAULT_CONFIG, format_error_bounce_max: 1 })
+    expect(r.warning).toContain('세션 상한')
+  })
+
   it('config.json을 읽을 수 없으면 파일은 그대로 두고 기본값을 쓰며 경고한다', async () => {
     fs.writeFileSync(path.join(root, 'config.json'), '{ 틀림')
     const r = await loadConfig(root)

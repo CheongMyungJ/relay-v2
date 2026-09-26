@@ -1,6 +1,8 @@
 // [스모크] 설치한 앱이 뜨고, 가짜 claude로 intake task 하나를 [의도 승인]까지 누른다 (I27, M2).
 // 프로젝트 등록 → 새 Work → intake 탭에 PTY 출력 → 창 크기 변경이 PTY에 전달 → [의도 승인]
 // → intent.md 확정, intake 세션 트리 종료, 다음 task 시작.
+// M3: 다음 task를 [즉시 중단]하면 중단됨·읽기 전용이 되고 트리가 끝난다 → [재개]하면 같은 세션을
+// --resume으로 이전 화면 뒤에 잇는다 → 설정 화면에서 세션 상한을 바꾼다 → 앱 종료 확인을 거쳐 끝낸다.
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -36,15 +38,20 @@ test.beforeAll(async () => {
     CLAUDE_BIN: FAKE,
     RELAY_HOME: home,
     FAKE_CLAUDE_SCENARIO: scenarioFile,
+    // 가짜 claude가 세션을 적어 두어야 --resume으로 다시 연다
+    FAKE_CLAUDE_RECORD: path.join(root, 'record'),
   } as Record<string, string>
   const exe = process.env['RELAY_APP_EXE']
   app = exe
     ? await electron.launch({ executablePath: exe, env })
     : await electron.launch({ args: [APP_DIR], env })
   // Electron 기본 대화상자는 Playwright가 가로채지 못하므로 메인 프로세스에서 바꿔 끼운다.
+  // 앱 종료 확인(시나리오 3-6)에는 [종료]로 답한다.
   await app.evaluate(({ dialog }, dir) => {
     dialog.showOpenDialog = (() =>
       Promise.resolve({ canceled: false, filePaths: [dir] })) as typeof dialog.showOpenDialog
+    dialog.showMessageBox = (() =>
+      Promise.resolve({ response: 0, checkboxChecked: false })) as typeof dialog.showMessageBox
   }, repo)
 })
 
@@ -108,6 +115,45 @@ test('가짜 claude로 intake task를 [의도 승인]까지 누른다', async ()
   )
   await expect(rows).toContainText('FAKE-CLAUDE READY', { timeout: 60_000 })
   await win.screenshot({ path: 'test-results/next-task.png' })
+  const badge = win.locator('.work-item .badge')
+  await expect(badge).toHaveText('작업 중')
+
+  // [즉시 중단] (시나리오 3-4): 중단됨, 읽기 전용, 프로세스 트리 종료
+  await expect(rows).toContainText('[가짜 claude] wait', { timeout: 60_000 })
+  const next = Number(/PID (\d+)/.exec((await rows.textContent()) ?? '')?.[1])
+  expect(alive(next)).toBe(true)
+  await win.getByRole('button', { name: '즉시 중단', exact: true }).click()
+  await expect(win.locator('.band')).toContainText('중단됨', { timeout: 30_000 })
+  await expect(win.locator('.band')).toContainText('읽기 전용')
+  await expect(badge).toHaveText('중단됨')
+  await expect.poll(() => alive(next), { timeout: 15_000 }).toBe(false)
+  await win.screenshot({ path: 'test-results/interrupted.png' })
+
+  // [재개]: 같은 세션 id로 --resume, 이전 화면 뒤에 잇는다
+  await win.getByRole('button', { name: '재개', exact: true }).click()
+  await expect(win.locator('.band')).toContainText('02 재현과 관찰 · 세션 재개', {
+    timeout: 30_000,
+  })
+  await expect(rows).toContainText('relay: 세션 재개', { timeout: 30_000 })
+  await expect(rows).toContainText('--resume', { timeout: 30_000 })
+  await expect(badge).toHaveText('대기')
+  await win.screenshot({ path: 'test-results/resumed.png' })
+
+  // 설정 화면 (D70): 세션 상한을 바꾸면 config.json에 쓴다
+  await win.locator('.sidebar').getByRole('button', { name: '설정', exact: true }).click()
+  await win.getByLabel('세션 상한').fill('2')
+  await win.screenshot({ path: 'test-results/settings.png' })
+  await win.getByRole('button', { name: '저장', exact: true }).click()
+  await expect
+    .poll(
+      () =>
+        (
+          JSON.parse(fs.readFileSync(path.join(home, 'config.json'), 'utf8')) as {
+            session_limit: number
+          }
+        ).session_limit,
+    )
+    .toBe(2)
 })
 
 function lastSize(text: string): string | undefined {

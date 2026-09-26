@@ -143,6 +143,7 @@ export async function drive(
       )
       if (w.status === 'completed') return finish('completed', null)
       if (w.status === 'stopped') return finish('stopped', w.stopNotice)
+      if (w.status === 'abandoned') return finish('failed', 'Work 포기')
       const task = current(w)
       if (!task) return finish('failed', '지금 task가 없음')
       const out = outcome(task)

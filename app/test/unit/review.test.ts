@@ -2,16 +2,18 @@ import { describe, expect, it } from 'vitest'
 import { createWork } from '../../src/core/machine'
 import {
   TASK_STATUS_LABEL,
+  WORK_STATUS_LABEL,
   bandText,
   emphasis,
   handoffSummary,
+  humanNotice,
   permissionNotice,
   stopNotice,
   taskLabel,
   verdicts,
 } from '../../src/core/review'
 import type { Handoff } from '../../src/shared/contracts'
-import type { FormatIssue, TaskStatus } from '../../src/shared/work'
+import type { FormatIssue, TaskStatus, WorkState } from '../../src/shared/work'
 
 const HANDOFF: Handoff = {
   status: 'awaiting_approval',
@@ -36,6 +38,25 @@ describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
     expect(bandText({ seq: 4, node: 'rca', reason: 'default' })).toBe(
       '04 원인 분석 · 새 세션 · 이유: 기본 진행',
     )
+    // [이 단계 새 세션으로 다시]로 만든 task (D114)
+    expect(bandText({ seq: 5, node: 'rca', reason: 'resume' })).toBe(
+      '05 원인 분석 · 새 세션 · 이유: 재개',
+    )
+  })
+
+  it('--resume으로 다시 연 세션은 세션 재개다 (시나리오 3-4)', () => {
+    const session = { id: 's', pid: 1, started_at: 'x', alive: true }
+    expect(bandText({ seq: 4, node: 'rca', reason: 'default', session })).toBe(
+      '04 원인 분석 · 새 세션 · 이유: 기본 진행',
+    )
+    expect(
+      bandText({
+        seq: 4,
+        node: 'rca',
+        reason: 'default',
+        session: { ...session, resumed_at: 'y' },
+      }),
+    ).toBe('04 원인 분석 · 세션 재개 · 이유: 기본 진행')
   })
 
   it('권한 확인 끈 모드가 아니면 경고한다 (D94)', () => {
@@ -48,6 +69,7 @@ describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
 
   it('상태마다 이름이 있다 (3.3, 시나리오 3)', () => {
     const all: TaskStatus[] = [
+      'queued',
       'working',
       'asking',
       'input_needed',
@@ -59,6 +81,8 @@ describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
       'approved',
     ]
     expect(Object.keys(TASK_STATUS_LABEL).sort()).toEqual([...all].sort())
+    expect(TASK_STATUS_LABEL.queued).toBe('대기열')
+    expect(WORK_STATUS_LABEL.abandoned).toBe('포기')
   })
 
   it('이전 단계 추천으로 멈추면 알린다 (D23)', () => {
@@ -75,6 +99,50 @@ describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
       },
     }
     expect(stopNotice(stopped)).toBe('이전 단계 추천으로 멈춤: 수정(fix)로 — 완료조건 2 실패')
+  })
+
+  it('[이 단계 끝나면 멈춤]으로 멈추면 승인한 task를 알린다 (시나리오 3-4)', () => {
+    const work = createWork({ workId: 'w', baseBranch: 'main', baseCommit: 'c', at: 'x' }).work
+    const stopped = {
+      ...work,
+      status: 'stopped' as const,
+      stop: { kind: 'after_step' as const, task_id: 't-01' },
+    }
+    expect(stopNotice(stopped)).toBe('이 단계 끝나면 멈춤: 01 의도 정리 승인 뒤 멈춤')
+  })
+})
+
+describe('OS 알림 문구 (D81)', () => {
+  const base = createWork({ workId: 'w', baseBranch: 'main', baseCommit: 'c', at: 'x' }).work
+  const at = (status: TaskStatus, work: WorkState = base): WorkState => ({
+    ...work,
+    tasks: work.tasks.map((t) => ({ ...t, status })),
+  })
+
+  it('사람이 필요한 상태로 바뀌면 알린다', () => {
+    expect(humanNotice(at('working'), at('asking'))).toBe('01 의도 정리: 질문 대기')
+    expect(humanNotice(at('working'), at('input_needed'))).toBe('01 의도 정리: 입력 필요')
+    expect(humanNotice(at('working'), at('awaiting_approval'))).toBe('01 의도 정리: 승인 대기')
+    expect(humanNotice(at('working'), at('blocked'))).toBe('01 의도 정리: 막힘')
+    expect(humanNotice(at('idle'), at('session_ended'))).toBe(
+      '01 의도 정리: handoff 없이 세션 종료',
+    )
+    const stopped: WorkState = {
+      ...at('approved'),
+      status: 'stopped',
+      stop: { kind: 'after_step', task_id: 't-01' },
+    }
+    expect(humanNotice(at('awaiting_approval'), stopped)).toBe(
+      '이 단계 끝나면 멈춤: 01 의도 정리 승인 뒤 멈춤',
+    )
+  })
+
+  it('같은 상태가 이어지거나 사람이 필요 없는 상태로 바뀌면 알리지 않는다', () => {
+    expect(humanNotice(at('asking'), at('input_needed'))).toBeNull()
+    expect(humanNotice(at('awaiting_approval'), at('working'))).toBeNull()
+    expect(humanNotice(at('working'), at('idle'))).toBeNull()
+    expect(humanNotice(at('working'), at('interrupted'))).toBeNull()
+    expect(humanNotice(at('queued'), at('working'))).toBeNull()
   })
 })
 

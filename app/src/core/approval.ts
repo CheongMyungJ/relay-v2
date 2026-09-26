@@ -1,11 +1,11 @@
-// 수동 승인의 판정 (4.1, D90, D112). machine의 승인과 승인 화면의 버튼이 같은 판정을 쓴다.
-// 자동 승인 조건(4.3)은 M7에서 더한다.
+// 수동 승인의 판정 (4.1, D90, D112)과 사이드바 배지의 우선순위 (D80).
+// machine의 승인과 승인 화면의 버튼이 같은 판정을 쓴다. 자동 승인 조건(4.3)은 M7에서 더한다.
 import type { Size } from '../shared/contracts'
-import type { ApprovalGate } from '../shared/views'
-import type { CheckSummary, FormatIssue, TaskRecord, TaskStatus } from '../shared/work'
+import type { ApprovalGate, Badge, BadgeKind } from '../shared/views'
+import type { CheckSummary, FormatIssue, TaskRecord, TaskStatus, WorkState } from '../shared/work'
 import { INTENT_DRAFT_FILE } from './validate'
 
-export type { ApprovalGate }
+export type { ApprovalGate, Badge, BadgeKind }
 
 /**
  * 에이전트가 턴을 끝낸 뒤라 사람이 승인할 수 있는 상태 (D112).
@@ -48,4 +48,71 @@ export function approvalGate(
     errors,
     blocking,
   }
+}
+
+// ---------- 사이드바 배지 (D80) ----------
+
+/**
+ * 배지 우선순위 (D80). 상태가 겹치면 앞의 것을 보인다:
+ * 질문 대기·입력 필요 > 승인 대기 > 막힘 > 멈춤 > 세션 종료(handoff 없음) > 작업 중 > 대기 > 대기열 > 중단됨 > 완료·포기
+ */
+export const BADGE_ORDER: readonly BadgeKind[] = [
+  'asking',
+  'awaiting_approval',
+  'blocked',
+  'stopped',
+  'session_ended',
+  'working',
+  'idle',
+  'queued',
+  'interrupted',
+  'done',
+]
+
+/** 사람이 필요한 상태. 색으로 강조하고 OS 알림을 보낸다 (D80, D81) */
+export const HUMAN_BADGES: readonly BadgeKind[] = BADGE_ORDER.slice(0, 5)
+
+const TASK_BADGE: Readonly<Record<TaskStatus, BadgeKind | null>> = {
+  asking: 'asking',
+  input_needed: 'asking',
+  awaiting_approval: 'awaiting_approval',
+  blocked: 'blocked',
+  session_ended: 'session_ended',
+  working: 'working',
+  idle: 'idle',
+  queued: 'queued',
+  interrupted: 'interrupted',
+  approved: null,
+}
+
+const BADGE_LABEL: Readonly<Record<BadgeKind, string>> = {
+  asking: '질문 대기',
+  awaiting_approval: '승인 대기',
+  blocked: '막힘',
+  stopped: '멈춤',
+  session_ended: '세션 종료',
+  working: '작업 중',
+  idle: '대기',
+  queued: '대기열',
+  interrupted: '중단됨',
+  done: '완료',
+}
+
+/**
+ * Work의 배지 (D80). 끝난 Work(완료, 포기)는 그 상태를 보이고, 그 밖에는 Work의 멈춤과 지금 task의
+ * 표시 가운데 우선순위가 앞선 것을 보인다. 입력 필요는 질문 대기와 같은 자리에 "입력 필요"로 보인다.
+ */
+export function badge(work: WorkState): Badge {
+  if (work.status === 'completed' || work.status === 'abandoned') {
+    return { kind: 'done', label: work.status === 'completed' ? '완료' : '포기', hot: false }
+  }
+  const task = work.tasks[work.tasks.length - 1]
+  const kinds: BadgeKind[] = []
+  if (work.status === 'stopped') kinds.push('stopped')
+  const fromTask = task ? TASK_BADGE[task.status] : null
+  if (fromTask) kinds.push(fromTask)
+  const kind = [...BADGE_ORDER].find((k) => kinds.includes(k)) ?? 'working'
+  const label =
+    kind === 'asking' && task?.status === 'input_needed' ? '입력 필요' : BADGE_LABEL[kind]
+  return { kind, label, hot: HUMAN_BADGES.includes(kind) }
 }
