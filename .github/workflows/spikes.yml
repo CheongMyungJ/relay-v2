@@ -13,6 +13,10 @@ on:
         description: "Claude Code 모델 (별칭 또는 모델 이름)"
         required: false
         default: "sonnet"
+      effort:
+        description: "effort 수준 (low / medium / high / xhigh). 비용을 아끼려고 기본은 low"
+        required: false
+        default: "low"
 
 permissions:
   contents: read
@@ -29,6 +33,7 @@ jobs:
       # 둘 다 있으면 구독 토큰만 쓴다. API 키가 함께 있으면 Claude Code가 키 승인 창을 띄울 수 있다.
       ANTHROPIC_API_KEY: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN == '' && secrets.ANTHROPIC_API_KEY || '' }}
       SPIKE_MODEL: ${{ inputs.model }}
+      CLAUDE_CODE_EFFORT_LEVEL: ${{ inputs.effort }}
     steps:
       - uses: actions/checkout@v4
 
@@ -50,6 +55,11 @@ jobs:
 
       - name: Claude Code 버전
         run: claude --version
+
+      - name: 인증 확인 (비대화형 한 번)
+        # 인증이 안 되면 스파이크를 돌려도 의미가 없으므로 먼저 확인하고 멈춘다.
+        timeout-minutes: 3
+        run: claude -p "READY 라고만 답해." --model $env:SPIKE_MODEL
 
       - name: 스파이크 의존성 설치
         working-directory: spikes
