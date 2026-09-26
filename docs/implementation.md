@@ -88,6 +88,7 @@
 - Windows의 Node(libuv)는 stdin을 raw 모드로 읽고 있을 때만 콘솔 크기 변경을 알아챈다(libuv `docs/src/signal.rst`). 가짜 `claude`도 stdin을 raw 모드로 읽어야 크기 변경 시험이 맞다(app-ci #1~#5).
 - node-pty의 `kill()`은 내장 ConPTY에서 보조 프로세스(`conpty_console_list_agent`)가 "AttachConsole failed"로 죽는 일이 러너에서 다시 보였다. 앱은 `taskkill`로 트리를 끝낸다(6절).
 - DLL 모드(I32)로 실제 `claude`가 동작하는지는 아직 확인하지 않았다. 스파이크는 내장 ConPTY로 돌렸다. M0의 [실기]는 생략했으므로 다음 실기 때 확인한다.
+- Linux에서 트리 종료(node-pty `kill()`, SIGHUP)를 받은 `claude`는 SessionEnd 훅(`reason: other`)을 보내고 응답을 기다린 뒤 끝났다(응답을 5초 늦추면 5.4초 뒤에 끝남, 2.1.283). SessionEnd 훅은 기본 1.5초까지 기다리고, 훅에 `timeout`을 주면 가장 큰 값(최대 60초)까지 기다린다(Claude Code 문서 hooks). 앱은 훅마다 `timeout` 30초를 주고, Work의 처리 줄 안에서 종료를 기다리며 훅 응답도 같은 줄에서 만든다. 그래서 응답이 종료 대기 시간(10초)만큼 늦어져 M2 [실제](Linux)에서 task 사이마다 10초가 걸렸다. Windows(`taskkill /F`)에서 같은 지연이 있는지는 Windows [실제]나 [실기]에서 본다.
 
 ## 4. 기술 선택
 
