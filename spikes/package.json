@@ -1,0 +1,13 @@
+{
+  "name": "relay-v2-spikes",
+  "private": true,
+  "type": "module",
+  "description": "relay-v2 스파이크 (docs/spikes.md). Windows 러너에서 Claude Code를 PTY로 띄워 설계 전제를 확인한다.",
+  "scripts": {
+    "spikes": "node run.mjs"
+  },
+  "dependencies": {
+    "@xterm/headless": "^5.5.0",
+    "node-pty": "^1.0.0"
+  }
+}
