@@ -96,6 +96,8 @@ export interface TaskRecord {
   /** 승인 기록 (D3) */
   approved_at?: string
   approved_by?: 'human'
+  /** [오류 무시하고 승인]으로 넘긴 오류 (4.1, D112) */
+  ignored_errors?: FormatIssue[]
   /** task를 띄우지 못한 이유 */
   error?: string
 }

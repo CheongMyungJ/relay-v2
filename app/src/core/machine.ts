@@ -1,7 +1,7 @@
 // Work와 Task의 상태 전이 (3.3, 시나리오 2~5). (상태, 이벤트) → (새 상태, 할 일)인 순수 함수다 (I10).
 // 훅 신호, 사람 버튼, 프로세스 종료를 main이 이벤트로 바꿔 넣고, 돌려받은 할 일을 차례로 실행한다.
 // 상태는 work.json이고 main이 전이마다 쓴다 (I11). 설정은 판정하는 때의 값을 받는다 (D73).
-// M1은 기본 흐름만 담는다. 중단, 재개, 대기열, 되감기, 자동 승인은 해당 마일스톤에서 더한다.
+// 기본 흐름과 [오류 무시하고 승인](D112)을 담는다. 중단, 재개, 대기열, 되감기, 자동 승인은 해당 마일스톤에서 더한다.
 import type { AppConfig, WorkSettings } from '../shared/config'
 import type { Decision, NodeName, Size } from '../shared/contracts'
 import type {
@@ -12,6 +12,7 @@ import type {
   TaskStatus,
   WorkState,
 } from '../shared/work'
+import { REVIEWABLE, approvalGate } from './approval'
 import { NODES, WORK_COMPLETE, defaultNext, isPrevious } from './pipeline'
 import { FORMAT_VERSION, bounceMessage, isValid, summarize, type TaskCheck } from './validate'
 
@@ -99,6 +100,8 @@ export interface Approve extends TaskEvent {
   check: TaskCheck
   /** intake에서 사람이 승인 화면에서 고른 크기. 없으면 intent 초안의 크기 (4.1) */
   size?: Size
+  /** [오류 무시하고 승인] (4.1, D90, D112). 확인 창을 거친 뒤에 보낸다 */
+  force?: boolean
 }
 
 export type MachineEvent =
@@ -121,14 +124,17 @@ export type Effect =
   | { type: 'endSession'; taskId: string }
   /** intent 초안을 intent.md로 확정하고 이전 버전은 intent.history/에 둔다 (4.1) */
   | { type: 'confirmIntent'; taskId: string; version: number; size: Size }
-  /** decisions.md에 handoff의 결정을 더한다 (5.4) */
+  /**
+   * decisions.md에 handoff의 결정을 더한다 (5.4).
+   * decisions가 null이면 [오류 무시하고 승인]에서 머리글을 읽지 못한 것이다 (D112)
+   */
   | {
       type: 'appendDecisions'
       taskId: string
       node: NodeName
       at: string
       by: 'human'
-      decisions: Decision[]
+      decisions: Decision[] | null
     }
   /** events.jsonl에 한 줄 더한다 (5.5) */
   | { type: 'log'; event: LifecycleEvent }
@@ -407,23 +413,28 @@ function sessionEnded(work: WorkState, task: TaskRecord, e: SessionEnded): Trans
 
 /**
  * 승인 (시나리오 4-4, 5). 승인을 기록하고, 세션을 끝내고, 결정을 decisions.md에 더하고, 다음 단계로 간다.
- * intake 승인은 의도 승인이라 intent를 확정한다 (4.1). verify 승인은 [Work 완료]다. M1의 전달은 [완료만]이다.
+ * intake 승인은 의도 승인이라 intent를 확정한다 (4.1). verify 승인은 [Work 완료]다. M2의 전달은 [완료만]이다.
+ * 에이전트가 턴을 끝낸 뒤(승인 대기, 대기, 세션 종료)에만 받는다. 누른 때의 검사로 다시 판정한다 (approvalGate).
+ * [오류 무시하고 승인]이면 무시한 오류를 남기고, 머리글에서 읽지 못한 값은 없는 것으로 본다 (D112).
  * 에이전트가 이전 단계를 추천했으면 다음 task를 시작하지 않고 멈춘다 (D23).
  */
 function approve(work: WorkState, task: TaskRecord, e: Approve): Transition {
-  if (task.status !== 'awaiting_approval') return unchanged(work, `${task.id}는 승인 대기가 아님`)
+  if (!REVIEWABLE.includes(task.status)) {
+    return unchanged(work, `${task.id}는 승인할 수 있는 상태가 아님`)
+  }
   const check = summarize(e.check)
-  const handoff = e.check.handoff
-  if (!isValid(check) || check.status !== 'awaiting_approval' || !handoff) {
-    // 승인 대기가 된 뒤 파일이 바뀌었다. 오류를 보이고 승인하지 않는다 (4.1).
-    return {
-      work: withTask(work, { ...task, check }),
-      effects: [],
-      rejected: `${task.id}의 handoff가 유효하지 않음`,
-    }
+  const gate = approvalGate(task, check, task.node === 'intake' ? e.size : undefined)
+  const forced = !gate.approve && e.force === true && gate.force
+  if (!gate.approve && !forced) {
+    // 승인 화면을 띄운 뒤 파일이 바뀌었다. 오류를 보이고 승인하지 않는다 (4.1).
+    const reason = e.force
+      ? `${task.id}: 오류를 무시하고 승인할 수 없음`
+      : `${task.id}의 handoff가 유효하지 않음`
+    return { work: withTask(work, { ...task, check }), effects: [], rejected: reason }
   }
   const size = task.node === 'intake' ? (e.size ?? e.check.intentDraft?.size) : work.intent?.size
   if (!size) return unchanged(work, `${task.id}: intent의 크기를 모름`)
+  const header = e.check.handoffHeader
 
   const session = task.session?.alive
     ? { ...task.session, alive: false, ended_at: e.at }
@@ -435,9 +446,11 @@ function approve(work: WorkState, task: TaskRecord, e: Approve): Transition {
     approved_by: 'human',
     check,
     session,
+    ...(forced ? { ignored_errors: gate.errors } : {}),
   }
   let next: WorkState = withTask(work, approved)
-  const effects: Effect[] = [log(work, e.at, 'task.approved', { by: 'human' }, task)]
+  const payload = forced ? { by: 'human', ignored_errors: gate.errors.length } : { by: 'human' }
+  const effects: Effect[] = [log(work, e.at, 'task.approved', payload, task)]
   if (task.session?.alive) effects.push({ type: 'endSession', taskId: task.id })
   effects.push({
     type: 'appendDecisions',
@@ -445,7 +458,7 @@ function approve(work: WorkState, task: TaskRecord, e: Approve): Transition {
     node: task.node,
     at: e.at,
     by: 'human',
-    decisions: handoff.decisions,
+    decisions: header ? header.decisions : null,
   })
   if (task.node === 'intake') {
     const version = (work.intent?.version ?? 0) + 1
@@ -453,7 +466,7 @@ function approve(work: WorkState, task: TaskRecord, e: Approve): Transition {
     effects.push({ type: 'confirmIntent', taskId: task.id, version, size })
   }
 
-  const rec = handoff.recommended_next
+  const rec = header?.recommended_next
   if (rec && NODES.includes(rec.node) && isPrevious(task.node, rec.node)) {
     next = {
       ...next,

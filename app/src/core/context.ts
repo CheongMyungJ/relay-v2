@@ -5,6 +5,7 @@ import type { AppConfig, QuestionMode, WorkSettings } from '../shared/config'
 import type { NodeName } from '../shared/contracts'
 import type { TaskRecord, WorkState } from '../shared/work'
 import { NODE_INFO, WORK_COMPLETE, defaultNext, previousSteps, type NextStep } from './pipeline'
+import { parseFrontMatter } from './validate'
 
 export type ApprovalMode = 'manual' | 'auto'
 
@@ -82,6 +83,46 @@ export interface ContextInput {
   previousHandoff: (TaskRef & { text: string }) | null
   /** 이전 task의 산출물 경로 (D89). 경로만 넣는다 */
   artifacts: readonly (TaskRef & { path: string })[]
+}
+
+/** 이전 task에서 main이 읽은 것. 폐기되지 않은 task를 순서대로 넘긴다 */
+export interface PreviousTask extends TaskRef {
+  /** handoff.md의 내용. 없으면 undefined */
+  handoff?: string
+  /** 산출물의 절대 경로 (D89: task 디렉터리의 .md 중 context.md와 handoff.md를 뺀 것) */
+  artifacts: readonly string[]
+}
+
+/** handoff 머리글의 rejected. 머리글을 읽지 못하거나 목록이 아니면 빈 목록이다 */
+function rejectedOf(handoff: string): string[] {
+  const fm = parseFrontMatter(handoff)
+  const items = fm.ok ? fm.data['rejected'] : undefined
+  return Array.isArray(items) ? items.filter((i): i is string => typeof i === 'string') : []
+}
+
+/**
+ * context.md의 누적 기각 목록, 직전 handoff, 필요한 산출물 (시나리오 2-4).
+ * 기각 목록은 이전 모든 handoff의 rejected이고, 직전 handoff는 마지막 handoff다.
+ * 산출물은 경로만 넣는다. intake의 intent 초안은 확정한 intent가 대신하므로 뺀다 (D89).
+ */
+export function previousInputs(
+  previous: readonly PreviousTask[],
+): Pick<ContextInput, 'rejected' | 'previousHandoff' | 'artifacts'> {
+  const withHandoff = previous.filter((p) => p.handoff !== undefined)
+  const last = withHandoff[withHandoff.length - 1]
+  return {
+    rejected: withHandoff.map((p) => ({
+      taskId: p.taskId,
+      node: p.node,
+      items: rejectedOf(p.handoff ?? ''),
+    })),
+    previousHandoff: last
+      ? { taskId: last.taskId, node: last.node, text: last.handoff ?? '' }
+      : null,
+    artifacts: previous
+      .filter((p) => p.node !== 'intake')
+      .flatMap((p) => p.artifacts.map((path) => ({ taskId: p.taskId, node: p.node, path }))),
+  }
 }
 
 const nodeLabel = (node: NodeName) => `${node} (${NODE_INFO[node].title})`

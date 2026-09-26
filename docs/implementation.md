@@ -78,6 +78,10 @@
 | Claude Code 동작 | 훅, 스킬, deny 규칙, 첫 실행 창은 `docs/spikes.md`의 S1~S5 결과를 따른다(2.1.283). 강제 종료 뒤 재개(S6)는 M3 전에 확인한다(I31) | `docs/spikes.md` |
 | HTTP 훅 머리글 | HTTP 훅에 `headers`를 줄 수 있다. 값에 `$VAR` 형태로 환경 변수를 넣을 수 있고, `allowedEnvVars`에 적은 변수만 풀린다. 응답 본문은 명령 훅과 같은 JSON 출력 형식이다. 기본 제한 시간은 600초(UserPromptSubmit은 30초)다 | Claude Code 문서 hooks (2026-09-26) |
 | SessionEnd 훅 | 본문의 `reason`은 `clear`(`/clear`), `resume`, `logout`, `prompt_input_exit`, `other`다. `/clear`와 `/resume` 뒤에는 SessionStart(source `clear`, `resume`)로 새 세션이 시작된다 | Claude Code 문서 hooks (2026-09-26) |
+| 훅 본문과 Stop 응답 | UserPromptSubmit은 `prompt`, Notification은 `message`와 `notification_type`, Stop은 `stop_hook_active`와 `last_assistant_message`를 보낸다. Stop을 막는 응답은 최상위 `{"decision":"block","reason":…}`이다. Stop 훅으로 연속 8번 이어 가면 Claude Code가 다음 막음을 무시하고 턴을 끝낸다(`CLAUDE_CODE_STOP_HOOK_BLOCK_CAP`) | Claude Code 문서 hooks (2026-09-26) |
+| 권한 규칙의 경로 | Read·Edit 규칙의 경로는 gitignore 패턴이다. 괄호는 이스케이프할 필요가 없다. "Yes, and don't ask again"으로 만든 규칙은 `[`, `]`, `*`를 이스케이프하지만 사람이 쓴 규칙은 이스케이프하지 않는다 | Claude Code 문서 permissions (2026-09-26) |
+| `claude auth status` | 인증 상태를 JSON으로 보이고, 로그인되어 있으면 종료 코드 0, 아니면 1이다 | Claude Code 문서 cli-reference (2026-09-26) |
+| 모델과 effort 환경 변수 | `ANTHROPIC_MODEL`은 별칭(`sonnet` 등)이나 모델 이름을 받는다. `CLAUDE_CODE_EFFORT_LEVEL`은 `low`~`max`, `auto`를 받고 `--effort`보다 우선한다. [실제] 시험은 앱이 넘기는 환경 변수로 모델과 effort를 정한다 | Claude Code 문서 model-config, env-vars (2026-09-26) |
 
 - N-API 사전 빌드가 Electron 44에서 다시 빌드 없이 로드되고, 설치 파일(asar)에서 `.node`와 `conpty\conpty.dll`, `OpenConsole.exe`가 풀려 나와 동작한다. M0의 [스모크]로 러너에서 확인했다(2026-09-26, `docs/checks.md`).
 - Windows의 Node(libuv)는 stdin을 raw 모드로 읽고 있을 때만 콘솔 크기 변경을 알아챈다(libuv `docs/src/signal.rst`). 가짜 `claude`도 stdin을 raw 모드로 읽어야 크기 변경 시험이 맞다(app-ci #1~#5).
@@ -374,3 +378,5 @@ app/src/
 | G8 | 배포할 relay 스킬의 범위가 없었다 | D108 |
 | G9 | 노드의 화면 이름이 없었다 | D109 |
 | G10 | SessionEnd가 `/clear`, `/resume`에도 와서, 세션 종료로 보면 CLI가 계속 도는데 신호를 무시하게 된다(M1 구현 중에 찾음) | D110 |
+| G11 | 설정 파일에 직접 쓴 권한 규칙은 경로의 gitignore 패턴 문자를 이스케이프하지 않아, 레포 폴더 이름에 `[`, `]` 등이 있으면 project-id가 든 deny 규칙이 맞지 않는다(M2 구현 중에 찾음) | D111 |
+| G12 | 형식 오류가 끝까지 남은 task는 대기나 세션 종료가 되는데, [오류 무시하고 승인]을 언제 누를 수 있는지, handoff 머리글을 읽지 못하면 결정과 이전 단계 추천을 어떻게 할지 없었다(M2 구현 중에 찾음) | D112 |

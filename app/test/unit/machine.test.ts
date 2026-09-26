@@ -40,6 +40,7 @@ function valid(handoff: Partial<Handoff> = {}, draftSize?: Size): TaskCheck {
     errors: [],
     warnings: [],
     handoff: { ...HANDOFF, ...handoff },
+    handoffHeader: { ...HANDOFF, ...handoff },
     intentDraft: draftSize ? { type: 'bugfix', size: draftSize } : null,
   }
 }
@@ -55,6 +56,7 @@ const MISSING: TaskCheck = {
   errors: [],
   warnings: [],
   handoff: null,
+  handoffHeader: null,
   intentDraft: null,
 }
 
@@ -693,11 +695,13 @@ describe('이전 단계 추천에서 멈춤 (D23)', () => {
 })
 
 describe('받지 않는 승인', () => {
-  it('승인 대기가 아니면 승인하지 않는다', () => {
-    const work = running('idle')
-    const r = approve(work, valid({}, 'M'))
-    expect(r.rejected).toMatch(/승인 대기가 아님/)
-    expect(r.work).toBe(work)
+  it('에이전트가 턴을 도는 중이거나 막힘이면 승인하지 않는다 (D112)', () => {
+    for (const s of ['working', 'asking', 'input_needed', 'blocked'] as const) {
+      const work = running(s)
+      const r = approve(work, valid({}, 'M'))
+      expect(r.rejected).toMatch(/승인할 수 있는 상태가 아님/)
+      expect(r.work).toBe(work)
+    }
   })
 
   it('누른 때 다시 한 검사가 유효하지 않으면 승인하지 않고 오류를 보인다 (4.1)', () => {
@@ -717,5 +721,166 @@ describe('받지 않는 승인', () => {
     const again = apply(next, { type: 'approve', taskId: 't-01', at: at(), check: valid({}, 'M') })
     expect(again.rejected).toMatch(/지금 task가 아님/)
     expect(again.work).toBe(next)
+  })
+})
+
+describe('대기와 세션 종료에서의 승인, [오류 무시하고 승인] (4.1, D90, D112)', () => {
+  const BODY: FormatIssue = {
+    file: 'handoff.md',
+    part: 'body',
+    field: '요약',
+    message: '`## 요약` 절 없음: handoff 본문의 필수 절',
+  }
+  const SIZE: FormatIssue = {
+    file: 'intent.draft.md',
+    part: 'header',
+    field: 'size',
+    message: '`size` 없음: 필수 필드',
+  }
+  const TYPE: FormatIssue = {
+    file: 'intent.draft.md',
+    part: 'header',
+    field: 'type',
+    message: '`type` 값이 허용값이 아님 (허용값: bugfix, 지금: feature)',
+  }
+  const NO_DRAFT: FormatIssue = {
+    file: 'intent.draft.md',
+    part: 'file',
+    message: '`intent.draft.md` 없음: `status: awaiting_approval`일 때 필수 산출물',
+  }
+  const DRAFT_BODY: FormatIssue = {
+    file: 'intent.draft.md',
+    part: 'body',
+    field: '비목표',
+    message: '`## 비목표` 절 없음: intent 초안 본문의 필수 절',
+  }
+
+  /** handoff 머리글은 스키마를 통과하고 오류가 남은 검사 */
+  function withErrors(errors: FormatIssue[], draftSize?: Size): TaskCheck {
+    return { ...valid({}, draftSize), handoff: null, errors }
+  }
+
+  /** Stop 뒤 오류가 남아 대기가 된 지금 task */
+  function idleWith(check: TaskCheck, work: WorkState = launch(newWork())): WorkState {
+    const r = stop(work, check, { changed: false })
+    expect(status(r.work)).toBe('idle')
+    return r.work
+  }
+
+  function forceApprove(work: WorkState, check: TaskCheck, size?: Size): Transition {
+    const task = currentTask(work)
+    return apply(work, {
+      type: 'approve',
+      taskId: task?.id ?? '',
+      at: at(),
+      check,
+      force: true,
+      ...(size ? { size } : {}),
+    })
+  }
+
+  /** intake를 M으로 승인하고 evidence task를 띄운 Work */
+  function atEvidence(): WorkState {
+    const ready = stop(launch(newWork()), valid({}, 'M')).work
+    return launch(approve(ready, valid({}, 'M')).work)
+  }
+
+  it('대기에서도 누른 때의 검사가 유효하면 승인한다', () => {
+    const work = idleWith(withErrors([BODY], 'M'))
+    const r = approve(work, valid({}, 'M'))
+    expect(r.rejected).toBeUndefined()
+    expect(r.work.tasks[0]?.status).toBe('approved')
+    expect(r.work.tasks[0]?.ignored_errors).toBeUndefined()
+    expect(types(r.effects)).toContain('endSession')
+  })
+
+  it('intake에서 사람이 size를 고르면 size 오류가 풀려 대기에서도 [의도 승인]이 된다 (4.1)', () => {
+    const noSize: TaskCheck = { ...withErrors([SIZE]), intentDraft: null }
+    const work = idleWith(noSize)
+    expect(approve(work, noSize).rejected).toMatch(/유효하지 않음/)
+    const r = approve(work, noSize, 'S')
+    expect(r.rejected).toBeUndefined()
+    expect(r.work.intent).toEqual({ version: 1, size: 'S' })
+    expect(r.work.tasks[0]?.ignored_errors).toBeUndefined()
+    expect(currentTask(r.work)?.node).toBe('fix')
+  })
+
+  it('[오류 무시하고 승인]은 무시한 오류를 work.json과 events.jsonl에 남기고 진행한다', () => {
+    const check = withErrors([BODY, DRAFT_BODY], 'M')
+    const r = forceApprove(idleWith(check), check)
+    expect(r.rejected).toBeUndefined()
+    expect(r.work.tasks[0]).toMatchObject({
+      status: 'approved',
+      ignored_errors: [BODY, DRAFT_BODY],
+    })
+    expect(r.effects[0]).toMatchObject({
+      type: 'log',
+      event: { type: 'task.approved', payload: { by: 'human', ignored_errors: 2 } },
+    })
+    expect(types(r.effects)).toEqual([
+      'log:task.approved',
+      'endSession',
+      'appendDecisions',
+      'confirmIntent',
+      'startTask',
+    ])
+    expect(r.effects[2]).toMatchObject({ decisions: HANDOFF.decisions })
+  })
+
+  it('handoff 머리글을 읽지 못하면 결정은 null이고 이전 단계 추천은 없는 것으로 본다', () => {
+    const header: FormatIssue = {
+      file: 'handoff.md',
+      part: 'header',
+      message: '머리글 YAML을 읽을 수 없음: bad indentation',
+    }
+    const unreadable: TaskCheck = { ...MISSING, handoff_present: true, errors: [header] }
+    const r = forceApprove(idleWith(unreadable, atEvidence()), unreadable)
+    expect(r.rejected).toBeUndefined()
+    expect(r.effects.find((e) => e.type === 'appendDecisions')).toMatchObject({ decisions: null })
+    expect(r.work.status).toBe('active')
+    expect(currentTask(r.work)?.node).toBe('rca')
+  })
+
+  it('세션이 끝난 task도 승인하고, 세션 종료는 하지 않는다', () => {
+    const check = withErrors([BODY], 'M')
+    const ended = apply(idleWith(check), { type: 'pty.exit', taskId: 't-01', at: at() }).work
+    expect(status(ended)).toBe('session_ended')
+    const r = forceApprove(ended, check)
+    expect(r.rejected).toBeUndefined()
+    expect(types(r.effects)).not.toContain('endSession')
+  })
+
+  it('intake의 intent 초안 머리글 오류와 초안 없음은 넘길 수 없다 (D90)', () => {
+    for (const issue of [TYPE, NO_DRAFT, SIZE]) {
+      const check: TaskCheck = { ...withErrors([issue, BODY]), intentDraft: null }
+      const work = idleWith(check)
+      const r = forceApprove(work, check)
+      expect(r.rejected).toMatch(/오류를 무시하고 승인할 수 없음/)
+      expect(r.effects).toEqual([])
+      expect(currentTask(r.work)?.status).toBe('idle')
+    }
+    // size 오류는 사람이 size를 고르면 풀린다
+    const check: TaskCheck = { ...withErrors([SIZE, BODY]), intentDraft: null }
+    expect(forceApprove(idleWith(check), check, 'M').rejected).toBeUndefined()
+  })
+
+  it('status가 blocked로 읽히면 [오류 무시하고 승인]을 받지 않는다 (4.4)', () => {
+    const check: TaskCheck = { ...withErrors([BODY], 'M'), status: 'blocked' }
+    const r = forceApprove(idleWith(check), check)
+    expect(r.rejected).toMatch(/오류를 무시하고 승인할 수 없음/)
+  })
+
+  it('누른 때 오류가 없으면 [오류 무시하고 승인]도 보통 승인이다', () => {
+    const work = idleWith(withErrors([BODY], 'M'))
+    const r = forceApprove(work, valid({}, 'M'))
+    expect(r.rejected).toBeUndefined()
+    expect(r.work.tasks[0]?.ignored_errors).toBeUndefined()
+    expect(r.effects[0]).toMatchObject({ event: { payload: { by: 'human' } } })
+  })
+
+  it('handoff가 없으면 어느 승인도 받지 않는다', () => {
+    const work = idleWith(MISSING)
+    expect(forceApprove(work, MISSING).rejected).toMatch(/오류를 무시하고 승인할 수 없음/)
+    expect(approve(work, MISSING).rejected).toMatch(/유효하지 않음/)
   })
 })

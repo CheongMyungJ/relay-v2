@@ -3,6 +3,7 @@ import {
   approvalMode,
   buildContext,
   closingMessage,
+  previousInputs,
   questionMode,
   type ContextInput,
 } from '../../src/core/context'
@@ -319,5 +320,52 @@ describe('Work별 덮어쓰기 (D72)', () => {
     })
     const md = buildContext({ ...input('rca'), work, task })
     expect(section(md, '질문 방식')).toBe('결정마다 확인 (`confirm_each`)')
+  })
+})
+
+describe('이전 task의 입력 (시나리오 2-4, D89)', () => {
+  const T = `${WORK_DIR}\\tasks`
+  const handoff = (rejected: string) =>
+    `---\nstatus: awaiting_approval\nrejected:\n${rejected}\n---\n## 요약\nx\n`
+
+  it('기각 목록은 이전 모든 handoff의 rejected, 직전 handoff는 마지막 handoff다', () => {
+    const r = previousInputs([
+      {
+        taskId: 't-01',
+        node: 'intake',
+        handoff: handoff('  []'),
+        artifacts: [`${T}\\01-intake\\intent.draft.md`],
+      },
+      {
+        taskId: 't-02',
+        node: 'evidence',
+        handoff: handoff(
+          '  - "캐시 TTL 가설: 캐시를 꺼도 재현됨"\n  - 3\n  - 가설: 따옴표 없으면 객체',
+        ),
+        artifacts: [`${T}\\02-evidence\\evidence.md`],
+      },
+      {
+        taskId: 't-03',
+        node: 'rca',
+        handoff: '머리글 없음',
+        artifacts: [`${T}\\03-rca\\rca.md`, `${T}\\03-rca\\notes.md`],
+      },
+    ])
+    expect(r.rejected).toEqual([
+      { taskId: 't-01', node: 'intake', items: [] },
+      { taskId: 't-02', node: 'evidence', items: ['캐시 TTL 가설: 캐시를 꺼도 재현됨'] },
+      { taskId: 't-03', node: 'rca', items: [] },
+    ])
+    expect(r.previousHandoff).toEqual({ taskId: 't-03', node: 'rca', text: '머리글 없음' })
+    // 산출물은 경로만. intake의 intent 초안은 확정한 intent가 대신한다
+    expect(r.artifacts).toEqual([
+      { taskId: 't-02', node: 'evidence', path: `${T}\\02-evidence\\evidence.md` },
+      { taskId: 't-03', node: 'rca', path: `${T}\\03-rca\\rca.md` },
+      { taskId: 't-03', node: 'rca', path: `${T}\\03-rca\\notes.md` },
+    ])
+  })
+
+  it('이전 task가 없으면 모두 비어 있다', () => {
+    expect(previousInputs([])).toEqual({ rejected: [], previousHandoff: null, artifacts: [] })
   })
 })

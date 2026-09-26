@@ -8,3 +8,6 @@
 | `validate` | handoff와 intent 초안의 머리글 파싱, 스키마 검사, 추가 검사, 되돌림 메시지 | 5.2.1, D107           |
 | `context`  | `context.md` 조립, 마무리 안내 문구                                        | 시나리오 2-4, D104    |
 | `settings` | task 설정 파일 내용(훅, deny 규칙), 실행 인자                              | 시나리오 2-3·2-5, 6절 |
+| `approval` | 수동 승인과 [오류 무시하고 승인]의 판정                                    | 4.1, D90, D112        |
+| `records`  | decisions.md와 intent.md 확정본의 모양, work-id, project-id, 시각          | 5.1, 5.3, 5.4, D111   |
+| `review`   | task 이름과 머리 띠, 상태 이름, 승인 화면의 강조 영역, 판정표              | D83, D109, 시나리오 7 |

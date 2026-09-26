@@ -373,6 +373,12 @@ function sectionLines(body: string, name: string): string[] | null {
   return (end < 0 ? rest : rest.slice(0, end)).map((l) => l.line)
 }
 
+/** ## name 절의 본문. 앞뒤 빈 줄은 뺀다. 절이 없으면 null */
+export function sectionText(body: string, name: string): string | null {
+  const lines = sectionLines(normalizeText(body), name)
+  return lines === null ? null : lines.join('\n').trim()
+}
+
 function missingSections(
   file: string,
   body: string,
@@ -465,6 +471,8 @@ export interface HandoffCheckOptions {
 export interface HandoffCheck extends DocCheck<Handoff> {
   /** 머리글에서 읽은 status. 다른 오류가 있어도 읽을 수 있으면 채운다 */
   status: HandoffStatus | null
+  /** 머리글이 스키마를 통과했을 때의 값. 본문이나 추가 검사의 오류가 있어도 채운다 (D112) */
+  header: Handoff | null
 }
 
 /** handoff.md 검사 (5.2, 5.2.1) */
@@ -490,6 +498,7 @@ export function checkHandoff(text: string, opts: HandoffCheckOptions): HandoffCh
   return {
     value: errors.length ? null : h.value,
     status: status === 'awaiting_approval' || status === 'blocked' ? status : null,
+    header: h.value,
     errors,
     warnings: [
       ...h.warnings,
@@ -560,6 +569,11 @@ export interface TaskCheckInput {
 export interface TaskCheck extends CheckSummary {
   /** handoff.md 자신에 오류가 없을 때의 머리글. 산출물 쪽 오류는 따지지 않는다 */
   handoff: Handoff | null
+  /**
+   * handoff.md 머리글이 스키마를 통과했을 때의 값. 본문이나 추가 검사의 오류가 있어도 채운다.
+   * [오류 무시하고 승인]이 결정과 이전 단계 추천을 읽는 데 쓴다 (D112)
+   */
+  handoffHeader: Handoff | null
   /** intake에서 intent 초안 머리글이 스키마를 통과했을 때의 값 */
   intentDraft: IntentDraft | null
 }
@@ -609,6 +623,7 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
     errors,
     warnings: [...(handoff?.warnings ?? []), ...(draft?.warnings ?? [])],
     handoff: handoff?.value ?? null,
+    handoffHeader: handoff?.header ?? null,
     intentDraft: draft?.value ?? null,
   }
 }
