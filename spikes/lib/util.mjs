@@ -4,6 +4,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { redact } from './session.mjs';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const WORK = path.join(ROOT, 'work');
@@ -123,10 +124,10 @@ export class Result {
     this.startedAt = new Date().toISOString();
   }
   check(name, ok, detail = '') {
-    this.checks.push({ name, status: ok ? 'pass' : 'fail', detail: String(detail).slice(-4000) });
+    this.checks.push({ name, status: ok ? 'pass' : 'fail', detail: redact(detail).slice(-4000) });
   }
   observe(name, value) {
-    this.checks.push({ name, status: 'observe', detail: typeof value === 'string' ? value.slice(-4000) : JSON.stringify(value).slice(-4000) });
+    this.checks.push({ name, status: 'observe', detail: redact(typeof value === 'string' ? value : JSON.stringify(value)).slice(-4000) });
   }
   error(e) {
     this.checks.push({ name: 'harness_error', status: 'error', detail: String(e?.stack || e).slice(0, 4000) });

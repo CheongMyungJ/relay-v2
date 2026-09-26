@@ -8,7 +8,7 @@ import xtermHeadless from '@xterm/headless';
 const { Terminal } = xtermHeadless;
 // 화면의 빈 줄을 빼고 끝부분만 보여 준다(로그용).
 export function tail(text, n = 15) {
-  return text.split('\n').filter((l) => l.trim()).slice(-n).map((l) => `    | ${l}`).join('\n');
+  return redact(text).split('\n').filter((l) => l.trim()).slice(-n).map((l) => `    | ${l}`).join('\n');
 }
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -24,11 +24,20 @@ const DIALOG_NAMES = [
   { name: 'terminal_setup', match: /terminal setup|shift\s*\+\s*enter/i },
   { name: 'login', match: /select login method|log in|login/i },
 ];
-// 선택 목록의 현재 항목 표시. macOS·Linux는 "❯ 1.", Windows 콘솔은 "> 1."로 그린다.
-const SELECT_CURSOR = /(?:^|\s)[❯>]\s*\d+\.\s/m;
-// 수락 항목(1. Yes, 2. Yes, I accept, 1. Yes, proceed …)
-const ACCEPT_OPTION = /(?:^|[\s│❯>])(\d)\.\s*(yes|i accept|accept|proceed|trust)/i;
-const PRESS_ENTER = /press enter|enter to (continue|confirm)/i;
+// 선택 목록의 현재 항목 표시. macOS·Linux는 "❯", Windows 콘솔은 ">"로 그린다. 번호가 없는 목록도 있다.
+const NUMBERED_CURSOR = /(?:^|\s)[❯>]\s*\d+\.\s/m;
+const CONFIRM_HINT = /enter to confirm|esc to cancel/i;
+const CURSOR_LINE = /^\s*[│|]?\s*[❯>]\s+\S/;
+// 수락 항목: "Yes", "2. Yes, I accept", "1. Yes, proceed" 등
+const ACCEPT_LINE = /^\s*[│|]?\s*(?:[❯>]\s*)?(?:\d+\.\s*)?(yes|i accept|accept|proceed|trust)\b/i;
+const PRESS_ENTER = /press enter|enter to continue/i;
+const KEY_UP = '\x1b[A';
+const KEY_DOWN = '\x1b[B';
+
+// 로그와 결과에 API 키가 남지 않게 가린다.
+export function redact(text) {
+  return String(text).replace(/sk-ant-[^\s│]*/g, 'sk-ant-[가림]');
+}
 
 export function resolveClaude() {
   if (process.env.CLAUDE_BIN) return process.env.CLAUDE_BIN;
@@ -129,24 +138,33 @@ export class Session {
   }
 
   // 보이는 창이 첫 실행 창(선택 목록이나 Enter 안내)이면 수락한다. 수락했으면 true.
+  // 선택 목록에 수락 항목(Yes, I accept, proceed, trust)이 있으면 화살표로 그 항목까지 옮겨 Enter를 누르고,
+  // 없으면 기본 항목에서 Enter를 누른다(예: 테마 선택).
   async handleDialogs() {
     const scr = this.screen();
-    const isSelect = SELECT_CURSOR.test(scr);
+    const isSelect = NUMBERED_CURSOR.test(scr) || CONFIRM_HINT.test(scr);
     const isEnter = PRESS_ENTER.test(scr);
     if (!isSelect && !isEnter) return false;
     if (this.lastDialogScreen === scr && Date.now() - this.lastDialogAt < 3000) return false;
     const name = (DIALOG_NAMES.find((d) => d.match.test(scr)) || { name: 'unknown' }).name;
-    this.dialogs.push({ name, screen: scr, at: Date.now() });
-    const opt = isSelect ? scr.split('\n').map((l) => l.match(ACCEPT_OPTION)).find(Boolean) : null;
-    console.log(`[${this.name}] 첫 실행 창 감지: ${name} → ${opt ? `${opt[1]}번(${opt[2]}) 선택` : 'Enter'}\n${tail(scr, 30)}`);
-    if (opt) {
-      this.p.write(opt[1]);
-      await sleep(800);
-      if (this.screen() === scr) this.p.write('\r');
-    } else {
-      // 기본 항목을 고른다. 권한 확인 끈 모드 경고는 기본이 "종료"라 위의 수락 항목으로 처리된다.
-      this.p.write('\r');
+    this.dialogs.push({ name, screen: redact(scr), at: Date.now() });
+    const lines = scr.split('\n');
+    const cursorIdx = lines.findIndex((l) => CURSOR_LINE.test(l));
+    const acceptIdx = isSelect ? lines.findIndex((l) => ACCEPT_LINE.test(l)) : -1;
+    let action = 'Enter(기본 항목)';
+    if (cursorIdx >= 0 && acceptIdx >= 0 && acceptIdx !== cursorIdx) {
+      const key = acceptIdx > cursorIdx ? KEY_DOWN : KEY_UP;
+      for (let i = 0; i < Math.abs(acceptIdx - cursorIdx); i++) {
+        this.p.write(key);
+        await sleep(300);
+      }
+      action = `${lines[acceptIdx].trim()} 로 이동 후 Enter`;
+    } else if (acceptIdx >= 0) {
+      action = `${lines[acceptIdx].trim()} 에서 Enter`;
     }
+    console.log(`[${this.name}] 첫 실행 창 감지: ${name} → ${action}\n${tail(scr, 30)}`);
+    await sleep(300);
+    this.p.write('\r');
     this.lastDialogScreen = scr;
     this.lastDialogAt = Date.now();
     await sleep(1500);
