@@ -31,6 +31,8 @@ const CURSOR_LINE = /^\s*[│|]?\s*[❯>]\s+\S/;
 // 수락 항목: "Yes", "2. Yes, I accept", "1. Yes, proceed" 등
 const ACCEPT_LINE = /^\s*[│|]?\s*(?:[❯>]\s*)?(?:\d+\.\s*)?(yes|i accept|accept|proceed|trust)\b/i;
 const PRESS_ENTER = /press enter|enter to continue/i;
+// 입력란 아래 상태 줄(모드 표시, "← for agents", "? for shortcuts")
+const READY_HINT = /for agents|for shortcuts|shift\+tab to cycle/i;
 const KEY_UP = '\x1b[A';
 const KEY_DOWN = '\x1b[B';
 
@@ -121,6 +123,7 @@ export class Session {
   }
 
   async typeLine(text) {
+    await this.waitReady();
     this.p.write(text);
     await sleep(300);
     this.p.write('\r');
@@ -181,12 +184,27 @@ export class Session {
         console.log(`[${this.name}] ${label} 기다리는 중 (alive=${this.alive()})\n${tail(this.screen())}`);
         nextDump = Date.now() + 30000;
       }
+      // 창이 떠 있으면 먼저 처리한다. 창이 떠 있는 동안에는 조건을 보지 않는다(창이 멈춘 화면을 '작업 끝'으로 오해하지 않게).
+      if (await this.handleDialogs()) continue;
       if (await pred()) return true;
-      await this.handleDialogs();
-      if (!this.alive()) return !!(await pred());
+      if (!this.alive()) {
+        throw new Error(`[${this.name}] 세션이 먼저 끝남(${label}) ${JSON.stringify(this.exit)}\n--- screen ---\n${tail(this.screen(), 30)}`);
+      }
       await sleep(250);
     }
     throw new Error(`[${this.name}] timeout waiting for ${label}\n--- screen ---\n${this.screen()}`);
+  }
+
+  // 입력란이 떠서 입력을 받을 수 있는 상태(아래 상태 줄이 보이고 창이 없음)가 될 때까지 기다린다.
+  async waitReady({ timeout = 120000 } = {}) {
+    return this.waitUntil(() => READY_HINT.test(this.screen()) && !this.isDialogScreen(this.screen()) && Date.now() - this.lastDataAt > 1500, {
+      label: 'ready',
+      timeout,
+    });
+  }
+
+  isDialogScreen(scr) {
+    return NUMBERED_CURSOR.test(scr) || CONFIRM_HINT.test(scr) || PRESS_ENTER.test(scr);
   }
 
   waitForText(re, opts = {}) {

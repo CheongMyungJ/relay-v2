@@ -35,16 +35,17 @@ export function ruleAbs(p) {
   return m ? `//${m[1].toLowerCase()}/${m[2]}` : `/${posix}`;
 }
 
-// 테스트용 레포: main 체크아웃, relay 브랜치 worktree, 로컬 bare 원격, Work 디렉터리.
-export function makeFixture(id) {
-  const base = path.join(WORK, id);
+// 테스트용 레포는 모든 스파이크가 하나를 같이 쓴다(main 체크아웃과 로컬 bare 원격).
+// Claude Code의 폴더 신뢰는 레포 단위로 기억되므로(S5 관찰), 첫 스파이크(S5)에서 한 번만 창이 뜨고
+// 나머지 스파이크는 창 없이 바로 시작한다. 스파이크마다 relay/<id> 브랜치 worktree와 Work 디렉터리를 만든다.
+let shared = null;
+function sharedRepo() {
+  if (shared) return shared;
+  const base = path.join(WORK, 'shared');
   fs.rmSync(base, { recursive: true, force: true });
   const main = path.join(base, 'repo');
   const remote = path.join(base, 'remote.git');
-  const worktree = path.join(base, 'wt');
-  const workDir = path.join(base, 'works', 'w-test');
   fs.mkdirSync(main, { recursive: true });
-  fs.mkdirSync(path.join(workDir, 'tasks', '01-test'), { recursive: true });
   sh('git', ['init', '--bare', remote]);
   git(main, 'init', '-b', 'main');
   git(main, 'config', 'user.email', 'spike@example.com');
@@ -55,10 +56,22 @@ export function makeFixture(id) {
   git(main, 'commit', '-m', 'init');
   git(main, 'remote', 'add', 'origin', remote);
   git(main, 'push', '-u', 'origin', 'main');
-  git(main, 'worktree', 'add', '-b', 'relay/w-test', worktree);
+  shared = { main, remote };
+  return shared;
+}
+
+export function makeFixture(id) {
+  const { main, remote } = sharedRepo();
+  const base = path.join(WORK, id);
+  fs.rmSync(base, { recursive: true, force: true });
+  const branch = `relay/${id}`;
+  const worktree = path.join(base, 'wt');
+  const workDir = path.join(base, 'works', `w-${id}`);
   const taskDir = path.join(workDir, 'tasks', '01-test');
+  fs.mkdirSync(taskDir, { recursive: true });
+  git(main, 'worktree', 'add', '-b', branch, worktree);
   fs.writeFileSync(path.join(taskDir, 'context.md'), '# context\n이 task는 스파이크 시험용이다.\n');
-  return { base, main, remote, worktree, workDir, taskDir };
+  return { base, main, remote, worktree, workDir, taskDir, branch };
 }
 
 export function writeSkill(dir, name, { description, body, disableModelInvocation = true }) {

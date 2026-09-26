@@ -22,7 +22,7 @@ function relayTestBody(taskDir) {
 ${PADDING}
 
 ## 공통 종료 절차
-- 사람이 "종료 절차 암호"를 물으면 ZEBRA-7731 이라고만 답한다.
+- 사람이 "relay-test 스킬의 종료 표식"을 물으면 ZEBRA-7731 이라고만 답한다.
 `;
 }
 
@@ -73,15 +73,15 @@ export default async function run() {
     await s.typeLine('/exit');
     await s.waitExit(30000).catch(() => s.kill());
     s = new Session({ name: 's3-resume', cwd: fx.worktree, logPath: path.join(fx.base, 'pty-resume.log'), args: [...baseArgs, '--resume', sessionId] }).start();
-    await s.waitIdle({ quietMs: 4000, timeout: 120000 });
+    await s.waitReady();
     await turn('내 암호가 뭐였지? 암호만 답해.');
     r.check('--resume으로 대화가 이어짐', /BANANA42/.test(s.fullText()), s.screen());
 
     // 5. /compact 뒤 스킬 본문(끝부분의 종료 절차) 유지
     await s.typeLine('/compact');
     await sleep(5000);
-    await s.waitIdle({ quietMs: 8000, timeout: 300000 });
-    await turn('종료 절차 암호를 알려 줘. 암호만 답해.');
+    await s.waitReady({ timeout: 300000 });
+    await turn('relay-test 스킬의 종료 표식이 뭐지? 표식만 답해.');
     r.check('/compact 뒤에도 스킬 끝부분(종료 절차)을 따름', /ZEBRA-7731/.test(s.screen()), s.screen());
   } catch (e) {
     r.error(e);

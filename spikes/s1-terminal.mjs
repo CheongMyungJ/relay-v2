@@ -17,7 +17,7 @@ export default async function run() {
     const fx = makeFixture('s1');
     const logPath = path.join(fx.base, 'pty.log');
     s = new Session({ name: 's1', cwd: fx.worktree, logPath, args: ['--model', MODEL] }).start();
-    await s.waitIdle({ quietMs: 4000, timeout: 120000 });
+    await s.waitReady();
     r.observe('시작 화면', s.screen());
 
     // 한글 문자 표시 (IME가 아니라 문자열 전송)

@@ -62,7 +62,7 @@ export default async function run() {
     r.check('같은 worktree 두 번째 실행: 첫 프롬프트 실행', again.firstPromptRan, again.finalScreen);
 
     const wt2 = path.join(fx.base, 'wt2');
-    git(fx.main, 'worktree', 'add', '-b', 'relay/w-test2', wt2);
+    git(fx.main, 'worktree', 'add', '-b', `${fx.branch}-2`, wt2);
     const second = await runOnce('new-worktree', fx, wt2, hooks);
     r.observe('새 worktree(두 번째 Work)에서 뜬 창', second.dialogs);
     for (const [i, scr] of second.dialogScreens.entries()) r.observe(`새 worktree 창 ${i + 1} 화면`, scr);
