@@ -1,0 +1,13 @@
+{
+  "name": "relay-v2-skills",
+  "private": true,
+  "type": "module",
+  "description": "relay-v2 스킬 원문 (docs/design.md 5.6). check.mjs로 정적 검증과 크기 측정을 한다.",
+  "scripts": {
+    "check": "node check.mjs"
+  },
+  "devDependencies": {
+    "ajv": "^8.17.1",
+    "yaml": "^2.8.1"
+  }
+}
