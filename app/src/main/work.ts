@@ -467,7 +467,7 @@ export class WorkRunner {
     await this.files.writeIntent(confirmedIntent(draft, { version, size }), version)
   }
 
-  /** [승인], [의도 승인], [Work 완료]([완료만]), [오류 무시하고 승인] (시나리오 4-3, 4.1) */
+  /** [승인], [의도 승인], [완료만], [오류 무시하고 승인] (시나리오 4-3, 4.1) */
   approve(taskId: string, opts: ApproveOptions): Promise<CommandResult> {
     return this.enqueue(async () => {
       const task = this.task(taskId)

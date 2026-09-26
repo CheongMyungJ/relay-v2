@@ -255,14 +255,14 @@ describe('context.md: intake (처음)', () => {
 describe('context.md: verify', () => {
   const md = buildContext(input('verify'))
 
-  it('기본 다음 단계는 Work 완료이고, [승인]은 [Work 완료]다 (D104)', () => {
+  it('기본 다음 단계는 Work 완료이고, [승인]은 Work 완료 화면의 [완료만]이다 (D104)', () => {
     expect(section(md, '선택 가능한 다음 단계')).toBe(
       [
         '- 기본 다음 단계: Work 완료',
         '- 이전 단계: intake (의도 정리), evidence (재현과 관찰), rca (원인 분석), fix (수정)',
       ].join('\n'),
     )
-    expect(section(md, '마무리 안내 문구')).toContain('[Work 완료]를 누르세요')
+    expect(section(md, '마무리 안내 문구')).toContain('[완료만]을 누르세요')
   })
 })
 
@@ -278,7 +278,7 @@ describe('마무리 안내 문구 (D104)', () => {
       '산출물과 handoff를 썼습니다. 오른쪽 패널에서 확인하고 [의도 승인]을 누르세요. 고칠 점은 여기에 말해 주세요.',
     )
     expect(closingMessage('verify', 'manual')).toBe(
-      '산출물과 handoff를 썼습니다. 오른쪽 패널에서 확인하고 [Work 완료]를 누르세요. 고칠 점은 여기에 말해 주세요.',
+      '산출물과 handoff를 썼습니다. 오른쪽 패널에서 확인하고 [완료만]을 누르세요. 고칠 점은 여기에 말해 주세요.',
     )
   })
 

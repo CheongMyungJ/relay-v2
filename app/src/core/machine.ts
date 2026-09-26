@@ -92,7 +92,7 @@ export interface CheckUpdated extends TaskEvent {
 }
 
 /**
- * 사람이 [승인]을 눌렀다 (시나리오 4-3). intake에서는 [의도 승인], verify에서는 [Work 완료]다.
+ * 사람이 [승인]을 눌렀다 (시나리오 4-3). intake에서는 [의도 승인], verify에서는 Work 완료 화면의 [완료만]이다.
  * check는 누른 때 main이 다시 한 검사다. 기록할 결정과 이전 단계 추천을 여기서 읽는다.
  */
 export interface Approve extends TaskEvent {
@@ -413,7 +413,7 @@ function sessionEnded(work: WorkState, task: TaskRecord, e: SessionEnded): Trans
 
 /**
  * 승인 (시나리오 4-4, 5). 승인을 기록하고, 세션을 끝내고, 결정을 decisions.md에 더하고, 다음 단계로 간다.
- * intake 승인은 의도 승인이라 intent를 확정한다 (4.1). verify 승인은 [Work 완료]다. M2의 전달은 [완료만]이다.
+ * intake 승인은 의도 승인이라 intent를 확정한다 (4.1). verify 승인은 Work 완료 화면의 전달 선택이고, M2의 전달은 [완료만]뿐이다.
  * 에이전트가 턴을 끝낸 뒤(승인 대기, 대기, 세션 종료)에만 받는다. 누른 때의 검사로 다시 판정한다 (approvalGate).
  * [오류 무시하고 승인]이면 무시한 오류를 남기고, 머리글에서 읽지 못한 값은 없는 것으로 본다 (D112).
  * 에이전트가 이전 단계를 추천했으면 다음 task를 시작하지 않고 멈춘다 (D23).

@@ -37,10 +37,13 @@ const CLOSING: Record<ApprovalMode, string> = {
     '멈추려면 [취소]를 누르거나 여기에 말해 주세요.',
 }
 
-/** 승인 버튼 이름과 조사. intake는 [의도 승인], verify는 [Work 완료]다 (D104) */
+/**
+ * 승인 버튼 이름과 조사 (D104). intake는 [의도 승인]이다. verify는 Work 완료 화면(시나리오 7-3)에
+ * 실제로 있는 전달 버튼이고, M2에는 [완료만]뿐이다. [push]와 [PR 생성]은 M5에서 더한다.
+ */
 const APPROVE_BUTTON: Partial<Record<NodeName, string>> = {
   intake: '[의도 승인]을',
-  verify: '[Work 완료]를',
+  verify: '[완료만]을',
 }
 
 /** 마무리 안내 문구 (D104). 승인 방식과 노드에 따라 고정 문구를 쓴다 */
