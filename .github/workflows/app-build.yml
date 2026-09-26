@@ -1,0 +1,85 @@
+# 설치 파일 빌드와 [스모크] (docs/implementation.md I8, I27, 8.3). 수동으로만 실행한다.
+# 설치 파일을 만들고, 러너에 조용히 설치하고, 설치한 앱을 Playwright로 띄워 가짜 claude의 출력을 확인한다.
+name: app-build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: 앱 의존성 설치
+        working-directory: app
+        run: npm ci --no-audit --no-fund
+
+      - name: 설치 파일 빌드
+        working-directory: app
+        run: npm run dist:win
+
+      - name: 조용한 설치
+        working-directory: app
+        run: |
+          $setup = Get-ChildItem dist -Filter 'relay-setup-*.exe' | Select-Object -First 1
+          if (-not $setup) { Write-Error '설치 파일이 없습니다'; exit 1 }
+          Start-Process -FilePath $setup.FullName -ArgumentList '/S' -Wait
+          $exe = Join-Path $env:LOCALAPPDATA 'Programs\relay\relay.exe'
+          if (-not (Test-Path $exe)) { Write-Error "설치된 실행 파일이 없습니다: $exe"; exit 1 }
+          "RELAY_APP_EXE=$exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "설치 위치: $exe"
+
+      - name: 설치된 node-pty 파일 확인 (asar 밖)
+        run: |
+          $pty = Join-Path (Split-Path $env:RELAY_APP_EXE) 'resources\app.asar.unpacked\node_modules\node-pty\prebuilds\win32-x64'
+          $missing = @('conpty.node', 'conpty\conpty.dll', 'conpty\OpenConsole.exe') | Where-Object { -not (Test-Path (Join-Path $pty $_)) }
+          Get-ChildItem -Recurse $pty | Select-Object FullName, Length | Format-Table -AutoSize
+          if ($missing) { Write-Error "없는 파일: $($missing -join ', ')"; exit 1 }
+
+      - name: "[스모크]"
+        working-directory: app
+        run: npm run test:smoke
+
+      - name: 결과 요약
+        if: always()
+        working-directory: app
+        run: |
+          $setup = Get-ChildItem dist -Filter 'relay-setup-*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+          @(
+            '# relay 설치 파일 빌드',
+            '',
+            "- 커밋: ${{ github.sha }}",
+            "- 러너: $env:ImageOS $env:ImageVersion",
+            "- 설치 파일: $($setup.Name) ($([math]::Round($setup.Length / 1MB, 1)) MB)",
+            "- 스모크: ${{ job.status }}"
+          ) -join "`n" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+      - name: 설치 파일 올리기
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: relay-setup-${{ github.sha }}
+          path: app/dist/relay-setup-*.exe
+          if-no-files-found: warn
+
+      - name: 스모크 결과 올리기
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-results-${{ github.sha }}
+          path: app/test-results/
+          if-no-files-found: ignore

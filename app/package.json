@@ -12,7 +12,10 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "test:smoke": "playwright test"
+    "test:smoke": "playwright test",
+    "test:unit": "vitest run --project unit",
+    "test:adapters": "vitest run --project adapters",
+    "dist:win": "electron-vite build && electron-builder --win --x64 --publish never"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
@@ -24,6 +27,7 @@
     "@xterm/addon-fit": "0.11.0",
     "@xterm/xterm": "6.0.0",
     "electron": "44.4.5",
+    "electron-builder": "26.15.3",
     "electron-vite": "5.0.0",
     "eslint": "10.11.0",
     "eslint-plugin-react-hooks": "7.1.1",

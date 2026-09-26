@@ -1,0 +1,87 @@
+# 앱 CI (docs/implementation.md I28, 8.3).
+# Linux: 타입 검사, ESLint, Prettier, [단위], skills/check.mjs. Windows: [어댑터] ([흐름]은 M2부터).
+name: app-ci
+
+on:
+  push:
+    paths:
+      - "app/**"
+      - "skills/**"
+      - "docs/contracts/**"
+      - ".github/workflows/app-ci.yml"
+  pull_request:
+    paths:
+      - "app/**"
+      - "skills/**"
+      - "docs/contracts/**"
+      - ".github/workflows/app-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: 앱 의존성 설치
+        working-directory: app
+        # Linux 작업은 node-pty와 Electron 바이너리가 필요 없어 설치 스크립트를 건너뛴다.
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: 타입 검사
+        working-directory: app
+        run: npm run typecheck
+
+      - name: ESLint
+        working-directory: app
+        run: npm run lint
+
+      - name: Prettier
+        working-directory: app
+        run: npm run format:check
+
+      - name: "[단위]"
+        working-directory: app
+        run: npm run test:unit
+
+      - name: 스킬 정적 검사
+        working-directory: skills
+        run: |
+          npm ci --no-audit --no-fund
+          node check.mjs
+
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: 앱 의존성 설치
+        working-directory: app
+        env:
+          # 어댑터 시험은 Node에서 돌아 Electron 바이너리가 필요 없다.
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+        run: npm ci --no-audit --no-fund
+
+      - name: "[어댑터]"
+        working-directory: app
+        run: npm run test:adapters
