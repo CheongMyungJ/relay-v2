@@ -31,6 +31,11 @@ export interface TaskOutcome {
   /** 질문에 답한 횟수 */
   answers: number
   nudges: number
+  /**
+   * 걸린 시간. 앞 task의 [승인]이 끝난 때(첫 task는 drive를 시작한 때)부터 이 task의 [승인]이 끝난
+   * 때까지다. [승인]에는 이 task의 세션 종료와 다음 task 시작이 들어 있다. 승인하지 못한 task는
+   * drive가 끝난 때까지다. 구간이 겹치지 않아 합이 전체 시간을 넘지 않는다.
+   */
   ms: number
 }
 
@@ -62,7 +67,10 @@ export async function drive(
   o: DriveOptions = {},
 ): Promise<DriveResult> {
   const started = Date.now()
-  const outcomes = new Map<string, TaskOutcome & { since: number }>()
+  const outcomes = new Map<string, TaskOutcome & { approved: boolean }>()
+  // 지금 task의 구간이 시작된 때. 다음 task는 승인 도중에 스냅샷에 나타나므로 그때가 아니라
+  // 앞 task의 [승인]이 끝난 때부터 잰다
+  let mark = started
   const seen = new Map<string, number>()
   // 스냅샷마다 연속 되돌림 횟수가 오르면 센다
   const off = ui.onChange(() => {
@@ -85,7 +93,7 @@ export async function drive(
         answers: 0,
         nudges: 0,
         ms: 0,
-        since: Date.now(),
+        approved: false,
       }
       outcomes.set(t.id, out)
     }
@@ -93,6 +101,11 @@ export async function drive(
   }
   const finish = (status: DriveResult['status'], reason: string | null): DriveResult => {
     off()
+    const now = Date.now()
+    // 승인하지 못하고 끝난 지금 task는 drive가 끝난 때까지 잰다
+    const w = ui.works.get(workKey)
+    const last = w?.current ? outcomes.get(w.current) : undefined
+    if (last && !last.approved) last.ms = now - mark
     return {
       status,
       reason,
@@ -105,7 +118,7 @@ export async function drive(
         nudges: t.nudges,
         ms: t.ms,
       })),
-      ms: Date.now() - started,
+      ms: now - started,
     }
   }
   const timeout = o.stepTimeoutMs ?? 60_000
@@ -154,7 +167,10 @@ export async function drive(
               continue
             }
             out.forced = forced
-            out.ms = Date.now() - out.since
+            out.approved = true
+            const now = Date.now()
+            out.ms = now - mark
+            mark = now
             // 다음 task가 시작되거나 Work가 끝날 때까지 기다린다
             await ui.until(
               () => {

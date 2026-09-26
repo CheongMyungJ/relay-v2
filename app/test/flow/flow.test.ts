@@ -73,6 +73,9 @@ describe('[흐름] 최소 흐름 (M2)', () => {
     ])
     // evidence의 질문 대기에 답했다
     expect(result.tasks[1]?.answers).toBeGreaterThan(0)
+    // task마다 걸린 시간은 구간이 겹치지 않아 합이 전체 시간을 넘지 않는다 (8.4)
+    expect(result.tasks.every((t) => t.ms > 0)).toBe(true)
+    expect(result.tasks.reduce((sum, t) => sum + t.ms, 0)).toBeLessThanOrEqual(result.ms)
 
     // ---------- work.json (5.1) ----------
     const w = work(s.workDir)
