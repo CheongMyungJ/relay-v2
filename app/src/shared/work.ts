@@ -4,21 +4,24 @@ import type { WorkSettings } from './config'
 import type { HandoffStatus, NodeName, Size } from './contracts'
 
 /**
- * Work 상태 (3.3). M1에는 진행 중(active), 멈춤(stopped), 완료(completed)만 있다.
- * 포기와 보관됨은 M3, M5에서 더한다.
+ * Work 상태 (3.3): 진행 중(active), 멈춤(stopped), 완료(completed), 포기(abandoned).
+ * 보관됨은 M5에서 더한다.
  */
-export type WorkStatus = 'active' | 'stopped' | 'completed'
+export type WorkStatus = 'active' | 'stopped' | 'completed' | 'abandoned'
 
 /**
  * Task 상태 (3.3)와 실행 중 표시(시나리오 3)를 한 값으로 둔다.
- * - 실행 중: working(작업 중), asking(질문 대기), input_needed(입력 필요), idle(대기)
+ * - queued(대기열): 세션 상한 때문에 시작을 기다린다 (D18)
+ * - 실행 중: working(작업 중), asking(질문 대기), input_needed(입력 필요), idle(대기).
+ *   working이면서 세션이 살아 있지 않으면 세션을 띄우는 중이다
  * - awaiting_approval(승인 대기), blocked(막힘): 세션이 끝나도 남는다 (3.3)
  * - session_ended: handoff 없이 세션이 끝났다. 3.3의 "중단됨"에 들지만 배지가 따로 있다 (D80)
- * - interrupted: 중단됨. M1에서는 task를 띄우지 못했을 때만 쓴다
+ * - interrupted: 중단됨. [즉시 중단], 앱 종료, 재시작 조정(D75, D78), task를 띄우지 못했을 때
  * - approved: 승인됨
- * 대기열과 폐기됨은 M3, M4에서 더한다.
+ * 폐기됨은 M4에서 더한다.
  */
 export type TaskStatus =
+  | 'queued'
   | 'working'
   | 'asking'
   | 'input_needed'
@@ -29,8 +32,12 @@ export type TaskStatus =
   | 'interrupted'
   | 'approved'
 
-/** task를 시작한 이유 (시나리오 2-5의 머리 띠). M1은 기본 진행만 있다 */
-export type StartReason = 'default'
+/**
+ * task를 시작한 이유 (시나리오 2-5의 머리 띠): 기본 진행, 재개.
+ * 재개는 handoff 없이 끝난 세션을 [이 단계 새 세션으로 다시] 한 새 task다 (D114).
+ * 되감기와 건너뛰기는 M4에서 더한다.
+ */
+export type StartReason = 'default' | 'resume'
 
 /** 형식 검사의 오류나 경고 하나 (5.2.1) */
 export interface FormatIssue {
@@ -64,6 +71,8 @@ export interface TaskSession {
   started_at: string
   alive: boolean
   ended_at?: string
+  /** 마지막으로 --resume으로 다시 연 때 (시나리오 3-4). 다시 열면 pid와 시작 시각이 바뀐다 */
+  resumed_at?: string
 }
 
 export interface TaskRecord {
@@ -85,6 +94,8 @@ export interface TaskRecord {
   claude_version?: string
   /** 세션. 띄우기 전에는 null */
   session: TaskSession | null
+  /** 대기열에 들어간 때 (D18) */
+  queued_at?: string
   /** 첫 UserPromptSubmit의 permission_mode (D94) */
   permission_mode?: string
   /** 사람이 새 요청을 보낸 마지막 때 (시나리오 3, UserPromptSubmit) */
@@ -108,14 +119,21 @@ export interface ApprovedIntent {
   size: Size
 }
 
-/** Work가 멈춘 이유 (3.3). M1에는 이전 단계 추천(D23)만 있다 */
-export interface WorkStop {
-  kind: 'recommended_back'
-  task_id: string
-  /** 추천한 이전 단계와 이유 (handoff의 recommended_next) */
-  node: NodeName
-  reason: string
-}
+/** Work가 멈춘 이유 (3.3): 이전 단계 추천(D23), [이 단계 끝나면 멈춤] (시나리오 3-4) */
+export type WorkStop =
+  | {
+      kind: 'recommended_back'
+      /** 승인하고 멈춘 task */
+      task_id: string
+      /** 추천한 이전 단계와 이유 (handoff의 recommended_next) */
+      node: NodeName
+      reason: string
+    }
+  | {
+      kind: 'after_step'
+      /** 승인하고 멈춘 task */
+      task_id: string
+    }
 
 export interface WorkState {
   schema_version: 1
@@ -124,6 +142,7 @@ export interface WorkState {
   status: WorkStatus
   created_at: string
   completed_at?: string
+  abandoned_at?: string
   /** 기준 브랜치와 기준 커밋 (시나리오 1, D97) */
   base_branch: string
   base_commit: string
@@ -133,6 +152,8 @@ export interface WorkState {
   settings: WorkSettings
   /** status가 stopped일 때 멈춘 이유 */
   stop?: WorkStop
+  /** [이 단계 끝나면 멈춤]: 지금 단계가 승인되면 다음 단계를 시작하지 않고 멈춘다 (시나리오 3-4) */
+  stop_after_step?: boolean
   tasks: TaskRecord[]
 }
 

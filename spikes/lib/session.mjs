@@ -35,6 +35,10 @@ const PRESS_ENTER = /press enter|enter to continue/i;
 const READY_HINT = /for agents|for shortcuts|shift\+tab to cycle/i;
 const KEY_UP = '\x1b[A';
 const KEY_DOWN = '\x1b[B';
+// 같은 창이 이만큼 그대로일 때만 누른다. 2.1.283(Linux)은 신뢰 창을 처음 그리고 150ms쯤 뒤에
+// 다시 그리며 선택을 기본 항목("No, exit")으로 되돌렸다. 그 사이에 누른 방향키는 사라진다.
+// 출처: app/test/claude/screen.ts (M2 [실제]에서 찾음)
+const SETTLE_MS = 1000;
 
 // 로그와 결과에 API 키가 남지 않게 가린다.
 export function redact(text) {
@@ -143,14 +147,23 @@ export class Session {
   // 보이는 창이 첫 실행 창(선택 목록이나 Enter 안내)이면 수락한다. 수락했으면 true.
   // 선택 목록에 수락 항목(Yes, I accept, proceed, trust)이 있으면 화살표로 그 항목까지 옮겨 Enter를 누르고,
   // 없으면 기본 항목에서 Enter를 누른다(예: 테마 선택).
+  // 창이 SETTLE_MS 동안 그대로일 때만 누르고, Enter 전에 커서가 수락 항목에 있는지 다시 본다
+  // (출처: app/test/claude/screen.ts).
   async handleDialogs() {
     const scr = this.screen();
     const isSelect = NUMBERED_CURSOR.test(scr) || CONFIRM_HINT.test(scr);
     const isEnter = PRESS_ENTER.test(scr);
-    if (!isSelect && !isEnter) return false;
+    if (!isSelect && !isEnter) {
+      this.shownDialog = null;
+      return false;
+    }
     if (this.lastDialogScreen === scr && Date.now() - this.lastDialogAt < 3000) return false;
+    if (this.shownDialog?.screen !== scr) {
+      this.shownDialog = { screen: scr, at: Date.now() };
+      return false;
+    }
+    if (Date.now() - this.shownDialog.at < SETTLE_MS) return false;
     const name = (DIALOG_NAMES.find((d) => d.match.test(scr)) || { name: 'unknown' }).name;
-    this.dialogs.push({ name, screen: redact(scr), at: Date.now() });
     const lines = scr.split('\n');
     const cursorIdx = lines.findIndex((l) => CURSOR_LINE.test(l));
     const acceptIdx = isSelect ? lines.findIndex((l) => ACCEPT_LINE.test(l)) : -1;
@@ -161,10 +174,17 @@ export class Session {
         this.p.write(key);
         await sleep(300);
       }
+      // 커서가 수락 항목에 없으면 누르지 않고 다음 차례에 처음부터 다시 한다
+      const at = this.screen().split('\n').find((l) => CURSOR_LINE.test(l)) ?? '';
+      if (!ACCEPT_LINE.test(at)) {
+        this.shownDialog = null;
+        return false;
+      }
       action = `${lines[acceptIdx].trim()} 로 이동 후 Enter`;
     } else if (acceptIdx >= 0) {
       action = `${lines[acceptIdx].trim()} 에서 Enter`;
     }
+    this.dialogs.push({ name, screen: redact(scr), at: Date.now() });
     console.log(`[${this.name}] 첫 실행 창 감지: ${name} → ${action}\n${tail(scr, 30)}`);
     await sleep(300);
     this.p.write('\r');
@@ -232,5 +252,26 @@ export class Session {
     try {
       this.p.kill();
     } catch {}
+  }
+
+  // 강제 종료(S6). 앱의 [즉시 중단]과 같게 Windows는 taskkill /T /F로 트리째 끝낸다.
+  // Linux와 macOS에는 taskkill이 없어 프로세스 그룹에 SIGKILL을 보내 흉내 낸다. node-pty는 forkpty(3)로
+  // 자식을 새 세션으로 띄우므로 자식의 pid가 프로세스 그룹 id다. node-pty kill()의 기본 신호인 SIGHUP은
+  // 강제 종료가 아니다. 받은 claude는 SessionEnd 훅을 보내고 정상으로 끝난다(docs/implementation.md 3절).
+  // 쓴 방법을 돌려준다.
+  forceKill() {
+    if (!this.alive()) return '이미 끝남';
+    if (process.platform === 'win32') {
+      try {
+        execFileSync('taskkill', ['/PID', String(this.pid), '/T', '/F'], { stdio: 'ignore' });
+      } catch {}
+      return `taskkill /PID ${this.pid} /T /F`;
+    }
+    try {
+      process.kill(-this.pid, 'SIGKILL');
+    } catch (e) {
+      return `프로세스 그룹 ${this.pid}에 SIGKILL 실패: ${e.message}`;
+    }
+    return `프로세스 그룹 ${this.pid}에 SIGKILL (kill -KILL -${this.pid})`;
   }
 }

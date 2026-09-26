@@ -10,7 +10,8 @@ import type {
   WorkState,
   WorkStatus,
 } from '../shared/work'
-import { NODE_INFO, isPrevious } from './pipeline'
+import { badge } from './approval'
+import { NODE_INFO, WORK_COMPLETE, defaultNext, isPrevious } from './pipeline'
 import { normalizeText, parseFrontMatter, sectionText } from './validate'
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -20,12 +21,18 @@ export function taskLabel(task: Pick<TaskRecord, 'seq' | 'node'>): string {
   return `${pad(task.seq)} ${NODE_INFO[task.node].title}`
 }
 
-/** 머리 띠의 이유 문구 (시나리오 2-5). 되감기, 건너뛰기, 재개는 M3와 M4에서 더한다 */
-const REASON_LABEL: Record<StartReason, string> = { default: '기본 진행' }
+/** 머리 띠의 이유 문구 (시나리오 2-5). 되감기와 건너뛰기는 M4에서 더한다 */
+const REASON_LABEL: Record<StartReason, string> = { default: '기본 진행', resume: '재개' }
 
-/** 탭 위 머리 띠: "04 원인 분석 · 새 세션 · 이유: 기본 진행" (시나리오 2-5, D109) */
-export function bandText(task: Pick<TaskRecord, 'seq' | 'node' | 'reason'>): string {
-  return `${taskLabel(task)} · 새 세션 · 이유: ${REASON_LABEL[task.reason]}`
+/**
+ * 탭 위 머리 띠: "04 원인 분석 · 새 세션 · 이유: 기본 진행" (시나리오 2-5, D109).
+ * --resume으로 다시 연 세션은 "세션 재개"다 (시나리오 3-4).
+ */
+export function bandText(
+  task: Pick<TaskRecord, 'seq' | 'node' | 'reason'> & Partial<Pick<TaskRecord, 'session'>>,
+): string {
+  const session = task.session?.resumed_at ? '세션 재개' : '새 세션'
+  return `${taskLabel(task)} · ${session} · 이유: ${REASON_LABEL[task.reason]}`
 }
 
 const BYPASS_MODE = 'bypassPermissions'
@@ -40,6 +47,7 @@ export function permissionNotice(task: Pick<TaskRecord, 'permission_mode'>): str
 
 /** task 표시 이름 (3.3, 시나리오 3) */
 export const TASK_STATUS_LABEL: Readonly<Record<TaskStatus, string>> = {
+  queued: '대기열',
   working: '작업 중',
   asking: '질문 대기',
   input_needed: '입력 필요',
@@ -56,13 +64,54 @@ export const WORK_STATUS_LABEL: Readonly<Record<WorkStatus, string>> = {
   active: '진행 중',
   stopped: '멈춤',
   completed: '완료',
+  abandoned: '포기',
 }
 
-/** Work가 멈춘 이유 (D23). M2는 알리기만 하고 단계 선택은 M4에서 넣는다 */
+/** Work가 멈춘 이유: 이전 단계 추천(D23), [이 단계 끝나면 멈춤](시나리오 3-4). 단계 선택은 M4에서 넣는다 */
 export function stopNotice(work: WorkState): string | null {
   const stop = work.stop
   if (work.status !== 'stopped' || !stop) return null
-  return `이전 단계 추천으로 멈춤: ${NODE_INFO[stop.node].title}(${stop.node})로 — ${stop.reason}`
+  if (stop.kind === 'recommended_back') {
+    return `이전 단계 추천으로 멈춤: ${NODE_INFO[stop.node].title}(${stop.node})로 — ${stop.reason}`
+  }
+  const task = work.tasks.find((t) => t.id === stop.task_id)
+  return `이 단계 끝나면 멈춤: ${task ? taskLabel(task) : stop.task_id} 승인 뒤 멈춤`
+}
+
+/**
+ * 멈춘 Work에서 [재개]가 할 일 (3.3). 멈추게 한 task의 기본 다음 단계를 시작하고, verify에서 멈췄으면
+ * Work를 완료한다. 이전 단계 추천(D23)은 따르지 않는다.
+ */
+export function resumeHint(work: WorkState): string | null {
+  const stop = work.stop
+  if (work.status !== 'stopped' || !stop) return null
+  const task = work.tasks.find((t) => t.id === stop.task_id)
+  const next = task && work.intent ? defaultNext(task.node, work.intent.size) : null
+  const action =
+    next === null
+      ? '기본 다음 단계로 갑니다'
+      : next === WORK_COMPLETE
+        ? 'Work를 완료합니다'
+        : `다음 단계(${NODE_INFO[next].title})를 시작합니다`
+  return stop.kind === 'recommended_back'
+    ? `[재개]하면 추천을 따르지 않고 ${action}. 추천대로 되돌아가는 단계 선택은 M4에서 넣습니다.`
+    : `[재개]하면 ${action}.`
+}
+
+/**
+ * 사람이 움직여야 하는 상태로 바뀌었을 때 알릴 문구 (D81). 배지(D80)가 사람이 필요한 상태로 바뀌었을
+ * 때만 문구를 돌려준다: 질문 대기·입력 필요, 승인 대기, 막힘, 멈춤, handoff 없이 세션 종료.
+ * 보고 있는 Work인지는 main이 가린다.
+ */
+export function humanNotice(before: WorkState, after: WorkState): string | null {
+  const b = badge(after)
+  if (!b.hot || badge(before).kind === b.kind) return null
+  if (b.kind === 'stopped') return stopNotice(after)
+  const task = after.tasks[after.tasks.length - 1]
+  if (!task) return null
+  return b.kind === 'session_ended'
+    ? `${taskLabel(task)}: handoff 없이 세션 종료`
+    : `${taskLabel(task)}: ${b.label}`
 }
 
 // ---------- 승인 화면 (D83) ----------

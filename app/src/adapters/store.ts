@@ -5,6 +5,7 @@ import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { normalizeConfig } from '../core/config'
 import { taskDirName } from '../core/machine'
 import { appendBlock } from '../core/records'
 import { DEFAULT_CONFIG, type AppConfig } from '../shared/config'
@@ -113,7 +114,7 @@ export interface LoadedConfig {
 }
 
 /**
- * config.json을 읽는다. 없으면 기본값으로 만든다. 없는 키는 기본값을 쓴다.
+ * config.json을 읽는다. 없으면 기본값으로 만든다. 없는 키와 값이 틀린 키는 기본값을 쓴다(core/config).
  * 읽을 수 없으면 파일을 그대로 두고 기본값을 쓴다.
  */
 export async function loadConfig(home: string): Promise<LoadedConfig> {
@@ -124,21 +125,19 @@ export async function loadConfig(home: string): Promise<LoadedConfig> {
     return { config: DEFAULT_CONFIG }
   }
   try {
-    const data = JSON.parse(text) as Partial<AppConfig>
-    return {
-      config: {
-        ...DEFAULT_CONFIG,
-        ...data,
-        auto_approve: { ...DEFAULT_CONFIG.auto_approve, ...data.auto_approve },
-        question_mode: { ...DEFAULT_CONFIG.question_mode, ...data.question_mode },
-      },
-    }
+    const { config, warnings } = normalizeConfig(JSON.parse(text))
+    return warnings.length ? { config, warning: warnings.join(' / ') } : { config }
   } catch (e) {
     return {
       config: DEFAULT_CONFIG,
       warning: `config.json을 읽을 수 없어 기본값을 씁니다: ${e instanceof Error ? e.message : String(e)}`,
     }
   }
+}
+
+/** 설정 화면에서 바꾼 앱 설정을 쓴다 (D70) */
+export async function saveConfig(home: string, config: AppConfig): Promise<void> {
+  await writeJson(path.join(home, 'config.json'), config)
 }
 
 // ---------- 프로젝트 (5.1) ----------

@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       spikes:
-        description: "돌릴 스파이크 (예: S2 S3). 비우면 전부 (S5, S1, S2, S3, S4 순서)"
+        description: "돌릴 스파이크 (예: S2 S3). 비우면 전부 (S5, S1, S2, S3, S3B, S4, S6 순서)"
         required: false
         default: ""
       model:

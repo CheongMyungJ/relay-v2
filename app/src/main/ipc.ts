@@ -1,4 +1,5 @@
 // 렌더러 명령을 Relay로 잇는다 (I14). 명령은 invoke로 받고, 상태는 UiPort가 스냅샷으로 보낸다.
+// 값은 여기서 모양만 확인하고, 뜻(상태에 맞는 명령인지, 설정 값의 범위)은 Relay와 core가 판정한다.
 import os from 'node:os'
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { IPC, type AppInfo } from '../shared/api'
@@ -21,7 +22,17 @@ function count(v: unknown): number {
   return Math.floor(v)
 }
 
-export function registerIpc(ready: Promise<Relay>): void {
+function flag(v: unknown): boolean {
+  if (typeof v !== 'boolean') throw new Error('true/false가 아님')
+  return v
+}
+
+export interface IpcHooks {
+  /** 사람이 보고 있는 Work가 바뀌었다 (D81) */
+  onSelectWork(workKey: string | null): void
+}
+
+export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   ipcMain.handle(IPC.appInfo, (): AppInfo => ({
     platform: process.platform,
     windowsBuild: windowsBuild(),
@@ -50,6 +61,7 @@ export function registerIpc(ready: Promise<Relay>): void {
       request: text(input.request),
       baseBranch: text(input.baseBranch),
       baseLocation: input.baseLocation === 'remote' ? 'remote' : 'local',
+      ...(input.settings === undefined ? {} : { settings: input.settings }),
     }),
   )
   ipcMain.handle(IPC.review, async (_e, workKey: unknown, taskId: unknown) =>
@@ -61,6 +73,34 @@ export function registerIpc(ready: Promise<Relay>): void {
       ...(opts.force === true ? { force: true } : {}),
     }),
   )
+
+  ipcMain.handle(IPC.interrupt, async (_e, workKey: unknown, taskId: unknown) =>
+    (await ready).interrupt(text(workKey), text(taskId)),
+  )
+  ipcMain.handle(IPC.resume, async (_e, workKey: unknown, taskId: unknown) =>
+    (await ready).resume(text(workKey), text(taskId)),
+  )
+  ipcMain.handle(IPC.retry, async (_e, workKey: unknown, taskId: unknown) =>
+    (await ready).retry(text(workKey), text(taskId)),
+  )
+  ipcMain.handle(IPC.stopAfter, async (_e, workKey: unknown, on: unknown) =>
+    (await ready).stopAfter(text(workKey), flag(on)),
+  )
+  ipcMain.handle(IPC.resumeWork, async (_e, workKey: unknown) =>
+    (await ready).resumeWork(text(workKey)),
+  )
+  ipcMain.handle(IPC.abandon, async (_e, workKey: unknown) => (await ready).abandon(text(workKey)))
+  ipcMain.handle(IPC.workSettings, async (_e, workKey: unknown, settings: unknown) =>
+    (await ready).updateWorkSettings(text(workKey), settings),
+  )
+  ipcMain.handle(IPC.config, async () => (await ready).currentConfig())
+  ipcMain.handle(IPC.updateConfig, async (_e, patch: unknown) => {
+    const r = await (await ready).updateConfig(patch)
+    return r.ok ? { ok: true } : r
+  })
+  ipcMain.on(IPC.selectWork, (_e, workKey: unknown) => {
+    hooks.onSelectWork(typeof workKey === 'string' ? workKey : null)
+  })
 
   ipcMain.handle(IPC.terminalAttach, async (_e, key: unknown) =>
     (await ready).terminalAttach(text(key)),

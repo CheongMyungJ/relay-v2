@@ -11,14 +11,19 @@ export type Step =
   | { do: 'tool'; name: string }
   | { do: 'notify'; type: string }
   | { do: 'stop'; onBlock?: Step[] }
-  | { do: 'exit'; reason?: string }
+  | { do: 'exit'; reason?: string; linger?: number }
+  /** /clear: 새 세션 id로 계속 돈다 (D110) */
+  | { do: 'clear' }
   | { do: 'sleep'; ms: number }
   | { do: 'print'; text: string }
   | { do: 'wait' }
+  | { do: 'waitEnter' }
 
 export interface Scenario {
   /** 스킬 이름이나 task id → 단계 */
   tasks: Partial<Record<SkillName | string, Step[]>>
+  /** --resume으로 다시 연 세션의 단계. 스킬 이름이나 task id → 단계. 없으면 입력을 기다리기만 한다 */
+  resume?: Partial<Record<SkillName | string, Step[]>>
 }
 
 // ---------- 시험 레포 ----------

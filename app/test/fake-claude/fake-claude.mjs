@@ -7,6 +7,11 @@
 // - 훅은 --settings 파일의 URL과 머리글로 보낸다. 머리글의 $VAR는 allowedEnvVars에 있는 것만 푼다
 //   (Claude Code 문서 hooks). 본문 필드는 S2에서 관찰한 모양이다.
 // - FAKE_CLAUDE_RECORD 폴더가 있으면 실행 인자와 훅 응답을 fake-claude.jsonl에 남긴다.
+// - --session-id로 시작한 세션은 FAKE_CLAUDE_RECORD/sessions/<id>.json에 task를 적어 두고,
+//   --resume <id>로 다시 열면 그 task의 resume 시나리오를 한다. 적어 둔 것이 없으면 실제 claude처럼
+//   "No conversation found with session ID"를 내고 종료 코드 1로 끝난다 (스파이크 S6).
+// - clear 단계는 /clear를 흉내 낸다: SessionEnd(reason: clear)를 보내고 새 세션 id로 계속 돈다(D110).
+//   새 세션은 다음 요청으로 대화가 생겨야 --resume으로 열 수 있다.
 // - 시나리오가 없으면 M0처럼 출력만 내고 끝날 때까지 살아 있는다.
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -54,12 +59,22 @@ process.stdout.on('resize', () => out(`SIZE ${size()}`))
 
 // ---------- 인자 ----------
 
-const opts = { skip: false, sessionId: randomUUID(), addDirs: [], settings: null, prompt: null }
+const opts = {
+  skip: false,
+  sessionId: randomUUID(),
+  resume: false,
+  addDirs: [],
+  settings: null,
+  prompt: null,
+}
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
   if (a === '--dangerously-skip-permissions') opts.skip = true
-  else if (a === '--session-id' || a === '--resume') opts.sessionId = argv[++i]
-  else if (a === '--add-dir') opts.addDirs.push(argv[++i])
+  else if (a === '--session-id') opts.sessionId = argv[++i]
+  else if (a === '--resume') {
+    opts.sessionId = argv[++i]
+    opts.resume = true
+  } else if (a === '--add-dir') opts.addDirs.push(argv[++i])
   else if (a === '--settings') opts.settings = argv[++i]
   else if (a === '--model' || a === '--effort') i++
   else if (!a.startsWith('--') && opts.prompt === null) opts.prompt = a
@@ -95,8 +110,9 @@ function interpolate(value, allowed) {
   })
 }
 
-const transcriptPath = path.join(os.tmpdir(), 'fake-claude', `${opts.sessionId}.jsonl`)
 let promptId
+/** /clear 뒤 아직 대화가 없는 새 세션. 다음 요청 때 기록한다 */
+let unsaved = false
 
 function permissionMode() {
   return env.FAKE_CLAUDE_PERMISSION_MODE || (opts.skip ? 'bypassPermissions' : 'default')
@@ -108,7 +124,7 @@ async function hook(event, fields = {}, toolName) {
   const body = {
     session_id: opts.sessionId,
     ...(promptId ? { prompt_id: promptId } : {}),
-    transcript_path: transcriptPath,
+    transcript_path: path.join(os.tmpdir(), 'fake-claude', `${opts.sessionId}.jsonl`),
     cwd: process.cwd(),
     permission_mode: permissionMode(),
     hook_event_name: event,
@@ -174,6 +190,23 @@ function fill(text, vars) {
   return String(text).replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m))
 }
 
+/** 세션 기록 (실제 claude의 transcript 대신). --resume이 이것으로 task를 찾는다 */
+function sessionFile(id) {
+  return recordDir ? path.join(recordDir, 'sessions', `${id}.json`) : null
+}
+
+function saveSession(ctx) {
+  const file = sessionFile(opts.sessionId)
+  if (!file) return
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.writeFileSync(file, JSON.stringify(ctx))
+}
+
+function loadSession() {
+  const file = sessionFile(opts.sessionId)
+  return file && fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : null
+}
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 function waitEnter() {
   if (enters > 0) {
@@ -189,7 +222,15 @@ async function steps(list, ctx, vars) {
     out(`[가짜 claude] ${s}${step.file ? ` ${step.file}` : ''}`)
     if (s === 'prompt') {
       promptId = randomUUID()
+      if (unsaved) {
+        saveSession(ctx)
+        unsaved = false
+      }
       await hook('UserPromptSubmit', { prompt: step.text ?? opts.prompt })
+    } else if (s === 'clear') {
+      await hook('SessionEnd', { reason: 'clear' })
+      opts.sessionId = randomUUID()
+      unsaved = true
     } else if (s === 'write') {
       const file = path.join(ctx.taskDir, step.file)
       fs.mkdirSync(path.dirname(file), { recursive: true })
@@ -206,6 +247,10 @@ async function steps(list, ctx, vars) {
       execFileSync('git', ['commit', '-q', '-m', step.message ?? 'fake commit'], {
         stdio: 'ignore',
       })
+    } else if (s === 'waitEnter') {
+      // 사람이 터미널에서 새 요청을 보낼 때까지 기다린다 (다시 연 세션은 입력을 기다린다, S6)
+      out('입력 대기: Enter를 누르세요')
+      await waitEnter()
     } else if (s === 'ask') {
       const question = { questions: [{ question: step.question ?? '질문', options: [] }] }
       await hook(
@@ -241,6 +286,8 @@ async function steps(list, ctx, vars) {
       }
     } else if (s === 'exit') {
       await hook('SessionEnd', { reason: step.reason ?? 'prompt_input_exit' })
+      // SessionEnd를 보낸 뒤 프로세스가 곧바로 끝나지 않는 때를 흉내 낸다
+      if (step.linger) await sleep(step.linger)
       process.exit(0)
     } else if (s === 'sleep') {
       await sleep(step.ms ?? 100)
@@ -256,17 +303,28 @@ async function steps(list, ctx, vars) {
 
 async function run() {
   const scenario = JSON.parse(fs.readFileSync(scenarioFile, 'utf8'))
-  const ctx = readContext()
+  const ctx = opts.resume ? loadSession() : readContext()
+  if (!ctx) {
+    // 실제 claude와 같다: 저장된 대화가 없는 id로 --resume하면 끝난다 (스파이크 S6)
+    record({ type: 'start', args: argv, resume: true, found: false })
+    out(`No conversation found with session ID: ${opts.sessionId}`)
+    process.exit(1)
+  }
+  if (!opts.resume) saveSession(ctx)
   record({
     type: 'start',
     args: argv,
+    resume: opts.resume,
     cwd: process.cwd(),
     token: Boolean(env.RELAY_HOOK_TOKEN),
     skill: ctx.skill,
     taskId: ctx.taskId,
     taskDir: ctx.taskDir,
   })
-  const list = scenario.tasks?.[ctx.taskId] ?? scenario.tasks?.[ctx.skill] ?? [{ do: 'prompt' }]
+  // 다시 연 세션은 사람의 입력을 기다린다. resume 시나리오가 없으면 아무것도 하지 않는다
+  const list = opts.resume
+    ? (scenario.resume?.[ctx.taskId] ?? scenario.resume?.[ctx.skill] ?? [])
+    : (scenario.tasks?.[ctx.taskId] ?? scenario.tasks?.[ctx.skill] ?? [{ do: 'prompt' }])
   await steps(list, ctx, { taskDir: ctx.taskDir, taskId: ctx.taskId, node: ctx.node, attempt: 0 })
   out('[가짜 claude] 대기')
 }

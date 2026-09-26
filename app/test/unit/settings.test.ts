@@ -8,6 +8,7 @@ import {
   launchArgs,
   launchEnv,
   relaySkillName,
+  resumeArgs,
   ruleAbs,
   taskSettings,
 } from '../../src/core/settings'
@@ -115,7 +116,7 @@ describe('deny 규칙 (D17, 시나리오 2-3)', () => {
 })
 
 describe('task 설정 파일 (시나리오 2-3)', () => {
-  it('훅과 deny 규칙을 담고 JSON으로 그대로 쓸 수 있다', () => {
+  it('훅, deny 규칙, 자동 메모리 끔(D113)을 담고 JSON으로 그대로 쓸 수 있다', () => {
     const input = {
       port: 51234,
       taskId: 't-03',
@@ -123,9 +124,10 @@ describe('task 설정 파일 (시나리오 2-3)', () => {
       previousTaskDirs: [`${TASKS}\\01-intake`, `${TASKS}\\02-evidence`],
     }
     const settings = taskSettings(input)
-    expect(Object.keys(settings)).toEqual(['hooks', 'permissions'])
+    expect(Object.keys(settings)).toEqual(['hooks', 'permissions', 'autoMemoryEnabled'])
     expect(settings.hooks).toEqual(hookSettings(51234, 't-03'))
     expect(settings.permissions.deny).toEqual(denyRules(input))
+    expect(settings.autoMemoryEnabled).toBe(false)
     expect(JSON.parse(JSON.stringify(settings))).toEqual(settings)
   })
 })
@@ -150,6 +152,24 @@ describe('실행 인자 (시나리오 2-5, 6절)', () => {
       '--settings',
       `${TASKS}\\03-rca\\task.settings.json`,
       `/relay-root-cause 이 task의 컨텍스트: ${context}`,
+    ])
+  })
+
+  it('재개는 같은 옵션 + --resume이고 --session-id와 첫 프롬프트는 뺀다 (시나리오 3-4, S6)', () => {
+    expect(
+      resumeArgs({
+        sessionId: '0b8f0d8e-6c1a-4f1e-9d9b-3c2f4a5e6d7f',
+        workDir: WORK_DIR,
+        settingsPath: `${TASKS}\\03-rca\\task.settings.json`,
+      }),
+    ).toEqual([
+      '--dangerously-skip-permissions',
+      '--resume',
+      '0b8f0d8e-6c1a-4f1e-9d9b-3c2f4a5e6d7f',
+      '--add-dir',
+      WORK_DIR,
+      '--settings',
+      `${TASKS}\\03-rca\\task.settings.json`,
     ])
   })
 

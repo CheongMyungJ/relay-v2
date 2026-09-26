@@ -5,6 +5,7 @@
 // 사람 역할: 첫 실행 창은 수락하고(I17), 질문에는 첫 선택지(추천)로 답하고, 승인 대기가 되면 승인한다.
 // 형식 오류가 끝까지 남으면 [오류 무시하고 승인]을 쓰고 센다(0이어야 함). 결과는 test-results/claude/에 남긴다.
 // RELAY_REAL_CLAUDE=dry면 가짜 claude로 같은 도구를 돌려 도구 자체를 확인한다 (사용량 없음).
+// RELAY_REAL_CASES로 돌릴 경우를 고른다(예: "S resume"). 비우면 전부(M, S, resume.test.ts의 resume).
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
@@ -17,7 +18,9 @@ import { ScreenUi } from './screen'
 
 const mode = process.env['RELAY_REAL_CLAUDE']
 const dry = mode === 'dry'
-const enabled = mode === '1' || dry
+const cases = (process.env['RELAY_REAL_CASES'] ?? '').split(/[\s,]+/).filter(Boolean)
+const chosen = [M_CASE, S_CASE].filter((c) => cases.length === 0 || cases.includes(c.name))
+const enabled = (mode === '1' || dry) && chosen.length > 0
 const OUT = path.join(APP, 'test-results', 'claude')
 const TASK_TIMEOUT_MS = 25 * 60 * 1000
 /** handoff 없이 턴이 끝났을 때 사람이 보내는 말 */
@@ -144,7 +147,7 @@ describe.runIf(enabled)('[실제] 실제 claude로 끝까지 (I29, 8.4)', () => 
     console.log(text)
   })
 
-  for (const c of [M_CASE, S_CASE]) {
+  for (const c of chosen) {
     it(`${c.name} 경로`, async () => {
       const r = await runCase(c)
       results.push(r)

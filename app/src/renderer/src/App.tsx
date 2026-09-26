@@ -2,21 +2,25 @@
 // 화면은 메인이 보낸 스냅샷을 그리기만 하고, 명령은 invoke로 보낸다 (I14).
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { AppInfo } from '../../shared/api'
-import type { ProjectView, ReviewView, WorkView } from '../../shared/views'
-import { NewWorkDialog, ProjectDialog } from './dialogs'
+import type { CommandResult, ProjectView, ReviewView, WorkView } from '../../shared/views'
+import { call } from './commands'
+import {
+  ConfirmDialog,
+  NewWorkDialog,
+  ProjectDialog,
+  SettingsDialog,
+  WorkSettingsDialog,
+} from './dialogs'
 import { Panel, wantsApproval } from './Panel'
 import { TerminalView } from './TerminalView'
 
-type Dialog = { kind: 'project' } | { kind: 'work'; project: ProjectView } | null
-
-/** 사람이 움직여야 하는 상태 (D80의 강조. 배지 우선순위는 M3에서 넣는다) */
-const NEEDS_HUMAN = new Set([
-  'awaiting_approval',
-  'asking',
-  'input_needed',
-  'blocked',
-  'session_ended',
-])
+type Dialog =
+  | { kind: 'project' }
+  | { kind: 'work'; project: ProjectView }
+  | { kind: 'settings' }
+  | { kind: 'work-settings'; workKey: string }
+  | { kind: 'abandon'; workKey: string }
+  | null
 
 function currentTask(w: WorkView) {
   return w.tasks.find((t) => t.id === w.current)
@@ -41,6 +45,8 @@ export function App() {
     void window.relay.appInfo().then(setInfo)
     const offWork = window.relay.onWork((w) => setWorks((m) => ({ ...m, [w.key]: w })))
     const offProjects = window.relay.onProjects(setProjects)
+    // 알림을 누르면 그 Work를 고른다 (D81)
+    const offFocus = window.relay.onFocusWork((key) => setSelected(key))
     void window.relay.snapshot().then((s) => {
       setProjects(s.projects)
       setWarnings(s.warnings)
@@ -59,13 +65,18 @@ export function App() {
     return () => {
       offWork()
       offProjects()
+      offFocus()
     }
   }, [])
+
+  // 보고 있는 Work를 main에 알린다. 그 Work의 알림은 보내지 않는다 (D81)
+  useEffect(() => {
+    window.relay.selectWork(selected)
+  }, [selected])
 
   const work = selected ? works[selected] : undefined
   const taskId = work ? (picked[work.key] ?? work.current) : null
   const task = work?.tasks.find((t) => t.id === taskId)
-  const busy = Object.values(works).some((w) => w.tasks.some((t) => t.live))
 
   // 승인 화면은 상태가 바뀔 때마다 파일을 다시 읽어 만든다
   const reviewKey = work && task ? `${work.key}|${task.id}|${work.revision}` : null
@@ -102,6 +113,8 @@ export function App() {
   }, [works])
 
   const wide = wantsApproval(review) && review?.taskId === task?.id
+  const dialogWork =
+    dialog?.kind === 'work-settings' || dialog?.kind === 'abandon' ? works[dialog.workKey] : null
 
   return (
     <div className={`layout${wide ? ' wide' : ''}`}>
@@ -118,7 +131,7 @@ export function App() {
             </div>
             {(worksByProject.get(p.id) ?? []).map((w) => {
               const t = currentTask(w)
-              const hot = w.status === 'active' && t && NEEDS_HUMAN.has(t.status)
+              const done = w.badge.kind === 'done'
               return (
                 <button
                   key={w.key}
@@ -126,27 +139,26 @@ export function App() {
                   onClick={() => setSelected(w.key)}
                   title={w.title}
                 >
-                  <span className={`badge${hot ? ' hot' : ''}`}>
-                    {w.status === 'active' ? (t?.statusLabel ?? w.statusLabel) : w.statusLabel}
+                  {/* 배지 하나와 현재 단계 (D80). 사람이 필요한 상태는 색으로 강조한다 */}
+                  <span className={`badge b-${w.badge.kind}${w.badge.hot ? ' hot' : ''}`}>
+                    {w.badge.label}
                   </span>
                   <span className="work-title">{w.title || w.workId}</span>
-                  {w.status === 'active' && t ? <span className="work-step">{t.label}</span> : null}
+                  {!done && t ? <span className="work-step">{t.label}</span> : null}
                 </button>
               )
             })}
-            <button
-              className="new-work"
-              disabled={busy}
-              title={busy ? 'M2는 한 번에 Work 하나만 진행합니다' : undefined}
-              onClick={() => setDialog({ kind: 'work', project: p })}
-            >
+            <button className="new-work" onClick={() => setDialog({ kind: 'work', project: p })}>
               새 Work
             </button>
           </div>
         ))}
-        <button className="add-project" onClick={() => setDialog({ kind: 'project' })}>
-          프로젝트 추가
-        </button>
+        <div className="sidebar-foot">
+          <button className="add-project" onClick={() => setDialog({ kind: 'project' })}>
+            프로젝트 추가
+          </button>
+          <button onClick={() => setDialog({ kind: 'settings' })}>설정</button>
+        </div>
       </aside>
 
       <main className="center">
@@ -169,6 +181,8 @@ export function App() {
             <>
               <span>{task.band}</span>
               <span className={`status s-${task.status}`}>{task.statusLabel}</span>
+              {/* 끝난 task의 탭은 읽기 전용이다 (시나리오 5-1) */}
+              {task.live ? null : <span className="readonly">읽기 전용</span>}
               {task.notice ? <span className="band-warn">{task.notice}</span> : null}
             </>
           ) : null}
@@ -197,15 +211,17 @@ export function App() {
             </div>
           ) : null}
         </div>
-        <div className="action-bar">
-          {work ? (
-            <span className="dim">
-              {work.workId} · 기준 {work.baseBranch} {work.baseCommit.slice(0, 8)}
-              {work.intent ? ` · intent v${work.intent.version} ${work.intent.size}` : ''}
-            </span>
-          ) : null}
-          {work?.problems.length ? <span className="error">{work.problems.at(-1)}</span> : null}
-        </div>
+        {work ? (
+          <ActionBar
+            key={work.key}
+            work={work}
+            onSettings={() => setDialog({ kind: 'work-settings', workKey: work.key })}
+            onAbandon={() => setDialog({ kind: 'abandon', workKey: work.key })}
+            onResumed={() => setPicked((m) => without(m, work.key))}
+          />
+        ) : (
+          <div className="action-bar" />
+        )}
       </main>
 
       <aside className="panel">
@@ -232,6 +248,134 @@ export function App() {
           }}
         />
       ) : null}
+      {dialog?.kind === 'settings' ? <SettingsDialog onClose={() => setDialog(null)} /> : null}
+      {dialog?.kind === 'work-settings' && dialogWork ? (
+        <WorkSettingsDialog work={dialogWork} onClose={() => setDialog(null)} />
+      ) : null}
+      {dialog?.kind === 'abandon' && dialogWork ? (
+        <AbandonDialog work={dialogWork} onClose={() => setDialog(null)} />
+      ) : null}
     </div>
+  )
+}
+
+/**
+ * 액션 바 (시나리오 3-4, 3-5, 4.4): [즉시 중단], [재개]·[세션 재개], [이 단계 새 세션으로 다시],
+ * [이 단계 끝나면 멈춤], [Work 설정], [Work 포기]. 누를 수 있는지는 main이 core로 판정해 보낸다.
+ * 조작은 지금 task에 한다. 단계 선택은 M4에서 넣는다.
+ */
+function ActionBar({
+  work,
+  onSettings,
+  onAbandon,
+  onResumed,
+}: {
+  work: WorkView
+  onSettings: () => void
+  onAbandon: () => void
+  onResumed: () => void
+}) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const task = currentTask(work)
+  const a = work.actions
+
+  const run = async (fn: () => Promise<CommandResult>, after?: () => void) => {
+    setBusy(true)
+    setError(null)
+    const r = await call(fn)
+    setBusy(false)
+    if (r.ok) after?.()
+    else setError(r.error)
+  }
+
+  return (
+    <div className="action-bar">
+      {a.interrupt && task ? (
+        <button
+          disabled={busy}
+          onClick={() => void run(() => window.relay.interrupt(work.key, task.id))}
+        >
+          즉시 중단
+        </button>
+      ) : null}
+      {a.resume && task ? (
+        <button
+          className="primary"
+          disabled={busy}
+          onClick={() => void run(() => window.relay.resume(work.key, task.id), onResumed)}
+        >
+          {task.status === 'interrupted' ? '재개' : '세션 재개'}
+        </button>
+      ) : null}
+      {a.retry && task ? (
+        <button
+          disabled={busy}
+          onClick={() => void run(() => window.relay.retry(work.key, task.id), onResumed)}
+        >
+          이 단계 새 세션으로 다시
+        </button>
+      ) : null}
+      {a.resumeWork ? (
+        <button
+          className="primary"
+          disabled={busy}
+          onClick={() => void run(() => window.relay.resumeWork(work.key), onResumed)}
+        >
+          재개
+        </button>
+      ) : null}
+      {a.stopAfter ? (
+        <label className="toggle" title="지금 단계가 승인되면 다음 단계를 시작하지 않고 멈춘다">
+          <input
+            type="checkbox"
+            disabled={busy}
+            checked={work.stopAfterStep}
+            onChange={(e) => void run(() => window.relay.stopAfter(work.key, e.target.checked))}
+          />
+          이 단계 끝나면 멈춤
+        </label>
+      ) : null}
+      {work.status === 'active' || work.status === 'stopped' ? (
+        <button disabled={busy} onClick={onSettings}>
+          Work 설정
+        </button>
+      ) : null}
+      {a.abandon ? (
+        <button className="danger" disabled={busy} onClick={onAbandon}>
+          Work 포기
+        </button>
+      ) : null}
+      {error ? <span className="error">{error}</span> : null}
+      <span className="dim info">
+        {work.workId} · 기준 {work.baseBranch} {work.baseCommit.slice(0, 8)}
+        {work.intent ? ` · intent v${work.intent.version} ${work.intent.size}` : ''}
+      </span>
+      {work.problems.length ? <span className="error">{work.problems.at(-1)}</span> : null}
+    </div>
+  )
+}
+
+/** [Work 포기] 확인 창 (3.3). 살아 있는 세션을 끝내고 push/PR은 하지 않는다 */
+function AbandonDialog({ work, onClose }: { work: WorkView; onClose: () => void }) {
+  const [error, setError] = useState<string | null>(null)
+  const abandon = async () => {
+    const r = await call(() => window.relay.abandon(work.key))
+    if (r.ok) onClose()
+    else setError(r.error)
+  }
+  return (
+    <ConfirmDialog
+      title="Work 포기"
+      confirm="Work 포기"
+      onConfirm={() => void abandon()}
+      onClose={onClose}
+    >
+      <p>
+        {work.title || work.workId}을(를) 포기합니다. 실행 중인 세션을 끝내고, push와 PR은 하지
+        않습니다. 산출물과 worktree는 남습니다.
+      </p>
+      {error ? <div className="error">{error}</div> : null}
+    </ConfirmDialog>
   )
 }

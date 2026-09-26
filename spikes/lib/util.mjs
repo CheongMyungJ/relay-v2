@@ -118,6 +118,50 @@ export function isAlive(pid, created, list = processes()) {
   return list.some((x) => x.ProcessId === pid && (!created || x.Created === created));
 }
 
+// Linux 프로세스 목록 (/proc/<pid>/stat). S6에서 강제 종료 전후의 트리를 본다.
+// State가 Z(좀비)면 이미 끝났고 부모가 거두기를 기다리는 것이다.
+export function procList() {
+  if (process.platform !== 'linux') return [];
+  const out = [];
+  for (const d of fs.readdirSync('/proc')) {
+    if (!/^\d+$/.test(d)) continue;
+    try {
+      const stat = fs.readFileSync(`/proc/${d}/stat`, 'utf8');
+      // "pid (comm) state ppid pgrp ...". comm에 공백과 괄호가 들어갈 수 있어 마지막 ')'로 나눈다.
+      const close = stat.lastIndexOf(')');
+      const [state, ppid, pgrp] = stat.slice(close + 2).split(' ');
+      let cmd = '';
+      try {
+        cmd = fs.readFileSync(`/proc/${d}/cmdline`, 'utf8').split('\0').filter(Boolean).join(' ');
+      } catch {}
+      out.push({
+        ProcessId: Number(d),
+        ParentProcessId: Number(ppid),
+        Pgid: Number(pgrp),
+        Name: stat.slice(stat.indexOf('(') + 1, close),
+        State: state,
+        Cmd: cmd.slice(0, 160),
+      });
+    } catch {}
+  }
+  return out;
+}
+
+// pid와 그 자손. Windows는 processes(), Linux는 procList()로 본다.
+export function processTree(pid) {
+  return descendants(pid, process.platform === 'win32' ? processes() : procList());
+}
+
+// 목록의 프로세스 중 아직 살아 있는 것. Windows는 시작 시각까지, Linux는 pid와 이름이 같은지 본다.
+export function survivors(tree) {
+  if (process.platform === 'win32') {
+    const list = processes();
+    return tree.filter((p) => isAlive(p.ProcessId, p.Created, list));
+  }
+  const list = procList();
+  return tree.filter((p) => list.some((x) => x.ProcessId === p.ProcessId && x.Name === p.Name && x.State !== 'Z'));
+}
+
 export function killTree(pid) {
   try {
     sh('taskkill', ['/PID', String(pid), '/T', '/F']);

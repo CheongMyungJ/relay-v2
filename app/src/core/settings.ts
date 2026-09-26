@@ -1,6 +1,7 @@
-// task 설정 파일(task.settings.json)의 내용과 claude 실행 인자 (시나리오 2-3, 2-5, 6절).
+// task 설정 파일(task.settings.json)의 내용과 claude 실행 인자 (시나리오 2-3, 2-5, 3-4, 6절).
 // 훅은 Claude Code 내장 HTTP 훅으로 앱의 로컬 서버에 보낸다 (D20, I13).
 // deny 규칙은 git push, gh pr, 앱 소유 파일 편집을 막는다 (D17). 실수를 막는 장치다 (D91).
+// 자동 메모리는 끈다 (D113).
 import type { SkillName } from '../shared/config'
 
 /** 앱이 받는 훅 여섯 가지 (시나리오 2-3) */
@@ -44,6 +45,11 @@ export interface HookGroup {
 export interface TaskSettings {
   hooks: Record<HookEvent, HookGroup[]>
   permissions: { deny: string[] }
+  /**
+   * 자동 메모리를 끈다 (D113). 켜 두면 task와 Work 사이를 context.md 밖으로 잇는다.
+   * --settings로 준 파일에서도 읽힌다 (Claude Code 문서 settings-reference autoMemoryEnabled)
+   */
+  autoMemoryEnabled: false
 }
 
 /** 훅 URL: http://127.0.0.1:<port>/hook/<task-id>/<Event> (I13) */
@@ -125,9 +131,13 @@ export interface TaskSettingsInput extends DenyInput {
   taskId: string
 }
 
-/** task 설정 파일의 내용 (시나리오 2-3) */
+/** task 설정 파일의 내용 (시나리오 2-3). 재개할 때도 새로 만든다(포트와 토큰이 바뀔 수 있음, I13) */
 export function taskSettings(input: TaskSettingsInput): TaskSettings {
-  return { hooks: hookSettings(input.port, input.taskId), permissions: { deny: denyRules(input) } }
+  return {
+    hooks: hookSettings(input.port, input.taskId),
+    permissions: { deny: denyRules(input) },
+    autoMemoryEnabled: false,
+  }
 }
 
 /** relay 스킬의 이름. Work 디렉터리의 .claude/skills/<이름>/에 배포하고 /<이름>으로 부른다 (D32, D33) */
@@ -162,6 +172,25 @@ export function launchArgs(input: LaunchInput): string[] {
     '--settings',
     input.settingsPath,
     firstPrompt(input.skill, input.contextPath),
+  ]
+}
+
+export type ResumeInput = Omit<LaunchInput, 'skill' | 'contextPath'>
+
+/**
+ * 끝난 세션을 다시 여는 인자 (시나리오 3-4, 6절): 같은 옵션 + --resume <세션 id>.
+ * --settings, --add-dir, 권한 확인 끈 모드는 --resume이 복원하지 않아 다시 준다(Claude Code 문서 sessions).
+ * --session-id는 새 세션에 쓰는 것이라 빼고, 첫 프롬프트는 스킬을 다시 시작하므로 뺀다. 확인: 스파이크 S6
+ */
+export function resumeArgs(input: ResumeInput): string[] {
+  return [
+    '--dangerously-skip-permissions',
+    '--resume',
+    input.sessionId,
+    '--add-dir',
+    input.workDir,
+    '--settings',
+    input.settingsPath,
   ]
 }
 

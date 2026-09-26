@@ -173,13 +173,12 @@ describe('[어댑터] Work 생성: worktree와 기준 커밋 (시나리오 1, D9
     ) as WorkState
     expect(work).toMatchObject({ base_branch: 'main', base_commit: base })
     expect(fs.readFileSync(path.join(workDirOf(h, workKey), 'request.md'), 'utf8')).toBe('요청\n')
-    // M2는 한 번에 Work 하나만 진행한다
-    const second = await h.relay.createWork(projectId, {
-      request: '또',
-      baseBranch: 'main',
-      baseLocation: 'local',
-    })
-    expect(second).toMatchObject({ ok: false })
+    // 여러 Work를 나란히 만든다 (D18). work-id의 순번이 오르고 worktree가 따로 있다
+    const second = await create(h, projectId, 'local')
+    expect(second.split('/')[1]).toMatch(/^w-\d{8}-002$/)
+    expect(git(worktreeOf(h, second), 'rev-parse', '--abbrev-ref', 'HEAD')).toBe(
+      `relay/${second.split('/')[1] ?? ''}`,
+    )
   })
 
   it('원격 기준: fetch한 origin/<브랜치>에서 분기한다', async () => {

@@ -18,13 +18,20 @@ export default defineConfig({
         test: { name: 'adapters', include: ['test/adapters/**/*.test.ts'], testTimeout: 60_000 },
       },
       {
-        test: { name: 'flow', include: ['test/flow/**/*.test.ts'], testTimeout: 180_000 },
+        // 흐름 시험은 PTY와 git을 많이 띄우므로 파일을 차례로 돌린다
+        test: {
+          name: 'flow',
+          include: ['test/flow/**/*.test.ts'],
+          testTimeout: 180_000,
+          fileParallelism: false,
+        },
       },
       {
         test: {
           name: 'claude',
           include: ['test/claude/**/*.test.ts'],
           testTimeout: 3 * 60 * 60 * 1000,
+          fileParallelism: false,
         },
       },
     ],

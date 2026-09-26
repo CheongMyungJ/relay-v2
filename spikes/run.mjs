@@ -12,6 +12,7 @@ const ALL = {
   S3: './s3-skills.mjs',
   S3B: './s3b-compact.mjs',
   S4: './s4-permissions.mjs',
+  S6: './s6-resume.mjs',
 };
 const wanted = process.argv.slice(2).map((a) => a.toUpperCase());
 const ids = Object.keys(ALL).filter((id) => wanted.length === 0 || wanted.includes(id));

@@ -434,11 +434,17 @@ describe('[흐름] 최소 흐름 (M2)', () => {
       stop: { kind: 'recommended_back', task_id: 't-03', node: 'fix', reason: '완료조건 2 실패' },
     })
     expect(w.tasks).toHaveLength(3)
-    expect(s.h.ui.notices).toEqual([
-      {
-        title: expect.stringContaining('빈 배열의 평균이 NaN') as string,
-        body: '이전 단계 추천으로 멈춤: 수정(fix)로 — 완료조건 2 실패',
-      },
+    // 멈추면 알린다 (D23, D81). 앞의 알림은 task마다의 승인 대기다
+    expect(s.h.ui.notices.at(-1)).toEqual({
+      workKey: s.workKey,
+      title: expect.stringContaining('빈 배열의 평균이 NaN') as string,
+      body: '이전 단계 추천으로 멈춤: 수정(fix)로 — 완료조건 2 실패',
+    })
+    expect(s.h.ui.notices.map((n) => n.body)).toEqual([
+      '01 의도 정리: 승인 대기',
+      '02 수정: 승인 대기',
+      '03 최종 검증: 승인 대기',
+      '이전 단계 추천으로 멈춤: 수정(fix)로 — 완료조건 2 실패',
     ])
     expect(events(s.workDir).map((e) => e.type)).not.toContain('work.completed')
     expect(read(path.join(s.workDir, 'decisions.md'))).toContain('## t-03 verify — ')

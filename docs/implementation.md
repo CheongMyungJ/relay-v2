@@ -75,7 +75,10 @@
 | Playwright의 Electron 지원 | 실험적 지원이다(`_electron`). `launch()`의 `executablePath`로 설치된 앱을 띄울 수 있다. `nodeCliInspect` 퓨즈가 꺼져 있으면 실행이 시간 초과될 수 있다. Electron 기본 대화상자(`dialog`)는 가로채지 못하므로 메인 프로세스에서 바꿔 끼워야 한다 | npm 패키지 `playwright-core@1.63.0` 타입 문서 (2026-09-26) |
 | GitHub Actions 요금 | 공개 레포에서 표준 GitHub 호스트 러너는 무료다. 이 레포는 공개다 | GitHub 문서 billing/github-actions, 레포 정보 (2026-09-26) |
 | 최신 버전 | electron 44.4.5, node-pty 1.1.0, @xterm/xterm 6.0.0, electron-builder 26.15.3, electron-vite 5.0.0, vitest 5.0.2 | npm 레지스트리 (2026-09-26) |
-| Claude Code 동작 | 훅, 스킬, deny 규칙, 첫 실행 창은 `docs/spikes.md`의 S1~S5 결과를 따른다(2.1.283). 강제 종료 뒤 재개(S6)는 M3 전에 확인한다(I31) | `docs/spikes.md` |
+| Claude Code 동작 | 훅, 스킬, deny 규칙, 첫 실행 창, 강제 종료 뒤 재개는 `docs/spikes.md`의 S1~S6 결과를 따른다(2.1.283) | `docs/spikes.md` |
+| 재개가 복원하는 것 | `--resume <세션 id>`는 대화(도구 호출과 결과 포함)를 복원한다. 끝나기 전에 끊긴 도구 호출은 결과를 모르는 것으로 표시된다. `--settings`, `--add-dir`로 준 것은 복원하지 않아 다시 줘야 하고, `bypassPermissions` 모드로 끝난 세션은 새 세션의 기본 모드로 열리므로 `--dangerously-skip-permissions`도 다시 준다. 저장된 대화가 없는 id면 "No conversation found with session ID"를 내고 끝난다 | Claude Code 문서 sessions, cli-reference (2026-09-26), S6 |
+| 세션 전환 | `/clear`는 새 대화를 시작하고 이전 대화는 `/resume`으로 다시 연다. 대화형 `/resume`은 다른 대화로 옮기고, `/branch`는 가지(새 세션 id)로 옮긴다. `/clear`와 대화형 `/resume`은 앞 세션에 SessionEnd(`reason: clear`, `resume`)를 보낸다. 훅 본문의 `session_id`는 지금 세션이다. `/compact`는 같은 대화를 이어 간다 | Claude Code 문서 commands, hooks, sessions (2026-09-26) |
+| 자동 메모리 | 기본으로 켜져 있다. 에이전트가 배운 것을 `<설정 폴더>/projects/<프로젝트>/memory/`에 적고 다음 세션 시작 때 읽는다. 프로젝트는 git 레포 단위라 worktree끼리 같은 폴더를 쓴다. `autoMemoryEnabled: false`는 어느 설정 파일(`--settings` 포함)에서도 읽힌다. 환경 변수 `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`이 설정보다 우선한다 | Claude Code 문서 memory, settings-reference, env-vars (2026-09-26), S6 |
 | HTTP 훅 머리글 | HTTP 훅에 `headers`를 줄 수 있다. 값에 `$VAR` 형태로 환경 변수를 넣을 수 있고, `allowedEnvVars`에 적은 변수만 풀린다. 응답 본문은 명령 훅과 같은 JSON 출력 형식이다. 기본 제한 시간은 600초(UserPromptSubmit은 30초)다 | Claude Code 문서 hooks (2026-09-26) |
 | SessionEnd 훅 | 본문의 `reason`은 `clear`(`/clear`), `resume`, `logout`, `prompt_input_exit`, `other`다. `/clear`와 `/resume` 뒤에는 SessionStart(source `clear`, `resume`)로 새 세션이 시작된다 | Claude Code 문서 hooks (2026-09-26) |
 | 훅 본문과 Stop 응답 | UserPromptSubmit은 `prompt`, Notification은 `message`와 `notification_type`, Stop은 `stop_hook_active`와 `last_assistant_message`를 보낸다. Stop을 막는 응답은 최상위 `{"decision":"block","reason":…}`이다. Stop 훅으로 연속 8번 이어 가면 Claude Code가 다음 막음을 무시하고 턴을 끝낸다(`CLAUDE_CODE_STOP_HOOK_BLOCK_CAP`) | Claude Code 문서 hooks (2026-09-26) |
@@ -88,7 +91,9 @@
 - Windows의 Node(libuv)는 stdin을 raw 모드로 읽고 있을 때만 콘솔 크기 변경을 알아챈다(libuv `docs/src/signal.rst`). 가짜 `claude`도 stdin을 raw 모드로 읽어야 크기 변경 시험이 맞다(app-ci #1~#5).
 - node-pty의 `kill()`은 내장 ConPTY에서 보조 프로세스(`conpty_console_list_agent`)가 "AttachConsole failed"로 죽는 일이 러너에서 다시 보였다. 앱은 `taskkill`로 트리를 끝낸다(6절).
 - DLL 모드(I32)로 실제 `claude`가 동작하는지는 아직 확인하지 않았다. 스파이크는 내장 ConPTY로 돌렸다. M0의 [실기]는 생략했으므로 다음 실기 때 확인한다.
-- Linux에서 트리 종료(node-pty `kill()`, SIGHUP)를 받은 `claude`는 SessionEnd 훅(`reason: other`)을 보내고 응답을 기다린 뒤 끝났다(응답을 5초 늦추면 5.4초 뒤에 끝남, 2.1.283). SessionEnd 훅은 기본 1.5초까지 기다리고, 훅에 `timeout`을 주면 가장 큰 값(최대 60초)까지 기다린다(Claude Code 문서 hooks). 앱은 훅마다 `timeout` 30초를 주고, Work의 처리 줄 안에서 종료를 기다리며 훅 응답도 같은 줄에서 만든다. 그래서 응답이 종료 대기 시간(10초)만큼 늦어져 M2 [실제](Linux)에서 task 사이마다 10초가 걸렸다. Windows(`taskkill /F`)에서 같은 지연이 있는지는 Windows [실제]나 [실기]에서 본다.
+- Linux에서 트리 종료(node-pty `kill()`, SIGHUP)를 받은 `claude`는 SessionEnd 훅(`reason: other`)을 보내고 응답을 기다린 뒤 끝났다(응답을 5초 늦추면 5.4초 뒤에 끝남, 2.1.283). SessionEnd 훅은 기본 1.5초까지 기다리고, 훅에 `timeout`을 주면 가장 큰 값(최대 60초)까지 기다린다(Claude Code 문서 hooks). 앱은 훅마다 `timeout` 30초를 주고, Work의 처리 줄 안에서 종료를 기다리며 훅 응답도 같은 줄에서 만든다. 그래서 응답이 종료 대기 시간(10초)만큼 늦어져 M2 [실제](Linux)에서 task 사이마다 10초가 걸렸다. Windows(`taskkill /F`)에서 같은 지연이 있는지는 Windows [실제]나 [실기]에서 본다. Linux는 시험 환경뿐이라 M3에서 고치지 않기로 했다(사용자 결정). [즉시 중단], 앱 종료, 승인 뒤 다음 task와 대기열 시작도 Linux에서는 이만큼 늦다.
+- 스파이크 S6(I31)는 레포에 Claude 인증 secret이 없어 러너 대신 Claude Code 웹 세션의 Linux 컨테이너에서 예비 확인으로 돌렸다(2026-09-26). Linux에는 `taskkill`이 없어 강제 종료는 프로세스 그룹 SIGKILL로 흉내 냈다. 결과는 통과이고, Windows(`taskkill /T /F`)에서도 같은지는 [실기]에서 본다(`docs/spikes.md` S6).
+- S6에서 Linux의 프로세스 그룹 SIGKILL은 claude가 Bash 도구로 띄운 셸과 명령을 남겼다(claude가 이들을 다른 프로세스 그룹으로 띄움). 앱은 Linux에서 node-pty `kill()`(SIGHUP)을 그대로 쓴다.
 
 ## 4. 기술 선택
 
@@ -260,6 +265,18 @@ app/src/
 - [실제] 트리 종료한 세션을 `--resume`으로 다시 열면 대화가 이어진다.
 - [실기] 사람이 필요한 상태가 되었는데 그 Work를 보고 있지 않으면 OS 알림이 온다. 배지, 읽기 전용 탭, 설정 화면이 설계대로 보인다. 앱을 껐다 켜서 재개한다.
 
+**구현하며 정한 것** (설계의 규칙에서 따라 나오는 세부. 설계를 바꾼 것은 D113, D114다)
+
+- **[즉시 중단]과 앱 종료:** 세션을 트리째 끝낸다. 유효한 handoff로 승인 대기나 막힘이던 task는 세션이 없어도 그 표시로 남고(3.3) 승인할 수 있다. 그 밖에는 중단됨이다. 대기열의 task는 대기열에서 빼고 중단됨으로 둔다.
+- **[재개]와 [세션 재개]:** 세션이 있던 task는 같은 옵션에서 `--session-id`와 첫 프롬프트를 빼고 `--resume <세션 id>`를 붙여 다시 연다(S6). 설정 파일은 다시 쓴다(훅 서버의 포트와 토큰이 바뀔 수 있음, I13). 한 번도 띄우지 못한 task(시작 실패, 대기열에 있다가 재시작을 맞음)는 새 세션으로 시작한다. 다시 연 뒤의 표시는 그때의 형식 검사로 정한다: 유효한 handoff면 승인 대기나 막힘, 아니면 대기. 탭에는 이전 화면 뒤에 "relay: 세션 재개" 줄과 새 출력을 잇고, 이 줄은 `pty.log`에도 쓴다. 머리 띠는 "세션 재개"다. 다시 여는 세션은 지금 대화다: 사람이 탭에서 `/clear`, 대화형 `/resume`, `/branch`로 다른 대화로 옮기면(D110) 턴 안의 훅(UserPromptSubmit, PreToolUse, PostToolUse, Stop)이 가져온 `session_id`로 task의 세션 id를 바꾼다. 알림과 SessionEnd로는 바꾸지 않는다: `/clear` 직후처럼 대화가 없는 세션은 `--resume`으로 열 수 없다(S6). 서브에이전트 안의 훅(`agent_id`가 있음)으로도 바꾸지 않는다. 바꾼 id는 `work.json`에 두고, 5.5에 없는 이벤트 유형은 더하지 않는다(`task.resumed`의 `session_id`에 드러남).
+- **대기열(D18):** 모든 Work가 대기열 하나를 쓰고 먼저 들어온 차례로 시작한다. 새 task, [재개], [세션 재개], [이 단계 새 세션으로 다시]가 모두 세션 상한을 따른다. 승인으로 자리가 나면 먼저 기다리던 task가 시작하고, 승인한 Work의 다음 task는 대기열 뒤에 선다.
+- **멈춘 Work의 [재개](3.3):** 멈추게 한 task의 기본 다음 단계를 시작한다. 이전 단계 추천(D23)으로 멈췄으면 추천을 따르지 않고 기본 다음 단계로 간다(추천대로 되돌아가는 것은 M4의 단계 선택). verify에서 멈췄으면 Work를 완료한다. [이 단계 끝나면 멈춤]은 verify 승인에도 적용된다: [완료만]을 눌러도 Work를 완료하지 않고 멈추며, [재개]하면 완료한다. 패널에는 [재개]가 할 일(다음 단계 이름이나 Work 완료)을 보인다.
+- **[Work 포기]:** 살아 있거나 대기열에 있는 task는 승인 대기였어도 중단됨이다. 포기한 Work에는 승인, 재개 같은 명령을 받지 않는다.
+- **알림(D81):** 배지가 사람이 필요한 다섯 상태(D80)로 바뀔 때와 대기열에서 자동으로 시작할 때 보낸다. 창에 포커스가 있고 최소화되지 않았고 그 Work를 고른 상태면 보내지 않는다. 알림을 누르면 창을 띄워 그 Work를 고른다. 재시작 조정으로 바뀐 상태는 알리지 않는다.
+- **설정 화면(D70):** 세션 상한(1~20), 스킬별 질문 방식, 형식 오류 되돌림 횟수(0~8. Stop 훅으로 연속 8번 이어 가면 Claude Code가 막음을 무시함, 3절), 분량 경고 기준, draft PR을 바꾼다. 자동 승인과 카운트다운은 M7에서 연다. `config.json`의 값이 틀리면 그 키는 기본값을 쓰고 경고한다. Work별 질문 방식(D72)은 새 Work 대화상자와 [Work 설정]에서 고른다.
+- **앱 종료 확인(시나리오 3-6):** 창을 닫을 때와 앱을 끝낼 때 살아 있는 세션이 있으면 묻는다. 대기열의 task는 다음 실행 때 중단됨이 된다(D78).
+- **재시작 조정(D75, D78):** "실행 중"은 세션이 살아 있던 task와 세션을 띄우는 중이던 task다. 바뀐 task는 `events.jsonl`에 `task.interrupted`나 `task.awaiting_approval`로 남긴다(`payload.reason: app_restart`).
+
 ### M4. 되감기와 단계 선택
 
 **내용**
@@ -357,6 +374,7 @@ app/src/
 - 경로: 의도 승인 때 시험 도구가 `size`를 골라(D90) M 경로와 S 경로를 하나씩 돌린다.
 - 사람 역할: 첫 실행 창은 I17의 도구로 수락하고, 질문(`AskUserQuestion`)에는 첫 선택지(추천)로 답한다. 승인 대기가 되면 [승인]한다.
 - 판정: Work 완료까지 갔는지, task마다 형식 오류 되돌림 횟수, [오류 무시하고 승인]을 쓴 횟수(0이어야 함), 걸린 시간.
+- 재개(M3): intake 세션에 표식을 알려 준 뒤 [즉시 중단]하고 [재개]한다. 다시 연 세션에 표식을 파일에 쓰게 해 파일로 판정한다(다시 연 화면에는 앞 대화가 보여 화면으로는 가를 수 없음). `RELAY_REAL_CASES`로 돌릴 경우(M, S, resume)를 고른다.
 - 결과는 실행 요약과 결과물에 올리고, 사람이 `docs/checks.md`에 옮긴다(I30). 러너 결과는 예비 확인으로 적는다(D93과 같음).
 
 ### 8.5 실기 확인 (I30)
@@ -382,3 +400,5 @@ app/src/
 | G10 | SessionEnd가 `/clear`, `/resume`에도 와서, 세션 종료로 보면 CLI가 계속 도는데 신호를 무시하게 된다(M1 구현 중에 찾음) | D110 |
 | G11 | 설정 파일에 직접 쓴 권한 규칙은 경로의 gitignore 패턴 문자를 이스케이프하지 않아, 레포 폴더 이름에 `[`, `]` 등이 있으면 project-id가 든 deny 규칙이 맞지 않는다(M2 구현 중에 찾음) | D111 |
 | G12 | 형식 오류가 끝까지 남은 task는 대기나 세션 종료가 되는데, [오류 무시하고 승인]을 언제 누를 수 있는지, handoff 머리글을 읽지 못하면 결정과 이전 단계 추천을 어떻게 할지 없었다(M2 구현 중에 찾음) | D112 |
+| G13 | Claude Code의 자동 메모리가 task와 Work 사이를 `context.md` 밖으로 잇는다. 되감기의 폐기(D22)도 메모리는 빼지 못한다(스파이크 S6에서 찾음) | D113 |
+| G14 | handoff 없이 끝난 세션의 [이 단계 새 세션으로 다시]가 새 task인지 같은 task의 새 세션인지 없었다(M3 구현 전에 찾음) | D114 |

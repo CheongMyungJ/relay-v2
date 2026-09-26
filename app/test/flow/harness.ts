@@ -3,7 +3,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import type { UiPort } from '../../src/main/ports'
+import type { Notice, UiPort } from '../../src/main/ports'
 import { Relay } from '../../src/main/relay'
 import type { AppConfig } from '../../src/shared/config'
 import type { ProjectView, TerminalChunk, WorkView } from '../../src/shared/views'
@@ -29,7 +29,7 @@ export class FakeUi implements UiPort {
   readonly history: WorkView[] = []
   projectList: ProjectView[] = []
   readonly output = new Map<string, string>()
-  readonly notices: { title: string; body: string }[] = []
+  readonly notices: Notice[] = []
   private readonly listeners = new Set<() => void>()
 
   work(view: WorkView): void {
@@ -48,7 +48,7 @@ export class FakeUi implements UiPort {
     this.wake()
   }
 
-  notify(n: { title: string; body: string }): void {
+  notify(n: Notice): void {
     this.notices.push(n)
     this.wake()
   }
@@ -125,6 +125,8 @@ export interface Harness {
   env: NodeJS.ProcessEnv
   /** 가짜 claude가 남긴 기록 */
   records(): Record<string, unknown>[]
+  /** 같은 RELAY_HOME으로 앱을 다시 켠다(재시작 조정, 시나리오 9). 앞 Relay는 닫혀 있어야 한다 */
+  reopen(): Promise<void>
   close(): Promise<void>
 }
 
@@ -145,11 +147,11 @@ export async function harness(o: HarnessOptions = {}): Promise<Harness> {
     ...o.env,
   }
   const ui = o.ui ?? new FakeUi()
-  const relay = await Relay.open({ home, skills: SKILLS, ui, env, ghBin: FAKE_GH })
-  return {
+  const open = (u: FakeUi) => Relay.open({ home, skills: SKILLS, ui: u, env, ghBin: FAKE_GH })
+  const h: Harness = {
     root,
     home,
-    relay,
+    relay: await open(ui),
     ui,
     env,
     records: () => {
@@ -161,12 +163,17 @@ export async function harness(o: HarnessOptions = {}): Promise<Harness> {
         .filter(Boolean)
         .map((l) => JSON.parse(l) as Record<string, unknown>)
     },
+    reopen: async () => {
+      h.ui = new FakeUi()
+      h.relay = await open(h.ui)
+    },
     close: async () => {
-      await relay.close()
+      await h.relay.close()
       // Windows는 끝낸 프로세스가 파일을 잠깐 잡고 있을 수 있다
       fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
     },
   }
+  return h
 }
 
 /** Work의 처리 줄이 빌 때까지 기다린다. 스냅샷은 할 일(파일 쓰기)보다 먼저 나가므로 파일을 읽기 전에 부른다 */

@@ -36,6 +36,24 @@ export interface WorkSettings {
   question_mode?: Partial<Record<SkillName, QuestionMode>>
 }
 
+/**
+ * 스킬과 그 노드의 화면 이름 (D109). 설정 화면과 Work 설정의 질문 방식 목록에 쓴다.
+ * core/pipeline의 NODE_INFO와 같은지 [단위]가 확인한다.
+ */
+export const SKILL_TITLES: readonly (readonly [SkillName, string])[] = [
+  ['work-start', '의도 정리'],
+  ['evidence', '재현과 관찰'],
+  ['root-cause', '원인 분석'],
+  ['fix', '수정'],
+  ['final-verify', '최종 검증'],
+]
+
+/** 질문 방식의 화면 이름 (5.6.1) */
+export const QUESTION_MODE_LABEL: Readonly<Record<QuestionMode, string>> = {
+  draft_first: '초안 우선',
+  confirm_each: '결정마다 확인',
+}
+
 /** 앱 설정의 기본값 (5.1.1) */
 export const DEFAULT_CONFIG: AppConfig = {
   schema_version: 1,

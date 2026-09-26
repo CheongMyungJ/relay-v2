@@ -1,4 +1,5 @@
 // 렌더러로 보내는 스냅샷과 조회 결과 (I14). main이 core로 계산하고, 화면은 받은 것을 그리기만 한다.
+import type { WorkSettings } from './config'
 import type { Decision, HandoffStatus, NodeName, Size } from './contracts'
 import type { ApprovedIntent, FormatIssue, TaskStatus, WorkStatus } from './work'
 
@@ -39,6 +40,27 @@ export interface Verdict {
   warn: boolean
 }
 
+// ---------- 사이드바 배지 (core/approval, D80) ----------
+
+export type BadgeKind =
+  | 'asking'
+  | 'awaiting_approval'
+  | 'blocked'
+  | 'stopped'
+  | 'session_ended'
+  | 'working'
+  | 'idle'
+  | 'queued'
+  | 'interrupted'
+  | 'done'
+
+/** Work마다 하나. 사람이 필요한 상태(hot)는 색으로 강조한다 (D80) */
+export interface Badge {
+  kind: BadgeKind
+  label: string
+  hot: boolean
+}
+
 // ---------- 스냅샷 (I14) ----------
 
 export interface ProjectView {
@@ -66,6 +88,8 @@ export interface TaskView {
   statusLabel: string
   /** 이 앱에서 세션이 살아 있다. 끝난 task의 탭은 읽기 전용이다 */
   live: boolean
+  /** --resume으로 다시 연 적이 있다 (시나리오 3-4) */
+  resumed: boolean
   /** task를 띄우지 못한 이유 */
   error: string | null
   /** 마지막 형식 검사의 오류 수 */
@@ -84,11 +108,21 @@ export interface WorkView {
   title: string
   status: WorkStatus
   statusLabel: string
+  /** 사이드바 배지 (D80) */
+  badge: Badge
+  /** 액션 바에서 누를 수 있는 조작 (core/machine actions) */
+  actions: WorkActions
+  /** [이 단계 끝나면 멈춤]이 켜져 있다 (시나리오 3-4) */
+  stopAfterStep: boolean
+  /** Work별 설정 (D72) */
+  settings: WorkSettings
   baseBranch: string
   baseCommit: string
   intent: ApprovedIntent | null
-  /** 이전 단계 추천으로 멈춘 이유 (D23) */
+  /** 멈춘 이유: 이전 단계 추천(D23), [이 단계 끝나면 멈춤] */
   stopNotice: string | null
+  /** 멈춘 Work에서 [재개]가 할 일 (3.3) */
+  stopHint: string | null
   tasks: TaskView[]
   /** 지금 task의 id */
   current: string | null
@@ -96,6 +130,22 @@ export interface WorkView {
   problems: string[]
   /** 바뀔 때마다 오른다. 렌더러는 이 값이 바뀌면 승인 화면을 다시 불러온다 */
   revision: number
+}
+
+/** 액션 바의 조작 (시나리오 3-4, 3-5, 4.4) */
+export interface WorkActions {
+  /** [즉시 중단] */
+  interrupt: boolean
+  /** [재개](중단됨), [세션 재개](세션 종료, 세션 없는 승인 대기와 막힘) */
+  resume: boolean
+  /** [이 단계 새 세션으로 다시] (D114) */
+  retry: boolean
+  /** 멈춘 Work의 [재개] */
+  resumeWork: boolean
+  /** [이 단계 끝나면 멈춤] */
+  stopAfter: boolean
+  /** [Work 포기] */
+  abandon: boolean
 }
 
 export interface AppSnapshot {
@@ -178,6 +228,8 @@ export interface NewWorkInput {
   baseBranch: string
   /** 원격이면 git fetch 뒤 origin/<브랜치>에서 분기한다 */
   baseLocation: 'local' | 'remote'
+  /** Work별 설정 (D72). M3는 질문 방식만 덮어쓴다. 없으면 앱 설정을 따른다 */
+  settings?: WorkSettings
 }
 
 export interface ApproveOptions {

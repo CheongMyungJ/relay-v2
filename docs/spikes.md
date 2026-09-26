@@ -289,9 +289,22 @@
 
 - 이어지지 않으면: [즉시 중단]의 종료 방법과 [재개](시나리오 3-4)를 사용자와 다시 정한다.
 
-**코드:** 앱 마일스톤 M3 전에 `spikes/`에 더한다(`docs/implementation.md` I31).
+**코드:** `spikes/s6-resume.mjs`(`docs/implementation.md` I31). 다시 열 때는 `--session-id`와 첫 프롬프트를 빼고 나머지 옵션(`--dangerously-skip-permissions`, `--add-dir`, `--settings`)을 다시 준다. 대화가 없는 세션 id로 `--resume`하면 어떻게 되는지도 관찰한다. Linux에는 `taskkill`이 없어 강제 종료는 프로세스 그룹에 SIGKILL을 보내 흉내 낸다. node-pty `kill()`의 기본 신호인 SIGHUP은 강제 종료가 아니다(받은 claude가 SessionEnd 훅을 보내고 정상으로 끝남).
 
 **결과**
 
 | 날짜 | Claude Code 버전 | OS | 결과 | 메모 |
 |---|---|---|---|---|
+| 2026-09-26 | 2.1.283 | Linux 클라우드 컨테이너(Claude Code 웹 세션), 예비 확인 | 통과(판정 흐림) | sonnet, effort medium. 에이전트가 표식을 자동 메모리에 적어, 다시 연 세션의 답이 대화가 아니라 메모리에서 왔을 수 있다. 아래 줄에서 자동 메모리를 끄고 다시 돌렸다 |
+| 2026-09-26 | 2.1.283 | Linux 클라우드 컨테이너(Claude Code 웹 세션), 예비 확인 | 통과 | sonnet, effort medium, 자동 메모리 끔(`CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`). 강제 종료는 프로세스 그룹 SIGKILL로 흉내 냈다. Windows(`taskkill /T /F`)에서도 같은지는 [실기]에서 본다 |
+
+**관찰 (2026-09-26, Linux 컨테이너, 예비 확인)**
+
+레포에 Claude 인증 secret이 없어 러너(`spikes.yml`) 대신 Claude Code 웹 세션의 Linux 컨테이너에서 실제 `claude`로 돌렸다. 세션의 환경 변수는 넘기지 않았고(`env -i`), 따로 둔 설정 폴더(`CLAUDE_CONFIG_DIR`)를 썼다(`spikes/README.md`).
+
+- **턴이 끝난 뒤 강제 종료:** SessionEnd 훅은 오지 않았다. 같은 옵션에 `--resume <id>`를 붙여 다시 열자 2.3초 만에 입력을 받았고, 화면에 앞의 대화가 보였고, 표식을 답했다. 다시 연 세션의 훅 본문은 `session_id`와 `transcript_path`가 처음과 같았고 `permission_mode`는 `bypassPermissions`였다. UserPromptSubmit과 Stop 훅이 왔다.
+- **작업 중(도구 실행 중) 강제 종료:** 다시 열렸고, 사람이 입력하기 전에는 스스로 이어서 작업하지 않았다(훅이 오지 않음). 끊긴 턴의 사람 메시지와 끝난 도구 호출은 대화에 남았다. 끊긴 도구 호출에는 결과 대신 "[Tool call interrupted: the session ended before this call's result was recorded, so its outcome is unknown. …]"가 붙고, 뒤에 "No response requested."라는 답이 들어갔다. 에이전트는 두 표식과 끊긴 명령을 답하고, 그 명령의 결과는 모른다고 했다. Claude Code 문서(sessions, "What a resumed session restores")의 설명과 같다.
+- **대화가 없는 세션:** 메시지를 보내기 전에 강제 종료한 세션 id(1차: 폴더 신뢰 창이 떠 있을 때, 2차: 입력을 기다릴 때)로 `--resume`하면 첫 실행 창을 거친 뒤 "No conversation found with session ID: <id>"를 출력하고 종료 코드 1로 끝났다.
+- **Linux의 프로세스 그룹 SIGKILL:** claude는 Bash 도구의 셸과 그 명령을 자기와 다른 프로세스 그룹으로 띄웠다. 그래서 claude의 그룹에 SIGKILL을 보내도 `bash`와 명령(`node`)이 남았다(스파이크가 치움). Windows의 `taskkill /T`는 부모 관계로 트리를 따라가므로 해당이 없을 것으로 보지만, 도구가 돌 때 트리 종료 뒤 남는 프로세스가 없는지는 [실기]에서 본다.
+- **렌더러:** 시작하는 중에 강제 종료한 다음 실행은 "fullscreen renderer didn't finish starting last time"을 알리고 기본(classic) 렌더러로 떴고, 여러 번 되풀이되자 전체 화면 렌더러를 껐다고 알렸다. S1의 관찰(실행 #5)과 같다.
+- **자동 메모리:** 1차 실행에서 "기억해 둬"라는 요청을 받은 에이전트가 표식을 자동 메모리(`<설정 폴더>/projects/<레포>/memory/`)에 적었다. 자동 메모리는 기본으로 켜져 있고 레포(worktree 공유)마다 쌓여 task와 Work 사이를 `context.md` 밖으로 잇는다(Claude Code 문서 memory). 앱은 task 세션에서 자동 메모리를 끈다(D113).
