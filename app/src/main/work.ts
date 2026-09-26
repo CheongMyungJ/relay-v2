@@ -310,10 +310,6 @@ export class WorkRunner {
     token: string,
     args: Parameters<typeof launchArgs>[0],
   ): LiveSession {
-    const log = this.files.openPtyLog(task)
-    const buffer = new TerminalBuffer()
-    this.terminals.set(task.id, buffer)
-    const key = this.terminalKey(task.id)
     const { cols, rows } = this.ctx.size()
     const pty = startPty({
       bin,
@@ -324,6 +320,11 @@ export class WorkRunner {
       rows,
       answerQueries: true,
     })
+    // 출력 구독은 같은 틱에 건다. PTY를 띄우지 못하면 로그를 열지 않는다
+    const log = this.files.openPtyLog(task)
+    const buffer = new TerminalBuffer()
+    this.terminals.set(task.id, buffer)
+    const key = this.terminalKey(task.id)
     let exited!: () => void
     const session: LiveSession = {
       pty,

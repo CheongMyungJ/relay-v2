@@ -26,6 +26,9 @@
 
 | 날짜 | 앱 커밋 | Claude Code 버전 | OS | 종류 | 결과 | 메모 |
 |---|---|---|---|---|---|---|
+| 2026-09-26 | 104f86e | 해당 없음(가짜 `claude`) | GitHub Actions windows-latest (win25-vs2026 20260922), 예비 확인 | [어댑터] | 통과 | app-ci #8. 등록 점검(D67, D106): 레포 루트, claude 로그인, 실행 파일 없음, 중복은 막고 origin과 gh는 경고만 한다. 기본 브랜치(origin/HEAD, 없으면 현재 브랜치), project-id의 패턴 문자(D111). worktree와 기준 커밋(로컬 기준, fetch한 원격 기준), fetch가 실패하면 Work, worktree, 브랜치를 만들지 않는다. work-id, 훅 서버(I13), 저장소, 스킬 배포(D108), 트리 종료(I32) |
+| 2026-09-26 | 104f86e | 해당 없음(가짜 `claude`) | GitHub Actions windows-latest (win25-vs2026 20260922), 예비 확인 | [흐름] | 통과 | app-ci #8. M 경로와 S 경로가 [완료만]까지 간다. 되돌린 뒤 고쳐 쓴 handoff로 승인 대기가 되고, 되돌림은 설정 횟수(기본 2, config.json으로 1)까지만 한다. 남은 오류는 [오류 무시하고 승인](D112)으로 넘긴다. D23 멈춤과 알림, D94 경고, handoff 없는 세션 종료. work.json, intent.md, decisions.md, events.jsonl의 모양 |
+| 2026-09-26 | f506d2a | 해당 없음(가짜 `claude`) | GitHub Actions windows-latest (win25-vs2026 20260922), 예비 확인 | [스모크] | 통과 | app-build #2. 설치한 앱에서 프로젝트 등록, 새 Work, intake 탭의 PTY 출력과 창 크기 변경, [의도 승인] 뒤 intent.md 확정, intake 세션 트리 종료, 다음 task 시작. 설치본의 resources/skills에서 스킬을 배포했다 |
 
 ## M3. 사람 조작과 여러 Work
 
