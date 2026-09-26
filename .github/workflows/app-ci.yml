@@ -1,5 +1,5 @@
 # 앱 CI (docs/implementation.md I28, 8.3).
-# Linux: 타입 검사, ESLint, Prettier, [단위], skills/check.mjs. Windows: [어댑터] ([흐름]은 M2부터).
+# Linux: 타입 검사, ESLint, Prettier, [단위], skills/check.mjs. Windows: [어댑터], [흐름].
 name: app-ci
 
 on:
@@ -78,10 +78,14 @@ jobs:
       - name: 앱 의존성 설치
         working-directory: app
         env:
-          # 어댑터 시험은 Node에서 돌아 Electron 바이너리가 필요 없다.
+          # 어댑터와 흐름 시험은 Node에서 돌아 Electron 바이너리가 필요 없다 (I26).
           ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
         run: npm ci --no-audit --no-fund
 
       - name: "[어댑터]"
         working-directory: app
         run: npm run test:adapters
+
+      - name: "[흐름]"
+        working-directory: app
+        run: npm run test:flow
