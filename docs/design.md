@@ -189,10 +189,12 @@ intake(work-start) → 의도 승인 → evidence → rca → fix → verify →
 | 상태 | 뜻 |
 |---|---|
 | 대기열 | 세션 상한 때문에 시작을 기다림 |
-| 실행 중 | 세션이 살아 있음. 화면 표시(작업 중/질문 대기/대기/승인 대기)는 시나리오 3의 훅 신호로 정한다 |
+| 실행 중 | 세션이 살아 있음. 화면 표시(작업 중/질문 대기/대기/승인 대기/막힘)는 시나리오 3의 훅 신호로 정한다 |
 | 중단됨 | [즉시 중단], 앱 종료나 충돌, handoff 없는 세션 종료, 재시작 때 대기열에 있던 task. [재개]할 수 있다 |
 | 승인됨 | 사람이나 자동 승인이 승인함 |
 | 폐기됨 | 되감기나 건너뛰기로 이후 입력에서 빠짐(6.2). 파일은 남는다 |
+
+- 세션이 없어도 유효한 handoff가 있으면 승인 대기나 막힘으로 표시한다. 세션이 끝난 뒤의 막힘(4.4)과 재시작 때 보충한 승인 대기(시나리오 9)가 이 경우다.
 
 ### 3.4 S 빠른 경로
 
@@ -304,11 +306,10 @@ S 크기는 `intake → fix → verify`로 간다. evidence와 rca의 일 중 �
 ### 시나리오 4. handoff와 승인
 
 1. **에이전트:** 공통 종료 절차(5.6.2)에 따라 산출물과 `handoff.md`를 쓰고, 안내 문구를 출력한 뒤 턴을 끝낸다. 형식 검사는 앱이 한다(시나리오 3-3, D29).
-2. **앱:** Stop을 받고 handoff가 유효하면 "승인 대기"로 바꾸고 검토 화면을 띄운다.
-   - handoff 요약, 결정 목록, 열린 질문, 위험
-   - 산출물(마크다운으로 보기)
-   - 이번 task의 코드 변경(diff)
-   - 커밋 안 된 변경이 있으면 경고
+2. **앱:** Stop을 받고 handoff가 유효하면 "승인 대기"로 바꾸고 승인 화면을 띄운다. 구성은 "화면 구성"의 승인 화면(D83)을 따른다.
+   - 강조 영역: `intent_deviation`, 열린 질문, 이전 단계 추천, 커밋 안 된 변경 경고, 형식 오류
+   - [요약] 탭: handoff 요약, 결정, 가정, 위험
+   - [산출물] 탭, [변경] 탭(이번 task의 diff)
 3. **사용자:** 고칠 점은 터미널에서 에이전트에게 말한다. 에이전트가 고쳐서 handoff를 다시 쓰면 2로 돌아간다. 괜찮으면 [승인]을 누른다.
 4. **앱:** 승인을 `work.json`에 기록하고, 세션을 종료하고(탭은 읽기 전용), `decisions.md`에 handoff의 결정을 추가하고, 다음 단계로 넘어간다(시나리오 5).
 
@@ -378,7 +379,7 @@ S 크기는 `intake → fix → verify`로 간다. evidence와 rca의 일 중 �
 
 - 의도 승인 전에는 [intake 다시]와 [Work 포기]만 할 수 있다.
 - Work 완료는 메뉴에 없다. verify를 거치거나 [Work 포기]를 쓴다.
-- **의도 변경:** intake로 되감는 것만 가능하다. 모든 산출물을 폐기하고, 원래 요청(`request.md`) + 추가 지시로 다시 시작한다.
+- **의도 변경:** intake로 되감는 것만 가능하다. 모든 산출물을 폐기하고, 원래 요청(`request.md`), 현재 승인된 intent, 추가 지시로 다시 시작한다. work-start는 현재 intent를 출발점으로 삼는다(D40).
 - 단계 선택 목록에는 파이프라인의 단계만 있다.
 
 ### 시나리오 7. 최종 검증 → Work 완료 → push/PR
@@ -637,7 +638,7 @@ knowledge_candidates: []
 
 ### 5.3 intent (`intent.md`)
 
-Work의 의도다. intake(work-start)가 `tasks/01-intake/intent.draft.md`에 초안을 쓰고, [의도 승인]을 누르면 앱이 `works/<work-id>/intent.md`로 확정한다. 이전 버전은 `intent.history/v<N>.md`에 둔다. 모든 task의 `context.md`에 본문 그대로 들어간다.
+Work의 의도다. intake(work-start)가 task 디렉터리(`tasks/<nn>-intake/`)의 `intent.draft.md`에 초안을 쓰고, [의도 승인]을 누르면 앱이 `works/<work-id>/intent.md`로 확정한다. 이전 버전은 `intent.history/v<N>.md`에 둔다. 모든 task의 `context.md`에 본문 그대로 들어간다.
 
 - **초안의 머리글:** work-start는 `type`과 `size`만 쓴다.
 - **확정본의 머리글:** 앱이 [의도 승인] 때 `schema_version`과 `version`을 붙인다(D88). 사람이 승인 화면에서 고친 `size`도 이때 반영한다.
@@ -831,7 +832,7 @@ knowledge_candidates: []  # 선택. 다음에도 쓸 만한 사실
 - `size`를 제안했다.
 - 모르면 쓸 수 없는 항목은 물었거나 `open_questions`에 남겼다.
 
-**산출물 템플릿:** `tasks/01-intake/intent.draft.md`. 본문은 5.3의 intent와 같다. 머리글에는 `type`과 `size`만 쓴다. 템플릿의 머리글은 주석으로 허용값을 단다(D87).
+**산출물 템플릿:** `tasks/<nn>-intake/intent.draft.md`. 본문은 5.3의 intent와 같다. 머리글에는 `type`과 `size`만 쓴다. 템플릿의 머리글은 주석으로 허용값을 단다(D87).
 
 ```yaml
 ---
@@ -992,7 +993,7 @@ intent의 완료조건마다 판정하고 `verification.md`와 PR 초안 `pr.md`
 - **사람이 정할 결정**
   - **약화 의심이 있을 때(D60):** 어떤 테스트를 어떻게 바꿨는지 보여 주고 묻는다. 사람이 약화가 아니라고 하면 "기존 테스트를 약화하거나 삭제하지 않는다"는 통과, 약화라고 하면 실패다.
   - **실패나 판정 불가가 있을 때(D61):** 둘 중에서 고르게 한다.
-    - 되돌아간다: `recommended_next`에 fix나 rca를 적는다. 앱은 멈추고 사람이 단계를 고른다(D23).
+    - 되돌아간다: `recommended_next`에 돌아갈 이전 단계(주로 fix나 rca)를 적는다. 앱은 멈추고 사람이 단계를 고른다(D23).
     - 이대로 완료 화면으로 간다: `recommended_next: null`. Work 완료 화면에 경고가 표시된다.
 
 **완료조건** (모두 채우면 `awaiting_approval`로 마무리)
@@ -1044,7 +1045,7 @@ intent의 완료조건마다 판정하고 `verification.md`와 PR 초안 `pr.md`
 | 컨텍스트 | `tasks/<nn>/context.md` + 첫 프롬프트에 경로 |
 | 스킬 배포 | Work 디렉터리 `.claude/skills/relay-<name>/`로 복사(`--add-dir`로 읽힘). 복사할 때 공통 종료 절차를 `SKILL.md` 끝에 붙임. `disable-model-invocation: true` |
 | 상태 신호 | 내장 HTTP 훅 → 앱 로컬 서버: UserPromptSubmit, Stop, Notification, SessionEnd, PreToolUse·PostToolUse(`AskUserQuestion`) |
-| 형식 오류 되돌림 | Stop 훅 응답 `{"decision":"block","reason":…}`, 연속 2회까지 |
+| 형식 오류 되돌림 | Stop 훅 응답 `{"decision":"block","reason":…}`, 연속 2회까지(설정 가능) |
 | 제한 | deny 규칙: `Bash(git push*)`, `Bash(gh pr*)`, 앱 소유 파일 `Edit(//…)` |
 | 산출물 감지 | 실행 중 task 디렉터리 감시 |
 
