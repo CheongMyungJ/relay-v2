@@ -121,7 +121,8 @@ export interface WorkView {
   intent: ApprovedIntent | null
   /** 멈춘 이유: 이전 단계 추천(D23), [이 단계 끝나면 멈춤] */
   stopNotice: string | null
-  stopKind: 'recommended_back' | 'after_step' | null
+  /** 멈춘 Work에서 [재개]가 할 일 (3.3) */
+  stopHint: string | null
   tasks: TaskView[]
   /** 지금 task의 id */
   current: string | null

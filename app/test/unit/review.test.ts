@@ -8,6 +8,7 @@ import {
   handoffSummary,
   humanNotice,
   permissionNotice,
+  resumeHint,
   stopNotice,
   taskLabel,
   verdicts,
@@ -109,6 +110,35 @@ describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
       stop: { kind: 'after_step' as const, task_id: 't-01' },
     }
     expect(stopNotice(stopped)).toBe('이 단계 끝나면 멈춤: 01 의도 정리 승인 뒤 멈춤')
+  })
+
+  it('[재개]가 할 일을 알린다: 기본 다음 단계, verify에서 멈췄으면 Work 완료 (3.3)', () => {
+    const work = createWork({ workId: 'w', baseBranch: 'main', baseCommit: 'c', at: 'x' }).work
+    expect(resumeHint(work)).toBeNull()
+    const at = (node: 'intake' | 'evidence' | 'verify', stop: WorkState['stop']): WorkState => ({
+      ...work,
+      status: 'stopped',
+      intent: { version: 1, size: 'M' },
+      tasks: work.tasks.map((t) => ({ ...t, node })),
+      stop,
+    })
+    const afterStep = { kind: 'after_step' as const, task_id: 't-01' }
+    expect(resumeHint(at('intake', afterStep))).toBe(
+      '[재개]하면 다음 단계(재현과 관찰)를 시작합니다.',
+    )
+    expect(resumeHint(at('verify', afterStep))).toBe('[재개]하면 Work를 완료합니다.')
+    const back = (node: 'intake' | 'fix') => ({
+      kind: 'recommended_back' as const,
+      task_id: 't-01',
+      node,
+      reason: '다시',
+    })
+    expect(resumeHint(at('evidence', back('intake')))).toBe(
+      '[재개]하면 추천을 따르지 않고 다음 단계(원인 분석)를 시작합니다. 추천대로 되돌아가는 단계 선택은 M4에서 넣습니다.',
+    )
+    expect(resumeHint(at('verify', back('fix')))).toBe(
+      '[재개]하면 추천을 따르지 않고 Work를 완료합니다. 추천대로 되돌아가는 단계 선택은 M4에서 넣습니다.',
+    )
   })
 })
 

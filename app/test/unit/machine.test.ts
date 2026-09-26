@@ -425,6 +425,62 @@ describe('시나리오 3의 신호 표: 신호마다 표시 상태', () => {
     }
   })
 
+  it('/clear 뒤에는 턴의 훅이 가져온 새 session_id를 따른다. [재개]는 그 세션을 연다 (D110)', () => {
+    let work = running('idle')
+    expect(currentTask(work)?.session?.id).toBe('session-t-01')
+    const hookAt = { taskId: 't-01', at: at(), sessionId: 'session-new' }
+    // 앞 세션의 SessionEnd(clear)와 새 세션의 알림으로는 옮기지 않는다: 아직 대화가 없다 (S6)
+    work = apply(work, {
+      ...hookAt,
+      type: 'SessionEnd',
+      reason: 'clear',
+      sessionId: 'session-t-01',
+    }).work
+    const idle = { ...hookAt, type: 'Notification' as const, notificationType: 'idle_prompt' }
+    expect(apply(work, idle).work).toBe(work)
+    // 턴 안의 훅은 옮긴다. 도구 훅처럼 표시를 바꾸지 않는 신호도 세션 id는 남긴다
+    const turns: MachineEvent[] = [
+      { ...hookAt, type: 'UserPromptSubmit' },
+      { ...hookAt, type: 'PreToolUse', toolName: 'Bash' },
+      { ...hookAt, type: 'PostToolUse', toolName: 'Bash' },
+      { ...hookAt, type: 'Stop', stopHookActive: false, handoffChanged: false, check: MISSING },
+    ]
+    for (const e of turns) {
+      const task = currentTask(apply(work, e).work)
+      expect(task?.session).toMatchObject({ id: 'session-new', alive: true, pid: 1001 })
+    }
+    // 서브에이전트 안의 훅으로는 옮기지 않는다
+    const inAgent = { ...hookAt, type: 'PreToolUse' as const, toolName: 'Bash', agentId: 'a-1' }
+    expect(apply(work, inAgent).work).toBe(work)
+    const same = { ...hookAt, type: 'PreToolUse' as const, toolName: 'Bash' }
+    const followed = apply(work, same).work
+    expect(apply(followed, same).work).toBe(followed)
+
+    // [즉시 중단] 뒤 [재개]: 다시 연 세션은 새 id다
+    const interrupted = apply(followed, {
+      type: 'interrupt',
+      taskId: 't-01',
+      at: at(),
+      reason: 'human',
+    }).work
+    expect(currentTask(interrupted)?.session).toMatchObject({ id: 'session-new', alive: false })
+    expect(apply(interrupted, { type: 'resume', taskId: 't-01', at: at() }).effects).toEqual([
+      { type: 'resumeTask', taskId: 't-01' },
+    ])
+    const r = apply(interrupted, {
+      type: 'session.resumed',
+      taskId: 't-01',
+      at: at(),
+      pid: 2001,
+      claudeVersion: '2.1.283 (Claude Code)',
+      check: MISSING,
+    })
+    const logged = r.effects.find((e) => e.type === 'log')
+    expect(logged?.type === 'log' ? logged.event.payload : null).toMatchObject({
+      session_id: 'session-new',
+    })
+  })
+
   it('그 밖의 reason이나 reason이 없는 SessionEnd는 세션 종료다 (D110)', () => {
     for (const reason of ['logout', 'prompt_input_exit', 'other', 'new_reason', undefined]) {
       const r = apply(running('working'), {
@@ -1203,14 +1259,25 @@ describe('[이 단계 끝나면 멈춤]과 멈춘 Work의 [재개] (시나리오
     ])
   })
 
-  it('verify 승인은 멈춤이 켜져 있어도 Work를 완료한다', () => {
+  it('verify 승인도 멈춤이 켜져 있으면 Work를 완료하지 않고 멈춘다. [재개]하면 완료한다', () => {
     let work = newWork()
     for (const check of [valid({}, 'S'), valid()]) {
       work = approve(stop(launch(work), check).work, check).work
     }
     const on = stopAfter(launch(work), true).work
+    expect(currentTask(on)?.node).toBe('verify')
     const r = approve(stop(on, valid()).work, valid())
-    expect(r.work.status).toBe('completed')
+    expect(r.work).toMatchObject({
+      status: 'stopped',
+      stop: { kind: 'after_step', task_id: 't-03' },
+    })
+    expect(r.work.completed_at).toBeUndefined()
+    expect(r.work.stop_after_step).toBeUndefined()
+    expect(types(r.effects)).toEqual(['log:task.approved', 'endSession', 'appendDecisions'])
+    const done = apply(r.work, { type: 'resumeWork', at: at() })
+    expect(done.work).toMatchObject({ status: 'completed' })
+    expect(done.work.stop).toBeUndefined()
+    expect(types(done.effects)).toEqual(['log:work.completed'])
   })
 
   it('이전 단계 추천으로 멈춘 Work를 [재개]하면 추천을 따르지 않고 기본 다음 단계로 간다', () => {

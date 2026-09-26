@@ -37,6 +37,7 @@ import {
   handoffSummary,
   humanNotice,
   permissionNotice,
+  resumeHint,
   stopNotice,
   taskLabel,
   verdicts,
@@ -525,8 +526,16 @@ export class WorkRunner {
     const task = this.task(taskId)
     const session = this.live.get(taskId)
     if (!task) return null
-    const at = this.ctx.at()
     const b = req.body
+    // 훅 본문의 세션 id. /clear 등으로 CLI가 다른 대화로 옮기면 core가 따른다 (D110)
+    const sessionId = str(b['session_id'])
+    const agentId = str(b['agent_id'])
+    const base = {
+      taskId,
+      at: this.ctx.at(),
+      ...(sessionId === undefined ? {} : { sessionId }),
+      ...(agentId === undefined ? {} : { agentId }),
+    }
     switch (req.event) {
       case 'UserPromptSubmit': {
         if (session) session.turnFiles = turnSnapshot(task, await this.files.taskFiles(task))
@@ -534,24 +543,21 @@ export class WorkRunner {
         return (
           await this.feed({
             type: 'UserPromptSubmit',
-            taskId,
-            at,
+            ...base,
             ...(mode === undefined ? {} : { permissionMode: mode }),
           })
         ).reply
       }
       case 'PreToolUse':
       case 'PostToolUse':
-        return (
-          await this.feed({ type: req.event, taskId, at, toolName: str(b['tool_name']) ?? '' })
-        ).reply
+        return (await this.feed({ type: req.event, ...base, toolName: str(b['tool_name']) ?? '' }))
+          .reply
       case 'Notification': {
         const kind = str(b['notification_type'])
         return (
           await this.feed({
             type: 'Notification',
-            taskId,
-            at,
+            ...base,
             ...(kind === undefined ? {} : { notificationType: kind }),
           })
         ).reply
@@ -564,8 +570,7 @@ export class WorkRunner {
         return (
           await this.feed({
             type: 'Stop',
-            taskId,
-            at,
+            ...base,
             stopHookActive: b['stop_hook_active'] === true,
             handoffChanged: changed,
             check: this.check(task, files),
@@ -577,8 +582,7 @@ export class WorkRunner {
         return (
           await this.feed({
             type: 'SessionEnd',
-            taskId,
-            at,
+            ...base,
             ...(reason === undefined ? {} : { reason }),
           })
         ).reply
@@ -856,7 +860,7 @@ export class WorkRunner {
       baseCommit: w.base_commit,
       intent: w.intent,
       stopNotice: stopNotice(w),
-      stopKind: w.status === 'stopped' ? (w.stop?.kind ?? null) : null,
+      stopHint: resumeHint(w),
       tasks: w.tasks.map((t) => this.taskView(t)),
       current: currentTask(w)?.id ?? null,
       problems: [...this.problems],

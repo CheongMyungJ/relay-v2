@@ -224,6 +224,67 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
     expect(hooks.every((r) => r['status'] === 200)).toBe(true)
   })
 
+  it('/clear로 CLI가 새 대화로 옮긴 뒤 [즉시 중단]하고 [재개]하면 새 대화를 --resume으로 연다 (D110)', async () => {
+    const s = await setup({
+      tasks: {
+        ...scenario('S').tasks,
+        'work-start': [
+          { do: 'prompt' },
+          { do: 'clear' },
+          { do: 'notify', type: 'idle_prompt' },
+          { do: 'prompt', text: '새 대화에서 다시 해 줘' },
+          { do: 'wait' },
+        ],
+      },
+      resume: {
+        'work-start': [
+          { do: 'waitEnter' },
+          { do: 'prompt', text: '이어서 해 줘' },
+          ...steps('intake', 'S').slice(1),
+        ],
+      },
+    })
+    const key = await s.create()
+    const dir = s.dir(key)
+    await untilPrompts(s, 2)
+    type Hook = { event: string; body: { session_id: string; reason?: string } }
+    const hooks = () => s.h.records().filter((r) => r['type'] === 'hook') as unknown as Hook[]
+    const started = events(dir).find((e) => e.type === 'task.started')?.payload['session_id']
+    const [before, after] = hooks()
+      .filter((r) => r.event === 'UserPromptSubmit')
+      .map((r) => r.body.session_id)
+    expect(before).toBe(started)
+    expect(after).not.toBe(started)
+    // 앞 세션의 SessionEnd(clear)는 세션 종료가 아니다. 새 대화의 요청부터 그 세션 id를 따른다
+    expect(hooks().find((r) => r.event === 'SessionEnd')?.body).toMatchObject({
+      reason: 'clear',
+      session_id: started,
+    })
+    await s.h.ui.until(() => work(dir).tasks[0]?.session?.id === after, '새 세션 id', 10_000)
+    expect(work(dir).tasks[0]).toMatchObject({ status: 'working', session: { alive: true } })
+
+    expect(await s.h.relay.interrupt(key, 't-01')).toEqual({ ok: true })
+    await settle(s.h, key)
+    expect(await s.h.relay.resume(key, 't-01')).toEqual({ ok: true })
+    await untilTask(s, key, (t) => t.live, '재개')
+    await s.h.ui.until(() => starts(s).length === 2, '다시 연 가짜 claude', 30_000)
+    const again = starts(s)[1]
+    expect(again?.args.slice(0, 3)).toEqual(['--dangerously-skip-permissions', '--resume', after])
+    expect(again?.found).toBeUndefined()
+    expect(events(dir).map((e) => [e.type, e.payload])).toEqual([
+      ['work.created', expect.anything()],
+      ['task.started', { reason: 'default', session_id: started }],
+      ['task.interrupted', { reason: 'human' }],
+      ['task.resumed', { session_id: after, claude_version: '0.0.0 (가짜 Claude Code)' }],
+    ])
+
+    // 다시 연 새 대화에서 이어서 일한다
+    s.h.relay.terminalWrite(`${key}/t-01`, '\r')
+    await untilTask(s, key, (t) => t.status === 'awaiting_approval', '승인 대기')
+    expect(hooks().at(-1)?.body.session_id).toBe(after)
+    expect(work(dir).tasks[0]?.session?.id).toBe(after)
+  })
+
   it('승인 대기에서 [즉시 중단]하면 승인 대기로 남아 승인할 수 있고, 자리가 나 대기열의 task가 시작된다 (3.3)', async () => {
     const s = await setup(
       {

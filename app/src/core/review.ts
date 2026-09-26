@@ -11,7 +11,7 @@ import type {
   WorkStatus,
 } from '../shared/work'
 import { badge } from './approval'
-import { NODE_INFO, isPrevious } from './pipeline'
+import { NODE_INFO, WORK_COMPLETE, defaultNext, isPrevious } from './pipeline'
 import { normalizeText, parseFrontMatter, sectionText } from './validate'
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -76,6 +76,26 @@ export function stopNotice(work: WorkState): string | null {
   }
   const task = work.tasks.find((t) => t.id === stop.task_id)
   return `이 단계 끝나면 멈춤: ${task ? taskLabel(task) : stop.task_id} 승인 뒤 멈춤`
+}
+
+/**
+ * 멈춘 Work에서 [재개]가 할 일 (3.3). 멈추게 한 task의 기본 다음 단계를 시작하고, verify에서 멈췄으면
+ * Work를 완료한다. 이전 단계 추천(D23)은 따르지 않는다.
+ */
+export function resumeHint(work: WorkState): string | null {
+  const stop = work.stop
+  if (work.status !== 'stopped' || !stop) return null
+  const task = work.tasks.find((t) => t.id === stop.task_id)
+  const next = task && work.intent ? defaultNext(task.node, work.intent.size) : null
+  const action =
+    next === null
+      ? '기본 다음 단계로 갑니다'
+      : next === WORK_COMPLETE
+        ? 'Work를 완료합니다'
+        : `다음 단계(${NODE_INFO[next].title})를 시작합니다`
+  return stop.kind === 'recommended_back'
+    ? `[재개]하면 추천을 따르지 않고 ${action}. 추천대로 되돌아가는 단계 선택은 M4에서 넣습니다.`
+    : `[재개]하면 ${action}.`
 }
 
 /**

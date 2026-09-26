@@ -68,23 +68,30 @@ export interface TaskQueued extends TaskEvent {
 }
 
 /** 훅 신호 (시나리오 3). type은 Claude Code의 훅 이벤트 이름이다 */
-export interface UserPromptSubmitted extends TaskEvent {
+interface HookSignal extends TaskEvent {
+  /** 본문의 session_id. /clear, 대화형 /resume, /branch로 CLI가 다른 대화로 옮기면 바뀐다 (D110) */
+  sessionId?: string
+  /** 본문의 agent_id. 서브에이전트 안에서 난 훅에만 있다 (Claude Code 문서 hooks) */
+  agentId?: string
+}
+
+export interface UserPromptSubmitted extends HookSignal {
   type: 'UserPromptSubmit'
   /** 본문의 permission_mode (D94) */
   permissionMode?: string
 }
 
-export interface ToolUse extends TaskEvent {
+export interface ToolUse extends HookSignal {
   type: 'PreToolUse' | 'PostToolUse'
   toolName: string
 }
 
-export interface NotificationSent extends TaskEvent {
+export interface NotificationSent extends HookSignal {
   type: 'Notification'
   notificationType?: string
 }
 
-export interface Stopped extends TaskEvent {
+export interface Stopped extends HookSignal {
   type: 'Stop'
   /** 본문의 stop_hook_active. 되돌림에 이어진 Stop이면 true다 (S2, D107) */
   stopHookActive: boolean
@@ -95,7 +102,7 @@ export interface Stopped extends TaskEvent {
 }
 
 /** SessionEnd 훅 */
-export interface SessionEndHook extends TaskEvent {
+export interface SessionEndHook extends HookSignal {
   type: 'SessionEnd'
   /** 본문의 reason: clear | resume | logout | prompt_input_exit | other (Claude Code 문서 hooks) */
   reason?: string
@@ -277,6 +284,9 @@ const PERMISSION_PROMPT = 'permission_prompt'
 
 /** /clear와 /resume도 SessionEnd를 보내지만 CLI는 새 세션으로 계속 돈다. 세션 종료로 보지 않는다 (D110) */
 const SESSION_CONTINUES: readonly string[] = ['clear', 'resume']
+
+/** 턴 안에서만 오는 훅. 이 훅이 가져온 세션에는 대화가 있다 */
+const TURN_HOOKS: readonly string[] = ['UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop']
 const BYPASS_MODE = 'bypassPermissions'
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -624,15 +634,17 @@ function queued(work: WorkState, task: TaskRecord, e: TaskQueued): Transition {
 /** 훅 신호에 따른 표시 (시나리오 3의 표) */
 function hook(
   work: WorkState,
-  task: TaskRecord,
+  current: TaskRecord,
   e: UserPromptSubmitted | ToolUse | NotificationSent | Stopped,
   config: AppConfig,
 ): Transition {
-  if (!task.session?.alive || !LIVE.includes(task.status)) return unchanged(work)
+  if (!current.session?.alive || !LIVE.includes(current.status)) return unchanged(work)
+  const task = followSession(current, e)
   const set = (patch: Partial<TaskRecord>): Transition => ({
     work: withTask(work, { ...task, ...patch }),
     effects: [],
   })
+  const keep = (): Transition => (task === current ? unchanged(work) : set({}))
   switch (e.type) {
     case 'UserPromptSubmit':
       // 작업 중. 사람이 새 요청을 보낸 때를 남기고, 첫 신호의 permission_mode를 기록한다 (D94).
@@ -644,16 +656,27 @@ function hook(
           : {}),
       })
     case 'PreToolUse':
-      return e.toolName === ASK_TOOL ? set({ status: 'asking' }) : unchanged(work)
+      return e.toolName === ASK_TOOL ? set({ status: 'asking' }) : keep()
     case 'PostToolUse':
-      return e.toolName === ASK_TOOL ? set({ status: 'working' }) : unchanged(work)
+      return e.toolName === ASK_TOOL ? set({ status: 'working' }) : keep()
     case 'Notification':
-      return e.notificationType === PERMISSION_PROMPT
-        ? set({ status: 'input_needed' })
-        : unchanged(work)
+      return e.notificationType === PERMISSION_PROMPT ? set({ status: 'input_needed' }) : keep()
     case 'Stop':
       return stop(work, task, e, config)
   }
+}
+
+/**
+ * 턴의 훅이 다른 session_id를 가져오면 그 세션을 따른다. /clear, 대화형 /resume, /branch로 CLI가 다른
+ * 대화로 옮긴 것이다 (D110, Claude Code 문서 commands). [재개]는 이 id로 --resume한다.
+ * 알림과 SessionEnd로는 옮기지 않는다: /clear 직후처럼 아직 대화가 없는 세션은 --resume으로 열 수 없다 (S6).
+ * 서브에이전트 안의 훅으로도 옮기지 않는다.
+ */
+function followSession(task: TaskRecord, e: HookSignal & { type: string }): TaskRecord {
+  const session = task.session
+  const id = e.agentId === undefined && TURN_HOOKS.includes(e.type) ? e.sessionId : undefined
+  if (!session || !id || id === session.id) return task
+  return { ...task, session: { ...session, id } }
 }
 
 /**
@@ -718,7 +741,8 @@ function sessionEnded(work: WorkState, task: TaskRecord, e: SessionEnded): Trans
  * 에이전트가 턴을 끝낸 뒤(승인 대기, 대기, 세션 종료)에만 받는다. 누른 때의 검사로 다시 판정한다 (approvalGate).
  * [오류 무시하고 승인]이면 무시한 오류를 남기고, 머리글에서 읽지 못한 값은 없는 것으로 본다 (D112).
  * 에이전트가 이전 단계를 추천했으면 다음 task를 시작하지 않고 멈춘다 (D23). [이 단계 끝나면 멈춤]이
- * 켜져 있어도 멈춘다 (시나리오 3-4). 어느 쪽이든 멈춤 표시는 지운다.
+ * 켜져 있어도 멈춘다 (시나리오 3-4). verify 승인도 Work를 완료하지 않고 멈추며, [재개]하면 완료한다.
+ * 어느 쪽이든 멈춤 표시는 지운다.
  */
 function approve(work: WorkState, task: TaskRecord, e: Approve): Transition {
   if (work.status !== 'active') return unchanged(work, '진행 중인 Work가 아님')
@@ -779,14 +803,14 @@ function approve(work: WorkState, task: TaskRecord, e: Approve): Transition {
     }
     return { work: next, effects }
   }
+  if (stopAfterStep) {
+    next = { ...next, status: 'stopped', stop: { kind: 'after_step', task_id: task.id } }
+    return { work: next, effects }
+  }
   const nextNode = defaultNext(task.node, size)
   if (nextNode === WORK_COMPLETE) {
     next = { ...next, status: 'completed', completed_at: e.at }
     effects.push(log(work, e.at, 'work.completed', { delivery: 'none' }))
-    return { work: next, effects }
-  }
-  if (stopAfterStep) {
-    next = { ...next, status: 'stopped', stop: { kind: 'after_step', task_id: task.id } }
     return { work: next, effects }
   }
   const created = newTask(next, nextNode, e.at)

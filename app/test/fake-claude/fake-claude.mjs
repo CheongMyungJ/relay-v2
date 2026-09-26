@@ -10,6 +10,8 @@
 // - --session-id로 시작한 세션은 FAKE_CLAUDE_RECORD/sessions/<id>.json에 task를 적어 두고,
 //   --resume <id>로 다시 열면 그 task의 resume 시나리오를 한다. 적어 둔 것이 없으면 실제 claude처럼
 //   "No conversation found with session ID"를 내고 종료 코드 1로 끝난다 (스파이크 S6).
+// - clear 단계는 /clear를 흉내 낸다: SessionEnd(reason: clear)를 보내고 새 세션 id로 계속 돈다(D110).
+//   새 세션은 다음 요청으로 대화가 생겨야 --resume으로 열 수 있다.
 // - 시나리오가 없으면 M0처럼 출력만 내고 끝날 때까지 살아 있는다.
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -108,8 +110,9 @@ function interpolate(value, allowed) {
   })
 }
 
-const transcriptPath = path.join(os.tmpdir(), 'fake-claude', `${opts.sessionId}.jsonl`)
 let promptId
+/** /clear 뒤 아직 대화가 없는 새 세션. 다음 요청 때 기록한다 */
+let unsaved = false
 
 function permissionMode() {
   return env.FAKE_CLAUDE_PERMISSION_MODE || (opts.skip ? 'bypassPermissions' : 'default')
@@ -121,7 +124,7 @@ async function hook(event, fields = {}, toolName) {
   const body = {
     session_id: opts.sessionId,
     ...(promptId ? { prompt_id: promptId } : {}),
-    transcript_path: transcriptPath,
+    transcript_path: path.join(os.tmpdir(), 'fake-claude', `${opts.sessionId}.jsonl`),
     cwd: process.cwd(),
     permission_mode: permissionMode(),
     hook_event_name: event,
@@ -219,7 +222,15 @@ async function steps(list, ctx, vars) {
     out(`[가짜 claude] ${s}${step.file ? ` ${step.file}` : ''}`)
     if (s === 'prompt') {
       promptId = randomUUID()
+      if (unsaved) {
+        saveSession(ctx)
+        unsaved = false
+      }
       await hook('UserPromptSubmit', { prompt: step.text ?? opts.prompt })
+    } else if (s === 'clear') {
+      await hook('SessionEnd', { reason: 'clear' })
+      opts.sessionId = randomUUID()
+      unsaved = true
     } else if (s === 'write') {
       const file = path.join(ctx.taskDir, step.file)
       fs.mkdirSync(path.dirname(file), { recursive: true })

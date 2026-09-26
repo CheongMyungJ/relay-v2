@@ -12,6 +12,8 @@ export type Step =
   | { do: 'notify'; type: string }
   | { do: 'stop'; onBlock?: Step[] }
   | { do: 'exit'; reason?: string; linger?: number }
+  /** /clear: 새 세션 id로 계속 돈다 (D110) */
+  | { do: 'clear' }
   | { do: 'sleep'; ms: number }
   | { do: 'print'; text: string }
   | { do: 'wait' }

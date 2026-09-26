@@ -36,11 +36,7 @@ export function Panel({ work, task, review, onApproved }: Props) {
       {work.stopNotice ? (
         <div className="notice stop">
           {work.stopNotice}
-          <div className="dim">
-            {work.stopKind === 'recommended_back'
-              ? '[재개]하면 추천을 따르지 않고 기본 다음 단계로 갑니다. 추천대로 되돌아가는 단계 선택은 M4에서 넣습니다.'
-              : '[재개]하면 다음 단계를 시작합니다.'}
-          </div>
+          {work.stopHint ? <div className="dim">{work.stopHint}</div> : null}
         </div>
       ) : null}
       {work.status === 'completed' && task.id === work.current ? (
