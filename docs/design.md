@@ -127,6 +127,9 @@ relay-v2는 Claude Code CLI를 **앱 안의 터미널(node-pty + xterm.js)에 �
 | D87 | 스키마는 앱이 검사하는 데 쓰고, 에이전트에게는 필드마다 허용값과 조건을 YAML 주석으로 단 템플릿을 준다. 되돌림 메시지에는 필드와 어긴 규칙을 적는다. 앱 테스트에서 템플릿 예시가 스키마를 통과하는지 확인한다 | 스킬 본문 5,000토큰 한도 안에서 처음부터 맞게 쓰게 함. 스키마 전문은 길고 에이전트가 읽는다는 보장이 없음 | ✅ |
 | D88 | 앱이 결정론적으로 아는 값은 에이전트가 쓰지 않는다. handoff에서 식별자(`work_id`, `task_id`, `node`, `skill`), `intent_version`, `schema_version`을 뺀다. intent의 `schema_version`과 `version`은 [의도 승인] 때 앱이 붙인다. `type`은 업무 유형이 늘어날 것에 대비해 work-start가 쓴다 | 앱이 아는 값을 쓰게 하면 틀릴 기회만 생김. 앱은 실행 중인 task 디렉터리의 handoff만 읽고 이전 task 디렉터리는 편집이 막혀 있어, 위치가 식별자 역할을 함 | ✅ |
 | D89 | handoff에 `artifacts` 필드를 두지 않는다. 앱은 task 디렉터리의 `.md` 파일(`context.md`, `handoff.md` 제외)을 산출물로 본다 | 필수 산출물은 3.1 표로 고정됨. 목록을 따로 적으면 파일과 목록이 어긋나는 오류만 생김 | ✅ |
+| D90 | intake에서는 intent 초안 머리글 오류를 [오류 무시하고 승인]으로 넘길 수 없다. 본문 오류만 넘길 수 있다. `size` 오류는 승인 화면에서 사람이 `size`를 고르면 풀린다 | 머리글이 틀리면 앱이 `intent.md`를 만들 수 없음(D38). 사람이 바로 고칠 수 있는 길은 남김 | ✅ |
+| D91 | deny 규칙은 에이전트의 실수를 막는 장치로 본다. 앱은 앱 소유 파일을 쓸 때마다 해시를 기록하고, 읽을 때 다르면 경고한다. deny를 우회한 push는 막지 못하므로 원격 브랜치 보호를 권장한다 | Claude Code의 deny는 스크립트가 직접 쓰는 파일이나 `sh -c` 안의 명령에는 적용되지 않음(공식 문서). 샌드박스는 Windows 네이티브를 지원하지 않음. 해시 확인은 비용이 작고 어긋남을 바로 알려 줌 | ✅ |
+| D92 | 스파이크 계획과 결과는 `docs/spikes.md`에, 스파이크 코드는 `spikes/<번호>/`에 둔다. Windows 네이티브에서 확인하는 것을 필수로 하고, 결과에는 날짜, Claude Code 버전, OS를 적는다 | 훅과 스킬 동작은 Claude Code 버전에 따라 바뀔 수 있어 다시 확인할 수 있어야 함. 주 플랫폼 문제는 Windows에서만 드러남(D12) | ✅ |
 
 ---
 
@@ -318,6 +321,8 @@ S 크기는 `intake → fix → verify`로 간다. evidence와 rca의 일 중 �
 - intake 승인 = [의도 승인]. 한 번 클릭으로 intent 초안을 확정한다(`intent.md`, 버전 +1). 초안에 형식 오류가 있으면 handoff 오류와 똑같이 처리한다(D38).
 - verify 승인 = [Work 완료]. 시나리오 7로 이어진다.
 - **형식 오류가 끝까지 남으면:** 승인 버튼을 비활성화하고 오류를 표시한다. 확인 창을 거치는 [오류 무시하고 승인]은 제공한다.
+  - intake에서는 intent 초안의 **머리글** 오류를 넘길 수 없다. 머리글이 틀리면 앱이 `intent.md`를 만들 수 없기 때문이다. 본문 오류만 넘길 수 있다(D90).
+  - `size` 오류는 승인 화면에서 사람이 `size`를 고르면 풀린다.
 - **커밋 안 된 변경:** 경고만 표시하고 승인은 가능하다.
 
 #### 4.2 자동 승인 설정
@@ -1046,8 +1051,21 @@ intent의 완료조건마다 판정하고 `verification.md`와 PR 초안 `pr.md`
 | 스킬 배포 | Work 디렉터리 `.claude/skills/relay-<name>/`로 복사(`--add-dir`로 읽힘). 복사할 때 공통 종료 절차를 `SKILL.md` 끝에 붙임. `disable-model-invocation: true` |
 | 상태 신호 | 내장 HTTP 훅 → 앱 로컬 서버: UserPromptSubmit, Stop, Notification, SessionEnd, PreToolUse·PostToolUse(`AskUserQuestion`) |
 | 형식 오류 되돌림 | Stop 훅 응답 `{"decision":"block","reason":…}`, 연속 2회까지(설정 가능) |
-| 제한 | deny 규칙: `Bash(git push*)`, `Bash(gh pr*)`, 앱 소유 파일 `Edit(//…)` |
+| 제한 | deny 규칙: `Bash(git push*)`, `Bash(gh pr*)`, 앱 소유 파일 `Edit(//…)`. 실수를 막는 장치이며 우회할 수 있다(6.1) |
 | 산출물 감지 | 실행 중 task 디렉터리 감시 |
+
+### 6.1 deny 규칙의 한계 (D91)
+
+공식 문서(permissions)에 따르면 deny 규칙은 다음 범위에만 적용된다.
+
+- **파일 규칙(`Edit`, `Read`):** Claude Code의 파일 도구, Claude Code가 알아보는 Bash 파일 명령(`cat`, `sed`, `tee` 등), `>` 같은 리디렉션의 대상. Python이나 Node 스크립트가 직접 여는 파일에는 적용되지 않는다.
+- **Bash 규칙:** 명령 문자열과 일치할 때만 적용된다. 경로로 부른 같은 프로그램이나 `sh -c` 안의 명령과는 일치하지 않는다.
+- **샌드박스:** 모든 프로세스를 막으려면 샌드박스가 필요하지만, 샌드박스는 macOS, Linux, WSL2만 지원하고 Windows 네이티브는 지원하지 않는다.
+
+그래서 relay는 deny 규칙을 **에이전트의 실수를 막는 장치**로 본다. 에이전트는 사람과 같은 편이라는 전제다(1.2).
+
+- **앱 소유 파일:** 앱은 `request.md`, `intent.md`, `decisions.md`를 쓸 때마다 해시를 `work.json`에 기록한다. `work.json` 자신은 앱이 실행 중일 때 마지막으로 쓴 내용과 비교한다. 읽을 때 다르면 경고하고, 바뀐 파일을 보여 준다. 자동으로 되돌리지는 않는다.
+- **push:** deny를 우회한 push는 앱이 막지 못한다. 원격 저장소의 브랜치 보호(보호 브랜치에 직접 push 금지)를 권장한다. relay 작업 브랜치(`relay/<work-id>`)는 기준 브랜치가 아니므로, 우회하더라도 기준 브랜치에는 바로 들어가지 않는다.
 
 ## 7. Windows 고려사항
 
@@ -1058,15 +1076,21 @@ intent의 완료조건마다 판정하고 `verification.md`와 PR 초안 `pr.md`
 - worktree 경로가 길어질 수 있으므로 worktree를 만들 때 `core.longpaths=true`를 설정한다.
 - 권한 확인을 끈 모드는 조직 관리 설정(`permissions.disableBypassPermissionsMode: "disable"`)으로 막혀 있을 수 있다. 이 경우 task 실행이 실패한다. 이때의 출력과 종료 코드는 스파이크 S4로 확인하고, 그 결과로 안내 문구를 정한다.
 - 배포는 electron-builder NSIS로 하고, 코드 서명은 이후 과제로 둔다.
-- WSL은 범위 밖이다.
+- WSL은 범위 밖이다. 그래서 Claude Code 샌드박스는 쓸 수 없다(6.1).
 
 ---
 
-## 8. 아직 정하지 않은 것 (다음 라운드)
+## 8. 스파이크
 
-같은 방식(시나리오 → 질문 → 결정)으로 하나씩 정한다.
+설계의 전제 중 실제로 실행해 봐야 알 수 있는 것이다. 계획, 절차, 성공 기준, 실패하면 바꿀 설계, 결과 기록은 `docs/spikes.md`에 두고, 스파이크 코드는 `spikes/<번호>/`에 둔다(D92). Windows 네이티브에서 확인하는 것이 필수다.
 
-1. **스파이크:** S1 터미널 임베드(한글 IME 포함), S2 HTTP 훅(AskUserQuestion의 PreToolUse·PostToolUse 포함)과 Stop 되돌림, S3 첫 프롬프트 스킬 트리거(`--add-dir` 디렉터리의 스킬, `disable-model-invocation: true`)와 재개, S4 권한 확인을 끈 모드에서 deny 규칙이 앱 소유 파일 편집과 `git push`를 막는지, 조직 설정으로 이 모드가 막혔을 때의 출력과 종료 코드, S5 권한 확인을 끈 모드에서도 폴더 신뢰 창이 worktree마다 뜨는지와 `--add-dir` 디렉터리에도 적용되는지
+| # | 확인할 것 | 관련 설계 |
+|---|---|---|
+| S1 | 터미널 임베드: node-pty + xterm.js에서 Claude Code가 정상 동작하는지(한글 IME 포함), 프로세스 트리 종료 | D1, D8, 시나리오 3·9 |
+| S2 | HTTP 훅: 쓰는 이벤트가 모두 오는지(`AskUserQuestion`의 PreToolUse·PostToolUse 포함), Stop 되돌림 | D20, D21, D24, D35 |
+| S3 | 스킬: `--add-dir` 디렉터리의 스킬이 첫 프롬프트로 시작되는지, `disable-model-invocation: true`, `--resume` 재개 | D32, D33, 시나리오 3-4 |
+| S4 | 권한: 권한 확인 끈 모드에서 deny 규칙이 막는 범위, 조직 설정으로 모드가 막혔을 때의 출력 | D17, D91, 7절 |
+| S5 | 첫 실행 창: 권한 확인 끈 모드 경고와 폴더 신뢰 창이 언제 뜨는지(worktree마다, `--add-dir` 디렉터리) | D68, D69 |
 
 ## 9. 추가 후보 (필요가 확인되면)
 
