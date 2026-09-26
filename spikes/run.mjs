@@ -10,6 +10,7 @@ const ALL = {
   S1: './s1-terminal.mjs',
   S2: './s2-hooks.mjs',
   S3: './s3-skills.mjs',
+  S3B: './s3b-compact.mjs',
   S4: './s4-permissions.mjs',
 };
 const wanted = process.argv.slice(2).map((a) => a.toUpperCase());
