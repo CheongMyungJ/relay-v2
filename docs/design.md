@@ -131,6 +131,7 @@ relay-v2는 Claude Code CLI를 **앱 안의 터미널(node-pty + xterm.js)에 �
 | D91 | deny 규칙은 에이전트의 실수를 막는 장치로 본다. 앱은 앱 소유 파일을 쓸 때마다 해시를 기록하고, 읽을 때 다르면 경고한다. deny를 우회한 push는 막지 못하므로 원격 브랜치 보호를 권장한다 | Claude Code의 deny는 스크립트가 직접 쓰는 파일이나 `sh -c` 안의 명령에는 적용되지 않음(공식 문서). 샌드박스는 Windows 네이티브를 지원하지 않음. 해시 확인은 비용이 작고 어긋남을 바로 알려 줌 | ✅ |
 | D92 | 스파이크 계획과 결과는 `docs/spikes.md`에, 스파이크 코드는 `spikes/`에 둔다. Windows 네이티브에서 확인하는 것을 필수로 하고, 결과에는 날짜, Claude Code 버전, OS를 적는다 | 훅과 스킬 동작은 Claude Code 버전에 따라 바뀔 수 있어 다시 확인할 수 있어야 함. 주 플랫폼 문제는 Windows에서만 드러남(D12) | ✅ |
 | D93 | 스파이크는 GitHub Actions Windows 러너에서 수동으로 돌릴 수 있게 한다. 러너 결과는 예비 확인으로 기록하고, 한글 IME는 실기에서 사람이 확인한다 | 실기 확인 전에 설계 전제를 싸게 걸러 냄. 러너는 Windows Server라 사용자 PC와 다르고, IME 조합 입력은 자동화할 수 없음 | ✅ |
+| D94 | 앱은 첫 훅(UserPromptSubmit)의 `permission_mode`를 확인한다. `bypassPermissions`가 아니면 탭 머리 띠에 경고를 띄우고 task는 계속한다 | 조직 설정으로 권한 확인 끈 모드가 막히면 Claude Code는 실패하지 않고 auto 모드로 실행된다(스파이크 S4). 더 안전한 쪽이라 멈출 이유는 없지만, 막히는 동작이 생길 수 있어 사람이 알아야 함 | ✅ |
 
 ---
 
@@ -291,7 +292,7 @@ S 크기는 `intake → fix → verify`로 간다. evidence와 rca의 일 중 �
 
    | 신호 | 표시 |
    |---|---|
-   | UserPromptSubmit | 작업 중 (사용자가 새 요청을 보냈다는 기록도 남김) |
+   | UserPromptSubmit | 작업 중 (사용자가 새 요청을 보냈다는 기록도 남김). 첫 신호에서는 본문의 `permission_mode`도 확인한다(D94) |
    | PreToolUse(`AskUserQuestion`) | 질문 대기 (입력 필요, 백그라운드 Work면 알림) |
    | PostToolUse(`AskUserQuestion`) | 작업 중 (사람이 답함) |
    | Stop + 유효한 handoff 없음 | 대기 |
@@ -1075,7 +1076,8 @@ intent의 완료조건마다 판정하고 `verification.md`와 PR 초안 `pr.md`
 - 첫 프롬프트는 짧게 유지한다(D19).
 - 세션 종료는 프로세스 트리 단위로 한다.
 - worktree 경로가 길어질 수 있으므로 worktree를 만들 때 `core.longpaths=true`를 설정한다.
-- 권한 확인을 끈 모드는 조직 관리 설정(`permissions.disableBypassPermissionsMode: "disable"`)으로 막혀 있을 수 있다. 이 경우 task 실행이 실패한다. 이때의 출력과 종료 코드는 스파이크 S4로 확인하고, 그 결과로 안내 문구를 정한다.
+- 권한 확인을 끈 모드는 조직 관리 설정(`permissions.disableBypassPermissionsMode: "disable"`)으로 막혀 있을 수 있다. 이 경우 Claude Code는 실패하지 않고 auto 모드로 실행된다(스파이크 S4). auto 모드는 Claude Code가 위험하다고 본 동작을 막고 나머지를 실행한다.
+  - 앱은 첫 훅(UserPromptSubmit) 본문의 `permission_mode`가 `bypassPermissions`가 아니면, 탭 머리 띠에 "권한 확인 끈 모드가 아님(auto 모드): 일부 동작이 막힐 수 있음"을 표시하고 task는 계속한다(D94).
 - 배포는 electron-builder NSIS로 하고, 코드 서명은 이후 과제로 둔다.
 - WSL은 범위 밖이다. 그래서 Claude Code 샌드박스는 쓸 수 없다(6.1).
 
