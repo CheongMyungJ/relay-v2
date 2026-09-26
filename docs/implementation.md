@@ -78,8 +78,10 @@
 | Claude Code 동작 | 훅, 스킬, deny 규칙, 첫 실행 창은 `docs/spikes.md`의 S1~S5 결과를 따른다(2.1.283). 강제 종료 뒤 재개(S6)는 M3 전에 확인한다(I31) | `docs/spikes.md` |
 | HTTP 훅 머리글 | HTTP 훅에 `headers`를 줄 수 있다. 값에 `$VAR` 형태로 환경 변수를 넣을 수 있고, `allowedEnvVars`에 적은 변수만 풀린다. 응답 본문은 명령 훅과 같은 JSON 출력 형식이다. 기본 제한 시간은 600초(UserPromptSubmit은 30초)다 | Claude Code 문서 hooks (2026-09-26) |
 
-- N-API 사전 빌드가 Electron 44에서 다시 빌드 없이 로드되는지, 설치 파일(asar)에서 `.node`와 `conpty\conpty.dll`, `OpenConsole.exe`가 풀려 나와 동작하는지는 아직 확인하지 않았다. M0의 [스모크]로 확인한다(7절).
-- DLL 모드(I32)로 실제 `claude`가 동작하는지는 아직 확인하지 않았다. 스파이크는 내장 ConPTY로 돌렸다. M0의 [실기]로 확인한다.
+- N-API 사전 빌드가 Electron 44에서 다시 빌드 없이 로드되고, 설치 파일(asar)에서 `.node`와 `conpty\conpty.dll`, `OpenConsole.exe`가 풀려 나와 동작한다. M0의 [스모크]로 러너에서 확인했다(2026-09-26, `docs/checks.md`).
+- Windows의 Node(libuv)는 stdin을 raw 모드로 읽고 있을 때만 콘솔 크기 변경을 알아챈다(libuv `docs/src/signal.rst`). 가짜 `claude`도 stdin을 raw 모드로 읽어야 크기 변경 시험이 맞다(app-ci #1~#5).
+- node-pty의 `kill()`은 내장 ConPTY에서 보조 프로세스(`conpty_console_list_agent`)가 "AttachConsole failed"로 죽는 일이 러너에서 다시 보였다. 앱은 `taskkill`로 트리를 끝낸다(6절).
+- DLL 모드(I32)로 실제 `claude`가 동작하는지는 아직 확인하지 않았다. 스파이크는 내장 ConPTY로 돌렸다. M0의 [실기]는 생략했으므로 다음 실기 때 확인한다.
 
 ## 4. 기술 선택
 
