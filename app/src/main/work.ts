@@ -47,6 +47,7 @@ import {
   TASK_STATUS_LABEL,
   WORK_STATUS_LABEL,
   bandText,
+  changeRange,
   emphasis,
   handoffSummary,
   humanNotice,
@@ -848,13 +849,14 @@ export class WorkRunner {
     let head: string
     let dirty: boolean
     let branch: string | null
+    let commit: string | null = null
     try {
       head = await headCommit(this.worktree, opts)
       dirty = (await statusLines(this.worktree, opts)).length > 0
       const commits = head === e.to ? 0 : await countCommits(this.worktree, e.to, 'HEAD', opts)
       branch = commits > 0 || dirty ? e.backupBranch : null
       if (branch) {
-        await createBackup(this.worktree, branch, {
+        commit = await createBackup(this.worktree, branch, {
           ...opts,
           uncommitted: dirty,
           message: e.message,
@@ -864,7 +866,7 @@ export class WorkRunner {
       await this.rewindFailed(err)
       return
     }
-    await this.feed({ type: 'rewind.backedUp', at: this.ctx.at(), branch })
+    await this.feed({ type: 'rewind.backedUp', at: this.ctx.at(), branch, commit })
     try {
       if (head !== e.to || dirty) await resetHard(this.worktree, e.to, { ...opts, clean: dirty })
     } catch (err) {
@@ -929,20 +931,21 @@ export class WorkRunner {
     const { env } = this.ctx
     const files = await this.files.taskFiles(task)
     const check = this.check(task, files)
-    const uncommitted = await statusLines(this.worktree, { env }).catch(() => [])
-    const diff = task.start_commit
-      ? await diffFrom(this.worktree, task.start_commit, { env }).catch(
-          (e: unknown) => `변경을 읽지 못함: ${message(e)}`,
-        )
-      : ''
+    // 끝난 task는 그 task가 끝났을 때의 코드까지 본다. 작업 트리는 지금 코드의 마지막 task만 본다
+    const range = changeRange(this.work, task.id)
+    const latest = range?.to === null
+    const uncommitted = latest ? await statusLines(this.worktree, { env }).catch(() => []) : []
+    const diffTo = (from: string) =>
+      diffFrom(this.worktree, from, range?.to ?? null, { env }).catch(
+        (e: unknown) => `변경을 읽지 못함: ${message(e)}`,
+      )
+    const diff = range ? await diffTo(range.from) : ''
     const header = check.handoffHeader
     const handoffText = files[HANDOFF_FILE]
     const gate = (size?: Size) => approvalGate(task, check, size)
     let completion: ReviewView['completion'] = null
     if (task.node === 'verify') {
-      const workDiff = await diffFrom(this.worktree, this.work.base_commit, { env }).catch(
-        (e: unknown) => `변경을 읽지 못함: ${message(e)}`,
-      )
+      const workDiff = await diffTo(this.work.base_commit)
       completion = { verdicts: verdicts(files['verification.md'] ?? ''), diff: clip(workDiff) }
     }
     return {

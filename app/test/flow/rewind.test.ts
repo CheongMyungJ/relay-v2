@@ -216,7 +216,7 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
       discarded: ['t-04', 't-05'],
       skipped: [],
       keep_code: false,
-      reset: { from: fixHead, to: base, backup_branch: branch },
+      reset: { from: fixHead, to: base, backup_branch: branch, backup_commit: fixHead },
     })
     // 미리 보기대로: 되돌린 커밋은 백업 브랜치에 있고, 되감은 fix는 기준 커밋에서 시작했다
     expect(git(s.repo, 'rev-parse', branch)).toBe(fixHead)
@@ -224,6 +224,13 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
     const tabs = s.h.ui.works.get(key)?.tasks
     expect(tabs?.at(-1)?.band).toBe('06 수정 · 새 세션 · 이유: 되감기')
     expect(tabs?.[3]).toMatchObject({ status: 'discarded', statusLabel: '폐기됨', live: false })
+    // 폐기된 task의 [변경]은 그 task가 끝났을 때의 코드까지다. 지금 작업 트리는 보지 않는다 (D83)
+    const oldFix = await s.h.relay.review(key, 't-04')
+    expect(oldFix?.diff).toContain('+  if (xs.length === 0) return 0')
+    expect(oldFix?.emphasis.map((e) => e.kind)).not.toContain('uncommitted')
+    const oldVerify = await s.h.relay.review(key, 't-05')
+    expect(oldVerify?.diff).toBe('')
+    expect(oldVerify?.completion?.diff).toContain('+  if (xs.length === 0) return 0')
 
     // context.md: 되감기 절이 맨 위이고, 폐기된 task는 입력에서 빠진다
     const ctx = read(path.join(taskDir(s, key, '06-fix'), 'context.md'))
@@ -448,7 +455,14 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
       from: fixCommit,
       to: base,
       backup_branch: branch,
+      backup_commit: backup,
     })
+    // 폐기된 fix의 [변경]은 백업 커밋까지다: 커밋한 수정과 커밋 안 된 변경이 모두 보인다
+    const discarded = await s.h.relay.review(key, 't-02')
+    expect(discarded?.diff).toContain('+  if (xs.length === 0) return 0')
+    expect(discarded?.diff).toContain('+// 고치는 중')
+    expect(discarded?.diff).toContain('+실험 메모')
+    expect(discarded?.emphasis.map((e) => e.kind)).not.toContain('uncommitted')
 
     const done = await drive(s.h.relay, s.h.ui, key, { size: 'S' })
     expect(done, s.h.ui.dump()).toMatchObject({ status: 'completed' })

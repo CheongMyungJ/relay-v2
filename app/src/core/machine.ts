@@ -213,10 +213,14 @@ export interface SelectStep extends WorkEvent {
   backups: readonly string[]
 }
 
-/** 되감기(D77의 backup 단계)가 끝났다. 백업할 것이 없어 만들지 않았으면 branch는 null이다 */
+/**
+ * 되감기(D77의 backup 단계)가 끝났다. branch는 만든 백업 브랜치, commit은 그 브랜치가 가리키는 커밋이다.
+ * 백업할 것이 없어 만들지 않았으면 둘 다 null이다
+ */
 export interface RewindBackedUp extends WorkEvent {
   type: 'rewind.backedUp'
   branch: string | null
+  commit: string | null
 }
 
 /** 되감기가 코드를 되돌렸다. head는 되돌리기 전 HEAD다 */
@@ -1028,6 +1032,7 @@ function selectStep(work: WorkState, e: SelectStep): Transition {
       discard: plan.discard.map((t) => t.id),
       reset_to: plan.code.to,
       backup_branch: plan.code.backupBranch,
+      backup_commit: null,
     }
     effects.push({
       type: 'rewindCode',
@@ -1048,12 +1053,15 @@ function selectStep(work: WorkState, e: SelectStep): Transition {
   return select(base, { node: plan.node, reason: plan.reason, selection }, e.at, effects)
 }
 
-/** 되감기의 백업 단계가 끝났다 (D77). 기록을 코드 되돌리기 단계로 옮기고 만든 백업 브랜치를 적는다 */
+/** 되감기의 백업 단계가 끝났다 (D77). 기록을 코드 되돌리기 단계로 옮기고 만든 백업 브랜치와 커밋을 적는다 */
 function rewindBackedUp(work: WorkState, e: RewindBackedUp): Transition {
   const op = work.operation
   if (op?.kind !== 'rewind' || op.stage !== 'backup') return unchanged(work)
   return {
-    work: { ...work, operation: { ...op, stage: 'reset', backup_branch: e.branch } },
+    work: {
+      ...work,
+      operation: { ...op, stage: 'reset', backup_branch: e.branch, backup_commit: e.commit },
+    },
     effects: [],
   }
 }
@@ -1072,6 +1080,7 @@ function rewindApplied(work: WorkState, e: RewindApplied): Transition {
       from: e.head,
       to: op.reset_to,
       backup_branch: op.stage === 'reset' ? op.backup_branch : null,
+      backup_commit: op.stage === 'reset' ? op.backup_commit : null,
     },
   }
   return select(work, { node: op.node, reason: 'rewind', selection }, e.at, [])

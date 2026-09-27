@@ -54,10 +54,16 @@ export interface StepSelection {
   /** fix로 되감으며 [현재 코드 위에서 이어서]를 골랐다 */
   keep_code: boolean
   /**
-   * 되돌린 코드 (D116, D117). from은 되돌리기 전 HEAD, to는 되돌린 커밋이다.
-   * 백업할 것이 없었으면 backup_branch는 null이다. 코드를 되돌리지 않았으면 reset이 null이다
+   * 되돌린 코드 (D116, D117). from은 되돌리기 전 HEAD, to는 되돌린 커밋이다. backup_commit은 백업 브랜치를
+   * 만들 때 가리킨 커밋이다(커밋 안 된 변경이 있었으면 from 위의 커밋 하나, 없었으면 from).
+   * 백업할 것이 없었으면 backup_branch와 backup_commit은 null이다. 코드를 되돌리지 않았으면 reset이 null이다
    */
-  reset: { from: string; to: string; backup_branch: string | null } | null
+  reset: {
+    from: string
+    to: string
+    backup_branch: string | null
+    backup_commit: string | null
+  } | null
 }
 
 /** 형식 검사의 오류나 경고 하나 (5.2.1) */
@@ -185,6 +191,8 @@ export interface RewindOperation {
    * 되돌릴 커밋도 커밋 안 된 변경도 없어 만들지 않았으면 null이다
    */
   backup_branch: string | null
+  /** reset 단계에서 만든 백업 브랜치가 가리키는 커밋. backup 단계와 만들지 않았으면 null이다 */
+  backup_commit: string | null
 }
 
 /** 진행 중인 여러 단계 작업 (D77). 전달과 정리는 M5에서 더한다 */

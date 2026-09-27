@@ -1,4 +1,4 @@
-// 사람에게 보일 것: task 이름과 머리 띠(D109), 상태 이름, 승인 화면의 강조 영역(D83),
+// 사람에게 보일 것: task 이름과 머리 띠(D109), 상태 이름, 승인 화면의 강조 영역과 [변경]의 범위(D83),
 // Work 완료 화면의 판정표(시나리오 7-3). 화면은 main이 이 값으로 만든 스냅샷을 그리기만 한다 (I14).
 import type { Handoff } from '../shared/contracts'
 import type { Emphasis, Verdict } from '../shared/views'
@@ -123,6 +123,30 @@ export function humanNotice(before: WorkState, after: WorkState): string | null 
 // ---------- 승인 화면 (D83) ----------
 
 export type { Emphasis, Verdict }
+
+/** 승인 화면의 [변경]이 보일 코드 범위. to가 null이면 작업 트리(커밋 안 된 변경 포함)까지다 */
+export interface ChangeRange {
+  from: string
+  to: string | null
+}
+
+/**
+ * [변경] 탭(D83: 이 task의 diff)의 범위. task의 시작 커밋부터 코드가 다음에 바뀐 때까지다.
+ * 다음에 시작한 task가 있으면 그 시작 커밋까지다. 코드를 되돌린 되감기가 먼저 오면 되돌리기 전의 코드,
+ * 곧 백업 커밋(커밋 안 된 변경 포함, D116)까지다. 백업이 없었으면 되돌리기 전 HEAD다.
+ * 뒤에 코드를 바꾼 task가 없으면 지금 코드의 마지막 task라 작업 트리까지다. 시작하지 않은 task는 null이다.
+ */
+export function changeRange(work: WorkState, taskId: string): ChangeRange | null {
+  const i = work.tasks.findIndex((t) => t.id === taskId)
+  const from = work.tasks[i]?.start_commit
+  if (!from) return null
+  for (const next of work.tasks.slice(i + 1)) {
+    const reset = next.selection?.reset
+    if (reset) return { from, to: reset.backup_commit ?? reset.from }
+    if (next.start_commit) return { from, to: next.start_commit }
+  }
+  return { from, to: null }
+}
 
 export interface EmphasisInput {
   node: TaskRecord['node']

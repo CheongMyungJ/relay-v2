@@ -9,6 +9,7 @@ import {
   addWorktree,
   countCommits,
   createBackup,
+  diffFrom,
   headCommit,
   refNames,
   resetHard,
@@ -105,10 +106,16 @@ describe('[어댑터] 되감기의 git 작업 (6.2, D115~D117)', () => {
       'src/avg.js',
     ])
     expect(git(repo, 'rev-list', '--count', `${base}..${backup}`)).toBe('2')
+    // 백업 커밋까지의 차이에는 커밋한 수정과 커밋 안 된 변경이 모두 있다
+    const diff = await diffFrom(tree, base, commit)
+    expect(diff).toContain('+export const avg = (xs) => (xs.length ? 2 : 0)')
+    expect(diff).toContain('+메모')
+    expect(diff).toContain('-# sample')
 
     await resetHard(tree, base, { clean: true })
     expect(await headCommit(tree)).toBe(base)
     expect(await statusLines(tree)).toEqual([])
+    expect(await diffFrom(tree, base, null)).toBe('')
     expect(git(repo, 'rev-parse', BRANCH)).toBe(base)
     // Windows의 core.autocrlf면 CRLF로 체크아웃된다
     expect(fs.readFileSync(path.join(tree, 'README.md'), 'utf8').replace(/\r\n/g, '\n')).toBe(

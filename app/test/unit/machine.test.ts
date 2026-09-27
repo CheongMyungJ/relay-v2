@@ -1541,6 +1541,7 @@ describe('단계 선택 (6.2, D77, D115~D117)', () => {
       discard: ['t-02', 't-03'],
       reset_to: 'start-t-02',
       backup_branch: BACKUP,
+      backup_commit: null,
     })
     expect(types(r.effects)).toEqual(['log:task.interrupted', 'endSession', 'rewindCode'])
     const logged = r.effects[0]
@@ -1562,8 +1563,17 @@ describe('단계 선택 (6.2, D77, D115~D117)', () => {
 
   it('백업하고 되돌리면 task를 폐기하고 고른 단계를 되감기로 시작하며 기록을 지운다', () => {
     const phase1 = select(toVerify(), 'fix', { instruction: '다시' }).work
-    const backedUp = apply(phase1, { type: 'rewind.backedUp', at: at(), branch: BACKUP })
-    expect(backedUp.work.operation).toMatchObject({ stage: 'reset', backup_branch: BACKUP })
+    const backedUp = apply(phase1, {
+      type: 'rewind.backedUp',
+      at: at(),
+      branch: BACKUP,
+      commit: 'backup-commit',
+    })
+    expect(backedUp.work.operation).toMatchObject({
+      stage: 'reset',
+      backup_branch: BACKUP,
+      backup_commit: 'backup-commit',
+    })
     expect(backedUp.effects).toEqual([])
     const r = apply(backedUp.work, { type: 'rewind.applied', at: at(), head: 'head-before' })
     expect(r.work.operation).toBeUndefined()
@@ -1582,7 +1592,12 @@ describe('단계 선택 (6.2, D77, D115~D117)', () => {
       discarded: ['t-02', 't-03'],
       skipped: [],
       keep_code: false,
-      reset: { from: 'head-before', to: 'start-t-02', backup_branch: BACKUP },
+      reset: {
+        from: 'head-before',
+        to: 'start-t-02',
+        backup_branch: BACKUP,
+        backup_commit: 'backup-commit',
+      },
     })
     expect(r.effects).toEqual([
       {
@@ -1611,12 +1626,13 @@ describe('단계 선택 (6.2, D77, D115~D117)', () => {
 
   it('백업할 것이 없었으면 백업 브랜치는 null이다 (D116)', () => {
     const phase1 = select(toVerify(), 'verify').work
-    const none = apply(phase1, { type: 'rewind.backedUp', at: at(), branch: null }).work
-    const r = apply(none, { type: 'rewind.applied', at: at(), head: 'start-t-03' })
+    const none = apply(phase1, { type: 'rewind.backedUp', at: at(), branch: null, commit: null })
+    const r = apply(none.work, { type: 'rewind.applied', at: at(), head: 'start-t-03' })
     expect(r.work.tasks.at(-1)?.selection?.reset).toEqual({
       from: 'start-t-03',
       to: 'start-t-03',
       backup_branch: null,
+      backup_commit: null,
     })
     const logged = r.effects[0]
     expect(logged?.type === 'log' && logged.event.payload['backup_branch']).toBeNull()
@@ -1633,7 +1649,9 @@ describe('단계 선택 (6.2, D77, D115~D117)', () => {
     expect(apply(r.work, { type: 'rewind.applied', at: at(), head: 'h' }).rejected).toBe(
       '진행 중인 되감기가 없음',
     )
-    expect(apply(r.work, { type: 'rewind.backedUp', at: at(), branch: null }).work).toBe(r.work)
+    expect(
+      apply(r.work, { type: 'rewind.backedUp', at: at(), branch: null, commit: null }).work,
+    ).toBe(r.work)
   })
 
   it('건너뛰기는 한 번에 반영한다: 진행 중인 k를 끝내고 폐기하고 고른 단계를 시작한다. 코드는 그대로다 (D117)', () => {

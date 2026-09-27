@@ -128,9 +128,16 @@ export async function headCommit(dir: string, opts?: GitOptions): Promise<string
   return git(dir, ['rev-parse', 'HEAD'], opts)
 }
 
-/** from 커밋과 작업 트리의 차이 (커밋한 것과 커밋 안 한 추적 파일 모두) */
-export async function diffFrom(dir: string, from: string, opts?: GitOptions): Promise<string> {
-  return git(dir, ['diff', '--no-color', '--no-ext-diff', from], opts)
+/**
+ * from 커밋부터 to 커밋까지의 차이. to가 null이면 작업 트리까지다(커밋한 것과 커밋 안 한 추적 파일 모두)
+ */
+export async function diffFrom(
+  dir: string,
+  from: string,
+  to: string | null,
+  opts?: GitOptions,
+): Promise<string> {
+  return git(dir, ['diff', '--no-color', '--no-ext-diff', from, ...(to ? [to] : [])], opts)
 }
 
 /** 커밋 안 된 변경 (git status --porcelain). 추적하지 않는 파일도 넣는다 */

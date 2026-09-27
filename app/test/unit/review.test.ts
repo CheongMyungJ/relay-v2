@@ -4,6 +4,7 @@ import {
   TASK_STATUS_LABEL,
   WORK_STATUS_LABEL,
   bandText,
+  changeRange,
   emphasis,
   handoffSummary,
   humanNotice,
@@ -13,8 +14,14 @@ import {
   taskLabel,
   verdicts,
 } from '../../src/core/review'
-import type { Handoff } from '../../src/shared/contracts'
-import type { FormatIssue, TaskStatus, WorkState } from '../../src/shared/work'
+import type { Handoff, NodeName } from '../../src/shared/contracts'
+import type {
+  FormatIssue,
+  StepSelection,
+  TaskRecord,
+  TaskStatus,
+  WorkState,
+} from '../../src/shared/work'
 
 const HANDOFF: Handoff = {
   status: 'awaiting_approval',
@@ -182,6 +189,89 @@ describe('OS 알림 문구 (D81)', () => {
     expect(humanNotice(at('working'), at('idle'))).toBeNull()
     expect(humanNotice(at('working'), at('interrupted'))).toBeNull()
     expect(humanNotice(at('queued'), at('working'))).toBeNull()
+  })
+})
+
+describe('[변경]의 범위 (D83: 이 task의 diff)', () => {
+  const base = createWork({ workId: 'w', baseBranch: 'main', baseCommit: 'c0', at: 'x' }).work
+  const first = base.tasks[0] as TaskRecord
+  const task = (seq: number, node: NodeName, extra: Partial<TaskRecord> = {}): TaskRecord => ({
+    ...first,
+    id: `t-${String(seq).padStart(2, '0')}`,
+    seq,
+    node,
+    status: 'approved',
+    ...extra,
+  })
+  const withTasks = (...tasks: TaskRecord[]): WorkState => ({ ...base, tasks })
+  const selection = (reset: StepSelection['reset']): StepSelection => ({
+    from_task: 't-03',
+    instruction: null,
+    discarded: [],
+    skipped: [],
+    keep_code: reset === null,
+    reset,
+  })
+
+  it('끝난 task는 다음 task의 시작 커밋까지, 지금 코드의 마지막 task는 작업 트리까지다', () => {
+    const work = withTasks(
+      task(1, 'intake', { start_commit: 'a' }),
+      task(2, 'fix', { start_commit: 'b' }),
+      task(3, 'verify', { start_commit: 'c', status: 'working' }),
+    )
+    expect(changeRange(work, 't-01')).toEqual({ from: 'a', to: 'b' })
+    expect(changeRange(work, 't-02')).toEqual({ from: 'b', to: 'c' })
+    expect(changeRange(work, 't-03')).toEqual({ from: 'c', to: null })
+    expect(changeRange(work, 't-09')).toBeNull()
+  })
+
+  it('시작하지 않은 task는 범위가 없고, 코드를 바꾸지 않아 앞 task의 범위도 끝내지 않는다', () => {
+    const work = withTasks(
+      task(1, 'intake', { start_commit: 'a' }),
+      task(2, 'evidence', { status: 'queued' }),
+    )
+    expect(changeRange(work, 't-02')).toBeNull()
+    expect(changeRange(work, 't-01')).toEqual({ from: 'a', to: null })
+  })
+
+  it('코드를 되돌린 되감기로 끝난 task는 백업 커밋까지다. 백업이 없었으면 되돌리기 전 HEAD다 (D116)', () => {
+    const reset = {
+      from: 'head',
+      to: 'b',
+      backup_branch: 'relay/w-discarded-1',
+      backup_commit: 'bk',
+    }
+    const tasks = [
+      task(1, 'intake', { start_commit: 'a' }),
+      task(2, 'fix', { start_commit: 'b', status: 'discarded' }),
+      task(3, 'verify', { start_commit: 'c', status: 'discarded' }),
+    ]
+    const work = withTasks(
+      ...tasks,
+      task(4, 'fix', { start_commit: 'b', status: 'working', selection: selection(reset) }),
+    )
+    // 폐기된 fix는 폐기된 verify가 시작할 때까지(자기 커밋), 폐기된 verify는 백업 커밋까지다
+    expect(changeRange(work, 't-02')).toEqual({ from: 'b', to: 'c' })
+    expect(changeRange(work, 't-03')).toEqual({ from: 'c', to: 'bk' })
+    expect(changeRange(work, 't-04')).toEqual({ from: 'b', to: null })
+    const noBackup = withTasks(
+      ...tasks,
+      task(4, 'fix', {
+        status: 'queued',
+        selection: selection({ ...reset, backup_branch: null, backup_commit: null }),
+      }),
+    )
+    expect(changeRange(noBackup, 't-03')).toEqual({ from: 'c', to: 'head' })
+  })
+
+  it('코드를 두는 선택(건너뛰기, [현재 코드 위에서 이어서])은 새 task의 시작 커밋까지다', () => {
+    const work = withTasks(
+      task(1, 'intake', { start_commit: 'a' }),
+      task(2, 'fix', { start_commit: 'b' }),
+      task(3, 'verify', { start_commit: 'c', status: 'discarded' }),
+      task(4, 'fix', { start_commit: 'd', status: 'working', selection: selection(null) }),
+    )
+    expect(changeRange(work, 't-03')).toEqual({ from: 'c', to: 'd' })
   })
 })
 
