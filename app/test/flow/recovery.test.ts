@@ -469,12 +469,13 @@ describe('[흐름] 끊긴 되감기 (M6, 시나리오 9-4, D116, D121~D123)', ()
 
     expect(await s.h.relay.retryOperation(s.key)).toEqual({ ok: true })
     await settle(s.h, s.key)
-    // 만든 백업이 지금 코드와 같아 다시 만들지 않았다. 코드는 되돌렸다
+    // 만든 백업이 지금 코드와 같아 다시 만들지 않았다. 코드를 되돌린 뒤 새 task가 시작했다(새 task는 곧 커밋하므로
+    // worktree 대신 새 task의 시작 커밋과 지운 파일로 본다)
     expect(backups(s)).toEqual([op.backup_branch])
     expect(git(s.repo, 'show', `${op.backup_branch}:notes.txt`)).toBe('메모')
-    expect(git(s.tree, 'rev-parse', 'HEAD')).toBe(op.reset_to)
-    expect(git(s.tree, 'status', '--porcelain')).toBe('')
+    expect(fs.existsSync(path.join(s.tree, 'notes.txt'))).toBe(false)
     const w = workOf(s)
+    expect(w.tasks[3]?.start_commit).toBe(op.reset_to)
     expect(w.operation).toBeUndefined()
     expect(w.tasks.map((t) => [t.id, t.status])).toEqual([
       ['t-01', 'approved'],
@@ -544,8 +545,9 @@ describe('[흐름] 끊긴 되감기 (M6, 시나리오 9-4, D116, D121~D123)', ()
     expect(backups(s)).toEqual([op.backup_branch, extra])
     expect(git(s.repo, 'show', `${extra}:later.txt`)).toBe('다시 켠 뒤')
     expect(git(s.repo, 'show', `${extra}:notes.txt`)).toBe('메모')
-    expect(git(s.tree, 'rev-parse', 'HEAD')).toBe(op.reset_to)
-    expect(git(s.tree, 'status', '--porcelain')).toBe('')
+    expect(fs.existsSync(path.join(s.tree, 'notes.txt'))).toBe(false)
+    expect(fs.existsSync(path.join(s.tree, 'later.txt'))).toBe(false)
+    expect(workOf(s).tasks.at(-1)?.start_commit).toBe(op.reset_to)
     // 폐기한 task의 [변경]이 볼 백업은 처음 백업이다. 덤으로 남긴 백업은 이벤트에 남긴다
     expect(workOf(s).tasks.at(-1)?.selection?.reset).toEqual({
       from: head,
