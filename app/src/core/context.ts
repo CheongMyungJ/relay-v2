@@ -46,17 +46,27 @@ const CLOSING: Record<ApprovalMode, string> = {
 }
 
 /**
- * 승인 버튼 이름과 조사 (D104). intake는 [의도 승인]이다. verify는 Work 완료 화면(시나리오 7-3)에
- * 실제로 있는 전달 버튼이고, M2에는 [완료만]뿐이다. [push]와 [PR 생성]은 M5에서 더한다.
+ * 승인 버튼 이름과 조사 (D104). intake는 [의도 승인]이다. verify는 Work 완료 화면(시나리오 7-3)에서
+ * 누를 수 있는 전달 버튼이다: [완료만]과, origin과 gh 점검(D67, D118)에 따라 [push], [PR 생성].
+ * 전달 버튼이 [완료만]뿐이면 [완료만]이다.
  */
-const APPROVE_BUTTON: Partial<Record<NodeName, string>> = {
-  intake: '[의도 승인]을',
-  verify: '[완료만]을',
+function approveButton(node: NodeName, delivery: readonly string[]): string | null {
+  if (node === 'intake') return '[의도 승인]을'
+  if (node !== 'verify') return null
+  const buttons = delivery.length ? delivery : ['[완료만]']
+  return buttons.length === 1 ? `${buttons[0] ?? ''}을` : `${buttons.join(', ')} 중 하나를`
 }
 
-/** 마무리 안내 문구 (D104). 승인 방식과 노드에 따라 고정 문구를 쓴다 */
-export function closingMessage(node: NodeName, mode: ApprovalMode): string {
-  const button = APPROVE_BUTTON[node]
+/**
+ * 마무리 안내 문구 (D104). 승인 방식과 노드에 따라 고정 문구를 쓴다.
+ * delivery는 verify의 전달 버튼이다(core/delivery closingButtons). 없으면 [완료만]이다.
+ */
+export function closingMessage(
+  node: NodeName,
+  mode: ApprovalMode,
+  delivery: readonly string[] = [],
+): string {
+  const button = approveButton(node, delivery)
   return button ? CLOSING[mode].replace('[승인]을', button) : CLOSING[mode]
 }
 
@@ -127,6 +137,8 @@ export interface ContextInput {
   artifacts: readonly (TaskRef & { path: string })[]
   /** 단계 선택으로 들어온 task (6.2). 아니면 없다 */
   selection?: SelectionInput | null
+  /** verify: Work 완료 화면에서 누를 수 있는 전달 버튼 (D104, core/delivery closingButtons) */
+  delivery?: readonly string[]
 }
 
 /** 이전 task에서 main이 읽은 것. 폐기되지 않은 task를 순서대로 넘긴다 */
@@ -344,7 +356,7 @@ export function buildContext(input: ContextInput): string {
       ]),
     ],
     ['승인 방식', APPROVAL_LABEL[mode]],
-    ['마무리 안내 문구', closingMessage(task.node, mode)],
+    ['마무리 안내 문구', closingMessage(task.node, mode, input.delivery)],
     ['질문 방식', QUESTION_LABEL[questionMode(config, work.settings, task.node)]],
     ['선택 가능한 다음 단계', list(nextSteps(work, task.node))],
     [

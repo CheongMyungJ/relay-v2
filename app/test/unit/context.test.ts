@@ -284,6 +284,22 @@ describe('마무리 안내 문구 (D104)', () => {
     )
   })
 
+  it('verify는 Work 완료 화면에서 누를 수 있는 전달 버튼을 적는다 (D104, D67, D118)', () => {
+    expect(closingMessage('verify', 'manual', ['[완료만]', '[push]', '[PR 생성]'])).toBe(
+      '산출물과 handoff를 썼습니다. 오른쪽 패널에서 확인하고 [완료만], [push], [PR 생성] 중 하나를 누르세요. 고칠 점은 여기에 말해 주세요.',
+    )
+    expect(closingMessage('verify', 'manual', ['[완료만]', '[push]'])).toContain(
+      '[완료만], [push] 중 하나를 누르세요',
+    )
+    expect(closingMessage('verify', 'manual', ['[완료만]'])).toContain('[완료만]을 누르세요')
+    // 다른 노드는 전달 버튼과 상관없다
+    expect(closingMessage('fix', 'manual', ['[완료만]', '[push]'])).toContain('[승인]을 누르세요')
+    const md = buildContext({ ...input('verify'), delivery: ['[완료만]', '[push]', '[PR 생성]'] })
+    expect(section(md, '마무리 안내 문구')).toContain(
+      '[완료만], [push], [PR 생성] 중 하나를 누르세요',
+    )
+  })
+
   it('자동 승인이 켜진 단계는 자동 문구를 넣는다', () => {
     const config = { ...DEFAULT_CONFIG, auto_approve: { evidence: false, rca: true, fix: false } }
     const md = buildContext(input('rca', {}, config))

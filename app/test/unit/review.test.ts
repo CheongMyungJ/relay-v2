@@ -100,6 +100,7 @@ describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
     expect(TASK_STATUS_LABEL.queued).toBe('대기열')
     expect(TASK_STATUS_LABEL.discarded).toBe('폐기됨')
     expect(WORK_STATUS_LABEL.abandoned).toBe('포기')
+    expect(WORK_STATUS_LABEL.archived).toBe('보관됨')
   })
 
   it('이전 단계 추천으로 멈추면 알린다 (D23)', () => {
@@ -128,7 +129,7 @@ describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
     expect(stopNotice(stopped)).toBe('이 단계 끝나면 멈춤: 01 의도 정리 승인 뒤 멈춤')
   })
 
-  it('[재개]가 할 일을 알린다: 기본 다음 단계, verify에서 멈췄으면 Work 완료 (3.3)', () => {
+  it('[재개]가 할 일을 알린다: 기본 다음 단계. verify에서 멈췄으면 Work 완료 화면에서 전달을 고른다 (3.3, D119)', () => {
     const work = createWork({ workId: 'w', baseBranch: 'main', baseCommit: 'c', at: 'x' }).work
     expect(resumeHint(work)).toBeNull()
     const at = (node: 'intake' | 'evidence' | 'verify', stop: WorkState['stop']): WorkState => ({
@@ -142,7 +143,9 @@ describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
     expect(resumeHint(at('intake', afterStep))).toBe(
       '[재개]하면 다음 단계(재현과 관찰)를 시작합니다.',
     )
-    expect(resumeHint(at('verify', afterStep))).toBe('[재개]하면 Work를 완료합니다.')
+    expect(resumeHint(at('verify', afterStep))).toBe(
+      'Work 완료 화면에서 전달을 고르면 Work를 완료합니다.',
+    )
     const back = (node: 'intake' | 'fix') => ({
       kind: 'recommended_back' as const,
       task_id: 't-01',
@@ -153,7 +156,7 @@ describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
       '[재개]하면 추천을 따르지 않고 다음 단계(원인 분석)를 시작합니다. 추천대로 되돌아가려면 [단계 선택]을 누르세요.',
     )
     expect(resumeHint(at('verify', back('fix')))).toBe(
-      '[재개]하면 추천을 따르지 않고 Work를 완료합니다. 추천대로 되돌아가려면 [단계 선택]을 누르세요.',
+      '추천을 따르지 않고 Work 완료 화면에서 전달을 고르면 Work를 완료합니다. 추천대로 되돌아가려면 [단계 선택]을 누르세요.',
     )
   })
 })
@@ -272,6 +275,21 @@ describe('[변경]의 범위 (D83: 이 task의 diff)', () => {
       task(4, 'fix', { start_commit: 'd', status: 'working', selection: selection(null) }),
     )
     expect(changeRange(work, 't-03')).toEqual({ from: 'c', to: 'd' })
+  })
+
+  it('정리한 Work(보관됨)는 작업 트리가 없어 마지막 task도 정리하기 전 HEAD까지다 (시나리오 8)', () => {
+    const tasks = [
+      task(1, 'intake', { start_commit: 'a' }),
+      task(2, 'fix', { start_commit: 'a' }),
+      task(3, 'verify', { start_commit: 'b' }),
+    ]
+    const cleaned = { at: 'x', head: 'h', forced: false, deleted_branches: [] }
+    const archived: WorkState = { ...withTasks(...tasks), status: 'archived', cleaned }
+    expect(changeRange(archived, 't-02')).toEqual({ from: 'a', to: 'b' })
+    expect(changeRange(archived, 't-03')).toEqual({ from: 'b', to: 'h' })
+    // worktree가 없어 HEAD를 몰랐으면 빈 범위다
+    const unknown: WorkState = { ...archived, cleaned: { ...cleaned, head: null } }
+    expect(changeRange(unknown, 't-03')).toEqual({ from: 'b', to: 'b' })
   })
 })
 

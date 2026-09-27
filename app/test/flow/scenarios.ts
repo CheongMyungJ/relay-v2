@@ -16,6 +16,8 @@ export type Step =
   | { do: 'exit'; reason?: string; linger?: number }
   /** /clear: 새 세션 id로 계속 돈다 (D110) */
   | { do: 'clear' }
+  /** worktree에서 git을 부른다. 정리 세션이 변경을 되돌리거나 커밋하는 것을 흉내 낸다 (7-5) */
+  | { do: 'git'; args: string[] }
   | { do: 'sleep'; ms: number }
   | { do: 'print'; text: string }
   | { do: 'wait' }
@@ -26,6 +28,8 @@ export interface Scenario {
   tasks: Partial<Record<SkillName | string, Step[]>>
   /** --resume으로 다시 연 세션의 단계. 스킬 이름이나 task id → 단계. 없으면 입력을 기다리기만 한다 */
   resume?: Partial<Record<SkillName | string, Step[]>>
+  /** 정리 세션([AI 세션 열기], 7-5)의 단계. 첫 프롬프트 없이 연 세션이다. 없으면 입력을 기다리기만 한다 */
+  cleanup?: Step[]
 }
 
 // ---------- 시험 레포 ----------

@@ -1,11 +1,19 @@
 // 렌더러 명령을 Relay로 잇는다 (I14). 명령은 invoke로 받고, 상태는 UiPort가 스냅샷으로 보낸다.
 // 값은 여기서 모양만 확인하고, 뜻(상태에 맞는 명령인지, 설정 값의 범위)은 Relay와 core가 판정한다.
 import os from 'node:os'
-import { BrowserWindow, dialog, ipcMain } from 'electron'
+import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { NODES } from '../core/pipeline'
 import { IPC, type AppInfo } from '../shared/api'
 import type { NodeName } from '../shared/contracts'
-import type { ApproveOptions, NewWorkInput, SelectStepInput } from '../shared/views'
+import type {
+  ApproveOptions,
+  CleanExpect,
+  CleanInput,
+  DeliverInput,
+  NewWorkInput,
+  SelectStepInput,
+} from '../shared/views'
+import type { DeliveryChoice } from '../shared/work'
 import type { Relay } from './relay'
 
 function windowsBuild(): number | null {
@@ -46,6 +54,48 @@ function stepInput(v: unknown): SelectStepInput {
     keepCode: flag(o['keepCode']),
     instruction: text(o['instruction']),
     expect: { taskId: text(e['taskId']), done: flag(e['done']) },
+  }
+}
+
+function texts(v: unknown): string[] {
+  if (!Array.isArray(v)) throw new Error('문자열 목록이 아님')
+  return v.map(text)
+}
+
+function choice(v: unknown): DeliveryChoice {
+  if (v !== 'push' && v !== 'pr') throw new Error('전달 선택이 아님')
+  return v
+}
+
+function deliverInput(v: unknown): DeliverInput {
+  if (!v || typeof v !== 'object') throw new Error('전달 입력이 아님')
+  const o = v as Record<string, unknown>
+  const u = o['uncommitted']
+  if (u === null || u === undefined) return { choice: choice(o['choice']), uncommitted: null }
+  if (typeof u !== 'object') throw new Error('커밋 안 된 변경의 처리가 아님')
+  const w = u as Record<string, unknown>
+  const action = w['action']
+  if (action !== 'discard' && action !== 'commit') throw new Error('커밋 안 된 변경의 처리가 아님')
+  return { choice: choice(o['choice']), uncommitted: { action, expect: texts(w['expect']) } }
+}
+
+function cleanInput(v: unknown): CleanInput {
+  if (!v || typeof v !== 'object') throw new Error('정리 입력이 아님')
+  const o = v as Record<string, unknown>
+  const e = o['expect']
+  if (!e || typeof e !== 'object') throw new Error('expect가 없음')
+  const x = e as Record<string, unknown>
+  const expect: CleanExpect = {
+    uncommitted: texts(x['uncommitted']),
+    locks: texts(x['locks']),
+    live: count(x['live']),
+    backups: texts(x['backups']),
+  }
+  return {
+    deleteBranch: flag(o['deleteBranch']),
+    deleteBackups: flag(o['deleteBackups']),
+    confirmed: flag(o['confirmed']),
+    expect,
   }
 }
 
@@ -118,6 +168,30 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   ipcMain.handle(IPC.selectStep, async (_e, workKey: unknown, input: unknown) =>
     (await ready).selectStep(text(workKey), stepInput(input)),
   )
+  ipcMain.handle(IPC.deliver, async (_e, workKey: unknown, input: unknown) =>
+    (await ready).deliver(text(workKey), deliverInput(input)),
+  )
+  ipcMain.handle(IPC.openCleanup, async (_e, workKey: unknown, c: unknown) =>
+    (await ready).openCleanup(text(workKey), choice(c)),
+  )
+  ipcMain.handle(IPC.finishCleanup, async (_e, workKey: unknown) =>
+    (await ready).finishCleanup(text(workKey)),
+  )
+  ipcMain.handle(IPC.recheck, async (_e, workKey: unknown) =>
+    (await ready).recheckWork(text(workKey)),
+  )
+  ipcMain.handle(IPC.cleanPreview, async (_e, workKey: unknown) =>
+    (await ready).cleanPreview(text(workKey)),
+  )
+  ipcMain.handle(IPC.clean, async (_e, workKey: unknown, input: unknown) =>
+    (await ready).clean(text(workKey), cleanInput(input)),
+  )
+  // 비교 URL과 PR 주소만 연다. 앱 창은 옮기지 않는다 (main/index)
+  ipcMain.handle(IPC.openExternal, async (_e, url: unknown) => {
+    const u = new URL(text(url))
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') throw new Error('http(s) 주소가 아님')
+    await shell.openExternal(u.toString())
+  })
   ipcMain.handle(IPC.workSettings, async (_e, workKey: unknown, settings: unknown) =>
     (await ready).updateWorkSettings(text(workKey), settings),
   )

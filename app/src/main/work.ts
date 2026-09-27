@@ -4,15 +4,27 @@
 // 세션 상한(D18)은 Relay의 SessionPool이 모든 Work에 걸쳐 센다. 자리가 없으면 대기열에 넣는다.
 import { randomBytes, randomUUID } from 'node:crypto'
 import fsp from 'node:fs/promises'
+import os from 'node:os'
 import path from 'node:path'
 import { claudeVersion, deploySkill, findClaude } from '../adapters/claude'
+import { ghCreatePr, ghOpenPr } from '../adapters/gh'
 import {
+  commitAll,
   countCommits,
   createBackup,
+  deleteBranches,
   diffFrom,
   headCommit,
+  isAncestor,
+  lockFiles,
+  pruneWorktrees,
+  pushBranch,
+  refCommit,
   refNames,
+  remoteUrl,
+  removeWorktree,
   resetHard,
+  stashAll,
   statusLines,
 } from '../adapters/git'
 import type { HookReply, HookRequest, HookServer } from '../adapters/hooks'
@@ -26,6 +38,7 @@ import {
 } from '../adapters/store'
 import { watchDir } from '../adapters/watch'
 import { REVIEWABLE, approvalGate, badge } from '../core/approval'
+import { canClean, cleanPreview, planClean, type CleanFacts } from '../core/cleanup'
 import {
   buildContext,
   discardedAttempts,
@@ -41,8 +54,21 @@ import {
   type InterruptReason,
   type MachineEvent,
 } from '../core/machine'
+import {
+  DELIVERY_LABEL,
+  approvalStops,
+  closingButtons,
+  compareUrl,
+  deliveryButtons,
+  deliveryStart,
+  deliveryView,
+  ghRepo,
+  prText,
+  sameChanges,
+  stoppedVerify,
+} from '../core/delivery'
 import { NODE_INFO } from '../core/pipeline'
-import { confirmedIntent, decisionsBlock, decisionsWithout } from '../core/records'
+import { confirmedIntent, decisionsBlock, decisionsWithout, workBranch } from '../core/records'
 import {
   TASK_STATUS_LABEL,
   WORK_STATUS_LABEL,
@@ -58,14 +84,26 @@ import {
   verdicts,
 } from '../core/review'
 import { backupPattern, planStep, stepChoices, stepPreview } from '../core/rewind'
-import { launchArgs, launchEnv, resumeArgs, taskSettings } from '../core/settings'
-import { HANDOFF_FILE, INTENT_DRAFT_FILE, checkTask, type TaskCheck } from '../core/validate'
+import { cleanupArgs, launchArgs, launchEnv, resumeArgs, taskSettings } from '../core/settings'
+import {
+  HANDOFF_FILE,
+  INTENT_DRAFT_FILE,
+  PR_FILE,
+  checkTask,
+  type TaskCheck,
+} from '../core/validate'
 import type { AppConfig, WorkSettings } from '../shared/config'
 import type { NodeName, Size } from '../shared/contracts'
-import type { ProjectState } from '../shared/project'
+import type { ProjectChecks, ProjectState } from '../shared/project'
 import type {
   ApproveOptions,
+  CleanInput,
+  CleanPreviewResult,
+  CleanupView,
   CommandResult,
+  Completion,
+  DeliverInput,
+  DeliverResult,
   ReviewView,
   SelectStepInput,
   StepPreviewResult,
@@ -73,7 +111,7 @@ import type {
   TerminalBacklog,
   WorkView,
 } from '../shared/views'
-import type { TaskRecord, WorkState } from '../shared/work'
+import type { DeliveryChoice, TaskRecord, UncommittedAction, WorkState } from '../shared/work'
 import type { SessionPool } from './pool'
 import type { UiPort } from './ports'
 import { CLAUDE_INSTALL_GUIDE } from './projects'
@@ -90,6 +128,12 @@ export interface RunnerContext {
   pool: SessionPool
   /** 판정하는 때의 앱 설정 (D73) */
   config(): AppConfig
+  /** gh 실행 파일 (D67, 시나리오 7-4) */
+  ghBin: string
+  /** 프로젝트의 origin·gh 점검 결과 (D67) */
+  checks(projectId: string): ProjectChecks | undefined
+  /** origin·gh를 다시 점검해 project.json을 고친다. verify를 시작할 때와 [다시 점검]에서 부른다 (D118) */
+  recheck(projectId: string): Promise<void>
   /** 지금 시각. 현지 시각과 오프셋을 담은 ISO 8601 */
   at(): string
   /** 새 PTY의 크기. 탭이 크기를 알리면 그 크기를 쓴다 */
@@ -108,6 +152,30 @@ interface LiveSession {
   stopped: boolean
 }
 
+/**
+ * 정리 세션: [AI 세션 열기]로 연, 기록하지 않는 일반 터미널의 Claude Code (시나리오 7-5).
+ * task가 아니라 work.json, events.jsonl, pty.log에 남기지 않는다. 앱을 다시 켜면 없다.
+ */
+interface CleanupSession {
+  /** 터미널 id: cleanup-<n>. 다시 열면 새 터미널이다 */
+  id: string
+  choice: DeliveryChoice
+  status: CleanupView['status']
+  /** 마지막 Stop 때 git status가 깨끗했다 */
+  clean: boolean
+  /** 세션이 끝난 뒤 남은 커밋 안 된 변경 */
+  uncommitted: string[]
+  pty: PtySession | null
+  exited: Promise<void> | null
+  unregister: () => void
+  /** 설정 파일을 둔 임시 폴더 */
+  dir: string | null
+  /** 끝난 세션을 앱이 이미 처리했다. 늦게 온 PTY 종료는 무시한다 */
+  handled: boolean
+}
+
+/** 정리 세션의 훅 URL(/hook/cleanup/<Event>)의 id. 터미널 id는 cleanup-<n>이다 */
+const CLEANUP_ID = 'cleanup'
 const CONTEXT_FILE = 'context.md'
 const SETTINGS_FILE = 'task.settings.json'
 const PTY_LOG = 'pty.log'
@@ -149,6 +217,11 @@ export class WorkRunner {
   private revision = 0
   /** 이번 명령의 되감기가 git에서 실패한 이유. [단계 선택]의 결과로 돌려준다 */
   private rewindError: string | null = null
+  /** 이번 명령의 전달이나 정리가 실패한 이유. 명령의 결과로 돌려준다 */
+  private opError: string | null = null
+  /** 정리 세션 ([AI 세션 열기], 7-5) */
+  private cleanup: CleanupSession | null = null
+  private cleanupSeq = 0
 
   constructor(
     private readonly ctx: RunnerContext,
@@ -161,9 +234,9 @@ export class WorkRunner {
     this.key = `${project.project_id}/${work.work_id}`
   }
 
-  /** 이 앱에서 살아 있는 세션이 있다 (앱 종료 확인, 시나리오 3-6) */
+  /** 이 앱에서 살아 있는 세션이 있다 (앱 종료 확인, 시나리오 3-6). 정리 세션도 센다 */
   hasLiveSession(): boolean {
-    return this.live.size > 0
+    return this.live.size > 0 || this.cleanup?.status === 'live'
   }
 
   /** Work의 이벤트를 하나씩 처리한다 */
@@ -195,6 +268,10 @@ export class WorkRunner {
     if (work === this.work && effects.length === 0) return null
     const before = this.work
     this.work = work
+    // 끝난 정리 세션은 Work가 끝나면 치운다
+    if (this.cleanup?.status === 'ended' && work.status !== 'active' && work.status !== 'stopped') {
+      this.cleanup = null
+    }
     await this.files.save(work)
     this.changed()
     const notice = opts.quiet ? null : humanNotice(before, work)
@@ -243,6 +320,15 @@ export class WorkRunner {
         return
       case 'rewindCode':
         await this.rewindCode(e)
+        return
+      case 'deliver':
+        await this.deliverCode(e)
+        return
+      case 'openCleanup':
+        await this.startCleanup(e.choice)
+        return
+      case 'clean':
+        await this.cleanCode(e)
         return
     }
   }
@@ -364,6 +450,8 @@ export class WorkRunner {
       })
       const version = await claudeVersion(bin, env)
 
+      // verify의 마무리 안내 문구(D104)와 Work 완료 화면의 전달 버튼이 쓸 점검을 새로 한다 (D118)
+      if (task.node === 'verify') await this.recheckProject()
       const settingsPath = await this.writeSettings(task)
       const contextPath = path.join(dir, CONTEXT_FILE)
       await writeFileAtomic(contextPath, await this.context(task, dir, this.approvedBefore(task)))
@@ -495,7 +583,38 @@ export class WorkRunner {
       decisionLog: decisionsWithout(await this.files.readDecisions(), discarded),
       ...previousInputs(earlier),
       selection: await this.selectionInput(task),
+      ...(task.node === 'verify' ? { delivery: closingButtons(this.checks()) } : {}),
     })
+  }
+
+  // ---------- 등록 점검 (D67, D118) ----------
+
+  /** 이 프로젝트의 origin·gh 점검 결과 */
+  private checks(): ProjectChecks {
+    return this.ctx.checks(this.project.project_id) ?? this.project.checks
+  }
+
+  /** origin·gh를 다시 점검한다 (D118). 실패하면 앞의 결과를 쓴다 */
+  private async recheckProject(): Promise<void> {
+    try {
+      await this.ctx.recheck(this.project.project_id)
+    } catch (e) {
+      this.problem(`origin·gh 점검 실패: ${message(e)}`)
+    }
+  }
+
+  /** Work 완료 화면의 [다시 점검] (D118). 전달 버튼과 이유가 바뀐다 */
+  recheck(): Promise<CommandResult> {
+    return this.enqueue(async () => {
+      await this.recheckProject()
+      this.changed()
+      return { ok: true }
+    })
+  }
+
+  /** 프로젝트의 점검이 바뀌었다. 승인 화면을 다시 읽게 스냅샷을 보낸다 */
+  touch(): void {
+    this.changed()
   }
 
   /** 단계 선택으로 들어온 task의 입력 (6.2): 사람 추가 지시와, 되감기면 폐기된 시도 요약 */
@@ -771,9 +890,17 @@ export class WorkRunner {
     return this.enqueue(() => this.command({ type: 'resumeWork', at: this.ctx.at() }))
   }
 
-  /** [Work 포기] */
+  /** [Work 포기]. 정리 세션이 있으면 끝낸다 */
   abandon(): Promise<CommandResult> {
-    return this.enqueue(() => this.command({ type: 'abandon', at: this.ctx.at() }))
+    return this.enqueue(async () => {
+      const r = await this.command({ type: 'abandon', at: this.ctx.at() })
+      if (r.ok && this.cleanup) {
+        await this.endCleanup()
+        this.cleanup = null
+        this.changed()
+      }
+      return r
+    })
   }
 
   // ---------- 단계 선택 (6.2) ----------
@@ -882,6 +1009,469 @@ export class WorkRunner {
     await this.feed({ type: 'rewind.failed', at: this.ctx.at(), error: message(err) })
   }
 
+  // ---------- 전달 (시나리오 7) ----------
+
+  /** 지금 task가 verify면 그 형식 검사. 전달을 시작할 수 있는지 core/delivery가 판정한다 */
+  private async verifyCheck(): Promise<TaskCheck | null> {
+    const task = currentTask(this.work)
+    if (task?.node !== 'verify') return null
+    return this.check(task, await this.files.taskFiles(task))
+  }
+
+  /**
+   * [push]·[PR 생성] (7-4~7-6, D119, D120). 커밋 안 된 변경이 있으면 사람이 고르게 변경 목록을 돌려준다
+   * (7-5). 고른 처리는 사람에게 보인 목록과 지금 목록이 같을 때만 받는다. 전달이 실패하면 오류를 돌려주고,
+   * 실패는 Work 완료 화면에도 남는다.
+   */
+  deliver(input: DeliverInput): Promise<DeliverResult> {
+    return this.enqueue(() => this.deliverNow(input.choice, input.uncommitted))
+  }
+
+  private async deliverNow(
+    choice: DeliveryChoice,
+    uncommitted: DeliverInput['uncommitted'],
+  ): Promise<DeliverResult> {
+    const check = await this.verifyCheck()
+    const start = deliveryStart(this.work, check)
+    if (!start.ok) return start
+    const button = deliveryButtons(this.checks())[choice]
+    if (!button.enabled) {
+      return {
+        ok: false,
+        error: `[${DELIVERY_LABEL[choice]}]을 쓸 수 없음: ${button.reason ?? ''}`,
+      }
+    }
+    if (this.cleanup && this.cleanup.status !== 'ended') {
+      return { ok: false, error: '정리 세션이 열려 있음. [정리 끝 → push/PR 진행]을 누르세요' }
+    }
+    let lines: string[]
+    try {
+      lines = await statusLines(this.worktree, { env: this.ctx.env })
+    } catch (e) {
+      return { ok: false, error: `git status를 읽지 못함: ${message(e)}` }
+    }
+    let action: UncommittedAction | null = null
+    if (lines.length > 0) {
+      if (!uncommitted) {
+        return {
+          ok: false,
+          error: '커밋 안 된 변경이 있어 push와 PR을 할 수 없음',
+          uncommitted: lines,
+        }
+      }
+      if (!sameChanges(uncommitted.expect, lines)) {
+        return {
+          ok: false,
+          error: '확인한 뒤 커밋 안 된 변경이 바뀌었음. 다시 고르세요',
+          uncommitted: lines,
+        }
+      }
+      action = uncommitted.action
+    }
+    this.opError = null
+    const r = await this.command({
+      type: 'deliver',
+      at: this.ctx.at(),
+      choice,
+      uncommitted: action,
+      check,
+    })
+    const failed = this.opError
+    this.opError = null
+    if (!r.ok) return r
+    if (failed) return { ok: false, error: failed }
+    // 끝난 정리 세션은 전달을 마치면 치운다
+    if (this.cleanup?.status === 'ended') {
+      this.cleanup = null
+      this.changed()
+    }
+    return { ok: true }
+  }
+
+  /**
+   * 전달 (7-4~7-6). 커밋 안 된 변경을 처리하고(stash나 커밋), origin에 push하고, PR이면 pr.md로 PR을
+   * 만든다. 같은 브랜치의 PR이 이미 열려 있으면 새로 만들지 않고 링크만 기록한다. 단계가 넘어갈 때마다
+   * machine에 알려 진행 중 작업 기록을 옮긴다(D77). 실패하면 알리고 Work는 완료하지 않는다.
+   */
+  private async deliverCode(e: Extract<Effect, { type: 'deliver' }>): Promise<void> {
+    const { env } = this.ctx
+    const repo = this.project.repo_path
+    const task = this.task(e.taskId)
+    const facts: {
+      stash?: string
+      commit?: string
+      prUrl?: string
+      prExisting?: boolean
+      draft?: boolean
+    } = {}
+    let compare: string | null
+    try {
+      if (e.uncommitted === 'discard')
+        facts.stash = await stashAll(this.worktree, e.message ?? '', { env })
+      if (e.uncommitted === 'commit')
+        facts.commit = await commitAll(this.worktree, e.message ?? '', { env })
+      if (e.uncommitted)
+        await this.feed({ type: 'delivery.stage', at: this.ctx.at(), stage: 'push' })
+      await pushBranch(this.worktree, e.branch, 'origin', { env })
+      const origin = await remoteUrl(repo, 'origin', { env })
+      compare = origin ? compareUrl(origin, e.base, e.branch) : null
+      if (e.choice === 'pr') {
+        await this.feed({ type: 'delivery.stage', at: this.ctx.at(), stage: 'pr' })
+        if (!origin) throw new Error('origin 원격이 없음')
+        const pr = prText((task ? await this.files.taskFiles(task) : {})[PR_FILE] ?? '')
+        if (!pr.ok) throw new Error(pr.error)
+        const gh = { repo: ghRepo(origin), cwd: repo, env }
+        const open = await ghOpenPr(this.ctx.ghBin, { ...gh, head: e.branch })
+        if (open) {
+          facts.prUrl = open.url
+          facts.prExisting = true
+        } else {
+          facts.draft = this.ctx.config().pr_draft
+          facts.prUrl = await ghCreatePr(this.ctx.ghBin, {
+            ...gh,
+            base: e.base,
+            head: e.branch,
+            title: pr.title,
+            body: pr.body,
+            draft: facts.draft,
+          })
+        }
+      }
+    } catch (err) {
+      this.opError = `전달 실패: ${message(err)}`
+      console.error(`[${this.key}] ${this.opError}`)
+      await this.feed({ type: 'delivery.failed', at: this.ctx.at(), error: message(err) })
+      return
+    }
+    const check = task ? this.check(task, await this.files.taskFiles(task)) : null
+    await this.feed({
+      type: 'delivery.succeeded',
+      at: this.ctx.at(),
+      compareUrl: compare,
+      ...facts,
+      check,
+    })
+  }
+
+  // ---------- 정리 세션 ([AI 세션 열기], 7-5) ----------
+
+  /**
+   * [AI 세션 열기] (7-5): verify 세션을 끝내고, 기록하지 않는 일반 터미널로 Claude Code를 worktree에서 연다.
+   * push와 PR은 계속 막혀 있다(deny 규칙). 세션 상한(D18)을 따라 자리가 없으면 대기열에서 기다린다.
+   */
+  openCleanup(choice: DeliveryChoice): Promise<CommandResult> {
+    return this.enqueue(async () => {
+      const check = await this.verifyCheck()
+      const start = deliveryStart(this.work, check)
+      if (!start.ok) return start
+      const button = deliveryButtons(this.checks())[choice]
+      if (!button.enabled) {
+        return {
+          ok: false,
+          error: `[${DELIVERY_LABEL[choice]}]을 쓸 수 없음: ${button.reason ?? ''}`,
+        }
+      }
+      if (this.cleanup && this.cleanup.status !== 'ended') {
+        return { ok: false, error: '정리 세션이 이미 열려 있음' }
+      }
+      return this.command({
+        type: 'deliver',
+        at: this.ctx.at(),
+        choice,
+        uncommitted: 'session',
+        check,
+      })
+    })
+  }
+
+  private async startCleanup(choice: DeliveryChoice): Promise<void> {
+    const id = `${CLEANUP_ID}-${++this.cleanupSeq}`
+    this.terminals.set(id, new TerminalBuffer())
+    this.cleanup = {
+      id,
+      choice,
+      status: 'queued',
+      clean: false,
+      uncommitted: [],
+      pty: null,
+      exited: null,
+      unregister: () => {},
+      dir: null,
+      handled: false,
+    }
+    this.changed()
+    if (this.ctx.pool.tryAcquire()) {
+      await this.launchCleanup()
+      return
+    }
+    this.ctx.pool.enqueue(this.slotKey(id), () => {
+      void this.enqueue(async () => {
+        if (this.cleanup?.status !== 'queued') {
+          this.ctx.pool.release()
+          return
+        }
+        if (await this.launchCleanup()) this.notify('정리 세션: 대기열에서 자동 시작')
+      })
+    })
+  }
+
+  /** 잡은 자리로 정리 세션을 띄운다. 띄우지 못하면 자리를 돌려주고 끝난 것으로 둔다 */
+  private async launchCleanup(): Promise<boolean> {
+    const c = this.cleanup
+    if (!c) {
+      this.ctx.pool.release()
+      return false
+    }
+    const { env } = this.ctx
+    try {
+      const bin = findClaude({ env })
+      if (!bin) throw new Error(CLAUDE_INSTALL_GUIDE)
+      c.dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'relay-cleanup-'))
+      const settingsPath = path.join(c.dir, SETTINGS_FILE)
+      await writeJson(
+        settingsPath,
+        taskSettings({
+          port: this.ctx.hooks.port,
+          taskId: CLEANUP_ID,
+          workDir: this.files.dir,
+          previousTaskDirs: this.work.tasks.map((t) => this.files.taskDir(t)),
+        }),
+      )
+      const token = randomBytes(32).toString('hex')
+      const { cols, rows } = this.ctx.size()
+      const pty = startPty({
+        bin,
+        args: cleanupArgs(settingsPath),
+        cwd: this.worktree,
+        env: { ...env, ...launchEnv(token) },
+        cols,
+        rows,
+        answerQueries: true,
+      })
+      const buffer = this.terminals.get(c.id) ?? new TerminalBuffer()
+      buffer.live = true
+      this.terminals.set(c.id, buffer)
+      const key = this.terminalKey(c.id)
+      let exited!: () => void
+      c.exited = new Promise((r) => (exited = r))
+      c.pty = pty
+      pty.onData((data) => {
+        if (!c.handled) this.ctx.ui.terminal(key, buffer.push(data))
+      })
+      pty.onExit(() => {
+        exited()
+        void this.enqueue(() => this.onCleanupExit(c))
+      })
+      c.unregister = this.ctx.hooks.register(token, CLEANUP_ID, (req) =>
+        this.enqueue(() => this.onCleanupHook(c, req)),
+      )
+      c.status = 'live'
+      this.changed()
+      return true
+    } catch (err) {
+      this.ctx.pool.release()
+      await this.releaseCleanup(c)
+      this.problem(`정리 세션을 열지 못함: ${message(err)}`)
+      return false
+    }
+  }
+
+  /** 정리 세션의 훅: 턴이 끝날 때(Stop)마다 git status가 깨끗한지 본다. 새 요청이 오면 강조를 끈다 (7-5) */
+  private async onCleanupHook(c: CleanupSession, req: HookRequest): Promise<HookReply> {
+    if (this.cleanup !== c || c.status !== 'live') return null
+    if (req.event === 'UserPromptSubmit' && c.clean) {
+      c.clean = false
+      this.changed()
+    }
+    if (req.event === 'Stop') {
+      const lines = await statusLines(this.worktree, { env: this.ctx.env }).catch(() => null)
+      if (lines) {
+        c.clean = lines.length === 0
+        this.changed()
+      }
+    }
+    return null
+  }
+
+  /** 정리 세션이 스스로 끝났다(/exit). 버튼을 누른 것과 같이 git status를 보고 전달하거나 선택지로 돌아간다 */
+  private async onCleanupExit(c: CleanupSession): Promise<void> {
+    if (this.cleanup !== c || c.handled) return
+    this.ctx.pool.release()
+    await this.releaseCleanup(c)
+    await this.afterCleanup()
+  }
+
+  /** 정리 세션에 걸어 둔 것을 푼다: 훅 토큰, 설정 파일 폴더. 끝난 것으로 둔다 */
+  private async releaseCleanup(c: CleanupSession): Promise<void> {
+    c.handled = true
+    c.status = 'ended'
+    c.unregister()
+    const buffer = this.terminals.get(c.id)
+    if (buffer) buffer.live = false
+    if (c.dir) await fsp.rm(c.dir, { recursive: true, force: true }).catch(() => undefined)
+    c.dir = null
+    this.changed()
+  }
+
+  /** 살아 있거나 대기열에 있는 정리 세션을 끝낸다 */
+  private async endCleanup(): Promise<void> {
+    const c = this.cleanup
+    if (!c || c.handled) return
+    if (c.status === 'queued') {
+      this.ctx.pool.remove(this.slotKey(c.id))
+    } else if (c.pty) {
+      await c.pty.killTree()
+      await Promise.race([c.exited, sleep(KILL_WAIT_MS)])
+      this.ctx.pool.release()
+    }
+    await this.releaseCleanup(c)
+  }
+
+  /**
+   * [정리 끝 → push/PR 진행] (7-5). 세션을 끝내고 git status를 본다. 깨끗하면 원래 고른 전달을 하고,
+   * 변경이 남았으면 선택지 화면으로 돌아가게 변경 목록을 돌려준다.
+   */
+  finishCleanup(): Promise<DeliverResult> {
+    return this.enqueue(async () => {
+      if (!this.cleanup) return { ok: false, error: '정리 세션이 없음' }
+      await this.endCleanup()
+      return this.afterCleanup()
+    })
+  }
+
+  private async afterCleanup(): Promise<DeliverResult> {
+    const c = this.cleanup
+    if (!c) return { ok: false, error: '정리 세션이 없음' }
+    let lines: string[]
+    try {
+      lines = await statusLines(this.worktree, { env: this.ctx.env })
+    } catch (e) {
+      return { ok: false, error: `git status를 읽지 못함: ${message(e)}` }
+    }
+    c.uncommitted = lines
+    this.changed()
+    if (lines.length > 0) {
+      return {
+        ok: false,
+        error: '정리 세션이 끝났지만 커밋 안 된 변경이 남음',
+        uncommitted: lines,
+      }
+    }
+    return this.deliverNow(c.choice, null)
+  }
+
+  // ---------- 정리 (시나리오 8) ----------
+
+  /** 정리 요약의 사실: git과 이 앱의 세션에서 읽는다 (8-1) */
+  private async cleanFacts(): Promise<CleanFacts> {
+    const opts = { env: this.ctx.env }
+    const repo = this.project.repo_path
+    const worktree = await fsp
+      .stat(this.worktree)
+      .then((st) => st.isDirectory())
+      .catch(() => false)
+    const name = workBranch(this.work.work_id)
+    const head = await refCommit(repo, `refs/heads/${name}`, opts)
+    const contains = async (ref: string) => {
+      const tip = await refCommit(repo, ref, opts)
+      return !!head && !!tip && (await isAncestor(repo, head, tip, opts))
+    }
+    const base = this.work.base_branch
+    return {
+      worktree,
+      uncommitted: worktree ? await statusLines(this.worktree, opts) : [],
+      locks: worktree ? await lockFiles(this.worktree, opts) : [],
+      live: this.live.size + (this.cleanup?.status === 'live' ? 1 : 0),
+      branch: {
+        name,
+        exists: head !== null,
+        pushed: await contains(`refs/remotes/origin/${name}`),
+        merged:
+          (await contains(`refs/heads/${base}`)) || (await contains(`refs/remotes/origin/${base}`)),
+      },
+      backups: await refNames(repo, backupPattern(this.work.work_id), opts),
+    }
+  }
+
+  /** [Work 정리]의 확인 요약 (시나리오 8-1) */
+  cleanPreview(): Promise<CleanPreviewResult> {
+    return this.enqueue(async () => {
+      if (!canClean(this.work)) return { ok: false, error: '완료나 포기한 Work만 정리함' }
+      try {
+        return { ok: true, preview: cleanPreview(await this.cleanFacts()) }
+      } catch (e) {
+        return { ok: false, error: `정리 요약을 만들지 못함: ${message(e)}` }
+      }
+    })
+  }
+
+  /**
+   * [Work 정리]의 [정리] (시나리오 8-2). 확인한 뒤 바뀌었으면 받지 않는다. 살아 있는 세션을 끝내고,
+   * worktree를 지우고, 고른 브랜치를 지운 뒤 보관됨으로 바꾼다. 산출물은 지우지 않는다.
+   */
+  clean(input: CleanInput): Promise<CommandResult> {
+    return this.enqueue(async () => {
+      if (!canClean(this.work)) return { ok: false, error: '완료나 포기한 Work만 정리함' }
+      let facts: CleanFacts
+      try {
+        facts = await this.cleanFacts()
+      } catch (e) {
+        return { ok: false, error: `정리 요약을 만들지 못함: ${message(e)}` }
+      }
+      const plan = planClean(cleanPreview(facts), input)
+      if (!plan.ok) return plan
+      const head = facts.worktree
+        ? await headCommit(this.worktree, { env: this.ctx.env }).catch(() => null)
+        : null
+      this.opError = null
+      const r = await this.command({
+        type: 'clean',
+        at: this.ctx.at(),
+        force: plan.force,
+        deleteBranches: plan.deleteBranches,
+        head,
+      })
+      const failed = this.opError
+      this.opError = null
+      return r.ok && failed ? { ok: false, error: failed } : r
+    })
+  }
+
+  /** 정리의 git 작업 (8-2). 단계가 끝날 때마다 machine에 알려 진행 중 작업 기록을 옮긴다(D77) */
+  private async cleanCode(e: Extract<Effect, { type: 'clean' }>): Promise<void> {
+    const opts = { env: this.ctx.env }
+    const repo = this.project.repo_path
+    try {
+      // 살아 있는 세션은 트리째 끝내고 기다린다 (8-1)
+      for (const id of [...this.live.keys()]) await this.endSession(id)
+      await this.endCleanup()
+      this.cleanup = null
+      const exists = await fsp
+        .stat(this.worktree)
+        .then(() => true)
+        .catch(() => false)
+      if (exists) await removeWorktree(repo, this.worktree, { ...opts, force: e.force })
+      else await pruneWorktrees(repo, opts)
+    } catch (err) {
+      await this.cleanFailed(err)
+      return
+    }
+    await this.feed({ type: 'clean.removed', at: this.ctx.at() })
+    try {
+      await deleteBranches(repo, e.deleteBranches, opts)
+    } catch (err) {
+      await this.cleanFailed(err)
+      return
+    }
+    await this.feed({ type: 'clean.done', at: this.ctx.at() })
+  }
+
+  private async cleanFailed(err: unknown): Promise<void> {
+    this.opError = `정리 실패: ${message(err)}`
+    this.problem(this.opError)
+    await this.feed({ type: 'clean.failed', at: this.ctx.at(), error: message(err) })
+  }
+
   /** Work별 설정 (D72). 검사한 값을 받는다. 질문 방식은 다음에 시작하는 task부터 쓴다 (D73) */
   updateSettings(settings: WorkSettings): Promise<CommandResult> {
     return this.enqueue(() =>
@@ -921,6 +1511,7 @@ export class WorkRunner {
         })
       }
       await Promise.all([...this.live.keys()].map((id) => this.endSession(id)))
+      await this.endCleanup()
     })
   }
 
@@ -931,22 +1522,43 @@ export class WorkRunner {
     const { env } = this.ctx
     const files = await this.files.taskFiles(task)
     const check = this.check(task, files)
-    // 끝난 task는 그 task가 끝났을 때의 코드까지 본다. 작업 트리는 지금 코드의 마지막 task만 본다
+    // 끝난 task는 그 task가 끝났을 때의 코드까지 본다. 작업 트리는 지금 코드의 마지막 task만 본다.
+    // 정리한 Work는 worktree가 없어 메인 체크아웃에서 커밋끼리 비교한다 (시나리오 8)
     const range = changeRange(this.work, task.id)
     const latest = range?.to === null
+    const cwd = this.work.status === 'archived' ? this.project.repo_path : this.worktree
     const uncommitted = latest ? await statusLines(this.worktree, { env }).catch(() => []) : []
     const diffTo = (from: string) =>
-      diffFrom(this.worktree, from, range?.to ?? null, { env }).catch(
+      diffFrom(cwd, from, range?.to ?? null, { env }).catch(
         (e: unknown) => `변경을 읽지 못함: ${message(e)}`,
       )
     const diff = range ? await diffTo(range.from) : ''
-    const header = check.handoffHeader
     const handoffText = files[HANDOFF_FILE]
+    const header = check.handoffHeader
     const gate = (size?: Size) => approvalGate(task, check, size)
-    let completion: ReviewView['completion'] = null
+    let completion: Completion | null = null
     if (task.node === 'verify') {
       const workDiff = await diffTo(this.work.base_commit)
-      completion = { verdicts: verdicts(files['verification.md'] ?? ''), diff: clip(workDiff) }
+      // Work 완료 화면 (시나리오 7-3): 승인할 수 있는 verify는 전달 버튼이나(승인하면 멈추면
+      // [승인하고 멈춤]), verify에서 멈춘 Work는 전달 버튼이다 (D119)
+      const stopped = stoppedVerify(this.work)?.id === task.id
+      const current =
+        this.work.status === 'active' &&
+        currentTask(this.work)?.id === task.id &&
+        REVIEWABLE.includes(task.status)
+      completion = {
+        verdicts: verdicts(files['verification.md'] ?? ''),
+        diff: clip(workDiff),
+        mode:
+          stopped || (current && !approvalStops(this.work, task.node, header))
+            ? 'deliver'
+            : current
+              ? 'stop'
+              : null,
+        stopped,
+        buttons: deliveryButtons(this.checks()),
+        delivery: deliveryView(this.work.delivery),
+      }
     }
     return {
       workKey: this.key,
@@ -993,17 +1605,27 @@ export class WorkRunner {
 
   /** 탭이 붙을 때 지금까지의 출력. 끝난 task는 pty.log를 읽어 읽기 전용으로 보인다 */
   async attach(taskId: string): Promise<TerminalBacklog> {
+    if (taskId.startsWith(`${CLEANUP_ID}-`)) {
+      return this.terminals.get(taskId)?.backlog() ?? { data: '', next: 0, live: false }
+    }
     const task = this.task(taskId)
     if (!task) return { data: '', next: 0, live: false }
     return (await this.terminalBuffer(task)).backlog()
   }
 
+  /** 입력을 받는 PTY: task의 살아 있는 세션이나 정리 세션 */
+  private ptyOf(taskId: string): PtySession | undefined {
+    const c = this.cleanup
+    if (c && taskId === c.id) return c.status === 'live' ? (c.pty ?? undefined) : undefined
+    return this.live.get(taskId)?.pty
+  }
+
   write(taskId: string, data: string): void {
-    this.live.get(taskId)?.pty.write(data)
+    this.ptyOf(taskId)?.write(data)
   }
 
   resize(taskId: string, cols: number, rows: number): void {
-    this.live.get(taskId)?.pty.resize(cols, rows)
+    this.ptyOf(taskId)?.resize(cols, rows)
   }
 
   // ---------- 스냅샷 (I14) ----------
@@ -1030,6 +1652,7 @@ export class WorkRunner {
       title: this.title,
       status: w.status,
       statusLabel: WORK_STATUS_LABEL[w.status],
+      completedAt: w.completed_at ?? null,
       badge: badge(w),
       actions: actions(w),
       stopAfterStep: w.stop_after_step === true,
@@ -1040,10 +1663,24 @@ export class WorkRunner {
       stopNotice: stopNotice(w),
       stopHint: resumeHint(w),
       steps: stepChoices(w),
+      delivery: deliveryView(w.delivery),
+      cleanup: this.cleanupView(),
       tasks: w.tasks.map((t) => this.taskView(t)),
       current: currentTask(w)?.id ?? null,
       problems: [...this.problems],
       revision: this.revision,
+    }
+  }
+
+  private cleanupView(): CleanupView | null {
+    const c = this.cleanup
+    if (!c) return null
+    return {
+      terminal: this.terminalKey(c.id),
+      status: c.status,
+      choice: c.choice,
+      clean: c.clean,
+      uncommitted: [...c.uncommitted],
     }
   }
 

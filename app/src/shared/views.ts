@@ -1,7 +1,14 @@
 // 렌더러로 보내는 스냅샷과 조회 결과 (I14). main이 core로 계산하고, 화면은 받은 것을 그리기만 한다.
 import type { WorkSettings } from './config'
 import type { Decision, HandoffStatus, NodeName, Size } from './contracts'
-import type { ApprovedIntent, FormatIssue, TaskStatus, WorkStatus } from './work'
+import type {
+  ApprovedIntent,
+  DeliveryChoice,
+  FormatIssue,
+  TaskStatus,
+  UncommittedAction,
+  WorkStatus,
+} from './work'
 
 // ---------- 승인 판정과 승인 화면 (core/approval, core/review) ----------
 
@@ -38,6 +45,118 @@ export interface Verdict {
   basis: string
   /** 실패나 판정 불가. 경고로 강조한다 (D59) */
   warn: boolean
+}
+
+// ---------- 전달과 정리 (core/delivery, core/cleanup) ----------
+
+/** 버튼을 누를 수 있는지와, 누를 수 없는 이유 */
+export interface ButtonState {
+  enabled: boolean
+  reason: string | null
+}
+
+/** Work 완료 화면의 전달 버튼 (시나리오 7-3, 7-4, D67): [완료만], [push], [PR 생성] */
+export interface DeliveryButtons {
+  none: ButtonState
+  push: ButtonState
+  pr: ButtonState
+}
+
+/** 전달 결과 (work.json의 delivery, 시나리오 7-4, 7-6) */
+export interface DeliveryView {
+  choice: DeliveryChoice
+  /** 버튼 이름: "push", "PR 생성" */
+  label: string
+  status: 'succeeded' | 'failed'
+  at: string
+  /** 실패한 단계의 이름과 오류 */
+  stage: string | null
+  error: string | null
+  branch: string | null
+  /** push 뒤 브라우저에서 PR을 만드는 비교 URL. origin 주소로 만들 수 없으면 null */
+  compareUrl: string | null
+  prUrl: string | null
+  /** 같은 브랜치의 PR이 이미 열려 있어 링크만 기록했다 */
+  prExisting: boolean
+  draft: boolean
+}
+
+/** 정리 세션: [AI 세션 열기]로 연, 기록하지 않는 일반 터미널의 Claude Code (시나리오 7-5) */
+export interface CleanupView {
+  /** 이 세션 터미널의 키 */
+  terminal: string
+  /** 대기열(D18), 살아 있음, 끝남 */
+  status: 'queued' | 'live' | 'ended'
+  /** 원래 고른 전달 */
+  choice: DeliveryChoice
+  /** 마지막 턴이 끝난 때(Stop) git status가 깨끗했다. [정리 끝 → push/PR 진행]을 강조한다 */
+  clean: boolean
+  /** 세션이 끝난 뒤 남은 커밋 안 된 변경. 있으면 선택지 화면으로 돌아간다 */
+  uncommitted: string[]
+}
+
+/** [push]·[PR 생성] (시나리오 7-4, 7-5) */
+export interface DeliverInput {
+  choice: DeliveryChoice
+  /**
+   * 커밋 안 된 변경의 처리. expect는 사람에게 보인 변경 목록이다. 그 사이 바뀌었으면 받지 않고
+   * 지금 목록을 다시 돌려준다. 변경이 없으면 null이다
+   */
+  uncommitted: { action: UncommittedAction; expect: string[] } | null
+}
+
+/**
+ * 전달의 결과. 커밋 안 된 변경이 있어 사람이 골라야 하면 uncommitted에 변경 목록을 준다 (7-5).
+ * 전달이 실패하면 error이고, 실패는 Work 완료 화면에도 남는다 (D120)
+ */
+export type DeliverResult = { ok: true } | { ok: false; error: string; uncommitted?: string[] }
+
+/** 정리를 확인한 때의 사실. [정리]에 함께 보내 그 사이 바뀌었으면 받지 않는다 */
+export interface CleanExpect {
+  uncommitted: string[]
+  locks: string[]
+  live: number
+  backups: string[]
+}
+
+/** [Work 정리]의 확인 요약 (시나리오 8-1) */
+export interface CleanPreview {
+  /** worktree가 있다 */
+  worktree: boolean
+  /** 커밋 안 된 변경. 백업 없이 지운다 */
+  uncommitted: string[]
+  /** worktree의 git 폴더에 남은 잠금 파일(index.lock 등) */
+  locks: string[]
+  /** 이 앱에서 살아 있는 세션. 정리하면 트리째 끝낸다 */
+  live: number
+  branch: {
+    name: string
+    exists: boolean
+    /** origin의 같은 이름 브랜치(원격 추적 브랜치)에 있다 */
+    pushed: boolean
+    /** 기준 브랜치(로컬이나 origin)에 머지됐다 */
+    merged: boolean
+    /** 삭제를 제안한다: push됐거나 머지됐다. 기본은 유지다 */
+    deletable: boolean
+  }
+  /** 되감기 백업 브랜치 (D115). "함께 삭제"의 기본은 체크다 */
+  backups: string[]
+  /** 사람이 명시적으로 확인해야 하는 것. 비어 있지 않으면 확인해야 [정리]를 누를 수 있다 */
+  confirm: string[]
+  expect: CleanExpect
+}
+
+export type CleanPreviewResult = { ok: true; preview: CleanPreview } | { ok: false; error: string }
+
+/** [Work 정리]의 [정리] (시나리오 8-2) */
+export interface CleanInput {
+  /** 작업 브랜치도 지운다. push됐거나 머지됐을 때만 받는다 */
+  deleteBranch: boolean
+  /** 되감기 백업 브랜치를 함께 지운다 */
+  deleteBackups: boolean
+  /** 확인이 필요한 것(커밋 안 된 변경, 살아 있는 세션, 잠금 파일)을 확인했다 */
+  confirmed: boolean
+  expect: CleanExpect
 }
 
 // ---------- 사이드바 배지 (core/approval, D80) ----------
@@ -108,6 +227,8 @@ export interface WorkView {
   title: string
   status: WorkStatus
   statusLabel: string
+  /** Work를 완료한 때. 보관된 Work가 완료였는지도 이것으로 안다 */
+  completedAt: string | null
   /** 사이드바 배지 (D80) */
   badge: Badge
   /** 액션 바에서 누를 수 있는 조작 (core/machine actions) */
@@ -125,6 +246,10 @@ export interface WorkView {
   stopHint: string | null
   /** 단계 선택 대화상자의 단계 (6.2, 6.3, D82) */
   steps: StepChoice[]
+  /** 마지막 전달 결과 (시나리오 7) */
+  delivery: DeliveryView | null
+  /** 정리 세션 ([AI 세션 열기], 7-5) */
+  cleanup: CleanupView | null
   tasks: TaskView[]
   /** 지금 task의 id */
   current: string | null
@@ -150,6 +275,8 @@ export interface WorkActions {
   stopAfter: boolean
   /** [Work 포기] */
   abandon: boolean
+  /** [Work 정리]: 완료나 포기한 Work (시나리오 8) */
+  clean: boolean
 }
 
 // ---------- 단계 선택 (6.2, 6.3, D82) ----------
@@ -275,8 +402,25 @@ export interface ReviewView {
   draftSize: Size | null
   /** 고른 size마다의 판정. none은 고르지 않았을 때다 */
   gates: Record<'none' | Size, ApprovalGate>
-  /** verify: 판정표와 전체 Work의 변경 (기준 커밋 → 작업 트리) */
-  completion: { verdicts: Verdict[]; diff: string } | null
+  /** verify: Work 완료 화면 (시나리오 7-3, D119, D120) */
+  completion: Completion | null
+}
+
+/** Work 완료 화면: 판정표, 전체 Work의 변경(기준 커밋 → 작업 트리), 전달 선택 (시나리오 7-3) */
+export interface Completion {
+  verdicts: Verdict[]
+  diff: string
+  /**
+   * 누를 버튼. deliver는 전달 버튼([완료만], [push], [PR 생성])이고, stop은 승인하면 Work가 멈추므로
+   * [승인하고 멈춤] 하나다(이전 단계 추천 D23, [이 단계 끝나면 멈춤], D119). null이면 누를 버튼이 없다
+   */
+  mode: 'deliver' | 'stop' | null
+  /** verify에서 멈춘 Work다. 이때 [완료만]은 멈춘 Work의 [재개]다 (D119) */
+  stopped: boolean
+  /** 전달 버튼을 누를 수 있는지와 이유 (7-4, D67, D118) */
+  buttons: DeliveryButtons
+  /** 마지막 전달 결과. 실패면 오류와 [다시 시도]·[전달 없이 완료]를 보인다 (D120) */
+  delivery: DeliveryView | null
 }
 
 // ---------- 명령 ----------

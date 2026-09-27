@@ -1,17 +1,20 @@
-// [스모크] 설치한 앱이 뜨고, 가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화면, [단계 선택]을
-// 누른다 (I27).
+// [스모크] 설치한 앱이 뜨고, 가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화면, [단계 선택],
+// [push]와 [Work 정리]를 누른다 (I27).
 // M2: 프로젝트 등록 → 새 Work → intake 탭에 PTY 출력 → 창 크기 변경이 PTY에 전달 → [의도 승인]
 // → intent.md 확정, intake 세션 트리 종료, 다음 task 시작.
 // M3: 다음 task를 [즉시 중단]하면 중단됨·읽기 전용이 되고 트리가 끝난다 → [재개]하면 같은 세션을
 // --resume으로 이전 화면 뒤에 잇는다 → 설정 화면에서 세션 상한을 바꾼다.
 // M4: [단계 선택]에서 intake를 고르면 미리 보기(폐기될 산출물, 중단할 task, 코드, intent 새 버전)를 보이고,
 // 추가 지시와 함께 [확인]하면 진행 중인 세션을 끝내고 intake를 되감기로 다시 시작한다(앞 탭은 폐기됨)
-// → 새 intake를 [의도 승인]하면 intent v2가 되고 v1은 intent.history에 남는다 → 앱 종료 확인을 거쳐 끝낸다.
+// → 새 intake를 [의도 승인]하면 intent v2가 되고 v1은 intent.history에 남는다.
+// M5: 두 번째 Work를 S 경로로 최종 검증까지 가면 Work 완료 화면에 전달 버튼이 보인다 → [push]하면 로컬 bare
+// 원격에 Work 브랜치가 생기고 Work 완료(전달: push)가 된다 → [Work 정리]의 요약에 push됨이 보이고 [정리]하면
+// worktree가 없어지고 보관됨이 된다(산출물은 남음) → 앱 종료 확인을 거쳐 끝낸다.
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test'
-import { makeRepo } from '../flow/repo'
+import { git, makeRepo } from '../flow/repo'
 import { REPO_FILES, REQUEST, scenario } from '../flow/scenarios'
 
 const isWin = process.platform === 'win32'
@@ -26,11 +29,12 @@ let app: ElectronApplication
 let root: string
 let home: string
 let repo: string
+let remote: string
 
 test.beforeAll(async () => {
   root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'relay-smoke-')))
   home = path.join(root, 'home')
-  repo = makeRepo(root, 'sample', REPO_FILES).repo
+  ;({ repo, remote } = makeRepo(root, 'sample', REPO_FILES))
   // intake는 초안과 handoff를 쓰고 멈추고, evidence는 시작만 한다
   const scenarioFile = path.join(root, 'scenario.json')
   fs.writeFileSync(
@@ -64,7 +68,7 @@ test.afterAll(async () => {
   fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
 })
 
-test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화면, [단계 선택]을 누른다', async () => {
+test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화면, [단계 선택], [push]와 [Work 정리]를 누른다', async () => {
   const win = await app.firstWindow()
   await expect(win.locator('.layout')).toBeVisible()
   await expect(win.locator('.sidebar')).toBeVisible()
@@ -202,6 +206,58 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   expect(
     fs.readFileSync(path.join(path.dirname(intentFile), 'intent.history', 'v1.md'), 'utf8'),
   ).toBe(v1)
+
+  // 두 번째 Work (M5): S 경로로 최종 검증까지 간다. 세션 상한 2에서 첫 Work의 세션 하나와 함께 돈다
+  await win.getByRole('button', { name: '새 Work' }).click()
+  await win.getByLabel('요청').fill(`${REQUEST}\n두 번째 Work`)
+  await win.getByRole('button', { name: '시작' }).click()
+  await expect(win.locator('.work-item')).toHaveCount(2, { timeout: 30_000 })
+  const intake2 = win.getByRole('button', { name: '의도 승인' })
+  await expect(intake2).toBeEnabled({ timeout: 60_000 })
+  await win.getByLabel('size').selectOption('S')
+  await intake2.click()
+  const approveFix = win.getByRole('button', { name: '승인', exact: true })
+  await expect(approveFix).toBeEnabled({ timeout: 60_000 })
+  await expect(win.locator('.band')).toContainText('02 수정')
+  await approveFix.click()
+
+  // Work 완료 화면 (시나리오 7-3): 판정표와 전달 버튼. origin(로컬 bare)이 있어 [push]를 누를 수 있다
+  const push = win.getByRole('button', { name: 'push', exact: true })
+  await expect(push).toBeEnabled({ timeout: 60_000 })
+  await expect(win.locator('.band')).toContainText('03 최종 검증')
+  await expect(win.getByRole('button', { name: '완료만', exact: true })).toBeEnabled()
+  await expect(win.locator('table.verdicts')).toContainText('재현 절차가 더 이상 실패하지 않는다')
+  await win.screenshot({ path: 'test-results/completion.png' })
+  await push.click()
+  const done = win.locator('.notice.done')
+  await expect(done).toContainText('Work 완료 (전달: push)', { timeout: 60_000 })
+  await expect(done).toContainText('비교 URL이 없습니다')
+  const badge2 = win.locator('.work-item.selected .badge')
+  await expect(badge2).toHaveText('완료')
+  const workId2 = /w-\d{8}-\d{3}/.exec(
+    (await win.locator('.action-bar .info').textContent()) ?? '',
+  )?.[0]
+  expect(workId2).toBeTruthy()
+  expect(git(remote, 'branch', '--list', `relay/${workId2 ?? ''}`)).toContain(
+    `relay/${workId2 ?? ''}`,
+  )
+  await win.screenshot({ path: 'test-results/delivered.png' })
+
+  // [Work 정리] (시나리오 8): 요약을 보이고 [정리]하면 worktree를 지우고 보관됨이 된다
+  await win.getByRole('button', { name: 'Work 정리', exact: true }).click()
+  const clean = win.getByRole('dialog', { name: /Work 정리/ })
+  await expect(clean.getByLabel('정리 요약')).toContainText('origin에 push됐습니다', {
+    timeout: 30_000,
+  })
+  await expect(clean.getByLabel('작업 브랜치 삭제')).not.toBeChecked()
+  await win.screenshot({ path: 'test-results/clean.png' })
+  await clean.getByRole('button', { name: '정리', exact: true }).click()
+  await expect(clean).toBeHidden({ timeout: 30_000 })
+  await expect(badge2).toHaveText('보관됨', { timeout: 30_000 })
+  const worktree = findDir(path.join(home, 'projects'), workId2 ?? '', 'worktrees')
+  expect(worktree).toBeNull()
+  expect(findFile(path.join(home, 'projects'), 'pr.md', '03-verify')).not.toBeNull()
+  await win.screenshot({ path: 'test-results/archived.png' })
 })
 
 function lastPid(text: string): number {
@@ -219,6 +275,18 @@ function alive(pid: number): boolean {
   } catch {
     return false
   }
+}
+
+/** worktrees 아래의 name 폴더. 없으면 null */
+function findDir(dir: string, name: string, parent: string): string | null {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (!e.isDirectory()) continue
+    const p = path.join(dir, e.name)
+    if (e.name === name && path.basename(dir) === parent) return p
+    const found = findDir(p, name, parent)
+    if (found) return found
+  }
+  return null
 }
 
 /** name 파일을 찾는다. within이 있으면 그 이름의 폴더 안에서만 찾는다 */

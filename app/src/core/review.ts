@@ -71,6 +71,7 @@ export const WORK_STATUS_LABEL: Readonly<Record<WorkStatus, string>> = {
   stopped: '멈춤',
   completed: '완료',
   abandoned: '포기',
+  archived: '보관됨',
 }
 
 /** Work가 멈춘 이유: 이전 단계 추천(D23), [이 단계 끝나면 멈춤](시나리오 3-4) */
@@ -85,22 +86,24 @@ export function stopNotice(work: WorkState): string | null {
 }
 
 /**
- * 멈춘 Work에서 [재개]가 할 일 (3.3). 멈추게 한 task의 기본 다음 단계를 시작하고, verify에서 멈췄으면
- * Work를 완료한다. 이전 단계 추천(D23)은 따르지 않는다. 추천대로 되돌아가는 것은 [단계 선택]이다 (6.2).
+ * 멈춘 Work에서 [재개]가 할 일 (3.3). 멈추게 한 task의 기본 다음 단계를 시작한다. 이전 단계 추천(D23)은
+ * 따르지 않는다. 추천대로 되돌아가는 것은 [단계 선택]이다 (6.2). verify에서 멈췄으면 [재개] 대신
+ * Work 완료 화면의 전달 버튼으로 Work를 완료한다 (D119).
  */
 export function resumeHint(work: WorkState): string | null {
   const stop = work.stop
   if (work.status !== 'stopped' || !stop) return null
   const task = work.tasks.find((t) => t.id === stop.task_id)
   const next = task && work.intent ? defaultNext(task.node, work.intent.size) : null
+  const back = '추천대로 되돌아가려면 [단계 선택]을 누르세요.'
+  if (next === WORK_COMPLETE) {
+    const done = 'Work 완료 화면에서 전달을 고르면 Work를 완료합니다'
+    return stop.kind === 'recommended_back' ? `추천을 따르지 않고 ${done}. ${back}` : `${done}.`
+  }
   const action =
-    next === null
-      ? '기본 다음 단계로 갑니다'
-      : next === WORK_COMPLETE
-        ? 'Work를 완료합니다'
-        : `다음 단계(${NODE_INFO[next].title})를 시작합니다`
+    next === null ? '기본 다음 단계로 갑니다' : `다음 단계(${NODE_INFO[next].title})를 시작합니다`
   return stop.kind === 'recommended_back'
-    ? `[재개]하면 추천을 따르지 않고 ${action}. 추천대로 되돌아가려면 [단계 선택]을 누르세요.`
+    ? `[재개]하면 추천을 따르지 않고 ${action}. ${back}`
     : `[재개]하면 ${action}.`
 }
 
@@ -134,7 +137,8 @@ export interface ChangeRange {
  * [변경] 탭(D83: 이 task의 diff)의 범위. task의 시작 커밋부터 코드가 다음에 바뀐 때까지다.
  * 다음에 시작한 task가 있으면 그 시작 커밋까지다. 코드를 되돌린 되감기가 먼저 오면 되돌리기 전의 코드,
  * 곧 백업 커밋(커밋 안 된 변경 포함, D116)까지다. 백업이 없었으면 되돌리기 전 HEAD다.
- * 뒤에 코드를 바꾼 task가 없으면 지금 코드의 마지막 task라 작업 트리까지다. 시작하지 않은 task는 null이다.
+ * 뒤에 코드를 바꾼 task가 없으면 지금 코드의 마지막 task라 작업 트리까지다. 정리한 Work(보관됨)는
+ * 작업 트리가 없어 정리하기 전 HEAD까지다(시나리오 8). 시작하지 않은 task는 null이다.
  */
 export function changeRange(work: WorkState, taskId: string): ChangeRange | null {
   const i = work.tasks.findIndex((t) => t.id === taskId)
@@ -145,6 +149,7 @@ export function changeRange(work: WorkState, taskId: string): ChangeRange | null
     if (reset) return { from, to: reset.backup_commit ?? reset.from }
     if (next.start_commit) return { from, to: next.start_commit }
   }
+  if (work.status === 'archived') return { from, to: work.cleaned?.head ?? from }
   return { from, to: null }
 }
 
