@@ -16,6 +16,7 @@ import {
 } from '../../src/core/review'
 import type { Handoff, NodeName } from '../../src/shared/contracts'
 import type {
+  AutoHoldReason,
   FormatIssue,
   StepSelection,
   TaskRecord,
@@ -192,6 +193,39 @@ describe('OS 알림 문구 (D81)', () => {
     expect(humanNotice(at('working'), at('idle'))).toBeNull()
     expect(humanNotice(at('working'), at('interrupted'))).toBeNull()
     expect(humanNotice(at('queued'), at('working'))).toBeNull()
+  })
+
+  it('자동 승인 카운트다운을 시작하면 알린다. 승인 대기로 바뀌는 알림 대신이다 (D81)', () => {
+    const counting = (startedAt: string, work = at('awaiting_approval')): WorkState => ({
+      ...work,
+      tasks: work.tasks.map((t) => ({ ...t, countdown: { started_at: startedAt, seconds: 15 } })),
+    })
+    expect(humanNotice(at('working'), counting('a'))).toBe(
+      '01 의도 정리: 15초 뒤 자동 승인 (멈추려면 [취소])',
+    )
+    // 승인 대기에서 새로 시작해도 알린다(새 요청 없이 턴이 다시 끝남, D131). 같은 카운트다운이면 다시 알리지 않는다
+    expect(humanNotice(counting('a'), counting('b'))).toContain('15초 뒤 자동 승인')
+    expect(humanNotice(counting('a'), counting('a'))).toBeNull()
+  })
+
+  it('사람이 누르지 않았는데 자동 승인하지 않게 되면 까닭과 함께 알린다. 사람이 앱에서 한 일은 알리지 않는다 (D130)', () => {
+    const holding = (reasons: AutoHoldReason[], work = at('awaiting_approval')): WorkState => ({
+      ...work,
+      tasks: work.tasks.map((t) => ({ ...t, auto_hold: { at: 'x', reasons } })),
+    })
+    expect(humanNotice(at('working'), holding(['open_questions']))).toBe(
+      '01 의도 정리: 승인 대기 — 자동 승인하지 않음(열린 질문이 있음)',
+    )
+    expect(humanNotice(at('awaiting_approval'), holding(['session']))).toBe(
+      '01 의도 정리: 승인 대기 — 자동 승인하지 않음(카운트다운 중에 세션이 끝남)',
+    )
+    // [취소], [즉시 중단], 설정 끔은 사람이 앱에서 한 일이다. 배지가 바뀌면 보통의 알림이다
+    expect(humanNotice(at('awaiting_approval'), holding(['cancel']))).toBeNull()
+    expect(humanNotice(at('awaiting_approval'), holding(['interrupt']))).toBeNull()
+    expect(humanNotice(at('awaiting_approval'), holding(['settings']))).toBeNull()
+    expect(humanNotice(at('working'), holding(['settings']))).toBe('01 의도 정리: 승인 대기')
+    // 같은 까닭이 이어지면 다시 알리지 않는다
+    expect(humanNotice(holding(['session']), holding(['session']))).toBeNull()
   })
 })
 

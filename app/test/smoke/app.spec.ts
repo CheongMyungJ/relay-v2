@@ -1,15 +1,19 @@
-// [스모크] 설치한 앱이 뜨고, 가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화면, [단계 선택],
-// [push]와 [Work 정리], 다시 켠 뒤 끊긴 작업의 [다시 시도]를 누른다 (I27).
+// [스모크] 설치한 앱이 뜨고, 가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화면(자동 승인 포함), [단계 선택],
+// 자동 승인 카운트다운의 [취소], [push]와 [Work 정리], 다시 켠 뒤 끊긴 작업의 [다시 시도]를 누른다 (I27).
 // M2: 프로젝트 등록 → 새 Work → intake 탭에 PTY 출력 → 창 크기 변경이 PTY에 전달 → [의도 승인]
 // → intent.md 확정, intake 세션 트리 종료, 다음 task 시작.
 // M3: 다음 task를 [즉시 중단]하면 중단됨·읽기 전용이 되고 트리가 끝난다 → [재개]하면 같은 세션을
-// --resume으로 이전 화면 뒤에 잇는다 → 설정 화면에서 세션 상한을 바꾼다.
+// --resume으로 이전 화면 뒤에 잇는다 → 설정 화면에서 세션 상한을 바꾼다. M7: 같은 설정 화면에서 수정 단계의 자동
+// 승인을 켜고 카운트다운을 600초로 바꾼다.
 // M4: [단계 선택]에서 intake를 고르면 미리 보기(폐기될 산출물, 중단할 task, 코드, intent 새 버전)를 보이고,
 // 추가 지시와 함께 [확인]하면 진행 중인 세션을 끝내고 intake를 되감기로 다시 시작한다(앞 탭은 폐기됨)
 // → 새 intake를 [의도 승인]하면 intent v2가 되고 v1은 intent.history에 남는다.
 // M5: 두 번째 Work를 S 경로로 최종 검증까지 가면 Work 완료 화면에 전달 버튼이 보인다 → [push]하면 로컬 bare
 // 원격에 Work 브랜치가 생기고 Work 완료(전달: push)가 된다 → [Work 정리]의 요약에 push됨이 보이고 [정리]하면
 // worktree가 없어지고 보관됨이 된다(산출물은 남음).
+// M7: 두 번째 Work의 새 Work 대화상자에 이 Work의 자동 승인(앱 설정 따름: 켜짐)이 보인다 → 수정이 승인 대기가 되면
+// 승인 화면에 자동 승인 카운트다운과 [취소]가 보인다 → [취소]하면 카운트다운이 없어지고 까닭([취소]를 누름)이 보이며,
+// 사람이 [승인]한다.
 // M6: 앱 종료 확인을 거쳐 앱을 끄고, 첫 Work의 work.json에 끊긴 되감기 기록을 넣고 decisions.md를 고친 뒤 다시
 // 켠다 → 첫 Work의 배지가 "끊긴 작업"이고, 패널 맨 위에 끊긴 곳과 [다시 시도]·[무시], 바뀐 파일과 [확인]이
 // 보인다. 끊긴 동안 [단계 선택]은 없다 → [확인]하면 파일 알림이 닫히고, [다시 시도]하면 앞 task를 폐기하고
@@ -79,7 +83,7 @@ test.afterAll(async () => {
   fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
 })
 
-test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화면, [단계 선택], [push]와 [Work 정리], 다시 켠 뒤 끊긴 작업의 [다시 시도]를 누른다', async () => {
+test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화면, [단계 선택], 자동 승인 카운트다운의 [취소], [push]와 [Work 정리], 다시 켠 뒤 끊긴 작업의 [다시 시도]를 누른다', async () => {
   const win = await app.firstWindow()
   await expect(win.locator('.layout')).toBeVisible()
   await expect(win.locator('.sidebar')).toBeVisible()
@@ -158,21 +162,23 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await expect(badge).toHaveText('대기')
   await win.screenshot({ path: 'test-results/resumed.png' })
 
-  // 설정 화면 (D70): 세션 상한을 바꾸면 config.json에 쓴다
+  // 설정 화면 (D70): 세션 상한과 수정 단계의 자동 승인, 카운트다운을 바꾸면 config.json에 쓴다 (4.2)
   await win.locator('.sidebar').getByRole('button', { name: '설정', exact: true }).click()
   await win.getByLabel('세션 상한').fill('2')
+  await expect(win.getByLabel('수정 자동 승인')).not.toBeChecked()
+  await win.getByLabel('수정 자동 승인').check()
+  await win.getByLabel('자동 승인 카운트다운(초)').fill('600')
   await win.screenshot({ path: 'test-results/settings.png' })
   await win.getByRole('button', { name: '저장', exact: true }).click()
-  await expect
-    .poll(
-      () =>
-        (
-          JSON.parse(fs.readFileSync(path.join(home, 'config.json'), 'utf8')) as {
-            session_limit: number
-          }
-        ).session_limit,
-    )
-    .toBe(2)
+  const config = () =>
+    JSON.parse(fs.readFileSync(path.join(home, 'config.json'), 'utf8')) as {
+      session_limit: number
+      auto_approve: Record<string, boolean>
+      auto_approve_countdown_sec: number
+    }
+  await expect.poll(() => config().session_limit).toBe(2)
+  expect(config().auto_approve).toEqual({ evidence: false, rca: false, fix: true })
+  expect(config().auto_approve_countdown_sec).toBe(600)
 
   // [단계 선택] (6.2, D82): intake를 고르면 결과를 미리 보인다
   const resumedPid = lastPid((await rows.textContent()) ?? '')
@@ -221,6 +227,12 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   // 두 번째 Work (M5): S 경로로 최종 검증까지 간다. 세션 상한 2에서 첫 Work의 세션 하나와 함께 돈다
   await win.getByRole('button', { name: '새 Work' }).click()
   await win.getByLabel('요청').fill(`${REQUEST}\n두 번째 Work`)
+  // 이 Work의 자동 승인은 고르지 않으면 앱 설정을 따른다 (D72)
+  await win.getByText('이 Work의 자동 승인').click()
+  await expect(win.getByLabel('수정 자동 승인')).toHaveValue('')
+  await expect(win.getByLabel('수정 자동 승인').locator('option').first()).toHaveText(
+    '앱 설정 따름 (켜짐)',
+  )
   await win.getByRole('button', { name: '시작' }).click()
   await expect(win.locator('.work-item')).toHaveCount(2, { timeout: 30_000 })
   const intake2 = win.getByRole('button', { name: '의도 승인' })
@@ -230,6 +242,17 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   const approveFix = win.getByRole('button', { name: '승인', exact: true })
   await expect(approveFix).toBeEnabled({ timeout: 60_000 })
   await expect(win.locator('.band')).toContainText('02 수정')
+  // 자동 승인이 켜진 수정은 승인 화면에 카운트다운과 [취소]가 보인다 (4.3, D83)
+  const countdown = win.getByRole('status', { name: '자동 승인 카운트다운' })
+  await expect(countdown).toContainText('자동 승인까지', { timeout: 30_000 })
+  await win.screenshot({ path: 'test-results/countdown.png' })
+  await countdown.getByRole('button', { name: '취소', exact: true }).click()
+  await expect(countdown).toBeHidden({ timeout: 30_000 })
+  await expect(win.locator('.notice.auto-hold')).toContainText(
+    '자동 승인하지 않음: [취소]를 누름',
+    { timeout: 30_000 },
+  )
+  await win.screenshot({ path: 'test-results/countdown-cancelled.png' })
   await approveFix.click()
 
   // Work 완료 화면 (시나리오 7-3): 판정표와 전달 버튼. origin(로컬 bare)이 있어 [push]를 누를 수 있다

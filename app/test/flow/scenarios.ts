@@ -12,7 +12,11 @@ export type Step =
   | { do: 'ask'; question?: string }
   | { do: 'tool'; name: string }
   | { do: 'notify'; type: string }
-  | { do: 'stop'; onBlock?: Step[] }
+  /**
+   * Stop을 보낸다. background와 crons는 본문의 background_tasks와 session_crons다: 세션이 백그라운드 작업이나 예약된
+   * 깨우기를 기다리며 쉬는 중이다 (D129)
+   */
+  | { do: 'stop'; onBlock?: Step[]; background?: object[]; crons?: object[] }
   | { do: 'exit'; reason?: string; linger?: number }
   /** /clear: 새 세션 id로 계속 돈다 (D110) */
   | { do: 'clear' }
@@ -96,7 +100,11 @@ export function handoff(h: Partial<Handoff> & { summary?: string; omit?: string[
     `assumptions:${list(h.assumptions)}`,
     `rejected:${list(h.rejected)}`,
     `open_questions:${list(h.open_questions)}`,
-    'intent_deviation: null',
+    `intent_deviation:${
+      h.intent_deviation
+        ? `\n  summary: ${q(h.intent_deviation.summary)}\n  evidence: ${q(h.intent_deviation.evidence)}`
+        : ' null'
+    }`,
     `risks:${list(h.risks)}`,
     `recommended_next:${rec ? `\n  node: ${rec.node}\n  reason: ${q(rec.reason)}` : ' null'}`,
     'knowledge_candidates: []',

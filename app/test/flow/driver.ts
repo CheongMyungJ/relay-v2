@@ -1,5 +1,6 @@
 // 사람 역할 (I29, 8.4). [흐름]과 [실제]가 함께 쓴다(8.1: claude 실행 파일만 바꾼다).
 // 승인 대기면 [승인]하고(intake는 고른 size로 [의도 승인]), 질문 대기면 첫 선택지(Enter)로 답한다.
+// awaitAuto면 자동 승인 카운트다운(4.3) 중인 task는 누르지 않고 기다린다.
 // 형식 오류가 끝까지 남으면 [오류 무시하고 승인]을 쓰고 센다. task마다 되돌림 횟수와 걸린 시간을 남긴다.
 import type { Relay } from '../../src/main/relay'
 import type { Size } from '../../src/shared/contracts'
@@ -24,6 +25,11 @@ export interface DriveOptions {
    * 승인 대기에서 단계 선택을 하는 시험(M4)이 쓴다
    */
   pauseAt?: (task: TaskView) => boolean
+  /**
+   * 자동 승인 카운트다운(4.3) 중인 task는 [승인]하지 않고 카운트다운이 끝나기를 기다린다. 카운트다운이 승인 없이
+   * 멈추면 사람처럼 [승인]한다
+   */
+  awaitAuto?: boolean
 }
 
 export interface TaskOutcome {
@@ -33,6 +39,8 @@ export interface TaskOutcome {
   bounces: number
   /** [오류 무시하고 승인]을 썼다 */
   forced: boolean
+  /** 자동 승인됐다 (4.3, awaitAuto) */
+  auto: boolean
   /** 질문에 답한 횟수 */
   answers: number
   nudges: number
@@ -95,6 +103,7 @@ export async function drive(
         label: t.label,
         bounces: 0,
         forced: false,
+        auto: false,
         answers: 0,
         nudges: 0,
         ms: 0,
@@ -119,6 +128,7 @@ export async function drive(
         label: t.label,
         bounces: t.bounces,
         forced: t.forced,
+        auto: t.auto,
         answers: t.answers,
         nudges: t.nudges,
         ms: t.ms,
@@ -157,6 +167,35 @@ export async function drive(
       switch (task.status) {
         case 'awaiting_approval':
         case 'idle': {
+          if (o.awaitAuto && task.countdown) {
+            // 자동 승인 카운트다운 중이다. 끝나 다음 task로 가거나 멈출 때까지 기다린다 (4.3)
+            const done = await ui.until(
+              () => {
+                const v = ui.works.get(workKey)
+                const t = v?.tasks.find((x) => x.id === task.id)
+                if (!v || !t) return null
+                return t.status === 'approved' || !t.countdown ? { v, t } : null
+              },
+              `${task.label}: 자동 승인`,
+              timeout + task.countdown.seconds * 1000,
+            )
+            if (done.t.status === 'approved') {
+              out.auto = true
+              out.approved = true
+              const now = Date.now()
+              out.ms = now - mark
+              mark = now
+              await ui.until(
+                () => {
+                  const v = ui.works.get(workKey)
+                  return v && (v.current !== task.id || v.status !== 'active') ? v : null
+                },
+                `${task.label} 자동 승인 뒤`,
+                timeout,
+              )
+            }
+            continue
+          }
           const review = await relay.review(workKey, task.id)
           if (!review) return finish('failed', `${task.label}: 승인 화면을 읽지 못함`)
           const size =

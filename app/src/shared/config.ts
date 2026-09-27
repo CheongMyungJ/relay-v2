@@ -48,6 +48,16 @@ export const SKILL_TITLES: readonly (readonly [SkillName, string])[] = [
   ['final-verify', '최종 검증'],
 ]
 
+/**
+ * 자동 승인을 켤 수 있는 노드와 그 화면 이름 (4.2, D109). 설정 화면과 Work 설정의 자동 승인 목록에 쓴다.
+ * core/pipeline의 NODE_INFO와 같은지 [단위]가 확인한다.
+ */
+export const AUTO_APPROVE_TITLES: readonly (readonly [AutoApproveNode, string])[] = [
+  ['evidence', '재현과 관찰'],
+  ['rca', '원인 분석'],
+  ['fix', '수정'],
+]
+
 /** 질문 방식의 화면 이름 (5.6.1) */
 export const QUESTION_MODE_LABEL: Readonly<Record<QuestionMode, string>> = {
   draft_first: '초안 우선',

@@ -1,15 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import {
+  AUTO_HOLD_LABEL,
   BADGE_ORDER,
   HUMAN_BADGES,
   REVIEWABLE,
   approvalGate,
+  approvalMode,
+  autoApproveHolds,
+  autoApproveNote,
   badge,
+  holdNeedsNotice,
+  pendingBackground,
   resolvedBySize,
 } from '../../src/core/approval'
 import { createWork } from '../../src/core/machine'
-import type { NodeName } from '../../src/shared/contracts'
+import { DEFAULT_CONFIG, type AppConfig } from '../../src/shared/config'
+import type { Handoff, NodeName } from '../../src/shared/contracts'
 import type {
+  AutoHoldReason,
   CheckSummary,
   FormatIssue,
   TaskStatus,
@@ -86,6 +94,187 @@ describe('승인 버튼의 판정 (4.1, D90, D112)', () => {
       approve: false,
       force: true,
     })
+  })
+})
+
+const HANDOFF: Handoff = {
+  status: 'awaiting_approval',
+  blocked_reason: null,
+  decisions: [],
+  assumptions: [],
+  rejected: [],
+  open_questions: [],
+  intent_deviation: null,
+  risks: [],
+  recommended_next: null,
+}
+
+/** 유효한 handoff의 검사 결과 */
+function valid(h: Partial<Handoff> = {}) {
+  const header = { ...HANDOFF, ...h }
+  return { ...check([], header.status), handoffHeader: header }
+}
+
+describe('자동 승인의 방식 (4.2, D72)', () => {
+  const config: AppConfig = {
+    ...DEFAULT_CONFIG,
+    auto_approve: { evidence: true, rca: true, fix: false },
+  }
+
+  it('Work 설정이 있으면 앱 설정보다 우선하고, 없는 단계는 앱 설정을 따른다', () => {
+    const settings = { auto_approve: { rca: false, fix: true } }
+    expect(approvalMode(config, settings, 'evidence')).toBe('auto')
+    expect(approvalMode(config, settings, 'rca')).toBe('manual')
+    expect(approvalMode(config, settings, 'fix')).toBe('auto')
+    expect(approvalMode(DEFAULT_CONFIG, {}, 'fix')).toBe('manual')
+  })
+
+  it('intake와 verify는 설정과 상관없이 늘 수동이다', () => {
+    const all = { auto_approve: { evidence: true, rca: true, fix: true } }
+    for (const node of ['intake', 'verify'] as const) {
+      expect(approvalMode(config, all, node)).toBe('manual')
+    }
+  })
+})
+
+describe('자동 승인 조건 (4.3, D129)', () => {
+  const holds = (c: CheckSummary & { handoffHeader?: Handoff | null }, background = false) =>
+    autoApproveHolds({ node: 'rca', size: 'M', check: c, background })
+
+  it('조건을 모두 만족하면 어긴 것이 없다', () => {
+    expect(holds(valid())).toEqual([])
+    // 기본 다음 단계(M 경로에서 rca 다음은 fix)를 추천해도 된다
+    expect(holds(valid({ recommended_next: { node: 'fix', reason: '기본' } }))).toEqual([])
+  })
+
+  it('조건을 하나씩 어기면 자동 승인하지 않는다', () => {
+    const rows: [
+      string,
+      CheckSummary & { handoffHeader?: Handoff | null },
+      boolean,
+      AutoHoldReason,
+    ][] = [
+      ['형식 오류', { ...valid(), errors: [BODY] }, false, 'invalid'],
+      [
+        'handoff 없음',
+        { handoff_present: false, status: null, errors: [], warnings: [] },
+        false,
+        'invalid',
+      ],
+      ['막힘 (4.4)', valid({ status: 'blocked', blocked_reason: '없음' }), false, 'invalid'],
+      ['머리글을 읽지 못함', { ...check([]), handoffHeader: null }, false, 'invalid'],
+      ['열린 질문', valid({ open_questions: ['기대 동작?'] }), false, 'open_questions'],
+      [
+        '의도와 어긋남',
+        valid({ intent_deviation: { summary: '범위 밖', evidence: '로그' } }),
+        false,
+        'intent_deviation',
+      ],
+      [
+        '이전 단계 추천 (D23)',
+        valid({ recommended_next: { node: 'evidence', reason: '재현 다시' } }),
+        false,
+        'recommended_next',
+      ],
+      ['백그라운드 작업 (D129)', valid(), true, 'background'],
+    ]
+    for (const [label, c, background, reason] of rows) {
+      expect(holds(c, background), label).toEqual([reason])
+    }
+  })
+
+  it('S 경로에서는 fix의 기본 다음 단계가 verify다. 건너뛴 rca를 추천하면 자동 승인하지 않는다 (3.4, D66)', () => {
+    const fix = (h: Partial<Handoff>) =>
+      autoApproveHolds({ node: 'fix', size: 'S', check: valid(h), background: false })
+    expect(fix({ recommended_next: { node: 'verify', reason: '기본' } })).toEqual([])
+    expect(fix({ recommended_next: { node: 'rca', reason: '원인이 다름' } })).toEqual([
+      'recommended_next',
+    ])
+  })
+
+  it('여럿을 어기면 모두 적는다', () => {
+    expect(
+      holds(
+        valid({
+          open_questions: ['?'],
+          intent_deviation: { summary: 's', evidence: 'e' },
+          recommended_next: { node: 'intake', reason: 'r' },
+        }),
+        true,
+      ),
+    ).toEqual(['open_questions', 'intent_deviation', 'recommended_next', 'background'])
+  })
+
+  it('Stop 본문의 background_tasks나 session_crons가 비어 있지 않으면 쉬는 중이다. 없으면 비어 있는 것으로 본다 (D129)', () => {
+    expect(pendingBackground({})).toBe(false)
+    expect(pendingBackground({ background_tasks: [], session_crons: [] })).toBe(false)
+    expect(pendingBackground({ background_tasks: [{ id: 't', type: 'subagent' }] })).toBe(true)
+    expect(pendingBackground({ session_crons: [{ id: 'c', schedule: '* * * * *' }] })).toBe(true)
+    expect(pendingBackground({ background_tasks: 'x' })).toBe(false)
+  })
+})
+
+describe('자동 승인하지 않은 까닭 (D128~D131)', () => {
+  const config: AppConfig = {
+    ...DEFAULT_CONFIG,
+    auto_approve: { evidence: false, rca: true, fix: false },
+  }
+  const task = (patch: object = {}) => ({
+    node: 'rca' as const,
+    status: 'awaiting_approval' as const,
+    ...patch,
+  })
+
+  it('켜진 단계의 승인 대기에서 카운트다운하지 않으면 까닭과 다음 판정을 보인다', () => {
+    expect(
+      autoApproveNote(
+        { settings: {} },
+        task({ auto_hold: { at: 'x', reasons: ['open_questions', 'cancel'] } }),
+        config,
+      ),
+    ).toEqual({
+      on: true,
+      hold: '자동 승인하지 않음: 열린 질문이 있음, [취소]를 누름. 다음 턴이 끝날 때 다시 판정합니다.',
+    })
+    // 까닭이 적혀 있지 않으면 자동 승인을 켜기 전에 턴이 끝났다 (D128)
+    expect(autoApproveNote({ settings: {} }, task(), config).hold).toBe(
+      '자동 승인은 턴이 끝날 때 판정합니다. 이 결과는 사람이 승인합니다. 다음 턴이 끝날 때 다시 판정합니다.',
+    )
+  })
+
+  it('카운트다운 중이거나, 꺼진 단계이거나, 승인 대기가 아니면 까닭을 보이지 않는다', () => {
+    const counting = task({ countdown: { started_at: 'x', seconds: 15 } })
+    expect(autoApproveNote({ settings: {} }, counting, config)).toEqual({ on: true, hold: null })
+    expect(autoApproveNote({ settings: { auto_approve: { rca: false } } }, task(), config)).toEqual(
+      {
+        on: false,
+        hold: null,
+      },
+    )
+    expect(autoApproveNote({ settings: {} }, task({ status: 'working' }), config).hold).toBeNull()
+    expect(autoApproveNote({ settings: {} }, { ...task(), node: 'verify' }, config)).toEqual({
+      on: false,
+      hold: null,
+    })
+  })
+
+  it('사람이 앱에서 한 일([취소], [즉시 중단], 설정)과 재시작 조정은 알리지 않는다 (D130, D121)', () => {
+    for (const r of ['cancel', 'interrupt', 'settings', 'restart'] as const) {
+      expect(holdNeedsNotice([r]), r).toBe(false)
+    }
+    for (const r of [
+      'session',
+      'invalid',
+      'open_questions',
+      'intent_deviation',
+      'recommended_next',
+      'background',
+      'operation',
+    ] as const) {
+      expect(holdNeedsNotice([r]), r).toBe(true)
+    }
+    expect(holdNeedsNotice(['cancel', 'session'])).toBe(true)
+    expect(Object.keys(AUTO_HOLD_LABEL)).toHaveLength(11)
   })
 })
 

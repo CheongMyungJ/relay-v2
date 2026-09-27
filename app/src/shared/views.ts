@@ -216,6 +216,16 @@ export interface TaskView {
   errorCount: number
   /** 형식 오류 되돌림의 연속 횟수 (D21, D107) */
   bounces: number
+  /** 자동 승인 카운트다운 (4.3, D83, D127). 카운트다운 중이 아니면 null */
+  countdown: CountdownView | null
+}
+
+/** 자동 승인 카운트다운. 승인 화면에 남은 초와 [취소]를 보인다 (D83) */
+export interface CountdownView {
+  /** 카운트다운 초 */
+  seconds: number
+  /** 끝나는 때 (Date.now()와 같은 ms). 렌더러가 남은 초를 센다 */
+  endsAt: number
 }
 
 export interface WorkView {
@@ -433,6 +443,11 @@ export interface ReviewView {
   draftSize: Size | null
   /** 고른 size마다의 판정. none은 고르지 않았을 때다 */
   gates: Record<'none' | Size, ApprovalGate>
+  /**
+   * 자동 승인 안내 (4.2, 4.3, D128~D131). on은 지금 설정으로 자동 승인이 켜진 단계인지, hold는 켜진 단계의 승인
+   * 대기인데 카운트다운하지 않는 까닭이다. 카운트다운은 TaskView.countdown이다
+   */
+  autoApprove: { on: boolean; hold: string | null }
   /** verify: Work 완료 화면 (시나리오 7-3, D119, D120) */
   completion: Completion | null
 }
@@ -489,7 +504,7 @@ export interface NewWorkInput {
   baseBranch: string
   /** 원격이면 git fetch 뒤 origin/<브랜치>에서 분기한다 */
   baseLocation: 'local' | 'remote'
-  /** Work별 설정 (D72). M3는 질문 방식만 덮어쓴다. 없으면 앱 설정을 따른다 */
+  /** Work별 설정 (D72): 단계별 자동 승인과 스킬별 질문 방식. 없는 것은 앱 설정을 따른다 */
   settings?: WorkSettings
 }
 

@@ -3,13 +3,16 @@
 // 상태는 work.json이고 main이 전이마다 쓴다 (I11). 설정은 판정하는 때의 값을 받는다 (D73).
 // 기본 흐름, [오류 무시하고 승인](D112), 사람 조작(중단, 재개, 멈춤, 포기), 대기열(D18), 재시작 조정(D75, D78),
 // 단계 선택(되감기와 건너뛰기, 6.2), 전달(시나리오 7, D119, D120)과 정리(시나리오 8), 끊긴 작업의 [다시 시도]와
-// [무시](D121~D123), 앱 소유 파일의 해시(D124)와 정리 세션의 프로세스(D126) 기록을 담는다. 자동 승인은
-// M7에서 더한다. 세션 상한은 main이 세고, 자리가 없으면 task.queued를 넣는다. 단계 선택의 계산은 core/rewind,
-// 전달의 판정은 core/delivery, 정리의 판정은 core/cleanup, 끊긴 작업의 알림과 재개 판정은 core/recovery가 한다.
+// [무시](D121~D123), 앱 소유 파일의 해시(D124)와 정리 세션의 프로세스(D126) 기록, 자동 승인 카운트다운(4.3,
+// D127~D131)을 담는다. 세션 상한은 main이 세고, 자리가 없으면 task.queued를 넣는다. 카운트다운의 타이머는 main이
+// 돌고, 끝나면 autoApprove를 넣는다. 단계 선택의 계산은 core/rewind, 전달의 판정은 core/delivery, 정리의 판정은
+// core/cleanup, 끊긴 작업의 알림과 재개 판정은 core/recovery, 자동 승인의 조건은 core/approval이 한다.
 import type { AppConfig, WorkSettings } from '../shared/config'
-import type { Decision, NodeName, Size } from '../shared/contracts'
+import type { Decision, Handoff, NodeName, Size } from '../shared/contracts'
 import type { StepExpect, WorkActions } from '../shared/views'
 import type {
+  ApprovalBy,
+  AutoHoldReason,
   CheckSummary,
   CleanOperation,
   CleanStage,
@@ -17,6 +20,7 @@ import type {
   DeliveryChoice,
   DeliveryRecord,
   DeliveryStage,
+  FormatIssue,
   LifecycleEvent,
   OwnedFile,
   OwnedFileHashes,
@@ -28,8 +32,9 @@ import type {
   UncommittedAction,
   WorkState,
 } from '../shared/work'
-import { REVIEWABLE, approvalGate } from './approval'
+import { REVIEWABLE, approvalGate, approvalMode, autoApproveHolds } from './approval'
 import { canClean } from './cleanup'
+import { mergeWorkSettings } from './config'
 import { commitMessage, deliveryStart, stashMessage, stoppedVerify } from './delivery'
 import { NODES, WORK_COMPLETE, defaultNext, isPrevious } from './pipeline'
 import { workBranch } from './records'
@@ -116,8 +121,13 @@ export interface Stopped extends HookSignal {
   stopHookActive: boolean
   /** 이번 턴에 handoff.md(intake는 intent 초안도)가 바뀌었는가. main이 턴 시작 때와 비교해 정한다 */
   handoffChanged: boolean
-  /** Stop을 받고 main이 다시 한 형식 검사 (I15) */
-  check: CheckSummary
+  /** Stop을 받고 main이 다시 한 형식 검사 (I15). 자동 승인 조건은 머리글(handoffHeader)에서 읽는다 (4.3) */
+  check: CheckSummary & { handoffHeader?: Handoff | null }
+  /**
+   * 본문의 background_tasks나 session_crons가 비어 있지 않다: 세션이 백그라운드 작업이나 예약된 깨우기를 기다리며
+   * 쉬는 중이다 (core/approval pendingBackground, D129). 없으면 false다
+   */
+  background?: boolean
 }
 
 /** SessionEnd 훅 */
@@ -136,10 +146,29 @@ export interface PtyExited extends TaskEvent {
 
 export type SessionEnded = SessionEndHook | PtyExited
 
-/** 감시(I15)가 파일 변경을 보고 다시 한 형식 검사. 패널 표시만 바꾼다 */
+/**
+ * 감시(I15)가 파일 변경을 보고 다시 한 형식 검사. 패널 표시만 바꾼다. 카운트다운 중에 자동 승인 조건을 어기면
+ * 카운트다운을 멈춘다 (D130)
+ */
 export interface CheckUpdated extends TaskEvent {
   type: 'check.updated'
-  check: CheckSummary
+  check: CheckSummary & { handoffHeader?: Handoff | null }
+}
+
+/**
+ * 자동 승인 카운트다운이 끝났다 (4.3, D128). main의 타이머가 넣는다. check는 끝난 때 다시 읽은 형식 검사이고,
+ * 읽지 못했으면 null이다. startedAt은 끝난 카운트다운의 시작 시각이다: 그 사이 멈췄거나 새로 시작한 카운트다운이면
+ * 늦게 온 타이머라 무시한다
+ */
+export interface AutoApprove extends TaskEvent {
+  type: 'autoApprove'
+  startedAt: string
+  check: TaskCheck | null
+}
+
+/** 승인 화면의 [취소] (4.3): 카운트다운을 멈추고 사람의 승인을 기다린다 */
+export interface CancelCountdown extends TaskEvent {
+  type: 'countdown.cancel'
 }
 
 /**
@@ -198,10 +227,19 @@ export interface Abandon extends WorkEvent {
   type: 'abandon'
 }
 
-/** Work별 설정 (D72). main이 검사한 값을 넣는다. 질문 방식은 다음에 시작하는 task부터 쓴다 (D73) */
+/**
+ * Work별 설정 (D72). main이 검사한 값을 넣는다. 준 키만 바꾸고, 빈 값이면 그 키를 지워 앱 설정을 따른다
+ * (core/config mergeWorkSettings). 질문 방식은 다음에 시작하는 task부터 쓰고(D73), 카운트다운 중에 그 단계의 자동
+ * 승인을 끄면 바로 멈춘다 (D128)
+ */
 export interface UpdateSettings extends WorkEvent {
   type: 'settings.update'
   settings: WorkSettings
+}
+
+/** 앱 설정을 바꿨다 (D70). 카운트다운 중에 그 단계의 자동 승인을 껐으면 바로 멈춘다 (D128) */
+export interface ConfigUpdated extends WorkEvent {
+  type: 'config.updated'
 }
 
 /**
@@ -378,6 +416,8 @@ export type MachineEvent =
   | Stopped
   | SessionEnded
   | CheckUpdated
+  | AutoApprove
+  | CancelCountdown
   | Approve
   | Interrupt
   | Resume
@@ -386,6 +426,7 @@ export type MachineEvent =
   | ResumeWork
   | Abandon
   | UpdateSettings
+  | ConfigUpdated
   | AppRestarted
   | SelectStep
   | RewindBackedUp
@@ -422,7 +463,7 @@ export type Effect =
   /** intent 초안을 intent.md로 확정하고 이전 버전은 intent.history/에 둔다 (4.1) */
   | { type: 'confirmIntent'; taskId: string; version: number; size: Size }
   /**
-   * decisions.md에 handoff의 결정을 더한다 (5.4).
+   * decisions.md에 handoff의 결정을 더한다 (5.4). by는 승인 방식이다(사람 승인, 자동 승인).
    * decisions가 null이면 [오류 무시하고 승인]에서 머리글을 읽지 못한 것이다 (D112)
    */
   | {
@@ -430,9 +471,16 @@ export type Effect =
       taskId: string
       node: NodeName
       at: string
-      by: 'human'
+      by: ApprovalBy
       decisions: Decision[] | null
     }
+  /**
+   * 자동 승인 카운트다운의 타이머를 건다 (4.3, D127). 끝나면 main이 파일을 다시 읽어 autoApprove를 넣는다.
+   * 같은 Work의 앞 타이머는 푼다. 카운트다운의 상태는 work.json의 task 기록에 있고 main은 타이머만 돈다
+   */
+  | { type: 'startCountdown'; taskId: string; startedAt: string; seconds: number }
+  /** 카운트다운의 타이머를 푼다: 카운트다운이 멈췄거나 승인됐다 */
+  | { type: 'stopCountdown'; taskId: string }
   /** events.jsonl에 한 줄 더한다 (5.5) */
   | { type: 'log'; event: LifecycleEvent }
   /**
@@ -644,6 +692,80 @@ const unqueued = (task: TaskRecord): TaskRecord => omit(task, 'queued_at')
 /** [이 단계 끝나면 멈춤] 표시를 지운 Work */
 const withoutStopAfter = (work: WorkState): WorkState => omit(work, 'stop_after_step')
 
+// ---------- 자동 승인 카운트다운 (4.3, D127~D131) ----------
+
+/** 카운트다운을 멈추고 자동 승인하지 않은 까닭을 적는다. 사람의 승인을 기다리고, 다음 Stop에서 다시 판정한다 */
+function held(task: TaskRecord, at: string, reasons: AutoHoldReason[]): TaskRecord {
+  return { ...omit(task, 'countdown'), auto_hold: { at, reasons } }
+}
+
+/** 이 task가 어긴 자동 승인 조건 (4.3, D129). evidence·rca·fix는 의도 승인 뒤라 intent가 있다 */
+function holdsNow(
+  work: WorkState,
+  task: TaskRecord,
+  check: CheckSummary & { handoffHeader?: Handoff | null },
+  background: boolean,
+): AutoHoldReason[] {
+  return autoApproveHolds({ node: task.node, size: work.intent?.size ?? 'M', check, background })
+}
+
+/**
+ * Stop으로 승인 대기가 된 task의 자동 승인 판정 (4.3, D128, D129, D131). 그때의 설정으로 자동 승인이 켜진 단계이고
+ * 조건을 모두 만족하면 카운트다운을 시작한다. 어긴 조건은 승인 화면에 보이게 적는다. 턴이 끝날 때마다 새로 판정한다
+ */
+function judgeAtStop(work: WorkState, task: TaskRecord, e: Stopped, config: AppConfig): TaskRecord {
+  if (approvalMode(config, work.settings, task.node) !== 'auto') return task
+  const reasons: AutoHoldReason[] = work.operation
+    ? ['operation']
+    : holdsNow(work, task, e.check, e.background === true)
+  if (reasons.length) return { ...task, auto_hold: { at: e.at, reasons } }
+  return { ...task, countdown: { started_at: e.at, seconds: config.auto_approve_countdown_sec } }
+}
+
+/** 카운트다운 중인 task의 단계에서 자동 승인을 껐으면(앱 설정이든 Work 설정이든) 바로 멈춘다 (D128) */
+function autoTurnedOff(work: WorkState, at: string, config: AppConfig): WorkState {
+  const task = currentTask(work)
+  if (!task?.countdown || approvalMode(config, work.settings, task.node) === 'auto') return work
+  return withTask(work, held(task, at, ['settings']))
+}
+
+/**
+ * 카운트다운은 승인 대기인 task에만 있다 (D127): 승인 대기를 벗어난 task(작업 중, 승인됨, 폐기됨 등)의 카운트다운과
+ * 자동 승인하지 않은 까닭은 지운다. 새 요청(UserPromptSubmit)으로 작업 중이 되면 이렇게 카운트다운이 멈춘다 (4.3).
+ * 카운트다운이 바뀌었으면 main의 타이머를 걸거나 푼다
+ */
+function countdownEffects(before: WorkState, t: Transition): Transition {
+  if (t.work === before) return t
+  const stale = (x: TaskRecord) =>
+    x.status !== 'awaiting_approval' && (x.countdown !== undefined || x.auto_hold !== undefined)
+  const work = t.work.tasks.some(stale)
+    ? {
+        ...t.work,
+        tasks: t.work.tasks.map((x): TaskRecord =>
+          stale(x) ? omit(x, 'countdown', 'auto_hold') : x,
+        ),
+      }
+    : t.work
+  const stops: Effect[] = []
+  const starts: Effect[] = []
+  for (const x of work.tasks) {
+    const was = before.tasks.find((b) => b.id === x.id)?.countdown
+    const now = x.countdown
+    if (was && was.started_at !== now?.started_at)
+      stops.push({ type: 'stopCountdown', taskId: x.id })
+    if (now && now.started_at !== was?.started_at) {
+      starts.push({
+        type: 'startCountdown',
+        taskId: x.id,
+        startedAt: now.started_at,
+        seconds: now.seconds,
+      })
+    }
+  }
+  if (work === t.work && !stops.length && !starts.length) return t
+  return { ...t, work, effects: [...stops, ...t.effects, ...starts] }
+}
+
 /**
  * 세션을 끝낸다: 살아 있으면 endSession, 대기열에 있으면 dequeue. 승인 대기와 막힘은 그대로 두고,
  * 그 밖에는 중단됨이다 (3.3). 세션도 대기열도 아니면 null. 단계 선택(rewind, skip)으로 끝낸 task는 곧
@@ -668,12 +790,14 @@ function endTask(
   }
   if (!task.session?.alive) return null
   const kept = reason !== 'abandoned' && KEPT_WITHOUT_SESSION.includes(task.status)
+  const ended: TaskRecord = {
+    ...task,
+    status: kept ? task.status : 'interrupted',
+    session: { ...task.session, alive: false, ended_at: at },
+  }
   return {
-    task: {
-      ...task,
-      status: kept ? task.status : 'interrupted',
-      session: { ...task.session, alive: false, ended_at: at },
-    },
+    // 카운트다운 중이던 승인 대기는 카운트다운을 멈추고 사람의 승인을 기다린다 (D130)
+    task: kept && task.countdown ? held(ended, at, ['interrupt']) : ended,
     effects: [
       log(work, at, 'task.interrupted', { reason }, task),
       { type: 'endSession', taskId: task.id },
@@ -705,7 +829,8 @@ export function createWork(input: NewWork): Transition {
     base_branch: input.baseBranch,
     base_commit: input.baseCommit,
     intent: null,
-    settings: input.settings ?? {},
+    // 빈 값은 앱 설정을 따른다는 뜻이라 두지 않는다 (D72)
+    settings: mergeWorkSettings({}, input.settings ?? {}),
     file_hashes: hashes,
     tasks: [],
   }
@@ -731,6 +856,7 @@ const TASK_COMMANDS: readonly MachineEvent['type'][] = [
   'session.failed',
   'task.queued',
   'approve',
+  'countdown.cancel',
   'interrupt',
   'resume',
   'retry',
@@ -742,6 +868,7 @@ const TASK_COMMANDS: readonly MachineEvent['type'][] = [
  */
 const BLOCKED_BY_OPERATION: readonly MachineEvent['type'][] = [
   'approve',
+  'countdown.cancel',
   'interrupt',
   'resume',
   'retry',
@@ -754,6 +881,10 @@ const BLOCKED_BY_OPERATION: readonly MachineEvent['type'][] = [
 ]
 
 export function transition(work: WorkState, event: MachineEvent, config: AppConfig): Transition {
+  return countdownEffects(work, dispatch(work, event, config))
+}
+
+function dispatch(work: WorkState, event: MachineEvent, config: AppConfig): Transition {
   if (work.operation && BLOCKED_BY_OPERATION.includes(event.type)) {
     return unchanged(work, OPERATION_BLOCKS)
   }
@@ -765,9 +896,11 @@ export function transition(work: WorkState, event: MachineEvent, config: AppConf
     case 'abandon':
       return abandon(work, event)
     case 'settings.update':
-      return updateSettings(work, event)
+      return updateSettings(work, event, config)
+    case 'config.updated':
+      return configUpdated(work, event, config)
     case 'app.restarted':
-      return restarted(work, event)
+      return restarted(work, event, config)
     case 'selectStep':
       return selectStep(work, event)
     case 'rewind.backedUp':
@@ -813,6 +946,7 @@ type TaskMachineEvent = Exclude<
   | ResumeWork
   | Abandon
   | UpdateSettings
+  | ConfigUpdated
   | AppRestarted
   | SelectStep
   | RewindBackedUp
@@ -850,6 +984,10 @@ function taskTransition(work: WorkState, event: TaskMachineEvent, config: AppCon
       return queued(work, task, event)
     case 'approve':
       return approve(work, task, event)
+    case 'autoApprove':
+      return autoApprove(work, task, event, config)
+    case 'countdown.cancel':
+      return cancelCountdown(work, task, event)
     case 'interrupt':
       return interrupt(work, task, event)
     case 'resume':
@@ -857,8 +995,7 @@ function taskTransition(work: WorkState, event: TaskMachineEvent, config: AppCon
     case 'retry':
       return retry(work, task, event)
     case 'check.updated':
-      if (task.status === 'approved' || task.status === 'interrupted') return unchanged(work)
-      return { work: withTask(work, { ...task, check: summarize(event.check) }), effects: [] }
+      return checkUpdated(work, task, event)
     case 'SessionEnd':
     case 'pty.exit':
       return sessionEnded(work, task, event)
@@ -1010,8 +1147,16 @@ function stop(work: WorkState, task: TaskRecord, e: Stopped, config: AppConfig):
   const status = handoffStatus(check)
   if (status) {
     const entered = status === 'awaiting_approval' && task.status !== 'awaiting_approval'
+    // 턴이 끝날 때마다 자동 승인을 새로 판정한다 (D131)
+    const base: TaskRecord = {
+      ...omit(task, 'countdown', 'auto_hold'),
+      status,
+      bounce_count: 0,
+      check,
+    }
+    const next = status === 'awaiting_approval' ? judgeAtStop(work, base, e, config) : base
     return {
-      work: withTask(work, { ...task, status, bounce_count: 0, check }),
+      work: withTask(work, next),
       effects: entered ? [log(work, e.at, 'task.awaiting_approval', {}, task)] : [],
     }
   }
@@ -1047,7 +1192,12 @@ function sessionEnded(work: WorkState, task: TaskRecord, e: SessionEnded): Trans
   }
   const session = { ...task.session, alive: false, ended_at: e.at }
   if (KEPT_WITHOUT_SESSION.includes(task.status)) {
-    return { work: withTask(work, { ...task, session }), effects: [] }
+    // 카운트다운 중에 세션이 끝나면(/exit, 크래시) 카운트다운을 멈추고 사람의 승인을 기다린다 (D130)
+    const kept: TaskRecord = { ...task, session }
+    return {
+      work: withTask(work, task.countdown ? held(kept, e.at, ['session']) : kept),
+      effects: [],
+    }
   }
   return {
     work: withTask(work, { ...task, session, status: 'session_ended' }),
@@ -1082,31 +1232,59 @@ function approve(work: WorkState, task: TaskRecord, e: Approve): Transition {
   }
   const size = task.node === 'intake' ? (e.size ?? e.check.intentDraft?.size) : work.intent?.size
   if (!size) return unchanged(work, `${task.id}: intent의 크기를 모름`)
-  const header = e.check.handoffHeader
+  return approveNow(work, task, {
+    at: e.at,
+    check: e.check,
+    size,
+    by: 'human',
+    ...(forced ? { ignored: gate.errors } : {}),
+  })
+}
 
+/** 승인을 기록할 것 */
+interface Approval {
+  at: string
+  /** 승인한 때의 형식 검사. 기록할 결정과 이전 단계 추천을 머리글에서 읽는다 */
+  check: TaskCheck
+  /** intent의 크기. intake는 의도 승인에서 확정하는 크기다 */
+  size: Size
+  /** 사람 승인이나 자동 승인 (5.4, 5.5) */
+  by: ApprovalBy
+  /** [오류 무시하고 승인]으로 넘긴 오류 (D112) */
+  ignored?: FormatIssue[]
+}
+
+/**
+ * 승인을 기록하고 다음 단계로 간다 (시나리오 4-4, 5). 사람의 [승인]과 자동 승인(4.3)이 같이 쓴다. 승인 방식은
+ * work.json(approved_by), events.jsonl(task.approved의 by), decisions.md의 머리 줄에 남긴다 (5.4, 5.5).
+ * 카운트다운과 자동 승인하지 않은 까닭은 지운다.
+ */
+function approveNow(work: WorkState, task: TaskRecord, a: Approval): Transition {
+  const { size } = a
+  const header = a.check.handoffHeader
   const session = task.session?.alive
-    ? { ...task.session, alive: false, ended_at: e.at }
+    ? { ...task.session, alive: false, ended_at: a.at }
     : task.session
   const approved: TaskRecord = {
-    ...task,
+    ...omit(task, 'countdown', 'auto_hold'),
     status: 'approved',
-    approved_at: e.at,
-    approved_by: 'human',
-    check,
+    approved_at: a.at,
+    approved_by: a.by,
+    check: summarize(a.check),
     session,
-    ...(forced ? { ignored_errors: gate.errors } : {}),
+    ...(a.ignored ? { ignored_errors: a.ignored } : {}),
   }
   const stopAfterStep = work.stop_after_step === true
   let next: WorkState = withoutStopAfter(withTask(work, approved))
-  const payload = forced ? { by: 'human', ignored_errors: gate.errors.length } : { by: 'human' }
-  const effects: Effect[] = [log(work, e.at, 'task.approved', payload, task)]
+  const payload = a.ignored ? { by: a.by, ignored_errors: a.ignored.length } : { by: a.by }
+  const effects: Effect[] = [log(work, a.at, 'task.approved', payload, task)]
   if (task.session?.alive) effects.push({ type: 'endSession', taskId: task.id })
   effects.push({
     type: 'appendDecisions',
     taskId: task.id,
     node: task.node,
-    at: e.at,
-    by: 'human',
+    at: a.at,
+    by: a.by,
     decisions: header ? header.decisions : null,
   })
   if (task.node === 'intake') {
@@ -1130,11 +1308,11 @@ function approve(work: WorkState, task: TaskRecord, e: Approve): Transition {
   }
   const nextNode = defaultNext(task.node, size)
   if (nextNode === WORK_COMPLETE) {
-    next = { ...next, status: 'completed', completed_at: e.at }
-    effects.push(log(work, e.at, 'work.completed', { delivery: 'none' }))
+    next = { ...next, status: 'completed', completed_at: a.at }
+    effects.push(log(work, a.at, 'work.completed', { delivery: 'none' }))
     return { work: next, effects }
   }
-  const created = newTask(next, nextNode, e.at)
+  const created = newTask(next, nextNode, a.at)
   next = { ...next, tasks: [...next.tasks, created] }
   effects.push({
     type: 'startTask',
@@ -1143,6 +1321,49 @@ function approve(work: WorkState, task: TaskRecord, e: Approve): Transition {
     reason: created.reason,
   })
   return { work: next, effects }
+}
+
+/**
+ * 자동 승인 카운트다운이 끝났다 (4.3, D128). 그때의 설정과 다시 읽은 handoff로 다시 판정해, 조건을 모두 만족하면
+ * 자동 승인한다. 아니면 카운트다운을 멈추고 사람의 승인을 기다린다(D130). 끊긴 작업의 기록이 있으면 승인하지
+ * 않는다(D122). 멈췄거나 새로 시작한 카운트다운의 늦은 타이머는 무시한다.
+ */
+function autoApprove(
+  work: WorkState,
+  task: TaskRecord,
+  e: AutoApprove,
+  config: AppConfig,
+): Transition {
+  const c = task.countdown
+  if (!c || c.started_at !== e.startedAt) return unchanged(work)
+  const hold = (reasons: AutoHoldReason[], check?: TaskCheck): Transition => ({
+    work: withTask(work, held(check ? { ...task, check: summarize(check) } : task, e.at, reasons)),
+    effects: [],
+  })
+  if (work.operation) return hold(['operation'])
+  if (approvalMode(config, work.settings, task.node) !== 'auto') return hold(['settings'])
+  const size = work.intent?.size
+  if (!e.check || !size) return hold(['invalid'])
+  const reasons = holdsNow(work, task, e.check, false)
+  if (reasons.length) return hold(reasons, e.check)
+  return approveNow(work, task, { at: e.at, check: e.check, size, by: 'auto' })
+}
+
+/** 승인 화면의 [취소] (4.3): 카운트다운을 멈추고 사람의 승인을 기다린다. 다음 Stop에서 다시 판정한다 (D131) */
+function cancelCountdown(work: WorkState, task: TaskRecord, e: CancelCountdown): Transition {
+  if (!task.countdown) return unchanged(work, `${task.id}는 자동 승인 카운트다운 중이 아님`)
+  return { work: withTask(work, held(task, e.at, ['cancel'])), effects: [] }
+}
+
+/**
+ * 감시(I15)로 다시 한 검사. 패널 표시만 바꾼다. 카운트다운 중이면 자동 승인 조건을 다시 보고, 어기면 카운트다운을
+ * 멈춘다 (D130). 카운트다운은 Stop 때 백그라운드 작업이 없을 때만 시작했다 (D129)
+ */
+function checkUpdated(work: WorkState, task: TaskRecord, e: CheckUpdated): Transition {
+  if (task.status === 'approved' || task.status === 'interrupted') return unchanged(work)
+  const next: TaskRecord = { ...task, check: summarize(e.check) }
+  const reasons = task.countdown ? holdsNow(work, task, e.check, false) : []
+  return { work: withTask(work, reasons.length ? held(next, e.at, reasons) : next), effects: [] }
 }
 
 /**
@@ -1246,12 +1467,22 @@ function abandon(work: WorkState, e: Abandon): Transition {
   }
 }
 
-/** Work별 설정 (D72). 끝난 Work는 바꾸지 않는다 */
-function updateSettings(work: WorkState, e: UpdateSettings): Transition {
+/**
+ * Work별 설정 (D72). 준 키만 바꾸고, 빈 값이면 앱 설정을 따른다. 끝난 Work는 바꾸지 않는다.
+ * 카운트다운 중에 그 단계의 자동 승인을 끄면 바로 멈춘다 (D128)
+ */
+function updateSettings(work: WorkState, e: UpdateSettings, config: AppConfig): Transition {
   if (work.status !== 'active' && work.status !== 'stopped') {
     return unchanged(work, '끝난 Work의 설정은 바꾸지 않음')
   }
-  return { work: { ...work, settings: e.settings }, effects: [] }
+  const next = { ...work, settings: mergeWorkSettings(work.settings, e.settings) }
+  return { work: autoTurnedOff(next, e.at, config), effects: [] }
+}
+
+/** 앱 설정을 바꿨다 (D70). 카운트다운 중에 그 단계의 자동 승인을 껐으면 바로 멈춘다 (D128) */
+function configUpdated(work: WorkState, e: ConfigUpdated, config: AppConfig): Transition {
+  const next = autoTurnedOff(work, e.at, config)
+  return next === work ? unchanged(work) : { work: next, effects: [] }
 }
 
 // ---------- 단계 선택 (6.2) ----------
@@ -1676,13 +1907,24 @@ function cleanFailed(work: WorkState): Transition {
  * - 남아 있는 진행 중 작업 기록은 끊긴 작업으로 표시한다(시나리오 9-4, D121). 알리고 [다시 시도]·[무시]만 받는다.
  * - 정리 세션은 재시작 뒤에 남지 않는다: 적어 둔 프로세스를 지운다 (main이 먼저 확인해 끝냈다, D126).
  * - main이 끝낸 고아 프로세스(D76)는 그 task의 조정 이벤트에 killed_pid로 남긴다.
+ * - 남은 자동 승인 카운트다운은 지운다. 카운트다운 중이었거나 이 조정으로 승인 대기가 된 task는 자동 승인이 켜진
+ *   단계라도 사람이 승인한다 (D75, D127). 다음 Stop에서 다시 판정한다 (D131).
  */
-function restarted(work: WorkState, e: AppRestarted): Transition {
+function restarted(work: WorkState, e: AppRestarted, config: AppConfig): Transition {
   const current = currentTask(work)
   const effects: Effect[] = []
   const killed = (t: TaskRecord) => {
     const k = e.killed?.find((x) => x.taskId === t.id)
     return k ? { killed_pid: k.pid } : {}
+  }
+  /** 재시작 조정으로 승인 대기가 됐거나 카운트다운이 끊긴 task: 자동 승인하지 않은 까닭을 적는다 (D75) */
+  const restartHold = (before: TaskRecord, after: TaskRecord): TaskRecord => {
+    const auto = approvalMode(config, work.settings, after.node) === 'auto'
+    const via = before.countdown !== undefined || before.status !== 'awaiting_approval'
+    const next = omit(after, 'countdown')
+    return after.status === 'awaiting_approval' && auto && via
+      ? held(next, e.at, ['restart'])
+      : next
   }
   const tasks = work.tasks.map((t): TaskRecord => {
     const session = t.session?.alive ? { ...t.session, alive: false, ended_at: e.at } : t.session
@@ -1695,7 +1937,7 @@ function restarted(work: WorkState, e: AppRestarted): Transition {
           ? log(work, e.at, 'task.interrupted', { reason: 'app_restart', queued: true }, t)
           : log(work, e.at, 'task.awaiting_approval', { reason: 'app_restart' }, t),
       )
-      return { ...unqueued(t), status }
+      return restartHold(t, { ...unqueued(t), status })
     }
     const running = t.session?.alive === true || (t.status === 'working' && !t.session?.alive)
     if (!running) return { ...t, session }
@@ -1707,7 +1949,7 @@ function restarted(work: WorkState, e: AppRestarted): Transition {
           log(work, e.at, 'task.awaiting_approval', { reason: 'app_restart', ...killed(t) }, t),
         )
       }
-      return { ...t, session, status, check: check ?? t.check }
+      return restartHold(t, { ...t, session, status, check: check ?? t.check })
     }
     effects.push(log(work, e.at, 'task.interrupted', { reason: 'app_restart', ...killed(t) }, t))
     return { ...t, session, status: 'interrupted', ...(check ? { check } : {}) }

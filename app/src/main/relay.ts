@@ -255,7 +255,8 @@ export class Relay {
 
   /**
    * 설정 화면에서 바꾼 값을 적용한다 (D70). 바로 적용하고, 질문 방식만 다음에 시작하는 task부터 쓴다 (D73).
-   * 세션 상한을 올리면 대기열의 task를 바로 시작한다.
+   * 세션 상한을 올리면 대기열의 task를 바로 시작한다. 카운트다운 중에 그 단계의 자동 승인을 끄면 바로 멈춘다 (D128).
+   * 자동 승인을 켜도 이미 승인 대기인 task는 카운트다운하지 않는다: 턴이 끝날 때 판정한다
    */
   updateConfig(patch: unknown): Promise<CommandResult & { config?: AppConfig }> {
     const run = this.configQueue.then(async (): Promise<CommandResult & { config?: AppConfig }> => {
@@ -264,6 +265,7 @@ export class Relay {
       await saveConfig(this.o.home, r.value)
       this.config = r.value
       this.pool.fill()
+      for (const w of this.works.values()) void w.configChanged()
       return { ok: true, config: r.value }
     })
     this.configQueue = run.catch(() => undefined)
@@ -308,7 +310,7 @@ export class Relay {
    * work-id, relay/<work-id> 브랜치와 worktree, 기준 커밋(D97), request.md, work.json을 만들고
    * intake task를 시작한다. 기준 위치가 원격이면 fetch한 origin/<브랜치>에서 분기하고,
    * fetch가 실패하면 Work를 만들지 않는다. 세션 상한을 넘으면 intake는 대기열에서 기다린다 (D18).
-   * Work별 질문 방식을 받으면 work.json에 둔다 (D72).
+   * Work별 자동 승인과 질문 방식을 받으면 work.json에 둔다 (D72).
    */
   async createWork(projectId: string, input: NewWorkInput): Promise<CreateWorkResult> {
     const project = this.projects.get(projectId)
@@ -396,6 +398,11 @@ export class Relay {
 
   async review(workKey: string, taskId: string): Promise<ReviewView | null> {
     return (await this.works.get(workKey)?.review(taskId)) ?? null
+  }
+
+  /** 승인 화면의 [취소]: 자동 승인 카운트다운을 멈춘다 (4.3) */
+  cancelCountdown(workKey: string, taskId: string): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.cancelCountdown(taskId))
   }
 
   // ---------- 사람 조작 (시나리오 3-4, 3-5, 4.4) ----------
@@ -511,14 +518,13 @@ export class Relay {
     return this.withWork(workKey, (w) => w.dismissNotice(id))
   }
 
-  /** Work별 질문 방식 (D72). 검사한 뒤 넣는다 */
+  /**
+   * Work별 자동 승인과 질문 방식 (D72). 검사한 뒤 넣는다. 준 키만 바꾸고, 빈 값이면 그 키를 앱 설정으로 되돌린다
+   */
   updateWorkSettings(workKey: string, settings: unknown): Promise<CommandResult> {
     const r = checkWorkSettings(settings)
     if (!r.ok) return Promise.resolve({ ok: false, error: r.error })
-    // 질문 방식을 모두 앱 설정으로 되돌리면 question_mode를 비운다
-    return this.withWork(workKey, (w) =>
-      w.updateSettings({ question_mode: r.value.question_mode ?? {} }),
-    )
+    return this.withWork(workKey, (w) => w.updateSettings(r.value))
   }
 
   // ---------- 터미널 ----------

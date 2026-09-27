@@ -518,7 +518,7 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
     const b = await s.create('버그 B', { question_mode: { 'work-start': 'confirm_each' } })
     await untilTask(s, b, (t) => t.status === 'queued', 'B 대기열')
     expect((await s.h.relay.updateConfig({ session_limit: 0 })).ok).toBe(false)
-    expect((await s.h.relay.updateConfig({ auto_approve: { fix: true } })).ok).toBe(false)
+    expect((await s.h.relay.updateConfig({ auto_approve: { verify: true } })).ok).toBe(false)
     // 세션 상한을 올리면 바로 적용한다 (D73)
     expect(await s.h.relay.updateConfig({ session_limit: 2 })).toMatchObject({ ok: true })
     await untilTask(s, b, (t) => t.live, 'B 시작')

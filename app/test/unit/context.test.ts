@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { approvalMode } from '../../src/core/approval'
 import {
-  approvalMode,
   buildContext,
   closingMessage,
   discardedAttempts,
@@ -131,10 +131,12 @@ describe('context.md: 시나리오 2-4 표의 항목', () => {
     )
   })
 
-  it('승인 방식과 마무리 안내 문구 (D104)', () => {
-    expect(section(md, '승인 방식')).toBe('수동 승인')
+  it('승인 방식과 마무리 안내 문구 (D104, D132)', () => {
+    expect(section(md, '승인 방식')).toBe(
+      '수동 승인 (task를 시작할 때의 설정. 설정은 바로 적용되고, 자동 승인 여부는 턴이 끝날 때의 설정으로 정한다)',
+    )
     expect(section(md, '마무리 안내 문구')).toBe(
-      '산출물과 handoff를 썼습니다. 오른쪽 패널에서 확인하고 [승인]을 누르세요. 고칠 점은 여기에 말해 주세요.',
+      '산출물과 handoff를 썼습니다. 오른쪽 패널에서 확인하고 [승인]을 누르세요. 자동 승인이 켜져 있으면 조건을 만족할 때 카운트다운 뒤 승인되고, 멈추려면 [취소]를 누르세요. 고칠 점은 여기에 말해 주세요.',
     )
   })
 
@@ -268,32 +270,31 @@ describe('context.md: verify', () => {
   })
 })
 
-describe('마무리 안내 문구 (D104)', () => {
-  it('승인 방식과 노드에 따라 고정 문구를 쓴다', () => {
-    expect(closingMessage('fix', 'manual')).toBe(
-      '산출물과 handoff를 썼습니다. 오른쪽 패널에서 확인하고 [승인]을 누르세요. 고칠 점은 여기에 말해 주세요.',
-    )
-    expect(closingMessage('fix', 'auto')).toBe(
-      '산출물과 handoff를 썼습니다. 자동 승인이 켜진 단계라 조건을 만족하면 카운트다운 뒤 승인됩니다. 멈추려면 [취소]를 누르거나 여기에 말해 주세요.',
-    )
-    expect(closingMessage('intake', 'manual')).toBe(
+describe('마무리 안내 문구 (D104, D132)', () => {
+  it('노드에 따라 고정 문구를 쓴다. 자동 승인을 켤 수 있는 단계는 수동과 자동을 한 문구에 적는다', () => {
+    for (const node of ['evidence', 'rca', 'fix'] as const) {
+      expect(closingMessage(node)).toBe(
+        '산출물과 handoff를 썼습니다. 오른쪽 패널에서 확인하고 [승인]을 누르세요. 자동 승인이 켜져 있으면 조건을 만족할 때 카운트다운 뒤 승인되고, 멈추려면 [취소]를 누르세요. 고칠 점은 여기에 말해 주세요.',
+      )
+    }
+    expect(closingMessage('intake')).toBe(
       '산출물과 handoff를 썼습니다. 오른쪽 패널에서 확인하고 [의도 승인]을 누르세요. 고칠 점은 여기에 말해 주세요.',
     )
-    expect(closingMessage('verify', 'manual')).toBe(
+    expect(closingMessage('verify')).toBe(
       '산출물과 handoff를 썼습니다. 오른쪽 패널에서 확인하고 [완료만]을 누르세요. [이 단계 끝나면 멈춤]이 켜져 있거나 이전 단계를 추천했으면 [승인하고 멈춤]을 누르고, 전달은 멈춘 뒤 Work 완료 화면에서 고르세요. 고칠 점은 여기에 말해 주세요.',
     )
   })
 
   it('verify는 Work 완료 화면에서 누를 수 있는 전달 버튼을 적는다 (D104, D67, D118)', () => {
-    expect(closingMessage('verify', 'manual', ['[완료만]', '[push]', '[PR 생성]'])).toBe(
+    expect(closingMessage('verify', ['[완료만]', '[push]', '[PR 생성]'])).toBe(
       '산출물과 handoff를 썼습니다. 오른쪽 패널에서 확인하고 [완료만], [push], [PR 생성] 중 하나를 누르세요. [이 단계 끝나면 멈춤]이 켜져 있거나 이전 단계를 추천했으면 [승인하고 멈춤]을 누르고, 전달은 멈춘 뒤 Work 완료 화면에서 고르세요. 고칠 점은 여기에 말해 주세요.',
     )
-    expect(closingMessage('verify', 'manual', ['[완료만]', '[push]'])).toContain(
+    expect(closingMessage('verify', ['[완료만]', '[push]'])).toContain(
       '[완료만], [push] 중 하나를 누르세요',
     )
-    expect(closingMessage('verify', 'manual', ['[완료만]'])).toContain('[완료만]을 누르세요')
+    expect(closingMessage('verify', ['[완료만]'])).toContain('[완료만]을 누르세요')
     // 다른 노드는 전달 버튼과 상관없다
-    expect(closingMessage('fix', 'manual', ['[완료만]', '[push]'])).toContain('[승인]을 누르세요')
+    expect(closingMessage('fix', ['[완료만]', '[push]'])).toContain('[승인]을 누르세요')
     const md = buildContext({ ...input('verify'), delivery: ['[완료만]', '[push]', '[PR 생성]'] })
     expect(section(md, '마무리 안내 문구')).toContain(
       '[완료만], [push], [PR 생성] 중 하나를 누르세요',
@@ -303,24 +304,30 @@ describe('마무리 안내 문구 (D104)', () => {
   it('verify는 승인하면 멈출 때의 [승인하고 멈춤]도 적는다. 다른 노드는 [승인]뿐이다 (D119)', () => {
     // [이 단계 끝나면 멈춤]은 task가 도는 중에도 켜고 끌 수 있고, 이전 단계 추천은 에이전트가 마지막에 정한다
     for (const buttons of [[], ['[완료만]', '[push]'], ['[완료만]', '[push]', '[PR 생성]']]) {
-      expect(closingMessage('verify', 'manual', buttons)).toContain(
+      expect(closingMessage('verify', buttons)).toContain(
         '누르세요. [이 단계 끝나면 멈춤]이 켜져 있거나 이전 단계를 추천했으면 [승인하고 멈춤]을 누르고, 전달은 멈춘 뒤 Work 완료 화면에서 고르세요. 고칠 점은',
       )
     }
     for (const node of ['intake', 'evidence', 'rca', 'fix'] as const) {
-      expect(closingMessage(node, 'manual')).not.toContain('[승인하고 멈춤]')
+      expect(closingMessage(node)).not.toContain('[승인하고 멈춤]')
     }
-    // 자동 승인 문구는 버튼을 적지 않는다
-    expect(closingMessage('verify', 'auto', ['[완료만]', '[push]'])).toBe(
-      closingMessage('fix', 'auto'),
-    )
+    // 의도 승인과 Work 완료는 늘 수동이라 자동 승인을 적지 않는다 (4.2)
+    for (const node of ['intake', 'verify'] as const) {
+      expect(closingMessage(node)).not.toContain('자동 승인')
+    }
   })
 
-  it('자동 승인이 켜진 단계는 자동 문구를 넣는다', () => {
+  it('승인 방식 절은 task를 시작할 때의 설정이다. 문구는 설정과 상관없이 같다 (D128, D132)', () => {
     const config = { ...DEFAULT_CONFIG, auto_approve: { evidence: false, rca: true, fix: false } }
     const md = buildContext(input('rca', {}, config))
-    expect(section(md, '승인 방식')).toBe('자동 승인')
-    expect(section(md, '마무리 안내 문구')).toBe(closingMessage('rca', 'auto'))
+    expect(section(md, '승인 방식')).toBe(
+      '자동 승인 (task를 시작할 때의 설정. 설정은 바로 적용되고, 자동 승인 여부는 턴이 끝날 때의 설정으로 정한다)',
+    )
+    expect(section(md, '마무리 안내 문구')).toBe(closingMessage('rca'))
+    expect(section(buildContext(input('rca')), '마무리 안내 문구')).toBe(closingMessage('rca'))
+    expect(section(buildContext(input('intake', {}, config)), '승인 방식')).toBe(
+      '수동 승인 (의도 승인과 Work 완료는 늘 수동)',
+    )
   })
 })
 

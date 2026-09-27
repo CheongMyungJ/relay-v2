@@ -10,7 +10,7 @@ import type {
   WorkState,
   WorkStatus,
 } from '../shared/work'
-import { badge } from './approval'
+import { badge, holdNeedsNotice, holdText } from './approval'
 import { NODE_INFO, WORK_COMPLETE, defaultNext, isPrevious } from './pipeline'
 import { normalizeText, parseFrontMatter, sectionText } from './validate'
 
@@ -108,15 +108,26 @@ export function resumeHint(work: WorkState): string | null {
 }
 
 /**
- * 사람이 움직여야 하는 상태로 바뀌었을 때 알릴 문구 (D81). 배지(D80)가 사람이 필요한 상태로 바뀌었을
- * 때만 문구를 돌려준다: 질문 대기·입력 필요, 승인 대기, 막힘, 멈춤, handoff 없이 세션 종료.
- * 보고 있는 Work인지는 main이 가린다.
+ * 알릴 문구 (D81). 보고 있는 Work인지는 main이 가린다.
+ * - 자동 승인 카운트다운을 시작했다 (D81). 사람은 [취소]로 멈출 수 있다
+ * - 사람이 누르지 않았는데 자동 승인하지 않게 됐다: 조건을 어겨 카운트다운하지 않거나, 카운트다운 중에 세션이 끝나거나
+ *   조건을 어겨 멈췄다 (D130). 사람이 누른 [취소]·[즉시 중단]과 설정 변경, 재시작 조정은 알리지 않는다
+ * - 배지(D80)가 사람이 필요한 상태로 바뀌었다: 질문 대기·입력 필요, 승인 대기, 막힘, 멈춤, handoff 없이 세션 종료
  */
 export function humanNotice(before: WorkState, after: WorkState): string | null {
+  const task = after.tasks[after.tasks.length - 1]
+  const prior = task ? before.tasks.find((t) => t.id === task.id) : undefined
+  const c = task?.countdown
+  if (task && c && c.started_at !== prior?.countdown?.started_at) {
+    return `${taskLabel(task)}: ${c.seconds}초 뒤 자동 승인 (멈추려면 [취소])`
+  }
+  const hold = task?.auto_hold
+  if (task && hold && hold.at !== prior?.auto_hold?.at && holdNeedsNotice(hold.reasons)) {
+    return `${taskLabel(task)}: 승인 대기 — 자동 승인하지 않음(${holdText(hold.reasons)})`
+  }
   const b = badge(after)
   if (!b.hot || badge(before).kind === b.kind) return null
   if (b.kind === 'stopped') return stopNotice(after)
-  const task = after.tasks[after.tasks.length - 1]
   if (!task) return null
   return b.kind === 'session_ended'
     ? `${taskLabel(task)}: handoff 없이 세션 종료`

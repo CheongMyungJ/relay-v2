@@ -146,6 +146,9 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
     }),
   )
 
+  ipcMain.handle(IPC.cancelCountdown, async (_e, workKey: unknown, taskId: unknown) =>
+    (await ready).cancelCountdown(text(workKey), text(taskId)),
+  )
   ipcMain.handle(IPC.interrupt, async (_e, workKey: unknown, taskId: unknown) =>
     (await ready).interrupt(text(workKey), text(taskId)),
   )

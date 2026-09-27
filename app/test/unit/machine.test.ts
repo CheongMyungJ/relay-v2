@@ -16,7 +16,13 @@ import { OPERATION_BLOCKS } from '../../src/core/recovery'
 import type { TaskCheck } from '../../src/core/validate'
 import { DEFAULT_CONFIG, type AppConfig } from '../../src/shared/config'
 import type { Handoff, NodeName, Size } from '../../src/shared/contracts'
-import type { FormatIssue, TaskStatus, WorkState } from '../../src/shared/work'
+import type {
+  AutoHoldReason,
+  FormatIssue,
+  TaskRecord,
+  TaskStatus,
+  WorkState,
+} from '../../src/shared/work'
 
 // ---------- 도움 ----------
 
@@ -2568,5 +2574,429 @@ describe('앱 소유 파일의 해시 (D91, D124)', () => {
     expect(apply(old, { type: 'files.recorded', at: at(), hashes: {} }).work.file_hashes).toEqual(
       {},
     )
+  })
+})
+
+describe('자동 승인 (4.3, D127~D131)', () => {
+  const AUTO: AppConfig = {
+    ...DEFAULT_CONFIG,
+    auto_approve: { evidence: true, rca: true, fix: true },
+    auto_approve_countdown_sec: 15,
+  }
+  /** M 경로의 의도 승인(사람) 뒤 evidence 세션을 띄운 Work */
+  function evidenceRunning(settings: WorkState['settings'] = {}): WorkState {
+    const w = approve(stop(launch(newWork()), valid({}, 'M')).work, valid({}, 'M')).work
+    return launch({ ...w, settings })
+  }
+  /** evidence가 Stop으로 승인 대기가 되어 카운트다운 중인 Work */
+  function counting(check: TaskCheck = valid()): WorkState {
+    const w = stop(evidenceRunning(), check, {}, AUTO).work
+    if (!currentTask(w)?.countdown) throw new Error('카운트다운 중이 아님')
+    return w
+  }
+  const task = (work: WorkState) => currentTask(work) as TaskRecord
+  const started = (work: WorkState) => task(work).countdown?.started_at ?? ''
+  const fire = (work: WorkState, check: TaskCheck | null = valid(), config = AUTO) =>
+    apply(
+      work,
+      { type: 'autoApprove', taskId: task(work).id, at: at(), startedAt: started(work), check },
+      config,
+    )
+
+  it('Stop으로 승인 대기가 되면 조건을 모두 만족할 때 카운트다운을 시작하고 타이머를 건다 (D127)', () => {
+    const running = evidenceRunning()
+    const r = apply(
+      running,
+      {
+        type: 'Stop',
+        taskId: 't-02',
+        at: '2026-09-26T11:00:00+09:00',
+        stopHookActive: false,
+        handoffChanged: true,
+        check: valid(),
+      },
+      AUTO,
+    )
+    expect(task(r.work)).toMatchObject({
+      status: 'awaiting_approval',
+      countdown: { started_at: '2026-09-26T11:00:00+09:00', seconds: 15 },
+    })
+    expect(task(r.work).auto_hold).toBeUndefined()
+    expect(r.effects).toEqual([
+      expect.objectContaining({ type: 'log' }),
+      {
+        type: 'startCountdown',
+        taskId: 't-02',
+        startedAt: '2026-09-26T11:00:00+09:00',
+        seconds: 15,
+      },
+    ])
+    // 꺼진 단계는 카운트다운하지 않고 까닭도 적지 않는다
+    const manual = stop(running, valid())
+    expect(task(manual.work).countdown).toBeUndefined()
+    expect(task(manual.work).auto_hold).toBeUndefined()
+    expect(types(manual.effects)).toEqual(['log:task.awaiting_approval'])
+  })
+
+  it('카운트다운이 끝나면 다시 판정해 자동 승인한다. 승인 방식은 자동이고 다음 단계로 간다 (4.3, 5.4, 5.5)', () => {
+    const w = counting()
+    const r = fire(w)
+    expect(task(w).id).toBe('t-02')
+    const approved = r.work.tasks.find((t) => t.id === 't-02')
+    expect(approved).toMatchObject({ status: 'approved', approved_by: 'auto' })
+    expect(approved?.countdown).toBeUndefined()
+    expect(types(r.effects)).toEqual([
+      'stopCountdown',
+      'log:task.approved',
+      'endSession',
+      'appendDecisions',
+      'startTask',
+    ])
+    expect(r.effects[1]).toMatchObject({ event: { payload: { by: 'auto' } } })
+    expect(r.effects[3]).toMatchObject({ by: 'auto', decisions: HANDOFF.decisions })
+    expect(r.effects[4]).toMatchObject({ node: 'rca' })
+  })
+
+  it('intake와 verify는 자동 승인을 켜도 카운트다운하지 않는다 (4.2)', () => {
+    const intake = stop(launch(newWork()), valid({}, 'M'), {}, AUTO)
+    expect(task(intake.work).countdown).toBeUndefined()
+    expect(task(intake.work).auto_hold).toBeUndefined()
+    let w = approve(intake.work, valid({}, 'S')).work
+    w = approve(stop(launch(w), valid(), {}, AUTO).work, valid()).work
+    const verify = stop(launch(w), valid(), {}, AUTO)
+    expect(task(verify.work).node).toBe('verify')
+    expect(task(verify.work).countdown).toBeUndefined()
+  })
+
+  it('조건을 하나라도 어기면 카운트다운하지 않고 까닭을 적는다 (4.3, D129)', () => {
+    const rows: [TaskCheck, boolean, AutoHoldReason][] = [
+      [valid({ open_questions: ['기대 동작?'] }), false, 'open_questions'],
+      [
+        valid({ intent_deviation: { summary: '범위 밖', evidence: '로그' } }),
+        false,
+        'intent_deviation',
+      ],
+      [
+        valid({ recommended_next: { node: 'intake', reason: '의도 다시' } }),
+        false,
+        'recommended_next',
+      ],
+      [valid(), true, 'background'],
+    ]
+    for (const [check, background, reason] of rows) {
+      const r = apply(
+        evidenceRunning(),
+        {
+          type: 'Stop',
+          taskId: 't-02',
+          at: '2026-09-26T11:00:00+09:00',
+          stopHookActive: false,
+          handoffChanged: true,
+          check,
+          background,
+        },
+        AUTO,
+      )
+      expect(task(r.work).status, reason).toBe('awaiting_approval')
+      expect(task(r.work).countdown, reason).toBeUndefined()
+      expect(task(r.work).auto_hold, reason).toEqual({
+        at: '2026-09-26T11:00:00+09:00',
+        reasons: [reason],
+      })
+      expect(types(r.effects), reason).not.toContain('startCountdown')
+    }
+    // 막힘(4.4)과 형식 오류(대기)는 승인 대기가 아니라 카운트다운도 까닭도 없다
+    const blocked = stop(evidenceRunning(), BLOCKED, {}, AUTO).work
+    expect(task(blocked)).toMatchObject({ status: 'blocked' })
+    expect(task(blocked).countdown ?? task(blocked).auto_hold).toBeUndefined()
+    const idle = stop(evidenceRunning(), INVALID, {}, AUTO).work
+    expect(task(idle).countdown ?? task(idle).auto_hold).toBeUndefined()
+  })
+
+  it('[취소]하면 멈추고 사람의 승인을 기다린다. 늦게 온 타이머는 무시한다 (4.3)', () => {
+    const w = counting()
+    const old = started(w)
+    const r = apply(
+      w,
+      { type: 'countdown.cancel', taskId: 't-02', at: '2026-09-26T11:00:05+09:00' },
+      AUTO,
+    )
+    expect(task(r.work)).toMatchObject({
+      status: 'awaiting_approval',
+      auto_hold: { at: '2026-09-26T11:00:05+09:00', reasons: ['cancel'] },
+    })
+    expect(task(r.work).countdown).toBeUndefined()
+    expect(r.effects).toEqual([{ type: 'stopCountdown', taskId: 't-02' }])
+    const late = apply(
+      r.work,
+      { type: 'autoApprove', taskId: 't-02', at: at(), startedAt: old, check: valid() },
+      AUTO,
+    )
+    expect(late.work).toBe(r.work)
+    expect(late.rejected).toBeUndefined()
+    // 카운트다운 중이 아니면 [취소]를 받지 않는다. 사람은 승인할 수 있다
+    expect(
+      apply(r.work, { type: 'countdown.cancel', taskId: 't-02', at: at() }, AUTO).rejected,
+    ).toBe('t-02는 자동 승인 카운트다운 중이 아님')
+    const human = approve(r.work, valid())
+    expect(human.work.tasks[1]).toMatchObject({ status: 'approved', approved_by: 'human' })
+    expect(human.work.tasks[1]?.auto_hold).toBeUndefined()
+  })
+
+  it('카운트다운 중에 사람이 [승인]하면 사람 승인이다', () => {
+    const r = approve(counting(), valid())
+    expect(r.work.tasks[1]).toMatchObject({ status: 'approved', approved_by: 'human' })
+    expect(types(r.effects)[0]).toBe('stopCountdown')
+    expect(r.effects[1]).toMatchObject({ event: { payload: { by: 'human' } } })
+  })
+
+  it('새 요청(UserPromptSubmit)이 오면 멈춘다. 다음 턴이 끝나면 다시 판정한다 (4.3, D131)', () => {
+    const w = counting()
+    const prompt = apply(w, { type: 'UserPromptSubmit', taskId: 't-02', at: at() }, AUTO)
+    expect(task(prompt.work).status).toBe('working')
+    expect(task(prompt.work).countdown ?? task(prompt.work).auto_hold).toBeUndefined()
+    expect(prompt.effects).toEqual([{ type: 'stopCountdown', taskId: 't-02' }])
+    const again = stop(prompt.work, valid(), {}, AUTO)
+    expect(task(again.work).countdown?.started_at).not.toBe(started(w))
+    expect(types(again.effects)).toEqual(['log:task.awaiting_approval', 'startCountdown'])
+    // [취소]한 뒤에도 사람이 요청하고 턴이 끝나면 다시 판정한다
+    const cancelled = apply(w, { type: 'countdown.cancel', taskId: 't-02', at: at() }, AUTO).work
+    const asked = apply(cancelled, { type: 'UserPromptSubmit', taskId: 't-02', at: at() }, AUTO)
+    expect(task(asked.work).auto_hold).toBeUndefined()
+    expect(task(stop(asked.work, valid(), {}, AUTO).work).countdown).toBeDefined()
+  })
+
+  it('새 요청 없이 Stop이 다시 오면 새로 판정한다: 조건을 만족하면 카운트다운을 새로 시작한다 (D131)', () => {
+    const w = counting()
+    const again = stop(w, valid(), { active: false }, AUTO)
+    expect(task(again.work).countdown?.started_at).not.toBe(started(w))
+    expect(types(again.effects)).toEqual(['stopCountdown', 'startCountdown'])
+    const broken = stop(w, valid({ open_questions: ['?'] }), {}, AUTO)
+    expect(task(broken.work).countdown).toBeUndefined()
+    expect(task(broken.work).auto_hold?.reasons).toEqual(['open_questions'])
+    expect(broken.effects).toEqual([{ type: 'stopCountdown', taskId: 't-02' }])
+  })
+
+  it('[즉시 중단], 세션 종료, 조건을 어긴 감시 검사도 카운트다운을 멈춘다 (D130)', () => {
+    const interrupted = apply(
+      counting(),
+      { type: 'interrupt', taskId: 't-02', at: at(), reason: 'human' },
+      AUTO,
+    )
+    expect(task(interrupted.work)).toMatchObject({
+      status: 'awaiting_approval',
+      session: { alive: false },
+      auto_hold: { reasons: ['interrupt'] },
+    })
+    expect(types(interrupted.effects)).toEqual([
+      'stopCountdown',
+      'log:task.interrupted',
+      'endSession',
+    ])
+    for (const end of [
+      { type: 'SessionEnd' as const, taskId: 't-02', at: at(), reason: 'prompt_input_exit' },
+      { type: 'pty.exit' as const, taskId: 't-02', at: at() },
+    ]) {
+      const r = apply(counting(), end, AUTO)
+      expect(task(r.work), end.type).toMatchObject({
+        status: 'awaiting_approval',
+        session: { alive: false },
+        auto_hold: { reasons: ['session'] },
+      })
+      expect(r.effects, end.type).toEqual([{ type: 'stopCountdown', taskId: 't-02' }])
+    }
+    // /clear와 /resume은 세션 종료가 아니다 (D110)
+    const clear = apply(
+      counting(),
+      { type: 'SessionEnd', taskId: 't-02', at: at(), reason: 'clear' },
+      AUTO,
+    )
+    expect(task(clear.work).countdown).toBeDefined()
+    // 감시로 다시 한 검사가 조건을 만족하면 그대로, 어기면 멈춘다
+    const w = counting()
+    const same = apply(w, { type: 'check.updated', taskId: 't-02', at: at(), check: valid() }, AUTO)
+    expect(task(same.work).countdown).toEqual(task(w).countdown)
+    expect(same.effects).toEqual([])
+    const changed = apply(
+      w,
+      { type: 'check.updated', taskId: 't-02', at: at(), check: valid({ open_questions: ['?'] }) },
+      AUTO,
+    )
+    expect(task(changed.work)).toMatchObject({
+      status: 'awaiting_approval',
+      auto_hold: { reasons: ['open_questions'] },
+    })
+    expect(task(changed.work).countdown).toBeUndefined()
+    expect(changed.effects).toEqual([{ type: 'stopCountdown', taskId: 't-02' }])
+  })
+
+  it('끝날 때 다시 판정한다: 설정을 껐거나 handoff가 바뀌었으면 승인하지 않는다 (D128, D130)', () => {
+    const off = fire(counting(), valid(), DEFAULT_CONFIG)
+    expect(task(off.work)).toMatchObject({
+      status: 'awaiting_approval',
+      auto_hold: { reasons: ['settings'] },
+    })
+    expect(types(off.effects)).toEqual(['stopCountdown'])
+    const changed = fire(counting(), valid({ intent_deviation: { summary: 's', evidence: 'e' } }))
+    expect(task(changed.work).auto_hold?.reasons).toEqual(['intent_deviation'])
+    expect(task(changed.work).status).toBe('awaiting_approval')
+    const unreadable = fire(counting(), null)
+    expect(task(unreadable.work).auto_hold?.reasons).toEqual(['invalid'])
+    const invalid = fire(counting(), { ...valid(), errors: [ERROR] })
+    expect(task(invalid.work).auto_hold?.reasons).toEqual(['invalid'])
+    expect(task(invalid.work).check?.errors).toEqual([ERROR])
+  })
+
+  it('판정은 턴이 끝날 때의 설정을 쓴다. 카운트다운 중에 끄면 바로 멈추고, 이미 승인 대기면 켜도 시작하지 않는다 (D73, D128)', () => {
+    // 앱 설정을 끈다
+    const off = apply(counting(), { type: 'config.updated', at: at() }, DEFAULT_CONFIG)
+    expect(task(off.work)).toMatchObject({ auto_hold: { reasons: ['settings'] } })
+    expect(off.effects).toEqual([{ type: 'stopCountdown', taskId: 't-02' }])
+    // 다른 단계를 끄면 그대로다
+    const rcaOff = { ...AUTO, auto_approve: { ...AUTO.auto_approve, rca: false } }
+    const other = apply(counting(), { type: 'config.updated', at: at() }, rcaOff)
+    expect(task(other.work).countdown).toBeDefined()
+    expect(other.effects).toEqual([])
+    // Work 설정으로 끈다 (D72)
+    const work = apply(
+      counting(),
+      { type: 'settings.update', at: at(), settings: { auto_approve: { evidence: false } } },
+      AUTO,
+    )
+    expect(work.work.settings).toEqual({ auto_approve: { evidence: false } })
+    expect(task(work.work).auto_hold?.reasons).toEqual(['settings'])
+    // 이미 승인 대기인 task는 켜도 카운트다운하지 않는다(다음 Stop부터)
+    const waiting = stop(evidenceRunning(), valid()).work
+    const on = apply(waiting, { type: 'config.updated', at: at() }, AUTO)
+    expect(on.work).toBe(waiting)
+    // task를 시작한 뒤 켜도 턴이 끝날 때의 설정을 쓴다
+    const later = stop(evidenceRunning(), valid(), {}, AUTO)
+    expect(task(later.work).countdown).toBeDefined()
+  })
+
+  it('Work 설정이 앱 설정보다 우선한다 (D72)', () => {
+    const manualWork = stop(
+      evidenceRunning({ auto_approve: { evidence: false } }),
+      valid(),
+      {},
+      AUTO,
+    )
+    expect(task(manualWork.work).countdown ?? task(manualWork.work).auto_hold).toBeUndefined()
+    const autoWork = stop(evidenceRunning({ auto_approve: { evidence: true } }), valid())
+    expect(task(autoWork.work).countdown?.seconds).toBe(DEFAULT_CONFIG.auto_approve_countdown_sec)
+  })
+
+  it('재시작 조정은 카운트다운을 지우고 자동 승인하지 않는다. 다음 턴이 끝나면 다시 판정한다 (D75, D127, D131)', () => {
+    const w = counting()
+    const old = started(w)
+    const r = apply(
+      w,
+      { type: 'app.restarted', at: '2026-09-26T13:00:00+09:00', check: valid() },
+      AUTO,
+    )
+    expect(task(r.work)).toMatchObject({
+      status: 'awaiting_approval',
+      session: { alive: false },
+      auto_hold: { at: '2026-09-26T13:00:00+09:00', reasons: ['restart'] },
+    })
+    expect(task(r.work).countdown).toBeUndefined()
+    // 이미 승인 대기였으니 조정 이벤트는 없다. 타이머는 없지만 푸는 할 일은 해가 없다
+    expect(types(r.effects)).toEqual(['stopCountdown'])
+    const late = apply(
+      r.work,
+      { type: 'autoApprove', taskId: 't-02', at: at(), startedAt: old, check: valid() },
+      AUTO,
+    )
+    expect(late.work).toBe(r.work)
+    // 작업 중이던 task가 유효한 handoff로 승인 대기가 되어도 자동 승인하지 않는다
+    const working = apply(
+      evidenceRunning(),
+      { type: 'app.restarted', at: '2026-09-26T13:00:00+09:00', check: valid() },
+      AUTO,
+    )
+    expect(task(working.work)).toMatchObject({
+      status: 'awaiting_approval',
+      auto_hold: { reasons: ['restart'] },
+    })
+    // [세션 재개]로 다시 연 세션에서 사람이 요청하고 턴이 끝나면 다시 판정한다
+    const resumed = apply(
+      r.work,
+      {
+        type: 'session.resumed',
+        taskId: 't-02',
+        at: at(),
+        pid: 3000,
+        claudeVersion: 'v',
+        check: valid(),
+      },
+      AUTO,
+    ).work
+    expect(task(resumed)).toMatchObject({
+      status: 'awaiting_approval',
+      auto_hold: { reasons: ['restart'] },
+    })
+    const prompt = apply(resumed, { type: 'UserPromptSubmit', taskId: 't-02', at: at() }, AUTO).work
+    expect(task(stop(prompt, valid(), {}, AUTO).work).countdown).toBeDefined()
+  })
+
+  it('끊긴 작업의 기록이 있으면 자동 승인하지 않는다. [취소]도 받지 않는다 (D122)', () => {
+    const w = counting()
+    const cut: WorkState = {
+      ...w,
+      operation: {
+        kind: 'clean',
+        stage: 'worktree',
+        started_at: at(),
+        force: false,
+        delete_branches: [],
+        head: null,
+        interrupted_at: at(),
+      },
+    }
+    const r = fire(cut)
+    expect(task(r.work)).toMatchObject({
+      status: 'awaiting_approval',
+      auto_hold: { reasons: ['operation'] },
+    })
+    expect(types(r.effects)).toEqual(['stopCountdown'])
+    const cancel = apply(cut, { type: 'countdown.cancel', taskId: 't-02', at: at() }, AUTO)
+    expect(cancel.rejected).toBe(OPERATION_BLOCKS)
+  })
+
+  it('[이 단계 끝나면 멈춤]이 켜져 있으면 자동 승인하고 멈춘다 (시나리오 3-4)', () => {
+    const w = { ...counting(), stop_after_step: true }
+    const r = fire(w)
+    expect(r.work).toMatchObject({
+      status: 'stopped',
+      stop: { kind: 'after_step', task_id: 't-02' },
+    })
+    expect(r.work.tasks[1]).toMatchObject({ status: 'approved', approved_by: 'auto' })
+    expect(types(r.effects)).not.toContain('startTask')
+  })
+
+  it('단계 선택과 포기는 카운트다운을 지운다 (6.2, 3.3)', () => {
+    const abandoned = apply(counting(), { type: 'abandon', at: at() }, AUTO)
+    expect(task(abandoned.work)).toMatchObject({ status: 'interrupted' })
+    expect(task(abandoned.work).countdown ?? task(abandoned.work).auto_hold).toBeUndefined()
+    expect(types(abandoned.effects)[0]).toBe('stopCountdown')
+    const w = counting()
+    const skipped = apply(
+      w,
+      {
+        type: 'selectStep',
+        at: at(),
+        node: 'fix',
+        keepCode: false,
+        instruction: '',
+        expect: { taskId: 't-02', done: false },
+        backups: [],
+      },
+      AUTO,
+    )
+    expect(skipped.rejected).toBeUndefined()
+    const t2 = skipped.work.tasks.find((t) => t.id === 't-02')
+    expect(t2?.status).toBe('discarded')
+    expect(t2?.countdown ?? t2?.auto_hold).toBeUndefined()
+    expect(types(skipped.effects)[0]).toBe('stopCountdown')
   })
 })

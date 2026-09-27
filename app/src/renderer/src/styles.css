@@ -717,3 +717,19 @@ button.ready {
 .toggle.confirm {
   color: var(--hot);
 }
+
+/* 자동 승인 카운트다운 (4.3, D83) */
+.countdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 3px;
+  background: #22303b;
+  border-left: 3px solid var(--accent);
+}
+
+.countdown > span:first-child {
+  font-weight: 600;
+}

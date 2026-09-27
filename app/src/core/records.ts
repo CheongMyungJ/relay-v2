@@ -1,6 +1,9 @@
 // 앱이 쓰는 파일의 모양과 id (5.1, 5.3, 5.4). 파일을 읽고 쓰는 것은 adapters/store가 한다.
 import type { Decision, NodeName, Size } from '../shared/contracts'
+import type { ApprovalBy } from '../shared/work'
 import { normalizeText, parseFrontMatter } from './validate'
+
+export type { ApprovalBy }
 
 // ---------- 시각 ----------
 
@@ -69,9 +72,6 @@ export function projectId(folderName: string, pathHash: string): string {
 }
 
 // ---------- decisions.md (5.4) ----------
-
-/** 승인 방식. 자동 승인은 M7에서 쓴다 */
-export type ApprovalBy = 'human' | 'auto'
 
 const APPROVAL_LABEL: Record<ApprovalBy, string> = { human: '사람 승인', auto: '자동 승인' }
 const DECIDER_LABEL: Record<Decision['by'], string> = { human: '[사람]', ai: '[AI]' }
