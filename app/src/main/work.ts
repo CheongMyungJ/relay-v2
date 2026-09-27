@@ -1098,20 +1098,21 @@ export class WorkRunner {
     const repo = this.project.repo_path
     const task = this.task(e.taskId)
     const facts: {
-      stash?: string
-      commit?: string
       prUrl?: string
       prExisting?: boolean
       draft?: boolean
     } = {}
     let compare: string | null
     try {
-      if (e.uncommitted === 'discard')
-        facts.stash = await stashAll(this.worktree, e.message ?? '', { env })
-      if (e.uncommitted === 'commit')
-        facts.commit = await commitAll(this.worktree, e.message ?? '', { env })
-      if (e.uncommitted)
-        await this.feed({ type: 'delivery.stage', at: this.ctx.at(), stage: 'push' })
+      // 만든 stash나 커밋은 push로 넘어가며 진행 중 작업 기록에 적는다. 뒤 단계가 실패해도 결과에 남는다 (7-5)
+      if (e.uncommitted === 'discard') {
+        const stash = await stashAll(this.worktree, e.message ?? '', { env })
+        await this.feed({ type: 'delivery.stage', at: this.ctx.at(), stage: 'push', stash })
+      }
+      if (e.uncommitted === 'commit') {
+        const commit = await commitAll(this.worktree, e.message ?? '', { env })
+        await this.feed({ type: 'delivery.stage', at: this.ctx.at(), stage: 'push', commit })
+      }
       await pushBranch(this.worktree, e.branch, 'origin', { env })
       const origin = await remoteUrl(repo, 'origin', { env })
       compare = origin ? compareUrl(origin, e.base, e.branch) : null

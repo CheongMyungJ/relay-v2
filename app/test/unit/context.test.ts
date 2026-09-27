@@ -280,13 +280,13 @@ describe('마무리 안내 문구 (D104)', () => {
       '산출물과 handoff를 썼습니다. 오른쪽 패널에서 확인하고 [의도 승인]을 누르세요. 고칠 점은 여기에 말해 주세요.',
     )
     expect(closingMessage('verify', 'manual')).toBe(
-      '산출물과 handoff를 썼습니다. 오른쪽 패널에서 확인하고 [완료만]을 누르세요. 고칠 점은 여기에 말해 주세요.',
+      '산출물과 handoff를 썼습니다. 오른쪽 패널에서 확인하고 [완료만]을 누르세요. [이 단계 끝나면 멈춤]이 켜져 있거나 이전 단계를 추천했으면 [승인하고 멈춤]을 누르고, 전달은 멈춘 뒤 Work 완료 화면에서 고르세요. 고칠 점은 여기에 말해 주세요.',
     )
   })
 
   it('verify는 Work 완료 화면에서 누를 수 있는 전달 버튼을 적는다 (D104, D67, D118)', () => {
     expect(closingMessage('verify', 'manual', ['[완료만]', '[push]', '[PR 생성]'])).toBe(
-      '산출물과 handoff를 썼습니다. 오른쪽 패널에서 확인하고 [완료만], [push], [PR 생성] 중 하나를 누르세요. 고칠 점은 여기에 말해 주세요.',
+      '산출물과 handoff를 썼습니다. 오른쪽 패널에서 확인하고 [완료만], [push], [PR 생성] 중 하나를 누르세요. [이 단계 끝나면 멈춤]이 켜져 있거나 이전 단계를 추천했으면 [승인하고 멈춤]을 누르고, 전달은 멈춘 뒤 Work 완료 화면에서 고르세요. 고칠 점은 여기에 말해 주세요.',
     )
     expect(closingMessage('verify', 'manual', ['[완료만]', '[push]'])).toContain(
       '[완료만], [push] 중 하나를 누르세요',
@@ -297,6 +297,22 @@ describe('마무리 안내 문구 (D104)', () => {
     const md = buildContext({ ...input('verify'), delivery: ['[완료만]', '[push]', '[PR 생성]'] })
     expect(section(md, '마무리 안내 문구')).toContain(
       '[완료만], [push], [PR 생성] 중 하나를 누르세요',
+    )
+  })
+
+  it('verify는 승인하면 멈출 때의 [승인하고 멈춤]도 적는다. 다른 노드는 [승인]뿐이다 (D119)', () => {
+    // [이 단계 끝나면 멈춤]은 task가 도는 중에도 켜고 끌 수 있고, 이전 단계 추천은 에이전트가 마지막에 정한다
+    for (const buttons of [[], ['[완료만]', '[push]'], ['[완료만]', '[push]', '[PR 생성]']]) {
+      expect(closingMessage('verify', 'manual', buttons)).toContain(
+        '누르세요. [이 단계 끝나면 멈춤]이 켜져 있거나 이전 단계를 추천했으면 [승인하고 멈춤]을 누르고, 전달은 멈춘 뒤 Work 완료 화면에서 고르세요. 고칠 점은',
+      )
+    }
+    for (const node of ['intake', 'evidence', 'rca', 'fix'] as const) {
+      expect(closingMessage(node, 'manual')).not.toContain('[승인하고 멈춤]')
+    }
+    // 자동 승인 문구는 버튼을 적지 않는다
+    expect(closingMessage('verify', 'auto', ['[완료만]', '[push]'])).toBe(
+      closingMessage('fix', 'auto'),
     )
   })
 

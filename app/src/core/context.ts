@@ -45,16 +45,27 @@ const CLOSING: Record<ApprovalMode, string> = {
     '멈추려면 [취소]를 누르거나 여기에 말해 주세요.',
 }
 
+/** 수동 승인 문구에서 노드마다 바꾸는 문장 */
+const PRESS = '[승인]을 누르세요.'
+
+/** 승인하면 멈추는 verify의 버튼 (D119). 멈춤은 context.md를 쓴 뒤에도 켜고 끌 수 있어 늘 함께 적는다 */
+const VERIFY_STOPS =
+  '[이 단계 끝나면 멈춤]이 켜져 있거나 이전 단계를 추천했으면 [승인하고 멈춤]을 누르고, ' +
+  '전달은 멈춘 뒤 Work 완료 화면에서 고르세요.'
+
 /**
- * 승인 버튼 이름과 조사 (D104). intake는 [의도 승인]이다. verify는 Work 완료 화면(시나리오 7-3)에서
- * 누를 수 있는 전달 버튼이다: [완료만]과, origin과 gh 점검(D67, D118)에 따라 [push], [PR 생성].
- * 전달 버튼이 [완료만]뿐이면 [완료만]이다.
+ * 누를 버튼의 문장 (D104). intake는 [의도 승인]이다. verify는 승인 화면(Work 완료 화면, 시나리오 7-3)에
+ * 실제로 있는 버튼이다: [완료만]과, origin과 gh 점검(D67, D118)에 따라 [push], [PR 생성]. 전달 버튼이
+ * [완료만]뿐이면 [완료만]이다. 승인하면 멈추는 verify의 승인 화면은 [승인하고 멈춤] 하나라서(D119) 그 경우도
+ * 적는다. [이 단계 끝나면 멈춤]은 task가 도는 중에도 켜고 끌 수 있고, 이전 단계 추천(D23)은 에이전트가
+ * 마지막에 정하며, 스킬은 이 문구를 그대로 찍으므로(_common.md) 둘 중 하나를 골라 적을 수 없다.
  */
-function approveButton(node: NodeName, delivery: readonly string[]): string | null {
-  if (node === 'intake') return '[의도 승인]을'
-  if (node !== 'verify') return null
+function pressSentence(node: NodeName, delivery: readonly string[]): string {
+  if (node === 'intake') return '[의도 승인]을 누르세요.'
+  if (node !== 'verify') return PRESS
   const buttons = delivery.length ? delivery : ['[완료만]']
-  return buttons.length === 1 ? `${buttons[0] ?? ''}을` : `${buttons.join(', ')} 중 하나를`
+  const pick = buttons.length === 1 ? `${buttons[0] ?? ''}을` : `${buttons.join(', ')} 중 하나를`
+  return `${pick} 누르세요. ${VERIFY_STOPS}`
 }
 
 /**
@@ -66,8 +77,7 @@ export function closingMessage(
   mode: ApprovalMode,
   delivery: readonly string[] = [],
 ): string {
-  const button = approveButton(node, delivery)
-  return button ? CLOSING[mode].replace('[승인]을', button) : CLOSING[mode]
+  return CLOSING[mode].replace(PRESS, pressSentence(node, delivery))
 }
 
 const APPROVAL_LABEL: Record<ApprovalMode, string> = { manual: '수동 승인', auto: '자동 승인' }

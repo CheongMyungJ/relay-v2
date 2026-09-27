@@ -220,6 +220,9 @@ export interface DeliverOperation {
   /** push할 브랜치(relay/<work-id>)와 PR 대상 브랜치(기준 브랜치) */
   branch: string
   base: string
+  /** 커밋 안 된 변경을 처리하며 만든 stash나 커밋 (7-5). prepare 단계를 마치고 push로 옮길 때 적는다 */
+  stash?: string
+  commit?: string
 }
 
 /** 정리의 단계 (D77): worktree 지우기, 브랜치 지우기 */
@@ -264,9 +267,12 @@ export interface DeliveryRecord {
   pr_existing?: boolean
   /** draft PR로 만들었다 (D71) */
   draft?: boolean
-  /** 커밋 안 된 변경을 버린 stash 커밋, 또는 앱이 만든 커밋 (7-5) */
-  stash?: string
-  commit?: string
+  /**
+   * 이 Work의 전달이 커밋 안 된 변경을 처리하며 만든 stash 커밋과 앱이 만든 커밋 (7-5). 실패한 시도의 것도
+   * 남기고, [다시 시도]나 [전달 없이 완료] 뒤에도 앞 시도의 것을 이어 둔다. 없으면 없다
+   */
+  stashes?: string[]
+  commits?: string[]
 }
 
 /** 정리 결과 (시나리오 8) */

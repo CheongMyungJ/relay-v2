@@ -257,10 +257,15 @@ export interface Deliver extends WorkEvent {
   check: TaskCheck | null
 }
 
-/** 전달이 다음 단계(push, PR 만들기)로 넘어갔다 (D77) */
+/**
+ * 전달이 다음 단계(push, PR 만들기)로 넘어갔다 (D77). 커밋 안 된 변경을 처리했으면(prepare) 만든 stash나
+ * 커밋을 함께 알린다. 진행 중 작업 기록에 적고, 전달 결과에 남긴다 (7-5)
+ */
 export interface DeliveryStaged extends WorkEvent {
   type: 'delivery.stage'
   stage: DeliveryStage
+  stash?: string
+  commit?: string
 }
 
 /** 전달이 끝났다. main이 git과 gh에서 얻은 것과, 승인을 기록할 때 다시 한 verify 검사다 (D120) */
@@ -270,8 +275,6 @@ export interface DeliverySucceeded extends WorkEvent {
   prUrl?: string
   prExisting?: boolean
   draft?: boolean
-  stash?: string
-  commit?: string
   check: TaskCheck | null
 }
 
@@ -1327,11 +1330,36 @@ function deliver(work: WorkState, e: Deliver): Transition {
   return { work: { ...next, operation }, effects }
 }
 
-/** 전달이 다음 단계로 넘어갔다. 진행 중 작업 기록의 단계를 옮긴다 (D77) */
+/**
+ * 전달이 다음 단계로 넘어갔다. 진행 중 작업 기록의 단계를 옮기고, 커밋 안 된 변경을 처리하며 만든 stash나
+ * 커밋을 적는다 (D77, 7-5)
+ */
 function deliveryStaged(work: WorkState, e: DeliveryStaged): Transition {
   const op = work.operation
   if (op?.kind !== 'deliver' || op.stage === e.stage) return unchanged(work)
-  return { work: { ...work, operation: { ...op, stage: e.stage } }, effects: [] }
+  const operation: DeliverOperation = {
+    ...op,
+    stage: e.stage,
+    ...(e.stash === undefined ? {} : { stash: e.stash }),
+    ...(e.commit === undefined ? {} : { commit: e.commit }),
+  }
+  return { work: { ...work, operation }, effects: [] }
+}
+
+/**
+ * 전달 결과에 남길 stash와 커밋 (7-5): 앞 시도의 결과(실패)에 있던 것에 이번 시도가 만든 것을 더한다.
+ * 그래서 전달이 실패한 뒤 [다시 시도]가 성공해도 앞 시도가 백업한 stash와 만든 커밋이 기록에 남는다
+ */
+function deliveryBackups(
+  prior: DeliveryRecord | undefined,
+  op: DeliverOperation,
+): Pick<DeliveryRecord, 'stashes' | 'commits'> {
+  const stashes = [...(prior?.stashes ?? []), ...(op.stash ? [op.stash] : [])]
+  const commits = [...(prior?.commits ?? []), ...(op.commit ? [op.commit] : [])]
+  return {
+    ...(stashes.length ? { stashes } : {}),
+    ...(commits.length ? { commits } : {}),
+  }
 }
 
 /**
@@ -1379,8 +1407,7 @@ function deliverySucceeded(work: WorkState, e: DeliverySucceeded): Transition {
     ...(e.prUrl === undefined ? {} : { pr_url: e.prUrl }),
     ...(e.prExisting ? { pr_existing: true } : {}),
     ...(e.draft === undefined ? {} : { draft: e.draft }),
-    ...(e.stash === undefined ? {} : { stash: e.stash }),
-    ...(e.commit === undefined ? {} : { commit: e.commit }),
+    ...deliveryBackups(work.delivery, op),
   }
   const rest = omit(work, 'operation', 'stop', 'stop_after_step')
   const next: WorkState = {
@@ -1401,10 +1428,12 @@ function deliverySucceeded(work: WorkState, e: DeliverySucceeded): Transition {
 /**
  * 전달이 실패했다 (7-6). Work는 완료하지 않는다: verify는 승인 대기로 남고(멈춘 Work는 멈춘 채),
  * Work 완료 화면이 오류와 [다시 시도]·[전달 없이 완료]를 보인다(D120). 진행 중 작업 기록은 지운다.
+ * 이번 시도가 만든 stash나 커밋은 실패한 결과에 남겨, 다음 시도나 [전달 없이 완료] 뒤에도 이어진다 (7-5).
  */
 function deliveryFailed(work: WorkState, e: DeliveryFailed): Transition {
   const op = work.operation
   if (op?.kind !== 'deliver') return unchanged(work)
+  const backups = deliveryBackups(work.delivery, op)
   const delivery: DeliveryRecord = {
     choice: op.choice,
     status: 'failed',
@@ -1412,11 +1441,17 @@ function deliveryFailed(work: WorkState, e: DeliveryFailed): Transition {
     stage: op.stage,
     error: e.error,
     branch: op.branch,
+    ...backups,
   }
   return {
     work: { ...omit(work, 'operation'), delivery },
     effects: [
-      log(work, e.at, 'delivery.failed', { choice: op.choice, stage: op.stage, error: e.error }),
+      log(work, e.at, 'delivery.failed', {
+        choice: op.choice,
+        stage: op.stage,
+        error: e.error,
+        ...backups,
+      }),
     ],
   }
 }

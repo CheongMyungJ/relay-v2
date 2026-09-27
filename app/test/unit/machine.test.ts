@@ -1874,11 +1874,82 @@ describe('전달 (시나리오 7, D77, D119, D120)', () => {
       uncommitted: 'commit',
       message: 'relay(w-20260926-001): 완료 전 남은 변경',
     })
-    // 단계가 넘어가면 기록의 단계를 옮긴다 (D77)
-    const pushing = apply(commit.work, { type: 'delivery.stage', at: at(), stage: 'push' })
-    expect(pushing.work.operation).toMatchObject({ kind: 'deliver', stage: 'push' })
+    // 단계가 넘어가면 기록의 단계를 옮기고, 만든 커밋이나 stash를 적는다 (D77)
+    const pushing = apply(commit.work, {
+      type: 'delivery.stage',
+      at: at(),
+      stage: 'push',
+      commit: 'commit01',
+    })
+    expect(pushing.work.operation).toMatchObject({
+      kind: 'deliver',
+      stage: 'push',
+      commit: 'commit01',
+    })
     const again = apply(pushing.work, { type: 'delivery.stage', at: at(), stage: 'push' })
     expect(again.work).toBe(pushing.work)
+    const stashing = apply(discard.work, {
+      type: 'delivery.stage',
+      at: at(),
+      stage: 'push',
+      stash: 'stash001',
+    })
+    expect(stashing.work.operation).toMatchObject({ stage: 'push', stash: 'stash001' })
+  })
+
+  it('앞 시도가 만든 stash와 커밋은 전달이 실패해도 결과에 남고, [다시 시도]와 [전달 없이 완료] 뒤에도 이어진다 (7-5, 7-6)', () => {
+    // [변경 버리고 진행]: stash를 만든 뒤 push가 실패했다
+    const first = deliver(atVerify(), 'push', 'discard').work
+    const stashed = apply(first, {
+      type: 'delivery.stage',
+      at: at(),
+      stage: 'push',
+      stash: 'stash001',
+    }).work
+    const failed = apply(stashed, { type: 'delivery.failed', at: at(), error: 'git push 실패' })
+    expect(failed.work.delivery).toMatchObject({
+      status: 'failed',
+      stage: 'push',
+      stashes: ['stash001'],
+    })
+    const logged = failed.effects[0]
+    expect(logged?.type === 'log' && logged.event.payload).toEqual({
+      choice: 'push',
+      stage: 'push',
+      error: 'git push 실패',
+      stashes: ['stash001'],
+    })
+    // [다시 시도]: 작업 트리는 이미 깨끗해 stash를 다시 만들지 않는다. 성공한 결과에 앞의 stash가 남는다
+    const done = succeed(deliver(failed.work, 'push').work)
+    expect(done.work.delivery).toMatchObject({ status: 'succeeded', stashes: ['stash001'] })
+    expect(done.work.delivery?.commits).toBeUndefined()
+    const delivered = done.effects.find(
+      (e) => e.type === 'log' && e.event.type === 'delivery.succeeded',
+    )
+    expect(delivered?.type === 'log' && delivered.event.payload).toMatchObject({
+      stashes: ['stash001'],
+    })
+    // 다음 시도가 [커밋하고 진행]으로 커밋을 만들고 또 실패하면 둘 다 남는다
+    const second = deliver(failed.work, 'push', 'commit').work
+    const committed = apply(second, {
+      type: 'delivery.stage',
+      at: at(),
+      stage: 'push',
+      commit: 'commit01',
+    }).work
+    const again = apply(committed, { type: 'delivery.failed', at: at(), error: 'git push 실패' })
+    expect(again.work.delivery).toMatchObject({
+      stashes: ['stash001'],
+      commits: ['commit01'],
+    })
+    // [전달 없이 완료]: 실패한 결과가 그대로 남는다
+    const none = approve(again.work, valid()).work
+    expect(none.status).toBe('completed')
+    expect(none.delivery).toMatchObject({
+      status: 'failed',
+      stashes: ['stash001'],
+      commits: ['commit01'],
+    })
   })
 
   it('전달이 끝나면 승인을 기록하고 Work를 완료하며 기록을 지운다 (7-6, D120)', () => {

@@ -322,7 +322,7 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
     expect(git(s.remote, 'rev-parse', `refs/heads/${s.branch}`)).toBe(fixed)
     expect(work(s)).toMatchObject({
       status: 'completed',
-      delivery: { choice: 'push', status: 'succeeded', stash },
+      delivery: { choice: 'push', status: 'succeeded', stashes: [stash] },
     })
   })
 
@@ -343,9 +343,48 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
     ])
     expect(work(s)).toMatchObject({
       status: 'completed',
-      delivery: { status: 'succeeded', commit: tip },
+      delivery: { status: 'succeeded', commits: [tip] },
     })
   })
+
+  for (const action of ['discard', 'commit'] as const) {
+    const label = action === 'discard' ? '[변경 버리고 진행]' : '[커밋하고 진행]'
+    const made = action === 'discard' ? 'stash는' : '커밋은'
+    it(`${label} 뒤 push가 실패해도 앱이 만든 ${made} 전달 결과에 남고, [다시 시도]가 성공해도 이어진다 (7-5, 7-6)`, async () => {
+      const s = await setup({ tasks: { ...scenario('S').tasks, 'final-verify': DIRTY_VERIFY } })
+      await toVerify(s)
+      fs.renameSync(s.remote, `${s.remote}.off`)
+      const r = await deliver(s, 'push', { action, expect: DIRTY })
+      expect(!r.ok && r.error).toMatch(/^전달 실패: git push 실패: /)
+      await settle(s.h, s.key)
+      const backup =
+        action === 'discard'
+          ? git(s.repo, 'rev-parse', 'refs/stash')
+          : git(s.tree, 'rev-parse', 'HEAD')
+      const field = action === 'discard' ? 'stashes' : 'commits'
+      expect(git(s.tree, 'status', '--porcelain')).toBe('')
+      expect(work(s).delivery).toMatchObject({
+        status: 'failed',
+        stage: 'push',
+        [field]: [backup],
+      })
+      expect(events(s).at(-1)).toMatchObject({
+        type: 'delivery.failed',
+        payload: { [field]: [backup] },
+      })
+      // [다시 시도]: 작업 트리는 이미 깨끗해 바로 push한다
+      fs.renameSync(`${s.remote}.off`, s.remote)
+      expect(await deliver(s, 'push')).toEqual({ ok: true })
+      await settle(s.h, s.key)
+      expect(work(s)).toMatchObject({
+        status: 'completed',
+        delivery: { status: 'succeeded', [field]: [backup] },
+      })
+      expect(events(s).find((e) => e.type === 'delivery.succeeded')?.payload).toMatchObject({
+        [field]: [backup],
+      })
+    })
+  }
 
   it('[AI 세션 열기]는 기록하지 않는 정리 세션을 열고, 턴이 끝나 깨끗하면 버튼을 강조한다. [정리 끝 → push/PR 진행]으로 전달한다 (7-5)', async () => {
     const s = await setup({
@@ -519,6 +558,10 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
   it('[이 단계 끝나면 멈춤]이면 verify는 [승인하고 멈춤]이고, 멈춘 Work의 Work 완료 화면에서 전달한다 (D119)', async () => {
     const s = await setup(scenario('S'))
     await toVerify(s)
+    // verify가 도는 중에 멈춤을 켜도 마무리 안내 문구가 맞다: [승인하고 멈춤]을 함께 적었다 (D104)
+    expect(read(path.join(s.dir, 'tasks', '03-verify', 'context.md'))).toContain(
+      '[이 단계 끝나면 멈춤]이 켜져 있거나 이전 단계를 추천했으면 [승인하고 멈춤]을 누르고',
+    )
     expect(await s.h.relay.stopAfter(s.key, true)).toEqual({ ok: true })
     expect((await s.h.relay.review(s.key, 't-03'))?.completion?.mode).toBe('stop')
     expect(await deliver(s, 'push')).toEqual({
