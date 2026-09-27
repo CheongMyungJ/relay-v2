@@ -487,6 +487,53 @@ describe('[흐름] 자동 승인 (M7)', () => {
     expect(done, s.h.ui.dump()).toMatchObject({ status: 'completed' })
   })
 
+  it('앱 설정을 바꾸면 상태가 그대로인 Work도 스냅샷을 다시 보내, 승인 화면이 새 설정으로 안내를 다시 읽는다 (D128)', async () => {
+    const s = await setup(scenario('S'), {
+      auto_approve: { evidence: false, rca: false, fix: false },
+      auto_approve_countdown_sec: LONG,
+    })
+    const key = await s.create()
+    await drive(s.h.relay, s.h.ui, key, { size: 'S', pauseAt: (t) => t.node === 'fix' })
+    const fix = await untilTask(
+      s,
+      key,
+      (t) => t.node === 'fix' && t.status === 'awaiting_approval',
+      '수정 승인 대기',
+    )
+    expect((await s.h.relay.review(key, fix.id))?.autoApprove).toEqual({ on: false, hold: null })
+    // 화면은 스냅샷의 revision이 바뀔 때 승인 화면을 다시 읽는다(App.tsx의 reviewKey)
+    const revision = () => s.h.ui.works.get(key)?.revision ?? 0
+    const snapshot = (after: number, label: string) =>
+      s.h.ui.until(() => revision() > after, label, 5_000)
+    /** 늦게 온 스냅샷(감시의 검사 등)이 1초 동안 없을 때까지 기다린다 */
+    const quiet = async () => {
+      for (let last = revision(); ; last = revision()) {
+        await sleep(1_000)
+        if (revision() === last) return last
+      }
+    }
+
+    // 켠다: 이미 승인 대기라 카운트다운하지 않아 상태는 그대로다 (D128)
+    let before = await quiet()
+    expect(await s.h.relay.updateConfig({ auto_approve: { fix: true } })).toMatchObject({
+      ok: true,
+    })
+    await snapshot(before, '켠 뒤 스냅샷')
+    expect(s.h.ui.works.get(key)?.tasks[1]?.countdown).toBeNull()
+    expect((await s.h.relay.review(key, fix.id))?.autoApprove).toEqual({
+      on: true,
+      hold: '자동 승인은 턴이 끝날 때 판정합니다. 이 결과는 사람이 승인합니다. 다음 턴이 끝날 때 다시 판정합니다.',
+    })
+
+    // 끈다
+    before = await quiet()
+    expect(await s.h.relay.updateConfig({ auto_approve: { fix: false } })).toMatchObject({
+      ok: true,
+    })
+    await snapshot(before, '끈 뒤 스냅샷')
+    expect((await s.h.relay.review(key, fix.id))?.autoApprove).toEqual({ on: false, hold: null })
+  })
+
   it('[즉시 중단]과 세션 종료도 카운트다운을 멈춘다. 사람이 누르지 않은 세션 종료는 알린다 (D130, D131)', async () => {
     const s = await setup(
       {

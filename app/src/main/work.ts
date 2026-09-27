@@ -997,10 +997,15 @@ export class WorkRunner {
     return this.enqueue(() => this.command({ type: 'countdown.cancel', taskId, at: this.ctx.at() }))
   }
 
-  /** 앱 설정이 바뀌었다 (D70). 카운트다운 중에 그 단계의 자동 승인을 껐으면 바로 멈춘다 (D128) */
+  /**
+   * 앱 설정이 바뀌었다 (D70). 카운트다운 중에 그 단계의 자동 승인을 껐으면 바로 멈춘다 (D128). 상태가 그대로여도
+   * 스냅샷을 다시 보낸다. 승인 화면의 안내(자동 승인 여부)는 설정으로 정하고, 화면은 스냅샷이 바뀔 때 다시 읽는다
+   */
   configChanged(): Promise<void> {
     return this.enqueue(async () => {
+      const before = this.revision
       await this.feed({ type: 'config.updated', at: this.ctx.at() })
+      if (this.revision === before) this.changed()
     })
   }
 
