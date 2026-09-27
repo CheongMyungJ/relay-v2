@@ -107,6 +107,7 @@
 | Node의 프로세스 종료 | Windows에는 시그널이 없어 `SIGINT`, `SIGTERM`, `SIGKILL`을 보내면 대상 프로세스를 무조건 끝낸다. Linux에서는 부모를 끝내도 자식의 자식은 끝나지 않는다 | Node 문서 process(Signal events), child_process(`subprocess.kill`) (2026-09-27) |
 | `detached` 자식 | Windows에서 `detached: true`로 띄운 자식은 부모가 끝나도 계속 돌고 자기 콘솔을 갖는다. 다른 OS에서는 새 프로세스 그룹과 세션의 리더가 되고, detached가 아니어도 부모가 끝난 뒤 계속 돌 수 있다 | Node 문서 child_process `options.detached` (2026-09-27) |
 | Linux에서 앱이 죽은 뒤의 PTY | 앱 역할 프로세스를 SIGKILL로 끝내면 PTY 안의 프로세스는 보통 hangup으로 함께 끝난다. 그런데 node-pty 1.1.0의 master fd는 뒤에 띄운 자식에게 상속됐고(두 번째 PTY 세션의 프로세스가 첫 세션의 `/dev/ptmx`를 쥐고 있었음), master를 쥔 프로세스가 살아 있으면 PTY 안의 트리가 남았다 | 실행(Linux 컨테이너, node-pty 1.1.0) (2026-09-27) |
+| Windows에서 앱이 죽은 뒤의 PTY | ConPTY DLL 모드(I32)에서 앱 역할 프로세스를 강제 종료하면 PTY 안의 트리(node와 그 자식)는 3초 안에 함께 끝났다(S1의 내장 ConPTY와 같음). `detached`로 띄운 프로세스(자기 콘솔, `conhost.exe`)는 남았다 | [어댑터] 고아 프로세스 시험, app-ci #42·#44(windows-2025-vs2026 20260922.246.2) (2026-09-27) |
 | worktree의 prune과 remove | `prune`은 작업 트리가 없어진 worktree의 `$GIT_DIR/worktrees` 정보를 지운다. `remove`는 깨끗한 worktree(추적하지 않는 파일과 추적 파일의 수정이 없음)만 지우고 아니면 `--force`가 필요하다. git 2.43.0에서 `.git` 파일이 없어진 worktree는 `--force`로도 지우지 않았고, prune은 관리 정보만 지우고 폴더는 남겼다. 지운 추적 파일도 수정으로 보아 `--force`가 있어야 지웠다 | git 문서 git-worktree, 실행 (2026-09-27) |
 | stash 목록 | `git stash list`는 `git log`의 형식 옵션을 받는다. `--message`로 만든 항목의 제목(`%gs`)은 `On <브랜치>: <메시지>`였다(2.43.0) | git 문서 git-stash, 실행 (2026-09-27) |
 | 없는 브랜치가 섞인 `git branch -D` | 있는 브랜치는 지우고 종료 코드 1로 끝났다(2.43.0) | 실행 (2026-09-27) |
