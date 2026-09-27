@@ -1,8 +1,12 @@
-// [스모크] 설치한 앱이 뜨고, 가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화면을 누른다 (I27).
+// [스모크] 설치한 앱이 뜨고, 가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화면, [단계 선택]을
+// 누른다 (I27).
 // M2: 프로젝트 등록 → 새 Work → intake 탭에 PTY 출력 → 창 크기 변경이 PTY에 전달 → [의도 승인]
 // → intent.md 확정, intake 세션 트리 종료, 다음 task 시작.
 // M3: 다음 task를 [즉시 중단]하면 중단됨·읽기 전용이 되고 트리가 끝난다 → [재개]하면 같은 세션을
-// --resume으로 이전 화면 뒤에 잇는다 → 설정 화면에서 세션 상한을 바꾼다 → 앱 종료 확인을 거쳐 끝낸다.
+// --resume으로 이전 화면 뒤에 잇는다 → 설정 화면에서 세션 상한을 바꾼다.
+// M4: [단계 선택]에서 intake를 고르면 미리 보기(폐기될 산출물, 중단할 task, 코드, intent 새 버전)를 보이고,
+// 추가 지시와 함께 [확인]하면 진행 중인 세션을 끝내고 intake를 되감기로 다시 시작한다(앞 탭은 폐기됨)
+// → 새 intake를 [의도 승인]하면 intent v2가 되고 v1은 intent.history에 남는다 → 앱 종료 확인을 거쳐 끝낸다.
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -60,7 +64,7 @@ test.afterAll(async () => {
   fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
 })
 
-test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화면을 누른다', async () => {
+test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화면, [단계 선택]을 누른다', async () => {
   const win = await app.firstWindow()
   await expect(win.locator('.layout')).toBeVisible()
   await expect(win.locator('.sidebar')).toBeVisible()
@@ -154,7 +158,55 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
         ).session_limit,
     )
     .toBe(2)
+
+  // [단계 선택] (6.2, D82): intake를 고르면 결과를 미리 보인다
+  const resumedPid = lastPid((await rows.textContent()) ?? '')
+  expect(alive(resumedPid)).toBe(true)
+  await win.getByRole('button', { name: '단계 선택', exact: true }).click()
+  const dialog = win.getByRole('dialog', { name: /단계 선택/ })
+  await dialog.getByLabel('의도 정리(intake)').check()
+  const preview = dialog.getByLabel('미리 보기')
+  await expect(preview).toContainText('01 의도 정리: intent.draft.md', { timeout: 30_000 })
+  await expect(preview).toContainText('02 재현과 관찰: 산출물 없음')
+  await expect(preview).toContainText('진행 중인 02 재현과 관찰의 세션을 끝냅니다')
+  await expect(preview).toContainText('되돌릴 커밋 0개')
+  await expect(preview).toContainText('백업 브랜치를 만들지 않습니다')
+  await expect(preview).toContainText('intent 새 버전(v2)')
+  await dialog.getByLabel('추가 지시').fill('완료조건에 음수만 든 배열을 더해 주세요')
+  await win.screenshot({ path: 'test-results/step-select.png' })
+  await dialog.getByRole('button', { name: '확인', exact: true }).click()
+
+  // 진행 중인 세션을 끝내고 intake를 되감기로 다시 시작한다. 앞 task는 폐기됨이다
+  await expect(win.getByRole('tab', { name: /03 의도 정리/ })).toBeVisible({ timeout: 30_000 })
+  await expect(win.locator('.band')).toContainText('03 의도 정리 · 새 세션 · 이유: 되감기')
+  await expect(win.locator('.tab.discarded')).toHaveCount(2)
+  await expect.poll(() => alive(resumedPid), { timeout: 15_000 }).toBe(false)
+  const intentFile = findFile(path.join(home, 'projects'), 'intent.md') ?? ''
+  const v1 = fs.readFileSync(intentFile, 'utf8')
+  // context.md는 탭이 보인 뒤 task를 띄우며 쓴다
+  await expect
+    .poll(() => findFile(path.join(home, 'projects'), 'context.md', '03-intake'))
+    .not.toBeNull()
+  const context = findFile(path.join(home, 'projects'), 'context.md', '03-intake') ?? ''
+  expect(fs.readFileSync(context, 'utf8')).toContain('완료조건에 음수만 든 배열을 더해 주세요')
+
+  // 새 intake를 [의도 승인]하면 intent v2가 된다 (D40)
+  const again = win.getByRole('button', { name: '의도 승인' })
+  await expect(again).toBeEnabled({ timeout: 60_000 })
+  await win.screenshot({ path: 'test-results/rewound.png' })
+  await again.click()
+  await expect(win.getByRole('tab', { name: /04 재현과 관찰/ })).toBeVisible({ timeout: 60_000 })
+  await expect
+    .poll(() => fs.readFileSync(intentFile, 'utf8'), { timeout: 15_000 })
+    .toContain('version: 2\n')
+  expect(
+    fs.readFileSync(path.join(path.dirname(intentFile), 'intent.history', 'v1.md'), 'utf8'),
+  ).toBe(v1)
 })
+
+function lastPid(text: string): number {
+  return Number([...text.matchAll(/PID (\d+)/g)].pop()?.[1] ?? 0)
+}
 
 function lastSize(text: string): string | undefined {
   return [...text.matchAll(/SIZE (\d+x\d+)/g)].pop()?.[1]
@@ -169,12 +221,13 @@ function alive(pid: number): boolean {
   }
 }
 
-function findFile(dir: string, name: string): string | null {
+/** name 파일을 찾는다. within이 있으면 그 이름의 폴더 안에서만 찾는다 */
+function findFile(dir: string, name: string, within?: string): string | null {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name)
-    if (e.isFile() && e.name === name) return p
+    if (e.isFile() && e.name === name && (!within || path.basename(dir) === within)) return p
     if (e.isDirectory() && e.name !== 'worktrees') {
-      const found = findFile(p, name)
+      const found = findFile(p, name, within)
       if (found) return found
     }
   }

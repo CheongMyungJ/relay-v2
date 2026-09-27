@@ -25,6 +25,7 @@ import { applyConfigPatch, checkWorkSettings } from '../core/config'
 import { createWork } from '../core/machine'
 import { localIso, nextWorkId } from '../core/records'
 import { DEFAULT_CONFIG, type AppConfig, type WorkSettings } from '../shared/config'
+import type { NodeName } from '../shared/contracts'
 import type { ProjectState } from '../shared/project'
 import type {
   AppSnapshot,
@@ -35,6 +36,8 @@ import type {
   ProjectInspection,
   ProjectView,
   ReviewView,
+  SelectStepInput,
+  StepPreviewResult,
   TerminalBacklog,
 } from '../shared/views'
 import type { WorkState } from '../shared/work'
@@ -363,6 +366,23 @@ export class Relay {
   /** [Work 포기] */
   abandon(workKey: string): Promise<CommandResult> {
     return this.withWork(workKey, (w) => w.abandon())
+  }
+
+  // ---------- 단계 선택 (6.2) ----------
+
+  /** 단계 선택 대화상자의 미리 보기 (D82) */
+  async stepPreview(
+    workKey: string,
+    node: NodeName,
+    keepCode: boolean,
+  ): Promise<StepPreviewResult> {
+    const runner = this.works.get(workKey)
+    return runner ? runner.stepPreview(node, keepCode) : { ok: false, error: 'Work가 없습니다' }
+  }
+
+  /** [단계 선택]의 [확인] */
+  selectStep(workKey: string, input: SelectStepInput): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.selectStep(input))
   }
 
   /** Work별 질문 방식 (D72). 검사한 뒤 넣는다 */

@@ -2,8 +2,10 @@
 // 값은 여기서 모양만 확인하고, 뜻(상태에 맞는 명령인지, 설정 값의 범위)은 Relay와 core가 판정한다.
 import os from 'node:os'
 import { BrowserWindow, dialog, ipcMain } from 'electron'
+import { NODES } from '../core/pipeline'
 import { IPC, type AppInfo } from '../shared/api'
-import type { ApproveOptions, NewWorkInput } from '../shared/views'
+import type { NodeName } from '../shared/contracts'
+import type { ApproveOptions, NewWorkInput, SelectStepInput } from '../shared/views'
 import type { Relay } from './relay'
 
 function windowsBuild(): number | null {
@@ -25,6 +27,26 @@ function count(v: unknown): number {
 function flag(v: unknown): boolean {
   if (typeof v !== 'boolean') throw new Error('true/false가 아님')
   return v
+}
+
+function node(v: unknown): NodeName {
+  const found = NODES.find((n) => n === v)
+  if (!found) throw new Error('파이프라인 단계가 아님')
+  return found
+}
+
+function stepInput(v: unknown): SelectStepInput {
+  if (!v || typeof v !== 'object') throw new Error('단계 선택 입력이 아님')
+  const o = v as Record<string, unknown>
+  const expect = o['expect']
+  if (!expect || typeof expect !== 'object') throw new Error('expect가 없음')
+  const e = expect as Record<string, unknown>
+  return {
+    node: node(o['node']),
+    keepCode: flag(o['keepCode']),
+    instruction: text(o['instruction']),
+    expect: { taskId: text(e['taskId']), done: flag(e['done']) },
+  }
 }
 
 export interface IpcHooks {
@@ -90,6 +112,12 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
     (await ready).resumeWork(text(workKey)),
   )
   ipcMain.handle(IPC.abandon, async (_e, workKey: unknown) => (await ready).abandon(text(workKey)))
+  ipcMain.handle(IPC.stepPreview, async (_e, workKey: unknown, step: unknown, keepCode: unknown) =>
+    (await ready).stepPreview(text(workKey), node(step), flag(keepCode)),
+  )
+  ipcMain.handle(IPC.selectStep, async (_e, workKey: unknown, input: unknown) =>
+    (await ready).selectStep(text(workKey), stepInput(input)),
+  )
   ipcMain.handle(IPC.workSettings, async (_e, workKey: unknown, settings: unknown) =>
     (await ready).updateWorkSettings(text(workKey), settings),
   )

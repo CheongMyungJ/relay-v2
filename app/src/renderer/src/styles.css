@@ -258,6 +258,16 @@ textarea {
   background: #2f4f2f;
 }
 
+/* 폐기된 task (6.2): 파일은 남지만 이후 입력에서 빠졌다 */
+.s-discarded {
+  background: #3a3a3a;
+  color: var(--text-dim);
+}
+
+.tab.discarded {
+  text-decoration: line-through;
+}
+
 .terminal {
   position: relative;
   min-height: 0;
@@ -589,4 +599,48 @@ fieldset.field {
 details summary {
   cursor: pointer;
   color: var(--text-dim);
+}
+
+/* 단계 선택 대화상자 (6.2, D82) */
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 8px;
+  margin: 0;
+}
+
+.step {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.step.disabled {
+  color: var(--text-dim);
+}
+
+.step-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: var(--bg-raise);
+  border-radius: 3px;
+}
+
+.step-preview ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.step-preview .files {
+  color: var(--text-dim);
+  font-family: Consolas, 'D2Coding', monospace;
+}
+
+.notice-actions {
+  margin-top: 6px;
 }

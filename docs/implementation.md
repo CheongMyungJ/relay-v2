@@ -85,6 +85,11 @@
 | 권한 규칙의 경로 | Read·Edit 규칙의 경로는 gitignore 패턴이다. 괄호는 이스케이프할 필요가 없다. "Yes, and don't ask again"으로 만든 규칙은 `[`, `]`, `*`를 이스케이프하지만 사람이 쓴 규칙은 이스케이프하지 않는다 | Claude Code 문서 permissions (2026-09-26) |
 | `claude auth status` | 인증 상태를 JSON으로 보이고, 로그인되어 있으면 종료 코드 0, 아니면 1이다 | Claude Code 문서 cli-reference (2026-09-26) |
 | 모델과 effort 환경 변수 | `ANTHROPIC_MODEL`은 별칭(`sonnet` 등)이나 모델 이름을 받는다. `CLAUDE_CODE_EFFORT_LEVEL`은 `low`~`max`, `auto`를 받고 `--effort`보다 우선한다. [실제] 시험은 앱이 넘기는 환경 변수로 모델과 effort를 정한다 | Claude Code 문서 model-config, env-vars (2026-09-26) |
+| git ref 이름의 디렉터리/파일 충돌 | 기본 ref 저장 방식(`$GIT_DIR/refs` 디렉터리 트리)에서는 `refs/heads/foo`가 있으면 `refs/heads/foo/bar`를 만들 수 없다. reftable 형식은 둘을 받지만 git은 계속 거부할 수 있다. git 2.43.0에서 `relay/w-1`이 있을 때 `relay/w-1/discarded-1`을 만들면 "cannot lock ref … exists; cannot create"로 실패했다(D115) | git 문서 technical/reftable "Directory/file conflicts" (2026-09-27), 실행 |
+| git worktree의 ref | `HEAD`와 `index`는 worktree마다 따로다. `refs/`로 시작하는 ref(브랜치)는 모든 worktree가 함께 쓴다. 그래서 worktree에서 `git reset`하면 그 worktree의 브랜치(`relay/<work-id>`)가 움직이고, 백업 브랜치는 레포 어디서나 보인다 | git 문서 git-worktree (2026-09-27) |
+| `git reset --hard`와 `git clean` | `reset --hard`는 index와 작업 트리를 커밋에 맞추고, 그 커밋에 없는 추적 파일은 지운다. 추적하지 않는 파일은 지우지 않는다(겹치면 덮어쓸 수 있음). `git clean -d -f`는 추적하지 않는 파일과 폴더를 지우고, 무시하는 파일은 `-x`가 있어야 지운다 | git 문서 git-reset, git-clean (2026-09-27) |
+| 진짜 index를 건드리지 않는 백업 커밋 | `GIT_INDEX_FILE`로 다른 index 파일을 쓸 수 있다. 그 index에 `git add -A`하고 `git write-tree`로 tree를 만들면 작업 트리의 상태(무시하는 파일 제외)가 담긴다. `git commit-tree <tree> -p <부모>`는 커밋 객체만 만든다. `git commit`과 달리 훅(pre-commit, commit-msg, post-commit)을 부르지 않는다. git 2.43.0 worktree에서 이 순서로 백업한 뒤 `reset --hard`와 `clean -fd`를 하면 진짜 index는 그대로였고, 무시하는 폴더는 남았다(D116) | git 문서 git(GIT_INDEX_FILE), git-add, git-write-tree, git-commit-tree, githooks (2026-09-27), 실행 |
+| 커밋 수와 ref 찾기 | `git rev-list --count A..B`는 B에서 닿고 A에서 닿지 않는 커밋 수를 찍는다. `git for-each-ref`의 패턴은 fnmatch(3)로 맞춘다(`refs/heads/relay/<work-id>-discarded-*`) | git 문서 git-rev-list, git-for-each-ref (2026-09-27) |
 | 폴더 신뢰와 훅 | 대화형 세션은 폴더 신뢰 창을 수락하기 전에는 모든 설정 파일의 훅을 실행하지 않는다. 앱이 `--settings`로 주는 훅도 같다(디버그 로그 "Skipping … hook execution - workspace trust not accepted"). `-p`와 SDK 세션은 신뢰한 것으로 본다. 레포에서는 신뢰를 레포 루트에 저장하고, worktree에서는 메인 체크아웃의 루트를 쓴다. 온보딩을 건너뛰는 `IS_DEMO`를 켜면 신뢰 창도 뜨지 않았고 훅이 오지 않았다(2.1.283) | Claude Code 문서 hooks(Workspace trust), permissions, env-vars (2026-09-26), M2 [실제] 준비 중 관찰 |
 
 - N-API 사전 빌드가 Electron 44에서 다시 빌드 없이 로드되고, 설치 파일(asar)에서 `.node`와 `conpty\conpty.dll`, `OpenConsole.exe`가 풀려 나와 동작한다. M0의 [스모크]로 러너에서 확인했다(2026-09-26, `docs/checks.md`).
@@ -135,7 +140,7 @@ app/src/
 | core | `context` | `context.md` 조립(입력: 상태, intent, 결정 로그, 누적 기각 목록, 직전 handoff), 마무리 안내 문구(D104) | 시나리오 2-4 |
 | core | `settings` | task 설정 파일 내용(훅, deny 규칙) 만들기, 실행 인자 만들기 | 시나리오 2-3·2-5, 6절 |
 | core | `approval` | 자동 승인 조건 판정, 배지 우선순위 | 4.3, D80 |
-| core | `rewind` | 단계 선택의 결과 계산(폐기할 task, 되돌릴 커밋, 건너뛸 단계) | 6.2, D82 |
+| core | `rewind` | 단계 선택의 결과 계산(폐기할 task, 되돌릴 커밋, 건너뛸 단계, 백업 브랜치 이름), 대화상자의 단계와 미리 보기 | 6.2, 6.3, D82, D115~D117 |
 | adapters | `store` | RELAY_HOME 경로, 원자적 쓰기, 앱 소유 파일 해시, `events.jsonl`, `decisions.md` | 5.1, 5.4, 5.5, D91 |
 | adapters | `pty` | node-pty 세션, `pty.log` 기록, 프로세스 트리 종료, 프로세스 ID와 시작 시각 | S1, D76 |
 | adapters | `hooks` | 훅 HTTP 서버, 토큰 확인, Stop 응답 (I13) | S2, D20, D21 |
@@ -295,6 +300,23 @@ app/src/
 - [흐름] intake로 되감으면 intent 버전이 오르고, 모든 산출물이 폐기된다.
 - [실기] 단계 선택 대화상자의 미리 보기가 실제 결과와 같다.
 
+**구현하며 정한 것** (설계의 규칙에서 따라 나오는 세부. 설계를 바꾼 것은 D115~D117이다)
+
+- **단계 선택을 받는 Work:** 진행 중이거나 멈춘 Work다. 완료와 포기한 Work는 끝났다(3.3). 승인된 intent가 없으면 intake만 고른다(6.3). intake로 되감은 뒤 새 intake를 승인하기 전에는 승인된 intent가 있어 다른 단계도 고를 수 있다. 뒤 단계를 고르면 새 intake를 폐기하고 지금 intent로 간다.
+- **k 진행 중과 k 완료(6.2):** 진행 중인 Work의 지금 task는 늘 진행 중이다. k 완료는 k를 승인하고 Work가 멈춘 경우다([이 단계 끝나면 멈춤], 이전 단계 추천).
+- **폐기:** 되감기는 고른 단계 이후 노드의 task 가운데 폐기되지 않은 것을 모두 폐기한다. 새 세션으로 다시 한 앞 task(D114)도 들어간다. 건너뛰기는 진행 중인 k만 폐기한다. 폐기한 task는 폐기됨으로 두고, 폐기한 때와 폐기를 부른 새 task를 `work.json`에 남긴다. 입력(결정 로그의 항목, 기각 목록, 직전 handoff, 산출물)에서 빠지고, 파일과 `decisions.md`는 그대로다. deny 규칙은 이전 task 디렉터리를 모두 막는다(폐기된 것과 세션 종료로 남은 것 포함).
+- **새 task의 이유:** 되감기는 "되감기", 건너뛰기는 "건너뛰기"다. 끝난 k의 기본 다음 단계를 고르면 건너뛴 것도 폐기한 것도 없어 "기본 진행"이고 추가 지시만 남는다.
+- **`context.md`의 맨 위 절(시나리오 2-4):** 되감기는 "되감기로 들어옴 (먼저 읽을 것)"에 사람 추가 지시, 폐기된 시도 요약, 코드를 넣는다. 폐기된 시도 요약은 이번에 폐기한 task마다 handoff의 `## 요약`, rejected, 이전 단계 추천이다. handoff가 없으면 없다고 적는다. 건너뛰기는 "건너뛰어 들어옴 (먼저 읽을 것)"에 건너뛴 단계, 폐기한 task, 사람 추가 지시를 넣는다. 기본 진행은 추가 지시가 있을 때만 "사람 추가 지시 (먼저 읽을 것)"를 넣는다. 백업 브랜치 이름은 넣지 않는다(폐기는 입력에서 빼는 것).
+- **백업 브랜치 번호(D115):** git에 있는 이 Work의 백업 브랜치 가운데 가장 큰 번호 + 1이다. 실패로 남은 백업 브랜치와도 겹치지 않는다.
+- **되돌리기와 백업(D116, D117):** 되돌릴 커밋이나 커밋 안 된 변경이 있을 때만 백업 브랜치를 만든다. 커밋 안 된 변경은 진짜 index를 건드리지 않고 커밋 하나(`relay(<work-id>): 되감기 전 커밋 안 된 변경`)로 HEAD 위에 담는다(3절). 그 뒤 `git reset --hard`로 되돌리고, 변경이 있었으면 `git clean -d -f`로 추적하지 않는 파일을 지운다. 무시하는 파일(설치한 의존성 등)은 남는다. 폐기하는 task가 한 번도 시작하지 않았으면(대기열) 되돌릴 커밋이 없어 코드를 건드리지 않는다. [현재 코드 위에서 이어서]로 시작한 fix를 다시 되감으면 그 fix의 시작 커밋(이어받은 커밋 포함)으로 되돌린다.
+- **진행 중 작업 기록(D77):** 코드를 되돌리는 되감기만 기록한다. 세션을 끝내며 `operation`(kind `rewind`, stage `backup`)을 적고, 백업 브랜치를 만들면 stage를 `reset`으로 바꾸고, 되돌린 뒤 폐기와 새 task를 쓰는 `work.json` 한 번 쓰기에서 지운다. 코드를 건드리지 않는 선택(건너뛰기, [현재 코드 위에서 이어서])은 `work.json` 한 번 쓰기로 끝나 끊길 곳이 없어 기록하지 않는다. git이 실패하면 [단계 선택]의 결과와 Work의 문제로 알리고 기록을 지운다. 끝낸 세션은 끝난 채로 두고(승인 대기였으면 승인 대기로 남아 승인할 수 있음), 만든 백업 브랜치는 남는다. 재시작 때 남은 기록은 그대로 둔다(알림은 M6).
+- **이벤트(5.5):** 되감기는 `task.rewound`, 건너뛰기는 `task.skipped_to`를 새 task의 이벤트로 남긴다. payload는 고른 단계(`node`), 단계를 고른 때의 task(`from_task`), 폐기한 task(`discarded`)이고, 되감기는 `keep_code`와 되돌렸으면 `reset_to`, `backup_branch`, 건너뛰기는 `skipped`를 더한다. 끝낸 k는 `task.interrupted`(`reason: rewind`나 `skip`)다. 5.5에 없는 유형은 더하지 않았다.
+- **미리 보기와 [확인](D82):** 미리 보기는 core의 계산에 git(되돌릴 커밋 수, 커밋 안 된 변경)과 산출물 파일을 더한다. 대화상자는 Work가 바뀔 때마다 미리 보기를 다시 읽는다. [현재 코드 위에서 이어서]는 fix로 되감을 때만 보인다(건너뛰어 fix로 가면 되돌릴 것이 없다). [확인]은 미리 본 때의 지금 task와 그 task가 끝났는지를 함께 보내고, 그 사이 바뀌었으면 받지 않는다.
+- **[단계 선택]을 여는 곳:** 액션 바와 멈춘 Work의 패널 안내다. 이전 단계 추천으로 멈췄으면 추천한 단계를 먼저 고른다(D23). 세션 없는 막힘(4.4)의 안내에도 [단계 선택]을 적었다. 멈춘 Work의 [재개]는 M3 그대로 추천을 따르지 않고, 안내가 [단계 선택]을 가리킨다.
+- **세션 상한(D18):** 새 task는 새 task 시작과 같은 길로 상한을 따른다. 끝낸 k의 자리는 먼저 기다리던 task가 받는다(M3의 승인과 같음).
+- **[이 단계 끝나면 멈춤]:** 단계 선택으로 꺼지지 않는다. 켜져 있으면 새 task가 승인될 때 멈춘다.
+- **Linux의 10초:** 살아 있는 세션을 끝내는 단계 선택은 [즉시 중단]처럼 Linux에서 10초 늦다(3절).
+
 ### M5. 전달과 정리
 
 **내용**
@@ -357,7 +379,7 @@ app/src/
 - 위치: `app/test/fake-claude/`. Node 스크립트이고 PTY 안에서 실행된다.
 - 입력: 실제와 같은 인자(`--settings`, `--session-id`, `--resume`, `--add-dir`, 첫 프롬프트)와 환경 변수 `RELAY_HOOK_TOKEN`. 시나리오 파일 경로는 환경 변수 `FAKE_CLAUDE_SCENARIO`로 받는다 **(기본값)**.
 - 동작: 설정 파일에서 훅 URL과 머리글을 읽어 신호를 보낸다. 본문 필드는 S2에서 관찰한 모양(`session_id`, `transcript_path`, `cwd`, `permission_mode`, `hook_event_name`, 도구 이름과 입력, `stop_hook_active`)을 따른다.
-- 시나리오 파일은 단계 목록이다: 신호 보내기, 산출물과 handoff 쓰기, worktree에 커밋하기, 질문 대기 흉내(`AskUserQuestion`의 PreToolUse와 PostToolUse), Stop 보내고 응답 확인, 되돌림을 받았을 때 쓸 내용, 종료.
+- 시나리오 파일은 단계 목록이다: 신호 보내기, 산출물과 handoff 쓰기, worktree에 커밋하기, 커밋하지 않고 worktree 고치기(M4, D116), 질문 대기 흉내(`AskUserQuestion`의 PreToolUse와 PostToolUse), Stop 보내고 응답 확인, 되돌림을 받았을 때 쓸 내용, 종료.
 - 가짜 `gh`도 같은 방식으로 두고, 받은 인자를 파일에 남긴다 **(기본값)**.
 
 ### 8.3 워크플로
@@ -374,7 +396,11 @@ app/src/
 - 경로: 의도 승인 때 시험 도구가 `size`를 골라(D90) M 경로와 S 경로를 하나씩 돌린다.
 - 사람 역할: 첫 실행 창은 I17의 도구로 수락하고, 질문(`AskUserQuestion`)에는 첫 선택지(추천)로 답한다. 승인 대기가 되면 [승인]한다.
 - 판정: Work 완료까지 갔는지, task마다 형식 오류 되돌림 횟수, [오류 무시하고 승인]을 쓴 횟수(0이어야 함), 걸린 시간.
-- 재개(M3): intake 세션에 표식을 알려 준 뒤 [즉시 중단]하고 [재개]한다. 다시 연 세션에 표식을 파일에 쓰게 해 파일로 판정한다(다시 연 화면에는 앞 대화가 보여 화면으로는 가를 수 없음). `RELAY_REAL_CASES`로 돌릴 경우(M, S, resume)를 고른다.
+- 재개(M3): intake 세션에 표식을 알려 준 뒤 [즉시 중단]하고 [재개]한다. 다시 연 세션에 표식을 파일에 쓰게 해 파일로 판정한다(다시 연 화면에는 앞 대화가 보여 화면으로는 가를 수 없음).
+- 되감기(M4, 사용자 결정): S 경로 레포에서 최종 검증이 승인 대기가 되면 [단계 선택]으로 되감고 Work 완료까지 간다. 가짜 `claude`로는 스킬이 `context.md`의 되감기 절을 따르는지 볼 수 없어서 둔다.
+  - rewind-intake: 완료조건을 하나 더하라는 추가 지시와 함께 intake로 되감는다. intent v2가 v1을 출발점으로 고쳐졌는지(완료조건이 늘고 v1 항목이 남는지, D40), 되돌린 수정 커밋이 백업 브랜치에 있는지 본다.
+  - rewind-fix: 재현 테스트 이름을 정한 추가 지시와 함께 fix로 되감는다. 되감은 fix가 추가 지시를 따랐는지, 되돌린 커밋이 백업 브랜치에 있는지 본다.
+- `RELAY_REAL_CASES`로 돌릴 경우(M, S, resume, rewind-intake, rewind-fix. rewind는 둘 다)를 고른다.
 - 결과는 실행 요약과 결과물에 올리고, 사람이 `docs/checks.md`에 옮긴다(I30). 러너 결과는 예비 확인으로 적는다(D93과 같음).
 
 ### 8.5 실기 확인 (I30)
@@ -402,3 +428,6 @@ app/src/
 | G12 | 형식 오류가 끝까지 남은 task는 대기나 세션 종료가 되는데, [오류 무시하고 승인]을 언제 누를 수 있는지, handoff 머리글을 읽지 못하면 결정과 이전 단계 추천을 어떻게 할지 없었다(M2 구현 중에 찾음) | D112 |
 | G13 | Claude Code의 자동 메모리가 task와 Work 사이를 `context.md` 밖으로 잇는다. 되감기의 폐기(D22)도 메모리는 빼지 못한다(스파이크 S6에서 찾음) | D113 |
 | G14 | handoff 없이 끝난 세션의 [이 단계 새 세션으로 다시]가 새 task인지 같은 task의 새 세션인지 없었다(M3 구현 전에 찾음) | D114 |
+| G15 | 백업 브랜치 이름 `relay/<work-id>/discarded-<n>`은 Work 브랜치 `relay/<work-id>`가 있으면 git이 만들지 않는다(M4 구현 전에 찾음) | D115 |
+| G16 | 코드 되돌림(`git reset --hard`)이 worktree의 커밋 안 된 변경을 백업 없이 지운다(M4 구현 전에 찾음) | D116 |
+| G17 | 실행한 적 없는 단계(S 경로의 evidence·rca)나 새 세션으로 다시 한 task(D114)가 있을 때 되돌릴 커밋이 없었다. 건너뛰기에서 진행 중인 fix의 코드 커밋을 폐기하는지 없었다(M4 구현 전에 찾음) | D117 |

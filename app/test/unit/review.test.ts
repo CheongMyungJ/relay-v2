@@ -43,6 +43,13 @@ describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
     expect(bandText({ seq: 5, node: 'rca', reason: 'resume' })).toBe(
       '05 원인 분석 · 새 세션 · 이유: 재개',
     )
+    // 단계 선택으로 들어온 task (6.2)
+    expect(bandText({ seq: 6, node: 'fix', reason: 'rewind' })).toBe(
+      '06 수정 · 새 세션 · 이유: 되감기',
+    )
+    expect(bandText({ seq: 7, node: 'verify', reason: 'skip' })).toBe(
+      '07 최종 검증 · 새 세션 · 이유: 건너뛰기',
+    )
   })
 
   it('--resume으로 다시 연 세션은 세션 재개다 (시나리오 3-4)', () => {
@@ -80,9 +87,11 @@ describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
       'session_ended',
       'interrupted',
       'approved',
+      'discarded',
     ]
     expect(Object.keys(TASK_STATUS_LABEL).sort()).toEqual([...all].sort())
     expect(TASK_STATUS_LABEL.queued).toBe('대기열')
+    expect(TASK_STATUS_LABEL.discarded).toBe('폐기됨')
     expect(WORK_STATUS_LABEL.abandoned).toBe('포기')
   })
 
@@ -134,10 +143,10 @@ describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
       reason: '다시',
     })
     expect(resumeHint(at('evidence', back('intake')))).toBe(
-      '[재개]하면 추천을 따르지 않고 다음 단계(원인 분석)를 시작합니다. 추천대로 되돌아가는 단계 선택은 M4에서 넣습니다.',
+      '[재개]하면 추천을 따르지 않고 다음 단계(원인 분석)를 시작합니다. 추천대로 되돌아가려면 [단계 선택]을 누르세요.',
     )
     expect(resumeHint(at('verify', back('fix')))).toBe(
-      '[재개]하면 추천을 따르지 않고 Work를 완료합니다. 추천대로 되돌아가는 단계 선택은 M4에서 넣습니다.',
+      '[재개]하면 추천을 따르지 않고 Work를 완료합니다. 추천대로 되돌아가려면 [단계 선택]을 누르세요.',
     )
   })
 })
@@ -203,7 +212,10 @@ describe('강조 영역 (D83, 시나리오 4-2)', () => {
       'format_errors',
     ])
     expect(items[0]?.lines).toEqual(['범위를 넘음', '근거: refresh.ts도 바뀜'])
-    expect(items[2]?.lines[0]).toBe('수정(fix)로 — 완료조건 2 실패')
+    expect(items[2]?.lines).toEqual([
+      '수정(fix)로 — 완료조건 2 실패',
+      '승인하면 다음 단계를 시작하지 않고 멈춥니다. 되돌아갈 단계는 멈춘 뒤 [단계 선택]으로 고릅니다.',
+    ])
     expect(items[4]?.lines).toEqual(['handoff.md: `## 요약` 절 없음'])
   })
 

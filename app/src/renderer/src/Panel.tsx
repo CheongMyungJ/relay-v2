@@ -1,7 +1,7 @@
 // 오른쪽 패널 (D79, D83). handoff 상태와 형식 오류, 산출물 목록을 보이고,
 // 승인할 수 있으면 넓어져 승인 화면이 된다. verify의 승인 화면은 Work 완료 화면이다 (시나리오 7-3).
 import { useState } from 'react'
-import type { Size } from '../../shared/contracts'
+import type { NodeName, Size } from '../../shared/contracts'
 import type { ReviewView, TaskView, WorkView } from '../../shared/views'
 import { call } from './commands'
 import { ConfirmDialog } from './dialogs'
@@ -16,6 +16,8 @@ interface Props {
   task: TaskView
   review: ReviewView | null
   onApproved: () => void
+  /** 단계 선택 대화상자를 연다. node는 처음 고를 단계다 */
+  onSelectStep: (node?: NodeName) => void
 }
 
 /** 승인 화면을 보일 task인가: 에이전트가 턴을 끝냈고 handoff가 있다. 막힘은 따로 보인다 */
@@ -25,8 +27,10 @@ export function wantsApproval(review: ReviewView | null): boolean {
   )
 }
 
-export function Panel({ work, task, review, onApproved }: Props) {
+export function Panel({ work, task, review, onApproved, onSelectStep }: Props) {
   if (!review) return <div className="panel-body dim">불러오는 중…</div>
+  // 이전 단계 추천으로 멈췄으면 추천한 단계를 처음 고른다 (D23)
+  const recommended = work.steps.find((c) => c.recommended && c.allowed)?.node
   return (
     <div className="panel-body">
       <header className="panel-head">
@@ -37,6 +41,21 @@ export function Panel({ work, task, review, onApproved }: Props) {
         <div className="notice stop">
           {work.stopNotice}
           {work.stopHint ? <div className="dim">{work.stopHint}</div> : null}
+          {work.actions.selectStep ? (
+            <div className="notice-actions">
+              <button
+                className={recommended ? 'primary' : ''}
+                onClick={() => onSelectStep(recommended)}
+              >
+                단계 선택
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      {task.status === 'discarded' ? (
+        <div className="notice">
+          폐기됨: 단계 선택으로 이후 입력에서 빠졌습니다. 파일과 기록은 남습니다.
         </div>
       ) : null}
       {work.status === 'completed' && task.id === work.current ? (
@@ -46,7 +65,7 @@ export function Panel({ work, task, review, onApproved }: Props) {
         <div className="notice">Work 포기. 산출물과 worktree는 남아 있습니다.</div>
       ) : null}
       {work.status === 'active' && task.id === work.current ? <TaskNotice task={task} /> : null}
-      {task.status === 'approved' ? (
+      {task.status === 'approved' || task.status === 'discarded' ? (
         <Review review={review} readOnly />
       ) : review.handoffPresent && review.handoffStatus === 'blocked' ? (
         <Review review={review} readOnly />
@@ -86,7 +105,8 @@ function TaskNotice({ task }: { task: TaskView }) {
   if (task.status === 'blocked' && !task.live) {
     return (
       <div className="notice">
-        막힘. 세션이 없습니다. [세션 재개]로 필요한 것을 주거나 [Work 포기]하세요.
+        막힘. 세션이 없습니다. [세션 재개]로 필요한 것을 주거나, [단계 선택]으로 다른 단계로 가거나,
+        [Work 포기]하세요.
       </div>
     )
   }

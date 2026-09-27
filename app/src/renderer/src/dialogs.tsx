@@ -1,5 +1,5 @@
 // 대화상자: 프로젝트 등록(시나리오 0), 새 Work(시나리오 1), 설정 화면(D70), Work 설정(D72),
-// 확인 창([오류 무시하고 승인] 4.1, [Work 포기] 3.3).
+// 단계 선택(6.2, D82), 확인 창([오류 무시하고 승인] 4.1, [Work 포기] 3.3).
 import { useEffect, useState, type ReactNode } from 'react'
 import {
   QUESTION_MODE_LABEL,
@@ -8,7 +8,14 @@ import {
   type QuestionMode,
   type SkillName,
 } from '../../shared/config'
-import type { ProjectInspection, ProjectView, WorkView } from '../../shared/views'
+import type { NodeName } from '../../shared/contracts'
+import type {
+  ProjectInspection,
+  ProjectView,
+  StepPreview,
+  StepPreviewResult,
+  WorkView,
+} from '../../shared/views'
 import { call } from './commands'
 
 function Modal({
@@ -409,6 +416,216 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         <button onClick={onClose}>취소</button>
         <button className="primary" disabled={busy || !value} onClick={() => void save()}>
           저장
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+// ---------- 단계 선택 (6.2, 6.3, D82) ----------
+
+const short = (commit: string | null) => (commit ? commit.slice(0, 8) : '')
+
+/** 미리 보기의 코드 줄 (D116, D117) */
+function codeLines(code: StepPreview['code']): string[] {
+  const n = code.uncommitted.length
+  if (code.kind === 'reset') {
+    const where = `고른 단계를 시작할 때의 커밋(${short(code.to)})`
+    return [
+      code.commits > 0 || n > 0
+        ? `되돌릴 커밋 ${code.commits}개: ${where}으로 되돌립니다`
+        : `되돌릴 커밋 0개: 코드가 이미 ${where}에 있습니다`,
+      ...(n ? [`커밋 안 된 변경 ${n}개는 백업 브랜치에 커밋으로 넣고 지웁니다`] : []),
+      code.backupBranch
+        ? `백업 브랜치: ${code.backupBranch}`
+        : '백업할 것이 없어 백업 브랜치를 만들지 않습니다',
+    ]
+  }
+  return [
+    code.kind === 'keep'
+      ? '[현재 코드 위에서 이어서]: 커밋을 되돌리지 않고 그 위에서 이어서 고칩니다'
+      : '코드를 되돌리지 않습니다',
+    ...(n ? [`커밋 안 된 변경 ${n}개는 그대로 둡니다`] : []),
+  ]
+}
+
+/** 고른 단계의 결과 (D82): 중단할 task, 폐기될 산출물, 코드, 건너뛸 단계, intent */
+function PreviewView({ p }: { p: StepPreview }) {
+  return (
+    <div className="step-preview" aria-label="미리 보기">
+      <div>
+        <strong>{p.title}</strong> · {p.kind === 'rewind' ? '되감기' : '건너뛰기'} · 새 task의 이유:{' '}
+        {p.reason}
+      </div>
+      {p.interrupt ? <div className="notice">{p.interrupt}</div> : null}
+      <section>
+        <h3>폐기될 산출물</h3>
+        {p.discard.length ? (
+          <ul>
+            {p.discard.map((d) => (
+              <li key={d.taskId}>
+                {d.label}: {d.artifacts.length ? d.artifacts.join(', ') : '산출물 없음'}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="dim">없음</div>
+        )}
+      </section>
+      <section>
+        <h3>코드</h3>
+        <ul>
+          {codeLines(p.code).map((l) => (
+            <li key={l}>{l}</li>
+          ))}
+        </ul>
+        {p.code.uncommitted.length ? (
+          <ul className="files">
+            {p.code.uncommitted.map((f) => (
+              <li key={f}>{f}</li>
+            ))}
+          </ul>
+        ) : null}
+      </section>
+      <section>
+        <h3>건너뛸 단계</h3>
+        {p.skipped.length ? p.skipped.join(', ') : <span className="dim">없음</span>}
+      </section>
+      {p.intent ? <div className="notice">{p.intent}</div> : null}
+    </div>
+  )
+}
+
+/**
+ * 단계 선택 대화상자 (D82): 파이프라인 단계를 차례로 보이고(6.3의 제약을 따른다), 고른 단계의 결과를
+ * 미리 보인다. 추가 지시는 선택이고, fix로 되감으면 [현재 코드 위에서 이어서]를 고를 수 있다.
+ * [확인]을 눌러야 실행한다. 미리 본 뒤 Work가 바뀌었으면 main이 받지 않는다.
+ */
+export function StepDialog({
+  work,
+  initial,
+  onClose,
+  onDone,
+}: {
+  work: WorkView
+  /** 처음 고른 단계. 이전 단계 추천으로 멈췄으면 추천한 단계다 (D23) */
+  initial?: NodeName
+  onClose: () => void
+  onDone: () => void
+}) {
+  const recommended = work.steps.find((c) => c.recommended && c.allowed)?.node
+  const [node, setNode] = useState<NodeName | null>(initial ?? recommended ?? null)
+  const [keepCode, setKeepCode] = useState(false)
+  const [instruction, setInstruction] = useState('')
+  // 미리 본 단계와 선택지. 고른 것과 다르면 보이지 않고 [확인]할 수 없다
+  const [preview, setPreview] = useState<{
+    node: NodeName
+    keepCode: boolean
+    result: StepPreviewResult
+  } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // 고른 단계의 결과를 미리 본다. Work가 바뀌면 다시 본다
+  useEffect(() => {
+    if (!node) return
+    let stale = false
+    void call(() => window.relay.stepPreview(work.key, node, keepCode)).then((result) => {
+      if (!stale) setPreview({ node, keepCode, result })
+    })
+    return () => {
+      stale = true
+    }
+  }, [work.key, work.revision, node, keepCode])
+
+  const current = preview && preview.node === node && preview.keepCode === keepCode ? preview : null
+  const shown = current?.result.ok ? current.result.preview : null
+  const failed = current && !current.result.ok ? current.result.error : null
+  // [현재 코드 위에서 이어서]는 fix로 되감을 때만 있다 (6.2)
+  const keepOffered = node === 'fix' && work.steps.find((c) => c.node === node)?.kind === 'rewind'
+
+  const pick = (next: NodeName) => {
+    setNode(next)
+    setKeepCode(false)
+  }
+
+  const confirm = async () => {
+    if (!shown) return
+    setBusy(true)
+    setError(null)
+    const r = await call(() =>
+      window.relay.selectStep(work.key, {
+        node: shown.node,
+        keepCode,
+        instruction,
+        expect: shown.expect,
+      }),
+    )
+    setBusy(false)
+    if (r.ok) onDone()
+    else setError(r.error)
+  }
+
+  return (
+    <Modal title={`단계 선택 · ${work.workId}`} onClose={onClose}>
+      <fieldset className="steps">
+        <legend>단계</legend>
+        {work.steps.map((c) => (
+          <label key={c.node} className={c.allowed ? 'step' : 'step disabled'} title={c.why ?? ''}>
+            <input
+              type="radio"
+              name="step"
+              aria-label={c.title}
+              disabled={!c.allowed}
+              checked={node === c.node}
+              onChange={() => pick(c.node)}
+            />
+            <span>{c.title}</span>
+            <span className="dim">
+              {c.kind === 'rewind' ? '되감기' : '건너뛰기'}
+              {c.current ? ' · 지금 단계' : ''}
+            </span>
+            {c.recommended ? <span className="badge hot">추천</span> : null}
+          </label>
+        ))}
+      </fieldset>
+      {keepOffered ? (
+        <label
+          className="toggle"
+          title="verify가 작은 문제를 찾았을 때 수정을 처음부터 다시 하지 않는다"
+        >
+          <input
+            type="checkbox"
+            checked={keepCode}
+            onChange={(e) => setKeepCode(e.target.checked)}
+          />
+          현재 코드 위에서 이어서
+        </label>
+      ) : null}
+      {node === null ? (
+        <div className="dim">단계를 고르면 결과를 미리 보입니다.</div>
+      ) : failed ? (
+        <div className="error">{failed}</div>
+      ) : shown ? (
+        <PreviewView p={shown} />
+      ) : (
+        <div className="dim">미리 보는 중…</div>
+      )}
+      <label className="field">
+        추가 지시 (선택)
+        <textarea
+          aria-label="추가 지시"
+          rows={4}
+          value={instruction}
+          onChange={(e) => setInstruction(e.target.value)}
+          placeholder="새 task의 context.md 맨 위에 넣습니다"
+        />
+      </label>
+      {error ? <div className="error">{error}</div> : null}
+      <div className="buttons">
+        <button onClick={onClose}>취소</button>
+        <button className="primary" disabled={busy || !shown} onClick={() => void confirm()}>
+          {busy ? '실행하는 중…' : '확인'}
         </button>
       </div>
     </Modal>

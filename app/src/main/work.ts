@@ -6,7 +6,15 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { claudeVersion, deploySkill, findClaude } from '../adapters/claude'
-import { diffFrom, headCommit, statusLines } from '../adapters/git'
+import {
+  countCommits,
+  createBackup,
+  diffFrom,
+  headCommit,
+  refNames,
+  resetHard,
+  statusLines,
+} from '../adapters/git'
 import type { HookReply, HookRequest, HookServer } from '../adapters/hooks'
 import { processStartTime, startPty, type PtySession } from '../adapters/pty'
 import {
@@ -18,7 +26,13 @@ import {
 } from '../adapters/store'
 import { watchDir } from '../adapters/watch'
 import { REVIEWABLE, approvalGate, badge } from '../core/approval'
-import { buildContext, previousInputs, type PreviousTask } from '../core/context'
+import {
+  buildContext,
+  discardedAttempts,
+  previousInputs,
+  type PreviousTask,
+  type SelectionInput,
+} from '../core/context'
 import {
   actions,
   currentTask,
@@ -28,7 +42,7 @@ import {
   type MachineEvent,
 } from '../core/machine'
 import { NODE_INFO } from '../core/pipeline'
-import { confirmedIntent, decisionsBlock } from '../core/records'
+import { confirmedIntent, decisionsBlock, decisionsWithout } from '../core/records'
 import {
   TASK_STATUS_LABEL,
   WORK_STATUS_LABEL,
@@ -42,15 +56,18 @@ import {
   taskLabel,
   verdicts,
 } from '../core/review'
+import { backupPattern, planStep, stepChoices, stepPreview } from '../core/rewind'
 import { launchArgs, launchEnv, resumeArgs, taskSettings } from '../core/settings'
 import { HANDOFF_FILE, INTENT_DRAFT_FILE, checkTask, type TaskCheck } from '../core/validate'
 import type { AppConfig, WorkSettings } from '../shared/config'
-import type { Size } from '../shared/contracts'
+import type { NodeName, Size } from '../shared/contracts'
 import type { ProjectState } from '../shared/project'
 import type {
   ApproveOptions,
   CommandResult,
   ReviewView,
+  SelectStepInput,
+  StepPreviewResult,
   TaskView,
   TerminalBacklog,
   WorkView,
@@ -129,6 +146,8 @@ export class WorkRunner {
   private readonly terminals = new Map<string, TerminalBuffer>()
   private readonly problems: string[] = []
   private revision = 0
+  /** 이번 명령의 되감기가 git에서 실패한 이유. [단계 선택]의 결과로 돌려준다 */
+  private rewindError: string | null = null
 
   constructor(
     private readonly ctx: RunnerContext,
@@ -220,6 +239,9 @@ export class WorkRunner {
         return
       case 'dequeue':
         this.ctx.pool.remove(this.slotKey(e.taskId))
+        return
+      case 'rewindCode':
+        await this.rewindCode(e)
         return
     }
   }
@@ -341,10 +363,9 @@ export class WorkRunner {
       })
       const version = await claudeVersion(bin, env)
 
-      const previous = this.approvedBefore(task)
-      const settingsPath = await this.writeSettings(task, previous)
+      const settingsPath = await this.writeSettings(task)
       const contextPath = path.join(dir, CONTEXT_FILE)
-      await writeFileAtomic(contextPath, await this.context(task, dir, previous))
+      await writeFileAtomic(contextPath, await this.context(task, dir, this.approvedBefore(task)))
 
       const sessionId = randomUUID()
       const token = randomBytes(32).toString('hex')
@@ -387,7 +408,7 @@ export class WorkRunner {
       const bin = findClaude({ env })
       if (!bin) throw new Error(CLAUDE_INSTALL_GUIDE)
       const version = await claudeVersion(bin, env)
-      const settingsPath = await this.writeSettings(task, this.approvedBefore(task))
+      const settingsPath = await this.writeSettings(task)
       const files = await this.files.taskFiles(task)
       // 이전 화면을 먼저 보인다. 이 앱에서 돌던 task면 버퍼가 남아 있고, 아니면 pty.log에서 읽는다
       await this.terminalBuffer(task)
@@ -410,27 +431,43 @@ export class WorkRunner {
     }
   }
 
-  /** 이 task보다 앞의 승인된 task. 입력과 deny 규칙에 쓴다. 폐기된 task는 M4에서 뺀다 */
+  /**
+   * 이 task보다 앞의 승인된 task. context.md의 입력이다 (시나리오 2-4). 폐기된 task(6.2)와 새 세션으로
+   * 다시 한 앞 task(D114)는 승인됨이 아니라 들어가지 않는다.
+   */
   private approvedBefore(task: TaskRecord): TaskRecord[] {
     return this.work.tasks.filter((t) => t.seq < task.seq && t.status === 'approved')
   }
 
-  /** task 설정 파일을 쓴다 (시나리오 2-3, D113) */
-  private async writeSettings(task: TaskRecord, previous: readonly TaskRecord[]): Promise<string> {
+  /**
+   * task 설정 파일을 쓴다 (시나리오 2-3, D113). deny 규칙은 이전 task 디렉터리를 모두 막는다.
+   * 폐기된 task와 세션 종료로 남은 task의 파일도 기록이라 고치지 않는다 (6.2).
+   */
+  private async writeSettings(task: TaskRecord): Promise<string> {
     const settingsPath = path.join(this.files.taskDir(task), SETTINGS_FILE)
+    const earlier = this.work.tasks.filter((t) => t.seq < task.seq)
     await writeJson(
       settingsPath,
       taskSettings({
         port: this.ctx.hooks.port,
         taskId: task.id,
         workDir: this.files.dir,
-        previousTaskDirs: previous.map((t) => this.files.taskDir(t)),
+        previousTaskDirs: earlier.map((t) => this.files.taskDir(t)),
       }),
     )
     return settingsPath
   }
 
-  /** context.md의 내용 (시나리오 2-4). 폐기된 task는 M4에서 뺀다 */
+  /** task의 handoff.md. 없으면 undefined */
+  private async handoffOf(task: TaskRecord): Promise<string | undefined> {
+    return (await readText(path.join(this.files.taskDir(task), HANDOFF_FILE))) ?? undefined
+  }
+
+  /**
+   * context.md의 내용 (시나리오 2-4). 폐기된 task는 입력에서 빠진다: 결정 로그의 항목(5.4)과,
+   * 승인됨이 아니라 기각 목록, 직전 handoff, 산출물에서도 빠진다. 단계 선택으로 들어온 task는
+   * 사람 추가 지시와 폐기된 시도 요약을 맨 위에 넣는다 (6.2).
+   */
   private async context(
     task: TaskRecord,
     dir: string,
@@ -438,14 +475,15 @@ export class WorkRunner {
   ): Promise<string> {
     const earlier: PreviousTask[] = []
     for (const t of previous) {
-      const handoff = await readText(path.join(this.files.taskDir(t), HANDOFF_FILE))
+      const handoff = await this.handoffOf(t)
       earlier.push({
         taskId: t.id,
         node: t.node,
-        ...(handoff === null ? {} : { handoff }),
+        ...(handoff === undefined ? {} : { handoff }),
         artifacts: await this.files.artifacts(t),
       })
     }
+    const discarded = this.work.tasks.filter((t) => t.status === 'discarded').map((t) => t.id)
     return buildContext({
       work: this.work,
       task,
@@ -453,9 +491,41 @@ export class WorkRunner {
       taskDir: dir,
       request: { path: this.files.request, text: await this.files.readRequest() },
       intent: await this.files.readIntent(),
-      decisionLog: await this.files.readDecisions(),
+      decisionLog: decisionsWithout(await this.files.readDecisions(), discarded),
       ...previousInputs(earlier),
+      selection: await this.selectionInput(task),
     })
+  }
+
+  /** 단계 선택으로 들어온 task의 입력 (6.2): 사람 추가 지시와, 되감기면 폐기된 시도 요약 */
+  private async selectionInput(task: TaskRecord): Promise<SelectionInput | null> {
+    const sel = task.selection
+    if (!sel) return null
+    const reason = task.reason === 'rewind' || task.reason === 'skip' ? task.reason : 'default'
+    const tasks = sel.discarded
+      .map((id) => this.task(id))
+      .filter((t): t is TaskRecord => t !== undefined)
+    const attempts =
+      reason === 'rewind'
+        ? discardedAttempts(
+            await Promise.all(
+              tasks.map(async (t) => {
+                const handoff = await this.handoffOf(t)
+                return { taskId: t.id, node: t.node, ...(handoff === undefined ? {} : { handoff }) }
+              }),
+            ),
+          )
+        : []
+    return {
+      reason,
+      from: { taskId: sel.from_task, node: this.task(sel.from_task)?.node ?? task.node },
+      instruction: sel.instruction,
+      discarded: attempts,
+      dropped: reason === 'skip' ? tasks.map((t) => ({ taskId: t.id, node: t.node })) : [],
+      skipped: sel.skipped,
+      keepCode: sel.keep_code,
+      reset: sel.reset !== null,
+    }
   }
 
   /**
@@ -705,6 +775,111 @@ export class WorkRunner {
     return this.enqueue(() => this.command({ type: 'abandon', at: this.ctx.at() }))
   }
 
+  // ---------- 단계 선택 (6.2) ----------
+
+  /** 이 Work의 백업 브랜치 (D115). 새 백업 브랜치의 번호를 정한다 */
+  private backups(): Promise<string[]> {
+    return refNames(this.worktree, backupPattern(this.work.work_id), { env: this.ctx.env })
+  }
+
+  /**
+   * 단계 선택 대화상자의 미리 보기 (D82). core/rewind의 계산에 git과 파일에서 읽은 것을 더한다:
+   * 되돌릴 커밋 수, 커밋 안 된 변경, 폐기될 산출물 파일.
+   */
+  async stepPreview(node: NodeName, keepCode: boolean): Promise<StepPreviewResult> {
+    const { env } = this.ctx
+    try {
+      const r = planStep(this.work, node, { keepCode, backups: await this.backups() })
+      if (!r.ok) return r
+      const plan = r.plan
+      const uncommitted = await statusLines(this.worktree, { env })
+      const commits =
+        plan.code.kind === 'reset'
+          ? await countCommits(this.worktree, plan.code.to, 'HEAD', { env })
+          : 0
+      const artifacts: Record<string, string[]> = {}
+      for (const t of plan.discard) {
+        artifacts[t.id] = (await this.files.artifacts(t)).map((p) => path.basename(p))
+      }
+      return {
+        ok: true,
+        preview: stepPreview(this.work, plan, { commits, uncommitted, artifacts }),
+      }
+    } catch (e) {
+      return { ok: false, error: `미리 보기를 만들지 못함: ${message(e)}` }
+    }
+  }
+
+  /**
+   * [단계 선택]의 [확인] (6.2). 진행 중인 task를 끝내고, 코드를 되돌리는 되감기면 백업하고 되돌린 뒤,
+   * 폐기하고 고른 단계를 시작한다. 새 task도 세션 상한을 따른다 (D18). git이 실패하면 오류를 돌려준다.
+   */
+  selectStep(input: SelectStepInput): Promise<CommandResult> {
+    return this.enqueue(async () => {
+      this.rewindError = null
+      let backups: string[]
+      try {
+        backups = await this.backups()
+      } catch (e) {
+        return { ok: false, error: `백업 브랜치를 읽지 못함: ${message(e)}` }
+      }
+      const r = await this.command({
+        type: 'selectStep',
+        at: this.ctx.at(),
+        node: input.node,
+        keepCode: input.keepCode,
+        instruction: input.instruction,
+        expect: input.expect,
+        backups,
+      })
+      const failed = this.rewindError
+      this.rewindError = null
+      return r.ok && failed ? { ok: false, error: failed } : r
+    })
+  }
+
+  /**
+   * 되감기의 코드 (6.2, D115~D117). 되돌릴 커밋이나 커밋 안 된 변경이 있으면 먼저 백업 브랜치를 만들고
+   * (커밋 안 된 변경은 커밋 하나로 담는다, D116), 되돌릴 커밋으로 worktree를 되돌린다. 단계가 끝날 때마다
+   * machine에 알려 진행 중 작업 기록을 옮긴다(D77). git이 실패하면 알리고 기록을 지운다.
+   */
+  private async rewindCode(e: Extract<Effect, { type: 'rewindCode' }>): Promise<void> {
+    const opts = { env: this.ctx.env }
+    let head: string
+    let dirty: boolean
+    let branch: string | null
+    try {
+      head = await headCommit(this.worktree, opts)
+      dirty = (await statusLines(this.worktree, opts)).length > 0
+      const commits = head === e.to ? 0 : await countCommits(this.worktree, e.to, 'HEAD', opts)
+      branch = commits > 0 || dirty ? e.backupBranch : null
+      if (branch) {
+        await createBackup(this.worktree, branch, {
+          ...opts,
+          uncommitted: dirty,
+          message: e.message,
+        })
+      }
+    } catch (err) {
+      await this.rewindFailed(err)
+      return
+    }
+    await this.feed({ type: 'rewind.backedUp', at: this.ctx.at(), branch })
+    try {
+      if (head !== e.to || dirty) await resetHard(this.worktree, e.to, { ...opts, clean: dirty })
+    } catch (err) {
+      await this.rewindFailed(err)
+      return
+    }
+    await this.feed({ type: 'rewind.applied', at: this.ctx.at(), head })
+  }
+
+  private async rewindFailed(err: unknown): Promise<void> {
+    this.rewindError = `되감기 실패: ${message(err)}`
+    this.problem(this.rewindError)
+    await this.feed({ type: 'rewind.failed', at: this.ctx.at(), error: message(err) })
+  }
+
   /** Work별 설정 (D72). 검사한 값을 받는다. 질문 방식은 다음에 시작하는 task부터 쓴다 (D73) */
   updateSettings(settings: WorkSettings): Promise<CommandResult> {
     return this.enqueue(() =>
@@ -861,6 +1036,7 @@ export class WorkRunner {
       intent: w.intent,
       stopNotice: stopNotice(w),
       stopHint: resumeHint(w),
+      steps: stepChoices(w),
       tasks: w.tasks.map((t) => this.taskView(t)),
       current: currentTask(w)?.id ?? null,
       problems: [...this.problems],

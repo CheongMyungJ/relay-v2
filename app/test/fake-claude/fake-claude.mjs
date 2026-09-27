@@ -3,7 +3,7 @@
 // - `--version`은 버전을 찍고(D105), `auth status`는 FAKE_CLAUDE_AUTH가 fail이면 종료 코드 1이다(D67).
 // - FAKE_CLAUDE_SCENARIO가 있으면 첫 프롬프트(/relay-<스킬> 이 task의 컨텍스트: <경로>)의 스킬이나
 //   context.md의 task id에 맞는 단계를 차례로 한다: 훅 신호 보내기, 산출물과 handoff 쓰기, worktree에
-//   커밋하기, 질문 대기 흉내, Stop 보내고 되돌림을 받으면 고쳐 쓰기, 종료.
+//   커밋하기, 커밋하지 않고 worktree 고치기, 질문 대기 흉내, Stop 보내고 되돌림을 받으면 고쳐 쓰기, 종료.
 // - 훅은 --settings 파일의 URL과 머리글로 보낸다. 머리글의 $VAR는 allowedEnvVars에 있는 것만 푼다
 //   (Claude Code 문서 hooks). 본문 필드는 S2에서 관찰한 모양이다.
 // - FAKE_CLAUDE_RECORD 폴더가 있으면 실행 인자와 훅 응답을 fake-claude.jsonl에 남긴다.
@@ -247,6 +247,13 @@ async function steps(list, ctx, vars) {
       execFileSync('git', ['commit', '-q', '-m', step.message ?? 'fake commit'], {
         stdio: 'ignore',
       })
+    } else if (s === 'edit') {
+      // 커밋하지 않고 worktree의 파일을 고친다. 끝나지 않은 fix의 커밋 안 된 변경을 흉내 낸다 (D116)
+      for (const [name, text] of Object.entries(step.files ?? {})) {
+        const file = path.join(process.cwd(), name)
+        fs.mkdirSync(path.dirname(file), { recursive: true })
+        fs.writeFileSync(file, fill(text, vars))
+      }
     } else if (s === 'waitEnter') {
       // 사람이 터미널에서 새 요청을 보낼 때까지 기다린다 (다시 연 세션은 입력을 기다린다, S6)
       out('입력 대기: Enter를 누르세요')

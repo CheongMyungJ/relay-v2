@@ -1,11 +1,19 @@
 // context.md 조립 (시나리오 2-4, D19). 앱이 task를 시작할 때 task 디렉터리에 쓰고,
 // 첫 프롬프트에는 이 파일의 경로만 넣는다. 스킬은 이 파일부터 읽는다 (5.6.3).
-// 되감기로 들어온 경우의 항목(사람 추가 지시, 폐기된 시도 요약)은 M4에서 더한다.
+// 단계 선택(6.2)으로 들어온 task는 사람 추가 지시와, 되감기면 폐기된 시도 요약을 맨 위에 강조해 넣는다.
 import type { AppConfig, QuestionMode, WorkSettings } from '../shared/config'
 import type { NodeName } from '../shared/contracts'
 import type { TaskRecord, WorkState } from '../shared/work'
-import { NODE_INFO, WORK_COMPLETE, defaultNext, previousSteps, type NextStep } from './pipeline'
-import { parseFrontMatter } from './validate'
+import {
+  NODES,
+  NODE_INFO,
+  WORK_COMPLETE,
+  defaultNext,
+  isPrevious,
+  previousSteps,
+  type NextStep,
+} from './pipeline'
+import { parseFrontMatter, sectionText } from './validate'
 
 export type ApprovalMode = 'manual' | 'auto'
 
@@ -66,6 +74,37 @@ export interface TaskRef {
   node: NodeName
 }
 
+/** 되감기로 폐기한 시도 하나 (6.2의 폐기된 시도 요약). 폐기한 task의 handoff에서 읽는다 */
+export interface DiscardedAttempt extends TaskRef {
+  /** handoff가 있었다 */
+  handoff: boolean
+  /** handoff 본문의 `## 요약` */
+  summary: string | null
+  /** handoff의 rejected */
+  rejected: string[]
+  /** handoff가 이전 단계를 추천했으면 그 단계와 이유 (D23) */
+  recommended: { node: NodeName; reason: string } | null
+}
+
+/** 단계 선택(6.2)으로 들어온 task의 입력. context.md의 맨 위에 강조해 넣는다 (시나리오 2-4) */
+export interface SelectionInput {
+  /** 되감기, 건너뛰기, 기본 진행(건너뛴 것도 폐기한 것도 없음) */
+  reason: 'rewind' | 'skip' | 'default'
+  /** 단계를 고른 때의 지금 task */
+  from: TaskRef
+  instruction: string | null
+  /** 되감기의 폐기된 시도 요약. 건너뛰기에는 넣지 않는다 (6.2) */
+  discarded: readonly DiscardedAttempt[]
+  /** 건너뛰기: 폐기한 task */
+  dropped: readonly TaskRef[]
+  /** 건너뛰기: 건너뛴 단계 */
+  skipped: readonly NodeName[]
+  /** fix로 되감으며 [현재 코드 위에서 이어서]를 골랐다 */
+  keepCode: boolean
+  /** 코드를 되돌렸다 (D116, D117) */
+  reset: boolean
+}
+
 export interface ContextInput {
   work: WorkState
   /** 시작하는 task */
@@ -86,6 +125,8 @@ export interface ContextInput {
   previousHandoff: (TaskRef & { text: string }) | null
   /** 이전 task의 산출물 경로 (D89). 경로만 넣는다 */
   artifacts: readonly (TaskRef & { path: string })[]
+  /** 단계 선택으로 들어온 task (6.2). 아니면 없다 */
+  selection?: SelectionInput | null
 }
 
 /** 이전 task에서 main이 읽은 것. 폐기되지 않은 task를 순서대로 넘긴다 */
@@ -128,6 +169,42 @@ export function previousInputs(
   }
 }
 
+/** handoff 머리글의 이전 단계 추천 (D23). 머리글을 읽지 못하거나 이전 단계가 아니면 null이다 */
+function recommendedBack(
+  node: NodeName,
+  data: Record<string, unknown>,
+): DiscardedAttempt['recommended'] {
+  const rec = data['recommended_next']
+  if (!rec || typeof rec !== 'object') return null
+  const { node: to, reason } = rec as Record<string, unknown>
+  const target = NODES.find((n) => n === to)
+  if (!target || typeof reason !== 'string' || !isPrevious(node, target)) return null
+  return { node: target, reason }
+}
+
+/**
+ * 폐기된 시도 요약 (6.2): 폐기한 task마다 handoff의 요약, 기각 목록, 이전 단계 추천.
+ * handoff가 없으면 없다고만 적는다. 머리글을 읽지 못해도 본문의 요약은 읽는다.
+ */
+export function discardedAttempts(
+  tasks: readonly (TaskRef & { handoff?: string })[],
+): DiscardedAttempt[] {
+  return tasks.map((t) => {
+    const ref = { taskId: t.taskId, node: t.node }
+    if (t.handoff === undefined) {
+      return { ...ref, handoff: false, summary: null, rejected: [], recommended: null }
+    }
+    const fm = parseFrontMatter(t.handoff)
+    return {
+      ...ref,
+      handoff: true,
+      summary: sectionText(fm.body, '요약'),
+      rejected: rejectedOf(t.handoff),
+      recommended: fm.ok ? recommendedBack(t.node, fm.data) : null,
+    }
+  })
+}
+
 const nodeLabel = (node: NodeName) => `${node} (${NODE_INFO[node].title})`
 const stepLabel = (step: NextStep) => (step === WORK_COMPLETE ? 'Work 완료' : nodeLabel(step))
 
@@ -157,12 +234,102 @@ function nextSteps(work: WorkState, node: NodeName): string[] {
   ]
 }
 
+const oneLine = (text: string) => text.replace(/\s*\n\s*/g, ' ').trim()
+const taskRef = (t: TaskRef) => `${t.taskId} ${nodeLabel(t.node)}`
+
+/** 폐기된 시도 요약의 목록 (6.2) */
+function attempts(items: readonly DiscardedAttempt[]): string {
+  if (items.length === 0) return '없음'
+  return items
+    .map((a) => {
+      if (!a.handoff) return `- ${taskRef(a)}: handoff 없음`
+      const lines = [
+        `- ${taskRef(a)}`,
+        `  - 요약: ${a.summary ? oneLine(a.summary) : '없음'}`,
+        ...(a.rejected.length
+          ? a.rejected.map((r) => `  - 기각: ${oneLine(r)}`)
+          : ['  - 기각: 없음']),
+      ]
+      if (a.recommended) {
+        lines.push(
+          `  - 이전 단계 추천: ${nodeLabel(a.recommended.node)} — ${oneLine(a.recommended.reason)}`,
+        )
+      }
+      return lines.join('\n')
+    })
+    .join('\n')
+}
+
+/** 되감기의 코드 (6.2, D116, D117) */
+function codeNote(sel: SelectionInput): string {
+  if (sel.keepCode) {
+    return '[현재 코드 위에서 이어서]: 폐기된 시도의 커밋이 남아 있다. 그 위에서 이어서 고친다.'
+  }
+  return sel.reset
+    ? '고른 단계를 시작할 때의 커밋으로 되돌렸다. 폐기된 시도의 코드는 입력이 아니다.'
+    : '코드는 되돌리지 않았다.'
+}
+
+/**
+ * 단계 선택으로 들어온 경우의 절 (시나리오 2-4의 "맨 위 강조", 6.2).
+ * 되감기: 사람 추가 지시, 폐기된 시도 요약, 코드. 건너뛰기: 건너뛴 단계와 폐기한 task, 사람 추가 지시.
+ * 기본 진행으로 들어왔으면 사람 추가 지시가 있을 때만 넣는다.
+ */
+function selectionSection(sel: SelectionInput): [string, string] | null {
+  const from = `${taskRef(sel.from)}에서 고름`
+  const instruction = sel.instruction ? fenced(sel.instruction, 'text') : '없음'
+  if (sel.reason === 'rewind') {
+    return [
+      '되감기로 들어옴 (먼저 읽을 것)',
+      [
+        `사람이 단계 선택으로 이 단계를 다시 실행한다(${from}). 폐기된 task의 산출물, 결정, 기각 목록은 아래 입력에서 뺐다. 사람 추가 지시를 따르고, 폐기된 시도를 그대로 되풀이하지 않는다.`,
+        '',
+        '### 사람 추가 지시',
+        '',
+        instruction,
+        '',
+        '### 폐기된 시도 요약',
+        '',
+        attempts(sel.discarded),
+        '',
+        '### 코드',
+        '',
+        codeNote(sel),
+      ].join('\n'),
+    ]
+  }
+  if (sel.reason === 'skip') {
+    const skipped = sel.skipped.length ? sel.skipped.map(nodeLabel).join(', ') : '없음'
+    const dropped = sel.dropped.length ? sel.dropped.map(taskRef).join(', ') : '없음'
+    return [
+      '건너뛰어 들어옴 (먼저 읽을 것)',
+      [
+        `사람이 단계 선택으로 이 단계를 실행한다(${from}). 입력은 지금까지 승인된 것이다. 코드는 되돌리지 않았다.`,
+        '',
+        `- 건너뛴 단계: ${skipped}`,
+        `- 폐기한 task: ${dropped}`,
+        '',
+        '### 사람 추가 지시',
+        '',
+        instruction,
+      ].join('\n'),
+    ]
+  }
+  if (!sel.instruction) return null
+  return [
+    '사람 추가 지시 (먼저 읽을 것)',
+    [`사람이 단계 선택으로 이 단계를 고르며 남긴 지시다(${from}).`, '', instruction].join('\n'),
+  ]
+}
+
 /** context.md의 내용 (시나리오 2-4의 표) */
 export function buildContext(input: ContextInput): string {
   const { work, task, config } = input
   const info = NODE_INFO[task.node]
   const mode = approvalMode(config, work.settings, task.node)
+  const entry = input.selection ? selectionSection(input.selection) : null
   const sections: [string, string][] = [
+    ...(entry ? [entry] : []),
     [
       'task 정보',
       list([

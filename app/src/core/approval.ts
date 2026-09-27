@@ -83,6 +83,7 @@ const TASK_BADGE: Readonly<Record<TaskStatus, BadgeKind | null>> = {
   queued: 'queued',
   interrupted: 'interrupted',
   approved: null,
+  discarded: null,
 }
 
 const BADGE_LABEL: Readonly<Record<BadgeKind, string>> = {

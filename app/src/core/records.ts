@@ -107,6 +107,26 @@ export function appendBlock(existing: string, block: string): string {
   return before ? `${before}\n\n${block}` : block
 }
 
+/** 덩어리의 머리 줄: `## t-04 rca — …` (decisionsBlock) */
+const BLOCK_HEAD = /^## (t-\d+) /
+
+/**
+ * decisions.md에서 이 task들의 덩어리를 뺀다. 폐기된 task의 항목은 파일에서 지우지 않고
+ * context.md에 넣을 때만 뺀다 (5.4, 6.2). 머리 줄 앞의 글은 그대로 둔다.
+ */
+export function decisionsWithout(text: string, taskIds: readonly string[]): string {
+  if (taskIds.length === 0) return text
+  const kept: string[] = []
+  let drop = false
+  for (const line of normalizeText(text).split('\n')) {
+    const id = BLOCK_HEAD.exec(line)?.[1]
+    if (id !== undefined) drop = taskIds.includes(id)
+    if (!drop) kept.push(line)
+  }
+  const out = kept.join('\n').trim()
+  return out ? `${out}\n` : ''
+}
+
 // ---------- intent.md (5.3) ----------
 
 /** intent.md의 형식 버전 (5.3) */

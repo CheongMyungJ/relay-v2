@@ -1,21 +1,25 @@
-// Work와 Task의 상태 전이 (3.3, 시나리오 2~5, 9). (상태, 이벤트) → (새 상태, 할 일)인 순수 함수다 (I10).
+// Work와 Task의 상태 전이 (3.3, 시나리오 2~6, 9). (상태, 이벤트) → (새 상태, 할 일)인 순수 함수다 (I10).
 // 훅 신호, 사람 버튼, 프로세스 종료, 재시작을 main이 이벤트로 바꿔 넣고, 돌려받은 할 일을 차례로 실행한다.
 // 상태는 work.json이고 main이 전이마다 쓴다 (I11). 설정은 판정하는 때의 값을 받는다 (D73).
-// 기본 흐름, [오류 무시하고 승인](D112), 사람 조작(중단, 재개, 멈춤, 포기), 대기열(D18), 재시작 조정(D75, D78)을
-// 담는다. 되감기와 자동 승인은 해당 마일스톤에서 더한다. 세션 상한은 main이 세고, 자리가 없으면 task.queued를 넣는다.
+// 기본 흐름, [오류 무시하고 승인](D112), 사람 조작(중단, 재개, 멈춤, 포기), 대기열(D18), 재시작 조정(D75, D78),
+// 단계 선택(되감기와 건너뛰기, 6.2)을 담는다. 자동 승인은 M7에서 더한다. 세션 상한은 main이 세고,
+// 자리가 없으면 task.queued를 넣는다. 단계 선택의 계산은 core/rewind가 한다.
 import type { AppConfig, WorkSettings } from '../shared/config'
 import type { Decision, NodeName, Size } from '../shared/contracts'
-import type { WorkActions } from '../shared/views'
+import type { StepExpect, WorkActions } from '../shared/views'
 import type {
   CheckSummary,
   LifecycleEvent,
+  RewindOperation,
   StartReason,
+  StepSelection,
   TaskRecord,
   TaskStatus,
   WorkState,
 } from '../shared/work'
 import { REVIEWABLE, approvalGate } from './approval'
 import { NODES, WORK_COMPLETE, defaultNext, isPrevious } from './pipeline'
+import { backupMessage, canSelectStep, planStep, type StepKind } from './rewind'
 import { FORMAT_VERSION, bounceMessage, isValid, summarize, type TaskCheck } from './validate'
 
 // ---------- 이벤트와 할 일 ----------
@@ -194,6 +198,39 @@ export interface AppRestarted extends WorkEvent {
   check: CheckSummary | null
 }
 
+/**
+ * [단계 선택]의 [확인] (6.2, D82). expect는 미리 본 때의 지금 task다. 그 뒤 바뀌었으면 받지 않는다.
+ * backups는 이 Work의 백업 브랜치(git)이고 새 백업 브랜치의 번호를 정한다 (D115).
+ */
+export interface SelectStep extends WorkEvent {
+  type: 'selectStep'
+  node: NodeName
+  /** fix로 되감을 때 [현재 코드 위에서 이어서] */
+  keepCode: boolean
+  /** 사람 추가 지시. 비어 있으면 없는 것이다 */
+  instruction: string
+  expect: StepExpect
+  backups: readonly string[]
+}
+
+/** 되감기(D77의 backup 단계)가 끝났다. 백업할 것이 없어 만들지 않았으면 branch는 null이다 */
+export interface RewindBackedUp extends WorkEvent {
+  type: 'rewind.backedUp'
+  branch: string | null
+}
+
+/** 되감기가 코드를 되돌렸다. head는 되돌리기 전 HEAD다 */
+export interface RewindApplied extends WorkEvent {
+  type: 'rewind.applied'
+  head: string
+}
+
+/** 되감기의 git 작업이 실패했다. 기록을 지우고 Work는 그대로 둔다. 오류는 main이 알린다 */
+export interface RewindFailed extends WorkEvent {
+  type: 'rewind.failed'
+  error: string
+}
+
 export type MachineEvent =
   | SessionStarted
   | SessionResumed
@@ -214,6 +251,10 @@ export type MachineEvent =
   | Abandon
   | UpdateSettings
   | AppRestarted
+  | SelectStep
+  | RewindBackedUp
+  | RewindApplied
+  | RewindFailed
 
 export type Effect =
   /**
@@ -245,6 +286,12 @@ export type Effect =
     }
   /** events.jsonl에 한 줄 더한다 (5.5) */
   | { type: 'log'; event: LifecycleEvent }
+  /**
+   * 되감기의 코드 (6.2, D115~D117). 되돌릴 커밋이나 커밋 안 된 변경이 있으면 백업 브랜치를 만들고
+   * (커밋 안 된 변경은 message로 커밋 하나를 더 만든다), to로 되돌린다. main은 결과를 rewind.backedUp,
+   * rewind.applied, rewind.failed로 알린다
+   */
+  | { type: 'rewindCode'; to: string; backupBranch: string; message: string }
 
 export interface Transition {
   work: WorkState
@@ -324,7 +371,8 @@ export function launchable(task: TaskRecord): boolean {
 /**
  * 사람이 할 수 있는 조작 (액션 바). 화면에 보이는 버튼과 machine이 받는 명령이 같은 판정을 쓴다.
  * [즉시 중단]은 세션이 살아 있거나 대기열에 있을 때, [재개]·[세션 재개]는 세션이 없고 중단됨, 세션 종료,
- * 승인 대기, 막힘일 때, [이 단계 새 세션으로 다시]는 세션 종료일 때다.
+ * 승인 대기, 막힘일 때, [이 단계 새 세션으로 다시]는 세션 종료일 때다. [단계 선택]은 진행 중이거나 멈춘
+ * Work에서 한다(6.2). 고를 수 있는 단계는 core/rewind가 정한다.
  */
 export function actions(work: WorkState): WorkActions {
   const task = currentTask(work)
@@ -335,6 +383,7 @@ export function actions(work: WorkState): WorkActions {
     resume: active && !!task && !live && RESUMABLE.includes(task.status),
     retry: active && task?.status === 'session_ended',
     resumeWork: work.status === 'stopped',
+    selectStep: canSelectStep(work),
     stopAfter: active,
     abandon: active || work.status === 'stopped',
   }
@@ -406,13 +455,14 @@ const withoutStopAfter = (work: WorkState): WorkState => omit(work, 'stop_after_
 
 /**
  * 세션을 끝낸다: 살아 있으면 endSession, 대기열에 있으면 dequeue. 승인 대기와 막힘은 그대로 두고,
- * 그 밖에는 중단됨이다 (3.3). 세션도 대기열도 아니면 null.
+ * 그 밖에는 중단됨이다 (3.3). 세션도 대기열도 아니면 null. 단계 선택(rewind, skip)으로 끝낸 task는 곧
+ * 폐기되지만, 코드 되돌리기가 실패하면 이 표시로 남는다.
  */
 function endTask(
   work: WorkState,
   task: TaskRecord,
   at: string,
-  reason: InterruptReason | 'abandoned',
+  reason: InterruptReason | 'abandoned' | StepKind,
   check?: CheckSummary,
 ): { task: TaskRecord; effects: Effect[] } | null {
   if (task.status === 'queued') {
@@ -503,6 +553,14 @@ export function transition(work: WorkState, event: MachineEvent, config: AppConf
       return updateSettings(work, event)
     case 'app.restarted':
       return restarted(work, event)
+    case 'selectStep':
+      return selectStep(work, event)
+    case 'rewind.backedUp':
+      return rewindBackedUp(work, event)
+    case 'rewind.applied':
+      return rewindApplied(work, event)
+    case 'rewind.failed':
+      return rewindFailed(work)
     default:
       return taskTransition(work, event, config)
   }
@@ -510,7 +568,15 @@ export function transition(work: WorkState, event: MachineEvent, config: AppConf
 
 type TaskMachineEvent = Exclude<
   MachineEvent,
-  StopAfterStep | ResumeWork | Abandon | UpdateSettings | AppRestarted
+  | StopAfterStep
+  | ResumeWork
+  | Abandon
+  | UpdateSettings
+  | AppRestarted
+  | SelectStep
+  | RewindBackedUp
+  | RewindApplied
+  | RewindFailed
 >
 
 function taskTransition(work: WorkState, event: TaskMachineEvent, config: AppConfig): Transition {
@@ -882,8 +948,8 @@ function stopAfter(work: WorkState, e: StopAfterStep): Transition {
 
 /**
  * 멈춘 Work의 [재개] (3.3, 시나리오 3-4). 멈추게 한 task의 기본 다음 단계를 시작한다.
- * 이전 단계 추천(D23)으로 멈췄으면 추천을 따르지 않고 기본 다음 단계로 간다. 추천을 따르는 단계 선택은 M4다.
- * 기본 다음 단계가 Work 완료면 Work를 완료한다(M3의 전달은 [완료만]뿐이다).
+ * 이전 단계 추천(D23)으로 멈췄으면 추천을 따르지 않고 기본 다음 단계로 간다. 추천을 따르는 것은 [단계 선택]이다.
+ * 기본 다음 단계가 Work 완료면 Work를 완료한다(M5 전의 전달은 [완료만]뿐이다).
  */
 function resumeWork(work: WorkState, e: ResumeWork): Transition {
   if (work.status !== 'stopped' || !work.stop) return unchanged(work, '멈춘 Work가 아님')
@@ -930,6 +996,134 @@ function updateSettings(work: WorkState, e: UpdateSettings): Transition {
     return unchanged(work, '끝난 Work의 설정은 바꾸지 않음')
   }
   return { work: { ...work, settings: e.settings }, effects: [] }
+}
+
+// ---------- 단계 선택 (6.2) ----------
+
+/**
+ * [단계 선택]의 [확인] (6.2, D82). core/rewind의 계산을 따른다: 진행 중인 k를 끝내고, 폐기할 task를 폐기하고,
+ * 고른 단계의 새 task를 시작한다. 코드를 되돌리는 되감기는 진행 중 작업을 먼저 기록하고(D77) 세션을 끝낸 뒤
+ * 코드를 main에 맡긴다(rewindCode). 폐기와 새 task는 main이 rewind.applied를 알린 뒤에 한다.
+ * 미리 본 뒤 지금 task나 그 task가 끝났는지가 바뀌었으면 받지 않는다.
+ */
+function selectStep(work: WorkState, e: SelectStep): Transition {
+  const r = planStep(work, e.node, { keepCode: e.keepCode, backups: e.backups })
+  if (!r.ok) return unchanged(work, r.error)
+  const plan = r.plan
+  if (plan.from.id !== e.expect.taskId || plan.done !== e.expect.done) {
+    return unchanged(work, '미리 본 뒤 Work가 바뀌었음. 단계 선택을 다시 여세요')
+  }
+  const instruction = e.instruction.trim() || null
+  const ended = plan.done ? null : endTask(work, plan.from, e.at, plan.kind)
+  const base = ended ? withTask(work, ended.task) : work
+  const effects = [...(ended?.effects ?? [])]
+  if (plan.code.kind === 'reset') {
+    const operation: RewindOperation = {
+      kind: 'rewind',
+      stage: 'backup',
+      started_at: e.at,
+      node: plan.node,
+      from_task: plan.from.id,
+      instruction,
+      discard: plan.discard.map((t) => t.id),
+      reset_to: plan.code.to,
+      backup_branch: plan.code.backupBranch,
+    }
+    effects.push({
+      type: 'rewindCode',
+      to: plan.code.to,
+      backupBranch: plan.code.backupBranch,
+      message: backupMessage(work.work_id),
+    })
+    return { work: { ...base, operation }, effects }
+  }
+  const selection: StepSelection = {
+    from_task: plan.from.id,
+    instruction,
+    discarded: plan.discard.map((t) => t.id),
+    skipped: plan.skipped,
+    keep_code: plan.code.kind === 'keep',
+    reset: null,
+  }
+  return select(base, { node: plan.node, reason: plan.reason, selection }, e.at, effects)
+}
+
+/** 되감기의 백업 단계가 끝났다 (D77). 기록을 코드 되돌리기 단계로 옮기고 만든 백업 브랜치를 적는다 */
+function rewindBackedUp(work: WorkState, e: RewindBackedUp): Transition {
+  const op = work.operation
+  if (op?.kind !== 'rewind' || op.stage !== 'backup') return unchanged(work)
+  return {
+    work: { ...work, operation: { ...op, stage: 'reset', backup_branch: e.branch } },
+    effects: [],
+  }
+}
+
+/** 되감기가 코드를 되돌렸다. 기록한 요청대로 폐기하고 새 task를 시작하며, 기록은 같이 지운다 (D77) */
+function rewindApplied(work: WorkState, e: RewindApplied): Transition {
+  const op = work.operation
+  if (op?.kind !== 'rewind') return unchanged(work, '진행 중인 되감기가 없음')
+  const selection: StepSelection = {
+    from_task: op.from_task,
+    instruction: op.instruction,
+    discarded: op.discard,
+    skipped: [],
+    keep_code: false,
+    reset: {
+      from: e.head,
+      to: op.reset_to,
+      backup_branch: op.stage === 'reset' ? op.backup_branch : null,
+    },
+  }
+  return select(work, { node: op.node, reason: 'rewind', selection }, e.at, [])
+}
+
+/** 되감기의 git 작업이 실패했다. 기록만 지운다. 끝낸 세션은 끝난 채로 두고, 오류는 main이 알린다 */
+function rewindFailed(work: WorkState): Transition {
+  return work.operation ? { work: omit(work, 'operation'), effects: [] } : unchanged(work)
+}
+
+interface Selected {
+  node: NodeName
+  reason: StartReason
+  selection: StepSelection
+}
+
+/**
+ * 단계 선택을 반영한다 (6.2): 폐기할 task를 폐기됨으로 두고(파일은 남음), 고른 단계의 새 task를 만들고,
+ * Work를 진행 중으로 되돌리고(멈춤 표시와 진행 중 작업 기록은 지움), 새 task를 시작한다.
+ * 되감기는 task.rewound, 건너뛰기는 task.skipped_to를 새 task의 이벤트로 남긴다 (5.5).
+ */
+function select(work: WorkState, s: Selected, at: string, effects: Effect[]): Transition {
+  const created: TaskRecord = { ...newTask(work, s.node, at, s.reason), selection: s.selection }
+  const sel = s.selection
+  const tasks = work.tasks.map((t): TaskRecord =>
+    sel.discarded.includes(t.id)
+      ? { ...t, status: 'discarded', discarded_at: at, discarded_by: created.id }
+      : t,
+  )
+  const next: WorkState = {
+    ...omit(work, 'stop', 'operation'),
+    status: 'active',
+    tasks: [...tasks, created],
+  }
+  const common = { node: s.node, from_task: sel.from_task, discarded: sel.discarded }
+  if (s.reason === 'rewind') {
+    const reset = sel.reset
+      ? { reset_to: sel.reset.to, backup_branch: sel.reset.backup_branch }
+      : {}
+    effects.push(
+      log(next, at, 'task.rewound', { ...common, keep_code: sel.keep_code, ...reset }, created),
+    )
+  } else if (s.reason === 'skip') {
+    effects.push(log(next, at, 'task.skipped_to', { ...common, skipped: sel.skipped }, created))
+  }
+  effects.push({
+    type: 'startTask',
+    taskId: created.id,
+    node: created.node,
+    reason: created.reason,
+  })
+  return { work: next, effects }
 }
 
 /**

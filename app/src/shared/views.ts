@@ -123,6 +123,8 @@ export interface WorkView {
   stopNotice: string | null
   /** 멈춘 Work에서 [재개]가 할 일 (3.3) */
   stopHint: string | null
+  /** 단계 선택 대화상자의 단계 (6.2, 6.3, D82) */
+  steps: StepChoice[]
   tasks: TaskView[]
   /** 지금 task의 id */
   current: string | null
@@ -142,10 +144,94 @@ export interface WorkActions {
   retry: boolean
   /** 멈춘 Work의 [재개] */
   resumeWork: boolean
+  /** [단계 선택] (6.2) */
+  selectStep: boolean
   /** [이 단계 끝나면 멈춤] */
   stopAfter: boolean
   /** [Work 포기] */
   abandon: boolean
+}
+
+// ---------- 단계 선택 (6.2, 6.3, D82) ----------
+
+/** 되감기(고른 단계가 지금 단계 이하) 또는 건너뛰기(지금 단계보다 뒤) (6.2) */
+export type StepKind = 'rewind' | 'skip'
+
+/** 단계 선택 대화상자의 한 단계. 파이프라인 차례로 보인다 */
+export interface StepChoice {
+  node: NodeName
+  /** "수정(fix)" */
+  title: string
+  kind: StepKind
+  /** 고를 수 있다. 아니면 why가 이유다 (6.3: 의도 승인 전에는 intake만) */
+  allowed: boolean
+  why: string | null
+  /** 지금 단계 */
+  current: boolean
+  /** 에이전트가 추천한 이전 단계 (D23) */
+  recommended: boolean
+}
+
+/** 미리 본 때의 지금 task(6.2의 k)와 그 task가 끝났는지. [확인]에 함께 보내 그 사이 바뀌었으면 받지 않는다 */
+export interface StepExpect {
+  taskId: string
+  done: boolean
+}
+
+/** 폐기될 task와 그 산출물 (D82) */
+export interface DiscardView {
+  taskId: string
+  /** "04 수정" */
+  label: string
+  /** 산출물 파일 이름 (D89: context.md와 handoff.md는 뺀다) */
+  artifacts: string[]
+}
+
+/**
+ * 고른 단계의 결과 (D82): 폐기될 산출물, 되돌릴 커밋 수와 커밋 안 된 변경과 백업 브랜치, 건너뛸 단계,
+ * 진행 중인 task를 중단하는지. core가 계산하고 main이 git에서 읽은 것을 더한다.
+ */
+export interface StepPreview {
+  node: NodeName
+  title: string
+  kind: StepKind
+  /** 새 task의 머리 띠 이유: 되감기, 건너뛰기, 기본 진행 */
+  reason: string
+  expect: StepExpect
+  /** 진행 중인 task를 중단한다는 안내. 없으면 null */
+  interrupt: string | null
+  discard: DiscardView[]
+  /** 건너뛸 단계의 화면 이름 */
+  skipped: string[]
+  code: {
+    /** reset: 되돌린다, keep: [현재 코드 위에서 이어서], none: 되돌리지 않는다 */
+    kind: 'reset' | 'keep' | 'none'
+    /** 되돌릴 커밋 */
+    to: string | null
+    /** 되돌릴 커밋 수 */
+    commits: number
+    /** 커밋 안 된 변경 (git status). reset이면 백업에 넣고 지운다 (D116) */
+    uncommitted: string[]
+    /** 만들 백업 브랜치 (D115). 되돌릴 것이 없으면 null */
+    backupBranch: string | null
+  }
+  /** fix로 되감을 때 [현재 코드 위에서 이어서]를 고를 수 있다 (6.2) */
+  keepCodeOffered: boolean
+  /** intake로 되감으면 intent 새 버전을 만든다는 안내 (D40) */
+  intent: string | null
+}
+
+/** 미리 보기의 결과. 고를 수 없는 단계거나 git을 읽지 못하면 오류다 */
+export type StepPreviewResult = { ok: true; preview: StepPreview } | { ok: false; error: string }
+
+/** [단계 선택]의 [확인] (6.2) */
+export interface SelectStepInput {
+  node: NodeName
+  /** fix로 되감을 때 [현재 코드 위에서 이어서] */
+  keepCode: boolean
+  /** 사람 추가 지시(선택) */
+  instruction: string
+  expect: StepExpect
 }
 
 export interface AppSnapshot {
