@@ -494,7 +494,8 @@ app/src/
   - rewind-fix: 재현 테스트 이름을 정한 추가 지시와 함께 fix로 되감는다. 되감은 fix가 추가 지시를 따랐는지, 되돌린 커밋이 백업 브랜치에 있는지 본다.
 - 전달(M5, 사용자 결정): S 경로 레포에서 최종 검증이 승인 대기가 되면, 사람 역할이 worktree에 커밋 안 된 메모를 남기고 [PR 생성]을 누른다. 선택지에서 [AI 세션 열기]로 정리 세션을 열어 메모를 지워 달라고 하고, git status가 깨끗해지면 [정리 끝 → push/PR 진행]을 누른 뒤 [Work 정리]를 한다. 실제 스킬이 쓴 `pr.md`가 PR 제목과 본문으로 가는지, 에이전트가 스스로 push하지 않는지, 첫 프롬프트 없이 연 정리 세션이 요청을 받아 일하고 Stop 훅이 오는지 본다. gh는 가짜 gh다(시험 환경에 gh 로그인이 없음). 실제 PR은 [실기]에서 본다.
 - 재시작(M6, 사용자 결정): 앱(Relay)을 자식 프로세스(`test/claude/app-process.mjs`)로 띄워 S 경로 레포의 intake가 첫 요청을 받아 일하는 중에 그 프로세스만 SIGKILL로 끝낸다(앱 충돌). 다시 켜면 조정과 고아 확인을 하고(D75, D76), 중단됨이 된 intake를 [재개]로 같은 세션(`--resume`)으로 열어 이어서 하라고 한 뒤 Work 완료까지 간다. 앱이 죽은 뒤 `claude`가 남았는지, 남았으면 재시작이 끝내고 알렸는지 적는다. 자식 프로세스는 Vite의 SSR 모듈 로더로 앱 코드를 TypeScript 그대로 불러 쓴다.
-- `RELAY_REAL_CASES`로 돌릴 경우(M, S, resume, rewind-intake, rewind-fix, deliver, restart. rewind는 둘 다)를 고른다.
+- 자동 승인(M7, 사용자 결정): S 경로 레포에서 수정 단계의 자동 승인을 켜고(카운트다운 5초) 사람 역할은 카운트다운을 기다린다. 실제 Stop 본문의 `background_tasks`와 `session_crons`가 턴이 끝날 때 비어 있어 카운트다운이 시작되는지(D129), 실제 스킬이 마무리 안내 문구(D132)를 그대로 찍는지, 자동 승인 뒤 세션을 끝내 최종 검증으로 가고 승인 방식이 자동으로 남는지 본다. 자동 승인하지 않으면 알림의 까닭을 남기고 실패로 친다.
+- `RELAY_REAL_CASES`로 돌릴 경우(M, S, resume, rewind-intake, rewind-fix, deliver, restart, auto. rewind는 둘 다)를 고른다.
 - 결과는 실행 요약과 결과물에 올리고, 사람이 `docs/checks.md`에 옮긴다(I30). 러너 결과는 예비 확인으로 적는다(D93과 같음).
 
 ### 8.5 실기 확인 (I30)

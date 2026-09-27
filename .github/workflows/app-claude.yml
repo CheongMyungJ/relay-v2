@@ -1,6 +1,7 @@
 # [실제] 실제 claude로 M 경로와 S 경로가 Work 완료까지 가는지, 트리 종료한 세션을 --resume으로 다시 열면
 # 대화가 이어지는지(M3), 되감기 뒤 스킬이 추가 지시와 폐기된 시도 요약을 따라 Work 완료까지 가는지(M4),
-# 전달과 정리(M5), 앱이 충돌한 뒤 다시 켜서 [재개]로 이어 가는지(M6) 본다 (docs/implementation.md I29, 8.3, 8.4).
+# 전달과 정리(M5), 앱이 충돌한 뒤 다시 켜서 [재개]로 이어 가는지(M6), 수정 단계를 카운트다운 뒤 자동 승인하는지(M7)
+# 본다 (docs/implementation.md I29, 8.3, 8.4).
 # 수동으로만 실행한다. Claude 사용량이 든다. 마일스톤을 마칠 때와 Claude Code를 올릴 때 돌린다.
 # 인증: spikes 워크플로와 같은 레포 secret CLAUDE_CODE_OAUTH_TOKEN 또는 ANTHROPIC_API_KEY.
 # 결과는 실행 요약과 claude-results 결과물에 올라가고, 사람이 docs/checks.md에 옮긴다 (I30).
@@ -85,7 +86,8 @@ jobs:
         if: always()
         working-directory: app
         run: |
-          foreach ($file in @('test-results/claude/summary.md', 'test-results/claude/resume.md', 'test-results/claude/rewind.md')) {
+          foreach ($name in @('summary.md', 'resume.md', 'rewind.md', 'deliver.md', 'restart.md', 'auto.md')) {
+            $file = "test-results/claude/$name"
             if (Test-Path $file) {
               Get-Content $file -Raw -Encoding utf8 | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
             }
