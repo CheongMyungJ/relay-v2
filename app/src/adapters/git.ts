@@ -172,12 +172,38 @@ export interface BackupOptions extends GitOptions {
 }
 
 /**
+ * 작업 트리 전체(커밋 안 된 변경과 추적하지 않는 파일 포함, 무시하는 파일 제외)를 담은 tree (D116).
+ * 진짜 index는 건드리지 않는다: 다른 index 파일(GIT_INDEX_FILE)에 git add -A하고 write-tree한다
+ * (git 문서 git, git-add, git-write-tree). 끊긴 되감기를 다시 할 때 이미 만든 백업과 비교하는 데도 쓴다 (D123).
+ */
+export async function worktreeTree(dir: string, opts: GitOptions = {}): Promise<string> {
+  const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'relay-backup-'))
+  const index = path.join(tmp, 'index')
+  const withIndex: GitOptions = {
+    ...opts,
+    env: { ...(opts.env ?? process.env), GIT_INDEX_FILE: index },
+  }
+  try {
+    // 진짜 index를 복사해 시작하면 파일 상태 캐시를 써 빠르다. 없으면 HEAD에서 만든다
+    const real = path.resolve(dir, await git(dir, ['rev-parse', '--git-path', 'index'], opts))
+    try {
+      await fsp.copyFile(real, index)
+    } catch {
+      await git(dir, ['read-tree', 'HEAD'], withIndex)
+    }
+    await git(dir, ['add', '-A'], withIndex)
+    return await git(dir, ['write-tree'], withIndex)
+  } finally {
+    await fsp.rm(tmp, { recursive: true, force: true })
+  }
+}
+
+/**
  * 되감기의 백업 브랜치를 만든다 (6.2, D115, D116). 브랜치는 HEAD를 가리킨다. 커밋 안 된 변경도 백업하면
  * 작업 트리 전체(무시하는 파일 제외)를 담은 커밋 하나를 HEAD 위에 더해 그 커밋을 가리킨다.
- * 진짜 index와 작업 트리, 지금 브랜치는 건드리지 않는다: 다른 index 파일(GIT_INDEX_FILE)에 git add -A하고
- * write-tree와 commit-tree로 커밋 객체만 만든다. commit-tree는 git commit과 달리 훅을 부르지 않는다
- * (git 문서 git, git-add, git-write-tree, git-commit-tree, githooks). 같은 이름의 브랜치가 있으면
- * git branch가 실패하고 아무것도 바꾸지 않는다. 백업한 커밋을 돌려준다.
+ * 진짜 index와 작업 트리, 지금 브랜치는 건드리지 않는다: worktreeTree로 tree를 만들고 commit-tree로 커밋 객체만
+ * 만든다. commit-tree는 git commit과 달리 훅을 부르지 않는다 (git 문서 git-commit-tree, githooks).
+ * 같은 이름의 브랜치가 있으면 git branch가 실패하고 아무것도 바꾸지 않는다. 백업한 커밋을 돌려준다.
  */
 export async function createBackup(
   dir: string,
@@ -187,29 +213,27 @@ export async function createBackup(
   const head = await headCommit(dir, opts)
   let commit = head
   if (opts.uncommitted) {
-    const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'relay-backup-'))
-    const index = path.join(tmp, 'index')
-    const withIndex: GitOptions = {
-      ...opts,
-      env: { ...(opts.env ?? process.env), GIT_INDEX_FILE: index },
-    }
-    try {
-      // 진짜 index를 복사해 시작하면 파일 상태 캐시를 써 빠르다. 없으면 HEAD에서 만든다
-      const real = path.resolve(dir, await git(dir, ['rev-parse', '--git-path', 'index'], opts))
-      try {
-        await fsp.copyFile(real, index)
-      } catch {
-        await git(dir, ['read-tree', 'HEAD'], withIndex)
-      }
-      await git(dir, ['add', '-A'], withIndex)
-      const tree = await git(dir, ['write-tree'], withIndex)
-      commit = await git(dir, ['commit-tree', tree, '-p', head, '-m', opts.message], opts)
-    } finally {
-      await fsp.rm(tmp, { recursive: true, force: true })
-    }
+    const tree = await worktreeTree(dir, opts)
+    commit = await git(dir, ['commit-tree', tree, '-p', head, '-m', opts.message], opts)
   }
   await git(dir, ['branch', branch, commit], opts)
   return commit
+}
+
+/** 커밋의 tree */
+export async function treeOf(dir: string, commit: string, opts?: GitOptions): Promise<string> {
+  return git(dir, ['rev-parse', '--verify', '--end-of-options', `${commit}^{tree}`], opts)
+}
+
+/** 커밋의 id, 제목(첫 줄), 첫 부모. 부모가 없으면 null */
+export async function commitInfo(
+  dir: string,
+  commit: string,
+  opts?: GitOptions,
+): Promise<{ id: string; subject: string; parent: string | null }> {
+  const out = await git(dir, ['log', '-1', '--format=%H%x00%s%x00%P', commit, '--'], opts)
+  const [id = '', subject = '', parents = ''] = out.split('\0')
+  return { id, subject, parent: parents.split(' ').find(Boolean) ?? null }
 }
 
 /**
@@ -279,6 +303,20 @@ export async function stashAll(dir: string, message: string, opts?: GitOptions):
   const after = await refCommit(dir, 'refs/stash', opts)
   if (!after || after === before) throw new GitError('git stash가 변경을 넣지 않음')
   return after
+}
+
+/**
+ * stash 목록: stash 커밋과 제목. 최신이 먼저다. git stash list는 git log의 형식 옵션을 받고, 제목(%gs)은
+ * `On <브랜치>: <메시지>`다 (git 문서 git-stash, 실행). 끊긴 전달이 만든 stash를 메시지로 찾는다 (D123)
+ */
+export async function stashEntries(
+  dir: string,
+  opts?: GitOptions,
+): Promise<{ commit: string; subject: string }[]> {
+  return lines(await git(dir, ['stash', 'list', '--format=%H%x00%gs'], opts)).map((l) => {
+    const [commit = '', subject = ''] = l.split('\0')
+    return { commit, subject }
+  })
 }
 
 /**

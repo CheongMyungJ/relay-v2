@@ -84,6 +84,12 @@ export interface RelayApi {
   cleanPreview(workKey: string): Promise<CleanPreviewResult>
   /** [Work 정리]의 [정리] (시나리오 8-2) */
   clean(workKey: string, input: CleanInput): Promise<CommandResult>
+  /** 끊긴 작업의 [다시 시도] (시나리오 9-4, D123). 끊긴 전달은 커밋 안 된 변경이 남았으면 목록을 돌려준다 */
+  retryOperation(workKey: string): Promise<DeliverResult>
+  /** 끊긴 작업의 [무시] (D123) */
+  ignoreOperation(workKey: string): Promise<CommandResult>
+  /** 재시작 때와 실행 중의 알림의 [확인] (D121, D124) */
+  dismissNotice(workKey: string, id: string): Promise<CommandResult>
   /** 비교 URL이나 PR 주소를 브라우저에서 연다 (7-4). http(s) 주소만 연다 */
   openExternal(url: string): Promise<void>
   /** Work별 질문 방식 (D72) */
@@ -128,6 +134,9 @@ export const IPC = {
   recheck: 'work:recheck',
   cleanPreview: 'work:clean-preview',
   clean: 'work:clean',
+  retryOperation: 'work:retry-operation',
+  ignoreOperation: 'work:ignore-operation',
+  dismissNotice: 'work:dismiss-notice',
   openExternal: 'app:open-external',
   workSettings: 'work:settings',
   config: 'config:get',

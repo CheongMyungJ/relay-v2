@@ -186,6 +186,15 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   ipcMain.handle(IPC.clean, async (_e, workKey: unknown, input: unknown) =>
     (await ready).clean(text(workKey), cleanInput(input)),
   )
+  ipcMain.handle(IPC.retryOperation, async (_e, workKey: unknown) =>
+    (await ready).retryOperation(text(workKey)),
+  )
+  ipcMain.handle(IPC.ignoreOperation, async (_e, workKey: unknown) =>
+    (await ready).ignoreOperation(text(workKey)),
+  )
+  ipcMain.handle(IPC.dismissNotice, async (_e, workKey: unknown, id: unknown) =>
+    (await ready).dismissNotice(text(workKey), text(id)),
+  )
   // 비교 URL과 PR 주소만 연다. 앱 창은 옮기지 않는다 (main/index)
   ipcMain.handle(IPC.openExternal, async (_e, url: unknown) => {
     const u = new URL(text(url))

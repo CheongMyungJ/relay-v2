@@ -100,8 +100,9 @@ describe('사이드바 배지 (D80)', () => {
     }
   }
 
-  it('우선순위는 질문 대기·입력 필요 > 승인 대기 > 막힘 > 멈춤 > 세션 종료 > 작업 중 > 대기 > 대기열 > 중단됨 > 완료·포기', () => {
+  it('우선순위는 끊긴 작업 > 질문 대기·입력 필요 > 승인 대기 > 막힘 > 멈춤 > 세션 종료 > 작업 중 > 대기 > 대기열 > 중단됨 > 완료·포기 (D121)', () => {
     expect(BADGE_ORDER).toEqual([
+      'recovery',
       'asking',
       'awaiting_approval',
       'blocked',
@@ -113,8 +114,9 @@ describe('사이드바 배지 (D80)', () => {
       'interrupted',
       'done',
     ])
-    // 사람이 필요한 상태(앞의 다섯)만 강조한다
+    // 사람이 필요한 상태(앞의 여섯)만 강조한다
     expect(HUMAN_BADGES).toEqual([
+      'recovery',
       'asking',
       'awaiting_approval',
       'blocked',
@@ -167,5 +169,25 @@ describe('사이드바 배지 (D80)', () => {
     // 멈춘 Work에 사람이 필요한 task가 있으면 그 task가 앞선다
     expect(badge(work('stopped', 'awaiting_approval')).kind).toBe('awaiting_approval')
     expect(badge(work('stopped', 'interrupted')).kind).toBe('stopped')
+  })
+
+  it('끊긴 작업이 있으면 끝난 Work라도 끊긴 작업이다. 진행 중인 작업 기록은 배지를 바꾸지 않는다 (D121)', () => {
+    const clean = {
+      kind: 'clean' as const,
+      stage: 'worktree' as const,
+      started_at: 'x',
+      force: false,
+      delete_branches: [],
+      head: null,
+    }
+    const recovery = { kind: 'recovery', label: '끊긴 작업', hot: true }
+    expect(badge({ ...work('completed', 'approved'), operation: clean })).toEqual({
+      kind: 'done',
+      label: '완료',
+      hot: false,
+    })
+    const cut = { ...clean, interrupted_at: 'y' }
+    expect(badge({ ...work('completed', 'approved'), operation: cut })).toEqual(recovery)
+    expect(badge({ ...work('active', 'awaiting_approval'), operation: cut })).toEqual(recovery)
   })
 })

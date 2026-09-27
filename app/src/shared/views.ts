@@ -162,6 +162,7 @@ export interface CleanInput {
 // ---------- 사이드바 배지 (core/approval, D80) ----------
 
 export type BadgeKind =
+  | 'recovery'
   | 'asking'
   | 'awaiting_approval'
   | 'blocked'
@@ -250,6 +251,10 @@ export interface WorkView {
   delivery: DeliveryView | null
   /** 정리 세션 ([AI 세션 열기], 7-5) */
   cleanup: CleanupView | null
+  /** 끊긴 작업 (시나리오 9-4, D121~D123). 있으면 [다시 시도]·[무시]만 받는다 */
+  operation: OperationView | null
+  /** 재시작 때와 실행 중의 알림: 끝낸 고아 프로세스, 앱 밖에서 바뀐 파일 (D76, D121, D124) */
+  notices: NoticeView[]
   tasks: TaskView[]
   /** 지금 task의 id */
   current: string | null
@@ -257,6 +262,32 @@ export interface WorkView {
   problems: string[]
   /** 바뀔 때마다 오른다. 렌더러는 이 값이 바뀌면 승인 화면을 다시 불러온다 */
   revision: number
+}
+
+/** 끊긴 작업의 알림 (시나리오 9-4, D121~D123): 무엇이 어디서 끊겼는지와 [다시 시도]·[무시]가 할 일 */
+export interface OperationView {
+  kind: 'rewind' | 'deliver' | 'clean'
+  title: string
+  lines: string[]
+  /** [다시 시도]가 할 일 */
+  retry: string
+  /** [무시]가 할 일 */
+  ignore: string
+  /** 끊긴 전달의 선택. [다시 시도]가 커밋 안 된 변경을 돌려주면 선택지를 이 이름으로 보인다 (7-5) */
+  choice: DeliveryChoice | null
+}
+
+/**
+ * 재시작 때와 실행 중의 알림 (D121): 끝낸 고아 프로세스(D76, D126), 앱 밖에서 바뀐 앱 소유 파일과
+ * work.json(D124). [확인]으로 닫는다. 바뀐 앱 소유 파일은 [확인]하면 지금 내용을 받아들인다
+ */
+export interface NoticeView {
+  id: string
+  kind: 'orphans' | 'files' | 'work_json'
+  title: string
+  lines: string[]
+  /** [확인]이 할 일과 앱이 한 일 */
+  hint: string
 }
 
 /** 액션 바의 조작 (시나리오 3-4, 3-5, 4.4) */

@@ -53,10 +53,12 @@ export function approvalGate(
 // ---------- 사이드바 배지 (D80) ----------
 
 /**
- * 배지 우선순위 (D80). 상태가 겹치면 앞의 것을 보인다:
- * 질문 대기·입력 필요 > 승인 대기 > 막힘 > 멈춤 > 세션 종료(handoff 없음) > 작업 중 > 대기 > 대기열 > 중단됨 > 완료·포기·보관됨
+ * 배지 우선순위 (D80, D121). 상태가 겹치면 앞의 것을 보인다:
+ * 끊긴 작업 > 질문 대기·입력 필요 > 승인 대기 > 막힘 > 멈춤 > 세션 종료(handoff 없음) > 작업 중 > 대기 > 대기열 >
+ * 중단됨 > 완료·포기·보관됨
  */
 export const BADGE_ORDER: readonly BadgeKind[] = [
+  'recovery',
   'asking',
   'awaiting_approval',
   'blocked',
@@ -69,8 +71,11 @@ export const BADGE_ORDER: readonly BadgeKind[] = [
   'done',
 ]
 
-/** 사람이 필요한 상태. 색으로 강조하고 OS 알림을 보낸다 (D80, D81) */
-export const HUMAN_BADGES: readonly BadgeKind[] = BADGE_ORDER.slice(0, 5)
+/**
+ * 사람이 필요한 상태. 색으로 강조하고 OS 알림을 보낸다 (D80, D81). 끊긴 작업은 재시작 조정에서만 생기고
+ * 재시작 조정은 알리지 않는다 (D121)
+ */
+export const HUMAN_BADGES: readonly BadgeKind[] = BADGE_ORDER.slice(0, 6)
 
 const TASK_BADGE: Readonly<Record<TaskStatus, BadgeKind | null>> = {
   asking: 'asking',
@@ -87,6 +92,7 @@ const TASK_BADGE: Readonly<Record<TaskStatus, BadgeKind | null>> = {
 }
 
 const BADGE_LABEL: Readonly<Record<BadgeKind, string>> = {
+  recovery: '끊긴 작업',
   asking: '질문 대기',
   awaiting_approval: '승인 대기',
   blocked: '막힘',
@@ -106,10 +112,14 @@ const DONE_LABEL: Readonly<Partial<Record<WorkState['status'], string>>> = {
 }
 
 /**
- * Work의 배지 (D80). 끝난 Work(완료, 포기, 보관됨)는 그 상태를 보이고, 그 밖에는 Work의 멈춤과 지금 task의
- * 표시 가운데 우선순위가 앞선 것을 보인다. 입력 필요는 질문 대기와 같은 자리에 "입력 필요"로 보인다.
+ * Work의 배지 (D80). 끊긴 작업이 있으면 끝난 Work라도 "끊긴 작업"이다 (D121). 끝난 Work(완료, 포기, 보관됨)는
+ * 그 상태를 보이고, 그 밖에는 Work의 멈춤과 지금 task의 표시 가운데 우선순위가 앞선 것을 보인다.
+ * 입력 필요는 질문 대기와 같은 자리에 "입력 필요"로 보인다.
  */
 export function badge(work: WorkState): Badge {
+  if (work.operation?.interrupted_at !== undefined) {
+    return { kind: 'recovery', label: BADGE_LABEL.recovery, hot: true }
+  }
   const done = DONE_LABEL[work.status]
   if (done) return { kind: 'done', label: done, hot: false }
   const task = work.tasks[work.tasks.length - 1]

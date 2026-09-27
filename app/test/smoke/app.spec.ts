@@ -1,5 +1,5 @@
 // [스모크] 설치한 앱이 뜨고, 가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화면, [단계 선택],
-// [push]와 [Work 정리]를 누른다 (I27).
+// [push]와 [Work 정리], 다시 켠 뒤 끊긴 작업의 [다시 시도]를 누른다 (I27).
 // M2: 프로젝트 등록 → 새 Work → intake 탭에 PTY 출력 → 창 크기 변경이 PTY에 전달 → [의도 승인]
 // → intent.md 확정, intake 세션 트리 종료, 다음 task 시작.
 // M3: 다음 task를 [즉시 중단]하면 중단됨·읽기 전용이 되고 트리가 끝난다 → [재개]하면 같은 세션을
@@ -9,7 +9,11 @@
 // → 새 intake를 [의도 승인]하면 intent v2가 되고 v1은 intent.history에 남는다.
 // M5: 두 번째 Work를 S 경로로 최종 검증까지 가면 Work 완료 화면에 전달 버튼이 보인다 → [push]하면 로컬 bare
 // 원격에 Work 브랜치가 생기고 Work 완료(전달: push)가 된다 → [Work 정리]의 요약에 push됨이 보이고 [정리]하면
-// worktree가 없어지고 보관됨이 된다(산출물은 남음) → 앱 종료 확인을 거쳐 끝낸다.
+// worktree가 없어지고 보관됨이 된다(산출물은 남음).
+// M6: 앱 종료 확인을 거쳐 앱을 끄고, 첫 Work의 work.json에 끊긴 되감기 기록을 넣고 decisions.md를 고친 뒤 다시
+// 켠다 → 첫 Work의 배지가 "끊긴 작업"이고, 패널 맨 위에 끊긴 곳과 [다시 시도]·[무시], 바뀐 파일과 [확인]이
+// 보인다. 끊긴 동안 [단계 선택]은 없다 → [확인]하면 파일 알림이 닫히고, [다시 시도]하면 앞 task를 폐기하고
+// intake를 되감기로 다시 시작한다 → 앱 종료 확인을 거쳐 끝낸다.
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -30,6 +34,24 @@ let root: string
 let home: string
 let repo: string
 let remote: string
+let env: Record<string, string>
+
+/** 앱을 띄운다. RELAY_APP_EXE가 있으면 설치된 앱이다 */
+async function launch(): Promise<ElectronApplication> {
+  const exe = process.env['RELAY_APP_EXE']
+  const a = exe
+    ? await electron.launch({ executablePath: exe, env })
+    : await electron.launch({ args: [APP_DIR], env })
+  // Electron 기본 대화상자는 Playwright가 가로채지 못하므로 메인 프로세스에서 바꿔 끼운다.
+  // 앱 종료 확인(시나리오 3-6)에는 [종료]로 답한다.
+  await a.evaluate(({ dialog }, dir) => {
+    dialog.showOpenDialog = (() =>
+      Promise.resolve({ canceled: false, filePaths: [dir] })) as typeof dialog.showOpenDialog
+    dialog.showMessageBox = (() =>
+      Promise.resolve({ response: 0, checkboxChecked: false })) as typeof dialog.showMessageBox
+  }, repo)
+  return a
+}
 
 test.beforeAll(async () => {
   root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'relay-smoke-')))
@@ -41,7 +63,7 @@ test.beforeAll(async () => {
     scenarioFile,
     JSON.stringify(scenario('M', { evidence: [{ do: 'prompt' }, { do: 'wait' }] })),
   )
-  const env = {
+  env = {
     ...process.env,
     CLAUDE_BIN: FAKE,
     RELAY_HOME: home,
@@ -49,18 +71,7 @@ test.beforeAll(async () => {
     // 가짜 claude가 세션을 적어 두어야 --resume으로 다시 연다
     FAKE_CLAUDE_RECORD: path.join(root, 'record'),
   } as Record<string, string>
-  const exe = process.env['RELAY_APP_EXE']
-  app = exe
-    ? await electron.launch({ executablePath: exe, env })
-    : await electron.launch({ args: [APP_DIR], env })
-  // Electron 기본 대화상자는 Playwright가 가로채지 못하므로 메인 프로세스에서 바꿔 끼운다.
-  // 앱 종료 확인(시나리오 3-6)에는 [종료]로 답한다.
-  await app.evaluate(({ dialog }, dir) => {
-    dialog.showOpenDialog = (() =>
-      Promise.resolve({ canceled: false, filePaths: [dir] })) as typeof dialog.showOpenDialog
-    dialog.showMessageBox = (() =>
-      Promise.resolve({ response: 0, checkboxChecked: false })) as typeof dialog.showMessageBox
-  }, repo)
+  app = await launch()
 })
 
 test.afterAll(async () => {
@@ -68,7 +79,7 @@ test.afterAll(async () => {
   fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
 })
 
-test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화면, [단계 선택], [push]와 [Work 정리]를 누른다', async () => {
+test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화면, [단계 선택], [push]와 [Work 정리], 다시 켠 뒤 끊긴 작업의 [다시 시도]를 누른다', async () => {
   const win = await app.firstWindow()
   await expect(win.locator('.layout')).toBeVisible()
   await expect(win.locator('.sidebar')).toBeVisible()
@@ -258,6 +269,64 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   expect(worktree).toBeNull()
   expect(findFile(path.join(home, 'projects'), 'pr.md', '03-verify')).not.toBeNull()
   await win.screenshot({ path: 'test-results/archived.png' })
+
+  // M6: 앱을 끈다(살아 있는 세션이 있어 종료 확인을 거친다). 되감기가 백업 브랜치를 만들기 전에 앱이 꺼진 것처럼
+  // 첫 Work의 work.json에 진행 중 작업 기록을 넣고, 꺼진 동안 스크립트가 decisions.md를 고친다
+  await app.close()
+  const works = path.dirname(findDir(path.join(home, 'projects'), workId2 ?? '', 'works') ?? '')
+  const workId1 = fs.readdirSync(works).sort()[0] ?? ''
+  const dir1 = path.join(works, workId1)
+  const w1 = JSON.parse(fs.readFileSync(path.join(dir1, 'work.json'), 'utf8')) as {
+    tasks: { id: string; created_at: string; start_commit?: string }[]
+    operation?: object
+  }
+  const intake3 = w1.tasks.find((t) => t.id === 't-03')
+  w1.operation = {
+    kind: 'rewind',
+    stage: 'backup',
+    started_at: w1.tasks.at(-1)?.created_at,
+    node: 'intake',
+    from_task: 't-04',
+    instruction: null,
+    discard: ['t-03', 't-04'],
+    reset_to: intake3?.start_commit,
+    backup_branch: `relay/${workId1}-discarded-1`,
+    backup_commit: null,
+  }
+  fs.writeFileSync(path.join(dir1, 'work.json'), `${JSON.stringify(w1, null, 2)}\n`)
+  fs.appendFileSync(path.join(dir1, 'decisions.md'), '\n스크립트가 더한 줄\n')
+
+  // 다시 켜면 첫 Work의 배지가 끊긴 작업이다 (시나리오 9-4, D121)
+  app = await launch()
+  const win2 = await app.firstWindow()
+  const item1 = win2.locator('.work-item').nth(1)
+  await expect(item1.locator('.badge')).toHaveText('끊긴 작업', { timeout: 30_000 })
+  await item1.click()
+  // 패널 맨 위에 무엇이 어디서 끊겼는지와 [다시 시도]·[무시] (D123)
+  const cut = win2.getByRole('alert', { name: '끊긴 작업' })
+  await expect(cut).toContainText('되감기가 끊겼습니다', { timeout: 30_000 })
+  await expect(cut).toContainText('끊긴 곳: 백업 브랜치를 만드는 단계')
+  await expect(cut).toContainText('폐기할 task: 03 의도 정리, 04 재현과 관찰')
+  await expect(cut.getByRole('button', { name: '무시', exact: true })).toBeEnabled()
+  // 끊긴 동안은 [다시 시도], [무시], Work 설정만 받는다 (D122)
+  await expect(win2.getByRole('button', { name: '단계 선택', exact: true })).toHaveCount(0)
+  await expect(win2.getByRole('button', { name: 'Work 설정', exact: true })).toBeVisible()
+  // 앱 밖에서 바뀐 decisions.md (D124)
+  const changed = win2.locator('.recovery .notice', { hasText: '앱 밖에서 바뀐 파일이 있습니다' })
+  await expect(changed).toContainText('decisions.md: 내용이 바뀜')
+  await win2.screenshot({ path: 'test-results/recovery.png' })
+  await changed.getByRole('button', { name: '확인', exact: true }).click()
+  await expect(changed).toBeHidden({ timeout: 30_000 })
+
+  // [다시 시도]: 끊긴 곳부터 잇는다. 코드는 이미 되돌릴 커밋이라 백업 없이 폐기하고 intake를 되감기로 시작한다
+  await cut.getByRole('button', { name: '다시 시도', exact: true }).click()
+  await expect(win2.getByRole('tab', { name: /05 의도 정리/ })).toBeVisible({ timeout: 60_000 })
+  await expect(win2.locator('.band')).toContainText('05 의도 정리 · 새 세션 · 이유: 되감기')
+  await expect(cut).toBeHidden()
+  await expect(item1.locator('.badge')).not.toHaveText('끊긴 작업')
+  await expect(win2.locator('.tab.discarded')).toHaveCount(4)
+  await expect(win2.getByRole('button', { name: '의도 승인' })).toBeEnabled({ timeout: 60_000 })
+  await win2.screenshot({ path: 'test-results/recovered.png' })
 })
 
 function lastPid(text: string): number {

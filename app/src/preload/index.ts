@@ -36,6 +36,9 @@ const api: RelayApi = {
   recheck: (workKey) => ipcRenderer.invoke(IPC.recheck, workKey),
   cleanPreview: (workKey) => ipcRenderer.invoke(IPC.cleanPreview, workKey),
   clean: (workKey, input) => ipcRenderer.invoke(IPC.clean, workKey, input),
+  retryOperation: (workKey) => ipcRenderer.invoke(IPC.retryOperation, workKey),
+  ignoreOperation: (workKey) => ipcRenderer.invoke(IPC.ignoreOperation, workKey),
+  dismissNotice: (workKey, id) => ipcRenderer.invoke(IPC.dismissNotice, workKey, id),
   openExternal: (url) => ipcRenderer.invoke(IPC.openExternal, url),
   updateWorkSettings: (workKey, settings) =>
     ipcRenderer.invoke(IPC.workSettings, workKey, settings),

@@ -167,16 +167,25 @@ export type WorkStop =
       task_id: string
     }
 
+/** 진행 중 작업 기록의 공통 (D77) */
+interface OperationBase {
+  started_at: string
+  /**
+   * 앱을 다시 켜며 이 기록이 남아 있는 것을 찾은 때 (시나리오 9-4). 있으면 끊긴 작업이다: 알리고
+   * [다시 시도]·[무시]만 받는다 (D121~D123). [다시 시도]가 시작하면 지운다
+   */
+  interrupted_at?: string
+}
+
 /**
  * 코드를 되돌리는 되감기의 진행 중 작업 기록 (6.2, D77). 세션을 끝낸 뒤 백업 브랜치를 만들고(backup),
  * 코드를 되돌리고(reset), task를 폐기하고 새 task를 만든다. 마지막은 work.json 한 번 쓰기라 기록을 지우는 것과
- * 같이 한다. 재시작 때 남은 기록을 알리는 것은 M6에서 넣는다.
+ * 같이 한다. 재시작 때 남아 있으면 끊긴 작업이다 (D123).
  */
-export interface RewindOperation {
+export interface RewindOperation extends OperationBase {
   kind: 'rewind'
   /** 지금 하는 단계: backup(백업 브랜치 만들기), reset(코드 되돌리기) */
   stage: 'backup' | 'reset'
-  started_at: string
   /** 고른 단계 */
   node: NodeName
   /** 단계를 고른 때의 지금 task */
@@ -193,6 +202,11 @@ export interface RewindOperation {
   backup_branch: string | null
   /** reset 단계에서 만든 백업 브랜치가 가리키는 커밋. backup 단계와 만들지 않았으면 null이다 */
   backup_commit: string | null
+  /**
+   * reset 단계에서 되돌리기 전 HEAD. 끊긴 되감기를 다시 할 때 백업이 지금 코드와 같은지 본다 (D123).
+   * backup 단계와 M6 전의 기록에는 없다
+   */
+  head?: string
 }
 
 /** 전달 (시나리오 7-3): [push] 또는 [PR 생성]. [완료만]은 전달이 없다 */
@@ -206,12 +220,11 @@ export type UncommittedAction = 'discard' | 'commit'
 
 /**
  * 전달의 진행 중 작업 기록 (7-6, D77). 전달을 시작할 때 적고, 단계마다 stage를 옮기고, 끝나면(성공이든
- * 실패든) 결과를 남기는 work.json 한 번 쓰기에서 지운다. 재시작 때 남은 기록을 알리는 것은 M6에서 넣는다.
+ * 실패든) 결과를 남기는 work.json 한 번 쓰기에서 지운다. 재시작 때 남아 있으면 끊긴 작업이다 (D123).
  */
-export interface DeliverOperation {
+export interface DeliverOperation extends OperationBase {
   kind: 'deliver'
   stage: DeliveryStage
-  started_at: string
   choice: DeliveryChoice
   /** 전달하는 verify task */
   task_id: string
@@ -230,12 +243,11 @@ export type CleanStage = 'worktree' | 'branches'
 
 /**
  * 정리의 진행 중 작업 기록 (시나리오 8, D77). 정리를 시작할 때 적고, worktree를 지우면 stage를 옮기고,
- * 끝나면 보관됨으로 바꾸는 work.json 한 번 쓰기에서 지운다.
+ * 끝나면 보관됨으로 바꾸는 work.json 한 번 쓰기에서 지운다. 재시작 때 남아 있으면 끊긴 작업이다 (D123).
  */
-export interface CleanOperation {
+export interface CleanOperation extends OperationBase {
   kind: 'clean'
   stage: CleanStage
-  started_at: string
   /** git worktree remove --force: 커밋 안 된 변경이나 잠금 파일을 사람이 확인했다 */
   force: boolean
   /** 지울 브랜치: 작업 브랜치(push됐거나 머지됐고 사람이 골랐을 때)와 되감기 백업 브랜치 */
@@ -275,6 +287,22 @@ export interface DeliveryRecord {
   commits?: string[]
 }
 
+/** 해시를 적는 앱 소유 파일 (6.1, D91, D124, D125). work.json은 따로 비교한다 */
+export type OwnedFile = 'request.md' | 'intent.md' | 'decisions.md'
+
+/** 앱 소유 파일의 해시(sha256:<hex>). 없는 파일은 키가 없다 (D124) */
+export type OwnedFileHashes = Partial<Record<OwnedFile, string>>
+
+/**
+ * 살아 있는 정리 세션([AI 세션 열기], 7-5)의 claude 프로세스 (D126). 세션이 끝나면 지운다.
+ * 재시작 때 task의 세션과 같이 확인해 끝낸다 (D76)
+ */
+export interface CleanupProcess {
+  pid: number
+  process_started_at?: string
+  started_at: string
+}
+
 /** 정리 결과 (시나리오 8) */
 export interface CleanedRecord {
   at: string
@@ -311,6 +339,13 @@ export interface WorkState {
   delivery?: DeliveryRecord
   /** [Work 정리]의 결과 (시나리오 8). 보관됨이면 있다 */
   cleaned?: CleanedRecord
+  /**
+   * 앱 소유 파일의 해시 (D91, D124). 앱이 쓸 때마다 적고, 앱을 켤 때와 읽을 때 비교한다.
+   * M6 전에 만든 Work는 처음 읽을 때 적기 전까지 없다
+   */
+  file_hashes?: OwnedFileHashes
+  /** 살아 있는 정리 세션의 프로세스 (D126) */
+  cleanup_process?: CleanupProcess
   tasks: TaskRecord[]
 }
 

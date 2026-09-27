@@ -2,20 +2,24 @@
 // 훅 신호, 사람 버튼, 프로세스 종료, 재시작을 main이 이벤트로 바꿔 넣고, 돌려받은 할 일을 차례로 실행한다.
 // 상태는 work.json이고 main이 전이마다 쓴다 (I11). 설정은 판정하는 때의 값을 받는다 (D73).
 // 기본 흐름, [오류 무시하고 승인](D112), 사람 조작(중단, 재개, 멈춤, 포기), 대기열(D18), 재시작 조정(D75, D78),
-// 단계 선택(되감기와 건너뛰기, 6.2), 전달(시나리오 7, D119, D120)과 정리(시나리오 8)를 담는다. 자동 승인은
+// 단계 선택(되감기와 건너뛰기, 6.2), 전달(시나리오 7, D119, D120)과 정리(시나리오 8), 끊긴 작업의 [다시 시도]와
+// [무시](D121~D123), 앱 소유 파일의 해시(D124)와 정리 세션의 프로세스(D126) 기록을 담는다. 자동 승인은
 // M7에서 더한다. 세션 상한은 main이 세고, 자리가 없으면 task.queued를 넣는다. 단계 선택의 계산은 core/rewind,
-// 전달의 판정은 core/delivery, 정리의 판정은 core/cleanup이 한다.
+// 전달의 판정은 core/delivery, 정리의 판정은 core/cleanup, 끊긴 작업의 알림과 재개 판정은 core/recovery가 한다.
 import type { AppConfig, WorkSettings } from '../shared/config'
 import type { Decision, NodeName, Size } from '../shared/contracts'
 import type { StepExpect, WorkActions } from '../shared/views'
 import type {
   CheckSummary,
   CleanOperation,
+  CleanStage,
   DeliverOperation,
   DeliveryChoice,
   DeliveryRecord,
   DeliveryStage,
   LifecycleEvent,
+  OwnedFile,
+  OwnedFileHashes,
   RewindOperation,
   StartReason,
   StepSelection,
@@ -29,6 +33,7 @@ import { canClean } from './cleanup'
 import { commitMessage, deliveryStart, stashMessage, stoppedVerify } from './delivery'
 import { NODES, WORK_COMPLETE, defaultNext, isPrevious } from './pipeline'
 import { workBranch } from './records'
+import { CUT_ERROR, OPERATION_BLOCKS, OWNED_FILES, cutOperation } from './recovery'
 import { backupMessage, canSelectStep, planStep, type StepKind } from './rewind'
 import { FORMAT_VERSION, bounceMessage, isValid, summarize, type TaskCheck } from './validate'
 
@@ -201,11 +206,12 @@ export interface UpdateSettings extends WorkEvent {
 
 /**
  * 앱을 다시 켰다 (시나리오 9, D75, D78). check는 지금 task의 형식 검사다.
- * 재시작 뒤 이 앱에서 살아 있는 세션은 없다.
+ * 재시작 뒤 이 앱에서 살아 있는 세션은 없다. killed는 main이 재시작 때 끝낸 고아 프로세스의 task다 (D76).
  */
 export interface AppRestarted extends WorkEvent {
   type: 'app.restarted'
   check: CheckSummary | null
+  killed?: readonly { taskId: string; pid: number }[]
 }
 
 /**
@@ -225,18 +231,23 @@ export interface SelectStep extends WorkEvent {
 
 /**
  * 되감기(D77의 backup 단계)가 끝났다. branch는 만든 백업 브랜치, commit은 그 브랜치가 가리키는 커밋이다.
- * 백업할 것이 없어 만들지 않았으면 둘 다 null이다
+ * 백업할 것이 없어 만들지 않았으면 둘 다 null이다. head는 되돌리기 전 HEAD다 (끊긴 되감기를 다시 할 때 본다, D123)
  */
 export interface RewindBackedUp extends WorkEvent {
   type: 'rewind.backedUp'
   branch: string | null
   commit: string | null
+  head?: string
 }
 
-/** 되감기가 코드를 되돌렸다. head는 되돌리기 전 HEAD다 */
+/**
+ * 되감기가 코드를 되돌렸다. head는 되돌리기 전 HEAD다. extraBackup은 끊긴 되감기를 다시 하며 덤으로 남긴 백업
+ * 브랜치다: 끊긴 되감기가 만든 백업과 지금 코드가 달라(재시작 뒤 사람이 고침) 한 번 더 백업했다 (D123)
+ */
 export interface RewindApplied extends WorkEvent {
   type: 'rewind.applied'
   head: string
+  extraBackup?: string
 }
 
 /** 되감기의 git 작업이 실패했다. 기록을 지우고 Work는 그대로 둔다. 오류는 main이 알린다 */
@@ -311,6 +322,51 @@ export interface CleanFailed extends WorkEvent {
   error: string
 }
 
+/**
+ * 끊긴 전달이 만들었지만 기록하지 못한 stash와 커밋 (D123). main이 메시지로 찾는다 (core/recovery lostStashes,
+ * lostCommit). 전달 결과에 남긴다
+ */
+export interface DeliveryFound {
+  stashes: readonly string[]
+  commits: readonly string[]
+}
+
+/**
+ * 끊긴 작업의 [다시 시도] (시나리오 9-4, D123). 되감기와 정리는 끊긴 곳부터 main에 맡긴다. 전달은 끊긴 시도를
+ * 실패로 남기고 기록을 지운다: main이 이어서 같은 전달을 처음부터 한다(deliver).
+ */
+export interface OperationRetry extends WorkEvent {
+  type: 'operationRetry'
+  found?: DeliveryFound
+}
+
+/** 끊긴 작업의 [무시] (D123). 기록만 지운다. 전달은 끊긴 시도를 실패로 남긴다 */
+export interface OperationIgnore extends WorkEvent {
+  type: 'operationIgnore'
+  found?: DeliveryFound
+}
+
+/** 정리 세션을 띄웠다 (D126). 살아 있는 동안 프로세스를 적어 재시작 때 확인한다 */
+export interface CleanupStarted extends WorkEvent {
+  type: 'cleanup.started'
+  pid: number
+  processStartedAt?: string
+}
+
+/** 정리 세션이 끝났다 (D126) */
+export interface CleanupEnded extends WorkEvent {
+  type: 'cleanup.ended'
+}
+
+/**
+ * 앱 소유 파일의 해시를 적는다 (D124): 앱이 파일을 쓴 뒤, M6 전에 만든 Work를 처음 읽을 때, 사람이 바뀐 파일을
+ * [확인]했을 때. null은 파일이 없다는 것이다
+ */
+export interface FilesRecorded extends WorkEvent {
+  type: 'files.recorded'
+  hashes: Partial<Record<OwnedFile, string | null>>
+}
+
 export type MachineEvent =
   | SessionStarted
   | SessionResumed
@@ -343,6 +399,11 @@ export type MachineEvent =
   | CleanRemoved
   | CleanDone
   | CleanFailed
+  | OperationRetry
+  | OperationIgnore
+  | CleanupStarted
+  | CleanupEnded
+  | FilesRecorded
 
 export type Effect =
   /**
@@ -381,6 +442,11 @@ export type Effect =
    */
   | { type: 'rewindCode'; to: string; backupBranch: string; message: string }
   /**
+   * 끊긴 되감기를 끊긴 곳부터 잇는다 (D123). main은 git에서 이미 만든 백업과 지금 코드를 보고 core/recovery의
+   * rewindResumePlan대로 백업하고 되돌린 뒤, 결과를 rewind.backedUp, rewind.applied, rewind.failed로 알린다
+   */
+  | { type: 'resumeRewind'; operation: RewindOperation; message: string }
+  /**
    * 전달 (7-4~7-6): 커밋 안 된 변경을 처리하고(discard는 git stash -u, commit은 커밋. message는 그 메시지),
    * branch를 origin에 push하고, pr이면 taskId의 pr.md로 PR을 만든다(같은 브랜치의 PR이 열려 있으면 링크만).
    * main은 결과를 delivery.stage, delivery.succeeded, delivery.failed로 알린다
@@ -398,9 +464,10 @@ export type Effect =
   | { type: 'openCleanup'; choice: DeliveryChoice }
   /**
    * 정리 (시나리오 8-2): 살아 있는 세션을 끝내고, worktree를 지우고(force면 --force), 브랜치를 지운다.
-   * main은 결과를 clean.removed, clean.done, clean.failed로 알린다
+   * resume이 있으면 끊긴 정리를 그 단계부터 잇는다(D123): branches면 worktree는 건너뛰고, worktree면 --force를
+   * core/recovery의 cleanResume으로 다시 정한다. main은 결과를 clean.removed, clean.done, clean.failed로 알린다
    */
-  | { type: 'clean'; force: boolean; deleteBranches: string[] }
+  | { type: 'clean'; force: boolean; deleteBranches: string[]; resume?: CleanStage }
 
 export interface Transition {
   work: WorkState
@@ -483,8 +550,21 @@ export function launchable(task: TaskRecord): boolean {
  * 승인 대기, 막힘일 때, [이 단계 새 세션으로 다시]는 세션 종료일 때다. [단계 선택]은 진행 중이거나 멈춘
  * Work에서 한다(6.2). 고를 수 있는 단계는 core/rewind가 정한다. 멈춘 Work의 [재개]는 verify에서 멈췄으면
  * 보이지 않는다: Work 완료 화면의 전달 버튼이 맡는다(D119). [Work 정리]는 완료나 포기한 Work에서 한다.
+ * 진행 중 작업 기록이 있는 동안은 아무 조작도 받지 않는다: 끊긴 작업이면 패널의 [다시 시도]·[무시]만 받는다(D122).
  */
 export function actions(work: WorkState): WorkActions {
+  if (work.operation) {
+    return {
+      interrupt: false,
+      resume: false,
+      retry: false,
+      resumeWork: false,
+      selectStep: false,
+      stopAfter: false,
+      abandon: false,
+      clean: false,
+    }
+  }
   const task = currentTask(work)
   const active = work.status === 'active'
   const live = task?.session?.alive === true
@@ -609,11 +689,14 @@ export interface NewWork {
   baseBranch: string
   baseCommit: string
   settings?: WorkSettings
+  /** 앱이 쓴 request.md의 해시 (D124) */
+  requestHash?: string
   at: string
 }
 
 /** Work를 만들고 intake task를 시작한다 (시나리오 1-2, 1-3) */
 export function createWork(input: NewWork): Transition {
+  const hashes: OwnedFileHashes = input.requestHash ? { 'request.md': input.requestHash } : {}
   const empty: WorkState = {
     schema_version: 1,
     work_id: input.workId,
@@ -623,6 +706,7 @@ export function createWork(input: NewWork): Transition {
     base_commit: input.baseCommit,
     intent: null,
     settings: input.settings ?? {},
+    file_hashes: hashes,
     tasks: [],
   }
   const intake = newTask(empty, 'intake', input.at)
@@ -652,7 +736,27 @@ const TASK_COMMANDS: readonly MachineEvent['type'][] = [
   'retry',
 ]
 
+/**
+ * 진행 중 작업 기록이 있는 동안 받지 않는 사람의 명령 (D122). 기록은 명령 하나 안에서 쓰고 지우므로 명령 사이에
+ * 남아 있으면 앱이 도중에 꺼진 끊긴 작업이다. [다시 시도]·[무시]와 Work 설정만 받는다
+ */
+const BLOCKED_BY_OPERATION: readonly MachineEvent['type'][] = [
+  'approve',
+  'interrupt',
+  'resume',
+  'retry',
+  'stopAfter',
+  'resumeWork',
+  'abandon',
+  'selectStep',
+  'deliver',
+  'clean',
+]
+
 export function transition(work: WorkState, event: MachineEvent, config: AppConfig): Transition {
+  if (work.operation && BLOCKED_BY_OPERATION.includes(event.type)) {
+    return unchanged(work, OPERATION_BLOCKS)
+  }
   switch (event.type) {
     case 'stopAfter':
       return stopAfter(work, event)
@@ -688,6 +792,16 @@ export function transition(work: WorkState, event: MachineEvent, config: AppConf
       return cleanDone(work, event)
     case 'clean.failed':
       return cleanFailed(work)
+    case 'operationRetry':
+      return operationRetry(work, event)
+    case 'operationIgnore':
+      return operationIgnore(work, event)
+    case 'cleanup.started':
+      return cleanupStarted(work, event)
+    case 'cleanup.ended':
+      return cleanupEnded(work)
+    case 'files.recorded':
+      return filesRecorded(work, event)
     default:
       return taskTransition(work, event, config)
   }
@@ -712,6 +826,11 @@ type TaskMachineEvent = Exclude<
   | CleanRemoved
   | CleanDone
   | CleanFailed
+  | OperationRetry
+  | OperationIgnore
+  | CleanupStarted
+  | CleanupEnded
+  | FilesRecorded
 >
 
 function taskTransition(work: WorkState, event: TaskMachineEvent, config: AppConfig): Transition {
@@ -1186,20 +1305,32 @@ function selectStep(work: WorkState, e: SelectStep): Transition {
   return select(base, { node: plan.node, reason: plan.reason, selection }, e.at, effects)
 }
 
-/** 되감기의 백업 단계가 끝났다 (D77). 기록을 코드 되돌리기 단계로 옮기고 만든 백업 브랜치와 커밋을 적는다 */
+/**
+ * 되감기의 백업 단계가 끝났다 (D77). 기록을 코드 되돌리기 단계로 옮기고 만든 백업 브랜치와 커밋, 되돌리기 전
+ * HEAD를 적는다. 끊긴 되감기를 다시 할 때 이것으로 백업이 지금 코드와 같은지 본다 (D123)
+ */
 function rewindBackedUp(work: WorkState, e: RewindBackedUp): Transition {
   const op = work.operation
   if (op?.kind !== 'rewind' || op.stage !== 'backup') return unchanged(work)
   return {
     work: {
       ...work,
-      operation: { ...op, stage: 'reset', backup_branch: e.branch, backup_commit: e.commit },
+      operation: {
+        ...op,
+        stage: 'reset',
+        backup_branch: e.branch,
+        backup_commit: e.commit,
+        ...(e.head === undefined ? {} : { head: e.head }),
+      },
     },
     effects: [],
   }
 }
 
-/** 되감기가 코드를 되돌렸다. 기록한 요청대로 폐기하고 새 task를 시작하며, 기록은 같이 지운다 (D77) */
+/**
+ * 되감기가 코드를 되돌렸다. 기록한 요청대로 폐기하고 새 task를 시작하며, 기록은 같이 지운다 (D77).
+ * 끊긴 되감기를 다시 하며 덤으로 남긴 백업이 있으면 task.rewound에 적는다 (D123)
+ */
 function rewindApplied(work: WorkState, e: RewindApplied): Transition {
   const op = work.operation
   if (op?.kind !== 'rewind') return unchanged(work, '진행 중인 되감기가 없음')
@@ -1216,7 +1347,8 @@ function rewindApplied(work: WorkState, e: RewindApplied): Transition {
       backup_commit: op.stage === 'reset' ? op.backup_commit : null,
     },
   }
-  return select(work, { node: op.node, reason: 'rewind', selection }, e.at, [])
+  const extra = e.extraBackup === undefined ? {} : { extra_backup_branch: e.extraBackup }
+  return select(work, { node: op.node, reason: 'rewind', selection }, e.at, [], extra)
 }
 
 /** 되감기의 git 작업이 실패했다. 기록만 지운다. 끝낸 세션은 끝난 채로 두고, 오류는 main이 알린다 */
@@ -1233,9 +1365,16 @@ interface Selected {
 /**
  * 단계 선택을 반영한다 (6.2): 폐기할 task를 폐기됨으로 두고(파일은 남음), 고른 단계의 새 task를 만들고,
  * Work를 진행 중으로 되돌리고(멈춤 표시와 진행 중 작업 기록은 지움), 새 task를 시작한다.
- * 되감기는 task.rewound, 건너뛰기는 task.skipped_to를 새 task의 이벤트로 남긴다 (5.5).
+ * 되감기는 task.rewound, 건너뛰기는 task.skipped_to를 새 task의 이벤트로 남긴다 (5.5). extra는 되감기 이벤트에
+ * 더할 것이다.
  */
-function select(work: WorkState, s: Selected, at: string, effects: Effect[]): Transition {
+function select(
+  work: WorkState,
+  s: Selected,
+  at: string,
+  effects: Effect[],
+  extra: Record<string, unknown> = {},
+): Transition {
   const created: TaskRecord = { ...newTask(work, s.node, at, s.reason), selection: s.selection }
   const sel = s.selection
   const tasks = work.tasks.map((t): TaskRecord =>
@@ -1254,7 +1393,13 @@ function select(work: WorkState, s: Selected, at: string, effects: Effect[]): Tr
       ? { reset_to: sel.reset.to, backup_branch: sel.reset.backup_branch }
       : {}
     effects.push(
-      log(next, at, 'task.rewound', { ...common, keep_code: sel.keep_code, ...reset }, created),
+      log(
+        next,
+        at,
+        'task.rewound',
+        { ...common, keep_code: sel.keep_code, ...reset, ...extra },
+        created,
+      ),
     )
   } else if (s.reason === 'skip') {
     effects.push(log(next, at, 'task.skipped_to', { ...common, skipped: sel.skipped }, created))
@@ -1348,14 +1493,25 @@ function deliveryStaged(work: WorkState, e: DeliveryStaged): Transition {
 
 /**
  * 전달 결과에 남길 stash와 커밋 (7-5): 앞 시도의 결과(실패)에 있던 것에 이번 시도가 만든 것을 더한다.
- * 그래서 전달이 실패한 뒤 [다시 시도]가 성공해도 앞 시도가 백업한 stash와 만든 커밋이 기록에 남는다
+ * 그래서 전달이 실패한 뒤 [다시 시도]가 성공해도 앞 시도가 백업한 stash와 만든 커밋이 기록에 남는다.
+ * found는 끊긴 시도가 만들었지만 기록하지 못해 main이 찾은 것이다 (D123)
  */
 function deliveryBackups(
   prior: DeliveryRecord | undefined,
   op: DeliverOperation,
+  found?: DeliveryFound,
 ): Pick<DeliveryRecord, 'stashes' | 'commits'> {
-  const stashes = [...(prior?.stashes ?? []), ...(op.stash ? [op.stash] : [])]
-  const commits = [...(prior?.commits ?? []), ...(op.commit ? [op.commit] : [])]
+  const uniq = (xs: readonly string[]) => [...new Set(xs)]
+  const stashes = uniq([
+    ...(prior?.stashes ?? []),
+    ...(op.stash ? [op.stash] : []),
+    ...(found?.stashes ?? []),
+  ])
+  const commits = uniq([
+    ...(prior?.commits ?? []),
+    ...(op.commit ? [op.commit] : []),
+    ...(found?.commits ?? []),
+  ])
   return {
     ...(stashes.length ? { stashes } : {}),
     ...(commits.length ? { commits } : {}),
@@ -1517,10 +1673,17 @@ function cleanFailed(work: WorkState): Transition {
  * - "실행 중"이던 task(세션이 살아 있었거나 띄우는 중이었음)는 중단됨이다. 유효한 handoff가 있으면
  *   승인 대기나 막힘이다. 앱이 꺼진 동안 받지 못한 Stop을 이렇게 보충한다. 자동 재개와 자동 승인은 없다.
  * - 대기열의 task는 대기열을 비우고 중단됨으로 둔다.
+ * - 남아 있는 진행 중 작업 기록은 끊긴 작업으로 표시한다(시나리오 9-4, D121). 알리고 [다시 시도]·[무시]만 받는다.
+ * - 정리 세션은 재시작 뒤에 남지 않는다: 적어 둔 프로세스를 지운다 (main이 먼저 확인해 끝냈다, D126).
+ * - main이 끝낸 고아 프로세스(D76)는 그 task의 조정 이벤트에 killed_pid로 남긴다.
  */
 function restarted(work: WorkState, e: AppRestarted): Transition {
   const current = currentTask(work)
   const effects: Effect[] = []
+  const killed = (t: TaskRecord) => {
+    const k = e.killed?.find((x) => x.taskId === t.id)
+    return k ? { killed_pid: k.pid } : {}
+  }
   const tasks = work.tasks.map((t): TaskRecord => {
     const session = t.session?.alive ? { ...t.session, alive: false, ended_at: e.at } : t.session
     if (t !== current || work.status !== 'active') return { ...t, session }
@@ -1540,13 +1703,135 @@ function restarted(work: WorkState, e: AppRestarted): Transition {
     const status = check ? handoffStatus(check) : null
     if (status) {
       if (status === 'awaiting_approval' && t.status !== 'awaiting_approval') {
-        effects.push(log(work, e.at, 'task.awaiting_approval', { reason: 'app_restart' }, t))
+        effects.push(
+          log(work, e.at, 'task.awaiting_approval', { reason: 'app_restart', ...killed(t) }, t),
+        )
       }
       return { ...t, session, status, check: check ?? t.check }
     }
-    effects.push(log(work, e.at, 'task.interrupted', { reason: 'app_restart' }, t))
+    effects.push(log(work, e.at, 'task.interrupted', { reason: 'app_restart', ...killed(t) }, t))
     return { ...t, session, status: 'interrupted', ...(check ? { check } : {}) }
   })
-  const changed = tasks.some((t, i) => JSON.stringify(t) !== JSON.stringify(work.tasks[i]))
-  return changed ? { work: { ...work, tasks }, effects } : unchanged(work)
+  const op = work.operation
+  const cut = op !== undefined && op.interrupted_at === undefined
+  const changed =
+    cut ||
+    work.cleanup_process !== undefined ||
+    tasks.some((t, i) => JSON.stringify(t) !== JSON.stringify(work.tasks[i]))
+  if (!changed) return unchanged(work)
+  let next: WorkState = omit({ ...work, tasks }, 'cleanup_process')
+  if (op && cut) next = { ...next, operation: { ...op, interrupted_at: e.at } }
+  return { work: next, effects }
+}
+
+// ---------- 끊긴 작업 (시나리오 9-4, D121~D123) ----------
+
+/**
+ * 끊긴 작업의 [다시 시도] (D123). 끊긴 곳부터 잇는다: 되감기와 정리는 끊긴 표시를 지우고 main에 맡긴다(다시 진행
+ * 중인 작업이 된다. 또 끊기면 다음 재시작 때 다시 끊긴 작업이다). 전달은 끊긴 시도를 실패로 남기고 기록을 지운다.
+ * main이 이어서 같은 전달을 처음부터 한다.
+ */
+function operationRetry(work: WorkState, e: OperationRetry): Transition {
+  const op = cutOperation(work)
+  if (!op) return unchanged(work, '끊긴 작업이 없음')
+  if (op.kind === 'deliver') return deliveryCut(work, op, e)
+  if (op.kind === 'rewind') {
+    const live: RewindOperation = omit(op, 'interrupted_at')
+    return {
+      work: { ...work, operation: live },
+      effects: [{ type: 'resumeRewind', operation: live, message: backupMessage(work.work_id) }],
+    }
+  }
+  const live: CleanOperation = omit(op, 'interrupted_at')
+  return {
+    work: { ...work, operation: live },
+    effects: [
+      {
+        type: 'clean',
+        force: live.force,
+        deleteBranches: [...live.delete_branches],
+        resume: live.stage,
+      },
+    ],
+  }
+}
+
+/** 끊긴 작업의 [무시] (D123). 기록만 지우고 git은 건드리지 않는다. 전달은 끊긴 시도를 실패로 남긴다 */
+function operationIgnore(work: WorkState, e: OperationIgnore): Transition {
+  const op = cutOperation(work)
+  if (!op) return unchanged(work, '끊긴 작업이 없음')
+  if (op.kind === 'deliver') return deliveryCut(work, op, e)
+  return { work: omit(work, 'operation'), effects: [] }
+}
+
+/**
+ * 끊긴 전달을 실패로 남긴다 (D123): 끊긴 단계와 오류, 끊긴 시도가 만든 stash와 커밋(기록한 것과 main이 찾은 것)을
+ * 전달 결과에 남기고 기록을 지운다. verify는 승인 대기로 남고(멈춘 Work는 멈춘 채), Work 완료 화면이 M5의 실패처럼
+ * [다시 시도]·[전달 없이 완료]를 보인다 (D120).
+ */
+function deliveryCut(
+  work: WorkState,
+  op: DeliverOperation,
+  e: OperationRetry | OperationIgnore,
+): Transition {
+  const backups = deliveryBackups(work.delivery, op, e.found)
+  const delivery: DeliveryRecord = {
+    choice: op.choice,
+    status: 'failed',
+    at: e.at,
+    stage: op.stage,
+    error: CUT_ERROR,
+    branch: op.branch,
+    ...backups,
+  }
+  return {
+    work: { ...omit(work, 'operation'), delivery },
+    effects: [
+      log(work, e.at, 'delivery.failed', {
+        choice: op.choice,
+        stage: op.stage,
+        error: CUT_ERROR,
+        reason: 'app_restart',
+        ...backups,
+      }),
+    ],
+  }
+}
+
+// ---------- 정리 세션의 프로세스 (D126), 앱 소유 파일의 해시 (D124) ----------
+
+/** 정리 세션을 띄웠다. 살아 있는 동안 프로세스를 적어 재시작 때 확인한다 (D126) */
+function cleanupStarted(work: WorkState, e: CleanupStarted): Transition {
+  return {
+    work: {
+      ...work,
+      cleanup_process: {
+        pid: e.pid,
+        ...(e.processStartedAt === undefined ? {} : { process_started_at: e.processStartedAt }),
+        started_at: e.at,
+      },
+    },
+    effects: [],
+  }
+}
+
+/** 정리 세션이 끝났다. 적어 둔 프로세스를 지운다 (D126) */
+function cleanupEnded(work: WorkState): Transition {
+  return work.cleanup_process
+    ? { work: omit(work, 'cleanup_process'), effects: [] }
+    : unchanged(work)
+}
+
+/** 앱 소유 파일의 해시를 적는다 (D124). null이면 파일이 없어 지운다. 키는 OWNED_FILES의 차례다 */
+function filesRecorded(work: WorkState, e: FilesRecorded): Transition {
+  const prior = work.file_hashes ?? {}
+  const next: OwnedFileHashes = {}
+  for (const file of OWNED_FILES) {
+    const hash = file in e.hashes ? e.hashes[file] : prior[file]
+    if (hash) next[file] = hash
+  }
+  if (work.file_hashes && JSON.stringify(next) === JSON.stringify(work.file_hashes)) {
+    return unchanged(work)
+  }
+  return { work: { ...work, file_hashes: next }, effects: [] }
 }
