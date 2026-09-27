@@ -1420,9 +1420,12 @@ export class WorkRunner {
       }
       const plan = planClean(cleanPreview(facts), input)
       if (!plan.ok) return plan
+      // 정리 전 HEAD: 보관된 Work의 [변경]이 작업 트리 대신 본다. 사람이 worktree 폴더를 먼저 지웠으면
+      // 작업 브랜치의 커밋이다(worktree의 HEAD는 그 브랜치다)
+      const opts = { env: this.ctx.env }
       const head = facts.worktree
-        ? await headCommit(this.worktree, { env: this.ctx.env }).catch(() => null)
-        : null
+        ? await headCommit(this.worktree, opts).catch(() => null)
+        : await refCommit(this.project.repo_path, `refs/heads/${facts.branch.name}`, opts)
       this.opError = null
       const r = await this.command({
         type: 'clean',

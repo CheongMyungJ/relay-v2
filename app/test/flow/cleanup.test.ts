@@ -297,6 +297,40 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
     expect(s.h.ui.works.get(s.key)?.completedAt).toBeNull()
   })
 
+  it('사람이 worktree 폴더를 먼저 지웠으면 git worktree prune만 하고, 보관된 Work의 [변경]은 작업 브랜치의 커밋까지 본다 (8-2)', async () => {
+    const s = await setup(scenario('S'))
+    const done = await drive(s.h.relay, s.h.ui, s.key, { size: 'S' })
+    expect(done.status).toBe('completed')
+    await settle(s.h, s.key)
+    const head = git(s.tree, 'rev-parse', 'HEAD')
+    fs.rmSync(s.tree, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
+    const summary = await preview(s)
+    expect(summary).toMatchObject({
+      worktree: false,
+      uncommitted: [],
+      locks: [],
+      live: 0,
+      branch: { exists: true },
+      confirm: [],
+    })
+    expect(
+      await s.h.relay.clean(s.key, {
+        deleteBranch: false,
+        deleteBackups: true,
+        confirmed: false,
+        expect: summary.expect,
+      }),
+    ).toEqual({ ok: true })
+    await settle(s.h, s.key)
+    // 폴더가 없어진 worktree의 관리 정보도 치웠다
+    expect(git(s.repo, 'worktree', 'list', '--porcelain')).not.toContain(s.workId)
+    const w = work(s)
+    expect(w.status).toBe('archived')
+    expect(w.cleaned).toMatchObject({ head, forced: false, deleted_branches: [] })
+    const verify = await s.h.relay.review(s.key, 't-03')
+    expect(verify?.completion?.diff).toContain('+  if (xs.length === 0) return 0')
+  })
+
   it('다시 켜도 보관된 Work는 보관됨이고 읽기 전용 화면이 열린다 (시나리오 8, 9)', async () => {
     const s = await setup(scenario('S'))
     const done = await drive(s.h.relay, s.h.ui, s.key, { size: 'S' })

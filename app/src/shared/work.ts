@@ -237,7 +237,7 @@ export interface CleanOperation {
   force: boolean
   /** 지울 브랜치: 작업 브랜치(push됐거나 머지됐고 사람이 골랐을 때)와 되감기 백업 브랜치 */
   delete_branches: string[]
-  /** 정리를 시작할 때 worktree의 HEAD. worktree가 없었으면 null */
+  /** 정리를 시작할 때 worktree의 HEAD. worktree 폴더가 없었으면 작업 브랜치의 커밋, 그것도 없으면 null */
   head: string | null
 }
 

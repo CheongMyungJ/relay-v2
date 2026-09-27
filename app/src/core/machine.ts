@@ -283,7 +283,7 @@ export interface DeliveryFailed extends WorkEvent {
 
 /**
  * [Work 정리]의 [정리] (시나리오 8-2). core/cleanup이 사람의 확인과 선택으로 정한 것이다.
- * head는 정리를 시작할 때 worktree의 HEAD다(없으면 null).
+ * head는 정리를 시작할 때 worktree의 HEAD다. worktree 폴더가 없으면 작업 브랜치의 커밋이고, 그것도 없으면 null이다.
  */
 export interface Clean extends WorkEvent {
   type: 'clean'
