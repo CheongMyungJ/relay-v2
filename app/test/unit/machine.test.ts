@@ -1481,8 +1481,14 @@ describe('액션 바의 조작 (시나리오 3-4, 3-5, 4.4)', () => {
       stopAfter: false,
       abandon: true,
     })
+    // 완료나 포기한 Work는 [Work 정리]만 누른다 (시나리오 8). 보관된 Work는 아무것도 누르지 않는다
     const done = { ...running('approved'), status: 'completed' as const }
-    expect(Object.values(actions(done)).every((v) => !v)).toBe(true)
+    const { clean, ...rest } = actions(done)
+    expect(clean).toBe(true)
+    expect(Object.values(rest).every((v) => !v)).toBe(true)
+    expect(actions({ ...done, status: 'abandoned' }).clean).toBe(true)
+    const archived = { ...done, status: 'archived' as const }
+    expect(Object.values(actions(archived)).every((v) => !v)).toBe(true)
   })
 })
 
@@ -1792,5 +1798,395 @@ describe('단계 선택 (6.2, D77, D115~D117)', () => {
     const phase1 = select(toVerify(), 'fix').work
     const r = apply(phase1, { type: 'app.restarted', at: at(), check: null })
     expect(r.work.operation).toEqual(phase1.operation)
+  })
+})
+
+describe('전달 (시나리오 7, D77, D119, D120)', () => {
+  const BRANCH = 'relay/w-20260926-001'
+
+  /** S 경로로 verify까지 가서 verify가 승인 대기인 Work: t-01 intake, t-02 fix, t-03 verify(세션 살아 있음) */
+  function atVerify(): WorkState {
+    let work = newWork()
+    for (const check of [valid({}, 'S'), valid()]) {
+      work = approve(stop(launch(work), check).work, check).work
+    }
+    return stop(launch(work), valid()).work
+  }
+
+  function deliver(
+    work: WorkState,
+    choice: 'push' | 'pr',
+    uncommitted: 'discard' | 'commit' | 'session' | null = null,
+    check: TaskCheck | null = valid(),
+  ): Transition {
+    return apply(work, { type: 'deliver', at: at(), choice, uncommitted, check })
+  }
+
+  function succeed(work: WorkState, extra: { prUrl?: string; draft?: boolean } = {}) {
+    return apply(work, {
+      type: 'delivery.succeeded',
+      at: at(),
+      compareUrl: 'https://github.com/o/r/compare/main...relay%2Fw-20260926-001?expand=1',
+      ...extra,
+      check: valid({ decisions: [{ what: '완료조건을 모두 통과', why: '다시 실행함', by: 'ai' }] }),
+    })
+  }
+
+  it('[push]는 verify 세션을 끝내고 진행 중 작업을 기록한 뒤 전달을 main에 맡긴다. 승인은 아직 없다 (D120)', () => {
+    const work = atVerify()
+    const r = deliver(work, 'push')
+    expect(r.rejected).toBeUndefined()
+    expect(r.work.status).toBe('active')
+    expect(r.work.operation).toEqual({
+      kind: 'deliver',
+      stage: 'push',
+      started_at: r.work.operation?.started_at,
+      choice: 'push',
+      task_id: 't-03',
+      uncommitted: null,
+      branch: BRANCH,
+      base: 'main',
+    })
+    const task = currentTask(r.work)
+    expect(task).toMatchObject({ status: 'awaiting_approval', session: { alive: false } })
+    expect(task?.approved_at).toBeUndefined()
+    expect(types(r.effects)).toEqual(['endSession', 'deliver'])
+    expect(r.effects[1]).toEqual({
+      type: 'deliver',
+      taskId: 't-03',
+      choice: 'push',
+      uncommitted: null,
+      message: null,
+      branch: BRANCH,
+      base: 'main',
+    })
+  })
+
+  it('커밋 안 된 변경을 처리하면 prepare 단계부터 기록하고 커밋이나 stash의 메시지를 준다 (7-5)', () => {
+    const discard = deliver(atVerify(), 'pr', 'discard')
+    expect(discard.work.operation).toMatchObject({ stage: 'prepare', uncommitted: 'discard' })
+    expect(discard.effects.at(-1)).toMatchObject({
+      uncommitted: 'discard',
+      message: 'relay(w-20260926-001): 완료 전 버린 변경',
+    })
+    const commit = deliver(atVerify(), 'push', 'commit')
+    expect(commit.effects.at(-1)).toMatchObject({
+      uncommitted: 'commit',
+      message: 'relay(w-20260926-001): 완료 전 남은 변경',
+    })
+    // 단계가 넘어가면 기록의 단계를 옮기고, 만든 커밋이나 stash를 적는다 (D77)
+    const pushing = apply(commit.work, {
+      type: 'delivery.stage',
+      at: at(),
+      stage: 'push',
+      commit: 'commit01',
+    })
+    expect(pushing.work.operation).toMatchObject({
+      kind: 'deliver',
+      stage: 'push',
+      commit: 'commit01',
+    })
+    const again = apply(pushing.work, { type: 'delivery.stage', at: at(), stage: 'push' })
+    expect(again.work).toBe(pushing.work)
+    const stashing = apply(discard.work, {
+      type: 'delivery.stage',
+      at: at(),
+      stage: 'push',
+      stash: 'stash001',
+    })
+    expect(stashing.work.operation).toMatchObject({ stage: 'push', stash: 'stash001' })
+  })
+
+  it('앞 시도가 만든 stash와 커밋은 전달이 실패해도 결과에 남고, [다시 시도]와 [전달 없이 완료] 뒤에도 이어진다 (7-5, 7-6)', () => {
+    // [변경 버리고 진행]: stash를 만든 뒤 push가 실패했다
+    const first = deliver(atVerify(), 'push', 'discard').work
+    const stashed = apply(first, {
+      type: 'delivery.stage',
+      at: at(),
+      stage: 'push',
+      stash: 'stash001',
+    }).work
+    const failed = apply(stashed, { type: 'delivery.failed', at: at(), error: 'git push 실패' })
+    expect(failed.work.delivery).toMatchObject({
+      status: 'failed',
+      stage: 'push',
+      stashes: ['stash001'],
+    })
+    const logged = failed.effects[0]
+    expect(logged?.type === 'log' && logged.event.payload).toEqual({
+      choice: 'push',
+      stage: 'push',
+      error: 'git push 실패',
+      stashes: ['stash001'],
+    })
+    // [다시 시도]: 작업 트리는 이미 깨끗해 stash를 다시 만들지 않는다. 성공한 결과에 앞의 stash가 남는다
+    const done = succeed(deliver(failed.work, 'push').work)
+    expect(done.work.delivery).toMatchObject({ status: 'succeeded', stashes: ['stash001'] })
+    expect(done.work.delivery?.commits).toBeUndefined()
+    const delivered = done.effects.find(
+      (e) => e.type === 'log' && e.event.type === 'delivery.succeeded',
+    )
+    expect(delivered?.type === 'log' && delivered.event.payload).toMatchObject({
+      stashes: ['stash001'],
+    })
+    // 다음 시도가 [커밋하고 진행]으로 커밋을 만들고 또 실패하면 둘 다 남는다
+    const second = deliver(failed.work, 'push', 'commit').work
+    const committed = apply(second, {
+      type: 'delivery.stage',
+      at: at(),
+      stage: 'push',
+      commit: 'commit01',
+    }).work
+    const again = apply(committed, { type: 'delivery.failed', at: at(), error: 'git push 실패' })
+    expect(again.work.delivery).toMatchObject({
+      stashes: ['stash001'],
+      commits: ['commit01'],
+    })
+    // [전달 없이 완료]: 실패한 결과가 그대로 남는다
+    const none = approve(again.work, valid()).work
+    expect(none.status).toBe('completed')
+    expect(none.delivery).toMatchObject({
+      status: 'failed',
+      stashes: ['stash001'],
+      commits: ['commit01'],
+    })
+  })
+
+  it('전달이 끝나면 승인을 기록하고 Work를 완료하며 기록을 지운다 (7-6, D120)', () => {
+    const started = deliver(atVerify(), 'pr').work
+    const r = succeed(started, { prUrl: 'https://github.com/o/r/pull/7', draft: false })
+    expect(r.rejected).toBeUndefined()
+    expect(r.work.status).toBe('completed')
+    expect(r.work.completed_at).toBeDefined()
+    expect(r.work.operation).toBeUndefined()
+    expect(currentTask(r.work)).toMatchObject({ status: 'approved', approved_by: 'human' })
+    expect(r.work.delivery).toEqual({
+      choice: 'pr',
+      status: 'succeeded',
+      at: r.work.completed_at,
+      branch: BRANCH,
+      compare_url: 'https://github.com/o/r/compare/main...relay%2Fw-20260926-001?expand=1',
+      pr_url: 'https://github.com/o/r/pull/7',
+      draft: false,
+    })
+    expect(types(r.effects)).toEqual([
+      'log:task.approved',
+      'appendDecisions',
+      'log:delivery.succeeded',
+      'log:work.completed',
+    ])
+    const [, decisions, delivered, completed] = r.effects
+    expect(decisions).toMatchObject({
+      type: 'appendDecisions',
+      taskId: 't-03',
+      node: 'verify',
+      decisions: [{ what: '완료조건을 모두 통과', why: '다시 실행함', by: 'ai' }],
+    })
+    expect(delivered?.type === 'log' && delivered.event.payload).toEqual({
+      choice: 'pr',
+      branch: BRANCH,
+      compare_url: 'https://github.com/o/r/compare/main...relay%2Fw-20260926-001?expand=1',
+      pr_url: 'https://github.com/o/r/pull/7',
+      draft: false,
+    })
+    expect(completed?.type === 'log' && completed.event.payload).toEqual({ delivery: 'pr' })
+  })
+
+  it('전달이 실패하면 완료하지 않는다. verify는 승인 대기로 남고 [다시 시도]와 [전달 없이 완료]를 받는다 (7-6, D120)', () => {
+    const started = deliver(atVerify(), 'push').work
+    const failed = apply(started, {
+      type: 'delivery.failed',
+      at: at(),
+      error: 'git push 실패: rejected',
+    })
+    expect(failed.work.status).toBe('active')
+    expect(failed.work.operation).toBeUndefined()
+    expect(currentTask(failed.work)?.status).toBe('awaiting_approval')
+    expect(failed.work.delivery).toEqual({
+      choice: 'push',
+      status: 'failed',
+      at: failed.work.delivery?.at,
+      stage: 'push',
+      error: 'git push 실패: rejected',
+      branch: BRANCH,
+    })
+    expect(types(failed.effects)).toEqual(['log:delivery.failed'])
+    const logged = failed.effects[0]
+    expect(logged?.type === 'log' && logged.event.payload).toEqual({
+      choice: 'push',
+      stage: 'push',
+      error: 'git push 실패: rejected',
+    })
+    // [다시 시도]: 같은 전달을 다시 한다. 세션은 이미 끝났다
+    const retry = deliver(failed.work, 'push')
+    expect(types(retry.effects)).toEqual(['deliver'])
+    expect(succeed(retry.work).work.delivery?.status).toBe('succeeded')
+    // [전달 없이 완료]: [완료만]과 같다. 실패한 전달은 기록으로 남는다
+    const none = approve(failed.work, valid())
+    expect(none.work.status).toBe('completed')
+    const last = none.effects.at(-1)
+    expect(last?.type === 'log' && last.event.payload).toEqual({ delivery: 'none' })
+    expect(none.work.delivery?.status).toBe('failed')
+  })
+
+  it('승인하면 멈추는 verify는 전달하지 않고 [승인하고 멈춤]으로 멈춘다. 멈춘 Work에서 전달하면 완료한다 (D119)', () => {
+    const on = apply(atVerify(), { type: 'stopAfter', at: at(), on: true }).work
+    expect(deliver(on, 'push').rejected).toBe('승인하면 Work가 멈춤: [승인하고 멈춤]을 누르세요')
+    const back = valid({ recommended_next: { node: 'fix', reason: '완료조건 2 실패' } })
+    expect(deliver(atVerify(), 'push', null, back).rejected).toBe(
+      '승인하면 Work가 멈춤: [승인하고 멈춤]을 누르세요',
+    )
+    // [승인하고 멈춤]은 승인이다: Work가 멈추고 액션 바의 [재개]는 보이지 않는다
+    const stopped = approve(on, valid()).work
+    expect(stopped).toMatchObject({
+      status: 'stopped',
+      stop: { kind: 'after_step', task_id: 't-03' },
+    })
+    expect(actions(stopped)).toMatchObject({ resumeWork: false, selectStep: true, abandon: true })
+    // 멈춘 Work에서 전달한다. 세션은 이미 끝났고 승인은 다시 남기지 않는다
+    const r = deliver(stopped, 'push', null, null)
+    expect(r.rejected).toBeUndefined()
+    expect(types(r.effects)).toEqual(['deliver'])
+    const done = succeed(r.work)
+    expect(done.work.status).toBe('completed')
+    expect(done.work.stop).toBeUndefined()
+    expect(types(done.effects)).toEqual(['log:delivery.succeeded', 'log:work.completed'])
+    // 멈춘 Work의 [완료만]은 M3의 [재개]다
+    const resumed = apply(stopped, { type: 'resumeWork', at: at() })
+    expect(resumed.work.status).toBe('completed')
+  })
+
+  it('[AI 세션 열기]는 verify 세션을 끝내고 정리 세션을 main에 맡긴다. 진행 중 작업은 기록하지 않는다 (7-5)', () => {
+    const r = deliver(atVerify(), 'pr', 'session')
+    expect(r.rejected).toBeUndefined()
+    expect(r.work.operation).toBeUndefined()
+    expect(types(r.effects)).toEqual(['endSession', 'openCleanup'])
+    expect(r.effects[1]).toEqual({ type: 'openCleanup', choice: 'pr' })
+    // 정리가 끝나면 다시 전달한다
+    expect(deliver(r.work, 'pr').work.operation).toMatchObject({ kind: 'deliver', stage: 'push' })
+  })
+
+  it('세션 없이 대기로 남은 verify도 누른 때의 검사가 유효하면 전달하고, 표시는 승인 대기다 (3.3, D112)', () => {
+    let work = newWork()
+    for (const check of [valid({}, 'S'), valid()]) {
+      work = approve(stop(launch(work), check).work, check).work
+    }
+    work = stop(launch(work), MISSING).work
+    work = apply(work, { type: 'pty.exit', taskId: 't-03', at: at() }).work
+    expect(status(work)).toBe('session_ended')
+    const r = deliver(work, 'push')
+    expect(r.rejected).toBeUndefined()
+    expect(status(r.work)).toBe('awaiting_approval')
+    expect(types(r.effects)).toEqual(['log:task.awaiting_approval', 'deliver'])
+  })
+
+  it('받지 않는 전달: 형식 오류, 턴이 끝나지 않음, verify가 아님, 진행 중 작업, 끝난 Work', () => {
+    expect(deliver(atVerify(), 'push', null, INVALID).rejected).toBe(
+      't-03의 handoff가 유효하지 않음',
+    )
+    let work = newWork()
+    for (const check of [valid({}, 'S'), valid()]) {
+      work = approve(stop(launch(work), check).work, check).work
+    }
+    const working = launch(work)
+    expect(deliver(working, 'push').rejected).toBe('t-03는 승인할 수 있는 상태가 아님')
+    const intake = stop(launch(newWork()), valid({}, 'S')).work
+    expect(deliver(intake, 'push').rejected).toBe('최종 검증의 Work 완료 화면이 아님')
+    const busy = deliver(atVerify(), 'push').work
+    expect(deliver(busy, 'push').rejected).toBe('진행 중인 작업이 있음')
+    const done = approve(atVerify(), valid()).work
+    expect(done.status).toBe('completed')
+    expect(deliver(done, 'push').rejected).toBe('전달할 수 있는 Work가 아님')
+    // 진행 중인 전달이 없으면 결과를 받지 않는다
+    expect(succeed(atVerify()).rejected).toBe('진행 중인 전달이 없음')
+    const quiet = apply(atVerify(), { type: 'delivery.failed', at: at(), error: 'x' })
+    expect(quiet.effects).toEqual([])
+  })
+
+  it('재시작 조정은 끊긴 전달 기록을 그대로 둔다 (D77, 알림은 M6)', () => {
+    const delivering = deliver(atVerify(), 'push').work
+    expect(apply(delivering, { type: 'app.restarted', at: at(), check: valid() }).work).toBe(
+      delivering,
+    )
+  })
+})
+
+describe('정리 (시나리오 8, D77)', () => {
+  const BACKUP = 'relay/w-20260926-001-discarded-1'
+
+  /** [완료만]으로 완료한 S 경로 Work */
+  function completed(): WorkState {
+    let work = newWork()
+    for (const check of [valid({}, 'S'), valid(), valid()]) {
+      work = approve(stop(launch(work), check).work, check).work
+    }
+    expect(work.status).toBe('completed')
+    return work
+  }
+
+  function clean(work: WorkState, force = false, deleteBranches: string[] = [BACKUP]) {
+    return apply(work, { type: 'clean', at: at(), force, deleteBranches, head: 'head0001' })
+  }
+
+  it('완료한 Work를 정리하면 진행 중 작업을 기록하고 git 작업을 main에 맡긴다', () => {
+    const r = clean(completed(), true)
+    expect(r.rejected).toBeUndefined()
+    expect(r.work.operation).toEqual({
+      kind: 'clean',
+      stage: 'worktree',
+      started_at: r.work.operation?.started_at,
+      force: true,
+      delete_branches: [BACKUP],
+      head: 'head0001',
+    })
+    expect(r.effects).toEqual([{ type: 'clean', force: true, deleteBranches: [BACKUP] }])
+    expect(actions(r.work).clean).toBe(false)
+  })
+
+  it('worktree를 지우면 브랜치 단계로 옮기고, 끝나면 보관됨으로 바꾸고 work.cleaned를 남긴다 (8-2)', () => {
+    const removed = apply(clean(completed()).work, { type: 'clean.removed', at: at() })
+    expect(removed.work.operation).toMatchObject({ kind: 'clean', stage: 'branches' })
+    const done = apply(removed.work, { type: 'clean.done', at: at() })
+    expect(done.work.status).toBe('archived')
+    expect(done.work.operation).toBeUndefined()
+    expect(done.work.cleaned).toEqual({
+      at: done.work.cleaned?.at,
+      head: 'head0001',
+      forced: false,
+      deleted_branches: [BACKUP],
+    })
+    expect(done.work.completed_at).toBeDefined()
+    expect(types(done.effects)).toEqual(['log:work.cleaned'])
+    const logged = done.effects[0]
+    expect(logged?.type === 'log' && logged.event.payload).toEqual({
+      forced: false,
+      deleted_branches: [BACKUP],
+    })
+    // 보관된 Work는 다시 정리하지 않고 설정도 바꾸지 않는다
+    expect(clean(done.work).rejected).toBe('정리할 수 있는 Work가 아님')
+    expect(apply(done.work, { type: 'abandon', at: at() }).rejected).toBeDefined()
+  })
+
+  it('git이 실패하면 기록만 지우고 Work는 그대로다', () => {
+    const failed = apply(clean(completed()).work, { type: 'clean.failed', at: at(), error: 'x' })
+    expect(failed.work.status).toBe('completed')
+    expect(failed.work.operation).toBeUndefined()
+    expect(actions(failed.work).clean).toBe(true)
+  })
+
+  it('포기한 Work도 정리한다. 진행 중이거나 멈춘 Work는 정리하지 않는다', () => {
+    const abandoned = apply(running(), { type: 'abandon', at: at() }).work
+    expect(clean(abandoned).rejected).toBeUndefined()
+    expect(clean(running()).rejected).toBe('정리할 수 있는 Work가 아님')
+    const stopped = { ...running('approved'), status: 'stopped' as const }
+    expect(clean(stopped).rejected).toBe('정리할 수 있는 Work가 아님')
+    expect(apply(completed(), { type: 'clean.done', at: at() }).rejected).toBe(
+      '진행 중인 정리가 없음',
+    )
+  })
+
+  it('재시작 조정은 끊긴 전달과 정리 기록을 그대로 둔다 (D77, 알림은 M6)', () => {
+    const cleaning = clean(completed()).work
+    expect(apply(cleaning, { type: 'app.restarted', at: at(), check: null }).work).toBe(cleaning)
   })
 })

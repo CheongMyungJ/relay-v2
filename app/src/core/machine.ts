@@ -2,23 +2,33 @@
 // 훅 신호, 사람 버튼, 프로세스 종료, 재시작을 main이 이벤트로 바꿔 넣고, 돌려받은 할 일을 차례로 실행한다.
 // 상태는 work.json이고 main이 전이마다 쓴다 (I11). 설정은 판정하는 때의 값을 받는다 (D73).
 // 기본 흐름, [오류 무시하고 승인](D112), 사람 조작(중단, 재개, 멈춤, 포기), 대기열(D18), 재시작 조정(D75, D78),
-// 단계 선택(되감기와 건너뛰기, 6.2)을 담는다. 자동 승인은 M7에서 더한다. 세션 상한은 main이 세고,
-// 자리가 없으면 task.queued를 넣는다. 단계 선택의 계산은 core/rewind가 한다.
+// 단계 선택(되감기와 건너뛰기, 6.2), 전달(시나리오 7, D119, D120)과 정리(시나리오 8)를 담는다. 자동 승인은
+// M7에서 더한다. 세션 상한은 main이 세고, 자리가 없으면 task.queued를 넣는다. 단계 선택의 계산은 core/rewind,
+// 전달의 판정은 core/delivery, 정리의 판정은 core/cleanup이 한다.
 import type { AppConfig, WorkSettings } from '../shared/config'
 import type { Decision, NodeName, Size } from '../shared/contracts'
 import type { StepExpect, WorkActions } from '../shared/views'
 import type {
   CheckSummary,
+  CleanOperation,
+  DeliverOperation,
+  DeliveryChoice,
+  DeliveryRecord,
+  DeliveryStage,
   LifecycleEvent,
   RewindOperation,
   StartReason,
   StepSelection,
   TaskRecord,
   TaskStatus,
+  UncommittedAction,
   WorkState,
 } from '../shared/work'
 import { REVIEWABLE, approvalGate } from './approval'
+import { canClean } from './cleanup'
+import { commitMessage, deliveryStart, stashMessage, stoppedVerify } from './delivery'
 import { NODES, WORK_COMPLETE, defaultNext, isPrevious } from './pipeline'
+import { workBranch } from './records'
 import { backupMessage, canSelectStep, planStep, type StepKind } from './rewind'
 import { FORMAT_VERSION, bounceMessage, isValid, summarize, type TaskCheck } from './validate'
 
@@ -235,6 +245,72 @@ export interface RewindFailed extends WorkEvent {
   error: string
 }
 
+/**
+ * Work 완료 화면의 [push]·[PR 생성] (시나리오 7-4~7-6, D119, D120). check는 누른 때의 verify 형식 검사다.
+ * uncommitted는 커밋 안 된 변경의 처리다(7-5). session은 [AI 세션 열기]로, verify 세션을 끝내고 정리 세션을
+ * 연다. 전달은 정리 세션이 끝난 뒤 다시 이 명령으로 한다. main은 커밋 안 된 변경을 먼저 확인한다.
+ */
+export interface Deliver extends WorkEvent {
+  type: 'deliver'
+  choice: DeliveryChoice
+  uncommitted: UncommittedAction | 'session' | null
+  check: TaskCheck | null
+}
+
+/**
+ * 전달이 다음 단계(push, PR 만들기)로 넘어갔다 (D77). 커밋 안 된 변경을 처리했으면(prepare) 만든 stash나
+ * 커밋을 함께 알린다. 진행 중 작업 기록에 적고, 전달 결과에 남긴다 (7-5)
+ */
+export interface DeliveryStaged extends WorkEvent {
+  type: 'delivery.stage'
+  stage: DeliveryStage
+  stash?: string
+  commit?: string
+}
+
+/** 전달이 끝났다. main이 git과 gh에서 얻은 것과, 승인을 기록할 때 다시 한 verify 검사다 (D120) */
+export interface DeliverySucceeded extends WorkEvent {
+  type: 'delivery.succeeded'
+  compareUrl: string | null
+  prUrl?: string
+  prExisting?: boolean
+  draft?: boolean
+  check: TaskCheck | null
+}
+
+/** 전달이 실패했다. Work는 완료하지 않는다 (7-6) */
+export interface DeliveryFailed extends WorkEvent {
+  type: 'delivery.failed'
+  error: string
+}
+
+/**
+ * [Work 정리]의 [정리] (시나리오 8-2). core/cleanup이 사람의 확인과 선택으로 정한 것이다.
+ * head는 정리를 시작할 때 worktree의 HEAD다. worktree 폴더가 없으면 작업 브랜치의 커밋이고, 그것도 없으면 null이다.
+ */
+export interface Clean extends WorkEvent {
+  type: 'clean'
+  force: boolean
+  deleteBranches: string[]
+  head: string | null
+}
+
+/** 정리가 worktree를 지웠다 (D77) */
+export interface CleanRemoved extends WorkEvent {
+  type: 'clean.removed'
+}
+
+/** 정리가 끝났다. Work를 보관됨으로 바꾼다 */
+export interface CleanDone extends WorkEvent {
+  type: 'clean.done'
+}
+
+/** 정리의 git 작업이 실패했다. 기록을 지우고 Work는 그대로 둔다. 오류는 main이 알린다 */
+export interface CleanFailed extends WorkEvent {
+  type: 'clean.failed'
+  error: string
+}
+
 export type MachineEvent =
   | SessionStarted
   | SessionResumed
@@ -259,6 +335,14 @@ export type MachineEvent =
   | RewindBackedUp
   | RewindApplied
   | RewindFailed
+  | Deliver
+  | DeliveryStaged
+  | DeliverySucceeded
+  | DeliveryFailed
+  | Clean
+  | CleanRemoved
+  | CleanDone
+  | CleanFailed
 
 export type Effect =
   /**
@@ -296,6 +380,27 @@ export type Effect =
    * rewind.applied, rewind.failed로 알린다
    */
   | { type: 'rewindCode'; to: string; backupBranch: string; message: string }
+  /**
+   * 전달 (7-4~7-6): 커밋 안 된 변경을 처리하고(discard는 git stash -u, commit은 커밋. message는 그 메시지),
+   * branch를 origin에 push하고, pr이면 taskId의 pr.md로 PR을 만든다(같은 브랜치의 PR이 열려 있으면 링크만).
+   * main은 결과를 delivery.stage, delivery.succeeded, delivery.failed로 알린다
+   */
+  | {
+      type: 'deliver'
+      taskId: string
+      choice: DeliveryChoice
+      uncommitted: UncommittedAction | null
+      message: string | null
+      branch: string
+      base: string
+    }
+  /** [AI 세션 열기] (7-5): 기록하지 않는 정리 세션을 worktree에서 연다. 세션 상한(D18)을 따른다 */
+  | { type: 'openCleanup'; choice: DeliveryChoice }
+  /**
+   * 정리 (시나리오 8-2): 살아 있는 세션을 끝내고, worktree를 지우고(force면 --force), 브랜치를 지운다.
+   * main은 결과를 clean.removed, clean.done, clean.failed로 알린다
+   */
+  | { type: 'clean'; force: boolean; deleteBranches: string[] }
 
 export interface Transition {
   work: WorkState
@@ -376,7 +481,8 @@ export function launchable(task: TaskRecord): boolean {
  * 사람이 할 수 있는 조작 (액션 바). 화면에 보이는 버튼과 machine이 받는 명령이 같은 판정을 쓴다.
  * [즉시 중단]은 세션이 살아 있거나 대기열에 있을 때, [재개]·[세션 재개]는 세션이 없고 중단됨, 세션 종료,
  * 승인 대기, 막힘일 때, [이 단계 새 세션으로 다시]는 세션 종료일 때다. [단계 선택]은 진행 중이거나 멈춘
- * Work에서 한다(6.2). 고를 수 있는 단계는 core/rewind가 정한다.
+ * Work에서 한다(6.2). 고를 수 있는 단계는 core/rewind가 정한다. 멈춘 Work의 [재개]는 verify에서 멈췄으면
+ * 보이지 않는다: Work 완료 화면의 전달 버튼이 맡는다(D119). [Work 정리]는 완료나 포기한 Work에서 한다.
  */
 export function actions(work: WorkState): WorkActions {
   const task = currentTask(work)
@@ -386,10 +492,11 @@ export function actions(work: WorkState): WorkActions {
     interrupt: active && !!task && (live || task.status === 'queued'),
     resume: active && !!task && !live && RESUMABLE.includes(task.status),
     retry: active && task?.status === 'session_ended',
-    resumeWork: work.status === 'stopped',
+    resumeWork: work.status === 'stopped' && !stoppedVerify(work),
     selectStep: canSelectStep(work),
     stopAfter: active,
     abandon: active || work.status === 'stopped',
+    clean: canClean(work),
   }
 }
 
@@ -565,6 +672,22 @@ export function transition(work: WorkState, event: MachineEvent, config: AppConf
       return rewindApplied(work, event)
     case 'rewind.failed':
       return rewindFailed(work)
+    case 'deliver':
+      return deliver(work, event)
+    case 'delivery.stage':
+      return deliveryStaged(work, event)
+    case 'delivery.succeeded':
+      return deliverySucceeded(work, event)
+    case 'delivery.failed':
+      return deliveryFailed(work, event)
+    case 'clean':
+      return clean(work, event)
+    case 'clean.removed':
+      return cleanRemoved(work)
+    case 'clean.done':
+      return cleanDone(work, event)
+    case 'clean.failed':
+      return cleanFailed(work)
     default:
       return taskTransition(work, event, config)
   }
@@ -581,6 +704,14 @@ type TaskMachineEvent = Exclude<
   | RewindBackedUp
   | RewindApplied
   | RewindFailed
+  | Deliver
+  | DeliveryStaged
+  | DeliverySucceeded
+  | DeliveryFailed
+  | Clean
+  | CleanRemoved
+  | CleanDone
+  | CleanFailed
 >
 
 function taskTransition(work: WorkState, event: TaskMachineEvent, config: AppConfig): Transition {
@@ -807,7 +938,8 @@ function sessionEnded(work: WorkState, task: TaskRecord, e: SessionEnded): Trans
 
 /**
  * 승인 (시나리오 4-4, 5). 승인을 기록하고, 세션을 끝내고, 결정을 decisions.md에 더하고, 다음 단계로 간다.
- * intake 승인은 의도 승인이라 intent를 확정한다 (4.1). verify 승인은 Work 완료 화면의 전달 선택이고, M2의 전달은 [완료만]뿐이다.
+ * intake 승인은 의도 승인이라 intent를 확정한다 (4.1). verify 승인은 Work 완료 화면의 [완료만]이다. [push]·[PR 생성]은
+ * deliver가 전달한 뒤 승인을 기록한다 (D120). 승인하면 멈추는 verify는 [승인하고 멈춤]이다 (D119).
  * 에이전트가 턴을 끝낸 뒤(승인 대기, 대기, 세션 종료)에만 받는다. 누른 때의 검사로 다시 판정한다 (approvalGate).
  * [오류 무시하고 승인]이면 무시한 오류를 남기고, 머리글에서 읽지 못한 값은 없는 것으로 본다 (D112).
  * 에이전트가 이전 단계를 추천했으면 다음 task를 시작하지 않고 멈춘다 (D23). [이 단계 끝나면 멈춤]이
@@ -953,7 +1085,8 @@ function stopAfter(work: WorkState, e: StopAfterStep): Transition {
 /**
  * 멈춘 Work의 [재개] (3.3, 시나리오 3-4). 멈추게 한 task의 기본 다음 단계를 시작한다.
  * 이전 단계 추천(D23)으로 멈췄으면 추천을 따르지 않고 기본 다음 단계로 간다. 추천을 따르는 것은 [단계 선택]이다.
- * 기본 다음 단계가 Work 완료면 Work를 완료한다(M5 전의 전달은 [완료만]뿐이다).
+ * 기본 다음 단계가 Work 완료면 전달 없이 Work를 완료한다: verify에서 멈춘 Work의 Work 완료 화면에서 누른
+ * [완료만]이다. [push]·[PR 생성]은 deliver다 (D119).
  */
 function resumeWork(work: WorkState, e: ResumeWork): Transition {
   if (work.status !== 'stopped' || !work.stop) return unchanged(work, '멈춘 Work가 아님')
@@ -1133,6 +1266,250 @@ function select(work: WorkState, s: Selected, at: string, effects: Effect[]): Tr
     reason: created.reason,
   })
   return { work: next, effects }
+}
+
+// ---------- 전달 (시나리오 7) ----------
+
+/**
+ * [push]·[PR 생성] (7-4~7-6, D119, D120). core/delivery의 판정을 따른다: 승인할 수 있는 verify(승인해도
+ * 멈추지 않음)이거나 verify에서 멈춘 Work다. verify 세션은 끝낸다(4-4의 승인과 같음). 승인은 기록하지
+ * 않는다: 전달이 성공한 뒤 Work 완료와 함께 남긴다(D120). 세션이 없어도 유효한 handoff면 승인 대기다(3.3).
+ * [AI 세션 열기](session)는 정리 세션을 main에 맡기고 끝난다. 아니면 진행 중 작업을 기록하고(D77)
+ * 전달을 main에 맡긴다.
+ */
+function deliver(work: WorkState, e: Deliver): Transition {
+  const start = deliveryStart(work, e.check)
+  if (!start.ok) return unchanged(work, start.error)
+  const task = start.task
+  const effects: Effect[] = []
+  let next = work
+  if (start.from === 'review') {
+    const ended: TaskRecord = {
+      ...task,
+      status: 'awaiting_approval',
+      ...(e.check ? { check: summarize(e.check) } : {}),
+      ...(task.session?.alive
+        ? { session: { ...task.session, alive: false, ended_at: e.at } }
+        : {}),
+    }
+    next = withTask(work, ended)
+    if (task.status !== 'awaiting_approval') {
+      effects.push(log(work, e.at, 'task.awaiting_approval', {}, task))
+    }
+    if (task.session?.alive) effects.push({ type: 'endSession', taskId: task.id })
+  }
+  if (e.uncommitted === 'session') {
+    effects.push({ type: 'openCleanup', choice: e.choice })
+    return { work: next, effects }
+  }
+  const branch = workBranch(work.work_id)
+  const operation: DeliverOperation = {
+    kind: 'deliver',
+    stage: e.uncommitted ? 'prepare' : 'push',
+    started_at: e.at,
+    choice: e.choice,
+    task_id: task.id,
+    uncommitted: e.uncommitted,
+    branch,
+    base: work.base_branch,
+  }
+  effects.push({
+    type: 'deliver',
+    taskId: task.id,
+    choice: e.choice,
+    uncommitted: e.uncommitted,
+    message:
+      e.uncommitted === 'commit'
+        ? commitMessage(work.work_id)
+        : e.uncommitted === 'discard'
+          ? stashMessage(work.work_id)
+          : null,
+    branch,
+    base: work.base_branch,
+  })
+  return { work: { ...next, operation }, effects }
+}
+
+/**
+ * 전달이 다음 단계로 넘어갔다. 진행 중 작업 기록의 단계를 옮기고, 커밋 안 된 변경을 처리하며 만든 stash나
+ * 커밋을 적는다 (D77, 7-5)
+ */
+function deliveryStaged(work: WorkState, e: DeliveryStaged): Transition {
+  const op = work.operation
+  if (op?.kind !== 'deliver' || op.stage === e.stage) return unchanged(work)
+  const operation: DeliverOperation = {
+    ...op,
+    stage: e.stage,
+    ...(e.stash === undefined ? {} : { stash: e.stash }),
+    ...(e.commit === undefined ? {} : { commit: e.commit }),
+  }
+  return { work: { ...work, operation }, effects: [] }
+}
+
+/**
+ * 전달 결과에 남길 stash와 커밋 (7-5): 앞 시도의 결과(실패)에 있던 것에 이번 시도가 만든 것을 더한다.
+ * 그래서 전달이 실패한 뒤 [다시 시도]가 성공해도 앞 시도가 백업한 stash와 만든 커밋이 기록에 남는다
+ */
+function deliveryBackups(
+  prior: DeliveryRecord | undefined,
+  op: DeliverOperation,
+): Pick<DeliveryRecord, 'stashes' | 'commits'> {
+  const stashes = [...(prior?.stashes ?? []), ...(op.stash ? [op.stash] : [])]
+  const commits = [...(prior?.commits ?? []), ...(op.commit ? [op.commit] : [])]
+  return {
+    ...(stashes.length ? { stashes } : {}),
+    ...(commits.length ? { commits } : {}),
+  }
+}
+
+/**
+ * 전달이 끝났다 (7-6). verify가 아직 승인되지 않았으면 승인을 기록한다(4-4: 승인 기록, decisions.md.
+ * 세션은 전달을 시작할 때 끝냈다). Work를 완료로 바꾸고 전달 결과를 남기며, 진행 중 작업 기록은 같이
+ * 지운다. verify에서 멈춘 Work는 멈춤 표시도 지운다 (D119).
+ */
+function deliverySucceeded(work: WorkState, e: DeliverySucceeded): Transition {
+  const op = work.operation
+  if (op?.kind !== 'deliver') return unchanged(work, '진행 중인 전달이 없음')
+  const task = work.tasks.find((t) => t.id === op.task_id)
+  if (!task) return unchanged(work, `${op.task_id} 없음`)
+  const effects: Effect[] = []
+  let tasks = work.tasks
+  if (task.status !== 'approved') {
+    const check = e.check ? summarize(e.check) : task.check
+    const approved: TaskRecord = {
+      ...task,
+      status: 'approved',
+      approved_at: e.at,
+      approved_by: 'human',
+      check,
+      ...(task.session?.alive
+        ? { session: { ...task.session, alive: false, ended_at: e.at } }
+        : {}),
+    }
+    tasks = work.tasks.map((t) => (t.id === task.id ? approved : t))
+    effects.push(log(work, e.at, 'task.approved', { by: 'human' }, task))
+    if (task.session?.alive) effects.push({ type: 'endSession', taskId: task.id })
+    effects.push({
+      type: 'appendDecisions',
+      taskId: task.id,
+      node: task.node,
+      at: e.at,
+      by: 'human',
+      decisions: e.check?.handoffHeader ? e.check.handoffHeader.decisions : null,
+    })
+  }
+  const delivery: DeliveryRecord = {
+    choice: op.choice,
+    status: 'succeeded',
+    at: e.at,
+    branch: op.branch,
+    compare_url: e.compareUrl,
+    ...(e.prUrl === undefined ? {} : { pr_url: e.prUrl }),
+    ...(e.prExisting ? { pr_existing: true } : {}),
+    ...(e.draft === undefined ? {} : { draft: e.draft }),
+    ...deliveryBackups(work.delivery, op),
+  }
+  const rest = omit(work, 'operation', 'stop', 'stop_after_step')
+  const next: WorkState = {
+    ...rest,
+    tasks,
+    status: 'completed',
+    completed_at: e.at,
+    delivery,
+  }
+  const payload: Record<string, unknown> = { ...delivery }
+  delete payload['status']
+  delete payload['at']
+  effects.push(log(next, e.at, 'delivery.succeeded', payload))
+  effects.push(log(next, e.at, 'work.completed', { delivery: op.choice }))
+  return { work: next, effects }
+}
+
+/**
+ * 전달이 실패했다 (7-6). Work는 완료하지 않는다: verify는 승인 대기로 남고(멈춘 Work는 멈춘 채),
+ * Work 완료 화면이 오류와 [다시 시도]·[전달 없이 완료]를 보인다(D120). 진행 중 작업 기록은 지운다.
+ * 이번 시도가 만든 stash나 커밋은 실패한 결과에 남겨, 다음 시도나 [전달 없이 완료] 뒤에도 이어진다 (7-5).
+ */
+function deliveryFailed(work: WorkState, e: DeliveryFailed): Transition {
+  const op = work.operation
+  if (op?.kind !== 'deliver') return unchanged(work)
+  const backups = deliveryBackups(work.delivery, op)
+  const delivery: DeliveryRecord = {
+    choice: op.choice,
+    status: 'failed',
+    at: e.at,
+    stage: op.stage,
+    error: e.error,
+    branch: op.branch,
+    ...backups,
+  }
+  return {
+    work: { ...omit(work, 'operation'), delivery },
+    effects: [
+      log(work, e.at, 'delivery.failed', {
+        choice: op.choice,
+        stage: op.stage,
+        error: e.error,
+        ...backups,
+      }),
+    ],
+  }
+}
+
+// ---------- 정리 (시나리오 8) ----------
+
+/**
+ * [Work 정리]의 [정리] (8-2). 완료나 포기한 Work만 정리한다. 진행 중 작업을 기록하고(D77) git 작업을
+ * main에 맡긴다. 지울 브랜치와 --force는 core/cleanup이 사람의 확인과 선택으로 정한 것이다.
+ */
+function clean(work: WorkState, e: Clean): Transition {
+  if (!canClean(work)) return unchanged(work, '정리할 수 있는 Work가 아님')
+  const operation: CleanOperation = {
+    kind: 'clean',
+    stage: 'worktree',
+    started_at: e.at,
+    force: e.force,
+    delete_branches: [...e.deleteBranches],
+    head: e.head,
+  }
+  return {
+    work: { ...work, operation },
+    effects: [{ type: 'clean', force: e.force, deleteBranches: [...e.deleteBranches] }],
+  }
+}
+
+/** 정리가 worktree를 지웠다. 기록을 브랜치 지우기 단계로 옮긴다 (D77) */
+function cleanRemoved(work: WorkState): Transition {
+  const op = work.operation
+  if (op?.kind !== 'clean' || op.stage !== 'worktree') return unchanged(work)
+  return { work: { ...work, operation: { ...op, stage: 'branches' } }, effects: [] }
+}
+
+/** 정리가 끝났다: 보관됨으로 바꾸고 work.cleaned를 남긴다. 산출물(works/<work-id>/)은 그대로다 (8-2) */
+function cleanDone(work: WorkState, e: CleanDone): Transition {
+  const op = work.operation
+  if (op?.kind !== 'clean') return unchanged(work, '진행 중인 정리가 없음')
+  const next: WorkState = {
+    ...omit(work, 'operation'),
+    status: 'archived',
+    cleaned: { at: e.at, head: op.head, forced: op.force, deleted_branches: op.delete_branches },
+  }
+  return {
+    work: next,
+    effects: [
+      log(next, e.at, 'work.cleaned', {
+        forced: op.force,
+        deleted_branches: op.delete_branches,
+      }),
+    ],
+  }
+}
+
+/** 정리의 git 작업이 실패했다. 기록만 지운다. 오류는 main이 알린다 */
+function cleanFailed(work: WorkState): Transition {
+  return work.operation?.kind === 'clean'
+    ? { work: omit(work, 'operation'), effects: [] }
+    : unchanged(work)
 }
 
 /**

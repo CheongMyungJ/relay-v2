@@ -225,3 +225,142 @@ export async function resetHard(
   await git(dir, ['reset', '--hard', '--quiet', commit], opts)
   if (opts.clean) await git(dir, ['clean', '-d', '-f', '--quiet'], opts)
 }
+
+// ---------- 전달 (시나리오 7) ----------
+
+/** 원격의 주소 (git remote get-url). insteadOf를 푼 fetch 주소다(git 문서 git-remote). 원격이 없으면 null */
+export async function remoteUrl(
+  repo: string,
+  name = 'origin',
+  opts?: GitOptions,
+): Promise<string | null> {
+  return tryGit(repo, ['remote', 'get-url', name], opts)
+}
+
+/**
+ * 브랜치를 원격의 같은 이름으로 push하고 추적 브랜치(upstream)로 둔다 (7-4, git push -u).
+ * 원격 추적 브랜치(refs/remotes/<remote>/<branch>)도 함께 바뀐다. 이미 같으면 아무것도 보내지 않고 성공한다.
+ * fast-forward가 아니면 원격이 거부한다(git 문서 git-push PUSH RULES). 사용자의 pre-push 훅과 자격 증명을 쓴다.
+ */
+export async function pushBranch(
+  dir: string,
+  branch: string,
+  remote = 'origin',
+  opts?: GitOptions,
+): Promise<void> {
+  const ref = `refs/heads/${branch}`
+  await git(dir, ['push', '--set-upstream', remote, `${ref}:${ref}`], {
+    ...opts,
+    timeoutMs: opts?.timeoutMs ?? 300_000,
+  })
+}
+
+/** ref가 가리키는 커밋. 없으면 null */
+export async function refCommit(
+  dir: string,
+  ref: string,
+  opts?: GitOptions,
+): Promise<string | null> {
+  return tryGit(
+    dir,
+    ['rev-parse', '--verify', '--quiet', '--end-of-options', `${ref}^{commit}`],
+    opts,
+  )
+}
+
+/**
+ * 커밋 안 된 변경을 stash에 넣는다 (7-5의 [변경 버리고 진행], git stash push -u). 추적하지 않는 파일도 넣고
+ * 작업 트리에서 지운다. 무시하는 파일은 남는다. refs/stash는 레포의 모든 worktree가 함께 써서 메인 체크아웃의
+ * git stash list에 보인다(git 문서 git-stash, git-worktree REFS). 만든 stash 커밋을 돌려준다.
+ */
+export async function stashAll(dir: string, message: string, opts?: GitOptions): Promise<string> {
+  const before = await refCommit(dir, 'refs/stash', opts)
+  await git(dir, ['stash', 'push', '--include-untracked', '--message', message], opts)
+  const after = await refCommit(dir, 'refs/stash', opts)
+  if (!after || after === before) throw new GitError('git stash가 변경을 넣지 않음')
+  return after
+}
+
+/**
+ * 커밋 안 된 변경을 모두 커밋한다 (7-5의 [커밋하고 진행]): git add -A 뒤 git commit. 무시하는 파일은 넣지
+ * 않는다. 사용자의 커밋 훅과 서명 설정을 그대로 쓴다. 새 HEAD를 돌려준다.
+ */
+export async function commitAll(dir: string, message: string, opts?: GitOptions): Promise<string> {
+  await git(dir, ['add', '-A'], opts)
+  await git(dir, ['commit', '--quiet', '--message', message], {
+    ...opts,
+    timeoutMs: opts?.timeoutMs ?? 120_000,
+  })
+  return headCommit(dir, opts)
+}
+
+// ---------- 정리 (시나리오 8) ----------
+
+/**
+ * a가 b의 조상인가(같은 커밋 포함). git merge-base --is-ancestor는 참이면 0, 거짓이면 1로 끝나고,
+ * 그 밖의 종료 코드는 오류다(git 문서 git-merge-base).
+ */
+export async function isAncestor(
+  dir: string,
+  a: string,
+  b: string,
+  opts: GitOptions = {},
+): Promise<boolean> {
+  const r = await run('git', [...BASE_ARGS, 'merge-base', '--is-ancestor', a, b], {
+    cwd: dir,
+    env: gitEnv(opts.env),
+    timeoutMs: opts.timeoutMs ?? 60_000,
+  })
+  if (r.code === 0) return true
+  if (r.code === 1) return false
+  throw new GitError(`git merge-base 실패: ${describeFailure(r)}`)
+}
+
+/** worktree의 git 폴더에 남은 잠금 파일(index.lock 등)의 이름. git 폴더를 찾지 못하면 빈 목록이다 */
+export async function lockFiles(dir: string, opts?: GitOptions): Promise<string[]> {
+  const gitDir = await tryGit(dir, ['rev-parse', '--absolute-git-dir'], opts)
+  if (!gitDir) return []
+  try {
+    const entries = await fsp.readdir(gitDir, { withFileTypes: true })
+    return entries
+      .filter((e) => e.isFile() && e.name.endsWith('.lock'))
+      .map((e) => e.name)
+      .sort()
+  } catch {
+    return []
+  }
+}
+
+/**
+ * worktree를 지운다 (시나리오 8, git worktree remove). 수정하거나 추적하지 않는 파일이 있으면 git이 거부하므로
+ * 사람이 확인한 뒤 force(--force)로 지운다. 무시하는 파일은 함께 지워지고, worktree의 git 폴더(잠금 파일 포함)도
+ * 지워진다(git 문서 git-worktree, 실행). 메인 체크아웃(repo)에서 부른다.
+ */
+export async function removeWorktree(
+  repo: string,
+  dir: string,
+  opts: GitOptions & { force: boolean },
+): Promise<void> {
+  await git(repo, ['worktree', 'remove', ...(opts.force ? ['--force'] : []), dir], {
+    ...opts,
+    timeoutMs: opts.timeoutMs ?? 300_000,
+  })
+}
+
+/** 폴더가 없어진 worktree의 관리 파일을 치운다 (git worktree prune) */
+export async function pruneWorktrees(repo: string, opts?: GitOptions): Promise<void> {
+  await git(repo, ['worktree', 'prune'], opts)
+}
+
+/**
+ * 브랜치를 지운다 (git branch -D). 지우면 reflog도 지운다. worktree가 쓰는 브랜치는 git이 거부한다
+ * (git 문서 git-branch, 실행). 머지 여부는 앱이 먼저 본다.
+ */
+export async function deleteBranches(
+  repo: string,
+  names: readonly string[],
+  opts?: GitOptions,
+): Promise<void> {
+  if (names.length === 0) return
+  await git(repo, ['branch', '-D', '--', ...names], opts)
+}

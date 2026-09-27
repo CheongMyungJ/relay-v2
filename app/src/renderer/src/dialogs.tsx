@@ -1,5 +1,6 @@
 // 대화상자: 프로젝트 등록(시나리오 0), 새 Work(시나리오 1), 설정 화면(D70), Work 설정(D72),
-// 단계 선택(6.2, D82), 확인 창([오류 무시하고 승인] 4.1, [Work 포기] 3.3).
+// 단계 선택(6.2, D82), 커밋 안 된 변경의 선택지(7-5), Work 정리(시나리오 8),
+// 확인 창([오류 무시하고 승인] 4.1, [Work 포기] 3.3).
 import { useEffect, useState, type ReactNode } from 'react'
 import {
   QUESTION_MODE_LABEL,
@@ -10,6 +11,7 @@ import {
 } from '../../shared/config'
 import type { NodeName } from '../../shared/contracts'
 import type {
+  CleanPreview,
   ProjectInspection,
   ProjectView,
   StepPreview,
@@ -367,7 +369,10 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 />
               </label>
             ))}
-            <label className="form-row" title="PR 생성은 M5에서 넣는다">
+            <label
+              className="form-row"
+              title="Work 완료 화면의 [PR 생성]이 draft PR을 만든다 (D71)"
+            >
               <span>draft PR로 만들기</span>
               <input
                 type="checkbox"
@@ -653,6 +658,229 @@ export function ConfirmDialog({
         <button onClick={onClose}>취소</button>
         <button className="danger" onClick={onConfirm}>
           {confirm}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+// ---------- 전달 (시나리오 7-5) ----------
+
+/**
+ * 커밋 안 된 변경이 있을 때의 세 선택지 (7-5). push와 PR은 이 변경을 둔 채 할 수 없다.
+ * 보인 목록이 [변경 버리고 진행]이 stash할 것이고 [커밋하고 진행]이 커밋할 것이다. 그 사이 바뀌면 main이
+ * 받지 않고 새 목록을 돌려준다.
+ */
+export function UncommittedDialog({
+  workId,
+  label,
+  files,
+  busy,
+  onDiscard,
+  onCommit,
+  onSession,
+  onClose,
+}: {
+  workId: string
+  /** 원래 고른 전달: "push", "PR 생성" */
+  label: string
+  files: string[]
+  busy: boolean
+  onDiscard: () => void
+  onCommit: () => void
+  onSession: () => void
+  onClose: () => void
+}) {
+  return (
+    <Modal title="커밋 안 된 변경" onClose={onClose}>
+      <p>커밋 안 된 변경이 있어 [{label}]을(를) 할 수 없습니다. 어떻게 할지 고르세요.</p>
+      <ul className="files" aria-label="커밋 안 된 변경">
+        {files.map((f) => (
+          <li key={f}>{f}</li>
+        ))}
+      </ul>
+      <div className="choices">
+        <button disabled={busy} onClick={onDiscard}>
+          변경 버리고 진행
+        </button>
+        <span className="dim">
+          git stash -u로 백업하고 지운 뒤 진행합니다. 백업은 메인 체크아웃의 git stash list에
+          남습니다.
+        </span>
+        <button disabled={busy} onClick={onCommit}>
+          커밋하고 진행
+        </button>
+        <span className="dim">
+          위 파일을 &quot;relay({workId}): 완료 전 남은 변경&quot;으로 커밋한 뒤 진행합니다.
+        </span>
+        <button disabled={busy} onClick={onSession}>
+          AI 세션 열기
+        </button>
+        <span className="dim">
+          기록하지 않는 Claude Code 세션을 열어 정리합니다. push와 PR은 계속 막혀 있습니다.
+        </span>
+      </div>
+      <div className="buttons">
+        <button onClick={onClose}>취소</button>
+      </div>
+    </Modal>
+  )
+}
+
+// ---------- 정리 (시나리오 8) ----------
+
+/**
+ * [Work 정리] (시나리오 8). 먼저 확인할 것을 요약해 보인다: 커밋 안 된 변경(백업 없이 지움), 작업 브랜치가
+ * 원격이나 기준 브랜치에 있는지, 살아 있는 세션(강제 종료), git 잠금 파일. 확인할 것이 있으면 명시적으로
+ * 확인해야 [정리]를 누를 수 있다. 작업 브랜치는 기본으로 두고 push됐거나 머지됐을 때만 삭제를 제안한다.
+ * 되감기 백업 브랜치의 "함께 삭제"는 기본으로 체크한다. 산출물은 지우지 않는다.
+ */
+export function CleanDialog({ work, onClose }: { work: WorkView; onClose: () => void }) {
+  const [preview, setPreview] = useState<CleanPreview | null>(null)
+  const [deleteBranch, setDeleteBranch] = useState(false)
+  const [deleteBackups, setDeleteBackups] = useState(true)
+  const [confirmed, setConfirmed] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let stale = false
+    void call(() => window.relay.cleanPreview(work.key)).then((r) => {
+      if (stale) return
+      if (r.ok) setPreview(r.preview)
+      else setError(r.error)
+    })
+    return () => {
+      stale = true
+    }
+  }, [work.key])
+
+  const clean = async () => {
+    if (!preview) return
+    setBusy(true)
+    setError(null)
+    const r = await call(() =>
+      window.relay.clean(work.key, {
+        deleteBranch: deleteBranch && preview.branch.deletable,
+        deleteBackups,
+        confirmed,
+        expect: preview.expect,
+      }),
+    )
+    setBusy(false)
+    if (r.ok) onClose()
+    else setError(r.error)
+  }
+
+  const b = preview?.branch
+  return (
+    <Modal title={`Work 정리 · ${work.workId}`} onClose={onClose}>
+      {!preview ? (
+        <div className="dim">{error ? null : '확인하는 중…'}</div>
+      ) : (
+        <div className="clean-summary" aria-label="정리 요약">
+          <div>
+            worktree를 지웁니다{preview.worktree ? '' : ' (이미 없음)'}. 산출물과 기록(works/
+            {work.workId}/)은 남습니다.
+          </div>
+          <section>
+            <h3>커밋 안 된 변경</h3>
+            {preview.uncommitted.length ? (
+              <>
+                <div className="error">백업 없이 지워집니다.</div>
+                <ul className="files">
+                  {preview.uncommitted.map((f) => (
+                    <li key={f}>{f}</li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <span className="dim">없음</span>
+            )}
+          </section>
+          {b ? (
+            <section>
+              <h3>작업 브랜치 {b.name}</h3>
+              <div>
+                {!b.exists
+                  ? '브랜치가 없습니다'
+                  : b.pushed && b.merged
+                    ? 'origin에 push됐고 기준 브랜치에 머지됐습니다'
+                    : b.pushed
+                      ? 'origin에 push됐습니다'
+                      : b.merged
+                        ? '기준 브랜치에 머지됐습니다'
+                        : '원격에도 기준 브랜치에도 없습니다. 이 브랜치에만 있는 커밋이 있습니다'}
+              </div>
+              <label className="toggle" title="push됐거나 머지됐을 때만 삭제를 제안합니다">
+                <input
+                  type="checkbox"
+                  aria-label="작업 브랜치 삭제"
+                  disabled={!b.deletable}
+                  checked={deleteBranch && b.deletable}
+                  onChange={(e) => setDeleteBranch(e.target.checked)}
+                />
+                작업 브랜치 삭제 {b.deletable ? '' : '(push됐거나 머지됐을 때만)'}
+              </label>
+            </section>
+          ) : null}
+          {preview.backups.length ? (
+            <section>
+              <h3>되감기 백업 브랜치</h3>
+              <ul className="files">
+                {preview.backups.map((n) => (
+                  <li key={n}>{n}</li>
+                ))}
+              </ul>
+              <label className="toggle">
+                <input
+                  type="checkbox"
+                  aria-label="백업 브랜치 함께 삭제"
+                  checked={deleteBackups}
+                  onChange={(e) => setDeleteBackups(e.target.checked)}
+                />
+                함께 삭제
+              </label>
+              <div className="dim">
+                지우면 폐기된 task의 [변경]이 가리키는 커밋을 나중에 git이 치울 수 있습니다.
+              </div>
+            </section>
+          ) : null}
+          {preview.live ? (
+            <div className="notice">살아 있는 세션 {preview.live}개를 강제 종료합니다.</div>
+          ) : null}
+          {preview.locks.length ? (
+            <section>
+              <h3>git 잠금 파일</h3>
+              <ul className="files">
+                {preview.locks.map((n) => (
+                  <li key={n}>{n}</li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+          {preview.confirm.length ? (
+            <label className="toggle confirm">
+              <input
+                type="checkbox"
+                aria-label="확인"
+                checked={confirmed}
+                onChange={(e) => setConfirmed(e.target.checked)}
+              />
+              확인했습니다: {preview.confirm.join(', ')}
+            </label>
+          ) : null}
+        </div>
+      )}
+      {error ? <div className="error">{error}</div> : null}
+      <div className="buttons">
+        <button onClick={onClose}>취소</button>
+        <button
+          className="danger"
+          disabled={busy || !preview || (preview.confirm.length > 0 && !confirmed)}
+          onClick={() => void clean()}
+        >
+          {busy ? '정리하는 중…' : '정리'}
         </button>
       </div>
     </Modal>

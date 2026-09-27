@@ -140,7 +140,7 @@ describe('사이드바 배지 (D80)', () => {
     }
   })
 
-  it('멈춘 Work는 멈춤이다. 완료와 포기는 지금 task와 상관없이 끝난 상태를 보인다', () => {
+  it('멈춘 Work는 멈춤이다. 완료, 포기, 보관됨은 지금 task와 상관없이 끝난 상태를 보인다', () => {
     expect(badge(work('stopped', 'approved'))).toEqual({
       kind: 'stopped',
       label: '멈춤',
@@ -154,6 +154,11 @@ describe('사이드바 배지 (D80)', () => {
     expect(badge(work('abandoned', 'interrupted'))).toEqual({
       kind: 'done',
       label: '포기',
+      hot: false,
+    })
+    expect(badge(work('archived', 'approved'))).toEqual({
+      kind: 'done',
+      label: '보관됨',
       hot: false,
     })
   })

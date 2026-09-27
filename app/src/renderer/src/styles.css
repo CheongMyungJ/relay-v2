@@ -644,3 +644,58 @@ details summary {
 .notice-actions {
   margin-top: 6px;
 }
+
+/* Work 완료 화면 (시나리오 7-3~7-6) */
+.completion-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.notice.fail {
+  border-left-color: var(--bad);
+}
+
+button.ready {
+  outline: 2px solid var(--good);
+}
+
+.link-line {
+  margin-top: 4px;
+  word-break: break-all;
+}
+
+.link-line code {
+  font-family: Consolas, 'D2Coding', monospace;
+}
+
+.tab.cleanup {
+  font-style: italic;
+}
+
+.modal .files {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-dim);
+  font-family: Consolas, 'D2Coding', monospace;
+}
+
+/* 커밋 안 된 변경의 선택지 (7-5) */
+.choices {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 12px;
+  align-items: center;
+  margin: 8px 0;
+}
+
+/* Work 정리 (시나리오 8) */
+.clean-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.toggle.confirm {
+  color: var(--hot);
+}

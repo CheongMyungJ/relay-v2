@@ -54,7 +54,7 @@ export function approvalGate(
 
 /**
  * 배지 우선순위 (D80). 상태가 겹치면 앞의 것을 보인다:
- * 질문 대기·입력 필요 > 승인 대기 > 막힘 > 멈춤 > 세션 종료(handoff 없음) > 작업 중 > 대기 > 대기열 > 중단됨 > 완료·포기
+ * 질문 대기·입력 필요 > 승인 대기 > 막힘 > 멈춤 > 세션 종료(handoff 없음) > 작업 중 > 대기 > 대기열 > 중단됨 > 완료·포기·보관됨
  */
 export const BADGE_ORDER: readonly BadgeKind[] = [
   'asking',
@@ -99,14 +99,19 @@ const BADGE_LABEL: Readonly<Record<BadgeKind, string>> = {
   done: '완료',
 }
 
+const DONE_LABEL: Readonly<Partial<Record<WorkState['status'], string>>> = {
+  completed: '완료',
+  abandoned: '포기',
+  archived: '보관됨',
+}
+
 /**
- * Work의 배지 (D80). 끝난 Work(완료, 포기)는 그 상태를 보이고, 그 밖에는 Work의 멈춤과 지금 task의
+ * Work의 배지 (D80). 끝난 Work(완료, 포기, 보관됨)는 그 상태를 보이고, 그 밖에는 Work의 멈춤과 지금 task의
  * 표시 가운데 우선순위가 앞선 것을 보인다. 입력 필요는 질문 대기와 같은 자리에 "입력 필요"로 보인다.
  */
 export function badge(work: WorkState): Badge {
-  if (work.status === 'completed' || work.status === 'abandoned') {
-    return { kind: 'done', label: work.status === 'completed' ? '완료' : '포기', hot: false }
-  }
+  const done = DONE_LABEL[work.status]
+  if (done) return { kind: 'done', label: done, hot: false }
   const task = work.tasks[work.tasks.length - 1]
   const kinds: BadgeKind[] = []
   if (work.status === 'stopped') kinds.push('stopped')

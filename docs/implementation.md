@@ -90,6 +90,15 @@
 | `git reset --hard`와 `git clean` | `reset --hard`는 index와 작업 트리를 커밋에 맞추고, 그 커밋에 없는 추적 파일은 지운다. 추적하지 않는 파일은 지우지 않는다(겹치면 덮어쓸 수 있음). `git clean -d -f`는 추적하지 않는 파일과 폴더를 지우고, 무시하는 파일은 `-x`가 있어야 지운다 | git 문서 git-reset, git-clean (2026-09-27) |
 | 진짜 index를 건드리지 않는 백업 커밋 | `GIT_INDEX_FILE`로 다른 index 파일을 쓸 수 있다. 그 index에 `git add -A`하고 `git write-tree`로 tree를 만들면 작업 트리의 상태(무시하는 파일 제외)가 담긴다. `git commit-tree <tree> -p <부모>`는 커밋 객체만 만든다. `git commit`과 달리 훅(pre-commit, commit-msg, post-commit)을 부르지 않는다. git 2.43.0 worktree에서 이 순서로 백업한 뒤 `reset --hard`와 `clean -fd`를 하면 진짜 index는 그대로였고, 무시하는 폴더는 남았다(D116) | git 문서 git(GIT_INDEX_FILE), git-add, git-write-tree, git-commit-tree, githooks (2026-09-27), 실행 |
 | 커밋 수와 ref 찾기 | `git rev-list --count A..B`는 B에서 닿고 A에서 닿지 않는 커밋 수를 찍는다. `git for-each-ref`의 패턴은 fnmatch(3)로 맞춘다(`refs/heads/relay/<work-id>-discarded-*`) | git 문서 git-rev-list, git-for-each-ref (2026-09-27) |
+| push와 upstream | `git push --set-upstream <원격> <ref>:<ref>`는 브랜치를 원격의 같은 이름으로 보내고 upstream(추적 브랜치)을 둔다. 원격의 브랜치는 fast-forward로만 바꾸고, 아니면 `--force`나 `+` 없이는 거부한다. git 2.43.0에서 push 뒤 원격 추적 브랜치(`refs/remotes/origin/<브랜치>`)도 바뀌었고, 같은 커밋을 다시 push하면 보낼 것 없이 성공했다 | git 문서 git-push (2026-09-27), 실행 |
+| 원격 주소 | `git remote get-url <원격>`은 첫 fetch 주소를 찍고 `insteadOf`를 풀어서 찍는다. push 주소(`pushurl`)는 `--push`일 때 찍는다 | git 문서 git-remote (2026-09-27) |
+| stash | `git stash push --include-untracked`는 커밋 안 된 변경과 추적하지 않는 파일을 stash 항목으로 저장하고, 작업 트리와 index를 HEAD로 되돌리고, 추적하지 않는 파일은 `git clean`으로 지운다. 무시하는 파일은 `--all`일 때만 넣는다. 최신 stash는 `refs/stash`다. `refs/`로 시작하는 ref는 모든 worktree가 함께 써서, git 2.43.0에서 worktree에서 만든 stash가 메인 체크아웃의 `git stash list`에 보였다 | git 문서 git-stash, git-worktree REFS (2026-09-27), 실행 |
+| worktree 지우기 | `git worktree remove`는 깨끗한 worktree(추적하지 않는 파일과 추적 파일의 수정이 없음)만 지우고, 아니면 `--force`가 필요하다. 잠근 worktree(`git worktree lock`)는 `--force`를 두 번 줘야 한다. 메인 worktree는 지울 수 없다. `git worktree prune`은 폴더가 없어진 worktree의 관리 정보를 지운다. git 2.43.0에서 무시하는 파일만 있으면 `--force` 없이 지웠고(무시하는 파일도 함께 지워짐), worktree의 git 폴더에 `index.lock`이 남아 있어도 막지 않았다 | git 문서 git-worktree (2026-09-27), 실행 |
+| 브랜치 지우기와 조상 | `git branch -D`는 `--delete --force`라 머지됐는지 보지 않고 지운다. 브랜치의 reflog도 지운다. git 2.43.0에서 worktree가 체크아웃한 브랜치는 지우지 않았다. `git merge-base --is-ancestor A B`는 A가 B의 조상이면 0, 아니면 1로 끝나고 그 밖의 종료 코드는 오류다 | git 문서 git-branch, git-merge-base (2026-09-27), 실행 |
+| `gh pr create` | `--head`를 주면 브랜치를 push하지 않는다. `--base`, `--title`, `--body-file`(파일에서 본문), `--draft`를 받고, 만든 PR의 주소를 표준 출력에 찍는다. `--web`이 여는 비교 URL은 `<레포 주소>/compare/<base>...<head>?expand=1`이고 두 브랜치 이름은 경로 조각으로 인코딩한다(Go `url.PathEscape`, `/`는 `%2F`) | cli/cli `pkg/cmd/pr/create/create.go` (2026-09-27) |
+| `gh pr list` | `--head <브랜치>`로 head 브랜치를 거른다(`<owner>:<branch>` 꼴은 받지 않음). `--state`의 기본은 `open`이다. `--json`은 고른 필드를 JSON 배열로 찍는다 | cli/cli `pkg/cmd/pr/list/list.go` (2026-09-27) |
+| gh의 레포 고르기 | `--repo`는 `[HOST/]OWNER/REPO`나 URL을 받는다. URL로 읽는 것은 `git@`, `ssh:`, `git+ssh:`, `git:`, `http:`, `git+https:`, `https:`로 시작할 때뿐이고, 호스트는 소문자로 바꾸고 `www.`을 뗀다. `--repo`가 없으면 원격에서 고르는데, 기본 레포를 정하지 않았으면 원격 이름 upstream, github, origin 차례다. 원격 주소의 ssh 별칭(`~/.ssh/config`의 Host)은 원격에서 고를 때만 `ssh -G`로 푼다 | cli/cli `context/remote.go`, `pkg/cmd/factory/remote_resolver.go`, cli/go-gh `pkg/repository/repository.go`, `internal/git/url.go` (2026-09-27) |
+| gh 환경 변수 | `GH_PROMPT_DISABLED`는 대화형 질문을 끄고, `GH_NO_UPDATE_NOTIFIER`는 새 버전 안내를 끈다 | `gh help environment`(cli/cli `pkg/cmd/root/help_topic.go`) (2026-09-27) |
 | 폴더 신뢰와 훅 | 대화형 세션은 폴더 신뢰 창을 수락하기 전에는 모든 설정 파일의 훅을 실행하지 않는다. 앱이 `--settings`로 주는 훅도 같다(디버그 로그 "Skipping … hook execution - workspace trust not accepted"). `-p`와 SDK 세션은 신뢰한 것으로 본다. 레포에서는 신뢰를 레포 루트에 저장하고, worktree에서는 메인 체크아웃의 루트를 쓴다. 온보딩을 건너뛰는 `IS_DEMO`를 켜면 신뢰 창도 뜨지 않았고 훅이 오지 않았다(2.1.283) | Claude Code 문서 hooks(Workspace trust), permissions, env-vars (2026-09-26), M2 [실제] 준비 중 관찰 |
 
 - N-API 사전 빌드가 Electron 44에서 다시 빌드 없이 로드되고, 설치 파일(asar)에서 `.node`와 `conpty\conpty.dll`, `OpenConsole.exe`가 풀려 나와 동작한다. M0의 [스모크]로 러너에서 확인했다(2026-09-26, `docs/checks.md`).
@@ -141,14 +150,16 @@ app/src/
 | core | `settings` | task 설정 파일 내용(훅, deny 규칙) 만들기, 실행 인자 만들기 | 시나리오 2-3·2-5, 6절 |
 | core | `approval` | 자동 승인 조건 판정, 배지 우선순위 | 4.3, D80 |
 | core | `rewind` | 단계 선택의 결과 계산(폐기할 task, 되돌릴 커밋, 건너뛸 단계, 백업 브랜치 이름), 대화상자의 단계와 미리 보기 | 6.2, 6.3, D82, D115~D117 |
+| core | `delivery` | 전달 버튼과 그 이유, 전달을 시작할 수 있는지, `pr.md`의 제목과 본문, 비교 URL과 gh의 레포, 커밋 안 된 변경의 커밋·stash 메시지 | 시나리오 7, D62, D67, D71, D118~D120 |
+| core | `cleanup` | 정리할 수 있는 Work, 확인 요약과 기본 선택, 지울 브랜치와 `--force` | 시나리오 8, D16 |
 | adapters | `store` | RELAY_HOME 경로, 원자적 쓰기, 앱 소유 파일 해시, `events.jsonl`, `decisions.md` | 5.1, 5.4, 5.5, D91 |
 | adapters | `pty` | node-pty 세션, `pty.log` 기록, 프로세스 트리 종료, 프로세스 ID와 시작 시각 | S1, D76 |
 | adapters | `hooks` | 훅 HTTP 서버, 토큰 확인, Stop 응답 (I13) | S2, D20, D21 |
-| adapters | `git`, `gh` | worktree, status, diff, reset, 백업 브랜치, push, `gh pr` (I12) | 시나리오 1·6·7·8 |
+| adapters | `git`, `gh` | worktree, status, diff, reset, 백업 브랜치, push, stash, 커밋, worktree와 브랜치 지우기, `gh auth status`, `gh pr` (I12) | 시나리오 1·6·7·8 |
 | adapters | `watch` | task 디렉터리 감시 (I15) | 시나리오 3-3 |
 | adapters | `claude` | 실행 파일 찾기(D106), `claude auth status`, 버전 기록(D105), 이번 task의 스킬 배포(D103, D108) | 시나리오 0, 2-2, 5.6.3 |
 | main | `app` | 시작 때 재시작 조정(시나리오 9), 종료 확인 | 시나리오 3-6, 9 |
-| main | `runner` | 할 일 실행: task 시작·종료, 세션 상한 대기열 | 시나리오 2, 5, D18 |
+| main | `runner` | 할 일 실행: task 시작·종료, 세션 상한 대기열, 되감기, 전달과 정리 세션, 정리 | 시나리오 2, 5~8, D18 |
 | main | `ipc` | 렌더러 명령 처리, 스냅샷 전송 (I14) | |
 | renderer | 화면 | 사이드바, 터미널 탭과 머리 띠, 액션 바, 오른쪽 패널(승인 화면), 대화상자 | 화면 구성 |
 
@@ -275,7 +286,7 @@ app/src/
 - **[즉시 중단]과 앱 종료:** 세션을 트리째 끝낸다. 유효한 handoff로 승인 대기나 막힘이던 task는 세션이 없어도 그 표시로 남고(3.3) 승인할 수 있다. 그 밖에는 중단됨이다. 대기열의 task는 대기열에서 빼고 중단됨으로 둔다.
 - **[재개]와 [세션 재개]:** 세션이 있던 task는 같은 옵션에서 `--session-id`와 첫 프롬프트를 빼고 `--resume <세션 id>`를 붙여 다시 연다(S6). 설정 파일은 다시 쓴다(훅 서버의 포트와 토큰이 바뀔 수 있음, I13). 한 번도 띄우지 못한 task(시작 실패, 대기열에 있다가 재시작을 맞음)는 새 세션으로 시작한다. 다시 연 뒤의 표시는 그때의 형식 검사로 정한다: 유효한 handoff면 승인 대기나 막힘, 아니면 대기. 탭에는 이전 화면 뒤에 "relay: 세션 재개" 줄과 새 출력을 잇고, 이 줄은 `pty.log`에도 쓴다. 머리 띠는 "세션 재개"다. 다시 여는 세션은 지금 대화다: 사람이 탭에서 `/clear`, 대화형 `/resume`, `/branch`로 다른 대화로 옮기면(D110) 턴 안의 훅(UserPromptSubmit, PreToolUse, PostToolUse, Stop)이 가져온 `session_id`로 task의 세션 id를 바꾼다. 알림과 SessionEnd로는 바꾸지 않는다: `/clear` 직후처럼 대화가 없는 세션은 `--resume`으로 열 수 없다(S6). 서브에이전트 안의 훅(`agent_id`가 있음)으로도 바꾸지 않는다. 바꾼 id는 `work.json`에 두고, 5.5에 없는 이벤트 유형은 더하지 않는다(`task.resumed`의 `session_id`에 드러남).
 - **대기열(D18):** 모든 Work가 대기열 하나를 쓰고 먼저 들어온 차례로 시작한다. 새 task, [재개], [세션 재개], [이 단계 새 세션으로 다시]가 모두 세션 상한을 따른다. 승인으로 자리가 나면 먼저 기다리던 task가 시작하고, 승인한 Work의 다음 task는 대기열 뒤에 선다.
-- **멈춘 Work의 [재개](3.3):** 멈추게 한 task의 기본 다음 단계를 시작한다. 이전 단계 추천(D23)으로 멈췄으면 추천을 따르지 않고 기본 다음 단계로 간다(추천대로 되돌아가는 것은 M4의 단계 선택). verify에서 멈췄으면 Work를 완료한다. [이 단계 끝나면 멈춤]은 verify 승인에도 적용된다: [완료만]을 눌러도 Work를 완료하지 않고 멈추며, [재개]하면 완료한다. 패널에는 [재개]가 할 일(다음 단계 이름이나 Work 완료)을 보인다.
+- **멈춘 Work의 [재개](3.3):** 멈추게 한 task의 기본 다음 단계를 시작한다. 이전 단계 추천(D23)으로 멈췄으면 추천을 따르지 않고 기본 다음 단계로 간다(추천대로 되돌아가는 것은 M4의 단계 선택). verify에서 멈췄으면 Work를 완료한다. [이 단계 끝나면 멈춤]은 verify 승인에도 적용된다: [완료만]을 눌러도 Work를 완료하지 않고 멈추며, [재개]하면 완료한다. 패널에는 [재개]가 할 일(다음 단계 이름이나 Work 완료)을 보인다. M5부터 verify에서 멈춘 Work는 [재개] 대신 Work 완료 화면에서 전달을 고르고, [완료만]이 이 완료를 맡는다(D119).
 - **[Work 포기]:** 살아 있거나 대기열에 있는 task는 승인 대기였어도 중단됨이다. 포기한 Work에는 승인, 재개 같은 명령을 받지 않는다.
 - **알림(D81):** 배지가 사람이 필요한 다섯 상태(D80)로 바뀔 때와 대기열에서 자동으로 시작할 때 보낸다. 창에 포커스가 있고 최소화되지 않았고 그 Work를 고른 상태면 보내지 않는다. 알림을 누르면 창을 띄워 그 Work를 고른다. 재시작 조정으로 바뀐 상태는 알리지 않는다.
 - **설정 화면(D70):** 세션 상한(1~20), 스킬별 질문 방식, 형식 오류 되돌림 횟수(0~8. Stop 훅으로 연속 8번 이어 가면 Claude Code가 막음을 무시함, 3절), 분량 경고 기준, draft PR을 바꾼다. 자동 승인과 카운트다운은 M7에서 연다. `config.json`의 값이 틀리면 그 키는 기본값을 쓰고 경고한다. Work별 질문 방식(D72)은 새 Work 대화상자와 [Work 설정]에서 고른다.
@@ -334,6 +345,27 @@ app/src/
 - [흐름] 정리 뒤 worktree는 없고 산출물은 남는다.
 - [실기] 시험용 GitHub 레포에 실제 PR을 만든다.
 
+**구현하며 정한 것** (설계의 규칙에서 따라 나오는 세부. 설계를 바꾼 것은 D118~D120이다)
+
+- **전달을 시작하는 때:** 진행 중인 Work의 verify가 턴을 끝냈고(승인 대기, 대기, 세션 종료) 형식 오류 없이 승인할 수 있을 때와, verify에서 멈춘 Work(D119)다. 승인하면 멈추는 verify는 [승인하고 멈춤]만 받는다. verify의 [오류 무시하고 승인]은 [완료만]처럼 전달 없이 완료하고, 멈추는 verify면 멈춘다. verify에서 멈춘 Work는 이미 승인됐으므로 형식 검사 없이 전달을 받는다. 이때 `pr.md`의 첫 줄이 `# <PR 제목>`이 아니면 [PR 생성]은 PR 단계에서 실패한다.
+- **세션과 승인 기록(D120):** [push]·[PR 생성]을 누르면 verify 세션을 끝내고(유효한 handoff라 승인 대기로 남음) 전달한다. 성공하면 `work.json` 한 번 쓰기로 verify 승인(`task.approved`, `decisions.md`), 전달 결과, Work 완료를 남기고 진행 중 작업 기록을 지운다. 실패하면 `delivery.failed`에 실패한 단계와 오류를 남긴다. verify는 승인 대기로 남아 [세션 재개]로 다시 열 수 있다. [다시 시도]는 같은 전달을 처음부터 다시 한다(이미 push한 커밋은 다시 보내지 않음, 3절). 앞 시도가 커밋 안 된 변경을 처리하며 만든 stash와 커밋은 결과에 이어 남는다(아래 커밋 안 된 변경).
+- **진행 중 작업 기록(D77):** 전달은 kind `deliver`다. 커밋 안 된 변경을 처리하면 stage `prepare`에서, 아니면 `push`에서 시작하고, [PR 생성]은 push 뒤 `pr`로 옮긴다. 고른 전달, verify task, 변경의 처리, 브랜치, 기준 브랜치를 함께 두고, 변경을 처리하며 만든 stash나 커밋은 push로 옮길 때 더한다. 정리는 kind `clean`, stage `worktree`로 시작해 worktree를 지우면 `branches`로 옮긴다. `--force` 여부, 지울 브랜치, 정리 전 worktree의 HEAD를 함께 둔다. 기록이 있는 동안에는 전달과 정리를 받지 않는다. 재시작 때 남은 기록은 그대로 둔다(알림은 M6).
+- **push(7-4):** worktree에서 `git push --set-upstream origin refs/heads/relay/<work-id>:refs/heads/relay/<work-id>`로 같은 이름에 보낸다. 사용자의 자격 증명과 pre-push 훅을 그대로 쓰고, 강제 push는 하지 않는다. 제한 시간은 5분이다.
+- **비교 URL(7-4):** origin의 fetch 주소(`git remote get-url`)를 https, ssh://, git://, scp 꼴(`[user@]host:owner/repo`)로 읽어 `https://<host>/<owner>/<repo>/compare/<기준 브랜치>...<브랜치>?expand=1`을 만든다. gh의 `--web`과 같은 꼴이다(3절). 호스트는 소문자로 바꾸고 `www.`을 떼고, 레포 이름의 `.git`을 뗀다. 경로가 소유자와 레포 두 조각이 아니거나 로컬 경로면 만들지 않고 없다고 보인다.
+- **PR(7-4, D62, D71):** gh는 메인 체크아웃에서 부른다. 먼저 `gh pr list --repo <레포> --head <브랜치> --state open`으로 같은 브랜치의 열린 PR을 찾고, 있으면 링크만 기록한다(draft 설정은 보지 않음). 없으면 `gh pr create --repo <레포> --base <기준 브랜치> --head <브랜치> --title <제목> --body-file <임시 파일>`로 만들고, draft 설정이 켜져 있으면 `--draft`를 더한다. `--head`를 주므로 gh는 push하지 않는다. 본문은 명령줄 길이와 인용을 피하려고 임시 파일로 준다. `GH_PROMPT_DISABLED`와 `GH_NO_UPDATE_NOTIFIER`를 켠다. `<레포>`는 origin 주소를 비교 URL과 같은 규칙으로 읽은 `HOST/OWNER/REPO`다. gh는 원격이 여럿이면 upstream을 먼저 고르고, `--repo`의 URL은 `git@`나 `https:` 따위로 시작할 때만 읽기 때문이다(3절). 읽을 수 없으면 주소를 그대로 넘기고 gh의 오류를 보인다. `pr.md`는 첫 줄의 `# ` 뒤가 제목이고 나머지가 본문이다. 본문 앞의 빈 줄과 끝의 공백은 뗀다.
+- **알려진 한계:** origin 주소가 ssh 별칭(`~/.ssh/config`의 Host)을 쓰면 비교 URL과 `--repo`의 호스트가 별칭이라 맞지 않는다. gh는 원격에서 고를 때만 별칭을 푼다(3절). 이때 [PR 생성]은 push 뒤 PR 단계에서 실패하므로, [전달 없이 완료]한 뒤 브라우저에서 PR을 만든다.
+- **커밋 안 된 변경(7-5):** [push]·[PR 생성]을 누르면 worktree의 `git status`를 본다. 변경이 있으면 전달하지 않고 목록을 돌려주고, 선택지 대화상자가 목록을 보인다. 고른 처리는 대화상자에 보인 목록과 지금 목록이 같을 때만 받는다. 다르면 새 목록으로 다시 고른다. [변경 버리고 진행]은 `git stash push --include-untracked --message "relay(<work-id>): 완료 전 버린 변경"`이다. stash는 레포에 하나(`refs/stash`)라 메인 체크아웃의 `git stash list`에 보인다(3절). [커밋하고 진행]은 `git add -A` 뒤 `git commit --message "relay(<work-id>): 완료 전 남은 변경"`이고, 사용자의 커밋 훅과 서명 설정을 그대로 쓴다. 둘 다 무시하는 파일은 건드리지 않는다. 만든 stash 커밋과 커밋은 전달 결과의 `stashes`, `commits`에 남긴다. 이 Work의 모든 시도가 만든 것을 모은다: 전달이 실패해도 남기고, [다시 시도]가 성공하거나 [전달 없이 완료]해도 앞 시도의 것이 이어진다. 전에는 성공한 시도가 만든 것만 남아, 실패 뒤 [다시 시도]가 성공하면 앞 시도의 stash와 커밋이 기록에서 빠졌다(PR #7 리뷰).
+- **정리 세션([AI 세션 열기], 7-5):** verify 세션을 끝내고 worktree에서 새 Claude Code 세션을 연다. 기록하지 않는 일반 터미널이라 task를 만들지 않고, 세션 id, 스킬, 첫 프롬프트, `context.md`가 없다. 설정 파일에는 task와 같은 deny 규칙(push와 PR, 이전 task 디렉터리, D17), 자동 메모리 끔(D113), 훅(`/hook/cleanup/<Event>`, 토큰은 세션마다)을 넣는다. 세션 상한(D18)을 따라 자리가 없으면 대기열에서 기다린다. 탭 이름은 "정리 세션"이고, 다시 열면 새 탭이다. 턴이 끝날 때(Stop)마다 `git status`를 보고 깨끗하면 [정리 끝 → push/PR 진행]을 강조하고, 사람이 새 요청을 보내면 강조를 끈다. 버튼을 누르거나 세션이 끝나면(`/exit`) `git status`가 깨끗할 때만 원래 고른 전달을 하고, 변경이 남았으면 선택지로 돌아간다. 정리 세션이 열려 있는 동안 전달 버튼은 막는다. 앱을 끝낼 때 정리 세션도 끝내고(종료 확인에 셈), 재시작 뒤에는 남지 않는다.
+- **다시 점검(D118):** verify task를 시작할 때 `context.md`를 쓰기 전에 `origin` 원격과 `gh auth status`를 다시 보고 `project.json`에 쓴다. 점검이 실패하면 앞의 결과를 쓰고 Work의 문제로 알린다. [다시 점검]은 비활성화된 전달 버튼의 이유 아래에 보인다. [재개]로 세션을 다시 열 때는 `context.md`를 다시 쓰지 않으므로 점검하지 않는다.
+- **마무리 안내 문구(D104):** verify는 누를 수 있는 전달 버튼을 모두 적는다(예: "[완료만], [push], [PR 생성] 중 하나를 누르세요"). [완료만]뿐이면 "[완료만]을 누르세요"다. 승인하면 멈출 때의 버튼도 늘 함께 적는다: "[이 단계 끝나면 멈춤]이 켜져 있거나 이전 단계를 추천했으면 [승인하고 멈춤]을 누르고, 전달은 멈춘 뒤 Work 완료 화면에서 고르세요"(D119). [이 단계 끝나면 멈춤]은 task가 도는 중에도 켜고 끌 수 있고, 이전 단계 추천은 에이전트가 마지막에 정하며, 스킬은 문구를 그대로 찍어서 한쪽을 골라 적을 수 없다. 전에는 전달 버튼만 적어 승인 화면의 [승인하고 멈춤]과 달랐다(PR #7 리뷰).
+- **완료한 Work의 화면:** Work 완료 화면은 읽기 전용이다. 패널 위에 전달 결과(push한 브랜치, PR 주소와 이미 열린 PR인지·draft인지, [push]면 비교 URL)를 보이고, 주소는 [브라우저에서 열기]로 연다. 메인 프로세스는 http와 https 주소만 연다.
+- **정리할 수 있는 Work(8):** 완료와 포기한 Work다. [Work 정리]는 액션 바에 있다.
+- **정리 요약(8-1):** 대화상자를 열 때 git에서 새로 읽는다: worktree가 있는지, 커밋 안 된 변경, worktree의 git 폴더에 남은 잠금 파일(`*.lock`), 이 앱의 살아 있는 세션(정리 세션 포함), 작업 브랜치, 되감기 백업 브랜치(D115). push됐는지는 브랜치 커밋이 `refs/remotes/origin/<브랜치>`의 조상인지, 머지됐는지는 기준 브랜치(로컬이나 `refs/remotes/origin/<기준 브랜치>`)의 조상인지로 본다. fetch하지 않는다(앱의 push는 원격 추적 브랜치도 바꿈, 3절). 확인이 필요한 것(커밋 안 된 변경, 살아 있는 세션, 잠금 파일)이 있으면 확인 체크박스를 켜야 [정리]를 누를 수 있다. 작업 브랜치 삭제는 push됐거나 머지됐을 때만 체크박스를 보이고 기본은 끈다. 백업 브랜치의 "함께 삭제"는 기본으로 켠다.
+- **[정리](8-2):** 요약을 본 뒤 커밋 안 된 변경, 잠금 파일, 살아 있는 세션 수, 백업 브랜치가 바뀌었으면 받지 않고 다시 열게 한다. 살아 있는 세션을 트리째 끝내고 기다린 뒤, 메인 체크아웃에서 `git worktree remove`로 지운다. 커밋 안 된 변경이나 잠금 파일이 있으면 `--force`를 준다. worktree 폴더가 이미 없으면 `git worktree prune`만 한다. 그 뒤 고른 브랜치를 `git branch -D`로 지운다. 산출물(`works/<work-id>/`)과 `events.jsonl`은 그대로다. git이 실패하면 Work의 문제로 알리고 기록을 지우며 Work는 그대로 둔다. worktree를 지운 뒤 브랜치 지우기가 실패하면 worktree 없는 Work로 남고 다시 정리할 수 있다.
+- **보관된 Work:** `work.json`의 `cleaned`에 정리한 때, 정리 전 HEAD, `--force` 여부, 지운 브랜치를 남기고 `work.cleaned`를 기록한다. 사람이 worktree 폴더를 먼저 지웠으면 정리 전 HEAD는 작업 브랜치의 커밋이다. 화면은 읽기 전용이고, git은 메인 체크아웃에서 부른다. [변경] 탭과 전체 변경은 작업 트리 대신 정리 전 HEAD까지 본다. 브랜치를 지웠으면 그 커밋은 레포의 gc가 치우기 전까지만 보인다.
+- **이벤트(5.5):** 전달은 `delivery.succeeded`(브랜치, 비교 URL, PR 주소, 이미 열린 PR, draft, stash와 커밋)와 `delivery.failed`(전달, 단계, 오류, stash와 커밋)를 남긴다. stash와 커밋은 그때까지의 전달 결과에 모인 것이다. `work.completed`의 `payload.delivery`는 `none`, `push`, `pr`이다. 정리는 `work.cleaned`(`forced`, `deleted_branches`)다. 5.5에 없는 유형은 더하지 않았다.
+- **Linux의 10초:** verify 세션을 끝내는 [push]·[PR 생성]·[AI 세션 열기]와, 정리 세션을 끝내는 [정리 끝 → push/PR 진행]도 [즉시 중단]처럼 Linux에서 10초 늦다(3절).
+
 ### M6. 복구
 
 **내용**
@@ -382,6 +414,8 @@ app/src/
 - 동작: 설정 파일에서 훅 URL과 머리글을 읽어 신호를 보낸다. 본문 필드는 S2에서 관찰한 모양(`session_id`, `transcript_path`, `cwd`, `permission_mode`, `hook_event_name`, 도구 이름과 입력, `stop_hook_active`)을 따른다.
 - 시나리오 파일은 단계 목록이다: 신호 보내기, 산출물과 handoff 쓰기, worktree에 커밋하기, 커밋하지 않고 worktree 고치기(M4, D116), 질문 대기 흉내(`AskUserQuestion`의 PreToolUse와 PostToolUse), Stop 보내고 응답 확인, 되돌림을 받았을 때 쓸 내용, 종료.
 - 가짜 `gh`도 같은 방식으로 두고, 받은 인자를 파일에 남긴다 **(기본값)**.
+  - 위치는 `app/test/fake-gh/gh.mjs`다. `auth status`, `pr list`, `pr create`를 흉내 내고, 인자와 cwd, `--body-file`의 내용을 `FAKE_GH_RECORD` 폴더의 `fake-gh.jsonl`에 한 줄씩 남긴다. 만든 PR은 같은 폴더의 `prs.json`에 두어 같은 `--repo`와 `--head`로 찾는다.
+  - 로그인 실패(`FAKE_GH_AUTH=fail`), 이미 열린 PR(`FAKE_GH_OPEN_PR`), 명령 실패(`FAKE_GH_FAIL=list|create`)를 환경 변수로 흉내 낸다. `--repo`가 로컬 경로면 head 브랜치가 그 레포에 push되어 있어야 PR을 만든다.
 
 ### 8.3 워크플로
 
@@ -401,7 +435,8 @@ app/src/
 - 되감기(M4, 사용자 결정): S 경로 레포에서 최종 검증이 승인 대기가 되면 [단계 선택]으로 되감고 Work 완료까지 간다. 가짜 `claude`로는 스킬이 `context.md`의 되감기 절을 따르는지 볼 수 없어서 둔다.
   - rewind-intake: 완료조건을 하나 더하라는 추가 지시와 함께 intake로 되감는다. intent v2가 v1을 출발점으로 고쳐졌는지(완료조건이 늘고 v1 항목이 남는지, D40), 되돌린 수정 커밋이 백업 브랜치에 있는지 본다.
   - rewind-fix: 재현 테스트 이름을 정한 추가 지시와 함께 fix로 되감는다. 되감은 fix가 추가 지시를 따랐는지, 되돌린 커밋이 백업 브랜치에 있는지 본다.
-- `RELAY_REAL_CASES`로 돌릴 경우(M, S, resume, rewind-intake, rewind-fix. rewind는 둘 다)를 고른다.
+- 전달(M5, 사용자 결정): S 경로 레포에서 최종 검증이 승인 대기가 되면, 사람 역할이 worktree에 커밋 안 된 메모를 남기고 [PR 생성]을 누른다. 선택지에서 [AI 세션 열기]로 정리 세션을 열어 메모를 지워 달라고 하고, git status가 깨끗해지면 [정리 끝 → push/PR 진행]을 누른 뒤 [Work 정리]를 한다. 실제 스킬이 쓴 `pr.md`가 PR 제목과 본문으로 가는지, 에이전트가 스스로 push하지 않는지, 첫 프롬프트 없이 연 정리 세션이 요청을 받아 일하고 Stop 훅이 오는지 본다. gh는 가짜 gh다(시험 환경에 gh 로그인이 없음). 실제 PR은 [실기]에서 본다.
+- `RELAY_REAL_CASES`로 돌릴 경우(M, S, resume, rewind-intake, rewind-fix, deliver. rewind는 둘 다)를 고른다.
 - 결과는 실행 요약과 결과물에 올리고, 사람이 `docs/checks.md`에 옮긴다(I30). 러너 결과는 예비 확인으로 적는다(D93과 같음).
 
 ### 8.5 실기 확인 (I30)
@@ -432,3 +467,6 @@ app/src/
 | G15 | 백업 브랜치 이름 `relay/<work-id>/discarded-<n>`은 Work 브랜치 `relay/<work-id>`가 있으면 git이 만들지 않는다(M4 구현 전에 찾음) | D115 |
 | G16 | 코드 되돌림(`git reset --hard`)이 worktree의 커밋 안 된 변경을 백업 없이 지운다(M4 구현 전에 찾음) | D116 |
 | G17 | 실행한 적 없는 단계(S 경로의 evidence·rca)나 새 세션으로 다시 한 task(D114)가 있을 때 되돌릴 커밋이 없었다. 건너뛰기에서 진행 중인 fix의 코드 커밋을 폐기하는지 없었다(M4 구현 전에 찾음) | D117 |
+| G18 | 전달 버튼의 점검(D67)을 등록 때 한 번만 해서, 등록 뒤에 gh를 설치하거나 로그인해도 [PR 생성]이 계속 비활성화되어 있었다(M5 구현 전에 찾음) | D118 |
+| G19 | verify에서 멈춘 Work의 [재개]는 전달 없이 Work를 완료해서 push나 PR을 고를 곳이 없었다. 승인하면 멈추는 verify에서 [push]·[PR 생성]이 무엇을 하는지 없었다(M5 구현 전에 찾음) | D119 |
+| G20 | 전달이 실패했을 때 verify 승인을 남겼는지와 Work의 상태가 없었다(M5 구현 전에 찾음) | D120 |

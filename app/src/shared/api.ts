@@ -6,8 +6,12 @@ import type { NodeName } from './contracts'
 import type {
   AppSnapshot,
   ApproveOptions,
+  CleanInput,
+  CleanPreviewResult,
   CommandResult,
   CreateWorkResult,
+  DeliverInput,
+  DeliverResult,
   NewWorkInput,
   ProjectInspection,
   ProjectView,
@@ -18,6 +22,7 @@ import type {
   TerminalChunk,
   WorkView,
 } from './views'
+import type { DeliveryChoice } from './work'
 
 export interface AppInfo {
   platform: string
@@ -67,6 +72,20 @@ export interface RelayApi {
   stepPreview(workKey: string, node: NodeName, keepCode: boolean): Promise<StepPreviewResult>
   /** [단계 선택]의 [확인] (6.2) */
   selectStep(workKey: string, input: SelectStepInput): Promise<CommandResult>
+  /** [push]·[PR 생성] (시나리오 7-4~7-6). 커밋 안 된 변경이 있으면 목록을 돌려준다 (7-5) */
+  deliver(workKey: string, input: DeliverInput): Promise<DeliverResult>
+  /** [AI 세션 열기] (7-5) */
+  openCleanup(workKey: string, choice: DeliveryChoice): Promise<CommandResult>
+  /** [정리 끝 → push/PR 진행] (7-5) */
+  finishCleanup(workKey: string): Promise<DeliverResult>
+  /** Work 완료 화면의 [다시 점검]: origin과 gh를 다시 점검한다 (D118) */
+  recheck(workKey: string): Promise<CommandResult>
+  /** [Work 정리]의 확인 요약 (시나리오 8-1) */
+  cleanPreview(workKey: string): Promise<CleanPreviewResult>
+  /** [Work 정리]의 [정리] (시나리오 8-2) */
+  clean(workKey: string, input: CleanInput): Promise<CommandResult>
+  /** 비교 URL이나 PR 주소를 브라우저에서 연다 (7-4). http(s) 주소만 연다 */
+  openExternal(url: string): Promise<void>
   /** Work별 질문 방식 (D72) */
   updateWorkSettings(workKey: string, settings: WorkSettings): Promise<CommandResult>
   /** 앱 설정 (D70) */
@@ -103,6 +122,13 @@ export const IPC = {
   abandon: 'work:abandon',
   stepPreview: 'work:step-preview',
   selectStep: 'work:select-step',
+  deliver: 'work:deliver',
+  openCleanup: 'work:open-cleanup',
+  finishCleanup: 'work:finish-cleanup',
+  recheck: 'work:recheck',
+  cleanPreview: 'work:clean-preview',
+  clean: 'work:clean',
+  openExternal: 'app:open-external',
   workSettings: 'work:settings',
   config: 'config:get',
   updateConfig: 'config:update',

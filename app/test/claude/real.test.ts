@@ -6,7 +6,7 @@
 // 형식 오류가 끝까지 남으면 [오류 무시하고 승인]을 쓰고 센다(0이어야 함). 결과는 test-results/claude/에 남긴다.
 // RELAY_REAL_CLAUDE=dry면 가짜 claude로 같은 도구를 돌려 도구 자체를 확인한다 (사용량 없음).
 // RELAY_REAL_CASES로 돌릴 경우를 고른다(예: "S resume"). 비우면 전부(M, S, resume.test.ts의 resume,
-// rewind.test.ts의 rewind-intake와 rewind-fix).
+// rewind.test.ts의 rewind-intake와 rewind-fix, deliver.test.ts의 deliver).
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'

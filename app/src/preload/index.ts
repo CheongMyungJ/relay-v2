@@ -30,6 +30,13 @@ const api: RelayApi = {
   stepPreview: (workKey, node, keepCode) =>
     ipcRenderer.invoke(IPC.stepPreview, workKey, node, keepCode),
   selectStep: (workKey, input) => ipcRenderer.invoke(IPC.selectStep, workKey, input),
+  deliver: (workKey, input) => ipcRenderer.invoke(IPC.deliver, workKey, input),
+  openCleanup: (workKey, choice) => ipcRenderer.invoke(IPC.openCleanup, workKey, choice),
+  finishCleanup: (workKey) => ipcRenderer.invoke(IPC.finishCleanup, workKey),
+  recheck: (workKey) => ipcRenderer.invoke(IPC.recheck, workKey),
+  cleanPreview: (workKey) => ipcRenderer.invoke(IPC.cleanPreview, workKey),
+  clean: (workKey, input) => ipcRenderer.invoke(IPC.clean, workKey, input),
+  openExternal: (url) => ipcRenderer.invoke(IPC.openExternal, url),
   updateWorkSettings: (workKey, settings) =>
     ipcRenderer.invoke(IPC.workSettings, workKey, settings),
   config: () => ipcRenderer.invoke(IPC.config),

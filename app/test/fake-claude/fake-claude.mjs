@@ -12,6 +12,8 @@
 //   "No conversation found with session ID"를 내고 종료 코드 1로 끝난다 (스파이크 S6).
 // - clear 단계는 /clear를 흉내 낸다: SessionEnd(reason: clear)를 보내고 새 세션 id로 계속 돈다(D110).
 //   새 세션은 다음 요청으로 대화가 생겨야 --resume으로 열 수 있다.
+// - 첫 프롬프트 없이 연 세션은 정리 세션([AI 세션 열기], 시나리오 7-5)이라 시나리오의 cleanup 단계를 한다.
+//   git 단계는 worktree에서 git을 부른다(정리 세션이 변경을 되돌리거나 커밋하는 것을 흉내 낸다).
 // - 시나리오가 없으면 M0처럼 출력만 내고 끝날 때까지 살아 있는다.
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -254,6 +256,8 @@ async function steps(list, ctx, vars) {
         fs.mkdirSync(path.dirname(file), { recursive: true })
         fs.writeFileSync(file, fill(text, vars))
       }
+    } else if (s === 'git') {
+      execFileSync('git', step.args ?? [], { stdio: 'ignore' })
     } else if (s === 'waitEnter') {
       // 사람이 터미널에서 새 요청을 보낼 때까지 기다린다 (다시 연 세션은 입력을 기다린다, S6)
       out('입력 대기: Enter를 누르세요')
@@ -322,16 +326,20 @@ async function run() {
     type: 'start',
     args: argv,
     resume: opts.resume,
+    cleanup: !opts.resume && opts.prompt === null,
     cwd: process.cwd(),
     token: Boolean(env.RELAY_HOOK_TOKEN),
     skill: ctx.skill,
     taskId: ctx.taskId,
     taskDir: ctx.taskDir,
   })
-  // 다시 연 세션은 사람의 입력을 기다린다. resume 시나리오가 없으면 아무것도 하지 않는다
+  // 다시 연 세션은 사람의 입력을 기다린다. resume 시나리오가 없으면 아무것도 하지 않는다.
+  // 첫 프롬프트가 없으면 정리 세션이다 (7-5). cleanup 시나리오가 없으면 입력을 기다리기만 한다
   const list = opts.resume
     ? (scenario.resume?.[ctx.taskId] ?? scenario.resume?.[ctx.skill] ?? [])
-    : (scenario.tasks?.[ctx.taskId] ?? scenario.tasks?.[ctx.skill] ?? [{ do: 'prompt' }])
+    : opts.prompt === null
+      ? (scenario.cleanup ?? [])
+      : (scenario.tasks?.[ctx.taskId] ?? scenario.tasks?.[ctx.skill] ?? [{ do: 'prompt' }])
   await steps(list, ctx, { taskDir: ctx.taskDir, taskId: ctx.taskId, node: ctx.node, attempt: 0 })
   out('[가짜 claude] 대기')
 }

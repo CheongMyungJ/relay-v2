@@ -3,6 +3,7 @@
 // Electron을 import하지 않으므로 흐름 시험이 Vitest(Node)에서 이 코드를 그대로 불러 쓴다.
 // 창과 알림, 렌더러로 보내기는 UiPort로 받는다.
 import path from 'node:path'
+import { ghAuthStatus } from '../adapters/gh'
 import {
   addWorktree,
   branches as gitBranches,
@@ -23,15 +24,19 @@ import {
 } from '../adapters/store'
 import { applyConfigPatch, checkWorkSettings } from '../core/config'
 import { createWork } from '../core/machine'
-import { localIso, nextWorkId } from '../core/records'
+import { localIso, nextWorkId, workBranch } from '../core/records'
 import { DEFAULT_CONFIG, type AppConfig, type WorkSettings } from '../shared/config'
 import type { NodeName } from '../shared/contracts'
-import type { ProjectState } from '../shared/project'
+import type { ProjectChecks, ProjectState } from '../shared/project'
 import type {
   AppSnapshot,
   ApproveOptions,
+  CleanInput,
+  CleanPreviewResult,
   CommandResult,
   CreateWorkResult,
+  DeliverInput,
+  DeliverResult,
   NewWorkInput,
   ProjectInspection,
   ProjectView,
@@ -40,7 +45,7 @@ import type {
   StepPreviewResult,
   TerminalBacklog,
 } from '../shared/views'
-import type { WorkState } from '../shared/work'
+import type { DeliveryChoice, WorkState } from '../shared/work'
 import { SessionPool } from './pool'
 import type { UiPort } from './ports'
 import { inspectProject, prepareProject, type ProjectEnv } from './projects'
@@ -140,7 +145,34 @@ export class Relay {
       config: () => this.config,
       at: () => this.at(),
       size: () => this.size,
+      ghBin: this.ghBin(),
+      checks: (projectId) => this.projects.get(projectId)?.checks,
+      recheck: (projectId) => this.recheck(projectId),
     }
+  }
+
+  private ghBin(): string {
+    return this.o.ghBin ?? 'gh'
+  }
+
+  /**
+   * 프로젝트의 origin 원격과 gh auth status를 다시 점검해 project.json을 고친다 (D67, D118).
+   * verify task를 시작할 때와 Work 완료 화면의 [다시 점검]에서 부른다. 그 프로젝트의 Work 스냅샷을 다시 보낸다.
+   */
+  private async recheck(projectId: string): Promise<void> {
+    const project = this.projects.get(projectId)
+    if (!project) return
+    const env = this.env
+    const checks: ProjectChecks = {
+      origin: await hasRemote(project.repo_path, 'origin', { env }),
+      gh: (await ghAuthStatus(this.ghBin(), env)).ok,
+      checked_at: this.at(),
+    }
+    const next: ProjectState = { ...project, checks }
+    await saveProject(this.o.home, next)
+    this.projects.set(projectId, next)
+    this.o.ui.projects(this.projectViews())
+    for (const w of this.works.values()) if (w.project.project_id === projectId) w.touch()
   }
 
   private runner(
@@ -209,7 +241,7 @@ export class Relay {
   // ---------- 프로젝트 등록 (시나리오 0) ----------
 
   private projectEnv(): ProjectEnv {
-    return { env: this.env, ghBin: this.o.ghBin ?? 'gh', registered: [...this.projects.values()] }
+    return { env: this.env, ghBin: this.ghBin(), registered: [...this.projects.values()] }
   }
 
   inspectProject(dir: string): Promise<ProjectInspection> {
@@ -301,7 +333,7 @@ export class Relay {
     ])
     const tree = worktreeDir(this.o.home, project.project_id, workId)
     try {
-      await addWorktree(repo, tree, `${RELAY_BRANCH}${workId}`, baseCommit, { env })
+      await addWorktree(repo, tree, workBranch(workId), baseCommit, { env })
     } catch (e) {
       return { ok: false, error: `worktree를 만들지 못했습니다. ${String(e)}` }
     }
@@ -383,6 +415,43 @@ export class Relay {
   /** [단계 선택]의 [확인] */
   selectStep(workKey: string, input: SelectStepInput): Promise<CommandResult> {
     return this.withWork(workKey, (w) => w.selectStep(input))
+  }
+
+  // ---------- 전달 (시나리오 7) ----------
+
+  /** [push]·[PR 생성] (7-4~7-6). 커밋 안 된 변경이 있으면 목록을 돌려준다 (7-5) */
+  async deliver(workKey: string, input: DeliverInput): Promise<DeliverResult> {
+    const runner = this.works.get(workKey)
+    return runner ? runner.deliver(input) : { ok: false, error: 'Work가 없습니다' }
+  }
+
+  /** [AI 세션 열기] (7-5) */
+  openCleanup(workKey: string, choice: DeliveryChoice): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.openCleanup(choice))
+  }
+
+  /** [정리 끝 → push/PR 진행] (7-5) */
+  async finishCleanup(workKey: string): Promise<DeliverResult> {
+    const runner = this.works.get(workKey)
+    return runner ? runner.finishCleanup() : { ok: false, error: 'Work가 없습니다' }
+  }
+
+  /** Work 완료 화면의 [다시 점검] (D118) */
+  recheckWork(workKey: string): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.recheck())
+  }
+
+  // ---------- 정리 (시나리오 8) ----------
+
+  /** [Work 정리]의 확인 요약 (8-1) */
+  async cleanPreview(workKey: string): Promise<CleanPreviewResult> {
+    const runner = this.works.get(workKey)
+    return runner ? runner.cleanPreview() : { ok: false, error: 'Work가 없습니다' }
+  }
+
+  /** [Work 정리]의 [정리] (8-2) */
+  clean(workKey: string, input: CleanInput): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.clean(input))
   }
 
   /** Work별 질문 방식 (D72). 검사한 뒤 넣는다 */

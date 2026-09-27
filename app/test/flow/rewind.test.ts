@@ -169,8 +169,10 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
     expect(fixHead).not.toBe(base)
     const view = s.h.ui.works.get(key)
     expect(view?.actions.selectStep).toBe(true)
+    // verify에서 멈춘 Work는 [재개] 대신 Work 완료 화면에서 전달을 고른다 (D119)
+    expect(view?.actions.resumeWork).toBe(false)
     expect(view?.stopHint).toBe(
-      '[재개]하면 추천을 따르지 않고 Work를 완료합니다. 추천대로 되돌아가려면 [단계 선택]을 누르세요.',
+      '추천을 따르지 않고 Work 완료 화면에서 전달을 고르면 Work를 완료합니다. 추천대로 되돌아가려면 [단계 선택]을 누르세요.',
     )
     expect(view?.steps.find((c) => c.recommended)?.node).toBe('fix')
 

@@ -4,10 +4,10 @@ import type { WorkSettings } from './config'
 import type { HandoffStatus, NodeName, Size } from './contracts'
 
 /**
- * Work 상태 (3.3): 진행 중(active), 멈춤(stopped), 완료(completed), 포기(abandoned).
- * 보관됨은 M5에서 더한다.
+ * Work 상태 (3.3): 진행 중(active), 멈춤(stopped), 완료(completed), 포기(abandoned),
+ * 보관됨(archived: 완료나 포기 뒤 [Work 정리]를 마침, 시나리오 8).
  */
-export type WorkStatus = 'active' | 'stopped' | 'completed' | 'abandoned'
+export type WorkStatus = 'active' | 'stopped' | 'completed' | 'abandoned' | 'archived'
 
 /**
  * Task 상태 (3.3)와 실행 중 표시(시나리오 3)를 한 값으로 둔다.
@@ -195,8 +195,96 @@ export interface RewindOperation {
   backup_commit: string | null
 }
 
-/** 진행 중인 여러 단계 작업 (D77). 전달과 정리는 M5에서 더한다 */
-export type WorkOperation = RewindOperation
+/** 전달 (시나리오 7-3): [push] 또는 [PR 생성]. [완료만]은 전달이 없다 */
+export type DeliveryChoice = 'push' | 'pr'
+
+/** 전달의 단계 (D77): 커밋 안 된 변경 처리(prepare), push, PR 만들기(pr) */
+export type DeliveryStage = 'prepare' | 'push' | 'pr'
+
+/** 커밋 안 된 변경의 처리 (7-5): [변경 버리고 진행](git stash -u), [커밋하고 진행] */
+export type UncommittedAction = 'discard' | 'commit'
+
+/**
+ * 전달의 진행 중 작업 기록 (7-6, D77). 전달을 시작할 때 적고, 단계마다 stage를 옮기고, 끝나면(성공이든
+ * 실패든) 결과를 남기는 work.json 한 번 쓰기에서 지운다. 재시작 때 남은 기록을 알리는 것은 M6에서 넣는다.
+ */
+export interface DeliverOperation {
+  kind: 'deliver'
+  stage: DeliveryStage
+  started_at: string
+  choice: DeliveryChoice
+  /** 전달하는 verify task */
+  task_id: string
+  /** 커밋 안 된 변경을 어떻게 하는가. 없었으면 null */
+  uncommitted: UncommittedAction | null
+  /** push할 브랜치(relay/<work-id>)와 PR 대상 브랜치(기준 브랜치) */
+  branch: string
+  base: string
+  /** 커밋 안 된 변경을 처리하며 만든 stash나 커밋 (7-5). prepare 단계를 마치고 push로 옮길 때 적는다 */
+  stash?: string
+  commit?: string
+}
+
+/** 정리의 단계 (D77): worktree 지우기, 브랜치 지우기 */
+export type CleanStage = 'worktree' | 'branches'
+
+/**
+ * 정리의 진행 중 작업 기록 (시나리오 8, D77). 정리를 시작할 때 적고, worktree를 지우면 stage를 옮기고,
+ * 끝나면 보관됨으로 바꾸는 work.json 한 번 쓰기에서 지운다.
+ */
+export interface CleanOperation {
+  kind: 'clean'
+  stage: CleanStage
+  started_at: string
+  /** git worktree remove --force: 커밋 안 된 변경이나 잠금 파일을 사람이 확인했다 */
+  force: boolean
+  /** 지울 브랜치: 작업 브랜치(push됐거나 머지됐고 사람이 골랐을 때)와 되감기 백업 브랜치 */
+  delete_branches: string[]
+  /** 정리를 시작할 때 worktree의 HEAD. worktree 폴더가 없었으면 작업 브랜치의 커밋, 그것도 없으면 null */
+  head: string | null
+}
+
+/** 진행 중인 여러 단계 작업 (D77): 되감기, 전달, 정리 */
+export type WorkOperation = RewindOperation | DeliverOperation | CleanOperation
+
+/**
+ * 전달 결과 (시나리오 7-4, 7-6). 마지막 [push]·[PR 생성]의 결과이고 실패해도 남는다 (D120).
+ * Work가 완료되면 전달은 status가 succeeded인 이 기록이고, 없거나 실패면 [완료만]이다.
+ */
+export interface DeliveryRecord {
+  choice: DeliveryChoice
+  status: 'succeeded' | 'failed'
+  at: string
+  /** 실패한 단계와 오류 */
+  stage?: DeliveryStage
+  error?: string
+  /** push한 브랜치. origin에 같은 이름으로 push한다 */
+  branch?: string
+  /** push 뒤 브라우저에서 PR을 만드는 비교 URL. origin 주소로 만들 수 없으면 null (7-4) */
+  compare_url?: string | null
+  /** PR 주소. 같은 브랜치의 PR이 이미 열려 있었으면 그 링크만 기록한다 (pr_existing, 7-4) */
+  pr_url?: string
+  pr_existing?: boolean
+  /** draft PR로 만들었다 (D71) */
+  draft?: boolean
+  /**
+   * 이 Work의 전달이 커밋 안 된 변경을 처리하며 만든 stash 커밋과 앱이 만든 커밋 (7-5). 실패한 시도의 것도
+   * 남기고, [다시 시도]나 [전달 없이 완료] 뒤에도 앞 시도의 것을 이어 둔다. 없으면 없다
+   */
+  stashes?: string[]
+  commits?: string[]
+}
+
+/** 정리 결과 (시나리오 8) */
+export interface CleanedRecord {
+  at: string
+  /** 정리하기 전 worktree의 HEAD. 보관된 Work의 [변경]은 작업 트리 대신 이 커밋까지 본다 */
+  head: string | null
+  /** git worktree remove --force로 지웠다 */
+  forced: boolean
+  /** 지운 브랜치 */
+  deleted_branches: string[]
+}
 
 export interface WorkState {
   schema_version: 1
@@ -219,6 +307,10 @@ export interface WorkState {
   stop_after_step?: boolean
   /** 진행 중인 여러 단계 작업 (D77). 시작 전에 적고 끝나면 지운다 */
   operation?: WorkOperation
+  /** 마지막 전달 결과 (시나리오 7). [push]·[PR 생성]을 한 적이 없으면 없다 */
+  delivery?: DeliveryRecord
+  /** [Work 정리]의 결과 (시나리오 8). 보관됨이면 있다 */
+  cleaned?: CleanedRecord
   tasks: TaskRecord[]
 }
 

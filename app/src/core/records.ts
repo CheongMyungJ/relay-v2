@@ -40,6 +40,11 @@ export function workId(at: string, seq: number): string {
   return `w-${y}${mo}${d}-${pad(seq, 3)}`
 }
 
+/** Work 브랜치: relay/<work-id> (시나리오 1). 전달은 origin의 같은 이름으로 push한다 (7-4) */
+export function workBranch(workId: string): string {
+  return `relay/${workId}`
+}
+
 /** 이 날짜의 다음 work-id. taken은 이미 쓰인 id다(Work 디렉터리, relay/<work-id> 브랜치) */
 export function nextWorkId(at: string, taken: Iterable<string>): string {
   const used = new Set(taken)

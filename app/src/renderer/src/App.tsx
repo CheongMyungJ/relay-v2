@@ -6,6 +6,7 @@ import type { NodeName } from '../../shared/contracts'
 import type { CommandResult, ProjectView, ReviewView, WorkView } from '../../shared/views'
 import { call } from './commands'
 import {
+  CleanDialog,
   ConfirmDialog,
   NewWorkDialog,
   ProjectDialog,
@@ -23,7 +24,11 @@ type Dialog =
   | { kind: 'work-settings'; workKey: string }
   | { kind: 'abandon'; workKey: string }
   | { kind: 'step'; workKey: string; node?: NodeName }
+  | { kind: 'clean'; workKey: string }
   | null
+
+/** 정리 세션 탭을 고른 표시 (7-5). task id와 겹치지 않는다 */
+const CLEANUP_TAB = '@cleanup'
 
 function currentTask(w: WorkView) {
   return w.tasks.find((t) => t.id === w.current)
@@ -78,7 +83,10 @@ export function App() {
   }, [selected])
 
   const work = selected ? works[selected] : undefined
-  const taskId = work ? (picked[work.key] ?? work.current) : null
+  const pickedId = work ? (picked[work.key] ?? work.current) : null
+  // 정리 세션 탭(7-5)을 고르면 터미널은 정리 세션이고, 패널은 지금 task(Work 완료 화면)다
+  const cleanupTab = !!work?.cleanup && pickedId === CLEANUP_TAB
+  const taskId = cleanupTab || pickedId === CLEANUP_TAB ? (work?.current ?? null) : pickedId
   const task = work?.tasks.find((t) => t.id === taskId)
 
   // 승인 화면은 상태가 바뀔 때마다 파일을 다시 읽어 만든다
@@ -117,7 +125,10 @@ export function App() {
 
   const wide = wantsApproval(review) && review?.taskId === task?.id
   const dialogWork =
-    dialog?.kind === 'work-settings' || dialog?.kind === 'abandon' || dialog?.kind === 'step'
+    dialog?.kind === 'work-settings' ||
+    dialog?.kind === 'abandon' ||
+    dialog?.kind === 'step' ||
+    dialog?.kind === 'clean'
       ? works[dialog.workKey]
       : null
   // 단계 선택 대화상자 (6.2). node는 처음 고를 단계다(이전 단계 추천, D23)
@@ -186,9 +197,34 @@ export function App() {
               {t.label}
             </div>
           ))}
+          {work?.cleanup ? (
+            <div
+              role="tab"
+              aria-selected={cleanupTab}
+              className={`tab cleanup${cleanupTab ? ' active' : ''}${
+                work.cleanup.status === 'live' ? ' live' : ''
+              }`}
+              title="정리 세션: 기록하지 않는 일반 터미널 (7-5)"
+              onClick={() => setPicked((m) => ({ ...m, [work.key]: CLEANUP_TAB }))}
+            >
+              <span
+                className={`dot s-${work.cleanup.status === 'live' ? 'working' : 'interrupted'}`}
+              />
+              정리 세션
+            </div>
+          ) : null}
         </div>
         <div className="band">
-          {task ? (
+          {cleanupTab && work?.cleanup ? (
+            <>
+              <span>정리 세션 · 기록하지 않음 · push와 PR은 막혀 있음</span>
+              {work.cleanup.status === 'live' ? null : (
+                <span className="readonly">
+                  {work.cleanup.status === 'queued' ? '대기열' : '끝남 · 읽기 전용'}
+                </span>
+              )}
+            </>
+          ) : task ? (
             <>
               <span>{task.band}</span>
               <span className={`status s-${task.status}`}>{task.statusLabel}</span>
@@ -200,17 +236,28 @@ export function App() {
         </div>
         <div className="terminal">
           {info
-            ? Object.values(works).flatMap((w) =>
-                w.tasks.map((t) => (
+            ? Object.values(works).flatMap((w) => [
+                ...w.tasks.map((t) => (
                   <TerminalView
                     key={t.terminal}
                     terminalKey={t.terminal}
                     info={info}
                     live={t.live}
-                    active={w.key === selected && t.id === taskId}
+                    active={w.key === selected && !cleanupTab && t.id === taskId}
                   />
                 )),
-              )
+                ...(w.cleanup
+                  ? [
+                      <TerminalView
+                        key={w.cleanup.terminal}
+                        terminalKey={w.cleanup.terminal}
+                        info={info}
+                        live={w.cleanup.status === 'live'}
+                        active={w.key === selected && cleanupTab}
+                      />,
+                    ]
+                  : []),
+              ])
             : null}
           {!work ? (
             <div className="empty">
@@ -228,6 +275,7 @@ export function App() {
             work={work}
             onSettings={() => setDialog({ kind: 'work-settings', workKey: work.key })}
             onAbandon={() => setDialog({ kind: 'abandon', workKey: work.key })}
+            onClean={() => setDialog({ kind: 'clean', workKey: work.key })}
             onSelectStep={() => openStep(work.key)}
             onResumed={() => setPicked((m) => without(m, work.key))}
           />
@@ -244,6 +292,7 @@ export function App() {
             review={review?.taskId === task.id && review.workKey === work.key ? review : null}
             onApproved={() => setPicked((m) => without(m, work.key))}
             onSelectStep={(node) => openStep(work.key, node)}
+            onShowCleanup={() => setPicked((m) => ({ ...m, [work.key]: CLEANUP_TAB }))}
           />
         ) : (
           <div className="panel-body dim">handoff 상태와 산출물</div>
@@ -268,6 +317,9 @@ export function App() {
       {dialog?.kind === 'abandon' && dialogWork ? (
         <AbandonDialog work={dialogWork} onClose={() => setDialog(null)} />
       ) : null}
+      {dialog?.kind === 'clean' && dialogWork ? (
+        <CleanDialog work={dialogWork} onClose={() => setDialog(null)} />
+      ) : null}
       {dialog?.kind === 'step' && dialogWork ? (
         <StepDialog
           work={dialogWork}
@@ -284,20 +336,22 @@ export function App() {
 }
 
 /**
- * 액션 바 (시나리오 3-4, 3-5, 4.4, 6.2): [즉시 중단], [재개]·[세션 재개], [이 단계 새 세션으로 다시],
- * [이 단계 끝나면 멈춤], [단계 선택], [Work 설정], [Work 포기]. 누를 수 있는지는 main이 core로 판정해 보낸다.
- * 조작은 지금 task에 한다.
+ * 액션 바 (시나리오 3-4, 3-5, 4.4, 6.2, 8): [즉시 중단], [재개]·[세션 재개], [이 단계 새 세션으로 다시],
+ * [이 단계 끝나면 멈춤], [단계 선택], [Work 설정], [Work 포기], [Work 정리]. 누를 수 있는지는 main이 core로
+ * 판정해 보낸다. 조작은 지금 task에 한다.
  */
 function ActionBar({
   work,
   onSettings,
   onAbandon,
+  onClean,
   onSelectStep,
   onResumed,
 }: {
   work: WorkView
   onSettings: () => void
   onAbandon: () => void
+  onClean: () => void
   onSelectStep: () => void
   onResumed: () => void
 }) {
@@ -375,6 +429,11 @@ function ActionBar({
       {a.abandon ? (
         <button className="danger" disabled={busy} onClick={onAbandon}>
           Work 포기
+        </button>
+      ) : null}
+      {a.clean ? (
+        <button disabled={busy} onClick={onClean}>
+          Work 정리
         </button>
       ) : null}
       {error ? <span className="error">{error}</span> : null}

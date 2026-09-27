@@ -125,6 +125,8 @@ export interface Harness {
   env: NodeJS.ProcessEnv
   /** 가짜 claude가 남긴 기록 */
   records(): Record<string, unknown>[]
+  /** 가짜 gh가 남긴 기록 (8.2) */
+  ghRecords(): Record<string, unknown>[]
   /** 같은 RELAY_HOME으로 앱을 다시 켠다(재시작 조정, 시나리오 9). 앞 Relay는 닫혀 있어야 한다 */
   reopen(): Promise<void>
   close(): Promise<void>
@@ -143,26 +145,29 @@ export async function harness(o: HarnessOptions = {}): Promise<Harness> {
     ...process.env,
     FAKE_CLAUDE_SCENARIO: scenario,
     FAKE_CLAUDE_RECORD: record,
+    FAKE_GH_RECORD: record,
     ...(claude ? { CLAUDE_BIN: claude } : {}),
     ...o.env,
   }
   const ui = o.ui ?? new FakeUi()
   const open = (u: FakeUi) => Relay.open({ home, skills: SKILLS, ui: u, env, ghBin: FAKE_GH })
+  const jsonl = (name: string) => {
+    const file = path.join(record, name)
+    if (!fs.existsSync(file)) return []
+    return fs
+      .readFileSync(file, 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map((l) => JSON.parse(l) as Record<string, unknown>)
+  }
   const h: Harness = {
     root,
     home,
     relay: await open(ui),
     ui,
     env,
-    records: () => {
-      const file = path.join(record, 'fake-claude.jsonl')
-      if (!fs.existsSync(file)) return []
-      return fs
-        .readFileSync(file, 'utf8')
-        .split('\n')
-        .filter(Boolean)
-        .map((l) => JSON.parse(l) as Record<string, unknown>)
-    },
+    records: () => jsonl('fake-claude.jsonl'),
+    ghRecords: () => jsonl('fake-gh.jsonl'),
     reopen: async () => {
       h.ui = new FakeUi()
       h.relay = await open(h.ui)

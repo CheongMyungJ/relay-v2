@@ -1,10 +1,13 @@
 // 오른쪽 패널 (D79, D83). handoff 상태와 형식 오류, 산출물 목록을 보이고,
-// 승인할 수 있으면 넓어져 승인 화면이 된다. verify의 승인 화면은 Work 완료 화면이다 (시나리오 7-3).
+// 승인할 수 있으면 넓어져 승인 화면이 된다. verify의 승인 화면은 Work 완료 화면이다 (시나리오 7-3):
+// 전달 선택([완료만], [push], [PR 생성]), 커밋 안 된 변경의 선택지(7-5), 전달 실패의 [다시 시도]·
+// [전달 없이 완료](7-6, D120). verify에서 멈춘 Work도 이 화면에서 전달을 고른다 (D119).
 import { useState } from 'react'
 import type { NodeName, Size } from '../../shared/contracts'
-import type { ReviewView, TaskView, WorkView } from '../../shared/views'
+import type { DeliverResult, ReviewView, TaskView, WorkView } from '../../shared/views'
+import type { DeliveryChoice, UncommittedAction } from '../../shared/work'
 import { call } from './commands'
-import { ConfirmDialog } from './dialogs'
+import { ConfirmDialog, UncommittedDialog } from './dialogs'
 import { Diff, Markdown } from './Markdown'
 
 type Tab = 'summary' | 'artifacts' | 'changes' | 'verdicts' | 'work'
@@ -18,16 +21,22 @@ interface Props {
   onApproved: () => void
   /** 단계 선택 대화상자를 연다. node는 처음 고를 단계다 */
   onSelectStep: (node?: NodeName) => void
+  /** 정리 세션 탭을 고른다 (7-5) */
+  onShowCleanup: () => void
 }
 
-/** 승인 화면을 보일 task인가: 에이전트가 턴을 끝냈고 handoff가 있다. 막힘은 따로 보인다 */
+/**
+ * 승인 화면을 보일 task인가: 에이전트가 턴을 끝냈고 handoff가 있다. 막힘은 따로 보인다.
+ * verify에서 멈춘 Work의 verify도 Work 완료 화면이다 (D119)
+ */
 export function wantsApproval(review: ReviewView | null): boolean {
+  if (review?.completion?.stopped) return true
   return (
     !!review && review.reviewable && review.handoffPresent && review.handoffStatus !== 'blocked'
   )
 }
 
-export function Panel({ work, task, review, onApproved, onSelectStep }: Props) {
+export function Panel({ work, task, review, onApproved, onSelectStep, onShowCleanup }: Props) {
   if (!review) return <div className="panel-body dim">불러오는 중…</div>
   // 이전 단계 추천으로 멈췄으면 추천한 단계를 처음 고른다 (D23)
   const recommended = work.steps.find((c) => c.recommended && c.allowed)?.node
@@ -58,14 +67,28 @@ export function Panel({ work, task, review, onApproved, onSelectStep }: Props) {
           폐기됨: 단계 선택으로 이후 입력에서 빠졌습니다. 파일과 기록은 남습니다.
         </div>
       ) : null}
-      {work.status === 'completed' && task.id === work.current ? (
-        <div className="notice done">Work 완료 (전달: 완료만)</div>
+      {(work.status === 'completed' || (work.status === 'archived' && work.completedAt)) &&
+      task.id === work.current ? (
+        <DoneNotice work={work} />
       ) : null}
       {work.status === 'abandoned' ? (
         <div className="notice">Work 포기. 산출물과 worktree는 남아 있습니다.</div>
       ) : null}
+      {work.status === 'archived' ? (
+        <div className="notice">
+          보관됨: [Work 정리]로 worktree를 지웠습니다. 산출물과 기록은 남아 있습니다.
+        </div>
+      ) : null}
       {work.status === 'active' && task.id === work.current ? <TaskNotice task={task} /> : null}
-      {task.status === 'approved' || task.status === 'discarded' ? (
+      {review.completion?.stopped ? (
+        <Review
+          key={`${review.workKey}|${review.taskId}|stopped`}
+          review={review}
+          work={work}
+          onApproved={onApproved}
+          onShowCleanup={onShowCleanup}
+        />
+      ) : task.status === 'approved' || task.status === 'discarded' ? (
         <Review review={review} readOnly />
       ) : review.handoffPresent && review.handoffStatus === 'blocked' ? (
         <Review review={review} readOnly />
@@ -73,7 +96,9 @@ export function Panel({ work, task, review, onApproved, onSelectStep }: Props) {
         <Review
           key={`${review.workKey}|${review.taskId}`}
           review={review}
+          work={work}
           onApproved={onApproved}
+          onShowCleanup={onShowCleanup}
         />
       ) : (
         <Progress review={review} task={task} />
@@ -178,12 +203,16 @@ function Issues({ review }: { review: ReviewView }) {
 /** 승인 화면 (D83): 강조 영역, [요약]·[산출물]·[변경] 탭, 버튼. verify는 판정표와 전체 변경을 더한다 */
 function Review({
   review,
+  work,
   readOnly,
   onApproved,
+  onShowCleanup,
 }: {
   review: ReviewView
+  work?: WorkView
   readOnly?: boolean
   onApproved?: () => void
+  onShowCleanup?: () => void
 }) {
   const verify = review.completion !== null
   const [tab, setTab] = useState<Tab>(verify ? 'verdicts' : 'summary')
@@ -196,7 +225,7 @@ function Review({
 
   const intake = review.node === 'intake'
   const gate = review.gates[intake ? (size ?? 'none') : 'none']
-  const approveLabel = intake ? '의도 승인' : verify ? '완료만' : '승인'
+  const approveLabel = intake ? '의도 승인' : '승인'
 
   const approve = async (force: boolean) => {
     setBusy(true)
@@ -290,7 +319,15 @@ function Review({
         {tab === 'work' && review.completion ? <Diff text={review.completion.diff} /> : null}
       </div>
 
-      {readOnly ? null : (
+      {readOnly ? null : review.completion && work ? (
+        <CompletionActions
+          review={review}
+          work={work}
+          onApproved={onApproved}
+          onShowCleanup={onShowCleanup}
+          onForce={() => setConfirming(true)}
+        />
+      ) : (
         <footer className="review-actions">
           {intake ? (
             <label className="size">
@@ -309,7 +346,6 @@ function Review({
               </select>
             </label>
           ) : null}
-          {verify ? <span className="dim">전달: push와 PR은 M5에서 넣습니다</span> : null}
           <button
             className="primary"
             disabled={busy || !gate.approve}
@@ -394,5 +430,260 @@ function List({ title, items }: { title: string; items: string[] }) {
         <div className="dim">없음</div>
       )}
     </section>
+  )
+}
+
+const DELIVERY_BUTTON: Readonly<Record<DeliveryChoice, string>> = {
+  push: 'push',
+  pr: 'PR 생성',
+}
+
+/** 완료한 Work의 전달과 결과 링크 (시나리오 7-4, 7-6). 보관된 Work도 보인다 */
+function DoneNotice({ work }: { work: WorkView }) {
+  const d = work.delivery?.status === 'succeeded' ? work.delivery : null
+  return (
+    <div className="notice done">
+      Work 완료 (전달: {d ? d.label : '완료만'})
+      {d?.branch ? <div className="dim">origin에 push: {d.branch}</div> : null}
+      {d?.prUrl ? (
+        <LinkLine
+          label={d.prExisting ? '이미 열린 PR' : d.draft ? 'draft PR' : 'PR'}
+          url={d.prUrl}
+        />
+      ) : null}
+      {d?.choice === 'push' ? (
+        d.compareUrl ? (
+          <LinkLine label="비교 URL (브라우저에서 PR 만들기)" url={d.compareUrl} />
+        ) : (
+          <div className="dim">origin 주소를 GitHub 레포로 읽지 못해 비교 URL이 없습니다</div>
+        )
+      ) : null}
+    </div>
+  )
+}
+
+function LinkLine({ label, url }: { label: string; url: string }) {
+  return (
+    <div className="link-line">
+      <span>{label}:</span> <code>{url}</code>{' '}
+      <button onClick={() => void call(() => window.relay.openExternal(url))}>
+        브라우저에서 열기
+      </button>
+    </div>
+  )
+}
+
+/**
+ * Work 완료 화면의 버튼 (시나리오 7-3~7-6, D119, D120).
+ * - 승인하면 Work가 멈추는 verify(이전 단계 추천, [이 단계 끝나면 멈춤]): [승인하고 멈춤] 하나. 전달은 멈춘 뒤 고른다
+ * - 전달 선택: [완료만], [push], [PR 생성]. 누를 수 없으면 이유와 [다시 점검](D118)
+ * - 커밋 안 된 변경이 있으면 세 선택지(7-5). 정리 세션이 있으면 [정리 끝 → push/PR 진행]
+ * - 마지막 전달이 실패했으면 오류와 [다시 시도]·[전달 없이 완료]
+ * verify에서 멈춘 Work는 verify가 이미 승인돼 [완료만]이 멈춘 Work의 [재개]다.
+ */
+function CompletionActions({
+  review,
+  work,
+  onApproved,
+  onShowCleanup,
+  onForce,
+}: {
+  review: ReviewView
+  work: WorkView
+  onApproved: (() => void) | undefined
+  onShowCleanup: (() => void) | undefined
+  onForce: () => void
+}) {
+  const [busy, setBusy] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  // 커밋 안 된 변경이 있어 고를 것 (7-5)
+  const [pending, setPending] = useState<{ choice: DeliveryChoice; files: string[] } | null>(null)
+  const c = review.completion
+  if (!c) return null
+  const gate = review.gates.none
+  const stopped = c.stopped
+  const ready = stopped || gate.approve
+  const cleanup = work.cleanup
+  const open = cleanup !== null && cleanup.status !== 'ended'
+
+  const run = async <T extends { ok: boolean }>(label: string, fn: () => Promise<T>) => {
+    setBusy(label)
+    setError(null)
+    const r = await call(fn)
+    setBusy(null)
+    return r
+  }
+  const done = (r: DeliverResult, choice?: DeliveryChoice) => {
+    if (r.ok) {
+      setPending(null)
+      onApproved?.()
+    } else if (r.uncommitted && choice) {
+      setPending({ choice, files: r.uncommitted })
+    } else {
+      setError(r.error)
+    }
+  }
+  /** [완료만]과 [전달 없이 완료]: 전달 없이 완료한다. 멈춘 Work는 [재개]다 */
+  const complete = async () =>
+    done(
+      await run('완료만', () =>
+        stopped
+          ? window.relay.resumeWork(work.key)
+          : window.relay.approve(work.key, review.taskId, {}),
+      ),
+    )
+  const deliver = async (
+    choice: DeliveryChoice,
+    uncommitted: { action: UncommittedAction; expect: string[] } | null,
+  ) =>
+    done(
+      await run(DELIVERY_BUTTON[choice], () =>
+        window.relay.deliver(work.key, { choice, uncommitted }),
+      ),
+      choice,
+    )
+  const openCleanup = async (choice: DeliveryChoice) => {
+    const r = await run('AI 세션 열기', () => window.relay.openCleanup(work.key, choice))
+    if (r.ok) {
+      setPending(null)
+      onShowCleanup?.()
+    } else setError(r.error)
+  }
+  const finishCleanup = async () =>
+    done(await run('정리 끝', () => window.relay.finishCleanup(work.key)), cleanup?.choice)
+  const recheck = async () => {
+    const r = await run('다시 점검', () => window.relay.recheck(work.key))
+    if (!r.ok) setError(r.error)
+  }
+
+  if (c.mode === 'stop') {
+    return (
+      <footer className="review-actions">
+        <button
+          className="primary"
+          disabled={!!busy || !gate.approve}
+          onClick={() => void complete()}
+        >
+          승인하고 멈춤
+        </button>
+        {gate.force ? (
+          <button className="danger" disabled={!!busy} onClick={onForce}>
+            오류 무시하고 승인
+          </button>
+        ) : null}
+        <span className="dim">승인하면 Work가 멈춥니다. 전달은 멈춘 뒤 고릅니다.</span>
+        {error ? <span className="error">{error}</span> : null}
+      </footer>
+    )
+  }
+  if (c.mode !== 'deliver') return null
+
+  const failed = c.delivery?.status === 'failed' ? c.delivery : null
+  const blocked = (['push', 'pr'] as const).filter((k) => !c.buttons[k].enabled)
+  const button = (choice: DeliveryChoice) => (
+    <button
+      disabled={!!busy || open || !ready || !c.buttons[choice].enabled}
+      title={c.buttons[choice].reason ?? ''}
+      onClick={() => void deliver(choice, null)}
+    >
+      {DELIVERY_BUTTON[choice]}
+    </button>
+  )
+  return (
+    <div className="completion-actions">
+      <footer className="review-actions">
+        <button
+          className="primary"
+          disabled={!!busy || open || !ready}
+          onClick={() => void complete()}
+        >
+          완료만
+        </button>
+        {button('push')}
+        {button('pr')}
+        {!stopped && gate.force ? (
+          <button className="danger" disabled={!!busy || open} onClick={onForce}>
+            오류 무시하고 승인
+          </button>
+        ) : null}
+        {busy ? <span className="dim">{busy}: 하는 중…</span> : null}
+      </footer>
+      {blocked.length ? (
+        <div className="dim">
+          {blocked.map((k) => (
+            <div key={k}>
+              [{DELIVERY_BUTTON[k]}]: {c.buttons[k].reason}
+            </div>
+          ))}
+          <button disabled={!!busy} onClick={() => void recheck()}>
+            다시 점검
+          </button>
+        </div>
+      ) : null}
+      {failed ? (
+        <div className="notice fail">
+          전달 실패 ([{failed.label}], {failed.stage ?? '알 수 없는 단계'}): {failed.error}
+          <div className="notice-actions">
+            <button
+              className="primary"
+              disabled={!!busy || open}
+              onClick={() => void deliver(failed.choice, null)}
+            >
+              다시 시도
+            </button>
+            <button disabled={!!busy || open || !ready} onClick={() => void complete()}>
+              전달 없이 완료
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {cleanup ? (
+        <div className="notice">
+          {cleanup.status === 'queued'
+            ? '정리 세션: 세션 상한 때문에 대기열에서 기다립니다. 자리가 나면 엽니다.'
+            : cleanup.status === 'live'
+              ? '정리 세션이 열려 있습니다(기록하지 않음). push와 PR은 막혀 있습니다. 정리가 끝나면 누르세요.'
+              : cleanup.uncommitted.length
+                ? `정리 세션이 끝났지만 커밋 안 된 변경 ${cleanup.uncommitted.length}개가 남았습니다.`
+                : '정리 세션이 끝났습니다.'}
+          <div className="notice-actions">
+            {cleanup.status !== 'ended' ? (
+              <>
+                <button onClick={onShowCleanup}>정리 세션 보기</button>
+                <button
+                  className={cleanup.clean ? 'primary ready' : ''}
+                  disabled={!!busy}
+                  onClick={() => void finishCleanup()}
+                >
+                  정리 끝 → push/PR 진행
+                </button>
+                {cleanup.clean ? <span className="dim">git status가 깨끗합니다</span> : null}
+              </>
+            ) : cleanup.uncommitted.length ? (
+              <button
+                onClick={() => setPending({ choice: cleanup.choice, files: cleanup.uncommitted })}
+              >
+                선택지 보기
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+      {error ? <div className="error">{error}</div> : null}
+      {pending ? (
+        <UncommittedDialog
+          workId={work.workId}
+          label={DELIVERY_BUTTON[pending.choice]}
+          files={pending.files}
+          busy={!!busy}
+          onDiscard={() =>
+            void deliver(pending.choice, { action: 'discard', expect: pending.files })
+          }
+          onCommit={() => void deliver(pending.choice, { action: 'commit', expect: pending.files })}
+          onSession={() => void openCleanup(pending.choice)}
+          onClose={() => setPending(null)}
+        />
+      ) : null}
+    </div>
   )
 }
