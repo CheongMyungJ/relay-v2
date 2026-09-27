@@ -230,12 +230,16 @@ describe('[어댑터] 끊긴 정리의 git (D123)', () => {
   })
 
   it('.git이 없어진 반쯤 지운 worktree는 --force로도 지우지 않는다. prune은 관리 정보만 지우고 폴더는 남긴다', async () => {
+    // git은 Windows에서도 경로를 /로 찍는다
+    const listed = () => git(repo, 'worktree', 'list', '--porcelain').replace(/\\/g, '/')
+    const entry = `worktree ${tree.replace(/\\/g, '/')}`
+    expect(listed()).toContain(entry)
     fs.rmSync(path.join(tree, '.git'))
     await expect(removeWorktree(repo, tree, { force: false })).rejects.toThrow()
     await expect(removeWorktree(repo, tree, { force: true })).rejects.toThrow()
-    expect(git(repo, 'worktree', 'list', '--porcelain')).toContain(`worktree ${tree}`)
+    expect(listed()).toContain(entry)
     await pruneWorktrees(repo)
-    expect(git(repo, 'worktree', 'list', '--porcelain')).not.toContain(`worktree ${tree}`)
+    expect(listed()).not.toContain(entry)
     expect(fs.existsSync(path.join(tree, 'src', 'a.js'))).toBe(true)
   })
 
