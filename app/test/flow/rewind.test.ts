@@ -441,8 +441,7 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
     )
     expect(git(s.repo, 'show', `${backup}:scratch.txt`)).toBe('실험 메모')
     expect(git(s.repo, 'show', `${backup}:src/avg.js`)).toContain('// 고치는 중')
-    // worktree는 기준 커밋과 같다
-    expect(git(tree, 'rev-parse', 'HEAD')).toBe(base)
+    // 되감은 fix는 기준 커밋에서 시작했다. HEAD는 그 fix가 곧 커밋해 바뀌므로 시작 커밋으로 본다
     const w = work(dir)
     expect(taskOf(w, 't-03')).toMatchObject({ reason: 'rewind', start_commit: base })
     expect(taskOf(w, 't-03').selection?.reset).toEqual({
@@ -460,6 +459,8 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
       ['t-03', 'fix', 'approved', 'rewind'],
       ['t-04', 'verify', 'approved', 'default'],
     ])
+    // 되감은 fix의 커밋은 기준 커밋 바로 위에 있고, 지운 추적하지 않는 파일은 돌아오지 않았다
+    expect(git(tree, 'rev-parse', 'HEAD^')).toBe(base)
     expect(fs.existsSync(path.join(tree, 'scratch.txt'))).toBe(false)
   })
 
@@ -663,7 +664,7 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
     await untilTask(s, key, (t) => t.id === 't-04' && t.live, '되감은 fix')
     await settle(s.h, key)
     w = work(dir)
-    expect(git(tree, 'rev-parse', 'HEAD')).toBe(base)
+    expect(taskOf(w, 't-04').start_commit).toBe(base)
     expect(taskOf(w, 't-04').selection?.reset?.backup_branch).toMatch(/-discarded-2$/)
     // 미리 본 뒤 바뀌었으면 받지 않는다
     expect(await confirm(s, key, second)).toEqual({
