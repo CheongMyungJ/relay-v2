@@ -10,7 +10,7 @@ import { taskDirName } from '../core/machine'
 import { appendBlock } from '../core/records'
 import { DEFAULT_CONFIG, type AppConfig } from '../shared/config'
 import type { ProjectState } from '../shared/project'
-import type { LifecycleEvent, TaskRecord, WorkState } from '../shared/work'
+import type { LifecycleEvent, OwnedFile, TaskRecord, WorkState } from '../shared/work'
 
 /** 저장소 위치. 환경 변수 RELAY_HOME으로만 바꾼다 (D74). 기본은 사용자 폴더의 .relay */
 export function relayHome(env: NodeJS.ProcessEnv = process.env): string {
@@ -21,6 +21,11 @@ export function relayHome(env: NodeJS.ProcessEnv = process.env): string {
 /** 출처: spikes/lib/util.mjs sha256 */
 export function sha256(data: string | Buffer): string {
   return createHash('sha256').update(data).digest('hex')
+}
+
+/** 앱이 적는 파일 해시의 모양: sha256:<hex> (D103, D124). 문자열은 UTF-8로 쓴 바이트의 해시다 */
+export function fileHash(data: string | Buffer): string {
+  return `sha256:${sha256(data)}`
 }
 
 /**
@@ -73,8 +78,13 @@ export async function writeFileAtomic(file: string, text: string): Promise<void>
   }
 }
 
+/** JSON 파일의 내용: 두 칸 들여쓰기와 끝의 줄바꿈 */
+export function jsonText(value: unknown): string {
+  return `${JSON.stringify(value, null, 2)}\n`
+}
+
 export async function writeJson(file: string, value: unknown): Promise<void> {
-  await writeFileAtomic(file, `${JSON.stringify(value, null, 2)}\n`)
+  await writeFileAtomic(file, jsonText(value))
 }
 
 /** 파일 내용. 없으면 null */
@@ -179,6 +189,25 @@ export interface PtyLog {
   close(): Promise<void>
 }
 
+/** 앱 소유 파일의 내용과 해시 (D124) */
+export interface OwnedText {
+  text: string
+  hash: string
+}
+
+/** 앱 소유 파일을 고쳐 쓴 결과 (D124): 쓰기 전에 읽은 내용의 해시(없었으면 null)와 쓴 내용의 해시 */
+export interface OwnedWrite {
+  before: string | null
+  hash: string
+}
+
+/**
+ * work.json을 쓴 결과 (I11, D124). text는 쓴 내용이고 다음에 쓸 때 이것과 비교한다. changed는 파일이 앱이 마지막으로
+ * 쓰거나 읽은 내용과 달랐다는 것이고, copy는 바뀐 내용을 남긴 옆 파일이다(파일이 없어졌으면 null)
+ */
+export type SavedWork =
+  { text: string; changed: false } | { text: string; changed: true; copy: string | null }
+
 /** works/<work-id>/ 아래의 파일 */
 export class WorkFiles {
   readonly workJson: string
@@ -206,13 +235,78 @@ export class WorkFiles {
     return readJson<WorkState>(this.workJson)
   }
 
-  /** 전이마다 쓴다 (I11) */
-  save(work: WorkState): Promise<void> {
-    return writeJson(this.workJson, work)
+  /** work.json과 그 내용. 없으면 null. 내용은 실행 중에 바뀌었는지 비교하는 데 쓴다 (D124) */
+  async readWork(): Promise<{ work: WorkState; text: string } | null> {
+    const text = await readText(this.workJson)
+    return text === null ? null : { work: JSON.parse(text) as WorkState, text }
   }
 
-  writeRequest(text: string): Promise<void> {
-    return writeFileAtomic(this.request, text)
+  /**
+   * 전이마다 쓴다 (I11). expected가 있으면 먼저 파일을 읽어 앱이 마지막으로 쓰거나 읽은 내용과 비교한다. 다르면
+   * 바뀐 내용을 옆 파일(copyName, 겹치면 -2, -3…)로 남긴 뒤 앱의 상태로 쓴다 (D124). expected가 null이면(처음
+   * 쓰는 때) 비교하지 않는다.
+   */
+  async save(
+    work: WorkState,
+    check: { expected: string | null; copyName: string } = { expected: null, copyName: '' },
+  ): Promise<SavedWork> {
+    const text = jsonText(work)
+    if (check.expected === null) {
+      await writeFileAtomic(this.workJson, text)
+      return { text, changed: false }
+    }
+    const current = await readText(this.workJson)
+    if (current === check.expected) {
+      await writeFileAtomic(this.workJson, text)
+      return { text, changed: false }
+    }
+    const copy = current === null ? null : await this.keepCopy(check.copyName, current)
+    await writeFileAtomic(this.workJson, text)
+    return { text, changed: true, copy }
+  }
+
+  /** 바뀐 work.json을 옆에 남긴다. 이름이 겹치면 번호를 붙인다 */
+  private async keepCopy(name: string, text: string): Promise<string> {
+    for (let n = 1; ; n++) {
+      const file = path.join(this.dir, n === 1 ? name : `${name}-${n}`)
+      try {
+        await fsp.writeFile(file, text, { encoding: 'utf8', flag: 'wx' })
+        return file
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e
+      }
+    }
+  }
+
+  /** 앱 소유 파일의 경로 (D124) */
+  ownedPath(file: OwnedFile): string {
+    return path.join(this.dir, file)
+  }
+
+  /** 앱 소유 파일의 내용과 바이트의 해시. 없으면 null (D124) */
+  async readOwned(file: OwnedFile): Promise<OwnedText | null> {
+    try {
+      const buf = await fsp.readFile(this.ownedPath(file))
+      return { text: buf.toString('utf8'), hash: fileHash(buf) }
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null
+      throw e
+    }
+  }
+
+  /** 앱 소유 파일마다 지금 해시. 없으면 null (D124) */
+  async ownedHashes(
+    files: readonly OwnedFile[],
+  ): Promise<Partial<Record<OwnedFile, string | null>>> {
+    const out: Partial<Record<OwnedFile, string | null>> = {}
+    for (const f of files) out[f] = (await this.readOwned(f))?.hash ?? null
+    return out
+  }
+
+  /** request.md를 쓰고 해시를 돌려준다 (D124) */
+  async writeRequest(text: string): Promise<string> {
+    await writeFileAtomic(this.request, text)
+    return fileHash(text)
   }
 
   async readRequest(): Promise<string> {
@@ -223,22 +317,29 @@ export class WorkFiles {
     return readText(this.intent)
   }
 
-  /** intent.md를 새 버전으로 바꾼다. 이전 버전은 intent.history/v<N>.md에 둔다 (5.3) */
-  async writeIntent(text: string, version: number): Promise<void> {
-    const previous = await this.readIntent()
+  /**
+   * intent.md를 새 버전으로 바꾼다. 이전 버전은 intent.history/v<N>.md에 둔다 (5.3). 읽은 이전 버전과 쓴 내용의
+   * 해시를 돌려준다 (D124)
+   */
+  async writeIntent(text: string, version: number): Promise<OwnedWrite> {
+    const previous = await this.readOwned('intent.md')
     if (previous !== null && version > 1) {
-      await writeFileAtomic(path.join(this.intentHistory, `v${version - 1}.md`), previous)
+      await writeFileAtomic(path.join(this.intentHistory, `v${version - 1}.md`), previous.text)
     }
     await writeFileAtomic(this.intent, text)
+    return { before: previous?.hash ?? null, hash: fileHash(text) }
   }
 
   async readDecisions(): Promise<string> {
     return (await readText(this.decisions)) ?? ''
   }
 
-  /** decisions.md에 덩어리를 더한다 (5.4) */
-  async appendDecisions(block: string): Promise<void> {
-    await writeFileAtomic(this.decisions, appendBlock(await this.readDecisions(), block))
+  /** decisions.md에 덩어리를 더한다 (5.4). 더하기 전에 읽은 내용과 쓴 내용의 해시를 돌려준다 (D124) */
+  async appendDecisions(block: string): Promise<OwnedWrite> {
+    const previous = await this.readOwned('decisions.md')
+    const text = appendBlock(previous?.text ?? '', block)
+    await writeFileAtomic(this.decisions, text)
+    return { before: previous?.hash ?? null, hash: fileHash(text) }
   }
 
   /** events.jsonl에 한 줄 더한다 (5.5) */
@@ -270,6 +371,22 @@ export class WorkFiles {
   async artifacts(task: Pick<TaskRecord, 'seq' | 'node'>): Promise<string[]> {
     const dir = this.taskDir(task)
     return (await mdFiles(dir)).filter((n) => !NOT_ARTIFACTS.has(n)).map((n) => path.join(dir, n))
+  }
+
+  /**
+   * pty.log를 읽는다 (시나리오 5-1). 충돌로 끝이 잘려 덜 쓴 UTF-8 문자가 남았으면 그 바이트는 버리고 남은 만큼
+   * 돌려준다. 경고하지 않는다 (시나리오 9-5). TextDecoder에 stream을 주면 끝의 덜 쓴 바이트 열을 다음 호출까지
+   * 안에 둔다 (Node 문서 util TextDecoder). 없으면 null
+   */
+  async readPtyLog(task: Pick<TaskRecord, 'seq' | 'node'>): Promise<string | null> {
+    let buf: Buffer
+    try {
+      buf = await fsp.readFile(path.join(this.taskDir(task), 'pty.log'))
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null
+      throw e
+    }
+    return new TextDecoder('utf-8').decode(buf, { stream: true })
   }
 
   /** 터미널 출력을 이어 쓰는 pty.log (시나리오 5-1). 충돌하면 끝부분이 잘릴 수 있다 (시나리오 9-5) */

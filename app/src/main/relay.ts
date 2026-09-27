@@ -1,5 +1,6 @@
 // 앱의 조립 (I26). 저장소를 읽고, 훅 서버를 띄우고, 프로젝트 등록(시나리오 0)과 Work 생성(시나리오 1),
-// 재시작 조정(시나리오 9), 세션 상한과 대기열(D18), 앱 설정(D70)을 맡는다. Work 하나의 흐름은 WorkRunner가 맡는다.
+// 재시작 때의 고아 프로세스 종료와 조정(시나리오 9), 세션 상한과 대기열(D18), 앱 설정(D70)을 맡는다.
+// Work 하나의 흐름은 WorkRunner가 맡는다.
 // Electron을 import하지 않으므로 흐름 시험이 Vitest(Node)에서 이 코드를 그대로 불러 쓴다.
 // 창과 알림, 렌더러로 보내기는 UiPort로 받는다.
 import path from 'node:path'
@@ -12,6 +13,7 @@ import {
   hasRemote,
 } from '../adapters/git'
 import { HookServer } from '../adapters/hooks'
+import { killOrphans } from '../adapters/pty'
 import {
   WorkFiles,
   loadConfig,
@@ -25,6 +27,7 @@ import {
 import { applyConfigPatch, checkWorkSettings } from '../core/config'
 import { createWork } from '../core/machine'
 import { localIso, nextWorkId, workBranch } from '../core/records'
+import { recordedProcesses, type RecordedProcess } from '../core/recovery'
 import { DEFAULT_CONFIG, type AppConfig, type WorkSettings } from '../shared/config'
 import type { NodeName } from '../shared/contracts'
 import type { ProjectChecks, ProjectState } from '../shared/project'
@@ -85,8 +88,8 @@ export class Relay {
   }
 
   /**
-   * 저장소를 읽고 훅 서버를 띄우고 재시작 조정을 한다 (시나리오 9, D75, D78).
-   * 고아 프로세스 종료(D76)와 끊긴 작업 알림(D77)은 M6에서 넣는다.
+   * 저장소를 읽고 훅 서버를 띄우고 재시작 조정을 한다 (시나리오 9): 고아 프로세스를 끝내고(D76, D126), Work마다
+   * 실행 중이던 task와 대기열을 맞추고(D75, D78), 끊긴 작업(D77, D121)과 바뀐 앱 소유 파일(D124)을 알린다.
    */
   static async open(o: RelayOptions): Promise<Relay> {
     const relay = new Relay(o)
@@ -105,10 +108,11 @@ export class Relay {
       for (const id of await workIds(this.o.home, project.project_id)) {
         const files = new WorkFiles(workDir(this.o.home, project.project_id, id))
         try {
-          const work = await files.load()
-          if (!work) continue
+          // 읽은 내용은 다음에 work.json을 쓰기 전에 비교한다 (D124)
+          const read = await files.readWork()
+          if (!read) continue
           const title = workTitle(await files.readRequest())
-          const runner = this.runner(project, files, work, title)
+          const runner = this.runner(project, files, read.work, title, read.text)
           this.works.set(runner.key, runner)
           loaded.push(runner)
         } catch (e) {
@@ -116,8 +120,35 @@ export class Relay {
         }
       }
     }
-    // 재시작 조정 (시나리오 9). Work마다 따로라 함께 한다
-    await Promise.all(loaded.map((r) => r.reconcile()))
+    // 1. 고아 프로세스 (시나리오 9-1): 모든 Work의 기록을 모아 한 번에 확인하고 끝낸다
+    const killed = await this.killOrphans(loaded)
+    // 2~6. 재시작 조정. Work마다 따로라 함께 한다
+    await Promise.all(loaded.map((r) => r.reconcile(killed.get(r) ?? [])))
+  }
+
+  /**
+   * 기록한 claude 프로세스(task의 세션과 살아 있던 정리 세션) 가운데 ID와 시작 시각이 같은 것이 살아 있으면 트리째
+   * 끝낸다 (시나리오 9-1, D76, D126). 시작 시각이 다르면 건드리지 않는다. Work마다 끝낸 기록을 돌려준다
+   */
+  private async killOrphans(
+    runners: readonly WorkRunner[],
+  ): Promise<Map<WorkRunner, RecordedProcess[]>> {
+    const records = runners.flatMap((r) => recordedProcesses(r.work).map((p) => ({ r, p })))
+    const out = new Map<WorkRunner, RecordedProcess[]>()
+    if (records.length === 0) return out
+    let killed: { pid: number; startedAt: string }[]
+    try {
+      killed = await killOrphans(records.map(({ p }) => ({ pid: p.pid, startedAt: p.startedAt })))
+    } catch (e) {
+      this.warnings.push(`남아 있던 프로세스를 확인하지 못함 (${String(e)})`)
+      return out
+    }
+    for (const { r, p } of records) {
+      if (killed.some((k) => k.pid === p.pid && k.startedAt === p.startedAt)) {
+        out.set(r, [...(out.get(r) ?? []), p])
+      }
+    }
+    return out
   }
 
   /**
@@ -180,9 +211,10 @@ export class Relay {
     files: WorkFiles,
     work: WorkState,
     title: string,
+    text: string | null = null,
   ): WorkRunner {
     const tree = worktreeDir(this.o.home, project.project_id, work.work_id)
-    return new WorkRunner(this.context(), project, files, tree, work, title)
+    return new WorkRunner(this.context(), project, files, tree, work, title, text)
   }
 
   private at(): string {
@@ -339,8 +371,15 @@ export class Relay {
     }
 
     const files = new WorkFiles(workDir(this.o.home, project.project_id, workId))
-    await files.writeRequest(input.request)
-    const created = createWork({ workId, baseBranch: branch, baseCommit, settings, at })
+    const requestHash = await files.writeRequest(input.request)
+    const created = createWork({
+      workId,
+      baseBranch: branch,
+      baseCommit,
+      settings,
+      requestHash,
+      at,
+    })
     const runner = this.runner(project, files, created.work, workTitle(input.request))
     this.works.set(runner.key, runner)
     await runner.enqueue(() => runner.apply(created.work, created.effects))
@@ -452,6 +491,24 @@ export class Relay {
   /** [Work 정리]의 [정리] (8-2) */
   clean(workKey: string, input: CleanInput): Promise<CommandResult> {
     return this.withWork(workKey, (w) => w.clean(input))
+  }
+
+  // ---------- 재시작과 복구 (시나리오 9) ----------
+
+  /** 끊긴 작업의 [다시 시도] (D123). 끊긴 전달은 커밋 안 된 변경이 남았으면 목록을 돌려준다 (7-5) */
+  async retryOperation(workKey: string): Promise<DeliverResult> {
+    const runner = this.works.get(workKey)
+    return runner ? runner.retryOperation() : { ok: false, error: 'Work가 없습니다' }
+  }
+
+  /** 끊긴 작업의 [무시] (D123) */
+  ignoreOperation(workKey: string): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.ignoreOperation())
+  }
+
+  /** 알림의 [확인] (D121, D124) */
+  dismissNotice(workKey: string, id: string): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.dismissNotice(id))
   }
 
   /** Work별 질문 방식 (D72). 검사한 뒤 넣는다 */

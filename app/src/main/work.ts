@@ -1,5 +1,7 @@
 // Work 하나의 흐름 (시나리오 2~7, 9). 훅 신호, 사람 버튼, 프로세스 종료, 감시, 재시작을 이벤트로 바꿔
 // core/machine에 넣고, 전이마다 work.json을 쓰고(I11) 돌려받은 할 일을 차례로 실행한다.
+// work.json은 쓰기 전에 앱이 마지막으로 쓰거나 읽은 내용과 비교하고, 앱 소유 파일은 읽을 때 적힌 해시와 비교한다
+// (D124). 재시작 때의 알림과 끊긴 작업의 [다시 시도]·[무시]도 여기서 한다 (시나리오 9, D121~D123).
 // 이벤트는 Work마다 한 줄로 처리한다. 할 일(task 시작 등)이 끝날 때까지 다음 이벤트는 기다린다.
 // 세션 상한(D18)은 Relay의 SessionPool이 모든 Work에 걸쳐 센다. 자리가 없으면 대기열에 넣는다.
 import { randomBytes, randomUUID } from 'node:crypto'
@@ -10,6 +12,7 @@ import { claudeVersion, deploySkill, findClaude } from '../adapters/claude'
 import { ghCreatePr, ghOpenPr } from '../adapters/gh'
 import {
   commitAll,
+  commitInfo,
   countCommits,
   createBackup,
   deleteBranches,
@@ -25,7 +28,10 @@ import {
   removeWorktree,
   resetHard,
   stashAll,
+  stashEntries,
   statusLines,
+  treeOf,
+  worktreeTree,
 } from '../adapters/git'
 import type { HookReply, HookRequest, HookServer } from '../adapters/hooks'
 import { processStartTime, startPty, type PtySession } from '../adapters/pty'
@@ -33,6 +39,7 @@ import {
   readText,
   writeFileAtomic,
   writeJson,
+  type OwnedWrite,
   type PtyLog,
   type WorkFiles,
 } from '../adapters/store'
@@ -50,6 +57,7 @@ import {
   actions,
   currentTask,
   transition,
+  type DeliveryFound,
   type Effect,
   type InterruptReason,
   type MachineEvent,
@@ -70,6 +78,29 @@ import {
 import { NODE_INFO } from '../core/pipeline'
 import { confirmedIntent, decisionsBlock, decisionsWithout, workBranch } from '../core/records'
 import {
+  OPERATION_BLOCKS,
+  OWNED_FILES,
+  backupHead,
+  changedCopyName,
+  changedFileLine,
+  changedFiles,
+  cleanResume,
+  cutOperation,
+  filesNotice,
+  knownBackups,
+  lostCommit,
+  lostStashes,
+  operationView,
+  orphanNotice,
+  rewindResumePlan,
+  workJsonNotice,
+  type ActualHashes,
+  type MadeBackup,
+  type RecordedProcess,
+  type RewindResumePlan,
+  type WorkJsonChange,
+} from '../core/recovery'
+import {
   TASK_STATUS_LABEL,
   WORK_STATUS_LABEL,
   bandText,
@@ -83,7 +114,7 @@ import {
   taskLabel,
   verdicts,
 } from '../core/review'
-import { backupPattern, planStep, stepChoices, stepPreview } from '../core/rewind'
+import { backupPattern, nextBackupBranch, planStep, stepChoices, stepPreview } from '../core/rewind'
 import { cleanupArgs, launchArgs, launchEnv, resumeArgs, taskSettings } from '../core/settings'
 import {
   HANDOFF_FILE,
@@ -104,6 +135,7 @@ import type {
   Completion,
   DeliverInput,
   DeliverResult,
+  NoticeView,
   ReviewView,
   SelectStepInput,
   StepPreviewResult,
@@ -111,7 +143,15 @@ import type {
   TerminalBacklog,
   WorkView,
 } from '../shared/views'
-import type { DeliveryChoice, TaskRecord, UncommittedAction, WorkState } from '../shared/work'
+import type {
+  DeliverOperation,
+  DeliveryChoice,
+  OwnedFile,
+  RewindOperation,
+  TaskRecord,
+  UncommittedAction,
+  WorkState,
+} from '../shared/work'
 import type { SessionPool } from './pool'
 import type { UiPort } from './ports'
 import { CLAUDE_INSTALL_GUIDE } from './projects'
@@ -154,7 +194,8 @@ interface LiveSession {
 
 /**
  * 정리 세션: [AI 세션 열기]로 연, 기록하지 않는 일반 터미널의 Claude Code (시나리오 7-5).
- * task가 아니라 work.json, events.jsonl, pty.log에 남기지 않는다. 앱을 다시 켜면 없다.
+ * task가 아니라 events.jsonl, pty.log에 남기지 않는다. 앱을 다시 켜면 없다. 살아 있는 동안만 프로세스 ID와
+ * 시작 시각을 work.json에 두어 앱이 충돌한 뒤 살아남으면 재시작 때 끝낸다 (D126).
  */
 interface CleanupSession {
   /** 터미널 id: cleanup-<n>. 다시 열면 새 터미널이다 */
@@ -178,7 +219,6 @@ interface CleanupSession {
 const CLEANUP_ID = 'cleanup'
 const CONTEXT_FILE = 'context.md'
 const SETTINGS_FILE = 'task.settings.json'
-const PTY_LOG = 'pty.log'
 const MAX_DIFF_CHARS = 2_000_000
 const KILL_WAIT_MS = 10_000
 
@@ -188,6 +228,11 @@ const RESUME_MARK = '\r\n\x1b[0m\x1b[2m── relay: 세션 재개 (--resume) �
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 const str = (v: unknown) => (typeof v === 'string' ? v : undefined)
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+const exists = (p: string) =>
+  fsp.stat(p).then(
+    () => true,
+    () => false,
+  )
 
 function clip(text: string): string {
   return text.length > MAX_DIFF_CHARS
@@ -222,7 +267,17 @@ export class WorkRunner {
   /** 정리 세션 ([AI 세션 열기], 7-5) */
   private cleanup: CleanupSession | null = null
   private cleanupSeq = 0
+  /** 재시작 때 끝낸 이 Work의 고아 프로세스 (D76, D121). [확인]으로 지운다 */
+  private orphans: RecordedProcess[] = []
+  /** 앱 밖에서 바뀐 앱 소유 파일: 알림 줄과 그때의 해시 (D124). [확인]으로 지운다 */
+  private readonly fileChanges = new Map<OwnedFile, { line: string; hash: string | null }>()
+  /** 앱 밖에서 바뀐 work.json (D124). [확인]으로 지운다 */
+  private workJsonChanges: WorkJsonChange[] = []
 
+  /**
+   * workText는 앱이 마지막으로 쓰거나 읽은 work.json의 내용이다. 다음에 쓰기 전에 이것과 비교한다 (D124).
+   * 새로 만든 Work는 아직 쓰지 않아 null이다
+   */
   constructor(
     private readonly ctx: RunnerContext,
     readonly project: ProjectState,
@@ -230,6 +285,7 @@ export class WorkRunner {
     readonly worktree: string,
     public work: WorkState,
     private readonly title: string,
+    private workText: string | null = null,
   ) {
     this.key = `${project.project_id}/${work.work_id}`
   }
@@ -256,7 +312,8 @@ export class WorkRunner {
   }
 
   /**
-   * 새 상태를 work.json에 쓰고(I11) 할 일을 차례로 실행한다.
+   * 새 상태를 work.json에 쓰고(I11) 할 일을 차례로 실행한다. 쓰기 전에 파일이 앱이 마지막으로 쓰거나 읽은 내용과
+   * 다르면 바뀐 내용을 옆에 남기고 알린 뒤 앱의 상태로 쓴다 (D124).
    * 사람이 움직여야 하는 상태로 바뀌었으면 알린다(D81). 재시작 조정은 알리지 않는다(quiet).
    * blockStop이 있으면 Stop 요청에 돌려줄 응답을 돌려준다 (D21, S2).
    */
@@ -272,7 +329,13 @@ export class WorkRunner {
     if (this.cleanup?.status === 'ended' && work.status !== 'active' && work.status !== 'stopped') {
       this.cleanup = null
     }
-    await this.files.save(work)
+    const at = this.ctx.at()
+    const saved = await this.files.save(work, {
+      expected: this.workText,
+      copyName: changedCopyName(at),
+    })
+    this.workText = saved.text
+    if (saved.changed) this.workJsonChanges.push({ at, copy: saved.copy })
     this.changed()
     const notice = opts.quiet ? null : humanNotice(before, work)
     if (notice) this.notify(notice)
@@ -297,8 +360,8 @@ export class WorkRunner {
       case 'endSession':
         await this.endSession(e.taskId)
         return
-      case 'appendDecisions':
-        await this.files.appendDecisions(
+      case 'appendDecisions': {
+        const written = await this.files.appendDecisions(
           decisionsBlock({
             taskId: e.taskId,
             node: e.node,
@@ -307,7 +370,9 @@ export class WorkRunner {
             decisions: e.decisions,
           }),
         )
+        await this.ownedWritten('decisions.md', written)
         return
+      }
       case 'confirmIntent':
         await this.confirmIntent(e.taskId, e.version, e.size)
         return
@@ -320,6 +385,9 @@ export class WorkRunner {
         return
       case 'rewindCode':
         await this.rewindCode(e)
+        return
+      case 'resumeRewind':
+        await this.resumeRewind(e)
         return
       case 'deliver':
         await this.deliverCode(e)
@@ -573,14 +641,23 @@ export class WorkRunner {
       })
     }
     const discarded = this.work.tasks.filter((t) => t.status === 'discarded').map((t) => t.id)
+    // 읽은 앱 소유 파일을 적힌 해시와 비교한다. 다르면 알리고 그 내용을 쓴다 (D124)
+    const request = await this.files.readOwned('request.md')
+    const intent = await this.files.readOwned('intent.md')
+    const decisions = await this.files.readOwned('decisions.md')
+    this.compareOwned({
+      'request.md': request?.hash ?? null,
+      'intent.md': intent?.hash ?? null,
+      'decisions.md': decisions?.hash ?? null,
+    })
     return buildContext({
       work: this.work,
       task,
       config: this.ctx.config(),
       taskDir: dir,
-      request: { path: this.files.request, text: await this.files.readRequest() },
-      intent: await this.files.readIntent(),
-      decisionLog: decisionsWithout(await this.files.readDecisions(), discarded),
+      request: { path: this.files.request, text: request?.text ?? '' },
+      intent: intent?.text ?? null,
+      decisionLog: decisionsWithout(decisions?.text ?? '', discarded),
       ...previousInputs(earlier),
       selection: await this.selectionInput(task),
       ...(task.node === 'verify' ? { delivery: closingButtons(this.checks()) } : {}),
@@ -828,7 +905,8 @@ export class WorkRunner {
     if (!task) throw new Error(`${taskId} 없음`)
     const draft = await readText(path.join(this.files.taskDir(task), INTENT_DRAFT_FILE))
     if (draft === null) throw new Error('intent 초안이 없음')
-    await this.files.writeIntent(confirmedIntent(draft, { version, size }), version)
+    const written = await this.files.writeIntent(confirmedIntent(draft, { version, size }), version)
+    await this.ownedWritten('intent.md', written)
   }
 
   /** [승인], [의도 승인], [완료만], [오류 무시하고 승인] (시나리오 4-3, 4.1) */
@@ -993,7 +1071,7 @@ export class WorkRunner {
       await this.rewindFailed(err)
       return
     }
-    await this.feed({ type: 'rewind.backedUp', at: this.ctx.at(), branch, commit })
+    await this.feed({ type: 'rewind.backedUp', at: this.ctx.at(), branch, commit, head })
     try {
       if (head !== e.to || dirty) await resetHard(this.worktree, e.to, { ...opts, clean: dirty })
     } catch (err) {
@@ -1007,6 +1085,83 @@ export class WorkRunner {
     this.rewindError = `되감기 실패: ${message(err)}`
     this.problem(this.rewindError)
     await this.feed({ type: 'rewind.failed', at: this.ctx.at(), error: message(err) })
+  }
+
+  /**
+   * 끊긴 되감기를 끊긴 곳부터 잇는다 (D123). 이미 만든 백업과 지금 코드를 보고 core/recovery의 rewindResumePlan대로
+   * 한다: 백업이 지금 코드(HEAD와 커밋 안 된 변경)와 다르면 다음 번호로 한 번 더 백업하고, 되돌릴 커밋이 아니면
+   * 되돌린다. rewindCode처럼 단계가 끝날 때마다 machine에 알린다 (D77).
+   */
+  private async resumeRewind(e: Extract<Effect, { type: 'resumeRewind' }>): Promise<void> {
+    const opts = { env: this.ctx.env }
+    const op = e.operation
+    let plan: RewindResumePlan
+    let dirty: boolean
+    let made: MadeBackup | null
+    let extra: { branch: string; commit: string } | null = null
+    try {
+      const head = await headCommit(this.worktree, opts)
+      dirty = (await statusLines(this.worktree, opts)).length > 0
+      made = await this.madeBackup(op)
+      const tree = made ? await worktreeTree(this.worktree, opts) : null
+      plan = rewindResumePlan(op, { head, dirty, tree, made })
+      if (plan.backup) {
+        const branch = nextBackupBranch(this.work.work_id, await this.backups())
+        const commit = await createBackup(this.worktree, branch, {
+          ...opts,
+          uncommitted: dirty,
+          message: e.message,
+        })
+        extra = { branch, commit }
+      }
+    } catch (err) {
+      await this.rewindFailed(err)
+      return
+    }
+    if (op.stage === 'backup') {
+      const kept = plan.keep === 'made' ? made : plan.keep === 'new' ? extra : null
+      await this.feed({
+        type: 'rewind.backedUp',
+        at: this.ctx.at(),
+        branch: kept?.branch ?? null,
+        commit: kept?.commit ?? null,
+        head: plan.from,
+      })
+    }
+    try {
+      if (plan.reset) await resetHard(this.worktree, op.reset_to, { ...opts, clean: dirty })
+    } catch (err) {
+      await this.rewindFailed(err)
+      return
+    }
+    await this.feed({
+      type: 'rewind.applied',
+      at: this.ctx.at(),
+      head: plan.from,
+      ...(extra && plan.keep !== 'new' ? { extraBackup: extra.branch } : {}),
+    })
+  }
+
+  /**
+   * 끊긴 되감기가 이미 만든 백업 (core/recovery MadeBackup). reset 단계면 기록에 있고, backup 단계면 계획한 이름의
+   * 브랜치가 git에 있을 때다(기록하기 전에 끊김). 없으면 null
+   */
+  private async madeBackup(op: RewindOperation): Promise<MadeBackup | null> {
+    const opts = { env: this.ctx.env }
+    const branch = op.backup_branch
+    if (!branch) return null
+    const commit =
+      op.stage === 'reset'
+        ? op.backup_commit
+        : await refCommit(this.worktree, `refs/heads/${branch}`, opts)
+    if (!commit) return null
+    const info = await commitInfo(this.worktree, commit, opts)
+    return {
+      branch,
+      commit,
+      head: op.head ?? backupHead(this.work.work_id, info),
+      tree: await treeOf(this.worktree, commit, opts),
+    }
   }
 
   // ---------- 전달 (시나리오 7) ----------
@@ -1031,6 +1186,7 @@ export class WorkRunner {
     choice: DeliveryChoice,
     uncommitted: DeliverInput['uncommitted'],
   ): Promise<DeliverResult> {
+    if (cutOperation(this.work)) return { ok: false, error: OPERATION_BLOCKS }
     const check = await this.verifyCheck()
     const start = deliveryStart(this.work, check)
     if (!start.ok) return start
@@ -1162,6 +1318,7 @@ export class WorkRunner {
    */
   openCleanup(choice: DeliveryChoice): Promise<CommandResult> {
     return this.enqueue(async () => {
+      if (cutOperation(this.work)) return { ok: false, error: OPERATION_BLOCKS }
       const check = await this.verifyCheck()
       const start = deliveryStart(this.work, check)
       if (!start.ok) return start
@@ -1224,6 +1381,7 @@ export class WorkRunner {
       return false
     }
     const { env } = this.ctx
+    let pid: number
     try {
       const bin = findClaude({ env })
       if (!bin) throw new Error(CLAUDE_INSTALL_GUIDE)
@@ -1268,13 +1426,22 @@ export class WorkRunner {
       )
       c.status = 'live'
       this.changed()
-      return true
+      pid = pty.pid
     } catch (err) {
       this.ctx.pool.release()
       await this.releaseCleanup(c)
       this.problem(`정리 세션을 열지 못함: ${message(err)}`)
       return false
     }
+    // 살아 있는 동안 프로세스 ID와 시작 시각을 적는다. 앱이 충돌한 뒤 살아남으면 재시작 때 끝낸다 (D126)
+    const processStartedAt = await processStartTime(pid)
+    await this.feed({
+      type: 'cleanup.started',
+      at: this.ctx.at(),
+      pid,
+      ...(processStartedAt ? { processStartedAt } : {}),
+    })
+    return true
   }
 
   /** 정리 세션의 훅: 턴이 끝날 때(Stop)마다 git status가 깨끗한지 본다. 새 요청이 오면 강조를 끈다 (7-5) */
@@ -1302,7 +1469,7 @@ export class WorkRunner {
     await this.afterCleanup()
   }
 
-  /** 정리 세션에 걸어 둔 것을 푼다: 훅 토큰, 설정 파일 폴더. 끝난 것으로 둔다 */
+  /** 정리 세션에 걸어 둔 것을 푼다: 훅 토큰, 설정 파일 폴더, 적어 둔 프로세스(D126). 끝난 것으로 둔다 */
   private async releaseCleanup(c: CleanupSession): Promise<void> {
     c.handled = true
     c.status = 'ended'
@@ -1312,6 +1479,7 @@ export class WorkRunner {
     if (c.dir) await fsp.rm(c.dir, { recursive: true, force: true }).catch(() => undefined)
     c.dir = null
     this.changed()
+    await this.feed({ type: 'cleanup.ended', at: this.ctx.at() })
   }
 
   /** 살아 있거나 대기열에 있는 정리 세션을 끝낸다 */
@@ -1397,6 +1565,7 @@ export class WorkRunner {
   /** [Work 정리]의 확인 요약 (시나리오 8-1) */
   cleanPreview(): Promise<CleanPreviewResult> {
     return this.enqueue(async () => {
+      if (cutOperation(this.work)) return { ok: false, error: OPERATION_BLOCKS }
       if (!canClean(this.work)) return { ok: false, error: '완료나 포기한 Work만 정리함' }
       try {
         return { ok: true, preview: cleanPreview(await this.cleanFacts()) }
@@ -1412,6 +1581,7 @@ export class WorkRunner {
    */
   clean(input: CleanInput): Promise<CommandResult> {
     return this.enqueue(async () => {
+      if (cutOperation(this.work)) return { ok: false, error: OPERATION_BLOCKS }
       if (!canClean(this.work)) return { ok: false, error: '완료나 포기한 Work만 정리함' }
       let facts: CleanFacts
       try {
@@ -1441,7 +1611,10 @@ export class WorkRunner {
     })
   }
 
-  /** 정리의 git 작업 (8-2). 단계가 끝날 때마다 machine에 알려 진행 중 작업 기록을 옮긴다(D77) */
+  /**
+   * 정리의 git 작업 (8-2). 단계가 끝날 때마다 machine에 알려 진행 중 작업 기록을 옮긴다(D77).
+   * 끊긴 정리를 다시 하면(resume) 끊긴 단계부터 하고, 아직 있는 브랜치만 지운다 (D123)
+   */
   private async cleanCode(e: Extract<Effect, { type: 'clean' }>): Promise<void> {
     const opts = { env: this.ctx.env }
     const repo = this.project.repo_path
@@ -1450,24 +1623,61 @@ export class WorkRunner {
       for (const id of [...this.live.keys()]) await this.endSession(id)
       await this.endCleanup()
       this.cleanup = null
-      const exists = await fsp
-        .stat(this.worktree)
-        .then(() => true)
-        .catch(() => false)
-      if (exists) await removeWorktree(repo, this.worktree, { ...opts, force: e.force })
-      else await pruneWorktrees(repo, opts)
+      if (e.resume === undefined) {
+        if (await exists(this.worktree)) {
+          await removeWorktree(repo, this.worktree, { ...opts, force: e.force })
+        } else {
+          await pruneWorktrees(repo, opts)
+        }
+      } else if (e.resume === 'worktree') {
+        await this.removeCutWorktree(e.force)
+      }
     } catch (err) {
       await this.cleanFailed(err)
       return
     }
     await this.feed({ type: 'clean.removed', at: this.ctx.at() })
     try {
-      await deleteBranches(repo, e.deleteBranches, opts)
+      const names =
+        e.resume === undefined ? e.deleteBranches : await this.existing(e.deleteBranches)
+      await deleteBranches(repo, names, opts)
     } catch (err) {
       await this.cleanFailed(err)
       return
     }
     await this.feed({ type: 'clean.done', at: this.ctx.at() })
+  }
+
+  /**
+   * 끊긴 정리의 worktree 단계 (D123). 폴더가 없으면 관리 정보만 prune한다. .git이 없으면(반쯤 지움) git worktree
+   * remove가 --force로도 거부하므로 prune한 뒤 남은 폴더를 지운다. 있으면 core/recovery의 cleanResume으로 --force를
+   * 다시 정해 지운다
+   */
+  private async removeCutWorktree(recordedForce: boolean): Promise<void> {
+    const opts = { env: this.ctx.env }
+    const repo = this.project.repo_path
+    if (!(await exists(this.worktree))) {
+      await pruneWorktrees(repo, opts)
+      return
+    }
+    if (!(await exists(path.join(this.worktree, '.git')))) {
+      await pruneWorktrees(repo, opts)
+      await fsp.rm(this.worktree, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 })
+      return
+    }
+    const r = cleanResume(recordedForce, await statusLines(this.worktree, opts))
+    if (!r.ok) throw new Error(r.error)
+    await removeWorktree(repo, this.worktree, { ...opts, force: r.force })
+  }
+
+  /** 아직 있는 브랜치 */
+  private async existing(names: readonly string[]): Promise<string[]> {
+    const opts = { env: this.ctx.env }
+    const out: string[] = []
+    for (const name of names) {
+      if (await refCommit(this.project.repo_path, `refs/heads/${name}`, opts)) out.push(name)
+    }
+    return out
   }
 
   private async cleanFailed(err: unknown): Promise<void> {
@@ -1489,14 +1699,160 @@ export class WorkRunner {
 
   /**
    * 앱을 다시 켰을 때의 조정 (시나리오 9, D75, D78). 실행 중이던 task는 중단됨이나(유효한 handoff가 있으면)
-   * 승인 대기로, 대기열의 task는 중단됨으로 바꾼다. 알리지 않고, 자동으로 재개하거나 승인하지 않는다.
+   * 승인 대기로, 대기열의 task는 중단됨으로 바꾼다. OS 알림은 보내지 않고, 자동으로 재개하거나 승인하지 않는다.
+   * killed는 Relay가 먼저 끝낸 이 Work의 고아 프로세스다 (D76). 남은 진행 중 작업 기록은 끊긴 작업이 된다 (D121).
+   * 앱 소유 파일은 적힌 해시와 비교해 다르면 패널에 알린다. M6 전에 만든 Work는 경고 없이 적는다 (D124).
    */
-  reconcile(): Promise<void> {
+  reconcile(killed: readonly RecordedProcess[] = []): Promise<void> {
     return this.enqueue(async () => {
       const task = currentTask(this.work)
       const check = task ? this.check(task, await this.files.taskFiles(task)) : null
-      await this.feed({ type: 'app.restarted', at: this.ctx.at(), check }, { quiet: true })
+      const tasks = killed.flatMap((p) => (p.taskId ? [{ taskId: p.taskId, pid: p.pid }] : []))
+      await this.feed(
+        {
+          type: 'app.restarted',
+          at: this.ctx.at(),
+          check,
+          ...(tasks.length ? { killed: tasks } : {}),
+        },
+        { quiet: true },
+      )
+      if (killed.length) {
+        this.orphans = [...killed]
+        this.changed()
+      }
+      let hashes: ActualHashes
+      try {
+        hashes = await this.files.ownedHashes(OWNED_FILES)
+      } catch (e) {
+        this.problem(`앱 소유 파일을 읽지 못함: ${message(e)}`)
+        return
+      }
+      if (this.work.file_hashes) this.compareOwned(hashes)
+      else await this.feed({ type: 'files.recorded', at: this.ctx.at(), hashes }, { quiet: true })
     })
+  }
+
+  // ---------- 끊긴 작업 (시나리오 9-4, D121~D123) ----------
+
+  /**
+   * 끊긴 작업의 [다시 시도] (D123). 되감기와 정리는 끊긴 곳부터 잇는다. 전달은 끊긴 시도가 만들었지만 기록하지 못한
+   * stash와 커밋을 찾아 끊긴 시도를 실패로 남긴 뒤 같은 전달을 처음부터 한다. 커밋 안 된 변경이 남았으면 선택지를
+   * 다시 보이게 변경 목록을 돌려준다 (7-5). git이 실패하면 오류를 돌려준다.
+   */
+  retryOperation(): Promise<DeliverResult> {
+    return this.enqueue(async () => {
+      const op = cutOperation(this.work)
+      if (!op) return { ok: false, error: '끊긴 작업이 없음' }
+      if (op.kind === 'deliver') {
+        const found = await this.lostDelivery(op)
+        const r = await this.command({ type: 'operationRetry', at: this.ctx.at(), found })
+        if (!r.ok) return r
+        return this.deliverNow(op.choice, null)
+      }
+      this.rewindError = null
+      this.opError = null
+      const r = await this.command({ type: 'operationRetry', at: this.ctx.at() })
+      const failed = this.rewindError ?? this.opError
+      this.rewindError = null
+      this.opError = null
+      return r.ok && failed ? { ok: false, error: failed } : r
+    })
+  }
+
+  /** 끊긴 작업의 [무시] (D123). 기록만 지우고 git은 건드리지 않는다. 전달은 끊긴 시도를 실패로 남긴다 */
+  ignoreOperation(): Promise<CommandResult> {
+    return this.enqueue(async () => {
+      const op = cutOperation(this.work)
+      if (!op) return { ok: false, error: '끊긴 작업이 없음' }
+      const found = op.kind === 'deliver' ? await this.lostDelivery(op) : undefined
+      return this.command({
+        type: 'operationIgnore',
+        at: this.ctx.at(),
+        ...(found ? { found } : {}),
+      })
+    })
+  }
+
+  /**
+   * 끊긴 전달이 만들었지만 기록하지 못한 stash와 커밋 (D123). [변경 버리고 진행]이면 이 Work의 메시지로 stash
+   * 목록을, [커밋하고 진행]이면 HEAD 커밋을 본다. git을 읽지 못하면 없는 것으로 두고 알린다
+   */
+  private async lostDelivery(op: DeliverOperation): Promise<DeliveryFound> {
+    const opts = { env: this.ctx.env }
+    const id = this.work.work_id
+    const known = knownBackups(this.work, op)
+    try {
+      const stashes =
+        op.uncommitted === 'discard'
+          ? lostStashes(id, await stashEntries(this.worktree, opts), known.stashes)
+          : []
+      const commit =
+        op.uncommitted === 'commit'
+          ? lostCommit(id, await commitInfo(this.worktree, 'HEAD', opts), known.commits)
+          : null
+      return { stashes, commits: commit ? [commit] : [] }
+    } catch (e) {
+      this.problem(`끊긴 전달이 만든 stash나 커밋을 찾지 못함: ${message(e)}`)
+      return { stashes: [], commits: [] }
+    }
+  }
+
+  // ---------- 알림 (D121) ----------
+
+  /** 알림의 [확인] (D121). 바뀐 앱 소유 파일은 지금 내용의 해시를 다시 적어 받아들인다 (D124) */
+  dismissNotice(id: string): Promise<CommandResult> {
+    return this.enqueue(async () => {
+      if (id === 'orphans') {
+        this.orphans = []
+      } else if (id === 'work_json') {
+        this.workJsonChanges = []
+      } else if (id === 'files') {
+        let hashes: ActualHashes
+        try {
+          hashes = await this.files.ownedHashes([...this.fileChanges.keys()])
+        } catch (e) {
+          return { ok: false, error: `파일을 읽지 못함: ${message(e)}` }
+        }
+        this.fileChanges.clear()
+        await this.feed({ type: 'files.recorded', at: this.ctx.at(), hashes })
+      } else {
+        return { ok: false, error: '알림이 없음' }
+      }
+      this.changed()
+      return { ok: true }
+    })
+  }
+
+  /**
+   * 앱 소유 파일의 지금 해시를 적힌 해시와 비교해, 다른 파일을 알림에 넣는다 (D124). 이미 알린 해시면 다시 넣지
+   * 않는다. 적힌 해시가 없는 Work(M6 전에 만듦)는 비교하지 않는다: 재시작 조정이 먼저 적는다
+   */
+  private compareOwned(actual: ActualHashes): void {
+    const recorded = this.work.file_hashes
+    if (!recorded) return
+    const at = this.ctx.at()
+    let added = false
+    for (const file of changedFiles(recorded, actual)) {
+      const hash = actual[file] ?? null
+      if (this.fileChanges.get(file)?.hash === hash) continue
+      const line = changedFileLine(
+        file,
+        recorded[file] ?? null,
+        hash,
+        at,
+        this.files.ownedPath(file),
+      )
+      this.fileChanges.set(file, { line, hash })
+      added = true
+    }
+    if (added) this.changed()
+  }
+
+  /** 앱이 앱 소유 파일을 고쳐 썼다: 쓰기 전에 읽은 내용을 적힌 해시와 비교하고(D124) 쓴 내용의 해시를 적는다 */
+  private async ownedWritten(file: OwnedFile, written: OwnedWrite): Promise<void> {
+    this.compareOwned({ [file]: written.before })
+    await this.feed({ type: 'files.recorded', at: this.ctx.at(), hashes: { [file]: written.hash } })
   }
 
   /**
@@ -1596,11 +1952,14 @@ export class WorkRunner {
     return `${this.key}/${taskId}`
   }
 
-  /** task 터미널의 보관. 이 앱에서 돌지 않은 task는 pty.log로 채운 읽기 전용 보관이다 */
+  /**
+   * task 터미널의 보관. 이 앱에서 돌지 않은 task는 pty.log로 채운 읽기 전용 보관이다. 충돌로 끝이 잘렸으면
+   * 경고 없이 남은 만큼 보인다 (시나리오 9-5)
+   */
   private async terminalBuffer(task: TaskRecord): Promise<TerminalBuffer> {
     let buffer = this.terminals.get(task.id)
     if (!buffer) {
-      const log = await readText(path.join(this.files.taskDir(task), PTY_LOG))
+      const log = await this.files.readPtyLog(task)
       buffer = TerminalBuffer.fromLog(log ?? '')
       this.terminals.set(task.id, buffer)
     }
@@ -1669,11 +2028,27 @@ export class WorkRunner {
       steps: stepChoices(w),
       delivery: deliveryView(w.delivery),
       cleanup: this.cleanupView(),
+      operation: operationView(w),
+      notices: this.noticeViews(),
       tasks: w.tasks.map((t) => this.taskView(t)),
       current: currentTask(w)?.id ?? null,
       problems: [...this.problems],
       revision: this.revision,
     }
+  }
+
+  /** 패널 맨 위의 알림 (D121): 끝낸 고아 프로세스, 바뀐 앱 소유 파일, 바뀐 work.json */
+  private noticeViews(): NoticeView[] {
+    const out: NoticeView[] = []
+    if (this.orphans.length) out.push({ id: 'orphans', ...orphanNotice(this.orphans) })
+    if (this.fileChanges.size) {
+      const lines = [...this.fileChanges.values()].map((c) => c.line)
+      out.push({ id: 'files', ...filesNotice(lines) })
+    }
+    if (this.workJsonChanges.length) {
+      out.push({ id: 'work_json', ...workJsonNotice(this.workJsonChanges) })
+    }
+    return out
   }
 
   private cleanupView(): CleanupView | null {

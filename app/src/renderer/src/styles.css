@@ -158,6 +158,12 @@ textarea {
   color: #1e1e1e;
 }
 
+/* 끊긴 작업 (D121): 풀기 전에는 그 Work가 막힌다 */
+.badge.b-recovery {
+  background: var(--bad);
+  color: #1e1e1e;
+}
+
 .new-work {
   align-self: flex-start;
 }
@@ -654,6 +660,18 @@ details summary {
 
 .notice.fail {
   border-left-color: var(--bad);
+}
+
+/* 패널 맨 위의 알림 (시나리오 9, D121) */
+.recovery {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.recovery .notice ul {
+  margin: 4px 0;
+  word-break: break-all;
 }
 
 button.ready {

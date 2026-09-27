@@ -101,6 +101,16 @@
 | gh의 레포 고르기 | `--repo`는 `[HOST/]OWNER/REPO`나 URL을 받는다. URL로 읽는 것은 `git@`, `ssh:`, `git+ssh:`, `git:`, `http:`, `git+https:`, `https:`로 시작할 때뿐이고, 호스트는 소문자로 바꾸고 `www.`을 뗀다. `--repo`가 없으면 원격에서 고르는데, 기본 레포를 정하지 않았으면 원격 이름 upstream, github, origin 차례다. 원격 주소의 ssh 별칭(`~/.ssh/config`의 Host)은 원격에서 고를 때만 `ssh -G`로 푼다 | cli/cli `context/remote.go`, `pkg/cmd/factory/remote_resolver.go`, cli/go-gh `pkg/repository/repository.go`, `internal/git/url.go` (2026-09-27) |
 | gh 환경 변수 | `GH_PROMPT_DISABLED`는 대화형 질문을 끄고, `GH_NO_UPDATE_NOTIFIER`는 새 버전 안내를 끈다 | `gh help environment`(cli/cli `pkg/cmd/root/help_topic.go`) (2026-09-27) |
 | 폴더 신뢰와 훅 | 대화형 세션은 폴더 신뢰 창을 수락하기 전에는 모든 설정 파일의 훅을 실행하지 않는다. 앱이 `--settings`로 주는 훅도 같다(디버그 로그 "Skipping … hook execution - workspace trust not accepted"). `-p`와 SDK 세션은 신뢰한 것으로 본다. 레포에서는 신뢰를 레포 루트에 저장하고, worktree에서는 메인 체크아웃의 루트를 쓴다. 온보딩을 건너뛰는 `IS_DEMO`를 켜면 신뢰 창도 뜨지 않았고 훅이 오지 않았다(2.1.283) | Claude Code 문서 hooks(Workspace trust), permissions, env-vars (2026-09-26), M2 [실제] 준비 중 관찰 |
+| `/proc`의 프로세스 정보 | `/proc/<pid>/stat`의 (2) comm은 괄호로 싼 실행 파일 이름이고 16바이트(끝의 NUL 포함)에서 잘린다. (3) state, (4) ppid가 있고, (22) starttime은 부팅 뒤 시작한 때를 클록 틱으로 적는다(`sysconf(_SC_CLK_TCK)`로 나눔). `/proc/stat`의 btime은 부팅 시각(유닉스 시각, 초)이다 | man-pages proc(5) (2026-09-27) |
+| btime의 계산 | 커널은 btime을 읽을 때마다 벽시계와 부팅 뒤 시계의 차이(`getboottime64`)로 계산한다. 벽시계를 설정하면 그 차이가 바뀌어(`tk_set_wall_to_mono`) btime도 바뀐다 | Linux 소스 `fs/proc/stat.c`, `kernel/time/timekeeping.c` (2026-09-27) |
+| Win32_Process의 부모와 시작 시각 | `ParentProcessId`는 만든 프로세스의 ID다. ID는 재사용되므로 끝난 프로세스나 ID를 재사용한 다른 프로세스를 가리킬 수 있고, `CreationDate`(실행을 시작한 때)로 부모가 먼저 만들어졌는지 가리라고 한다 | Microsoft 문서 Win32_Process(MicrosoftDocs/win32 `win32-process.md`) (2026-09-27) |
+| Node의 프로세스 종료 | Windows에는 시그널이 없어 `SIGINT`, `SIGTERM`, `SIGKILL`을 보내면 대상 프로세스를 무조건 끝낸다. Linux에서는 부모를 끝내도 자식의 자식은 끝나지 않는다 | Node 문서 process(Signal events), child_process(`subprocess.kill`) (2026-09-27) |
+| `detached` 자식 | Windows에서 `detached: true`로 띄운 자식은 부모가 끝나도 계속 돌고 자기 콘솔을 갖는다. 다른 OS에서는 새 프로세스 그룹과 세션의 리더가 되고, detached가 아니어도 부모가 끝난 뒤 계속 돌 수 있다 | Node 문서 child_process `options.detached` (2026-09-27) |
+| Linux에서 앱이 죽은 뒤의 PTY | 앱 역할 프로세스를 SIGKILL로 끝내면 PTY 안의 프로세스는 보통 hangup으로 함께 끝난다. 그런데 node-pty 1.1.0의 master fd는 뒤에 띄운 자식에게 상속됐고(두 번째 PTY 세션의 프로세스가 첫 세션의 `/dev/ptmx`를 쥐고 있었음), master를 쥔 프로세스가 살아 있으면 PTY 안의 트리가 남았다 | 실행(Linux 컨테이너, node-pty 1.1.0) (2026-09-27) |
+| worktree의 prune과 remove | `prune`은 작업 트리가 없어진 worktree의 `$GIT_DIR/worktrees` 정보를 지운다. `remove`는 깨끗한 worktree(추적하지 않는 파일과 추적 파일의 수정이 없음)만 지우고 아니면 `--force`가 필요하다. git 2.43.0에서 `.git` 파일이 없어진 worktree는 `--force`로도 지우지 않았고, prune은 관리 정보만 지우고 폴더는 남겼다. 지운 추적 파일도 수정으로 보아 `--force`가 있어야 지웠다 | git 문서 git-worktree, 실행 (2026-09-27) |
+| stash 목록 | `git stash list`는 `git log`의 형식 옵션을 받는다. `--message`로 만든 항목의 제목(`%gs`)은 `On <브랜치>: <메시지>`였다(2.43.0) | git 문서 git-stash, 실행 (2026-09-27) |
+| 없는 브랜치가 섞인 `git branch -D` | 있는 브랜치는 지우고 종료 코드 1로 끝났다(2.43.0) | 실행 (2026-09-27) |
+| `TextDecoder`의 stream | `decode(input, { stream: true })`는 끝의 덜 끝난 바이트 열을 안에 두고 다음 호출 때 내보낸다. 한 번만 부르면 잘린 글자는 나오지 않는다 | Node 문서 util `textDecoder.decode` (2026-09-27) |
 
 - N-API 사전 빌드가 Electron 44에서 다시 빌드 없이 로드되고, 설치 파일(asar)에서 `.node`와 `conpty\conpty.dll`, `OpenConsole.exe`가 풀려 나와 동작한다. M0의 [스모크]로 러너에서 확인했다(2026-09-26, `docs/checks.md`).
 - Windows의 Node(libuv)는 stdin을 raw 모드로 읽고 있을 때만 콘솔 크기 변경을 알아챈다(libuv `docs/src/signal.rst`). 가짜 `claude`도 stdin을 raw 모드로 읽어야 크기 변경 시험이 맞다(app-ci #1~#5).
@@ -183,8 +193,9 @@ app/src/
 | 훅 설정 모양(이벤트별 `matcher`, `type: http`) | `spikes/lib/hooks.mjs` `settings` | `core/settings` |
 | Stop 되돌림 응답 `{"decision":"block","reason":…}` | `spikes/lib/hooks.mjs` | `adapters/hooks` |
 | 파일 해시(SHA-256) | `spikes/lib/util.mjs` `sha256` | `adapters/store` |
+| 고아 프로세스의 트리 모으기(부모 ID)와 Linux 프로세스 목록(`/proc`) | `spikes/lib/util.mjs` `descendants`, `procList` | `adapters/pty` |
 
-시험 도구로만 옮기는 것(I17): xterm headless 화면 읽기, 첫 실행 창 자동 수락(`handleDialogs`), 입력 대기 판정(`waitReady`), 테스트용 레포와 bare 원격 만들기(`makeFixture`), 결과 기록(`Result`).
+시험 도구로만 옮기는 것(I17): xterm headless 화면 읽기, 첫 실행 창 자동 수락(`handleDialogs`), 입력 대기 판정(`waitReady`), 테스트용 레포와 bare 원격 만들기(`makeFixture`), 결과 기록(`Result`), 앱 역할 프로세스(`orphan-parent.mjs` → `test/fixtures/app-role.mjs`).
 
 새로 쓰는 것: 상태 기계, 저장소, `context.md` 조립, 형식 검사(I18), 되감기, 전달, 정리, 화면.
 
@@ -379,6 +390,32 @@ app/src/
 - [흐름] 되감기, 전달, 정리 도중에 끊긴 기록이 있으면 재시작 때 어디서 끊겼는지 알린다.
 - [흐름] 스크립트로 바꾼 `work.json`을 경고한다.
 - [실기] 작업 관리자로 앱을 끝낸 뒤 다시 켜서 상태를 확인한다.
+
+**구현하며 정한 것** (설계의 규칙에서 따라 나오는 세부. 설계를 바꾼 것은 D121~D126, I33이다)
+
+- **재시작 순서(시나리오 9):** 모든 Work의 `work.json`을 읽고, 기록한 프로세스를 모아 한 번 확인해 끝낸 뒤(9-1), Work마다 조정한다(9-2~9-6). 조정은 OS 알림을 보내지 않는다.
+- **확인하는 프로세스(D76, D126):** 모든 task의 세션(끝난 세션 포함)과 살아 있던 정리 세션 가운데 시작 시각을 적은 것이다. 끝난 세션도 넣는다: SessionEnd 뒤에 늦게 끝나는 프로세스가 있고, 시작 시각까지 같으면 같은 프로세스다. 시작 시각이 없으면 재사용된 ID를 가리지 못해 넣지 않는다.
+- **트리 모으기와 끝내기:** 프로세스 목록을 한 번 읽어(Windows는 PowerShell의 Win32_Process, Linux는 `/proc`) 기록과 ID·시작 시각이 같은 프로세스를 찾고, 부모 ID로 자손을 모은다. 부모 ID는 재사용된 ID를 가리킬 수 있어 부모보다 먼저 시작한 프로세스는 자식으로 보지 않는다(3절). 모은 프로세스를 모두 강제로 끝내고(Node `process.kill`의 `SIGKILL`: Windows는 무조건 종료, Linux는 SIGKILL, 3절) 목록에서 없어질 때까지 기다린다(최대 10초).
+- **끝낸 것의 기록:** 실행 중이던 task의 세션을 끝냈으면 그 task의 조정 이벤트(`task.interrupted`, `task.awaiting_approval`)에 `killed_pid`를 더한다. 정리 세션은 이벤트를 남기지 않는다(D126). 알림은 Work마다 "앱을 다시 켜며 남아 있던 프로세스를 끝냈습니다"와 "<task>의 claude (PID n)" 줄이다.
+- **Linux의 시작 시각(I33):** starttime을 CLK_TCK로 나누고 btime을 더해 ms까지의 ISO 8601(UTC)로 적는다. CLK_TCK는 `getconf CLK_TCK`로 한 번 읽고, 읽지 못하면 100이다. 좀비(Z)와 죽은(X) 프로세스는 끝난 것으로 본다. btime은 벽시계를 설정하면 바뀌므로(3절) 그 사이에 시계를 설정했으면 같은 프로세스도 시작 시각이 달라 끝내지 않는다. 건드리지 않는 쪽으로 틀린다. macOS 등 그 밖의 OS는 시작 시각이 없어 확인하지 않는다.
+- **끊긴 작업의 표시(D121, D122):** 조정은 남은 진행 중 작업 기록에 `interrupted_at`을 적는다. 이것이 있으면 끊긴 작업이다: 배지 "끊긴 작업", 패널 맨 위의 알림, 액션 바의 조작은 Work 설정만 보이고, 승인과 전달 버튼은 누를 수 없다. 받지 않는 명령은 "끊긴 작업이 있음: 먼저 [다시 시도]나 [무시]를 누르세요"로 거부한다. [다시 시도]가 시작하면 `interrupted_at`을 지워 다시 진행 중인 작업이 된다. 또 끊기면 다음 재시작 때 다시 끊긴 작업이다.
+- **되감기의 [다시 시도](D123):** 지금 HEAD, 커밋 안 된 변경, 이미 만든 백업을 git에서 본다. 이미 만든 백업은 reset 단계면 기록한 것이고, backup 단계면 계획한 이름의 브랜치가 있을 때다(기록하기 전에 끊김). 기록이 있는 동안 이 Work의 다른 되감기는 없으므로 그 이름의 브랜치는 끊긴 되감기가 만든 것이다.
+  - 코드가 이미 되돌릴 커밋이고 깨끗하면 백업도 되돌리기도 하지 않는다.
+  - 이미 만든 백업이 지금 코드와 같으면(HEAD가 백업할 때의 HEAD이고, 작업 트리의 tree가 백업 커밋의 tree) 다시 만들지 않는다. 작업 트리의 tree는 백업 커밋처럼 다른 index 파일로 만든다(D116).
+  - 아니면 다음 번호로 백업한 뒤 되돌린다. 이미 만든 백업이 있으면 새 task의 선택 기록(`selection.reset`)에는 처음 백업을 남기고(폐기한 task의 [변경]이 본다), 이번 백업은 `task.rewound`의 `extra_backup_branch`로 남긴다.
+  - 백업할 때의 HEAD는 기록(`operation.head`, M6부터 보통의 되감기도 적음)이나, 백업 커밋에서 읽는다: 커밋 안 된 변경을 담은 백업 커밋은 메시지(D116)로 알아보고 그 부모, 아니면 그 커밋이다.
+- **전달의 [다시 시도]·[무시](D123):** 둘 다 먼저 끊긴 시도가 만들었지만 기록하지 못한 stash와 커밋을 찾는다. [변경 버리고 진행]이면 stash 목록에서 제목이 이 Work의 stash 메시지인 것, [커밋하고 진행]이면 HEAD의 제목이 이 Work의 커밋 메시지일 때 HEAD다. 전달 결과에 이미 있는 것은 뺀다. 그리고 끊긴 시도를 `delivery.failed`(오류 "앱이 꺼져 끊김", `reason: app_restart`)로 남긴다. [다시 시도]는 이어서 같은 전달을 처음부터 한다: 이미 push한 커밋은 git이 다시 보내지 않고, 같은 브랜치의 열린 PR이 있으면 링크만 남긴다(7-4). 커밋 안 된 변경이 남았으면 그 자리에서 선택지를 다시 보인다. [무시] 뒤의 Work 완료 화면은 M5의 실패처럼 [다시 시도]·[전달 없이 완료]다.
+- **정리의 [다시 시도](D123):** worktree 단계에서 끊겼으면, 폴더가 없으면 `git worktree prune`만 한다. `.git` 파일이 없으면(git이 지우다 멈춤) `git worktree remove`가 거부하므로(3절) prune한 뒤 남은 폴더를 지운다. 있으면 `git status`를 다시 본다: 기록이 `--force`였으면 `--force`로, 아니면 남은 변경이 지우다 만 추적 파일(` D`, `D `, `DD`)뿐일 때만 `--force`로 지운다. 다른 변경이 생겼으면 멈추고 [Work 정리]로 다시 확인하게 한다. 브랜치는 아직 있는 것만 지운다(없는 이름이 섞이면 `git branch -D`가 실패함, 3절). `cleaned.deleted_branches`는 기록한 목록 그대로다.
+- **[무시](D123):** 되감기와 정리는 기록만 지운다. 되감기는 task를 폐기하지 않아 단계를 고르기 전의 Work 그대로이고, 다시 [단계 선택]을 할 수 있다. 정리는 [Work 정리]를 다시 할 수 있다.
+- **앱 소유 파일의 해시(D124, D125):** `work.json`의 `file_hashes`에 `request.md`, `intent.md`, `decisions.md`의 `sha256:<hex>`(파일 바이트의 해시)를 적는다. Work를 만들 때 `request.md`, intent를 확정할 때 `intent.md`, 결정 로그에 덧붙일 때 `decisions.md`를 적는다. 비교하는 때는 재시작 때 세 파일, `context.md`를 만들 때 세 파일, intent를 새 버전으로 바꿀 때 이전 `intent.md`, 결정 로그에 덧붙일 때 덧붙이기 전의 `decisions.md`다. 없어진 파일과 앱이 쓰지 않았는데 생긴 파일도 다르다고 본다.
+  - 알림 줄은 "<파일>: 내용이 바뀜 | 없어짐 | 앱이 쓰지 않았는데 생김 (<확인한 때>) — <경로>"다. 같은 내용을 다시 읽으면 다시 넣지 않는다. [확인]은 알림에 든 파일의 지금 해시를 적고(없으면 지움) 알림을 닫는다.
+  - 알림은 앱의 메모리에만 있다. [확인]하지 않고 다시 켜면 다시 비교해 알린다. `file_hashes`가 없는 Work(M6 전)는 재시작 조정이 경고 없이 적는다.
+- **`work.json`의 비교(D124):** 앱은 Work를 읽거나 쓸 때 그 내용을 기억하고, 쓰기 전에 파일을 읽어 비교한다. 다르면 파일의 내용을 `work.json.changed-<현지 시각 YYYYMMDDTHHMMSS>`로 남기고(이름이 겹치면 `-2`, `-3`…) 앱의 상태로 쓴다. 파일이 없어졌으면 남길 것이 없다. 알림 줄은 "<확인한 때>: 바뀐 내용 — <옆 파일>"이다.
+- **정리 세션의 기록(D126):** 세션을 띄운 뒤 `cleanup_process`(프로세스 ID, 시작 시각, 띄운 때)를 적고, 세션이 끝나면([정리 끝 → push/PR 진행], `/exit`, [Work 포기], 앱 종료) 지운다. 재시작 조정은 남은 기록을 지운다(끝내는 것은 9-1).
+- **잘린 `pty.log`(9-5):** 끝난 task의 탭은 `pty.log`를 바이트로 읽어 UTF-8로 풀고 끝의 덜 쓴 글자는 버린다(`TextDecoder`의 stream, 3절). 가운데의 잘못된 바이트는 대체 문자로 보인다. 경고하지 않는다.
+- **이벤트(5.5):** 재시작 때 끝낸 task의 세션은 그 task의 `task.interrupted`·`task.awaiting_approval`에 `killed_pid`를 더한다. 끊긴 전달은 `delivery.failed`에 `reason: app_restart`를 더한다. 끊긴 되감기를 다시 하며 덤으로 남긴 백업은 `task.rewound`의 `extra_backup_branch`다. 5.5에 없는 유형은 더하지 않았다.
+- **알림의 화면(D121):** 패널 맨 위에 끊긴 작업(무엇이 어디서 끊겼는지, [다시 시도]·[무시]가 할 일), 끝낸 고아 프로세스, 바뀐 앱 소유 파일, 바뀐 `work.json`의 차례로 보인다. 끊긴 작업 말고는 [확인]으로 닫는다.
+- **시험에서 끊긴 모습 만들기:** [흐름]은 앱이 명령을 받아 쓴 `work.json`을 core의 전이로 만들고, git은 끊긴 곳까지 한 일(백업, push, stash, 반쯤 지운 worktree)을 손으로 한다. 앱을 끈 뒤 그 `work.json`과 끊기기 전의 `events.jsonl`을 두고 다시 켠다. 살아남은 claude의 자리는 분리해 띄운 프로세스 트리다. [스모크]는 앱을 끈 뒤 첫 Work의 `work.json`에 끊긴 되감기 기록을 손으로 넣는다.
 
 ### M7. 자동 승인
 

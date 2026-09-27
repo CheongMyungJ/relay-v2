@@ -2,9 +2,17 @@
 // 승인할 수 있으면 넓어져 승인 화면이 된다. verify의 승인 화면은 Work 완료 화면이다 (시나리오 7-3):
 // 전달 선택([완료만], [push], [PR 생성]), 커밋 안 된 변경의 선택지(7-5), 전달 실패의 [다시 시도]·
 // [전달 없이 완료](7-6, D120). verify에서 멈춘 Work도 이 화면에서 전달을 고른다 (D119).
+// 맨 위에는 재시작 때와 실행 중의 알림을 보인다: 끊긴 작업의 [다시 시도]·[무시], 끝낸 고아 프로세스와 바뀐
+// 파일의 [확인] (시나리오 9, D121~D124). 끊긴 작업이 있는 동안 승인과 전달 버튼은 누를 수 없다 (D122).
 import { useState } from 'react'
 import type { NodeName, Size } from '../../shared/contracts'
-import type { DeliverResult, ReviewView, TaskView, WorkView } from '../../shared/views'
+import type {
+  CommandResult,
+  DeliverResult,
+  ReviewView,
+  TaskView,
+  WorkView,
+} from '../../shared/views'
 import type { DeliveryChoice, UncommittedAction } from '../../shared/work'
 import { call } from './commands'
 import { ConfirmDialog, UncommittedDialog } from './dialogs'
@@ -37,11 +45,22 @@ export function wantsApproval(review: ReviewView | null): boolean {
 }
 
 export function Panel({ work, task, review, onApproved, onSelectStep, onShowCleanup }: Props) {
-  if (!review) return <div className="panel-body dim">불러오는 중…</div>
+  const recovery = (
+    <Recovery key={work.key} work={work} onDone={onApproved} onShowCleanup={onShowCleanup} />
+  )
+  if (!review) {
+    return (
+      <div className="panel-body">
+        {recovery}
+        <div className="dim">불러오는 중…</div>
+      </div>
+    )
+  }
   // 이전 단계 추천으로 멈췄으면 추천한 단계를 처음 고른다 (D23)
   const recommended = work.steps.find((c) => c.recommended && c.allowed)?.node
   return (
     <div className="panel-body">
+      {recovery}
       <header className="panel-head">
         <span className="panel-title">{task.label}</span>
         <span className={`status s-${task.status}`}>{task.statusLabel}</span>
@@ -103,6 +122,128 @@ export function Panel({ work, task, review, onApproved, onSelectStep, onShowClea
       ) : (
         <Progress review={review} task={task} />
       )}
+    </div>
+  )
+}
+
+/**
+ * 패널 맨 위의 알림 (시나리오 9, D121). 끊긴 작업은 무엇이 어디서 끊겼는지와 [다시 시도]·[무시]가 할 일을 보인다
+ * (D123). 끊긴 전달의 [다시 시도]가 커밋 안 된 변경을 돌려주면 선택지를 보인다(7-5). 끝낸 고아 프로세스(D76)와
+ * 앱 밖에서 바뀐 파일(D124)은 [확인]으로 닫는다
+ */
+function Recovery({
+  work,
+  onDone,
+  onShowCleanup,
+}: {
+  work: WorkView
+  onDone: () => void
+  onShowCleanup: () => void
+}) {
+  const [busy, setBusy] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [pending, setPending] = useState<{ choice: DeliveryChoice; files: string[] } | null>(null)
+  const op = work.operation
+
+  const run = async <T extends { ok: boolean }>(label: string, fn: () => Promise<T>) => {
+    setBusy(label)
+    setError(null)
+    const r = await call(fn)
+    setBusy(null)
+    return r
+  }
+  const done = (r: DeliverResult, choice: DeliveryChoice | null) => {
+    if (r.ok) {
+      setPending(null)
+      onDone()
+    } else if (r.uncommitted && choice) {
+      setPending({ choice, files: r.uncommitted })
+    } else {
+      setError(r.error)
+    }
+  }
+  const retry = async () => {
+    const choice = op?.choice ?? null
+    done(await run('다시 시도', () => window.relay.retryOperation(work.key)), choice)
+  }
+  const command = async (label: string, fn: () => Promise<CommandResult>) => {
+    const r = await run(label, fn)
+    if (!r.ok) setError(r.error)
+  }
+  const deliver = async (choice: DeliveryChoice, action: UncommittedAction, expect: string[]) =>
+    done(
+      await run(DELIVERY_BUTTON[choice], () =>
+        window.relay.deliver(work.key, { choice, uncommitted: { action, expect } }),
+      ),
+      choice,
+    )
+  const openCleanup = async (choice: DeliveryChoice) => {
+    const r = await run('AI 세션 열기', () => window.relay.openCleanup(work.key, choice))
+    if (r.ok) {
+      setPending(null)
+      onShowCleanup()
+    } else setError(r.error)
+  }
+
+  if (!op && !work.notices.length && !pending && !error) return null
+  return (
+    <div className="recovery">
+      {op ? (
+        <div className="notice fail" role="alert" aria-label="끊긴 작업">
+          <strong>{op.title}</strong>
+          <ul>
+            {op.lines.map((l, i) => (
+              <li key={i}>{l}</li>
+            ))}
+          </ul>
+          <div className="dim">{op.retry}</div>
+          <div className="dim">{op.ignore}</div>
+          <div className="notice-actions">
+            <button className="primary" disabled={!!busy} onClick={() => void retry()}>
+              다시 시도
+            </button>
+            <button
+              disabled={!!busy}
+              onClick={() => void command('무시', () => window.relay.ignoreOperation(work.key))}
+            >
+              무시
+            </button>
+            {busy ? <span className="dim">{busy}: 하는 중…</span> : null}
+          </div>
+        </div>
+      ) : null}
+      {work.notices.map((n) => (
+        <div key={n.id} className="notice" aria-label={n.title}>
+          <strong>{n.title}</strong>
+          <ul>
+            {n.lines.map((l, i) => (
+              <li key={i}>{l}</li>
+            ))}
+          </ul>
+          <div className="dim">{n.hint}</div>
+          <div className="notice-actions">
+            <button
+              disabled={!!busy}
+              onClick={() => void command('확인', () => window.relay.dismissNotice(work.key, n.id))}
+            >
+              확인
+            </button>
+          </div>
+        </div>
+      ))}
+      {error ? <div className="error">{error}</div> : null}
+      {pending ? (
+        <UncommittedDialog
+          workId={work.workId}
+          label={DELIVERY_BUTTON[pending.choice]}
+          files={pending.files}
+          busy={!!busy}
+          onDiscard={() => void deliver(pending.choice, 'discard', pending.files)}
+          onCommit={() => void deliver(pending.choice, 'commit', pending.files)}
+          onSession={() => void openCleanup(pending.choice)}
+          onClose={() => setPending(null)}
+        />
+      ) : null}
     </div>
   )
 }
@@ -226,6 +367,8 @@ function Review({
   const intake = review.node === 'intake'
   const gate = review.gates[intake ? (size ?? 'none') : 'none']
   const approveLabel = intake ? '의도 승인' : '승인'
+  // 끊긴 작업이 있는 동안은 승인하지 않는다 (D122)
+  const cut = !!work?.operation
 
   const approve = async (force: boolean) => {
     setBusy(true)
@@ -348,13 +491,13 @@ function Review({
           ) : null}
           <button
             className="primary"
-            disabled={busy || !gate.approve}
+            disabled={busy || cut || !gate.approve}
             onClick={() => void approve(false)}
           >
             {approveLabel}
           </button>
           {gate.force ? (
-            <button className="danger" disabled={busy} onClick={() => setConfirming(true)}>
+            <button className="danger" disabled={busy || cut} onClick={() => setConfirming(true)}>
               오류 무시하고 승인
             </button>
           ) : null}
@@ -502,7 +645,9 @@ function CompletionActions({
   if (!c) return null
   const gate = review.gates.none
   const stopped = c.stopped
-  const ready = stopped || gate.approve
+  // 끊긴 작업이 있는 동안은 완료도 전달도 하지 않는다 (D122)
+  const cut = work.operation !== null
+  const ready = (stopped || gate.approve) && !cut
   const cleanup = work.cleanup
   const open = cleanup !== null && cleanup.status !== 'ended'
 
@@ -561,13 +706,13 @@ function CompletionActions({
       <footer className="review-actions">
         <button
           className="primary"
-          disabled={!!busy || !gate.approve}
+          disabled={!!busy || cut || !gate.approve}
           onClick={() => void complete()}
         >
           승인하고 멈춤
         </button>
         {gate.force ? (
-          <button className="danger" disabled={!!busy} onClick={onForce}>
+          <button className="danger" disabled={!!busy || cut} onClick={onForce}>
             오류 무시하고 승인
           </button>
         ) : null}
@@ -602,7 +747,7 @@ function CompletionActions({
         {button('push')}
         {button('pr')}
         {!stopped && gate.force ? (
-          <button className="danger" disabled={!!busy || open} onClick={onForce}>
+          <button className="danger" disabled={!!busy || open || cut} onClick={onForce}>
             오류 무시하고 승인
           </button>
         ) : null}
@@ -626,7 +771,7 @@ function CompletionActions({
           <div className="notice-actions">
             <button
               className="primary"
-              disabled={!!busy || open}
+              disabled={!!busy || open || cut}
               onClick={() => void deliver(failed.choice, null)}
             >
               다시 시도
