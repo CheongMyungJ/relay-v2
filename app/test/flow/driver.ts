@@ -19,6 +19,11 @@ export interface DriveOptions {
   stepTimeoutMs?: number
   /** 기다리는 동안 부른다. 첫 실행 창 수락 같은 일을 한다 ([실제]) */
   tick?: (task: TaskView) => unknown
+  /**
+   * 사람이 할 일이 생긴 task가 이것을 만족하면 손대지 않고 paused로 돌아온다.
+   * 승인 대기에서 단계 선택을 하는 시험(M4)이 쓴다
+   */
+  pauseAt?: (task: TaskView) => boolean
 }
 
 export interface TaskOutcome {
@@ -40,7 +45,7 @@ export interface TaskOutcome {
 }
 
 export interface DriveResult {
-  status: 'completed' | 'stopped' | 'failed'
+  status: 'completed' | 'stopped' | 'paused' | 'failed'
   reason: string | null
   tasks: TaskOutcome[]
   ms: number
@@ -146,6 +151,7 @@ export async function drive(
       if (w.status === 'abandoned') return finish('failed', 'Work 포기')
       const task = current(w)
       if (!task) return finish('failed', '지금 task가 없음')
+      if (o.pauseAt?.(task)) return finish('paused', `${task.label}: ${task.statusLabel}`)
       const out = outcome(task)
 
       switch (task.status) {

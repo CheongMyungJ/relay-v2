@@ -5,7 +5,8 @@
 // 사람 역할: 첫 실행 창은 수락하고(I17), 질문에는 첫 선택지(추천)로 답하고, 승인 대기가 되면 승인한다.
 // 형식 오류가 끝까지 남으면 [오류 무시하고 승인]을 쓰고 센다(0이어야 함). 결과는 test-results/claude/에 남긴다.
 // RELAY_REAL_CLAUDE=dry면 가짜 claude로 같은 도구를 돌려 도구 자체를 확인한다 (사용량 없음).
-// RELAY_REAL_CASES로 돌릴 경우를 고른다(예: "S resume"). 비우면 전부(M, S, resume.test.ts의 resume).
+// RELAY_REAL_CASES로 돌릴 경우를 고른다(예: "S resume"). 비우면 전부(M, S, resume.test.ts의 resume,
+// rewind.test.ts의 rewind-intake와 rewind-fix).
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
@@ -120,7 +121,12 @@ function summary(): string {
     '',
   ]
   for (const r of results) {
-    const status = { completed: 'Work 완료', stopped: '멈춤', failed: '실패' }[r.result.status]
+    const status = {
+      completed: 'Work 완료',
+      stopped: '멈춤',
+      paused: '멈춤(시험 도구)',
+      failed: '실패',
+    }[r.result.status]
     lines.push(
       `## ${r.name} 경로: ${status} (${seconds(r.result.ms)})`,
       '',

@@ -2,6 +2,7 @@
 // 렌더러는 명령을 invoke로 보내고, 메인은 상태가 바뀔 때마다 Work 스냅샷을 보낸다.
 // 터미널 출력은 task별 채널로 보낸다. 메인과 렌더러가 같은 타입을 보도록 여기에 둔다.
 import type { AppConfig, WorkSettings } from './config'
+import type { NodeName } from './contracts'
 import type {
   AppSnapshot,
   ApproveOptions,
@@ -11,6 +12,8 @@ import type {
   ProjectInspection,
   ProjectView,
   ReviewView,
+  SelectStepInput,
+  StepPreviewResult,
   TerminalBacklog,
   TerminalChunk,
   WorkView,
@@ -60,6 +63,10 @@ export interface RelayApi {
   resumeWork(workKey: string): Promise<CommandResult>
   /** [Work 포기] (3.3) */
   abandon(workKey: string): Promise<CommandResult>
+  /** 단계 선택 대화상자의 미리 보기 (6.2, D82) */
+  stepPreview(workKey: string, node: NodeName, keepCode: boolean): Promise<StepPreviewResult>
+  /** [단계 선택]의 [확인] (6.2) */
+  selectStep(workKey: string, input: SelectStepInput): Promise<CommandResult>
   /** Work별 질문 방식 (D72) */
   updateWorkSettings(workKey: string, settings: WorkSettings): Promise<CommandResult>
   /** 앱 설정 (D70) */
@@ -94,6 +101,8 @@ export const IPC = {
   stopAfter: 'work:stop-after',
   resumeWork: 'work:resume-work',
   abandon: 'work:abandon',
+  stepPreview: 'work:step-preview',
+  selectStep: 'work:select-step',
   workSettings: 'work:settings',
   config: 'config:get',
   updateConfig: 'config:update',

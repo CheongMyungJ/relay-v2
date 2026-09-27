@@ -4,6 +4,7 @@ import {
   TASK_STATUS_LABEL,
   WORK_STATUS_LABEL,
   bandText,
+  changeRange,
   emphasis,
   handoffSummary,
   humanNotice,
@@ -13,8 +14,14 @@ import {
   taskLabel,
   verdicts,
 } from '../../src/core/review'
-import type { Handoff } from '../../src/shared/contracts'
-import type { FormatIssue, TaskStatus, WorkState } from '../../src/shared/work'
+import type { Handoff, NodeName } from '../../src/shared/contracts'
+import type {
+  FormatIssue,
+  StepSelection,
+  TaskRecord,
+  TaskStatus,
+  WorkState,
+} from '../../src/shared/work'
 
 const HANDOFF: Handoff = {
   status: 'awaiting_approval',
@@ -42,6 +49,13 @@ describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
     // [이 단계 새 세션으로 다시]로 만든 task (D114)
     expect(bandText({ seq: 5, node: 'rca', reason: 'resume' })).toBe(
       '05 원인 분석 · 새 세션 · 이유: 재개',
+    )
+    // 단계 선택으로 들어온 task (6.2)
+    expect(bandText({ seq: 6, node: 'fix', reason: 'rewind' })).toBe(
+      '06 수정 · 새 세션 · 이유: 되감기',
+    )
+    expect(bandText({ seq: 7, node: 'verify', reason: 'skip' })).toBe(
+      '07 최종 검증 · 새 세션 · 이유: 건너뛰기',
     )
   })
 
@@ -80,9 +94,11 @@ describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
       'session_ended',
       'interrupted',
       'approved',
+      'discarded',
     ]
     expect(Object.keys(TASK_STATUS_LABEL).sort()).toEqual([...all].sort())
     expect(TASK_STATUS_LABEL.queued).toBe('대기열')
+    expect(TASK_STATUS_LABEL.discarded).toBe('폐기됨')
     expect(WORK_STATUS_LABEL.abandoned).toBe('포기')
   })
 
@@ -134,10 +150,10 @@ describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
       reason: '다시',
     })
     expect(resumeHint(at('evidence', back('intake')))).toBe(
-      '[재개]하면 추천을 따르지 않고 다음 단계(원인 분석)를 시작합니다. 추천대로 되돌아가는 단계 선택은 M4에서 넣습니다.',
+      '[재개]하면 추천을 따르지 않고 다음 단계(원인 분석)를 시작합니다. 추천대로 되돌아가려면 [단계 선택]을 누르세요.',
     )
     expect(resumeHint(at('verify', back('fix')))).toBe(
-      '[재개]하면 추천을 따르지 않고 Work를 완료합니다. 추천대로 되돌아가는 단계 선택은 M4에서 넣습니다.',
+      '[재개]하면 추천을 따르지 않고 Work를 완료합니다. 추천대로 되돌아가려면 [단계 선택]을 누르세요.',
     )
   })
 })
@@ -176,6 +192,89 @@ describe('OS 알림 문구 (D81)', () => {
   })
 })
 
+describe('[변경]의 범위 (D83: 이 task의 diff)', () => {
+  const base = createWork({ workId: 'w', baseBranch: 'main', baseCommit: 'c0', at: 'x' }).work
+  const first = base.tasks[0] as TaskRecord
+  const task = (seq: number, node: NodeName, extra: Partial<TaskRecord> = {}): TaskRecord => ({
+    ...first,
+    id: `t-${String(seq).padStart(2, '0')}`,
+    seq,
+    node,
+    status: 'approved',
+    ...extra,
+  })
+  const withTasks = (...tasks: TaskRecord[]): WorkState => ({ ...base, tasks })
+  const selection = (reset: StepSelection['reset']): StepSelection => ({
+    from_task: 't-03',
+    instruction: null,
+    discarded: [],
+    skipped: [],
+    keep_code: reset === null,
+    reset,
+  })
+
+  it('끝난 task는 다음 task의 시작 커밋까지, 지금 코드의 마지막 task는 작업 트리까지다', () => {
+    const work = withTasks(
+      task(1, 'intake', { start_commit: 'a' }),
+      task(2, 'fix', { start_commit: 'b' }),
+      task(3, 'verify', { start_commit: 'c', status: 'working' }),
+    )
+    expect(changeRange(work, 't-01')).toEqual({ from: 'a', to: 'b' })
+    expect(changeRange(work, 't-02')).toEqual({ from: 'b', to: 'c' })
+    expect(changeRange(work, 't-03')).toEqual({ from: 'c', to: null })
+    expect(changeRange(work, 't-09')).toBeNull()
+  })
+
+  it('시작하지 않은 task는 범위가 없고, 코드를 바꾸지 않아 앞 task의 범위도 끝내지 않는다', () => {
+    const work = withTasks(
+      task(1, 'intake', { start_commit: 'a' }),
+      task(2, 'evidence', { status: 'queued' }),
+    )
+    expect(changeRange(work, 't-02')).toBeNull()
+    expect(changeRange(work, 't-01')).toEqual({ from: 'a', to: null })
+  })
+
+  it('코드를 되돌린 되감기로 끝난 task는 백업 커밋까지다. 백업이 없었으면 되돌리기 전 HEAD다 (D116)', () => {
+    const reset = {
+      from: 'head',
+      to: 'b',
+      backup_branch: 'relay/w-discarded-1',
+      backup_commit: 'bk',
+    }
+    const tasks = [
+      task(1, 'intake', { start_commit: 'a' }),
+      task(2, 'fix', { start_commit: 'b', status: 'discarded' }),
+      task(3, 'verify', { start_commit: 'c', status: 'discarded' }),
+    ]
+    const work = withTasks(
+      ...tasks,
+      task(4, 'fix', { start_commit: 'b', status: 'working', selection: selection(reset) }),
+    )
+    // 폐기된 fix는 폐기된 verify가 시작할 때까지(자기 커밋), 폐기된 verify는 백업 커밋까지다
+    expect(changeRange(work, 't-02')).toEqual({ from: 'b', to: 'c' })
+    expect(changeRange(work, 't-03')).toEqual({ from: 'c', to: 'bk' })
+    expect(changeRange(work, 't-04')).toEqual({ from: 'b', to: null })
+    const noBackup = withTasks(
+      ...tasks,
+      task(4, 'fix', {
+        status: 'queued',
+        selection: selection({ ...reset, backup_branch: null, backup_commit: null }),
+      }),
+    )
+    expect(changeRange(noBackup, 't-03')).toEqual({ from: 'c', to: 'head' })
+  })
+
+  it('코드를 두는 선택(건너뛰기, [현재 코드 위에서 이어서])은 새 task의 시작 커밋까지다', () => {
+    const work = withTasks(
+      task(1, 'intake', { start_commit: 'a' }),
+      task(2, 'fix', { start_commit: 'b' }),
+      task(3, 'verify', { start_commit: 'c', status: 'discarded' }),
+      task(4, 'fix', { start_commit: 'd', status: 'working', selection: selection(null) }),
+    )
+    expect(changeRange(work, 't-03')).toEqual({ from: 'c', to: 'd' })
+  })
+})
+
 describe('강조 영역 (D83, 시나리오 4-2)', () => {
   const ERR: FormatIssue = { file: 'handoff.md', part: 'body', message: '`## 요약` 절 없음' }
 
@@ -203,7 +302,10 @@ describe('강조 영역 (D83, 시나리오 4-2)', () => {
       'format_errors',
     ])
     expect(items[0]?.lines).toEqual(['범위를 넘음', '근거: refresh.ts도 바뀜'])
-    expect(items[2]?.lines[0]).toBe('수정(fix)로 — 완료조건 2 실패')
+    expect(items[2]?.lines).toEqual([
+      '수정(fix)로 — 완료조건 2 실패',
+      '승인하면 다음 단계를 시작하지 않고 멈춥니다. 되돌아갈 단계는 멈춘 뒤 [단계 선택]으로 고릅니다.',
+    ])
     expect(items[4]?.lines).toEqual(['handoff.md: `## 요약` 절 없음'])
   })
 

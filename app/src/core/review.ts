@@ -1,4 +1,4 @@
-// 사람에게 보일 것: task 이름과 머리 띠(D109), 상태 이름, 승인 화면의 강조 영역(D83),
+// 사람에게 보일 것: task 이름과 머리 띠(D109), 상태 이름, 승인 화면의 강조 영역과 [변경]의 범위(D83),
 // Work 완료 화면의 판정표(시나리오 7-3). 화면은 main이 이 값으로 만든 스냅샷을 그리기만 한다 (I14).
 import type { Handoff } from '../shared/contracts'
 import type { Emphasis, Verdict } from '../shared/views'
@@ -21,8 +21,13 @@ export function taskLabel(task: Pick<TaskRecord, 'seq' | 'node'>): string {
   return `${pad(task.seq)} ${NODE_INFO[task.node].title}`
 }
 
-/** 머리 띠의 이유 문구 (시나리오 2-5). 되감기와 건너뛰기는 M4에서 더한다 */
-const REASON_LABEL: Record<StartReason, string> = { default: '기본 진행', resume: '재개' }
+/** 머리 띠의 이유 문구 (시나리오 2-5): 기본 진행 / 되감기 / 건너뛰기 / 재개 */
+export const REASON_LABEL: Readonly<Record<StartReason, string>> = {
+  default: '기본 진행',
+  rewind: '되감기',
+  skip: '건너뛰기',
+  resume: '재개',
+}
 
 /**
  * 탭 위 머리 띠: "04 원인 분석 · 새 세션 · 이유: 기본 진행" (시나리오 2-5, D109).
@@ -57,6 +62,7 @@ export const TASK_STATUS_LABEL: Readonly<Record<TaskStatus, string>> = {
   session_ended: '세션 종료',
   interrupted: '중단됨',
   approved: '승인됨',
+  discarded: '폐기됨',
 }
 
 /** Work 표시 이름 (3.3) */
@@ -67,7 +73,7 @@ export const WORK_STATUS_LABEL: Readonly<Record<WorkStatus, string>> = {
   abandoned: '포기',
 }
 
-/** Work가 멈춘 이유: 이전 단계 추천(D23), [이 단계 끝나면 멈춤](시나리오 3-4). 단계 선택은 M4에서 넣는다 */
+/** Work가 멈춘 이유: 이전 단계 추천(D23), [이 단계 끝나면 멈춤](시나리오 3-4) */
 export function stopNotice(work: WorkState): string | null {
   const stop = work.stop
   if (work.status !== 'stopped' || !stop) return null
@@ -80,7 +86,7 @@ export function stopNotice(work: WorkState): string | null {
 
 /**
  * 멈춘 Work에서 [재개]가 할 일 (3.3). 멈추게 한 task의 기본 다음 단계를 시작하고, verify에서 멈췄으면
- * Work를 완료한다. 이전 단계 추천(D23)은 따르지 않는다.
+ * Work를 완료한다. 이전 단계 추천(D23)은 따르지 않는다. 추천대로 되돌아가는 것은 [단계 선택]이다 (6.2).
  */
 export function resumeHint(work: WorkState): string | null {
   const stop = work.stop
@@ -94,7 +100,7 @@ export function resumeHint(work: WorkState): string | null {
         ? 'Work를 완료합니다'
         : `다음 단계(${NODE_INFO[next].title})를 시작합니다`
   return stop.kind === 'recommended_back'
-    ? `[재개]하면 추천을 따르지 않고 ${action}. 추천대로 되돌아가는 단계 선택은 M4에서 넣습니다.`
+    ? `[재개]하면 추천을 따르지 않고 ${action}. 추천대로 되돌아가려면 [단계 선택]을 누르세요.`
     : `[재개]하면 ${action}.`
 }
 
@@ -117,6 +123,30 @@ export function humanNotice(before: WorkState, after: WorkState): string | null 
 // ---------- 승인 화면 (D83) ----------
 
 export type { Emphasis, Verdict }
+
+/** 승인 화면의 [변경]이 보일 코드 범위. to가 null이면 작업 트리(커밋 안 된 변경 포함)까지다 */
+export interface ChangeRange {
+  from: string
+  to: string | null
+}
+
+/**
+ * [변경] 탭(D83: 이 task의 diff)의 범위. task의 시작 커밋부터 코드가 다음에 바뀐 때까지다.
+ * 다음에 시작한 task가 있으면 그 시작 커밋까지다. 코드를 되돌린 되감기가 먼저 오면 되돌리기 전의 코드,
+ * 곧 백업 커밋(커밋 안 된 변경 포함, D116)까지다. 백업이 없었으면 되돌리기 전 HEAD다.
+ * 뒤에 코드를 바꾼 task가 없으면 지금 코드의 마지막 task라 작업 트리까지다. 시작하지 않은 task는 null이다.
+ */
+export function changeRange(work: WorkState, taskId: string): ChangeRange | null {
+  const i = work.tasks.findIndex((t) => t.id === taskId)
+  const from = work.tasks[i]?.start_commit
+  if (!from) return null
+  for (const next of work.tasks.slice(i + 1)) {
+    const reset = next.selection?.reset
+    if (reset) return { from, to: reset.backup_commit ?? reset.from }
+    if (next.start_commit) return { from, to: next.start_commit }
+  }
+  return { from, to: null }
+}
 
 export interface EmphasisInput {
   node: TaskRecord['node']
@@ -155,7 +185,7 @@ export function emphasis(input: EmphasisInput): Emphasis[] {
       title: '이전 단계 추천',
       lines: [
         `${NODE_INFO[rec.node].title}(${rec.node})로 — ${rec.reason}`,
-        '승인하면 다음 단계를 시작하지 않고 멈춥니다.',
+        '승인하면 다음 단계를 시작하지 않고 멈춥니다. 되돌아갈 단계는 멈춘 뒤 [단계 선택]으로 고릅니다.',
       ],
     })
   }

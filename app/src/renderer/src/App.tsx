@@ -2,6 +2,7 @@
 // 화면은 메인이 보낸 스냅샷을 그리기만 하고, 명령은 invoke로 보낸다 (I14).
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { AppInfo } from '../../shared/api'
+import type { NodeName } from '../../shared/contracts'
 import type { CommandResult, ProjectView, ReviewView, WorkView } from '../../shared/views'
 import { call } from './commands'
 import {
@@ -9,6 +10,7 @@ import {
   NewWorkDialog,
   ProjectDialog,
   SettingsDialog,
+  StepDialog,
   WorkSettingsDialog,
 } from './dialogs'
 import { Panel, wantsApproval } from './Panel'
@@ -20,6 +22,7 @@ type Dialog =
   | { kind: 'settings' }
   | { kind: 'work-settings'; workKey: string }
   | { kind: 'abandon'; workKey: string }
+  | { kind: 'step'; workKey: string; node?: NodeName }
   | null
 
 function currentTask(w: WorkView) {
@@ -114,7 +117,12 @@ export function App() {
 
   const wide = wantsApproval(review) && review?.taskId === task?.id
   const dialogWork =
-    dialog?.kind === 'work-settings' || dialog?.kind === 'abandon' ? works[dialog.workKey] : null
+    dialog?.kind === 'work-settings' || dialog?.kind === 'abandon' || dialog?.kind === 'step'
+      ? works[dialog.workKey]
+      : null
+  // 단계 선택 대화상자 (6.2). node는 처음 고를 단계다(이전 단계 추천, D23)
+  const openStep = (workKey: string, node?: NodeName) =>
+    setDialog({ kind: 'step', workKey, ...(node ? { node } : {}) })
 
   return (
     <div className={`layout${wide ? ' wide' : ''}`}>
@@ -168,7 +176,10 @@ export function App() {
               key={t.id}
               role="tab"
               aria-selected={t.id === taskId}
-              className={`tab${t.id === taskId ? ' active' : ''}${t.live ? ' live' : ''}`}
+              className={`tab${t.id === taskId ? ' active' : ''}${t.live ? ' live' : ''}${
+                t.status === 'discarded' ? ' discarded' : ''
+              }`}
+              title={t.status === 'discarded' ? `${t.label}: 폐기됨` : t.label}
               onClick={() => selectTask(work, t.id)}
             >
               <span className={`dot s-${t.status}`} />
@@ -217,6 +228,7 @@ export function App() {
             work={work}
             onSettings={() => setDialog({ kind: 'work-settings', workKey: work.key })}
             onAbandon={() => setDialog({ kind: 'abandon', workKey: work.key })}
+            onSelectStep={() => openStep(work.key)}
             onResumed={() => setPicked((m) => without(m, work.key))}
           />
         ) : (
@@ -231,6 +243,7 @@ export function App() {
             task={task}
             review={review?.taskId === task.id && review.workKey === work.key ? review : null}
             onApproved={() => setPicked((m) => without(m, work.key))}
+            onSelectStep={(node) => openStep(work.key, node)}
           />
         ) : (
           <div className="panel-body dim">handoff 상태와 산출물</div>
@@ -255,24 +268,37 @@ export function App() {
       {dialog?.kind === 'abandon' && dialogWork ? (
         <AbandonDialog work={dialogWork} onClose={() => setDialog(null)} />
       ) : null}
+      {dialog?.kind === 'step' && dialogWork ? (
+        <StepDialog
+          work={dialogWork}
+          {...(dialog.node ? { initial: dialog.node } : {})}
+          onClose={() => setDialog(null)}
+          onDone={() => {
+            setDialog(null)
+            setPicked((m) => without(m, dialogWork.key))
+          }}
+        />
+      ) : null}
     </div>
   )
 }
 
 /**
- * 액션 바 (시나리오 3-4, 3-5, 4.4): [즉시 중단], [재개]·[세션 재개], [이 단계 새 세션으로 다시],
- * [이 단계 끝나면 멈춤], [Work 설정], [Work 포기]. 누를 수 있는지는 main이 core로 판정해 보낸다.
- * 조작은 지금 task에 한다. 단계 선택은 M4에서 넣는다.
+ * 액션 바 (시나리오 3-4, 3-5, 4.4, 6.2): [즉시 중단], [재개]·[세션 재개], [이 단계 새 세션으로 다시],
+ * [이 단계 끝나면 멈춤], [단계 선택], [Work 설정], [Work 포기]. 누를 수 있는지는 main이 core로 판정해 보낸다.
+ * 조작은 지금 task에 한다.
  */
 function ActionBar({
   work,
   onSettings,
   onAbandon,
+  onSelectStep,
   onResumed,
 }: {
   work: WorkView
   onSettings: () => void
   onAbandon: () => void
+  onSelectStep: () => void
   onResumed: () => void
 }) {
   const [busy, setBusy] = useState(false)
@@ -335,6 +361,11 @@ function ActionBar({
           />
           이 단계 끝나면 멈춤
         </label>
+      ) : null}
+      {a.selectStep ? (
+        <button disabled={busy} onClick={onSelectStep}>
+          단계 선택
+        </button>
       ) : null}
       {work.status === 'active' || work.status === 'stopped' ? (
         <button disabled={busy} onClick={onSettings}>

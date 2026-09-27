@@ -3,9 +3,11 @@ import {
   approvalMode,
   buildContext,
   closingMessage,
+  discardedAttempts,
   previousInputs,
   questionMode,
   type ContextInput,
+  type SelectionInput,
 } from '../../src/core/context'
 import { createWork, taskDirName, taskId } from '../../src/core/machine'
 import { route } from '../../src/core/pipeline'
@@ -367,5 +369,197 @@ describe('이전 task의 입력 (시나리오 2-4, D89)', () => {
 
   it('이전 task가 없으면 모두 비어 있다', () => {
     expect(previousInputs([])).toEqual({ rejected: [], previousHandoff: null, artifacts: [] })
+  })
+})
+
+describe('단계 선택으로 들어온 task (시나리오 2-4, 6.2)', () => {
+  const rewind: SelectionInput = {
+    reason: 'rewind',
+    from: { taskId: 't-05', node: 'verify' },
+    instruction: '빈 배열 말고 null도 봐 줘.\n\n```\nnull\n```',
+    discarded: [
+      {
+        taskId: 't-04',
+        node: 'fix',
+        handoff: true,
+        summary: '빈 배열이면 0.\n여러 줄 요약',
+        rejected: ['캐시 가설: 없음'],
+        recommended: null,
+      },
+      {
+        taskId: 't-05',
+        node: 'verify',
+        handoff: true,
+        summary: null,
+        rejected: [],
+        recommended: { node: 'fix', reason: '완료조건 2 실패' },
+      },
+      {
+        taskId: 't-06',
+        node: 'verify',
+        handoff: false,
+        summary: null,
+        rejected: [],
+        recommended: null,
+      },
+    ],
+    dropped: [],
+    skipped: [],
+    keepCode: false,
+    reset: true,
+  }
+
+  it('되감기: 사람 추가 지시, 폐기된 시도 요약, 코드를 맨 위에 넣는다', () => {
+    const md = buildContext(input('fix', { selection: rewind }))
+    expect([...sections(md).keys()][0]).toBe('되감기로 들어옴 (먼저 읽을 것)')
+    expect(section(md, '되감기로 들어옴 (먼저 읽을 것)')).toBe(
+      [
+        '사람이 단계 선택으로 이 단계를 다시 실행한다(t-05 verify (최종 검증)에서 고름). 폐기된 task의 산출물, 결정, 기각 목록은 아래 입력에서 뺐다. 사람 추가 지시를 따르고, 폐기된 시도를 그대로 되풀이하지 않는다.',
+        '',
+        '### 사람 추가 지시',
+        '',
+        '````text',
+        '빈 배열 말고 null도 봐 줘.',
+        '',
+        '```',
+        'null',
+        '```',
+        '````',
+        '',
+        '### 폐기된 시도 요약',
+        '',
+        '- t-04 fix (수정)',
+        '  - 요약: 빈 배열이면 0. 여러 줄 요약',
+        '  - 기각: 캐시 가설: 없음',
+        '- t-05 verify (최종 검증)',
+        '  - 요약: 없음',
+        '  - 기각: 없음',
+        '  - 이전 단계 추천: fix (수정) — 완료조건 2 실패',
+        '- t-06 verify (최종 검증): handoff 없음',
+        '',
+        '### 코드',
+        '',
+        '고른 단계를 시작할 때의 커밋으로 되돌렸다. 폐기된 시도의 코드는 입력이 아니다.',
+      ].join('\n'),
+    )
+    // 나머지 절은 처음 실행할 때와 같다
+    expect([...sections(md).keys()].slice(1)).toEqual([
+      ...sections(buildContext(input('fix'))).keys(),
+    ])
+  })
+
+  it('[현재 코드 위에서 이어서]와 되돌리지 않은 코드, 없는 추가 지시', () => {
+    const keep = buildContext(
+      input('fix', { selection: { ...rewind, keepCode: true, reset: false } }),
+    )
+    expect(section(keep, '되감기로 들어옴 (먼저 읽을 것)')).toContain(
+      '### 코드\n\n[현재 코드 위에서 이어서]: 폐기된 시도의 커밋이 남아 있다. 그 위에서 이어서 고친다.',
+    )
+    const none = buildContext(
+      input('fix', { selection: { ...rewind, instruction: null, discarded: [], reset: false } }),
+    )
+    const body = section(none, '되감기로 들어옴 (먼저 읽을 것)')
+    expect(body).toContain('### 사람 추가 지시\n\n없음\n')
+    expect(body).toContain('### 폐기된 시도 요약\n\n없음\n')
+    expect(body).toContain('### 코드\n\n코드는 되돌리지 않았다.')
+  })
+
+  it('건너뛰기: 건너뛴 단계, 폐기한 task, 사람 추가 지시. 폐기된 시도 요약은 없다', () => {
+    const skip: SelectionInput = {
+      ...rewind,
+      reason: 'skip',
+      from: { taskId: 't-03', node: 'rca' },
+      instruction: '바로 검증해 줘',
+      dropped: [{ taskId: 't-03', node: 'rca' }],
+      skipped: ['fix'],
+    }
+    const md = buildContext(input('verify', { selection: skip }))
+    expect(section(md, '건너뛰어 들어옴 (먼저 읽을 것)')).toBe(
+      [
+        '사람이 단계 선택으로 이 단계를 실행한다(t-03 rca (원인 분석)에서 고름). 입력은 지금까지 승인된 것이다. 코드는 되돌리지 않았다.',
+        '',
+        '- 건너뛴 단계: fix (수정)',
+        '- 폐기한 task: t-03 rca (원인 분석)',
+        '',
+        '### 사람 추가 지시',
+        '',
+        '```text',
+        '바로 검증해 줘',
+        '```',
+      ].join('\n'),
+    )
+    expect(md).not.toContain('폐기된 시도 요약')
+  })
+
+  it('기본 진행으로 들어왔으면 사람 추가 지시가 있을 때만 넣는다', () => {
+    const plain: SelectionInput = { ...rewind, reason: 'default', discarded: [] }
+    const md = buildContext(input('rca', { selection: plain }))
+    expect([...sections(md).keys()][0]).toBe('사람 추가 지시 (먼저 읽을 것)')
+    expect(section(md, '사람 추가 지시 (먼저 읽을 것)')).toMatch(
+      /^사람이 단계 선택으로 이 단계를 고르며 남긴 지시다\(t-05 verify \(최종 검증\)에서 고름\)\./,
+    )
+    const empty = buildContext(input('rca', { selection: { ...plain, instruction: null } }))
+    expect(empty).toBe(buildContext(input('rca')))
+  })
+
+  it('폐기된 시도 요약은 handoff의 요약, rejected, 이전 단계 추천이다', () => {
+    const handoff = [
+      '---',
+      'status: awaiting_approval',
+      'rejected:',
+      '  - "캐시 가설: 없음"',
+      'recommended_next:',
+      '  node: fix',
+      '  reason: "완료조건 2 실패"',
+      '---',
+      '## 요약',
+      '검증 실패',
+      '',
+      '## 다음 task가 알아야 할 것',
+      '- x',
+      '',
+    ].join('\n')
+    expect(
+      discardedAttempts([
+        { taskId: 't-05', node: 'verify', handoff },
+        // 기본 다음 단계 추천은 넣지 않는다
+        { taskId: 't-03', node: 'rca', handoff },
+        { taskId: 't-02', node: 'evidence', handoff: '머리글 없음\n## 요약\n본문만 있음\n' },
+        { taskId: 't-06', node: 'verify' },
+      ]),
+    ).toEqual([
+      {
+        taskId: 't-05',
+        node: 'verify',
+        handoff: true,
+        summary: '검증 실패',
+        rejected: ['캐시 가설: 없음'],
+        recommended: { node: 'fix', reason: '완료조건 2 실패' },
+      },
+      {
+        taskId: 't-03',
+        node: 'rca',
+        handoff: true,
+        summary: '검증 실패',
+        rejected: ['캐시 가설: 없음'],
+        recommended: null,
+      },
+      {
+        taskId: 't-02',
+        node: 'evidence',
+        handoff: true,
+        summary: '본문만 있음',
+        rejected: [],
+        recommended: null,
+      },
+      {
+        taskId: 't-06',
+        node: 'verify',
+        handoff: false,
+        summary: null,
+        rejected: [],
+        recommended: null,
+      },
+    ])
   })
 })

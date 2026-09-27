@@ -4,6 +4,7 @@ import {
   appendBlock,
   confirmedIntent,
   decisionsBlock,
+  decisionsWithout,
   localIso,
   localMinute,
   nextWorkId,
@@ -98,6 +99,18 @@ describe('decisions.md (5.4)', () => {
     expect(appendBlock('', a)).toBe(a)
     expect(appendBlock(`${a}\n\n\n`, b)).toBe(`${a}\n${b}`)
     expect(appendBlock(a.replace(/\n/g, '\r\n'), b)).toBe(`${a}\n${b}`)
+  })
+
+  it('폐기된 task의 덩어리는 context.md에 넣을 때만 뺀다 (5.4, 6.2)', () => {
+    const a = '## t-01 intake — 2026-09-25 14:00 (사람 승인)\n- [AI] 크기는 M — 이유\n'
+    const b = '## t-02 evidence — 2026-09-25 14:32 (사람 승인)\n없음\n'
+    const c = '## t-03 rca — 2026-09-25 15:00 (사람 승인)\n- [사람] 원인 — 근거\n'
+    const file = [a, b, c].reduce((text, block) => appendBlock(text, block), '')
+    expect(decisionsWithout(file, [])).toBe(file)
+    expect(decisionsWithout(file, ['t-02', 't-03'])).toBe(a)
+    expect(decisionsWithout(file, ['t-01'])).toBe(`${b}\n${c}`)
+    expect(decisionsWithout(file, ['t-01', 't-02', 't-03'])).toBe('')
+    expect(decisionsWithout(file.replace(/\n/g, '\r\n'), ['t-02'])).toBe(`${a}\n${c}`)
   })
 })
 

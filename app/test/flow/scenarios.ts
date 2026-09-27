@@ -7,6 +7,8 @@ export type Step =
   | { do: 'write'; file: string; text: string }
   | { do: 'remove'; file: string }
   | { do: 'commit'; files: Record<string, string>; message: string }
+  /** 커밋하지 않고 worktree의 파일을 고친다 (커밋 안 된 변경, D116) */
+  | { do: 'edit'; files: Record<string, string> }
   | { do: 'ask'; question?: string }
   | { do: 'tool'; name: string }
   | { do: 'notify'; type: string }

@@ -18,7 +18,7 @@ export type WorkStatus = 'active' | 'stopped' | 'completed' | 'abandoned'
  * - session_ended: handoff 없이 세션이 끝났다. 3.3의 "중단됨"에 들지만 배지가 따로 있다 (D80)
  * - interrupted: 중단됨. [즉시 중단], 앱 종료, 재시작 조정(D75, D78), task를 띄우지 못했을 때
  * - approved: 승인됨
- * 폐기됨은 M4에서 더한다.
+ * - discarded: 폐기됨. 되감기나 건너뛰기로 이후 입력에서 빠졌다 (6.2). 파일과 기록은 남는다
  */
 export type TaskStatus =
   | 'queued'
@@ -31,13 +31,40 @@ export type TaskStatus =
   | 'session_ended'
   | 'interrupted'
   | 'approved'
+  | 'discarded'
 
 /**
- * task를 시작한 이유 (시나리오 2-5의 머리 띠): 기본 진행, 재개.
+ * task를 시작한 이유 (시나리오 2-5의 머리 띠): 기본 진행, 되감기, 건너뛰기, 재개.
  * 재개는 handoff 없이 끝난 세션을 [이 단계 새 세션으로 다시] 한 새 task다 (D114).
- * 되감기와 건너뛰기는 M4에서 더한다.
+ * 되감기와 건너뛰기는 단계 선택(6.2)으로 들어온 task다. 단계 선택에서 기본 다음 단계를 골라
+ * 건너뛴 단계도 폐기한 task도 없으면 기본 진행이다.
  */
-export type StartReason = 'default' | 'resume'
+export type StartReason = 'default' | 'rewind' | 'skip' | 'resume'
+
+/** 단계 선택(6.2)으로 들어온 task의 입력과 코드. context.md의 맨 위에 넣는다 (시나리오 2-4) */
+export interface StepSelection {
+  /** 단계를 고른 때의 지금 task (6.2의 k) */
+  from_task: string
+  /** 사람 추가 지시. 없으면 null */
+  instruction: string | null
+  /** 이번에 폐기한 task. 되감기면 그 시도를 요약해 넣는다 */
+  discarded: string[]
+  /** 건너뛴 단계 */
+  skipped: NodeName[]
+  /** fix로 되감으며 [현재 코드 위에서 이어서]를 골랐다 */
+  keep_code: boolean
+  /**
+   * 되돌린 코드 (D116, D117). from은 되돌리기 전 HEAD, to는 되돌린 커밋이다. backup_commit은 백업 브랜치를
+   * 만들 때 가리킨 커밋이다(커밋 안 된 변경이 있었으면 from 위의 커밋 하나, 없었으면 from).
+   * 백업할 것이 없었으면 backup_branch와 backup_commit은 null이다. 코드를 되돌리지 않았으면 reset이 null이다
+   */
+  reset: {
+    from: string
+    to: string
+    backup_branch: string | null
+    backup_commit: string | null
+  } | null
+}
 
 /** 형식 검사의 오류나 경고 하나 (5.2.1) */
 export interface FormatIssue {
@@ -111,6 +138,11 @@ export interface TaskRecord {
   ignored_errors?: FormatIssue[]
   /** task를 띄우지 못한 이유 */
   error?: string
+  /** 단계 선택(6.2)으로 들어온 task */
+  selection?: StepSelection
+  /** 폐기한 때와, 폐기를 부른 단계 선택이 만든 task (6.2) */
+  discarded_at?: string
+  discarded_by?: string
 }
 
 /** 승인된 intent (5.3). intent.md 머리글의 version, size와 같다 */
@@ -135,6 +167,37 @@ export type WorkStop =
       task_id: string
     }
 
+/**
+ * 코드를 되돌리는 되감기의 진행 중 작업 기록 (6.2, D77). 세션을 끝낸 뒤 백업 브랜치를 만들고(backup),
+ * 코드를 되돌리고(reset), task를 폐기하고 새 task를 만든다. 마지막은 work.json 한 번 쓰기라 기록을 지우는 것과
+ * 같이 한다. 재시작 때 남은 기록을 알리는 것은 M6에서 넣는다.
+ */
+export interface RewindOperation {
+  kind: 'rewind'
+  /** 지금 하는 단계: backup(백업 브랜치 만들기), reset(코드 되돌리기) */
+  stage: 'backup' | 'reset'
+  started_at: string
+  /** 고른 단계 */
+  node: NodeName
+  /** 단계를 고른 때의 지금 task */
+  from_task: string
+  instruction: string | null
+  /** 폐기할 task */
+  discard: string[]
+  /** 되돌릴 커밋 (D117) */
+  reset_to: string
+  /**
+   * 백업 브랜치 (D115). backup 단계에서는 만들 이름이고, reset 단계에서는 만든 이름이다.
+   * 되돌릴 커밋도 커밋 안 된 변경도 없어 만들지 않았으면 null이다
+   */
+  backup_branch: string | null
+  /** reset 단계에서 만든 백업 브랜치가 가리키는 커밋. backup 단계와 만들지 않았으면 null이다 */
+  backup_commit: string | null
+}
+
+/** 진행 중인 여러 단계 작업 (D77). 전달과 정리는 M5에서 더한다 */
+export type WorkOperation = RewindOperation
+
 export interface WorkState {
   schema_version: 1
   /** w-YYYYMMDD-NNN */
@@ -154,6 +217,8 @@ export interface WorkState {
   stop?: WorkStop
   /** [이 단계 끝나면 멈춤]: 지금 단계가 승인되면 다음 단계를 시작하지 않고 멈춘다 (시나리오 3-4) */
   stop_after_step?: boolean
+  /** 진행 중인 여러 단계 작업 (D77). 시작 전에 적고 끝나면 지운다 */
+  operation?: WorkOperation
   tasks: TaskRecord[]
 }
 
