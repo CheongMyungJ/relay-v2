@@ -73,17 +73,6 @@ export class ScreenUi extends FakeUi {
     return lines.join('\n')
   }
 
-  /** 스크롤백까지 버퍼 전체의 글자. 세션이 끝난 뒤에도 남아 있다. 보통 화면과 대체 화면을 이어 붙인다 */
-  text(key: string): string {
-    const t = this.terms.get(key)
-    if (!t) return ''
-    const lines: string[] = []
-    for (const buf of [t.buffer.normal, t.buffer.alternate]) {
-      for (let i = 0; i < buf.length; i++) lines.push(buf.getLine(i)?.translateToString(true) ?? '')
-    }
-    return lines.join('\n')
-  }
-
   /**
    * 보이는 창이 첫 실행 창(선택 목록이나 Enter 안내)이면 수락한다. 수락했으면 true.
    * 선택 목록에 수락 항목이 있으면 화살표로 그 항목까지 옮겨 Enter를 누르고, 없으면 기본 항목에서 Enter를 누른다.

@@ -72,6 +72,8 @@ async function run(): Promise<Result> {
   let workDir: string | null = null
   let claudeVersion: string | null = null
   let error: string | null = null
+  let watch: NodeJS.Timeout | undefined
+  let printed = false
   try {
     const { repo } = makeRepo(h.root, S_CASE.repo, S_CASE.files)
     const projectId = await register(h, repo)
@@ -83,6 +85,13 @@ async function run(): Promise<Result> {
     if (!created.ok) throw new Error(`Work 생성 실패: ${created.error}`)
     const key = created.workKey
     workDir = path.join(h.home, 'projects', projectId, 'works', key.split('/')[1] ?? '')
+    // 마무리 안내 문구(D132)는 수정 세션이 살아 있는 동안 화면에서 찾는다. claude는 대체 화면에 그려서
+    // 세션이 끝나면 화면에 글자가 남지 않는다
+    const closing = squash(closingMessage('fix'))
+    watch = setInterval(() => {
+      const t = ui.works.get(key)?.tasks.find((x) => x.node === 'fix')
+      if (t?.live && squash(ui.screen(t.terminal)).includes(closing)) printed = true
+    }, 500)
     const r = await drive(h.relay, ui, key, {
       size: 'S',
       force: true,
@@ -94,6 +103,7 @@ async function run(): Promise<Result> {
         if (task.status !== 'asking') await ui.handleDialogs(h.relay, task.terminal)
       },
     })
+    clearInterval(watch)
     tasks = r.tasks
     await settle(h, key)
     const wd = workDir
@@ -114,15 +124,15 @@ async function run(): Promise<Result> {
     const notices = ui.notices.filter((n) => n.workKey === key && n.body.includes('자동 승인'))
     notes.push(`자동 승인 알림: ${notices.map((n) => n.body).join(' / ') || '없음'}`)
 
-    // 마무리 안내 문구 (D132): 수정 세션의 화면에 그대로 있는가
-    const term = views[0]?.terminal
-    const closing = closingMessage('fix')
-    const printed = term ? squash(ui.text(term)).includes(squash(closing)) : false
-    notes.push(`수정 세션의 화면에 마무리 안내 문구가 그대로 있다: ${yes(printed)}`)
+    // 마무리 안내 문구 (D132)
+    notes.push(
+      `수정 세션이 살아 있는 동안 화면에 마무리 안내 문구가 그대로 보였다: ${yes(printed)}`,
+    )
     const context = fs.readFileSync(path.join(wd, 'tasks', taskDirName(fix), 'context.md'), 'utf8')
     notes.push(
       `수정의 context.md에 자동 승인 문장과 승인 방식(자동 승인, task를 시작할 때의 설정)이 있다: ${yes(
-        context.includes(closing) && context.includes('자동 승인 (task를 시작할 때의 설정.'),
+        context.includes(closingMessage('fix')) &&
+          context.includes('자동 승인 (task를 시작할 때의 설정.'),
       )}`,
     )
 
@@ -164,6 +174,7 @@ async function run(): Promise<Result> {
   } catch (e) {
     error = e instanceof Error ? e.message : String(e)
   } finally {
+    clearInterval(watch)
     if (workDir && fs.existsSync(workDir)) {
       fs.rmSync(dir, { recursive: true, force: true })
       fs.cpSync(workDir, path.join(dir, 'work'), { recursive: true })
