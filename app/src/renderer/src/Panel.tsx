@@ -4,10 +4,12 @@
 // [전달 없이 완료](7-6, D120). verify에서 멈춘 Work도 이 화면에서 전달을 고른다 (D119).
 // 맨 위에는 재시작 때와 실행 중의 알림을 보인다: 끊긴 작업의 [다시 시도]·[무시], 끝낸 고아 프로세스와 바뀐
 // 파일의 [확인] (시나리오 9, D121~D124). 끊긴 작업이 있는 동안 승인과 전달 버튼은 누를 수 없다 (D122).
-import { useState } from 'react'
+// 자동 승인 중이면 승인 화면에 카운트다운과 [취소]를 보이고, 켜진 단계인데 카운트다운하지 않으면 까닭을 보인다 (D83, 4.3).
+import { useEffect, useState } from 'react'
 import type { NodeName, Size } from '../../shared/contracts'
 import type {
   CommandResult,
+  CountdownView,
   DeliverResult,
   ReviewView,
   TaskView,
@@ -369,6 +371,16 @@ function Review({
   const approveLabel = intake ? '의도 승인' : '승인'
   // 끊긴 작업이 있는 동안은 승인하지 않는다 (D122)
   const cut = !!work?.operation
+  // 자동 승인 카운트다운 (4.3, D83)
+  const countdown = work?.tasks.find((t) => t.id === review.taskId)?.countdown ?? null
+
+  const cancel = async () => {
+    setBusy(true)
+    setError(null)
+    const r = await call(() => window.relay.cancelCountdown(review.workKey, review.taskId))
+    setBusy(false)
+    if (!r.ok) setError(r.error)
+  }
 
   const approve = async (force: boolean) => {
     setBusy(true)
@@ -462,6 +474,12 @@ function Review({
         {tab === 'work' && review.completion ? <Diff text={review.completion.diff} /> : null}
       </div>
 
+      {!readOnly && countdown ? (
+        <Countdown countdown={countdown} busy={busy} onCancel={() => void cancel()} />
+      ) : null}
+      {!readOnly && review.autoApprove.hold ? (
+        <div className="notice auto-hold">{review.autoApprove.hold}</div>
+      ) : null}
       {readOnly ? null : review.completion && work ? (
         <CompletionActions
           review={review}
@@ -526,6 +544,36 @@ function Review({
           </ul>
         </ConfirmDialog>
       ) : null}
+    </div>
+  )
+}
+
+/**
+ * 자동 승인 카운트다운과 [취소] (4.3, D83). 남은 초는 main이 보낸 끝나는 때로 센다. [취소]하면 사람의 승인을 기다린다.
+ * 터미널에 새 요청을 보내도 멈춘다
+ */
+function Countdown({
+  countdown,
+  busy,
+  onCancel,
+}: {
+  countdown: CountdownView
+  busy: boolean
+  onCancel: () => void
+}) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 250)
+    return () => clearInterval(timer)
+  }, [])
+  const left = Math.max(0, Math.ceil((countdown.endsAt - now) / 1000))
+  return (
+    <div className="countdown" role="status" aria-label="자동 승인 카운트다운">
+      <span>{left > 0 ? `자동 승인까지 ${left}초` : '자동 승인하는 중…'}</span>
+      <button disabled={busy} onClick={onCancel}>
+        취소
+      </button>
+      <span className="dim">멈추려면 [취소]를 누르거나 터미널에 말하세요.</span>
     </div>
   )
 }

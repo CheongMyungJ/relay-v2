@@ -5,7 +5,8 @@
 //   context.md의 task id에 맞는 단계를 차례로 한다: 훅 신호 보내기, 산출물과 handoff 쓰기, worktree에
 //   커밋하기, 커밋하지 않고 worktree 고치기, 질문 대기 흉내, Stop 보내고 되돌림을 받으면 고쳐 쓰기, 종료.
 // - 훅은 --settings 파일의 URL과 머리글로 보낸다. 머리글의 $VAR는 allowedEnvVars에 있는 것만 푼다
-//   (Claude Code 문서 hooks). 본문 필드는 S2에서 관찰한 모양이다.
+//   (Claude Code 문서 hooks). 본문 필드는 S2에서 관찰한 모양이다. Stop에는 background_tasks와 session_crons를
+//   넣는다(Claude Code 2.1.145부터, 문서 hooks). 시나리오의 stop 단계가 목록을 주면 그것을 넣는다(D129).
 // - FAKE_CLAUDE_RECORD 폴더가 있으면 실행 인자와 훅 응답을 fake-claude.jsonl에 남긴다.
 // - --session-id로 시작한 세션은 FAKE_CLAUDE_RECORD/sessions/<id>.json에 task를 적어 두고,
 //   --resume <id>로 다시 열면 그 task의 resume 시나리오를 한다. 적어 둔 것이 없으면 실제 claude처럼
@@ -286,10 +287,16 @@ async function steps(list, ctx, vars) {
     } else if (s === 'notify') {
       await hook('Notification', { message: '알림', notification_type: step.type })
     } else if (s === 'stop') {
-      // Stop을 보내고 되돌림을 받으면 고쳐 쓴 뒤 stop_hook_active: true로 다시 보낸다 (S2)
+      // Stop을 보내고 되돌림을 받으면 고쳐 쓴 뒤 stop_hook_active: true로 다시 보낸다 (S2).
+      // background와 crons는 백그라운드 작업이나 예약된 깨우기를 기다리며 쉬는 세션을 흉내 낸다 (D129)
       let active = false
       for (let attempt = 1; attempt <= 10; attempt++) {
-        const r = await hook('Stop', { stop_hook_active: active, last_assistant_message: '끝' })
+        const r = await hook('Stop', {
+          stop_hook_active: active,
+          last_assistant_message: '끝',
+          background_tasks: step.background ?? [],
+          session_crons: step.crons ?? [],
+        })
         if (r?.decision !== 'block') break
         out(`[가짜 claude] 되돌림 ${attempt}: ${String(r.reason).split('\n')[0]}`)
         await steps(step.onBlock ?? [], ctx, { ...vars, attempt })

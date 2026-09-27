@@ -4,6 +4,7 @@
 // (D124). 재시작 때의 알림과 끊긴 작업의 [다시 시도]·[무시]도 여기서 한다 (시나리오 9, D121~D123).
 // 이벤트는 Work마다 한 줄로 처리한다. 할 일(task 시작 등)이 끝날 때까지 다음 이벤트는 기다린다.
 // 세션 상한(D18)은 Relay의 SessionPool이 모든 Work에 걸쳐 센다. 자리가 없으면 대기열에 넣는다.
+// 자동 승인 카운트다운(4.3)은 언제 시작하고 멈추는지를 core가 정해 work.json에 두고(D127), 여기서는 타이머만 돈다.
 import { randomBytes, randomUUID } from 'node:crypto'
 import fsp from 'node:fs/promises'
 import os from 'node:os'
@@ -44,7 +45,13 @@ import {
   type WorkFiles,
 } from '../adapters/store'
 import { watchDir } from '../adapters/watch'
-import { REVIEWABLE, approvalGate, badge } from '../core/approval'
+import {
+  REVIEWABLE,
+  approvalGate,
+  autoApproveNote,
+  badge,
+  pendingBackground,
+} from '../core/approval'
 import { canClean, cleanPreview, planClean, type CleanFacts } from '../core/cleanup'
 import {
   buildContext,
@@ -273,6 +280,16 @@ export class WorkRunner {
   private readonly fileChanges = new Map<OwnedFile, { line: string; hash: string | null }>()
   /** 앱 밖에서 바뀐 work.json (D124). [확인]으로 지운다 */
   private workJsonChanges: WorkJsonChange[] = []
+  /**
+   * 자동 승인 카운트다운의 타이머 (4.3, D127). 카운트다운의 상태는 work.json의 task 기록에 있다. 끝나는 때는
+   * 스냅샷으로 렌더러에 보내 남은 초를 세게 한다
+   */
+  private countdown: {
+    taskId: string
+    startedAt: string
+    endsAt: number
+    timer: NodeJS.Timeout
+  } | null = null
 
   /**
    * workText는 앱이 마지막으로 쓰거나 읽은 work.json의 내용이다. 다음에 쓰기 전에 이것과 비교한다 (D124).
@@ -397,6 +414,12 @@ export class WorkRunner {
         return
       case 'clean':
         await this.cleanCode(e)
+        return
+      case 'startCountdown':
+        this.startCountdown(e)
+        return
+      case 'stopCountdown':
+        this.stopCountdown(e.taskId)
         return
     }
   }
@@ -841,6 +864,8 @@ export class WorkRunner {
             stopHookActive: b['stop_hook_active'] === true,
             handoffChanged: changed,
             check: this.check(task, files),
+            // 백그라운드 작업이나 예약된 깨우기를 기다리며 쉬는 중이면 자동 승인하지 않는다 (D129)
+            background: pendingBackground(b),
           })
         ).reply
       }
@@ -923,6 +948,64 @@ export class WorkRunner {
         ...(opts.size ? { size: opts.size } : {}),
         ...(opts.force ? { force: true } : {}),
       })
+    })
+  }
+
+  // ---------- 자동 승인 카운트다운 (4.3, D127~D131) ----------
+
+  /**
+   * 카운트다운의 타이머를 건다. 끝나면 파일을 다시 읽어 autoApprove를 넣는다: 그때의 설정과 handoff로 core가 다시
+   * 판정한다 (D128). 한 Work에서 카운트다운은 지금 task 하나뿐이라 앞 타이머는 푼다
+   */
+  private startCountdown(e: Extract<Effect, { type: 'startCountdown' }>): void {
+    this.stopCountdown()
+    const ms = e.seconds * 1000
+    const timer = setTimeout(() => {
+      void this.enqueue(() => this.countdownDone(e.taskId, e.startedAt))
+    }, ms)
+    this.countdown = { taskId: e.taskId, startedAt: e.startedAt, endsAt: Date.now() + ms, timer }
+    // 스냅샷은 할 일보다 먼저 나갔다. 끝나는 때를 타이머에 맞춘 스냅샷을 다시 보낸다
+    this.changed()
+  }
+
+  /** 카운트다운의 타이머를 푼다. taskId를 주면 그 task의 타이머일 때만 푼다 */
+  private stopCountdown(taskId?: string): void {
+    const c = this.countdown
+    if (!c || (taskId !== undefined && c.taskId !== taskId)) return
+    clearTimeout(c.timer)
+    this.countdown = null
+  }
+
+  /** 카운트다운이 끝났다. 멈췄거나 새로 시작한 카운트다운의 늦은 타이머면 아무것도 하지 않는다 */
+  private async countdownDone(taskId: string, startedAt: string): Promise<void> {
+    const c = this.countdown
+    if (c?.taskId === taskId && c.startedAt === startedAt) this.countdown = null
+    if (this.task(taskId)?.countdown?.started_at !== startedAt) return
+    const check = (await this.checkNow(taskId)) ?? null
+    await this.feed({ type: 'autoApprove', taskId, at: this.ctx.at(), startedAt, check })
+  }
+
+  /** 카운트다운이 끝나는 때. 이 앱의 타이머가 있으면 그 때, 없으면 기록한 시작 시각으로 센다 */
+  private countdownEnds(t: TaskRecord): number {
+    const c = this.countdown
+    if (c && c.taskId === t.id && c.startedAt === t.countdown?.started_at) return c.endsAt
+    return Date.parse(t.countdown?.started_at ?? '') + (t.countdown?.seconds ?? 0) * 1000
+  }
+
+  /** 승인 화면의 [취소] (4.3): 카운트다운을 멈추고 사람의 승인을 기다린다 */
+  cancelCountdown(taskId: string): Promise<CommandResult> {
+    return this.enqueue(() => this.command({ type: 'countdown.cancel', taskId, at: this.ctx.at() }))
+  }
+
+  /**
+   * 앱 설정이 바뀌었다 (D70). 카운트다운 중에 그 단계의 자동 승인을 껐으면 바로 멈춘다 (D128). 상태가 그대로여도
+   * 스냅샷을 다시 보낸다. 승인 화면의 안내(자동 승인 여부)는 설정으로 정하고, 화면은 스냅샷이 바뀔 때 다시 읽는다
+   */
+  configChanged(): Promise<void> {
+    return this.enqueue(async () => {
+      const before = this.revision
+      await this.feed({ type: 'config.updated', at: this.ctx.at() })
+      if (this.revision === before) this.changed()
     })
   }
 
@@ -1686,14 +1769,13 @@ export class WorkRunner {
     await this.feed({ type: 'clean.failed', at: this.ctx.at(), error: message(err) })
   }
 
-  /** Work별 설정 (D72). 검사한 값을 받는다. 질문 방식은 다음에 시작하는 task부터 쓴다 (D73) */
+  /**
+   * Work별 설정 (D72). 검사한 값을 받는다. 준 키만 바꾸고 빈 값이면 앱 설정을 따른다. 질문 방식은 다음에 시작하는
+   * task부터 쓰고(D73), 카운트다운 중에 그 단계의 자동 승인을 끄면 바로 멈춘다 (D128)
+   */
   updateSettings(settings: WorkSettings): Promise<CommandResult> {
     return this.enqueue(() =>
-      this.command({
-        type: 'settings.update',
-        at: this.ctx.at(),
-        settings: { ...this.work.settings, ...settings },
-      }),
+      this.command({ type: 'settings.update', at: this.ctx.at(), settings }),
     )
   }
 
@@ -1861,6 +1943,7 @@ export class WorkRunner {
    */
   shutdown(): Promise<void> {
     return this.enqueue(async () => {
+      this.stopCountdown()
       const task = currentTask(this.work)
       if (task && this.live.has(task.id)) {
         await this.feed({
@@ -1942,6 +2025,7 @@ export class WorkRunner {
       diff: clip(diff),
       draftSize: task.node === 'intake' ? (check.intentDraft?.size ?? null) : null,
       gates: { none: gate(), S: gate('S'), M: gate('M'), L: gate('L') },
+      autoApprove: autoApproveNote(this.work, task, this.ctx.config()),
       completion,
     }
   }
@@ -2078,6 +2162,9 @@ export class WorkRunner {
       error: t.error ?? null,
       errorCount: t.check?.errors.length ?? 0,
       bounces: t.bounce_count,
+      countdown: t.countdown
+        ? { seconds: t.countdown.seconds, endsAt: this.countdownEnds(t) }
+        : null,
     }
   }
 }

@@ -4,6 +4,7 @@
 import type { AppConfig, QuestionMode, WorkSettings } from '../shared/config'
 import type { NodeName } from '../shared/contracts'
 import type { TaskRecord, WorkState } from '../shared/work'
+import { approvalMode, type ApprovalMode } from './approval'
 import {
   NODES,
   NODE_INFO,
@@ -15,18 +16,6 @@ import {
 } from './pipeline'
 import { parseFrontMatter, sectionText } from './validate'
 
-export type ApprovalMode = 'manual' | 'auto'
-
-/** 승인 방식. intake와 verify는 항상 수동이고, 나머지는 Work 설정, 앱 설정 순서로 본다 (4.2, D72) */
-export function approvalMode(
-  config: AppConfig,
-  settings: WorkSettings,
-  node: NodeName,
-): ApprovalMode {
-  if (node !== 'evidence' && node !== 'rca' && node !== 'fix') return 'manual'
-  return (settings.auto_approve?.[node] ?? config.auto_approve[node]) ? 'auto' : 'manual'
-}
-
 /** 이 노드 스킬의 질문 방식. Work 설정, 앱 설정 순서로 본다 (D26, D72) */
 export function questionMode(
   config: AppConfig,
@@ -37,16 +26,18 @@ export function questionMode(
   return settings.question_mode?.[skill] ?? config.question_mode[skill]
 }
 
-const CLOSING: Record<ApprovalMode, string> = {
-  manual:
-    '산출물과 handoff를 썼습니다. 오른쪽 패널에서 확인하고 [승인]을 누르세요. 고칠 점은 여기에 말해 주세요.',
-  auto:
-    '산출물과 handoff를 썼습니다. 자동 승인이 켜진 단계라 조건을 만족하면 카운트다운 뒤 승인됩니다. ' +
-    '멈추려면 [취소]를 누르거나 여기에 말해 주세요.',
-}
+const CLOSING =
+  '산출물과 handoff를 썼습니다. 오른쪽 패널에서 확인하고 [승인]을 누르세요. 고칠 점은 여기에 말해 주세요.'
 
-/** 수동 승인 문구에서 노드마다 바꾸는 문장 */
+/** 문구에서 노드마다 바꾸는 문장 */
 const PRESS = '[승인]을 누르세요.'
+
+/**
+ * 자동 승인을 켤 수 있는 단계(evidence, rca, fix)의 문장 (D132). 자동 승인 여부는 턴이 끝날 때의 설정으로 정하고
+ * (D128) 설정은 task가 도는 중에도 바뀌며, 스킬은 이 문구를 그대로 찍으므로 두 경우를 함께 적는다
+ */
+const AUTO_SENTENCE =
+  '자동 승인이 켜져 있으면 조건을 만족할 때 카운트다운 뒤 승인되고, 멈추려면 [취소]를 누르세요.'
 
 /** 승인하면 멈추는 verify의 버튼 (D119). 멈춤은 context.md를 쓴 뒤에도 켜고 끌 수 있어 늘 함께 적는다 */
 const VERIFY_STOPS =
@@ -62,25 +53,33 @@ const VERIFY_STOPS =
  */
 function pressSentence(node: NodeName, delivery: readonly string[]): string {
   if (node === 'intake') return '[의도 승인]을 누르세요.'
-  if (node !== 'verify') return PRESS
+  if (node !== 'verify') return `${PRESS} ${AUTO_SENTENCE}`
   const buttons = delivery.length ? delivery : ['[완료만]']
   const pick = buttons.length === 1 ? `${buttons[0] ?? ''}을` : `${buttons.join(', ')} 중 하나를`
   return `${pick} 누르세요. ${VERIFY_STOPS}`
 }
 
 /**
- * 마무리 안내 문구 (D104). 승인 방식과 노드에 따라 고정 문구를 쓴다.
- * delivery는 verify의 전달 버튼이다(core/delivery closingButtons). 없으면 [완료만]이다.
+ * 마무리 안내 문구 (D104, D132). 노드에 따라 고정 문구를 쓴다. 자동 승인을 켤 수 있는 단계는 수동 승인과 자동 승인을
+ * 한 문구에 적는다. delivery는 verify의 전달 버튼이다(core/delivery closingButtons). 없으면 [완료만]이다.
  */
-export function closingMessage(
-  node: NodeName,
-  mode: ApprovalMode,
-  delivery: readonly string[] = [],
-): string {
-  return CLOSING[mode].replace(PRESS, pressSentence(node, delivery))
+export function closingMessage(node: NodeName, delivery: readonly string[] = []): string {
+  return CLOSING.replace(PRESS, pressSentence(node, delivery))
 }
 
 const APPROVAL_LABEL: Record<ApprovalMode, string> = { manual: '수동 승인', auto: '자동 승인' }
+
+/**
+ * context.md의 승인 방식 (시나리오 2-4). task를 시작할 때의 설정이다. 자동 승인 여부는 턴이 끝날 때의 설정으로
+ * 정하므로(D128) 그렇다고 적는다. intake와 verify는 늘 수동이다 (4.2)
+ */
+function approvalSection(config: AppConfig, settings: WorkSettings, node: NodeName): string {
+  if (node !== 'evidence' && node !== 'rca' && node !== 'fix') {
+    return '수동 승인 (의도 승인과 Work 완료는 늘 수동)'
+  }
+  const mode = APPROVAL_LABEL[approvalMode(config, settings, node)]
+  return `${mode} (task를 시작할 때의 설정. 설정은 바로 적용되고, 자동 승인 여부는 턴이 끝날 때의 설정으로 정한다)`
+}
 
 /** 질문 방식의 이름. _common.md의 표와 같다 (5.6.1) */
 const QUESTION_LABEL: Record<QuestionMode, string> = {
@@ -348,7 +347,6 @@ function selectionSection(sel: SelectionInput): [string, string] | null {
 export function buildContext(input: ContextInput): string {
   const { work, task, config } = input
   const info = NODE_INFO[task.node]
-  const mode = approvalMode(config, work.settings, task.node)
   const entry = input.selection ? selectionSection(input.selection) : null
   const sections: [string, string][] = [
     ...(entry ? [entry] : []),
@@ -365,8 +363,8 @@ export function buildContext(input: ContextInput): string {
         `기준 커밋: ${work.base_commit}`,
       ]),
     ],
-    ['승인 방식', APPROVAL_LABEL[mode]],
-    ['마무리 안내 문구', closingMessage(task.node, mode, input.delivery)],
+    ['승인 방식', approvalSection(config, work.settings, task.node)],
+    ['마무리 안내 문구', closingMessage(task.node, input.delivery)],
     ['질문 방식', QUESTION_LABEL[questionMode(config, work.settings, task.node)]],
     ['선택 가능한 다음 단계', list(nextSteps(work, task.node))],
     [

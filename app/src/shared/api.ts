@@ -56,6 +56,8 @@ export interface RelayApi {
   createWork(projectId: string, input: NewWorkInput): Promise<CreateWorkResult>
   review(workKey: string, taskId: string): Promise<ReviewView | null>
   approve(workKey: string, taskId: string, opts: ApproveOptions): Promise<CommandResult>
+  /** 승인 화면의 [취소]: 자동 승인 카운트다운을 멈춘다 (4.3) */
+  cancelCountdown(workKey: string, taskId: string): Promise<CommandResult>
   /** [즉시 중단] (시나리오 3-4) */
   interrupt(workKey: string, taskId: string): Promise<CommandResult>
   /** [재개], [세션 재개] (시나리오 3-4, 3-5, 4.4) */
@@ -92,7 +94,7 @@ export interface RelayApi {
   dismissNotice(workKey: string, id: string): Promise<CommandResult>
   /** 비교 URL이나 PR 주소를 브라우저에서 연다 (7-4). http(s) 주소만 연다 */
   openExternal(url: string): Promise<void>
-  /** Work별 질문 방식 (D72) */
+  /** Work별 자동 승인과 질문 방식 (D72). 준 키만 바꾸고, 빈 값이면 앱 설정을 따른다 */
   updateWorkSettings(workKey: string, settings: WorkSettings): Promise<CommandResult>
   /** 앱 설정 (D70) */
   config(): Promise<AppConfig>
@@ -120,6 +122,7 @@ export const IPC = {
   createWork: 'work:create',
   review: 'work:review',
   approve: 'work:approve',
+  cancelCountdown: 'work:cancel-countdown',
   interrupt: 'work:interrupt',
   resume: 'work:resume',
   retry: 'work:retry',

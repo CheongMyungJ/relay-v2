@@ -88,6 +88,46 @@ export interface CheckSummary {
   warnings: FormatIssue[]
 }
 
+/** 승인 방식 (5.4, 5.5): 사람 승인, 자동 승인 (4.3) */
+export type ApprovalBy = 'human' | 'auto'
+
+/**
+ * 자동 승인 카운트다운 (4.3, D127). Stop으로 승인 대기가 될 때 조건을 만족하면 시작하고, 끝나면 그때의 설정과
+ * 다시 읽은 handoff로 다시 판정해 자동 승인한다 (D128). 멈추면 지운다
+ */
+export interface Countdown {
+  /** 시작한 때: Stop을 받은 때 */
+  started_at: string
+  /** 카운트다운 초. 시작할 때의 설정이다 (D128) */
+  seconds: number
+}
+
+/**
+ * 자동 승인이 켜진 단계에서 자동 승인하지 않은 까닭 (4.3, D128~D130, D75, D122).
+ * 조건: open_questions, intent_deviation, recommended_next(기본 다음 단계가 아님), background(Stop 때 백그라운드 작업이나
+ * 예약된 깨우기가 남음, D129), invalid(다시 읽은 handoff가 유효하지 않음).
+ * 멈춤: cancel([취소]), interrupt([즉시 중단]), session(세션 종료), settings(자동 승인을 끔), restart(재시작 조정),
+ * operation(끊긴 작업)
+ */
+export type AutoHoldReason =
+  | 'open_questions'
+  | 'intent_deviation'
+  | 'recommended_next'
+  | 'background'
+  | 'invalid'
+  | 'cancel'
+  | 'interrupt'
+  | 'session'
+  | 'settings'
+  | 'restart'
+  | 'operation'
+
+/** 자동 승인하지 않은 때와 까닭. 다음 Stop에서 다시 판정한다 (D131) */
+export interface AutoHold {
+  at: string
+  reasons: AutoHoldReason[]
+}
+
 /** task의 CLI 세션 (시나리오 2-5). task를 띄우면 main이 알린다 */
 export interface TaskSession {
   /** --session-id로 준 uuid */
@@ -131,9 +171,16 @@ export interface TaskRecord {
   bounce_count: number
   /** 마지막 형식 검사. 패널에 오류와 경고를 보인다 */
   check: CheckSummary | null
-  /** 승인 기록 (D3) */
+  /** 자동 승인 카운트다운 (4.3, D127). 승인 대기에서 카운트다운 중일 때만 있다 */
+  countdown?: Countdown
+  /**
+   * 자동 승인이 켜진 단계에서 자동 승인하지 않은 까닭 (D128~D130). 승인 대기일 때만 있고, 다음 Stop에서 다시
+   * 판정한다 (D131). 승인 화면에 보인다
+   */
+  auto_hold?: AutoHold
+  /** 승인 기록 (D3). 자동 승인이면 auto다 (4.3) */
   approved_at?: string
-  approved_by?: 'human'
+  approved_by?: ApprovalBy
   /** [오류 무시하고 승인]으로 넘긴 오류 (4.1, D112) */
   ignored_errors?: FormatIssue[]
   /** task를 띄우지 못한 이유 */

@@ -1,13 +1,16 @@
-// 대화상자: 프로젝트 등록(시나리오 0), 새 Work(시나리오 1), 설정 화면(D70), Work 설정(D72),
+// 대화상자: 프로젝트 등록(시나리오 0), 새 Work(시나리오 1), 설정 화면(D70), Work 설정(D72: 자동 승인, 질문 방식),
 // 단계 선택(6.2, D82), 커밋 안 된 변경의 선택지(7-5), Work 정리(시나리오 8),
 // 확인 창([오류 무시하고 승인] 4.1, [Work 포기] 3.3).
 import { useEffect, useState, type ReactNode } from 'react'
 import {
+  AUTO_APPROVE_TITLES,
   QUESTION_MODE_LABEL,
   SKILL_TITLES,
   type AppConfig,
+  type AutoApproveNode,
   type QuestionMode,
   type SkillName,
+  type WorkSettings,
 } from '../../shared/config'
 import type { NodeName } from '../../shared/contracts'
 import type {
@@ -131,6 +134,7 @@ export function NewWorkDialog({
   const [branch, setBranch] = useState(project.defaultBranch)
   const [location, setLocation] = useState<'local' | 'remote'>('local')
   const [modes, setModes] = useState<Overrides>({})
+  const [auto, setAuto] = useState<AutoOverrides>({})
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const config = useConfig()
@@ -144,12 +148,16 @@ export function NewWorkDialog({
   const start = async () => {
     setBusy(true)
     setError(null)
+    const settings: WorkSettings = {
+      ...(Object.keys(auto).length ? { auto_approve: auto } : {}),
+      ...(Object.keys(modes).length ? { question_mode: modes } : {}),
+    }
     const r = await call(() =>
       window.relay.createWork(project.id, {
         request,
         baseBranch: branch,
         baseLocation: location,
-        ...(Object.keys(modes).length ? { settings: { question_mode: modes } } : {}),
+        ...(Object.keys(settings).length ? { settings } : {}),
       }),
     )
     setBusy(false)
@@ -207,6 +215,10 @@ export function NewWorkDialog({
           </label>
         </fieldset>
       </div>
+      <details>
+        <summary>이 Work의 자동 승인</summary>
+        <AutoApproveOverrides config={config} value={auto} onChange={setAuto} />
+      </details>
       <details>
         <summary>이 Work의 질문 방식</summary>
         <QuestionModes config={config} value={modes} onChange={setModes} />
@@ -278,16 +290,70 @@ function QuestionModes({
   )
 }
 
-/** Work 설정 (D72): 이 Work의 질문 방식. 다음에 시작하는 task부터 쓴다 (D73) */
+// ---------- 자동 승인 (4.2, D72) ----------
+
+type AutoOverrides = Partial<Record<AutoApproveNode, boolean>>
+
+const onOff = (on: boolean) => (on ? '켜짐' : '꺼짐')
+
+/** Work별 자동 승인 (D72). 고르지 않은 단계는 앱 설정을 따른다. 의도 정리와 최종 검증은 늘 수동이다 (4.2) */
+function AutoApproveOverrides({
+  config,
+  value,
+  onChange,
+}: {
+  config: AppConfig | null
+  value: AutoOverrides
+  onChange: (v: AutoOverrides) => void
+}) {
+  const set = (node: AutoApproveNode, v: string) => {
+    const rest = Object.fromEntries(Object.entries(value).filter(([k]) => k !== node))
+    onChange(v ? { ...rest, [node]: v === 'on' } : rest)
+  }
+  const pick = (node: AutoApproveNode) => {
+    const v = value[node]
+    return v === undefined ? '' : v ? 'on' : 'off'
+  }
+  return (
+    <div className="form-grid">
+      {AUTO_APPROVE_TITLES.map(([node, title]) => (
+        <label key={node} className="form-row">
+          <span>
+            {title} <span className="dim">({node})</span>
+          </span>
+          <select
+            aria-label={`${title} 자동 승인`}
+            value={pick(node)}
+            onChange={(e) => set(node, e.target.value)}
+          >
+            <option value="">
+              앱 설정 따름{config ? ` (${onOff(config.auto_approve[node])})` : ''}
+            </option>
+            <option value="on">켜기</option>
+            <option value="off">끄기</option>
+          </select>
+        </label>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * Work 설정 (D72): 이 Work의 자동 승인과 질문 방식. 자동 승인은 바로 적용하고(턴이 끝날 때의 설정으로 판정, 카운트다운
+ * 중에 끄면 멈춤, D128), 질문 방식은 다음에 시작하는 task부터 쓴다 (D73)
+ */
 export function WorkSettingsDialog({ work, onClose }: { work: WorkView; onClose: () => void }) {
   const [modes, setModes] = useState<Overrides>(work.settings.question_mode ?? {})
+  const [auto, setAuto] = useState<AutoOverrides>(work.settings.auto_approve ?? {})
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const config = useConfig()
 
   const save = async () => {
     setBusy(true)
-    const r = await call(() => window.relay.updateWorkSettings(work.key, { question_mode: modes }))
+    const r = await call(() =>
+      window.relay.updateWorkSettings(work.key, { auto_approve: auto, question_mode: modes }),
+    )
     setBusy(false)
     if (r.ok) onClose()
     else setError(r.error)
@@ -295,6 +361,12 @@ export function WorkSettingsDialog({ work, onClose }: { work: WorkView; onClose:
 
   return (
     <Modal title={`Work 설정 · ${work.workId}`} onClose={onClose}>
+      <h3>자동 승인</h3>
+      <div className="dim">
+        바로 적용합니다. 턴이 끝날 때의 설정으로 판정하고, 카운트다운 중에 끄면 멈춥니다.
+      </div>
+      <AutoApproveOverrides config={config} value={auto} onChange={setAuto} />
+      <h3>질문 방식</h3>
       <div className="dim">질문 방식은 다음에 시작하는 task부터 씁니다.</div>
       <QuestionModes config={config} value={modes} onChange={setModes} />
       {error ? <div className="error">{error}</div> : null}
@@ -322,7 +394,7 @@ const NUMBERS: [NumberKey, string, string][] = [
 
 /**
  * 앱 설정 (D70). 바꾸면 바로 적용하고, 질문 방식만 다음에 시작하는 task부터 쓴다 (D73).
- * 자동 승인과 카운트다운은 자동 승인을 넣는 M7에서 연다.
+ * 자동 승인은 턴이 끝날 때의 설정으로 판정하고, 카운트다운 중에 끄면 멈춘다. 카운트다운 초는 다음 카운트다운부터 쓴다 (D128)
  */
 export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const config = useConfig()
@@ -338,6 +410,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     const r = await call(() =>
       window.relay.updateConfig({
         session_limit: value.session_limit,
+        auto_approve: value.auto_approve,
+        auto_approve_countdown_sec: value.auto_approve_countdown_sec,
         question_mode: value.question_mode,
         format_error_bounce_max: value.format_error_bounce_max,
         handoff_body_warn_chars: value.handoff_body_warn_chars,
@@ -411,7 +485,45 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               </label>
             ))}
           </div>
-          <div className="dim">자동 승인과 카운트다운은 M7에서 설정합니다.</div>
+          <h3>자동 승인</h3>
+          <div className="dim">
+            켠 단계는 조건(4.3)을 만족하면 카운트다운 뒤 승인합니다. 턴이 끝날 때의 설정으로
+            판정하고, 카운트다운 중에 끄면 멈춥니다. 의도 정리와 최종 검증은 늘 수동입니다.
+          </div>
+          <div className="form-grid">
+            {AUTO_APPROVE_TITLES.map(([node, title]) => (
+              <label key={node} className="form-row">
+                <span>
+                  {title} <span className="dim">({node})</span>
+                </span>
+                <input
+                  type="checkbox"
+                  aria-label={`${title} 자동 승인`}
+                  checked={value.auto_approve[node]}
+                  onChange={(e) =>
+                    setDraft({
+                      ...value,
+                      auto_approve: { ...value.auto_approve, [node]: e.target.checked },
+                    })
+                  }
+                />
+              </label>
+            ))}
+            <label
+              className="form-row"
+              title="자동 승인 전에 기다리는 초. [취소]로 멈춘다. 다음 카운트다운부터 쓴다 (4.3)"
+            >
+              <span>자동 승인 카운트다운(초)</span>
+              <input
+                type="number"
+                aria-label="자동 승인 카운트다운(초)"
+                value={value.auto_approve_countdown_sec}
+                onChange={(e) =>
+                  setDraft({ ...value, auto_approve_countdown_sec: Number(e.target.value) })
+                }
+              />
+            </label>
+          </div>
         </>
       ) : (
         <div className="dim">불러오는 중…</div>
