@@ -69,7 +69,7 @@ test.beforeAll(async () => {
   fs.writeFileSync(
     scenarioFile,
     JSON.stringify({
-      ...scenario('M', {
+      ...scenario('L', {
         evidence: [{ do: 'prompt' }, { do: 'wait' }],
         'final-verify': [
           ...steps('verify', 'S').slice(0, -1),
@@ -141,7 +141,7 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   // 승인 화면 (D83)과 [의도 승인] (4.1)
   const approve = win.getByRole('button', { name: '의도 승인' })
   await expect(approve).toBeEnabled({ timeout: 60_000 })
-  await expect(win.getByLabel('size')).toHaveValue('M')
+  await expect(win.getByLabel('size')).toHaveValue('L')
   await win.screenshot({ path: 'test-results/approval.png' })
   await approve.click()
 
@@ -152,7 +152,7 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await expect.poll(() => findFile(path.join(home, 'projects'), 'intent.md')).not.toBeNull()
   const intent = findFile(path.join(home, 'projects'), 'intent.md')
   expect(fs.readFileSync(intent ?? '', 'utf8')).toContain(
-    'schema_version: 1\nversion: 1\ntype: bugfix\nsize: M\n',
+    'schema_version: 1\nversion: 1\ntype: bugfix\nsize: L\n',
   )
   await expect(rows).toContainText('FAKE-CLAUDE READY', { timeout: 60_000 })
   await win.screenshot({ path: 'test-results/next-task.png' })
@@ -195,7 +195,12 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
       auto_approve_countdown_sec: number
     }
   await expect.poll(() => config().session_limit).toBe(2)
-  expect(config().auto_approve).toEqual({ evidence: false, rca: false, fix: true })
+  expect(config().auto_approve).toEqual({
+    investigate: false,
+    evidence: false,
+    rca: false,
+    fix: true,
+  })
   expect(config().auto_approve_countdown_sec).toBe(600)
 
   // [단계 선택] (6.2, D82): intake를 고르면 결과를 미리 보인다

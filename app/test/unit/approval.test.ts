@@ -43,7 +43,7 @@ function check(errors: FormatIssue[], status: CheckSummary['status'] = 'awaiting
   return { handoff_present: true, status, errors, warnings: [] }
 }
 
-const gate = (node: NodeName, s: TaskStatus, c: CheckSummary, size?: 'S' | 'M' | 'L') =>
+const gate = (node: NodeName, s: TaskStatus, c: CheckSummary, size?: 'S' | 'L' | 'L') =>
   approvalGate({ node, status: s }, c, size)
 
 describe('승인 버튼의 판정 (4.1, D90, D112)', () => {
@@ -75,16 +75,16 @@ describe('승인 버튼의 판정 (4.1, D90, D112)', () => {
   it('size 오류는 intake에서 사람이 size를 고를 때만 풀린다', () => {
     expect(resolvedBySize(SIZE)).toBe(true)
     expect(resolvedBySize(DRAFT_TYPE)).toBe(false)
-    expect(gate('intake', 'idle', check([SIZE]), 'M')).toMatchObject({
+    expect(gate('intake', 'idle', check([SIZE]), 'L')).toMatchObject({
       approve: true,
       errors: [],
     })
-    expect(gate('intake', 'idle', check([SIZE, BODY]), 'M')).toMatchObject({
+    expect(gate('intake', 'idle', check([SIZE, BODY]), 'L')).toMatchObject({
       approve: false,
       force: true,
       errors: [BODY],
     })
-    expect(gate('rca', 'idle', check([SIZE]), 'M').errors).toEqual([SIZE])
+    expect(gate('rca', 'idle', check([SIZE]), 'L').errors).toEqual([SIZE])
   })
 
   it('handoff가 없거나 blocked면 승인하지 않는다. 머리글을 읽지 못한 handoff는 무시하고 승인할 수 있다', () => {
@@ -136,7 +136,7 @@ function valid(h: Partial<Handoff> = {}) {
 describe('자동 승인의 방식 (4.2, D72)', () => {
   const config: AppConfig = {
     ...DEFAULT_CONFIG,
-    auto_approve: { evidence: true, rca: true, fix: false },
+    auto_approve: { investigate: false, evidence: true, rca: true, fix: false },
   }
 
   it('Work 설정이 있으면 앱 설정보다 우선하고, 없는 단계는 앱 설정을 따른다', () => {
@@ -148,7 +148,7 @@ describe('자동 승인의 방식 (4.2, D72)', () => {
   })
 
   it('intake와 verify는 설정과 상관없이 늘 수동이다', () => {
-    const all = { auto_approve: { evidence: true, rca: true, fix: true } }
+    const all = { auto_approve: { investigate: false, evidence: true, rca: true, fix: true } }
     for (const node of ['intake', 'verify'] as const) {
       expect(approvalMode(config, all, node)).toBe('manual')
     }
@@ -157,11 +157,11 @@ describe('자동 승인의 방식 (4.2, D72)', () => {
 
 describe('자동 승인 조건 (4.3, D129)', () => {
   const holds = (c: CheckSummary & { handoffHeader?: Handoff | null }, background = false) =>
-    autoApproveHolds({ node: 'rca', size: 'M', check: c, background })
+    autoApproveHolds({ node: 'rca', size: 'L', check: c, background })
 
   it('조건을 모두 만족하면 어긴 것이 없다', () => {
     expect(holds(valid())).toEqual([])
-    // 기본 다음 단계(M 경로에서 rca 다음은 fix)를 추천해도 된다
+    // 기본 다음 단계(L 경로에서 rca 다음은 fix)를 추천해도 된다
     expect(holds(valid({ recommended_next: { node: 'fix', reason: '기본' } }))).toEqual([])
   })
 
@@ -235,7 +235,7 @@ describe('자동 승인 조건 (4.3, D129)', () => {
 describe('자동 승인하지 않은 까닭 (D128~D131)', () => {
   const config: AppConfig = {
     ...DEFAULT_CONFIG,
-    auto_approve: { evidence: false, rca: true, fix: false },
+    auto_approve: { investigate: false, evidence: false, rca: true, fix: false },
   }
   const task = (patch: object = {}) => ({
     node: 'rca' as const,

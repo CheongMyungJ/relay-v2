@@ -4,7 +4,7 @@
 import type { AppConfig, QuestionMode, WorkSettings } from '../shared/config'
 import type { NodeName } from '../shared/contracts'
 import type { TaskRecord, WorkState } from '../shared/work'
-import { approvalMode, type ApprovalMode } from './approval'
+import { approvalMode, autoApprovable, type ApprovalMode } from './approval'
 import {
   NODES,
   NODE_INFO,
@@ -33,7 +33,7 @@ const CLOSING =
 const PRESS = '[승인]을 누르세요.'
 
 /**
- * 자동 승인을 켤 수 있는 단계(evidence, rca, fix)의 문장 (D132). 자동 승인 여부는 턴이 끝날 때의 설정으로 정하고
+ * 자동 승인을 켤 수 있는 단계(investigate, evidence, rca, fix)의 문장 (D132). 자동 승인 여부는 턴이 끝날 때의 설정으로 정하고
  * (D128) 설정은 task가 도는 중에도 바뀌며, 스킬은 이 문구를 그대로 찍으므로 두 경우를 함께 적는다
  */
 const AUTO_SENTENCE =
@@ -74,7 +74,7 @@ const APPROVAL_LABEL: Record<ApprovalMode, string> = { manual: '수동 승인', 
  * 정하므로(D128) 그렇다고 적는다. intake와 verify는 늘 수동이다 (4.2)
  */
 function approvalSection(config: AppConfig, settings: WorkSettings, node: NodeName): string {
-  if (node !== 'evidence' && node !== 'rca' && node !== 'fix') {
+  if (!autoApprovable(node)) {
     return '수동 승인 (의도 승인과 Work 완료는 늘 수동)'
   }
   const mode = APPROVAL_LABEL[approvalMode(config, settings, node)]
@@ -243,12 +243,13 @@ function list(items: readonly string[]): string {
 }
 
 function nextSteps(work: WorkState, node: NodeName): string[] {
-  // intake의 기본 다음 단계는 의도 승인 때 정하는 size에 달렸다 (3.4)
+  // intake의 기본 다음 단계는 의도 승인 때 정하는 size에 달렸다 (3.4). intake보다 앞 단계는 없다
+  const size = work.intent?.size
   const next =
-    node === 'intake'
-      ? `의도 승인 뒤 size에 따라 ${stepLabel(defaultNext(node, 'M'))}, size가 S이면 ${stepLabel(defaultNext(node, 'S'))}`
-      : stepLabel(defaultNext(node, work.intent?.size ?? 'M'))
-  const previous = previousSteps(node)
+    node === 'intake' || !size
+      ? `의도 승인 뒤 size에 따라 S이면 ${stepLabel(defaultNext(node, 'S'))}, M이면 ${stepLabel(defaultNext(node, 'M'))}, L이면 ${stepLabel(defaultNext(node, 'L'))}`
+      : stepLabel(defaultNext(node, size))
+  const previous = size ? previousSteps(node, size) : []
   return [
     `기본 다음 단계: ${next}`,
     `이전 단계: ${previous.length ? previous.map(nodeLabel).join(', ') : '없음'}`,

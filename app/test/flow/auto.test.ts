@@ -132,16 +132,16 @@ function counted(s: Setup, workKey: string): string[] {
 const noticesOf = (s: Setup, workKey: string) =>
   s.h.ui.notices.filter((n) => n.workKey === workKey).map((n) => n.body)
 
-const ALL_AUTO = { evidence: true, rca: true, fix: true }
+const ALL_AUTO = { investigate: true, evidence: true, rca: true, fix: true }
 
 /** 카운트다운이 끝나기 전에 [취소]할 수 있게 넉넉히 둔 카운트다운 */
 const LONG = 600
 
 describe('[흐름] 자동 승인 (M7)', () => {
   it('조건을 모두 만족하면 카운트다운 뒤 자동 승인되고 다음 단계로 간다. decisions.md의 머리 줄과 task.approved에 자동 승인이 남고, 카운트다운 시작을 알린다 (4.3, 5.4, 5.5, D81)', async () => {
-    const s = await setup(scenario('M'), { auto_approve: ALL_AUTO, auto_approve_countdown_sec: 1 })
+    const s = await setup(scenario('L'), { auto_approve: ALL_AUTO, auto_approve_countdown_sec: 1 })
     const key = await s.create()
-    const result = await drive(s.h.relay, s.h.ui, key, { size: 'M', awaitAuto: true })
+    const result = await drive(s.h.relay, s.h.ui, key, { size: 'L', awaitAuto: true })
     expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed' })
     expect(result.tasks.map((t) => [t.label, t.auto])).toEqual([
       ['01 의도 정리', false],
@@ -207,7 +207,7 @@ describe('[흐름] 자동 승인 (M7)', () => {
       { do: 'wait' },
     ]
     const s = await setup(scenario('S', { fix }), {
-      auto_approve: { evidence: false, rca: false, fix: true },
+      auto_approve: { investigate: false, evidence: false, rca: false, fix: true },
       auto_approve_countdown_sec: 4,
     })
     const key = await s.create()
@@ -299,7 +299,7 @@ describe('[흐름] 자동 승인 (M7)', () => {
       { do: 'stop' },
     ]
     const s = await setup(scenario('S', { fix }), {
-      auto_approve: { evidence: false, rca: false, fix: true },
+      auto_approve: { investigate: false, evidence: false, rca: false, fix: true },
       auto_approve_countdown_sec: 60,
     })
     const key = await s.create()
@@ -339,7 +339,7 @@ describe('[흐름] 자동 승인 (M7)', () => {
 
   it('조건을 하나라도 어기면 카운트다운하지 않고 까닭과 함께 알린다: 열린 질문, 백그라운드 작업, 의도와 어긋남 (4.3, D129, D130)', async () => {
     const s = await setup(
-      scenario('M', {
+      scenario('L', {
         evidence: [
           { do: 'prompt' },
           { do: 'write', file: 'evidence.md', text: EVIDENCE },
@@ -374,7 +374,7 @@ describe('[흐름] 자동 승인 (M7)', () => {
       { auto_approve: ALL_AUTO, auto_approve_countdown_sec: 1 },
     )
     const key = await s.create()
-    const result = await drive(s.h.relay, s.h.ui, key, { size: 'M', awaitAuto: true })
+    const result = await drive(s.h.relay, s.h.ui, key, { size: 'L', awaitAuto: true })
     expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed' })
     expect(result.tasks.every((t) => !t.auto)).toBe(true)
     expect(counted(s, key)).toEqual([])
@@ -395,7 +395,7 @@ describe('[흐름] 자동 승인 (M7)', () => {
 
   it('Work 설정이 앱 설정보다 우선한다 (D72)', async () => {
     const s = await setup(scenario('S'), {
-      auto_approve: { evidence: false, rca: false, fix: false },
+      auto_approve: { investigate: false, evidence: false, rca: false, fix: false },
       auto_approve_countdown_sec: 1,
     })
     // 앱 설정은 꺼짐: Work A는 켜서 자동 승인, Work B는 앱 설정을 따라 사람 승인
@@ -439,7 +439,7 @@ describe('[흐름] 자동 승인 (M7)', () => {
       { do: 'wait' },
     ]
     const s = await setup(scenario('S', { fix }), {
-      auto_approve: { evidence: false, rca: false, fix: false },
+      auto_approve: { investigate: false, evidence: false, rca: false, fix: false },
       auto_approve_countdown_sec: LONG,
     })
     const key = await s.create()
@@ -494,7 +494,7 @@ describe('[흐름] 자동 승인 (M7)', () => {
 
   it('앱 설정을 바꾸면 상태가 그대로인 Work도 스냅샷을 다시 보내, 승인 화면이 새 설정으로 안내를 다시 읽는다 (D128)', async () => {
     const s = await setup(scenario('S'), {
-      auto_approve: { evidence: false, rca: false, fix: false },
+      auto_approve: { investigate: false, evidence: false, rca: false, fix: false },
       auto_approve_countdown_sec: LONG,
     })
     const key = await s.create()
@@ -564,7 +564,7 @@ describe('[흐름] 자동 승인 (M7)', () => {
         },
       },
       {
-        auto_approve: { evidence: false, rca: false, fix: true },
+        auto_approve: { investigate: false, evidence: false, rca: false, fix: true },
         auto_approve_countdown_sec: LONG,
       },
     )
@@ -625,7 +625,10 @@ describe('[흐름] 자동 승인 (M7)', () => {
           ],
         },
       },
-      { auto_approve: { evidence: false, rca: false, fix: true }, auto_approve_countdown_sec: 5 },
+      {
+        auto_approve: { investigate: false, evidence: false, rca: false, fix: true },
+        auto_approve_countdown_sec: 5,
+      },
     )
     const key = await s.create()
     const dir = s.dir(key)
@@ -702,7 +705,7 @@ describe('[흐름] 자동 승인 (M7)', () => {
         },
       },
       {
-        auto_approve: { evidence: false, rca: false, fix: true },
+        auto_approve: { investigate: false, evidence: false, rca: false, fix: true },
         auto_approve_countdown_sec: LONG,
       },
     )

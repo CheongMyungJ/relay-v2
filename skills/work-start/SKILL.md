@@ -14,7 +14,7 @@ Read the request, talk with the human, and write the intent draft `intent.draft.
 
 ## Rules
 
-- **This skill does not change code.** Skim the code only enough to write concrete goals and completion criteria. Do not reproduce the bug or trace the cause. That is the job of evidence and rca.
+- **This skill does not change code.** Skim the code only enough to write concrete goals and completion criteria. Do not reproduce the bug or trace the cause. That is the job of the later steps.
 - Do not write the cause or how to fix it in the intent. The only exception is the human's suspicions below.
 - **Human suspicions:** if the request says where the human suspects the bug is, copy it to `추가 의견` with the prefix "(사람 추정, 확인 안 됨)".
 - **Your own hypotheses** do not go in the intent. Put them only in the handoff section `## 다음 task가 알아야 할 것`, as reference.
@@ -41,11 +41,19 @@ Scope (`비목표`), completion criteria (`완료조건`), size (`size`). This s
 
 Propose `size` in the draft. Put the rationale in handoff `decisions` (`by: ai`), not in the intent.
 
-Propose `S` only when all of these hold. Otherwise propose `M`. (`L` is treated like `M`.)
+The size sets the steps: `S` goes straight to fix, `M` reproduces and finds the cause in one step (investigate), `L` does them as two steps (evidence, then rca) so the human checks the evidence before the cause is traced.
+
+Propose `S` only when all of these hold:
 
 - The request contains a way to reproduce the bug.
 - The request, or a skim of the code, narrows the fix location to one place.
 - Nothing could touch the non-goals or constraints.
+
+Otherwise propose `L` when any of these holds, and `M` when none does:
+
+- The request has no way to reproduce the bug.
+- The bug is intermittent, or depends on the environment, timing or data.
+- After a skim of the code, the candidate locations span several modules.
 
 ## Done when
 
@@ -59,7 +67,7 @@ Propose `S` only when all of these hold. Otherwise propose `M`. (`L` is treated 
 ```markdown
 ---
 type: bugfix   # bugfix only
-size:          # S | M | L. S only under the criteria above
+size:          # S | M | L. By the criteria in Size above
 ---
 ## 목표
 

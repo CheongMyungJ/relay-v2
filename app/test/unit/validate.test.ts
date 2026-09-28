@@ -72,7 +72,7 @@ const DRAFT_BODY = [
   '',
 ].join('\n')
 
-function draft(header = 'type: bugfix\nsize: M', body = DRAFT_BODY): string {
+function draft(header = 'type: bugfix\nsize: L', body = DRAFT_BODY): string {
   return `---\n${header}\n---\n${body}`
 }
 
@@ -82,7 +82,7 @@ const errorsOf = (r: { errors: { message: string }[] }) => r.errors.map((e) => e
 function check(
   node: NodeName,
   files: Record<string, string>,
-  size: Size | undefined = 'M',
+  size: Size | undefined = 'L',
 ): ReturnType<typeof checkTask> {
   return checkTask({ node, size, files, config: DEFAULT_CONFIG })
 }
@@ -99,11 +99,11 @@ describe('머리글 읽기', () => {
 
   it('통과: CRLF 줄 끝과 BOM도 읽는다', () => {
     const text = `\uFEFF${handoff().replace(/\n/g, '\r\n')}`
-    expect(errorsOf(checkHandoff(text, { node: 'rca', size: 'M', ...WARN }))).toEqual([])
+    expect(errorsOf(checkHandoff(text, { node: 'rca', size: 'L', ...WARN }))).toEqual([])
   })
 
   it('실패: 머리글이 없다', () => {
-    expect(errorsOf(checkHandoff(HANDOFF_BODY, { node: 'rca', size: 'M', ...WARN }))).toEqual([
+    expect(errorsOf(checkHandoff(HANDOFF_BODY, { node: 'rca', size: 'L', ...WARN }))).toEqual([
       '머리글 없음: 첫 줄이 `---`인 YAML 머리글이 필요함',
     ])
   })
@@ -136,7 +136,7 @@ describe('머리글 읽기', () => {
 
 describe('스키마 검사: handoff (5.2.1)', () => {
   const run = (fields: Record<string, unknown>) =>
-    errorsOf(checkHandoff(handoff(fields), { node: 'rca', size: 'M', ...WARN }))
+    errorsOf(checkHandoff(handoff(fields), { node: 'rca', size: 'L', ...WARN }))
 
   it('통과: 필수 필드를 모두 채웠다 (knowledge_candidates는 선택)', () => {
     expect(run({})).toEqual([])
@@ -218,7 +218,7 @@ describe('스키마 검사: handoff (5.2.1)', () => {
       '`recommended_next` 형식이 틀림 (기대: null 또는 {node, reason}, 지금: 문자열)',
     ])
     expect(run({ recommended_next: { node: 'deploy', reason: '배포' } })).toEqual([
-      '`recommended_next.node` 값이 허용값이 아님 (허용값: intake | evidence | rca | fix | verify, 지금: deploy)',
+      '`recommended_next.node` 값이 허용값이 아님 (허용값: intake | investigate | evidence | rca | fix | verify, 지금: deploy)',
     ])
     expect(run({ recommended_next: { node: 'fix' } })).toEqual([
       '`recommended_next.reason` 없음: 필수 필드',
@@ -226,7 +226,7 @@ describe('스키마 검사: handoff (5.2.1)', () => {
   })
 
   it('읽을 수 있으면 오류가 있어도 status를 돌려준다', () => {
-    const r = checkHandoff(handoff({ risks: 3 }), { node: 'rca', size: 'M', ...WARN })
+    const r = checkHandoff(handoff({ risks: 3 }), { node: 'rca', size: 'L', ...WARN })
     expect(r.status).toBe('awaiting_approval')
     expect(r.value).toBeNull()
   })
@@ -234,7 +234,7 @@ describe('스키마 검사: handoff (5.2.1)', () => {
 
 describe('스키마 검사: intent 초안 (5.3, D38)', () => {
   it('통과: type과 size가 허용값이다', () => {
-    for (const size of ['S', 'M', 'L']) {
+    for (const size of ['S', 'L', 'L']) {
       const r = checkIntentDraft(draft(`type: bugfix\nsize: ${size}`), WARN)
       expect(errorsOf(r)).toEqual([])
       expect(r.value).toEqual({ type: 'bugfix', size })
@@ -270,18 +270,33 @@ describe('추가 검사: recommended_next.node가 선택 가능한 다음 단계
     errorsOf(checkHandoff(text, { node, size, ...WARN }))
 
   it('통과: 이전 단계나 기본 다음 단계', () => {
-    expect(run(rec('evidence'), 'rca', 'M')).toEqual([])
-    expect(run(rec('fix'), 'rca', 'M')).toEqual([])
-    expect(run(rec('fix'), 'verify', 'M')).toEqual([])
-    // S 경로의 fix는 건너뛴 evidence나 rca를 추천할 수 있다 (D66)
-    expect(run(rec('rca'), 'fix', 'S')).toEqual([])
+    expect(run(rec('evidence'), 'rca', 'L')).toEqual([])
+    expect(run(rec('fix'), 'rca', 'L')).toEqual([])
+    expect(run(rec('fix'), 'verify', 'L')).toEqual([])
+    // S 경로의 fix는 건너뛴 investigate를 추천할 수 있다 (D66, D149)
+    expect(run(rec('investigate'), 'fix', 'S')).toEqual([])
+    // M 경로: investigate의 이전 단계와 기본 다음 단계, fix가 되돌아갈 investigate
+    expect(run(rec('fix'), 'investigate', 'M')).toEqual([])
+    expect(run(rec('investigate'), 'fix', 'M')).toEqual([])
+  })
+
+  it('실패: 그 크기가 고를 수 없는 단계를 추천했다 (D149)', () => {
+    expect(run(rec('rca'), 'fix', 'S')).toEqual([
+      '`recommended_next.node` 값이 선택 가능한 다음 단계가 아님 (허용값: intake | investigate | verify, 지금: rca)',
+    ])
+    expect(run(rec('rca'), 'fix', 'M')).toEqual([
+      '`recommended_next.node` 값이 선택 가능한 다음 단계가 아님 (허용값: intake | investigate | verify, 지금: rca)',
+    ])
+    expect(run(rec('investigate'), 'fix', 'L')).toEqual([
+      '`recommended_next.node` 값이 선택 가능한 다음 단계가 아님 (허용값: intake | evidence | rca | verify, 지금: investigate)',
+    ])
   })
 
   it('실패: 뒤 단계를 건너뛰거나 지금 단계를 추천했다', () => {
-    expect(run(rec('verify'), 'rca', 'M')).toEqual([
+    expect(run(rec('verify'), 'rca', 'L')).toEqual([
       '`recommended_next.node` 값이 선택 가능한 다음 단계가 아님 (허용값: intake | evidence | fix, 지금: verify)',
     ])
-    expect(run(rec('verify'), 'verify', 'M')).toEqual([
+    expect(run(rec('verify'), 'verify', 'L')).toEqual([
       '`recommended_next.node` 값이 선택 가능한 다음 단계가 아님 (허용값: intake | evidence | rca | fix, 지금: verify)',
     ])
   })
@@ -292,8 +307,9 @@ describe('추가 검사: recommended_next.node가 선택 가능한 다음 단계
       'intent.draft.md': draft(`type: bugfix\nsize: ${size}`),
     })
     expect(errorsOf(check('intake', files('S', 'fix'), undefined))).toEqual([])
-    expect(errorsOf(check('intake', files('M', 'evidence'), undefined))).toEqual([])
-    expect(errorsOf(check('intake', files('M', 'fix'), undefined))).toEqual([
+    expect(errorsOf(check('intake', files('L', 'evidence'), undefined))).toEqual([])
+    expect(errorsOf(check('intake', files('M', 'investigate'), undefined))).toEqual([])
+    expect(errorsOf(check('intake', files('L', 'fix'), undefined))).toEqual([
       '`recommended_next.node` 값이 선택 가능한 다음 단계가 아님 (허용값: evidence, 지금: fix)',
     ])
   })
@@ -332,14 +348,14 @@ describe('추가 검사: 본문 필수 절 (5.2.1)', () => {
 
   it('실패: handoff 본문에 절이 없다', () => {
     const text = handoff({}, '## 요약\n내용\n')
-    expect(errorsOf(checkHandoff(text, { node: 'rca', size: 'M', ...WARN }))).toEqual([
+    expect(errorsOf(checkHandoff(text, { node: 'rca', size: 'L', ...WARN }))).toEqual([
       '`## 다음 task가 알아야 할 것` 절 없음: handoff 본문의 필수 절',
     ])
   })
 
   it('실패: 코드 펜스 안의 제목이나 다른 수준의 제목은 절로 치지 않는다', () => {
     const body = '```markdown\n## 요약\n```\n### 다음 task가 알아야 할 것\n'
-    expect(errorsOf(checkHandoff(handoff({}, body), { node: 'rca', size: 'M', ...WARN }))).toEqual([
+    expect(errorsOf(checkHandoff(handoff({}, body), { node: 'rca', size: 'L', ...WARN }))).toEqual([
       '`## 요약` 절 없음: handoff 본문의 필수 절',
       '`## 다음 task가 알아야 할 것` 절 없음: handoff 본문의 필수 절',
     ])
@@ -407,7 +423,7 @@ describe('경고는 오류로 치지 않는다 (D85, D86, 분량 기준)', () =>
       decisions: [{ what: '크기는 M', why: '이유', by: 'ai', confidence: 0.9 }],
       recommended_next: { node: 'evidence', reason: '이유', urgent: true },
     })
-    const r = checkHandoff(text, { node: 'rca', size: 'M', ...WARN })
+    const r = checkHandoff(text, { node: 'rca', size: 'L', ...WARN })
     expect(r.errors).toEqual([])
     expect(r.warnings.map((w) => w.message)).toEqual([
       '정의되지 않은 필드 `decisions[0].confidence`: 앱은 무시함',
@@ -437,7 +453,7 @@ describe('경고는 오류로 치지 않는다 (D85, D86, 분량 기준)', () =>
   it('문자열과 목록의 길이에는 상한이 없다 (D86)', () => {
     const long = () => ({ what: '가'.repeat(5000), why: '나'.repeat(5000), by: 'ai' })
     const text = handoff({ decisions: Array.from({ length: 200 }, long) })
-    expect(errorsOf(checkHandoff(text, { node: 'rca', size: 'M', warnChars: 1e9 }))).toEqual([])
+    expect(errorsOf(checkHandoff(text, { node: 'rca', size: 'L', warnChars: 1e9 }))).toEqual([])
   })
 })
 
@@ -462,7 +478,7 @@ describe('task 검사 (5.2.1)', () => {
     expect(isValid(r)).toBe(true)
     expect(r.status).toBe('awaiting_approval')
     expect(r.handoff?.decisions).toEqual(HANDOFF_FIELDS.decisions)
-    expect(r.intentDraft).toEqual({ type: 'bugfix', size: 'M' })
+    expect(r.intentDraft).toEqual({ type: 'bugfix', size: 'L' })
   })
 
   it('산출물 쪽 오류만 있으면 handoff 머리글 값은 남긴다', () => {

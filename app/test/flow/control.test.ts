@@ -558,7 +558,7 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
   })
 
   it('설정: 세션 상한을 올리면 대기열이 바로 시작하고, 질문 방식은 다음에 시작하는 task부터 쓴다 (D70, D72, D73)', async () => {
-    const s = await setup(scenario('M'), { session_limit: 1 })
+    const s = await setup(scenario('L'), { session_limit: 1 })
     const a = await s.create('버그 A')
     const b = await s.create('버그 B', { question_mode: { 'work-start': 'confirm_each' } })
     await untilTask(s, b, (t) => t.status === 'queued', 'B 대기열')
@@ -585,7 +585,7 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
       await s.h.relay.updateWorkSettings(a, { question_mode: { 'root-cause': 'confirm_each' } }),
     ).toEqual({ ok: true })
     expect((await s.h.relay.updateWorkSettings(a, { question_mode: { fix: 'x' } })).ok).toBe(false)
-    const result = await drive(s.h.relay, s.h.ui, a, { size: 'M' })
+    const result = await drive(s.h.relay, s.h.ui, a, { size: 'L' })
     expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed' })
     await settle(s.h, a)
     const ctx = (dir: string) => read(path.join(s.dir(a), 'tasks', dir, 'context.md'))

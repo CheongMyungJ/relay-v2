@@ -636,11 +636,11 @@ describe('승인과 다음 task (시나리오 4, 5)', () => {
     return approve(ready, check, size)
   }
 
-  it('M 경로: intake → evidence → rca → fix → verify → Work 완료', () => {
+  it('L 경로: intake → evidence → rca → fix → verify → Work 완료', () => {
     let work = newWork()
     const nodes: NodeName[] = []
     const all: Effect[] = []
-    let r = stepApprove(work, valid({}, 'M'))
+    let r = stepApprove(work, valid({}, 'L'))
     for (;;) {
       nodes.push(...r.work.tasks.slice(nodes.length).map((t) => t.node))
       all.push(...r.effects)
@@ -657,11 +657,29 @@ describe('승인과 다음 task (시나리오 4, 5)', () => {
     ])
     expect(work.status).toBe('completed')
     expect(work.completed_at).toBeDefined()
-    expect(work.intent).toEqual({ version: 1, size: 'M' })
+    expect(work.intent).toEqual({ version: 1, size: 'L' })
     expect(
       all.filter((e) => e.type === 'startTask').map((e) => e.type === 'startTask' && e.node),
     ).toEqual(['evidence', 'rca', 'fix', 'verify'])
     expect(types(all).at(-1)).toBe('log:work.completed')
+  })
+
+  it('M 경로: intake → investigate → fix → verify → Work 완료 (D147)', () => {
+    let r = stepApprove(newWork(), valid({}, 'M'))
+    expect(r.work.intent).toEqual({ version: 1, size: 'M' })
+    expect(r.effects.at(-1)).toEqual({
+      type: 'startTask',
+      taskId: 't-02',
+      node: 'investigate',
+      reason: 'default',
+    })
+    for (const next of ['fix', 'verify']) {
+      r = stepApprove(r.work, valid())
+      expect(currentTask(r.work)?.node).toBe(next)
+    }
+    r = stepApprove(r.work, valid())
+    expect(r.work.status).toBe('completed')
+    expect(r.work.tasks.map((t) => t.node)).toEqual(['intake', 'investigate', 'fix', 'verify'])
   })
 
   it('S 경로: intake → fix → verify → Work 완료 (3.4)', () => {
@@ -676,12 +694,12 @@ describe('승인과 다음 task (시나리오 4, 5)', () => {
   })
 
   it('의도 승인: 승인을 기록하고, 세션을 끝내고, 결정을 더하고, intent를 확정하고, 다음 task를 시작한다', () => {
-    const ready = stop(launch(newWork()), valid({}, 'M')).work
+    const ready = stop(launch(newWork()), valid({}, 'L')).work
     const r = apply(ready, {
       type: 'approve',
       taskId: 't-01',
       at: '2026-09-26T12:00:00+09:00',
-      check: valid({}, 'M'),
+      check: valid({}, 'L'),
     })
     expect(r.effects).toEqual([
       {
@@ -703,7 +721,7 @@ describe('승인과 다음 task (시나리오 4, 5)', () => {
         by: 'human',
         decisions: HANDOFF.decisions,
       },
-      { type: 'confirmIntent', taskId: 't-01', version: 1, size: 'M' },
+      { type: 'confirmIntent', taskId: 't-01', version: 1, size: 'L' },
       { type: 'startTask', taskId: 't-02', node: 'evidence', reason: 'default' },
     ])
     expect(r.work.tasks[0]).toMatchObject({
@@ -721,7 +739,7 @@ describe('승인과 다음 task (시나리오 4, 5)', () => {
   })
 
   it('의도 승인 화면에서 사람이 고른 size가 초안의 size보다 우선한다 (4.1)', () => {
-    const r = stepApprove(newWork(), valid({}, 'M'), 'S')
+    const r = stepApprove(newWork(), valid({}, 'L'), 'S')
     expect(r.work.intent).toEqual({ version: 1, size: 'S' })
     expect(currentTask(r.work)?.node).toBe('fix')
   })
@@ -742,9 +760,9 @@ describe('승인과 다음 task (시나리오 4, 5)', () => {
   })
 
   it('세션이 이미 끝난 승인 대기도 승인한다. 세션 종료는 하지 않는다', () => {
-    const ready = stop(launch(newWork()), valid({}, 'M')).work
+    const ready = stop(launch(newWork()), valid({}, 'L')).work
     const ended = apply(ready, { type: 'pty.exit', taskId: 't-01', at: at() }).work
-    const r = approve(ended, valid({}, 'M'))
+    const r = approve(ended, valid({}, 'L'))
     expect(r.rejected).toBeUndefined()
     expect(types(r.effects)).not.toContain('endSession')
   })
@@ -773,18 +791,29 @@ describe('이전 단계 추천에서 멈춤 (D23)', () => {
     expect(r.work.tasks).toHaveLength(3)
   })
 
-  it('S 경로의 fix가 건너뛴 rca를 추천해도 멈춘다 (D66)', () => {
+  it('S 경로의 fix가 건너뛴 investigate를 추천해도 멈춘다 (D66, D149)', () => {
     let work = newWork()
     work = approve(stop(launch(work), valid({}, 'S')).work, valid({}, 'S')).work
-    const rec = valid({ recommended_next: { node: 'rca', reason: '원인을 좁히지 못함' } })
+    const rec = valid({ recommended_next: { node: 'investigate', reason: '원인을 좁히지 못함' } })
     const r = approve(stop(launch(work), rec).work, rec)
     expect(r.work.status).toBe('stopped')
-    expect(r.work.stop).toMatchObject({ kind: 'recommended_back', node: 'rca' })
+    expect(r.work.stop).toMatchObject({ kind: 'recommended_back', node: 'investigate' })
+  })
+
+  it('M 경로의 fix가 investigate를 추천하면 멈춘다 (D55, D147)', () => {
+    let work = newWork()
+    work = approve(stop(launch(work), valid({}, 'M')).work, valid({}, 'M')).work
+    work = approve(stop(launch(work), valid()).work, valid()).work
+    expect(currentTask(work)?.node).toBe('fix')
+    const rec = valid({ recommended_next: { node: 'investigate', reason: '원인이 틀림' } })
+    const r = approve(stop(launch(work), rec).work, rec)
+    expect(r.work.status).toBe('stopped')
+    expect(r.work.stop).toMatchObject({ kind: 'recommended_back', node: 'investigate' })
   })
 
   it('기본 다음 단계를 추천하면 그대로 진행한다', () => {
     let work = newWork()
-    work = approve(stop(launch(work), valid({}, 'M')).work, valid({}, 'M')).work
+    work = approve(stop(launch(work), valid({}, 'L')).work, valid({}, 'L')).work
     const rec = valid({ recommended_next: { node: 'rca', reason: '다음은 원인 분석' } })
     const r = approve(stop(launch(work), rec).work, rec)
     expect(r.work.status).toBe('active')
@@ -803,14 +832,14 @@ describe('받지 않는 승인', () => {
   it('에이전트가 턴을 도는 중이거나 막힘이면 승인하지 않는다 (D112)', () => {
     for (const s of ['working', 'asking', 'input_needed', 'blocked'] as const) {
       const work = running(s)
-      const r = approve(work, valid({}, 'M'))
+      const r = approve(work, valid({}, 'L'))
       expect(r.rejected).toMatch(/승인할 수 있는 상태가 아님/)
       expect(r.work).toBe(work)
     }
   })
 
   it('누른 때 다시 한 검사가 유효하지 않으면 승인하지 않고 오류를 보인다 (4.1)', () => {
-    const ready = stop(launch(newWork()), valid({}, 'M')).work
+    const ready = stop(launch(newWork()), valid({}, 'L')).work
     const r = approve(ready, INVALID)
     expect(r.rejected).toMatch(/유효하지 않음/)
     expect(r.effects).toEqual([])
@@ -821,9 +850,9 @@ describe('받지 않는 승인', () => {
   })
 
   it('지금 task가 아니면 승인하지 않는다', () => {
-    const r = stop(launch(newWork()), valid({}, 'M'))
-    const next = approve(r.work, valid({}, 'M')).work
-    const again = apply(next, { type: 'approve', taskId: 't-01', at: at(), check: valid({}, 'M') })
+    const r = stop(launch(newWork()), valid({}, 'L'))
+    const next = approve(r.work, valid({}, 'L')).work
+    const again = apply(next, { type: 'approve', taskId: 't-01', at: at(), check: valid({}, 'L') })
     expect(again.rejected).toMatch(/지금 task가 아님/)
     expect(again.work).toBe(next)
   })
@@ -886,13 +915,13 @@ describe('대기와 세션 종료에서의 승인, [오류 무시하고 승인] 
 
   /** intake를 M으로 승인하고 evidence task를 띄운 Work */
   function atEvidence(): WorkState {
-    const ready = stop(launch(newWork()), valid({}, 'M')).work
-    return launch(approve(ready, valid({}, 'M')).work)
+    const ready = stop(launch(newWork()), valid({}, 'L')).work
+    return launch(approve(ready, valid({}, 'L')).work)
   }
 
   it('대기에서도 누른 때의 검사가 유효하면 승인한다', () => {
-    const work = idleWith(withErrors([BODY], 'M'))
-    const r = approve(work, valid({}, 'M'))
+    const work = idleWith(withErrors([BODY], 'L'))
+    const r = approve(work, valid({}, 'L'))
     expect(r.rejected).toBeUndefined()
     expect(r.work.tasks[0]?.status).toBe('approved')
     expect(r.work.tasks[0]?.ignored_errors).toBeUndefined()
@@ -911,7 +940,7 @@ describe('대기와 세션 종료에서의 승인, [오류 무시하고 승인] 
   })
 
   it('[오류 무시하고 승인]은 무시한 오류를 work.json과 events.jsonl에 남기고 진행한다', () => {
-    const check = withErrors([BODY, DRAFT_BODY], 'M')
+    const check = withErrors([BODY, DRAFT_BODY], 'L')
     const r = forceApprove(idleWith(check), check)
     expect(r.rejected).toBeUndefined()
     expect(r.work.tasks[0]).toMatchObject({
@@ -947,7 +976,7 @@ describe('대기와 세션 종료에서의 승인, [오류 무시하고 승인] 
   })
 
   it('세션이 끝난 task도 승인하고, 세션 종료는 하지 않는다', () => {
-    const check = withErrors([BODY], 'M')
+    const check = withErrors([BODY], 'L')
     const ended = apply(idleWith(check), { type: 'pty.exit', taskId: 't-01', at: at() }).work
     expect(status(ended)).toBe('session_ended')
     const r = forceApprove(ended, check)
@@ -966,18 +995,18 @@ describe('대기와 세션 종료에서의 승인, [오류 무시하고 승인] 
     }
     // size 오류는 사람이 size를 고르면 풀린다
     const check: TaskCheck = { ...withErrors([SIZE, BODY]), intentDraft: null }
-    expect(forceApprove(idleWith(check), check, 'M').rejected).toBeUndefined()
+    expect(forceApprove(idleWith(check), check, 'L').rejected).toBeUndefined()
   })
 
   it('status가 blocked로 읽히면 [오류 무시하고 승인]을 받지 않는다 (4.4)', () => {
-    const check: TaskCheck = { ...withErrors([BODY], 'M'), status: 'blocked' }
+    const check: TaskCheck = { ...withErrors([BODY], 'L'), status: 'blocked' }
     const r = forceApprove(idleWith(check), check)
     expect(r.rejected).toMatch(/오류를 무시하고 승인할 수 없음/)
   })
 
   it('누른 때 오류가 없으면 [오류 무시하고 승인]도 보통 승인이다', () => {
-    const work = idleWith(withErrors([BODY], 'M'))
-    const r = forceApprove(work, valid({}, 'M'))
+    const work = idleWith(withErrors([BODY], 'L'))
+    const r = forceApprove(work, valid({}, 'L'))
     expect(r.rejected).toBeUndefined()
     expect(r.work.tasks[0]?.ignored_errors).toBeUndefined()
     expect(r.effects[0]).toMatchObject({ event: { payload: { by: 'human' } } })
@@ -994,8 +1023,8 @@ describe('대기와 세션 종료에서의 승인, [오류 무시하고 승인] 
 
 /** intake를 M으로 승인하고 evidence task를 띄운 Work */
 function evidenceLive(): WorkState {
-  const ready = stop(launch(newWork()), valid({}, 'M')).work
-  return launch(approve(ready, valid({}, 'M')).work)
+  const ready = stop(launch(newWork()), valid({}, 'L')).work
+  return launch(approve(ready, valid({}, 'L')).work)
 }
 
 describe('대기열 (D18)', () => {
@@ -1053,8 +1082,8 @@ describe('[즉시 중단] (시나리오 3-4)', () => {
       expect(currentTask(r.work)?.session?.alive).toBe(false)
       expect(types(r.effects)).toEqual(['log:task.interrupted', 'endSession'])
     }
-    const ended = interrupt(stop(launch(newWork()), valid({}, 'M')).work).work
-    const r = approve(ended, valid({}, 'M'))
+    const ended = interrupt(stop(launch(newWork()), valid({}, 'L')).work).work
+    const r = approve(ended, valid({}, 'L'))
     expect(r.rejected).toBeUndefined()
     expect(types(r.effects)).not.toContain('endSession')
   })
@@ -1065,7 +1094,7 @@ describe('[즉시 중단] (시나리오 3-4)', () => {
   })
 
   it('대기열에서 뺀 task에 유효한 handoff가 있으면 승인 대기로 남는다 (3.3)', () => {
-    const ended = apply(stop(launch(newWork()), valid({}, 'M')).work, {
+    const ended = apply(stop(launch(newWork()), valid({}, 'L')).work, {
       type: 'pty.exit',
       taskId: 't-01',
       at: at(),
@@ -1077,7 +1106,7 @@ describe('[즉시 중단] (시나리오 3-4)', () => {
       taskId: 't-01',
       at: at(),
       reason: 'human',
-      check: valid({}, 'M'),
+      check: valid({}, 'L'),
     })
     expect(status(r.work)).toBe('awaiting_approval')
   })
@@ -1149,11 +1178,11 @@ describe('[재개]와 [세션 재개] (시나리오 3-4, 3-5, 4.4)', () => {
       },
     })
     // 다시 연 세션의 신호를 받는다
-    expect(status(stop(r.work, valid({}, 'M')).work)).toBe('awaiting_approval')
+    expect(status(stop(r.work, valid({}, 'L')).work)).toBe('awaiting_approval')
   })
 
   it('다시 연 때 유효한 handoff가 있으면 승인 대기나 막힘이다 (3.3)', () => {
-    const r = resumed(resume(interrupted()).work, valid({}, 'M'))
+    const r = resumed(resume(interrupted()).work, valid({}, 'L'))
     expect(status(r.work)).toBe('awaiting_approval')
     expect(types(r.effects)).toEqual(['log:task.resumed', 'log:task.awaiting_approval'])
     expect(status(resumed(resume(interrupted()).work, BLOCKED).work)).toBe('blocked')
@@ -1187,18 +1216,18 @@ describe('[재개]와 [세션 재개] (시나리오 3-4, 3-5, 4.4)', () => {
   })
 
   it('승인 대기를 다시 열어도 task.awaiting_approval을 거듭 남기지 않는다', () => {
-    const ended = apply(stop(launch(newWork()), valid({}, 'M')).work, {
+    const ended = apply(stop(launch(newWork()), valid({}, 'L')).work, {
       type: 'pty.exit',
       taskId: 't-01',
       at: at(),
     }).work
-    const r = resumed(resume(ended).work, valid({}, 'M'))
+    const r = resumed(resume(ended).work, valid({}, 'L'))
     expect(status(r.work)).toBe('awaiting_approval')
     expect(types(r.effects)).toEqual(['log:task.resumed'])
   })
 
   it('세션 없는 승인 대기를 다시 열지 못하면 유효한 handoff로 승인 대기에 남는다 (3.3)', () => {
-    const ended = apply(stop(launch(newWork()), valid({}, 'M')).work, {
+    const ended = apply(stop(launch(newWork()), valid({}, 'L')).work, {
       type: 'pty.exit',
       taskId: 't-01',
       at: at(),
@@ -1208,10 +1237,10 @@ describe('[재개]와 [세션 재개] (시나리오 3-4, 3-5, 4.4)', () => {
       taskId: 't-01',
       at: at(),
       error: 'claude 없음',
-      check: valid({}, 'M'),
+      check: valid({}, 'L'),
     })
     expect(currentTask(r.work)).toMatchObject({ status: 'awaiting_approval', error: 'claude 없음' })
-    expect(approve(r.work, valid({}, 'M')).rejected).toBeUndefined()
+    expect(approve(r.work, valid({}, 'L')).rejected).toBeUndefined()
   })
 
   it('다시 열지 못하면 중단됨이고 세션 id는 남는다', () => {
@@ -1373,7 +1402,7 @@ describe('[Work 포기] (3.3)', () => {
   it('승인 대기도 중단됨으로 둔다. 포기한 Work의 task는 승인하지 않는다', () => {
     const r = abandon(running('awaiting_approval'))
     expect(status(r.work)).toBe('interrupted')
-    expect(approve(r.work, valid({}, 'M')).rejected).toMatch(/진행 중인 Work가 아님/)
+    expect(approve(r.work, valid({}, 'L')).rejected).toMatch(/진행 중인 Work가 아님/)
     // 늦은 신호는 무시한다
     expect(apply(r.work, { type: 'UserPromptSubmit', taskId: 't-01', at: at() }).work).toBe(r.work)
   })
@@ -1434,7 +1463,7 @@ describe('재시작 조정 (시나리오 9, D75, D78)', () => {
   })
 
   it('유효한 handoff가 있으면 승인 대기나 막힘이다. 자동 승인과 자동 재개는 하지 않는다', () => {
-    const r = restart(running('working'), valid({}, 'M'))
+    const r = restart(running('working'), valid({}, 'L'))
     expect(currentTask(r.work)).toMatchObject({
       status: 'awaiting_approval',
       session: { alive: false },
@@ -1444,7 +1473,7 @@ describe('재시작 조정 (시나리오 9, D75, D78)', () => {
     expect(r.effects[0]).toMatchObject({ event: { payload: { reason: 'app_restart' } } })
     expect(status(restart(running('working'), BLOCKED).work)).toBe('blocked')
     // 이미 승인 대기였으면 기록을 더하지 않는다
-    const kept = restart(running('awaiting_approval'), valid({}, 'M'))
+    const kept = restart(running('awaiting_approval'), valid({}, 'L'))
     expect(status(kept.work)).toBe('awaiting_approval')
     expect(kept.effects).toEqual([])
     // 승인 대기였어도 지금 handoff가 유효하지 않으면 중단됨이다
@@ -1475,13 +1504,13 @@ describe('재시작 조정 (시나리오 9, D75, D78)', () => {
   })
 
   it('다시 열려고 대기열에 있던 승인 대기는 유효한 handoff로 승인 대기가 된다 (3.3)', () => {
-    const ended = apply(stop(launch(newWork()), valid({}, 'M')).work, {
+    const ended = apply(stop(launch(newWork()), valid({}, 'L')).work, {
       type: 'pty.exit',
       taskId: 't-01',
       at: at(),
     }).work
     const q = apply(ended, { type: 'task.queued', taskId: 't-01', at: at() }).work
-    const r = restart(q, valid({}, 'M'))
+    const r = restart(q, valid({}, 'L'))
     expect(status(r.work)).toBe('awaiting_approval')
     expect(r.effects).toEqual([
       expect.objectContaining({
@@ -1550,10 +1579,10 @@ describe('단계 선택 (6.2, D77, D115~D117)', () => {
     return launch(work)
   }
 
-  /** M 경로로 rca까지 가서 rca 세션이 살아 있는 Work: t-01 intake, t-02 evidence, t-03 rca */
+  /** L 경로로 rca까지 가서 rca 세션이 살아 있는 Work: t-01 intake, t-02 evidence, t-03 rca */
   function toRca(): WorkState {
     let work = newWork()
-    for (const check of [valid({}, 'M'), valid()]) {
+    for (const check of [valid({}, 'L'), valid()]) {
       work = approve(stop(launch(work), check).work, check).work
     }
     return launch(work)
@@ -1798,8 +1827,8 @@ describe('단계 선택 (6.2, D77, D115~D117)', () => {
 
   it('끝난 k 다음의 기본 다음 단계를 고르면 기본 진행이고 추가 지시만 남는다', () => {
     const on = apply(launch(newWork()), { type: 'stopAfter', at: at(), on: true }).work
-    const ready = stop(on, valid({}, 'M')).work
-    const stopped = approve(ready, valid({}, 'M')).work
+    const ready = stop(on, valid({}, 'L')).work
+    const stopped = approve(ready, valid({}, 'L')).work
     expect(stopped.status).toBe('stopped')
     const r = select(stopped, 'evidence', { instruction: '로그를 먼저 봐 줘' })
     expect(r.work.status).toBe('active')
@@ -1838,14 +1867,14 @@ describe('단계 선택 (6.2, D77, D115~D117)', () => {
     ])
     // 새 intake가 승인되기 전에는 지금 승인된 intent가 그대로다
     expect(rewound.intent).toEqual({ version: 1, size: 'S' })
-    const ready = stop(launch(rewound), valid({}, 'M')).work
-    const r = approve(ready, valid({}, 'M'))
-    expect(r.work.intent).toEqual({ version: 2, size: 'M' })
+    const ready = stop(launch(rewound), valid({}, 'L')).work
+    const r = approve(ready, valid({}, 'L'))
+    expect(r.work.intent).toEqual({ version: 2, size: 'L' })
     expect(r.effects).toContainEqual({
       type: 'confirmIntent',
       taskId: 't-04',
       version: 2,
-      size: 'M',
+      size: 'L',
     })
     expect(currentTask(r.work)).toMatchObject({ id: 't-05', node: 'evidence', reason: 'default' })
   })
@@ -2639,12 +2668,12 @@ describe('앱 소유 파일의 해시 (D91, D124)', () => {
 describe('자동 승인 (4.3, D127~D131)', () => {
   const AUTO: AppConfig = {
     ...DEFAULT_CONFIG,
-    auto_approve: { evidence: true, rca: true, fix: true },
+    auto_approve: { investigate: false, evidence: true, rca: true, fix: true },
     auto_approve_countdown_sec: 15,
   }
-  /** M 경로의 의도 승인(사람) 뒤 evidence 세션을 띄운 Work */
+  /** L 경로의 의도 승인(사람) 뒤 evidence 세션을 띄운 Work */
   function evidenceRunning(settings: WorkState['settings'] = {}): WorkState {
-    const w = approve(stop(launch(newWork()), valid({}, 'M')).work, valid({}, 'M')).work
+    const w = approve(stop(launch(newWork()), valid({}, 'L')).work, valid({}, 'L')).work
     return launch({ ...w, settings })
   }
   /** evidence가 Stop으로 승인 대기가 되어 카운트다운 중인 Work */
@@ -2717,7 +2746,7 @@ describe('자동 승인 (4.3, D127~D131)', () => {
   })
 
   it('intake와 verify는 자동 승인을 켜도 카운트다운하지 않는다 (4.2)', () => {
-    const intake = stop(launch(newWork()), valid({}, 'M'), {}, AUTO)
+    const intake = stop(launch(newWork()), valid({}, 'L'), {}, AUTO)
     expect(task(intake.work).countdown).toBeUndefined()
     expect(task(intake.work).auto_hold).toBeUndefined()
     let w = approve(intake.work, valid({}, 'S')).work

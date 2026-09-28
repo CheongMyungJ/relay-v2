@@ -67,6 +67,7 @@
 | I37 | D142는 `main/notices.ts`가 한다. 알림은 `click`이나 `failed`에서 놓고 `close`에서는 놓지 않는다. `app.setAppUserModelId`는 Windows 설치본(`app.isPackaged`)에서만 부르고 개발 중에는 Electron 기본값을 쓴다. 앱 ID가 `electron-builder.yml`의 appId와 같은지는 [단위]가 본다 | Windows는 토스트가 알림 센터로 옮겨 갈 때 `close`를 보내므로(Electron 문서 Notification) `close`에서 놓으면 알림 센터에서 누를 알림을 놓침. 개발 중의 실행 파일에는 그 앱 ID의 시작 메뉴 바로 가기가 없음 | ✅ |
 | I38 | D146의 검사는 main이 SessionEnd 훅과 PTY 종료 때 task 파일을 다시 읽어 이벤트에 넣는다. 먼저 처리된 신호가 정하고 뒤의 것은 세션이 이미 끝나 무시된다. 이미 끝낸 세션(승인, [즉시 중단] 등)의 PTY 종료에는 읽지 않는다. 파일을 읽지 못하면 검사 없이 넣어 세션 종료로 둔다 | Windows에서 강제로 끝난 claude는 SessionEnd를 보내지 않아 PTY 종료만 옴. 파일을 읽다 실패해도 세션이 끝난 것은 남겨야 함 | ✅ |
 | I39 | app-ci의 Windows 작업은 [어댑터]와 [흐름] 전에 앱을 빌드한다(`npm run build`). 설치 파일 빌드와 [스모크]는 그대로 수동이다 | Windows는 파일 이름의 대소문자를 가리지 않아, Linux에서 되는 확장자 없는 import가 Windows에서만 다른 파일로 풀릴 수 있음(A79, PR #10의 app-build #15). Linux 작업과 Windows의 시험은 앱을 빌드하지 않아 이것을 놓쳤음. 빌드는 몇 초라 push마다 돌려도 부담이 없음 | ✅ |
+| I40 | 크기별 경로(D147~D151)는 `core/pipeline`의 `steps`(고를 수 있는 단계)와 `route`(지나는 단계)가 정하고, 단계 선택(`core/rewind`), `context.md`의 이전 단계, `recommended_next` 검사가 같은 `previousSteps(node, size)`를 쓴다. 스킬 합치기(D148)는 `adapters/claude`의 `SKILL_PARTS`, `soloSkill`, `composeSkill`이 하고, `skills/check.mjs`가 같은 표와 같은 방식으로 합친다. 경로는 저장하지 않고 승인된 intent의 크기로 매번 계산한다. 그래서 이 변경 전에 시작해 evidence를 지난 M Work는 새 M 경로에 evidence가 없어 rca를 건너뛰고 fix로 간다 **(알려진 제약)**: 업데이트 전에 진행 중인 M Work를 끝내거나, intake로 되감아 L로 고친다 | 경로를 `work.json`에 저장하면 읽고 옮기는 곳이 늘어남. MVP는 사용자가 하나이고 진행 중인 Work를 끝낸 뒤 올릴 수 있음 | |
 
 ## 3. 확인한 사실
 
@@ -164,7 +165,7 @@ app/src/
 
 | 층 | 모듈 | 맡는 일 | 설계 |
 |---|---|---|---|
-| core | `pipeline` | 노드 순서, S 빠른 경로, 선택 가능한 다음 단계, 기본 다음 단계 | 3.1, 3.2, 3.4 |
+| core | `pipeline` | 노드 순서, 크기별 경로와 고를 수 있는 단계(D147, D149), 선택 가능한 다음 단계, 기본 다음 단계 | 3.1, 3.2, 3.4 |
 | core | `machine` | Work와 Task 상태 전이. `(상태, 이벤트) → (새 상태, 할 일)` (I10) | 3.3, 시나리오 3~5 |
 | core | `validate` | handoff와 intent 초안의 머리글 파싱, 스키마 검사, 추가 검사, 되돌림 메시지 | 5.2.1, D107 |
 | core | `context` | `context.md` 조립(입력: 상태, intent, 결정 로그, 누적 기각 목록, 직전 handoff), 마무리 안내 문구(D104) | 시나리오 2-4 |
