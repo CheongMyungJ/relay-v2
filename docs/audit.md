@@ -919,7 +919,7 @@ core는 `core/settings.ts`를 빼면 줄 95% 이상, 가지 84% 이상이다(`ma
 
 | ID | 처리 | 바꾼 것 | 결정 | 커밋 |
 |---|---|---|---|---|
-| A1 | 고침 | Electron 인스턴스 잠금(`main/instance.ts`, `main/index.ts`). 두 번째로 켠 앱은 relay를 열지 않고 끝나고, 떠 있는 창이 앞으로 온다. 시험 `test/unit/instance.test.ts`. 개발용 실행과 설치한 앱을 함께 켜는 경우는 막지 않는다(I34) | D133, I34 | (이 커밋) |
+| A1 | 고침 | Electron 인스턴스 잠금(`main/instance.ts`, `main/index.ts`). 두 번째로 켠 앱은 relay를 열지 않고 끝나고, 떠 있는 창이 앞으로 온다. 시험 `test/unit/instance.test.ts`. 개발용 실행과 설치한 앱을 함께 켜는 경우는 막지 않는다(I34) | D133, I34 | 8232958 |
 
 ## 부록. 1단계 대조표
 
