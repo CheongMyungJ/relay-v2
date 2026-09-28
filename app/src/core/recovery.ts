@@ -140,7 +140,8 @@ function cleanView(op: CleanOperation): OperationView {
     ],
     retry:
       '[다시 시도]: 끊긴 단계부터 정리를 마치고 보관됨으로 바꿉니다. 반쯤 지운 worktree는 마저 지우고, ' +
-      '이미 지운 브랜치는 건너뜁니다.',
+      '이미 지운 브랜치는 건너뜁니다. 끊긴 뒤 worktree를 고치거나 커밋했으면 그것도 지우므로 [무시]를 누른 뒤 ' +
+      '[Work 정리]로 다시 확인하세요.',
     ignore: '[무시]: 기록만 지웁니다. [Work 정리]를 다시 할 수 있습니다.',
     choice: null,
   }
@@ -275,7 +276,7 @@ export function cleanResume(recordedForce: boolean, status: readonly string[]): 
   return {
     ok: false,
     error:
-      'worktree에 지우다 만 것 말고 다른 변경이 있어 정리를 멈춤. [Work 정리]로 다시 확인하세요',
+      'worktree에 지우다 만 것 말고 다른 변경이 있어 정리를 멈춤. [무시]를 누른 뒤 [Work 정리]로 다시 확인하세요',
   }
 }
 

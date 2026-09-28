@@ -192,6 +192,10 @@ describe('[단위] 끊긴 작업의 알림 (D121, D123)', () => {
       choice: null,
     })
     expect(v?.ignore).toBe('[무시]: 기록만 지웁니다. [Work 정리]를 다시 할 수 있습니다.')
+    // [다시 시도]는 끊긴 뒤의 변경을 다시 확인하지 않는다 (D139)
+    expect(v?.retry).toContain(
+      '끊긴 뒤 worktree를 고치거나 커밋했으면 그것도 지우므로 [무시]를 누른 뒤 [Work 정리]로 다시 확인하세요.',
+    )
   })
 })
 
@@ -291,7 +295,9 @@ describe('[단위] 끊긴 전달과 정리 (D123)', () => {
     })
     const r = cleanResume(false, [' D src/a.js', ' M b.txt'])
     expect(r.ok).toBe(false)
-    expect(!r.ok && r.error).toContain('[Work 정리]로 다시 확인하세요')
+    expect(!r.ok && r.error).toBe(
+      'worktree에 지우다 만 것 말고 다른 변경이 있어 정리를 멈춤. [무시]를 누른 뒤 [Work 정리]로 다시 확인하세요',
+    )
     expect(cleanResume(false, ['?? scratch.txt']).ok).toBe(false)
   })
 })
