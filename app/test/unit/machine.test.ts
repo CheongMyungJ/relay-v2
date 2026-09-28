@@ -636,7 +636,7 @@ describe('승인과 다음 task (시나리오 4, 5)', () => {
     return approve(ready, check, size)
   }
 
-  it('L 경로: intake → evidence → rca → fix → verify → Work 완료', () => {
+  it('L 경로: intake → evidence → rca → fix → review → verify → Work 완료', () => {
     let work = newWork()
     const nodes: NodeName[] = []
     const all: Effect[] = []
@@ -653,18 +653,19 @@ describe('승인과 다음 task (시나리오 4, 5)', () => {
       ['t-02', 'evidence', 'approved'],
       ['t-03', 'rca', 'approved'],
       ['t-04', 'fix', 'approved'],
-      ['t-05', 'verify', 'approved'],
+      ['t-05', 'review', 'approved'],
+      ['t-06', 'verify', 'approved'],
     ])
     expect(work.status).toBe('completed')
     expect(work.completed_at).toBeDefined()
     expect(work.intent).toEqual({ version: 1, size: 'L' })
     expect(
       all.filter((e) => e.type === 'startTask').map((e) => e.type === 'startTask' && e.node),
-    ).toEqual(['evidence', 'rca', 'fix', 'verify'])
+    ).toEqual(['evidence', 'rca', 'fix', 'review', 'verify'])
     expect(types(all).at(-1)).toBe('log:work.completed')
   })
 
-  it('M 경로: intake → investigate → fix → verify → Work 완료 (D147)', () => {
+  it('M 경로: intake → investigate → fix → review → verify → Work 완료 (D147, D166)', () => {
     let r = stepApprove(newWork(), valid({}, 'M'))
     expect(r.work.intent).toEqual({ version: 1, size: 'M' })
     expect(r.effects.at(-1)).toEqual({
@@ -673,24 +674,50 @@ describe('승인과 다음 task (시나리오 4, 5)', () => {
       node: 'investigate',
       reason: 'default',
     })
-    for (const next of ['fix', 'verify']) {
+    for (const next of ['fix', 'review', 'verify']) {
       r = stepApprove(r.work, valid())
       expect(currentTask(r.work)?.node).toBe(next)
     }
     r = stepApprove(r.work, valid())
     expect(r.work.status).toBe('completed')
-    expect(r.work.tasks.map((t) => t.node)).toEqual(['intake', 'investigate', 'fix', 'verify'])
+    expect(r.work.tasks.map((t) => t.node)).toEqual([
+      'intake',
+      'investigate',
+      'fix',
+      'review',
+      'verify',
+    ])
   })
 
-  it('S 경로: intake → fix → verify → Work 완료 (3.4)', () => {
+  it('S 경로: intake → fix → review → verify → Work 완료 (3.4, D163)', () => {
     let r = stepApprove(newWork(), valid({}, 'S'))
     expect(r.work.intent).toEqual({ version: 1, size: 'S' })
     expect(currentTask(r.work)?.node).toBe('fix')
     r = stepApprove(r.work, valid())
+    expect(currentTask(r.work)?.node).toBe('review')
+    r = stepApprove(r.work, valid())
     expect(currentTask(r.work)?.node).toBe('verify')
     r = stepApprove(r.work, valid())
     expect(r.work.status).toBe('completed')
-    expect(r.work.tasks.map((t) => t.node)).toEqual(['intake', 'fix', 'verify'])
+    expect(r.work.tasks.map((t) => t.node)).toEqual(['intake', 'fix', 'review', 'verify'])
+  })
+
+  it('review는 자동 승인을 모두 켜도 카운트다운하지 않고 사람의 승인을 기다린다 (D167)', () => {
+    const all: AppConfig = {
+      ...DEFAULT_CONFIG,
+      auto_approve: { investigate: true, evidence: true, rca: true, fix: true },
+    }
+    let work = stepApprove(newWork(), valid({}, 'S')).work
+    work = stepApprove(work, valid()).work
+    expect(currentTask(work)?.node).toBe('review')
+    const r = stop(launch(work), valid(), {}, all)
+    expect(currentTask(r.work)).toMatchObject({ node: 'review', status: 'awaiting_approval' })
+    expect(currentTask(r.work)?.countdown).toBeUndefined()
+    expect(currentTask(r.work)?.auto_hold).toBeUndefined()
+    expect(types(r.effects)).toEqual(['log:task.awaiting_approval'])
+    // 사람이 승인하면 verify로 간다
+    const next = approve(r.work, valid())
+    expect(next.effects.at(-1)).toMatchObject({ type: 'startTask', node: 'verify' })
   })
 
   it('의도 승인: 승인을 기록하고, 세션을 끝내고, 결정을 더하고, intent를 확정하고, 다음 task를 시작한다', () => {
@@ -747,6 +774,8 @@ describe('승인과 다음 task (시나리오 4, 5)', () => {
   it('verify 승인은 [완료만]으로 Work를 완료한다 (시나리오 7, I22)', () => {
     let work = stepApprove(newWork(), valid({}, 'S')).work
     work = stepApprove(work, valid()).work
+    work = stepApprove(work, valid()).work
+    expect(currentTask(work)?.node).toBe('verify')
     const r = stepApprove(work, valid())
     expect(r.work.status).toBe('completed')
     expect(types(r.effects)).toEqual([
@@ -769,9 +798,10 @@ describe('승인과 다음 task (시나리오 4, 5)', () => {
 })
 
 describe('이전 단계 추천에서 멈춤 (D23)', () => {
+  /** S 경로로 verify까지 가서 verify 세션이 살아 있는 Work: t-01 intake, t-02 fix, t-03 review, t-04 verify */
   function toVerify(): WorkState {
     let work = newWork()
-    for (const check of [valid({}, 'S'), valid()]) {
+    for (const check of [valid({}, 'S'), valid(), valid()]) {
       work = approve(stop(launch(work), check).work, check).work
     }
     return launch(work)
@@ -783,12 +813,12 @@ describe('이전 단계 추천에서 멈춤 (D23)', () => {
     expect(r.work.status).toBe('stopped')
     expect(r.work.stop).toEqual({
       kind: 'recommended_back',
-      task_id: 't-03',
+      task_id: 't-04',
       node: 'fix',
       reason: '완료조건 2 실패',
     })
     expect(types(r.effects)).toEqual(['log:task.approved', 'endSession', 'appendDecisions'])
-    expect(r.work.tasks).toHaveLength(3)
+    expect(r.work.tasks).toHaveLength(4)
   })
 
   it('S 경로의 fix가 건너뛴 investigate를 추천해도 멈춘다 (D66, D149)', () => {
@@ -820,10 +850,31 @@ describe('이전 단계 추천에서 멈춤 (D23)', () => {
     expect(currentTask(r.work)?.node).toBe('rca')
   })
 
+  it('review가 fix를, verify가 review를 추천하면 멈춘다 (5.6.10, D149)', () => {
+    let work = newWork()
+    for (const check of [valid({}, 'M'), valid(), valid()]) {
+      work = approve(stop(launch(work), check).work, check).work
+    }
+    expect(currentTask(work)?.node).toBe('review')
+    const back = valid({ recommended_next: { node: 'fix', reason: '수정 방향이 틀림' } })
+    const r = approve(stop(launch(work), back).work, back)
+    expect(r.work.stop).toMatchObject({ kind: 'recommended_back', task_id: 't-04', node: 'fix' })
+
+    const toReview = valid({ recommended_next: { node: 'review', reason: '리뷰 반영이 깨짐' } })
+    let v = newWork()
+    for (const check of [valid({}, 'S'), valid(), valid()]) {
+      v = approve(stop(launch(v), check).work, check).work
+    }
+    expect(currentTask(v)?.node).toBe('verify')
+    const rv = approve(stop(launch(v), toReview).work, toReview)
+    expect(rv.work.status).toBe('stopped')
+    expect(rv.work.stop).toMatchObject({ kind: 'recommended_back', node: 'review' })
+  })
+
   it('멈춘 Work에는 늦은 신호가 와도 바뀌지 않는다', () => {
     const rec = valid({ recommended_next: { node: 'fix', reason: '실패' } })
     const stopped = approve(stop(toVerify(), rec).work, rec).work
-    const r = apply(stopped, { type: 'pty.exit', taskId: 't-03', at: at() })
+    const r = apply(stopped, { type: 'pty.exit', taskId: 't-04', at: at() })
     expect(r.work).toBe(stopped)
   })
 })
@@ -1338,7 +1389,7 @@ describe('[이 단계 끝나면 멈춤]과 멈춘 Work의 [재개] (시나리오
 
   it('verify 승인도 멈춤이 켜져 있으면 Work를 완료하지 않고 멈춘다. [재개]하면 완료한다', () => {
     let work = newWork()
-    for (const check of [valid({}, 'S'), valid()]) {
+    for (const check of [valid({}, 'S'), valid(), valid()]) {
       work = approve(stop(launch(work), check).work, check).work
     }
     const on = stopAfter(launch(work), true).work
@@ -1346,7 +1397,7 @@ describe('[이 단계 끝나면 멈춤]과 멈춘 Work의 [재개] (시나리오
     const r = approve(stop(on, valid()).work, valid())
     expect(r.work).toMatchObject({
       status: 'stopped',
-      stop: { kind: 'after_step', task_id: 't-03' },
+      stop: { kind: 'after_step', task_id: 't-04' },
     })
     expect(r.work.completed_at).toBeUndefined()
     expect(r.work.stop_after_step).toBeUndefined()
@@ -1369,9 +1420,10 @@ describe('[이 단계 끝나면 멈춤]과 멈춘 Work의 [재개] (시나리오
 
   it('verify에서 멈춘 Work를 [재개]하면 Work를 완료한다', () => {
     let work = newWork()
-    for (const check of [valid({}, 'S'), valid()]) {
+    for (const check of [valid({}, 'S'), valid(), valid()]) {
       work = approve(stop(launch(work), check).work, check).work
     }
+    expect(currentTask(work)?.node).toBe('verify')
     const rec = valid({ recommended_next: { node: 'fix', reason: '완료조건 2 실패' } })
     const stopped = approve(stop(launch(work), rec).work, rec).work
     const r = apply(stopped, { type: 'resumeWork', at: at() })
@@ -1570,10 +1622,10 @@ describe('액션 바의 조작 (시나리오 3-4, 3-5, 4.4)', () => {
 })
 
 describe('단계 선택 (6.2, D77, D115~D117)', () => {
-  /** S 경로로 verify까지 가서 verify 세션이 살아 있는 Work: t-01 intake, t-02 fix, t-03 verify */
+  /** S 경로로 verify까지 가서 verify 세션이 살아 있는 Work: t-01 intake, t-02 fix, t-03 review, t-04 verify */
   function toVerify(): WorkState {
     let work = newWork()
-    for (const check of [valid({}, 'S'), valid()]) {
+    for (const check of [valid({}, 'S'), valid(), valid()]) {
       work = approve(stop(launch(work), check).work, check).work
     }
     return launch(work)
@@ -1619,9 +1671,9 @@ describe('단계 선택 (6.2, D77, D115~D117)', () => {
       stage: 'backup',
       started_at: r.work.operation?.started_at,
       node: 'fix',
-      from_task: 't-03',
+      from_task: 't-04',
       instruction: '완료조건 2를 다시 봐 줘',
-      discard: ['t-02', 't-03'],
+      discard: ['t-02', 't-03', 't-04'],
       reset_to: 'start-t-02',
       backup_branch: BACKUP,
       backup_commit: null,
@@ -1639,9 +1691,10 @@ describe('단계 선택 (6.2, D77, D115~D117)', () => {
     expect(r.work.tasks.map((t) => [t.id, t.status])).toEqual([
       ['t-01', 'approved'],
       ['t-02', 'approved'],
-      ['t-03', 'interrupted'],
+      ['t-03', 'approved'],
+      ['t-04', 'interrupted'],
     ])
-    expect(r.work.tasks[2]?.session?.alive).toBe(false)
+    expect(r.work.tasks[3]?.session?.alive).toBe(false)
   })
 
   it('백업하고 되돌리면 task를 폐기하고 고른 단계를 되감기로 시작하며 기록을 지운다', () => {
@@ -1664,15 +1717,16 @@ describe('단계 선택 (6.2, D77, D115~D117)', () => {
     expect(r.work.tasks.map((t) => [t.id, t.node, t.status, t.reason])).toEqual([
       ['t-01', 'intake', 'approved', 'default'],
       ['t-02', 'fix', 'discarded', 'default'],
-      ['t-03', 'verify', 'discarded', 'default'],
-      ['t-04', 'fix', 'working', 'rewind'],
+      ['t-03', 'review', 'discarded', 'default'],
+      ['t-04', 'verify', 'discarded', 'default'],
+      ['t-05', 'fix', 'working', 'rewind'],
     ])
-    expect(r.work.tasks[1]).toMatchObject({ discarded_by: 't-04', approved_by: 'human' })
+    expect(r.work.tasks[1]).toMatchObject({ discarded_by: 't-05', approved_by: 'human' })
     expect(r.work.tasks[1]?.discarded_at).toBeDefined()
-    expect(r.work.tasks[3]?.selection).toEqual({
-      from_task: 't-03',
+    expect(r.work.tasks[4]?.selection).toEqual({
+      from_task: 't-04',
       instruction: '다시',
-      discarded: ['t-02', 't-03'],
+      discarded: ['t-02', 't-03', 't-04'],
       skipped: [],
       keep_code: false,
       reset: {
@@ -1688,32 +1742,32 @@ describe('단계 선택 (6.2, D77, D115~D117)', () => {
         event: {
           ts: expect.any(String) as string,
           work_id: 'w-20260926-001',
-          task_id: 't-04',
+          task_id: 't-05',
           type: 'task.rewound',
           payload: {
             node: 'fix',
-            from_task: 't-03',
-            discarded: ['t-02', 't-03'],
+            from_task: 't-04',
+            discarded: ['t-02', 't-03', 't-04'],
             keep_code: false,
             reset_to: 'start-t-02',
             backup_branch: BACKUP,
           },
         },
       },
-      { type: 'startTask', taskId: 't-04', node: 'fix', reason: 'rewind' },
+      { type: 'startTask', taskId: 't-05', node: 'fix', reason: 'rewind' },
     ])
     // 폐기된 task에 늦게 온 신호는 무시한다
-    const late = apply(r.work, { type: 'pty.exit', taskId: 't-03', at: at() })
+    const late = apply(r.work, { type: 'pty.exit', taskId: 't-04', at: at() })
     expect(late.work).toBe(r.work)
   })
 
   it('백업할 것이 없었으면 백업 브랜치는 null이다 (D116)', () => {
     const phase1 = select(toVerify(), 'verify').work
     const none = apply(phase1, { type: 'rewind.backedUp', at: at(), branch: null, commit: null })
-    const r = apply(none.work, { type: 'rewind.applied', at: at(), head: 'start-t-03' })
+    const r = apply(none.work, { type: 'rewind.applied', at: at(), head: 'start-t-04' })
     expect(r.work.tasks.at(-1)?.selection?.reset).toEqual({
-      from: 'start-t-03',
-      to: 'start-t-03',
+      from: 'start-t-04',
+      to: 'start-t-04',
       backup_branch: null,
       backup_commit: null,
     })
@@ -1765,6 +1819,7 @@ describe('단계 선택 (6.2, D77, D115~D117)', () => {
       ['t-03', 'rca', 'discarded', 'default'],
       ['t-04', 'verify', 'working', 'skip'],
     ])
+    // fix와 review를 건너뛴다 (D166)
     expect(r.work.tasks[2]?.session?.alive).toBe(false)
     expect(types(r.effects)).toEqual([
       'log:task.interrupted',
@@ -1775,13 +1830,18 @@ describe('단계 선택 (6.2, D77, D115~D117)', () => {
     const skipped = r.effects[2]
     expect(skipped?.type === 'log' && skipped.event).toMatchObject({
       task_id: 't-04',
-      payload: { node: 'verify', from_task: 't-03', discarded: ['t-03'], skipped: ['fix'] },
+      payload: {
+        node: 'verify',
+        from_task: 't-03',
+        discarded: ['t-03'],
+        skipped: ['fix', 'review'],
+      },
     })
     expect(r.work.tasks[3]?.selection).toEqual({
       from_task: 't-03',
       instruction: '바로 검증해 줘',
       discarded: ['t-03'],
-      skipped: ['fix'],
+      skipped: ['fix', 'review'],
       keep_code: false,
       reset: null,
     })
@@ -1799,8 +1859,8 @@ describe('단계 선택 (6.2, D77, D115~D117)', () => {
     const logged = r.effects[2]
     expect(logged?.type === 'log' && logged.event.payload).toEqual({
       node: 'fix',
-      from_task: 't-03',
-      discarded: ['t-02', 't-03'],
+      from_task: 't-04',
+      discarded: ['t-02', 't-03', 't-04'],
       keep_code: true,
     })
     expect(r.work.tasks.at(-1)?.selection).toMatchObject({ keep_code: true, reset: null })
@@ -1821,7 +1881,8 @@ describe('단계 선택 (6.2, D77, D115~D117)', () => {
       ['t-01', 'approved'],
       ['t-02', 'discarded'],
       ['t-03', 'discarded'],
-      ['t-04', 'working'],
+      ['t-04', 'discarded'],
+      ['t-05', 'working'],
     ])
   })
 
@@ -1845,7 +1906,7 @@ describe('단계 선택 (6.2, D77, D115~D117)', () => {
     expect(select(work, 'fix', { expect: { taskId: 't-02', done: false } }).rejected).toBe(
       '미리 본 뒤 Work가 바뀌었음. 단계 선택을 다시 여세요',
     )
-    expect(select(work, 'fix', { expect: { taskId: 't-03', done: true } }).rejected).toBeDefined()
+    expect(select(work, 'fix', { expect: { taskId: 't-04', done: true } }).rejected).toBeDefined()
   })
 
   it('의도 승인 전에는 intake만 고를 수 있다. intake로 되감은 뒤 의도 승인하면 intent 새 버전이다 (6.3, D40)', () => {
@@ -1863,6 +1924,7 @@ describe('단계 선택 (6.2, D77, D115~D117)', () => {
       'discarded',
       'discarded',
       'discarded',
+      'discarded',
       'working',
     ])
     // 새 intake가 승인되기 전에는 지금 승인된 intent가 그대로다
@@ -1872,11 +1934,11 @@ describe('단계 선택 (6.2, D77, D115~D117)', () => {
     expect(r.work.intent).toEqual({ version: 2, size: 'L' })
     expect(r.effects).toContainEqual({
       type: 'confirmIntent',
-      taskId: 't-04',
+      taskId: 't-05',
       version: 2,
       size: 'L',
     })
-    expect(currentTask(r.work)).toMatchObject({ id: 't-05', node: 'evidence', reason: 'default' })
+    expect(currentTask(r.work)).toMatchObject({ id: 't-06', node: 'evidence', reason: 'default' })
   })
 
   it('끝난 Work에서는 고르지 않는다. [단계 선택]은 진행 중이거나 멈춘 Work에서 누른다', () => {
@@ -1904,10 +1966,13 @@ describe('단계 선택 (6.2, D77, D115~D117)', () => {
 describe('전달 (시나리오 7, D77, D119, D120)', () => {
   const BRANCH = 'relay/w-20260926-001'
 
-  /** S 경로로 verify까지 가서 verify가 승인 대기인 Work: t-01 intake, t-02 fix, t-03 verify(세션 살아 있음) */
+  /**
+   * S 경로로 verify까지 가서 verify가 승인 대기인 Work: t-01 intake, t-02 fix, t-03 review,
+   * t-04 verify(세션 살아 있음)
+   */
   function atVerify(): WorkState {
     let work = newWork()
-    for (const check of [valid({}, 'S'), valid()]) {
+    for (const check of [valid({}, 'S'), valid(), valid()]) {
       work = approve(stop(launch(work), check).work, check).work
     }
     return stop(launch(work), valid()).work
@@ -1942,7 +2007,7 @@ describe('전달 (시나리오 7, D77, D119, D120)', () => {
       stage: 'push',
       started_at: r.work.operation?.started_at,
       choice: 'push',
-      task_id: 't-03',
+      task_id: 't-04',
       uncommitted: null,
       branch: BRANCH,
       base: 'main',
@@ -1953,7 +2018,7 @@ describe('전달 (시나리오 7, D77, D119, D120)', () => {
     expect(types(r.effects)).toEqual(['endSession', 'deliver'])
     expect(r.effects[1]).toEqual({
       type: 'deliver',
-      taskId: 't-03',
+      taskId: 't-04',
       choice: 'push',
       uncommitted: null,
       message: null,
@@ -2078,7 +2143,7 @@ describe('전달 (시나리오 7, D77, D119, D120)', () => {
     const [, decisions, delivered, completed] = r.effects
     expect(decisions).toMatchObject({
       type: 'appendDecisions',
-      taskId: 't-03',
+      taskId: 't-04',
       node: 'verify',
       decisions: [{ what: '완료조건을 모두 통과', why: '다시 실행함', by: 'ai' }],
     })
@@ -2140,7 +2205,7 @@ describe('전달 (시나리오 7, D77, D119, D120)', () => {
     const stopped = approve(on, valid()).work
     expect(stopped).toMatchObject({
       status: 'stopped',
-      stop: { kind: 'after_step', task_id: 't-03' },
+      stop: { kind: 'after_step', task_id: 't-04' },
     })
     expect(actions(stopped)).toMatchObject({ resumeWork: false, selectStep: true, abandon: true })
     // 멈춘 Work에서 전달한다. 세션은 이미 끝났고 승인은 다시 남기지 않는다
@@ -2168,11 +2233,11 @@ describe('전달 (시나리오 7, D77, D119, D120)', () => {
 
   it('세션 없이 대기로 남은 verify도 누른 때의 검사가 유효하면 전달하고, 표시는 승인 대기다 (3.3, D112)', () => {
     let work = newWork()
-    for (const check of [valid({}, 'S'), valid()]) {
+    for (const check of [valid({}, 'S'), valid(), valid()]) {
       work = approve(stop(launch(work), check).work, check).work
     }
     work = stop(launch(work), MISSING).work
-    work = apply(work, { type: 'pty.exit', taskId: 't-03', at: at() }).work
+    work = apply(work, { type: 'pty.exit', taskId: 't-04', at: at() }).work
     expect(status(work)).toBe('session_ended')
     const r = deliver(work, 'push')
     expect(r.rejected).toBeUndefined()
@@ -2182,14 +2247,14 @@ describe('전달 (시나리오 7, D77, D119, D120)', () => {
 
   it('받지 않는 전달: 형식 오류, 턴이 끝나지 않음, verify가 아님, 진행 중 작업, 끝난 Work', () => {
     expect(deliver(atVerify(), 'push', null, INVALID).rejected).toBe(
-      't-03의 handoff가 유효하지 않음',
+      't-04의 handoff가 유효하지 않음',
     )
     let work = newWork()
-    for (const check of [valid({}, 'S'), valid()]) {
+    for (const check of [valid({}, 'S'), valid(), valid()]) {
       work = approve(stop(launch(work), check).work, check).work
     }
     const working = launch(work)
-    expect(deliver(working, 'push').rejected).toBe('t-03는 승인할 수 있는 상태가 아님')
+    expect(deliver(working, 'push').rejected).toBe('t-04는 승인할 수 있는 상태가 아님')
     const intake = stop(launch(newWork()), valid({}, 'S')).work
     expect(deliver(intake, 'push').rejected).toBe('최종 검증의 Work 완료 화면이 아님')
     const busy = deliver(atVerify(), 'push').work
@@ -2216,10 +2281,10 @@ describe('전달 (시나리오 7, D77, D119, D120)', () => {
 describe('정리 (시나리오 8, D77)', () => {
   const BACKUP = 'relay/w-20260926-001-discarded-1'
 
-  /** [완료만]으로 완료한 S 경로 Work */
+  /** [완료만]으로 완료한 S 경로 Work: intake → fix → review → verify */
   function completed(): WorkState {
     let work = newWork()
-    for (const check of [valid({}, 'S'), valid(), valid()]) {
+    for (const check of [valid({}, 'S'), valid(), valid(), valid()]) {
       work = approve(stop(launch(work), check).work, check).work
     }
     expect(work.status).toBe('completed')
@@ -2299,10 +2364,10 @@ describe('정리 (시나리오 8, D77)', () => {
 describe('끊긴 작업 (시나리오 9-4, D121~D123)', () => {
   const BACKUP = 'relay/w-20260926-001-discarded-1'
 
-  /** S 경로로 verify까지 가서 verify 세션이 살아 있는 Work: t-01 intake, t-02 fix, t-03 verify */
+  /** S 경로로 verify까지 가서 verify 세션이 살아 있는 Work: t-01 intake, t-02 fix, t-03 review, t-04 verify */
   function toVerify(): WorkState {
     let work = newWork()
-    for (const check of [valid({}, 'S'), valid()]) {
+    for (const check of [valid({}, 'S'), valid(), valid()]) {
       work = approve(stop(launch(work), check).work, check).work
     }
     return launch(work)
@@ -2327,7 +2392,7 @@ describe('끊긴 작업 (시나리오 9-4, D121~D123)', () => {
       node: 'fix',
       keepCode: false,
       instruction: '다시 고쳐 줘',
-      expect: { taskId: 't-03', done: false },
+      expect: { taskId: 't-04', done: false },
       backups: [],
     }).work
   }
@@ -2347,7 +2412,7 @@ describe('끊긴 작업 (시나리오 9-4, D121~D123)', () => {
   /** [완료만]으로 완료하고 정리하다 끊긴 Work */
   function cleaning(): WorkState {
     let work = newWork()
-    for (const check of [valid({}, 'S'), valid(), valid()]) {
+    for (const check of [valid({}, 'S'), valid(), valid(), valid()]) {
       work = approve(stop(launch(work), check).work, check).work
     }
     return apply(work, {
@@ -2361,12 +2426,12 @@ describe('끊긴 작업 (시나리오 9-4, D121~D123)', () => {
 
   it('끊긴 작업이 있는 동안은 [다시 시도], [무시], Work 설정만 받는다. 액션 바는 비어 있다 (D122)', () => {
     const cut = restart(rewinding())
-    const t3 = 't-03'
+    const verify = 't-04'
     const commands: MachineEvent[] = [
-      { type: 'approve', taskId: t3, at: at(), check: valid() },
-      { type: 'interrupt', taskId: t3, at: at(), reason: 'human' },
-      { type: 'resume', taskId: t3, at: at() },
-      { type: 'retry', taskId: t3, at: at() },
+      { type: 'approve', taskId: verify, at: at(), check: valid() },
+      { type: 'interrupt', taskId: verify, at: at(), reason: 'human' },
+      { type: 'resume', taskId: verify, at: at() },
+      { type: 'retry', taskId: verify, at: at() },
       { type: 'stopAfter', at: at(), on: true },
       { type: 'resumeWork', at: at() },
       { type: 'abandon', at: at() },
@@ -2376,7 +2441,7 @@ describe('끊긴 작업 (시나리오 9-4, D121~D123)', () => {
         node: 'verify',
         keepCode: false,
         instruction: '',
-        expect: { taskId: t3, done: false },
+        expect: { taskId: verify, done: false },
         backups: [],
       },
       { type: 'deliver', at: at(), choice: 'push', uncommitted: null, check: valid() },
@@ -2404,7 +2469,7 @@ describe('끊긴 작업 (시나리오 9-4, D121~D123)', () => {
     expect(r.effects).toEqual([])
     expect(r.work.operation).toBeUndefined()
     // 되감으려고 끝낸 verify는 승인 대기가 아니었으니 중단됨이고, [재개]할 수 있다
-    expect(currentTask(r.work)).toMatchObject({ id: 't-03', status: 'interrupted' })
+    expect(currentTask(r.work)).toMatchObject({ id: 't-04', status: 'interrupted' })
     expect(actions(r.work)).toMatchObject({ resume: true, selectStep: true })
 
     const cleanCut = restart(cleaning())
@@ -2463,7 +2528,7 @@ describe('끊긴 작업 (시나리오 9-4, D121~D123)', () => {
     const rewound = applied.effects.find((e) => e.type === 'log' && e.event.type === 'task.rewound')
     expect(rewound?.type === 'log' && rewound.event.payload).toMatchObject({
       node: 'fix',
-      discarded: ['t-02', 't-03'],
+      discarded: ['t-02', 't-03', 't-04'],
       reset_to: 'start-t-02',
       backup_branch: BACKUP,
       extra_backup_branch: 'relay/w-20260926-001-discarded-2',
@@ -2559,7 +2624,7 @@ describe('끊긴 작업 (시나리오 9-4, D121~D123)', () => {
         stashes: ['stash001', 'stash000'],
       })
       // verify는 승인 대기로 남아 다시 전달하거나 [완료만]할 수 있다
-      expect(currentTask(r.work)).toMatchObject({ id: 't-03', status: 'awaiting_approval' })
+      expect(currentTask(r.work)).toMatchObject({ id: 't-04', status: 'awaiting_approval' })
       const again = apply(r.work, {
         type: 'deliver',
         at: at(),
@@ -2745,12 +2810,17 @@ describe('자동 승인 (4.3, D127~D131)', () => {
     expect(r.effects[4]).toMatchObject({ node: 'rca' })
   })
 
-  it('intake와 verify는 자동 승인을 켜도 카운트다운하지 않는다 (4.2)', () => {
+  it('intake, review, verify는 자동 승인을 켜도 카운트다운하지 않는다 (4.2, D167)', () => {
     const intake = stop(launch(newWork()), valid({}, 'L'), {}, AUTO)
     expect(task(intake.work).countdown).toBeUndefined()
     expect(task(intake.work).auto_hold).toBeUndefined()
     let w = approve(intake.work, valid({}, 'S')).work
     w = approve(stop(launch(w), valid(), {}, AUTO).work, valid()).work
+    const review = stop(launch(w), valid(), {}, AUTO)
+    expect(task(review.work).node).toBe('review')
+    expect(task(review.work).countdown).toBeUndefined()
+    expect(task(review.work).auto_hold).toBeUndefined()
+    w = approve(review.work, valid()).work
     const verify = stop(launch(w), valid(), {}, AUTO)
     expect(task(verify.work).node).toBe('verify')
     expect(task(verify.work).countdown).toBeUndefined()

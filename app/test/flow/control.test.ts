@@ -379,7 +379,7 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
     expect(await s.h.relay.resumeWork(key)).toEqual({ ok: true })
     const done = await drive(s.h.relay, s.h.ui, key, { size: 'S' })
     expect(done, s.h.ui.dump()).toMatchObject({ status: 'completed' })
-    expect(work(s.dir(key)).tasks.map((t) => t.node)).toEqual(['intake', 'fix', 'verify'])
+    expect(work(s.dir(key)).tasks.map((t) => t.node)).toEqual(['intake', 'fix', 'review', 'verify'])
   })
 
   it('[Work 포기]는 세션을 끝내고 Work를 포기로 둔다 (3.3)', async () => {
@@ -434,7 +434,8 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
       ['t-01', 'intake', 'session_ended', 'default'],
       ['t-02', 'intake', 'approved', 'resume'],
       ['t-03', 'fix', 'approved', 'default'],
-      ['t-04', 'verify', 'approved', 'default'],
+      ['t-04', 'review', 'approved', 'default'],
+      ['t-05', 'verify', 'approved', 'default'],
     ])
     const third = starts(s)[2]
     expect(third?.args).toContain('--session-id')
@@ -445,7 +446,8 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
       '01-intake',
       '02-intake',
       '03-fix',
-      '04-verify',
+      '04-review',
+      '05-verify',
     ])
   })
 

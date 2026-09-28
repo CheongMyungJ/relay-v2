@@ -174,7 +174,7 @@ const UNFINISHED_FIX: Step[] = [
 describe('[흐름] 되감기와 단계 선택 (M4)', () => {
   it('verify의 추천대로 fix로 되감아 다시 Work 완료까지 간다. 되돌린 커밋은 백업 브랜치에 남는다 (6.2, D23, D115)', async () => {
     const s = await setup({
-      tasks: { ...scenario('L').tasks, 't-05': recommending('verify', 'fix', '완료조건 2 실패') },
+      tasks: { ...scenario('L').tasks, 't-06': recommending('verify', 'fix', '완료조건 2 실패') },
     })
     const key = await s.create()
     const dir = s.dir(key)
@@ -204,11 +204,12 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
       title: '수정(fix)',
       kind: 'rewind',
       reason: '되감기',
-      expect: { taskId: 't-05', done: true },
+      expect: { taskId: 't-06', done: true },
       interrupt: null,
       discard: [
         { taskId: 't-04', label: '04 수정', artifacts: ['fix.md'] },
-        { taskId: 't-05', label: '05 최종 검증', artifacts: ['pr.md', 'verification.md'] },
+        { taskId: 't-05', label: '05 리뷰', artifacts: ['review.md'] },
+        { taskId: 't-06', label: '06 최종 검증', artifacts: ['pr.md', 'verification.md'] },
       ],
       skipped: [],
       code: { kind: 'reset', to: base, commits: 1, uncommitted: [], backupBranch: branch },
@@ -217,7 +218,7 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
     })
 
     expect(await confirm(s, key, p, '완료조건 2의 빈 배열 경우를 다시 봐 줘')).toEqual({ ok: true })
-    await untilTask(s, key, (t) => t.id === 't-06' && t.live, '되감은 fix')
+    await untilTask(s, key, (t) => t.id === 't-07' && t.live, '되감은 fix')
     await settle(s.h, key)
     const w = work(dir)
     expect(statuses(w)).toEqual([
@@ -225,37 +226,38 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
       ['t-02', 'evidence', 'approved', 'default'],
       ['t-03', 'rca', 'approved', 'default'],
       ['t-04', 'fix', 'discarded', 'default'],
-      ['t-05', 'verify', 'discarded', 'default'],
-      ['t-06', 'fix', 'working', 'rewind'],
+      ['t-05', 'review', 'discarded', 'default'],
+      ['t-06', 'verify', 'discarded', 'default'],
+      ['t-07', 'fix', 'working', 'rewind'],
     ])
     expect(w.status).toBe('active')
     expect(w.stop).toBeUndefined()
     expect(w.operation).toBeUndefined()
-    expect(taskOf(w, 't-04')).toMatchObject({ discarded_by: 't-06', approved_by: 'human' })
-    expect(taskOf(w, 't-06').selection).toEqual({
-      from_task: 't-05',
+    expect(taskOf(w, 't-04')).toMatchObject({ discarded_by: 't-07', approved_by: 'human' })
+    expect(taskOf(w, 't-07').selection).toEqual({
+      from_task: 't-06',
       instruction: '완료조건 2의 빈 배열 경우를 다시 봐 줘',
-      discarded: ['t-04', 't-05'],
+      discarded: ['t-04', 't-05', 't-06'],
       skipped: [],
       keep_code: false,
       reset: { from: fixHead, to: base, backup_branch: branch, backup_commit: fixHead },
     })
     // 미리 보기대로: 되돌린 커밋은 백업 브랜치에 있고, 되감은 fix는 기준 커밋에서 시작했다
     expect(git(s.repo, 'rev-parse', branch)).toBe(fixHead)
-    expect(taskOf(w, 't-06').start_commit).toBe(base)
+    expect(taskOf(w, 't-07').start_commit).toBe(base)
     const tabs = s.h.ui.works.get(key)?.tasks
-    expect(tabs?.at(-1)?.band).toBe('06 수정 · 새 세션 · 이유: 되감기')
+    expect(tabs?.at(-1)?.band).toBe('07 수정 · 새 세션 · 이유: 되감기')
     expect(tabs?.[3]).toMatchObject({ status: 'discarded', statusLabel: '폐기됨', live: false })
     // 폐기된 task의 [변경]은 그 task가 끝났을 때의 코드까지다. 지금 작업 트리는 보지 않는다 (D83)
     const oldFix = await s.h.relay.review(key, 't-04')
     expect(oldFix?.diff).toContain('+  if (xs.length === 0) return 0')
     expect(oldFix?.emphasis.map((e) => e.kind)).not.toContain('uncommitted')
-    const oldVerify = await s.h.relay.review(key, 't-05')
+    const oldVerify = await s.h.relay.review(key, 't-06')
     expect(oldVerify?.diff).toBe('')
     expect(oldVerify?.completion?.diff).toContain('+  if (xs.length === 0) return 0')
 
     // context.md: 되감기 절이 맨 위이고, 폐기된 task는 입력에서 빠진다
-    const ctx = read(path.join(taskDir(s, key, '06-fix'), 'context.md'))
+    const ctx = read(path.join(taskDir(s, key, '07-fix'), 'context.md'))
     const top = ctx.indexOf('## 되감기로 들어옴 (먼저 읽을 것)')
     expect(top).toBeGreaterThan(0)
     expect(top).toBeLessThan(ctx.indexOf('## task 정보'))
@@ -264,58 +266,71 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
     expect(ctx).toContain('  - 이전 단계 추천: fix (수정) — 완료조건 2 실패')
     expect(ctx).toContain('고른 단계를 시작할 때의 커밋으로 되돌렸다.')
     expect(ctx).toContain('## 직전 handoff (t-03 rca)')
+    expect(ctx).toContain('- t-05 review (리뷰)\n  - 요약: 지적 둘을 썼다.')
     expect(ctx).not.toContain('## t-04 fix — ')
-    expect(ctx).not.toContain('## t-05 verify — ')
+    expect(ctx).not.toContain('## t-05 review — ')
+    expect(ctx).not.toContain('## t-06 verify — ')
     expect(ctx).not.toContain(path.join('04-fix', 'fix.md'))
+    expect(ctx).not.toContain(path.join('05-review', 'review.md'))
     // decisions.md에서는 지우지 않는다 (5.4)
     const decisions = read(path.join(dir, 'decisions.md'))
     expect(decisions).toContain('## t-04 fix — ')
-    expect(decisions).toContain('## t-05 verify — ')
+    expect(decisions).toContain('## t-05 review — ')
+    expect(decisions).toContain('## t-06 verify — ')
     // deny 규칙은 폐기된 task 디렉터리도 막는다
     const settings = JSON.parse(
-      read(path.join(taskDir(s, key, '06-fix'), 'task.settings.json')),
+      read(path.join(taskDir(s, key, '07-fix'), 'task.settings.json')),
     ) as { permissions: { deny: string[] } }
-    expect(settings.permissions.deny.filter((r) => r.includes('/tasks/'))).toHaveLength(5)
+    expect(settings.permissions.deny.filter((r) => r.includes('/tasks/'))).toHaveLength(6)
 
     const done = await drive(s.h.relay, s.h.ui, key, { size: 'L' })
     expect(done, s.h.ui.dump()).toMatchObject({ status: 'completed' })
     await settle(s.h, key)
     const finished = work(dir)
     expect(finished.status).toBe('completed')
-    expect(statuses(finished).slice(5)).toEqual([
-      ['t-06', 'fix', 'approved', 'rewind'],
-      ['t-07', 'verify', 'approved', 'default'],
+    expect(statuses(finished).slice(6)).toEqual([
+      ['t-07', 'fix', 'approved', 'rewind'],
+      ['t-08', 'review', 'approved', 'default'],
+      ['t-09', 'verify', 'approved', 'default'],
     ])
     const ev = events(dir)
-    expect(ev.slice(-9).map((e) => [e.type, e.task_id ?? null])).toEqual([
-      ['task.approved', 't-05'],
-      ['task.rewound', 't-06'],
-      ['task.started', 't-06'],
-      ['task.awaiting_approval', 't-06'],
+    expect(ev.slice(-12).map((e) => [e.type, e.task_id ?? null])).toEqual([
       ['task.approved', 't-06'],
+      ['task.rewound', 't-07'],
       ['task.started', 't-07'],
       ['task.awaiting_approval', 't-07'],
       ['task.approved', 't-07'],
+      ['task.started', 't-08'],
+      ['task.awaiting_approval', 't-08'],
+      ['task.approved', 't-08'],
+      ['task.started', 't-09'],
+      ['task.awaiting_approval', 't-09'],
+      ['task.approved', 't-09'],
       ['work.completed', null],
     ])
     expect(ev.find((e) => e.type === 'task.rewound')?.payload).toEqual({
       node: 'fix',
-      from_task: 't-05',
-      discarded: ['t-04', 't-05'],
+      from_task: 't-06',
+      discarded: ['t-04', 't-05', 't-06'],
       keep_code: false,
       reset_to: base,
       backup_branch: branch,
     })
     expect(
-      ev.find((e) => e.type === 'task.started' && e.task_id === 't-06')?.payload,
+      ev.find((e) => e.type === 'task.started' && e.task_id === 't-07')?.payload,
     ).toMatchObject({ reason: 'rewind' })
-    // 되감은 fix 다음의 verify에는 되감기 절이 없고 되감은 fix가 직전 handoff다
-    const verifyCtx = read(path.join(taskDir(s, key, '07-verify'), 'context.md'))
+    // 되감은 fix 다음의 review에는 되감기 절이 없고 되감은 fix가 직전 handoff다. verify는 새 review를 받는다
+    const reviewCtx = read(path.join(taskDir(s, key, '08-review'), 'context.md'))
+    expect(reviewCtx).not.toContain('되감기로 들어옴')
+    expect(reviewCtx).toContain('## 직전 handoff (t-07 fix)')
+    const verifyCtx = read(path.join(taskDir(s, key, '09-verify'), 'context.md'))
     expect(verifyCtx).not.toContain('되감기로 들어옴')
-    expect(verifyCtx).toContain('## 직전 handoff (t-06 fix)')
+    expect(verifyCtx).toContain('## 직전 handoff (t-08 review)')
+    expect(verifyCtx).toContain(path.join('08-review', 'review.md'))
+    expect(verifyCtx).not.toContain(path.join('05-review', 'review.md'))
   })
 
-  it('S Work의 fix가 investigate를 추천하면 멈추고, investigate로 되감으면 fix → verify로 끝난다. 다시 한 fix는 rca.md를 받는다 (D66, D149, 점검 A33)', async () => {
+  it('S Work의 fix가 investigate를 추천하면 멈추고, investigate로 되감으면 fix → review → verify로 끝난다. 다시 한 fix와 review는 rca.md를 받는다 (D66, D149, 점검 A33)', async () => {
     const s = await setup({
       tasks: {
         ...scenario('S').tasks,
@@ -335,6 +350,7 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
       ['intake', false],
       ['investigate', true],
       ['fix', false],
+      ['review', false],
       ['verify', false],
     ])
     const p = await preview(s, key, 'investigate')
@@ -351,12 +367,18 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
       ['t-02', 'fix', 'discarded', 'default'],
       ['t-03', 'investigate', 'approved', 'rewind'],
       ['t-04', 'fix', 'approved', 'default'],
-      ['t-05', 'verify', 'approved', 'default'],
+      ['t-05', 'review', 'approved', 'default'],
+      ['t-06', 'verify', 'approved', 'default'],
     ])
     expect(w.intent?.size).toBe('S')
     // 크기는 S 그대로지만 fix는 investigate의 산출물을 받는다. S 경로 문구는 rca.md가 없을 때만이다 (A33)
     const ctx = read(path.join(taskDir(s, key, '04-fix'), 'context.md'))
     expect(ctx).toContain(
+      `- t-03 investigate: ${path.join(taskDir(s, key, '03-investigate'), 'rca.md')}`,
+    )
+    // 리뷰도 크기와 관계없이 context.md에 있는 rca.md를 읽는다 (5.6.10, A33)
+    const reviewCtx = read(path.join(taskDir(s, key, '05-review'), 'context.md'))
+    expect(reviewCtx).toContain(
       `- t-03 investigate: ${path.join(taskDir(s, key, '03-investigate'), 'rca.md')}`,
     )
   })
@@ -367,7 +389,7 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
         ...scenario('S').tasks,
         // verify는 승인 대기를 만든 뒤에도 세션이 살아 있다(6.2의 k 진행 중)
         'final-verify': [...steps('verify', 'S'), { do: 'wait' }],
-        't-04': [
+        't-05': [
           { do: 'prompt' },
           {
             do: 'write',
@@ -392,11 +414,11 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
     })
     expect(paused, s.h.ui.dump()).toMatchObject({
       status: 'paused',
-      reason: '03 최종 검증: 승인 대기',
+      reason: '04 최종 검증: 승인 대기',
     })
     await settle(s.h, key)
     const v1 = read(path.join(dir, 'intent.md'))
-    const verifyPid = work(dir).tasks[2]?.session?.pid ?? 0
+    const verifyPid = work(dir).tasks[3]?.session?.pid ?? 0
     expect(alive(verifyPid)).toBe(true)
 
     // 의도 승인 뒤라 모든 단계를 고를 수 있다
@@ -404,12 +426,13 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
     const p = await preview(s, key, 'intake')
     expect(p).toMatchObject({
       kind: 'rewind',
-      expect: { taskId: 't-03', done: false },
-      interrupt: '진행 중인 03 최종 검증의 세션을 끝냅니다',
+      expect: { taskId: 't-04', done: false },
+      interrupt: '진행 중인 04 최종 검증의 세션을 끝냅니다',
       discard: [
         { taskId: 't-01', label: '01 의도 정리', artifacts: ['intent.draft.md'] },
         { taskId: 't-02', label: '02 수정', artifacts: ['fix.md'] },
-        { taskId: 't-03', label: '03 최종 검증', artifacts: ['pr.md', 'verification.md'] },
+        { taskId: 't-03', label: '03 리뷰', artifacts: ['review.md'] },
+        { taskId: 't-04', label: '04 최종 검증', artifacts: ['pr.md', 'verification.md'] },
       ],
       code: { kind: 'reset', to: base, commits: 1, uncommitted: [] },
       keepCodeOffered: false,
@@ -420,22 +443,23 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
     expect(branch).toMatch(/-discarded-1$/)
 
     expect(await confirm(s, key, p, '완료조건에 음수만 든 배열도 넣어 줘')).toEqual({ ok: true })
-    await untilTask(s, key, (t) => t.id === 't-04' && t.status === 'awaiting_approval', 'intake v2')
+    await untilTask(s, key, (t) => t.id === 't-05' && t.status === 'awaiting_approval', 'intake v2')
     await settle(s.h, key)
     expect(alive(verifyPid)).toBe(false)
     let w = work(dir)
     expect(statuses(w)).toEqual([
       ['t-01', 'intake', 'discarded', 'default'],
       ['t-02', 'fix', 'discarded', 'default'],
-      ['t-03', 'verify', 'discarded', 'default'],
-      ['t-04', 'intake', 'awaiting_approval', 'rewind'],
+      ['t-03', 'review', 'discarded', 'default'],
+      ['t-04', 'verify', 'discarded', 'default'],
+      ['t-05', 'intake', 'awaiting_approval', 'rewind'],
     ])
     // 새 intake가 승인되기 전에는 지금 승인된 intent가 그대로다
     expect(w.intent).toEqual({ version: 1, size: 'S' })
     expect(read(path.join(dir, 'intent.md'))).toBe(v1)
-    expect(taskOf(w, 't-04').start_commit).toBe(base)
+    expect(taskOf(w, 't-05').start_commit).toBe(base)
     expect(git(s.repo, 'rev-parse', branch ?? '')).not.toBe(base)
-    const ctx = read(path.join(taskDir(s, key, '04-intake'), 'context.md'))
+    const ctx = read(path.join(taskDir(s, key, '05-intake'), 'context.md'))
     expect(ctx.indexOf('## 되감기로 들어옴 (먼저 읽을 것)')).toBeLessThan(
       ctx.indexOf('## task 정보'),
     )
@@ -451,29 +475,34 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
     await settle(s.h, key)
     w = work(dir)
     expect(w.intent).toEqual({ version: 2, size: 'S' })
-    expect(statuses(w).slice(3)).toEqual([
-      ['t-04', 'intake', 'approved', 'rewind'],
-      ['t-05', 'fix', 'approved', 'default'],
-      ['t-06', 'verify', 'approved', 'default'],
+    expect(statuses(w).slice(4)).toEqual([
+      ['t-05', 'intake', 'approved', 'rewind'],
+      ['t-06', 'fix', 'approved', 'default'],
+      ['t-07', 'review', 'approved', 'default'],
+      ['t-08', 'verify', 'approved', 'default'],
     ])
     const v2 = read(path.join(dir, 'intent.md'))
     expect(v2).toContain('\nversion: 2\n')
     expect(v2).toContain('음수만 든 배열도 확인한다')
     expect(read(path.join(dir, 'intent.history', 'v1.md'))).toBe(v1)
     // 되감은 뒤의 fix는 폐기된 task를 입력으로 받지 않는다
-    const fixCtx = read(path.join(taskDir(s, key, '05-fix'), 'context.md'))
+    const fixCtx = read(path.join(taskDir(s, key, '06-fix'), 'context.md'))
     expect(fixCtx).toContain('## intent (버전 2)')
-    expect(fixCtx).toContain('## 직전 handoff (t-04 intake)')
+    expect(fixCtx).toContain('## 직전 handoff (t-05 intake)')
     expect(fixCtx).not.toContain('## t-01 intake — ')
-    expect(fixCtx).toContain('## t-04 intake — ')
-    expect(taskOf(w, 't-05').start_commit).toBe(base)
+    expect(fixCtx).toContain('## t-05 intake — ')
+    expect(taskOf(w, 't-06').start_commit).toBe(base)
     const ev = events(dir)
-    expect(ev.find((e) => e.type === 'task.interrupted' && e.task_id === 't-03')?.payload).toEqual({
+    expect(ev.find((e) => e.type === 'task.interrupted' && e.task_id === 't-04')?.payload).toEqual({
       reason: 'rewind',
     })
     expect(ev.find((e) => e.type === 'task.rewound')).toMatchObject({
-      task_id: 't-04',
-      payload: { node: 'intake', from_task: 't-03', discarded: ['t-01', 't-02', 't-03'] },
+      task_id: 't-05',
+      payload: {
+        node: 'intake',
+        from_task: 't-04',
+        discarded: ['t-01', 't-02', 't-03', 't-04'],
+      },
     })
   })
 
@@ -539,7 +568,8 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
       ['t-01', 'intake', 'approved', 'default'],
       ['t-02', 'fix', 'discarded', 'default'],
       ['t-03', 'fix', 'approved', 'rewind'],
-      ['t-04', 'verify', 'approved', 'default'],
+      ['t-04', 'review', 'approved', 'default'],
+      ['t-05', 'verify', 'approved', 'default'],
     ])
     // 되감은 fix의 커밋은 기준 커밋 바로 위에 있고, 지운 추적하지 않는 파일은 돌아오지 않았다
     expect(git(tree, 'rev-parse', 'HEAD^')).toBe(base)
@@ -700,7 +730,8 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
       ['t-01', 'intake', 'approved', 'default'],
       ['t-02', 'evidence', 'discarded', 'default'],
       ['t-03', 'fix', 'approved', 'skip'],
-      ['t-04', 'verify', 'approved', 'default'],
+      ['t-04', 'review', 'approved', 'default'],
+      ['t-05', 'verify', 'approved', 'default'],
     ])
     const ev = events(dir)
     expect(
@@ -729,13 +760,13 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
     expect(await confirm(s, a, p)).toEqual({ ok: true })
     // A의 verify 세션이 끝나 자리가 나면 먼저 기다리던 B가 시작하고, 되감은 A의 fix는 대기열에서 기다린다
     await untilTask(s, b, (t) => t.live, 'B 시작')
-    await untilTask(s, a, (t) => t.id === 't-04' && t.status === 'queued', 'A 되감은 fix 대기열')
+    await untilTask(s, a, (t) => t.id === 't-05' && t.status === 'queued', 'A 되감은 fix 대기열')
     expect(await s.h.relay.interrupt(b, 't-01')).toEqual({ ok: true })
-    await untilTask(s, a, (t) => t.id === 't-04' && t.live, 'A 되감은 fix 시작')
+    await untilTask(s, a, (t) => t.id === 't-05' && t.live, 'A 되감은 fix 시작')
     // 대기열에서 자동으로 시작하면 알린다 (D81). 알림은 세션을 띄운 뒤에 보낸다
     await s.h.ui.until(
       () =>
-        s.h.ui.notices.some((n) => n.workKey === a && n.body === '04 수정: 대기열에서 자동 시작'),
+        s.h.ui.notices.some((n) => n.workKey === a && n.body === '05 수정: 대기열에서 자동 시작'),
       'A 알림',
       10_000,
     )
@@ -776,13 +807,14 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
         expect(statuses(w).map(([id, , st]) => [id, st])).toEqual([
           ['t-01', 'approved'],
           ['t-02', 'approved'],
-          ['t-03', 'awaiting_approval'],
+          ['t-03', 'approved'],
+          ['t-04', 'awaiting_approval'],
         ])
         const view = s.h.ui.works.get(key)
         expect(view?.badge.kind).toBe('recovery')
         expect(view?.operation?.title).toBe('되감기가 끊겼습니다')
         // 되돌린 코드로 승인하거나 전달하지 않는다 (D122)
-        expect(await s.h.relay.approve(key, 't-03', {})).toEqual({
+        expect(await s.h.relay.approve(key, 't-04', {})).toEqual({
           ok: false,
           error: '끊긴 작업이 있음: 먼저 [다시 시도]나 [무시]를 누르세요',
         })
@@ -796,21 +828,22 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
       }
 
       expect(await s.h.relay.retryOperation(key)).toEqual({ ok: true })
-      await untilTask(s, key, (t) => t.id === 't-04' && t.live, '되감은 fix')
+      await untilTask(s, key, (t) => t.id === 't-05' && t.live, '되감은 fix')
       await settle(s.h, key)
       const w = work(dir)
       expect(w.operation).toBeUndefined()
       expect(fs.existsSync(stuck)).toBe(false)
       // 되감은 fix는 곧 커밋하므로 HEAD 대신 시작 커밋으로 본다
-      expect(taskOf(w, 't-04').start_commit).toBe(base)
+      expect(taskOf(w, 't-05').start_commit).toBe(base)
       // 되돌리기 전 코드는 첫 백업에 있다
-      const backup = taskOf(w, 't-04').selection?.reset?.backup_branch ?? ''
+      const backup = taskOf(w, 't-05').selection?.reset?.backup_branch ?? ''
       expect(git(s.repo, 'rev-parse', `${backup}~1`)).toBe(fixHead)
       expect(statuses(w).map(([id, , st]) => [id, st])).toEqual([
         ['t-01', 'approved'],
         ['t-02', 'discarded'],
         ['t-03', 'discarded'],
-        ['t-04', 'working'],
+        ['t-04', 'discarded'],
+        ['t-05', 'working'],
       ])
     },
   )
@@ -873,24 +906,25 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
     expect(statuses(w)).toEqual([
       ['t-01', 'intake', 'approved', 'default'],
       ['t-02', 'fix', 'approved', 'default'],
-      ['t-03', 'verify', 'awaiting_approval', 'default'],
+      ['t-03', 'review', 'approved', 'default'],
+      ['t-04', 'verify', 'awaiting_approval', 'default'],
     ])
-    expect(taskOf(w, 't-03').session?.alive).toBe(false)
+    expect(taskOf(w, 't-04').session?.alive).toBe(false)
     expect(git(tree, 'rev-parse', 'HEAD')).toBe(fixHead)
     expect(git(s.repo, 'rev-parse', branch1)).toBe(fixHead)
     expect(s.h.ui.works.get(key)?.problems.at(-1)).toContain('되감기 실패')
 
     fs.rmSync(lock)
     const second = await preview(s, key, 'fix')
-    expect(second.expect).toEqual({ taskId: 't-03', done: false })
+    expect(second.expect).toEqual({ taskId: 't-04', done: false })
     expect(second.interrupt).toBeNull()
     expect(second.code.backupBranch).toMatch(/-discarded-2$/)
     expect(await confirm(s, key, second)).toEqual({ ok: true })
-    await untilTask(s, key, (t) => t.id === 't-04' && t.live, '되감은 fix')
+    await untilTask(s, key, (t) => t.id === 't-05' && t.live, '되감은 fix')
     await settle(s.h, key)
     w = work(dir)
-    expect(taskOf(w, 't-04').start_commit).toBe(base)
-    expect(taskOf(w, 't-04').selection?.reset?.backup_branch).toMatch(/-discarded-2$/)
+    expect(taskOf(w, 't-05').start_commit).toBe(base)
+    expect(taskOf(w, 't-05').selection?.reset?.backup_branch).toMatch(/-discarded-2$/)
     // 미리 본 뒤 바뀌었으면 받지 않는다
     expect(await confirm(s, key, second)).toEqual({
       ok: false,

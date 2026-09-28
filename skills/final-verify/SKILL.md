@@ -10,7 +10,7 @@ Judge each 완료조건 of the intent and write `verification.md` and the PR dra
 ## Inputs
 
 - The argument gives the path of `context.md`. Read it first. It has the intent and the Work's base commit.
-- `evidence.md` and `fix.md`, and `rca.md` if needed, at the paths in `context.md`.
+- `evidence.md` and `fix.md`, and `rca.md` and `review.md` if needed, at the paths in `context.md`. What the review changed is in the `반영` section of `review.md`. If it says the reproduction steps changed, reproduce with the changed steps.
 - **S path** (`size: S` and `context.md` lists no `evidence.md`): use the reproduction steps in the `원인과 재현` section of `fix.md` instead. If there are neither reproduction steps nor a reproduction test, the first 완료조건 is 판정 불가.
 
 ## Rules

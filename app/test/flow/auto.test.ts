@@ -143,12 +143,14 @@ describe('[흐름] 자동 승인 (M7)', () => {
     const key = await s.create()
     const result = await drive(s.h.relay, s.h.ui, key, { size: 'L', awaitAuto: true })
     expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed' })
+    // 리뷰는 켤 수 있는 단계를 모두 켜도 수동 승인이다 (D167)
     expect(result.tasks.map((t) => [t.label, t.auto])).toEqual([
       ['01 의도 정리', false],
       ['02 재현과 관찰', true],
       ['03 원인 분석', true],
       ['04 수정', true],
-      ['05 최종 검증', false],
+      ['05 리뷰', false],
+      ['06 최종 검증', false],
     ])
     await settle(s.h, key)
     const dir = s.dir(key)
@@ -159,6 +161,7 @@ describe('[흐름] 자동 승인 (M7)', () => {
       ['t-03', 'auto'],
       ['t-04', 'auto'],
       ['t-05', 'human'],
+      ['t-06', 'human'],
     ])
     expect(w.tasks.every((t) => t.countdown === undefined && t.auto_hold === undefined)).toBe(true)
     expect(approvedBy(dir)).toEqual([
@@ -167,13 +170,15 @@ describe('[흐름] 자동 승인 (M7)', () => {
       ['t-03', 'auto'],
       ['t-04', 'auto'],
       ['t-05', 'human'],
+      ['t-06', 'human'],
     ])
     expect(heads(dir)).toEqual([
       '## t-01 intake — (사람 승인)',
       '## t-02 evidence — (자동 승인)',
       '## t-03 rca — (자동 승인)',
       '## t-04 fix — (자동 승인)',
-      '## t-05 verify — (사람 승인)',
+      '## t-05 review — (사람 승인)',
+      '## t-06 verify — (사람 승인)',
     ])
     // 자동 승인도 사람 승인과 같은 길로 decisions.md에 덧붙이고 해시를 적는다. 다시 읽어도 경고가 없다 (D124)
     const hash = createHash('sha256')
@@ -187,6 +192,9 @@ describe('[흐름] 자동 승인 (M7)', () => {
       expect(notices).toContain(`${label}: 1초 뒤 자동 승인 (멈추려면 [취소])`)
     }
     expect(notices).not.toContain('02 재현과 관찰: 승인 대기')
+    // 리뷰는 카운트다운하지 않고 승인 대기를 알린다 (D167)
+    expect(notices).toContain('05 리뷰: 승인 대기')
+    expect(notices.some((n) => n.startsWith('05 리뷰: 1초 뒤'))).toBe(false)
     // 마무리 안내 문구는 수동과 자동을 한 문구에 적는다 (D132)
     const ctx = read(path.join(dir, 'tasks', '03-rca', 'context.md'))
     expect(ctx).toContain('자동 승인이 켜져 있으면 조건을 만족할 때 카운트다운 뒤 승인되고')
@@ -275,6 +283,7 @@ describe('[흐름] 자동 승인 (M7)', () => {
       ['t-01', 'human'],
       ['t-02', 'human'],
       ['t-03', 'human'],
+      ['t-04', 'human'],
     ])
     expect(heads(s.dir(key))[1]).toBe('## t-02 fix — (사람 승인)')
   })
@@ -678,6 +687,7 @@ describe('[흐름] 자동 승인 (M7)', () => {
       ['t-01', 'human'],
       ['t-02', 'auto'],
       ['t-03', 'human'],
+      ['t-04', 'human'],
     ])
   })
 

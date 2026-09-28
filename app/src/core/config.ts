@@ -11,13 +11,23 @@ import {
   type SkillName,
   type WorkSettings,
 } from '../shared/config'
+import type { NodeName } from '../shared/contracts'
+import { NODES } from './pipeline'
 
 export const SKILLS: readonly SkillName[] = SKILL_TITLES.map(([skill]) => skill)
 
 export const QUESTION_MODES: readonly QuestionMode[] = ['draft_first', 'confirm_each']
 
-/** 자동 승인을 켤 수 있는 노드 (4.2). intake(의도 승인)와 verify(Work 완료)는 늘 수동이다 */
+/** 자동 승인을 켤 수 있는 노드 (4.2). intake(의도 승인), review(D167), verify(Work 완료)는 늘 수동이다 */
 export const AUTO_APPROVE_NODES: readonly AutoApproveNode[] = AUTO_APPROVE_TITLES.map(([n]) => n)
+
+/**
+ * 늘 수동인 노드: 자동 승인을 켤 수 있는 노드의 나머지. 의도 승인, 리뷰(D167), Work 완료다 (4.2). 자동 승인에
+ * 이 키가 있으면 켜든 끄든 받지 않는다
+ */
+const MANUAL_NODES: readonly NodeName[] = NODES.filter(
+  (n) => !(AUTO_APPROVE_NODES as readonly NodeName[]).includes(n),
+)
 
 /** 설정 화면에서 바꾸는 값 (D70) */
 export const EDITABLE_KEYS = [
@@ -99,17 +109,17 @@ function questionModes(v: unknown): Checked<Partial<Record<SkillName, QuestionMo
 }
 
 /**
- * 단계별 자동 승인 (4.2). 없는 단계는 빼고, 켤 수 없는 단계(intake, verify)와 모르는 단계, 참·거짓이 아닌 값은
- * 오류다
+ * 단계별 자동 승인 (4.2). 없는 단계는 빼고, 켤 수 없는 단계(intake, review, verify)와 모르는 단계, 참·거짓이
+ * 아닌 값은 오류다 (D167)
  */
 function autoApprove(v: unknown): Checked<Partial<Record<AutoApproveNode, boolean>>> {
   if (!isRecord(v)) return { ok: false, error: `${NAMES.auto_approve}: 객체여야 함` }
   const out: Partial<Record<AutoApproveNode, boolean>> = {}
   for (const [node, on] of Object.entries(v)) {
-    if (node === 'intake' || node === 'verify') {
+    if ((MANUAL_NODES as readonly string[]).includes(node)) {
       return {
         ok: false,
-        error: `${NAMES.auto_approve}: ${node}는 켤 수 없음 (의도 승인과 Work 완료는 늘 수동)`,
+        error: `${NAMES.auto_approve}: ${node}는 켤 수 없음 (의도 승인, 리뷰, Work 완료는 늘 수동)`,
       }
     }
     if (!(AUTO_APPROVE_NODES as readonly string[]).includes(node)) {

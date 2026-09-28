@@ -176,6 +176,23 @@ describe('[어댑터] 스킬 배포와 claude 실행 (5.6.3, D103, D105, D108)',
     expect(text).not.toContain('<!-- solo -->')
   })
 
+  it('review는 단독 스킬로 배포한다: relay-review에 공통 규칙을 붙인다 (D187, 5.6.10)', async () => {
+    const workDir = path.join(root, 'w-review')
+    const deployed = await deploySkill({ source: SKILLS, workDir, skill: 'review' })
+    expect(path.basename(path.dirname(deployed.file))).toBe('relay-review')
+    const text = read(deployed.file)
+    expect(text).toBe(
+      mergeSkill(
+        soloSkill(read(path.join(SKILLS, 'review', 'SKILL.md'))),
+        read(path.join(SKILLS, '_common.md')),
+      ),
+    )
+    expect(text).toMatch(/^---\ndescription: relay review step/)
+    expect(text).toContain('\n# relay: review')
+    expect(text).toContain('\n# Common rules')
+    expect(fs.readdirSync(path.join(workDir, '.claude', 'skills'))).toEqual(['relay-review'])
+  })
+
   it('단독 구간: 단독으로 쓰면 표시 줄만 지우고, 합치면 구간을 뺀다 (D148)', () => {
     const part = '---\nd: 1\n---\n# P\n\n한 줄\n<!-- solo -->\n단독만\n<!-- /solo -->\n\n## 절\n'
     expect(soloSkill(part)).toBe('---\nd: 1\n---\n# P\n\n한 줄\n단독만\n\n## 절\n')

@@ -3,6 +3,7 @@
 // [흐름]과 같은 도구(harness, drive)를 쓰고 claude 실행 파일만 실제 claude로 바꾼다 (8.1).
 // 모델과 effort는 앱이 PTY에 넘기는 환경 변수(ANTHROPIC_MODEL, CLAUDE_CODE_EFFORT_LEVEL)로 정한다.
 // 사람 역할: 첫 실행 창은 수락하고(I17), 질문에는 첫 선택지(추천)로 답하고, 승인 대기가 되면 승인한다.
+// 리뷰(M8)가 처음 승인 대기가 되면 첫 지적만 반영하라고 번호로 지시하고, 그 지적만 고쳐 커밋했는지 본다(review.ts, D164).
 // 형식 오류가 끝까지 남으면 [오류 무시하고 승인]을 쓰고 센다(0이어야 함). 결과는 test-results/claude/에 남긴다.
 // RELAY_REAL_CLAUDE=dry면 가짜 claude로 같은 도구를 돌려 도구 자체를 확인한다 (사용량 없음).
 // RELAY_REAL_CASES로 돌릴 경우를 고른다(예: "S resume"). 비우면 전부(M, S, resume.test.ts의 resume,
@@ -11,11 +12,13 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
+import { taskDirName } from '../../src/core/machine'
 import type { WorkState } from '../../src/shared/work'
 import { drive, type DriveResult } from '../flow/driver'
-import { APP, FAKE_CLAUDE, harness, makeRepo, register, settle } from '../flow/harness'
-import { scenario } from '../flow/scenarios'
+import { APP, FAKE_CLAUDE, git, harness, makeRepo, register, settle } from '../flow/harness'
+import { reviewInstructed, scenario } from '../flow/scenarios'
 import { M_CASE, S_CASE, type RealCase } from './repos'
+import { instructReview, judgeReview, type ReviewCheck } from './review'
 import { ScreenUi } from './screen'
 
 const mode = process.env['RELAY_REAL_CLAUDE']
@@ -33,6 +36,8 @@ interface CaseResult {
   result: DriveResult
   claudeVersion: string | null
   dialogs: string[]
+  /** 리뷰(M8)의 판정. 리뷰까지 가지 못했으면 null */
+  review: ReviewCheck | null
 }
 
 const results: CaseResult[] = []
@@ -52,6 +57,7 @@ async function runCase(c: RealCase): Promise<CaseResult> {
       },
       claudeVersion: null,
       dialogs: [],
+      review: null,
     }
   }
 }
@@ -61,7 +67,7 @@ async function runCaseOnce(c: RealCase): Promise<CaseResult> {
   // CLAUDE_BIN이 없으면 앱이 설치 위치에서 찾는다 (D106)
   const h = await harness(
     dry
-      ? { ui, claudeBin: FAKE_CLAUDE, scenario: scenario(c.name) }
+      ? { ui, claudeBin: FAKE_CLAUDE, scenario: scenario(c.name, { review: reviewInstructed() }) }
       : { ui, claudeBin: process.env['CLAUDE_BIN'] ?? null },
   )
   const dir = path.join(OUT, c.name)
@@ -75,7 +81,11 @@ async function runCaseOnce(c: RealCase): Promise<CaseResult> {
       baseLocation: 'local',
     })
     if (!created.ok) throw new Error(`Work 생성 실패: ${created.error}`)
-    workDir = path.join(h.home, 'projects', projectId, 'works', created.workKey.split('/')[1] ?? '')
+    const workId = created.workKey.split('/')[1] ?? ''
+    workDir = path.join(h.home, 'projects', projectId, 'works', workId)
+    const tree = path.join(h.home, 'projects', projectId, 'worktrees', workId)
+    /** 리뷰 task마다 지시한 때의 HEAD. 리뷰의 커밋을 지시 전과 뒤로 나눈다 */
+    const instructedAt = new Map<string, string>()
     const result = await drive(h.relay, ui, created.workKey, {
       size: c.name,
       force: true,
@@ -85,6 +95,11 @@ async function runCaseOnce(c: RealCase): Promise<CaseResult> {
       tick: async (task) => {
         if (task.status !== 'asking') await ui.handleDialogs(h.relay, task.terminal)
       },
+      instruct: (task, view) => {
+        const text = instructReview(task, view)
+        if (text) instructedAt.set(task.id, git(tree, 'rev-parse', 'HEAD'))
+        return text
+      },
     })
     await settle(h, created.workKey)
     const work = JSON.parse(fs.readFileSync(path.join(workDir, 'work.json'), 'utf8')) as WorkState
@@ -93,6 +108,7 @@ async function runCaseOnce(c: RealCase): Promise<CaseResult> {
       result,
       claudeVersion: work.tasks[0]?.claude_version ?? null,
       dialogs: ui.dialogs.map((d) => `${d.name}: ${d.action}`),
+      review: reviewOf(work, workDir, tree, result, instructedAt),
     }
   } finally {
     // Work 디렉터리(context.md, handoff, 산출물, pty.log, work.json 등)를 결과로 남긴다
@@ -104,6 +120,39 @@ async function runCaseOnce(c: RealCase): Promise<CaseResult> {
     fs.writeFileSync(path.join(dir, 'ui.txt'), ui.dump())
     await h.close()
   }
+}
+
+/**
+ * 리뷰의 판정 (D164): 승인된 리뷰의 review.md와 handoff, 리뷰의 커밋과 바뀐 파일. 커밋은 지시한 때의 HEAD로
+ * 지시 전(리뷰의 시작 커밋부터)과 뒤(다음 task인 verify의 시작 커밋까지)로 나눈다. 지시하지 않았으면 모두 지시 전이다
+ */
+function reviewOf(
+  work: WorkState,
+  workDir: string,
+  tree: string,
+  result: DriveResult,
+  instructedAt: ReadonlyMap<string, string>,
+): ReviewCheck | null {
+  const i = work.tasks.findLastIndex((t) => t.node === 'review' && t.status === 'approved')
+  const task = work.tasks[i]
+  const next = work.tasks[i + 1]
+  if (!task?.start_commit || !next?.start_commit) return null
+  const dir = path.join(workDir, 'tasks', taskDirName(task))
+  const readIn = (name: string) => {
+    const file = path.join(dir, name)
+    return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : ''
+  }
+  const lines = (text: string) => text.split('\n').filter(Boolean)
+  const log = (from: string, to: string) => lines(git(tree, 'log', '--format=%s', `${from}..${to}`))
+  const at = instructedAt.get(task.id) ?? null
+  return judgeReview({
+    reviewMd: readIn('review.md'),
+    handoff: readIn('handoff.md'),
+    instructed: result.tasks.find((t) => t.taskId === task.id)?.instructed ?? null,
+    commitsBefore: log(task.start_commit, at ?? next.start_commit),
+    commits: at ? log(at, next.start_commit) : [],
+    files: lines(git(tree, 'diff', '--name-only', `${task.start_commit}..${next.start_commit}`)),
+  })
 }
 
 const seconds = (ms: number) => `${Math.round(ms / 1000)}초`
@@ -140,9 +189,33 @@ function summary(): string {
       ),
       '',
       ...(r.dialogs.length ? [`- 첫 실행 창: ${r.dialogs.join(', ')}`, ''] : []),
+      ...reviewLines(r.review),
     )
   }
   return lines.join('\n')
+}
+
+/** 리뷰(M8)의 결과: 지적, 지시, 반영, 커밋, 바뀐 파일, 사람 결정, 판정 */
+function reviewLines(r: ReviewCheck | null): string[] {
+  if (!r) return ['### 리뷰', '', '- 리뷰까지 가지 못함', '']
+  const quote = (text: string | null) => (text ?? '(절 없음)').split('\n').map((l) => `  > ${l}`)
+  return [
+    '### 리뷰 (M8, D164)',
+    '',
+    `- 판정: ${r.problems.length ? `어긋남 — ${r.problems.join('; ')}` : '통과'}`,
+    `- 지시: ${r.instructed ?? '없음'}`,
+    '- 지적:',
+    ...(r.findings.length ? r.findings.map((f) => `  - ${f}`) : ['  - 없음']),
+    '- 반영 절:',
+    ...quote(r.applied),
+    '- 반영하지 않은 지적 절:',
+    ...quote(r.notApplied),
+    ...(r.commitsBefore.length ? [`- 지시 전 커밋: ${r.commitsBefore.join(' / ')}`] : []),
+    `- 지시 뒤 커밋: ${r.commits.length ? r.commits.join(' / ') : '없음'}`,
+    `- 바뀐 파일: ${r.files.length ? r.files.join(', ') : '없음'}`,
+    `- 사람 결정(by: human): ${r.humanDecisions.length ? r.humanDecisions.join(' / ') : '없음'}`,
+    '',
+  ]
 }
 
 describe.runIf(enabled)('[실제] 실제 claude로 끝까지 (I29, 8.4)', () => {
@@ -162,6 +235,8 @@ describe.runIf(enabled)('[실제] 실제 claude로 끝까지 (I29, 8.4)', () => 
       expect(r.result.status).toBe('completed')
       // [오류 무시하고 승인]을 쓴 횟수는 0이어야 한다 (8.4)
       expect(r.result.tasks.filter((t) => t.forced)).toEqual([])
+      // 리뷰는 번호로 지시한 지적만 고쳐 커밋하고, 나머지는 반영하지 않은 지적으로 남긴다 (D164)
+      expect(r.review?.problems).toEqual([])
     })
   }
 })

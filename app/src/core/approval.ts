@@ -64,12 +64,12 @@ export function approvalGate(
 
 export type ApprovalMode = 'manual' | 'auto'
 
-/** 자동 승인을 켤 수 있는 노드인가. intake(의도 승인)와 verify(Work 완료)는 늘 수동이다 (4.2) */
+/** 자동 승인을 켤 수 있는 노드인가. intake(의도 승인), review(D167), verify(Work 완료)는 늘 수동이다 (4.2) */
 export function autoApprovable(node: NodeName): node is AutoApproveNode {
   return (AUTO_APPROVE_NODES as readonly NodeName[]).includes(node)
 }
 
-/** 승인 방식. intake와 verify는 항상 수동이고, 나머지는 Work 설정, 앱 설정 순서로 본다 (4.2, D72) */
+/** 승인 방식. intake, review, verify는 항상 수동이고, 나머지는 Work 설정, 앱 설정 순서로 본다 (4.2, D72, D167) */
 export function approvalMode(
   config: AppConfig,
   settings: WorkSettings,

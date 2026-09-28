@@ -29,7 +29,7 @@ interface RewindCase {
   name: 'rewind-intake' | 'rewind-fix'
   node: 'intake' | 'fix'
   instruction: string
-  /** 가짜 claude의 시나리오 (dry) */
+  /** 가짜 claude의 시나리오 (dry). 되감은 task는 t-05다 (S 경로 intake, fix, review, verify 다음) */
   dry: Scenario
 }
 
@@ -45,7 +45,7 @@ const CASES: RewindCase[] = [
     dry: {
       tasks: {
         ...scenario('S').tasks,
-        't-04': steps('intake', 'S').map((st) =>
+        't-05': steps('intake', 'S').map((st) =>
           st.do === 'write' && st.file === 'intent.draft.md'
             ? {
                 ...st,
@@ -66,7 +66,7 @@ const CASES: RewindCase[] = [
     dry: {
       tasks: {
         ...scenario('S').tasks,
-        't-04': [
+        't-05': [
           { do: 'prompt' },
           {
             do: 'commit',
