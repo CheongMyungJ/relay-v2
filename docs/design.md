@@ -810,6 +810,24 @@ task.rewound | task.skipped_to
 delivery.succeeded | delivery.failed
 ```
 
+- 유형별 `payload`(코드 `core/machine.ts`의 기록과 같다. 값이 없는 키는 넣지 않는다):
+
+| 유형 | payload |
+|---|---|
+| `work.created` | `base_branch`, `base_commit` |
+| `work.completed` | `delivery`: `none`(전달 없이 완료), `push`, `pr` |
+| `work.abandoned` | 없음 |
+| `work.cleaned` | `forced`(`--force`로 지웠는가), `deleted_branches` |
+| `task.started` | `reason`(task를 시작한 까닭: `default`, `rewind`, `skip`, `resume`), `session_id` |
+| `task.awaiting_approval` | 없음. 재시작 조정이 바꿨으면 `reason: app_restart`와 끝낸 고아의 `killed_pid`(D76) |
+| `task.approved` | `by`: `human`, `auto`. [오류 무시하고 승인]이면 `ignored_errors`(수) |
+| `task.interrupted` | `reason`: `human`([즉시 중단]), `app_quit`(앱 종료 확인), `abandoned`([Work 포기]), `rewind`, `skip`(단계 선택), `session_ended`(handoff 없이 세션 종료), `start_failed`(세션을 띄우지 못함. `error`에 까닭, D135의 앞선 처리 실패도 여기다), `app_restart`(재시작 조정. 끝낸 고아가 있으면 `killed_pid`). 대기열에 있던 task면 `queued: true` |
+| `task.resumed` | `session_id`, `claude_version` |
+| `task.rewound` | `node`, `from_task`, `discarded`, `keep_code`, 코드를 되돌렸으면 `reset_to`, `backup_branch`, 끊긴 되감기를 다시 하며 덤으로 남긴 백업이 있으면 `extra_backup_branch` |
+| `task.skipped_to` | `node`, `from_task`, `discarded`, `skipped` |
+| `delivery.succeeded` | `choice`, `branch`, `compare_url`, `pr_url`, `pr_existing`, `draft`, `stashes`, `commits` |
+| `delivery.failed` | `choice`, `stage`, `error`, `stashes`, `commits`. 끊긴 전달을 실패로 남겼으면 `reason: app_restart` |
+
 ### 5.6 스킬
 
 스킬은 task 하나에서 에이전트가 따르는 절차다. 이 절에는 모든 스킬에 공통인 규칙(질문 규칙, 공통 종료 절차, 배포와 입력)을 적는다. 질문 규칙과 공통 종료 절차의 원본은 `skills/_common.md` 한 파일이다(D99). 스킬별 명세(입력, 결정 지점, 완료조건, 산출물 템플릿)는 5.6.4~5.6.8에 적는다.

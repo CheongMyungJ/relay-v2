@@ -939,6 +939,7 @@ core는 `core/settings.ts`를 빼면 줄 95% 이상, 가지 84% 이상이다(`ma
 | A18 | 문서만 | 8.1 표와 8.3 `app-claude` 줄, 8.4에 지금은 Linux 클라우드 세션에서 돌린다는 것과 Linux 준비 절차를 적었다. `vitest.config.ts`와 `real.test.ts`의 주석을 고쳤다. 스파이크 뒤 secret이 없어진 까닭은 기록에 없다고 적었다 | — | d1a3967 |
 | A19 | 문서만 | 설계 시나리오 3-4와 6절 표의 재개 인자를 코드(`core/settings.ts` resumeArgs, 스파이크 S6)에 맞췄다: 같은 설정 + `--resume`, `--session-id`와 첫 프롬프트는 뺀다 | — | f7863d7 |
 | A20 | 문서만 | D104 끝에 "D118, D132로 좁힘"과 지금 규칙을 덧붙였다. 원래 문장과 번호는 그대로다. 다른 앞 결정의 옛 표현은 A69에서 본다 | — | 1fb9fe5 |
+| A21 | 문서만 | 설계 5.5에 유형별 payload 표를 더했다. `core/machine.ts`의 기록 호출 26곳에서 모았고, D135의 앞선 처리 실패(`start_failed`의 `error`)도 넣었다 | — | (이 커밋) |
 
 ## 부록. 1단계 대조표
 
