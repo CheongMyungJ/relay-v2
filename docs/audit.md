@@ -941,7 +941,7 @@ core는 `core/settings.ts`를 빼면 줄 95% 이상, 가지 84% 이상이다(`ma
 | A20 | 문서만 | D104 끝에 "D118, D132로 좁힘"과 지금 규칙을 덧붙였다. 원래 문장과 번호는 그대로다. 다른 앞 결정의 옛 표현은 A69에서 본다 | — | 1fb9fe5 |
 | A21 | 문서만 | 설계 5.5에 유형별 payload 표를 더했다. `core/machine.ts`의 기록 호출 26곳에서 모았고, D135의 앞선 처리 실패(`start_failed`의 `error`)도 넣었다 | — | 5b512d1 |
 | A22 | 고침 | 훅 처리기가 등록한 세션을 기억하고, 지금 살아 있는 세션과 다르면 신호를 버린다(`main/work.ts` onHook). 시험 `test/flow/control.test.ts`(앞 세션의 처리기를 붙잡아 재개 뒤에 불러 재현) | D144 | c1520ab |
-| A23 | 고침 | 세션을 끝내 카운트다운을 멈춘 까닭을 끝낸 까닭대로 적는다: 확인 창으로 앱을 끄면 "카운트다운 중에 앱을 끔", [단계 선택]이면 "[단계 선택]을 누름"(`core/machine.ts` endHold, `core/approval.ts`, `shared/work.ts`). 둘 다 알리지 않는다. 시험 `test/unit/machine.test.ts`, `approval.test.ts`, `test/flow/auto.test.ts`(끈 뒤 `work.json`을 덮어쓰지 않고 다시 켬, `index.lock`으로 git 실패). 앱이 충돌한 경우의 "재시작"은 그대로다 | D145 | (이 커밋) |
+| A23 | 고침 | 세션을 끝내 카운트다운을 멈춘 까닭을 끝낸 까닭대로 적는다: 확인 창으로 앱을 끄면 "카운트다운 중에 앱을 끔", [단계 선택]이면 "[단계 선택]을 누름"(`core/machine.ts` endHold, `core/approval.ts`, `shared/work.ts`). 둘 다 알리지 않는다. 시험 `test/unit/machine.test.ts`, `approval.test.ts`, `test/flow/auto.test.ts`(끈 뒤 `work.json`을 덮어쓰지 않고 다시 켬, `index.lock`으로 git 실패). 앱이 충돌한 경우의 "재시작"은 그대로다 | D145 | dc8f504 |
 
 ## 부록. 1단계 대조표
 
