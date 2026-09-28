@@ -161,7 +161,6 @@ core는 `core/settings.ts`를 빼면 줄 95% 이상, 가지 84% 이상이다(`ma
 | A6 | 중간 | 전달·정리 | 전달은 worktree의 HEAD가 아니라 `relay/<work-id>` 브랜치를 push한다 | 버그 |
 | A7 | 중간 | 복구 | 끊긴 정리의 [다시 시도]가 재시작 뒤 생긴 변경과 커밋을 확인 없이 지운다 | 버그 |
 | A8 | 중간 | 전달·정리 | `git worktree remove`가 도중에 실패하면 그 Work를 다시 정리할 수 없다 | 버그 |
-| A9 | 나중에 | 바꾸지 않았다. 사람이 정함: 턴이 끝났는지는 task 터미널에서 보이므로 따로 조치하지 않는다. StopFailure 훅은 필요가 확인되면 다시 본다 | — | 781464e |
 | A9 | 중간 | 상태 기계 | Stop 없이 끝나는 턴과 권한 확인 창을 닫은 뒤를 알리는 신호가 없다 | 설계 빈 곳(StopFailure 훅, 끊긴 턴의 표시) |
 | A10 | 중간 | 기반 | npm으로 설치한 `claude.cmd`를 `cmd.exe`로 감싸면 경로의 공백이나 `&`에서 인자가 깨진다 | 버그, 실기 확인 |
 | A11 | 중간 | 기반 | `project.json` 하나를 읽지 못하거나 Work 하나의 재시작 조정이 실패하면 앱이 시작되지 않는다 | 버그 |
@@ -928,6 +927,7 @@ core는 `core/settings.ts`를 빼면 줄 95% 이상, 가지 84% 이상이다(`ma
 | A6 | 고침 | 전달과 되감기 전에 HEAD가 Work 브랜치인지 보고, 아니면 멈추고 `git switch`를 알린다. 끊긴 되감기의 [다시 시도]는 끊긴 채로 둔다(`adapters/git.ts` currentBranch, `core/records.ts` offWorkBranch, `main/work.ts`). 시험 `test/flow/delivery.test.ts`, `rewind.test.ts`, `recovery.test.ts` | D138 | a70594a |
 | A7 | 문서만 | 한계를 설계에 적었다. 끊긴 정리의 [다시 시도] 안내에 한계를 적고, "[Work 정리]로 다시 확인" 안내 앞에 빠진 [무시]를 더했다(`core/recovery.ts`의 문구, 시험 `test/unit/recovery.test.ts`) | D139 | b577f77 |
 | A8 | 고침(안내만) | 반쯤 지운 worktree 폴더(폴더는 있고 git이 worktree로 보지 않음)를 알아보고, 정리 실패와 정리 요약에 경로와 "직접 지운 뒤 다시 누르세요"를 보인다(`core/cleanup.ts` halfRemovedHint, `main/work.ts`). 앱이 대신 지우지는 않는다. 시험 `test/flow/cleanup.test.ts`(Linux의 `chattr`, root만). Windows의 잠긴 파일로 같은 모양이 되는지는 3단계에 남긴다(1.3) | D140 | 22a8517 |
+| A9 | 나중에 | 바꾸지 않았다. 사람이 정함: 턴이 끝났는지는 task 터미널에서 보이므로 따로 조치하지 않는다. StopFailure 훅은 필요가 확인되면 다시 본다 | — | 781464e |
 
 ## 부록. 1단계 대조표
 
