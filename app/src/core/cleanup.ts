@@ -11,6 +11,14 @@ export function canClean(work: WorkState): boolean {
 }
 
 /** 정리 요약에 쓰는 사실. main이 git과 세션에서 읽는다 */
+/**
+ * 반쯤 지운 worktree 폴더의 안내 (D140). git worktree remove가 파일을 지우다 실패해도 git은 관리 정보를 지워, 남은
+ * 폴더에서는 git status도 git worktree remove도 실패한다. 사람이 폴더를 지우면 다음 정리가 prune만 한다
+ */
+export function halfRemovedHint(dir: string): string {
+  return `반쯤 지운 worktree 폴더가 남아 있음: ${dir} (git은 이 폴더를 더 이상 worktree로 보지 않음). 폴더를 직접 지운 뒤 다시 누르세요`
+}
+
 export interface CleanFacts {
   /** worktree가 있다 */
   worktree: boolean

@@ -16,6 +16,7 @@ import {
   commitInfo,
   countCommits,
   createBackup,
+  currentBranch,
   deleteBranches,
   diffFrom,
   headCommit,
@@ -27,17 +28,18 @@ import {
   refNames,
   remoteUrl,
   removeWorktree,
+  repoRoot,
   resetHard,
   stashAll,
   stashEntries,
   statusLines,
   treeOf,
   worktreeTree,
-  currentBranch,
 } from '../adapters/git'
 import type { HookReply, HookRequest, HookServer } from '../adapters/hooks'
 import { processStartTime, startPty, type PtySession } from '../adapters/pty'
 import {
+  pathKey,
   readText,
   writeFileAtomic,
   writeJson,
@@ -53,7 +55,13 @@ import {
   badge,
   pendingBackground,
 } from '../core/approval'
-import { canClean, cleanPreview, planClean, type CleanFacts } from '../core/cleanup'
+import {
+  canClean,
+  cleanPreview,
+  halfRemovedHint,
+  planClean,
+  type CleanFacts,
+} from '../core/cleanup'
 import {
   buildContext,
   discardedAttempts,
@@ -1739,6 +1747,7 @@ export class WorkRunner {
       .stat(this.worktree)
       .then((st) => st.isDirectory())
       .catch(() => false)
+    if (worktree && (await this.halfRemoved())) throw new Error(halfRemovedHint(this.worktree))
     const name = workBranch(this.work.work_id)
     const head = await refCommit(repo, `refs/heads/${name}`, opts)
     const contains = async (ref: string) => {
@@ -1880,8 +1889,18 @@ export class WorkRunner {
     return out
   }
 
+  /** worktree 폴더는 있는데 git이 worktree로 보지 않는다: 지우다 도중에 실패했다 (D140) */
+  private async halfRemoved(): Promise<boolean> {
+    if (!(await exists(this.worktree))) return false
+    const root = await repoRoot(this.worktree, { env: this.ctx.env })
+    return root === null || pathKey(root) !== pathKey(this.worktree)
+  }
+
   private async cleanFailed(err: unknown): Promise<void> {
-    this.opError = `정리 실패: ${message(err)}`
+    const hint = (await this.halfRemoved().catch(() => false))
+      ? `. ${halfRemovedHint(this.worktree)}`
+      : ''
+    this.opError = `정리 실패: ${message(err)}${hint}`
     this.problem(this.opError)
     await this.feed({ type: 'clean.failed', at: this.ctx.at(), error: message(err) })
   }
