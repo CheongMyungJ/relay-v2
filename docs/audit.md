@@ -231,6 +231,7 @@ core는 `core/settings.ts`를 빼면 줄 95% 이상, 가지 84% 이상이다(`ma
 | A76 | 낮음 | 문서 | `skills`와 `spikes` 패키지는 버전을 범위(^)로 적는다 | 사람이 정함 |
 | A77 | 중간 | 복구 | 고아 프로세스 시험이 정리할 때 이미 끝난 프로세스의 ID로 강제 종료를 보낸다 | 시험 |
 | A78 | 낮음 | 기반 | 명령이 실패하면 오류의 끝 세 줄만 보여, git의 원인 줄이 빠진다 | 버그 |
+| A79 | 중간 | 기반 | app-ci는 Windows에서 앱을 빌드하지 않아, Windows에서만 깨지는 빌드를 설치 파일을 만들 때까지 모른다 | 시험(CI) |
 
 #### A1. 앱을 두 번 실행하면 두 번째 인스턴스가 첫 인스턴스의 살아 있는 claude를 끝낸다
 
@@ -919,6 +920,14 @@ core는 `core/settings.ts`를 빼면 줄 95% 이상, 가지 84% 이상이다(`ma
 - 확신: 확인함
 - 4단계 제안: 버그
 
+#### A79. app-ci는 Windows에서 앱을 빌드하지 않아, Windows에서만 깨지는 빌드를 설치 파일을 만들 때까지 모른다
+
+- 심각도: 중간 (시험 빠짐). 영역: 기반
+- 위치: `.github/workflows/app-ci.yml`(Windows 작업은 [어댑터]와 [흐름]만 돈다), `.github/workflows/app-build.yml`(수동)
+- 내용: A15(bb8335c)가 `renderer/src/markdown.ts`를 `Markdown.tsx` 옆에 두었다. Windows는 파일 이름의 대소문자를 가리지 않아 `Panel.tsx`의 `./Markdown` import가 `.ts`를 먼저 찾아 `markdown.ts`로 풀리고, 화면 빌드가 "Markdown is not exported"로 실패한다. Linux의 타입 검사와 [단위], Windows의 [어댑터]와 [흐름]은 화면을 빌드하지 않아 모두 통과했고, 수동인 app-build #15(PR #10)에서야 드러났다. 이름은 PR #10에서 고쳤고 [단위] `test/unit/files.test.ts`가 같은 모양을 막는다. Windows에서 화면을 빌드하는 단계는 아직 없다
+- 확신: 확인함
+- 4단계 제안: 시험(CI). app-ci의 Windows 작업에 `electron-vite build`를 더하는 것이 가장 작다
+
 
 ### 1.6 2단계로 넘기는 것
 
@@ -953,7 +962,7 @@ core는 `core/settings.ts`를 빼면 줄 95% 이상, 가지 84% 이상이다(`ma
 | A12 | 고침 | 알림을 누르거나 실패할 때까지 붙잡아 두고(최근 50개), Windows 설치본은 appId를 앱 ID로 쓴다(`main/notices.ts`, `main/index.ts`). 시험 `test/unit/notices.test.ts`(붙잡기와 appId 일치만). 실제 토스트와 클릭은 3단계에서 본다(1.3) | D142, I37 | 488b1d8 |
 | A13 | 고침 | 고른 적 있는 Work의 터미널만 만든다(`renderer/src/opened.ts`, `App.tsx`). 한 번 만든 터미널은 치우지 않는다. 시험 `test/unit/opened.test.ts`(판정만). 화면은 [스모크]에서만 지나고 여기서는 돌리지 못했다(빌드만 확인) | D143 | 5bae560 |
 | A14 | 고침(시험) | 되돌릴 커밋 없이 커밋 안 된 변경만 있는 되감기의 [흐름]을 더했다(`test/flow/rewind.test.ts`). 실행 쪽 백업 조건을 커밋 수만 보게 깨뜨리면 실패하는 것을 확인했다. 코드는 그대로다 Windows CI에서 새 fix가 곧 커밋해 HEAD 단언이 흔들려, HEAD 대신 새 task의 시작 커밋으로 보게 고쳤다(A4의 시험도 같이) | — | 601680b, e7c0d1a |
-| A15 | 고침(시험) | 창 설정값(`main/security.ts` WEB_PREFERENCES), 외부 주소 검사(externalUrl), Markdown 변환(`renderer/src/markdown.ts`)을 떼어 [단위] `test/unit/security.test.ts`로 지킨다. CSP는 `index.html`을 읽어 본다. 동작은 그대로다. D79·D83·D119의 화면 분기는 여전히 [스모크]에만 있다 | — | bb8335c |
+| A15 | 고침(시험) | 창 설정값(`main/security.ts` WEB_PREFERENCES), 외부 주소 검사(externalUrl), Markdown 변환(`renderer/src/markdown.ts`)을 떼어 [단위] `test/unit/security.test.ts`로 지킨다. CSP는 `index.html`을 읽어 본다. 동작은 그대로다. D79·D83·D119의 화면 분기는 여전히 [스모크]에만 있다. PR #10의 app-build #15에서 `markdown.ts`가 `Markdown.tsx`와 대소문자만 달라 Windows에서 `./Markdown` import가 `markdown.ts`로 풀려 화면 빌드가 실패했다. `renderMarkdown.ts`로 이름을 바꾸고, 한 폴더에 대소문자만 다른 이름이 없는지 [단위] `test/unit/files.test.ts`로 본다(A79) | — | bb8335c, (이 커밋) |
 | A16 | 문서만 | `checks.md`의 M2~M7 표에 [실기] "아직 안 함(3단계로 미룸)" 줄을 더했다. 실제 확인은 3단계에서 한다(1.3) | — | 6b39e4d |
 | A17 | 문서만 | `implementation.md` 8.4에 실행 방법(`RELAY_REAL_CLAUDE=1`, `dry`, 모델과 effort 변수)을 적었다. 변수 없이 돌리면 8개가 모두 건너뛰고 통과하는 것을 다시 확인했다 | — | d1a3967 |
 | A18 | 문서만 | 8.1 표와 8.3 `app-claude` 줄, 8.4에 지금은 Linux 클라우드 세션에서 돌린다는 것과 Linux 준비 절차를 적었다. `vitest.config.ts`와 `real.test.ts`의 주석을 고쳤다. 스파이크 뒤 secret이 없어진 까닭은 기록에 없다고 적었다 | — | d1a3967 |

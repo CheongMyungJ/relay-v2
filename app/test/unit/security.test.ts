@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { WEB_PREFERENCES, externalUrl } from '../../src/main/security'
-import { renderMarkdown } from '../../src/renderer/src/markdown'
+import { renderMarkdown } from '../../src/renderer/src/renderMarkdown'
 
 describe('창의 격리 (I2)', () => {
   it('contextIsolation과 sandbox를 켜고 nodeIntegration을 끈다', () => {

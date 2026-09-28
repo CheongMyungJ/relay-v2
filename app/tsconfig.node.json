@@ -19,7 +19,7 @@
     "src/shared/generated/*.json",
     "src/core",
     "src/adapters",
-    "src/renderer/src/markdown.ts",
+    "src/renderer/src/renderMarkdown.ts",
     "src/renderer/src/opened.ts",
     "test"
   ]
