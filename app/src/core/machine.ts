@@ -770,6 +770,12 @@ function countdownEffects(before: WorkState, t: Transition): Transition {
   return { ...t, work, effects: [...stops, ...t.effects, ...starts] }
 }
 
+/** 세션을 끝내 카운트다운을 멈춘 까닭 (D145): [즉시 중단], 앱 종료 확인, [단계 선택] */
+function endHold(reason: InterruptReason | StepKind): AutoHoldReason {
+  if (reason === 'human') return 'interrupt'
+  return reason === 'app_quit' ? 'quit' : 'step'
+}
+
 /**
  * 세션을 끝낸다: 살아 있으면 endSession, 대기열에 있으면 dequeue. 승인 대기와 막힘은 그대로 두고,
  * 그 밖에는 중단됨이다 (3.3). 세션도 대기열도 아니면 null. 단계 선택(rewind, skip)으로 끝낸 task는 곧
@@ -800,8 +806,9 @@ function endTask(
     session: { ...task.session, alive: false, ended_at: at },
   }
   return {
-    // 카운트다운 중이던 승인 대기는 카운트다운을 멈추고 사람의 승인을 기다린다 (D130)
-    task: kept && task.countdown ? held(ended, at, ['interrupt']) : ended,
+    // 카운트다운 중이던 승인 대기는 카운트다운을 멈추고 사람의 승인을 기다린다 (D130).
+    // 까닭은 세션을 끝낸 까닭대로 적는다 (D145)
+    task: kept && task.countdown ? held(ended, at, [endHold(reason)]) : ended,
     effects: [
       log(work, at, 'task.interrupted', { reason }, task),
       { type: 'endSession', taskId: task.id },

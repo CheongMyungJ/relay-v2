@@ -122,14 +122,23 @@ export const AUTO_HOLD_LABEL: Readonly<Record<AutoHoldReason, string>> = {
   invalid: '다시 읽은 handoff가 유효하지 않음',
   cancel: '[취소]를 누름',
   interrupt: '[즉시 중단]을 누름',
+  quit: '카운트다운 중에 앱을 끔',
+  step: '[단계 선택]을 누름',
   session: '카운트다운 중에 세션이 끝남',
   settings: '카운트다운 중에 자동 승인을 끔',
   restart: '앱을 다시 켜며 승인 대기가 됨 (재시작 경로는 자동 승인하지 않음)',
   operation: '끊긴 작업이 있음',
 }
 
-/** 사람이 앱에서 한 일이라 알리지 않는 까닭 (D130). 재시작 조정은 알리지 않는다 (D121) */
-const QUIET_HOLDS: readonly AutoHoldReason[] = ['cancel', 'interrupt', 'settings', 'restart']
+/** 사람이 앱에서 한 일이라 알리지 않는 까닭 (D130, D145). 재시작 조정은 알리지 않는다 (D121) */
+const QUIET_HOLDS: readonly AutoHoldReason[] = [
+  'cancel',
+  'interrupt',
+  'quit',
+  'step',
+  'settings',
+  'restart',
+]
 
 /** 이 까닭으로 자동 승인하지 않았으면 알린다: 사람이 누르지 않았는데 사람이 필요해졌다 (D81, D130) */
 export function holdNeedsNotice(reasons: readonly AutoHoldReason[]): boolean {

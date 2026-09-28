@@ -10,6 +10,7 @@ import {
   autoApproveNote,
   badge,
   holdNeedsNotice,
+  holdText,
   pendingBackground,
   resolvedBySize,
 } from '../../src/core/approval'
@@ -275,10 +276,12 @@ describe('자동 승인하지 않은 까닭 (D128~D131)', () => {
     })
   })
 
-  it('사람이 앱에서 한 일([취소], [즉시 중단], 설정)과 재시작 조정은 알리지 않는다 (D130, D121)', () => {
-    for (const r of ['cancel', 'interrupt', 'settings', 'restart'] as const) {
+  it('사람이 앱에서 한 일([취소], [즉시 중단], 앱 종료, [단계 선택], 설정)과 재시작 조정은 알리지 않는다 (D130, D121, D145)', () => {
+    for (const r of ['cancel', 'interrupt', 'quit', 'step', 'settings', 'restart'] as const) {
       expect(holdNeedsNotice([r]), r).toBe(false)
     }
+    expect(holdText(['quit'])).toBe('카운트다운 중에 앱을 끔')
+    expect(holdText(['step'])).toBe('[단계 선택]을 누름')
     for (const r of [
       'session',
       'invalid',
@@ -291,7 +294,7 @@ describe('자동 승인하지 않은 까닭 (D128~D131)', () => {
       expect(holdNeedsNotice([r]), r).toBe(true)
     }
     expect(holdNeedsNotice(['cancel', 'session'])).toBe(true)
-    expect(Object.keys(AUTO_HOLD_LABEL)).toHaveLength(11)
+    expect(Object.keys(AUTO_HOLD_LABEL)).toHaveLength(13)
   })
 })
 

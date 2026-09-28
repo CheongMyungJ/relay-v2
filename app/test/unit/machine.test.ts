@@ -2849,6 +2849,50 @@ describe('자동 승인 (4.3, D127~D131)', () => {
     expect(changed.effects).toEqual([{ type: 'stopCountdown', taskId: 't-02' }])
   })
 
+  it('앱 종료 확인과 [단계 선택]으로 세션을 끝내도 멈춘다. 까닭은 끝낸 까닭대로 적는다 (D130, D145)', () => {
+    const quit = apply(
+      counting(),
+      { type: 'interrupt', taskId: 't-02', at: at(), reason: 'app_quit' },
+      AUTO,
+    )
+    expect(task(quit.work)).toMatchObject({
+      status: 'awaiting_approval',
+      session: { alive: false },
+      auto_hold: { reasons: ['quit'] },
+    })
+    expect(types(quit.effects)).toEqual(['stopCountdown', 'log:task.interrupted', 'endSession'])
+    // 다시 켜도 재시작 조정은 까닭을 바꾸지 않는다: 카운트다운은 끌 때 이미 멈췄다
+    const reopened = apply(quit.work, { type: 'app.restarted', at: at(), check: valid() }, AUTO)
+    expect(task(reopened.work).auto_hold?.reasons).toEqual(['quit'])
+    // 코드를 되돌리는 [단계 선택]은 git이 실패하면 끝낸 task가 승인 대기로 남는다 (6.2)
+    const selected = apply(
+      counting(),
+      {
+        type: 'selectStep',
+        at: at(),
+        node: 'evidence',
+        keepCode: false,
+        instruction: '',
+        expect: { taskId: 't-02', done: false },
+        backups: [],
+      },
+      AUTO,
+    )
+    expect(selected.rejected).toBeUndefined()
+    expect(types(selected.effects)).toEqual([
+      'stopCountdown',
+      'log:task.interrupted',
+      'endSession',
+      'rewindCode',
+    ])
+    const failed = apply(selected.work, { type: 'rewind.failed', at: at(), error: 'index.lock' })
+    expect(task(failed.work)).toMatchObject({
+      status: 'awaiting_approval',
+      session: { alive: false },
+      auto_hold: { reasons: ['step'] },
+    })
+  })
+
   it('끝날 때 다시 판정한다: 설정을 껐거나 handoff가 바뀌었으면 승인하지 않는다 (D128, D130)', () => {
     const off = fire(counting(), valid(), DEFAULT_CONFIG)
     expect(task(off.work)).toMatchObject({
