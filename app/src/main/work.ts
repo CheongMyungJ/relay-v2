@@ -843,7 +843,7 @@ export class WorkRunner {
       void this.enqueue(() => this.onExit(task.id, session))
     })
     session.unregister = this.ctx.hooks.register(token, task.id, (req) =>
-      this.enqueue(() => this.onHook(task.id, req)),
+      this.enqueue(() => this.onHook(task.id, req, session)),
     )
     session.unwatch = watchDir(this.files.taskDir(task), () => {
       void this.enqueue(() => this.onWatch(task.id))
@@ -855,10 +855,12 @@ export class WorkRunner {
   // ---------- 세션 동안 (시나리오 3) ----------
 
   /** 훅 신호 (시나리오 3의 표). Stop이면 파일을 다시 읽어 검사한다 (I15) */
-  private async onHook(taskId: string, req: HookRequest): Promise<HookReply> {
+  private async onHook(taskId: string, req: HookRequest, from: LiveSession): Promise<HookReply> {
     const task = this.task(taskId)
     const session = this.live.get(taskId)
     if (!task) return null
+    // 토큰 확인을 지나 처리 줄에서 기다린 앞 프로세스의 요청은 다시 연 세션에 적용하지 않는다 (D144)
+    if (session !== from) return null
     const b = req.body
     // 훅 본문의 세션 id. /clear 등으로 CLI가 다른 대화로 옮기면 core가 따른다 (D110)
     const sessionId = str(b['session_id'])
