@@ -315,12 +315,12 @@
 
 **확인할 것:** PR 진행(설계 시나리오 10)이 쓰는 GitHub 동작을 앱이 gh로 할 수 있는가. 결과가 설계의 가정(D157~D161, D172, D175~D179)과 같은가.
 
-**환경:** 시험용 레포에서 한다. relay-v2 레포에는 시험 PR을 만들지 않는다(`docs/implementation.md` I42). gh와 GitHub의 동작은 OS와 상관없으므로 Windows 러너가 아니어도 된다. 결과 표에는 gh 버전을 적는다. Claude Code 웹 세션에서는 GitHub GraphQL이 막혀 있어(2026-09-28 확인), GraphQL을 쓰는 gh의 PR 명령(`gh pr create`, `gh pr view` 등)이 돌지 않는다. 그래서 러너나 사람의 PC에서 한다. 러너에서 할 때는 시험용 레포의 토큰 secret(I43)만 있으면 되고 Claude 인증 secret은 필요 없다.
+**환경:** 시험용 레포 [`CheongMyungJ/relay-v2-test`](https://github.com/CheongMyungJ/relay-v2-test)에서 한다. CI를 일부러 실패시키는 스위치, 봇 코멘트 워크플로, 토큰 권한은 그 레포의 README에 있다. relay-v2 레포에는 시험 PR을 만들지 않는다(`docs/implementation.md` I42). gh와 GitHub의 동작은 OS와 상관없으므로 Windows 러너가 아니어도 된다. 결과 표에는 gh 버전을 적는다. Claude Code 웹 세션에서는 GitHub GraphQL이 막혀 있어(2026-09-28 확인), GraphQL을 쓰는 gh의 PR 명령(`gh pr create`, `gh pr view` 등)이 돌지 않는다. 그래서 러너나 사람의 PC에서 한다. 러너에서 할 때는 시험용 레포의 토큰 secret(I43)만 있으면 되고 Claude 인증 secret은 필요 없다.
 
 **절차**
 
 1. 시험용 브랜치를 push하고 `gh pr create`로 PR을 만든다.
-2. PR 상태를 읽는다: 열림·머지·닫힘, head 커밋, 머지 가능 여부, 리뷰 상태, 체크 상태. 실패한 체크(GitHub Actions)의 로그 끝부분을 읽는다.
+2. PR 상태를 읽는다: 열림·머지·닫힘, head 커밋, 머지 가능 여부, 리뷰 상태, 체크 상태. 실패한 체크(GitHub Actions)에서 실패한 스텝의 로그 끝부분을 읽는다. 작업 로그 전체의 끝에는 정리 단계(Post job cleanup)가 오므로(시험용 레포의 스모크 시험, 2026-09-28), 실패한 스텝만 가려 읽는 방법(`gh run view --log-failed` 등)을 확인한다.
 3. 코멘트를 읽는다: 리뷰 본문, 인라인 코멘트와 기존 스레드의 답글, PR 대화 코멘트. 소유자, 협업자, 협업자가 아닌 계정, 봇(GitHub 앱)이 하나씩 단 코멘트에서 작성자 관계(author association)와 봇 여부가 무엇으로 오는지 기록한다.
 4. 답글을 게시한다: 인라인 코멘트 스레드의 답글, PR 대화 코멘트. 앱이 게시한 답글을 다음 읽기에서 가려낼 수 있는지 본다.
 5. 실패한 체크를 다시 실행한다.
