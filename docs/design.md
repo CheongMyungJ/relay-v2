@@ -100,10 +100,10 @@ relay-v2는 Claude Code CLI를 **앱 안의 터미널(node-pty + xterm.js)에 �
 | D60 | verify는 기준 커밋과 비교해 바뀐 테스트 파일을 모두 판정한다. 약화 의심이 있으면 사람이 정할 결정으로 그 자리에서 묻는다 | fix가 표시하지 않은 변경도 잡으려고 git diff를 기준으로 봄. 약화인지는 테스트의 의도를 아는 사람이 정함 | ✅ |
 | D61 | 실패나 판정 불가가 있으면 verify는 사람이 정할 결정으로 묻는다: 되돌아가기(`recommended_next`) / 이대로 완료 화면으로(`null`) | 새 버튼 없이 기존 장치로 두 경우를 처리함. 되돌아갈지는 산출물 폐기가 따르는 판단이라 사람 몫(D23) | ✅ |
 | D62 | `verification.md`는 `완료조건 판정`, `테스트 파일 변경`, `남은 위험` 세 절로 쓴다. `pr.md`는 첫 줄이 `# 제목`이고 본문 절은 `요약`, `원인`, `변경`, `테스트`다(언어와 레포 PR 템플릿은 D101). 앱은 첫 줄을 PR 제목으로 쓴다 | 제목 위치가 정해져야 앱이 결정론적으로 PR을 만듦(D15) | ✅ |
-| D63 | work-start는 요청에 재현 방법이 있고, 수정 위치가 한 곳으로 좁혀지고, 비목표·제약에 걸릴 여지가 없을 때만 S를 제안한다(기본값) | work-start는 원인을 추적하지 않으므로 기준은 요청에 이미 있는 정보여야 함. 변경량은 고치기 전에는 알 수 없음 | ✅ |
+| D63 | work-start는 요청에 재현 방법이 있고, 수정 위치가 한 곳으로 좁혀지고, 비목표·제약에 걸릴 여지가 없을 때만 S를 제안한다(기본값). D150으로 넓힘: S가 아니면 L 기준(D150)에 맞을 때 L, 아니면 M | work-start는 원인을 추적하지 않으므로 기준은 요청에 이미 있는 정보여야 함. 변경량은 고치기 전에는 알 수 없음 | ✅ |
 | D64 | S에서는 fix가 먼저 재현을 확인하고 원인을 짧게 적은 뒤 고친다. `fix.md`의 `rca와 달라진 점` 대신 `원인과 재현` 절을 쓴다 | S에서도 재현과 원인은 필요함. 한 절에 모아 두면 verify와 사람이 볼 곳이 생김 | ✅ |
 | D65 | S에서 verify는 `fix.md`의 `원인과 재현` 절의 재현 절차로 판정한다. 재현 절차도 재현 테스트도 없으면 첫 완료조건은 판정 불가다 | M과 같은 판정 방식을 쓰고 재현 절차를 읽는 곳만 바꿈 | ✅ |
-| D66 | S로 진행하던 fix가 재현이 안 되거나 원인을 좁히지 못하면, 발견 사실을 `fix.md`에 적고 `recommended_next`에 evidence나 rca를 적어 마무리한다. intent의 `size`는 바꾸지 않는다 | rca가 틀렸을 때(D55)와 같은 장치. 의도 변경은 intake 되감기로만 함 | ✅ |
+| D66 | S로 진행하던 fix가 재현이 안 되거나 원인을 좁히지 못하면, 발견 사실을 `fix.md`에 적고 `recommended_next`에 evidence나 rca를 적어 마무리한다. intent의 `size`는 바꾸지 않는다. D149로 바꿈: 되돌아갈 곳은 investigate다 | rca가 틀렸을 때(D55)와 같은 장치. 의도 변경은 intake 되감기로만 함 | ✅ |
 | D67 | 프로젝트 등록 때 git 레포 루트, `claude auth status`, 중복 등록을 확인해 실패하면 막는다. `origin` 원격과 `gh auth status`는 경고만 하고 해당 전달 버튼을 비활성화한다 | Work를 만든 뒤에야 claude 로그인 문제가 드러나면 헛수고가 됨. push/PR은 Work 완료 때 쓰는 것이라 막을 이유가 없음 | ✅ |
 | D68 | relay는 "권한 확인 없이 실행한다"는 동의를 따로 받지 않는다. Claude Code가 처음 실행할 때 띄우는 자체 경고 창에 맡긴다 | 같은 내용을 두 번 확인받지 않음. Claude Code의 경고 창은 사용자당 한 번 뜨고, 거절하면 실행되지 않음 | ✅ |
 | D69 | Claude Code의 첫 실행 창(권한 확인 끈 모드 경고, 폴더 신뢰)은 앱이 미리 설정하지 않는다. 창이 뜨면 사람이 터미널에서 수락한다 | 사람이 봐야 할 경고를 앱이 대신 넘기지 않음. 미리 넣은 설정이 창을 건너뛰는지는 공식 문서에 없음 | ✅ |
@@ -184,6 +184,11 @@ relay-v2는 Claude Code CLI를 **앱 안의 터미널(node-pty + xterm.js)에 �
 | D144 | 훅 신호는 그 신호를 보낸 claude 프로세스가 지금 그 task의 살아 있는 세션일 때만 적용한다. 다시 연 세션(같은 세션 id)에는 앞 프로세스가 늦게 보낸 신호를 적용하지 않는다 | 끝낸 세션의 토큰은 풀지만, 토큰 확인을 지나 처리 줄에서 기다리던 앞 프로세스의 SessionEnd가 [재개]로 다시 연 세션을 세션 종료로 바꿀 수 있었음(A22). 그러면 새 세션의 Stop을 무시하고 승인해도 세션을 끝내지 않아 자리를 쥔 채 남음. [재개]는 같은 세션 id를 써서 id로는 가를 수 없음 | ✅ |
 | D145 | 확인 창으로 앱을 끄거나 [단계 선택]으로 세션을 끝내도 카운트다운을 멈추고 사람의 승인을 기다린다. 멈춘 까닭은 세션을 끝낸 까닭대로 적는다: "[즉시 중단]을 누름", "카운트다운 중에 앱을 끔", "[단계 선택]을 누름". 셋 다 사람이 한 일이라 알리지 않는다. 앱이 충돌해 남은 카운트다운은 그대로 재시작 조정이 "재시작"으로 적는다(D127) | 세션을 무엇으로 끝냈는지 보지 않고 까닭을 늘 [즉시 중단]으로 적어, 확인 창으로 앱을 끈 뒤나 [단계 선택]의 git이 실패한 뒤 승인 화면이 누르지 않은 버튼을 까닭으로 보였음(A23). 확인 창으로 끄면 끌 때 카운트다운이 멈춰 재시작 조정이 "재시작"으로 바꾸지 않음 | ✅ |
 | D146 | Stop 없이 세션이 끝나면(SessionEnd, PTY 종료) 그때의 파일로 다시 형식 검사해, 유효한 handoff면 승인 대기나 막힘으로 두고 아니면 세션 종료다(3.3). 이 경로는 턴이 끝난 것이 아니라 자동 승인을 판정하지 않고 사람이 승인한다(다음 Stop부터 판정, D131). [즉시 중단]과 앱 종료는 그대로다: 누른 때 승인 대기나 막힘이던 것만 남는다 | 파일을 보지 않고 세션 종료로 두어, 에이전트가 handoff를 다 쓴 뒤 Stop 없이 끝나면(Ctrl+C, 크래시, 오류로 끊긴 턴 뒤 `/exit`) "handoff 없이 세션 종료"를 알리고 [이 단계 새 세션으로 다시]를 권했음(A24). 3.3은 세션이 없어도 유효한 handoff가 있으면 승인 대기나 막힘으로 표시한다고 함 | ✅ |
+| D147 | **M은 evidence와 rca를 task 하나(`investigate`, 화면 이름 "재현과 원인 분석")로 합친다.** L은 지금처럼 나눈다. S는 둘 다 건너뛴다(3.4). 경로: S `intake → fix → verify`, M `intake → investigate → fix → verify`, L `intake → evidence → rca → fix → verify` | M에서 evidence와 rca 사이의 승인과 세션 전환은 비용(같은 코드를 다시 읽음, 세션을 새로 띄움)이 크고 사람이 새로 판단할 것이 적음. 사람이 원인에 동의한 뒤 고치는 rca·fix 사이의 승인과, 고친 에이전트가 스스로 판정하지 않는 fix·verify의 분리는 남김. L을 M과 다르게 두어 크기 세 단계가 모두 뜻을 가짐 | ✅ |
+| D148 | investigate 스킬은 따로 쓰지 않고 앱이 배포할 때 합친다: `skills/investigate/SKILL.md`(머리: 차례와 합칠 때의 규칙) + evidence 본문 + root-cause 본문 + `_common.md`. 부분의 머리글과, 원본에서 `<!-- solo -->`와 `<!-- /solo -->` 줄로 감싼 단독 구간은 뺀다. 단독으로 배포할 때는 표시 줄만 지운다(5.6.3) | 스킬 원본을 한 벌로 둠: L과 M이 같은 절차를 씀. 합칠 때 부딪히는 문장("원인 판단은 rca의 일" 등)을 원본에 표시해 빼면, 어느 문장이 빠지는지 원본에서 보이고 에이전트에게 부딪히는 문장이 가지 않음. 머리에서 덮어쓰는 문구로 두면 부딪히는 문장이 그대로 보임 | ✅ |
+| D149 | **한 Work가 고를 수 있는 단계는 그 크기의 단계뿐이다.** S와 M은 intake·investigate·fix·verify, L은 intake·evidence·rca·fix·verify. S의 fix가 막히면(D66) investigate로 되돌아간다. 단계 선택 대화상자, `context.md`의 이전 단계(3.2), `recommended_next` 검사(5.2.1)가 같은 목록을 쓴다. 크기를 바꾸려면 intake로 되감는다(6.3) | 같은 산출물(`evidence.md`, `rca.md`)을 쓰는 task가 한 Work에 둘 생기면 뒤 단계가 어느 쪽을 믿을지 규칙이 따로 필요함. S가 막혔을 때 재현과 원인을 한 번에 다시 보는 것은 M으로 커진 것과 같음 | ✅ |
+| D150 | work-start는 S가 아니면 다음 중 하나라도 맞을 때 L을, 아니면 M을 제안한다 **(기본값)**: 요청에 재현 방법이 없다 / 간헐적이거나 환경·시점·데이터에 달렸다 / 코드를 훑어도 후보 위치가 여러 모듈에 걸친다. 사람이 의도 승인 화면에서 확정한다 | 재현이 불확실하면 잘못 모은 관찰이 원인 분석을 끌고 가므로, 사람이 원인 분석 전에 evidence를 보는 것이 값짐. 기준은 D63처럼 요청과 훑어본 코드에 이미 있는 정보만 씀 | ✅ |
+| D151 | investigate의 자동 승인과 질문 방식은 따로 설정한다(`investigate` 키). 기본은 자동 승인 꺼짐, 초안 우선이다(5.1.1) | evidence와 rca의 설정을 물려받으면 둘이 다를 때 어느 쪽을 따를지 규칙이 필요함. 자동 승인하면 사람이 재현과 원인을 한 번도 보지 않고 fix로 가므로 켜는 것은 사람이 정함 | |
 
 ---
 
@@ -203,32 +208,36 @@ Project (레포 1개)
 **파이프라인 (버그 수정, 고정)**
 
 ```
-intake(work-start) → 의도 승인 → evidence → rca → fix → verify → Work 완료(push/PR)
+intake(work-start) → 의도 승인 → evidence → rca → fix → verify → Work 완료(push/PR)   (L)
+intake(work-start) → 의도 승인 → investigate → fix → verify → Work 완료(push/PR)      (M)
+intake(work-start) → 의도 승인 → fix → verify → Work 완료(push/PR)                    (S)
 ```
 
 - 의도 승인은 intake 승인과 한 번 클릭으로 합친다. Work 완료는 verify 승인과 한 번 클릭으로 합친다.
-- S 크기(intent의 `size`)면 evidence와 rca를 건너뛴다(빠른 경로, 3.4).
+- 경로는 intent의 `size`로 정한다(3.4). M은 evidence와 rca를 investigate 하나로 합치고(D147), S는 둘 다 건너뛴다.
 
 ### 3.1 단계
 
 | 순서 | 노드 | 스킬 | 하는 일 | 산출물 |
 |---|---|---|---|---|
 | 1 | `intake` | `work-start` | 요청을 읽고 사람과 대화해 의도를 정돈한다 | `intent.draft.md` |
+| 2 | `investigate` | `investigate` | evidence와 rca의 일을 한 세션에서 한다. M 경로만(D147) | `evidence.md`, `rca.md` |
 | 2 | `evidence` | `evidence` | 재현 절차와 관찰 사실을 모은다 | `evidence.md` |
 | 3 | `rca` | `root-cause` | 원인을 찾고 근거를 댄다 | `rca.md` |
 | 4 | `fix` | `fix` | 코드를 고치고 커밋한다 | 코드 커밋, `fix.md`(변경 요약) |
 | 5 | `verify` | `final-verify` | 완료조건별로 판정하고 PR 초안을 쓴다 | `verification.md`, `pr.md` |
 
-- 화면 이름(D109): intake "의도 정리", evidence "재현과 관찰", rca "원인 분석", fix "수정", verify "최종 검증".
+- 화면 이름(D109): intake "의도 정리", investigate "재현과 원인 분석", evidence "재현과 관찰", rca "원인 분석", fix "수정", verify "최종 검증".
 - 산출물은 모두 task 디렉터리(`tasks/<nn>-<node>/`)에 쓴다. 코드 변경은 worktree에서 에이전트가 커밋한다(push는 막혀 있음, D17).
 - 스킬의 공통 규칙과 스킬별 명세(입력, 결정 지점, 완료조건, 산출물 템플릿)는 5.6에 적는다.
+- 파이프라인 순서는 `intake, investigate, evidence, rca, fix, verify`다. 되감기와 건너뛰기, 이전 단계는 이 순서로 가른다(6.2). 한 Work는 크기에 따라 investigate와 evidence·rca 가운데 한쪽만 지난다(D149).
 
 ### 3.2 선택 가능한 다음 단계
 
 앱이 `context.md`에 넣는 목록이며, handoff의 `recommended_next`는 이 안에서만 고른다.
 
-- **기본 다음 단계:** 파이프라인 순서상 다음 단계(S면 건너뛰기 반영). verify의 기본 다음 단계는 Work 완료다.
-- **이전 단계:** 파이프라인에서 현재 단계보다 앞의 모든 단계. S 경로에서 건너뛴 evidence와 rca도 포함한다.
+- **기본 다음 단계:** 그 크기의 경로(3.4)에서 다음 단계. verify의 기본 다음 단계는 Work 완료다.
+- **이전 단계:** 그 크기가 고를 수 있는 단계(D149) 가운데 현재 단계보다 앞의 모든 단계. S 경로에서 건너뛴 investigate도 포함한다.
 
 ### 3.3 상태
 
@@ -254,17 +263,32 @@ intake(work-start) → 의도 승인 → evidence → rca → fix → verify →
 
 - 세션이 없어도 유효한 handoff가 있으면 승인 대기나 막힘으로 표시한다. 세션이 끝난 뒤의 막힘(4.4)과 재시작 때 보충한 승인 대기(시나리오 9)가 이 경우다. Stop 없이 세션이 끝날 때도 그때의 파일로 판정한다(D146).
 
-### 3.4 S 빠른 경로
+### 3.4 크기별 경로
 
-S 크기는 `intake → fix → verify`로 간다. evidence와 rca의 일 중 꼭 필요한 재현과 원인은 fix가 짧게 한다.
+| 크기 | 경로 | 고를 수 있는 단계(D149) |
+|---|---|---|
+| S | `intake → fix → verify` | intake, investigate, fix, verify |
+| M | `intake → investigate → fix → verify` | intake, investigate, fix, verify |
+| L | `intake → evidence → rca → fix → verify` | intake, evidence, rca, fix, verify |
 
-- **S 판정 기준(D63, 기본값):** work-start는 아래를 모두 만족할 때만 S를 제안한다. 하나라도 아니면 M이다. 사람이 의도 승인 화면에서 확정한다.
-  - 요청에 재현 방법이 있다
-  - 요청이나 코드를 훑어본 결과로 수정 위치가 한 곳으로 좁혀진다
-  - 비목표나 제약에 걸릴 여지가 없다
+- **M(D147):** 재현과 원인 분석을 한 세션에서 한다. 사람은 `evidence.md`와 `rca.md`를 한 번에 승인한다. 스킬은 evidence와 root-cause를 합친 것이다(5.6.9, D148).
+- **L:** 재현과 원인 분석을 나눠, 사람이 원인 분석 전에 evidence를 본다.
+- **크기 판정 기준(기본값):** work-start가 제안하고 사람이 의도 승인 화면에서 확정한다.
+  - **S(D63):** 아래를 모두 만족할 때만 S다.
+    - 요청에 재현 방법이 있다
+    - 요청이나 코드를 훑어본 결과로 수정 위치가 한 곳으로 좁혀진다
+    - 비목표나 제약에 걸릴 여지가 없다
+  - **L(D150):** S가 아니고 아래 중 하나라도 맞으면 L, 아니면 M이다.
+    - 요청에 재현 방법이 없다
+    - 간헐적이거나 환경·시점·데이터에 달렸다
+    - 코드를 훑어도 후보 위치가 여러 모듈에 걸친다
+- **진행 중에 크기를 바꾸기:** intake로 되감을 때만 한다(6.3). 그 밖에는 고를 수 있는 단계가 크기로 정해진다(D149).
+
+**S 빠른 경로.** evidence와 rca의 일 중 꼭 필요한 재현과 원인은 fix가 짧게 한다.
+
 - **fix(D64):** 먼저 재현을 확인하고, 원인을 짧게 적은 뒤 고친다. `fix.md`에는 `rca와 달라진 점` 대신 `원인과 재현` 절을 쓴다(5.6.7).
 - **verify(D65):** `evidence.md` 대신 `fix.md`의 `원인과 재현` 절의 재현 절차로 첫 완료조건을 판정한다(5.6.8).
-- **S가 아닐 때(D66):** fix가 재현하지 못하거나 원인을 한 곳으로 좁히지 못하면, 발견한 사실을 `fix.md`에 적고 `recommended_next`에 evidence나 rca를 적어 마무리한다. 앱은 멈추고 사람이 단계를 고른다(D23). intent의 `size`는 바꾸지 않는다. 의도 변경은 intake로 되감을 때만 하기 때문이다(6.3).
+- **S가 아닐 때(D66, D149):** fix가 재현하지 못하거나 원인을 한 곳으로 좁히지 못하면, 발견한 사실을 `fix.md`에 적고 `recommended_next`에 investigate를 적어 마무리한다. 앱은 멈추고 사람이 단계를 고른다(D23). intent의 `size`는 바꾸지 않는다. 의도 변경은 intake로 되감을 때만 하기 때문이다(6.3). investigate를 지난 뒤의 fix와 verify는 `context.md`에 `rca.md`와 `evidence.md`가 있으므로 S 경로 문구 대신 보통 경로를 따른다(5.6.7, 5.6.8).
 
 ---
 
@@ -337,7 +361,7 @@ S 크기는 `intake → fix → verify`로 간다. evidence와 rca의 일 중 �
    | 노드 | 문구 |
    |---|---|
    | intake, verify | 산출물과 handoff를 썼습니다. 오른쪽 패널에서 확인하고 [승인]을 누르세요. 고칠 점은 여기에 말해 주세요. |
-   | evidence, rca, fix | 산출물과 handoff를 썼습니다. 오른쪽 패널에서 확인하고 [승인]을 누르세요. 자동 승인이 켜져 있으면 조건을 만족할 때 카운트다운 뒤 승인되고, 멈추려면 [취소]를 누르세요. 고칠 점은 여기에 말해 주세요. |
+   | investigate, evidence, rca, fix | 산출물과 handoff를 썼습니다. 오른쪽 패널에서 확인하고 [승인]을 누르세요. 자동 승인이 켜져 있으면 조건을 만족할 때 카운트다운 뒤 승인되고, 멈추려면 [취소]를 누르세요. 고칠 점은 여기에 말해 주세요. |
 
 5. **앱:** 새 탭에서 실행한다.
    ```
@@ -425,9 +449,9 @@ S 크기는 `intake → fix → verify`로 간다. evidence와 rca의 일 중 �
 ### 시나리오 5. 다음 task로 전환
 
 1. **앱:** 승인을 기록하고 세션을 종료한다. 탭은 읽기 전용이 되고, 터미널 출력을 파일(`tasks/<nn>/pty.log`)로 저장해 앱을 다시 켜도 볼 수 있다.
-2. **앱:** 다음 노드를 정한다. 파이프라인 순서를 따르고, S 크기면 evidence와 rca를 건너뛴다.
+2. **앱:** 다음 노드를 정한다. 그 크기의 경로를 따른다(3.4).
 3. **앱:** "이 단계 끝나면 멈춤"이 켜져 있으면 멈춘다. 아니면 다음 task를 바로 자동 시작한다(시나리오 2).
-4. **에이전트가 이전 단계로 가라고 추천하면**(예: verify가 "fix로", rca가 "evidence로", S 경로의 fix가 "rca로") 자동으로 진행하지 않는다. 멈추고 사람에게 알린다. 사람이 단계를 고르고 추가 지시를 입력하면 시나리오 6의 규칙으로 진행한다(D23).
+4. **에이전트가 이전 단계로 가라고 추천하면**(예: verify가 "fix로", rca가 "evidence로", S 경로의 fix가 "investigate로") 자동으로 진행하지 않는다. 멈추고 사람에게 알린다. 사람이 단계를 고르고 추가 지시를 입력하면 시나리오 6의 규칙으로 진행한다(D23).
 
 ### 시나리오 6. 반려, 되돌아가기, 단계 선택
 
@@ -459,7 +483,8 @@ S 크기는 `intake → fix → verify`로 간다. evidence와 rca의 일 중 �
 - 의도 승인 전에는 [intake 다시]와 [Work 포기]만 할 수 있다.
 - Work 완료는 메뉴에 없다. verify를 거치거나 [Work 포기]를 쓴다.
 - **의도 변경:** intake로 되감는 것만 가능하다. 모든 산출물을 폐기하고, 원래 요청(`request.md`), 현재 승인된 intent, 추가 지시로 다시 시작한다. work-start는 현재 intent를 출발점으로 삼는다(D40).
-- 단계 선택 목록에는 파이프라인의 단계만 있다.
+- 단계 선택 목록에는 그 Work 크기가 고를 수 있는 단계만 있다(D149). 의도 승인 전에는 모든 단계를 보이되 intake만 고를 수 있다.
+- 끝난 k의 기본 다음 단계를 고른 경우만 기본 진행이다. 경로 밖의 단계(S의 investigate)를 고르면 건너뛴 단계가 없어도 건너뛰기다.
 
 ### 시나리오 7. 최종 검증 → Work 완료 → push/PR
 
@@ -629,10 +654,11 @@ S 크기는 `intake → fix → verify`로 간다. evidence와 rca의 일 중 �
 {
   "schema_version": 1,
   "session_limit": 3,
-  "auto_approve": { "evidence": false, "rca": false, "fix": false },
+  "auto_approve": { "investigate": false, "evidence": false, "rca": false, "fix": false },
   "auto_approve_countdown_sec": 15,
   "question_mode": {
-    "work-start": "draft_first", "evidence": "draft_first", "root-cause": "draft_first",
+    "work-start": "draft_first", "investigate": "draft_first",
+    "evidence": "draft_first", "root-cause": "draft_first",
     "fix": "draft_first", "final-verify": "draft_first"
   },
   "pr_draft": false,
@@ -645,7 +671,7 @@ S 크기는 `intake → fix → verify`로 간다. evidence와 rca의 일 중 �
 | 항목 | 기본값 | 뜻 | Work별 덮어쓰기 |
 |---|---|---|---|
 | `session_limit` | 3 | 살아 있는 세션 합계 상한(D18) | 없음 |
-| `auto_approve` | 모두 `false` | 단계별 자동 승인(4.2). intake와 verify는 켤 수 없어 항목이 없다 | 있음 |
+| `auto_approve` | 모두 `false` | 단계별 자동 승인(4.2). intake와 verify는 켤 수 없어 항목이 없다. investigate는 따로 정한다(D151) | 있음 |
 | `auto_approve_countdown_sec` | 15 | 자동 승인 전 카운트다운(4.3). 바꾸면 다음 카운트다운부터 쓴다(D128) | 없음 |
 | `question_mode` | 모두 `draft_first` | 스킬별 질문 방식. `draft_first`(초안 우선) / `confirm_each`(결정마다 확인) (5.6.1) | 있음 |
 | `pr_draft` | `false` | `true`면 draft PR로 만든다(D71) | 없음 |
@@ -770,7 +796,7 @@ KST 서버에서 액세스 토큰이 발급 직후 만료로 판정되는 문제
 | `schema_version` | 앱 | 형식 버전, 현재 1 |
 | `version` | 앱 | intent 버전. 확정할 때마다 1씩 오른다 |
 | `type` | work-start | 업무 유형. MVP에서 허용하는 값은 `bugfix`뿐이다. 업무 유형이 늘어날 것에 대비해 work-start가 요청을 보고 쓴다(D88) |
-| `size` | work-start | `S` / `M` / `L`. S면 evidence와 rca를 건너뛴다. MVP에서 L은 M과 같다. work-start가 제안하고 의도 승인 화면에서 사람이 확정한다 |
+| `size` | work-start | `S` / `M` / `L`. 경로를 정한다(3.4): S는 evidence와 rca를 건너뛰고, M은 둘을 investigate 하나로 합치고, L은 따로 지난다. work-start가 제안하고 의도 승인 화면에서 사람이 확정한다 |
 
 - **본문 절:** `목표`, `비목표`(없으면 "없음"), `원하는 결과`, `완료조건`은 필수다. `제약`과 `추가 의견`은 선택이다.
 - **완료조건:** `- [ ] `로 시작하는 목록이고, 한 줄에 검증 가능한 문장 하나를 쓴다. push/PR은 쓰지 않는다. verify보다 뒤에 일어나는 일이라 verify가 판정할 수 없기 때문이다(D15).
@@ -833,7 +859,7 @@ delivery.succeeded | delivery.failed
 
 ### 5.6 스킬
 
-스킬은 task 하나에서 에이전트가 따르는 절차다. 이 절에는 모든 스킬에 공통인 규칙(질문 규칙, 공통 종료 절차, 배포와 입력)을 적는다. 질문 규칙과 공통 종료 절차의 원본은 `skills/_common.md` 한 파일이다(D99). 스킬별 명세(입력, 결정 지점, 완료조건, 산출물 템플릿)는 5.6.4~5.6.8에 적는다.
+스킬은 task 하나에서 에이전트가 따르는 절차다. 이 절에는 모든 스킬에 공통인 규칙(질문 규칙, 공통 종료 절차, 배포와 입력)을 적는다. 질문 규칙과 공통 종료 절차의 원본은 `skills/_common.md` 한 파일이다(D99). 스킬별 명세(입력, 결정 지점, 완료조건, 산출물 템플릿)는 5.6.4~5.6.9에 적는다.
 
 #### 5.6.1 질문 규칙
 
@@ -913,6 +939,7 @@ knowledge_candidates: []  # 선택. 다음에도 쓸 만한 사실
 
 - **원본:** 앱에 묶어 배포한 `skills/<name>/SKILL.md`와 공통 규칙 `skills/_common.md`(질문 규칙과 종료 절차, D99). 환경 변수 `RELAY_SKILLS_DIR`가 있으면 그 폴더를 원본으로 쓴다. 앱은 task마다 배포한 스킬의 해시를 `work.json`에 적는다(D103).
 - **배포:** task를 시작할 때 앱이 이번 task의 스킬을 Work 디렉터리(`works/<work-id>/`)의 `.claude/skills/relay-<name>/`에 복사하고, `_common.md`를 `SKILL.md` 끝에 붙인다. 다른 relay 스킬 폴더는 지운다(D108). relay는 `--add-dir <work 디렉터리>`로 실행하고, Claude Code는 추가한 디렉터리의 `.claude/skills/`도 읽는다. 그래서 worktree에는 두지 않는다(D32). 이 경로는 deny 규칙으로 편집을 막는다.
+- **합친 스킬(D148):** investigate는 `skills/investigate/SKILL.md`(머리)에 evidence와 root-cause의 본문을 차례로 붙이고 그 끝에 `_common.md`를 붙여 배포한다. 부분의 머리글과, 원본에서 `<!-- solo -->`와 `<!-- /solo -->` 줄로 감싼 단독 구간은 뺀다. 스킬을 단독으로 배포할 때는 표시 줄만 지운다. `skills/check.mjs`도 같은 방식으로 합쳐 크기를 재고 대조한다.
 - **호출:** 모든 relay 스킬은 `disable-model-invocation: true`로 둔다. 스킬은 첫 프롬프트로만 시작한다(D33).
 - **입력:** 첫 프롬프트는 `/relay-<스킬> 이 task의 컨텍스트: <context.md 경로>`다. 스킬은 `context.md`부터 읽는다. `context.md`의 구성은 시나리오 2-4의 표를 따른다. 스킬별로 더 읽는 파일은 스킬별 명세에 적는다.
 - **언어(D98, D102):** 스킬 본문(에이전트에게 주는 지시)은 영어로 쓴다. 에이전트가 사람에게 내보내는 글(질문과 선택지, 산출물과 handoff의 내용)은 한국어로 쓰고, 절 제목과 머리글 필드는 템플릿 그대로 둔다. `pr.md`는 D101을 따른다.
@@ -923,14 +950,14 @@ knowledge_candidates: []  # 선택. 다음에도 쓸 만한 사실
 
 요청을 읽고 사람과 대화해 `intent.draft.md`를 쓴다. 사람은 의도 승인 화면에서 초안을 보고 확정한다. 의도 승인은 항상 수동이다.
 
-- **코드를 바꾸지 않는다.** 코드는 목표와 완료조건을 구체적으로 쓸 만큼만 훑는다. 재현과 원인 추적은 하지 않는다. 그것은 evidence와 rca의 일이다.
+- **코드를 바꾸지 않는다.** 코드는 목표와 완료조건을 구체적으로 쓸 만큼만 훑는다. 재현과 원인 추적은 하지 않는다. 그것은 뒤 단계의 일이다.
 - **결정 지점:** 범위(비목표), 완료조건, 규모(`size`). 사람이 정할 결정은 없다(D36).
   - 초안 우선이면 기대 동작처럼 모르면 초안을 쓸 수 없는 것만 묻는다.
   - 결정마다 확인이면 세 결정 지점을 초안을 쓰기 전에 묻는다.
 - **완료조건:** 기본 항목과 테스트 명령 규칙은 5.3을 따른다(D37).
 - **사람의 의심 지점:** 요청에 있으면 intent의 `추가 의견`에 "(사람 추정, 확인 안 됨)"으로 옮긴다(D39).
 - **에이전트의 가설:** intent에 쓰지 않는다. handoff의 "다음 task가 알아야 할 것"에 참고로만 적는다.
-- **규모:** 초안에 `size`를 제안하고, 근거는 handoff `decisions`에 적는다(D42). S 제안 기준은 3.4를 따른다(D63).
+- **규모:** 초안에 `size`를 제안하고, 근거는 handoff `decisions`에 적는다(D42). S와 L 제안 기준은 3.4를 따른다(D63, D150).
 - **형식 검사:** 앱이 초안을 handoff와 같은 방식으로 검사한다(D38).
 
 **입력**
@@ -1001,7 +1028,7 @@ size:          # S | M | L. S 기준은 3.4
 evidence의 관찰 사실을 바탕으로 원인을 찾고 근거를 `rca.md`에 쓴다.
 
 - **코드를 바꾸지 않는다.** 원인을 확인하려고 임시로 바꾼 코드는 마무리할 때 되돌린다(5.6.2).
-- **입력:** `context.md`와 `evidence.md`(경로). S 경로에서는 rca를 건너뛴다(3.4).
+- **입력:** `context.md`와 `evidence.md`(경로). rca는 L 경로에서만 따로 지난다(3.4). M 경로에서는 investigate의 2부로 한다(5.6.9).
 - **결정 지점:** 원인 선택, 수정 방향. 질문 방식이 결정마다 확인이면 확정하기 전에 묻는다.
 - **원인 확정 기준(D49):** 원인은 재현되는 조건과 재현되지 않는 조건을 모두 설명해야 한다. 할 수 있으면 실험으로 확인한다(예: 임시로 코드를 바꿔 재현이 사라지는지 본다). 실험을 못 했으면 `assumptions`에 적는다.
 - **사람 추정(D48):** intent `추가 의견`의 사람 추정은 반드시 판정한다. 맞음 / 틀림 / 판단 불가 중 하나를 근거와 함께 적는다. 틀리면 handoff `rejected`에도 적는다.
@@ -1043,16 +1070,16 @@ evidence의 관찰 사실을 바탕으로 원인을 찾고 근거를 `rca.md`에
 
 rca의 수정 방향에 따라 코드를 고치고 커밋한다. 변경 요약은 `fix.md`에 쓴다. 파이프라인에서 코드를 바꾸는 단계는 fix 하나다.
 
-- **입력:** `context.md`, `rca.md`(경로), 필요하면 `evidence.md`(경로). S 경로에서는 `evidence.md`와 `rca.md`가 없고, 입력은 `context.md`뿐이다.
+- **입력:** `context.md`, `rca.md`(경로), 필요하면 `evidence.md`(경로). S 경로(`size: S`이고 `context.md`에 `rca.md`가 없음)에서는 입력이 `context.md`뿐이다. S Work가 investigate로 되돌아갔다 오면 `rca.md`가 있으므로 보통 경로를 따른다(점검 A33).
 - **S 경로(D64, D66):**
   - 고치기 전에 재현을 확인하고 원인을 짧게 적는다. 결과는 `fix.md`의 `원인과 재현` 절에 쓴다. 이 절은 `rca와 달라진 점` 대신 쓴다.
   - intent `추가 의견`의 사람 추정은 이 절에서 판정한다(D48과 같은 방식).
-  - 재현이 안 되거나 원인이 한 곳으로 좁혀지지 않으면, 발견한 사실을 이 절에 적고 `recommended_next`에 evidence나 rca를 적어 마무리한다. `size`는 바꾸지 않는다.
+  - 재현이 안 되거나 원인이 한 곳으로 좁혀지지 않으면, 발견한 사실을 이 절에 적고 `recommended_next`에 investigate를 적어 마무리한다(D149). `size`는 바꾸지 않는다.
 - **[현재 코드 위에서 이어서](6.2)로 들어온 경우:** 기존 커밋 위에 이어서 고친다.
 - **결정 지점:** 구현 방식(수정 방향 안에서 어떻게 고칠지). 질문 방식이 결정마다 확인이면 코드를 바꾸기 전에 묻는다.
 - **재현 테스트(D53):** 할 수 있으면 항상 추가한다. 수정 전에 실패하고 수정 후에 통과하는 것을 확인한다. 추가할 수 없으면(예: UI 동작, 외부 서비스 필요) 이유를 `fix.md`와 `risks`에 적는다.
 - **커밋(D54):** 커밋 수는 제한하지 않고, 메시지는 레포 관례를 따른다. 마무리할 때 변경을 모두 커밋한다(5.6.2).
-- **rca가 틀렸음을 알았을 때(D55):** 발견한 사실을 `fix.md`의 `rca와 달라진 점`에 적고, `recommended_next: {node: rca, reason}`으로 마무리한다. 앱은 멈추고 사람에게 알린다(D23). 원인은 같고 수정 지점만 다르면 fix가 정하고 `decisions`에 적는다.
+- **rca가 틀렸음을 알았을 때(D55):** 발견한 사실을 `fix.md`의 `rca와 달라진 점`에 적고, `recommended_next: {node: rca, reason}`으로 마무리한다. M 경로처럼 `rca.md`를 investigate가 썼으면 node는 investigate다. 앱은 멈추고 사람에게 알린다(D23). 원인은 같고 수정 지점만 다르면 fix가 정하고 `decisions`에 적는다.
 - **기존 테스트를 고쳐야 할 때(D56):** 고치고 `risks`에 적는다. `fix.md`의 `변경 요약`에는 기존 테스트 변경을 따로 표시한다. 약화인지는 verify가 완료조건으로 판정한다.
 - **테스트 실행(D57):** intent 완료조건의 테스트 명령을 실행한다. 실패가 있으면 기준 커밋(`context.md`, D97)에서도 실패하던 것인지 확인해 구분한다.
 
@@ -1100,7 +1127,7 @@ S 경로에서는 `rca와 달라진 점` 대신 아래 절을 쓴다.
 intent의 완료조건마다 판정하고 `verification.md`와 PR 초안 `pr.md`를 쓴다. verify 승인 화면이 곧 Work 완료 화면이고, 항상 수동이다.
 
 - **코드를 바꾸지 않는다.** 실험용 변경은 마무리할 때 되돌린다(5.6.2).
-- **입력:** `context.md`, `evidence.md`와 `fix.md`(경로). 필요하면 `rca.md`(경로)도 읽는다. S 경로에서는 `evidence.md` 대신 `fix.md`의 `원인과 재현` 절의 재현 절차를 쓴다. 재현 절차도 재현 테스트도 없으면 첫 완료조건은 판정 불가다(D65).
+- **입력:** `context.md`, `evidence.md`와 `fix.md`(경로). 필요하면 `rca.md`(경로)도 읽는다. S 경로(`size: S`이고 `context.md`에 `evidence.md`가 없음)에서는 `evidence.md` 대신 `fix.md`의 `원인과 재현` 절의 재현 절차를 쓴다. 재현 절차도 재현 테스트도 없으면 첫 완료조건은 판정 불가다(D65).
 - **결정 지점:** 각 완료조건의 판정. 질문 방식이 결정마다 확인이면 판정을 확정하기 전에 묻는다.
 - **판정 방식(D58):** 모든 완료조건을 verify가 직접 다시 실행해 판정한다. 재현 절차, 재현 테스트, 테스트 명령을 모두 실행한다. `fix.md`의 결과는 비교용으로만 본다.
 - **판정 값(D59):** 통과 / 실패 / 판정 불가. 판정 불가에는 이유를 적고, 참고할 사실이 있으면 함께 적는다(예: 재현하지 못한 Work에서 재현 테스트는 통과). 재현 없이 진행한 Work(D45)의 "재현 절차가 더 이상 실패하지 않는다"는 판정 불가다.
@@ -1108,7 +1135,7 @@ intent의 완료조건마다 판정하고 `verification.md`와 PR 초안 `pr.md`
 - **사람이 정할 결정**
   - **약화 의심이 있을 때(D60):** 어떤 테스트를 어떻게 바꿨는지 보여 주고 묻는다. 사람이 약화가 아니라고 하면 "기존 테스트를 약화하거나 삭제하지 않는다"는 통과, 약화라고 하면 실패다.
   - **실패나 판정 불가가 있을 때(D61):** 둘 중에서 고르게 한다.
-    - 되돌아간다: `recommended_next`에 돌아갈 이전 단계(주로 fix나 rca)를 적는다. 앱은 멈추고 사람이 단계를 고른다(D23).
+    - 되돌아간다: `recommended_next`에 돌아갈 이전 단계(주로 fix, 또는 `rca.md`를 쓴 rca나 investigate)를 적는다. 앱은 멈추고 사람이 단계를 고른다(D23).
     - 이대로 완료 화면으로 간다: `recommended_next: null`. Work 완료 화면에 경고가 표시된다.
 
 **완료조건** (모두 채우면 `awaiting_approval`로 마무리)
@@ -1150,6 +1177,19 @@ intent의 완료조건마다 판정하고 `verification.md`와 PR 초안 `pr.md`
 - 앱은 `pr.md`의 첫 줄(`# ` 뒤)을 PR 제목으로, 나머지를 본문으로 쓴다. 첫 줄이 `# `로 시작하지 않으면 형식 오류다.
 - **언어와 구성(D101):** 레포 관례(최근 커밋과 PR)의 언어로 쓴다. 레포에 PR 템플릿이 있으면 그 구성을 따르고, 없으면 위 네 절을 그 언어로 쓴다.
 
+#### 5.6.9 investigate (M 경로)
+
+evidence(5.6.5)와 root-cause(5.6.6)의 일을 한 세션에서 한다(D147). 1부에서 버그를 재현하고 `evidence.md`를 쓰고, 2부에서 그 관찰 사실로 원인을 찾아 `rca.md`를 쓴다. 스킬은 앱이 배포할 때 합친다(5.6.3, D148). 이 절에는 합칠 때의 규칙만 적고, 두 부분의 규칙은 5.6.5와 5.6.6을 따른다.
+
+- **입력:** `context.md`. 요청 원문이 필요하면 `request.md` 경로를 읽는다. 2부는 1부에서 쓴 `evidence.md`를 읽는다.
+- **차례:** 1부를 마치고 마무리하지 않는다(handoff와 마무리 안내 문구 없음). 2부를 마친 뒤 한 번 마무리하고, handoff 하나에 두 부분의 `decisions`, `assumptions`, `rejected`를 담는다.
+- **산출물을 나눈다:** `evidence.md`에는 출처 있는 관찰 사실만 적는다. 가설과 원인은 `rca.md`에 적는다.
+- **재현이 안 될 때(D45):** "재현 없이 진행"은 관찰 사실만으로 2부로 가는 것이다. "`blocked`로 마무리"는 2부 없이 task 전체를 막힘으로 끝낸다.
+- **질문:** 두 부분의 결정 지점과 사람이 정할 결정이 모두 적용된다. 1부의 질문은 1부에서 묻고 2부와 모으려고 미루지 않는다.
+- **코드를 바꾸지 않는다.** 실험용 변경은 마무리할 때 되돌린다(5.6.2).
+
+**완료조건:** 5.6.5와 5.6.6의 완료조건을 모두 채운다. **산출물 템플릿:** `tasks/<nn>-investigate/`에 5.6.5의 `evidence.md`와 5.6.6의 `rca.md`.
+
 ---
 
 ## 6. 벤더 연동 (Claude Code)
@@ -1159,7 +1199,7 @@ intent의 완료조건마다 판정하고 `verification.md`와 PR 초안 `pr.md`
 | 실행 | `claude --dangerously-skip-permissions --session-id <uuid> --add-dir <work dir> --settings <task 설정> "<짧은 첫 프롬프트>"` |
 | 재개 | 같은 설정(`--dangerously-skip-permissions`, `--add-dir`, `--settings`) + `--resume <uuid>`. `--session-id`와 첫 프롬프트는 뺀다(이전 옵션이 복원된다고 가정하지 않음, 스파이크 S6) |
 | 컨텍스트 | `tasks/<nn>/context.md` + 첫 프롬프트에 경로 |
-| 스킬 배포 | 이번 task의 스킬만 Work 디렉터리 `.claude/skills/relay-<name>/`로 복사(`--add-dir`로 읽힘, D108). 복사할 때 공통 규칙(`_common.md`)을 `SKILL.md` 끝에 붙임. `disable-model-invocation: true` |
+| 스킬 배포 | 이번 task의 스킬만 Work 디렉터리 `.claude/skills/relay-<name>/`로 복사(`--add-dir`로 읽힘, D108). 복사할 때 공통 규칙(`_common.md`)을 `SKILL.md` 끝에 붙임. investigate는 evidence와 root-cause를 합쳐 배포(D148). `disable-model-invocation: true` |
 | 상태 신호 | 내장 HTTP 훅 → 앱 로컬 서버: UserPromptSubmit, Stop, Notification, SessionEnd, PreToolUse·PostToolUse(`AskUserQuestion`) |
 | 형식 오류 되돌림 | Stop 훅 응답 `{"decision":"block","reason":…}`, 연속 2회까지(설정 가능) |
 | 제한 | deny 규칙: `Bash(git push*)`, `Bash(gh pr*)`, 앱 소유 파일 `Edit(//…)`. 실수를 막는 장치이며 우회할 수 있다(6.1) |

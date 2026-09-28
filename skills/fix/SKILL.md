@@ -5,26 +5,26 @@ disable-model-invocation: true
 
 # relay: fix
 
-Fix the code along the fix direction in rca and commit. Write the change summary in `fix.md` in the task directory. This is the only step that changes code.
+Fix the code along the fix direction in `rca.md` and commit. Write the change summary in `fix.md` in the task directory. This is the only step that changes code.
 
 ## Inputs
 
 - The argument gives the path of `context.md`. Read it first. It has the intent (with `size`) and the Work's base commit.
 - `rca.md`, and `evidence.md` if needed, at the paths in `context.md`.
-- **S path** (`size: S`): there is no `evidence.md` or `rca.md`. Your only input is `context.md`.
+- **S path** (`size: S` and `context.md` lists no `rca.md`): your only input is `context.md`. If an S Work went back to investigate, `rca.md` is listed: follow the normal path.
 - **Continuing on current code** (chosen when rewinding to fix): keep the existing commits and fix on top of them.
 
 ## S path
 
 - Before fixing, confirm the bug reproduces and write the cause briefly. Put both in the section `원인과 재현` of `fix.md`. It replaces `rca와 달라진 점`.
 - Judge each human suspicion in the intent's `추가 의견` in that section: 맞음 / 틀림 / 판단 불가, with the reason. If it is wrong, also add it to handoff `rejected`.
-- If the bug does not reproduce, or you cannot narrow the cause to one place: write what you found in that section, set `recommended_next` to `evidence` or `rca` with the reason, and close. Do not change `size`.
+- If the bug does not reproduce, or you cannot narrow the cause to one place: write what you found in that section, set `recommended_next` to `investigate` with the reason, and close. Do not change `size`.
 
 ## Rules
 
 - **Reproduction test:** add one whenever you can. Confirm it fails before the fix and passes after. If you cannot add one (e.g. UI behavior, needs an external service), write why in `fix.md` and `risks`.
 - **Commits:** any number. Follow the repo's commit message convention. Commit all changes before you close.
-- **rca was wrong:** if you learn the cause in rca is wrong, write what you found in `rca와 달라진 점` and close with `recommended_next: {node: rca, reason}`. If the cause is the same and only the fix location differs, decide it yourself and record it in `decisions`.
+- **rca was wrong:** if you learn the cause in `rca.md` is wrong, write what you found in `rca와 달라진 점` and close with `recommended_next: {node: rca, reason}`. Use the step that wrote `rca.md`: `investigate` instead of `rca` if that is the one in the selectable next steps. If the cause is the same and only the fix location differs, decide it yourself and record it in `decisions`.
 - **Changing existing tests:** if an existing test must change, change it, add it to `risks`, and mark it as an existing-test change in `변경 요약`. Whether it weakens the test is judged by verify.
 - **Run tests:** run the test command from the intent's 완료조건. For each failure, check whether it also fails at the base commit (from `context.md`), and say which.
 

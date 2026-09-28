@@ -136,7 +136,7 @@ describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
     const at = (node: 'intake' | 'evidence' | 'verify', stop: WorkState['stop']): WorkState => ({
       ...work,
       status: 'stopped',
-      intent: { version: 1, size: 'M' },
+      intent: { version: 1, size: 'L' },
       tasks: work.tasks.map((t) => ({ ...t, node })),
       stop,
     })

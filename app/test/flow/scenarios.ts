@@ -1,5 +1,5 @@
 // 가짜 claude의 시나리오 (8.2). 스킬마다 단계 목록을 둔다. 산출물과 handoff는 5.2~5.6의 모양이다.
-import type { Handoff, NodeName } from '../../src/shared/contracts'
+import type { Handoff, NodeName, Size } from '../../src/shared/contracts'
 import type { SkillName } from '../../src/shared/config'
 
 export type Step =
@@ -58,7 +58,7 @@ export const REQUEST = [
 
 // ---------- 산출물 ----------
 
-export function intentDraft(size: 'S' | 'M' | 'L', opts: { omit?: string[]; note?: string } = {}) {
+export function intentDraft(size: Size, opts: { omit?: string[]; note?: string } = {}) {
   const sections: [string, string][] = [
     ['목표', '빈 배열의 평균이 NaN이 되는 문제를 고친다.'],
     ['비목표', '- 없음'],
@@ -206,7 +206,7 @@ export const FIXED_FILES = {
 
 const decision = (what: string, by: 'ai' | 'human' = 'ai') => ({ what, why: `${what}인 이유`, by })
 
-export function steps(node: NodeName, size: 'S' | 'M' = 'M'): Step[] {
+export function steps(node: NodeName, size: Size = 'L'): Step[] {
   switch (node) {
     case 'intake':
       return [
@@ -231,6 +231,24 @@ export function steps(node: NodeName, size: 'S' | 'M' = 'M'): Step[] {
             decisions: [decision('재현 명령은 node -e', 'human')],
             rejected: ['캐시 가설: 캐시가 없음'],
             summary: '재현됨.',
+          }),
+        },
+        { do: 'stop' },
+      ]
+    case 'investigate':
+      // evidence와 rca를 한 세션에서 한다 (D147). 1부의 질문 하나, 산출물 둘, handoff 하나
+      return [
+        { do: 'prompt' },
+        { do: 'ask', question: '재현 방법' },
+        { do: 'write', file: 'evidence.md', text: EVIDENCE },
+        { do: 'write', file: 'rca.md', text: RCA },
+        {
+          do: 'write',
+          file: 'handoff.md',
+          text: handoff({
+            decisions: [decision('재현 명령은 node -e', 'human'), decision('원인은 0으로 나눔')],
+            rejected: ['캐시 가설: 캐시가 없음', 'reduce 초기값 누락: 초기값이 있음'],
+            summary: '재현됨. 원인은 0으로 나눔.',
           }),
         },
         { do: 'stop' },
@@ -276,14 +294,15 @@ export function steps(node: NodeName, size: 'S' | 'M' = 'M'): Step[] {
   }
 }
 
-/** M 경로(intake → evidence → rca → fix → verify)나 S 경로(intake → fix → verify)의 기본 시나리오 */
-export function scenario(
-  size: 'S' | 'M',
-  override: Partial<Record<SkillName, Step[]>> = {},
-): Scenario {
+/**
+ * 크기별 경로의 기본 시나리오 (3.4): L은 intake → evidence → rca → fix → verify, M은 intake → investigate → fix →
+ * verify, S는 intake → fix → verify
+ */
+export function scenario(size: Size, override: Partial<Record<SkillName, Step[]>> = {}): Scenario {
   return {
     tasks: {
       'work-start': steps('intake', size),
+      investigate: steps('investigate', size),
       evidence: steps('evidence', size),
       'root-cause': steps('rca', size),
       fix: steps('fix', size),

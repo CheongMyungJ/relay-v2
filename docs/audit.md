@@ -975,6 +975,8 @@ core는 `core/settings.ts`를 빼면 줄 95% 이상, 가지 84% 이상이다(`ma
 | A24 | 고침 | Stop 없이 세션이 끝나면 main이 그때의 파일로 다시 검사해, 유효한 handoff면 승인 대기나 막힘으로 둔다(`core/machine.ts` sessionEnded, `main/work.ts`의 SessionEnd와 onExit가 checkNow를 부름). 알림은 "승인 대기"이고 `task.awaiting_approval`에 `reason: session_ended`를 남긴다. 이 경로는 자동 승인하지 않는다. [즉시 중단]과 앱 종료는 그대로다. 시험 `test/unit/machine.test.ts`, `test/flow/flow.test.ts`(handoff를 쓰고 Stop 없이 끝나는 가짜 claude). 점검 기록의 "같은 파일로 앱을 다시 켜면 승인 대기가 된다"는 세션이 살아 있는 채 앱이 충돌한 경우만 맞았다. 세션이 끝난 뒤에는 다시 켜도 세션 종료였다 | D146, I38 | 0f62f2c, 9d02a55 |
 | A25 | 나중에 | 바꾸지 않았다. 설계 9절 추가 후보에 적었다(알림, 강조 배지, [재개] 안내). 지금도 원인을 치운 뒤 [재개]를 누르면 한 번도 띄우지 못한 단계는 새 세션으로 시작한다(D135의 [흐름] 시험). 패널 안내는 [즉시 중단]과 같은 "중단됨. [재개]하면 이어서 합니다."이고 오류 줄이 그 아래에 보인다 | — | 386a846 |
 | A79 | 고침(시험) | app-ci의 Windows 작업이 [어댑터] 전에 앱을 빌드한다(`npm run build`, `.github/workflows/app-ci.yml`). app-build #15에서 실패한 것과 같은 명령이라, 이름을 고치기 전이었다면 push마다 잡았다. 같은 모양은 [단위] `test/unit/files.test.ts`도 막는다(fb088f6). 사람이 정함: PR #10에 넣는다 | I39 | b0c7b85 |
+| A33 | 고침(스킬 문구) | 크기별 경로(D147~D151)에서 함께 고쳤다. D149로 S의 fix가 되돌아갈 곳이 investigate가 되어, fix·final-verify의 S 경로 문구를 "`size: S`이고 `context.md`에 `rca.md`(`evidence.md`)가 없을 때"로 좁혔다. `skills/check.mjs`가 문구를 본다. 시험 `test/flow/rewind.test.ts`(S Work가 investigate로 되돌아간 뒤 fix의 `context.md`에 `rca.md`가 있음). 실제 에이전트가 문구를 따르는지는 [실제]에서 본다 | D149 | 크기별 경로 PR |
+| A42 | 고침 | 크기별 경로에서 함께 고쳤다. 기본 진행은 끝난 k의 기본 다음 단계를 고른 경우뿐이다. 경로 밖의 단계(S의 investigate)를 고르면 건너뛴 단계가 없어도 건너뛰기다(`core/rewind.ts` planStep). 시험 `test/unit/rewind.test.ts`. 옛 판정으로 돌리면 실패하는 것을 확인했다 | — | 크기별 경로 PR |
 
 ## 부록. 1단계 대조표
 

@@ -1,6 +1,6 @@
 // 승인의 판정: 수동 승인 (4.1, D90, D112), 자동 승인의 방식과 조건 (4.2, 4.3, D72, D129), 사이드바 배지의
 // 우선순위 (D80). machine의 승인과 자동 승인 카운트다운, 승인 화면의 버튼이 같은 판정을 쓴다.
-import type { AppConfig, WorkSettings } from '../shared/config'
+import type { AppConfig, AutoApproveNode, WorkSettings } from '../shared/config'
 import type { Handoff, NodeName, Size } from '../shared/contracts'
 import type { ApprovalGate, Badge, BadgeKind } from '../shared/views'
 import type {
@@ -11,6 +11,7 @@ import type {
   TaskStatus,
   WorkState,
 } from '../shared/work'
+import { AUTO_APPROVE_NODES } from './config'
 import { defaultNext } from './pipeline'
 import { INTENT_DRAFT_FILE, isValid } from './validate'
 
@@ -63,13 +64,18 @@ export function approvalGate(
 
 export type ApprovalMode = 'manual' | 'auto'
 
+/** 자동 승인을 켤 수 있는 노드인가. intake(의도 승인)와 verify(Work 완료)는 늘 수동이다 (4.2) */
+export function autoApprovable(node: NodeName): node is AutoApproveNode {
+  return (AUTO_APPROVE_NODES as readonly NodeName[]).includes(node)
+}
+
 /** 승인 방식. intake와 verify는 항상 수동이고, 나머지는 Work 설정, 앱 설정 순서로 본다 (4.2, D72) */
 export function approvalMode(
   config: AppConfig,
   settings: WorkSettings,
   node: NodeName,
 ): ApprovalMode {
-  if (node !== 'evidence' && node !== 'rca' && node !== 'fix') return 'manual'
+  if (!autoApprovable(node)) return 'manual'
   return (settings.auto_approve?.[node] ?? config.auto_approve[node]) ? 'auto' : 'manual'
 }
 

@@ -11,7 +11,7 @@ Judge each 완료조건 of the intent and write `verification.md` and the PR dra
 
 - The argument gives the path of `context.md`. Read it first. It has the intent and the Work's base commit.
 - `evidence.md` and `fix.md`, and `rca.md` if needed, at the paths in `context.md`.
-- **S path** (`size: S`): there is no `evidence.md`. Use the reproduction steps in the `원인과 재현` section of `fix.md` instead. If there are neither reproduction steps nor a reproduction test, the first 완료조건 is 판정 불가.
+- **S path** (`size: S` and `context.md` lists no `evidence.md`): use the reproduction steps in the `원인과 재현` section of `fix.md` instead. If there are neither reproduction steps nor a reproduction test, the first 완료조건 is 판정 불가.
 
 ## Rules
 
@@ -30,7 +30,7 @@ Ask on the spot:
 
 - **A test change looks like weakening:** show which test changed and how. If the human says it is not weakening, "기존 테스트를 약화하거나 삭제하지 않는다" is 통과. If they say it is, it is 실패.
 - **Any 실패 or 판정 불가:** let the human choose:
-  - Go back: set `recommended_next` to the earlier step to return to (usually fix or rca). The app stops and the human picks the step.
+  - Go back: set `recommended_next` to the earlier step to return to (usually fix, or the step that wrote `rca.md`). The app stops and the human picks the step.
   - Go to the completion screen as is: `recommended_next: null`. The screen shows a warning.
 
 ## Done when
