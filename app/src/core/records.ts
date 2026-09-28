@@ -48,6 +48,16 @@ export function workBranch(workId: string): string {
   return `relay/${workId}`
 }
 
+/**
+ * worktree가 Work 브랜치에 있지 않을 때의 오류 (D138). 전달과 되감기는 Work 브랜치를 옮기므로 HEAD가 그 브랜치에
+ * 있어야 사람이 본 코드를 다룬다. 있으면 null. current가 null이면 분리된 HEAD다
+ */
+export function offWorkBranch(workId: string, current: string | null): string | null {
+  const branch = workBranch(workId)
+  if (current === branch) return null
+  return `worktree가 Work 브랜치에 있지 않음(지금: ${current ?? '분리된 HEAD'}). worktree에서 \`git switch ${branch}\`로 돌아온 뒤 다시 누르세요`
+}
+
 /** 이 날짜의 다음 work-id. taken은 이미 쓰인 id다(Work 디렉터리, relay/<work-id> 브랜치) */
 export function nextWorkId(at: string, taken: Iterable<string>): string {
   const used = new Set(taken)

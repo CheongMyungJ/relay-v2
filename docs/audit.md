@@ -924,6 +924,7 @@ core는 `core/settings.ts`를 빼면 줄 95% 이상, 가지 84% 이상이다(`ma
 | A3 | 고침 | intake에서 handoff의 status를 읽지 못하면 초안 없음도 오류로 넣어 [오류 무시하고 승인]을 막는다(`core/validate.ts`). 시험 `test/unit/approval.test.ts` | D134 | 965e641 |
 | A4 | 고침 | 코드를 되돌리다 실패했는데 코드가 이미 바뀌었으면 끊긴 되감기로 남기고 알린다(`main/work.ts` resetCode, `core/machine.ts` rewind.failed의 cut). 시험 `test/unit/machine.test.ts`, `test/unit/review.test.ts`, `test/flow/rewind.test.ts`(Linux의 `chattr`, root만). Windows의 잠긴 파일은 3단계에 남긴다(1.3) | D136, I36 | ac5ac35 |
 | A5 | 고침 | 정리 세션이 열린 동안(대기열 포함) [단계 선택], [재개]·[세션 재개], [이 단계 새 세션으로 다시], 승인·[완료만], [Work 포기]를 끄고 main도 거부한다. [정리 세션 닫기]를 더했다(전달 없이 세션만 끝냄). `core/delivery.ts` cleanupActions, `main/work.ts`, IPC, `Panel.tsx`. 시험 `test/flow/delivery.test.ts`, `test/unit/delivery.test.ts`. 새 버튼의 화면은 [스모크]에 없다 | D137 | 004c0e4 |
+| A6 | 고침 | 전달과 되감기 전에 HEAD가 Work 브랜치인지 보고, 아니면 멈추고 `git switch`를 알린다. 끊긴 되감기의 [다시 시도]는 끊긴 채로 둔다(`adapters/git.ts` currentBranch, `core/records.ts` offWorkBranch, `main/work.ts`). 시험 `test/flow/delivery.test.ts`, `rewind.test.ts`, `recovery.test.ts` | D138 | (이 커밋) |
 
 ## 부록. 1단계 대조표
 

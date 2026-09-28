@@ -728,6 +728,36 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
     },
   )
 
+  it('worktree가 Work 브랜치에 있지 않으면 코드를 되돌리지 않고 기록을 지운다 (D138)', async () => {
+    const s = await setup({
+      tasks: { ...scenario('S').tasks, 'final-verify': [...steps('verify', 'S'), { do: 'wait' }] },
+    })
+    const key = await s.create()
+    const dir = s.dir(key)
+    const tree = s.tree(key)
+    await drive(s.h.relay, s.h.ui, key, { size: 'S', pauseAt: (t) => t.node === 'verify' })
+    await settle(s.h, key)
+    const fixHead = git(tree, 'rev-parse', 'HEAD')
+    const branch = git(tree, 'symbolic-ref', '--short', 'HEAD')
+    git(tree, 'checkout', '--quiet', '--detach')
+
+    const p = await preview(s, key, 'fix')
+    const r = await confirm(s, key, p)
+    expect(r).toEqual({
+      ok: false,
+      error: `되감기 실패: worktree가 Work 브랜치에 있지 않음(지금: 분리된 HEAD). worktree에서 \`git switch ${branch}\`로 돌아온 뒤 다시 누르세요`,
+    })
+    await settle(s.h, key)
+    expect(work(dir).operation).toBeUndefined()
+    expect(git(tree, 'rev-parse', 'HEAD')).toBe(fixHead)
+    expect(git(s.repo, 'rev-parse', branch)).toBe(fixHead)
+    expect(git(s.repo, 'branch', '--list', 'relay/*-discarded-*')).toBe('')
+
+    git(tree, 'switch', '--quiet', branch)
+    const again = await preview(s, key, 'fix')
+    expect(await confirm(s, key, again)).toEqual({ ok: true })
+  })
+
   it('git이 실패하면 오류를 돌려주고 기록을 지운다. 다시 고르면 다음 번호의 백업 브랜치를 만든다 (D77, D115)', async () => {
     const s = await setup({
       tasks: { ...scenario('S').tasks, 'final-verify': [...steps('verify', 'S'), { do: 'wait' }] },

@@ -33,6 +33,7 @@ import {
   statusLines,
   treeOf,
   worktreeTree,
+  currentBranch,
 } from '../adapters/git'
 import type { HookReply, HookRequest, HookServer } from '../adapters/hooks'
 import { processStartTime, startPty, type PtySession } from '../adapters/pty'
@@ -85,7 +86,13 @@ import {
   stoppedVerify,
 } from '../core/delivery'
 import { NODE_INFO } from '../core/pipeline'
-import { confirmedIntent, decisionsBlock, decisionsWithout, workBranch } from '../core/records'
+import {
+  confirmedIntent,
+  decisionsBlock,
+  decisionsWithout,
+  offWorkBranch,
+  workBranch,
+} from '../core/records'
 import {
   OPERATION_BLOCKS,
   OWNED_FILES,
@@ -1181,6 +1188,8 @@ export class WorkRunner {
     let branch: string | null
     let commit: string | null = null
     try {
+      const off = await this.offBranch()
+      if (off) throw new Error(off)
       head = await headCommit(this.worktree, opts)
       dirty = (await statusLines(this.worktree, opts)).length > 0
       const commits = head === e.to ? 0 : await countCommits(this.worktree, e.to, 'HEAD', opts)
@@ -1237,6 +1246,12 @@ export class WorkRunner {
     }
   }
 
+  /** worktree가 Work 브랜치에 있지 않으면 그 오류 (D138) */
+  private async offBranch(): Promise<string | null> {
+    const current = await currentBranch(this.worktree, { env: this.ctx.env })
+    return offWorkBranch(this.work.work_id, current)
+  }
+
   private async rewindFailed(err: unknown, cut = false): Promise<void> {
     this.rewindError = `되감기 실패: ${message(err)}`
     this.problem(this.rewindError)
@@ -1260,6 +1275,12 @@ export class WorkRunner {
     let dirty: boolean
     let made: MadeBackup | null
     let extra: { branch: string; commit: string } | null = null
+    // 끊긴 되감기는 코드를 이미 되돌렸을 수 있어 Work 브랜치가 아니면 끊긴 채로 둔다 (D138, D136)
+    const off = await this.offBranch().catch((err: unknown) => message(err))
+    if (off) {
+      await this.rewindFailed(new Error(off), true)
+      return
+    }
     try {
       const head = await headCommit(this.worktree, opts)
       dirty = (await statusLines(this.worktree, opts)).length > 0
@@ -1361,6 +1382,12 @@ export class WorkRunner {
     }
     if (this.cleanup && this.cleanup.status !== 'ended') {
       return { ok: false, error: '정리 세션이 열려 있음. [정리 끝 → push/PR 진행]을 누르세요' }
+    }
+    try {
+      const off = await this.offBranch()
+      if (off) return { ok: false, error: off }
+    } catch (e) {
+      return { ok: false, error: `Work 브랜치를 확인하지 못함: ${message(e)}` }
     }
     let lines: string[]
     try {

@@ -563,6 +563,31 @@ describe('[흐름] 끊긴 되감기 (M6, 시나리오 9-4, D116, D121~D123)', ()
     expect(done, s.h.ui.dump()).toMatchObject({ status: 'completed' })
   })
 
+  it('끊긴 되감기의 [다시 시도]는 worktree가 Work 브랜치에 있지 않으면 하지 않고 끊긴 채로 둔다 (D138)', async () => {
+    const s = await setup(recommendFix())
+    await toStopped(s)
+    const head = git(s.tree, 'rev-parse', 'HEAD')
+    const b = await before(s.h, s)
+    const { rewinding } = await rewindStarted(s, b)
+    await crash(s.h, [{ w: s, work: rewinding, events: b.events }])
+    git(s.tree, 'checkout', '--quiet', '--detach')
+
+    expect(await s.h.relay.retryOperation(s.key)).toEqual({
+      ok: false,
+      error: `되감기 실패: worktree가 Work 브랜치에 있지 않음(지금: 분리된 HEAD). worktree에서 \`git switch ${s.branch}\`로 돌아온 뒤 다시 누르세요`,
+    })
+    await settle(s.h, s.key)
+    expect(workOf(s).operation?.interrupted_at).toBeDefined()
+    expect(view(s.h, s).badge.kind).toBe('recovery')
+    expect(backups(s)).toEqual([])
+    expect(git(s.tree, 'rev-parse', 'HEAD')).toBe(head)
+
+    git(s.tree, 'switch', '--quiet', s.branch)
+    expect(await s.h.relay.retryOperation(s.key)).toEqual({ ok: true })
+    await settle(s.h, s.key)
+    expect(workOf(s).operation).toBeUndefined()
+  })
+
   it('[무시]는 기록만 지운다. 코드와 task는 그대로이고, 다시 단계를 골라 끝까지 간다', async () => {
     const s = await setup(recommendFix())
     await toStopped(s)
