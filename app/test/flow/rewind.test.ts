@@ -2,9 +2,12 @@
 // verify에서 fix로 되감아 Work 완료까지(백업 브랜치), intake로 되감아 intent 새 버전(모든 산출물 폐기, D40),
 // 진행 중인 fix의 커밋 안 된 변경(D116)과 [현재 코드 위에서 이어서], 건너뛰기(D117), 세션 상한(D18),
 // git 실패와 백업 브랜치 번호(D115). 미리 보기(D82)가 실제 결과와 같은지도 본다.
+import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import type { NodeName, Size } from '../../src/shared/contracts'
 import type { SelectStepInput, StepPreview, WorkView } from '../../src/shared/views'
 import type { LifecycleEvent, TaskRecord, WorkState } from '../../src/shared/work'
 import { drive } from './driver'
@@ -29,6 +32,23 @@ afterEach(async () => {
 })
 
 const read = (file: string) => fs.readFileSync(file, 'utf8')
+
+/** 파일을 지울 수 없게 표시한다 (Linux의 chattr +i, root만). 없거나 안 되면 false */
+function immutable(file: string, on: boolean): boolean {
+  if (process.platform !== 'linux') return false
+  return spawnSync('chattr', [on ? '+i' : '-i', file]).status === 0
+}
+
+/** git clean만 실패시킬 수 있는가 (D136). Windows에서 잠긴 파일은 실기 확인에 맡긴다 */
+const canLock = (() => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'relay-chattr-'))
+  const file = path.join(dir, 'x')
+  fs.writeFileSync(file, '')
+  const ok = immutable(file, true)
+  if (ok) immutable(file, false)
+  fs.rmSync(dir, { recursive: true, force: true })
+  return ok
+})()
 
 interface Setup {
   h: Harness
@@ -113,8 +133,8 @@ const taskOf = (w: WorkState, id: string) => w.tasks.find((t) => t.id === id) as
 const taskDir = (s: Setup, key: string, name: string) => path.join(s.dir(key), 'tasks', name)
 
 /** handoff가 이전 단계를 추천하는 단계 */
-function recommending(node: 'verify', to: 'fix', reason: string): Step[] {
-  return steps(node).map((st) =>
+function recommending(node: NodeName, to: NodeName, reason: string, size?: Size): Step[] {
+  return steps(node, size).map((st) =>
     st.do === 'write' && st.file === 'handoff.md'
       ? { ...st, text: handoff({ recommended_next: { node: to, reason } }) }
       : st,
@@ -154,12 +174,12 @@ const UNFINISHED_FIX: Step[] = [
 describe('[흐름] 되감기와 단계 선택 (M4)', () => {
   it('verify의 추천대로 fix로 되감아 다시 Work 완료까지 간다. 되돌린 커밋은 백업 브랜치에 남는다 (6.2, D23, D115)', async () => {
     const s = await setup({
-      tasks: { ...scenario('M').tasks, 't-05': recommending('verify', 'fix', '완료조건 2 실패') },
+      tasks: { ...scenario('L').tasks, 't-05': recommending('verify', 'fix', '완료조건 2 실패') },
     })
     const key = await s.create()
     const dir = s.dir(key)
     const base = git(s.repo, 'rev-parse', 'main')
-    const stopped = await drive(s.h.relay, s.h.ui, key, { size: 'M' })
+    const stopped = await drive(s.h.relay, s.h.ui, key, { size: 'L' })
     expect(stopped, s.h.ui.dump()).toMatchObject({
       status: 'stopped',
       reason: '이전 단계 추천으로 멈춤: 수정(fix)로 — 완료조건 2 실패',
@@ -257,7 +277,7 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
     ) as { permissions: { deny: string[] } }
     expect(settings.permissions.deny.filter((r) => r.includes('/tasks/'))).toHaveLength(5)
 
-    const done = await drive(s.h.relay, s.h.ui, key, { size: 'M' })
+    const done = await drive(s.h.relay, s.h.ui, key, { size: 'L' })
     expect(done, s.h.ui.dump()).toMatchObject({ status: 'completed' })
     await settle(s.h, key)
     const finished = work(dir)
@@ -293,6 +313,52 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
     const verifyCtx = read(path.join(taskDir(s, key, '07-verify'), 'context.md'))
     expect(verifyCtx).not.toContain('되감기로 들어옴')
     expect(verifyCtx).toContain('## 직전 handoff (t-06 fix)')
+  })
+
+  it('S Work의 fix가 investigate를 추천하면 멈추고, investigate로 되감으면 fix → verify로 끝난다. 다시 한 fix는 rca.md를 받는다 (D66, D149, 점검 A33)', async () => {
+    const s = await setup({
+      tasks: {
+        ...scenario('S').tasks,
+        't-02': recommending('fix', 'investigate', '재현이 안 됨', 'S'),
+      },
+    })
+    const key = await s.create()
+    const dir = s.dir(key)
+    const stopped = await drive(s.h.relay, s.h.ui, key, { size: 'S' })
+    expect(stopped, s.h.ui.dump()).toMatchObject({
+      status: 'stopped',
+      reason: '이전 단계 추천으로 멈춤: 재현과 원인 분석(investigate)로 — 재현이 안 됨',
+    })
+    await settle(s.h, key)
+    // S Work의 대화상자: 경로 밖의 investigate를 고를 수 있고 evidence와 rca는 없다
+    expect(s.h.ui.works.get(key)?.steps.map((c) => [c.node, c.recommended])).toEqual([
+      ['intake', false],
+      ['investigate', true],
+      ['fix', false],
+      ['verify', false],
+    ])
+    const p = await preview(s, key, 'investigate')
+    expect(p).toMatchObject({ kind: 'rewind', reason: '되감기', skipped: [] })
+    expect(p.discard.map((d) => d.taskId)).toEqual(['t-02'])
+    expect(await confirm(s, key, p)).toEqual({ ok: true })
+
+    const done = await drive(s.h.relay, s.h.ui, key, { size: 'S' })
+    expect(done, s.h.ui.dump()).toMatchObject({ status: 'completed' })
+    await settle(s.h, key)
+    const w = work(dir)
+    expect(statuses(w)).toEqual([
+      ['t-01', 'intake', 'approved', 'default'],
+      ['t-02', 'fix', 'discarded', 'default'],
+      ['t-03', 'investigate', 'approved', 'rewind'],
+      ['t-04', 'fix', 'approved', 'default'],
+      ['t-05', 'verify', 'approved', 'default'],
+    ])
+    expect(w.intent?.size).toBe('S')
+    // 크기는 S 그대로지만 fix는 investigate의 산출물을 받는다. S 경로 문구는 rca.md가 없을 때만이다 (A33)
+    const ctx = read(path.join(taskDir(s, key, '04-fix'), 'context.md'))
+    expect(ctx).toContain(
+      `- t-03 investigate: ${path.join(taskDir(s, key, '03-investigate'), 'rca.md')}`,
+    )
   })
 
   it('intake로 되감으면 모든 산출물을 폐기하고, 의도 승인 때 intent 버전이 오른다 (6.3, D40)', async () => {
@@ -480,6 +546,45 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
     expect(fs.existsSync(path.join(tree, 'scratch.txt'))).toBe(false)
   })
 
+  it('되돌릴 커밋이 없어도 커밋 안 된 변경이 있으면 백업한 뒤 지운다. 미리 보기와 같다 (D116, A14)', async () => {
+    const s = await setup({
+      tasks: { ...scenario('S').tasks, 't-02': [{ do: 'prompt' }, { do: 'wait' }] },
+    })
+    const key = await s.create()
+    const dir = s.dir(key)
+    const tree = s.tree(key)
+    const base = git(s.repo, 'rev-parse', 'main')
+    await approveIntake(s, key)
+    await untilTask(s, key, (t) => t.id === 't-02' && t.live, 'fix')
+    await settle(s.h, key)
+    // fix는 아직 커밋하지 않았다. 사람이 worktree에 메모를 남겼다
+    fs.writeFileSync(path.join(tree, 'notes.txt'), '사람의 메모\n')
+    expect(git(tree, 'rev-parse', 'HEAD')).toBe(base)
+
+    const p = await preview(s, key, 'fix')
+    expect(p.code).toMatchObject({ kind: 'reset', to: base, commits: 0 })
+    expect(p.code.uncommitted).toEqual(['?? notes.txt'])
+    const branch = p.code.backupBranch ?? ''
+    expect(branch).toMatch(/-discarded-1$/)
+    expect(await confirm(s, key, p)).toEqual({ ok: true })
+    await untilTask(s, key, (t) => t.id === 't-03' && t.live, '되감은 fix')
+    await settle(s.h, key)
+
+    // 백업은 기준 커밋 위에 커밋 안 된 변경을 담은 커밋 하나다
+    const backup = git(s.repo, 'rev-parse', branch)
+    expect(git(s.repo, 'rev-parse', `${backup}^`)).toBe(base)
+    expect(git(s.repo, 'show', `${backup}:notes.txt`)).toBe('사람의 메모')
+    expect(fs.existsSync(path.join(tree, 'notes.txt'))).toBe(false)
+    // 되감은 fix는 곧 커밋하므로 HEAD 대신 시작 커밋으로 본다
+    expect(taskOf(work(dir), 't-03').start_commit).toBe(base)
+    expect(taskOf(work(dir), 't-03').selection?.reset).toEqual({
+      from: base,
+      to: base,
+      backup_branch: branch,
+      backup_commit: backup,
+    })
+  })
+
   it('[현재 코드 위에서 이어서]는 커밋과 커밋 안 된 변경을 두고 그 위에서 고친다 (6.2)', async () => {
     const s = await setup({
       tasks: {
@@ -540,12 +645,12 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
 
   it('건너뛰기: 기본 다음 단계는 추가 지시와 함께 기본 진행으로, 진행 중인 task에서 뒤 단계로 가면 그 task를 폐기한다 (6.2, D117)', async () => {
     const s = await setup({
-      tasks: { ...scenario('M').tasks, evidence: [{ do: 'prompt' }, { do: 'wait' }] },
+      tasks: { ...scenario('L').tasks, evidence: [{ do: 'prompt' }, { do: 'wait' }] },
     })
     const key = await s.create()
     const dir = s.dir(key)
     expect(await s.h.relay.stopAfter(key, true)).toEqual({ ok: true })
-    const stopped = await drive(s.h.relay, s.h.ui, key, { size: 'M' })
+    const stopped = await drive(s.h.relay, s.h.ui, key, { size: 'L' })
     expect(stopped.status).toBe('stopped')
 
     // 끝난 intake 다음의 기본 다음 단계: 건너뛴 것도 폐기한 것도 없다
@@ -588,7 +693,7 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
     expect(fixCtx).toContain('## 직전 handoff (t-01 intake)')
     expect(fixCtx).not.toContain('폐기된 시도 요약')
 
-    const done = await drive(s.h.relay, s.h.ui, key, { size: 'M' })
+    const done = await drive(s.h.relay, s.h.ui, key, { size: 'L' })
     expect(done, s.h.ui.dump()).toMatchObject({ status: 'completed' })
     await settle(s.h, key)
     expect(statuses(work(dir))).toEqual([
@@ -634,6 +739,110 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
       'A 알림',
       10_000,
     )
+  })
+
+  it.runIf(canLock)(
+    'reset 뒤 clean이 실패하면 끊긴 되감기로 남긴다. 승인과 전달을 막고, 원인을 치우면 [다시 시도]로 끝까지 되감는다 (D136)',
+    async () => {
+      const s = await setup({
+        tasks: {
+          ...scenario('S').tasks,
+          'final-verify': [...steps('verify', 'S'), { do: 'wait' }],
+        },
+      })
+      const key = await s.create()
+      const dir = s.dir(key)
+      const tree = s.tree(key)
+      const base = git(s.repo, 'rev-parse', 'main')
+      await drive(s.h.relay, s.h.ui, key, { size: 'S', pauseAt: (t) => t.node === 'verify' })
+      await settle(s.h, key)
+      const fixHead = git(tree, 'rev-parse', 'HEAD')
+      // 추적하지 않는 파일을 지울 수 없게 한다. reset은 되고 clean만 실패한다
+      const stuck = path.join(tree, 'stuck', 'x.txt')
+      fs.mkdirSync(path.dirname(stuck))
+      fs.writeFileSync(stuck, '남은 파일\n')
+      expect(immutable(stuck, true)).toBe(true)
+      try {
+        const p = await preview(s, key, 'fix')
+        const r = await confirm(s, key, p)
+        expect(r.ok).toBe(false)
+        expect(!r.ok && r.error).toMatch(/^되감기 실패: /)
+        await settle(s.h, key)
+        // 코드는 이미 되돌렸다. 기록은 끊긴 되감기로 남고 task는 아직 폐기하지 않았다
+        expect(git(tree, 'rev-parse', 'HEAD')).toBe(base)
+        const w = work(dir)
+        expect(w.operation).toMatchObject({ kind: 'rewind', stage: 'reset', reset_to: base })
+        expect(w.operation?.interrupted_at).toBeDefined()
+        expect(statuses(w).map(([id, , st]) => [id, st])).toEqual([
+          ['t-01', 'approved'],
+          ['t-02', 'approved'],
+          ['t-03', 'awaiting_approval'],
+        ])
+        const view = s.h.ui.works.get(key)
+        expect(view?.badge.kind).toBe('recovery')
+        expect(view?.operation?.title).toBe('되감기가 끊겼습니다')
+        // 되돌린 코드로 승인하거나 전달하지 않는다 (D122)
+        expect(await s.h.relay.approve(key, 't-03', {})).toEqual({
+          ok: false,
+          error: '끊긴 작업이 있음: 먼저 [다시 시도]나 [무시]를 누르세요',
+        })
+        expect(
+          s.h.ui.notices.some(
+            (n) => n.workKey === key && n.body.startsWith('끊긴 작업이 있습니다'),
+          ),
+        ).toBe(true)
+      } finally {
+        immutable(stuck, false)
+      }
+
+      expect(await s.h.relay.retryOperation(key)).toEqual({ ok: true })
+      await untilTask(s, key, (t) => t.id === 't-04' && t.live, '되감은 fix')
+      await settle(s.h, key)
+      const w = work(dir)
+      expect(w.operation).toBeUndefined()
+      expect(fs.existsSync(stuck)).toBe(false)
+      // 되감은 fix는 곧 커밋하므로 HEAD 대신 시작 커밋으로 본다
+      expect(taskOf(w, 't-04').start_commit).toBe(base)
+      // 되돌리기 전 코드는 첫 백업에 있다
+      const backup = taskOf(w, 't-04').selection?.reset?.backup_branch ?? ''
+      expect(git(s.repo, 'rev-parse', `${backup}~1`)).toBe(fixHead)
+      expect(statuses(w).map(([id, , st]) => [id, st])).toEqual([
+        ['t-01', 'approved'],
+        ['t-02', 'discarded'],
+        ['t-03', 'discarded'],
+        ['t-04', 'working'],
+      ])
+    },
+  )
+
+  it('worktree가 Work 브랜치에 있지 않으면 코드를 되돌리지 않고 기록을 지운다 (D138)', async () => {
+    const s = await setup({
+      tasks: { ...scenario('S').tasks, 'final-verify': [...steps('verify', 'S'), { do: 'wait' }] },
+    })
+    const key = await s.create()
+    const dir = s.dir(key)
+    const tree = s.tree(key)
+    await drive(s.h.relay, s.h.ui, key, { size: 'S', pauseAt: (t) => t.node === 'verify' })
+    await settle(s.h, key)
+    const fixHead = git(tree, 'rev-parse', 'HEAD')
+    const branch = git(tree, 'symbolic-ref', '--short', 'HEAD')
+    git(tree, 'checkout', '--quiet', '--detach')
+
+    const p = await preview(s, key, 'fix')
+    const r = await confirm(s, key, p)
+    expect(r).toEqual({
+      ok: false,
+      error: `되감기 실패: worktree가 Work 브랜치에 있지 않음(지금: 분리된 HEAD). worktree에서 \`git switch ${branch}\`로 돌아온 뒤 다시 누르세요`,
+    })
+    await settle(s.h, key)
+    expect(work(dir).operation).toBeUndefined()
+    expect(git(tree, 'rev-parse', 'HEAD')).toBe(fixHead)
+    expect(git(s.repo, 'rev-parse', branch)).toBe(fixHead)
+    expect(git(s.repo, 'branch', '--list', 'relay/*-discarded-*')).toBe('')
+
+    git(tree, 'switch', '--quiet', branch)
+    const again = await preview(s, key, 'fix')
+    expect(await confirm(s, key, again)).toEqual({ ok: true })
   })
 
   it('git이 실패하면 오류를 돌려주고 기록을 지운다. 다시 고르면 다음 번호의 백업 브랜치를 만든다 (D77, D115)', async () => {

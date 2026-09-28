@@ -3,14 +3,17 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { mergeSkill } from '../../src/adapters/claude'
+import { mergeSkill, skillText } from '../../src/adapters/claude'
+import { sha256 } from '../../src/adapters/store'
 import { parseFrontMatter } from '../../src/core/validate'
 import type { LifecycleEvent, WorkState } from '../../src/shared/work'
 import { drive } from './driver'
-import { git, harness, makeRepo, register, settle, type Harness } from './harness'
+import { git, harness, makeRepo, register, settle, sleep, type Harness } from './harness'
 import {
+  FIXED_FILES,
   REPO_FILES,
   REQUEST,
+  fixDoc,
   handoff,
   intentDraft,
   scenario,
@@ -58,10 +61,10 @@ function events(workDir: string): LifecycleEvent[] {
 }
 
 describe('[흐름] 최소 흐름 (M2)', () => {
-  it('M 경로: intake → evidence → rca → fix → verify → [완료만]', async () => {
-    const s = await start(scenario('M'))
+  it('L 경로: intake → evidence → rca → fix → verify → [완료만]', async () => {
+    const s = await start(scenario('L'))
     const base = git(s.repo, 'rev-parse', 'main')
-    const result = await drive(s.h.relay, s.h.ui, s.workKey, { size: 'M' })
+    const result = await drive(s.h.relay, s.h.ui, s.workKey, { size: 'L' })
     await settle(s.h, s.workKey)
     expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed', reason: null })
     expect(result.tasks.map((t) => [t.label, t.bounces, t.forced])).toEqual([
@@ -85,7 +88,7 @@ describe('[흐름] 최소 흐름 (M2)', () => {
       status: 'completed',
       base_branch: 'main',
       base_commit: base,
-      intent: { version: 1, size: 'M' },
+      intent: { version: 1, size: 'L' },
       settings: {},
     })
     expect(w.completed_at).toMatch(ISO)
@@ -127,8 +130,8 @@ describe('[흐름] 최소 흐름 (M2)', () => {
     // ---------- intent.md (5.3) ----------
     const intent = read(path.join(s.workDir, 'intent.md'))
     const fm = parseFrontMatter(intent)
-    expect(fm.ok && fm.data).toEqual({ schema_version: 1, version: 1, type: 'bugfix', size: 'M' })
-    expect(fm.body).toBe(parseFrontMatter(intentDraft('M')).body)
+    expect(fm.ok && fm.data).toEqual({ schema_version: 1, version: 1, type: 'bugfix', size: 'L' })
+    expect(fm.body).toBe(parseFrontMatter(intentDraft('L')).body)
     expect(fs.existsSync(path.join(s.workDir, 'intent.history'))).toBe(false)
 
     // ---------- decisions.md (5.4) ----------
@@ -143,7 +146,7 @@ describe('[흐름] 최소 흐름 (M2)', () => {
       ['t-04', 'fix', '사람 승인'],
       ['t-05', 'verify', '사람 승인'],
     ])
-    expect(decisions).toContain('- [AI] 크기는 M — 크기는 M인 이유\n')
+    expect(decisions).toContain('- [AI] 크기는 L — 크기는 L인 이유\n')
     expect(decisions).toContain('- [사람] 재현 명령은 node -e — 재현 명령은 node -e인 이유\n')
 
     // ---------- events.jsonl (5.5) ----------
@@ -241,9 +244,50 @@ describe('[흐름] 최소 흐름 (M2)', () => {
     expect(hooks.some((r) => r['event'] === 'PreToolUse')).toBe(true)
   })
 
+  it('M 경로: intake → investigate → fix → verify → [완료만]. investigate는 합친 스킬 하나로 산출물 둘을 쓴다 (D147, D148)', async () => {
+    const s = await start(scenario('M'))
+    const result = await drive(s.h.relay, s.h.ui, s.workKey, { size: 'M' })
+    await settle(s.h, s.workKey)
+    expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed', reason: null })
+    expect(result.tasks.map((t) => t.label)).toEqual([
+      '01 의도 정리',
+      '02 재현과 원인 분석',
+      '03 수정',
+      '04 최종 검증',
+    ])
+    // investigate의 1부 질문 대기에 답했다
+    expect(result.tasks[1]?.answers).toBeGreaterThan(0)
+    const w = work(s.workDir)
+    expect(w.intent).toEqual({ version: 1, size: 'M' })
+    expect(w.tasks.map((t) => [t.id, t.node, t.status])).toEqual([
+      ['t-01', 'intake', 'approved'],
+      ['t-02', 'investigate', 'approved'],
+      ['t-03', 'fix', 'approved'],
+      ['t-04', 'verify', 'approved'],
+    ])
+    // 배포한 스킬은 합친 스킬이다 (D103의 해시로 확인)
+    const skillsSrc = path.resolve(__dirname, '../../../skills')
+    const composed = await skillText(skillsSrc, 'investigate')
+    expect(w.tasks[1]?.skill_hash).toBe(`sha256:${sha256(composed)}`)
+    const started = s.h.records().filter((r) => r['type'] === 'start') as { args: string[] }[]
+    expect(started[1]?.args).toContain(
+      `/relay-investigate 이 task의 컨텍스트: ${path.join(s.workDir, 'tasks', '02-investigate', 'context.md')}`,
+    )
+
+    // fix는 investigate의 두 산출물 경로를 받고, 이전 단계는 intake와 investigate다 (D149)
+    const task = (dir: string) => path.join(s.workDir, 'tasks', dir)
+    const ctx = read(path.join(task('03-fix'), 'context.md'))
+    expect(ctx).toContain(`- t-02 investigate: ${path.join(task('02-investigate'), 'evidence.md')}`)
+    expect(ctx).toContain(`- t-02 investigate: ${path.join(task('02-investigate'), 'rca.md')}`)
+    expect(ctx).toContain('- 이전 단계: intake (의도 정리), investigate (재현과 원인 분석)')
+    const decisions = read(path.join(s.workDir, 'decisions.md'))
+    expect(decisions).toMatch(/## t-02 investigate — .* \(사람 승인\)/)
+    expect(decisions).toContain('- [AI] 원인은 0으로 나눔')
+  })
+
   it('S 경로: intake → fix → verify → [완료만]. 사람이 고른 size가 초안보다 우선한다 (3.4, 4.1)', async () => {
-    // 초안은 M을 제안하지만 사람이 의도 승인 화면에서 S를 고른다
-    const s = await start(scenario('S', { 'work-start': steps('intake', 'M') }), {
+    // 초안은 L을 제안하지만 사람이 의도 승인 화면에서 S를 고른다
+    const s = await start(scenario('S', { 'work-start': steps('intake', 'L') }), {
       FAKE_CLAUDE_PERMISSION_MODE: 'auto',
     })
     const result = await drive(s.h.relay, s.h.ui, s.workKey, { size: 'S' })
@@ -275,7 +319,7 @@ describe('[흐름] 최소 흐름 (M2)', () => {
   it('형식 오류를 되돌리면 고쳐 쓴 handoff로 승인 대기가 된다 (D21, D107)', async () => {
     const bad = handoff({ omit: ['요약'] })
     const s = await start(
-      scenario('M', {
+      scenario('L', {
         evidence: [
           { do: 'prompt' },
           {
@@ -291,7 +335,7 @@ describe('[흐름] 최소 흐름 (M2)', () => {
         ],
       }),
     )
-    const result = await drive(s.h.relay, s.h.ui, s.workKey, { size: 'M' })
+    const result = await drive(s.h.relay, s.h.ui, s.workKey, { size: 'L' })
     await settle(s.h, s.workKey)
     expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed' })
     expect(result.tasks.map((t) => t.bounces)).toEqual([0, 1, 0, 0, 0])
@@ -315,9 +359,9 @@ describe('[흐름] 최소 흐름 (M2)', () => {
 
   it('되돌림은 설정 횟수까지만 한다. 남은 오류는 [오류 무시하고 승인]으로 넘긴다 (D21, D90, D112)', async () => {
     // intent 초안의 본문 절이 계속 빠져 있다(넘길 수 있는 오류). 되돌림마다 초안을 다시 쓴다
-    const draft = (n: string) => intentDraft('M', { omit: ['비목표'], note: `시도 ${n}` })
+    const draft = (n: string) => intentDraft('L', { omit: ['비목표'], note: `시도 ${n}` })
     const s = await start(
-      scenario('M', {
+      scenario('L', {
         'work-start': [
           { do: 'prompt' },
           { do: 'write', file: 'intent.draft.md', text: draft('0') },
@@ -354,9 +398,9 @@ describe('[흐름] 최소 흐름 (M2)', () => {
     expect(review?.gates.M).toMatchObject({ approve: false, force: true, blocking: [] })
     expect(review?.emphasis.map((e) => e.kind)).toEqual(['format_errors'])
     // 확인 창 없이 [승인]은 받지 않는다
-    expect((await s.h.relay.approve(s.workKey, 't-01', { size: 'M' })).ok).toBe(false)
+    expect((await s.h.relay.approve(s.workKey, 't-01', { size: 'L' })).ok).toBe(false)
 
-    const result = await drive(s.h.relay, s.h.ui, s.workKey, { size: 'M', force: true })
+    const result = await drive(s.h.relay, s.h.ui, s.workKey, { size: 'L', force: true })
     await settle(s.h, s.workKey)
     expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed' })
     expect(result.tasks.map((t) => t.forced)).toEqual([true, false, false, false, false])
@@ -380,10 +424,10 @@ describe('[흐름] 최소 흐름 (M2)', () => {
 
   it('되돌림 횟수는 config.json을 따른다 (D70)', async () => {
     const s = await start(
-      scenario('M', {
+      scenario('L', {
         'work-start': [
           { do: 'prompt' },
-          { do: 'write', file: 'intent.draft.md', text: intentDraft('M') },
+          { do: 'write', file: 'intent.draft.md', text: intentDraft('L') },
           {
             do: 'write',
             file: 'handoff.md',
@@ -454,7 +498,7 @@ describe('[흐름] 최소 흐름 (M2)', () => {
 
   it('handoff 없이 세션이 끝나면 세션 종료로 남는다 (시나리오 3)', async () => {
     const s = await start(
-      scenario('M', { 'work-start': [{ do: 'prompt' }, { do: 'stop' }, { do: 'exit' }] }),
+      scenario('L', { 'work-start': [{ do: 'prompt' }, { do: 'stop' }, { do: 'exit' }] }),
     )
     await s.h.ui.until(
       () => s.h.ui.works.get(s.workKey)?.tasks[0]?.status === 'session_ended',
@@ -469,5 +513,118 @@ describe('[흐름] 최소 흐름 (M2)', () => {
       ['task.started', expect.anything()],
       ['task.interrupted', { reason: 'session_ended' }],
     ])
+  })
+
+  it('Stop 없이 세션이 끝나도 유효한 handoff가 있으면 승인 대기로 알린다. 이 경로는 자동 승인하지 않는다 (3.3, D146)', async () => {
+    const s = await start(
+      scenario('S', {
+        fix: [
+          { do: 'prompt' },
+          { do: 'commit', files: FIXED_FILES, message: 'fix: 빈 배열의 평균은 0' },
+          { do: 'write', file: 'fix.md', text: fixDoc(true) },
+          { do: 'write', file: 'handoff.md', text: handoff({ summary: '수정했다.' }) },
+          { do: 'exit' },
+        ],
+      }),
+      {},
+      {
+        auto_approve: { investigate: false, evidence: false, rca: false, fix: true },
+        auto_approve_countdown_sec: 1,
+      },
+    )
+    const ui = s.h.ui
+    await drive(s.h.relay, ui, s.workKey, { size: 'S', pauseAt: (t) => t.node === 'fix' })
+    const fix = await ui.until(
+      () => {
+        const t = ui.works.get(s.workKey)?.tasks[1]
+        return t && !t.live && t.status !== 'working' ? t : null
+      },
+      '세션 종료',
+      60_000,
+    )
+    expect(fix).toMatchObject({ id: 't-02', status: 'awaiting_approval', countdown: null })
+    expect(ui.notices.map((n) => n.body)).toEqual(['01 의도 정리: 승인 대기', '02 수정: 승인 대기'])
+    // 카운트다운 초가 지나도 자동 승인하지 않는다
+    await sleep(2_000)
+    await settle(s.h, s.workKey)
+    expect(work(s.workDir).tasks[1]).toMatchObject({
+      status: 'awaiting_approval',
+      session: { alive: false },
+    })
+    expect(
+      events(s.workDir)
+        .filter((e) => e.task_id === 't-02')
+        .map((e) => [e.type, e.payload]),
+    ).toEqual([
+      ['task.started', expect.anything()],
+      ['task.awaiting_approval', { reason: 'session_ended' }],
+    ])
+    // 사람은 승인하고 다음 단계로 간다
+    const result = await drive(s.h.relay, ui, s.workKey, { size: 'S' })
+    expect(result, ui.dump()).toMatchObject({ status: 'completed' })
+  })
+})
+
+describe('[흐름] 할 일이 실패할 때 (D135)', () => {
+  it('승인 뒤 앞선 할 일이 실패하면 다음 task를 띄우지 않고 중단됨으로 둔다. 원인을 치우면 [재개]로 이어 간다', async () => {
+    const s = await start(scenario('L'))
+    const ui = s.h.ui
+    await ui.until(
+      () => ui.works.get(s.workKey)?.tasks[0]?.status === 'awaiting_approval',
+      '의도 승인 대기',
+      60_000,
+    )
+    // 이벤트를 덧붙일 수 없게 한다. 세션을 띄우는 데는 events.jsonl이 필요 없다
+    const log = path.join(s.workDir, 'events.jsonl')
+    const saved = read(log)
+    fs.rmSync(log)
+    fs.mkdirSync(log)
+
+    expect(await s.h.relay.approve(s.workKey, 't-01', { size: 'L' })).toEqual({ ok: true })
+    await settle(s.h, s.workKey)
+    const w = work(s.workDir)
+    expect(w.tasks.map((t) => [t.id, t.node, t.status])).toEqual([
+      ['t-01', 'intake', 'approved'],
+      ['t-02', 'evidence', 'interrupted'],
+    ])
+    const t2 = w.tasks[1]
+    expect(t2?.session ?? null).toBeNull()
+    expect(t2?.error).toMatch(/^앞선 처리가 실패해 시작하지 않음: log 실패: /)
+    // 실패하지 않은 할 일은 한다: 결정을 적고 intent를 확정했다
+    expect(read(path.join(s.workDir, 'decisions.md'))).toContain('t-01')
+    expect(read(path.join(s.workDir, 'intent.md'))).toContain('version: 1')
+    expect(s.h.records().filter((r) => r['type'] === 'start')).toHaveLength(1)
+    const view = ui.works.get(s.workKey)
+    expect(view?.tasks[1]).toMatchObject({ status: 'interrupted', live: false })
+    expect(view?.problems.some((p) => p.includes('log 실패'))).toBe(true)
+
+    fs.rmdirSync(log)
+    fs.writeFileSync(log, saved)
+    expect(await s.h.relay.resume(s.workKey, 't-02')).toEqual({ ok: true })
+    await ui.until(() => ui.works.get(s.workKey)?.tasks[1]?.live === true, 'evidence 세션', 30_000)
+  })
+  it('work.json을 쓰지 못하면 메모리의 상태도 바꾸지 않고 할 일도 하지 않는다', async () => {
+    const s = await start(scenario('L'))
+    const ui = s.h.ui
+    await ui.until(
+      () => ui.works.get(s.workKey)?.tasks[0]?.status === 'awaiting_approval',
+      '의도 승인 대기',
+      60_000,
+    )
+    const file = path.join(s.workDir, 'work.json')
+    const saved = read(file)
+    fs.rmSync(file)
+    fs.mkdirSync(file)
+
+    await expect(s.h.relay.approve(s.workKey, 't-01', { size: 'L' })).rejects.toThrow()
+    const view = ui.works.get(s.workKey)
+    expect(view?.tasks.map((t) => t.status)).toEqual(['awaiting_approval'])
+    expect(view?.problems.at(-1)).toContain('work.json 쓰기 실패')
+    expect(fs.existsSync(path.join(s.workDir, 'intent.md'))).toBe(false)
+
+    fs.rmdirSync(file)
+    fs.writeFileSync(file, saved)
+    expect(await s.h.relay.approve(s.workKey, 't-01', { size: 'L' })).toEqual({ ok: true })
+    await ui.until(() => ui.works.get(s.workKey)?.tasks[1]?.live === true, 'evidence 세션', 30_000)
   })
 })

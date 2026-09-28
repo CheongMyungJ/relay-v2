@@ -5,19 +5,26 @@ disable-model-invocation: true
 
 # relay: evidence
 
-Reproduce the bug and collect observed facts in `evidence.md` in the task directory. Judging the cause is the job of rca.
+Reproduce the bug and collect observed facts in `evidence.md` in the task directory.
+<!-- solo -->
+Judging the cause is the job of rca.
+<!-- /solo -->
 
+<!-- solo -->
 ## Inputs
 
 - The argument gives the path of `context.md`. Read it first.
 - If you need the original request, read `request.md` at the path in `context.md`.
+<!-- /solo -->
 
 ## Rules
 
 - **This skill does not change code.** Revert experimental changes such as debug output when you close. Adding a reproduction test as code is the job of fix.
 - **Observe only.** Record logs, inputs, actual and expected values, and the conditions under which the bug does and does not reproduce.
 - **Human suspicions** in the intent's `추가 의견`: if you observe something related, record it as a fact. Do not judge whether the suspicion is true.
+<!-- solo -->
 - **Your own hypotheses** go only in the handoff section `## 다음 task가 알아야 할 것`.
+<!-- /solo -->
 
 ## Decision points
 

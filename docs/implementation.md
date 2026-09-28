@@ -55,12 +55,19 @@
 | I25 | 앱 흐름 시험에는 Node 스크립트로 만든 가짜 `claude`를 쓴다. 실제와 같은 인자를 받아 PTY 안에서 돌고, 설정 파일의 훅 URL과 토큰으로 신호를 보내고, 시나리오 파일대로 산출물과 handoff를 쓰고, Stop 되돌림을 받으면 고쳐 쓴다 | 비용이 없고 결과가 매번 같음. PTY, 훅 서버, 토큰, 감시, 되돌림까지 실제 경로를 지남. 실제와 어긋나는 것은 실제 `claude` 시험(I29)이 잡음 | ✅ |
 | I26 | 앱 흐름 시험은 Electron 없이 Vitest(Node)에서 `main`의 조립 코드를 불러 돌린다. 창, 알림, 렌더러로 보내기는 주입받게 하고 시험에서는 가짜로 바꾼다 | 흐름 시험의 대상은 상태, 파일, 프로세스임. 화면을 거치면 느리고 흔들림. I9의 층 나눔과 맞음 | ✅ |
 | I27 | 화면과 설치 파일은 Playwright(`_electron`)로 스모크 시험만 한다: 설치된 앱이 뜬다, 탭에 PTY 출력이 보인다, 가짜 `claude`로 task 하나를 승인까지 누른다. 설치 파일 워크플로에서 돌린다 | 설치 파일 안의 node-pty(M0)를 자동으로 확인하려면 설치된 앱을 띄워야 함. Electron 지원이 실험적이라 범위를 좁게 둠 | ✅ |
-| I28 | push와 PR마다 두 작업을 돌린다. Linux: 타입 검사, lint(ESLint, Prettier **(기본값)**), core 단위 시험. Windows: adapters 시험과 가짜 `claude` 흐름 시험. 설치 파일 빌드와 스모크, 실제 `claude` 시험은 수동으로 돌린다 | 공개 레포라 러너가 무료임. core는 Node API를 쓰지 않아 Linux에서 빨리 결과가 나옴. 주 플랫폼 문제는 Windows 작업이 잡음. 설치 파일 빌드는 오래 걸림 | ✅ |
+| I28 | push와 PR마다 두 작업을 돌린다. Linux: 타입 검사, lint(ESLint, Prettier **(기본값)**), core 단위 시험. Windows: adapters 시험과 가짜 `claude` 흐름 시험. 설치 파일 빌드와 스모크, 실제 `claude` 시험은 수동으로 돌린다. I39로 더함: Windows 작업은 [어댑터] 전에 앱을 빌드한다 | 공개 레포라 러너가 무료임. core는 Node API를 쓰지 않아 Linux에서 빨리 결과가 나옴. 주 플랫폼 문제는 Windows 작업이 잡음. 설치 파일 빌드는 오래 걸림 | ✅ |
 | I29 | 실제 `claude` 흐름 시험은 수동 워크플로로, 마일스톤 완료 때와 Claude Code를 올릴 때 돌린다. 시험 레포 두 개(M 경로, S 경로)를 시험 때 만들고 **(기본값)**, 질문에는 첫 선택지로 답한다. 모델과 effort는 입력으로 받고 기본은 `sonnet`, `low`다 **(기본값)**. 끝까지 갔는지, task마다 되돌림 횟수, 걸린 시간을 판정한다 | 한 번에 세션이 8개 돌아 Claude 사용량이 가장 큰 시험임. 스킬이나 Claude Code가 바뀔 때만 의미가 있음. 되돌림 횟수는 스킬 템플릿이 잘 맞는지 보는 지표도 됨 | ✅ |
 | I30 | 마일스톤마다 실기 확인 항목을 7절에 두고, 실제 `claude` 시험과 실기 확인의 결과는 `docs/checks.md`에 날짜, 앱 커밋, Claude Code 버전, OS와 함께 기록한다 | 스파이크 결과(D92)와 같은 방식. Claude Code 버전이 바뀌었을 때 무엇을 다시 확인할지 알 수 있음 | ✅ |
 | I31 | 스파이크 S6(강제 종료 뒤 `--resume`)을 M3 전에 러너에서 돌린다. 계획은 `docs/spikes.md`에 둔다 | [즉시 중단]은 트리 종료인데 S3는 `/exit`로 끝낸 세션만 확인함. 결과에 따라 M3의 설계가 바뀔 수 있어 먼저 알아야 함 | ✅ |
 | I32 | PTY는 `useConpty: true`, `useConptyDll: true`로 띄운다. node-pty에 들어 있는 `conpty.dll`과 `OpenConsole.exe`를 쓰고 Windows 내장 ConPTY는 쓰지 않는다 | DLL 모드는 세션을 시작한 직후 의사 콘솔을 놓아(`ConptyReleasePseudoConsole`) 세션이 끝나면 `OpenConsole.exe`도 스스로 끝남. 내장 ConPTY는 트리 종료 뒤에도 `conhost.exe`가 남을 수 있음(3절). Windows 10과 11에서 같은 ConPTY를 씀. 스파이크 S1~S5는 내장 ConPTY로 확인했으므로 M0의 [실기]에서 다시 확인함 | ✅ |
 | I33 | Linux에서 프로세스의 시작 시각(D76)은 `/proc/<pid>/stat`의 starttime을 CLK_TCK로 나누고 `/proc/stat`의 btime을 더해 만든다. 고아 트리는 `/proc`의 부모 관계로 모아 SIGKILL로 끝낸다 | Linux는 시험 환경뿐이지만 로컬 `npm test`가 [어댑터]와 [흐름]을 돌린다. 시작 시각이 없으면 재사용된 ID를 가리지 못해 고아를 확인할 수 없음. Linux에서도 다른 프로세스가 PTY의 master를 쥐고 있으면 앱이 꺼져도 세션이 살아남았음(3절) | ✅ |
+| I34 | 앱이 하나인지는 Electron의 `app.requestSingleInstanceLock()`으로 막는다(D133). 잠금을 잡지 못하면 `Relay.open` 전에 `app.exit(0)`으로 끝내고, 잡은 앱은 `second-instance`에서 창을 앞으로 가져온다. 판단은 `main/instance.ts`에 두고 [단위]로 시험한다 | 잠금이 relay를 열기 전이어야 두 번째 앱이 고아 확인(9-1)을 하지 않음. `exit`는 `before-quit`을 부르지 않아 종료 확인 창이 뜨지 않음. 잠금은 Electron의 userData 폴더마다라, 개발용 실행과 설치한 앱은 서로 막지 않음(같은 `RELAY_HOME`을 쓰면 A1이 남음). 사람이 정한 범위임 | ✅ |
+| I35 | D135는 `WorkRunner.apply`가 한다. `work.json`을 먼저 쓰고 성공하면 메모리의 상태를 바꾼다. 쓰기가 실패하면 문제 목록에 남기고 예외를 그대로 던진다. 할 일이 하나라도 실패하면 뒤의 `startTask`·`resumeTask` 대신 `session.failed`(오류 "앞선 처리가 실패해 시작하지 않음: …")를 넣는다. 문제 목록은 지금처럼 최근 20줄을 남기고 지우지 않는다 | `session.failed`는 세션을 띄우다 실패할 때 이미 쓰는 전이라 화면과 [재개]가 같음. 자리를 잡기 전이라 풀의 자리를 돌려주지 않음. [흐름]에서 `events.jsonl`과 `work.json`을 폴더로 바꿔 실패를 만든다 | ✅ |
+| I36 | D136의 "코드가 이미 바뀌었는가"는 되돌리기 직전과 실패한 뒤의 HEAD와 작업 트리 tree(`worktreeTree`, 커밋 안 된 변경과 추적하지 않는 파일 포함)를 비교해 정한다. 둘 다 같으면 전처럼 기록을 지우고, 다르거나 비교하지 못하면 끊긴 되감기로 남긴다. [단계 선택]과 끊긴 되감기의 [다시 시도]가 같은 방법을 쓴다. [흐름]은 Linux에서 `chattr +i`로 추적하지 않는 파일을 지울 수 없게 해 clean만 실패시킨다(root가 아니면 건너뜀). Windows의 잠긴 파일은 3단계 실기에서 본다 | clean만 실패하는 경우뿐 아니라 reset이 도중에 실패해 작업 트리 일부만 바뀐 경우도 잡음. index.lock처럼 아무것도 바꾸지 않은 실패는 지금처럼 다시 고를 수 있음. 비교하지 못하면 되돌린 코드로 진행하지 않는 쪽으로 틀림 | ✅ |
+| I37 | D142는 `main/notices.ts`가 한다. 알림은 `click`이나 `failed`에서 놓고 `close`에서는 놓지 않는다. `app.setAppUserModelId`는 Windows 설치본(`app.isPackaged`)에서만 부르고 개발 중에는 Electron 기본값을 쓴다. 앱 ID가 `electron-builder.yml`의 appId와 같은지는 [단위]가 본다 | Windows는 토스트가 알림 센터로 옮겨 갈 때 `close`를 보내므로(Electron 문서 Notification) `close`에서 놓으면 알림 센터에서 누를 알림을 놓침. 개발 중의 실행 파일에는 그 앱 ID의 시작 메뉴 바로 가기가 없음 | ✅ |
+| I38 | D146의 검사는 main이 SessionEnd 훅과 PTY 종료 때 task 파일을 다시 읽어 이벤트에 넣는다. 먼저 처리된 신호가 정하고 뒤의 것은 세션이 이미 끝나 무시된다. 이미 끝낸 세션(승인, [즉시 중단] 등)의 PTY 종료에는 읽지 않는다. 파일을 읽지 못하면 검사 없이 넣어 세션 종료로 둔다 | Windows에서 강제로 끝난 claude는 SessionEnd를 보내지 않아 PTY 종료만 옴. 파일을 읽다 실패해도 세션이 끝난 것은 남겨야 함 | ✅ |
+| I39 | app-ci의 Windows 작업은 [어댑터]와 [흐름] 전에 앱을 빌드한다(`npm run build`). 설치 파일 빌드와 [스모크]는 그대로 수동이다 | Windows는 파일 이름의 대소문자를 가리지 않아, Linux에서 되는 확장자 없는 import가 Windows에서만 다른 파일로 풀릴 수 있음(A79, PR #10의 app-build #15). Linux 작업과 Windows의 시험은 앱을 빌드하지 않아 이것을 놓쳤음. 빌드는 몇 초라 push마다 돌려도 부담이 없음 | ✅ |
+| I40 | 크기별 경로(D147~D151)는 `core/pipeline`의 `steps`(고를 수 있는 단계)와 `route`(지나는 단계)가 정하고, 단계 선택(`core/rewind`), `context.md`의 이전 단계, `recommended_next` 검사가 같은 `previousSteps(node, size)`를 쓴다. 스킬 합치기(D148)는 `adapters/claude`의 `SKILL_PARTS`, `soloSkill`, `composeSkill`이 하고, `skills/check.mjs`가 같은 표와 같은 방식으로 합친다. 경로는 저장하지 않고 승인된 intent의 크기로 매번 계산한다. 그래서 이 변경 전에 시작해 evidence를 지난 M Work는 새 M 경로에 evidence가 없어 rca를 건너뛰고 fix로 간다 **(알려진 제약)**: 업데이트 전에 진행 중인 M Work를 끝내거나, intake로 되감아 L로 고친다 | 경로를 `work.json`에 저장하면 읽고 옮기는 곳이 늘어남. MVP는 사용자가 하나이고 진행 중인 Work를 끝낸 뒤 올릴 수 있음 | |
 | I41 | 설계 v0.5의 확장(리뷰 단계와 PR 진행, D152~D192)은 M8 리뷰 단계 → M9 PR 진행 → M10 PR 대응 → M11 자동 대응 차례로 만든다. 마일스톤 사이에 실제 버그에 써 본다 | 위험이 낮은 것부터 넣음. 에이전트가 없는 M9로 머지까지 먼저 쓰고, 자동화는 써 보고 넣음(설계 0절, I24) | ✅ |
 | I42 | 스파이크 S7(GitHub 연동)을 M9 전에 시험용 레포에서 돌린다. relay-v2 레포에는 시험 PR을 만들지 않는다 | gh와 GitHub의 동작은 추측하지 않음(설계 부록 A 5항). 이 레포에 시험 PR과 브랜치가 쌓이지 않음 | ✅ |
 | I43 | PR 단계의 [흐름] 시험은 가짜 gh를 늘려 PR 상태, 코멘트, 체크, 답글, 재실행, 머지를 흉내 낸다. [실제] 시험은 시험용 레포에 실제 PR을 만들어 코멘트와 머지까지 돌린다. 시험용 레포와 토큰은 레포 secret(`RELAY_TEST_GH_REPO`, `RELAY_TEST_GH_TOKEN`)으로 받는다 **(기본값)** | 실제 GitHub의 동작과 실제 스킬을 함께 확인함 | ✅ |
@@ -161,7 +168,7 @@ app/src/
 
 | 층 | 모듈 | 맡는 일 | 설계 |
 |---|---|---|---|
-| core | `pipeline` | 노드 순서, S 빠른 경로, 선택 가능한 다음 단계, 기본 다음 단계 | 3.1, 3.2, 3.4 |
+| core | `pipeline` | 노드 순서, 크기별 경로와 고를 수 있는 단계(D147, D149), 선택 가능한 다음 단계, 기본 다음 단계 | 3.1, 3.2, 3.4 |
 | core | `machine` | Work와 Task 상태 전이. `(상태, 이벤트) → (새 상태, 할 일)` (I10) | 3.3, 시나리오 3~5 |
 | core | `validate` | handoff와 intent 초안의 머리글 파싱, 스키마 검사, 추가 검사, 되돌림 메시지 | 5.2.1, D107 |
 | core | `context` | `context.md` 조립(입력: 상태, intent, 결정 로그, 누적 기각 목록, 직전 handoff), 마무리 안내 문구(D104) | 시나리오 2-4 |
@@ -193,7 +200,7 @@ app/src/
 | 옮길 것 | 출처 | 앱 모듈 |
 |---|---|---|
 | `claude` 실행 파일 찾기(`CLAUDE_BIN`, `%USERPROFILE%\.local\bin\claude.exe`, npm `claude.cmd`, PATH. D106) | `spikes/lib/session.mjs` `resolveClaude` | `adapters/claude` |
-| npm `.cmd`를 `cmd.exe /d /s /c`로 감싸 실행, `useConpty: true`, `xterm-256color`. 앱은 `useConptyDll: true`를 더한다(I32) | `spikes/lib/session.mjs` `start` | `adapters/pty` |
+| npm `.cmd`를 `cmd.exe /d /s /c`로 감싸 실행, `useConpty: true`, `xterm-256color`. 앱은 `useConptyDll: true`를 더한다(I32). 경로의 공백과 특수 문자는 다루지 않는다(D141) | `spikes/lib/session.mjs` `start` | `adapters/pty` |
 | 프로세스 트리 종료 `taskkill /PID <pid> /T /F`(node-pty `kill()` 대신) | `spikes/lib/session.mjs` `kill`, `util.mjs` `killTree` | `adapters/pty` |
 | 프로세스 ID와 시작 시각 조회(I20) | `spikes/lib/util.mjs` `processes`, `isAlive` | `adapters/pty` |
 | deny 규칙의 절대 경로 변환(`C:\x` → `//c/x`) | `spikes/lib/util.mjs` `ruleAbs` | `core/settings` |
@@ -344,7 +351,7 @@ app/src/
 - **`context.md`의 맨 위 절(시나리오 2-4):** 되감기는 "되감기로 들어옴 (먼저 읽을 것)"에 사람 추가 지시, 폐기된 시도 요약, 코드를 넣는다. 폐기된 시도 요약은 이번에 폐기한 task마다 handoff의 `## 요약`, rejected, 이전 단계 추천이다. handoff가 없으면 없다고 적는다. 건너뛰기는 "건너뛰어 들어옴 (먼저 읽을 것)"에 건너뛴 단계, 폐기한 task, 사람 추가 지시를 넣는다. 기본 진행은 추가 지시가 있을 때만 "사람 추가 지시 (먼저 읽을 것)"를 넣는다. 백업 브랜치 이름은 넣지 않는다(폐기는 입력에서 빼는 것).
 - **백업 브랜치 번호(D115):** git에 있는 이 Work의 백업 브랜치 가운데 가장 큰 번호 + 1이다. 실패로 남은 백업 브랜치와도 겹치지 않는다.
 - **되돌리기와 백업(D116, D117):** 되돌릴 커밋이나 커밋 안 된 변경이 있을 때만 백업 브랜치를 만든다. 커밋 안 된 변경은 진짜 index를 건드리지 않고 커밋 하나(`relay(<work-id>): 되감기 전 커밋 안 된 변경`)로 HEAD 위에 담는다(3절). 그 뒤 `git reset --hard`로 되돌리고, 변경이 있었으면 `git clean -d -f`로 추적하지 않는 파일을 지운다. 무시하는 파일(설치한 의존성 등)은 남는다. 폐기하는 task가 한 번도 시작하지 않았으면(대기열) 되돌릴 커밋이 없어 코드를 건드리지 않는다. [현재 코드 위에서 이어서]로 시작한 fix를 다시 되감으면 그 fix의 시작 커밋(이어받은 커밋 포함)으로 되돌린다.
-- **진행 중 작업 기록(D77):** 코드를 되돌리는 되감기만 기록한다. 세션을 끝내며 `operation`(kind `rewind`, stage `backup`)을 적고, 백업 브랜치를 만들면 stage를 `reset`으로 바꾸고, 되돌린 뒤 폐기와 새 task를 쓰는 `work.json` 한 번 쓰기에서 지운다. 코드를 건드리지 않는 선택(건너뛰기, [현재 코드 위에서 이어서])은 `work.json` 한 번 쓰기로 끝나 끊길 곳이 없어 기록하지 않는다. git이 실패하면 [단계 선택]의 결과와 Work의 문제로 알리고 기록을 지운다. 끝낸 세션은 끝난 채로 두고(승인 대기였으면 승인 대기로 남아 승인할 수 있음), 만든 백업 브랜치는 남는다. 재시작 때 남은 기록은 그대로 둔다(알림은 M6).
+- **진행 중 작업 기록(D77):** 코드를 되돌리는 되감기만 기록한다. 세션을 끝내며 `operation`(kind `rewind`, stage `backup`)을 적고, 백업 브랜치를 만들면 stage를 `reset`으로 바꾸고, 되돌린 뒤 폐기와 새 task를 쓰는 `work.json` 한 번 쓰기에서 지운다. 코드를 건드리지 않는 선택(건너뛰기, [현재 코드 위에서 이어서])은 `work.json` 한 번 쓰기로 끝나 끊길 곳이 없어 기록하지 않는다. git이 실패하면 [단계 선택]의 결과와 Work의 문제로 알리고 기록을 지운다. 다만 코드를 되돌리다 실패했는데 코드가 이미 바뀌었으면 기록을 끊긴 되감기로 남긴다(D136, I36). 끝낸 세션은 끝난 채로 두고(승인 대기였으면 승인 대기로 남아 승인할 수 있음), 만든 백업 브랜치는 남는다. 재시작 때 남은 기록은 그대로 둔다(알림은 M6).
 - **이벤트(5.5):** 되감기는 `task.rewound`, 건너뛰기는 `task.skipped_to`를 새 task의 이벤트로 남긴다. payload는 고른 단계(`node`), 단계를 고른 때의 task(`from_task`), 폐기한 task(`discarded`)이고, 되감기는 `keep_code`와 되돌렸으면 `reset_to`, `backup_branch`, 건너뛰기는 `skipped`를 더한다. 끝낸 k는 `task.interrupted`(`reason: rewind`나 `skip`)다. 5.5에 없는 유형은 더하지 않았다.
 - **미리 보기와 [확인](D82):** 미리 보기는 core의 계산에 git(되돌릴 커밋 수, 커밋 안 된 변경)과 산출물 파일을 더한다. 대화상자는 Work가 바뀔 때마다 미리 보기를 다시 읽는다. [현재 코드 위에서 이어서]는 fix로 되감을 때만 보인다(건너뛰어 fix로 가면 되돌릴 것이 없다). [확인]은 미리 본 때의 지금 task와 그 task가 끝났는지를 함께 보내고, 그 사이 바뀌었으면 받지 않는다.
 - **끝난 task의 [변경](D83):** [변경] 탭은 이 task의 diff다. task의 시작 커밋부터 코드가 다음에 바뀐 때까지 본다. 다음에 시작한 task가 있으면 그 시작 커밋까지다. 코드를 되돌린 되감기가 먼저 오면 백업 커밋(커밋 안 된 변경 포함)까지이고, 백업하지 않았으면 되돌리기 전 HEAD까지다. 백업 커밋은 새 task의 선택 기록(`reset.backup_commit`)에 남긴다. 그래서 폐기된 fix의 탭은 백업 브랜치에 남은 원래 수정을 보인다. 작업 트리와 비교하는 것은 지금 코드의 마지막 task뿐이고, 커밋 안 된 변경의 강조도 이 task에만 보인다. verify의 전체 변경도 같은 끝까지다. 전에는 끝난 task도 지금 작업 트리와 비교해, 되감은 뒤 폐기된 fix의 변경이 비거나 새 시도의 변경이 보였다(리뷰에서 찾음).
@@ -379,7 +386,7 @@ app/src/
 - **PR(7-4, D62, D71):** gh는 메인 체크아웃에서 부른다. 먼저 `gh pr list --repo <레포> --head <브랜치> --state open`으로 같은 브랜치의 열린 PR을 찾고, 있으면 링크만 기록한다(draft 설정은 보지 않음). 없으면 `gh pr create --repo <레포> --base <기준 브랜치> --head <브랜치> --title <제목> --body-file <임시 파일>`로 만들고, draft 설정이 켜져 있으면 `--draft`를 더한다. `--head`를 주므로 gh는 push하지 않는다. 본문은 명령줄 길이와 인용을 피하려고 임시 파일로 준다. `GH_PROMPT_DISABLED`와 `GH_NO_UPDATE_NOTIFIER`를 켠다. `<레포>`는 origin 주소를 비교 URL과 같은 규칙으로 읽은 `HOST/OWNER/REPO`다. gh는 원격이 여럿이면 upstream을 먼저 고르고, `--repo`의 URL은 `git@`나 `https:` 따위로 시작할 때만 읽기 때문이다(3절). 읽을 수 없으면 주소를 그대로 넘기고 gh의 오류를 보인다. `pr.md`는 첫 줄의 `# ` 뒤가 제목이고 나머지가 본문이다. 본문 앞의 빈 줄과 끝의 공백은 뗀다.
 - **알려진 한계:** origin 주소가 ssh 별칭(`~/.ssh/config`의 Host)을 쓰면 비교 URL과 `--repo`의 호스트가 별칭이라 맞지 않는다. gh는 원격에서 고를 때만 별칭을 푼다(3절). 이때 [PR 생성]은 push 뒤 PR 단계에서 실패하므로, [전달 없이 완료]한 뒤 브라우저에서 PR을 만든다.
 - **커밋 안 된 변경(7-5):** [push]·[PR 생성]을 누르면 worktree의 `git status`를 본다. 변경이 있으면 전달하지 않고 목록을 돌려주고, 선택지 대화상자가 목록을 보인다. 고른 처리는 대화상자에 보인 목록과 지금 목록이 같을 때만 받는다. 다르면 새 목록으로 다시 고른다. [변경 버리고 진행]은 `git stash push --include-untracked --message "relay(<work-id>): 완료 전 버린 변경"`이다. stash는 레포에 하나(`refs/stash`)라 메인 체크아웃의 `git stash list`에 보인다(3절). [커밋하고 진행]은 `git add -A` 뒤 `git commit --message "relay(<work-id>): 완료 전 남은 변경"`이고, 사용자의 커밋 훅과 서명 설정을 그대로 쓴다. 둘 다 무시하는 파일은 건드리지 않는다. 만든 stash 커밋과 커밋은 전달 결과의 `stashes`, `commits`에 남긴다. 이 Work의 모든 시도가 만든 것을 모은다: 전달이 실패해도 남기고, [다시 시도]가 성공하거나 [전달 없이 완료]해도 앞 시도의 것이 이어진다. 전에는 성공한 시도가 만든 것만 남아, 실패 뒤 [다시 시도]가 성공하면 앞 시도의 stash와 커밋이 기록에서 빠졌다(PR #7 리뷰).
-- **정리 세션([AI 세션 열기], 7-5):** verify 세션을 끝내고 worktree에서 새 Claude Code 세션을 연다. 기록하지 않는 일반 터미널이라 task를 만들지 않고, 세션 id, 스킬, 첫 프롬프트, `context.md`가 없다. 설정 파일에는 task와 같은 deny 규칙(push와 PR, 이전 task 디렉터리, D17), 자동 메모리 끔(D113), 훅(`/hook/cleanup/<Event>`, 토큰은 세션마다)을 넣는다. 세션 상한(D18)을 따라 자리가 없으면 대기열에서 기다린다. 탭 이름은 "정리 세션"이고, 다시 열면 새 탭이다. 턴이 끝날 때(Stop)마다 `git status`를 보고 깨끗하면 [정리 끝 → push/PR 진행]을 강조하고, 사람이 새 요청을 보내면 강조를 끈다. 버튼을 누르거나 세션이 끝나면(`/exit`) `git status`가 깨끗할 때만 원래 고른 전달을 하고, 변경이 남았으면 선택지로 돌아간다. 정리 세션이 열려 있는 동안 전달 버튼은 막는다. 앱을 끝낼 때 정리 세션도 끝내고(종료 확인에 셈), 재시작 뒤에는 남지 않는다.
+- **정리 세션([AI 세션 열기], 7-5):** verify 세션을 끝내고 worktree에서 새 Claude Code 세션을 연다. 기록하지 않는 일반 터미널이라 task를 만들지 않고, 세션 id, 스킬, 첫 프롬프트, `context.md`가 없다. 설정 파일에는 task와 같은 deny 규칙(push와 PR, 이전 task 디렉터리, D17), 자동 메모리 끔(D113), 훅(`/hook/cleanup/<Event>`, 토큰은 세션마다)을 넣는다. 세션 상한(D18)을 따라 자리가 없으면 대기열에서 기다린다. 탭 이름은 "정리 세션"이고, 다시 열면 새 탭이다. 턴이 끝날 때(Stop)마다 `git status`를 보고 깨끗하면 [정리 끝 → push/PR 진행]을 강조하고, 사람이 새 요청을 보내면 강조를 끈다. 버튼을 누르거나 세션이 끝나면(`/exit`) `git status`가 깨끗할 때만 원래 고른 전달을 하고, 변경이 남았으면 선택지로 돌아간다. 정리 세션이 열려 있는 동안 전달 버튼은 막는다. D137의 나머지 조작도 main이 막고(`WorkRunner`의 명령이 정리 세션을 보고 거부), 화면의 조작은 `cleanupActions`(core/delivery)로 끈다. [정리 세션 닫기]는 정리 세션을 끝내고(대기열이면 뺀다) 치운다. 정리 세션 중에 [이 단계 끝나면 멈춤]을 켜 Work 완료 화면이 [승인하고 멈춤]이 되어도 정리 세션의 안내와 [정리 세션 닫기]를 보인다. 정리 세션이 열린 동안은 [승인하고 멈춤]을 끄고, 승인하면 멈추는 동안은 전달하지 않으므로(`deliveryStart`) [정리 끝 → push/PR 진행]도 끈다(PR #10 리뷰). 앱을 끝낼 때 정리 세션도 끝내고(종료 확인에 셈), 재시작 뒤에는 남지 않는다.
 - **다시 점검(D118):** verify task를 시작할 때 `context.md`를 쓰기 전에 `origin` 원격과 `gh auth status`를 다시 보고 `project.json`에 쓴다. 점검이 실패하면 앞의 결과를 쓰고 Work의 문제로 알린다. [다시 점검]은 비활성화된 전달 버튼의 이유 아래에 보인다. [재개]로 세션을 다시 열 때는 `context.md`를 다시 쓰지 않으므로 점검하지 않는다.
 - **마무리 안내 문구(D104):** verify는 누를 수 있는 전달 버튼을 모두 적는다(예: "[완료만], [push], [PR 생성] 중 하나를 누르세요"). [완료만]뿐이면 "[완료만]을 누르세요"다. 승인하면 멈출 때의 버튼도 늘 함께 적는다: "[이 단계 끝나면 멈춤]이 켜져 있거나 이전 단계를 추천했으면 [승인하고 멈춤]을 누르고, 전달은 멈춘 뒤 Work 완료 화면에서 고르세요"(D119). [이 단계 끝나면 멈춤]은 task가 도는 중에도 켜고 끌 수 있고, 이전 단계 추천은 에이전트가 마지막에 정하며, 스킬은 문구를 그대로 찍어서 한쪽을 골라 적을 수 없다. 전에는 전달 버튼만 적어 승인 화면의 [승인하고 멈춤]과 달랐다(PR #7 리뷰).
 - **완료한 Work의 화면:** Work 완료 화면은 읽기 전용이다. 패널 위에 전달 결과(push한 브랜치, PR 주소와 이미 열린 PR인지·draft인지, [push]면 비교 URL)를 보이고, 주소는 [브라우저에서 열기]로 연다. 메인 프로세스는 http와 https 주소만 연다.
@@ -448,10 +455,10 @@ app/src/
 - **판정(4.3, D128, D129):** 조건은 core/approval의 `autoApproveHolds`가 본다. 기본 다음 단계는 승인된 intent의 크기로 정한다(S 경로 fix의 기본 다음 단계는 verify). `background_tasks`와 `session_crons`는 Stop 본문의 배열이고, 배열이 아니거나 없으면 비어 있는 것으로 본다. 형식 경고(D85, 분량)와 커밋 안 된 변경은 조건이 아니다(D7, 승인 화면의 경고). 되돌림에 이어진 턴(`stop_hook_active: true`)도 턴이 끝난 것이라 판정한다. 끊긴 작업의 기록이 있으면 카운트다운하지 않고 승인하지 않는다(D122). 기록이 있는 동안은 세션을 열 수 없어 실제로는 Stop이 오지 않는다.
 - **승인의 기록:** 자동 승인은 사람 승인과 같은 전이로 `approved_by: auto`, `task.approved`의 `payload.by: auto`, `decisions.md` 머리 줄의 "(자동 승인)"을 남긴다. `decisions.md`는 사람 승인과 같은 길로 덧붙이고 해시를 적는다(D124). 카운트다운 중에 사람이 [승인]하면 사람 승인이다. [이 단계 끝나면 멈춤]이 켜져 있으면 자동 승인한 뒤 멈춘다(3-4). 세션은 사람 승인처럼 끝내고 다음 task를 시작한다(시나리오 5).
 - **이벤트(5.5):** 카운트다운의 시작과 멈춤은 `events.jsonl`에 남기지 않는다. 5.5에 없는 유형은 더하지 않았다. 멈춘 까닭은 다음 Stop까지 `work.json`에 남는다.
-- **알림(D81, D130):** 카운트다운을 시작하면 "<task>: <n>초 뒤 자동 승인 (멈추려면 [취소])"를 알린다. 승인 대기로 바뀌는 알림 대신이다. 새 요청 없이 턴이 다시 끝나 새로 시작해도 알린다. 켜진 단계에서 조건을 어겨 카운트다운하지 않거나, 세션 종료나 조건 어김으로 멈추면 "<task>: 승인 대기 — 자동 승인하지 않음(<까닭>)"을 알린다. [취소], [즉시 중단], 설정을 끈 것과 재시작 조정은 알리지 않는다. 보고 있는 Work면 창이 가린다(M3).
+- **알림(D81, D130):** 카운트다운을 시작하면 "<task>: <n>초 뒤 자동 승인 (멈추려면 [취소])"를 알린다. 승인 대기로 바뀌는 알림 대신이다. 새 요청 없이 턴이 다시 끝나 새로 시작해도 알린다. 켜진 단계에서 조건을 어겨 카운트다운하지 않거나, 세션 종료나 조건 어김으로 멈추면 "<task>: 승인 대기 — 자동 승인하지 않음(<까닭>)"을 알린다. [취소], [즉시 중단], 확인 창으로 앱을 끈 것, [단계 선택](D145), 설정을 끈 것과 재시작 조정은 알리지 않는다. 보고 있는 Work면 창이 가린다(M3).
 - **설정(D70, D72):** 설정 화면에서 단계별 자동 승인(evidence, rca, fix)과 카운트다운(1~3600초)을 바꾼다. intake나 verify를 켜는 값은 받지 않고, `config.json`에 있으면 경고하고 기본값을 쓴다. Work별 자동 승인은 새 Work 대화상자와 [Work 설정]에서 단계마다 "앱 설정 따름 / 켜기 / 끄기"로 고른다. Work 설정은 준 키만 바꾸고, 빈 값이면 그 키를 `settings`에서 빼 앱 설정을 따른다. 카운트다운 초는 Work별 덮어쓰기가 없다(5.1.1). 앱 설정을 바꾸면 모든 Work에 알려 카운트다운 중에 끈 단계를 멈춘다. 상태가 그대로인 Work에도 스냅샷을 다시 보낸다. 승인 화면의 자동 승인 안내는 설정으로 정하는데, 화면은 스냅샷이 바뀔 때만 다시 읽기 때문이다(PR #9 리뷰).
 - **화면(D83):** 승인 화면의 [승인] 위에 "자동 승인까지 n초"와 [취소]를 보인다. 켜진 단계의 승인 대기인데 카운트다운하지 않으면 까닭과 "다음 턴이 끝날 때 다시 판정합니다"를 보인다. 까닭이 적혀 있지 않으면 자동 승인을 켜기 전에 턴이 끝난 것이다(D128). 사이드바 배지는 승인 대기 그대로다(D80).
-- **재시작(D75, D127):** 조정은 카운트다운을 지운다. 카운트다운 중이었거나 조정으로 승인 대기가 된 task(자동 승인이 켜진 단계)는 까닭을 "재시작"으로 적는다. [세션 재개]로 다시 연 세션은 Stop이 없어 판정하지 않고, 사람이 요청해 턴이 끝나면 판정한다(D131).
+- **재시작(D75, D127):** 조정은 카운트다운을 지운다. 카운트다운 중이었거나 조정으로 승인 대기가 된 task(자동 승인이 켜진 단계)는 까닭을 "재시작"으로 적는다. 이것은 앱이 충돌해 카운트다운이 남은 경우다. 확인 창으로 끄면 끌 때 세션을 끝내며 카운트다운을 멈추고 까닭을 "카운트다운 중에 앱을 끔"으로 적어, 조정은 까닭을 바꾸지 않는다(D145). 세션을 끝내 멈춘 까닭은 core/machine의 `endHold`가 `task.interrupted`의 reason(human, app_quit, rewind·skip)에서 정한다. [세션 재개]로 다시 연 세션은 Stop이 없어 판정하지 않고, 사람이 요청해 턴이 끝나면 판정한다(D131).
 - **알려진 한계:** 자동 이벤트(백그라운드 작업의 완료 알림 등)로 시작한 턴에 UserPromptSubmit이 오는지는 문서에 없다(3절). 오지 않으면 카운트다운 중에 그런 턴이 시작돼도 앱은 Stop 전까지 모른다. Stop 때 백그라운드 작업과 예약된 깨우기가 없었을 때만 카운트다운하므로(D129) 드물고, 그 턴이 handoff를 바꾸면 감시가 다시 판정하며(D130), 카운트다운이 끝날 때도 다시 읽어 판정한다. 터미널에 글자를 치는 것(Enter 전)은 새 요청이 아니라 카운트다운을 멈추지 않는다. 길게 말할 때는 [취소]를 먼저 누른다.
 - **Linux의 10초:** 자동 승인도 세션을 끝내고 다음 task로 가므로 Linux에서 10초 늦다(3절).
 
@@ -459,7 +466,7 @@ app/src/
 
 **내용**
 
-- `core/pipeline`에 노드 `review`를 fix와 verify 사이에 더한다(D166, D187). S 경로도 거친다(D163). 선택 가능한 다음 단계(3.2)와 되감기 계산(6.2, D117)이 따라 바뀐다.
+- `core/pipeline`의 `steps`와 `route`(I40)에 노드 `review`를 fix와 verify 사이에 더한다(D166, D187). 모든 크기(S, M, L)가 거친다(D163). 선택 가능한 다음 단계(3.2)와 되감기 계산(6.2, D117)이 따라 바뀐다.
 - 스킬 `skills/review/SKILL.md`(설계 5.6.10)를 쓰고 `skills/check.mjs`의 대상에 더한다. 크기 목표(D31) 안에 둔다.
 - 리뷰는 자동 승인을 켤 수 없다(D167). `config.json`의 `auto_approve`에 항목이 없고, `question_mode`에 `review`를 더한다.
 - `context.md`의 마무리 안내 문구(설계 시나리오 2-4의 review 줄), 화면 이름 "리뷰"(D109, D187), 필수 산출물 `review.md`(3.1, D30).
@@ -526,7 +533,7 @@ app/src/
 | [어댑터] | `adapters`: 실제 git, 파일, node-pty, HTTP 서버, 프로세스 종료 | Vitest | Windows 러너 | push, PR |
 | [흐름] | `main` 조립 + `adapters` + 가짜 `claude`(I25, I26) | Vitest | Windows 러너 | push, PR |
 | [스모크] | 설치 파일과 화면(I27) | Playwright `_electron` | Windows 러너 | 수동. 설치 파일 워크플로 |
-| [실제] | 앱 흐름 + 실제 `claude` + 스킬(I29) | Vitest와 시험 도구(I17) | Windows 러너 | 수동. 마일스톤 완료, Claude Code 업데이트 때 |
+| [실제] | 앱 흐름 + 실제 `claude` + 스킬(I29) | Vitest와 시험 도구(I17) | Windows 러너. 지금은 Linux 클라우드 세션(8.4) | 수동. 마일스톤 완료, Claude Code 업데이트 때 |
 | [실기] | 한글 IME, 알림, 화면, 사용감 | 사람 | Windows 10/11 PC | 마일스톤 완료 때 |
 
 - 비용: 공개 레포라 러너 시간은 무료다. 비용이 드는 것은 [실제]의 Claude 사용량뿐이다.
@@ -547,9 +554,9 @@ app/src/
 
 | 파일 | 실행 | 하는 일 |
 |---|---|---|
-| `.github/workflows/app-ci.yml` | push, PR (`app/`, `skills/`, `docs/contracts/`가 바뀔 때) | Linux: 타입 검사, ESLint, Prettier 확인, [단위], `skills/check.mjs` **(기본값)**. Windows: [어댑터], [흐름] |
+| `.github/workflows/app-ci.yml` | push, PR (`app/`, `skills/`, `docs/contracts/`가 바뀔 때) | Linux: 타입 검사, ESLint, Prettier 확인, [단위], `skills/check.mjs` **(기본값)**. Windows: 빌드(I39), [어댑터], [흐름] |
 | `.github/workflows/app-build.yml` | 수동 | 설치 파일 빌드, 조용한 설치, [스모크], 설치 파일을 결과물로 올리기(I8) |
-| `.github/workflows/app-claude.yml` | 수동 | [실제]. 입력: 모델, effort. 인증은 스파이크 워크플로와 같은 레포 secret. PR 단계의 경우는 시험용 레포 secret(`RELAY_TEST_GH_REPO`, `RELAY_TEST_GH_TOKEN`)이 있을 때만 돈다(I43) |
+| `.github/workflows/app-claude.yml` | 수동 | [실제]. 입력: 모델, effort. 인증은 스파이크 워크플로와 같은 레포 secret. 레포에 secret이 없으면 첫 단계에서 멈춘다. 2026-09-28까지 한 번도 돌지 않았다(8.4). PR 단계의 경우는 시험용 레포 secret(`RELAY_TEST_GH_REPO`, `RELAY_TEST_GH_TOKEN`)이 있을 때만 돈다(I43) |
 
 ### 8.4 실제 claude 시험 (I29)
 
@@ -564,9 +571,12 @@ app/src/
 - 전달(M5, 사용자 결정): S 경로 레포에서 최종 검증이 승인 대기가 되면, 사람 역할이 worktree에 커밋 안 된 메모를 남기고 [PR 생성]을 누른다. 선택지에서 [AI 세션 열기]로 정리 세션을 열어 메모를 지워 달라고 하고, git status가 깨끗해지면 [정리 끝 → push/PR 진행]을 누른 뒤 [Work 정리]를 한다. 실제 스킬이 쓴 `pr.md`가 PR 제목과 본문으로 가는지, 에이전트가 스스로 push하지 않는지, 첫 프롬프트 없이 연 정리 세션이 요청을 받아 일하고 Stop 훅이 오는지 본다. gh는 가짜 gh다(시험 환경에 gh 로그인이 없음). 실제 PR은 [실기]에서 본다.
 - 재시작(M6, 사용자 결정): 앱(Relay)을 자식 프로세스(`test/claude/app-process.mjs`)로 띄워 S 경로 레포의 intake가 첫 요청을 받아 일하는 중에 그 프로세스만 SIGKILL로 끝낸다(앱 충돌). 다시 켜면 조정과 고아 확인을 하고(D75, D76), 중단됨이 된 intake를 [재개]로 같은 세션(`--resume`)으로 열어 이어서 하라고 한 뒤 Work 완료까지 간다. 앱이 죽은 뒤 `claude`가 남았는지, 남았으면 재시작이 끝내고 알렸는지 적는다. 자식 프로세스는 Vite의 SSR 모듈 로더로 앱 코드를 TypeScript 그대로 불러 쓴다.
 - 자동 승인(M7, 사용자 결정): S 경로 레포에서 수정 단계의 자동 승인을 켜고(카운트다운 5초) 사람 역할은 카운트다운을 기다린다. 실제 Stop 본문의 `background_tasks`와 `session_crons`가 턴이 끝날 때 비어 있어 카운트다운이 시작되는지(D129), 실제 스킬이 마무리 안내 문구(D132)를 그대로 찍는지, 자동 승인 뒤 세션을 끝내 최종 검증으로 가고 승인 방식이 자동으로 남는지 본다. 자동 승인하지 않으면 알림의 까닭을 남기고 실패로 친다.
-- 리뷰(M8): M과 S 경로가 review를 거친다. 사람 역할은 review가 끝나면 첫 지적만 반영하라고 번호로 지시하고, 그 지적만 고쳐졌는지 본다.
+- 리뷰(M8): 모든 크기가 review를 거친다. M과 S 경로의 시험에서 사람 역할은 review가 끝나면 첫 지적만 반영하라고 번호로 지시하고, 그 지적만 고쳐졌는지 본다.
 - PR(M9~M11, I43): 시험용 레포에 [PR 생성]으로 실제 PR을 만든다. 사람 역할이 리뷰 코멘트를 달고(M10), 대응 task의 커밋과 답글이 PR에 올라오는지, 코멘트 속 지시를 따르지 않는지(D162) 본다. 마지막에 [머지]하고 정리한다. 시험이 끝나면 시험용 레포의 브랜치를 지운다.
 - `RELAY_REAL_CASES`로 돌릴 경우(M, S, resume, rewind-intake, rewind-fix, deliver, restart, auto. rewind는 둘 다)를 고른다. PR 단계의 경우 이름은 마일스톤을 만들 때 정한다.
+- 실행: `app/`에서 `RELAY_REAL_CLAUDE=1 npm run test:claude`로 돌린다. `RELAY_REAL_CLAUDE`가 없으면 모든 경우를 건너뛰고 실패 없이 끝난다. `RELAY_REAL_CLAUDE=dry`는 가짜 `claude`로 같은 시험 도구를 돌려 도구만 확인한다(사용량 없음). 모델과 effort는 `ANTHROPIC_MODEL`, `CLAUDE_CODE_EFFORT_LEVEL`로 정한다.
+- 돌리는 곳: 레포에 인증 secret이 없어 `app-claude` 워크플로(Windows 러너)는 돌린 적이 없다. 지금까지의 [실제]는 모두 Claude Code 웹 세션의 Linux 컨테이너에서 돌렸고, 예비 확인으로 적는다(`checks.md`). Linux에서는 스파이크와 같이 준비한다(`spikes/README.md`): 세션의 환경 변수를 `env -i`로 빼고 필요한 것(HOME, PATH, 프록시와 인증서 변수)만 넘긴다. 대화형 온보딩을 마친 적이 없으면 따로 만든 설정 폴더를 `CLAUDE_CONFIG_DIR`로 주고 그 `.claude.json`에 `"hasCompletedOnboarding": true`를 더한다. root에서는 `IS_SANDBOX=1`을 준다. Linux는 세션을 끝낼 때마다 10초가 더 걸린다(3절).
+- 스파이크 S1~S5는 같은 레포 secret으로 Windows 러너에서 돌았다(`spikes.md`, 2026-09-26). 그 뒤 secret이 없어진 까닭은 기록에 없다.
 - 결과는 실행 요약과 결과물에 올리고, 사람이 `docs/checks.md`에 옮긴다(I30). 러너 결과는 예비 확인으로 적는다(D93과 같음).
 
 ### 8.5 실기 확인 (I30)

@@ -22,7 +22,7 @@ const INTENT = [
   'schema_version: 1',
   'version: 1',
   'type: bugfix',
-  'size: M',
+  'size: L',
   '---',
   '## 목표',
   'KST 서버에서 토큰이 발급 직후 만료로 판정되는 문제를 고친다.',
@@ -37,7 +37,7 @@ function workAt(
   node: NodeName,
   opts: { size?: Size; settings?: WorkSettings } = {},
 ): { work: WorkState; task: TaskRecord } {
-  const size = opts.size ?? 'M'
+  const size = opts.size ?? 'L'
   const created = createWork({
     workId: 'w-20260926-001',
     baseBranch: 'main',
@@ -58,8 +58,13 @@ function workAt(
   return { work, task: tasks[tasks.length - 1] as TaskRecord }
 }
 
-function input(node: NodeName, overrides: Partial<ContextInput> = {}, config?: AppConfig) {
-  const { work, task } = workAt(node)
+function input(
+  node: NodeName,
+  overrides: Partial<ContextInput> = {},
+  config?: AppConfig,
+  size?: Size,
+) {
+  const { work, task } = workAt(node, size ? { size } : {})
   const base: ContextInput = {
     work,
     task,
@@ -226,7 +231,7 @@ describe('context.md: intake (처음)', () => {
     expect(section(md, 'intent')).toBe('없음 (의도 승인 전)')
     expect(section(md, '선택 가능한 다음 단계')).toBe(
       [
-        '- 기본 다음 단계: 의도 승인 뒤 size에 따라 evidence (재현과 관찰), size가 S이면 fix (수정)',
+        '- 기본 다음 단계: 의도 승인 뒤 size에 따라 S이면 fix (수정), M이면 investigate (재현과 원인 분석), L이면 evidence (재현과 관찰)',
         '- 이전 단계: 없음',
       ].join('\n'),
     )
@@ -253,6 +258,40 @@ describe('context.md: intake (처음)', () => {
 
   it('마무리 안내 문구의 [승인]은 [의도 승인]이다 (D104)', () => {
     expect(section(md, '마무리 안내 문구')).toContain('[의도 승인]을 누르세요')
+  })
+})
+
+describe('context.md: M 경로 (D147, D149)', () => {
+  const at = (node: NodeName, config?: AppConfig) => buildContext(input(node, {}, config, 'M'))
+
+  it('investigate: 스킬은 investigate, 기본 다음 단계는 fix, 이전 단계는 intake', () => {
+    const md = at('investigate')
+    expect(section(md, 'task 정보')).toContain('- node: investigate (재현과 원인 분석)')
+    expect(section(md, 'task 정보')).toContain('- skill: investigate')
+    expect(section(md, '선택 가능한 다음 단계')).toBe(
+      ['- 기본 다음 단계: fix (수정)', '- 이전 단계: intake (의도 정리)'].join('\n'),
+    )
+  })
+
+  it('fix의 이전 단계에는 evidence와 rca 대신 investigate가 있다', () => {
+    expect(section(at('fix'), '선택 가능한 다음 단계')).toBe(
+      [
+        '- 기본 다음 단계: verify (최종 검증)',
+        '- 이전 단계: intake (의도 정리), investigate (재현과 원인 분석)',
+      ].join('\n'),
+    )
+  })
+
+  it('investigate는 자동 승인을 켤 수 있고 질문 방식은 investigate 스킬의 설정이다 (D151)', () => {
+    const config: AppConfig = {
+      ...DEFAULT_CONFIG,
+      auto_approve: { ...DEFAULT_CONFIG.auto_approve, investigate: true },
+      question_mode: { ...DEFAULT_CONFIG.question_mode, investigate: 'confirm_each' },
+    }
+    expect(approvalMode(config, {}, 'investigate')).toBe('auto')
+    expect(approvalMode(DEFAULT_CONFIG, {}, 'investigate')).toBe('manual')
+    expect(questionMode(config, {}, 'investigate')).toBe('confirm_each')
+    expect(closingMessage('investigate')).toBe(closingMessage('rca'))
   })
 })
 
@@ -318,7 +357,10 @@ describe('마무리 안내 문구 (D104, D132)', () => {
   })
 
   it('승인 방식 절은 task를 시작할 때의 설정이다. 문구는 설정과 상관없이 같다 (D128, D132)', () => {
-    const config = { ...DEFAULT_CONFIG, auto_approve: { evidence: false, rca: true, fix: false } }
+    const config = {
+      ...DEFAULT_CONFIG,
+      auto_approve: { investigate: false, evidence: false, rca: true, fix: false },
+    }
     const md = buildContext(input('rca', {}, config))
     expect(section(md, '승인 방식')).toBe(
       '자동 승인 (task를 시작할 때의 설정. 설정은 바로 적용되고, 자동 승인 여부는 턴이 끝날 때의 설정으로 정한다)',
@@ -334,7 +376,7 @@ describe('마무리 안내 문구 (D104, D132)', () => {
 describe('Work별 덮어쓰기 (D72)', () => {
   const config: AppConfig = {
     ...DEFAULT_CONFIG,
-    auto_approve: { evidence: true, rca: true, fix: false },
+    auto_approve: { investigate: false, evidence: true, rca: true, fix: false },
     question_mode: { ...DEFAULT_CONFIG.question_mode, 'root-cause': 'confirm_each' },
   }
 

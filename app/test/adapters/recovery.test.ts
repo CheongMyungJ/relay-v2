@@ -26,6 +26,7 @@ import {
   processStartTime,
   processTree,
   type ProcessInfo,
+  type ProcessRecord,
 } from '../../src/adapters/pty'
 import { WorkFiles, fileHash } from '../../src/adapters/store'
 import { createWork } from '../../src/core/machine'
@@ -43,21 +44,20 @@ const BRANCH = `relay/${WORK_ID}`
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 let root: string
-const spawned: number[] = []
+/** 시험이 띄운 자식 프로세스 */
+const children: ChildProcess[] = []
+/** 자식이 띄운 프로세스: ID와 시작 시각 */
+const grandchildren: ProcessRecord[] = []
 
 beforeEach(() => {
   root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'relay-recovery-')))
 })
 
-afterEach(() => {
-  // 시험이 실패해도 띄운 프로세스를 남기지 않는다
-  for (const pid of spawned.splice(0)) {
-    try {
-      process.kill(pid, 'SIGKILL')
-    } catch {
-      // 이미 끝났다
-    }
-  }
+afterEach(async () => {
+  // 시험이 실패해도 띄운 프로세스를 남기지 않는다. ID만으로 끝내지 않는다: 이미 끝난 프로세스의 ID는 나란히 도는
+  // 다른 시험 파일의 프로세스가 곧 다시 쓸 수 있다(Windows, A77). 자식은 핸들로, 손자는 ID와 시작 시각으로 끝낸다
+  for (const child of children.splice(0)) child.kill('SIGKILL')
+  await killOrphans(grandchildren.splice(0))
   fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
 })
 
@@ -102,7 +102,7 @@ describe('[어댑터] 고아 프로세스 (시나리오 9-1, D76, I33)', () => {
     const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1 << 30)'], {
       stdio: 'ignore',
     })
-    spawned.push(child.pid ?? 0)
+    children.push(child)
     const started = await processStartTime(child.pid ?? 0)
     expect(started).toBeTruthy()
     const list = await listProcesses()
@@ -115,19 +115,19 @@ describe('[어댑터] 고아 프로세스 (시나리오 9-1, D76, I33)', () => {
     async () => {
       const out = path.join(root, 'pids.json')
       const role = spawn(process.execPath, [APP_ROLE, out], { stdio: 'ignore' })
-      spawned.push(role.pid ?? 0)
+      children.push(role)
       const pids = await until(
         () =>
           fs.existsSync(out) &&
           (JSON.parse(fs.readFileSync(out, 'utf8')) as { pty: number; survivor: number }),
         '앱 역할 프로세스',
       )
-      spawned.push(pids.pty, pids.survivor)
       // 앱은 세션을 띄운 직후 프로세스 ID와 시작 시각을 기록한다 (D76)
       const records = [
         { pid: pids.pty, startedAt: (await processStartTime(pids.pty)) ?? '' },
         { pid: pids.survivor, startedAt: (await processStartTime(pids.survivor)) ?? '' },
       ]
+      grandchildren.push(...records.filter((r) => r.startedAt))
       expect(records.every((r) => r.startedAt)).toBe(true)
       // survivor의 트리(tree.mjs와 그 자식)가 떠 있을 때까지 기다린다
       const before = await until(async () => {

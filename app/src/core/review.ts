@@ -111,7 +111,8 @@ export function resumeHint(work: WorkState): string | null {
  * 알릴 문구 (D81). 보고 있는 Work인지는 main이 가린다.
  * - 자동 승인 카운트다운을 시작했다 (D81). 사람은 [취소]로 멈출 수 있다
  * - 사람이 누르지 않았는데 자동 승인하지 않게 됐다: 조건을 어겨 카운트다운하지 않거나, 카운트다운 중에 세션이 끝나거나
- *   조건을 어겨 멈췄다 (D130). 사람이 누른 [취소]·[즉시 중단]과 설정 변경, 재시작 조정은 알리지 않는다
+ *   조건을 어겨 멈췄다 (D130). 사람이 누른 [취소]·[즉시 중단]·[단계 선택], 앱 종료, 설정 변경, 재시작 조정은
+ *   알리지 않는다 (D145)
  * - 배지(D80)가 사람이 필요한 상태로 바뀌었다: 질문 대기·입력 필요, 승인 대기, 막힘, 멈춤, handoff 없이 세션 종료
  */
 export function humanNotice(before: WorkState, after: WorkState): string | null {
@@ -128,6 +129,8 @@ export function humanNotice(before: WorkState, after: WorkState): string | null 
   const b = badge(after)
   if (!b.hot || badge(before).kind === b.kind) return null
   if (b.kind === 'stopped') return stopNotice(after)
+  // 끊긴 작업은 되감기가 코드를 바꾼 뒤 실패했을 때도 생긴다 (D136). 재시작 조정은 알리지 않는다
+  if (b.kind === 'recovery') return '끊긴 작업이 있습니다: [다시 시도]나 [무시]를 누르세요'
   if (!task) return null
   return b.kind === 'session_ended'
     ? `${taskLabel(task)}: handoff 없이 세션 종료`

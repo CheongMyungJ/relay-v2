@@ -50,7 +50,7 @@ describe.runIf(handoffTemplate && draftTemplate)(
       'blocked_reason',
       '재현에 필요한 운영 로그가 없음',
     )
-    const draft = fill(draftTpl, 'size', 'M')
+    const draft = fill(draftTpl, 'size', 'L')
 
     /** 노드의 필수 산출물. intake는 채운 intent 초안, verify의 pr.md는 첫 줄이 제목이다 */
     function artifacts(node: NodeName): Record<string, string> {
@@ -65,7 +65,7 @@ describe.runIf(handoffTemplate && draftTemplate)(
     it.each(NODES)('%s: handoff 템플릿에 status만 채운 예시가 유효하다', (node) => {
       const check = checkTask({
         node,
-        size: 'M',
+        size: 'L',
         files: { 'handoff.md': awaiting, ...artifacts(node) },
         config: DEFAULT_CONFIG,
       })
@@ -79,7 +79,7 @@ describe.runIf(handoffTemplate && draftTemplate)(
     it('blocked와 blocked_reason을 채운 예시가 유효하다 (D96)', () => {
       const check = checkTask({
         node: 'rca',
-        size: 'M',
+        size: 'L',
         files: { 'handoff.md': blocked },
         config: DEFAULT_CONFIG,
       })
@@ -90,7 +90,7 @@ describe.runIf(handoffTemplate && draftTemplate)(
     it('반례: 채우지 않은 handoff 템플릿은 status 오류다', () => {
       const check = checkTask({
         node: 'rca',
-        size: 'M',
+        size: 'L',
         files: { 'handoff.md': handoffTpl, 'rca.md': '' },
         config: DEFAULT_CONFIG,
       })
@@ -100,7 +100,7 @@ describe.runIf(handoffTemplate && draftTemplate)(
     it('반례: blocked인데 blocked_reason을 비워 두면 오류다', () => {
       const check = checkTask({
         node: 'rca',
-        size: 'M',
+        size: 'L',
         files: { 'handoff.md': fill(handoffTpl, 'status', 'blocked') },
         config: DEFAULT_CONFIG,
       })
@@ -113,7 +113,7 @@ describe.runIf(handoffTemplate && draftTemplate)(
       const r = checkIntentDraft(draft, { warnChars: DEFAULT_CONFIG.intent_warn_chars })
       expect(r.errors).toEqual([])
       expect(r.warnings).toEqual([])
-      expect(r.value).toEqual({ type: 'bugfix', size: 'M' })
+      expect(r.value).toEqual({ type: 'bugfix', size: 'L' })
     })
 
     it('반례: 채우지 않은 intent.draft.md 템플릿은 size 오류다', () => {

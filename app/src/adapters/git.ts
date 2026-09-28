@@ -124,6 +124,11 @@ export async function addWorktree(
   await git(repo, ['worktree', 'add', '-b', branch, dir, commit], opts)
 }
 
+/** HEAD가 가리키는 브랜치 이름. 분리된 HEAD면 null (git 문서 git-symbolic-ref) */
+export async function currentBranch(dir: string, opts?: GitOptions): Promise<string | null> {
+  return tryGit(dir, ['symbolic-ref', '--quiet', '--short', 'HEAD'], opts)
+}
+
 export async function headCommit(dir: string, opts?: GitOptions): Promise<string> {
   return git(dir, ['rev-parse', 'HEAD'], opts)
 }

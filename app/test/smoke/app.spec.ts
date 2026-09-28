@@ -8,9 +8,11 @@
 // M4: [단계 선택]에서 intake를 고르면 미리 보기(폐기될 산출물, 중단할 task, 코드, intent 새 버전)를 보이고,
 // 추가 지시와 함께 [확인]하면 진행 중인 세션을 끝내고 intake를 되감기로 다시 시작한다(앞 탭은 폐기됨)
 // → 새 intake를 [의도 승인]하면 intent v2가 되고 v1은 intent.history에 남는다.
-// M5: 두 번째 Work를 S 경로로 최종 검증까지 가면 Work 완료 화면에 전달 버튼이 보인다 → [push]하면 로컬 bare
-// 원격에 Work 브랜치가 생기고 Work 완료(전달: push)가 된다 → [Work 정리]의 요약에 push됨이 보이고 [정리]하면
-// worktree가 없어지고 보관됨이 된다(산출물은 남음).
+// M5: 두 번째 Work를 S 경로로 최종 검증까지 가면 Work 완료 화면에 전달 버튼이 보인다 → [push]하면 최종 검증이 남긴
+// 커밋 안 된 파일 때문에 선택지가 뜨고, [AI 세션 열기]로 정리 세션을 연다(7-5) → 정리 세션 중에 [이 단계 끝나면 멈춤]을
+// 켜면 [승인하고 멈춤] 화면이 되어도 [정리 세션 닫기]가 남고, 멈추는 동안은 전달하지 않는다(D137) → 끄고
+// [정리 끝 → push/PR 진행]을 누르면 로컬 bare 원격에 Work 브랜치가 생기고 Work 완료(전달: push)가 된다 → [Work 정리]의
+// 요약에 push됨이 보이고 [정리]하면 worktree가 없어지고 보관됨이 된다(산출물은 남음).
 // M7: 두 번째 Work의 새 Work 대화상자에 이 Work의 자동 승인(앱 설정 따름: 켜짐)이 보인다 → 수정이 승인 대기가 되면
 // 승인 화면에 자동 승인 카운트다운과 [취소]가 보인다 → [취소]하면 카운트다운이 없어지고 까닭([취소]를 누름)이 보이며,
 // 사람이 [승인]한다.
@@ -23,7 +25,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test'
 import { git, makeRepo } from '../flow/repo'
-import { REPO_FILES, REQUEST, scenario } from '../flow/scenarios'
+import { REPO_FILES, REQUEST, scenario, steps } from '../flow/scenarios'
 
 const isWin = process.platform === 'win32'
 const APP_DIR = path.resolve(__dirname, '../..')
@@ -61,11 +63,27 @@ test.beforeAll(async () => {
   root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'relay-smoke-')))
   home = path.join(root, 'home')
   ;({ repo, remote } = makeRepo(root, 'sample', REPO_FILES))
-  // intake는 초안과 handoff를 쓰고 멈추고, evidence는 시작만 한다
+  // intake는 초안과 handoff를 쓰고 멈추고, evidence는 시작만 한다. 최종 검증은 커밋 안 된 파일을 남기고,
+  // 정리 세션은 그 파일을 지운다 (7-5)
   const scenarioFile = path.join(root, 'scenario.json')
   fs.writeFileSync(
     scenarioFile,
-    JSON.stringify(scenario('M', { evidence: [{ do: 'prompt' }, { do: 'wait' }] })),
+    JSON.stringify({
+      ...scenario('L', {
+        evidence: [{ do: 'prompt' }, { do: 'wait' }],
+        'final-verify': [
+          ...steps('verify', 'S').slice(0, -1),
+          { do: 'edit', files: { 'debug.log': '실험 출력\n' } },
+          { do: 'stop' },
+        ],
+      }),
+      cleanup: [
+        { do: 'prompt', text: '커밋 안 된 파일을 지워 줘' },
+        { do: 'git', args: ['clean', '-f', '-q'] },
+        { do: 'stop' },
+        { do: 'wait' },
+      ],
+    }),
   )
   env = {
     ...process.env,
@@ -123,7 +141,7 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   // 승인 화면 (D83)과 [의도 승인] (4.1)
   const approve = win.getByRole('button', { name: '의도 승인' })
   await expect(approve).toBeEnabled({ timeout: 60_000 })
-  await expect(win.getByLabel('size')).toHaveValue('M')
+  await expect(win.getByLabel('size')).toHaveValue('L')
   await win.screenshot({ path: 'test-results/approval.png' })
   await approve.click()
 
@@ -134,7 +152,7 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await expect.poll(() => findFile(path.join(home, 'projects'), 'intent.md')).not.toBeNull()
   const intent = findFile(path.join(home, 'projects'), 'intent.md')
   expect(fs.readFileSync(intent ?? '', 'utf8')).toContain(
-    'schema_version: 1\nversion: 1\ntype: bugfix\nsize: M\n',
+    'schema_version: 1\nversion: 1\ntype: bugfix\nsize: L\n',
   )
   await expect(rows).toContainText('FAKE-CLAUDE READY', { timeout: 60_000 })
   await win.screenshot({ path: 'test-results/next-task.png' })
@@ -177,7 +195,12 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
       auto_approve_countdown_sec: number
     }
   await expect.poll(() => config().session_limit).toBe(2)
-  expect(config().auto_approve).toEqual({ evidence: false, rca: false, fix: true })
+  expect(config().auto_approve).toEqual({
+    investigate: false,
+    evidence: false,
+    rca: false,
+    fix: true,
+  })
   expect(config().auto_approve_countdown_sec).toBe(600)
 
   // [단계 선택] (6.2, D82): intake를 고르면 결과를 미리 보인다
@@ -263,6 +286,32 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await expect(win.locator('table.verdicts')).toContainText('재현 절차가 더 이상 실패하지 않는다')
   await win.screenshot({ path: 'test-results/completion.png' })
   await push.click()
+
+  // 최종 검증이 남긴 커밋 안 된 파일 때문에 고른다 (7-5): [AI 세션 열기]로 정리 세션을 연다
+  await expect(win.getByRole('list', { name: '커밋 안 된 변경' })).toContainText('debug.log', {
+    timeout: 30_000,
+  })
+  await win.getByRole('button', { name: 'AI 세션 열기', exact: true }).click()
+  const closeCleanup = win.getByRole('button', { name: '정리 세션 닫기', exact: true })
+  const finishCleanup = win.getByRole('button', { name: '정리 끝 → push/PR 진행', exact: true })
+  await expect(closeCleanup).toBeVisible({ timeout: 60_000 })
+  await expect(win.getByText('git status가 깨끗합니다')).toBeVisible({ timeout: 60_000 })
+  // 정리 세션 중에도 받는 [이 단계 끝나면 멈춤](D137)을 켜면 [승인하고 멈춤] 화면이 된다. 정리 세션을 끝내는 버튼은
+  // 남고, 정리 세션이 열린 동안은 승인하지 않으며, 멈추는 동안은 전달하지 않는다
+  const stopAfter = win.getByLabel('이 단계 끝나면 멈춤')
+  await stopAfter.click()
+  await expect(stopAfter).toBeChecked({ timeout: 30_000 })
+  await expect(win.getByRole('button', { name: '승인하고 멈춤', exact: true })).toBeDisabled({
+    timeout: 30_000,
+  })
+  await expect(closeCleanup).toBeEnabled()
+  await expect(finishCleanup).toBeDisabled()
+  await win.screenshot({ path: 'test-results/cleanup-stop.png' })
+  await stopAfter.click()
+  await expect(stopAfter).not.toBeChecked({ timeout: 30_000 })
+  await expect(finishCleanup).toBeEnabled({ timeout: 30_000 })
+  await win.screenshot({ path: 'test-results/cleanup.png' })
+  await finishCleanup.click()
   const done = win.locator('.notice.done')
   await expect(done).toContainText('Work 완료 (전달: push)', { timeout: 60_000 })
   await expect(done).toContainText('비교 URL이 없습니다')

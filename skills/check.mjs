@@ -3,8 +3,10 @@
 //
 // 1. 머리글: disable-model-invocation: true, description 있음, name 없음 (D33)
 // 2. 크기: SKILL.md + _common.md. Claude Code 어림(글자 수 / 4)으로 판정, 모델 토큰 어림은 참고 (D31, D95)
+//    합친 스킬(investigate)은 앱이 배포하는 모양대로 합쳐 잰다 (D148)
 // 3. 템플릿: 주석 단 템플릿에 값을 채운 예시가 docs/contracts 스키마를 통과하는지 (D87)
-// 4. 설계 대조: 산출물 템플릿의 절 제목, 입력·결정 지점·사람이 정할 결정·완료조건 항목 (5.6.1~5.6.8)
+// 4. 설계 대조: 산출물 템플릿의 절 제목, 입력·결정 지점·사람이 정할 결정·완료조건 항목 (5.6.1~5.6.9)
+// 5. 합친 스킬: 단독 구간 표시가 짝이 맞고, 합친 스킬에 단독 구간과 부분의 머리글이 없는지 (D148)
 
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -17,11 +19,26 @@ const root = join(here, '..');
 const read = (p) => readFileSync(join(root, p), 'utf8').replace(/\r\n/g, '\n');
 
 const SIZE_TARGET = 5000; // D31
-const SKILLS = ['work-start', 'evidence', 'root-cause', 'fix', 'final-verify'];
+const SKILLS = ['work-start', 'investigate', 'evidence', 'root-cause', 'fix', 'final-verify'];
+
+// 합친 스킬 (D148). 머리 뒤에 이 스킬들의 본문을 차례로 붙인다. 원본: app/src/adapters/claude.ts SKILL_PARTS
+const PARTS = { investigate: ['evidence', 'root-cause'] };
 
 const design = read('docs/design.md');
 const common = read('skills/_common.md');
-const skills = Object.fromEntries(SKILLS.map((s) => [s, read(`skills/${s}/SKILL.md`)]));
+const sources = Object.fromEntries(SKILLS.map((s) => [s, read(`skills/${s}/SKILL.md`)]));
+
+// 앱의 배포(app/src/adapters/claude.ts soloSkill, composeSkill)와 같은 방식으로 합친다
+const SOLO_BLOCK = /^<!-- solo -->\n[\s\S]*?^<!-- \/solo -->\n/gm;
+const SOLO_MARK = /^<!-- \/?solo -->\n/gm;
+const soloSkill = (text) => text.replace(SOLO_MARK, '');
+const partBody = (text) =>
+  text.replace(/^---\n[\s\S]*?\n---\n/, '').replace(SOLO_BLOCK, '').replace(/\n{3,}/g, '\n\n').trim();
+const composeSkill = (head, parts) => `${[soloSkill(head).trimEnd(), ...parts.map(partBody)].join('\n\n')}\n`;
+// 에이전트가 받는 스킬 본문(공통 규칙을 붙이기 전)
+const skills = Object.fromEntries(
+  SKILLS.map((s) => [s, PARTS[s] ? composeSkill(sources[s], PARTS[s].map((p) => sources[p])) : soloSkill(sources[s])]),
+);
 
 let failures = 0;
 const ok = (msg) => console.log(`  ok    ${msg}`);
@@ -72,7 +89,7 @@ const sameSet = (a, b) => a.length === b.length && a.every((x) => b.includes(x))
 // ---------- 1. 머리글 ----------
 
 console.log('\n[1] 머리글 (D33)');
-for (const [name, text] of Object.entries(skills)) {
+for (const [name, text] of Object.entries(sources)) {
   const fm = frontMatter(text);
   check(fm && fm.data['disable-model-invocation'] === true, `${name}: disable-model-invocation: true`);
   check(fm && typeof fm.data.description === 'string' && fm.data.description.length > 0, `${name}: description 있음`);
@@ -163,6 +180,7 @@ if (intentTpl) {
 console.log('\n[4] 설계 대조: 산출물 템플릿의 절 제목');
 const templateSources = {
   'work-start': ['### 5.3'],
+  investigate: ['#### 5.6.5', '#### 5.6.6'],
   evidence: ['#### 5.6.5'],
   'root-cause': ['#### 5.6.6'],
   fix: ['#### 5.6.7'],
@@ -221,7 +239,19 @@ const spec = {
     ['5.3', '완료조건에 push/PR 없음', /Never include push or PR/],
     ['D42', 'size 근거는 handoff decisions', /rationale in handoff `decisions`/],
     ['D63', 'S 기준 세 가지', /way to reproduce[\s\S]*one place[\s\S]*non-goals or constraints/],
+    ['D150', 'L 기준 세 가지, 아니면 M', /propose `L` when any[\s\S]*`M` when none[\s\S]*no way to reproduce[\s\S]*intermittent[\s\S]*several modules/],
     ['D43', '완료조건 네 항목', /## Done when[\s\S]*required sections[\s\S]*verifiable[\s\S]*`size` is proposed[\s\S]*`open_questions`/],
+  ],
+  investigate: [
+    ['5.6.9', '입력: context.md, request.md 경로, 1부의 evidence.md', /`context\.md`[\s\S]*`request\.md`[\s\S]*Part 2 reads the `evidence\.md`/],
+    ['D147', '1부 evidence → 2부 rca, 1부 뒤에 마무리하지 않음', /Part 1:\*\*[\s\S]*Do not close after Part 1[\s\S]*Part 2:\*\*[\s\S]*Close once/],
+    ['5.6.9', '산출물을 나눔: evidence.md는 관찰만', /`evidence\.md` holds only observed facts[\s\S]*`rca\.md`/],
+    ['D45', '재현 안 될 때: 재현 없이 진행 → 2부, blocked → 전체', /without reproduction" means you go on to Part 2[\s\S]*closes the whole task/],
+    ['5.6.9', '질문: 두 부분의 결정 지점, 1부 질문은 1부에서', /both parts apply[\s\S]*Ask Part 1 questions in Part 1/],
+    ['5.6.9', 'handoff 하나가 두 부분을 담음', /cover both parts/],
+    ['5.6.9', '완료조건: 두 부분의 완료조건', /## Done when\n\n- The "Done when" items of both parts/],
+    ['D46', '1부: 관찰만', /Observe only/],
+    ['D48', '2부: 사람 추정 판정', /맞음 \/ 틀림 \/ 판단 불가/],
   ],
   evidence: [
     ['5.6.5', '입력: context.md, request.md 경로', /`context\.md`[\s\S]*`request\.md`/],
@@ -247,10 +277,11 @@ const spec = {
     ['D97', '기준 커밋은 context.md', /base commit[\s\S]*base commit \(from `context\.md`\)/],
     ['6.2', '현재 코드 위에서 이어서', /Continuing on current code/],
     ['D64', 'S: 재현 확인과 원인 → 원인과 재현 절', /S path[\s\S]*`원인과 재현`[\s\S]*replaces `rca와 달라진 점`/],
-    ['D66', 'S: 실패하면 evidence/rca 추천, size 안 바꿈', /`recommended_next` to `evidence` or `rca`[\s\S]*Do not change `size`/],
+    ['D66', 'S: 실패하면 investigate 추천, size 안 바꿈 (D149)', /`recommended_next` to `investigate`[\s\S]*Do not change `size`/],
+    ['A33', 'S 경로는 rca.md가 없을 때만', /`size: S` and `context\.md` lists no `rca\.md`/],
     ['D53', '재현 테스트: 수정 전 실패, 후 통과, 못 하면 이유', /fails before the fix and passes after[\s\S]*`risks`/],
     ['D54', '커밋 수 제한 없음, 레포 관례', /any number[\s\S]*commit message convention/],
-    ['D55', 'rca가 틀리면 recommended_next rca', /`recommended_next: \{node: rca, reason\}`[\s\S]*only the fix location differs/],
+    ['D55', 'rca가 틀리면 rca.md를 쓴 단계 추천(rca 또는 investigate)', /`recommended_next: \{node: rca, reason\}`[\s\S]*`investigate` instead of `rca`[\s\S]*only the fix location differs/],
     ['D56', '기존 테스트 변경 → risks, 변경 요약에 표시', /existing test must change[\s\S]*`risks`[\s\S]*`변경 요약`/],
     ['D57', '테스트 명령 실행, 기준 커밋 실패 구분', /Run tests[\s\S]*also fails at the base commit/],
     ['5.6.7', '결정 지점: 구현 방식', /How to implement within the fix direction/],
@@ -260,6 +291,7 @@ const spec = {
   'final-verify': [
     ['5.6.8', '입력: evidence.md, fix.md, rca.md', /`evidence\.md` and `fix\.md`, and `rca\.md`/],
     ['D65', 'S: 원인과 재현의 재현 절차, 없으면 판정 불가', /S path[\s\S]*`원인과 재현`[\s\S]*판정 불가/],
+    ['A33', 'S 경로는 evidence.md가 없을 때만', /`size: S` and `context\.md` lists no `evidence\.md`/],
     ['5.6.8', '코드를 바꾸지 않음', /does not change code/],
     ['D58', '모든 완료조건을 직접 다시 실행', /Re-run everything yourself[\s\S]*only for comparison/],
     ['D59', '판정 값 셋, 판정 불가 이유', /통과 \/ 실패 \/ 판정 불가[\s\S]*give the reason/],
@@ -276,6 +308,27 @@ const spec = {
 for (const [name, items] of Object.entries(spec)) {
   const text = name === '_common' ? common : skills[name];
   for (const [ref, desc, re] of items) check(re.test(text), `${name}: ${desc} (${ref})`);
+}
+
+// ---------- 5. 합친 스킬 (D148) ----------
+
+console.log('\n[5] 합친 스킬 (D148)');
+for (const [name, text] of Object.entries(sources)) {
+  const marks = [...text.matchAll(/^<!-- (\/?)solo -->$/gm)].map((m) => m[1]);
+  const paired = marks.length % 2 === 0 && marks.every((m, i) => m === (i % 2 ? '/' : ''));
+  check(paired, `${name}: 단독 구간 표시가 짝이 맞음 (${marks.length / 2}쌍)`);
+  check(!/<!-- \/?solo -->/.test(skills[name]), `${name}: 배포하는 본문에 단독 구간 표시가 남지 않음`);
+}
+for (const [name, parts] of Object.entries(PARTS)) {
+  const text = skills[name];
+  check((text.match(/^---\n/gm) ?? []).length === 2, `${name}: 머리글은 머리의 것 하나 (부분의 머리글은 뺌)`);
+  for (const p of parts) {
+    check(text.includes(`# relay: ${p === 'root-cause' ? 'root-cause (rca)' : p}`), `${name}: 부분 ${p}의 본문이 있음`);
+    for (const m of sources[p].matchAll(/^<!-- solo -->\n([\s\S]*?)^<!-- \/solo -->$/gm)) {
+      const block = m[1].trim();
+      check(text.includes(partBody(sources[p])) && !partBody(sources[p]).includes(block), `${name}: ${p}의 단독 구간이 빠짐 ("${block.split('\n')[0].slice(0, 40)}")`);
+    }
+  }
 }
 
 console.log(failures ? `\n실패 ${failures}건` : '\n모두 통과');

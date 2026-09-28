@@ -7,10 +7,12 @@ disable-model-invocation: true
 
 Find the cause from the observed facts of evidence, and write it with its proof in `rca.md` in the task directory.
 
+<!-- solo -->
 ## Inputs
 
 - The argument gives the path of `context.md`. Read it first.
 - `evidence.md`, at the path in `context.md`.
+<!-- /solo -->
 
 ## Rules
 

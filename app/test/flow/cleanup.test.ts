@@ -2,7 +2,9 @@
 // 정리 뒤 worktree는 없고 산출물은 남는다. 되감기 백업 브랜치는 "함께 삭제"(기본 체크)로 지운다. 작업 브랜치는
 // 기본으로 두고 push됐거나 머지됐을 때만 지운다. 커밋 안 된 변경은 사람이 확인해야 지운다(--force).
 // 보관된 Work의 탭과 읽기 전용 승인 화면은 메인 체크아웃에서 git을 돌려 그대로 보인다.
+import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { CleanPreview } from '../../src/shared/views'
@@ -27,6 +29,23 @@ afterEach(async () => {
 })
 
 const read = (file: string) => fs.readFileSync(file, 'utf8')
+
+/** 파일을 지울 수 없게 표시한다 (Linux의 chattr +i, root만). 없거나 안 되면 false */
+function immutable(file: string, on: boolean): boolean {
+  if (process.platform !== 'linux') return false
+  return spawnSync('chattr', [on ? '+i' : '-i', file]).status === 0
+}
+
+/** worktree 지우기를 도중에 실패시킬 수 있는가 (A8). Windows의 잠긴 파일은 실기 확인에 맡긴다 */
+const canLock = (() => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'relay-chattr-'))
+  const file = path.join(dir, 'x')
+  fs.writeFileSync(file, '')
+  const ok = immutable(file, true)
+  if (ok) immutable(file, false)
+  fs.rmSync(dir, { recursive: true, force: true })
+  return ok
+})()
 
 interface Setup {
   h: Harness
@@ -330,6 +349,54 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
     const verify = await s.h.relay.review(s.key, 't-03')
     expect(verify?.completion?.diff).toContain('+  if (xs.length === 0) return 0')
   })
+
+  it.runIf(canLock)(
+    'worktree를 지우다 도중에 실패해 반쯤 지운 폴더가 남으면 그 경로와 직접 지우라는 안내를 보인다. 지우면 다시 정리한다 (D140)',
+    async () => {
+      const s = await setup(scenario('S'))
+      const done = await drive(s.h.relay, s.h.ui, s.key, { size: 'S' })
+      expect(done.status).toBe('completed')
+      await settle(s.h, s.key)
+      const stuck = path.join(s.tree, 'stuck', 'x.txt')
+      fs.mkdirSync(path.dirname(stuck))
+      fs.writeFileSync(stuck, '지울 수 없음\n')
+      expect(immutable(stuck, true)).toBe(true)
+      const hint = `반쯤 지운 worktree 폴더가 남아 있음: ${s.tree} (git은 이 폴더를 더 이상 worktree로 보지 않음). 폴더를 직접 지운 뒤 다시 누르세요`
+      try {
+        const first = await preview(s)
+        const r = await s.h.relay.clean(s.key, {
+          deleteBranch: false,
+          deleteBackups: true,
+          confirmed: true,
+          expect: first.expect,
+        })
+        expect(r.ok).toBe(false)
+        expect(!r.ok && r.error).toMatch(/^정리 실패: /)
+        expect(!r.ok && r.error).toContain(hint)
+        await settle(s.h, s.key)
+        expect(work(s).status).toBe('completed')
+        expect(await s.h.relay.cleanPreview(s.key)).toEqual({
+          ok: false,
+          error: `정리 요약을 만들지 못함: ${hint}`,
+        })
+      } finally {
+        immutable(stuck, false)
+      }
+      fs.rmSync(s.tree, { recursive: true, force: true })
+      const again = await preview(s)
+      expect(again.worktree).toBe(false)
+      expect(
+        await s.h.relay.clean(s.key, {
+          deleteBranch: false,
+          deleteBackups: true,
+          confirmed: false,
+          expect: again.expect,
+        }),
+      ).toEqual({ ok: true })
+      await settle(s.h, s.key)
+      expect(work(s).status).toBe('archived')
+    },
+  )
 
   it('다시 켜도 보관된 Work는 보관됨이고 읽기 전용 화면이 열린다 (시나리오 8, 9)', async () => {
     const s = await setup(scenario('S'))

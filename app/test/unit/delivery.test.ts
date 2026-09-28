@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  cleanupActions,
   approvalStops,
   closingButtons,
   commitMessage,
@@ -320,5 +321,30 @@ describe('전달 결과의 화면 (7-6)', () => {
       compareUrl: 'https://github.com/o/r/compare/main...relay%2Fw-20260927-001?expand=1',
     })
     expect(completedDelivery(pushed)).toBe('push')
+  })
+})
+
+describe('정리 세션이 열린 동안의 조작 (D137)', () => {
+  it('재개, 다시, 단계 선택, 포기를 끈다. 나머지는 그대로다', () => {
+    const all = {
+      interrupt: true,
+      resume: true,
+      retry: true,
+      resumeWork: true,
+      selectStep: true,
+      stopAfter: true,
+      abandon: true,
+      clean: true,
+    }
+    expect(cleanupActions(all)).toEqual({
+      interrupt: true,
+      resume: false,
+      retry: false,
+      resumeWork: false,
+      selectStep: false,
+      stopAfter: true,
+      abandon: false,
+      clean: true,
+    })
   })
 })

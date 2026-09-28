@@ -3,7 +3,13 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { claudeVersion, deploySkill, mergeSkill } from '../../src/adapters/claude'
+import {
+  claudeVersion,
+  composeSkill,
+  deploySkill,
+  mergeSkill,
+  soloSkill,
+} from '../../src/adapters/claude'
 import { WorkFiles, loadConfig, relayHome, writeFileAtomic } from '../../src/adapters/store'
 import { DEFAULT_CONFIG } from '../../src/shared/config'
 import { FAKE_CLAUDE, SKILLS } from '../flow/harness'
@@ -127,14 +133,54 @@ describe('[어댑터] 스킬 배포와 claude 실행 (5.6.3, D103, D105, D108)',
     const first = await deploySkill({ source: SKILLS, workDir, skill: 'root-cause' })
     expect(fs.readdirSync(skills).sort()).toEqual(['my-own', 'relay-root-cause'])
     const expected = mergeSkill(
-      read(path.join(SKILLS, 'root-cause', 'SKILL.md')),
+      soloSkill(read(path.join(SKILLS, 'root-cause', 'SKILL.md'))),
       read(path.join(SKILLS, '_common.md')),
     )
     expect(read(first.file)).toBe(expected)
+    expect(read(first.file)).toContain('`evidence.md`, at the path in `context.md`.')
+    expect(read(first.file)).not.toContain('<!-- solo -->')
     expect(first.hash).toMatch(/^sha256:[0-9a-f]{64}$/)
     // 같은 원본이면 해시가 같다
     expect((await deploySkill({ source: SKILLS, workDir, skill: 'root-cause' })).hash).toBe(
       first.hash,
+    )
+  })
+
+  it('investigate는 머리 뒤에 evidence와 root-cause의 본문을 붙여 배포한다 (D148)', async () => {
+    const workDir = path.join(root, 'w-investigate')
+    const deployed = await deploySkill({ source: SKILLS, workDir, skill: 'investigate' })
+    expect(path.basename(path.dirname(deployed.file))).toBe('relay-investigate')
+    const src = (name: string) => read(path.join(SKILLS, name, 'SKILL.md'))
+    const text = read(deployed.file)
+    expect(text).toBe(
+      mergeSkill(
+        composeSkill(src('investigate'), [src('evidence'), src('root-cause')]),
+        read(path.join(SKILLS, '_common.md')),
+      ),
+    )
+    // 머리글은 머리의 것 하나이고, 두 부분과 공통 규칙이 차례로 있다
+    expect(text.match(/^description: /gm)).toHaveLength(1)
+    expect(text).toMatch(/^---\ndescription: relay investigate step/)
+    const order = [
+      '# relay: investigate',
+      '# relay: evidence',
+      '# relay: root-cause (rca)',
+      '# Common rules',
+    ]
+    const at = order.map((h) => text.indexOf(`\n${h}`))
+    expect(at.every((i) => i > 0)).toBe(true)
+    expect([...at].sort((a, b) => a - b)).toEqual(at)
+    // 부분의 단독 구간은 빠진다
+    expect(text).not.toContain('Judging the cause is the job of rca.')
+    expect(text).not.toContain('`evidence.md`, at the path in `context.md`.')
+    expect(text).not.toContain('<!-- solo -->')
+  })
+
+  it('단독 구간: 단독으로 쓰면 표시 줄만 지우고, 합치면 구간을 뺀다 (D148)', () => {
+    const part = '---\nd: 1\n---\n# P\n\n한 줄\n<!-- solo -->\n단독만\n<!-- /solo -->\n\n## 절\n'
+    expect(soloSkill(part)).toBe('---\nd: 1\n---\n# P\n\n한 줄\n단독만\n\n## 절\n')
+    expect(composeSkill('---\nd: 0\n---\n# H\r\n', [part])).toBe(
+      '---\nd: 0\n---\n# H\n\n# P\n\n한 줄\n\n## 절\n',
     )
   })
 

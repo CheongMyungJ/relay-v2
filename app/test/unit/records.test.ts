@@ -164,7 +164,7 @@ describe('intent.md 확정본 (5.3)', () => {
   })
 
   it('CRLF 초안도 LF로 쓴다. 확정본 본문은 초안 검사를 그대로 통과한다', () => {
-    const text = confirmedIntent(draft.replace(/\n/g, '\r\n'), { version: 2, size: 'M' })
+    const text = confirmedIntent(draft.replace(/\n/g, '\r\n'), { version: 2, size: 'L' })
     expect(text).not.toContain('\r')
     expect(text).toContain('version: 2\n')
     // schema_version, version은 초안 스키마에 없는 필드라 경고만 나온다 (D85)
@@ -172,9 +172,9 @@ describe('intent.md 확정본 (5.3)', () => {
   })
 
   it('머리글을 읽을 수 없거나 type이 없으면 만들지 않는다', () => {
-    expect(() => confirmedIntent('## 목표\n', { version: 1, size: 'M' })).toThrow()
+    expect(() => confirmedIntent('## 목표\n', { version: 1, size: 'L' })).toThrow()
     expect(() =>
-      confirmedIntent('---\nsize: M\n---\n## 목표\n', { version: 1, size: 'M' }),
+      confirmedIntent('---\nsize: M\n---\n## 목표\n', { version: 1, size: 'L' }),
     ).toThrow(/type/)
   })
 })

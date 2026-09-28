@@ -3,7 +3,8 @@
 // [이 단계 새 세션으로 다시](D114), 재시작 조정(D75, D78), 설정(D70, D72, D73), 알림(D81).
 import fs from 'node:fs'
 import path from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { HookServer, type HookHandler } from '../../src/adapters/hooks'
 import type { WorkView } from '../../src/shared/views'
 import type { LifecycleEvent, WorkState } from '../../src/shared/work'
 import { drive } from './driver'
@@ -141,6 +142,50 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
       expect(w.tasks.every((t) => t.queued_at === undefined)).toBe(true)
     }
     expect(s.h.ui.works.get(c)?.badge).toEqual({ kind: 'done', label: '완료', hot: false })
+  })
+
+  it('다시 연 세션에는 앞 프로세스가 늦게 보낸 훅을 적용하지 않는다 (D144)', async () => {
+    // 세션마다 등록한 훅 처리기를 붙잡아 둔다. 앞 프로세스의 요청이 토큰 확인을 지나 처리 줄에서 기다린 경우다
+    const handlers: HookHandler[] = []
+    const register = HookServer.prototype.register
+    const spy = vi.spyOn(HookServer.prototype, 'register').mockImplementation(function (
+      this: HookServer,
+      token,
+      taskId,
+      handler,
+    ) {
+      handlers.push(handler)
+      return register.call(this, token, taskId, handler)
+    })
+    try {
+      const s = await setup({
+        tasks: { ...scenario('S').tasks, 'work-start': [{ do: 'prompt' }, { do: 'wait' }] },
+        resume: { 'work-start': [{ do: 'wait' }] },
+      })
+      const key = await s.create()
+      const dir = s.dir(key)
+      await untilTask(s, key, (t) => t.status === 'working' && t.live, '작업 중')
+      expect(await s.h.relay.interrupt(key, 't-01')).toEqual({ ok: true })
+      expect(await s.h.relay.resume(key, 't-01')).toEqual({ ok: true })
+      await untilTask(s, key, (t) => t.live, '재개')
+      await settle(s.h, key)
+      expect(handlers).toHaveLength(2)
+      const sessionId = work(dir).tasks[0]?.session?.id
+
+      // 앞 세션의 늦은 SessionEnd와 Stop
+      const stale = handlers[0] as HookHandler
+      await stale({
+        taskId: 't-01',
+        event: 'SessionEnd',
+        body: { session_id: sessionId, reason: 'other' },
+      })
+      await stale({ taskId: 't-01', event: 'UserPromptSubmit', body: { session_id: sessionId } })
+      await settle(s.h, key)
+      expect(work(dir).tasks[0]).toMatchObject({ status: 'idle', session: { alive: true } })
+      expect(s.h.ui.works.get(key)?.tasks[0]).toMatchObject({ live: true, status: 'idle' })
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   it('[즉시 중단] 뒤 [재개]는 같은 세션 id로 --resume을 부르고, 이전 화면 뒤에 이어 보인다 (시나리오 3-4)', async () => {
@@ -513,7 +558,7 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
   })
 
   it('설정: 세션 상한을 올리면 대기열이 바로 시작하고, 질문 방식은 다음에 시작하는 task부터 쓴다 (D70, D72, D73)', async () => {
-    const s = await setup(scenario('M'), { session_limit: 1 })
+    const s = await setup(scenario('L'), { session_limit: 1 })
     const a = await s.create('버그 A')
     const b = await s.create('버그 B', { question_mode: { 'work-start': 'confirm_each' } })
     await untilTask(s, b, (t) => t.status === 'queued', 'B 대기열')
@@ -540,7 +585,7 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
       await s.h.relay.updateWorkSettings(a, { question_mode: { 'root-cause': 'confirm_each' } }),
     ).toEqual({ ok: true })
     expect((await s.h.relay.updateWorkSettings(a, { question_mode: { fix: 'x' } })).ok).toBe(false)
-    const result = await drive(s.h.relay, s.h.ui, a, { size: 'M' })
+    const result = await drive(s.h.relay, s.h.ui, a, { size: 'L' })
     expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed' })
     await settle(s.h, a)
     const ctx = (dir: string) => read(path.join(s.dir(a), 'tasks', dir, 'context.md'))

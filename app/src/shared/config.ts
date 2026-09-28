@@ -1,14 +1,15 @@
 // 앱 설정 config.json (5.1.1)과 Work별 덮어쓰기 (D72).
 // 파일에 쓰는 모양이라 키는 snake_case다.
 
-/** relay 스킬 (5.6). 질문 방식을 스킬마다 고른다 (D26) */
-export type SkillName = 'work-start' | 'evidence' | 'root-cause' | 'fix' | 'final-verify'
+/** relay 스킬 (5.6). 질문 방식을 스킬마다 고른다 (D26). investigate는 evidence와 root-cause를 합친 스킬이다 (D148) */
+export type SkillName =
+  'work-start' | 'investigate' | 'evidence' | 'root-cause' | 'fix' | 'final-verify'
 
 /** 질문 방식 (5.6.1). 초안 우선 / 결정마다 확인 */
 export type QuestionMode = 'draft_first' | 'confirm_each'
 
 /** 자동 승인을 켤 수 있는 노드. intake(의도 승인)와 verify(Work 완료)는 항상 수동이다 (4.2) */
-export type AutoApproveNode = 'evidence' | 'rca' | 'fix'
+export type AutoApproveNode = 'investigate' | 'evidence' | 'rca' | 'fix'
 
 export interface AppConfig {
   schema_version: 1
@@ -42,6 +43,7 @@ export interface WorkSettings {
  */
 export const SKILL_TITLES: readonly (readonly [SkillName, string])[] = [
   ['work-start', '의도 정리'],
+  ['investigate', '재현과 원인 분석'],
   ['evidence', '재현과 관찰'],
   ['root-cause', '원인 분석'],
   ['fix', '수정'],
@@ -53,6 +55,7 @@ export const SKILL_TITLES: readonly (readonly [SkillName, string])[] = [
  * core/pipeline의 NODE_INFO와 같은지 [단위]가 확인한다.
  */
 export const AUTO_APPROVE_TITLES: readonly (readonly [AutoApproveNode, string])[] = [
+  ['investigate', '재현과 원인 분석'],
   ['evidence', '재현과 관찰'],
   ['rca', '원인 분석'],
   ['fix', '수정'],
@@ -68,10 +71,11 @@ export const QUESTION_MODE_LABEL: Readonly<Record<QuestionMode, string>> = {
 export const DEFAULT_CONFIG: AppConfig = {
   schema_version: 1,
   session_limit: 3,
-  auto_approve: { evidence: false, rca: false, fix: false },
+  auto_approve: { investigate: false, evidence: false, rca: false, fix: false },
   auto_approve_countdown_sec: 15,
   question_mode: {
     'work-start': 'draft_first',
+    investigate: 'draft_first',
     evidence: 'draft_first',
     'root-cause': 'draft_first',
     fix: 'draft_first',

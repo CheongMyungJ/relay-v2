@@ -25,7 +25,8 @@ const title = (node: NodeName) => `${NODE_INFO[node].title}(${node})`
 
 /**
  * 끊긴 작업: 앱을 다시 켜며 남아 있던 진행 중 작업 기록 (재시작 조정이 표시한다). 없으면 undefined.
- * 진행 중 작업 기록은 명령 하나 안에서 쓰고 지우므로 명령 사이에 남는 것은 앱이 도중에 꺼졌을 때뿐이다
+ * 진행 중 작업 기록은 명령 하나 안에서 쓰고 지우므로 명령 사이에 남는 것은 앱이 도중에 꺼졌을 때와,
+ * 되감기가 코드를 바꾼 뒤 실패했을 때(D136)다
  */
 export function cutOperation(work: WorkState): WorkOperation | undefined {
   return work.operation?.interrupted_at === undefined ? undefined : work.operation
@@ -139,7 +140,8 @@ function cleanView(op: CleanOperation): OperationView {
     ],
     retry:
       '[다시 시도]: 끊긴 단계부터 정리를 마치고 보관됨으로 바꿉니다. 반쯤 지운 worktree는 마저 지우고, ' +
-      '이미 지운 브랜치는 건너뜁니다.',
+      '이미 지운 브랜치는 건너뜁니다. 끊긴 뒤 worktree를 고치거나 커밋했으면 그것도 지우므로 [무시]를 누른 뒤 ' +
+      '[Work 정리]로 다시 확인하세요.',
     ignore: '[무시]: 기록만 지웁니다. [Work 정리]를 다시 할 수 있습니다.',
     choice: null,
   }
@@ -274,7 +276,7 @@ export function cleanResume(recordedForce: boolean, status: readonly string[]): 
   return {
     ok: false,
     error:
-      'worktree에 지우다 만 것 말고 다른 변경이 있어 정리를 멈춤. [Work 정리]로 다시 확인하세요',
+      'worktree에 지우다 만 것 말고 다른 변경이 있어 정리를 멈춤. [무시]를 누른 뒤 [Work 정리]로 다시 확인하세요',
   }
 }
 
