@@ -935,6 +935,8 @@ core는 `core/settings.ts`를 빼면 줄 95% 이상, 가지 84% 이상이다(`ma
 | A14 | 고침(시험) | 되돌릴 커밋 없이 커밋 안 된 변경만 있는 되감기의 [흐름]을 더했다(`test/flow/rewind.test.ts`). 실행 쪽 백업 조건을 커밋 수만 보게 깨뜨리면 실패하는 것을 확인했다. 코드는 그대로다 | — | 601680b |
 | A15 | 고침(시험) | 창 설정값(`main/security.ts` WEB_PREFERENCES), 외부 주소 검사(externalUrl), Markdown 변환(`renderer/src/markdown.ts`)을 떼어 [단위] `test/unit/security.test.ts`로 지킨다. CSP는 `index.html`을 읽어 본다. 동작은 그대로다. D79·D83·D119의 화면 분기는 여전히 [스모크]에만 있다 | — | bb8335c |
 | A16 | 문서만 | `checks.md`의 M2~M7 표에 [실기] "아직 안 함(3단계로 미룸)" 줄을 더했다. 실제 확인은 3단계에서 한다(1.3) | — | 6b39e4d |
+| A17 | 문서만 | `implementation.md` 8.4에 실행 방법(`RELAY_REAL_CLAUDE=1`, `dry`, 모델과 effort 변수)을 적었다. 변수 없이 돌리면 8개가 모두 건너뛰고 통과하는 것을 다시 확인했다 | — | (이 커밋) |
+| A18 | 문서만 | 8.1 표와 8.3 `app-claude` 줄, 8.4에 지금은 Linux 클라우드 세션에서 돌린다는 것과 Linux 준비 절차를 적었다. `vitest.config.ts`와 `real.test.ts`의 주석을 고쳤다. 스파이크 뒤 secret이 없어진 까닭은 기록에 없다고 적었다 | — | (이 커밋) |
 
 ## 부록. 1단계 대조표
 

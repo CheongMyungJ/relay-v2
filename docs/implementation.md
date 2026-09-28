@@ -461,7 +461,7 @@ app/src/
 | [어댑터] | `adapters`: 실제 git, 파일, node-pty, HTTP 서버, 프로세스 종료 | Vitest | Windows 러너 | push, PR |
 | [흐름] | `main` 조립 + `adapters` + 가짜 `claude`(I25, I26) | Vitest | Windows 러너 | push, PR |
 | [스모크] | 설치 파일과 화면(I27) | Playwright `_electron` | Windows 러너 | 수동. 설치 파일 워크플로 |
-| [실제] | 앱 흐름 + 실제 `claude` + 스킬(I29) | Vitest와 시험 도구(I17) | Windows 러너 | 수동. 마일스톤 완료, Claude Code 업데이트 때 |
+| [실제] | 앱 흐름 + 실제 `claude` + 스킬(I29) | Vitest와 시험 도구(I17) | Windows 러너. 지금은 Linux 클라우드 세션(8.4) | 수동. 마일스톤 완료, Claude Code 업데이트 때 |
 | [실기] | 한글 IME, 알림, 화면, 사용감 | 사람 | Windows 10/11 PC | 마일스톤 완료 때 |
 
 - 비용: 공개 레포라 러너 시간은 무료다. 비용이 드는 것은 [실제]의 Claude 사용량뿐이다.
@@ -484,7 +484,7 @@ app/src/
 |---|---|---|
 | `.github/workflows/app-ci.yml` | push, PR (`app/`, `skills/`, `docs/contracts/`가 바뀔 때) | Linux: 타입 검사, ESLint, Prettier 확인, [단위], `skills/check.mjs` **(기본값)**. Windows: [어댑터], [흐름] |
 | `.github/workflows/app-build.yml` | 수동 | 설치 파일 빌드, 조용한 설치, [스모크], 설치 파일을 결과물로 올리기(I8) |
-| `.github/workflows/app-claude.yml` | 수동 | [실제]. 입력: 모델, effort. 인증은 스파이크 워크플로와 같은 레포 secret |
+| `.github/workflows/app-claude.yml` | 수동 | [실제]. 입력: 모델, effort. 인증은 스파이크 워크플로와 같은 레포 secret. 레포에 secret이 없으면 첫 단계에서 멈춘다. 2026-09-28까지 한 번도 돌지 않았다(8.4) |
 
 ### 8.4 실제 claude 시험 (I29)
 
@@ -500,6 +500,9 @@ app/src/
 - 재시작(M6, 사용자 결정): 앱(Relay)을 자식 프로세스(`test/claude/app-process.mjs`)로 띄워 S 경로 레포의 intake가 첫 요청을 받아 일하는 중에 그 프로세스만 SIGKILL로 끝낸다(앱 충돌). 다시 켜면 조정과 고아 확인을 하고(D75, D76), 중단됨이 된 intake를 [재개]로 같은 세션(`--resume`)으로 열어 이어서 하라고 한 뒤 Work 완료까지 간다. 앱이 죽은 뒤 `claude`가 남았는지, 남았으면 재시작이 끝내고 알렸는지 적는다. 자식 프로세스는 Vite의 SSR 모듈 로더로 앱 코드를 TypeScript 그대로 불러 쓴다.
 - 자동 승인(M7, 사용자 결정): S 경로 레포에서 수정 단계의 자동 승인을 켜고(카운트다운 5초) 사람 역할은 카운트다운을 기다린다. 실제 Stop 본문의 `background_tasks`와 `session_crons`가 턴이 끝날 때 비어 있어 카운트다운이 시작되는지(D129), 실제 스킬이 마무리 안내 문구(D132)를 그대로 찍는지, 자동 승인 뒤 세션을 끝내 최종 검증으로 가고 승인 방식이 자동으로 남는지 본다. 자동 승인하지 않으면 알림의 까닭을 남기고 실패로 친다.
 - `RELAY_REAL_CASES`로 돌릴 경우(M, S, resume, rewind-intake, rewind-fix, deliver, restart, auto. rewind는 둘 다)를 고른다.
+- 실행: `app/`에서 `RELAY_REAL_CLAUDE=1 npm run test:claude`로 돌린다. `RELAY_REAL_CLAUDE`가 없으면 모든 경우를 건너뛰고 실패 없이 끝난다. `RELAY_REAL_CLAUDE=dry`는 가짜 `claude`로 같은 시험 도구를 돌려 도구만 확인한다(사용량 없음). 모델과 effort는 `ANTHROPIC_MODEL`, `CLAUDE_CODE_EFFORT_LEVEL`로 정한다.
+- 돌리는 곳: 레포에 인증 secret이 없어 `app-claude` 워크플로(Windows 러너)는 돌린 적이 없다. 지금까지의 [실제]는 모두 Claude Code 웹 세션의 Linux 컨테이너에서 돌렸고, 예비 확인으로 적는다(`checks.md`). Linux에서는 스파이크와 같이 준비한다(`spikes/README.md`): 세션의 환경 변수를 `env -i`로 빼고 필요한 것(HOME, PATH, 프록시와 인증서 변수)만 넘긴다. 대화형 온보딩을 마친 적이 없으면 따로 만든 설정 폴더를 `CLAUDE_CONFIG_DIR`로 주고 그 `.claude.json`에 `"hasCompletedOnboarding": true`를 더한다. root에서는 `IS_SANDBOX=1`을 준다. Linux는 세션을 끝낼 때마다 10초가 더 걸린다(3절).
+- 스파이크 S1~S5는 같은 레포 secret으로 Windows 러너에서 돌았다(`spikes.md`, 2026-09-26). 그 뒤 secret이 없어진 까닭은 기록에 없다.
 - 결과는 실행 요약과 결과물에 올리고, 사람이 `docs/checks.md`에 옮긴다(I30). 러너 결과는 예비 확인으로 적는다(D93과 같음).
 
 ### 8.5 실기 확인 (I30)
