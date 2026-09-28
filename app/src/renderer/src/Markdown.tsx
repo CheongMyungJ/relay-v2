@@ -1,12 +1,10 @@
 // 산출물을 마크다운으로 보인다 (D83의 [산출물] 탭). 에이전트가 쓴 파일이라 HTML은 글자로 둔다.
 // 링크는 창을 옮기지 않는다(main이 이동을 막는다).
-import MarkdownIt from 'markdown-it'
 import { useMemo } from 'react'
-
-const md = new MarkdownIt({ html: false, linkify: false, breaks: false })
+import { renderMarkdown } from './markdown'
 
 export function Markdown({ text }: { text: string }) {
-  const html = useMemo(() => md.render(text), [text])
+  const html = useMemo(() => renderMarkdown(text), [text])
   return (
     <div
       className="markdown"

@@ -933,6 +933,7 @@ core는 `core/settings.ts`를 빼면 줄 95% 이상, 가지 84% 이상이다(`ma
 | A12 | 고침 | 알림을 누르거나 실패할 때까지 붙잡아 두고(최근 50개), Windows 설치본은 appId를 앱 ID로 쓴다(`main/notices.ts`, `main/index.ts`). 시험 `test/unit/notices.test.ts`(붙잡기와 appId 일치만). 실제 토스트와 클릭은 3단계에서 본다(1.3) | D142, I37 | 488b1d8 |
 | A13 | 고침 | 고른 적 있는 Work의 터미널만 만든다(`renderer/src/opened.ts`, `App.tsx`). 한 번 만든 터미널은 치우지 않는다. 시험 `test/unit/opened.test.ts`(판정만). 화면은 [스모크]에서만 지나고 여기서는 돌리지 못했다(빌드만 확인) | D143 | 5bae560 |
 | A14 | 고침(시험) | 되돌릴 커밋 없이 커밋 안 된 변경만 있는 되감기의 [흐름]을 더했다(`test/flow/rewind.test.ts`). 실행 쪽 백업 조건을 커밋 수만 보게 깨뜨리면 실패하는 것을 확인했다. 코드는 그대로다 | — | 601680b |
+| A15 | 고침(시험) | 창 설정값(`main/security.ts` WEB_PREFERENCES), 외부 주소 검사(externalUrl), Markdown 변환(`renderer/src/markdown.ts`)을 떼어 [단위] `test/unit/security.test.ts`로 지킨다. CSP는 `index.html`을 읽어 본다. 동작은 그대로다. D79·D83·D119의 화면 분기는 여전히 [스모크]에만 있다 | — | (이 커밋) |
 
 ## 부록. 1단계 대조표
 

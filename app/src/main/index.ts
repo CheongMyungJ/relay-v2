@@ -9,6 +9,7 @@ import { registerIpc } from './ipc'
 import { APP_USER_MODEL_ID, keepNotice } from './notices'
 import type { Notice, UiPort } from './ports'
 import { Relay } from './relay'
+import { WEB_PREFERENCES } from './security'
 
 let win: BrowserWindow | null = null
 /** 사람이 창에서 고른 Work (D81의 "그 Work를 보고 있는가") */
@@ -131,12 +132,7 @@ function createWindow(): void {
     width: 1500,
     height: 950,
     show: false,
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
+    webPreferences: { preload: join(__dirname, '../preload/index.js'), ...WEB_PREFERENCES },
   })
   win.once('ready-to-show', () => win?.show())
   // 산출물의 링크가 창을 다른 곳으로 옮기지 않게 한다
