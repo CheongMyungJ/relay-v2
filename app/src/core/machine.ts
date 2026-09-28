@@ -135,6 +135,8 @@ export interface SessionEndHook extends HookSignal {
   type: 'SessionEnd'
   /** 본문의 reason: clear | resume | logout | prompt_input_exit | other (Claude Code 문서 hooks) */
   reason?: string
+  /** 세션이 끝날 때 main이 다시 한 형식 검사 (3.3, D146). 읽지 못했으면 없다 */
+  check?: CheckSummary
 }
 
 /** PTY 종료 */
@@ -142,6 +144,8 @@ export interface PtyExited extends TaskEvent {
   type: 'pty.exit'
   /** 끝난 프로세스. 다시 연 세션이 있으면 앞 프로세스의 늦은 종료를 가려낸다 */
   pid?: number
+  /** 세션이 끝날 때 main이 다시 한 형식 검사 (3.3, D146). 읽지 못했으면 없다 */
+  check?: CheckSummary
 }
 
 export type SessionEnded = SessionEndHook | PtyExited
@@ -1189,7 +1193,9 @@ function stop(work: WorkState, task: TaskRecord, e: Stopped, config: AppConfig):
 }
 
 /**
- * SessionEnd나 PTY 종료 (시나리오 3). 승인 대기와 막힘은 그대로 두고, 그 밖에는 세션 종료다 (3.3).
+ * SessionEnd나 PTY 종료 (시나리오 3). 승인 대기와 막힘은 그대로 둔다. 그 밖에는 세션이 끝날 때 다시 한 검사에
+ * 유효한 handoff가 있으면 승인 대기나 막힘이고, 없으면 세션 종료다 (3.3, D146). 턴이 끝난 것이 아니라 자동 승인은
+ * 판정하지 않는다(다음 Stop부터, D131).
  * SessionEnd의 reason이 clear나 resume이면 CLI가 계속 돌므로 세션 종료로 보지 않는다 (D110).
  * 다시 연 세션이 있으면 앞 프로세스의 늦은 PTY 종료는 무시한다.
  */
@@ -1210,8 +1216,24 @@ function sessionEnded(work: WorkState, task: TaskRecord, e: SessionEnded): Trans
       effects: [],
     }
   }
+  const check = e.check ? summarize(e.check) : null
+  const status = check ? handoffStatus(check) : null
+  if (check && status) {
+    return {
+      work: withTask(work, { ...task, session, status, check }),
+      effects:
+        status === 'awaiting_approval'
+          ? [log(work, e.at, 'task.awaiting_approval', { reason: 'session_ended' }, task)]
+          : [],
+    }
+  }
   return {
-    work: withTask(work, { ...task, session, status: 'session_ended' }),
+    work: withTask(work, {
+      ...task,
+      session,
+      status: 'session_ended',
+      ...(check ? { check } : {}),
+    }),
     effects: [log(work, e.at, 'task.interrupted', { reason: 'session_ended' }, task)],
   }
 }

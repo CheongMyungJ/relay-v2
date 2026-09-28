@@ -183,6 +183,7 @@ relay-v2는 Claude Code CLI를 **앱 안의 터미널(node-pty + xterm.js)에 �
 | D143 | 화면은 사람이 고른 적 있는 Work의 터미널만 만든다. 앱을 켤 때 다른 Work(보관됨 포함)의 터미널을 만들거나 `pty.log`를 읽지 않는다. 처음 고를 때 지금까지의 출력을 받아 그린다 | 모든 Work의 모든 task 터미널(스크롤백 10,000줄)을 만들고 main이 task마다 `pty.log`를 읽어 들고 있어, Work가 쌓일수록 시작이 느려지고 메모리가 커졌음(A13). 터미널은 처음 붙을 때 지금까지의 출력을 받으므로 늦게 만들어도 잃는 출력이 없음 | ✅ |
 | D144 | 훅 신호는 그 신호를 보낸 claude 프로세스가 지금 그 task의 살아 있는 세션일 때만 적용한다. 다시 연 세션(같은 세션 id)에는 앞 프로세스가 늦게 보낸 신호를 적용하지 않는다 | 끝낸 세션의 토큰은 풀지만, 토큰 확인을 지나 처리 줄에서 기다리던 앞 프로세스의 SessionEnd가 [재개]로 다시 연 세션을 세션 종료로 바꿀 수 있었음(A22). 그러면 새 세션의 Stop을 무시하고 승인해도 세션을 끝내지 않아 자리를 쥔 채 남음. [재개]는 같은 세션 id를 써서 id로는 가를 수 없음 | ✅ |
 | D145 | 확인 창으로 앱을 끄거나 [단계 선택]으로 세션을 끝내도 카운트다운을 멈추고 사람의 승인을 기다린다. 멈춘 까닭은 세션을 끝낸 까닭대로 적는다: "[즉시 중단]을 누름", "카운트다운 중에 앱을 끔", "[단계 선택]을 누름". 셋 다 사람이 한 일이라 알리지 않는다. 앱이 충돌해 남은 카운트다운은 그대로 재시작 조정이 "재시작"으로 적는다(D127) | 세션을 무엇으로 끝냈는지 보지 않고 까닭을 늘 [즉시 중단]으로 적어, 확인 창으로 앱을 끈 뒤나 [단계 선택]의 git이 실패한 뒤 승인 화면이 누르지 않은 버튼을 까닭으로 보였음(A23). 확인 창으로 끄면 끌 때 카운트다운이 멈춰 재시작 조정이 "재시작"으로 바꾸지 않음 | ✅ |
+| D146 | Stop 없이 세션이 끝나면(SessionEnd, PTY 종료) 그때의 파일로 다시 형식 검사해, 유효한 handoff면 승인 대기나 막힘으로 두고 아니면 세션 종료다(3.3). 이 경로는 턴이 끝난 것이 아니라 자동 승인을 판정하지 않고 사람이 승인한다(다음 Stop부터 판정, D131). [즉시 중단]과 앱 종료는 그대로다: 누른 때 승인 대기나 막힘이던 것만 남는다 | 파일을 보지 않고 세션 종료로 두어, 에이전트가 handoff를 다 쓴 뒤 Stop 없이 끝나면(Ctrl+C, 크래시, 오류로 끊긴 턴 뒤 `/exit`) "handoff 없이 세션 종료"를 알리고 [이 단계 새 세션으로 다시]를 권했음(A24). 3.3은 세션이 없어도 유효한 handoff가 있으면 승인 대기나 막힘으로 표시한다고 함 | ✅ |
 
 ---
 
@@ -251,7 +252,7 @@ intake(work-start) → 의도 승인 → evidence → rca → fix → verify →
 | 승인됨 | 사람이나 자동 승인이 승인함 |
 | 폐기됨 | 되감기나 건너뛰기로 이후 입력에서 빠짐(6.2). 파일은 남는다 |
 
-- 세션이 없어도 유효한 handoff가 있으면 승인 대기나 막힘으로 표시한다. 세션이 끝난 뒤의 막힘(4.4)과 재시작 때 보충한 승인 대기(시나리오 9)가 이 경우다.
+- 세션이 없어도 유효한 handoff가 있으면 승인 대기나 막힘으로 표시한다. 세션이 끝난 뒤의 막힘(4.4)과 재시작 때 보충한 승인 대기(시나리오 9)가 이 경우다. Stop 없이 세션이 끝날 때도 그때의 파일로 판정한다(D146).
 
 ### 3.4 S 빠른 경로
 
@@ -360,7 +361,7 @@ S 크기는 `intake → fix → verify`로 간다. evidence와 rca의 일 중 �
    | Stop + 유효한 handoff 있음(`awaiting_approval`) | 승인 대기 (시나리오 4) |
    | Stop + 유효한 handoff 있음(`blocked`) | 막힘 (4.4) |
    | Notification(`permission_prompt`) | 입력 필요 (이 모드에서는 드묾) |
-   | SessionEnd(`reason`이 `clear`, `resume`이 아님, D110) / PTY 종료 | 세션 종료 |
+   | SessionEnd(`reason`이 `clear`, `resume`이 아님, D110) / PTY 종료 | 세션 종료. 그때의 파일에 유효한 handoff가 있으면 승인 대기나 막힘(3.3, D146) |
 
 3. **handoff 감시:** handoff가 생기거나 바뀌면 바로 검증해서 패널에 표시한다. intake에서는 intent 초안도 같은 방식으로 검증한다(D38). Stop 시점에 형식 오류가 있고 이번 턴에 handoff가 바뀌었으면, Stop 훅 응답으로 오류를 에이전트에게 되돌린다(연속 2회까지, 설정 가능, D21). 연속 횟수는 사람이 새 요청으로 시작한 턴의 Stop(`stop_hook_active: false`)이나 검사 통과 때 0으로 돌아간다(D107).
 4. **중단**
@@ -821,7 +822,7 @@ delivery.succeeded | delivery.failed
 | `work.abandoned` | 없음 |
 | `work.cleaned` | `forced`(`--force`로 지웠는가), `deleted_branches` |
 | `task.started` | `reason`(task를 시작한 까닭: `default`, `rewind`, `skip`, `resume`), `session_id` |
-| `task.awaiting_approval` | 없음. 재시작 조정이 바꿨으면 `reason: app_restart`와 끝낸 고아의 `killed_pid`(D76) |
+| `task.awaiting_approval` | 없음. 재시작 조정이 바꿨으면 `reason: app_restart`와 끝낸 고아의 `killed_pid`(D76). Stop 없이 세션이 끝나며 바뀌었으면 `reason: session_ended`(D146) |
 | `task.approved` | `by`: `human`, `auto`. [오류 무시하고 승인]이면 `ignored_errors`(수) |
 | `task.interrupted` | `reason`: `human`([즉시 중단]), `app_quit`(앱 종료 확인), `abandoned`([Work 포기]), `rewind`, `skip`(단계 선택), `session_ended`(handoff 없이 세션 종료), `start_failed`(세션을 띄우지 못함. `error`에 까닭, D135의 앞선 처리 실패도 여기다), `app_restart`(재시작 조정. 끝낸 고아가 있으면 `killed_pid`). 대기열에 있던 task면 `queued: true` |
 | `task.resumed` | `session_id`, `claude_version` |

@@ -421,6 +421,46 @@ describe('시나리오 3의 신호 표: 신호마다 표시 상태', () => {
     expect(exit.rejected).toBeUndefined()
   })
 
+  it('Stop 없이 세션이 끝나도 그때의 파일에 유효한 handoff가 있으면 승인 대기나 막힘이다 (3.3, D146)', () => {
+    for (const end of [
+      { type: 'SessionEnd' as const, taskId: 't-01', at: at(), reason: 'other', check: valid() },
+      { type: 'pty.exit' as const, taskId: 't-01', at: at(), check: valid() },
+    ]) {
+      const r = apply(running('working'), end)
+      expect(currentTask(r.work), end.type).toMatchObject({
+        status: 'awaiting_approval',
+        session: { alive: false },
+        check: { handoff_present: true, status: 'awaiting_approval', errors: [] },
+      })
+      expect(r.effects, end.type).toEqual([
+        {
+          type: 'log',
+          event: expect.objectContaining({
+            type: 'task.awaiting_approval',
+            payload: { reason: 'session_ended' },
+          }) as unknown,
+        },
+      ])
+    }
+    const blocked = apply(running('idle'), {
+      type: 'pty.exit',
+      taskId: 't-01',
+      at: at(),
+      check: BLOCKED,
+    })
+    expect(status(blocked.work)).toBe('blocked')
+    expect(blocked.effects).toEqual([])
+    // 형식 오류가 있으면 세션 종료다
+    const invalid = apply(running('idle'), {
+      type: 'SessionEnd',
+      taskId: 't-01',
+      at: at(),
+      check: INVALID,
+    })
+    expect(status(invalid.work)).toBe('session_ended')
+    expect(types(invalid.effects)).toEqual(['log:task.interrupted'])
+  })
+
   it('SessionEnd의 reason이 clear나 resume이면 CLI가 계속 돌므로 세션 종료가 아니다 (D110)', () => {
     for (const reason of ['clear', 'resume']) {
       const work = running('idle')
@@ -2847,6 +2887,17 @@ describe('자동 승인 (4.3, D127~D131)', () => {
     })
     expect(task(changed.work).countdown).toBeUndefined()
     expect(changed.effects).toEqual([{ type: 'stopCountdown', taskId: 't-02' }])
+  })
+
+  it('Stop 없이 세션이 끝나 승인 대기가 되면 자동 승인을 판정하지 않는다: 턴이 끝난 것이 아니다 (D146)', () => {
+    const r = apply(
+      evidenceRunning(),
+      { type: 'SessionEnd', taskId: 't-02', at: at(), reason: 'other', check: valid() },
+      AUTO,
+    )
+    expect(task(r.work)).toMatchObject({ status: 'awaiting_approval', session: { alive: false } })
+    expect(task(r.work).countdown ?? task(r.work).auto_hold).toBeUndefined()
+    expect(types(r.effects)).toEqual(['log:task.awaiting_approval'])
   })
 
   it('앱 종료 확인과 [단계 선택]으로 세션을 끝내도 멈춘다. 까닭은 끝낸 까닭대로 적는다 (D130, D145)', () => {

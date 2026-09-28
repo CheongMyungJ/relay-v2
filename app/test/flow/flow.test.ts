@@ -7,10 +7,12 @@ import { mergeSkill } from '../../src/adapters/claude'
 import { parseFrontMatter } from '../../src/core/validate'
 import type { LifecycleEvent, WorkState } from '../../src/shared/work'
 import { drive } from './driver'
-import { git, harness, makeRepo, register, settle, type Harness } from './harness'
+import { git, harness, makeRepo, register, settle, sleep, type Harness } from './harness'
 import {
+  FIXED_FILES,
   REPO_FILES,
   REQUEST,
+  fixDoc,
   handoff,
   intentDraft,
   scenario,
@@ -469,6 +471,52 @@ describe('[흐름] 최소 흐름 (M2)', () => {
       ['task.started', expect.anything()],
       ['task.interrupted', { reason: 'session_ended' }],
     ])
+  })
+
+  it('Stop 없이 세션이 끝나도 유효한 handoff가 있으면 승인 대기로 알린다. 이 경로는 자동 승인하지 않는다 (3.3, D146)', async () => {
+    const s = await start(
+      scenario('S', {
+        fix: [
+          { do: 'prompt' },
+          { do: 'commit', files: FIXED_FILES, message: 'fix: 빈 배열의 평균은 0' },
+          { do: 'write', file: 'fix.md', text: fixDoc(true) },
+          { do: 'write', file: 'handoff.md', text: handoff({ summary: '수정했다.' }) },
+          { do: 'exit' },
+        ],
+      }),
+      {},
+      { auto_approve: { evidence: false, rca: false, fix: true }, auto_approve_countdown_sec: 1 },
+    )
+    const ui = s.h.ui
+    await drive(s.h.relay, ui, s.workKey, { size: 'S', pauseAt: (t) => t.node === 'fix' })
+    const fix = await ui.until(
+      () => {
+        const t = ui.works.get(s.workKey)?.tasks[1]
+        return t && !t.live && t.status !== 'working' ? t : null
+      },
+      '세션 종료',
+      60_000,
+    )
+    expect(fix).toMatchObject({ id: 't-02', status: 'awaiting_approval', countdown: null })
+    expect(ui.notices.map((n) => n.body)).toEqual(['01 의도 정리: 승인 대기', '02 수정: 승인 대기'])
+    // 카운트다운 초가 지나도 자동 승인하지 않는다
+    await sleep(2_000)
+    await settle(s.h, s.workKey)
+    expect(work(s.workDir).tasks[1]).toMatchObject({
+      status: 'awaiting_approval',
+      session: { alive: false },
+    })
+    expect(
+      events(s.workDir)
+        .filter((e) => e.task_id === 't-02')
+        .map((e) => [e.type, e.payload]),
+    ).toEqual([
+      ['task.started', expect.anything()],
+      ['task.awaiting_approval', { reason: 'session_ended' }],
+    ])
+    // 사람은 승인하고 다음 단계로 간다
+    const result = await drive(s.h.relay, ui, s.workKey, { size: 'S' })
+    expect(result, ui.dump()).toMatchObject({ status: 'completed' })
   })
 })
 
