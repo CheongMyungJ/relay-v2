@@ -39,6 +39,14 @@ const PRESS = '[승인]을 누르세요.'
 const AUTO_SENTENCE =
   '자동 승인이 켜져 있으면 조건을 만족할 때 카운트다운 뒤 승인되고, 멈추려면 [취소]를 누르세요.'
 
+/**
+ * 리뷰의 문구 (시나리오 2-4의 review 줄, D164). 리뷰는 지적을 쓰고 마무리한 뒤 사람이 터미널에서 반영할 지적을
+ * 번호로 고른다. 늘 수동 승인이라(D167) 자동 승인을 적지 않는다
+ */
+const REVIEW_CLOSING =
+  '리뷰를 썼습니다. 반영할 지적은 번호로 여기에 말해 주세요. 반영할 것이 없거나 반영을 마쳤으면 오른쪽 패널에서 ' +
+  '확인하고 [승인]을 누르세요.'
+
 /** 승인하면 멈추는 verify의 버튼 (D119). 멈춤은 context.md를 쓴 뒤에도 켜고 끌 수 있어 늘 함께 적는다 */
 const VERIFY_STOPS =
   '[이 단계 끝나면 멈춤]이 켜져 있거나 이전 단계를 추천했으면 [승인하고 멈춤]을 누르고, ' +
@@ -61,9 +69,11 @@ function pressSentence(node: NodeName, delivery: readonly string[]): string {
 
 /**
  * 마무리 안내 문구 (D104, D132). 노드에 따라 고정 문구를 쓴다. 자동 승인을 켤 수 있는 단계는 수동 승인과 자동 승인을
- * 한 문구에 적는다. delivery는 verify의 전달 버튼이다(core/delivery closingButtons). 없으면 [완료만]이다.
+ * 한 문구에 적는다. 리뷰는 지적을 고르는 문구다(D164). delivery는 verify의 전달 버튼이다(core/delivery
+ * closingButtons). 없으면 [완료만]이다.
  */
 export function closingMessage(node: NodeName, delivery: readonly string[] = []): string {
+  if (node === 'review') return REVIEW_CLOSING
   return CLOSING.replace(PRESS, pressSentence(node, delivery))
 }
 
@@ -71,11 +81,11 @@ const APPROVAL_LABEL: Record<ApprovalMode, string> = { manual: '수동 승인', 
 
 /**
  * context.md의 승인 방식 (시나리오 2-4). task를 시작할 때의 설정이다. 자동 승인 여부는 턴이 끝날 때의 설정으로
- * 정하므로(D128) 그렇다고 적는다. intake와 verify는 늘 수동이다 (4.2)
+ * 정하므로(D128) 그렇다고 적는다. intake, review, verify는 늘 수동이다 (4.2, D167)
  */
 function approvalSection(config: AppConfig, settings: WorkSettings, node: NodeName): string {
   if (!autoApprovable(node)) {
-    return '수동 승인 (의도 승인과 Work 완료는 늘 수동)'
+    return '수동 승인 (의도 승인, 리뷰, Work 완료는 늘 수동)'
   }
   const mode = APPROVAL_LABEL[approvalMode(config, settings, node)]
   return `${mode} (task를 시작할 때의 설정. 설정은 바로 적용되고, 자동 승인 여부는 턴이 끝날 때의 설정으로 정한다)`

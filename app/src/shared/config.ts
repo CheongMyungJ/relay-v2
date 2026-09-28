@@ -3,12 +3,12 @@
 
 /** relay 스킬 (5.6). 질문 방식을 스킬마다 고른다 (D26). investigate는 evidence와 root-cause를 합친 스킬이다 (D148) */
 export type SkillName =
-  'work-start' | 'investigate' | 'evidence' | 'root-cause' | 'fix' | 'final-verify'
+  'work-start' | 'investigate' | 'evidence' | 'root-cause' | 'fix' | 'review' | 'final-verify'
 
 /** 질문 방식 (5.6.1). 초안 우선 / 결정마다 확인 */
 export type QuestionMode = 'draft_first' | 'confirm_each'
 
-/** 자동 승인을 켤 수 있는 노드. intake(의도 승인)와 verify(Work 완료)는 항상 수동이다 (4.2) */
+/** 자동 승인을 켤 수 있는 노드. intake(의도 승인), review(D167), verify(Work 완료)는 항상 수동이다 (4.2) */
 export type AutoApproveNode = 'investigate' | 'evidence' | 'rca' | 'fix'
 
 export interface AppConfig {
@@ -47,12 +47,13 @@ export const SKILL_TITLES: readonly (readonly [SkillName, string])[] = [
   ['evidence', '재현과 관찰'],
   ['root-cause', '원인 분석'],
   ['fix', '수정'],
+  ['review', '리뷰'],
   ['final-verify', '최종 검증'],
 ]
 
 /**
  * 자동 승인을 켤 수 있는 노드와 그 화면 이름 (4.2, D109). 설정 화면과 Work 설정의 자동 승인 목록에 쓴다.
- * core/pipeline의 NODE_INFO와 같은지 [단위]가 확인한다.
+ * 리뷰는 늘 수동이라 없다 (D167). core/pipeline의 NODE_INFO와 같은지 [단위]가 확인한다.
  */
 export const AUTO_APPROVE_TITLES: readonly (readonly [AutoApproveNode, string])[] = [
   ['investigate', '재현과 원인 분석'],
@@ -79,6 +80,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     evidence: 'draft_first',
     'root-cause': 'draft_first',
     fix: 'draft_first',
+    review: 'draft_first',
     'final-verify': 'draft_first',
   },
   pr_draft: false,

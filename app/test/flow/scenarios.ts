@@ -193,6 +193,41 @@ export const VERIFICATION = [
   '',
 ].join('\n')
 
+/** review.md (5.6.10): 지적을 번호로 쓰고 마무리한다. 사람이 고르기 전에는 반영이 없다 */
+export const REVIEW = [
+  '## 지적',
+  '1. [권장] src/avg.js:2 — 빈 배열에 0을 돌려주는 까닭을 주석으로 남긴다',
+  '2. [사소] test/avg.test.js:6 — 시험 이름을 "빈 배열은 0"으로 바꾼다',
+  '',
+  '## 반영',
+  '없음',
+  '',
+  '## 반영하지 않은 지적',
+  '- 1',
+  '- 2',
+  '',
+].join('\n')
+
+/** 사람이 1번만 반영하라고 지시한 뒤의 review.md (D164) */
+export const REVIEW_APPLIED = [
+  '## 지적',
+  '1. [권장] src/avg.js:2 — 빈 배열에 0을 돌려주는 까닭을 주석으로 남긴다',
+  '2. [사소] test/avg.test.js:6 — 시험 이름을 "빈 배열은 0"으로 바꾼다',
+  '',
+  '## 반영',
+  '- 1 — 주석을 더했다, 커밋 "review: 빈 배열 주석", npm test 통과',
+  '',
+  '## 반영하지 않은 지적',
+  '- 2',
+  '',
+].join('\n')
+
+/** 리뷰가 사람이 고른 지적(1번)을 고친 코드 */
+export const REVIEWED_FILES = {
+  'src/avg.js':
+    'export function avg(xs) {\n  // 빈 배열의 평균은 0으로 정했다\n  if (xs.length === 0) return 0\n  return xs.reduce((a, b) => a + b, 0) / xs.length\n}\n',
+}
+
 export const PR = '# 빈 배열의 평균을 0으로\n\n## 요약\n## 원인\n## 변경\n## 테스트\n'
 
 export const FIXED_FILES = {
@@ -279,6 +314,18 @@ export function steps(node: NodeName, size: Size = 'L'): Step[] {
         },
         { do: 'stop' },
       ]
+    case 'review':
+      // 지적을 번호로 쓰고 마무리한다. 사람이 지시하지 않으면 코드를 바꾸지 않는다 (5.6.10)
+      return [
+        { do: 'prompt' },
+        { do: 'write', file: 'review.md', text: REVIEW },
+        {
+          do: 'write',
+          file: 'handoff.md',
+          text: handoff({ summary: '지적 둘을 썼다. 사람이 고르기 전이라 반영한 것은 없다.' }),
+        },
+        { do: 'stop' },
+      ]
     case 'verify':
       return [
         { do: 'prompt' },
@@ -295,8 +342,34 @@ export function steps(node: NodeName, size: Size = 'L'): Step[] {
 }
 
 /**
- * 크기별 경로의 기본 시나리오 (3.4): L은 intake → evidence → rca → fix → verify, M은 intake → investigate → fix →
- * verify, S는 intake → fix → verify
+ * 리뷰가 마무리한 뒤 사람의 지시(터미널의 새 요청)를 기다려, 1번 지적만 고쳐 커밋하고 산출물과 handoff를 다시 쓴 뒤
+ * 다시 마무리한다 (D164, 시나리오 4-3). 사람 역할은 driver의 instruct로 지시한다
+ */
+export function reviewInstructed(): Step[] {
+  return [
+    ...steps('review'),
+    { do: 'waitEnter' },
+    { do: 'prompt', text: '1번 지적만 반영해 주세요.' },
+    { do: 'commit', files: REVIEWED_FILES, message: 'review: 빈 배열 주석' },
+    { do: 'write', file: 'review.md', text: REVIEW_APPLIED },
+    {
+      do: 'write',
+      file: 'handoff.md',
+      text: handoff({
+        decisions: [
+          { what: '지적 1 반영', why: '사람이 번호로 지시함', by: 'human' },
+          { what: '지적 2 반영 안 함', why: '사람이 고르지 않음', by: 'human' },
+        ],
+        summary: '1번 지적을 반영해 커밋했다. 2번은 반영하지 않았다.',
+      }),
+    },
+    { do: 'stop' },
+  ]
+}
+
+/**
+ * 크기별 경로의 기본 시나리오 (3.4): L은 intake → evidence → rca → fix → review → verify, M은 intake → investigate →
+ * fix → review → verify, S는 intake → fix → review → verify. 리뷰는 모든 크기가 지난다 (D163)
  */
 export function scenario(size: Size, override: Partial<Record<SkillName, Step[]>> = {}): Scenario {
   return {
@@ -306,6 +379,7 @@ export function scenario(size: Size, override: Partial<Record<SkillName, Step[]>
       evidence: steps('evidence', size),
       'root-cause': steps('rca', size),
       fix: steps('fix', size),
+      review: steps('review', size),
       'final-verify': steps('verify', size),
       ...override,
     },

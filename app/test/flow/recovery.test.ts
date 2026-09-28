@@ -133,13 +133,13 @@ const backups = (s: Setup) =>
     .split('\n')
     .filter(Boolean)
 
-/** S 경로로 최종 검증이 승인 대기가 될 때까지 간다 */
+/** S 경로(intake → fix → review → verify)로 최종 검증이 승인 대기가 될 때까지 간다 */
 async function toVerify(s: Setup): Promise<void> {
   const r = await drive(s.h.relay, s.h.ui, s.key, {
     size: 'S',
     pauseAt: (t) => t.node === 'verify' && t.status === 'awaiting_approval',
   })
-  expect(r, s.h.ui.dump()).toMatchObject({ status: 'paused', reason: '03 최종 검증: 승인 대기' })
+  expect(r, s.h.ui.dump()).toMatchObject({ status: 'paused', reason: '04 최종 검증: 승인 대기' })
   await settle(s.h, s.key)
 }
 
@@ -150,7 +150,7 @@ function recommendFix(): Scenario {
       ? { ...st, text: handoff({ recommended_next: { node: 'fix', reason: '완료조건 2 실패' } }) }
       : st,
   )
-  return { tasks: { ...scenario('S').tasks, 't-03': recommending } }
+  return { tasks: { ...scenario('S').tasks, 't-04': recommending } }
 }
 
 async function toStopped(s: Setup): Promise<void> {
@@ -330,7 +330,7 @@ describe('[흐름] 고아 프로세스와 정리 세션 (M6, 시나리오 9-1, D
       const bCrashed: WorkState = {
         ...b.work,
         tasks: b.work.tasks.map((t) =>
-          t.id === 't-03' && t.session
+          t.id === 't-04' && t.session
             ? {
                 ...t,
                 session: {
@@ -401,7 +401,7 @@ describe('[흐름] 고아 프로세스와 정리 세션 (M6, 시나리오 9-1, D
     const w = workOf(s)
     expect(w.cleanup_process?.pid).toEqual(expect.any(Number))
     if (listing) expect(w.cleanup_process?.process_started_at).toEqual(expect.any(String))
-    expect(w.tasks).toHaveLength(3)
+    expect(w.tasks).toHaveLength(4)
     // [정리 끝 → push/PR 진행]: 세션을 끝내고 깨끗하니 원래 고른 전달을 한다
     expect(await s.h.relay.finishCleanup(s.key)).toEqual({ ok: true })
     await settle(s.h, s.key)
@@ -416,7 +416,8 @@ describe('[흐름] 고아 프로세스와 정리 세션 (M6, 시나리오 9-1, D
     expect(fs.readdirSync(path.join(s.dir, 'tasks')).sort()).toEqual([
       '01-intake',
       '02-fix',
-      '03-verify',
+      '03-review',
+      '04-verify',
     ])
   })
 })
@@ -450,7 +451,7 @@ describe('[흐름] 끊긴 되감기 (M6, 시나리오 9-4, D116, D121~D123)', ()
       `만들려던 백업 브랜치: ${op.backup_branch}`,
       '코드는 아직 되돌리지 않았습니다.',
       `되돌릴 커밋: ${op.reset_to.slice(0, 8)}`,
-      '폐기할 task: 02 수정, 03 최종 검증',
+      '폐기할 task: 02 수정, 03 리뷰, 04 최종 검증',
     ])
     expect(Object.values(v.actions).some(Boolean)).toBe(false)
     expect(s.h.ui.notices).toEqual([])
@@ -462,7 +463,7 @@ describe('[흐름] 끊긴 되감기 (M6, 시나리오 9-4, D116, D121~D123)', ()
         node: 'rca',
         keepCode: false,
         instruction: '',
-        expect: { taskId: 't-03', done: true },
+        expect: { taskId: 't-04', done: true },
       }),
     ).toEqual({ ok: false, error: OPERATION_BLOCKS })
     expect(await s.h.relay.updateWorkSettings(s.key, { question_mode: {} })).toEqual({ ok: true })
@@ -475,15 +476,16 @@ describe('[흐름] 끊긴 되감기 (M6, 시나리오 9-4, D116, D121~D123)', ()
     expect(git(s.repo, 'show', `${op.backup_branch}:notes.txt`)).toBe('메모')
     expect(fs.existsSync(path.join(s.tree, 'notes.txt'))).toBe(false)
     const w = workOf(s)
-    expect(w.tasks[3]?.start_commit).toBe(op.reset_to)
+    expect(w.tasks[4]?.start_commit).toBe(op.reset_to)
     expect(w.operation).toBeUndefined()
     expect(w.tasks.map((t) => [t.id, t.status])).toEqual([
       ['t-01', 'approved'],
       ['t-02', 'discarded'],
       ['t-03', 'discarded'],
-      ['t-04', expect.any(String)],
+      ['t-04', 'discarded'],
+      ['t-05', expect.any(String)],
     ])
-    expect(w.tasks[3]).toMatchObject({
+    expect(w.tasks[4]).toMatchObject({
       node: 'fix',
       reason: 'rewind',
       selection: {
@@ -635,7 +637,7 @@ describe('[흐름] 끊긴 전달 (M6, 시나리오 9-4, 7-5, D120~D123)', () => 
       at: at(),
       choice: 'push',
       uncommitted: null,
-      check: await checkOf(s, b.work, 't-03'),
+      check: await checkOf(s, b.work, 't-04'),
     })
     expect(delivering.operation).toMatchObject({ kind: 'deliver', stage: 'push' })
     // 앱은 push하고 결과를 기록하기 전에 꺼졌다
@@ -656,7 +658,7 @@ describe('[흐름] 끊긴 전달 (M6, 시나리오 9-4, 7-5, D120~D123)', () => 
       ok: false,
       error: OPERATION_BLOCKS,
     })
-    expect(await s.h.relay.approve(s.key, 't-03', {})).toEqual({
+    expect(await s.h.relay.approve(s.key, 't-04', {})).toEqual({
       ok: false,
       error: OPERATION_BLOCKS,
     })
@@ -693,7 +695,7 @@ describe('[흐름] 끊긴 전달 (M6, 시나리오 9-4, 7-5, D120~D123)', () => 
       at: at(),
       choice: 'pr',
       uncommitted: 'discard',
-      check: await checkOf(s, b.work, 't-03'),
+      check: await checkOf(s, b.work, 't-04'),
     })
     expect(delivering.operation).toMatchObject({ stage: 'prepare', uncommitted: 'discard' })
     const stash = await stashAll(s.tree, stashMessage(s.workId))
@@ -710,7 +712,7 @@ describe('[흐름] 끊긴 전달 (M6, 시나리오 9-4, 7-5, D120~D123)', () => 
     const w = workOf(s)
     expect(w.operation).toBeUndefined()
     expect(w.status).toBe('active')
-    expect(w.tasks[2]?.status).toBe('awaiting_approval')
+    expect(w.tasks[3]?.status).toBe('awaiting_approval')
     expect(w.delivery).toEqual({
       choice: 'pr',
       status: 'failed',
@@ -725,9 +727,9 @@ describe('[흐름] 끊긴 전달 (M6, 시나리오 9-4, 7-5, D120~D123)', () => 
       payload: { reason: 'app_restart', stage: 'prepare', stashes: [stash] },
     })
     // Work 완료 화면은 M5의 실패처럼 [다시 시도]·[전달 없이 완료]다 (D120)
-    const review = await s.h.relay.review(s.key, 't-03')
+    const review = await s.h.relay.review(s.key, 't-04')
     expect(review?.completion).toMatchObject({ mode: 'deliver', delivery: { status: 'failed' } })
-    expect(await s.h.relay.approve(s.key, 't-03', {})).toEqual({ ok: true })
+    expect(await s.h.relay.approve(s.key, 't-04', {})).toEqual({ ok: true })
     await settle(s.h, s.key)
     const done = workOf(s)
     expect(done.status).toBe('completed')
@@ -745,7 +747,7 @@ describe('[흐름] 끊긴 전달 (M6, 시나리오 9-4, 7-5, D120~D123)', () => 
       at: at(),
       choice: 'pr',
       uncommitted: 'discard',
-      check: await checkOf(s, b.work, 't-03'),
+      check: await checkOf(s, b.work, 't-04'),
     })
     await crash(s.h, [{ w: s, work: delivering, events: b.events }])
 
@@ -815,7 +817,7 @@ describe('[흐름] 끊긴 정리 (M6, 시나리오 9-4, 8-2, D121~D123)', () => 
     expect(w.cleaned).toMatchObject({ forced: false, deleted_branches: [s.branch] })
     expect(eventsOf(s).at(-1)).toMatchObject({ type: 'work.cleaned' })
     // 산출물은 남는다
-    expect(fs.existsSync(path.join(s.dir, 'tasks', '03-verify', 'verification.md'))).toBe(true)
+    expect(fs.existsSync(path.join(s.dir, 'tasks', '04-verify', 'verification.md'))).toBe(true)
   })
 
   it('브랜치를 지우다 끊긴 정리의 [다시 시도]는 아직 있는 브랜치만 지운다', async () => {
@@ -853,7 +855,7 @@ describe('[흐름] 끊긴 정리 (M6, 시나리오 9-4, 8-2, D121~D123)', () => 
   it('[무시]는 기록만 지운다. 기록이 있는 동안 받지 않던 [Work 정리]를 다시 해 끝낸다', async () => {
     const s = await setup(scenario('S'))
     await toVerify(s)
-    expect(await s.h.relay.approve(s.key, 't-03', {})).toEqual({ ok: true })
+    expect(await s.h.relay.approve(s.key, 't-04', {})).toEqual({ ok: true })
     const b = await before(s.h, s)
     expect(b.work.status).toBe('completed')
     const { cleaning, input } = await cleanStarted(s, b, {
@@ -944,7 +946,7 @@ describe('[흐름] 앱 소유 파일과 잘린 pty.log (M6, 6.1, 시나리오 9-
     const script = read(file).replace('"status": "active"', '"status": "stopped"')
     expect(script).not.toBe(read(file))
     fs.writeFileSync(file, script)
-    expect(await s.h.relay.approve(s.key, 't-03', {})).toEqual({ ok: true })
+    expect(await s.h.relay.approve(s.key, 't-04', {})).toEqual({ ok: true })
     await settle(s.h, s.key)
     const copies = fs.readdirSync(s.dir).filter((f) => f.startsWith('work.json.changed-'))
     expect(copies).toEqual([expect.stringMatching(/^work\.json\.changed-\d{8}T\d{6}$/)])

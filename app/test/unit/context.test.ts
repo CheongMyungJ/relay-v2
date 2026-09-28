@@ -273,10 +273,10 @@ describe('context.md: M 경로 (D147, D149)', () => {
     )
   })
 
-  it('fix의 이전 단계에는 evidence와 rca 대신 investigate가 있다', () => {
+  it('fix의 이전 단계에는 evidence와 rca 대신 investigate가 있다. 기본 다음 단계는 review다 (D166)', () => {
     expect(section(at('fix'), '선택 가능한 다음 단계')).toBe(
       [
-        '- 기본 다음 단계: verify (최종 검증)',
+        '- 기본 다음 단계: review (리뷰)',
         '- 이전 단계: intake (의도 정리), investigate (재현과 원인 분석)',
       ].join('\n'),
     )
@@ -295,6 +295,62 @@ describe('context.md: M 경로 (D147, D149)', () => {
   })
 })
 
+describe('context.md: review (D163~D167)', () => {
+  const REVIEW_CLOSING =
+    '리뷰를 썼습니다. 반영할 지적은 번호로 여기에 말해 주세요. 반영할 것이 없거나 반영을 마쳤으면 오른쪽 패널에서 확인하고 [승인]을 누르세요.'
+
+  it('task 정보: 노드 review, 스킬 review, 화면 이름 리뷰 (D187)', () => {
+    const md = buildContext(input('review'))
+    expect(section(md, 'task 정보')).toContain('- node: review (리뷰)')
+    expect(section(md, 'task 정보')).toContain('- skill: review')
+    expect(section(md, 'task 정보')).toContain(`- task 디렉터리: ${WORK_DIR}\\tasks\\05-review`)
+  })
+
+  it('마무리 안내 문구는 리뷰의 고정 문구다 (시나리오 2-4의 review 줄)', () => {
+    expect(closingMessage('review')).toBe(REVIEW_CLOSING)
+    expect(section(buildContext(input('review')), '마무리 안내 문구')).toBe(REVIEW_CLOSING)
+  })
+
+  it('승인은 늘 수동이다. 자동 승인을 켤 수 있는 단계를 모두 켜도 수동이다 (D167)', () => {
+    const config: AppConfig = {
+      ...DEFAULT_CONFIG,
+      auto_approve: { investigate: true, evidence: true, rca: true, fix: true },
+    }
+    const md = buildContext(input('review', {}, config))
+    expect(section(md, '승인 방식')).toBe('수동 승인 (의도 승인, 리뷰, Work 완료는 늘 수동)')
+    expect(approvalMode(config, {}, 'review')).toBe('manual')
+  })
+
+  it('질문 방식은 review 스킬의 설정이다. 기본은 초안 우선이다 (5.1.1)', () => {
+    expect(section(buildContext(input('review')), '질문 방식')).toBe('초안 우선 (`draft_first`)')
+    const config: AppConfig = {
+      ...DEFAULT_CONFIG,
+      question_mode: { ...DEFAULT_CONFIG.question_mode, review: 'confirm_each' },
+    }
+    expect(questionMode(config, {}, 'review')).toBe('confirm_each')
+    expect(section(buildContext(input('review', {}, config)), '질문 방식')).toBe(
+      '결정마다 확인 (`confirm_each`)',
+    )
+  })
+
+  it('기본 다음 단계는 verify이고, 이전 단계는 그 크기가 고를 수 있는 fix까지의 단계다 (3.2, D149)', () => {
+    expect(section(buildContext(input('review')), '선택 가능한 다음 단계')).toBe(
+      [
+        '- 기본 다음 단계: verify (최종 검증)',
+        '- 이전 단계: intake (의도 정리), evidence (재현과 관찰), rca (원인 분석), fix (수정)',
+      ].join('\n'),
+    )
+    expect(
+      section(buildContext(input('review', {}, undefined, 'S')), '선택 가능한 다음 단계'),
+    ).toBe(
+      [
+        '- 기본 다음 단계: verify (최종 검증)',
+        '- 이전 단계: intake (의도 정리), investigate (재현과 원인 분석), fix (수정)',
+      ].join('\n'),
+    )
+  })
+})
+
 describe('context.md: verify', () => {
   const md = buildContext(input('verify'))
 
@@ -302,10 +358,22 @@ describe('context.md: verify', () => {
     expect(section(md, '선택 가능한 다음 단계')).toBe(
       [
         '- 기본 다음 단계: Work 완료',
-        '- 이전 단계: intake (의도 정리), evidence (재현과 관찰), rca (원인 분석), fix (수정)',
+        '- 이전 단계: intake (의도 정리), evidence (재현과 관찰), rca (원인 분석), fix (수정), review (리뷰)',
       ].join('\n'),
     )
     expect(section(md, '마무리 안내 문구')).toContain('[완료만]을 누르세요')
+  })
+
+  it('필요한 산출물에 리뷰의 review.md 경로가 들어간다 (5.6.8)', () => {
+    const T = `${WORK_DIR}\\tasks`
+    const previous = previousInputs([
+      { taskId: 't-04', node: 'fix', artifacts: [`${T}\\04-fix\\fix.md`] },
+      { taskId: 't-05', node: 'review', artifacts: [`${T}\\05-review\\review.md`] },
+    ])
+    const text = section(buildContext(input('verify', previous)), '필요한 산출물')
+    expect(text).toBe(
+      [`- t-04 fix: ${T}\\04-fix\\fix.md`, `- t-05 review: ${T}\\05-review\\review.md`].join('\n'),
+    )
   })
 })
 
@@ -347,11 +415,11 @@ describe('마무리 안내 문구 (D104, D132)', () => {
         '누르세요. [이 단계 끝나면 멈춤]이 켜져 있거나 이전 단계를 추천했으면 [승인하고 멈춤]을 누르고, 전달은 멈춘 뒤 Work 완료 화면에서 고르세요. 고칠 점은',
       )
     }
-    for (const node of ['intake', 'evidence', 'rca', 'fix'] as const) {
+    for (const node of ['intake', 'evidence', 'rca', 'fix', 'review'] as const) {
       expect(closingMessage(node)).not.toContain('[승인하고 멈춤]')
     }
-    // 의도 승인과 Work 완료는 늘 수동이라 자동 승인을 적지 않는다 (4.2)
-    for (const node of ['intake', 'verify'] as const) {
+    // 의도 승인, 리뷰, Work 완료는 늘 수동이라 자동 승인을 적지 않는다 (4.2, D167)
+    for (const node of ['intake', 'review', 'verify'] as const) {
       expect(closingMessage(node)).not.toContain('자동 승인')
     }
   })
@@ -368,7 +436,7 @@ describe('마무리 안내 문구 (D104, D132)', () => {
     expect(section(md, '마무리 안내 문구')).toBe(closingMessage('rca'))
     expect(section(buildContext(input('rca')), '마무리 안내 문구')).toBe(closingMessage('rca'))
     expect(section(buildContext(input('intake', {}, config)), '승인 방식')).toBe(
-      '수동 승인 (의도 승인과 Work 완료는 늘 수동)',
+      '수동 승인 (의도 승인, 리뷰, Work 완료는 늘 수동)',
     )
   })
 })
@@ -392,8 +460,9 @@ describe('Work별 덮어쓰기 (D72)', () => {
     expect(questionMode(config, settings, 'evidence')).toBe('draft_first')
   })
 
-  it('intake와 verify는 항상 수동이다 (4.2)', () => {
+  it('intake, review, verify는 항상 수동이다 (4.2, D167)', () => {
     expect(approvalMode(config, {}, 'intake')).toBe('manual')
+    expect(approvalMode(config, {}, 'review')).toBe('manual')
     expect(approvalMode(config, {}, 'verify')).toBe('manual')
   })
 

@@ -41,6 +41,11 @@ describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
     expect(taskLabel({ seq: 3, node: 'rca' })).toBe('03 원인 분석')
     expect(taskLabel({ seq: 1, node: 'intake' })).toBe('01 의도 정리')
     expect(taskLabel({ seq: 12, node: 'verify' })).toBe('12 최종 검증')
+    // 리뷰의 화면 이름 (D109, D187)
+    expect(taskLabel({ seq: 3, node: 'review' })).toBe('03 리뷰')
+    expect(bandText({ seq: 3, node: 'review', reason: 'default' })).toBe(
+      '03 리뷰 · 새 세션 · 이유: 기본 진행',
+    )
   })
 
   it('머리 띠는 이름 · 새 세션 · 이유다', () => {
@@ -162,6 +167,30 @@ describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
   })
 })
 
+describe('리뷰의 앞뒤에서 멈춘 Work (D166)', () => {
+  it('fix 뒤에 멈추면 [재개]가 리뷰를 시작하고, 리뷰 뒤에 멈추면 최종 검증을 시작한다', () => {
+    const work = createWork({ workId: 'w', baseBranch: 'main', baseCommit: 'c', at: 'x' }).work
+    const at = (node: NodeName, size: 'S' | 'M' | 'L'): WorkState => ({
+      ...work,
+      status: 'stopped',
+      intent: { version: 1, size },
+      tasks: work.tasks.map((t) => ({ ...t, node })),
+      stop: { kind: 'after_step', task_id: 't-01' },
+    })
+    for (const size of ['S', 'M', 'L'] as const) {
+      expect(resumeHint(at('fix', size)), size).toBe('[재개]하면 다음 단계(리뷰)를 시작합니다.')
+      expect(resumeHint(at('review', size)), size).toBe(
+        '[재개]하면 다음 단계(최종 검증)를 시작합니다.',
+      )
+    }
+    const back: WorkState = {
+      ...at('verify', 'S'),
+      stop: { kind: 'recommended_back', task_id: 't-01', node: 'review', reason: '다시' },
+    }
+    expect(stopNotice(back)).toBe('이전 단계 추천으로 멈춤: 리뷰(review)로 — 다시')
+  })
+})
+
 describe('OS 알림 문구 (D81)', () => {
   const base = createWork({ workId: 'w', baseBranch: 'main', baseCommit: 'c', at: 'x' }).work
   const at = (status: TaskStatus, work: WorkState = base): WorkState => ({
@@ -278,6 +307,20 @@ describe('[변경]의 범위 (D83: 이 task의 diff)', () => {
     expect(changeRange(work, 't-02')).toEqual({ from: 'b', to: 'c' })
     expect(changeRange(work, 't-03')).toEqual({ from: 'c', to: null })
     expect(changeRange(work, 't-09')).toBeNull()
+  })
+
+  it('리뷰가 만든 커밋은 리뷰의 [변경]에 있고 최종 검증의 [변경]에는 없다 (D83, 사용자 결정)', () => {
+    // fix → review(사람이 고른 지적을 고쳐 커밋) → verify. 최종 검증의 [변경]은 verify가 바꾼 것이다.
+    // 리뷰의 커밋은 Work 완료 화면의 [전체 변경](기준 커밋부터)에 들어간다
+    const work = withTasks(
+      task(1, 'intake', { start_commit: 'a' }),
+      task(2, 'fix', { start_commit: 'a' }),
+      task(3, 'review', { start_commit: 'fixed' }),
+      task(4, 'verify', { start_commit: 'reviewed', status: 'working' }),
+    )
+    expect(changeRange(work, 't-02')).toEqual({ from: 'a', to: 'fixed' })
+    expect(changeRange(work, 't-03')).toEqual({ from: 'fixed', to: 'reviewed' })
+    expect(changeRange(work, 't-04')).toEqual({ from: 'reviewed', to: null })
   })
 
   it('시작하지 않은 task는 범위가 없고, 코드를 바꾸지 않아 앞 task의 범위도 끝내지 않는다', () => {

@@ -99,13 +99,13 @@ function until(s: Setup, pred: (w: WorkView) => boolean, label: string) {
   )
 }
 
-/** S 경로로 최종 검증이 승인 대기가 될 때까지 간다 */
+/** S 경로(intake → fix → review → verify)로 최종 검증이 승인 대기가 될 때까지 간다 */
 async function toVerify(s: Setup): Promise<void> {
   const r = await drive(s.h.relay, s.h.ui, s.key, {
     size: 'S',
     pauseAt: (t) => t.node === 'verify' && t.status === 'awaiting_approval',
   })
-  expect(r, s.h.ui.dump()).toMatchObject({ status: 'paused', reason: '03 최종 검증: 승인 대기' })
+  expect(r, s.h.ui.dump()).toMatchObject({ status: 'paused', reason: '04 최종 검증: 승인 대기' })
   await settle(s.h, s.key)
 }
 
@@ -146,9 +146,9 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
     const head = git(s.tree, 'rev-parse', 'HEAD')
     // verify를 시작할 때 origin과 gh를 다시 점검했다 (D118). 마무리 안내 문구는 누를 수 있는 전달 버튼이다 (D104)
     expect(gh(s, 'auth')).toHaveLength(2)
-    const ctx = read(path.join(s.dir, 'tasks', '03-verify', 'context.md'))
+    const ctx = read(path.join(s.dir, 'tasks', '04-verify', 'context.md'))
     expect(ctx).toContain('[완료만], [push], [PR 생성] 중 하나를 누르세요')
-    const review = await s.h.relay.review(s.key, 't-03')
+    const review = await s.h.relay.review(s.key, 't-04')
     expect(review?.completion).toMatchObject({
       mode: 'deliver',
       stopped: false,
@@ -168,12 +168,13 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
     const w = work(s)
     expect(w.status).toBe('completed')
     expect(w.operation).toBeUndefined()
-    expect(w.tasks.map((t) => [t.id, t.status])).toEqual([
-      ['t-01', 'approved'],
-      ['t-02', 'approved'],
-      ['t-03', 'approved'],
+    expect(w.tasks.map((t) => [t.id, t.node, t.status])).toEqual([
+      ['t-01', 'intake', 'approved'],
+      ['t-02', 'fix', 'approved'],
+      ['t-03', 'review', 'approved'],
+      ['t-04', 'verify', 'approved'],
     ])
-    expect(w.tasks[2]?.session?.alive).toBe(false)
+    expect(w.tasks[3]?.session?.alive).toBe(false)
     // origin이 로컬 경로라 비교 URL은 없다
     expect(w.delivery).toEqual({
       choice: 'push',
@@ -187,16 +188,16 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
         .slice(-4)
         .map((e) => [e.type, e.task_id ?? null, e.payload]),
     ).toEqual([
-      ['task.awaiting_approval', 't-03', {}],
-      ['task.approved', 't-03', { by: 'human' }],
+      ['task.awaiting_approval', 't-04', {}],
+      ['task.approved', 't-04', { by: 'human' }],
       ['delivery.succeeded', null, { choice: 'push', branch: s.branch, compare_url: null }],
       ['work.completed', null, { delivery: 'push' }],
     ])
-    expect(read(path.join(s.dir, 'decisions.md'))).toContain('## t-03 verify — ')
+    expect(read(path.join(s.dir, 'decisions.md'))).toContain('## t-04 verify — ')
     expect(view(s)?.delivery).toMatchObject({ label: 'push', status: 'succeeded' })
     expect(view(s)?.badge).toEqual({ kind: 'done', label: '완료', hot: false })
     // 완료한 Work의 Work 완료 화면은 읽기 전용이다
-    expect((await s.h.relay.review(s.key, 't-03'))?.completion?.mode).toBeNull()
+    expect((await s.h.relay.review(s.key, 't-04'))?.completion?.mode).toBeNull()
     expect(gh(s, 'pr create')).toEqual([])
   })
 
@@ -304,7 +305,7 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
     expect(!blocked.ok && [...(blocked.uncommitted ?? [])].sort()).toEqual(DIRTY)
     // 고르기 전에는 아무것도 바뀌지 않는다: verify 세션도 살아 있다
     await settle(s.h, s.key)
-    expect(work(s).tasks[2]).toMatchObject({
+    expect(work(s).tasks[3]).toMatchObject({
       status: 'awaiting_approval',
       session: { alive: true },
     })
@@ -400,15 +401,15 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
     })
     await toVerify(s)
     const fixed = git(s.tree, 'rev-parse', 'HEAD')
-    const verifyPid = work(s).tasks[2]?.session?.pid ?? 0
+    const verifyPid = work(s).tasks[3]?.session?.pid ?? 0
     expect(await s.h.relay.openCleanup(s.key, 'push')).toEqual({ ok: true })
     const opened = await until(s, (w) => w.cleanup?.status === 'live', '정리 세션')
     expect(opened.cleanup).toMatchObject({ choice: 'push', clean: false, uncommitted: [] })
     // verify 세션은 끝났고 승인 대기로 남는다. 정리 세션은 task가 아니다
     await settle(s.h, s.key)
     expect(alive(verifyPid)).toBe(false)
-    expect(work(s).tasks).toHaveLength(3)
-    expect(work(s).tasks[2]).toMatchObject({
+    expect(work(s).tasks).toHaveLength(4)
+    expect(work(s).tasks[3]).toMatchObject({
       status: 'awaiting_approval',
       session: { alive: false },
     })
@@ -430,7 +431,7 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
     expect(settings.permissions.deny).toEqual(
       expect.arrayContaining(['Bash(git push*)', 'Bash(gh pr*)']),
     )
-    expect(settings.permissions.deny.filter((r) => r.includes('/tasks/'))).toHaveLength(3)
+    expect(settings.permissions.deny.filter((r) => r.includes('/tasks/'))).toHaveLength(4)
     expect(settings.autoMemoryEnabled).toBe(false)
     expect(settings.hooks['Stop']?.[0]?.hooks[0]?.url).toMatch(/\/hook\/cleanup\/Stop$/)
     // 정리 세션이 열려 있으면 전달하지 않는다
@@ -447,10 +448,10 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
       status: 'completed',
       delivery: { choice: 'push', status: 'succeeded' },
     })
-    expect(w.tasks).toHaveLength(3)
+    expect(w.tasks).toHaveLength(4)
     // 정리 세션은 기록하지 않는다: 설정 파일도 지운다
     expect(fs.existsSync(start?.args[2] ?? '')).toBe(false)
-    expect(events(s).filter((e) => e.type === 'task.started')).toHaveLength(3)
+    expect(events(s).filter((e) => e.type === 'task.started')).toHaveLength(4)
     expect(view(s)?.cleanup).toBeNull()
   })
 
@@ -505,19 +506,19 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
       ok: false,
       error: '정리 세션이 열려 있음: 먼저 [정리 세션 닫기]나 [정리 끝 → push/PR 진행]을 누르세요',
     }
-    expect(await s.h.relay.resume(s.key, 't-03')).toEqual(blocked)
-    expect(await s.h.relay.retry(s.key, 't-03')).toEqual(blocked)
-    expect(await s.h.relay.approve(s.key, 't-03', {})).toEqual(blocked)
+    expect(await s.h.relay.resume(s.key, 't-04')).toEqual(blocked)
+    expect(await s.h.relay.retry(s.key, 't-04')).toEqual(blocked)
+    expect(await s.h.relay.approve(s.key, 't-04', {})).toEqual(blocked)
     expect(await s.h.relay.abandon(s.key)).toEqual(blocked)
     expect(
       await s.h.relay.selectStep(s.key, {
         node: 'fix',
         keepCode: false,
         instruction: '',
-        expect: { taskId: 't-03', done: false },
+        expect: { taskId: 't-04', done: false },
       }),
     ).toEqual(blocked)
-    expect(work(s).tasks).toHaveLength(3)
+    expect(work(s).tasks).toHaveLength(4)
 
     expect(await s.h.relay.closeCleanup(s.key)).toEqual({ ok: true })
     await settle(s.h, s.key)
@@ -531,7 +532,7 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
     expect(w.cleanup_process).toBeUndefined()
     expect(git(s.tree, 'status', '--porcelain')).toBe(dirty)
     expect(git(s.remote, 'branch', '--list', s.branch)).toBe('')
-    expect(await s.h.relay.resume(s.key, 't-03')).toEqual({ ok: true })
+    expect(await s.h.relay.resume(s.key, 't-04')).toEqual({ ok: true })
   })
 
   it('정리 세션을 /exit로 끝냈는데 변경이 남았으면 선택지로 돌아간다 (7-5)', async () => {
@@ -590,15 +591,15 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
     let w = work(s)
     expect(w.status).toBe('active')
     expect(w.operation).toBeUndefined()
-    expect(w.tasks[2]).toMatchObject({ status: 'awaiting_approval', session: { alive: false } })
-    expect(w.tasks[2]?.approved_at).toBeUndefined()
+    expect(w.tasks[3]).toMatchObject({ status: 'awaiting_approval', session: { alive: false } })
+    expect(w.tasks[3]?.approved_at).toBeUndefined()
     expect(w.delivery).toMatchObject({ choice: 'push', status: 'failed', stage: 'push' })
     expect(events(s).at(-1)).toMatchObject({
       type: 'delivery.failed',
       payload: { choice: 'push', stage: 'push' },
     })
-    expect(read(path.join(s.dir, 'decisions.md'))).not.toContain('## t-03 verify — ')
-    const review = await s.h.relay.review(s.key, 't-03')
+    expect(read(path.join(s.dir, 'decisions.md'))).not.toContain('## t-04 verify — ')
+    const review = await s.h.relay.review(s.key, 't-04')
     expect(review?.completion).toMatchObject({
       mode: 'deliver',
       delivery: { status: 'failed', stage: 'push', label: 'push' },
@@ -623,7 +624,7 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
     expect(work(s).delivery).toMatchObject({ choice: 'pr', status: 'failed', stage: 'pr' })
     expect(git(s.remote, 'branch', '--list', s.branch)).toContain(s.branch)
     // [전달 없이 완료]
-    expect(await s.h.relay.approve(s.key, 't-03', {})).toEqual({ ok: true })
+    expect(await s.h.relay.approve(s.key, 't-04', {})).toEqual({ ok: true })
     await settle(s.h, s.key)
     const w = work(s)
     expect(w.status).toBe('completed')
@@ -639,21 +640,21 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
     const s = await setup(scenario('S'))
     await toVerify(s)
     // verify가 도는 중에 멈춤을 켜도 마무리 안내 문구가 맞다: [승인하고 멈춤]을 함께 적었다 (D104)
-    expect(read(path.join(s.dir, 'tasks', '03-verify', 'context.md'))).toContain(
+    expect(read(path.join(s.dir, 'tasks', '04-verify', 'context.md'))).toContain(
       '[이 단계 끝나면 멈춤]이 켜져 있거나 이전 단계를 추천했으면 [승인하고 멈춤]을 누르고',
     )
     expect(await s.h.relay.stopAfter(s.key, true)).toEqual({ ok: true })
-    expect((await s.h.relay.review(s.key, 't-03'))?.completion?.mode).toBe('stop')
+    expect((await s.h.relay.review(s.key, 't-04'))?.completion?.mode).toBe('stop')
     expect(await deliver(s, 'push')).toEqual({
       ok: false,
       error: '승인하면 Work가 멈춤: [승인하고 멈춤]을 누르세요',
     })
     // [승인하고 멈춤]
-    expect(await s.h.relay.approve(s.key, 't-03', {})).toEqual({ ok: true })
+    expect(await s.h.relay.approve(s.key, 't-04', {})).toEqual({ ok: true })
     const stopped = await until(s, (w) => w.status === 'stopped', '멈춤')
     expect(stopped.actions.resumeWork).toBe(false)
     expect(stopped.stopHint).toBe('Work 완료 화면에서 전달을 고르면 Work를 완료합니다.')
-    const review = await s.h.relay.review(s.key, 't-03')
+    const review = await s.h.relay.review(s.key, 't-04')
     expect(review?.completion).toMatchObject({ mode: 'deliver', stopped: true })
     expect(await deliver(s, 'push')).toEqual({ ok: true })
     await settle(s.h, s.key)
@@ -661,7 +662,7 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
     expect(w.status).toBe('completed')
     expect(w.stop).toBeUndefined()
     expect(
-      events(s).filter((e) => e.type === 'task.approved' && e.task_id === 't-03'),
+      events(s).filter((e) => e.type === 'task.approved' && e.task_id === 't-04'),
     ).toHaveLength(1)
     expect(git(s.remote, 'branch', '--list', s.branch)).toContain(s.branch)
   })
@@ -669,9 +670,9 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
   it('origin·gh는 verify를 시작할 때와 [다시 점검]에서 다시 점검한다. 전달 버튼과 마무리 안내 문구가 따른다 (D67, D104, D118)', async () => {
     const s = await setup(scenario('S'), { env: { FAKE_GH_AUTH: 'fail' } })
     await toVerify(s)
-    const ctx = read(path.join(s.dir, 'tasks', '03-verify', 'context.md'))
+    const ctx = read(path.join(s.dir, 'tasks', '04-verify', 'context.md'))
     expect(ctx).toContain('[완료만], [push] 중 하나를 누르세요')
-    let review = await s.h.relay.review(s.key, 't-03')
+    let review = await s.h.relay.review(s.key, 't-04')
     expect(review?.completion?.buttons.pr).toEqual({
       enabled: false,
       reason: 'gh가 없거나 로그인되지 않음',
@@ -683,7 +684,7 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
     // gh에 로그인한 뒤 [다시 점검]
     delete s.h.env['FAKE_GH_AUTH']
     expect(await s.h.relay.recheckWork(s.key)).toEqual({ ok: true })
-    review = await s.h.relay.review(s.key, 't-03')
+    review = await s.h.relay.review(s.key, 't-04')
     expect(review?.completion?.buttons.pr).toEqual({ enabled: true, reason: null })
     const project = JSON.parse(
       read(path.join(s.h.home, 'projects', s.key.split('/')[0] ?? '', 'project.json')),
@@ -693,7 +694,7 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
     // origin을 지우면 [push]와 [PR 생성]이 모두 꺼진다
     git(s.repo, 'remote', 'remove', 'origin')
     expect(await s.h.relay.recheckWork(s.key)).toEqual({ ok: true })
-    review = await s.h.relay.review(s.key, 't-03')
+    review = await s.h.relay.review(s.key, 't-04')
     expect(review?.completion?.buttons).toMatchObject({
       none: { enabled: true },
       push: { enabled: false, reason: 'origin 원격이 없음' },

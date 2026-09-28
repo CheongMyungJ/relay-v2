@@ -5,7 +5,7 @@ disable-model-invocation: true
 
 # relay: fix
 
-Fix the code along the fix direction in `rca.md` and commit. Write the change summary in `fix.md` in the task directory. This is the only step that changes code.
+Fix the code along the fix direction in `rca.md` and commit. Write the change summary in `fix.md` in the task directory. This is the main step that changes code.
 
 ## Inputs
 

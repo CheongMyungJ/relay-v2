@@ -44,8 +44,29 @@ describe('config.json 읽기 (5.1.1)', () => {
       'config.json 자동 승인 카운트다운: 1~3600의 정수여야 함 (지금: 0). 기본값 15을 씀',
     )
     expect(warnings).toContain(
-      'config.json 자동 승인: verify는 켤 수 없음 (의도 승인과 Work 완료는 늘 수동). 기본값을 씀',
+      'config.json 자동 승인: verify는 켤 수 없음 (의도 승인, 리뷰, Work 완료는 늘 수동). 기본값을 씀',
     )
+  })
+
+  it('리뷰는 질문 방식만 있고 자동 승인 항목이 없다. 기본은 초안 우선이다 (5.1.1, D167)', () => {
+    expect(DEFAULT_CONFIG.question_mode.review).toBe('draft_first')
+    expect(Object.keys(DEFAULT_CONFIG.auto_approve)).not.toContain('review')
+    const { config, warnings } = normalizeConfig({ question_mode: { review: 'confirm_each' } })
+    expect(warnings).toEqual([])
+    expect(config.question_mode).toEqual({
+      ...DEFAULT_CONFIG.question_mode,
+      review: 'confirm_each',
+    })
+  })
+
+  it('리뷰에 자동 승인을 켜는 값은 받지 않는다. 경고하고 기본값을 쓴다 (D167)', () => {
+    for (const on of [true, false]) {
+      const { config, warnings } = normalizeConfig({ auto_approve: { fix: true, review: on } })
+      expect(config.auto_approve).toEqual(DEFAULT_CONFIG.auto_approve)
+      expect(warnings).toEqual([
+        'config.json 자동 승인: review는 켤 수 없음 (의도 승인, 리뷰, Work 완료는 늘 수동). 기본값을 씀',
+      ])
+    }
   })
 
   it('객체가 아니면 기본값이다', () => {
@@ -109,13 +130,18 @@ describe('설정 화면 (D70)', () => {
     expect(on.auto_approve.fix).toBe(false)
   })
 
-  it('의도 승인과 Work 완료는 켤 수 없다. 카운트다운은 1~3600초다 (4.2)', () => {
+  it('의도 승인, 리뷰, Work 완료는 켤 수 없다. 카운트다운은 1~3600초다 (4.2, D167)', () => {
     expect(applyConfigPatch(DEFAULT_CONFIG, { auto_approve: { verify: true } })).toEqual({
       ok: false,
-      error: '자동 승인: verify는 켤 수 없음 (의도 승인과 Work 완료는 늘 수동)',
+      error: '자동 승인: verify는 켤 수 없음 (의도 승인, 리뷰, Work 완료는 늘 수동)',
+    })
+    expect(applyConfigPatch(DEFAULT_CONFIG, { auto_approve: { review: true } })).toEqual({
+      ok: false,
+      error: '자동 승인: review는 켤 수 없음 (의도 승인, 리뷰, Work 완료는 늘 수동)',
     })
     for (const patch of [
       { auto_approve: { intake: false } },
+      { auto_approve: { review: false } },
       { auto_approve: { deploy: true } },
       { auto_approve: { fix: 'yes' } },
       { auto_approve: true },
@@ -147,11 +173,20 @@ describe('Work별 설정 (D72)', () => {
       value: { question_mode: {}, auto_approve: {} },
     })
     expect(checkWorkSettings({})).toEqual({ ok: true, value: {} })
+    // 리뷰는 질문 방식만 덮어쓴다 (D72, D167)
+    expect(checkWorkSettings({ question_mode: { review: 'confirm_each' } })).toEqual({
+      ok: true,
+      value: { question_mode: { review: 'confirm_each' } },
+    })
   })
 
   it('모르는 값과 켤 수 없는 단계는 받지 않는다', () => {
     expect(checkWorkSettings({ question_mode: { evidence: 'x' } }).ok).toBe(false)
     expect(checkWorkSettings({ auto_approve: { verify: true } }).ok).toBe(false)
+    expect(checkWorkSettings({ auto_approve: { review: true } })).toEqual({
+      ok: false,
+      error: '자동 승인: review는 켤 수 없음 (의도 승인, 리뷰, Work 완료는 늘 수동)',
+    })
     expect(checkWorkSettings({ auto_approve: { intake: false } }).ok).toBe(false)
     expect(checkWorkSettings({ auto_approve: { fix: 1 } }).ok).toBe(false)
     expect(checkWorkSettings({ session_limit: 2 }).ok).toBe(false)
@@ -176,6 +211,12 @@ describe('Work별 설정 (D72)', () => {
 describe('화면의 스킬 이름', () => {
   it('노드의 화면 이름(D109)과 같은 순서, 같은 이름이다', () => {
     expect(SKILL_TITLES).toEqual(NODES.map((n) => [NODE_INFO[n].skill, NODE_INFO[n].title]))
+    // 리뷰는 fix와 verify 사이다 (D166, D187)
+    expect(SKILL_TITLES.slice(-3)).toEqual([
+      ['fix', '수정'],
+      ['review', '리뷰'],
+      ['final-verify', '최종 검증'],
+    ])
   })
 
   it('자동 승인을 켤 수 있는 단계는 investigate, evidence, rca, fix이고 이름은 노드의 화면 이름이다 (4.2, D109, D151)', () => {

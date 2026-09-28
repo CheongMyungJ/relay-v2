@@ -13,7 +13,8 @@ export interface NodeInfo {
 
 /**
  * 파이프라인 순서 (3.1). 되감기와 건너뛰기, 이전 단계는 이 순서로 가른다(6.2). investigate는 M 경로에서
- * evidence와 rca를 대신하고(D147), 한 Work는 크기에 따라 둘 중 한쪽만 지난다(steps)
+ * evidence와 rca를 대신하고(D147), 한 Work는 크기에 따라 둘 중 한쪽만 지난다(steps). review는 모든 크기가
+ * fix와 verify 사이에 지난다 (D163, D166)
  */
 export const NODES: readonly NodeName[] = [
   'intake',
@@ -21,6 +22,7 @@ export const NODES: readonly NodeName[] = [
   'evidence',
   'rca',
   'fix',
+  'review',
   'verify',
 ]
 
@@ -45,6 +47,7 @@ export const NODE_INFO: Readonly<Record<NodeName, NodeInfo>> = {
   },
   rca: { node: 'rca', skill: 'root-cause', title: '원인 분석', artifacts: ['rca.md'] },
   fix: { node: 'fix', skill: 'fix', title: '수정', artifacts: ['fix.md'] },
+  review: { node: 'review', skill: 'review', title: '리뷰', artifacts: ['review.md'] },
   verify: {
     node: 'verify',
     skill: 'final-verify',
@@ -61,12 +64,13 @@ export type NextStep = NodeName | typeof WORK_COMPLETE
 /**
  * 이 크기의 Work가 고를 수 있는 단계 (3.4, D149). 경로(route)의 단계에 더해, S는 fix가 막혔을 때 되돌아갈
  * investigate를 가진다(D66). M은 evidence와 rca를, L은 investigate를 고를 수 없다. 같은 산출물(evidence.md,
- * rca.md)을 쓰는 task가 한 Work에 둘 생기지 않게 하려는 것이다. 크기를 바꾸려면 intake로 되감는다 (6.3)
+ * rca.md)을 쓰는 task가 한 Work에 둘 생기지 않게 하려는 것이다. 크기를 바꾸려면 intake로 되감는다 (6.3).
+ * review는 모든 크기가 고른다 (D166)
  */
 const STEPS: Readonly<Record<Size, readonly NodeName[]>> = {
-  S: ['intake', 'investigate', 'fix', 'verify'],
-  M: ['intake', 'investigate', 'fix', 'verify'],
-  L: ['intake', 'evidence', 'rca', 'fix', 'verify'],
+  S: ['intake', 'investigate', 'fix', 'review', 'verify'],
+  M: ['intake', 'investigate', 'fix', 'review', 'verify'],
+  L: ['intake', 'evidence', 'rca', 'fix', 'review', 'verify'],
 }
 
 /** S 빠른 경로에서 건너뛰는 노드 (3.4) */
@@ -78,8 +82,8 @@ export function steps(size: Size): NodeName[] {
 }
 
 /**
- * 이 크기로 지나는 노드 (3.4). S는 intake → fix → verify, M은 evidence와 rca를 합친 investigate를 지나고(D147),
- * L은 evidence와 rca를 따로 지난다
+ * 이 크기로 지나는 노드 (3.4). S는 intake → fix → review → verify, M은 evidence와 rca를 합친 investigate를
+ * 지나고(D147), L은 evidence와 rca를 따로 지난다. 모든 크기가 fix와 verify 사이에 review를 지난다 (D163, D166)
  */
 export function route(size: Size): NodeName[] {
   return steps(size).filter((n) => size !== 'S' || !SKIPPED_ON_S.includes(n))

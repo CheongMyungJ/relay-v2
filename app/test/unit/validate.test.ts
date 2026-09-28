@@ -218,7 +218,7 @@ describe('스키마 검사: handoff (5.2.1)', () => {
       '`recommended_next` 형식이 틀림 (기대: null 또는 {node, reason}, 지금: 문자열)',
     ])
     expect(run({ recommended_next: { node: 'deploy', reason: '배포' } })).toEqual([
-      '`recommended_next.node` 값이 허용값이 아님 (허용값: intake | investigate | evidence | rca | fix | verify, 지금: deploy)',
+      '`recommended_next.node` 값이 허용값이 아님 (허용값: intake | investigate | evidence | rca | fix | review | verify, 지금: deploy)',
     ])
     expect(run({ recommended_next: { node: 'fix' } })).toEqual([
       '`recommended_next.reason` 없음: 필수 필드',
@@ -280,15 +280,31 @@ describe('추가 검사: recommended_next.node가 선택 가능한 다음 단계
     expect(run(rec('investigate'), 'fix', 'M')).toEqual([])
   })
 
+  it('통과: review는 모든 크기에서 fix의 기본 다음 단계이고 verify의 이전 단계다 (D149, D166)', () => {
+    for (const size of ['S', 'M', 'L'] as const) {
+      expect(run(rec('review'), 'fix', size), size).toEqual([])
+      expect(run(rec('review'), 'verify', size), size).toEqual([])
+      expect(run(rec('verify'), 'review', size), size).toEqual([])
+      expect(run(rec('fix'), 'review', size), size).toEqual([])
+    }
+    // review는 크기에 따라 rca.md를 쓴 단계로 되돌아가자고 할 수 있다 (5.6.10)
+    expect(run(rec('investigate'), 'review', 'S')).toEqual([])
+    expect(run(rec('investigate'), 'review', 'M')).toEqual([])
+    expect(run(rec('rca'), 'review', 'L')).toEqual([])
+  })
+
   it('실패: 그 크기가 고를 수 없는 단계를 추천했다 (D149)', () => {
     expect(run(rec('rca'), 'fix', 'S')).toEqual([
-      '`recommended_next.node` 값이 선택 가능한 다음 단계가 아님 (허용값: intake | investigate | verify, 지금: rca)',
+      '`recommended_next.node` 값이 선택 가능한 다음 단계가 아님 (허용값: intake | investigate | review, 지금: rca)',
     ])
     expect(run(rec('rca'), 'fix', 'M')).toEqual([
-      '`recommended_next.node` 값이 선택 가능한 다음 단계가 아님 (허용값: intake | investigate | verify, 지금: rca)',
+      '`recommended_next.node` 값이 선택 가능한 다음 단계가 아님 (허용값: intake | investigate | review, 지금: rca)',
     ])
     expect(run(rec('investigate'), 'fix', 'L')).toEqual([
-      '`recommended_next.node` 값이 선택 가능한 다음 단계가 아님 (허용값: intake | evidence | rca | verify, 지금: investigate)',
+      '`recommended_next.node` 값이 선택 가능한 다음 단계가 아님 (허용값: intake | evidence | rca | review, 지금: investigate)',
+    ])
+    expect(run(rec('rca'), 'review', 'M')).toEqual([
+      '`recommended_next.node` 값이 선택 가능한 다음 단계가 아님 (허용값: intake | investigate | fix | verify, 지금: rca)',
     ])
   })
 
@@ -297,7 +313,14 @@ describe('추가 검사: recommended_next.node가 선택 가능한 다음 단계
       '`recommended_next.node` 값이 선택 가능한 다음 단계가 아님 (허용값: intake | evidence | fix, 지금: verify)',
     ])
     expect(run(rec('verify'), 'verify', 'L')).toEqual([
-      '`recommended_next.node` 값이 선택 가능한 다음 단계가 아님 (허용값: intake | evidence | rca | fix, 지금: verify)',
+      '`recommended_next.node` 값이 선택 가능한 다음 단계가 아님 (허용값: intake | evidence | rca | fix | review, 지금: verify)',
+    ])
+    // fix 다음은 review라 verify는 review를 건너뛴다 (D166)
+    expect(run(rec('verify'), 'fix', 'S')).toEqual([
+      '`recommended_next.node` 값이 선택 가능한 다음 단계가 아님 (허용값: intake | investigate | review, 지금: verify)',
+    ])
+    expect(run(rec('review'), 'review', 'S')).toEqual([
+      '`recommended_next.node` 값이 선택 가능한 다음 단계가 아님 (허용값: intake | investigate | fix | verify, 지금: review)',
     ])
   })
 
@@ -320,6 +343,22 @@ describe('추가 검사: 필수 산출물 (3.1, D30)', () => {
     expect(errorsOf(check('evidence', { 'handoff.md': handoff(), 'evidence.md': '' }))).toEqual([])
     const verify = { 'handoff.md': handoff(), 'verification.md': '', 'pr.md': '# 제목\n' }
     expect(errorsOf(check('verify', verify))).toEqual([])
+    expect(
+      errorsOf(check('review', { 'handoff.md': handoff(), 'review.md': '## 지적\n없음\n' })),
+    ).toEqual([])
+  })
+
+  it('실패: review가 awaiting_approval인데 review.md가 없다 (3.1, D30, D187)', () => {
+    expect(check('review', { 'handoff.md': handoff() }, 'S').errors).toEqual([
+      {
+        file: 'review.md',
+        part: 'file',
+        message: '`review.md` 없음: `status: awaiting_approval`일 때 필수 산출물',
+      },
+    ])
+    // blocked이면 확인하지 않는다
+    const blocked = handoff({ status: 'blocked', blocked_reason: '기준 커밋을 읽지 못함' })
+    expect(errorsOf(check('review', { 'handoff.md': blocked }, 'S'))).toEqual([])
   })
 
   it('실패: awaiting_approval인데 산출물이 없다', () => {

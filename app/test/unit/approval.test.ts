@@ -6,6 +6,7 @@ import {
   REVIEWABLE,
   approvalGate,
   approvalMode,
+  autoApprovable,
   autoApproveHolds,
   autoApproveNote,
   badge,
@@ -147,11 +148,12 @@ describe('자동 승인의 방식 (4.2, D72)', () => {
     expect(approvalMode(DEFAULT_CONFIG, {}, 'fix')).toBe('manual')
   })
 
-  it('intake와 verify는 설정과 상관없이 늘 수동이다', () => {
+  it('intake, review, verify는 설정과 상관없이 늘 수동이다 (4.2, D167)', () => {
     const all = { auto_approve: { investigate: false, evidence: true, rca: true, fix: true } }
-    for (const node of ['intake', 'verify'] as const) {
+    for (const node of ['intake', 'review', 'verify'] as const) {
       expect(approvalMode(config, all, node)).toBe('manual')
     }
+    expect(autoApprovable('review')).toBe(false)
   })
 })
 
@@ -201,11 +203,18 @@ describe('자동 승인 조건 (4.3, D129)', () => {
     }
   })
 
-  it('S 경로에서는 fix의 기본 다음 단계가 verify다. 건너뛴 rca를 추천하면 자동 승인하지 않는다 (3.4, D66)', () => {
-    const fix = (h: Partial<Handoff>) =>
+  it('fix의 기본 다음 단계는 모든 크기에서 review다. review를 건너뛰는 verify나 건너뛴 rca를 추천하면 자동 승인하지 않는다 (3.4, D66, D166)', () => {
+    for (const size of ['S', 'M', 'L'] as const) {
+      const fix = (h: Partial<Handoff>) =>
+        autoApproveHolds({ node: 'fix', size, check: valid(h), background: false })
+      expect(fix({ recommended_next: { node: 'review', reason: '기본' } }), size).toEqual([])
+      expect(fix({ recommended_next: { node: 'verify', reason: '리뷰 없이' } }), size).toEqual([
+        'recommended_next',
+      ])
+    }
+    const fixS = (h: Partial<Handoff>) =>
       autoApproveHolds({ node: 'fix', size: 'S', check: valid(h), background: false })
-    expect(fix({ recommended_next: { node: 'verify', reason: '기본' } })).toEqual([])
-    expect(fix({ recommended_next: { node: 'rca', reason: '원인이 다름' } })).toEqual([
+    expect(fixS({ recommended_next: { node: 'rca', reason: '원인이 다름' } })).toEqual([
       'recommended_next',
     ])
   })

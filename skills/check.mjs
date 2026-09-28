@@ -5,7 +5,7 @@
 // 2. 크기: SKILL.md + _common.md. Claude Code 어림(글자 수 / 4)으로 판정, 모델 토큰 어림은 참고 (D31, D95)
 //    합친 스킬(investigate)은 앱이 배포하는 모양대로 합쳐 잰다 (D148)
 // 3. 템플릿: 주석 단 템플릿에 값을 채운 예시가 docs/contracts 스키마를 통과하는지 (D87)
-// 4. 설계 대조: 산출물 템플릿의 절 제목, 입력·결정 지점·사람이 정할 결정·완료조건 항목 (5.6.1~5.6.9)
+// 4. 설계 대조: 산출물 템플릿의 절 제목, 입력·결정 지점·사람이 정할 결정·완료조건 항목 (5.6.1~5.6.10)
 // 5. 합친 스킬: 단독 구간 표시가 짝이 맞고, 합친 스킬에 단독 구간과 부분의 머리글이 없는지 (D148)
 
 import { readFileSync } from 'node:fs';
@@ -19,7 +19,7 @@ const root = join(here, '..');
 const read = (p) => readFileSync(join(root, p), 'utf8').replace(/\r\n/g, '\n');
 
 const SIZE_TARGET = 5000; // D31
-const SKILLS = ['work-start', 'investigate', 'evidence', 'root-cause', 'fix', 'final-verify'];
+const SKILLS = ['work-start', 'investigate', 'evidence', 'root-cause', 'fix', 'review', 'final-verify'];
 
 // 합친 스킬 (D148). 머리 뒤에 이 스킬들의 본문을 차례로 붙인다. 원본: app/src/adapters/claude.ts SKILL_PARTS
 const PARTS = { investigate: ['evidence', 'root-cause'] };
@@ -184,6 +184,7 @@ const templateSources = {
   evidence: ['#### 5.6.5'],
   'root-cause': ['#### 5.6.6'],
   fix: ['#### 5.6.7'],
+  review: ['#### 5.6.10'],
   'final-verify': ['#### 5.6.8'],
 };
 for (const [name, sections] of Object.entries(templateSources)) {
@@ -285,11 +286,29 @@ const spec = {
     ['D56', '기존 테스트 변경 → risks, 변경 요약에 표시', /existing test must change[\s\S]*`risks`[\s\S]*`변경 요약`/],
     ['D57', '테스트 명령 실행, 기준 커밋 실패 구분', /Run tests[\s\S]*also fails at the base commit/],
     ['5.6.7', '결정 지점: 구현 방식', /How to implement within the fix direction/],
+    ['5.6.7', '코드를 고치는 주 단계 (리뷰는 사람이 고른 지적만, D164)', /main step that changes code/],
     ['5.6.2', '코드를 바꾸는 단계: 모두 커밋', /Commit all changes before you close/],
     ['5.6.7', '완료조건: 네 절, 커밋, 재현 테스트, 테스트 명령', /## Done when[\s\S]*four template sections[\s\S]*committed[\s\S]*fails before[\s\S]*test command/],
   ],
+  review: [
+    ['5.6.10', '입력: context.md, fix.md와 rca.md(S는 없음)', /`context\.md`[\s\S]*`fix\.md` and `rca\.md`[\s\S]*S path there is no `rca\.md`/],
+    ['D97', '리뷰 대상: 기준 커밋(context.md)부터 지금까지의 변경', /base commit \(from `context\.md`\) to now/],
+    ['5.6.10', '보는 것: 목표·비목표, 수정 방향, 빠진 경우와 경계 조건, 테스트, 관례와 읽기 쉬움, 필요 없는 변경', /`목표` and `비목표`[\s\S]*fix direction[\s\S]*edge conditions[\s\S]*tests[\s\S]*conventions and readability[\s\S]*not needed/],
+    ['5.6.10', '완료조건 판정은 verify의 일', /Do not judge the 완료조건[\s\S]*job of verify/],
+    ['D164', '순서 1: 번호 붙인 지적(심각도, 파일과 줄, 문제와 제안), 없으면 없음, 종료 절차로 마무리', /numbered item[\s\S]*차단 \/ 권장 \/ 사소[\s\S]*file and line[\s\S]*"없음"[\s\S]*closing procedure/],
+    ['D164', '순서 2: 번호로 지시한 지적만 고쳐 커밋, 테스트 명령, 반영 절, 종료 절차 다시', /by number[\s\S]*fix only those and commit[\s\S]*test command[\s\S]*`## 반영`[\s\S]*closing procedure again/],
+    ['D164', '순서 3: 지시하지 않은 지적은 고치지 않음, 지시 없이 승인하면 반영 없음', /Never fix a finding the human did not pick[\s\S]*approves without picking/],
+    ['5.6.10', '코드: 사람이 고른 지적만, 바꿨으면 커밋', /Change code only for the findings the human picked[\s\S]*Commit/],
+    ['D165', '반영 뒤 리뷰를 다시 돌리지 않음', /Do not review again/],
+    ['D164', '반영할 지적은 AskUserQuestion으로 묻지 않고 마무리 뒤 터미널에서 (D28의 예외)', /exception to asking on the spot[\s\S]*Do not ask with `AskUserQuestion`[\s\S]*terminal/],
+    ['D164', '고른 것과 고르지 않은 것 → decisions by: human', /picked and what they did not[\s\S]*`by: human`/],
+    ['5.6.10', '결정 지점: 고른 지적을 어떻게 고칠지', /How to fix a picked finding[\s\S]*결정마다 확인/],
+    ['5.6.10', '이전 단계 추천: fix, 또는 rca.md를 쓴 단계 (D149)', /`recommended_next` to `fix`[\s\S]*`rca` or `investigate`/],
+    ['5.6.10', '완료조건: 세 절, 고른 지적을 고쳤으면 커밋과 테스트 결과', /## Done when[\s\S]*three template sections[\s\S]*committed[\s\S]*test command[\s\S]*`반영`/],
+  ],
   'final-verify': [
-    ['5.6.8', '입력: evidence.md, fix.md, rca.md', /`evidence\.md` and `fix\.md`, and `rca\.md`/],
+    ['5.6.8', '입력: evidence.md, fix.md, rca.md, review.md', /`evidence\.md` and `fix\.md`, and `rca\.md` and `review\.md`/],
+    ['D164', '리뷰에서 고친 것은 review.md의 반영 절', /`review\.md`[\s\S]*`반영` section/],
     ['D65', 'S: 원인과 재현의 재현 절차, 없으면 판정 불가', /S path[\s\S]*`원인과 재현`[\s\S]*판정 불가/],
     ['A33', 'S 경로는 evidence.md가 없을 때만', /`size: S` and `context\.md` lists no `evidence\.md`/],
     ['5.6.8', '코드를 바꾸지 않음', /does not change code/],

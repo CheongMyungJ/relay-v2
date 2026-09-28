@@ -12,6 +12,7 @@ import {
   type StepOptions,
   type StepPlan,
 } from '../../src/core/rewind'
+import { route } from '../../src/core/pipeline'
 import type { NodeName, Size } from '../../src/shared/contracts'
 import type { TaskRecord, TaskStatus, WorkState, WorkStop } from '../../src/shared/work'
 
@@ -61,9 +62,12 @@ function work(
   }
 }
 
-/** L 경로에서 앞 단계를 모두 승인하고 node가 지금 task인 Work */
+/**
+ * L 경로에서 앞 단계를 모두 승인하고 node가 지금 task인 Work:
+ * t-01 intake, t-02 evidence, t-03 rca, t-04 fix, t-05 review, t-06 verify
+ */
 function lAt(node: NodeName, status: TaskStatus = 'working'): WorkState {
-  const nodes: NodeName[] = ['intake', 'evidence', 'rca', 'fix', 'verify']
+  const nodes: NodeName[] = ['intake', 'evidence', 'rca', 'fix', 'review', 'verify']
   const upto = nodes.slice(0, nodes.indexOf(node) + 1)
   return work(upto.map((n, i) => task(i + 1, n, n === node ? status : 'approved')))
 }
@@ -99,14 +103,14 @@ describe('6.2 표의 네 경우', () => {
       code: { kind: 'reset', to: 'start-4', backupBranch: `relay/${WORK_ID}-discarded-1` },
       keepCodeOffered: true,
     })
-    expect(p.from.id).toBe('t-05')
-    expect(ids(p.discard)).toEqual(['t-04', 't-05'])
+    expect(p.from.id).toBe('t-06')
+    expect(ids(p.discard)).toEqual(['t-04', 't-05', 't-06'])
   })
 
   it('k 완료에 k 이하를 고르면: 위와 같다. 중단할 세션은 없다', () => {
     const p = plan(stoppedAfter('verify'), 'fix')
     expect(p).toMatchObject({ kind: 'rewind', done: true, interrupt: null, reason: 'rewind' })
-    expect(ids(p.discard)).toEqual(['t-04', 't-05'])
+    expect(ids(p.discard)).toEqual(['t-04', 't-05', 't-06'])
     expect(p.code).toEqual({
       kind: 'reset',
       to: 'start-4',
@@ -114,8 +118,8 @@ describe('6.2 표의 네 경우', () => {
     })
     // 같은 단계를 고르면 k만 폐기하고 다시 실행한다
     const same = plan(stoppedAfter('verify'), 'verify')
-    expect(ids(same.discard)).toEqual(['t-05'])
-    expect(same.code).toMatchObject({ kind: 'reset', to: 'start-5' })
+    expect(ids(same.discard)).toEqual(['t-06'])
+    expect(same.code).toMatchObject({ kind: 'reset', to: 'start-6' })
     expect(same.keepCodeOffered).toBe(false)
   })
 
@@ -125,15 +129,15 @@ describe('6.2 표의 네 경우', () => {
       kind: 'skip',
       done: false,
       interrupt: 'session',
-      skipped: ['fix'],
+      skipped: ['fix', 'review'],
       reason: 'skip',
       code: { kind: 'none' },
       keepCodeOffered: false,
     })
     expect(ids(p.discard)).toEqual(['t-03'])
-    // 진행 중인 fix를 두고 verify로 건너뛰어도 fix의 코드는 되돌리지 않는다
+    // 진행 중인 fix를 두고 verify로 건너뛰어도 fix의 코드는 되돌리지 않는다. review는 건너뛴다
     const fromFix = plan(lAt('fix'), 'verify')
-    expect(fromFix).toMatchObject({ skipped: [], reason: 'skip', code: { kind: 'none' } })
+    expect(fromFix).toMatchObject({ skipped: ['review'], reason: 'skip', code: { kind: 'none' } })
     expect(ids(fromFix.discard)).toEqual(['t-04'])
   })
 
@@ -161,19 +165,22 @@ describe('6.2 표의 네 경우', () => {
 describe('되돌릴 커밋 (D117)', () => {
   it('폐기하는 task 가운데 가장 앞 task의 시작 커밋으로 되돌린다', () => {
     expect(plan(lAt('verify'), 'rca').code).toMatchObject({ kind: 'reset', to: 'start-3' })
-    expect(ids(plan(lAt('verify'), 'rca').discard)).toEqual(['t-03', 't-04', 't-05'])
+    expect(ids(plan(lAt('verify'), 'rca').discard)).toEqual(['t-03', 't-04', 't-05', 't-06'])
   })
 
   it('S 경로에서 건너뛴 investigate를 고르면 폐기하는 fix의 시작 커밋으로 되돌린다 (D66, D149)', () => {
     const w = work(
-      [task(1, 'intake', 'approved'), task(2, 'fix', 'approved'), task(3, 'verify', 'working')],
-      {
-        size: 'S',
-      },
+      [
+        task(1, 'intake', 'approved'),
+        task(2, 'fix', 'approved'),
+        task(3, 'review', 'approved'),
+        task(4, 'verify', 'working'),
+      ],
+      { size: 'S' },
     )
     const p = plan(w, 'investigate')
     expect(p).toMatchObject({ kind: 'rewind', reason: 'rewind' })
-    expect(ids(p.discard)).toEqual(['t-02', 't-03'])
+    expect(ids(p.discard)).toEqual(['t-02', 't-03', 't-04'])
     expect(p.code).toMatchObject({ kind: 'reset', to: 'start-2' })
   })
 
@@ -208,10 +215,10 @@ describe('되돌릴 커밋 (D117)', () => {
 
   it('폐기하는 task가 한 번도 시작하지 않았으면 되돌릴 커밋이 없다. 대기열의 task는 대기열에서 뺀다', () => {
     const queued = lAt('verify', 'queued')
-    const last = queued.tasks[4] as TaskRecord
+    const last = queued.tasks[5] as TaskRecord
     const w = {
       ...queued,
-      tasks: [...queued.tasks.slice(0, 4), { ...last, session: null, start_commit: undefined }],
+      tasks: [...queued.tasks.slice(0, 5), { ...last, session: null, start_commit: undefined }],
     }
     expect(plan(w, 'verify')).toMatchObject({ interrupt: 'queue', code: { kind: 'none' } })
     expect(plan(w, 'fix').code).toMatchObject({ kind: 'reset', to: 'start-4' })
@@ -223,7 +230,11 @@ describe('되돌릴 커밋 (D117)', () => {
       code: { kind: 'keep' },
       keepCodeOffered: true,
     })
-    expect(ids(plan(lAt('verify'), 'fix', { keepCode: true }).discard)).toEqual(['t-04', 't-05'])
+    expect(ids(plan(lAt('verify'), 'fix', { keepCode: true }).discard)).toEqual([
+      't-04',
+      't-05',
+      't-06',
+    ])
     expect(planStep(lAt('verify'), 'rca', { keepCode: true })).toMatchObject({ ok: false })
     // 건너뛰어 fix로 가면 되돌릴 것이 없다
     expect(planStep(stoppedAfter('rca'), 'fix', { keepCode: true })).toMatchObject({ ok: false })
@@ -271,6 +282,7 @@ describe('고를 수 있는 단계 (6.3)', () => {
       ['evidence', false],
       ['rca', false],
       ['fix', false],
+      ['review', false],
       ['verify', false],
     ])
     expect(stepChoices(w)[1]?.why).toBe('의도 승인 전에는 intake만 고를 수 있음 (6.3)')
@@ -278,7 +290,7 @@ describe('고를 수 있는 단계 (6.3)', () => {
 
   it('intake로 되감으면 모든 task를 폐기한다 (6.3)', () => {
     const p = plan(stoppedAfter('verify'), 'intake')
-    expect(ids(p.discard)).toEqual(['t-01', 't-02', 't-03', 't-04', 't-05'])
+    expect(ids(p.discard)).toEqual(['t-01', 't-02', 't-03', 't-04', 't-05', 't-06'])
     expect(p.code).toMatchObject({ kind: 'reset', to: 'start-1' })
   })
 
@@ -296,7 +308,7 @@ describe('고를 수 있는 단계 (6.3)', () => {
   it('대화상자는 파이프라인 차례로 되감기와 건너뛰기, 지금 단계, 추천한 단계를 보인다 (D82, D23)', () => {
     const w: WorkState = {
       ...stoppedAfter('verify'),
-      stop: { kind: 'recommended_back', task_id: 't-05', node: 'fix', reason: '완료조건 2 실패' },
+      stop: { kind: 'recommended_back', task_id: 't-06', node: 'fix', reason: '완료조건 2 실패' },
     }
     expect(stepChoices(w)).toEqual([
       {
@@ -336,6 +348,15 @@ describe('고를 수 있는 단계 (6.3)', () => {
         recommended: true,
       },
       {
+        node: 'review',
+        title: '리뷰(review)',
+        kind: 'rewind',
+        allowed: true,
+        why: null,
+        current: false,
+        recommended: false,
+      },
+      {
         node: 'verify',
         title: '최종 검증(verify)',
         kind: 'rewind',
@@ -351,6 +372,7 @@ describe('고를 수 있는 단계 (6.3)', () => {
       'skip',
       'skip',
       'skip',
+      'skip',
     ])
   })
 })
@@ -358,7 +380,7 @@ describe('고를 수 있는 단계 (6.3)', () => {
 describe('크기별 단계 (D149)', () => {
   /** M 경로에서 앞 단계를 모두 승인하고 node가 지금 task인 Work */
   function mAt(node: NodeName, status: TaskStatus = 'working'): WorkState {
-    const nodes: NodeName[] = ['intake', 'investigate', 'fix', 'verify']
+    const nodes: NodeName[] = ['intake', 'investigate', 'fix', 'review', 'verify']
     const upto = nodes.slice(0, nodes.indexOf(node) + 1)
     return work(
       upto.map((n, i) => task(i + 1, n, n === node ? status : 'approved')),
@@ -372,6 +394,7 @@ describe('크기별 단계 (D149)', () => {
       ['intake', 'rewind', true],
       ['investigate', 'rewind', true],
       ['fix', 'rewind', true],
+      ['review', 'rewind', true],
       ['verify', 'rewind', true],
     ])
     for (const node of ['evidence', 'rca'] as const) {
@@ -385,7 +408,7 @@ describe('크기별 단계 (D149)', () => {
   it('M Work에서 investigate로 되감으면 investigate부터 폐기하고 그 시작 커밋으로 되돌린다', () => {
     const p = plan(mAt('verify'), 'investigate')
     expect(p).toMatchObject({ kind: 'rewind', reason: 'rewind', keepCodeOffered: false })
-    expect(ids(p.discard)).toEqual(['t-02', 't-03', 't-04'])
+    expect(ids(p.discard)).toEqual(['t-02', 't-03', 't-04', 't-05'])
     expect(p.code).toMatchObject({ kind: 'reset', to: 'start-2' })
   })
 
@@ -395,6 +418,7 @@ describe('크기별 단계 (D149)', () => {
       'evidence',
       'rca',
       'fix',
+      'review',
       'verify',
     ])
     expect(planStep(lAt('fix'), 'investigate')).toMatchObject({ ok: false })
@@ -406,6 +430,7 @@ describe('크기별 단계 (D149)', () => {
       ['intake', 'rewind'],
       ['investigate', 'rewind'],
       ['fix', 'rewind'],
+      ['review', 'skip'],
       ['verify', 'skip'],
     ])
   })
@@ -433,11 +458,109 @@ describe('크기별 단계 (D149)', () => {
   })
 })
 
+describe('리뷰 단계 (D163~D167, D117)', () => {
+  /** size 경로에서 앞 단계를 모두 승인하고 node가 지금 task인 Work */
+  function at(size: Size, node: NodeName, status: TaskStatus = 'working'): WorkState {
+    const nodes = route(size)
+    const upto = nodes.slice(0, nodes.indexOf(node) + 1)
+    return work(
+      upto.map((n, i) => task(i + 1, n, n === node ? status : 'approved')),
+      { size },
+    )
+  }
+  const stopped = (w: WorkState): WorkState => ({
+    ...w,
+    status: 'stopped',
+    stop: { kind: 'after_step', task_id: w.tasks.at(-1)?.id ?? '' },
+  })
+
+  it('모든 크기의 대화상자에 review가 fix와 verify 사이에 있다 (D149, D166)', () => {
+    expect(stepChoices(at('S', 'verify')).map((c) => [c.node, c.kind])).toEqual([
+      ['intake', 'rewind'],
+      ['investigate', 'rewind'],
+      ['fix', 'rewind'],
+      ['review', 'rewind'],
+      ['verify', 'rewind'],
+    ])
+    expect(stepChoices(at('M', 'fix')).map((c) => [c.node, c.kind])).toEqual([
+      ['intake', 'rewind'],
+      ['investigate', 'rewind'],
+      ['fix', 'rewind'],
+      ['review', 'skip'],
+      ['verify', 'skip'],
+    ])
+    expect(stepChoices(at('L', 'review')).map((c) => c.node)).toEqual([
+      'intake',
+      'evidence',
+      'rca',
+      'fix',
+      'review',
+      'verify',
+    ])
+  })
+
+  it('verify에서 review로 되감으면 review부터 폐기하고 review의 시작 커밋으로 되돌린다. [현재 코드 위에서 이어서]는 fix만이다 (6.2)', () => {
+    const w = at('S', 'verify')
+    const p = plan(w, 'review')
+    expect(p).toMatchObject({ kind: 'rewind', reason: 'rewind', keepCodeOffered: false })
+    expect(ids(p.discard)).toEqual(['t-03', 't-04'])
+    expect(p.code).toMatchObject({ kind: 'reset', to: 'start-3' })
+    expect(planStep(w, 'review', { keepCode: true })).toMatchObject({ ok: false })
+  })
+
+  it('verify에서 fix로 되감으면 리뷰가 고친 커밋도 되돌린다. [현재 코드 위에서 이어서]면 그대로 둔다 (D117)', () => {
+    const w = at('M', 'verify')
+    const p = plan(w, 'fix')
+    expect(ids(p.discard)).toEqual(['t-03', 't-04', 't-05'])
+    expect(p.code).toMatchObject({ kind: 'reset', to: 'start-3' })
+    expect(plan(w, 'fix', { keepCode: true }).code).toEqual({ kind: 'keep' })
+    // 진행 중인 review에서 fix로 되감아도 같다
+    const r = plan(at('M', 'review'), 'fix')
+    expect(ids(r.discard)).toEqual(['t-03', 't-04'])
+    expect(r).toMatchObject({ code: { kind: 'reset', to: 'start-3' }, keepCodeOffered: true })
+  })
+
+  it('fix 다음의 기본 진행은 review다. verify를 고르면 review를 건너뛴다 (D117)', () => {
+    expect(plan(stopped(at('L', 'fix', 'approved')), 'review')).toMatchObject({
+      kind: 'skip',
+      discard: [],
+      skipped: [],
+      reason: 'default',
+    })
+    expect(plan(stopped(at('L', 'fix', 'approved')), 'verify')).toMatchObject({
+      kind: 'skip',
+      discard: [],
+      skipped: ['review'],
+      reason: 'skip',
+    })
+    // 진행 중인 fix를 두고 verify로 건너뛰면 fix를 폐기하고 코드는 그대로다
+    const p = plan(at('S', 'fix'), 'verify')
+    expect(p).toMatchObject({ skipped: ['review'], reason: 'skip', code: { kind: 'none' } })
+    expect(ids(p.discard)).toEqual(['t-02'])
+    // review 다음의 기본 진행은 verify다
+    expect(plan(stopped(at('S', 'review', 'approved')), 'verify')).toMatchObject({
+      reason: 'default',
+      skipped: [],
+    })
+  })
+
+  it('review 없이 verify에 온 Work(M8 전에 fix를 지남)도 review로 되감을 수 있다: verify만 폐기하고 그 시작 커밋에서 시작한다', () => {
+    const w = work(
+      [task(1, 'intake', 'approved'), task(2, 'fix', 'approved'), task(3, 'verify', 'working')],
+      { size: 'S' },
+    )
+    const p = plan(w, 'review')
+    expect(p).toMatchObject({ kind: 'rewind', reason: 'rewind' })
+    expect(ids(p.discard)).toEqual(['t-03'])
+    expect(p.code).toMatchObject({ kind: 'reset', to: 'start-3' })
+  })
+})
+
 describe('미리 보기 (D82)', () => {
   const facts = {
     commits: 2,
     uncommitted: [' M src/avg.js', '?? notes.txt'],
-    artifacts: { 't-04': ['fix.md'], 't-05': ['pr.md', 'verification.md'] },
+    artifacts: { 't-04': ['fix.md'], 't-05': ['review.md'], 't-06': ['pr.md', 'verification.md'] },
   }
 
   it('폐기될 산출물, 되돌릴 커밋 수와 커밋 안 된 변경, 백업 브랜치, 중단할 task', () => {
@@ -447,11 +570,12 @@ describe('미리 보기 (D82)', () => {
       title: '수정(fix)',
       kind: 'rewind',
       reason: '되감기',
-      expect: { taskId: 't-05', done: false },
-      interrupt: '진행 중인 05 최종 검증의 세션을 끝냅니다',
+      expect: { taskId: 't-06', done: false },
+      interrupt: '진행 중인 06 최종 검증의 세션을 끝냅니다',
       discard: [
         { taskId: 't-04', label: '04 수정', artifacts: ['fix.md'] },
-        { taskId: 't-05', label: '05 최종 검증', artifacts: ['pr.md', 'verification.md'] },
+        { taskId: 't-05', label: '05 리뷰', artifacts: ['review.md'] },
+        { taskId: 't-06', label: '06 최종 검증', artifacts: ['pr.md', 'verification.md'] },
       ],
       skipped: [],
       code: {
@@ -503,7 +627,7 @@ describe('미리 보기 (D82)', () => {
       reason: '건너뛰기',
       interrupt: '진행 중인 03 원인 분석의 세션을 끝냅니다',
       discard: [{ taskId: 't-03', label: '03 원인 분석', artifacts: ['rca.md'] }],
-      skipped: ['수정(fix)'],
+      skipped: ['수정(fix)', '리뷰(review)'],
       code: { kind: 'none', to: null, commits: 0, uncommitted: ['?? x'], backupBranch: null },
       keepCodeOffered: false,
     })
@@ -521,10 +645,10 @@ describe('미리 보기 (D82)', () => {
     const queued = lAt('verify', 'queued')
     const q = {
       ...queued,
-      tasks: queued.tasks.map((t) => (t.id === 't-05' ? { ...t, session: null } : t)),
+      tasks: queued.tasks.map((t) => (t.id === 't-06' ? { ...t, session: null } : t)),
     }
     expect(stepPreview(q, plan(q, 'fix'), facts).interrupt).toBe(
-      '대기열의 05 최종 검증을(를) 대기열에서 뺍니다',
+      '대기열의 06 최종 검증을(를) 대기열에서 뺍니다',
     )
   })
 
