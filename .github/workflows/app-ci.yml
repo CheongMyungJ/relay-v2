@@ -1,5 +1,5 @@
 # 앱 CI (docs/implementation.md I28, 8.3).
-# Linux: 타입 검사, ESLint, Prettier, [단위], skills/check.mjs. Windows: [어댑터], [흐름].
+# Linux: 타입 검사, ESLint, Prettier, [단위], skills/check.mjs. Windows: 빌드(I39), [어댑터], [흐름].
 name: app-ci
 
 on:
@@ -81,6 +81,11 @@ jobs:
           # 어댑터와 흐름 시험은 Node에서 돌아 Electron 바이너리가 필요 없다 (I26).
           ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
         run: npm ci --no-audit --no-fund
+
+      - name: 빌드
+        working-directory: app
+        # 파일 이름의 대소문자를 가리지 않는 Windows에서만 깨지는 import를 push마다 잡는다 (I39, A79)
+        run: npm run build
 
       - name: "[어댑터]"
         working-directory: app

@@ -974,6 +974,7 @@ core는 `core/settings.ts`를 빼면 줄 95% 이상, 가지 84% 이상이다(`ma
 | A77 | 고침(시험) | 고아 프로세스 시험의 정리가 ID만으로 끝내지 않는다: 시험이 띄운 자식은 핸들로(`ChildProcess.kill`, 이미 끝났으면 아무것도 안 함), 그 자식이 띄운 프로세스는 ID와 시작 시각이 같을 때만(`killOrphans`) 끝낸다(`test/adapters/recovery.test.ts`, `test/flow/recovery.test.ts`). 제품 코드는 그대로다. 시험이 중간에 실패해도 프로세스가 남지 않는 것을 Linux에서 확인했다. 가끔만 생기는 일이라 Windows CI 한 번의 통과로 증명되지는 않는다. CI를 가끔 빨갛게 해서 A24보다 먼저 봤다. A78은 차례가 오면 본다 | — | e958bb6 |
 | A24 | 고침 | Stop 없이 세션이 끝나면 main이 그때의 파일로 다시 검사해, 유효한 handoff면 승인 대기나 막힘으로 둔다(`core/machine.ts` sessionEnded, `main/work.ts`의 SessionEnd와 onExit가 checkNow를 부름). 알림은 "승인 대기"이고 `task.awaiting_approval`에 `reason: session_ended`를 남긴다. 이 경로는 자동 승인하지 않는다. [즉시 중단]과 앱 종료는 그대로다. 시험 `test/unit/machine.test.ts`, `test/flow/flow.test.ts`(handoff를 쓰고 Stop 없이 끝나는 가짜 claude). 점검 기록의 "같은 파일로 앱을 다시 켜면 승인 대기가 된다"는 세션이 살아 있는 채 앱이 충돌한 경우만 맞았다. 세션이 끝난 뒤에는 다시 켜도 세션 종료였다 | D146, I38 | 0f62f2c, 9d02a55 |
 | A25 | 나중에 | 바꾸지 않았다. 설계 9절 추가 후보에 적었다(알림, 강조 배지, [재개] 안내). 지금도 원인을 치운 뒤 [재개]를 누르면 한 번도 띄우지 못한 단계는 새 세션으로 시작한다(D135의 [흐름] 시험). 패널 안내는 [즉시 중단]과 같은 "중단됨. [재개]하면 이어서 합니다."이고 오류 줄이 그 아래에 보인다 | — | 386a846 |
+| A79 | 고침(시험) | app-ci의 Windows 작업이 [어댑터] 전에 앱을 빌드한다(`npm run build`, `.github/workflows/app-ci.yml`). app-build #15에서 실패한 것과 같은 명령이라, 이름을 고치기 전이었다면 push마다 잡았다. 같은 모양은 [단위] `test/unit/files.test.ts`도 막는다(fb088f6). 사람이 정함: PR #10에 넣는다 | I39 | (이 커밋) |
 
 ## 부록. 1단계 대조표
 

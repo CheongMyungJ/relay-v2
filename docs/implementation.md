@@ -55,7 +55,7 @@
 | I25 | 앱 흐름 시험에는 Node 스크립트로 만든 가짜 `claude`를 쓴다. 실제와 같은 인자를 받아 PTY 안에서 돌고, 설정 파일의 훅 URL과 토큰으로 신호를 보내고, 시나리오 파일대로 산출물과 handoff를 쓰고, Stop 되돌림을 받으면 고쳐 쓴다 | 비용이 없고 결과가 매번 같음. PTY, 훅 서버, 토큰, 감시, 되돌림까지 실제 경로를 지남. 실제와 어긋나는 것은 실제 `claude` 시험(I29)이 잡음 | ✅ |
 | I26 | 앱 흐름 시험은 Electron 없이 Vitest(Node)에서 `main`의 조립 코드를 불러 돌린다. 창, 알림, 렌더러로 보내기는 주입받게 하고 시험에서는 가짜로 바꾼다 | 흐름 시험의 대상은 상태, 파일, 프로세스임. 화면을 거치면 느리고 흔들림. I9의 층 나눔과 맞음 | ✅ |
 | I27 | 화면과 설치 파일은 Playwright(`_electron`)로 스모크 시험만 한다: 설치된 앱이 뜬다, 탭에 PTY 출력이 보인다, 가짜 `claude`로 task 하나를 승인까지 누른다. 설치 파일 워크플로에서 돌린다 | 설치 파일 안의 node-pty(M0)를 자동으로 확인하려면 설치된 앱을 띄워야 함. Electron 지원이 실험적이라 범위를 좁게 둠 | ✅ |
-| I28 | push와 PR마다 두 작업을 돌린다. Linux: 타입 검사, lint(ESLint, Prettier **(기본값)**), core 단위 시험. Windows: adapters 시험과 가짜 `claude` 흐름 시험. 설치 파일 빌드와 스모크, 실제 `claude` 시험은 수동으로 돌린다 | 공개 레포라 러너가 무료임. core는 Node API를 쓰지 않아 Linux에서 빨리 결과가 나옴. 주 플랫폼 문제는 Windows 작업이 잡음. 설치 파일 빌드는 오래 걸림 | ✅ |
+| I28 | push와 PR마다 두 작업을 돌린다. Linux: 타입 검사, lint(ESLint, Prettier **(기본값)**), core 단위 시험. Windows: adapters 시험과 가짜 `claude` 흐름 시험. 설치 파일 빌드와 스모크, 실제 `claude` 시험은 수동으로 돌린다. I39로 더함: Windows 작업은 [어댑터] 전에 앱을 빌드한다 | 공개 레포라 러너가 무료임. core는 Node API를 쓰지 않아 Linux에서 빨리 결과가 나옴. 주 플랫폼 문제는 Windows 작업이 잡음. 설치 파일 빌드는 오래 걸림 | ✅ |
 | I29 | 실제 `claude` 흐름 시험은 수동 워크플로로, 마일스톤 완료 때와 Claude Code를 올릴 때 돌린다. 시험 레포 두 개(M 경로, S 경로)를 시험 때 만들고 **(기본값)**, 질문에는 첫 선택지로 답한다. 모델과 effort는 입력으로 받고 기본은 `sonnet`, `low`다 **(기본값)**. 끝까지 갔는지, task마다 되돌림 횟수, 걸린 시간을 판정한다 | 한 번에 세션이 8개 돌아 Claude 사용량이 가장 큰 시험임. 스킬이나 Claude Code가 바뀔 때만 의미가 있음. 되돌림 횟수는 스킬 템플릿이 잘 맞는지 보는 지표도 됨 | ✅ |
 | I30 | 마일스톤마다 실기 확인 항목을 7절에 두고, 실제 `claude` 시험과 실기 확인의 결과는 `docs/checks.md`에 날짜, 앱 커밋, Claude Code 버전, OS와 함께 기록한다 | 스파이크 결과(D92)와 같은 방식. Claude Code 버전이 바뀌었을 때 무엇을 다시 확인할지 알 수 있음 | ✅ |
 | I31 | 스파이크 S6(강제 종료 뒤 `--resume`)을 M3 전에 러너에서 돌린다. 계획은 `docs/spikes.md`에 둔다 | [즉시 중단]은 트리 종료인데 S3는 `/exit`로 끝낸 세션만 확인함. 결과에 따라 M3의 설계가 바뀔 수 있어 먼저 알아야 함 | ✅ |
@@ -66,6 +66,7 @@
 | I36 | D136의 "코드가 이미 바뀌었는가"는 되돌리기 직전과 실패한 뒤의 HEAD와 작업 트리 tree(`worktreeTree`, 커밋 안 된 변경과 추적하지 않는 파일 포함)를 비교해 정한다. 둘 다 같으면 전처럼 기록을 지우고, 다르거나 비교하지 못하면 끊긴 되감기로 남긴다. [단계 선택]과 끊긴 되감기의 [다시 시도]가 같은 방법을 쓴다. [흐름]은 Linux에서 `chattr +i`로 추적하지 않는 파일을 지울 수 없게 해 clean만 실패시킨다(root가 아니면 건너뜀). Windows의 잠긴 파일은 3단계 실기에서 본다 | clean만 실패하는 경우뿐 아니라 reset이 도중에 실패해 작업 트리 일부만 바뀐 경우도 잡음. index.lock처럼 아무것도 바꾸지 않은 실패는 지금처럼 다시 고를 수 있음. 비교하지 못하면 되돌린 코드로 진행하지 않는 쪽으로 틀림 | ✅ |
 | I37 | D142는 `main/notices.ts`가 한다. 알림은 `click`이나 `failed`에서 놓고 `close`에서는 놓지 않는다. `app.setAppUserModelId`는 Windows 설치본(`app.isPackaged`)에서만 부르고 개발 중에는 Electron 기본값을 쓴다. 앱 ID가 `electron-builder.yml`의 appId와 같은지는 [단위]가 본다 | Windows는 토스트가 알림 센터로 옮겨 갈 때 `close`를 보내므로(Electron 문서 Notification) `close`에서 놓으면 알림 센터에서 누를 알림을 놓침. 개발 중의 실행 파일에는 그 앱 ID의 시작 메뉴 바로 가기가 없음 | ✅ |
 | I38 | D146의 검사는 main이 SessionEnd 훅과 PTY 종료 때 task 파일을 다시 읽어 이벤트에 넣는다. 먼저 처리된 신호가 정하고 뒤의 것은 세션이 이미 끝나 무시된다. 이미 끝낸 세션(승인, [즉시 중단] 등)의 PTY 종료에는 읽지 않는다. 파일을 읽지 못하면 검사 없이 넣어 세션 종료로 둔다 | Windows에서 강제로 끝난 claude는 SessionEnd를 보내지 않아 PTY 종료만 옴. 파일을 읽다 실패해도 세션이 끝난 것은 남겨야 함 | ✅ |
+| I39 | app-ci의 Windows 작업은 [어댑터]와 [흐름] 전에 앱을 빌드한다(`npm run build`). 설치 파일 빌드와 [스모크]는 그대로 수동이다 | Windows는 파일 이름의 대소문자를 가리지 않아, Linux에서 되는 확장자 없는 import가 Windows에서만 다른 파일로 풀릴 수 있음(A79, PR #10의 app-build #15). Linux 작업과 Windows의 시험은 앱을 빌드하지 않아 이것을 놓쳤음. 빌드는 몇 초라 push마다 돌려도 부담이 없음 | ✅ |
 
 ## 3. 확인한 사실
 
@@ -483,7 +484,7 @@ app/src/
 
 | 파일 | 실행 | 하는 일 |
 |---|---|---|
-| `.github/workflows/app-ci.yml` | push, PR (`app/`, `skills/`, `docs/contracts/`가 바뀔 때) | Linux: 타입 검사, ESLint, Prettier 확인, [단위], `skills/check.mjs` **(기본값)**. Windows: [어댑터], [흐름] |
+| `.github/workflows/app-ci.yml` | push, PR (`app/`, `skills/`, `docs/contracts/`가 바뀔 때) | Linux: 타입 검사, ESLint, Prettier 확인, [단위], `skills/check.mjs` **(기본값)**. Windows: 빌드(I39), [어댑터], [흐름] |
 | `.github/workflows/app-build.yml` | 수동 | 설치 파일 빌드, 조용한 설치, [스모크], 설치 파일을 결과물로 올리기(I8) |
 | `.github/workflows/app-claude.yml` | 수동 | [실제]. 입력: 모델, effort. 인증은 스파이크 워크플로와 같은 레포 secret. 레포에 secret이 없으면 첫 단계에서 멈춘다. 2026-09-28까지 한 번도 돌지 않았다(8.4) |
 
