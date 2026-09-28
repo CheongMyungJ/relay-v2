@@ -934,7 +934,7 @@ core는 `core/settings.ts`를 빼면 줄 95% 이상, 가지 84% 이상이다(`ma
 | A13 | 고침 | 고른 적 있는 Work의 터미널만 만든다(`renderer/src/opened.ts`, `App.tsx`). 한 번 만든 터미널은 치우지 않는다. 시험 `test/unit/opened.test.ts`(판정만). 화면은 [스모크]에서만 지나고 여기서는 돌리지 못했다(빌드만 확인) | D143 | 5bae560 |
 | A14 | 고침(시험) | 되돌릴 커밋 없이 커밋 안 된 변경만 있는 되감기의 [흐름]을 더했다(`test/flow/rewind.test.ts`). 실행 쪽 백업 조건을 커밋 수만 보게 깨뜨리면 실패하는 것을 확인했다. 코드는 그대로다 | — | 601680b |
 | A15 | 고침(시험) | 창 설정값(`main/security.ts` WEB_PREFERENCES), 외부 주소 검사(externalUrl), Markdown 변환(`renderer/src/markdown.ts`)을 떼어 [단위] `test/unit/security.test.ts`로 지킨다. CSP는 `index.html`을 읽어 본다. 동작은 그대로다. D79·D83·D119의 화면 분기는 여전히 [스모크]에만 있다 | — | bb8335c |
-| A16 | 문서만 | `checks.md`의 M2~M7 표에 [실기] "아직 안 함(3단계로 미룸)" 줄을 더했다. 실제 확인은 3단계에서 한다(1.3) | — | (이 커밋) |
+| A16 | 문서만 | `checks.md`의 M2~M7 표에 [실기] "아직 안 함(3단계로 미룸)" 줄을 더했다. 실제 확인은 3단계에서 한다(1.3) | — | 6b39e4d |
 
 ## 부록. 1단계 대조표
 
