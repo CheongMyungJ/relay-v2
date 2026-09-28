@@ -499,6 +499,44 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
     expect(fs.existsSync(path.join(tree, 'scratch.txt'))).toBe(false)
   })
 
+  it('되돌릴 커밋이 없어도 커밋 안 된 변경이 있으면 백업한 뒤 지운다. 미리 보기와 같다 (D116, A14)', async () => {
+    const s = await setup({
+      tasks: { ...scenario('S').tasks, 't-02': [{ do: 'prompt' }, { do: 'wait' }] },
+    })
+    const key = await s.create()
+    const dir = s.dir(key)
+    const tree = s.tree(key)
+    const base = git(s.repo, 'rev-parse', 'main')
+    await approveIntake(s, key)
+    await untilTask(s, key, (t) => t.id === 't-02' && t.live, 'fix')
+    await settle(s.h, key)
+    // fix는 아직 커밋하지 않았다. 사람이 worktree에 메모를 남겼다
+    fs.writeFileSync(path.join(tree, 'notes.txt'), '사람의 메모\n')
+    expect(git(tree, 'rev-parse', 'HEAD')).toBe(base)
+
+    const p = await preview(s, key, 'fix')
+    expect(p.code).toMatchObject({ kind: 'reset', to: base, commits: 0 })
+    expect(p.code.uncommitted).toEqual(['?? notes.txt'])
+    const branch = p.code.backupBranch ?? ''
+    expect(branch).toMatch(/-discarded-1$/)
+    expect(await confirm(s, key, p)).toEqual({ ok: true })
+    await untilTask(s, key, (t) => t.id === 't-03' && t.live, '되감은 fix')
+    await settle(s.h, key)
+
+    // 백업은 기준 커밋 위에 커밋 안 된 변경을 담은 커밋 하나다
+    const backup = git(s.repo, 'rev-parse', branch)
+    expect(git(s.repo, 'rev-parse', `${backup}^`)).toBe(base)
+    expect(git(s.repo, 'show', `${backup}:notes.txt`)).toBe('사람의 메모')
+    expect(fs.existsSync(path.join(tree, 'notes.txt'))).toBe(false)
+    expect(git(tree, 'rev-parse', 'HEAD')).toBe(base)
+    expect(taskOf(work(dir), 't-03').selection?.reset).toEqual({
+      from: base,
+      to: base,
+      backup_branch: branch,
+      backup_commit: backup,
+    })
+  })
+
   it('[현재 코드 위에서 이어서]는 커밋과 커밋 안 된 변경을 두고 그 위에서 고친다 (6.2)', async () => {
     const s = await setup({
       tasks: {
