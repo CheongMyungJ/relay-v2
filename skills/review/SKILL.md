@@ -10,13 +10,13 @@ Review the whole change of this Work and write numbered findings in `review.md` 
 ## Inputs
 
 - The argument gives the path of `context.md`. Read it first. It has the intent and the Work's base commit.
-- `fix.md` and `rca.md`, at the paths in `context.md`. On the S path there is no `rca.md`.
+- `fix.md`, and `rca.md` if `context.md` lists it, at the paths in `context.md`. Skip `rca.md` only when `context.md` lists none (usually the S path). If it is listed, read it whatever the size: an S Work that went back to investigate has one.
 - Review the change from the base commit (from `context.md`) to now: `git diff <base commit>`.
 
 ## What to look at
 
 - Does the change fit the intent's `목표` and `비목표`?
-- Where does it depart from the fix direction in `rca.md`?
+- If there is `rca.md`, where does the change depart from its fix direction?
 - Missing cases and edge conditions.
 - Do the tests really catch the fix?
 - The repo's conventions and readability.

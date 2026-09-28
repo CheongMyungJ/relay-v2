@@ -291,7 +291,7 @@ const spec = {
     ['5.6.7', '완료조건: 네 절, 커밋, 재현 테스트, 테스트 명령', /## Done when[\s\S]*four template sections[\s\S]*committed[\s\S]*fails before[\s\S]*test command/],
   ],
   review: [
-    ['5.6.10', '입력: context.md, fix.md와 rca.md(S는 없음)', /`context\.md`[\s\S]*`fix\.md` and `rca\.md`[\s\S]*S path there is no `rca\.md`/],
+    ['A33', '입력: context.md, fix.md. rca.md는 context.md에 없을 때만 건너뛰고, 있으면 크기와 관계없이 읽음', /`context\.md`[\s\S]*`fix\.md`, and `rca\.md` if `context\.md` lists it[\s\S]*only when `context\.md` lists none[\s\S]*whatever the size/],
     ['D97', '리뷰 대상: 기준 커밋(context.md)부터 지금까지의 변경', /base commit \(from `context\.md`\) to now/],
     ['5.6.10', '보는 것: 목표·비목표, 수정 방향, 빠진 경우와 경계 조건, 테스트, 관례와 읽기 쉬움, 필요 없는 변경', /`목표` and `비목표`[\s\S]*fix direction[\s\S]*edge conditions[\s\S]*tests[\s\S]*conventions and readability[\s\S]*not needed/],
     ['5.6.10', '완료조건 판정은 verify의 일', /Do not judge the 완료조건[\s\S]*job of verify/],

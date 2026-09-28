@@ -330,7 +330,7 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
     expect(verifyCtx).not.toContain(path.join('05-review', 'review.md'))
   })
 
-  it('S Work의 fix가 investigate를 추천하면 멈추고, investigate로 되감으면 fix → review → verify로 끝난다. 다시 한 fix는 rca.md를 받는다 (D66, D149, 점검 A33)', async () => {
+  it('S Work의 fix가 investigate를 추천하면 멈추고, investigate로 되감으면 fix → review → verify로 끝난다. 다시 한 fix와 review는 rca.md를 받는다 (D66, D149, 점검 A33)', async () => {
     const s = await setup({
       tasks: {
         ...scenario('S').tasks,
@@ -374,6 +374,11 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
     // 크기는 S 그대로지만 fix는 investigate의 산출물을 받는다. S 경로 문구는 rca.md가 없을 때만이다 (A33)
     const ctx = read(path.join(taskDir(s, key, '04-fix'), 'context.md'))
     expect(ctx).toContain(
+      `- t-03 investigate: ${path.join(taskDir(s, key, '03-investigate'), 'rca.md')}`,
+    )
+    // 리뷰도 크기와 관계없이 context.md에 있는 rca.md를 읽는다 (5.6.10, A33)
+    const reviewCtx = read(path.join(taskDir(s, key, '05-review'), 'context.md'))
+    expect(reviewCtx).toContain(
       `- t-03 investigate: ${path.join(taskDir(s, key, '03-investigate'), 'rca.md')}`,
     )
   })
