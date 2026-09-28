@@ -1,9 +1,9 @@
 // [실제] 실제 claude로 자동 승인 (docs/implementation.md M7, 8.4). 가짜 claude로는 볼 수 없는 것을 본다:
 // - 실제 Stop 본문의 background_tasks와 session_crons가 턴이 끝날 때 비어 있어 카운트다운이 시작된다 (D129)
 // - 실제 수정 스킬이 수동 승인과 자동 승인을 함께 적은 마무리 안내 문구를 그대로 찍는다 (D132)
-// - 카운트다운 뒤 자동 승인하고 세션을 끝내 최종 검증으로 간다. 승인 방식이 work.json, task.approved,
+// - 카운트다운 뒤 자동 승인하고 세션을 끝내 다음 단계(리뷰, M8)로 간다. 승인 방식이 work.json, task.approved,
 //   decisions.md의 머리 줄에 자동으로 남는다 (4.3, 5.4, 5.5)
-// S 경로 레포에서 수정 단계의 자동 승인을 켠다(카운트다운 5초). 사람 역할은 의도 정리와 최종 검증을 승인하고,
+// S 경로 레포에서 수정 단계의 자동 승인을 켠다(카운트다운 5초). 사람 역할은 의도 정리, 리뷰, 최종 검증을 승인하고,
 // 수정은 카운트다운을 기다린다(awaitAuto). 카운트다운하지 않았거나 멈췄으면 사람처럼 승인하고, 알림에 온 까닭을
 // 결과에 남긴 뒤 실패로 친다.
 // RELAY_REAL_CLAUDE=1이면 실제 claude, dry면 가짜 claude로 도구만 확인한다. RELAY_REAL_CASES의 auto로 고른다.
@@ -157,8 +157,10 @@ async function run(): Promise<Result> {
       const s = Math.round((Date.parse(approvedEvent.ts) - Date.parse(last.ts)) / 1000)
       notes.push(`수정의 마지막 승인 대기부터 승인까지: ${s}초 (승인 대기 ${waited.length}번)`)
     }
-    const next = work.tasks.find((t) => t.node === 'verify')
-    notes.push(`자동 승인 뒤 최종 검증: ${next ? `${next.id} ${next.status}` : '시작하지 않음'}`)
+    const next = work.tasks[work.tasks.indexOf(fix) + 1]
+    notes.push(
+      `자동 승인 뒤 다음 task: ${next ? `${next.id} ${next.node} ${next.status}` : '시작하지 않음'}`,
+    )
 
     if (r.status !== 'completed') throw new Error(`Work 완료 전에 멈춤: ${r.reason ?? r.status}`)
     const auto =
