@@ -16,6 +16,8 @@
 // M7: 두 번째 Work의 새 Work 대화상자에 이 Work의 자동 승인(앱 설정 따름: 켜짐)이 보인다 → 수정이 승인 대기가 되면
 // 승인 화면에 자동 승인 카운트다운과 [취소]가 보인다 → [취소]하면 카운트다운이 없어지고 까닭([취소]를 누름)이 보이며,
 // 사람이 [승인]한다.
+// M8: 설정 화면에 리뷰의 질문 방식은 있고 자동 승인은 없다 → 두 번째 Work는 수정 뒤 리뷰를 지난다. 리뷰는 카운트다운
+// 없이 승인 대기가 되고 [산출물]에 review.md가 보이며, 사람이 [승인]하면 최종 검증으로 간다.
 // M6: 앱 종료 확인을 거쳐 앱을 끄고, 첫 Work의 work.json에 끊긴 되감기 기록을 넣고 decisions.md를 고친 뒤 다시
 // 켠다 → 첫 Work의 배지가 "끊긴 작업"이고, 패널 맨 위에 끊긴 곳과 [다시 시도]·[무시], 바뀐 파일과 [확인]이
 // 보인다. 끊긴 동안 [단계 선택]은 없다 → [확인]하면 파일 알림이 닫히고, [다시 시도]하면 앞 task를 폐기하고
@@ -186,6 +188,9 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await expect(win.getByLabel('수정 자동 승인')).not.toBeChecked()
   await win.getByLabel('수정 자동 승인').check()
   await win.getByLabel('자동 승인 카운트다운(초)').fill('600')
+  // 리뷰는 질문 방식만 고르고 자동 승인은 켤 수 없다 (5.1.1, D167)
+  await expect(win.getByLabel('리뷰 질문 방식')).toHaveValue('draft_first')
+  await expect(win.getByLabel('리뷰 자동 승인')).toHaveCount(0)
   await win.screenshot({ path: 'test-results/settings.png' })
   await win.getByRole('button', { name: '저장', exact: true }).click()
   const config = () =>
@@ -278,10 +283,21 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await win.screenshot({ path: 'test-results/countdown-cancelled.png' })
   await approveFix.click()
 
+  // 리뷰 (M8): 수정 다음은 모든 크기가 리뷰다. 리뷰는 늘 수동이라 자동 승인이 켜진 앱에서도 카운트다운 없이
+  // [승인]을 기다린다. 지적은 [산출물]의 review.md에 있다 (D163, D167)
+  await expect(win.locator('.band')).toContainText('03 리뷰', { timeout: 60_000 })
+  const approveReview = win.getByRole('button', { name: '승인', exact: true })
+  await expect(approveReview).toBeEnabled({ timeout: 60_000 })
+  await expect(countdown).toBeHidden()
+  await win.getByRole('tab', { name: '산출물', exact: true }).click()
+  await expect(win.locator('.review-body')).toContainText('review.md')
+  await win.screenshot({ path: 'test-results/review.png' })
+  await approveReview.click()
+
   // Work 완료 화면 (시나리오 7-3): 판정표와 전달 버튼. origin(로컬 bare)이 있어 [push]를 누를 수 있다
   const push = win.getByRole('button', { name: 'push', exact: true })
   await expect(push).toBeEnabled({ timeout: 60_000 })
-  await expect(win.locator('.band')).toContainText('03 최종 검증')
+  await expect(win.locator('.band')).toContainText('04 최종 검증')
   await expect(win.getByRole('button', { name: '완료만', exact: true })).toBeEnabled()
   await expect(win.locator('table.verdicts')).toContainText('재현 절차가 더 이상 실패하지 않는다')
   await win.screenshot({ path: 'test-results/completion.png' })
@@ -339,7 +355,7 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await expect(badge2).toHaveText('보관됨', { timeout: 30_000 })
   const worktree = findDir(path.join(home, 'projects'), workId2 ?? '', 'worktrees')
   expect(worktree).toBeNull()
-  expect(findFile(path.join(home, 'projects'), 'pr.md', '03-verify')).not.toBeNull()
+  expect(findFile(path.join(home, 'projects'), 'pr.md', '04-verify')).not.toBeNull()
   await win.screenshot({ path: 'test-results/archived.png' })
 
   // M6: 앱을 끈다(살아 있는 세션이 있어 종료 확인을 거친다). 되감기가 백업 브랜치를 만들기 전에 앱이 꺼진 것처럼
