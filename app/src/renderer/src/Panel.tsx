@@ -744,6 +744,11 @@ function CompletionActions({
   }
   const finishCleanup = async () =>
     done(await run('정리 끝', () => window.relay.finishCleanup(work.key)), cleanup?.choice)
+  /** [정리 세션 닫기] (D137): 전달하지 않고 세션만 끝낸다 */
+  const closeCleanup = async () => {
+    const r = await run('정리 세션 닫기', () => window.relay.closeCleanup(work.key))
+    if (!r.ok) setError(r.error)
+  }
   const recheck = async () => {
     const r = await run('다시 점검', () => window.relay.recheck(work.key))
     if (!r.ok) setError(r.error)
@@ -835,7 +840,7 @@ function CompletionActions({
           {cleanup.status === 'queued'
             ? '정리 세션: 세션 상한 때문에 대기열에서 기다립니다. 자리가 나면 엽니다.'
             : cleanup.status === 'live'
-              ? '정리 세션이 열려 있습니다(기록하지 않음). push와 PR은 막혀 있습니다. 정리가 끝나면 누르세요.'
+              ? '정리 세션이 열려 있습니다(기록하지 않음). push와 PR, 단계 선택과 재개는 막혀 있습니다. 정리가 끝나면 누르세요. 전달하지 않고 그만두려면 [정리 세션 닫기]를 누르세요.'
               : cleanup.uncommitted.length
                 ? `정리 세션이 끝났지만 커밋 안 된 변경 ${cleanup.uncommitted.length}개가 남았습니다.`
                 : '정리 세션이 끝났습니다.'}
@@ -849,6 +854,9 @@ function CompletionActions({
                   onClick={() => void finishCleanup()}
                 >
                   정리 끝 → push/PR 진행
+                </button>
+                <button disabled={!!busy} onClick={() => void closeCleanup()}>
+                  정리 세션 닫기
                 </button>
                 {cleanup.clean ? <span className="dim">git status가 깨끗합니다</span> : null}
               </>

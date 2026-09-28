@@ -70,8 +70,10 @@ import {
   type MachineEvent,
 } from '../core/machine'
 import {
+  CLEANUP_BLOCKS,
   DELIVERY_LABEL,
   approvalStops,
+  cleanupActions,
   closingButtons,
   compareUrl,
   deliveryButtons,
@@ -963,6 +965,7 @@ export class WorkRunner {
   /** [승인], [의도 승인], [완료만], [오류 무시하고 승인] (시나리오 4-3, 4.1) */
   approve(taskId: string, opts: ApproveOptions): Promise<CommandResult> {
     return this.enqueue(async () => {
+      if (this.cleanupOpen()) return { ok: false, error: CLEANUP_BLOCKS }
       const task = this.task(taskId)
       if (!task) return { ok: false, error: `${taskId} 없음` }
       const check = this.check(task, await this.files.taskFiles(task))
@@ -1043,6 +1046,17 @@ export class WorkRunner {
     return t.rejected ? { ok: false, error: t.rejected } : { ok: true }
   }
 
+  /** 정리 세션이 열려 있으면(대기열 포함) 받지 않는 명령 (D137) */
+  private unlessCleanup(event: MachineEvent): Promise<CommandResult> {
+    if (this.cleanupOpen()) return Promise.resolve({ ok: false, error: CLEANUP_BLOCKS })
+    return this.command(event)
+  }
+
+  /** 정리 세션이 열려 있다(대기열 포함) */
+  private cleanupOpen(): boolean {
+    return !!this.cleanup && this.cleanup.status !== 'ended'
+  }
+
   /** [즉시 중단]: 세션을 트리째 끝내고 중단됨으로 남긴다. 대기열의 task는 대기열에서 뺀다 */
   interrupt(taskId: string, reason: InterruptReason = 'human'): Promise<CommandResult> {
     return this.enqueue(async () => {
@@ -1059,12 +1073,12 @@ export class WorkRunner {
 
   /** [재개], [세션 재개]: 같은 옵션과 --resume으로 다시 연다. 세션 상한을 넘으면 대기열에 넣는다 */
   resume(taskId: string): Promise<CommandResult> {
-    return this.enqueue(() => this.command({ type: 'resume', taskId, at: this.ctx.at() }))
+    return this.enqueue(() => this.unlessCleanup({ type: 'resume', taskId, at: this.ctx.at() }))
   }
 
   /** [이 단계 새 세션으로 다시] (D114) */
   retry(taskId: string): Promise<CommandResult> {
-    return this.enqueue(() => this.command({ type: 'retry', taskId, at: this.ctx.at() }))
+    return this.enqueue(() => this.unlessCleanup({ type: 'retry', taskId, at: this.ctx.at() }))
   }
 
   /** [이 단계 끝나면 멈춤]을 켜거나 끈다 */
@@ -1074,13 +1088,13 @@ export class WorkRunner {
 
   /** 멈춘 Work의 [재개]: 기본 다음 단계를 시작한다 */
   resumeWork(): Promise<CommandResult> {
-    return this.enqueue(() => this.command({ type: 'resumeWork', at: this.ctx.at() }))
+    return this.enqueue(() => this.unlessCleanup({ type: 'resumeWork', at: this.ctx.at() }))
   }
 
-  /** [Work 포기]. 정리 세션이 있으면 끝낸다 */
+  /** [Work 포기]. 끝난 정리 세션이 남아 있으면 치운다. 열려 있으면 받지 않는다 (D137) */
   abandon(): Promise<CommandResult> {
     return this.enqueue(async () => {
-      const r = await this.command({ type: 'abandon', at: this.ctx.at() })
+      const r = await this.unlessCleanup({ type: 'abandon', at: this.ctx.at() })
       if (r.ok && this.cleanup) {
         await this.endCleanup()
         this.cleanup = null
@@ -1131,6 +1145,7 @@ export class WorkRunner {
    */
   selectStep(input: SelectStepInput): Promise<CommandResult> {
     return this.enqueue(async () => {
+      if (this.cleanupOpen()) return { ok: false, error: CLEANUP_BLOCKS }
       this.rewindError = null
       let backups: string[]
       try {
@@ -1641,6 +1656,17 @@ export class WorkRunner {
       this.ctx.pool.release()
     }
     await this.releaseCleanup(c)
+  }
+
+  /** [정리 세션 닫기] (D137): 정리 세션을 끝내고 전달하지 않는다. 변경은 worktree에 남는다 */
+  closeCleanup(): Promise<CommandResult> {
+    return this.enqueue(async () => {
+      if (!this.cleanup) return { ok: false, error: '정리 세션이 없음' }
+      await this.endCleanup()
+      this.cleanup = null
+      this.changed()
+      return { ok: true }
+    })
   }
 
   /**
@@ -2165,7 +2191,7 @@ export class WorkRunner {
       statusLabel: WORK_STATUS_LABEL[w.status],
       completedAt: w.completed_at ?? null,
       badge: badge(w),
-      actions: actions(w),
+      actions: this.cleanupOpen() ? cleanupActions(actions(w)) : actions(w),
       stopAfterStep: w.stop_after_step === true,
       settings: w.settings,
       baseBranch: w.base_branch,

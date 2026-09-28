@@ -454,6 +454,57 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
     expect(view(s)?.cleanup).toBeNull()
   })
 
+  it('정리 세션이 열린 동안에는 다른 조작을 받지 않는다. [정리 세션 닫기]는 전달 없이 세션만 끝낸다 (D137)', async () => {
+    const s = await setup({
+      tasks: { ...scenario('S').tasks, 'final-verify': DIRTY_VERIFY },
+      cleanup: [{ do: 'waitEnter' }, { do: 'wait' }],
+    })
+    await toVerify(s)
+    expect(await s.h.relay.openCleanup(s.key, 'push')).toEqual({ ok: true })
+    const opened = await until(s, (w) => w.cleanup?.status === 'live', '정리 세션')
+    await settle(s.h, s.key)
+    const dirty = git(s.tree, 'status', '--porcelain')
+    expect(dirty).not.toBe('')
+    // 버튼을 끄고 main도 받지 않는다
+    expect(opened.actions).toMatchObject({
+      resume: false,
+      retry: false,
+      selectStep: false,
+      abandon: false,
+    })
+    const blocked = {
+      ok: false,
+      error: '정리 세션이 열려 있음: 먼저 [정리 세션 닫기]나 [정리 끝 → push/PR 진행]을 누르세요',
+    }
+    expect(await s.h.relay.resume(s.key, 't-03')).toEqual(blocked)
+    expect(await s.h.relay.retry(s.key, 't-03')).toEqual(blocked)
+    expect(await s.h.relay.approve(s.key, 't-03', {})).toEqual(blocked)
+    expect(await s.h.relay.abandon(s.key)).toEqual(blocked)
+    expect(
+      await s.h.relay.selectStep(s.key, {
+        node: 'fix',
+        keepCode: false,
+        instruction: '',
+        expect: { taskId: 't-03', done: false },
+      }),
+    ).toEqual(blocked)
+    expect(work(s).tasks).toHaveLength(3)
+
+    expect(await s.h.relay.closeCleanup(s.key)).toEqual({ ok: true })
+    await settle(s.h, s.key)
+    const closed = view(s)
+    expect(closed?.cleanup).toBeNull()
+    expect(closed?.actions).toMatchObject({ resume: true, selectStep: true, abandon: true })
+    // 전달하지 않았고 변경은 worktree에 남는다
+    const w = work(s)
+    expect(w.status).toBe('active')
+    expect(w.delivery).toBeUndefined()
+    expect(w.cleanup_process).toBeUndefined()
+    expect(git(s.tree, 'status', '--porcelain')).toBe(dirty)
+    expect(git(s.remote, 'branch', '--list', s.branch)).toBe('')
+    expect(await s.h.relay.resume(s.key, 't-03')).toEqual({ ok: true })
+  })
+
   it('정리 세션을 /exit로 끝냈는데 변경이 남았으면 선택지로 돌아간다 (7-5)', async () => {
     const s = await setup({
       tasks: { ...scenario('S').tasks, 'final-verify': DIRTY_VERIFY },

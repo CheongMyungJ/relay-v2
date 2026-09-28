@@ -3,7 +3,7 @@
 // git과 gh는 main이 adapters로 부른다. machine의 전달 전이와 승인 화면이 같은 판정을 쓴다.
 import type { Handoff, NodeName } from '../shared/contracts'
 import type { ProjectChecks } from '../shared/project'
-import type { ButtonState, DeliveryButtons, DeliveryView } from '../shared/views'
+import type { ButtonState, DeliveryButtons, DeliveryView, WorkActions } from '../shared/views'
 import type {
   CheckSummary,
   DeliveryChoice,
@@ -15,6 +15,18 @@ import type {
 import { REVIEWABLE, approvalGate } from './approval'
 import { isPrevious } from './pipeline'
 import { normalizeText } from './validate'
+
+/** 정리 세션이 열린 동안 받지 않는 명령의 이유 (D137) */
+export const CLEANUP_BLOCKS =
+  '정리 세션이 열려 있음: 먼저 [정리 세션 닫기]나 [정리 끝 → push/PR 진행]을 누르세요'
+
+/**
+ * 정리 세션이 열린 동안(대기열 포함)의 조작 (D137). 같은 worktree에서 다른 claude를 띄우거나 코드를 되돌리거나 Work를
+ * 끝내는 조작을 끈다. 승인과 [완료만]도 받지 않는다(main이 막는다)
+ */
+export function cleanupActions(a: WorkActions): WorkActions {
+  return { ...a, resume: false, retry: false, resumeWork: false, selectStep: false, abandon: false }
+}
 
 /** 전달 버튼의 이름 (시나리오 7-3) */
 export const DELIVERY_LABEL: Readonly<Record<DeliveryChoice | 'none', string>> = {

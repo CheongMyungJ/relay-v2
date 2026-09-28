@@ -177,6 +177,9 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   ipcMain.handle(IPC.openCleanup, async (_e, workKey: unknown, c: unknown) =>
     (await ready).openCleanup(text(workKey), choice(c)),
   )
+  ipcMain.handle(IPC.closeCleanup, async (_e, workKey: unknown) =>
+    (await ready).closeCleanup(text(workKey)),
+  )
   ipcMain.handle(IPC.finishCleanup, async (_e, workKey: unknown) =>
     (await ready).finishCleanup(text(workKey)),
   )

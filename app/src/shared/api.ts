@@ -78,6 +78,8 @@ export interface RelayApi {
   deliver(workKey: string, input: DeliverInput): Promise<DeliverResult>
   /** [AI 세션 열기] (7-5) */
   openCleanup(workKey: string, choice: DeliveryChoice): Promise<CommandResult>
+  /** [정리 세션 닫기] (D137): 정리 세션을 끝내고 전달하지 않는다 */
+  closeCleanup(workKey: string): Promise<CommandResult>
   /** [정리 끝 → push/PR 진행] (7-5) */
   finishCleanup(workKey: string): Promise<DeliverResult>
   /** Work 완료 화면의 [다시 점검]: origin과 gh를 다시 점검한다 (D118) */
@@ -133,6 +135,7 @@ export const IPC = {
   selectStep: 'work:select-step',
   deliver: 'work:deliver',
   openCleanup: 'work:open-cleanup',
+  closeCleanup: 'work:close-cleanup',
   finishCleanup: 'work:finish-cleanup',
   recheck: 'work:recheck',
   cleanPreview: 'work:clean-preview',
