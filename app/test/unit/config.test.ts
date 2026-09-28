@@ -130,6 +130,17 @@ describe('설정 화면 (D70)', () => {
     expect(on.auto_approve.fix).toBe(false)
   })
 
+  it('자동 승인을 켤 수 있는 단계가 아닌 노드는 모두 "켤 수 없음"으로 거절한다. 모르는 단계로 거절하지 않는다 (4.2, D167)', () => {
+    const manual = NODES.filter((n) => !(AUTO_APPROVE_NODES as readonly string[]).includes(n))
+    expect(manual).toEqual(['intake', 'review', 'verify'])
+    for (const n of manual) {
+      expect(applyConfigPatch(DEFAULT_CONFIG, { auto_approve: { [n]: true } }), n).toEqual({
+        ok: false,
+        error: `자동 승인: ${n}는 켤 수 없음 (의도 승인, 리뷰, Work 완료는 늘 수동)`,
+      })
+    }
+  })
+
   it('의도 승인, 리뷰, Work 완료는 켤 수 없다. 카운트다운은 1~3600초다 (4.2, D167)', () => {
     expect(applyConfigPatch(DEFAULT_CONFIG, { auto_approve: { verify: true } })).toEqual({
       ok: false,

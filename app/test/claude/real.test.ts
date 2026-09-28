@@ -12,6 +12,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
+import { taskDirName } from '../../src/core/machine'
 import type { WorkState } from '../../src/shared/work'
 import { drive, type DriveResult } from '../flow/driver'
 import { APP, FAKE_CLAUDE, git, harness, makeRepo, register, settle } from '../flow/harness'
@@ -82,6 +83,9 @@ async function runCaseOnce(c: RealCase): Promise<CaseResult> {
     if (!created.ok) throw new Error(`Work 생성 실패: ${created.error}`)
     const workId = created.workKey.split('/')[1] ?? ''
     workDir = path.join(h.home, 'projects', projectId, 'works', workId)
+    const tree = path.join(h.home, 'projects', projectId, 'worktrees', workId)
+    /** 리뷰 task마다 지시한 때의 HEAD. 리뷰의 커밋을 지시 전과 뒤로 나눈다 */
+    const instructedAt = new Map<string, string>()
     const result = await drive(h.relay, ui, created.workKey, {
       size: c.name,
       force: true,
@@ -91,17 +95,20 @@ async function runCaseOnce(c: RealCase): Promise<CaseResult> {
       tick: async (task) => {
         if (task.status !== 'asking') await ui.handleDialogs(h.relay, task.terminal)
       },
-      instruct: instructReview,
+      instruct: (task, view) => {
+        const text = instructReview(task, view)
+        if (text) instructedAt.set(task.id, git(tree, 'rev-parse', 'HEAD'))
+        return text
+      },
     })
     await settle(h, created.workKey)
     const work = JSON.parse(fs.readFileSync(path.join(workDir, 'work.json'), 'utf8')) as WorkState
-    const tree = path.join(h.home, 'projects', projectId, 'worktrees', workId)
     return {
       name: c.name,
       result,
       claudeVersion: work.tasks[0]?.claude_version ?? null,
       dialogs: ui.dialogs.map((d) => `${d.name}: ${d.action}`),
-      review: reviewOf(work, workDir, tree, result),
+      review: reviewOf(work, workDir, tree, result, instructedAt),
     }
   } finally {
     // Work 디렉터리(context.md, handoff, 산출물, pty.log, work.json 등)를 결과로 남긴다
@@ -116,32 +123,35 @@ async function runCaseOnce(c: RealCase): Promise<CaseResult> {
 }
 
 /**
- * 리뷰의 판정 (D164): 승인된 리뷰의 review.md와 handoff, 리뷰의 시작 커밋부터 다음 task(verify)의 시작 커밋까지의
- * 커밋과 바뀐 파일
+ * 리뷰의 판정 (D164): 승인된 리뷰의 review.md와 handoff, 리뷰의 커밋과 바뀐 파일. 커밋은 지시한 때의 HEAD로
+ * 지시 전(리뷰의 시작 커밋부터)과 뒤(다음 task인 verify의 시작 커밋까지)로 나눈다. 지시하지 않았으면 모두 지시 전이다
  */
 function reviewOf(
   work: WorkState,
   workDir: string,
   tree: string,
   result: DriveResult,
+  instructedAt: ReadonlyMap<string, string>,
 ): ReviewCheck | null {
   const i = work.tasks.findLastIndex((t) => t.node === 'review' && t.status === 'approved')
   const task = work.tasks[i]
   const next = work.tasks[i + 1]
   if (!task?.start_commit || !next?.start_commit) return null
-  const dir = path.join(workDir, 'tasks', `${String(task.seq).padStart(2, '0')}-review`)
+  const dir = path.join(workDir, 'tasks', taskDirName(task))
   const readIn = (name: string) => {
     const file = path.join(dir, name)
     return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : ''
   }
-  const range = `${task.start_commit}..${next.start_commit}`
   const lines = (text: string) => text.split('\n').filter(Boolean)
+  const log = (from: string, to: string) => lines(git(tree, 'log', '--format=%s', `${from}..${to}`))
+  const at = instructedAt.get(task.id) ?? null
   return judgeReview({
     reviewMd: readIn('review.md'),
     handoff: readIn('handoff.md'),
     instructed: result.tasks.find((t) => t.taskId === task.id)?.instructed ?? null,
-    commits: lines(git(tree, 'log', '--format=%s', range)),
-    files: lines(git(tree, 'diff', '--name-only', range)),
+    commitsBefore: log(task.start_commit, at ?? next.start_commit),
+    commits: at ? log(at, next.start_commit) : [],
+    files: lines(git(tree, 'diff', '--name-only', `${task.start_commit}..${next.start_commit}`)),
   })
 }
 
@@ -200,7 +210,8 @@ function reviewLines(r: ReviewCheck | null): string[] {
     ...quote(r.applied),
     '- 반영하지 않은 지적 절:',
     ...quote(r.notApplied),
-    `- 리뷰의 커밋: ${r.commits.length ? r.commits.join(' / ') : '없음'}`,
+    ...(r.commitsBefore.length ? [`- 지시 전 커밋: ${r.commitsBefore.join(' / ')}`] : []),
+    `- 지시 뒤 커밋: ${r.commits.length ? r.commits.join(' / ') : '없음'}`,
     `- 바뀐 파일: ${r.files.length ? r.files.join(', ') : '없음'}`,
     `- 사람 결정(by: human): ${r.humanDecisions.length ? r.humanDecisions.join(' / ') : '없음'}`,
     '',
