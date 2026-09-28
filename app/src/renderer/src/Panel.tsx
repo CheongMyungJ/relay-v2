@@ -669,6 +669,9 @@ function LinkLine({ label, url }: { label: string; url: string }) {
  * - 승인하면 Work가 멈추는 verify(이전 단계 추천, [이 단계 끝나면 멈춤]): [승인하고 멈춤] 하나. 전달은 멈춘 뒤 고른다
  * - 전달 선택: [완료만], [push], [PR 생성]. 누를 수 없으면 이유와 [다시 점검](D118)
  * - 커밋 안 된 변경이 있으면 세 선택지(7-5). 정리 세션이 있으면 [정리 끝 → push/PR 진행]
+ * - 정리 세션의 안내와 [정리 세션 닫기]는 어느 쪽이든 보인다. 정리 세션이 열린 동안에도 받는 [이 단계 끝나면 멈춤]으로
+ *   [승인하고 멈춤]이 되어도 세션을 끝낼 수 있다 (D137). 정리 세션이 열린 동안은 승인하지 않고, 멈추는 동안은
+ *   전달하지 않는다
  * - 마지막 전달이 실패했으면 오류와 [다시 시도]·[전달 없이 완료]
  * verify에서 멈춘 Work는 verify가 이미 승인돼 [완료만]이 멈춘 Work의 [재개]다.
  */
@@ -754,24 +757,68 @@ function CompletionActions({
     if (!r.ok) setError(r.error)
   }
 
-  if (c.mode === 'stop') {
-    return (
-      <footer className="review-actions">
-        <button
-          className="primary"
-          disabled={!!busy || cut || !gate.approve}
-          onClick={() => void complete()}
-        >
-          승인하고 멈춤
-        </button>
-        {gate.force ? (
-          <button className="danger" disabled={!!busy || cut} onClick={onForce}>
-            오류 무시하고 승인
+  // 승인하면 Work가 멈추는 동안은 전달하지 않는다(main의 deliveryStart도 거부). 전달로 잇는 버튼을 끈다
+  const stopping = c.mode === 'stop'
+  const cleanupNotice = cleanup ? (
+    <div className="notice">
+      {cleanup.status === 'queued'
+        ? '정리 세션: 세션 상한 때문에 대기열에서 기다립니다. 자리가 나면 엽니다.'
+        : cleanup.status === 'live'
+          ? stopping
+            ? '정리 세션이 열려 있습니다(기록하지 않음). 승인하면 Work가 멈추므로 지금은 전달하지 않습니다. 정리가 끝나면 [정리 세션 닫기]로 세션을 끝낸 뒤 승인하세요.'
+            : '정리 세션이 열려 있습니다(기록하지 않음). push와 PR, 단계 선택과 재개는 막혀 있습니다. 정리가 끝나면 누르세요. 전달하지 않고 그만두려면 [정리 세션 닫기]를 누르세요.'
+          : cleanup.uncommitted.length
+            ? `정리 세션이 끝났지만 커밋 안 된 변경 ${cleanup.uncommitted.length}개가 남았습니다.`
+            : '정리 세션이 끝났습니다.'}
+      <div className="notice-actions">
+        {cleanup.status !== 'ended' ? (
+          <>
+            <button onClick={onShowCleanup}>정리 세션 보기</button>
+            <button
+              className={cleanup.clean && !stopping ? 'primary ready' : ''}
+              disabled={!!busy || stopping}
+              title={stopping ? '승인하면 Work가 멈추는 동안은 전달하지 않습니다' : ''}
+              onClick={() => void finishCleanup()}
+            >
+              정리 끝 → push/PR 진행
+            </button>
+            <button disabled={!!busy} onClick={() => void closeCleanup()}>
+              정리 세션 닫기
+            </button>
+            {cleanup.clean ? <span className="dim">git status가 깨끗합니다</span> : null}
+          </>
+        ) : cleanup.uncommitted.length && !stopping ? (
+          <button
+            onClick={() => setPending({ choice: cleanup.choice, files: cleanup.uncommitted })}
+          >
+            선택지 보기
           </button>
         ) : null}
-        <span className="dim">승인하면 Work가 멈춥니다. 전달은 멈춘 뒤 고릅니다.</span>
-        {error ? <span className="error">{error}</span> : null}
-      </footer>
+      </div>
+    </div>
+  ) : null
+
+  if (stopping) {
+    return (
+      <div className="completion-actions">
+        <footer className="review-actions">
+          <button
+            className="primary"
+            disabled={!!busy || open || cut || !gate.approve}
+            onClick={() => void complete()}
+          >
+            승인하고 멈춤
+          </button>
+          {gate.force ? (
+            <button className="danger" disabled={!!busy || open || cut} onClick={onForce}>
+              오류 무시하고 승인
+            </button>
+          ) : null}
+          <span className="dim">승인하면 Work가 멈춥니다. 전달은 멈춘 뒤 고릅니다.</span>
+          {error ? <span className="error">{error}</span> : null}
+        </footer>
+        {cleanupNotice}
+      </div>
     )
   }
   if (c.mode !== 'deliver') return null
@@ -835,41 +882,7 @@ function CompletionActions({
           </div>
         </div>
       ) : null}
-      {cleanup ? (
-        <div className="notice">
-          {cleanup.status === 'queued'
-            ? '정리 세션: 세션 상한 때문에 대기열에서 기다립니다. 자리가 나면 엽니다.'
-            : cleanup.status === 'live'
-              ? '정리 세션이 열려 있습니다(기록하지 않음). push와 PR, 단계 선택과 재개는 막혀 있습니다. 정리가 끝나면 누르세요. 전달하지 않고 그만두려면 [정리 세션 닫기]를 누르세요.'
-              : cleanup.uncommitted.length
-                ? `정리 세션이 끝났지만 커밋 안 된 변경 ${cleanup.uncommitted.length}개가 남았습니다.`
-                : '정리 세션이 끝났습니다.'}
-          <div className="notice-actions">
-            {cleanup.status !== 'ended' ? (
-              <>
-                <button onClick={onShowCleanup}>정리 세션 보기</button>
-                <button
-                  className={cleanup.clean ? 'primary ready' : ''}
-                  disabled={!!busy}
-                  onClick={() => void finishCleanup()}
-                >
-                  정리 끝 → push/PR 진행
-                </button>
-                <button disabled={!!busy} onClick={() => void closeCleanup()}>
-                  정리 세션 닫기
-                </button>
-                {cleanup.clean ? <span className="dim">git status가 깨끗합니다</span> : null}
-              </>
-            ) : cleanup.uncommitted.length ? (
-              <button
-                onClick={() => setPending({ choice: cleanup.choice, files: cleanup.uncommitted })}
-              >
-                선택지 보기
-              </button>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
+      {cleanupNotice}
       {error ? <div className="error">{error}</div> : null}
       {pending ? (
         <UncommittedDialog
