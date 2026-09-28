@@ -916,12 +916,14 @@ export class WorkRunner {
       }
       case 'SessionEnd': {
         const reason = str(b['reason'])
+        // Stop 없이 끝났어도 유효한 handoff가 있으면 승인 대기나 막힘이다 (3.3, D146)
+        const check = await this.checkNow(taskId)
         return (
           await this.feed({
             type: 'SessionEnd',
             ...base,
             ...(reason === undefined ? {} : { reason }),
-            ...(await this.endCheck(task)),
+            ...(check ? { check } : {}),
           })
         ).reply
       }
@@ -939,22 +941,16 @@ export class WorkRunner {
   private async onExit(taskId: string, session: LiveSession): Promise<void> {
     await this.release(taskId, session)
     const at = this.ctx.at()
-    const task = this.task(taskId)
-    // 이미 끝낸 세션(승인, [즉시 중단] 등)의 PTY 종료는 core가 무시하므로 파일을 읽지 않는다
-    const check = task?.session?.alive ? await this.endCheck(task) : {}
-    await this.feed({ type: 'pty.exit', taskId, at, pid: session.pty.pid, ...check })
-  }
-
-  /**
-   * 세션이 끝날 때의 형식 검사: Stop 없이 끝났어도 유효한 handoff가 있으면 승인 대기나 막힘이다 (3.3, D146).
-   * 파일을 읽지 못하면 검사 없이 넘겨 세션 종료로 둔다
-   */
-  private async endCheck(task: TaskRecord): Promise<{ check?: TaskCheck }> {
-    try {
-      return { check: this.check(task, await this.files.taskFiles(task)) }
-    } catch {
-      return {}
-    }
+    // Stop 없이 끝났어도 유효한 handoff가 있으면 승인 대기나 막힘이다 (3.3, D146). 이미 끝낸 세션(승인,
+    // [즉시 중단] 등)의 PTY 종료는 core가 무시하므로 파일을 읽지 않는다
+    const check = this.task(taskId)?.session?.alive ? await this.checkNow(taskId) : undefined
+    await this.feed({
+      type: 'pty.exit',
+      taskId,
+      at,
+      pid: session.pty.pid,
+      ...(check ? { check } : {}),
+    })
   }
 
   /**
