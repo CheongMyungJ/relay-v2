@@ -581,6 +581,7 @@ export interface TaskCheck extends CheckSummary {
 /**
  * task 디렉터리 검사 (5.2.1). 파일이 있으면 그 파일의 검사를 하고,
  * 필수 산출물(3.1)은 handoff가 awaiting_approval일 때만 확인한다 (D30).
+ * intake에서 status를 읽지 못하면 intent 초안이 있는지는 확인한다 (D134).
  */
 export function checkTask(input: TaskCheckInput): TaskCheck {
   const { node, files, config } = input
@@ -612,6 +613,13 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
         })
       }
     }
+  } else if (node === 'intake' && handoff && handoff.status === null && draftText === undefined) {
+    // status를 읽지 못한 handoff는 [오류 무시하고 승인]할 수 있으므로 초안 없음을 넘길 수 없는 오류로 남긴다 (D134)
+    errors.push({
+      file: INTENT_DRAFT_FILE,
+      part: 'file',
+      message: `\`${INTENT_DRAFT_FILE}\` 없음: handoff의 \`status\`를 읽지 못해도 의도 승인에 필요`,
+    })
   }
   errors.push(...(draft?.errors ?? []))
   const prText = node === 'verify' ? files[PR_FILE] : undefined

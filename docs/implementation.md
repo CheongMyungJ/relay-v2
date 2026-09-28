@@ -62,6 +62,7 @@
 | I32 | PTY는 `useConpty: true`, `useConptyDll: true`로 띄운다. node-pty에 들어 있는 `conpty.dll`과 `OpenConsole.exe`를 쓰고 Windows 내장 ConPTY는 쓰지 않는다 | DLL 모드는 세션을 시작한 직후 의사 콘솔을 놓아(`ConptyReleasePseudoConsole`) 세션이 끝나면 `OpenConsole.exe`도 스스로 끝남. 내장 ConPTY는 트리 종료 뒤에도 `conhost.exe`가 남을 수 있음(3절). Windows 10과 11에서 같은 ConPTY를 씀. 스파이크 S1~S5는 내장 ConPTY로 확인했으므로 M0의 [실기]에서 다시 확인함 | ✅ |
 | I33 | Linux에서 프로세스의 시작 시각(D76)은 `/proc/<pid>/stat`의 starttime을 CLK_TCK로 나누고 `/proc/stat`의 btime을 더해 만든다. 고아 트리는 `/proc`의 부모 관계로 모아 SIGKILL로 끝낸다 | Linux는 시험 환경뿐이지만 로컬 `npm test`가 [어댑터]와 [흐름]을 돌린다. 시작 시각이 없으면 재사용된 ID를 가리지 못해 고아를 확인할 수 없음. Linux에서도 다른 프로세스가 PTY의 master를 쥐고 있으면 앱이 꺼져도 세션이 살아남았음(3절) | ✅ |
 | I34 | 앱이 하나인지는 Electron의 `app.requestSingleInstanceLock()`으로 막는다(D133). 잠금을 잡지 못하면 `Relay.open` 전에 `app.exit(0)`으로 끝내고, 잡은 앱은 `second-instance`에서 창을 앞으로 가져온다. 판단은 `main/instance.ts`에 두고 [단위]로 시험한다 | 잠금이 relay를 열기 전이어야 두 번째 앱이 고아 확인(9-1)을 하지 않음. `exit`는 `before-quit`을 부르지 않아 종료 확인 창이 뜨지 않음. 잠금은 Electron의 userData 폴더마다라, 개발용 실행과 설치한 앱은 서로 막지 않음(같은 `RELAY_HOME`을 쓰면 A1이 남음). 사람이 정한 범위임 | ✅ |
+| I35 | D135는 `WorkRunner.apply`가 한다. `work.json`을 먼저 쓰고 성공하면 메모리의 상태를 바꾼다. 쓰기가 실패하면 문제 목록에 남기고 예외를 그대로 던진다. 할 일이 하나라도 실패하면 뒤의 `startTask`·`resumeTask` 대신 `session.failed`(오류 "앞선 처리가 실패해 시작하지 않음: …")를 넣는다. 문제 목록은 지금처럼 최근 20줄을 남기고 지우지 않는다 | `session.failed`는 세션을 띄우다 실패할 때 이미 쓰는 전이라 화면과 [재개]가 같음. 자리를 잡기 전이라 풀의 자리를 돌려주지 않음. [흐름]에서 `events.jsonl`과 `work.json`을 폴더로 바꿔 실패를 만든다 | ✅ |
 
 ## 3. 확인한 사실
 

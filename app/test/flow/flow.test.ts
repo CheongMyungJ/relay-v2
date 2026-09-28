@@ -471,3 +471,67 @@ describe('[흐름] 최소 흐름 (M2)', () => {
     ])
   })
 })
+
+describe('[흐름] 할 일이 실패할 때 (D135)', () => {
+  it('승인 뒤 앞선 할 일이 실패하면 다음 task를 띄우지 않고 중단됨으로 둔다. 원인을 치우면 [재개]로 이어 간다', async () => {
+    const s = await start(scenario('M'))
+    const ui = s.h.ui
+    await ui.until(
+      () => ui.works.get(s.workKey)?.tasks[0]?.status === 'awaiting_approval',
+      '의도 승인 대기',
+      60_000,
+    )
+    // 이벤트를 덧붙일 수 없게 한다. 세션을 띄우는 데는 events.jsonl이 필요 없다
+    const log = path.join(s.workDir, 'events.jsonl')
+    const saved = read(log)
+    fs.rmSync(log)
+    fs.mkdirSync(log)
+
+    expect(await s.h.relay.approve(s.workKey, 't-01', { size: 'M' })).toEqual({ ok: true })
+    await settle(s.h, s.workKey)
+    const w = work(s.workDir)
+    expect(w.tasks.map((t) => [t.id, t.node, t.status])).toEqual([
+      ['t-01', 'intake', 'approved'],
+      ['t-02', 'evidence', 'interrupted'],
+    ])
+    const t2 = w.tasks[1]
+    expect(t2?.session ?? null).toBeNull()
+    expect(t2?.error).toMatch(/^앞선 처리가 실패해 시작하지 않음: log 실패: /)
+    // 실패하지 않은 할 일은 한다: 결정을 적고 intent를 확정했다
+    expect(read(path.join(s.workDir, 'decisions.md'))).toContain('t-01')
+    expect(read(path.join(s.workDir, 'intent.md'))).toContain('version: 1')
+    expect(s.h.records().filter((r) => r['type'] === 'start')).toHaveLength(1)
+    const view = ui.works.get(s.workKey)
+    expect(view?.tasks[1]).toMatchObject({ status: 'interrupted', live: false })
+    expect(view?.problems.some((p) => p.includes('log 실패'))).toBe(true)
+
+    fs.rmdirSync(log)
+    fs.writeFileSync(log, saved)
+    expect(await s.h.relay.resume(s.workKey, 't-02')).toEqual({ ok: true })
+    await ui.until(() => ui.works.get(s.workKey)?.tasks[1]?.live === true, 'evidence 세션', 30_000)
+  })
+  it('work.json을 쓰지 못하면 메모리의 상태도 바꾸지 않고 할 일도 하지 않는다', async () => {
+    const s = await start(scenario('M'))
+    const ui = s.h.ui
+    await ui.until(
+      () => ui.works.get(s.workKey)?.tasks[0]?.status === 'awaiting_approval',
+      '의도 승인 대기',
+      60_000,
+    )
+    const file = path.join(s.workDir, 'work.json')
+    const saved = read(file)
+    fs.rmSync(file)
+    fs.mkdirSync(file)
+
+    await expect(s.h.relay.approve(s.workKey, 't-01', { size: 'M' })).rejects.toThrow()
+    const view = ui.works.get(s.workKey)
+    expect(view?.tasks.map((t) => t.status)).toEqual(['awaiting_approval'])
+    expect(view?.problems.at(-1)).toContain('work.json 쓰기 실패')
+    expect(fs.existsSync(path.join(s.workDir, 'intent.md'))).toBe(false)
+
+    fs.rmdirSync(file)
+    fs.writeFileSync(file, saved)
+    expect(await s.h.relay.approve(s.workKey, 't-01', { size: 'M' })).toEqual({ ok: true })
+    await ui.until(() => ui.works.get(s.workKey)?.tasks[1]?.live === true, 'evidence 세션', 30_000)
+  })
+})

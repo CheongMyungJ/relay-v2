@@ -333,6 +333,8 @@ export class WorkRunner {
    * 다르면 바뀐 내용을 옆에 남기고 알린 뒤 앱의 상태로 쓴다 (D124).
    * 사람이 움직여야 하는 상태로 바뀌었으면 알린다(D81). 재시작 조정은 알리지 않는다(quiet).
    * blockStop이 있으면 Stop 요청에 돌려줄 응답을 돌려준다 (D21, S2).
+   * work.json을 쓰지 못하면 메모리의 상태도 바꾸지 않고 할 일도 하지 않는다. 할 일 하나가 실패하면 나머지는 하되,
+   * 그 뒤의 세션 시작은 하지 않고 task를 중단됨으로 둔다 (D135).
    */
   async apply(
     work: WorkState,
@@ -341,30 +343,54 @@ export class WorkRunner {
   ): Promise<HookReply> {
     if (work === this.work && effects.length === 0) return null
     const before = this.work
+    const at = this.ctx.at()
+    let saved: Awaited<ReturnType<WorkFiles['save']>>
+    try {
+      saved = await this.files.save(work, {
+        expected: this.workText,
+        copyName: changedCopyName(at),
+      })
+    } catch (err) {
+      this.problem(`work.json 쓰기 실패: ${message(err)}`)
+      throw err
+    }
     this.work = work
     // 끝난 정리 세션은 Work가 끝나면 치운다
     if (this.cleanup?.status === 'ended' && work.status !== 'active' && work.status !== 'stopped') {
       this.cleanup = null
     }
-    const at = this.ctx.at()
-    const saved = await this.files.save(work, {
-      expected: this.workText,
-      copyName: changedCopyName(at),
-    })
     this.workText = saved.text
     if (saved.changed) this.workJsonChanges.push({ at, copy: saved.copy })
     this.changed()
     const notice = opts.quiet ? null : humanNotice(before, work)
     if (notice) this.notify(notice)
     let reply: HookReply = null
+    let failed: string | null = null
     for (const e of effects) {
       try {
+        if (failed && (e.type === 'startTask' || e.type === 'resumeTask')) {
+          await this.skipStart(e.taskId, failed)
+          continue
+        }
         reply = (await this.run(e)) ?? reply
       } catch (err) {
-        this.problem(`${e.type} 실패: ${message(err)}`)
+        failed = `${e.type} 실패: ${message(err)}`
+        this.problem(failed)
       }
     }
     return reply
+  }
+
+  /** 앞선 할 일이 실패해 세션을 띄우지 않았다. 띄우다 실패한 것과 같이 중단됨으로 둔다 (D135) */
+  private async skipStart(taskId: string, failed: string): Promise<void> {
+    const check = await this.checkNow(taskId)
+    await this.feed({
+      type: 'session.failed',
+      taskId,
+      at: this.ctx.at(),
+      error: `앞선 처리가 실패해 시작하지 않음: ${failed}`,
+      ...(check ? { check } : {}),
+    })
   }
 
   private async run(e: Effect): Promise<HookReply | undefined> {

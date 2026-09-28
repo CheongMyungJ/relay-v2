@@ -14,6 +14,7 @@ import {
   resolvedBySize,
 } from '../../src/core/approval'
 import { createWork } from '../../src/core/machine'
+import { checkTask } from '../../src/core/validate'
 import { DEFAULT_CONFIG, type AppConfig } from '../../src/shared/config'
 import type { Handoff, NodeName } from '../../src/shared/contracts'
 import type {
@@ -94,6 +95,22 @@ describe('승인 버튼의 판정 (4.1, D90, D112)', () => {
       approve: false,
       force: true,
     })
+  })
+
+  it('intake에서 handoff 머리글을 읽지 못하고 초안도 없으면 넘길 수 없다 (D134)', () => {
+    const broken = '---\nstatus: [\n---\n## 요약\n'
+    const config = { handoff_body_warn_chars: 5000, intent_warn_chars: 5000 }
+    const c = checkTask({ node: 'intake', files: { 'handoff.md': broken }, config })
+    expect(c.status).toBeNull()
+    const g = gate('intake', 'idle', c)
+    expect(g).toMatchObject({ approve: false, force: false })
+    expect(g.blocking.map((e) => e.message)).toEqual([
+      '`intent.draft.md` 없음: handoff의 `status`를 읽지 못해도 의도 승인에 필요',
+    ])
+    // blocked로 읽히면 초안을 요구하지 않는다 (D30)
+    const blocked = '---\nstatus: blocked\nblocked_reason: 없음\n---\n'
+    const b = checkTask({ node: 'intake', files: { 'handoff.md': blocked }, config })
+    expect(b.errors.filter((e) => e.file === 'intent.draft.md')).toEqual([])
   })
 })
 
