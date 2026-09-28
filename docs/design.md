@@ -362,7 +362,7 @@ S 크기는 `intake → fix → verify`로 간다. evidence와 rca의 일 중 �
 
 3. **handoff 감시:** handoff가 생기거나 바뀌면 바로 검증해서 패널에 표시한다. intake에서는 intent 초안도 같은 방식으로 검증한다(D38). Stop 시점에 형식 오류가 있고 이번 턴에 handoff가 바뀌었으면, Stop 훅 응답으로 오류를 에이전트에게 되돌린다(연속 2회까지, 설정 가능, D21). 연속 횟수는 사람이 새 요청으로 시작한 턴의 Stop(`stop_hook_active: false`)이나 검사 통과 때 0으로 돌아간다(D107).
 4. **중단**
-   - **[즉시 중단]:** 세션을 종료하고 task를 "중단됨"으로 남긴다. 탭과 액션 바에 **[재개]** 버튼이 생긴다. [재개]는 같은 실행 옵션 + `--resume <세션 id>`로 대화를 잇고, 이전 터미널 화면을 먼저 보여 준다.
+   - **[즉시 중단]:** 세션을 종료하고 task를 "중단됨"으로 남긴다. 탭과 액션 바에 **[재개]** 버튼이 생긴다. [재개]는 같은 설정(`--settings`, `--add-dir`, 권한 확인 끈 모드) + `--resume <세션 id>`로 대화를 잇고(`--session-id`와 첫 프롬프트는 뺀다. 첫 프롬프트를 다시 주면 스킬이 처음부터 시작한다), 이전 터미널 화면을 먼저 보여 준다.
    - **[이 단계 끝나면 멈춤]:** 현재 단계가 승인되면 다음 단계를 시작하지 않고 멈춘다. [재개]를 누르면 다음 단계를 시작한다. verify에서는 승인 화면이 [승인하고 멈춤]이고, 멈춘 뒤 Work 완료 화면에서 전달을 고른다(D119).
 5. **handoff 없이 CLI가 끝나면**(사용자가 `/exit`했거나 크래시): [세션 재개] / [이 단계 새 세션으로 다시]. 새 세션으로 다시 하면 같은 노드의 새 task를 만든다(D114).
 6. **앱 종료 (기본값):** 실행 중인 세션이 있으면 확인 창을 띄운다. 확인하면 세션을 "중단됨"으로 남기고, 다음 실행 때 [재개]할 수 있다. 실행 중인 탭에는 닫기 버튼이 없다. 다음 실행 때는 시나리오 9의 규칙을 따른다.
@@ -1136,7 +1136,7 @@ intent의 완료조건마다 판정하고 `verification.md`와 PR 초안 `pr.md`
 | 필요 | 방법 |
 |---|---|
 | 실행 | `claude --dangerously-skip-permissions --session-id <uuid> --add-dir <work dir> --settings <task 설정> "<짧은 첫 프롬프트>"` |
-| 재개 | 같은 옵션 + `--resume <uuid>` (이전 옵션이 복원된다고 가정하지 않음) |
+| 재개 | 같은 설정(`--dangerously-skip-permissions`, `--add-dir`, `--settings`) + `--resume <uuid>`. `--session-id`와 첫 프롬프트는 뺀다(이전 옵션이 복원된다고 가정하지 않음, 스파이크 S6) |
 | 컨텍스트 | `tasks/<nn>/context.md` + 첫 프롬프트에 경로 |
 | 스킬 배포 | 이번 task의 스킬만 Work 디렉터리 `.claude/skills/relay-<name>/`로 복사(`--add-dir`로 읽힘, D108). 복사할 때 공통 규칙(`_common.md`)을 `SKILL.md` 끝에 붙임. `disable-model-invocation: true` |
 | 상태 신호 | 내장 HTTP 훅 → 앱 로컬 서버: UserPromptSubmit, Stop, Notification, SessionEnd, PreToolUse·PostToolUse(`AskUserQuestion`) |
