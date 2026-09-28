@@ -962,7 +962,7 @@ core는 `core/settings.ts`를 빼면 줄 95% 이상, 가지 84% 이상이다(`ma
 | A21 | 문서만 | 설계 5.5에 유형별 payload 표를 더했다. `core/machine.ts`의 기록 호출 26곳에서 모았고, D135의 앞선 처리 실패(`start_failed`의 `error`)도 넣었다 | — | 5b512d1 |
 | A22 | 고침 | 훅 처리기가 등록한 세션을 기억하고, 지금 살아 있는 세션과 다르면 신호를 버린다(`main/work.ts` onHook). 시험 `test/flow/control.test.ts`(앞 세션의 처리기를 붙잡아 재개 뒤에 불러 재현) | D144 | c1520ab |
 | A23 | 고침 | 세션을 끝내 카운트다운을 멈춘 까닭을 끝낸 까닭대로 적는다: 확인 창으로 앱을 끄면 "카운트다운 중에 앱을 끔", [단계 선택]이면 "[단계 선택]을 누름"(`core/machine.ts` endHold, `core/approval.ts`, `shared/work.ts`). 둘 다 알리지 않는다. 시험 `test/unit/machine.test.ts`, `approval.test.ts`, `test/flow/auto.test.ts`(끈 뒤 `work.json`을 덮어쓰지 않고 다시 켬, `index.lock`으로 git 실패). 앱이 충돌한 경우의 "재시작"은 그대로다 | D145 | dc8f504 |
-| A77 | 고침(시험) | 고아 프로세스 시험의 정리가 ID만으로 끝내지 않는다: 시험이 띄운 자식은 핸들로(`ChildProcess.kill`, 이미 끝났으면 아무것도 안 함), 그 자식이 띄운 프로세스는 ID와 시작 시각이 같을 때만(`killOrphans`) 끝낸다(`test/adapters/recovery.test.ts`, `test/flow/recovery.test.ts`). 제품 코드는 그대로다. 시험이 중간에 실패해도 프로세스가 남지 않는 것을 Linux에서 확인했다. 가끔만 생기는 일이라 Windows CI 한 번의 통과로 증명되지는 않는다. CI를 가끔 빨갛게 해서 A24보다 먼저 봤다. A78은 차례가 오면 본다 | — | (이 커밋) |
+| A77 | 고침(시험) | 고아 프로세스 시험의 정리가 ID만으로 끝내지 않는다: 시험이 띄운 자식은 핸들로(`ChildProcess.kill`, 이미 끝났으면 아무것도 안 함), 그 자식이 띄운 프로세스는 ID와 시작 시각이 같을 때만(`killOrphans`) 끝낸다(`test/adapters/recovery.test.ts`, `test/flow/recovery.test.ts`). 제품 코드는 그대로다. 시험이 중간에 실패해도 프로세스가 남지 않는 것을 Linux에서 확인했다. 가끔만 생기는 일이라 Windows CI 한 번의 통과로 증명되지는 않는다. CI를 가끔 빨갛게 해서 A24보다 먼저 봤다. A78은 차례가 오면 본다 | — | e958bb6 |
 
 ## 부록. 1단계 대조표
 
