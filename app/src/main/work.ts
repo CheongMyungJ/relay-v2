@@ -16,6 +16,7 @@ import {
   commitInfo,
   countCommits,
   createBackup,
+  currentBranch,
   deleteBranches,
   diffFrom,
   headCommit,
@@ -27,6 +28,7 @@ import {
   refNames,
   remoteUrl,
   removeWorktree,
+  repoRoot,
   resetHard,
   stashAll,
   stashEntries,
@@ -37,6 +39,7 @@ import {
 import type { HookReply, HookRequest, HookServer } from '../adapters/hooks'
 import { processStartTime, startPty, type PtySession } from '../adapters/pty'
 import {
+  pathKey,
   readText,
   writeFileAtomic,
   writeJson,
@@ -52,7 +55,13 @@ import {
   badge,
   pendingBackground,
 } from '../core/approval'
-import { canClean, cleanPreview, planClean, type CleanFacts } from '../core/cleanup'
+import {
+  canClean,
+  cleanPreview,
+  halfRemovedHint,
+  planClean,
+  type CleanFacts,
+} from '../core/cleanup'
 import {
   buildContext,
   discardedAttempts,
@@ -70,8 +79,10 @@ import {
   type MachineEvent,
 } from '../core/machine'
 import {
+  CLEANUP_BLOCKS,
   DELIVERY_LABEL,
   approvalStops,
+  cleanupActions,
   closingButtons,
   compareUrl,
   deliveryButtons,
@@ -83,7 +94,13 @@ import {
   stoppedVerify,
 } from '../core/delivery'
 import { NODE_INFO } from '../core/pipeline'
-import { confirmedIntent, decisionsBlock, decisionsWithout, workBranch } from '../core/records'
+import {
+  confirmedIntent,
+  decisionsBlock,
+  decisionsWithout,
+  offWorkBranch,
+  workBranch,
+} from '../core/records'
 import {
   OPERATION_BLOCKS,
   OWNED_FILES,
@@ -333,6 +350,8 @@ export class WorkRunner {
    * 다르면 바뀐 내용을 옆에 남기고 알린 뒤 앱의 상태로 쓴다 (D124).
    * 사람이 움직여야 하는 상태로 바뀌었으면 알린다(D81). 재시작 조정은 알리지 않는다(quiet).
    * blockStop이 있으면 Stop 요청에 돌려줄 응답을 돌려준다 (D21, S2).
+   * work.json을 쓰지 못하면 메모리의 상태도 바꾸지 않고 할 일도 하지 않는다. 할 일 하나가 실패하면 나머지는 하되,
+   * 그 뒤의 세션 시작은 하지 않고 task를 중단됨으로 둔다 (D135).
    */
   async apply(
     work: WorkState,
@@ -341,30 +360,54 @@ export class WorkRunner {
   ): Promise<HookReply> {
     if (work === this.work && effects.length === 0) return null
     const before = this.work
+    const at = this.ctx.at()
+    let saved: Awaited<ReturnType<WorkFiles['save']>>
+    try {
+      saved = await this.files.save(work, {
+        expected: this.workText,
+        copyName: changedCopyName(at),
+      })
+    } catch (err) {
+      this.problem(`work.json 쓰기 실패: ${message(err)}`)
+      throw err
+    }
     this.work = work
     // 끝난 정리 세션은 Work가 끝나면 치운다
     if (this.cleanup?.status === 'ended' && work.status !== 'active' && work.status !== 'stopped') {
       this.cleanup = null
     }
-    const at = this.ctx.at()
-    const saved = await this.files.save(work, {
-      expected: this.workText,
-      copyName: changedCopyName(at),
-    })
     this.workText = saved.text
     if (saved.changed) this.workJsonChanges.push({ at, copy: saved.copy })
     this.changed()
     const notice = opts.quiet ? null : humanNotice(before, work)
     if (notice) this.notify(notice)
     let reply: HookReply = null
+    let failed: string | null = null
     for (const e of effects) {
       try {
+        if (failed && (e.type === 'startTask' || e.type === 'resumeTask')) {
+          await this.skipStart(e.taskId, failed)
+          continue
+        }
         reply = (await this.run(e)) ?? reply
       } catch (err) {
-        this.problem(`${e.type} 실패: ${message(err)}`)
+        failed = `${e.type} 실패: ${message(err)}`
+        this.problem(failed)
       }
     }
     return reply
+  }
+
+  /** 앞선 할 일이 실패해 세션을 띄우지 않았다. 띄우다 실패한 것과 같이 중단됨으로 둔다 (D135) */
+  private async skipStart(taskId: string, failed: string): Promise<void> {
+    const check = await this.checkNow(taskId)
+    await this.feed({
+      type: 'session.failed',
+      taskId,
+      at: this.ctx.at(),
+      error: `앞선 처리가 실패해 시작하지 않음: ${failed}`,
+      ...(check ? { check } : {}),
+    })
   }
 
   private async run(e: Effect): Promise<HookReply | undefined> {
@@ -800,7 +843,7 @@ export class WorkRunner {
       void this.enqueue(() => this.onExit(task.id, session))
     })
     session.unregister = this.ctx.hooks.register(token, task.id, (req) =>
-      this.enqueue(() => this.onHook(task.id, req)),
+      this.enqueue(() => this.onHook(task.id, req, session)),
     )
     session.unwatch = watchDir(this.files.taskDir(task), () => {
       void this.enqueue(() => this.onWatch(task.id))
@@ -812,10 +855,12 @@ export class WorkRunner {
   // ---------- 세션 동안 (시나리오 3) ----------
 
   /** 훅 신호 (시나리오 3의 표). Stop이면 파일을 다시 읽어 검사한다 (I15) */
-  private async onHook(taskId: string, req: HookRequest): Promise<HookReply> {
+  private async onHook(taskId: string, req: HookRequest, from: LiveSession): Promise<HookReply> {
     const task = this.task(taskId)
     const session = this.live.get(taskId)
     if (!task) return null
+    // 토큰 확인을 지나 처리 줄에서 기다린 앞 프로세스의 요청은 다시 연 세션에 적용하지 않는다 (D144)
+    if (session !== from) return null
     const b = req.body
     // 훅 본문의 세션 id. /clear 등으로 CLI가 다른 대화로 옮기면 core가 따른다 (D110)
     const sessionId = str(b['session_id'])
@@ -871,11 +916,14 @@ export class WorkRunner {
       }
       case 'SessionEnd': {
         const reason = str(b['reason'])
+        // Stop 없이 끝났어도 유효한 handoff가 있으면 승인 대기나 막힘이다 (3.3, D146)
+        const check = await this.checkNow(taskId)
         return (
           await this.feed({
             type: 'SessionEnd',
             ...base,
             ...(reason === undefined ? {} : { reason }),
+            ...(check ? { check } : {}),
           })
         ).reply
       }
@@ -892,7 +940,17 @@ export class WorkRunner {
 
   private async onExit(taskId: string, session: LiveSession): Promise<void> {
     await this.release(taskId, session)
-    await this.feed({ type: 'pty.exit', taskId, at: this.ctx.at(), pid: session.pty.pid })
+    const at = this.ctx.at()
+    // Stop 없이 끝났어도 유효한 handoff가 있으면 승인 대기나 막힘이다 (3.3, D146). 이미 끝낸 세션(승인,
+    // [즉시 중단] 등)의 PTY 종료는 core가 무시하므로 파일을 읽지 않는다
+    const check = this.task(taskId)?.session?.alive ? await this.checkNow(taskId) : undefined
+    await this.feed({
+      type: 'pty.exit',
+      taskId,
+      at,
+      pid: session.pty.pid,
+      ...(check ? { check } : {}),
+    })
   }
 
   /**
@@ -937,6 +995,7 @@ export class WorkRunner {
   /** [승인], [의도 승인], [완료만], [오류 무시하고 승인] (시나리오 4-3, 4.1) */
   approve(taskId: string, opts: ApproveOptions): Promise<CommandResult> {
     return this.enqueue(async () => {
+      if (this.cleanupOpen()) return { ok: false, error: CLEANUP_BLOCKS }
       const task = this.task(taskId)
       if (!task) return { ok: false, error: `${taskId} 없음` }
       const check = this.check(task, await this.files.taskFiles(task))
@@ -1017,6 +1076,17 @@ export class WorkRunner {
     return t.rejected ? { ok: false, error: t.rejected } : { ok: true }
   }
 
+  /** 정리 세션이 열려 있으면(대기열 포함) 받지 않는 명령 (D137) */
+  private unlessCleanup(event: MachineEvent): Promise<CommandResult> {
+    if (this.cleanupOpen()) return Promise.resolve({ ok: false, error: CLEANUP_BLOCKS })
+    return this.command(event)
+  }
+
+  /** 정리 세션이 열려 있다(대기열 포함) */
+  private cleanupOpen(): boolean {
+    return !!this.cleanup && this.cleanup.status !== 'ended'
+  }
+
   /** [즉시 중단]: 세션을 트리째 끝내고 중단됨으로 남긴다. 대기열의 task는 대기열에서 뺀다 */
   interrupt(taskId: string, reason: InterruptReason = 'human'): Promise<CommandResult> {
     return this.enqueue(async () => {
@@ -1033,12 +1103,12 @@ export class WorkRunner {
 
   /** [재개], [세션 재개]: 같은 옵션과 --resume으로 다시 연다. 세션 상한을 넘으면 대기열에 넣는다 */
   resume(taskId: string): Promise<CommandResult> {
-    return this.enqueue(() => this.command({ type: 'resume', taskId, at: this.ctx.at() }))
+    return this.enqueue(() => this.unlessCleanup({ type: 'resume', taskId, at: this.ctx.at() }))
   }
 
   /** [이 단계 새 세션으로 다시] (D114) */
   retry(taskId: string): Promise<CommandResult> {
-    return this.enqueue(() => this.command({ type: 'retry', taskId, at: this.ctx.at() }))
+    return this.enqueue(() => this.unlessCleanup({ type: 'retry', taskId, at: this.ctx.at() }))
   }
 
   /** [이 단계 끝나면 멈춤]을 켜거나 끈다 */
@@ -1048,13 +1118,13 @@ export class WorkRunner {
 
   /** 멈춘 Work의 [재개]: 기본 다음 단계를 시작한다 */
   resumeWork(): Promise<CommandResult> {
-    return this.enqueue(() => this.command({ type: 'resumeWork', at: this.ctx.at() }))
+    return this.enqueue(() => this.unlessCleanup({ type: 'resumeWork', at: this.ctx.at() }))
   }
 
-  /** [Work 포기]. 정리 세션이 있으면 끝낸다 */
+  /** [Work 포기]. 끝난 정리 세션이 남아 있으면 치운다. 열려 있으면 받지 않는다 (D137) */
   abandon(): Promise<CommandResult> {
     return this.enqueue(async () => {
-      const r = await this.command({ type: 'abandon', at: this.ctx.at() })
+      const r = await this.unlessCleanup({ type: 'abandon', at: this.ctx.at() })
       if (r.ok && this.cleanup) {
         await this.endCleanup()
         this.cleanup = null
@@ -1105,6 +1175,7 @@ export class WorkRunner {
    */
   selectStep(input: SelectStepInput): Promise<CommandResult> {
     return this.enqueue(async () => {
+      if (this.cleanupOpen()) return { ok: false, error: CLEANUP_BLOCKS }
       this.rewindError = null
       let backups: string[]
       try {
@@ -1130,7 +1201,8 @@ export class WorkRunner {
   /**
    * 되감기의 코드 (6.2, D115~D117). 되돌릴 커밋이나 커밋 안 된 변경이 있으면 먼저 백업 브랜치를 만들고
    * (커밋 안 된 변경은 커밋 하나로 담는다, D116), 되돌릴 커밋으로 worktree를 되돌린다. 단계가 끝날 때마다
-   * machine에 알려 진행 중 작업 기록을 옮긴다(D77). git이 실패하면 알리고 기록을 지운다.
+   * machine에 알려 진행 중 작업 기록을 옮긴다(D77). git이 실패하면 알리고 기록을 지운다. 코드를 되돌리다 실패했는데
+   * 코드가 이미 바뀌었으면 기록을 지우지 않고 끊긴 되감기로 남긴다 (D136).
    */
   private async rewindCode(e: Extract<Effect, { type: 'rewindCode' }>): Promise<void> {
     const opts = { env: this.ctx.env }
@@ -1139,6 +1211,8 @@ export class WorkRunner {
     let branch: string | null
     let commit: string | null = null
     try {
+      const off = await this.offBranch()
+      if (off) throw new Error(off)
       head = await headCommit(this.worktree, opts)
       dirty = (await statusLines(this.worktree, opts)).length > 0
       const commits = head === e.to ? 0 : await countCommits(this.worktree, e.to, 'HEAD', opts)
@@ -1155,19 +1229,61 @@ export class WorkRunner {
       return
     }
     await this.feed({ type: 'rewind.backedUp', at: this.ctx.at(), branch, commit, head })
-    try {
-      if (head !== e.to || dirty) await resetHard(this.worktree, e.to, { ...opts, clean: dirty })
-    } catch (err) {
-      await this.rewindFailed(err)
-      return
+    if (head !== e.to || dirty) {
+      const reset = await this.resetCode(e.to, dirty)
+      if (reset) {
+        await this.rewindFailed(reset.err, reset.cut)
+        return
+      }
     }
     await this.feed({ type: 'rewind.applied', at: this.ctx.at(), head })
   }
 
-  private async rewindFailed(err: unknown): Promise<void> {
+  /**
+   * 코드를 되돌린다. 실패하면 오류와, 실패하기 전에 코드가 이미 바뀌었는지(cut)를 돌려준다 (D136).
+   * reset은 됐는데 clean이 실패하거나 reset이 도중에 실패하면 HEAD나 작업 트리가 되돌리기 전과 다르다.
+   * 바뀌었는지 확인하지 못하면 바뀐 것으로 본다
+   */
+  private async resetCode(
+    to: string,
+    dirty: boolean,
+  ): Promise<{ err: unknown; cut: boolean } | null> {
+    const opts = { env: this.ctx.env }
+    let before: { head: string; tree: string } | null = null
+    try {
+      before = {
+        head: await headCommit(this.worktree, opts),
+        tree: await worktreeTree(this.worktree, opts),
+      }
+      await resetHard(this.worktree, to, { ...opts, clean: dirty })
+      return null
+    } catch (err) {
+      if (!before) return { err, cut: false }
+      try {
+        const head = await headCommit(this.worktree, opts)
+        const tree = await worktreeTree(this.worktree, opts)
+        return { err, cut: head !== before.head || tree !== before.tree }
+      } catch {
+        return { err, cut: true }
+      }
+    }
+  }
+
+  /** worktree가 Work 브랜치에 있지 않으면 그 오류 (D138) */
+  private async offBranch(): Promise<string | null> {
+    const current = await currentBranch(this.worktree, { env: this.ctx.env })
+    return offWorkBranch(this.work.work_id, current)
+  }
+
+  private async rewindFailed(err: unknown, cut = false): Promise<void> {
     this.rewindError = `되감기 실패: ${message(err)}`
     this.problem(this.rewindError)
-    await this.feed({ type: 'rewind.failed', at: this.ctx.at(), error: message(err) })
+    await this.feed({
+      type: 'rewind.failed',
+      at: this.ctx.at(),
+      error: message(err),
+      ...(cut ? { cut } : {}),
+    })
   }
 
   /**
@@ -1182,6 +1298,12 @@ export class WorkRunner {
     let dirty: boolean
     let made: MadeBackup | null
     let extra: { branch: string; commit: string } | null = null
+    // 끊긴 되감기는 코드를 이미 되돌렸을 수 있어 Work 브랜치가 아니면 끊긴 채로 둔다 (D138, D136)
+    const off = await this.offBranch().catch((err: unknown) => message(err))
+    if (off) {
+      await this.rewindFailed(new Error(off), true)
+      return
+    }
     try {
       const head = await headCommit(this.worktree, opts)
       dirty = (await statusLines(this.worktree, opts)).length > 0
@@ -1211,11 +1333,12 @@ export class WorkRunner {
         head: plan.from,
       })
     }
-    try {
-      if (plan.reset) await resetHard(this.worktree, op.reset_to, { ...opts, clean: dirty })
-    } catch (err) {
-      await this.rewindFailed(err)
-      return
+    if (plan.reset) {
+      const reset = await this.resetCode(op.reset_to, dirty)
+      if (reset) {
+        await this.rewindFailed(reset.err, reset.cut)
+        return
+      }
     }
     await this.feed({
       type: 'rewind.applied',
@@ -1282,6 +1405,12 @@ export class WorkRunner {
     }
     if (this.cleanup && this.cleanup.status !== 'ended') {
       return { ok: false, error: '정리 세션이 열려 있음. [정리 끝 → push/PR 진행]을 누르세요' }
+    }
+    try {
+      const off = await this.offBranch()
+      if (off) return { ok: false, error: off }
+    } catch (e) {
+      return { ok: false, error: `Work 브랜치를 확인하지 못함: ${message(e)}` }
     }
     let lines: string[]
     try {
@@ -1579,6 +1708,17 @@ export class WorkRunner {
     await this.releaseCleanup(c)
   }
 
+  /** [정리 세션 닫기] (D137): 정리 세션을 끝내고 전달하지 않는다. 변경은 worktree에 남는다 */
+  closeCleanup(): Promise<CommandResult> {
+    return this.enqueue(async () => {
+      if (!this.cleanup) return { ok: false, error: '정리 세션이 없음' }
+      await this.endCleanup()
+      this.cleanup = null
+      this.changed()
+      return { ok: true }
+    })
+  }
+
   /**
    * [정리 끝 → push/PR 진행] (7-5). 세션을 끝내고 git status를 본다. 깨끗하면 원래 고른 전달을 하고,
    * 변경이 남았으면 선택지 화면으로 돌아가게 변경 목록을 돌려준다.
@@ -1622,6 +1762,7 @@ export class WorkRunner {
       .stat(this.worktree)
       .then((st) => st.isDirectory())
       .catch(() => false)
+    if (worktree && (await this.halfRemoved())) throw new Error(halfRemovedHint(this.worktree))
     const name = workBranch(this.work.work_id)
     const head = await refCommit(repo, `refs/heads/${name}`, opts)
     const contains = async (ref: string) => {
@@ -1763,8 +1904,18 @@ export class WorkRunner {
     return out
   }
 
+  /** worktree 폴더는 있는데 git이 worktree로 보지 않는다: 지우다 도중에 실패했다 (D140) */
+  private async halfRemoved(): Promise<boolean> {
+    if (!(await exists(this.worktree))) return false
+    const root = await repoRoot(this.worktree, { env: this.ctx.env })
+    return root === null || pathKey(root) !== pathKey(this.worktree)
+  }
+
   private async cleanFailed(err: unknown): Promise<void> {
-    this.opError = `정리 실패: ${message(err)}`
+    const hint = (await this.halfRemoved().catch(() => false))
+      ? `. ${halfRemovedHint(this.worktree)}`
+      : ''
+    this.opError = `정리 실패: ${message(err)}${hint}`
     this.problem(this.opError)
     await this.feed({ type: 'clean.failed', at: this.ctx.at(), error: message(err) })
   }
@@ -2101,7 +2252,7 @@ export class WorkRunner {
       statusLabel: WORK_STATUS_LABEL[w.status],
       completedAt: w.completed_at ?? null,
       badge: badge(w),
-      actions: actions(w),
+      actions: this.cleanupOpen() ? cleanupActions(actions(w)) : actions(w),
       stopAfterStep: w.stop_after_step === true,
       settings: w.settings,
       baseBranch: w.base_branch,

@@ -1,5 +1,5 @@
 // [실제] 실제 claude로 M 경로와 S 경로가 끝까지 간다 (docs/implementation.md I29, 8.4).
-// 수동 워크플로 app-claude에서만 돈다(RELAY_REAL_CLAUDE=1). Claude 사용량이 든다.
+// RELAY_REAL_CLAUDE=1일 때만 수동으로 돈다(app-claude 워크플로나 Linux 세션, 8.4). Claude 사용량이 든다.
 // [흐름]과 같은 도구(harness, drive)를 쓰고 claude 실행 파일만 실제 claude로 바꾼다 (8.1).
 // 모델과 effort는 앱이 PTY에 넘기는 환경 변수(ANTHROPIC_MODEL, CLAUDE_CODE_EFFORT_LEVEL)로 정한다.
 // 사람 역할: 첫 실행 창은 수락하고(I17), 질문에는 첫 선택지(추천)로 답하고, 승인 대기가 되면 승인한다.

@@ -454,6 +454,86 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
     expect(view(s)?.cleanup).toBeNull()
   })
 
+  it('worktree가 Work 브랜치에 있지 않으면 전달하지 않는다. 돌아오면 전달한다 (D138)', async () => {
+    const s = await setup(scenario('S'))
+    await toVerify(s)
+    const head = git(s.tree, 'rev-parse', 'HEAD')
+    // 에이전트가 분리된 HEAD에 커밋을 남겼다
+    git(s.tree, 'checkout', '--quiet', '--detach')
+    fs.writeFileSync(path.join(s.tree, 'detached.txt'), '분리된 HEAD의 커밋\n')
+    git(s.tree, 'add', 'detached.txt')
+    git(s.tree, 'commit', '--quiet', '-m', 'detached')
+    const refused = {
+      ok: false,
+      error: `worktree가 Work 브랜치에 있지 않음(지금: 분리된 HEAD). worktree에서 \`git switch ${s.branch}\`로 돌아온 뒤 다시 누르세요`,
+    }
+    expect(await deliver(s, 'push')).toEqual(refused)
+    expect(await deliver(s, 'pr')).toEqual(refused)
+    expect(git(s.remote, 'branch', '--list', s.branch)).toBe('')
+    expect(work(s).status).toBe('active')
+    // 다른 브랜치면 그 이름을 보인다
+    git(s.tree, 'switch', '--quiet', '-c', 'other')
+    expect(await deliver(s, 'push')).toEqual({
+      ok: false,
+      error: `worktree가 Work 브랜치에 있지 않음(지금: other). worktree에서 \`git switch ${s.branch}\`로 돌아온 뒤 다시 누르세요`,
+    })
+
+    git(s.tree, 'switch', '--quiet', s.branch)
+    expect(await deliver(s, 'push')).toEqual({ ok: true })
+    expect(git(s.remote, 'rev-parse', `refs/heads/${s.branch}`)).toBe(head)
+  })
+
+  it('정리 세션이 열린 동안에는 다른 조작을 받지 않는다. [정리 세션 닫기]는 전달 없이 세션만 끝낸다 (D137)', async () => {
+    const s = await setup({
+      tasks: { ...scenario('S').tasks, 'final-verify': DIRTY_VERIFY },
+      cleanup: [{ do: 'waitEnter' }, { do: 'wait' }],
+    })
+    await toVerify(s)
+    expect(await s.h.relay.openCleanup(s.key, 'push')).toEqual({ ok: true })
+    const opened = await until(s, (w) => w.cleanup?.status === 'live', '정리 세션')
+    await settle(s.h, s.key)
+    const dirty = git(s.tree, 'status', '--porcelain')
+    expect(dirty).not.toBe('')
+    // 버튼을 끄고 main도 받지 않는다
+    expect(opened.actions).toMatchObject({
+      resume: false,
+      retry: false,
+      selectStep: false,
+      abandon: false,
+    })
+    const blocked = {
+      ok: false,
+      error: '정리 세션이 열려 있음: 먼저 [정리 세션 닫기]나 [정리 끝 → push/PR 진행]을 누르세요',
+    }
+    expect(await s.h.relay.resume(s.key, 't-03')).toEqual(blocked)
+    expect(await s.h.relay.retry(s.key, 't-03')).toEqual(blocked)
+    expect(await s.h.relay.approve(s.key, 't-03', {})).toEqual(blocked)
+    expect(await s.h.relay.abandon(s.key)).toEqual(blocked)
+    expect(
+      await s.h.relay.selectStep(s.key, {
+        node: 'fix',
+        keepCode: false,
+        instruction: '',
+        expect: { taskId: 't-03', done: false },
+      }),
+    ).toEqual(blocked)
+    expect(work(s).tasks).toHaveLength(3)
+
+    expect(await s.h.relay.closeCleanup(s.key)).toEqual({ ok: true })
+    await settle(s.h, s.key)
+    const closed = view(s)
+    expect(closed?.cleanup).toBeNull()
+    expect(closed?.actions).toMatchObject({ resume: true, selectStep: true, abandon: true })
+    // 전달하지 않았고 변경은 worktree에 남는다
+    const w = work(s)
+    expect(w.status).toBe('active')
+    expect(w.delivery).toBeUndefined()
+    expect(w.cleanup_process).toBeUndefined()
+    expect(git(s.tree, 'status', '--porcelain')).toBe(dirty)
+    expect(git(s.remote, 'branch', '--list', s.branch)).toBe('')
+    expect(await s.h.relay.resume(s.key, 't-03')).toEqual({ ok: true })
+  })
+
   it('정리 세션을 /exit로 끝냈는데 변경이 남았으면 선택지로 돌아간다 (7-5)', async () => {
     const s = await setup({
       tasks: { ...scenario('S').tasks, 'final-verify': DIRTY_VERIFY },

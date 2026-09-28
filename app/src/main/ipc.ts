@@ -15,6 +15,7 @@ import type {
 } from '../shared/views'
 import type { DeliveryChoice } from '../shared/work'
 import type { Relay } from './relay'
+import { externalUrl } from './security'
 
 function windowsBuild(): number | null {
   if (process.platform !== 'win32') return null
@@ -177,6 +178,9 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   ipcMain.handle(IPC.openCleanup, async (_e, workKey: unknown, c: unknown) =>
     (await ready).openCleanup(text(workKey), choice(c)),
   )
+  ipcMain.handle(IPC.closeCleanup, async (_e, workKey: unknown) =>
+    (await ready).closeCleanup(text(workKey)),
+  )
   ipcMain.handle(IPC.finishCleanup, async (_e, workKey: unknown) =>
     (await ready).finishCleanup(text(workKey)),
   )
@@ -200,9 +204,7 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   )
   // 비교 URL과 PR 주소만 연다. 앱 창은 옮기지 않는다 (main/index)
   ipcMain.handle(IPC.openExternal, async (_e, url: unknown) => {
-    const u = new URL(text(url))
-    if (u.protocol !== 'https:' && u.protocol !== 'http:') throw new Error('http(s) 주소가 아님')
-    await shell.openExternal(u.toString())
+    await shell.openExternal(externalUrl(text(url)))
   })
   ipcMain.handle(IPC.workSettings, async (_e, workKey: unknown, settings: unknown) =>
     (await ready).updateWorkSettings(text(workKey), settings),

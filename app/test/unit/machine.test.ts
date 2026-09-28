@@ -421,6 +421,46 @@ describe('시나리오 3의 신호 표: 신호마다 표시 상태', () => {
     expect(exit.rejected).toBeUndefined()
   })
 
+  it('Stop 없이 세션이 끝나도 그때의 파일에 유효한 handoff가 있으면 승인 대기나 막힘이다 (3.3, D146)', () => {
+    for (const end of [
+      { type: 'SessionEnd' as const, taskId: 't-01', at: at(), reason: 'other', check: valid() },
+      { type: 'pty.exit' as const, taskId: 't-01', at: at(), check: valid() },
+    ]) {
+      const r = apply(running('working'), end)
+      expect(currentTask(r.work), end.type).toMatchObject({
+        status: 'awaiting_approval',
+        session: { alive: false },
+        check: { handoff_present: true, status: 'awaiting_approval', errors: [] },
+      })
+      expect(r.effects, end.type).toEqual([
+        {
+          type: 'log',
+          event: expect.objectContaining({
+            type: 'task.awaiting_approval',
+            payload: { reason: 'session_ended' },
+          }) as unknown,
+        },
+      ])
+    }
+    const blocked = apply(running('idle'), {
+      type: 'pty.exit',
+      taskId: 't-01',
+      at: at(),
+      check: BLOCKED,
+    })
+    expect(status(blocked.work)).toBe('blocked')
+    expect(blocked.effects).toEqual([])
+    // 형식 오류가 있으면 세션 종료다
+    const invalid = apply(running('idle'), {
+      type: 'SessionEnd',
+      taskId: 't-01',
+      at: at(),
+      check: INVALID,
+    })
+    expect(status(invalid.work)).toBe('session_ended')
+    expect(types(invalid.effects)).toEqual(['log:task.interrupted'])
+  })
+
   it('SessionEnd의 reason이 clear나 resume이면 CLI가 계속 돌므로 세션 종료가 아니다 (D110)', () => {
     for (const reason of ['clear', 'resume']) {
       const work = running('idle')
@@ -1668,6 +1708,25 @@ describe('단계 선택 (6.2, D77, D115~D117)', () => {
     ).toBe(r.work)
   })
 
+  it('git이 실패했는데 코드가 이미 바뀌었으면 끊긴 되감기로 남긴다. 승인과 전달을 막고 [다시 시도]로 잇는다 (D136)', () => {
+    const phase1 = select(toVerify(), 'fix').work
+    const backedUp = apply(phase1, {
+      type: 'rewind.backedUp',
+      at: at(),
+      branch: BACKUP,
+      commit: 'backup1',
+      head: 'fixhead1',
+    }).work
+    const failedAt = at()
+    const r = apply(backedUp, { type: 'rewind.failed', at: failedAt, error: 'clean', cut: true })
+    expect(r.work.operation).toEqual({ ...backedUp.operation, interrupted_at: failedAt })
+    expect(r.work.tasks).toEqual(backedUp.tasks)
+    expect(badge(r.work).kind).toBe('recovery')
+    expect(approve(r.work, valid()).rejected).toBe(OPERATION_BLOCKS)
+    const retry = apply(r.work, { type: 'operationRetry', at: at() })
+    expect(retry.effects.map((e) => e.type)).toEqual(['resumeRewind'])
+  })
+
   it('건너뛰기는 한 번에 반영한다: 진행 중인 k를 끝내고 폐기하고 고른 단계를 시작한다. 코드는 그대로다 (D117)', () => {
     const r = select(toRca(), 'verify', { instruction: '바로 검증해 줘' })
     expect(r.work.operation).toBeUndefined()
@@ -2828,6 +2887,61 @@ describe('자동 승인 (4.3, D127~D131)', () => {
     })
     expect(task(changed.work).countdown).toBeUndefined()
     expect(changed.effects).toEqual([{ type: 'stopCountdown', taskId: 't-02' }])
+  })
+
+  it('Stop 없이 세션이 끝나 승인 대기가 되면 자동 승인을 판정하지 않는다: 턴이 끝난 것이 아니다 (D146)', () => {
+    const r = apply(
+      evidenceRunning(),
+      { type: 'SessionEnd', taskId: 't-02', at: at(), reason: 'other', check: valid() },
+      AUTO,
+    )
+    expect(task(r.work)).toMatchObject({ status: 'awaiting_approval', session: { alive: false } })
+    expect(task(r.work).countdown ?? task(r.work).auto_hold).toBeUndefined()
+    expect(types(r.effects)).toEqual(['log:task.awaiting_approval'])
+  })
+
+  it('앱 종료 확인과 [단계 선택]으로 세션을 끝내도 멈춘다. 까닭은 끝낸 까닭대로 적는다 (D130, D145)', () => {
+    const quit = apply(
+      counting(),
+      { type: 'interrupt', taskId: 't-02', at: at(), reason: 'app_quit' },
+      AUTO,
+    )
+    expect(task(quit.work)).toMatchObject({
+      status: 'awaiting_approval',
+      session: { alive: false },
+      auto_hold: { reasons: ['quit'] },
+    })
+    expect(types(quit.effects)).toEqual(['stopCountdown', 'log:task.interrupted', 'endSession'])
+    // 다시 켜도 재시작 조정은 까닭을 바꾸지 않는다: 카운트다운은 끌 때 이미 멈췄다
+    const reopened = apply(quit.work, { type: 'app.restarted', at: at(), check: valid() }, AUTO)
+    expect(task(reopened.work).auto_hold?.reasons).toEqual(['quit'])
+    // 코드를 되돌리는 [단계 선택]은 git이 실패하면 끝낸 task가 승인 대기로 남는다 (6.2)
+    const selected = apply(
+      counting(),
+      {
+        type: 'selectStep',
+        at: at(),
+        node: 'evidence',
+        keepCode: false,
+        instruction: '',
+        expect: { taskId: 't-02', done: false },
+        backups: [],
+      },
+      AUTO,
+    )
+    expect(selected.rejected).toBeUndefined()
+    expect(types(selected.effects)).toEqual([
+      'stopCountdown',
+      'log:task.interrupted',
+      'endSession',
+      'rewindCode',
+    ])
+    const failed = apply(selected.work, { type: 'rewind.failed', at: at(), error: 'index.lock' })
+    expect(task(failed.work)).toMatchObject({
+      status: 'awaiting_approval',
+      session: { alive: false },
+      auto_hold: { reasons: ['step'] },
+    })
   })
 
   it('끝날 때 다시 판정한다: 설정을 껐거나 handoff가 바뀌었으면 승인하지 않는다 (D128, D130)', () => {

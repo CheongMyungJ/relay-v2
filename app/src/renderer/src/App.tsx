@@ -14,6 +14,7 @@ import {
   StepDialog,
   WorkSettingsDialog,
 } from './dialogs'
+import { withOpened } from './opened'
 import { Panel, wantsApproval } from './Panel'
 import { TerminalView } from './TerminalView'
 
@@ -81,6 +82,11 @@ export function App() {
   useEffect(() => {
     window.relay.selectWork(selected)
   }, [selected])
+
+  // 터미널은 고른 적 있는 Work만 만든다 (D143). 고른 Work가 바뀌면 렌더 중에 더한다(React 문서의 이전 렌더 정보 저장)
+  const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set())
+  const nextOpened = withOpened(opened, selected)
+  if (nextOpened !== opened) setOpened(nextOpened)
 
   const work = selected ? works[selected] : undefined
   const pickedId = work ? (picked[work.key] ?? work.current) : null
@@ -236,28 +242,30 @@ export function App() {
         </div>
         <div className="terminal">
           {info
-            ? Object.values(works).flatMap((w) => [
-                ...w.tasks.map((t) => (
-                  <TerminalView
-                    key={t.terminal}
-                    terminalKey={t.terminal}
-                    info={info}
-                    live={t.live}
-                    active={w.key === selected && !cleanupTab && t.id === taskId}
-                  />
-                )),
-                ...(w.cleanup
-                  ? [
-                      <TerminalView
-                        key={w.cleanup.terminal}
-                        terminalKey={w.cleanup.terminal}
-                        info={info}
-                        live={w.cleanup.status === 'live'}
-                        active={w.key === selected && cleanupTab}
-                      />,
-                    ]
-                  : []),
-              ])
+            ? Object.values(works)
+                .filter((w) => nextOpened.has(w.key))
+                .flatMap((w) => [
+                  ...w.tasks.map((t) => (
+                    <TerminalView
+                      key={t.terminal}
+                      terminalKey={t.terminal}
+                      info={info}
+                      live={t.live}
+                      active={w.key === selected && !cleanupTab && t.id === taskId}
+                    />
+                  )),
+                  ...(w.cleanup
+                    ? [
+                        <TerminalView
+                          key={w.cleanup.terminal}
+                          terminalKey={w.cleanup.terminal}
+                          info={info}
+                          live={w.cleanup.status === 'live'}
+                          active={w.key === selected && cleanupTab}
+                        />,
+                      ]
+                    : []),
+                ])
             : null}
           {!work ? (
             <div className="empty">

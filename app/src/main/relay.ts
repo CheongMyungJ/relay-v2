@@ -476,6 +476,11 @@ export class Relay {
     return this.withWork(workKey, (w) => w.openCleanup(choice))
   }
 
+  /** [정리 세션 닫기] (D137) */
+  closeCleanup(workKey: string): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.closeCleanup())
+  }
+
   /** [정리 끝 → push/PR 진행] (7-5) */
   async finishCleanup(workKey: string): Promise<DeliverResult> {
     const runner = this.works.get(workKey)

@@ -4,7 +4,7 @@ import { defineConfig } from 'vitest/config'
 // unit: core의 [단위]. Linux 러너에서 돈다.
 // adapters: 실제 node-pty, 파일, git, 프로세스를 쓰는 [어댑터]. Windows 러너에서 돈다.
 // flow: main 조립 + adapters + 가짜 claude의 [흐름]. Windows 러너에서 돈다 (I25, I26).
-// claude: 실제 claude의 [실제]. 수동 워크플로 app-claude에서만 돈다 (I29).
+// claude: 실제 claude의 [실제]. RELAY_REAL_CLAUDE가 있을 때만 수동으로 돈다(app-claude 워크플로나 Linux 세션, I29, 8.4).
 export default defineConfig({
   test: {
     projects: [

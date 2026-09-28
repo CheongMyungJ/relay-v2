@@ -4,17 +4,19 @@
 // 무엇이 어디서 끊겼는지 패널에 알리고, [다시 시도]와 [무시]가 각각 끝까지 간다. 앱이 충돌한 뒤 살아남은 claude의
 // 자리는 분리해 띄운 프로세스 트리다: 기록과 시작 시각이 같으면 트리째 끝내고 알리며, 다르면 건드리지 않는다.
 // 앱 밖에서 바뀐 앱 소유 파일과 work.json은 알린다. 잘린 pty.log는 경고 없이 남은 만큼 보인다.
-import { spawn } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createBackup, stashAll } from '../../src/adapters/git'
 import {
   isAlive,
+  killOrphans,
   listProcesses,
   processStartTime,
   processTree,
   type ProcessInfo,
+  type ProcessRecord,
 } from '../../src/adapters/pty'
 import { WorkFiles, fileHash, jsonText } from '../../src/adapters/store'
 import { planClean } from '../../src/core/cleanup'
@@ -41,17 +43,15 @@ import {
 import { REPO_FILES, REQUEST, handoff, scenario, steps, type Scenario } from './scenarios'
 
 let h: Harness | undefined
-/** 시험이 띄운 프로세스. 시험이 실패해도 남기지 않는다 */
-const spawned: number[] = []
+/** 시험이 띄운 자식 프로세스와, 그 트리의 ID와 시작 시각. 시험이 실패해도 남기지 않는다 */
+const children: ChildProcess[] = []
+const recorded: ProcessRecord[] = []
 
 afterEach(async () => {
-  for (const pid of spawned.splice(0)) {
-    try {
-      process.kill(pid, 'SIGKILL')
-    } catch {
-      // 이미 끝났다
-    }
-  }
+  // ID만으로 끝내지 않는다: 이미 끝난 프로세스의 ID는 다른 프로세스가 곧 다시 쓸 수 있다(Windows, A77).
+  // 자식은 핸들로, 트리는 ID와 시작 시각으로 끝낸다
+  for (const child of children.splice(0)) child.kill('SIGKILL')
+  await killOrphans(recorded.splice(0))
   await h?.close()
   h = undefined
 })
@@ -269,12 +269,12 @@ async function survivor(): Promise<{ pid: number; startedAt: string; tree: Proce
   const p = spawn(process.execPath, [TREE], { detached: true, stdio: 'ignore', windowsHide: true })
   p.unref()
   const pid = p.pid ?? 0
-  spawned.push(pid)
+  children.push(p)
   const tree = await poll(async () => {
     const t = processTree(pid, await listProcesses())
     return t.length >= 2 ? t : null
   }, '프로세스 트리')
-  for (const x of tree) spawned.push(x.ProcessId)
+  for (const x of tree) recorded.push({ pid: x.ProcessId, startedAt: x.Created })
   const startedAt = await processStartTime(pid)
   if (!startedAt) throw new Error('시작 시각을 읽지 못함')
   return { pid, startedAt, tree }
@@ -561,6 +561,31 @@ describe('[흐름] 끊긴 되감기 (M6, 시나리오 9-4, D116, D121~D123)', ()
     })
     const done = await drive(s.h.relay, s.h.ui, s.key, { size: 'S' })
     expect(done, s.h.ui.dump()).toMatchObject({ status: 'completed' })
+  })
+
+  it('끊긴 되감기의 [다시 시도]는 worktree가 Work 브랜치에 있지 않으면 하지 않고 끊긴 채로 둔다 (D138)', async () => {
+    const s = await setup(recommendFix())
+    await toStopped(s)
+    const head = git(s.tree, 'rev-parse', 'HEAD')
+    const b = await before(s.h, s)
+    const { rewinding } = await rewindStarted(s, b)
+    await crash(s.h, [{ w: s, work: rewinding, events: b.events }])
+    git(s.tree, 'checkout', '--quiet', '--detach')
+
+    expect(await s.h.relay.retryOperation(s.key)).toEqual({
+      ok: false,
+      error: `되감기 실패: worktree가 Work 브랜치에 있지 않음(지금: 분리된 HEAD). worktree에서 \`git switch ${s.branch}\`로 돌아온 뒤 다시 누르세요`,
+    })
+    await settle(s.h, s.key)
+    expect(workOf(s).operation?.interrupted_at).toBeDefined()
+    expect(view(s.h, s).badge.kind).toBe('recovery')
+    expect(backups(s)).toEqual([])
+    expect(git(s.tree, 'rev-parse', 'HEAD')).toBe(head)
+
+    git(s.tree, 'switch', '--quiet', s.branch)
+    expect(await s.h.relay.retryOperation(s.key)).toEqual({ ok: true })
+    await settle(s.h, s.key)
+    expect(workOf(s).operation).toBeUndefined()
   })
 
   it('[무시]는 기록만 지운다. 코드와 task는 그대로이고, 다시 단계를 골라 끝까지 간다', async () => {

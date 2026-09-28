@@ -135,6 +135,8 @@ export interface SessionEndHook extends HookSignal {
   type: 'SessionEnd'
   /** 본문의 reason: clear | resume | logout | prompt_input_exit | other (Claude Code 문서 hooks) */
   reason?: string
+  /** 세션이 끝날 때 main이 다시 한 형식 검사 (3.3, D146). 읽지 못했으면 없다 */
+  check?: CheckSummary
 }
 
 /** PTY 종료 */
@@ -142,6 +144,8 @@ export interface PtyExited extends TaskEvent {
   type: 'pty.exit'
   /** 끝난 프로세스. 다시 연 세션이 있으면 앞 프로세스의 늦은 종료를 가려낸다 */
   pid?: number
+  /** 세션이 끝날 때 main이 다시 한 형식 검사 (3.3, D146). 읽지 못했으면 없다 */
+  check?: CheckSummary
 }
 
 export type SessionEnded = SessionEndHook | PtyExited
@@ -288,10 +292,14 @@ export interface RewindApplied extends WorkEvent {
   extraBackup?: string
 }
 
-/** 되감기의 git 작업이 실패했다. 기록을 지우고 Work는 그대로 둔다. 오류는 main이 알린다 */
+/**
+ * 되감기의 git 작업이 실패했다. 기록을 지우고 Work는 그대로 둔다. 오류는 main이 알린다.
+ * cut이면 실패하기 전에 코드가 이미 바뀌었다(reset 뒤 clean 실패 등). 끊긴 되감기로 남긴다 (D136)
+ */
 export interface RewindFailed extends WorkEvent {
   type: 'rewind.failed'
   error: string
+  cut?: boolean
 }
 
 /**
@@ -766,6 +774,12 @@ function countdownEffects(before: WorkState, t: Transition): Transition {
   return { ...t, work, effects: [...stops, ...t.effects, ...starts] }
 }
 
+/** 세션을 끝내 카운트다운을 멈춘 까닭 (D145): [즉시 중단], 앱 종료 확인, [단계 선택] */
+function endHold(reason: InterruptReason | StepKind): AutoHoldReason {
+  if (reason === 'human') return 'interrupt'
+  return reason === 'app_quit' ? 'quit' : 'step'
+}
+
 /**
  * 세션을 끝낸다: 살아 있으면 endSession, 대기열에 있으면 dequeue. 승인 대기와 막힘은 그대로 두고,
  * 그 밖에는 중단됨이다 (3.3). 세션도 대기열도 아니면 null. 단계 선택(rewind, skip)으로 끝낸 task는 곧
@@ -796,8 +810,9 @@ function endTask(
     session: { ...task.session, alive: false, ended_at: at },
   }
   return {
-    // 카운트다운 중이던 승인 대기는 카운트다운을 멈추고 사람의 승인을 기다린다 (D130)
-    task: kept && task.countdown ? held(ended, at, ['interrupt']) : ended,
+    // 카운트다운 중이던 승인 대기는 카운트다운을 멈추고 사람의 승인을 기다린다 (D130).
+    // 까닭은 세션을 끝낸 까닭대로 적는다 (D145)
+    task: kept && task.countdown ? held(ended, at, [endHold(reason)]) : ended,
     effects: [
       log(work, at, 'task.interrupted', { reason }, task),
       { type: 'endSession', taskId: task.id },
@@ -908,7 +923,7 @@ function dispatch(work: WorkState, event: MachineEvent, config: AppConfig): Tran
     case 'rewind.applied':
       return rewindApplied(work, event)
     case 'rewind.failed':
-      return rewindFailed(work)
+      return rewindFailed(work, event)
     case 'deliver':
       return deliver(work, event)
     case 'delivery.stage':
@@ -1178,7 +1193,9 @@ function stop(work: WorkState, task: TaskRecord, e: Stopped, config: AppConfig):
 }
 
 /**
- * SessionEnd나 PTY 종료 (시나리오 3). 승인 대기와 막힘은 그대로 두고, 그 밖에는 세션 종료다 (3.3).
+ * SessionEnd나 PTY 종료 (시나리오 3). 승인 대기와 막힘은 그대로 둔다. 그 밖에는 세션이 끝날 때 다시 한 검사에
+ * 유효한 handoff가 있으면 승인 대기나 막힘이고, 없으면 세션 종료다 (3.3, D146). 턴이 끝난 것이 아니라 자동 승인은
+ * 판정하지 않는다(다음 Stop부터, D131).
  * SessionEnd의 reason이 clear나 resume이면 CLI가 계속 돌므로 세션 종료로 보지 않는다 (D110).
  * 다시 연 세션이 있으면 앞 프로세스의 늦은 PTY 종료는 무시한다.
  */
@@ -1199,8 +1216,24 @@ function sessionEnded(work: WorkState, task: TaskRecord, e: SessionEnded): Trans
       effects: [],
     }
   }
+  const check = e.check ? summarize(e.check) : null
+  const status = check ? handoffStatus(check) : null
+  if (check && status) {
+    return {
+      work: withTask(work, { ...task, session, status, check }),
+      effects:
+        status === 'awaiting_approval'
+          ? [log(work, e.at, 'task.awaiting_approval', { reason: 'session_ended' }, task)]
+          : [],
+    }
+  }
   return {
-    work: withTask(work, { ...task, session, status: 'session_ended' }),
+    work: withTask(work, {
+      ...task,
+      session,
+      status: 'session_ended',
+      ...(check ? { check } : {}),
+    }),
     effects: [log(work, e.at, 'task.interrupted', { reason: 'session_ended' }, task)],
   }
 }
@@ -1583,8 +1616,11 @@ function rewindApplied(work: WorkState, e: RewindApplied): Transition {
 }
 
 /** 되감기의 git 작업이 실패했다. 기록만 지운다. 끝낸 세션은 끝난 채로 두고, 오류는 main이 알린다 */
-function rewindFailed(work: WorkState): Transition {
-  return work.operation ? { work: omit(work, 'operation'), effects: [] } : unchanged(work)
+function rewindFailed(work: WorkState, e: RewindFailed): Transition {
+  const op = work.operation
+  if (!op) return unchanged(work)
+  if (e.cut) return { work: { ...work, operation: { ...op, interrupted_at: e.at } }, effects: [] }
+  return { work: omit(work, 'operation'), effects: [] }
 }
 
 interface Selected {
