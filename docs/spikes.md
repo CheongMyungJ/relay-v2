@@ -315,7 +315,7 @@
 
 **확인할 것:** PR 진행(설계 시나리오 10)이 쓰는 GitHub 동작을 앱이 gh로 할 수 있는가. 결과가 설계의 가정(D157~D161, D172, D175~D179)과 같은가.
 
-**환경:** 시험용 레포에서 한다. relay-v2 레포에는 시험 PR을 만들지 않는다(`docs/implementation.md` I42). gh와 GitHub의 동작은 OS와 상관없으므로 Windows 러너가 아니어도 된다. 결과 표에는 gh 버전을 적는다.
+**환경:** 시험용 레포에서 한다. relay-v2 레포에는 시험 PR을 만들지 않는다(`docs/implementation.md` I42). gh와 GitHub의 동작은 OS와 상관없으므로 Windows 러너가 아니어도 된다. 결과 표에는 gh 버전을 적는다. Claude Code 웹 세션에서는 GitHub GraphQL이 막혀 있어(2026-09-28 확인), GraphQL을 쓰는 gh의 PR 명령(`gh pr create`, `gh pr view` 등)이 돌지 않는다. 그래서 러너나 사람의 PC에서 한다. 러너에서 할 때는 시험용 레포의 토큰 secret(I43)만 있으면 되고 Claude 인증 secret은 필요 없다.
 
 **절차**
 
