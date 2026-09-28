@@ -1668,6 +1668,25 @@ describe('단계 선택 (6.2, D77, D115~D117)', () => {
     ).toBe(r.work)
   })
 
+  it('git이 실패했는데 코드가 이미 바뀌었으면 끊긴 되감기로 남긴다. 승인과 전달을 막고 [다시 시도]로 잇는다 (D136)', () => {
+    const phase1 = select(toVerify(), 'fix').work
+    const backedUp = apply(phase1, {
+      type: 'rewind.backedUp',
+      at: at(),
+      branch: BACKUP,
+      commit: 'backup1',
+      head: 'fixhead1',
+    }).work
+    const failedAt = at()
+    const r = apply(backedUp, { type: 'rewind.failed', at: failedAt, error: 'clean', cut: true })
+    expect(r.work.operation).toEqual({ ...backedUp.operation, interrupted_at: failedAt })
+    expect(r.work.tasks).toEqual(backedUp.tasks)
+    expect(badge(r.work).kind).toBe('recovery')
+    expect(approve(r.work, valid()).rejected).toBe(OPERATION_BLOCKS)
+    const retry = apply(r.work, { type: 'operationRetry', at: at() })
+    expect(retry.effects.map((e) => e.type)).toEqual(['resumeRewind'])
+  })
+
   it('건너뛰기는 한 번에 반영한다: 진행 중인 k를 끝내고 폐기하고 고른 단계를 시작한다. 코드는 그대로다 (D117)', () => {
     const r = select(toRca(), 'verify', { instruction: '바로 검증해 줘' })
     expect(r.work.operation).toBeUndefined()

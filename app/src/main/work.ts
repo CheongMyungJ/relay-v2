@@ -1156,7 +1156,8 @@ export class WorkRunner {
   /**
    * 되감기의 코드 (6.2, D115~D117). 되돌릴 커밋이나 커밋 안 된 변경이 있으면 먼저 백업 브랜치를 만들고
    * (커밋 안 된 변경은 커밋 하나로 담는다, D116), 되돌릴 커밋으로 worktree를 되돌린다. 단계가 끝날 때마다
-   * machine에 알려 진행 중 작업 기록을 옮긴다(D77). git이 실패하면 알리고 기록을 지운다.
+   * machine에 알려 진행 중 작업 기록을 옮긴다(D77). git이 실패하면 알리고 기록을 지운다. 코드를 되돌리다 실패했는데
+   * 코드가 이미 바뀌었으면 기록을 지우지 않고 끊긴 되감기로 남긴다 (D136).
    */
   private async rewindCode(e: Extract<Effect, { type: 'rewindCode' }>): Promise<void> {
     const opts = { env: this.ctx.env }
@@ -1181,19 +1182,55 @@ export class WorkRunner {
       return
     }
     await this.feed({ type: 'rewind.backedUp', at: this.ctx.at(), branch, commit, head })
-    try {
-      if (head !== e.to || dirty) await resetHard(this.worktree, e.to, { ...opts, clean: dirty })
-    } catch (err) {
-      await this.rewindFailed(err)
-      return
+    if (head !== e.to || dirty) {
+      const reset = await this.resetCode(e.to, dirty)
+      if (reset) {
+        await this.rewindFailed(reset.err, reset.cut)
+        return
+      }
     }
     await this.feed({ type: 'rewind.applied', at: this.ctx.at(), head })
   }
 
-  private async rewindFailed(err: unknown): Promise<void> {
+  /**
+   * 코드를 되돌린다. 실패하면 오류와, 실패하기 전에 코드가 이미 바뀌었는지(cut)를 돌려준다 (D136).
+   * reset은 됐는데 clean이 실패하거나 reset이 도중에 실패하면 HEAD나 작업 트리가 되돌리기 전과 다르다.
+   * 바뀌었는지 확인하지 못하면 바뀐 것으로 본다
+   */
+  private async resetCode(
+    to: string,
+    dirty: boolean,
+  ): Promise<{ err: unknown; cut: boolean } | null> {
+    const opts = { env: this.ctx.env }
+    let before: { head: string; tree: string } | null = null
+    try {
+      before = {
+        head: await headCommit(this.worktree, opts),
+        tree: await worktreeTree(this.worktree, opts),
+      }
+      await resetHard(this.worktree, to, { ...opts, clean: dirty })
+      return null
+    } catch (err) {
+      if (!before) return { err, cut: false }
+      try {
+        const head = await headCommit(this.worktree, opts)
+        const tree = await worktreeTree(this.worktree, opts)
+        return { err, cut: head !== before.head || tree !== before.tree }
+      } catch {
+        return { err, cut: true }
+      }
+    }
+  }
+
+  private async rewindFailed(err: unknown, cut = false): Promise<void> {
     this.rewindError = `되감기 실패: ${message(err)}`
     this.problem(this.rewindError)
-    await this.feed({ type: 'rewind.failed', at: this.ctx.at(), error: message(err) })
+    await this.feed({
+      type: 'rewind.failed',
+      at: this.ctx.at(),
+      error: message(err),
+      ...(cut ? { cut } : {}),
+    })
   }
 
   /**
@@ -1237,11 +1274,12 @@ export class WorkRunner {
         head: plan.from,
       })
     }
-    try {
-      if (plan.reset) await resetHard(this.worktree, op.reset_to, { ...opts, clean: dirty })
-    } catch (err) {
-      await this.rewindFailed(err)
-      return
+    if (plan.reset) {
+      const reset = await this.resetCode(op.reset_to, dirty)
+      if (reset) {
+        await this.rewindFailed(reset.err, reset.cut)
+        return
+      }
     }
     await this.feed({
       type: 'rewind.applied',

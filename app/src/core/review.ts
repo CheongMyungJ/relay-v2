@@ -128,6 +128,8 @@ export function humanNotice(before: WorkState, after: WorkState): string | null 
   const b = badge(after)
   if (!b.hot || badge(before).kind === b.kind) return null
   if (b.kind === 'stopped') return stopNotice(after)
+  // 끊긴 작업은 되감기가 코드를 바꾼 뒤 실패했을 때도 생긴다 (D136). 재시작 조정은 알리지 않는다
+  if (b.kind === 'recovery') return '끊긴 작업이 있습니다: [다시 시도]나 [무시]를 누르세요'
   if (!task) return null
   return b.kind === 'session_ended'
     ? `${taskLabel(task)}: handoff 없이 세션 종료`

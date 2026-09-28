@@ -188,8 +188,8 @@ export const BADGE_ORDER: readonly BadgeKind[] = [
 ]
 
 /**
- * 사람이 필요한 상태. 색으로 강조하고 OS 알림을 보낸다 (D80, D81). 끊긴 작업은 재시작 조정에서만 생기고
- * 재시작 조정은 알리지 않는다 (D121)
+ * 사람이 필요한 상태. 색으로 강조하고 OS 알림을 보낸다 (D80, D81). 끊긴 작업은 재시작 조정과 코드를 바꾼 뒤
+ * 실패한 되감기(D136)에서 생기고, 재시작 조정은 알리지 않는다 (D121)
  */
 export const HUMAN_BADGES: readonly BadgeKind[] = BADGE_ORDER.slice(0, 6)
 

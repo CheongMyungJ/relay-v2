@@ -288,10 +288,14 @@ export interface RewindApplied extends WorkEvent {
   extraBackup?: string
 }
 
-/** 되감기의 git 작업이 실패했다. 기록을 지우고 Work는 그대로 둔다. 오류는 main이 알린다 */
+/**
+ * 되감기의 git 작업이 실패했다. 기록을 지우고 Work는 그대로 둔다. 오류는 main이 알린다.
+ * cut이면 실패하기 전에 코드가 이미 바뀌었다(reset 뒤 clean 실패 등). 끊긴 되감기로 남긴다 (D136)
+ */
 export interface RewindFailed extends WorkEvent {
   type: 'rewind.failed'
   error: string
+  cut?: boolean
 }
 
 /**
@@ -908,7 +912,7 @@ function dispatch(work: WorkState, event: MachineEvent, config: AppConfig): Tran
     case 'rewind.applied':
       return rewindApplied(work, event)
     case 'rewind.failed':
-      return rewindFailed(work)
+      return rewindFailed(work, event)
     case 'deliver':
       return deliver(work, event)
     case 'delivery.stage':
@@ -1583,8 +1587,11 @@ function rewindApplied(work: WorkState, e: RewindApplied): Transition {
 }
 
 /** 되감기의 git 작업이 실패했다. 기록만 지운다. 끝낸 세션은 끝난 채로 두고, 오류는 main이 알린다 */
-function rewindFailed(work: WorkState): Transition {
-  return work.operation ? { work: omit(work, 'operation'), effects: [] } : unchanged(work)
+function rewindFailed(work: WorkState, e: RewindFailed): Transition {
+  const op = work.operation
+  if (!op) return unchanged(work)
+  if (e.cut) return { work: { ...work, operation: { ...op, interrupted_at: e.at } }, effects: [] }
+  return { work: omit(work, 'operation'), effects: [] }
 }
 
 interface Selected {

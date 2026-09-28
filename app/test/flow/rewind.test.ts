@@ -2,7 +2,9 @@
 // verify에서 fix로 되감아 Work 완료까지(백업 브랜치), intake로 되감아 intent 새 버전(모든 산출물 폐기, D40),
 // 진행 중인 fix의 커밋 안 된 변경(D116)과 [현재 코드 위에서 이어서], 건너뛰기(D117), 세션 상한(D18),
 // git 실패와 백업 브랜치 번호(D115). 미리 보기(D82)가 실제 결과와 같은지도 본다.
+import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { SelectStepInput, StepPreview, WorkView } from '../../src/shared/views'
@@ -29,6 +31,23 @@ afterEach(async () => {
 })
 
 const read = (file: string) => fs.readFileSync(file, 'utf8')
+
+/** 파일을 지울 수 없게 표시한다 (Linux의 chattr +i, root만). 없거나 안 되면 false */
+function immutable(file: string, on: boolean): boolean {
+  if (process.platform !== 'linux') return false
+  return spawnSync('chattr', [on ? '+i' : '-i', file]).status === 0
+}
+
+/** git clean만 실패시킬 수 있는가 (D136). Windows에서 잠긴 파일은 실기 확인에 맡긴다 */
+const canLock = (() => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'relay-chattr-'))
+  const file = path.join(dir, 'x')
+  fs.writeFileSync(file, '')
+  const ok = immutable(file, true)
+  if (ok) immutable(file, false)
+  fs.rmSync(dir, { recursive: true, force: true })
+  return ok
+})()
 
 interface Setup {
   h: Harness
@@ -635,6 +654,79 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
       10_000,
     )
   })
+
+  it.runIf(canLock)(
+    'reset 뒤 clean이 실패하면 끊긴 되감기로 남긴다. 승인과 전달을 막고, 원인을 치우면 [다시 시도]로 끝까지 되감는다 (D136)',
+    async () => {
+      const s = await setup({
+        tasks: {
+          ...scenario('S').tasks,
+          'final-verify': [...steps('verify', 'S'), { do: 'wait' }],
+        },
+      })
+      const key = await s.create()
+      const dir = s.dir(key)
+      const tree = s.tree(key)
+      const base = git(s.repo, 'rev-parse', 'main')
+      await drive(s.h.relay, s.h.ui, key, { size: 'S', pauseAt: (t) => t.node === 'verify' })
+      await settle(s.h, key)
+      const fixHead = git(tree, 'rev-parse', 'HEAD')
+      // 추적하지 않는 파일을 지울 수 없게 한다. reset은 되고 clean만 실패한다
+      const stuck = path.join(tree, 'stuck', 'x.txt')
+      fs.mkdirSync(path.dirname(stuck))
+      fs.writeFileSync(stuck, '남은 파일\n')
+      expect(immutable(stuck, true)).toBe(true)
+      try {
+        const p = await preview(s, key, 'fix')
+        const r = await confirm(s, key, p)
+        expect(r.ok).toBe(false)
+        expect(!r.ok && r.error).toMatch(/^되감기 실패: /)
+        await settle(s.h, key)
+        // 코드는 이미 되돌렸다. 기록은 끊긴 되감기로 남고 task는 아직 폐기하지 않았다
+        expect(git(tree, 'rev-parse', 'HEAD')).toBe(base)
+        const w = work(dir)
+        expect(w.operation).toMatchObject({ kind: 'rewind', stage: 'reset', reset_to: base })
+        expect(w.operation?.interrupted_at).toBeDefined()
+        expect(statuses(w).map(([id, , st]) => [id, st])).toEqual([
+          ['t-01', 'approved'],
+          ['t-02', 'approved'],
+          ['t-03', 'awaiting_approval'],
+        ])
+        const view = s.h.ui.works.get(key)
+        expect(view?.badge.kind).toBe('recovery')
+        expect(view?.operation?.title).toBe('되감기가 끊겼습니다')
+        // 되돌린 코드로 승인하거나 전달하지 않는다 (D122)
+        expect(await s.h.relay.approve(key, 't-03', {})).toEqual({
+          ok: false,
+          error: '끊긴 작업이 있음: 먼저 [다시 시도]나 [무시]를 누르세요',
+        })
+        expect(
+          s.h.ui.notices.some(
+            (n) => n.workKey === key && n.body.startsWith('끊긴 작업이 있습니다'),
+          ),
+        ).toBe(true)
+      } finally {
+        immutable(stuck, false)
+      }
+
+      expect(await s.h.relay.retryOperation(key)).toEqual({ ok: true })
+      await untilTask(s, key, (t) => t.id === 't-04' && t.live, '되감은 fix')
+      await settle(s.h, key)
+      const w = work(dir)
+      expect(w.operation).toBeUndefined()
+      expect(fs.existsSync(stuck)).toBe(false)
+      expect(git(tree, 'rev-parse', 'HEAD')).toBe(base)
+      // 되돌리기 전 코드는 첫 백업에 있다
+      const backup = taskOf(w, 't-04').selection?.reset?.backup_branch ?? ''
+      expect(git(s.repo, 'rev-parse', `${backup}~1`)).toBe(fixHead)
+      expect(statuses(w).map(([id, , st]) => [id, st])).toEqual([
+        ['t-01', 'approved'],
+        ['t-02', 'discarded'],
+        ['t-03', 'discarded'],
+        ['t-04', 'working'],
+      ])
+    },
+  )
 
   it('git이 실패하면 오류를 돌려주고 기록을 지운다. 다시 고르면 다음 번호의 백업 브랜치를 만든다 (D77, D115)', async () => {
     const s = await setup({

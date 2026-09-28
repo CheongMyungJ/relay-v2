@@ -25,7 +25,8 @@ const title = (node: NodeName) => `${NODE_INFO[node].title}(${node})`
 
 /**
  * 끊긴 작업: 앱을 다시 켜며 남아 있던 진행 중 작업 기록 (재시작 조정이 표시한다). 없으면 undefined.
- * 진행 중 작업 기록은 명령 하나 안에서 쓰고 지우므로 명령 사이에 남는 것은 앱이 도중에 꺼졌을 때뿐이다
+ * 진행 중 작업 기록은 명령 하나 안에서 쓰고 지우므로 명령 사이에 남는 것은 앱이 도중에 꺼졌을 때와,
+ * 되감기가 코드를 바꾼 뒤 실패했을 때(D136)다
  */
 export function cutOperation(work: WorkState): WorkOperation | undefined {
   return work.operation?.interrupted_at === undefined ? undefined : work.operation

@@ -187,6 +187,24 @@ describe('OS 알림 문구 (D81)', () => {
     )
   })
 
+  it('되감기가 코드를 바꾼 뒤 실패해 끊긴 작업이 되면 알린다 (D136)', () => {
+    const op = {
+      kind: 'rewind' as const,
+      stage: 'reset' as const,
+      started_at: 'x',
+      node: 'intake' as const,
+      from_task: 't-01',
+      instruction: null,
+      discard: ['t-01'],
+      reset_to: 'c',
+      backup_branch: null,
+      backup_commit: null,
+    }
+    const running = { ...at('awaiting_approval'), operation: op }
+    const cut = { ...running, operation: { ...op, interrupted_at: 'y' } }
+    expect(humanNotice(running, cut)).toBe('끊긴 작업이 있습니다: [다시 시도]나 [무시]를 누르세요')
+  })
+
   it('같은 상태가 이어지거나 사람이 필요 없는 상태로 바뀌면 알리지 않는다', () => {
     expect(humanNotice(at('asking'), at('input_needed'))).toBeNull()
     expect(humanNotice(at('awaiting_approval'), at('working'))).toBeNull()

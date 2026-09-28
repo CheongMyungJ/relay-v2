@@ -922,6 +922,7 @@ core는 `core/settings.ts`를 빼면 줄 95% 이상, 가지 84% 이상이다(`ma
 | A1 | 고침 | Electron 인스턴스 잠금(`main/instance.ts`, `main/index.ts`). 두 번째로 켠 앱은 relay를 열지 않고 끝나고, 떠 있는 창이 앞으로 온다. 시험 `test/unit/instance.test.ts`. 개발용 실행과 설치한 앱을 함께 켜는 경우는 막지 않는다(I34) | D133, I34 | 8232958 |
 | A2 | 고침 | 할 일이 실패하면 뒤의 세션 시작을 하지 않고 task를 중단됨으로 둔다. `work.json`을 쓰지 못하면 메모리도 바꾸지 않는다(`main/work.ts` apply). 시험 `test/flow/flow.test.ts`의 "할 일이 실패할 때" 둘. 문제 목록을 지우지 않는 것은 그대로 둔다(I35). A51·A52는 차례가 오면 D135에 비춰 본다 | D135, I35 | 965e641 |
 | A3 | 고침 | intake에서 handoff의 status를 읽지 못하면 초안 없음도 오류로 넣어 [오류 무시하고 승인]을 막는다(`core/validate.ts`). 시험 `test/unit/approval.test.ts` | D134 | 965e641 |
+| A4 | 고침 | 코드를 되돌리다 실패했는데 코드가 이미 바뀌었으면 끊긴 되감기로 남기고 알린다(`main/work.ts` resetCode, `core/machine.ts` rewind.failed의 cut). 시험 `test/unit/machine.test.ts`, `test/unit/review.test.ts`, `test/flow/rewind.test.ts`(Linux의 `chattr`, root만). Windows의 잠긴 파일은 3단계에 남긴다(1.3) | D136, I36 | (이 커밋) |
 
 ## 부록. 1단계 대조표
 
