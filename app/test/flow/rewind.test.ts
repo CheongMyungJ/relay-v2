@@ -528,7 +528,8 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
     expect(git(s.repo, 'rev-parse', `${backup}^`)).toBe(base)
     expect(git(s.repo, 'show', `${backup}:notes.txt`)).toBe('사람의 메모')
     expect(fs.existsSync(path.join(tree, 'notes.txt'))).toBe(false)
-    expect(git(tree, 'rev-parse', 'HEAD')).toBe(base)
+    // 되감은 fix는 곧 커밋하므로 HEAD 대신 시작 커밋으로 본다
+    expect(taskOf(work(dir), 't-03').start_commit).toBe(base)
     expect(taskOf(work(dir), 't-03').selection?.reset).toEqual({
       from: base,
       to: base,
@@ -753,7 +754,8 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
       const w = work(dir)
       expect(w.operation).toBeUndefined()
       expect(fs.existsSync(stuck)).toBe(false)
-      expect(git(tree, 'rev-parse', 'HEAD')).toBe(base)
+      // 되감은 fix는 곧 커밋하므로 HEAD 대신 시작 커밋으로 본다
+      expect(taskOf(w, 't-04').start_commit).toBe(base)
       // 되돌리기 전 코드는 첫 백업에 있다
       const backup = taskOf(w, 't-04').selection?.reset?.backup_branch ?? ''
       expect(git(s.repo, 'rev-parse', `${backup}~1`)).toBe(fixHead)
