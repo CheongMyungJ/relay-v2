@@ -931,7 +931,7 @@ core는 `core/settings.ts`를 빼면 줄 95% 이상, 가지 84% 이상이다(`ma
 | A10 | 문서만 | 한계를 설계(D141, 시나리오 0의 점검)와 `implementation.md` 6절에 적고 네이티브 설치를 권했다. 코드는 그대로다. 실제로 깨지는지는 3단계에 남긴다(1.3) | D141 | 2536d12 |
 | A11 | 나중에 | 바꾸지 않았다. 설계 9절 추가 후보에 적었다 | — | 5a0d831 |
 | A12 | 고침 | 알림을 누르거나 실패할 때까지 붙잡아 두고(최근 50개), Windows 설치본은 appId를 앱 ID로 쓴다(`main/notices.ts`, `main/index.ts`). 시험 `test/unit/notices.test.ts`(붙잡기와 appId 일치만). 실제 토스트와 클릭은 3단계에서 본다(1.3) | D142, I37 | 488b1d8 |
-| A13 | 고침 | 고른 적 있는 Work의 터미널만 만든다(`renderer/src/opened.ts`, `App.tsx`). 한 번 만든 터미널은 치우지 않는다. 시험 `test/unit/opened.test.ts`(판정만). 화면은 [스모크]에서만 지나고 여기서는 돌리지 못했다(빌드만 확인) | D143 | (이 커밋) |
+| A13 | 고침 | 고른 적 있는 Work의 터미널만 만든다(`renderer/src/opened.ts`, `App.tsx`). 한 번 만든 터미널은 치우지 않는다. 시험 `test/unit/opened.test.ts`(판정만). 화면은 [스모크]에서만 지나고 여기서는 돌리지 못했다(빌드만 확인) | D143 | 5bae560 |
 
 ## 부록. 1단계 대조표
 
