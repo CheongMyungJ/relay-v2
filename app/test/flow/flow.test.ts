@@ -391,6 +391,10 @@ describe('[흐름] 최소 흐름 (M2)', () => {
     expect(reviewCtx).toContain(
       `- t-02 investigate: ${path.join(task('02-investigate'), 'rca.md')}`,
     )
+    // 재현 절차가 적힌 evidence.md도 받는다. 리뷰는 재현 절차가 쓰는 코드를 지킨다 (D195)
+    expect(reviewCtx).toContain(
+      `- t-02 investigate: ${path.join(task('02-investigate'), 'evidence.md')}`,
+    )
     // verify의 입력에 review.md(경로)가 들어간다 (5.6.8)
     const verifyCtx = read(path.join(task('05-verify'), 'context.md'))
     expect(verifyCtx).toContain(`- t-04 review: ${path.join(task('04-review'), 'review.md')}`)

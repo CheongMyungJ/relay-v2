@@ -11,6 +11,7 @@ Review the whole change of this Work and write numbered findings in `review.md` 
 
 - The argument gives the path of `context.md`. Read it first. It has the intent and the Work's base commit.
 - `fix.md`, and `rca.md` if `context.md` lists it, at the paths in `context.md`. Skip `rca.md` only when `context.md` lists none (usually the S path). If it is listed, read it whatever the size: an S Work that went back to investigate has one.
+- `evidence.md` if `context.md` lists it: the reproduction steps. On the S path they are in the `원인과 재현` section of `fix.md`. Code that the reproduction steps use is not unused code.
 - Review the change from the base commit (from `context.md`) to now: `git diff <base commit>`.
 
 ## What to look at
@@ -27,7 +28,7 @@ Do not judge the 완료조건. That is the job of verify.
 ## Order
 
 1. Review, and write each finding under `## 지적` as a numbered item: severity (차단 / 권장 / 사소), file and line, what is wrong and what you suggest. If there is nothing, write "없음". Until the human picks, `## 반영` is "없음" and `## 반영하지 않은 지적` lists every finding number. Close with the closing procedure (`awaiting_approval`).
-2. When the human names findings by number in the terminal, fix only those and commit. Run the intent's test command, and for each failure check whether it also fails at the base commit. Fill in `## 반영` (what you did, the commit, the test command and result) and `## 반영하지 않은 지적`, then run the closing procedure again.
+2. When the human names findings by number in the terminal, fix only those and commit. Do not change code that the reproduction steps use. If a picked finding needs it, write in `반영` how the reproduction steps change. Run the intent's test command, and for each failure check whether it also fails at the base commit. Fill in `## 반영` (what you did, the commit, the test command and result) and `## 반영하지 않은 지적`, then run the closing procedure again.
 3. Never fix a finding the human did not pick, even a small one. If the human approves without picking, no finding is applied.
 
 ## Rules
@@ -57,7 +58,7 @@ This is the exception to asking on the spot. Do not ask with `AskUserQuestion`: 
 (지적이 없으면 "없음")
 
 ## 반영
-- 지적 번호 — 한 일, 커밋, 테스트 명령과 결과
+- 지적 번호 — 한 일, 커밋, 테스트 명령과 결과 (재현 절차를 바꿨으면 달라진 절차)
 (사람이 고른 것이 없으면 "없음")
 
 ## 반영하지 않은 지적

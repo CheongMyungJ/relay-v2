@@ -293,10 +293,12 @@ const spec = {
   review: [
     ['A33', '입력: context.md, fix.md. rca.md는 context.md에 없을 때만 건너뛰고, 있으면 크기와 관계없이 읽음', /`context\.md`[\s\S]*`fix\.md`, and `rca\.md` if `context\.md` lists it[\s\S]*only when `context\.md` lists none[\s\S]*whatever the size/],
     ['D97', '리뷰 대상: 기준 커밋(context.md)부터 지금까지의 변경', /base commit \(from `context\.md`\) to now/],
+    ['D195', '입력: context.md에 있으면 evidence.md(재현 절차). S 경로는 fix.md의 원인과 재현', /`evidence\.md` if `context\.md` lists it[\s\S]*reproduction steps[\s\S]*`원인과 재현`/],
     ['5.6.10', '보는 것: 목표·비목표, 수정 방향, 빠진 경우와 경계 조건, 테스트, 관례와 읽기 쉬움, 필요 없는 변경', /`목표` and `비목표`[\s\S]*fix direction[\s\S]*edge conditions[\s\S]*tests[\s\S]*conventions and readability[\s\S]*not needed/],
     ['5.6.10', '완료조건 판정은 verify의 일', /Do not judge the 완료조건[\s\S]*job of verify/],
     ['D164', '순서 1: 번호 붙인 지적(심각도, 파일과 줄, 문제와 제안), 없으면 없음, 종료 절차로 마무리', /numbered item[\s\S]*차단 \/ 권장 \/ 사소[\s\S]*file and line[\s\S]*"없음"[\s\S]*closing procedure/],
     ['D164', '순서 2: 번호로 지시한 지적만 고쳐 커밋, 테스트 명령, 반영 절, 종료 절차 다시', /by number[\s\S]*fix only those and commit[\s\S]*test command[\s\S]*`## 반영`[\s\S]*closing procedure again/],
+    ['D195', '재현 절차가 쓰는 코드는 바꾸지 않음. 바꿔야 하면 달라진 재현 절차를 반영 절에', /Do not change code that the reproduction steps use[\s\S]*`반영`[\s\S]*reproduction steps change/],
     ['D164', '순서 3: 지시하지 않은 지적은 고치지 않음, 지시 없이 승인하면 반영 없음', /Never fix a finding the human did not pick[\s\S]*approves without picking/],
     ['5.6.10', '코드: 사람이 고른 지적만, 바꿨으면 커밋', /Change code only for the findings the human picked[\s\S]*Commit/],
     ['D165', '반영 뒤 리뷰를 다시 돌리지 않음', /Do not review again/],
@@ -309,6 +311,7 @@ const spec = {
   'final-verify': [
     ['5.6.8', '입력: evidence.md, fix.md, rca.md, review.md', /`evidence\.md` and `fix\.md`, and `rca\.md` and `review\.md`/],
     ['D164', '리뷰에서 고친 것은 review.md의 반영 절', /`review\.md`[\s\S]*`반영` section/],
+    ['D195', '리뷰가 재현 절차를 바꿨으면 반영 절의 달라진 절차로 재현', /`반영` section[\s\S]*reproduction steps changed[\s\S]*changed steps/],
     ['D65', 'S: 원인과 재현의 재현 절차, 없으면 판정 불가', /S path[\s\S]*`원인과 재현`[\s\S]*판정 불가/],
     ['A33', 'S 경로는 evidence.md가 없을 때만', /`size: S` and `context\.md` lists no `evidence\.md`/],
     ['5.6.8', '코드를 바꾸지 않음', /does not change code/],
