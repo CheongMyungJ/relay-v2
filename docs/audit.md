@@ -937,7 +937,7 @@ core는 `core/settings.ts`를 빼면 줄 95% 이상, 가지 84% 이상이다(`ma
 | A16 | 문서만 | `checks.md`의 M2~M7 표에 [실기] "아직 안 함(3단계로 미룸)" 줄을 더했다. 실제 확인은 3단계에서 한다(1.3) | — | 6b39e4d |
 | A17 | 문서만 | `implementation.md` 8.4에 실행 방법(`RELAY_REAL_CLAUDE=1`, `dry`, 모델과 effort 변수)을 적었다. 변수 없이 돌리면 8개가 모두 건너뛰고 통과하는 것을 다시 확인했다 | — | d1a3967 |
 | A18 | 문서만 | 8.1 표와 8.3 `app-claude` 줄, 8.4에 지금은 Linux 클라우드 세션에서 돌린다는 것과 Linux 준비 절차를 적었다. `vitest.config.ts`와 `real.test.ts`의 주석을 고쳤다. 스파이크 뒤 secret이 없어진 까닭은 기록에 없다고 적었다 | — | d1a3967 |
-| A19 | 문서만 | 설계 시나리오 3-4와 6절 표의 재개 인자를 코드(`core/settings.ts` resumeArgs, 스파이크 S6)에 맞췄다: 같은 설정 + `--resume`, `--session-id`와 첫 프롬프트는 뺀다 | — | (이 커밋) |
+| A19 | 문서만 | 설계 시나리오 3-4와 6절 표의 재개 인자를 코드(`core/settings.ts` resumeArgs, 스파이크 S6)에 맞췄다: 같은 설정 + `--resume`, `--session-id`와 첫 프롬프트는 뺀다 | — | f7863d7 |
 
 ## 부록. 1단계 대조표
 
