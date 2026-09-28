@@ -6,6 +6,7 @@ import { relayHome } from '../adapters/store'
 import { IPC } from '../shared/api'
 import { holdSingleInstance } from './instance'
 import { registerIpc } from './ipc'
+import { APP_USER_MODEL_ID, keepNotice } from './notices'
 import type { Notice, UiPort } from './ports'
 import { Relay } from './relay'
 
@@ -38,10 +39,13 @@ function showWindow(): boolean {
   return true
 }
 
+/** 누르기 전까지 붙잡아 둔 알림 (D142) */
+const notices = new Set<Notification>()
+
 /** OS 알림 (D81). 보고 있지 않을 때만 보내고, 누르면 창을 띄워 그 Work를 고른다 */
 function notify(n: Notice): void {
   if (!Notification.isSupported() || looking(n.workKey)) return
-  const notice = new Notification({ title: n.title, body: n.body })
+  const notice = keepNotice(notices, new Notification({ title: n.title, body: n.body }))
   notice.on('click', () => {
     if (showWindow()) send(IPC.focusWork, n.workKey)
   })
@@ -61,6 +65,9 @@ function bundledSkills(): string {
     ? join(process.resourcesPath, 'skills')
     : join(app.getAppPath(), '..', 'skills')
 }
+
+// Windows의 토스트와 클릭이 이 앱으로 오게 설치 파일과 같은 앱 ID를 쓴다 (D142). 개발 중에는 바꾸지 않는다
+if (process.platform === 'win32' && app.isPackaged) app.setAppUserModelId(APP_USER_MODEL_ID)
 
 // 앱은 하나만 켠다 (D133). 두 번째로 켠 앱은 relay를 열지 않고 끝나고, 첫 앱이 창을 앞으로 가져온다
 const primary = holdSingleInstance(app, () => void showWindow())
