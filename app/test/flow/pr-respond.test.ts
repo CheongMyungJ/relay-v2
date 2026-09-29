@@ -199,7 +199,8 @@ describe('[흐름] PR 대응 (M10, 가짜 gh)', () => {
         const state = workState(w)
         const task = state.tasks.find((x) => x.id === t.id)
         if (!task?.respond) throw new Error('대응 task 없음')
-        const { failure: _f, ...respond } = task.respond
+        const respond = { ...task.respond }
+        delete respond.failure
         cut = {
           ...state,
           tasks: state.tasks.map((x) => (x.id === t.id ? { ...x, respond } : x)),

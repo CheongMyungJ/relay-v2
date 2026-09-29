@@ -11,12 +11,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { APP, FAKE_CLAUDE, harness, register } from '../flow/harness'
-import {
-  describePr,
-  runPrScenario,
-  runRespondScenario,
-  type PrContext,
-} from '../flow/pr-scenario'
+import { describePr, runPrScenario, runRespondScenario, type PrContext } from '../flow/pr-scenario'
 import {
   GIT_ENV,
   cleanup,
