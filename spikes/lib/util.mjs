@@ -4,12 +4,27 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { redact } from './session.mjs';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const WORK = path.join(ROOT, 'work');
 export const RESULTS = path.join(ROOT, 'results');
 export const MODEL = process.env.SPIKE_MODEL || 'sonnet';
+
+// 로그와 결과에 비밀 값이 남지 않게 가린다: Anthropic API 키(S1~S6), GitHub 토큰(S7).
+export function redact(text) {
+  let s = String(text).replace(/sk-ant-[^\s│]*/g, 'sk-ant-[가림]');
+  s = s.replace(/github_pat_[A-Za-z0-9_]+|gh[opsu]_[A-Za-z0-9]{20,}/g, '[GitHub 토큰 가림]');
+  for (const v of [process.env.GH_TOKEN, process.env.GITHUB_TOKEN]) if (v && v.length >= 8) s = s.split(v).join('[GitHub 토큰 가림]');
+  return s;
+}
+
+// 객체의 문자열 값마다 가린다. JSON 문자열을 통째로 가리면 sk-ant- 규칙이 따옴표와 구분자까지 먹어 다시 읽지 못한다.
+export function redactDeep(v) {
+  if (typeof v === 'string') return redact(v);
+  if (Array.isArray(v)) return v.map(redactDeep);
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, redactDeep(x)]));
+  return v;
+}
 
 export function sh(cmd, args, opts = {}) {
   return execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts }).trim();
@@ -187,7 +202,7 @@ export class Result {
     this.checks.push({ name, status: 'observe', detail: redact(typeof value === 'string' ? value : JSON.stringify(value)).slice(-4000) });
   }
   error(e) {
-    this.checks.push({ name: 'harness_error', status: 'error', detail: String(e?.stack || e).slice(0, 4000) });
+    this.checks.push({ name: 'harness_error', status: 'error', detail: redact(String(e?.stack || e)).slice(0, 4000) });
   }
   save() {
     this.finishedAt = new Date().toISOString();

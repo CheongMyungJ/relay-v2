@@ -16,8 +16,8 @@
   | 날짜 | Claude Code 버전 | OS | 결과(통과/실패) | 메모 |
   |---|---|---|---|---|
 
-- **자동 실행:** GitHub Actions의 `spikes` 워크플로(`.github/workflows/spikes.yml`)가 Windows 러너에서 S1(한글 IME 제외)~S5를 돌린다. 수동으로만 실행한다. 결과는 실행 요약과 `spike-results` 결과물에 올라가고, 사람이 읽고 아래 결과 표에 옮긴다. 러너는 Windows Server라 **예비 확인**으로 기록하고, 결과 표의 OS 칸에 러너 이미지를 적는다(D93).
-- **인증:** 레포 secret `CLAUDE_CODE_OAUTH_TOKEN`(Claude 구독, `claude setup-token`으로 발급) 또는 `ANTHROPIC_API_KEY`(Claude Console 사용량 과금). 둘 다 있으면 구독 토큰을 쓴다.
+- **자동 실행:** GitHub Actions의 `spikes` 워크플로(`.github/workflows/spikes.yml`)가 Windows 러너에서 S1(한글 IME 제외)~S5를 돌린다. 수동으로만 실행한다. 결과는 실행 요약과 `spike-results` 결과물에 올라가고, 사람이 읽고 아래 결과 표에 옮긴다. 러너는 Windows Server라 **예비 확인**으로 기록하고, 결과 표의 OS 칸에 러너 이미지를 적는다(D93). S7은 같은 워크플로의 Linux 작업에서 돈다(`spikes` 입력에 S7만 적음, `docs/implementation.md` I47).
+- **인증:** 레포 secret `CLAUDE_CODE_OAUTH_TOKEN`(Claude 구독, `claude setup-token`으로 발급) 또는 `ANTHROPIC_API_KEY`(Claude Console 사용량 과금). 둘 다 있으면 구독 토큰을 쓴다. S7은 Claude 인증 대신 시험용 레포 secret `RELAY_TEST_GH_REPO`, `RELAY_TEST_GH_TOKEN`을 쓴다(I43).
 - **실패했을 때:** "실패하면 바꿀 설계"의 절을 사용자와 다시 정한다. 스파이크 문서에서 설계를 바꾸지 않는다.
 
 ---
@@ -345,7 +345,87 @@
 - 체크 재실행이 안 되면: D175를 사용자와 다시 정한다.
 - 표시가 본문에 남지 않거나 그것으로 답글을 찾을 수 없으면: 게시 결과를 모르는 요청의 확인 방법(D194)을 사용자와 다시 정한다.
 
+**코드:** `spikes/s7-github.mjs`(`docs/implementation.md` I47). `spikes` 워크플로의 Linux 작업에서 start → 사람의 코멘트 → finish 차례로 돌고, 남은 것은 cleanup이 치운다. 시험 PR은 시험용 레포의 main에서 만든 임시 기준 브랜치(`s7/<run>/base`)에 열어 main을 건드리지 않는다. 돌리는 방법과 사람이 할 일은 `spikes/README.md`에 있다.
+
 **결과**
 
 | 날짜 | gh 버전 | 환경 | 결과 | 메모 |
 |---|---|---|---|---|
+| 2026-09-29 | 2.101.0 | GitHub Actions ubuntu-latest (ubuntu24 20260920.314.1), git 2.55.0 | 통과(작성자 관계 일부는 확인 못 함) | 실행 #8·#9·#12·#14·#16(start), #11·#13·#15·#18(finish), #10(cleanup). 다른 계정이 없어 협업자와 협업자가 아닌 계정의 코멘트(절차 3의 사람 단계)는 하지 않았다. 새 head의 체크가 비어 있는 틈을 보고 D196을 정했다 |
+
+**성공 기준 판정**
+
+| 성공 기준 | 판정 | 근거 |
+|---|---|---|
+| 2~9를 gh(필요하면 `gh api`)로 할 수 있다 | 통과 | 절차마다 쓴 명령은 아래 관찰에 있다. PR 상태, 체크, 재실행, 머지는 gh 명령으로, 코멘트 목록과 답글은 `gh api`(REST)로 했다 |
+| 작성자 관계로 소유자·조직 구성원·협업자와 나머지를, 봇과 사람을 가를 수 있다(D160, D161) | 일부 확인 | 소유자의 코멘트는 OWNER, 봇(github-actions)의 코멘트는 REST `user.type` Bot과 관계 NONE이었다. 협업자와 협업자가 아닌 계정은 사람 단계를 하지 않아 확인 못 함. 조직 구성원(MEMBER)은 시험용 레포가 개인 레포라 확인할 수 없다. 값의 뜻은 아래 관찰 3의 GitHub 스키마 설명을 따른다 |
+| head 커밋을 고정한 머지가 된다(D176) | 통과 | `gh pr merge <n> --repo <레포> --squash --match-head-commit <sha>`. 옛 head를 주면 머지되지 않고 PR이 열린 채 남았고, 지금 head를 주면 머지됐다 |
+| 보이지 않는 표시로 앱이 게시한 답글을 찾을 수 있다(D194) | 통과 | 표시는 API가 주는 본문에 그대로 있고 웹이 그리는 본문(`body_html`)에는 없었다. 코멘트 목록의 본문에서 표시로 답글을 찾았다 |
+| 2분 읽기가 한도 안이다(D158) | 통과 | 한 번 읽기가 GraphQL 1점과 REST 3번이다. 2분마다 읽으면 시간당 30점과 90번으로, 한도(각 5,000)의 2%다 |
+
+**관찰 (2026-09-29, 러너)**
+
+1. **PR 만들기:** `gh pr create --repo <레포> --base <기준> --head <브랜치> --title … --body-file …`는 TTY가 아니어도 PR 주소를 표준 출력에 찍었다.
+2. **상태 읽기**
+   - `gh pr view <n> --repo <레포> --json state,headRefOid,baseRefOid,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,…` 한 번(GraphQL 요청 1번)으로 열림·머지·닫힘(`state`의 OPEN, MERGED, CLOSED), head, 머지 가능 여부, 리뷰 상태, 체크를 읽는다. 리뷰 규칙이 없는 레포라 `reviewDecision`은 빈 문자열이었다.
+   - PR을 만든 직후에는 `mergeable`과 `mergeStateStatus`가 UNKNOWN이었다. 새 head의 체크는 PR을 만든 뒤 4.2초(실행 #16), push한 뒤 4.8~6.7초(실행 #8, #9, #12, #14, #16)에 나타났다. 그전에는 체크 목록이 비어 있는데도 MERGEABLE, CLEAN이 나올 때가 있었다. 실행 #16에서는 만든 뒤 0.5초에 UNKNOWN, 2.6초에 MERGEABLE/CLEAN과 체크 0개, 4.2초에 체크 1개였고, push한 뒤 3.7초에 MERGEABLE/CLEAN과 체크 0개, 5.4초에 체크 1개였다. 실행 #9와 #12에서도 만든 뒤와 push한 뒤 모두 이 틈을 봤다. 경과는 `gh pr create`나 push가 끝난 때부터 그 읽기가 끝난 때까지다. 실행 #8~#14는 PR을 만든 뒤의 경과를 첫 읽기(gh 세 번)를 마친 때부터 재어 0.7~3.5초로 적혔고, 실제로는 그 세 번에 걸린 시간(실행 #16에서 약 2초)만큼 더 길다. D196의 근거다.
+   - 체크가 없을 때 `gh pr checks`는 `--json`을 줘도 종료 코드 1과 "no checks reported on the '<브랜치>' branch"를 냈다. 체크가 있으면 `--json`은 실패와 대기에 상관없이 종료 코드 0이다. 종료 코드 1(실패)과 8(대기)은 표 출력에만 쓴다(cli/cli v2.101.0 `pkg/cmd/pr/checks/checks.go`).
+   - 체크의 링크(`gh pr checks`의 `link`, statusCheckRollup의 `detailsUrl`)는 `…/actions/runs/<실행 id>/job/<작업 id>`라 실행과 작업을 안다. Actions 체크는 statusCheckRollup의 CheckRun에 `workflowName`이 있다.
+   - **실패한 스텝의 로그:** `gh run view <실행 id> --log-failed`(`--job <작업 id>`도 같음)는 실패한 스텝(`스위치 확인`)의 줄만 `<작업>\t<스텝>\t<시각> <줄>` 모양으로 줬다. 끝은 `##[error]…` 두 줄이었고 정리 단계는 없었다. 스크립트 줄에는 색 제어 문자가 `^[[36;1m`처럼 남는다. 실행의 로그 zip에 스텝별 파일이 없으면 gh는 작업 로그 전체를 스텝 이름 "UNKNOWN STEP"으로 준다(cli/cli `pkg/cmd/run/view/logs.go`). 이번에는 스텝별 파일이 있었다.
+   - REST 작업 로그(`actions/jobs/{id}/logs`)에는 정리 단계까지 들어 있다. 색 제어 문자가 있어 `gh api`는 `--allow-escape-sequences`를 줘야 출력했다. "Post job cleanup." 앞에서 자르면 끝이 실패한 스텝의 오류였다.
+   - 체크의 annotation(`check-runs/{작업 id}/annotations`)에는 `::error::`의 문구와 "Process completed with exit code 1."이 failure로 왔다.
+3. **코멘트 읽기**
+   - REST 목록 셋: 리뷰 `pulls/{n}/reviews`, 인라인 코멘트 `pulls/{n}/comments`, 대화 코멘트 `issues/{n}/comments`. 항목마다 `author_association`, `user.login`, `user.type`(User, Bot)이 있다. 스레드의 답글은 `in_reply_to_id`로 스레드의 첫 코멘트를 가리킨다.
+   - 소유자(토큰의 계정)가 단 리뷰, 인라인 코멘트, 답글, 대화 코멘트는 모두 OWNER였다. github-actions(시험용 레포의 봇 코멘트 워크플로)는 REST에서 login `github-actions[bot]`, `user.type` Bot, 관계 NONE이었다. GraphQL(`gh pr view --json comments,reviews`)은 봇의 login을 `github-actions`로 주고 봇인지 알려 주지 않는다(gh는 PR 작성자에만 `is_bot`을 붙인다. cli/cli `api/queries_issue.go`). 인라인 코멘트도 주지 않는다.
+   - 인라인 스레드에 답글을 달면 본문이 빈 리뷰(state COMMENTED)가 하나 더 생기고, 답글의 `pull_request_review_id`가 그 리뷰를 가리킨다. 앱이 게시한 답글도 같았다.
+   - 코멘트를 고쳐도 id는 그대로고 `updated_at`만 바뀌었다. `issues/{n}/comments?since=<때>`는 그 뒤에 고친 코멘트를 돌려줬다.
+   - 협업자와 협업자가 아닌 계정은 사람 단계를 하지 않아 확인 못 함. 앱의 거르기를 흉내 내면(finish) 소유자의 것은 받음, 봇의 것은 받지 않음(받을 봇 목록이 빔)이었다.
+   - 작성자 관계의 값과 뜻(GitHub GraphQL 스키마의 CommentAuthorAssociation. shurcooL/githubv4 `enum.go`가 스키마에서 옮긴 설명): OWNER "Author is the owner of the repository.", MEMBER "Author is a member of the organization that owns the repository.", COLLABORATOR "Author has been invited to collaborate on the repository.", CONTRIBUTOR, FIRST_TIME_CONTRIBUTOR, FIRST_TIMER, MANNEQUIN, NONE.
+4. **답글과 보이지 않는 표시**
+   - 인라인 스레드의 답글(`POST pulls/{n}/comments/{id}/replies`)과 대화 코멘트(`POST issues/{n}/comments`)는 응답에 코멘트 id를 준다. 게시하자마자 `pr-items.json`에 적을 수 있다(D194). `gh pr comment`는 코멘트 주소(`…#issuecomment-<id>`)를 찍는다.
+   - 본문 끝의 `<!-- relay:<work-id>/<항목 id>/<라운드> -->`는 REST와 GraphQL의 본문에 그대로 남았고, 웹이 그리는 본문(`Accept: application/vnd.github.full+json`의 `body_html`, `body_text`)에는 없었다. 목록의 본문에서 표시로 게시한 답글을 찾았다. 웹 화면을 눈으로 보는 확인은 사람 단계와 함께 하지 않았다.
+   - 답글을 게시한 뒤의 읽기에서 새로 생긴 것은 앱의 답글 둘과 본문이 빈 리뷰 하나였다. 적어 둔 id·표시와 "본문이 빈 리뷰는 항목이 아님"으로 모두 가렸다.
+5. **실패한 체크 다시 실행:** `gh run rerun <실행 id> --repo <레포> --failed`(REST `rerun-failed-jobs`)로 실패한 작업만 다시 돌았고, 두 번째 시도가 통과했다(시험용 레포의 `ci-flaky` 스위치). 다시 돈 뒤 statusCheckRollup과 `gh pr checks`에는 새 시도의 체크 하나만 있었다.
+6. **머지**
+   - 허용하는 머지 방식은 `gh repo view <레포> --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed`로 읽는다(REST는 `allow_merge_commit` 등). `viewerDefaultMergeMethod`도 있다. MERGE였다가 실행 #11에서 squash로 머지한 뒤 SQUASH로 바뀌었다.
+   - `gh pr merge <n> --repo <레포> --squash --match-head-commit <옛 head>`는 종료 코드 1과 "GraphQL: Head branch was modified. Review and try the merge again. (mergePullRequest)"로 실패했고 PR은 열린 채였다. REST `PUT pulls/{n}/merge`에 옛 `sha`를 주면 409와 같은 문구였다. 지금 head를 주면 머지됐다. gh는 이 값을 GraphQL `mergePullRequest`의 `expectedHeadOid`로 보낸다(cli/cli `pkg/cmd/pr/merge/http.go`).
+   - TTY가 아니면 `gh pr merge`는 성공해도 아무것도 찍지 않았다(종료 코드 0). 성공 문구는 TTY일 때만 찍는다(cli/cli `pkg/cmd/pr/merge/merge.go`의 `infof`).
+   - `--repo`를 준 머지는 worktree와 로컬 브랜치를 건드리지 않았다. 레포 설정 `delete_branch_on_merge`가 꺼져 있어 머지 뒤 원격 head 브랜치가 남았고, `git push origin --delete <브랜치>`로 지웠다.
+   - `--delete-branch`를 주면: `--repo`와 함께면 원격 브랜치만 지웠다(로컬 그대로). `--repo` 없이 메인 체크아웃에서 부르면, head 브랜치가 체크아웃된 다른 worktree를 `git worktree remove`로 지우고 로컬 브랜치도 지웠다(출력 없음, 종료 코드 0). 소스를 보면, 부른 곳이 그 브랜치의 worktree(메인이 아님)면 로컬 삭제를 건너뛰고, 메인 worktree에서 불렀는데 메인이 그 브랜치면 기준 브랜치로 바꾼 뒤 지운다(cli/cli `merge.go`의 `deleteLocalBranch`).
+   - 머지된 PR은 `state` MERGED와 `mergedAt`, `mergeCommit`으로, 닫은 PR은 CLOSED로, 다시 연 PR은 OPEN으로 읽혔다(D179).
+7. **충돌:** 기준 브랜치에 PR과 같은 자리를 바꾼 커밋을 넣자 `mergeable` CONFLICTING, `mergeStateStatus` DIRTY(REST `mergeable` false, `mergeable_state` dirty)가 됐다. 이때 PR의 기준 커밋(REST `base.sha`, GraphQL `baseRefOid`)은 기준 브랜치의 새 커밋이 아니라 PR을 만들 때의 커밋이었고, PR 브랜치에 push한 뒤에야 바뀌었다. 기준 브랜치를 병합해 푼 커밋은 일반 push로 올라갔고 MERGEABLE로 돌아왔다.
+8. **원격 PR 브랜치 맞추기**
+   - GitHub에서 한 커밋(contents API. 웹 편집처럼 GitHub가 만드는 커밋)을 fetch한 뒤 `git merge-base --is-ancestor HEAD origin/<브랜치>`(종료 코드 0)로 원격만 앞선 것을 알고 `git merge --ff-only`로 받았다.
+   - GitHub의 [Update branch](`PUT pulls/{n}/update-branch`)는 202 "Updating pull request branch."를 돌려주고 몇 초 뒤 head가 바뀌었다. 받은 커밋 가운데 두 번째 부모가 기준 브랜치 커밋인 병합 커밋으로 기준 브랜치 병합을 가렸다(`git rev-list --parents`).
+   - 로컬에도 커밋이 있으면 일반 push가 거절됐다. fetch 전에는 `[rejected] (fetch first)`, fetch 뒤에는 `[rejected] (non-fast-forward)`였고 둘 다 종료 코드 1이다. `--porcelain`을 주면 `!<탭><ref>:<ref><탭>[rejected] (…)` 줄로 나온다. fetch 뒤 두 방향 조상 검사가 모두 1이면 갈라진 것이다. 원격을 병합한 뒤 일반 push가 됐다.
+   - 리뷰 제안 커밋 적용은 하지 않았다.
+9. **API 한도:** 앱이 2분마다 할 한 번 읽기는 `gh pr view --json …` 하나(GraphQL 1점)와 REST 목록 셋(리뷰, 인라인 코멘트, 대화 코멘트. 100개까지는 한 쪽)이다. 응답 머리글(`X-Ratelimit-Used`)로 보면 한 번 읽기마다 graphql이 1, core가 3 늘었다. 이 토큰(fine-grained)의 한도는 core와 graphql 모두 시간당 5,000이다. PR 하나를 2분마다 읽으면 시간당 graphql 30, core 90으로 한도의 2%다. 새 CI 실패를 볼 때만 드는 `gh run view --log-failed`는 REST 4번과 로그 zip 내려받기 1번이었다. `rate_limit`의 `used`는 첫 실행에서 읽기 전후가 같게 나와(0) 머리글로 쟀다.
+
+**설계의 가정과 비교**
+
+| 결정 | 가정 | 결과 |
+|---|---|---|
+| D157 | 항목은 CI 실패, 리뷰 본문과 인라인 코멘트(기존 스레드는 새 답글), 대화 코멘트, 충돌, 원격과 갈라짐 | 모두 gh로 읽힌다. 인라인 답글이 만드는 본문이 빈 리뷰는 리뷰 본문이 없으므로 항목이 아니다. 새 답글은 `in_reply_to_id`로 스레드를 안다 |
+| D158 | 2분 주기가 한도 안 | 맞다(시간당 2%) |
+| D159 | 재시작 때 한 번 읽기 | 읽기는 목록 전체를 읽어 앞 읽기가 없어도 같다. 앱의 동작이라 시험하지 않았다 |
+| D160 | 작성자 관계로 소유자·조직 구성원·협업자를 가림 | OWNER만 확인했다. COLLABORATOR와 나머지는 확인 못 함. MEMBER는 조직 레포가 있어야 한다 |
+| D161 | 봇을 가리고 설정한 봇만 받음 | REST `user.type` Bot으로 가린다. 봇 이름은 REST가 `github-actions[bot]`, GraphQL이 `github-actions`로 모양이 달라, 설정에 적는 이름의 모양을 D197로 정했다 |
+| D172 | 승인 뒤 답글 게시 | 인라인 스레드의 답글과 대화 코멘트를 게시했다 |
+| D175 | GitHub Actions 체크만 다시 실행 | `gh run rerun --failed`가 된다. Actions 체크는 링크가 `/actions/runs/…/job/…`이고 CheckRun에 `workflowName`이 있어 가린다. Actions 밖 체크(커밋 상태)는 이 토큰(Commit statuses 읽기)으로 만들 수 없어 시험하지 않았다 |
+| D176 | head를 고정한 머지, 체크가 없으면 통과 | head 고정은 `--match-head-commit`으로 된다. 체크가 없는 틈 때문에 D196을 더했다 |
+| D177 | 허용하는 머지 방식에서 고름 | `gh repo view --json …Allowed`로 읽는다 |
+| D178 | 머지 뒤 정리 창, 원격 브랜치 삭제는 고름 | 머지는 원격 브랜치를 남긴다(`delete_branch_on_merge`가 꺼져 있을 때). 정리에서 `git push --delete`로 지운다. gh의 `--delete-branch`는 `--repo` 없이 쓰면 worktree를 지운다 |
+| D179 | 밖에서 머지·닫힘을 읽음 | `state`가 MERGED, CLOSED이고, 다시 열면 OPEN이다 |
+| D193 | 원격만 앞서면 fast-forward, 갈라지면 항목, push 거절 | 맞다. update-branch의 병합 커밋도 두 번째 부모로 가린다 |
+| D194 | 답글의 id를 바로 적고 표시로 찾음 | 맞다. 게시 응답에 id가 있고, 표시는 본문에 남고 화면에는 없다 |
+
+**토큰 권한** (시험용 레포 README의 부탁)
+
+- 쓴 권한: Contents 쓰기(브랜치 push와 삭제, contents API 커밋, 머지, update-branch), Pull requests 쓰기(PR, 리뷰, 인라인 답글), Issues 쓰기(대화 코멘트와 고치기), Actions 쓰기(실패한 작업 다시 실행, 봇 코멘트 워크플로 실행)와 읽기(실행, 작업, 로그). 모든 호출이 성공해 모자란 권한은 없었다.
+- Administration(읽기)과 Commit statuses(읽기)가 필요한지는 그 권한을 뺀 토큰으로 시험하지 않아 모른다. 레포 설정의 머지 방식은 읽혔고, Actions 밖 CI는 없었다.
+
+**확인 못 한 것**
+
+- 협업자와 협업자가 아닌 계정의 작성자 관계(사람 단계). 사용자가 따로 한다. start로 PR을 만들고 `spikes/README.md`의 사람 단계를 한 뒤 finish를 돌린다.
+- 조직 구성원(MEMBER). 조직이 가진 레포가 있어야 한다.
+- 웹 화면에서 표시가 보이지 않는지 눈으로 보기, 리뷰 제안 커밋 적용, Actions 밖 체크(커밋 상태).

@@ -1,12 +1,14 @@
-# relay-v2 스파이크 (docs/spikes.md)를 Windows 러너에서 돌린다.
-# 인증: 레포 secret CLAUDE_CODE_OAUTH_TOKEN(구독, `claude setup-token`으로 발급) 또는 ANTHROPIC_API_KEY(Console 과금).
+# relay-v2 스파이크 (docs/spikes.md)를 러너에서 돌린다.
+# S1~S6: Windows 러너. 인증은 레포 secret CLAUDE_CODE_OAUTH_TOKEN(구독, `claude setup-token`으로 발급) 또는 ANTHROPIC_API_KEY(Console 과금).
+# S7(GitHub 연동): spikes 입력에 S7만 적으면 Linux 러너에서 돈다. Claude 인증은 쓰지 않고, 시험용 레포 secret
+# RELAY_TEST_GH_REPO(owner/repo)와 RELAY_TEST_GH_TOKEN을 쓴다(docs/implementation.md I43, I47).
 name: spikes
 
 on:
   workflow_dispatch:
     inputs:
       spikes:
-        description: "돌릴 스파이크 (예: S2 S3). 비우면 전부 (S5, S1, S2, S3, S3B, S4, S6 순서)"
+        description: "돌릴 스파이크 (예: S2 S3). 비우면 S7을 뺀 전부 (S5, S1, S2, S3, S3B, S4, S6 순서). S7은 S7만 적는다(다른 것과 함께 적으면 시작 전에 멈춤)"
         required: false
         default: ""
       model:
@@ -17,12 +19,23 @@ on:
         description: "effort 수준 (low / medium / high / xhigh). 비용을 아끼려고 기본은 low"
         required: false
         default: "low"
+      s7:
+        description: "S7 단계: start(시험 PR을 만들고 사람의 코멘트를 기다림) / finish(s7_pr 필요) / cleanup(남은 s7/ 브랜치와 열린 시험 PR 정리)"
+        type: choice
+        options: [start, finish, cleanup]
+        default: start
+      s7_pr:
+        description: "S7 finish에서 이어 갈 시험 PR 번호. cleanup에 주면 그 PR의 시험만 치운다"
+        required: false
+        default: ""
 
 permissions:
   contents: read
 
 jobs:
   spikes:
+    # S7이 들어 있으면 Linux 작업(s7)이 맡는다. 낱말로 찾으려고 앞뒤에 공백을 붙인다(contains는 대소문자를 가리지 않음).
+    if: ${{ !contains(format(' {0} ', inputs.spikes), ' S7 ') }}
     runs-on: windows-latest
     timeout-minutes: 60
     defaults:
@@ -77,4 +90,49 @@ jobs:
           path: |
             spikes/results/
             spikes/work/**/*.log
+          if-no-files-found: warn
+
+  s7:
+    if: ${{ contains(format(' {0} ', inputs.spikes), ' S7 ') }}
+    runs-on: ubuntu-latest
+    # 스크립트의 전체 기한(s7-github.mjs DEADLINE_MIN, 75분)보다 길게 둔다. 작업이 제한에 걸려 끊기면
+    # 결과 저장과 시험 PR·브랜치 정리가 돌지 못한다.
+    timeout-minutes: 90
+    env:
+      RELAY_TEST_GH_REPO: ${{ secrets.RELAY_TEST_GH_REPO }}
+      GH_TOKEN: ${{ secrets.RELAY_TEST_GH_TOKEN }}
+      S7_PHASE: ${{ inputs.s7 }}
+      S7_PR: ${{ inputs.s7_pr }}
+      SPIKES: ${{ inputs.spikes }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: 시험용 레포 secret 확인
+        run: |
+          if [ -z "$RELAY_TEST_GH_REPO" ] || [ -z "$GH_TOKEN" ]; then
+            echo "::error::RELAY_TEST_GH_REPO와 RELAY_TEST_GH_TOKEN secret이 필요합니다 (docs/implementation.md I43)."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: gh 버전
+        run: gh --version
+
+      # S7은 Node 내장 모듈과 gh, git만 쓴다. 스파이크 의존성(node-pty)은 설치하지 않는다.
+      # 입력을 그대로 넘겨, S7이 다른 스파이크와 섞여 있으면 run.mjs가 시작 전에 멈춘다.
+      - name: S7
+        working-directory: spikes
+        run: node run.mjs $SPIKES
+
+      - name: 결과 올리기
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spike-s7-results
+          path: spikes/results/
           if-no-files-found: warn

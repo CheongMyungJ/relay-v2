@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import pty from 'node-pty';
 import xtermHeadless from '@xterm/headless';
+import { redact } from './util.mjs';
 
 const { Terminal } = xtermHeadless;
 // 화면의 빈 줄을 빼고 끝부분만 보여 준다(로그용).
@@ -39,11 +40,6 @@ const KEY_DOWN = '\x1b[B';
 // 다시 그리며 선택을 기본 항목("No, exit")으로 되돌렸다. 그 사이에 누른 방향키는 사라진다.
 // 출처: app/test/claude/screen.ts (M2 [실제]에서 찾음)
 const SETTLE_MS = 1000;
-
-// 로그와 결과에 API 키가 남지 않게 가린다.
-export function redact(text) {
-  return String(text).replace(/sk-ant-[^\s│]*/g, 'sk-ant-[가림]');
-}
 
 export function resolveClaude() {
   if (process.env.CLAUDE_BIN) return process.env.CLAUDE_BIN;
