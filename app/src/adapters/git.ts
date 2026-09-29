@@ -407,3 +407,68 @@ export async function deleteBranches(
   if (names.length === 0) return
   await git(repo, ['branch', '-D', '--', ...names], opts)
 }
+
+// ---------- PR 진행 (시나리오 10, D193, D178) ----------
+
+/** 커밋이 이 레포에 있는가 (git cat-file -e). fetch한 뒤 원격 head를 받았는지 본다 */
+export async function hasCommit(dir: string, commit: string, opts?: GitOptions): Promise<boolean> {
+  return (await tryGit(dir, ['cat-file', '-e', `${commit}^{commit}`], opts)) !== null
+}
+
+/**
+ * 원격만 앞선 브랜치를 받는다 (D193): worktree에서 git merge --ff-only <커밋>. fast-forward가 아니면 git이 거부하고
+ * 아무것도 바꾸지 않는다(git 문서 git-merge). S7 관찰 8에서 fetch 뒤 이렇게 받았다
+ */
+export async function mergeFastForward(
+  dir: string,
+  commit: string,
+  opts?: GitOptions,
+): Promise<void> {
+  await git(dir, ['merge', '--ff-only', '--quiet', commit], opts)
+}
+
+/**
+ * from에서 닿지 않고 to에서 닿는 커밋과 그 부모 (git rev-list --parents from..to). 새것이 먼저다. 받은 커밋 가운데
+ * 기준 브랜치 병합(둘째 이후 부모가 기준 브랜치 커밋)을 가린다 (S7 관찰 8, D181)
+ */
+export async function commitsWithParents(
+  dir: string,
+  from: string,
+  to: string,
+  opts?: GitOptions,
+): Promise<{ commit: string; parents: string[] }[]> {
+  return lines(await git(dir, ['rev-list', '--parents', `${from}..${to}`], opts)).map((l) => {
+    const [commit = '', ...parents] = l.split(' ')
+    return { commit, parents }
+  })
+}
+
+/** 원격에 브랜치가 있는가 (git ls-remote --heads). 원격에 닿지 못하면 GitError (D178 정리 창) */
+export async function remoteBranchExists(
+  repo: string,
+  branch: string,
+  remote = 'origin',
+  opts?: GitOptions,
+): Promise<boolean> {
+  const out = await git(repo, ['ls-remote', '--heads', remote, `refs/heads/${branch}`], {
+    ...opts,
+    timeoutMs: opts?.timeoutMs ?? 120_000,
+  })
+  return out.trim() !== ''
+}
+
+/**
+ * 원격의 브랜치를 지운다 (D178): git push <원격> --delete <브랜치> (S7 관찰 6에서 머지 뒤 이렇게 지웠다). 사용자의
+ * 자격 증명과 pre-push 훅을 그대로 쓴다
+ */
+export async function deleteRemoteBranch(
+  repo: string,
+  branch: string,
+  remote = 'origin',
+  opts?: GitOptions,
+): Promise<void> {
+  await git(repo, ['push', remote, '--delete', branch], {
+    ...opts,
+    timeoutMs: opts?.timeoutMs ?? 300_000,
+  })
+}

@@ -5,12 +5,22 @@
 // 이벤트는 Work마다 한 줄로 처리한다. 할 일(task 시작 등)이 끝날 때까지 다음 이벤트는 기다린다.
 // 세션 상한(D18)은 Relay의 SessionPool이 모든 Work에 걸쳐 센다. 자리가 없으면 대기열에 넣는다.
 // 자동 승인 카운트다운(4.3)은 언제 시작하고 멈추는지를 core가 정해 work.json에 두고(D127), 여기서는 타이머만 돈다.
+// PR 진행(시나리오 10)은 주기 읽기의 타이머, 읽은 결과의 반영(fast-forward, pr-items.json), 머지를 여기서 한다.
+// 읽기의 네트워크 부분은 main/pr이 처리 줄 밖에서 한다(I51). 판정은 core/pr이 한다.
 import { randomBytes, randomUUID } from 'node:crypto'
 import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { claudeVersion, deploySkill, findClaude } from '../adapters/claude'
-import { ghCreatePr, ghOpenPr } from '../adapters/gh'
+import {
+  ghCreatePr,
+  ghMerge,
+  ghMergeSettings,
+  ghOpenPr,
+  ghPrView,
+  ghVersion,
+  type GhPrOptions,
+} from '../adapters/gh'
 import {
   commitAll,
   commitInfo,
@@ -18,14 +28,17 @@ import {
   createBackup,
   currentBranch,
   deleteBranches,
+  deleteRemoteBranch,
   diffFrom,
   headCommit,
   isAncestor,
   lockFiles,
+  mergeFastForward,
   pruneWorktrees,
   pushBranch,
   refCommit,
   refNames,
+  remoteBranchExists,
   remoteUrl,
   removeWorktree,
   repoRoot,
@@ -95,6 +108,24 @@ import {
 } from '../core/delivery'
 import { NODE_INFO } from '../core/pipeline'
 import {
+  CHECK_WAIT_MS,
+  allowedMethods,
+  applyItemAction,
+  ciState,
+  divergedFact,
+  gatherItems,
+  reapplyRules,
+  mergeGate,
+  prBadgeKind,
+  prLocation,
+  prView,
+  preferredMethod,
+  repoArg,
+  type Gate,
+  type ItemRules,
+  type PrReadState,
+} from '../core/pr'
+import {
   confirmedIntent,
   decisionsBlock,
   decisionsWithout,
@@ -149,9 +180,11 @@ import {
 } from '../core/validate'
 import type { AppConfig, WorkSettings } from '../shared/config'
 import type { NodeName, Size } from '../shared/contracts'
+import { EMPTY_PR_ITEMS, type PrItemsFile, type PrSynced } from '../shared/pr'
 import type { ProjectChecks, ProjectState } from '../shared/project'
 import type {
   ApproveOptions,
+  BadgeKind,
   CleanInput,
   CleanPreviewResult,
   CleanupView,
@@ -159,7 +192,11 @@ import type {
   Completion,
   DeliverInput,
   DeliverResult,
+  MergeInfoResult,
+  MergeInput,
   NoticeView,
+  PrItemAction,
+  PrView,
   ReviewView,
   SelectStepInput,
   StepPreviewResult,
@@ -170,6 +207,7 @@ import type {
 import type {
   DeliverOperation,
   DeliveryChoice,
+  MergeMethod,
   OwnedFile,
   RewindOperation,
   TaskRecord,
@@ -178,6 +216,7 @@ import type {
 } from '../shared/work'
 import type { SessionPool } from './pool'
 import type { UiPort } from './ports'
+import { readPr, receivedCommits, fetchTip, type PrFetched, type PrViewFacts } from './pr'
 import { CLAUDE_INSTALL_GUIDE } from './projects'
 import { TerminalBuffer } from './terminals'
 
@@ -196,6 +235,8 @@ export interface RunnerContext {
   ghBin: string
   /** 프로젝트의 origin·gh 점검 결과 (D67) */
   checks(projectId: string): ProjectChecks | undefined
+  /** 지금 프로젝트. 프로젝트 설정(받을 봇, 기본 머지 방식)이 실행 중에 바뀐다 (D185) */
+  project(projectId: string): ProjectState | undefined
   /** origin·gh를 다시 점검해 project.json을 고친다. verify를 시작할 때와 [다시 점검]에서 부른다 (D118) */
   recheck(projectId: string): Promise<void>
   /** 지금 시각. 현지 시각과 오프셋을 담은 ISO 8601 */
@@ -307,6 +348,27 @@ export class WorkRunner {
     endsAt: number
     timer: NodeJS.Timeout
   } | null = null
+  /** pr-items.json의 내용 (D191). 처음 쓸 때 읽는다 */
+  private prFile: PrItemsFile | null = null
+  /** 마지막으로 읽은 PR (D159: 메모리에만 두고 앱을 켜면 다시 읽는다) */
+  private prRead: PrReadState | null = null
+  /** 마지막 읽기 때의 로컬 Work 브랜치 커밋 */
+  private prLocal: string | null = null
+  /** 마지막 읽기의 오류나 경고 */
+  private prError: string | null = null
+  /** 읽는 중인 읽기. 한 Work의 읽기는 한 번에 하나다 (I51) */
+  private prReading: Promise<CommandResult> | null = null
+  /** 주기 읽기의 타이머 (D158) */
+  private prTimer: NodeJS.Timeout | null = null
+  /** head를 처음 읽은 때 (D196). 메모리에만 두어 앱을 다시 켜면 다시 잰다 */
+  private readonly headSeen = new Map<string, number>()
+  /**
+   * Actions 실행 id → 이벤트 (D201, I52). 실행의 이벤트는 바뀌지 않아 메모리에 두고 처음 보는 실행만 읽는다. 앱을 다시
+   * 켜면 CI 실패 항목에 적힌 것부터 채운다
+   */
+  private readonly runEvents = new Map<number, string>()
+  /** 앱을 끝낸다. 읽기를 더 걸지 않는다 */
+  private closing = false
 
   /**
    * workText는 앱이 마지막으로 쓰거나 읽은 work.json의 내용이다. 다음에 쓰기 전에 이것과 비교한다 (D124).
@@ -463,6 +525,9 @@ export class WorkRunner {
         return
       case 'stopCountdown':
         this.stopCountdown(e.taskId)
+        return
+      case 'merge':
+        await this.mergeCode(e)
         return
     }
   }
@@ -1065,6 +1130,8 @@ export class WorkRunner {
       const before = this.revision
       await this.feed({ type: 'config.updated', at: this.ctx.at() })
       if (this.revision === before) this.changed()
+      // PR 읽기 주기(D158)를 바꿨으면 다음 읽기부터 쓴다
+      if (this.prTimer) this.schedulePr()
     })
   }
 
@@ -1469,6 +1536,7 @@ export class WorkRunner {
       prUrl?: string
       prExisting?: boolean
       draft?: boolean
+      pr?: { number: number; head: string; ghVersion: string | null }
     } = {}
     let compare: string | null
     try {
@@ -1505,6 +1573,14 @@ export class WorkRunner {
             draft: facts.draft,
           })
         }
+        // PR 진행 (D152, D191): 번호는 PR 주소에서 읽고(I50), head는 push한 커밋이고, gh 버전을 적는다 (D198)
+        const location = prLocation(facts.prUrl)
+        if (!location) throw new Error(`PR 주소를 읽지 못함: ${facts.prUrl}`)
+        facts.pr = {
+          number: location.number,
+          head: await headCommit(this.worktree, { env }),
+          ghVersion: await ghVersion(this.ctx.ghBin, env),
+        }
       }
     } catch (err) {
       this.opError = `전달 실패: ${message(err)}`
@@ -1520,6 +1596,8 @@ export class WorkRunner {
       ...facts,
       check,
     })
+    // [PR 생성]이 성공하면 PR 진행이다. 바로 한 번 읽고 주기 읽기를 건다 (시나리오 10-1)
+    if (this.work.status === 'pr') await this.startPr()
   }
 
   // ---------- 정리 세션 ([AI 세션 열기], 7-5) ----------
@@ -1770,6 +1848,16 @@ export class WorkRunner {
       return !!head && !!tip && (await isAncestor(repo, head, tip, opts))
     }
     const base = this.work.base_branch
+    // 머지로 완료한 Work는 origin의 브랜치 삭제도 고를 수 있다 (D178). 원격에 닿지 못하면 고르지 못하게 둔다
+    const merged = this.work.pr?.merged !== undefined
+    let remote: CleanFacts['remote'] = null
+    if (merged) {
+      try {
+        remote = { name, exists: await remoteBranchExists(repo, name, 'origin', opts) }
+      } catch (e) {
+        this.problem(`origin의 브랜치 ${name}를 확인하지 못함: ${message(e)}`)
+      }
+    }
     return {
       worktree,
       uncommitted: worktree ? await statusLines(this.worktree, opts) : [],
@@ -1783,6 +1871,8 @@ export class WorkRunner {
           (await contains(`refs/heads/${base}`)) || (await contains(`refs/remotes/origin/${base}`)),
       },
       backups: await refNames(repo, backupPattern(this.work.work_id), opts),
+      merged,
+      remote,
     }
   }
 
@@ -1827,6 +1917,7 @@ export class WorkRunner {
         at: this.ctx.at(),
         force: plan.force,
         deleteBranches: plan.deleteBranches,
+        ...(plan.deleteRemote ? { deleteRemote: plan.deleteRemote } : {}),
         head,
       })
       const failed = this.opError
@@ -1837,7 +1928,8 @@ export class WorkRunner {
 
   /**
    * 정리의 git 작업 (8-2). 단계가 끝날 때마다 machine에 알려 진행 중 작업 기록을 옮긴다(D77).
-   * 끊긴 정리를 다시 하면(resume) 끊긴 단계부터 하고, 아직 있는 브랜치만 지운다 (D123)
+   * 끊긴 정리를 다시 하면(resume) 끊긴 단계부터 하고, 아직 있는 브랜치만 지운다 (D123). 머지로 완료한 Work에서 고르면
+   * 마지막에 origin의 브랜치를 지운다(D178). 이미 없으면(레포 설정이 머지 뒤 지움) 건너뛴다
    */
   private async cleanCode(e: Extract<Effect, { type: 'clean' }>): Promise<void> {
     const opts = { env: this.ctx.env }
@@ -1861,13 +1953,26 @@ export class WorkRunner {
       return
     }
     await this.feed({ type: 'clean.removed', at: this.ctx.at() })
-    try {
-      const names =
-        e.resume === undefined ? e.deleteBranches : await this.existing(e.deleteBranches)
-      await deleteBranches(repo, names, opts)
-    } catch (err) {
-      await this.cleanFailed(err)
-      return
+    if (e.resume !== 'remote') {
+      try {
+        const names =
+          e.resume === undefined ? e.deleteBranches : await this.existing(e.deleteBranches)
+        await deleteBranches(repo, names, opts)
+      } catch (err) {
+        await this.cleanFailed(err)
+        return
+      }
+    }
+    if (e.deleteRemote) {
+      await this.feed({ type: 'clean.branchesDeleted', at: this.ctx.at() })
+      try {
+        if (await remoteBranchExists(repo, e.deleteRemote, 'origin', opts)) {
+          await deleteRemoteBranch(repo, e.deleteRemote, 'origin', opts)
+        }
+      } catch (err) {
+        await this.cleanFailed(err)
+        return
+      }
     }
     await this.feed({ type: 'clean.done', at: this.ctx.at() })
   }
@@ -2093,6 +2198,9 @@ export class WorkRunner {
    * 대기열의 task는 그대로 두고 다음 실행 때 중단됨으로 바꾼다 (D78).
    */
   shutdown(): Promise<void> {
+    this.closing = true
+    if (this.prTimer) clearTimeout(this.prTimer)
+    this.prTimer = null
     return this.enqueue(async () => {
       this.stopCountdown()
       const task = currentTask(this.work)
@@ -2181,6 +2289,475 @@ export class WorkRunner {
     }
   }
 
+  // ---------- PR 진행 (시나리오 10, D152~D200) ----------
+
+  /** 지금 프로젝트. 프로젝트 설정은 실행 중에 바뀐다 (D185) */
+  private projectNow(): ProjectState {
+    return this.ctx.project(this.project.project_id) ?? this.project
+  }
+
+  /** 코멘트의 거르기 규칙: 프로젝트 설정의 받을 봇 (D161, D197) */
+  private prRules(): ItemRules {
+    return { allowedBots: this.projectNow().allowed_bots ?? [] }
+  }
+
+  /** pr-items.json. 처음 쓸 때 읽는다. 읽지 못하면 알리고 빈 목록으로 둔다 */
+  private async prItems(): Promise<PrItemsFile> {
+    if (!this.prFile) {
+      try {
+        this.prFile = await this.files.readPrItems()
+      } catch (e) {
+        this.problem(`pr-items.json을 읽지 못함: ${message(e)}`)
+        this.prFile = { ...EMPTY_PR_ITEMS, items: [], synced: [] }
+      }
+    }
+    return this.prFile
+  }
+
+  /** 머지 조건 (D176, D196) */
+  private prGate(): Gate {
+    return mergeGate({
+      work: this.work,
+      read: this.prRead,
+      items: this.prFile?.items ?? [],
+      localHead: this.prLocal,
+    })
+  }
+
+  /** PR 진행인 Work의 배지 (D183) */
+  private prBadge(): BadgeKind | undefined {
+    if (this.work.status !== 'pr') return undefined
+    return prBadgeKind(
+      this.prFile?.items ?? [],
+      this.work.pr?.closed_at !== undefined,
+      this.prGate(),
+    )
+  }
+
+  /** PR 패널 (시나리오 10, D183) */
+  private prPanel(): PrView | null {
+    return prView({
+      work: this.work,
+      read: this.prRead,
+      file: this.prFile ?? EMPTY_PR_ITEMS,
+      rules: this.prRules(),
+      localHead: this.prLocal,
+      reading: this.prReading !== null,
+      error: this.prError,
+    })
+  }
+
+  /**
+   * PR 진행을 시작했거나 앱을 켰다 (시나리오 10-1, D158, D159). 항목을 읽어 두고, 닫히지 않은 PR이면 바로 한 번 읽고
+   * 주기 읽기를 건다. 닫힌 PR은 [새로 고침]으로만 읽는다(D179). quiet면(앱을 켤 때) 읽은 결과로 알리지 않는다
+   * (D159, D121). 읽기는 기다리지 않는다: 반영은 이 Work의 처리 줄에서 한다(I51)
+   */
+  async startPr(opts: { quiet?: boolean } = {}): Promise<void> {
+    if (!this.work.pr) return
+    await this.prItems()
+    this.changed()
+    if (this.work.status !== 'pr' || this.work.pr.closed_at) return
+    void this.readPrNow(opts)
+  }
+
+  /** 주기 읽기를 건다 (D158). PR 진행이 아니거나 닫혔거나 앱을 끝내면 걸지 않는다 */
+  private schedulePr(): void {
+    if (this.prTimer) clearTimeout(this.prTimer)
+    this.prTimer = null
+    const w = this.work
+    if (this.closing || w.status !== 'pr' || !w.pr || w.pr.closed_at) return
+    this.prTimer = setTimeout(() => {
+      this.prTimer = null
+      void this.readPrNow()
+    }, this.ctx.config().pr_poll_interval_sec * 1000)
+  }
+
+  /**
+   * 하던 PR 읽기가 끝나기를 기다린다. 앱을 끝낼 때는 기다리지 않는다(네트워크를 기다려 종료가 늦어짐). 끝난 읽기는
+   * 반영하지 않는다. 시험 도구가 임시 폴더를 지우기 전에 부른다: Windows는 gh·git이 작업 폴더로 쓰는 폴더를 지우지
+   * 못한다
+   */
+  async prIdle(): Promise<void> {
+    while (this.prReading) await this.prReading
+  }
+
+  /** PR 패널의 [새로 고침] (D158). 닫힌 PR도 읽어 다시 열렸는지 본다 (D179) */
+  refreshPr(): Promise<CommandResult> {
+    return this.readPrNow()
+  }
+
+  /**
+   * PR을 한 번 읽는다 (시나리오 10-2, I51). 네트워크 부분은 처리 줄 밖에서 하고 반영은 줄에서 한다. 읽는 중이면 그
+   * 읽기가 끝난 뒤 다시 읽는다. 끝나면 다음 주기 읽기를 건다
+   */
+  private async readPrNow(opts: { quiet?: boolean } = {}): Promise<CommandResult> {
+    while (this.prReading) await this.prReading
+    if (this.closing) return { ok: false, error: '앱을 끝내는 중' }
+    const run = this.readPrOnce(opts).catch((e: unknown): CommandResult =>
+      this.prFailed(`PR을 읽지 못함: ${message(e)}`),
+    )
+    this.prReading = run
+    this.changed()
+    try {
+      return await run
+    } finally {
+      this.prReading = null
+      this.changed()
+      this.schedulePr()
+    }
+  }
+
+  private prFailed(error: string): CommandResult {
+    this.prError = error
+    console.error(`[${this.key}] ${error}`)
+    return { ok: false, error }
+  }
+
+  private async readPrOnce(opts: { quiet?: boolean }): Promise<CommandResult> {
+    const pr = this.work.pr
+    if (this.work.status !== 'pr' || !pr) return { ok: false, error: 'PR 진행인 Work가 아님' }
+    // 끊긴 작업의 기록이 있는 동안은 읽지 않는다 (I51, D122). 진행 중인 머지는 처리 줄이 끝나야 읽는다
+    if (cutOperation(this.work)) return { ok: false, error: OPERATION_BLOCKS }
+    const location = prLocation(pr.url)
+    if (!location) return this.prFailed(`PR 주소를 읽지 못함: ${pr.url}`)
+    const file = await this.prItems()
+    // CI 실패 항목에 적힌 이벤트를 다시 읽지 않는다. 읽기에 실패해도 항목의 id가 바뀌지 않는다 (I52)
+    for (const item of file.items) {
+      const c = item.check
+      if (c && c.run !== null && c.event) this.runEvents.set(c.run, c.event)
+    }
+    let fetched: PrFetched
+    try {
+      fetched = await readPr(
+        {
+          ghBin: this.ctx.ghBin,
+          env: this.ctx.env,
+          repo: this.project.repo_path,
+          worktree: this.worktree,
+          branch: workBranch(this.work.work_id),
+          location,
+          runEvents: this.runEvents,
+        },
+        (id) => file.items.some((i) => i.id === id && i.log !== undefined),
+      )
+    } catch (e) {
+      return this.prFailed(`PR을 읽지 못함: ${message(e)}`)
+    }
+    return this.enqueue(() => this.applyRead(pr.number, fetched, opts))
+  }
+
+  /**
+   * 읽은 결과를 반영한다 (처리 줄 안, I51). 새 head를 처음 읽은 때로 CI를 정하고(D196), 원격만 앞섰으면 fast-forward로
+   * 받고(D193) 기준 브랜치 병합이 있으면 기준 커밋을 옮기고(D181), 항목을 모아(D189, D199) pr-items.json에 쓰고,
+   * 읽은 결과를 machine에 넣는다. 사람이 움직여야 하면 알린다(D184): 대응 거리가 들어옴, 머지할 수 있음, 닫힘,
+   * 밖에서 머지됨. 앱을 켤 때 읽은 것(quiet)은 알리지 않는다(D159)
+   */
+  private async applyRead(
+    number: number,
+    f: PrFetched,
+    opts: { quiet?: boolean },
+  ): Promise<CommandResult> {
+    const pr = this.work.pr
+    // 앱을 끝내는 동안 끝난 읽기는 반영하지 않는다. 다음에 켤 때 다시 읽는다 (D159)
+    if (this.closing) return { ok: false, error: '앱을 끝내는 중' }
+    if (this.work.status !== 'pr' || !pr || pr.number !== number || this.work.operation) {
+      return { ok: false, error: '읽는 동안 Work가 바뀌어 반영하지 않음' }
+    }
+    const at = this.ctx.at()
+    const now = Date.now()
+    const mergeableBefore = this.prGate().enabled
+    const closedBefore = pr.closed_at !== undefined
+    // D196: 새 head를 처음 읽은 때부터 60초는 체크가 없어도 통과로 보지 않는다
+    const seen = this.headSeen.get(f.view.head) ?? now
+    this.headSeen.set(f.view.head, seen)
+    const warnings = [...f.warnings]
+    let local = f.local
+    let sync = f.sync
+    let synced: PrSynced | null = null
+    if (sync === 'ff' && local) {
+      try {
+        synced = await this.fastForward(local, f.view, at)
+        local = f.view.head
+        sync = 'same'
+      } catch (e) {
+        warnings.push(`원격 커밋을 받지 못함: ${message(e)}`)
+        sync = null
+      }
+    }
+    const file = await this.prItems()
+    const gathered = gatherItems(
+      file.items,
+      {
+        at,
+        head: f.view.head,
+        comments: f.comments,
+        failing: f.checks.filter((c) => c.bucket === 'fail'),
+        conflict: f.conflict,
+        diverged: sync === null || !local ? undefined : divergedFact(sync, f.view.head, local),
+        logs: f.logs,
+      },
+      this.prRules(),
+    )
+    const next: PrItemsFile = {
+      schema_version: 1,
+      items: gathered.items,
+      synced: synced ? [...file.synced, synced] : file.synced,
+    }
+    try {
+      await this.files.writePrItems(next)
+    } catch (e) {
+      return this.prFailed(`pr-items.json을 쓰지 못함: ${message(e)}`)
+    }
+    this.prFile = next
+    this.prLocal = local
+    this.prRead = {
+      at,
+      state: f.view.state,
+      head: f.view.head,
+      headRef: f.view.headRef,
+      baseRef: f.view.baseRef,
+      isDraft: f.view.isDraft,
+      mergeable: f.view.mergeable,
+      mergeStateStatus: f.view.mergeStateStatus,
+      reviewDecision: f.view.reviewDecision,
+      checks: f.checks,
+      ci: ciState(f.checks, now - seen >= CHECK_WAIT_MS),
+      sync,
+    }
+    this.prError = warnings.length ? warnings.join(' / ') : null
+    await this.feed(
+      {
+        type: 'pr.read',
+        at,
+        number,
+        state: f.view.state,
+        head: f.view.head,
+        received: gathered.received,
+        notAccepted: gathered.notAccepted,
+        ...(synced
+          ? {
+              synced: {
+                commits: synced.commits,
+                ...(synced.base_commit ? { baseCommit: synced.base_commit } : {}),
+              },
+            }
+          : {}),
+      },
+      { quiet: true },
+    )
+    if (!opts.quiet) {
+      const w = this.work
+      const notes: string[] = []
+      if (w.status === 'completed' && w.pr?.merged?.outside) {
+        notes.push('밖에서 머지됨. [Work 정리]로 정리하세요')
+      } else if (w.status === 'pr') {
+        if (w.pr?.closed_at && !closedBefore) notes.push('PR이 닫혀 자동 읽기를 멈춤')
+        if (gathered.received.length) notes.push(`대응 거리 ${gathered.received.length}개가 들어옴`)
+        if (!mergeableBefore && this.prGate().enabled) notes.push('머지할 수 있음')
+      }
+      if (notes.length) this.notify(`PR #${number}: ${notes.join(' · ')}`)
+    }
+    this.changed()
+    return { ok: true }
+  }
+
+  /**
+   * 원격만 앞선 PR 브랜치를 받는다 (D193, S7 관찰 8). 읽은 뒤 바뀌었을 수 있어 로컬 Work 브랜치, worktree의 변경과
+   * 브랜치를 다시 본다. 받은 커밋에 기준 브랜치 병합이 있으면 기준 브랜치를 fetch해 옮길 기준 커밋을 정한다 (D181)
+   */
+  private async fastForward(local: string, view: PrViewFacts, at: string): Promise<PrSynced> {
+    const opts = { env: this.ctx.env }
+    const repo = this.project.repo_path
+    const branch = workBranch(this.work.work_id)
+    if ((await refCommit(repo, `refs/heads/${branch}`, opts)) !== local) {
+      throw new Error('읽은 뒤 로컬 Work 브랜치가 바뀜')
+    }
+    if ((await statusLines(this.worktree, opts)).length) {
+      throw new Error('읽은 뒤 worktree에 커밋 안 된 변경이 생김')
+    }
+    if ((await currentBranch(this.worktree, opts)) !== branch) {
+      throw new Error('worktree가 Work 브랜치에 있지 않음')
+    }
+    await mergeFastForward(this.worktree, view.head, opts)
+    const ctx = { repo, env: this.ctx.env }
+    const { received, base } = await receivedCommits(
+      ctx,
+      local,
+      view.head,
+      this.work.base_commit,
+      () => fetchTip(ctx, view.baseRef || this.work.base_branch),
+    )
+    return { at, from: local, commits: received, ...(base ? { base_commit: base } : {}) }
+  }
+
+  /**
+   * 프로젝트 설정이 바뀌었다 (D185). 받을 봇이 바뀌었을 수 있어 PR 진행인 Work의 항목에 거르기 규칙을 다시 적용한다
+   * (D161). 사람이 바꾼 것이라 알리지 않는다
+   */
+  projectSettingsChanged(): Promise<void> {
+    return this.enqueue(async () => {
+      if (this.work.status === 'pr' && this.work.pr) {
+        const file = await this.prItems()
+        const r = reapplyRules(file.items, this.prRules())
+        if (r.changed.length) {
+          const next: PrItemsFile = { ...file, items: r.items }
+          try {
+            await this.files.writePrItems(next)
+            this.prFile = next
+          } catch (e) {
+            this.problem(`pr-items.json을 쓰지 못함: ${message(e)}`)
+          }
+        }
+      }
+      this.changed()
+    })
+  }
+
+  /** PR 패널의 [제외], [다시 넣기], [받기] (D160, D161, D170, D189). PR 진행인 Work만 받는다 */
+  prItem(id: string, action: PrItemAction): Promise<CommandResult> {
+    return this.enqueue(async () => {
+      if (this.work.status !== 'pr') return { ok: false, error: 'PR 진행인 Work가 아님' }
+      if (cutOperation(this.work)) return { ok: false, error: OPERATION_BLOCKS }
+      const file = await this.prItems()
+      const r = applyItemAction(file.items, id, action)
+      if (!r.ok) return r
+      const next: PrItemsFile = { ...file, items: r.items }
+      try {
+        await this.files.writePrItems(next)
+      } catch (e) {
+        return { ok: false, error: `pr-items.json을 쓰지 못함: ${message(e)}` }
+      }
+      this.prFile = next
+      this.changed()
+      return { ok: true }
+    })
+  }
+
+  /**
+   * 머지 창 (D176, D177): 레포가 허용하는 방식을 gh로 읽고(S7 관찰 6), 기본 선택(프로젝트 설정이 허용되면 그것,
+   * 아니면 허용하는 첫 방식)과 머지할 head, 지금 머지 조건을 준다
+   */
+  async prMergeInfo(): Promise<MergeInfoResult> {
+    const pr = this.work.pr
+    if (this.work.status !== 'pr' || !pr) return { ok: false, error: 'PR 진행인 Work가 아님' }
+    const location = prLocation(pr.url)
+    if (!location) return { ok: false, error: `PR 주소를 읽지 못함: ${pr.url}` }
+    let methods: MergeMethod[]
+    try {
+      methods = allowedMethods(
+        await ghMergeSettings(this.ctx.ghBin, {
+          repo: repoArg(location),
+          cwd: this.project.repo_path,
+          env: this.ctx.env,
+        }),
+      )
+    } catch (e) {
+      return { ok: false, error: `레포가 허용하는 머지 방식을 읽지 못함: ${message(e)}` }
+    }
+    if (!methods.length) return { ok: false, error: '레포가 허용하는 머지 방식이 없음' }
+    return {
+      ok: true,
+      info: {
+        head: pr.head,
+        methods,
+        preferred: preferredMethod(methods, this.projectNow().merge_method),
+        gate: this.prGate(),
+      },
+    }
+  }
+
+  /** 머지 창의 [머지] (D176). 창에 보인 head와 지금 머지 조건을 machine이 본다. 실패하면 GitHub의 오류를 돌려준다 */
+  prMerge(input: MergeInput): Promise<CommandResult> {
+    return this.enqueue(async () => {
+      this.opError = null
+      const r = await this.command({
+        type: 'pr.merge',
+        at: this.ctx.at(),
+        method: input.method,
+        head: input.head,
+        gate: this.prGate(),
+      })
+      const failed = this.opError
+      this.opError = null
+      if (!r.ok) return r
+      return failed ? { ok: false, error: failed } : { ok: true }
+    })
+  }
+
+  /**
+   * 머지 (D176~D178): gh pr merge --match-head-commit. TTY가 아니면 성공해도 출력이 없으므로 종료 코드와 다시 읽은
+   * state로 판정한다(S7 관찰 6). 끊긴 머지를 다시 하면(resume) 먼저 읽어 이미 머지됐으면 성공으로 둔다 (D123).
+   * 그사이 새 커밋이 생겨 GitHub가 거절하면 알리고 다시 읽는다
+   */
+  private async mergeCode(e: Extract<Effect, { type: 'merge' }>): Promise<void> {
+    const pr = this.work.pr
+    const location = pr ? prLocation(pr.url) : null
+    const fail = async (error: string) => {
+      this.opError = error
+      await this.feed({ type: 'pr.mergeFailed', at: this.ctx.at(), error })
+    }
+    if (!pr || !location) {
+      await fail('PR 주소를 읽지 못함')
+      return
+    }
+    const gh = {
+      repo: repoArg(location),
+      number: pr.number,
+      cwd: this.project.repo_path,
+      env: this.ctx.env,
+    }
+    const state = async () => (await ghPrView(this.ctx.ghBin, gh, ['state']))['state']
+    try {
+      if (e.resume && (await state()) === 'MERGED') {
+        await this.feed({ type: 'pr.merged', at: this.ctx.at() })
+        return
+      }
+      const r = await ghMerge(this.ctx.ghBin, { ...gh, method: e.method, head: e.head })
+      if (!r.ok) {
+        // 새 커밋이 생긴 직후에는 GitHub가 "Head branch was modified" 대신 "Pull Request is not mergeable"로
+        // 거절하기도 한다(3절, M9 [실제]). 문구에 기대지 않고 head를 다시 읽어 가른다
+        const moved = r.headMoved || (await this.headMoved(gh, e.head))
+        await fail(
+          moved
+            ? `그사이 PR에 새 커밋이 생겨 머지하지 않음. 다시 읽은 뒤 머지 창을 다시 여세요 (${r.error})`
+            : `머지 실패: ${r.error}`,
+        )
+        // 머지가 거절되면 PR이 바뀌었을 수 있어 곧 다시 읽는다
+        setTimeout(() => void this.readPrNow(), 0)
+        return
+      }
+      // 성공 문구는 TTY일 때만 찍으므로 다시 읽어 머지됐는지 본다 (S7 관찰 6, 3절)
+      const now = await state()
+      if (now !== 'MERGED') {
+        await fail(`gh pr merge는 성공했지만 PR이 머지되지 않음 (state: ${String(now)})`)
+        return
+      }
+      await this.feed({ type: 'pr.merged', at: this.ctx.at() })
+    } catch (err) {
+      await fail(`머지 실패: ${message(err)}`)
+    }
+  }
+
+  /** PR의 지금 head가 머지하려던 head와 다른가. 읽지 못하면 모른다(false) */
+  private async headMoved(gh: GhPrOptions, head: string): Promise<boolean> {
+    try {
+      const now = (await ghPrView(this.ctx.ghBin, gh, ['headRefOid']))['headRefOid']
+      return typeof now === 'string' && now !== '' && now !== head
+    } catch {
+      return false
+    }
+  }
+
+  /** [머지 없이 끝내기] (D179). 확인 창은 화면이 띄운다. GitHub의 PR은 건드리지 않는다 */
+  prEnd(): Promise<CommandResult> {
+    return this.enqueue(() => this.command({ type: 'pr.end', at: this.ctx.at() }))
+  }
+
+  /** 머지 뒤 정리 창을 열었다 (D178, D200) */
+  prCleanOffered(): Promise<CommandResult> {
+    return this.enqueue(() => this.command({ type: 'pr.cleanOffered', at: this.ctx.at() }))
+  }
+
   // ---------- 터미널 ----------
 
   terminalKey(taskId: string): string {
@@ -2251,7 +2828,7 @@ export class WorkRunner {
       status: w.status,
       statusLabel: WORK_STATUS_LABEL[w.status],
       completedAt: w.completed_at ?? null,
-      badge: badge(w),
+      badge: badge(w, this.prBadge()),
       actions: this.cleanupOpen() ? cleanupActions(actions(w)) : actions(w),
       stopAfterStep: w.stop_after_step === true,
       settings: w.settings,
@@ -2262,6 +2839,7 @@ export class WorkRunner {
       stopHint: resumeHint(w),
       steps: stepChoices(w),
       delivery: deliveryView(w.delivery),
+      pr: this.prPanel(),
       cleanup: this.cleanupView(),
       operation: operationView(w),
       notices: this.noticeViews(),

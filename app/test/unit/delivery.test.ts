@@ -90,6 +90,19 @@ describe('전달 버튼 (시나리오 7-4, D67, D118)', () => {
     expect(none.none.enabled).toBe(true)
   })
 
+  it('gh가 2.48.0보다 낮으면 [PR 생성]을 이유와 함께 끈다. 버전을 모르면 끄지 않는다 (D198)', () => {
+    expect(deliveryButtons({ origin: true, gh: true, gh_version: '2.47.0' }).pr).toEqual({
+      enabled: false,
+      reason: 'gh 2.48.0 이상이 필요함 (지금 2.47.0)',
+    })
+    expect(deliveryButtons({ origin: true, gh: true, gh_version: '2.48.0' }).pr.enabled).toBe(true)
+    expect(deliveryButtons({ origin: true, gh: true, gh_version: null }).pr.enabled).toBe(true)
+    expect(closingButtons({ origin: true, gh: true, gh_version: '1.0.0' })).toEqual([
+      '[완료만]',
+      '[push]',
+    ])
+  })
+
   it('마무리 안내 문구의 버튼은 누를 수 있는 전달 버튼이다 (D104)', () => {
     expect(closingButtons({ origin: true, gh: true })).toEqual(['[완료만]', '[push]', '[PR 생성]'])
     expect(closingButtons({ origin: true, gh: false })).toEqual(['[완료만]', '[push]'])

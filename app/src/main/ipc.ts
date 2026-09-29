@@ -10,10 +10,12 @@ import type {
   CleanExpect,
   CleanInput,
   DeliverInput,
+  MergeInput,
   NewWorkInput,
+  PrItemAction,
   SelectStepInput,
 } from '../shared/views'
-import type { DeliveryChoice } from '../shared/work'
+import type { DeliveryChoice, MergeMethod } from '../shared/work'
 import type { Relay } from './relay'
 import { externalUrl } from './security'
 
@@ -91,13 +93,31 @@ function cleanInput(v: unknown): CleanInput {
     locks: texts(x['locks']),
     live: count(x['live']),
     backups: texts(x['backups']),
+    remote: flag(x['remote']),
   }
   return {
     deleteBranch: flag(o['deleteBranch']),
     deleteBackups: flag(o['deleteBackups']),
+    ...(o['deleteRemote'] === undefined ? {} : { deleteRemote: flag(o['deleteRemote']) }),
     confirmed: flag(o['confirmed']),
     expect,
   }
+}
+
+function mergeMethod(v: unknown): MergeMethod {
+  if (v !== 'merge' && v !== 'squash' && v !== 'rebase') throw new Error('머지 방식이 아님')
+  return v
+}
+
+function mergeInput(v: unknown): MergeInput {
+  if (!v || typeof v !== 'object') throw new Error('머지 입력이 아님')
+  const o = v as Record<string, unknown>
+  return { method: mergeMethod(o['method']), head: text(o['head']) }
+}
+
+function itemAction(v: unknown): PrItemAction {
+  if (v !== 'exclude' && v !== 'include' && v !== 'accept') throw new Error('항목 조작이 아님')
+  return v
 }
 
 export interface IpcHooks {
@@ -201,6 +221,25 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   )
   ipcMain.handle(IPC.dismissNotice, async (_e, workKey: unknown, id: unknown) =>
     (await ready).dismissNotice(text(workKey), text(id)),
+  )
+  ipcMain.handle(IPC.prRefresh, async (_e, workKey: unknown) =>
+    (await ready).prRefresh(text(workKey)),
+  )
+  ipcMain.handle(IPC.prItem, async (_e, workKey: unknown, itemId: unknown, action: unknown) =>
+    (await ready).prItem(text(workKey), text(itemId), itemAction(action)),
+  )
+  ipcMain.handle(IPC.prMergeInfo, async (_e, workKey: unknown) =>
+    (await ready).prMergeInfo(text(workKey)),
+  )
+  ipcMain.handle(IPC.prMerge, async (_e, workKey: unknown, input: unknown) =>
+    (await ready).prMerge(text(workKey), mergeInput(input)),
+  )
+  ipcMain.handle(IPC.prEnd, async (_e, workKey: unknown) => (await ready).prEnd(text(workKey)))
+  ipcMain.handle(IPC.prCleanOffered, async (_e, workKey: unknown) =>
+    (await ready).prCleanOffered(text(workKey)),
+  )
+  ipcMain.handle(IPC.projectSettings, async (_e, projectId: unknown, settings: unknown) =>
+    (await ready).updateProjectSettings(text(projectId), settings),
   )
   // 비교 URL과 PR 주소만 연다. 앱 창은 옮기지 않는다 (main/index)
   ipcMain.handle(IPC.openExternal, async (_e, url: unknown) => {

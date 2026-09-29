@@ -318,27 +318,34 @@ describe('사이드바 배지 (D80)', () => {
     }
   }
 
-  it('우선순위는 끊긴 작업 > 질문 대기·입력 필요 > 승인 대기 > 막힘 > 멈춤 > 세션 종료 > 작업 중 > 대기 > 대기열 > 중단됨 > 완료·포기 (D121)', () => {
+  it('우선순위는 끊긴 작업 > 질문 대기·입력 필요 > 승인 대기 > 막힘 > 멈춤 > 대응 거리 있음 > PR 닫힘 > 머지 가능 > 세션 종료 > 작업 중 > 대기 > 대기열 > 리뷰·CI 대기 > 중단됨 > 완료·포기 (D121, D183)', () => {
     expect(BADGE_ORDER).toEqual([
       'recovery',
       'asking',
       'awaiting_approval',
       'blocked',
       'stopped',
+      'pr_items',
+      'pr_closed',
+      'mergeable',
       'session_ended',
       'working',
       'idle',
       'queued',
+      'pr_waiting',
       'interrupted',
       'done',
     ])
-    // 사람이 필요한 상태(앞의 여섯)만 강조한다
+    // 사람이 필요한 상태(앞의 아홉)만 강조한다. 리뷰·CI 대기는 남을 기다리는 것이라 강조하지 않는다 (D183)
     expect(HUMAN_BADGES).toEqual([
       'recovery',
       'asking',
       'awaiting_approval',
       'blocked',
       'stopped',
+      'pr_items',
+      'pr_closed',
+      'mergeable',
       'session_ended',
     ])
   })

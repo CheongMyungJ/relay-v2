@@ -1,10 +1,11 @@
 // 프로젝트 등록 (시나리오 0). 레포를 점검하고(D67) project.json을 만든다.
-// git 레포 루트, claude 로그인, 중복 등록은 실패하면 막고, origin과 gh는 경고만 한다.
+// git 레포 루트, claude 로그인, 중복 등록은 실패하면 막고, origin과 gh(로그인과 버전, D198)는 경고만 한다.
 import path from 'node:path'
 import { findClaude, claudeAuthStatus } from '../adapters/claude'
-import { ghAuthStatus } from '../adapters/gh'
+import { ghAuthStatus, ghVersion } from '../adapters/gh'
 import { branches, defaultBranch, hasRemote, repoRoot } from '../adapters/git'
 import { canonicalPath, pathKey, sha256 } from '../adapters/store'
+import { MIN_GH_VERSION, ghTooOld, ghVersionReason } from '../core/pr'
 import { projectId } from '../core/records'
 import type { ProjectState } from '../shared/project'
 import type { CheckItem, ProjectInspection } from '../shared/views'
@@ -27,6 +28,41 @@ const folderName = (p: string) => path.basename(p) || p
 
 /** 등록 점검 표 (시나리오 0-2, D67, D106). 기본 브랜치 제안도 함께 돌려준다 (시나리오 0-3) */
 export async function inspectProject(dir: string, o: ProjectEnv): Promise<ProjectInspection> {
+  return (await inspect(dir, o)).view
+}
+
+/** gh의 점검 (D67, D198): gh auth status와 gh --version. project.json에는 둘을 따로 적는다 */
+export interface GhCheck {
+  auth: boolean
+  version: string | null
+}
+
+/** gh 점검 표의 줄 (시나리오 0-2, D198). 로그인되어 있고 최소 버전 이상이어야 통과다 */
+export async function checkGh(
+  bin: string,
+  env: NodeJS.ProcessEnv,
+): Promise<{ check: GhCheck; item: CheckItem }> {
+  const auth = await ghAuthStatus(bin, env)
+  const version = await ghVersion(bin, env)
+  const old = ghTooOld(version)
+  const item: CheckItem = {
+    id: 'gh',
+    label: `gh auth status가 성공하고 gh가 ${MIN_GH_VERSION} 이상인가`,
+    ok: auth.ok && !old,
+    blocking: false,
+    detail: !auth.ok
+      ? `${auth.detail}. [PR 생성]을 쓸 수 없습니다`
+      : old && version
+        ? `${ghVersionReason(version)}. gh를 올리기 전에는 [PR 생성]을 쓸 수 없습니다`
+        : `로그인됨 (gh ${version ?? '버전 모름'})`,
+  }
+  return { check: { auth: auth.ok, version }, item }
+}
+
+async function inspect(
+  dir: string,
+  o: ProjectEnv,
+): Promise<{ view: ProjectInspection; gh: GhCheck }> {
   const env = o.env
   const picked = canonicalPath(dir)
   const root = await repoRoot(picked, { env })
@@ -78,21 +114,18 @@ export async function inspectProject(dir: string, o: ProjectEnv): Promise<Projec
     detail: origin ? '있음' : '없음. [push]와 [PR 생성]을 쓸 수 없습니다',
   })
 
-  const gh = await ghAuthStatus(o.ghBin, env)
-  checks.push({
-    id: 'gh',
-    label: 'gh auth status가 성공하는가',
-    ok: gh.ok,
-    blocking: false,
-    detail: gh.ok ? '로그인됨' : `${gh.detail}. [PR 생성]을 쓸 수 없습니다`,
-  })
+  const gh = await checkGh(o.ghBin, env)
+  checks.push(gh.item)
 
   return {
-    path: repo,
-    name: folderName(repo),
-    checks,
-    defaultBranch: root ? await defaultBranch(root, { env }) : null,
-    canRegister: checks.every((c) => c.ok || !c.blocking),
+    view: {
+      path: repo,
+      name: folderName(repo),
+      checks,
+      defaultBranch: root ? await defaultBranch(root, { env }) : null,
+      canRegister: checks.every((c) => c.ok || !c.blocking),
+    },
+    gh: gh.check,
   }
 }
 
@@ -105,7 +138,7 @@ export async function prepareProject(
   at: string,
   o: ProjectEnv,
 ): Promise<Registration> {
-  const inspection = await inspectProject(dir, o)
+  const { view: inspection, gh } = await inspect(dir, o)
   const failed = inspection.checks.find((c) => c.blocking && !c.ok)
   if (failed) return { ok: false, error: `${failed.label}: ${failed.detail}` }
   const name = branch.trim() || inspection.defaultBranch
@@ -124,7 +157,7 @@ export async function prepareProject(
       repo_path: repo,
       default_branch: name,
       created_at: at,
-      checks: { origin: check('origin'), gh: check('gh'), checked_at: at },
+      checks: { origin: check('origin'), gh: gh.auth, gh_version: gh.version, checked_at: at },
     },
   }
 }

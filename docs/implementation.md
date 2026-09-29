@@ -75,6 +75,11 @@
 | I45 | M8의 완료 기준 "review에서 만든 커밋이 verify의 [변경]과 Work 완료 화면의 전체 변경에 들어간다"를 "review의 [변경]과 Work 완료 화면의 [전체 변경]에 들어간다"로 고친다. task의 [변경]은 그 task의 시작 커밋부터라(D83) 리뷰가 고친 커밋은 review의 승인 화면에 보이고, verify의 승인 화면(Work 완료 화면)에는 기준 커밋부터의 [전체 변경]에 보인다. 설계는 바꾸지 않는다 | 계획의 문구가 D83과 어긋났음. verify의 [변경]에 앞 task의 커밋을 넣으면 task마다 [변경]의 뜻이 달라짐 | ✅ |
 | I46 | 승인 대기에서 사람이 요청해 시작한 턴이 handoff를 다시 쓰지 않고 끝나도(Stop, 세션 종료, 재시작 조정), 앞 턴의 유효한 handoff로 승인 대기가 되고 [승인]이 켜진다 **(알려진 제약)**. `core/machine`의 `stop`, `sessionEnded`, `restarted`는 이번 턴에 handoff가 바뀌었는지 보지 않는다(`handoffChanged`는 형식 오류 되돌림에만 씀). 모든 단계에 원래 있던 동작인데, 리뷰는 고른 지적을 고치는 두 번째 턴을 늘 거친다. 리뷰에서 이렇게 된 채 승인하면 `decisions.md`에 고른 기록(D164)이 남지 않고, verify는 `반영`이 "없음"인 `review.md`를 읽는다. 승인하기 전에 승인 화면에서 `review.md`의 `반영` 절과 [변경]의 커밋이 맞는지 본다. 경고나 막음은 설계 9절의 추가 후보에 올린다 | 리뷰는 늘 수동 승인이라(D167) 승인 화면에 `반영` 절("없음")과 [변경]의 새 커밋이 함께 보여 사람이 어긋남을 알 수 있음. 모든 단계의 상태 기계를 바꾸는 일이라 M8 밖임. [실제] M·S에서는 두 번째 턴이 모두 `review.md`와 handoff를 다시 썼음(PR #13 리뷰) | ✅ |
 | I47 | 스파이크 S7은 `spikes` 워크플로의 Linux 작업에서 돌린다(`spikes` 입력에 S7만 적을 때). Claude 인증 없이 시험용 레포 secret(I43)만 쓰고, 스파이크 의존성(node-pty)은 설치하지 않는다. 다른 계정의 코멘트는 사람이 달아야 하므로 start(시험 PR을 만들고 사람이 필요 없는 절차를 돌린 뒤 PR을 남김) → 사람의 코멘트 → finish(작성자 관계 읽기, 머지, 정리)로 나누고, 남은 것은 cleanup으로 치운다. 시험 PR은 main에서 만든 임시 기준 브랜치(`s7/<run>/base`)에 열어 시험용 레포의 main을 건드리지 않는다 | 웹 세션에서는 GraphQL이 막혀 gh의 PR 명령이 돌지 않음(`spikes.md` S7). 기존 Windows 작업은 Claude 인증부터 확인해 그대로 쓸 수 없음. 새 워크플로 파일은 기본 브랜치에 들어가기 전에는 수동 실행을 할 수 없는데, 기존 `spikes` 워크플로는 작업 브랜치를 ref로 줘 실행할 수 있음. 사람을 기다리며 러너를 붙잡지 않음. 임시 기준 브랜치를 지우면 머지한 시험 커밋도 남지 않음 | |
+| I48 | PR 단계의 [실제]는 시험용 레포의 main에서 만든 임시 기준 브랜치(`m9/<run>/base`)를 Work의 기준 브랜치로 쓴다. PR의 머지와 충돌을 만드는 커밋은 그 브랜치에만 생기고, 시험이 끝나면 지운다 | 시험용 레포의 main을 건드리지 않음. 머지 커밋이 main에 쌓이지 않음. S7(I47)과 같은 방식(PR #14의 제안) | ✅ |
+| I49 | M9의 [실제]는 가짜 `claude`와 실제 gh로 `app-claude` 워크플로의 Linux 작업(`pr`)에서 돌린다(`cases` 입력에 `pr`이나 `pr-cleanup`만 적을 때). Claude 인증 없이 시험용 레포 secret(`RELAY_TEST_GH_REPO`, `RELAY_TEST_GH_TOKEN`, I43)만 쓴다. 시험은 `test/claude/pr.test.ts`이고 `RELAY_REAL_GH=1`일 때만 돈다. 앱과 시험 도구의 git push는 gh의 자격 증명을 쓴다(S7과 같음). 도중에 멈춰 남은 시험 브랜치와 PR은 경우 `pr-cleanup`으로 치운다 | M9에는 에이전트가 없어 실제 `claude`가 필요 없고, Claude 인증 secret이 없는 레포에서도 돈다(8.4). 웹 세션에서는 GraphQL이 막혀 gh의 PR 명령이 돌지 않음(`spikes.md` S7). gh와 GitHub의 동작은 OS와 상관없고(S7), Windows에서 앱이 실제 gh를 부르는 길은 [실기]가 본다. 기존 워크플로에 작업을 더해 작업 브랜치를 ref로 줘 PR 전에도 돌림(I47) | |
+| I50 | PR 진행의 gh 명령은 PR 주소(`https://<host>/<owner>/<repo>/pull/<n>`, `gh pr create`가 찍은 것이나 이미 열린 PR의 것)에서 읽은 레포로 부른다: gh 명령은 `--repo <host>/<owner>/<repo>`, REST는 `gh api --hostname <host> repos/<owner>/<repo>/…`이다 | PR 주소는 GitHub가 준 정식 주소라 origin 주소를 다시 읽을 필요가 없음. `gh api`는 호스트를 `--hostname`으로만 받고 `--repo`나 `GH_REPO`에서 읽지 않음(3절). 가짜 gh도 같은 모양의 주소를 줘 [흐름]이 같은 길을 지남 | |
+| I51 | PR 읽기의 네트워크 부분(gh, git fetch)은 Work의 처리 줄 밖에서 하고, 결과의 반영(fast-forward, `pr-items.json`, `work.json`, 알림)만 처리 줄에서 한다. 한 Work의 읽기는 한 번에 하나이고, 끊긴 작업의 기록(D122)이 있는 동안은 자동으로 읽지 않는다 | 한 번 읽기가 gh를 네 번 이상 불러 몇 초 걸림(S7). 처리 줄에서 하면 그동안 사람의 조작과 (M10부터) 대응 task의 훅 응답이 기다림. 반영은 git과 파일을 바꾸므로 다른 조작과 섞이지 않게 줄에서 함. 끊긴 머지가 있는데 읽기가 Work를 끝내면 [다시 시도]·[무시]와 어긋남 | |
+| I52 | Actions 실행의 이벤트(D201)는 WorkRunner가 실행 id별로 메모리에 두고, 처음 보는 실행만 `gh api --hostname <host> repos/<owner>/<repo>/actions/runs/<실행>?exclude_pull_requests=true`로 읽는다(한 번 읽기의 REST 목록 셋과 동시에). 앱을 켜면 CI 실패 항목에 적힌 이벤트로 먼저 채운다. 읽지 못하면 읽기의 경고로 보이고, 그 실행의 체크는 실행 id로 가려(`<워크플로>/<이름> #<실행>`) 다른 실행과 합치지 않으며, 다음 읽기에서 다시 읽는다 | 실행의 이벤트는 바뀌지 않아 한 번 읽으면 됨. 이벤트를 못 읽어도 PR 상태와 코멘트는 쓸모 있어 읽기 전체를 실패로 하지 않음. 합치면 실패를 가릴 수 있어 합치지 않는 쪽으로 틀림. CI 실패 항목에 적힌 이벤트를 쓰면 다시 켠 뒤 이벤트를 못 읽어도 항목의 id가 바뀌지 않음(바뀌면 해소됐다가 새 항목으로 돌아와 알림이 감). 처음 볼 때 이미 실패였고 그때 이벤트를 못 읽은 체크는 다음 읽기에서 항목의 id가 바뀐다(옛 항목은 해소됨). 머지 조건의 CI는 그동안에도 실패다 | |
 
 ## 3. 확인한 사실
 
@@ -92,6 +97,14 @@
 | 최신 버전 | electron 44.4.5, node-pty 1.1.0, @xterm/xterm 6.0.0, electron-builder 26.15.3, electron-vite 5.0.0, vitest 5.0.2 | npm 레지스트리 (2026-09-26) |
 | Claude Code 동작 | 훅, 스킬, deny 규칙, 첫 실행 창, 강제 종료 뒤 재개는 `docs/spikes.md`의 S1~S6 결과를 따른다(2.1.283) | `docs/spikes.md` |
 | GitHub 연동 | PR 진행(M9~M11)이 쓰는 gh와 GitHub의 동작(PR 상태, 체크와 실패 로그, 코멘트의 작성자, 답글과 표시, 재실행, 충돌, 원격 PR 브랜치, 머지, API 한도)은 `docs/spikes.md`의 S7 결과를 따른다(gh 2.101.0). 협업자와 협업자가 아닌 계정의 작성자 관계는 아직 확인하지 않았다 | `docs/spikes.md` S7 (2026-09-29) |
+| gh의 체크 분류 | `gh pr checks`는 체크의 상태(StatusContext는 `state`, CheckRun은 끝났으면 `conclusion` 아니면 `status`)를 SUCCESS는 pass, SKIPPED·NEUTRAL은 skipping, ERROR·FAILURE·TIMED_OUT·ACTION_REQUIRED는 fail, CANCELLED는 cancel, 나머지(EXPECTED, REQUESTED, WAITING, QUEUED, PENDING, IN_PROGRESS, STALE)는 pending으로 나눈다. 같은 체크가 여러 번 돌았으면 시작 시각이 가장 늦은 것만 남긴다(StatusContext는 context, CheckRun은 이름·워크플로·이벤트로 가림) | cli/cli v2.101.0 `pkg/cmd/pr/checks/aggregate.go` (2026-09-29) |
+| `gh pr view --json statusCheckRollup` | PR의 마지막 커밋(`commits(last: 1)`)의 체크 가운데 처음 100개다. CheckRun은 `__typename`, `name`, `workflowName`, `status`, `conclusion`, `startedAt`, `completedAt`, `detailsUrl`을, StatusContext는 `__typename`, `context`, `state`, `targetUrl`, `startedAt`(만든 때)을 준다. 커밋 노드가 없으면 null이다. `mergeCommit`은 `{oid}`다 | cli/cli v2.101.0 `api/query_builder.go`, `api/export_pr.go` (2026-09-29) |
+| `gh run view --log-failed` | `--job`을 줘도 그 작업과 실행(run) 전체가 끝나야 로그를 준다. 아니면 "run <id> is still in progress; logs will be available when it is complete"(작업이면 "job <id> …")로 실패한다. 줄마다 `<작업 이름>\t<스텝 이름>\t`을 앞에 붙이고, 로그의 제어 문자는 `^[` 꼴의 글자로 바꾼다 | cli/cli v2.101.0 `pkg/cmd/run/view/view.go` (2026-09-29) |
+| `gh pr merge` | 머지하기 전에 PR의 mergeStateStatus가 BLOCKED, BEHIND, DIRTY면 GitHub에 머지를 요청하지 않고 "Pull request <레포>#<n> is not mergeable: …"를 stderr에 쓰고 종료 코드 1로 끝난다(`--admin`, `--auto`를 빼면). 이미 머지된 PR이면 아무것도 하지 않고 성공한다. `--match-head-commit`은 GraphQL `mergePullRequest`의 `expectedHeadOid`로 보낸다. 진행 문구는 표준 출력이 TTY일 때만 쓴다. `--delete-branch`가 없으면 로컬 브랜치를 건드리지 않는다 | cli/cli v2.101.0 `pkg/cmd/pr/merge/merge.go`, `http.go` (2026-09-29), S7 |
+| `gh api`의 호스트 | 요청 호스트는 gh 설정의 기본 호스트이고 `--hostname`으로만 바꾼다. `GH_REPO`에서는 `{owner}`, `{repo}` 자리 표시자만 채운다. `--slurp`는 `--paginate`와 함께 써야 하고 모든 쪽의 JSON 배열을 한 배열로 싼다 | cli/cli v2.101.0 `pkg/cmd/api/api.go` (2026-09-29) |
+| Actions 실행의 이벤트 | REST `GET /repos/{owner}/{repo}/actions/runs/{run_id}`(Get a workflow run)는 실행을 부른 이벤트를 필수 필드 `event`(문자열, 예 `push`)로 준다. `exclude_pull_requests`를 받는다. 레포를 읽을 수 있으면 부를 수 있다(비공개 레포는 OAuth·classic 토큰에 `repo` 범위). `gh run view`도 같은 경로를 `exclude_pull_requests=true`로 읽는다. `gh pr view --json statusCheckRollup`의 CheckRun에는 이벤트가 없다(위). 이 레포의 app-ci는 PR이 열린 브랜치에 코드를 push하면 push와 pull_request로 실행이 둘 생겨 같은 커밋에 체크가 두 벌 붙는다(f7781ce: 실행 #96 push, #97 pull_request) | GitHub REST API 설명 `github/rest-api-description`의 api.github.com.json 1.1.4(`actions/get-workflow-run`), cli/cli v2.101.0 `pkg/cmd/run/shared/shared.go`, 이 레포의 Actions 실행 목록 (2026-09-29) |
+| 옛 head로 머지할 때 GitHub의 거절 | 머지 창에 보인 head 뒤에 새 커밋이 생긴 직후 `--match-head-commit <옛 head>`로 머지하면 GitHub가 "Head branch was modified"가 아니라 "GraphQL: Pull Request is not mergeable (mergePullRequest)"로 거절할 수 있다(새 head의 머지 가능 여부를 계산하는 중). 어느 쪽이든 머지하지 않는다. S7에서는 "Head branch was modified"를 봤다. 앱은 거절 문구에 기대지 않고 PR의 head를 다시 읽어 가른다 | M9 [실제] `app-claude` 실행 #2(2026-09-29, 새 커밋은 contents API로 넣음), S7 |
+| gh 버전과 플래그 | `gh api --slurp`는 v2.48.0에, `gh pr merge --match-head-commit`은 v2.13.0에 생겼다. `gh run view --log-failed`는 v2.0.0에 있다. M9가 쓰는 `gh pr view --json`의 필드(number, url, state, isDraft, headRefName, headRefOid, baseRefName, mergeable, mergeStateStatus, reviewDecision, statusCheckRollup, mergedAt, mergeCommit), `gh repo view --json`의 머지 방식 셋, `gh run view --job`, `gh api --hostname`은 v2.48.0에 모두 있다. `gh --version`의 첫 줄은 `gh version <버전> (<빌드 날짜>)`다 | cli/cli 태그별 소스(`pkg/cmd/api/api.go`, `pkg/cmd/pr/merge/merge.go`, `pkg/cmd/run/view/view.go`, `api/query_builder.go`, `api/queries_repo.go`, `api/export_pr.go`, `pkg/cmd/version/version.go`) (2026-09-29) |
 | 재개가 복원하는 것 | `--resume <세션 id>`는 대화(도구 호출과 결과 포함)를 복원한다. 끝나기 전에 끊긴 도구 호출은 결과를 모르는 것으로 표시된다. `--settings`, `--add-dir`로 준 것은 복원하지 않아 다시 줘야 하고, `bypassPermissions` 모드로 끝난 세션은 새 세션의 기본 모드로 열리므로 `--dangerously-skip-permissions`도 다시 준다. 저장된 대화가 없는 id면 "No conversation found with session ID"를 내고 끝난다 | Claude Code 문서 sessions, cli-reference (2026-09-26), S6 |
 | 세션 전환 | `/clear`는 새 대화를 시작하고 이전 대화는 `/resume`으로 다시 연다. 대화형 `/resume`은 다른 대화로 옮기고, `/branch`는 가지(새 세션 id)로 옮긴다. `/clear`와 대화형 `/resume`은 앞 세션에 SessionEnd(`reason: clear`, `resume`)를 보낸다. 훅 본문의 `session_id`는 지금 세션이다. `/compact`는 같은 대화를 이어 간다 | Claude Code 문서 commands, hooks, sessions (2026-09-26) |
 | 자동 메모리 | 기본으로 켜져 있다. 에이전트가 배운 것을 `<설정 폴더>/projects/<프로젝트>/memory/`에 적고 다음 세션 시작 때 읽는다. 프로젝트는 git 레포 단위라 worktree끼리 같은 폴더를 쓴다. `autoMemoryEnabled: false`는 어느 설정 파일(`--settings` 포함)에서도 읽힌다. 환경 변수 `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`이 설정보다 우선한다 | Claude Code 문서 memory, settings-reference, env-vars (2026-09-26), S6 |
@@ -181,15 +194,16 @@ app/src/
 | core | `approval` | 자동 승인의 방식과 조건 판정, 배지 우선순위 | 4.2, 4.3, D80, D129 |
 | core | `rewind` | 단계 선택의 결과 계산(폐기할 task, 되돌릴 커밋, 건너뛸 단계, 백업 브랜치 이름), 대화상자의 단계와 미리 보기 | 6.2, 6.3, D82, D115~D117 |
 | core | `delivery` | 전달 버튼과 그 이유, 전달을 시작할 수 있는지, `pr.md`의 제목과 본문, 비교 URL과 gh의 레포, 커밋 안 된 변경의 커밋·stash 메시지 | 시나리오 7, D62, D67, D71, D118~D120 |
-| core | `cleanup` | 정리할 수 있는 Work, 확인 요약과 기본 선택, 지울 브랜치와 `--force` | 시나리오 8, D16 |
+| core | `cleanup` | 정리할 수 있는 Work, 확인 요약과 기본 선택, 지울 브랜치와 `--force`, 머지한 Work의 원격 브랜치 삭제(D178) | 시나리오 8, D16 |
+| core | `pr` | PR 진행: PR 주소의 레포(I50), 체크 분류와 CI 상태(D196), 코멘트의 거르기(D160, D161, D197), 항목의 모음과 상태(D189, D199), 머지 조건(D176), 배지(D183), 원격 head 비교(D193), 실패 로그의 끝부분, 기본 머지 방식(D177), gh 버전(D198) | 시나리오 10 |
 | adapters | `store` | RELAY_HOME 경로, 원자적 쓰기, 앱 소유 파일 해시, `events.jsonl`, `decisions.md` | 5.1, 5.4, 5.5, D91 |
 | adapters | `pty` | node-pty 세션, `pty.log` 기록, 프로세스 트리 종료, 프로세스 ID와 시작 시각 | S1, D76 |
 | adapters | `hooks` | 훅 HTTP 서버, 토큰 확인, Stop 응답 (I13) | S2, D20, D21 |
-| adapters | `git`, `gh` | worktree, status, diff, reset, 백업 브랜치, push, stash, 커밋, worktree와 브랜치 지우기, `gh auth status`, `gh pr` (I12) | 시나리오 1·6·7·8 |
+| adapters | `git`, `gh` | worktree, status, diff, reset, 백업 브랜치, push, stash, 커밋, worktree와 브랜치 지우기, fetch와 fast-forward, 원격 브랜치 지우기, `gh auth status`, `gh --version`, `gh pr`(list, create, view, merge), `gh api`(코멘트 목록), `gh run view`, `gh repo view` (I12) | 시나리오 1·6·7·8·10 |
 | adapters | `watch` | task 디렉터리 감시 (I15) | 시나리오 3-3 |
 | adapters | `claude` | 실행 파일 찾기(D106), `claude auth status`, 버전 기록(D105), 이번 task의 스킬 배포(D103, D108) | 시나리오 0, 2-2, 5.6.3 |
 | main | `app` | 시작 때 재시작 조정(시나리오 9), 종료 확인 | 시나리오 3-6, 9 |
-| main | `runner` | 할 일 실행: task 시작·종료, 세션 상한 대기열, 되감기, 전달과 정리 세션, 정리, 자동 승인 카운트다운의 타이머 | 시나리오 2, 4.3, 5~8, D18, D127 |
+| main | `runner` | 할 일 실행: task 시작·종료, 세션 상한 대기열, 되감기, 전달과 정리 세션, 정리, 자동 승인 카운트다운의 타이머, PR 읽기의 타이머와 머지(I51) | 시나리오 2, 4.3, 5~8, 10, D18, D127 |
 | main | `ipc` | 렌더러 명령 처리, 스냅샷 전송 (I14) | |
 | renderer | 화면 | 사이드바, 터미널 탭과 머리 띠, 액션 바, 오른쪽 패널(승인 화면), 대화상자 | 화면 구성 |
 
@@ -502,14 +516,60 @@ app/src/
 - `adapters/gh`: PR 상태, head 커밋, 체크 상태와 실패 로그, 리뷰와 코멘트, 머지 가능 여부 읽기, 머지. 방법은 S7의 결과를 따른다.
 - 읽기(D153, D158, D159), 항목과 거르기(D157, D160, D161, D189), 원격 PR 브랜치 맞추기(fast-forward와 갈라짐 항목, D193), `work.json`의 `pr`과 `pr-items.json`(D191), deny 규칙에 `pr-items.json`.
 - PR 패널, [새로 고침], 배지(D183), 알림(D184), 머지 창과 머지(D176, D177), 머지 뒤 정리 창(D178), 밖에서 머지·닫힘(D179), [머지 없이 끝내기], 프로젝트 설정 화면(D185).
-- 이 마일스톤에는 PR 대응 task가 없다. 항목은 보이기만 한다. 머지 조건은 "제외하지 않은 받은 항목이 모두 처리됨"이므로(D176) 사람이 [제외]해서 채운다. CI 실패와 충돌은 제외해도 머지를 막으므로, 사람이 relay 밖에서 고쳐 push하면 앱이 받는다(D193).
+- 이 마일스톤에는 PR 대응 task가 없다. 항목은 보이기만 한다. 머지 조건은 "제외하지 않은 받은 항목이 모두 처리됨"이므로(D176) 사람이 [제외]해서 채운다. CI 실패와 충돌은 제외해도 머지를 막으므로, 사람이 relay 밖에서 고쳐 push하면 앱이 받는다(D193). 조건이 없어진 것을 읽으면 그 항목은 해소됨이다(D199).
+- gh 버전(D198): 등록 점검과 다시 점검(D67, D118)이 `gh --version`도 보고 2.48.0보다 낮으면 [PR 생성]을 끈다. PR 진행을 시작할 때 버전을 `work.json`의 `pr`에 적는다. 확인한 버전(2.101.0)과 다르기만 하면 알리지 않는다.
+- 머지 뒤 정리 창(D178, D200): [머지]로 머지했으면 바로 열고, 밖에서 머지된 것을 읽었으면 그 Work를 볼 때 한 번 연다.
+- 새 설정: `config.json`의 `pr_poll_interval_sec`(D158), `project.json`의 `allowed_bots`와 `merge_method`(5.1.2).
+
+**gh와 git으로 하는 일** (S7의 결과와 PR #14의 "M9에 미치는 영향". 레포는 PR 주소에서 읽는다, I50)
+
+- **한 번 읽기:** GraphQL 한 번과 REST 셋이다(S7 관찰 9). `gh pr view --json comments,reviews`는 쓰지 않는다: 인라인 코멘트가 없고, 봇인지 알려 주지 않고, 봇 login에서 `[bot]`을 뗀다(S7 관찰 3).
+  - PR 상태와 체크: `gh pr view <n> --repo <host>/<owner>/<repo> --json number,url,state,isDraft,headRefName,headRefOid,baseRefName,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,mergedAt,mergeCommit`
+  - 코멘트: `gh api --hostname <host> --paginate --slurp repos/<owner>/<repo>/pulls/<n>/reviews?per_page=100`, `…/pulls/<n>/comments?per_page=100`, `…/issues/<n>/comments?per_page=100`
+- **항목을 가리는 규칙**
+  - 본문이 빈 리뷰는 항목이 아니다. 인라인 스레드에 답글을 달면(앱이 게시해도) 본문이 빈 리뷰가 하나 더 생긴다(S7 관찰 3). 제출하지 않은 리뷰(PENDING)도 항목이 아니다.
+  - 항목 id(D189)에는 목록의 종류를 함께 적는다(`review:<id>`, `inline:<id>`, `convo:<id>`). 목록마다 따로 받는 id다. CI 실패는 `ci:<head>:<워크플로>/<체크> (<이벤트>)`(D201), 충돌은 `conflict:<기준 브랜치 커밋>`, 갈라짐은 `diverged:<원격 head>`다.
+  - 고친 코멘트는 id가 같아 새 항목이 아니다. 본문만 새로 적는다(S7 관찰 3). 스레드의 새 답글은 `in_reply_to_id`로 스레드에 붙인다.
+  - 봇은 REST `user.type` Bot으로 가린다. 받을 봇(`allowed_bots`)과는 login 끝 `[bot]`을 떼고 비교한다(D161, D197). 사람은 작성자 관계가 OWNER, MEMBER, COLLABORATOR일 때 받는다(D160).
+- **CI:** statusCheckRollup의 체크를 gh의 분류(3절)로 나눈다. fail이 CI 실패 항목이고, cancel과 pending은 항목이 아니지만 머지를 막는다. CheckRun의 `detailsUrl`(`…/actions/runs/<실행>/job/<작업>`)에서 실행과 작업을 얻는다(S7 관찰 2). 실행을 부른 이벤트는 `--json`에 없어 처음 보는 실행만 `gh api --hostname <host> repos/<owner>/<repo>/actions/runs/<실행>?exclude_pull_requests=true`의 `event`로 읽는다(D201, I52, 3절).
+  - 로그 끝부분은 `gh run view --job <작업> --repo <레포> --log-failed`로 얻는다. 실행 전체가 끝나야 주므로(3절) 그전에는 다음 읽기에서 다시 본다. 줄 앞의 `<작업>\t<스텝>\t<시각> `과 색 제어 문자(`^[[…m`)를 뗀다. 스텝 이름이 "UNKNOWN STEP"이면(로그 zip에 스텝별 파일이 없음) "Post job cleanup." 앞에서 자른다(S7 관찰 2).
+  - `gh pr checks`는 쓰지 않는다. 체크가 없으면 `--json`에서도 종료 코드 1로 실패한다. 체크 없음은 statusCheckRollup이 비어 있는 것으로 안다(S7 관찰 2).
+  - D196: 새 head를 처음 읽은 때를 메모리에 두고, 체크가 없는 head는 그때부터 60초 동안 "체크 기다림"이다. 앱을 다시 켜면 다시 잰다.
+- **충돌:** `mergeable`이 CONFLICTING이면 항목이다. id의 기준 브랜치 커밋은 PR의 `baseRefOid`나 REST `base.sha`가 아니라 fetch한 기준 브랜치의 커밋이다. 앞의 둘은 기준 브랜치가 움직여도 PR 브랜치에 push하기 전까지 그대로다(S7 관찰 7). UNKNOWN은 GitHub가 계산하는 중이라 머지를 막는다.
+- **원격 PR 브랜치 맞추기(D193)는 git으로 한다(S7 관찰 8):** 원격 head가 로컬 Work 브랜치와 다르면 `git fetch`하고 두 방향 `merge-base --is-ancestor`로 가른다. 원격만 앞서고 worktree가 깨끗하고 Work 브랜치에 있으면 worktree에서 `git merge --ff-only <원격 head>`로 받는다. 받은 커밋의 기준 브랜치 병합은 `rev-list --parents`의 둘째 이후 부모가 fetch한 기준 브랜치의 조상인 것으로 보고, 가장 새것으로 기준 커밋을 옮긴다(D181).
+- **머지(D176, D177):** `gh pr merge <n> --repo <레포> --<방식> --match-head-commit <머지 창에 보인 head>`. `--delete-branch`는 쓰지 않는다: `--repo` 없이 쓰면 head 브랜치가 체크아웃된 다른 worktree를 지운다(S7 관찰 6). TTY가 아니면 성공해도 출력이 없으므로 종료 코드와 다시 읽은 `state`로 판정한다. 허용하는 방식은 `gh repo view <레포> --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed`로 읽는다. 원격 브랜치 삭제(D178)는 정리 창에서 `git push origin --delete <브랜치>`로 한다.
+- **M10에서 쓸 것:** 답글은 `gh api -X POST …/pulls/<n>/comments/<id>/replies --input -`, `gh api -X POST …/issues/<n>/comments --input -`이고 응답의 `id`를 바로 적는다(D194). 재실행(D175)은 `gh run rerun <실행> --repo <레포> --failed`이고 Actions 체크는 링크가 `/actions/runs/`인 것이다.
 
 **완료 기준**
 
-- [단위] 머지 조건(D176, 제외한 항목은 막지 않음), 항목 상태의 전이(D189), 배지 차례(D183), 작성자 거르기(D160, D161), 원격 head 비교(같음, 원격만 앞섬, 로컬만 앞섬, 갈라짐, D193).
-- [흐름] 가짜 gh로 PR 진행이 되고, 코멘트와 CI 실패가 항목으로 들어오고, [제외] 뒤 [머지]가 켜지고, 머지하면 완료와 정리 창이 뜬다. 밖에서 머지·닫힘, 재시작(D159)도 본다. 원격 PR 브랜치에 커밋이 생기면 fast-forward로 받고, 로컬에도 커밋이 있으면 갈라짐 항목이 되고 [머지]가 꺼진다(D193).
-- [실제] 시험용 레포의 실제 PR로 읽기, 거르기, 머지를 한다(I43).
-- [실기] PR 패널, 머지 창, 알림, 배지가 설계대로 보인다.
+- [단위] 머지 조건(D176, 제외한 항목은 막지 않음, D196의 60초), 항목 상태의 전이(D189, 해소됨 D199), 배지 차례(D183), 작성자 거르기(D160, D161, D197), 원격 head 비교(같음, 원격만 앞섬, 로컬만 앞섬, 갈라짐, D193), 체크 분류와 로그 끝부분, gh 버전 점검(D198).
+- [흐름] 가짜 gh로 PR 진행이 되고, 코멘트와 CI 실패가 항목으로 들어오고, [제외] 뒤 [머지]가 켜지고, 머지하면 완료와 정리 창이 뜬다. 밖에서 머지·닫힘, 재시작(D159)도 본다. 원격 PR 브랜치에 커밋이 생기면 fast-forward로 받고, 로컬에도 커밋이 있으면 갈라짐 항목이 되고 [머지]가 꺼진다(D193). relay 밖에서 고치면 조건 항목이 해소됨이 된다(D199).
+- [실제] 시험용 레포의 실제 PR로 읽기, 거르기, 머지를 한다(I43, I48, I49, 8.4).
+- [실기] PR 패널, 머지 창, 알림, 배지, 프로젝트 설정 화면, 머지 뒤 정리 창(원격 브랜치 삭제)이 설계대로 보인다.
+
+**구현하며 정한 것** (설계의 규칙에서 따라 나오는 세부. 계획 때 사람이 정한 것은 D198~D200, I48이다. PR #15 리뷰로 설계 결정 D201을 더했다)
+
+- **PR 진행의 시작(D152, D191, D198):** [PR 생성]의 전달이 성공하면(새로 만들었든 같은 브랜치의 열린 PR을 찾았든) main이 PR 주소에서 번호를 읽고(I50), push한 head와 `gh --version`을 `delivery.succeeded`에 넣는다. machine이 Work를 PR 진행으로 바꾸고 `work.json`의 `pr`에 번호, 주소, head, gh 버전, 시작한 때를 적는다. `work.completed`는 남기지 않는다. PR 주소를 읽지 못하면 전달 실패다(M5의 [다시 시도]·[전달 없이 완료]).
+- **읽기(D153, D158, D159, I51):** 한 번 읽기는 `main/pr.ts`가 한다: `gh pr view --json` 한 번(상태, head, 체크, 머지 가능 여부, 리뷰 상태)과 REST 목록 셋(`gh api --paginate --slurp`, 동시에), 처음 보는 Actions 실행의 이벤트(D201, I52, 목록과 동시에). 로컬 Work 브랜치와 원격 head가 다르면 PR 브랜치를, 충돌이면 기준 브랜치를 메인 체크아웃에서 fetch한다. 새 CI 실패만 로그를 읽는다. 반영은 처리 줄에서 한다. 한 Work의 읽기는 한 번에 하나이고, 읽는 중에 [새로 고침]을 누르면 그 읽기가 끝난 뒤 다시 읽는다. 읽기가 끝날 때마다 다음 주기 읽기(`pr_poll_interval_sec`, 30~3600초, 기본 120초)를 건다. 주기를 바꾸면 다음 읽기부터 쓴다. 닫힌 PR과 앱을 끝내는 동안은 걸지 않는다. 끊긴 작업의 기록이 있는 동안은 읽지 않고(I51), [다시 시도]·[무시]로 풀리면 다음 주기부터 읽는다. 읽기가 실패하면 PR 패널에 오류를 보이고 상태는 그대로다.
+- **앱을 켤 때(D159):** PR 진행인 Work는 `pr-items.json`을 읽어 두고 PR을 한 번 읽는다. 이 읽기로는 OS 알림을 보내지 않는다(D121과 같음). 닫힌 PR은 켤 때도 읽지 않고 [새로 고침]으로만 읽는다(D179). 새 head를 처음 읽은 때(D196)는 메모리에 두어 켤 때마다 다시 잰다.
+- **항목(D157, D160, D161, D189, D197, D199):** `core/pr`의 `gatherItems`가 지난 항목과 이번 읽기로 정한다.
+  - 코멘트: 리뷰는 본문이 있는 것만(상태와 관계없이 승인 리뷰의 본문도 D157의 "리뷰 본문"으로 넣는다), 인라인 코멘트는 스레드의 답글을 포함해 모두, 대화 코멘트는 모두다. 제출하지 않은 리뷰(PENDING)는 뺀다. 사람이 정하지 않은 새 항목과 받지 않음은 읽을 때마다 거르기 규칙을 다시 적용하고, 프로젝트 설정의 받을 봇을 바꾸면 다음 읽기를 기다리지 않고 바로 다시 적용한다(`reapplyRules`). 사람이 [받기], [제외], [다시 넣기]한 항목(`by_human`)은 규칙이 바꾸지 않는다.
+  - GitHub에서 없어진 코멘트는 `gone`을 적고, 새 항목과 받지 않음이면 해소됨이다. 제외는 제외인 채 둔다. 없어진 코멘트에는 조작을 받지 않는다.
+  - CI 실패: 지금 head에서 fail로 나뉜 체크 하나가 항목 하나다. 체크의 이름은 Actions 체크면 `<워크플로>/<이름> (<이벤트>)`, 그 밖의 CheckRun이면 `<워크플로>/<이름>`, 커밋 상태(StatusContext)면 context다(D201). 이름이 같은 체크가 여럿이면 가장 늦게 시작한 것만 본다. 이벤트를 읽지 못한 Actions 체크는 `<워크플로>/<이름> #<실행>`으로 가려 다른 실행과 합치지 않는다(I52). 화면에는 `워크플로 / 이름 (이벤트)`로 보인다. cancel과 pending은 항목이 아니지만 머지를 막는다. 로그는 Actions 체크만 읽고(`gh run view --job --log-failed`), 실행이 끝나지 않았으면 까닭을 적고 다음 읽기에서 채운다. 한 번 채운 로그는 다시 읽지 않는다. 끝부분은 40줄 **(기본값)**이다.
+  - 충돌은 `mergeable`이 CONFLICTING일 때, 갈라짐은 원격 head와 로컬 Work 브랜치가 갈라졌거나 원격만 앞섰는데 worktree가 깨끗하지 않을 때다(D193). `mergeable`이 UNKNOWN이거나 기준 브랜치를 fetch하지 못하면 충돌 항목을 바꾸지 않고, 비교하지 못하면 갈라짐 항목을 바꾸지 않는다. 로컬만 앞서거나 worktree가 Work 브랜치에 있지 않으면(D138) 항목을 만들지 않고 머지 조건에 까닭을 보인다.
+  - `pr.items_received`는 새 항목이 된 id(되살아난 조건 항목 포함)와, 있으면 받지 않은 코멘트 id(`not_accepted`)를 적는다.
+- **fast-forward(D181, D193):** 읽은 뒤 바뀌었을 수 있어 반영할 때 로컬 Work 브랜치, worktree의 변경, 체크아웃된 브랜치를 다시 보고 `git merge --ff-only`로 받는다. 받은 커밋(`rev-list --parents <로컬>..<원격>`)의 둘째 이후 부모가 fetch한 기준 브랜치의 조상이고 지금 기준 커밋의 자손이면 기준 브랜치 병합으로 보고, 그 가운데 가장 새것으로 기준 커밋을 옮긴다. 기준 브랜치는 병합 커밋이 있을 때만 fetch한다. 받은 것은 `pr-items.json`의 `synced`와 `pr.synced`에 남아 PR 패널의 "받은 원격 커밋"에 보인다(대응 라운드 기록은 M10).
+- **머지 조건(D176, D196):** 원격 PR의 상태가 OPEN, 닫히지 않음, 진행 중 작업 없음, CI가 pass나 none(체크 없음이 60초 지남), `mergeable` MERGEABLE, 새 항목 없음, 로컬 Work 브랜치가 원격 head와 같음이다. draft와 리뷰 승인, 브랜치 보호는 앱이 보지 않고 GitHub가 판정해 오류를 준다(시나리오 10-8). 꺼져 있으면 어긴 조건을 모두 보인다.
+- **머지(D77, D123, D176, D177):** machine은 머지 창의 head가 마지막으로 읽은 head이고 머지 조건을 만족할 때만 받아 진행 중 작업(`merge`, 방식, head)을 적는다. main이 `gh pr merge --<방식> --match-head-commit <head>`를 부르고, 성공하면 PR을 다시 읽어 MERGED일 때만 완료(머지됨)로 바꾼다. 거절되면 PR의 head를 다시 읽어, 머지하려던 head와 다르면 "그사이 PR에 새 커밋이 생겨 머지하지 않음"을, 같으면 gh의 오류를 머지 창에 보이고 PR 진행에 남는다. GitHub는 새 커밋이 생긴 직후에 "Head branch was modified" 대신 "Pull Request is not mergeable"로 거절하기도 해서 문구로 가르지 않는다(3절). 어느 쪽이든 곧 PR을 다시 읽는다. 끊긴 머지의 [다시 시도]는 먼저 읽어 이미 MERGED면 머지하지 않고 완료한다.
+- **머지 창(D177):** 창을 열 때 `gh repo view --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed`를 읽는다. 보이는 차례와 기본 선택의 차례는 merge, squash, rebase다. "판정표는 대응 전 코드 기준" 경고(D180)는 대응 라운드가 생기는 M10에서 더한다.
+- **머지 뒤 정리 창(D178, D200):** 머지로 완료했고 아직 창을 열지 않은 Work를 사람이 보고 있으면(화면에서 고른 Work, 다른 창이 없을 때) 화면이 [Work 정리] 창을 열고 연 것을 `work.json`의 `pr.clean_offered_at`에 적어 다시 열지 않는다. 앱에서 머지하면 보고 있으므로 바로 열린다. 머지로 완료한 Work는 작업 브랜치 삭제가 기본으로 체크된다. origin의 작업 브랜치 삭제는 `git ls-remote`로 있을 때만 고를 수 있고 기본은 끈다(D178의 "고를 수 있다"). 원격 브랜치는 로컬 브랜치를 지운 뒤 `git push origin --delete`로 지우고, 정리 기록에 그 단계(`remote`)를 더해 끊기면 [다시 시도]가 잇는다. 그때 원격에 없으면 건너뛴다.
+- **밖에서 머지·닫힘(D179):** 머지를 읽으면 완료(머지됨, `outside: true`, 방식 없음)다. 닫힘을 읽으면 `pr.closed_at`과 `pr.closed`를 한 번 적고 자동 읽기를 멈춘다. 다시 열린 것을 읽으면 지우고 `pr.reopened`를 적고 주기 읽기를 다시 건다. [머지 없이 끝내기]는 확인 창을 거쳐 완료(`ended_at`, `work.completed`의 `merged: false`)이고 더 읽지 않는다.
+- **알림(D184):** 사람이 움직일 일만 "PR #n: …"으로 알린다: 대응 거리 k개가 들어옴(새 항목이 된 것), 머지할 수 있음(머지 조건이 꺼져 있다 켜짐), PR이 닫혀 자동 읽기를 멈춤, 밖에서 머지됨. 보고 있는 Work는 알리지 않는다(D81).
+- **배지(D183):** PR 진행이면 대응 거리 있음(새 항목) > PR 닫힘 > 머지 가능 > 리뷰·CI 대기 차례로 하나다. 앞의 셋은 강조한다. 끊긴 작업은 늘 앞선다. 자동 대응 멈춤(D171)과 대응 task의 상태는 M10, M11에서 더한다.
+- **PR 패널(D183):** 지금 task(verify)를 고르면 오른쪽 패널이 넓어져 PR 패널과 최종 검증 결과(읽기 전용) 탭이 된다. 요약(번호와 링크, head, CI, 체크별 상태, 리뷰, 충돌, 로컬과의 비교, 마지막으로 읽은 때와 [새로 고침]), [머지]와 어긴 조건, [머지 없이 끝내기], 항목 목록, 받은 원격 커밋, PR 진행을 시작할 때의 gh 버전을 보인다. 코멘트 본문과 CI 로그는 남이 쓴 글이라 마크다운으로 그리지 않고 글자 그대로 보인다. 완료한 Work에도 기록으로 남는다.
+- **프로젝트 설정(D185, 5.1.2):** 사이드바의 프로젝트 이름을 누르면 연다. 받을 봇은 한 줄에 하나(쉼표도 받음)이고 앞뒤 공백을 떼고 겹친 것은 하나로 둔다. 기본 머지 방식은 "레포가 허용하는 첫 방식"(null), merge, squash, rebase다. 앱 설정과 같은 줄에서 차례로 저장한다.
+- **gh 버전(D198):** 등록 점검과 다시 점검은 로그인과 관계없이 `gh --version`을 읽는다. 점검 표의 줄은 "gh auth status가 성공하고 gh가 2.48.0 이상인가" 하나이고, `project.json`에는 로그인(`gh`)과 버전(`gh_version`)을 따로 적는다. 버전을 읽지 못했거나 숫자로 읽을 수 없으면 막지 않는다. M9 전에 점검한 `project.json`은 버전이 없어 막지 않고, 다음 점검에서 적는다.
+- **시험:** 가짜 gh(8.2)의 PR 상태는 `prs.json`, 체크와 코멘트는 `github.json`이고, `test/flow/github.ts`의 `FakeGitHub`가 바꾼다. 가짜 세계(`FakeWorld`)는 PR 브랜치에 `ci-fail`이 있으면 CI를 실패로 두고, 원격 브랜치가 바뀌면 `git merge-tree`로 `mergeable`을 다시 계산한다. [흐름]과 [실제]는 같은 공통 시나리오(`test/flow/pr-scenario.ts`, 8.4의 PR 진행 1~6)를 돌고, 가짜로만 만들 수 있는 경우(재시작, 로컬만 앞섬과 갈라짐, 깨끗하지 않은 worktree, gh 실패, 끊긴 머지, 고친·지운 코멘트, 로그가 아직 없는 CI 실패, push와 pull_request로 두 번 돈 작업과 이벤트를 읽지 못함(D201, I52), 머지 방식과 브랜치 보호, 낮은 gh)는 `test/flow/pr.test.ts`가 따로 본다.
 
 ### M10. PR 대응
 
@@ -550,7 +610,7 @@ app/src/
 | [어댑터] | `adapters`: 실제 git, 파일, node-pty, HTTP 서버, 프로세스 종료 | Vitest | Windows 러너 | push, PR |
 | [흐름] | `main` 조립 + `adapters` + 가짜 `claude`(I25, I26) | Vitest | Windows 러너 | push, PR |
 | [스모크] | 설치 파일과 화면(I27) | Playwright `_electron` | Windows 러너 | 수동. 설치 파일 워크플로 |
-| [실제] | 앱 흐름 + 실제 `claude` + 스킬(I29) | Vitest와 시험 도구(I17) | Windows 러너. 지금은 Linux 클라우드 세션(8.4) | 수동. 마일스톤 완료, Claude Code 업데이트 때 |
+| [실제] | 앱 흐름 + 실제 `claude` + 스킬(I29). PR 진행(M9)은 가짜 `claude` + 실제 gh(I49) | Vitest와 시험 도구(I17) | Windows 러너. 지금은 Linux 클라우드 세션(8.4). PR 진행은 Linux 러너(I49) | 수동. 마일스톤 완료, Claude Code 업데이트 때 |
 | [실기] | 한글 IME, 알림, 화면, 사용감 | 사람 | Windows 10/11 PC | 마일스톤 완료 때 |
 
 - 비용: 공개 레포라 러너 시간은 무료다. 비용이 드는 것은 [실제]의 Claude 사용량뿐이다.
@@ -566,6 +626,11 @@ app/src/
 - 가짜 `gh`도 같은 방식으로 두고, 받은 인자를 파일에 남긴다 **(기본값)**. PR 단계(M9~M11)를 위해 PR 상태, 체크, 리뷰와 코멘트 읽기, 답글 게시, 체크 재실행, 머지를 더하고, 시나리오 파일로 PR의 상태와 코멘트를 바꾼다(I43).
   - 위치는 `app/test/fake-gh/gh.mjs`다. `auth status`, `pr list`, `pr create`를 흉내 내고, 인자와 cwd, `--body-file`의 내용을 `FAKE_GH_RECORD` 폴더의 `fake-gh.jsonl`에 한 줄씩 남긴다. 만든 PR은 같은 폴더의 `prs.json`에 두어 같은 `--repo`와 `--head`로 찾는다.
   - 로그인 실패(`FAKE_GH_AUTH=fail`), 이미 열린 PR(`FAKE_GH_OPEN_PR`), 명령 실패(`FAKE_GH_FAIL=list|create`)를 환경 변수로 흉내 낸다. `--repo`가 로컬 경로면 head 브랜치가 그 레포에 push되어 있어야 PR을 만든다.
+  - M9에서 더한 명령(PR #14): `--version`, `pr view --json`, `api`(GET 목록 셋과 실행 하나 `…/actions/runs/<실행>`. 답글 POST 둘은 M10), `run view --job --log-failed`, `pr merge --match-head-commit`, `repo view --json …Allowed`.
+  - PR의 상태는 `prs.json`(번호, 주소, 레포, head와 기준 브랜치, 상태, 머지)과 시험이 쓰는 같은 폴더의 `github.json`(PR마다 체크, 리뷰, 인라인 코멘트, 대화 코멘트, mergeable, 실패 로그, 허용 머지 방식, 실행마다 이벤트)에 둔다. 시험은 `test/flow/github.ts`로 이 파일을 바꾸고 [새로 고침]으로 읽게 한다. head와 base는 PR을 만든 레포(로컬 bare 원격)의 브랜치에서 매번 읽어, 시험이 원격에 커밋을 더하면(웹 편집 흉내) 바뀐다(D193).
+  - 주소는 GitHub 모양(`https://github.test/local/<레포 이름>/pull/<n>`)이라 앱이 PR 주소에서 레포를 읽는 길(I50)을 그대로 지난다.
+  - S7에서 본 모양을 넣는다: 체크가 아직 없는 새 head(빈 statusCheckRollup), 본문이 빈 리뷰, 봇(`…[bot]`, `user.type` Bot, 관계 NONE), 고친 코멘트(id가 같고 `updated_at`만 바뀜), 기준 브랜치가 움직여도 옛 `baseRefOid`, TTY가 아닐 때 머지 성공의 빈 출력, head가 다르면 "GraphQL: Head branch was modified. Review and try the merge again. (mergePullRequest)"와 종료 코드 1, 실행이 끝나기 전의 로그 요청 실패(3절).
+  - 명령 실패는 `FAKE_GH_FAIL`(`view`, `api`, `event`, `merge`, `log`를 더함. `api`는 REST 요청 모두, `event`는 실행 읽기만), gh 버전은 `FAKE_GH_VERSION`(기본 2.101.0)으로 흉내 낸다. `merge`의 실패는 M9 [실제]에서 GitHub가 준 "GraphQL: Pull Request is not mergeable (mergePullRequest)"다. 브랜치 보호로 막힌 것(mergeStateStatus BLOCKED)은 `github.json`의 `merge_state`로 두면 gh처럼 GitHub에 묻기 전에 멈춘다.
 
 ### 8.3 워크플로
 
@@ -573,7 +638,7 @@ app/src/
 |---|---|---|
 | `.github/workflows/app-ci.yml` | push, PR (`app/`, `skills/`, `docs/contracts/`가 바뀔 때) | Linux: 타입 검사, ESLint, Prettier 확인, [단위], `skills/check.mjs` **(기본값)**. Windows: 빌드(I39), [어댑터], [흐름] |
 | `.github/workflows/app-build.yml` | 수동 | 설치 파일 빌드, 조용한 설치, [스모크], 설치 파일을 결과물로 올리기(I8) |
-| `.github/workflows/app-claude.yml` | 수동 | [실제]. 입력: 모델, effort. 인증은 스파이크 워크플로와 같은 레포 secret. 레포에 secret이 없으면 첫 단계에서 멈춘다. 2026-09-28까지 한 번도 돌지 않았다(8.4). PR 단계의 경우는 시험용 레포 secret(`RELAY_TEST_GH_REPO`, `RELAY_TEST_GH_TOKEN`)이 있을 때만 돈다(I43) |
+| `.github/workflows/app-claude.yml` | 수동 | [실제]. 입력: 모델, effort. 인증은 스파이크 워크플로와 같은 레포 secret. 레포에 secret이 없으면 첫 단계에서 멈춘다. Windows 작업은 2026-09-29까지 한 번도 돌지 않았다(8.4). `cases`에 `pr`이나 `pr-cleanup`만 적으면 Linux 작업(`pr`)이 가짜 `claude`와 실제 gh로 PR 진행(M9)을 돈다. Claude 인증 없이 시험용 레포 secret(`RELAY_TEST_GH_REPO`, `RELAY_TEST_GH_TOKEN`)만 쓴다(I43, I49) |
 
 ### 8.4 실제 claude 시험 (I29)
 
@@ -590,9 +655,18 @@ app/src/
 - 자동 승인(M7, 사용자 결정): S 경로 레포에서 수정 단계의 자동 승인을 켜고(카운트다운 5초) 사람 역할은 카운트다운을 기다린다. 실제 Stop 본문의 `background_tasks`와 `session_crons`가 턴이 끝날 때 비어 있어 카운트다운이 시작되는지(D129), 실제 스킬이 마무리 안내 문구(D132)를 그대로 찍는지, 자동 승인 뒤 세션을 끝내 다음 단계(M8부터 리뷰)로 가고 승인 방식이 자동으로 남는지 본다. 자동 승인하지 않으면 알림의 까닭을 남기고 실패로 친다.
 - 리뷰(M8): 모든 크기가 review를 거친다. M과 S 경로의 시험에서 사람 역할은 review가 처음 승인 대기가 되면 `review.md`의 `## 지적`을 읽고, 번호 붙은 지적이 있으면 터미널에 "1번 지적만 반영해 주세요. 나머지 지적은 반영하지 않습니다."라고 친다. 다시 승인 대기가 되면 [승인]한다(`test/claude/review.ts`). 판정: 지적이 1부터 차례로 번호가 붙었다(들여쓰지 않은 번호 줄만 센다), 지시하기 전에는 리뷰의 커밋이 없고(review의 시작 커밋 → 지시한 때의 HEAD) 지시한 뒤에는 있다(→ verify의 시작 커밋), `반영` 절은 1번뿐이다, `반영하지 않은 지적` 절은 나머지 모두다(두 절은 들여쓰지 않은 목록 줄의 번호를 읽고 2~4 같은 범위는 펼친다), handoff에 `by: human` 결정이 있다. 판정 도구는 [단위]가 본다(`test/unit/claude-review.test.ts`). 지적이 없으면 지시할 수 없어 실패로 친다. 고친 내용이 1번 지적과 맞는지와 다른 지적을 건드리지 않았는지는 결과 요약의 지적, 커밋, 바뀐 파일과 대화 기록(`pty.log`)으로 사람이 본다. 다른 경우(재개, 되감기, 전달, 재시작, 자동 승인)의 사람 역할은 지시 없이 [승인]한다.
 - PR(M9~M11, I43): 시험용 레포에 [PR 생성]으로 실제 PR을 만든다. 사람 역할이 리뷰 코멘트를 달고(M10), 대응 task의 커밋과 답글이 PR에 올라오는지, 코멘트 속 지시를 따르지 않는지(D162) 본다. 마지막에 [머지]하고 정리한다. 시험이 끝나면 시험용 레포의 브랜치를 지운다. Claude Code 웹 세션에서는 GitHub GraphQL이 막혀 gh의 PR 명령이 돌지 않으므로(`spikes.md` S7), 이 경우는 `app-claude` 워크플로나 사람의 PC에서 돌린다.
-- `RELAY_REAL_CASES`로 돌릴 경우(M, S, resume, rewind-intake, rewind-fix, deliver, restart, auto. rewind는 둘 다)를 고른다. PR 단계의 경우 이름은 마일스톤을 만들 때 정한다.
+- PR 진행(M9, 경우 `pr`, I48, I49): 에이전트가 없어 가짜 `claude`와 실제 gh로 돈다. [흐름]의 PR 진행 시험과 같은 시나리오(`test/flow/pr-scenario.ts`)를 쓰고, GitHub 쪽만 가짜 gh와 로컬 bare 원격에서 실제 gh와 시험용 레포로 바꾼다. 시험용 레포를 clone해 main에서 임시 기준 브랜치 `m9/<run>/base`를 만들고, 그 브랜치를 기준으로 한 Work를 S 경로로 최종 검증까지 가게 한 뒤 [PR 생성]한다. 가짜 `claude`의 수정은 `ci-fail` 스위치를 함께 커밋한다. 시험 도구는 사람과 relay 밖의 GitHub 역할을 한다.
+  1. 읽기: PR 진행이 되고, 체크가 없는 새 head는 "체크 기다림"이다(D196). CI가 실패하면 CI 실패 항목이 실패한 스텝의 로그 끝부분과 함께 들어온다.
+  2. 거르기: 소유자(토큰의 계정)의 대화 코멘트와 리뷰(본문과 인라인)는 받고, 봇 코멘트 워크플로의 코멘트는 받지 않는다. `allowed_bots`에 `github-actions`를 적으면 받는다(D160, D161, D197).
+  3. 항목을 모두 [제외]해도 CI 실패로 [머지]가 꺼져 있다. 사람이 제외한 항목은 조건이 풀려도 그대로이므로(D199) CI 실패 항목은 [다시 넣기]로 되돌린다. relay 밖에서 `ci-fail`을 지우는 커밋(contents API. 웹 편집과 같음)을 더하면 앱이 fast-forward로 받고(D193), 옛 CI 실패 항목은 해소됨이다(D199). 새 head의 CI가 통과하면 [머지]가 켜진다.
+  4. 충돌: 임시 기준 브랜치에 같은 자리를 바꾼 커밋을 넣으면 충돌 항목이 fetch한 기준 브랜치 커밋의 id로 생긴다. 다른 clone에서 기준 브랜치를 병합해 push하면 받아서 기준 커밋을 옮기고(D181, D193), 충돌 항목은 해소됨이다.
+  5. 머지: 사람이 본 head 뒤에 relay 밖의 커밋이 생기면 [머지]가 GitHub에서 거절되고 PR은 열린 채다(D176). 다시 읽은 뒤 [머지]하면 완료(머지됨)가 되고 정리 창을 연다. 정리에서 작업 브랜치와 원격 브랜치를 지운다(D178).
+  6. 밖에서 닫힘·다시 열림·머지(D179): 두 번째 Work의 PR을 gh로 닫으면 PR 닫힘이 되고 자동 읽기를 멈추며, 다시 열고 [새로 고침]하면 읽기를 다시 시작한다. gh로 머지하면 완료(머지됨, `outside: true`)가 되고 정리 창을 그 Work를 볼 때 연다(D200).
+  - 시험이 끝나면(실패해도) 이 시험의 PR을 닫고 브랜치(`relay/<work-id>`, `m9/<run>/base`)를 지운다. 경우 `pr-cleanup`은 남은 `m9/` 기준 브랜치와 그 브랜치에 열린 PR과 head 브랜치를 모두 치운다. 시작할 때 앞 시험이 남긴 것이 있으면 돌리지 않고 `pr-cleanup`을 먼저 돌리라고 알린다.
+  - 협업자와 협업자가 아닌 계정의 거르기는 다른 계정이 필요해 [실기]나 S7의 사람 단계로 본다.
+- `RELAY_REAL_CASES`로 돌릴 경우(M, S, resume, rewind-intake, rewind-fix, deliver, restart, auto. rewind는 둘 다)를 고른다. PR 진행은 `pr`(정리는 `pr-cleanup`)이고 `RELAY_REAL_GH=1`일 때만 돈다. `RELAY_REAL_CLAUDE`와 따로이고, 비워 둔 "전부"에 들지 않는다.
 - 실행: `app/`에서 `RELAY_REAL_CLAUDE=1 npm run test:claude`로 돌린다. `RELAY_REAL_CLAUDE`가 없으면 모든 경우를 건너뛰고 실패 없이 끝난다. `RELAY_REAL_CLAUDE=dry`는 가짜 `claude`로 같은 시험 도구를 돌려 도구만 확인한다(사용량 없음). 모델과 effort는 `ANTHROPIC_MODEL`, `CLAUDE_CODE_EFFORT_LEVEL`로 정한다.
-- 돌리는 곳: 레포에 인증 secret이 없어 `app-claude` 워크플로(Windows 러너)는 돌린 적이 없다. 지금까지의 [실제]는 모두 Claude Code 웹 세션의 Linux 컨테이너에서 돌렸고, 예비 확인으로 적는다(`checks.md`). Linux에서는 스파이크와 같이 준비한다(`spikes/README.md`): 세션의 환경 변수를 `env -i`로 빼고 필요한 것(HOME, PATH, 프록시와 인증서 변수)만 넘긴다. 대화형 온보딩을 마친 적이 없으면 따로 만든 설정 폴더를 `CLAUDE_CONFIG_DIR`로 주고 그 `.claude.json`에 `"hasCompletedOnboarding": true`를 더한다. root에서는 `IS_SANDBOX=1`을 준다. Linux는 세션을 끝낼 때마다 10초가 더 걸린다(3절).
+- 돌리는 곳: 레포에 인증 secret이 없어 `app-claude` 워크플로의 Windows 작업은 돌린 적이 없다. 실제 `claude`의 [실제]는 모두 Claude Code 웹 세션의 Linux 컨테이너에서 돌렸고, 예비 확인으로 적는다(`checks.md`). M9의 PR 진행(`pr`)은 Claude 인증이 필요 없어 `app-claude`의 Linux 작업에서 돌았다(I49). Linux에서는 스파이크와 같이 준비한다(`spikes/README.md`): 세션의 환경 변수를 `env -i`로 빼고 필요한 것(HOME, PATH, 프록시와 인증서 변수)만 넘긴다. 대화형 온보딩을 마친 적이 없으면 따로 만든 설정 폴더를 `CLAUDE_CONFIG_DIR`로 주고 그 `.claude.json`에 `"hasCompletedOnboarding": true`를 더한다. root에서는 `IS_SANDBOX=1`을 준다. Linux는 세션을 끝낼 때마다 10초가 더 걸린다(3절).
 - 스파이크 S1~S5는 같은 레포 secret으로 Windows 러너에서 돌았다(`spikes.md`, 2026-09-26). 그 뒤 secret이 없어진 까닭은 기록에 없다.
 - 결과는 실행 요약과 결과물에 올리고, 사람이 `docs/checks.md`에 옮긴다(I30). 러너 결과는 예비 확인으로 적는다(D93과 같음).
 

@@ -14,6 +14,7 @@ import type {
 } from '../shared/work'
 import { REVIEWABLE, approvalGate } from './approval'
 import { isPrevious } from './pipeline'
+import { ghTooOld, ghVersionReason } from './pr'
 import { normalizeText } from './validate'
 
 /** 정리 세션이 열린 동안 받지 않는 명령의 이유 (D137) */
@@ -49,19 +50,30 @@ const enabled: ButtonState = { enabled: true, reason: null }
 const disabled = (reason: string): ButtonState => ({ enabled: false, reason })
 
 /**
- * 전달 버튼 (7-4, D67): origin 원격이 없으면 [push]와 [PR 생성]을, gh가 없거나 로그인되지 않았으면
- * [PR 생성]만 이유와 함께 비활성화한다. 점검 결과는 verify를 시작할 때와 [다시 점검]으로 새로 한다 (D118).
+ * 전달 버튼 (7-4, D67): origin 원격이 없으면 [push]와 [PR 생성]을, gh가 없거나 로그인되지 않았거나 최소 버전보다
+ * 낮으면(D198) [PR 생성]만 이유와 함께 비활성화한다. 점검 결과는 verify를 시작할 때와 [다시 점검]으로 새로 한다 (D118).
  */
-export function deliveryButtons(checks: Pick<ProjectChecks, 'origin' | 'gh'>): DeliveryButtons {
+export function deliveryButtons(
+  checks: Pick<ProjectChecks, 'origin' | 'gh' | 'gh_version'>,
+): DeliveryButtons {
+  const version = checks.gh_version
   return {
     none: enabled,
     push: checks.origin ? enabled : disabled(NO_ORIGIN),
-    pr: !checks.origin ? disabled(NO_ORIGIN) : checks.gh ? enabled : disabled(NO_GH),
+    pr: !checks.origin
+      ? disabled(NO_ORIGIN)
+      : !checks.gh
+        ? disabled(NO_GH)
+        : version && ghTooOld(version)
+          ? disabled(ghVersionReason(version))
+          : enabled,
   }
 }
 
 /** 마무리 안내 문구(D104)에 넣을 verify의 버튼: Work 완료 화면에서 누를 수 있는 전달 버튼 */
-export function closingButtons(checks: Pick<ProjectChecks, 'origin' | 'gh'>): string[] {
+export function closingButtons(
+  checks: Pick<ProjectChecks, 'origin' | 'gh' | 'gh_version'>,
+): string[] {
   const b = deliveryButtons(checks)
   return (['none', 'push', 'pr'] as const)
     .filter((k) => b[k].enabled)

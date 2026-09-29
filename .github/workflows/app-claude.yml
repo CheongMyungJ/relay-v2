@@ -4,6 +4,8 @@
 # 본다 (docs/implementation.md I29, 8.3, 8.4).
 # 수동으로만 실행한다. Claude 사용량이 든다. 마일스톤을 마칠 때와 Claude Code를 올릴 때 돌린다.
 # 인증: spikes 워크플로와 같은 레포 secret CLAUDE_CODE_OAUTH_TOKEN 또는 ANTHROPIC_API_KEY.
+# cases에 pr이나 pr-cleanup만 적으면 Linux 작업(pr)이 가짜 claude와 실제 gh로 PR 진행(M9)을 시험용 레포에서 돈다.
+# 이때는 Claude 인증 없이 시험용 레포 secret RELAY_TEST_GH_REPO, RELAY_TEST_GH_TOKEN만 쓴다 (I43, I49).
 # 결과는 실행 요약과 claude-results 결과물에 올라가고, 사람이 docs/checks.md에 옮긴다 (I30).
 name: app-claude
 
@@ -19,7 +21,7 @@ on:
         required: false
         default: "low"
       cases:
-        description: "돌릴 경우 (예: S resume rewind-fix restart). rewind는 rewind-intake와 rewind-fix. 비우면 전부"
+        description: "돌릴 경우 (예: S resume rewind-fix restart). rewind는 rewind-intake와 rewind-fix. 비우면 전부. pr, pr-cleanup은 따로(PR 진행, Linux)"
         required: false
         default: ""
 
@@ -28,6 +30,8 @@ permissions:
 
 jobs:
   claude:
+    # pr이나 pr-cleanup이 들어 있으면 Linux 작업(pr)이 맡는다. 낱말로 찾으려고 앞뒤에 공백을 붙인다
+    if: ${{ !contains(format(' {0} ', inputs.cases), ' pr ') && !contains(format(' {0} ', inputs.cases), ' pr-cleanup ') }}
     runs-on: windows-latest
     timeout-minutes: 120
     defaults:
@@ -98,5 +102,66 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: claude-results-${{ github.sha }}
+          path: app/test-results/claude/
+          if-no-files-found: warn
+
+  pr:
+    # PR 진행(M9, I49): 에이전트가 없어 가짜 claude와 실제 gh로 돈다. gh와 GitHub의 동작은 OS와 상관없어 Linux에서 한다
+    # (S7과 같음). 시험용 레포의 main에서 임시 기준 브랜치 m9/<run>/base를 만들어 거기에 PR을 연다(I48).
+    if: ${{ contains(format(' {0} ', inputs.cases), ' pr ') || contains(format(' {0} ', inputs.cases), ' pr-cleanup ') }}
+    runs-on: ubuntu-latest
+    # 시험의 기한(test/claude/pr.test.ts, 50분)보다 길게 둔다. 작업이 제한에 걸려 끊기면 시험 PR과 브랜치 정리가 돌지 못한다
+    timeout-minutes: 60
+    env:
+      RELAY_TEST_GH_REPO: ${{ secrets.RELAY_TEST_GH_REPO }}
+      GH_TOKEN: ${{ secrets.RELAY_TEST_GH_TOKEN }}
+      RELAY_REAL_GH: "1"
+      RELAY_REAL_CASES: ${{ inputs.cases }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: 시험용 레포 secret 확인
+        run: |
+          if [ -z "$RELAY_TEST_GH_REPO" ] || [ -z "$GH_TOKEN" ]; then
+            echo "::error::RELAY_TEST_GH_REPO와 RELAY_TEST_GH_TOKEN secret이 필요합니다 (docs/implementation.md I43)."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: gh 버전
+        run: gh --version
+
+      - name: 앱 의존성 설치
+        working-directory: app
+        env:
+          # [실제]는 Node에서 돌아 Electron 바이너리가 필요 없다 (I26)
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+        run: npm ci --no-audit --no-fund
+
+      - name: "[실제] PR 진행"
+        working-directory: app
+        run: npm run test:claude
+
+      - name: 결과 요약
+        if: always()
+        working-directory: app
+        run: |
+          for name in pr.md pr-cleanup.md; do
+            file="test-results/claude/$name"
+            if [ -f "$file" ]; then cat "$file" >> "$GITHUB_STEP_SUMMARY"; fi
+          done
+
+      - name: 결과 올리기
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-pr-results-${{ github.sha }}
           path: app/test-results/claude/
           if-no-files-found: warn

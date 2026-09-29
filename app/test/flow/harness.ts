@@ -30,6 +30,8 @@ export interface HarnessOptions {
   env?: Record<string, string>
   /** claude 실행 파일. 기본은 가짜 claude다. [실제]는 실제 claude를 쓴다 */
   claudeBin?: string | null
+  /** gh 실행 파일. 기본은 가짜 gh다. [실제]의 PR 진행(M9)은 실제 gh를 쓴다 */
+  ghBin?: string
   ui?: FakeUi
 }
 
@@ -66,7 +68,8 @@ export async function harness(o: HarnessOptions = {}): Promise<Harness> {
     ...o.env,
   }
   const ui = o.ui ?? new FakeUi()
-  const open = (u: FakeUi) => Relay.open({ home, skills: SKILLS, ui: u, env, ghBin: FAKE_GH })
+  const ghBin = o.ghBin ?? FAKE_GH
+  const open = (u: FakeUi) => Relay.open({ home, skills: SKILLS, ui: u, env, ghBin })
   const jsonl = (name: string) => {
     const file = path.join(record, name)
     if (!fs.existsSync(file)) return []
@@ -90,6 +93,8 @@ export async function harness(o: HarnessOptions = {}): Promise<Harness> {
     },
     close: async () => {
       await h.relay.close()
+      // 하던 PR 읽기의 gh·git이 레포 폴더를 작업 폴더로 쓰는 동안 Windows는 그 폴더를 지우지 못한다
+      await h.relay.settled()
       // Windows는 끝낸 프로세스가 파일을 잠깐 잡고 있을 수 있다
       fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
     },

@@ -69,6 +69,7 @@ export const TASK_STATUS_LABEL: Readonly<Record<TaskStatus, string>> = {
 export const WORK_STATUS_LABEL: Readonly<Record<WorkStatus, string>> = {
   active: '진행 중',
   stopped: '멈춤',
+  pr: 'PR 진행',
   completed: '완료',
   abandoned: '포기',
   archived: '보관됨',

@@ -1,6 +1,6 @@
-// 대화상자: 프로젝트 등록(시나리오 0), 새 Work(시나리오 1), 설정 화면(D70), Work 설정(D72: 자동 승인, 질문 방식),
-// 단계 선택(6.2, D82), 커밋 안 된 변경의 선택지(7-5), Work 정리(시나리오 8),
-// 확인 창([오류 무시하고 승인] 4.1, [Work 포기] 3.3).
+// 대화상자: 프로젝트 등록(시나리오 0), 프로젝트 설정(D185), 새 Work(시나리오 1), 설정 화면(D70),
+// Work 설정(D72: 자동 승인, 질문 방식), 단계 선택(6.2, D82), 커밋 안 된 변경의 선택지(7-5), Work 정리(시나리오 8, D178),
+// 확인 창([오류 무시하고 승인] 4.1, [Work 포기] 3.3, [머지 없이 끝내기] D179).
 import { useEffect, useState, type ReactNode } from 'react'
 import {
   AUTO_APPROVE_TITLES,
@@ -13,6 +13,7 @@ import {
   type WorkSettings,
 } from '../../shared/config'
 import type { NodeName } from '../../shared/contracts'
+import type { MergeMethod } from '../../shared/work'
 import type {
   CleanPreview,
   ProjectInspection,
@@ -23,7 +24,7 @@ import type {
 } from '../../shared/views'
 import { call } from './commands'
 
-function Modal({
+export function Modal({
   title,
   children,
   onClose,
@@ -113,6 +114,96 @@ export function ProjectDialog({ onClose }: { onClose: () => void }) {
           onClick={() => void register()}
         >
           등록
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+const METHOD_LABEL: Readonly<Record<MergeMethod, string>> = {
+  merge: '머지 커밋 (merge)',
+  squash: '하나로 합침 (squash)',
+  rebase: '다시 쌓음 (rebase)',
+}
+
+/**
+ * 프로젝트 설정 (5.1.2, D185): 받을 봇(D161, 이름 모양은 D197)과 머지 창의 기본 방식(D177). 사이드바의 프로젝트
+ * 이름으로 연다. 받을 봇을 바꾸면 PR 진행인 Work의 항목에 바로 다시 적용한다
+ */
+export function ProjectSettingsDialog({
+  project,
+  onClose,
+}: {
+  project: ProjectView
+  onClose: () => void
+}) {
+  const [bots, setBots] = useState(project.allowedBots.join('\n'))
+  const [method, setMethod] = useState<MergeMethod | null>(project.mergeMethod)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const save = async () => {
+    setBusy(true)
+    setError(null)
+    const r = await call(() =>
+      window.relay.updateProjectSettings(project.id, {
+        allowed_bots: bots
+          .split(/[\n,]/)
+          .map((b) => b.trim())
+          .filter(Boolean),
+        merge_method: method,
+      }),
+    )
+    setBusy(false)
+    if (r.ok) onClose()
+    else setError(r.error)
+  }
+
+  return (
+    <Modal title={`프로젝트 설정 · ${project.name}`} onClose={onClose}>
+      <div className="dim">{project.repoPath}</div>
+      <label className="form-col">
+        <span>받을 봇</span>
+        <textarea
+          aria-label="받을 봇"
+          rows={4}
+          value={bots}
+          placeholder="github-actions"
+          onChange={(e) => setBots(e.target.value)}
+        />
+        <span className="dim">
+          코멘트를 대응할 거리로 받을 봇의 이름. 한 줄에 하나씩, GitHub 웹 화면에 보이는 이름으로
+          적습니다. [bot]을 붙여 적어도 됩니다 (D161, D197). 적지 않은 봇의 코멘트는 받지 않음으로
+          보이고 [받기]로 넣을 수 있습니다.
+        </span>
+      </label>
+      <label className="form-row">
+        <span>기본 머지 방식</span>
+        <select
+          aria-label="기본 머지 방식"
+          value={method ?? ''}
+          onChange={(e) => setMethod((e.target.value || null) as MergeMethod | null)}
+        >
+          <option value="">레포가 허용하는 첫 방식</option>
+          {(Object.keys(METHOD_LABEL) as MergeMethod[]).map((m) => (
+            <option key={m} value={m}>
+              {METHOD_LABEL[m]}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="dim">
+        머지 창의 기본 선택입니다. 레포가 허용하지 않는 방식이면 허용하는 첫 방식을 고릅니다 (D177).
+      </div>
+      <div className="dim">
+        gh {project.ghVersion ?? '버전 모름'} · origin {project.origin ? '있음' : '없음'} · gh
+        로그인 {project.gh ? '됨' : '안 됨'}
+      </div>
+      {error ? <div className="error">{error}</div> : null}
+      <div className="buttons">
+        <button onClick={onClose}>취소</button>
+        <button className="primary" disabled={busy} onClick={() => void save()}>
+          저장
         </button>
       </div>
     </Modal>
@@ -383,13 +474,22 @@ export function WorkSettingsDialog({ work, onClose }: { work: WorkView; onClose:
 // ---------- 설정 화면 (D70) ----------
 
 type NumberKey =
-  'session_limit' | 'format_error_bounce_max' | 'handoff_body_warn_chars' | 'intent_warn_chars'
+  | 'session_limit'
+  | 'format_error_bounce_max'
+  | 'handoff_body_warn_chars'
+  | 'intent_warn_chars'
+  | 'pr_poll_interval_sec'
 
 const NUMBERS: [NumberKey, string, string][] = [
   ['session_limit', '세션 상한', '살아 있는 세션의 합계. 넘으면 대기열에서 기다린다 (D18)'],
   ['format_error_bounce_max', '형식 오류 되돌림 횟수', 'Stop 훅으로 되돌리는 연속 횟수 (D21)'],
   ['handoff_body_warn_chars', 'handoff 본문 분량 경고 기준', '글자 수. 넘으면 경고만 한다'],
   ['intent_warn_chars', 'intent 분량 경고 기준', '글자 수. 넘으면 경고만 한다'],
+  [
+    'pr_poll_interval_sec',
+    'PR 읽기 주기(초)',
+    'PR 진행인 Work의 PR을 읽는 주기. 다음 읽기부터 쓴다 (D158)',
+  ],
 ]
 
 /**
@@ -417,6 +517,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         handoff_body_warn_chars: value.handoff_body_warn_chars,
         intent_warn_chars: value.intent_warn_chars,
         pr_draft: value.pr_draft,
+        pr_poll_interval_sec: value.pr_poll_interval_sec,
       }),
     )
     setBusy(false)
@@ -845,11 +946,13 @@ export function UncommittedDialog({
  * [Work 정리] (시나리오 8). 먼저 확인할 것을 요약해 보인다: 커밋 안 된 변경(백업 없이 지움), 작업 브랜치가
  * 원격이나 기준 브랜치에 있는지, 살아 있는 세션(강제 종료), git 잠금 파일. 확인할 것이 있으면 명시적으로
  * 확인해야 [정리]를 누를 수 있다. 작업 브랜치는 기본으로 두고 push됐거나 머지됐을 때만 삭제를 제안한다.
- * 되감기 백업 브랜치의 "함께 삭제"는 기본으로 체크한다. 산출물은 지우지 않는다.
+ * PR을 머지해 완료한 Work는 작업 브랜치 삭제가 기본으로 체크되고, origin의 작업 브랜치 삭제도 고를 수 있다
+ * (D178, 기본은 끔). 되감기 백업 브랜치의 "함께 삭제"는 기본으로 체크한다. 산출물은 지우지 않는다.
  */
 export function CleanDialog({ work, onClose }: { work: WorkView; onClose: () => void }) {
   const [preview, setPreview] = useState<CleanPreview | null>(null)
   const [deleteBranch, setDeleteBranch] = useState(false)
+  const [deleteRemote, setDeleteRemote] = useState(false)
   const [deleteBackups, setDeleteBackups] = useState(true)
   const [confirmed, setConfirmed] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -859,8 +962,10 @@ export function CleanDialog({ work, onClose }: { work: WorkView; onClose: () => 
     let stale = false
     void call(() => window.relay.cleanPreview(work.key)).then((r) => {
       if (stale) return
-      if (r.ok) setPreview(r.preview)
-      else setError(r.error)
+      if (r.ok) {
+        setPreview(r.preview)
+        setDeleteBranch(r.preview.merged)
+      } else setError(r.error)
     })
     return () => {
       stale = true
@@ -874,6 +979,7 @@ export function CleanDialog({ work, onClose }: { work: WorkView; onClose: () => 
     const r = await call(() =>
       window.relay.clean(work.key, {
         deleteBranch: deleteBranch && preview.branch.deletable,
+        deleteRemote: deleteRemote && preview.remote?.exists === true,
         deleteBackups,
         confirmed,
         expect: preview.expect,
@@ -934,6 +1040,19 @@ export function CleanDialog({ work, onClose }: { work: WorkView; onClose: () => 
                 />
                 작업 브랜치 삭제 {b.deletable ? '' : '(push됐거나 머지됐을 때만)'}
               </label>
+              {preview.remote ? (
+                <label className="toggle" title="PR을 머지한 Work만 고를 수 있습니다 (D178)">
+                  <input
+                    type="checkbox"
+                    aria-label="원격 브랜치 삭제"
+                    disabled={!preview.remote.exists}
+                    checked={deleteRemote && preview.remote.exists}
+                    onChange={(e) => setDeleteRemote(e.target.checked)}
+                  />
+                  origin의 {preview.remote.name}도 삭제{' '}
+                  {preview.remote.exists ? '' : '(origin에 없음)'}
+                </label>
+              ) : null}
             </section>
           ) : null}
           {preview.backups.length ? (

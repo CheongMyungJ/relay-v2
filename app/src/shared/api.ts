@@ -3,6 +3,7 @@
 // 터미널 출력은 task별 채널로 보낸다. 메인과 렌더러가 같은 타입을 보도록 여기에 둔다.
 import type { AppConfig, WorkSettings } from './config'
 import type { NodeName } from './contracts'
+import type { ProjectSettings } from './project'
 import type {
   AppSnapshot,
   ApproveOptions,
@@ -12,7 +13,10 @@ import type {
   CreateWorkResult,
   DeliverInput,
   DeliverResult,
+  MergeInfoResult,
+  MergeInput,
   NewWorkInput,
+  PrItemAction,
   ProjectInspection,
   ProjectView,
   ReviewView,
@@ -96,6 +100,20 @@ export interface RelayApi {
   dismissNotice(workKey: string, id: string): Promise<CommandResult>
   /** 비교 URL이나 PR 주소를 브라우저에서 연다 (7-4). http(s) 주소만 연다 */
   openExternal(url: string): Promise<void>
+  /** PR 패널의 [새로 고침] (D158). 닫힌 PR도 읽는다 (D179) */
+  prRefresh(workKey: string): Promise<CommandResult>
+  /** PR 패널의 [제외], [다시 넣기], [받기] (D160, D161, D170) */
+  prItem(workKey: string, itemId: string, action: PrItemAction): Promise<CommandResult>
+  /** 머지 창을 열 때: 레포가 허용하는 방식과 기본 선택, 머지할 head (D176, D177) */
+  prMergeInfo(workKey: string): Promise<MergeInfoResult>
+  /** 머지 창의 [머지] (D176). 창에 보인 head가 아니면 머지하지 않는다 */
+  prMerge(workKey: string, input: MergeInput): Promise<CommandResult>
+  /** [머지 없이 끝내기] (D179). GitHub의 PR은 건드리지 않는다 */
+  prEnd(workKey: string): Promise<CommandResult>
+  /** 머지 뒤 정리 창을 열었다 (D178, D200). 다시 열지 않는다 */
+  prCleanOffered(workKey: string): Promise<CommandResult>
+  /** 프로젝트 설정 (5.1.2, D185): 받을 봇과 기본 머지 방식 */
+  updateProjectSettings(projectId: string, settings: ProjectSettings): Promise<CommandResult>
   /** Work별 자동 승인과 질문 방식 (D72). 준 키만 바꾸고, 빈 값이면 앱 설정을 따른다 */
   updateWorkSettings(workKey: string, settings: WorkSettings): Promise<CommandResult>
   /** 앱 설정 (D70) */
@@ -144,6 +162,13 @@ export const IPC = {
   ignoreOperation: 'work:ignore-operation',
   dismissNotice: 'work:dismiss-notice',
   openExternal: 'app:open-external',
+  prRefresh: 'pr:refresh',
+  prItem: 'pr:item',
+  prMergeInfo: 'pr:merge-info',
+  prMerge: 'pr:merge',
+  prEnd: 'pr:end',
+  prCleanOffered: 'pr:clean-offered',
+  projectSettings: 'project:settings',
   workSettings: 'work:settings',
   config: 'config:get',
   updateConfig: 'config:update',

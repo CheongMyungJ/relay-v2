@@ -15,6 +15,8 @@ function facts(patch: Partial<CleanFacts> = {}): CleanFacts {
     live: 0,
     branch: { name: BRANCH, exists: true, pushed: false, merged: false },
     backups: [],
+    merged: false,
+    remote: null,
     ...patch,
   }
 }
@@ -65,7 +67,12 @@ describe('정리 전 확인 요약 (8-1)', () => {
       merged: false,
       deletable: false,
     })
-    expect(planClean(p, input(p))).toEqual({ ok: true, force: false, deleteBranches: [] })
+    expect(planClean(p, input(p))).toEqual({
+      ok: true,
+      force: false,
+      deleteBranches: [],
+      deleteRemote: null,
+    })
   })
 
   it('커밋 안 된 변경, 살아 있는 세션, 잠금 파일은 사람이 명시적으로 확인해야 한다', () => {
@@ -86,6 +93,7 @@ describe('정리 전 확인 요약 (8-1)', () => {
       ok: true,
       force: true,
       deleteBranches: [],
+      deleteRemote: null,
     })
     const live = cleanPreview(facts({ live: 2 }))
     expect(planClean(live, input(live, { confirmed: true }))).toMatchObject({ force: false })
@@ -103,7 +111,7 @@ describe('정리 전 확인 요약 (8-1)', () => {
       const r = planClean(p, input(p, { deleteBranch: true }))
       expect(r).toEqual(
         deletable
-          ? { ok: true, force: false, deleteBranches: [BRANCH] }
+          ? { ok: true, force: false, deleteBranches: [BRANCH], deleteRemote: null }
           : { ok: false, error: '작업 브랜치는 push됐거나 머지됐을 때만 지움' },
       )
     }
@@ -120,16 +128,23 @@ describe('정리 전 확인 요약 (8-1)', () => {
         branch: { name: BRANCH, exists: true, pushed: true, merged: false },
       }),
     )
-    expect(planClean(p, input(p))).toEqual({ ok: true, force: false, deleteBranches: [BACKUP] })
+    expect(planClean(p, input(p))).toEqual({
+      ok: true,
+      force: false,
+      deleteBranches: [BACKUP],
+      deleteRemote: null,
+    })
     expect(planClean(p, input(p, { deleteBackups: false }))).toEqual({
       ok: true,
       force: false,
       deleteBranches: [],
+      deleteRemote: null,
     })
     expect(planClean(p, input(p, { deleteBranch: true }))).toEqual({
       ok: true,
       force: false,
       deleteBranches: [BRANCH, BACKUP],
+      deleteRemote: null,
     })
   })
 
@@ -142,5 +157,42 @@ describe('정리 전 확인 요약 (8-1)', () => {
     })
     const more = cleanPreview(facts({ backups: [BACKUP] }))
     expect(planClean(more, input(seen)).ok).toBe(false)
+  })
+})
+
+describe('머지로 완료한 Work의 정리 (D178)', () => {
+  const merged = facts({
+    branch: { name: BRANCH, exists: true, pushed: true, merged: false },
+    merged: true,
+    remote: { name: BRANCH, exists: true },
+  })
+
+  it('origin의 작업 브랜치 삭제를 고를 수 있다. 확인한 뒤 원격 브랜치가 없어졌으면 받지 않는다', () => {
+    const preview = cleanPreview(merged)
+    expect(preview).toMatchObject({ merged: true, remote: { name: BRANCH, exists: true } })
+    expect(preview.expect.remote).toBe(true)
+    expect(planClean(preview, input(preview, { deleteBranch: true, deleteRemote: true }))).toEqual({
+      ok: true,
+      force: false,
+      deleteBranches: [BRANCH],
+      deleteRemote: BRANCH,
+    })
+    expect(planClean(preview, input(preview, { deleteBranch: true }))).toMatchObject({
+      deleteRemote: null,
+    })
+    const gone = cleanPreview({ ...merged, remote: { name: BRANCH, exists: false } })
+    expect(planClean(gone, input(preview, { deleteRemote: true }))).toMatchObject({ ok: false })
+    expect(planClean(gone, input(gone, { deleteRemote: true }))).toEqual({
+      ok: false,
+      error: 'origin의 브랜치는 머지로 완료한 Work에서 원격에 있을 때만 지움',
+    })
+  })
+
+  it('머지하지 않은 Work는 원격 브랜치를 지우지 않는다', () => {
+    const preview = cleanPreview(
+      facts({ branch: { name: BRANCH, exists: true, pushed: true, merged: false } }),
+    )
+    expect(preview).toMatchObject({ merged: false, remote: null })
+    expect(planClean(preview, input(preview, { deleteRemote: true }))).toMatchObject({ ok: false })
   })
 })

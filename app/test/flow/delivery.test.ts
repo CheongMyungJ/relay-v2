@@ -246,17 +246,31 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
     expect(fs.realpathSync.native(create?.cwd ?? '')).toBe(fs.realpathSync.native(s.repo))
     const compare = `https://github.com/relay-test/sample/compare/main...relay%2F${s.workId}?expand=1`
     const w = work(s)
-    expect(w.status).toBe('completed')
+    // 완료 대신 PR 진행이다 (M9, D120, D152). PR 번호, 주소, head, gh 버전을 적는다 (D191, D198)
+    expect(w.status).toBe('pr')
+    expect(w.completed_at).toBeUndefined()
     expect(w.delivery).toEqual({
       choice: 'pr',
       status: 'succeeded',
-      at: w.completed_at,
+      at: expect.any(String),
       branch: s.branch,
       compare_url: compare,
       pr_url: 'https://github.com/relay-test/sample/pull/1',
       draft: true,
     })
-    expect(events(s).at(-1)).toMatchObject({ type: 'work.completed', payload: { delivery: 'pr' } })
+    expect(w.pr).toEqual({
+      number: 1,
+      url: 'https://github.com/relay-test/sample/pull/1',
+      head,
+      gh_version: '2.101.0',
+      started_at: w.delivery?.at,
+      ...(w.pr?.read_at ? { read_at: w.pr.read_at } : {}),
+    })
+    expect(events(s).map((e) => e.type)).not.toContain('work.completed')
+    expect(events(s).find((e) => e.type === 'delivery.succeeded')?.payload).toMatchObject({
+      choice: 'pr',
+      pr_url: 'https://github.com/relay-test/sample/pull/1',
+    })
     expect(view(s)?.delivery).toMatchObject({
       label: 'PR 생성',
       prUrl: 'https://github.com/relay-test/sample/pull/1',

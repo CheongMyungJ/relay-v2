@@ -4,7 +4,6 @@
 // Electron을 import하지 않으므로 흐름 시험이 Vitest(Node)에서 이 코드를 그대로 불러 쓴다.
 // 창과 알림, 렌더러로 보내기는 UiPort로 받는다.
 import path from 'node:path'
-import { ghAuthStatus } from '../adapters/gh'
 import {
   addWorktree,
   branches as gitBranches,
@@ -24,7 +23,7 @@ import {
   workIds,
   worktreeDir,
 } from '../adapters/store'
-import { applyConfigPatch, checkWorkSettings } from '../core/config'
+import { applyConfigPatch, checkProjectSettings, checkWorkSettings } from '../core/config'
 import { createWork } from '../core/machine'
 import { localIso, nextWorkId, workBranch } from '../core/records'
 import { recordedProcesses, type RecordedProcess } from '../core/recovery'
@@ -40,7 +39,10 @@ import type {
   CreateWorkResult,
   DeliverInput,
   DeliverResult,
+  MergeInfoResult,
+  MergeInput,
   NewWorkInput,
+  PrItemAction,
   ProjectInspection,
   ProjectView,
   ReviewView,
@@ -51,7 +53,7 @@ import type {
 import type { DeliveryChoice, WorkState } from '../shared/work'
 import { SessionPool } from './pool'
 import type { UiPort } from './ports'
-import { inspectProject, prepareProject, type ProjectEnv } from './projects'
+import { checkGh, inspectProject, prepareProject, type ProjectEnv } from './projects'
 import { WorkRunner, workTitle, type RunnerContext } from './work'
 
 export interface RelayOptions {
@@ -124,6 +126,8 @@ export class Relay {
     const killed = await this.killOrphans(loaded)
     // 2~6. 재시작 조정. Work마다 따로라 함께 한다
     await Promise.all(loaded.map((r) => r.reconcile(killed.get(r) ?? [])))
+    // PR 진행인 Work는 항목을 읽어 두고 PR을 한 번 읽는다 (D159). 읽은 결과로 알리지 않는다
+    await Promise.all(loaded.map((r) => r.startPr({ quiet: true })))
   }
 
   /**
@@ -161,6 +165,11 @@ export class Relay {
     await this.hooks.close()
   }
 
+  /** 하던 PR 읽기가 모두 끝나기를 기다린다 (WorkRunner.prIdle). 시험 도구가 close 뒤에 부른다 */
+  async settled(): Promise<void> {
+    await Promise.all([...this.works.values()].map((w) => w.prIdle()))
+  }
+
   /** 이 앱에서 살아 있는 세션이 있다. 앱을 끝낼 때 확인 창을 띄운다 (시나리오 3-6) */
   hasLiveSessions(): boolean {
     return [...this.works.values()].some((w) => w.hasLiveSession())
@@ -178,6 +187,7 @@ export class Relay {
       size: () => this.size,
       ghBin: this.ghBin(),
       checks: (projectId) => this.projects.get(projectId)?.checks,
+      project: (projectId) => this.projects.get(projectId),
       recheck: (projectId) => this.recheck(projectId),
     }
   }
@@ -187,23 +197,29 @@ export class Relay {
   }
 
   /**
-   * 프로젝트의 origin 원격과 gh auth status를 다시 점검해 project.json을 고친다 (D67, D118).
+   * 프로젝트의 origin 원격과 gh auth status, gh 버전을 다시 점검해 project.json을 고친다 (D67, D118, D198).
    * verify task를 시작할 때와 Work 완료 화면의 [다시 점검]에서 부른다. 그 프로젝트의 Work 스냅샷을 다시 보낸다.
    */
   private async recheck(projectId: string): Promise<void> {
     const project = this.projects.get(projectId)
     if (!project) return
     const env = this.env
+    const gh = (await checkGh(this.ghBin(), env)).check
     const checks: ProjectChecks = {
       origin: await hasRemote(project.repo_path, 'origin', { env }),
-      gh: (await ghAuthStatus(this.ghBin(), env)).ok,
+      gh: gh.auth,
+      gh_version: gh.version,
       checked_at: this.at(),
     }
-    const next: ProjectState = { ...project, checks }
+    await this.saveProjectState({ ...(this.projects.get(projectId) ?? project), checks })
+  }
+
+  /** project.json을 쓰고 화면과 그 프로젝트의 Work에 알린다 */
+  private async saveProjectState(next: ProjectState): Promise<void> {
     await saveProject(this.o.home, next)
-    this.projects.set(projectId, next)
+    this.projects.set(next.project_id, next)
     this.o.ui.projects(this.projectViews())
-    for (const w of this.works.values()) if (w.project.project_id === projectId) w.touch()
+    for (const w of this.works.values()) if (w.project.project_id === next.project_id) w.touch()
   }
 
   private runner(
@@ -239,6 +255,9 @@ export class Relay {
       defaultBranch: p.default_branch,
       origin: p.checks.origin,
       gh: p.checks.gh,
+      ghVersion: p.checks.gh_version ?? null,
+      allowedBots: p.allowed_bots ?? [],
+      mergeMethod: p.merge_method ?? null,
     }))
   }
 
@@ -292,6 +311,32 @@ export class Relay {
     this.projects.set(r.project.project_id, r.project)
     this.o.ui.projects(this.projectViews())
     return { ok: true, projectId: r.project.project_id }
+  }
+
+  /**
+   * 프로젝트 설정 화면의 [저장] (5.1.2, D185): 받을 봇과 기본 머지 방식. 받을 봇이 바뀌면 PR 진행인 Work의 항목에
+   * 거르기 규칙을 다시 적용한다 (D161)
+   */
+  updateProjectSettings(projectId: string, settings: unknown): Promise<CommandResult> {
+    const run = this.configQueue.then(async (): Promise<CommandResult> => {
+      const project = this.projects.get(projectId)
+      if (!project) return { ok: false, error: '프로젝트가 없습니다' }
+      const r = checkProjectSettings(settings)
+      if (!r.ok) return { ok: false, error: r.error }
+      await this.saveProjectState({
+        ...project,
+        allowed_bots: r.value.allowed_bots,
+        merge_method: r.value.merge_method,
+      })
+      await Promise.all(
+        [...this.works.values()]
+          .filter((w) => w.project.project_id === projectId)
+          .map((w) => w.projectSettingsChanged()),
+      )
+      return { ok: true }
+    })
+    this.configQueue = run.catch(() => undefined)
+    return run
   }
 
   /** 기준 브랜치 목록 (시나리오 1). 프로젝트의 기본 브랜치를 맨 앞에 둔다 */
@@ -503,6 +548,39 @@ export class Relay {
   /** [Work 정리]의 [정리] (8-2) */
   clean(workKey: string, input: CleanInput): Promise<CommandResult> {
     return this.withWork(workKey, (w) => w.clean(input))
+  }
+
+  // ---------- PR 진행 (시나리오 10) ----------
+
+  /** PR 패널의 [새로 고침] (D158) */
+  prRefresh(workKey: string): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.refreshPr())
+  }
+
+  /** PR 패널의 [제외], [다시 넣기], [받기] (D160, D161, D170) */
+  prItem(workKey: string, itemId: string, action: PrItemAction): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.prItem(itemId, action))
+  }
+
+  /** 머지 창을 열 때 (D176, D177) */
+  async prMergeInfo(workKey: string): Promise<MergeInfoResult> {
+    const runner = this.works.get(workKey)
+    return runner ? runner.prMergeInfo() : { ok: false, error: 'Work가 없습니다' }
+  }
+
+  /** 머지 창의 [머지] (D176) */
+  prMerge(workKey: string, input: MergeInput): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.prMerge(input))
+  }
+
+  /** [머지 없이 끝내기] (D179) */
+  prEnd(workKey: string): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.prEnd())
+  }
+
+  /** 머지 뒤 정리 창을 열었다 (D178, D200) */
+  prCleanOffered(workKey: string): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.prCleanOffered())
   }
 
   // ---------- 재시작과 복구 (시나리오 9) ----------

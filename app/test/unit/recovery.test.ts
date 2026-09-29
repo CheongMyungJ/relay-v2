@@ -199,6 +199,31 @@ describe('[단위] 끊긴 작업의 알림 (D121, D123)', () => {
   })
 })
 
+describe('[단위] 끊긴 머지의 알림 (D77, D123, M9)', () => {
+  it('머지: 방식과 머지할 head, [다시 시도]는 다시 읽어 머지됐으면 완료하고 아니면 같은 head로 머지한다', () => {
+    const v = operationView(
+      work({
+        status: 'pr',
+        operation: {
+          kind: 'merge',
+          started_at: 'x',
+          method: 'squash',
+          head: 'abcdef0123456789',
+          interrupted_at: 'y',
+        },
+      }),
+    )
+    expect(v).toMatchObject({
+      kind: 'merge',
+      title: '머지가 끊겼습니다',
+      lines: ['방식: squash', '머지할 head: abcdef01'],
+      choice: null,
+    })
+    expect(v?.retry).toContain('이미 머지됐으면 완료(머지됨)합니다')
+    expect(v?.ignore).toContain('PR 진행으로 남고')
+  })
+})
+
 describe('[단위] 끊긴 되감기의 [다시 시도] (D116, D123)', () => {
   const made = { branch: BACKUP, commit: 'bk', head: 'h1', tree: 't-bk' }
 

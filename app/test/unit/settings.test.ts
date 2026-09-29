@@ -97,6 +97,7 @@ describe('deny 규칙 (D17, 시나리오 2-3)', () => {
       `Edit(${w}/request.md)`,
       `Edit(${w}/intent.md)`,
       `Edit(${w}/decisions.md)`,
+      `Edit(${w}/pr-items.json)`,
       `Edit(${w}/tasks/01-intake/**)`,
       `Edit(${w}/tasks/02-evidence/**)`,
       `Edit(${w}/.claude/**)`,

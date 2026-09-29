@@ -42,6 +42,14 @@ const api: RelayApi = {
   ignoreOperation: (workKey) => ipcRenderer.invoke(IPC.ignoreOperation, workKey),
   dismissNotice: (workKey, id) => ipcRenderer.invoke(IPC.dismissNotice, workKey, id),
   openExternal: (url) => ipcRenderer.invoke(IPC.openExternal, url),
+  prRefresh: (workKey) => ipcRenderer.invoke(IPC.prRefresh, workKey),
+  prItem: (workKey, itemId, action) => ipcRenderer.invoke(IPC.prItem, workKey, itemId, action),
+  prMergeInfo: (workKey) => ipcRenderer.invoke(IPC.prMergeInfo, workKey),
+  prMerge: (workKey, input) => ipcRenderer.invoke(IPC.prMerge, workKey, input),
+  prEnd: (workKey) => ipcRenderer.invoke(IPC.prEnd, workKey),
+  prCleanOffered: (workKey) => ipcRenderer.invoke(IPC.prCleanOffered, workKey),
+  updateProjectSettings: (projectId, settings) =>
+    ipcRenderer.invoke(IPC.projectSettings, projectId, settings),
   updateWorkSettings: (workKey, settings) =>
     ipcRenderer.invoke(IPC.workSettings, workKey, settings),
   config: () => ipcRenderer.invoke(IPC.config),
