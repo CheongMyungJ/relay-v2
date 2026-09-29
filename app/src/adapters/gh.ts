@@ -309,3 +309,70 @@ export async function ghMerge(
     headMoved: /Head branch was modified/.test(`${r.stderr}\n${r.stdout}`),
   }
 }
+
+// ---------- PR 대응 (시나리오 10-6, 10-7). 명령은 docs/implementation.md M10의 "gh와 git으로 하는 일"이다 ----------
+
+/** gh api가 HTTP 오류로 끝났을 때 stderr의 "gh: <메시지> (HTTP <코드>)"에서 읽은 코드 (3절). 없으면 null */
+export function httpStatusOf(stderr: string): number | null {
+  const m = /\(HTTP (\d{3})\)/.exec(stderr)
+  return m ? Number(m[1]) : null
+}
+
+export class GhApiError extends GhError {
+  constructor(
+    message: string,
+    /** HTTP 응답 코드. 응답이 없었거나(연결 끊김, 시간 초과) 읽지 못했으면 null이다: GitHub가 받았는지 모른다 (D194) */
+    readonly status: number | null,
+  ) {
+    super(message)
+  }
+}
+
+/**
+ * REST 요청 하나를 보낸다: gh api --hostname <host> -X POST <경로> --input - (3절). 본문은 JSON으로 표준 입력에 준다: 명령줄
+ * 길이와 인용을 피하고 답글 본문이 로그나 프로세스 목록에 남지 않는다. 응답 객체를 돌려준다. 실패하면 GhApiError이고,
+ * 응답 코드가 없으면 게시됐는지 모르는 요청이다 (D194)
+ */
+export async function ghApiPost(
+  bin: string,
+  o: { host: string; path: string; body: unknown; cwd: string; env?: NodeJS.ProcessEnv },
+): Promise<Record<string, unknown>> {
+  const r = await run(bin, ['api', '--hostname', o.host, '-X', 'POST', o.path, '--input', '-'], {
+    cwd: o.cwd,
+    env: ghEnv(o.env),
+    timeoutMs: 60_000,
+    input: JSON.stringify(o.body),
+  })
+  if (r.code !== 0) {
+    throw new GhApiError(
+      `gh api -X POST ${o.path} 실패: ${describeFailure(r)}`,
+      httpStatusOf(r.stderr),
+    )
+  }
+  const v = parseJson(`gh api -X POST ${o.path}`, r.stdout)
+  if (!v || typeof v !== 'object' || Array.isArray(v)) {
+    throw new GhApiError(
+      `gh api -X POST ${o.path}의 출력이 객체가 아님: ${r.stdout.slice(0, 200)}`,
+      null,
+    )
+  }
+  return v as Record<string, unknown>
+}
+
+export type RerunResult = { ok: true } | { ok: false; error: string }
+
+/**
+ * Actions 실행의 실패한 작업을 다시 돌린다 (D175, D203): gh run rerun <실행> --repo <레포> --failed (3절, S7 관찰 5). gh는
+ * 실행을 읽은 뒤 rerun-failed-jobs를 보낸다. 성공 문구는 TTY일 때만 쓰므로 종료 코드로 본다
+ */
+export async function ghRerunFailed(
+  bin: string,
+  o: { repo: string; run: number; cwd: string; env?: NodeJS.ProcessEnv },
+): Promise<RerunResult> {
+  const r = await run(bin, ['run', 'rerun', String(o.run), '--repo', o.repo, '--failed'], {
+    cwd: o.cwd,
+    env: ghEnv(o.env),
+    timeoutMs: 60_000,
+  })
+  return r.code === 0 ? { ok: true } : { ok: false, error: describeFailure(r) }
+}

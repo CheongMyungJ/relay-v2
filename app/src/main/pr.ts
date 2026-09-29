@@ -176,6 +176,23 @@ const NOT_ACTIONS = 'GitHub Actions 밖의 체크라 로그를 읽지 않음'
 const RUN_PENDING = '실행이 아직 끝나지 않아 로그를 읽지 못함. 다음 읽기에서 다시 봄'
 
 /**
+ * PR의 인라인 코멘트(`pulls/<n>/comments`)나 대화 코멘트(`issues/<n>/comments`) 목록 (모든 쪽). 읽기와 답글 게시(D194, D205)가
+ * 같이 쓴다
+ */
+export function listPrComments(
+  ctx: Pick<PrReadContext, 'ghBin' | 'env' | 'repo' | 'location'>,
+  kind: 'inline' | 'convo',
+): Promise<unknown[]> {
+  const rest = restRepo(ctx.location)
+  const n = ctx.location.number
+  const path =
+    kind === 'inline'
+      ? `${rest}/pulls/${n}/comments?per_page=100`
+      : `${rest}/issues/${n}/comments?per_page=100`
+  return ghApiList(ctx.ghBin, { host: ctx.location.host, path, cwd: ctx.repo, env: ctx.env })
+}
+
+/**
  * PR을 한 번 읽는다 (시나리오 10-2). hasLog는 이미 로그를 읽은 CI 실패 항목이다: 새 CI 실패의 로그만 읽는다
  * (gh run view --log-failed는 REST 4번과 로그 zip, S7 관찰 9). gh가 실패하면 오류를 던진다
  */
@@ -195,8 +212,8 @@ export async function readPr(
   const warnings: string[] = []
   const [reviews, inline, convo] = await Promise.all([
     list(`${rest}/pulls/${n}/reviews?per_page=100`),
-    list(`${rest}/pulls/${n}/comments?per_page=100`),
-    list(`${rest}/issues/${n}/comments?per_page=100`),
+    listPrComments(ctx, 'inline'),
+    listPrComments(ctx, 'convo'),
     readRunEvents(ctx, rollupRuns(rollup), warnings),
   ])
   const checks = checksOf(rollup, ctx.runEvents)

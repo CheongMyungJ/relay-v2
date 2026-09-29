@@ -18,9 +18,19 @@ import type {
   PrItemAction,
   PrItemView,
   PrView,
+  RoundView,
   SyncKind,
 } from '../shared/views'
 import type { MergeMethod, WorkState } from '../shared/work'
+import {
+  isRespondPending,
+  pendingRespond,
+  rerunPlan,
+  respondFailureView,
+  respondStart,
+  respondTasks,
+} from './respond'
+import { TASK_STATUS_LABEL, taskLabel } from './review'
 
 const short = (commit: string) => commit.slice(0, 8)
 
@@ -719,7 +729,7 @@ export interface Gate {
 }
 
 export interface GateInput {
-  work: Pick<WorkState, 'status' | 'operation' | 'pr'>
+  work: Pick<WorkState, 'status' | 'operation' | 'pr' | 'tasks'>
   read: PrReadState | null
   items: readonly PrItem[]
   /** 로컬 Work 브랜치의 커밋. 읽지 못했으면 null */
@@ -746,8 +756,9 @@ const SYNC_REASON: Readonly<Record<SyncKind, string | null>> = {
 
 /**
  * [머지]를 누를 수 있는가 (D176): head 커밋의 CI 통과(체크가 없으면 통과. 다만 새 head를 처음 읽은 뒤 60초는 기다림,
- * D196), 충돌 없음, 제외하지 않은 받은 항목이 모두 처리됨, 원격 PR head와 로컬 Work 브랜치가 같음. 돌거나 기다리는
- * PR 대응 task는 M10에 생긴다. 리뷰 승인과 브랜치 보호는 GitHub가 판정한다. 꺼져 있으면 어긴 조건을 모두 준다
+ * D196), 충돌 없음, 돌거나 기다리는 PR 대응 task 없음, 제외하지 않은 받은 항목이 모두 처리됨(새 항목과 대응 중이 없음,
+ * D189), 원격 PR head와 로컬 Work 브랜치가 같음. 리뷰 승인과 브랜치 보호는 GitHub가 판정한다. 꺼져 있으면 어긴 조건을
+ * 모두 준다
  */
 export function mergeGate(g: GateInput): Gate {
   const { work, read } = g
@@ -756,6 +767,7 @@ export function mergeGate(g: GateInput): Gate {
   const reasons: string[] = []
   if (work.operation) reasons.push('진행 중인 작업이 있음')
   if (pr.closed_at) reasons.push('PR이 닫혀 있음')
+  if (pendingRespond(work)) reasons.push('돌거나 기다리는 PR 대응 task가 있음')
   if (!read) {
     reasons.push('아직 PR을 읽지 못함')
     return { enabled: false, reasons }
@@ -778,6 +790,10 @@ export function mergeGate(g: GateInput): Gate {
   else if (read.mergeable !== 'MERGEABLE') reasons.push('GitHub가 머지 가능 여부를 계산하는 중')
   const open = openItems(g.items).length
   if (open) reasons.push(`처리하지 않은 항목 ${open}개 ([제외]하면 머지를 막지 않음)`)
+  const responding = g.items.filter((i) => i.status === 'responding').length
+  if (responding) {
+    reasons.push(`대응 중인 항목 ${responding}개 (그 라운드의 push와 답글 게시가 끝나면 처리됨)`)
+  }
   if (!g.localHead) {
     reasons.push('로컬 Work 브랜치를 읽지 못함')
   } else if (g.localHead !== read.head) {
@@ -793,7 +809,7 @@ export function mergeGate(g: GateInput): Gate {
 
 /**
  * PR 진행인 Work의 배지 (D183). 설계의 차례대로 대응 거리 있음(받은 새 항목) > PR 닫힘 > 머지 가능 > 리뷰·CI 대기다.
- * 자동 대응 멈춤(D171)과 PR 대응 task의 상태는 M10, M11에서 더한다
+ * PR 대응 task가 끝나기 전에는 core/approval badge가 task 상태를 보인다. 자동 대응 멈춤(D171)은 M11에서 더한다
  */
 export function prBadgeKind(items: readonly PrItem[], closed: boolean, gate: Gate): BadgeKind {
   if (openItems(items).length) return 'pr_items'
@@ -987,7 +1003,7 @@ const STATUS_ORDER: readonly PrItemStatus[] = [
 ]
 
 export interface PrViewInput {
-  work: Pick<WorkState, 'status' | 'operation' | 'pr'>
+  work: Pick<WorkState, 'status' | 'operation' | 'pr' | 'tasks'>
   read: PrReadState | null
   file: PrItemsFile
   rules: ItemRules
@@ -1056,6 +1072,9 @@ export function prView(input: PrViewInput): PrView | null {
       pr.merged !== undefined &&
       pr.clean_offered_at === undefined,
     ghVersion: pr.gh_version,
+    respond: respondStart(input.work, input.file.items),
+    rerun: rerunView(input),
+    rounds: roundViews(input),
     labels: {
       state: state
         ? `${STATE_LABEL[state]}${read?.isDraft && state === 'OPEN' ? ' (draft)' : ''}`
@@ -1068,4 +1087,84 @@ export function prView(input: PrViewInput): PrView | null {
       sync: read?.sync ? SYNC_LABEL[read.sync] : null,
     },
   }
+}
+
+/**
+ * [실패한 체크 다시 실행] (D175, D203): 마지막으로 읽은 head에 실패한 Actions 체크가 있으면 보인다. 열린 PR이고 진행 중
+ * 작업이 없을 때 누를 수 있다
+ */
+function rerunView(input: PrViewInput): PrView['rerun'] {
+  const read = input.read
+  const plan = rerunPlan(read)
+  if (!plan.runs.length) return null
+  const pr = input.work.pr
+  const reason =
+    input.work.status !== 'pr' || !pr
+      ? 'PR 진행인 Work가 아님'
+      : input.work.operation
+        ? '진행 중인 작업이 있음'
+        : pr.closed_at || read?.state !== 'OPEN'
+          ? 'PR이 열려 있지 않음'
+          : null
+  return { enabled: reason === null, reason, ...plan }
+}
+
+const ROUND_STATE_LABEL: Readonly<Record<Exclude<RoundView['state'], 'running'>, string>> = {
+  failed: 'push나 답글 게시가 실패함: 승인 화면에서 [다시 시도]',
+  deferred:
+    'push를 미룸: 원격 PR 브랜치에 새 커밋이 있음. 다음 라운드가 병합한 뒤 함께 push하고 답글을 게시함 (D193)',
+  published: 'push와 답글 게시를 마침',
+}
+
+/** 대응 라운드 기록 (화면 구성의 PR 패널): work.json의 라운드와 pr-items.json의 push·답글 기록을 합친다 */
+function roundViews(input: PrViewInput): RoundView[] {
+  const { file } = input
+  const items = new Map(file.items.map((i) => [i.id, i]))
+  return respondTasks(input.work).map((t): RoundView => {
+    const r = t.respond
+    const rec = file.rounds.find((x) => x.task_id === t.id)
+    const state: RoundView['state'] = isRespondPending(t)
+      ? r.failure
+        ? 'failed'
+        : 'running'
+      : r.published_at
+        ? 'published'
+        : r.deferred_at
+          ? 'deferred'
+          : 'published'
+    return {
+      round: r.round,
+      taskId: t.id,
+      label: taskLabel(t),
+      state,
+      stateLabel: state === 'running' ? TASK_STATUS_LABEL[t.status] : ROUND_STATE_LABEL[state],
+      items: roundItemViews(r.items, items, input.rules),
+      instruction: r.instruction,
+      pushed: rec?.pushed ? { at: rec.pushed.at, commits: rec.pushed.commits } : null,
+      pushedWith: rec?.pushed_with ?? null,
+      replies: (rec?.replies ?? []).map((x) => ({
+        item: x.item,
+        url: x.url ?? null,
+        skipped: x.skipped ?? null,
+      })),
+      publishedAt: r.published_at ?? null,
+      failure: respondFailureView(r.failure),
+    }
+  })
+}
+
+/**
+ * 대응 라운드의 항목. PR 패널의 라운드 기록과 승인 화면이 같이 쓴다. pr-items.json에 없는 항목은 id만 보인다
+ */
+export function roundItemViews(
+  ids: readonly string[],
+  items: ReadonlyMap<string, PrItem>,
+  rules: ItemRules,
+): RoundView['items'] {
+  return ids.map((id) => {
+    const item = items.get(id)
+    return item
+      ? { id, kindLabel: ITEM_KIND_LABEL[item.kind], title: prItemView(item, rules).title }
+      : { id, kindLabel: '', title: id }
+  })
 }

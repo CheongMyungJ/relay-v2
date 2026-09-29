@@ -6,6 +6,8 @@
 // 파일의 [확인] (시나리오 9, D121~D124). 끊긴 작업이 있는 동안 승인과 전달 버튼은 누를 수 없다 (D122).
 // 자동 승인 중이면 승인 화면에 카운트다운과 [취소]를 보이고, 켜진 단계인데 카운트다운하지 않으면 까닭을 보인다 (D83, 4.3).
 // PR 진행인 Work의 지금 task(verify)에서는 PR 패널이 된다 (시나리오 10, D183). 최종 검증 결과는 탭으로 본다.
+// 지금 task가 PR 대응 task면 PR 패널과 그 대응 task를 탭으로 오가고, 승인할 때는 대응 승인 화면(항목별 결과, 게시될 모양의
+// 답글, 기존 테스트 변경, D172, D202, D207)을 먼저 보인다.
 import { useEffect, useState } from 'react'
 import type { NodeName, Size } from '../../shared/contracts'
 import type {
@@ -108,9 +110,19 @@ export function Panel({ work, task, review, onApproved, onSelectStep, onShowClea
           보관됨: [Work 정리]로 worktree를 지웠습니다. 산출물과 기록은 남아 있습니다.
         </div>
       ) : null}
-      {work.status === 'active' && task.id === work.current ? <TaskNotice task={task} /> : null}
+      {(work.status === 'active' || (work.status === 'pr' && task.node === 'respond')) &&
+      task.id === work.current ? (
+        <TaskNotice task={task} pr={work.status === 'pr'} />
+      ) : null}
       {showsPr(work, task.id) && work.pr ? (
-        <PrSection key={work.key} work={work} pr={work.pr} review={review} />
+        <PrSection
+          key={`${work.key}|${review.taskId}|${wantsApproval(review) ? 'approve' : ''}`}
+          work={work}
+          task={task}
+          pr={work.pr}
+          review={review}
+          onApproved={onApproved}
+        />
       ) : review.completion?.stopped ? (
         <Review
           key={`${review.workKey}|${review.taskId}|stopped`}
@@ -260,8 +272,11 @@ function Recovery({
   )
 }
 
-/** 지금 task가 사람을 기다리는 까닭과 누를 수 있는 버튼 (시나리오 3-4, 3-5, 4.4, D18) */
-function TaskNotice({ task }: { task: TaskView }) {
+/**
+ * 지금 task가 사람을 기다리는 까닭과 누를 수 있는 버튼 (시나리오 3-4, 3-5, 4.4, D18). PR 진행 중의 PR 대응 task는 [즉시
+ * 중단]과 [재개]만 있다 (D182)
+ */
+function TaskNotice({ task, pr }: { task: TaskView; pr: boolean }) {
   if (task.status === 'queued') {
     return (
       <div className="notice">
@@ -275,8 +290,17 @@ function TaskNotice({ task }: { task: TaskView }) {
   if (task.status === 'session_ended') {
     return (
       <div className="notice">
-        handoff 없이 세션이 끝났습니다. [세션 재개]로 대화를 잇거나 [이 단계 새 세션으로 다시]
-        시작하세요.
+        {pr
+          ? 'handoff 없이 세션이 끝났습니다. [세션 재개]로 대화를 이으세요.'
+          : 'handoff 없이 세션이 끝났습니다. [세션 재개]로 대화를 잇거나 [이 단계 새 세션으로 다시] 시작하세요.'}
+      </div>
+    )
+  }
+  if (task.status === 'blocked' && !task.live && pr) {
+    return (
+      <div className="notice">
+        막힘. 세션이 없습니다. [세션 재개]로 필요한 것을 주세요. 근본부터 다시 하려면 [머지 없이
+        끝내기] 뒤 새 Work로 하세요 (D182).
       </div>
     )
   }
@@ -378,7 +402,9 @@ function Review({
 
   const intake = review.node === 'intake'
   const gate = review.gates[intake ? (size ?? 'none') : 'none']
-  const approveLabel = intake ? '의도 승인' : '승인'
+  const respond = review.respond
+  // PR 대응은 승인하면 push하고 답글을 게시한다. 실패한 뒤의 [승인]은 [다시 시도]다 (시나리오 10-6)
+  const approveLabel = intake ? '의도 승인' : respond?.failure ? '다시 시도' : '승인'
   // 끊긴 작업이 있는 동안은 승인하지 않는다 (D122)
   const cut = !!work?.operation
   // 자동 승인 카운트다운 (4.3, D83)
@@ -447,7 +473,9 @@ function Review({
       </div>
 
       <div className="review-body">
+        {tab === 'summary' && respond ? <RespondSummary respond={respond} /> : null}
         {tab === 'summary' ? <Summary review={review} /> : null}
+        {tab === 'artifacts' && respond ? <Replies respond={respond} /> : null}
         {tab === 'artifacts' ? (
           review.artifacts.length ? (
             review.artifacts.map((a) => (
@@ -519,7 +547,7 @@ function Review({
           ) : null}
           <button
             className="primary"
-            disabled={busy || cut || !gate.approve}
+            disabled={busy || cut || !gate.approve || !!respond?.blocked}
             onClick={() => void approve(false)}
           >
             {approveLabel}
@@ -530,7 +558,21 @@ function Review({
             </button>
           ) : null}
           {!gate.approve && gate.blocking.length ? (
-            <span className="error">intent 초안의 머리글 오류는 넘길 수 없습니다 (D90)</span>
+            <span className="error">
+              {respond
+                ? 'replies.md의 오류는 넘길 수 없습니다: 터미널에서 고치게 하세요 (D204)'
+                : 'intent 초안의 머리글 오류는 넘길 수 없습니다 (D90)'}
+            </span>
+          ) : null}
+          {respond?.blocked ? <span className="error">{respond.blocked}</span> : null}
+          {respond ? (
+            <span className="dim">
+              승인하면 push하고 답글 {respond.replies.filter((r) => !r.url && !r.skipped).length}
+              개를 게시합니다
+              {respond.deferred.length
+                ? ` (미룬 앞 라운드 ${respond.deferred.join(', ')}와 함께, D193)`
+                : ''}
+            </span>
           ) : null}
         </footer>
       )}
@@ -640,10 +682,36 @@ const DELIVERY_BUTTON: Readonly<Record<DeliveryChoice, string>> = {
 }
 
 /**
- * PR 진행인 Work의 오른쪽 패널: PR 패널과 최종 검증 결과(읽기 전용)를 탭으로 오간다 (시나리오 10, D183)
+ * PR 진행인 Work의 오른쪽 패널: PR 패널과 지금 task를 탭으로 오간다 (시나리오 10, D183). 지금 task가 verify면 최종 검증
+ * 결과(읽기 전용)이고, PR 대응 task면 그 task다: 승인할 때는 승인 화면을 먼저 보이고, 도는 중이면 진행 상태를 보인다
  */
-function PrSection({ work, pr, review }: { work: WorkView; pr: PrView; review: ReviewView }) {
-  const [tab, setTab] = useState<'pr' | 'verify'>('pr')
+function PrSection({
+  work,
+  task,
+  pr,
+  review,
+  onApproved,
+}: {
+  work: WorkView
+  task: TaskView
+  pr: PrView
+  review: ReviewView
+  onApproved: () => void
+}) {
+  const respond = review.respond !== null
+  const approving = respond && work.status === 'pr' && wantsApproval(review)
+  const [tab, setTab] = useState<'pr' | 'task'>(approving ? 'task' : 'pr')
+  const body = !respond ? (
+    <Review review={review} readOnly />
+  ) : approving ? (
+    <Review review={review} work={work} onApproved={onApproved} />
+  ) : task.status === 'approved' ||
+    (review.handoffPresent && review.handoffStatus === 'blocked') ||
+    work.status !== 'pr' ? (
+    <Review review={review} readOnly />
+  ) : (
+    <Progress review={review} task={task} />
+  )
   return (
     <>
       <div className="review-tabs" role="tablist">
@@ -657,15 +725,86 @@ function PrSection({ work, pr, review }: { work: WorkView; pr: PrView; review: R
         </button>
         <button
           role="tab"
-          aria-selected={tab === 'verify'}
-          className={tab === 'verify' ? 'active' : ''}
-          onClick={() => setTab('verify')}
+          aria-selected={tab === 'task'}
+          className={tab === 'task' ? 'active' : ''}
+          onClick={() => setTab('task')}
         >
-          최종 검증 결과
+          {respond ? task.label : '최종 검증 결과'}
         </button>
       </div>
-      {tab === 'pr' ? <PrPanel work={work} pr={pr} /> : <Review review={review} readOnly />}
+      {tab === 'pr' ? <PrPanel work={work} pr={pr} /> : body}
     </>
+  )
+}
+
+/** PR 대응 task의 [요약] 앞부분 (D172): 이번 라운드의 항목과 사람 지시, response.md의 항목별 결과 */
+function RespondSummary({ respond }: { respond: NonNullable<ReviewView['respond']> }) {
+  return (
+    <>
+      <section>
+        <h3>라운드 {respond.round}의 항목</h3>
+        {respond.items.length ? (
+          <ul>
+            {respond.items.map((i) => (
+              <li key={i.id}>
+                <span className="kind">{i.kindLabel}</span> {i.title}{' '}
+                <span className="dim">({i.id})</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="dim">없음: 사람 지시만으로 시작한 라운드 (D182)</div>
+        )}
+      </section>
+      {respond.instruction ? (
+        <section>
+          <h3>사람 지시</h3>
+          <pre className="pr-item-text">{respond.instruction}</pre>
+        </section>
+      ) : null}
+      <section>
+        <h3>항목별 결과</h3>
+        {respond.results ? (
+          <Markdown text={respond.results} />
+        ) : (
+          <div className="dim">response.md의 항목별 결과가 없음</div>
+        )}
+      </section>
+    </>
+  )
+}
+
+/**
+ * 게시될 모양의 답글 (D172, D207): 어디에 달리는지와 본문(원래 코멘트 링크, 초안, 표시 문구). 보이지 않는 표시는 빼고
+ * 보인다. 게시했으면 링크를, 건너뛰었으면 까닭을 보인다 (D194, D205)
+ */
+function Replies({ respond }: { respond: NonNullable<ReviewView['respond']> }) {
+  return (
+    <section aria-label="게시될 답글">
+      <h3>게시될 답글</h3>
+      {respond.replies.length ? (
+        respond.replies.map((r) => (
+          <div key={r.item} className="reply-preview">
+            <div className="pr-item-head">
+              <span className="kind">{r.item}</span>
+              <span className="dim">{r.where}</span>
+              {r.url ? (
+                <button
+                  className="link"
+                  onClick={() => void call(() => window.relay.openExternal(r.url ?? ''))}
+                >
+                  게시함
+                </button>
+              ) : null}
+              {r.skipped ? <span className="dim">{r.skipped}</span> : null}
+            </div>
+            <Markdown text={r.body} />
+          </div>
+        ))
+      ) : (
+        <div className="dim">이번 라운드에 코멘트 항목이 없어 답글이 없음</div>
+      )}
+    </section>
   )
 }
 
@@ -679,6 +818,8 @@ const MERGE_LABEL: Readonly<Record<string, string>> = {
 function DoneNotice({ work }: { work: WorkView }) {
   const d = work.delivery?.status === 'succeeded' ? work.delivery : null
   const pr = work.pr
+  // 밖에서 머지될 때 승인했지만 push·게시를 미룬 라운드(D193)는 머지에 들어가지 않았다
+  const lost = pr?.merged ? pr.rounds.filter((r) => r.state === 'deferred') : []
   return (
     <div className="notice done">
       Work 완료 (전달: {d ? d.label : '완료만'})
@@ -692,6 +833,13 @@ function DoneNotice({ work }: { work: WorkView }) {
               : ''}
           , head {pr.merged.head.slice(0, 8)}).
           {work.status === 'completed' ? ' [Work 정리]로 정리하세요.' : ''}
+        </div>
+      ) : null}
+      {lost.length ? (
+        <div className="error">
+          승인했지만 push·게시하지 못한 대응 라운드 {lost.length}개(
+          {lost.map((r) => r.label).join(', ')})는 머지에 들어가지 않았습니다. 그 커밋은 작업
+          브랜치에만 있고 답글은 게시하지 않았습니다 (D193).
         </div>
       ) : null}
       {pr?.ended ? (

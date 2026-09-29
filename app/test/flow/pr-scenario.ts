@@ -15,10 +15,20 @@
 //    뒤 [머지]하면 완료(머지됨)가 되고 정리 창을 연다. 정리에서 작업 브랜치와 원격 브랜치를 지운다(D178).
 // 6. 밖에서 닫힘·다시 열림·머지(D179): 두 번째 Work의 PR을 닫으면 PR 닫힘이 되고, 다시 열고 [새로 고침]하면 읽기를
 //    다시 시작한다. 밖에서 머지하면 완료(머지됨, outside)가 되고 정리 창을 그 Work를 볼 때 연다(D200).
+//
+// PR 대응(M10)의 공통 시나리오는 runRespondScenario다 (I53: [실제]는 가짜 claude와 실제 gh로 push, 답글 게시와 표시,
+// 다시 실행을 본다).
+// 7. CI가 실패하면 [실패한 체크 다시 실행]이 그 실행을 다시 돌린다(D203). 소유자의 대화 코멘트와 리뷰(본문, 인라인)가
+//    들어오면 [대응 시작](D170)으로 대응 task가 CI 실패를 고치고 답글 초안을 쓴다. 승인하면 앱이 push하고 답글을
+//    게시한다: 인라인은 그 스레드에, 리뷰 본문과 대화 코멘트는 원래 코멘트 링크를 붙인 대화 코멘트로, 표시 문구와 보이지
+//    않는 표시를 붙여(D173, D194, D207). 항목은 처리됨이 되고, 앱이 게시한 답글은 항목이 아니다(D189, D194). 새 head의
+//    CI가 통과하면 [머지]가 켜지고 머지 창이 판정표 경고를 보인다(D180, D206). 머지하고 정리한다.
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect } from 'vitest'
-import type { CleanPreview, PrView, WorkView } from '../../src/shared/views'
+import { DEFAULT_CONFIG } from '../../src/shared/config'
+import type { PrItemsFile } from '../../src/shared/pr'
+import type { CleanPreview, PrView, TaskView, WorkView } from '../../src/shared/views'
 import type { LifecycleEvent, WorkState } from '../../src/shared/work'
 import { drive } from './driver'
 import { git, settle, sleep, type Harness } from './harness'
@@ -59,6 +69,22 @@ export interface PrWorld {
   merge(pr: number): Promise<void>
   /** 원격 브랜치의 커밋. 없으면 null */
   branchTip(branch: string): Promise<string | null>
+  /** PR의 인라인 코멘트와 대화 코멘트 (앱이 게시한 답글 포함) */
+  comments(pr: number): Promise<PrComment[]>
+  /**
+   * Actions 실행을 다시 실행했는가 (D203). 가짜는 gh run rerun의 기록을, 실제는 실행의 run_attempt가 2 이상이 될 때까지
+   * 기다린다
+   */
+  rerunSeen(pr: number, run: number): Promise<boolean>
+}
+
+/** PR의 코멘트 하나 (REST pulls/<n>/comments와 issues/<n>/comments) */
+export interface PrComment {
+  kind: 'inline' | 'convo'
+  id: number
+  body: string
+  /** 인라인 스레드의 답글이면 스레드 첫 코멘트 */
+  reply_to: number | null
 }
 
 export interface PrContext {
@@ -90,8 +116,15 @@ export const BASE_CODE =
   '\n/**\n * 장바구니가 비었는가 (relay M9 기준 브랜치 변경).\n * @param {unknown[]} items\n * @returns {boolean}\n */\nexport function isEmpty(items) {\n  return items.length === 0;\n}\n'
 const CART = 'src/cart.mjs'
 const CI_FAIL = 'ci-fail'
+/**
+ * PR 대응 시나리오의 PR이 더하는 새 파일. [실제]는 runPrScenario 뒤에 돌아 기준 브랜치에 HEAD_CODE가 이미 머지돼 있으므로,
+ * 같은 코드를 더하면 PR의 diff에 없어 인라인 코멘트의 줄을 GitHub가 받지 않는다(HTTP 422 "Line could not be resolved")
+ */
+const RESPOND_FILE = 'src/m10.mjs'
+const RESPOND_CODE =
+  '/**\n * 두 배 (relay M10 시험 변경).\n * @param {number} n\n * @returns {number}\n */\nexport function double(n) {\n  return n * 2;\n}\n'
 
-/** 가짜 claude의 S 경로. fix가 files를 커밋하고 verify가 pr.md(제목 title)를 쓴다 */
+/** 가짜 claude의 S 경로. fix가 files를 커밋하고 verify가 pr.md(제목 title)를 쓴다. PR 대응 task도 여기에 둔다 */
 export function prClaude(files: Record<string, string>, title: string): Scenario {
   const fix: Step[] = [
     { do: 'prompt' },
@@ -503,4 +536,220 @@ export async function cleanMerged(ctx: PrContext, w: PrWork): Promise<CleanPrevi
   expect(git(ctx.repo, 'branch', '--list', w.branch)).toBe('')
   expect(await ctx.world.branchTip(w.branch)).toBeNull()
   return p.preview
+}
+
+// ---------- PR 대응 (M10) ----------
+
+/** pr-items.json (D191) */
+export function prItems(w: PrWork): PrItemsFile {
+  return JSON.parse(read(path.join(w.dir, 'pr-items.json'))) as PrItemsFile
+}
+
+/**
+ * 가짜 claude의 PR 대응 task (5.6.11): CI를 실패시키는 ci-fail을 지워 커밋하고, 항목별 결과와 코멘트 항목마다 답글
+ * 초안을 쓴다
+ */
+export function respondClaude(files: Record<string, string>, title: string): Scenario {
+  const base = prClaude(files, title)
+  const respond: Step[] = [
+    { do: 'prompt' },
+    { do: 'git', args: ['rm', '-q', CI_FAIL] },
+    { do: 'git', args: ['commit', '-q', '-m', 'fix: ci-fail 지움 (relay M10 대응)'] },
+    { do: 'respond', text: '{id}: relay M10 시험 답글입니다. 반영했습니다.' },
+    { do: 'write', file: 'handoff.md', text: handoff({ summary: 'CI 실패와 코멘트에 대응했다.' }) },
+    { do: 'stop' },
+  ]
+  return { ...base, tasks: { ...base.tasks, 'pr-respond': respond } }
+}
+
+/** 지금 task가 조건을 만족할 때까지 */
+export function currentUntil(
+  ctx: PrContext,
+  w: PrWork,
+  pred: (t: TaskView) => boolean,
+  label: string,
+): Promise<TaskView> {
+  return ctx.h.ui.until(
+    () => {
+      const v = ctx.h.ui.works.get(w.key)
+      const t = v?.tasks.find((x) => x.id === v.current)
+      return t && pred(t) ? t : null
+    },
+    label,
+    ctx.world.waitMs,
+  )
+}
+
+/** PR 대응의 공통 시나리오 (파일 머리의 7) */
+export async function runRespondScenario(ctx: PrContext): Promise<void> {
+  const { h, world } = ctx
+  const w = await openPrWork(
+    ctx,
+    respondClaude(
+      { [RESPOND_FILE]: RESPOND_CODE, [CI_FAIL]: 'relay M10 시험: CI를 실패시킨다\n' },
+      'relay M10 시험: PR 대응',
+    ),
+    'relay M10 시험 (대응)',
+  )
+  const head1 = workState(w).pr?.head ?? ''
+
+  // ---------- CI 실패와 [실패한 체크 다시 실행] (D175, D203) ----------
+  await world.runCi(w.pr, head1)
+  const failed = await refreshUntil(
+    ctx,
+    w,
+    (p) => p.ci === 'fail' && p.rerun !== null && newItems(p, 'ci').length === 1,
+    'CI 실패와 [실패한 체크 다시 실행]',
+    world.ciWaitMs,
+  )
+  expect(failed.rerun).toMatchObject({
+    enabled: true,
+    checks: ['ci / test (pull_request)'],
+    others: [],
+  })
+  const run = failed.rerun?.runs[0] ?? 0
+  expect(failed.rerun?.runs).toEqual([run])
+  expect(await h.relay.prRerun(w.key)).toEqual({ ok: true })
+  await settle(h, w.key)
+  expect(workEvents(w).find((e) => e.type === 'pr.checks_rerun')?.payload).toEqual({
+    runs: [run],
+    checks: ['ci / test (pull_request)'],
+  })
+  expect(await world.rerunSeen(w.pr, run)).toBe(true)
+  // 다시 돈 실행이 끝나기를 기다린다 (시험용 레포의 CI는 ci-fail이 있어 또 실패한다)
+  await world.runCi(w.pr, head1)
+  ctx.note(`7. CI 실패 → [실패한 체크 다시 실행]이 실행 ${run}을 다시 돌림`)
+
+  // ---------- 코멘트와 [대응 시작] (D170) ----------
+  const line = RESPOND_CODE.split('\n').findIndex((l) => l.startsWith('export function double')) + 1
+  await world.convo(w.pr, 'relay M10 시험: 소유자의 대화 코멘트')
+  await world.review(w.pr, head1, {
+    body: 'relay M10 시험: 소유자의 리뷰 본문',
+    path: RESPOND_FILE,
+    line,
+    comment: 'relay M10 시험: 소유자의 인라인 코멘트',
+  })
+  const ready = await refreshUntil(
+    ctx,
+    w,
+    (p) => ['ci', 'convo', 'review', 'inline'].every((k) => newItems(p, k).length === 1),
+    '대응 거리 넷 (CI 실패, 대화 코멘트, 리뷰 본문, 인라인 코멘트)',
+    world.ciWaitMs,
+  )
+  expect(ready.respond.enabled).toBe(true)
+  expect([...ready.respond.items].sort()).toEqual(
+    newItems(ready)
+      .map((i) => i.id)
+      .sort(),
+  )
+  expect(view(ctx, w).badge.kind).toBe('pr_items')
+  expect(
+    await h.relay.prRespond(w.key, {
+      items: ready.respond.items,
+      instruction: 'relay M10 시험: CI 실패도 고쳐 주세요',
+    }),
+  ).toEqual({ ok: true })
+  const task = await currentUntil(
+    ctx,
+    w,
+    (t) => t.node === 'respond' && t.status === 'awaiting_approval',
+    '대응 task 승인 대기',
+  )
+  await settle(h, w.key)
+  expect(task.band).toContain('이유: 대응 시작')
+  const responding = view(ctx, w)
+  // 대응 task가 끝나기 전까지 배지는 task 상태이고, [머지]와 [대응 시작]은 꺼진다 (D176, D183, D170)
+  expect(responding.badge.kind).toBe('awaiting_approval')
+  expect(responding.pr?.gate.reasons).toContain('돌거나 기다리는 PR 대응 task가 있음')
+  expect(responding.pr?.respond.enabled).toBe(false)
+  expect(
+    responding.pr?.items
+      .filter((i) => i.status === 'responding')
+      .map((i) => i.id)
+      .sort(),
+  ).toEqual([...ready.respond.items].sort())
+  // 승인 화면: 항목별 결과와 게시될 모양의 답글 (D172, D207)
+  const review = await h.relay.review(w.key, task.id)
+  const replies = review?.respond?.replies ?? []
+  expect(replies.map((r) => [r.item.split(':')[0], r.where.startsWith('스레드')])).toEqual(
+    expect.arrayContaining([
+      ['convo', false],
+      ['review', false],
+      ['inline', true],
+    ]),
+  )
+  expect(replies).toHaveLength(3)
+  for (const r of replies) {
+    expect(r.body).toContain('relay M10 시험 답글입니다')
+    expect(r.body).toContain(DEFAULT_CONFIG.reply_signature)
+    expect(r.body).not.toContain('<!-- relay:')
+  }
+  const convoReply = replies.find((r) => r.item.startsWith('convo:'))
+  expect(convoReply?.body).toMatch(/^> @\S+의 대화 코멘트에 대한 답글: https?:\/\//)
+  expect(review?.respond?.results).toContain(ready.respond.items[0])
+  expect(review?.emphasis.map((e) => e.kind)).not.toContain('existing_tests')
+
+  // ---------- 승인 → push와 답글 게시 (D169, D172, D194) ----------
+  expect(await h.relay.approve(w.key, task.id, {})).toEqual({ ok: true })
+  await settle(h, w.key)
+  const after = workState(w)
+  expect(after.status).toBe('pr')
+  expect(after.operation).toBeUndefined()
+  const record = after.tasks.find((t) => t.id === task.id)
+  expect(record?.status).toBe('approved')
+  expect(record?.respond?.published_at).toBeDefined()
+  const head2 = git(w.tree, 'rev-parse', 'HEAD')
+  expect(await world.branchTip(w.branch)).toBe(head2)
+  const round = prItems(w).rounds.find((r) => r.task_id === task.id)
+  expect(round?.pushed?.commits).toEqual([head2])
+  expect(round?.replies.every((r) => r.comment_id !== undefined && r.url)).toBe(true)
+  const posted = await world.comments(w.pr)
+  const inlineItem = ready.items.find((i) => i.kind === 'inline')?.id ?? ''
+  for (const r of round?.replies ?? []) {
+    const c = posted.find((x) => x.id === r.comment_id)
+    expect(c, r.item).toBeDefined()
+    expect(c?.body).toContain(r.marker)
+    expect(c?.body).toContain(DEFAULT_CONFIG.reply_signature)
+    if (r.item === inlineItem) {
+      expect(c).toMatchObject({ kind: 'inline', reply_to: Number(inlineItem.split(':')[1]) })
+    } else {
+      expect(c?.kind).toBe('convo')
+      expect(c?.body).toMatch(/^> @\S+의 (리뷰|대화 코멘트)에 대한 답글: /)
+    }
+  }
+  const types = workEvents(w).map((e) => e.type)
+  expect(types).toEqual(expect.arrayContaining(['pr.pushed', 'pr.replied']))
+  ctx.note(
+    `7. [대응 시작] → 대응 task ${task.id} 승인 → push ${head2.slice(0, 8)}, 답글 ${round?.replies.length}개 게시 (${(round?.replies ?? []).map((r) => r.item).join(', ')})`,
+  )
+
+  // ---------- 처리됨, 앱의 답글은 항목이 아님, 머지 (D189, D194, D206) ----------
+  await world.runCi(w.pr, head2)
+  const passing = await refreshUntil(
+    ctx,
+    w,
+    (p) => p.head === head2 && p.ci === 'pass' && p.gate.enabled,
+    '대응 뒤 CI 통과와 [머지] 켜짐',
+    world.ciWaitMs,
+  )
+  expect(
+    passing.items.filter((i) => ready.respond.items.includes(i.id)).map((i) => i.status),
+  ).toEqual(ready.respond.items.map(() => 'done'))
+  // 앱이 게시한 답글과 그 때문에 생긴 본문 없는 리뷰는 항목이 아니다
+  expect(passing.items.map((i) => i.id).sort()).toEqual([...ready.respond.items].sort())
+  expect(passing.rounds).toMatchObject([{ round: 1, state: 'published', taskId: task.id }])
+  const info = await h.relay.prMergeInfo(w.key)
+  if (!info.ok) throw new Error(`머지 창: ${info.error}`)
+  expect(info.info.stale).toEqual({ rounds: 1, synced: 0 })
+  expect(info.info.verdicts.length).toBeGreaterThan(0)
+  const method = info.info.preferred
+  if (!method) throw new Error('머지 방식이 없음')
+  expect(await h.relay.prMerge(w.key, { method, head: head2 })).toEqual({ ok: true })
+  await settle(h, w.key)
+  expect(workState(w).status).toBe('completed')
+  expect(await h.relay.prCleanOffered(w.key)).toEqual({ ok: true })
+  await cleanMerged(ctx, w)
+  ctx.note(
+    `7. 항목 넷 처리됨, 앱의 답글은 항목 아님, 판정표 경고(라운드 1) 뒤 ${method}로 머지, 정리`,
+  )
 }

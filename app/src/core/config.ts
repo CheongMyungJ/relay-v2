@@ -42,6 +42,7 @@ export const EDITABLE_KEYS = [
   'intent_warn_chars',
   'format_error_bounce_max',
   'pr_poll_interval_sec',
+  'reply_signature',
 ] as const
 
 export type EditableKey = (typeof EDITABLE_KEYS)[number]
@@ -73,18 +74,20 @@ const RANGES: Readonly<Record<IntegerKey, readonly [number, number]>> = {
   pr_poll_interval_sec: [30, 3600],
 }
 
-const NAMES: Readonly<Record<IntegerKey | 'question_mode' | 'pr_draft' | 'auto_approve', string>> =
-  {
-    session_limit: '세션 상한',
-    format_error_bounce_max: '형식 오류 되돌림 횟수',
-    handoff_body_warn_chars: 'handoff 본문 분량 경고 기준',
-    intent_warn_chars: 'intent 분량 경고 기준',
-    auto_approve_countdown_sec: '자동 승인 카운트다운',
-    pr_poll_interval_sec: 'PR 읽기 주기',
-    question_mode: '질문 방식',
-    pr_draft: 'draft PR',
-    auto_approve: '자동 승인',
-  }
+const NAMES: Readonly<
+  Record<IntegerKey | 'question_mode' | 'pr_draft' | 'auto_approve' | 'reply_signature', string>
+> = {
+  session_limit: '세션 상한',
+  format_error_bounce_max: '형식 오류 되돌림 횟수',
+  handoff_body_warn_chars: 'handoff 본문 분량 경고 기준',
+  intent_warn_chars: 'intent 분량 경고 기준',
+  auto_approve_countdown_sec: '자동 승인 카운트다운',
+  pr_poll_interval_sec: 'PR 읽기 주기',
+  question_mode: '질문 방식',
+  pr_draft: 'draft PR',
+  auto_approve: '자동 승인',
+  reply_signature: '답글 표시 문구',
+}
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -95,6 +98,23 @@ function integer(key: IntegerKey, v: unknown): Checked<number> {
     return { ok: false, error: `${NAMES[key]}: ${min}~${max}의 정수여야 함 (지금: ${String(v)})` }
   }
   return { ok: true, value: v }
+}
+
+/** 답글 표시 문구의 길이 상한 (D173, 기본값) */
+const SIGNATURE_MAX = 200
+
+/**
+ * 답글 끝에 붙이는 표시 문구 (D173): 비어 있지 않은 한 줄이고 200자 이하다 **(기본값)**. 앞뒤 공백은 뗀다. 답글이 사람
+ * 계정으로 올라가므로 AI가 썼다는 표시는 늘 붙인다
+ */
+function signature(v: unknown): Checked<string> {
+  const t = typeof v === 'string' ? v.trim() : ''
+  if (!t) return { ok: false, error: `${NAMES.reply_signature}: 비어 있지 않은 글이어야 함` }
+  if (/[\r\n]/.test(t)) return { ok: false, error: `${NAMES.reply_signature}: 한 줄이어야 함` }
+  if ([...t].length > SIGNATURE_MAX) {
+    return { ok: false, error: `${NAMES.reply_signature}: ${SIGNATURE_MAX}자 이하여야 함` }
+  }
+  return { ok: true, value: t }
 }
 
 /** 스킬별 질문 방식. 없는 스킬은 빼고, 모르는 스킬이나 값은 오류다 */
@@ -165,6 +185,11 @@ export function normalizeConfig(data: unknown): { config: AppConfig; warnings: s
     if (typeof data['pr_draft'] === 'boolean') config.pr_draft = data['pr_draft']
     else warnings.push('config.json pr_draft: true/false여야 함. 기본값을 씀')
   }
+  if (data['reply_signature'] !== undefined) {
+    const r = signature(data['reply_signature'])
+    if (r.ok) config.reply_signature = r.value
+    else warnings.push(`config.json ${r.error}. 기본값을 씀`)
+  }
   if (data['question_mode'] !== undefined) {
     const r = questionModes(data['question_mode'])
     if (r.ok) config.question_mode = { ...config.question_mode, ...r.value }
@@ -197,6 +222,10 @@ export function applyConfigPatch(current: AppConfig, patch: unknown): Checked<Ap
       if (typeof v !== 'boolean')
         return { ok: false, error: `${NAMES.pr_draft}: true/false여야 함` }
       next.pr_draft = v
+    } else if (key === 'reply_signature') {
+      const r = signature(v)
+      if (!r.ok) return r
+      next.reply_signature = r.value
     } else if (key === 'question_mode') {
       const r = questionModes(v)
       if (!r.ok) return r

@@ -7,7 +7,7 @@ import {
   mergeWorkSettings,
   normalizeConfig,
 } from '../../src/core/config'
-import { NODE_INFO, NODES } from '../../src/core/pipeline'
+import { NODE_INFO, NODES, RESPOND } from '../../src/core/pipeline'
 import { AUTO_APPROVE_TITLES, DEFAULT_CONFIG, SKILL_TITLES } from '../../src/shared/config'
 
 describe('config.json 읽기 (5.1.1)', () => {
@@ -221,13 +221,16 @@ describe('Work별 설정 (D72)', () => {
 })
 
 describe('화면의 스킬 이름', () => {
-  it('노드의 화면 이름(D109)과 같은 순서, 같은 이름이다', () => {
-    expect(SKILL_TITLES).toEqual(NODES.map((n) => [NODE_INFO[n].skill, NODE_INFO[n].title]))
+  it('노드의 화면 이름(D109)과 같은 순서, 같은 이름이다. PR 대응은 파이프라인 뒤에 둔다 (D187, D188)', () => {
+    expect(SKILL_TITLES).toEqual(
+      [...NODES, RESPOND].map((n) => [NODE_INFO[n].skill, NODE_INFO[n].title]),
+    )
     // 리뷰는 fix와 verify 사이다 (D166, D187)
-    expect(SKILL_TITLES.slice(-3)).toEqual([
+    expect(SKILL_TITLES.slice(-4)).toEqual([
       ['fix', '수정'],
       ['review', '리뷰'],
       ['final-verify', '최종 검증'],
+      ['pr-respond', 'PR 대응'],
     ])
   })
 

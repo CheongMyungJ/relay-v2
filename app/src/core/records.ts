@@ -1,5 +1,5 @@
 // 앱이 쓰는 파일의 모양과 id (5.1, 5.3, 5.4). 파일을 읽고 쓰는 것은 adapters/store가 한다.
-import type { Decision, NodeName, Size } from '../shared/contracts'
+import type { Decision, Size, TaskNode } from '../shared/contracts'
 import type { ApprovalBy } from '../shared/work'
 import { normalizeText, parseFrontMatter } from './validate'
 
@@ -91,7 +91,7 @@ export const DECISIONS_UNREADABLE = 'handoff 머리글 오류로 결정을 읽�
 
 export interface DecisionsEntry {
   taskId: string
-  node: NodeName
+  node: TaskNode
   /** 승인 시각 (ISO 8601) */
   at: string
   by: ApprovalBy

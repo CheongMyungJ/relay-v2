@@ -13,6 +13,7 @@ import type {
   MergeInput,
   NewWorkInput,
   PrItemAction,
+  RespondStartInput,
   SelectStepInput,
 } from '../shared/views'
 import type { DeliveryChoice, MergeMethod } from '../shared/work'
@@ -118,6 +119,14 @@ function mergeInput(v: unknown): MergeInput {
 function itemAction(v: unknown): PrItemAction {
   if (v !== 'exclude' && v !== 'include' && v !== 'accept') throw new Error('항목 조작이 아님')
   return v
+}
+
+function respondInput(v: unknown): RespondStartInput {
+  if (!v || typeof v !== 'object') throw new Error('대응 시작 입력이 아님')
+  const o = v as Record<string, unknown>
+  const items = o['items']
+  if (!Array.isArray(items)) throw new Error('항목 목록이 아님')
+  return { items: items.map(text), instruction: text(o['instruction']) }
 }
 
 export interface IpcHooks {
@@ -238,6 +247,10 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   ipcMain.handle(IPC.prCleanOffered, async (_e, workKey: unknown) =>
     (await ready).prCleanOffered(text(workKey)),
   )
+  ipcMain.handle(IPC.prRespond, async (_e, workKey: unknown, input: unknown) =>
+    (await ready).prRespond(text(workKey), respondInput(input)),
+  )
+  ipcMain.handle(IPC.prRerun, async (_e, workKey: unknown) => (await ready).prRerun(text(workKey)))
   ipcMain.handle(IPC.projectSettings, async (_e, projectId: unknown, settings: unknown) =>
     (await ready).updateProjectSettings(text(projectId), settings),
   )

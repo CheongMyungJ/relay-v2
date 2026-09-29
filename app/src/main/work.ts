@@ -7,29 +7,37 @@
 // 자동 승인 카운트다운(4.3)은 언제 시작하고 멈추는지를 core가 정해 work.json에 두고(D127), 여기서는 타이머만 돈다.
 // PR 진행(시나리오 10)은 주기 읽기의 타이머, 읽은 결과의 반영(fast-forward, pr-items.json), 머지를 여기서 한다.
 // 읽기의 네트워크 부분은 main/pr이 처리 줄 밖에서 한다(I51). 판정은 core/pr이 한다.
+// PR 대응(시나리오 10-3~10-7)은 [대응 시작]의 fetch와 fast-forward, 승인 뒤 push와 답글 게시, [실패한 체크 다시 실행]을 여기서
+// 한다. 판정은 core/respond가 한다.
 import { randomBytes, randomUUID } from 'node:crypto'
 import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { claudeVersion, deploySkill, findClaude } from '../adapters/claude'
 import {
+  GhApiError,
+  ghApiPost,
   ghCreatePr,
   ghMerge,
   ghMergeSettings,
   ghOpenPr,
   ghPrView,
+  ghRerunFailed,
   ghVersion,
   type GhPrOptions,
 } from '../adapters/gh'
 import {
+  changedPaths,
   commitAll,
   commitInfo,
+  commitsWithParents,
   countCommits,
   createBackup,
   currentBranch,
   deleteBranches,
   deleteRemoteBranch,
   diffFrom,
+  hasCommit,
   headCommit,
   isAncestor,
   lockFiles,
@@ -79,7 +87,9 @@ import {
   buildContext,
   discardedAttempts,
   previousInputs,
+  type PreviousRound,
   type PreviousTask,
+  type RespondInput,
   type SelectionInput,
 } from '../core/context'
 import {
@@ -106,7 +116,7 @@ import {
   sameChanges,
   stoppedVerify,
 } from '../core/delivery'
-import { NODE_INFO } from '../core/pipeline'
+import { NODE_INFO, RESPOND } from '../core/pipeline'
 import {
   CHECK_WAIT_MS,
   allowedMethods,
@@ -121,8 +131,12 @@ import {
   prView,
   preferredMethod,
   repoArg,
+  restRepo,
+  roundItemViews,
+  syncKind,
   type Gate,
   type ItemRules,
+  type PrLocation,
   type PrReadState,
 } from '../core/pr'
 import {
@@ -169,18 +183,47 @@ import {
   taskLabel,
   verdicts,
 } from '../core/review'
+import {
+  GONE_SKIP,
+  PR_CLOSED,
+  RESPOND_STAGE_LABEL,
+  deferredRounds,
+  existingTestChanges,
+  isAppReply,
+  pendingRespond,
+  planRound,
+  reconcileItems,
+  replyItemIds,
+  respondFailureView,
+  respondInputError,
+  respondStart,
+  respondTasks,
+  staleVerdicts,
+  unpostedReplies,
+  visibleBody,
+} from '../core/respond'
 import { backupPattern, nextBackupBranch, planStep, stepChoices, stepPreview } from '../core/rewind'
 import { cleanupArgs, launchArgs, launchEnv, resumeArgs, taskSettings } from '../core/settings'
 import {
   HANDOFF_FILE,
   INTENT_DRAFT_FILE,
   PR_FILE,
+  REPLIES_FILE,
+  RESPONSE_FILE,
   checkTask,
+  sectionText,
   type TaskCheck,
 } from '../core/validate'
 import type { AppConfig, WorkSettings } from '../shared/config'
 import type { NodeName, Size } from '../shared/contracts'
-import { EMPTY_PR_ITEMS, type PrItemsFile, type PrSynced } from '../shared/pr'
+import {
+  EMPTY_PR_ITEMS,
+  type PrItem,
+  type PrItemsFile,
+  type PrReply,
+  type PrRound,
+  type PrSynced,
+} from '../shared/pr'
 import type { ProjectChecks, ProjectState } from '../shared/project'
 import type {
   ApproveOptions,
@@ -197,6 +240,8 @@ import type {
   NoticeView,
   PrItemAction,
   PrView,
+  RespondReview,
+  RespondStartInput,
   ReviewView,
   SelectStepInput,
   StepPreviewResult,
@@ -209,6 +254,7 @@ import type {
   DeliveryChoice,
   MergeMethod,
   OwnedFile,
+  RespondOperation,
   RewindOperation,
   TaskRecord,
   UncommittedAction,
@@ -216,7 +262,7 @@ import type {
 } from '../shared/work'
 import type { SessionPool } from './pool'
 import type { UiPort } from './ports'
-import { readPr, receivedCommits, fetchTip, type PrFetched, type PrViewFacts } from './pr'
+import { listPrComments, readPr, receivedCommits, fetchTip, type PrFetched } from './pr'
 import { CLAUDE_INSTALL_GUIDE } from './projects'
 import { TerminalBuffer } from './terminals'
 
@@ -310,6 +356,9 @@ function turnSnapshot(task: TaskRecord, files: Readonly<Record<string, string>>)
   const draft = task.node === 'intake' ? (files[INTENT_DRAFT_FILE] ?? null) : null
   return JSON.stringify([files[HANDOFF_FILE] ?? null, draft])
 }
+
+/** 한 번의 답글 게시에서 받아 둔 코멘트 목록 (인라인 코멘트, 대화 코멘트) */
+type ReplyLists = Map<'inline' | 'convo', Promise<unknown[]>>
 
 /** 요청의 첫 줄. 사이드바의 Work 제목이다 */
 export function workTitle(request: string): string {
@@ -529,6 +578,9 @@ export class WorkRunner {
       case 'merge':
         await this.mergeCode(e)
         return
+      case 'respond':
+        await this.respondCode(e)
+        return
     }
   }
 
@@ -543,6 +595,8 @@ export class WorkRunner {
       files,
       config: this.ctx.config(),
       formatVersion: task.format_version,
+      // PR 대응 task는 이번 라운드의 코멘트 항목마다 replies.md의 절을 본다 (D190)
+      ...(task.respond ? { replyItems: replyItemIds(task.respond.items) } : {}),
     })
   }
 
@@ -792,7 +846,49 @@ export class WorkRunner {
       ...previousInputs(earlier),
       selection: await this.selectionInput(task),
       ...(task.node === 'verify' ? { delivery: closingButtons(this.checks()) } : {}),
+      respond: await this.respondInput(task),
     })
+  }
+
+  /**
+   * PR 대응 task의 입력 (D192, 시나리오 10-4): 이번 라운드의 항목, 사람 지시, PR 정보와 앱이 fetch한 원격 브랜치의 커밋,
+   * 앞 대응 라운드의 handoff 요약. 대응 task가 아니면 null
+   */
+  private async respondInput(task: TaskRecord): Promise<RespondInput | null> {
+    const r = task.respond
+    const pr = this.work.pr
+    if (task.node !== RESPOND || !r || !pr) return null
+    const file = await this.prItems()
+    const items = r.items
+      .map((id) => file.items.find((i) => i.id === id))
+      .filter((i): i is PrItem => i !== undefined)
+    const previous: PreviousRound[] = []
+    for (const t of respondTasks(this.work)) {
+      if (t.seq >= task.seq || t.status !== 'approved') continue
+      const handoff = await this.handoffOf(t)
+      previous.push({
+        taskId: t.id,
+        round: t.respond.round,
+        items: t.respond.items,
+        instruction: t.respond.instruction,
+        summary: handoff === undefined ? null : handoffSummary(handoff),
+      })
+    }
+    const opts = { env: this.ctx.env }
+    const repo = this.project.repo_path
+    const branch = workBranch(this.work.work_id)
+    return {
+      round: r.round,
+      instruction: r.instruction,
+      pr: { number: pr.number, url: pr.url, head: pr.head },
+      branch,
+      remote: {
+        base: await refCommit(repo, `refs/remotes/origin/${this.work.base_branch}`, opts),
+        branch: await refCommit(repo, `refs/remotes/origin/${branch}`, opts),
+      },
+      items,
+      previous,
+    }
   }
 
   // ---------- 등록 점검 (D67, D118) ----------
@@ -1064,7 +1160,9 @@ export class WorkRunner {
       const task = this.task(taskId)
       if (!task) return { ok: false, error: `${taskId} 없음` }
       const check = this.check(task, await this.files.taskFiles(task))
-      return this.command({
+      // PR 대응 task는 승인하면 push하고 답글을 게시한다. 실패하면 그 오류를 돌려준다 (시나리오 10-6)
+      this.opError = null
+      const r = await this.command({
         type: 'approve',
         taskId,
         at: this.ctx.at(),
@@ -1072,6 +1170,10 @@ export class WorkRunner {
         ...(opts.size ? { size: opts.size } : {}),
         ...(opts.force ? { force: true } : {}),
       })
+      const failed = this.opError
+      this.opError = null
+      if (!r.ok) return r
+      return failed ? { ok: false, error: failed } : { ok: true }
     })
   }
 
@@ -2238,6 +2340,7 @@ export class WorkRunner {
     const handoffText = files[HANDOFF_FILE]
     const header = check.handoffHeader
     const gate = (size?: Size) => approvalGate(task, check, size)
+    const respond = task.respond ? await this.respondReview(task, files) : null
     let completion: Completion | null = null
     if (task.node === 'verify') {
       const workDiff = await diffTo(this.work.base_commit)
@@ -2268,7 +2371,13 @@ export class WorkRunner {
       node: task.node,
       label: taskLabel(task),
       taskStatus: task.status,
-      reviewable: REVIEWABLE.includes(task.status) && this.work.status === 'active',
+      reviewable:
+        REVIEWABLE.includes(task.status) &&
+        (task.node === RESPOND
+          ? this.work.status === 'pr' &&
+            !this.work.operation &&
+            currentTask(this.work)?.id === task.id
+          : this.work.status === 'active'),
       handoffPresent: check.handoff_present,
       handoffStatus: check.status,
       summary: handoffText === undefined ? null : handoffSummary(handoffText),
@@ -2277,7 +2386,13 @@ export class WorkRunner {
       risks: header?.risks ?? [],
       errors: check.errors,
       warnings: check.warnings,
-      emphasis: emphasis({ node: task.node, handoff: header, errors: check.errors, uncommitted }),
+      emphasis: emphasis({
+        node: task.node,
+        handoff: header,
+        errors: check.errors,
+        uncommitted,
+        ...(respond ? { tests: respond.tests, failure: respond.view.failure } : {}),
+      }),
       artifacts: Object.entries(files)
         .filter(([name]) => name !== CONTEXT_FILE && name !== HANDOFF_FILE)
         .map(([name, text]) => ({ name, text })),
@@ -2286,6 +2401,65 @@ export class WorkRunner {
       gates: { none: gate(), S: gate('S'), M: gate('M'), L: gate('L') },
       autoApprove: autoApproveNote(this.work, task, this.ctx.config()),
       completion,
+      respond: respond?.view ?? null,
+    }
+  }
+
+  /**
+   * PR 대응 task의 승인 화면에 더할 것 (D172, D180, D202, D207): 이번 라운드의 항목, 항목별 결과(response.md), 게시될 모양의
+   * 답글(지금 replies.md로 만든다. 끝난 라운드는 게시한 기록), 함께 게시할 미룬 앞 라운드, 승인 뒤 실패한 push나 게시.
+   * 기존 테스트 변경은 끝나지 않은 라운드만 git으로 가린다(라운드 시작 커밋 → 지금 작업 트리)
+   */
+  private async respondReview(
+    task: TaskRecord,
+    files: Readonly<Record<string, string>>,
+  ): Promise<{ view: RespondReview; tests: string[] } | null> {
+    const r = task.respond
+    if (!r) return null
+    const file = await this.prItems()
+    const prior = file.rounds.find((x) => x.task_id === task.id)
+    const pending = pendingRespond(this.work)?.id === task.id
+    const round: PrRound =
+      !pending && prior
+        ? prior
+        : planRound({
+            workId: this.work.work_id,
+            task: { id: task.id, respond: r },
+            items: file.items,
+            replies: files[REPLIES_FILE],
+            signature: this.ctx.config().reply_signature,
+            prior,
+          })
+    let tests: string[] = []
+    if (pending && task.start_commit) {
+      try {
+        tests = existingTestChanges(
+          await changedPaths(this.worktree, task.start_commit, { env: this.ctx.env }),
+        )
+      } catch (e) {
+        this.problem(`기존 테스트 변경을 읽지 못함: ${message(e)}`)
+      }
+    }
+    const rules = this.prRules()
+    return {
+      tests,
+      view: {
+        round: r.round,
+        instruction: r.instruction,
+        items: roundItemViews(r.items, new Map(file.items.map((i) => [i.id, i])), rules),
+        results: sectionText(files[RESPONSE_FILE] ?? '', '항목별 결과'),
+        replies: round.replies.map((x) => ({
+          item: x.item,
+          where:
+            x.thread === null ? 'PR 대화 코멘트로 새로 올림' : `스레드 inline:${x.thread}에 답글`,
+          body: visibleBody(x),
+          url: x.url ?? null,
+          skipped: x.skipped ?? null,
+        })),
+        deferred: pending ? deferredRounds(this.work).map((t) => taskLabel(t)) : [],
+        failure: respondFailureView(r.failure),
+        blocked: pending && this.work.pr?.closed_at ? PR_CLOSED : null,
+      },
     }
   }
 
@@ -2308,7 +2482,7 @@ export class WorkRunner {
         this.prFile = await this.files.readPrItems()
       } catch (e) {
         this.problem(`pr-items.json을 읽지 못함: ${message(e)}`)
-        this.prFile = { ...EMPTY_PR_ITEMS, items: [], synced: [] }
+        this.prFile = { ...EMPTY_PR_ITEMS, items: [], synced: [], rounds: [] }
       }
     }
     return this.prFile
@@ -2355,6 +2529,8 @@ export class WorkRunner {
   async startPr(opts: { quiet?: boolean } = {}): Promise<void> {
     if (!this.work.pr) return
     await this.prItems()
+    // 항목의 대응 중·처리됨을 대응 task의 기록(work.json)에 맞춘다: 앱이 둘 사이에 꺼졌을 수 있다 (D189)
+    await this.syncItemStatus()
     this.changed()
     if (this.work.status !== 'pr' || this.work.pr.closed_at) return
     void this.readPrNow(opts)
@@ -2474,9 +2650,10 @@ export class WorkRunner {
     let local = f.local
     let sync = f.sync
     let synced: PrSynced | null = null
-    if (sync === 'ff' && local) {
+    // PR 대응 task가 끝나기 전에는 fast-forward하지 않는다 (D193): 대응 task가 코드를 바꾸는 중이다
+    if (sync === 'ff' && local && !pendingRespond(this.work)) {
       try {
-        synced = await this.fastForward(local, f.view, at)
+        synced = await this.fastForward(local, f.view.head, f.view.baseRef, at)
         local = f.view.head
         sync = 'same'
       } catch (e) {
@@ -2485,12 +2662,14 @@ export class WorkRunner {
       }
     }
     const file = await this.prItems()
+    // 앱이 게시한 답글은 항목으로 보지 않는다: 적어 둔 코멘트 id와 보이지 않는 표시로 가린다 (D194)
+    const comments = f.comments.filter((c) => !isAppReply(c, this.work.work_id, file))
     const gathered = gatherItems(
       file.items,
       {
         at,
         head: f.view.head,
-        comments: f.comments,
+        comments,
         failing: f.checks.filter((c) => c.bucket === 'fail'),
         conflict: f.conflict,
         diverged: sync === null || !local ? undefined : divergedFact(sync, f.view.head, local),
@@ -2499,7 +2678,7 @@ export class WorkRunner {
       this.prRules(),
     )
     const next: PrItemsFile = {
-      schema_version: 1,
+      ...file,
       items: gathered.items,
       synced: synced ? [...file.synced, synced] : file.synced,
     }
@@ -2549,7 +2728,13 @@ export class WorkRunner {
       const w = this.work
       const notes: string[] = []
       if (w.status === 'completed' && w.pr?.merged?.outside) {
-        notes.push('밖에서 머지됨. [Work 정리]로 정리하세요')
+        // 승인했지만 push·게시를 미룬 라운드(D193)는 머지에 들어가지 않았다
+        const lost = deferredRounds(w).length
+        notes.push(
+          lost
+            ? `밖에서 머지됨. 승인했지만 push·게시하지 못한 대응 라운드 ${lost}개는 머지에 들어가지 않음. [Work 정리]로 정리하세요`
+            : '밖에서 머지됨. [Work 정리]로 정리하세요',
+        )
       } else if (w.status === 'pr') {
         if (w.pr?.closed_at && !closedBefore) notes.push('PR이 닫혀 자동 읽기를 멈춤')
         if (gathered.received.length) notes.push(`대응 거리 ${gathered.received.length}개가 들어옴`)
@@ -2565,7 +2750,12 @@ export class WorkRunner {
    * 원격만 앞선 PR 브랜치를 받는다 (D193, S7 관찰 8). 읽은 뒤 바뀌었을 수 있어 로컬 Work 브랜치, worktree의 변경과
    * 브랜치를 다시 본다. 받은 커밋에 기준 브랜치 병합이 있으면 기준 브랜치를 fetch해 옮길 기준 커밋을 정한다 (D181)
    */
-  private async fastForward(local: string, view: PrViewFacts, at: string): Promise<PrSynced> {
+  private async fastForward(
+    local: string,
+    remote: string,
+    baseRef: string,
+    at: string,
+  ): Promise<PrSynced> {
     const opts = { env: this.ctx.env }
     const repo = this.project.repo_path
     const branch = workBranch(this.work.work_id)
@@ -2578,14 +2768,14 @@ export class WorkRunner {
     if ((await currentBranch(this.worktree, opts)) !== branch) {
       throw new Error('worktree가 Work 브랜치에 있지 않음')
     }
-    await mergeFastForward(this.worktree, view.head, opts)
+    await mergeFastForward(this.worktree, remote, opts)
     const ctx = { repo, env: this.ctx.env }
     const { received, base } = await receivedCommits(
       ctx,
       local,
-      view.head,
+      remote,
       this.work.base_commit,
-      () => fetchTip(ctx, view.baseRef || this.work.base_branch),
+      () => fetchTip(ctx, baseRef || this.work.base_branch),
     )
     return { at, from: local, commits: received, ...(base ? { base_commit: base } : {}) }
   }
@@ -2655,6 +2845,11 @@ export class WorkRunner {
       return { ok: false, error: `레포가 허용하는 머지 방식을 읽지 못함: ${message(e)}` }
     }
     if (!methods.length) return { ok: false, error: '레포가 허용하는 머지 방식이 없음' }
+    // 대응 라운드가 push했거나 원격 커밋을 받았으면 판정표가 대응 전 코드 기준이다 (D180, D206)
+    const verify = [...this.work.tasks].reverse().find((t) => t.node === 'verify')
+    const table = verify
+      ? verdicts((await this.files.taskFiles(verify))['verification.md'] ?? '')
+      : []
     return {
       ok: true,
       info: {
@@ -2662,6 +2857,8 @@ export class WorkRunner {
         methods,
         preferred: preferredMethod(methods, this.projectNow().merge_method),
         gate: this.prGate(),
+        stale: staleVerdicts(await this.prItems()),
+        verdicts: table,
       },
     }
   }
@@ -2756,6 +2953,455 @@ export class WorkRunner {
   /** 머지 뒤 정리 창을 열었다 (D178, D200) */
   prCleanOffered(): Promise<CommandResult> {
     return this.enqueue(() => this.command({ type: 'pr.cleanOffered', at: this.ctx.at() }))
+  }
+
+  // ---------- PR 대응 (시나리오 10-3~10-7, D168~D207) ----------
+
+  /** pr-items.json을 쓰고 메모리에 둔다. 쓰지 못하면 던진다 */
+  private async writePr(next: PrItemsFile): Promise<void> {
+    await this.files.writePrItems(next)
+    this.prFile = next
+  }
+
+  /** 항목의 대응 중·처리됨을 대응 task의 기록(work.json)에 맞춘다 (D189). 쓰지 못하면 알리고 다음에 다시 맞춘다 */
+  private async syncItemStatus(): Promise<void> {
+    const file = await this.prItems()
+    const r = reconcileItems(file.items, this.work)
+    if (!r.changed.length) return
+    try {
+      await this.writePr({ ...file, items: r.items })
+    } catch (e) {
+      this.problem(`pr-items.json을 쓰지 못함: ${message(e)}`)
+    }
+    this.changed()
+  }
+
+  /**
+   * PR 패널의 [대응 시작] (시나리오 10-3, D170, D182). 먼저 기준 브랜치와 PR 브랜치를 fetch한다(네트워크라 처리 줄 밖, I51).
+   * 실패해도 시작한다: 대응 task는 앱이 가진 원격 추적 브랜치로 한다. 줄에서 사람이 본 새 항목이 지금 새 항목과 같은지
+   * 보고, 원격만 앞섰으면 받은 뒤(D181, D193) 대응 task를 시작한다. 넣은 항목은 대응 중이 된다 (D189)
+   */
+  async respond(input: RespondStartInput): Promise<CommandResult> {
+    const pre = respondStart(this.work, this.prFile?.items ?? [])
+    if (!pre.enabled) return { ok: false, error: pre.reason ?? '대응을 시작할 수 없음' }
+    if (this.cleanupOpen()) return { ok: false, error: CLEANUP_BLOCKS }
+    const ctx = { repo: this.project.repo_path, env: this.ctx.env }
+    const branch = workBranch(this.work.work_id)
+    await fetchTip(ctx, this.work.base_branch)
+    const remote = await fetchTip(ctx, branch)
+    return this.enqueue(async () => {
+      if (this.cleanupOpen()) return { ok: false, error: CLEANUP_BLOCKS }
+      const file = await this.prItems()
+      const error = respondInputError(
+        respondStart(this.work, file.items),
+        input.items,
+        input.instruction,
+      )
+      if (error) return { ok: false, error }
+      const at = this.ctx.at()
+      let synced: PrSynced | null
+      try {
+        synced = remote ? await this.syncForRespond(remote, at) : null
+      } catch (e) {
+        return { ok: false, error: `원격 PR 브랜치의 새 커밋을 받지 못함: ${message(e)}` }
+      }
+      const r = await this.command({
+        type: 'pr.respond',
+        at,
+        items: [...input.items],
+        instruction: input.instruction,
+        ...(synced && remote
+          ? {
+              synced: {
+                head: remote,
+                commits: synced.commits,
+                ...(synced.base_commit ? { baseCommit: synced.base_commit } : {}),
+              },
+            }
+          : {}),
+      })
+      // 받은 커밋과 대응 중이 된 항목을 적는다. 상태의 기준은 work.json이라 쓰지 못하면 켤 때 맞춘다 (D189)
+      const now = await this.prItems()
+      try {
+        await this.writePr({
+          ...now,
+          items: reconcileItems(now.items, this.work).items,
+          synced: synced ? [...now.synced, synced] : now.synced,
+        })
+      } catch (e) {
+        this.problem(`pr-items.json을 쓰지 못함: ${message(e)}`)
+      }
+      this.changed()
+      return r
+    })
+  }
+
+  /**
+   * [대응 시작] 전에 원격만 앞선 PR 브랜치를 받는다 (시나리오 10-3, D181, D193). 읽기의 fast-forward와 같은 규칙이다: 로컬
+   * Work 브랜치가 원격의 조상이고 worktree가 깨끗하고 Work 브랜치에 있을 때만 받는다. 아니면 받지 않고 시작한다: 갈라짐은
+   * 항목이 되고, 승인 뒤 push가 거절되면 라운드를 미룬다
+   */
+  private async syncForRespond(remote: string, at: string): Promise<PrSynced | null> {
+    const opts = { env: this.ctx.env }
+    const repo = this.project.repo_path
+    const branch = workBranch(this.work.work_id)
+    const local = await refCommit(repo, `refs/heads/${branch}`, opts)
+    if (!local || local === remote) return null
+    const localInRemote = await isAncestor(repo, local, remote, opts)
+    if (!localInRemote) return null
+    const clean = (await statusLines(this.worktree, opts)).length === 0
+    const onBranch = (await currentBranch(this.worktree, opts)) === branch
+    const kind = syncKind({ local, remote, localInRemote, remoteInLocal: false, clean, onBranch })
+    if (kind !== 'ff') return null
+    return this.fastForward(local, remote, this.work.base_branch, at)
+  }
+
+  /**
+   * PR 대응의 push와 답글 게시 (시나리오 10-6, D169, D172~D174, D181, D193, D194, D205, D207). 게시할 답글을 적어 두고,
+   * push를 미룬 앞 라운드와 함께 push하고, 답글을 하나씩 게시하며 게시할 때마다 코멘트 id를 적는다. 원격의 새 커밋 때문에
+   * push가 거절되면 라운드를 미룬다. 실패하면 오류를 남기고 대응 task는 승인 대기로 남는다. 어느 쪽이든 곧 PR을 다시 읽는다
+   */
+  private async respondCode(e: Extract<Effect, { type: 'respond' }>): Promise<void> {
+    const op = this.work.operation
+    if (op?.kind !== 'respond') return
+    const pr = this.work.pr
+    const location = pr ? prLocation(pr.url) : null
+    try {
+      if (!pr || !location) throw new Error(`PR 주소를 읽지 못함: ${pr?.url ?? ''}`)
+      await this.planReplies(op, e.resume === true)
+      if (op.stage === 'push') {
+        const pushed = await this.respondPush(op)
+        if (!pushed) {
+          const check = (await this.checkNow(op.task_id)) ?? null
+          await this.feed({ type: 'respond.deferred', at: this.ctx.at(), check })
+          setTimeout(() => void this.readPrNow(), 0)
+          return
+        }
+        await this.feed({ type: 'respond.pushed', at: this.ctx.at(), ...pushed })
+      }
+      const replies = await this.postReplies(op, location)
+      const base = (await this.prItems()).rounds.find((r) => r.task_id === op.task_id)?.pushed
+        ?.base_commit
+      const check = (await this.checkNow(op.task_id)) ?? null
+      await this.feed({
+        type: 'respond.published',
+        at: this.ctx.at(),
+        check,
+        replies,
+        ...(base && base !== this.work.base_commit ? { baseCommit: base } : {}),
+      })
+      await this.syncItemStatus()
+    } catch (err) {
+      const now = this.work.operation
+      const stage = now?.kind === 'respond' ? now.stage : op.stage
+      this.opError = `PR 대응의 ${RESPOND_STAGE_LABEL[stage]} 실패: ${message(err)}`
+      console.error(`[${this.key}] ${this.opError}`)
+      await this.feed({ type: 'respond.failed', at: this.ctx.at(), error: message(err) })
+    }
+    // push나 게시로 PR이 바뀌었다: 새 head의 체크, 게시한 답글 거르기
+    setTimeout(() => void this.readPrNow(), 0)
+  }
+
+  /**
+   * 게시할 답글을 적어 둔다 (D172, D190, D194, D207). 승인한 라운드는 지금 replies.md로 정한다: 실패한 뒤 다시 승인했으면
+   * 고친 초안을 쓴다. 게시했거나 건너뛴 답글은 그대로다. push를 미룬 앞 라운드와, 끊긴 작업을 잇는 경우(resume)는 적어 둔
+   * 것을 쓴다: 사람이 승인한 본문이다. 적어 둔 것이 없는 라운드만 정한다
+   */
+  private async planReplies(op: RespondOperation, resume: boolean): Promise<void> {
+    const file = await this.prItems()
+    const rounds = [...file.rounds]
+    let changed = false
+    for (const id of op.rounds) {
+      const task = this.task(id)
+      if (!task?.respond) continue
+      const i = rounds.findIndex((r) => r.task_id === id)
+      const prior = i >= 0 ? rounds[i] : undefined
+      if (prior && (resume || id !== op.task_id)) continue
+      const files = await this.files.taskFiles(task)
+      const next = planRound({
+        workId: this.work.work_id,
+        task: { id, respond: task.respond },
+        items: file.items,
+        replies: files[REPLIES_FILE],
+        signature: this.ctx.config().reply_signature,
+        prior,
+      })
+      if (i >= 0) rounds[i] = next
+      else rounds.push(next)
+      changed = true
+    }
+    if (changed) await this.writePr({ ...file, rounds })
+  }
+
+  /**
+   * push (시나리오 10-6): M5와 같은 일반 push다. 강제 push는 하지 않는다(D181). worktree가 Work 브랜치에 있지 않으면 하지
+   * 않는다(D138). 원격에 이미 있는 커밋이면 보내지 않는다(끊긴 push를 다시 함). 거절되면 PR 브랜치를 fetch해 원격과 로컬
+   * HEAD의 조상 관계로 가른다: 갈라졌으면 원격의 새 커밋 때문이라 null(라운드를 미룸, D193), 보낼 커밋이 이미 원격에
+   * 있으면 push한 것으로 본다. 거절 문구에 기대지 않는다(M9의 머지와 같은 까닭, S7 관찰 8)
+   */
+  private async respondPush(
+    op: RespondOperation,
+  ): Promise<{ head: string; commits: string[] } | null> {
+    const opts = { env: this.ctx.env }
+    const repo = this.project.repo_path
+    const ctx = { repo, env: this.ctx.env }
+    const branch = workBranch(this.work.work_id)
+    const off = await this.offBranch()
+    if (off) throw new Error(off)
+    const head = await headCommit(this.worktree, opts)
+    const inRemote = async (remote: string | null) =>
+      remote !== null && (remote === head || (await isAncestor(repo, head, remote, opts)))
+    const tip = await fetchTip(ctx, branch)
+    // 실패한 뒤 다시 승인했고 그때 push한 head 그대로면 다시 적지 않는다: 이번에 올라간 커밋이 없다
+    const pushed = (await this.prItems()).rounds.find((r) => r.task_id === op.task_id)?.pushed
+    if (pushed?.head === head && (await inRemote(tip))) return { head, commits: [] }
+    if (!(await inRemote(tip))) {
+      try {
+        await pushBranch(this.worktree, branch, 'origin', opts)
+      } catch (err) {
+        const after = await fetchTip(ctx, branch)
+        if (!(await inRemote(after))) {
+          if (after && !(await isAncestor(repo, after, head, opts))) return null
+          throw err
+        }
+      }
+    }
+    return this.recordPush(op, head)
+  }
+
+  /**
+   * push한 것을 라운드 기록에 적는다: 승인할 때 읽은 원격 head(from)에서 닿지 않는 커밋(원격에 없던 것)과, 이번에 push한
+   * 라운드들이 기준 브랜치를 병합했으면 옮길 기준 커밋(D181. 원격을 병합해 들어온 기준 브랜치 병합도 본다). 미룬 앞 라운드에는
+   * 함께 push한 라운드를 적는다 (D193)
+   */
+  private async recordPush(
+    op: RespondOperation,
+    head: string,
+  ): Promise<{ head: string; commits: string[] }> {
+    const opts = { env: this.ctx.env }
+    const repo = this.project.repo_path
+    const ctx = { repo, env: this.ctx.env }
+    const first = this.task(op.rounds[0] ?? op.task_id)?.start_commit
+    const from = (await hasCommit(repo, op.from, opts)) ? op.from : first
+    const commits = from
+      ? (await commitsWithParents(repo, from, head, opts)).map((c) => c.commit)
+      : []
+    const base = first
+      ? (
+          await receivedCommits(ctx, first, head, this.work.base_commit, () =>
+            fetchTip(ctx, this.work.base_branch),
+          )
+        ).base
+      : null
+    const file = await this.prItems()
+    const at = this.ctx.at()
+    const rounds = file.rounds.map((r): PrRound =>
+      r.task_id === op.task_id
+        ? { ...r, pushed: { at, head, commits, ...(base ? { base_commit: base } : {}) } }
+        : op.rounds.includes(r.task_id)
+          ? { ...r, pushed_with: op.task_id }
+          : r,
+    )
+    await this.writePr({ ...file, rounds })
+    return { head, commits }
+  }
+
+  /**
+   * 라운드마다 답글을 하나씩 게시한다 (시나리오 10-6, D172~D174, D194, D205, D207). 게시했거나 건너뛴 답글을 돌려준다
+   * (5.5 pr.replied). 끊긴 뒤 이었으면 앞서 게시한 답글도 넣는다
+   */
+  private async postReplies(
+    op: RespondOperation,
+    location: PrLocation,
+  ): Promise<{ item: string; commentId?: number; skipped?: string }[]> {
+    // 코멘트 목록은 한 번의 게시에서 종류마다 한 번만 받는다: 찾는 표시는 앞선 시도에서 올린 답글이고, 없어졌는지는
+    // 원래 코멘트만 본다. 실패하면 그 자리에서 멈추고 [다시 시도]가 새로 받는다
+    const lists: ReplyLists = new Map()
+    for (const id of op.rounds) {
+      const round = (await this.prItems()).rounds.find((r) => r.task_id === id)
+      if (!round) continue
+      for (const reply of unpostedReplies(round)) await this.postReply(id, reply, location, lists)
+    }
+    return (await this.prItems()).rounds
+      .filter((r) => op.rounds.includes(r.task_id))
+      .flatMap((r) => r.replies)
+      .flatMap((x): { item: string; commentId?: number; skipped?: string }[] =>
+        x.comment_id !== undefined
+          ? [{ item: x.item, commentId: x.comment_id }]
+          : x.skipped !== undefined
+            ? [{ item: x.item, skipped: x.skipped }]
+            : [],
+      )
+  }
+
+  /**
+   * 답글 하나를 게시한다 (D194, D205, D207). GitHub에서 없어진 코멘트(앞 읽기에서 없어짐)면 건너뛴다. 시도했지만 결과를 모르는
+   * 답글은 먼저 원격에서 보이지 않는 표시를 찾아 있으면 id만 적는다. 게시하기 전에 시도한 때를 적고, 게시하면 코멘트 id를
+   * 바로 적는다. 인라인 답글이 GitHub의 오류로 실패했는데 다시 읽어도 그 코멘트가 없으면 건너뛴다
+   */
+  private async postReply(
+    taskId: string,
+    reply: PrReply,
+    location: PrLocation,
+    lists: ReplyLists,
+  ): Promise<void> {
+    const file = await this.prItems()
+    const item = file.items.find((i) => i.id === reply.item)
+    if (item?.gone) {
+      await this.updateReply(taskId, reply.item, { skipped: GONE_SKIP })
+      return
+    }
+    if (reply.attempted_at) {
+      const found = await this.findReply(reply, location, lists)
+      if (found) {
+        await this.updateReply(taskId, reply.item, {
+          comment_id: found.id,
+          ...(found.url ? { url: found.url } : {}),
+          posted_at: this.ctx.at(),
+        })
+        return
+      }
+    }
+    await this.updateReply(taskId, reply.item, { attempted_at: this.ctx.at() })
+    const rest = restRepo(location)
+    const n = location.number
+    const path =
+      reply.thread === null
+        ? `${rest}/issues/${n}/comments`
+        : `${rest}/pulls/${n}/comments/${reply.thread}/replies`
+    let res: Record<string, unknown>
+    try {
+      res = await ghApiPost(this.ctx.ghBin, {
+        host: location.host,
+        path,
+        body: { body: reply.body },
+        cwd: this.project.repo_path,
+        env: this.ctx.env,
+      })
+    } catch (err) {
+      const answered = err instanceof GhApiError && err.status !== null
+      if (reply.thread !== null && answered && (await this.inlineGone(reply, location, lists))) {
+        await this.markGone(reply.item)
+        await this.updateReply(taskId, reply.item, { skipped: GONE_SKIP })
+        return
+      }
+      throw err
+    }
+    const id = typeof res['id'] === 'number' ? res['id'] : null
+    if (id === null) throw new Error(`게시한 답글의 id를 읽지 못함 (${reply.item})`)
+    const url = typeof res['html_url'] === 'string' ? res['html_url'] : undefined
+    await this.updateReply(taskId, reply.item, {
+      comment_id: id,
+      ...(url ? { url } : {}),
+      posted_at: this.ctx.at(),
+    })
+  }
+
+  /** 답글이 올라갈 REST 목록 (스레드에 단 답글은 인라인 코멘트, 아니면 대화 코멘트). 한 번의 게시에서 종류마다 한 번 받는다 */
+  private replyList(reply: PrReply, location: PrLocation, lists: ReplyLists): Promise<unknown[]> {
+    const kind = reply.thread === null ? 'convo' : 'inline'
+    let list = lists.get(kind)
+    if (!list) {
+      list = listPrComments(
+        { ghBin: this.ctx.ghBin, env: this.ctx.env, repo: this.project.repo_path, location },
+        kind,
+      )
+      lists.set(kind, list)
+    }
+    return list
+  }
+
+  /** 게시 결과를 모르는 답글을 원격에서 보이지 않는 표시로 찾는다 (D194). 없으면 null */
+  private async findReply(
+    reply: PrReply,
+    location: PrLocation,
+    lists: ReplyLists,
+  ): Promise<{ id: number; url: string | null } | null> {
+    for (const raw of await this.replyList(reply, location, lists)) {
+      const c = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+      const body = typeof c['body'] === 'string' ? c['body'] : ''
+      if (typeof c['id'] === 'number' && body.includes(reply.marker)) {
+        return { id: c['id'], url: typeof c['html_url'] === 'string' ? c['html_url'] : null }
+      }
+    }
+    return null
+  }
+
+  /** 인라인 답글이 달릴 코멘트(항목의 코멘트나 스레드 첫 코멘트)가 GitHub에서 없어졌는가 (D205) */
+  private async inlineGone(
+    reply: PrReply,
+    location: PrLocation,
+    lists: ReplyLists,
+  ): Promise<boolean> {
+    const ids = new Set(
+      (await this.replyList(reply, location, lists)).map((raw) =>
+        raw && typeof raw === 'object' ? (raw as Record<string, unknown>)['id'] : null,
+      ),
+    )
+    const own = Number(reply.item.slice('inline:'.length))
+    return !ids.has(own) || !ids.has(reply.thread)
+  }
+
+  /** 없어진 코멘트를 적는다 (D205). 항목은 그 라운드를 게시하면 처리됨이다 */
+  private async markGone(itemId: string): Promise<void> {
+    const file = await this.prItems()
+    await this.writePr({
+      ...file,
+      items: file.items.map((i) => (i.id === itemId ? { ...i, gone: true } : i)),
+    })
+  }
+
+  /** 라운드 기록의 답글 하나를 고쳐 바로 쓴다 (D194: 게시할 때마다 적음) */
+  private async updateReply(
+    taskId: string,
+    itemId: string,
+    patch: Partial<PrReply>,
+  ): Promise<void> {
+    const file = await this.prItems()
+    const rounds = file.rounds.map((r): PrRound =>
+      r.task_id !== taskId
+        ? r
+        : { ...r, replies: r.replies.map((x) => (x.item === itemId ? { ...x, ...patch } : x)) },
+    )
+    await this.writePr({ ...file, rounds })
+    this.changed()
+  }
+
+  /**
+   * PR 패널의 [실패한 체크 다시 실행] (D175, D203): 마지막으로 읽은 head에서 실패한 Actions 체크의 실행을 --failed로 다시
+   * 돌린다. 실행 하나가 실패해도 나머지는 한다. 다시 실행한 것을 남기고 곧 PR을 다시 읽는다
+   */
+  rerunChecks(): Promise<CommandResult> {
+    return this.enqueue(async () => {
+      const view = this.prPanel()?.rerun
+      if (!view) return { ok: false, error: '다시 실행할 실패한 Actions 체크가 없음' }
+      if (!view.enabled) return { ok: false, error: view.reason ?? '다시 실행할 수 없음' }
+      const pr = this.work.pr
+      const location = pr ? prLocation(pr.url) : null
+      if (!location) return { ok: false, error: `PR 주소를 읽지 못함: ${pr?.url ?? ''}` }
+      const done: number[] = []
+      const errors: string[] = []
+      for (const run of view.runs) {
+        const r = await ghRerunFailed(this.ctx.ghBin, {
+          repo: repoArg(location),
+          run,
+          cwd: this.project.repo_path,
+          env: this.ctx.env,
+        })
+        if (r.ok) done.push(run)
+        else errors.push(`실행 ${run}: ${r.error}`)
+      }
+      if (done.length) {
+        const checks = (this.prRead?.checks ?? [])
+          .filter((c) => c.bucket === 'fail' && c.run !== null && done.includes(c.run))
+          .map((c) => c.label)
+        await this.feed({ type: 'pr.checksRerun', at: this.ctx.at(), runs: done, checks })
+      }
+      setTimeout(() => void this.readPrNow(), 0)
+      return errors.length
+        ? { ok: false, error: `다시 실행하지 못함: ${errors.join(' / ')}` }
+        : { ok: true }
+    })
   }
 
   // ---------- 터미널 ----------

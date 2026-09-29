@@ -15,6 +15,9 @@
 //   새 세션은 다음 요청으로 대화가 생겨야 --resume으로 열 수 있다.
 // - 첫 프롬프트 없이 연 세션은 정리 세션([AI 세션 열기], 시나리오 7-5)이라 시나리오의 cleanup 단계를 한다.
 //   git 단계는 worktree에서 git을 부른다(정리 세션이 변경을 되돌리거나 커밋하는 것을 흉내 낸다).
+// - PR 대응 task(스킬 pr-respond)의 respond 단계는 context.md의 이번 라운드 항목(`#### \`<항목 id>\` — …`)을 읽어
+//   response.md(항목마다 한 줄)와 replies.md(코멘트 항목마다 `## <항목 id>`, D190)를 쓴다. merge 단계는 앱이 fetch한
+//   원격 브랜치(remote: PR 브랜치, base: 기준 브랜치)를 worktree에서 병합한다(D181, D193. context.md의 브랜치 이름).
 // - 시나리오가 없으면 M0처럼 출력만 내고 끝날 때까지 살아 있는다.
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -183,10 +186,20 @@ function readContext() {
   const field = (name) => new RegExp(`^- ${name}: (.+)$`, 'm').exec(text)?.[1]?.trim() ?? null
   return {
     skill,
+    contextPath: contextPath.trim(),
     taskDir: field('task 디렉터리') ?? path.dirname(contextPath),
     taskId: field('task_id'),
     node: field('node')?.split(' ')[0] ?? null,
   }
+}
+
+/** PR 대응 task의 context.md에서 이번 라운드의 항목 id와 브랜치 이름 (core/context respondSection의 모양) */
+function roundOf(ctx) {
+  const text = ctx.contextPath ? fs.readFileSync(ctx.contextPath, 'utf8') : ''
+  const items = [...text.matchAll(/^#### `([^`]+)` — /gm)].map((x) => x[1])
+  const branch = /^- Work 브랜치: (\S+)/m.exec(text)?.[1] ?? null
+  const base = /^- 기준 브랜치: (\S+)/m.exec(text)?.[1] ?? null
+  return { items, branch, base }
 }
 
 function fill(text, vars) {
@@ -259,6 +272,34 @@ async function steps(list, ctx, vars) {
       }
     } else if (s === 'git') {
       execFileSync('git', step.args ?? [], { stdio: 'ignore' })
+    } else if (s === 'respond') {
+      // PR 대응: 항목마다 결과를, 코멘트 항목마다 답글 초안을 쓴다. skip의 항목은 답글을 빼고(형식 오류를 흉내 낸다),
+      // text의 {id}는 항목 id다
+      const { items } = roundOf(ctx)
+      const skip = new Set(step.skip ?? [])
+      const lines = items.map(
+        (id) => `- ${id} — ${fill(step.result ?? '고침 — {id}을 고침', { ...vars, id })}`,
+      )
+      fs.writeFileSync(
+        path.join(ctx.taskDir, 'response.md'),
+        `## 항목별 결과\n${lines.join('\n') || '- 사람 지시 — 고침'}\n\n## 테스트 실행\n- 명령: npm test\n- 결과: 통과\n`,
+      )
+      const comments = items.filter((id) => /^(review|inline|convo):\d+$/.test(id) && !skip.has(id))
+      if (comments.length || step.always) {
+        fs.writeFileSync(
+          path.join(ctx.taskDir, 'replies.md'),
+          comments
+            .map(
+              (id) => `## ${id}\n${fill(step.text ?? '{id}에 대응했습니다.', { ...vars, id })}\n`,
+            )
+            .join('\n'),
+        )
+      }
+    } else if (s === 'merge') {
+      // 앱이 fetch해 둔 원격 브랜치를 병합한다. 리베이스하지 않는다 (D181, D193)
+      const r = roundOf(ctx)
+      const branch = step.from === 'base' ? r.base : r.branch
+      execFileSync('git', ['merge', '--no-edit', '-q', `origin/${branch}`], { stdio: 'ignore' })
     } else if (s === 'waitEnter') {
       // 사람이 터미널에서 새 요청을 보낼 때까지 기다린다 (다시 연 세션은 입력을 기다린다, S6)
       out('입력 대기: Enter를 누르세요')

@@ -17,8 +17,15 @@
 //   github.json에 둔다. 시험이 test/flow/github.ts로 바꾼다. head 커밋은 PR 브랜치에서 매번 읽는다.
 //   S7에서 본 모양: 체크가 없는 head는 빈 statusCheckRollup, 머지 성공은 TTY가 아니라 출력이 없음, head가 다르면
 //   "Head branch was modified", 실행이 끝나기 전의 로그 요청은 "still in progress", baseRefOid는 PR 브랜치에 push해야 바뀜.
-// - FAKE_GH_FAIL=list|create|view|api|event|log|merge(쉼표로 여럿)면 그 명령이 종료 코드 1로 실패한다. api는 REST 요청
-//   모두, event는 실행 읽기만이다. merge는 새 커밋이 생긴 직후 GitHub가 준 "Pull Request is not mergeable"이다(M9 [실제]).
+// - PR 대응(M10): `api --hostname H -X POST repos/O/R/pulls/<n>/comments/<id>/replies --input -`(스레드 첫 코멘트에 답글.
+//   본문은 표준 입력의 JSON. 답글을 달면 본문이 빈 리뷰가 하나 생긴다, S7 관찰 3), `api --hostname H -X POST
+//   repos/O/R/issues/<n>/comments --input -`(대화 코멘트), `run rerun <실행> --repo R --failed`(다시 실행한 실행을
+//   github.json의 reruns에 남긴다). 게시한 코멘트는 앱의 사람(relay-owner, OWNER)이 단 것이다. 없는 코멘트에 답하면
+//   HTTP 404다. github.json의 post_faults는 POST마다 앞에서 하나씩 꺼내 쓴다: error는 게시하지 않고 HTTP 502로, posted는
+//   게시한 뒤 HTTP 502로 끝난다(게시하고도 오류를 돌려준 요청, D194). 그 밖(ok)은 그대로 게시한다.
+// - FAKE_GH_FAIL=list|create|view|api|event|log|merge|post|rerun(쉼표로 여럿)면 그 명령이 종료 코드 1로 실패한다. api는
+//   REST 요청 모두, event는 실행 읽기만, post는 POST만이다. merge는 새 커밋이 생긴 직후 GitHub가 준 "Pull Request is not
+//   mergeable"이다(M9 [실제]). rerun은 gh가 403에 쓰는 "run <id> cannot be rerun; …"이다(3절).
 // - FAKE_GH_RECORD 폴더가 있으면 명령마다 인자, cwd, --body-file의 내용을 fake-gh.jsonl에 한 줄씩 남긴다.
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -66,6 +73,27 @@ function loadGithub() {
   const g = file && fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {}
   return { prs: {}, logs: {}, pending_logs: {}, ...g }
 }
+
+function saveGithub(g) {
+  if (recordDir) fs.writeFileSync(path.join(recordDir, 'github.json'), JSON.stringify(g, null, 2))
+}
+
+/** 코멘트와 리뷰의 id. 시험 도구(test/flow/github.ts)와 같은 수를 쓴다 */
+function nextId(g) {
+  const id = g.next_id ?? 1001
+  g.next_id = id + 1
+  return id
+}
+
+/** gh api가 HTTP 오류를 받았을 때 (cli/cli pkg/cmd/api/api.go, 3절): 본문은 표준 출력, 요약은 stderr */
+function httpFail(status, message) {
+  process.stdout.write(`${JSON.stringify({ message, status: String(status) })}\n`)
+  process.stderr.write(`gh: ${message} (HTTP ${status})\n`)
+  process.exit(1)
+}
+
+/** 앱의 사람: PR을 만든 사람이다. 앱이 게시한 답글의 작성자다 */
+const ME = { login: 'relay-owner', type: 'User', association: 'OWNER' }
 
 function fail(message) {
   process.stderr.write(`${message}\n`)
@@ -244,6 +272,111 @@ if (cmd === 'pr' && sub === 'view') {
   const all = prFields(pr, loadGithub())
   const fields = (opt('--json') ?? 'url').split(',')
   process.stdout.write(`${JSON.stringify(Object.fromEntries(fields.map((f) => [f, all[f]])))}\n`)
+  process.exit(0)
+}
+
+if (cmd === 'api' && opt('-X') === 'POST') {
+  const target = argv[argv.indexOf('-X') + 2] ?? ''
+  const input = argv.includes('--input') && opt('--input') === '-' ? fs.readFileSync(0, 'utf8') : ''
+  record({ type: 'api post', input })
+  if (failing('post')) httpFail(502, 'Bad Gateway')
+  const host = opt('--hostname') ?? 'github.com'
+  const m =
+    /^repos\/([^/]+)\/([^/]+)\/(?:pulls\/(\d+)\/comments\/(\d+)\/replies|issues\/(\d+)\/comments)$/.exec(
+      target,
+    )
+  if (!m) fail(`가짜 gh: 모르는 POST ${argv.join(' ')}`)
+  const [, owner, name, pullNum, top, issueNum] = m
+  const n = Number(pullNum ?? issueNum)
+  const pr = findPr(loadPrs(), `${host}/${owner}/${name}`, n)
+  if (!pr) httpFail(404, 'Not Found')
+  let body
+  try {
+    body = JSON.parse(input).body
+  } catch {
+    httpFail(400, 'Problems parsing JSON')
+  }
+  if (typeof body !== 'string' || !body) httpFail(422, 'Validation Failed')
+  const g = loadGithub()
+  const fault = (g.post_faults ?? []).shift() ?? 'ok'
+  if (fault === 'error') {
+    saveGithub(g)
+    httpFail(502, 'Bad Gateway')
+  }
+  const s = (g.prs[String(n)] ??= {})
+  const at = new Date().toISOString().replace(/\.\d+Z$/, 'Z')
+  const who = { user: { login: ME.login, type: ME.type }, author_association: ME.association }
+  let created
+  if (top) {
+    const parent = (s.inline ?? []).find((c) => c.id === Number(top))
+    if (!parent) {
+      saveGithub(g)
+      httpFail(404, 'Not Found')
+    }
+    // REST는 스레드 첫 코멘트에만 답글을 받는다 (3절). 앱은 답글의 답글을 보내지 않는다
+    if (parent.in_reply_to_id) fail(`가짜 gh: 답글(${top})에는 답글을 달지 않음`)
+    // 인라인 스레드에 답글을 달면 본문이 빈 리뷰가 하나 더 생긴다 (S7 관찰 3)
+    const review = nextId(g)
+    s.reviews = [
+      ...(s.reviews ?? []),
+      {
+        id: review,
+        ...who,
+        body: '',
+        state: 'COMMENTED',
+        html_url: `${pr.url}#pullrequestreview-${review}`,
+        submitted_at: at,
+        commit_id: pr.head_oid,
+      },
+    ]
+    const id = nextId(g)
+    created = {
+      id,
+      ...who,
+      body,
+      path: parent.path,
+      line: parent.line,
+      original_line: parent.original_line ?? parent.line,
+      in_reply_to_id: parent.id,
+      pull_request_review_id: review,
+      html_url: `${pr.url}#discussion_r${id}`,
+      created_at: at,
+      updated_at: at,
+    }
+    s.inline = [...(s.inline ?? []), created]
+  } else {
+    const id = nextId(g)
+    created = {
+      id,
+      ...who,
+      body,
+      html_url: `${pr.url}#issuecomment-${id}`,
+      created_at: at,
+      updated_at: at,
+    }
+    s.convo = [...(s.convo ?? []), created]
+  }
+  saveGithub(g)
+  // 게시하고도 오류를 돌려준 요청 (D194): 게시는 됐고 gh는 실패로 끝난다
+  if (fault === 'posted') httpFail(502, 'Bad Gateway')
+  process.stdout.write(`${JSON.stringify(created)}\n`)
+  process.exit(0)
+}
+
+if (cmd === 'run' && sub === 'rerun') {
+  record({ type: 'run rerun' })
+  const run = argv[2]
+  if (!run || !argv.includes('--failed')) fail(`가짜 gh: 모르는 run rerun ${argv.join(' ')}`)
+  const g = loadGithub()
+  if (!(g.runs ?? {})[run]) {
+    fail(
+      `failed to get run: HTTP 404: Not Found (https://api.github.com/repos/actions/runs/${run})`,
+    )
+  }
+  if (failing('rerun')) fail(`run ${run} cannot be rerun; This workflow run cannot be retried`)
+  g.reruns = [...(g.reruns ?? []), Number(run)]
+  saveGithub(g)
+  // TTY가 아니면 성공 문구를 쓰지 않는다 (cli/cli pkg/cmd/run/rerun/rerun.go, 3절)
   process.exit(0)
 }
 

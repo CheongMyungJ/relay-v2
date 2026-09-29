@@ -232,15 +232,16 @@ export class WorkFiles {
 
   /**
    * pr-items.json (D191). 없으면 빈 목록이다. 앱 소유이고 해시는 확인하지 않는다: 항목은 앱이 GitHub에서 다시 읽는다.
-   * 읽을 수 없는 내용이면 오류다
+   * 읽을 수 없는 내용이면 오류다. M9 때 쓴 파일에는 대응 라운드(rounds)가 없어 빈 목록으로 둔다
    */
   async readPrItems(): Promise<PrItemsFile> {
     const file = await readJson<Partial<PrItemsFile>>(this.prItems)
-    if (!file) return { ...EMPTY_PR_ITEMS, items: [], synced: [] }
+    if (!file) return { ...EMPTY_PR_ITEMS, items: [], synced: [], rounds: [] }
     return {
       schema_version: 1,
       items: Array.isArray(file.items) ? file.items : [],
       synced: Array.isArray(file.synced) ? file.synced : [],
+      rounds: Array.isArray(file.rounds) ? file.rounds : [],
     }
   }
 

@@ -5,7 +5,7 @@
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import type { PrWorld } from '../flow/pr-scenario'
+import type { PrComment, PrWorld } from '../flow/pr-scenario'
 
 /** gh는 묻지 않고 새 버전 안내를 끈다 (3절 "gh 환경 변수") */
 const GH_ENV = { GH_PROMPT_DISABLED: '1', GH_NO_UPDATE_NOTIFIER: '1', NO_COLOR: '1' }
@@ -346,6 +346,30 @@ export class RealWorld implements PrWorld {
   async branchTip(branch: string): Promise<string | null> {
     const out = git(this.clone, 'ls-remote', '--heads', 'origin', `refs/heads/${branch}`)
     return out ? (out.split(/\s+/)[0] ?? null) : null
+  }
+
+  async comments(pr: number): Promise<PrComment[]> {
+    const rows = (
+      kind: 'inline' | 'convo',
+      xs: { id: number; body?: string | null; in_reply_to_id?: number }[],
+    ): PrComment[] =>
+      xs.map((c) => ({ kind, id: c.id, body: c.body ?? '', reply_to: c.in_reply_to_id ?? null }))
+    return [
+      ...rows('inline', list(`repos/${this.repo}/pulls/${pr}/comments?per_page=100`)),
+      ...rows('convo', list(`repos/${this.repo}/issues/${pr}/comments?per_page=100`)),
+    ]
+  }
+
+  /** 실행의 run_attempt가 2 이상이 될 때까지 기다린다 (REST "Get a workflow run") */
+  async rerunSeen(_pr: number, run: number): Promise<boolean> {
+    await waitFor(
+      `실행 ${run}의 다시 실행`,
+      () =>
+        (apiJson<{ run_attempt?: number }>('GET', `repos/${this.repo}/actions/runs/${run}`)
+          .run_attempt ?? 0) >= 2,
+      120_000,
+    )
+    return true
   }
 }
 

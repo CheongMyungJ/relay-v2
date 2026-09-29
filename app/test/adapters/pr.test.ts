@@ -2,25 +2,32 @@
 // 확인한 것이다: gh --version, pr view --json, api --hostname --paginate --slurp, api …/actions/runs/<실행>(D201),
 // run view --log-failed,
 // repo view --json …Allowed, pr merge --match-head-commit. git은 실제 git으로 fast-forward, 받은 커밋과 부모,
-// 원격 브랜치 확인과 삭제를 본다 (D178, D193).
+// 원격 브랜치 확인과 삭제를 본다 (D178, D193). PR 대응(M10)은 답글 POST(api -X POST --input -), run rerun --failed,
+// 라운드의 바뀐 파일(D202)을 본다.
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { run } from '../../src/adapters/exec'
 import {
+  GhApiError,
   GhError,
   ghApi,
   ghApiList,
+  ghApiPost,
   ghCreatePr,
   ghFailedLog,
   ghMerge,
   ghMergeSettings,
   ghPrView,
+  ghRerunFailed,
   ghVersion,
+  httpStatusOf,
 } from '../../src/adapters/gh'
 import {
   GitError,
   addWorktree,
+  changedPaths,
   commitsWithParents,
   deleteRemoteBranch,
   fetchBranch,
@@ -307,5 +314,130 @@ describe('[어댑터] PR 진행의 git 작업 (D178, D193)', () => {
     expect(git(remote, 'branch', '--list', BRANCH)).toBe('')
     fs.renameSync(remote, `${remote}.off`)
     await expect(remoteBranchExists(repo, BRANCH)).rejects.toBeInstanceOf(GitError)
+  })
+})
+
+describe('[어댑터] PR 대응의 gh·git 작업 (docs/implementation.md M10, 3절)', () => {
+  const post = (target: string, body: string, extra: Record<string, string> = {}) =>
+    ghApiPost(FAKE_GH, {
+      host: 'github.test',
+      path: target,
+      body: { body },
+      cwd: repo,
+      env: env(extra),
+    })
+
+  it('인라인 답글은 스레드 첫 코멘트의 replies로, 스레드 없는 답글은 대화 코멘트로 올린다. 본문은 표준 입력의 JSON이다', async () => {
+    await openPr()
+    const gh = new FakeGitHub(record, remote, root)
+    const top = gh.inline(1, { body: '여기 고쳐 주세요', path: 'src/a.js', line: 1 })
+    const reply = await post(
+      `repos/local/sample/pulls/1/comments/${top}/replies`,
+      '고쳤습니다\n<!-- relay:w/inline:1/1 -->',
+    )
+    expect(reply).toMatchObject({
+      body: '고쳤습니다\n<!-- relay:w/inline:1/1 -->',
+      in_reply_to_id: top,
+      path: 'src/a.js',
+      user: { login: 'relay-owner', type: 'User' },
+      author_association: 'OWNER',
+    })
+    expect(typeof reply['id']).toBe('number')
+    expect(String(reply['html_url'])).toMatch(/#discussion_r\d+$/)
+    // 인라인 답글을 달면 본문이 빈 리뷰가 하나 더 생긴다 (S7 관찰 3)
+    const reviews = (gh.read().prs['1']?.reviews ?? []) as { body: string }[]
+    expect(reviews.map((r) => r.body)).toEqual([''])
+    const convo = await post('repos/local/sample/issues/1/comments', '> 링크\n\n답')
+    expect(String(convo['html_url'])).toMatch(/#issuecomment-\d+$/)
+    expect(gh.comments(1).map((c) => [c.kind, c.reply_to])).toEqual([
+      ['inline', null],
+      ['inline', top],
+      ['convo', null],
+    ])
+    // 본문은 명령줄에 없고 표준 입력으로 갔다
+    const calls = fs
+      .readFileSync(path.join(record, 'fake-gh.jsonl'), 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map((l) => JSON.parse(l) as { type: string; args: string[]; input?: string })
+      .filter((c) => c.type === 'api post')
+    expect(calls[0]?.args).toEqual([
+      'api',
+      '--hostname',
+      'github.test',
+      '-X',
+      'POST',
+      `repos/local/sample/pulls/1/comments/${top}/replies`,
+      '--input',
+      '-',
+    ])
+    expect(JSON.parse(calls[0]?.input ?? '{}')).toEqual({
+      body: '고쳤습니다\n<!-- relay:w/inline:1/1 -->',
+    })
+  })
+
+  it('없는 코멘트에 답하면 HTTP 404이고, 응답이 없으면 게시됐는지 모른다. 게시하고도 오류를 돌려줄 수 있다 (D194, D205)', async () => {
+    await openPr()
+    const gh = new FakeGitHub(record, remote, root)
+    const err = await post('repos/local/sample/pulls/1/comments/999/replies', '답').catch(
+      (e: unknown) => e,
+    )
+    expect(err).toBeInstanceOf(GhApiError)
+    expect((err as GhApiError).status).toBe(404)
+    gh.postFaults(['error', 'posted'])
+    const e1 = await post('repos/local/sample/issues/1/comments', '첫째').catch((e: unknown) => e)
+    expect((e1 as GhApiError).status).toBe(502)
+    expect(gh.comments(1)).toEqual([])
+    const e2 = await post('repos/local/sample/issues/1/comments', '둘째').catch((e: unknown) => e)
+    expect((e2 as GhApiError).status).toBe(502)
+    expect(gh.comments(1).map((c) => c.body)).toEqual(['둘째'])
+    expect(await post('repos/local/sample/issues/1/comments', '셋째')).toMatchObject({
+      body: '셋째',
+    })
+    const down = await post('repos/local/sample/issues/1/comments', '넷째', {
+      FAKE_GH_FAIL: 'post',
+    }).catch((e: unknown) => e)
+    expect((down as GhApiError).status).toBe(502)
+    expect(httpStatusOf('gh: Not Found (HTTP 404)\n')).toBe(404)
+    expect(httpStatusOf('connection reset')).toBeNull()
+  })
+
+  it('실패한 작업은 gh run rerun <실행> --repo <레포> --failed로 다시 돌린다. 성공하면 출력이 없다 (D203, 3절)', async () => {
+    await openPr()
+    const gh = new FakeGitHub(record, remote, root)
+    gh.checkRun(1, { conclusion: 'FAILURE', event: 'push', run: 77 })
+    const o = { repo: REPO, run: 77, cwd: repo, env: env() }
+    expect(await ghRerunFailed(FAKE_GH, o)).toEqual({ ok: true })
+    expect(gh.reruns()).toEqual([77])
+    const refused = await ghRerunFailed(FAKE_GH, { ...o, env: env({ FAKE_GH_FAIL: 'rerun' }) })
+    expect(refused).toMatchObject({
+      ok: false,
+      error: expect.stringContaining('run 77 cannot be rerun'),
+    })
+    expect(await ghRerunFailed(FAKE_GH, { ...o, run: 5 })).toMatchObject({ ok: false })
+  })
+
+  it('라운드 시작 커밋과 지금 작업 트리의 차이에서 바뀐 파일과 상태를 준다. 이름에 공백과 한글이 있어도 된다 (D202)', async () => {
+    const start = commit(
+      tree,
+      { 'test/a.test.js': 'a\n', 'test/지울 것.test.js': 'b\n', 'src/b.js': 'b\n' },
+      '시작',
+    )
+    commit(tree, { 'test/a.test.js': 'a2\n', 'test/new.test.js': 'n\n' }, '고침')
+    git(tree, 'rm', '-q', 'test/지울 것.test.js')
+    writeFiles(tree, { 'src/b.js': 'b2\n' })
+    expect(await changedPaths(tree, start)).toEqual([
+      { status: 'M', path: 'src/b.js' },
+      { status: 'M', path: 'test/a.test.js' },
+      { status: 'A', path: 'test/new.test.js' },
+      { status: 'D', path: 'test/지울 것.test.js' },
+    ])
+  })
+
+  it('명령에 표준 입력을 주면 다 쓴 뒤 닫는다 (gh api --input -)', async () => {
+    const r = await run(process.execPath, ['-e', 'process.stdin.pipe(process.stdout)'], {
+      input: '한글 본문\n',
+    })
+    expect(r).toMatchObject({ code: 0, stdout: '한글 본문\n' })
   })
 })

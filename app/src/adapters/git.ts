@@ -145,6 +145,24 @@ export async function diffFrom(
   return git(dir, ['diff', '--no-color', '--no-ext-diff', from, ...(to ? [to] : [])], opts)
 }
 
+/**
+ * from 커밋과 지금 작업 트리의 차이에서 바뀐 파일과 상태 (git diff --name-status --no-renames -z <from>). 이름을 바꾼 파일은
+ * 지운 것(D)과 새 것(A)으로 나온다. 추적하지 않는 새 파일은 없다. PR 대응 승인 화면의 기존 테스트 변경(D202)에 쓴다
+ */
+export async function changedPaths(
+  dir: string,
+  from: string,
+  opts?: GitOptions,
+): Promise<{ status: string; path: string }[]> {
+  const out = await git(dir, ['diff', '--name-status', '--no-renames', '-z', from], opts)
+  const parts = out.split('\0').filter((p) => p !== '')
+  const changes: { status: string; path: string }[] = []
+  for (let i = 0; i + 1 < parts.length; i += 2) {
+    changes.push({ status: parts[i] ?? '', path: parts[i + 1] ?? '' })
+  }
+  return changes
+}
+
 /** 커밋 안 된 변경 (git status --porcelain). 추적하지 않는 파일도 넣는다 */
 export async function statusLines(dir: string, opts?: GitOptions): Promise<string[]> {
   return lines(await git(dir, ['status', '--porcelain=v1', '--untracked-files=all'], opts))

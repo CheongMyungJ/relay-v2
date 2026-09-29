@@ -414,7 +414,8 @@ textarea {
 }
 
 .em-format_errors,
-.em-blocked {
+.em-blocked,
+.em-respond_failed {
   background: #3b2525;
   border-left-color: var(--bad);
 }
@@ -875,6 +876,51 @@ button.ready {
   word-break: break-word;
   font-family: Consolas, 'D2Coding', monospace;
   font-size: 12px;
+}
+
+/* PR 대응 (시나리오 10-3~10-7) */
+.pr-respond textarea {
+  width: 100%;
+  min-height: 48px;
+  box-sizing: border-box;
+}
+
+/* 버튼과 옆의 안내 문구 사이를 띄운다 */
+.pr-respond .notice-actions,
+.pr-actions .notice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.pr-round {
+  padding: 4px 6px;
+  margin-bottom: 4px;
+  border-radius: 3px;
+  background: var(--bg-raise);
+  border-left: 3px solid var(--border);
+}
+
+.pr-round.round-running,
+.pr-round.round-deferred {
+  border-left-color: var(--hot);
+}
+
+.pr-round.round-failed {
+  border-left-color: var(--bad);
+}
+
+.pr-round ul {
+  margin: 4px 0;
+}
+
+.reply-preview {
+  padding: 4px 6px;
+  margin-bottom: 6px;
+  border-radius: 3px;
+  background: var(--bg-raise);
+  border-left: 3px solid var(--border);
 }
 
 button.link {

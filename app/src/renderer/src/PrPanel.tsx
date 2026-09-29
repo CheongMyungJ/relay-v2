@@ -1,8 +1,15 @@
-// PR 패널 (시나리오 10, D183)과 머지 창 (D176, D177). PR 요약, 머지 조건, 항목 목록, 받은 원격 커밋을 보인다.
-// 대응 시작과 대응 라운드 기록은 M10에 더한다. 코멘트 본문과 CI 로그는 남이 쓴 글이라 마크다운으로 그리지 않고
-// 글자 그대로 보인다(D162).
+// PR 패널 (시나리오 10, D183)과 머지 창 (D176, D177). PR 요약, [대응 시작]과 [실패한 체크 다시 실행](D175, D203), 머지
+// 조건, 항목 목록, 대응 라운드 기록, 받은 원격 커밋을 보인다. 코멘트 본문과 CI 로그는 남이 쓴 글이라 마크다운으로 그리지
+// 않고 글자 그대로 보인다(D162). 머지 창은 대응 라운드가 코드를 바꿨으면 판정표 경고를 보인다(D180, D206).
 import { useEffect, useState } from 'react'
-import type { MergeInfo, PrItemAction, PrItemView, PrView, WorkView } from '../../shared/views'
+import type {
+  MergeInfo,
+  PrItemAction,
+  PrItemView,
+  PrView,
+  RoundView,
+  WorkView,
+} from '../../shared/views'
 import type { MergeMethod } from '../../shared/work'
 import { call } from './commands'
 import { ConfirmDialog, Modal } from './dialogs'
@@ -37,8 +44,13 @@ export function PrPanel({ work, pr }: { work: WorkView; pr: PrView }) {
   const [error, setError] = useState<string | null>(null)
   const [merging, setMerging] = useState(false)
   const [ending, setEnding] = useState(false)
+  const [instruction, setInstruction] = useState('')
   const active = work.status === 'pr'
   const cut = work.operation !== null
+  // 도는 PR 대응 task가 있으면 [머지 없이 끝내기] 전에 [즉시 중단]한다
+  const current = work.tasks.find((t) => t.id === work.current)
+  const respondLive = current?.node === 'respond' && (current.live || current.status === 'queued')
+  const respondCount = pr.respond.items.length
 
   const run = async (
     label: string,
@@ -126,6 +138,59 @@ export function PrPanel({ work, pr }: { work: WorkView; pr: PrView }) {
       ) : null}
 
       {active ? (
+        <section className="pr-respond" aria-label="대응">
+          <h3>대응</h3>
+          <textarea
+            aria-label="사람 지시"
+            placeholder="사람 지시 (선택). 항목이 없으면 지시만으로 시작합니다 (D182)"
+            value={instruction}
+            disabled={!pr.respond.enabled || !!busy}
+            onChange={(e) => setInstruction(e.target.value)}
+          />
+          <div className="notice-actions">
+            <button
+              className="primary"
+              disabled={!!busy || !pr.respond.enabled || (!respondCount && !instruction.trim())}
+              onClick={() =>
+                void run('대응 시작', () =>
+                  window.relay.prRespond(work.key, { items: pr.respond.items, instruction }),
+                ).then((ok) => {
+                  if (ok) setInstruction('')
+                })
+              }
+            >
+              대응 시작
+            </button>
+            <span className="dim">
+              {pr.respond.enabled
+                ? respondCount
+                  ? `새 항목 ${respondCount}개를 넣습니다. 뺄 항목은 먼저 [제외]하세요`
+                  : '새 항목이 없습니다. 지시를 적으면 지시만으로 시작합니다'
+                : pr.respond.reason}
+            </span>
+          </div>
+          {pr.rerun ? (
+            <div className="notice-actions">
+              <button
+                disabled={!!busy || !pr.rerun.enabled}
+                onClick={() =>
+                  void run('실패한 체크 다시 실행', () => window.relay.prRerun(work.key))
+                }
+              >
+                실패한 체크 다시 실행
+              </button>
+              <span className="dim">
+                {pr.rerun.enabled ? pr.rerun.checks.join(', ') : pr.rerun.reason}
+                {pr.rerun.others.length
+                  ? ` · Actions 밖 체크(${pr.rerun.others.join(', ')})는 GitHub에서 다시 실행하세요`
+                  : ''}
+              </span>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {active ? (
         <section className="pr-actions" aria-label="머지">
           <div className="notice-actions">
             <button
@@ -135,7 +200,11 @@ export function PrPanel({ work, pr }: { work: WorkView; pr: PrView }) {
             >
               머지
             </button>
-            <button disabled={!!busy || cut} onClick={() => setEnding(true)}>
+            <button
+              disabled={!!busy || cut || respondLive}
+              title={respondLive ? 'PR 대응 task가 돌고 있음: 먼저 [즉시 중단]하세요' : undefined}
+              onClick={() => setEnding(true)}
+            >
               머지 없이 끝내기
             </button>
             {busy ? <span className="dim">{busy}: 하는 중…</span> : null}
@@ -182,6 +251,15 @@ export function PrPanel({ work, pr }: { work: WorkView; pr: PrView }) {
         )}
       </section>
 
+      {pr.rounds.length ? (
+        <section aria-label="대응 라운드">
+          <h3>대응 라운드</h3>
+          {[...pr.rounds].reverse().map((r) => (
+            <Round key={r.taskId} round={r} />
+          ))}
+        </section>
+      ) : null}
+
       {pr.synced.length ? (
         <section aria-label="받은 원격 커밋">
           <h3>받은 원격 커밋 (D193)</h3>
@@ -214,6 +292,61 @@ export function PrPanel({ work, pr }: { work: WorkView; pr: PrView }) {
             읽지 않습니다.
           </p>
         </ConfirmDialog>
+      ) : null}
+    </div>
+  )
+}
+
+/** 대응 라운드 하나 (화면 구성의 PR 패널): task, 항목, push한 커밋, 게시한 답글(링크), 미룸과 실패 (D193, D194, D205) */
+function Round({ round }: { round: RoundView }) {
+  return (
+    <div className={`pr-round round-${round.state}`} aria-label={`라운드 ${round.round}`}>
+      <div className="pr-item-head">
+        <strong>라운드 {round.round}</strong>
+        <span>{round.label}</span>
+        <span className="dim">{round.stateLabel}</span>
+      </div>
+      {round.failure ? (
+        <div className="error">
+          {round.failure.stage} 실패: {round.failure.error}
+        </div>
+      ) : null}
+      <ul>
+        {round.items.map((i) => (
+          <li key={i.id}>
+            <span className="kind">{i.kindLabel}</span> {i.title}
+          </li>
+        ))}
+        {!round.items.length ? <li className="dim">항목 없음 (사람 지시만)</li> : null}
+      </ul>
+      {round.instruction ? <pre className="pr-item-text">{round.instruction}</pre> : null}
+      {round.pushed ? (
+        <div className="dim">
+          push {round.pushed.at}: 커밋 {round.pushed.commits.length}개
+          {round.pushed.commits.length ? ` (${round.pushed.commits.map(short).join(', ')})` : ''}
+        </div>
+      ) : null}
+      {round.pushedWith ? <div className="dim">{round.pushedWith} 라운드와 함께 push함</div> : null}
+      {round.replies.length ? (
+        <ul aria-label="답글">
+          {round.replies.map((x) => (
+            <li key={x.item}>
+              {x.item}:{' '}
+              {x.url ? (
+                <button
+                  className="link"
+                  onClick={() => void call(() => window.relay.openExternal(x.url ?? ''))}
+                >
+                  게시한 답글
+                </button>
+              ) : x.skipped ? (
+                <span className="dim">{x.skipped}</span>
+              ) : (
+                <span className="dim">게시 전</span>
+              )}
+            </li>
+          ))}
+        </ul>
       ) : null}
     </div>
   )
@@ -260,7 +393,8 @@ function Item({
 /**
  * 머지 창 (D176, D177): 레포가 허용하는 방식 가운데 고르고(기본은 프로젝트 설정, 없으면 허용하는 첫 방식), 머지할
  * head 커밋을 보인다. 이 커밋이 아니면 머지하지 않는다. GitHub가 막으면(리뷰 승인, 브랜치 보호) 그 오류를 보인다.
- * "판정표는 대응 전 코드 기준" 경고(D180)는 대응 라운드가 생기는 M10에 더한다
+ * 대응 라운드가 커밋을 push했거나 앱이 원격 커밋을 받았으면 "판정표는 대응 전 코드 기준"을 경고하고 verify의 판정표를
+ * 함께 보인다 (D180, D206)
  */
 export function MergeDialog({ work, onClose }: { work: WorkView; onClose: () => void }) {
   const [info, setInfo] = useState<MergeInfo | null>(null)
@@ -302,6 +436,35 @@ export function MergeDialog({ work, onClose }: { work: WorkView; onClose: () => 
             머지할 head 커밋: <code>{info.head}</code>
           </div>
           <div className="dim">그사이 PR에 새 커밋이 생기면 머지하지 않습니다.</div>
+          {info.stale ? (
+            <div className="notice fail" role="alert" aria-label="판정표 경고">
+              <strong>판정표는 대응 전 코드 기준입니다.</strong> verify 뒤에 코드가 바뀌었습니다:
+              {info.stale.rounds ? ` 커밋을 push한 대응 라운드 ${info.stale.rounds}개` : ''}
+              {info.stale.rounds && info.stale.synced ? ',' : ''}
+              {info.stale.synced ? ` 받은 원격 커밋 ${info.stale.synced}개` : ''}. 대응 뒤에는
+              verify를 다시 돌리지 않고, 대응 task의 테스트 실행과 CI로 갈음합니다 (D180).
+              {info.verdicts.length ? (
+                <table className="verdicts">
+                  <thead>
+                    <tr>
+                      <th>완료조건</th>
+                      <th>판정</th>
+                      <th>근거</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {info.verdicts.map((v, i) => (
+                      <tr key={i} className={v.warn ? 'warn' : ''}>
+                        <td>{v.criterion}</td>
+                        <td>{v.verdict}</td>
+                        <td>{v.basis}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : null}
+            </div>
+          ) : null}
           <fieldset>
             <legend>머지 방식</legend>
             {info.methods.map((m) => (

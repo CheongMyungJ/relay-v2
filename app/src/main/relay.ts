@@ -45,6 +45,7 @@ import type {
   PrItemAction,
   ProjectInspection,
   ProjectView,
+  RespondStartInput,
   ReviewView,
   SelectStepInput,
   StepPreviewResult,
@@ -581,6 +582,16 @@ export class Relay {
   /** 머지 뒤 정리 창을 열었다 (D178, D200) */
   prCleanOffered(workKey: string): Promise<CommandResult> {
     return this.withWork(workKey, (w) => w.prCleanOffered())
+  }
+
+  /** PR 패널의 [대응 시작] (시나리오 10-3) */
+  prRespond(workKey: string, input: RespondStartInput): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.respond(input))
+  }
+
+  /** PR 패널의 [실패한 체크 다시 실행] (D175, D203) */
+  prRerun(workKey: string): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.rerunChecks())
   }
 
   // ---------- 재시작과 복구 (시나리오 9) ----------

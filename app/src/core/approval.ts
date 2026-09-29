@@ -1,7 +1,7 @@
 // 승인의 판정: 수동 승인 (4.1, D90, D112), 자동 승인의 방식과 조건 (4.2, 4.3, D72, D129), 사이드바 배지의
 // 우선순위 (D80). machine의 승인과 자동 승인 카운트다운, 승인 화면의 버튼이 같은 판정을 쓴다.
 import type { AppConfig, AutoApproveNode, WorkSettings } from '../shared/config'
-import type { Handoff, NodeName, Size } from '../shared/contracts'
+import type { Handoff, Size, TaskNode } from '../shared/contracts'
 import type { ApprovalGate, Badge, BadgeKind } from '../shared/views'
 import type {
   AutoHoldReason,
@@ -12,8 +12,9 @@ import type {
   WorkState,
 } from '../shared/work'
 import { AUTO_APPROVE_NODES } from './config'
-import { defaultNext } from './pipeline'
-import { INTENT_DRAFT_FILE, isValid } from './validate'
+import { RESPOND, defaultNext, isPipelineNode } from './pipeline'
+import { isRespondPending } from './respond'
+import { INTENT_DRAFT_FILE, REPLIES_FILE, isValid } from './validate'
 
 export type { ApprovalGate, Badge, BadgeKind }
 
@@ -29,10 +30,11 @@ export function resolvedBySize(issue: FormatIssue): boolean {
 }
 
 /**
- * 넘길 수 없는 오류 (D90): intake에서 intent 초안의 머리글 오류와 초안 없음.
- * 머리글이 틀리거나 초안이 없으면 앱이 intent.md를 만들 수 없다.
+ * 넘길 수 없는 오류: intake에서 intent 초안의 머리글 오류와 초안 없음(D90), PR 대응에서 replies.md의 오류(D204).
+ * 머리글이 틀리거나 초안이 없으면 앱이 intent.md를 만들 수 없고, 답글은 밖으로 나가 되돌릴 수 없어 추측 없이 게시한다
  */
 function unignorable(node: TaskRecord['node'], issue: FormatIssue): boolean {
+  if (node === RESPOND) return issue.file === REPLIES_FILE
   return node === 'intake' && issue.file === INTENT_DRAFT_FILE && issue.part !== 'body'
 }
 
@@ -64,16 +66,19 @@ export function approvalGate(
 
 export type ApprovalMode = 'manual' | 'auto'
 
-/** 자동 승인을 켤 수 있는 노드인가. intake(의도 승인), review(D167), verify(Work 완료)는 늘 수동이다 (4.2) */
-export function autoApprovable(node: NodeName): node is AutoApproveNode {
-  return (AUTO_APPROVE_NODES as readonly NodeName[]).includes(node)
+/**
+ * 자동 승인을 켤 수 있는 노드인가. intake(의도 승인), review(D167), verify(Work 완료)는 늘 수동이다 (4.2). PR 대응의
+ * 자동 승인(D169)은 M11이라 아직 늘 수동이다
+ */
+export function autoApprovable(node: TaskNode): node is AutoApproveNode {
+  return (AUTO_APPROVE_NODES as readonly TaskNode[]).includes(node)
 }
 
-/** 승인 방식. intake, review, verify는 항상 수동이고, 나머지는 Work 설정, 앱 설정 순서로 본다 (4.2, D72, D167) */
+/** 승인 방식. intake, review, verify, PR 대응은 항상 수동이고, 나머지는 Work 설정, 앱 설정 순서로 본다 (4.2, D72, D167) */
 export function approvalMode(
   config: AppConfig,
   settings: WorkSettings,
-  node: NodeName,
+  node: TaskNode,
 ): ApprovalMode {
   if (!autoApprovable(node)) return 'manual'
   return (settings.auto_approve?.[node] ?? config.auto_approve[node]) ? 'auto' : 'manual'
@@ -90,7 +95,7 @@ export function pendingBackground(body: Readonly<Record<string, unknown>>): bool
 }
 
 export interface AutoApproveInput {
-  node: NodeName
+  node: TaskNode
   /** 승인된 intent의 크기. 기본 다음 단계를 정한다 (3.2) */
   size: Size
   /** 판정하는 때의 형식 검사. 머리글(handoffHeader)에서 조건을 읽는다 */
@@ -114,7 +119,9 @@ export function autoApproveHolds(input: AutoApproveInput): AutoHoldReason[] {
   if (h.open_questions.length > 0) out.push('open_questions')
   if (h.intent_deviation) out.push('intent_deviation')
   const rec = h.recommended_next
-  if (rec && rec.node !== defaultNext(input.node, input.size)) out.push('recommended_next')
+  if (rec && (!isPipelineNode(input.node) || rec.node !== defaultNext(input.node, input.size))) {
+    out.push('recommended_next')
+  }
   if (input.background) out.push('background')
   return out
 }
@@ -264,7 +271,7 @@ const DONE_LABEL: Readonly<Partial<Record<WorkState['status'], string>>> = {
  * Work의 배지 (D80). 끊긴 작업이 있으면 끝난 Work라도 "끊긴 작업"이다 (D121). 끝난 Work(완료, 포기, 보관됨)는
  * 그 상태를 보이고, 그 밖에는 Work의 멈춤과 지금 task의 표시 가운데 우선순위가 앞선 것을 보인다.
  * 입력 필요는 질문 대기와 같은 자리에 "입력 필요"로 보인다. PR 진행인 Work는 PR의 세부 상태(core/pr prBadgeKind,
- * D183)를 main이 넘긴다. 넘기지 않으면 리뷰·CI 대기다.
+ * D183)를 main이 넘긴다. 넘기지 않으면 리뷰·CI 대기다. PR 대응 task가 끝나기 전까지는 그 task의 상태만 보인다 (D183)
  */
 export function badge(work: WorkState, pr?: BadgeKind): Badge {
   if (work.operation?.interrupted_at !== undefined) {
@@ -275,7 +282,7 @@ export function badge(work: WorkState, pr?: BadgeKind): Badge {
   const task = work.tasks[work.tasks.length - 1]
   const kinds: BadgeKind[] = []
   if (work.status === 'stopped') kinds.push('stopped')
-  if (work.status === 'pr') kinds.push(pr ?? 'pr_waiting')
+  if (work.status === 'pr' && !(task && isRespondPending(task))) kinds.push(pr ?? 'pr_waiting')
   const fromTask = task ? TASK_BADGE[task.status] : null
   if (fromTask) kinds.push(fromTask)
   const kind = [...BADGE_ORDER].find((k) => kinds.includes(k)) ?? 'working'

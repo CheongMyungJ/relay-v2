@@ -4,12 +4,13 @@
 // 기본 흐름, [오류 무시하고 승인](D112), 사람 조작(중단, 재개, 멈춤, 포기), 대기열(D18), 재시작 조정(D75, D78),
 // 단계 선택(되감기와 건너뛰기, 6.2), 전달(시나리오 7, D119, D120)과 정리(시나리오 8), 끊긴 작업의 [다시 시도]와
 // [무시](D121~D123), 앱 소유 파일의 해시(D124)와 정리 세션의 프로세스(D126) 기록, 자동 승인 카운트다운(4.3,
-// D127~D131), PR 진행(시나리오 10: 읽은 결과, 머지, 밖에서 머지·닫힘, [머지 없이 끝내기], D152~D200)을 담는다.
+// D127~D131), PR 진행(시나리오 10: 읽은 결과, 머지, 밖에서 머지·닫힘, [머지 없이 끝내기], D152~D200)과 PR 대응(대응 task,
+// 승인 뒤 push와 답글 게시, 미룬 라운드, 다시 실행, D168~D207)을 담는다.
 // PR의 항목(pr-items.json)과 머지 조건의 판정은 core/pr이 하고, 여기는 work.json의 기록만 바꾼다. 세션 상한은 main이 세고, 자리가 없으면 task.queued를 넣는다. 카운트다운의 타이머는 main이
 // 돌고, 끝나면 autoApprove를 넣는다. 단계 선택의 계산은 core/rewind, 전달의 판정은 core/delivery, 정리의 판정은
 // core/cleanup, 끊긴 작업의 알림과 재개 판정은 core/recovery, 자동 승인의 조건은 core/approval이 한다.
 import type { AppConfig, WorkSettings } from '../shared/config'
-import type { Decision, Handoff, NodeName, Size } from '../shared/contracts'
+import type { Decision, Handoff, NodeName, Size, TaskNode } from '../shared/contracts'
 import type { StepExpect, WorkActions } from '../shared/views'
 import type {
   ApprovalBy,
@@ -28,6 +29,8 @@ import type {
   OwnedFile,
   OwnedFileHashes,
   PrMerged,
+  RespondOperation,
+  RespondRound,
   RewindOperation,
   StartReason,
   StepSelection,
@@ -40,9 +43,10 @@ import { REVIEWABLE, approvalGate, approvalMode, autoApproveHolds } from './appr
 import { canClean } from './cleanup'
 import { mergeWorkSettings } from './config'
 import { commitMessage, deliveryStart, stashMessage, stoppedVerify } from './delivery'
-import { NODES, WORK_COMPLETE, defaultNext, isPrevious } from './pipeline'
+import { NODES, RESPOND, WORK_COMPLETE, defaultNext, isPipelineNode, isPrevious } from './pipeline'
 import { workBranch } from './records'
 import { CUT_ERROR, OPERATION_BLOCKS, OWNED_FILES, cutOperation } from './recovery'
+import { PR_CLOSED, deferredRounds, isRespondPending, nextRound, respondBlocked } from './respond'
 import { backupMessage, canSelectStep, planStep, type StepKind } from './rewind'
 import { FORMAT_VERSION, bounceMessage, isValid, summarize, type TaskCheck } from './validate'
 
@@ -477,6 +481,57 @@ export interface PrCleanOffered extends WorkEvent {
   type: 'pr.cleanOffered'
 }
 
+/**
+ * PR 패널의 [대응 시작] (시나리오 10-3, D170, D182). items는 사람이 본 새 항목이고 main이 지금 새 항목과 같은지 보았다
+ * (core/respond respondInputError). 시작하기 전에 main이 기준 브랜치와 PR 브랜치를 fetch하고 원격만 앞섰으면 받았다
+ * (D181, D193): synced는 받은 원격 head와 커밋, 옮긴 기준 커밋이다
+ */
+export interface PrRespond extends WorkEvent {
+  type: 'pr.respond'
+  items: readonly string[]
+  /** 사람 지시. 비어 있으면 없는 것이다 */
+  instruction: string
+  synced?: { head: string; commits: readonly string[]; baseCommit?: string }
+}
+
+/** PR 대응의 push가 끝났다 (D77): 기록을 답글 게시 단계로 옮긴다. commits는 이번에 원격에 올라간 커밋이다 */
+export interface RespondPushed extends WorkEvent {
+  type: 'respond.pushed'
+  head: string
+  commits: readonly string[]
+}
+
+/**
+ * PR 대응의 push와 답글 게시가 끝났다 (시나리오 10-6). check는 main이 다시 한 대응 task의 형식 검사다(승인을 기록할 때
+ * 결정을 읽음, D120과 같음). replies는 게시했거나 건너뛴 답글이고(D194, D205), baseCommit은 기준 브랜치를 병합한 라운드의
+ * 옮길 기준 커밋이다 (D181)
+ */
+export interface RespondPublished extends WorkEvent {
+  type: 'respond.published'
+  check: TaskCheck | null
+  replies: readonly { item: string; commentId?: number; skipped?: string }[]
+  baseCommit?: string
+}
+
+/** push가 원격 PR 브랜치의 새 커밋 때문에 거절됐다 (D193): 라운드를 승인된 채 미룬다. check는 respond.published와 같다 */
+export interface RespondDeferred extends WorkEvent {
+  type: 'respond.deferred'
+  check: TaskCheck | null
+}
+
+/** push나 답글 게시가 실패했다 (D120과 같은 방식): 대응 task는 승인 대기로 남아 오류와 [다시 시도]를 보인다 */
+export interface RespondFailed extends WorkEvent {
+  type: 'respond.failed'
+  error: string
+}
+
+/** [실패한 체크 다시 실행] (D175, D203): main이 다시 실행한 Actions 실행과 그 체크. events.jsonl에 남긴다 */
+export interface PrChecksRerun extends WorkEvent {
+  type: 'pr.checksRerun'
+  runs: readonly number[]
+  checks: readonly string[]
+}
+
 export type MachineEvent =
   | SessionStarted
   | SessionResumed
@@ -524,13 +579,19 @@ export type MachineEvent =
   | PrMergeFailed
   | PrEnd
   | PrCleanOffered
+  | PrRespond
+  | RespondPushed
+  | RespondPublished
+  | RespondDeferred
+  | RespondFailed
+  | PrChecksRerun
 
 export type Effect =
   /**
    * task를 새 세션으로 시작한다 (시나리오 2): task 디렉터리와 시작 커밋, 스킬 배포, 설정 파일, context.md, PTY.
    * 세션 상한을 넘으면 main이 대기열에 넣는다 (D18)
    */
-  | { type: 'startTask'; taskId: string; node: NodeName; reason: StartReason }
+  | { type: 'startTask'; taskId: string; node: TaskNode; reason: StartReason }
   /** 끝난 세션을 같은 옵션과 --resume <세션 id>로 다시 연다 (시나리오 3-4). 상한은 startTask와 같다 */
   | { type: 'resumeTask'; taskId: string }
   /** 대기열에서 뺀다 */
@@ -548,7 +609,7 @@ export type Effect =
   | {
       type: 'appendDecisions'
       taskId: string
-      node: NodeName
+      node: TaskNode
       at: string
       by: ApprovalBy
       decisions: Decision[] | null
@@ -606,6 +667,13 @@ export type Effect =
    * 성공으로 알린다. main은 결과를 pr.merged, pr.mergeFailed로 알린다
    */
   | { type: 'merge'; method: MergeMethod; head: string; resume?: boolean }
+  /**
+   * PR 대응의 push와 답글 게시 (시나리오 10-6, D169, D172, D193, D194). push를 미룬 앞 라운드와 승인한 task(rounds 차례)의
+   * 커밋을 함께 push하고 라운드마다 답글을 게시한다. resume이면 끊긴 곳부터 잇는다(D123): 원격에 이미 있는 커밋은 다시
+   * 보내지 않고, 게시한 답글은 건너뛰며, 결과를 모르는 답글은 원격에서 표시를 찾는다(D194). main은 결과를
+   * respond.pushed, respond.published, respond.deferred, respond.failed로 알린다
+   */
+  | { type: 'respond'; taskId: string; rounds: string[]; resume?: boolean }
 
 export interface Transition {
   work: WorkState
@@ -688,6 +756,7 @@ export function launchable(task: TaskRecord): boolean {
  * 승인 대기, 막힘일 때, [이 단계 새 세션으로 다시]는 세션 종료일 때다. [단계 선택]은 진행 중이거나 멈춘
  * Work에서 한다(6.2). 고를 수 있는 단계는 core/rewind가 정한다. 멈춘 Work의 [재개]는 verify에서 멈췄으면
  * 보이지 않는다: Work 완료 화면의 전달 버튼이 맡는다(D119). [Work 정리]는 완료나 포기한 Work에서 한다.
+ * PR 진행 중에는 끝나지 않은 PR 대응 task의 [즉시 중단]과 [재개]만 있다(D182).
  * 진행 중 작업 기록이 있는 동안은 아무 조작도 받지 않는다: 끊긴 작업이면 패널의 [다시 시도]·[무시]만 받는다(D122).
  */
 export function actions(work: WorkState): WorkActions {
@@ -704,23 +773,31 @@ export function actions(work: WorkState): WorkActions {
     }
   }
   const task = currentTask(work)
-  const active = work.status === 'active'
+  const active = !!task && taskActive(work, task)
   const live = task?.session?.alive === true
   return {
-    interrupt: active && !!task && (live || task.status === 'queued'),
-    resume: active && !!task && !live && RESUMABLE.includes(task.status),
-    retry: active && task?.status === 'session_ended',
+    interrupt: active && (live || task.status === 'queued'),
+    resume: active && !live && RESUMABLE.includes(task.status),
+    retry: work.status === 'active' && task?.status === 'session_ended',
     resumeWork: work.status === 'stopped' && !stoppedVerify(work),
     selectStep: canSelectStep(work),
-    stopAfter: active,
-    abandon: active || work.status === 'stopped',
+    stopAfter: work.status === 'active',
+    abandon: work.status === 'active' || work.status === 'stopped',
     clean: canClean(work),
   }
 }
 
+/**
+ * task의 세션을 다루는 사람 조작([즉시 중단], [재개])을 받는 Work인가: 진행 중이거나, PR 진행이고 그 task가 끝나지 않은
+ * PR 대응 task다 (D182)
+ */
+function taskActive(work: WorkState, task: TaskRecord): boolean {
+  return work.status === 'active' || (work.status === 'pr' && isRespondPending(task))
+}
+
 function newTask(
   work: WorkState,
-  node: NodeName,
+  node: TaskNode,
   at: string,
   reason: StartReason = 'default',
 ): TaskRecord {
@@ -857,7 +934,7 @@ function countdownEffects(before: WorkState, t: Transition): Transition {
 }
 
 /** 세션을 끝내 카운트다운을 멈춘 까닭 (D145): [즉시 중단], 앱 종료 확인, [단계 선택] */
-function endHold(reason: InterruptReason | StepKind): AutoHoldReason {
+function endHold(reason: InterruptReason | 'pr_merged' | StepKind): AutoHoldReason {
   if (reason === 'human') return 'interrupt'
   return reason === 'app_quit' ? 'quit' : 'step'
 }
@@ -871,11 +948,13 @@ function endTask(
   work: WorkState,
   task: TaskRecord,
   at: string,
-  reason: InterruptReason | 'abandoned' | StepKind,
+  reason: InterruptReason | 'abandoned' | 'pr_merged' | StepKind,
   check?: CheckSummary,
 ): { task: TaskRecord; effects: Effect[] } | null {
+  // 포기와 밖에서 머지됨(D179)은 Work가 끝난다: 승인 대기로도 남기지 않는다
+  const final = reason === 'abandoned' || reason === 'pr_merged'
   if (task.status === 'queued') {
-    const status = reason === 'abandoned' ? 'interrupted' : withoutSession(check)
+    const status = final ? 'interrupted' : withoutSession(check)
     return {
       task: { ...unqueued(task), status },
       effects: [
@@ -885,7 +964,7 @@ function endTask(
     }
   }
   if (!task.session?.alive) return null
-  const kept = reason !== 'abandoned' && KEPT_WITHOUT_SESSION.includes(task.status)
+  const kept = !final && KEPT_WITHOUT_SESSION.includes(task.status)
   const ended: TaskRecord = {
     ...task,
     status: kept ? task.status : 'interrupted',
@@ -977,6 +1056,8 @@ const BLOCKED_BY_OPERATION: readonly MachineEvent['type'][] = [
   'clean',
   'pr.merge',
   'pr.end',
+  'pr.respond',
+  'pr.checksRerun',
 ]
 
 export function transition(work: WorkState, event: MachineEvent, config: AppConfig): Transition {
@@ -1048,6 +1129,18 @@ function dispatch(work: WorkState, event: MachineEvent, config: AppConfig): Tran
       return prEnd(work, event)
     case 'pr.cleanOffered':
       return prCleanOffered(work, event)
+    case 'pr.respond':
+      return prRespond(work, event)
+    case 'respond.pushed':
+      return respondPushed(work, event)
+    case 'respond.published':
+      return respondPublished(work, event)
+    case 'respond.deferred':
+      return respondDeferred(work, event)
+    case 'respond.failed':
+      return respondFailed(work, event)
+    case 'pr.checksRerun':
+      return prChecksRerun(work, event)
     default:
       return taskTransition(work, event, config)
   }
@@ -1085,6 +1178,12 @@ type TaskMachineEvent = Exclude<
   | PrMergeFailed
   | PrEnd
   | PrCleanOffered
+  | PrRespond
+  | RespondPushed
+  | RespondPublished
+  | RespondDeferred
+  | RespondFailed
+  | PrChecksRerun
 >
 
 function taskTransition(work: WorkState, event: TaskMachineEvent, config: AppConfig): Transition {
@@ -1354,6 +1453,7 @@ function sessionEnded(work: WorkState, task: TaskRecord, e: SessionEnded): Trans
  * 어느 쪽이든 멈춤 표시는 지운다.
  */
 function approve(work: WorkState, task: TaskRecord, e: Approve): Transition {
+  if (task.node === RESPOND) return respondApprove(work, task, e)
   if (work.status !== 'active') return unchanged(work, '진행 중인 Work가 아님')
   if (!REVIEWABLE.includes(task.status)) {
     return unchanged(work, `${task.id}는 승인할 수 있는 상태가 아님`)
@@ -1399,6 +1499,9 @@ interface Approval {
  */
 function approveNow(work: WorkState, task: TaskRecord, a: Approval): Transition {
   const { size } = a
+  const node = task.node
+  // PR 대응 task의 승인은 respondApprove다 (D169)
+  if (!isPipelineNode(node)) return unchanged(work, `${task.id}는 파이프라인 task가 아님`)
   const header = a.check.handoffHeader
   const session = task.session?.alive
     ? { ...task.session, alive: false, ended_at: a.at }
@@ -1432,7 +1535,7 @@ function approveNow(work: WorkState, task: TaskRecord, a: Approval): Transition 
   }
 
   const rec = header?.recommended_next
-  if (rec && NODES.includes(rec.node) && isPrevious(task.node, rec.node)) {
+  if (rec && NODES.includes(rec.node) && isPrevious(node, rec.node)) {
     next = {
       ...next,
       status: 'stopped',
@@ -1444,7 +1547,7 @@ function approveNow(work: WorkState, task: TaskRecord, a: Approval): Transition 
     next = { ...next, status: 'stopped', stop: { kind: 'after_step', task_id: task.id } }
     return { work: next, effects }
   }
-  const nextNode = defaultNext(task.node, size)
+  const nextNode = defaultNext(node, size)
   if (nextNode === WORK_COMPLETE) {
     next = { ...next, status: 'completed', completed_at: a.at }
     effects.push(log(work, a.at, 'work.completed', { delivery: 'none' }))
@@ -1510,7 +1613,7 @@ function checkUpdated(work: WorkState, task: TaskRecord, e: CheckUpdated): Trans
  * 대기열의 task는 대기열에서 빼고 중단됨으로 둔다.
  */
 function interrupt(work: WorkState, task: TaskRecord, e: Interrupt): Transition {
-  if (work.status !== 'active') return unchanged(work, '진행 중인 Work가 아님')
+  if (!taskActive(work, task)) return unchanged(work, '진행 중인 Work가 아님')
   const ended = endTask(work, task, e.at, e.reason, e.check)
   if (!ended) return unchanged(work, `${task.id}에 끝낼 세션이 없음`)
   return { work: withTask(work, ended.task), effects: ended.effects }
@@ -1523,7 +1626,7 @@ function interrupt(work: WorkState, task: TaskRecord, e: Interrupt): Transition 
  * 세션 상한을 넘으면 main이 대기열에 넣는다.
  */
 function resume(work: WorkState, task: TaskRecord): Transition {
-  if (work.status !== 'active') return unchanged(work, '진행 중인 Work가 아님')
+  if (!taskActive(work, task)) return unchanged(work, '진행 중인 Work가 아님')
   if (task.session?.alive || !RESUMABLE.includes(task.status)) {
     return unchanged(work, `${task.id}는 재개할 수 있는 상태가 아님`)
   }
@@ -1570,9 +1673,10 @@ function resumeWork(work: WorkState, e: ResumeWork): Transition {
   if (work.status !== 'stopped' || !work.stop) return unchanged(work, '멈춘 Work가 아님')
   const stopped = work.tasks.find((t) => t.id === work.stop?.task_id)
   const size = work.intent?.size
-  if (!stopped || !size) return unchanged(work, '다음 단계를 정할 수 없음')
+  const node = stopped?.node
+  if (!node || !size || !isPipelineNode(node)) return unchanged(work, '다음 단계를 정할 수 없음')
   const active: WorkState = { ...omit(work, 'stop'), status: 'active' }
-  const nextNode = defaultNext(stopped.node, size)
+  const nextNode = defaultNext(node, size)
   if (nextNode === WORK_COMPLETE) {
     return {
       work: { ...active, status: 'completed', completed_at: e.at },
@@ -2109,7 +2213,8 @@ function restarted(work: WorkState, e: AppRestarted, config: AppConfig): Transit
   }
   const tasks = work.tasks.map((t): TaskRecord => {
     const session = t.session?.alive ? { ...t.session, alive: false, ended_at: e.at } : t.session
-    if (t !== current || work.status !== 'active') return { ...t, session }
+    // 도는 PR 대응 task도 다른 task처럼 조정한다 (시나리오 9-7)
+    if (t !== current || !taskActive(work, t)) return { ...t, session }
     if (t.status === 'queued') {
       // 대기열을 비운다 (D78). 세션 없이 남는 표시는 3.3을 따른다(보통 중단됨)
       const status = withoutSession(e.check)
@@ -2165,6 +2270,13 @@ function operationRetry(work: WorkState, e: OperationRetry): Transition {
       effects: [{ type: 'merge', method: live.method, head: live.head, resume: true }],
     }
   }
+  if (op.kind === 'respond') {
+    const live: RespondOperation = omit(op, 'interrupted_at')
+    return {
+      work: { ...work, operation: live },
+      effects: [{ type: 'respond', taskId: live.task_id, rounds: [...live.rounds], resume: true }],
+    }
+  }
   if (op.kind === 'rewind') {
     const live: RewindOperation = omit(op, 'interrupted_at')
     return {
@@ -2192,6 +2304,8 @@ function operationIgnore(work: WorkState, e: OperationIgnore): Transition {
   const op = cutOperation(work)
   if (!op) return unchanged(work, '끊긴 작업이 없음')
   if (op.kind === 'deliver') return deliveryCut(work, op, e)
+  // 끊긴 PR 대응의 push와 게시는 실패로 남긴다: 대응 task의 승인 화면이 오류와 [다시 시도]를 보인다
+  if (op.kind === 'respond') return respondFailure(work, op, e.at, CUT_ERROR)
   return { work: omit(work, 'operation'), effects: [] }
 }
 
@@ -2303,13 +2417,29 @@ function prRead(work: WorkState, e: PrRead): Transition {
   const now = next.pr ?? pr
   if (e.state === 'MERGED') {
     const merged: PrMerged = { at: e.at, head: e.head, method: null, outside: true }
+    // 밖에서 머지됐으면 도는 PR 대응 task의 세션을 끝낸다: [머지]는 대응 task가 없을 때만 누른다 (D176, D179)
+    const task = currentTask(next)
+    const ended = task && isRespondPending(task) ? endTask(next, task, e.at, 'pr_merged') : null
+    if (ended) {
+      next = withTask(next, ended.task)
+      effects.push(...ended.effects)
+    }
     next = {
       ...next,
       status: 'completed',
       completed_at: e.at,
       pr: { ...omit(now, 'closed_at'), merged },
     }
-    effects.push(log(next, e.at, 'pr.merged', { head: e.head, outside: true }))
+    // 승인했지만 push와 답글 게시를 미룬 라운드(D193)는 머지에 들어가지 않았다. 사람이 알 수 있게 남긴다
+    // (알림은 main이, 완료 화면은 PR 패널의 라운드로 보인다)
+    const deferred = deferredRounds(next).map((t) => t.id)
+    effects.push(
+      log(next, e.at, 'pr.merged', {
+        head: e.head,
+        outside: true,
+        ...(deferred.length ? { deferred } : {}),
+      }),
+    )
     effects.push(log(next, e.at, 'work.completed', { delivery: 'pr', merged: true }))
   } else if (e.state === 'CLOSED') {
     if (!pr.closed_at) {
@@ -2380,6 +2510,10 @@ function prMergeFailed(work: WorkState): Transition {
 function prEnd(work: WorkState, e: PrEnd): Transition {
   const pr = work.pr
   if (work.status !== 'pr' || !pr) return unchanged(work, 'PR 진행인 Work가 아님')
+  const task = currentTask(work)
+  if (task && isRespondPending(task) && (task.session?.alive || task.status === 'queued')) {
+    return unchanged(work, 'PR 대응 task가 돌고 있음: 먼저 [즉시 중단]하세요')
+  }
   const next: WorkState = {
     ...work,
     status: 'completed',
@@ -2397,4 +2531,240 @@ function prCleanOffered(work: WorkState, e: PrCleanOffered): Transition {
   const pr = work.pr
   if (!pr?.merged || pr.clean_offered_at) return unchanged(work)
   return { work: { ...work, pr: { ...pr, clean_offered_at: e.at } }, effects: [] }
+}
+
+// ---------- PR 대응 (시나리오 10-3~10-7, D168~D207) ----------
+
+/**
+ * PR 패널의 [대응 시작] (시나리오 10-3, D170, D182). core/respond의 판정을 따른다: PR 진행이고, 진행 중 작업이 없고, PR이
+ * 닫히지 않았고, 끝나지 않은 대응 task가 없다. 새 라운드의 대응 task(파이프라인 밖, D188)를 만들어 새 세션으로
+ * 시작한다(세션 상한과 대기열, D18). 시작하기 전에 main이 원격만 앞선 PR 브랜치를 받았으면 받은 커밋과 옮긴 기준 커밋을
+ * 남기고(D181, D193) 읽은 head를 받은 원격 head로 둔다
+ */
+function prRespond(work: WorkState, e: PrRespond): Transition {
+  const why = respondBlocked(work)
+  if (why) return unchanged(work, why)
+  const pr = work.pr
+  if (!pr) return unchanged(work, 'PR 진행인 Work가 아님')
+  const instruction = e.instruction.trim() || null
+  if (!e.items.length && !instruction) {
+    return unchanged(work, '대응할 새 항목이 없음. 지시를 적으면 지시만으로 시작함 (D182)')
+  }
+  const effects: Effect[] = []
+  let next = work
+  const synced = e.synced
+  if (synced?.commits.length) {
+    next = {
+      ...next,
+      pr: { ...pr, head: synced.head },
+      ...(synced.baseCommit ? { base_commit: synced.baseCommit } : {}),
+    }
+    effects.push(
+      log(next, e.at, 'pr.synced', {
+        commits: [...synced.commits],
+        ...(synced.baseCommit ? { base_commit: synced.baseCommit } : {}),
+      }),
+    )
+  }
+  const respond: RespondRound = { round: nextRound(work), items: [...e.items], instruction }
+  const created: TaskRecord = { ...newTask(next, RESPOND, e.at, 'respond'), respond }
+  next = { ...next, tasks: [...next.tasks, created] }
+  effects.push({
+    type: 'startTask',
+    taskId: created.id,
+    node: created.node,
+    reason: created.reason,
+  })
+  return { work: next, effects }
+}
+
+/**
+ * PR 대응 task의 [승인] (시나리오 10-5, 10-6, D169, D172). 판정은 다른 승인과 같고, replies.md의 오류는 넘길 수 없다(D204).
+ * 세션을 끝내고 진행 중 작업을 기록한 뒤(D77) push와 답글 게시를 main에 맡긴다. 승인은 push와 게시가 끝나거나 push를
+ * 미룬 뒤에 기록한다(D120과 같은 방식). push를 미룬 앞 라운드(D193)가 있으면 함께 push하고 그 답글도 게시한다.
+ * 앞 승인의 실패 기록은 지운다: 다시 누른 [승인]은 [다시 시도]다
+ */
+function respondApprove(work: WorkState, task: TaskRecord, e: Approve): Transition {
+  const pr = work.pr
+  if (work.status !== 'pr' || !pr) return unchanged(work, 'PR 진행인 Work가 아님')
+  // 닫힌 PR에는 push하지도 답글을 게시하지도 않는다: 대응을 멈춘 채 둔다 (D179)
+  if (pr.closed_at) return unchanged(work, PR_CLOSED)
+  if (!REVIEWABLE.includes(task.status) || !task.respond) {
+    return unchanged(work, `${task.id}는 승인할 수 있는 상태가 아님`)
+  }
+  const check = summarize(e.check)
+  const gate = approvalGate(task, check)
+  const forced = !gate.approve && e.force === true && gate.force
+  if (!gate.approve && !forced) {
+    const reason = e.force
+      ? `${task.id}: 오류를 무시하고 승인할 수 없음`
+      : `${task.id}의 handoff가 유효하지 않음`
+    return { work: withTask(work, { ...task, check }), effects: [], rejected: reason }
+  }
+  const waiting: TaskRecord = {
+    ...task,
+    status: 'awaiting_approval',
+    check,
+    respond: omit(task.respond, 'failure'),
+    ...(task.session?.alive ? { session: { ...task.session, alive: false, ended_at: e.at } } : {}),
+  }
+  const effects: Effect[] = []
+  if (task.status !== 'awaiting_approval') {
+    effects.push(log(work, e.at, 'task.awaiting_approval', {}, task))
+  }
+  if (task.session?.alive) effects.push({ type: 'endSession', taskId: task.id })
+  const operation: RespondOperation = {
+    kind: 'respond',
+    stage: 'push',
+    started_at: e.at,
+    task_id: task.id,
+    rounds: [...deferredRounds(work).map((t) => t.id), task.id],
+    from: pr.head,
+    ...(forced ? { ignored: gate.errors } : {}),
+  }
+  effects.push({ type: 'respond', taskId: task.id, rounds: [...operation.rounds] })
+  return { work: { ...withTask(work, waiting), operation }, effects }
+}
+
+/** PR 대응의 push가 끝났다: 기록을 답글 게시 단계로 옮기고 push한 커밋을 남긴다 (D77, 5.5 pr.pushed) */
+function respondPushed(work: WorkState, e: RespondPushed): Transition {
+  const op = work.operation
+  if (op?.kind !== 'respond' || op.stage !== 'push') return unchanged(work)
+  const task = work.tasks.find((t) => t.id === op.task_id)
+  const effects: Effect[] = e.commits.length
+    ? [log(work, e.at, 'pr.pushed', { head: e.head, commits: [...e.commits] }, task)]
+    : []
+  return { work: { ...work, operation: { ...op, stage: 'reply' } }, effects }
+}
+
+/**
+ * 대응 task의 승인을 기록한다 (4-4의 기록, D120과 같은 방식): 승인됨, decisions.md, task.approved. check는 main이 다시 한
+ * 검사이고, 읽지 못했으면 승인할 때의 검사를 남긴다. 세션은 승인할 때 끝냈다
+ */
+function recordRespondApproval(
+  work: WorkState,
+  task: TaskRecord,
+  op: RespondOperation,
+  at: string,
+  check: TaskCheck | null,
+): { task: TaskRecord; effects: Effect[] } {
+  const approved: TaskRecord = {
+    ...task,
+    status: 'approved',
+    approved_at: at,
+    approved_by: 'human',
+    check: check ? summarize(check) : task.check,
+    ...(op.ignored ? { ignored_errors: op.ignored } : {}),
+  }
+  const payload = op.ignored ? { by: 'human', ignored_errors: op.ignored.length } : { by: 'human' }
+  return {
+    task: approved,
+    effects: [
+      log(work, at, 'task.approved', payload, task),
+      {
+        type: 'appendDecisions',
+        taskId: task.id,
+        node: task.node,
+        at,
+        by: 'human',
+        decisions: check?.handoffHeader ? check.handoffHeader.decisions : null,
+      },
+    ],
+  }
+}
+
+/**
+ * PR 대응의 push와 답글 게시가 끝났다 (시나리오 10-6). 승인을 기록하고, 이번에 게시한 라운드(미룬 앞 라운드 포함)에 게시한
+ * 때를 적어 그 항목을 처리됨으로 하고(D189, 항목의 상태는 main이 pr-items.json에 쓴다), 기준 브랜치를 병합한 라운드면
+ * 기준 커밋을 옮기고(D181), 게시한 답글을 남긴다(5.5 pr.replied). 진행 중 작업 기록은 같이 지운다. Work는 PR 진행에 남는다
+ */
+function respondPublished(work: WorkState, e: RespondPublished): Transition {
+  const op = work.operation
+  if (op?.kind !== 'respond') return unchanged(work, '진행 중인 PR 대응 게시가 없음')
+  const task = work.tasks.find((t) => t.id === op.task_id)
+  if (!task) return unchanged(work, `${op.task_id} 없음`)
+  const approval = recordRespondApproval(work, task, op, e.at, e.check)
+  let next = withTask(work, approval.task)
+  next = {
+    ...omit(next, 'operation'),
+    tasks: next.tasks.map((t): TaskRecord =>
+      op.rounds.includes(t.id) && t.respond
+        ? { ...t, respond: { ...omit(t.respond, 'failure'), published_at: e.at } }
+        : t,
+    ),
+    ...(e.baseCommit ? { base_commit: e.baseCommit } : {}),
+  }
+  const effects = [...approval.effects]
+  const posted = e.replies.filter((r) => r.commentId !== undefined)
+  const skipped = e.replies.filter((r) => r.skipped !== undefined)
+  if (posted.length || skipped.length) {
+    effects.push(
+      log(
+        next,
+        e.at,
+        'pr.replied',
+        {
+          replies: posted.map((r) => ({ item: r.item, comment_id: r.commentId })),
+          ...(skipped.length ? { skipped: skipped.map((r) => r.item) } : {}),
+        },
+        task,
+      ),
+    )
+  }
+  return { work: next, effects }
+}
+
+/**
+ * push가 원격 PR 브랜치의 새 커밋 때문에 거절됐다 (D193). 이 라운드는 승인된 채 push와 답글 게시를 미룬다: 승인을 기록하고
+ * 미룬 때를 적고, 진행 중 작업 기록을 지운다. 함께 push하려던 앞 라운드는 미룬 채로 남는다. 갈라짐 항목은 main이 곧 읽어
+ * 만들고, 다음 라운드가 원격을 병합한 뒤 함께 push하고 이 라운드의 답글도 게시한다
+ */
+function respondDeferred(work: WorkState, e: RespondDeferred): Transition {
+  const op = work.operation
+  if (op?.kind !== 'respond') return unchanged(work, '진행 중인 PR 대응 게시가 없음')
+  const task = work.tasks.find((t) => t.id === op.task_id)
+  if (!task?.respond) return unchanged(work, `${op.task_id} 없음`)
+  const approval = recordRespondApproval(work, task, op, e.at, e.check)
+  const deferred: TaskRecord = {
+    ...approval.task,
+    respond: { ...omit(task.respond, 'failure'), deferred_at: e.at },
+  }
+  return { work: omit(withTask(work, deferred), 'operation'), effects: approval.effects }
+}
+
+/**
+ * push나 답글 게시가 실패했다 (시나리오 10-6, D120과 같은 방식). 끊긴 곳과 오류를 대응 task에 적고 진행 중 작업 기록을
+ * 지운다. 대응 task는 승인 대기로 남고 승인 화면이 오류와 [다시 시도]를 보인다. 게시한 답글과 push한 커밋은 main이
+ * pr-items.json에 적어 두었다
+ */
+function respondFailed(work: WorkState, e: RespondFailed): Transition {
+  const op = work.operation
+  if (op?.kind !== 'respond') return unchanged(work)
+  return respondFailure(work, op, e.at, e.error)
+}
+
+function respondFailure(
+  work: WorkState,
+  op: RespondOperation,
+  at: string,
+  error: string,
+): Transition {
+  const task = work.tasks.find((t) => t.id === op.task_id)
+  const next = task?.respond
+    ? withTask(work, {
+        ...task,
+        respond: { ...task.respond, failure: { at, stage: op.stage, error } },
+      })
+    : work
+  return { work: omit(next, 'operation'), effects: [] }
+}
+
+/** [실패한 체크 다시 실행] (D175, D203): main이 다시 실행한 Actions 실행과 체크를 남긴다(5.5 pr.checks_rerun) */
+function prChecksRerun(work: WorkState, e: PrChecksRerun): Transition {
+  if (work.status !== 'pr' || !work.pr) return unchanged(work, 'PR 진행인 Work가 아님')
+  if (!e.runs.length) return unchanged(work)
+  return {
+    work,
+    effects: [log(work, e.at, 'pr.checks_rerun', { runs: [...e.runs], checks: [...e.checks] })],
+  }
 }

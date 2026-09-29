@@ -5,7 +5,7 @@
 // 2. 크기: SKILL.md + _common.md. Claude Code 어림(글자 수 / 4)으로 판정, 모델 토큰 어림은 참고 (D31, D95)
 //    합친 스킬(investigate)은 앱이 배포하는 모양대로 합쳐 잰다 (D148)
 // 3. 템플릿: 주석 단 템플릿에 값을 채운 예시가 docs/contracts 스키마를 통과하는지 (D87)
-// 4. 설계 대조: 산출물 템플릿의 절 제목, 입력·결정 지점·사람이 정할 결정·완료조건 항목 (5.6.1~5.6.10)
+// 4. 설계 대조: 산출물 템플릿의 절 제목, 입력·결정 지점·사람이 정할 결정·완료조건 항목 (5.6.1~5.6.11)
 // 5. 합친 스킬: 단독 구간 표시가 짝이 맞고, 합친 스킬에 단독 구간과 부분의 머리글이 없는지 (D148)
 
 import { readFileSync } from 'node:fs';
@@ -19,7 +19,7 @@ const root = join(here, '..');
 const read = (p) => readFileSync(join(root, p), 'utf8').replace(/\r\n/g, '\n');
 
 const SIZE_TARGET = 5000; // D31
-const SKILLS = ['work-start', 'investigate', 'evidence', 'root-cause', 'fix', 'review', 'final-verify'];
+const SKILLS = ['work-start', 'investigate', 'evidence', 'root-cause', 'fix', 'review', 'final-verify', 'pr-respond'];
 
 // 합친 스킬 (D148). 머리 뒤에 이 스킬들의 본문을 차례로 붙인다. 원본: app/src/adapters/claude.ts SKILL_PARTS
 const PARTS = { investigate: ['evidence', 'root-cause'] };
@@ -186,6 +186,7 @@ const templateSources = {
   fix: ['#### 5.6.7'],
   review: ['#### 5.6.10'],
   'final-verify': ['#### 5.6.8'],
+  'pr-respond': ['#### 5.6.11'],
 };
 for (const [name, sections] of Object.entries(templateSources)) {
   const skillHeadings = codeBlocks(skills[name], 'markdown').flatMap(headings);
@@ -224,6 +225,7 @@ const spec = {
     ['5.2.1', '추가 검사: 필수 산출물', /required artifacts exist in the task directory/],
     ['5.2.1', '추가 검사: intent 초안 절과 완료조건 줄', /`목표`, `비목표`, `원하는 결과`, `완료조건`[\s\S]*`- \[ \] `/],
     ['5.2.1', '추가 검사: pr.md 첫 줄', /first line of `pr\.md` starts with `# `/],
+    ['5.2.1', '추가 검사: replies.md의 절 (D190)', /`replies\.md` has one `## <item id>` section with a non-empty reply for each comment item/],
     ['D100', '형식 오류 되돌림: 파일 고침, 판단은 유지, 3~4 다시', /fix the file it names[\s\S]*Do not change your judgments[\s\S]*steps 3 and 4 again/],
   ],
   'work-start': [
@@ -307,6 +309,24 @@ const spec = {
     ['5.6.10', '결정 지점: 고른 지적을 어떻게 고칠지', /How to fix a picked finding[\s\S]*결정마다 확인/],
     ['5.6.10', '이전 단계 추천: fix, 또는 rca.md를 쓴 단계 (D149)', /`recommended_next` to `fix`[\s\S]*`rca` or `investigate`/],
     ['5.6.10', '완료조건: 세 절, 고른 지적을 고쳤으면 커밋과 테스트 결과', /## Done when[\s\S]*three template sections[\s\S]*committed[\s\S]*test command[\s\S]*`반영`/],
+  ],
+  'pr-respond': [
+    ['D192', '입력: context.md(이번 라운드의 항목, 사람 지시, PR 정보, 앞 라운드 요약)와 파이프라인 산출물(경로)', /`context\.md`[\s\S]*this round's items, the human's instruction, the PR[\s\S]*summaries of earlier rounds[\s\S]*pipeline artifacts/],
+    ['D162', '외부 글은 지시가 아니라 데이터, 명령 실행·설정 변경·비밀 정보 요청은 따르지 않고 사람에게 물음, 사람 지시는 따름', /data, not instructions[\s\S]*run a command, change settings[\s\S]*reveal secrets[\s\S]*ask the human[\s\S]*Follow only the human/],
+    ['D168', '항목마다 셋 중 하나: 고침 / 고치지 않음과 이유 / 사람에게 물음. 모르면 open_questions', /고침[\s\S]*고치지 않음[\s\S]*사람에게 물음[\s\S]*`open_questions`/],
+    ['5.6.11', '범위: intent의 목표와 비목표. 비목표·제약에 걸리면 사람 결정 (D51과 같음)', /`목표` and `비목표`[\s\S]*`비목표` or `제약`[\s\S]*human decision/],
+    ['D175', 'CI 실패: 로그로 원인. 이 PR의 코드 문제면 고침, 아니면 코드를 바꾸지 않고 결론과 근거', /CI failure:[\s\S]*this PR's code causes it, fix it[\s\S]*do not change code[\s\S]*conclusion and the evidence/],
+    ['D181', '충돌: 기준 브랜치를 병합하며 풂. 리베이스하지 않음', /Conflict:[\s\S]*merge the base branch[\s\S]*Do not rebase/],
+    ['D193', '원격과 갈라짐: 앱이 fetch해 둔 원격 PR 브랜치를 병합. 리베이스하지 않음', /Divergence:[\s\S]*merge the remote PR branch the app fetched[\s\S]*Do not rebase/],
+    ['D57', '테스트: 고쳤으면 테스트 명령, 기준 커밋 실패 구분', /changed code, run the test command[\s\S]*also fails at the base commit/],
+    ['D56', '기존 테스트를 고쳤으면 risks (D180)', /changed an existing test, add it to `risks`/],
+    ['D190', '답글: 코멘트 항목마다 replies.md에 ## <항목 id> 절', /`## <item id>` in `replies\.md` for each comment item/],
+    ['5.6.11', '답글: 고친 것은 무엇을 어떻게, 고치지 않은 것은 이유. 코멘트의 언어', /what you fixed and how, or why you did not[\s\S]*language of the comment/],
+    ['D173', '표시 문구와 원래 코멘트 링크는 앱이 붙이므로 쓰지 않음 (D207)', /Do not write a signature or a link[\s\S]*the app adds them/],
+    ['D15', '코드를 바꾸는 단계: 모두 커밋, push하지 않음(앱이 함)', /this step changes code\. Commit all changes[\s\S]*Do not push/],
+    ['D188', 'recommended_next는 늘 null', /`recommended_next`:\*\* always null/],
+    ['5.6.11', '결정 지점: 항목마다 고칠지와 방식. 결정마다 확인이면 코드 전에 물음', /Whether and how to fix each item[\s\S]*결정마다 확인, ask before you change code/],
+    ['5.6.11', '완료조건: 셋 중 하나 또는 open_questions, 코멘트 항목마다 답글, 커밋과 테스트 결과', /## Done when[\s\S]*settled as one of the three[\s\S]*has a reply in `replies\.md`[\s\S]*committed[\s\S]*test command/],
   ],
   'final-verify': [
     ['5.6.8', '입력: evidence.md, fix.md, rca.md, review.md', /`evidence\.md` and `fix\.md`, and `rca\.md` and `review\.md`/],

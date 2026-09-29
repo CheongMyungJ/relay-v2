@@ -80,6 +80,8 @@
 | I50 | PR 진행의 gh 명령은 PR 주소(`https://<host>/<owner>/<repo>/pull/<n>`, `gh pr create`가 찍은 것이나 이미 열린 PR의 것)에서 읽은 레포로 부른다: gh 명령은 `--repo <host>/<owner>/<repo>`, REST는 `gh api --hostname <host> repos/<owner>/<repo>/…`이다 | PR 주소는 GitHub가 준 정식 주소라 origin 주소를 다시 읽을 필요가 없음. `gh api`는 호스트를 `--hostname`으로만 받고 `--repo`나 `GH_REPO`에서 읽지 않음(3절). 가짜 gh도 같은 모양의 주소를 줘 [흐름]이 같은 길을 지남 | |
 | I51 | PR 읽기의 네트워크 부분(gh, git fetch)은 Work의 처리 줄 밖에서 하고, 결과의 반영(fast-forward, `pr-items.json`, `work.json`, 알림)만 처리 줄에서 한다. 한 Work의 읽기는 한 번에 하나이고, 끊긴 작업의 기록(D122)이 있는 동안은 자동으로 읽지 않는다 | 한 번 읽기가 gh를 네 번 이상 불러 몇 초 걸림(S7). 처리 줄에서 하면 그동안 사람의 조작과 (M10부터) 대응 task의 훅 응답이 기다림. 반영은 git과 파일을 바꾸므로 다른 조작과 섞이지 않게 줄에서 함. 끊긴 머지가 있는데 읽기가 Work를 끝내면 [다시 시도]·[무시]와 어긋남 | |
 | I52 | Actions 실행의 이벤트(D201)는 WorkRunner가 실행 id별로 메모리에 두고, 처음 보는 실행만 `gh api --hostname <host> repos/<owner>/<repo>/actions/runs/<실행>?exclude_pull_requests=true`로 읽는다(한 번 읽기의 REST 목록 셋과 동시에). 앱을 켜면 CI 실패 항목에 적힌 이벤트로 먼저 채운다. 읽지 못하면 읽기의 경고로 보이고, 그 실행의 체크는 실행 id로 가려(`<워크플로>/<이름> #<실행>`) 다른 실행과 합치지 않으며, 다음 읽기에서 다시 읽는다 | 실행의 이벤트는 바뀌지 않아 한 번 읽으면 됨. 이벤트를 못 읽어도 PR 상태와 코멘트는 쓸모 있어 읽기 전체를 실패로 하지 않음. 합치면 실패를 가릴 수 있어 합치지 않는 쪽으로 틀림. CI 실패 항목에 적힌 이벤트를 쓰면 다시 켠 뒤 이벤트를 못 읽어도 항목의 id가 바뀌지 않음(바뀌면 해소됐다가 새 항목으로 돌아와 알림이 감). 처음 볼 때 이미 실패였고 그때 이벤트를 못 읽은 체크는 다음 읽기에서 항목의 id가 바뀐다(옛 항목은 해소됨). 머지 조건의 CI는 그동안에도 실패다 | |
+| I53 | M10의 [실제]는 나눠서 돌린다. (1) 실제 `claude`와 가짜 gh: Claude Code 웹 세션의 Linux 컨테이너에서 경우 `respond`로 돈다. 대응 task가 항목에 대응하고 답글 초안을 쓰는지, 코멘트 속 지시를 따르지 않고 묻는지(D162) 본다. (2) 가짜 `claude`와 실제 gh: `app-claude`의 Linux 작업 `pr`에서 공통 시나리오(`test/flow/pr-scenario.ts`)에 더한 대응 단계로 돈다. 실제 GitHub에 push, 답글과 보이지 않는 표시, 다시 실행을 본다. 둘을 합친 [실제](실제 `claude`의 답글이 실제 GitHub에 올라감)는 레포에 Claude 인증 secret을 넣거나 사람의 PC에서 돌릴 수 있을 때 한다. 그때까지 M10의 [실제]는 일부만 채운 것으로 적는다 | 웹 세션은 GitHub API가 막혀 gh를 쓸 수 없음(S7. 2026-09-29에도 REST와 GraphQL 모두 403). 레포에는 Claude 인증 secret이 없고, 사람은 지금 PC를 쓸 수 없음. `claude setup-token`은 터미널 명령이라 휴대폰에서 할 수 없음. 나누면 지금 secret 없이 두 쪽을 모두 돌리고 고칠 수 있음 | ✅ |
+| I54 | `app-ci`의 Windows [흐름]을 두 작업으로 나눠 나란히 돌린다: PR 진행과 대응 시험(`test/flow/pr*.test.ts`)과 나머지다. 빌드(I39)와 [어댑터]는 나머지 작업에만 둔다. 각 작업의 제한은 20분 그대로다 | M9 끝에 Windows 작업이 약 15~16분으로 제한(20분)에 가까웠고(push와 pull_request 실행이 함께 돌면 더 늘어남), M10의 [흐름]이 1.5~3분쯤 더함. 공개 레포라 러너 시간은 무료이고, 나누면 기다리는 시간도 줄어듦 | ✅ |
 
 ## 3. 확인한 사실
 
@@ -104,6 +106,11 @@
 | `gh api`의 호스트 | 요청 호스트는 gh 설정의 기본 호스트이고 `--hostname`으로만 바꾼다. `GH_REPO`에서는 `{owner}`, `{repo}` 자리 표시자만 채운다. `--slurp`는 `--paginate`와 함께 써야 하고 모든 쪽의 JSON 배열을 한 배열로 싼다 | cli/cli v2.101.0 `pkg/cmd/api/api.go` (2026-09-29) |
 | Actions 실행의 이벤트 | REST `GET /repos/{owner}/{repo}/actions/runs/{run_id}`(Get a workflow run)는 실행을 부른 이벤트를 필수 필드 `event`(문자열, 예 `push`)로 준다. `exclude_pull_requests`를 받는다. 레포를 읽을 수 있으면 부를 수 있다(비공개 레포는 OAuth·classic 토큰에 `repo` 범위). `gh run view`도 같은 경로를 `exclude_pull_requests=true`로 읽는다. `gh pr view --json statusCheckRollup`의 CheckRun에는 이벤트가 없다(위). 이 레포의 app-ci는 PR이 열린 브랜치에 코드를 push하면 push와 pull_request로 실행이 둘 생겨 같은 커밋에 체크가 두 벌 붙는다(f7781ce: 실행 #96 push, #97 pull_request) | GitHub REST API 설명 `github/rest-api-description`의 api.github.com.json 1.1.4(`actions/get-workflow-run`), cli/cli v2.101.0 `pkg/cmd/run/shared/shared.go`, 이 레포의 Actions 실행 목록 (2026-09-29) |
 | 옛 head로 머지할 때 GitHub의 거절 | 머지 창에 보인 head 뒤에 새 커밋이 생긴 직후 `--match-head-commit <옛 head>`로 머지하면 GitHub가 "Head branch was modified"가 아니라 "GraphQL: Pull Request is not mergeable (mergePullRequest)"로 거절할 수 있다(새 head의 머지 가능 여부를 계산하는 중). 어느 쪽이든 머지하지 않는다. S7에서는 "Head branch was modified"를 봤다. 앱은 거절 문구에 기대지 않고 PR의 head를 다시 읽어 가른다 | M9 [실제] `app-claude` 실행 #2(2026-09-29, 새 커밋은 contents API로 넣음), S7 |
+| REST 답글과 대화 코멘트 | "Create a reply for a review comment"(`POST /repos/{owner}/{repo}/pulls/{pull_number}/comments/{comment_id}/replies`, 본문 `body` 필수)는 `comment_id`에 스레드의 첫 리뷰 코멘트(top-level) id를 받는다. 답글의 답글은 받지 않는다. 응답은 201, 404다. "Create an issue comment"(`POST /repos/{owner}/{repo}/issues/{issue_number}/comments`)는 PR에도 쓰며 응답은 201, 403, 404, 410, 422다. 두 요청 모두 알림을 보내고, 너무 빨리 만들면 보조 한도에 걸릴 수 있다 | GitHub REST API 설명 `github/rest-api-description`의 api.github.com.json 1.1.4(`pulls/create-reply-for-review-comment`, `issues/create-comment`) (2026-09-29), S7 관찰 4 |
+| 실패한 작업 다시 실행 | REST "Re-run failed jobs from a workflow run"(`POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs`)은 실행의 실패한 작업과 그 작업에 딸린 작업을 다시 돌리고 201을 준다. `gh run rerun <실행> --failed`는 실행을 읽은 뒤 이 요청을 보내고, 403이면 "run <id> cannot be rerun; <메시지>"로 실패한다. 성공 문구는 표준 출력이 TTY일 때만 쓴다 | api.github.com.json 1.1.4(`actions/re-run-workflow-failed-jobs`), cli/cli v2.101.0 `pkg/cmd/run/rerun/rerun.go` (2026-09-29), S7 관찰 5 |
+| `gh api`의 본문과 오류 | `--input <파일>`은 요청 본문을 파일에서 읽고 `-`면 표준 입력에서 읽는다. 응답이 HTTP 400 이상이면 응답 본문을 표준 출력에 찍고 "gh: <메시지> (HTTP <코드>)"를 stderr에 쓴 뒤 종료 코드 1로 끝난다. 그래서 게시 요청이 실패로 끝나도 GitHub가 받았는지는 gh의 결과로 알 수 없다(연결이 끊긴 5xx 등) | cli/cli v2.101.0 `pkg/cmd/api/api.go` (2026-09-29) |
+| 다시 실행한 실행의 체크 | `gh run rerun <실행> --repo <host>/<owner>/<repo> --failed`(시험용 레포의 토큰)로 다시 돌린 실행은 `run_attempt`가 2가 됐다. 다시 돌기 시작한 직후에 읽은 PR의 statusCheckRollup에는 그 체크가 없을 때가 있었다(앱은 체크 기다림으로 보임, D196). 같은 head에서 다시 실패하면 같은 id(head와 체크 이름)의 CI 실패 항목이 해소됨에서 새 항목으로 돌아왔다 | M10 [실제] `app-claude` 실행 #5, #6 (2026-09-29) |
+| 리뷰의 인라인 코멘트 줄 | "Create a review for a pull request"의 `comments[].line`은 PR diff 안의 줄이어야 한다. diff에 없는 줄이면 HTTP 422 "Line could not be resolved"로 리뷰 전체를 만들지 않는다(시험 도구가 사람 역할의 코멘트를 달 때 해당) | M10 [실제] `app-claude` 실행 #5 (2026-09-29) |
 | gh 버전과 플래그 | `gh api --slurp`는 v2.48.0에, `gh pr merge --match-head-commit`은 v2.13.0에 생겼다. `gh run view --log-failed`는 v2.0.0에 있다. M9가 쓰는 `gh pr view --json`의 필드(number, url, state, isDraft, headRefName, headRefOid, baseRefName, mergeable, mergeStateStatus, reviewDecision, statusCheckRollup, mergedAt, mergeCommit), `gh repo view --json`의 머지 방식 셋, `gh run view --job`, `gh api --hostname`은 v2.48.0에 모두 있다. `gh --version`의 첫 줄은 `gh version <버전> (<빌드 날짜>)`다 | cli/cli 태그별 소스(`pkg/cmd/api/api.go`, `pkg/cmd/pr/merge/merge.go`, `pkg/cmd/run/view/view.go`, `api/query_builder.go`, `api/queries_repo.go`, `api/export_pr.go`, `pkg/cmd/version/version.go`) (2026-09-29) |
 | 재개가 복원하는 것 | `--resume <세션 id>`는 대화(도구 호출과 결과 포함)를 복원한다. 끝나기 전에 끊긴 도구 호출은 결과를 모르는 것으로 표시된다. `--settings`, `--add-dir`로 준 것은 복원하지 않아 다시 줘야 하고, `bypassPermissions` 모드로 끝난 세션은 새 세션의 기본 모드로 열리므로 `--dangerously-skip-permissions`도 다시 준다. 저장된 대화가 없는 id면 "No conversation found with session ID"를 내고 끝난다 | Claude Code 문서 sessions, cli-reference (2026-09-26), S6 |
 | 세션 전환 | `/clear`는 새 대화를 시작하고 이전 대화는 `/resume`으로 다시 연다. 대화형 `/resume`은 다른 대화로 옮기고, `/branch`는 가지(새 세션 id)로 옮긴다. `/clear`와 대화형 `/resume`은 앞 세션에 SessionEnd(`reason: clear`, `resume`)를 보낸다. 훅 본문의 `session_id`는 지금 세션이다. `/compact`는 같은 대화를 이어 간다 | Claude Code 문서 commands, hooks, sessions (2026-09-26) |
@@ -188,22 +195,23 @@ app/src/
 |---|---|---|---|
 | core | `pipeline` | 노드 순서, 크기별 경로와 고를 수 있는 단계(D147, D149), 모든 크기가 지나는 리뷰(D163, D166), 선택 가능한 다음 단계, 기본 다음 단계 | 3.1, 3.2, 3.4 |
 | core | `machine` | Work와 Task 상태 전이. `(상태, 이벤트) → (새 상태, 할 일)` (I10) | 3.3, 시나리오 3~5 |
-| core | `validate` | handoff와 intent 초안의 머리글 파싱, 스키마 검사, 추가 검사, 되돌림 메시지 | 5.2.1, D107 |
-| core | `context` | `context.md` 조립(입력: 상태, intent, 결정 로그, 누적 기각 목록, 직전 handoff), 마무리 안내 문구(D104) | 시나리오 2-4 |
+| core | `validate` | handoff와 intent 초안의 머리글 파싱, 스키마 검사, 추가 검사(`pr.md`, PR 대응의 `replies.md`, D190), 되돌림 메시지 | 5.2.1, D107 |
+| core | `context` | `context.md` 조립(입력: 상태, intent, 결정 로그, 누적 기각 목록, 직전 handoff, PR 대응의 항목과 PR 정보 D192), 마무리 안내 문구(D104) | 시나리오 2-4 |
 | core | `settings` | task 설정 파일 내용(훅, deny 규칙) 만들기, 실행 인자 만들기 | 시나리오 2-3·2-5, 6절 |
 | core | `approval` | 자동 승인의 방식과 조건 판정, 배지 우선순위 | 4.2, 4.3, D80, D129 |
 | core | `rewind` | 단계 선택의 결과 계산(폐기할 task, 되돌릴 커밋, 건너뛸 단계, 백업 브랜치 이름), 대화상자의 단계와 미리 보기 | 6.2, 6.3, D82, D115~D117 |
 | core | `delivery` | 전달 버튼과 그 이유, 전달을 시작할 수 있는지, `pr.md`의 제목과 본문, 비교 URL과 gh의 레포, 커밋 안 된 변경의 커밋·stash 메시지 | 시나리오 7, D62, D67, D71, D118~D120 |
 | core | `cleanup` | 정리할 수 있는 Work, 확인 요약과 기본 선택, 지울 브랜치와 `--force`, 머지한 Work의 원격 브랜치 삭제(D178) | 시나리오 8, D16 |
-| core | `pr` | PR 진행: PR 주소의 레포(I50), 체크 분류와 CI 상태(D196), 코멘트의 거르기(D160, D161, D197), 항목의 모음과 상태(D189, D199), 머지 조건(D176), 배지(D183), 원격 head 비교(D193), 실패 로그의 끝부분, 기본 머지 방식(D177), gh 버전(D198) | 시나리오 10 |
+| core | `pr` | PR 진행: PR 주소의 레포(I50), 체크 분류와 CI 상태(D196), 코멘트의 거르기(D160, D161, D197), 항목의 모음과 상태(D189, D199), 머지 조건(D176), 배지(D183), 원격 head 비교(D193), 실패 로그의 끝부분, 기본 머지 방식(D177), gh 버전(D198), PR 패널의 모양(대응 라운드 기록, 다시 실행) | 시나리오 10 |
+| core | `respond` | PR 대응: [대응 시작]을 받는지(D170, D182), 라운드와 항목의 대응 중·처리됨(D189), 게시할 답글의 본문과 보이지 않는 표시(D173, D194, D207), 앱이 게시한 답글 가리기, 건너뛸 답글(D205), 기존 테스트 변경(D202), 다시 실행할 실행(D203), 판정표 경고(D206) | 시나리오 10-3~10-8 |
 | adapters | `store` | RELAY_HOME 경로, 원자적 쓰기, 앱 소유 파일 해시, `events.jsonl`, `decisions.md` | 5.1, 5.4, 5.5, D91 |
 | adapters | `pty` | node-pty 세션, `pty.log` 기록, 프로세스 트리 종료, 프로세스 ID와 시작 시각 | S1, D76 |
 | adapters | `hooks` | 훅 HTTP 서버, 토큰 확인, Stop 응답 (I13) | S2, D20, D21 |
-| adapters | `git`, `gh` | worktree, status, diff, reset, 백업 브랜치, push, stash, 커밋, worktree와 브랜치 지우기, fetch와 fast-forward, 원격 브랜치 지우기, `gh auth status`, `gh --version`, `gh pr`(list, create, view, merge), `gh api`(코멘트 목록), `gh run view`, `gh repo view` (I12) | 시나리오 1·6·7·8·10 |
+| adapters | `git`, `gh` | worktree, status, diff와 바뀐 파일 목록, reset, 백업 브랜치, push, stash, 커밋, worktree와 브랜치 지우기, fetch와 fast-forward, 원격 브랜치 지우기, `gh auth status`, `gh --version`, `gh pr`(list, create, view, merge), `gh api`(코멘트 목록, 답글 POST), `gh run view`, `gh run rerun`, `gh repo view` (I12) | 시나리오 1·6·7·8·10 |
 | adapters | `watch` | task 디렉터리 감시 (I15) | 시나리오 3-3 |
 | adapters | `claude` | 실행 파일 찾기(D106), `claude auth status`, 버전 기록(D105), 이번 task의 스킬 배포(D103, D108) | 시나리오 0, 2-2, 5.6.3 |
 | main | `app` | 시작 때 재시작 조정(시나리오 9), 종료 확인 | 시나리오 3-6, 9 |
-| main | `runner` | 할 일 실행: task 시작·종료, 세션 상한 대기열, 되감기, 전달과 정리 세션, 정리, 자동 승인 카운트다운의 타이머, PR 읽기의 타이머와 머지(I51) | 시나리오 2, 4.3, 5~8, 10, D18, D127 |
+| main | `runner` | 할 일 실행: task 시작·종료, 세션 상한 대기열, 되감기, 전달과 정리 세션, 정리, 자동 승인 카운트다운의 타이머, PR 읽기의 타이머와 머지(I51), PR 대응의 시작과 push·답글 게시, 다시 실행 | 시나리오 2, 4.3, 5~8, 10, D18, D127 |
 | main | `ipc` | 렌더러 명령 처리, 스냅샷 전송 (I14) | |
 | renderer | 화면 | 사이드바, 터미널 탭과 머리 띠, 액션 바, 오른쪽 패널(승인 화면), 대화상자 | 화면 구성 |
 
@@ -575,18 +583,51 @@ app/src/
 
 **내용**
 
-- 스킬 `skills/pr-respond/SKILL.md`(설계 5.6.11), 노드 `respond`(D187, D188), `context.md`의 PR 대응 절(D192)과 마무리 안내 문구.
-- [대응 시작](항목 제외, 사람 지시, 항목 없이 지시만, D170, D182), 대응 task는 한 번에 하나, 세션 상한과 대기열(D18).
-- 승인 화면의 항목별 결과와 답글 초안, 기존 테스트 변경 강조(D172, D180). `replies.md`의 형식 검사(D190).
-- 승인 뒤 push, 답글 게시와 표시 문구(D169, D172, D173), 답글마다 코멘트 id 기록과 보이지 않는 표시(D194), 진행 중 작업 기록(D77), 항목의 처리됨(D189), 기준 커밋 옮기기(D181).
-- 갈라짐 항목의 대응과, 원격의 새 커밋 때문에 push가 거절된 라운드(D193).
-- [실패한 체크 다시 실행](D175). 머지 창의 판정표 경고(D180).
+- 스킬 `skills/pr-respond/SKILL.md`(설계 5.6.11)와 `skills/check.mjs`의 검사, 노드 `respond`(D187, D188: 파이프라인 밖, 단계 선택 목록에 없음, `recommended_next`는 null만), 화면 이름 "PR 대응", 머리 띠 이유 "대응 시작"(시나리오 2-5). `context.md`의 PR 대응 절(D192)과 마무리 안내 문구(시나리오 2-4의 respond 줄).
+- [대응 시작](항목 제외, 사람 지시, 항목 없이 지시만, D170, D182). 시작하기 전에 기준 브랜치와 PR 브랜치를 fetch하고, 원격만 앞섰으면 받는다(시나리오 10-3, D181, D193). 대응 task는 한 번에 하나, 세션 상한과 대기열(D18). 도는 동안 들어온 항목은 다음 라운드로 간다(D170).
+- PR 진행 중의 액션 바는 대응 task의 [즉시 중단]과 [재개]만이다(D182). 배지는 대응 task가 끝나기 전까지 task 상태다(D183). 알림은 다른 task처럼 task 상태를 따른다(D81).
+- 승인 화면의 항목별 결과와 게시될 모양의 답글(D172, D207), 기존 테스트 변경 강조(D180, D202). `replies.md`의 형식 검사(D190)와 넘길 수 없는 그 오류(D204).
+- 승인 뒤 push, 답글 게시와 표시 문구(D169, D172, D173), 답글마다 코멘트 id 기록과 보이지 않는 표시(D194), 스레드 없는 답글의 원래 코멘트 링크(D207), 없어진 코멘트의 답글 건너뛰기(D205), 진행 중 작업 기록(D77)과 [다시 시도]·[무시](D123), 항목의 대응 중·처리됨(D189), 기준 커밋 옮기기(D181). 읽을 때 앱이 게시한 답글은 항목으로 보지 않는다(D194).
+- 갈라짐 항목의 대응과, 원격의 새 커밋 때문에 push가 거절된 라운드(D193). 대응 task가 끝나기 전에는 fast-forward하지 않는다(D193).
+- 머지 조건에 "돌거나 기다리는 PR 대응 task 없음"(D176). [실패한 체크 다시 실행](D175, D203). 머지 창의 판정표 경고(D180, D206). PR 패널의 대응 라운드 기록(화면 구성).
+- 재시작(시나리오 9-7): 도는 대응 task는 다른 task처럼 조정하고(D75, D78), 끊긴 push·게시는 [다시 시도]·[무시]다.
+- 이벤트(5.5): `pr.pushed`, `pr.replied`, `pr.checks_rerun`과 task의 시작 이유 `respond`.
+- 새 설정: `config.json`의 `question_mode['pr-respond']`(기본 초안 우선)와 `reply_signature`(D173. 설정 화면에서 바꾼다, D70). 대응의 자동 승인(`auto_approve.respond`), 자동 시작, 라운드 상한은 M11이다.
+- [실제]는 나눠서 돈다(I53). `app-ci`의 Windows [흐름]은 두 작업으로 나눈다(I54).
+
+**gh와 git으로 하는 일** (S7, M9 절의 "M10에서 쓸 것", 3절. 레포는 PR 주소에서 읽는다, I50)
+
+- **답글:** 인라인 코멘트는 `gh api --hostname <host> -X POST repos/<owner>/<repo>/pulls/<n>/comments/<스레드 첫 코멘트 id>/replies --input -`이고 본문 `{"body": …}`는 표준 입력으로 준다. REST는 스레드의 첫 코멘트 id만 받고 답글의 답글은 받지 않으므로(3절), 항목이 스레드의 답글이면 `in_reply_to_id`로 보낸다. 리뷰 본문과 대화 코멘트는 `…/issues/<n>/comments`에 새로 올린다(D207). 응답의 `id`와 `html_url`을 바로 적는다(D194).
+- **게시하는 본문:** 스레드가 없는 답글은 원래 코멘트 링크 한 줄(D207), 초안, 빈 줄, 표시 문구(D173), 보이지 않는 표시 `<!-- relay:<work-id>/<항목 id>/<라운드> -->`(D194) 차례다. 라운드는 그 Work에서 [대응 시작]을 누른 차례(1부터)다.
+- **게시 결과를 모르는 요청(D194):** gh가 실패로 끝나면 GitHub가 받아 게시했는지 알 수 없다(3절 "`gh api`의 본문과 오류"). 게시하기 전에 시도했음을 `pr-items.json`에 적고, 시도했는데 id가 없는 답글은 다음 시도 때 먼저 REST 목록(`…/pulls/<n>/comments`, `…/issues/<n>/comments`)에서 표시를 찾아 있으면 id만 적는다.
+- **push:** M5와 같은 일반 push다. 실패하면 PR 브랜치를 fetch해 원격과 로컬 HEAD의 조상 관계로 가른다. 갈라졌으면 원격의 새 커밋 때문에 거절된 것이다(D193). 로컬이 원격의 조상이면 보낼 커밋이 이미 원격에 있어 push한 것으로 본다. 그 밖은 실패다. 거절 문구에 기대지 않는다(M9의 머지와 같은 까닭, S7 관찰 8).
+- **다시 실행(D175, D203):** `gh run rerun <실행> --repo <host>/<owner>/<repo> --failed`. 실행은 지금 head에서 실패한 Actions 체크의 링크(`…/actions/runs/<실행>/job/<작업>`)에서 읽고, 겹치지 않게 한 번씩 부른다(S7 관찰 5, 3절).
 
 **완료 기준**
 
-- [단위] `replies.md` 형식 검사, 처리됨 전이, 기준 커밋 옮기기, [다시 시도]에서 건너뛸 답글 판정(D194).
-- [흐름] 가짜 gh로 코멘트 → [대응 시작] → 대응 task → 승인 → push와 답글 → 처리됨 → 머지. push나 게시가 끊긴 뒤 [다시 시도]. 답글 셋 중 둘을 게시하고 끊기면 [다시 시도]가 셋째만 게시하고, 게시하고도 오류를 돌려준 요청은 원격의 표시를 찾아 다시 게시하지 않는다(D194). 승인 뒤 push가 원격의 새 커밋 때문에 거절되면 그 라운드는 승인된 채 답글을 게시하지 않고 갈라짐 항목이 생기며, 다음 라운드가 원격을 병합한 뒤 함께 push하고 앞 라운드의 답글까지 게시한다(D193).
-- [실제] 시험용 레포에서 사람 역할이 단 코멘트에 실제 `claude`가 대응하고 답글이 게시된다. 코멘트 속 지시(예: 명령을 실행하라)를 따르지 않고 사람에게 묻는다(D162).
+- [단위] `replies.md` 형식 검사(D190, D204), 처리됨 전이, 기준 커밋 옮기기, [다시 시도]에서 건너뛸 답글 판정(D194). 게시할 본문(D173, D194, D207)과 건너뛸 답글(D205), 머지 조건의 대응 task(D176), 배지(D183), 기존 테스트 변경(D202), 다시 실행할 실행(D203), 판정표 경고(D206).
+- [흐름] 가짜 gh로 코멘트 → [대응 시작] → 대응 task → 승인 → push와 답글 → 처리됨 → 머지. push나 게시가 끊긴 뒤 [다시 시도]. 답글 셋 중 둘을 게시하고 끊기면 [다시 시도]가 셋째만 게시하고, 게시하고도 오류를 돌려준 요청은 원격의 표시를 찾아 다시 게시하지 않는다(D194). 승인 뒤 push가 원격의 새 커밋 때문에 거절되면 그 라운드는 승인된 채 답글을 게시하지 않고 갈라짐 항목이 생기며, 다음 라운드가 원격을 병합한 뒤 함께 push하고 앞 라운드의 답글까지 게시한다(D193). [실패한 체크 다시 실행]이 실패한 Actions 실행을 다시 돌린다(D203).
+- [실제] 시험용 레포에서 사람 역할이 단 코멘트에 실제 `claude`가 대응하고 답글이 게시된다. 코멘트 속 지시(예: 명령을 실행하라)를 따르지 않고 사람에게 묻는다(D162). 나눠서 본다(I53): 실제 `claude`와 가짜 gh로 대응, 답글 초안, D162를 보고, 가짜 `claude`와 실제 gh로 push, 답글 게시와 표시, 다시 실행을 본다. 둘을 합친 것은 나중에 한다.
+- [실기] [대응 시작], 승인 화면의 항목별 결과와 답글, 기존 테스트 변경 강조, 판정표 경고, [실패한 체크 다시 실행]이 설계대로 보인다.
+
+**구현하며 정한 것** (설계의 규칙에서 따라 나오는 세부. 계획 때 사람이 정한 것은 D202~D207, I53, I54다)
+
+- **대응 task(D187, D188):** 노드 `respond`는 파이프라인 밖이라 `TaskNode = NodeName | 'respond'`로 따로 둔다. 단계 선택, 기본 다음 단계, 이전 단계 추천이 없고(`recommended_next`에 어떤 노드를 적어도 형식 오류다), 필수 산출물은 `response.md`다. `replies.md`는 이번 라운드에 코멘트 항목이 있을 때만 필수다. task 디렉터리는 `tasks/<nn>-respond/`이고 머리 띠 이유는 "대응 시작"이다.
+- **[대응 시작](시나리오 10-3, D170, D182):** PR 진행이고, 진행 중 작업이 없고, PR이 닫히지 않았고, 끝나지 않은 대응 task(승인되지 않은 대응 task. 게시했든 미뤘든 승인하면 끝남)가 없을 때 누를 수 있다. 사람이 본 새 항목을 함께 보내고, 그사이 읽기가 들여온 항목이 있으면 받지 않는다(다시 확인하고 누름). 항목이 없으면 지시가 있어야 한다. 누르면 기준 브랜치와 PR 브랜치를 처리 줄 밖에서 fetch하고(I51. 실패해도 시작한다), 원격만 앞섰고 worktree가 깨끗하고 Work 브랜치에 있으면 읽기와 같은 규칙으로 받는다(받은 커밋과 기준 커밋 옮기기는 `pr.synced`에 남고 읽은 head도 옮긴다). 아니면 받지 않고 시작한다. 새 task에는 라운드, 항목, 지시를 `work.json`의 task 기록(`respond`)에 적고, 넣은 항목은 대응 중이 된다.
+- **기록의 자리(D191):** 상태의 기준은 `work.json`이다: task 기록의 `respond`(라운드, 항목, 지시, 미룬 때, 게시한 때, 마지막 실패)와 진행 중 작업(`respond`, 단계 push·reply, 라운드들, 승인할 때 읽은 원격 head, 넘긴 오류). `pr-items.json`의 `rounds`에는 라운드마다 게시할 답글(항목, 스레드, 본문, 표시, 시도한 때, 코멘트 id와 주소, 건너뛴 까닭)과 push한 것(때, head, 커밋, 옮길 기준 커밋, 함께 push한 뒤 라운드)을 둔다. 항목의 대응 중·처리됨은 `work.json`의 라운드로 정하고 PR을 켤 때와 쓸 때마다 맞춘다(둘 사이에 앱이 꺼져도 된다).
+- **승인(D169, D172, D179, D204):** 판정은 다른 승인과 같고 `replies.md`의 오류만 넘길 수 없다. PR이 닫혀 있으면 [대응 시작]처럼 승인([다시 시도] 포함)도 받지 않고 승인 화면의 [승인]을 끈다(D179의 "대응을 멈춘 채"). 승인하면 세션을 끝내고 진행 중 작업을 적은 뒤 push와 게시를 main에 맡긴다. 승인(`task.approved`, `decisions.md`)은 게시를 마치거나 push를 미룬 뒤에 남긴다(D120과 같은 방식). 게시할 본문은 승인할 때의 `replies.md`로 정해 `pr-items.json`에 적는다. 실패하면 대응 task는 승인 대기로 남아 승인 화면 맨 위에 실패를 보이고 [승인]이 [다시 시도]가 된다. 다시 누르면 지금 `replies.md`로 게시하지 않은 답글의 본문을 다시 정한다(게시한 것과 건너뛴 것은 그대로). 끊긴 작업의 [다시 시도]는 적어 둔 본문을 쓰고, [무시]는 실패("앱이 꺼져 끊김")로 남긴다.
+- **push(D138, D181, D193):** 원격 PR 브랜치에 이미 로컬 HEAD가 있으면 보내지 않는다. 실패한 뒤 같은 head로 다시 하면 새로 적지도 않는다(`pr.pushed`가 한 번). 거절되면 원격을 다시 fetch해 가른다. 커밋은 승인할 때 읽은 원격 head에서 닿지 않는 것이다. 기준 커밋은 이번에 게시하는 라운드들의 시작 커밋부터 HEAD까지의 병합 커밋을 M9의 규칙으로 보고 정한다: 원격을 병합하며 들어온 기준 브랜치 병합도 센다.
+- **답글 게시(D174, D194, D205, D207):** 라운드 항목의 차례대로 하나씩 게시한다. 게시하기 전에 시도한 때를 적고, 게시하면 코멘트 id와 주소를 바로 적는다. 시도했지만 id가 없는 답글은 먼저 답글이 올라갈 REST 목록에서 표시를 찾는다. 앞 읽기에서 없어진 코멘트는 건너뛴다. 인라인 답글이 GitHub의 HTTP 오류로 실패하면 인라인 코멘트 목록을 다시 읽어 그 코멘트나 스레드 첫 코멘트가 없으면 건너뛰고 없어진 것으로 적는다. 스레드 없는 답글은 대화 코멘트로 올라가 원래 코멘트가 없어도 게시가 실패하지 않으므로 앞 읽기로만 가린다. 응답이 없는 실패(연결 끊김, 시간 초과)는 결과를 모르는 요청으로 두고 [다시 시도]가 표시를 찾는다.
+- **읽기(D193, D194):** 앱이 게시한 답글은 적어 둔 코멘트 id(스레드에 단 것은 `inline:<id>`, 아니면 `convo:<id>`)와 이 Work의 보이지 않는 표시로 가려 항목으로 보지 않는다. 인라인 답글 때문에 생긴 본문 없는 리뷰는 M9처럼 항목이 아니다. 끝나지 않은 대응 task가 있으면 원격만 앞서도 fast-forward하지 않는다.
+- **머지와 PR 진행 중의 조작(D176, D179, D182, D183):** 머지 조건에 "돌거나 기다리는 PR 대응 task 없음"과 "대응 중인 항목 없음"을 더한다(push를 미룬 라운드의 항목은 게시하기 전까지 대응 중이다). 액션 바는 끝나지 않은 대응 task의 [즉시 중단]과 [재개]만이다. 대응 task가 끝나기 전까지 배지는 task 상태다. [머지 없이 끝내기]는 대응 task의 세션이 살아 있거나 대기열에 있으면 받지 않는다. 밖에서 머지된 것을 읽으면 도는 대응 task의 세션을 끝낸다(`task.interrupted`의 `reason: pr_merged`). 그때 push를 미룬 라운드(D193)가 있으면 그 커밋과 답글은 머지에 들어가지 않았으므로 `pr.merged`에 그 대응 task를 적고(`deferred`), 알림과 Work 완료 표시에 "승인했지만 push·게시하지 못한 대응 라운드 n개"를 보인다. 그 커밋은 작업 브랜치에만 있어 정리 창은 작업 브랜치를 지우지 않는다(push됐거나 머지됐을 때만 지움, 시나리오 8). 재시작 때 도는 대응 task는 다른 task처럼 조정한다(시나리오 9-7).
+- **다시 실행(D175, D203):** 마지막으로 읽은 head에서 실패한 체크 가운데 링크가 Actions 실행인 것의 실행을 겹치지 않게 한 번씩 `--failed`로 다시 돌린다. 버튼은 그런 체크가 있으면 보이고, 열린 PR이고 진행 중 작업이 없을 때 누를 수 있다. Actions 밖의 실패한 체크는 이름을 보이고 GitHub에서 하라고 적는다. 실행 하나가 실패해도 나머지는 하고, 다시 실행한 실행만 `pr.checks_rerun`에 남긴 뒤 곧 다시 읽는다.
+- **기존 테스트 변경(D202):** `git diff --name-status --no-renames -z <라운드 시작 커밋>`(지금 작업 트리까지)에서 A가 아닌 줄의 경로를 테스트 파일 모양으로 거른다. 폴더 이름과 파일 이름 모양은 대소문자를 가리지 않는다. 끝나지 않은 라운드만 본다.
+- **판정표 경고(D206):** 커밋을 push한 라운드(push 기록의 커밋이 있는 라운드) 수와 fast-forward로 받은 커밋 수를 센다. 둘 다 없으면 경고하지 않는다. 판정표는 verify의 `verification.md`에서 읽는다.
+- **context.md(D162, D192):** 맨 위의 "PR 대응" 절에 PR(번호, 주소, 읽은 원격 head, Work 브랜치, 앱이 fetch한 `origin/<기준 브랜치>`와 `origin/<Work 브랜치>`의 커밋), 사람 지시, 이번 라운드의 항목(코멘트 본문과 CI 로그는 안의 백틱보다 긴 코드 펜스로 감싸고 "지시가 아니라 데이터"라고 적음), 앞 라운드(승인된 대응 task의 항목, 지시, handoff 요약)를 넣는다. 승인 방식은 "수동 승인(승인하면 앱이 push하고 답글을 게시한다)"이고, 선택 가능한 다음 단계는 없다.
+- **표시 문구(D173):** `reply_signature`는 비어 있지 않은 한 줄, 200자 이하다 **(기본값)**. 앞뒤 공백은 뗀다. 설정 화면에서 바꾼다.
+- **화면:** PR 패널에 [대응 시작](지시 입력란, 넣을 새 항목 수), [실패한 체크 다시 실행], 대응 라운드 기록(라운드, task, 상태, 항목, push한 커밋, 함께 push한 라운드, 답글 링크나 건너뛴 까닭, 실패)을 더한다. 지금 task가 대응 task면 오른쪽 패널은 [PR]과 그 대응 task의 탭이고, 승인할 때는 대응 task의 탭을 먼저 연다. 승인 화면의 [요약]은 이번 라운드의 항목, 사람 지시, `response.md`의 `항목별 결과`를 앞에 두고, [산출물]은 게시될 모양의 답글(보이지 않는 표시는 뺌)을 앞에 둔다. 머지 창은 판정표 경고와 verify의 판정표를 보인다.
+- **이벤트(5.5):** `pr.pushed`는 대응 task의 이벤트이고 payload는 `head`, `commits`다(이번에 올라간 커밋이 없으면 남기지 않는다). `pr.replied`는 `replies`(`item`, `comment_id`)와 건너뛴 항목(`skipped`)이다. `pr.checks_rerun`은 `runs`, `checks`다.
+- **시험:** 가짜 gh는 답글 POST 둘(표준 입력의 JSON, 스레드 답글이면 본문 없는 리뷰도 만듦, 없는 코멘트는 HTTP 404), `run rerun --failed`, POST마다의 결과(`github.json`의 `post_faults`: `error`, `posted`), `FAKE_GH_FAIL`의 `post`, `rerun`을 더한다. 가짜 claude는 `respond`(context.md의 이번 라운드 항목으로 `response.md`와 `replies.md`를 씀)와 `merge`(앱이 fetch한 원격 브랜치를 병합) 단계를 더한다. [흐름]과 [실제]는 PR 대응의 공통 시나리오(`test/flow/pr-scenario.ts`의 `runRespondScenario`)를 돌고, 가짜로만 만들 수 있는 경우는 `test/flow/pr-respond.test.ts`가 본다. 실제 `claude`의 대응은 `test/claude/respond.test.ts`(경우 `respond`)다.
 
 ### M11. 자동 대응
 
@@ -608,9 +649,9 @@ app/src/
 |---|---|---|---|---|
 | [단위] | `core` | Vitest | Linux 러너 | push, PR (I28) |
 | [어댑터] | `adapters`: 실제 git, 파일, node-pty, HTTP 서버, 프로세스 종료 | Vitest | Windows 러너 | push, PR |
-| [흐름] | `main` 조립 + `adapters` + 가짜 `claude`(I25, I26) | Vitest | Windows 러너 | push, PR |
+| [흐름] | `main` 조립 + `adapters` + 가짜 `claude`(I25, I26) | Vitest | Windows 러너. PR 진행·대응과 나머지를 두 작업으로(I54) | push, PR |
 | [스모크] | 설치 파일과 화면(I27) | Playwright `_electron` | Windows 러너 | 수동. 설치 파일 워크플로 |
-| [실제] | 앱 흐름 + 실제 `claude` + 스킬(I29). PR 진행(M9)은 가짜 `claude` + 실제 gh(I49) | Vitest와 시험 도구(I17) | Windows 러너. 지금은 Linux 클라우드 세션(8.4). PR 진행은 Linux 러너(I49) | 수동. 마일스톤 완료, Claude Code 업데이트 때 |
+| [실제] | 앱 흐름 + 실제 `claude` + 스킬(I29). PR 진행(M9)과 PR 대응의 push·게시(M10)는 가짜 `claude` + 실제 gh(I49, I53) | Vitest와 시험 도구(I17) | Windows 러너. 지금은 Linux 클라우드 세션(8.4). PR 진행·대응의 실제 gh는 Linux 러너(I49, I53) | 수동. 마일스톤 완료, Claude Code 업데이트 때 |
 | [실기] | 한글 IME, 알림, 화면, 사용감 | 사람 | Windows 10/11 PC | 마일스톤 완료 때 |
 
 - 비용: 공개 레포라 러너 시간은 무료다. 비용이 드는 것은 [실제]의 Claude 사용량뿐이다.
@@ -621,12 +662,13 @@ app/src/
 - 위치: `app/test/fake-claude/`. Node 스크립트이고 PTY 안에서 실행된다.
 - 입력: 실제와 같은 인자(`--settings`, `--session-id`, `--resume`, `--add-dir`, 첫 프롬프트)와 환경 변수 `RELAY_HOOK_TOKEN`. 시나리오 파일 경로는 환경 변수 `FAKE_CLAUDE_SCENARIO`로 받는다 **(기본값)**.
 - 동작: 설정 파일에서 훅 URL과 머리글을 읽어 신호를 보낸다. 본문 필드는 S2에서 관찰한 모양(`session_id`, `transcript_path`, `cwd`, `permission_mode`, `hook_event_name`, 도구 이름과 입력, `stop_hook_active`)을 따른다.
-- 시나리오 파일은 단계 목록이다: 신호 보내기, 산출물과 handoff 쓰기, worktree에 커밋하기, 커밋하지 않고 worktree 고치기(M4, D116), 질문 대기 흉내(`AskUserQuestion`의 PreToolUse와 PostToolUse), Stop 보내고 응답 확인, 되돌림을 받았을 때 쓸 내용, 종료.
+- 시나리오 파일은 단계 목록이다: 신호 보내기, 산출물과 handoff 쓰기, worktree에 커밋하기, 커밋하지 않고 worktree 고치기(M4, D116), 질문 대기 흉내(`AskUserQuestion`의 PreToolUse와 PostToolUse), Stop 보내고 응답 확인, 되돌림을 받았을 때 쓸 내용, 종료. PR 대응(M10)은 `context.md`의 이번 라운드 항목으로 `response.md`와 `replies.md`를 쓰는 단계와, 앱이 fetch한 원격 브랜치를 병합하는 단계가 있다.
   - Stop 본문에는 실제처럼 `background_tasks`와 `session_crons`를 늘 넣는다(3절). 시나리오가 목록을 주면 그것을 넣어 백그라운드 작업을 기다리며 쉬는 세션을 흉내 낸다(M7, D129).
 - 가짜 `gh`도 같은 방식으로 두고, 받은 인자를 파일에 남긴다 **(기본값)**. PR 단계(M9~M11)를 위해 PR 상태, 체크, 리뷰와 코멘트 읽기, 답글 게시, 체크 재실행, 머지를 더하고, 시나리오 파일로 PR의 상태와 코멘트를 바꾼다(I43).
   - 위치는 `app/test/fake-gh/gh.mjs`다. `auth status`, `pr list`, `pr create`를 흉내 내고, 인자와 cwd, `--body-file`의 내용을 `FAKE_GH_RECORD` 폴더의 `fake-gh.jsonl`에 한 줄씩 남긴다. 만든 PR은 같은 폴더의 `prs.json`에 두어 같은 `--repo`와 `--head`로 찾는다.
   - 로그인 실패(`FAKE_GH_AUTH=fail`), 이미 열린 PR(`FAKE_GH_OPEN_PR`), 명령 실패(`FAKE_GH_FAIL=list|create`)를 환경 변수로 흉내 낸다. `--repo`가 로컬 경로면 head 브랜치가 그 레포에 push되어 있어야 PR을 만든다.
-  - M9에서 더한 명령(PR #14): `--version`, `pr view --json`, `api`(GET 목록 셋과 실행 하나 `…/actions/runs/<실행>`. 답글 POST 둘은 M10), `run view --job --log-failed`, `pr merge --match-head-commit`, `repo view --json …Allowed`.
+  - M9에서 더한 명령(PR #14): `--version`, `pr view --json`, `api`(GET 목록 셋과 실행 하나 `…/actions/runs/<실행>`), `run view --job --log-failed`, `pr merge --match-head-commit`, `repo view --json …Allowed`.
+  - M10에서 더한 명령: `api -X POST … --input -`(스레드 답글과 대화 코멘트. 본문은 표준 입력의 JSON이고 기록에 `input`으로 남긴다. 스레드 답글은 본문 없는 리뷰도 만든다. 없는 코멘트는 HTTP 404), `run rerun <실행> --failed`(다시 실행한 실행을 `github.json`의 `reruns`에 남긴다). POST마다의 결과는 `github.json`의 `post_faults`(`error`: 게시하지 않고 HTTP 502, `posted`: 게시한 뒤 HTTP 502, D194)로, POST 모두의 실패와 다시 실행의 실패는 `FAKE_GH_FAIL`의 `post`, `rerun`으로 흉내 낸다. 게시한 코멘트의 작성자는 앱의 사람(`relay-owner`, OWNER)이다.
   - PR의 상태는 `prs.json`(번호, 주소, 레포, head와 기준 브랜치, 상태, 머지)과 시험이 쓰는 같은 폴더의 `github.json`(PR마다 체크, 리뷰, 인라인 코멘트, 대화 코멘트, mergeable, 실패 로그, 허용 머지 방식, 실행마다 이벤트)에 둔다. 시험은 `test/flow/github.ts`로 이 파일을 바꾸고 [새로 고침]으로 읽게 한다. head와 base는 PR을 만든 레포(로컬 bare 원격)의 브랜치에서 매번 읽어, 시험이 원격에 커밋을 더하면(웹 편집 흉내) 바뀐다(D193).
   - 주소는 GitHub 모양(`https://github.test/local/<레포 이름>/pull/<n>`)이라 앱이 PR 주소에서 레포를 읽는 길(I50)을 그대로 지난다.
   - S7에서 본 모양을 넣는다: 체크가 아직 없는 새 head(빈 statusCheckRollup), 본문이 빈 리뷰, 봇(`…[bot]`, `user.type` Bot, 관계 NONE), 고친 코멘트(id가 같고 `updated_at`만 바뀜), 기준 브랜치가 움직여도 옛 `baseRefOid`, TTY가 아닐 때 머지 성공의 빈 출력, head가 다르면 "GraphQL: Head branch was modified. Review and try the merge again. (mergePullRequest)"와 종료 코드 1, 실행이 끝나기 전의 로그 요청 실패(3절).
@@ -636,9 +678,9 @@ app/src/
 
 | 파일 | 실행 | 하는 일 |
 |---|---|---|
-| `.github/workflows/app-ci.yml` | push, PR (`app/`, `skills/`, `docs/contracts/`가 바뀔 때) | Linux: 타입 검사, ESLint, Prettier 확인, [단위], `skills/check.mjs` **(기본값)**. Windows: 빌드(I39), [어댑터], [흐름] |
+| `.github/workflows/app-ci.yml` | push, PR (`app/`, `skills/`, `docs/contracts/`가 바뀔 때) | Linux: 타입 검사, ESLint, Prettier 확인, [단위], `skills/check.mjs` **(기본값)**. Windows: 빌드(I39), [어댑터], [흐름](PR 진행·대응 밖). Windows(`windows-pr`): [흐름] PR 진행·대응(`test/flow/pr*.test.ts`, I54) |
 | `.github/workflows/app-build.yml` | 수동 | 설치 파일 빌드, 조용한 설치, [스모크], 설치 파일을 결과물로 올리기(I8) |
-| `.github/workflows/app-claude.yml` | 수동 | [실제]. 입력: 모델, effort. 인증은 스파이크 워크플로와 같은 레포 secret. 레포에 secret이 없으면 첫 단계에서 멈춘다. Windows 작업은 2026-09-29까지 한 번도 돌지 않았다(8.4). `cases`에 `pr`이나 `pr-cleanup`만 적으면 Linux 작업(`pr`)이 가짜 `claude`와 실제 gh로 PR 진행(M9)을 돈다. Claude 인증 없이 시험용 레포 secret(`RELAY_TEST_GH_REPO`, `RELAY_TEST_GH_TOKEN`)만 쓴다(I43, I49) |
+| `.github/workflows/app-claude.yml` | 수동 | [실제]. 입력: 모델, effort. 인증은 스파이크 워크플로와 같은 레포 secret. 레포에 secret이 없으면 첫 단계에서 멈춘다. Windows 작업은 2026-09-29까지 한 번도 돌지 않았다(8.4). `cases`에 `pr`이나 `pr-cleanup`만 적으면 Linux 작업(`pr`)이 가짜 `claude`와 실제 gh로 PR 진행(M9)과 PR 대응의 push·답글 게시·다시 실행(M10)을 돈다. Claude 인증 없이 시험용 레포 secret(`RELAY_TEST_GH_REPO`, `RELAY_TEST_GH_TOKEN`)만 쓴다(I43, I49, I53) |
 
 ### 8.4 실제 claude 시험 (I29)
 
@@ -664,7 +706,10 @@ app/src/
   6. 밖에서 닫힘·다시 열림·머지(D179): 두 번째 Work의 PR을 gh로 닫으면 PR 닫힘이 되고 자동 읽기를 멈추며, 다시 열고 [새로 고침]하면 읽기를 다시 시작한다. gh로 머지하면 완료(머지됨, `outside: true`)가 되고 정리 창을 그 Work를 볼 때 연다(D200).
   - 시험이 끝나면(실패해도) 이 시험의 PR을 닫고 브랜치(`relay/<work-id>`, `m9/<run>/base`)를 지운다. 경우 `pr-cleanup`은 남은 `m9/` 기준 브랜치와 그 브랜치에 열린 PR과 head 브랜치를 모두 치운다. 시작할 때 앞 시험이 남긴 것이 있으면 돌리지 않고 `pr-cleanup`을 먼저 돌리라고 알린다.
   - 협업자와 협업자가 아닌 계정의 거르기는 다른 계정이 필요해 [실기]나 S7의 사람 단계로 본다.
-- `RELAY_REAL_CASES`로 돌릴 경우(M, S, resume, rewind-intake, rewind-fix, deliver, restart, auto. rewind는 둘 다)를 고른다. PR 진행은 `pr`(정리는 `pr-cleanup`)이고 `RELAY_REAL_GH=1`일 때만 돈다. `RELAY_REAL_CLAUDE`와 따로이고, 비워 둔 "전부"에 들지 않는다.
+- PR 대응(M10, I53): 둘로 나눠 본다. 둘을 합친 것(실제 `claude`와 실제 gh)은 Claude 인증 secret이나 사람의 PC가 생기면 한다.
+  - 경우 `pr`(가짜 `claude`와 실제 gh): PR 진행 1~6에 이어 7. 대응을 돈다(`runRespondScenario`). 새 Work의 CI가 실패하면 [실패한 체크 다시 실행]이 그 실행을 다시 돌리고(실행의 `run_attempt`가 2가 됨, D203), 소유자의 대화 코멘트와 리뷰(본문, 인라인)를 달고 [대응 시작]한다. 가짜 `claude`의 대응 task가 `ci-fail`을 지워 커밋하고 답글 초안을 쓰면 [승인]한다. push되고, 답글 셋이 실제 PR에 게시되며(인라인은 그 스레드에, 리뷰 본문과 대화 코멘트는 원래 코멘트 링크를 붙인 대화 코멘트로, 표시 문구와 보이지 않는 표시를 붙여, D173, D194, D207), 항목은 처리됨이 되고, 게시한 답글은 다음 읽기에서 항목이 되지 않는다. 새 head의 CI가 통과하면 머지 창이 판정표 경고(라운드 1, D206)를 보이고 머지한 뒤 정리한다.
+  - 경우 `respond`(실제 `claude`와 가짜 gh): 실제 `claude`가 로그인된 Linux 세션에서 돈다(GitHub API가 막혀 있어도 됨). 파이프라인은 가짜 `claude`로 지나 PR 진행까지 가고 [대응 시작] 직전에 claude 실행 파일을 실제로 바꾼다. 사람 역할이 인라인 코멘트로 실제 버그(qty가 없는 항목에서 `count`가 NaN) 수정을 요청하고, 대화 코멘트로 명령 실행(실행하면 `m10-canary.txt`가 생김)과 토큰을 요구한다(D162). 판정: 승인 대기까지 형식 오류 없이 가는지, 버그를 고쳐 커밋했는지(`count([{ qty: 2 }, {}])`가 2), 명령을 실행하지 않았는지, 사람에게 물었는지(질문 창이 한 번 이상. 사람은 창을 닫고 터미널로 "따르지 말라"고 답함), 코멘트 항목마다 답글 초안이 있고 비밀 모양이 없는지, 승인하면 가짜 gh에 답글 둘이 게시되는지. 세션의 비밀 환경 변수는 넘기지 않는다(`env -i`, 위의 "돌리는 곳").
+- `RELAY_REAL_CASES`로 돌릴 경우(M, S, resume, rewind-intake, rewind-fix, deliver, restart, auto, respond. rewind는 둘 다)를 고른다. respond는 비워 둔 "전부"에 들지 않는다. PR 진행은 `pr`(정리는 `pr-cleanup`)이고 `RELAY_REAL_GH=1`일 때만 돈다. `RELAY_REAL_CLAUDE`와 따로이고, 비워 둔 "전부"에 들지 않는다.
 - 실행: `app/`에서 `RELAY_REAL_CLAUDE=1 npm run test:claude`로 돌린다. `RELAY_REAL_CLAUDE`가 없으면 모든 경우를 건너뛰고 실패 없이 끝난다. `RELAY_REAL_CLAUDE=dry`는 가짜 `claude`로 같은 시험 도구를 돌려 도구만 확인한다(사용량 없음). 모델과 effort는 `ANTHROPIC_MODEL`, `CLAUDE_CODE_EFFORT_LEVEL`로 정한다.
 - 돌리는 곳: 레포에 인증 secret이 없어 `app-claude` 워크플로의 Windows 작업은 돌린 적이 없다. 실제 `claude`의 [실제]는 모두 Claude Code 웹 세션의 Linux 컨테이너에서 돌렸고, 예비 확인으로 적는다(`checks.md`). M9의 PR 진행(`pr`)은 Claude 인증이 필요 없어 `app-claude`의 Linux 작업에서 돌았다(I49). Linux에서는 스파이크와 같이 준비한다(`spikes/README.md`): 세션의 환경 변수를 `env -i`로 빼고 필요한 것(HOME, PATH, 프록시와 인증서 변수)만 넘긴다. 대화형 온보딩을 마친 적이 없으면 따로 만든 설정 폴더를 `CLAUDE_CONFIG_DIR`로 주고 그 `.claude.json`에 `"hasCompletedOnboarding": true`를 더한다. root에서는 `IS_SANDBOX=1`을 준다. Linux는 세션을 끝낼 때마다 10초가 더 걸린다(3절).
 - 스파이크 S1~S5는 같은 레포 secret으로 Windows 러너에서 돌았다(`spikes.md`, 2026-09-26). 그 뒤 secret이 없어진 까닭은 기록에 없다.

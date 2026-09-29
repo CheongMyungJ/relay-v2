@@ -15,7 +15,7 @@ import { badge } from '../../src/core/approval'
 import { OPERATION_BLOCKS } from '../../src/core/recovery'
 import type { TaskCheck } from '../../src/core/validate'
 import { DEFAULT_CONFIG, type AppConfig } from '../../src/shared/config'
-import type { Handoff, NodeName, Size } from '../../src/shared/contracts'
+import type { Handoff, NodeName, Size, TaskNode } from '../../src/shared/contracts'
 import type {
   AutoHoldReason,
   FormatIssue,
@@ -638,7 +638,7 @@ describe('승인과 다음 task (시나리오 4, 5)', () => {
 
   it('L 경로: intake → evidence → rca → fix → review → verify → Work 완료', () => {
     let work = newWork()
-    const nodes: NodeName[] = []
+    const nodes: TaskNode[] = []
     const all: Effect[] = []
     let r = stepApprove(work, valid({}, 'L'))
     for (;;) {
