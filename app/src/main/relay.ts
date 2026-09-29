@@ -165,6 +165,11 @@ export class Relay {
     await this.hooks.close()
   }
 
+  /** 하던 PR 읽기가 모두 끝나기를 기다린다 (WorkRunner.prIdle). 시험 도구가 close 뒤에 부른다 */
+  async settled(): Promise<void> {
+    await Promise.all([...this.works.values()].map((w) => w.prIdle()))
+  }
+
   /** 이 앱에서 살아 있는 세션이 있다. 앱을 끝낼 때 확인 창을 띄운다 (시나리오 3-6) */
   hasLiveSessions(): boolean {
     return [...this.works.values()].some((w) => w.hasLiveSession())

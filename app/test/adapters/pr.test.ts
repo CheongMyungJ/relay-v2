@@ -114,6 +114,27 @@ describe('[어댑터] gh로 PR 읽기와 머지 (가짜 gh, S7)', () => {
     ).rejects.toThrow(/Could not resolve to a PullRequest with the number of 9/)
   })
 
+  it('가짜 gh의 baseRefOid는 기준 브랜치가 움직여도 PR 브랜치에 push하기 전까지 옛 커밋이다 (S7 관찰 7)', async () => {
+    await openPr()
+    const view = () =>
+      ghPrView(FAKE_GH, { repo: REPO, number: 1, cwd: repo, env: env() }, [
+        'headRefOid',
+        'baseRefOid',
+      ])
+    const before = await view()
+    const base0 = git(remote, 'rev-parse', 'refs/heads/main')
+    expect(before['baseRefOid']).toBe(base0)
+    // 기준 브랜치에 커밋이 생긴다
+    commit(repo, { 'base.txt': 'b\n' }, '기준 브랜치')
+    git(repo, 'push', '-q', 'origin', 'main')
+    const base1 = git(remote, 'rev-parse', 'refs/heads/main')
+    expect((await view())['baseRefOid']).toBe(base0)
+    // PR 브랜치에 push하면 따라온다
+    commit(tree, { 'more.txt': 'm\n' }, '더')
+    await pushBranch(tree, BRANCH)
+    expect(await view()).toEqual({ headRefOid: git(tree, 'rev-parse', 'HEAD'), baseRefOid: base1 })
+  })
+
   it('REST 목록은 --hostname과 --paginate --slurp로 모든 쪽을 읽어 한 목록으로 편다', async () => {
     await openPr()
     const gh = new FakeGitHub(record, remote, root)

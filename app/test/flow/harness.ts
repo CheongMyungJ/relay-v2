@@ -93,6 +93,8 @@ export async function harness(o: HarnessOptions = {}): Promise<Harness> {
     },
     close: async () => {
       await h.relay.close()
+      // 하던 PR 읽기의 gh·git이 레포 폴더를 작업 폴더로 쓰는 동안 Windows는 그 폴더를 지우지 못한다
+      await h.relay.settled()
       // Windows는 끝낸 프로세스가 파일을 잠깐 잡고 있을 수 있다
       fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
     },

@@ -2367,6 +2367,15 @@ export class WorkRunner {
     }, this.ctx.config().pr_poll_interval_sec * 1000)
   }
 
+  /**
+   * 하던 PR 읽기가 끝나기를 기다린다. 앱을 끝낼 때는 기다리지 않는다(네트워크를 기다려 종료가 늦어짐). 끝난 읽기는
+   * 반영하지 않는다. 시험 도구가 임시 폴더를 지우기 전에 부른다: Windows는 gh·git이 작업 폴더로 쓰는 폴더를 지우지
+   * 못한다
+   */
+  async prIdle(): Promise<void> {
+    while (this.prReading) await this.prReading
+  }
+
   /** PR 패널의 [새로 고침] (D158). 닫힌 PR도 읽어 다시 열렸는지 본다 (D179) */
   refreshPr(): Promise<CommandResult> {
     return this.readPrNow()
