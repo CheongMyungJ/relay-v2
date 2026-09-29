@@ -99,8 +99,8 @@ function ruleJoin(base: string, ...names: string[]): string {
   return [base.replace(/\/+$/, ''), ...names].join('/')
 }
 
-/** Work 디렉터리 안의 앱 소유 파일 (시나리오 2-3) */
-const APP_OWNED_FILES = ['work.json', 'request.md', 'intent.md', 'decisions.md']
+/** Work 디렉터리 안의 앱 소유 파일 (시나리오 2-3). pr-items.json은 PR 진행의 항목이다 (D191) */
+const APP_OWNED_FILES = ['work.json', 'request.md', 'intent.md', 'decisions.md', 'pr-items.json']
 
 export interface DenyInput {
   /** Work 디렉터리(works/<work-id>)의 절대 경로 */
@@ -111,7 +111,7 @@ export interface DenyInput {
 
 /**
  * deny 규칙 (D17, 시나리오 2-3): git push, gh pr 계열, 앱 소유 파일(work.json, request.md, intent.md,
- * decisions.md, 이전 task 디렉터리, Work 디렉터리의 .claude/) 편집.
+ * decisions.md, pr-items.json(D191), 이전 task 디렉터리, Work 디렉터리의 .claude/) 편집.
  * 출처: spikes/s4-permissions.mjs (Bash(git push*), Bash(gh pr*), Edit(ruleAbs(…)))
  */
 export function denyRules(input: DenyInput): string[] {

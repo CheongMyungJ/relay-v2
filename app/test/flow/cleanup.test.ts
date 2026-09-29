@@ -153,8 +153,10 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
       live: 0,
       branch: { name: s.branch, exists: true, pushed: true, merged: false, deletable: true },
       backups: [backup],
+      merged: false,
+      remote: null,
       confirm: [],
-      expect: { uncommitted: [], locks: [], live: 0, backups: [backup] },
+      expect: { uncommitted: [], locks: [], live: 0, backups: [backup], remote: false },
     })
     expect(s.h.ui.works.get(s.key)?.actions.clean).toBe(true)
     expect(

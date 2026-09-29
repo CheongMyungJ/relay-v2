@@ -1,10 +1,12 @@
 // 렌더러로 보내는 스냅샷과 조회 결과 (I14). main이 core로 계산하고, 화면은 받은 것을 그리기만 한다.
 import type { WorkSettings } from './config'
 import type { Decision, HandoffStatus, NodeName, Size } from './contracts'
+import type { PrItemKind, PrItemStatus } from './pr'
 import type {
   ApprovedIntent,
   DeliveryChoice,
   FormatIssue,
+  MergeMethod,
   TaskStatus,
   UncommittedAction,
   WorkStatus,
@@ -117,6 +119,8 @@ export interface CleanExpect {
   locks: string[]
   live: number
   backups: string[]
+  /** origin에 작업 브랜치가 있었다 (머지로 완료한 Work만, D178) */
+  remote: boolean
 }
 
 /** [Work 정리]의 확인 요약 (시나리오 8-1) */
@@ -141,6 +145,12 @@ export interface CleanPreview {
   }
   /** 되감기 백업 브랜치 (D115). "함께 삭제"의 기본은 체크다 */
   backups: string[]
+  /** 머지로 완료한 Work다. 작업 브랜치 삭제가 기본으로 체크된다 (D178) */
+  merged: boolean
+  /**
+   * origin의 작업 브랜치 (D178). 머지로 완료한 Work만 삭제를 고를 수 있고 기본은 끈다. 머지로 완료하지 않았으면 null
+   */
+  remote: { name: string; exists: boolean } | null
   /** 사람이 명시적으로 확인해야 하는 것. 비어 있지 않으면 확인해야 [정리]를 누를 수 있다 */
   confirm: string[]
   expect: CleanExpect
@@ -154,10 +164,123 @@ export interface CleanInput {
   deleteBranch: boolean
   /** 되감기 백업 브랜치를 함께 지운다 */
   deleteBackups: boolean
+  /** origin의 작업 브랜치도 지운다. 머지로 완료한 Work에서 원격에 있을 때만 받는다 (D178). 없으면 지우지 않는다 */
+  deleteRemote?: boolean
   /** 확인이 필요한 것(커밋 안 된 변경, 살아 있는 세션, 잠금 파일)을 확인했다 */
   confirmed: boolean
   expect: CleanExpect
 }
+
+// ---------- PR 진행 (시나리오 10, core/pr) ----------
+
+/** gh의 체크 분류 (docs/implementation.md 3절, cli/cli pkg/cmd/pr/checks/aggregate.go) */
+export type CheckBucket = 'pass' | 'skipping' | 'fail' | 'cancel' | 'pending'
+
+/**
+ * head 커밋의 CI (D176, D196): 통과(pass), 체크 없음(none: 처음 읽은 뒤 60초가 지나 통과로 봄),
+ * 체크 기다림(waiting: 체크 없음, 60초 안), 도는 중(pending), 실패(fail), 취소됨(cancel)
+ */
+export type CiState = 'pass' | 'none' | 'waiting' | 'pending' | 'fail' | 'cancel'
+
+export interface PrCheckView {
+  name: string
+  workflow: string | null
+  state: string
+  bucket: CheckBucket
+  url: string | null
+}
+
+/**
+ * 원격 PR head와 로컬 Work 브랜치의 비교 (D193): 같음, 원격만 앞섬(받음), 로컬만 앞섬, 갈라짐,
+ * 원격만 앞서지만 worktree가 깨끗하지 않음, worktree가 Work 브랜치에 있지 않음(D138)
+ */
+export type SyncKind = 'same' | 'ff' | 'local_ahead' | 'diverged' | 'dirty' | 'off_branch'
+
+export interface PrItemView {
+  id: string
+  kind: PrItemKind
+  /** "리뷰", "인라인 코멘트", "대화 코멘트", "CI 실패", "충돌", "원격과 갈라짐" */
+  kindLabel: string
+  status: PrItemStatus
+  statusLabel: string
+  /** 한 줄 제목: 작성자와 본문 첫 줄, 체크 이름, 기준 커밋 */
+  title: string
+  /** 본문(코멘트)이나 로그 끝부분(CI 실패) */
+  text: string | null
+  /** 로그가 없는 까닭 */
+  note: string | null
+  url: string | null
+  /** 인라인 코멘트의 파일:줄, 스레드의 답글이면 스레드 */
+  where: string | null
+  /** 받지 않은 까닭 (D160, D161) */
+  why: string | null
+  gone: boolean
+}
+
+/** PR 패널 (시나리오 10, D183): PR 요약, 항목, 머지 조건, 받은 커밋 */
+export interface PrView {
+  number: number
+  url: string
+  /** 앱이 마지막으로 읽은 원격 head */
+  head: string
+  /** 마지막으로 읽은 PR의 상태. 아직 읽지 못했으면 null */
+  state: 'OPEN' | 'CLOSED' | 'MERGED' | null
+  isDraft: boolean
+  /** 닫힌 것을 읽어 자동 읽기를 멈췄다 (D179) */
+  closed: boolean
+  readAt: string | null
+  /** 읽는 중이다 */
+  reading: boolean
+  /** 마지막 읽기의 오류 */
+  error: string | null
+  ci: CiState | null
+  checks: PrCheckView[]
+  /** reviewDecision (APPROVED, CHANGES_REQUESTED, REVIEW_REQUIRED). 없으면 null */
+  reviewDecision: string | null
+  /** mergeable (MERGEABLE, CONFLICTING, UNKNOWN) */
+  mergeable: string | null
+  sync: SyncKind | null
+  items: PrItemView[]
+  /** [머지]를 누를 수 있는지와 어긴 조건 (D176) */
+  gate: { enabled: boolean; reasons: string[] }
+  /** fast-forward로 받은 커밋 (D193) */
+  synced: { at: string; commits: string[]; baseCommit: string | null }[]
+  merged: { at: string; head: string; method: MergeMethod | null; outside: boolean } | null
+  /** [머지 없이 끝내기]를 누른 때 */
+  ended: string | null
+  /** 머지 뒤 정리 창을 아직 열지 않았다. 사람이 이 Work를 보면 연다 (D178, D200) */
+  offerClean: boolean
+  /** PR 진행을 시작할 때의 gh 버전 (D198) */
+  ghVersion: string | null
+  /** PR 요약의 글: 상태, CI, 리뷰, 충돌, 로컬 Work 브랜치와의 비교. 아직 읽지 못한 것은 null */
+  labels: {
+    state: string | null
+    ci: string | null
+    review: string | null
+    mergeable: string | null
+    sync: string | null
+  }
+}
+
+/** 머지 창 (D176, D177): 레포가 허용하는 방식, 기본 선택, 머지할 head */
+export interface MergeInfo {
+  head: string
+  methods: MergeMethod[]
+  /** 기본 선택: 프로젝트 설정이 허용되면 그것, 아니면 허용하는 첫 방식(merge, squash, rebase 차례) */
+  preferred: MergeMethod | null
+  gate: { enabled: boolean; reasons: string[] }
+}
+
+export type MergeInfoResult = { ok: true; info: MergeInfo } | { ok: false; error: string }
+
+/** 머지 창의 [머지]. head는 창에 보인 커밋이다 (D176) */
+export interface MergeInput {
+  method: MergeMethod
+  head: string
+}
+
+/** PR 패널의 항목 조작: [제외], [다시 넣기], [받기] (D160, D161, D170, D189) */
+export type PrItemAction = 'exclude' | 'include' | 'accept'
 
 // ---------- 사이드바 배지 (core/approval, D80) ----------
 
@@ -167,10 +290,14 @@ export type BadgeKind =
   | 'awaiting_approval'
   | 'blocked'
   | 'stopped'
+  | 'pr_items'
+  | 'pr_closed'
+  | 'mergeable'
   | 'session_ended'
   | 'working'
   | 'idle'
   | 'queued'
+  | 'pr_waiting'
   | 'interrupted'
   | 'done'
 
@@ -191,6 +318,11 @@ export interface ProjectView {
   defaultBranch: string
   origin: boolean
   gh: boolean
+  /** 점검한 gh 버전 (D198). 모르면 null */
+  ghVersion: string | null
+  /** 프로젝트 설정 (5.1.2, D185) */
+  allowedBots: string[]
+  mergeMethod: MergeMethod | null
 }
 
 export interface TaskView {
@@ -259,6 +391,8 @@ export interface WorkView {
   steps: StepChoice[]
   /** 마지막 전달 결과 (시나리오 7) */
   delivery: DeliveryView | null
+  /** PR 진행 (시나리오 10). [PR 생성]이 성공한 Work에 있다 */
+  pr: PrView | null
   /** 정리 세션 ([AI 세션 열기], 7-5) */
   cleanup: CleanupView | null
   /** 끊긴 작업 (시나리오 9-4, D121~D123). 있으면 [다시 시도]·[무시]만 받는다 */
@@ -276,7 +410,7 @@ export interface WorkView {
 
 /** 끊긴 작업의 알림 (시나리오 9-4, D121~D123): 무엇이 어디서 끊겼는지와 [다시 시도]·[무시]가 할 일 */
 export interface OperationView {
-  kind: 'rewind' | 'deliver' | 'clean'
+  kind: 'rewind' | 'deliver' | 'clean' | 'merge'
   title: string
   lines: string[]
   /** [다시 시도]가 할 일 */

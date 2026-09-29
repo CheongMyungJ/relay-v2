@@ -12,6 +12,8 @@ import {
   type WorkSettings,
 } from '../shared/config'
 import type { NodeName } from '../shared/contracts'
+import type { ProjectSettings } from '../shared/project'
+import type { MergeMethod } from '../shared/work'
 import { NODES } from './pipeline'
 
 export const SKILLS: readonly SkillName[] = SKILL_TITLES.map(([skill]) => skill)
@@ -39,6 +41,7 @@ export const EDITABLE_KEYS = [
   'handoff_body_warn_chars',
   'intent_warn_chars',
   'format_error_bounce_max',
+  'pr_poll_interval_sec',
 ] as const
 
 export type EditableKey = (typeof EDITABLE_KEYS)[number]
@@ -53,10 +56,13 @@ type IntegerKey =
   | 'handoff_body_warn_chars'
   | 'intent_warn_chars'
   | 'auto_approve_countdown_sec'
+  | 'pr_poll_interval_sec'
 
 /**
  * 정수 값의 범위. 되돌림 횟수는 8을 넘겨도 소용이 없다: Stop 훅으로 연속 8번 이어 가면
  * Claude Code가 다음 막음을 무시한다(docs/implementation.md 3절, CLAUDE_CODE_STOP_HOOK_BLOCK_CAP).
+ * PR 읽기 주기는 30초~1시간이다 **(기본값)**: 한 번 읽기가 GraphQL 1점과 REST 3번이라(S7) 30초여도 PR 하나에 시간당
+ * 한도(각 5,000)의 약 7%다.
  */
 const RANGES: Readonly<Record<IntegerKey, readonly [number, number]>> = {
   session_limit: [1, 20],
@@ -64,6 +70,7 @@ const RANGES: Readonly<Record<IntegerKey, readonly [number, number]>> = {
   handoff_body_warn_chars: [1, 1_000_000],
   intent_warn_chars: [1, 1_000_000],
   auto_approve_countdown_sec: [1, 3600],
+  pr_poll_interval_sec: [30, 3600],
 }
 
 const NAMES: Readonly<Record<IntegerKey | 'question_mode' | 'pr_draft' | 'auto_approve', string>> =
@@ -73,6 +80,7 @@ const NAMES: Readonly<Record<IntegerKey | 'question_mode' | 'pr_draft' | 'auto_a
     handoff_body_warn_chars: 'handoff 본문 분량 경고 기준',
     intent_warn_chars: 'intent 분량 경고 기준',
     auto_approve_countdown_sec: '자동 승인 카운트다운',
+    pr_poll_interval_sec: 'PR 읽기 주기',
     question_mode: '질문 방식',
     pr_draft: 'draft PR',
     auto_approve: '자동 승인',
@@ -247,4 +255,29 @@ export function mergeWorkSettings(current: WorkSettings, patch: WorkSettings): W
     ...(auto ? { auto_approve: auto } : {}),
     ...(modes ? { question_mode: modes } : {}),
   }
+}
+
+// ---------- 프로젝트 설정 (5.1.2, D185) ----------
+
+const MERGE_METHOD_VALUES: readonly MergeMethod[] = ['merge', 'squash', 'rebase']
+
+/**
+ * 프로젝트 설정 화면의 값 (5.1.2, D185): 받을 봇(D161, D197)과 기본 머지 방식(D177). 봇 이름은 앞뒤 공백을 떼고
+ * 빈 이름과 같은 이름은 뺀다. 머지 방식은 merge, squash, rebase나 null(레포가 허용하는 첫 방식)이다
+ */
+export function checkProjectSettings(input: unknown): Checked<ProjectSettings> {
+  if (!isRecord(input)) return { ok: false, error: '프로젝트 설정이 객체가 아님' }
+  const bots = input['allowed_bots']
+  if (!Array.isArray(bots) || !bots.every((b) => typeof b === 'string')) {
+    return { ok: false, error: '받을 봇: 문자열 목록이어야 함' }
+  }
+  const method = input['merge_method']
+  if (method !== null && !(MERGE_METHOD_VALUES as readonly unknown[]).includes(method)) {
+    return {
+      ok: false,
+      error: `기본 머지 방식: ${MERGE_METHOD_VALUES.join(' | ')}나 null이어야 함`,
+    }
+  }
+  const names = [...new Set(bots.map((b: string) => b.trim()).filter(Boolean))]
+  return { ok: true, value: { allowed_bots: names, merge_method: method as MergeMethod | null } }
 }

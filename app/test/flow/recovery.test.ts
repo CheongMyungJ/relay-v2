@@ -769,12 +769,14 @@ describe('[흐름] 끊긴 전달 (M6, 시나리오 9-4, 7-5, D120~D123)', () => 
     ).toEqual({ ok: true })
     await settle(s.h, s.key)
     const w = workOf(s)
-    expect(w.status).toBe('completed')
+    // PR을 만들면 PR 진행이다 (M9, D152)
+    expect(w.status).toBe('pr')
     expect(w.delivery).toMatchObject({
       choice: 'pr',
       status: 'succeeded',
       pr_url: 'https://github.com/relay-test/sample/pull/1',
     })
+    expect(w.pr).toMatchObject({ number: 1, url: 'https://github.com/relay-test/sample/pull/1' })
     expect(w.delivery?.stashes).toHaveLength(1)
   })
 })

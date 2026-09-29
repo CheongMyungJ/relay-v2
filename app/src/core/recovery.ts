@@ -6,6 +6,7 @@ import type { NoticeView, OperationView } from '../shared/views'
 import type {
   CleanOperation,
   DeliverOperation,
+  MergeOperation,
   OwnedFile,
   OwnedFileHashes,
   RewindOperation,
@@ -46,6 +47,7 @@ const REWIND_STAGE: Readonly<Record<RewindOperation['stage'], string>> = {
 const CLEAN_STAGE: Readonly<Record<CleanOperation['stage'], string>> = {
   worktree: 'worktree를 지우는 단계',
   branches: '브랜치를 지우는 단계(worktree는 지웠음)',
+  remote: 'origin의 브랜치를 지우는 단계(worktree와 로컬 브랜치는 지웠음)',
 }
 
 /** 끊긴 작업의 알림 (D121): 무엇이 어디서 끊겼는지와 [다시 시도]·[무시]가 할 일 (D123). 없으면 null */
@@ -59,6 +61,21 @@ export function operationView(work: WorkState): OperationView | null {
       return deliverView(op)
     case 'clean':
       return cleanView(op)
+    case 'merge':
+      return mergeView(op)
+  }
+}
+
+function mergeView(op: MergeOperation): OperationView {
+  return {
+    kind: 'merge',
+    title: '머지가 끊겼습니다',
+    lines: [`방식: ${op.method}`, `머지할 head: ${short(op.head)}`],
+    retry:
+      '[다시 시도]: PR을 다시 읽어 이미 머지됐으면 완료(머지됨)합니다. 아니면 같은 head로 다시 머지합니다. ' +
+      '그사이 새 커밋이 생겼으면 GitHub가 머지하지 않습니다.',
+    ignore: '[무시]: 기록만 지웁니다. PR 진행으로 남고, 다음 읽기가 머지됐는지 봅니다.',
+    choice: null,
   }
 }
 
@@ -134,6 +151,7 @@ function cleanView(op: CleanOperation): OperationView {
     lines: [
       `끊긴 곳: ${CLEAN_STAGE[op.stage]}`,
       `지울 브랜치: ${op.delete_branches.length ? op.delete_branches.join(', ') : '없음'}`,
+      ...(op.delete_remote ? [`지울 origin의 브랜치: ${op.delete_remote}`] : []),
       ...(op.force
         ? ['커밋 안 된 변경이나 잠금 파일을 확인하고 --force로 지우던 중이었습니다.']
         : []),

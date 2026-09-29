@@ -32,12 +32,17 @@ export interface CleanFacts {
   branch: { name: string; exists: boolean; pushed: boolean; merged: boolean }
   /** 이 Work의 되감기 백업 브랜치 (D115) */
   backups: readonly string[]
+  /** 머지로 완료한 Work다 (D178) */
+  merged: boolean
+  /** origin의 작업 브랜치와 있는지. 머지로 완료한 Work만 본다 (D178). 아니면 null */
+  remote: { name: string; exists: boolean } | null
 }
 
 /**
  * 확인 요약 (시나리오 8-1). 커밋 안 된 변경은 백업 없이 지워짐을, 살아 있는 세션은 강제 종료함을,
  * git 잠금 파일은 worktree와 함께 지움을 사람이 명시적으로 확인해야 한다. 작업 브랜치는 기본으로 두고
- * push됐거나 머지됐을 때만 삭제를 제안한다. 되감기 백업 브랜치의 "함께 삭제"는 기본으로 체크한다(화면).
+ * push됐거나 머지됐을 때만 삭제를 제안한다. 머지로 완료한 Work는 작업 브랜치 삭제가 기본으로 체크되고 origin의
+ * 브랜치 삭제도 고를 수 있다(D178, 기본은 끔). 되감기 백업 브랜치의 "함께 삭제"는 기본으로 체크한다(화면).
  */
 export function cleanPreview(facts: CleanFacts): CleanPreview {
   const confirm: string[] = []
@@ -55,12 +60,15 @@ export function cleanPreview(facts: CleanFacts): CleanPreview {
     live: facts.live,
     branch: { ...b, deletable: b.exists && (b.pushed || b.merged) },
     backups: [...facts.backups],
+    merged: facts.merged,
+    remote: facts.remote ? { ...facts.remote } : null,
     confirm,
     expect: {
       uncommitted: [...facts.uncommitted],
       locks: [...facts.locks],
       live: facts.live,
       backups: [...facts.backups],
+      remote: facts.remote?.exists === true,
     },
   }
 }
@@ -68,6 +76,7 @@ export function cleanPreview(facts: CleanFacts): CleanPreview {
 function sameExpect(a: CleanExpect, b: CleanExpect): boolean {
   return (
     a.live === b.live &&
+    a.remote === b.remote &&
     sameChanges(a.uncommitted, b.uncommitted) &&
     sameChanges(a.locks, b.locks) &&
     sameChanges(a.backups, b.backups)
@@ -75,7 +84,8 @@ function sameExpect(a: CleanExpect, b: CleanExpect): boolean {
 }
 
 export type CleanPlan =
-  { ok: true; force: boolean; deleteBranches: string[] } | { ok: false; error: string }
+  | { ok: true; force: boolean; deleteBranches: string[]; deleteRemote: string | null }
+  | { ok: false; error: string }
 
 /**
  * [정리]를 누른 때 (시나리오 8-2). 확인한 뒤 사실이 바뀌었으면 받지 않는다. 확인이 필요한 것을 확인하지
@@ -92,6 +102,9 @@ export function planClean(preview: CleanPreview, input: CleanInput): CleanPlan {
   if (input.deleteBranch && !preview.branch.deletable) {
     return { ok: false, error: '작업 브랜치는 push됐거나 머지됐을 때만 지움' }
   }
+  if (input.deleteRemote && !preview.remote?.exists) {
+    return { ok: false, error: 'origin의 브랜치는 머지로 완료한 Work에서 원격에 있을 때만 지움' }
+  }
   return {
     ok: true,
     force: preview.uncommitted.length > 0 || preview.locks.length > 0,
@@ -99,5 +112,6 @@ export function planClean(preview: CleanPreview, input: CleanInput): CleanPlan {
       ...(input.deleteBranch ? [preview.branch.name] : []),
       ...(input.deleteBackups ? preview.backups : []),
     ],
+    deleteRemote: input.deleteRemote && preview.remote ? preview.remote.name : null,
   }
 }

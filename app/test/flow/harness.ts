@@ -30,6 +30,8 @@ export interface HarnessOptions {
   env?: Record<string, string>
   /** claude 실행 파일. 기본은 가짜 claude다. [실제]는 실제 claude를 쓴다 */
   claudeBin?: string | null
+  /** gh 실행 파일. 기본은 가짜 gh다. [실제]의 PR 진행(M9)은 실제 gh를 쓴다 */
+  ghBin?: string
   ui?: FakeUi
 }
 
@@ -66,7 +68,8 @@ export async function harness(o: HarnessOptions = {}): Promise<Harness> {
     ...o.env,
   }
   const ui = o.ui ?? new FakeUi()
-  const open = (u: FakeUi) => Relay.open({ home, skills: SKILLS, ui: u, env, ghBin: FAKE_GH })
+  const ghBin = o.ghBin ?? FAKE_GH
+  const open = (u: FakeUi) => Relay.open({ home, skills: SKILLS, ui: u, env, ghBin })
   const jsonl = (name: string) => {
     const file = path.join(record, name)
     if (!fs.existsSync(file)) return []

@@ -4,10 +4,10 @@ import type { WorkSettings } from './config'
 import type { HandoffStatus, NodeName, Size } from './contracts'
 
 /**
- * Work 상태 (3.3): 진행 중(active), 멈춤(stopped), 완료(completed), 포기(abandoned),
- * 보관됨(archived: 완료나 포기 뒤 [Work 정리]를 마침, 시나리오 8).
+ * Work 상태 (3.3): 진행 중(active), 멈춤(stopped), PR 진행(pr: [PR 생성] 뒤 머지나 [머지 없이 끝내기]까지, D152),
+ * 완료(completed), 포기(abandoned), 보관됨(archived: 완료나 포기 뒤 [Work 정리]를 마침, 시나리오 8).
  */
-export type WorkStatus = 'active' | 'stopped' | 'completed' | 'abandoned' | 'archived'
+export type WorkStatus = 'active' | 'stopped' | 'pr' | 'completed' | 'abandoned' | 'archived'
 
 /**
  * Task 상태 (3.3)와 실행 중 표시(시나리오 3)를 한 값으로 둔다.
@@ -287,8 +287,8 @@ export interface DeliverOperation extends OperationBase {
   commit?: string
 }
 
-/** 정리의 단계 (D77): worktree 지우기, 브랜치 지우기 */
-export type CleanStage = 'worktree' | 'branches'
+/** 정리의 단계 (D77): worktree 지우기, 브랜치 지우기, 원격 브랜치 지우기(머지한 Work, D178) */
+export type CleanStage = 'worktree' | 'branches' | 'remote'
 
 /**
  * 정리의 진행 중 작업 기록 (시나리오 8, D77). 정리를 시작할 때 적고, worktree를 지우면 stage를 옮기고,
@@ -301,12 +301,29 @@ export interface CleanOperation extends OperationBase {
   force: boolean
   /** 지울 브랜치: 작업 브랜치(push됐거나 머지됐고 사람이 골랐을 때)와 되감기 백업 브랜치 */
   delete_branches: string[]
+  /** 지울 origin의 브랜치. 머지로 완료한 Work에서 사람이 골랐을 때만 있다 (D178) */
+  delete_remote?: string
   /** 정리를 시작할 때 worktree의 HEAD. worktree 폴더가 없었으면 작업 브랜치의 커밋, 그것도 없으면 null */
   head: string | null
 }
 
-/** 진행 중인 여러 단계 작업 (D77): 되감기, 전달, 정리 */
-export type WorkOperation = RewindOperation | DeliverOperation | CleanOperation
+/** 머지 방식 (D177): 머지 커밋, squash, rebase */
+export type MergeMethod = 'merge' | 'squash' | 'rebase'
+
+/**
+ * 머지의 진행 중 작업 기록 (시나리오 10-8, D77). gh pr merge를 부르기 전에 적고, 결과를 남기는 work.json 한 번
+ * 쓰기에서 지운다. 재시작 때 남아 있으면 끊긴 작업이다: [다시 시도]는 PR을 다시 읽어 머지됐으면 완료하고, 아니면
+ * 같은 head로 다시 머지한다 (D123)
+ */
+export interface MergeOperation extends OperationBase {
+  kind: 'merge'
+  method: MergeMethod
+  /** 머지할 head: 머지 창에 보인 커밋이다. 이 커밋이 아니면 GitHub가 머지하지 않는다 (D176) */
+  head: string
+}
+
+/** 진행 중인 여러 단계 작업 (D77): 되감기, 전달, 정리, 머지 */
+export type WorkOperation = RewindOperation | DeliverOperation | CleanOperation | MergeOperation
 
 /**
  * 전달 결과 (시나리오 7-4, 7-6). 마지막 [push]·[PR 생성]의 결과이고 실패해도 남는다 (D120).
@@ -361,6 +378,47 @@ export interface CleanedRecord {
   forced: boolean
   /** 지운 브랜치 */
   deleted_branches: string[]
+  /** 지운 origin의 브랜치 (D178). 지우지 않았으면 없다 */
+  deleted_remote_branch?: string
+}
+
+/** 머지 (D176~D179) */
+export interface PrMerged {
+  at: string
+  /** 머지한 head 커밋 */
+  head: string
+  /** 앱의 [머지]로 고른 방식. 밖에서 머지된 것을 읽었으면 null (D179) */
+  method: MergeMethod | null
+  /** 밖에서 머지된 것을 읽었다 (D179) */
+  outside: boolean
+}
+
+/**
+ * PR 진행의 기록 (D191). 항목의 본문과 상태는 Work 디렉터리의 pr-items.json에 둔다.
+ * PR의 레포는 주소에서 읽는다 (I50)
+ */
+export interface PullRequestRecord {
+  number: number
+  /** gh pr create가 찍은 주소나 이미 열려 있던 PR의 주소 (7-4, D156) */
+  url: string
+  /**
+   * 앱이 마지막으로 읽은 원격 PR head. PR을 만들 때는 push한 커밋이다. 머지 창에 보이고 머지는 이 커밋으로만
+   * 한다 (D176)
+   */
+  head: string
+  /** PR 진행을 시작할 때의 gh --version (D198). 읽지 못했으면 null */
+  gh_version: string | null
+  started_at: string
+  /** 마지막으로 읽은 때 (D158) */
+  read_at?: string
+  /** 닫힌 것을 읽은 때 (D179). 있는 동안은 자동으로 읽지 않는다. 다시 열린 것을 읽으면 지운다 */
+  closed_at?: string
+  /** 머지 (D178, D179). 있으면 Work는 완료다 */
+  merged?: PrMerged
+  /** [머지 없이 끝내기]를 누른 때 (D179). 있으면 Work는 완료다 */
+  ended_at?: string
+  /** 머지 뒤 [Work 정리] 창을 연 때 (D178, D200). 머지했는데 없으면 사람이 그 Work를 볼 때 연다 */
+  clean_offered_at?: string
 }
 
 export interface WorkState {
@@ -395,6 +453,8 @@ export interface WorkState {
   file_hashes?: OwnedFileHashes
   /** 살아 있는 정리 세션의 프로세스 (D126) */
   cleanup_process?: CleanupProcess
+  /** PR 진행의 기록 (D191). [PR 생성]이 성공한 Work에 있다 */
+  pr?: PullRequestRecord
   tasks: TaskRecord[]
 }
 
@@ -413,6 +473,11 @@ export type LifecycleEventType =
   | 'task.skipped_to'
   | 'delivery.succeeded'
   | 'delivery.failed'
+  | 'pr.items_received'
+  | 'pr.synced'
+  | 'pr.merged'
+  | 'pr.closed'
+  | 'pr.reopened'
 
 /** events.jsonl의 한 줄 (5.5). task_id는 task 이벤트에만 있다 */
 export interface LifecycleEvent {

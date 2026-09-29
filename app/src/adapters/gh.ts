@@ -1,7 +1,8 @@
-// gh CLI (I12). 등록 점검(D67)과 전달의 PR(시나리오 7-4)을 한다.
+// gh CLI (I12). 등록 점검(D67, D198)과 전달의 PR(시나리오 7-4), PR 진행의 읽기와 머지(시나리오 10)를 한다.
 import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { ghVersionOf } from '../core/pr'
 import { describeFailure, run } from './exec'
 
 export class GhError extends Error {}
@@ -134,5 +135,156 @@ export async function ghCreatePr(bin: string, o: CreatePrOptions): Promise<strin
     return url
   } finally {
     await fsp.rm(dir, { recursive: true, force: true })
+  }
+}
+
+// ---------- PR 진행 (시나리오 10). 명령은 S7에서 확인한 것이다 (docs/spikes.md S7, PR #14) ----------
+
+/**
+ * gh --version의 버전 (D198). 등록 점검, 다시 점검(D118)과 PR 진행을 시작할 때 부른다. gh가 없거나 읽지 못하면 null
+ */
+export async function ghVersion(bin = 'gh', env?: NodeJS.ProcessEnv): Promise<string | null> {
+  const r = await run(bin, ['--version'], { env: ghEnv(env), timeoutMs: 30_000 })
+  return r.code === 0 ? ghVersionOf(r.stdout) : null
+}
+
+/** PR 하나 (core/pr prLocation, I50) */
+export interface GhPrOptions {
+  /** gh --repo에 줄 HOST/OWNER/REPO */
+  repo: string
+  number: number
+  /** gh를 실행할 폴더: 메인 체크아웃 */
+  cwd: string
+  env?: NodeJS.ProcessEnv
+}
+
+/** 한 번 읽기에서 PR 상태와 체크를 읽는 필드 (PR #14, S7 관찰 2). 모두 gh 2.48.0에 있다 (3절) */
+export const PR_VIEW_FIELDS = [
+  'number',
+  'url',
+  'state',
+  'isDraft',
+  'headRefName',
+  'headRefOid',
+  'baseRefName',
+  'mergeable',
+  'mergeStateStatus',
+  'reviewDecision',
+  'statusCheckRollup',
+  'mergedAt',
+  'mergeCommit',
+] as const
+
+function parseJson(what: string, out: string): unknown {
+  try {
+    return JSON.parse(out)
+  } catch {
+    throw new GhError(`${what}의 출력을 읽지 못함: ${out.slice(0, 200)}`)
+  }
+}
+
+/** PR의 상태, head, 머지 가능 여부, 리뷰 상태, 체크 (gh pr view --json, GraphQL 한 번, S7 관찰 2, 9) */
+export async function ghPrView(
+  bin: string,
+  o: GhPrOptions,
+  fields: readonly string[] = PR_VIEW_FIELDS,
+): Promise<Record<string, unknown>> {
+  const r = await run(
+    bin,
+    ['pr', 'view', String(o.number), '--repo', o.repo, '--json', fields.join(',')],
+    { cwd: o.cwd, env: ghEnv(o.env), timeoutMs: 60_000 },
+  )
+  if (r.code !== 0) throw new GhError(`gh pr view 실패: ${describeFailure(r)}`)
+  const v = parseJson('gh pr view', r.stdout)
+  if (!v || typeof v !== 'object' || Array.isArray(v)) {
+    throw new GhError(`gh pr view의 출력이 객체가 아님: ${r.stdout.slice(0, 200)}`)
+  }
+  return v as Record<string, unknown>
+}
+
+/**
+ * REST 목록 하나를 모든 쪽까지 읽는다: gh api --hostname <host> --paginate --slurp <경로> (S7 관찰 3, 9).
+ * --slurp는 쪽마다의 JSON 배열을 한 배열로 싸므로(3절) 한 번 편다. 호스트는 --hostname으로만 준다(I50)
+ */
+export async function ghApiList(
+  bin: string,
+  o: { host: string; path: string; cwd: string; env?: NodeJS.ProcessEnv },
+): Promise<unknown[]> {
+  const r = await run(bin, ['api', '--hostname', o.host, '--paginate', '--slurp', o.path], {
+    cwd: o.cwd,
+    env: ghEnv(o.env),
+    timeoutMs: 60_000,
+  })
+  if (r.code !== 0) throw new GhError(`gh api ${o.path} 실패: ${describeFailure(r)}`)
+  const pages = parseJson(`gh api ${o.path}`, r.stdout)
+  if (!Array.isArray(pages)) throw new GhError(`gh api ${o.path}의 출력이 배열이 아님`)
+  return pages.flatMap((p: unknown) => (Array.isArray(p) ? (p as unknown[]) : [p]))
+}
+
+export type FailedLog = { ok: true; text: string } | { ok: false; pending: boolean; error: string }
+
+/**
+ * 실패한 스텝의 로그: gh run view --job <작업> --repo <레포> --log-failed (S7 관찰 2). 실행(run) 전체가 끝나야 로그를
+ * 준다(3절). 끝나지 않았으면 pending이다. 줄의 모양은 `<작업>\t<스텝>\t<시각> <줄>`이고 core/pr failedLogTail이 다듬는다
+ */
+export async function ghFailedLog(
+  bin: string,
+  o: { repo: string; job: number; cwd: string; env?: NodeJS.ProcessEnv },
+): Promise<FailedLog> {
+  const r = await run(
+    bin,
+    ['run', 'view', '--job', String(o.job), '--repo', o.repo, '--log-failed'],
+    { cwd: o.cwd, env: ghEnv(o.env), timeoutMs: 120_000 },
+  )
+  if (r.code === 0) return { ok: true, text: r.stdout }
+  const detail = describeFailure(r)
+  return { ok: false, pending: /still in progress/.test(`${r.stderr}\n${r.stdout}`), error: detail }
+}
+
+/** 레포가 허용하는 머지 방식 (D177): gh repo view --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed (S7 관찰 6) */
+export async function ghMergeSettings(
+  bin: string,
+  o: { repo: string; cwd: string; env?: NodeJS.ProcessEnv },
+): Promise<unknown> {
+  const r = await run(
+    bin,
+    ['repo', 'view', o.repo, '--json', 'mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed'],
+    { cwd: o.cwd, env: ghEnv(o.env), timeoutMs: 60_000 },
+  )
+  if (r.code !== 0) throw new GhError(`gh repo view 실패: ${describeFailure(r)}`)
+  return parseJson('gh repo view', r.stdout)
+}
+
+export type MergeResult = { ok: true } | { ok: false; error: string; headMoved: boolean }
+
+/**
+ * 머지 (D176, D177): gh pr merge <n> --repo <레포> --<방식> --match-head-commit <head> (S7 관찰 6). head가 지금 PR의
+ * head가 아니면 GitHub가 "Head branch was modified"로 거절한다. --delete-branch는 쓰지 않는다(--repo 없이 쓰면 다른
+ * worktree를 지움, S7). TTY가 아니면 성공해도 출력이 없으므로 종료 코드로 보고, 머지됐는지는 부른 쪽이 다시 읽어 본다
+ */
+export async function ghMerge(
+  bin: string,
+  o: GhPrOptions & { method: 'merge' | 'squash' | 'rebase'; head: string },
+): Promise<MergeResult> {
+  const r = await run(
+    bin,
+    [
+      'pr',
+      'merge',
+      String(o.number),
+      '--repo',
+      o.repo,
+      `--${o.method}`,
+      '--match-head-commit',
+      o.head,
+    ],
+    { cwd: o.cwd, env: ghEnv(o.env), timeoutMs: 120_000 },
+  )
+  if (r.code === 0) return { ok: true }
+  const error = describeFailure(r)
+  return {
+    ok: false,
+    error,
+    headMoved: /Head branch was modified/.test(`${r.stderr}\n${r.stdout}`),
   }
 }

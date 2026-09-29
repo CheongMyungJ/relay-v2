@@ -184,9 +184,9 @@ export function autoApproveNote(
 // ---------- 사이드바 배지 (D80) ----------
 
 /**
- * 배지 우선순위 (D80, D121). 상태가 겹치면 앞의 것을 보인다:
- * 끊긴 작업 > 질문 대기·입력 필요 > 승인 대기 > 막힘 > 멈춤 > 세션 종료(handoff 없음) > 작업 중 > 대기 > 대기열 >
- * 중단됨 > 완료·포기·보관됨
+ * 배지 우선순위 (D80, D121, D183). 상태가 겹치면 앞의 것을 보인다:
+ * 끊긴 작업 > 질문 대기·입력 필요 > 승인 대기 > 막힘 > 멈춤 > (자동 대응 멈춤, M11) > 대응 거리 있음 > PR 닫힘 >
+ * 머지 가능 > 세션 종료(handoff 없음) > 작업 중 > 대기 > 대기열 > 리뷰·CI 대기 > 중단됨 > 완료·포기·보관됨
  */
 export const BADGE_ORDER: readonly BadgeKind[] = [
   'recovery',
@@ -194,19 +194,33 @@ export const BADGE_ORDER: readonly BadgeKind[] = [
   'awaiting_approval',
   'blocked',
   'stopped',
+  'pr_items',
+  'pr_closed',
+  'mergeable',
   'session_ended',
   'working',
   'idle',
   'queued',
+  'pr_waiting',
   'interrupted',
   'done',
 ]
 
 /**
- * 사람이 필요한 상태. 색으로 강조하고 OS 알림을 보낸다 (D80, D81). 끊긴 작업은 재시작 조정과 코드를 바꾼 뒤
- * 실패한 되감기(D136)에서 생기고, 재시작 조정은 알리지 않는다 (D121)
+ * 사람이 필요한 상태. 색으로 강조한다 (D80, D183). 끊긴 작업은 재시작 조정과 코드를 바꾼 뒤 실패한 되감기(D136)에서
+ * 생기고, 재시작 조정은 알리지 않는다 (D121). OS 알림은 task 상태는 배지가 바뀔 때(D81), PR 진행은 읽은 결과로(D184) 보낸다
  */
-export const HUMAN_BADGES: readonly BadgeKind[] = BADGE_ORDER.slice(0, 6)
+export const HUMAN_BADGES: readonly BadgeKind[] = [
+  'recovery',
+  'asking',
+  'awaiting_approval',
+  'blocked',
+  'stopped',
+  'pr_items',
+  'pr_closed',
+  'mergeable',
+  'session_ended',
+]
 
 const TASK_BADGE: Readonly<Record<TaskStatus, BadgeKind | null>> = {
   asking: 'asking',
@@ -232,6 +246,10 @@ const BADGE_LABEL: Readonly<Record<BadgeKind, string>> = {
   working: '작업 중',
   idle: '대기',
   queued: '대기열',
+  pr_items: '대응 거리 있음',
+  pr_closed: 'PR 닫힘',
+  mergeable: '머지 가능',
+  pr_waiting: '리뷰·CI 대기',
   interrupted: '중단됨',
   done: '완료',
 }
@@ -245,9 +263,10 @@ const DONE_LABEL: Readonly<Partial<Record<WorkState['status'], string>>> = {
 /**
  * Work의 배지 (D80). 끊긴 작업이 있으면 끝난 Work라도 "끊긴 작업"이다 (D121). 끝난 Work(완료, 포기, 보관됨)는
  * 그 상태를 보이고, 그 밖에는 Work의 멈춤과 지금 task의 표시 가운데 우선순위가 앞선 것을 보인다.
- * 입력 필요는 질문 대기와 같은 자리에 "입력 필요"로 보인다.
+ * 입력 필요는 질문 대기와 같은 자리에 "입력 필요"로 보인다. PR 진행인 Work는 PR의 세부 상태(core/pr prBadgeKind,
+ * D183)를 main이 넘긴다. 넘기지 않으면 리뷰·CI 대기다.
  */
-export function badge(work: WorkState): Badge {
+export function badge(work: WorkState, pr?: BadgeKind): Badge {
   if (work.operation?.interrupted_at !== undefined) {
     return { kind: 'recovery', label: BADGE_LABEL.recovery, hot: true }
   }
@@ -256,6 +275,7 @@ export function badge(work: WorkState): Badge {
   const task = work.tasks[work.tasks.length - 1]
   const kinds: BadgeKind[] = []
   if (work.status === 'stopped') kinds.push('stopped')
+  if (work.status === 'pr') kinds.push(pr ?? 'pr_waiting')
   const fromTask = task ? TASK_BADGE[task.status] : null
   if (fromTask) kinds.push(fromTask)
   const kind = [...BADGE_ORDER].find((k) => kinds.includes(k)) ?? 'working'

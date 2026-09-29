@@ -29,6 +29,8 @@ export interface AppConfig {
   intent_warn_chars: number
   /** 형식 오류를 Stop 훅으로 되돌리는 연속 횟수 (D21) */
   format_error_bounce_max: number
+  /** PR 진행인 Work를 읽는 주기 (D158) */
+  pr_poll_interval_sec: number
 }
 
 /** work.json의 settings. 앱 설정과 같은 키를 쓰고, 없는 키는 앱 설정을 따른다 (D72) */
@@ -87,4 +89,5 @@ export const DEFAULT_CONFIG: AppConfig = {
   handoff_body_warn_chars: 1500,
   intent_warn_chars: 1500,
   format_error_bounce_max: 2,
+  pr_poll_interval_sec: 120,
 }

@@ -1,6 +1,6 @@
 // 3단 레이아웃 (D79): 사이드바 / 터미널 탭과 액션 바 / 오른쪽 패널.
 // 화면은 메인이 보낸 스냅샷을 그리기만 하고, 명령은 invoke로 보낸다 (I14).
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AppInfo } from '../../shared/api'
 import type { NodeName } from '../../shared/contracts'
 import type { CommandResult, ProjectView, ReviewView, WorkView } from '../../shared/views'
@@ -10,16 +10,18 @@ import {
   ConfirmDialog,
   NewWorkDialog,
   ProjectDialog,
+  ProjectSettingsDialog,
   SettingsDialog,
   StepDialog,
   WorkSettingsDialog,
 } from './dialogs'
 import { withOpened } from './opened'
-import { Panel, wantsApproval } from './Panel'
+import { Panel, showsPr, wantsApproval } from './Panel'
 import { TerminalView } from './TerminalView'
 
 type Dialog =
   | { kind: 'project' }
+  | { kind: 'project-settings'; project: ProjectView }
   | { kind: 'work'; project: ProjectView }
   | { kind: 'settings' }
   | { kind: 'work-settings'; workKey: string }
@@ -129,7 +131,18 @@ export function App() {
     return out
   }, [works])
 
-  const wide = wantsApproval(review) && review?.taskId === task?.id
+  // 머지 뒤 정리 창 (D178, D200): 머지로 완료한 Work를 보고 있으면 한 번 연다. 앱에서 머지했거나 밖에서 머지된 것을
+  // 읽었을 때, 다른 Work를 보고 있었으면 그 Work를 고를 때다. 연 것을 main에 알려 다시 열지 않는다
+  const offered = useRef(new Set<string>())
+  useEffect(() => {
+    if (!work?.pr?.offerClean || dialog !== null || offered.current.has(work.key)) return
+    offered.current.add(work.key)
+    setDialog({ kind: 'clean', workKey: work.key })
+    void call(() => window.relay.prCleanOffered(work.key))
+  }, [work, dialog])
+
+  const wide =
+    (wantsApproval(review) && review?.taskId === task?.id) || (!!work && showsPr(work, task?.id))
   const dialogWork =
     dialog?.kind === 'work-settings' ||
     dialog?.kind === 'abandon' ||
@@ -151,9 +164,13 @@ export function App() {
         ))}
         {projects.map((p) => (
           <div key={p.id} className="project">
-            <div className="project-name" title={p.repoPath}>
+            <button
+              className="project-name"
+              title={`${p.repoPath} · 프로젝트 설정 (D185)`}
+              onClick={() => setDialog({ kind: 'project-settings', project: p })}
+            >
               {p.name}
-            </div>
+            </button>
             {(worksByProject.get(p.id) ?? []).map((w) => {
               const t = currentTask(w)
               const done = w.badge.kind === 'done'
@@ -308,6 +325,12 @@ export function App() {
       </aside>
 
       {dialog?.kind === 'project' ? <ProjectDialog onClose={() => setDialog(null)} /> : null}
+      {dialog?.kind === 'project-settings' ? (
+        <ProjectSettingsDialog
+          project={projects.find((p) => p.id === dialog.project.id) ?? dialog.project}
+          onClose={() => setDialog(null)}
+        />
+      ) : null}
       {dialog?.kind === 'work' ? (
         <NewWorkDialog
           project={dialog.project}

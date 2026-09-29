@@ -9,6 +9,7 @@ import { normalizeConfig } from '../core/config'
 import { taskDirName } from '../core/machine'
 import { appendBlock } from '../core/records'
 import { DEFAULT_CONFIG, type AppConfig } from '../shared/config'
+import { EMPTY_PR_ITEMS, type PrItemsFile } from '../shared/pr'
 import type { ProjectState } from '../shared/project'
 import type { LifecycleEvent, OwnedFile, TaskRecord, WorkState } from '../shared/work'
 
@@ -216,6 +217,8 @@ export class WorkFiles {
   readonly intentHistory: string
   readonly decisions: string
   readonly events: string
+  /** PR 진행의 항목 (D191) */
+  readonly prItems: string
 
   constructor(readonly dir: string) {
     this.workJson = path.join(dir, 'work.json')
@@ -224,6 +227,26 @@ export class WorkFiles {
     this.intentHistory = path.join(dir, 'intent.history')
     this.decisions = path.join(dir, 'decisions.md')
     this.events = path.join(dir, 'events.jsonl')
+    this.prItems = path.join(dir, 'pr-items.json')
+  }
+
+  /**
+   * pr-items.json (D191). 없으면 빈 목록이다. 앱 소유이고 해시는 확인하지 않는다: 항목은 앱이 GitHub에서 다시 읽는다.
+   * 읽을 수 없는 내용이면 오류다
+   */
+  async readPrItems(): Promise<PrItemsFile> {
+    const file = await readJson<Partial<PrItemsFile>>(this.prItems)
+    if (!file) return { ...EMPTY_PR_ITEMS, items: [], synced: [] }
+    return {
+      schema_version: 1,
+      items: Array.isArray(file.items) ? file.items : [],
+      synced: Array.isArray(file.synced) ? file.synced : [],
+    }
+  }
+
+  /** pr-items.json을 원자적으로 쓴다 */
+  async writePrItems(file: PrItemsFile): Promise<void> {
+    await writeJson(this.prItems, file)
   }
 
   /** tasks/<nn>-<node> */

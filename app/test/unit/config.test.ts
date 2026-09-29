@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   AUTO_APPROVE_NODES,
   applyConfigPatch,
+  checkProjectSettings,
   checkWorkSettings,
   mergeWorkSettings,
   normalizeConfig,
@@ -233,5 +234,44 @@ describe('화면의 스킬 이름', () => {
   it('자동 승인을 켤 수 있는 단계는 investigate, evidence, rca, fix이고 이름은 노드의 화면 이름이다 (4.2, D109, D151)', () => {
     expect(AUTO_APPROVE_NODES).toEqual(['investigate', 'evidence', 'rca', 'fix'])
     expect(AUTO_APPROVE_TITLES).toEqual(AUTO_APPROVE_NODES.map((n) => [n, NODE_INFO[n].title]))
+  })
+})
+
+describe('PR 진행의 설정 (D158, D185, 5.1.2)', () => {
+  it('PR 읽기 주기는 기본 120초이고 30~3600초다', () => {
+    expect(DEFAULT_CONFIG.pr_poll_interval_sec).toBe(120)
+    expect(applyConfigPatch(DEFAULT_CONFIG, { pr_poll_interval_sec: 30 })).toMatchObject({
+      ok: true,
+      value: { pr_poll_interval_sec: 30 },
+    })
+    for (const v of [29, 3601, 1.5, '60']) {
+      expect(applyConfigPatch(DEFAULT_CONFIG, { pr_poll_interval_sec: v }).ok, String(v)).toBe(
+        false,
+      )
+    }
+  })
+
+  it('프로젝트 설정은 받을 봇 목록과 기본 머지 방식이다. 봇 이름은 앞뒤 공백을 떼고 겹치지 않게 둔다', () => {
+    expect(
+      checkProjectSettings({
+        allowed_bots: [' github-actions ', 'github-actions', '', 'renovate[bot]'],
+        merge_method: 'squash',
+      }),
+    ).toEqual({
+      ok: true,
+      value: { allowed_bots: ['github-actions', 'renovate[bot]'], merge_method: 'squash' },
+    })
+    expect(checkProjectSettings({ allowed_bots: [], merge_method: null })).toEqual({
+      ok: true,
+      value: { allowed_bots: [], merge_method: null },
+    })
+    for (const bad of [
+      { allowed_bots: 'github-actions', merge_method: null },
+      { allowed_bots: [1], merge_method: null },
+      { allowed_bots: [], merge_method: 'fast-forward' },
+      null,
+    ]) {
+      expect(checkProjectSettings(bad).ok, JSON.stringify(bad)).toBe(false)
+    }
   })
 })

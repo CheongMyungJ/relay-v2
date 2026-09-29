@@ -196,7 +196,7 @@ describe('[어댑터] gh pr list·create (7-4, 가짜 gh)', () => {
       body: '## 요약\n고쳤다 "따옴표" & 기호\n',
       draft: true,
     })
-    expect(url).toBe('https://github.test/fake/pull/1')
+    expect(url).toBe('https://github.test/local/sample/pull/1')
     const create = records().find((r) => r.type === 'pr create')
     expect(create?.args).toEqual([
       'pr',

@@ -115,9 +115,17 @@ textarea {
   gap: 4px;
 }
 
+/* 누르면 프로젝트 설정 (D185) */
 .project-name {
   font-weight: 600;
   padding: 4px 2px;
+  text-align: left;
+  background: transparent;
+  border-color: transparent;
+}
+
+.project-name:hover {
+  border-color: var(--border);
 }
 
 .work-item {
@@ -155,6 +163,18 @@ textarea {
 
 .badge.hot {
   background: var(--hot);
+  color: #1e1e1e;
+}
+
+/* PR 닫힘 (D179): 사람이 끝낼지 정한다 */
+.badge.b-pr_closed {
+  background: var(--bad);
+  color: #1e1e1e;
+}
+
+/* 머지 가능 (D176) */
+.badge.b-mergeable {
+  background: var(--good);
   color: #1e1e1e;
 }
 
@@ -732,4 +752,150 @@ button.ready {
 
 .countdown > span:first-child {
   font-weight: 600;
+}
+
+/* 프로젝트 설정 (D185) */
+.form-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* PR 패널 (시나리오 10, D183) */
+.pr-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pr-title {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.pr-state {
+  color: var(--text-dim);
+}
+
+.pr-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 2px 10px;
+  margin: 4px 0;
+}
+
+.pr-facts dt {
+  color: var(--text-dim);
+}
+
+.pr-facts dd {
+  margin: 0;
+}
+
+.ci-pass,
+.ci-none,
+.check-pass {
+  color: var(--good);
+}
+
+.ci-fail,
+.ci-cancel,
+.check-fail,
+.check-cancel {
+  color: var(--bad);
+}
+
+.ci-waiting,
+.ci-pending,
+.check-pending {
+  color: var(--hot);
+}
+
+.pr-checks li {
+  word-break: break-all;
+}
+
+.pr-read {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.gate-reasons {
+  margin: 4px 0 0;
+  color: var(--hot);
+}
+
+.item-group h4 {
+  margin: 6px 0 4px;
+  font-size: 12px;
+}
+
+.pr-item {
+  padding: 4px 6px;
+  margin-bottom: 4px;
+  border-radius: 3px;
+  background: var(--bg-raise);
+  border-left: 3px solid var(--border);
+}
+
+.pr-item.st-new {
+  border-left-color: var(--hot);
+}
+
+.pr-item.st-resolved,
+.pr-item.st-excluded,
+.pr-item.st-not_accepted {
+  opacity: 0.75;
+}
+
+.pr-item-head {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.pr-item-head .kind {
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.pr-item-title {
+  flex: 1;
+  word-break: break-word;
+}
+
+.pr-item-text {
+  margin: 4px 0 0;
+  max-height: 200px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: Consolas, 'D2Coding', monospace;
+  font-size: 12px;
+}
+
+button.link {
+  padding: 0 4px;
+  background: transparent;
+  border-color: transparent;
+  color: #3794ff;
+}
+
+/* 머지 창 (D176, D177) */
+.merge-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  word-break: break-all;
+}
+
+.merge-form fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
 }

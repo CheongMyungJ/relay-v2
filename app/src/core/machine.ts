@@ -4,7 +4,8 @@
 // 기본 흐름, [오류 무시하고 승인](D112), 사람 조작(중단, 재개, 멈춤, 포기), 대기열(D18), 재시작 조정(D75, D78),
 // 단계 선택(되감기와 건너뛰기, 6.2), 전달(시나리오 7, D119, D120)과 정리(시나리오 8), 끊긴 작업의 [다시 시도]와
 // [무시](D121~D123), 앱 소유 파일의 해시(D124)와 정리 세션의 프로세스(D126) 기록, 자동 승인 카운트다운(4.3,
-// D127~D131)을 담는다. 세션 상한은 main이 세고, 자리가 없으면 task.queued를 넣는다. 카운트다운의 타이머는 main이
+// D127~D131), PR 진행(시나리오 10: 읽은 결과, 머지, 밖에서 머지·닫힘, [머지 없이 끝내기], D152~D200)을 담는다.
+// PR의 항목(pr-items.json)과 머지 조건의 판정은 core/pr이 하고, 여기는 work.json의 기록만 바꾼다. 세션 상한은 main이 세고, 자리가 없으면 task.queued를 넣는다. 카운트다운의 타이머는 main이
 // 돌고, 끝나면 autoApprove를 넣는다. 단계 선택의 계산은 core/rewind, 전달의 판정은 core/delivery, 정리의 판정은
 // core/cleanup, 끊긴 작업의 알림과 재개 판정은 core/recovery, 자동 승인의 조건은 core/approval이 한다.
 import type { AppConfig, WorkSettings } from '../shared/config'
@@ -22,8 +23,11 @@ import type {
   DeliveryStage,
   FormatIssue,
   LifecycleEvent,
+  MergeMethod,
+  MergeOperation,
   OwnedFile,
   OwnedFileHashes,
+  PrMerged,
   RewindOperation,
   StartReason,
   StepSelection,
@@ -332,6 +336,11 @@ export interface DeliverySucceeded extends WorkEvent {
   prUrl?: string
   prExisting?: boolean
   draft?: boolean
+  /**
+   * [PR 생성]이 만들거나 찾은 PR (D152, D156, D191). 있으면 Work는 완료 대신 PR 진행이 된다: 번호는 PR 주소에서
+   * 읽고(I50), head는 push한 커밋, ghVersion은 그때의 gh --version이다 (D198)
+   */
+  pr?: { number: number; head: string; ghVersion: string | null }
   check: TaskCheck | null
 }
 
@@ -349,12 +358,19 @@ export interface Clean extends WorkEvent {
   type: 'clean'
   force: boolean
   deleteBranches: string[]
+  /** 지울 origin의 브랜치. 머지로 완료한 Work에서 사람이 골랐을 때만 있다 (D178) */
+  deleteRemote?: string
   head: string | null
 }
 
 /** 정리가 worktree를 지웠다 (D77) */
 export interface CleanRemoved extends WorkEvent {
   type: 'clean.removed'
+}
+
+/** 정리가 로컬 브랜치를 지웠다. origin의 브랜치를 지울 것이 있으면 그 단계로 옮긴다 (D77, D178) */
+export interface CleanBranchesDeleted extends WorkEvent {
+  type: 'clean.branchesDeleted'
 }
 
 /** 정리가 끝났다. Work를 보관됨으로 바꾼다 */
@@ -413,6 +429,54 @@ export interface FilesRecorded extends WorkEvent {
   hashes: Partial<Record<OwnedFile, string | null>>
 }
 
+/**
+ * PR을 읽었다 (시나리오 10-2, D158). main이 gh와 git으로 읽고 core/pr로 항목을 모은 뒤 넣는다. state가 MERGED면
+ * 밖에서 머지된 것이다(D179). received, notAccepted는 이번에 새로 받은 항목과 받지 않은 새 코멘트(D189),
+ * synced는 fast-forward로 받은 커밋과 옮긴 기준 커밋이다(D193, D181)
+ */
+export interface PrRead extends WorkEvent {
+  type: 'pr.read'
+  number: number
+  state: 'OPEN' | 'CLOSED' | 'MERGED'
+  /** 읽은 원격 PR head */
+  head: string
+  received: readonly string[]
+  notAccepted: readonly string[]
+  synced?: { commits: readonly string[]; baseCommit?: string }
+}
+
+/**
+ * 머지 창의 [머지] (D176, D177). head는 머지 창에 보인 커밋이고, gate는 main이 core/pr mergeGate로 판정한 머지
+ * 조건이다. 진행 중 작업을 기록하고(D77) 머지를 main에 맡긴다
+ */
+export interface PrMerge extends WorkEvent {
+  type: 'pr.merge'
+  method: MergeMethod
+  head: string
+  gate: { enabled: boolean; reasons: readonly string[] }
+}
+
+/** 머지가 끝났다 (D178): main이 gh pr merge의 종료 코드와 다시 읽은 state(MERGED)로 판정했다 */
+export interface PrMergeSucceeded extends WorkEvent {
+  type: 'pr.merged'
+}
+
+/** 머지가 실패했다. 기록을 지우고 PR 진행에 남는다. 오류는 main이 알린다 (D176: GitHub의 오류를 보임) */
+export interface PrMergeFailed extends WorkEvent {
+  type: 'pr.mergeFailed'
+  error: string
+}
+
+/** [머지 없이 끝내기] (D179). GitHub의 PR은 건드리지 않는다 */
+export interface PrEnd extends WorkEvent {
+  type: 'pr.end'
+}
+
+/** 머지 뒤 [Work 정리] 창을 열었다 (D178, D200). 다시 열지 않는다 */
+export interface PrCleanOffered extends WorkEvent {
+  type: 'pr.cleanOffered'
+}
+
 export type MachineEvent =
   | SessionStarted
   | SessionResumed
@@ -446,6 +510,7 @@ export type MachineEvent =
   | DeliveryFailed
   | Clean
   | CleanRemoved
+  | CleanBranchesDeleted
   | CleanDone
   | CleanFailed
   | OperationRetry
@@ -453,6 +518,12 @@ export type MachineEvent =
   | CleanupStarted
   | CleanupEnded
   | FilesRecorded
+  | PrRead
+  | PrMerge
+  | PrMergeSucceeded
+  | PrMergeFailed
+  | PrEnd
+  | PrCleanOffered
 
 export type Effect =
   /**
@@ -523,7 +594,18 @@ export type Effect =
    * resume이 있으면 끊긴 정리를 그 단계부터 잇는다(D123): branches면 worktree는 건너뛰고, worktree면 --force를
    * core/recovery의 cleanResume으로 다시 정한다. main은 결과를 clean.removed, clean.done, clean.failed로 알린다
    */
-  | { type: 'clean'; force: boolean; deleteBranches: string[]; resume?: CleanStage }
+  | {
+      type: 'clean'
+      force: boolean
+      deleteBranches: string[]
+      deleteRemote?: string
+      resume?: CleanStage
+    }
+  /**
+   * 머지 (D176, D177): gh pr merge --match-head-commit <head>. resume이면 끊긴 머지를 잇는다(D123): 먼저 PR을 읽어 머지됐으면
+   * 성공으로 알린다. main은 결과를 pr.merged, pr.mergeFailed로 알린다
+   */
+  | { type: 'merge'; method: MergeMethod; head: string; resume?: boolean }
 
 export interface Transition {
   work: WorkState
@@ -893,6 +975,8 @@ const BLOCKED_BY_OPERATION: readonly MachineEvent['type'][] = [
   'selectStep',
   'deliver',
   'clean',
+  'pr.merge',
+  'pr.end',
 ]
 
 export function transition(work: WorkState, event: MachineEvent, config: AppConfig): Transition {
@@ -936,6 +1020,8 @@ function dispatch(work: WorkState, event: MachineEvent, config: AppConfig): Tran
       return clean(work, event)
     case 'clean.removed':
       return cleanRemoved(work)
+    case 'clean.branchesDeleted':
+      return cleanBranchesDeleted(work)
     case 'clean.done':
       return cleanDone(work, event)
     case 'clean.failed':
@@ -950,6 +1036,18 @@ function dispatch(work: WorkState, event: MachineEvent, config: AppConfig): Tran
       return cleanupEnded(work)
     case 'files.recorded':
       return filesRecorded(work, event)
+    case 'pr.read':
+      return prRead(work, event)
+    case 'pr.merge':
+      return prMerge(work, event)
+    case 'pr.merged':
+      return prMerged(work, event)
+    case 'pr.mergeFailed':
+      return prMergeFailed(work)
+    case 'pr.end':
+      return prEnd(work, event)
+    case 'pr.cleanOffered':
+      return prCleanOffered(work, event)
     default:
       return taskTransition(work, event, config)
   }
@@ -973,6 +1071,7 @@ type TaskMachineEvent = Exclude<
   | DeliveryFailed
   | Clean
   | CleanRemoved
+  | CleanBranchesDeleted
   | CleanDone
   | CleanFailed
   | OperationRetry
@@ -980,6 +1079,12 @@ type TaskMachineEvent = Exclude<
   | CleanupStarted
   | CleanupEnded
   | FilesRecorded
+  | PrRead
+  | PrMerge
+  | PrMergeSucceeded
+  | PrMergeFailed
+  | PrEnd
+  | PrCleanOffered
 >
 
 function taskTransition(work: WorkState, event: TaskMachineEvent, config: AppConfig): Transition {
@@ -1833,6 +1938,27 @@ function deliverySucceeded(work: WorkState, e: DeliverySucceeded): Transition {
     ...deliveryBackups(work.delivery, op),
   }
   const rest = omit(work, 'operation', 'stop', 'stop_after_step')
+  const payload: Record<string, unknown> = { ...delivery }
+  delete payload['status']
+  delete payload['at']
+  if (op.choice === 'pr' && e.pr && e.prUrl) {
+    // [PR 생성]이 성공하면 완료 대신 PR 진행이다 (D120, D152). 완료는 머지나 [머지 없이 끝내기]에서 남긴다
+    const next: WorkState = {
+      ...rest,
+      tasks,
+      status: 'pr',
+      delivery,
+      pr: {
+        number: e.pr.number,
+        url: e.prUrl,
+        head: e.pr.head,
+        gh_version: e.pr.ghVersion,
+        started_at: e.at,
+      },
+    }
+    effects.push(log(next, e.at, 'delivery.succeeded', payload))
+    return { work: next, effects }
+  }
   const next: WorkState = {
     ...rest,
     tasks,
@@ -1840,9 +1966,6 @@ function deliverySucceeded(work: WorkState, e: DeliverySucceeded): Transition {
     completed_at: e.at,
     delivery,
   }
-  const payload: Record<string, unknown> = { ...delivery }
-  delete payload['status']
-  delete payload['at']
   effects.push(log(next, e.at, 'delivery.succeeded', payload))
   effects.push(log(next, e.at, 'work.completed', { delivery: op.choice }))
   return { work: next, effects }
@@ -1893,11 +2016,19 @@ function clean(work: WorkState, e: Clean): Transition {
     started_at: e.at,
     force: e.force,
     delete_branches: [...e.deleteBranches],
+    ...(e.deleteRemote ? { delete_remote: e.deleteRemote } : {}),
     head: e.head,
   }
   return {
     work: { ...work, operation },
-    effects: [{ type: 'clean', force: e.force, deleteBranches: [...e.deleteBranches] }],
+    effects: [
+      {
+        type: 'clean',
+        force: e.force,
+        deleteBranches: [...e.deleteBranches],
+        ...(e.deleteRemote ? { deleteRemote: e.deleteRemote } : {}),
+      },
+    ],
   }
 }
 
@@ -1908,6 +2039,13 @@ function cleanRemoved(work: WorkState): Transition {
   return { work: { ...work, operation: { ...op, stage: 'branches' } }, effects: [] }
 }
 
+/** 정리가 로컬 브랜치를 지웠다. origin의 브랜치를 지울 것이 있으면 기록을 그 단계로 옮긴다 (D77, D178) */
+function cleanBranchesDeleted(work: WorkState): Transition {
+  const op = work.operation
+  if (op?.kind !== 'clean' || op.stage !== 'branches' || !op.delete_remote) return unchanged(work)
+  return { work: { ...work, operation: { ...op, stage: 'remote' } }, effects: [] }
+}
+
 /** 정리가 끝났다: 보관됨으로 바꾸고 work.cleaned를 남긴다. 산출물(works/<work-id>/)은 그대로다 (8-2) */
 function cleanDone(work: WorkState, e: CleanDone): Transition {
   const op = work.operation
@@ -1915,7 +2053,13 @@ function cleanDone(work: WorkState, e: CleanDone): Transition {
   const next: WorkState = {
     ...omit(work, 'operation'),
     status: 'archived',
-    cleaned: { at: e.at, head: op.head, forced: op.force, deleted_branches: op.delete_branches },
+    cleaned: {
+      at: e.at,
+      head: op.head,
+      forced: op.force,
+      deleted_branches: op.delete_branches,
+      ...(op.delete_remote ? { deleted_remote_branch: op.delete_remote } : {}),
+    },
   }
   return {
     work: next,
@@ -1923,6 +2067,7 @@ function cleanDone(work: WorkState, e: CleanDone): Transition {
       log(next, e.at, 'work.cleaned', {
         forced: op.force,
         deleted_branches: op.delete_branches,
+        ...(op.delete_remote ? { deleted_remote_branch: op.delete_remote } : {}),
       }),
     ],
   }
@@ -2013,6 +2158,13 @@ function operationRetry(work: WorkState, e: OperationRetry): Transition {
   const op = cutOperation(work)
   if (!op) return unchanged(work, '끊긴 작업이 없음')
   if (op.kind === 'deliver') return deliveryCut(work, op, e)
+  if (op.kind === 'merge') {
+    const live: MergeOperation = omit(op, 'interrupted_at')
+    return {
+      work: { ...work, operation: live },
+      effects: [{ type: 'merge', method: live.method, head: live.head, resume: true }],
+    }
+  }
   if (op.kind === 'rewind') {
     const live: RewindOperation = omit(op, 'interrupted_at')
     return {
@@ -2028,6 +2180,7 @@ function operationRetry(work: WorkState, e: OperationRetry): Transition {
         type: 'clean',
         force: live.force,
         deleteBranches: [...live.delete_branches],
+        ...(live.delete_remote ? { deleteRemote: live.delete_remote } : {}),
         resume: live.stage,
       },
     ],
@@ -2112,4 +2265,136 @@ function filesRecorded(work: WorkState, e: FilesRecorded): Transition {
     return unchanged(work)
   }
   return { work: { ...work, file_hashes: next }, effects: [] }
+}
+
+// ---------- PR 진행 (시나리오 10, D152~D200) ----------
+
+/**
+ * PR을 읽었다 (시나리오 10-2). 읽은 head와 때를 적고(D191), 받은 항목과 fast-forward로 받은 커밋을 events.jsonl에
+ * 남긴다(5.5). 받은 커밋에 기준 브랜치 병합이 있으면 기준 커밋을 옮긴다(D181, D193). MERGED면 [머지]를 누른 것과
+ * 같게 완료(머지됨)한다(D179). CLOSED면 닫힘을 적고 자동 읽기를 멈추며, 다시 열린 것을 읽으면 지운다(D179).
+ * 진행 중 작업 기록이 있는 동안은 받지 않는다(I51): 끊긴 머지는 [다시 시도]·[무시]가 먼저다
+ */
+function prRead(work: WorkState, e: PrRead): Transition {
+  const pr = work.pr
+  if (work.status !== 'pr' || !pr || pr.number !== e.number || work.operation) {
+    return unchanged(work)
+  }
+  const effects: Effect[] = []
+  let next: WorkState = { ...work, pr: { ...pr, head: e.head, read_at: e.at } }
+  const synced = e.synced
+  if (synced && synced.commits.length) {
+    if (synced.baseCommit) next = { ...next, base_commit: synced.baseCommit }
+    effects.push(
+      log(next, e.at, 'pr.synced', {
+        commits: [...synced.commits],
+        ...(synced.baseCommit ? { base_commit: synced.baseCommit } : {}),
+      }),
+    )
+  }
+  if (e.received.length || e.notAccepted.length) {
+    effects.push(
+      log(next, e.at, 'pr.items_received', {
+        items: [...e.received],
+        ...(e.notAccepted.length ? { not_accepted: [...e.notAccepted] } : {}),
+      }),
+    )
+  }
+  const now = next.pr ?? pr
+  if (e.state === 'MERGED') {
+    const merged: PrMerged = { at: e.at, head: e.head, method: null, outside: true }
+    next = {
+      ...next,
+      status: 'completed',
+      completed_at: e.at,
+      pr: { ...omit(now, 'closed_at'), merged },
+    }
+    effects.push(log(next, e.at, 'pr.merged', { head: e.head, outside: true }))
+    effects.push(log(next, e.at, 'work.completed', { delivery: 'pr', merged: true }))
+  } else if (e.state === 'CLOSED') {
+    if (!pr.closed_at) {
+      next = { ...next, pr: { ...now, closed_at: e.at } }
+      effects.push(log(next, e.at, 'pr.closed'))
+    }
+  } else if (pr.closed_at) {
+    next = { ...next, pr: omit(now, 'closed_at') }
+    effects.push(log(next, e.at, 'pr.reopened'))
+  }
+  return { work: next, effects }
+}
+
+/**
+ * 머지 창의 [머지] (D176). 머지 창에 보인 head가 앱이 마지막으로 읽은 head와 같고 머지 조건을 만족할 때만 받는다.
+ * 진행 중 작업을 기록하고(D77) 머지를 main에 맡긴다. 그사이 GitHub에 새 커밋이 생겼으면 GitHub가 거절한다
+ * (--match-head-commit, S7)
+ */
+function prMerge(work: WorkState, e: PrMerge): Transition {
+  const pr = work.pr
+  if (work.status !== 'pr' || !pr) return unchanged(work, 'PR 진행인 Work가 아님')
+  if (work.operation) return unchanged(work, '진행 중인 작업이 있음')
+  if (e.head !== pr.head) {
+    return unchanged(work, '머지 창을 연 뒤 PR의 새 head를 읽었음. 머지 창을 다시 여세요')
+  }
+  if (!e.gate.enabled) return unchanged(work, `머지할 수 없음: ${e.gate.reasons.join(', ')}`)
+  const operation: MergeOperation = {
+    kind: 'merge',
+    started_at: e.at,
+    method: e.method,
+    head: e.head,
+  }
+  return {
+    work: { ...work, operation },
+    effects: [{ type: 'merge', method: e.method, head: e.head }],
+  }
+}
+
+/** 머지가 끝났다 (D178): 완료(머지됨)로 바꾸고 기록을 지운다. 정리 창은 화면이 연다 */
+function prMerged(work: WorkState, e: PrMergeSucceeded): Transition {
+  const op = work.operation
+  const pr = work.pr
+  if (op?.kind !== 'merge' || !pr) return unchanged(work, '진행 중인 머지가 없음')
+  const merged: PrMerged = { at: e.at, head: op.head, method: op.method, outside: false }
+  const next: WorkState = {
+    ...omit(work, 'operation'),
+    status: 'completed',
+    completed_at: e.at,
+    pr: { ...omit(pr, 'closed_at'), head: op.head, merged },
+  }
+  return {
+    work: next,
+    effects: [
+      log(next, e.at, 'pr.merged', { method: op.method, head: op.head, outside: false }),
+      log(next, e.at, 'work.completed', { delivery: 'pr', merged: true }),
+    ],
+  }
+}
+
+/** 머지가 실패했다. 기록만 지우고 PR 진행에 남는다 */
+function prMergeFailed(work: WorkState): Transition {
+  return work.operation?.kind === 'merge'
+    ? { work: omit(work, 'operation'), effects: [] }
+    : unchanged(work)
+}
+
+/** [머지 없이 끝내기] (D179): 완료(머지 없이)로 바꾼다. GitHub의 PR은 건드리지 않는다 */
+function prEnd(work: WorkState, e: PrEnd): Transition {
+  const pr = work.pr
+  if (work.status !== 'pr' || !pr) return unchanged(work, 'PR 진행인 Work가 아님')
+  const next: WorkState = {
+    ...work,
+    status: 'completed',
+    completed_at: e.at,
+    pr: { ...pr, ended_at: e.at },
+  }
+  return {
+    work: next,
+    effects: [log(next, e.at, 'work.completed', { delivery: 'pr', merged: false })],
+  }
+}
+
+/** 머지 뒤 정리 창을 열었다 (D178, D200) */
+function prCleanOffered(work: WorkState, e: PrCleanOffered): Transition {
+  const pr = work.pr
+  if (!pr?.merged || pr.clean_offered_at) return unchanged(work)
+  return { work: { ...work, pr: { ...pr, clean_offered_at: e.at } }, effects: [] }
 }

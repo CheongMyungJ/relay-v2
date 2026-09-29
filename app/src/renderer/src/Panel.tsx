@@ -5,12 +5,14 @@
 // 맨 위에는 재시작 때와 실행 중의 알림을 보인다: 끊긴 작업의 [다시 시도]·[무시], 끝낸 고아 프로세스와 바뀐
 // 파일의 [확인] (시나리오 9, D121~D124). 끊긴 작업이 있는 동안 승인과 전달 버튼은 누를 수 없다 (D122).
 // 자동 승인 중이면 승인 화면에 카운트다운과 [취소]를 보이고, 켜진 단계인데 카운트다운하지 않으면 까닭을 보인다 (D83, 4.3).
+// PR 진행인 Work의 지금 task(verify)에서는 PR 패널이 된다 (시나리오 10, D183). 최종 검증 결과는 탭으로 본다.
 import { useEffect, useState } from 'react'
 import type { NodeName, Size } from '../../shared/contracts'
 import type {
   CommandResult,
   CountdownView,
   DeliverResult,
+  PrView,
   ReviewView,
   TaskView,
   WorkView,
@@ -19,6 +21,7 @@ import type { DeliveryChoice, UncommittedAction } from '../../shared/work'
 import { call } from './commands'
 import { ConfirmDialog, UncommittedDialog } from './dialogs'
 import { Diff, Markdown } from './Markdown'
+import { PrPanel } from './PrPanel'
 
 type Tab = 'summary' | 'artifacts' | 'changes' | 'verdicts' | 'work'
 
@@ -33,6 +36,11 @@ interface Props {
   onSelectStep: (node?: NodeName) => void
   /** 정리 세션 탭을 고른다 (7-5) */
   onShowCleanup: () => void
+}
+
+/** PR 패널을 보일 때인가: PR 진행을 시작한 Work의 지금 task(verify)를 보고 있다 (시나리오 10) */
+export function showsPr(work: WorkView, taskId: string | undefined): boolean {
+  return work.pr !== null && taskId === work.current
 }
 
 /**
@@ -101,7 +109,9 @@ export function Panel({ work, task, review, onApproved, onSelectStep, onShowClea
         </div>
       ) : null}
       {work.status === 'active' && task.id === work.current ? <TaskNotice task={task} /> : null}
-      {review.completion?.stopped ? (
+      {showsPr(work, task.id) && work.pr ? (
+        <PrSection key={work.key} work={work} pr={work.pr} review={review} />
+      ) : review.completion?.stopped ? (
         <Review
           key={`${review.workKey}|${review.taskId}|stopped`}
           review={review}
@@ -629,12 +639,65 @@ const DELIVERY_BUTTON: Readonly<Record<DeliveryChoice, string>> = {
   pr: 'PR 생성',
 }
 
-/** 완료한 Work의 전달과 결과 링크 (시나리오 7-4, 7-6). 보관된 Work도 보인다 */
+/**
+ * PR 진행인 Work의 오른쪽 패널: PR 패널과 최종 검증 결과(읽기 전용)를 탭으로 오간다 (시나리오 10, D183)
+ */
+function PrSection({ work, pr, review }: { work: WorkView; pr: PrView; review: ReviewView }) {
+  const [tab, setTab] = useState<'pr' | 'verify'>('pr')
+  return (
+    <>
+      <div className="review-tabs" role="tablist">
+        <button
+          role="tab"
+          aria-selected={tab === 'pr'}
+          className={tab === 'pr' ? 'active' : ''}
+          onClick={() => setTab('pr')}
+        >
+          PR
+        </button>
+        <button
+          role="tab"
+          aria-selected={tab === 'verify'}
+          className={tab === 'verify' ? 'active' : ''}
+          onClick={() => setTab('verify')}
+        >
+          최종 검증 결과
+        </button>
+      </div>
+      {tab === 'pr' ? <PrPanel work={work} pr={pr} /> : <Review review={review} readOnly />}
+    </>
+  )
+}
+
+const MERGE_LABEL: Readonly<Record<string, string>> = {
+  merge: 'merge',
+  squash: 'squash',
+  rebase: 'rebase',
+}
+
+/** 완료한 Work의 전달과 결과 링크 (시나리오 7-4, 7-6). PR 진행으로 끝났으면 머지나 끝낸 것을 보인다 (D178, D179) */
 function DoneNotice({ work }: { work: WorkView }) {
   const d = work.delivery?.status === 'succeeded' ? work.delivery : null
+  const pr = work.pr
   return (
     <div className="notice done">
       Work 완료 (전달: {d ? d.label : '완료만'})
+      {pr?.merged ? (
+        <div>
+          PR #{pr.number} 머지됨 (
+          {pr.merged.outside
+            ? 'relay 밖에서'
+            : pr.merged.method
+              ? MERGE_LABEL[pr.merged.method]
+              : ''}
+          , head {pr.merged.head.slice(0, 8)}). [Work 정리]로 정리하세요.
+        </div>
+      ) : null}
+      {pr?.ended ? (
+        <div>
+          PR #{pr.number}을(를) 머지 없이 끝냄 ({pr.ended}). GitHub의 PR은 건드리지 않았습니다.
+        </div>
+      ) : null}
       {d?.branch ? <div className="dim">origin에 push: {d.branch}</div> : null}
       {d?.prUrl ? (
         <LinkLine

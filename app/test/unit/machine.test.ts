@@ -3213,3 +3213,246 @@ describe('자동 승인 (4.3, D127~D131)', () => {
     expect(types(skipped.effects)[0]).toBe('stopCountdown')
   })
 })
+
+describe('PR 진행 (시나리오 10, D152~D200)', () => {
+  const PR_URL = 'https://github.com/o/r/pull/7'
+  const HEAD = 'head0001'
+  const OPEN = { enabled: true, reasons: [] }
+
+  /** S 경로로 verify가 승인 대기인 Work에서 [PR 생성]이 성공해 PR 진행이 된 Work */
+  function inPr(): WorkState {
+    let work = newWork()
+    for (const check of [valid({}, 'S'), valid(), valid()]) {
+      work = approve(stop(launch(work), check).work, check).work
+    }
+    work = stop(launch(work), valid()).work
+    work = apply(work, {
+      type: 'deliver',
+      at: at(),
+      choice: 'pr',
+      uncommitted: null,
+      check: valid(),
+    }).work
+    return apply(work, {
+      type: 'delivery.succeeded',
+      at: at(),
+      compareUrl: null,
+      prUrl: PR_URL,
+      draft: false,
+      pr: { number: 7, head: HEAD, ghVersion: '2.101.0' },
+      check: valid(),
+    }).work
+  }
+
+  const readPr = (work: WorkState, o: Partial<Extract<MachineEvent, { type: 'pr.read' }>> = {}) =>
+    apply(work, {
+      type: 'pr.read',
+      at: at(),
+      number: 7,
+      state: 'OPEN',
+      head: HEAD,
+      received: [],
+      notAccepted: [],
+      ...o,
+    })
+
+  it('[PR 생성]이 성공하면 완료 대신 PR 진행이다. 번호, 주소, head, gh 버전을 적는다 (D152, D191, D198)', () => {
+    const work = inPr()
+    expect(work.status).toBe('pr')
+    expect(work.completed_at).toBeUndefined()
+    expect(work.operation).toBeUndefined()
+    expect(work.pr).toEqual({
+      number: 7,
+      url: PR_URL,
+      head: HEAD,
+      gh_version: '2.101.0',
+      started_at: work.delivery?.at,
+    })
+    expect(currentTask(work)).toMatchObject({ status: 'approved', session: { alive: false } })
+    // PR 진행 중에는 [단계 선택], [이 단계 끝나면 멈춤], [Work 포기], [Work 정리]가 없다 (D182)
+    expect(actions(work)).toEqual({
+      interrupt: false,
+      resume: false,
+      retry: false,
+      resumeWork: false,
+      selectStep: false,
+      stopAfter: false,
+      abandon: false,
+      clean: false,
+    })
+    expect(badge(work)).toMatchObject({ kind: 'pr_waiting', hot: false })
+    expect(badge(work, 'pr_items')).toMatchObject({
+      kind: 'pr_items',
+      label: '대응 거리 있음',
+      hot: true,
+    })
+    expect(badge(work, 'mergeable')).toMatchObject({ label: '머지 가능', hot: true })
+    // PR 진행에서는 다른 사람 명령을 받지 않는다
+    expect(apply(work, { type: 'abandon', at: at() }).rejected).toBeDefined()
+  })
+
+  it('읽으면 head와 읽은 때를 적고, 받은 항목과 받은 원격 커밋을 기록한다. 기준 브랜치 병합이 있으면 기준 커밋을 옮긴다 (D181, D191, D193)', () => {
+    const r = readPr(inPr(), {
+      head: 'head0002',
+      received: ['convo:1'],
+      notAccepted: ['convo:2'],
+      synced: { commits: ['head0002', 'base0002'], baseCommit: 'base0002' },
+    })
+    expect(r.work.pr).toMatchObject({ head: 'head0002', read_at: expect.any(String) })
+    expect(r.work.base_commit).toBe('base0002')
+    expect(
+      r.effects.map((e) => (e.type === 'log' ? [e.event.type, e.event.payload] : e.type)),
+    ).toEqual([
+      ['pr.synced', { commits: ['head0002', 'base0002'], base_commit: 'base0002' }],
+      ['pr.items_received', { items: ['convo:1'], not_accepted: ['convo:2'] }],
+    ])
+    // 받은 것이 없으면 기록하지 않는다
+    expect(readPr(inPr()).effects).toEqual([])
+  })
+
+  it('밖에서 머지된 것을 읽으면 완료(머지됨, outside)다 (D179)', () => {
+    const r = readPr(inPr(), { state: 'MERGED', head: 'head0003' })
+    expect(r.work.status).toBe('completed')
+    expect(r.work.completed_at).toBeDefined()
+    expect(r.work.pr?.merged).toEqual({
+      at: r.work.completed_at,
+      head: 'head0003',
+      method: null,
+      outside: true,
+    })
+    expect(types(r.effects)).toEqual(['log:pr.merged', 'log:work.completed'])
+    expect(actions(r.work).clean).toBe(true)
+  })
+
+  it('닫힘을 읽으면 한 번 기록하고, 다시 열린 것을 읽으면 되돌린다 (D179)', () => {
+    const closed = readPr(inPr(), { state: 'CLOSED' })
+    expect(closed.work.status).toBe('pr')
+    expect(closed.work.pr?.closed_at).toBeDefined()
+    expect(types(closed.effects)).toEqual(['log:pr.closed'])
+    expect(readPr(closed.work, { state: 'CLOSED' }).effects).toEqual([])
+    const reopened = readPr(closed.work)
+    expect(reopened.work.pr?.closed_at).toBeUndefined()
+    expect(types(reopened.effects)).toEqual(['log:pr.reopened'])
+  })
+
+  it('다른 PR의 읽기나 진행 중 작업이 있을 때의 읽기는 반영하지 않는다', () => {
+    const work = inPr()
+    expect(readPr(work, { number: 8, head: 'x' }).work).toBe(work)
+    const merging = apply(work, {
+      type: 'pr.merge',
+      at: at(),
+      method: 'squash',
+      head: HEAD,
+      gate: OPEN,
+    }).work
+    expect(readPr(merging, { state: 'MERGED' }).work).toBe(merging)
+  })
+
+  it('[머지]는 머지 창의 head가 마지막으로 읽은 head이고 조건을 만족할 때만 받는다. 진행 중 작업으로 기록한다 (D77, D176)', () => {
+    const work = inPr()
+    expect(
+      apply(work, { type: 'pr.merge', at: at(), method: 'squash', head: 'other', gate: OPEN })
+        .rejected,
+    ).toBe('머지 창을 연 뒤 PR의 새 head를 읽었음. 머지 창을 다시 여세요')
+    expect(
+      apply(work, {
+        type: 'pr.merge',
+        at: at(),
+        method: 'squash',
+        head: HEAD,
+        gate: { enabled: false, reasons: ['CI 실패', '기준 브랜치와 충돌'] },
+      }).rejected,
+    ).toBe('머지할 수 없음: CI 실패, 기준 브랜치와 충돌')
+    const r = apply(work, { type: 'pr.merge', at: at(), method: 'squash', head: HEAD, gate: OPEN })
+    expect(r.work.operation).toEqual({
+      kind: 'merge',
+      started_at: expect.any(String),
+      method: 'squash',
+      head: HEAD,
+    })
+    expect(r.effects).toEqual([{ type: 'merge', method: 'squash', head: HEAD }])
+    expect(badge(r.work).kind).toBe('pr_waiting')
+    // 머지가 끝나면 완료(머지됨)다 (D178)
+    const done = apply(r.work, { type: 'pr.merged', at: at() })
+    expect(done.work).toMatchObject({
+      status: 'completed',
+      pr: { merged: { head: HEAD, method: 'squash', outside: false } },
+    })
+    expect(done.work.operation).toBeUndefined()
+    expect(
+      done.effects.map((e) => (e.type === 'log' ? [e.event.type, e.event.payload] : e.type)),
+    ).toEqual([
+      ['pr.merged', { method: 'squash', head: HEAD, outside: false }],
+      ['work.completed', { delivery: 'pr', merged: true }],
+    ])
+    // 실패하면 기록만 지우고 PR 진행에 남는다
+    const failed = apply(r.work, {
+      type: 'pr.mergeFailed',
+      at: at(),
+      error: 'Head branch was modified',
+    })
+    expect(failed.work.status).toBe('pr')
+    expect(failed.work.operation).toBeUndefined()
+  })
+
+  it('끊긴 머지의 [다시 시도]는 이어서 머지하고, [무시]는 기록만 지운다 (D123)', () => {
+    const merging = apply(inPr(), {
+      type: 'pr.merge',
+      at: at(),
+      method: 'rebase',
+      head: HEAD,
+      gate: OPEN,
+    }).work
+    const restarted = apply(merging, { type: 'app.restarted', at: at(), check: null }).work
+    expect(restarted.operation).toMatchObject({ kind: 'merge', interrupted_at: expect.any(String) })
+    expect(badge(restarted).kind).toBe('recovery')
+    const retried = apply(restarted, { type: 'operationRetry', at: at() })
+    expect(retried.effects).toEqual([{ type: 'merge', method: 'rebase', head: HEAD, resume: true }])
+    const ignored = apply(restarted, { type: 'operationIgnore', at: at() })
+    expect(ignored.work.operation).toBeUndefined()
+    expect(ignored.work.status).toBe('pr')
+  })
+
+  it('[머지 없이 끝내기]는 완료(머지 없이)다. 머지 뒤 정리 창을 연 것을 적는다 (D178, D179, D200)', () => {
+    const ended = apply(inPr(), { type: 'pr.end', at: at() })
+    expect(ended.work.status).toBe('completed')
+    expect(ended.work.pr?.ended_at).toBeDefined()
+    expect(
+      ended.effects.map((e) => (e.type === 'log' ? [e.event.type, e.event.payload] : e.type)),
+    ).toEqual([['work.completed', { delivery: 'pr', merged: false }]])
+    const merged = readPr(inPr(), { state: 'MERGED' }).work
+    const offered = apply(merged, { type: 'pr.cleanOffered', at: at() })
+    expect(offered.work.pr?.clean_offered_at).toBeDefined()
+    expect(apply(inPr(), { type: 'pr.end', at: at() }).work.status).toBe('completed')
+    expect(apply(newWork(), { type: 'pr.end', at: at() }).rejected).toBe('PR 진행인 Work가 아님')
+  })
+
+  it('머지로 완료한 Work의 정리는 origin의 작업 브랜치를 지우는 단계를 더 기록한다 (D77, D178)', () => {
+    const merged = readPr(inPr(), { state: 'MERGED' }).work
+    const cleaning = apply(merged, {
+      type: 'clean',
+      at: at(),
+      force: false,
+      deleteBranches: ['relay/w-20260926-001'],
+      deleteRemote: 'relay/w-20260926-001',
+      head: HEAD,
+    })
+    expect(cleaning.work.operation).toMatchObject({
+      stage: 'worktree',
+      delete_remote: 'relay/w-20260926-001',
+    })
+    expect(cleaning.effects[0]).toMatchObject({
+      type: 'clean',
+      deleteRemote: 'relay/w-20260926-001',
+    })
+    const removed = apply(cleaning.work, { type: 'clean.removed', at: at() }).work
+    const branches = apply(removed, { type: 'clean.branchesDeleted', at: at() }).work
+    expect(branches.operation).toMatchObject({ stage: 'remote' })
+    const done = apply(branches, { type: 'clean.done', at: at() })
+    expect(done.work.status).toBe('archived')
+    expect(done.work.cleaned).toMatchObject({
+      deleted_branches: ['relay/w-20260926-001'],
+      deleted_remote_branch: 'relay/w-20260926-001',
+    })
+  })
+})
