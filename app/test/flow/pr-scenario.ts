@@ -116,6 +116,13 @@ export const BASE_CODE =
   '\n/**\n * 장바구니가 비었는가 (relay M9 기준 브랜치 변경).\n * @param {unknown[]} items\n * @returns {boolean}\n */\nexport function isEmpty(items) {\n  return items.length === 0;\n}\n'
 const CART = 'src/cart.mjs'
 const CI_FAIL = 'ci-fail'
+/**
+ * PR 대응 시나리오의 PR이 더하는 새 파일. [실제]는 runPrScenario 뒤에 돌아 기준 브랜치에 HEAD_CODE가 이미 머지돼 있으므로,
+ * 같은 코드를 더하면 PR의 diff에 없어 인라인 코멘트의 줄을 GitHub가 받지 않는다(HTTP 422 "Line could not be resolved")
+ */
+const RESPOND_FILE = 'src/m10.mjs'
+const RESPOND_CODE =
+  '/**\n * 두 배 (relay M10 시험 변경).\n * @param {number} n\n * @returns {number}\n */\nexport function double(n) {\n  return n * 2;\n}\n'
 
 /** 가짜 claude의 S 경로. fix가 files를 커밋하고 verify가 pr.md(제목 title)를 쓴다. PR 대응 task도 여기에 둔다 */
 export function prClaude(files: Record<string, string>, title: string): Scenario {
@@ -576,11 +583,10 @@ export function currentUntil(
 /** PR 대응의 공통 시나리오 (파일 머리의 7) */
 export async function runRespondScenario(ctx: PrContext): Promise<void> {
   const { h, world } = ctx
-  const cart = world.file(CART)
   const w = await openPrWork(
     ctx,
     respondClaude(
-      { [CART]: cart + HEAD_CODE, [CI_FAIL]: 'relay M10 시험: CI를 실패시킨다\n' },
+      { [RESPOND_FILE]: RESPOND_CODE, [CI_FAIL]: 'relay M10 시험: CI를 실패시킨다\n' },
       'relay M10 시험: PR 대응',
     ),
     'relay M10 시험 (대응)',
@@ -615,12 +621,11 @@ export async function runRespondScenario(ctx: PrContext): Promise<void> {
   ctx.note(`7. CI 실패 → [실패한 체크 다시 실행]이 실행 ${run}을 다시 돌림`)
 
   // ---------- 코멘트와 [대응 시작] (D170) ----------
-  const line =
-    (cart + HEAD_CODE).split('\n').findIndex((l) => l.startsWith('export function count')) + 1
+  const line = RESPOND_CODE.split('\n').findIndex((l) => l.startsWith('export function double')) + 1
   await world.convo(w.pr, 'relay M10 시험: 소유자의 대화 코멘트')
   await world.review(w.pr, head1, {
     body: 'relay M10 시험: 소유자의 리뷰 본문',
-    path: CART,
+    path: RESPOND_FILE,
     line,
     comment: 'relay M10 시험: 소유자의 인라인 코멘트',
   })
