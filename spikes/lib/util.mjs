@@ -18,6 +18,14 @@ export function redact(text) {
   return s;
 }
 
+// 객체의 문자열 값마다 가린다. JSON 문자열을 통째로 가리면 sk-ant- 규칙이 따옴표와 구분자까지 먹어 다시 읽지 못한다.
+export function redactDeep(v) {
+  if (typeof v === 'string') return redact(v);
+  if (Array.isArray(v)) return v.map(redactDeep);
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, redactDeep(x)]));
+  return v;
+}
+
 export function sh(cmd, args, opts = {}) {
   return execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts }).trim();
 }

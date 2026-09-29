@@ -12,8 +12,9 @@
 // 레포의 main은 건드리지 않는다. main에서 임시 기준 브랜치 s7/<run>/base를 만들고 그 브랜치에 PR을 연다.
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { WORK, RESULTS, Result, redact, writeJson } from './lib/util.mjs';
+import { WORK, RESULTS, Result, redact, redactDeep, writeJson } from './lib/util.mjs';
 
 const REPO = process.env.RELAY_TEST_GH_REPO || '';
 const PHASE = (process.env.S7_PHASE || 'start').trim().toLowerCase();
@@ -84,6 +85,18 @@ const prView = (n, fields = PR_FIELDS) => ghJson(['pr', 'view', String(n), '--re
 const rollup = (p) => (p.statusCheckRollup || []).map((c) => (c.__typename === 'CheckRun' ? `${c.workflowName}/${c.name}: ${c.status} ${c.conclusion || ''}`.trim() : `${c.context}: ${c.state}`));
 const brief = (p) => ({ state: p.state, head: p.headRefOid?.slice(0, 7), base: `${p.baseRefName}@${p.baseRefOid?.slice(0, 7)}`, mergeable: p.mergeable, mergeStateStatus: p.mergeStateStatus, reviewDecision: p.reviewDecision, checks: rollup(p) });
 const branches = (id) => ({ base: `s7/${id}/base`, head: `s7/${id}/head`, head2: `s7/${id}/head2`, head3: `s7/${id}/head3` });
+// 시험(run)의 id. 브랜치 이름과 정리할 범위(s7/<id>/)가 되므로, 같은 분에 시작한 시험끼리도 겹치지 않게
+// 초까지의 시각에 임의의 6자를 붙인다.
+export const newRunId = () => `${new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15)}-${crypto.randomBytes(3).toString('hex')}`;
+
+// 결과 저장과 정리는 서로 막지 않는다. 하나가 실패해도 다음 것을 하고, 실패는 실행기 오류로 남긴다.
+function safely(r, fn) {
+  try {
+    fn();
+  } catch (e) {
+    r.error(e);
+  }
+}
 
 // head 커밋의 체크가 모두 끝날 때까지 기다린다. 다시 실행한 체크는 새 시도가 끝날 때까지 기다린다.
 async function waitChecks(n, sha, what) {
@@ -173,7 +186,7 @@ async function dispatchBot(n, kind, body) {
 
 async function startPhase(r) {
   const ctx = prepare(r);
-  const id = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 13);
+  const id = newRunId();
   const B = branches(id);
   const dir = path.join(WORK, 's7', id);
   const raw = { id };
@@ -422,8 +435,8 @@ async function startPhase(r) {
     r.observe('사람이 할 일', humanSteps(n, url, ctx.login));
     done = true;
   } finally {
-    writeJson(path.join(RESULTS, 'S7-start-raw.json'), JSON.parse(redact(JSON.stringify(raw))));
-    if (!done) cleanupRun(r, id);
+    safely(r, () => writeJson(path.join(RESULTS, 'S7-start-raw.json'), redactDeep(raw)));
+    if (!done) safely(r, () => cleanupRun(r, id));
   }
 }
 
@@ -573,8 +586,8 @@ async function finishPhase(r) {
     const m3 = gh(['pr', 'merge', String(three.n), `--${method}`, '--delete-branch'], { cwd: main });
     r.observe('6. (나) --repo 없이 --delete-branch, 메인 체크아웃에서: 출력, 로컬 전후, 원격 브랜치', { out: show(m3), before: b3, after: localState(main), wtExists: fs.existsSync(three.wt), remote: remoteHas(main, three.br), state: prView(three.n, ['state']).state });
   } finally {
-    writeJson(path.join(RESULTS, 'S7-finish-raw.json'), JSON.parse(redact(JSON.stringify(raw))));
-    cleanupRun(r, id);
+    safely(r, () => writeJson(path.join(RESULTS, 'S7-finish-raw.json'), redactDeep(raw)));
+    safely(r, () => cleanupRun(r, id));
   }
 }
 
