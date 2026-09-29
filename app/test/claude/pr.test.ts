@@ -5,6 +5,7 @@
 // GitHub에서 본다(I53. 실제 claude의 대응과 답글 초안은 test/claude/respond.test.ts). Claude 인증은 필요 없고 시험용
 // 레포의 토큰(GH_TOKEN)만 쓴다. 레포의 main은 건드리지 않는다.
 // RELAY_REAL_GH=1이고 RELAY_REAL_CASES에 pr이나 pr-cleanup이 있을 때만 돈다(app-claude 워크플로의 Linux 작업 pr, I49).
+// 같은 작업의 pr-auto(M11)와 함께 적을 수 있다. 파일은 차례로 돈다(vitest의 claude 프로젝트).
 // 끝나면(실패해도) 이 시험의 PR을 닫고 브랜치를 지운다. pr-cleanup은 남은 m9/ 기준 브랜치와 그 PR, head 브랜치를 모두
 // 치운다. 앞 시험이 남긴 기준 브랜치가 있으면 pr을 돌리지 않는다. 결과는 test-results/claude/pr.md에 남긴다.
 import fs from 'node:fs'
@@ -28,6 +29,8 @@ import {
 const REPO = process.env['RELAY_TEST_GH_REPO'] ?? ''
 const cases = (process.env['RELAY_REAL_CASES'] ?? '').split(/[\s,]+/).filter(Boolean)
 const PR_CASES = ['pr', 'pr-cleanup']
+/** app-claude의 pr 작업이 맡는 경우. pr-auto(M11, 실제 claude와 실제 gh)는 test/claude/pr-auto.test.ts다 */
+const JOB_CASES = [...PR_CASES, 'pr-auto']
 const enabled = process.env['RELAY_REAL_GH'] === '1' && cases.some((c) => PR_CASES.includes(c))
 const OUT = path.join(APP, 'test-results', 'claude')
 /** app-claude의 pr 작업 제한(60분)보다 짧게 둔다. 넘으면 finally의 정리와 결과 저장이 돈다 */
@@ -99,9 +102,9 @@ describe.runIf(enabled)('[실제] PR 진행 (M9, 실제 gh와 시험용 레포)'
     'pr: 읽기, 거르기, 제외와 relay 밖의 수정, 충돌, 머지, 밖에서 닫힘·다시 열림·머지, 대응 (8.4의 PR 진행 1~7)',
     async () => {
       if (!REPO) throw new Error('RELAY_TEST_GH_REPO가 없음')
-      const others = cases.filter((c) => !PR_CASES.includes(c))
+      const others = cases.filter((c) => !JOB_CASES.includes(c))
       if (others.length)
-        throw new Error(`pr, pr-cleanup은 다른 경우(${others.join(' ')})와 섞지 않는다`)
+        throw new Error(`pr, pr-cleanup, pr-auto는 다른 경우(${others.join(' ')})와 섞지 않는다`)
       const left = leftoverBases(REPO)
       if (left.length) {
         throw new Error(

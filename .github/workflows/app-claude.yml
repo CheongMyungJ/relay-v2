@@ -7,6 +7,8 @@
 # cases에 pr이나 pr-cleanup만 적으면 Linux 작업(pr)이 가짜 claude와 실제 gh로 PR 진행(M9)과 PR 대응의 push, 답글 게시,
 # 다시 실행(M10, I53)을 시험용 레포에서 돈다.
 # 이때는 Claude 인증 없이 시험용 레포 secret RELAY_TEST_GH_REPO, RELAY_TEST_GH_TOKEN만 쓴다 (I43, I49).
+# cases의 pr-auto는 같은 Linux 작업이 실제 claude와 실제 gh를 합쳐 자동 대응(M11)을 돈다. 이때만 Claude 인증 secret을
+# 작업에 넣고 Claude Code를 설치한다 (I55). pr, pr-cleanup과 함께 적을 수 있다.
 # 결과는 실행 요약과 claude-results 결과물에 올라가고, 사람이 docs/checks.md에 옮긴다 (I30).
 name: app-claude
 
@@ -22,7 +24,7 @@ on:
         required: false
         default: "low"
       cases:
-        description: "돌릴 경우 (예: S resume rewind-fix restart). rewind는 rewind-intake와 rewind-fix. 비우면 전부. pr, pr-cleanup은 따로(PR 진행, Linux)"
+        description: "돌릴 경우 (예: S resume rewind-fix restart). rewind는 rewind-intake와 rewind-fix. 비우면 전부. pr, pr-cleanup, pr-auto는 따로(PR 진행과 대응, Linux)"
         required: false
         default: ""
 
@@ -31,8 +33,8 @@ permissions:
 
 jobs:
   claude:
-    # pr이나 pr-cleanup이 들어 있으면 Linux 작업(pr)이 맡는다. 낱말로 찾으려고 앞뒤에 공백을 붙인다
-    if: ${{ !contains(format(' {0} ', inputs.cases), ' pr ') && !contains(format(' {0} ', inputs.cases), ' pr-cleanup ') }}
+    # pr, pr-cleanup, pr-auto가 들어 있으면 Linux 작업(pr)이 맡는다. 낱말로 찾으려고 앞뒤에 공백을 붙인다
+    if: ${{ !contains(format(' {0} ', inputs.cases), ' pr ') && !contains(format(' {0} ', inputs.cases), ' pr-cleanup ') && !contains(format(' {0} ', inputs.cases), ' pr-auto ') }}
     runs-on: windows-latest
     timeout-minutes: 120
     defaults:
@@ -109,7 +111,8 @@ jobs:
   pr:
     # PR 진행(M9, I49)과 PR 대응(M10, I53): 가짜 claude와 실제 gh로 돈다. gh와 GitHub의 동작은 OS와 상관없어 Linux에서 한다
     # (S7과 같음). 시험용 레포의 main에서 임시 기준 브랜치 m9/<run>/base를 만들어 거기에 PR을 연다(I48).
-    if: ${{ contains(format(' {0} ', inputs.cases), ' pr ') || contains(format(' {0} ', inputs.cases), ' pr-cleanup ') }}
+    # 자동 대응(M11, pr-auto)은 대응 task만 실제 claude다 (I55).
+    if: ${{ contains(format(' {0} ', inputs.cases), ' pr ') || contains(format(' {0} ', inputs.cases), ' pr-cleanup ') || contains(format(' {0} ', inputs.cases), ' pr-auto ') }}
     runs-on: ubuntu-latest
     # 시험의 기한(test/claude/pr.test.ts, 50분)보다 길게 둔다. 작업이 제한에 걸려 끊기면 시험 PR과 브랜치 정리가 돌지 못한다
     timeout-minutes: 60
@@ -118,6 +121,13 @@ jobs:
       GH_TOKEN: ${{ secrets.RELAY_TEST_GH_TOKEN }}
       RELAY_REAL_GH: "1"
       RELAY_REAL_CASES: ${{ inputs.cases }}
+      # pr-auto만 실제 claude를 쓴다. 다른 경우에는 Claude 인증을 작업에 넣지 않는다 (I55)
+      RELAY_REAL_CLAUDE: ${{ contains(format(' {0} ', inputs.cases), ' pr-auto ') && '1' || '' }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ contains(format(' {0} ', inputs.cases), ' pr-auto ') && secrets.CLAUDE_CODE_OAUTH_TOKEN || '' }}
+      # 둘 다 있으면 구독 토큰만 쓴다 (claude 작업과 같음)
+      ANTHROPIC_API_KEY: ${{ contains(format(' {0} ', inputs.cases), ' pr-auto ') && secrets.CLAUDE_CODE_OAUTH_TOKEN == '' && secrets.ANTHROPIC_API_KEY || '' }}
+      ANTHROPIC_MODEL: ${{ inputs.model }}
+      CLAUDE_CODE_EFFORT_LEVEL: ${{ inputs.effort }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -139,6 +149,31 @@ jobs:
       - name: gh 버전
         run: gh --version
 
+      - name: Claude 인증 secret 확인 (pr-auto)
+        if: ${{ contains(format(' {0} ', inputs.cases), ' pr-auto ') }}
+        run: |
+          if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ] && [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::error::pr-auto에는 CLAUDE_CODE_OAUTH_TOKEN 또는 ANTHROPIC_API_KEY secret이 필요합니다 (docs/implementation.md I55)."
+            exit 1
+          fi
+
+      - name: Claude Code 설치 (pr-auto, 네이티브 설치 스크립트)
+        if: ${{ contains(format(' {0} ', inputs.cases), ' pr-auto ') }}
+        # 설치 스크립트에는 토큰을 넘기지 않는다
+        run: |
+          curl -fsSL https://claude.ai/install.sh | env -u GH_TOKEN -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Claude Code 설정 폴더 (pr-auto, 대화형 온보딩을 건너뜀)
+        # 따로 만든 설정 폴더의 .claude.json에 hasCompletedOnboarding만 더한다 (docs/implementation.md 8.4, spikes/README.md)
+        if: ${{ contains(format(' {0} ', inputs.cases), ' pr-auto ') }}
+        run: |
+          dir="$RUNNER_TEMP/claude-config"
+          mkdir -p "$dir"
+          CLAUDE_CONFIG_DIR="$dir" env -u GH_TOKEN claude --version
+          node -e 'const fs = require("fs"); const f = process.argv[1]; const j = fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, "utf8")) : {}; j.hasCompletedOnboarding = true; fs.writeFileSync(f, JSON.stringify(j, null, 2));' "$dir/.claude.json"
+          echo "CLAUDE_CONFIG_DIR=$dir" >> "$GITHUB_ENV"
+
       - name: 앱 의존성 설치
         working-directory: app
         env:
@@ -154,7 +189,7 @@ jobs:
         if: always()
         working-directory: app
         run: |
-          for name in pr.md pr-cleanup.md; do
+          for name in pr-cleanup.md pr.md pr-auto.md; do
             file="test-results/claude/$name"
             if [ -f "$file" ]; then cat "$file" >> "$GITHUB_STEP_SUMMARY"; fi
           done
