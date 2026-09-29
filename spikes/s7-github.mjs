@@ -442,7 +442,7 @@ function humanSteps(n, url, owner) {
     '',
     '1. Conversation 탭 맨 아래에 대화 코멘트를 단다(예: "A 대화 코멘트").',
     '2. Files changed 탭에서 `src/cart.mjs`의 더한 줄(초록 줄) 하나에 인라인 코멘트를 적고 [Start a review]를 누른다. [Submit review](또는 [Review changes])에서 본문을 적고 [Comment]로 제출한다.',
-    `3. Conversation 탭에서 "${'소유자 인라인 코멘트 (S7)'}" 스레드에 [Reply]로 답글을 단다.`,
+    '3. Conversation 탭에서 "소유자 인라인 코멘트 (S7)" 스레드에 [Reply]로 답글을 단다.',
     '4. (계정 A만, 할 수 있으면) 리뷰를 [Approve]로 한 번 더 제출한다.',
     '',
     `아무 계정으로나 PR 화면에서 "${TAG}"가 붙은 답글 둘에 \`<!-- relay:\` 글자가 보이지 않는지도 본다(절차 4).`,
