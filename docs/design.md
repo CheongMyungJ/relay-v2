@@ -1002,10 +1002,10 @@ pr.items_received | pr.synced | pr.pushed | pr.replied | pr.checks_rerun | pr.me
 | `work.completed` | `delivery`: `none`(전달 없이 완료), `push`, `pr`. PR 진행에서 끝나면 `merged`(`true`는 머지됨, `false`는 머지 없이 끝냄, D152) |
 | `work.abandoned` | 없음 |
 | `work.cleaned` | `forced`(`--force`로 지웠는가), `deleted_branches` |
-| `task.started` | `reason`(task를 시작한 까닭: `default`, `rewind`, `skip`, `resume`), `session_id` |
+| `task.started` | `reason`(task를 시작한 까닭: `default`, `rewind`, `skip`, `resume`, `respond`([대응 시작], D187)), `session_id` |
 | `task.awaiting_approval` | 없음. 재시작 조정이 바꿨으면 `reason: app_restart`와 끝낸 고아의 `killed_pid`(D76). Stop 없이 세션이 끝나며 바뀌었으면 `reason: session_ended`(D146) |
 | `task.approved` | `by`: `human`, `auto`. [오류 무시하고 승인]이면 `ignored_errors`(수) |
-| `task.interrupted` | `reason`: `human`([즉시 중단]), `app_quit`(앱 종료 확인), `abandoned`([Work 포기]), `rewind`, `skip`(단계 선택), `session_ended`(handoff 없이 세션 종료), `start_failed`(세션을 띄우지 못함. `error`에 까닭, D135의 앞선 처리 실패도 여기다), `app_restart`(재시작 조정. 끝낸 고아가 있으면 `killed_pid`). 대기열에 있던 task면 `queued: true` |
+| `task.interrupted` | `reason`: `human`([즉시 중단]), `app_quit`(앱 종료 확인), `abandoned`([Work 포기]), `rewind`, `skip`(단계 선택), `session_ended`(handoff 없이 세션 종료), `start_failed`(세션을 띄우지 못함. `error`에 까닭, D135의 앞선 처리 실패도 여기다), `app_restart`(재시작 조정. 끝낸 고아가 있으면 `killed_pid`), `pr_merged`(PR이 밖에서 머지돼 대응 task를 끝냄, D179). 대기열에 있던 task면 `queued: true` |
 | `task.resumed` | `session_id`, `claude_version` |
 | `task.rewound` | `node`, `from_task`, `discarded`, `keep_code`, 코드를 되돌렸으면 `reset_to`, `backup_branch`, 끊긴 되감기를 다시 하며 덤으로 남긴 백업이 있으면 `extra_backup_branch` |
 | `task.skipped_to` | `node`, `from_task`, `discarded`, `skipped` |
@@ -1014,8 +1014,8 @@ pr.items_received | pr.synced | pr.pushed | pr.replied | pr.checks_rerun | pr.me
 | `pr.items_received` | 받은 항목 id(D189) |
 | `pr.synced` | fast-forward로 받은 원격 커밋, 옮긴 기준 커밋(있으면, D193) |
 | `pr.pushed` | 대응 task, push한 커밋 |
-| `pr.replied` | 답글을 단 항목 id와 게시한 코멘트 id(D194) |
-| `pr.checks_rerun` | 다시 실행한 체크 |
+| `pr.replied` | 답글을 단 항목 id와 게시한 코멘트 id(D194). 코멘트가 없어져 건너뛴 항목이 있으면 `skipped`(D205) |
+| `pr.checks_rerun` | 다시 실행한 Actions 실행(`runs`)과 체크 이름(`checks`, D203) |
 | `pr.merged` | 머지 방식, 머지한 head 커밋. 밖에서 머지됐으면 `outside: true`(D179) |
 | `pr.closed`, `pr.reopened` | 없음 |
 | `pr.auto_paused` | 멈춘 까닭(라운드 상한, D171) |
