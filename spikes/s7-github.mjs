@@ -69,11 +69,15 @@ async function waitFor(what, fn, { timeout = 300000, interval = 5000 } = {}) {
   }
 }
 
-// GH_DEBUG=api가 찍는 "* Request to <URL>" 줄로 gh가 보낸 HTTP 요청을 센다(절차 9).
+// GH_DEBUG=api가 찍는 "* Request to <URL>" 줄로 gh가 보낸 HTTP 요청을 세고(절차 9), 응답 머리글의
+// X-Ratelimit-Resource와 X-Ratelimit-Used로 요청마다 어느 한도를 얼마나 썼는지 본다(go-gh의 httpretty 출력).
 function counted(args, opts = {}) {
   const res = gh(args, { ...opts, env: { GH_DEBUG: 'api' } });
   const urls = [...res.stderr.matchAll(/^\* Request to (\S+)/gm)].map((m) => m[1].replace('https://api.github.com', ''));
-  return { code: res.code, stdout: res.stdout, urls, head: urls.length ? '' : redact(res.stderr.split('\n').slice(0, 5).join('\n')) };
+  const resources = [...res.stderr.matchAll(/^< X-Ratelimit-Resource: (\S+)/gim)].map((m) => m[1]);
+  const used = [...res.stderr.matchAll(/^< X-Ratelimit-Used: (\d+)/gim)].map((m) => Number(m[1]));
+  const limits = [...res.stderr.matchAll(/^< X-Ratelimit-Limit: (\d+)/gim)].map((m) => Number(m[1]));
+  return { code: res.code, stdout: res.stdout, urls, rate: resources.map((r, i) => ({ resource: r, used: used[i], limit: limits[i] })), head: urls.length ? '' : redact(res.stderr.split('\n').slice(0, 5).join('\n')) };
 }
 
 const prView = (n, fields = PR_FIELDS) => ghJson(['pr', 'view', String(n), '--repo', REPO, '--json', fields.join(',')]);
@@ -96,9 +100,9 @@ async function checksAppear(n, sha) {
   const t0 = Date.now();
   const samples = [];
   await waitFor('체크가 나타남', () => {
-    const p = prView(n, ['headRefOid', 'statusCheckRollup']);
+    const p = prView(n, ['headRefOid', 'statusCheckRollup', 'mergeable', 'mergeStateStatus']);
     const len = p.headRefOid === sha ? (p.statusCheckRollup || []).length : -1;
-    samples.push(`${((Date.now() - t0) / 1000).toFixed(1)}s:${p.headRefOid.slice(0, 7)}:${len}`);
+    samples.push(`${((Date.now() - t0) / 1000).toFixed(1)}s:${p.headRefOid.slice(0, 7)}:${len}:${p.mergeable}/${p.mergeStateStatus}`);
     return len > 0;
   }, { timeout: 180000, interval: 1000 });
   return samples;
@@ -201,7 +205,10 @@ async function startPhase(r) {
 
     // 2. 상태 읽기: 만든 직후, 체크가 나타나기까지, 첫 시도(ci-flaky로 실패)가 끝난 뒤
     r.observe('2. 만든 직후의 PR 상태 (gh pr view --json)', brief(prView(n)));
-    r.observe('2. PR을 만든 뒤 체크 목록 길이 (경과:head:길이)', await checksAppear(n, sha1));
+    const noChecks = gh(['pr', 'checks', String(n), '--repo', REPO]);
+    const noChecksJson = gh(['pr', 'checks', String(n), '--repo', REPO, '--json', 'name,bucket']);
+    r.observe('2. 체크가 아직 없을 때 gh pr checks (표 출력 / --json)', `${show(noChecks)}\n---\n${show(noChecksJson)}`);
+    r.observe('2. PR을 만든 뒤 체크 목록 길이 (경과:head:길이:mergeable/mergeStateStatus)', await checksAppear(n, sha1));
     const failedPr = await waitChecks(n, sha1, 'CI 첫 시도');
     r.observe('2. 첫 시도가 끝난 뒤의 PR 상태', brief(failedPr));
     r.observe('2. statusCheckRollup 원본 (첫 시도 뒤)', failedPr.statusCheckRollup);
@@ -226,7 +233,8 @@ async function startPhase(r) {
     r.observe('2. gh run view --job <작업> --log-failed: 끝 6줄', show({ ...jobLogFailed, stdout: jobLogFailed.stdout.split('\n').slice(-6).join('\n') }));
     const job = apiJson('GET', `repos/${REPO}/actions/jobs/${jobId}`);
     r.observe('2. 작업의 스텝 (REST actions/jobs/{id})', job.steps.map((s) => `${s.number} ${s.name}: ${s.conclusion} ${s.started_at}~${s.completed_at}`));
-    const jobLogRes = api('GET', `repos/${REPO}/actions/jobs/${jobId}/logs`);
+    // 로그에 색 제어 문자가 있어 gh api는 --allow-escape-sequences 없이는 출력하지 않는다(첫 실행에서 관찰).
+    const jobLogRes = api('GET', `repos/${REPO}/actions/jobs/${jobId}/logs`, undefined, ['--allow-escape-sequences']);
     const jobLog = jobLogRes.stdout.split('\n');
     r.observe('2. 작업 로그 전체의 끝 6줄 (REST actions/jobs/{id}/logs)', jobLogRes.code === 0 ? jobLog.slice(-6).join('\n') : show(jobLogRes));
     const cut = jobLog.findIndex((l) => cleanupRe.test(l));
@@ -300,10 +308,13 @@ async function startPhase(r) {
     r.check('4. 웹이 그리는 본문(body_html, body_text)에 표시가 없다', ![html1.body_html, html1.body_text, html2.body_html, html2.body_text].some((s) => (s || '').includes('relay:')), JSON.stringify({ html1: html1.body_html, text2: html2.body_text }));
     const gql2 = ghJson(['pr', 'view', String(n), '--repo', REPO, '--json', 'comments']);
     r.observe('4. GraphQL(gh pr view --json comments)의 본문에도 표시가 있다', gql2.comments.some((x) => x.body.includes(mark2)));
+    // 스레드 답글을 게시하면 본문이 빈 리뷰가 하나 더 생긴다(첫 실행에서 관찰). 본문이 빈 리뷰는 항목(리뷰 본문)이 아니다.
     const appIds = new Set([`inline:${reply1.id}`, `convo:${reply2.id}`]);
     const isApp = (key, x) => appIds.has(key) || /<!-- relay:w-s7-/.test(x.body || '');
+    const emptyReview = (key, x) => key.startsWith('review:') && !(x.body || '').trim();
     const fresh = [...c2.reviews.map((x) => [`review:${x.id}`, x]), ...c2.inline.map((x) => [`inline:${x.id}`, x]), ...c2.convo.map((x) => [`convo:${x.id}`, x])].filter(([key]) => !seen.has(key));
-    r.check('4. 다음 읽기의 새 코멘트는 앱의 답글뿐이고, 적어 둔 id와 표시로 가려낸다', fresh.length === 2 && fresh.every(([key, x]) => isApp(key, x)), JSON.stringify(fresh.map(([key]) => key)));
+    r.observe('4. 답글을 게시한 뒤 새로 생긴 것 (종류:id, 본문 앞부분, 인라인 답글의 pull_request_review_id)', { fresh: fresh.map(([key, x]) => `${key} ${JSON.stringify((x.body || '').slice(0, 20))}`), reply1Review: reply1.pull_request_review_id });
+    r.check('4. 다음 읽기에서 새로 생긴 것을 적어 둔 id·표시와 "본문이 빈 리뷰는 항목이 아님"으로 모두 가려낸다', fresh.some(([key]) => key === `inline:${reply1.id}`) && fresh.some(([key]) => key === `convo:${reply2.id}`) && fresh.every(([key, x]) => isApp(key, x) || emptyReview(key, x)), JSON.stringify(fresh.map(([key]) => key)));
 
     // 7. 충돌: 기준 브랜치의 같은 자리(파일 끝)에 다른 내용을 GitHub에서 커밋한다.
     const baseFile = apiJson('GET', `repos/${REPO}/contents/src/cart.mjs?ref=${enc(B.base)}`);
@@ -331,7 +342,7 @@ async function startPhase(r) {
     const pushMerged = gitTry(wt, 'push', 'origin', `${B.head}:${B.head}`);
     r.check('7. 기준 브랜치를 병합한 커밋은 일반 push로 올라간다', pushMerged.code === 0, show(pushMerged));
     const sha2 = git(wt, 'rev-parse', 'HEAD');
-    r.observe('7. push 뒤 새 head의 체크 목록 길이 (경과:head:길이)', await checksAppear(n, sha2));
+    r.observe('7. push 뒤 새 head의 체크 목록 길이 (경과:head:길이:mergeable/mergeStateStatus)', await checksAppear(n, sha2));
     const resolved = await waitFor('충돌이 풀림', () => {
       const p = prView(n, ['mergeable', 'mergeStateStatus', 'headRefOid']);
       return p.headRefOid === sha2 && p.mergeable === 'MERGEABLE' ? p : null;
@@ -385,20 +396,25 @@ async function startPhase(r) {
     const sha4 = git(wt, 'rev-parse', 'HEAD');
 
     // 9. PR 하나를 한 번 읽는 데 드는 요청 수와 한도 (D158)
-    const rl0 = apiJson('GET', 'rate_limit').resources;
-    const reads = [
+    // 같은 읽기를 두 번 하고, 응답 머리글의 X-Ratelimit-Used가 한 번 읽기에 얼마나 느는지 한도(resource)마다 본다.
+    const readOnce = () => [
       ['pr', 'view', String(n), '--repo', REPO, '--json', PR_FIELDS.join(',')],
       ['api', `repos/${REPO}/pulls/${n}/reviews?per_page=100`, '--paginate', '--slurp'],
       ['api', `repos/${REPO}/pulls/${n}/comments?per_page=100`, '--paginate', '--slurp'],
       ['api', `repos/${REPO}/issues/${n}/comments?per_page=100`, '--paginate', '--slurp'],
     ].map((args) => ({ cmd: args.slice(0, 3).join(' '), ...counted(args) }));
-    const rl1 = apiJson('GET', 'rate_limit').resources;
-    const rest = reads.flatMap((x) => x.urls).filter((u) => !u.startsWith('/graphql')).length;
-    const graphql = reads.flatMap((x) => x.urls).filter((u) => u.startsWith('/graphql')).length;
-    const usage = { rest, graphql, core_used_delta: rl1.core.used - rl0.core.used, graphql_points_delta: rl1.graphql.used - rl0.graphql.used, core_limit: rl1.core.limit, graphql_limit: rl1.graphql.limit, perHour: { rest: rest * 30, graphqlPoints: Math.max(graphql, rl1.graphql.used - rl0.graphql.used) * 30 } };
-    r.observe('9. 한 번 읽기의 명령별 요청', reads.map((x) => ({ cmd: x.cmd, code: x.code, requests: x.urls, debugHead: x.head })));
-    r.observe('9. 한 번 읽기의 요청 수, 한도, 2분 주기의 시간당 사용량', usage);
-    r.check('9. PR 하나를 2분마다 읽어도 한도 안이다 (시간당 사용량 < 한도의 10%)', reads.every((x) => x.code === 0) && rest > 0 && usage.perHour.rest < usage.core_limit / 10 && usage.perHour.graphqlPoints < usage.graphql_limit / 10, JSON.stringify(usage));
+    const read1 = readOnce();
+    const read2 = readOnce();
+    const lastUsed = (reads) => Object.fromEntries(reads.flatMap((x) => x.rate).map((x) => [x.resource, x.used]));
+    const u1 = lastUsed(read1);
+    const u2 = lastUsed(read2);
+    const perRead = Object.fromEntries(Object.keys(u2).map((k) => [k, u2[k] - (u1[k] ?? u2[k])]));
+    const limits = Object.fromEntries(read2.flatMap((x) => x.rate).map((x) => [x.resource, x.limit]));
+    const requests = read2.flatMap((x) => x.urls);
+    const usage = { requests: requests.length, graphqlRequests: requests.filter((u) => u.startsWith('/graphql')).length, perRead, limits, perHour: Object.fromEntries(Object.keys(perRead).map((k) => [k, perRead[k] * 30])) };
+    r.observe('9. 한 번 읽기의 명령별 요청과 응답 머리글의 한도 (두 번째 읽기)', read2.map((x) => ({ cmd: x.cmd, code: x.code, requests: x.urls, rate: x.rate, debugHead: x.head })));
+    r.observe('9. 한 번 읽기가 쓰는 한도, 2분 주기의 시간당 사용량', usage);
+    r.check('9. PR 하나를 2분마다 읽어도 한도 안이다 (시간당 사용량 < 한도의 10%)', [...read1, ...read2].every((x) => x.code === 0) && requests.length > 0 && Object.keys(perRead).length > 0 && Object.keys(perRead).every((k) => perRead[k] >= 0 && usage.perHour[k] < limits[k] / 10), JSON.stringify(usage));
 
     // 사람의 코멘트를 받을 수 있게 CI가 끝난 상태로 PR을 남긴다.
     const final = await waitChecks(n, sha4, '마지막 head의 CI');
@@ -428,6 +444,8 @@ function humanSteps(n, url, owner) {
     '2. Files changed 탭에서 `src/cart.mjs`의 더한 줄(초록 줄) 하나에 인라인 코멘트를 적고 [Start a review]를 누른다. [Submit review](또는 [Review changes])에서 본문을 적고 [Comment]로 제출한다.',
     `3. Conversation 탭에서 "${'소유자 인라인 코멘트 (S7)'}" 스레드에 [Reply]로 답글을 단다.`,
     '4. (계정 A만, 할 수 있으면) 리뷰를 [Approve]로 한 번 더 제출한다.',
+    '',
+    `아무 계정으로나 PR 화면에서 "${TAG}"가 붙은 답글 둘에 \`<!-- relay:\` 글자가 보이지 않는지도 본다(절차 4).`,
     '',
     `다 달았으면 spikes 워크플로를 spikes=S7, s7=finish, s7_pr=${n}으로 돌린다. finish가 머지와 정리까지 한다.`,
     '코멘트를 달지 않고 끝내려면 s7=cleanup으로 돌린다.',
@@ -495,6 +513,12 @@ async function finishPhase(r) {
     const assocs = (p) => Object.values(p.associations).flat();
     r.check('3. 협업자 계정의 코멘트는 작성자 관계가 COLLABORATOR다 (D160)', collabs.length > 0 && collabs.every(([, p]) => assocs(p).every((a) => a === 'COLLABORATOR')), collabs.length ? JSON.stringify(collabs) : '협업자 계정의 코멘트가 없다');
     r.check('3. 협업자가 아닌 계정의 코멘트는 OWNER·MEMBER·COLLABORATOR가 아니다 (D160)', others.length > 0 && others.every(([, p]) => assocs(p).every((a) => !['OWNER', 'MEMBER', 'COLLABORATOR'].includes(a))), others.length ? JSON.stringify(others) : '협업자가 아닌 계정의 코멘트가 없다');
+    // 앱의 거르기를 흉내 낸다: 본문이 빈 리뷰와 앱의 답글(표시)은 항목이 아니고, 사람의 것은 작성자 관계가
+    // OWNER·MEMBER·COLLABORATOR일 때만 받는다(D160). 봇은 받을 봇 목록(D161)이 비어 있어 받지 않는다.
+    const view = items
+      .filter(([kind, x]) => !(kind === 'review' && !(x.body || '').trim()) && !/<!-- relay:/.test(x.body || ''))
+      .map(([kind, x]) => `${kind}:${x.id} ${x.user.login} ${x.author_association}${x.in_reply_to_id ? ` (답글 → ${x.in_reply_to_id})` : ''} → ${x.user.type === 'User' && ['OWNER', 'MEMBER', 'COLLABORATOR'].includes(x.author_association) ? '받음' : '받지 않음'}`);
+    r.observe('3. 앱의 거르기를 흉내 낸 결과 (D157, D160, D161, D194)', view);
     const gql = ghJson(['pr', 'view', String(n), '--repo', REPO, '--json', 'comments,reviews,latestReviews,reviewDecision']);
     raw.graphql = gql;
     r.observe('3. GraphQL(gh pr view --json)의 작성자와 관계', { comments: gql.comments.map((x) => `${x.author?.login}:${x.authorAssociation}`), reviews: gql.reviews.map((x) => `${x.author?.login}:${x.authorAssociation}:${x.state}`), latestReviews: gql.latestReviews.map((x) => `${x.author?.login}:${x.state}`), reviewDecision: gql.reviewDecision });
