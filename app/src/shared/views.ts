@@ -296,6 +296,7 @@ export interface AutoRespondView {
   startFromWork: boolean
   /** PR 대응의 자동 승인이 켜져 있다 (D169) */
   approve: boolean
+  /** PR 대응의 자동 승인을 Work 설정으로 정했다. 아니면 앱 설정을 따른다 (D72) */
   approveFromWork: boolean
   /** 사람 손 없이 이어진 라운드 수 (D171) */
   rounds: number

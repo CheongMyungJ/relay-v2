@@ -16,6 +16,8 @@
 // M7: 두 번째 Work의 새 Work 대화상자에 이 Work의 자동 승인(앱 설정 따름: 켜짐)이 보인다 → 수정이 승인 대기가 되면
 // 승인 화면에 자동 승인 카운트다운과 [취소]가 보인다 → [취소]하면 카운트다운이 없어지고 까닭([취소]를 누름)이 보이며,
 // 사람이 [승인]한다.
+// M11: 같은 설정 화면에 PR 대응의 자동 승인과 "자동 대응 (PR 진행)" 절(대응 자동 시작, 자동 대응 라운드 상한)이 있고
+// 기본은 꺼짐, 3이다.
 // M8: 설정 화면에 리뷰의 질문 방식은 있고 자동 승인은 없다 → 두 번째 Work는 수정 뒤 리뷰를 지난다. 리뷰는 카운트다운
 // 없이 승인 대기가 되고 [산출물]에 review.md가 보이며, 사람이 [승인]하면 최종 검증으로 간다.
 // M6: 앱 종료 확인을 거쳐 앱을 끄고, 첫 Work의 work.json에 끊긴 되감기 기록을 넣고 decisions.md를 고친 뒤 다시
@@ -191,6 +193,10 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   // 리뷰는 질문 방식만 고르고 자동 승인은 켤 수 없다 (5.1.1, D167)
   await expect(win.getByLabel('리뷰 질문 방식')).toHaveValue('draft_first')
   await expect(win.getByLabel('리뷰 자동 승인')).toHaveCount(0)
+  // 자동 대응 (M11, D154, D169, D171): 기본은 꺼짐과 상한 3이다
+  await expect(win.getByLabel('PR 대응 자동 승인')).not.toBeChecked()
+  await expect(win.getByLabel('대응 자동 시작')).not.toBeChecked()
+  await expect(win.getByLabel('자동 대응 라운드 상한')).toHaveValue('3')
   await win.screenshot({ path: 'test-results/settings.png' })
   await win.getByRole('button', { name: '저장', exact: true }).click()
   const config = () =>
@@ -205,6 +211,7 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
     evidence: false,
     rca: false,
     fix: true,
+    respond: false,
   })
   expect(config().auto_approve_countdown_sec).toBe(600)
 
