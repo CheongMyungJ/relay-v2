@@ -542,6 +542,7 @@ async function finishPhase(r) {
     const stale = git(main, 'rev-parse', `${head}^`);
     const bad = gh(['pr', 'merge', String(n), '--repo', REPO, `--${method}`, '--match-head-commit', stale], { cwd: wt });
     r.check('6. --match-head-commit이 지금 head가 아니면 머지되지 않는다 (D176)', bad.code !== 0 && prView(n, ['state']).state === 'OPEN', show(bad));
+    r.observe('6. 옛 head로 gh pr merge --match-head-commit을 하면 (출력)', show(bad));
     const badRest = api('PUT', `repos/${REPO}/pulls/${n}/merge`, { sha: stale, merge_method: method });
     r.observe('6. REST pulls/{n}/merge에 옛 sha를 주면', show(badRest));
     const before = localState(main);
