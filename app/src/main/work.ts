@@ -3148,7 +3148,11 @@ export class WorkRunner {
     const head = await headCommit(this.worktree, opts)
     const inRemote = async (remote: string | null) =>
       remote !== null && (remote === head || (await isAncestor(repo, head, remote, opts)))
-    if (!(await inRemote(await fetchTip(ctx, branch)))) {
+    const tip = await fetchTip(ctx, branch)
+    // 실패한 뒤 다시 승인했고 그때 push한 head 그대로면 다시 적지 않는다: 이번에 올라간 커밋이 없다
+    const pushed = (await this.prItems()).rounds.find((r) => r.task_id === op.task_id)?.pushed
+    if (pushed?.head === head && (await inRemote(tip))) return { head, commits: [] }
+    if (!(await inRemote(tip))) {
       try {
         await pushBranch(this.worktree, branch, 'origin', opts)
       } catch (err) {

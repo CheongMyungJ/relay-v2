@@ -1,7 +1,9 @@
-// [실제] PR 진행 (docs/implementation.md M9, 8.4의 "PR 진행", I43, I48, I49).
-// 에이전트가 없는 마일스톤이라 가짜 claude와 실제 gh로 돈다. 시험용 레포(RELAY_TEST_GH_REPO)를 clone해 main에서 임시
-// 기준 브랜치 m9/<run>/base를 만들고(I48), [흐름]과 같은 공통 시나리오(test/flow/pr-scenario.ts)를 돈다. 앱은 같고
-// GitHub 쪽만 실제다. Claude 인증은 필요 없고 시험용 레포의 토큰(GH_TOKEN)만 쓴다. 레포의 main은 건드리지 않는다.
+// [실제] PR 진행과 대응 (docs/implementation.md M9, M10, 8.4의 "PR 진행", I43, I48, I49, I53).
+// 가짜 claude와 실제 gh로 돈다. 시험용 레포(RELAY_TEST_GH_REPO)를 clone해 main에서 임시 기준 브랜치 m9/<run>/base를
+// 만들고(I48), [흐름]과 같은 공통 시나리오(test/flow/pr-scenario.ts의 runPrScenario, 이어서 PR 대응의
+// runRespondScenario)를 돈다. 앱은 같고 GitHub 쪽만 실제다: 대응은 push, 답글 게시와 보이지 않는 표시, 다시 실행을 실제
+// GitHub에서 본다(I53. 실제 claude의 대응과 답글 초안은 test/claude/respond.test.ts). Claude 인증은 필요 없고 시험용
+// 레포의 토큰(GH_TOKEN)만 쓴다. 레포의 main은 건드리지 않는다.
 // RELAY_REAL_GH=1이고 RELAY_REAL_CASES에 pr이나 pr-cleanup이 있을 때만 돈다(app-claude 워크플로의 Linux 작업 pr, I49).
 // 끝나면(실패해도) 이 시험의 PR을 닫고 브랜치를 지운다. pr-cleanup은 남은 m9/ 기준 브랜치와 그 PR, head 브랜치를 모두
 // 치운다. 앞 시험이 남긴 기준 브랜치가 있으면 pr을 돌리지 않는다. 결과는 test-results/claude/pr.md에 남긴다.
@@ -9,7 +11,12 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { APP, FAKE_CLAUDE, harness, register } from '../flow/harness'
-import { describePr, runPrScenario, type PrContext } from '../flow/pr-scenario'
+import {
+  describePr,
+  runPrScenario,
+  runRespondScenario,
+  type PrContext,
+} from '../flow/pr-scenario'
 import {
   GIT_ENV,
   cleanup,
@@ -94,7 +101,7 @@ describe.runIf(enabled)('[실제] PR 진행 (M9, 실제 gh와 시험용 레포)'
   )
 
   it.runIf(cases.includes('pr'))(
-    'pr: 읽기, 거르기, 제외와 relay 밖의 수정, 충돌, 머지, 밖에서 닫힘·다시 열림·머지 (8.4의 PR 진행 1~6)',
+    'pr: 읽기, 거르기, 제외와 relay 밖의 수정, 충돌, 머지, 밖에서 닫힘·다시 열림·머지, 대응 (8.4의 PR 진행 1~7)',
     async () => {
       if (!REPO) throw new Error('RELAY_TEST_GH_REPO가 없음')
       const others = cases.filter((c) => !PR_CASES.includes(c))
@@ -124,6 +131,7 @@ describe.runIf(enabled)('[실제] PR 진행 (M9, 실제 gh와 시험용 레포)'
         const projectId = await register(h, clone, 'main')
         ctx = { h, world, projectId, repo: clone, note: (l) => notes.push(l), created: [] }
         await runPrScenario(ctx)
+        await runRespondScenario(ctx)
       } catch (e) {
         error = e
       } finally {
@@ -137,7 +145,7 @@ describe.runIf(enabled)('[실제] PR 진행 (M9, 실제 gh와 시험용 레포)'
           (w) => `- ${w.workId} ${w.statusLabel}: ${describePr(w.pr)}`,
         )
         save('pr.md', [
-          ...header('relay [실제] PR 진행 (M9)'),
+          ...header('relay [실제] PR 진행과 대응 (M9, M10)'),
           `- 시험: ${run}, 기준 브랜치 ${base}, PR ${ctx?.created.map((c) => `#${c.pr ?? '?'}`).join(', ') || '없음'}`,
           `- 결과: ${error ? '실패' : '통과'} (${seconds(Date.now() - started)})`,
           ...(error ? [`- 오류: ${String(error instanceof Error ? error.message : error)}`] : []),

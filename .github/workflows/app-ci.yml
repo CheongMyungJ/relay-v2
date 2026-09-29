@@ -1,5 +1,6 @@
 # 앱 CI (docs/implementation.md I28, 8.3).
 # Linux: 타입 검사, ESLint, Prettier, [단위], skills/check.mjs. Windows: 빌드(I39), [어댑터], [흐름].
+# Windows의 [흐름]은 PR 진행·대응(test/flow/pr*.test.ts)과 나머지를 두 작업으로 나눠 함께 돈다. 작업마다 20분 제한이다 (I54).
 name: app-ci
 
 on:
@@ -91,6 +92,31 @@ jobs:
         working-directory: app
         run: npm run test:adapters
 
-      - name: "[흐름]"
+      - name: "[흐름] (PR 진행·대응 밖)"
         working-directory: app
-        run: npm run test:flow
+        run: npm run test:flow -- --exclude "test/flow/pr*.test.ts"
+
+  windows-pr:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: 앱 의존성 설치
+        working-directory: app
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+        run: npm ci --no-audit --no-fund
+
+      - name: "[흐름] PR 진행·대응"
+        working-directory: app
+        run: npm run test:flow -- test/flow/pr
