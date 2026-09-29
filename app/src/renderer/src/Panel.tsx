@@ -818,6 +818,8 @@ const MERGE_LABEL: Readonly<Record<string, string>> = {
 function DoneNotice({ work }: { work: WorkView }) {
   const d = work.delivery?.status === 'succeeded' ? work.delivery : null
   const pr = work.pr
+  // 밖에서 머지될 때 승인했지만 push·게시를 미룬 라운드(D193)는 머지에 들어가지 않았다
+  const lost = pr?.merged ? pr.rounds.filter((r) => r.state === 'deferred') : []
   return (
     <div className="notice done">
       Work 완료 (전달: {d ? d.label : '완료만'})
@@ -831,6 +833,13 @@ function DoneNotice({ work }: { work: WorkView }) {
               : ''}
           , head {pr.merged.head.slice(0, 8)}).
           {work.status === 'completed' ? ' [Work 정리]로 정리하세요.' : ''}
+        </div>
+      ) : null}
+      {lost.length ? (
+        <div className="error">
+          승인했지만 push·게시하지 못한 대응 라운드 {lost.length}개(
+          {lost.map((r) => r.label).join(', ')})는 머지에 들어가지 않았습니다. 그 커밋은 작업
+          브랜치에만 있고 답글은 게시하지 않았습니다 (D193).
         </div>
       ) : null}
       {pr?.ended ? (

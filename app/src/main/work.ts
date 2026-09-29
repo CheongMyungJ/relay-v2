@@ -16,7 +16,6 @@ import path from 'node:path'
 import { claudeVersion, deploySkill, findClaude } from '../adapters/claude'
 import {
   GhApiError,
-  ghApiList,
   ghApiPost,
   ghCreatePr,
   ghMerge,
@@ -120,7 +119,6 @@ import {
 import { NODE_INFO, RESPOND } from '../core/pipeline'
 import {
   CHECK_WAIT_MS,
-  ITEM_KIND_LABEL,
   allowedMethods,
   applyItemAction,
   ciState,
@@ -129,12 +127,12 @@ import {
   reapplyRules,
   mergeGate,
   prBadgeKind,
-  prItemView,
   prLocation,
   prView,
   preferredMethod,
   repoArg,
   restRepo,
+  roundItemViews,
   syncKind,
   type Gate,
   type ItemRules,
@@ -196,6 +194,7 @@ import {
   planRound,
   reconcileItems,
   replyItemIds,
+  respondFailureView,
   respondInputError,
   respondStart,
   respondTasks,
@@ -263,7 +262,7 @@ import type {
 } from '../shared/work'
 import type { SessionPool } from './pool'
 import type { UiPort } from './ports'
-import { readPr, receivedCommits, fetchTip, type PrFetched } from './pr'
+import { listPrComments, readPr, receivedCommits, fetchTip, type PrFetched } from './pr'
 import { CLAUDE_INSTALL_GUIDE } from './projects'
 import { TerminalBuffer } from './terminals'
 
@@ -357,6 +356,9 @@ function turnSnapshot(task: TaskRecord, files: Readonly<Record<string, string>>)
   const draft = task.node === 'intake' ? (files[INTENT_DRAFT_FILE] ?? null) : null
   return JSON.stringify([files[HANDOFF_FILE] ?? null, draft])
 }
+
+/** 한 번의 답글 게시에서 받아 둔 코멘트 목록 (인라인 코멘트, 대화 코멘트) */
+type ReplyLists = Map<'inline' | 'convo', Promise<unknown[]>>
 
 /** 요청의 첫 줄. 사이드바의 Work 제목이다 */
 export function workTitle(request: string): string {
@@ -2444,12 +2446,7 @@ export class WorkRunner {
       view: {
         round: r.round,
         instruction: r.instruction,
-        items: r.items.map((id) => {
-          const item = file.items.find((i) => i.id === id)
-          return item
-            ? { id, kindLabel: ITEM_KIND_LABEL[item.kind], title: prItemView(item, rules).title }
-            : { id, kindLabel: '', title: id }
-        }),
+        items: roundItemViews(r.items, new Map(file.items.map((i) => [i.id, i])), rules),
         results: sectionText(files[RESPONSE_FILE] ?? '', '항목별 결과'),
         replies: round.replies.map((x) => ({
           item: x.item,
@@ -2460,9 +2457,7 @@ export class WorkRunner {
           skipped: x.skipped ?? null,
         })),
         deferred: pending ? deferredRounds(this.work).map((t) => taskLabel(t)) : [],
-        failure: r.failure
-          ? { stage: RESPOND_STAGE_LABEL[r.failure.stage], error: r.failure.error }
-          : null,
+        failure: respondFailureView(r.failure),
         blocked: pending && this.work.pr?.closed_at ? PR_CLOSED : null,
       },
     }
@@ -2733,7 +2728,13 @@ export class WorkRunner {
       const w = this.work
       const notes: string[] = []
       if (w.status === 'completed' && w.pr?.merged?.outside) {
-        notes.push('밖에서 머지됨. [Work 정리]로 정리하세요')
+        // 승인했지만 push·게시를 미룬 라운드(D193)는 머지에 들어가지 않았다
+        const lost = deferredRounds(w).length
+        notes.push(
+          lost
+            ? `밖에서 머지됨. 승인했지만 push·게시하지 못한 대응 라운드 ${lost}개는 머지에 들어가지 않음. [Work 정리]로 정리하세요`
+            : '밖에서 머지됨. [Work 정리]로 정리하세요',
+        )
       } else if (w.status === 'pr') {
         if (w.pr?.closed_at && !closedBefore) notes.push('PR이 닫혀 자동 읽기를 멈춤')
         if (gathered.received.length) notes.push(`대응 거리 ${gathered.received.length}개가 들어옴`)
@@ -3213,10 +3214,13 @@ export class WorkRunner {
     op: RespondOperation,
     location: PrLocation,
   ): Promise<{ item: string; commentId?: number; skipped?: string }[]> {
+    // 코멘트 목록은 한 번의 게시에서 종류마다 한 번만 받는다: 찾는 표시는 앞선 시도에서 올린 답글이고, 없어졌는지는
+    // 원래 코멘트만 본다. 실패하면 그 자리에서 멈추고 [다시 시도]가 새로 받는다
+    const lists: ReplyLists = new Map()
     for (const id of op.rounds) {
       const round = (await this.prItems()).rounds.find((r) => r.task_id === id)
       if (!round) continue
-      for (const reply of unpostedReplies(round)) await this.postReply(id, reply, location)
+      for (const reply of unpostedReplies(round)) await this.postReply(id, reply, location, lists)
     }
     return (await this.prItems()).rounds
       .filter((r) => op.rounds.includes(r.task_id))
@@ -3235,7 +3239,12 @@ export class WorkRunner {
    * 답글은 먼저 원격에서 보이지 않는 표시를 찾아 있으면 id만 적는다. 게시하기 전에 시도한 때를 적고, 게시하면 코멘트 id를
    * 바로 적는다. 인라인 답글이 GitHub의 오류로 실패했는데 다시 읽어도 그 코멘트가 없으면 건너뛴다
    */
-  private async postReply(taskId: string, reply: PrReply, location: PrLocation): Promise<void> {
+  private async postReply(
+    taskId: string,
+    reply: PrReply,
+    location: PrLocation,
+    lists: ReplyLists,
+  ): Promise<void> {
     const file = await this.prItems()
     const item = file.items.find((i) => i.id === reply.item)
     if (item?.gone) {
@@ -3243,7 +3252,7 @@ export class WorkRunner {
       return
     }
     if (reply.attempted_at) {
-      const found = await this.findReply(reply, location)
+      const found = await this.findReply(reply, location, lists)
       if (found) {
         await this.updateReply(taskId, reply.item, {
           comment_id: found.id,
@@ -3271,7 +3280,7 @@ export class WorkRunner {
       })
     } catch (err) {
       const answered = err instanceof GhApiError && err.status !== null
-      if (reply.thread !== null && answered && (await this.inlineGone(reply, location))) {
+      if (reply.thread !== null && answered && (await this.inlineGone(reply, location, lists))) {
         await this.markGone(reply.item)
         await this.updateReply(taskId, reply.item, { skipped: GONE_SKIP })
         return
@@ -3288,28 +3297,27 @@ export class WorkRunner {
     })
   }
 
-  /** 답글이 올라갈 REST 목록 (스레드에 단 답글은 인라인 코멘트, 아니면 대화 코멘트) */
-  private async replyList(reply: PrReply, location: PrLocation): Promise<unknown[]> {
-    const rest = restRepo(location)
-    const n = location.number
-    const path =
-      reply.thread === null
-        ? `${rest}/issues/${n}/comments?per_page=100`
-        : `${rest}/pulls/${n}/comments?per_page=100`
-    return ghApiList(this.ctx.ghBin, {
-      host: location.host,
-      path,
-      cwd: this.project.repo_path,
-      env: this.ctx.env,
-    })
+  /** 답글이 올라갈 REST 목록 (스레드에 단 답글은 인라인 코멘트, 아니면 대화 코멘트). 한 번의 게시에서 종류마다 한 번 받는다 */
+  private replyList(reply: PrReply, location: PrLocation, lists: ReplyLists): Promise<unknown[]> {
+    const kind = reply.thread === null ? 'convo' : 'inline'
+    let list = lists.get(kind)
+    if (!list) {
+      list = listPrComments(
+        { ghBin: this.ctx.ghBin, env: this.ctx.env, repo: this.project.repo_path, location },
+        kind,
+      )
+      lists.set(kind, list)
+    }
+    return list
   }
 
   /** 게시 결과를 모르는 답글을 원격에서 보이지 않는 표시로 찾는다 (D194). 없으면 null */
   private async findReply(
     reply: PrReply,
     location: PrLocation,
+    lists: ReplyLists,
   ): Promise<{ id: number; url: string | null } | null> {
-    for (const raw of await this.replyList(reply, location)) {
+    for (const raw of await this.replyList(reply, location, lists)) {
       const c = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
       const body = typeof c['body'] === 'string' ? c['body'] : ''
       if (typeof c['id'] === 'number' && body.includes(reply.marker)) {
@@ -3320,9 +3328,13 @@ export class WorkRunner {
   }
 
   /** 인라인 답글이 달릴 코멘트(항목의 코멘트나 스레드 첫 코멘트)가 GitHub에서 없어졌는가 (D205) */
-  private async inlineGone(reply: PrReply, location: PrLocation): Promise<boolean> {
+  private async inlineGone(
+    reply: PrReply,
+    location: PrLocation,
+    lists: ReplyLists,
+  ): Promise<boolean> {
     const ids = new Set(
-      (await this.replyList(reply, location)).map((raw) =>
+      (await this.replyList(reply, location, lists)).map((raw) =>
         raw && typeof raw === 'object' ? (raw as Record<string, unknown>)['id'] : null,
       ),
     )

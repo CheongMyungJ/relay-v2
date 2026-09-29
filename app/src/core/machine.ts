@@ -2430,7 +2430,16 @@ function prRead(work: WorkState, e: PrRead): Transition {
       completed_at: e.at,
       pr: { ...omit(now, 'closed_at'), merged },
     }
-    effects.push(log(next, e.at, 'pr.merged', { head: e.head, outside: true }))
+    // 승인했지만 push와 답글 게시를 미룬 라운드(D193)는 머지에 들어가지 않았다. 사람이 알 수 있게 남긴다
+    // (알림은 main이, 완료 화면은 PR 패널의 라운드로 보인다)
+    const deferred = deferredRounds(next).map((t) => t.id)
+    effects.push(
+      log(next, e.at, 'pr.merged', {
+        head: e.head,
+        outside: true,
+        ...(deferred.length ? { deferred } : {}),
+      }),
+    )
     effects.push(log(next, e.at, 'work.completed', { delivery: 'pr', merged: true }))
   } else if (e.state === 'CLOSED') {
     if (!pr.closed_at) {

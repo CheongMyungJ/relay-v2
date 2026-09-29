@@ -318,6 +318,40 @@ describe('PR 진행 중의 액션 바와 배지 (D182, D183)', () => {
     expect(r.effects[0]).toMatchObject({ event: { payload: { reason: 'pr_merged' } } })
   })
 
+  it('push를 미룬 라운드가 있는데 밖에서 머지된 것을 읽으면 pr.merged에 그 라운드를 남긴다 (D193, D179)', () => {
+    const first = approve(awaiting()).work
+    const t1 = currentTask(first)?.id ?? ''
+    const deferred = apply(first, { type: 'respond.deferred', at: at(), check: valid() }).work
+    const r = apply(deferred, {
+      type: 'pr.read',
+      at: at(),
+      number: 7,
+      state: 'MERGED',
+      head: 'remote01',
+      received: [],
+      notAccepted: [],
+    })
+    expect(r.work.status).toBe('completed')
+    expect(types(r.effects)).toEqual(['log:pr.merged', 'log:work.completed'])
+    expect(r.effects[0]).toMatchObject({
+      event: { payload: { head: 'remote01', outside: true, deferred: [t1] } },
+    })
+    // 미룬 라운드가 없으면 남기지 않는다
+    const plain = apply(inPr(), {
+      type: 'pr.read',
+      at: at(),
+      number: 7,
+      state: 'MERGED',
+      head: HEAD,
+      received: [],
+      notAccepted: [],
+    })
+    expect(plain.effects[0]).toMatchObject({ event: { payload: { head: HEAD, outside: true } } })
+    expect(plain.effects[0]).not.toMatchObject({
+      event: { payload: { deferred: expect.anything() } },
+    })
+  })
+
   it('PR이 닫혀 있으면 대응 task의 [승인]을 받지 않고, 다시 열린 것을 읽으면 받는다 (D179)', () => {
     const read = (work: WorkState, state: 'OPEN' | 'CLOSED') =>
       apply(work, {

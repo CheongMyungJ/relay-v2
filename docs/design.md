@@ -1016,7 +1016,7 @@ pr.items_received | pr.synced | pr.pushed | pr.replied | pr.checks_rerun | pr.me
 | `pr.pushed` | 대응 task, push한 커밋 |
 | `pr.replied` | 답글을 단 항목 id와 게시한 코멘트 id(D194). 코멘트가 없어져 건너뛴 항목이 있으면 `skipped`(D205) |
 | `pr.checks_rerun` | 다시 실행한 Actions 실행(`runs`)과 체크 이름(`checks`, D203) |
-| `pr.merged` | 머지 방식, 머지한 head 커밋. 밖에서 머지됐으면 `outside: true`(D179) |
+| `pr.merged` | 머지 방식, 머지한 head 커밋. 밖에서 머지됐으면 `outside: true`(D179). 그때 승인했지만 push와 답글 게시를 미룬 라운드(D193)가 있으면 그 대응 task(`deferred`) |
 | `pr.closed`, `pr.reopened` | 없음 |
 | `pr.auto_paused` | 멈춘 까닭(라운드 상한, D171) |
 

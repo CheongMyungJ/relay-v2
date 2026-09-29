@@ -93,6 +93,13 @@ export interface RespondStart {
 export const PR_CLOSED =
   'PR이 닫혀 있음 ([새로 고침]으로 다시 열린 것을 읽으면 대응할 수 있음, D179)'
 
+/** 대응 라운드의 마지막 실패 (push나 답글 게시). PR 패널의 라운드 기록과 승인 화면이 같이 쓴다 */
+export function respondFailureView(
+  failure: RespondRound['failure'],
+): { stage: string; error: string } | null {
+  return failure ? { stage: RESPOND_STAGE_LABEL[failure.stage], error: failure.error } : null
+}
+
 /**
  * [대응 시작]을 받지 않는 까닭 (시나리오 10-3, D170, D179, D182): PR 진행이 아님, 진행 중 작업이 있음, PR이 닫힘, 끝나지
  * 않은 대응 task가 있음(한 번에 하나). 받으면 null. machine과 PR 패널의 버튼이 같이 쓴다

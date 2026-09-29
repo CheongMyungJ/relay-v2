@@ -23,10 +23,10 @@ import type {
 } from '../shared/views'
 import type { MergeMethod, WorkState } from '../shared/work'
 import {
-  RESPOND_STAGE_LABEL,
   isRespondPending,
   pendingRespond,
   rerunPlan,
+  respondFailureView,
   respondStart,
   respondTasks,
 } from './respond'
@@ -1138,16 +1138,7 @@ function roundViews(input: PrViewInput): RoundView[] {
       label: taskLabel(t),
       state,
       stateLabel: state === 'running' ? TASK_STATUS_LABEL[t.status] : ROUND_STATE_LABEL[state],
-      items: r.items.map((id) => {
-        const item = items.get(id)
-        return item
-          ? {
-              id,
-              kindLabel: ITEM_KIND_LABEL[item.kind],
-              title: prItemView(item, input.rules).title,
-            }
-          : { id, kindLabel: '', title: id }
-      }),
+      items: roundItemViews(r.items, items, input.rules),
       instruction: r.instruction,
       pushed: rec?.pushed ? { at: rec.pushed.at, commits: rec.pushed.commits } : null,
       pushedWith: rec?.pushed_with ?? null,
@@ -1157,9 +1148,23 @@ function roundViews(input: PrViewInput): RoundView[] {
         skipped: x.skipped ?? null,
       })),
       publishedAt: r.published_at ?? null,
-      failure: r.failure
-        ? { stage: RESPOND_STAGE_LABEL[r.failure.stage], error: r.failure.error }
-        : null,
+      failure: respondFailureView(r.failure),
     }
+  })
+}
+
+/**
+ * 대응 라운드의 항목. PR 패널의 라운드 기록과 승인 화면이 같이 쓴다. pr-items.json에 없는 항목은 id만 보인다
+ */
+export function roundItemViews(
+  ids: readonly string[],
+  items: ReadonlyMap<string, PrItem>,
+  rules: ItemRules,
+): RoundView['items'] {
+  return ids.map((id) => {
+    const item = items.get(id)
+    return item
+      ? { id, kindLabel: ITEM_KIND_LABEL[item.kind], title: prItemView(item, rules).title }
+      : { id, kindLabel: '', title: id }
   })
 }

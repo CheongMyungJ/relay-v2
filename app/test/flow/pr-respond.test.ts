@@ -323,6 +323,38 @@ describe('[흐름] PR 대응 (M10, 가짜 gh)', () => {
     expect(replies(s, w).map((c) => /\/(\d+) -->/.exec(c.body)?.[1])).toEqual(['1'])
   })
 
+  it('push를 미룬 라운드가 있는데 밖에서 머지되면 pr.merged, 알림, 라운드 기록에 남고 작업 브랜치는 지울 수 없다 (D193, D179)', async () => {
+    const s = await setup()
+    const w = await openWork(s)
+    s.gh.convo(w.pr, '대화 코멘트')
+    const t1 = await startRound(s, w, 1)
+    await s.world.commit(w.branch, { 'outside.txt': '밖\n' }, '밖의 커밋')
+    expect(await s.ctx.h.relay.approve(w.key, t1.id, {})).toEqual({ ok: true })
+    await settle(s.ctx.h, w.key)
+    const local = git(w.tree, 'rev-parse', 'HEAD')
+    expect(workState(w).tasks.find((x) => x.id === t1.id)?.respond?.deferred_at).toBeDefined()
+    // 앱의 [머지]는 갈라짐 때문에 꺼져 있지만 GitHub에서는 머지할 수 있다
+    await s.world.merge(w.pr)
+    const merged = await refreshUntil(s.ctx, w, (p) => p.state === 'MERGED', '밖에서 머지됨')
+    expect(workState(w).status).toBe('completed')
+    expect(workEvents(w).find((e) => e.type === 'pr.merged')?.payload).toEqual({
+      head: expect.any(String),
+      outside: true,
+      deferred: [t1.id],
+    })
+    expect(merged.rounds).toMatchObject([{ taskId: t1.id, state: 'deferred' }])
+    expect(s.ctx.h.ui.notices.map((n) => n.body)).toContainEqual(
+      expect.stringContaining(
+        '승인했지만 push·게시하지 못한 대응 라운드 1개는 머지에 들어가지 않음',
+      ),
+    )
+    // 승인한 커밋은 작업 브랜치에만 있어 정리 창이 지우지 않는다 (push됐거나 머지됐을 때만 지움)
+    const preview = await s.ctx.h.relay.cleanPreview(w.key)
+    if (!preview.ok) throw new Error(preview.error)
+    expect(preview.preview.branch).toMatchObject({ pushed: false, merged: false, deletable: false })
+    expect(git(w.tree, 'rev-parse', 'HEAD')).toBe(local)
+  })
+
   it('GitHub에서 없어진 코멘트의 답글은 게시하지 않고 건너뛰며 그 항목은 처리됨이다 (D205)', async () => {
     const s = await setup()
     const w = await openWork(s)
