@@ -636,7 +636,7 @@ app/src/
 |---|---|---|
 | `.github/workflows/app-ci.yml` | push, PR (`app/`, `skills/`, `docs/contracts/`가 바뀔 때) | Linux: 타입 검사, ESLint, Prettier 확인, [단위], `skills/check.mjs` **(기본값)**. Windows: 빌드(I39), [어댑터], [흐름] |
 | `.github/workflows/app-build.yml` | 수동 | 설치 파일 빌드, 조용한 설치, [스모크], 설치 파일을 결과물로 올리기(I8) |
-| `.github/workflows/app-claude.yml` | 수동 | [실제]. 입력: 모델, effort. 인증은 스파이크 워크플로와 같은 레포 secret. 레포에 secret이 없으면 첫 단계에서 멈춘다. 2026-09-28까지 한 번도 돌지 않았다(8.4). `cases`에 `pr`이나 `pr-cleanup`만 적으면 Linux 작업(`pr`)이 가짜 `claude`와 실제 gh로 PR 진행(M9)을 돈다. Claude 인증 없이 시험용 레포 secret(`RELAY_TEST_GH_REPO`, `RELAY_TEST_GH_TOKEN`)만 쓴다(I43, I49) |
+| `.github/workflows/app-claude.yml` | 수동 | [실제]. 입력: 모델, effort. 인증은 스파이크 워크플로와 같은 레포 secret. 레포에 secret이 없으면 첫 단계에서 멈춘다. Windows 작업은 2026-09-29까지 한 번도 돌지 않았다(8.4). `cases`에 `pr`이나 `pr-cleanup`만 적으면 Linux 작업(`pr`)이 가짜 `claude`와 실제 gh로 PR 진행(M9)을 돈다. Claude 인증 없이 시험용 레포 secret(`RELAY_TEST_GH_REPO`, `RELAY_TEST_GH_TOKEN`)만 쓴다(I43, I49) |
 
 ### 8.4 실제 claude 시험 (I29)
 
@@ -664,7 +664,7 @@ app/src/
   - 협업자와 협업자가 아닌 계정의 거르기는 다른 계정이 필요해 [실기]나 S7의 사람 단계로 본다.
 - `RELAY_REAL_CASES`로 돌릴 경우(M, S, resume, rewind-intake, rewind-fix, deliver, restart, auto. rewind는 둘 다)를 고른다. PR 진행은 `pr`(정리는 `pr-cleanup`)이고 `RELAY_REAL_GH=1`일 때만 돈다. `RELAY_REAL_CLAUDE`와 따로이고, 비워 둔 "전부"에 들지 않는다.
 - 실행: `app/`에서 `RELAY_REAL_CLAUDE=1 npm run test:claude`로 돌린다. `RELAY_REAL_CLAUDE`가 없으면 모든 경우를 건너뛰고 실패 없이 끝난다. `RELAY_REAL_CLAUDE=dry`는 가짜 `claude`로 같은 시험 도구를 돌려 도구만 확인한다(사용량 없음). 모델과 effort는 `ANTHROPIC_MODEL`, `CLAUDE_CODE_EFFORT_LEVEL`로 정한다.
-- 돌리는 곳: 레포에 인증 secret이 없어 `app-claude` 워크플로(Windows 러너)는 돌린 적이 없다. 지금까지의 [실제]는 모두 Claude Code 웹 세션의 Linux 컨테이너에서 돌렸고, 예비 확인으로 적는다(`checks.md`). Linux에서는 스파이크와 같이 준비한다(`spikes/README.md`): 세션의 환경 변수를 `env -i`로 빼고 필요한 것(HOME, PATH, 프록시와 인증서 변수)만 넘긴다. 대화형 온보딩을 마친 적이 없으면 따로 만든 설정 폴더를 `CLAUDE_CONFIG_DIR`로 주고 그 `.claude.json`에 `"hasCompletedOnboarding": true`를 더한다. root에서는 `IS_SANDBOX=1`을 준다. Linux는 세션을 끝낼 때마다 10초가 더 걸린다(3절).
+- 돌리는 곳: 레포에 인증 secret이 없어 `app-claude` 워크플로의 Windows 작업은 돌린 적이 없다. 실제 `claude`의 [실제]는 모두 Claude Code 웹 세션의 Linux 컨테이너에서 돌렸고, 예비 확인으로 적는다(`checks.md`). M9의 PR 진행(`pr`)은 Claude 인증이 필요 없어 `app-claude`의 Linux 작업에서 돌았다(I49). Linux에서는 스파이크와 같이 준비한다(`spikes/README.md`): 세션의 환경 변수를 `env -i`로 빼고 필요한 것(HOME, PATH, 프록시와 인증서 변수)만 넘긴다. 대화형 온보딩을 마친 적이 없으면 따로 만든 설정 폴더를 `CLAUDE_CONFIG_DIR`로 주고 그 `.claude.json`에 `"hasCompletedOnboarding": true`를 더한다. root에서는 `IS_SANDBOX=1`을 준다. Linux는 세션을 끝낼 때마다 10초가 더 걸린다(3절).
 - 스파이크 S1~S5는 같은 레포 secret으로 Windows 러너에서 돌았다(`spikes.md`, 2026-09-26). 그 뒤 secret이 없어진 까닭은 기록에 없다.
 - 결과는 실행 요약과 결과물에 올리고, 사람이 `docs/checks.md`에 옮긴다(I30). 러너 결과는 예비 확인으로 적는다(D93과 같음).
 
