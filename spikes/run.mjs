@@ -1,9 +1,9 @@
 // 스파이크 실행기. 인자로 스파이크 id를 주면 그것만 돌린다(예: node run.mjs S2 S3).
 // S5는 깨끗한 사용자 프로필이 필요하므로 가장 먼저 돌린다.
+// S7(GitHub 연동)은 Claude Code를 쓰지 않고 사람의 단계가 있어 "전부"에 넣지 않는다. 이름을 적어야 돈다.
 import fs from 'node:fs';
 import path from 'node:path';
 import { RESULTS, MODEL, sh } from './lib/util.mjs';
-import { resolveClaude } from './lib/session.mjs';
 
 const ALL = {
   S5: './s5-first-run.mjs',
@@ -13,18 +13,24 @@ const ALL = {
   S3B: './s3b-compact.mjs',
   S4: './s4-permissions.mjs',
   S6: './s6-resume.mjs',
+  S7: './s7-github.mjs',
 };
 const wanted = process.argv.slice(2).map((a) => a.toUpperCase());
-const ids = Object.keys(ALL).filter((id) => wanted.length === 0 || wanted.includes(id));
+const ids = Object.keys(ALL).filter((id) => (wanted.length === 0 ? id !== 'S7' : wanted.includes(id)));
+const usesClaude = ids.some((id) => id !== 'S7');
 
 fs.mkdirSync(RESULTS, { recursive: true });
-let version = '';
-try {
-  version = sh(resolveClaude(), ['--version']);
-} catch (e) {
-  version = `알 수 없음 (${e.message})`;
-}
-const env = { date: new Date().toISOString(), claudeVersion: version, os: `${process.platform} ${process.env.ImageOS || ''} ${process.env.ImageVersion || ''}`.trim(), model: MODEL, effort: process.env.CLAUDE_CODE_EFFORT_LEVEL || '(기본)' };
+const version = async (bin) => {
+  try {
+    return sh(await bin(), ['--version']).split('\n')[0];
+  } catch (e) {
+    return `알 수 없음 (${e.message})`;
+  }
+};
+// node-pty가 필요한 session.mjs는 Claude Code 스파이크를 돌릴 때만 불러온다(S7은 npm ci 없이 돈다).
+const claudeVersion = usesClaude ? await version(async () => (await import('./lib/session.mjs')).resolveClaude()) : null;
+const ghVersion = ids.includes('S7') ? await version(async () => 'gh') : null;
+const env = { date: new Date().toISOString(), claudeVersion, ghVersion, os: `${process.platform} ${process.env.ImageOS || ''} ${process.env.ImageVersion || ''}`.trim(), model: MODEL, effort: process.env.CLAUDE_CODE_EFFORT_LEVEL || '(기본)' };
 
 const results = [];
 for (const id of ids) {
@@ -44,10 +50,10 @@ const lines = [
   '# relay-v2 스파이크 결과',
   '',
   `- 날짜: ${env.date}`,
-  `- Claude Code 버전: ${env.claudeVersion}`,
+  ...(usesClaude ? [`- Claude Code 버전: ${env.claudeVersion}`] : []),
+  ...(ghVersion ? [`- gh 버전: ${env.ghVersion}`] : []),
   `- OS: ${env.os}`,
-  `- 모델: ${env.model}`,
-  `- effort: ${env.effort}`,
+  ...(usesClaude ? [`- 모델: ${env.model}`, `- effort: ${env.effort}`] : []),
   '',
 ];
 for (const r of results) {
