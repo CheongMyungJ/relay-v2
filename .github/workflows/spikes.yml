@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       spikes:
-        description: "돌릴 스파이크 (예: S2 S3). 비우면 S7을 뺀 전부 (S5, S1, S2, S3, S3B, S4, S6 순서). S7은 S7만 적는다"
+        description: "돌릴 스파이크 (예: S2 S3). 비우면 S7을 뺀 전부 (S5, S1, S2, S3, S3B, S4, S6 순서). S7은 S7만 적는다(다른 것과 함께 적으면 시작 전에 멈춤)"
         required: false
         default: ""
       model:
@@ -34,7 +34,8 @@ permissions:
 
 jobs:
   spikes:
-    if: inputs.spikes != 'S7'
+    # S7이 들어 있으면 Linux 작업(s7)이 맡는다. 낱말로 찾으려고 앞뒤에 공백을 붙인다(contains는 대소문자를 가리지 않음).
+    if: ${{ !contains(format(' {0} ', inputs.spikes), ' S7 ') }}
     runs-on: windows-latest
     timeout-minutes: 60
     defaults:
@@ -92,14 +93,17 @@ jobs:
           if-no-files-found: warn
 
   s7:
-    if: inputs.spikes == 'S7'
+    if: ${{ contains(format(' {0} ', inputs.spikes), ' S7 ') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    # 스크립트의 전체 기한(s7-github.mjs DEADLINE_MIN, 75분)보다 길게 둔다. 작업이 제한에 걸려 끊기면
+    # 결과 저장과 시험 PR·브랜치 정리가 돌지 못한다.
+    timeout-minutes: 90
     env:
       RELAY_TEST_GH_REPO: ${{ secrets.RELAY_TEST_GH_REPO }}
       GH_TOKEN: ${{ secrets.RELAY_TEST_GH_TOKEN }}
       S7_PHASE: ${{ inputs.s7 }}
       S7_PR: ${{ inputs.s7_pr }}
+      SPIKES: ${{ inputs.spikes }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -120,9 +124,10 @@ jobs:
         run: gh --version
 
       # S7은 Node 내장 모듈과 gh, git만 쓴다. 스파이크 의존성(node-pty)은 설치하지 않는다.
+      # 입력을 그대로 넘겨, S7이 다른 스파이크와 섞여 있으면 run.mjs가 시작 전에 멈춘다.
       - name: S7
         working-directory: spikes
-        run: node run.mjs S7
+        run: node run.mjs $SPIKES
 
       - name: 결과 올리기
         if: always()

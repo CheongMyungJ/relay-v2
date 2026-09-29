@@ -47,7 +47,7 @@ env -i HOME="$HOME" PATH="$PATH" SHELL=/bin/bash TERM=xterm-256color LANG=C.UTF-
 
 S7은 Claude Code를 쓰지 않는다. gh, git, Node 22만 있으면 되고 `npm ci`는 필요 없다. Claude Code 웹 세션에서는 GitHub GraphQL이 막혀 gh의 PR 명령이 돌지 않으므로(`docs/spikes.md` S7) 러너나 사람의 PC에서 돌린다(`docs/implementation.md` I47).
 
-GitHub Actions: Actions 탭 → `spikes` → Run workflow에서 `spikes`에 `S7`만 적고, `s7`에서 단계를 고르고, finish면 `s7_pr`에 PR 번호를 적는다. Linux 러너에서 돌고, Claude 인증 대신 레포 secret `RELAY_TEST_GH_REPO`(owner/repo)와 `RELAY_TEST_GH_TOKEN`(시험용 레포 하나에만 권한이 있는 fine-grained 토큰. 권한은 시험용 레포의 README)을 쓴다(I43). 결과는 실행 요약과 `spike-s7-results` 결과물에 올라간다. 로그에는 secret인 레포 이름이 `***`로 가려진다.
+GitHub Actions: Actions 탭 → `spikes` → Run workflow에서 `spikes`에 `S7`만 적고, `s7`에서 단계를 고르고, finish면 `s7_pr`에 PR 번호를 적는다. S7을 다른 스파이크와 함께 적으면 아무것도 돌리지 않고 멈춘다. Linux 러너에서 돌고, Claude 인증 대신 레포 secret `RELAY_TEST_GH_REPO`(owner/repo)와 `RELAY_TEST_GH_TOKEN`(시험용 레포 하나에만 권한이 있는 fine-grained 토큰. 권한은 시험용 레포의 README)을 쓴다(I43). 결과는 실행 요약과 `spike-s7-results` 결과물에 올라간다. 로그에는 secret인 레포 이름이 `***`로 가려진다.
 
 로컬(gh와 git이 있는 PC):
 
@@ -72,6 +72,8 @@ git push도 gh의 자격 증명(`gh auth git-credential`)으로 한다. 이 설�
    - 아무 계정으로나 PR 화면에서 앱이 게시한 답글 둘("relay가 게시한 답글입니다")에 `<!-- relay:` 글자가 보이지 않는지 본다.
 3. **finish** (`s7_pr`=PR 번호): 모든 코멘트의 작성자 관계를 읽고 REST의 협업자 여부와 맞춰 본다(절차 3). 머지 방식을 읽고, 옛 head로 머지하면 막히는지, 본 head로 머지되는지, 원격 브랜치를 지울 수 있는지 본다(절차 6). `--delete-branch`를 준 머지가 worktree를 어떻게 하는지 보려고 PR 둘을 더 만들어 머지한다. 마지막에 이 시험의 브랜치와 열린 PR을 모두 치운다.
 4. **cleanup**: 남은 `s7/` 브랜치와 열린 시험 PR을 모두 치운다. `s7_pr`(로컬은 `S7_PR`)을 주면 그 PR의 시험만 치운다. 사람이 코멘트를 달지 않고 끝낼 때나 finish가 도중에 멈췄을 때 쓴다.
+
+기다림이 길어져 한 단계가 75분을 넘으면 멈추고, start와 finish는 만든 브랜치와 PR을 치운다. 러너 작업의 제한(90분)은 이보다 길어서, 작업이 끊기기 전에 정리가 돈다.
 
 결과 파일: `results/S7-<단계>.json`(판정과 관찰), `results/S7-<단계>-raw.json`(읽은 코멘트 원본), `results/S7-human.md`(start 뒤 사람이 할 일).
 

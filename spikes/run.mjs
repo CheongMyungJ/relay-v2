@@ -17,19 +17,24 @@ const ALL = {
 };
 const wanted = process.argv.slice(2).map((a) => a.toUpperCase());
 const ids = Object.keys(ALL).filter((id) => (wanted.length === 0 ? id !== 'S7' : wanted.includes(id)));
+// S7은 다른 스파이크와 함께 돌리지 않는다(러너 작업과 인증이 다르다). 섞여 있으면 아무것도 돌리기 전에 멈춘다.
+if (ids.includes('S7') && ids.length > 1) {
+  console.error(`S7은 다른 스파이크와 함께 돌리지 않는다: ${ids.join(' ')}. S7만 따로 돌린다(node run.mjs S7).`);
+  process.exit(1);
+}
 const usesClaude = ids.some((id) => id !== 'S7');
 
 fs.mkdirSync(RESULTS, { recursive: true });
-const version = async (bin) => {
+const version = (bin) => {
   try {
-    return sh(await bin(), ['--version']).split('\n')[0];
+    return sh(bin, ['--version']).split('\n')[0];
   } catch (e) {
     return `알 수 없음 (${e.message})`;
   }
 };
 // node-pty가 필요한 session.mjs는 Claude Code 스파이크를 돌릴 때만 불러온다(S7은 npm ci 없이 돈다).
-const claudeVersion = usesClaude ? await version(async () => (await import('./lib/session.mjs')).resolveClaude()) : null;
-const ghVersion = ids.includes('S7') ? await version(async () => 'gh') : null;
+const claudeVersion = usesClaude ? version((await import('./lib/session.mjs')).resolveClaude()) : null;
+const ghVersion = ids.includes('S7') ? version('gh') : null;
 const env = { date: new Date().toISOString(), claudeVersion, ghVersion, os: `${process.platform} ${process.env.ImageOS || ''} ${process.env.ImageVersion || ''}`.trim(), model: MODEL, effort: process.env.CLAUDE_CODE_EFFORT_LEVEL || '(기본)' };
 
 const results = [];

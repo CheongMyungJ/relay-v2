@@ -18,6 +18,10 @@ import { WORK, RESULTS, Result, redact, redactDeep, writeJson } from './lib/util
 
 const REPO = process.env.RELAY_TEST_GH_REPO || '';
 const PHASE = (process.env.S7_PHASE || 'start').trim().toLowerCase();
+// 전체 기한. spikes.yml의 s7 작업 제한(90분)보다 짧게 둬서, 넘으면 waitFor가 던지고 finally의 결과 저장과 정리가 돈다.
+// 작업이 제한에 걸려 끊기면 finally가 돌지 못한다. start의 기다림 한도를 모두 더하면 약 67분이다.
+const DEADLINE_MIN = 75;
+const DEADLINE = Date.now() + DEADLINE_MIN * 60000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // gh는 질문과 새 버전 안내를 끄고 부른다(implementation.md 3절 "gh 환경 변수").
 const GH_ENV = { GH_PROMPT_DISABLED: '1', GH_NO_UPDATE_NOTIFIER: '1', NO_COLOR: '1' };
@@ -36,6 +40,11 @@ const TAG = 'relay가 게시한 답글입니다 (S7 시험).'; // D173의 표시
 const HEAD_CODE = '\n/**\n * 수량의 합 (S7 시험 변경).\n * @param {{ qty: number }[]} items\n * @returns {number}\n */\nexport function count(items) {\n  return items.reduce((sum, item) => sum + item.qty, 0);\n}\n';
 const BASE_CODE = '\n/**\n * 장바구니가 비었는가 (S7 기준 브랜치 변경).\n * @param {unknown[]} items\n * @returns {boolean}\n */\nexport function isEmpty(items) {\n  return items.length === 0;\n}\n';
 
+// gh나 git이 0이 아닌 종료 코드로 끝남. 502나 보조 한도 같은 일시 오류일 수 있어 waitFor는 이것만 다시 시도한다.
+export class CommandError extends Error {}
+// waitFor가 기다림 한도 안에 조건을 보지 못함
+export class WaitTimeout extends Error {}
+
 function exec(cmd, args, { cwd, input, env = {}, timeout = 180000 } = {}) {
   const res = spawnSync(cmd, args, { cwd, input, encoding: 'utf8', env: { ...process.env, ...env }, timeout, maxBuffer: 64 * 1024 * 1024 });
   return { code: res.status ?? -1, stdout: (res.stdout || '').trim(), stderr: `${(res.stderr || '').trim()}${res.error ? `\n${res.error.message}` : ''}` };
@@ -43,7 +52,7 @@ function exec(cmd, args, { cwd, input, env = {}, timeout = 180000 } = {}) {
 const gh = (args, opts = {}) => exec('gh', args, { ...opts, env: { ...GH_ENV, ...(opts.env || {}) } });
 const show = (res) => `종료 코드 ${res.code}\n${res.stdout}${res.stderr ? `\n[stderr] ${res.stderr}` : ''}`;
 function ok(res, what) {
-  if (res.code !== 0) throw new Error(`${what}: ${show(res)}`);
+  if (res.code !== 0) throw new CommandError(`${what}: ${show(res)}`);
   return res.stdout;
 }
 const ghJson = (args, opts) => JSON.parse(ok(gh(args, opts), `gh ${args.slice(0, 3).join(' ')}`) || 'null');
@@ -60,15 +69,33 @@ const gitTry = (cwd, ...args) => exec('git', args, { cwd, env: GIT_ENV });
 const b64 = (s) => Buffer.from(s, 'utf8').toString('base64');
 const enc = encodeURIComponent;
 
-async function waitFor(what, fn, { timeout = 300000, interval = 5000 } = {}) {
+// fn이 참인 값을 줄 때까지 부른다. 명령 실패(CommandError)는 기억해 두고 다시 시도하고, 한도를 넘으면 마지막 오류를
+// 붙여 WaitTimeout을 던진다. 코드 오류는 바로 던진다. 전체 기한을 넘으면 기다림 한도와 관계없이 멈춘다.
+export async function waitFor(what, fn, { timeout = 300000, interval = 5000 } = {}) {
   const until = Date.now() + timeout;
+  let last = null;
   for (;;) {
-    const v = await fn();
-    if (v) return v;
-    if (Date.now() > until) throw new Error(`기다리다 시간 초과: ${what}`);
+    try {
+      const v = await fn();
+      if (v) return v;
+    } catch (e) {
+      if (!(e instanceof CommandError)) throw e;
+      last = e;
+    }
+    if (Date.now() > DEADLINE) throw new Error(`S7 전체 기한(${DEADLINE_MIN}분)을 넘어 멈춘다: ${what}${last ? `\n마지막 오류: ${last.message}` : ''}`);
+    if (Date.now() > until) throw new WaitTimeout(`기다리다 시간 초과: ${what}${last ? `\n마지막 오류: ${last.message}` : ''}`);
     await sleep(interval);
   }
 }
+
+// 기다림이 한도 안에 끝나지 않으면 던지지 않고 null을 준다. 시간 초과 메시지는 표본 끝에 붙여, GitHub가 예상과 다르게
+// 답한 값도 판정에 남긴다. 전체 기한과 코드 오류는 그대로 던진다.
+const orNull = (promise, samples) =>
+  promise.catch((e) => {
+    if (!(e instanceof WaitTimeout)) throw e;
+    samples.push(e.message);
+    return null;
+  });
 
 // GH_DEBUG=api가 찍는 "* Request to <URL>" 줄로 gh가 보낸 HTTP 요청을 세고(절차 9), 응답 머리글의
 // X-Ratelimit-Resource와 X-Ratelimit-Used로 요청마다 어느 한도를 얼마나 썼는지 본다(go-gh의 httpretty 출력).
@@ -108,21 +135,21 @@ async function waitChecks(n, sha, what) {
   }, { timeout: 600000, interval: 5000 });
 }
 
-// push 직후 새 head 커밋의 체크 목록이 비어 있는 동안을 잰다(D176 "체크가 없으면 통과로 봄"과 관련).
-async function checksAppear(n, sha) {
-  const t0 = Date.now();
+// 새 head 커밋의 체크 목록이 비어 있는 동안을 잰다(D176 "체크가 없으면 통과로 봄"과 관련).
+// t0는 PR을 만든 명령이나 push가 끝난 때다. 경과는 그때부터 읽기가 끝난 때까지다.
+const elapsed = (t0) => `${((Date.now() - t0) / 1000).toFixed(1)}s`;
+async function checksAppear(n, sha, t0) {
   const samples = [];
-  await waitFor('체크가 나타남', () => {
+  await orNull(waitFor('체크가 나타남', () => {
     const p = prView(n, ['headRefOid', 'statusCheckRollup', 'mergeable', 'mergeStateStatus']);
     const len = p.headRefOid === sha ? (p.statusCheckRollup || []).length : -1;
-    samples.push(`${((Date.now() - t0) / 1000).toFixed(1)}s:${p.headRefOid.slice(0, 7)}:${len}:${p.mergeable}/${p.mergeStateStatus}`);
+    samples.push(`${elapsed(t0)}:${p.headRefOid.slice(0, 7)}:${len}:${p.mergeable}/${p.mergeStateStatus}`);
     return len > 0;
-  }, { timeout: 180000, interval: 1000 });
+  }, { timeout: 180000, interval: 1000 }), samples);
   return samples;
 }
 
 function prepare(r) {
-  if (!/^[\w.-]+\/[\w.-]+$/.test(REPO)) throw new Error('RELAY_TEST_GH_REPO(owner/repo)가 필요합니다');
   r.observe('gh auth status', show(gh(['auth', 'status'])));
   const login = apiJson('GET', 'user').login;
   const rest = apiJson('GET', `repos/${REPO}`);
@@ -165,7 +192,22 @@ function readComments(n) {
   };
 }
 const who = (x) => ({ id: x.id, login: x.user?.login, type: x.user?.type, association: x.author_association, reply_to: x.in_reply_to_id, review: x.pull_request_review_id, state: x.state, body: (x.body || '').slice(0, 50) });
-const keys = (c) => new Set([...c.reviews.map((x) => `review:${x.id}`), ...c.inline.map((x) => `inline:${x.id}`), ...c.convo.map((x) => `convo:${x.id}`)]);
+// 세 목록을 종류와 함께 펼친다. id는 목록마다 따로 받으므로 항목 키는 `<종류>:<id>`다.
+const entries = (c) => [...c.reviews.map((x) => ['review', x]), ...c.inline.map((x) => ['inline', x]), ...c.convo.map((x) => ['convo', x])];
+const keys = (c) => new Set(entries(c).map(([kind, x]) => `${kind}:${x.id}`));
+
+// 협업자면 204, 아니면 404다(REST collaborators/{login}). gh api는 HTTP 오류를 stderr에 "gh: <메시지> (HTTP 404)"나
+// "gh: HTTP 404"로 적는다(cli/cli pkg/cmd/api/api.go). 다른 실패(403, 5xx, 한도 초과)는 다시 시도하고, 끝내 모르면
+// null로 두어 판정에서 뺀다. 일시 오류로 협업자를 "협업자 아님"으로 가르지 않게 한다.
+async function isCollaborator(login, errors) {
+  const v = await orNull(waitFor(`협업자 여부 ${login}`, () => {
+    const res = api('GET', `repos/${REPO}/collaborators/${enc(login)}`);
+    if (res.code === 0) return 'yes';
+    if (/\bHTTP 404\b/.test(res.stderr)) return 'no';
+    throw new CommandError(`GET collaborators/${login}: ${show(res)}`);
+  }, { timeout: 60000, interval: 5000 }), errors);
+  return v === null ? null : v === 'yes';
+}
 
 async function dispatchBot(n, kind, body) {
   const since = new Date(Date.now() - 10000).toISOString();
@@ -210,18 +252,20 @@ async function startPhase(r) {
     const bodyFile = path.join(dir, 'pr-body.md');
     fs.writeFileSync(bodyFile, `relay-v2 스파이크 S7이 만든 시험 PR이다 (${id}). 시험이 끝나면 머지하거나 닫고 브랜치를 지운다.\n`);
     const created = gh(['pr', 'create', '--repo', REPO, '--base', B.base, '--head', B.head, '--title', `S7 시험 ${id}`, '--body-file', bodyFile], { cwd: wt });
+    const createdAt = Date.now();
     const url = (created.stdout.match(/https:\/\/\S+\/pull\/\d+/) || [])[0];
     n = url ? Number(url.split('/').pop()) : 0;
     r.check('1. gh pr create로 PR을 만들고 주소를 받는다', created.code === 0 && n > 0, show(created));
     if (!n) throw new Error('PR을 만들지 못해 멈춘다');
     console.log(`S7 시험 PR: ${url}`);
 
-    // 2. 상태 읽기: 만든 직후, 체크가 나타나기까지, 첫 시도(ci-flaky로 실패)가 끝난 뒤
-    r.observe('2. 만든 직후의 PR 상태 (gh pr view --json)', brief(prView(n)));
+    // 2. 상태 읽기: 만든 직후, 체크가 나타나기까지, 첫 시도(ci-flaky로 실패)가 끝난 뒤. 경과는 gh pr create가 끝난 때부터다.
+    const first = prView(n);
+    r.observe('2. 만든 직후의 PR 상태 (gh pr view --json)', { elapsed: elapsed(createdAt), ...brief(first) });
     const noChecks = gh(['pr', 'checks', String(n), '--repo', REPO]);
     const noChecksJson = gh(['pr', 'checks', String(n), '--repo', REPO, '--json', 'name,bucket']);
     r.observe('2. 체크가 아직 없을 때 gh pr checks (표 출력 / --json)', `${show(noChecks)}\n---\n${show(noChecksJson)}`);
-    r.observe('2. PR을 만든 뒤 체크 목록 길이 (경과:head:길이:mergeable/mergeStateStatus)', await checksAppear(n, sha1));
+    r.observe('2. PR을 만든 뒤 체크 목록 길이 (경과:head:길이:mergeable/mergeStateStatus)', await checksAppear(n, sha1, createdAt));
     const failedPr = await waitChecks(n, sha1, 'CI 첫 시도');
     r.observe('2. 첫 시도가 끝난 뒤의 PR 상태', brief(failedPr));
     r.observe('2. statusCheckRollup 원본 (첫 시도 뒤)', failedPr.statusCheckRollup);
@@ -318,14 +362,16 @@ async function startPhase(r) {
     r.check('4. API로 읽은 본문에 표시가 그대로 있고, 표시로 게시한 답글을 찾는다', byMark1.join() === String(reply1.id) && byMark2.join() === String(reply2.id), JSON.stringify({ byMark1, byMark2 }));
     const html1 = apiJson('GET', `repos/${REPO}/pulls/comments/${reply1.id}`, undefined, ['-H', 'Accept: application/vnd.github.full+json']);
     const html2 = apiJson('GET', `repos/${REPO}/issues/comments/${reply2.id}`, undefined, ['-H', 'Accept: application/vnd.github.full+json']);
-    r.check('4. 웹이 그리는 본문(body_html, body_text)에 표시가 없다', ![html1.body_html, html1.body_text, html2.body_html, html2.body_text].some((s) => (s || '').includes('relay:')), JSON.stringify({ html1: html1.body_html, text2: html2.body_text }));
+    // 네 값이 모두 비지 않은 문자열이어야 한다. Accept 머리글이 먹지 않아 body만 오면 "표시가 없다"가 거저 통과한다.
+    const rendered = [html1.body_html, html1.body_text, html2.body_html, html2.body_text];
+    r.check('4. 웹이 그리는 본문(body_html, body_text)에 표시가 없다', rendered.every((s) => typeof s === 'string' && s.trim() !== '') && !rendered.some((s) => s.includes('relay:')), JSON.stringify(rendered));
     const gql2 = ghJson(['pr', 'view', String(n), '--repo', REPO, '--json', 'comments']);
     r.observe('4. GraphQL(gh pr view --json comments)의 본문에도 표시가 있다', gql2.comments.some((x) => x.body.includes(mark2)));
     // 스레드 답글을 게시하면 본문이 빈 리뷰가 하나 더 생긴다(첫 실행에서 관찰). 본문이 빈 리뷰는 항목(리뷰 본문)이 아니다.
     const appIds = new Set([`inline:${reply1.id}`, `convo:${reply2.id}`]);
     const isApp = (key, x) => appIds.has(key) || /<!-- relay:w-s7-/.test(x.body || '');
     const emptyReview = (key, x) => key.startsWith('review:') && !(x.body || '').trim();
-    const fresh = [...c2.reviews.map((x) => [`review:${x.id}`, x]), ...c2.inline.map((x) => [`inline:${x.id}`, x]), ...c2.convo.map((x) => [`convo:${x.id}`, x])].filter(([key]) => !seen.has(key));
+    const fresh = entries(c2).map(([kind, x]) => [`${kind}:${x.id}`, x]).filter(([key]) => !seen.has(key));
     r.observe('4. 답글을 게시한 뒤 새로 생긴 것 (종류:id, 본문 앞부분, 인라인 답글의 pull_request_review_id)', { fresh: fresh.map(([key, x]) => `${key} ${JSON.stringify((x.body || '').slice(0, 20))}`), reply1Review: reply1.pull_request_review_id });
     r.check('4. 다음 읽기에서 새로 생긴 것을 적어 둔 id·표시와 "본문이 빈 리뷰는 항목이 아님"으로 모두 가려낸다', fresh.some(([key]) => key === `inline:${reply1.id}`) && fresh.some(([key]) => key === `convo:${reply2.id}`) && fresh.every(([key, x]) => isApp(key, x) || emptyReview(key, x)), JSON.stringify(fresh.map(([key]) => key)));
 
@@ -333,15 +379,16 @@ async function startPhase(r) {
     const baseFile = apiJson('GET', `repos/${REPO}/contents/src/cart.mjs?ref=${enc(B.base)}`);
     const baseText = Buffer.from(baseFile.content, 'base64').toString('utf8');
     const basePut = apiJson('PUT', `repos/${REPO}/contents/src/cart.mjs`, { message: 's7: 기준 브랜치 변경 (충돌)', content: b64(baseText + BASE_CODE), sha: baseFile.sha, branch: B.base });
+    // GitHub가 예상과 다르게 답해도 던지지 않고, 모은 표본과 함께 판정에 남긴 뒤 다음 절차로 간다.
     const conflictSamples = [];
-    const conflicted = await waitFor('충돌 판정', () => {
+    const conflicted = await orNull(waitFor('충돌 판정', () => {
       const p = prView(n, ['mergeable', 'mergeStateStatus', 'baseRefOid', 'headRefOid']);
       conflictSamples.push(`${p.mergeable}/${p.mergeStateStatus}/base ${p.baseRefOid.slice(0, 7)}`);
       return p.mergeable === 'CONFLICTING' ? p : null;
-    }, { timeout: 180000, interval: 3000 });
-    r.check('7. 기준 브랜치와 충돌하면 mergeable CONFLICTING, mergeStateStatus DIRTY로 보인다', conflicted.mergeStateStatus === 'DIRTY', conflictSamples.join(' → '));
+    }, { timeout: 180000, interval: 3000 }), conflictSamples);
+    r.check('7. 기준 브랜치와 충돌하면 mergeable CONFLICTING, mergeStateStatus DIRTY로 보인다', conflicted?.mergeStateStatus === 'DIRTY', conflictSamples.join(' → '));
     const restPr = apiJson('GET', `repos/${REPO}/pulls/${n}`);
-    r.observe('7. 충돌 때 REST pulls/{n}', { mergeable: restPr.mergeable, mergeable_state: restPr.mergeable_state, base_sha: restPr.base.sha, base_branch_head: basePut.commit.sha, graphql_baseRefOid: conflicted.baseRefOid });
+    r.observe('7. 충돌 때 REST pulls/{n}', { mergeable: restPr.mergeable, mergeable_state: restPr.mergeable_state, base_sha: restPr.base.sha, base_branch_head: basePut.commit.sha, graphql_baseRefOid: conflicted?.baseRefOid });
 
     // 7. 푼다: 기준 브랜치를 병합하고(D181) ci-flaky를 끈 뒤 일반 push
     git(wt, 'fetch', 'origin', B.base);
@@ -353,14 +400,17 @@ async function startPhase(r) {
     git(wt, 'rm', '-q', 'ci-flaky');
     git(wt, 'commit', '-m', 's7: ci-flaky 끔');
     const pushMerged = gitTry(wt, 'push', 'origin', `${B.head}:${B.head}`);
+    const pushedAt = Date.now();
     r.check('7. 기준 브랜치를 병합한 커밋은 일반 push로 올라간다', pushMerged.code === 0, show(pushMerged));
     const sha2 = git(wt, 'rev-parse', 'HEAD');
-    r.observe('7. push 뒤 새 head의 체크 목록 길이 (경과:head:길이:mergeable/mergeStateStatus)', await checksAppear(n, sha2));
-    const resolved = await waitFor('충돌이 풀림', () => {
+    r.observe('7. push 뒤 새 head의 체크 목록 길이 (경과:head:길이:mergeable/mergeStateStatus)', await checksAppear(n, sha2, pushedAt));
+    const resolvedSamples = [];
+    const resolved = await orNull(waitFor('충돌이 풀림', () => {
       const p = prView(n, ['mergeable', 'mergeStateStatus', 'headRefOid']);
+      resolvedSamples.push(`${p.headRefOid.slice(0, 7)}:${p.mergeable}/${p.mergeStateStatus}`);
       return p.headRefOid === sha2 && p.mergeable === 'MERGEABLE' ? p : null;
-    }, { timeout: 180000, interval: 3000 });
-    r.check('7. 병합해 푼 뒤 mergeable이 MERGEABLE이 된다', true, JSON.stringify(resolved));
+    }, { timeout: 180000, interval: 3000 }), resolvedSamples);
+    r.check('7. 병합해 푼 뒤 mergeable이 MERGEABLE이 된다', !!resolved, resolvedSamples.join(' → '));
 
     // 8. 원격 PR 브랜치가 앞서 나감 (D193). (a) GitHub에서 한 커밋(웹 편집과 같음)
     const web1 = apiJson('PUT', `repos/${REPO}/contents/s7-web-edit.txt`, { message: 's7: GitHub에서 더한 커밋 (웹 편집)', content: b64('웹 편집\n'), branch: B.head });
@@ -508,14 +558,14 @@ async function finishPhase(r) {
     // 3. 사람이 단 코멘트까지 모두 읽고, 작성자마다 협업자 여부(REST collaborators)와 작성자 관계를 맞춰 본다.
     const c = readComments(n);
     raw.comments = c;
-    const items = [...c.reviews.map((x) => ['review', x]), ...c.inline.map((x) => ['inline', x]), ...c.convo.map((x) => ['convo', x])];
+    const items = entries(c);
     const people = {};
+    const unreadable = [];
     for (const [kind, x] of items) {
       const login = x.user.login;
       if (!people[login]) {
-        const collab = api('GET', `repos/${REPO}/collaborators/${enc(login)}`);
         const perm = x.user.type === 'Bot' ? null : api('GET', `repos/${REPO}/collaborators/${enc(login)}/permission`);
-        people[login] = { type: x.user.type, collaborator: collab.code === 0, permission: perm?.code === 0 ? JSON.parse(perm.stdout).role_name : perm?.stderr, associations: {} };
+        people[login] = { type: x.user.type, collaborator: await isCollaborator(login, unreadable), permission: perm?.code === 0 ? JSON.parse(perm.stdout).role_name : perm?.stderr, associations: {} };
       }
       (people[login].associations[kind] ||= new Set()).add(x.author_association);
     }
@@ -525,14 +575,17 @@ async function finishPhase(r) {
     r.observe('3. 인라인 코멘트와 답글 (REST)', c.inline.map(who));
     r.observe('3. 대화 코멘트 (REST)', c.convo.map(who));
     const humans = Object.entries(people).filter(([login, p]) => p.type === 'User' && login !== ctx.login);
-    const collabs = humans.filter(([, p]) => p.collaborator);
-    const others = humans.filter(([, p]) => !p.collaborator);
+    const collabs = humans.filter(([, p]) => p.collaborator === true);
+    const others = humans.filter(([, p]) => p.collaborator === false);
+    const unknown = humans.filter(([, p]) => p.collaborator === null);
     const assocs = (p) => Object.values(p.associations).flat();
-    // 사람이 그 계정으로 코멘트를 달지 않았으면 판정하지 않고 "확인 못 함"으로 남긴다.
+    // 사람이 그 계정으로 코멘트를 달지 않았거나 협업자 여부를 읽지 못했으면 판정하지 않고 "확인 못 함"으로 남긴다.
+    if (unknown.length) r.observe('3. 협업자 여부를 읽지 못한 작성자 (판정에서 뺌)', { people: unknown.map(([login]) => login), errors: unreadable });
+    const none = unknown.length ? '없음. 협업자 여부를 읽지 못한 작성자가 있어 확인 못 함' : '없음. 사람 단계를 하지 않아 확인 못 함';
     if (collabs.length) r.check('3. 협업자 계정의 코멘트는 작성자 관계가 COLLABORATOR다 (D160)', collabs.every(([, p]) => assocs(p).every((a) => a === 'COLLABORATOR')), JSON.stringify(collabs));
-    else r.observe('3. 협업자 계정의 코멘트 (D160)', '없음. 사람 단계를 하지 않아 확인 못 함');
+    else r.observe('3. 협업자 계정의 코멘트 (D160)', none);
     if (others.length) r.check('3. 협업자가 아닌 계정의 코멘트는 OWNER·MEMBER·COLLABORATOR가 아니다 (D160)', others.every(([, p]) => assocs(p).every((a) => !['OWNER', 'MEMBER', 'COLLABORATOR'].includes(a))), JSON.stringify(others));
-    else r.observe('3. 협업자가 아닌 계정의 코멘트 (D160)', '없음. 사람 단계를 하지 않아 확인 못 함');
+    else r.observe('3. 협업자가 아닌 계정의 코멘트 (D160)', none);
     // 앱의 거르기를 흉내 낸다: 본문이 빈 리뷰와 앱의 답글(표시)은 항목이 아니고, 사람의 것은 작성자 관계가
     // OWNER·MEMBER·COLLABORATOR일 때만 받는다(D160). 봇은 받을 봇 목록(D161)이 비어 있어 받지 않는다.
     const view = items
@@ -554,7 +607,8 @@ async function finishPhase(r) {
     const head = prView(n).headRefOid;
     const stale = git(main, 'rev-parse', `${head}^`);
     const bad = gh(['pr', 'merge', String(n), '--repo', REPO, `--${method}`, '--match-head-commit', stale], { cwd: wt });
-    r.check('6. --match-head-commit이 지금 head가 아니면 머지되지 않는다 (D176)', bad.code !== 0 && prView(n, ['state']).state === 'OPEN', show(bad));
+    // 네트워크 오류나 mergeability 계산 전 같은 다른 실패와 가리려고, head가 달라 거절한 GitHub의 문구까지 본다.
+    r.check('6. --match-head-commit이 지금 head가 아니면 머지되지 않는다 (D176)', bad.code !== 0 && /Head branch was modified/.test(bad.stderr) && prView(n, ['state']).state === 'OPEN', show(bad));
     r.observe('6. 옛 head로 gh pr merge --match-head-commit을 하면 (출력)', show(bad));
     const badRest = api('PUT', `repos/${REPO}/pulls/${n}/merge`, { sha: stale, merge_method: method });
     r.observe('6. REST pulls/{n}/merge에 옛 sha를 주면', show(badRest));
@@ -594,6 +648,9 @@ async function finishPhase(r) {
 export default async function run() {
   const r = new Result(`S7-${PHASE}`, `GitHub 연동 (${PHASE})`);
   try {
+    // 세 단계 모두 먼저 본다. 비어 있으면 gh가 --repo ''를 지정하지 않은 것으로 보고 GH_REPO나 현재 폴더의 레포(relay-v2)를
+    // 잡는다(cli/cli pkg/cmdutil/repo_override.go). 그러면 cleanup이 relay-v2의 s7/ PR을 닫으려 한다.
+    if (!/^[\w.-]+\/[\w.-]+$/.test(REPO)) throw new Error('RELAY_TEST_GH_REPO(owner/repo)가 필요합니다');
     r.observe('시험용 레포', REPO);
     if (PHASE === 'start') await startPhase(r);
     else if (PHASE === 'finish') await finishPhase(r);
