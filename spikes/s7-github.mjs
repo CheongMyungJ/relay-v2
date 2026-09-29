@@ -515,8 +515,11 @@ async function finishPhase(r) {
     const collabs = humans.filter(([, p]) => p.collaborator);
     const others = humans.filter(([, p]) => !p.collaborator);
     const assocs = (p) => Object.values(p.associations).flat();
-    r.check('3. 협업자 계정의 코멘트는 작성자 관계가 COLLABORATOR다 (D160)', collabs.length > 0 && collabs.every(([, p]) => assocs(p).every((a) => a === 'COLLABORATOR')), collabs.length ? JSON.stringify(collabs) : '협업자 계정의 코멘트가 없다');
-    r.check('3. 협업자가 아닌 계정의 코멘트는 OWNER·MEMBER·COLLABORATOR가 아니다 (D160)', others.length > 0 && others.every(([, p]) => assocs(p).every((a) => !['OWNER', 'MEMBER', 'COLLABORATOR'].includes(a))), others.length ? JSON.stringify(others) : '협업자가 아닌 계정의 코멘트가 없다');
+    // 사람이 그 계정으로 코멘트를 달지 않았으면 판정하지 않고 "확인 못 함"으로 남긴다.
+    if (collabs.length) r.check('3. 협업자 계정의 코멘트는 작성자 관계가 COLLABORATOR다 (D160)', collabs.every(([, p]) => assocs(p).every((a) => a === 'COLLABORATOR')), JSON.stringify(collabs));
+    else r.observe('3. 협업자 계정의 코멘트 (D160)', '없음. 사람 단계를 하지 않아 확인 못 함');
+    if (others.length) r.check('3. 협업자가 아닌 계정의 코멘트는 OWNER·MEMBER·COLLABORATOR가 아니다 (D160)', others.every(([, p]) => assocs(p).every((a) => !['OWNER', 'MEMBER', 'COLLABORATOR'].includes(a))), JSON.stringify(others));
+    else r.observe('3. 협업자가 아닌 계정의 코멘트 (D160)', '없음. 사람 단계를 하지 않아 확인 못 함');
     // 앱의 거르기를 흉내 낸다: 본문이 빈 리뷰와 앱의 답글(표시)은 항목이 아니고, 사람의 것은 작성자 관계가
     // OWNER·MEMBER·COLLABORATOR일 때만 받는다(D160). 봇은 받을 봇 목록(D161)이 비어 있어 받지 않는다.
     const view = items
