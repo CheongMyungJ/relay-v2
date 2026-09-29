@@ -16,8 +16,8 @@
   | 날짜 | Claude Code 버전 | OS | 결과(통과/실패) | 메모 |
   |---|---|---|---|---|
 
-- **자동 실행:** GitHub Actions의 `spikes` 워크플로(`.github/workflows/spikes.yml`)가 Windows 러너에서 S1(한글 IME 제외)~S5를 돌린다. 수동으로만 실행한다. 결과는 실행 요약과 `spike-results` 결과물에 올라가고, 사람이 읽고 아래 결과 표에 옮긴다. 러너는 Windows Server라 **예비 확인**으로 기록하고, 결과 표의 OS 칸에 러너 이미지를 적는다(D93).
-- **인증:** 레포 secret `CLAUDE_CODE_OAUTH_TOKEN`(Claude 구독, `claude setup-token`으로 발급) 또는 `ANTHROPIC_API_KEY`(Claude Console 사용량 과금). 둘 다 있으면 구독 토큰을 쓴다.
+- **자동 실행:** GitHub Actions의 `spikes` 워크플로(`.github/workflows/spikes.yml`)가 Windows 러너에서 S1(한글 IME 제외)~S5를 돌린다. 수동으로만 실행한다. 결과는 실행 요약과 `spike-results` 결과물에 올라가고, 사람이 읽고 아래 결과 표에 옮긴다. 러너는 Windows Server라 **예비 확인**으로 기록하고, 결과 표의 OS 칸에 러너 이미지를 적는다(D93). S7은 같은 워크플로의 Linux 작업에서 돈다(`spikes` 입력에 S7만 적음, `docs/implementation.md` I47).
+- **인증:** 레포 secret `CLAUDE_CODE_OAUTH_TOKEN`(Claude 구독, `claude setup-token`으로 발급) 또는 `ANTHROPIC_API_KEY`(Claude Console 사용량 과금). 둘 다 있으면 구독 토큰을 쓴다. S7은 Claude 인증 대신 시험용 레포 secret `RELAY_TEST_GH_REPO`, `RELAY_TEST_GH_TOKEN`을 쓴다(I43).
 - **실패했을 때:** "실패하면 바꿀 설계"의 절을 사용자와 다시 정한다. 스파이크 문서에서 설계를 바꾸지 않는다.
 
 ---

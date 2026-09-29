@@ -25,7 +25,7 @@ on:
         options: [start, finish, cleanup]
         default: start
       s7_pr:
-        description: "S7 finish에서 이어 갈 시험 PR 번호"
+        description: "S7 finish에서 이어 갈 시험 PR 번호. cleanup에 주면 그 PR의 시험만 치운다"
         required: false
         default: ""
 

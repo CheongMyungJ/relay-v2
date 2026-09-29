@@ -6,7 +6,7 @@
 //   열어 두고, 할 일을 results/S7-human.md와 실행 요약에 적는다. 도중에 실패하면 만든 것을 치운다.
 // - finish (S7_PR=<번호>): 사람이 단 코멘트의 작성자 관계를 읽고(절차 3), 머지와 원격 브랜치 삭제를 하고(절차 6),
 //   이 시험이 만든 브랜치와 PR을 모두 치운다.
-// - cleanup: 남은 s7/ 브랜치와 열린 시험 PR을 치운다.
+// - cleanup: 남은 s7/ 브랜치와 열린 시험 PR을 치운다. S7_PR을 주면 그 PR의 시험(run)만 치운다.
 // 레포는 RELAY_TEST_GH_REPO(owner/repo)이고, 인증은 GH_TOKEN(러너에서는 RELAY_TEST_GH_TOKEN)이나 gh 로그인이다.
 // git push도 gh의 자격 증명을 쓴다(이 프로세스의 git에만 credential.helper를 준다).
 // 레포의 main은 건드리지 않는다. main에서 임시 기준 브랜치 s7/<run>/base를 만들고 그 브랜치에 PR을 연다.
@@ -477,14 +477,18 @@ async function extraPr(main, dir, B, id, name) {
 const localState = (main) => ({ worktrees: git(main, 'worktree', 'list', '--porcelain').replace(/\n\n/g, ' | '), branches: git(main, 'branch', '--format=%(refname:short)').split('\n') });
 const remoteHas = (main, br) => gitTry(main, 'ls-remote', '--exit-code', '--heads', 'origin', br).code === 0;
 
+// S7이 만든 PR의 run id (head 브랜치 s7/<run>/head)
+function runOf(n) {
+  const m = prView(n, ['headRefName']).headRefName.match(/^s7\/([^/]+)\/head$/);
+  if (!m) throw new Error(`S7이 만든 PR이 아닙니다: #${n}`);
+  return m[1];
+}
+
 async function finishPhase(r) {
   const ctx = prepare(r);
   const n = Number(process.env.S7_PR);
   if (!n) throw new Error('S7_PR(시험 PR 번호)가 필요합니다');
-  const pr = prView(n);
-  const m = pr.headRefName.match(/^s7\/([^/]+)\/head$/);
-  if (!m) throw new Error(`S7이 만든 PR이 아닙니다: ${pr.headRefName}`);
-  const id = m[1];
+  const id = runOf(n);
   const B = branches(id);
   const raw = { id, n };
   try {
@@ -576,7 +580,7 @@ export default async function run() {
     r.observe('시험용 레포', REPO);
     if (PHASE === 'start') await startPhase(r);
     else if (PHASE === 'finish') await finishPhase(r);
-    else if (PHASE === 'cleanup') cleanupRun(r, '');
+    else if (PHASE === 'cleanup') cleanupRun(r, process.env.S7_PR ? runOf(Number(process.env.S7_PR)) : '');
     else throw new Error(`S7_PHASE는 start, finish, cleanup 중 하나다: ${PHASE}`);
   } catch (e) {
     r.error(e);
