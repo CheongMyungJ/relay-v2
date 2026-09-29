@@ -8,7 +8,8 @@
 // PR 진행(시나리오 10)은 주기 읽기의 타이머, 읽은 결과의 반영(fast-forward, pr-items.json), 머지를 여기서 한다.
 // 읽기의 네트워크 부분은 main/pr이 처리 줄 밖에서 한다(I51). 판정은 core/pr이 한다.
 // PR 대응(시나리오 10-3~10-7)은 [대응 시작]의 fetch와 fast-forward, 승인 뒤 push와 답글 게시, [실패한 체크 다시 실행]을 여기서
-// 한다. 판정은 core/respond가 한다.
+// 한다. 자동 대응(D154, D171, D210)은 읽기가 받은 새 항목으로 자동 시작을 바라 두고, 막힘이 풀리면 시작하거나 상한에서
+// 멈추고 알린다. push·게시 바로 전에 PR 상태를 다시 읽는다(D208). 판정은 core/respond가 한다.
 import { randomBytes, randomUUID } from 'node:crypto'
 import fsp from 'node:fs/promises'
 import os from 'node:os'
@@ -187,6 +188,10 @@ import {
   GONE_SKIP,
   PR_CLOSED,
   RESPOND_STAGE_LABEL,
+  autoPausedNotice,
+  autoPlan,
+  autoStartNotice,
+  autoStartOn,
   deferredRounds,
   existingTestChanges,
   isAppReply,
@@ -201,6 +206,7 @@ import {
   staleVerdicts,
   unpostedReplies,
   visibleBody,
+  wantsAutoStart,
 } from '../core/respond'
 import { backupPattern, nextBackupBranch, planStep, stepChoices, stepPreview } from '../core/rewind'
 import { cleanupArgs, launchArgs, launchEnv, resumeArgs, taskSettings } from '../core/settings'
@@ -214,7 +220,7 @@ import {
   sectionText,
   type TaskCheck,
 } from '../core/validate'
-import type { AppConfig, WorkSettings } from '../shared/config'
+import type { AppConfig, WorkSettingsPatch } from '../shared/config'
 import type { NodeName, Size } from '../shared/contracts'
 import {
   EMPTY_PR_ITEMS,
@@ -418,6 +424,14 @@ export class WorkRunner {
   private readonly runEvents = new Map<number, string>()
   /** 앱을 끝낸다. 읽기를 더 걸지 않는다 */
   private closing = false
+  /**
+   * 자동 대응을 바란다 (D210): 읽기가 받은 새 항목이 있을 때 대응 자동 시작이 켜져 있었다. 시작하거나 상한에서 멈추거나
+   * 넣을 새 항목이 없어지거나 자동 시작이 꺼지면 버린다. 도는 대응 task, 진행 중 작업, 닫힌 PR로 막히면 남겨 두고 풀리면
+   * 시작한다. 메모리에만 둔다: 앱을 다시 켜면 쌓인 항목만으로는 시작하지 않는다 (D159)
+   */
+  private autoWanted = false
+  /** 자동 대응을 판정하고 시작하는 중. 한 번에 하나다 */
+  private autoRunning: Promise<void> | null = null
 
   /**
    * workText는 앱이 마지막으로 쓰거나 읽은 work.json의 내용이다. 다음에 쓰기 전에 이것과 비교한다 (D124).
@@ -506,6 +520,8 @@ export class WorkRunner {
         this.problem(failed)
       }
     }
+    // 바라 둔 자동 대응을 막던 것(도는 대응 task, 진행 중 작업, 닫힌 PR)이 이 전이로 풀렸을 수 있다 (D170, D210)
+    this.autoRespondSoon()
     return reply
   }
 
@@ -879,6 +895,7 @@ export class WorkRunner {
     const branch = workBranch(this.work.work_id)
     return {
       round: r.round,
+      ...(task.reason === 'auto_respond' ? { auto: true } : {}),
       instruction: r.instruction,
       pr: { number: pr.number, url: pr.url, head: pr.head },
       branch,
@@ -2131,7 +2148,7 @@ export class WorkRunner {
    * Work별 설정 (D72). 검사한 값을 받는다. 준 키만 바꾸고 빈 값이면 앱 설정을 따른다. 질문 방식은 다음에 시작하는
    * task부터 쓰고(D73), 카운트다운 중에 그 단계의 자동 승인을 끄면 바로 멈춘다 (D128)
    */
-  updateSettings(settings: WorkSettings): Promise<CommandResult> {
+  updateSettings(settings: WorkSettingsPatch): Promise<CommandResult> {
     return this.enqueue(() =>
       this.command({ type: 'settings.update', at: this.ctx.at(), settings }),
     )
@@ -2501,17 +2518,17 @@ export class WorkRunner {
   /** PR 진행인 Work의 배지 (D183) */
   private prBadge(): BadgeKind | undefined {
     if (this.work.status !== 'pr') return undefined
-    return prBadgeKind(
-      this.prFile?.items ?? [],
-      this.work.pr?.closed_at !== undefined,
-      this.prGate(),
-    )
+    const items = this.prFile?.items ?? []
+    // 상한에 닿아 자동 시작을 멈췄으면 "자동 대응 멈춤"이 앞선다 (D171, D183)
+    const paused = autoPlan(this.work, items, this.ctx.config()).kind === 'paused'
+    return prBadgeKind(items, this.work.pr?.closed_at !== undefined, this.prGate(), paused)
   }
 
   /** PR 패널 (시나리오 10, D183) */
   private prPanel(): PrView | null {
     return prView({
       work: this.work,
+      config: this.ctx.config(),
       read: this.prRead,
       file: this.prFile ?? EMPTY_PR_ITEMS,
       rules: this.prRules(),
@@ -2724,6 +2741,14 @@ export class WorkRunner {
       },
       { quiet: true },
     )
+    // 받은 새 항목으로 자동 대응을 바란다. 앱을 켤 때 읽은 것은 보이기만 한다 (D159, D210)
+    const autoOn = autoStartOn(this.ctx.config(), this.work.settings)
+    const wanted = wantsAutoStart({
+      quiet: opts.quiet === true,
+      received: gathered.received.length,
+      on: autoOn,
+    })
+    if (wanted) this.autoWanted = true
     if (!opts.quiet) {
       const w = this.work
       const notes: string[] = []
@@ -2737,12 +2762,16 @@ export class WorkRunner {
         )
       } else if (w.status === 'pr') {
         if (w.pr?.closed_at && !closedBefore) notes.push('PR이 닫혀 자동 읽기를 멈춤')
-        if (gathered.received.length) notes.push(`대응 거리 ${gathered.received.length}개가 들어옴`)
+        // 자동 시작이 켜져 있으면 들어옴 대신 자동 시작이나 멈춤을 알린다 (D184)
+        if (gathered.received.length && !autoOn) {
+          notes.push(`대응 거리 ${gathered.received.length}개가 들어옴`)
+        }
         if (!mergeableBefore && this.prGate().enabled) notes.push('머지할 수 있음')
       }
       if (notes.length) this.notify(`PR #${number}: ${notes.join(' · ')}`)
     }
     this.changed()
+    if (wanted) this.autoRespondSoon()
     return { ok: true }
   }
 
@@ -2945,6 +2974,31 @@ export class WorkRunner {
     }
   }
 
+  /**
+   * PR이 열려 있는지 다시 읽는다 (D208): 닫혔거나 머지됐거나 읽지 못하면 던진다. 대응의 push와 답글 게시 바로 전에 부른다.
+   * 앱이 마지막으로 읽은 것은 읽기 주기만큼 늦을 수 있다
+   */
+  private async ensureOpen(number: number, location: PrLocation): Promise<void> {
+    const gh = {
+      repo: repoArg(location),
+      number,
+      cwd: this.project.repo_path,
+      env: this.ctx.env,
+    }
+    let state: unknown
+    try {
+      state = (await ghPrView(this.ctx.ghBin, gh, ['state']))['state']
+    } catch (e) {
+      throw new Error(`PR 상태를 읽지 못해 push·게시하지 않음 (D208): ${message(e)}`, {
+        cause: e,
+      })
+    }
+    if (state !== 'OPEN') {
+      const what = state === 'MERGED' ? '머지됨' : state === 'CLOSED' ? '닫힘' : String(state)
+      throw new Error(`PR이 열려 있지 않아(${what}) push·게시하지 않음 (D179, D208)`)
+    }
+  }
+
   /** [머지 없이 끝내기] (D179). 확인 창은 화면이 띄운다. GitHub의 PR은 건드리지 않는다 */
   prEnd(): Promise<CommandResult> {
     return this.enqueue(() => this.command({ type: 'pr.end', at: this.ctx.at() }))
@@ -3056,6 +3110,98 @@ export class WorkRunner {
     return this.fastForward(local, remote, this.work.base_branch, at)
   }
 
+  // ---------- 자동 대응 (D154, D159, D171, D184, D210) ----------
+
+  /**
+   * 바라 둔 자동 대응을 판정한다. 바람이 없거나 판정하는 중이거나 앱을 끝내는 중이면 아무것도 하지 않는다. 기다리지
+   * 않는다: 네트워크(fetch)는 처리 줄 밖에서 하고 시작은 줄에서 한다 (I51)
+   */
+  private autoRespondSoon(): void {
+    if (!this.autoWanted || this.autoRunning || this.closing) return
+    this.autoRunning = this.autoRespond()
+      .catch((e: unknown) => this.problem(`자동 대응을 시작하지 못함: ${message(e)}`))
+      .finally(() => {
+        this.autoRunning = null
+      })
+  }
+
+  /** 자동 대응 (D154, D170, D171, D184, D210): 판정을 따라 시작하거나, 상한에서 멈추고 알리거나, 막힘이 풀리기를 기다린다 */
+  private async autoRespond(): Promise<void> {
+    const pre = autoPlan(this.work, this.prFile?.items ?? [], this.ctx.config())
+    if (pre.kind === 'wait') return
+    if (pre.kind === 'off' || pre.kind === 'none') {
+      this.autoWanted = false
+      return
+    }
+    // [대응 시작]처럼 시작하기 전에 기준 브랜치와 PR 브랜치를 fetch한다 (시나리오 10-3). 실패해도 시작한다
+    let remote: string | null = null
+    if (pre.kind === 'start') {
+      const ctx = { repo: this.project.repo_path, env: this.ctx.env }
+      await fetchTip(ctx, this.work.base_branch)
+      remote = await fetchTip(ctx, workBranch(this.work.work_id))
+    }
+    await this.enqueue(async () => {
+      if (this.closing) return
+      const file = await this.prItems()
+      // fetch하는 동안 바뀌었을 수 있어 줄에서 다시 판정한다
+      const plan = autoPlan(this.work, file.items, this.ctx.config())
+      if (plan.kind === 'wait') return
+      this.autoWanted = false
+      const pr = this.work.pr
+      if (!pr) return
+      if (plan.kind === 'paused') {
+        await this.feed({ type: 'pr.autoPaused', at: this.ctx.at(), items: plan.items })
+        this.notify(autoPausedNotice(pr.number, plan.max, plan.items.length))
+        return
+      }
+      if (plan.kind !== 'start') return
+      const at = this.ctx.at()
+      let synced: PrSynced | null
+      try {
+        synced = remote ? await this.syncForRespond(remote, at) : null
+      } catch (e) {
+        // 받지 못하면 시작하지 않는다: [대응 시작]과 같다. 새 항목은 남아 사람이 [대응 시작]할 수 있다
+        const error = `자동 대응을 시작하지 못함: 원격 PR 브랜치의 새 커밋을 받지 못함: ${message(e)}`
+        this.problem(error)
+        this.notify(`PR #${pr.number}: ${error}`)
+        return
+      }
+      const r = await this.command({
+        type: 'pr.respond',
+        at,
+        items: plan.items,
+        instruction: '',
+        auto: true,
+        ...(synced && remote
+          ? {
+              synced: {
+                head: remote,
+                commits: synced.commits,
+                ...(synced.base_commit ? { baseCommit: synced.base_commit } : {}),
+              },
+            }
+          : {}),
+      })
+      // 받은 커밋과 대응 중이 된 항목을 적는다 (D189). [대응 시작]과 같다
+      const now = await this.prItems()
+      try {
+        await this.writePr({
+          ...now,
+          items: reconcileItems(now.items, this.work).items,
+          synced: synced ? [...now.synced, synced] : now.synced,
+        })
+      } catch (e) {
+        this.problem(`pr-items.json을 쓰지 못함: ${message(e)}`)
+      }
+      this.changed()
+      if (!r.ok) {
+        this.problem(`자동 대응을 시작하지 못함: ${r.error}`)
+        return
+      }
+      this.notify(autoStartNotice(pr.number, plan.round, plan.items.length))
+    })
+  }
+
   /**
    * PR 대응의 push와 답글 게시 (시나리오 10-6, D169, D172~D174, D181, D193, D194, D205, D207). 게시할 답글을 적어 두고,
    * push를 미룬 앞 라운드와 함께 push하고, 답글을 하나씩 게시하며 게시할 때마다 코멘트 id를 적는다. 원격의 새 커밋 때문에
@@ -3068,6 +3214,9 @@ export class WorkRunner {
     const location = pr ? prLocation(pr.url) : null
     try {
       if (!pr || !location) throw new Error(`PR 주소를 읽지 못함: ${pr?.url ?? ''}`)
+      // 닫히거나 머지된 PR에는 push하지도 답글을 게시하지도 않는다. 앱이 닫힘을 읽기 전의 승인과 끊긴 작업의
+      // [다시 시도]도 막는다 (D179, D208)
+      await this.ensureOpen(pr.number, location)
       await this.planReplies(op, e.resume === true)
       if (op.stage === 'push') {
         const pushed = await this.respondPush(op)
@@ -3097,6 +3246,14 @@ export class WorkRunner {
       this.opError = `PR 대응의 ${RESPOND_STAGE_LABEL[stage]} 실패: ${message(err)}`
       console.error(`[${this.key}] ${this.opError}`)
       await this.feed({ type: 'respond.failed', at: this.ctx.at(), error: message(err) })
+      // 자동 승인한 라운드는 사람이 누르지 않았으니 실패를 알린다 (D81, D130과 같은 까닭). 사람이 누른 승인은 결과로 보인다
+      if (op.by === 'auto') {
+        const task = this.task(op.task_id)
+        const label = task ? taskLabel(task) : op.task_id
+        this.notify(
+          `${pr ? `PR #${pr.number}: ` : ''}${label} 자동 승인한 대응의 ${RESPOND_STAGE_LABEL[stage]} 실패 — 승인 화면에서 [다시 시도]를 누르세요 (${message(err)})`,
+        )
+      }
     }
     // push나 게시로 PR이 바뀌었다: 새 head의 체크, 게시한 답글 거르기
     setTimeout(() => void this.readPrNow(), 0)

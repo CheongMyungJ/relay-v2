@@ -10,6 +10,7 @@ import {
   type QuestionMode,
   type SkillName,
   type WorkSettings,
+  type WorkSettingsPatch,
 } from '../shared/config'
 import type { NodeName } from '../shared/contracts'
 import type { ProjectSettings } from '../shared/project'
@@ -20,7 +21,10 @@ export const SKILLS: readonly SkillName[] = SKILL_TITLES.map(([skill]) => skill)
 
 export const QUESTION_MODES: readonly QuestionMode[] = ['draft_first', 'confirm_each']
 
-/** 자동 승인을 켤 수 있는 노드 (4.2). intake(의도 승인), review(D167), verify(Work 완료)는 늘 수동이다 */
+/**
+ * 자동 승인을 켤 수 있는 노드 (4.2). intake(의도 승인), review(D167), verify(Work 완료)는 늘 수동이다. PR 대응(respond)은
+ * 켤 수 있다 (D169)
+ */
 export const AUTO_APPROVE_NODES: readonly AutoApproveNode[] = AUTO_APPROVE_TITLES.map(([n]) => n)
 
 /**
@@ -42,6 +46,8 @@ export const EDITABLE_KEYS = [
   'intent_warn_chars',
   'format_error_bounce_max',
   'pr_poll_interval_sec',
+  'respond_auto_start',
+  'respond_auto_round_max',
   'reply_signature',
 ] as const
 
@@ -58,12 +64,14 @@ type IntegerKey =
   | 'intent_warn_chars'
   | 'auto_approve_countdown_sec'
   | 'pr_poll_interval_sec'
+  | 'respond_auto_round_max'
 
 /**
  * 정수 값의 범위. 되돌림 횟수는 8을 넘겨도 소용이 없다: Stop 훅으로 연속 8번 이어 가면
  * Claude Code가 다음 막음을 무시한다(docs/implementation.md 3절, CLAUDE_CODE_STOP_HOOK_BLOCK_CAP).
  * PR 읽기 주기는 30초~1시간이다 **(기본값)**: 한 번 읽기가 GraphQL 1점과 REST 3번이라(S7) 30초여도 PR 하나에 시간당
  * 한도(각 5,000)의 약 7%다.
+ * 자동 대응 라운드 상한은 1~20이다 **(기본값)**: 0은 자동 시작을 끈 것과 같아 받지 않는다(D171).
  */
 const RANGES: Readonly<Record<IntegerKey, readonly [number, number]>> = {
   session_limit: [1, 20],
@@ -72,10 +80,13 @@ const RANGES: Readonly<Record<IntegerKey, readonly [number, number]>> = {
   intent_warn_chars: [1, 1_000_000],
   auto_approve_countdown_sec: [1, 3600],
   pr_poll_interval_sec: [30, 3600],
+  respond_auto_round_max: [1, 20],
 }
 
+type BooleanKey = 'pr_draft' | 'respond_auto_start'
+
 const NAMES: Readonly<
-  Record<IntegerKey | 'question_mode' | 'pr_draft' | 'auto_approve' | 'reply_signature', string>
+  Record<IntegerKey | BooleanKey | 'question_mode' | 'auto_approve' | 'reply_signature', string>
 > = {
   session_limit: '세션 상한',
   format_error_bounce_max: '형식 오류 되돌림 횟수',
@@ -83,8 +94,10 @@ const NAMES: Readonly<
   intent_warn_chars: 'intent 분량 경고 기준',
   auto_approve_countdown_sec: '자동 승인 카운트다운',
   pr_poll_interval_sec: 'PR 읽기 주기',
+  respond_auto_round_max: '자동 대응 라운드 상한',
   question_mode: '질문 방식',
   pr_draft: 'draft PR',
+  respond_auto_start: '대응 자동 시작',
   auto_approve: '자동 승인',
   reply_signature: '답글 표시 문구',
 }
@@ -99,6 +112,9 @@ function integer(key: IntegerKey, v: unknown): Checked<number> {
   }
   return { ok: true, value: v }
 }
+
+/** 참·거짓 값: draft PR(D71), 대응 자동 시작(D154) */
+const BOOLEAN_KEYS: readonly BooleanKey[] = ['pr_draft', 'respond_auto_start']
 
 /** 답글 표시 문구의 길이 상한 (D173, 기본값) */
 const SIGNATURE_MAX = 200
@@ -181,9 +197,11 @@ export function normalizeConfig(data: unknown): { config: AppConfig; warnings: s
     if (r.ok) config[key] = r.value
     else warnings.push(`config.json ${r.error}. 기본값 ${String(DEFAULT_CONFIG[key])}을 씀`)
   }
-  if (data['pr_draft'] !== undefined) {
-    if (typeof data['pr_draft'] === 'boolean') config.pr_draft = data['pr_draft']
-    else warnings.push('config.json pr_draft: true/false여야 함. 기본값을 씀')
+  for (const key of BOOLEAN_KEYS) {
+    const v = data[key]
+    if (v === undefined) continue
+    if (typeof v === 'boolean') config[key] = v
+    else warnings.push(`config.json ${key}: true/false여야 함. 기본값을 씀`)
   }
   if (data['reply_signature'] !== undefined) {
     const r = signature(data['reply_signature'])
@@ -218,10 +236,10 @@ export function applyConfigPatch(current: AppConfig, patch: unknown): Checked<Ap
     if (!(EDITABLE_KEYS as readonly string[]).includes(key)) {
       return { ok: false, error: `설정 화면에서 바꿀 수 없는 값: ${key}` }
     }
-    if (key === 'pr_draft') {
-      if (typeof v !== 'boolean')
-        return { ok: false, error: `${NAMES.pr_draft}: true/false여야 함` }
-      next.pr_draft = v
+    if ((BOOLEAN_KEYS as readonly string[]).includes(key)) {
+      const k = key as BooleanKey
+      if (typeof v !== 'boolean') return { ok: false, error: `${NAMES[k]}: true/false여야 함` }
+      next[k] = v
     } else if (key === 'reply_signature') {
       const r = signature(v)
       if (!r.ok) return r
@@ -244,21 +262,27 @@ export function applyConfigPatch(current: AppConfig, patch: unknown): Checked<Ap
   return { ok: true, value: next }
 }
 
-const WORK_KEYS = ['auto_approve', 'question_mode'] as const
+const WORK_KEYS = ['auto_approve', 'question_mode', 'respond_auto_start'] as const
 
 /**
- * Work별 설정 (D72): 단계별 자동 승인과 스킬별 질문 방식. 준 키만 돌려주고, 빈 값은 그 키를 앱 설정으로 되돌린다는
- * 뜻이다(mergeWorkSettings). 단계나 스킬을 빼면 앱 설정을 따른다.
+ * Work별 설정 (D72): 단계별 자동 승인, 스킬별 질문 방식, 대응 자동 시작(D154). 준 키만 돌려주고, 빈 값은 그 키를 앱
+ * 설정으로 되돌린다는 뜻이다(mergeWorkSettings): 자동 승인과 질문 방식은 빈 객체, 대응 자동 시작은 null이다. 단계나
+ * 스킬을 빼면 앱 설정을 따른다.
  */
-export function checkWorkSettings(input: unknown): Checked<WorkSettings> {
+export function checkWorkSettings(input: unknown): Checked<WorkSettingsPatch> {
   if (!isRecord(input)) return { ok: false, error: 'Work 설정이 객체가 아님' }
-  const out: WorkSettings = {}
+  const out: WorkSettingsPatch = {}
   for (const [key, v] of Object.entries(input)) {
     if (!(WORK_KEYS as readonly string[]).includes(key)) {
       return { ok: false, error: `Work 설정에서 바꿀 수 없는 값: ${key}` }
     }
     if (v === undefined) continue
-    if (key === 'question_mode') {
+    if (key === 'respond_auto_start') {
+      if (v !== null && typeof v !== 'boolean') {
+        return { ok: false, error: `${NAMES.respond_auto_start}: true/false나 null이어야 함` }
+      }
+      out.respond_auto_start = v
+    } else if (key === 'question_mode') {
       const r = questionModes(v)
       if (!r.ok) return r
       out.question_mode = r.value
@@ -272,17 +296,23 @@ export function checkWorkSettings(input: unknown): Checked<WorkSettings> {
 }
 
 /**
- * Work 설정을 바꾼다 (D72). patch에 있는 키만 바꾸고, 빈 값이면 그 키를 지워 앱 설정을 따른다.
- * 자동 승인은 바로, 질문 방식은 다음에 시작하는 task부터 쓴다 (D73)
+ * Work 설정을 바꾼다 (D72). patch에 있는 키만 바꾸고, 빈 값(빈 객체, null)이면 그 키를 지워 앱 설정을 따른다.
+ * 자동 승인과 대응 자동 시작은 바로, 질문 방식은 다음에 시작하는 task부터 쓴다 (D73). 대응 자동 시작을 켜도 이미 받은
+ * 새 항목으로는 시작하지 않는다 (D210)
  */
-export function mergeWorkSettings(current: WorkSettings, patch: WorkSettings): WorkSettings {
+export function mergeWorkSettings(current: WorkSettings, patch: WorkSettingsPatch): WorkSettings {
   const pick = <T extends object>(now: T | undefined, next: T | undefined): T | undefined =>
     next === undefined ? now : Object.keys(next).length ? { ...next } : undefined
   const auto = pick(current.auto_approve, patch.auto_approve)
   const modes = pick(current.question_mode, patch.question_mode)
+  const start =
+    patch.respond_auto_start === undefined
+      ? current.respond_auto_start
+      : (patch.respond_auto_start ?? undefined)
   return {
     ...(auto ? { auto_approve: auto } : {}),
     ...(modes ? { question_mode: modes } : {}),
+    ...(start === undefined ? {} : { respond_auto_start: start }),
   }
 }
 

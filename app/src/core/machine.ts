@@ -5,11 +5,12 @@
 // 단계 선택(되감기와 건너뛰기, 6.2), 전달(시나리오 7, D119, D120)과 정리(시나리오 8), 끊긴 작업의 [다시 시도]와
 // [무시](D121~D123), 앱 소유 파일의 해시(D124)와 정리 세션의 프로세스(D126) 기록, 자동 승인 카운트다운(4.3,
 // D127~D131), PR 진행(시나리오 10: 읽은 결과, 머지, 밖에서 머지·닫힘, [머지 없이 끝내기], D152~D200)과 PR 대응(대응 task,
-// 승인 뒤 push와 답글 게시, 미룬 라운드, 다시 실행, D168~D207)을 담는다.
+// 승인 뒤 push와 답글 게시, 미룬 라운드, 다시 실행, D168~D207)과 자동 대응(자동 시작과 라운드 상한, 대응 task의 자동 승인,
+// D154, D169, D171, D208~D210)을 담는다.
 // PR의 항목(pr-items.json)과 머지 조건의 판정은 core/pr이 하고, 여기는 work.json의 기록만 바꾼다. 세션 상한은 main이 세고, 자리가 없으면 task.queued를 넣는다. 카운트다운의 타이머는 main이
 // 돌고, 끝나면 autoApprove를 넣는다. 단계 선택의 계산은 core/rewind, 전달의 판정은 core/delivery, 정리의 판정은
 // core/cleanup, 끊긴 작업의 알림과 재개 판정은 core/recovery, 자동 승인의 조건은 core/approval이 한다.
-import type { AppConfig, WorkSettings } from '../shared/config'
+import type { AppConfig, WorkSettingsPatch } from '../shared/config'
 import type { Decision, Handoff, NodeName, Size, TaskNode } from '../shared/contracts'
 import type { StepExpect, WorkActions } from '../shared/views'
 import type {
@@ -46,7 +47,16 @@ import { commitMessage, deliveryStart, stashMessage, stoppedVerify } from './del
 import { NODES, RESPOND, WORK_COMPLETE, defaultNext, isPipelineNode, isPrevious } from './pipeline'
 import { workBranch } from './records'
 import { CUT_ERROR, OPERATION_BLOCKS, OWNED_FILES, cutOperation } from './recovery'
-import { PR_CLOSED, deferredRounds, isRespondPending, nextRound, respondBlocked } from './respond'
+import {
+  AUTO_LIMIT,
+  PR_CLOSED,
+  autoRounds,
+  autoStartOn,
+  deferredRounds,
+  isRespondPending,
+  nextRound,
+  respondBlocked,
+} from './respond'
 import { backupMessage, canSelectStep, planStep, type StepKind } from './rewind'
 import { FORMAT_VERSION, bounceMessage, isValid, summarize, type TaskCheck } from './validate'
 
@@ -242,11 +252,11 @@ export interface Abandon extends WorkEvent {
 /**
  * Work별 설정 (D72). main이 검사한 값을 넣는다. 준 키만 바꾸고, 빈 값이면 그 키를 지워 앱 설정을 따른다
  * (core/config mergeWorkSettings). 질문 방식은 다음에 시작하는 task부터 쓰고(D73), 카운트다운 중에 그 단계의 자동
- * 승인을 끄면 바로 멈춘다 (D128)
+ * 승인을 끄면 바로 멈춘다 (D128). PR 진행 중에도 받는다 (D209)
  */
 export interface UpdateSettings extends WorkEvent {
   type: 'settings.update'
-  settings: WorkSettings
+  settings: WorkSettingsPatch
 }
 
 /** 앱 설정을 바꿨다 (D70). 카운트다운 중에 그 단계의 자동 승인을 껐으면 바로 멈춘다 (D128) */
@@ -482,9 +492,10 @@ export interface PrCleanOffered extends WorkEvent {
 }
 
 /**
- * PR 패널의 [대응 시작] (시나리오 10-3, D170, D182). items는 사람이 본 새 항목이고 main이 지금 새 항목과 같은지 보았다
- * (core/respond respondInputError). 시작하기 전에 main이 기준 브랜치와 PR 브랜치를 fetch하고 원격만 앞섰으면 받았다
- * (D181, D193): synced는 받은 원격 head와 커밋, 옮긴 기준 커밋이다
+ * PR 패널의 [대응 시작] (시나리오 10-3, D170, D182)과 자동 대응 (D154, D210). items는 사람이 본 새 항목(자동이면 받은 새
+ * 항목 전부)이고 main이 지금 새 항목과 같은지 보았다(core/respond respondInputError, autoPlan). 시작하기 전에 main이 기준
+ * 브랜치와 PR 브랜치를 fetch하고 원격만 앞섰으면 받았다 (D181, D193): synced는 받은 원격 head와 커밋, 옮긴 기준 커밋이다.
+ * auto는 앱이 자동으로 시작한 것이다: 사람 손 없이 이어진 라운드를 하나 더 센다. 사람의 [대응 시작]은 다시 센다 (D171)
  */
 export interface PrRespond extends WorkEvent {
   type: 'pr.respond'
@@ -492,6 +503,16 @@ export interface PrRespond extends WorkEvent {
   /** 사람 지시. 비어 있으면 없는 것이다 */
   instruction: string
   synced?: { head: string; commits: readonly string[]; baseCommit?: string }
+  auto?: boolean
+}
+
+/**
+ * 자동 대응이 상한에 닿아 시작하지 않았다 (D171, D184): main이 받은 새 항목으로 자동 시작하려 했는데 사람 손 없이 이어진
+ * 라운드가 상한에 닿았다. events.jsonl에 pr.auto_paused를 남긴다. 알림은 main이 한다
+ */
+export interface PrAutoPaused extends WorkEvent {
+  type: 'pr.autoPaused'
+  items: readonly string[]
 }
 
 /** PR 대응의 push가 끝났다 (D77): 기록을 답글 게시 단계로 옮긴다. commits는 이번에 원격에 올라간 커밋이다 */
@@ -580,6 +601,7 @@ export type MachineEvent =
   | PrEnd
   | PrCleanOffered
   | PrRespond
+  | PrAutoPaused
   | RespondPushed
   | RespondPublished
   | RespondDeferred
@@ -866,7 +888,12 @@ function held(task: TaskRecord, at: string, reasons: AutoHoldReason[]): TaskReco
   return { ...omit(task, 'countdown'), auto_hold: { at, reasons } }
 }
 
-/** 이 task가 어긴 자동 승인 조건 (4.3, D129). evidence·rca·fix는 의도 승인 뒤라 intent가 있다 */
+/** PR 대응 task인데 PR이 닫혀 있다: 닫힌 PR은 승인을 받지 않아 자동 승인하지 않는다 (D179) */
+function closedHold(work: WorkState, task: TaskRecord): AutoHoldReason[] {
+  return task.node === RESPOND && work.pr?.closed_at !== undefined ? ['pr_closed'] : []
+}
+
+/** 이 task가 어긴 자동 승인 조건 (4.3, D129). evidence·rca·fix와 PR 대응은 의도 승인 뒤라 intent가 있다 */
 function holdsNow(
   work: WorkState,
   task: TaskRecord,
@@ -884,7 +911,7 @@ function judgeAtStop(work: WorkState, task: TaskRecord, e: Stopped, config: AppC
   if (approvalMode(config, work.settings, task.node) !== 'auto') return task
   const reasons: AutoHoldReason[] = work.operation
     ? ['operation']
-    : holdsNow(work, task, e.check, e.background === true)
+    : [...closedHold(work, task), ...holdsNow(work, task, e.check, e.background === true)]
   if (reasons.length) return { ...task, auto_hold: { at: e.at, reasons } }
   return { ...task, countdown: { started_at: e.at, seconds: config.auto_approve_countdown_sec } }
 }
@@ -988,7 +1015,7 @@ export interface NewWork {
   /** 기준 브랜치와, Work를 만들 때 분기한 기준 커밋 (시나리오 1, D97) */
   baseBranch: string
   baseCommit: string
-  settings?: WorkSettings
+  settings?: WorkSettingsPatch
   /** 앱이 쓴 request.md의 해시 (D124) */
   requestHash?: string
   at: string
@@ -1130,7 +1157,9 @@ function dispatch(work: WorkState, event: MachineEvent, config: AppConfig): Tran
     case 'pr.cleanOffered':
       return prCleanOffered(work, event)
     case 'pr.respond':
-      return prRespond(work, event)
+      return prRespond(work, event, config)
+    case 'pr.autoPaused':
+      return prAutoPaused(work, event, config)
     case 'respond.pushed':
       return respondPushed(work, event)
     case 'respond.published':
@@ -1179,6 +1208,7 @@ type TaskMachineEvent = Exclude<
   | PrEnd
   | PrCleanOffered
   | PrRespond
+  | PrAutoPaused
   | RespondPushed
   | RespondPublished
   | RespondDeferred
@@ -1585,8 +1615,12 @@ function autoApprove(
   if (approvalMode(config, work.settings, task.node) !== 'auto') return hold(['settings'])
   const size = work.intent?.size
   if (!e.check || !size) return hold(['invalid'])
-  const reasons = holdsNow(work, task, e.check, false)
+  const reasons = [...closedHold(work, task), ...holdsNow(work, task, e.check, false)]
   if (reasons.length) return hold(reasons, e.check)
+  // PR 대응 task는 승인하면 push하고 답글을 게시한다 (D169, D172)
+  if (task.node === RESPOND) {
+    return respondApproveNow(work, task, { at: e.at, check: summarize(e.check), by: 'auto' })
+  }
   return approveNow(work, task, { at: e.at, check: e.check, size, by: 'auto' })
 }
 
@@ -1710,11 +1744,12 @@ function abandon(work: WorkState, e: Abandon): Transition {
 }
 
 /**
- * Work별 설정 (D72). 준 키만 바꾸고, 빈 값이면 앱 설정을 따른다. 끝난 Work는 바꾸지 않는다.
- * 카운트다운 중에 그 단계의 자동 승인을 끄면 바로 멈춘다 (D128)
+ * Work별 설정 (D72). 준 키만 바꾸고, 빈 값이면 앱 설정을 따른다. 끝난 Work는 바꾸지 않는다. PR 진행 중에도 받는다: 대응
+ * 자동 시작과 PR 대응 자동 승인의 덮어쓰기가 가장 쓰이는 때다 (D209). 카운트다운 중에 그 단계의 자동 승인을 끄면 바로
+ * 멈춘다 (D128). 대응 자동 시작을 켜도 이미 받은 새 항목으로는 시작하지 않는다 (D210)
  */
 function updateSettings(work: WorkState, e: UpdateSettings, config: AppConfig): Transition {
-  if (work.status !== 'active' && work.status !== 'stopped') {
+  if (work.status !== 'active' && work.status !== 'stopped' && work.status !== 'pr') {
     return unchanged(work, '끝난 Work의 설정은 바꾸지 않음')
   }
   const next = { ...work, settings: mergeWorkSettings(work.settings, e.settings) }
@@ -2444,6 +2479,11 @@ function prRead(work: WorkState, e: PrRead): Transition {
   } else if (e.state === 'CLOSED') {
     if (!pr.closed_at) {
       next = { ...next, pr: { ...now, closed_at: e.at } }
+      // 카운트다운 중인 대응 task는 멈춘다: 닫힌 PR은 승인을 받지 않는다 (D179). 알림은 닫힘을 읽은 알림이 한다
+      const task = currentTask(next)
+      if (task?.node === RESPOND && task.countdown) {
+        next = withTask(next, held(task, e.at, ['pr_closed']))
+      }
       effects.push(log(next, e.at, 'pr.closed'))
     }
   } else if (pr.closed_at) {
@@ -2541,7 +2581,7 @@ function prCleanOffered(work: WorkState, e: PrCleanOffered): Transition {
  * 시작한다(세션 상한과 대기열, D18). 시작하기 전에 main이 원격만 앞선 PR 브랜치를 받았으면 받은 커밋과 옮긴 기준 커밋을
  * 남기고(D181, D193) 읽은 head를 받은 원격 head로 둔다
  */
-function prRespond(work: WorkState, e: PrRespond): Transition {
+function prRespond(work: WorkState, e: PrRespond, config: AppConfig): Transition {
   const why = respondBlocked(work)
   if (why) return unchanged(work, why)
   const pr = work.pr
@@ -2549,6 +2589,10 @@ function prRespond(work: WorkState, e: PrRespond): Transition {
   const instruction = e.instruction.trim() || null
   if (!e.items.length && !instruction) {
     return unchanged(work, '대응할 새 항목이 없음. 지시를 적으면 지시만으로 시작함 (D182)')
+  }
+  if (e.auto) {
+    if (!autoStartOn(config, work.settings)) return unchanged(work, '대응 자동 시작이 꺼져 있음')
+    if (autoRounds(work) >= config.respond_auto_round_max) return unchanged(work, AUTO_LIMIT)
   }
   const effects: Effect[] = []
   let next = work
@@ -2566,8 +2610,11 @@ function prRespond(work: WorkState, e: PrRespond): Transition {
       }),
     )
   }
+  // 자동 시작은 사람 손 없이 이어진 라운드를 하나 더 세고, 사람의 [대응 시작]은 다시 센다 (D171)
+  next = withRounds(next, e.auto ? autoRounds(work) + 1 : 0)
   const respond: RespondRound = { round: nextRound(work), items: [...e.items], instruction }
-  const created: TaskRecord = { ...newTask(next, RESPOND, e.at, 'respond'), respond }
+  const reason = e.auto ? 'auto_respond' : 'respond'
+  const created: TaskRecord = { ...newTask(next, RESPOND, e.at, reason), respond }
   next = { ...next, tasks: [...next.tasks, created] }
   effects.push({
     type: 'startTask',
@@ -2576,6 +2623,35 @@ function prRespond(work: WorkState, e: PrRespond): Transition {
     reason: created.reason,
   })
   return { work: next, effects }
+}
+
+/**
+ * 사람 손 없이 이어진 대응 라운드 수를 바꾼다 (D171, D191). 기록이 없고 0이면 적지 않는다(M11 전의 Work를 건드리지 않음)
+ */
+function withRounds(work: WorkState, rounds: number): WorkState {
+  const pr = work.pr
+  if (!pr || (pr.auto_rounds ?? 0) === rounds) return work
+  return { ...work, pr: { ...pr, auto_rounds: rounds } }
+}
+
+/**
+ * 자동 대응이 상한에 닿아 시작하지 않았다 (D171, D184): pr.auto_paused를 남긴다(5.5). 멈춘 상태는 따로 적지 않는다: 배지와
+ * 패널은 대응 자동 시작, 라운드 수와 상한, 받은 새 항목으로 정한다(core/respond autoPlan). 사람이 [대응 시작]이나 승인을
+ * 누르면 다시 센다
+ */
+function prAutoPaused(work: WorkState, e: PrAutoPaused, config: AppConfig): Transition {
+  if (work.status !== 'pr' || !work.pr) return unchanged(work)
+  return {
+    work,
+    effects: [
+      log(work, e.at, 'pr.auto_paused', {
+        reason: 'round_limit',
+        rounds: autoRounds(work),
+        max: config.respond_auto_round_max,
+        items: [...e.items],
+      }),
+    ],
+  }
 }
 
 /**
@@ -2601,29 +2677,51 @@ function respondApprove(work: WorkState, task: TaskRecord, e: Approve): Transiti
       : `${task.id}의 handoff가 유효하지 않음`
     return { work: withTask(work, { ...task, check }), effects: [], rejected: reason }
   }
-  const waiting: TaskRecord = {
-    ...task,
-    status: 'awaiting_approval',
+  return respondApproveNow(work, task, {
+    at: e.at,
     check,
+    by: 'human',
+    ...(forced ? { ignored: gate.errors } : {}),
+  })
+}
+
+/**
+ * 대응 task의 승인을 받는다 (D169, D172): 사람의 [승인]과 자동 승인(4.3)이 같이 쓴다. 세션을 끝내고 진행 중 작업을 적은 뒤
+ * push와 답글 게시를 main에 맡긴다. 승인 방식은 진행 중 작업에 두었다가 승인을 기록할 때 남긴다. 사람이 누른 승인은 사람
+ * 손 없이 이어진 라운드를 다시 센다 (D171)
+ */
+function respondApproveNow(
+  work: WorkState,
+  task: TaskRecord,
+  a: { at: string; check: CheckSummary; by: ApprovalBy; ignored?: FormatIssue[] },
+): Transition {
+  const pr = work.pr
+  if (!pr || !task.respond) return unchanged(work, `${task.id}는 승인할 수 있는 상태가 아님`)
+  const waiting: TaskRecord = {
+    ...omit(task, 'countdown', 'auto_hold'),
+    status: 'awaiting_approval',
+    check: a.check,
     respond: omit(task.respond, 'failure'),
-    ...(task.session?.alive ? { session: { ...task.session, alive: false, ended_at: e.at } } : {}),
+    ...(task.session?.alive ? { session: { ...task.session, alive: false, ended_at: a.at } } : {}),
   }
   const effects: Effect[] = []
   if (task.status !== 'awaiting_approval') {
-    effects.push(log(work, e.at, 'task.awaiting_approval', {}, task))
+    effects.push(log(work, a.at, 'task.awaiting_approval', {}, task))
   }
   if (task.session?.alive) effects.push({ type: 'endSession', taskId: task.id })
   const operation: RespondOperation = {
     kind: 'respond',
     stage: 'push',
-    started_at: e.at,
+    started_at: a.at,
     task_id: task.id,
     rounds: [...deferredRounds(work).map((t) => t.id), task.id],
     from: pr.head,
-    ...(forced ? { ignored: gate.errors } : {}),
+    ...(a.ignored ? { ignored: a.ignored } : {}),
+    ...(a.by === 'auto' ? { by: 'auto' as const } : {}),
   }
   effects.push({ type: 'respond', taskId: task.id, rounds: [...operation.rounds] })
-  return { work: { ...withTask(work, waiting), operation }, effects }
+  const counted = a.by === 'human' ? withRounds(work, 0) : work
+  return { work: { ...withTask(counted, waiting), operation }, effects }
 }
 
 /** PR 대응의 push가 끝났다: 기록을 답글 게시 단계로 옮기고 push한 커밋을 남긴다 (D77, 5.5 pr.pushed) */
@@ -2648,15 +2746,17 @@ function recordRespondApproval(
   at: string,
   check: TaskCheck | null,
 ): { task: TaskRecord; effects: Effect[] } {
+  // 승인 방식은 승인할 때 진행 중 작업에 적었다. M11 전의 기록은 사람 승인이다 (D169)
+  const by: ApprovalBy = op.by ?? 'human'
   const approved: TaskRecord = {
     ...task,
     status: 'approved',
     approved_at: at,
-    approved_by: 'human',
+    approved_by: by,
     check: check ? summarize(check) : task.check,
     ...(op.ignored ? { ignored_errors: op.ignored } : {}),
   }
-  const payload = op.ignored ? { by: 'human', ignored_errors: op.ignored.length } : { by: 'human' }
+  const payload = op.ignored ? { by, ignored_errors: op.ignored.length } : { by }
   return {
     task: approved,
     effects: [
@@ -2666,7 +2766,7 @@ function recordRespondApproval(
         taskId: task.id,
         node: task.node,
         at,
-        by: 'human',
+        by,
         decisions: check?.handoffHeader ? check.handoffHeader.decisions : null,
       },
     ],

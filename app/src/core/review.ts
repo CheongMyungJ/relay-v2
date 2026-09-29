@@ -31,6 +31,7 @@ export const REASON_LABEL: Readonly<Record<StartReason, string>> = {
   skip: '건너뛰기',
   resume: '재개',
   respond: '대응 시작',
+  auto_respond: '자동 대응',
 }
 
 /**

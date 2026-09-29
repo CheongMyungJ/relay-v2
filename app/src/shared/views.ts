@@ -260,6 +260,8 @@ export interface PrView {
   ghVersion: string | null
   /** [대응 시작] (시나리오 10-3, D170, D182): 누를 수 있는지와 까닭, 누르면 넣을 새 항목 */
   respond: { enabled: boolean; reason: string | null; items: string[] }
+  /** 자동 대응 (D154, D169, D171): 설정, 사람 손 없이 이어진 라운드와 상한, 멈춤 */
+  auto: AutoRespondView
   /**
    * [실패한 체크 다시 실행] (D175, D203): 지금 head에서 실패한 Actions 체크의 실행. 없으면 null이고 버튼을 보이지 않는다.
    * others는 Actions 밖의 실패한 체크다(사람이 한다)
@@ -281,6 +283,28 @@ export interface PrView {
     mergeable: string | null
     sync: string | null
   }
+}
+
+/**
+ * 자동 대응 (D154, D169, D171, D183): 대응 자동 시작과 PR 대응 자동 승인이 켜졌는지와 어디서 정했는지, 사람 손 없이 이어진
+ * 라운드와 상한, 상한에 닿아 멈췄는지. PR 패널에 보인다
+ */
+export interface AutoRespondView {
+  /** 대응 자동 시작이 켜져 있다 (D154) */
+  start: boolean
+  /** 대응 자동 시작을 Work 설정으로 정했다. 아니면 앱 설정을 따른다 (D72) */
+  startFromWork: boolean
+  /** PR 대응의 자동 승인이 켜져 있다 (D169) */
+  approve: boolean
+  approveFromWork: boolean
+  /** 사람 손 없이 이어진 라운드 수 (D171) */
+  rounds: number
+  /** 상한 (respond_auto_round_max) */
+  max: number
+  /** 상한에 닿아 자동 시작을 멈췄다: 받은 새 항목이 있는데 시작하지 않는다 (배지 "자동 대응 멈춤", D183) */
+  paused: boolean
+  /** 패널에 보일 한 줄 */
+  text: string
 }
 
 /** 대응 라운드 하나 (화면 구성의 PR 패널, D193, D194, D205) */
@@ -349,6 +373,7 @@ export type BadgeKind =
   | 'awaiting_approval'
   | 'blocked'
   | 'stopped'
+  | 'auto_paused'
   | 'pr_items'
   | 'pr_closed'
   | 'mergeable'

@@ -132,7 +132,7 @@ function counted(s: Setup, workKey: string): string[] {
 const noticesOf = (s: Setup, workKey: string) =>
   s.h.ui.notices.filter((n) => n.workKey === workKey).map((n) => n.body)
 
-const ALL_AUTO = { investigate: true, evidence: true, rca: true, fix: true }
+const ALL_AUTO = { investigate: true, evidence: true, rca: true, fix: true, respond: false }
 
 /** 카운트다운이 끝나기 전에 [취소]할 수 있게 넉넉히 둔 카운트다운 */
 const LONG = 600
@@ -215,7 +215,7 @@ describe('[흐름] 자동 승인 (M7)', () => {
       { do: 'wait' },
     ]
     const s = await setup(scenario('S', { fix }), {
-      auto_approve: { investigate: false, evidence: false, rca: false, fix: true },
+      auto_approve: { investigate: false, evidence: false, rca: false, fix: true, respond: false },
       auto_approve_countdown_sec: 4,
     })
     const key = await s.create()
@@ -308,7 +308,7 @@ describe('[흐름] 자동 승인 (M7)', () => {
       { do: 'stop' },
     ]
     const s = await setup(scenario('S', { fix }), {
-      auto_approve: { investigate: false, evidence: false, rca: false, fix: true },
+      auto_approve: { investigate: false, evidence: false, rca: false, fix: true, respond: false },
       auto_approve_countdown_sec: 60,
     })
     const key = await s.create()
@@ -404,7 +404,7 @@ describe('[흐름] 자동 승인 (M7)', () => {
 
   it('Work 설정이 앱 설정보다 우선한다 (D72)', async () => {
     const s = await setup(scenario('S'), {
-      auto_approve: { investigate: false, evidence: false, rca: false, fix: false },
+      auto_approve: { investigate: false, evidence: false, rca: false, fix: false, respond: false },
       auto_approve_countdown_sec: 1,
     })
     // 앱 설정은 꺼짐: Work A는 켜서 자동 승인, Work B는 앱 설정을 따라 사람 승인
@@ -448,7 +448,7 @@ describe('[흐름] 자동 승인 (M7)', () => {
       { do: 'wait' },
     ]
     const s = await setup(scenario('S', { fix }), {
-      auto_approve: { investigate: false, evidence: false, rca: false, fix: false },
+      auto_approve: { investigate: false, evidence: false, rca: false, fix: false, respond: false },
       auto_approve_countdown_sec: LONG,
     })
     const key = await s.create()
@@ -503,7 +503,7 @@ describe('[흐름] 자동 승인 (M7)', () => {
 
   it('앱 설정을 바꾸면 상태가 그대로인 Work도 스냅샷을 다시 보내, 승인 화면이 새 설정으로 안내를 다시 읽는다 (D128)', async () => {
     const s = await setup(scenario('S'), {
-      auto_approve: { investigate: false, evidence: false, rca: false, fix: false },
+      auto_approve: { investigate: false, evidence: false, rca: false, fix: false, respond: false },
       auto_approve_countdown_sec: LONG,
     })
     const key = await s.create()
@@ -573,7 +573,13 @@ describe('[흐름] 자동 승인 (M7)', () => {
         },
       },
       {
-        auto_approve: { investigate: false, evidence: false, rca: false, fix: true },
+        auto_approve: {
+          investigate: false,
+          evidence: false,
+          rca: false,
+          fix: true,
+          respond: false,
+        },
         auto_approve_countdown_sec: LONG,
       },
     )
@@ -635,7 +641,13 @@ describe('[흐름] 자동 승인 (M7)', () => {
         },
       },
       {
-        auto_approve: { investigate: false, evidence: false, rca: false, fix: true },
+        auto_approve: {
+          investigate: false,
+          evidence: false,
+          rca: false,
+          fix: true,
+          respond: false,
+        },
         auto_approve_countdown_sec: 5,
       },
     )
@@ -715,7 +727,13 @@ describe('[흐름] 자동 승인 (M7)', () => {
         },
       },
       {
-        auto_approve: { investigate: false, evidence: false, rca: false, fix: true },
+        auto_approve: {
+          investigate: false,
+          evidence: false,
+          rca: false,
+          fix: true,
+          respond: false,
+        },
         auto_approve_countdown_sec: LONG,
       },
     )

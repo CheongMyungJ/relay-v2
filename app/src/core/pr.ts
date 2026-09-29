@@ -21,8 +21,10 @@ import type {
   RoundView,
   SyncKind,
 } from '../shared/views'
+import type { AppConfig } from '../shared/config'
 import type { MergeMethod, WorkState } from '../shared/work'
 import {
+  autoRespondView,
   isRespondPending,
   pendingRespond,
   rerunPlan,
@@ -808,10 +810,17 @@ export function mergeGate(g: GateInput): Gate {
 // ---------- 배지 (D183) ----------
 
 /**
- * PR 진행인 Work의 배지 (D183). 설계의 차례대로 대응 거리 있음(받은 새 항목) > PR 닫힘 > 머지 가능 > 리뷰·CI 대기다.
- * PR 대응 task가 끝나기 전에는 core/approval badge가 task 상태를 보인다. 자동 대응 멈춤(D171)은 M11에서 더한다
+ * PR 진행인 Work의 배지 (D183). 설계의 차례대로 자동 대응 멈춤(D171) > 대응 거리 있음(받은 새 항목) > PR 닫힘 > 머지 가능 >
+ * 리뷰·CI 대기다. PR 대응 task가 끝나기 전에는 core/approval badge가 task 상태를 보인다. paused는 core/respond autoPlan이
+ * 상한 때문에 시작하지 않는다고 본 것이다
  */
-export function prBadgeKind(items: readonly PrItem[], closed: boolean, gate: Gate): BadgeKind {
+export function prBadgeKind(
+  items: readonly PrItem[],
+  closed: boolean,
+  gate: Gate,
+  paused = false,
+): BadgeKind {
+  if (paused) return 'auto_paused'
   if (openItems(items).length) return 'pr_items'
   if (closed) return 'pr_closed'
   if (gate.enabled) return 'mergeable'
@@ -1003,7 +1012,9 @@ const STATUS_ORDER: readonly PrItemStatus[] = [
 ]
 
 export interface PrViewInput {
-  work: Pick<WorkState, 'status' | 'operation' | 'pr' | 'tasks'>
+  work: Pick<WorkState, 'status' | 'operation' | 'pr' | 'tasks' | 'settings'>
+  /** 앱 설정: 자동 대응의 상태 (D154, D169, D171) */
+  config: Pick<AppConfig, 'respond_auto_start' | 'respond_auto_round_max' | 'auto_approve'>
   read: PrReadState | null
   file: PrItemsFile
   rules: ItemRules
@@ -1073,6 +1084,7 @@ export function prView(input: PrViewInput): PrView | null {
       pr.clean_offered_at === undefined,
     ghVersion: pr.gh_version,
     respond: respondStart(input.work, input.file.items),
+    auto: autoRespondView(input.work, input.file.items, input.config),
     rerun: rerunView(input),
     rounds: roundViews(input),
     labels: {

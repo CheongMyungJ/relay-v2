@@ -1,8 +1,10 @@
-// PR 대응 (시나리오 10-3~10-8, D168~D207)의 판정. [대응 시작]을 받는지(D170, D179, D182), 라운드와 항목의 상태(D189),
+// PR 대응 (시나리오 10-3~10-8, D168~D210)의 판정. [대응 시작]을 받는지(D170, D179, D182), 라운드와 항목의 상태(D189),
 // 게시할 답글의 본문과 보이지 않는 표시(D173, D194, D207), 게시하지 않고 건너뛸 답글(D205), 기존 테스트 변경(D202),
-// 다시 실행할 Actions 실행(D203), 머지 창의 판정표 경고(D206)를 정한다. gh와 git은 부르지 않는다: push와 게시는 main이
-// 하고, 읽은 PR의 판정은 core/pr이 한다.
+// 다시 실행할 Actions 실행(D203), 머지 창의 판정표 경고(D206), 자동 대응의 시작과 라운드 상한(D154, D159, D171, D210)을
+// 정한다. gh와 git은 부르지 않는다: push와 게시는 main이 하고, 읽은 PR의 판정은 core/pr이 한다.
+import type { AppConfig, WorkSettings } from '../shared/config'
 import type { PrItem, PrItemKind, PrItemsFile, PrReply, PrRound } from '../shared/pr'
+import type { AutoRespondView } from '../shared/views'
 import type { RespondRound, RespondStage, TaskRecord, WorkState } from '../shared/work'
 import type { PrReadState } from './pr'
 import { RESPOND } from './pipeline'
@@ -384,4 +386,108 @@ export function staleVerdicts(
   const rounds = file.rounds.filter((r) => (r.pushed?.commits.length ?? 0) > 0).length
   const synced = file.synced.reduce((n, s) => n + s.commits.length, 0)
   return rounds || synced ? { rounds, synced } : null
+}
+
+// ---------- 자동 대응 (D154, D159, D169, D171, D183, D184, D210) ----------
+
+/** 대응 자동 시작이 켜져 있는가: Work 설정, 앱 설정 차례로 본다 (D72, D154) */
+export function autoStartOn(
+  config: Pick<AppConfig, 'respond_auto_start'>,
+  settings: Pick<WorkSettings, 'respond_auto_start'>,
+): boolean {
+  return settings.respond_auto_start ?? config.respond_auto_start
+}
+
+/** PR 대응의 자동 승인이 켜져 있는가: Work 설정, 앱 설정 차례로 본다 (D72, D169) */
+export function autoApproveOn(
+  config: Pick<AppConfig, 'auto_approve'>,
+  settings: Pick<WorkSettings, 'auto_approve'>,
+): boolean {
+  return settings.auto_approve?.respond ?? config.auto_approve.respond
+}
+
+/** 사람 손 없이 이어진 대응 라운드 수 (D171, D191). 기록이 없으면 0이다 */
+export function autoRounds(work: Pick<WorkState, 'pr'>): number {
+  return work.pr?.auto_rounds ?? 0
+}
+
+/** 자동 시작이 상한 때문에 거절된 까닭 (D171) */
+export const AUTO_LIMIT =
+  '사람 손 없이 이어진 대응 라운드가 상한에 닿음: [대응 시작]을 누르면 다시 셈 (D171)'
+
+/**
+ * 읽은 결과로 자동 시작을 바랄 것인가 (D159, D210): 앱을 켤 때 읽은 것(quiet)이 아니고, 받은 새 항목이 있고, 그때 대응
+ * 자동 시작이 켜져 있다. 자동 시작을 켤 때와 사람의 [받기]·[다시 넣기]는 읽기가 아니라 바라지 않는다. 바람은 시작하거나
+ * 멈추거나 새 항목이 없어질 때까지 남아, 도는 대응 task가 끝나면 바로 시작한다
+ */
+export function wantsAutoStart(p: { quiet: boolean; received: number; on: boolean }): boolean {
+  return !p.quiet && p.received > 0 && p.on
+}
+
+/**
+ * 자동 시작의 판정 (D154, D170, D171, D210).
+ * - off: 대응 자동 시작이 꺼져 있다. 바람을 버린다
+ * - none: PR 진행이 아니거나 넣을 새 항목이 없다. 바람을 버린다
+ * - wait: 끝나지 않은 대응 task, 진행 중 작업, 닫힌 PR이 있다. 풀리면 다시 본다 (D170)
+ * - paused: 사람 손 없이 이어진 라운드가 상한에 닿아 다음 라운드가 상한을 넘는다. 시작하지 않고 멈추고 알린다 (D171)
+ * - start: 제외하지 않은 새 항목 전부로 다음 라운드를 시작한다 (D170)
+ */
+export type AutoPlan =
+  | { kind: 'off' }
+  | { kind: 'none' }
+  | { kind: 'wait'; reason: string }
+  | { kind: 'paused'; items: string[]; rounds: number; max: number }
+  | { kind: 'start'; items: string[]; round: number }
+
+export function autoPlan(
+  work: Pick<WorkState, 'status' | 'pr' | 'operation' | 'tasks' | 'settings'>,
+  items: readonly PrItem[],
+  config: Pick<AppConfig, 'respond_auto_start' | 'respond_auto_round_max'>,
+): AutoPlan {
+  if (!autoStartOn(config, work.settings)) return { kind: 'off' }
+  if (work.status !== 'pr' || !work.pr) return { kind: 'none' }
+  const blocked = respondBlocked(work)
+  if (blocked) return { kind: 'wait', reason: blocked }
+  const ids = newItemIds(items)
+  if (!ids.length) return { kind: 'none' }
+  const rounds = autoRounds(work)
+  const max = config.respond_auto_round_max
+  if (rounds >= max) return { kind: 'paused', items: ids, rounds, max }
+  return { kind: 'start', items: ids, round: nextRound(work) }
+}
+
+/** 자동 대응을 시작했다는 알림 (D184) */
+export function autoStartNotice(pr: number, round: number, items: number): string {
+  return `PR #${pr}: 자동 대응 시작 — 라운드 ${round}, 새 항목 ${items}개`
+}
+
+/** 상한에 닿아 자동 시작을 멈췄다는 알림 (D171, D184) */
+export function autoPausedNotice(pr: number, max: number, items: number): string {
+  return `PR #${pr}: 자동 대응 멈춤 — 사람 손 없이 이어진 라운드가 상한(${max})에 닿음. 새 항목 ${items}개는 [대응 시작]으로 대응하세요 (누르면 다시 셈)`
+}
+
+/**
+ * PR 패널의 자동 대응 (D154, D169, D171, D183): 설정과 어디서 정했는지, 사람 손 없이 이어진 라운드와 상한, 멈춤. 멈춤은
+ * 자동 시작이 켜져 있고 받은 새 항목이 있는데 상한 때문에 시작하지 않는 것이다(배지 "자동 대응 멈춤")
+ */
+export function autoRespondView(
+  work: Pick<WorkState, 'status' | 'pr' | 'operation' | 'tasks' | 'settings'>,
+  items: readonly PrItem[],
+  config: Pick<AppConfig, 'respond_auto_start' | 'respond_auto_round_max' | 'auto_approve'>,
+): AutoRespondView {
+  const settings = work.settings
+  const start = autoStartOn(config, settings)
+  const approve = autoApproveOn(config, settings)
+  const startFromWork = settings.respond_auto_start !== undefined
+  const approveFromWork = settings.auto_approve?.respond !== undefined
+  const rounds = autoRounds(work)
+  const max = config.respond_auto_round_max
+  const paused = autoPlan(work, items, config).kind === 'paused'
+  const from = (w: boolean) => (w ? '이 Work' : '앱 설정')
+  const text = paused
+    ? `자동 대응 멈춤: 사람 손 없이 이어진 라운드가 상한(${max})에 닿아 새 항목으로 자동 시작하지 않습니다. [대응 시작]을 누르면 다시 셉니다 (D171)`
+    : start
+      ? `대응 자동 시작 켜짐(${from(startFromWork)}) · 자동 승인 ${approve ? '켜짐' : '꺼짐'}(${from(approveFromWork)}) · 사람 손 없이 이어진 라운드 ${rounds}/${max}`
+      : `대응 자동 시작 꺼짐(${from(startFromWork)}): 새 항목은 [대응 시작]으로 대응합니다 · 자동 승인 ${approve ? '켜짐' : '꺼짐'}(${from(approveFromWork)})`
+  return { start, startFromWork, approve, approveFromWork, rounds, max, paused, text }
 }

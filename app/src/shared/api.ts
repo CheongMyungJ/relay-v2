@@ -1,7 +1,7 @@
 // preload가 contextBridge로 렌더러에 내보내는 API (I2, I14).
 // 렌더러는 명령을 invoke로 보내고, 메인은 상태가 바뀔 때마다 Work 스냅샷을 보낸다.
 // 터미널 출력은 task별 채널로 보낸다. 메인과 렌더러가 같은 타입을 보도록 여기에 둔다.
-import type { AppConfig, WorkSettings } from './config'
+import type { AppConfig, WorkSettingsPatch } from './config'
 import type { NodeName } from './contracts'
 import type { ProjectSettings } from './project'
 import type {
@@ -120,7 +120,7 @@ export interface RelayApi {
   /** 프로젝트 설정 (5.1.2, D185): 받을 봇과 기본 머지 방식 */
   updateProjectSettings(projectId: string, settings: ProjectSettings): Promise<CommandResult>
   /** Work별 자동 승인과 질문 방식 (D72). 준 키만 바꾸고, 빈 값이면 앱 설정을 따른다 */
-  updateWorkSettings(workKey: string, settings: WorkSettings): Promise<CommandResult>
+  updateWorkSettings(workKey: string, settings: WorkSettingsPatch): Promise<CommandResult>
   /** 앱 설정 (D70) */
   config(): Promise<AppConfig>
   /** 설정 화면에서 바꾼 값. 바로 적용한다 (D73) */

@@ -705,7 +705,7 @@ describe('승인과 다음 task (시나리오 4, 5)', () => {
   it('review는 자동 승인을 모두 켜도 카운트다운하지 않고 사람의 승인을 기다린다 (D167)', () => {
     const all: AppConfig = {
       ...DEFAULT_CONFIG,
-      auto_approve: { investigate: true, evidence: true, rca: true, fix: true },
+      auto_approve: { investigate: true, evidence: true, rca: true, fix: true, respond: false },
     }
     let work = stepApprove(newWork(), valid({}, 'S')).work
     work = stepApprove(work, valid()).work
@@ -2733,7 +2733,7 @@ describe('앱 소유 파일의 해시 (D91, D124)', () => {
 describe('자동 승인 (4.3, D127~D131)', () => {
   const AUTO: AppConfig = {
     ...DEFAULT_CONFIG,
-    auto_approve: { investigate: false, evidence: true, rca: true, fix: true },
+    auto_approve: { investigate: false, evidence: true, rca: true, fix: true, respond: false },
     auto_approve_countdown_sec: 15,
   }
   /** L 경로의 의도 승인(사람) 뒤 evidence 세션을 띄운 Work */

@@ -140,6 +140,14 @@ export function PrPanel({ work, pr }: { work: WorkView; pr: PrView }) {
       {active ? (
         <section className="pr-respond" aria-label="대응">
           <h3>대응</h3>
+          {/* 자동 대응 (D154, D169, D171): 상한에 닿으면 멈춤을 강조한다 */}
+          <div
+            className={pr.auto.paused ? 'notice fail' : 'dim'}
+            role={pr.auto.paused ? 'status' : undefined}
+            aria-label="자동 대응"
+          >
+            {pr.auto.text}
+          </div>
           <textarea
             aria-label="사람 지시"
             placeholder="사람 지시 (선택). 항목이 없으면 지시만으로 시작합니다 (D182)"

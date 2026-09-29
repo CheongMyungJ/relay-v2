@@ -116,14 +116,14 @@ describe('설정 화면 (D70)', () => {
   it('단계별 자동 승인과 카운트다운을 바꾼다. 자동 승인은 단계마다 덮어쓴다 (4.2, 4.3)', () => {
     const on = {
       ...DEFAULT_CONFIG,
-      auto_approve: { investigate: false, evidence: true, rca: false, fix: false },
+      auto_approve: { investigate: false, evidence: true, rca: false, fix: false, respond: false },
     }
     const r = applyConfigPatch(on, { auto_approve: { fix: true }, auto_approve_countdown_sec: 30 })
     expect(r).toEqual({
       ok: true,
       value: {
         ...on,
-        auto_approve: { investigate: false, evidence: true, rca: false, fix: true },
+        auto_approve: { investigate: false, evidence: true, rca: false, fix: true, respond: false },
         auto_approve_countdown_sec: 30,
       },
     })
@@ -234,8 +234,8 @@ describe('화면의 스킬 이름', () => {
     ])
   })
 
-  it('자동 승인을 켤 수 있는 단계는 investigate, evidence, rca, fix이고 이름은 노드의 화면 이름이다 (4.2, D109, D151)', () => {
-    expect(AUTO_APPROVE_NODES).toEqual(['investigate', 'evidence', 'rca', 'fix'])
+  it('자동 승인을 켤 수 있는 단계는 investigate, evidence, rca, fix와 PR 대응이고 이름은 노드의 화면 이름이다 (4.2, D109, D151, D169)', () => {
+    expect(AUTO_APPROVE_NODES).toEqual(['investigate', 'evidence', 'rca', 'fix', 'respond'])
     expect(AUTO_APPROVE_TITLES).toEqual(AUTO_APPROVE_NODES.map((n) => [n, NODE_INFO[n].title]))
   })
 })

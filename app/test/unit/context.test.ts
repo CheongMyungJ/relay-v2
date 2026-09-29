@@ -314,7 +314,7 @@ describe('context.md: review (D163~D167)', () => {
   it('승인은 늘 수동이다. 자동 승인을 켤 수 있는 단계를 모두 켜도 수동이다 (D167)', () => {
     const config: AppConfig = {
       ...DEFAULT_CONFIG,
-      auto_approve: { investigate: true, evidence: true, rca: true, fix: true },
+      auto_approve: { investigate: true, evidence: true, rca: true, fix: true, respond: false },
     }
     const md = buildContext(input('review', {}, config))
     expect(section(md, '승인 방식')).toBe('수동 승인 (의도 승인, 리뷰, Work 완료는 늘 수동)')
@@ -427,7 +427,7 @@ describe('마무리 안내 문구 (D104, D132)', () => {
   it('승인 방식 절은 task를 시작할 때의 설정이다. 문구는 설정과 상관없이 같다 (D128, D132)', () => {
     const config = {
       ...DEFAULT_CONFIG,
-      auto_approve: { investigate: false, evidence: false, rca: true, fix: false },
+      auto_approve: { investigate: false, evidence: false, rca: true, fix: false, respond: false },
     }
     const md = buildContext(input('rca', {}, config))
     expect(section(md, '승인 방식')).toBe(
@@ -444,7 +444,7 @@ describe('마무리 안내 문구 (D104, D132)', () => {
 describe('Work별 덮어쓰기 (D72)', () => {
   const config: AppConfig = {
     ...DEFAULT_CONFIG,
-    auto_approve: { investigate: false, evidence: true, rca: true, fix: false },
+    auto_approve: { investigate: false, evidence: true, rca: true, fix: false, respond: false },
     question_mode: { ...DEFAULT_CONFIG.question_mode, 'root-cause': 'confirm_each' },
   }
 

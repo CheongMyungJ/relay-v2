@@ -861,6 +861,7 @@ describe('머지 조건과 PR 패널의 대응 (D176, D183, D203, 화면 구성)
     }
     const v = prView({
       work: running,
+      config: DEFAULT_CONFIG,
       read: read({ checks: failing }),
       file,
       rules: { allowedBots: [] },
@@ -1090,7 +1091,10 @@ describe('PR 대응 task의 context.md (D162, D192, 시나리오 2-4)', () => {
     expect(text).toContain(
       '없음: PR 대응 task는 파이프라인 밖이다. `recommended_next`는 null로 둔다 (D188)',
     )
-    expect(text).toContain('수동 승인 (승인하면 앱이 push하고 답글을 게시한다)')
+    // 승인 방식은 설정을 따른다(D169). 기본은 수동이다
+    expect(text).toContain(
+      '수동 승인 (task를 시작할 때의 설정. 설정은 바로 적용되고, 자동 승인 여부는 턴이 끝날 때의 설정으로 정한다. 승인하면 앱이 push하고 답글을 게시한다)',
+    )
     expect(text).toContain(closingMessage('respond'))
     expect(closingMessage('respond')).toBe(
       '대응 결과와 답글 초안을 썼습니다. 오른쪽 패널에서 확인하고 [승인]을 누르면 push하고 답글을 게시합니다. 자동 승인이 켜져 있으면 조건을 만족할 때 카운트다운 뒤 승인되고, 멈추려면 [취소]를 누르세요. 고칠 점은 여기에 말해 주세요.',

@@ -452,7 +452,8 @@ function ActionBar({
           단계 선택
         </button>
       ) : null}
-      {work.status === 'active' || work.status === 'stopped' ? (
+      {/* PR 진행 중에도 [Work 설정]을 받는다: 대응 자동 시작과 PR 대응 자동 승인을 바꾼다 (D209) */}
+      {work.status === 'active' || work.status === 'stopped' || work.status === 'pr' ? (
         <button disabled={busy} onClick={onSettings}>
           Work 설정
         </button>

@@ -67,14 +67,14 @@ export function approvalGate(
 export type ApprovalMode = 'manual' | 'auto'
 
 /**
- * 자동 승인을 켤 수 있는 노드인가. intake(의도 승인), review(D167), verify(Work 완료)는 늘 수동이다 (4.2). PR 대응의
- * 자동 승인(D169)은 M11이라 아직 늘 수동이다
+ * 자동 승인을 켤 수 있는 노드인가. intake(의도 승인), review(D167), verify(Work 완료)는 늘 수동이다 (4.2). PR 대응은 다른
+ * 단계처럼 켤 수 있다 (D169)
  */
 export function autoApprovable(node: TaskNode): node is AutoApproveNode {
   return (AUTO_APPROVE_NODES as readonly TaskNode[]).includes(node)
 }
 
-/** 승인 방식. intake, review, verify, PR 대응은 항상 수동이고, 나머지는 Work 설정, 앱 설정 순서로 본다 (4.2, D72, D167) */
+/** 승인 방식. intake, review, verify는 항상 수동이고, 나머지는 Work 설정, 앱 설정 순서로 본다 (4.2, D72, D167, D169) */
 export function approvalMode(
   config: AppConfig,
   settings: WorkSettings,
@@ -141,6 +141,7 @@ export const AUTO_HOLD_LABEL: Readonly<Record<AutoHoldReason, string>> = {
   settings: '카운트다운 중에 자동 승인을 끔',
   restart: '앱을 다시 켜며 승인 대기가 됨 (재시작 경로는 자동 승인하지 않음)',
   operation: '끊긴 작업이 있음',
+  pr_closed: 'PR이 닫혀 있음 (닫힌 PR은 승인을 받지 않음, D179)',
 }
 
 /** 사람이 앱에서 한 일이라 알리지 않는 까닭 (D130, D145). 재시작 조정은 알리지 않는다 (D121) */
@@ -192,7 +193,7 @@ export function autoApproveNote(
 
 /**
  * 배지 우선순위 (D80, D121, D183). 상태가 겹치면 앞의 것을 보인다:
- * 끊긴 작업 > 질문 대기·입력 필요 > 승인 대기 > 막힘 > 멈춤 > (자동 대응 멈춤, M11) > 대응 거리 있음 > PR 닫힘 >
+ * 끊긴 작업 > 질문 대기·입력 필요 > 승인 대기 > 막힘 > 멈춤 > 자동 대응 멈춤 > 대응 거리 있음 > PR 닫힘 >
  * 머지 가능 > 세션 종료(handoff 없음) > 작업 중 > 대기 > 대기열 > 리뷰·CI 대기 > 중단됨 > 완료·포기·보관됨
  */
 export const BADGE_ORDER: readonly BadgeKind[] = [
@@ -201,6 +202,7 @@ export const BADGE_ORDER: readonly BadgeKind[] = [
   'awaiting_approval',
   'blocked',
   'stopped',
+  'auto_paused',
   'pr_items',
   'pr_closed',
   'mergeable',
@@ -223,6 +225,7 @@ export const HUMAN_BADGES: readonly BadgeKind[] = [
   'awaiting_approval',
   'blocked',
   'stopped',
+  'auto_paused',
   'pr_items',
   'pr_closed',
   'mergeable',
@@ -249,6 +252,7 @@ const BADGE_LABEL: Readonly<Record<BadgeKind, string>> = {
   awaiting_approval: '승인 대기',
   blocked: '막힘',
   stopped: '멈춤',
+  auto_paused: '자동 대응 멈춤',
   session_ended: '세션 종료',
   working: '작업 중',
   idle: '대기',

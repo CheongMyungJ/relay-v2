@@ -37,6 +37,7 @@ import {
   type PrReadState,
   type ReadFacts,
 } from '../../src/core/pr'
+import { DEFAULT_CONFIG } from '../../src/shared/config'
 import type { PrItem } from '../../src/shared/pr'
 import type { WorkState } from '../../src/shared/work'
 
@@ -623,8 +624,8 @@ const PR: NonNullable<WorkState['pr']> = {
 
 function prWork(
   o: Partial<WorkState> = {},
-): Pick<WorkState, 'status' | 'operation' | 'pr' | 'tasks'> {
-  return { status: 'pr', pr: PR, tasks: [], ...o }
+): Pick<WorkState, 'status' | 'operation' | 'pr' | 'tasks' | 'settings'> {
+  return { status: 'pr', pr: PR, tasks: [], settings: {}, ...o }
 }
 
 function readState(o: Partial<PrReadState> = {}): PrReadState {
@@ -805,6 +806,7 @@ describe('PR 패널 (D183)', () => {
     if (!ex.ok) throw new Error(ex.error)
     const v = prView({
       work: prWork(),
+      config: DEFAULT_CONFIG,
       read: readState(),
       file: { schema_version: 1, items: ex.items, synced: [], rounds: [] },
       rules,
@@ -851,6 +853,7 @@ describe('PR 패널 (D183)', () => {
     })
     const input = {
       work: merged,
+      config: DEFAULT_CONFIG,
       read: readState(),
       file: { schema_version: 1 as const, items: [], synced: [], rounds: [] },
       rules,
@@ -876,6 +879,6 @@ describe('PR 패널 (D183)', () => {
         },
       })?.offerClean,
     ).toBe(false)
-    expect(prView({ ...input, work: { status: 'active', tasks: [] } })).toBeNull()
+    expect(prView({ ...input, work: { status: 'active', tasks: [], settings: {} } })).toBeNull()
   })
 })
