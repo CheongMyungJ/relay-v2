@@ -754,13 +754,13 @@ function RespondSummary({ respond }: { respond: NonNullable<ReviewView['respond'
         ) : (
           <div className="dim">없음: 사람 지시만으로 시작한 라운드 (D182)</div>
         )}
-        {respond.instruction ? (
-          <>
-            <h4>사람 지시</h4>
-            <pre className="pr-item-text">{respond.instruction}</pre>
-          </>
-        ) : null}
       </section>
+      {respond.instruction ? (
+        <section>
+          <h3>사람 지시</h3>
+          <pre className="pr-item-text">{respond.instruction}</pre>
+        </section>
+      ) : null}
       <section>
         <h3>항목별 결과</h3>
         {respond.results ? (

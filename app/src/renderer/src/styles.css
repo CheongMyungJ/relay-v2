@@ -885,7 +885,12 @@ button.ready {
   box-sizing: border-box;
 }
 
-.pr-respond .notice-actions {
+/* 버튼과 옆의 안내 문구 사이를 띄운다 */
+.pr-respond .notice-actions,
+.pr-actions .notice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   align-items: baseline;
 }
 
