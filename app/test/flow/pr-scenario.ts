@@ -3,7 +3,7 @@
 // relay 밖의 사람, 봇, CI는 PrWorld가 맡는다. Work는 가짜 claude로 S 경로를 지나 [PR 생성]까지 간다.
 //
 // 1. 읽기: PR 진행이 되고 gh 버전을 적는다(D198). 체크가 없는 새 head는 "체크 기다림"이다(D196). CI가 실패하면 CI 실패
-//    항목이 실패한 스텝의 로그 끝부분과 함께 들어온다.
+//    항목이 실패한 스텝의 로그 끝부분과 함께 들어온다. 체크의 이름에는 실행을 부른 이벤트가 붙는다(D201).
 // 2. 거르기: 소유자의 대화 코멘트와 리뷰(본문과 인라인)는 받고, 봇의 코멘트는 받지 않는다. 받을 봇에 적으면 받는다
 //    (D160, D161, D197).
 // 3. 항목을 모두 [제외]해도 CI 실패로 [머지]가 꺼져 있다. CI 실패 항목을 [다시 넣고] relay 밖에서 ci-fail을 지우면
@@ -137,7 +137,8 @@ function prOf(ctx: PrContext, w: PrWork): PrView {
 export function describePr(p: PrView | null): string {
   if (!p) return '(PR 없음)'
   const items = p.items.map((i) => `${i.id}=${i.status}`).join(', ')
-  return `#${p.number} ${p.state ?? '?'} head ${p.head.slice(0, 8)} ci ${p.ci ?? '-'} mergeable ${p.mergeable ?? '-'} sync ${p.sync ?? '-'} gate ${p.gate.enabled ? '켜짐' : `꺼짐(${p.gate.reasons.join(' / ')})`} items [${items}] error ${p.error ?? '-'}`
+  const checks = p.checks.map((c) => `${c.label}=${c.bucket}`).join(', ')
+  return `#${p.number} ${p.state ?? '?'} head ${p.head.slice(0, 8)} ci ${p.ci ?? '-'} checks [${checks}] mergeable ${p.mergeable ?? '-'} sync ${p.sync ?? '-'} gate ${p.gate.enabled ? '켜짐' : `꺼짐(${p.gate.reasons.join(' / ')})`} items [${items}] error ${p.error ?? '-'}`
 }
 
 /**
@@ -248,12 +249,17 @@ export async function runPrScenario(ctx: PrContext): Promise<void> {
     world.ciWaitMs,
   )
   const ci1 = newItems(failed, 'ci')[0]
-  expect(ci1?.id.startsWith(`ci:${head1}:`)).toBe(true)
+  // 체크는 워크플로·이름·이벤트로 가린다. 이벤트는 실행마다 REST로 읽는다 (D201). 시험용 레포의 CI는 PR 브랜치에서
+  // pull_request로만 돈다
+  expect(ci1?.id).toBe(`ci:${head1}:ci/test (pull_request)`)
+  expect(failed.checks.map((c) => c.label)).toEqual(['ci / test (pull_request)'])
   // 실패한 스텝의 로그 끝부분: 줄 앞의 작업, 스텝, 시각과 색 제어 문자를 뗐다 (S7 관찰 2)
   expect(ci1?.text).toContain('ci-fail 파일이 있어 실패합니다')
   expect(ci1?.text).not.toMatch(/\^\[\[|\t/)
   expect(view(ctx, w).badge.kind).toBe('pr_items')
-  ctx.note(`1. CI 실패 항목 ${ci1?.id}, 로그 ${ci1?.text?.split('\n').length}줄`)
+  ctx.note(
+    `1. CI 실패 항목 ${ci1?.id}, 체크 ${failed.checks.map((c) => `${c.label}: ${c.state}`).join(', ')}, 로그 ${ci1?.text?.split('\n').length}줄`,
+  )
 
   // ---------- 2. 거르기 ----------
   const path2 = CART

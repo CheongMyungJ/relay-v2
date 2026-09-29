@@ -83,9 +83,8 @@ export function PrPanel({ work, pr }: { work: WorkView; pr: PrView }) {
         {pr.checks.length ? (
           <ul className="pr-checks" aria-label="체크">
             {pr.checks.map((c) => (
-              <li key={`${c.workflow ?? ''}/${c.name}`} className={`check-${c.bucket}`}>
-                {c.workflow ? `${c.workflow} / ` : ''}
-                {c.name}: {c.state}
+              <li key={c.label} className={`check-${c.bucket}`}>
+                {c.label}: {c.state}
                 {c.url ? (
                   <button
                     className="link"

@@ -10,14 +10,15 @@
 //   주소는 GitHub 모양이다: --repo가 GitHub 레포면 그 레포의 주소, 로컬 경로면 https://github.test/local/<레포 이름>/pull/<n>.
 //   PR의 브랜치는 PR을 만든 레포(로컬 경로면 그것, 아니면 cwd의 origin push 주소)에서 읽는다.
 // - PR 진행(M9, S7): `pr view <n> --repo R --json …`, `api --hostname H --paginate --slurp <목록>`(리뷰, 인라인 코멘트,
-//   대화 코멘트), `run view --job <작업> --repo R --log-failed`, `pr merge <n> --repo R --<방식> --match-head-commit <head>`,
+//   대화 코멘트), `api --hostname H repos/O/R/actions/runs/<실행>[?…]`(실행의 event, D201),
+//   `run view --job <작업> --repo R --log-failed`, `pr merge <n> --repo R --<방식> --match-head-commit <head>`,
 //   `repo view R --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed`.
 //   PR의 상태(열림, 닫힘, 머지됨)는 prs.json에, 체크와 코멘트, mergeable, 실패 로그, 허용 머지 방식은 같은 폴더의
 //   github.json에 둔다. 시험이 test/flow/github.ts로 바꾼다. head 커밋은 PR 브랜치에서 매번 읽는다.
 //   S7에서 본 모양: 체크가 없는 head는 빈 statusCheckRollup, 머지 성공은 TTY가 아니라 출력이 없음, head가 다르면
 //   "Head branch was modified", 실행이 끝나기 전의 로그 요청은 "still in progress", baseRefOid는 PR 브랜치에 push해야 바뀜.
-// - FAKE_GH_FAIL=list|create|view|api|log|merge(쉼표로 여럿)면 그 명령이 종료 코드 1로 실패한다. merge는 새 커밋이 생긴
-//   직후 GitHub가 준 "Pull Request is not mergeable"이다(M9 [실제]).
+// - FAKE_GH_FAIL=list|create|view|api|event|log|merge(쉼표로 여럿)면 그 명령이 종료 코드 1로 실패한다. api는 REST 요청
+//   모두, event는 실행 읽기만이다. merge는 새 커밋이 생긴 직후 GitHub가 준 "Pull Request is not mergeable"이다(M9 [실제]).
 // - FAKE_GH_RECORD 폴더가 있으면 명령마다 인자, cwd, --body-file의 내용을 fake-gh.jsonl에 한 줄씩 남긴다.
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -247,10 +248,18 @@ if (cmd === 'pr' && sub === 'view') {
 }
 
 if (cmd === 'api') {
-  record({ type: 'api' })
-  if (failing('api')) fail('HTTP 502: Bad Gateway (가짜 gh)')
-  const host = opt('--hostname') ?? 'github.com'
   const target = argv[argv.length - 1] ?? ''
+  // Actions 실행 하나 (REST "Get a workflow run"의 모양에서 앱이 읽는 것만, D201)
+  const runPath = /^repos\/[^/]+\/[^/]+\/actions\/runs\/(\d+)(?:\?.*)?$/.exec(target)
+  record({ type: runPath ? 'api run' : 'api' })
+  if (failing('api') || (runPath && failing('event'))) fail('HTTP 502: Bad Gateway (가짜 gh)')
+  if (runPath) {
+    const found = (loadGithub().runs ?? {})[runPath[1]]
+    if (!found) fail('gh: Not Found (HTTP 404)')
+    process.stdout.write(`${JSON.stringify({ id: Number(runPath[1]), event: found.event })}\n`)
+    process.exit(0)
+  }
+  const host = opt('--hostname') ?? 'github.com'
   const m = /^repos\/([^/]+)\/([^/]+)\/(pulls|issues)\/(\d+)\/(reviews|comments)(?:\?(.*))?$/.exec(
     target,
   )

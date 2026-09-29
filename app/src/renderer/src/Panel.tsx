@@ -690,7 +690,8 @@ function DoneNotice({ work }: { work: WorkView }) {
             : pr.merged.method
               ? MERGE_LABEL[pr.merged.method]
               : ''}
-          , head {pr.merged.head.slice(0, 8)}). [Work 정리]로 정리하세요.
+          , head {pr.merged.head.slice(0, 8)}).
+          {work.status === 'completed' ? ' [Work 정리]로 정리하세요.' : ''}
         </div>
       ) : null}
       {pr?.ended ? (

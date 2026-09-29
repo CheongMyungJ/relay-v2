@@ -221,6 +221,27 @@ export async function ghApiList(
   return pages.flatMap((p: unknown) => (Array.isArray(p) ? (p as unknown[]) : [p]))
 }
 
+/**
+ * REST 객체 하나를 읽는다: gh api --hostname <host> <경로>. Actions 실행의 이벤트를 읽을 때 쓴다(D201, REST "Get a workflow
+ * run", 3절). 호스트는 --hostname으로만 준다(I50)
+ */
+export async function ghApi(
+  bin: string,
+  o: { host: string; path: string; cwd: string; env?: NodeJS.ProcessEnv },
+): Promise<Record<string, unknown>> {
+  const r = await run(bin, ['api', '--hostname', o.host, o.path], {
+    cwd: o.cwd,
+    env: ghEnv(o.env),
+    timeoutMs: 60_000,
+  })
+  if (r.code !== 0) throw new GhError(`gh api ${o.path} 실패: ${describeFailure(r)}`)
+  const v = parseJson(`gh api ${o.path}`, r.stdout)
+  if (!v || typeof v !== 'object' || Array.isArray(v)) {
+    throw new GhError(`gh api ${o.path}의 출력이 객체가 아님: ${r.stdout.slice(0, 200)}`)
+  }
+  return v as Record<string, unknown>
+}
+
 export type FailedLog = { ok: true; text: string } | { ok: false; pending: boolean; error: string }
 
 /**

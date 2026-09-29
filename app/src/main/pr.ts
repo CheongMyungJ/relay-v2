@@ -1,8 +1,9 @@
 // PR 읽기의 네트워크 부분 (시나리오 10-2, I51). gh로 PR 상태와 체크, 코멘트 목록 셋을 읽고(GraphQL 한 번과 REST 셋,
-// S7 관찰 9), 원격 head가 로컬 Work 브랜치와 다르면 PR 브랜치를, 충돌이면 기준 브랜치를 fetch해 비교할 사실을 모은다
-// (D193, D189). 새 CI 실패는 실패한 스텝의 로그를 읽는다. 작업 트리와 앱의 파일은 바꾸지 않는다(fetch는 원격 추적
-// 브랜치만 바꿈). 반영(fast-forward, pr-items.json, work.json)은 WorkRunner가 Work의 처리 줄에서 한다.
-import { ghApiList, ghFailedLog, ghPrView } from '../adapters/gh'
+// S7 관찰 9), 처음 보는 Actions 실행의 이벤트를 읽고(D201), 원격 head가 로컬 Work 브랜치와 다르면 PR 브랜치를, 충돌이면
+// 기준 브랜치를 fetch해 비교할 사실을 모은다(D193, D189). 새 CI 실패는 실패한 스텝의 로그를 읽는다. 작업 트리와 앱의
+// 파일은 바꾸지 않는다(fetch는 원격 추적 브랜치만 바꿈). 반영(fast-forward, pr-items.json, work.json)은 WorkRunner가
+// Work의 처리 줄에서 한다.
+import { ghApi, ghApiList, ghFailedLog, ghPrView } from '../adapters/gh'
 import {
   commitsWithParents,
   currentBranch,
@@ -19,6 +20,7 @@ import {
   failedLogTail,
   repoArg,
   restRepo,
+  rollupRuns,
   syncKind,
   type CheckFact,
   type CommentFact,
@@ -35,6 +37,11 @@ export interface PrReadContext {
   /** Work 브랜치 relay/<work-id> */
   branch: string
   location: PrLocation
+  /**
+   * Actions 실행 id → 이벤트 (D201). 실행의 이벤트는 바뀌지 않아 WorkRunner가 메모리에 두고(I52), readPr이 처음 보는
+   * 실행의 것을 읽어 더한다
+   */
+  runEvents: Map<number, string>
 }
 
 /** gh pr view --json으로 읽은 PR (PR #14의 필드) */
@@ -130,6 +137,40 @@ async function compare(
   return syncKind({ local, remote: view.head, localInRemote, remoteInLocal, clean, onBranch })
 }
 
+const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
+
+/**
+ * 처음 보는 Actions 실행의 이벤트를 읽어 ctx.runEvents에 더한다 (D201, I52): gh api repos/<owner>/<repo>/actions/runs/<실행>
+ * ?exclude_pull_requests=true의 event(REST "Get a workflow run", gh run view와 같은 요청, 3절). 읽지 못하면 경고를 남기고
+ * 다음 읽기에서 다시 읽는다. 그동안 그 실행의 체크는 실행 id로 가린다(core/pr checksOf)
+ */
+async function readRunEvents(
+  ctx: PrReadContext,
+  runs: readonly number[],
+  warnings: string[],
+): Promise<void> {
+  const rest = restRepo(ctx.location)
+  await Promise.all(
+    runs
+      .filter((id) => !ctx.runEvents.has(id))
+      .map(async (id) => {
+        try {
+          const v = await ghApi(ctx.ghBin, {
+            host: ctx.location.host,
+            path: `${rest}/actions/runs/${id}?exclude_pull_requests=true`,
+            cwd: ctx.repo,
+            env: ctx.env,
+          })
+          const event = typeof v['event'] === 'string' && v['event'] !== '' ? v['event'] : null
+          if (event) ctx.runEvents.set(id, event)
+          else warnings.push(`실행 ${id}의 이벤트가 비어 있음`)
+        } catch (e) {
+          warnings.push(`실행 ${id}의 이벤트를 읽지 못함: ${errorText(e)}`)
+        }
+      }),
+  )
+}
+
 /** 로그를 읽지 않는 까닭 */
 const NOT_ACTIONS = 'GitHub Actions 밖의 체크라 로그를 읽지 않음'
 const RUN_PENDING = '실행이 아직 끝나지 않아 로그를 읽지 못함. 다음 읽기에서 다시 봄'
@@ -146,17 +187,19 @@ export async function readPr(
   const gh = { repo, number: ctx.location.number, cwd: ctx.repo, env: ctx.env }
   const raw = await ghPrView(ctx.ghBin, gh)
   const view = viewFacts(raw)
-  const checks = checksOf(raw['statusCheckRollup'])
+  const rollup = raw['statusCheckRollup']
   const rest = restRepo(ctx.location)
   const list = (path: string) =>
     ghApiList(ctx.ghBin, { host: ctx.location.host, path, cwd: ctx.repo, env: ctx.env })
   const n = ctx.location.number
+  const warnings: string[] = []
   const [reviews, inline, convo] = await Promise.all([
     list(`${rest}/pulls/${n}/reviews?per_page=100`),
     list(`${rest}/pulls/${n}/comments?per_page=100`),
     list(`${rest}/issues/${n}/comments?per_page=100`),
+    readRunEvents(ctx, rollupRuns(rollup), warnings),
   ])
-  const warnings: string[] = []
+  const checks = checksOf(rollup, ctx.runEvents)
   const local = await refCommit(ctx.repo, `refs/heads/${ctx.branch}`, { env: ctx.env })
   const sync = view.state === 'OPEN' ? await compare(ctx, view, local, warnings) : null
   let conflict: string | null | undefined = null

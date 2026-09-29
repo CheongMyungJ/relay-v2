@@ -148,17 +148,54 @@ export function actionsIds(url: string | null): { run: number | null; job: numbe
   return m ? { run: Number(m[1]), job: Number(m[2]) } : { run: null, job: null }
 }
 
+const isStatusContext = (c: Record<string, unknown>) =>
+  c['__typename'] === 'StatusContext' || text(c['context']) !== null
+
+/**
+ * statusCheckRollup의 CheckRun이 가리키는 Actions 실행 id (D201). main이 이 실행들의 이벤트를 읽어 checksOf에 준다.
+ * 겹치지 않게 한 번씩이다
+ */
+export function rollupRuns(rollup: unknown): number[] {
+  const runs = new Set<number>()
+  for (const raw of Array.isArray(rollup) ? rollup : []) {
+    const c = obj(raw)
+    if (isStatusContext(c)) continue
+    const { run } = actionsIds(text(c['detailsUrl']))
+    if (run !== null) runs.add(run)
+  }
+  return [...runs]
+}
+
+/**
+ * 체크의 이름: 워크플로 / 이름 (이벤트) (D201). GitHub의 PR 체크 목록처럼 이벤트를 붙인다. 이벤트를 읽지 못한 Actions
+ * 체크는 실행 id를 붙인다
+ */
+export function checkLabel(c: {
+  name: string
+  workflow: string | null
+  event?: string | null
+  run?: number | null
+}): string {
+  const base = `${c.workflow ? `${c.workflow} / ` : ''}${c.name}`
+  if (c.event) return `${base} (${c.event})`
+  return c.run !== null && c.run !== undefined ? `${base} (실행 ${c.run})` : base
+}
+
 /**
  * gh pr view --json statusCheckRollup을 체크 목록으로 (3절). 상태는 StatusContext의 state, CheckRun은 끝났으면(COMPLETED)
- * conclusion, 아니면 status다. 같은 체크(StatusContext는 context, CheckRun은 워크플로와 이름)가 여럿이면 시작 시각이
- * 가장 늦은 것만 남긴다(gh의 eliminateDuplicates. gh는 CheckRun의 이벤트로도 가리지만 --json에는 이벤트가 없다).
- * 비었거나 null이면 체크가 없다
+ * conclusion, 아니면 status다. 같은 체크가 여럿이면 시작 시각이 가장 늦은 것만 남긴다(gh의 eliminateDuplicates, D201).
+ * 같은 체크는 StatusContext면 context, CheckRun이면 워크플로·이름·이벤트가 같은 것이다. --json에는 이벤트가 없어
+ * Actions 체크는 events(실행 id → 이벤트)로 채운다. 이벤트를 모르는 Actions 체크는 실행 id로 가려 다른 실행과 합치지
+ * 않는다(I52). 비었거나 null이면 체크가 없다
  */
-export function checksOf(rollup: unknown): CheckFact[] {
+export function checksOf(
+  rollup: unknown,
+  events: ReadonlyMap<number, string> = new Map(),
+): CheckFact[] {
   const all: CheckFact[] = []
   for (const raw of Array.isArray(rollup) ? rollup : []) {
     const c = obj(raw)
-    if (c['__typename'] === 'StatusContext' || text(c['context'])) {
+    if (isStatusContext(c)) {
       const name = text(c['context']) ?? '(이름 없음)'
       const state = text(c['state']) ?? 'PENDING'
       const url = text(c['targetUrl'])
@@ -166,6 +203,8 @@ export function checksOf(rollup: unknown): CheckFact[] {
         key: name,
         name,
         workflow: null,
+        event: null,
+        label: name,
         state,
         bucket: bucketOf(state),
         url,
@@ -179,14 +218,19 @@ export function checksOf(rollup: unknown): CheckFact[] {
     const status = text(c['status']) ?? ''
     const state = status === 'COMPLETED' ? (text(c['conclusion']) ?? '') : status
     const url = text(c['detailsUrl'])
+    const ids = actionsIds(url)
+    const event = ids.run !== null ? (events.get(ids.run) ?? null) : null
+    const base = workflow ? `${workflow}/${name}` : name
     all.push({
-      key: workflow ? `${workflow}/${name}` : name,
+      key: event ? `${base} (${event})` : ids.run !== null ? `${base} #${ids.run}` : base,
       name,
       workflow,
+      event,
+      label: checkLabel({ name, workflow, event, run: ids.run }),
       state,
       bucket: bucketOf(state),
       url,
-      ...actionsIds(url),
+      ...ids,
       startedAt: text(c['startedAt']),
     })
   }
@@ -375,13 +419,24 @@ export interface Gathered {
 
 const COMMENT_KINDS: readonly PrItemKind[] = ['review', 'inline', 'convo']
 
-/** CI 실패 항목의 id: ci:<head>:<체크> (D189) */
+/**
+ * CI 실패 항목의 id: ci:<head>:<체크> (D189). 체크는 checksOf의 key다. Actions 체크는 <워크플로>/<이름> (<이벤트>)다
+ * (D201)
+ */
 export function ciItemId(head: string, check: Pick<CheckFact, 'key'>): string {
   return `ci:${head}:${check.key}`
 }
 
 function checkRef(c: CheckFact): PrCheckRef {
-  return { name: c.name, workflow: c.workflow, state: c.state, url: c.url, run: c.run, job: c.job }
+  return {
+    name: c.name,
+    workflow: c.workflow,
+    event: c.event,
+    state: c.state,
+    url: c.url,
+    run: c.run,
+    job: c.job,
+  }
 }
 
 function commentFields(c: CommentFact): Partial<PrItem> {
@@ -716,7 +771,7 @@ export function mergeGate(g: GateInput): Gate {
             ? c.bucket === 'cancel'
             : c.bucket === 'pending',
       )
-      .map((c) => c.name)
+      .map((c) => c.label)
     reasons.push(names.length && read.ci !== 'waiting' ? `${ci}: ${names.join(', ')}` : ci)
   }
   if (read.mergeable === 'CONFLICTING') reasons.push('기준 브랜치와 충돌')
@@ -849,7 +904,7 @@ export function prItemView(item: PrItem, rules: ItemRules): PrItemView {
   let title: string
   switch (item.kind) {
     case 'ci':
-      title = `${item.check?.workflow ? `${item.check.workflow} / ` : ''}${item.check?.name ?? ''} (${item.check?.state ?? ''}, head ${short(item.head ?? '')})`
+      title = `${item.check ? checkLabel(item.check) : ''}: ${item.check?.state ?? ''}, head ${short(item.head ?? '')}`
       break
     case 'conflict':
       title = `기준 브랜치 ${short(item.base_commit ?? '')}와 충돌`
@@ -971,6 +1026,8 @@ export function prView(input: PrViewInput): PrView | null {
     checks: (read?.checks ?? []).map((c) => ({
       name: c.name,
       workflow: c.workflow,
+      event: c.event,
+      label: c.label,
       state: c.state,
       bucket: c.bucket,
       url: c.url,

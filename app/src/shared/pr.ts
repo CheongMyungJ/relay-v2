@@ -30,6 +30,8 @@ export interface PrCheckRef {
   /** Actions의 실행과 작업 id (detailsUrl …/actions/runs/<실행>/job/<작업>, S7). Actions 밖 체크면 null */
   run: number | null
   job: number | null
+  /** 실행을 부른 이벤트 (D201). Actions 밖 체크이거나 읽지 못했으면 null이나 없음 */
+  event?: string | null
 }
 
 export interface PrItem {

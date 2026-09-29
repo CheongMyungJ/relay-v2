@@ -2,7 +2,8 @@
 // 가짜 gh(8.2)와 로컬 bare 원격으로 [실제]와 같은 공통 시나리오(pr-scenario.ts)를 돌고, 가짜로만 만들 수 있는 경우를
 // 더 본다: 재시작(D159), 로컬만 앞섬과 원격과 갈라짐, worktree가 깨끗하지 않음(D193), gh가 실패함, 끊긴 머지(D77, D123),
 // [머지 없이 끝내기](D179), 고친 코멘트와 지운 코멘트, 본문이 빈 리뷰와 스레드 답글(S7), 로그를 아직 줄 수 없는
-// CI 실패와 취소된 체크, 머지 방식(D177), gh 버전이 낮으면 [PR 생성]을 끔(D198).
+// CI 실패와 취소된 체크, push와 pull_request로 두 번 돈 작업과 실행의 이벤트(D201, I52), 머지 방식(D177),
+// gh 버전이 낮으면 [PR 생성]을 끔(D198).
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -71,6 +72,9 @@ async function toMergeable(s: Setup, w: PrWork): Promise<void> {
   s.gh.runCi(w.pr, workState(w).pr?.head ?? '')
   await refreshUntil(s.ctx, w, (p) => p.gate.enabled, '[머지] 켜짐')
 }
+
+/** 실패한 스텝의 로그 한 줄 (gh run view --log-failed의 모양, S7 관찰 2) */
+const CI_LOG_LINE = 'test\tRun npm test\t2026-09-29T00:00:01.0000000Z ##[error]실패\n'
 
 const ghCalls = (s: Setup, type: string) =>
   s.ctx.h.ghRecords().filter((r) => r['type'] === type) as { args: string[] }[]
@@ -379,7 +383,90 @@ describe('[흐름] PR 진행 (M9, 시나리오 10)', () => {
     s.gh.setChecks(w.pr, head, [s.gh.checkRun(w.pr, { conclusion: 'CANCELLED' })])
     p = await refreshUntil(s.ctx, w, (x) => x.ci === 'cancel', '취소')
     expect(p.items.filter((i) => i.status === 'new')).toEqual([])
-    expect(p.gate.reasons).toContain('취소된 체크가 있음: test')
+    expect(p.gate.reasons).toContain('취소된 체크가 있음: ci / test (pull_request)')
+  })
+
+  it('같은 작업이 push와 pull_request로 두 번 돌면 따로 본다. 늦게 시작한 쪽이 통과해도 다른 쪽의 실패는 CI 실패 항목이고 머지를 막는다. 실행의 이벤트는 한 번만 읽는다 (D201)', async () => {
+    const s = await setup()
+    const w = await openWork(s)
+    const head = workState(w).pr?.head ?? ''
+    const push = s.gh.checkRun(w.pr, {
+      event: 'push',
+      conclusion: 'FAILURE',
+      log: 'test\tRun npm test\t2026-09-29T00:00:01.0000000Z ##[error]push에서 실패\n',
+      startedAt: '2026-09-29T00:00:00Z',
+    })
+    const pull = s.gh.checkRun(w.pr, {
+      event: 'pull_request',
+      conclusion: 'SUCCESS',
+      startedAt: '2026-09-29T00:00:30Z',
+    })
+    s.gh.setChecks(w.pr, head, [push, pull])
+    const p = await refreshUntil(s.ctx, w, (x) => x.ci === 'fail', 'CI 실패')
+    expect(p.checks.map((c) => [c.label, c.bucket])).toEqual([
+      ['ci / test (pull_request)', 'pass'],
+      ['ci / test (push)', 'fail'],
+    ])
+    expect(p.items).toEqual([
+      expect.objectContaining({
+        id: `ci:${head}:ci/test (push)`,
+        status: 'new',
+        title: `ci / test (push): FAILURE, head ${head.slice(0, 8)}`,
+        text: '##[error]push에서 실패',
+      }),
+    ])
+    expect(p.gate.enabled).toBe(false)
+    expect(p.gate.reasons).toContain('CI 실패: ci / test (push)')
+    // 실행 둘의 이벤트를 한 번씩 읽었고 다시 읽지 않는다
+    expect(ghCalls(s, 'api run')).toHaveLength(2)
+    await s.ctx.h.relay.prRefresh(w.key)
+    await settle(s.ctx.h, w.key)
+    expect(ghCalls(s, 'api run')).toHaveLength(2)
+  })
+
+  it('실행의 이벤트를 읽지 못하면 경고를 보이고 그 체크는 실행 id로 가린다. 다음 읽기에서 다시 읽는다. 다시 켜면 CI 실패 항목에 적힌 이벤트를 쓴다 (I52)', async () => {
+    const s = await setup()
+    const w = await openWork(s)
+    const head = workState(w).pr?.head ?? ''
+    s.gh.setChecks(w.pr, head, [s.gh.checkRun(w.pr, { conclusion: 'SUCCESS' })])
+    s.ctx.h.env['FAKE_GH_FAIL'] = 'event'
+    expect(await s.ctx.h.relay.prRefresh(w.key)).toEqual({ ok: true })
+    await settle(s.ctx.h, w.key)
+    let p = view(s.ctx, w).pr
+    expect(p?.checks.map((c) => c.label)).toEqual([
+      expect.stringMatching(/^ci \/ test \(실행 \d+\)$/),
+    ])
+    expect(p?.error).toMatch(
+      /^실행 \d+의 이벤트를 읽지 못함: gh api repos\/local\/cart\/actions\/runs\/\d+\?exclude_pull_requests=true 실패/,
+    )
+    delete s.ctx.h.env['FAKE_GH_FAIL']
+    expect(await s.ctx.h.relay.prRefresh(w.key)).toEqual({ ok: true })
+    await settle(s.ctx.h, w.key)
+    p = view(s.ctx, w).pr
+    expect(p?.checks.map((c) => c.label)).toEqual(['ci / test (pull_request)'])
+    expect(p?.error).toBeNull()
+    // 실패한 실행의 이벤트는 CI 실패 항목에 남아, 다시 켠 뒤 읽지 못해도 항목의 id가 그대로다
+    s.gh.setChecks(w.pr, head, [s.gh.checkRun(w.pr, { conclusion: 'FAILURE', log: CI_LOG_LINE })])
+    const failed = await refreshUntil(s.ctx, w, (x) => x.ci === 'fail', 'CI 실패')
+    expect(failed.items.map((i) => i.id)).toEqual([`ci:${head}:ci/test (pull_request)`])
+    const calls = ghCalls(s, 'api run').length
+    await s.ctx.h.relay.close()
+    s.ctx.h.env['FAKE_GH_FAIL'] = 'event'
+    await s.ctx.h.reopen()
+    const after = await s.ctx.h.ui.until(
+      () => {
+        const v = s.ctx.h.ui.works.get(w.key)?.pr
+        return v && v.checks.length === 1 && !v.reading ? v : null
+      },
+      '켠 뒤의 첫 읽기',
+      10_000,
+    )
+    expect(after.checks.map((c) => c.label)).toEqual(['ci / test (pull_request)'])
+    expect(after.items.map((i) => [i.id, i.status])).toEqual([
+      [`ci:${head}:ci/test (pull_request)`, 'new'],
+    ])
+    expect(after.error).toBeNull()
+    expect(ghCalls(s, 'api run')).toHaveLength(calls)
   })
 
   it('머지 창은 레포가 허용하는 방식만 보이고 기본은 프로젝트 설정이다. GitHub가 막으면 그 오류를 보이고 PR 진행에 남는다 (D176, D177)', async () => {

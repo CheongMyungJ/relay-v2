@@ -39,6 +39,8 @@ interface GithubFile {
   logs: Record<string, string>
   /** 실행이 끝나지 않아 로그를 줄 수 없는 작업 id → 실행 id */
   pending_logs: Record<string, number>
+  /** 실행 id → 실행을 부른 이벤트 (gh api …/actions/runs/<실행>, D201) */
+  runs?: Record<string, { event: string }>
   methods?: { merge?: boolean; squash?: boolean; rebase?: boolean }
   next_id?: number
 }
@@ -258,7 +260,9 @@ export class FakeGitHub {
   }
 
   /**
-   * Actions 체크 하나 (gh --json의 CheckRun 모양). 링크 …/actions/runs/<실행>/job/<작업>에서 앱이 실행과 작업을 읽는다
+   * Actions 체크 하나 (gh --json의 CheckRun 모양). 링크 …/actions/runs/<실행>/job/<작업>에서 앱이 실행과 작업을 읽는다.
+   * 실행은 새로 만들고 event(기본 pull_request)로 돈 것으로 둔다. run을 주면 그 실행의 작업이다(다시 실행, 같은 실행의
+   * 다른 작업)
    */
   checkRun(
     n: number,
@@ -269,13 +273,20 @@ export class FakeGitHub {
       conclusion?: string | null
       log?: string
       pending?: boolean
+      event?: string
+      run?: number
+      startedAt?: string
     },
   ): object {
     let run = 0
     let job = 0
     this.update((g) => {
-      run = this.nextId(g)
+      run = c.run ?? this.nextId(g)
       job = this.nextId(g)
+      g.runs ??= {}
+      if (c.event !== undefined || !g.runs[String(run)]) {
+        g.runs[String(run)] = { event: c.event ?? 'pull_request' }
+      }
       if (c.log !== undefined) g.logs[String(job)] = c.log
       if (c.pending) g.pending_logs[String(job)] = run
     })
@@ -286,7 +297,7 @@ export class FakeGitHub {
       workflowName: c.workflow ?? 'ci',
       status,
       conclusion: status === 'COMPLETED' ? (c.conclusion ?? 'SUCCESS') : '',
-      startedAt: stamp(),
+      startedAt: c.startedAt ?? stamp(),
       completedAt: status === 'COMPLETED' ? stamp() : '0001-01-01T00:00:00Z',
       detailsUrl: `${this.prBase(n)}/actions/runs/${run}/job/${job}`,
     }

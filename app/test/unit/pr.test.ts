@@ -1,4 +1,4 @@
-// [단위] PR 진행의 판정 (docs/implementation.md M9, core/pr): gh 버전(D198), PR 주소(I50), 체크 분류와 CI(D176, D196),
+// [단위] PR 진행의 판정 (docs/implementation.md M9, core/pr): gh 버전(D198), PR 주소(I50), 체크 분류와 CI(D176, D196, D201),
 // 작성자 거르기(D160, D161, D197), 항목 모으기와 상태(D189, D199), 원격 head 비교(D193), 머지 조건(D176), 배지(D183),
 // 실패 로그의 끝부분(S7 관찰 2), 머지 방식(D177), PR 패널.
 import { describe, expect, it } from 'vitest'
@@ -10,6 +10,7 @@ import {
   applyItemAction,
   botName,
   bucketOf,
+  checkLabel,
   checksOf,
   ciItemId,
   ciState,
@@ -29,6 +30,7 @@ import {
   reapplyRules,
   repoArg,
   restRepo,
+  rollupRuns,
   syncKind,
   type CheckFact,
   type CommentFact,
@@ -105,7 +107,14 @@ describe('PR 주소 (I50)', () => {
 
 // ---------- 체크 (D176, D196) ----------
 
-const run = (name: string, status: string, conclusion: string, startedAt: string, job = 2) => ({
+const run = (
+  name: string,
+  status: string,
+  conclusion: string,
+  startedAt: string,
+  job = 2,
+  runId = 1,
+) => ({
   __typename: 'CheckRun',
   name,
   workflowName: 'ci',
@@ -113,8 +122,12 @@ const run = (name: string, status: string, conclusion: string, startedAt: string
   conclusion,
   startedAt,
   completedAt: '',
-  detailsUrl: `https://github.com/o/r/actions/runs/1/job/${job}`,
+  detailsUrl: `https://github.com/o/r/actions/runs/${runId}/job/${job}`,
 })
+
+/** 실행 id → 이벤트 (main이 gh api로 읽어 준다, D201) */
+const events = (e: Record<number, string>) =>
+  new Map(Object.entries(e).map(([k, v]) => [Number(k), v]))
 
 describe('체크 분류 (cli/cli pkg/cmd/pr/checks/aggregate.go)', () => {
   it('gh pr checks와 같은 분류다', () => {
@@ -129,25 +142,109 @@ describe('체크 분류 (cli/cli pkg/cmd/pr/checks/aggregate.go)', () => {
   })
 
   it('CheckRun은 끝났으면 conclusion, 아니면 status다. 같은 체크는 가장 늦게 시작한 것만 남긴다 (다시 실행)', () => {
-    const checks = checksOf([
-      run('test', 'COMPLETED', 'FAILURE', '2026-09-29T00:00:00Z', 10),
-      run('test', 'COMPLETED', 'SUCCESS', '2026-09-29T00:05:00Z', 11),
-      run('lint', 'IN_PROGRESS', '', '2026-09-29T00:00:00Z', 12),
-      {
-        __typename: 'StatusContext',
-        context: 'deploy/preview',
-        state: 'ERROR',
-        targetUrl: 'https://ci.example.com/1',
-        startedAt: '2026-09-29T00:00:00Z',
-      },
-    ])
-    expect(checks.map((c) => [c.key, c.state, c.bucket, c.run, c.job])).toEqual([
-      ['ci/lint', 'IN_PROGRESS', 'pending', 1, 12],
-      ['ci/test', 'SUCCESS', 'pass', 1, 11],
-      ['deploy/preview', 'ERROR', 'fail', null, null],
+    const checks = checksOf(
+      [
+        run('test', 'COMPLETED', 'FAILURE', '2026-09-29T00:00:00Z', 10),
+        run('test', 'COMPLETED', 'SUCCESS', '2026-09-29T00:05:00Z', 11),
+        run('lint', 'IN_PROGRESS', '', '2026-09-29T00:00:00Z', 12),
+        {
+          __typename: 'StatusContext',
+          context: 'deploy/preview',
+          state: 'ERROR',
+          targetUrl: 'https://ci.example.com/1',
+          startedAt: '2026-09-29T00:00:00Z',
+        },
+      ],
+      events({ 1: 'pull_request' }),
+    )
+    expect(checks.map((c) => [c.key, c.label, c.state, c.bucket, c.run, c.job])).toEqual([
+      ['ci/lint (pull_request)', 'ci / lint (pull_request)', 'IN_PROGRESS', 'pending', 1, 12],
+      ['ci/test (pull_request)', 'ci / test (pull_request)', 'SUCCESS', 'pass', 1, 11],
+      ['deploy/preview', 'deploy/preview', 'ERROR', 'fail', null, null],
     ])
     expect(checksOf(null)).toEqual([])
     expect(checksOf([])).toEqual([])
+  })
+
+  it('이벤트가 다른 실행(push, pull_request)은 따로 남고, 이벤트가 같은 실행은 늦게 시작한 것만 남는다 (gh와 같음, D201)', () => {
+    const rollup = [
+      // push 실행이 실패하면 늦게 시작한 pull_request 실행이 통과해도 실패는 남는다
+      run('test', 'COMPLETED', 'FAILURE', '2026-09-29T00:00:00Z', 21, 20),
+      // PR을 다시 열어 같은 이벤트로 새로 돈 실행(40)은 옛 실행(30)을 덮는다
+      run('test', 'COMPLETED', 'FAILURE', '2026-09-29T00:00:30Z', 31, 30),
+      run('test', 'COMPLETED', 'SUCCESS', '2026-09-29T00:01:00Z', 41, 40),
+      // 큐에 있는 실행(시작 전)도 이벤트가 다르면 남는다
+      run('lint', 'COMPLETED', 'SUCCESS', '2026-09-29T00:00:00Z', 22, 20),
+      run('lint', 'QUEUED', '', '', 42, 40),
+    ]
+    const checks = checksOf(rollup, events({ 20: 'push', 30: 'pull_request', 40: 'pull_request' }))
+    expect(checks.map((c) => [c.key, c.bucket, c.run, c.event])).toEqual([
+      ['ci/lint (pull_request)', 'pending', 40, 'pull_request'],
+      ['ci/lint (push)', 'pass', 20, 'push'],
+      ['ci/test (pull_request)', 'pass', 40, 'pull_request'],
+      ['ci/test (push)', 'fail', 20, 'push'],
+    ])
+    expect(ciState(checks, true)).toBe('fail')
+    // 두 실행이 모두 실패하면 CI 실패 항목도 둘이다
+    const both = checksOf(
+      [
+        run('test', 'COMPLETED', 'FAILURE', '2026-09-29T00:00:00Z', 21, 20),
+        run('test', 'COMPLETED', 'FAILURE', '2026-09-29T00:01:00Z', 31, 30),
+      ],
+      events({ 20: 'push', 30: 'pull_request' }),
+    )
+    expect(both.map((c) => ciItemId(H1, c))).toEqual([
+      `ci:${H1}:ci/test (pull_request)`,
+      `ci:${H1}:ci/test (push)`,
+    ])
+  })
+
+  it('이벤트를 모르는 Actions 체크는 실행 id로 가려 다른 실행과 합치지 않는다 (I52)', () => {
+    const checks = checksOf(
+      [
+        run('test', 'COMPLETED', 'FAILURE', '2026-09-29T00:00:00Z', 21, 20),
+        run('test', 'COMPLETED', 'SUCCESS', '2026-09-29T00:01:00Z', 31, 30),
+      ],
+      events({ 30: 'pull_request' }),
+    )
+    expect(checks.map((c) => [c.key, c.label, c.bucket])).toEqual([
+      ['ci/test (pull_request)', 'ci / test (pull_request)', 'pass'],
+      ['ci/test #20', 'ci / test (실행 20)', 'fail'],
+    ])
+  })
+
+  it('이벤트를 읽을 실행은 Actions 체크의 실행 id를 한 번씩이다 (D201)', () => {
+    expect(
+      rollupRuns([
+        run('test', 'COMPLETED', 'SUCCESS', 'a', 21, 20),
+        run('lint', 'COMPLETED', 'SUCCESS', 'a', 22, 20),
+        run('test', 'COMPLETED', 'SUCCESS', 'a', 31, 30),
+        {
+          __typename: 'CheckRun',
+          name: 'codecov',
+          status: 'COMPLETED',
+          conclusion: 'SUCCESS',
+          detailsUrl: 'https://codecov.example.com/1',
+        },
+        {
+          __typename: 'StatusContext',
+          context: 'deploy',
+          state: 'SUCCESS',
+          targetUrl: 'https://github.com/o/r/actions/runs/50/job/51',
+        },
+      ]),
+    ).toEqual([20, 30])
+    expect(rollupRuns(null)).toEqual([])
+  })
+
+  it('체크의 이름은 워크플로 / 이름 (이벤트)다 (D201)', () => {
+    expect(checkLabel({ name: 'test', workflow: 'ci', event: 'push', run: 1 })).toBe(
+      'ci / test (push)',
+    )
+    expect(checkLabel({ name: 'test', workflow: 'ci', event: null, run: 7 })).toBe(
+      'ci / test (실행 7)',
+    )
+    expect(checkLabel({ name: 'codecov', workflow: null, run: null })).toBe('codecov')
   })
 
   it('Actions 체크의 링크에서 실행과 작업 id를 읽는다 (S7 관찰 2)', () => {
@@ -279,9 +376,11 @@ function comment(id: string, body: string, author = owner): CommentFact {
 
 function check(name: string, bucket: CheckFact['bucket'] = 'fail'): CheckFact {
   return {
-    key: `ci/${name}`,
+    key: `ci/${name} (pull_request)`,
     name,
     workflow: 'ci',
+    event: 'pull_request',
+    label: `ci / ${name} (pull_request)`,
     state: bucket === 'fail' ? 'FAILURE' : 'SUCCESS',
     bucket,
     url: 'https://github.com/o/r/actions/runs/1/job/2',
@@ -379,7 +478,7 @@ describe('항목 모으기 (D189, D199)', () => {
   it('CI 실패는 head와 체크의 id다. 새 head에서 풀리면 해소됨이고, 같은 id가 다시 실패하면 새 항목으로 돌아온다 (D199)', () => {
     const logs = new Map([[ciItemId(H1, check('test')), { log: '로그' }]])
     const failed = gatherItems([], read({ failing: [check('test')], logs }), rules)
-    const id = `ci:${H1}:ci/test`
+    const id = `ci:${H1}:ci/test (pull_request)`
     expect(failed.items).toEqual([
       expect.objectContaining({ id, kind: 'ci', status: 'new', head: H1, log: '로그' }),
     ])
@@ -395,12 +494,12 @@ describe('항목 모으기 (D189, D199)', () => {
 
   it('같은 head에서 다시 실행해 통과하면 해소됨이다. 사람이 제외한 CI 실패는 풀려도 그대로다 (D199)', () => {
     const two = gatherItems([], read({ failing: [check('test'), check('lint')] }), rules)
-    const ex = applyItemAction(two.items, `ci:${H1}:ci/lint`, 'exclude')
+    const ex = applyItemAction(two.items, `ci:${H1}:ci/lint (pull_request)`, 'exclude')
     if (!ex.ok) throw new Error(ex.error)
     const rerun = gatherItems(ex.items, read({ at: 'T2' }), rules)
     expect(status(rerun.items)).toEqual({
-      [`ci:${H1}:ci/test`]: 'resolved',
-      [`ci:${H1}:ci/lint`]: 'excluded',
+      [`ci:${H1}:ci/test (pull_request)`]: 'resolved',
+      [`ci:${H1}:ci/lint (pull_request)`]: 'excluded',
     })
   })
 
@@ -574,7 +673,7 @@ describe('머지 조건 (D176, D196)', () => {
         local: H2,
       }).reasons,
     ).toEqual([
-      'CI 실패: test',
+      'CI 실패: ci / test (pull_request)',
       '기준 브랜치와 충돌',
       '처리하지 않은 항목 1개 ([제외]하면 머지를 막지 않음)',
       `원격 PR head(${H1.slice(0, 8)})와 로컬 Work 브랜치(${H2.slice(0, 8)})가 다름`,
@@ -584,7 +683,7 @@ describe('머지 조건 (D176, D196)', () => {
     ])
     expect(
       gate({ read: { ci: 'pending', checks: [{ ...check('lint'), bucket: 'pending' }] } }).reasons,
-    ).toEqual(['체크가 도는 중: lint'])
+    ).toEqual(['체크가 도는 중: ci / lint (pull_request)'])
     expect(gate({ read: { mergeable: 'UNKNOWN' } }).reasons).toEqual([
       'GitHub가 머지 가능 여부를 계산하는 중',
     ])
@@ -713,7 +812,7 @@ describe('PR 패널 (D183)', () => {
     })
     expect(v?.items.map((i) => [i.id, i.statusLabel])).toEqual([
       ['inline:5', '새 항목'],
-      [`ci:${H1}:ci/test`, '새 항목'],
+      [`ci:${H1}:ci/test (pull_request)`, '새 항목'],
       [`conflict:${B1}`, '새 항목'],
       ['convo:1', '제외'],
       ['convo:2', '받지 않음'],
@@ -727,8 +826,8 @@ describe('PR 패널 (D183)', () => {
       why: '봇 github-actions: 프로젝트 설정의 받을 봇에 없음 (D161)',
     })
     expect(byId('inline:5')?.where).toBe('a.js:3 (스레드 inline:4의 답글)')
-    expect(byId(`ci:${H1}:ci/test`)).toMatchObject({
-      title: `ci / test (FAILURE, head ${H1.slice(0, 8)})`,
+    expect(byId(`ci:${H1}:ci/test (pull_request)`)).toMatchObject({
+      title: `ci / test (pull_request): FAILURE, head ${H1.slice(0, 8)}`,
       text: null,
       note: '로그를 아직 읽지 않음',
     })

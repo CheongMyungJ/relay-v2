@@ -1,5 +1,6 @@
 // [어댑터] PR 진행의 gh·git 작업 (docs/implementation.md M9, 시나리오 10). gh는 가짜 gh(8.2)이고 명령의 모양은 S7에서
-// 확인한 것이다: gh --version, pr view --json, api --hostname --paginate --slurp, run view --log-failed,
+// 확인한 것이다: gh --version, pr view --json, api --hostname --paginate --slurp, api …/actions/runs/<실행>(D201),
+// run view --log-failed,
 // repo view --json …Allowed, pr merge --match-head-commit. git은 실제 git으로 fast-forward, 받은 커밋과 부모,
 // 원격 브랜치 확인과 삭제를 본다 (D178, D193).
 import fs from 'node:fs'
@@ -7,6 +8,8 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
+  GhError,
+  ghApi,
   ghApiList,
   ghCreatePr,
   ghFailedLog,
@@ -168,6 +171,32 @@ describe('[어댑터] gh로 PR 읽기와 머지 (가짜 gh, S7)', () => {
       '--slurp',
       'repos/local/sample/issues/1/comments?per_page=100',
     ])
+  })
+
+  it('Actions 실행의 이벤트는 REST 객체 하나로 읽는다 (D201, 3절)', async () => {
+    await openPr()
+    const gh = new FakeGitHub(record, remote, root)
+    const check = gh.checkRun(1, { event: 'push' }) as { detailsUrl: string }
+    const run = Number(/runs\/(\d+)\//.exec(check.detailsUrl)?.[1])
+    const path1 = `repos/local/sample/actions/runs/${run}?exclude_pull_requests=true`
+    const o = { host: 'github.test', path: path1, cwd: repo, env: env() }
+    expect(await ghApi(FAKE_GH, o)).toMatchObject({ id: run, event: 'push' })
+    const call = fs
+      .readFileSync(path.join(record, 'fake-gh.jsonl'), 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map((l) => JSON.parse(l) as { type: string; args: string[] })
+      .find((r) => r.type === 'api run')
+    expect(call?.args).toEqual(['api', '--hostname', 'github.test', path1])
+    await expect(
+      ghApi(FAKE_GH, {
+        ...o,
+        path: 'repos/local/sample/actions/runs/9?exclude_pull_requests=true',
+      }),
+    ).rejects.toThrow(GhError)
+    await expect(ghApi(FAKE_GH, { ...o, env: env({ FAKE_GH_FAIL: 'event' }) })).rejects.toThrow(
+      /HTTP 502/,
+    )
   })
 
   it('실패 로그는 실행이 끝나야 준다. 끝나기 전에는 pending이다 (3절, S7 관찰 2)', async () => {

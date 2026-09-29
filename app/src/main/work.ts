@@ -362,6 +362,11 @@ export class WorkRunner {
   private prTimer: NodeJS.Timeout | null = null
   /** head를 처음 읽은 때 (D196). 메모리에만 두어 앱을 다시 켜면 다시 잰다 */
   private readonly headSeen = new Map<string, number>()
+  /**
+   * Actions 실행 id → 이벤트 (D201, I52). 실행의 이벤트는 바뀌지 않아 메모리에 두고 처음 보는 실행만 읽는다. 앱을 다시
+   * 켜면 CI 실패 항목에 적힌 것부터 채운다
+   */
+  private readonly runEvents = new Map<number, string>()
   /** 앱을 끝낸다. 읽기를 더 걸지 않는다 */
   private closing = false
 
@@ -2416,6 +2421,11 @@ export class WorkRunner {
     const location = prLocation(pr.url)
     if (!location) return this.prFailed(`PR 주소를 읽지 못함: ${pr.url}`)
     const file = await this.prItems()
+    // CI 실패 항목에 적힌 이벤트를 다시 읽지 않는다. 읽기에 실패해도 항목의 id가 바뀌지 않는다 (I52)
+    for (const item of file.items) {
+      const c = item.check
+      if (c && c.run !== null && c.event) this.runEvents.set(c.run, c.event)
+    }
     let fetched: PrFetched
     try {
       fetched = await readPr(
@@ -2426,6 +2436,7 @@ export class WorkRunner {
           worktree: this.worktree,
           branch: workBranch(this.work.work_id),
           location,
+          runEvents: this.runEvents,
         },
         (id) => file.items.some((i) => i.id === id && i.log !== undefined),
       )

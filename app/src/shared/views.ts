@@ -185,6 +185,10 @@ export type CiState = 'pass' | 'none' | 'waiting' | 'pending' | 'fail' | 'cancel
 export interface PrCheckView {
   name: string
   workflow: string | null
+  /** Actions 체크를 부른 이벤트 (push, pull_request 등, D201). Actions 밖 체크이거나 읽지 못했으면 null */
+  event: string | null
+  /** 화면의 이름: 워크플로 / 이름 (이벤트) (core/pr checkLabel) */
+  label: string
   state: string
   bucket: CheckBucket
   url: string | null
