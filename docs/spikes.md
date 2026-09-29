@@ -409,7 +409,7 @@
 | D158 | 2분 주기가 한도 안 | 맞다(시간당 2%) |
 | D159 | 재시작 때 한 번 읽기 | 읽기는 목록 전체를 읽어 앞 읽기가 없어도 같다. 앱의 동작이라 시험하지 않았다 |
 | D160 | 작성자 관계로 소유자·조직 구성원·협업자를 가림 | OWNER만 확인했다. COLLABORATOR와 나머지는 확인 못 함. MEMBER는 조직 레포가 있어야 한다 |
-| D161 | 봇을 가리고 설정한 봇만 받음 | REST `user.type` Bot으로 가린다. 봇 이름은 REST가 `github-actions[bot]`, GraphQL이 `github-actions`로 모양이 다르다 |
+| D161 | 봇을 가리고 설정한 봇만 받음 | REST `user.type` Bot으로 가린다. 봇 이름은 REST가 `github-actions[bot]`, GraphQL이 `github-actions`로 모양이 달라, 설정에 적는 이름의 모양을 D197로 정했다 |
 | D172 | 승인 뒤 답글 게시 | 인라인 스레드의 답글과 대화 코멘트를 게시했다 |
 | D175 | GitHub Actions 체크만 다시 실행 | `gh run rerun --failed`가 된다. Actions 체크는 링크가 `/actions/runs/…/job/…`이고 CheckRun에 `workflowName`이 있어 가린다. Actions 밖 체크(커밋 상태)는 이 토큰(Commit statuses 읽기)으로 만들 수 없어 시험하지 않았다 |
 | D176 | head를 고정한 머지, 체크가 없으면 통과 | head 고정은 `--match-head-commit`으로 된다. 체크가 없는 틈 때문에 D196을 더했다 |
