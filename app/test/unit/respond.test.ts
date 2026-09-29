@@ -19,6 +19,7 @@ import { mergeGate, prView, type PrReadState } from '../../src/core/pr'
 import { CUT_ERROR, operationView } from '../../src/core/recovery'
 import {
   GONE_SKIP,
+  PR_CLOSED,
   existingTestChanges,
   isAppReply,
   isTestPath,
@@ -315,6 +316,28 @@ describe('PR 진행 중의 액션 바와 배지 (D182, D183)', () => {
       'log:work.completed',
     ])
     expect(r.effects[0]).toMatchObject({ event: { payload: { reason: 'pr_merged' } } })
+  })
+
+  it('PR이 닫혀 있으면 대응 task의 [승인]을 받지 않고, 다시 열린 것을 읽으면 받는다 (D179)', () => {
+    const read = (work: WorkState, state: 'OPEN' | 'CLOSED') =>
+      apply(work, {
+        type: 'pr.read',
+        at: at(),
+        number: 7,
+        state,
+        head: HEAD,
+        received: [],
+        notAccepted: [],
+      }).work
+    const closed = read(awaiting(), 'CLOSED')
+    const refused = approve(closed)
+    expect(refused.rejected).toBe(PR_CLOSED)
+    expect(refused.effects).toEqual([])
+    expect(refused.work.operation).toBeUndefined()
+    expect(currentTask(refused.work)?.status).toBe('awaiting_approval')
+    const reopened = approve(read(closed, 'OPEN'))
+    expect(reopened.rejected).toBeUndefined()
+    expect(types(reopened.effects)).toEqual(['endSession', 'respond'])
   })
 
   it('재시작 때 도는 대응 task는 다른 task처럼 중단됨이나 승인 대기가 된다 (시나리오 9-7)', () => {

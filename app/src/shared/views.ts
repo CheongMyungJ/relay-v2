@@ -672,6 +672,8 @@ export interface RespondReview {
   deferred: string[]
   /** 승인 뒤 실패한 push나 게시. 있으면 [승인]은 [다시 시도]다 */
   failure: { stage: string; error: string } | null
+  /** 지금 승인할 수 없는 까닭(PR이 닫힘, D179). 있으면 [승인]이 꺼진다 */
+  blocked: string | null
 }
 
 /** Work 완료 화면: 판정표, 전체 Work의 변경(기준 커밋 → 작업 트리), 전달 선택 (시나리오 7-3) */

@@ -87,6 +87,13 @@ export interface RespondStart {
 }
 
 /**
+ * 닫힌 PR에는 대응하지 않는다 (D179): [대응 시작]과 대응 task의 [승인]([다시 시도] 포함)을 받지 않는다. 다시 열린 것을
+ * 읽으면 이어서 할 수 있다
+ */
+export const PR_CLOSED =
+  'PR이 닫혀 있음 ([새로 고침]으로 다시 열린 것을 읽으면 대응할 수 있음, D179)'
+
+/**
  * [대응 시작]을 받지 않는 까닭 (시나리오 10-3, D170, D179, D182): PR 진행이 아님, 진행 중 작업이 있음, PR이 닫힘, 끝나지
  * 않은 대응 task가 있음(한 번에 하나). 받으면 null. machine과 PR 패널의 버튼이 같이 쓴다
  */
@@ -95,9 +102,7 @@ export function respondBlocked(
 ): string | null {
   if (work.status !== 'pr' || !work.pr) return 'PR 진행인 Work가 아님'
   if (work.operation) return '진행 중인 작업이 있음'
-  if (work.pr.closed_at) {
-    return 'PR이 닫혀 있음 ([새로 고침]으로 다시 열린 것을 읽으면 대응할 수 있음, D179)'
-  }
+  if (work.pr.closed_at) return PR_CLOSED
   if (pendingRespond(work))
     return '끝나지 않은 PR 대응 task가 있음 (대응 task는 한 번에 하나, D170)'
   return null

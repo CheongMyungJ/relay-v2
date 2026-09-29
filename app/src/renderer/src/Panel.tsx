@@ -547,7 +547,7 @@ function Review({
           ) : null}
           <button
             className="primary"
-            disabled={busy || cut || !gate.approve}
+            disabled={busy || cut || !gate.approve || !!respond?.blocked}
             onClick={() => void approve(false)}
           >
             {approveLabel}
@@ -564,6 +564,7 @@ function Review({
                 : 'intent 초안의 머리글 오류는 넘길 수 없습니다 (D90)'}
             </span>
           ) : null}
+          {respond?.blocked ? <span className="error">{respond.blocked}</span> : null}
           {respond ? (
             <span className="dim">
               승인하면 push하고 답글 {respond.replies.filter((r) => !r.url && !r.skipped).length}

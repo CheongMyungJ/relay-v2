@@ -46,7 +46,7 @@ import { commitMessage, deliveryStart, stashMessage, stoppedVerify } from './del
 import { NODES, RESPOND, WORK_COMPLETE, defaultNext, isPipelineNode, isPrevious } from './pipeline'
 import { workBranch } from './records'
 import { CUT_ERROR, OPERATION_BLOCKS, OWNED_FILES, cutOperation } from './recovery'
-import { deferredRounds, isRespondPending, nextRound, respondBlocked } from './respond'
+import { PR_CLOSED, deferredRounds, isRespondPending, nextRound, respondBlocked } from './respond'
 import { backupMessage, canSelectStep, planStep, type StepKind } from './rewind'
 import { FORMAT_VERSION, bounceMessage, isValid, summarize, type TaskCheck } from './validate'
 
@@ -2578,6 +2578,8 @@ function prRespond(work: WorkState, e: PrRespond): Transition {
 function respondApprove(work: WorkState, task: TaskRecord, e: Approve): Transition {
   const pr = work.pr
   if (work.status !== 'pr' || !pr) return unchanged(work, 'PR 진행인 Work가 아님')
+  // 닫힌 PR에는 push하지도 답글을 게시하지도 않는다: 대응을 멈춘 채 둔다 (D179)
+  if (pr.closed_at) return unchanged(work, PR_CLOSED)
   if (!REVIEWABLE.includes(task.status) || !task.respond) {
     return unchanged(work, `${task.id}는 승인할 수 있는 상태가 아님`)
   }

@@ -187,6 +187,7 @@ import {
 } from '../core/review'
 import {
   GONE_SKIP,
+  PR_CLOSED,
   RESPOND_STAGE_LABEL,
   deferredRounds,
   existingTestChanges,
@@ -2462,6 +2463,7 @@ export class WorkRunner {
         failure: r.failure
           ? { stage: RESPOND_STAGE_LABEL[r.failure.stage], error: r.failure.error }
           : null,
+        blocked: pending && this.work.pr?.closed_at ? PR_CLOSED : null,
       },
     }
   }
