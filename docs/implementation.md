@@ -82,6 +82,8 @@
 | I52 | Actions 실행의 이벤트(D201)는 WorkRunner가 실행 id별로 메모리에 두고, 처음 보는 실행만 `gh api --hostname <host> repos/<owner>/<repo>/actions/runs/<실행>?exclude_pull_requests=true`로 읽는다(한 번 읽기의 REST 목록 셋과 동시에). 앱을 켜면 CI 실패 항목에 적힌 이벤트로 먼저 채운다. 읽지 못하면 읽기의 경고로 보이고, 그 실행의 체크는 실행 id로 가려(`<워크플로>/<이름> #<실행>`) 다른 실행과 합치지 않으며, 다음 읽기에서 다시 읽는다 | 실행의 이벤트는 바뀌지 않아 한 번 읽으면 됨. 이벤트를 못 읽어도 PR 상태와 코멘트는 쓸모 있어 읽기 전체를 실패로 하지 않음. 합치면 실패를 가릴 수 있어 합치지 않는 쪽으로 틀림. CI 실패 항목에 적힌 이벤트를 쓰면 다시 켠 뒤 이벤트를 못 읽어도 항목의 id가 바뀌지 않음(바뀌면 해소됐다가 새 항목으로 돌아와 알림이 감). 처음 볼 때 이미 실패였고 그때 이벤트를 못 읽은 체크는 다음 읽기에서 항목의 id가 바뀐다(옛 항목은 해소됨). 머지 조건의 CI는 그동안에도 실패다 | |
 | I53 | M10의 [실제]는 나눠서 돌린다. (1) 실제 `claude`와 가짜 gh: Claude Code 웹 세션의 Linux 컨테이너에서 경우 `respond`로 돈다. 대응 task가 항목에 대응하고 답글 초안을 쓰는지, 코멘트 속 지시를 따르지 않고 묻는지(D162) 본다. (2) 가짜 `claude`와 실제 gh: `app-claude`의 Linux 작업 `pr`에서 공통 시나리오(`test/flow/pr-scenario.ts`)에 더한 대응 단계로 돈다. 실제 GitHub에 push, 답글과 보이지 않는 표시, 다시 실행을 본다. 둘을 합친 [실제](실제 `claude`의 답글이 실제 GitHub에 올라감)는 레포에 Claude 인증 secret을 넣거나 사람의 PC에서 돌릴 수 있을 때 한다. 그때까지 M10의 [실제]는 일부만 채운 것으로 적는다 | 웹 세션은 GitHub API가 막혀 gh를 쓸 수 없음(S7. 2026-09-29에도 REST와 GraphQL 모두 403). 레포에는 Claude 인증 secret이 없고, 사람은 지금 PC를 쓸 수 없음. `claude setup-token`은 터미널 명령이라 휴대폰에서 할 수 없음. 나누면 지금 secret 없이 두 쪽을 모두 돌리고 고칠 수 있음 | ✅ |
 | I54 | `app-ci`의 Windows [흐름]을 두 작업으로 나눠 나란히 돌린다: PR 진행과 대응 시험(`test/flow/pr*.test.ts`)과 나머지다. 빌드(I39)와 [어댑터]는 나머지 작업에만 둔다. 각 작업의 제한은 20분 그대로다 | M9 끝에 Windows 작업이 약 15~16분으로 제한(20분)에 가까웠고(push와 pull_request 실행이 함께 돌면 더 늘어남), M10의 [흐름]이 1.5~3분쯤 더함. 공개 레포라 러너 시간은 무료이고, 나누면 기다리는 시간도 줄어듦 | ✅ |
+| I55 | M11의 [실제]는 실제 `claude`와 실제 gh를 합쳐 `app-claude` 워크플로의 Linux 작업(`pr`)에서 돈다(경우 `pr-auto`). 작업은 Claude Code를 네이티브 설치 스크립트로 설치하고 레포 secret `CLAUDE_CODE_OAUTH_TOKEN`(사람이 `claude setup-token`으로 만든 것)으로 인증한다. 시험용 레포 secret(I43)은 M9·M10과 같다. 파이프라인은 가짜 `claude`로 [PR 생성]까지 가고 대응 task만 실제 `claude`다(M10의 `respond`와 같음). 실제 `claude`는 GitHub 토큰(`GH_TOKEN`, `GITHUB_TOKEN`)을 뺀 환경으로 띄운다(시험 도구의 실행 파일 감싸개) | 웹 세션은 GitHub 프록시가 GraphQL을 정해 둔 PR 작업만 받아 앱의 `gh pr view --json`, `gh pr create`, `gh pr merge`, `gh repo view`가 403이고, gh가 없고, 실패 로그의 다운로드 주소가 막힘(3절). 사람이 PC에서 `setup-token`을 만들 수 있게 됨(I53 때는 못 함). Linux 작업에는 gh와 시험용 레포 secret이 이미 있고 M9·M10의 실제 gh 시험이 돈 곳임. Windows 작업은 한 번도 돈 적이 없어 준비에서 막힐 수 있고, Windows 동작은 [실기]가 봄. 권한 확인 없이 도는 세션(D17)에 GitHub 토큰이 있으면 앱을 거치지 않고 PR에 쓸 수 있음(D162) | ✅ |
+| I56 | M11의 [흐름]은 `test/flow/pr-auto.test.ts`로 두어 `app-ci`의 `windows-pr` 작업에서 돈다. 파일 이름이 `pr*`라 워크플로를 바꾸지 않는다 **(기본값)** | M10 마지막 실행(#118)에서 `windows` 작업은 약 17분([흐름] 876초. #117은 580초)으로 제한 20분에 가깝고, `windows-pr`는 약 5분이었음 | |
 
 ## 3. 확인한 사실
 
@@ -150,6 +152,8 @@
 | 턴의 훅 | 턴마다 오는 훅은 UserPromptSubmit, Stop, StopFailure다. UserPromptSubmit은 사람이 프롬프트를 제출할 때 Claude가 처리하기 전에 온다. Stop은 Claude가 응답을 마칠 때 오고, 사람이 Esc로 끊으면 오지 않으며, API 오류로 끝나면 StopFailure가 대신 온다. 자동 이벤트(아래 완료 알림)로 시작한 턴에 UserPromptSubmit이 오는지는 문서에 없다 | Claude Code 문서 hooks (2026-09-27) |
 | Stop의 백그라운드 작업 | Stop 본문에는 `background_tasks`(도는 셸, 서브에이전트 등)와 `session_crons`(`/loop`, `CronCreate`, `ScheduleWakeup`의 예약된 깨우기)가 있어, "세션이 끝남"과 "백그라운드 작업이 다시 깨우기를 기다리며 쉬는 중"을 가른다. task 목록을 읽을 수 있으면 늘 있고 없으면 빈 배열이다. 2.1.145에서 더해졌다 | Claude Code 문서 hooks, changelog (2026-09-27) |
 | 백그라운드 서브에이전트 | 대화형 세션은 fork 모드가 기본으로 켜져 있어 Claude가 띄운 서브에이전트를 백그라운드에서 돌린다. 그 결과는 나중 턴에 완료 알림으로 오고, 알림은 사람의 메시지가 아니라 자동 이벤트로 표시된다. `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`이면 포그라운드에서 돌린다. 백그라운드 셸은 Claude Code가 끝날 때 함께 정리된다 | Claude Code 문서 sub-agents, interactive-mode (2026-09-27) |
+| 웹 세션의 GitHub 프록시 | Anthropic이 운영하는 클라우드 세션의 GitHub 요청은 GitHub 프록시를 지난다. `gh`는 자리 표시자 토큰(`proxy-injected`)으로 부르면 프록시가 자격 증명을 넣는다. API 요청은 세션에 붙인 레포에만 닿는다. GraphQL은 정해 둔 PR 작업만 받고 나머지는 403(`This GraphQL query is not enabled for this session`)이며, 사용자가 준 `GH_TOKEN`도 같다. 2026-09-29에 이 레포의 웹 세션에서 붙인 레포(relay-v2)의 REST는 200, 붙이지 않은 시험용 레포는 403, GraphQL(`viewer{login}`)은 403이었다. 문서는 gh가 미리 설치돼 있다고 하지만 이 세션에는 없었고, Actions 로그가 내려오는 `productionresultssa2.blob.core.windows.net`은 프록시가 CONNECT를 403으로 막았다 | Claude Code 문서 cloud-environments(GitHub proxy, Work with GitHub issues and pull requests), 이 세션에서 실행 (2026-09-29) |
+| Claude Code 설치와 CI 인증 | Linux 네이티브 설치는 `curl -fsSL https://claude.ai/install.sh \| bash`이고 실행 파일은 `~/.local/bin/claude`다. `claude setup-token`은 브라우저로 승인한 뒤 1년짜리 OAuth 토큰을 찍고(저장하지 않음) `CLAUDE_CODE_OAUTH_TOKEN`으로 쓴다. 구독(Pro, Max, Team, Enterprise)으로 인증하고 모델 요청만 한다. 인증의 우선순위는 `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_API_KEY`, `apiKeyHelper`, `CLAUDE_CODE_OAUTH_TOKEN`, `/login` 차례다 | Claude Code 문서 setup, authentication (2026-09-29) |
 
 - N-API 사전 빌드가 Electron 44에서 다시 빌드 없이 로드되고, 설치 파일(asar)에서 `.node`와 `conpty\conpty.dll`, `OpenConsole.exe`가 풀려 나와 동작한다. M0의 [스모크]로 러너에서 확인했다(2026-09-26, `docs/checks.md`).
 - Windows의 Node(libuv)는 stdin을 raw 모드로 읽고 있을 때만 콘솔 크기 변경을 알아챈다(libuv `docs/src/signal.rst`). 가짜 `claude`도 stdin을 raw 모드로 읽어야 크기 변경 시험이 맞다(app-ci #1~#5).
@@ -261,7 +265,7 @@ app/src/
 | M8 | 리뷰 단계 | fix와 verify 사이의 리뷰 노드와 스킬(D163~D167) | |
 | M9 | PR 진행 | PR 진행 상태, 읽기, 항목 보기, 머지, 머지 뒤 정리. 에이전트 없음 | 스파이크 S7(I42) |
 | M10 | PR 대응 | 사람이 누르는 [대응 시작], PR 대응 task, 승인 뒤 push와 답글, CI 재실행 | |
-| M11 | 자동 대응 | 대응 자동 시작과 자동 승인, 라운드 상한 | |
+| M11 | 자동 대응 | 대응 자동 시작과 자동 승인, 라운드 상한, 닫힌 PR의 push·게시 막기(D208) | |
 
 ### M0. 골격과 배포
 
@@ -634,12 +638,21 @@ app/src/
 **내용**
 
 - 대응 자동 시작(D154)과 PR 대응의 자동 승인(D169)의 앱 설정과 Work별 덮어쓰기, 라운드 상한(D171), 재시작 규칙(D159), 알림(D184).
+- 새 설정(5.1.1): `respond_auto_start`(기본 끔, Work별 덮어쓰기 있음), `respond_auto_round_max`(기본 3, 1~20 **(기본값)**, 덮어쓰기 없음), `auto_approve.respond`(기본 끔, 덮어쓰기 있음). 설정 화면, 새 Work 대화상자, [Work 설정]에서 바꾼다. [Work 설정]은 PR 진행 중에도 받는다(D209).
+- 자동 시작: 앱이 PR을 읽어 받은 새 항목이 생길 때만 시작한다(D210). 넣는 항목은 제외하지 않은 새 항목 전부이고(D170), 시작하기 전에 [대응 시작]처럼 기준 브랜치와 PR 브랜치를 fetch하고 원격만 앞섰으면 받는다(시나리오 10-3). 대응 task가 도는 동안 받은 항목은 그 라운드가 끝나면 바로 시작한다. 앱을 켤 때 읽은 것(D159), 자동 시작을 켤 때, [받기]·[다시 넣기]로는 시작하지 않는다.
+- 라운드 셈(D171, D191의 "자동 라운드 수"): `work.json`의 `pr.auto_rounds`다. 자동 시작할 때 1 더하고, 사람이 [대응 시작]이나 대응 task의 승인([다시 시도] 포함)을 누르면 0으로 돌린다. 다음 자동 시작이 상한을 넘게 되면(셈이 상한 이상) 시작하지 않고 멈춘다: `pr.auto_paused`(5.5), 알림(D184), 배지 "자동 대응 멈춤"(D183). 그래서 사람 손 없이 이어지는 라운드는 상한까지다. 자동 승인이 꺼져 있으면 사람이 라운드마다 승인하므로 멈추지 않는다.
+- PR 대응의 자동 승인(D169): 다른 단계처럼 4.3의 조건, 카운트다운과 [취소], 턴마다 다시 판정(D128~D131), 재시작 경로는 자동 승인하지 않음(D75, D127). 기존 테스트 변경(D202)은 조건이 아니다. 닫힌 PR은 승인을 받지 않으므로(D179) 카운트다운하지 않고 까닭을 보인다. 승인 기록은 `approved_by: auto`, `task.approved`의 `by: auto`, `decisions.md`의 "(자동 승인)"이다.
+- 닫힌 PR: push와 답글 게시 바로 전에 PR 상태를 다시 읽어 열려 있을 때만 한다(D208). 사람 승인, 자동 승인, [다시 시도] 모두 같다.
+- 알림(D184): 자동 시작이 켜져 있으면 "대응 거리가 들어옴" 대신 자동 대응 시작을 알린다. 도는 라운드가 있어 다음 라운드로 미룰 때는 알리지 않는다. 상한에 닿으면 멈춤을 알린다. 자동 승인한 라운드의 push나 게시가 실패하면 알린다(사람이 누르지 않았는데 사람이 필요해짐, D81, D130과 같은 까닭).
+- 머리 띠 이유 "자동 대응"(시나리오 2-5)과 `task.started`의 `auto_respond`(5.5). 대응 task의 `context.md`의 승인 방식이 설정을 따른다.
+- [실제]는 실제 `claude`와 실제 gh를 합쳐 돈다(I55). [흐름]은 `windows-pr` 작업에서 돈다(I56).
 
 **완료 기준**
 
-- [단위] 사람 손 없이 이어진 라운드의 셈과 상한, 재시작 때 쌓인 항목만으로는 시작하지 않음.
-- [흐름] 자동 시작 → 자동 승인 → push → 새 항목 → 다음 라운드 → 상한에서 멈추고 알림.
-- [실제] 시험용 레포에서 CI 실패에 자동으로 대응한다.
+- [단위] 사람 손 없이 이어진 라운드의 셈과 상한, 재시작 때 쌓인 항목만으로는 시작하지 않음(D159, D210). 자동 시작의 판정(꺼짐, 기다림, 새 항목 없음, 멈춤, 시작), PR 대응의 자동 승인 판정(4.3, 닫힌 PR), 새 설정과 Work 설정, 배지 차례(D183).
+- [흐름] 자동 시작 → 자동 승인 → push → 새 항목 → 다음 라운드 → 상한에서 멈추고 알림. 사람이 [대응 시작]을 누르면 다시 센다. 재시작 뒤 쌓인 항목, 설정을 켬, [다시 넣기]로는 시작하지 않고 다음에 들어온 항목과 함께 시작한다(D159, D210). 도는 동안 들어온 항목은 라운드가 끝나면 바로 시작한다. 닫힌 PR에는 push·게시하지 않는다(D208). PR 진행 중에 [Work 설정]으로 바꾼다(D209). 자동 승인한 라운드의 게시가 실패하면 알린다.
+- [실제] 시험용 레포에서 CI가 실패하면 앱이 자동으로 대응 task를 시작하고, 실제 `claude`가 원인을 고쳐 커밋하고, 자동 승인으로 push해 CI가 통과한다. 상한에 닿으면 멈추고 알린다(I55).
+- [실기] 설정 화면과 [Work 설정]의 자동 대응, PR 패널의 자동 대응 상태, 배지 "자동 대응 멈춤", 알림, 대응 task의 카운트다운과 [취소]가 설계대로 보인다(목록은 `docs/checks.md` M11).
 
 ## 8. 테스트 전략
 
