@@ -837,6 +837,10 @@ const firstLine = (s: string) =>
     .find((l) => l.trim())
     ?.trim() ?? ''
 
+/** 내용이 있는 줄이 둘 이상인 본문. 아니면 null */
+const multiLine = (s: string | undefined): string | null =>
+  s !== undefined && s.split(/\r?\n/).filter((l) => l.trim()).length > 1 ? s : null
+
 /** 항목 하나의 화면 모양 */
 export function prItemView(item: PrItem, rules: ItemRules): PrItemView {
   const who = item.author
@@ -871,7 +875,8 @@ export function prItemView(item: PrItem, rules: ItemRules): PrItemView {
     status: item.status,
     statusLabel: ITEM_STATUS_LABEL[item.status],
     title,
-    text: item.kind === 'ci' ? (item.log ?? null) : (item.body ?? null),
+    // 한 줄짜리 본문은 제목에 이미 있다
+    text: item.kind === 'ci' ? (item.log ?? null) : multiLine(item.body),
     note: item.kind === 'ci' && !item.log ? (item.log_note ?? '로그를 아직 읽지 않음') : null,
     url: item.url ?? item.check?.url ?? null,
     where,
@@ -902,13 +907,13 @@ const REVIEW_LABEL: Readonly<Record<string, string>> = {
 }
 
 const MERGEABLE_LABEL: Readonly<Record<string, string>> = {
-  MERGEABLE: '충돌 없음',
+  MERGEABLE: '없음',
   CONFLICTING: '기준 브랜치와 충돌',
   UNKNOWN: 'GitHub가 계산하는 중',
 }
 
 const SYNC_LABEL: Readonly<Record<SyncKind, string>> = {
-  same: '로컬 Work 브랜치와 같음',
+  same: '원격 head와 같음',
   ff: '원격만 앞섬',
   local_ahead: '로컬 Work 브랜치만 앞섬 (push하지 않은 커밋)',
   diverged: '원격 PR 브랜치와 갈라짐',

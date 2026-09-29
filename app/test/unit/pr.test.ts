@@ -719,7 +719,9 @@ describe('PR 패널 (D183)', () => {
       ['convo:2', '받지 않음'],
     ])
     const byId = (id: string) => v?.items.find((i) => i.id === id)
-    expect(byId('convo:1')?.title).toBe('me: 첫 줄')
+    expect(byId('convo:1')).toMatchObject({ title: 'me: 첫 줄', text: '첫 줄\n둘째 줄' })
+    // 한 줄짜리 본문은 제목에만 보인다
+    expect(byId('inline:5')).toMatchObject({ title: 'me: 여기', text: null })
     expect(byId('convo:2')).toMatchObject({
       title: 'github-actions: 봇',
       why: '봇 github-actions: 프로젝트 설정의 받을 봇에 없음 (D161)',
@@ -735,8 +737,8 @@ describe('PR 패널 (D183)', () => {
       state: '열림',
       ci: '통과',
       review: null,
-      mergeable: '충돌 없음',
-      sync: '로컬 Work 브랜치와 같음',
+      mergeable: '없음',
+      sync: '원격 head와 같음',
     })
     expect(prItemView(ex.items[0] as PrItem, rules).kindLabel).toBe('대화 코멘트')
   })

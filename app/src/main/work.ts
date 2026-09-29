@@ -12,7 +12,15 @@ import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { claudeVersion, deploySkill, findClaude } from '../adapters/claude'
-import { ghCreatePr, ghMerge, ghMergeSettings, ghOpenPr, ghPrView, ghVersion } from '../adapters/gh'
+import {
+  ghCreatePr,
+  ghMerge,
+  ghMergeSettings,
+  ghOpenPr,
+  ghPrView,
+  ghVersion,
+  type GhPrOptions,
+} from '../adapters/gh'
 import {
   commitAll,
   commitInfo,
@@ -2686,12 +2694,16 @@ export class WorkRunner {
       }
       const r = await ghMerge(this.ctx.ghBin, { ...gh, method: e.method, head: e.head })
       if (!r.ok) {
+        // 새 커밋이 생긴 직후에는 GitHub가 "Head branch was modified" 대신 "Pull Request is not mergeable"로
+        // 거절하기도 한다(3절, M9 [실제]). 문구에 기대지 않고 head를 다시 읽어 가른다
+        const moved = r.headMoved || (await this.headMoved(gh, e.head))
         await fail(
-          r.headMoved
+          moved
             ? `그사이 PR에 새 커밋이 생겨 머지하지 않음. 다시 읽은 뒤 머지 창을 다시 여세요 (${r.error})`
             : `머지 실패: ${r.error}`,
         )
-        if (r.headMoved) setTimeout(() => void this.readPrNow(), 0)
+        // 머지가 거절되면 PR이 바뀌었을 수 있어 곧 다시 읽는다
+        setTimeout(() => void this.readPrNow(), 0)
         return
       }
       // 성공 문구는 TTY일 때만 찍으므로 다시 읽어 머지됐는지 본다 (S7 관찰 6, 3절)
@@ -2703,6 +2715,16 @@ export class WorkRunner {
       await this.feed({ type: 'pr.merged', at: this.ctx.at() })
     } catch (err) {
       await fail(`머지 실패: ${message(err)}`)
+    }
+  }
+
+  /** PR의 지금 head가 머지하려던 head와 다른가. 읽지 못하면 모른다(false) */
+  private async headMoved(gh: GhPrOptions, head: string): Promise<boolean> {
+    try {
+      const now = (await ghPrView(this.ctx.ghBin, gh, ['headRefOid']))['headRefOid']
+      return typeof now === 'string' && now !== '' && now !== head
+    } catch {
+      return false
     }
   }
 

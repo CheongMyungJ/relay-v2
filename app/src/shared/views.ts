@@ -205,7 +205,7 @@ export interface PrItemView {
   statusLabel: string
   /** 한 줄 제목: 작성자와 본문 첫 줄, 체크 이름, 기준 커밋 */
   title: string
-  /** 본문(코멘트)이나 로그 끝부분(CI 실패) */
+  /** 여러 줄인 본문(코멘트. 한 줄이면 제목에 있음)이나 로그 끝부분(CI 실패) */
   text: string | null
   /** 로그가 없는 까닭 */
   note: string | null

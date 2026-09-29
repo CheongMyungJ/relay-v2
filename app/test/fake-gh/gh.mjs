@@ -16,7 +16,8 @@
 //   github.json에 둔다. 시험이 test/flow/github.ts로 바꾼다. head 커밋은 PR 브랜치에서 매번 읽는다.
 //   S7에서 본 모양: 체크가 없는 head는 빈 statusCheckRollup, 머지 성공은 TTY가 아니라 출력이 없음, head가 다르면
 //   "Head branch was modified", 실행이 끝나기 전의 로그 요청은 "still in progress", baseRefOid는 PR 브랜치에 push해야 바뀜.
-// - FAKE_GH_FAIL=list|create|view|api|log|merge(쉼표로 여럿)면 그 명령이 종료 코드 1로 실패한다.
+// - FAKE_GH_FAIL=list|create|view|api|log|merge(쉼표로 여럿)면 그 명령이 종료 코드 1로 실패한다. merge는 새 커밋이 생긴
+//   직후 GitHub가 준 "Pull Request is not mergeable"이다(M9 [실제]).
 // - FAKE_GH_RECORD 폴더가 있으면 명령마다 인자, cwd, --body-file의 내용을 fake-gh.jsonl에 한 줄씩 남긴다.
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -324,7 +325,8 @@ if (cmd === 'pr' && sub === 'merge') {
       `X Pull request ${repo.split('/').slice(-2).join('/')}#${number} is not mergeable: the base branch policy prohibits the merge.`,
     )
   }
-  if (failing('merge')) fail('GraphQL: 머지할 수 없음 (가짜 gh)')
+  // 새 커밋이 생긴 직후 GitHub가 준 거절 (M9 [실제], app-claude 실행 #2)
+  if (failing('merge')) fail('GraphQL: Pull Request is not mergeable (mergePullRequest)')
   if (!method) fail('가짜 gh: 머지 방식이 없음')
   const allowed = (g.methods ?? {})[method] ?? true
   if (!allowed) fail(`GraphQL: ${method} 머지를 허용하지 않는 레포 (가짜 gh)`)

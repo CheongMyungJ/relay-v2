@@ -326,10 +326,10 @@ describe('[흐름] PR 진행 (M9, 시나리오 10)', () => {
     p = await refreshUntil(
       s.ctx,
       w,
-      (x) => x.items.some((i) => i.text === '고친 본문'),
+      (x) => x.items.some((i) => i.title.endsWith('고친 본문')),
       '고친 본문',
     )
-    expect(p.items.find((i) => i.text === '고친 본문')).toMatchObject({
+    expect(p.items.find((i) => i.title.endsWith('고친 본문'))).toMatchObject({
       id: `convo:${convo}`,
       status: 'new',
     })
@@ -418,6 +418,29 @@ describe('[흐름] PR 진행 (M9, 시나리오 10)', () => {
         merge_method: 'fast',
       }),
     ).toMatchObject({ ok: false })
+  })
+
+  it('머지가 "not mergeable"로 거절돼도 그사이 head가 바뀌었으면 새 커밋 때문이라고 알리고 다시 읽는다 (D176, M9 [실제])', async () => {
+    const s = await setup()
+    const w = await openWork(s)
+    await toMergeable(s, w)
+    const head = workState(w).pr?.head ?? ''
+    // head가 그대로인 거절은 GitHub의 오류를 그대로 보인다
+    s.ctx.h.env['FAKE_GH_FAIL'] = 'merge'
+    const same = await s.ctx.h.relay.prMerge(w.key, { method: 'merge', head })
+    expect(same).toEqual({
+      ok: false,
+      error: '머지 실패: 종료 코드 1: GraphQL: Pull Request is not mergeable (mergePullRequest)',
+    })
+    // 머지 창을 연 뒤 새 커밋이 생겼고, GitHub는 "not mergeable"로 거절한다
+    const moved = await s.world.commit(w.branch, { 'late.txt': '늦은 커밋\n' }, '늦은 커밋')
+    const r = await s.ctx.h.relay.prMerge(w.key, { method: 'merge', head })
+    expect(!r.ok && r.error).toMatch(/^그사이 PR에 새 커밋이 생겨 머지하지 않음/)
+    delete s.ctx.h.env['FAKE_GH_FAIL']
+    // 곧 다시 읽어 새 head를 받는다
+    await s.ctx.h.ui.until(() => view(s.ctx, w).pr?.head === moved, '다시 읽기', 10_000)
+    expect(workState(w)).toMatchObject({ status: 'pr' })
+    expect(s.gh.pr(w.pr).state).toBe('open')
   })
 
   it('gh가 2.48.0보다 낮으면 등록 점검이 경고하고 [PR 생성]을 끈다. 올리고 [다시 점검]하면 켜진다 (D198)', async () => {

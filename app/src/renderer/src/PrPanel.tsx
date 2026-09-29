@@ -107,12 +107,14 @@ export function PrPanel({ work, pr }: { work: WorkView; pr: PrView }) {
                 : '아직 읽지 않음'}
             {pr.closed && active ? ' · 닫혀 자동 읽기를 멈춤' : ''}
           </span>
-          <button
-            disabled={!!busy || pr.reading || cut}
-            onClick={() => void run('새로 고침', () => window.relay.prRefresh(work.key))}
-          >
-            새로 고침
-          </button>
+          {active ? (
+            <button
+              disabled={!!busy || pr.reading || cut}
+              onClick={() => void run('새로 고침', () => window.relay.prRefresh(work.key))}
+            >
+              새로 고침
+            </button>
+          ) : null}
         </div>
         {pr.error ? <div className="error">{pr.error}</div> : null}
       </section>

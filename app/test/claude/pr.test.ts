@@ -60,9 +60,12 @@ function cleanupLines(r: CleanupReport | null, error: unknown = null): string[] 
   ]
 }
 
+/** 결과 파일을 쓰고 작업 로그에도 찍는다(결과물을 받지 못하는 곳에서도 읽게) */
 function save(name: string, lines: readonly string[]): void {
+  const text = redact(lines.join('\n'))
   fs.mkdirSync(OUT, { recursive: true })
-  fs.writeFileSync(path.join(OUT, name), redact(lines.join('\n')))
+  fs.writeFileSync(path.join(OUT, name), text)
+  console.log(`----- ${name} -----\n${text}\n----- ${name} 끝 -----`)
 }
 
 describe.runIf(enabled)('[실제] PR 진행 (M9, 실제 gh와 시험용 레포)', () => {
