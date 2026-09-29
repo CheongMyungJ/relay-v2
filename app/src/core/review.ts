@@ -11,7 +11,7 @@ import type {
   WorkStatus,
 } from '../shared/work'
 import { badge, holdNeedsNotice, holdText } from './approval'
-import { NODE_INFO, WORK_COMPLETE, defaultNext, isPrevious } from './pipeline'
+import { NODE_INFO, WORK_COMPLETE, defaultNext, isPipelineNode, isPrevious } from './pipeline'
 import { normalizeText, parseFrontMatter, sectionText } from './validate'
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -21,12 +21,16 @@ export function taskLabel(task: Pick<TaskRecord, 'seq' | 'node'>): string {
   return `${pad(task.seq)} ${NODE_INFO[task.node].title}`
 }
 
-/** 머리 띠의 이유 문구 (시나리오 2-5): 기본 진행 / 되감기 / 건너뛰기 / 재개 */
+/**
+ * 머리 띠의 이유 문구 (시나리오 2-5): 기본 진행 / 되감기 / 건너뛰기 / 재개, PR 대응 task는 대응 시작이다 (자동 대응은
+ * M11)
+ */
 export const REASON_LABEL: Readonly<Record<StartReason, string>> = {
   default: '기본 진행',
   rewind: '되감기',
   skip: '건너뛰기',
   resume: '재개',
+  respond: '대응 시작',
 }
 
 /**
@@ -95,7 +99,11 @@ export function resumeHint(work: WorkState): string | null {
   const stop = work.stop
   if (work.status !== 'stopped' || !stop) return null
   const task = work.tasks.find((t) => t.id === stop.task_id)
-  const next = task && work.intent ? defaultNext(task.node, work.intent.size) : null
+  // 멈추는 것은 파이프라인 task의 승인뿐이다. PR 대응 task는 멈추지 않는다 (D188)
+  const next =
+    task && isPipelineNode(task.node) && work.intent
+      ? defaultNext(task.node, work.intent.size)
+      : null
   const back = '추천대로 되돌아가려면 [단계 선택]을 누르세요.'
   if (next === WORK_COMPLETE) {
     const done = 'Work 완료 화면에서 전달을 고르면 Work를 완료합니다'
@@ -175,14 +183,30 @@ export interface EmphasisInput {
   errors: readonly FormatIssue[]
   /** worktree의 커밋 안 된 변경 (git status) */
   uncommitted: readonly string[]
+  /** PR 대응 task: 이번 라운드에 바뀌거나 지워진 기존 테스트 파일 (D180, D202) */
+  tests?: readonly string[]
+  /** PR 대응 task: 승인 뒤 실패한 push나 답글 게시 (시나리오 10-6) */
+  failure?: { stage: string; error: string } | null
 }
 
 /**
  * 강조 영역 (시나리오 4-2, D83): intent_deviation, 열린 질문, 이전 단계 추천, 커밋 안 된 변경 경고, 형식 오류.
+ * PR 대응 task는 승인 뒤 실패한 push나 게시를 맨 앞에, 기존 테스트 변경(D180, D202)을 함께 둔다.
  * 막힘이면 blocked_reason을 맨 앞에 둔다 (4.4). 없으면 빈 목록이다.
  */
 export function emphasis(input: EmphasisInput): Emphasis[] {
   const out: Emphasis[] = []
+  const f = input.failure
+  if (f) {
+    out.push({
+      kind: 'respond_failed',
+      title: `${f.stage} 실패`,
+      lines: [
+        f.error,
+        '[다시 시도]를 누르면 이어서 합니다: 이미 원격에 있는 커밋은 다시 보내지 않고, 게시한 답글은 건너뜁니다.',
+      ],
+    })
+  }
   const h = input.handoff
   if (h?.status === 'blocked' && h.blocked_reason) {
     out.push({ kind: 'blocked', title: '막힘', lines: [h.blocked_reason] })
@@ -206,6 +230,16 @@ export function emphasis(input: EmphasisInput): Emphasis[] {
       lines: [
         `${NODE_INFO[rec.node].title}(${rec.node})로 — ${rec.reason}`,
         '승인하면 다음 단계를 시작하지 않고 멈춥니다. 되돌아갈 단계는 멈춘 뒤 [단계 선택]으로 고릅니다.',
+      ],
+    })
+  }
+  if (input.tests?.length) {
+    out.push({
+      kind: 'existing_tests',
+      title: '기존 테스트 변경',
+      lines: [
+        ...input.tests,
+        '이번 라운드가 이미 있던 테스트 파일을 바꾸거나 지웠습니다. 대응 뒤에는 verify를 다시 돌리지 않습니다 (D180).',
       ],
     })
   }

@@ -4,7 +4,7 @@
 import Ajv2020, { type ErrorObject, type ValidateFunction } from 'ajv/dist/2020'
 import { parseDocument } from 'yaml'
 import type { AppConfig } from '../shared/config'
-import type { Handoff, HandoffStatus, IntentDraft, NodeName, Size } from '../shared/contracts'
+import type { Handoff, HandoffStatus, IntentDraft, Size, TaskNode } from '../shared/contracts'
 import handoffSchemaV1 from '../shared/generated/handoff.v1.schema.json'
 import intentDraftSchemaV1 from '../shared/generated/intent-draft.v1.schema.json'
 import type { CheckSummary, FormatIssue } from '../shared/work'
@@ -16,6 +16,9 @@ export const FORMAT_VERSION = 1
 export const HANDOFF_FILE = 'handoff.md'
 export const INTENT_DRAFT_FILE = 'intent.draft.md'
 export const PR_FILE = 'pr.md'
+/** PR 대응 task의 산출물 (5.6.11, D187) */
+export const RESPONSE_FILE = 'response.md'
+export const REPLIES_FILE = 'replies.md'
 
 /** 본문 필수 절 (5.2.1) */
 export const HANDOFF_SECTIONS = ['요약', '다음 task가 알아야 할 것'] as const
@@ -461,7 +464,7 @@ function checkHeader<T>(
 }
 
 export interface HandoffCheckOptions {
-  node: NodeName
+  node: TaskNode
   /** 선택 가능한 다음 단계를 정할 크기. 모르면 recommended_next.node 검사를 건너뛴다 */
   size?: Size
   warnChars: number
@@ -553,10 +556,92 @@ export function checkPr(text: string): FormatIssue[] {
       ]
 }
 
+/** replies.md의 절 하나: `## <항목 id>`와 그 아래 본문 (D190) */
+export interface ReplySection {
+  id: string
+  /** 절의 본문. 앞뒤 빈 줄은 뺀다 */
+  body: string
+}
+
+/**
+ * replies.md의 `## <항목 id>` 절 (D190). 제목의 id는 앞뒤 공백을 떼고, 백틱으로 감쌌으면 벗긴다. 첫 절 앞의 글은 절이
+ * 아니다. 본문은 다음 `#`이나 `##` 제목 앞까지다(코드 펜스 안의 제목은 치지 않음)
+ */
+export function replySections(text: string): ReplySection[] {
+  const body = normalizeText(text)
+  return sectionNames(body).map((name) => {
+    const id = name
+      .trim()
+      .replace(/^`([^`]+)`$/, '$1')
+      .trim()
+    return { id, body: sectionText(body, name) ?? '' }
+  })
+}
+
+/**
+ * replies.md 검사 (5.2.1, D190): 이번 라운드의 코멘트 항목(replyItems)마다 `## <항목 id>` 절이 하나씩 있고, 모르는 id가
+ * 없고, 답글 본문이 비어 있지 않다. 코멘트 항목이 있는데 파일이 없으면 오류다. 이 오류는 [오류 무시하고 승인]으로 넘길 수
+ * 없다 (D204, core/approval)
+ */
+export function checkReplies(
+  text: string | undefined,
+  replyItems: readonly string[],
+): FormatIssue[] {
+  const file = REPLIES_FILE
+  if (text === undefined) {
+    return replyItems.length
+      ? [
+          {
+            file,
+            part: 'file',
+            message: `\`${file}\` 없음: 이번 라운드의 코멘트 항목(${replyItems.join(', ')})마다 답글이 필요함`,
+          },
+        ]
+      : []
+  }
+  const sections = replySections(text)
+  const errors: FormatIssue[] = []
+  for (const id of replyItems) {
+    const found = sections.filter((s) => s.id === id)
+    if (found.length === 0) {
+      errors.push({
+        file,
+        part: 'body',
+        field: id,
+        message: `\`## ${id}\` 절 없음: 이번 라운드의 코멘트 항목`,
+      })
+    } else if (found.length > 1) {
+      errors.push({
+        file,
+        part: 'body',
+        field: id,
+        message: `\`## ${id}\` 절이 ${found.length}개임: 항목마다 하나`,
+      })
+    }
+  }
+  const seen = new Set<string>()
+  for (const s of sections) {
+    if (!replyItems.includes(s.id)) {
+      if (!seen.has(s.id)) {
+        errors.push({
+          file,
+          part: 'body',
+          field: s.id,
+          message: `\`## ${s.id}\`: 이번 라운드의 코멘트 항목이 아님 (항목: ${replyItems.join(', ') || '없음'})`,
+        })
+      }
+    } else if (!s.body.trim() && !seen.has(s.id)) {
+      errors.push({ file, part: 'body', field: s.id, message: `\`## ${s.id}\`의 답글이 비어 있음` })
+    }
+    seen.add(s.id)
+  }
+  return errors
+}
+
 // ---------- task 검사 ----------
 
 export interface TaskCheckInput {
-  node: NodeName
+  node: TaskNode
   /** 승인된 intent의 크기. intake는 intent 초안의 크기를 쓴다 */
   size?: Size
   /** task 디렉터리 바로 아래의 .md 파일. 이름 → 내용 */
@@ -564,6 +649,8 @@ export interface TaskCheckInput {
   config: Pick<AppConfig, 'handoff_body_warn_chars' | 'intent_warn_chars'>
   /** 형식 버전 (5.2.1). 기본은 FORMAT_VERSION */
   formatVersion?: number
+  /** PR 대응 task: 이번 라운드의 코멘트 항목 id. replies.md를 검사한다 (D190) */
+  replyItems?: readonly string[]
 }
 
 export interface TaskCheck extends CheckSummary {
@@ -624,6 +711,13 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
   errors.push(...(draft?.errors ?? []))
   const prText = node === 'verify' ? files[PR_FILE] : undefined
   if (prText !== undefined) errors.push(...checkPr(prText))
+  if (node === 'respond') {
+    // 파일이 있으면 늘 검사하고, 없으면 마무리할 때(awaiting_approval) 필수다 (D30, D190)
+    const replies = files[REPLIES_FILE]
+    if (replies !== undefined || handoff?.status === 'awaiting_approval') {
+      errors.push(...checkReplies(replies, input.replyItems ?? []))
+    }
+  }
 
   return {
     handoff_present: handoffText !== undefined,

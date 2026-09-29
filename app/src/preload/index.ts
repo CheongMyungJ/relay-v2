@@ -48,6 +48,8 @@ const api: RelayApi = {
   prMerge: (workKey, input) => ipcRenderer.invoke(IPC.prMerge, workKey, input),
   prEnd: (workKey) => ipcRenderer.invoke(IPC.prEnd, workKey),
   prCleanOffered: (workKey) => ipcRenderer.invoke(IPC.prCleanOffered, workKey),
+  prRespond: (workKey, input) => ipcRenderer.invoke(IPC.prRespond, workKey, input),
+  prRerun: (workKey) => ipcRenderer.invoke(IPC.prRerun, workKey),
   updateProjectSettings: (projectId, settings) =>
     ipcRenderer.invoke(IPC.projectSettings, projectId, settings),
   updateWorkSettings: (workKey, settings) =>

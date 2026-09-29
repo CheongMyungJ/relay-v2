@@ -28,6 +28,8 @@ export interface RunOptions {
   cwd?: string
   env?: NodeJS.ProcessEnv
   timeoutMs?: number
+  /** 표준 입력에 쓸 내용. 주면 다 쓴 뒤 닫는다 (gh api --input -) */
+  input?: string
 }
 
 const MAX_BUFFER = 64 * 1024 * 1024
@@ -41,7 +43,7 @@ export function run(
   const spec = spawnSpec(bin, [...args])
   const timeout = opts.timeoutMs ?? 60_000
   return new Promise((resolve) => {
-    execFile(
+    const child = execFile(
       spec.file,
       spec.args,
       {
@@ -63,6 +65,11 @@ export function run(
         }
       },
     )
+    if (opts.input !== undefined) {
+      // 받는 쪽이 먼저 끝나 파이프가 닫히면(EPIPE) 오류를 내지 않는다: 결과는 종료 코드로 본다
+      child.stdin?.on('error', () => {})
+      child.stdin?.end(opts.input, 'utf8')
+    }
   })
 }
 

@@ -621,8 +621,10 @@ const PR: NonNullable<WorkState['pr']> = {
   started_at: 'T',
 }
 
-function prWork(o: Partial<WorkState> = {}): Pick<WorkState, 'status' | 'operation' | 'pr'> {
-  return { status: 'pr', pr: PR, ...o }
+function prWork(
+  o: Partial<WorkState> = {},
+): Pick<WorkState, 'status' | 'operation' | 'pr' | 'tasks'> {
+  return { status: 'pr', pr: PR, tasks: [], ...o }
 }
 
 function readState(o: Partial<PrReadState> = {}): PrReadState {
@@ -804,7 +806,7 @@ describe('PR 패널 (D183)', () => {
     const v = prView({
       work: prWork(),
       read: readState(),
-      file: { schema_version: 1, items: ex.items, synced: [] },
+      file: { schema_version: 1, items: ex.items, synced: [], rounds: [] },
       rules,
       localHead: H1,
       reading: false,
@@ -850,7 +852,7 @@ describe('PR 패널 (D183)', () => {
     const input = {
       work: merged,
       read: readState(),
-      file: { schema_version: 1 as const, items: [], synced: [] },
+      file: { schema_version: 1 as const, items: [], synced: [], rounds: [] },
       rules,
       localHead: H1,
       reading: false,
@@ -874,6 +876,6 @@ describe('PR 패널 (D183)', () => {
         },
       })?.offerClean,
     ).toBe(false)
-    expect(prView({ ...input, work: { status: 'active' } })).toBeNull()
+    expect(prView({ ...input, work: { status: 'active', tasks: [] } })).toBeNull()
   })
 })

@@ -1,9 +1,19 @@
 // 앱 설정 config.json (5.1.1)과 Work별 덮어쓰기 (D72).
 // 파일에 쓰는 모양이라 키는 snake_case다.
 
-/** relay 스킬 (5.6). 질문 방식을 스킬마다 고른다 (D26). investigate는 evidence와 root-cause를 합친 스킬이다 (D148) */
+/**
+ * relay 스킬 (5.6). 질문 방식을 스킬마다 고른다 (D26). investigate는 evidence와 root-cause를 합친 스킬이다 (D148).
+ * pr-respond는 파이프라인 밖의 PR 대응 task다 (D168, D187)
+ */
 export type SkillName =
-  'work-start' | 'investigate' | 'evidence' | 'root-cause' | 'fix' | 'review' | 'final-verify'
+  | 'work-start'
+  | 'investigate'
+  | 'evidence'
+  | 'root-cause'
+  | 'fix'
+  | 'review'
+  | 'final-verify'
+  | 'pr-respond'
 
 /** 질문 방식 (5.6.1). 초안 우선 / 결정마다 확인 */
 export type QuestionMode = 'draft_first' | 'confirm_each'
@@ -31,6 +41,8 @@ export interface AppConfig {
   format_error_bounce_max: number
   /** PR 진행인 Work를 읽는 주기 (D158) */
   pr_poll_interval_sec: number
+  /** 앱이 게시하는 답글 끝에 붙이는 표시 (D173) */
+  reply_signature: string
 }
 
 /** work.json의 settings. 앱 설정과 같은 키를 쓰고, 없는 키는 앱 설정을 따른다 (D72) */
@@ -51,6 +63,7 @@ export const SKILL_TITLES: readonly (readonly [SkillName, string])[] = [
   ['fix', '수정'],
   ['review', '리뷰'],
   ['final-verify', '최종 검증'],
+  ['pr-respond', 'PR 대응'],
 ]
 
 /**
@@ -84,10 +97,12 @@ export const DEFAULT_CONFIG: AppConfig = {
     fix: 'draft_first',
     review: 'draft_first',
     'final-verify': 'draft_first',
+    'pr-respond': 'draft_first',
   },
   pr_draft: false,
   handoff_body_warn_chars: 1500,
   intent_warn_chars: 1500,
   format_error_bounce_max: 2,
   pr_poll_interval_sec: 120,
+  reply_signature: '— relay(AI)가 작성함',
 }

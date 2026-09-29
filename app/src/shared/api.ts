@@ -19,6 +19,7 @@ import type {
   PrItemAction,
   ProjectInspection,
   ProjectView,
+  RespondStartInput,
   ReviewView,
   SelectStepInput,
   StepPreviewResult,
@@ -112,6 +113,10 @@ export interface RelayApi {
   prEnd(workKey: string): Promise<CommandResult>
   /** 머지 뒤 정리 창을 열었다 (D178, D200). 다시 열지 않는다 */
   prCleanOffered(workKey: string): Promise<CommandResult>
+  /** PR 패널의 [대응 시작] (시나리오 10-3, D170, D182). 사람이 본 새 항목과 사람 지시를 보낸다 */
+  prRespond(workKey: string, input: RespondStartInput): Promise<CommandResult>
+  /** PR 패널의 [실패한 체크 다시 실행] (D175, D203) */
+  prRerun(workKey: string): Promise<CommandResult>
   /** 프로젝트 설정 (5.1.2, D185): 받을 봇과 기본 머지 방식 */
   updateProjectSettings(projectId: string, settings: ProjectSettings): Promise<CommandResult>
   /** Work별 자동 승인과 질문 방식 (D72). 준 키만 바꾸고, 빈 값이면 앱 설정을 따른다 */
@@ -168,6 +173,8 @@ export const IPC = {
   prMerge: 'pr:merge',
   prEnd: 'pr:end',
   prCleanOffered: 'pr:clean-offered',
+  prRespond: 'pr:respond',
+  prRerun: 'pr:rerun',
   projectSettings: 'project:settings',
   workSettings: 'work:settings',
   config: 'config:get',

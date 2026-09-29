@@ -1,6 +1,6 @@
 // 렌더러로 보내는 스냅샷과 조회 결과 (I14). main이 core로 계산하고, 화면은 받은 것을 그리기만 한다.
 import type { WorkSettings } from './config'
-import type { Decision, HandoffStatus, NodeName, Size } from './contracts'
+import type { Decision, HandoffStatus, NodeName, Size, TaskNode } from './contracts'
 import type { PrItemKind, PrItemStatus } from './pr'
 import type {
   ApprovedIntent,
@@ -26,10 +26,12 @@ export interface ApprovalGate {
 }
 
 export type EmphasisKind =
+  | 'respond_failed'
   | 'blocked'
   | 'intent_deviation'
   | 'open_questions'
   | 'recommended_back'
+  | 'existing_tests'
   | 'uncommitted'
   | 'format_errors'
 
@@ -256,6 +258,21 @@ export interface PrView {
   offerClean: boolean
   /** PR 진행을 시작할 때의 gh 버전 (D198) */
   ghVersion: string | null
+  /** [대응 시작] (시나리오 10-3, D170, D182): 누를 수 있는지와 까닭, 누르면 넣을 새 항목 */
+  respond: { enabled: boolean; reason: string | null; items: string[] }
+  /**
+   * [실패한 체크 다시 실행] (D175, D203): 지금 head에서 실패한 Actions 체크의 실행. 없으면 null이고 버튼을 보이지 않는다.
+   * others는 Actions 밖의 실패한 체크다(사람이 한다)
+   */
+  rerun: {
+    enabled: boolean
+    reason: string | null
+    runs: number[]
+    checks: string[]
+    others: string[]
+  } | null
+  /** 대응 라운드 기록 (화면 구성의 PR 패널): 라운드마다 task, 항목, push한 커밋, 게시한 답글 */
+  rounds: RoundView[]
   /** PR 요약의 글: 상태, CI, 리뷰, 충돌, 로컬 Work 브랜치와의 비교. 아직 읽지 못한 것은 null */
   labels: {
     state: string | null
@@ -266,6 +283,28 @@ export interface PrView {
   }
 }
 
+/** 대응 라운드 하나 (화면 구성의 PR 패널, D193, D194, D205) */
+export interface RoundView {
+  round: number
+  taskId: string
+  /** "07 PR 대응" */
+  label: string
+  /** 도는 중(대응 task가 끝나지 않음), 실패(push나 게시), push를 미룸(D193), 게시함 */
+  state: 'running' | 'failed' | 'deferred' | 'published'
+  /** 도는 중이면 task 상태, 아니면 상태의 설명 */
+  stateLabel: string
+  items: { id: string; kindLabel: string; title: string }[]
+  instruction: string | null
+  /** push한 때와 커밋(새것이 먼저). 없으면 null */
+  pushed: { at: string; commits: string[] } | null
+  /** push를 미룬 이 라운드를 함께 push한 뒤 라운드의 task (D193) */
+  pushedWith: string | null
+  /** 게시했거나 게시할 답글. url은 게시한 코멘트, skipped는 건너뛴 까닭이다 (D205) */
+  replies: { item: string; url: string | null; skipped: string | null }[]
+  publishedAt: string | null
+  failure: { stage: string; error: string } | null
+}
+
 /** 머지 창 (D176, D177): 레포가 허용하는 방식, 기본 선택, 머지할 head */
 export interface MergeInfo {
   head: string
@@ -273,6 +312,13 @@ export interface MergeInfo {
   /** 기본 선택: 프로젝트 설정이 허용되면 그것, 아니면 허용하는 첫 방식(merge, squash, rebase 차례) */
   preferred: MergeMethod | null
   gate: { enabled: boolean; reasons: string[] }
+  /**
+   * "판정표는 대응 전 코드 기준" 경고 (D180, D206): 커밋을 push한 대응 라운드 수와 fast-forward로 받은 원격 커밋 수.
+   * 머지할 head가 verify가 본 코드면 null이다
+   */
+  stale: { rounds: number; synced: number } | null
+  /** 경고와 함께 보일 verify의 판정표 (시나리오 7-3) */
+  verdicts: Verdict[]
 }
 
 export type MergeInfoResult = { ok: true; info: MergeInfo } | { ok: false; error: string }
@@ -285,6 +331,15 @@ export interface MergeInput {
 
 /** PR 패널의 항목 조작: [제외], [다시 넣기], [받기] (D160, D161, D170, D189) */
 export type PrItemAction = 'exclude' | 'include' | 'accept'
+
+/**
+ * PR 패널의 [대응 시작] (시나리오 10-3, D170, D182). items는 사람이 본 새 항목이다: 그사이 바뀌었으면 받지 않는다.
+ * instruction은 사람 지시이고 비어 있어도 된다(항목이 있을 때)
+ */
+export interface RespondStartInput {
+  items: string[]
+  instruction: string
+}
 
 // ---------- 사이드바 배지 (core/approval, D80) ----------
 
@@ -333,7 +388,7 @@ export interface TaskView {
   id: string
   /** 이 task 터미널의 키 */
   terminal: string
-  node: NodeName
+  node: TaskNode
   /** "03 원인 분석" (D109) */
   label: string
   /** 탭 위 머리 띠 (시나리오 2-5) */
@@ -414,7 +469,7 @@ export interface WorkView {
 
 /** 끊긴 작업의 알림 (시나리오 9-4, D121~D123): 무엇이 어디서 끊겼는지와 [다시 시도]·[무시]가 할 일 */
 export interface OperationView {
-  kind: 'rewind' | 'deliver' | 'clean' | 'merge'
+  kind: 'rewind' | 'deliver' | 'clean' | 'merge' | 'respond'
   title: string
   lines: string[]
   /** [다시 시도]가 할 일 */
@@ -558,7 +613,7 @@ export interface Artifact {
 export interface ReviewView {
   workKey: string
   taskId: string
-  node: NodeName
+  node: TaskNode
   label: string
   taskStatus: TaskStatus
   /** 에이전트가 턴을 끝낸 뒤라 승인 화면을 보일 상태다 (승인 대기, 대기, 세션 종료. D112) */
@@ -588,6 +643,35 @@ export interface ReviewView {
   autoApprove: { on: boolean; hold: string | null }
   /** verify: Work 완료 화면 (시나리오 7-3, D119, D120) */
   completion: Completion | null
+  /** PR 대응 task의 승인 화면 (D172, D207). 대응 task가 아니면 null */
+  respond: RespondReview | null
+}
+
+/**
+ * PR 대응 task의 승인 화면 (화면 구성의 승인 화면, D172, D180, D202, D207): 이번 라운드의 항목과 사람 지시, 항목별 결과,
+ * 게시될 모양의 답글, 함께 게시할 미룬 앞 라운드, 승인 뒤 실패한 push나 게시. 기존 테스트 변경은 강조 영역에 있다
+ */
+export interface RespondReview {
+  round: number
+  instruction: string | null
+  items: { id: string; kindLabel: string; title: string }[]
+  /** response.md의 `## 항목별 결과`. 없으면 null */
+  results: string | null
+  /**
+   * 게시될 모양의 답글 (D207): 어디에 달리는지와 본문(원래 코멘트 링크, 초안, 표시 문구. 보이지 않는 표시는 뺌). 이미
+   * 게시했으면 url, 건너뛰었으면 그 까닭이다 (D194, D205)
+   */
+  replies: {
+    item: string
+    where: string
+    body: string
+    url: string | null
+    skipped: string | null
+  }[]
+  /** 함께 push하고 답글을 게시할, push를 미룬 앞 라운드 (D193) */
+  deferred: string[]
+  /** 승인 뒤 실패한 push나 게시. 있으면 [승인]은 [다시 시도]다 */
+  failure: { stage: string; error: string } | null
 }
 
 /** Work 완료 화면: 판정표, 전체 Work의 변경(기준 커밋 → 작업 트리), 전달 선택 (시나리오 7-3) */

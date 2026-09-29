@@ -1,9 +1,10 @@
 // 버그 수정 파이프라인: 노드 순서, 크기별 경로, 선택 가능한 다음 단계 (3.1, 3.2, 3.4).
+// PR 대응 task(노드 respond)는 파이프라인 밖이다 (D187, D188): 순서, 경로, 단계 선택에 없고 선택 가능한 다음 단계가 없다.
 import type { SkillName } from '../shared/config'
-import type { NodeName, Size } from '../shared/contracts'
+import type { NodeName, Size, TaskNode } from '../shared/contracts'
 
 export interface NodeInfo {
-  node: NodeName
+  node: TaskNode
   skill: SkillName
   /** 화면 이름 (D109) */
   title: string
@@ -26,7 +27,15 @@ export const NODES: readonly NodeName[] = [
   'verify',
 ]
 
-export const NODE_INFO: Readonly<Record<NodeName, NodeInfo>> = {
+/** PR 대응 task의 노드 (D187). 파이프라인 밖이다 (D188) */
+export const RESPOND = 'respond' as const
+
+/** 파이프라인 노드인가. PR 대응(respond)은 아니다 (D188) */
+export function isPipelineNode(node: TaskNode): node is NodeName {
+  return node !== RESPOND
+}
+
+export const NODE_INFO: Readonly<Record<TaskNode, NodeInfo>> = {
   intake: {
     node: 'intake',
     skill: 'work-start',
@@ -54,6 +63,8 @@ export const NODE_INFO: Readonly<Record<NodeName, NodeInfo>> = {
     title: '최종 검증',
     artifacts: ['verification.md', 'pr.md'],
   },
+  // replies.md는 이번 라운드에 코멘트 항목이 있을 때만 필수다 (5.2, D190). core/validate가 본다
+  respond: { node: 'respond', skill: 'pr-respond', title: 'PR 대응', artifacts: ['response.md'] },
 }
 
 /** verify의 기본 다음 단계 (3.2) */
@@ -114,13 +125,17 @@ export function selectableNext(node: NodeName, size: Size): SelectableNext {
   return { defaultNext: defaultNext(node, size), previous: previousSteps(node, size) }
 }
 
-/** recommended_next.node로 쓸 수 있는 노드: 이전 단계와, 노드라면 기본 다음 단계 */
-export function recommendableNodes(node: NodeName, size: Size): NodeName[] {
+/**
+ * recommended_next.node로 쓸 수 있는 노드: 이전 단계와, 노드라면 기본 다음 단계. PR 대응 task는 선택 가능한 다음 단계가
+ * 없어 null만 쓴다 (3.2, D188)
+ */
+export function recommendableNodes(node: TaskNode, size: Size): NodeName[] {
+  if (!isPipelineNode(node)) return []
   const { defaultNext: next, previous } = selectableNext(node, size)
   return next === WORK_COMPLETE ? previous : [...previous, next]
 }
 
-/** to가 from보다 앞 단계인가. 에이전트가 이전 단계를 추천하면 앱은 멈춘다 (D23) */
-export function isPrevious(from: NodeName, to: NodeName): boolean {
-  return NODES.indexOf(to) < NODES.indexOf(from)
+/** to가 from보다 앞 단계인가. 에이전트가 이전 단계를 추천하면 앱은 멈춘다 (D23). PR 대응 task에는 앞 단계가 없다 */
+export function isPrevious(from: TaskNode, to: NodeName): boolean {
+  return isPipelineNode(from) && NODES.indexOf(to) < NODES.indexOf(from)
 }

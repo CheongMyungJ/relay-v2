@@ -26,6 +26,13 @@ export type Step =
   | { do: 'print'; text: string }
   | { do: 'wait' }
   | { do: 'waitEnter' }
+  /**
+   * PR 대응 (5.6.11): context.md의 이번 라운드 항목으로 response.md와, 코멘트 항목마다 replies.md의 절을 쓴다. skip의
+   * 항목은 답글을 뺀다. text와 result의 {id}는 항목 id다. 코멘트 항목이 없으면 always일 때만 replies.md를 쓴다
+   */
+  | { do: 'respond'; text?: string; result?: string; skip?: string[]; always?: boolean }
+  /** 앱이 fetch한 원격 PR 브랜치(remote)나 기준 브랜치(base)를 worktree에서 병합한다 (D181, D193) */
+  | { do: 'merge'; from: 'remote' | 'base' }
 
 export interface Scenario {
   /** 스킬 이름이나 task id → 단계 */

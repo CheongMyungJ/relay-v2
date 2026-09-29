@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { git, writeFiles } from './repo'
-import type { PrWorld } from './pr-scenario'
+import type { PrComment, PrWorld } from './pr-scenario'
 
 export interface FakePr {
   number: number
@@ -43,6 +43,10 @@ interface GithubFile {
   runs?: Record<string, { event: string }>
   methods?: { merge?: boolean; squash?: boolean; rebase?: boolean }
   next_id?: number
+  /** POST마다 앞에서 하나씩 꺼내 쓰는 결과: ok, error(게시하지 않고 502), posted(게시하고 502, D194) */
+  post_faults?: string[]
+  /** gh run rerun --failed로 다시 실행한 실행 (D203) */
+  reruns?: number[]
 }
 
 /** 코멘트를 다는 사람. REST의 user와 author_association (S7 관찰 3) */
@@ -247,6 +251,34 @@ export class FakeGitHub {
       const s = this.state(g, n)
       s[kind] = ((s[kind] ?? []) as Record<string, unknown>[]).filter((x) => x['id'] !== id)
     })
+  }
+
+  /** POST(답글, 대화 코멘트)의 결과를 차례로 정한다: ok, error(게시하지 않고 502), posted(게시하고 502, D194) */
+  postFaults(faults: ('ok' | 'error' | 'posted')[]): void {
+    this.update((g) => {
+      g.post_faults = [...faults]
+    })
+  }
+
+  /** PR의 인라인 코멘트와 대화 코멘트 (앱이 게시한 답글도 있다) */
+  comments(n: number): PrComment[] {
+    const s = this.read().prs[String(n)] ?? {}
+    const pick = (kind: 'inline' | 'convo', list: object[] | undefined) =>
+      (list ?? []).map((raw) => {
+        const c = raw as Record<string, unknown>
+        return {
+          kind,
+          id: Number(c['id']),
+          body: String(c['body'] ?? ''),
+          reply_to: typeof c['in_reply_to_id'] === 'number' ? c['in_reply_to_id'] : null,
+        }
+      })
+    return [...pick('inline', s.inline), ...pick('convo', s.convo)]
+  }
+
+  /** gh run rerun --failed로 다시 실행한 실행 (D203) */
+  reruns(): number[] {
+    return this.read().reruns ?? []
   }
 
   // ---------- 체크와 로그 (S7 관찰 2) ----------
@@ -540,6 +572,14 @@ export class FakeWorld implements PrWorld {
 
   async branchTip(branch: string): Promise<string | null> {
     return this.gh.headOf(branch)
+  }
+
+  async comments(pr: number): Promise<PrComment[]> {
+    return this.gh.comments(pr)
+  }
+
+  async rerunSeen(_pr: number, run: number): Promise<boolean> {
+    return this.gh.reruns().includes(run)
   }
 
   /** 열린 PR의 mergeable을 다시 계산한다 */

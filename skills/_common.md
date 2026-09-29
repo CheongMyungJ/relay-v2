@@ -84,5 +84,6 @@ The app checks the format when your turn ends. You do not run a validator. It ch
 - The handoff body has `## 요약` and `## 다음 task가 알아야 할 것`.
 - The body of `intent.draft.md` has `목표`, `비목표`, `원하는 결과`, `완료조건`, and each 완료조건 line starts with `- [ ] `.
 - The first line of `pr.md` starts with `# `.
+- `replies.md` has one `## <item id>` section with a non-empty reply for each comment item of the round, and no other ids.
 
 If the app sends back a format error: fix the file it names and fill in missing artifacts or sections. Do not change your judgments (decisions, cause, verdicts). Then do steps 3 and 4 again.

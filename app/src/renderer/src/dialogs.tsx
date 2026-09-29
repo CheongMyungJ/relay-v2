@@ -518,6 +518,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         intent_warn_chars: value.intent_warn_chars,
         pr_draft: value.pr_draft,
         pr_poll_interval_sec: value.pr_poll_interval_sec,
+        reply_signature: value.reply_signature,
       }),
     )
     setBusy(false)
@@ -554,6 +555,18 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 aria-label="draft PR로 만들기"
                 checked={value.pr_draft}
                 onChange={(e) => setDraft({ ...value, pr_draft: e.target.checked })}
+              />
+            </label>
+            <label
+              className="form-row"
+              title="앱이 게시하는 PR 답글 끝에 붙이는 표시. 답글이 내 계정으로 올라가므로 AI가 썼다고 알린다 (D173)"
+            >
+              <span>답글 표시 문구</span>
+              <input
+                type="text"
+                aria-label="답글 표시 문구"
+                value={value.reply_signature}
+                onChange={(e) => setDraft({ ...value, reply_signature: e.target.value })}
               />
             </label>
           </div>

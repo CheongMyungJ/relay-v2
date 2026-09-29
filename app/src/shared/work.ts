@@ -1,7 +1,7 @@
 // work.json의 모양 (5.1). 상태의 기준이고, main이 전이마다 원자적으로 쓴다 (I11).
 // core/machine만 이 값을 바꾼다. 파일에 쓰는 모양이라 키는 snake_case다.
 import type { WorkSettings } from './config'
-import type { HandoffStatus, NodeName, Size } from './contracts'
+import type { HandoffStatus, NodeName, Size, TaskNode } from './contracts'
 
 /**
  * Work 상태 (3.3): 진행 중(active), 멈춤(stopped), PR 진행(pr: [PR 생성] 뒤 머지나 [머지 없이 끝내기]까지, D152),
@@ -34,12 +34,13 @@ export type TaskStatus =
   | 'discarded'
 
 /**
- * task를 시작한 이유 (시나리오 2-5의 머리 띠): 기본 진행, 되감기, 건너뛰기, 재개.
+ * task를 시작한 이유 (시나리오 2-5의 머리 띠): 기본 진행, 되감기, 건너뛰기, 재개, 대응 시작.
  * 재개는 handoff 없이 끝난 세션을 [이 단계 새 세션으로 다시] 한 새 task다 (D114).
  * 되감기와 건너뛰기는 단계 선택(6.2)으로 들어온 task다. 단계 선택에서 기본 다음 단계를 골라
- * 건너뛴 단계도 폐기한 task도 없으면 기본 진행이다.
+ * 건너뛴 단계도 폐기한 task도 없으면 기본 진행이다. 대응 시작은 PR 패널의 [대응 시작]으로 시작한 PR 대응 task다
+ * (시나리오 10-3). 자동 대응(M11)은 아직 없다
  */
-export type StartReason = 'default' | 'rewind' | 'skip' | 'resume'
+export type StartReason = 'default' | 'rewind' | 'skip' | 'resume' | 'respond'
 
 /** 단계 선택(6.2)으로 들어온 task의 입력과 코드. context.md의 맨 위에 넣는다 (시나리오 2-4) */
 export interface StepSelection {
@@ -130,6 +131,31 @@ export interface AutoHold {
   reasons: AutoHoldReason[]
 }
 
+/** PR 대응의 push와 답글 게시에서 실패한 단계 (D77): push, 답글 게시(reply) */
+export type RespondStage = 'push' | 'reply'
+
+/**
+ * PR 대응 task의 라운드 (시나리오 10-3~10-6, D170, D189, D193). [대응 시작] 때 적고, 승인 뒤 push와 답글 게시의 결과를
+ * 적는다. 게시한 답글의 본문과 코멘트 id는 pr-items.json의 라운드 기록에 둔다 (D191, D194)
+ */
+export interface RespondRound {
+  /** 라운드: 이 Work의 PR 대응 task 차례. 1부터다. 답글의 보이지 않는 표시에 넣는다 (D194) */
+  round: number
+  /** 이번 라운드의 항목 id. [대응 시작]을 누른 때 사람이 본 새 항목이다 (D170) */
+  items: string[]
+  /** 사람 지시. 없으면 null (D182) */
+  instruction: string | null
+  /**
+   * 승인했지만 원격 PR 브랜치의 새 커밋 때문에 push가 거절돼 push와 답글 게시를 미뤘다 (D193). 다음 라운드가 원격을
+   * 병합한 뒤 함께 push하고 이 라운드의 답글도 게시한다
+   */
+  deferred_at?: string
+  /** push와 답글 게시를 마친 때. 이 라운드의 항목은 처리됨이다 (D189) */
+  published_at?: string
+  /** 마지막으로 실패한 push나 답글 게시 (D120과 같은 방식). 승인 대기로 남고 다시 승인하면 이어서 한다 */
+  failure?: { at: string; stage: RespondStage; error: string }
+}
+
 /** task의 CLI 세션 (시나리오 2-5). task를 띄우면 main이 알린다 */
 export interface TaskSession {
   /** --session-id로 준 uuid */
@@ -149,7 +175,7 @@ export interface TaskRecord {
   id: string
   /** task 디렉터리 tasks/<nn>-<node>의 nn */
   seq: number
-  node: NodeName
+  node: TaskNode
   status: TaskStatus
   reason: StartReason
   /** handoff를 검사할 형식 버전 (5.2.1) */
@@ -192,6 +218,8 @@ export interface TaskRecord {
   /** 폐기한 때와, 폐기를 부른 단계 선택이 만든 task (6.2) */
   discarded_at?: string
   discarded_by?: string
+  /** PR 대응 task의 라운드 (시나리오 10). respond 노드에만 있다 */
+  respond?: RespondRound
 }
 
 /** 승인된 intent (5.3). intent.md 머리글의 version, size와 같다 */
@@ -322,8 +350,30 @@ export interface MergeOperation extends OperationBase {
   head: string
 }
 
-/** 진행 중인 여러 단계 작업 (D77): 되감기, 전달, 정리, 머지 */
-export type WorkOperation = RewindOperation | DeliverOperation | CleanOperation | MergeOperation
+/**
+ * PR 대응을 승인한 뒤의 push와 답글 게시 (시나리오 10-6, D77, D169, D194). 승인하면 적고, 결과(게시 마침, push를 미룸,
+ * 실패)를 남기는 work.json 한 번 쓰기에서 지운다. 재시작 때 남아 있으면 끊긴 작업이다: [다시 시도]는 push를 다시 하고
+ * (보낸 커밋은 다시 보내지 않음) 코멘트 id가 적힌 답글은 건너뛴다(D123, D194)
+ */
+export interface RespondOperation extends OperationBase {
+  kind: 'respond'
+  stage: RespondStage
+  /** 승인한 PR 대응 task */
+  task_id: string
+  /** push하고 답글을 게시할 라운드의 task. push를 미룬 앞 라운드(D193)가 먼저이고 승인한 task가 끝이다 */
+  rounds: string[]
+  /**
+   * 승인할 때 앱이 마지막으로 읽은 원격 PR head. push한 커밋은 여기서 닿지 않고 로컬 HEAD에서 닿는 커밋이다. 끊긴 push를
+   * 다시 해도 같은 커밋을 적는다
+   */
+  from: string
+  /** [오류 무시하고 승인]으로 넘긴 오류 (D112). 승인을 기록할 때 남긴다 */
+  ignored?: FormatIssue[]
+}
+
+/** 진행 중인 여러 단계 작업 (D77): 되감기, 전달, 정리, 머지, PR 대응의 push와 게시 */
+export type WorkOperation =
+  RewindOperation | DeliverOperation | CleanOperation | MergeOperation | RespondOperation
 
 /**
  * 전달 결과 (시나리오 7-4, 7-6). 마지막 [push]·[PR 생성]의 결과이고 실패해도 남는다 (D120).
@@ -475,6 +525,9 @@ export type LifecycleEventType =
   | 'delivery.failed'
   | 'pr.items_received'
   | 'pr.synced'
+  | 'pr.pushed'
+  | 'pr.replied'
+  | 'pr.checks_rerun'
   | 'pr.merged'
   | 'pr.closed'
   | 'pr.reopened'

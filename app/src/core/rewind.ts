@@ -4,7 +4,7 @@
 import type { NodeName } from '../shared/contracts'
 import type { DiscardView, StepChoice, StepExpect, StepKind, StepPreview } from '../shared/views'
 import type { StartReason, TaskRecord, WorkState } from '../shared/work'
-import { NODE_INFO, NODES, defaultNext, route, steps } from './pipeline'
+import { NODE_INFO, NODES, defaultNext, isPipelineNode, route, steps } from './pipeline'
 import { REASON_LABEL, taskLabel } from './review'
 
 export type { StepKind }
@@ -125,7 +125,11 @@ export function planStep(work: WorkState, node: NodeName, opts: StepOptions = {}
   if (why) return { ok: false, error: why }
   const from = lastTask(work)
   if (!from) return { ok: false, error: '지금 task가 없음' }
-  const kind = stepKind(from.node, node)
+  // PR 대응 task는 PR 진행 중에만 있어 canSelectStep이 이미 막는다 (D182, D188)
+  const fromNode = from.node
+  if (!isPipelineNode(fromNode))
+    return { ok: false, error: 'PR 대응 task에서는 단계를 고를 수 없음 (D182)' }
+  const kind = stepKind(fromNode, node)
   const done = from.status === 'approved'
   const keepCodeOffered = kind === 'rewind' && node === 'fix'
   if (opts.keepCode && !keepCodeOffered) {
@@ -141,7 +145,7 @@ export function planStep(work: WorkState, node: NodeName, opts: StepOptions = {}
 
   if (kind === 'rewind') {
     const discard = work.tasks.filter(
-      (t) => t.status !== 'discarded' && index(t.node) >= index(node),
+      (t) => t.status !== 'discarded' && isPipelineNode(t.node) && index(t.node) >= index(node),
     )
     const to = discard.find((t) => t.start_commit)?.start_commit
     const code: StepCode = opts.keepCode
@@ -170,11 +174,11 @@ export function planStep(work: WorkState, node: NodeName, opts: StepOptions = {}
   // 의도 승인 전에는 건너뛸 수 없다(notAllowed). 경로는 승인된 intent의 크기를 따른다 (3.4)
   const size = work.intent?.size
   const onRoute = size ? route(size) : [...NODES]
-  const skipped = onRoute.filter((n) => index(n) > index(from.node) && index(n) < index(node))
+  const skipped = onRoute.filter((n) => index(n) > index(fromNode) && index(n) < index(node))
   // 기본 진행은 끝난 k의 기본 다음 단계를 고른 경우뿐이다. 경로 밖 단계(S의 investigate)는 건너뛴 단계가 없어도
   // 건너뛰기다 (점검 A42)
   const isDefault =
-    skipped.length === 0 && discard.length === 0 && !!size && defaultNext(from.node, size) === node
+    skipped.length === 0 && discard.length === 0 && !!size && defaultNext(fromNode, size) === node
   return {
     ok: true,
     plan: {
@@ -202,6 +206,8 @@ const title = (node: NodeName) => `${NODE_INFO[node].title}(${node})`
  */
 export function stepChoices(work: WorkState): StepChoice[] {
   const from = lastTask(work)
+  // PR 대응 task(D188)가 지금 task면 파이프라인의 어느 단계보다 뒤로 본다: 고를 수는 없다 (canSelectStep, D182)
+  const fromNode = from ? (isPipelineNode(from.node) ? from.node : 'verify') : null
   const recommended = work.stop?.kind === 'recommended_back' ? work.stop.node : null
   const shown = work.intent ? steps(work.intent.size) : [...NODES]
   return shown.map((node) => {
@@ -209,7 +215,7 @@ export function stepChoices(work: WorkState): StepChoice[] {
     return {
       node,
       title: title(node),
-      kind: from ? stepKind(from.node, node) : 'rewind',
+      kind: fromNode ? stepKind(fromNode, node) : 'rewind',
       allowed: why === null,
       why,
       current: from?.node === node,

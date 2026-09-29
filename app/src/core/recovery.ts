@@ -9,6 +9,7 @@ import type {
   MergeOperation,
   OwnedFile,
   OwnedFileHashes,
+  RespondOperation,
   RewindOperation,
   WorkOperation,
   WorkState,
@@ -16,6 +17,7 @@ import type {
 import { DELIVERY_LABEL, DELIVERY_STAGE_LABEL, commitMessage, stashMessage } from './delivery'
 import { NODE_INFO } from './pipeline'
 import { localMinute } from './records'
+import { RESPOND_STAGE_LABEL } from './respond'
 import { taskLabel } from './review'
 import { backupMessage } from './rewind'
 
@@ -63,6 +65,29 @@ export function operationView(work: WorkState): OperationView | null {
       return cleanView(op)
     case 'merge':
       return mergeView(op)
+    case 'respond':
+      return respondView(work, op)
+  }
+}
+
+function respondView(work: WorkState, op: RespondOperation): OperationView {
+  const rounds = op.rounds.map((id) => {
+    const t = work.tasks.find((x) => x.id === id)
+    return t ? `${taskLabel(t)} (라운드 ${t.respond?.round ?? '?'})` : id
+  })
+  return {
+    kind: 'respond',
+    title: 'PR 대응의 push와 답글 게시가 끊겼습니다',
+    lines: [
+      `끊긴 곳: ${RESPOND_STAGE_LABEL[op.stage]}${op.stage === 'reply' ? ' (push는 끝남)' : ''}`,
+      `라운드: ${rounds.join(', ')}`,
+    ],
+    retry:
+      '[다시 시도]: 끊긴 곳부터 잇습니다. 이미 원격에 있는 커밋은 다시 보내지 않고, 코멘트 id를 적은 답글은 건너뜁니다. ' +
+      '게시 결과를 모르는 답글은 원격에서 보이지 않는 표시를 찾아 있으면 다시 게시하지 않습니다 (D194).',
+    ignore:
+      '[무시]: 기록만 지웁니다. PR 대응 task는 승인 대기로 남아 실패를 보이고, 승인 화면에서 [다시 시도]할 수 있습니다.',
+    choice: null,
   }
 }
 
