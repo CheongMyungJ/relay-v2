@@ -81,6 +81,11 @@ jobs:
         # Codex 질문창과 Electron Node 모드 브리지의 GUI 스모크에도 쓴다.
         run: npm ci --no-audit --no-fund
 
+      - name: Electron 실행 파일 준비
+        working-directory: app
+        # CI의 npm 설치 정책과 무관하게 새 브리지·GUI 검사의 실행 파일을 보장한다.
+        run: node node_modules/electron/install.js
+
       - name: 빌드
         working-directory: app
         # 파일 이름의 대소문자를 가리지 않는 Windows에서만 깨지는 import를 push마다 잡는다 (I39, A79)

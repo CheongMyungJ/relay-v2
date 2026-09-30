@@ -108,7 +108,7 @@ describe('Codex CLI 점검과 스킬·설정', () => {
     expect(args).toContain('--no-daemon')
     expect(args).not.toContain('--dangerously-bypass-hook-trust')
     expect(args).not.toContain('--session-id')
-    expect(args.at(-1)).toContain(deployed.file)
+    expect(args.at(-1)).toContain(JSON.stringify(deployed.file))
     expect(JSON.stringify(settings)).not.toContain('a-secret-token')
     expect(codexLaunchEnv('a-secret-token', 12345, 't-01')).toMatchObject({
       RELAY_HOOK_TOKEN: 'a-secret-token',
@@ -194,7 +194,7 @@ describe('실제 브리지와 MCP', () => {
     '../../node_modules/electron/dist',
     process.platform === 'win32' ? 'electron.exe' : 'electron',
   )
-  it.skipIf(!fs.existsSync(electron))(
+  it.skipIf(process.platform !== 'win32' && !fs.existsSync(electron))(
     'Electron Node 모드에서 별도 Node 설치 없이 MCP initialize를 처리한다',
     async () => {
       const client = mcp(electron, process.env)
