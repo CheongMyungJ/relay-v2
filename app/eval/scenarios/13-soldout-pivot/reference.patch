@@ -1,0 +1,59 @@
+diff --git a/src/search/sort.js b/src/search/sort.js
+index 1df1ece..3d5ac13 100644
+--- a/src/search/sort.js
++++ b/src/search/sort.js
+@@ -1,5 +1,7 @@
+ // 결과 정렬
+ 
++import { isSoldOut } from '../catalog/stock.js'
++
+ function byId(a, b) {
+   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+ }
+@@ -20,8 +22,11 @@ export function isSort(name) {
+ }
+ 
+ // 새 배열을 돌려준다(원본은 그대로)
++// 품절 상품은 정렬 방식과 관계없이 재고 있는 상품 뒤로 보낸다. 품절끼리, 재고 상품끼리는 정렬 순서를 지킨다.
++// 페이지를 나누기 전 전체 목록에서 해야 쪽을 넘겨도 품절이 앞 쪽에 섞이지 않는다.
+ export function sortHits(hits, sort = 'relevance') {
+   const compare = COMPARATORS[sort]
+   if (!compare) throw new RangeError(`모르는 정렬: ${sort} (가능: ${SORTS.join(', ')})`)
+-  return [...hits].sort(compare)
++  const sorted = [...hits].sort(compare)
++  return [...sorted.filter((h) => !isSoldOut(h.product)), ...sorted.filter((h) => isSoldOut(h.product))]
+ }
+diff --git a/test/engine.test.js b/test/engine.test.js
+index 8073651..abf678a 100644
+--- a/test/engine.test.js
++++ b/test/engine.test.js
+@@ -29,6 +29,11 @@ test('재고 있는 상품만', () => {
+   assert.ok(r.items.every((i) => !i.soldOut))
+ })
+ 
++test('품절은 쪽을 넘겨도 재고 상품 뒤에 온다', () => {
++  const all = [1, 2, 3].flatMap((page) => ids(engine.search('텀블러', { page, pageSize: 3 })))
++  assert.deepStrictEqual(all, ['tb-003', 'tb-004', 'tb-002', 'bt-002', 'bt-001', 'tb-005', 'tb-001'])
++})
++
+ test('페이지 나누기', () => {
+   const r = engine.search('', { page: 4, pageSize: 5 })
+   assert.deepStrictEqual([r.total, r.totalPages, r.items.length, r.hasPrev, r.hasNext], [19, 4, 4, true, false])
+diff --git a/test/sort.test.js b/test/sort.test.js
+index ce4de67..4355de5 100644
+--- a/test/sort.test.js
++++ b/test/sort.test.js
+@@ -22,6 +22,13 @@ test('가격, 최신, 인기', () => {
+   assert.deepStrictEqual(ids(sortHits(hits, 'popular')), ['b', 'd', 'c', 'a'])
+ })
+ 
++test('품절은 재고 상품 뒤로, 품절끼리는 정렬 순서대로', () => {
++  const soldOut = (id, score, price) => ({ id, score, product: { id, price, createdAt: '2026-01-01', popularity: 0, stock: 0 } })
++  const mixed = [...hits, soldOut('x', 9, 5000), soldOut('y', 4, 40000)]
++  assert.deepStrictEqual(ids(sortHits(mixed)), ['a', 'b', 'c', 'd', 'x', 'y'])
++  assert.deepStrictEqual(ids(sortHits(mixed, 'price_asc')), ['a', 'b', 'd', 'c', 'x', 'y'])
++})
++
+ test('원본 배열은 바꾸지 않는다', () => {
+   const before = ids(hits)
+   sortHits(hits, 'price_asc')
