@@ -588,6 +588,8 @@ textarea {
 .modal-back {
   position: fixed;
   inset: 0;
+  /* 고정 승인 버튼(.review-bottom)보다 위에서 배경 클릭도 막는다. */
+  z-index: 2;
   background: rgb(0 0 0 / 50%);
   display: grid;
   place-items: center;

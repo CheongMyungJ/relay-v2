@@ -122,7 +122,20 @@ test('엔진 설정에서 Codex를 골라 앱 질문창으로 답하고 다음 t
   })
   await expect(window.locator('.band')).toContainText('Codex')
   await expect(window.locator('.auto-hold')).toContainText('Codex 작업은 사람이 승인합니다.')
+  // 작은 화면에서도 고정 승인 버튼이 설정 대화상자의 클릭을 가로채지 않는다.
+  await (
+    await app.browserWindow(window)
+  ).evaluate((browserWindow) => browserWindow.setSize(1000, 700))
   await window.getByRole('button', { name: '설정', exact: true }).click()
+  await expect(window.getByRole('dialog', { name: '설정', exact: true })).toBeVisible()
+  await expect(
+    window.locator('.review-actions').evaluate((footer) => {
+      const rect = footer.getBoundingClientRect()
+      return !!footer.ownerDocument
+        .elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)
+        ?.closest('.modal-back')
+    }),
+  ).resolves.toBe(true)
   await window.getByLabel('기본 엔진').selectOption('claude')
   await window.getByRole('button', { name: '저장', exact: true }).click()
   await window.getByRole('button', { name: '의도 승인', exact: true }).click()
