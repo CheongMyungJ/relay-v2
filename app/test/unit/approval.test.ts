@@ -13,7 +13,6 @@ import {
   holdNeedsNotice,
   holdText,
   pendingBackground,
-  resolvedBySize,
 } from '../../src/core/approval'
 import { createWork } from '../../src/core/machine'
 import { checkTask } from '../../src/core/validate'
@@ -30,70 +29,70 @@ import type {
 
 const BODY: FormatIssue = { file: 'handoff.md', part: 'body', field: '요약', message: '요약 없음' }
 const HEADER: FormatIssue = { file: 'handoff.md', part: 'header', field: 'risks', message: '형식' }
-const ARTIFACT: FormatIssue = { file: 'rca.md', part: 'file', message: '`rca.md` 없음' }
-const SIZE: FormatIssue = {
+const ARTIFACT: FormatIssue = { file: 'fix.md', part: 'file', message: '`fix.md` 없음' }
+const DRAFT_TYPE: FormatIssue = {
   file: 'intent.draft.md',
   part: 'header',
-  field: 'size',
-  message: 'size',
+  field: 'type',
+  message: 'type',
 }
-const DRAFT_TYPE: FormatIssue = { ...SIZE, field: 'type', message: 'type' }
+const DRAFT_HEADER: FormatIssue = {
+  file: 'intent.draft.md',
+  part: 'header',
+  message: '머리글 없음',
+}
 const DRAFT_BODY: FormatIssue = { file: 'intent.draft.md', part: 'body', message: '비목표 없음' }
 
 function check(errors: FormatIssue[], status: CheckSummary['status'] = 'awaiting_approval') {
   return { handoff_present: true, status, errors, warnings: [] }
 }
 
-const gate = (node: NodeName, s: TaskStatus, c: CheckSummary, size?: 'S' | 'L' | 'L') =>
-  approvalGate({ node, status: s }, c, size)
+const gate = (node: NodeName, s: TaskStatus, c: CheckSummary) =>
+  approvalGate({ node, status: s }, c)
 
 describe('승인 버튼의 판정 (4.1, D90, D112)', () => {
   it('에이전트가 턴을 끝낸 뒤(승인 대기, 대기, 세션 종료)에만 누를 수 있다', () => {
     expect(REVIEWABLE).toEqual(['awaiting_approval', 'idle', 'session_ended'])
     for (const s of ['working', 'asking', 'input_needed', 'blocked', 'approved'] as const) {
-      expect(gate('rca', s, check([]))).toMatchObject({ approve: false, force: false })
-      expect(gate('rca', s, check([BODY]))).toMatchObject({ approve: false, force: false })
+      expect(gate('fix', s, check([]))).toMatchObject({ approve: false, force: false })
+      expect(gate('fix', s, check([BODY]))).toMatchObject({ approve: false, force: false })
     }
     for (const s of REVIEWABLE) {
-      expect(gate('rca', s, check([]))).toMatchObject({ approve: true, force: false })
-      expect(gate('rca', s, check([BODY]))).toMatchObject({ approve: false, force: true })
+      expect(gate('fix', s, check([]))).toMatchObject({ approve: true, force: false })
+      expect(gate('fix', s, check([BODY]))).toMatchObject({ approve: false, force: true })
     }
   })
 
   it('노드마다 넘길 수 있는 오류: intake의 intent 초안 머리글과 초안 없음만 막는다', () => {
     for (const e of [BODY, HEADER, ARTIFACT]) {
-      expect(gate('rca', 'idle', check([e])).force).toBe(true)
+      expect(gate('fix', 'idle', check([e])).force).toBe(true)
       expect(gate('intake', 'idle', check([e])).force).toBe(true)
     }
     expect(gate('intake', 'idle', check([DRAFT_BODY])).force).toBe(true)
     const noDraft: FormatIssue = { file: 'intent.draft.md', part: 'file', message: '없음' }
-    for (const e of [SIZE, DRAFT_TYPE, noDraft]) {
+    for (const e of [DRAFT_TYPE, DRAFT_HEADER, noDraft]) {
       const g = gate('intake', 'idle', check([e, BODY]))
       expect(g).toMatchObject({ approve: false, force: false, blocking: [e] })
     }
   })
 
-  it('size 오류는 intake에서 사람이 size를 고를 때만 풀린다', () => {
-    expect(resolvedBySize(SIZE)).toBe(true)
-    expect(resolvedBySize(DRAFT_TYPE)).toBe(false)
-    expect(gate('intake', 'idle', check([SIZE]), 'L')).toMatchObject({
-      approve: true,
-      errors: [],
-    })
-    expect(gate('intake', 'idle', check([SIZE, BODY]), 'L')).toMatchObject({
+  it('형식 오류는 노드와 상관없이 모두 남는다. verify의 산출물 오류도 넘길 수 있다', () => {
+    expect(gate('intake', 'idle', check([DRAFT_BODY, BODY])).errors).toEqual([DRAFT_BODY, BODY])
+    const pr: FormatIssue = { file: 'pr.md', part: 'file', message: '`pr.md` 없음' }
+    expect(gate('verify', 'idle', check([pr]))).toMatchObject({
       approve: false,
       force: true,
-      errors: [BODY],
+      errors: [pr],
+      blocking: [],
     })
-    expect(gate('rca', 'idle', check([SIZE]), 'L').errors).toEqual([SIZE])
   })
 
   it('handoff가 없거나 blocked면 승인하지 않는다. 머리글을 읽지 못한 handoff는 무시하고 승인할 수 있다', () => {
     const none = { handoff_present: false, status: null, errors: [], warnings: [] }
-    expect(gate('rca', 'idle', none)).toMatchObject({ approve: false, force: false })
-    expect(gate('rca', 'idle', check([BODY], 'blocked'))).toMatchObject({ force: false })
-    expect(gate('rca', 'awaiting_approval', check([], 'blocked')).approve).toBe(false)
-    expect(gate('rca', 'idle', check([HEADER], null))).toMatchObject({
+    expect(gate('fix', 'idle', none)).toMatchObject({ approve: false, force: false })
+    expect(gate('fix', 'idle', check([BODY], 'blocked'))).toMatchObject({ force: false })
+    expect(gate('fix', 'awaiting_approval', check([], 'blocked')).approve).toBe(false)
+    expect(gate('fix', 'idle', check([HEADER], null))).toMatchObject({
       approve: false,
       force: true,
     })
@@ -138,57 +137,52 @@ describe('자동 승인의 방식 (4.2, D72)', () => {
   const config: AppConfig = {
     ...DEFAULT_CONFIG,
     auto_approve: {
-      investigate: false,
-      evidence: true,
-      rca: true,
       fix: false,
-      review: false,
-      respond: false,
+      respond: true,
     },
   }
 
   it('Work 설정이 있으면 앱 설정보다 우선하고, 없는 단계는 앱 설정을 따른다', () => {
-    const settings = { auto_approve: { rca: false, fix: true } }
-    expect(approvalMode(config, settings, 'evidence')).toBe('auto')
-    expect(approvalMode(config, settings, 'rca')).toBe('manual')
+    const settings = { auto_approve: { respond: false, fix: true } }
+    expect(approvalMode(config, settings, 'respond')).toBe('manual')
     expect(approvalMode(config, settings, 'fix')).toBe('auto')
-    expect(approvalMode(config, { auto_approve: { review: true } }, 'review')).toBe('auto')
+    expect(approvalMode(config, { auto_approve: { fix: true } }, 'respond')).toBe('auto')
+    expect(approvalMode(config, {}, 'fix')).toBe('manual')
   })
 
   it('Codex는 Work에서 켜도 수동이며, 기본 엔진 변경은 기존 Claude 승인 방식에 영향을 주지 않는다', () => {
     const switched = { ...config, agent_engine: 'codex' as const }
-    for (const node of ['investigate', 'evidence', 'rca', 'fix', 'review', 'respond'] as const) {
+    for (const node of ['fix', 'respond'] as const) {
       const settings = { auto_approve: { [node]: true } }
       expect(approvalMode(config, settings, node, 'codex')).toBe('manual')
       expect(approvalMode(switched, settings, node, 'claude')).toBe('auto')
     }
   })
 
-  it('앱의 기본값은 수정과 리뷰만 자동 승인이다 (D213, D214)', () => {
+  it('앱의 기본값은 원인 분석과 수정만 자동 승인이다 (D214)', () => {
+    expect(DEFAULT_CONFIG.auto_approve).toEqual({ fix: true, respond: false })
     expect(approvalMode(DEFAULT_CONFIG, {}, 'fix')).toBe('auto')
-    expect(approvalMode(DEFAULT_CONFIG, {}, 'review')).toBe('auto')
-    for (const node of ['investigate', 'evidence', 'rca', 'respond'] as const) {
-      expect(approvalMode(DEFAULT_CONFIG, {}, node)).toBe('manual')
-    }
+    expect(approvalMode(DEFAULT_CONFIG, {}, 'respond')).toBe('manual')
   })
 
-  it('intake와 verify는 설정과 상관없이 늘 수동이다. 리뷰는 켤 수 있다 (4.2, D213)', () => {
+  it('intake와 verify는 설정과 상관없이 늘 수동이다. fix와 PR 대응은 켤 수 있다 (4.2, D169)', () => {
     for (const node of ['intake', 'verify'] as const) {
       expect(approvalMode(DEFAULT_CONFIG, {}, node)).toBe('manual')
       expect(autoApprovable(node)).toBe(false)
     }
-    expect(autoApprovable('review')).toBe(true)
+    expect(autoApprovable('fix')).toBe(true)
+    expect(autoApprovable('respond')).toBe(true)
   })
 })
 
 describe('자동 승인 조건 (4.3, D129)', () => {
   const holds = (c: CheckSummary & { handoffHeader?: Handoff | null }, background = false) =>
-    autoApproveHolds({ node: 'rca', size: 'L', check: c, background })
+    autoApproveHolds({ node: 'fix', check: c, background })
 
   it('조건을 모두 만족하면 어긴 것이 없다', () => {
     expect(holds(valid())).toEqual([])
-    // 기본 다음 단계(L 경로에서 rca 다음은 fix)를 추천해도 된다
-    expect(holds(valid({ recommended_next: { node: 'fix', reason: '기본' } }))).toEqual([])
+    // 기본 다음 단계(fix 다음은 verify)를 추천해도 된다
+    expect(holds(valid({ recommended_next: { node: 'verify', reason: '기본' } }))).toEqual([])
   })
 
   it('조건을 하나씩 어기면 자동 승인하지 않는다', () => {
@@ -216,7 +210,7 @@ describe('자동 승인 조건 (4.3, D129)', () => {
       ],
       [
         '이전 단계 추천 (D23)',
-        valid({ recommended_next: { node: 'evidence', reason: '재현 다시' } }),
+        valid({ recommended_next: { node: 'intake', reason: '의도 다시' } }),
         false,
         'recommended_next',
       ],
@@ -227,44 +221,24 @@ describe('자동 승인 조건 (4.3, D129)', () => {
     }
   })
 
-  it('fix의 기본 다음 단계는 모든 크기에서 review다. review를 건너뛰는 verify나 건너뛴 rca를 추천하면 자동 승인하지 않는다 (3.4, D66, D166)', () => {
-    for (const size of ['S', 'M', 'L'] as const) {
-      const fix = (h: Partial<Handoff>) =>
-        autoApproveHolds({ node: 'fix', size, check: valid(h), background: false })
-      expect(fix({ recommended_next: { node: 'review', reason: '기본' } }), size).toEqual([])
-      expect(fix({ recommended_next: { node: 'verify', reason: '리뷰 없이' } }), size).toEqual([
+  it('fix의 기본 다음 단계는 verify다. 자기 단계나 intake를 추천하면 자동 승인하지 않는다 (3.2)', () => {
+    const fix = (h: Partial<Handoff>) =>
+      autoApproveHolds({ node: 'fix', check: valid(h), background: false })
+    expect(fix({ recommended_next: { node: 'verify', reason: '기본' } })).toEqual([])
+    for (const node of ['intake', 'fix'] as const) {
+      expect(fix({ recommended_next: { node, reason: '다시' } }), node).toEqual([
         'recommended_next',
       ])
     }
-    const fixS = (h: Partial<Handoff>) =>
-      autoApproveHolds({ node: 'fix', size: 'S', check: valid(h), background: false })
-    expect(fixS({ recommended_next: { node: 'rca', reason: '원인이 다름' } })).toEqual([
-      'recommended_next',
-    ])
   })
 
-  it('리뷰는 review.md의 지적이 "없음"일 때만 자동 승인한다. 지적이 있거나 읽지 못하면 사람이 승인한다 (D213)', () => {
-    const review = (reviewFindings: boolean | null, h: Partial<Handoff> = {}) =>
-      autoApproveHolds({
-        node: 'review',
-        size: 'S',
-        check: { ...valid(h), reviewFindings },
-        background: false,
-      })
-    expect(review(false)).toEqual([])
-    expect(review(true)).toEqual(['review_findings'])
-    expect(review(null)).toEqual(['review_findings'])
-    // 다른 조건과 함께 적는다
-    expect(review(true, { open_questions: ['?'] })).toEqual(['open_questions', 'review_findings'])
-    // 리뷰가 아닌 단계는 지적 유무를 보지 않는다
-    expect(
-      autoApproveHolds({
-        node: 'fix',
-        size: 'S',
-        check: { ...valid(), reviewFindings: null },
-        background: false,
-      }),
-    ).toEqual([])
+  it('PR 대응은 선택 가능한 다음 단계가 없어 어떤 추천이든 자동 승인하지 않는다 (D188)', () => {
+    const respond = (h: Partial<Handoff>) =>
+      autoApproveHolds({ node: 'respond', check: valid(h), background: false })
+    expect(respond({})).toEqual([])
+    expect(respond({ recommended_next: { node: 'verify', reason: '다시' } })).toEqual([
+      'recommended_next',
+    ])
   })
 
   it('여럿을 어기면 모두 적는다', () => {
@@ -293,16 +267,12 @@ describe('자동 승인하지 않은 까닭 (D128~D131)', () => {
   const config: AppConfig = {
     ...DEFAULT_CONFIG,
     auto_approve: {
-      investigate: false,
-      evidence: false,
-      rca: true,
-      fix: false,
-      review: false,
+      fix: true,
       respond: false,
     },
   }
   const task = (patch: object = {}) => ({
-    node: 'rca' as const,
+    node: 'fix' as const,
     status: 'awaiting_approval' as const,
     ...patch,
   })
@@ -327,7 +297,7 @@ describe('자동 승인하지 않은 까닭 (D128~D131)', () => {
   it('카운트다운 중이거나, 꺼진 단계이거나, 승인 대기가 아니면 까닭을 보이지 않는다', () => {
     const counting = task({ countdown: { started_at: 'x', seconds: 15 } })
     expect(autoApproveNote({ settings: {} }, counting, config)).toEqual({ on: true, hold: null })
-    expect(autoApproveNote({ settings: { auto_approve: { rca: false } } }, task(), config)).toEqual(
+    expect(autoApproveNote({ settings: { auto_approve: { fix: false } } }, task(), config)).toEqual(
       {
         on: false,
         hold: null,
@@ -342,7 +312,7 @@ describe('자동 승인하지 않은 까닭 (D128~D131)', () => {
 
   it('Codex 승인 대기는 다음 턴의 자동 승인 약속 대신 수동 승인 정책을 보인다', () => {
     const codex = { ...task(), engine: 'codex' as const }
-    expect(autoApproveNote({ settings: { auto_approve: { rca: true } } }, codex, config)).toEqual({
+    expect(autoApproveNote({ settings: { auto_approve: { fix: true } } }, codex, config)).toEqual({
       on: false,
       hold: 'Codex 작업은 사람이 승인합니다. 자동 승인 설정은 Claude Code 작업에 적용됩니다.',
     })
@@ -369,15 +339,13 @@ describe('자동 승인하지 않은 까닭 (D128~D131)', () => {
       'completion_unknown',
       // 대응 task의 Stop 때 PR이 닫혀 있었다: 사람이 다시 열거나 끝내야 한다 (D179)
       'pr_closed',
-      // 리뷰에 지적이 있다: 사람이 반영할 지적을 고른다 (D213)
-      'review_findings',
     ] as const) {
       expect(holdNeedsNotice([r]), r).toBe(true)
     }
     expect(holdNeedsNotice(['cancel', 'session'])).toBe(true)
     expect(holdText(['pr_closed'])).toContain('PR이 닫혀 있음')
-    expect(holdText(['review_findings'])).toBe('리뷰에 지적이 있음 (반영할 지적은 사람이 고름)')
-    expect(Object.keys(AUTO_HOLD_LABEL)).toHaveLength(16)
+    expect(Object.keys(AUTO_HOLD_LABEL)).toHaveLength(15)
+    expect(AUTO_HOLD_LABEL).not.toHaveProperty('review_findings')
   })
 })
 

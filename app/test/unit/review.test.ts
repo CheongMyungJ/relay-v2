@@ -42,46 +42,46 @@ const HANDOFF: Handoff = {
 
 describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
   it('탭 이름은 순번과 화면 이름이다', () => {
-    expect(taskLabel({ seq: 3, node: 'rca' })).toBe('03 원인 분석')
+    expect(taskLabel({ seq: 2, node: 'fix' })).toBe('02 원인 분석과 수정')
     expect(taskLabel({ seq: 1, node: 'intake' })).toBe('01 의도 정리')
-    expect(taskLabel({ seq: 12, node: 'verify' })).toBe('12 최종 검증')
-    // 리뷰의 화면 이름 (D109, D187)
-    expect(taskLabel({ seq: 3, node: 'review' })).toBe('03 리뷰')
-    expect(bandText({ seq: 3, node: 'review', reason: 'default' })).toBe(
-      '03 리뷰 · 새 세션 · 이유: 기본 진행',
+    expect(taskLabel({ seq: 12, node: 'verify' })).toBe('12 리뷰와 검증')
+    // PR 대응의 화면 이름 (D109, D187)
+    expect(taskLabel({ seq: 4, node: 'respond' })).toBe('04 PR 대응')
+    expect(bandText({ seq: 3, node: 'verify', reason: 'default' })).toBe(
+      '03 리뷰와 검증 · 새 세션 · 이유: 기본 진행',
     )
   })
 
   it('머리 띠는 이름 · 새 세션 · 이유다', () => {
-    expect(bandText({ seq: 4, node: 'rca', reason: 'default' })).toBe(
-      '04 원인 분석 · 새 세션 · 이유: 기본 진행',
+    expect(bandText({ seq: 4, node: 'fix', reason: 'default' })).toBe(
+      '04 원인 분석과 수정 · 새 세션 · 이유: 기본 진행',
     )
     // [이 단계 새 세션으로 다시]로 만든 task (D114)
-    expect(bandText({ seq: 5, node: 'rca', reason: 'resume' })).toBe(
-      '05 원인 분석 · 새 세션 · 이유: 재개',
+    expect(bandText({ seq: 5, node: 'fix', reason: 'resume' })).toBe(
+      '05 원인 분석과 수정 · 새 세션 · 이유: 재개',
     )
     // 단계 선택으로 들어온 task (6.2)
     expect(bandText({ seq: 6, node: 'fix', reason: 'rewind' })).toBe(
-      '06 수정 · 새 세션 · 이유: 되감기',
+      '06 원인 분석과 수정 · 새 세션 · 이유: 되감기',
     )
     expect(bandText({ seq: 7, node: 'verify', reason: 'skip' })).toBe(
-      '07 최종 검증 · 새 세션 · 이유: 건너뛰기',
+      '07 리뷰와 검증 · 새 세션 · 이유: 건너뛰기',
     )
   })
 
   it('--resume으로 다시 연 세션은 세션 재개다 (시나리오 3-4)', () => {
     const session = { id: 's', pid: 1, started_at: 'x', alive: true }
-    expect(bandText({ seq: 4, node: 'rca', reason: 'default', session })).toBe(
-      '04 원인 분석 · 새 세션 · 이유: 기본 진행',
+    expect(bandText({ seq: 4, node: 'fix', reason: 'default', session })).toBe(
+      '04 원인 분석과 수정 · 새 세션 · 이유: 기본 진행',
     )
     expect(
       bandText({
         seq: 4,
-        node: 'rca',
+        node: 'fix',
         reason: 'default',
         session: { ...session, resumed_at: 'y' },
       }),
-    ).toBe('04 원인 분석 · 세션 재개 · 이유: 기본 진행')
+    ).toBe('04 원인 분석과 수정 · 세션 재개 · 이유: 기본 진행')
   })
 
   it('권한 확인 끈 모드가 아니면 경고한다 (D94)', () => {
@@ -126,7 +126,9 @@ describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
         reason: '완료조건 2 실패',
       },
     }
-    expect(stopNotice(stopped)).toBe('이전 단계 추천으로 멈춤: 수정(fix)로 — 완료조건 2 실패')
+    expect(stopNotice(stopped)).toBe(
+      '이전 단계 추천으로 멈춤: 원인 분석과 수정(fix)로 — 완료조건 2 실패',
+    )
   })
 
   it('[이 단계 끝나면 멈춤]으로 멈추면 승인한 task를 알린다 (시나리오 3-4)', () => {
@@ -142,17 +144,18 @@ describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
   it('[재개]가 할 일을 알린다: 기본 다음 단계. verify에서 멈췄으면 Work 완료 화면에서 전달을 고른다 (3.3, D119)', () => {
     const work = createWork({ workId: 'w', baseBranch: 'main', baseCommit: 'c', at: 'x' }).work
     expect(resumeHint(work)).toBeNull()
-    const at = (node: 'intake' | 'evidence' | 'verify', stop: WorkState['stop']): WorkState => ({
+    const at = (node: NodeName, stop: WorkState['stop']): WorkState => ({
       ...work,
       status: 'stopped',
-      intent: { version: 1, size: 'L' },
+      intent: { version: 1 },
       tasks: work.tasks.map((t) => ({ ...t, node })),
       stop,
     })
     const afterStep = { kind: 'after_step' as const, task_id: 't-01' }
     expect(resumeHint(at('intake', afterStep))).toBe(
-      '[재개]하면 다음 단계(재현과 관찰)를 시작합니다.',
+      '[재개]하면 다음 단계(원인 분석과 수정)를 시작합니다.',
     )
+    expect(resumeHint(at('fix', afterStep))).toBe('[재개]하면 다음 단계(리뷰와 검증)를 시작합니다.')
     expect(resumeHint(at('verify', afterStep))).toBe(
       'Work 완료 화면에서 전달을 고르면 Work를 완료합니다.',
     )
@@ -162,8 +165,8 @@ describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
       node,
       reason: '다시',
     })
-    expect(resumeHint(at('evidence', back('intake')))).toBe(
-      '[재개]하면 추천을 따르지 않고 다음 단계(원인 분석)를 시작합니다. 추천대로 되돌아가려면 [단계 선택]을 누르세요.',
+    expect(resumeHint(at('fix', back('intake')))).toBe(
+      '[재개]하면 추천을 따르지 않고 다음 단계(리뷰와 검증)를 시작합니다. 추천대로 되돌아가려면 [단계 선택]을 누르세요.',
     )
     expect(resumeHint(at('verify', back('fix')))).toBe(
       '추천을 따르지 않고 Work 완료 화면에서 전달을 고르면 Work를 완료합니다. 추천대로 되돌아가려면 [단계 선택]을 누르세요.',
@@ -242,27 +245,20 @@ describe('진행 표시의 도구 이름 (D216)', () => {
   })
 })
 
-describe('리뷰의 앞뒤에서 멈춘 Work (D166)', () => {
-  it('fix 뒤에 멈추면 [재개]가 리뷰를 시작하고, 리뷰 뒤에 멈추면 최종 검증을 시작한다', () => {
+describe('리뷰와 검증에서 멈춘 Work (D229)', () => {
+  it('verify가 의도 정리를 추천해 멈추면 알리고, [재개] 대신 Work 완료 화면에서 전달을 고른다', () => {
     const work = createWork({ workId: 'w', baseBranch: 'main', baseCommit: 'c', at: 'x' }).work
-    const at = (node: NodeName, size: 'S' | 'M' | 'L'): WorkState => ({
+    const back: WorkState = {
       ...work,
       status: 'stopped',
-      intent: { version: 1, size },
-      tasks: work.tasks.map((t) => ({ ...t, node })),
-      stop: { kind: 'after_step', task_id: 't-01' },
-    })
-    for (const size of ['S', 'M', 'L'] as const) {
-      expect(resumeHint(at('fix', size)), size).toBe('[재개]하면 다음 단계(리뷰)를 시작합니다.')
-      expect(resumeHint(at('review', size)), size).toBe(
-        '[재개]하면 다음 단계(최종 검증)를 시작합니다.',
-      )
+      intent: { version: 1 },
+      tasks: work.tasks.map((t) => ({ ...t, node: 'verify' })),
+      stop: { kind: 'recommended_back', task_id: 't-01', node: 'intake', reason: '다시' },
     }
-    const back: WorkState = {
-      ...at('verify', 'S'),
-      stop: { kind: 'recommended_back', task_id: 't-01', node: 'review', reason: '다시' },
-    }
-    expect(stopNotice(back)).toBe('이전 단계 추천으로 멈춤: 리뷰(review)로 — 다시')
+    expect(stopNotice(back)).toBe('이전 단계 추천으로 멈춤: 의도 정리(intake)로 — 다시')
+    expect(resumeHint(back)).toBe(
+      '추천을 따르지 않고 Work 완료 화면에서 전달을 고르면 Work를 완료합니다. 추천대로 되돌아가려면 [단계 선택]을 누르세요.',
+    )
   })
 })
 
@@ -384,24 +380,23 @@ describe('[변경]의 범위 (D83: 이 task의 diff)', () => {
     expect(changeRange(work, 't-09')).toBeNull()
   })
 
-  it('리뷰가 만든 커밋은 리뷰의 [변경]에 있고 최종 검증의 [변경]에는 없다 (D83, 사용자 결정)', () => {
-    // fix → review(사람이 고른 지적을 고쳐 커밋) → verify. 최종 검증의 [변경]은 verify가 바꾼 것이다.
-    // 리뷰의 커밋은 Work 완료 화면의 [전체 변경](기준 커밋부터)에 들어간다
+  it('리뷰에서 반영한 커밋은 리뷰와 검증의 [변경]에 있고 원인 분석과 수정의 [변경]에는 없다 (D83, D229)', () => {
+    // intake → fix(원인 분석과 수정, 커밋) → verify(사람이 고른 지적을 반영해 커밋). 반영 커밋은 verify가 바꾼 것이다.
+    // 모든 커밋은 Work 완료 화면의 [전체 변경](기준 커밋부터)에 들어간다
     const work = withTasks(
       task(1, 'intake', { start_commit: 'a' }),
       task(2, 'fix', { start_commit: 'a' }),
-      task(3, 'review', { start_commit: 'fixed' }),
-      task(4, 'verify', { start_commit: 'reviewed', status: 'working' }),
+      task(3, 'verify', { start_commit: 'fixed', status: 'awaiting_approval' }),
     )
+    expect(changeRange(work, 't-01')).toEqual({ from: 'a', to: 'a' })
     expect(changeRange(work, 't-02')).toEqual({ from: 'a', to: 'fixed' })
-    expect(changeRange(work, 't-03')).toEqual({ from: 'fixed', to: 'reviewed' })
-    expect(changeRange(work, 't-04')).toEqual({ from: 'reviewed', to: null })
+    expect(changeRange(work, 't-03')).toEqual({ from: 'fixed', to: null })
   })
 
   it('시작하지 않은 task는 범위가 없고, 코드를 바꾸지 않아 앞 task의 범위도 끝내지 않는다', () => {
     const work = withTasks(
       task(1, 'intake', { start_commit: 'a' }),
-      task(2, 'evidence', { status: 'queued' }),
+      task(2, 'fix', { status: 'queued' }),
     )
     expect(changeRange(work, 't-02')).toBeNull()
     expect(changeRange(work, 't-01')).toEqual({ from: 'a', to: null })
@@ -467,7 +462,7 @@ describe('강조 영역 (D83, 시나리오 4-2)', () => {
   const ERR: FormatIssue = { file: 'handoff.md', part: 'body', message: '`## 요약` 절 없음' }
 
   it('사람이 봐야 할 것이 없으면 비어 있다', () => {
-    expect(emphasis({ node: 'rca', handoff: HANDOFF, errors: [], uncommitted: [] })).toEqual([])
+    expect(emphasis({ node: 'fix', handoff: HANDOFF, errors: [], uncommitted: [] })).toEqual([])
   })
 
   it('intent_deviation, 열린 질문, 이전 단계 추천, 커밋 안 된 변경, 형식 오류를 순서대로 모은다', () => {
@@ -491,7 +486,7 @@ describe('강조 영역 (D83, 시나리오 4-2)', () => {
     ])
     expect(items[0]?.lines).toEqual(['범위를 넘음', '근거: refresh.ts도 바뀜'])
     expect(items[2]?.lines).toEqual([
-      '수정(fix)로 — 완료조건 2 실패',
+      '원인 분석과 수정(fix)로 — 완료조건 2 실패',
       '승인하면 다음 단계를 시작하지 않고 멈춥니다. 되돌아갈 단계는 멈춘 뒤 [단계 선택]으로 고릅니다.',
     ])
     expect(items[4]?.lines).toEqual(['handoff.md: `## 요약` 절 없음'])
@@ -519,14 +514,14 @@ describe('강조 영역 (D83, 시나리오 4-2)', () => {
   it('기본 다음 단계 추천은 강조하지 않는다. 막힘은 blocked_reason을 맨 앞에 둔다 (4.4)', () => {
     expect(
       emphasis({
-        node: 'evidence',
-        handoff: { ...HANDOFF, recommended_next: { node: 'rca', reason: '다음' } },
+        node: 'fix',
+        handoff: { ...HANDOFF, recommended_next: { node: 'verify', reason: '다음' } },
         errors: [],
         uncommitted: [],
       }),
     ).toEqual([])
     const blocked = emphasis({
-      node: 'rca',
+      node: 'fix',
       handoff: { ...HANDOFF, status: 'blocked', blocked_reason: '운영 로그가 없음' },
       errors: [],
       uncommitted: [],
@@ -534,11 +529,10 @@ describe('강조 영역 (D83, 시나리오 4-2)', () => {
     expect(blocked).toEqual([{ kind: 'blocked', title: '막힘', lines: ['운영 로그가 없음'] }])
   })
 
-  it('[요약] 맨 위: 의도 정리는 intent 초안의 size와 목표·비목표·완료조건이다 (D223)', () => {
+  it('[요약] 맨 위: 의도 정리는 intent 초안의 목표·비목표·완료조건이다 (D223)', () => {
     const draft = [
       '---',
       'type: bugfix',
-      'size: M',
       '---',
       '## 목표',
       '빈 배열의 평균을 0으로',
@@ -551,35 +545,67 @@ describe('강조 영역 (D83, 시나리오 4-2)', () => {
       '',
     ].join('\n')
     expect(stageLead('intake', { 'intent.draft.md': draft })).toEqual({
-      title: '의도 초안 (size: M)',
+      title: '의도 초안',
       sections: [
         { title: '목표', text: '빈 배열의 평균을 0으로' },
         { title: '비목표', text: '- 음수 처리' },
         { title: '완료조건', text: '- [ ] avg([])가 0이다' },
       ],
-      hint: null,
     })
-    // 머리글을 읽지 못하거나 절이 없어도 읽은 만큼 보인다. 초안이 없으면 없다
+    // 머리글을 읽지 못하거나 절이 없어도 읽은 만큼 보인다. 절이 하나도 없어도 제목은 보인다. 초안이 없으면 없다
     expect(stageLead('intake', { 'intent.draft.md': '## 목표\n무엇\n' })).toEqual({
-      title: '의도 초안 (size: 없음)',
+      title: '의도 초안',
       sections: [{ title: '목표', text: '무엇' }],
-      hint: null,
+    })
+    expect(stageLead('intake', { 'intent.draft.md': '---\ntype: bugfix\n---\n본문만\n' })).toEqual({
+      title: '의도 초안',
+      sections: [],
     })
     expect(stageLead('intake', {})).toBeNull()
   })
 
-  it('[요약] 맨 위: 리뷰는 지적 목록과 반영할 번호를 말하라는 안내다. 다른 단계는 없다 (D223)', () => {
-    const review = '## 지적\r\n1. [권장] src/avg.js:2 — 주석\r\n\r\n## 반영\r\n없음\r\n'
-    expect(stageLead('review', { 'review.md': review })).toEqual({
-      title: '리뷰 지적',
-      sections: [{ title: '지적', text: '1. [권장] src/avg.js:2 — 주석' }],
-      hint: '반영할 지적은 번호로 가운데 터미널에 말하세요. 반영할 것이 없거나 반영을 마쳤으면 [승인]을 누르세요.',
+  it('[요약] 맨 위: 원인 분석과 수정은 fix.md의 원인 절이다. 절이나 파일이 없으면 없다 (D223, D228)', () => {
+    const fix = [
+      '## 재현',
+      '`node repro.js`가 NaN을 출력',
+      '',
+      '## 원인',
+      'src/avg.js:2에서 길이 0으로 나눔',
+      '',
+      '## 변경 요약',
+      '- 빈 배열이면 0',
+      '',
+    ].join('\r\n')
+    expect(stageLead('fix', { 'fix.md': fix })).toEqual({
+      title: '원인',
+      sections: [{ title: '원인', text: 'src/avg.js:2에서 길이 0으로 나눔' }],
     })
-    expect(stageLead('review', { 'review.md': '지적 절 없음' })).toBeNull()
-    expect(stageLead('review', {})).toBeNull()
-    for (const node of ['evidence', 'rca', 'fix', 'verify', 'respond'] as const) {
-      expect(stageLead(node, { 'review.md': review })).toBeNull()
-    }
+    expect(stageLead('fix', { 'fix.md': '## 재현\n됨\n' })).toBeNull()
+    expect(stageLead('fix', {})).toBeNull()
+    // 다른 단계의 파일은 보지 않는다
+    expect(stageLead('fix', { 'review.md': '## 지적\n1. x\n' })).toBeNull()
+  })
+
+  it('[요약] 맨 위: 리뷰와 검증은 review.md의 지적과 반영 절이다. 다른 단계는 없다 (D223, D229)', () => {
+    const review = '## 지적\r\n1. [권장] src/avg.js:2 — 주석\r\n\r\n## 반영\r\n없음\r\n'
+    expect(stageLead('verify', { 'review.md': review })).toEqual({
+      title: '리뷰 지적',
+      sections: [
+        { title: '지적', text: '1. [권장] src/avg.js:2 — 주석' },
+        { title: '반영', text: '없음' },
+      ],
+    })
+    // 있는 절만 보인다
+    expect(stageLead('verify', { 'review.md': '## 지적\n없음\n' })).toEqual({
+      title: '리뷰 지적',
+      sections: [{ title: '지적', text: '없음' }],
+    })
+    expect(stageLead('verify', { 'review.md': '지적 절 없음' })).toBeNull()
+    expect(stageLead('verify', {})).toBeNull()
+    expect(stageLead('verify', { 'fix.md': '## 원인\nx\n' })).toBeNull()
+    const both = { 'review.md': review, 'fix.md': '## 원인\nx\n' }
+    expect(stageLead('respond', both)).toBeNull()
+    expect(stageLead('intake', both)).toBeNull()
   })
 
   it('handoff의 요약 절을 읽는다. 머리글을 읽지 못해도 본문에서 찾는다', () => {
