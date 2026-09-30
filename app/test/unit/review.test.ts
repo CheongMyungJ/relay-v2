@@ -12,6 +12,7 @@ import {
   resumeHint,
   stopNotice,
   taskLabel,
+  toolLabel,
   verdicts,
 } from '../../src/core/review'
 import type { Handoff, NodeName } from '../../src/shared/contracts'
@@ -164,6 +165,48 @@ describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
     expect(resumeHint(at('verify', back('fix')))).toBe(
       '추천을 따르지 않고 Work 완료 화면에서 전달을 고르면 Work를 완료합니다. 추천대로 되돌아가려면 [단계 선택]을 누르세요.',
     )
+  })
+})
+
+describe('진행 표시의 도구 이름 (D216)', () => {
+  it('도구 이름과 인자 하나를 보인다. 인자가 없는 도구는 이름만 보인다', () => {
+    expect(toolLabel('Bash', { command: 'npm test', description: '시험' })).toBe('Bash(npm test)')
+    expect(toolLabel('Grep', { pattern: 'avg\\(', path: 'src' })).toBe('Grep(avg\\()')
+    expect(toolLabel('WebFetch', { url: 'https://example.com/a', prompt: '요약' })).toBe(
+      'WebFetch(https://example.com/a)',
+    )
+    expect(toolLabel('Task', { description: '원인 찾기', prompt: '길다' })).toBe('Task(원인 찾기)')
+    expect(toolLabel('TodoWrite', { todos: [] })).toBe('TodoWrite')
+    expect(toolLabel('Bash', { command: '   ' })).toBe('Bash')
+    expect(toolLabel('Mystery', 'not an object')).toBe('Mystery')
+  })
+
+  it('작업 폴더 안의 파일은 상대 경로로, 밖의 파일은 그대로 보인다. 구분자는 /와 \\ 둘 다 본다', () => {
+    const cwd = '/home/u/wt/w-1'
+    expect(toolLabel('Edit', { file_path: '/home/u/wt/w-1/src/avg.js' }, cwd)).toBe(
+      'Edit(src/avg.js)',
+    )
+    expect(toolLabel('Read', { file_path: '/home/u/wt/w-1/src/avg.js' }, `${cwd}/`)).toBe(
+      'Read(src/avg.js)',
+    )
+    expect(toolLabel('Read', { file_path: '/home/u/wt/w-10/a.js' }, cwd)).toBe(
+      'Read(/home/u/wt/w-10/a.js)',
+    )
+    expect(toolLabel('Write', { file_path: 'C:\\wt\\w-1\\tasks\\fix.md' }, 'C:\\wt\\w-1')).toBe(
+      'Write(tasks\\fix.md)',
+    )
+    expect(toolLabel('NotebookEdit', { notebook_path: '/n/a.ipynb' })).toBe(
+      'NotebookEdit(/n/a.ipynb)',
+    )
+  })
+
+  it('여러 줄이면 첫 줄 뒤에 …를 붙이고, 40자가 넘으면 줄인다', () => {
+    expect(toolLabel('Bash', { command: "cat > a.js <<'EOF'\nconsole.log(1)\nEOF" })).toBe(
+      "Bash(cat > a.js <<'EOF' …)",
+    )
+    expect(toolLabel('Bash', { command: '\n  npm   test  \n' })).toBe('Bash(npm test)')
+    const long = `node -e "${'x'.repeat(60)}"`
+    expect(toolLabel('Bash', { command: long })).toBe(`Bash(${long.slice(0, 39)}…)`)
   })
 })
 

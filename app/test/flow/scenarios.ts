@@ -10,7 +10,8 @@ export type Step =
   /** 커밋하지 않고 worktree의 파일을 고친다 (커밋 안 된 변경, D116) */
   | { do: 'edit'; files: Record<string, string> }
   | { do: 'ask'; question?: string }
-  | { do: 'tool'; name: string }
+  /** 도구 호출: PreToolUse, ms만큼 실행, PostToolUse (D216). input은 tool_input이다 */
+  | { do: 'tool'; name: string; input?: Record<string, unknown>; ms?: number }
   | { do: 'notify'; type: string }
   /**
    * Stop을 보낸다. background와 crons는 본문의 background_tasks와 session_crons다: 세션이 백그라운드 작업이나 예약된

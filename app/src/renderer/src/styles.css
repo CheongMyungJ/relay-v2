@@ -247,6 +247,14 @@ textarea {
   color: var(--hot);
 }
 
+/* 진행 표시 (D216): 경과 시간과 마지막 동작. 머리 띠가 좁으면 뒤를 줄인다 */
+.activity {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
 .status {
   font-size: 11px;
   padding: 0 6px;

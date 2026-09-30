@@ -677,12 +677,16 @@ app/src/
 **내용**
 
 - **R1 절차 무게:** 크기 기준을 좁힌다(D212). 리뷰도 자동 승인을 켤 수 있고 지적이 없을 때만 자동 승인한다(D213). 앱 설정의 자동 승인 기본값은 수정과 리뷰를 켠다(D214). 크기를 고를 때 경로를 보이는 것은 하지 않기로 했다.
+- **R2 검은 화면과 진행 표시:** 새 세션의 터미널에 표시 줄을 넣는다(D215). 작업 중인 task의 머리 띠와 패널에 경과 시간과 마지막 도구를 보인다(D216). 세션마다 첫 PTY 출력과 첫 훅까지 걸린 시간을 기록한다(D217). 평가 도구는 경과 시간을 화면이 멈췄는지의 판정에서 뺀다(`docs/eval.md`).
 
 **완료 기준**
 
-- [단위] 리뷰 지적 읽기(`## 지적`의 번호 항목, "없음", 읽지 못함), 리뷰의 자동 승인 조건과 까닭, 자동 승인을 켤 수 없는 단계(의도 승인, Work 완료), 앱 설정의 기본값, 리뷰의 마무리 안내 문구와 승인 방식.
-- [흐름] 앱의 기본값으로 S Work가 수정과 지적 없는 리뷰를 자동 승인하고 의도 승인과 Work 완료는 사람이 한다. 지적이 있는 리뷰는 자동 승인을 켜도 까닭을 알리고 사람이 승인한다.
-- [실기] 설정 화면, 새 Work 대화상자, [Work 설정]의 자동 승인 목록에 리뷰가 있고, 지적 없는 리뷰가 카운트다운 뒤 승인되며, 지적이 있으면 승인 화면에 까닭이 보인다(목록은 `docs/checks.md` M12).
+- R1 [단위] 리뷰 지적 읽기(`## 지적`의 번호 항목, "없음", 읽지 못함), 리뷰의 자동 승인 조건과 까닭, 자동 승인을 켤 수 없는 단계(의도 승인, Work 완료), 앱 설정의 기본값, 리뷰의 마무리 안내 문구와 승인 방식.
+- R1 [흐름] 앱의 기본값으로 S Work가 수정과 지적 없는 리뷰를 자동 승인하고 의도 승인과 Work 완료는 사람이 한다. 지적이 있는 리뷰는 자동 승인을 켜도 까닭을 알리고 사람이 승인한다.
+- R1 [실기] 설정 화면, 새 Work 대화상자, [Work 설정]의 자동 승인 목록에 리뷰가 있고, 지적 없는 리뷰가 카운트다운 뒤 승인되며, 지적이 있으면 승인 화면에 까닭이 보인다(목록은 `docs/checks.md` M12).
+- R2 [단위] 훅 설정(모든 도구에 검), 도구 이름과 인자(작업 폴더 안의 상대 경로, 여러 줄, 긴 인자), 첫 출력과 첫 훅의 기록과 앞 세션 알림 무시.
+- R2 [흐름] 새 세션의 터미널과 `pty.log`가 표시 줄로 시작한다. 수정 task가 세션을 띄우는 중 → 도구 실행 중 → 도구 끝남을 보이고, 도구 훅의 진행 표시는 스냅샷과 따로 오며 훅에는 빈 본문으로 답한다. `events.jsonl`에 세션마다 첫 출력과 첫 훅이 있다.
+- R2 [실기] 실제 `claude`에서 머리 띠와 패널의 진행 표시가 도구마다 바뀌고, 에이전트가 눈에 띄게 늦어지지 않는다. 표시 줄이 CLI의 첫 화면 앞에 보인다(목록은 `docs/checks.md` M12).
 
 **구현하며 정한 것**
 
@@ -692,7 +696,13 @@ app/src/
 - **크기 기준(D212):** work-start 스킬의 Size 절을 고치고 `skills/check.mjs`에 D212 대조를 더한다. 앱 코드는 바뀌지 않는다.
 - **시험의 기본 설정:** [단위]의 상태 전이와 [흐름]·[실제]의 도구(`test/flow/harness.ts`)는 자동 승인을 모두 끈 설정(`MANUAL`)을 기본으로 쓴다. 기존 시험이 보던 사람 승인의 길을 그대로 보고, 앱의 기본값은 `productDefaults`로 켠 시험에서 본다.
 - **화면:** 설정 화면, 새 Work 대화상자, [Work 설정]의 자동 승인 목록에 리뷰가 생기고, 안내 문구에 "리뷰는 지적이 없을 때만 자동 승인합니다"를 더한다. 지적이 있는 리뷰의 까닭은 다른 까닭처럼 승인 화면의 `notice auto-hold`에 보인다.
-- **시험:** [단위] `test/unit/validate.test.ts`, `approval.test.ts`, `config.test.ts`, `context.test.ts`, `machine.test.ts`. [흐름] `test/flow/auto.test.ts`(앱의 기본값, 지적이 있는 리뷰의 알림). [스모크] `test/smoke/app.spec.ts`(설정 화면의 기본값, 지적이 있는 리뷰의 까닭).
+- **시험(R1):** [단위] `test/unit/validate.test.ts`, `approval.test.ts`, `config.test.ts`, `context.test.ts`, `machine.test.ts`. [흐름] `test/flow/auto.test.ts`(앱의 기본값, 지적이 있는 리뷰의 알림). [스모크] `test/smoke/app.spec.ts`(설정 화면의 기본값, 지적이 있는 리뷰의 까닭).
+- **진행 표시의 길(R2, D216):** main의 `hookArrived`가 훅을 받으면 먼저 진행 표시를 바꾼다. UserPromptSubmit은 턴이 시작한 때를 두고 도구를 지운다. PreToolUse는 마지막 도구를 두고, PostToolUse는 끝난 때를 둔다(`tool_use_id`가 있으면 그것으로, 없으면 도구 이름으로 맞춘다). 질문 도구가 아닌 도구의 훅은 처리 줄에 넣지 않고 빈 본문으로 바로 답하며, `UiPort.activity`(IPC `app:activity`, 렌더러의 `onActivity`)로 따로 보낸다. Work 스냅샷의 `TaskView.activity`에도 같은 값이 있고, 렌더러는 그 Work의 스냅샷이 오면 따로 온 값을 지운다(같은 창으로 차례대로 온다). 정리 세션은 도구 훅을 쓰지 않아 바로 답한다. 진행 표시는 작업 중인 task만이다.
+- **보이는 모양(D216):** `renderer/src/Activity.tsx`. 경과 시간은 1초마다 세고 `data-tick`을 붙인다. 머리 띠는 상태 옆에, 패널은 진행 중 화면 맨 위의 "진행" 절에 둔다. 도구 이름은 `core/review`의 `toolLabel`이 입력에서 인자 하나(`command`, `file_path`, `notebook_path`, `pattern`, `url`, `query`, `description` 차례)를 골라 만든다.
+- **시각 기록(D217):** 첫 PTY 출력과 첫 훅을 받으면 main이 `session.timing`을 처리 줄에 넣고, core는 pid가 그 task의 지금 세션과 같을 때만 `task.first_output`, `task.first_hook`을 남긴다. 세션을 띄우는 처리가 줄 안에서 돌므로 늘 `task.started`(재개는 `task.resumed`) 뒤에 온다.
+- **표시 줄(D215):** `startSession`이 `launch`에 넘긴다(재개의 `RESUME_MARK`와 같은 길). 띄우기 전(스킬 배포, `claude --version`, context.md)에는 터미널이 아직 없고, 진행 표시가 "세션을 띄우는 중"을 보인다.
+- **평가 도구:** `eval/lib/relay-arm.mjs`의 `pollText`가 `[data-tick]`을 잠깐 가리고 화면 글자를 읽는다. 사람 역할이 보는 글자(`visibleText`)와 스크린샷에는 그대로 있다.
+- **시험(R2):** [단위] `test/unit/settings.test.ts`(모든 도구), `review.test.ts`(도구 이름), `machine.test.ts`(시각 기록). [흐름] `test/flow/activity.test.ts`. 가짜 `claude`의 `tool` 단계에 `input`, `ms`와 `tool_use_id`를 더했다(`ask`도 `tool_use_id`를 보낸다). 이벤트 목록을 통째로 보는 기존 [흐름] 시험에 두 이벤트를 넣었다.
 
 ## 8. 테스트 전략
 

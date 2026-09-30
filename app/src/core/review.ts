@@ -55,6 +55,51 @@ export function permissionNotice(task: Pick<TaskRecord, 'permission_mode'>): str
     : `권한 확인 끈 모드가 아님(${mode} 모드): 일부 동작이 막힐 수 있음`
 }
 
+/** 진행 표시에서 도구 인자의 길이 (D216) */
+const TOOL_ARG_MAX = 40
+
+/** 도구 입력에서 인자로 보일 키. 앞의 것부터 본다. 경로 키는 작업 폴더 안이면 상대 경로로 보인다 */
+const TOOL_ARG_KEYS = [
+  'command',
+  'file_path',
+  'notebook_path',
+  'pattern',
+  'url',
+  'query',
+  'description',
+]
+const PATH_KEYS = ['file_path', 'notebook_path']
+
+/**
+ * 진행 표시의 도구 이름과 짧은 인자 (D216). 예: "Bash(npm test)", "Edit(src/avg.js)". 인자는 도구 입력에서 하나만
+ * 골라 첫 줄을 줄여 보인다. 인자가 없는 도구는 이름만 보인다
+ */
+export function toolLabel(name: string, input: unknown, cwd?: string): string {
+  const fields =
+    typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {}
+  const key = TOOL_ARG_KEYS.find((k) => typeof fields[k] === 'string' && fields[k].trim() !== '')
+  if (key === undefined) return name
+  const value = String(fields[key])
+  return `${name}(${shorten(PATH_KEYS.includes(key) ? relativeTo(value, cwd) : value)})`
+}
+
+/** 작업 폴더 안의 경로는 작업 폴더 뒤만 남긴다. 구분자는 /와 \ 둘 다 본다 */
+function relativeTo(file: string, cwd?: string): string {
+  if (!cwd) return file
+  const base = cwd.replace(/[\\/]+$/, '')
+  const rest = file.slice(base.length)
+  return file.startsWith(base) && /^[\\/]./.test(rest) ? rest.slice(1) : file
+}
+
+/** 첫 줄을 공백을 줄여 보이고, 뒤에 더 있거나 길면 …를 붙인다 */
+function shorten(value: string): string {
+  const lines = value.split(/\r?\n/).map((l) => l.replace(/\s+/g, ' ').trim())
+  const first = lines.find((l) => l !== '') ?? ''
+  const more = lines.filter((l) => l !== '').length > 1
+  if (first.length > TOOL_ARG_MAX) return `${first.slice(0, TOOL_ARG_MAX - 1)}…`
+  return more ? `${first} …` : first
+}
+
 /** task 표시 이름 (3.3, 시나리오 3) */
 export const TASK_STATUS_LABEL: Readonly<Record<TaskStatus, string>> = {
   queued: '대기열',

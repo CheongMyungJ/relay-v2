@@ -525,6 +525,8 @@ export type LifecycleEventType =
   | 'work.abandoned'
   | 'work.cleaned'
   | 'task.started'
+  | 'task.first_output'
+  | 'task.first_hook'
   | 'task.awaiting_approval'
   | 'task.approved'
   | 'task.interrupted'

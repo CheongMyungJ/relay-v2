@@ -182,6 +182,7 @@ import {
   resumeHint,
   stopNotice,
   taskLabel,
+  toolLabel,
   verdicts,
 } from '../core/review'
 import {
@@ -233,6 +234,7 @@ import {
 } from '../shared/pr'
 import type { ProjectChecks, ProjectState } from '../shared/project'
 import type {
+  ActivityView,
   ApproveOptions,
   BadgeKind,
   CleanInput,
@@ -254,6 +256,7 @@ import type {
   StepPreviewResult,
   TaskView,
   TerminalBacklog,
+  ToolActivityView,
   WorkView,
 } from '../shared/views'
 import type {
@@ -308,6 +311,14 @@ interface LiveSession {
   /** 직전 UserPromptSubmit이나 Stop 때의 handoff.md(intake는 intent 초안도) (D21, D107) */
   turnFiles: string
   stopped: boolean
+  /** 띄운 때 (Date.now()). 첫 출력과 첫 훅까지 걸린 시간을 잰다 (D217) */
+  spawnedAt: number
+  /** 첫 PTY 출력과 첫 훅을 이미 알렸다 (D217) */
+  sawOutput: boolean
+  sawHook: boolean
+  /** 진행 표시 (D216): 이번 턴이 시작한 때(UserPromptSubmit)와 마지막 도구. 기록하지 않고 살아 있는 동안만 둔다 */
+  turnStartedAt: number | null
+  tool: (ToolActivityView & { id?: string; name: string }) | null
 }
 
 /**
@@ -342,6 +353,13 @@ const KILL_WAIT_MS = 10_000
 
 /** 다시 연 세션의 출력 앞에 넣는 줄. 이전 화면 뒤에 이어 보인다 (시나리오 3-4) */
 const RESUME_MARK = '\r\n\x1b[0m\x1b[2m── relay: 세션 재개 (--resume) ──\x1b[0m\r\n'
+
+/** 새 세션의 출력 앞에 넣는 줄. CLI가 첫 화면을 그리기 전의 빈 화면을 채운다 (시나리오 2-5, D215) */
+const startMark = (task: TaskRecord) =>
+  `\x1b[0m\x1b[2m── relay: ${taskLabel(task)} · 새 세션을 띄우는 중 ──\x1b[0m\r\n`
+
+/** 질문 도구. 질문 대기 표시는 core가 한다 (D24, D35). 나머지 도구의 훅은 진행 표시만 바꾼다 (D216) */
+const ASK_TOOL = 'AskUserQuestion'
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 const str = (v: unknown) => (typeof v === 'string' ? v : undefined)
@@ -741,7 +759,7 @@ export class WorkRunner {
         skill,
         contextPath,
       })
-      const session = this.launch(task, bin, token, args, turnSnapshot(task, {}))
+      const session = this.launch(task, bin, token, args, turnSnapshot(task, {}), startMark(task))
       const processStartedAt = await processStartTime(session.pty.pid)
       await this.feed({
         type: 'session.started',
@@ -1013,6 +1031,11 @@ export class WorkRunner {
       exited: new Promise((r) => (exited = r)),
       turnFiles,
       stopped: false,
+      spawnedAt: Date.now(),
+      sawOutput: false,
+      sawHook: false,
+      turnStartedAt: null,
+      tool: null,
     }
     const write = (data: string) => {
       log.write(data)
@@ -1021,14 +1044,19 @@ export class WorkRunner {
     if (mark) write(mark)
     pty.onData((data) => {
       // 끝낸 세션의 늦은 출력은 다시 연 세션의 화면에 섞지 않는다
-      if (!session.stopped) write(data)
+      if (session.stopped) return
+      write(data)
+      if (!session.sawOutput) {
+        session.sawOutput = true
+        this.timing(task.id, session, 'output')
+      }
     })
     pty.onExit(() => {
       exited()
       void this.enqueue(() => this.onExit(task.id, session))
     })
     session.unregister = this.ctx.hooks.register(token, task.id, (req) =>
-      this.enqueue(() => this.onHook(task.id, req, session)),
+      this.hookArrived(task.id, req, session),
     )
     session.unwatch = watchDir(this.files.taskDir(task), () => {
       void this.enqueue(() => this.onWatch(task.id))
@@ -1038,6 +1066,65 @@ export class WorkRunner {
   }
 
   // ---------- 세션 동안 (시나리오 3) ----------
+
+  /**
+   * 세션의 첫 PTY 출력과 첫 훅까지 걸린 시간을 events.jsonl에 남긴다 (D217). 줄에 넣으므로 세션을 띄우는 처리
+   * (session.started)가 끝난 뒤에 core에 간다
+   */
+  private timing(taskId: string, session: LiveSession, first: 'output' | 'hook', hook?: string) {
+    const ms = Date.now() - session.spawnedAt
+    const pid = session.pty.pid
+    void this.enqueue(() =>
+      this.feed({
+        type: 'session.timing',
+        taskId,
+        at: this.ctx.at(),
+        pid,
+        first,
+        ...(hook === undefined ? {} : { hook }),
+        ms,
+      }),
+    )
+  }
+
+  /**
+   * 훅을 받았다. 진행 표시(D216)를 먼저 바꾸고, 질문 도구가 아닌 도구의 훅은 줄에 넣지 않고 바로 답한다: 도구를 쓸
+   * 때마다 오므로 앞선 처리(PR 읽기 등)를 기다리게 하면 에이전트가 늦어진다. core는 이 훅으로 상태를 바꾸지 않는다
+   */
+  private hookArrived(taskId: string, req: HookRequest, session: LiveSession): Promise<HookReply> {
+    if (!session.sawHook) {
+      session.sawHook = true
+      this.timing(taskId, session, 'hook', req.event)
+    }
+    const b = req.body
+    const now = Date.now()
+    if (req.event === 'UserPromptSubmit') {
+      session.turnStartedAt = now
+      session.tool = null
+    }
+    if (req.event === 'PreToolUse' || req.event === 'PostToolUse') {
+      const name = str(b['tool_name']) ?? ''
+      const id = str(b['tool_use_id'])
+      if (req.event === 'PreToolUse') {
+        const label = toolLabel(name, b['tool_input'], str(b['cwd']))
+        session.tool = { name, label, startedAt: now, endedAt: null, ...(id ? { id } : {}) }
+      } else if (
+        session.tool?.endedAt === null &&
+        (id ? session.tool.id === id : session.tool.name === name)
+      ) {
+        session.tool = { ...session.tool, endedAt: now }
+      }
+      if (name !== ASK_TOOL) {
+        if (this.live.get(taskId) === session) {
+          const task = this.task(taskId)
+          if (task)
+            this.ctx.ui.activity({ workKey: this.key, taskId, activity: this.activityOf(task) })
+        }
+        return Promise.resolve(null)
+      }
+    }
+    return this.enqueue(() => this.onHook(taskId, req, session))
+  }
 
   /** 훅 신호 (시나리오 3의 표). Stop이면 파일을 다시 읽어 검사한다 (I15) */
   private async onHook(taskId: string, req: HookRequest, from: LiveSession): Promise<HookReply> {
@@ -1068,6 +1155,7 @@ export class WorkRunner {
           })
         ).reply
       }
+      // 질문 도구만 온다. 나머지 도구는 hookArrived가 진행 표시만 바꾸고 답했다 (D216)
       case 'PreToolUse':
       case 'PostToolUse':
         return (await this.feed({ type: req.event, ...base, toolName: str(b['tool_name']) ?? '' }))
@@ -1837,8 +1925,11 @@ export class WorkRunner {
         exited()
         void this.enqueue(() => this.onCleanupExit(c))
       })
+      // 도구 훅은 쓰지 않는다. 도구를 쓸 때마다 오므로 줄에 넣지 않고 바로 답한다 (D216)
       c.unregister = this.ctx.hooks.register(token, CLEANUP_ID, (req) =>
-        this.enqueue(() => this.onCleanupHook(c, req)),
+        req.event === 'PreToolUse' || req.event === 'PostToolUse'
+          ? Promise.resolve(null)
+          : this.enqueue(() => this.onCleanupHook(c, req)),
       )
       c.status = 'live'
       this.changed()
@@ -3680,6 +3771,23 @@ export class WorkRunner {
       countdown: t.countdown
         ? { seconds: t.countdown.seconds, endsAt: this.countdownEnds(t) }
         : null,
+      activity: this.activityOf(t),
+    }
+  }
+
+  /**
+   * 진행 표시 (D216). 작업 중인 task만 보인다. 첫 턴 전(세션을 띄우는 중)은 task를 만든 때부터 센다: 앱이 스킬과
+   * context.md를 준비하는 시간도 사람에게는 기다리는 시간이다
+   */
+  private activityOf(t: TaskRecord): ActivityView | null {
+    if (t.status !== 'working') return null
+    const session = this.live.get(t.id)
+    const turn = session?.turnStartedAt ?? null
+    const tool = session?.tool ?? null
+    return {
+      turn: turn !== null,
+      since: turn ?? Date.parse(t.created_at),
+      tool: tool ? { label: tool.label, startedAt: tool.startedAt, endedAt: tool.endedAt } : null,
     }
   }
 }

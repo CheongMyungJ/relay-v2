@@ -110,6 +110,22 @@ export interface SessionFailed extends TaskEvent {
   check?: CheckSummary
 }
 
+/**
+ * 세션을 띄운 뒤 처음 받은 PTY 출력과 훅 (D217). main이 세션마다 한 번씩 알린다. 검은 화면이 어디서 생기는지 보려고
+ * events.jsonl에만 남기고 상태는 바꾸지 않는다
+ */
+export interface SessionTiming extends TaskEvent {
+  type: 'session.timing'
+  /** 띄운 프로세스. 앞 세션의 늦은 알림을 가려낸다 */
+  pid: number
+  /** 처음 받은 것: PTY 출력이나 훅 */
+  first: 'output' | 'hook'
+  /** 첫 훅의 이벤트 이름 (first가 hook일 때) */
+  hook?: string
+  /** 세션을 띄운 뒤 걸린 ms */
+  ms: number
+}
+
 /** 세션 상한 때문에 띄우지 못해 대기열에 넣었다 (D18). main이 넣는다 */
 export interface TaskQueued extends TaskEvent {
   type: 'task.queued'
@@ -566,6 +582,7 @@ export type MachineEvent =
   | SessionStarted
   | SessionResumed
   | SessionFailed
+  | SessionTiming
   | TaskQueued
   | UserPromptSubmitted
   | ToolUse
@@ -1238,6 +1255,8 @@ function taskTransition(work: WorkState, event: TaskMachineEvent, config: AppCon
       return sessionResumed(work, task, event)
     case 'session.failed':
       return sessionFailed(work, task, event)
+    case 'session.timing':
+      return sessionTiming(work, task, event)
     case 'task.queued':
       return queued(work, task, event)
     case 'approve':
@@ -1338,6 +1357,14 @@ function sessionFailed(work: WorkState, task: TaskRecord, e: SessionFailed): Tra
       log(work, e.at, 'task.interrupted', { reason: 'start_failed', error: e.error }, task),
     ],
   }
+}
+
+/** 세션의 첫 출력과 첫 훅을 events.jsonl에 남긴다 (D217). 이 task의 지금 세션이 아니면 남기지 않는다 */
+function sessionTiming(work: WorkState, task: TaskRecord, e: SessionTiming): Transition {
+  if (!task.session || task.session.pid !== e.pid) return unchanged(work)
+  const type = e.first === 'output' ? 'task.first_output' : 'task.first_hook'
+  const payload = { pid: e.pid, ms: e.ms, ...(e.hook === undefined ? {} : { event: e.hook }) }
+  return { work, effects: [log(work, e.at, type, payload, task)] }
 }
 
 /** 세션 상한 때문에 대기열에 넣었다 (D18) */

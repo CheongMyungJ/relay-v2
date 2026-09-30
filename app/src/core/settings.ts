@@ -16,12 +16,6 @@ export const HOOK_EVENTS = [
 
 export type HookEvent = (typeof HOOK_EVENTS)[number]
 
-/** 도구 이름으로 가리는 훅. 질문 대기 표시에는 AskUserQuestion만 쓴다 (D24, D35) */
-const MATCHERS: Partial<Record<HookEvent, string>> = {
-  PreToolUse: 'AskUserQuestion',
-  PostToolUse: 'AskUserQuestion',
-}
-
 /** 훅 토큰을 넘기는 PTY 환경 변수 (I13). 설정 파일에는 변수 이름만 적는다 */
 export const HOOK_TOKEN_ENV = 'RELAY_HOOK_TOKEN'
 
@@ -58,7 +52,8 @@ export function hookUrl(port: number, taskId: string, event: HookEvent): string 
 }
 
 /**
- * 이벤트마다 matcher 묶음 하나에 http 훅 하나를 둔다.
+ * 이벤트마다 묶음 하나에 http 훅 하나를 둔다. PreToolUse와 PostToolUse는 matcher 없이 모든 도구에 건다: 질문 대기
+ * 표시(D24, D35)는 AskUserQuestion으로, 진행 표시(D216)는 나머지 도구로 한다.
  * 출처: spikes/lib/hooks.mjs HookServer.settings (이벤트별 matcher, type: http, timeout).
  * 토큰 머리글은 I13에서 더했다. $RELAY_HOOK_TOKEN은 allowedEnvVars에 있어야 풀린다 (Claude Code 문서 hooks).
  */
@@ -71,8 +66,7 @@ export function hookSettings(port: number, taskId: string): Record<HookEvent, Ho
       allowedEnvVars: [HOOK_TOKEN_ENV],
       timeout: HOOK_TIMEOUT_SEC,
     }
-    const matcher = MATCHERS[event]
-    return [matcher ? { matcher, hooks: [hook] } : { hooks: [hook] }]
+    return [{ hooks: [hook] }]
   }
   return {
     UserPromptSubmit: group('UserPromptSubmit'),

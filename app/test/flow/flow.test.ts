@@ -155,27 +155,18 @@ describe('[흐름] 최소 흐름 (M2)', () => {
     expect(decisions).toContain('- [사람] 재현 명령은 node -e — 재현 명령은 node -e인 이유\n')
 
     // ---------- events.jsonl (5.5) ----------
+    // 세션마다 task.started 다음에 첫 PTY 출력과 첫 훅(UserPromptSubmit)의 시각이 온다 (D217)
     const ev = events(s.workDir)
+    const session = (id: string) => [
+      ['task.started', id],
+      ['task.first_output', id],
+      ['task.first_hook', id],
+      ['task.awaiting_approval', id],
+      ['task.approved', id],
+    ]
     expect(ev.map((e) => [e.type, e.task_id ?? null])).toEqual([
       ['work.created', null],
-      ['task.started', 't-01'],
-      ['task.awaiting_approval', 't-01'],
-      ['task.approved', 't-01'],
-      ['task.started', 't-02'],
-      ['task.awaiting_approval', 't-02'],
-      ['task.approved', 't-02'],
-      ['task.started', 't-03'],
-      ['task.awaiting_approval', 't-03'],
-      ['task.approved', 't-03'],
-      ['task.started', 't-04'],
-      ['task.awaiting_approval', 't-04'],
-      ['task.approved', 't-04'],
-      ['task.started', 't-05'],
-      ['task.awaiting_approval', 't-05'],
-      ['task.approved', 't-05'],
-      ['task.started', 't-06'],
-      ['task.awaiting_approval', 't-06'],
-      ['task.approved', 't-06'],
+      ...['t-01', 't-02', 't-03', 't-04', 't-05', 't-06'].flatMap(session),
       ['work.completed', null],
     ])
     for (const e of ev) {
@@ -184,7 +175,16 @@ describe('[흐름] 최소 흐름 (M2)', () => {
     }
     expect(ev[0]?.payload).toEqual({ base_branch: 'main', base_commit: base })
     expect(ev.at(-1)?.payload).toEqual({ delivery: 'none' })
-    expect(ev[3]?.payload).toEqual({ by: 'human' })
+    expect(ev[5]?.payload).toEqual({ by: 'human' })
+    for (const t of w.tasks) {
+      const own = ev.filter((e) => e.task_id === t.id)
+      expect(own[1]?.payload).toEqual({ pid: t.session?.pid, ms: expect.any(Number) })
+      expect(own[2]?.payload).toEqual({
+        pid: t.session?.pid,
+        ms: expect.any(Number),
+        event: 'UserPromptSubmit',
+      })
+    }
 
     // ---------- task 디렉터리 (5.1) ----------
     const task = (dir: string) => path.join(s.workDir, 'tasks', dir)
@@ -416,7 +416,14 @@ describe('[흐름] 최소 흐름 (M2)', () => {
       events(s.workDir)
         .filter((e) => e.task_id === 't-04')
         .map((e) => e.type),
-    ).toEqual(['task.started', 'task.awaiting_approval', 'task.awaiting_approval', 'task.approved'])
+    ).toEqual([
+      'task.started',
+      'task.first_output',
+      'task.first_hook',
+      'task.awaiting_approval',
+      'task.awaiting_approval',
+      'task.approved',
+    ])
   })
 
   it('형식 오류를 되돌리면 고쳐 쓴 handoff로 승인 대기가 된다 (D21, D107)', async () => {
@@ -615,6 +622,8 @@ describe('[흐름] 최소 흐름 (M2)', () => {
     expect(events(s.workDir).map((e) => [e.type, e.payload])).toEqual([
       ['work.created', expect.anything()],
       ['task.started', expect.anything()],
+      ['task.first_output', expect.anything()],
+      ['task.first_hook', expect.anything()],
       ['task.interrupted', { reason: 'session_ended' }],
     ])
   })
@@ -661,6 +670,8 @@ describe('[흐름] 최소 흐름 (M2)', () => {
         .map((e) => [e.type, e.payload]),
     ).toEqual([
       ['task.started', expect.anything()],
+      ['task.first_output', expect.anything()],
+      ['task.first_hook', expect.anything()],
       ['task.awaiting_approval', { reason: 'session_ended' }],
     ])
     // 사람은 승인하고 다음 단계로 간다

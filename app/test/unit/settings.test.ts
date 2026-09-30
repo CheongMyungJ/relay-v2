@@ -48,16 +48,17 @@ describe('훅 (I13, 시나리오 2-3)', () => {
     },
   )
 
-  it('PreToolUse와 PostToolUse만 AskUserQuestion으로 가린다 (D24, D35)', () => {
+  it('훅은 matcher 없이 건다. PreToolUse와 PostToolUse는 모든 도구에서 온다: 질문 대기(D24, D35)와 진행 표시(D216)', () => {
     const matchers = Object.fromEntries(HOOK_EVENTS.map((e) => [e, hooks[e][0]?.matcher]))
     expect(matchers).toEqual({
       UserPromptSubmit: undefined,
       Stop: undefined,
       Notification: undefined,
       SessionEnd: undefined,
-      PreToolUse: 'AskUserQuestion',
-      PostToolUse: 'AskUserQuestion',
+      PreToolUse: undefined,
+      PostToolUse: undefined,
     })
+    for (const e of HOOK_EVENTS) expect(Object.keys(hooks[e][0] ?? {})).toEqual(['hooks'])
   })
 
   it('훅 URL', () => {

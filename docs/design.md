@@ -253,6 +253,9 @@ relay-v2는 Claude Code CLI를 **앱 안의 터미널(node-pty + xterm.js)에 �
 | D212 | work-start의 크기 기준(D63, D150)에서, 환경·시점·데이터에 달린 버그라도 명령으로 그 조건을 만들어 늘 재현할 수 있으면(예: `TZ=America/Los_Angeles`로 실행) 그것만으로는 L이 아니다. 재현 방법은 요청이나 intake에서 받은 사람의 답에 있으면 된다. L은 사람의 답을 들어도 재현 방법이 없거나, 같은 절차로 늘 재현되지 않거나(간헐적), 후보 위치가 여러 모듈에 걸칠 때다 | 사용성 평가(`docs/eval-findings.md` R1)에서 한 줄 수정인 시간대 버그가 "환경에 달림"으로 L이 되어 6단계를 거쳤고(08, 5회 중 3회), 같은 요청이 L·M·S로 흔들렸다. 재현이 명령으로 정해지면 evidence를 따로 볼 까닭(D150)이 약함 | ✅ |
 | D213 | 리뷰도 자동 승인을 켤 수 있다. 조건(4.3)에 더해 `review.md`의 `## 지적`이 "없음"일 때만 자동 승인한다. 지적이 있거나 읽지 못하면 까닭("리뷰에 지적이 있음")을 보이고 사람이 고르고 승인한다. 앱 설정의 기본은 켬이다. 의도 승인과 Work 완료는 늘 수동이다 | 평가에서 작은 버그의 승인이 4~6번으로 가장 큰 부담이었다(R1). D167의 까닭(지적을 고를 시간)은 지적이 없으면 없음. 지적이 있으면 D164 그대로 사람이 고름 | ✅ |
 | D214 | 앱 설정의 자동 승인 기본값은 수정(fix)을 켠다. 재현과 관찰, 원인 분석, 재현과 원인 분석, PR 대응은 끈 채로 둔다. 설정을 이미 저장한 사람은 저장한 값을 쓴다 | fix의 결과는 리뷰와 Work 완료 화면(전체 diff, 판정표)에서 사람이 다시 봄(D7의 까닭). 사람이 원인에 동의한 뒤 고치게 하는 원인 분석의 승인(D147)은 남김 | ✅ |
+| D215 | 새 세션을 띄울 때도 터미널에 표시 줄 "── relay: <task 이름> · 새 세션을 띄우는 중 ──"을 넣는다. 다시 연 세션의 "세션 재개" 줄처럼 `pty.log`에도 남는다 | 사용성 평가(`docs/eval-findings.md` R2)에서 단계가 바뀌면 CLI가 첫 화면을 그릴 때까지 터미널이 검은 빈 화면이라 멈춘 것인지 헷갈렸다(7개 시나리오 25회) | ✅ |
+| D216 | 작업 중인 task의 머리 띠와 오른쪽 패널에 진행 표시를 둔다. 첫 턴 전이면 "세션을 띄우는 중"과 task를 만든 뒤 지난 시간, 턴 중이면 턴이 시작한 뒤 지난 시간과 마지막 도구("Bash(npm test) 실행 중 8초", "마지막 동작 Edit(src/avg.js) 8초 전")다. PreToolUse·PostToolUse 훅을 모든 도구에 건다. 질문 도구가 아닌 도구의 훅은 처리 줄에 넣지 않고 바로 빈 본문으로 답하며, core를 거치지 않고 진행 표시만 바꿔 Work 스냅샷과 따로 보낸다. 진행 표시는 기록하지 않는다 | 평가에서 relay 사람 차례의 약 1/4이 기다리기만 한 차례였고 "진행 중인지 멈춘 것인지 모른다"가 되풀이됐다(R2). 도구 이름과 인자는 훅 본문에 있어 터미널을 읽지 않아도 된다(D2). 도구를 쓸 때마다 처리 줄을 기다리게 하면 에이전트가 늦어지고, 스냅샷을 보내면 렌더러가 승인 화면(diff)을 다시 읽음 | ✅ |
+| D217 | 세션마다 띄운 뒤 첫 PTY 출력과 첫 훅까지 걸린 시간을 `events.jsonl`에 남긴다(`task.first_output`, `task.first_hook`, 5.5) | 검은 화면이 CLI를 띄우는 시간인지 첫 화면이 늦는 것인지(터미널 질의의 답, 창 크기 변경) 기록이 없어 가리지 못했다(R2). 다음 평가에서 원인을 가린 뒤 고친다 | ✅ |
 
 ---
 
@@ -420,7 +423,7 @@ Work 완료에서 [PR 생성]을 고르면 → PR 진행 → 머지
 1. **앱:** task 디렉터리 `tasks/<순번>-<노드>/`를 만들고, 현재 HEAD를 이 task의 시작 커밋으로 `work.json`에 기록한다(되감기 기준, 6.2).
 2. **앱:** 이번 task의 스킬을 Work 디렉터리의 `.claude/skills/relay-<이름>/`에 복사하고, 공통 규칙(`_common.md`)을 `SKILL.md` 끝에 붙인다. 다른 relay 스킬 폴더는 지운다(D108, 5.6.3). worktree는 건드리지 않는다.
 3. **앱:** task 전용 설정 파일을 만든다.
-   - HTTP 훅: UserPromptSubmit, Stop, Notification, SessionEnd, PreToolUse·PostToolUse(`AskUserQuestion`만)
+   - HTTP 훅: UserPromptSubmit, Stop, Notification, SessionEnd, PreToolUse·PostToolUse(모든 도구. 질문 대기는 `AskUserQuestion`으로, 진행 표시는 나머지 도구로 한다, D216)
    - deny 규칙: `git push`, `gh pr` 계열, 앱 소유 파일(`work.json`, `request.md`, `intent.md`, `decisions.md`, `pr-items.json`(D191), 이전 task 디렉터리, Work 디렉터리의 `.claude/`) 편집
    - 자동 메모리 끔: `autoMemoryEnabled: false` (D113)
 4. **앱:** `context.md`를 조립한다.
@@ -454,7 +457,8 @@ Work 완료에서 [PR 생성]을 고르면 → PR 진행 → 머지
    claude --dangerously-skip-permissions --session-id <uuid> --add-dir <work 디렉터리> --settings <task 설정>
           "/relay-<스킬> 이 task의 컨텍스트: <context.md 경로>"
    ```
-   탭 위 머리 띠에 "04 원인 분석 · 새 세션 · 이유: 기본 진행"을 표시한다. 이유 문구는 기본 진행 / 되감기 / 건너뛰기 / 재개 중 하나다. PR 대응 task는 대응 시작 / 자동 대응 중 하나다(시나리오 10).
+   탭 위 머리 띠에 "04 원인 분석 · 새 세션 · 이유: 기본 진행"을 표시한다. 이유 문구는 기본 진행 / 되감기 / 건너뛰기 / 재개 중 하나다. PR 대응 task는 대응 시작 / 자동 대응 중 하나다(시나리오 10). 머리 띠에는 진행 표시도 있다(시나리오 3-2, D216).
+   터미널은 앱이 넣은 표시 줄 "── relay: 04 원인 분석 · 새 세션을 띄우는 중 ──"으로 시작한다. CLI가 첫 화면을 그리기 전의 빈 화면을 채운다(D215).
 6. **세션 상한:** 넘으면 대기열에 넣고, 자리가 나면 자동으로 시작하면서 알린다.
 
 ### 시나리오 3. task 진행 중
@@ -467,11 +471,14 @@ Work 완료에서 [PR 생성]을 고르면 → PR 진행 → 머지
    | UserPromptSubmit | 작업 중 (사용자가 새 요청을 보냈다는 기록도 남김). 첫 신호에서는 본문의 `permission_mode`도 확인한다(D94) |
    | PreToolUse(`AskUserQuestion`) | 질문 대기 (입력 필요, 백그라운드 Work면 알림) |
    | PostToolUse(`AskUserQuestion`) | 작업 중 (사람이 답함) |
+   | PreToolUse·PostToolUse(나머지 도구) | 그대로. 진행 표시의 마지막 동작만 바꾼다(D216) |
    | Stop + 유효한 handoff 없음 | 대기 |
    | Stop + 유효한 handoff 있음(`awaiting_approval`) | 승인 대기 (시나리오 4) |
    | Stop + 유효한 handoff 있음(`blocked`) | 막힘 (4.4) |
    | Notification(`permission_prompt`) | 입력 필요 (이 모드에서는 드묾) |
    | SessionEnd(`reason`이 `clear`, `resume`이 아님, D110) / PTY 종료 | 세션 종료. 그때의 파일에 유효한 handoff가 있으면 승인 대기나 막힘(3.3, D146) |
+
+   **진행 표시(D216):** 작업 중인 task는 머리 띠와 오른쪽 패널에 진행 표시가 있다. 첫 턴(UserPromptSubmit) 전이면 "세션을 띄우는 중 12초"처럼 task를 만든 뒤 지난 시간이다(앱이 스킬과 `context.md`를 준비하는 시간도 사람에게는 기다리는 시간이다). 턴 중이면 "1분 12초 · Bash(npm test) 실행 중 8초"나 "1분 12초 · 마지막 동작 Edit(src/avg.js) 8초 전"처럼 턴이 시작한 뒤 지난 시간과 마지막 도구다. 도구는 이름과 입력의 인자 하나(명령, 파일, 패턴, 주소 등의 첫 줄, 40자까지)로 보이고, 작업 폴더 안의 파일은 상대 경로다. 경과 시간은 렌더러가 센다. 질문 도구가 아닌 도구의 훅은 처리 줄을 기다리지 않고 바로 답하며, 진행 표시만 Work 스냅샷과 따로 보낸다. 진행 표시는 `work.json`과 `events.jsonl`에 남기지 않는다.
 
 3. **handoff 감시:** handoff가 생기거나 바뀌면 바로 검증해서 패널에 표시한다. intake에서는 intent 초안도 같은 방식으로 검증한다(D38). Stop 시점에 형식 오류가 있고 이번 턴에 handoff가 바뀌었으면, Stop 훅 응답으로 오류를 에이전트에게 되돌린다(연속 2회까지, 설정 가능, D21). 연속 횟수는 사람이 새 요청으로 시작한 턴의 Stop(`stop_hook_active: false`)이나 검사 통과 때 0으로 돌아간다(D107).
 4. **중단**
@@ -702,8 +709,8 @@ Work 완료에서 [PR 생성]을 고르면 → PR 진행 → 머지
 ```
 
 - **왼쪽 사이드바:** 프로젝트 → Work 목록. [새 Work], [프로젝트 추가].
-- **가운데:** 선택한 Work의 터미널 탭(task마다 탭 하나), 탭 위 머리 띠, 아래 액션 바. 끝난 task의 탭은 읽기 전용이다. PR 진행 중 액션 바에는 PR 대응 task의 [즉시 중단]과 [재개], 그리고 [Work 설정]이 있다(D182, D209).
-- **오른쪽 패널:** handoff 상태와 형식 오류, 산출물 목록. 승인 대기가 되면 넓어져 승인 화면이 된다. 터미널은 옆에 그대로 보인다. 재시작 때의 알림(끊긴 작업, 끝낸 고아 프로세스, 바뀐 앱 소유 파일)은 맨 위에 보인다(D121). PR 진행이면 PR 패널이 된다(아래).
+- **가운데:** 선택한 Work의 터미널 탭(task마다 탭 하나), 탭 위 머리 띠, 아래 액션 바. 작업 중이면 머리 띠에 진행 표시가 있다(D216). 끝난 task의 탭은 읽기 전용이다. PR 진행 중 액션 바에는 PR 대응 task의 [즉시 중단]과 [재개], 그리고 [Work 설정]이 있다(D182, D209).
+- **오른쪽 패널:** 진행 표시(작업 중일 때, D216), handoff 상태와 형식 오류, 산출물 목록. 승인 대기가 되면 넓어져 승인 화면이 된다. 터미널은 옆에 그대로 보인다. 재시작 때의 알림(끊긴 작업, 끝낸 고아 프로세스, 바뀐 앱 소유 파일)은 맨 위에 보인다(D121). PR 진행이면 PR 패널이 된다(아래).
 - Work 생성 화면과 프로젝트 등록 화면은 시나리오 0·1의 입력 항목을 그대로 쓴다.
 - **프로젝트 설정 화면(D185):** 사이드바의 프로젝트에서 연다. 받을 봇 목록(D161)과 기본 머지 방식(D177)을 고친다(5.1.2).
 
@@ -999,7 +1006,7 @@ KST 서버에서 액세스 토큰이 발급 직후 만료로 판정되는 문제
 
 ```
 work.created | work.completed | work.abandoned | work.cleaned
-task.started | task.awaiting_approval | task.approved | task.interrupted | task.resumed
+task.started | task.first_output | task.first_hook | task.awaiting_approval | task.approved | task.interrupted | task.resumed
 task.rewound | task.skipped_to
 delivery.succeeded | delivery.failed
 pr.items_received | pr.synced | pr.pushed | pr.replied | pr.checks_rerun | pr.merged | pr.closed | pr.reopened | pr.auto_paused
@@ -1014,6 +1021,7 @@ pr.items_received | pr.synced | pr.pushed | pr.replied | pr.checks_rerun | pr.me
 | `work.abandoned` | 없음 |
 | `work.cleaned` | `forced`(`--force`로 지웠는가), `deleted_branches` |
 | `task.started` | `reason`(task를 시작한 까닭: `default`, `rewind`, `skip`, `resume`, `respond`([대응 시작], D187), `auto_respond`(자동 대응, D154)), `session_id` |
+| `task.first_output`, `task.first_hook` | 세션을 띄운 뒤 처음 받은 PTY 출력과 훅(D217): `pid`, 띄운 뒤 걸린 `ms`. `task.first_hook`에는 그 훅의 `event`(보통 `UserPromptSubmit`). 새 세션과 다시 연 세션마다 한 번씩이다 |
 | `task.awaiting_approval` | 없음. 재시작 조정이 바꿨으면 `reason: app_restart`와 끝낸 고아의 `killed_pid`(D76). Stop 없이 세션이 끝나며 바뀌었으면 `reason: session_ended`(D146) |
 | `task.approved` | `by`: `human`, `auto`. [오류 무시하고 승인]이면 `ignored_errors`(수) |
 | `task.interrupted` | `reason`: `human`([즉시 중단]), `app_quit`(앱 종료 확인), `abandoned`([Work 포기]), `rewind`, `skip`(단계 선택), `session_ended`(handoff 없이 세션 종료), `start_failed`(세션을 띄우지 못함. `error`에 까닭, D135의 앞선 처리 실패도 여기다), `app_restart`(재시작 조정. 끝낸 고아가 있으면 `killed_pid`), `pr_merged`(PR이 밖에서 머지돼 대응 task를 끝냄, D179). 대기열에 있던 task면 `queued: true` |
@@ -1453,7 +1461,7 @@ PR 진행 중 앱이 모은 항목(D157)에 대응한다. 코드를 고치고 �
 | 재개 | 같은 설정(`--dangerously-skip-permissions`, `--add-dir`, `--settings`) + `--resume <uuid>`. `--session-id`와 첫 프롬프트는 뺀다(이전 옵션이 복원된다고 가정하지 않음, 스파이크 S6) |
 | 컨텍스트 | `tasks/<nn>/context.md` + 첫 프롬프트에 경로 |
 | 스킬 배포 | 이번 task의 스킬만 Work 디렉터리 `.claude/skills/relay-<name>/`로 복사(`--add-dir`로 읽힘, D108). 복사할 때 공통 규칙(`_common.md`)을 `SKILL.md` 끝에 붙임. investigate는 evidence와 root-cause를 합쳐 배포(D148). `disable-model-invocation: true` |
-| 상태 신호 | 내장 HTTP 훅 → 앱 로컬 서버: UserPromptSubmit, Stop, Notification, SessionEnd, PreToolUse·PostToolUse(`AskUserQuestion`) |
+| 상태 신호 | 내장 HTTP 훅 → 앱 로컬 서버: UserPromptSubmit, Stop, Notification, SessionEnd, PreToolUse·PostToolUse(모든 도구, D216) |
 | 형식 오류 되돌림 | Stop 훅 응답 `{"decision":"block","reason":…}`, 연속 2회까지(설정 가능) |
 | 제한 | deny 규칙: `Bash(git push*)`, `Bash(gh pr*)`, 앱 소유 파일 `Edit(//…)`. 실수를 막는 장치이며 우회할 수 있다(6.1) |
 | 자동 메모리 | task 설정에 `autoMemoryEnabled: false` (D113) |
@@ -1569,4 +1577,4 @@ PR 대응 task는 남이 쓴 글(코멘트, CI 로그)을 받는다. 이 전제�
 
 - v0.4: MVP 설계. 이전 버전의 검토 기록과 조사 자료는 브랜치 `claude/relay-v2-design-refinement-n2gda6`에 있다.
 - v0.5: 리뷰 단계와 PR 진행(D152~D194). 부록 A의 방식으로 주제(흐름의 뼈대, PR 연결과 감시, 외부 글의 신뢰, 리뷰 단계, PR 대응 task, 밖으로 나가는 동작, 검증과 코드 이력, 상태·화면·복구, 기록과 순서)마다 사람과 문답으로 정했다. D187~D192는 문답에서 정한 것을 문서로 옮기며 채운 세부이고 사용자 결정이 아니다. "PR 머지 감지 후 정리 제안" 후보는 D178, D179로 들어가 9절에서 뺐다. PR 리뷰를 반영해 머지 조건(D176)을 "제외하지 않은 받은 항목이 모두 처리됨"으로 고치고, 원격 PR 브랜치 맞추기(D193)와 답글 게시 기록(D194)을 사람이 정해 더했다. M8 구현 중 PR #13 리뷰로 리뷰가 재현 절차를 지키는 규칙(D195)을 사람이 정해 더했다. 스파이크 S7에서 새 head의 체크가 몇 초 동안 비어 있는 것을 보고, 그동안 체크 없음을 통과로 보지 않는 규칙(D196)과, 받을 봇의 이름을 웹 화면에 보이는 모양으로 적는 규칙(D197)을 사람이 정해 더했다. M9 구현 전에 gh 버전의 기록과 최소 버전(D198), relay 밖에서 풀린 조건 항목의 해소됨(D199), 밖에서 머지된 것을 읽었을 때 정리 창을 여는 때(D200)를 사람이 정해 더했다. M9 구현 중 PR #15 리뷰로 CI 체크를 이벤트까지 가리는 규칙(D201)을 사람이 정해 더했다. M10 구현 전에 기존 테스트 변경을 앱이 git으로 가리는 것(D202), [실패한 체크 다시 실행]을 보이는 때(D203), `replies.md` 오류는 넘길 수 없음(D204), 없어진 코멘트의 답글(D205), 판정표 경고의 범위(D206), 스레드가 없는 답글의 원래 코멘트 링크(D207)를 사람이 정해 더했다.
-- v0.6: 사용성 평가 반영(D212~). 평가 보고서(`app/eval/reports/`)에서 뽑은 개선점(`docs/eval-findings.md`)을 사람이 하나씩 보고 정했다. R1(작은 버그의 절차 무게): 크기 기준을 좁히고(D212), 지적이 없는 리뷰를 자동 승인할 수 있게 하고(D213), 자동 승인 기본값으로 수정과 리뷰를 켰다(D214). 크기를 고를 때 경로를 보이는 안은 사람이 빼기로 했다.
+- v0.6: 사용성 평가 반영(D212~). 평가 보고서(`app/eval/reports/`)에서 뽑은 개선점(`docs/eval-findings.md`)을 사람이 하나씩 보고 정했다. R1(작은 버그의 절차 무게): 크기 기준을 좁히고(D212), 지적이 없는 리뷰를 자동 승인할 수 있게 하고(D213), 자동 승인 기본값으로 수정과 리뷰를 켰다(D214). 크기를 고를 때 경로를 보이는 안은 사람이 빼기로 했다. R2(검은 화면과 진행 표시): 새 세션의 표시 줄(D215), 경과 시간과 마지막 도구의 진행 표시(D216), 세션의 첫 출력과 첫 훅 시각 기록(D217).

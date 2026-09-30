@@ -124,14 +124,24 @@ function visibleText() {
   return { text: clean(text), terminal: clean(terminal).replace(/\n+$/, ''), dialogs }
 }
 
-/** 폴링용: DOM을 복제하지 않고 화면 글자와 보이는 터미널 글자만 읽는다 */
+/**
+ * 폴링용: DOM을 복제하지 않고 화면 글자와 보이는 터미널 글자만 읽는다. 앱의 경과 시간처럼 시계만 따라 바뀌는
+ * 글자([data-tick], relay D216)는 잠깐 가리고 읽는다: 시계가 도는 것으로는 화면이 바뀐 것으로 보지 않는다
+ * (docs/eval.md의 같은 깨우기). 가렸다 되돌리는 것은 한 번의 실행 안이라 화면에 그려지지 않는다
+ */
 function pollText() {
   const rows = document.querySelector('.terminal-host:not([hidden]) .xterm-rows')
   const terminal = rows
     ? [...rows.children].map((r) => r.textContent.replace(/\u00a0/g, ' ').trimEnd()).join('\n')
     : ''
   const layout = document.querySelector('.layout') ?? document.body
-  return { text: layout.innerText, terminal }
+  const ticks = [...layout.querySelectorAll('[data-tick]')].map((el) => [el, el.style.display])
+  for (const [el] of ticks) el.style.display = 'none'
+  try {
+    return { text: layout.innerText, terminal }
+  } finally {
+    for (const [el, display] of ticks) el.style.display = display
+  }
 }
 
 /** 열린 대화상자 수 */

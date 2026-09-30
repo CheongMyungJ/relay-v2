@@ -19,6 +19,12 @@ export const FAKE_CLAUDE = path.join(
 )
 export const FAKE_GH = path.join(APP, 'test/fake-gh', isWin ? 'gh.cmd' : 'gh.mjs')
 
+/**
+ * 세션의 첫 출력과 첫 훅 시각 (D217). 세션마다 남으므로, 이것을 보지 않는 시험은 events.jsonl을 통째로 비교할 때
+ * 뺀다
+ */
+export const TIMING_EVENTS: readonly string[] = ['task.first_output', 'task.first_hook']
+
 export { FakeUi, sleep } from './ui'
 
 export interface HarnessOptions {

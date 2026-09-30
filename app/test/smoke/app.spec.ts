@@ -1,10 +1,11 @@
 // [스모크] 설치한 앱이 뜨고, 가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화면(자동 승인 포함), [단계 선택],
 // 자동 승인 카운트다운의 [취소], [push]와 [Work 정리], 다시 켠 뒤 끊긴 작업의 [다시 시도]를 누른다 (I27).
 // M2: 프로젝트 등록 → 새 Work → intake 탭에 PTY 출력 → 창 크기 변경이 PTY에 전달 → [의도 승인]
-// → intent.md 확정, intake 세션 트리 종료, 다음 task 시작.
+// → intent.md 확정, intake 세션 트리 종료, 다음 task 시작. M12: 다음 task의 터미널은 표시 줄로 시작하고, 머리 띠와
+// 패널에 진행 표시(마지막 동작 Bash(npm test))가 보인다.
 // M3: 다음 task를 [즉시 중단]하면 중단됨·읽기 전용이 되고 트리가 끝난다 → [재개]하면 같은 세션을
-// --resume으로 이전 화면 뒤에 잇는다 → 설정 화면에서 세션 상한을 바꾼다. M7: 같은 설정 화면에서 수정 단계의 자동
-// 승인을 켜고 카운트다운을 600초로 바꾼다.
+// --resume으로 이전 화면 뒤에 잇는다 → 설정 화면에서 세션 상한을 바꾼다. M7: 같은 설정 화면에서 카운트다운을
+// 600초로 바꾼다(수정 단계의 자동 승인은 M12부터 기본으로 켜져 있다).
 // M4: [단계 선택]에서 intake를 고르면 미리 보기(폐기될 산출물, 중단할 task, 코드, intent 새 버전)를 보이고,
 // 추가 지시와 함께 [확인]하면 진행 중인 세션을 끝내고 intake를 되감기로 다시 시작한다(앞 탭은 폐기됨)
 // → 새 intake를 [의도 승인]하면 intent v2가 되고 v1은 intent.history에 남는다.
@@ -75,7 +76,11 @@ test.beforeAll(async () => {
     scenarioFile,
     JSON.stringify({
       ...scenario('L', {
-        evidence: [{ do: 'prompt' }, { do: 'wait' }],
+        evidence: [
+          { do: 'prompt' },
+          { do: 'tool', name: 'Bash', input: { command: 'npm test' } },
+          { do: 'wait' },
+        ],
         'final-verify': [
           ...steps('verify', 'S').slice(0, -1),
           { do: 'edit', files: { 'debug.log': '실험 출력\n' } },
@@ -164,8 +169,14 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   const badge = win.locator('.work-item .badge')
   await expect(badge).toHaveText('작업 중')
 
-  // [즉시 중단] (시나리오 3-4): 중단됨, 읽기 전용, 프로세스 트리 종료
+  // 새 세션은 표시 줄로 시작하고(D215), 머리 띠와 패널에 진행 표시가 있다(D216)
   await expect(rows).toContainText('[가짜 claude] wait', { timeout: 60_000 })
+  await expect(rows).toContainText('── relay: 02 재현과 관찰 · 새 세션을 띄우는 중 ──')
+  await expect(win.locator('.band .activity')).toContainText('마지막 동작 Bash(npm test)')
+  await expect(win.locator('.panel .progress')).toContainText('마지막 동작 Bash(npm test)')
+  await win.screenshot({ path: 'test-results/activity.png' })
+
+  // [즉시 중단] (시나리오 3-4): 중단됨, 읽기 전용, 프로세스 트리 종료
   const next = Number(/PID (\d+)/.exec((await rows.textContent()) ?? '')?.[1])
   expect(alive(next)).toBe(true)
   await win.getByRole('button', { name: '즉시 중단', exact: true }).click()

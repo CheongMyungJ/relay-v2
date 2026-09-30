@@ -3,7 +3,7 @@
 // - `--version`은 버전을 찍고(D105), `auth status`는 FAKE_CLAUDE_AUTH가 fail이면 종료 코드 1이다(D67).
 // - FAKE_CLAUDE_SCENARIO가 있으면 첫 프롬프트(/relay-<스킬> 이 task의 컨텍스트: <경로>)의 스킬이나
 //   context.md의 task id에 맞는 단계를 차례로 한다: 훅 신호 보내기, 산출물과 handoff 쓰기, worktree에
-//   커밋하기, 커밋하지 않고 worktree 고치기, 질문 대기 흉내, Stop 보내고 되돌림을 받으면 고쳐 쓰기, 종료.
+//   커밋하기, 커밋하지 않고 worktree 고치기, 질문 대기와 도구 호출 흉내, Stop 보내고 되돌림을 받으면 고쳐 쓰기, 종료.
 // - 훅은 --settings 파일의 URL과 머리글로 보낸다. 머리글의 $VAR는 allowedEnvVars에 있는 것만 푼다
 //   (Claude Code 문서 hooks). 본문 필드는 S2에서 관찰한 모양이다. Stop에는 background_tasks와 session_crons를
 //   넣는다(Claude Code 2.1.145부터, 문서 hooks). 시나리오의 stop 단계가 목록을 주면 그것을 넣는다(D129).
@@ -306,25 +306,20 @@ async function steps(list, ctx, vars) {
       await waitEnter()
     } else if (s === 'ask') {
       const question = { questions: [{ question: step.question ?? '질문', options: [] }] }
-      await hook(
-        'PreToolUse',
-        { tool_name: 'AskUserQuestion', tool_input: question },
-        'AskUserQuestion',
-      )
+      const id = `toolu_${randomUUID().replaceAll('-', '').slice(0, 24)}`
+      const fields = { tool_name: 'AskUserQuestion', tool_input: question, tool_use_id: id }
+      await hook('PreToolUse', fields, 'AskUserQuestion')
       out('질문 대기: Enter를 누르세요')
       await waitEnter()
-      await hook(
-        'PostToolUse',
-        { tool_name: 'AskUserQuestion', tool_input: question, tool_response: '답함' },
-        'AskUserQuestion',
-      )
+      await hook('PostToolUse', { ...fields, tool_response: '답함' }, 'AskUserQuestion')
     } else if (s === 'tool') {
-      await hook('PreToolUse', { tool_name: step.name, tool_input: {} }, step.name)
-      await hook(
-        'PostToolUse',
-        { tool_name: step.name, tool_input: {}, tool_response: '' },
-        step.name,
-      )
+      // 도구 호출 (D216): PreToolUse, ms만큼 실행, PostToolUse. 두 훅은 같은 tool_use_id를 가진다
+      const input = step.input ?? {}
+      const id = `toolu_${randomUUID().replaceAll('-', '').slice(0, 24)}`
+      const fields = { tool_name: step.name, tool_input: input, tool_use_id: id }
+      await hook('PreToolUse', fields, step.name)
+      if (step.ms) await sleep(step.ms)
+      await hook('PostToolUse', { ...fields, tool_response: '' }, step.name)
     } else if (s === 'notify') {
       await hook('Notification', { message: '알림', notification_type: step.type })
     } else if (s === 'stop') {

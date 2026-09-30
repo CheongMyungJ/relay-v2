@@ -286,6 +286,58 @@ describe('Work 만들기와 task 시작 (시나리오 1, 2)', () => {
     expect(again.rejected).toBeDefined()
     expect(again.work).toBe(work)
   })
+
+  it('첫 PTY 출력과 첫 훅까지 걸린 시간을 기록하고 표시는 바꾸지 않는다 (D217)', () => {
+    const work = launch(newWork())
+    const output = apply(work, {
+      type: 'session.timing',
+      taskId: 't-01',
+      at: '2026-09-26T10:02:00+09:00',
+      pid: 1001,
+      first: 'output',
+      ms: 850,
+    })
+    expect(output.work).toBe(work)
+    expect(output.effects).toEqual([
+      {
+        type: 'log',
+        event: {
+          ts: '2026-09-26T10:02:00+09:00',
+          work_id: 'w-20260926-001',
+          task_id: 't-01',
+          type: 'task.first_output',
+          payload: { pid: 1001, ms: 850 },
+        },
+      },
+    ])
+    const hook = apply(work, {
+      type: 'session.timing',
+      taskId: 't-01',
+      at: at(),
+      pid: 1001,
+      first: 'hook',
+      hook: 'UserPromptSubmit',
+      ms: 4200,
+    })
+    expect(hook.work).toBe(work)
+    expect(hook.effects.map((e) => e.type === 'log' && [e.event.type, e.event.payload])).toEqual([
+      ['task.first_hook', { pid: 1001, ms: 4200, event: 'UserPromptSubmit' }],
+    ])
+  })
+
+  it('다시 열기 전 프로세스의 늦은 시간 알림과 세션이 없는 task의 알림은 기록하지 않는다 (D217)', () => {
+    const timing = {
+      type: 'session.timing',
+      taskId: 't-01',
+      at: at(),
+      first: 'output',
+      ms: 5,
+    } as const
+    const work = launch(newWork())
+    expect(apply(work, { ...timing, pid: 999 })).toEqual({ work, effects: [] })
+    const fresh = newWork()
+    expect(apply(fresh, { ...timing, pid: 1001 })).toEqual({ work: fresh, effects: [] })
+  })
 })
 
 describe('시나리오 3의 신호 표: 신호마다 표시 상태', () => {

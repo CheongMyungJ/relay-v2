@@ -20,6 +20,7 @@ import type {
   WorkView,
 } from '../../shared/views'
 import type { DeliveryChoice, UncommittedAction } from '../../shared/work'
+import { Activity } from './Activity'
 import { call } from './commands'
 import { ConfirmDialog, UncommittedDialog } from './dialogs'
 import { Diff, Markdown } from './Markdown'
@@ -315,10 +316,16 @@ function TaskNotice({ task, pr }: { task: TaskView; pr: boolean }) {
   return null
 }
 
-/** 진행 중: handoff 상태, 형식 오류, 산출물 목록 */
+/** 진행 중: 경과 시간과 마지막 동작(D216), handoff 상태, 형식 오류, 산출물 목록 */
 function Progress({ review, task }: { review: ReviewView; task: TaskView }) {
   return (
     <>
+      {task.activity ? (
+        <section className="progress">
+          <h3>진행</h3>
+          <Activity activity={task.activity} />
+        </section>
+      ) : null}
       <section>
         <h3>handoff</h3>
         <div>

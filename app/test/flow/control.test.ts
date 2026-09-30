@@ -8,7 +8,7 @@ import { HookServer, type HookHandler } from '../../src/adapters/hooks'
 import type { WorkView } from '../../src/shared/views'
 import type { LifecycleEvent, WorkState } from '../../src/shared/work'
 import { drive } from './driver'
-import { harness, makeRepo, register, settle, type Harness } from './harness'
+import { TIMING_EVENTS, harness, makeRepo, register, settle, type Harness } from './harness'
 import {
   REPO_FILES,
   REQUEST,
@@ -64,11 +64,13 @@ function work(dir: string): WorkState {
   return JSON.parse(read(path.join(dir, 'work.json'))) as WorkState
 }
 
+/** events.jsonl. 세션의 시각(D217)은 이 파일의 시험이 보지 않아 뺀다 */
 function events(dir: string): LifecycleEvent[] {
   return read(path.join(dir, 'events.jsonl'))
     .split('\n')
     .filter(Boolean)
     .map((l) => JSON.parse(l) as LifecycleEvent)
+    .filter((e) => !TIMING_EVENTS.includes(e.type))
 }
 
 /** Work 스냅샷의 지금 task가 pred를 만족할 때까지 기다린다 */
