@@ -1,0 +1,39 @@
+{
+  "id": "07-two-bugs",
+  "repoName": "utils",
+  "title": "서로 관계없는 버그 두 개를 한꺼번에",
+  "purpose": "두 버그를 나란히 또는 차례로 처리할 때 사람의 부담, 변경이 섞이지 않게 나누기 쉬운지, 둘 다 끝까지 가는지 본다.",
+  "report": [
+    "리포트 1 (화면 팀): truncate('hello world', 8)이 'hello wo…'(9자)를 돌려준다. 붙인 '…'까지 8자여야 한다. 짧은 글에도 '…'가 붙는다. (src/text.js)",
+    "리포트 2 (통계 팀): median([10, 9, 100])이 100을 돌려준다. 10이어야 한다. (src/stats.js)"
+  ],
+  "knowledge": [
+    {
+      "share": "on_ask",
+      "text": "개수가 짝수면 가운데 두 값의 평균이 중앙값이다."
+    }
+  ],
+  "preferences": [
+    "두 버그는 서로 관계없고 리뷰하는 팀도 다르다. 되도록 따로 진행해서 변경이 섞이지 않게(따로 커밋하거나 따로 브랜치로) 하고 싶다.",
+    "둘 다 이번에 끝내고 싶다."
+  ],
+  "reveals": [],
+  "events": [],
+  "expectedFiles": ["src/text.js", "src/stats.js", "test/**"],
+  "checks": [
+    {
+      "name": "truncate",
+      "file": "truncate.test.js",
+      "bug": "text"
+    },
+    {
+      "name": "median",
+      "file": "median.test.js",
+      "bug": "stats"
+    }
+  ],
+  "limits": {
+    "minutes": 60,
+    "turns": 80
+  }
+}

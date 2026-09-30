@@ -1,0 +1,28 @@
+{
+  "id": "06-paginate-crash",
+  "repoName": "paginate",
+  "title": "작업 도중 앱이나 터미널이 갑자기 꺼지는 경우",
+  "purpose": "에이전트가 코드를 고치기 시작한 뒤 도구가 비정상 종료될 때, 사람이 상황을 파악하고 이어 가기까지의 부담과 결과가 온전한지 본다.",
+  "report": "목록 첫 쪽에 앞 항목들이 안 보이고, 마지막 쪽이 아예 안 나올 때가 있다. 예: 항목 25개를 한 쪽에 10개씩 보이면 쪽 수가 2로 나오고, 1쪽에 11~20번이 나온다. (src/page.js)",
+  "knowledge": [],
+  "preferences": [],
+  "reveals": [],
+  "events": [
+    {
+      "when": "first_change",
+      "afterSeconds": 5,
+      "do": "crash"
+    }
+  ],
+  "expectedFiles": ["src/page.js", "test/**"],
+  "checks": [
+    {
+      "name": "쪽 나누기와 쪽 수",
+      "file": "page.test.js"
+    }
+  ],
+  "limits": {
+    "minutes": 45,
+    "turns": 60
+  }
+}

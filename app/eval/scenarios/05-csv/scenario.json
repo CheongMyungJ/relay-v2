@@ -1,0 +1,32 @@
+{
+  "id": "05-csv",
+  "repoName": "csv",
+  "title": "진행 중에 요구가 늘어나는 버그",
+  "purpose": "수정이 시작된 뒤 사람이 요구를 더할 때, 방향을 바꾸기가 쉬운지(relay는 단계 선택·되감기나 지시, CLI는 대화)와 최종 결과가 두 요구를 다 채우는지 본다.",
+  "report": "CSV에서 따옴표로 감싼 칸 안에 쉼표가 있으면 칸이 쪼개진다. 예: parseLine('a,\"b,c\",d')가 ['a', '\"b', 'c\"', 'd']를 돌려준다. 기대: ['a', 'b,c', 'd']. (src/csv.js)",
+  "knowledge": [],
+  "preferences": ["외부 라이브러리는 쓰지 않는다."],
+  "reveals": [
+    {
+      "when": "first_change",
+      "afterSeconds": 0,
+      "text": "생각해 보니 따옴표 안의 따옴표는 두 번 써서 나타낸다(\"\"). 예: '\"say \"\"hi\"\"\",2' → ['say \"hi\"', '2']. 이것도 이번에 같이 고쳐져야 한다. 빈 칸(a,,b)은 빈 문자열로 남아야 한다. 에이전트에게 알려라."
+    }
+  ],
+  "events": [],
+  "expectedFiles": ["src/csv.js", "test/**"],
+  "checks": [
+    {
+      "name": "따옴표 안 쉼표",
+      "file": "quoted.test.js"
+    },
+    {
+      "name": "이중 따옴표와 빈 칸",
+      "file": "escaped.test.js"
+    }
+  ],
+  "limits": {
+    "minutes": 45,
+    "turns": 60
+  }
+}

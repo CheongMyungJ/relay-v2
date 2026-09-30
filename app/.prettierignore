@@ -3,3 +3,7 @@ dist/
 package-lock.json
 test-results/
 src/shared/generated/
+# 평가 시나리오의 레포는 일부러 고르지 않은 모양이다 (docs/eval.md)
+eval/scenarios/*/repo/
+eval/scenarios/*/hidden/
+eval/results/

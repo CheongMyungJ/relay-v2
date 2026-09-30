@@ -1,0 +1,25 @@
+{
+  "id": "01-slug",
+  "title": "재현 방법과 위치가 분명한 한 줄 버그",
+  "purpose": "가장 단순한 버그에서 relay의 단계와 승인이 부담이 되는지(과한 절차) 본다.",
+  "report": "slugify('Hello Big World')가 'hello-big world'를 돌려준다. 기대: 'hello-big-world'. 공백을 하나만 바꾸는 것 같다 (src/slug.js). 재현: node -e \"import('./src/slug.js').then((m) => console.log(m.slugify('Hello Big World')))\"",
+  "knowledge": [],
+  "preferences": [
+    "간단한 버그라 빨리 끝내고 싶다.",
+    "고친 동작을 지키는 테스트가 하나 있으면 좋겠다."
+  ],
+  "reveals": [],
+  "events": [],
+  "expectedFiles": ["src/slug.js", "test/**"],
+  "checks": [
+    {
+      "name": "여러 공백과 기존 동작",
+      "file": "slug.test.js"
+    }
+  ],
+  "limits": {
+    "minutes": 30,
+    "turns": 40
+  },
+  "repoName": "slug"
+}

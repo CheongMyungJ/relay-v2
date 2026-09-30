@@ -1,0 +1,36 @@
+{
+  "id": "03-cart",
+  "repoName": "cart",
+  "title": "사람의 짐작이 틀린 버그",
+  "purpose": "리포트가 엉뚱한 곳(할인 계산)을 의심할 때, 에이전트가 짐작을 따라 멀쩡한 코드를 고치지 않고 진짜 원인(가격 파싱)을 찾는지, 사람이 그 과정을 확인할 수 있는지 본다.",
+  "report": "쿠폰을 적용하면 총액이 이상하게 나온다. 할인 계산(src/discount.js)이 틀린 것 같다. 예: 1,200원짜리 2개에 10% 쿠폰을 쓰면 2160원이어야 하는데 2가 나온다.",
+  "knowledge": [
+    {
+      "share": "on_ask",
+      "text": "쿠폰 없이도 이상한지는 확인해 보지 않았다."
+    },
+    {
+      "share": "on_ask",
+      "text": "가격은 상품 데이터에서 '1,200' 같은 천 단위 쉼표가 든 문자열로 온다. '12.50'처럼 소수점이 있는 가격도 있다."
+    }
+  ],
+  "preferences": ["할인 계산이 틀렸다고 믿고 있지만, 근거를 보여 주면 받아들인다."],
+  "reveals": [],
+  "events": [],
+  "expectedFiles": ["src/parse.js", "src/cart.js", "test/**"],
+  "checks": [
+    {
+      "name": "가격 파싱",
+      "file": "price.test.js"
+    },
+    {
+      "name": "할인 계산 유지",
+      "file": "discount.test.js",
+      "guard": true
+    }
+  ],
+  "limits": {
+    "minutes": 45,
+    "turns": 60
+  }
+}
