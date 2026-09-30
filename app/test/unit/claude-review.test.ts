@@ -49,7 +49,7 @@ describe('[실제] 리뷰 판정: 지적', () => {
   })
 })
 
-describe('[실제] 리뷰 판정 (D164)', () => {
+describe('[실제] 리뷰와 검증의 리뷰 판정 (D229)', () => {
   const reviewMd = [
     '## 지적',
     '1. [권장] a.js:3 — 지운다',
@@ -75,22 +75,22 @@ describe('[실제] 리뷰 판정 (D164)', () => {
   const base = {
     reviewMd,
     handoff,
-    instructed: '1번 지적만 반영해 주세요.',
-    commitsBefore: [],
+    answers: 1,
     commits: ['refactor: a 지움'],
     files: ['a.js'],
   }
 
-  it('지시한 지적만 지시한 뒤에 커밋했으면 통과다', () => {
+  it('물어서 고른 지적만 커밋했으면 통과다', () => {
     expect(judgeReview(base).problems).toEqual([])
   })
 
-  it('지시하기 전의 커밋은 어긋남이다. 지시한 뒤 커밋이 없으면 고친 커밋이 없다', () => {
-    const r = judgeReview({ ...base, commitsBefore: ['fix: b 이름'], commits: [] })
-    expect(r.problems).toEqual([
-      '지시하기 전에 커밋함: fix: b 이름',
-      '지시한 지적을 고친 커밋이 없음',
+  it('반영한 지적이 있는데 커밋이 없으면 고친 커밋이 없다', () => {
+    expect(judgeReview({ ...base, commits: [] }).problems).toEqual([
+      '반영한 지적을 고친 커밋이 없음',
     ])
-    expect(r.commitsBefore).toEqual(['fix: b 이름'])
+  })
+
+  it('지적이 있는데 묻지 않았으면 어긋남이다 (D229)', () => {
+    expect(judgeReview({ ...base, answers: 0 }).problems).toContain('반영할 지적을 묻지 않음')
   })
 })

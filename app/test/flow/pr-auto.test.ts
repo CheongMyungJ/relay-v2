@@ -83,7 +83,7 @@ function answer(round: number, wait = false): Step[] {
 }
 
 /**
- * 대응할 PR 진행 Work: 파일 끝에 함수를 더하고 ci-fail을 둔다. 첫 대응 task(t-05)는 ci-fail을 지워 커밋한다
+ * 대응할 PR 진행 Work: 파일 끝에 함수를 더하고 ci-fail을 둔다. 첫 대응 task(t-04)는 ci-fail을 지워 커밋한다
  * (respondClaude). tasks로 다음 대응 task의 단계를 정한다
  */
 function openWork(s: Setup, tasks: Record<string, Step[]>): Promise<PrWork> {
@@ -155,22 +155,22 @@ describe('[흐름] 자동 대응 (M11, 가짜 gh)', () => {
   it('자동 시작 → 자동 승인 → push → 새 항목 → 다음 라운드 → 상한에서 멈추고 알림. 사람의 [대응 시작]은 다시 센다. 자동 승인한 라운드의 게시 실패를 알린다 (D154, D169, D171, D184)', async () => {
     const s = await setup(AUTO)
     const { h: app } = s.ctx
-    const w = await openWork(s, { 't-06': answer(2), 't-07': answer(3), 't-08': answer(4) })
+    const w = await openWork(s, { 't-05': answer(2), 't-06': answer(3), 't-07': answer(4) })
     const head1 = workState(w).pr?.head ?? ''
 
     // ---------- 라운드 1: CI 실패로 자동 시작, 자동 승인, push ----------
     s.gh.runCi(w.pr, head1)
     await refresh(s, w)
-    const r1 = await published(s, w, 't-05')
-    const t5 = task(w, 't-05')
-    expect(t5).toMatchObject({ reason: 'auto_respond', approved_by: 'auto', respond: { round: 1 } })
+    const r1 = await published(s, w, 't-04')
+    const t4 = task(w, 't-04')
+    expect(t4).toMatchObject({ reason: 'auto_respond', approved_by: 'auto', respond: { round: 1 } })
     expect(r1.items.map((i) => i.id)).toEqual([`ci:${head1}:ci/test (pull_request)`])
-    expect(bandOf(s, w, 't-05')).toContain('이유: 자동 대응')
+    expect(bandOf(s, w, 't-04')).toContain('이유: 자동 대응')
     const events = workEvents(w)
     expect(
-      events.find((e) => e.type === 'task.started' && e.task_id === 't-05')?.payload,
+      events.find((e) => e.type === 'task.started' && e.task_id === 't-04')?.payload,
     ).toMatchObject({ reason: 'auto_respond' })
-    expect(events.find((e) => e.type === 'task.approved' && e.task_id === 't-05')?.payload).toEqual(
+    expect(events.find((e) => e.type === 'task.approved' && e.task_id === 't-04')?.payload).toEqual(
       {
         by: 'auto',
       },
@@ -183,7 +183,7 @@ describe('[흐름] 자동 대응 (M11, 가짜 gh)', () => {
     expect(notices(s, w)).toContain(`PR #${w.pr}: 자동 대응 시작 — 라운드 1, 새 항목 1개`)
     expect(notices(s, w).some((n) => n.includes('대응 거리'))).toBe(false)
     // context.md의 사람 지시와 승인 방식
-    const context = fs.readFileSync(path.join(w.dir, 'tasks', '05-respond', 'context.md'), 'utf8')
+    const context = fs.readFileSync(path.join(w.dir, 'tasks', '04-respond', 'context.md'), 'utf8')
     expect(context).toContain('없음: 앱이 받은 새 항목으로 자동으로 시작한 라운드다 (D154)')
     expect(context).toContain('자동 승인 (task를 시작할 때의 설정.')
 
@@ -191,9 +191,9 @@ describe('[흐름] 자동 대응 (M11, 가짜 gh)', () => {
     s.gh.runCi(w.pr, head2)
     const c2 = s.gh.convo(w.pr, 'relay M11 흐름 시험: 라운드 2 코멘트')
     await refresh(s, w)
-    const r2 = await published(s, w, 't-06')
+    const r2 = await published(s, w, 't-05')
     expect(r2.items.map((i) => i.id)).toEqual([`convo:${c2}`])
-    expect(task(w, 't-06')).toMatchObject({ reason: 'auto_respond', approved_by: 'auto' })
+    expect(task(w, 't-05')).toMatchObject({ reason: 'auto_respond', approved_by: 'auto' })
     expect(workState(w).pr?.auto_rounds).toBe(2)
     expect(replies(s, w)).toHaveLength(1)
     expect(notices(s, w)).toContain(`PR #${w.pr}: 자동 대응 시작 — 라운드 2, 새 항목 1개`)
@@ -228,10 +228,10 @@ describe('[흐름] 자동 대응 (M11, 가짜 gh)', () => {
     })
     await settle(app, w.key)
     expect(workState(w).pr?.auto_rounds).toBe(0)
-    await published(s, w, 't-07')
+    await published(s, w, 't-06')
     // 사람이 시작한 라운드도 자동 승인은 설정을 따른다. 자동 승인은 셈을 늘리지 않는다
-    expect(task(w, 't-07')).toMatchObject({ reason: 'respond', approved_by: 'auto' })
-    expect(bandOf(s, w, 't-07')).toContain('이유: 대응 시작')
+    expect(task(w, 't-06')).toMatchObject({ reason: 'respond', approved_by: 'auto' })
+    expect(bandOf(s, w, 't-06')).toContain('이유: 대응 시작')
     expect(workState(w).pr?.auto_rounds).toBe(0)
     expect(view(s.ctx, w).badge.kind).not.toBe('auto_paused')
 
@@ -239,10 +239,10 @@ describe('[흐름] 자동 대응 (M11, 가짜 gh)', () => {
     s.gh.postFaults(['error'])
     const c4 = s.gh.convo(w.pr, 'relay M11 흐름 시험: 다시 센 뒤의 코멘트')
     await refresh(s, w)
-    const failed = await roundUntil(s, w, 't-08', (r) => r.state === 'failed', '게시 실패')
+    const failed = await roundUntil(s, w, 't-07', (r) => r.state === 'failed', '게시 실패')
     await settle(app, w.key)
     expect(failed.items.map((i) => i.id)).toEqual([`convo:${c4}`])
-    expect(task(w, 't-08')).toMatchObject({
+    expect(task(w, 't-07')).toMatchObject({
       reason: 'auto_respond',
       status: 'awaiting_approval',
       respond: { round: 4, failure: { stage: 'reply' } },
@@ -252,21 +252,21 @@ describe('[흐름] 자동 대응 (M11, 가짜 gh)', () => {
     expect(
       notices(s, w).filter((n) =>
         n.startsWith(
-          `PR #${w.pr}: 08 PR 대응 자동 승인한 대응의 답글 게시 실패 — 승인 화면에서 [다시 시도]를 누르세요 (`,
+          `PR #${w.pr}: 07 PR 대응 자동 승인한 대응의 답글 게시 실패 — 승인 화면에서 [다시 시도]를 누르세요 (`,
         ),
       ),
     ).toHaveLength(1)
     // 사람이 [다시 시도](승인)하면 이어서 게시하고 다시 센다
-    expect(await app.relay.approve(w.key, 't-08', {})).toEqual({ ok: true })
-    await published(s, w, 't-08')
-    expect(task(w, 't-08')?.approved_by).toBe('human')
+    expect(await app.relay.approve(w.key, 't-07', {})).toEqual({ ok: true })
+    await published(s, w, 't-07')
+    expect(task(w, 't-07')?.approved_by).toBe('human')
     expect(workState(w).pr?.auto_rounds).toBe(0)
     expect(replies(s, w)).toHaveLength(3)
   })
 
   it('켜기 전에 받은 항목, 자동 시작을 켬, [받기]·[다시 넣기], 재시작 뒤 쌓인 항목으로는 시작하지 않고 다음에 들어온 항목과 함께 시작한다. 도는 동안 들어온 항목은 라운드가 끝나면 바로 시작한다 (D159, D209, D210)', async () => {
     const s = await setup({ auto_approve_countdown_sec: 1 })
-    const w = await openWork(s, { 't-06': answer(2) })
+    const w = await openWork(s, { 't-05': answer(2) })
     const head1 = workState(w).pr?.head ?? ''
     const ci = `ci:${head1}:ci/test (pull_request)`
 
@@ -322,19 +322,19 @@ describe('[흐름] 자동 대응 (M11, 가짜 gh)', () => {
     // 다음 읽기에 새 항목이 들어오면 쌓인 것과 함께 시작한다
     const c2 = s.gh.convo(w.pr, 'relay M11 흐름 시험: 켠 뒤의 코멘트')
     await refresh(s, w)
-    const t5 = await currentUntil(
+    const t4 = await currentUntil(
       s.ctx,
       w,
-      (t) => t.id === 't-05' && t.status === 'awaiting_approval',
+      (t) => t.id === 't-04' && t.status === 'awaiting_approval',
       '자동 시작한 대응 task의 승인 대기',
     )
     await settle(s.ctx.h, w.key)
-    expect(t5.band).toContain('이유: 자동 대응')
+    expect(t4.band).toContain('이유: 자동 대응')
     const items = [ci, `convo:${bot}`, `convo:${c1}`, `convo:${c2}`]
-    expect([...(task(w, 't-05')?.respond?.items ?? [])].sort()).toEqual(items.sort())
+    expect([...(task(w, 't-04')?.respond?.items ?? [])].sort()).toEqual(items.sort())
     expect(notices(s, w)).toContain(`PR #${w.pr}: 자동 대응 시작 — 라운드 1, 새 항목 4개`)
     // 자동 승인은 이 Work에서 꺼 두었다: 카운트다운하지 않는다
-    expect(task(w, 't-05')?.countdown).toBeUndefined()
+    expect(task(w, 't-04')?.countdown).toBeUndefined()
 
     // 도는 동안 들어온 항목은 기다린다. 다음 라운드로 미룰 때는 알리지 않는다 (D184)
     const c3 = s.gh.convo(w.pr, 'relay M11 흐름 시험: 도는 동안의 코멘트')
@@ -345,17 +345,17 @@ describe('[흐름] 자동 대응 (M11, 가짜 gh)', () => {
     expect(notices(s, w)).toHaveLength(before)
 
     // 라운드가 끝나면(사람의 승인, push와 게시) 바로 시작한다
-    expect(await s.ctx.h.relay.approve(w.key, 't-05', {})).toEqual({ ok: true })
+    expect(await s.ctx.h.relay.approve(w.key, 't-04', {})).toEqual({ ok: true })
     const t6 = await currentUntil(
       s.ctx,
       w,
-      (t) => t.id === 't-06' && t.status === 'awaiting_approval',
+      (t) => t.id === 't-05' && t.status === 'awaiting_approval',
       '라운드가 끝난 뒤 자동 시작한 대응 task',
     )
     await settle(s.ctx.h, w.key)
     expect(t6.band).toContain('이유: 자동 대응')
-    expect(task(w, 't-05')).toMatchObject({ status: 'approved', approved_by: 'human' })
-    expect(task(w, 't-06')?.respond).toMatchObject({ round: 2, items: [`convo:${c3}`] })
+    expect(task(w, 't-04')).toMatchObject({ status: 'approved', approved_by: 'human' })
+    expect(task(w, 't-05')?.respond).toMatchObject({ round: 2, items: [`convo:${c3}`] })
     // 사람의 승인이 다시 셌고, 이어서 자동 시작이 하나 셌다
     expect(workState(w).pr?.auto_rounds).toBe(1)
     expect(notices(s, w)).toContain(`PR #${w.pr}: 자동 대응 시작 — 라운드 2, 새 항목 1개`)
@@ -363,28 +363,28 @@ describe('[흐름] 자동 대응 (M11, 가짜 gh)', () => {
 
   it('닫힌 PR에는 push·게시하지 않는다: 앱이 닫힘을 읽기 전의 사람 승인과 자동 승인 모두 (D179, D208)', async () => {
     const s = await setup({ respond_auto_start: true, auto_approve_countdown_sec: 1 })
-    const w = await openWork(s, { 't-06': answer(2, true) })
+    const w = await openWork(s, { 't-05': answer(2, true) })
     const head1 = workState(w).pr?.head ?? ''
     s.gh.runCi(w.pr, head1)
     await refresh(s, w)
     await currentUntil(
       s.ctx,
       w,
-      (t) => t.id === 't-05' && t.status === 'awaiting_approval',
+      (t) => t.id === 't-04' && t.status === 'awaiting_approval',
       '자동 시작한 대응 task의 승인 대기',
     )
     await settle(s.ctx.h, w.key)
 
     // 사람 승인: 앱은 아직 열린 PR로 알고 있다
     s.gh.close(w.pr)
-    const refused = await s.ctx.h.relay.approve(w.key, 't-05', {})
+    const refused = await s.ctx.h.relay.approve(w.key, 't-04', {})
     expect(refused).toEqual({
       ok: false,
       error: 'PR 대응의 push 실패: PR이 열려 있지 않아(닫힘) push·게시하지 않음 (D179, D208)',
     })
     await settle(s.ctx.h, w.key)
     expect(await s.world.branchTip(w.branch)).toBe(head1)
-    expect(task(w, 't-05')).toMatchObject({
+    expect(task(w, 't-04')).toMatchObject({
       status: 'awaiting_approval',
       respond: { failure: { stage: 'push' } },
     })
@@ -392,8 +392,8 @@ describe('[흐름] 자동 대응 (M11, 가짜 gh)', () => {
 
     // 다시 열리면 [다시 시도]로 push한다. 자동 승인을 이 Work에서 켠다 (D209)
     s.gh.reopen(w.pr)
-    expect(await s.ctx.h.relay.approve(w.key, 't-05', {})).toEqual({ ok: true })
-    await published(s, w, 't-05')
+    expect(await s.ctx.h.relay.approve(w.key, 't-04', {})).toEqual({ ok: true })
+    await published(s, w, 't-04')
     const head2 = git(w.tree, 'rev-parse', 'HEAD')
     expect(await s.world.branchTip(w.branch)).toBe(head2)
     expect(
@@ -405,34 +405,34 @@ describe('[흐름] 자동 대응 (M11, 가짜 gh)', () => {
     s.gh.convo(w.pr, 'relay M11 흐름 시험: 닫히기 전의 코멘트')
     await refresh(s, w)
     await s.ctx.h.ui.until(
-      () => (s.ctx.h.ui.output.get(`${w.key}/t-06`) ?? '').includes('입력 대기'),
-      't-06의 입력 대기',
+      () => (s.ctx.h.ui.output.get(`${w.key}/t-05`) ?? '').includes('입력 대기'),
+      't-05의 입력 대기',
       WAIT,
     )
     s.gh.close(w.pr)
-    s.ctx.h.relay.terminalWrite(`${w.key}/t-06`, '\r')
-    await roundUntil(s, w, 't-06', (r) => r.state === 'failed', 'push 실패')
+    s.ctx.h.relay.terminalWrite(`${w.key}/t-05`, '\r')
+    await roundUntil(s, w, 't-05', (r) => r.state === 'failed', 'push 실패')
     await settle(s.ctx.h, w.key)
     expect(await s.world.branchTip(w.branch)).toBe(head2)
     expect(replies(s, w)).toHaveLength(0)
-    expect(task(w, 't-06')).toMatchObject({
+    expect(task(w, 't-05')).toMatchObject({
       reason: 'auto_respond',
       status: 'awaiting_approval',
       respond: { failure: { stage: 'push' } },
     })
     expect(notices(s, w)).toContain(
-      `PR #${w.pr}: 06 PR 대응 자동 승인한 대응의 push 실패 — 승인 화면에서 [다시 시도]를 누르세요 (PR이 열려 있지 않아(닫힘) push·게시하지 않음 (D179, D208))`,
+      `PR #${w.pr}: 05 PR 대응 자동 승인한 대응의 push 실패 — 승인 화면에서 [다시 시도]를 누르세요 (PR이 열려 있지 않아(닫힘) push·게시하지 않음 (D179, D208))`,
     )
     // 닫힘을 읽으면 PR 닫힘이고, 대응 task의 승인을 받지 않는다 (D179)
     await refresh(s, w)
     expect(view(s.ctx, w).pr?.state).toBe('CLOSED')
-    const closed = await s.ctx.h.relay.approve(w.key, 't-06', {})
+    const closed = await s.ctx.h.relay.approve(w.key, 't-05', {})
     expect(closed.ok).toBe(false)
   })
 
   it('켤 때의 읽기가 반영되지 않으면 반영된 읽기까지 켤 때처럼 보이기만 한다. 중단된 대응 task에 막혀 자동 시작하지 못하면 대응 거리를 알린다 (D159, D184, D211)', async () => {
     const s = await setup({ respond_auto_start: true })
-    const w = await openWork(s, { 't-05': answer(1, true) })
+    const w = await openWork(s, { 't-04': answer(1, true) })
 
     // ---------- 켤 때의 읽기가 실패한다: 반영에 성공한 첫 읽기가 켤 때의 읽기다 (D159) ----------
     await s.ctx.h.relay.close()
@@ -457,13 +457,13 @@ describe('[흐름] 자동 대응 (M11, 가짜 gh)', () => {
     const c2 = s.gh.convo(w.pr, 'relay M11 흐름 시험: 켠 뒤의 코멘트')
     await refresh(s, w)
     await s.ctx.h.ui.until(
-      () => (s.ctx.h.ui.output.get(`${w.key}/t-05`) ?? '').includes('입력 대기'),
-      't-05의 입력 대기',
+      () => (s.ctx.h.ui.output.get(`${w.key}/t-04`) ?? '').includes('입력 대기'),
+      't-04의 입력 대기',
       WAIT,
     )
     await settle(s.ctx.h, w.key)
-    expect(task(w, 't-05')?.reason).toBe('auto_respond')
-    expect([...(task(w, 't-05')?.respond?.items ?? [])].sort()).toEqual(
+    expect(task(w, 't-04')?.reason).toBe('auto_respond')
+    expect([...(task(w, 't-04')?.respond?.items ?? [])].sort()).toEqual(
       [`convo:${c1}`, `convo:${c2}`].sort(),
     )
     expect(notices(s, w)).toEqual([`PR #${w.pr}: 자동 대응 시작 — 라운드 1, 새 항목 2개`])
@@ -484,7 +484,7 @@ describe('[흐름] 자동 대응 (M11, 가짜 gh)', () => {
       WAIT,
     )
     await settle(s.ctx.h, w.key)
-    expect(task(w, 't-05')?.status).toBe('interrupted')
+    expect(task(w, 't-04')?.status).toBe('interrupted')
 
     // 중단된 대응 task는 사람이 손대야 풀린다: 자동 시작하지 못하니 대응 거리를 알린다 (D211)
     s.gh.convo(w.pr, 'relay M11 흐름 시험: 중단된 뒤의 코멘트')

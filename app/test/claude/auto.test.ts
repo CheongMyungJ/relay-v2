@@ -1,9 +1,9 @@
 // [실제] 실제 claude로 자동 승인 (docs/implementation.md M7, 8.4). 가짜 claude로는 볼 수 없는 것을 본다:
 // - 실제 Stop 본문의 background_tasks와 session_crons가 턴이 끝날 때 비어 있어 카운트다운이 시작된다 (D129)
 // - 실제 수정 스킬이 수동 승인과 자동 승인을 함께 적은 마무리 안내 문구를 그대로 찍는다 (D132)
-// - 카운트다운 뒤 자동 승인하고 세션을 끝내 다음 단계(리뷰, M8)로 간다. 승인 방식이 work.json, task.approved,
+// - 카운트다운 뒤 자동 승인하고 세션을 끝내 다음 단계(리뷰와 검증, M8)로 간다. 승인 방식이 work.json, task.approved,
 //   decisions.md의 머리 줄에 자동으로 남는다 (4.3, 5.4, 5.5)
-// S 경로 레포에서 수정 단계의 자동 승인을 켠다(카운트다운 5초). 사람 역할은 의도 정리, 리뷰, 최종 검증을 승인하고,
+// S 요청 레포에서 원인 분석과 수정의 자동 승인을 켠다(카운트다운 5초). 사람 역할은 의도 정리, 리뷰와 검증을 승인하고,
 // 수정은 카운트다운을 기다린다(awaitAuto). 카운트다운하지 않았거나 멈췄으면 사람처럼 승인하고, 알림에 온 까닭을
 // 결과에 남긴 뒤 실패로 친다.
 // RELAY_REAL_CLAUDE=1이면 실제 claude, dry면 가짜 claude로 도구만 확인한다. RELAY_REAL_CASES의 auto로 고른다.
@@ -30,14 +30,7 @@ const TASK_TIMEOUT_MS = 25 * 60 * 1000
 const NUDGE = '스킬의 절차를 계속해 주세요. 마치면 종료 절차대로 handoff를 쓰고 턴을 끝내 주세요.'
 /** 수정 단계만 켠다. 카운트다운은 사람 역할이 기다릴 만큼 짧게 둔다 */
 const CONFIG: Partial<AppConfig> = {
-  auto_approve: {
-    investigate: false,
-    evidence: false,
-    rca: false,
-    fix: true,
-    review: false,
-    respond: false,
-  },
+  auto_approve: { fix: true, respond: false },
   auto_approve_countdown_sec: 5,
 }
 
@@ -52,13 +45,9 @@ interface Result {
 
 let result: Result | null = null
 
-/** 가짜 claude의 시나리오 (dry): S 경로. 수정은 실제 스킬처럼 턴을 끝내기 전에 마무리 안내 문구를 찍는다 */
-const DRY = scenario('S', {
-  fix: [
-    ...steps('fix', 'S').slice(0, -1),
-    { do: 'print', text: closingMessage('fix') },
-    { do: 'stop' },
-  ],
+/** 가짜 claude의 시나리오 (dry): 기본 경로. 수정은 실제 스킬처럼 턴을 끝내기 전에 마무리 안내 문구를 찍는다 */
+const DRY = scenario({
+  fix: [...steps('fix').slice(0, -1), { do: 'print', text: closingMessage('fix') }, { do: 'stop' }],
 })
 
 /** 공백을 모두 뺀다. 터미널은 긴 문장을 줄을 바꿔 들여 쓰므로 공백 없이 비교한다 */
@@ -100,7 +89,6 @@ async function run(): Promise<Result> {
       if (t?.live && squash(ui.screen(t.terminal)).includes(closing)) printed = true
     }, 500)
     const r = await drive(h.relay, ui, key, {
-      size: 'S',
       force: true,
       nudge: NUDGE,
       maxNudges: 2,

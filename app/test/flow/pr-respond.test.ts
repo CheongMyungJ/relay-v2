@@ -64,7 +64,7 @@ const CART = CART_FILES['src/cart.mjs'] ?? ''
 
 /**
  * 대응할 PR 진행 Work: 파일 끝에 함수를 더하고 ci-fail을 둔다. 대응 task는 ci-fail을 지워 커밋하고 답글 초안을 쓴다
- * (respondClaude). tasks로 task id별 단계를 바꾼다(대응 task는 t-05부터)
+ * (respondClaude). tasks로 task id별 단계를 바꾼다(대응 task는 t-04부터)
  */
 function openWork(s: Setup, tasks: Record<string, Step[]> = {}): Promise<PrWork> {
   const claude = respondClaude(
@@ -289,7 +289,7 @@ describe('[흐름] PR 대응 (M10, 가짜 gh)', () => {
     expect(diverged.items.find((i) => i.kind === 'convo')?.status).toBe('responding')
     expect(diverged.rounds[0]).toMatchObject({ state: 'deferred' })
     addTasks(s, {
-      't-06': [
+      't-05': [
         { do: 'prompt' },
         { do: 'merge', from: 'remote' },
         { do: 'respond' },
@@ -388,7 +388,7 @@ describe('[흐름] PR 대응 (M10, 가짜 gh)', () => {
 
   it('대응 task가 도는 동안에는 원격만 앞서도 fast-forward하지 않는다. 재시작하면 다른 task처럼 조정하고 [재개]만 남는다 (D193, 시나리오 9-7)', async () => {
     const s = await setup()
-    const w = await openWork(s, { 't-05': [{ do: 'prompt' }, { do: 'waitEnter' }] })
+    const w = await openWork(s, { 't-04': [{ do: 'prompt' }, { do: 'waitEnter' }] })
     s.gh.convo(w.pr, '대화 코멘트')
     const t = await startRound(s, w, 1, { until: (x) => x.status === 'working' && x.live })
     const local = git(w.tree, 'rev-parse', 'HEAD')
@@ -414,7 +414,7 @@ describe('[흐름] PR 대응 (M10, 가짜 gh)', () => {
     const s = await setup()
     const w = await openWork(s)
     const t = await startRound(s, w, 0, { instruction: '로그 문구를 다듬어 주세요' })
-    const context = fs.readFileSync(path.join(w.dir, 'tasks', '05-respond', 'context.md'), 'utf8')
+    const context = fs.readFileSync(path.join(w.dir, 'tasks', '04-respond', 'context.md'), 'utf8')
     expect(context).toContain('로그 문구를 다듬어 주세요')
     expect(context).toContain('없음: 사람 지시만으로 시작한 라운드다 (D182)')
     expect(await s.ctx.h.relay.approve(w.key, t.id, {})).toEqual({ ok: true })
@@ -428,7 +428,7 @@ describe('[흐름] PR 대응 (M10, 가짜 gh)', () => {
     const s = await setup()
     const test = CART_FILES['test/cart.test.mjs'] ?? ''
     const w = await openWork(s, {
-      't-05': [
+      't-04': [
         { do: 'prompt' },
         {
           do: 'commit',
@@ -482,7 +482,7 @@ describe('[흐름] PR 대응 (M10, 가짜 gh)', () => {
     const w = await openWork(s)
     const c = threeComments(s, w)
     addTasks(s, {
-      't-05': [
+      't-04': [
         { do: 'prompt' },
         { do: 'respond', skip: [`convo:${c.convo}`] },
         { do: 'write', file: 'handoff.md', text: handoff() },
@@ -491,8 +491,8 @@ describe('[흐름] PR 대응 (M10, 가짜 gh)', () => {
     })
     const t = await startRound(s, w, 3, { until: (x) => x.status === 'idle' })
     const review = await s.ctx.h.relay.review(w.key, t.id)
-    expect(review?.gates.none).toMatchObject({ approve: false, force: false })
-    expect(review?.gates.none.blocking.map((e) => e.file)).toEqual(['replies.md'])
+    expect(review?.gate).toMatchObject({ approve: false, force: false })
+    expect(review?.gate.blocking.map((e) => e.file)).toEqual(['replies.md'])
     const r = await s.ctx.h.relay.approve(w.key, t.id, { force: true })
     expect(r).toMatchObject({
       ok: false,

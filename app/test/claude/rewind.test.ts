@@ -1,6 +1,6 @@
 // [실제] 실제 claude로 되감기 (docs/implementation.md M4, 8.4). 가짜 claude로는 스킬이 context.md의
 // 되감기 절(사람 추가 지시, 폐기된 시도 요약)을 따르는지 볼 수 없어 둔다(사용자 결정).
-// S 경로 레포에서 최종 검증이 승인 대기가 되면 사람 역할이 [단계 선택]으로 되감는다.
+// S 요청 레포에서 리뷰와 검증이 승인 대기가 되면 사람 역할이 [단계 선택]으로 되감는다.
 // - rewind-intake: 추가 지시와 함께 intake로 되감는다. intent v2가 v1을 출발점으로 고쳐지고(D40),
 //   수정 커밋이 백업 브랜치에 남고, Work 완료까지 가는지 본다.
 // - rewind-fix: 추가 지시와 함께 fix로 되감는다(코드 되돌림). 되감은 fix가 추가 지시를 따르고
@@ -29,7 +29,7 @@ interface RewindCase {
   name: 'rewind-intake' | 'rewind-fix'
   node: 'intake' | 'fix'
   instruction: string
-  /** 가짜 claude의 시나리오 (dry). 되감은 task는 t-05다 (S 경로 intake, fix, review, verify 다음) */
+  /** 가짜 claude의 시나리오 (dry). 되감은 task는 t-04다 (intake, fix, verify 다음) */
   dry: Scenario
 }
 
@@ -44,12 +44,12 @@ const CASES: RewindCase[] = [
       "완료조건에 '공백이 여러 개 연달아 있어도 하이픈 하나로 바꾼다'를 더해 주세요. 나머지는 지금 intent 그대로 둡니다.",
     dry: {
       tasks: {
-        ...scenario('S').tasks,
-        't-05': steps('intake', 'S').map((st) =>
+        ...scenario().tasks,
+        't-04': steps('intake').map((st) =>
           st.do === 'write' && st.file === 'intent.draft.md'
             ? {
                 ...st,
-                text: intentDraft('S').replace(
+                text: intentDraft().replace(
                   '- [ ] 기존 테스트를 약화하거나 삭제하지 않는다',
                   `- [ ] 기존 테스트를 약화하거나 삭제하지 않는다\n${EXTRA}`,
                 ),
@@ -65,15 +65,15 @@ const CASES: RewindCase[] = [
     instruction: `앞의 수정은 버렸습니다. 다시 고치되, 재현 테스트의 이름은 '${TEST_NAME}'로 해 주세요.`,
     dry: {
       tasks: {
-        ...scenario('S').tasks,
-        't-05': [
+        ...scenario().tasks,
+        't-04': [
           { do: 'prompt' },
           {
             do: 'commit',
             files: { 'test/slug.test.js': `// ${TEST_NAME}\n` },
             message: 'fix: 다시',
           },
-          ...steps('fix', 'S').slice(2),
+          ...steps('fix').slice(2),
         ],
       },
     },
@@ -151,7 +151,6 @@ async function runCase(c: RewindCase): Promise<CaseResult> {
     workDir = path.join(h.home, 'projects', projectId, 'works', key.split('/')[1] ?? '')
     const tree = path.join(h.home, 'projects', projectId, 'worktrees', key.split('/')[1] ?? '')
     const opts: DriveOptions = {
-      size: 'S',
       force: true,
       nudge: NUDGE,
       maxNudges: 2,
@@ -163,13 +162,13 @@ async function runCase(c: RewindCase): Promise<CaseResult> {
     const load = () =>
       JSON.parse(fs.readFileSync(path.join(workDir ?? '', 'work.json'), 'utf8')) as WorkState
 
-    // 1. 최종 검증이 승인 대기가 될 때까지
+    // 1. 리뷰와 검증이 승인 대기가 될 때까지
     const first = await drive(h.relay, ui, key, {
       ...opts,
       pauseAt: (t) => t.node === 'verify' && t.status === 'awaiting_approval',
     })
     tasks.push(...first.tasks)
-    if (first.status !== 'paused') throw new Error(`최종 검증 전에 멈춤: ${first.reason ?? ''}`)
+    if (first.status !== 'paused') throw new Error(`리뷰와 검증 전에 멈춤: ${first.reason ?? ''}`)
     await settle(h, key)
     const v1 = fs.readFileSync(path.join(workDir, 'intent.md'), 'utf8')
     const fixHead = git(tree, 'rev-parse', 'HEAD')

@@ -1,5 +1,5 @@
 // [실제] 앱이 충돌한 뒤 다시 켜서 [재개]로 이어 간다 (docs/implementation.md M6, 8.4, 시나리오 9, D75, D76).
-// 앱(Relay)을 자식 프로세스(app-process.mjs)로 띄워 S 경로 레포의 intake가 첫 요청을 받아 일하는 중에 그 프로세스만
+// 앱(Relay)을 자식 프로세스(app-process.mjs)로 띄워 S 요청 레포의 intake가 첫 요청을 받아 일하는 중에 그 프로세스만
 // SIGKILL로 끝낸다(트리 종료 아님). 다시 켜면 조정과 고아 확인을 한다: 기록과 시작 시각이 같은 claude가 남았으면
 // 트리째 끝내고 알린다. 중단됨이 된 intake를 [재개]로 같은 세션(--resume)으로 연다. 앱이 이어서 하라는 첫 입력을
 // 주므로(D218) 사람은 치지 않고 Work 완료까지 간다. 앱이 죽은 뒤 claude가 남았는지, 재시작이 한 일, pty.log 끝의
@@ -42,9 +42,9 @@ const NUDGE = '스킬의 절차를 계속해 주세요. 마치면 종료 절차�
 /** 가짜 claude의 시나리오 (dry): 첫 세션은 요청을 받고 멈춰 있고, 다시 연 세션이 intake를 마친다 */
 function dryScenario(): Scenario {
   return {
-    tasks: { ...scenario('S').tasks, 'work-start': [{ do: 'prompt' }, { do: 'wait' }] },
+    tasks: { ...scenario().tasks, 'work-start': [{ do: 'prompt' }, { do: 'wait' }] },
     // 다시 연 세션은 앱이 준 이어서 하라는 입력(D218)을 받고 intake를 마친다
-    resume: { 'work-start': steps('intake', 'S').slice(1) },
+    resume: { 'work-start': steps('intake').slice(1) },
   }
 }
 
@@ -194,7 +194,6 @@ describe.runIf(enabled)('[실제] 앱이 충돌한 뒤 [재개] (M6, 시나리�
         lap('재개')
       }
       result = await drive(h.relay, ui, key, {
-        size: 'S',
         force: true,
         nudge: NUDGE,
         maxNudges: 2,

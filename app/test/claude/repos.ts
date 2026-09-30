@@ -1,7 +1,6 @@
 // [실제] 시험 레포 두 개 (8.4). 작은 Node 레포에 버그 하나와 의존성 없는 node:test 시험이 있다.
-// 경로는 의도 승인 때 시험 도구가 고른 size로 정한다(D90). M은 intake → investigate → fix → verify다(D147).
+// 크기는 없고 두 요청 모두 intake → fix → verify를 지난다 (D227). 이름(M, S)은 요청의 어려움이다:
 // M은 재현 방법과 수정 위치를 모르는 요청, S는 재현 방법이 있고 수정 위치가 한 곳인 요청이다 (D63).
-// M 요청은 D150 기준으로는 L 제안감이지만, 시험 도구가 M을 골라 investigate(합친 스킬)를 지나게 한다.
 
 const packageJson = (name: string) =>
   `${JSON.stringify({ name, private: true, type: 'module', scripts: { test: 'node --test' } }, null, 2)}\n`
@@ -13,7 +12,7 @@ export interface RealCase {
   request: string
 }
 
-/** M 경로: 리더보드가 두 자리 이상 점수에서 틀린다 (숫자를 글자로 정렬) */
+/** M 요청: 리더보드가 두 자리 이상 점수에서 틀린다 (숫자를 글자로 정렬) */
 export const M_CASE: RealCase = {
   name: 'M',
   repo: 'leaderboard',
@@ -62,7 +61,7 @@ export const M_CASE: RealCase = {
   ].join('\n'),
 }
 
-/** S 경로: slugify가 첫 공백만 바꾼다 */
+/** S 요청: slugify가 첫 공백만 바꾼다 */
 export const S_CASE: RealCase = {
   name: 'S',
   repo: 'slug',

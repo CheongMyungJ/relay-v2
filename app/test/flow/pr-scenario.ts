@@ -1,6 +1,6 @@
 // PR 진행(M9)의 공통 시나리오 (docs/implementation.md 8.4의 "PR 진행" 1~6, I49). [흐름](pr.test.ts: 가짜 gh와
 // 로컬 bare 원격)과 [실제](test/claude/pr.test.ts: 실제 gh와 시험용 레포)가 함께 쓴다. 앱은 같고 GitHub 쪽만 다르다.
-// relay 밖의 사람, 봇, CI는 PrWorld가 맡는다. Work는 가짜 claude로 S 경로를 지나 [PR 생성]까지 간다.
+// relay 밖의 사람, 봇, CI는 PrWorld가 맡는다. Work는 가짜 claude로 기본 경로(intake → fix → verify)를 지나 [PR 생성]까지 간다.
 //
 // 1. 읽기: PR 진행이 되고 gh 버전을 적는다(D198). 체크가 없는 새 head는 "체크 기다림"이다(D196). CI가 실패하면 CI 실패
 //    항목이 실패한 스텝의 로그 끝부분과 함께 들어온다. 체크의 이름에는 실행을 부른 이벤트가 붙는다(D201).
@@ -124,21 +124,23 @@ const RESPOND_FILE = 'src/m10.mjs'
 const RESPOND_CODE =
   '/**\n * 두 배 (relay M10 시험 변경).\n * @param {number} n\n * @returns {number}\n */\nexport function double(n) {\n  return n * 2;\n}\n'
 
-/** 가짜 claude의 S 경로. fix가 files를 커밋하고 verify가 pr.md(제목 title)를 쓴다. PR 대응 task도 여기에 둔다 */
+/** 가짜 claude의 기본 경로. fix가 files를 커밋하고 verify가 pr.md(제목 title)를 쓴다. PR 대응 task도 여기에 둔다 */
 export function prClaude(files: Record<string, string>, title: string): Scenario {
   const fix: Step[] = [
     { do: 'prompt' },
     { do: 'commit', files, message: 'fix: relay M9 시험 변경' },
-    ...steps('fix', 'S').filter((s) => s.do === 'write' || s.do === 'stop'),
+    ...steps('fix').filter((s) => s.do === 'write' || s.do === 'stop'),
   ]
   const verify: Step[] = [
     { do: 'prompt' },
-    ...steps('verify', 'S').filter((s) => s.do === 'write' && s.file === 'verification.md'),
+    ...steps('verify').filter(
+      (s) => s.do === 'write' && (s.file === 'review.md' || s.file === 'verification.md'),
+    ),
     { do: 'write', file: 'pr.md', text: `# ${title}\n\n## 요약\nrelay M9 시험 PR입니다.\n` },
     { do: 'write', file: 'handoff.md', text: handoff({ summary: '완료조건을 모두 통과했다.' }) },
     { do: 'stop' },
   ]
-  return scenario('S', { fix, 'final-verify': verify })
+  return scenario({ fix, verify })
 }
 
 const read = (file: string) => fs.readFileSync(file, 'utf8')
@@ -199,7 +201,7 @@ export async function refreshUntil(
   }
 }
 
-/** 새 Work를 만들어 S 경로로 최종 검증까지 가게 하고 [PR 생성]한다. PR 진행이 되고 첫 읽기가 끝날 때까지 기다린다 */
+/** 새 Work를 만들어 기본 경로로 리뷰와 검증까지 가게 하고 [PR 생성]한다. PR 진행이 되고 첫 읽기가 끝날 때까지 기다린다 */
 export async function openPrWork(
   ctx: PrContext,
   claude: Scenario,
@@ -217,7 +219,6 @@ export async function openPrWork(
   const entry = { branch: `relay/${workId}`, pr: null as number | null }
   ctx.created.push(entry)
   const r = await drive(h.relay, h.ui, created.workKey, {
-    size: 'S',
     pauseAt: (t) => t.node === 'verify' && t.status === 'awaiting_approval',
   })
   expect(r, h.ui.dump()).toMatchObject({ status: 'paused' })
@@ -546,7 +547,7 @@ export function prItems(w: PrWork): PrItemsFile {
 }
 
 /**
- * 가짜 claude의 PR 대응 task (5.6.11): CI를 실패시키는 ci-fail을 지워 커밋하고, 항목별 결과와 코멘트 항목마다 답글
+ * 가짜 claude의 PR 대응 task (5.6.7): CI를 실패시키는 ci-fail을 지워 커밋하고, 항목별 결과와 코멘트 항목마다 답글
  * 초안을 쓴다
  */
 export function respondClaude(files: Record<string, string>, title: string): Scenario {

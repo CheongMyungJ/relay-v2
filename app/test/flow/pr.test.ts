@@ -555,7 +555,6 @@ describe('[흐름] PR 진행 (M9, 시나리오 10)', () => {
     })
     if (!created.ok) throw new Error(created.error)
     await drive(h.relay, h.ui, created.workKey, {
-      size: 'S',
       pauseAt: (t) => t.node === 'verify' && t.status === 'awaiting_approval',
     })
     const taskId = h.ui.works.get(created.workKey)?.current ?? ''

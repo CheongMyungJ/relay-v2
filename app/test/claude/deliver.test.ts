@@ -1,8 +1,8 @@
 // [실제] 실제 claude로 전달과 정리 (docs/implementation.md M5, 8.4). 가짜 claude로는 볼 수 없는 것을 본다:
-// - 실제 최종 검증 스킬이 쓴 pr.md를 앱이 PR의 제목과 본문으로 읽는다 (D62)
+// - 실제 리뷰와 검증 스킬이 쓴 pr.md를 앱이 PR의 제목과 본문으로 읽는다 (D62)
 // - 마무리 안내 문구가 [push]·[PR 생성]을 가리켜도 에이전트는 push하거나 PR을 만들지 않는다 (D17, D104)
 // - 첫 프롬프트 없이 연 정리 세션([AI 세션 열기], 7-5)이 사람의 요청을 받아 일하고, 턴이 끝나면 Stop 훅이 온다
-// S 경로 레포에서 최종 검증이 승인 대기가 되면 사람 역할이 worktree에 커밋 안 된 메모를 남기고 [PR 생성]을
+// S 요청 레포에서 리뷰와 검증이 승인 대기가 되면 사람 역할이 worktree에 커밋 안 된 메모를 남기고 [PR 생성]을
 // 누른다. 커밋 안 된 변경의 선택지에서 [AI 세션 열기]로 정리 세션을 열어 메모를 지워 달라고 하고, 턴이 끝나
 // git status가 깨끗해지면 [정리 끝 → push/PR 진행]을 누른다. 그 뒤 [Work 정리]로 worktree를 지운다.
 // gh는 가짜 gh다(8.2): 시험 환경에 gh 로그인이 없다. 실제 GitHub PR은 [실기]에서 본다.
@@ -36,9 +36,9 @@ const REQUEST = `${NOTE}는 제가 남긴 메모입니다. 이 파일을 지우�
 /** 입력란 아래 상태 줄. 입력을 받을 수 있는지 본다. 출처: spikes/lib/session.mjs READY_HINT */
 const READY_HINT = /for agents|for shortcuts|shift\+tab to cycle/i
 
-/** 가짜 claude의 시나리오 (dry): S 경로와, 정리 세션에서 사람의 요청대로 메모를 지운다 */
+/** 가짜 claude의 시나리오 (dry): 기본 경로와, 정리 세션에서 사람의 요청대로 메모를 지운다 */
 const DRY: Scenario = {
-  tasks: scenario('S').tasks,
+  tasks: scenario().tasks,
   cleanup: [
     { do: 'waitEnter' },
     { do: 'prompt' },
@@ -148,9 +148,8 @@ async function run(): Promise<Result> {
         () => (cleanupTerm ? ui.handleDialogs(h.relay, cleanupTerm) : undefined),
       )
 
-    // 1. 최종 검증이 승인 대기가 될 때까지
+    // 1. 리뷰와 검증이 승인 대기가 될 때까지
     const first = await drive(h.relay, ui, key, {
-      size: 'S',
       force: true,
       nudge: NUDGE,
       maxNudges: 2,
@@ -161,16 +160,16 @@ async function run(): Promise<Result> {
       pauseAt: (t) => t.node === 'verify' && t.status === 'awaiting_approval',
     })
     tasks.push(...first.tasks)
-    if (first.status !== 'paused') throw new Error(`최종 검증 전에 멈춤: ${first.reason ?? ''}`)
+    if (first.status !== 'paused') throw new Error(`리뷰와 검증 전에 멈춤: ${first.reason ?? ''}`)
     await settle(h, key)
     const verify = load().tasks.at(-1)
-    if (verify?.node !== 'verify') throw new Error('지금 task가 최종 검증이 아님')
+    if (verify?.node !== 'verify') throw new Error('지금 task가 리뷰와 검증이 아님')
     claudeVersion = load().tasks[0]?.claude_version ?? null
     const verifyDir = path.join(workDir, 'tasks', taskDirName(verify))
     const context = fs.readFileSync(path.join(verifyDir, 'context.md'), 'utf8')
     const closing = /\[완료만\], \[push\], \[PR 생성\] 중 하나를/.test(context)
     notes.push(
-      `최종 검증의 마무리 안내 문구가 [완료만], [push], [PR 생성]을 가리킨다: ${closing ? '예' : '아니오'}`,
+      `리뷰와 검증의 마무리 안내 문구가 [완료만], [push], [PR 생성]을 가리킨다: ${closing ? '예' : '아니오'}`,
     )
     if (!closing) throw new Error('마무리 안내 문구에 전달 버튼이 없음')
     // 에이전트는 push하거나 PR을 만들지 않는다 (D17)
@@ -251,10 +250,10 @@ async function run(): Promise<Result> {
     const approved = work.tasks.find((t) => t.id === verify.id)
     const decisions = fs.readFileSync(path.join(workDir, 'decisions.md'), 'utf8')
     notes.push(
-      `최종 검증: ${approved?.status ?? '없음'}, decisions.md에 ${verify.id}가 있다: ${decisions.includes(verify.id) ? '예' : '아니오'}`,
+      `리뷰와 검증: ${approved?.status ?? '없음'}, decisions.md에 ${verify.id}가 있다: ${decisions.includes(verify.id) ? '예' : '아니오'}`,
     )
     if (approved?.status !== 'approved' || !decisions.includes(verify.id)) {
-      throw new Error('최종 검증의 승인 기록이 없음')
+      throw new Error('리뷰와 검증의 승인 기록이 없음')
     }
 
     // 5. [Work 정리]: worktree를 지운다. 산출물은 남는다 (시나리오 8)
