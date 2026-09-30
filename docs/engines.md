@@ -135,7 +135,7 @@ task 생성 시 기본 엔진을 task 기록에 고정한다. 대기열에서 �
 
 command 훅은 stdin JSON을 받아 앱의 loopback 서버에 전달하고 JSON 응답을 stdout으로 반환한다. 토큰·task ID·포트는 환경 변수이며 설정 파일이나 명령줄에 인증 토큰을 저장하지 않는다. 세션 인스턴스와 토큰으로 앞 프로세스의 늦은 요청을 거른다. 실제 ID를 받기 전 종료되면 재개를 제공하지 않고 새 task로 다시 시도한다.
 
-`codex-bridge.mjs`를 앱 resources에 넣고 실행 중인 Electron을 `ELECTRON_RUN_AS_NODE=1`로 호출한다. 추가 Node 설치는 브리지의 요구사항이 아니다. Windows는 함께 배포한 `codex-hook.ps1`을 호출하며 설치 경로를 환경 변수로 전달한다. 긴 경로를 모든 훅 인자에 반복해서 `.cmd`의 8191자 제한을 넘기는 것을 피한다. PowerShell의 실행 정책 우회는 이 자식 프로세스에서 배포 스크립트를 실행하기 위한 것이며 Codex의 훅 신뢰 검토를 우회하지 않는다.
+`codex-bridge.mjs`를 앱 resources에 넣고 실행 중인 Electron을 `ELECTRON_RUN_AS_NODE=1`로 호출한다. 추가 Node 설치는 브리지의 요구사항이 아니다. Windows는 함께 배포한 `codex-hook.ps1`을 호출하며 설치 경로를 환경 변수로 전달한다. Electron은 Windows의 GUI 실행 파일이라 PowerShell 호출의 stdout을 파이프라인으로 받아 종료·훅 응답까지 기다린다. 바로 반환하면 첫 턴 시작 훅이 질문 뒤에 도착해 질문을 취소할 수 있다. 긴 경로를 모든 훅 인자에 반복해서 `.cmd`의 8191자 제한을 넘기는 것을 피한다. PowerShell의 실행 정책 우회는 이 자식 프로세스에서 배포 스크립트를 실행하기 위한 것이며 Codex의 훅 신뢰 검토를 우회하지 않는다.
 
 설정은 task별 JSON에서 TOML `-c` override로 전달한다. 사용자 전역 설정 파일을 수정하지 않는다. `hooks`, `--no-daemon`, 권한 모드의 가용성을 CLI 도움말·기능 목록으로 확인하며 임의의 최소 버전 번호를 정하지 않는다. hooks 설정과 MCP `relay` 이름은 이번 실행의 앱 브리지에 사용한다. 기존 사용자 훅과의 병합·충돌은 실제 CLI 시험이 남아 있다.
 
@@ -155,7 +155,7 @@ MCP 기다림은 WorkRunner 직렬 처리 줄 밖에서 await한다. 그동안 �
 
 ### 5.3 보호와 자동 승인
 
-Codex 보호 정책은 Claude 문자열을 번역하는 것만으로 완료되지 않는다. git push/gh pr, 앱 소유 파일, 이전 task, 배포한 지시 파일에 대한 보호를 쉘·patch·스크립트에서 시험하고, 기존 D91의 실수 방지 보장과 비교한다. 현재 훅은 명시적인 push/PR 명령, patch·파일 편집 대상, 일부 직접 쉘 변경을 검사한다. 별칭·별도 스크립트·동적 경로·심볼릭 링크를 통한 간접 변경까지 막는 샌드박스가 아니다. 앱 소유 파일 해시 검사는 계속 유지한다. 조직 정책이나 사용자 설정 때문에 실제 모드가 달라지면 엔진에 맞는 안내를 표시한다.
+Codex 보호 정책은 Claude 문자열을 번역하는 것만으로 완료되지 않는다. git push/gh pr, 앱 소유 파일, 이전 task, 배포한 지시 파일에 대한 보호를 쉘·patch·스크립트에서 시험하고, 기존 D91의 실수 방지 보장과 비교한다. 현재 훅은 루트·자식 에이전트 모두의 명시적인 push/PR 명령, patch·파일 편집 대상, 일부 직접 쉘 변경을 검사한다. 자식의 Stop·세션 상태 신호로 루트 task나 정리를 완료 처리하지 않는다. 별칭·별도 스크립트·동적 경로·심볼릭 링크를 통한 간접 변경까지 막는 샌드박스가 아니다. 앱 소유 파일 해시 검사는 계속 유지한다. 조직 정책이나 사용자 설정 때문에 실제 모드가 달라지면 엔진에 맞는 안내를 표시한다.
 
 Codex turn.completed/Stop을 받아도 pending 상태를 모르면 자동 승인하지 않는다. 내부 모델은 `없음 / 있음 / 알 수 없음`을 구분한다. Claude의 기존 판정은 유지한다. 자동 승인을 허용하려면 새 이벤트·훅, 미완료 프로세스/서브에이전트 추적, 기능 제한 등 실제 완료를 확인하는 방법이 필요하다. 이를 위한 기능 제한 또는 Codex만 수동 승인하는 차이가 발생하면 사람이 선택한다.
 
@@ -226,6 +226,7 @@ C9 근거와 사람의 결정을 반영한 뒤 Codex 자동 승인/대응을 연
 - 2026-09-30: 사용자 답변 "질문방식 추천대로"로 Q3 확정. Codex 실행·훅·질문·지시 전달을 연결함. Q4는 답 대기.
 - 2026-09-30, Linux: 타입 검사, lint, format, 빌드 통과. 최종 전체 시험 48개 파일, 811개 통과·3개 건너뜀. Windows 명령줄 길이 수정 후 Codex adapter/flow 12개도 통과. 모델 호출 없이 S intake → fix → review → verify 완료, 수동 승인 대기, verify 엔진으로 정리 질문, Codex → Claude 전환, 질문 취소·중단·재개·ID 전환을 검사함.
 - 2026-09-30, Linux, `codex-cli 0.159.0-alpha.3`: 기능·인증 상태와 전체 override 설정 파싱은 확인. 실제 PTY는 폴더 신뢰 화면까지 실행했고 자동 수락 없이 종료함. 프롬프트를 제출하지 않아 모델 실행, 실제 훅 전달·MCP 준비·세션 ID는 미검증.
-- 2026-09-30, Linux: 실제 Electron Node 모드의 브리지 MCP initialize 통과. GUI 스모크는 DISPLAY 없는 환경에서 Electron이 시작하지 못하여 Linux에서는 명시적으로 건너뜀. Windows CI에 개발 빌드 질문창 스모크를 추가함. Windows 설치본과 실제 Codex의 한글 질문은 미검증.
+- 2026-09-30, Linux: 실제 Electron Node 모드의 MCP initialize 및 지연 command 훅의 한글 JSON 응답 통과. 처음에는 DISPLAY 없어 GUI를 건너뛰었으나, 이후 권한 변경 없이 임시 Xvfb를 실행해 개발 빌드 질문창 스모크를 통과함. 추천 선택지 수동 선택, 숨김·재열기, 한글 답변, Codex → Claude 전환 포함. 기존 Claude GUI 스모크도 승인·중단·재개·단계 선택·자동 승인 취소·push·정리·재시작 복구까지 통과함.
+- 2026-09-30, Windows Server 2025, Electron 44.4.5, 가짜 Codex: CI [`fce1bb4`](https://github.com/CheongMyungJ/relay-v2/actions/runs/36689196210)의 Linux·Windows·Windows PR 작업 모두 통과. Windows 어댑터·전체 흐름·Codex 7개 흐름·개발 빌드 질문창 스모크 포함. `.cmd` 길이 제한, 경로 인용, Electron GUI 실행 파일을 기다리지 않아 훅이 늦게 도착하는 문제를 각각 수정하고 검증함. 브리지는 실제 Electron/PowerShell/HTTP/MCP를 거친다. CLI 이벤트와 모델 동작은 가짜이며 실제 Codex·Windows 설치본 검증을 대체하지 않는다.
 
-다음은 Q4 답 반영, Windows CI 결과와 실제 설치본 확인, 신뢰 확인 후 최소 모델 task로 C3~C8을 검증하는 것이다. Claude 평가 도구의 agent·사람 역할·판정자는 기존 경로를 유지한다.
+다음은 Q4 답 반영, Windows 실제 설치본 확인, 신뢰 확인 후 최소 모델 task로 C3~C8을 검증하는 것이다. Claude 평가 도구의 agent·사람 역할·판정자는 기존 경로를 유지한다.
