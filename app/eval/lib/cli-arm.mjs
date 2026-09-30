@@ -1,10 +1,11 @@
 // 맨 CLI 쪽: 평가 레포에서 bash를 PTY로 띄우고 claude를 실행해 둔다. 사람 역할은 터미널 화면(xterm headless로 그린
 // 글자)을 보고 입력한다. 터미널을 더 열 수 있다(여러 버그를 나란히 할 때). relay와 같은 모델, effort, 권한 모드다.
+import fs from 'node:fs'
 import path from 'node:path'
 import headless from '@xterm/headless'
 import pty from 'node-pty'
 import { cleanEnv, findClaude } from './env.mjs'
-import { decideDialog } from './dialogs.mjs'
+import { DialogGuard } from './dialogs.mjs'
 import { gitState } from './repo.mjs'
 import { sleep } from './util.mjs'
 
@@ -44,12 +45,28 @@ export class CliArm {
 
   kind = 'cli'
 
+  /**
+   * 셸이 찾는 claude가 relay의 CLAUDE_BIN과 같은 실행 파일이 되게 한다. 실행 파일의 이름이 claude가 아니어도
+   * 사람 역할이 셸에서 친 claude(예: 비정상 종료 뒤 claude --continue)가 같은 것을 띄우도록 PATH 맨 앞에 링크를 둔다
+   */
+  shimDir() {
+    const dir = path.join(this.o.dir, 'bin')
+    const link = path.join(dir, 'claude')
+    if (!fs.existsSync(link)) {
+      fs.mkdirSync(dir, { recursive: true })
+      fs.symlinkSync(findClaude(), link)
+    }
+    return dir
+  }
+
   env() {
-    return cleanEnv({
+    const env = cleanEnv({
       ...this.o.agentEnv,
       CLAUDE_CONFIG_DIR: this.o.agentConfigDir,
       PS1: '\\w $ ',
     })
+    env.PATH = `${this.shimDir()}:${env.PATH ?? ''}`
+    return env
   }
 
   /** bash를 하나 띄운다. claude가 true면 claude를 실행해 둔다 */
@@ -62,16 +79,16 @@ export class CliArm {
       cwd: this.o.repo,
       env: this.env(),
     })
-    const t = { term, p, exited: false }
+    // 첫 실행 창의 안정 판정은 터미널마다 따로 한다(다른 터미널의 화면이 판정을 되돌리지 않게)
+    const t = { term, p, exited: false, guard: new DialogGuard() }
     p.onData((d) => term.write(d))
     p.onExit(() => (t.exited = true))
     this.terms.push(t)
     this.active = this.terms.length - 1
     await sleep(500)
     if (claude) {
-      const bin = findClaude()
-      const dir = path.dirname(bin)
-      p.write(`export PATH="${dir}:$PATH"; clear; claude ${this.o.claudeArgs.join(' ')}\r`)
+      // relay가 쓰는 실행 파일을 경로로 직접 띄운다
+      p.write(`clear; '${findClaude()}' ${this.o.claudeArgs.join(' ')}\r`)
       await sleep(3000)
     }
     return t
@@ -93,17 +110,17 @@ export class CliArm {
     return lines.join('\n').replace(/\n+$/, '')
   }
 
-  async signature() {
-    return this.terms.map((t) => this.screenOf(t)).join('\n\u0000\n')
+  async poll() {
+    return { signature: this.terms.map((t) => this.screenOf(t)).join('\n\u0000\n') }
   }
 
   async notifications() {
     return []
   }
 
-  async handleSetupDialogs(guard) {
+  async handleSetupDialogs() {
     for (const t of this.terms) {
-      const d = guard ? guard.check(this.screenOf(t)) : decideDialog(this.screenOf(t))
+      const d = t.guard.check(this.screenOf(t))
       if (!d) continue
       for (const k of d.keys) {
         t.p.write(RAW[k])
@@ -125,39 +142,42 @@ export class CliArm {
     }
   }
 
+  /** 사람 역할의 행동 하나. { ok, message }를 돌려준다. ok가 false면 헛동작이다 */
   async act(a) {
     const t = this.cur()
+    const ok = (message) => ({ ok: true, message })
+    const fail = (message) => ({ ok: false, message })
     switch (a.do) {
       case 'type': {
-        if (!t || t.exited) return '열린 터미널이 없음'
+        if (!t || t.exited) return fail('열린 터미널이 없음')
         const text = String(a.text ?? '').replace(/\s*\n\s*/g, ' ')
         if (text) t.p.write(text)
         if (a.enter !== false) {
           await sleep(300)
           t.p.write('\r')
         }
-        return `터미널 ${this.active + 1}에 입력함`
+        return ok(`터미널 ${this.active + 1}에 입력함`)
       }
       case 'key': {
-        if (!t || t.exited) return '열린 터미널이 없음'
+        if (!t || t.exited) return fail('열린 터미널이 없음')
         const k = cliKey(a.key)
-        if (k === null) return `모르는 키 ${a.key}`
+        if (k === null) return fail(`모르는 키 ${a.key}`)
         t.p.write(k)
-        return `${a.key}를 누름`
+        return ok(`${a.key}를 누름`)
       }
       case 'new_terminal': {
-        if (this.terms.length >= 4) return '터미널은 넷까지'
+        if (this.terms.length >= 4) return fail('터미널은 넷까지')
         await this.open(false)
-        return `새 터미널 ${this.terms.length}을 염 (셸)`
+        return ok(`새 터미널 ${this.terms.length}을 염 (셸)`)
       }
       case 'switch': {
         const i = Number(a.terminal) - 1
-        if (!this.terms[i]) return `터미널 ${a.terminal}이 없음`
+        if (!this.terms[i]) return fail(`터미널 ${a.terminal}이 없음`)
         this.active = i
-        return `터미널 ${a.terminal}로 옮김`
+        return ok(`터미널 ${a.terminal}로 옮김`)
       }
       default:
-        return `모르는 행동 ${a.do}`
+        return fail(`모르는 행동 ${a.do}`)
     }
   }
 

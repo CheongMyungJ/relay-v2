@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { _electron as electron } from '@playwright/test'
 import { cleanEnv, findClaude } from './env.mjs'
-import { decideDialog } from './dialogs.mjs'
+import { DialogGuard } from './dialogs.mjs'
 import { gitState } from './repo.mjs'
 import { copyTree, sleep } from './util.mjs'
 
@@ -124,6 +124,23 @@ function visibleText() {
   return { text: clean(text), terminal: clean(terminal).replace(/\n+$/, ''), dialogs }
 }
 
+/** 폴링용: DOM을 복제하지 않고 화면 글자와 보이는 터미널 글자만 읽는다 */
+function pollText() {
+  const rows = document.querySelector('.terminal-host:not([hidden]) .xterm-rows')
+  const terminal = rows
+    ? [...rows.children].map((r) => r.textContent.replace(/\u00a0/g, ' ').trimEnd()).join('\n')
+    : ''
+  const layout = document.querySelector('.layout') ?? document.body
+  return { text: layout.innerText, terminal }
+}
+
+/** 열린 대화상자 수 */
+function openDialogs() {
+  return [...document.querySelectorAll('[role=dialog]')].filter(
+    (d) => !d.closest('[hidden]') && d.getBoundingClientRect().width > 0,
+  ).length
+}
+
 export class RelayArm {
   /**
    * @param {object} o
@@ -142,6 +159,7 @@ export class RelayArm {
     this.noticeSeen = 0
     this.launches = 0
     this.snapped = new Map()
+    this.guard = new DialogGuard()
   }
 
   kind = 'relay'
@@ -214,16 +232,18 @@ export class RelayArm {
     }
   }
 
-  /** 화면이 바뀌었는지 가를 서명. 스크린샷 없이 글자만 본다 */
-  async signature() {
-    const v = await this.win.evaluate(visibleText)
-    return `${v.text}\n${v.terminal}`
+  /**
+   * 폴링 한 번에 한 번만 읽는다. signature는 화면이 바뀌었는지 가를 서명(스크린샷 없이 글자만),
+   * terminal은 첫 실행 창을 가를 때 쓴다
+   */
+  async poll() {
+    const v = await this.win.evaluate(pollText)
+    return { signature: `${v.text}\n${v.terminal}`, terminal: v.terminal }
   }
 
   /** 첫 실행 창(신뢰, 권한 우회 경고 등)을 도구가 수락한다. 사람의 부담에 넣지 않는다 */
-  async handleSetupDialogs(guard) {
-    const v = await this.win.evaluate(visibleText)
-    const d = guard ? guard.check(v.terminal) : decideDialog(v.terminal)
+  async handleSetupDialogs(polled) {
+    const d = this.guard.check(polled.terminal)
     if (!d) return null
     await this.focusTerminal()
     for (const k of d.keys) {
@@ -249,57 +269,72 @@ export class RelayArm {
     }
   }
 
+  /** 보이는 터미널에 포커스를 준다. 보이는 터미널이 없으면 false */
   async focusTerminal() {
     const ta = this.win.locator('.terminal-host:not([hidden]) textarea.xterm-helper-textarea')
-    if ((await ta.count()) > 0) await ta.first().focus()
+    if ((await ta.count()) === 0) return false
+    await ta.first().focus()
+    return true
   }
 
-  /** 사람 역할의 행동 하나. 결과 문장을 돌려준다 */
+  /** 사람 역할의 행동 하나. { ok, message }를 돌려준다. ok가 false면 헛동작이다 */
   async act(a) {
     const win = this.win
     const el = (id) => win.locator(`[data-eval-id="${id}"]`)
+    const ok = (message) => ({ ok: true, message })
+    const fail = (message) => ({ ok: false, message })
     switch (a.do) {
       case 'click': {
         const l = el(a.id)
-        if ((await l.count()) === 0) return `요소 ${a.id}가 없음`
+        if ((await l.count()) === 0) return fail(`요소 ${a.id}가 없음`)
         await l.click({ timeout: 5000 })
-        return `요소 ${a.id}를 누름`
+        return ok(`요소 ${a.id}를 누름`)
       }
       case 'fill': {
         const l = el(a.id)
-        if ((await l.count()) === 0) return `요소 ${a.id}가 없음`
+        if ((await l.count()) === 0) return fail(`요소 ${a.id}가 없음`)
         await l.fill(a.text ?? '', { timeout: 5000 })
-        return `요소 ${a.id}에 입력함`
+        return ok(`요소 ${a.id}에 입력함`)
       }
       case 'select': {
         const l = el(a.id)
-        if ((await l.count()) === 0) return `요소 ${a.id}가 없음`
+        if ((await l.count()) === 0) return fail(`요소 ${a.id}가 없음`)
         await l.selectOption(String(a.value ?? ''), { timeout: 5000 })
-        return `요소 ${a.id}에서 ${a.value}를 고름`
+        return ok(`요소 ${a.id}에서 ${a.value}를 고름`)
       }
       case 'type': {
-        await this.focusTerminal()
+        // 맨 CLI 쪽과 같게, 보이는 터미널이 없으면 입력하지 않는다
+        if (!(await this.focusTerminal())) return fail('열린 터미널이 없음')
         const text = String(a.text ?? '').replace(/\s*\n\s*/g, ' ')
         if (text) await win.keyboard.insertText(text)
         if (a.enter !== false) {
           await sleep(300)
           await win.keyboard.press('Enter')
         }
-        return '터미널에 입력함'
+        return ok('터미널에 입력함')
       }
       case 'key': {
-        // 열린 대화상자가 없으면 터미널로 보낸다
-        const v = await win.evaluate(visibleText)
-        if (!v.dialogs) await this.focusTerminal()
+        // 열린 대화상자가 있으면 그쪽으로, 없으면 터미널로 보낸다
+        if (!(await win.evaluate(openDialogs)) && !(await this.focusTerminal()))
+          return fail('열린 대화상자도 터미널도 없음')
         await win.keyboard.press(keyName(a.key))
-        return `${a.key}를 누름`
+        return ok(`${a.key}를 누름`)
       }
       case 'scroll': {
+        // 휠은 마우스가 있는 곳을 굴린다. id가 있으면 그 요소 위에서, 없으면 창 가운데서 굴린다
+        if (a.id !== undefined) {
+          const l = el(a.id)
+          if ((await l.count()) === 0) return fail(`요소 ${a.id}가 없음`)
+          await l.hover({ timeout: 5000 })
+        } else {
+          const size = win.viewportSize() ?? { width: 1500, height: 950 }
+          await win.mouse.move(size.width / 2, size.height / 2)
+        }
         await win.mouse.wheel(0, a.direction === 'up' ? -600 : 600)
-        return '스크롤함'
+        return ok('스크롤함')
       }
       default:
-        return `모르는 행동 ${a.do}`
+        return fail(`모르는 행동 ${a.do}`)
     }
   }
 

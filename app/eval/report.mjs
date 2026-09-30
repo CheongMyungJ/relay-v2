@@ -6,7 +6,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { DIMENSIONS, judgePair } from './lib/judge.mjs'
-import { clip, readJson, stats, writeJson } from './lib/util.mjs'
+import { clip, readJson, readJsonl, stats, writeJson } from './lib/util.mjs'
 
 const SCENARIOS = path.resolve(import.meta.dirname, 'scenarios')
 
@@ -251,13 +251,7 @@ export function buildReport(dir) {
     lines.push('', '#### friction이 높았던 차례', '')
     for (const r of rs) {
       const file = path.join(r.dir, 'turns.jsonl')
-      if (!fs.existsSync(file)) continue
-      const high = fs
-        .readFileSync(file, 'utf8')
-        .split('\n')
-        .filter(Boolean)
-        .map((l) => JSON.parse(l))
-        .filter((t) => t.friction >= 2)
+      const high = readJsonl(file).filter((t) => t.friction >= 2)
       for (const t of high.slice(0, 5))
         lines.push(
           `- ${r.kind}#${r.index} 차례 ${t.turn} (friction ${t.friction}): ${t.friction_note || t.thought}`,

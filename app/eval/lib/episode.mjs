@@ -4,7 +4,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { CliArm } from './cli-arm.mjs'
-import { DialogGuard } from './dialogs.mjs'
 import { agentEnv, makeClaudeConfig } from './env.mjs'
 import { Human } from './human.mjs'
 import { RelayArm } from './relay-arm.mjs'
@@ -34,10 +33,14 @@ export async function runEpisode(o) {
   const { scenario, kind, opts } = o
   const tag = `[${scenario.id} ${kind}#${o.index}]`
   const say = (m) => console.log(`${new Date().toISOString().slice(11, 19)} ${tag} ${m}`)
+  // 같은 결과 폴더로 다시 돌리면 같은 회차 번호의 폴더를 다시 쓴다. 앞 실행의 레포, relay 저장소, 결과가 섞이지 않게 비운다
+  fs.rmSync(o.workDir, { recursive: true, force: true })
+  fs.rmSync(o.outDir, { recursive: true, force: true })
+  // 이 회차의 짝 판정도 새 결과로 다시 해야 한다
+  fs.rmSync(path.join(path.dirname(o.outDir), `judge-${o.index}.json`), { force: true })
   fs.mkdirSync(o.workDir, { recursive: true })
   fs.mkdirSync(o.outDir, { recursive: true })
   const turnsFile = path.join(o.outDir, 'turns.jsonl')
-  fs.rmSync(turnsFile, { force: true })
 
   const baseDir = path.join(o.scenarioDir, 'repo')
   const { repo, base } = makeRepo(o.workDir, scenario.repoName ?? 'repo', baseDir)
@@ -100,7 +103,6 @@ export async function runEpisode(o) {
   try {
     say(`준비 (${repo})`)
     await arm.prepare()
-    const guard = new DialogGuard()
     let lastSig = null
     let lastChange = Date.now()
     let changedSinceTurn = true
@@ -127,7 +129,8 @@ export async function runEpisode(o) {
       }
       let sig
       try {
-        const dialog = await arm.handleSetupDialogs(guard)
+        const polled = await arm.poll()
+        const dialog = await arm.handleSetupDialogs(polled)
         if (dialog) {
           setupDialogs.push({ t: now - t0, name: dialog })
           say(`첫 실행 창 수락: ${dialog}`)
@@ -136,7 +139,7 @@ export async function runEpisode(o) {
           notes.push(`OS 알림 — ${n}`)
           force = true
         }
-        sig = hash(await arm.signature())
+        sig = hash(polled.signature)
         readErrors = 0
       } catch (e) {
         // 창을 다시 띄우는 중 같은 잠깐의 오류는 넘긴다. 30초 넘게 이어지면 멈춘다
@@ -203,6 +206,7 @@ export async function runEpisode(o) {
         continue
       }
       const obs = { turn: n, elapsed: mmss(Date.now() - t0), notes, results, diff, screen }
+      const sent = { notes, results, diff, immediate, force }
       const sentNotes = notes
       notes = []
       results = []
@@ -216,7 +220,8 @@ export async function runEpisode(o) {
       } catch (e) {
         failures++
         say(`사람 역할 호출 실패 (${failures}): ${String(e).slice(0, 200)}`)
-        notes = sentNotes
+        // 다음 차례에 같은 알림, 행동 결과, 코드 차이를 다시 보인다
+        ;({ notes, results, diff, immediate, force } = sent)
         if (failures >= 3) {
           ending = 'human_error'
           error = String(e)
@@ -263,13 +268,16 @@ export async function runEpisode(o) {
         } else {
           if (typeof a.text === 'string' && (a.do === 'type' || a.do === 'fill'))
             charsTyped += a.text.length
+          let r
           try {
-            act.result = await arm.act(a)
+            r = await arm.act(a)
           } catch (e) {
-            act.result = `실패: ${String(e).split('\n')[0].slice(0, 200)}`
+            r = { ok: false, message: `실패: ${String(e).split('\n')[0].slice(0, 200)}` }
           }
-          if (/없음|모르는|실패/.test(act.result)) invalid++
-          results.push(act.result)
+          act.result = r.message
+          act.ok = r.ok
+          if (!r.ok) invalid++
+          results.push(r.message)
           await sleep(700)
         }
         rec.actions.push(act)
@@ -335,13 +343,18 @@ export async function runEpisode(o) {
   }
   await arm.close()
 
-  // 결과 폴더 하나라도 통과하면 그 시험은 통과다(relay는 버그마다 Work를 따로 만들 수 있다)
-  const checkNames = (scenario.checks ?? []).map((c) => c.name)
-  const checks = checkNames.map((name) => ({
-    name,
-    pass: final.some((f) => f.checks.find((c) => c.name === name)?.pass),
-  }))
+  // 고친 것을 보는 시험은 결과 폴더 하나라도 통과하면 통과다(relay는 버그마다 Work를 따로 만들 수 있다).
+  // guard 시험(멀쩡한 동작을 지키는지)은 바뀐 결과 폴더 모두에서 통과해야 한다. 바뀐 폴더가 없으면 모든 폴더를 본다
   const changedTrees = final.filter((f) => f.files.length > 0)
+  const guardTrees = changedTrees.length ? changedTrees : final
+  const passIn = (f, name) => !!f.checks.find((c) => c.name === name)?.pass
+  const checks = (scenario.checks ?? []).map((c) => ({
+    name: c.name,
+    guard: !!c.guard,
+    pass: c.guard
+      ? guardTrees.length > 0 && guardTrees.every((f) => passIn(f, c.name))
+      : final.some((f) => passIn(f, c.name)),
+  }))
   const frictions = turns.map((t) => t.friction).filter((x) => typeof x === 'number')
   const result = {
     scenario: scenario.id,

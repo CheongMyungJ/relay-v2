@@ -86,7 +86,7 @@ const ACTION_HELP = {
     '- select {id, value}: 선택 상자에서 값을 고른다',
     '- type {text, enter}: 지금 보이는 터미널(에이전트 세션)에 입력한다. enter 기본 true. 줄바꿈은 공백이 된다',
     '- key {key}: 키를 누른다 (Enter, Escape, ArrowUp, ArrowDown, Tab, Space, 숫자). 열린 대화상자가 없으면 터미널로 간다',
-    '- scroll {direction}: 화면을 굴린다',
+    '- scroll {direction, id}: 화면을 굴린다. id가 있으면 그 요소 위에서, 없으면 창 가운데서 굴린다',
   ],
   cli: [
     '- type {text, enter}: 지금 터미널에 입력한다. enter 기본 true. 줄바꿈은 공백이 된다',
