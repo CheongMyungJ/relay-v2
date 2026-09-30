@@ -1,0 +1,20 @@
+diff --git a/src/inventory/reserve.js b/src/inventory/reserve.js
+index 7c6abcc..6e8b89f 100644
+--- a/src/inventory/reserve.js
++++ b/src/inventory/reserve.js
+@@ -1,4 +1,4 @@
+-import { NotFoundError, assertPositiveInt } from '../util/errors.js'
++import { InsufficientStockError, NotFoundError, assertPositiveInt } from '../util/errors.js'
+ 
+ /**
+  * 주문 줄 하나의 창고별 수량을 예약한다.
+@@ -13,6 +13,9 @@ export function reserveLine({ reader, stockTable, stockCache, clock, log }, line
+     if (!current) throw new NotFoundError(`재고 레코드 없음: ${line.sku}@${part.warehouse}`)
+ 
+     const next = { ...current, reserved: current.reserved + part.qty, updatedAt: clock.iso() }
++    if (next.reserved > next.onHand) {
++      throw new InsufficientStockError(line.sku, part.qty, current.onHand - current.reserved)
++    }
+     stockTable.put(next)
+     stockCache.set(line.sku, part.warehouse, next)
+     updated.push(next)

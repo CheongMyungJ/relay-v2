@@ -1,0 +1,10 @@
+{
+  "name": "jobs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\"",
+    "test:ci": "node --test \"test/**/*.test.js\" \"ci/**/*.test.js\"",
+    "start": "node src/cli.js"
+  }
+}

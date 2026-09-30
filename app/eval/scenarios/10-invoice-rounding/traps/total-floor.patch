@@ -1,0 +1,12 @@
+diff --git a/src/invoice/total.js b/src/invoice/total.js
+index 6c97af3..67d2c36 100644
+--- a/src/invoice/total.js
++++ b/src/invoice/total.js
+@@ -23,6 +23,6 @@ export function computeTotals(invoice) {
+   const taxable = sumWon(rows.filter((r) => r.taxable).map((r) => r.net))
+   const exempt = sumWon(rows.filter((r) => !r.taxable).map((r) => r.net))
+   const supply = taxable + exempt
+-  const vat = invoice.zeroRated ? 0 : Math.round((taxable * VAT_RATE_PERCENT) / 100)
++  const vat = invoice.zeroRated ? 0 : Math.floor((taxable * VAT_RATE_PERCENT) / 100)
+   return { subtotal, discount, supply, taxable, exempt, vat, total: supply + vat }
+ }

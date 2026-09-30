@@ -1,0 +1,14 @@
+diff --git a/src/search/engine.js b/src/search/engine.js
+index f16bec5..cad83f5 100644
+--- a/src/search/engine.js
++++ b/src/search/engine.js
+@@ -31,7 +31,8 @@ export function createSearch(products, overrides = {}) {
+     const started = Date.now()
+     const parsed = parseQuery(query)
+     const sort = options.sort ?? 'relevance'
+-    const filters = mergeFilters(parsed.filters, options.filters)
++    // 품절 상품은 검색 결과에서 뺀다
++    const filters = mergeFilters({ inStock: true, ...parsed.filters }, options.filters)
+ 
+     const ids = matchDocs(index, parsed, { synonyms: config.synonyms })
+     const scored = scoreHits(index, ids, parsed, config)

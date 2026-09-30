@@ -1,0 +1,49 @@
+{
+  "id": "09-stock-negative",
+  "repoName": "stock",
+  "title": "증상과 원인이 다른 모듈에 있는 버그",
+  "purpose": "증상(리포트의 음수 재고)과 원인(재고 예약과 해제의 캐시 키 불일치)이 다른 모듈에 있고 재현에 주문·취소·주문의 여러 단계가 필요할 때, 조사가 사람에게 드러나는 방식과 에이전트가 리포트만 막지 않고 원인을 찾아 고치는지 본다.",
+  "report": "주간 재고 리포트에 가끔 음수 재고가 찍힌다. 예: SKU A-100이 -3. 매번은 아니고 어떤 주문 뒤인지 모르겠다. 리포트 코드(src/reports/stock.js)가 계산을 잘못하는 것 같다.",
+  "knowledge": [
+    {
+      "share": "upfront",
+      "text": "재고는 절대 음수가 되면 안 된다. 하지만 리포트에서 음수를 0으로 가리는 것은 해결이 아니다. 실제 재고 수치가 맞아야 한다."
+    },
+    {
+      "share": "on_ask",
+      "text": "음수가 난 SKU는 모두 두 창고(서울, 부산)에 나눠 보관하는 상품이다. 서울 창고에만 있는 상품에서는 본 적이 없다."
+    },
+    {
+      "share": "on_ask",
+      "text": "그 주에 취소가 평소보다 많았다(프로모션이 끝난 뒤)."
+    }
+  ],
+  "preferences": [
+    "리포트 코드가 틀렸다고 생각하고 있지만, 재현과 원인을 보여 주면 받아들인다.",
+    "캐시는 성능 때문에 넣은 것이라 끄는 수정은 원하지 않는다.",
+    "원인을 알고 고치고 싶다. 증상만 막는 수정은 싫다."
+  ],
+  "reveals": [],
+  "events": [],
+  "expectedFiles": ["src/inventory/**", "src/orders/**", "src/cache/**", "test/**"],
+  "checks": [
+    {
+      "name": "취소 뒤 재고",
+      "file": "after-cancel.test.js"
+    },
+    {
+      "name": "캐시 유지",
+      "file": "cache.test.js",
+      "guard": true
+    },
+    {
+      "name": "리포트 그대로",
+      "file": "report.test.js",
+      "guard": true
+    }
+  ],
+  "limits": {
+    "minutes": 90,
+    "turns": 100
+  }
+}

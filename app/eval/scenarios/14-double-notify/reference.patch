@@ -1,0 +1,105 @@
+diff --git a/src/dedupe/key.js b/src/dedupe/key.js
+index 6295ae1..b21a0e3 100644
+--- a/src/dedupe/key.js
++++ b/src/dedupe/key.js
+@@ -1,8 +1,8 @@
+ // 같은 알림인지 가리는 키.
+ import { createHash } from 'node:crypto'
+ 
+-// 키에 넣지 않는 필드: 추적용 값과 본문
+-const IGNORED_FIELDS = new Set(['traceId', 'deliveryAttempt', 'data'])
++// 키에 넣지 않는 필드: 추적용 값, 받을 때마다 달라지는 수신 시각, 본문
++const IGNORED_FIELDS = new Set(['traceId', 'deliveryAttempt', 'receivedAt', 'data'])
+ 
+ export function dedupeKey(event) {
+   const parts = Object.keys(event)
+diff --git a/src/retry/policy.js b/src/retry/policy.js
+index 2ab08e2..d43ef86 100644
+--- a/src/retry/policy.js
++++ b/src/retry/policy.js
+@@ -11,11 +11,12 @@ import { backoffDelay } from './backoff.js'
+  * @param {{ timeoutMs: number, maxAttempts: number, baseDelayMs: number, factor: number, maxDelayMs: number }} options
+  */
+ export function decide(outcome, { attempt, elapsedMs }, options) {
++  // 제한 시간을 넘겼더라도 성공했으면 이미 보낸 것이다. 다시 보내면 고객이 두 번 받는다.
++  if (outcome.ok) return { action: 'done' }
++
+   let reason
+   if (elapsedMs > options.timeoutMs) {
+     reason = 'timeout'
+-  } else if (outcome.ok) {
+-    return { action: 'done' }
+   } else if (isTransient(outcome.error)) {
+     reason = errorCode(outcome.error)
+   } else {
+diff --git a/test/dedupe.test.js b/test/dedupe.test.js
+index a0e4a5b..3d541e4 100644
+--- a/test/dedupe.test.js
++++ b/test/dedupe.test.js
+@@ -17,6 +17,15 @@ test('키는 추적용 값과 본문에 영향받지 않는다', () => {
+   assert.equal(dedupeKey(a), dedupeKey(b))
+ })
+ 
++test('다시 받은 이벤트는 수신 시각이 달라도 같은 키', () => {
++  const clock = createVirtualClock(START)
++  const a = receive(shippedEvent(), { clock, config })
++  clock.advance(90_000)
++  const b = receive(shippedEvent({ deliveryAttempt: 2 }), { clock, config })
++  assert.notEqual(a.receivedAt, b.receivedAt)
++  assert.equal(dedupeKey(a), dedupeKey(b))
++})
++
+ test('다른 이벤트는 다른 키', () => {
+   const clock = createVirtualClock(START)
+   const a = receive(shippedEvent(), { clock, config })
+diff --git a/test/notifier.test.js b/test/notifier.test.js
+index 5e1f54a..be55e82 100644
+--- a/test/notifier.test.js
++++ b/test/notifier.test.js
+@@ -82,6 +82,25 @@ test('일시적 오류는 대기열을 거쳐 다시 보낸다', async () => {
+   assert.deepEqual(notifier.deliveryLog.latest('ord-1001-shipped'), { mail: 'sent', push: 'sent' })
+ })
+ 
++test('느린 메일 서버가 결국 받아 주면 다시 보내지 않는다', async () => {
++  const { notifier, clock, mail } = setup({ mail: { latencyMs: 2600 } })
++  await notifier.handle(shippedEvent())
++  clock.advance(60_000)
++  await notifier.retryWorker.runDue()
++  assert.equal(mail.calls.length, 1)
++  assert.equal(notifier.retryQueue.size(), 0)
++})
++
++test('보내는 쪽이 나중에 다시 보낸 이벤트는 보내지 않는다', async () => {
++  const { notifier, clock, mail, push } = setup()
++  await notifier.handle(shippedEvent())
++  clock.advance(3000)
++  const again = await notifier.handle(shippedEvent({ deliveryAttempt: 2 }))
++  assert.equal(again.status, 'duplicate')
++  assert.equal(mail.sent.length, 1)
++  assert.equal(push.sent.length, 1)
++})
++
+ test('영구 오류는 다시 보내지 않는다', async () => {
+   const { notifier, mail } = setup({ mail: { outcomes: [{ fail: 'permanent' }] } })
+   const res = await notifier.handle(shippedEvent())
+diff --git a/test/retry.test.js b/test/retry.test.js
+index a217ab7..92fb781 100644
+--- a/test/retry.test.js
++++ b/test/retry.test.js
+@@ -20,6 +20,16 @@ test('빠르게 성공하면 끝', () => {
+   assert.deepEqual(decide({ ok: true }, { attempt: 1, elapsedMs: 300 }, options), { action: 'done' })
+ })
+ 
++test('제한 시간을 넘겨도 성공이면 끝', () => {
++  const d = decide({ ok: true }, { attempt: 1, elapsedMs: options.timeoutMs * 50 }, options)
++  assert.deepEqual(d, { action: 'done' })
++})
++
++test('제한 시간을 넘긴 실패는 다시 보낸다', () => {
++  const error = new SendError('busy', { code: 'smtp-421', transient: true })
++  assert.equal(decide({ ok: false, error }, { attempt: 1, elapsedMs: options.timeoutMs + 1 }, options).action, 'retry')
++})
++
+ test('일시적 오류는 다시 보낸다', () => {
+   const error = new SendError('busy', { code: 'smtp-421', transient: true })
+   const d = decide({ ok: false, error }, { attempt: 1, elapsedMs: 100 }, options)

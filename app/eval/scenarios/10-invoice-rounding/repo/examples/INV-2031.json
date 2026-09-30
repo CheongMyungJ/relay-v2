@@ -1,0 +1,13 @@
+{
+  "number": "INV-2031",
+  "customerId": "C-0412",
+  "issueDate": "2026-09-14",
+  "dueDate": "2026-10-14",
+  "lines": [
+    { "sku": "OF-1342", "name": "박스테이프", "unitPrice": 1342, "qty": 4 },
+    { "sku": "OF-0905", "name": "네임펜 흑", "unitPrice": 905, "qty": 7 },
+    { "sku": "OF-1085", "name": "스테이플러 심", "unitPrice": 1085, "qty": 3 },
+    { "sku": "OF-1675", "name": "수정테이프", "unitPrice": 1675, "qty": 5 },
+    { "sku": "OF-0345", "name": "볼펜 0.5 흑", "unitPrice": 345, "qty": 9 }
+  ]
+}

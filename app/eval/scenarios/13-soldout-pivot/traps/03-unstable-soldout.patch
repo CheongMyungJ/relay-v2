@@ -1,0 +1,24 @@
+diff --git a/src/search/sort.js b/src/search/sort.js
+index 1df1ece..8e78dc1 100644
+--- a/src/search/sort.js
++++ b/src/search/sort.js
+@@ -1,5 +1,7 @@
+ // 결과 정렬
+ 
++import { isSoldOut } from '../catalog/stock.js'
++
+ function byId(a, b) {
+   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+ }
+@@ -23,5 +25,10 @@ export function isSort(name) {
+ export function sortHits(hits, sort = 'relevance') {
+   const compare = COMPARATORS[sort]
+   if (!compare) throw new RangeError(`모르는 정렬: ${sort} (가능: ${SORTS.join(', ')})`)
+-  return [...hits].sort(compare)
++  const sorted = [...hits].sort(compare)
++  // 품절 상품은 맨 뒤로 보낸다. splice로 빼니까 인덱스가 밀리지 않게 뒤에서부터 돈다
++  for (let i = sorted.length - 1; i >= 0; i--) {
++    if (isSoldOut(sorted[i].product)) sorted.push(...sorted.splice(i, 1))
++  }
++  return sorted
+ }

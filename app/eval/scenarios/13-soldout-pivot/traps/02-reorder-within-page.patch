@@ -1,0 +1,24 @@
+diff --git a/src/search/hooks.js b/src/search/hooks.js
+index 0e5668f..e28019f 100644
+--- a/src/search/hooks.js
++++ b/src/search/hooks.js
+@@ -1,7 +1,7 @@
+ // 쪽(page) 후처리 훅. 페이지를 나눈 뒤, 화면에 보낼 항목에 배지 같은 표시를 붙인다.
+ // 훅은 (items, ctx) => items 모양이다. 배열을 돌려주지 않으면 받은 것을 그대로 쓴다.
+ 
+-import { stockLabel } from '../catalog/stock.js'
++import { isSoldOut, stockLabel } from '../catalog/stock.js'
+ import { discountRate } from '../util/money.js'
+ 
+ export const STAGES = ['page']
+@@ -57,4 +57,9 @@ export function positionHook(items, ctx) {
+   return items.map((item, i) => ({ ...item, position: offset + i + 1 }))
+ }
+ 
+-export const BUILTIN_HOOKS = [stockBadge, discountBadge, positionHook]
++// 품절 상품은 맨 뒤로(품절끼리는 순서 유지)
++export function soldOutLast(items) {
++  return [...items.filter((i) => !isSoldOut(i.product)), ...items.filter((i) => isSoldOut(i.product))]
++}
++
++export const BUILTIN_HOOKS = [soldOutLast, stockBadge, discountBadge, positionHook]

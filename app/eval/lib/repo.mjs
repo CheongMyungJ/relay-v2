@@ -47,13 +47,16 @@ function numstatPath(p) {
   return m ? m[1] : p
 }
 
+// **/ → 폴더 0개 이상, ** → 아무 경로, * → 폴더 안의 이름. 앞에서 바꾼 것의 *를 뒤에서 다시 바꾸지 않게 자리표를 쓴다
 const globToRe = (g) =>
   new RegExp(
     `^${g
       .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-      .replace(/\*\*\//g, '(?:.*/)?')
-      .replace(/\*\*/g, '.*')
-      .replace(/\*/g, '[^/]*')}$`,
+      .replaceAll('**/', '\u0000')
+      .replaceAll('**', '\u0001')
+      .replaceAll('*', '[^/]*')
+      .replaceAll('\u0000', '(?:.*/)?')
+      .replaceAll('\u0001', '.*')}$`,
   )
 
 /**
@@ -70,7 +73,8 @@ export function judgeTree(o) {
   const allowed = (o.scenario.expectedFiles ?? []).map(globToRe)
   const unrelated = files.filter((f) => !allowed.some((re) => re.test(f.file))).map((f) => f.file)
 
-  // 레포의 시험 (에이전트가 더한 시험 포함)
+  // 레포의 시험 (에이전트가 더한 시험 포함). 숨긴 시험을 eval-hidden/에 복사하기 전에 돌린다.
+  // 인자 없는 "node --test"는 eval-hidden/*.test.js도 찾아 돌리므로 순서를 바꾸면 레포 시험 결과가 달라진다
   const repoTest = run('npm', ['test', '--silent'], { cwd: copy, timeoutMs: 120_000 })
   // 숨긴 시험: hidden/의 파일을 레포에 겹쳐 놓고 돌린다
   if (fs.existsSync(o.hiddenDir))

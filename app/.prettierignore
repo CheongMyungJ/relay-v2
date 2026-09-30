@@ -7,3 +7,5 @@ src/shared/generated/
 eval/scenarios/*/repo/
 eval/scenarios/*/hidden/
 eval/results/
+# 평가 보고서는 eval/report.mjs가 만든 것을 그대로 옮긴다
+eval/reports/

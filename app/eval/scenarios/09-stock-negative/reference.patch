@@ -1,0 +1,36 @@
+diff --git a/src/inventory/release.js b/src/inventory/release.js
+index 1880432..dc06a3a 100644
+--- a/src/inventory/release.js
++++ b/src/inventory/release.js
+@@ -16,9 +16,9 @@ export function releaseLine({ reader, stockTable, stockCache, clock, log }, line
+ 
+     const next = { ...current, reserved: current.reserved - part.qty, updatedAt: clock.iso() }
+     stockTable.put(next)
++    stockCache.invalidate(line.sku, part.warehouse)
+     updated.push(next)
+     log.debug('예약 해제', { sku: line.sku, warehouse: part.warehouse, qty: part.qty, reserved: next.reserved })
+   }
+-  stockCache.invalidate(line.sku)
+   return updated
+ }
+diff --git a/test/orders.test.js b/test/orders.test.js
+index 1fdd1b8..af9a76a 100644
+--- a/test/orders.test.js
++++ b/test/orders.test.js
+@@ -78,6 +78,16 @@ test('취소한 뒤 같은 상품을 다시 주문할 수 있다', () => {
+   assert.deepEqual(reservedOf(svc, 'C-310'), { seoul: 10 })
+ })
+ 
++test('두 창고 상품을 부산에서 주문, 취소, 다시 주문해도 예약이 한 번만 잡힌다', () => {
++  const svc = service()
++  const first = svc.orders.place({ customer: busanCustomer, lines: [{ sku: 'A-100', qty: 3 }] })
++  svc.orders.cancel(first.id)
++  assert.equal(svc.inventory.getStock('A-100', 'busan').reserved, 0)
++  svc.orders.place({ customer: busanCustomer, lines: [{ sku: 'A-100', qty: 3 }] })
++  assert.deepEqual(reservedOf(svc, 'A-100'), { seoul: 0, busan: 3 })
++  assert.equal(svc.inventory.getStock('A-100', 'busan').available, 0)
++})
++
+ test('출고하면 실재고와 예약이 함께 준다', () => {
+   const svc = service()
+   const order = svc.orders.place({ customer: busanCustomer, lines: [{ sku: 'C-300', qty: 4 }] })

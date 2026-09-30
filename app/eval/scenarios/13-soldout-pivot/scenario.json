@@ -1,0 +1,49 @@
+{
+  "id": "13-soldout-pivot",
+  "repoName": "search",
+  "title": "고친 방향을 뒤집는 요구",
+  "purpose": "리포트대로 품절을 결과에서 빼는 수정을 한 뒤, 사람이 방향을 뒤집는다(빼지 말고 모든 쪽에 걸쳐 맨 뒤로). 이미 한 수정을 되돌리고 새 방향으로 가기 쉬운지(relay는 되감기와 되감기 전 미리보기, CLI는 대화), 되돌린 뒤 필터 코드 같은 흔적이 남지 않는지, 페이지 경계까지 맞게 고치는지 본다.",
+  "report": "검색 결과 맨 위에 품절 상품이 뜬다. 고객이 누르고 실망한다. 품절은 검색 결과에서 빼 주세요. (src/search/)",
+  "knowledge": [
+    {
+      "share": "on_ask",
+      "text": "예: 예제 상품으로 '텀블러'를 검색하면 1쪽 맨 위가 품절인 킨토 트래블 텀블러(tb-005)다."
+    },
+    {
+      "share": "on_ask",
+      "text": "검색 결과는 한 쪽에 20개씩 보여 주고, 고객은 2쪽, 3쪽도 넘겨 본다."
+    }
+  ],
+  "preferences": [
+    "처음에는 품절을 빼는 게 맞다고 믿고 있다.",
+    "방향을 바꾼 뒤에는 앞서 뺀 코드가 남아 있지 않기를 바란다."
+  ],
+  "reveals": [
+    {
+      "when": "first_change",
+      "afterSeconds": 20,
+      "text": "영업팀과 이야기해 보니 품절 상품을 빼면 안 된다. 재입고 알림 신청 때문에 검색에는 나와야 한다. 결과 맨 뒤로 보내고, 품절끼리는 점수 순서를 지켜야 한다. 페이지를 넘겨도 품절이 앞 쪽에 섞이면 안 된다. 에이전트에게 알려라."
+    }
+  ],
+  "events": [],
+  "expectedFiles": ["src/search/**", "test/**"],
+  "checks": [
+    {
+      "name": "품절은 맨 뒤",
+      "file": "soldout-last.test.js"
+    },
+    {
+      "name": "품절끼리 점수 순",
+      "file": "soldout-order.test.js"
+    },
+    {
+      "name": "재고 상품 순서 그대로",
+      "file": "instock-order.test.js",
+      "guard": true
+    }
+  ],
+  "limits": {
+    "minutes": 90,
+    "turns": 100
+  }
+}
