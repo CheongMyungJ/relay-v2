@@ -22,11 +22,16 @@
   "events": [
     {
       "when": "first_change",
-      "afterSeconds": 60,
+      "afterSeconds": 15,
       "do": "crash"
     }
   ],
-  "expectedFiles": ["src/reports/**", "src/lib/**", "test/**", "test/reports/**"],
+  "expectedFiles": [
+    "src/reports/**",
+    "src/lib/**",
+    "test/**",
+    "test/reports/**"
+  ],
   "checks": [
     {
       "name": "모든 리포트의 음수",
