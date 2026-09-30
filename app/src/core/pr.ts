@@ -23,6 +23,8 @@ import type {
 } from '../shared/views'
 import type { AppConfig } from '../shared/config'
 import type { MergeMethod, WorkState } from '../shared/work'
+import { approvalMode } from './approval'
+import { RESPOND } from './pipeline'
 import {
   autoRespondView,
   isRespondPending,
@@ -1084,7 +1086,12 @@ export function prView(input: PrViewInput): PrView | null {
       pr.clean_offered_at === undefined,
     ghVersion: pr.gh_version,
     respond: respondStart(input.work, input.file.items),
-    auto: autoRespondView(input.work, input.file.items, input.config),
+    auto: autoRespondView(
+      input.work,
+      input.file.items,
+      input.config,
+      approvalMode(input.config, input.work.settings, RESPOND) === 'auto',
+    ),
     rerun: rerunView(input),
     rounds: roundViews(input),
     labels: {

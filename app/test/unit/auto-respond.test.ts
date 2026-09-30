@@ -3,7 +3,13 @@
 // 셈과 상한, PR 대응의 자동 승인 판정(4.3, 닫힌 PR)과 승인 화면 안내, 배지 차례, PR 패널의 자동 대응, context.md와
 // 머리 띠를 본다.
 import { describe, expect, it } from 'vitest'
-import { AUTO_HOLD_LABEL, BADGE_ORDER, autoApproveNote, badge } from '../../src/core/approval'
+import {
+  AUTO_HOLD_LABEL,
+  BADGE_ORDER,
+  approvalMode,
+  autoApproveNote,
+  badge,
+} from '../../src/core/approval'
 import {
   applyConfigPatch,
   checkWorkSettings,
@@ -22,7 +28,6 @@ import {
 import { prBadgeKind } from '../../src/core/pr'
 import {
   AUTO_LIMIT,
-  autoApproveOn,
   autoPausedNotice,
   autoPlan,
   autoRespondView,
@@ -322,10 +327,13 @@ describe('자동 대응의 설정 (5.1.1, D72, D154, D169, D171)', () => {
     expect(autoStartOn(DEFAULT_CONFIG, { respond_auto_start: true })).toBe(true)
     expect(autoStartOn(ON, { respond_auto_start: false })).toBe(false)
     expect(autoStartOn(ON, {})).toBe(true)
-    expect(autoApproveOn(DEFAULT_CONFIG, {})).toBe(false)
-    expect(autoApproveOn(DEFAULT_CONFIG, { auto_approve: { respond: true } })).toBe(true)
-    expect(autoApproveOn(ON, { auto_approve: { respond: false } })).toBe(false)
-    expect(autoApproveOn(ON, { auto_approve: { fix: false } })).toBe(true)
+    // PR 대응의 자동 승인은 다른 단계와 같은 승인 방식이다 (D169). PR 패널도 이것으로 보인다
+    expect(approvalMode(DEFAULT_CONFIG, {}, 'respond')).toBe('manual')
+    expect(approvalMode(DEFAULT_CONFIG, { auto_approve: { respond: true } }, 'respond')).toBe(
+      'auto',
+    )
+    expect(approvalMode(ON, { auto_approve: { respond: false } }, 'respond')).toBe('manual')
+    expect(approvalMode(ON, { auto_approve: { fix: false } }, 'respond')).toBe('auto')
   })
 
   it('PR 진행 중에도 [Work 설정]을 받는다. 끝난 Work는 받지 않는다 (D209)', () => {
@@ -699,8 +707,11 @@ describe('배지 "자동 대응 멈춤"과 PR 패널 (D171, D183)', () => {
   })
 
   it('패널은 설정과 어디서 정했는지, 이어진 라운드와 상한, 멈춤을 보인다', () => {
+    // PR 패널(core/pr prView)처럼 자동 승인은 승인 방식으로 정해 넘긴다
+    const panel = (w: WorkState, items: PrItem[], config: AppConfig) =>
+      autoRespondView(w, items, config, approvalMode(config, w.settings, 'respond') === 'auto')
     const work = inPr()
-    expect(autoRespondView(work, [], DEFAULT_CONFIG)).toEqual({
+    expect(panel(work, [], DEFAULT_CONFIG)).toEqual({
       start: false,
       startFromWork: false,
       approve: false,
@@ -711,15 +722,15 @@ describe('배지 "자동 대응 멈춤"과 PR 패널 (D171, D183)', () => {
       text: '대응 자동 시작 꺼짐(앱 설정): 새 항목은 [대응 시작]으로 대응합니다 · 자동 승인 꺼짐(앱 설정)',
     })
     const byWork = { ...work, settings: { respond_auto_start: true } }
-    expect(autoRespondView(byWork, [], DEFAULT_CONFIG).text).toBe(
+    expect(panel(byWork, [], DEFAULT_CONFIG).text).toBe(
       '대응 자동 시작 켜짐(이 Work) · 자동 승인 꺼짐(앱 설정) · 사람 손 없이 이어진 라운드 0/3',
     )
     const two = autoRound(autoRound(inPr()), ['convo:20'])
-    const paused = autoRespondView(two, [item('convo:21')], ON)
+    const paused = panel(two, [item('convo:21')], ON)
     expect(paused).toMatchObject({ start: true, approve: true, rounds: 2, max: 2, paused: true })
     expect(paused.text).toContain('자동 대응 멈춤')
     // 새 항목이 없으면 멈춤이 아니다
-    expect(autoRespondView(two, [], ON).paused).toBe(false)
+    expect(panel(two, [], ON).paused).toBe(false)
   })
 })
 

@@ -76,7 +76,7 @@ export function autoApprovable(node: TaskNode): node is AutoApproveNode {
 
 /** 승인 방식. intake, review, verify는 항상 수동이고, 나머지는 Work 설정, 앱 설정 순서로 본다 (4.2, D72, D167, D169) */
 export function approvalMode(
-  config: AppConfig,
+  config: Pick<AppConfig, 'auto_approve'>,
   settings: WorkSettings,
   node: TaskNode,
 ): ApprovalMode {

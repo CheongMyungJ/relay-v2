@@ -398,14 +398,6 @@ export function autoStartOn(
   return settings.respond_auto_start ?? config.respond_auto_start
 }
 
-/** PR 대응의 자동 승인이 켜져 있는가: Work 설정, 앱 설정 차례로 본다 (D72, D169) */
-export function autoApproveOn(
-  config: Pick<AppConfig, 'auto_approve'>,
-  settings: Pick<WorkSettings, 'auto_approve'>,
-): boolean {
-  return settings.auto_approve?.respond ?? config.auto_approve.respond
-}
-
 /** 사람 손 없이 이어진 대응 라운드 수 (D171, D191). 기록이 없으면 0이다 */
 export function autoRounds(work: Pick<WorkState, 'pr'>): number {
   return work.pr?.auto_rounds ?? 0
@@ -487,16 +479,18 @@ export function autoPausedNotice(pr: number, max: number, items: number): string
 
 /**
  * PR 패널의 자동 대응 (D154, D169, D171, D183): 설정과 어디서 정했는지, 사람 손 없이 이어진 라운드와 상한, 멈춤. 멈춤은
- * 자동 시작이 켜져 있고 받은 새 항목이 있는데 상한 때문에 시작하지 않는 것이다(배지 "자동 대응 멈춤")
+ * 자동 시작이 켜져 있고 받은 새 항목이 있는데 상한 때문에 시작하지 않는 것이다(배지 "자동 대응 멈춤"). PR 대응의 자동
+ * 승인이 켜졌는지(approve)는 부르는 쪽이 실제 자동 승인과 같은 승인 방식(core/approval approvalMode)으로 정해 넘긴다.
+ * core/approval이 이 파일을 가져오므로 여기서 가져오면 순환 import다
  */
 export function autoRespondView(
   work: Pick<WorkState, 'status' | 'pr' | 'operation' | 'tasks' | 'settings'>,
   items: readonly PrItem[],
-  config: Pick<AppConfig, 'respond_auto_start' | 'respond_auto_round_max' | 'auto_approve'>,
+  config: Pick<AppConfig, 'respond_auto_start' | 'respond_auto_round_max'>,
+  approve: boolean,
 ): AutoRespondView {
   const settings = work.settings
   const start = autoStartOn(config, settings)
-  const approve = autoApproveOn(config, settings)
   const startFromWork = settings.respond_auto_start !== undefined
   const approveFromWork = settings.auto_approve?.respond !== undefined
   const rounds = autoRounds(work)

@@ -3041,12 +3041,8 @@ export class WorkRunner {
     const pre = respondStart(this.work, this.prFile?.items ?? [])
     if (!pre.enabled) return { ok: false, error: pre.reason ?? '대응을 시작할 수 없음' }
     if (this.cleanupOpen()) return { ok: false, error: CLEANUP_BLOCKS }
-    const ctx = { repo: this.project.repo_path, env: this.ctx.env }
-    const branch = workBranch(this.work.work_id)
-    await fetchTip(ctx, this.work.base_branch)
-    const remote = await fetchTip(ctx, branch)
+    const remote = await this.fetchForRound()
     return this.enqueue(async () => {
-      if (this.cleanupOpen()) return { ok: false, error: CLEANUP_BLOCKS }
       const file = await this.prItems()
       const error = respondInputError(
         respondStart(this.work, file.items),
@@ -3054,42 +3050,67 @@ export class WorkRunner {
         input.instruction,
       )
       if (error) return { ok: false, error }
-      const at = this.ctx.at()
-      let synced: PrSynced | null
-      try {
-        synced = remote ? await this.syncForRespond(remote, at) : null
-      } catch (e) {
-        return { ok: false, error: `원격 PR 브랜치의 새 커밋을 받지 못함: ${message(e)}` }
-      }
-      const r = await this.command({
-        type: 'pr.respond',
-        at,
-        items: [...input.items],
-        instruction: input.instruction,
-        ...(synced && remote
-          ? {
-              synced: {
-                head: remote,
-                commits: synced.commits,
-                ...(synced.base_commit ? { baseCommit: synced.base_commit } : {}),
-              },
-            }
-          : {}),
-      })
-      // 받은 커밋과 대응 중이 된 항목을 적는다. 상태의 기준은 work.json이라 쓰지 못하면 켤 때 맞춘다 (D189)
-      const now = await this.prItems()
-      try {
-        await this.writePr({
-          ...now,
-          items: reconcileItems(now.items, this.work).items,
-          synced: synced ? [...now.synced, synced] : now.synced,
-        })
-      } catch (e) {
-        this.problem(`pr-items.json을 쓰지 못함: ${message(e)}`)
-      }
-      this.changed()
-      return r
+      return this.startRound({ items: input.items, instruction: input.instruction }, remote)
     })
+  }
+
+  /**
+   * 대응 라운드 전에 기준 브랜치와 PR 브랜치를 fetch한다 (시나리오 10-3). 네트워크라 처리 줄 밖에서 한다(I51). 실패해도
+   * 시작한다: 대응 task는 앱이 가진 원격 추적 브랜치로 한다. PR 브랜치의 원격 끝이고, 읽지 못하면 null이다
+   */
+  private async fetchForRound(): Promise<string | null> {
+    const ctx = { repo: this.project.repo_path, env: this.ctx.env }
+    await fetchTip(ctx, this.work.base_branch)
+    return fetchTip(ctx, workBranch(this.work.work_id))
+  }
+
+  /**
+   * 대응 라운드를 시작한다 (시나리오 10-3, D170, D181, D193). [대응 시작]과 자동 대응(D154)이 같이 쓰고, 판정(사람이 본
+   * 항목, 자동 대응의 판정)과 실패했을 때의 처리는 부르는 쪽이 한다. 처리 줄 안에서 부른다. 정리 세션이 열려 있으면
+   * 시작하지 않는다(D137). 원격만 앞섰으면 받고, 받지 못하면 시작하지 않는다: 새 항목은 남아 [대응 시작]할 수 있다.
+   * 대응 task를 넣은 뒤 받은 커밋과 대응 중이 된 항목을 적는다 (D189)
+   */
+  private async startRound(
+    input: { items: readonly string[]; instruction: string; auto?: boolean },
+    remote: string | null,
+  ): Promise<CommandResult> {
+    if (this.cleanupOpen()) return { ok: false, error: CLEANUP_BLOCKS }
+    const at = this.ctx.at()
+    let synced: PrSynced | null
+    try {
+      synced = remote ? await this.syncForRespond(remote, at) : null
+    } catch (e) {
+      return { ok: false, error: `원격 PR 브랜치의 새 커밋을 받지 못함: ${message(e)}` }
+    }
+    const r = await this.command({
+      type: 'pr.respond',
+      at,
+      items: [...input.items],
+      instruction: input.instruction,
+      ...(input.auto ? { auto: true } : {}),
+      ...(synced && remote
+        ? {
+            synced: {
+              head: remote,
+              commits: synced.commits,
+              ...(synced.base_commit ? { baseCommit: synced.base_commit } : {}),
+            },
+          }
+        : {}),
+    })
+    // 상태의 기준은 work.json이라 쓰지 못하면 켤 때 맞춘다 (D189)
+    const now = await this.prItems()
+    try {
+      await this.writePr({
+        ...now,
+        items: reconcileItems(now.items, this.work).items,
+        synced: synced ? [...now.synced, synced] : now.synced,
+      })
+    } catch (e) {
+      this.problem(`pr-items.json을 쓰지 못함: ${message(e)}`)
+    }
+    this.changed()
+    return r
   }
 
   /**
@@ -3136,12 +3157,7 @@ export class WorkRunner {
       return
     }
     // [대응 시작]처럼 시작하기 전에 기준 브랜치와 PR 브랜치를 fetch한다 (시나리오 10-3). 실패해도 시작한다
-    let remote: string | null = null
-    if (pre.kind === 'start') {
-      const ctx = { repo: this.project.repo_path, env: this.ctx.env }
-      await fetchTip(ctx, this.work.base_branch)
-      remote = await fetchTip(ctx, workBranch(this.work.work_id))
-    }
+    const remote = pre.kind === 'start' ? await this.fetchForRound() : null
     await this.enqueue(async () => {
       if (this.closing) return
       const file = await this.prItems()
@@ -3157,47 +3173,12 @@ export class WorkRunner {
         return
       }
       if (plan.kind !== 'start') return
-      const at = this.ctx.at()
-      let synced: PrSynced | null
-      try {
-        synced = remote ? await this.syncForRespond(remote, at) : null
-      } catch (e) {
-        // 받지 못하면 시작하지 않는다: [대응 시작]과 같다. 새 항목은 남아 사람이 [대응 시작]할 수 있다
-        const error = `자동 대응을 시작하지 못함: 원격 PR 브랜치의 새 커밋을 받지 못함: ${message(e)}`
+      const r = await this.startRound({ items: plan.items, instruction: '', auto: true }, remote)
+      if (!r.ok) {
+        // 사람이 누르지 않았는데 사람이 필요해졌다: 새 항목은 남아 [대응 시작]할 수 있다
+        const error = `자동 대응을 시작하지 못함: ${r.error}`
         this.problem(error)
         this.notify(`PR #${pr.number}: ${error}`)
-        return
-      }
-      const r = await this.command({
-        type: 'pr.respond',
-        at,
-        items: plan.items,
-        instruction: '',
-        auto: true,
-        ...(synced && remote
-          ? {
-              synced: {
-                head: remote,
-                commits: synced.commits,
-                ...(synced.base_commit ? { baseCommit: synced.base_commit } : {}),
-              },
-            }
-          : {}),
-      })
-      // 받은 커밋과 대응 중이 된 항목을 적는다 (D189). [대응 시작]과 같다
-      const now = await this.prItems()
-      try {
-        await this.writePr({
-          ...now,
-          items: reconcileItems(now.items, this.work).items,
-          synced: synced ? [...now.synced, synced] : now.synced,
-        })
-      } catch (e) {
-        this.problem(`pr-items.json을 쓰지 못함: ${message(e)}`)
-      }
-      this.changed()
-      if (!r.ok) {
-        this.problem(`자동 대응을 시작하지 못함: ${r.error}`)
         return
       }
       this.notify(autoStartNotice(pr.number, plan.round, plan.items.length))
