@@ -155,6 +155,19 @@ if (handoffTpl) {
   // 스키마가 막아야 하는 것
   check(!vHandoff({ ...tplFm.data, status: 'blocked' }), '반례: blocked인데 blocked_reason 빈 값 → 오류');
   check(!vHandoff({ ...tplFm.data, status: null }), '반례: status 빈 값 → 오류');
+
+  // 값을 채운 handoff 예시 (D221): 글 값은 큰따옴표로 감싸고 스키마를 통과한다. 본문은 필수 절 둘을 갖춘다
+  const filled = codeBlocks(common, 'yaml').find((b) => b !== handoffTpl && b.includes('status: awaiting_approval'));
+  check(!!filled, '_common.md: 값을 채운 handoff 예시 있음');
+  if (filled) {
+    const fm = frontMatter(filled);
+    check(sameSet(Object.keys(fm.data), Object.keys(handoffSchema.properties)), '채운 예시의 필드 = 스키마 필드');
+    check(vHandoff(fm.data), `채운 예시가 스키마를 통과 ${errs(vHandoff)}`);
+    check(/^## 요약\n[\s\S]*^## 다음 task가 알아야 할 것\n/m.test(fm.body), '채운 예시의 본문에 필수 절 둘');
+    // 글 값: decisions의 what·why와 글 목록의 항목
+    const texts = fm.raw.split('\n').filter((l) => /^\s*- (?!\w+:)|^\s*(- )?(what|why): /.test(l));
+    check(texts.length > 0 && texts.every((l) => /: "[^"]*"$|^\s*- "[^"]*"$/.test(l)), `채운 예시의 글 값은 큰따옴표로 감쌈 (${texts.length}줄)`);
+  }
 }
 
 // intent 초안 템플릿 (work-start)
@@ -221,6 +234,8 @@ const spec = {
     ['5.6.2', '순서 4: 마무리 안내 문구 출력, blocked 안내', /closing message from context\.md verbatim[\s\S]*If `blocked`/],
     ['5.2', 'handoff 본문 필수 절 두 개', /## 요약\n## 다음 task가 알아야 할 것/],
     ['D88', '앱이 아는 값은 쓰지 않음', /Do not add fields for IDs/],
+    ['D221', '글 값은 큰따옴표로 감쌈', /Put every text value in double quotes[\s\S]*contains `: `[\s\S]*starts with a backtick/],
+    ['D221', '큰따옴표 안의 역슬래시는 \\\\로, 경로는 /로', /`\\\\` for a backslash\. Write paths with `\/`, not `\\`/],
     ['5.2.1', '추가 검사: recommended_next.node', /`recommended_next\.node` is one of the selectable next steps/],
     ['5.2.1', '추가 검사: 필수 산출물', /required artifacts exist in the task directory/],
     ['5.2.1', '추가 검사: intent 초안 절과 완료조건 줄', /`목표`, `비목표`, `원하는 결과`, `완료조건`[\s\S]*`- \[ \] `/],
@@ -241,8 +256,9 @@ const spec = {
     ['D37', '테스트 명령은 레포에서 찾기, 없으면 이 항목만 뺌', /Find the concrete test command in the repo[\s\S]*no tests/],
     ['5.3', '완료조건에 push/PR 없음', /Never include push or PR/],
     ['D42', 'size 근거는 handoff decisions', /rationale in handoff `decisions`/],
-    ['D63', 'S 기준 세 가지', /way to reproduce[\s\S]*one place[\s\S]*non-goals or constraints/],
+    ['D63', 'S 기준 세 가지(재현 방법은 사람의 답도 포함, D212)', /human's answers in this task, give a way to reproduce[\s\S]*one place[\s\S]*non-goals or constraints/],
     ['D150', 'L 기준 세 가지, 아니면 M', /propose `L` when any[\s\S]*`M` when none[\s\S]*no way to reproduce[\s\S]*intermittent[\s\S]*several modules/],
+    ['D212', '환경·시점·데이터에 달린 것만으로는 L이 아님. 명령으로 늘 재현되면 위 기준', /environment, timing or data is not `L` by that alone[\s\S]*command can set that condition and reproduce the bug every time/],
     ['D43', '완료조건 네 항목', /## Done when[\s\S]*required sections[\s\S]*verifiable[\s\S]*`size` is proposed[\s\S]*`open_questions`/],
   ],
   investigate: [

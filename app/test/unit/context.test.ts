@@ -295,9 +295,9 @@ describe('context.md: M 경로 (D147, D149)', () => {
   })
 })
 
-describe('context.md: review (D163~D167)', () => {
+describe('context.md: review (D163~D166, D213)', () => {
   const REVIEW_CLOSING =
-    '리뷰를 썼습니다. 반영할 지적은 번호로 여기에 말해 주세요. 반영할 것이 없거나 반영을 마쳤으면 오른쪽 패널에서 확인하고 [승인]을 누르세요.'
+    '리뷰를 썼습니다. 반영할 지적은 번호로 여기에 말해 주세요. 반영할 것이 없거나 반영을 마쳤으면 오른쪽 패널에서 확인하고 [승인]을 누르세요. 지적이 없고 자동 승인이 켜져 있으면 카운트다운 뒤 승인되고, 멈추려면 [취소]를 누르세요.'
 
   it('task 정보: 노드 review, 스킬 review, 화면 이름 리뷰 (D187)', () => {
     const md = buildContext(input('review'))
@@ -311,14 +311,19 @@ describe('context.md: review (D163~D167)', () => {
     expect(section(buildContext(input('review')), '마무리 안내 문구')).toBe(REVIEW_CLOSING)
   })
 
-  it('승인은 늘 수동이다. 자동 승인을 켤 수 있는 단계를 모두 켜도 수동이다 (D167)', () => {
-    const config: AppConfig = {
+  it('승인 방식은 설정을 따르고, 지적이 없을 때만 자동 승인한다고 적는다 (D213)', () => {
+    const md = buildContext(input('review'))
+    expect(section(md, '승인 방식')).toBe(
+      '자동 승인 (task를 시작할 때의 설정. 설정은 바로 적용되고, 자동 승인 여부는 턴이 끝날 때의 설정으로 정한다. 리뷰는 지적이 없을 때만 자동 승인한다)',
+    )
+    const off: AppConfig = {
       ...DEFAULT_CONFIG,
-      auto_approve: { investigate: true, evidence: true, rca: true, fix: true, respond: false },
+      auto_approve: { ...DEFAULT_CONFIG.auto_approve, review: false },
     }
-    const md = buildContext(input('review', {}, config))
-    expect(section(md, '승인 방식')).toBe('수동 승인 (의도 승인, 리뷰, Work 완료는 늘 수동)')
-    expect(approvalMode(config, {}, 'review')).toBe('manual')
+    expect(section(buildContext(input('review', {}, off)), '승인 방식')).toBe(
+      '수동 승인 (task를 시작할 때의 설정. 설정은 바로 적용되고, 자동 승인 여부는 턴이 끝날 때의 설정으로 정한다. 리뷰는 지적이 없을 때만 자동 승인한다)',
+    )
+    expect(approvalMode(off, {}, 'review')).toBe('manual')
   })
 
   it('질문 방식은 review 스킬의 설정이다. 기본은 초안 우선이다 (5.1.1)', () => {
@@ -418,16 +423,24 @@ describe('마무리 안내 문구 (D104, D132)', () => {
     for (const node of ['intake', 'evidence', 'rca', 'fix', 'review'] as const) {
       expect(closingMessage(node)).not.toContain('[승인하고 멈춤]')
     }
-    // 의도 승인, 리뷰, Work 완료는 늘 수동이라 자동 승인을 적지 않는다 (4.2, D167)
-    for (const node of ['intake', 'review', 'verify'] as const) {
+    // 의도 승인과 Work 완료는 늘 수동이라 자동 승인을 적지 않는다. 리뷰는 지적이 없을 때를 적는다 (4.2, D213)
+    for (const node of ['intake', 'verify'] as const) {
       expect(closingMessage(node)).not.toContain('자동 승인')
     }
+    expect(closingMessage('review')).toContain('지적이 없고 자동 승인이 켜져 있으면')
   })
 
   it('승인 방식 절은 task를 시작할 때의 설정이다. 문구는 설정과 상관없이 같다 (D128, D132)', () => {
     const config = {
       ...DEFAULT_CONFIG,
-      auto_approve: { investigate: false, evidence: false, rca: true, fix: false, respond: false },
+      auto_approve: {
+        investigate: false,
+        evidence: false,
+        rca: true,
+        fix: false,
+        review: false,
+        respond: false,
+      },
     }
     const md = buildContext(input('rca', {}, config))
     expect(section(md, '승인 방식')).toBe(
@@ -436,7 +449,7 @@ describe('마무리 안내 문구 (D104, D132)', () => {
     expect(section(md, '마무리 안내 문구')).toBe(closingMessage('rca'))
     expect(section(buildContext(input('rca')), '마무리 안내 문구')).toBe(closingMessage('rca'))
     expect(section(buildContext(input('intake', {}, config)), '승인 방식')).toBe(
-      '수동 승인 (의도 승인, 리뷰, Work 완료는 늘 수동)',
+      '수동 승인 (의도 승인, Work 완료는 늘 수동)',
     )
   })
 })
@@ -444,7 +457,14 @@ describe('마무리 안내 문구 (D104, D132)', () => {
 describe('Work별 덮어쓰기 (D72)', () => {
   const config: AppConfig = {
     ...DEFAULT_CONFIG,
-    auto_approve: { investigate: false, evidence: true, rca: true, fix: false, respond: false },
+    auto_approve: {
+      investigate: false,
+      evidence: true,
+      rca: true,
+      fix: false,
+      review: false,
+      respond: false,
+    },
     question_mode: { ...DEFAULT_CONFIG.question_mode, 'root-cause': 'confirm_each' },
   }
 
@@ -460,10 +480,11 @@ describe('Work별 덮어쓰기 (D72)', () => {
     expect(questionMode(config, settings, 'evidence')).toBe('draft_first')
   })
 
-  it('intake, review, verify는 항상 수동이다 (4.2, D167)', () => {
+  it('intake와 verify는 항상 수동이다. 리뷰는 설정을 따른다 (4.2, D213)', () => {
     expect(approvalMode(config, {}, 'intake')).toBe('manual')
-    expect(approvalMode(config, {}, 'review')).toBe('manual')
     expect(approvalMode(config, {}, 'verify')).toBe('manual')
+    expect(approvalMode(config, {}, 'review')).toBe('manual')
+    expect(approvalMode(config, { auto_approve: { review: true } }, 'review')).toBe('auto')
   })
 
   it('context.md의 질문 방식은 Work 설정을 따른다', () => {

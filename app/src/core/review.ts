@@ -1,7 +1,7 @@
 // 사람에게 보일 것: task 이름과 머리 띠(D109), 상태 이름, 승인 화면의 강조 영역과 [변경]의 범위(D83),
 // Work 완료 화면의 판정표(시나리오 7-3). 화면은 main이 이 값으로 만든 스냅샷을 그리기만 한다 (I14).
-import type { Handoff } from '../shared/contracts'
-import type { Emphasis, Verdict } from '../shared/views'
+import type { Handoff, TaskNode } from '../shared/contracts'
+import type { Emphasis, StageLead, Verdict } from '../shared/views'
 import type {
   FormatIssue,
   StartReason,
@@ -12,7 +12,13 @@ import type {
 } from '../shared/work'
 import { badge, holdNeedsNotice, holdText } from './approval'
 import { NODE_INFO, WORK_COMPLETE, defaultNext, isPipelineNode, isPrevious } from './pipeline'
-import { normalizeText, parseFrontMatter, sectionText } from './validate'
+import {
+  INTENT_DRAFT_FILE,
+  REVIEW_FILE,
+  normalizeText,
+  parseFrontMatter,
+  sectionText,
+} from './validate'
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
@@ -53,6 +59,64 @@ export function permissionNotice(task: Pick<TaskRecord, 'permission_mode'>): str
   return mode === undefined || mode === BYPASS_MODE
     ? null
     : `권한 확인 끈 모드가 아님(${mode} 모드): 일부 동작이 막힐 수 있음`
+}
+
+/**
+ * 형식 되돌림(D21) 뒤 에이전트가 고치는 동안의 안내 (D220). 터미널의 "Stop hook error"가 작업 결과와 관계없음을
+ * 알린다. 작업 중이 아니면(고쳐서 승인 대기가 됐거나 상한까지 되돌려 대기면) 없다
+ */
+export function bounceNotice(
+  task: Pick<TaskRecord, 'status' | 'bounce_count'>,
+  max: number,
+): string | null {
+  return task.status === 'working' && task.bounce_count > 0
+    ? `형식 확인으로 되돌림(${task.bounce_count}/${max}): 에이전트가 handoff와 산출물의 형식만 고칩니다. 결정과 판정은 바뀌지 않습니다.`
+    : null
+}
+
+/** 진행 표시에서 도구 인자의 길이 (D216) */
+const TOOL_ARG_MAX = 40
+
+/** 도구 입력에서 인자로 보일 키. 앞의 것부터 본다. 경로 키는 작업 폴더 안이면 상대 경로로 보인다 */
+const TOOL_ARG_KEYS = [
+  'command',
+  'file_path',
+  'notebook_path',
+  'pattern',
+  'url',
+  'query',
+  'description',
+]
+const PATH_KEYS = ['file_path', 'notebook_path']
+
+/**
+ * 진행 표시의 도구 이름과 짧은 인자 (D216). 예: "Bash(npm test)", "Edit(src/avg.js)". 인자는 도구 입력에서 하나만
+ * 골라 첫 줄을 줄여 보인다. 인자가 없는 도구는 이름만 보인다
+ */
+export function toolLabel(name: string, input: unknown, cwd?: string): string {
+  const fields =
+    typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {}
+  const key = TOOL_ARG_KEYS.find((k) => typeof fields[k] === 'string' && fields[k].trim() !== '')
+  if (key === undefined) return name
+  const value = String(fields[key])
+  return `${name}(${shorten(PATH_KEYS.includes(key) ? relativeTo(value, cwd) : value)})`
+}
+
+/** 작업 폴더 안의 경로는 작업 폴더 뒤만 남긴다. 구분자는 /와 \ 둘 다 본다 */
+function relativeTo(file: string, cwd?: string): string {
+  if (!cwd) return file
+  const base = cwd.replace(/[\\/]+$/, '')
+  const rest = file.slice(base.length)
+  return file.startsWith(base) && /^[\\/]./.test(rest) ? rest.slice(1) : file
+}
+
+/** 첫 줄을 공백을 줄여 보이고, 뒤에 더 있거나 길면 …를 붙인다 */
+function shorten(value: string): string {
+  const lines = value.split(/\r?\n/).map((l) => l.replace(/\s+/g, ' ').trim())
+  const first = lines.find((l) => l !== '') ?? ''
+  const more = lines.filter((l) => l !== '').length > 1
+  if (first.length > TOOL_ARG_MAX) return `${first.slice(0, TOOL_ARG_MAX - 1)}…`
+  return more ? `${first} …` : first
 }
 
 /** task 표시 이름 (3.3, 시나리오 3) */
@@ -188,6 +252,8 @@ export interface EmphasisInput {
   tests?: readonly string[]
   /** PR 대응 task: 승인 뒤 실패한 push나 답글 게시 (시나리오 10-6) */
   failure?: { stage: string; error: string } | null
+  /** 세션이 살아 있다. 아니면 열린 질문의 안내가 [세션 재개]를 먼저 누르라고 한다 (D222). 없으면 살아 있다 */
+  live?: boolean
 }
 
 /**
@@ -221,7 +287,12 @@ export function emphasis(input: EmphasisInput): Emphasis[] {
     })
   }
   if (h && h.open_questions.length > 0) {
-    out.push({ kind: 'open_questions', title: '열린 질문', lines: [...h.open_questions] })
+    out.push({
+      kind: 'open_questions',
+      title: '열린 질문',
+      lines: [...h.open_questions],
+      hint: input.live === false ? OPEN_QUESTIONS_HINT_NO_SESSION : OPEN_QUESTIONS_HINT,
+    })
   }
   const rec = h?.recommended_next
   if (rec && isPrevious(input.node, rec.node)) {
@@ -261,6 +332,64 @@ export function emphasis(input: EmphasisInput): Emphasis[] {
 export function handoffSummary(text: string): string | null {
   const fm = parseFrontMatter(text)
   return sectionText(fm.body, '요약')
+}
+
+/** 열린 질문에 답하는 곳 (D222). 선택지 질문이 아니라 handoff에 남은 질문이라 따로 알린다 */
+export const OPEN_QUESTIONS_HINT =
+  '답은 가운데 터미널에 쓰세요. 답하면 에이전트가 산출물을 고쳐 다시 승인 대기가 됩니다.'
+
+/** 세션이 없을 때(앱이 꺼져 끝난 세션 등) 열린 질문에 답하는 곳. 터미널은 [세션 재개] 전에는 읽기 전용이다 */
+export const OPEN_QUESTIONS_HINT_NO_SESSION =
+  '세션이 끝나 있습니다. [세션 재개]를 누른 뒤 가운데 터미널에 답을 쓰세요. 답하면 에이전트가 산출물을 고쳐 다시 승인 대기가 됩니다.'
+
+/**
+ * PTY 출력에 보이는 글자가 있는가 (D217). 제어 문자와 이스케이프 시퀀스(CSI, OSC 등)만 있으면 없다. Windows에서는
+ * CLI의 첫 화면보다 ConPTY의 제어 문자가 먼저 오므로, 첫 출력의 시각은 보이는 글자로 잰다
+ */
+/* eslint-disable no-control-regex -- 터미널의 제어 문자와 이스케이프 시퀀스를 찾는 식이다 */
+export function hasVisibleText(data: string): boolean {
+  const text = data
+    .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
+    .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '')
+    .replace(/\x1b[ -/]*[0-~]/g, '')
+  return /[^\s\x00-\x1f\x7f]/.test(text)
+}
+/* eslint-enable no-control-regex */
+
+/** 리뷰의 [요약]에 보일 안내 (D223). 리뷰의 마무리 안내 문구(시나리오 2-4)와 같은 뜻이다 */
+export const REVIEW_LEAD_HINT =
+  '반영할 지적은 번호로 가운데 터미널에 말하세요. 반영할 것이 없거나 반영을 마쳤으면 [승인]을 누르세요.'
+
+/**
+ * [요약] 탭 맨 위에 둘 이 단계의 핵심 (D223). 의도 정리는 intent 초안의 size와 목표·비목표·완료조건을, 리뷰는
+ * review.md의 `## 지적`을 보인다. 파일이 없거나 절을 읽지 못하면 그 부분은 뺀다. 다른 단계는 null이다
+ */
+export function stageLead(
+  node: TaskNode,
+  files: Readonly<Record<string, string>>,
+): StageLead | null {
+  if (node === 'intake') {
+    const text = files[INTENT_DRAFT_FILE]
+    if (text === undefined) return null
+    const fm = parseFrontMatter(text)
+    const size = fm.ok && typeof fm.data['size'] === 'string' ? fm.data['size'] : null
+    const sections = ['목표', '비목표', '완료조건'].flatMap((title) => {
+      const body = sectionText(fm.body, title)
+      return body ? [{ title, text: body }] : []
+    })
+    return { title: `의도 초안 (size: ${size ?? '없음'})`, sections, hint: null }
+  }
+  if (node === 'review') {
+    const text = files[REVIEW_FILE]
+    const findings = text === undefined ? null : sectionText(normalizeText(text), '지적')
+    if (findings === null) return null
+    return {
+      title: '리뷰 지적',
+      sections: [{ title: '지적', text: findings }],
+      hint: REVIEW_LEAD_HINT,
+    }
+  }
+  return null
 }
 
 // ---------- Work 완료 화면 (시나리오 7-3) ----------

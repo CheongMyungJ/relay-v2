@@ -45,11 +45,12 @@ const AUTO_SENTENCE =
 
 /**
  * 리뷰의 문구 (시나리오 2-4의 review 줄, D164). 리뷰는 지적을 쓰고 마무리한 뒤 사람이 터미널에서 반영할 지적을
- * 번호로 고른다. 늘 수동 승인이라(D167) 자동 승인을 적지 않는다
+ * 번호로 고른다. 지적이 없으면 자동 승인할 수 있으므로(D213) 그 경우를 함께 적는다
  */
 const REVIEW_CLOSING =
   '리뷰를 썼습니다. 반영할 지적은 번호로 여기에 말해 주세요. 반영할 것이 없거나 반영을 마쳤으면 오른쪽 패널에서 ' +
-  '확인하고 [승인]을 누르세요.'
+  '확인하고 [승인]을 누르세요. 지적이 없고 자동 승인이 켜져 있으면 카운트다운 뒤 승인되고, 멈추려면 [취소]를 ' +
+  '누르세요.'
 
 /**
  * PR 대응의 문구 (시나리오 2-4의 respond 줄). 승인하면 앱이 push하고 답글을 게시한다 (D169, D172). 자동 승인(D169)은
@@ -94,16 +95,21 @@ const APPROVAL_LABEL: Record<ApprovalMode, string> = { manual: '수동 승인', 
 
 /**
  * context.md의 승인 방식 (시나리오 2-4). task를 시작할 때의 설정이다. 자동 승인 여부는 턴이 끝날 때의 설정으로
- * 정하므로(D128) 그렇다고 적는다. intake, review, verify는 늘 수동이다 (4.2, D167). PR 대응은 승인하면 앱이 push하고
- * 답글을 게시한다 (D169, D172)
+ * 정하므로(D128) 그렇다고 적는다. intake와 verify는 늘 수동이다 (4.2). 리뷰는 지적이 없을 때만 자동 승인한다 (D213).
+ * PR 대응은 승인하면 앱이 push하고 답글을 게시한다 (D169, D172)
  */
 function approvalSection(config: AppConfig, settings: WorkSettings, node: TaskNode): string {
   if (!autoApprovable(node)) {
-    return '수동 승인 (의도 승인, 리뷰, Work 완료는 늘 수동)'
+    return '수동 승인 (의도 승인, Work 완료는 늘 수동)'
   }
   const mode = APPROVAL_LABEL[approvalMode(config, settings, node)]
-  const push = node === RESPOND ? '. 승인하면 앱이 push하고 답글을 게시한다' : ''
-  return `${mode} (task를 시작할 때의 설정. 설정은 바로 적용되고, 자동 승인 여부는 턴이 끝날 때의 설정으로 정한다${push})`
+  const extra =
+    node === RESPOND
+      ? '. 승인하면 앱이 push하고 답글을 게시한다'
+      : node === 'review'
+        ? '. 리뷰는 지적이 없을 때만 자동 승인한다'
+        : ''
+  return `${mode} (task를 시작할 때의 설정. 설정은 바로 적용되고, 자동 승인 여부는 턴이 끝날 때의 설정으로 정한다${extra})`
 }
 
 /** 질문 방식의 이름. _common.md의 표와 같다 (5.6.1) */

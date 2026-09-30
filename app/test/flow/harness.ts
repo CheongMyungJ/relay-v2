@@ -19,13 +19,24 @@ export const FAKE_CLAUDE = path.join(
 )
 export const FAKE_GH = path.join(APP, 'test/fake-gh', isWin ? 'gh.cmd' : 'gh.mjs')
 
+/**
+ * 세션의 첫 출력과 첫 훅 시각 (D217). 세션마다 남으므로, 이것을 보지 않는 시험은 events.jsonl을 통째로 비교할 때
+ * 뺀다
+ */
+export const TIMING_EVENTS: readonly string[] = ['task.first_output', 'task.first_hook']
+
 export { FakeUi, sleep } from './ui'
 
 export interface HarnessOptions {
   /** 가짜 claude의 시나리오 (FAKE_CLAUDE_SCENARIO) */
   scenario?: object
-  /** config.json에 미리 쓸 값 */
+  /**
+   * config.json에 미리 쓸 값. 자동 승인은 준 단계만 이 값이고 나머지는 끈다(MANUAL). 앱의 기본값을 보려면
+   * productDefaults를 켠다
+   */
   config?: Partial<AppConfig>
+  /** 자동 승인을 끄지 않고 앱의 기본값(수정과 지적 없는 리뷰는 켬, D213, D214)을 쓴다 */
+  productDefaults?: boolean
   /** 앱에 넘길 환경 변수에 더할 것 */
   env?: Record<string, string>
   /** claude 실행 파일. 기본은 가짜 claude다. [실제]는 실제 claude를 쓴다 */
@@ -50,11 +61,29 @@ export interface Harness {
   close(): Promise<void>
 }
 
+/**
+ * [흐름] 시험의 자동 승인 기본값: 모두 끈다. 시험은 사람이 승인하는 길을 기본으로 보고, 자동 승인은 켠 시험에서 본다.
+ * 앱의 기본값(D213, D214)과 다르다
+ */
+export const MANUAL: Pick<AppConfig, 'auto_approve'> = {
+  auto_approve: {
+    investigate: false,
+    evidence: false,
+    rca: false,
+    fix: false,
+    review: false,
+    respond: false,
+  },
+}
+
 export async function harness(o: HarnessOptions = {}): Promise<Harness> {
   const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'relay-flow-')))
   const home = path.join(root, 'home')
   fs.mkdirSync(home)
-  if (o.config) fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify(o.config))
+  const config = o.productDefaults
+    ? o.config
+    : { ...o.config, auto_approve: { ...MANUAL.auto_approve, ...o.config?.auto_approve } }
+  if (config) fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify(config))
   const record = path.join(root, 'record')
   const scenario = path.join(root, 'scenario.json')
   fs.writeFileSync(scenario, JSON.stringify(o.scenario ?? { tasks: {} }))

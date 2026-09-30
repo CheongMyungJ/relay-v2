@@ -55,6 +55,7 @@ function notify(n: Notice): void {
 
 const ui: UiPort = {
   work: (view) => send(IPC.work, view),
+  activity: (update) => send(IPC.activity, update),
   projects: (views) => send(IPC.projects, views),
   terminal: (key, chunk) => send(IPC.terminalData(key), chunk),
   notify,

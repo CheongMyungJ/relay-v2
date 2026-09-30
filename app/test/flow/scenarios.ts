@@ -9,8 +9,22 @@ export type Step =
   | { do: 'commit'; files: Record<string, string>; message: string }
   /** 커밋하지 않고 worktree의 파일을 고친다 (커밋 안 된 변경, D116) */
   | { do: 'edit'; files: Record<string, string> }
-  | { do: 'ask'; question?: string }
-  | { do: 'tool'; name: string }
+  /** 질문 대기. fail이면 답한 뒤 PostToolUse 대신 PostToolUseFailure를 보낸다 */
+  | { do: 'ask'; question?: string; fail?: boolean }
+  /**
+   * 도구 호출: PreToolUse, ms만큼 실행, PostToolUse (D216). input은 tool_input이다. fail이면 PostToolUse 대신
+   * PostToolUseFailure를 보낸다. agent가 있으면 서브에이전트 안의 도구라 훅에 agent_id를 넣는다. inner는 이 도구가
+   * 도는 동안 할 단계다(Task 도구 안의 서브에이전트)
+   */
+  | {
+      do: 'tool'
+      name: string
+      input?: Record<string, unknown>
+      ms?: number
+      fail?: boolean
+      agent?: string
+      inner?: Step[]
+    }
   | { do: 'notify'; type: string }
   /**
    * Stop을 보낸다. background와 crons는 본문의 background_tasks와 session_crons다: 세션이 백그라운드 작업이나 예약된
@@ -215,6 +229,19 @@ export const REVIEW = [
   '',
 ].join('\n')
 
+/** 지적이 없는 review.md (5.6.10). 지적이 없는 리뷰는 자동 승인할 수 있다 (D213) */
+export const REVIEW_NONE = [
+  '## 지적',
+  '없음',
+  '',
+  '## 반영',
+  '없음',
+  '',
+  '## 반영하지 않은 지적',
+  '없음',
+  '',
+].join('\n')
+
 /** 사람이 1번만 반영하라고 지시한 뒤의 review.md (D164) */
 export const REVIEW_APPLIED = [
   '## 지적',
@@ -346,6 +373,16 @@ export function steps(node: NodeName, size: Size = 'L'): Step[] {
         { do: 'stop' },
       ]
   }
+}
+
+/** 지적 없이 마무리하는 리뷰 (5.6.10, D213) */
+export function reviewClean(): Step[] {
+  return [
+    { do: 'prompt' },
+    { do: 'write', file: 'review.md', text: REVIEW_NONE },
+    { do: 'write', file: 'handoff.md', text: handoff({ summary: '지적이 없다.' }) },
+    { do: 'stop' },
+  ]
 }
 
 /**

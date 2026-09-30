@@ -9,6 +9,22 @@ import { gitState } from './repo.mjs'
 import { copyTree, sleep } from './util.mjs'
 
 const APP_DIR = path.resolve(import.meta.dirname, '../..')
+/**
+ * 사람 역할에게 붙이는 스크린샷의 너비 (eval-findings E10). 창(1500×950)을 줄여 그림 토큰을 절반쯤으로 줄인다.
+ * 글자는 따로 주므로 그림은 배치와 번호를 보는 데 쓴다
+ */
+const SHOT_WIDTH = 1000
+
+/**
+ * 화면 배치의 열쇠 (E10): 누를 수 있는 요소(역할, 이름, 선택·켜짐·비활성·화면 밖)와 열린 대화상자 수. 입력란의 값은
+ * 넣지 않는다. 같으면 사람 역할에게 그림을 다시 붙이지 않는다
+ */
+function layoutKey(elements, dialogs) {
+  return JSON.stringify([
+    dialogs,
+    elements.map((e) => [e.role, e.name, !!e.selected, e.checked, !!e.disabled, !!e.offscreen]),
+  ])
+}
 
 /** 렌더러에서 누를 수 있는 요소를 찾아 번호를 매긴다. 번호는 data-eval-id로 남긴다 */
 function collectElements() {
@@ -124,14 +140,24 @@ function visibleText() {
   return { text: clean(text), terminal: clean(terminal).replace(/\n+$/, ''), dialogs }
 }
 
-/** 폴링용: DOM을 복제하지 않고 화면 글자와 보이는 터미널 글자만 읽는다 */
+/**
+ * 폴링용: DOM을 복제하지 않고 화면 글자와 보이는 터미널 글자만 읽는다. 앱의 경과 시간처럼 시계만 따라 바뀌는
+ * 글자([data-tick], relay D216)는 잠깐 가리고 읽는다: 시계가 도는 것으로는 화면이 바뀐 것으로 보지 않는다
+ * (docs/eval.md의 같은 깨우기). 가렸다 되돌리는 것은 한 번의 실행 안이라 화면에 그려지지 않는다
+ */
 function pollText() {
   const rows = document.querySelector('.terminal-host:not([hidden]) .xterm-rows')
   const terminal = rows
     ? [...rows.children].map((r) => r.textContent.replace(/\u00a0/g, ' ').trimEnd()).join('\n')
     : ''
   const layout = document.querySelector('.layout') ?? document.body
-  return { text: layout.innerText, terminal }
+  const ticks = [...layout.querySelectorAll('[data-tick]')].map((el) => [el, el.style.display])
+  for (const [el] of ticks) el.style.display = 'none'
+  try {
+    return { text: layout.innerText, terminal }
+  } finally {
+    for (const [el, display] of ticks) el.style.display = display
+  }
 }
 
 /** 열린 대화상자 수 */
@@ -257,7 +283,7 @@ export class RelayArm {
   async observe(shotPath) {
     const elements = await this.win.evaluate(collectElements)
     await this.win.evaluate(drawMarks, true)
-    await this.win.screenshot({ path: shotPath })
+    await this.shot(shotPath)
     await this.win.evaluate(drawMarks, false)
     const v = await this.win.evaluate(visibleText)
     return {
@@ -266,7 +292,31 @@ export class RelayArm {
       terminal: v.terminal,
       dialogs: v.dialogs,
       screenshot: shotPath,
+      layout: layoutKey(elements, v.dialogs),
     }
+  }
+
+  /**
+   * 창을 SHOT_WIDTH 너비로 줄여 찍는다 (E10). 메인 프로세스의 capturePage와 nativeImage.resize를 쓴다. 안 되면 창
+   * 크기 그대로 찍는다
+   */
+  async shot(file) {
+    try {
+      const png = await this.app.evaluate(async ({ BrowserWindow }, width) => {
+        const w = BrowserWindow.getAllWindows()[0]
+        if (!w) return null
+        const img = await w.webContents.capturePage()
+        const small = img.getSize().width > width ? img.resize({ width, quality: 'good' }) : img
+        return small.toPNG().toString('base64')
+      }, SHOT_WIDTH)
+      if (png) {
+        fs.writeFileSync(file, Buffer.from(png, 'base64'))
+        return
+      }
+    } catch {
+      // 아래에서 창 크기 그대로 찍는다
+    }
+    await this.win.screenshot({ path: file })
   }
 
   /** 보이는 터미널에 포커스를 준다. 보이는 터미널이 없으면 false */
@@ -408,15 +458,23 @@ export class RelayArm {
         const file = path.join(ws, w, 'work.json')
         if (!fs.existsSync(file)) continue
         const j = JSON.parse(fs.readFileSync(file, 'utf8'))
+        // 단계별 토큰(eval-findings R9)을 세려고 세션 id와 context.md 크기를 남긴다
+        const context = (t) =>
+          path.join(ws, w, 'tasks', `${String(t.seq).padStart(2, '0')}-${t.node}`, 'context.md')
         out.push({
           id: w,
           dir: path.join(ws, w),
           status: j.status,
           branch: j.branch ?? null,
           tasks: (j.tasks ?? []).map((t) => ({
+            seq: t.seq,
             node: t.node,
             status: t.status,
             approved_by: t.approved_by ?? null,
+            session: t.session?.id ?? null,
+            contextChars: fs.existsSync(context(t))
+              ? fs.readFileSync(context(t), 'utf8').length
+              : null,
           })),
         })
       }

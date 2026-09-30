@@ -12,15 +12,11 @@ export const HOOK_EVENTS = [
   'SessionEnd',
   'PreToolUse',
   'PostToolUse',
+  // 도구가 실패하면 PostToolUse 대신 온다(Claude Code 2.1.285의 훅 설명). 진행 표시에서 도구가 끝난 것으로 본다 (D216)
+  'PostToolUseFailure',
 ] as const
 
 export type HookEvent = (typeof HOOK_EVENTS)[number]
-
-/** 도구 이름으로 가리는 훅. 질문 대기 표시에는 AskUserQuestion만 쓴다 (D24, D35) */
-const MATCHERS: Partial<Record<HookEvent, string>> = {
-  PreToolUse: 'AskUserQuestion',
-  PostToolUse: 'AskUserQuestion',
-}
 
 /** 훅 토큰을 넘기는 PTY 환경 변수 (I13). 설정 파일에는 변수 이름만 적는다 */
 export const HOOK_TOKEN_ENV = 'RELAY_HOOK_TOKEN'
@@ -58,7 +54,8 @@ export function hookUrl(port: number, taskId: string, event: HookEvent): string 
 }
 
 /**
- * 이벤트마다 matcher 묶음 하나에 http 훅 하나를 둔다.
+ * 이벤트마다 묶음 하나에 http 훅 하나를 둔다. PreToolUse, PostToolUse, PostToolUseFailure는 matcher 없이 모든
+ * 도구에 건다: 질문 대기 표시(D24, D35)는 AskUserQuestion으로, 진행 표시(D216)는 나머지 도구로 한다.
  * 출처: spikes/lib/hooks.mjs HookServer.settings (이벤트별 matcher, type: http, timeout).
  * 토큰 머리글은 I13에서 더했다. $RELAY_HOOK_TOKEN은 allowedEnvVars에 있어야 풀린다 (Claude Code 문서 hooks).
  */
@@ -71,8 +68,7 @@ export function hookSettings(port: number, taskId: string): Record<HookEvent, Ho
       allowedEnvVars: [HOOK_TOKEN_ENV],
       timeout: HOOK_TIMEOUT_SEC,
     }
-    const matcher = MATCHERS[event]
-    return [matcher ? { matcher, hooks: [hook] } : { hooks: [hook] }]
+    return [{ hooks: [hook] }]
   }
   return {
     UserPromptSubmit: group('UserPromptSubmit'),
@@ -81,6 +77,7 @@ export function hookSettings(port: number, taskId: string): Record<HookEvent, Ho
     SessionEnd: group('SessionEnd'),
     PreToolUse: group('PreToolUse'),
     PostToolUse: group('PostToolUse'),
+    PostToolUseFailure: group('PostToolUseFailure'),
   }
 }
 
@@ -175,12 +172,16 @@ export function launchArgs(input: LaunchInput): string[] {
   ]
 }
 
-export type ResumeInput = Omit<LaunchInput, 'skill' | 'contextPath'>
+export type ResumeInput = Omit<LaunchInput, 'skill' | 'contextPath'> & {
+  /** 다시 연 세션에 줄 첫 입력 (D218). 없으면 다시 연 세션은 사람의 입력을 기다린다 (S6) */
+  prompt?: string
+}
 
 /**
  * 끝난 세션을 다시 여는 인자 (시나리오 3-4, 6절): 같은 옵션 + --resume <세션 id>.
  * --settings, --add-dir, 권한 확인 끈 모드는 --resume이 복원하지 않아 다시 준다(Claude Code 문서 sessions).
- * --session-id는 새 세션에 쓰는 것이라 빼고, 첫 프롬프트는 스킬을 다시 시작하므로 뺀다. 확인: 스파이크 S6
+ * --session-id는 새 세션에 쓰는 것이라 빼고, 첫 프롬프트는 스킬을 다시 시작하므로 뺀다. 확인: 스파이크 S6.
+ * 중단됨의 [재개]는 대신 이어서 하라는 첫 입력을 맨 뒤에 준다 (D218)
  */
 export function resumeArgs(input: ResumeInput): string[] {
   return [
@@ -191,7 +192,20 @@ export function resumeArgs(input: ResumeInput): string[] {
     input.workDir,
     '--settings',
     input.settingsPath,
+    ...(input.prompt ? [input.prompt] : []),
   ]
+}
+
+/**
+ * 중단됨 task의 [재개]에 주는 첫 입력 (D218). --resume으로 다시 연 세션은 입력을 기다리므로(S6) 하던 일을 이어서
+ * 하라고 알린다. 시작 인자라 실행 중인 세션에 글을 넣지 않는다(1.2). 앱이 꺼져 끊겼으면 그렇다고 적는다 (D219)
+ */
+export function continuePrompt(appEnded: boolean): string {
+  const why = appEnded ? '앱이 꺼져 세션이 끊겼다가' : '사람이 [즉시 중단]한 세션이'
+  return (
+    `relay: ${why} [재개]로 다시 열렸습니다. 끊기기 전의 마지막 상태(끝나지 않은 명령 등)를 확인하고 ` +
+    '하던 일을 이어서 하세요. 사람에게 물을 것이 있었다면 다시 물으세요.'
+  )
 }
 
 /** PTY에 넘길 환경 변수. 토큰은 여기로만 넘긴다 (I13) */

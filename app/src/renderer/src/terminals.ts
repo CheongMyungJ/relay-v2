@@ -15,6 +15,14 @@ export interface TermEntry {
 
 const entries = new Map<string, TermEntry>()
 
+/** 터미널에 포커스를 준다. 글을 넣지는 않는다 (D222). 아직 만들지 않은 터미널이면 false */
+export function focusTerm(key: string): boolean {
+  const entry = entries.get(key)
+  if (!entry) return false
+  entry.term.focus()
+  return true
+}
+
 /** 터미널 키의 xterm. 없으면 만들고 출력을 붙인다 */
 export function ensureTerm(key: string, info: AppInfo): TermEntry {
   const existing = entries.get(key)

@@ -10,7 +10,13 @@ import {
   mergeSkill,
   soloSkill,
 } from '../../src/adapters/claude'
-import { WorkFiles, loadConfig, relayHome, writeFileAtomic } from '../../src/adapters/store'
+import {
+  WorkFiles,
+  loadConfig,
+  partialUtf8,
+  relayHome,
+  writeFileAtomic,
+} from '../../src/adapters/store'
 import { DEFAULT_CONFIG } from '../../src/shared/config'
 import { FAKE_CLAUDE, SKILLS } from '../flow/harness'
 
@@ -120,6 +126,32 @@ describe('[어댑터] 저장소 (5.1)', () => {
       'notes.md',
     ])
     expect(await w.taskFiles({ seq: 9, node: 'fix' })).toEqual({})
+  })
+
+  it('pty.log 끝에 표시 줄을 한 번만 붙이고, 끝의 덜 쓴 UTF-8 문자는 지운다. pty.log가 없으면 만들지 않는다 (D219)', async () => {
+    const w = new WorkFiles(path.join(root, 'w'))
+    const task = { seq: 4, node: 'fix' as const }
+    const file = path.join(w.taskDir(task), 'pty.log')
+    const mark = '\r\n── relay: 앱이 꺼져 세션이 여기서 끝났습니다 ──\r\n'
+    await w.appendPtyMark(task, mark)
+    expect(fs.existsSync(file)).toBe(false)
+    // 충돌로 "한"(ED 95 9C)의 앞 두 바이트만 쓰였다
+    fs.mkdirSync(path.dirname(file), { recursive: true })
+    fs.writeFileSync(file, Buffer.concat([Buffer.from('작업 중'), Buffer.from([0xed, 0x95])]))
+    await w.appendPtyMark(task, mark)
+    await w.appendPtyMark(task, mark)
+    expect(read(file)).toBe(`작업 중${mark}`)
+    expect(await w.readPtyLog(task)).toBe(`작업 중${mark}`)
+  })
+
+  it('끝의 덜 쓴 UTF-8 문자의 바이트 수', () => {
+    expect(partialUtf8(Buffer.from('abc'))).toBe(0)
+    expect(partialUtf8(Buffer.from('가'))).toBe(0)
+    expect(partialUtf8(Buffer.from([0x61, 0xea]))).toBe(1)
+    expect(partialUtf8(Buffer.from([0x61, 0xea, 0xb0]))).toBe(2)
+    expect(partialUtf8(Buffer.from([0xf0, 0x9f, 0x98]))).toBe(3)
+    expect(partialUtf8(Buffer.from('😀'))).toBe(0)
+    expect(partialUtf8(Buffer.alloc(0))).toBe(0)
   })
 })
 

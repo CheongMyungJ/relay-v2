@@ -137,7 +137,14 @@ function valid(h: Partial<Handoff> = {}) {
 describe('자동 승인의 방식 (4.2, D72)', () => {
   const config: AppConfig = {
     ...DEFAULT_CONFIG,
-    auto_approve: { investigate: false, evidence: true, rca: true, fix: false, respond: false },
+    auto_approve: {
+      investigate: false,
+      evidence: true,
+      rca: true,
+      fix: false,
+      review: false,
+      respond: false,
+    },
   }
 
   it('Work 설정이 있으면 앱 설정보다 우선하고, 없는 단계는 앱 설정을 따른다', () => {
@@ -145,17 +152,23 @@ describe('자동 승인의 방식 (4.2, D72)', () => {
     expect(approvalMode(config, settings, 'evidence')).toBe('auto')
     expect(approvalMode(config, settings, 'rca')).toBe('manual')
     expect(approvalMode(config, settings, 'fix')).toBe('auto')
-    expect(approvalMode(DEFAULT_CONFIG, {}, 'fix')).toBe('manual')
+    expect(approvalMode(config, { auto_approve: { review: true } }, 'review')).toBe('auto')
   })
 
-  it('intake, review, verify는 설정과 상관없이 늘 수동이다 (4.2, D167)', () => {
-    const all = {
-      auto_approve: { investigate: false, evidence: true, rca: true, fix: true, respond: false },
+  it('앱의 기본값은 수정과 리뷰만 자동 승인이다 (D213, D214)', () => {
+    expect(approvalMode(DEFAULT_CONFIG, {}, 'fix')).toBe('auto')
+    expect(approvalMode(DEFAULT_CONFIG, {}, 'review')).toBe('auto')
+    for (const node of ['investigate', 'evidence', 'rca', 'respond'] as const) {
+      expect(approvalMode(DEFAULT_CONFIG, {}, node)).toBe('manual')
     }
-    for (const node of ['intake', 'review', 'verify'] as const) {
-      expect(approvalMode(config, all, node)).toBe('manual')
+  })
+
+  it('intake와 verify는 설정과 상관없이 늘 수동이다. 리뷰는 켤 수 있다 (4.2, D213)', () => {
+    for (const node of ['intake', 'verify'] as const) {
+      expect(approvalMode(DEFAULT_CONFIG, {}, node)).toBe('manual')
+      expect(autoApprovable(node)).toBe(false)
     }
-    expect(autoApprovable('review')).toBe(false)
+    expect(autoApprovable('review')).toBe(true)
   })
 })
 
@@ -221,6 +234,30 @@ describe('자동 승인 조건 (4.3, D129)', () => {
     ])
   })
 
+  it('리뷰는 review.md의 지적이 "없음"일 때만 자동 승인한다. 지적이 있거나 읽지 못하면 사람이 승인한다 (D213)', () => {
+    const review = (reviewFindings: boolean | null, h: Partial<Handoff> = {}) =>
+      autoApproveHolds({
+        node: 'review',
+        size: 'S',
+        check: { ...valid(h), reviewFindings },
+        background: false,
+      })
+    expect(review(false)).toEqual([])
+    expect(review(true)).toEqual(['review_findings'])
+    expect(review(null)).toEqual(['review_findings'])
+    // 다른 조건과 함께 적는다
+    expect(review(true, { open_questions: ['?'] })).toEqual(['open_questions', 'review_findings'])
+    // 리뷰가 아닌 단계는 지적 유무를 보지 않는다
+    expect(
+      autoApproveHolds({
+        node: 'fix',
+        size: 'S',
+        check: { ...valid(), reviewFindings: null },
+        background: false,
+      }),
+    ).toEqual([])
+  })
+
   it('여럿을 어기면 모두 적는다', () => {
     expect(
       holds(
@@ -246,7 +283,14 @@ describe('자동 승인 조건 (4.3, D129)', () => {
 describe('자동 승인하지 않은 까닭 (D128~D131)', () => {
   const config: AppConfig = {
     ...DEFAULT_CONFIG,
-    auto_approve: { investigate: false, evidence: false, rca: true, fix: false, respond: false },
+    auto_approve: {
+      investigate: false,
+      evidence: false,
+      rca: true,
+      fix: false,
+      review: false,
+      respond: false,
+    },
   }
   const task = (patch: object = {}) => ({
     node: 'rca' as const,
@@ -303,12 +347,15 @@ describe('자동 승인하지 않은 까닭 (D128~D131)', () => {
       'operation',
       // 대응 task의 Stop 때 PR이 닫혀 있었다: 사람이 다시 열거나 끝내야 한다 (D179)
       'pr_closed',
+      // 리뷰에 지적이 있다: 사람이 반영할 지적을 고른다 (D213)
+      'review_findings',
     ] as const) {
       expect(holdNeedsNotice([r]), r).toBe(true)
     }
     expect(holdNeedsNotice(['cancel', 'session'])).toBe(true)
     expect(holdText(['pr_closed'])).toContain('PR이 닫혀 있음')
-    expect(Object.keys(AUTO_HOLD_LABEL)).toHaveLength(14)
+    expect(holdText(['review_findings'])).toBe('리뷰에 지적이 있음 (반영할 지적은 사람이 고름)')
+    expect(Object.keys(AUTO_HOLD_LABEL)).toHaveLength(15)
   })
 })
 

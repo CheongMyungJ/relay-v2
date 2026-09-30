@@ -159,6 +159,9 @@ export class Human {
     this.system = systemPrompt(o.kind, o.scenario, guide)
     this.costUsd = 0
     this.calls = 0
+    /** 스크린샷을 붙인 차례 수와 마지막으로 붙인 화면 배치 (eval-findings E10) */
+    this.images = 0
+    this.shownLayout = null
   }
 
   async call(prompt, schema, images) {
@@ -181,14 +184,22 @@ export class Human {
     return r
   }
 
-  /** 한 차례. 화면(obs)과 알림을 주고 행동을 받는다 */
+  /**
+   * 한 차례. 화면(obs)과 알림을 주고 행동을 받는다. 스크린샷은 화면 배치가 앞에 붙인 그림과 다를 때만 붙인다
+   * (eval-findings E10). 글자와 요소 목록은 늘 준다
+   */
   async turn(obs) {
-    const images = this.o.vision && obs.screen.screenshot ? [obs.screen.screenshot] : undefined
+    const s = obs.screen
+    const fresh = !!(this.o.vision && s.screenshot && s.layout !== this.shownLayout)
     const r = await this.call(
-      renderObservation(this.o.kind, obs, this.o.vision),
+      renderObservation(this.o.kind, obs, this.o.vision, fresh),
       turnSchema(this.o.kind),
-      images,
+      fresh ? [s.screenshot] : undefined,
     )
+    if (fresh) {
+      this.shownLayout = s.layout
+      this.images++
+    }
     return { ...r.data, costUsd: r.costUsd, ms: r.ms }
   }
 
@@ -211,7 +222,7 @@ export class Human {
   }
 }
 
-function renderObservation(kind, obs, vision) {
+function renderObservation(kind, obs, vision, fresh) {
   const lines = [`[차례 ${obs.turn} · 시작 뒤 ${obs.elapsed}]`]
   if (obs.notes?.length) lines.push('', '## 알림', ...obs.notes.map((n) => `- ${n}`))
   if (obs.results?.length)
@@ -220,7 +231,13 @@ function renderObservation(kind, obs, vision) {
     lines.push('', '## 바뀐 코드 (inspect_diff)', '```diff', obs.diff || '(바뀐 것 없음)', '```')
   if (kind === 'relay') {
     const s = obs.screen
-    if (vision) lines.push('', '붙인 그림이 지금 화면이다. 노란 번호는 아래 요소 목록의 id다.')
+    if (vision && fresh)
+      lines.push('', '붙인 그림이 지금 화면이다. 노란 번호는 아래 요소 목록의 id다.')
+    else if (vision)
+      lines.push(
+        '',
+        '화면 배치가 앞에 붙인 그림과 같아 그림을 다시 붙이지 않았다. 아래 글자와 요소 목록이 지금 화면이다.',
+      )
     lines.push(
       '',
       '## 보이는 글자 (터미널 제외)',

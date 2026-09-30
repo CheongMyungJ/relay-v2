@@ -28,7 +28,7 @@ import { HOOK_TOKEN_ENV } from '../../src/core/settings'
 import { DEFAULT_CONFIG, type AppConfig } from '../../src/shared/config'
 import type { TaskView } from '../../src/shared/views'
 import { CART_FILES, FakeGitHub, FakeWorld } from '../flow/github'
-import { APP, FAKE_CLAUDE, harness, makeRepo, register, settle } from '../flow/harness'
+import { APP, FAKE_CLAUDE, MANUAL, harness, makeRepo, register, settle } from '../flow/harness'
 import {
   currentUntil,
   describePr,
@@ -78,7 +78,7 @@ const TASK_TIMEOUT_MS = 20 * 60 * 1000
 const CONFIG: Partial<AppConfig> = {
   respond_auto_start: true,
   respond_auto_round_max: 2,
-  auto_approve: { ...DEFAULT_CONFIG.auto_approve, respond: true },
+  auto_approve: { ...MANUAL.auto_approve, respond: true },
   auto_approve_countdown_sec: 15,
 }
 

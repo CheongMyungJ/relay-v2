@@ -82,38 +82,72 @@ export function stats(xs) {
   return { n: v.length, mean, sd }
 }
 
-/** 설정 폴더(CLAUDE_CONFIG_DIR)의 대화 기록에서 에이전트의 토큰 사용량을 더한다. 같은 메시지 id는 한 번만 센다 */
-export function agentUsage(configDir) {
-  const total = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, messages: 0, sessions: 0 }
+/**
+ * 설정 폴더(CLAUDE_CONFIG_DIR)의 대화 기록에서 메시지 id마다 마지막 줄의 토큰 사용량을 모은다. Claude Code는 메시지
+ * 하나를 여러 줄에 나눠 쓰고, 앞 줄의 output_tokens는 아직 다 세지 않은 값이다. 세션은 대화 기록 파일 이름
+ * (<세션 id>.jsonl)이고, 세션 폴더 아래의 서브에이전트 기록(<세션 id>/…)은 그 세션에 넣는다. agentUsage와
+ * agentUsageBySession이 함께 써서 두 합계가 어긋나지 않는다
+ */
+function scanUsage(configDir) {
+  const messages = new Map()
+  const sessions = new Set()
+  let files = 0
   const dir = path.join(configDir, 'projects')
-  if (!fs.existsSync(dir)) return total
-  const seen = new Map()
-  const walk = (d) => {
-    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
-      const p = path.join(d, e.name)
-      if (e.isDirectory()) walk(p)
-      else if (e.name.endsWith('.jsonl')) {
-        total.sessions++
+  if (!fs.existsSync(dir)) return { messages, sessions, files }
+  for (const project of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (!project.isDirectory()) continue
+    const root = path.join(dir, project.name)
+    const walk = (d) => {
+      for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+        const p = path.join(d, e.name)
+        if (e.isDirectory()) {
+          walk(p)
+          continue
+        }
+        if (!e.name.endsWith('.jsonl')) continue
+        files++
+        const first = path.relative(root, p).split(path.sep)[0] ?? ''
+        const session = first.endsWith('.jsonl') ? first.slice(0, -'.jsonl'.length) : first
+        sessions.add(session)
         for (const line of fs.readFileSync(p, 'utf8').split('\n')) {
           if (!line.includes('"usage"')) continue
           try {
-            const j = JSON.parse(line)
-            const m = j.message
-            if (m?.usage && m.id) seen.set(m.id, m.usage)
+            const m = JSON.parse(line).message
+            // 같은 id의 뒤 줄이 앞 줄을 덮는다
+            if (m?.usage && m.id) messages.set(m.id, { session, usage: m.usage })
           } catch {
             // 쓰는 중인 줄
           }
         }
       }
     }
+    walk(root)
   }
-  walk(dir)
-  for (const u of seen.values()) {
-    total.input += u.input_tokens ?? 0
-    total.output += u.output_tokens ?? 0
-    total.cacheRead += u.cache_read_input_tokens ?? 0
-    total.cacheWrite += u.cache_creation_input_tokens ?? 0
-    total.messages++
-  }
+  return { messages, sessions, files }
+}
+
+const noUsage = () => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0, messages: 0 })
+
+function addUsage(total, u) {
+  total.input += u.input_tokens ?? 0
+  total.output += u.output_tokens ?? 0
+  total.cacheRead += u.cache_read_input_tokens ?? 0
+  total.cacheWrite += u.cache_creation_input_tokens ?? 0
+  total.messages++
+}
+
+/** 에이전트의 토큰 사용량을 세션마다 더한다 (relay의 단계별 토큰, eval-findings R9). 메시지가 없는 세션은 0이다 */
+export function agentUsageBySession(configDir) {
+  const { messages, sessions } = scanUsage(configDir)
+  const out = new Map([...sessions].map((s) => [s, noUsage()]))
+  for (const { session, usage } of messages.values()) addUsage(out.get(session), usage)
+  return out
+}
+
+/** 에이전트의 토큰 사용량을 모두 더한다. sessions는 대화 기록 파일 수다(서브에이전트 기록 포함) */
+export function agentUsage(configDir) {
+  const { messages, files } = scanUsage(configDir)
+  const total = { ...noUsage(), sessions: files }
+  for (const { usage } of messages.values()) addUsage(total, usage)
   return total
 }

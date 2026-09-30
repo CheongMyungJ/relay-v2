@@ -40,6 +40,32 @@ export interface Emphasis {
   kind: EmphasisKind
   title: string
   lines: string[]
+  /** 사람이 할 일. 열린 질문은 어디에 답하는지다 (D222) */
+  hint?: string
+}
+
+/**
+ * [요약] 탭 맨 위에 둘 이 단계의 핵심 (D223): 의도 정리는 intent 초안의 목표·비목표·완료조건과 size, 리뷰는 지적
+ * 목록과 반영할 번호를 말하라는 안내다
+ */
+export interface StageLead {
+  title: string
+  /** 절마다 제목과 본문(마크다운) */
+  sections: { title: string; text: string }[]
+  /** 사람이 할 일. 없으면 null */
+  hint: string | null
+}
+
+/** 작업 브랜치의 커밋 (D225). Work 완료 화면과 완료 알림에 보인다 */
+export interface BranchInfo {
+  /** 작업 브랜치: relay/<work-id> */
+  name: string
+  /** 기준 커밋 뒤의 커밋 수 */
+  ahead: number
+  /** 마지막 커밋의 짧은 해시와 제목. 기준 뒤 커밋이 없으면 null */
+  last: { sha: string; subject: string } | null
+  /** worktree 경로. [Work 정리]로 지웠으면 null */
+  worktree: string | null
 }
 
 /** Work 완료 화면의 판정표 한 행 (시나리오 7-3) */
@@ -427,14 +453,53 @@ export interface TaskView {
   live: boolean
   /** --resume으로 다시 연 적이 있다 (시나리오 3-4) */
   resumed: boolean
+  /** 앱이 꺼져 세션이 끝났다 (D219). 다시 열면 false다 */
+  appEnded: boolean
+  /** 세션 기록이 있다. 없으면(띄우다 실패함 등) [재개]는 이 단계를 새 세션으로 시작한다 (D218) */
+  hasSession: boolean
   /** task를 띄우지 못한 이유 */
   error: string | null
   /** 마지막 형식 검사의 오류 수 */
   errorCount: number
   /** 형식 오류 되돌림의 연속 횟수 (D21, D107) */
   bounces: number
+  /** 되돌린 뒤 에이전트가 형식을 고치는 동안의 안내 (D220). 아니면 null */
+  bounceNotice: string | null
   /** 자동 승인 카운트다운 (4.3, D83, D127). 카운트다운 중이 아니면 null */
   countdown: CountdownView | null
+  /**
+   * 진행 표시 (D216): 작업 중인 task의 경과 시간과 마지막 동작. 작업 중이 아니면 null. 도구 훅으로 바뀐 것은 스냅샷을
+   * 기다리지 않고 onActivity로 따로 온다
+   */
+  activity: ActivityView | null
+}
+
+/**
+ * 진행 표시 (D216). 시각은 Date.now()와 같은 ms이고, 렌더러가 경과 시간을 센다. 훅으로만 알고 터미널은 읽지 않는다 (D2)
+ */
+export interface ActivityView {
+  /** 첫 턴(UserPromptSubmit)이 시작했다. 아니면 세션을 띄우는 중이다 */
+  turn: boolean
+  /** 턴이 시작한 때. 세션을 띄우는 중이면 task를 만든 때다 */
+  since: number
+  /** 이번 턴의 마지막 도구. 아직 없으면 null */
+  tool: ToolActivityView | null
+}
+
+export interface ToolActivityView {
+  /** 도구 이름과 짧은 인자. 예: "Bash(npm test)" */
+  label: string
+  /** PreToolUse를 받은 때 */
+  startedAt: number
+  /** PostToolUse를 받은 때. 실행 중이면 null */
+  endedAt: number | null
+}
+
+/** 도구 훅으로 바뀐 진행 표시 (D216). 이 Work의 다음 스냅샷이 오면 스냅샷의 값을 쓴다 */
+export interface ActivityUpdate {
+  workKey: string
+  taskId: string
+  activity: ActivityView | null
 }
 
 /** 자동 승인 카운트다운. 승인 화면에 남은 초와 [취소]를 보인다 (D83) */
@@ -655,6 +720,8 @@ export interface ReviewView {
   errors: FormatIssue[]
   warnings: FormatIssue[]
   emphasis: Emphasis[]
+  /** [요약] 탭 맨 위의 이 단계 핵심 (D223). 의도 정리와 리뷰만 있다 */
+  lead: StageLead | null
   artifacts: Artifact[]
   /** 이 task의 변경 (task 시작 커밋 → 작업 트리) */
   diff: string
@@ -717,6 +784,8 @@ export interface Completion {
   buttons: DeliveryButtons
   /** 마지막 전달 결과. 실패면 오류와 [다시 시도]·[전달 없이 완료]를 보인다 (D120) */
   delivery: DeliveryView | null
+  /** 작업 브랜치의 커밋 (D225). 브랜치가 없으면(정리로 지움) null */
+  branch: BranchInfo | null
 }
 
 // ---------- 명령 ----------

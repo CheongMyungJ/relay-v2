@@ -3,13 +3,14 @@
 // - `--version`은 버전을 찍고(D105), `auth status`는 FAKE_CLAUDE_AUTH가 fail이면 종료 코드 1이다(D67).
 // - FAKE_CLAUDE_SCENARIO가 있으면 첫 프롬프트(/relay-<스킬> 이 task의 컨텍스트: <경로>)의 스킬이나
 //   context.md의 task id에 맞는 단계를 차례로 한다: 훅 신호 보내기, 산출물과 handoff 쓰기, worktree에
-//   커밋하기, 커밋하지 않고 worktree 고치기, 질문 대기 흉내, Stop 보내고 되돌림을 받으면 고쳐 쓰기, 종료.
+//   커밋하기, 커밋하지 않고 worktree 고치기, 질문 대기와 도구 호출 흉내, Stop 보내고 되돌림을 받으면 고쳐 쓰기, 종료.
 // - 훅은 --settings 파일의 URL과 머리글로 보낸다. 머리글의 $VAR는 allowedEnvVars에 있는 것만 푼다
 //   (Claude Code 문서 hooks). 본문 필드는 S2에서 관찰한 모양이다. Stop에는 background_tasks와 session_crons를
 //   넣는다(Claude Code 2.1.145부터, 문서 hooks). 시나리오의 stop 단계가 목록을 주면 그것을 넣는다(D129).
 // - FAKE_CLAUDE_RECORD 폴더가 있으면 실행 인자와 훅 응답을 fake-claude.jsonl에 남긴다.
 // - --session-id로 시작한 세션은 FAKE_CLAUDE_RECORD/sessions/<id>.json에 task를 적어 두고,
-//   --resume <id>로 다시 열면 그 task의 resume 시나리오를 한다. 적어 둔 것이 없으면 실제 claude처럼
+//   --resume <id>로 다시 열면 그 task의 resume 시나리오를 한다. 입력을 함께 주면 그것을 먼저 첫 요청으로 보낸다
+//   (중단됨의 [재개], D218). 적어 둔 것이 없으면 실제 claude처럼
 //   "No conversation found with session ID"를 내고 종료 코드 1로 끝난다 (스파이크 S6).
 // - clear 단계는 /clear를 흉내 낸다: SessionEnd(reason: clear)를 보내고 새 세션 id로 계속 돈다(D110).
 //   새 세션은 다음 요청으로 대화가 생겨야 --resume으로 열 수 있다.
@@ -306,25 +307,39 @@ async function steps(list, ctx, vars) {
       await waitEnter()
     } else if (s === 'ask') {
       const question = { questions: [{ question: step.question ?? '질문', options: [] }] }
-      await hook(
-        'PreToolUse',
-        { tool_name: 'AskUserQuestion', tool_input: question },
-        'AskUserQuestion',
-      )
+      const id = `toolu_${randomUUID().replaceAll('-', '').slice(0, 24)}`
+      const fields = { tool_name: 'AskUserQuestion', tool_input: question, tool_use_id: id }
+      await hook('PreToolUse', fields, 'AskUserQuestion')
       out('질문 대기: Enter를 누르세요')
       await waitEnter()
-      await hook(
-        'PostToolUse',
-        { tool_name: 'AskUserQuestion', tool_input: question, tool_response: '답함' },
-        'AskUserQuestion',
-      )
+      // fail이면 도구가 실패한 것이다: PostToolUse 대신 PostToolUseFailure를 보낸다
+      if (step.fail)
+        await hook('PostToolUseFailure', { ...fields, error: '거절함' }, 'AskUserQuestion')
+      else await hook('PostToolUse', { ...fields, tool_response: '답함' }, 'AskUserQuestion')
     } else if (s === 'tool') {
-      await hook('PreToolUse', { tool_name: step.name, tool_input: {} }, step.name)
-      await hook(
-        'PostToolUse',
-        { tool_name: step.name, tool_input: {}, tool_response: '' },
-        step.name,
-      )
+      // 도구 호출 (D216): PreToolUse, ms만큼 실행, PostToolUse. 두 훅은 같은 tool_use_id를 가진다.
+      // fail이면 PostToolUse 대신 PostToolUseFailure를 보낸다. agent가 있으면 서브에이전트 안의 도구라 훅에
+      // agent_id를 넣는다. inner는 이 도구가 도는 동안 할 단계다(Task 도구 안의 서브에이전트)
+      const input = step.input ?? {}
+      const id = `toolu_${randomUUID().replaceAll('-', '').slice(0, 24)}`
+      const fields = {
+        ...(step.agent ? { agent_id: step.agent, agent_type: 'general-purpose' } : {}),
+        tool_name: step.name,
+        tool_input: input,
+        tool_use_id: id,
+      }
+      await hook('PreToolUse', fields, step.name)
+      if (step.inner) await steps(step.inner, ctx, vars)
+      if (step.ms) await sleep(step.ms)
+      if (step.fail) {
+        await hook(
+          'PostToolUseFailure',
+          { ...fields, error: 'Exit code 1', is_interrupt: false },
+          step.name,
+        )
+      } else {
+        await hook('PostToolUse', { ...fields, tool_response: '' }, step.name)
+      }
     } else if (s === 'notify') {
       await hook('Notification', { message: '알림', notification_type: step.type })
     } else if (s === 'stop') {
@@ -381,14 +396,17 @@ async function run() {
     taskId: ctx.taskId,
     taskDir: ctx.taskDir,
   })
-  // 다시 연 세션은 사람의 입력을 기다린다. resume 시나리오가 없으면 아무것도 하지 않는다.
+  // 다시 연 세션은 사람의 입력을 기다린다. resume 시나리오가 없으면 아무것도 하지 않는다. --resume과 함께 입력을
+  // 주면(중단됨의 [재개], D218) 실제 claude처럼 그것을 첫 요청으로 바로 보낸 뒤 resume 시나리오를 한다.
   // 첫 프롬프트가 없으면 정리 세션이다 (7-5). cleanup 시나리오가 없으면 입력을 기다리기만 한다
+  const vars = { taskDir: ctx.taskDir, taskId: ctx.taskId, node: ctx.node, attempt: 0 }
+  if (opts.resume && opts.prompt !== null) await steps([{ do: 'prompt' }], ctx, vars)
   const list = opts.resume
     ? (scenario.resume?.[ctx.taskId] ?? scenario.resume?.[ctx.skill] ?? [])
     : opts.prompt === null
       ? (scenario.cleanup ?? [])
       : (scenario.tasks?.[ctx.taskId] ?? scenario.tasks?.[ctx.skill] ?? [{ do: 'prompt' }])
-  await steps(list, ctx, { taskDir: ctx.taskDir, taskId: ctx.taskId, node: ctx.node, attempt: 0 })
+  await steps(list, ctx, vars)
   out('[가짜 claude] 대기')
 }
 

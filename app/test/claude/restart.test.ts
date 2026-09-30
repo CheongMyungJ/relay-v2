@@ -1,15 +1,15 @@
 // [실제] 앱이 충돌한 뒤 다시 켜서 [재개]로 이어 간다 (docs/implementation.md M6, 8.4, 시나리오 9, D75, D76).
 // 앱(Relay)을 자식 프로세스(app-process.mjs)로 띄워 S 경로 레포의 intake가 첫 요청을 받아 일하는 중에 그 프로세스만
 // SIGKILL로 끝낸다(트리 종료 아님). 다시 켜면 조정과 고아 확인을 한다: 기록과 시작 시각이 같은 claude가 남았으면
-// 트리째 끝내고 알린다. 중단됨이 된 intake를 [재개]로 같은 세션(--resume)으로 열고, 이어서 하라고 한 뒤 Work
-// 완료까지 간다. 앱이 죽은 뒤 claude가 남았는지와 재시작이 한 일을 결과에 적는다.
+// 트리째 끝내고 알린다. 중단됨이 된 intake를 [재개]로 같은 세션(--resume)으로 연다. 앱이 이어서 하라는 첫 입력을
+// 주므로(D218) 사람은 치지 않고 Work 완료까지 간다. 앱이 죽은 뒤 claude가 남았는지, 재시작이 한 일, pty.log 끝의
+// 표시 줄(D219)을 결과에 적는다.
 // RELAY_REAL_CLAUDE=1이면 실제 claude, dry면 가짜 claude로 도구만 확인한다. RELAY_REAL_CASES로 고른다(restart).
 import { spawn, type ChildProcess } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { isAlive, listProcesses } from '../../src/adapters/pty'
-import type { Relay } from '../../src/main/relay'
 import type { NoticeView, TaskView } from '../../src/shared/views'
 import type { LifecycleEvent, WorkState } from '../../src/shared/work'
 import { drive, type DriveResult } from '../flow/driver'
@@ -36,21 +36,15 @@ const APP_PROCESS = path.join(APP, 'test/claude/app-process.mjs')
 const TASK_TIMEOUT_MS = 25 * 60 * 1000
 /** 첫 요청을 받은 뒤 앱을 끝내기까지 기다리는 시간. 에이전트가 일하는 도중에 끊는다 */
 const WORK_MS = dry ? 1000 : 10_000
-/** 다시 연 세션에 보내는 말 */
-const CONTINUE =
-  '앱이 꺼져 세션을 다시 열었습니다. 하던 일을 스킬의 절차대로 이어서 해 주세요. 마치면 종료 절차대로 handoff를 쓰고 턴을 끝내 주세요.'
 /** handoff 없이 턴이 끝났을 때 사람이 보내는 말 (real.test.ts와 같음) */
 const NUDGE = '스킬의 절차를 계속해 주세요. 마치면 종료 절차대로 handoff를 쓰고 턴을 끝내 주세요.'
-/** 입력란 아래 상태 줄. 입력을 받을 수 있는지 본다. 출처: spikes/lib/session.mjs READY_HINT */
-const READY_HINT = /for agents|for shortcuts|shift\+tab to cycle/i
 
 /** 가짜 claude의 시나리오 (dry): 첫 세션은 요청을 받고 멈춰 있고, 다시 연 세션이 intake를 마친다 */
 function dryScenario(): Scenario {
   return {
     tasks: { ...scenario('S').tasks, 'work-start': [{ do: 'prompt' }, { do: 'wait' }] },
-    resume: {
-      'work-start': [{ do: 'waitEnter' }, { do: 'prompt' }, ...steps('intake', 'S').slice(1)],
-    },
+    // 다시 연 세션은 앱이 준 이어서 하라는 입력(D218)을 받고 intake를 마친다
+    resume: { 'work-start': steps('intake', 'S').slice(1) },
   }
 }
 
@@ -75,6 +69,10 @@ interface Restart {
   notices: NoticeView[]
   resumed: boolean
   sameSession: boolean | null
+  /** 다시 켠 뒤 intake 세션 기록의 app_ended (D219) */
+  appEnded: string | null
+  /** 다시 켠 뒤 pty.log가 앱이 꺼졌다는 표시 줄로 끝남 (D219) */
+  endMark: boolean
 }
 
 interface Timing {
@@ -108,6 +106,8 @@ describe.runIf(enabled)('[실제] 앱이 충돌한 뒤 [재개] (M6, 시나리�
       notices: [],
       resumed: false,
       sameSession: null,
+      appEnded: null,
+      endMark: false,
     }
     let ui = new ScreenUi()
     let child: ChildProcess | null = null
@@ -169,9 +169,13 @@ describe.runIf(enabled)('[실제] 앱이 충돌한 뒤 [재개] (M6, 시나리�
       facts.notices = view?.notices ?? []
       facts.status = work(workDir).tasks[0]?.status ?? null
       facts.event = events(workDir).at(-1) ?? null
+      facts.appEnded = work(workDir).tasks[0]?.session?.app_ended ?? null
+      facts.endMark = fs
+        .readFileSync(path.join(workDir, 'tasks', '01-intake', 'pty.log'), 'utf8')
+        .endsWith('── relay: 앱이 꺼져 세션이 여기서 끝났습니다 ──\x1b[0m\r\n')
       lap('다시 켬')
 
-      // 중단됨이면 [재개]: 같은 세션을 --resume으로 열고 이어서 하라고 한다
+      // 중단됨이면 [재개]: 같은 세션을 --resume으로 열고 앱이 이어서 하라는 입력을 준다 (D218)
       const task = (): TaskView | undefined =>
         h.relay.snapshot().works.find((w) => w.key === key)?.tasks[0]
       if (facts.status === 'interrupted') {
@@ -181,10 +185,9 @@ describe.runIf(enabled)('[실제] 앱이 충돌한 뒤 [재개] (M6, 시나리�
         facts.resumed = true
         const after = work(workDir).tasks[0]?.session
         facts.sameSession = after?.id === before?.id && after?.resumed_at !== undefined
-        await typeLine(h.relay, ui, term, CONTINUE)
         await ui.until(
           () => task()?.status === 'working',
-          '이어서 하라는 요청',
+          '앱이 준 이어서 하라는 입력',
           120_000,
           () => ui.handleDialogs(h.relay, term),
         )
@@ -220,6 +223,8 @@ describe.runIf(enabled)('[실제] 앱이 충돌한 뒤 [재개] (M6, 시나리�
     expect(facts.aliveAfter ?? false).toBe(false)
     expect(facts.notices.some((n) => n.kind === 'orphans')).toBe(facts.survived === true)
     expect(facts.event).toMatchObject({ payload: { reason: 'app_restart' } })
+    expect(facts.appEnded).toBe('restart')
+    expect(facts.endMark).toBe(true)
     if (facts.resumed) expect(facts.sameSession).toBe(true)
   })
 })
@@ -256,26 +261,6 @@ function exited(child: ChildProcess): Promise<void> {
   })
 }
 
-/** 입력란이 뜰 때까지 기다린 뒤 한 줄을 보낸다 (resume.test.ts와 같음) */
-async function typeLine(relay: Relay, ui: ScreenUi, term: string, text: string): Promise<void> {
-  if (!dry) {
-    let quiet = { screen: '', at: Date.now() }
-    await ui.until(
-      () => {
-        const scr = ui.screen(term)
-        if (scr !== quiet.screen) quiet = { screen: scr, at: Date.now() }
-        return READY_HINT.test(scr) && Date.now() - quiet.at > 1500
-      },
-      '입력란',
-      120_000,
-      () => ui.handleDialogs(relay, term),
-    )
-  }
-  relay.terminalWrite(term, text)
-  await sleep(300)
-  relay.terminalWrite(term, '\r')
-}
-
 const seconds = (ms: number) => `${Math.round(ms / 1000)}초`
 const yesNo = (v: boolean | null) => (v === null ? '알 수 없음' : v ? '예' : '아니오')
 
@@ -302,7 +287,8 @@ function summary(
     `- 다시 켠 뒤 그 claude가 살아 있음: ${yesNo(f.aliveAfter)}`,
     `- 다시 켠 뒤 intake: ${f.status ?? '알 수 없음'} (이벤트 ${f.event ? `${f.event.type} ${JSON.stringify(f.event.payload)}` : '없음'})`,
     `- 알림: ${f.notices.length ? f.notices.map((n) => `${n.title}: ${n.lines.join(', ')}`).join(' / ') : '없음'}`,
-    `- [재개]: ${f.resumed ? `함(같은 세션: ${yesNo(f.sameSession)})` : '안 함'}`,
+    `- 앱이 꺼져 끝남(app_ended): ${f.appEnded ?? '없음'}, pty.log 끝의 표시 줄: ${yesNo(f.endMark)}`,
+    `- [재개]: ${f.resumed ? `함(같은 세션: ${yesNo(f.sameSession)}, 사람은 치지 않음)` : '안 함'}`,
     '',
     '| 단계 | 걸린 시간 |',
     '|---|---|',

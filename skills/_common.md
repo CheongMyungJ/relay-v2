@@ -75,6 +75,33 @@ knowledge_candidates: []  # optional. facts worth reusing later
 - `## 다음 task가 알아야 할 것`: facts that are costly to find again, such as paths and lines, commands, numbers.
 - Keep the body around 1,500 characters.
 - Do not add fields for IDs, versions, commits, test results or an artifact list. The app knows them.
+- Put every text value in double quotes. Unquoted text is not read as the text you meant when it contains `: ` or ` #`, or starts with a backtick, `-`, `*`, `[`, `{`, `>` or `|`. Inside the quotes, write `\"` for a double quote and `\\` for a backslash. Write paths with `/`, not `\`.
+
+A filled `handoff.md`:
+
+```yaml
+---
+status: awaiting_approval
+blocked_reason:
+decisions:
+  - what: "빈 배열의 평균은 0으로 한다"
+    why: "요청의 완료조건: `avg([])`는 0"
+    by: human
+assumptions: []
+rejected:
+  - "reduce 초기값 누락: 초기값 0이 이미 있음"
+open_questions: []
+intent_deviation: null
+risks:
+  - "음수만 있는 배열은 확인하지 않음"
+recommended_next: null
+knowledge_candidates: []
+---
+## 요약
+빈 배열이면 0을 돌려주게 고쳤다.
+## 다음 task가 알아야 할 것
+- `src/avg.js:2`: 빈 배열 처리
+```
 
 The app checks the format when your turn ends. You do not run a validator. It checks:
 
