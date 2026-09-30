@@ -3,6 +3,7 @@ import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { harness, makeRepo, register, type Harness } from './harness'
 import { handoff, intentDraft, REPO_FILES, REQUEST, scenario } from './scenarios'
+import { continuePrompt } from '../../src/core/settings'
 import type { WorkState } from '../../src/shared/work'
 
 let h: Harness | undefined
@@ -125,6 +126,16 @@ describe('[흐름] Codex CLI와 실제 훅·MCP 브리지', () => {
       '재개 후 새 질문',
     )
     expect(next.id).not.toBe(first.id)
+    const resumed = s.hh
+      .codexRecords()
+      .filter((r) => r['type'] === 'start')
+      .at(-1)
+    expect((resumed?.['args'] as string[]).at(-1)).toBe(continuePrompt(false))
+    expect(
+      s.hh
+        .codexRecords()
+        .find((r) => r['pid'] === resumed?.['pid'] && r['event'] === 'UserPromptSubmit')?.['body'],
+    ).toMatchObject({ prompt: continuePrompt(false) })
     expect(s.read().tasks[0]).toMatchObject({ engine: 'codex', session: { id, alive: true } })
     expect((await s.hh.relay.answerQuestion(s.key, 't-01', first.id, { scope: ['전체'] })).ok).toBe(
       false,
@@ -170,7 +181,7 @@ describe('[흐름] Codex CLI와 실제 훅·MCP 브리지', () => {
       cleanup: [{ do: 'prompt' }, { do: 'ask' }, { do: 'wait' }],
     })
     await s.hh.relay.updateConfig({
-      auto_approve: { ...s.hh.relay.currentConfig().auto_approve, fix: true },
+      auto_approve: { ...s.hh.relay.currentConfig().auto_approve, fix: true, review: true },
     })
     for (const [index, node] of ['intake', 'fix', 'review', 'verify'].entries()) {
       const id = `t-0${index + 1}`
@@ -181,7 +192,7 @@ describe('[흐름] Codex CLI와 실제 훅·MCP 브리지', () => {
       const task = s.read().tasks[index]
       expect(task).toMatchObject({ node, engine: 'codex', session: { alive: true } })
       expect(task?.countdown).toBeUndefined()
-      if (node === 'fix') {
+      if (node === 'fix' || node === 'review') {
         expect(task?.auto_hold).toBeUndefined()
         expect((await s.hh.relay.review(s.key, id))?.autoApprove).toMatchObject({ on: false })
       }
@@ -347,6 +358,83 @@ describe('[흐름] Codex CLI와 실제 훅·MCP 브리지', () => {
     )
     expect(stops[0]?.['response']).toMatchObject({ decision: 'block' })
     expect(s.read().tasks[0]?.bounce_count).toBe(0)
+  })
+
+  it('Codex 실패 도구도 진행을 끝내고 자식 도구 보호는 바깥 진행 표시를 유지한다', async () => {
+    const s = await setup({
+      tasks: {
+        'work-start': [
+          { do: 'prompt' },
+          {
+            do: 'hook',
+            event: 'PreToolUse',
+            body: {
+              tool_name: 'exec_command',
+              tool_use_id: 'outer',
+              tool_input: { cmd: 'npm test' },
+            },
+          },
+          {
+            do: 'hook',
+            event: 'PreToolUse',
+            body: {
+              agent_id: 'child',
+              tool_name: 'exec_command',
+              tool_use_id: 'child',
+              tool_input: { cmd: 'printf changed > request.md', workdir: '{taskDir}/../..' },
+            },
+          },
+          {
+            do: 'hook',
+            event: 'PostToolUse',
+            body: {
+              tool_name: 'exec_command',
+              tool_use_id: 'outer',
+              tool_response: { exit_code: 1, output: 'test failed' },
+            },
+          },
+          {
+            do: 'hook',
+            event: 'PreToolUse',
+            body: {
+              tool_name: 'exec_command',
+              tool_use_id: 'denied',
+              tool_input: { cmd: 'rm request.md', workdir: '{taskDir}/../..' },
+            },
+          },
+          { do: 'wait' },
+        ],
+      },
+    })
+    await s.hh.ui.until(
+      () =>
+        s.hh
+          .codexRecords()
+          .some(
+            (r) => (r['body'] as { tool_use_id?: string } | undefined)?.tool_use_id === 'denied',
+          ),
+      'Codex 실패 훅',
+    )
+    const child = s.hh
+      .codexRecords()
+      .find(
+        (r) =>
+          r['event'] === 'PreToolUse' && (r['body'] as { agent_id?: string }).agent_id === 'child',
+      )
+    expect(child?.['response']).toMatchObject({
+      hookSpecificOutput: { permissionDecision: 'deny' },
+    })
+    expect(
+      s.hh.ui.activityLog
+        .filter((u) => u.workKey === s.key)
+        .map((u) => [u.activity?.tool?.label, u.activity?.tool?.endedAt === null]),
+    ).toEqual([
+      ['exec_command(npm test)', true],
+      ['exec_command(npm test)', false],
+      ['exec_command(rm request.md)', false],
+    ])
+    expect(s.hh.ui.activityOf(s.key, 't-01')?.tool?.endedAt).toBeTypeOf('number')
+    expect(s.read().tasks[0]?.status).toBe('working')
   })
 
   it('실제 command 훅이 push와 앱 소유 파일 패치를 거절하고 현재 산출물은 허용한다', async () => {

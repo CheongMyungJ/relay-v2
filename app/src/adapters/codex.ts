@@ -197,6 +197,7 @@ export async function codexResumeArgs(input: ResumeInput): Promise<string[]> {
     input.workDir,
     'resume',
     input.sessionId,
+    ...(input.prompt ? [input.prompt] : []),
   ]
 }
 export async function codexCleanupArgs(settingsPath: string): Promise<string[]> {

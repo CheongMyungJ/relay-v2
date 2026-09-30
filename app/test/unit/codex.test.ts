@@ -73,6 +73,80 @@ describe('Codex 보호 범위', () => {
       expect(codexToolDenial(input, tool, { input: 'rm /home/relay/work/work.json' })).toBeTruthy()
     }
   })
+  it('실행 도구의 workdir·cwd와 상대 경로를 정규화해 보호한다', () => {
+    const cases = [
+      { cmd: 'printf changed > request.md', workdir: input.workDir },
+      { cmd: 'rm handoff.md', workdir: input.previousTaskDirs[0] },
+      { command: 'tee ./request.md', cwd: '/home/relay/work/tasks/..' },
+      { command: 'mv notes.md ../request.md', cwd: input.taskDir + '/..' },
+      { cmd: 'rm ./context.md', workdir: input.taskDir },
+      { cmd: 'rm -rf .agents', workdir: input.workDir },
+      { cmd: 'rm -rf .', workdir: input.workDir },
+      { cmd: 'rm handoff.md', workdir: '../home/relay/work/tasks/01-intake' },
+      { cmd: 'printf changed > ../home/relay/work/request.md' },
+    ]
+    for (const args of cases)
+      expect(codexToolDenial(input, 'exec_command', args), JSON.stringify(args)).toBeTruthy()
+    expect(
+      codexToolDenial(input, 'exec_command', { cmd: 'cat request.md', workdir: input.workDir }),
+    ).toBeNull()
+    expect(
+      codexToolDenial(input, 'exec_command', {
+        cmd: 'printf request.md > notes.md',
+        workdir: input.workDir,
+      }),
+    ).toBeNull()
+    expect(
+      codexToolDenial(input, 'exec_command', {
+        cmd: 'printf changed > handoff.md',
+        workdir: input.taskDir,
+      }),
+    ).toBeNull()
+    expect(
+      codexToolDenial(input, 'exec_command', {
+        cmd: 'rm request.md',
+        workdir: input.workDir + '-other',
+      }),
+    ).toBeNull()
+    expect(
+      codexToolDenial(input, 'apply_patch', {
+        input: '*** Update File: request.md',
+        cwd: input.workDir,
+      }),
+    ).toBeTruthy()
+    expect(
+      codexToolDenial({ ...input, cwd: input.taskDir }, 'exec_command', { cmd: 'rm context.md' }),
+    ).toBeTruthy()
+    expect(
+      codexToolDenial({ ...input, cwd: input.taskDir }, 'exec_command', {
+        cmd: 'rm handoff.md',
+        workdir: '../01-intake',
+      }),
+    ).toBeTruthy()
+    const win = {
+      workDir: 'C:\\Relay Work',
+      worktree: 'C:\\repo',
+      previousTaskDirs: ['C:\\Relay Work\\tasks\\01-intake'],
+    }
+    expect(
+      codexToolDenial(win, 'shell_command', {
+        command: 'Set-Content -Path "./request.md" -Value changed',
+        workdir: 'c:\\RELAY WORK\\tasks\\..',
+      }),
+    ).toBeTruthy()
+    expect(
+      codexToolDenial(win, 'shell_command', {
+        command: 'Remove-Item .\\handoff.md',
+        cwd: 'C:\\Relay Work\\tasks\\01-intake',
+      }),
+    ).toBeTruthy()
+    expect(
+      codexToolDenial(input, 'exec_command', {
+        cmd: 'printf changed > "request.md"',
+        workdir: input.workDir,
+      }),
+    ).toBeTruthy()
+  })
   it('TOML 인라인 객체와 문자열을 구분하고 토큰을 훅 설정에 넣지 않는다', () => {
     expect(tomlValue({ input: { cmd: '한글 "quoted"\nline' }, enabled: true })).toBe(
       '{ "input" = { "cmd" = "한글 \\"quoted\\"\\nline" }, "enabled" = true }',

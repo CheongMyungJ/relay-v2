@@ -1,0 +1,30 @@
+diff --git a/src/invoice/total.js b/src/invoice/total.js
+index 6c97af3..348317c 100644
+--- a/src/invoice/total.js
++++ b/src/invoice/total.js
+@@ -13,6 +13,15 @@ export function lineAmounts(invoice) {
+   })
+ }
+ 
++// 은행가 반올림: 딱 0.5면 짝수 쪽으로. 줄마다 반올림할 때 오차가 한쪽으로 쌓이지 않는다
++function roundHalfEven(x) {
++  const floor = Math.floor(x)
++  const diff = x - floor
++  if (diff > 0.5) return floor + 1
++  if (diff < 0.5) return floor
++  return floor % 2 === 0 ? floor : floor + 1
++}
++
+ // 청구서 합계
+ //   subtotal: 할인 전 금액 합, discount: 할인 합, supply: 공급가액 합
+ //   taxable / exempt: 공급가액 중 과세분 / 면세분, vat: 부가세, total: 청구 합계
+@@ -23,6 +32,8 @@ export function computeTotals(invoice) {
+   const taxable = sumWon(rows.filter((r) => r.taxable).map((r) => r.net))
+   const exempt = sumWon(rows.filter((r) => !r.taxable).map((r) => r.net))
+   const supply = taxable + exempt
+-  const vat = invoice.zeroRated ? 0 : Math.round((taxable * VAT_RATE_PERCENT) / 100)
++  const vat = invoice.zeroRated
++    ? 0
++    : sumWon(rows.filter((r) => r.taxable).map((r) => roundHalfEven((r.net * VAT_RATE_PERCENT) / 100)))
+   return { subtotal, discount, supply, taxable, exempt, vat, total: supply + vat }
+ }

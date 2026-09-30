@@ -99,6 +99,7 @@ import {
   type SelectionInput,
 } from '../core/context'
 import {
+  ASK_TOOL,
   actions,
   currentTask,
   transition,
@@ -179,14 +180,18 @@ import {
   TASK_STATUS_LABEL,
   WORK_STATUS_LABEL,
   bandText,
+  bounceNotice,
   changeRange,
   emphasis,
   handoffSummary,
+  hasVisibleText,
   humanNotice,
   permissionNotice,
   resumeHint,
+  stageLead,
   stopNotice,
   taskLabel,
+  toolLabel,
   verdicts,
 } from '../core/review'
 import {
@@ -215,6 +220,7 @@ import {
   wantsAutoStart,
 } from '../core/respond'
 import { backupPattern, nextBackupBranch, planStep, stepChoices, stepPreview } from '../core/rewind'
+import { continuePrompt } from '../core/settings'
 import {
   HANDOFF_FILE,
   INTENT_DRAFT_FILE,
@@ -237,8 +243,10 @@ import {
 } from '../shared/pr'
 import type { ProjectChecks, ProjectState } from '../shared/project'
 import type {
+  ActivityView,
   ApproveOptions,
   BadgeKind,
+  BranchInfo,
   CleanInput,
   CleanPreviewResult,
   CleanupView,
@@ -258,6 +266,7 @@ import type {
   StepPreviewResult,
   TaskView,
   TerminalBacklog,
+  ToolActivityView,
   WorkView,
 } from '../shared/views'
 import type {
@@ -313,6 +322,14 @@ interface LiveSession {
   /** 직전 UserPromptSubmit이나 Stop 때의 handoff.md(intake는 intent 초안도) (D21, D107) */
   turnFiles: string
   stopped: boolean
+  /** 띄운 때 (Date.now()). 첫 출력과 첫 훅까지 걸린 시간을 잰다 (D217) */
+  spawnedAt: number
+  /** 첫 PTY 출력과 첫 훅을 이미 알렸다 (D217) */
+  sawOutput: boolean
+  sawHook: boolean
+  /** 진행 표시 (D216): 이번 턴이 시작한 때(UserPromptSubmit)와 마지막 도구. 기록하지 않고 살아 있는 동안만 둔다 */
+  turnStartedAt: number | null
+  tool: (ToolActivityView & { id?: string; name: string }) | null
 }
 
 interface PendingHumanQuestion {
@@ -359,6 +376,16 @@ const KILL_WAIT_MS = 10_000
 /** 다시 연 세션의 출력 앞에 넣는 줄. 이전 화면 뒤에 이어 보인다 (시나리오 3-4) */
 const RESUME_MARK = '\r\n\x1b[0m\x1b[2m── relay: 세션 재개 (--resume) ──\x1b[0m\r\n'
 
+/** 새 세션의 출력 앞에 넣는 줄. CLI가 첫 화면을 그리기 전의 빈 화면을 채운다 (시나리오 2-5, D215) */
+const startMark = (task: TaskRecord) =>
+  `\x1b[0m\x1b[2m── relay: ${taskLabel(task)} · 새 세션을 띄우는 중 ──\x1b[0m\r\n`
+
+/** 앱이 꺼지며 끝난 세션의 pty.log 끝에 넣는 줄 (D219). 다시 그린 옛 화면이 어디서 끝났는지 보인다 */
+const APP_END_MARK = '\r\n\x1b[0m\x1b[2m── relay: 앱이 꺼져 세션이 여기서 끝났습니다 ──\x1b[0m\r\n'
+
+/** 도구 훅. 실패한 도구는 PostToolUse 대신 PostToolUseFailure를 보낸다 (D216) */
+const TOOL_HOOKS: readonly string[] = ['PreToolUse', 'PostToolUse', 'PostToolUseFailure']
+
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 const str = (v: unknown) => (typeof v === 'string' ? v : undefined)
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -395,6 +422,13 @@ export class WorkRunner {
   private queue: Promise<unknown> = Promise.resolve()
   private readonly live = new Map<string, LiveSession>()
   private readonly terminals = new Map<string, TerminalBuffer>()
+  /**
+   * 다시 열 세션에 이어서 하라는 첫 입력을 줄지 (D218). [재개]·[세션 재개]마다 core가 정한 것을 두고, 세션을 다시 열
+   * 때 쓴다. 대기열에서 기다리는 동안에도 남는다
+   */
+  private readonly resumeContinue = new Map<string, boolean>()
+  /** task마다 자리를 잡아 세션을 띄우기 시작한 때. 진행 표시의 "세션을 띄우는 중"을 여기서부터 센다 (D216) */
+  private readonly launchedAt = new Map<string, number>()
   private readonly problems: string[] = []
   private revision = 0
   /** 이번 명령의 되감기가 git에서 실패한 이유. [단계 선택]의 결과로 돌려준다 */
@@ -507,6 +541,17 @@ export class WorkRunner {
     opts: { quiet?: boolean } = {},
   ): Promise<HookReply> {
     if (work === this.work && effects.length === 0) return null
+    // 상태가 그대로이고 기록만 남기는 전이(세션 시각, D217)는 work.json을 다시 쓰지 않고 스냅샷도 보내지 않는다
+    if (work === this.work && effects.every((e) => e.type === 'log')) {
+      for (const e of effects) {
+        try {
+          await this.run(e)
+        } catch (err) {
+          this.problem(`${e.type} 실패: ${message(err)}`)
+        }
+      }
+      return null
+    }
     const before = this.work
     const at = this.ctx.at()
     let saved: Awaited<ReturnType<WorkFiles['save']>>
@@ -587,7 +632,10 @@ export class WorkRunner {
         await this.confirmIntent(e.taskId, e.version, e.size)
         return
       case 'startTask':
+        await this.requestSession(e.taskId)
+        return
       case 'resumeTask':
+        this.resumeContinue.set(e.taskId, e.continue)
         await this.requestSession(e.taskId)
         return
       case 'dequeue':
@@ -688,6 +736,7 @@ export class WorkRunner {
       this.ctx.pool.release()
       return false
     }
+    this.launchedAt.set(taskId, Date.now())
     return task.session ? this.resumeSession(task) : this.startSession(task)
   }
 
@@ -760,7 +809,7 @@ export class WorkRunner {
         skill,
         contextPath,
       })
-      const session = this.launch(task, bin, token, args, turnSnapshot(task, {}))
+      const session = this.launch(task, bin, token, args, turnSnapshot(task, {}), startMark(task))
       const processStartedAt = await processStartTime(session.pty.pid)
       await this.feed({
         type: 'session.started',
@@ -800,7 +849,17 @@ export class WorkRunner {
       // 이전 화면을 먼저 보인다. 이 앱에서 돌던 task면 버퍼가 남아 있고, 아니면 pty.log에서 읽는다
       await this.terminalBuffer(task)
       const token = randomBytes(32).toString('hex')
-      const args = await driver.resumeArgs({ sessionId, workDir: this.files.dir, settingsPath })
+      // 중단됨의 [재개]는 이어서 하라고 알린다 (D218)
+      const prompt = this.resumeContinue.get(task.id)
+        ? continuePrompt(task.session?.app_ended !== undefined)
+        : undefined
+      this.resumeContinue.delete(task.id)
+      const args = await driver.resumeArgs({
+        sessionId,
+        workDir: this.files.dir,
+        settingsPath,
+        ...(prompt ? { prompt } : {}),
+      })
       const session = this.launch(task, bin, token, args, turnSnapshot(task, files), RESUME_MARK)
       const processStartedAt = await processStartTime(session.pty.pid)
       await this.feed({
@@ -1041,6 +1100,11 @@ export class WorkRunner {
       turnFiles,
       stopped: false,
       hooksReady: false,
+      spawnedAt: Date.now(),
+      sawOutput: false,
+      sawHook: false,
+      turnStartedAt: null,
+      tool: null,
     }
     const write = (data: string) => {
       log.write(data)
@@ -1049,7 +1113,13 @@ export class WorkRunner {
     if (mark) write(mark)
     pty.onData((data) => {
       // 끝낸 세션의 늦은 출력은 다시 연 세션의 화면에 섞지 않는다
-      if (!session.stopped) write(data)
+      if (session.stopped) return
+      write(data)
+      // 첫 출력은 보이는 글자로 잰다. Windows에서는 CLI의 첫 화면보다 ConPTY의 제어 문자가 먼저 온다 (D217)
+      if (!session.sawOutput && hasVisibleText(data)) {
+        session.sawOutput = true
+        this.timing(task.id, session, 'output')
+      }
     })
     pty.onExit(() => {
       exited()
@@ -1058,7 +1128,7 @@ export class WorkRunner {
     session.unregister = this.ctx.hooks.register(
       token,
       task.id,
-      (req) => this.enqueue(() => this.onHook(task.id, req, session)),
+      (req) => this.hookArrived(task.id, req, session),
       taskEngine(task) === 'codex'
         ? {
             failClosed: true,
@@ -1179,6 +1249,110 @@ export class WorkRunner {
     })
   }
 
+  /**
+   * 세션의 첫 PTY 출력과 첫 훅까지 걸린 시간을 events.jsonl에 남긴다 (D217). 줄에 넣으므로 세션을 띄우는 처리
+   * (session.started)가 끝난 뒤에 core에 간다
+   */
+  private timing(taskId: string, session: LiveSession, first: 'output' | 'hook', hook?: string) {
+    const ms = Date.now() - session.spawnedAt
+    const pid = session.pty.pid
+    void this.enqueue(() =>
+      this.feed({
+        type: 'session.timing',
+        taskId,
+        at: this.ctx.at(),
+        pid,
+        first,
+        ...(hook === undefined ? {} : { hook }),
+        ms,
+      }),
+    )
+  }
+
+  /** Codex의 도구 보호는 진행 표시의 빠른 응답 경로에서도 먼저 판정한다. */
+  private codexToolReply(task: TaskRecord, req: HookRequest): HookReply {
+    const b = req.body
+    const toolName = str(b['tool_name']) ?? ''
+    const args = b['tool_input']
+    const reason = codexToolDenial(
+      {
+        workDir: this.files.dir,
+        ...(str(b['cwd']) ? { cwd: str(b['cwd']) } : {}),
+        worktree: this.worktree,
+        taskDir: this.files.taskDir(task),
+        previousTaskDirs: this.work.tasks
+          .filter((t) => t.seq < task.seq)
+          .map((t) => this.files.taskDir(t)),
+      },
+      toolName,
+      typeof args === 'object' && args !== null ? (args as Record<string, unknown>) : {},
+    )
+    if (reason)
+      return {
+        hookSpecificOutput: {
+          hookEventName: 'PreToolUse',
+          permissionDecision: 'deny',
+          permissionDecisionReason: reason,
+        },
+      }
+    return null
+  }
+
+  /**
+   * 훅을 받았다. 진행 표시(D216)를 먼저 바꾸고, 질문 도구가 아닌 도구의 훅은 줄에 넣지 않고 바로 답한다: 도구를 쓸
+   * 때마다 오므로 앞선 처리(PR 읽기 등)를 기다리게 하면 에이전트가 늦어진다. core는 이 훅으로 상태를 바꾸지 않는다
+   */
+  private hookArrived(taskId: string, req: HookRequest, session: LiveSession): Promise<HookReply> {
+    if (this.live.get(taskId) !== session) return Promise.resolve(null)
+    if (!session.sawHook) {
+      session.sawHook = true
+      this.timing(taskId, session, 'hook', req.event)
+    }
+    const b = req.body
+    const now = Date.now()
+    if (req.event === 'UserPromptSubmit' && str(b['agent_id']) === undefined) {
+      session.turnStartedAt = now
+      session.tool = null
+    }
+    if (TOOL_HOOKS.includes(req.event)) {
+      const task = this.task(taskId)
+      const denial =
+        task?.engine === 'codex' && req.event === 'PreToolUse'
+          ? this.codexToolReply(task, req)
+          : null
+      const name = str(b['tool_name']) ?? ''
+      const id = str(b['tool_use_id'])
+      const before = session.tool
+      // 서브에이전트 안의 도구(agent_id가 있음)는 바깥 도구(Task 등)가 도는 동안이다. 바깥 도구를 덮지 않는다
+      if (str(b['agent_id']) === undefined) {
+        if (req.event === 'PreToolUse') {
+          const label = toolLabel(name, b['tool_input'], str(b['cwd']))
+          session.tool = {
+            name,
+            label,
+            startedAt: now,
+            endedAt: denial ? now : null,
+            ...(id ? { id } : {}),
+          }
+        } else if (
+          session.tool?.endedAt === null &&
+          (id ? session.tool.id === id : session.tool.name === name)
+        ) {
+          session.tool = { ...session.tool, endedAt: now }
+        }
+      }
+      if (name !== ASK_TOOL) {
+        if (session.tool !== before && this.live.get(taskId) === session) {
+          const task = this.task(taskId)
+          if (task)
+            this.ctx.ui.activity({ workKey: this.key, taskId, activity: this.activityOf(task) })
+        }
+        return Promise.resolve(denial)
+      }
+    }
+    return this.enqueue(() => this.onHook(taskId, req, session))
+  }
+
   /** 훅 신호 (시나리오 3의 표). Stop이면 파일을 다시 읽어 검사한다 (I15) */
   private async onHook(taskId: string, req: HookRequest, from: LiveSession): Promise<HookReply> {
     const task = this.task(taskId)
@@ -1251,33 +1425,12 @@ export class WorkRunner {
           })
         ).reply
       }
+      // 질문 도구만 온다. 나머지 도구는 hookArrived가 진행 표시만 바꾸고 답했다 (D216)
       case 'PreToolUse':
-      case 'PostToolUse': {
+      case 'PostToolUse':
+      case 'PostToolUseFailure': {
         const toolName = str(b['tool_name']) ?? ''
-        if (engine === 'codex' && req.event === 'PreToolUse') {
-          const args = b['tool_input']
-          const reason = codexToolDenial(
-            {
-              workDir: this.files.dir,
-              worktree: this.worktree,
-              taskDir: this.files.taskDir(task),
-              previousTaskDirs: this.work.tasks
-                .filter((t) => t.seq < task.seq)
-                .map((t) => this.files.taskDir(t)),
-            },
-            toolName,
-            typeof args === 'object' && args !== null ? (args as Record<string, unknown>) : {},
-          )
-          if (reason)
-            return {
-              hookSpecificOutput: {
-                hookEventName: 'PreToolUse',
-                permissionDecision: 'deny',
-                permissionDecisionReason: reason,
-              },
-            }
-        }
-        if (engine === 'claude' && toolName === 'AskUserQuestion') {
+        if (engine === 'claude' && toolName === ASK_TOOL) {
           return (
             await this.feed({
               type: req.event === 'PreToolUse' ? 'question.started' : 'question.finished',
@@ -1374,6 +1527,8 @@ export class WorkRunner {
     this.live.delete(taskId)
     const buffer = this.terminals.get(taskId)
     if (buffer) buffer.live = false
+    // 앱을 끄며 끝낸 세션은 pty.log 끝에 표시 줄을 남긴다 (D219)
+    if (this.closing) session.log.write(APP_END_MARK)
     await session.log.close()
     this.ctx.pool.release()
     this.changed()
@@ -2066,7 +2221,10 @@ export class WorkRunner {
       c.unregister = this.ctx.hooks.register(
         token,
         CLEANUP_ID,
-        (req) => this.enqueue(() => this.onCleanupHook(c, req)),
+        (req) =>
+          taskEngine(c) === 'claude' && TOOL_HOOKS.includes(req.event)
+            ? Promise.resolve(null)
+            : this.enqueue(() => this.onCleanupHook(c, req)),
         taskEngine(c) === 'codex'
           ? {
               failClosed: true,
@@ -2106,6 +2264,7 @@ export class WorkRunner {
       const reason = codexToolDenial(
         {
           workDir: this.files.dir,
+          ...(str(req.body['cwd']) ? { cwd: str(req.body['cwd']) } : {}),
           worktree: this.worktree,
           previousTaskDirs: this.work.tasks.map((t) => this.files.taskDir(t)),
         },
@@ -2447,6 +2606,13 @@ export class WorkRunner {
       const task = currentTask(this.work)
       const check = task ? this.check(task, await this.files.taskFiles(task)) : null
       const tasks = killed.flatMap((p) => (p.taskId ? [{ taskId: p.taskId, pid: p.pid }] : []))
+      // 앱이 끝내지 못한 세션: pty.log 끝에 앱이 꺼져 끝났다는 표시 줄을 남긴다 (D219)
+      for (const t of this.work.tasks) {
+        if (!t.session?.alive) continue
+        await this.files
+          .appendPtyMark(t, APP_END_MARK)
+          .catch((e: unknown) => this.problem(`pty.log에 표시 줄을 쓰지 못함: ${message(e)}`))
+      }
       await this.feed(
         {
           type: 'app.restarted',
@@ -2618,6 +2784,26 @@ export class WorkRunner {
     })
   }
 
+  /**
+   * 작업 브랜치의 커밋 (D225): 기준 커밋 뒤의 커밋 수와 마지막 커밋, worktree 경로. 브랜치는 모든 worktree가 함께
+   * 보므로 메인 체크아웃에서 읽는다. 커밋 안 된 변경은 넣지 않는다. 브랜치가 없으면(정리로 지움) null이다
+   */
+  private async branchInfo(): Promise<BranchInfo | null> {
+    const opts = { env: this.ctx.env }
+    const repo = this.project.repo_path
+    const name = workBranch(this.work.work_id)
+    const head = await refCommit(repo, name, opts).catch(() => null)
+    if (!head) return null
+    const ahead = await countCommits(repo, this.work.base_commit, head, opts).catch(() => 0)
+    const last = ahead > 0 ? await commitInfo(repo, head, opts).catch(() => null) : null
+    return {
+      name,
+      ahead,
+      last: last ? { sha: last.id.slice(0, 8), subject: last.subject } : null,
+      worktree: (await exists(this.worktree)) ? this.worktree : null,
+    }
+  }
+
   /** 승인 화면(D83)과 Work 완료 화면(시나리오 7-3)에 보일 것. 파일을 다시 읽어 만든다 */
   async review(taskId: string): Promise<ReviewView | null> {
     const task = this.task(taskId)
@@ -2662,6 +2848,7 @@ export class WorkRunner {
         stopped,
         buttons: deliveryButtons(this.checks()),
         delivery: deliveryView(this.work.delivery),
+        branch: await this.branchInfo(),
       }
     }
     return {
@@ -2690,8 +2877,10 @@ export class WorkRunner {
         handoff: header,
         errors: check.errors,
         uncommitted,
+        live: this.live.has(task.id),
         ...(respond ? { tests: respond.tests, failure: respond.view.failure } : {}),
       }),
+      lead: stageLead(task.node, files),
       artifacts: Object.entries(files)
         .filter(([name]) => name !== CONTEXT_FILE && name !== HANDOFF_FILE)
         .map(([name, text]) => ({ name, text })),
@@ -3962,12 +4151,32 @@ export class WorkRunner {
       statusLabel: TASK_STATUS_LABEL[t.status],
       live: this.live.has(t.id),
       resumed: t.session?.resumed_at !== undefined,
+      appEnded: t.session?.app_ended !== undefined,
+      hasSession: !!t.session,
       error: t.error ?? null,
       errorCount: t.check?.errors.length ?? 0,
       bounces: t.bounce_count,
+      bounceNotice: bounceNotice(t, this.ctx.config().format_error_bounce_max),
       countdown: t.countdown
         ? { seconds: t.countdown.seconds, endsAt: this.countdownEnds(t) }
         : null,
+      activity: this.activityOf(t),
+    }
+  }
+
+  /**
+   * 진행 표시 (D216). 작업 중인 task만 보인다. 첫 턴 전(세션을 띄우는 중)은 자리를 잡아 띄우기 시작한 때부터 센다:
+   * 앱이 스킬과 context.md를 준비하는 시간도 사람에게는 기다리는 시간이다. 대기열에서 기다린 시간은 넣지 않는다
+   */
+  private activityOf(t: TaskRecord): ActivityView | null {
+    if (t.status !== 'working') return null
+    const session = this.live.get(t.id)
+    const turn = session?.turnStartedAt ?? null
+    const tool = session?.tool ?? null
+    return {
+      turn: turn !== null,
+      since: turn ?? this.launchedAt.get(t.id) ?? Date.parse(t.created_at),
+      tool: tool ? { label: tool.label, startedAt: tool.startedAt, endedAt: tool.endedAt } : null,
     }
   }
 }

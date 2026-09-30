@@ -104,7 +104,8 @@ function systemPrompt(kind, scenario, guide) {
     '## 규칙',
     '- 너는 화면에 보이는 것만 안다. 파일을 직접 읽거나 고치지 않는다. 바뀐 코드를 보고 싶으면 inspect_diff를 쓴다(에디터로 바뀐 코드를 훑어보는 것과 같다).',
     '- 코드를 고치는 일은 AI 에이전트(Claude Code)가 한다. 너는 요청하고, 질문에 답하고, 결과를 확인하고, 승인하거나 다시 해 달라고 한다.',
-    '- "물으면 답함" 항목은 에이전트가 묻거나 흐름상 꼭 필요할 때만 말한다. 처음부터 다 쏟아내지 않는다. "처음부터 앎" 항목은 처음 요청에 넣어도 된다.',
+    '- "처음부터 앎" 항목은 처음 요청에 넣어도 된다.',
+    '- "물으면 답함" 항목은 에이전트가 화면에서 그 내용을 물었을 때만 답한다. 처음 요청이나 확인하는 말에 먼저 넣지 않는다. 에이전트가 묻지 않고 일을 끝낸 것도 평가 자료이니 억지로 알려 주지 않는다. 다만 결과를 확인해 보니 네가 아는 사실과 어긋나면, 실제 사람처럼 무엇이 어긋나는지 지적할 수 있다.',
     '- 실제 사람처럼 짧고 자연스럽게, 한국어로 입력한다.',
     '- 도구를 편들거나 깎아내리지 않는다. friction은 실제 사람이 느낄 만큼만 솔직하게 적는다. 헷갈렸거나 무엇을 할지 찾느라 시간을 썼으면 그대로 적는다.',
     '- 결과를 받아들이기(승인, 완료, 커밋) 전에 실제 개발자처럼 무엇이 바뀌었고 왜인지 확인한다. 화면에 근거가 모자라면 코드를 보거나(inspect_diff, 또는 도구가 보여 주는 변경 화면) 에이전트에게 묻는다.',
@@ -158,6 +159,9 @@ export class Human {
     this.system = systemPrompt(o.kind, o.scenario, guide)
     this.costUsd = 0
     this.calls = 0
+    /** 스크린샷을 붙인 차례 수와 마지막으로 붙인 화면 배치 (eval-findings E10) */
+    this.images = 0
+    this.shownLayout = null
   }
 
   async call(prompt, schema, images) {
@@ -180,14 +184,22 @@ export class Human {
     return r
   }
 
-  /** 한 차례. 화면(obs)과 알림을 주고 행동을 받는다 */
+  /**
+   * 한 차례. 화면(obs)과 알림을 주고 행동을 받는다. 스크린샷은 화면 배치가 앞에 붙인 그림과 다를 때만 붙인다
+   * (eval-findings E10). 글자와 요소 목록은 늘 준다
+   */
   async turn(obs) {
-    const images = this.o.vision && obs.screen.screenshot ? [obs.screen.screenshot] : undefined
+    const s = obs.screen
+    const fresh = !!(this.o.vision && s.screenshot && s.layout !== this.shownLayout)
     const r = await this.call(
-      renderObservation(this.o.kind, obs, this.o.vision),
+      renderObservation(this.o.kind, obs, this.o.vision, fresh),
       turnSchema(this.o.kind),
-      images,
+      fresh ? [s.screenshot] : undefined,
     )
+    if (fresh) {
+      this.shownLayout = s.layout
+      this.images++
+    }
     return { ...r.data, costUsd: r.costUsd, ms: r.ms }
   }
 
@@ -210,7 +222,7 @@ export class Human {
   }
 }
 
-function renderObservation(kind, obs, vision) {
+function renderObservation(kind, obs, vision, fresh) {
   const lines = [`[차례 ${obs.turn} · 시작 뒤 ${obs.elapsed}]`]
   if (obs.notes?.length) lines.push('', '## 알림', ...obs.notes.map((n) => `- ${n}`))
   if (obs.results?.length)
@@ -219,7 +231,13 @@ function renderObservation(kind, obs, vision) {
     lines.push('', '## 바뀐 코드 (inspect_diff)', '```diff', obs.diff || '(바뀐 것 없음)', '```')
   if (kind === 'relay') {
     const s = obs.screen
-    if (vision) lines.push('', '붙인 그림이 지금 화면이다. 노란 번호는 아래 요소 목록의 id다.')
+    if (vision && fresh)
+      lines.push('', '붙인 그림이 지금 화면이다. 노란 번호는 아래 요소 목록의 id다.')
+    else if (vision)
+      lines.push(
+        '',
+        '화면 배치가 앞에 붙인 그림과 같아 그림을 다시 붙이지 않았다. 아래 글자와 요소 목록이 지금 화면이다.',
+      )
     lines.push(
       '',
       '## 보이는 글자 (터미널 제외)',

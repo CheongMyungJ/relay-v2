@@ -247,6 +247,14 @@ textarea {
   color: var(--hot);
 }
 
+/* 진행 표시 (D216): 경과 시간과 마지막 동작. 머리 띠가 좁으면 뒤를 줄인다 */
+.activity {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
 .status {
   font-size: 11px;
   padding: 0 6px;
@@ -470,6 +478,43 @@ textarea {
   align-items: center;
   padding-top: 8px;
   border-top: 1px solid var(--border);
+}
+
+/* 카운트다운, 자동 승인하지 않은 까닭, 버튼 줄은 패널 아래에 붙여 둔다: 긴 diff가 밀어내지 않는다 (D224).
+   패널 좌우 여백까지 덮어 뒤로 지나가는 글을 가린다 */
+.review-bottom {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 -12px;
+  padding: 0 12px 10px;
+  background: var(--bg-side);
+  box-shadow: 0 -8px 8px -8px rgba(0, 0, 0, 0.6);
+}
+
+.review-bottom:empty {
+  display: none;
+}
+
+/* 사람이 할 일 (D222, D223) */
+.em-hint {
+  margin-top: 4px;
+  color: var(--text-dim);
+}
+
+/* [요약] 탭 맨 위의 이 단계 핵심 (D223) */
+.lead h4 {
+  margin: 6px 0 2px;
+  font-size: 12px;
+}
+
+/* 작업 브랜치와 커밋 (D225) */
+.branch-line {
+  margin-top: 4px;
+  overflow-wrap: anywhere;
 }
 
 .by-human {

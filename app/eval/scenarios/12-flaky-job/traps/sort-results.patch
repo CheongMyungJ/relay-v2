@@ -1,0 +1,15 @@
+diff --git a/src/collect/collector.js b/src/collect/collector.js
+index 1994b7c..74874c1 100644
+--- a/src/collect/collector.js
++++ b/src/collect/collector.js
+@@ -33,7 +33,9 @@ export function collectResults(jobs, outcomes) {
+   if (outcomes.length !== jobs.length) {
+     throw new Error(`결과 수(${outcomes.length})가 작업 수(${jobs.length})와 다릅니다`)
+   }
+-  return jobs.map((job, i) => toRecord(job, outcomes[i]))
++  // 결과는 끝난 순서로 오므로 작업 id 순서로 맞춘다
++  const ordered = [...outcomes].sort((a, b) => a.jobId.localeCompare(b.jobId, undefined, { numeric: true }))
++  return jobs.map((job, i) => toRecord(job, ordered[i]))
+ }
+ 
+ /** jobId → 기록 */

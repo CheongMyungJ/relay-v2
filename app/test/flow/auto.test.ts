@@ -21,6 +21,7 @@ import {
   RCA,
   fixDoc,
   handoff,
+  reviewClean,
   scenario,
   type Scenario,
   type Step,
@@ -45,8 +46,12 @@ interface Setup {
   tree(workKey: string): string
 }
 
-async function setup(s: Scenario, config: Partial<AppConfig>): Promise<Setup> {
-  h = await harness({ scenario: s, config })
+async function setup(
+  s: Scenario,
+  config: Partial<AppConfig>,
+  o: { productDefaults?: boolean } = {},
+): Promise<Setup> {
+  h = await harness({ scenario: s, config, ...o })
   const hh = h
   const { repo } = makeRepo(hh.root, 'sample', REPO_FILES)
   const projectId = await register(hh, repo)
@@ -132,7 +137,18 @@ function counted(s: Setup, workKey: string): string[] {
 const noticesOf = (s: Setup, workKey: string) =>
   s.h.ui.notices.filter((n) => n.workKey === workKey).map((n) => n.body)
 
-const ALL_AUTO = { investigate: true, evidence: true, rca: true, fix: true, respond: false }
+const ALL_AUTO = {
+  investigate: true,
+  evidence: true,
+  rca: true,
+  fix: true,
+  review: true,
+  respond: false,
+}
+
+/** 리뷰에 지적이 있어 자동 승인하지 않을 때의 알림 (D213) */
+const REVIEW_HELD =
+  '05 리뷰: 승인 대기 — 자동 승인하지 않음(리뷰에 지적이 있음 (반영할 지적은 사람이 고름))'
 
 /** 카운트다운이 끝나기 전에 [취소]할 수 있게 넉넉히 둔 카운트다운 */
 const LONG = 600
@@ -143,7 +159,7 @@ describe('[흐름] 자동 승인 (M7)', () => {
     const key = await s.create()
     const result = await drive(s.h.relay, s.h.ui, key, { size: 'L', awaitAuto: true })
     expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed' })
-    // 리뷰는 켤 수 있는 단계를 모두 켜도 수동 승인이다 (D167)
+    // 리뷰는 자동 승인을 켜도 지적이 있으면 사람이 승인한다 (D213). 기본 시나리오의 리뷰는 지적이 둘이다
     expect(result.tasks.map((t) => [t.label, t.auto])).toEqual([
       ['01 의도 정리', false],
       ['02 재현과 관찰', true],
@@ -192,12 +208,42 @@ describe('[흐름] 자동 승인 (M7)', () => {
       expect(notices).toContain(`${label}: 1초 뒤 자동 승인 (멈추려면 [취소])`)
     }
     expect(notices).not.toContain('02 재현과 관찰: 승인 대기')
-    // 리뷰는 카운트다운하지 않고 승인 대기를 알린다 (D167)
-    expect(notices).toContain('05 리뷰: 승인 대기')
+    // 지적이 있는 리뷰는 카운트다운하지 않고, 자동 승인하지 않은 까닭과 함께 승인 대기를 알린다 (D213)
+    expect(notices).toContain(REVIEW_HELD)
     expect(notices.some((n) => n.startsWith('05 리뷰: 1초 뒤'))).toBe(false)
     // 마무리 안내 문구는 수동과 자동을 한 문구에 적는다 (D132)
     const ctx = read(path.join(dir, 'tasks', '03-rca', 'context.md'))
     expect(ctx).toContain('자동 승인이 켜져 있으면 조건을 만족할 때 카운트다운 뒤 승인되고')
+    expect(ctx).toContain('자동 승인 (task를 시작할 때의 설정.')
+  })
+
+  it('앱의 기본값은 수정과 지적이 없는 리뷰를 자동 승인한다. 의도 승인과 Work 완료는 사람이 한다 (D213, D214)', async () => {
+    const s = await setup(
+      scenario('S', { review: reviewClean() }),
+      { auto_approve_countdown_sec: 1 },
+      { productDefaults: true },
+    )
+    const key = await s.create()
+    const result = await drive(s.h.relay, s.h.ui, key, { size: 'S', awaitAuto: true })
+    expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed' })
+    expect(result.tasks.map((t) => [t.label, t.auto])).toEqual([
+      ['01 의도 정리', false],
+      ['02 수정', true],
+      ['03 리뷰', true],
+      ['04 최종 검증', false],
+    ])
+    await settle(s.h, key)
+    const dir = s.dir(key)
+    expect(approvedBy(dir)).toEqual([
+      ['t-01', 'human'],
+      ['t-02', 'auto'],
+      ['t-03', 'auto'],
+      ['t-04', 'human'],
+    ])
+    expect(noticesOf(s, key)).toContain('03 리뷰: 1초 뒤 자동 승인 (멈추려면 [취소])')
+    // 리뷰의 마무리 안내 문구는 지적이 없을 때의 자동 승인을 함께 적는다 (D213)
+    const ctx = read(path.join(dir, 'tasks', '03-review', 'context.md'))
+    expect(ctx).toContain('지적이 없고 자동 승인이 켜져 있으면 카운트다운 뒤 승인되고')
     expect(ctx).toContain('자동 승인 (task를 시작할 때의 설정.')
   })
 
@@ -215,7 +261,14 @@ describe('[흐름] 자동 승인 (M7)', () => {
       { do: 'wait' },
     ]
     const s = await setup(scenario('S', { fix }), {
-      auto_approve: { investigate: false, evidence: false, rca: false, fix: true, respond: false },
+      auto_approve: {
+        investigate: false,
+        evidence: false,
+        rca: false,
+        fix: true,
+        review: false,
+        respond: false,
+      },
       auto_approve_countdown_sec: 4,
     })
     const key = await s.create()
@@ -308,7 +361,14 @@ describe('[흐름] 자동 승인 (M7)', () => {
       { do: 'stop' },
     ]
     const s = await setup(scenario('S', { fix }), {
-      auto_approve: { investigate: false, evidence: false, rca: false, fix: true, respond: false },
+      auto_approve: {
+        investigate: false,
+        evidence: false,
+        rca: false,
+        fix: true,
+        review: false,
+        respond: false,
+      },
       auto_approve_countdown_sec: 60,
     })
     const key = await s.create()
@@ -395,6 +455,7 @@ describe('[흐름] 자동 승인 (M7)', () => {
     expect(notices).toContain(
       '04 수정: 승인 대기 — 자동 승인하지 않음(의도와 어긋남(intent_deviation)이 있음)',
     )
+    expect(notices).toContain(REVIEW_HELD)
     await settle(s.h, key)
     const dir = s.dir(key)
     expect(approvedBy(dir).every(([, by]) => by === 'human')).toBe(true)
@@ -404,7 +465,14 @@ describe('[흐름] 자동 승인 (M7)', () => {
 
   it('Work 설정이 앱 설정보다 우선한다 (D72)', async () => {
     const s = await setup(scenario('S'), {
-      auto_approve: { investigate: false, evidence: false, rca: false, fix: false, respond: false },
+      auto_approve: {
+        investigate: false,
+        evidence: false,
+        rca: false,
+        fix: false,
+        review: false,
+        respond: false,
+      },
       auto_approve_countdown_sec: 1,
     })
     // 앱 설정은 꺼짐: Work A는 켜서 자동 승인, Work B는 앱 설정을 따라 사람 승인
@@ -448,7 +516,14 @@ describe('[흐름] 자동 승인 (M7)', () => {
       { do: 'wait' },
     ]
     const s = await setup(scenario('S', { fix }), {
-      auto_approve: { investigate: false, evidence: false, rca: false, fix: false, respond: false },
+      auto_approve: {
+        investigate: false,
+        evidence: false,
+        rca: false,
+        fix: false,
+        review: false,
+        respond: false,
+      },
       auto_approve_countdown_sec: LONG,
     })
     const key = await s.create()
@@ -503,7 +578,14 @@ describe('[흐름] 자동 승인 (M7)', () => {
 
   it('앱 설정을 바꾸면 상태가 그대로인 Work도 스냅샷을 다시 보내, 승인 화면이 새 설정으로 안내를 다시 읽는다 (D128)', async () => {
     const s = await setup(scenario('S'), {
-      auto_approve: { investigate: false, evidence: false, rca: false, fix: false, respond: false },
+      auto_approve: {
+        investigate: false,
+        evidence: false,
+        rca: false,
+        fix: false,
+        review: false,
+        respond: false,
+      },
       auto_approve_countdown_sec: LONG,
     })
     const key = await s.create()
@@ -578,6 +660,7 @@ describe('[흐름] 자동 승인 (M7)', () => {
           evidence: false,
           rca: false,
           fix: true,
+          review: false,
           respond: false,
         },
         auto_approve_countdown_sec: LONG,
@@ -646,6 +729,7 @@ describe('[흐름] 자동 승인 (M7)', () => {
           evidence: false,
           rca: false,
           fix: true,
+          review: false,
           respond: false,
         },
         auto_approve_countdown_sec: 5,
@@ -732,6 +816,7 @@ describe('[흐름] 자동 승인 (M7)', () => {
           evidence: false,
           rca: false,
           fix: true,
+          review: false,
           respond: false,
         },
         auto_approve_countdown_sec: LONG,

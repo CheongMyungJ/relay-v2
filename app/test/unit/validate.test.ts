@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { stringify } from 'yaml'
 import {
+  BOUNCE_HEAD,
   bounceMessage,
   checkHandoff,
   checkIntentDraft,
@@ -8,6 +9,7 @@ import {
   checkTask,
   isValid,
   parseFrontMatter,
+  reviewFindings,
   sectionNames,
 } from '../../src/core/validate'
 import { DEFAULT_CONFIG } from '../../src/shared/config'
@@ -527,18 +529,57 @@ describe('task 검사 (5.2.1)', () => {
   })
 })
 
+describe('리뷰 지적 읽기 (5.6.10, D213)', () => {
+  const review = (findings: string) =>
+    `## 지적\n${findings}\n\n## 반영\n없음\n\n## 반영하지 않은 지적\n없음\n`
+
+  it('번호 항목이 있으면 지적이 있고, "없음"이면 없다', () => {
+    expect(reviewFindings(review('1. [권장] src/a.js:2 — 주석을 단다'))).toBe(true)
+    expect(reviewFindings(review('1) [사소] src/a.js:3 — 이름을 바꾼다'))).toBe(true)
+    expect(reviewFindings(review('없음'))).toBe(false)
+    expect(reviewFindings(review('- 없음'))).toBe(false)
+    expect(reviewFindings(review('없음. 코드가 의도대로 동작한다'))).toBe(false)
+  })
+
+  it('절이 없거나 번호도 "없음"도 아니면 모른다(null). 모르면 자동 승인하지 않는다', () => {
+    expect(reviewFindings('## 반영\n없음\n')).toBeNull()
+    expect(reviewFindings(review('특별한 문제는 보이지 않는다'))).toBeNull()
+    // "없음" 뒤에 번호 없는 지적 목록이 이어지면 지적이 없다고 보지 않는다 (PR #19 리뷰)
+    expect(
+      reviewFindings(
+        review('없음 (차단 수준 지적 없음)\n- [권장] src/avg.js:2 — 빈 배열 검사를 함수 앞으로'),
+      ),
+    ).toBeNull()
+    expect(reviewFindings(review(''))).toBeNull()
+    // 코드 펜스 안의 제목은 절이 아니다
+    expect(reviewFindings('```\n## 지적\n없음\n```\n')).toBeNull()
+  })
+
+  it('task 검사는 review 노드에서만 review.md의 지적을 읽는다', () => {
+    expect(check('review', { 'review.md': review('없음') }).reviewFindings).toBe(false)
+    expect(check('review', { 'review.md': review('1. [차단] a — b') }).reviewFindings).toBe(true)
+    expect(check('review', {}).reviewFindings).toBeNull()
+    expect(check('fix', { 'review.md': review('없음') }).reviewFindings).toBeNull()
+  })
+})
+
 describe('되돌림 메시지 (D21, D87)', () => {
-  it('파일, 필드, 어긴 규칙을 적고 경고는 넣지 않는다', () => {
+  it('첫 줄은 사람도 읽는 안내이고, 파일, 필드, 어긴 규칙을 적고 경고는 넣지 않는다 (D220)', () => {
     const r = check('intake', {
       'handoff.md': handoff({ status: 'blocked', blocked_reason: null, extra_field: 1 }),
       'intent.draft.md': draft('type: bugfix\nsize: XL'),
     })
     const msg = bounceMessage(r)
-    expect(msg.split('\n').slice(1)).toEqual([
+    // Claude Code는 되돌림을 "Stop hook error: <첫 줄>"로 그린다
+    expect(msg.split('\n')[0]).toBe(
+      '[relay 형식 확인] 작업 결과와는 관계없고 handoff와 산출물의 형식만 고칩니다.',
+    )
+    expect(msg.split('\n')[0]).toBe(BOUNCE_HEAD)
+    expect(msg.split('\n')[1]).toContain('오류가 가리키는 파일을 고치고')
+    expect(msg.split('\n').slice(2)).toEqual([
       '- handoff.md: `blocked_reason` 없음: `status: blocked`일 때 필수',
       '- intent.draft.md: `size` 값이 허용값이 아님 (허용값: S | M | L, 지금: XL)',
     ])
     expect(msg).not.toContain('extra_field')
-    expect(msg.split('\n')[0]).toContain('오류가 가리키는 파일을 고치고')
   })
 })

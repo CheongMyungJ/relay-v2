@@ -71,6 +71,7 @@ function valid(o: Partial<Handoff> = {}, draftSize?: 'S'): TaskCheck {
     handoff,
     handoffHeader: handoff,
     intentDraft: draftSize ? { type: 'bugfix', size: draftSize } : null,
+    reviewFindings: null,
   }
 }
 

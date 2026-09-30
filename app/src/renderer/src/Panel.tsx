@@ -11,6 +11,7 @@
 import { useEffect, useState } from 'react'
 import type { NodeName, Size } from '../../shared/contracts'
 import type {
+  BranchInfo,
   CommandResult,
   CountdownView,
   DeliverResult,
@@ -20,10 +21,12 @@ import type {
   WorkView,
 } from '../../shared/views'
 import type { DeliveryChoice, UncommittedAction } from '../../shared/work'
+import { Activity } from './Activity'
 import { call } from './commands'
 import { ConfirmDialog, UncommittedDialog } from './dialogs'
 import { Diff, Markdown } from './Markdown'
 import { PrPanel } from './PrPanel'
+import { focusTerm } from './terminals'
 
 type Tab = 'summary' | 'artifacts' | 'changes' | 'verdicts' | 'work'
 
@@ -100,7 +103,7 @@ export function Panel({ work, task, review, onApproved, onSelectStep, onShowClea
       ) : null}
       {(work.status === 'completed' || (work.status === 'archived' && work.completedAt)) &&
       task.id === work.current ? (
-        <DoneNotice work={work} />
+        <DoneNotice work={work} branch={review.completion?.branch ?? null} />
       ) : null}
       {work.status === 'abandoned' ? (
         <div className="notice">Work 포기. 산출물과 worktree는 남아 있습니다.</div>
@@ -274,7 +277,8 @@ function Recovery({
 
 /**
  * 지금 task가 사람을 기다리는 까닭과 누를 수 있는 버튼 (시나리오 3-4, 3-5, 4.4, D18). PR 진행 중의 PR 대응 task는 [즉시
- * 중단]과 [재개]만 있다 (D182)
+ * 중단]과 [재개]만 있다 (D182). 중단됨의 [재개]는 이어서 하라고 알리고, [세션 재개]는 입력을 기다린다 (D218). 앱이 꺼져
+ * 끝난 세션은 그렇다고 보인다 (D219)
  */
 function TaskNotice({ task, pr }: { task: TaskView; pr: boolean }) {
   if (task.status === 'queued') {
@@ -285,14 +289,29 @@ function TaskNotice({ task, pr }: { task: TaskView; pr: boolean }) {
     )
   }
   if (task.status === 'interrupted') {
-    return <div className="notice">중단됨. [재개]하면 이어서 합니다.</div>
+    return (
+      <div className="notice">
+        {task.appEnded ? '앱이 꺼져 중단됐습니다. ' : '중단됨. '}
+        {task.hasSession
+          ? '[재개]하면 같은 대화를 다시 열고 하던 일을 이어서 하라고 알립니다.'
+          : '세션을 띄우지 못했습니다. [재개]하면 이 단계를 새 세션으로 시작합니다.'}
+      </div>
+    )
   }
   if (task.status === 'session_ended') {
     return (
       <div className="notice">
-        {pr
-          ? 'handoff 없이 세션이 끝났습니다. [세션 재개]로 대화를 이으세요.'
-          : 'handoff 없이 세션이 끝났습니다. [세션 재개]로 대화를 잇거나 [이 단계 새 세션으로 다시] 시작하세요.'}
+        handoff 없이 세션이 끝났습니다. [세션 재개]하면 같은 대화를 다시 엽니다. 에이전트는 입력을
+        기다리니 이어서 할 일을 터미널에 말하세요.
+        {pr ? null : ' 처음부터 다시 하려면 [이 단계 새 세션으로 다시]를 누르세요.'}
+      </div>
+    )
+  }
+  if (task.status === 'awaiting_approval' && !task.live && task.appEnded) {
+    return (
+      <div className="notice">
+        앱이 꺼지기 전에 산출물과 handoff를 다 썼습니다. 확인하고 승인하세요. 터미널의 옛 화면은
+        앱이 꺼질 때까지의 기록입니다.
       </div>
     )
   }
@@ -315,10 +334,17 @@ function TaskNotice({ task, pr }: { task: TaskView; pr: boolean }) {
   return null
 }
 
-/** 진행 중: handoff 상태, 형식 오류, 산출물 목록 */
+/** 진행 중: 형식 되돌림 안내(D220), 경과 시간과 마지막 동작(D216), handoff 상태, 형식 오류, 산출물 목록 */
 function Progress({ review, task }: { review: ReviewView; task: TaskView }) {
   return (
     <>
+      {task.bounceNotice ? <div className="notice">{task.bounceNotice}</div> : null}
+      {task.activity ? (
+        <section className="progress">
+          <h3>진행</h3>
+          <Activity activity={task.activity} />
+        </section>
+      ) : null}
       <section>
         <h3>handoff</h3>
         <div>
@@ -399,6 +425,10 @@ function Review({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
+  // 답하지 않은 열린 질문이 남은 채 [승인]하면 한 번 확인받는다 (D222)
+  const [asking, setAsking] = useState(false)
+  const questions = review.emphasis.find((e) => e.kind === 'open_questions')?.lines ?? []
+  const liveTask = work?.tasks.find((t) => t.id === review.taskId && t.live)
 
   const intake = review.node === 'intake'
   const gate = review.gates[intake ? (size ?? 'none') : 'none']
@@ -429,6 +459,7 @@ function Review({
     )
     setBusy(false)
     setConfirming(false)
+    setAsking(false)
     if (r.ok) onApproved?.()
     else setError(r.error)
   }
@@ -453,6 +484,13 @@ function Review({
                   <li key={j}>{l}</li>
                 ))}
               </ul>
+              {e.hint ? <div className="em-hint">{e.hint}</div> : null}
+              {/* 터미널에 포커스만 준다. 글을 넣지 않는다 (D222, 1.2) */}
+              {e.kind === 'open_questions' && liveTask && !readOnly ? (
+                <div className="notice-actions">
+                  <button onClick={() => focusTerm(liveTask.terminal)}>터미널에서 답하기</button>
+                </div>
+              ) : null}
             </div>
           ))}
         </section>
@@ -512,71 +550,85 @@ function Review({
         {tab === 'work' && review.completion ? <Diff text={review.completion.diff} /> : null}
       </div>
 
-      {!readOnly && countdown ? (
-        <Countdown countdown={countdown} busy={busy} onCancel={() => void cancel()} />
-      ) : null}
-      {!readOnly && review.autoApprove.hold ? (
-        <div className="notice auto-hold">{review.autoApprove.hold}</div>
-      ) : null}
-      {readOnly ? null : review.completion && work ? (
-        <CompletionActions
-          review={review}
-          work={work}
-          onApproved={onApproved}
-          onShowCleanup={onShowCleanup}
-          onForce={() => setConfirming(true)}
-        />
-      ) : (
-        <footer className="review-actions">
-          {intake ? (
-            <label className="size">
-              size
-              <select
-                aria-label="size"
-                value={size ?? ''}
-                onChange={(e) => setChosen((e.target.value || null) as Size | null)}
-              >
-                {size === null ? <option value="">고르세요</option> : null}
-                {SIZES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
-          <button
-            className="primary"
-            disabled={busy || cut || !gate.approve || !!respond?.blocked}
-            onClick={() => void approve(false)}
-          >
-            {approveLabel}
-          </button>
-          {gate.force ? (
-            <button className="danger" disabled={busy || cut} onClick={() => setConfirming(true)}>
-              오류 무시하고 승인
+      {/* 카운트다운, 까닭, 버튼 줄은 패널 아래에 붙여 둔다: 긴 diff가 밀어내지 않는다 (D224) */}
+      <div className="review-bottom">
+        {!readOnly && countdown ? (
+          <Countdown countdown={countdown} busy={busy} onCancel={() => void cancel()} />
+        ) : null}
+        {!readOnly && review.autoApprove.hold ? (
+          <div className="notice auto-hold">{review.autoApprove.hold}</div>
+        ) : null}
+        {readOnly ? null : review.completion && work ? (
+          <CompletionActions
+            review={review}
+            work={work}
+            questions={questions}
+            live={!!liveTask}
+            onApproved={onApproved}
+            onShowCleanup={onShowCleanup}
+            onForce={() => setConfirming(true)}
+          />
+        ) : (
+          <footer className="review-actions">
+            {intake ? (
+              <label className="size">
+                size
+                <select
+                  aria-label="size"
+                  value={size ?? ''}
+                  onChange={(e) => setChosen((e.target.value || null) as Size | null)}
+                >
+                  {size === null ? <option value="">고르세요</option> : null}
+                  {SIZES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            <button
+              className="primary"
+              disabled={busy || cut || !gate.approve || !!respond?.blocked}
+              onClick={() => (questions.length ? setAsking(true) : void approve(false))}
+            >
+              {approveLabel}
             </button>
-          ) : null}
-          {!gate.approve && gate.blocking.length ? (
-            <span className="error">
-              {respond
-                ? 'replies.md의 오류는 넘길 수 없습니다: 터미널에서 고치게 하세요 (D204)'
-                : 'intent 초안의 머리글 오류는 넘길 수 없습니다 (D90)'}
-            </span>
-          ) : null}
-          {respond?.blocked ? <span className="error">{respond.blocked}</span> : null}
-          {respond ? (
-            <span className="dim">
-              승인하면 push하고 답글 {respond.replies.filter((r) => !r.url && !r.skipped).length}
-              개를 게시합니다
-              {respond.deferred.length
-                ? ` (미룬 앞 라운드 ${respond.deferred.join(', ')}와 함께, D193)`
-                : ''}
-            </span>
-          ) : null}
-        </footer>
-      )}
-      {error ? <div className="error">{error}</div> : null}
+            {gate.force ? (
+              <button className="danger" disabled={busy || cut} onClick={() => setConfirming(true)}>
+                오류 무시하고 승인
+              </button>
+            ) : null}
+            {!gate.approve && gate.blocking.length ? (
+              <span className="error">
+                {respond
+                  ? 'replies.md의 오류는 넘길 수 없습니다: 터미널에서 고치게 하세요 (D204)'
+                  : 'intent 초안의 머리글 오류는 넘길 수 없습니다 (D90)'}
+              </span>
+            ) : null}
+            {respond?.blocked ? <span className="error">{respond.blocked}</span> : null}
+            {respond ? (
+              <span className="dim">
+                승인하면 push하고 답글 {respond.replies.filter((r) => !r.url && !r.skipped).length}
+                개를 게시합니다
+                {respond.deferred.length
+                  ? ` (미룬 앞 라운드 ${respond.deferred.join(', ')}와 함께, D193)`
+                  : ''}
+              </span>
+            ) : null}
+          </footer>
+        )}
+        {error ? <div className="error">{error}</div> : null}
+      </div>
+      {asking ? (
+        <OpenQuestionsDialog
+          questions={questions}
+          live={!!liveTask}
+          confirm={approveLabel}
+          onConfirm={() => void approve(false)}
+          onClose={() => setAsking(false)}
+        />
+      ) : null}
       {confirming ? (
         <ConfirmDialog
           title="오류 무시하고 승인"
@@ -594,6 +646,20 @@ function Review({
               </li>
             ))}
           </ul>
+          {/* 열린 질문이 함께 남았으면 이 확인 창에서 같이 알린다 (D222) */}
+          {questions.length ? (
+            <>
+              <p>
+                답하지 않은 열린 질문 {questions.length}개도 있습니다: 에이전트는 가정으로
+                진행합니다.
+              </p>
+              <ul>
+                {questions.map((q, i) => (
+                  <li key={i}>{q}</li>
+                ))}
+              </ul>
+            </>
+          ) : null}
         </ConfirmDialog>
       ) : null}
     </div>
@@ -631,8 +697,21 @@ function Countdown({
 }
 
 function Summary({ review }: { review: ReviewView }) {
+  const lead = review.lead
   return (
     <>
+      {lead ? (
+        <section className="lead">
+          <h3>{lead.title}</h3>
+          {lead.sections.map((s) => (
+            <div key={s.title}>
+              <h4>{s.title}</h4>
+              <Markdown text={s.text} />
+            </div>
+          ))}
+          {lead.hint ? <div className="em-hint">{lead.hint}</div> : null}
+        </section>
+      ) : null}
       <section>
         <h3>요약</h3>
         {review.summary ? <Markdown text={review.summary} /> : <div className="dim">없음</div>}
@@ -815,7 +894,7 @@ const MERGE_LABEL: Readonly<Record<string, string>> = {
 }
 
 /** 완료한 Work의 전달과 결과 링크 (시나리오 7-4, 7-6). PR 진행으로 끝났으면 머지나 끝낸 것을 보인다 (D178, D179) */
-function DoneNotice({ work }: { work: WorkView }) {
+function DoneNotice({ work, branch }: { work: WorkView; branch: BranchInfo | null }) {
   const d = work.delivery?.status === 'succeeded' ? work.delivery : null
   const pr = work.pr
   // 밖에서 머지될 때 승인했지만 push·게시를 미룬 라운드(D193)는 머지에 들어가지 않았다
@@ -823,6 +902,7 @@ function DoneNotice({ work }: { work: WorkView }) {
   return (
     <div className="notice done">
       Work 완료 (전달: {d ? d.label : '완료만'})
+      {branch ? <BranchLine work={work} branch={branch} /> : null}
       {pr?.merged ? (
         <div>
           PR #{pr.number} 머지됨 (
@@ -865,6 +945,31 @@ function DoneNotice({ work }: { work: WorkView }) {
   )
 }
 
+/**
+ * 작업 브랜치와 기준 뒤 커밋, 마지막 커밋, worktree (D225): 끝났을 때 어디에 무엇이 남았는지 보인다.
+ * 예: "작업 브랜치 relay/w-20260930-001: 기준(main 3943005e) 뒤 커밋 2개, 마지막 1a2b3c4d fix: 빈 배열의 평균은 0"
+ */
+function BranchLine({ work, branch }: { work: WorkView; branch: BranchInfo }) {
+  const base = `${work.baseBranch} ${work.baseCommit.slice(0, 8)}`
+  return (
+    <div className="branch-line dim">
+      <div>
+        작업 브랜치 <code>{branch.name}</code>: 기준({base}) 뒤 커밋 {branch.ahead}개
+        {branch.last ? (
+          <>
+            , 마지막 <code>{branch.last.sha}</code> {branch.last.subject}
+          </>
+        ) : null}
+      </div>
+      {branch.worktree ? (
+        <div>
+          worktree: <code>{branch.worktree}</code>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function LinkLine({ label, url }: { label: string; url: string }) {
   return (
     <div className="link-line">
@@ -890,18 +995,26 @@ function LinkLine({ label, url }: { label: string; url: string }) {
 function CompletionActions({
   review,
   work,
+  questions,
+  live,
   onApproved,
   onShowCleanup,
   onForce,
 }: {
   review: ReviewView
   work: WorkView
+  /** 답하지 않은 열린 질문 (D222) */
+  questions: readonly string[]
+  /** 최종 검증의 세션이 살아 있다 */
+  live: boolean
   onApproved: (() => void) | undefined
   onShowCleanup: (() => void) | undefined
   onForce: () => void
 }) {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // 답하지 않은 열린 질문이 남은 채 완료하거나 전달하면 한 번 확인받는다 (D222). 누른 버튼과 할 일을 둔다
+  const [asking, setAsking] = useState<{ label: string; go: () => void } | null>(null)
   // 커밋 안 된 변경이 있어 고를 것 (7-5)
   const [pending, setPending] = useState<{ choice: DeliveryChoice; files: string[] } | null>(null)
   const c = review.completion
@@ -969,6 +1082,22 @@ function CompletionActions({
     if (!r.ok) setError(r.error)
   }
 
+  /** 열린 질문이 있으면 확인 창을 거쳐 한다 */
+  const ask = (label: string, go: () => void) => () =>
+    questions.length ? setAsking({ label, go }) : go()
+  const askingDialog = asking ? (
+    <OpenQuestionsDialog
+      questions={questions}
+      live={live}
+      confirm={asking.label}
+      onConfirm={() => {
+        setAsking(null)
+        asking.go()
+      }}
+      onClose={() => setAsking(null)}
+    />
+  ) : null
+
   // 승인하면 Work가 멈추는 동안은 전달하지 않는다(main의 deliveryStart도 거부). 전달로 잇는 버튼을 끈다
   const stopping = c.mode === 'stop'
   const cleanupNotice = cleanup ? (
@@ -1017,7 +1146,7 @@ function CompletionActions({
           <button
             className="primary"
             disabled={!!busy || open || cut || !gate.approve}
-            onClick={() => void complete()}
+            onClick={ask('승인하고 멈춤', () => void complete())}
           >
             승인하고 멈춤
           </button>
@@ -1030,6 +1159,7 @@ function CompletionActions({
           {error ? <span className="error">{error}</span> : null}
         </footer>
         {cleanupNotice}
+        {askingDialog}
       </div>
     )
   }
@@ -1041,18 +1171,20 @@ function CompletionActions({
     <button
       disabled={!!busy || open || !ready || !c.buttons[choice].enabled}
       title={c.buttons[choice].reason ?? ''}
-      onClick={() => void deliver(choice, null)}
+      onClick={ask(DELIVERY_BUTTON[choice], () => void deliver(choice, null))}
     >
       {DELIVERY_BUTTON[choice]}
     </button>
   )
   return (
     <div className="completion-actions">
+      {/* 전달을 고르기 전에 작업 브랜치에 무엇이 남았는지 보인다 (D225) */}
+      {c.branch ? <BranchLine work={work} branch={c.branch} /> : null}
       <footer className="review-actions">
         <button
           className="primary"
           disabled={!!busy || open || !ready}
-          onClick={() => void complete()}
+          onClick={ask('완료만', () => void complete())}
         >
           완료만
         </button>
@@ -1110,6 +1242,45 @@ function CompletionActions({
           onClose={() => setPending(null)}
         />
       ) : null}
+      {askingDialog}
     </div>
+  )
+}
+
+/**
+ * 답하지 않은 열린 질문을 두고 승인하거나 전달할 때의 확인 창 (D222). 세션이 없으면 [세션 재개]를 먼저 누르라고 한다
+ */
+function OpenQuestionsDialog({
+  questions,
+  live,
+  confirm,
+  onConfirm,
+  onClose,
+}: {
+  questions: readonly string[]
+  live: boolean
+  confirm: string
+  onConfirm: () => void
+  onClose: () => void
+}) {
+  return (
+    <ConfirmDialog
+      title="답하지 않은 열린 질문"
+      confirm={confirm}
+      onConfirm={onConfirm}
+      onClose={onClose}
+    >
+      <p>답하지 않은 열린 질문 {questions.length}개: 에이전트는 가정으로 진행합니다.</p>
+      <ul>
+        {questions.map((q, i) => (
+          <li key={i}>{q}</li>
+        ))}
+      </ul>
+      <p className="dim">
+        {live
+          ? '답하려면 [취소]하고 가운데 터미널에 쓰세요.'
+          : '답하려면 [취소]하고 [세션 재개]를 누른 뒤 가운데 터미널에 쓰세요.'}
+      </p>
+    </ConfirmDialog>
   )
 }

@@ -5,6 +5,7 @@ import type { AppConfig, WorkSettingsPatch } from './config'
 import type { NodeName } from './contracts'
 import type { ProjectSettings } from './project'
 import type {
+  ActivityUpdate,
   AppSnapshot,
   ApproveOptions,
   CleanInput,
@@ -52,6 +53,8 @@ export interface RelayApi {
   appInfo(): Promise<AppInfo>
   snapshot(): Promise<AppSnapshot>
   onWork(cb: (work: WorkView) => void): () => void
+  /** 도구 훅으로 바뀐 진행 표시 (D216). 스냅샷보다 자주 온다 */
+  onActivity(cb: (update: ActivityUpdate) => void): () => void
   onProjects(cb: (projects: ProjectView[]) => void): () => void
   /** 폴더 선택 창. 취소하면 null */
   pickFolder(): Promise<string | null>
@@ -147,6 +150,7 @@ export const IPC = {
   appInfo: 'app:info',
   snapshot: 'app:snapshot',
   work: 'app:work',
+  activity: 'app:activity',
   projects: 'app:projects',
   pickFolder: 'project:pick-folder',
   inspectProject: 'project:inspect',

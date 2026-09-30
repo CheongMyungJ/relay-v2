@@ -26,12 +26,16 @@ if (argv[0] === 'login') {
 
 const config = new Map()
 let resumeId = null
+let resumePrompt = null
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === '-c') {
     const v = argv[++i]
     const eq = v.indexOf('=')
     config.set(v.slice(0, eq), v.slice(eq + 1))
-  } else if (argv[i] === 'resume') resumeId = argv[++i]
+  } else if (argv[i] === 'resume') {
+    resumeId = argv[++i]
+    resumePrompt = argv[i + 1] ?? null
+  }
 }
 const field = (table, key) => {
   const literal = new RegExp(`"${key}"\\s*=\\s*("(?:\\\\.|[^"\\\\])*"|\\[[^\\]]*\\])`).exec(
@@ -159,9 +163,13 @@ const filled = (value) =>
 async function steps(list) {
   for (const step of list) {
     console.log(`[가짜 codex] ${step.do}`)
-    if (step.do === 'prompt')
-      await hook('UserPromptSubmit', { prompt: '사람 요청', permission_mode: 'bypassPermissions' })
-    else if (step.do === 'ask') {
+    if (step.do === 'prompt') {
+      await hook('UserPromptSubmit', {
+        prompt: resumePrompt ?? '사람 요청',
+        permission_mode: 'bypassPermissions',
+      })
+      resumePrompt = null
+    } else if (step.do === 'ask') {
       const waiting = rpc('tools/call', {
         name: 'ask_human',
         arguments: {

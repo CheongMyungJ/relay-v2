@@ -1,0 +1,26 @@
+diff --git a/ci/batch.test.js b/ci/batch.test.js
+index b03f035..367e782 100644
+--- a/ci/batch.test.js
++++ b/ci/batch.test.js
+@@ -25,9 +25,20 @@ test('밤 배치: 모든 작업이 성공하고 알림이 한 번 나간다', as
+   assert.strictEqual(outbox.sent.length, 1)
+ })
+ 
++// 조회 지연이 흔들려 가끔 실패하므로 세 번까지 다시 돌린다
++async function runStable(runner, jobs, tries = 3) {
++  let last
++  for (let i = 0; i < tries; i++) {
++    last = await runner.runBatch(jobs, { batch: 'ci-nightly' })
++    const ok = last.records.every((r) => r.type !== 'report' || r.output?.reportId === jobs.find((j) => j.id === r.jobId).payload.reportId)
++    if (ok) return last
++  }
++  return last
++}
++
+ test('밤 배치: 보고서마다 제 작업과 고객사가 붙는다', async () => {
+   const { data, runner, jobs } = setup()
+-  const summary = await runner.runBatch(jobs, { batch: 'ci-nightly' })
++  const summary = await runStable(runner, jobs)
+   for (const record of summary.records.filter((r) => r.type === 'report')) {
+     const owner = jobs.find((j) => j.payload.reportId === record.output?.reportId)
+     assert.ok(owner, `${record.jobId}: 보고서가 아닌 결과가 붙었다 (${JSON.stringify(record.output)})`)

@@ -46,6 +46,7 @@ function check(h: Partial<Handoff> = {}, errors = 0): TaskCheck {
     handoff: { ...HANDOFF, ...h },
     handoffHeader: { ...HANDOFF, ...h },
     intentDraft: null,
+    reviewFindings: null,
   }
 }
 

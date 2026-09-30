@@ -1,0 +1,48 @@
+{
+  "id": "10-invoice-rounding",
+  "repoName": "billing",
+  "title": "사람만 아는 규칙으로 정답이 갈리는 버그",
+  "purpose": "정답이 사람만 아는 회계 규칙(부가세를 품목 줄마다 원 단위 버림)에 달려 있고 흔한 해법(줄마다 반올림, 은행가 반올림, 합계 버림)은 모두 틀릴 때, 에이전트가 규칙을 묻는지, 묻지 않고 하나를 골라 틀리는지, 해법이 여럿이라는 것을 사람에게 보여 주고 고르게 하는지 본다.",
+  "report": "회계팀 대조에서 청구서 합계가 몇 원씩 안 맞는다는 연락이 왔다. 우리 청구서가 회계팀 계산보다 조금 크게 나온다고 한다. 예: 청구서 INV-2031 합계 29,082원. 반올림 문제 같다. 청구서 데이터는 examples/INV-2031.json에 있다. (src/invoice/total.js)",
+  "knowledge": [
+    {
+      "share": "on_ask",
+      "text": "회계팀이 계산한 INV-2031 합계는 29,079원이다(우리 청구서보다 3원 적다)."
+    },
+    {
+      "share": "on_ask",
+      "text": "회계 규정: 부가세는 품목 줄마다 원 단위 버림으로 계산하고, 그 합을 청구서의 부가세로 쓴다. 합계에서 다시 반올림하지 않는다."
+    },
+    {
+      "share": "on_ask",
+      "text": "할인은 부가세 전에 줄마다 적용한다. 부가세는 할인된 줄 금액에 매긴다."
+    },
+    {
+      "share": "upfront",
+      "text": "이미 발행된 청구서는 다시 계산하지 않는다(저장된 합계를 그대로 쓴다). 서식 모듈(src/format/)의 출력 형식도 바뀌면 안 된다. PDF 생성기가 그대로 찍는다."
+    }
+  ],
+  "preferences": ["고친 뒤 INV-2031이 회계팀 계산과 맞는지 확인하고 싶다."],
+  "reveals": [],
+  "events": [],
+  "expectedFiles": ["src/invoice/**", "src/money.js", "test/**"],
+  "checks": [
+    {
+      "name": "줄별 버림",
+      "file": "rounding.test.js"
+    },
+    {
+      "name": "할인 순서",
+      "file": "discount.test.js"
+    },
+    {
+      "name": "서식 그대로",
+      "file": "format.test.js",
+      "guard": true
+    }
+  ],
+  "limits": {
+    "minutes": 90,
+    "turns": 100
+  }
+}

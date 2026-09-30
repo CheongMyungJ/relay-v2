@@ -1,0 +1,43 @@
+diff --git a/src/lib/money.js b/src/lib/money.js
+index baab4ce..78cf92d 100644
+--- a/src/lib/money.js
++++ b/src/lib/money.js
+@@ -1,6 +1,8 @@
+ // 금액 문자열 공통 처리. 원장의 금액은 '1,200', '₩3,000', '12.50'처럼 문자열로 온다
++// 회계식 괄호 표기 '(1,200)'은 음수로, '-1,200'과 같다. ₩와 공백은 괄호 안팎 어디에나 올 수 있다
++// 모든 리포트가 이 함수로 금액을 읽는다
+ 
+-const AMOUNT = /^(-?)\(?(\d+(?:\.\d+)?)\)?$/
++const AMOUNT = /^(?:(-)?(\d+(?:\.\d+)?)|(\()(\d+(?:\.\d+)?)\))$/
+ 
+ export function parseAmount(text) {
+   if (typeof text === 'number') return text
+@@ -8,8 +10,9 @@ export function parseAmount(text) {
+   if (s === '') return 0
+   const m = AMOUNT.exec(s)
+   if (!m) throw new Error(`금액 형식이 아님: ${text}`)
+-  const n = Number(m[2])
+-  return m[1] ? -n : n
++  const negative = Boolean(m[1] || m[3])
++  const n = Number(m[2] ?? m[4])
++  return negative ? -n : n
+ }
+ 
+ export function sumAmounts(list) {
+diff --git a/test/money.test.js b/test/money.test.js
+index 24f44bd..0d79878 100644
+--- a/test/money.test.js
++++ b/test/money.test.js
+@@ -30,3 +30,12 @@ test('금액 글자로', () => {
+   assert.strictEqual(formatWon(-1200, { sign: 'paren' }), '(₩1,200)')
+   assert.strictEqual(formatWon(12.5), '₩12.50')
+ })
++
++test('괄호 음수', () => {
++  assert.strictEqual(parseAmount('(1,200)'), -1200)
++  assert.strictEqual(parseAmount('₩(3,000)'), -3000)
++  assert.strictEqual(parseAmount('(₩ 450)'), -450)
++  assert.strictEqual(parseAmount(' ( 12.50 ) '), -12.5)
++  assert.throws(() => parseAmount('(1,200'))
++  assert.throws(() => parseAmount('-(1,200)'))
++})

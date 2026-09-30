@@ -69,14 +69,14 @@ export function approvalGate(
 export type ApprovalMode = 'manual' | 'auto'
 
 /**
- * 자동 승인을 켤 수 있는 노드인가. intake(의도 승인), review(D167), verify(Work 완료)는 늘 수동이다 (4.2). PR 대응은 다른
- * 단계처럼 켤 수 있다 (D169)
+ * 자동 승인을 켤 수 있는 노드인가. intake(의도 승인)와 verify(Work 완료)는 늘 수동이다 (4.2). 리뷰는 지적이 없을 때만
+ * 자동 승인한다 (D213). PR 대응은 다른 단계처럼 켤 수 있다 (D169)
  */
 export function autoApprovable(node: TaskNode): node is AutoApproveNode {
   return (AUTO_APPROVE_NODES as readonly TaskNode[]).includes(node)
 }
 
-/** 승인 방식. intake, review, verify는 항상 수동이고, Codex는 수동이다. Claude의 나머지는 Work 설정, 앱 설정 순서로 본다 (4.2, D72, D167, D169) */
+/** 승인 방식. intake와 verify는 항상 수동이고, Codex는 수동이고, Claude의 나머지는 Work 설정, 앱 설정 순서로 본다 (4.2, D72, D169, D213) */
 export function approvalMode(
   config: Pick<AppConfig, 'auto_approve'>,
   settings: WorkSettings,
@@ -101,8 +101,11 @@ export interface AutoApproveInput {
   node: TaskNode
   /** 승인된 intent의 크기. 기본 다음 단계를 정한다 (3.2) */
   size: Size
-  /** 판정하는 때의 형식 검사. 머리글(handoffHeader)에서 조건을 읽는다 */
-  check: CheckSummary & { handoffHeader?: Handoff | null }
+  /**
+   * 판정하는 때의 형식 검사. 머리글(handoffHeader)에서 조건을 읽는다. 리뷰는 review.md의 지적 유무(reviewFindings)도
+   * 읽는다 (D213)
+   */
+  check: CheckSummary & { handoffHeader?: Handoff | null; reviewFindings?: boolean | null }
   /** Stop 때 백그라운드 작업이나 예약된 깨우기가 남아 있었다 (pendingBackground, D129) */
   background: boolean
 }
@@ -110,7 +113,8 @@ export interface AutoApproveInput {
 /**
  * 자동 승인 조건 (4.3, D129)에서 어긴 것. 비어 있으면 모두 만족한다:
  * handoff 형식이 유효하고 awaiting_approval, open_questions가 비어 있음, intent_deviation이 없음,
- * recommended_next가 null이거나 기본 다음 단계, Stop 때 백그라운드 작업과 예약된 깨우기가 없음.
+ * recommended_next가 null이거나 기본 다음 단계, Stop 때 백그라운드 작업과 예약된 깨우기가 없음, 리뷰면 review.md의 지적이
+ * "없음"(D213. 지적이 있거나 읽지 못하면 사람이 지적을 고르고 승인한다, D164).
  * "턴이 끝난 뒤 새 요청이 없음"은 machine이 새 요청(UserPromptSubmit)을 받으면 카운트다운을 멈추는 것으로 지킨다.
  * 모든 조건은 에이전트가 쓴 내용과 에이전트의 세션이다(D7). 커밋 안 된 변경은 조건이 아니다(승인 화면의 경고).
  */
@@ -126,6 +130,7 @@ export function autoApproveHolds(input: AutoApproveInput): AutoHoldReason[] {
     out.push('recommended_next')
   }
   if (input.background) out.push('background')
+  if (input.node === 'review' && check.reviewFindings !== false) out.push('review_findings')
   return out
 }
 
@@ -137,6 +142,7 @@ export const AUTO_HOLD_LABEL: Readonly<Record<AutoHoldReason, string>> = {
   background: '턴이 끝날 때 백그라운드 작업이나 예약된 깨우기가 남아 있었음',
   completion_unknown: 'Codex의 미완료 작업 여부를 확인할 수 없어 사람이 승인해야 함',
   invalid: '다시 읽은 handoff가 유효하지 않음',
+  review_findings: '리뷰에 지적이 있음 (반영할 지적은 사람이 고름)',
   cancel: '[취소]를 누름',
   interrupt: '[즉시 중단]을 누름',
   quit: '카운트다운 중에 앱을 끔',

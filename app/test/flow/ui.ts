@@ -1,7 +1,13 @@
 // 시험의 가짜 화면 (I26). 창과 알림, 렌더러로 보내기 대신 받은 것을 모은다. [흐름]과 [실제]가 쓰고,
 // [실제]의 앱 역할 프로세스(test/claude/app-process.mjs)도 쓰므로 __dirname 같은 CommonJS 값을 쓰지 않는다.
 import type { Notice, UiPort } from '../../src/main/ports'
-import type { ProjectView, TerminalChunk, WorkView } from '../../src/shared/views'
+import type {
+  ActivityUpdate,
+  ActivityView,
+  ProjectView,
+  TerminalChunk,
+  WorkView,
+} from '../../src/shared/views'
 
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
@@ -13,12 +19,32 @@ export class FakeUi implements UiPort {
   projectList: ProjectView[] = []
   readonly output = new Map<string, string>()
   readonly notices: Notice[] = []
+  /** 도구 훅으로 따로 온 진행 표시 (D216). 받은 것 전부는 activityLog에 남는다 */
+  readonly activities = new Map<string, ActivityView | null>()
+  readonly activityLog: ActivityUpdate[] = []
   private readonly listeners = new Set<() => void>()
 
   work(view: WorkView): void {
     this.works.set(view.key, view)
     this.history.push(view)
+    // 스냅샷의 진행 표시가 그 앞에 따로 온 것보다 새것이다 (렌더러와 같다, D216)
+    for (const k of [...this.activities.keys()]) {
+      if (k.startsWith(`${view.key}|`)) this.activities.delete(k)
+    }
     this.wake()
+  }
+
+  activity(update: ActivityUpdate): void {
+    this.activities.set(`${update.workKey}|${update.taskId}`, update.activity)
+    this.activityLog.push(update)
+    this.wake()
+  }
+
+  /** 렌더러가 보일 진행 표시: 스냅샷 뒤에 따로 온 것이 있으면 그것, 없으면 스냅샷의 값 */
+  activityOf(workKey: string, taskId: string): ActivityView | null {
+    const key = `${workKey}|${taskId}`
+    if (this.activities.has(key)) return this.activities.get(key) ?? null
+    return this.works.get(workKey)?.tasks.find((t) => t.id === taskId)?.activity ?? null
   }
 
   projects(views: ProjectView[]): void {

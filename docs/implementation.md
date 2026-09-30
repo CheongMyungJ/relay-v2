@@ -154,6 +154,8 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | 턴의 훅 | 턴마다 오는 훅은 UserPromptSubmit, Stop, StopFailure다. UserPromptSubmit은 사람이 프롬프트를 제출할 때 Claude가 처리하기 전에 온다. Stop은 Claude가 응답을 마칠 때 오고, 사람이 Esc로 끊으면 오지 않으며, API 오류로 끝나면 StopFailure가 대신 온다. 자동 이벤트(아래 완료 알림)로 시작한 턴에 UserPromptSubmit이 오는지는 문서에 없다 | Claude Code 문서 hooks (2026-09-27) |
 | Stop의 백그라운드 작업 | Stop 본문에는 `background_tasks`(도는 셸, 서브에이전트 등)와 `session_crons`(`/loop`, `CronCreate`, `ScheduleWakeup`의 예약된 깨우기)가 있어, "세션이 끝남"과 "백그라운드 작업이 다시 깨우기를 기다리며 쉬는 중"을 가른다. task 목록을 읽을 수 있으면 늘 있고 없으면 빈 배열이다. 2.1.145에서 더해졌다 | Claude Code 문서 hooks, changelog (2026-09-27) |
 | 백그라운드 서브에이전트 | 대화형 세션은 fork 모드가 기본으로 켜져 있어 Claude가 띄운 서브에이전트를 백그라운드에서 돌린다. 그 결과는 나중 턴에 완료 알림으로 오고, 알림은 사람의 메시지가 아니라 자동 이벤트로 표시된다. `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`이면 포그라운드에서 돌린다. 백그라운드 셸은 Claude Code가 끝날 때 함께 정리된다 | Claude Code 문서 sub-agents, interactive-mode (2026-09-27) |
+| 실패한 도구의 훅 | 도구가 실패하면 PostToolUse 대신 PostToolUseFailure가 온다("Run after tool fails"). 입력은 `tool_name`, `tool_input`, `tool_use_id`, `error`, `error_type`, `is_interrupt`, `is_timeout`이다. 서브에이전트 안에서 온 훅에는 `agent_id`와 `agent_type`이 있다 | Claude Code 2.1.285의 훅 설명 (2026-09-30, PR #19 리뷰) |
+| 대화 기록의 토큰 | Claude Code는 메시지 하나를 대화 기록에 여러 줄로 나눠 쓰고, 앞 줄의 `usage.output_tokens`는 아직 다 세지 않은 값이다(예: 같은 id가 6 → 6 → 4209). 메시지 id마다 마지막 줄을 센다 | 2.1.285의 대화 기록 (2026-09-30, PR #19 리뷰) |
 | 웹 세션의 GitHub 프록시 | Anthropic이 운영하는 클라우드 세션의 GitHub 요청은 GitHub 프록시를 지난다. `gh`는 자리 표시자 토큰(`proxy-injected`)으로 부르면 프록시가 자격 증명을 넣는다. API 요청은 세션에 붙인 레포에만 닿는다. GraphQL은 정해 둔 PR 작업만 받고 나머지는 403(`This GraphQL query is not enabled for this session`)이며, 사용자가 준 `GH_TOKEN`도 같다. 2026-09-29에 이 레포의 웹 세션에서 붙인 레포(relay-v2)의 REST는 200, 붙이지 않은 시험용 레포는 403, GraphQL(`viewer{login}`)은 403이었다. 문서는 gh가 미리 설치돼 있다고 하지만 이 세션에는 없었고, Actions 로그가 내려오는 `productionresultssa2.blob.core.windows.net`은 프록시가 CONNECT를 403으로 막았다 | Claude Code 문서 cloud-environments(GitHub proxy, Work with GitHub issues and pull requests), 이 세션에서 실행 (2026-09-29) |
 | Claude Code 설치와 CI 인증 | Linux 네이티브 설치는 `curl -fsSL https://claude.ai/install.sh \| bash`이고 실행 파일은 `~/.local/bin/claude`다. `claude setup-token`은 브라우저로 승인한 뒤 1년짜리 OAuth 토큰을 찍고(저장하지 않음) `CLAUDE_CODE_OAUTH_TOKEN`으로 쓴다. 구독(Pro, Max, Team, Enterprise)으로 인증하고 모델 요청만 한다. 인증의 우선순위는 `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_API_KEY`, `apiKeyHelper`, `CLAUDE_CODE_OAUTH_TOKEN`, `/login` 차례다 | Claude Code 문서 setup, authentication (2026-09-29) |
 
@@ -252,6 +254,7 @@ app/src/
 - 첫 목표인 최소 흐름은 M2다(I22).
 - M3가 끝나면 실제 버그에 쓰기 시작하고, 쓰면서 나온 불편으로 M4~M7의 순서를 다시 정한다(I24).
 - 설계 v0.5의 확장은 M8 → M9 → M10 → M11 차례다(I41). M9 전에 스파이크 S7을 돌린다(I42).
+- 사용성 평가(`docs/eval-findings.md`)에서 나온 개선은 M12에 모은다. 개선점마다 사람이 반영할지와 방법을 정한다(설계 v0.6).
 - 완료 기준 앞의 꼬리표는 확인 방법이다: [단위], [어댑터], [흐름], [스모크], [실제], [실기]. 뜻은 8.1을 따른다. [실제]와 [실기]의 결과는 `docs/checks.md`에 기록한다(I30).
 
 | # | 이름 | 한 줄 요약 | 선행 |
@@ -268,6 +271,7 @@ app/src/
 | M9 | PR 진행 | PR 진행 상태, 읽기, 항목 보기, 머지, 머지 뒤 정리. 에이전트 없음 | 스파이크 S7(I42) |
 | M10 | PR 대응 | 사람이 누르는 [대응 시작], PR 대응 task, 승인 뒤 push와 답글, CI 재실행 | |
 | M11 | 자동 대응 | 대응 자동 시작과 자동 승인, 라운드 상한, 닫힌 PR의 push·게시 막기(D208) | |
+| M12 | 사용성 평가 반영 | 평가에서 나온 개선점 가운데 사람이 고른 것(D212~) | 사용성 평가 |
 
 ### M0. 골격과 배포
 
@@ -640,7 +644,7 @@ app/src/
 **내용**
 
 - 대응 자동 시작(D154)과 PR 대응의 자동 승인(D169)의 앱 설정과 Work별 덮어쓰기, 라운드 상한(D171), 재시작 규칙(D159), 알림(D184).
-- 새 설정(5.1.1): `respond_auto_start`(기본 끔, Work별 덮어쓰기 있음), `respond_auto_round_max`(기본 3, 1~20 **(기본값)**, 덮어쓰기 없음), `auto_approve.respond`(기본 끔, 덮어쓰기 있음). 설정 화면, 새 Work 대화상자, [Work 설정]에서 바꾼다. [Work 설정]은 PR 진행 중에도 받는다(D209).
+- 새 설정(5.1.1): `respond_auto_start`(기본 끔, Work별 덮어쓰기 있음), `respond_auto_round_max`(기본 3, 1~20 **(기본값)**, 덮어쓰기 없음), `auto_approve.respond`(기본 끔, 덮어쓰기 있음). 설정 화면, 새 Work 대화상자, [Work 설정]에서 바꾼다(M12의 D226부터 대응 자동 시작은 새 Work 대화상자에 없다). [Work 설정]은 PR 진행 중에도 받는다(D209).
 - 자동 시작: 앱이 PR을 읽어 받은 새 항목이 생길 때만 시작한다(D210). 넣는 항목은 제외하지 않은 새 항목 전부이고(D170), 시작하기 전에 [대응 시작]처럼 기준 브랜치와 PR 브랜치를 fetch하고 원격만 앞섰으면 받는다(시나리오 10-3). 대응 task가 도는 동안 받은 항목은 그 라운드가 끝나면 바로 시작한다. 앱을 켤 때 읽은 것(D159), 자동 시작을 켤 때, [받기]·[다시 넣기]로는 시작하지 않는다.
 - 라운드 셈(D171, D191의 "자동 라운드 수"): `work.json`의 `pr.auto_rounds`다. 자동 시작할 때 1 더하고, 사람이 [대응 시작]이나 대응 task의 승인([다시 시도] 포함)을 누르면 0으로 돌린다. 다음 자동 시작이 상한을 넘게 되면(셈이 상한 이상) 시작하지 않고 멈춘다: `pr.auto_paused`(5.5), 알림(D184), 배지 "자동 대응 멈춤"(D183). 그래서 사람 손 없이 이어지는 라운드는 상한까지다. 자동 승인이 꺼져 있으면 사람이 라운드마다 승인하므로 멈추지 않는다.
 - PR 대응의 자동 승인(D169): 다른 단계처럼 4.3의 조건, 카운트다운과 [취소], 턴마다 다시 판정(D128~D131), 재시작 경로는 자동 승인하지 않음(D75, D127). 기존 테스트 변경(D202)은 조건이 아니다. 닫힌 PR은 승인을 받지 않으므로(D179) 카운트다운하지 않고 까닭을 보인다. 승인 기록은 `approved_by: auto`, `task.approved`의 `by: auto`, `decisions.md`의 "(자동 승인)"이다.
@@ -658,7 +662,7 @@ app/src/
 
 **구현하며 정한 것** (설계의 규칙에서 따라 나오는 세부. 계획 때 사람이 정한 것은 D208~D210, I55이고, PR #17 리뷰로 정한 것은 D211이다)
 
-- **설정(5.1.1, D72):** `respond_auto_start`는 참·거짓이고, `respond_auto_round_max`는 1~20의 정수다 **(기본값)**. 0은 자동 시작을 끈 것과 같아 받지 않는다. Work 설정의 대응 자동 시작은 `true`·`false`로 덮어쓰고 `null`을 보내면 지워 앱 설정을 따른다(자동 승인과 질문 방식의 빈 객체와 같은 뜻). 켜져 있는지는 Work 설정, 앱 설정 차례로 본다. 설정 화면은 "자동 대응 (PR 진행)" 절에 대응 자동 시작과 자동 대응 라운드 상한을 두고, PR 대응의 자동 승인은 자동 승인 목록에 "PR 대응"으로 더한다. 새 Work 대화상자와 [Work 설정]은 대응 자동 시작을 "앱 설정 따름 / 켜기 / 끄기"로 고른다. [Work 설정]은 진행 중, 멈춤, PR 진행인 Work의 액션 바에 있다(D209).
+- **설정(5.1.1, D72):** `respond_auto_start`는 참·거짓이고, `respond_auto_round_max`는 1~20의 정수다 **(기본값)**. 0은 자동 시작을 끈 것과 같아 받지 않는다. Work 설정의 대응 자동 시작은 `true`·`false`로 덮어쓰고 `null`을 보내면 지워 앱 설정을 따른다(자동 승인과 질문 방식의 빈 객체와 같은 뜻). 켜져 있는지는 Work 설정, 앱 설정 차례로 본다. 설정 화면은 "자동 대응 (PR 진행)" 절에 대응 자동 시작과 자동 대응 라운드 상한을 두고, PR 대응의 자동 승인은 자동 승인 목록에 "PR 대응"으로 더한다. 새 Work 대화상자와 [Work 설정]은 대응 자동 시작을 "앱 설정 따름 / 켜기 / 끄기"로 고른다(M12의 D226부터 [Work 설정]에서만). [Work 설정]은 진행 중, 멈춤, PR 진행인 Work의 액션 바에 있다(D209).
 - **자동 시작의 판정(D154, D170, D171):** `core/respond`의 `autoPlan`이 가른다. 꺼짐(버림), PR 진행이 아니거나 넣을 새 항목이 없음(버림), 기다림(끝나지 않은 대응 task, 진행 중 작업, 닫힌 PR. [대응 시작]을 막는 것과 같다), 멈춤(셈이 상한 이상), 시작(제외하지 않은 새 항목 전부, 다음 라운드) 차례다.
 - **자동 시작의 계기(D159, D210):** 앱을 켤 때가 아닌 읽기가 받은 새 항목이 있고 그때 자동 시작이 켜져 있으면 main이 자동 대응을 바라 둔다. 받은 새 항목은 처음 받은 코멘트와 조건 항목, 해소됨에서 새 항목으로 돌아온 조건 항목이다(읽기가 만든 새 항목). 바람은 메모리에만 두어 앱을 끄면 사라진다(D159). 앱을 켤 때의 읽기는 반영에 성공한 첫 읽기다: 켤 때의 읽기가 실패하거나(네트워크, gh 오류) 끊긴 작업 때문에 읽지 못하면, 반영에 성공한 읽기가 나올 때까지(주기 읽기, [새로 고침], 작업이 끝난 뒤의 읽기) 켤 때의 읽기처럼 알리지 않고 바라지 않는다. 그래서 꺼져 있던 동안 쌓인 항목으로는 자동 시작하지 않는다(PR #17 리뷰). 전이가 끝날 때마다와 읽기를 반영한 뒤 판정하고, 기다림이면 남겨 막힘이 풀리는 전이에서 다시 본다. 그래서 도는 라운드에 들어온 항목은 그 라운드의 게시가 끝나면 바로 시작하고, 닫힌 PR로 기다리던 것은 다시 열린 것을 읽으면 시작한다. 시작은 [대응 시작]과 같은 도우미(`main/work.ts`의 `fetchForRound`, `startRound`)로 한다: 기준 브랜치와 PR 브랜치를 처리 줄 밖에서 fetch하고(실패해도 시작), 줄에서 다시 판정한 뒤 정리 세션이 열려 있지 않은지 보고(D137) 원격만 앞섰으면 받고, `pr.respond`에 `auto`를 붙여 넣고, 받은 커밋과 대응 중이 된 항목을 적는다. 시작하지 못하면(원격 커밋을 받지 못함, 정리 세션, machine이 받지 않음) 알린다. machine은 자동 시작이 꺼졌거나 상한이면 받지 않는다.
 - **라운드 셈(D171, D191):** `work.json`의 `pr.auto_rounds`다. 자동 시작의 `pr.respond`가 1 더하고, 사람의 `pr.respond`와 사람이 누른 대응 task의 승인(자동으로 시작한 라운드의 승인과 [다시 시도] 포함)이 0으로 돌린다. 자동 승인은 바꾸지 않는다. 기록이 없으면 0이고, 0에서 0으로 돌릴 때는 적지 않는다(M11 전의 Work를 건드리지 않음). 멈춤은 따로 적지 않고 설정, 셈, 새 항목으로 정한다: 상한을 올리거나 새 항목을 모두 제외하면 풀린다.
@@ -669,6 +673,84 @@ app/src/
 - **화면:** PR 패널의 대응 절 맨 위(지시 입력란 앞)에 자동 대응 한 줄을 둔다: 대응 자동 시작과 PR 대응 자동 승인이 켜졌는지와 어디서 정했는지(이 Work, 앱 설정. 자동 승인은 실제 자동 승인과 같은 `approvalMode`로 정한다), 사람 손 없이 이어진 라운드와 상한(`r/상한`), 멈춤이면 그 까닭과 [대응 시작]으로 다시 센다는 안내.
 - **context.md(시나리오 2-4):** 자동으로 시작한 라운드의 사람 지시는 "없음: 앱이 받은 새 항목으로 자동으로 시작한 라운드다"이고, 승인 방식은 다른 단계처럼 설정을 따른다("… 승인하면 앱이 push하고 답글을 게시한다"를 붙임). 머리 띠 이유는 "자동 대응"이다.
 - **시험:** [단위] `test/unit/auto-respond.test.ts`. [흐름] `test/flow/pr-auto.test.ts`(가짜 gh, 가짜 claude의 task id별 단계와 입력 대기로 닫는 때를 맞춤). [실제] `test/claude/pr-auto.test.ts`(경우 `pr-auto`, 8.4). `RELAY_REAL_CLAUDE=dry`는 가짜 gh와 감싸개를 거친 가짜 claude로 시험 도구만 돈다.
+
+### M12. 사용성 평가 반영
+
+사용성 평가(`docs/eval.md`, 보고서 `app/eval/reports/`)에서 뽑은 개선점(`docs/eval-findings.md`)을 사람이 하나씩 보고 반영할지와 방법을 정한다. 정한 것과 상태는 `docs/eval-findings.md`의 반영 현황에 적는다.
+
+**내용**
+
+- **R1 절차 무게:** 크기 기준을 좁힌다(D212). 리뷰도 자동 승인을 켤 수 있고 지적이 없을 때만 자동 승인한다(D213). 앱 설정의 자동 승인 기본값은 수정과 리뷰를 켠다(D214). 크기를 고를 때 경로를 보이는 것은 하지 않기로 했다.
+- **R2 검은 화면과 진행 표시:** 새 세션의 터미널에 표시 줄을 넣는다(D215). 작업 중인 task의 머리 띠와 패널에 경과 시간과 마지막 도구를 보인다(D216). 세션마다 첫 PTY 출력과 첫 훅까지 걸린 시간을 기록한다(D217). 평가 도구는 경과 시간을 화면이 멈췄는지의 판정에서 뺀다(`docs/eval.md`).
+- **R3 재개 뒤 멈춤:** 중단됨 task의 [재개]는 이어서 하라는 첫 입력을 준다(D218). [세션 재개]는 입력 없이 연다. 앱이 꺼져 끝난 세션은 기록에 남기고 `pty.log` 끝에 표시 줄을 적으며, 패널이 그렇다고 안내한다(D219).
+- **R4 Stop hook error 노출:** 되돌림을 `task.bounced`로 기록하고, 되돌림 메시지 첫 줄을 사람도 읽게 쓰며, 되돌린 동안 패널에 안내한다(D220). handoff 템플릿에 따옴표 규칙과 채운 예시를 둔다(D221).
+- **R6 열린 질문과 [요약]:** 열린 질문에 답할 곳 안내와 [터미널에서 답하기], 남은 질문을 두고 승인할 때의 확인(D222). [요약] 탭 맨 위의 단계 핵심(D223). 바뀐 파일 표시는 하지 않기로 했다.
+- **R5 버튼 밀림:** 카운트다운, 까닭, 버튼 줄을 패널 아래에 붙인다(D224).
+- **R7 완료 뒤 브랜치:** Work 완료 화면과 완료 알림에 작업 브랜치와 커밋, worktree를 보인다(D225).
+- **R8 새 Work 창:** 이 Work의 자동 승인과 질문 방식을 고급 설정 하나로 접고, 대응 자동 시작은 뺀다([Work 설정]에 남음, D226).
+- **R9 에이전트 토큰:** 줄이기 전에 평가 보고서에 relay의 단계별 에이전트 토큰과 `context.md` 크기를 보인다(`docs/eval.md`). 줄일 곳은 R1·R4의 효과와 함께 다음 평가에서 고른다.
+- **평가 도구:** E2 걸린 시간에서 사람 역할의 응답 시간을 가르고 기다리기만 한 차례를 센다. E10 스크린샷을 줄여 배치가 바뀐 차례에만 붙인다. E3·E4·E5·E6·E8·E9와 카운트다운을 멈춤 판정에서 빼는 안은 사람이 고르지 않아 하지 않았다.
+
+**완료 기준**
+
+- R1 [단위] 리뷰 지적 읽기(`## 지적`의 번호 항목, "없음", 읽지 못함), 리뷰의 자동 승인 조건과 까닭, 자동 승인을 켤 수 없는 단계(의도 승인, Work 완료), 앱 설정의 기본값, 리뷰의 마무리 안내 문구와 승인 방식.
+- R1 [흐름] 앱의 기본값으로 S Work가 수정과 지적 없는 리뷰를 자동 승인하고 의도 승인과 Work 완료는 사람이 한다. 지적이 있는 리뷰는 자동 승인을 켜도 까닭을 알리고 사람이 승인한다.
+- R1 [실기] 설정 화면, 새 Work 대화상자, [Work 설정]의 자동 승인 목록에 리뷰가 있고, 지적 없는 리뷰가 카운트다운 뒤 승인되며, 지적이 있으면 승인 화면에 까닭이 보인다(목록은 `docs/checks.md` M12).
+- R2 [단위] 훅 설정(모든 도구에 검), 도구 이름과 인자(작업 폴더 안의 상대 경로, 여러 줄, 긴 인자), 첫 출력과 첫 훅의 기록과 앞 세션 알림 무시.
+- R2 [흐름] 새 세션의 터미널과 `pty.log`가 표시 줄로 시작한다. 수정 task가 세션을 띄우는 중 → 도구 실행 중 → 도구 끝남을 보이고, 도구 훅의 진행 표시는 스냅샷과 따로 오며 훅에는 빈 본문으로 답한다. `events.jsonl`에 세션마다 첫 출력과 첫 훅이 있다.
+- R2 [실기] 실제 `claude`에서 머리 띠와 패널의 진행 표시가 도구마다 바뀌고, 에이전트가 눈에 띄게 늦어지지 않는다. 표시 줄이 CLI의 첫 화면 앞에 보인다(목록은 `docs/checks.md` M12).
+- R3 [단위] [재개]의 첫 입력(중단됨만, 사람이 끊었는지 앱이 꺼졌는지에 따른 문구), 재개 인자, 앱이 꺼져 끝난 세션의 기록(앱 종료 확인, 재시작 조정)과 다시 열 때 지우기. [어댑터] `pty.log` 끝의 표시 줄(한 번만, 덜 쓴 UTF-8 지우기).
+- R3 [흐름] [즉시 중단] 뒤 [재개]한 세션이 사람 입력 없이 이어서 일해 승인 대기가 된다. 앱을 끄고 다시 켜면 중단됨·승인 대기에 앱이 꺼져 끝났다는 표시가 있고 `pty.log` 끝에 표시 줄이 한 번 있으며, [재개]는 앱이 꺼져 끊겼다고 알린다.
+- R3 [실제] `test/claude/restart.test.ts`: 앱을 SIGKILL로 끈 뒤 [재개]하면 실제 `claude`가 사람 입력 없이 이어서 일해 Work 완료까지 간다(`--resume <id> "<입력>"`이 첫 요청이 되는지, 스파이크 S6의 덧붙임).
+- R3 [실기] 앱을 끄고 다시 켠 뒤 [재개]하면 에이전트가 이어서 일한다. 옛 화면 끝에 표시 줄이 보이고, 승인 대기면 안내가 보인다(목록은 `docs/checks.md` M12).
+- R4 [단위] `task.bounced`의 몇 번째·상한·오류, 되돌림 메시지 첫 줄, 패널 안내(작업 중인 동안만), 채운 handoff 예시가 앱 검사기를 통과하고 따옴표를 빼면 실패함. [흐름] 되돌림의 첫 줄, `task.bounced`, 고치는 동안의 안내와 고친 뒤 사라짐. 스킬 정적 검사가 채운 예시와 따옴표 규칙을 대조한다.
+- R4 [실기]와 평가: 되돌림이 나면 터미널의 "Stop hook error:" 뒤가 "[relay 형식 확인] …"이고 패널에 안내가 보인다. 다음 평가에서 `task.bounced`로 흔한 오류를 센다.
+- R5·R6·R7 [단위] 열린 질문의 안내, [요약] 맨 위의 단계 핵심(의도 초안의 size와 절, 리뷰 지적, 다른 단계는 없음). [흐름] 의도 정리와 리뷰의 `lead`, 열린 질문의 `hint`, Work 완료 화면과 완료 뒤의 `completion.branch`(브랜치, 기준 뒤 커밋 1개, 마지막 커밋, worktree). [스모크] 열린 질문의 안내와 [터미널에서 답하기](터미널에 포커스), 승인 확인 창, 고정된 버튼 줄(`position: sticky`), [요약]의 의도 초안과 리뷰 지적, 완료 알림의 작업 브랜치 줄.
+- R8 [스모크] 새 Work 대화상자에 고급 설정 펼침 하나가 있고, 펼치면 이 Work의 자동 승인과 질문 방식이 있으며 자동 대응은 없다. [실기]는 `docs/checks.md` M12.
+- R9·E2·E10 평가 도구: 보고서가 새 결과와 예전 결과(`run.json`에 새 값이 없음)로 만들어진다. 다음 평가 실행에서 단계별 표와 새 줄이 채워지고 스크린샷이 줄어드는지 본다.
+
+**구현하며 정한 것**
+
+- **리뷰 지적 읽기(D213):** `core/validate`의 `reviewFindings`가 `review.md`의 `## 지적` 절을 읽는다(코드 펜스 안의 제목은 절이 아니다). 번호 항목(`1.`, `1)`)이 하나라도 있으면 지적이 있고, 번호 항목 없이 "없음"(목록 표시 `-`를 붙여도 됨)으로 시작하면 없다. 절이 없거나 둘 다 아니면 모른다(null). task 검사(`TaskCheck.reviewFindings`)는 review 노드에서만 읽는다. 자동 승인은 없을 때(false)만 하고, 지적이 있거나 모르면 까닭 `review_findings`("리뷰에 지적이 있음 (반영할 지적은 사람이 고름)")를 남기고 알린다(사람이 누르지 않았는데 사람이 필요해짐, D130). 지적을 고른 뒤 다시 마무리해도 `## 지적`에 지적이 남으므로 사람이 승인한다(D164).
+- **설정(5.1.1):** `auto_approve`에 `review`가 생기고 기본값은 `fix`와 `review`만 `true`다. 설정 파일에 값이 없으면 기본값을 쓰므로, 설정 화면에서 저장한 적이 있는 사람은 저장한 값(대개 `fix: false`, `review` 없음 → 기본값 켬)을 쓴다. 켤 수 없는 단계의 오류 문구는 "(의도 승인, Work 완료는 늘 수동)"이다.
+- **context.md(시나리오 2-4):** 리뷰의 마무리 안내 문구에 "지적이 없고 자동 승인이 켜져 있으면 카운트다운 뒤 승인되고, 멈추려면 [취소]를 누르세요."를 더한다. 승인 방식은 다른 단계처럼 설정을 따르고 "리뷰는 지적이 없을 때만 자동 승인한다"를 붙인다.
+- **크기 기준(D212):** work-start 스킬의 Size 절을 고치고 `skills/check.mjs`에 D212 대조를 더한다. 앱 코드는 바뀌지 않는다.
+- **시험의 기본 설정:** [단위]의 상태 전이와 [흐름]·[실제]의 도구(`test/flow/harness.ts`)는 자동 승인을 모두 끈 설정(`MANUAL`)을 기본으로 쓴다. 기존 시험이 보던 사람 승인의 길을 그대로 보고, 앱의 기본값은 `productDefaults`로 켠 시험에서 본다.
+- **화면:** 설정 화면, 새 Work 대화상자, [Work 설정]의 자동 승인 목록에 리뷰가 생기고, 안내 문구에 "리뷰는 지적이 없을 때만 자동 승인합니다"를 더한다. 지적이 있는 리뷰의 까닭은 다른 까닭처럼 승인 화면의 `notice auto-hold`에 보인다.
+- **시험(R1):** [단위] `test/unit/validate.test.ts`, `approval.test.ts`, `config.test.ts`, `context.test.ts`, `machine.test.ts`. [흐름] `test/flow/auto.test.ts`(앱의 기본값, 지적이 있는 리뷰의 알림). [스모크] `test/smoke/app.spec.ts`(설정 화면의 기본값, 지적이 있는 리뷰의 까닭).
+- **진행 표시의 길(R2, D216):** main의 `hookArrived`가 훅을 받으면 먼저 진행 표시를 바꾼다. UserPromptSubmit은 턴이 시작한 때를 두고 도구를 지운다. PreToolUse는 마지막 도구를 두고, PostToolUse는 끝난 때를 둔다(`tool_use_id`가 있으면 그것으로, 없으면 도구 이름으로 맞춘다). 질문 도구가 아닌 도구의 훅은 처리 줄에 넣지 않고 빈 본문으로 바로 답하며, `UiPort.activity`(IPC `app:activity`, 렌더러의 `onActivity`)로 따로 보낸다. Work 스냅샷의 `TaskView.activity`에도 같은 값이 있고, 렌더러는 그 Work의 스냅샷이 오면 따로 온 값을 지운다(같은 창으로 차례대로 온다). 정리 세션은 도구 훅을 쓰지 않아 바로 답한다. 진행 표시는 작업 중인 task만이다.
+- **보이는 모양(D216):** `renderer/src/Activity.tsx`. 경과 시간은 1초마다 세고 `data-tick`을 붙인다. 머리 띠는 상태 옆에, 패널은 진행 중 화면 맨 위의 "진행" 절에 둔다. 도구 이름은 `core/review`의 `toolLabel`이 입력에서 인자 하나(`command`, `file_path`, `notebook_path`, `pattern`, `url`, `query`, `description` 차례)를 골라 만든다.
+- **시각 기록(D217):** 첫 PTY 출력(core/review의 `hasVisibleText`로 제어 문자와 이스케이프 시퀀스만 있는 출력은 뺀다)과 첫 훅을 받으면 main이 `session.timing`을 처리 줄에 넣고, core는 pid가 그 task의 지금 세션과 같을 때만 `task.first_output`, `task.first_hook`을 남긴다. 세션을 띄우는 처리가 줄 안에서 돌므로 늘 `task.started`(재개는 `task.resumed`) 뒤에 온다.
+- **표시 줄(D215):** `startSession`이 `launch`에 넘긴다(재개의 `RESUME_MARK`와 같은 길). 띄우기 전(스킬 배포, `claude --version`, context.md)에는 터미널이 아직 없고, 진행 표시가 "세션을 띄우는 중"을 보인다.
+- **평가 도구:** `eval/lib/relay-arm.mjs`의 `pollText`가 `[data-tick]`을 잠깐 가리고 화면 글자를 읽는다. 사람 역할이 보는 글자(`visibleText`)와 스크린샷에는 그대로 있다.
+- **시험(R2):** [단위] `test/unit/settings.test.ts`(모든 도구), `review.test.ts`(도구 이름), `machine.test.ts`(시각 기록). [흐름] `test/flow/activity.test.ts`. 가짜 `claude`의 `tool` 단계에 `input`, `ms`와 `tool_use_id`를 더했다(`ask`도 `tool_use_id`를 보낸다). 이벤트 목록을 통째로 보는 기존 [흐름] 시험에 두 이벤트를 넣었다.
+- **[재개]의 첫 입력(R3, D218):** core의 `resume`이 `resumeTask` 할 일에 `continue`(중단됨이면 참)를 싣고, main은 그것을 task마다 두었다가(대기열에서 기다려도 남는다) `resumeSession`이 `resumeArgs`의 맨 뒤에 `continuePrompt`를 넣는다. 문구는 세션 기록의 `app_ended`가 있으면 "앱이 꺼져 세션이 끊겼다가", 없으면 "사람이 [즉시 중단]한 세션이"로 시작한다. 가짜 `claude`는 `--resume`과 함께 받은 입력을 실제 `claude`처럼 첫 요청(UserPromptSubmit)으로 바로 보낸 뒤 resume 시나리오를 한다.
+- **앱이 꺼져 끝난 세션(R3, D219):** `TaskSession.app_ended`는 core가 둔다: 앱 종료 확인의 `endTask`가 `quit`, 재시작 조정이 살아 있던 세션에 `restart`. `sessionResumed`가 지운다. `pty.log`의 표시 줄은 main이 적는다: 앱을 끄는 동안(`closing`) 끝낸 세션은 `release`에서, 앱이 끝내지 못한 세션은 `reconcile`에서 `WorkFiles.appendPtyMark`로 적는다. 이미 그 줄로 끝나면 다시 적지 않고, 충돌로 끝에 덜 쓴 UTF-8 문자가 있으면 그 바이트를 지운다. 화면에는 `TaskView.appEnded`로 알리고, 패널의 안내가 중단됨("앱이 꺼져 중단됐습니다")과 승인 대기("앱이 꺼지기 전에 산출물과 handoff를 다 썼습니다")를 가른다. [세션 재개]의 안내는 입력을 기다린다고 바로잡았다.
+- **시험(R3):** [단위] `settings.test.ts`(재개 인자와 문구), `machine.test.ts`(`continue`, `app_ended`), `respond.test.ts`. [어댑터] `store.test.ts`(`appendPtyMark`, `partialUtf8`). [흐름] `control.test.ts`([재개]가 이어서 일함, 앱 종료 확인 뒤 다시 켬, 충돌 뒤 다시 켬). [스모크] 중단됨 안내와 [재개] 뒤 작업 중. [실제] `restart.test.ts`는 사람이 "이어서"를 치지 않고, `resume.test.ts`는 첫 입력의 턴이 끝난 뒤 표식을 묻는다.
+- **되돌림 기록과 안내(R4, D220):** core `stop`이 되돌릴 때 `blockStop` 앞에 `task.bounced`(`attempt`, `max`, `errors`의 `file`·`message`)를 남긴다. 되돌림 메시지의 첫 줄은 `BOUNCE_HEAD`다. 패널 안내는 `core/review`의 `bounceNotice`가 만들어 `TaskView.bounceNotice`로 보내고, 진행 중 화면 맨 위에 보인다. 작업 중이고 되돌린 횟수가 1 이상일 때만이다.
+- **템플릿(R4, D221):** `skills/_common.md`의 handoff 템플릿 아래에 따옴표 규칙과 값을 채운 예시(머리글과 본문)를 둔다. `skills/check.mjs`가 예시의 스키마 통과, 필드, 본문의 절, 글 값의 따옴표, 규칙 문장(D221)을 본다. [단위] `templates.test.ts`는 예시가 앱 검사기를 통과하고, 따옴표를 뺀 반례가 실패하는 것을 본다.
+- **시험(R4):** [단위] `machine.test.ts`(되돌림 기록), `validate.test.ts`(첫 줄), `review.test.ts`(안내), `templates.test.ts`(채운 예시와 반례). [흐름] `flow.test.ts`의 되돌림 시험.
+- **열린 질문(R6, D222):** 안내 문구는 `core/review`의 `OPEN_QUESTIONS_HINT`로, 강조 영역 항목의 `hint`에 싣는다. [터미널에서 답하기]는 렌더러의 `focusTerm`이 그 task의 xterm에 포커스만 준다(세션이 살아 있을 때만 보인다). 확인 창은 렌더러가 강조 영역의 열린 질문으로 띄운다. API로 승인하는 [흐름]과 [실제]의 사람 역할에는 없다.
+- **[요약] 맨 위(R6, D223):** `core/review`의 `stageLead`가 파일에서 만든다: intake는 `intent.draft.md`의 머리글 `size`와 `## 목표`·`## 비목표`·`## 완료조건`(머리글을 읽지 못해도 절은 보인다), review는 `review.md`의 `## 지적`과 `REVIEW_LEAD_HINT`. `ReviewView.lead`로 보낸다.
+- **버튼 줄(R5, D224):** 승인 화면의 카운트다운·까닭·버튼 줄(Work 완료 화면이면 `CompletionActions` 전체)을 `.review-bottom`으로 감싸 `position: sticky; bottom: 0`으로 둔다. 감싼 것이 `.review`의 바로 아래 자식이어야 긴 본문에서도 붙는다. 비었으면(읽기 전용) 가린다.
+- **작업 브랜치(R7, D225):** main의 `branchInfo`가 메인 체크아웃에서 `relay/<work-id>`를 읽는다: 기준 커밋 뒤 커밋 수(`rev-list --count`), 마지막 커밋(짧은 해시와 제목), worktree가 있으면 그 경로. `Completion.branch`로 Work 완료 화면(`CompletionActions` 위)과 완료 알림(`DoneNotice`)에 보인다. 브랜치가 없으면 null이다.
+- **시험(R5·R6·R7):** [단위] `review.test.ts`(열린 질문의 안내, `stageLead`). [흐름] `flow.test.ts`의 새 시험. [스모크] 두 Work의 첫 intake(`t-01`)에 열린 질문 하나를 남기게 하고 위 화면을 본다.
+- **새 Work 대화상자(R8, D226):** `dialogs.tsx`의 `NewWorkDialog`가 펼침 하나("고급 설정 (나중에 [Work 설정]에서도 바꿀 수 있음)") 안에 제목을 달아 자동 승인과 질문 방식을 둔다. 대응 자동 시작의 상태와 `respond_auto_start`를 보내는 코드를 뺐다. [Work 설정]과, 만들 때 고르지 않은 값은 앱 설정을 따르는 것(D72)은 그대로다.
+- **단계별 토큰(R9):** `eval/lib/util.mjs`의 `agentUsageBySession`이 에이전트 설정 폴더의 대화 기록을 세션 id(파일 이름 `<id>.jsonl`, 그 아래 `<id>/`의 서브에이전트 기록도 넣음)마다 더한다. 같은 메시지 id는 처음 본 세션에만 센다. `relay-arm.mjs`의 `works()`가 task마다 순번, 세션 id, `context.md` 글자 수를 남기고, `episode.mjs`가 둘을 맞춰 `run.json`의 `agentSteps`에 둔다. `report.mjs`는 시나리오마다 "relay 단계별 에이전트" 표(단계마다 task 수와 task 하나의 입력(캐시 포함)·캐시 쓰기·출력 토큰, `context.md` 글자의 평균)를 만든다. 대화 기록을 찾지 못한 세션은 빼고 센다.
+- **사람 역할 시간(E2):** `run.json`의 `human.ms`는 차례마다 사람 역할이 답하는 데 쓴 시간의 합, `human.waitOnlyTurns`는 행동이 `wait`뿐이거나 없는 차례 수다. 보고서는 "사람 역할 응답 시간", "걸린 시간 − 사람 역할 응답", "기다리기만 한 차례"를 보이고, 예전 결과는 `turns.jsonl`의 차례 기록에서 센다.
+- **스크린샷(E10):** `relay-arm.mjs`의 `shot`이 메인 프로세스의 `capturePage`로 찍은 창을 1000픽셀 너비로 줄인다(안 되면 창 크기 그대로 찍는다). `observe`는 배치 열쇠(누를 수 있는 요소의 역할·이름·선택·켜짐·비활성·화면 밖, 열린 대화상자)를 함께 돌려주고, `human.mjs`는 앞에 붙인 그림과 열쇠가 다를 때만 그림을 붙인다. 붙이지 않은 차례에는 그렇다고 적고, 글자와 요소 목록은 늘 준다. 붙인 차례 수는 `human.images`와 보고서의 "스크린샷을 붙인 차례"다. 찍은 파일(`shots/`)은 차례마다 남는다.
+- **시험(R8·R9·E2·E10):** [스모크] 두 번째 Work의 새 Work 대화상자. 평가 도구는 시험이 없어, 가짜 결과 폴더(새 `run.json`과 `human.ms`가 없는 예전 `run.json`·`turns.jsonl`)로 보고서를 만들어 새 줄과 단계별 표를 봤고, 빌드한 앱에서 `shot`이 1000픽셀 너비의 PNG를 쓰는 것을 봤다.
+- **PR #19 리뷰 대응:** 사람이 PR에 남긴 지적 13개를 모두 고쳤다. Work 완료 화면의 전달 버튼까지 열린 질문을 물을지는 사람이 정했다(D222를 넓힘).
+  - 따옴표 규칙에 역슬래시를 더했다(`\\`로 쓰고 경로는 `/`로, D221). `check.mjs`가 대조하고 `templates.test.ts`가 반례(`\c`는 형식 오류, `\t`는 TAB)를 본다.
+  - 평가 도구의 토큰은 `agentUsage`와 `agentUsageBySession`이 함께 쓰는 `scanUsage`가 메시지 id마다 마지막 줄로 센다(R9). 메시지가 없는 세션은 0이다.
+  - `reviewFindings`는 "없음"으로 시작하는 한 줄뿐일 때만 지적이 없다고 본다(D213).
+  - core의 UserPromptSubmit이 `bounce_count`를 0으로 돌린다(D220).
+  - 진행 표시(D216): 훅에 PostToolUseFailure를 더해 실패한 도구도 끝난 것으로 본다. 실패한 질문 도구는 core에 PostToolUse로 넘겨 질문 대기를 끝낸다. `agent_id`가 있는 도구 훅(서브에이전트)은 도구 칸을 바꾸지 않는다. "세션을 띄우는 중"은 `launchTask`가 자리를 잡은 때(`launchedAt`)부터 센다.
+  - 첫 출력(D217)은 core/review의 `hasVisibleText`로 보이는 글자가 있는 출력부터 잰다.
+  - `apply`: 상태가 그대로이고 할 일이 `log`뿐인 전이(세션 시각)는 work.json을 쓰지 않고 스냅샷도 보내지 않는다.
+  - `ASK_TOOL`은 core/machine이 export하고 main이 쓴다.
+  - 화면: 세션 기록이 없는 중단됨(`TaskView.hasSession`)의 [재개] 안내(D218). 세션이 없을 때 열린 질문의 안내(`OPEN_QUESTIONS_HINT_NO_SESSION`)와 확인 창 문구, [오류 무시하고 승인] 확인 창의 열린 질문(D222). 열린 질문 확인 창은 `OpenQuestionsDialog` 하나로 두고, Work 완료 화면(`CompletionActions`)의 [완료만]·[push]·[PR 생성]·[승인하고 멈춤]도 이 창을 거친다. 끊긴 전달의 [다시 시도]와 정리 세션의 [정리 끝 → push/PR 진행]은 이미 고른 전달을 잇는 것이라 묻지 않는다.
+  - 시험: [단위] `templates`, `validate`, `machine`, `settings`, `review`(`hasVisibleText`, 세션이 없을 때의 안내). [흐름] `activity.test.ts`의 새 시험(실패한 도구, 서브에이전트의 도구, 실패한 질문 도구), `control.test.ts`(대기열에서 시작한 task의 진행 표시가 대기열 시간을 넣지 않음, `hasSession`). Windows에서는 세션을 띄운 뒤 프로세스 시작 시각을 PowerShell로 읽는 동안 첫 요청이 먼저 와서 대기열에 있던 task가 "세션을 띄우는 중" 없이 곧바로 턴 중이 될 수 있다. 그래서 이 시험은 처음 보인 진행 표시(턴 전이든 턴 중이든)의 시작 시각을 본다(5671bad). 가짜 `claude`의 `tool`에 `fail`, `agent`, `inner`를, `ask`에 `fail`을 더했다. [스모크]는 두 번째 Work의 최종 검증이 열린 질문을 남기게 해, [push]를 누르면 확인 창이 뜨고 창의 [push]로 전달하는 것을 본다.
 
 ## 8. 테스트 전략
 

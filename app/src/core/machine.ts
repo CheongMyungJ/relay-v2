@@ -13,7 +13,7 @@
 import type { AppConfig, WorkSettingsPatch } from '../shared/config'
 import type { AgentEngine } from '../shared/agent'
 import { agentLabel, knownTaskEngine, taskEngine } from './agent'
-import type { Decision, Handoff, NodeName, Size, TaskNode } from '../shared/contracts'
+import type { Decision, NodeName, Size, TaskNode } from '../shared/contracts'
 import type { StepExpect, WorkActions } from '../shared/views'
 import type {
   ApprovalBy,
@@ -42,7 +42,13 @@ import type {
   UncommittedAction,
   WorkState,
 } from '../shared/work'
-import { REVIEWABLE, approvalGate, approvalMode, autoApproveHolds } from './approval'
+import {
+  REVIEWABLE,
+  approvalGate,
+  approvalMode,
+  autoApproveHolds,
+  type AutoApproveInput,
+} from './approval'
 import { canClean } from './cleanup'
 import { mergeWorkSettings } from './config'
 import { commitMessage, deliveryStart, stashMessage, stoppedVerify } from './delivery'
@@ -109,6 +115,22 @@ export interface SessionFailed extends TaskEvent {
   check?: CheckSummary
 }
 
+/**
+ * 세션을 띄운 뒤 처음 받은 PTY 출력과 훅 (D217). main이 세션마다 한 번씩 알린다. 검은 화면이 어디서 생기는지 보려고
+ * events.jsonl에만 남기고 상태는 바꾸지 않는다
+ */
+export interface SessionTiming extends TaskEvent {
+  type: 'session.timing'
+  /** 띄운 프로세스. 앞 세션의 늦은 알림을 가려낸다 */
+  pid: number
+  /** 처음 받은 것: PTY 출력이나 훅 */
+  first: 'output' | 'hook'
+  /** 첫 훅의 이벤트 이름 (first가 hook일 때) */
+  hook?: string
+  /** 세션을 띄운 뒤 걸린 ms */
+  ms: number
+}
+
 /** 세션 상한 때문에 띄우지 못해 대기열에 넣었다 (D18). main이 넣는다 */
 export interface TaskQueued extends TaskEvent {
   type: 'task.queued'
@@ -144,8 +166,11 @@ export interface Stopped extends HookSignal {
   stopHookActive: boolean
   /** 이번 턴에 handoff.md(intake는 intent 초안도)가 바뀌었는가. main이 턴 시작 때와 비교해 정한다 */
   handoffChanged: boolean
-  /** Stop을 받고 main이 다시 한 형식 검사 (I15). 자동 승인 조건은 머리글(handoffHeader)에서 읽는다 (4.3) */
-  check: CheckSummary & { handoffHeader?: Handoff | null }
+  /**
+   * Stop을 받고 main이 다시 한 형식 검사 (I15). 자동 승인 조건은 머리글(handoffHeader)과 리뷰의 지적(reviewFindings)에서
+   * 읽는다 (4.3, D213)
+   */
+  check: AutoApproveInput['check']
   /**
    * 본문의 background_tasks나 session_crons가 비어 있지 않다: 세션이 백그라운드 작업이나 예약된 깨우기를 기다리며
    * 쉬는 중이다 (core/approval pendingBackground, D129). 없으면 false다
@@ -191,7 +216,7 @@ export type RuntimeSignal =
  */
 export interface CheckUpdated extends TaskEvent {
   type: 'check.updated'
-  check: CheckSummary & { handoffHeader?: Handoff | null }
+  check: AutoApproveInput['check']
 }
 
 /**
@@ -575,6 +600,7 @@ export type MachineEvent =
   | SessionStarted
   | SessionResumed
   | SessionFailed
+  | SessionTiming
   | TaskQueued
   | UserPromptSubmitted
   | ToolUse
@@ -633,7 +659,8 @@ export type Effect =
    */
   | { type: 'startTask'; taskId: string; node: TaskNode; reason: StartReason }
   /** 끝난 세션을 같은 옵션과 --resume <세션 id>로 다시 연다 (시나리오 3-4). 상한은 startTask와 같다 */
-  | { type: 'resumeTask'; taskId: string }
+  /** 끝난 세션을 --resume으로 다시 연다. continue면 이어서 하라는 첫 입력을 준다 (중단됨의 [재개], D218) */
+  | { type: 'resumeTask'; taskId: string; continue: boolean }
   /** 대기열에서 뺀다 */
   | { type: 'dequeue'; taskId: string }
   /** Stop 훅에 {"decision":"block","reason":…}로 답해 형식 오류를 되돌린다 (D21) */
@@ -748,7 +775,8 @@ const RESUMABLE: readonly TaskStatus[] = [
   'blocked',
 ]
 
-const ASK_TOOL = 'AskUserQuestion'
+/** 질문 도구 (D24, D35). main은 이 도구의 훅만 core에 넘기고 나머지 도구의 훅은 진행 표시만 바꾼다 (D216) */
+export const ASK_TOOL = 'AskUserQuestion'
 const PERMISSION_PROMPT = 'permission_prompt'
 
 /** /clear와 /resume도 SessionEnd를 보내지만 CLI는 새 세션으로 계속 돈다. 세션 종료로 보지 않는다 (D110) */
@@ -923,7 +951,7 @@ function closedHold(work: WorkState, task: TaskRecord): AutoHoldReason[] {
 function holdsNow(
   work: WorkState,
   task: TaskRecord,
-  check: CheckSummary & { handoffHeader?: Handoff | null },
+  check: AutoApproveInput['check'],
   background: boolean,
 ): AutoHoldReason[] {
   const holds = autoApproveHolds({
@@ -1037,7 +1065,13 @@ function endTask(
   const ended: TaskRecord = {
     ...task,
     status: kept ? task.status : 'interrupted',
-    session: { ...task.session, alive: false, ended_at: at },
+    session: {
+      ...task.session,
+      alive: false,
+      ended_at: at,
+      // 앱 종료 확인으로 끝낸 세션 (D219)
+      ...(reason === 'app_quit' ? { app_ended: 'quit' as const } : {}),
+    },
   }
   return {
     // 카운트다운 중이던 승인 대기는 카운트다운을 멈추고 사람의 승인을 기다린다 (D130).
@@ -1335,6 +1369,8 @@ function taskTransition(work: WorkState, event: TaskMachineEvent, config: AppCon
       return sessionResumed(work, task, event)
     case 'session.failed':
       return sessionFailed(work, task, event)
+    case 'session.timing':
+      return sessionTiming(work, task, event)
     case 'task.queued':
       return queued(work, task, event)
     case 'approve':
@@ -1393,7 +1429,7 @@ function sessionResumed(work: WorkState, task: TaskRecord, e: SessionResumed): T
   }
   const check = summarize(e.check)
   const status = handoffStatus(check) ?? 'idle'
-  const session = omit(task.session, 'ended_at', 'process_started_at')
+  const session = omit(task.session, 'ended_at', 'process_started_at', 'app_ended')
   const resumed: TaskRecord = {
     ...omit(unqueued(task), 'error'),
     status,
@@ -1455,6 +1491,14 @@ function sessionFailed(work: WorkState, task: TaskRecord, e: SessionFailed): Tra
   }
 }
 
+/** 세션의 첫 출력과 첫 훅을 events.jsonl에 남긴다 (D217). 이 task의 지금 세션이 아니면 남기지 않는다 */
+function sessionTiming(work: WorkState, task: TaskRecord, e: SessionTiming): Transition {
+  if (!task.session || task.session.pid !== e.pid) return unchanged(work)
+  const type = e.first === 'output' ? 'task.first_output' : 'task.first_hook'
+  const payload = { pid: e.pid, ms: e.ms, ...(e.hook === undefined ? {} : { event: e.hook }) }
+  return { work, effects: [log(work, e.at, type, payload, task)] }
+}
+
 /** 세션 상한 때문에 대기열에 넣었다 (D18) */
 function queued(work: WorkState, task: TaskRecord, e: TaskQueued): Transition {
   if (!launchable(task)) return unchanged(work, `${task.id}는 띄울 수 있는 상태가 아님`)
@@ -1478,8 +1522,10 @@ function hook(
   switch (e.type) {
     case 'UserPromptSubmit':
       // 작업 중. 사람이 새 요청을 보낸 때를 남기고, 첫 신호의 permission_mode를 기록한다 (D94).
+      // 새 요청의 턴은 되돌림이 아니다: 되돌림 안내(D220)를 지운다. 다음 Stop도 0부터 센다
       return set({
         status: 'working',
+        bounce_count: 0,
         last_prompt_at: e.at,
         ...(task.permission_mode === undefined && e.permissionMode !== undefined
           ? { permission_mode: e.permissionMode }
@@ -1539,9 +1585,18 @@ function stop(work: WorkState, task: TaskRecord, e: Stopped, config: AppConfig):
     e.handoffChanged &&
     bounces < config.format_error_bounce_max
   if (bounce) {
+    // 몇 번째 되돌림인지와 오류를 남긴다: 어떤 실수가 흔한지 센다 (D220)
+    const bounced = {
+      attempt: bounces + 1,
+      max: config.format_error_bounce_max,
+      errors: check.errors.map((x) => ({ file: x.file, message: x.message })),
+    }
     return {
       work: withTask(work, { ...task, status: 'working', bounce_count: bounces + 1, check }),
-      effects: [{ type: 'blockStop', taskId: task.id, reason: bounceMessage(check) }],
+      effects: [
+        log(work, e.at, 'task.bounced', bounced, task),
+        { type: 'blockStop', taskId: task.id, reason: bounceMessage(check) },
+      ],
     }
   }
   return {
@@ -1793,8 +1848,9 @@ function resume(work: WorkState, task: TaskRecord): Transition {
   }
   if (task.session?.id === '')
     return unchanged(work, 'Codex 대화 ID를 받지 못했습니다. 이 단계 새 세션으로 다시 실행하세요.')
+  // 중단됨의 [재개]는 이어서 하라고 알린다. [세션 재개](세션 종료, 막힘, 승인 대기)는 입력을 기다린다 (D218)
   const effect: Effect = task.session
-    ? { type: 'resumeTask', taskId: task.id }
+    ? { type: 'resumeTask', taskId: task.id, continue: task.status === 'interrupted' }
     : { type: 'startTask', taskId: task.id, node: task.node, reason: task.reason }
   return { work, effects: [effect] }
 }
@@ -2386,7 +2442,10 @@ function restarted(work: WorkState, e: AppRestarted, config: AppConfig): Transit
       : next
   }
   const tasks = work.tasks.map((t): TaskRecord => {
-    const session = t.session?.alive ? { ...t.session, alive: false, ended_at: e.at } : t.session
+    // 앱이 세션을 끝내지 못하고 꺼졌다 (D219)
+    const session = t.session?.alive
+      ? { ...t.session, alive: false, ended_at: e.at, app_ended: 'restart' as const }
+      : t.session
     // 도는 PR 대응 task도 다른 task처럼 조정한다 (시나리오 9-7)
     if (t !== current || !taskActive(work, t)) return { ...t, session }
     if (t.status === 'queued') {

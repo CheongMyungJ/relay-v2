@@ -1,0 +1,26 @@
+diff --git a/src/config/defaults.js b/src/config/defaults.js
+index 68c7447..5da3361 100644
+--- a/src/config/defaults.js
++++ b/src/config/defaults.js
+@@ -24,7 +24,7 @@ export const defaults = deepFreeze({
+   },
+   retry: {
+     // 첫 발송을 포함한 최대 시도 횟수
+-    maxAttempts: 3,
++    maxAttempts: 1,
+     baseDelayMs: 1000,
+     factor: 2,
+     maxDelayMs: 60 * 1000,
+diff --git a/src/dedupe/key.js b/src/dedupe/key.js
+index 6295ae1..095c44f 100644
+--- a/src/dedupe/key.js
++++ b/src/dedupe/key.js
+@@ -2,7 +2,7 @@
+ import { createHash } from 'node:crypto'
+ 
+ // 키에 넣지 않는 필드: 추적용 값과 본문
+-const IGNORED_FIELDS = new Set(['traceId', 'deliveryAttempt', 'data'])
++const IGNORED_FIELDS = new Set(['traceId', 'deliveryAttempt', 'receivedAt', 'data'])
+ 
+ export function dedupeKey(event) {
+   const parts = Object.keys(event)

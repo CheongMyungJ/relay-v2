@@ -233,7 +233,6 @@ export function NewWorkDialog({
   const [location, setLocation] = useState<'local' | 'remote'>('local')
   const [modes, setModes] = useState<Overrides>({})
   const [auto, setAuto] = useState<AutoOverrides>({})
-  const [autoStart, setAutoStart] = useState<boolean | undefined>(undefined)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const config = useConfig()
@@ -250,7 +249,6 @@ export function NewWorkDialog({
     const settings: WorkSettings = {
       ...(Object.keys(auto).length ? { auto_approve: auto } : {}),
       ...(Object.keys(modes).length ? { question_mode: modes } : {}),
-      ...(autoStart === undefined ? {} : { respond_auto_start: autoStart }),
     }
     const r = await call(() =>
       window.relay.createWork(project.id, {
@@ -315,17 +313,13 @@ export function NewWorkDialog({
           </label>
         </fieldset>
       </div>
+      {/* 처음 쓰는 사람을 헷갈리게 하지 않게 하나로 접는다. PR 자동 대응은 PR 진행이 된 뒤 [Work 설정]에서 고른다 (D226) */}
       <details>
-        <summary>이 Work의 자동 승인 (Claude Code)</summary>
+        <summary>고급 설정 (나중에 [Work 설정]에서도 바꿀 수 있음)</summary>
+        <h3>이 Work의 자동 승인 (Claude Code)</h3>
         <div className="dim">{AGENT_APPROVAL_NOTICE}</div>
         <AutoApproveOverrides config={config} value={auto} onChange={setAuto} />
-      </details>
-      <details>
-        <summary>이 Work의 자동 대응 (PR 진행)</summary>
-        <AutoStartOverride config={config} value={autoStart} onChange={setAutoStart} />
-      </details>
-      <details>
-        <summary>이 Work의 질문 방식</summary>
+        <h3>이 Work의 질문 방식</h3>
         <QuestionModes config={config} value={modes} onChange={setModes} />
       </details>
       {error ? <div className="error">{error}</div> : null}
@@ -401,7 +395,10 @@ type AutoOverrides = Partial<Record<AutoApproveNode, boolean>>
 
 const onOff = (on: boolean) => (on ? '켜짐' : '꺼짐')
 
-/** Work별 자동 승인 (D72). 고르지 않은 단계는 앱 설정을 따른다. 의도 정리, 리뷰, 최종 검증은 늘 수동이다 (4.2, D167) */
+/**
+ * Work별 자동 승인 (D72). 고르지 않은 단계는 앱 설정을 따른다. 의도 정리와 최종 검증은 늘 수동이고, 리뷰는 지적이 없을
+ * 때만 자동 승인한다 (4.2, D213)
+ */
 function AutoApproveOverrides({
   config,
   value,
@@ -511,7 +508,8 @@ export function WorkSettingsDialog({ work, onClose }: { work: WorkView; onClose:
       <h3>자동 승인 (Claude Code)</h3>
       <div className="dim">{AGENT_APPROVAL_NOTICE}</div>
       <div className="dim">
-        바로 적용합니다. 턴이 끝날 때의 설정으로 판정하고, 카운트다운 중에 끄면 멈춥니다.
+        바로 적용합니다. 턴이 끝날 때의 설정으로 판정하고, 카운트다운 중에 끄면 멈춥니다. 리뷰는
+        지적이 없을 때만 자동 승인합니다.
       </div>
       <AutoApproveOverrides config={config} value={auto} onChange={setAuto} />
       <h3>자동 대응 (PR 진행)</h3>
@@ -685,7 +683,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           <div className="dim">{AGENT_APPROVAL_NOTICE}</div>
           <div className="dim">
             켠 단계는 조건(4.3)을 만족하면 카운트다운 뒤 승인합니다. 턴이 끝날 때의 설정으로
-            판정하고, 카운트다운 중에 끄면 멈춥니다. 의도 정리, 리뷰, 최종 검증은 늘 수동입니다.
+            판정하고, 카운트다운 중에 끄면 멈춥니다. 리뷰는 지적이 없을 때만 자동 승인합니다. 의도
+            정리와 최종 검증은 늘 수동입니다.
           </div>
           <div className="form-grid">
             {AUTO_APPROVE_TITLES.map(([node, title]) => (

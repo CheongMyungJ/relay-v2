@@ -107,7 +107,8 @@ export interface Countdown {
 /**
  * 자동 승인이 켜진 단계에서 자동 승인하지 않은 까닭 (4.3, D128~D130, D75, D122).
  * 조건: open_questions, intent_deviation, recommended_next(기본 다음 단계가 아님), background(Stop 때 백그라운드 작업이나
- * 예약된 깨우기가 남음, D129), invalid(다시 읽은 handoff가 유효하지 않음).
+ * 예약된 깨우기가 남음, D129), invalid(다시 읽은 handoff가 유효하지 않음), review_findings(리뷰에 지적이 있거나
+ * 지적을 읽지 못함, D213).
  * 멈춤: cancel([취소]), interrupt([즉시 중단]), quit(앱 종료 확인), step([단계 선택], D145), session(세션 종료),
  * settings(자동 승인을 끔), restart(재시작 조정), operation(끊긴 작업), pr_closed(PR 대응인데 PR이 닫혀 승인을 받지 않음, D179)
  */
@@ -118,6 +119,7 @@ export type AutoHoldReason =
   | 'background'
   | 'completion_unknown'
   | 'invalid'
+  | 'review_findings'
   | 'cancel'
   | 'interrupt'
   | 'quit'
@@ -171,6 +173,11 @@ export interface TaskSession {
   ended_at?: string
   /** 마지막으로 --resume으로 다시 연 때 (시나리오 3-4). 다시 열면 pid와 시작 시각이 바뀐다 */
   resumed_at?: string
+  /**
+   * 앱이 꺼져 끝난 세션 (D219): quit은 앱 종료 확인으로 끝냈고, restart는 앱이 세션을 끝내지 못하고 꺼져 다시 켤 때
+   * 조정했다. 승인 안내와 [재개]의 첫 입력에 쓴다. 다른 까닭으로 끝났거나 다시 열면 없다
+   */
+  app_ended?: 'quit' | 'restart'
 }
 
 export interface TaskRecord {
@@ -530,6 +537,9 @@ export type LifecycleEventType =
   | 'work.cleaned'
   | 'task.started'
   | 'task.session_identified'
+  | 'task.first_output'
+  | 'task.first_hook'
+  | 'task.bounced'
   | 'task.awaiting_approval'
   | 'task.approved'
   | 'task.interrupted'

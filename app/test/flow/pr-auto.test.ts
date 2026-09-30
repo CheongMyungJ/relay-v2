@@ -11,10 +11,10 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { DEFAULT_CONFIG, type AppConfig } from '../../src/shared/config'
+import type { AppConfig } from '../../src/shared/config'
 import type { RoundView, TaskView } from '../../src/shared/views'
 import { CART_FILES, FakeGitHub, FakeWorld } from './github'
-import { git, harness, makeRepo, register, settle, sleep, type Harness } from './harness'
+import { MANUAL, git, harness, makeRepo, register, settle, sleep, type Harness } from './harness'
 import {
   HEAD_CODE,
   currentUntil,
@@ -60,7 +60,7 @@ async function setup(config: Partial<AppConfig>): Promise<Setup> {
 const AUTO: Partial<AppConfig> = {
   respond_auto_start: true,
   respond_auto_round_max: 2,
-  auto_approve: { ...DEFAULT_CONFIG.auto_approve, respond: true },
+  auto_approve: { ...MANUAL.auto_approve, respond: true },
   auto_approve_countdown_sec: 1,
 }
 

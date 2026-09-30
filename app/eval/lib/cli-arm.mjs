@@ -7,7 +7,7 @@ import pty from 'node-pty'
 import { cleanEnv, findClaude } from './env.mjs'
 import { DialogGuard } from './dialogs.mjs'
 import { gitState } from './repo.mjs'
-import { sleep } from './util.mjs'
+import { git, run, sleep } from './util.mjs'
 
 const { Terminal } = headless
 const COLS = 140
@@ -41,6 +41,8 @@ export class CliArm {
     this.o = o
     this.terms = []
     this.active = 0
+    /** 꺼낸 브랜치: label → 꺼낼 때의 커밋 */
+    this.exported = new Map()
   }
 
   kind = 'cli'
@@ -202,8 +204,52 @@ export class CliArm {
 
   snapshot() {}
 
+  /**
+   * 에이전트가 고친 코드가 있는 곳들: 평가 레포(체크아웃된 브랜치)와, 체크아웃되지 않은 로컬 브랜치 가운데
+   * 기준 뒤에 커밋이 있고 HEAD에 아직 들어 있지 않은 것. 사람이 버그마다 브랜치를 나눠 달라고 하면 고친 것이
+   * 여러 브랜치에 흩어지므로, 그런 브랜치는 git archive로 꺼내 따로 판정한다(레포는 건드리지 않는다)
+   */
   finalTrees() {
-    return [{ path: this.o.repo, label: 'repo', git: gitState(this.o.repo, this.o.base) }]
+    const repo = this.o.repo
+    const trees = [{ path: repo, label: 'repo', git: gitState(repo, this.o.base) }]
+    let branches
+    try {
+      branches = git(repo, 'for-each-ref', '--format=%(refname:short)', 'refs/heads')
+        .split('\n')
+        .filter(Boolean)
+    } catch {
+      return trees
+    }
+    const head = run('git', ['symbolic-ref', '--short', '-q', 'HEAD'], { cwd: repo }).out.trim()
+    for (const b of branches) {
+      if (b === head) continue
+      try {
+        const sha = git(repo, 'rev-parse', b)
+        const commits = Number(git(repo, 'rev-list', '--count', `${this.o.base}..${sha}`))
+        if (commits === 0) continue
+        // HEAD에 이미 들어 있으면 평가 레포가 대신한다
+        if (run('git', ['merge-base', '--is-ancestor', sha, 'HEAD'], { cwd: repo }).code === 0)
+          continue
+        const label = `branch-${b.replace(/[^\w.-]+/g, '-')}`
+        const dir = path.join(this.o.dir, 'branches', label)
+        if (this.exported.get(label) !== sha) {
+          fs.rmSync(dir, { recursive: true, force: true })
+          fs.mkdirSync(dir, { recursive: true })
+          const tar = `${dir}.tar`
+          git(repo, 'archive', '--format=tar', '-o', tar, sha)
+          run('tar', ['-xf', tar, '-C', dir])
+          fs.rmSync(tar, { force: true })
+          this.exported.set(label, sha)
+        }
+        const log = git(repo, 'log', '--format=%s', `${this.o.base}..${sha}`)
+          .split('\n')
+          .filter(Boolean)
+        trees.push({ path: dir, label, git: { branch: b, commits, log, uncommitted: [] } })
+      } catch {
+        // 브랜치를 읽지 못하면 그 브랜치만 빼고 판정한다
+      }
+    }
+    return trees
   }
 
   works() {

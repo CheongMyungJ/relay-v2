@@ -76,17 +76,35 @@ const f2 = (x) => (x === null || x === undefined ? '-' : Number(x).toFixed(2))
 const pct = (a, n) => (n ? `${Math.round((100 * a) / n)}% (${a}/${n})` : '-')
 const ms = (s) => (s.mean === null ? '-' : `${f1(s.mean)} ± ${f1(s.sd)}`)
 
+/**
+ * 사람 역할이 답하는 데 쓴 시간(밀리초)과 기다리기만 한 차례 (eval-findings E2). 예전 결과는 run.json에 없어
+ * turns.jsonl의 차례 기록에서 센다
+ */
+function humanTime(r) {
+  if (typeof r.human.ms === 'number') return { ms: r.human.ms, waitOnly: r.human.waitOnlyTurns }
+  const turns = readJsonl(path.join(r.dir, 'turns.jsonl')).filter((t) => typeof t.turn === 'number')
+  return {
+    ms: turns.reduce((a, t) => a + (typeof t.ms === 'number' ? t.ms : 0), 0),
+    waitOnly: turns.filter((t) => (t.actions ?? []).every((a) => a.do === 'wait')).length,
+  }
+}
+
 function metricRows(rs) {
   const get = (fn) => stats(rs.map(fn))
   const n = rs.length
   const sv = (k) => get((r) => r.survey?.[k] ?? null)
+  const time = new Map(rs.map((r) => [r, humanTime(r)]))
   return [
     ['숨긴 시험 모두 통과', pct(rs.filter((r) => r.outcome.success).length, n)],
     ['레포 시험 통과', pct(rs.filter((r) => r.outcome.repoTestsPass).length, n)],
     ['커밋까지 됨', pct(rs.filter((r) => r.outcome.committed).length, n)],
     ['사람이 끝냄(done)', pct(rs.filter((r) => r.ending === 'done').length, n)],
     ['걸린 시간(분)', ms(get((r) => r.wallMs / 60000))],
+    ['사람 역할 응답 시간(분)', ms(get((r) => (time.get(r)?.ms ?? 0) / 60000))],
+    ['걸린 시간 − 사람 역할 응답(분)', ms(get((r) => (r.wallMs - (time.get(r)?.ms ?? 0)) / 60000))],
     ['사람 차례 수', ms(get((r) => r.human.turns))],
+    ['기다리기만 한 차례', ms(get((r) => time.get(r)?.waitOnly ?? null))],
+    ['스크린샷을 붙인 차례', ms(get((r) => r.human.images ?? null))],
     ['사람 행동 수(기다림 제외)', ms(get((r) => r.human.actionsTotal))],
     ['입력한 글자 수', ms(get((r) => r.human.charsTyped))],
     ['코드 직접 확인(inspect_diff)', ms(get((r) => r.human.actions.inspect_diff ?? 0))],
@@ -110,6 +128,28 @@ function metricRows(rs) {
     ['에이전트 세션 수', ms(get((r) => r.agent.sessions))],
     ['사람 역할 비용($)', ms(get((r) => r.human.costUsd))],
   ]
+}
+
+/**
+ * relay의 단계별 에이전트 토큰과 context.md 크기 (eval-findings R9). 한 줄이 한 단계(node)이고 수치는 그 단계
+ * task 하나의 평균이다. 단계는 평균 순번 차례로 놓는다
+ */
+function stepRows(rs) {
+  const steps = rs.flatMap((r) => r.agentSteps ?? [])
+  const seq = (node) => stats(steps.filter((s) => s.node === node).map((s) => s.seq)).mean
+  const nodes = [...new Set(steps.map((s) => s.node))].sort((a, b) => seq(a) - seq(b))
+  return nodes.map((node) => {
+    const own = steps.filter((s) => s.node === node)
+    const k = (fn) => ms(stats(own.map((s) => (s.tokens ? fn(s.tokens) / 1000 : null))))
+    return [
+      node,
+      `${own.length}`,
+      k((t) => t.input + t.cacheRead + t.cacheWrite),
+      k((t) => t.cacheWrite),
+      k((t) => t.output),
+      ms(stats(own.map((s) => s.contextChars))),
+    ]
+  })
 }
 
 function judgeRows(js) {
@@ -170,6 +210,7 @@ export function buildReport(dir) {
     `- 실행 ${runs.length}개, 짝 판정 ${judges.length}개`,
     '',
     '읽는 법: 수치는 평균 ± 표준편차다. 사람 역할과 판정은 AI이므로 경향을 보는 자료로 쓴다. 회차가 적으면 편차가 크다.',
+    '걸린 시간에는 사람 역할(AI)이 답을 만드는 동안 기다린 시간이 들어 있다. 두 쪽의 대기를 견줄 때는 그 시간을 뺀 줄을 본다.',
     '',
   ]
   const kinds = ['relay', 'cli']
@@ -207,6 +248,20 @@ export function buildReport(dir) {
         '',
       )
       lines.push(table(['판정 점수', 'relay', '맨 CLI'], scoreRows(js)), '')
+    }
+    const steps = stepRows(rs.filter((r) => r.kind === 'relay'))
+    if (steps.length) {
+      lines.push(
+        '### relay 단계별 에이전트',
+        '',
+        '단계 task 하나의 평균이다. 입력은 캐시 읽기와 쓰기를 더한 값이고, 대화 기록을 찾지 못한 세션은 빼고 센다.',
+        '',
+        table(
+          ['단계', 'task 수', '입력 토큰(천)', '캐시 쓰기(천)', '출력 토큰(천)', 'context.md 글자'],
+          steps,
+        ),
+        '',
+      )
     }
     lines.push('### 회차별', '')
     lines.push(

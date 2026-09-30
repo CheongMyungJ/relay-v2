@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   HOOK_EVENTS,
+  continuePrompt,
   denyRules,
   firstPrompt,
   hookSettings,
@@ -19,7 +20,7 @@ const TASKS = `${WORK_DIR}\\tasks`
 describe('훅 (I13, 시나리오 2-3)', () => {
   const hooks = hookSettings(51234, 't-03')
 
-  it('여섯 가지 훅을 둔다', () => {
+  it('일곱 가지 훅을 둔다. 실패한 도구는 PostToolUse 대신 PostToolUseFailure로 온다 (D216)', () => {
     expect(Object.keys(hooks)).toEqual([
       'UserPromptSubmit',
       'Stop',
@@ -27,6 +28,7 @@ describe('훅 (I13, 시나리오 2-3)', () => {
       'SessionEnd',
       'PreToolUse',
       'PostToolUse',
+      'PostToolUseFailure',
     ])
     expect(HOOK_EVENTS).toEqual(Object.keys(hooks))
   })
@@ -48,16 +50,18 @@ describe('훅 (I13, 시나리오 2-3)', () => {
     },
   )
 
-  it('PreToolUse와 PostToolUse만 AskUserQuestion으로 가린다 (D24, D35)', () => {
+  it('훅은 matcher 없이 건다. 도구 훅은 모든 도구에서 온다: 질문 대기(D24, D35)와 진행 표시(D216)', () => {
     const matchers = Object.fromEntries(HOOK_EVENTS.map((e) => [e, hooks[e][0]?.matcher]))
     expect(matchers).toEqual({
       UserPromptSubmit: undefined,
       Stop: undefined,
       Notification: undefined,
       SessionEnd: undefined,
-      PreToolUse: 'AskUserQuestion',
-      PostToolUse: 'AskUserQuestion',
+      PreToolUse: undefined,
+      PostToolUse: undefined,
+      PostToolUseFailure: undefined,
     })
+    for (const e of HOOK_EVENTS) expect(Object.keys(hooks[e][0] ?? {})).toEqual(['hooks'])
   })
 
   it('훅 URL', () => {
@@ -172,6 +176,22 @@ describe('실행 인자 (시나리오 2-5, 6절)', () => {
       '--settings',
       `${TASKS}\\03-rca\\task.settings.json`,
     ])
+  })
+
+  it('중단됨의 [재개]는 이어서 하라는 첫 입력을 맨 뒤에 준다. 앱이 꺼져 끊겼으면 그렇다고 적는다 (D218, D219)', () => {
+    const args = resumeArgs({
+      sessionId: 'id-1',
+      workDir: WORK_DIR,
+      settingsPath: 'task.settings.json',
+      prompt: continuePrompt(true),
+    })
+    expect(args.slice(0, 3)).toEqual(['--dangerously-skip-permissions', '--resume', 'id-1'])
+    expect(args.at(-1)).toBe(
+      'relay: 앱이 꺼져 세션이 끊겼다가 [재개]로 다시 열렸습니다. 끊기기 전의 마지막 상태(끝나지 않은 명령 등)를 확인하고 하던 일을 이어서 하세요. 사람에게 물을 것이 있었다면 다시 물으세요.',
+    )
+    expect(continuePrompt(false)).toBe(
+      'relay: 사람이 [즉시 중단]한 세션이 [재개]로 다시 열렸습니다. 끊기기 전의 마지막 상태(끝나지 않은 명령 등)를 확인하고 하던 일을 이어서 하세요. 사람에게 물을 것이 있었다면 다시 물으세요.',
+    )
   })
 
   it('첫 프롬프트는 스킬 호출과 context.md 경로만 담는다 (D19)', () => {

@@ -13,6 +13,7 @@ const api: RelayApi = {
   appInfo: () => ipcRenderer.invoke(IPC.appInfo),
   snapshot: () => ipcRenderer.invoke(IPC.snapshot),
   onWork: (cb) => subscribe(IPC.work, cb),
+  onActivity: (cb) => subscribe(IPC.activity, cb),
   onProjects: (cb) => subscribe(IPC.projects, cb),
   pickFolder: () => ipcRenderer.invoke(IPC.pickFolder),
   inspectProject: (path) => ipcRenderer.invoke(IPC.inspectProject, path),

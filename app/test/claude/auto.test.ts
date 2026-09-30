@@ -30,7 +30,14 @@ const TASK_TIMEOUT_MS = 25 * 60 * 1000
 const NUDGE = '스킬의 절차를 계속해 주세요. 마치면 종료 절차대로 handoff를 쓰고 턴을 끝내 주세요.'
 /** 수정 단계만 켠다. 카운트다운은 사람 역할이 기다릴 만큼 짧게 둔다 */
 const CONFIG: Partial<AppConfig> = {
-  auto_approve: { investigate: false, evidence: false, rca: false, fix: true, respond: false },
+  auto_approve: {
+    investigate: false,
+    evidence: false,
+    rca: false,
+    fix: true,
+    review: false,
+    respond: false,
+  },
   auto_approve_countdown_sec: 5,
 }
 

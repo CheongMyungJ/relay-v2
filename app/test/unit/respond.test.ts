@@ -72,6 +72,7 @@ function valid(draftSize?: 'S'): TaskCheck {
     handoff: HANDOFF,
     handoffHeader: HANDOFF,
     intentDraft: draftSize ? { type: 'bugfix', size: draftSize } : null,
+    reviewFindings: null,
   }
 }
 
@@ -290,7 +291,7 @@ describe('PR 진행 중의 액션 바와 배지 (D182, D183)', () => {
     expect(actions(interrupted.work)).toMatchObject({ interrupt: false, resume: true })
     expect(badge(interrupted.work, 'pr_items').kind).toBe('interrupted')
     const resumed = apply(interrupted.work, { type: 'resume', taskId: t?.id ?? '', at: at() })
-    expect(resumed.effects).toEqual([{ type: 'resumeTask', taskId: t?.id }])
+    expect(resumed.effects).toEqual([{ type: 'resumeTask', taskId: t?.id, continue: true }])
     const waiting = awaiting()
     expect(badge(waiting, 'pr_items')).toMatchObject({ kind: 'awaiting_approval', hot: true })
   })

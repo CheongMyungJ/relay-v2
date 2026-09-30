@@ -8,7 +8,15 @@ import { agentEnv, makeClaudeConfig } from './env.mjs'
 import { Human } from './human.mjs'
 import { RelayArm } from './relay-arm.mjs'
 import { diffTree, judgeTree, makeRepo } from './repo.mjs'
-import { agentUsage, appendJsonl, clip, hash, sleep, writeJson } from './util.mjs'
+import {
+  agentUsage,
+  agentUsageBySession,
+  appendJsonl,
+  clip,
+  hash,
+  sleep,
+  writeJson,
+} from './util.mjs'
 
 const STABLE_MS = 6000
 const MAX_BUSY_MS = 4 * 60 * 1000
@@ -92,9 +100,16 @@ export async function runEpisode(o) {
   }
   const currentDiff = () => {
     const parts = []
-    for (const t of trees()) {
+    const all = trees()
+    for (const t of all) {
       const d = diffTree(t.path, baseDir, path.join(o.workDir, 'inspect', t.label))
-      const head = kind === 'relay' ? `# Work ${t.label}${t.removed ? ' (정리됨)' : ''}\n` : ''
+      // 맨 CLI는 체크아웃되지 않은 브랜치에 고친 것이 있을 때만 브랜치를 밝힌다
+      const head =
+        kind === 'relay'
+          ? `# Work ${t.label}${t.removed ? ' (정리됨)' : ''}\n`
+          : all.length > 1
+            ? `# ${t.label === 'repo' ? '체크아웃된 ' : ''}브랜치 ${t.git?.branch ?? '?'}\n`
+            : ''
       parts.push(`${head}${d.diff.trim() || '(바뀐 것 없음)'}`)
     }
     return clip(parts.join('\n\n') || '(Work가 아직 없음)', 12_000)
@@ -356,6 +371,17 @@ export async function runEpisode(o) {
       : final.some((f) => passIn(f, c.name)),
   }))
   const frictions = turns.map((t) => t.friction).filter((x) => typeof x === 'number')
+  // relay의 단계별 에이전트 토큰과 context.md 크기 (eval-findings R9). 세션 id로 대화 기록을 맞춘다
+  const bySession = agentUsageBySession(agentConfigDir)
+  const agentSteps = works.flatMap((w) =>
+    w.tasks.map((t) => ({
+      work: w.id,
+      seq: t.seq,
+      node: t.node,
+      contextChars: t.contextChars ?? null,
+      tokens: t.session ? (bySession.get(t.session) ?? null) : null,
+    })),
+  )
   const result = {
     scenario: scenario.id,
     kind,
@@ -393,9 +419,15 @@ export async function runEpisode(o) {
       frictionHigh: frictions.filter((f) => f >= 2).length,
       costUsd: human.costUsd,
       calls: human.calls,
+      // 사람 역할이 답하는 데 쓴 시간의 합과 기다리기만 한 차례 (eval-findings E2)
+      ms: turns.reduce((a, t) => a + (typeof t.ms === 'number' ? t.ms : 0), 0),
+      waitOnlyTurns: turns.filter((t) => t.actions.every((a) => a.do === 'wait')).length,
+      // 스크린샷을 붙인 차례 (eval-findings E10)
+      images: human.images,
     },
     setupDialogs,
     agent: agentUsage(agentConfigDir),
+    agentSteps,
     works,
     survey,
     options: {

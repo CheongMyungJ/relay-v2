@@ -45,15 +45,17 @@ The size sets the steps: `S` goes straight to fix, `M` reproduces and finds the 
 
 Propose `S` only when all of these hold:
 
-- The request contains a way to reproduce the bug.
+- The request, or the human's answers in this task, give a way to reproduce the bug.
 - The request, or a skim of the code, narrows the fix location to one place.
 - Nothing could touch the non-goals or constraints.
 
 Otherwise propose `L` when any of these holds, and `M` when none does:
 
-- The request has no way to reproduce the bug.
-- The bug is intermittent, or depends on the environment, timing or data.
+- There is no way to reproduce the bug, even with the human's answers.
+- The bug is intermittent: the same steps do not reproduce it every time.
 - After a skim of the code, the candidate locations span several modules.
+
+A bug that depends on the environment, timing or data is not `L` by that alone. If a command can set that condition and reproduce the bug every time (e.g. `TZ=America/Los_Angeles node …`), judge it by the rules above.
 
 ## Done when
 

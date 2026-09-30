@@ -3,7 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AppInfo } from '../../shared/api'
 import type { NodeName } from '../../shared/contracts'
-import type { CommandResult, ProjectView, ReviewView, WorkView } from '../../shared/views'
+import type {
+  ActivityView,
+  CommandResult,
+  ProjectView,
+  ReviewView,
+  TaskView,
+  WorkView,
+} from '../../shared/views'
 import { call } from './commands'
 import {
   CleanDialog,
@@ -15,6 +22,7 @@ import {
   StepDialog,
   WorkSettingsDialog,
 } from './dialogs'
+import { Activity } from './Activity'
 import { withOpened } from './opened'
 import { Panel, showsPr, wantsApproval } from './Panel'
 import { TerminalView } from './TerminalView'
@@ -42,10 +50,26 @@ function without<T>(m: Record<string, T>, key: string): Record<string, T> {
   return Object.fromEntries(Object.entries(m).filter(([k]) => k !== key))
 }
 
+/** 도구 훅으로 따로 온 진행 표시(D216). 키는 "<Work 키>|<task id>"다 */
+type Activities = Record<string, ActivityView | null>
+
+/** 한 Work의 따로 온 진행 표시를 지운다. 없으면 그대로 돌려준다 */
+function withoutWork(m: Activities, workKey: string): Activities {
+  const prefix = `${workKey}|`
+  if (!Object.keys(m).some((k) => k.startsWith(prefix))) return m
+  return Object.fromEntries(Object.entries(m).filter(([k]) => !k.startsWith(prefix)))
+}
+
+/** 따로 온 진행 표시가 있으면 스냅샷의 값 대신 쓴다 */
+function withActivity(t: TaskView, activity: ActivityView | null | undefined): TaskView {
+  return activity === undefined ? t : { ...t, activity }
+}
+
 export function App() {
   const [info, setInfo] = useState<AppInfo | null>(null)
   const [projects, setProjects] = useState<ProjectView[]>([])
   const [works, setWorks] = useState<Record<string, WorkView>>({})
+  const [activities, setActivities] = useState<Activities>({})
   const [warnings, setWarnings] = useState<string[]>([])
   const [selected, setSelected] = useState<string | null>(null)
   // Work마다 사람이 고른 탭. 없으면 지금 task를 따라간다
@@ -56,7 +80,14 @@ export function App() {
 
   useEffect(() => {
     void window.relay.appInfo().then(setInfo)
-    const offWork = window.relay.onWork((w) => setWorks((m) => ({ ...m, [w.key]: w })))
+    const offWork = window.relay.onWork((w) => {
+      setWorks((m) => ({ ...m, [w.key]: w }))
+      // 스냅샷의 진행 표시가 그 앞에 따로 온 것보다 새것이다 (D216)
+      setActivities((m) => withoutWork(m, w.key))
+    })
+    const offActivity = window.relay.onActivity((u) =>
+      setActivities((m) => ({ ...m, [`${u.workKey}|${u.taskId}`]: u.activity })),
+    )
     const offProjects = window.relay.onProjects(setProjects)
     // 알림을 누르면 그 Work를 고른다 (D81)
     const offFocus = window.relay.onFocusWork((key) => setSelected(key))
@@ -77,6 +108,7 @@ export function App() {
     })
     return () => {
       offWork()
+      offActivity()
       offProjects()
       offFocus()
     }
@@ -97,7 +129,9 @@ export function App() {
   // 정리 세션 탭(7-5)을 고르면 터미널은 정리 세션이고, 패널은 지금 task(Work 완료 화면)다
   const cleanupTab = !!work?.cleanup && pickedId === CLEANUP_TAB
   const taskId = cleanupTab || pickedId === CLEANUP_TAB ? (work?.current ?? null) : pickedId
-  const task = work?.tasks.find((t) => t.id === taskId)
+  const found = work?.tasks.find((t) => t.id === taskId)
+  // 도구 훅으로 따로 온 진행 표시가 있으면 그것을 보인다 (D216)
+  const task = found && work ? withActivity(found, activities[`${work.key}|${found.id}`]) : found
   const questionTask = work ? currentTask(work) : undefined
   const question = work?.cleanup?.question ?? questionTask?.question
   const questionTaskId = work?.cleanup?.question ? 'cleanup' : questionTask?.id
@@ -276,6 +310,7 @@ export function App() {
                 ) : null}
               </span>
               <span className={`status s-${task.status}`}>{task.statusLabel}</span>
+              {task.activity ? <Activity activity={task.activity} /> : null}
               {/* 끝난 task의 탭은 읽기 전용이다 (시나리오 5-1) */}
               {task.live ? null : <span className="readonly">읽기 전용</span>}
               {task.notice ? <span className="band-warn">{task.notice}</span> : null}

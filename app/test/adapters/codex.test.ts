@@ -111,6 +111,7 @@ describe('Codex CLI 점검과 스킬·설정', () => {
     expect(args.at(-1)).toContain(JSON.stringify(deployed.file))
     expect(JSON.stringify(settings)).not.toContain('a-secret-token')
     expect(settings.overrides['hooks.PostCompact']).toBeUndefined()
+    expect(settings.overrides['hooks.PostToolUseFailure']).toBeUndefined()
     expect(JSON.stringify(settings.overrides['hooks.SessionStart'])).toContain(
       'additionalContextLimit',
     )

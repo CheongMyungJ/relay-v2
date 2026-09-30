@@ -130,6 +130,7 @@ describe('엔진 선택과 이전 기록 (E3, E5)', () => {
           handoff,
           handoffHeader: handoff,
           intentDraft: null,
+          reviewFindings: null,
         },
       },
       codex,

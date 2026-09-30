@@ -4,8 +4,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { mergeSkill, skillText } from '../../src/adapters/claude'
+import { OPEN_QUESTIONS_HINT, REVIEW_LEAD_HINT } from '../../src/core/review'
 import { sha256 } from '../../src/adapters/store'
-import { parseFrontMatter } from '../../src/core/validate'
+import { BOUNCE_HEAD, parseFrontMatter } from '../../src/core/validate'
 import type { LifecycleEvent, WorkState } from '../../src/shared/work'
 import { drive } from './driver'
 import { git, harness, makeRepo, register, settle, sleep, type Harness } from './harness'
@@ -155,27 +156,18 @@ describe('[흐름] 최소 흐름 (M2)', () => {
     expect(decisions).toContain('- [사람] 재현 명령은 node -e — 재현 명령은 node -e인 이유\n')
 
     // ---------- events.jsonl (5.5) ----------
+    // 세션마다 task.started 다음에 첫 PTY 출력과 첫 훅(UserPromptSubmit)의 시각이 온다 (D217)
     const ev = events(s.workDir)
+    const session = (id: string) => [
+      ['task.started', id],
+      ['task.first_output', id],
+      ['task.first_hook', id],
+      ['task.awaiting_approval', id],
+      ['task.approved', id],
+    ]
     expect(ev.map((e) => [e.type, e.task_id ?? null])).toEqual([
       ['work.created', null],
-      ['task.started', 't-01'],
-      ['task.awaiting_approval', 't-01'],
-      ['task.approved', 't-01'],
-      ['task.started', 't-02'],
-      ['task.awaiting_approval', 't-02'],
-      ['task.approved', 't-02'],
-      ['task.started', 't-03'],
-      ['task.awaiting_approval', 't-03'],
-      ['task.approved', 't-03'],
-      ['task.started', 't-04'],
-      ['task.awaiting_approval', 't-04'],
-      ['task.approved', 't-04'],
-      ['task.started', 't-05'],
-      ['task.awaiting_approval', 't-05'],
-      ['task.approved', 't-05'],
-      ['task.started', 't-06'],
-      ['task.awaiting_approval', 't-06'],
-      ['task.approved', 't-06'],
+      ...['t-01', 't-02', 't-03', 't-04', 't-05', 't-06'].flatMap(session),
       ['work.completed', null],
     ])
     for (const e of ev) {
@@ -184,7 +176,16 @@ describe('[흐름] 최소 흐름 (M2)', () => {
     }
     expect(ev[0]?.payload).toEqual({ base_branch: 'main', base_commit: base })
     expect(ev.at(-1)?.payload).toEqual({ delivery: 'none' })
-    expect(ev[3]?.payload).toEqual({ by: 'human' })
+    expect(ev[5]?.payload).toEqual({ by: 'human' })
+    for (const t of w.tasks) {
+      const own = ev.filter((e) => e.task_id === t.id)
+      expect(own[1]?.payload).toEqual({ pid: t.session?.pid, ms: expect.any(Number) })
+      expect(own[2]?.payload).toEqual({
+        pid: t.session?.pid,
+        ms: expect.any(Number),
+        event: 'UserPromptSubmit',
+      })
+    }
 
     // ---------- task 디렉터리 (5.1) ----------
     const task = (dir: string) => path.join(s.workDir, 'tasks', dir)
@@ -328,6 +329,90 @@ describe('[흐름] 최소 흐름 (M2)', () => {
     expect(events(s.workDir).at(-1)?.type).toBe('work.completed')
   })
 
+  it('[요약] 맨 위에 의도 초안과 리뷰 지적을 보이고 열린 질문에 답할 곳을 알린다. Work 완료 화면과 완료 뒤에 작업 브랜치의 커밋을 보인다 (D222, D223, D225)', async () => {
+    const s = await start(
+      scenario('S', {
+        'work-start': [
+          { do: 'prompt' },
+          { do: 'write', file: 'intent.draft.md', text: intentDraft('S') },
+          {
+            do: 'write',
+            file: 'handoff.md',
+            text: handoff({
+              decisions: [{ what: '크기는 S', why: '한 줄 수정', by: 'ai' }],
+              open_questions: ['운영 시간대는?'],
+            }),
+          },
+          { do: 'stop' },
+        ],
+      }),
+    )
+    const ui = s.h.ui
+    const pause = (node: string) =>
+      drive(s.h.relay, ui, s.workKey, { size: 'S', pauseAt: (t) => t.node === node })
+
+    // 의도 정리: 초안의 size와 목표·비목표·완료조건, 열린 질문과 답할 곳
+    expect((await pause('intake')).status).toBe('paused')
+    const intake = await s.h.relay.review(s.workKey, 't-01')
+    expect(intake?.lead).toEqual({
+      title: '의도 초안 (size: S)',
+      sections: [
+        { title: '목표', text: '빈 배열의 평균이 NaN이 되는 문제를 고친다.' },
+        { title: '비목표', text: '- 없음' },
+        {
+          title: '완료조건',
+          text: '- [ ] 재현 절차가 더 이상 실패하지 않는다\n- [ ] `npm test`가 통과한다\n- [ ] 기존 테스트를 약화하거나 삭제하지 않는다',
+        },
+      ],
+      hint: null,
+    })
+    expect(intake?.emphasis.find((e) => e.kind === 'open_questions')).toEqual({
+      kind: 'open_questions',
+      title: '열린 질문',
+      lines: ['운영 시간대는?'],
+      hint: OPEN_QUESTIONS_HINT,
+    })
+
+    // 리뷰: 지적 목록과 반영할 번호를 말하라는 안내
+    expect((await pause('review')).status).toBe('paused')
+    const reviewTask = ui.works.get(s.workKey)?.tasks.find((t) => t.node === 'review')
+    const review = await s.h.relay.review(s.workKey, reviewTask?.id ?? '')
+    expect(review?.lead).toEqual({
+      title: '리뷰 지적',
+      sections: [
+        {
+          title: '지적',
+          text: '1. [권장] src/avg.js:2 — 빈 배열에 0을 돌려주는 까닭을 주석으로 남긴다\n2. [사소] test/avg.test.js:6 — 시험 이름을 "빈 배열은 0"으로 바꾼다',
+        },
+      ],
+      hint: REVIEW_LEAD_HINT,
+    })
+
+    // Work 완료 화면: 작업 브랜치, 기준 뒤 커밋 수와 마지막 커밋, worktree
+    expect((await pause('verify')).status).toBe('paused')
+    const verifyTask = ui.works.get(s.workKey)?.tasks.find((t) => t.node === 'verify')
+    const worktree = path.join(s.h.home, 'projects', s.projectId, 'worktrees', s.workId)
+    const head = git(worktree, 'rev-parse', 'HEAD')
+    const branch = {
+      name: `relay/${s.workId}`,
+      ahead: 1,
+      last: { sha: head.slice(0, 8), subject: 'fix: 빈 배열의 평균은 0' },
+      worktree,
+    }
+    expect((await s.h.relay.review(s.workKey, verifyTask?.id ?? ''))?.completion?.branch).toEqual(
+      branch,
+    )
+    // [완료만] 뒤에도 같은 것을 보인다 (완료 알림)
+    const done = await drive(s.h.relay, ui, s.workKey, { size: 'S' })
+    expect(done, ui.dump()).toMatchObject({ status: 'completed' })
+    expect((await s.h.relay.review(s.workKey, verifyTask?.id ?? ''))?.completion?.branch).toEqual(
+      branch,
+    )
+    // 다른 단계에는 [요약] 맨 위의 핵심이 없다
+    const fixTask = ui.works.get(s.workKey)?.tasks.find((t) => t.node === 'fix')
+    expect((await s.h.relay.review(s.workKey, fixTask?.id ?? ''))?.lead).toBeNull()
+  })
+
   it('리뷰(M8): 지적을 번호로 쓰고 마무리한 뒤 사람이 번호로 고른 지적만 같은 세션에서 고쳐 커밋한다. 리뷰 커밋은 리뷰의 [변경]과 Work 완료 화면의 [전체 변경]에 들어간다 (D164, D83)', async () => {
     const s = await start(scenario('M', { review: reviewInstructed() }))
     const instruction = '1번 지적만 반영해 주세요.'
@@ -381,9 +466,12 @@ describe('[흐름] 최소 흐름 (M2)', () => {
     const reviewCtx = read(path.join(task('04-review'), 'context.md'))
     expect(reviewCtx).toContain('- skill: review')
     expect(reviewCtx).toContain(
-      '리뷰를 썼습니다. 반영할 지적은 번호로 여기에 말해 주세요. 반영할 것이 없거나 반영을 마쳤으면 오른쪽 패널에서 확인하고 [승인]을 누르세요.',
+      '리뷰를 썼습니다. 반영할 지적은 번호로 여기에 말해 주세요. 반영할 것이 없거나 반영을 마쳤으면 오른쪽 패널에서 확인하고 [승인]을 누르세요. 지적이 없고 자동 승인이 켜져 있으면 카운트다운 뒤 승인되고, 멈추려면 [취소]를 누르세요.',
     )
-    expect(reviewCtx).toContain('수동 승인 (의도 승인, 리뷰, Work 완료는 늘 수동)')
+    // 시험의 설정은 자동 승인을 모두 끈다. 리뷰는 지적이 없을 때만 자동 승인한다고 적는다 (D213)
+    expect(reviewCtx).toContain(
+      '수동 승인 (task를 시작할 때의 설정. 설정은 바로 적용되고, 자동 승인 여부는 턴이 끝날 때의 설정으로 정한다. 리뷰는 지적이 없을 때만 자동 승인한다)',
+    )
     expect(reviewCtx).toContain(
       '- 이전 단계: intake (의도 정리), investigate (재현과 원인 분석), fix (수정)',
     )
@@ -413,7 +501,14 @@ describe('[흐름] 최소 흐름 (M2)', () => {
       events(s.workDir)
         .filter((e) => e.task_id === 't-04')
         .map((e) => e.type),
-    ).toEqual(['task.started', 'task.awaiting_approval', 'task.awaiting_approval', 'task.approved'])
+    ).toEqual([
+      'task.started',
+      'task.first_output',
+      'task.first_hook',
+      'task.awaiting_approval',
+      'task.awaiting_approval',
+      'task.approved',
+    ])
   })
 
   it('형식 오류를 되돌리면 고쳐 쓴 handoff로 승인 대기가 된다 (D21, D107)', async () => {
@@ -450,11 +545,29 @@ describe('[흐름] 최소 흐름 (M2)', () => {
     expect(blocked[0]?.response?.reason).toContain(
       '- handoff.md: `## 요약` 절 없음: handoff 본문의 필수 절',
     )
+    // 되돌림 메시지의 첫 줄은 사람도 읽는다. Claude Code가 "Stop hook error: <첫 줄>"로 그린다 (D220)
+    expect(blocked[0]?.response?.reason?.split('\n')[0]).toBe(BOUNCE_HEAD)
     const i = stops.indexOf(blocked[0] as (typeof stops)[number])
     expect(stops[i + 1]?.body.stop_hook_active).toBe(true)
     expect(stops[i + 1]?.response).toBeNull()
     const w = work(s.workDir)
     expect(w.tasks[1]).toMatchObject({ status: 'approved', bounce_count: 0 })
+    // 되돌림은 몇 번째인지와 오류로 기록한다. 고치는 동안 패널이 안내한다 (D220)
+    expect(events(s.workDir).filter((e) => e.type === 'task.bounced')).toEqual([
+      expect.objectContaining({
+        task_id: 't-02',
+        payload: {
+          attempt: 1,
+          max: 2,
+          errors: [{ file: 'handoff.md', message: '`## 요약` 절 없음: handoff 본문의 필수 절' }],
+        },
+      }),
+    ])
+    const notices = s.h.ui.history.flatMap((v) => v.tasks[1]?.bounceNotice ?? [])
+    expect([...new Set(notices)]).toEqual([
+      '형식 확인으로 되돌림(1/2): 에이전트가 handoff와 산출물의 형식만 고칩니다. 결정과 판정은 바뀌지 않습니다.',
+    ])
+    expect(s.h.ui.works.get(s.workKey)?.tasks[1]?.bounceNotice).toBeNull()
   })
 
   it('되돌림은 설정 횟수까지만 한다. 남은 오류는 [오류 무시하고 승인]으로 넘긴다 (D21, D90, D112)', async () => {
@@ -612,6 +725,8 @@ describe('[흐름] 최소 흐름 (M2)', () => {
     expect(events(s.workDir).map((e) => [e.type, e.payload])).toEqual([
       ['work.created', expect.anything()],
       ['task.started', expect.anything()],
+      ['task.first_output', expect.anything()],
+      ['task.first_hook', expect.anything()],
       ['task.interrupted', { reason: 'session_ended' }],
     ])
   })
@@ -658,6 +773,8 @@ describe('[흐름] 최소 흐름 (M2)', () => {
         .map((e) => [e.type, e.payload]),
     ).toEqual([
       ['task.started', expect.anything()],
+      ['task.first_output', expect.anything()],
+      ['task.first_hook', expect.anything()],
       ['task.awaiting_approval', { reason: 'session_ended' }],
     ])
     // 사람은 승인하고 다음 단계로 간다
