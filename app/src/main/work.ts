@@ -1189,7 +1189,8 @@ export class WorkRunner {
     // 훅 본문의 세션 id. /clear 등으로 CLI가 다른 대화로 옮기면 core가 따른다 (D110)
     const sessionId = str(b['session_id'])
     const agentId = str(b['agent_id'])
-    if (engine === 'codex' && agentId !== undefined) return null
+    // 자식의 상태 신호는 task를 끝내지 않지만 도구 보호는 자식에도 적용한다.
+    if (engine === 'codex' && agentId !== undefined && req.event !== 'PreToolUse') return null
     if (engine === 'codex' && !session.hooksReady) {
       session.hooksReady = true
       this.changed()
@@ -2120,6 +2121,7 @@ export class WorkRunner {
           },
         }
     }
+    if (taskEngine(c) === 'codex' && str(req.body['agent_id']) !== undefined) return null
     if ((req.event === 'Interrupt' || req.event === 'SessionEnd') && c.question) {
       this.cancelQuestion(c, '정리 세션의 질문을 취소했습니다.')
       this.changed()

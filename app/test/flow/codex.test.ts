@@ -239,7 +239,16 @@ describe('[흐름] Codex CLI와 실제 훅·MCP 브리지', () => {
           {
             do: 'hook',
             event: 'PreToolUse',
-            body: { tool_name: 'exec_command', tool_input: { cmd: 'git push origin main' } },
+            body: {
+              agent_id: 'child',
+              tool_name: 'exec_command',
+              tool_input: { cmd: 'git push origin main' },
+            },
+          },
+          {
+            do: 'hook',
+            event: 'Stop',
+            body: { agent_id: 'child' },
           },
           {
             do: 'hook',
@@ -274,5 +283,7 @@ describe('[흐름] Codex CLI와 실제 훅·MCP 브리지', () => {
     expect(responses[0]).toMatchObject({ hookSpecificOutput: { permissionDecision: 'deny' } })
     expect(responses[1]).toMatchObject({ hookSpecificOutput: { permissionDecision: 'deny' } })
     expect(responses[2]).toBeNull()
+    expect(s.hh.codexRecords().find((r) => r['event'] === 'Stop')?.['response']).toBeNull()
+    expect(s.task()?.status).toBe('working')
   })
 })

@@ -10,7 +10,14 @@ const appDir = path.resolve(__dirname, '../..')
 const win32 = process.platform === 'win32'
 let app: ElectronApplication | undefined
 let root: string
-test.afterEach(async () => {
+// Playwright는 사용하지 않는 fixture 인자도 객체 분해 형태여야 한다.
+// eslint-disable-next-line no-empty-pattern
+test.afterEach(async ({}, info) => {
+  if (root && info.status !== info.expectedStatus) {
+    const record = path.join(root, 'record/fake-codex.jsonl')
+    if (fs.existsSync(record))
+      await info.attach('fake-codex-record', { path: record, contentType: 'text/plain' })
+  }
   await app?.close()
   if (root) fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
 })
