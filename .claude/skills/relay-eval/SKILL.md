@@ -12,7 +12,7 @@ description: relay-v2의 버그 수정 사용성을 맨 Claude Code CLI와 비�
 - 시나리오: 번호(`3`, `1,5`), id(`03-cart`), "전부"(`all`). 목록은 `node app/eval/run.mjs --list`.
 - 횟수: "n번" → `--runs n` (시나리오와 쪽마다 n번). 말이 없으면 1.
 - 한쪽만: "relay만" → `--arms relay`, "CLI만" → `--arms cli`.
-- 모델과 effort: 말이 있을 때만 `--agent-model`, `--effort`, `--human-model`, `--judge-model`을 준다. 기본은 에이전트 sonnet·medium, 사람 역할 sonnet·low, 판정 sonnet.
+- 모델과 effort: 말이 있을 때만 `--agent-model`, `--effort`, `--human-model`, `--judge-model`을 준다. 기본은 에이전트 sonnet·medium, 사람 역할 sonnet·medium, 판정 sonnet.
 - 시나리오 번호가 목록에 없거나 요청이 모호할 때만 묻는다. 나머지는 기본값으로 바로 시작하고 무엇으로 돌리는지 한 줄로 알린다.
 
 ## 2. 준비 (새 세션마다 한 번, 2~3분)

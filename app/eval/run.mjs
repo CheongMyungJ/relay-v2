@@ -28,7 +28,7 @@ const HELP = `쓰는 법: node eval/run.mjs [옵션]
   --agent-model <모델>     relay와 CLI 안의 claude 모델 (기본 sonnet)
   --effort <수준>          에이전트 effort: low / medium / high (기본 medium)
   --human-model <모델>     사람 역할 모델 (기본 sonnet)
-  --human-effort <수준>    사람 역할 effort (기본 low)
+  --human-effort <수준>    사람 역할 effort (기본 medium)
   --judge-model <모델>     판정 모델 (기본 sonnet)
   --cli-permission <모드>  skip(--dangerously-skip-permissions, relay와 같음) / default (기본 skip)
   --no-vision              relay 사람 역할이 스크린샷 없이 글자만 본다
@@ -111,7 +111,7 @@ async function main() {
       'agent-model': { type: 'string', default: 'sonnet' },
       effort: { type: 'string', default: 'medium' },
       'human-model': { type: 'string', default: 'sonnet' },
-      'human-effort': { type: 'string', default: 'low' },
+      'human-effort': { type: 'string', default: 'medium' },
       'judge-model': { type: 'string', default: 'sonnet' },
       'cli-permission': { type: 'string', default: 'skip' },
       'no-vision': { type: 'boolean' },
