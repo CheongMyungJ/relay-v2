@@ -6,6 +6,8 @@
 //    시작하지 않고, 다음 읽기에 들어온 항목과 함께 시작한다(D159, D210). 도는 동안 들어온 항목은 라운드가 끝나면 바로
 //    시작한다.
 // 3. 닫힌 PR에는 push·게시하지 않는다(D208): 앱이 닫힘을 읽기 전의 사람 승인과 자동 승인 모두.
+// 4. 켤 때의 읽기가 실패하면 반영에 성공한 첫 읽기가 켤 때의 읽기다(D159). 도는 라운드에 들어온 항목은 알리지 않고,
+//    중단된 대응 task에 막혀 자동 시작하지 못하면 대응 거리를 알린다(D184, D211).
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -426,5 +428,70 @@ describe('[흐름] 자동 대응 (M11, 가짜 gh)', () => {
     expect(view(s.ctx, w).pr?.state).toBe('CLOSED')
     const closed = await s.ctx.h.relay.approve(w.key, 't-06', {})
     expect(closed.ok).toBe(false)
+  })
+
+  it('켤 때의 읽기가 반영되지 않으면 반영된 읽기까지 켤 때처럼 보이기만 한다. 중단된 대응 task에 막혀 자동 시작하지 못하면 대응 거리를 알린다 (D159, D184, D211)', async () => {
+    const s = await setup({ respond_auto_start: true })
+    const w = await openWork(s, { 't-05': answer(1, true) })
+
+    // ---------- 켤 때의 읽기가 실패한다: 반영에 성공한 첫 읽기가 켤 때의 읽기다 (D159) ----------
+    await s.ctx.h.relay.close()
+    const c1 = s.gh.convo(w.pr, 'relay M11 흐름 시험: 꺼진 동안의 코멘트')
+    // 켤 때의 읽기만 실패하게 가짜 gh의 github.json을 망가뜨린다
+    const github = path.join(s.ctx.h.root, 'record', 'github.json')
+    const saved = fs.readFileSync(github, 'utf8')
+    fs.writeFileSync(github, '{')
+    await s.ctx.h.reopen()
+    await s.ctx.h.ui.until(
+      () => view(s.ctx, w).pr?.error?.startsWith('PR을 읽지 못함'),
+      '켤 때의 읽기 실패',
+      WAIT,
+    )
+    fs.writeFileSync(github, saved)
+    await refresh(s, w)
+    expect(newIds(w)).toEqual([`convo:${c1}`])
+    await notStarted(s, w, 0)
+    expect(notices(s, w)).toEqual([])
+
+    // 다음 읽기에 새 항목이 들어오면 쌓인 것과 함께 시작한다 (D210)
+    const c2 = s.gh.convo(w.pr, 'relay M11 흐름 시험: 켠 뒤의 코멘트')
+    await refresh(s, w)
+    await s.ctx.h.ui.until(
+      () => (s.ctx.h.ui.output.get(`${w.key}/t-05`) ?? '').includes('입력 대기'),
+      't-05의 입력 대기',
+      WAIT,
+    )
+    await settle(s.ctx.h, w.key)
+    expect(task(w, 't-05')?.reason).toBe('auto_respond')
+    expect([...(task(w, 't-05')?.respond?.items ?? [])].sort()).toEqual(
+      [`convo:${c1}`, `convo:${c2}`].sort(),
+    )
+    expect(notices(s, w)).toEqual([`PR #${w.pr}: 자동 대응 시작 — 라운드 1, 새 항목 2개`])
+
+    // ---------- 도는 라운드에 들어온 항목은 알리지 않는다: 라운드가 끝나면 이어서 시작한다 (D184) ----------
+    s.gh.convo(w.pr, 'relay M11 흐름 시험: 도는 동안의 코멘트')
+    await refresh(s, w)
+    await notStarted(s, w, 1)
+    expect(notices(s, w)).toHaveLength(1)
+
+    // ---------- 라운드가 도는 동안 앱을 끄면 대응 task는 중단됨으로 남는다 ----------
+    await s.ctx.h.relay.close()
+    const c4 = s.gh.convo(w.pr, 'relay M11 흐름 시험: 다시 꺼진 동안의 코멘트')
+    await s.ctx.h.reopen()
+    await s.ctx.h.ui.until(
+      () => view(s.ctx, w).pr?.items.some((i) => i.id === `convo:${c4}`),
+      '켤 때의 읽기',
+      WAIT,
+    )
+    await settle(s.ctx.h, w.key)
+    expect(task(w, 't-05')?.status).toBe('interrupted')
+
+    // 중단된 대응 task는 사람이 손대야 풀린다: 자동 시작하지 못하니 대응 거리를 알린다 (D211)
+    s.gh.convo(w.pr, 'relay M11 흐름 시험: 중단된 뒤의 코멘트')
+    await refresh(s, w)
+    await sleep(300)
+    await settle(s.ctx.h, w.key)
+    expect(respondTasks(w)).toHaveLength(1)
+    expect(notices(s, w)).toEqual([`PR #${w.pr}: 대응 거리 1개가 들어옴`])
   })
 })

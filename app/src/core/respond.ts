@@ -456,6 +456,25 @@ export function autoPlan(
   return { kind: 'start', items: ids, round: nextRound(work) }
 }
 
+/**
+ * 읽기가 받은 새 항목을 "대응 거리가 들어옴"으로 알릴 것인가 (D184, D211). 자동 시작이 꺼져 있으면 알린다. 켜져 있으면
+ * 자동 대응이 시작하거나 상한에서 멈추며 그것을 알리고, 도는 라운드(끝나지 않은 대응 task)를 기다리면 그 라운드가
+ * 끝날 때 이어서 시작하므로 알리지 않는다. 그 라운드가 사람을 기다리면 그 상태로 알린다(D81). 중단된 대응 task와 닫힌
+ * PR은 사람이 손대야 풀린다: 알리지 않으면 새 항목이 조용히 쌓인다. 진행 중 작업이 있으면 읽기를 반영하지 않아
+ * 여기 오지 않는다
+ */
+export function receivedNeedsNotice(
+  work: Pick<WorkState, 'status' | 'pr' | 'operation' | 'tasks' | 'settings'>,
+  items: readonly PrItem[],
+  config: Pick<AppConfig, 'respond_auto_start' | 'respond_auto_round_max'>,
+): boolean {
+  const plan = autoPlan(work, items, config)
+  if (plan.kind === 'start' || plan.kind === 'paused') return false
+  if (plan.kind !== 'wait') return true
+  if (work.pr?.closed_at) return true
+  return pendingRespond(work)?.status === 'interrupted'
+}
+
 /** 자동 대응을 시작했다는 알림 (D184) */
 export function autoStartNotice(pr: number, round: number, items: number): string {
   return `PR #${pr}: 자동 대응 시작 — 라운드 ${round}, 새 항목 ${items}개`

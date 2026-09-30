@@ -1,6 +1,7 @@
-// [단위] 자동 대응 (docs/implementation.md M11, D154, D159, D169, D171, D183, D184, D208~D210). 새 설정과 Work 설정,
-// 자동 시작의 판정(꺼짐, 기다림, 새 항목 없음, 멈춤, 시작)과 재시작 규칙, 사람 손 없이 이어진 라운드의 셈과 상한,
-// PR 대응의 자동 승인 판정(4.3, 닫힌 PR), 배지 차례, PR 패널의 자동 대응, context.md와 머리 띠를 본다.
+// [단위] 자동 대응 (docs/implementation.md M11, D154, D159, D169, D171, D183, D184, D208~D211). 새 설정과 Work 설정,
+// 자동 시작의 판정(꺼짐, 기다림, 새 항목 없음, 멈춤, 시작)과 재시작 규칙, 대응 거리 알림, 사람 손 없이 이어진 라운드의
+// 셈과 상한, PR 대응의 자동 승인 판정(4.3, 닫힌 PR)과 승인 화면 안내, 배지 차례, PR 패널의 자동 대응, context.md와
+// 머리 띠를 본다.
 import { describe, expect, it } from 'vitest'
 import { AUTO_HOLD_LABEL, BADGE_ORDER, autoApproveNote, badge } from '../../src/core/approval'
 import {
@@ -28,6 +29,7 @@ import {
   autoRounds,
   autoStartNotice,
   autoStartOn,
+  receivedNeedsNotice,
   wantsAutoStart,
 } from '../../src/core/respond'
 import { bandText } from '../../src/core/review'
@@ -412,6 +414,44 @@ describe('자동 시작의 판정 (D154, D159, D170, D171, D210)', () => {
     expect(autoPlan(full, others, ON)).toEqual({ kind: 'none' })
   })
 
+  it('받은 새 항목은 자동 대응이 맡지 못하고 사람이 손대야 풀릴 때만 "대응 거리가 들어옴"으로 알린다 (D184, D211)', () => {
+    const work = inPr()
+    // 꺼져 있으면 알린다
+    expect(receivedNeedsNotice(work, NEW, DEFAULT_CONFIG)).toBe(true)
+    // 시작하거나 상한에서 멈추면 그것을 알린다
+    expect(receivedNeedsNotice(work, NEW, ON)).toBe(false)
+    expect(receivedNeedsNotice(withPr(work, { auto_rounds: 2 }), NEW, ON)).toBe(false)
+    // 도는 라운드(대기열, 실행 중, 카운트다운, 사람의 승인 대기)는 끝나면 이어서 시작한다
+    const started = respond(work, true).work
+    const queued: WorkState = {
+      ...started,
+      tasks: started.tasks.map((t) => (t.node === 'respond' ? { ...t, status: 'queued' } : t)),
+    }
+    expect(receivedNeedsNotice(queued, NEW, ON)).toBe(false)
+    const running = launch(started)
+    expect(task(running).status).toBe('working')
+    expect(receivedNeedsNotice(running, NEW, ON)).toBe(false)
+    const counting = stop(running).work
+    expect(task(counting).countdown).toBeDefined()
+    expect(receivedNeedsNotice(counting, NEW, ON)).toBe(false)
+    const manual = { ...ON, auto_approve: { ...ON.auto_approve, respond: false } }
+    const waiting = stop(running, valid(), manual).work
+    expect(task(waiting)).toMatchObject({ status: 'awaiting_approval' })
+    expect(task(waiting).countdown).toBeUndefined()
+    expect(receivedNeedsNotice(waiting, NEW, ON)).toBe(false)
+    // 중단된 대응 task와 닫힌 PR은 사람이 손대야 풀린다: 알리지 않으면 새 항목이 조용히 쌓인다
+    const quit = apply(running, {
+      type: 'interrupt',
+      taskId: task(running).id,
+      at: at(),
+      reason: 'app_quit',
+    }).work
+    expect(task(quit).status).toBe('interrupted')
+    expect(autoPlan(quit, NEW, ON)).toMatchObject({ kind: 'wait' })
+    expect(receivedNeedsNotice(quit, NEW, ON)).toBe(true)
+    expect(receivedNeedsNotice(prRead(work, 'CLOSED').work, NEW, ON)).toBe(true)
+  })
+
   it('알림 문구 (D184)', () => {
     expect(autoStartNotice(7, 2, 3)).toBe('PR #7: 자동 대응 시작 — 라운드 2, 새 항목 3개')
     expect(autoPausedNotice(7, 3, 1)).toBe(
@@ -612,6 +652,31 @@ describe('PR 대응의 자동 승인 (4.3, D128~D131, D169, D179)', () => {
     const r = apply(counting, { type: 'app.restarted', at: at(), check: valid() })
     expect(task(r.work).countdown).toBeUndefined()
     expect(task(r.work).auto_hold?.reasons).toEqual(['restart'])
+  })
+
+  it('승인한 뒤 push나 게시가 실패해 승인 대기로 남으면 자동 승인 안내를 보이지 않는다: 판정할 턴이 없고, 실패와 [다시 시도]는 강조 영역이 보인다', () => {
+    const counting = stop(launch(respond(inPr(), true).work)).work
+    const failed = apply(fire(counting).work, {
+      type: 'respond.failed',
+      at: at(),
+      error: 'HTTP 502',
+    }).work
+    expect(task(failed)).toMatchObject({
+      status: 'awaiting_approval',
+      respond: { failure: { stage: 'push', error: 'HTTP 502' } },
+    })
+    expect(task(failed).countdown).toBeUndefined()
+    expect(task(failed).auto_hold).toBeUndefined()
+    expect(autoApproveNote(failed, task(failed), ON)).toEqual({ on: true, hold: null })
+    // 실패가 없고 까닭도 없는 승인 대기는 자동 승인을 켜기 전에 끝난 턴이다 (D128)
+    const before = stop(launch(respond(inPr(), false).work), valid(), {
+      ...ON,
+      auto_approve: { ...ON.auto_approve, respond: false },
+    }).work
+    expect(task(before).auto_hold).toBeUndefined()
+    expect(autoApproveNote(before, task(before), ON).hold).toBe(
+      '자동 승인은 턴이 끝날 때 판정합니다. 이 결과는 사람이 승인합니다. 다음 턴이 끝날 때 다시 판정합니다.',
+    )
   })
 })
 

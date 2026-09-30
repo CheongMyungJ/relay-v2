@@ -197,6 +197,7 @@ import {
   isAppReply,
   pendingRespond,
   planRound,
+  receivedNeedsNotice,
   reconcileItems,
   replyItemIds,
   respondFailureView,
@@ -432,6 +433,12 @@ export class WorkRunner {
   private autoWanted = false
   /** 자동 대응을 판정하고 시작하는 중. 한 번에 하나다 */
   private autoRunning: Promise<void> | null = null
+  /**
+   * 앱을 켤 때의 읽기를 아직 반영하지 못했다 (D159). 켤 때의 읽기가 실패하거나 끊긴 작업 때문에 읽지 못하면, 반영에 성공한
+   * 첫 읽기가 켤 때의 읽기다: 그 읽기까지는 알리지 않고 자동 대응을 바라지 않는다. 꺼져 있던 동안 쌓인 항목으로는 자동
+   * 시작하지 않는다
+   */
+  private prStartRead = false
 
   /**
    * workText는 앱이 마지막으로 쓰거나 읽은 work.json의 내용이다. 다음에 쓰기 전에 이것과 비교한다 (D124).
@@ -2540,17 +2547,18 @@ export class WorkRunner {
 
   /**
    * PR 진행을 시작했거나 앱을 켰다 (시나리오 10-1, D158, D159). 항목을 읽어 두고, 닫히지 않은 PR이면 바로 한 번 읽고
-   * 주기 읽기를 건다. 닫힌 PR은 [새로 고침]으로만 읽는다(D179). quiet면(앱을 켤 때) 읽은 결과로 알리지 않는다
-   * (D159, D121). 읽기는 기다리지 않는다: 반영은 이 Work의 처리 줄에서 한다(I51)
+   * 주기 읽기를 건다. 닫힌 PR은 [새로 고침]으로만 읽는다(D179). quiet면(앱을 켤 때) 반영에 성공한 첫 읽기까지 알리지
+   * 않고 자동 대응을 바라지 않는다 (D159, D121). 읽기는 기다리지 않는다: 반영은 이 Work의 처리 줄에서 한다(I51)
    */
   async startPr(opts: { quiet?: boolean } = {}): Promise<void> {
     if (!this.work.pr) return
+    if (opts.quiet) this.prStartRead = true
     await this.prItems()
     // 항목의 대응 중·처리됨을 대응 task의 기록(work.json)에 맞춘다: 앱이 둘 사이에 꺼졌을 수 있다 (D189)
     await this.syncItemStatus()
     this.changed()
     if (this.work.status !== 'pr' || this.work.pr.closed_at) return
-    void this.readPrNow(opts)
+    void this.readPrNow()
   }
 
   /** 주기 읽기를 건다 (D158). PR 진행이 아니거나 닫혔거나 앱을 끝내면 걸지 않는다 */
@@ -2583,10 +2591,10 @@ export class WorkRunner {
    * PR을 한 번 읽는다 (시나리오 10-2, I51). 네트워크 부분은 처리 줄 밖에서 하고 반영은 줄에서 한다. 읽는 중이면 그
    * 읽기가 끝난 뒤 다시 읽는다. 끝나면 다음 주기 읽기를 건다
    */
-  private async readPrNow(opts: { quiet?: boolean } = {}): Promise<CommandResult> {
+  private async readPrNow(): Promise<CommandResult> {
     while (this.prReading) await this.prReading
     if (this.closing) return { ok: false, error: '앱을 끝내는 중' }
-    const run = this.readPrOnce(opts).catch((e: unknown): CommandResult =>
+    const run = this.readPrOnce().catch((e: unknown): CommandResult =>
       this.prFailed(`PR을 읽지 못함: ${message(e)}`),
     )
     this.prReading = run
@@ -2606,7 +2614,7 @@ export class WorkRunner {
     return { ok: false, error }
   }
 
-  private async readPrOnce(opts: { quiet?: boolean }): Promise<CommandResult> {
+  private async readPrOnce(): Promise<CommandResult> {
     const pr = this.work.pr
     if (this.work.status !== 'pr' || !pr) return { ok: false, error: 'PR 진행인 Work가 아님' }
     // 끊긴 작업의 기록이 있는 동안은 읽지 않는다 (I51, D122). 진행 중인 머지는 처리 줄이 끝나야 읽는다
@@ -2636,20 +2644,16 @@ export class WorkRunner {
     } catch (e) {
       return this.prFailed(`PR을 읽지 못함: ${message(e)}`)
     }
-    return this.enqueue(() => this.applyRead(pr.number, fetched, opts))
+    return this.enqueue(() => this.applyRead(pr.number, fetched))
   }
 
   /**
    * 읽은 결과를 반영한다 (처리 줄 안, I51). 새 head를 처음 읽은 때로 CI를 정하고(D196), 원격만 앞섰으면 fast-forward로
    * 받고(D193) 기준 브랜치 병합이 있으면 기준 커밋을 옮기고(D181), 항목을 모아(D189, D199) pr-items.json에 쓰고,
    * 읽은 결과를 machine에 넣는다. 사람이 움직여야 하면 알린다(D184): 대응 거리가 들어옴, 머지할 수 있음, 닫힘,
-   * 밖에서 머지됨. 앱을 켤 때 읽은 것(quiet)은 알리지 않는다(D159)
+   * 밖에서 머지됨. 앱을 켤 때의 읽기(반영에 성공한 첫 읽기)는 알리지 않는다(D159)
    */
-  private async applyRead(
-    number: number,
-    f: PrFetched,
-    opts: { quiet?: boolean },
-  ): Promise<CommandResult> {
+  private async applyRead(number: number, f: PrFetched): Promise<CommandResult> {
     const pr = this.work.pr
     // 앱을 끝내는 동안 끝난 읽기는 반영하지 않는다. 다음에 켤 때 다시 읽는다 (D159)
     if (this.closing) return { ok: false, error: '앱을 끝내는 중' }
@@ -2721,6 +2725,7 @@ export class WorkRunner {
       sync,
     }
     this.prError = warnings.length ? warnings.join(' / ') : null
+    const quiet = this.prStartRead
     await this.feed(
       {
         type: 'pr.read',
@@ -2741,15 +2746,12 @@ export class WorkRunner {
       },
       { quiet: true },
     )
-    // 받은 새 항목으로 자동 대응을 바란다. 앱을 켤 때 읽은 것은 보이기만 한다 (D159, D210)
+    this.prStartRead = false
+    // 받은 새 항목으로 자동 대응을 바란다. 앱을 켤 때의 읽기는 보이기만 한다 (D159, D210)
     const autoOn = autoStartOn(this.ctx.config(), this.work.settings)
-    const wanted = wantsAutoStart({
-      quiet: opts.quiet === true,
-      received: gathered.received.length,
-      on: autoOn,
-    })
+    const wanted = wantsAutoStart({ quiet, received: gathered.received.length, on: autoOn })
     if (wanted) this.autoWanted = true
-    if (!opts.quiet) {
+    if (!quiet) {
       const w = this.work
       const notes: string[] = []
       if (w.status === 'completed' && w.pr?.merged?.outside) {
@@ -2762,8 +2764,8 @@ export class WorkRunner {
         )
       } else if (w.status === 'pr') {
         if (w.pr?.closed_at && !closedBefore) notes.push('PR이 닫혀 자동 읽기를 멈춤')
-        // 자동 시작이 켜져 있으면 들어옴 대신 자동 시작이나 멈춤을 알린다 (D184)
-        if (gathered.received.length && !autoOn) {
+        // 자동 대응이 맡으면 들어옴 대신 자동 시작이나 멈춤을 알린다. 사람이 손대야 풀리면 알린다 (D184, D211)
+        if (gathered.received.length && receivedNeedsNotice(w, next.items, this.ctx.config())) {
           notes.push(`대응 거리 ${gathered.received.length}개가 들어옴`)
         }
         if (!mergeableBefore && this.prGate().enabled) notes.push('머지할 수 있음')

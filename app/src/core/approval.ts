@@ -173,15 +173,18 @@ export interface AutoApproveNote {
 
 /**
  * 승인 화면의 자동 승인 안내 (D83, D128~D131). 켜진 단계의 승인 대기인데 카운트다운하지 않으면 까닭을 보인다.
- * 까닭이 적혀 있지 않으면 자동 승인을 켜기 전에 턴이 끝난 것이다 (D128)
+ * 까닭이 적혀 있지 않으면 자동 승인을 켜기 전에 턴이 끝난 것이다 (D128). 승인한 뒤 push나 답글 게시가 실패해 승인
+ * 대기로 남은 PR 대응 task는 보이지 않는다: 세션이 끝나 판정할 턴이 없고, 실패와 [다시 시도]는 강조 영역이 보인다
  */
 export function autoApproveNote(
   work: Pick<WorkState, 'settings'>,
-  task: Pick<TaskRecord, 'node' | 'status' | 'countdown' | 'auto_hold'>,
+  task: Pick<TaskRecord, 'node' | 'status' | 'countdown' | 'auto_hold' | 'respond'>,
   config: AppConfig,
 ): AutoApproveNote {
   const on = approvalMode(config, work.settings, task.node) === 'auto'
-  if (!on || task.status !== 'awaiting_approval' || task.countdown) return { on, hold: null }
+  if (!on || task.status !== 'awaiting_approval' || task.countdown || task.respond?.failure) {
+    return { on, hold: null }
+  }
   const next = '다음 턴이 끝날 때 다시 판정합니다.'
   const hold = task.auto_hold
     ? `자동 승인하지 않음: ${holdText(task.auto_hold.reasons)}. ${next}`
