@@ -80,7 +80,12 @@ export function codexToolDenial(
   const command = [args['command'], args['cmd'], args['patch'], args['input']]
     .filter((x): x is string => typeof x === 'string')
     .join('\n')
-  if (/\bgit(?:\.exe)?\b[^\n;&|]*\bpush\b|\bgh(?:\.exe)?\b[^\n;&|]*\bpr\b/i.test(command)) {
+  const execution = /bash|shell|exec|terminal/i.test(tool)
+    ? [args['command'], args['cmd'], args['input']]
+        .filter((x): x is string => typeof x === 'string')
+        .join('\n')
+    : ''
+  if (/\bgit(?:\.exe)?\b[^\n;&|]*\bpush\b|\bgh(?:\.exe)?\b[^\n;&|]*\bpr\b/i.test(execution)) {
     return 'push와 PR 조작은 사람이 승인한 뒤 relay 앱이 수행합니다.'
   }
   const paths: string[] = []
@@ -95,10 +100,10 @@ export function codexToolDenial(
   if (paths.some(protectedPath)) return '앱 소유 파일이나 이전 task 기록은 편집할 수 없습니다.'
   if (
     /(?:\b(?:rm|mv|cp|tee|truncate|Set-Content|Add-Content|Remove-Item|Move-Item)\b|\bsed\b[^\n]*\s-i\b|write_text|writeFile|open\([^\n]*['"](?:w|a)['"]|(?:^|[^<])>)/i.test(
-      command,
+      execution,
     )
   ) {
-    const normalized = norm(command)
+    const normalized = norm(execution)
     if ([...protectedFiles, ...protectedDirs].some((p) => normalized.includes(p)))
       return '명령이 앱 소유 파일이나 이전 task 기록을 변경하려고 합니다.'
   }

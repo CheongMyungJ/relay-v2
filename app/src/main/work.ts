@@ -19,7 +19,7 @@ import { codexSkillPath } from '../adapters/codex'
 import { codexToolDenial } from '../core/codex'
 import { humanAnswers, humanQuestions } from '../core/questions'
 import type { HumanAnswerReply, PendingQuestionView } from '../shared/questions'
-import { agentLabel, taskEngine, taskEngineVersion } from '../core/agent'
+import { agentLabel, knownTaskEngine, taskEngine, taskEngineVersion } from '../core/agent'
 import {
   GhApiError,
   ghApiPost,
@@ -328,6 +328,8 @@ interface PendingHumanQuestion {
 interface CleanupSession {
   hooksReady: boolean
   question?: PendingHumanQuestion
+  /** Codex 내부 대화 전환에서 앞 질문을 취소한다. task 기록에는 저장하지 않는다. */
+  sessionId?: string
   /** 대기열에서도 정리를 요청한 verify task의 엔진을 유지한다. */
   engine: TaskRecord['engine']
   /** 터미널 id: cleanup-<n>. 다시 열면 새 터미널이다 */
@@ -2120,6 +2122,16 @@ export class WorkRunner {
         }
     }
     if (taskEngine(c) === 'codex' && str(req.body['agent_id']) !== undefined) return null
+    if (taskEngine(c) === 'codex') {
+      const sessionId = str(req.body['session_id'])
+      const switched = req.event === 'SessionStart' && sessionId && sessionId !== c.sessionId
+      if ((req.event === 'UserPromptSubmit' || switched) && c.question)
+        await this.finishQuestion(CLEANUP_ID, c, c.question, {
+          cancelled: true,
+          reason: switched ? '대화가 바뀌었습니다.' : '새 요청을 보냈습니다.',
+        })
+      if (req.event === 'SessionStart' && sessionId) c.sessionId = sessionId
+    }
     if ((req.event === 'Interrupt' || req.event === 'SessionEnd') && c.question) {
       this.cancelQuestion(c, '정리 세션의 질문을 취소했습니다.')
       this.changed()
@@ -3941,9 +3953,11 @@ export class WorkRunner {
       label: taskLabel(t),
       band: bandText(t),
       notice:
-        t.engine === 'codex' && this.live.has(t.id) && !this.live.get(t.id)?.hooksReady
-          ? 'Codex 터미널의 폴더 신뢰 확인 후 /hooks로 relay 훅을 검토·신뢰하세요.'
-          : permissionNotice(t),
+        knownTaskEngine(t) === null
+          ? `${agentLabel(t)}. 이 세션은 재개할 수 없습니다.`
+          : t.engine === 'codex' && this.live.has(t.id) && !this.live.get(t.id)?.hooksReady
+            ? 'Codex 터미널의 폴더 신뢰 확인 후 /hooks로 relay 훅을 검토·신뢰하세요.'
+            : permissionNotice(t),
       status: t.status,
       statusLabel: TASK_STATUS_LABEL[t.status],
       live: this.live.has(t.id),

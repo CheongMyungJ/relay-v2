@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { agentLabel, taskEngine, taskEngineVersion } from '../../src/core/agent'
 import { applyConfigPatch, normalizeConfig } from '../../src/core/config'
-import { createWork, currentTask, transition } from '../../src/core/machine'
+import { actions, createWork, currentTask, transition } from '../../src/core/machine'
+import { autoApproveNote } from '../../src/core/approval'
 import { DEFAULT_CONFIG } from '../../src/shared/config'
 import type { AgentEngine } from '../../src/shared/agent'
 import type { WorkState } from '../../src/shared/work'
@@ -50,6 +51,50 @@ describe('엔진 선택과 이전 기록 (E3, E5)', () => {
     const corrupt = JSON.parse('{"engine":"unknown"}') as { engine: AgentEngine }
     expect(() => taskEngine(corrupt)).toThrow('지원하지 않는 엔진')
     expect(agentLabel(corrupt)).toContain('unknown')
+  })
+
+  it('알 수 없는 엔진은 재개와 자동 승인을 막고 재시작·설정 변경은 허용한다', () => {
+    const initial = makeWork()
+    const config = {
+      ...DEFAULT_CONFIG,
+      auto_approve: { ...DEFAULT_CONFIG.auto_approve, fix: true },
+    }
+    const task = {
+      ...firstTask(initial),
+      node: 'fix' as const,
+      status: 'awaiting_approval' as const,
+      engine: JSON.parse('"future-engine"') as AgentEngine,
+      countdown: { started_at: at, seconds: 10 },
+    }
+    const work: WorkState = { ...initial, tasks: [task] }
+    expect(actions(work).resume).toBe(false)
+    expect(autoApproveNote(work, task, config).on).toBe(false)
+    const changed = transition(work, { type: 'config.updated', at }, config)
+    expect(currentTask(changed.work)?.countdown).toBeUndefined()
+    expect(transition(work, { type: 'resume', taskId: task.id, at }, config)).toMatchObject({
+      rejected: expect.stringContaining('future-engine'),
+      effects: [],
+    })
+    const restarted = transition(
+      { ...work, tasks: [{ ...task, status: 'working' }] },
+      {
+        type: 'app.restarted',
+        at,
+        check: {
+          handoff_present: true,
+          status: 'awaiting_approval',
+          errors: [],
+          warnings: [],
+        },
+      },
+      config,
+    )
+    expect(restarted.rejected).toBeUndefined()
+    expect(currentTask(restarted.work)).toMatchObject({
+      engine: 'future-engine',
+      status: 'awaiting_approval',
+    })
+    expect(currentTask(restarted.work)?.countdown).toBeUndefined()
   })
 
   it('처음 만든 task의 엔진은 대기열과 설정 변경 후에도 유지한다', () => {

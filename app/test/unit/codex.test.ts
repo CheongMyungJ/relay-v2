@@ -52,6 +52,27 @@ describe('Codex 보호 범위', () => {
     ).toBeTruthy()
     expect(codexToolDenial(win, 'Write', { path: 'src/a.js' })).toBeNull()
   })
+  it('push·PR 명령을 설명하는 일반 패치는 허용하고 실행과 보호 대상 편집은 거절한다', () => {
+    const patch = [
+      '*** Begin Patch',
+      '*** Update File: README.md',
+      '@@',
+      '+To publish, run git push origin main or gh pr create.',
+      '+> Read the previous task at /home/relay/work/tasks/01-intake/handoff.md.',
+      '*** End Patch',
+    ].join('\n')
+    expect(codexToolDenial(input, 'apply_patch', { input: patch })).toBeNull()
+    expect(
+      codexToolDenial(input, 'apply_patch', {
+        input: patch.replace('README.md', '/home/relay/work/work.json'),
+      }),
+    ).toBeTruthy()
+    for (const tool of ['Bash', 'exec_command', 'shell_command', 'shell']) {
+      expect(codexToolDenial(input, tool, { command: 'git push origin main' })).toBeTruthy()
+      expect(codexToolDenial(input, tool, { cmd: 'gh pr create' })).toBeTruthy()
+      expect(codexToolDenial(input, tool, { input: 'rm /home/relay/work/work.json' })).toBeTruthy()
+    }
+  })
   it('TOML 인라인 객체와 문자열을 구분하고 토큰을 훅 설정에 넣지 않는다', () => {
     expect(tomlValue({ input: { cmd: '한글 "quoted"\nline' }, enabled: true })).toBe(
       '{ "input" = { "cmd" = "한글 \\"quoted\\"\\nline" }, "enabled" = true }',

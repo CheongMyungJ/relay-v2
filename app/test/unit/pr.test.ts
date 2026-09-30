@@ -920,6 +920,14 @@ describe('PR 패널: 엔진별 자동 승인', () => {
       })?.auto.approve,
     ).toBe(false)
     expect(
+      prView({
+        ...input,
+        work: prWork({
+          tasks: [{ ...active, engine: JSON.parse('"future-engine"') as typeof active.engine }],
+        }),
+      })?.auto.approve,
+    ).toBe(false)
+    expect(
       prView({ ...input, work: prWork({ tasks: [{ ...active, status: 'approved' }] }) })?.auto
         .approve,
     ).toBe(false)

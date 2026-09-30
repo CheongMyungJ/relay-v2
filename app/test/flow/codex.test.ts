@@ -211,6 +211,121 @@ describe('[흐름] Codex CLI와 실제 훅·MCP 브리지', () => {
     expect(s.hh.records().filter((r) => r['type'] === 'start')).toHaveLength(0)
   })
 
+  it('정리 질문은 같은 대화 압축에 유지하고 새 요청·대화 전환에 취소한다', async () => {
+    const s = await setup({
+      ...scenario('S'),
+      cleanup: [
+        { do: 'prompt' },
+        {
+          do: 'ask',
+          afterEnter: [
+            {
+              do: 'hook',
+              event: 'SessionStart',
+              body: { session_id: 'child-session', agent_id: 'child', source: 'startup' },
+            },
+            { do: 'hook', event: 'SessionStart', body: { source: 'compact' } },
+          ],
+        },
+        { do: 'ask', afterEnter: [{ do: 'prompt' }] },
+        {
+          do: 'ask',
+          afterEnter: [
+            {
+              do: 'hook',
+              event: 'SessionStart',
+              body: { session_id: 'new-cleanup-session', source: 'startup' },
+            },
+          ],
+        },
+        { do: 'ask' },
+        { do: 'wait' },
+      ],
+    })
+    for (const index of [0, 1, 2, 3]) {
+      const id = `t-0${index + 1}`
+      await s.hh.ui.until(
+        () => s.view()?.tasks[index]?.status === 'awaiting_approval',
+        `${id} 승인 대기`,
+      )
+      if (index < 3)
+        expect(await s.hh.relay.approve(s.key, id, index === 0 ? { size: 'S' } : {})).toEqual({
+          ok: true,
+        })
+    }
+    const runner = s.hh.relay.work(s.key)
+    if (!runner) throw new Error('runner 없음')
+    fs.writeFileSync(path.join(runner.worktree, 'debug.log'), '정리할 파일')
+    expect(await s.hh.relay.openCleanup(s.key, 'push')).toEqual({ ok: true })
+    const question = () => s.view()?.cleanup?.question
+    const first = await s.hh.ui.until(question, '압축 전 정리 질문')
+    const terminal = s.view()?.cleanup?.terminal
+    const pid = s.hh
+      .codexRecords()
+      .filter((r) => r['type'] === 'start')
+      .at(-1)?.['pid']
+    if (!terminal || !pid) throw new Error('정리 세션 없음')
+    const answers = () =>
+      s.hh.codexRecords().filter((r) => r['type'] === 'answer' && r['pid'] === pid)
+    s.hh.relay.terminalWrite(terminal, '\r')
+    await s.hh.ui.until(
+      () =>
+        s.hh
+          .codexRecords()
+          .some(
+            (r) =>
+              r['pid'] === pid &&
+              r['event'] === 'SessionStart' &&
+              (r['body'] as { source?: string }).source === 'compact',
+          ),
+      '같은 대화 압축 훅',
+    )
+    expect(question()?.id).toBe(first.id)
+    expect(answers()).toHaveLength(0)
+    expect(
+      await s.hh.relay.answerQuestion(s.key, 'cleanup', first.id, { scope: ['첫 답'] }),
+    ).toEqual({
+      ok: true,
+    })
+    const second = await s.hh.ui.until(
+      () => (question()?.id !== first.id ? question() : undefined),
+      '새 요청 전 정리 질문',
+    )
+    s.hh.relay.terminalWrite(terminal, '\r')
+    const third = await s.hh.ui.until(
+      () => (question()?.id !== second.id ? question() : undefined),
+      '새 요청 후 정리 질문',
+    )
+    expect(
+      (await s.hh.relay.answerQuestion(s.key, 'cleanup', second.id, { scope: ['오래된 답'] })).ok,
+    ).toBe(false)
+    expect(question()?.id).toBe(third.id)
+    s.hh.relay.terminalWrite(terminal, '\r')
+    const fourth = await s.hh.ui.until(
+      () => (question()?.id !== third.id ? question() : undefined),
+      '대화 전환 후 정리 질문',
+    )
+    expect((await s.hh.relay.answerQuestion(s.key, 'cleanup', third.id, null)).ok).toBe(false)
+    expect(question()?.id).toBe(fourth.id)
+    expect(
+      await s.hh.relay.answerQuestion(s.key, 'cleanup', fourth.id, { scope: ['새 답'] }),
+    ).toEqual({
+      ok: true,
+    })
+    await s.hh.ui.until(() => answers().length === 4, '정리 MCP 응답 네 개')
+    const replies = answers().map((r) => {
+      const result = r['result'] as { isError: boolean; content: { text: string }[] }
+      return { isError: result.isError, ...JSON.parse(result.content[0]?.text ?? '') }
+    })
+    expect(replies).toMatchObject([
+      { cancelled: false, isError: false, answers: { scope: ['첫 답'] } },
+      { cancelled: true, isError: true },
+      { cancelled: true, isError: true },
+      { cancelled: false, isError: false, answers: { scope: ['새 답'] } },
+    ])
+    expect(await s.hh.relay.closeCleanup(s.key)).toEqual({ ok: true })
+  })
+
   it('형식 오류 되돌림을 브리지 응답으로 보낸 뒤 정상 handoff로 승인 대기가 된다', async () => {
     const s = await setup({
       tasks: {

@@ -23,7 +23,7 @@ import type {
 } from '../shared/views'
 import type { AppConfig } from '../shared/config'
 import type { MergeMethod, WorkState } from '../shared/work'
-import { taskEngine } from './agent'
+import { knownTaskEngine } from './agent'
 import { approvalMode } from './approval'
 import { RESPOND } from './pipeline'
 import {
@@ -1034,7 +1034,7 @@ export function prView(input: PrViewInput): PrView | null {
   const { read } = input
   const activeResponse = pendingRespond(input.work)
   const responseEngine = activeResponse
-    ? taskEngine(activeResponse)
+    ? knownTaskEngine(activeResponse)
     : (input.config.agent_engine ?? 'claude')
   const gate = mergeGate({
     work: input.work,

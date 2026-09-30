@@ -76,9 +76,24 @@ const save = () => {
 save()
 record({ type: 'start', args: argv, sessionId, context })
 console.log(`FAKE-CODEX READY PID ${process.pid}`)
+let enters = 0
+const enterWaiters = []
 if (process.stdin.isTTY) process.stdin.setRawMode(true)
 process.stdin.resume()
-process.stdin.on('data', () => {})
+process.stdin.on('data', (data) => {
+  enters += (data.toString('utf8').match(/[\r\n]/g) ?? []).length
+  while (enters > 0 && enterWaiters.length > 0) {
+    enters--
+    enterWaiters.shift()()
+  }
+})
+const waitEnter = () => {
+  if (enters > 0) {
+    enters--
+    return Promise.resolve()
+  }
+  return new Promise((resolve) => enterWaiters.push(resolve))
+}
 
 async function hook(event, extra = {}) {
   const body = { hook_event_name: event, session_id: sessionId, cwd: process.cwd(), ...extra }
@@ -147,7 +162,7 @@ async function steps(list) {
     if (step.do === 'prompt')
       await hook('UserPromptSubmit', { prompt: '사람 요청', permission_mode: 'bypassPermissions' })
     else if (step.do === 'ask') {
-      const message = await rpc('tools/call', {
+      const waiting = rpc('tools/call', {
         name: 'ask_human',
         arguments: {
           questions: step.questions ?? [
@@ -163,6 +178,11 @@ async function steps(list) {
           ],
         },
       })
+      if (step.afterEnter) {
+        await waitEnter()
+        await steps(step.afterEnter)
+      }
+      const message = await waiting
       record({ type: 'answer', result: message.result })
     } else if (step.do === 'write') {
       const p = path.join(context.taskDir, step.file)

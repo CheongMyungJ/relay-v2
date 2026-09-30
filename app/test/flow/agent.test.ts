@@ -92,6 +92,39 @@ describe('[흐름] 엔진 설정과 재개', () => {
     expect(s.read(key).tasks[0]).toMatchObject({ session: { id, alive: true } })
   })
 
+  it.each(['interrupted', 'queued', 'working'] as const)(
+    '알 수 없는 엔진의 %s 기록은 표시하고 재개만 거절한다',
+    async (status) => {
+      const s = await setup()
+      const unknown = await s.create()
+      const healthy = await s.create()
+      await s.hh.ui.until(() => s.prompts() >= 1, '기존 CLI 대화 생성')
+      await s.hh.relay.close()
+      await s.hh.relay.settled()
+      const record = s.read(unknown)
+      const task = record.tasks[0]
+      if (!task) throw new Error('시험 task 없음')
+      Object.assign(task, { engine: 'future-engine', status, session: null })
+      fs.writeFileSync(s.file(unknown), JSON.stringify(record))
+      const starts = s.hh.records().filter((r) => r['type'] === 'start').length
+      await s.hh.reopen()
+      const snapshot = s.hh.relay.snapshot()
+      expect(snapshot.works.map((w) => w.key)).toEqual(expect.arrayContaining([unknown, healthy]))
+      const view = snapshot.works.find((w) => w.key === unknown)
+      expect(view?.tasks[0]?.engineLabel).toContain('future-engine')
+      expect(view?.tasks[0]?.notice).toContain('재개할 수 없습니다')
+      expect(view?.actions.resume).toBe(false)
+      expect((await s.hh.relay.review(unknown, 't-01'))?.autoApprove.on).toBe(false)
+      expect(await s.hh.relay.resume(unknown, 't-01')).toMatchObject({
+        ok: false,
+        error: expect.stringContaining('future-engine'),
+      })
+      expect(s.read(unknown).tasks[0]?.engine).toBe('future-engine')
+      expect(s.hh.records().filter((r) => r['type'] === 'start')).toHaveLength(starts)
+      expect(await s.hh.relay.resume(healthy, 't-01')).toMatchObject({ ok: true })
+    },
+  )
+
   it('미설치 Codex task를 Claude로 자동 대체하여 실행하지 않는다', async () => {
     const s = await setup()
     await s.hh.relay.updateConfig({ agent_engine: 'codex' })

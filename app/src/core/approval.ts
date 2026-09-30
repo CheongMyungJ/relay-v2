@@ -1,7 +1,7 @@
 // 승인의 판정: 수동 승인 (4.1, D90, D112), 자동 승인의 방식과 조건 (4.2, 4.3, D72, D129), 사이드바 배지의
 // 우선순위 (D80). machine의 승인과 자동 승인 카운트다운, 승인 화면의 버튼이 같은 판정을 쓴다.
 import { AGENT_APPROVAL_NOTICE, type AgentEngine } from '../shared/agent'
-import { taskEngine } from './agent'
+import { agentLabel, knownTaskEngine } from './agent'
 import type { AppConfig, AutoApproveNode, WorkSettings } from '../shared/config'
 import type { Handoff, Size, TaskNode } from '../shared/contracts'
 import type { ApprovalGate, Badge, BadgeKind } from '../shared/views'
@@ -81,9 +81,9 @@ export function approvalMode(
   config: Pick<AppConfig, 'auto_approve'>,
   settings: WorkSettings,
   node: TaskNode,
-  engine: AgentEngine = 'claude',
+  engine: AgentEngine | null = 'claude',
 ): ApprovalMode {
-  if (engine === 'codex' || !autoApprovable(node)) return 'manual'
+  if (engine !== 'claude' || !autoApprovable(node)) return 'manual'
   return (settings.auto_approve?.[node] ?? config.auto_approve[node]) ? 'auto' : 'manual'
 }
 
@@ -185,8 +185,10 @@ export function autoApproveNote(
   task: Pick<TaskRecord, 'node' | 'status' | 'countdown' | 'auto_hold' | 'respond' | 'engine'>,
   config: AppConfig,
 ): AutoApproveNote {
-  const engine = taskEngine(task)
+  const engine = knownTaskEngine(task)
   const on = approvalMode(config, work.settings, task.node, engine) === 'auto'
+  if (engine === null)
+    return { on: false, hold: `${agentLabel(task)}. 이 세션은 재개할 수 없습니다.` }
   if (engine === 'codex') {
     return {
       on: false,
