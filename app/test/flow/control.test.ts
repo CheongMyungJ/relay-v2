@@ -6,7 +6,7 @@ import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { HookServer, type HookHandler } from '../../src/adapters/hooks'
 import { continuePrompt } from '../../src/core/settings'
-import type { WorkView } from '../../src/shared/views'
+import type { ActivityView, WorkView } from '../../src/shared/views'
 import type { LifecycleEvent, WorkState } from '../../src/shared/work'
 import { drive } from './driver'
 import { TIMING_EVENTS, harness, makeRepo, register, settle, type Harness } from './harness'
@@ -118,11 +118,20 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
       const live = [...s.h.ui.works.values()].flatMap((w) => w.tasks).filter((t) => t.live)
       maxLive = Math.max(maxLive, live.length)
     })
+    // C의 intake가 처음 보인 "세션을 띄우는 중" (D216)
+    let cKey: string | null = null
+    let cStarting: ActivityView | null = null
+    const offStarting = s.h.ui.onChange(() => {
+      const t = cKey ? s.h.ui.works.get(cKey)?.tasks[0] : undefined
+      if (!cStarting && t?.activity && !t.activity.turn) cStarting = t.activity
+    })
     const a = await s.create('버그 A')
     const b = await s.create('버그 B')
     const c = await s.create('버그 C')
+    cKey = c
     // C의 intake는 자리가 없어 대기열에 있다
     const queued = await untilTask(s, c, (t) => t.status === 'queued', 'C 대기열')
+    const queuedSeenAt = Date.now()
     expect(queued.live).toBe(false)
     expect(s.h.ui.works.get(c)?.badge).toEqual({ kind: 'queued', label: '대기열', hot: false })
     expect(s.h.ui.works.get(c)?.actions).toMatchObject({ interrupt: true, resume: false })
@@ -131,9 +140,13 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
 
     const results = await Promise.all([a, b, c].map((key) => drive(s.h.relay, s.h.ui, key)))
     off()
+    offStarting()
     for (const r of results) expect(r, s.h.ui.dump()).toMatchObject({ status: 'completed' })
     expect(maxLive).toBeLessThanOrEqual(2)
     expect(maxLive).toBe(2)
+    // 대기열에서 기다린 시간은 "세션을 띄우는 중"에 넣지 않는다: 자리를 잡은 때부터 센다 (D216)
+    expect(cStarting).not.toBeNull()
+    expect((cStarting as ActivityView | null)?.since).toBeGreaterThanOrEqual(queuedSeenAt)
     // 대기열에서 자동으로 시작하면 알린다
     const auto = s.h.ui.notices.filter((n) => n.body.endsWith('대기열에서 자동 시작'))
     expect(auto.map((n) => n.workKey)).toContain(c)
@@ -566,6 +579,9 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
     // 이 시험은 앱을 정상으로 끈 뒤 충돌 직전의 work.json을 되돌렸으므로 끌 때 적은 줄이 이미 있다
     expect(s.h.ui.works.get(a)?.tasks[0]?.appEnded).toBe(true)
     expect(s.h.ui.works.get(c)?.tasks[0]?.appEnded).toBe(true)
+    // 한 번도 띄우지 못한 B는 세션 기록이 없어 [재개]가 새 세션으로 시작한다고 안내한다 (D218)
+    expect(s.h.ui.works.get(c)?.tasks[0]?.hasSession).toBe(true)
+    expect(s.h.ui.works.get(b)?.tasks[0]?.hasSession).toBe(false)
     for (const key of [a, c]) {
       const log = read(path.join(s.dir(key), 'tasks', '01-intake', 'pty.log'))
       expect(log.endsWith(APP_END)).toBe(true)

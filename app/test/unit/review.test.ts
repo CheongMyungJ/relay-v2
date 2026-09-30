@@ -8,6 +8,7 @@ import {
   changeRange,
   emphasis,
   handoffSummary,
+  hasVisibleText,
   humanNotice,
   permissionNotice,
   resumeHint,
@@ -179,6 +180,22 @@ describe('형식 되돌림 안내 (D220)', () => {
     // 고쳐서 승인 대기가 됐거나 상한까지 되돌려 대기면 없다
     expect(bounceNotice({ status: 'awaiting_approval', bounce_count: 0 }, 2)).toBeNull()
     expect(bounceNotice({ status: 'idle', bounce_count: 2 }, 2)).toBeNull()
+  })
+})
+
+describe('첫 출력의 보이는 글자 (D217)', () => {
+  it('제어 문자와 이스케이프 시퀀스만 있으면 보이는 글자가 없다. ConPTY가 먼저 보내는 것들이다', () => {
+    expect(hasVisibleText('')).toBe(false)
+    expect(hasVisibleText('\x1b[?9001h\x1b[?1004h')).toBe(false)
+    expect(hasVisibleText('\x1b[?25l\x1b[2J\x1b[m\x1b[H\r\n')).toBe(false)
+    expect(hasVisibleText('\x1b]0;C:\\Windows\\system32\\cmd.exe\x07\x1b[?25h')).toBe(false)
+    expect(hasVisibleText('\x1b=\x1b>\x1b(B\t \r\n')).toBe(false)
+  })
+
+  it('CLI가 그린 글자가 있으면 있다', () => {
+    expect(hasVisibleText('\x1b[?9001hFAKE-CLAUDE READY\r\n')).toBe(true)
+    expect(hasVisibleText('\x1b[1m╭───\x1b[0m')).toBe(true)
+    expect(hasVisibleText('한글')).toBe(true)
   })
 })
 
@@ -485,6 +502,17 @@ describe('강조 영역 (D83, 시나리오 4-2)', () => {
       hint: '답은 가운데 터미널에 쓰세요. 답하면 에이전트가 산출물을 고쳐 다시 승인 대기가 됩니다.',
     })
     expect(items.filter((i) => i.hint).map((i) => i.kind)).toEqual(['open_questions'])
+    // 세션이 없으면(앱이 꺼져 끝난 세션 등) 터미널이 읽기 전용이라 [세션 재개]를 먼저 누르라고 한다
+    const ended = emphasis({
+      node: 'intake',
+      handoff: { ...HANDOFF, open_questions: ['운영 TZ는?'] },
+      errors: [],
+      uncommitted: [],
+      live: false,
+    })
+    expect(ended[0]?.hint).toBe(
+      '세션이 끝나 있습니다. [세션 재개]를 누른 뒤 가운데 터미널에 답을 쓰세요. 답하면 에이전트가 산출물을 고쳐 다시 승인 대기가 됩니다.',
+    )
   })
 
   it('기본 다음 단계 추천은 강조하지 않는다. 막힘은 blocked_reason을 맨 앞에 둔다 (4.4)', () => {

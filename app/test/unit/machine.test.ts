@@ -687,13 +687,14 @@ describe('형식 오류 되돌림 (D21, D107)', () => {
     expect(bounced).toEqual([1, 1, 1, 0])
   })
 
-  it('사람이 새 요청으로 시작한 턴의 Stop(stop_hook_active: false)에서 0으로 돌아간다', () => {
+  it('사람이 새 요청을 보내면 0으로 돌아간다. 그 턴에는 되돌림 안내가 없고 다음 Stop도 0부터 센다 (D220)', () => {
     let work = running()
     work = stop(work, INVALID, { active: false }).work
     work = stop(work, INVALID, { active: true }).work
     work = stop(work, INVALID, { active: true }).work
     expect(currentTask(work)).toMatchObject({ status: 'idle', bounce_count: 2 })
     work = apply(work, { type: 'UserPromptSubmit', taskId: 't-01', at: at() }).work
+    expect(currentTask(work)).toMatchObject({ status: 'working', bounce_count: 0 })
     const r = stop(work, INVALID, { active: false })
     expect(types(r.effects)).toEqual(['log:task.bounced', 'blockStop'])
     expect(currentTask(r.work)?.bounce_count).toBe(1)

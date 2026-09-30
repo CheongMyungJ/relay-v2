@@ -75,7 +75,7 @@ knowledge_candidates: []  # optional. facts worth reusing later
 - `## 다음 task가 알아야 할 것`: facts that are costly to find again, such as paths and lines, commands, numbers.
 - Keep the body around 1,500 characters.
 - Do not add fields for IDs, versions, commits, test results or an artifact list. The app knows them.
-- Put every text value in double quotes. Unquoted text is not read as the text you meant when it contains `: ` or ` #`, or starts with a backtick, `-`, `*`, `[`, `{`, `>` or `|`. Inside the quotes, write `\"` for a double quote.
+- Put every text value in double quotes. Unquoted text is not read as the text you meant when it contains `: ` or ` #`, or starts with a backtick, `-`, `*`, `[`, `{`, `>` or `|`. Inside the quotes, write `\"` for a double quote and `\\` for a backslash. Write paths with `/`, not `\`.
 
 A filled `handoff.md`:
 

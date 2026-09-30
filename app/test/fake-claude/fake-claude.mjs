@@ -312,15 +312,34 @@ async function steps(list, ctx, vars) {
       await hook('PreToolUse', fields, 'AskUserQuestion')
       out('질문 대기: Enter를 누르세요')
       await waitEnter()
-      await hook('PostToolUse', { ...fields, tool_response: '답함' }, 'AskUserQuestion')
+      // fail이면 도구가 실패한 것이다: PostToolUse 대신 PostToolUseFailure를 보낸다
+      if (step.fail)
+        await hook('PostToolUseFailure', { ...fields, error: '거절함' }, 'AskUserQuestion')
+      else await hook('PostToolUse', { ...fields, tool_response: '답함' }, 'AskUserQuestion')
     } else if (s === 'tool') {
-      // 도구 호출 (D216): PreToolUse, ms만큼 실행, PostToolUse. 두 훅은 같은 tool_use_id를 가진다
+      // 도구 호출 (D216): PreToolUse, ms만큼 실행, PostToolUse. 두 훅은 같은 tool_use_id를 가진다.
+      // fail이면 PostToolUse 대신 PostToolUseFailure를 보낸다. agent가 있으면 서브에이전트 안의 도구라 훅에
+      // agent_id를 넣는다. inner는 이 도구가 도는 동안 할 단계다(Task 도구 안의 서브에이전트)
       const input = step.input ?? {}
       const id = `toolu_${randomUUID().replaceAll('-', '').slice(0, 24)}`
-      const fields = { tool_name: step.name, tool_input: input, tool_use_id: id }
+      const fields = {
+        ...(step.agent ? { agent_id: step.agent, agent_type: 'general-purpose' } : {}),
+        tool_name: step.name,
+        tool_input: input,
+        tool_use_id: id,
+      }
       await hook('PreToolUse', fields, step.name)
+      if (step.inner) await steps(step.inner, ctx, vars)
       if (step.ms) await sleep(step.ms)
-      await hook('PostToolUse', { ...fields, tool_response: '' }, step.name)
+      if (step.fail) {
+        await hook(
+          'PostToolUseFailure',
+          { ...fields, error: 'Exit code 1', is_interrupt: false },
+          step.name,
+        )
+      } else {
+        await hook('PostToolUse', { ...fields, tool_response: '' }, step.name)
+      }
     } else if (s === 'notify') {
       await hook('Notification', { message: '알림', notification_type: step.type })
     } else if (s === 'stop') {

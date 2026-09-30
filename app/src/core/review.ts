@@ -252,6 +252,8 @@ export interface EmphasisInput {
   tests?: readonly string[]
   /** PR 대응 task: 승인 뒤 실패한 push나 답글 게시 (시나리오 10-6) */
   failure?: { stage: string; error: string } | null
+  /** 세션이 살아 있다. 아니면 열린 질문의 안내가 [세션 재개]를 먼저 누르라고 한다 (D222). 없으면 살아 있다 */
+  live?: boolean
 }
 
 /**
@@ -289,7 +291,7 @@ export function emphasis(input: EmphasisInput): Emphasis[] {
       kind: 'open_questions',
       title: '열린 질문',
       lines: [...h.open_questions],
-      hint: OPEN_QUESTIONS_HINT,
+      hint: input.live === false ? OPEN_QUESTIONS_HINT_NO_SESSION : OPEN_QUESTIONS_HINT,
     })
   }
   const rec = h?.recommended_next
@@ -335,6 +337,24 @@ export function handoffSummary(text: string): string | null {
 /** 열린 질문에 답하는 곳 (D222). 선택지 질문이 아니라 handoff에 남은 질문이라 따로 알린다 */
 export const OPEN_QUESTIONS_HINT =
   '답은 가운데 터미널에 쓰세요. 답하면 에이전트가 산출물을 고쳐 다시 승인 대기가 됩니다.'
+
+/** 세션이 없을 때(앱이 꺼져 끝난 세션 등) 열린 질문에 답하는 곳. 터미널은 [세션 재개] 전에는 읽기 전용이다 */
+export const OPEN_QUESTIONS_HINT_NO_SESSION =
+  '세션이 끝나 있습니다. [세션 재개]를 누른 뒤 가운데 터미널에 답을 쓰세요. 답하면 에이전트가 산출물을 고쳐 다시 승인 대기가 됩니다.'
+
+/**
+ * PTY 출력에 보이는 글자가 있는가 (D217). 제어 문자와 이스케이프 시퀀스(CSI, OSC 등)만 있으면 없다. Windows에서는
+ * CLI의 첫 화면보다 ConPTY의 제어 문자가 먼저 오므로, 첫 출력의 시각은 보이는 글자로 잰다
+ */
+/* eslint-disable no-control-regex -- 터미널의 제어 문자와 이스케이프 시퀀스를 찾는 식이다 */
+export function hasVisibleText(data: string): boolean {
+  const text = data
+    .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
+    .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '')
+    .replace(/\x1b[ -/]*[0-~]/g, '')
+  return /[^\s\x00-\x1f\x7f]/.test(text)
+}
+/* eslint-enable no-control-regex */
 
 /** 리뷰의 [요약]에 보일 안내 (D223). 리뷰의 마무리 안내 문구(시나리오 2-4)와 같은 뜻이다 */
 export const REVIEW_LEAD_HINT =

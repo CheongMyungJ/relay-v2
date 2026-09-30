@@ -65,14 +65,16 @@ describe('[흐름] 진행 표시와 세션 시각 (M12 R2)', () => {
       return a && pred(a) ? a : null
     }
 
-    // 첫 턴 전: 세션을 띄우는 중이고 task를 만든 때부터 센다
+    // 첫 턴 전: 세션을 띄우는 중이고 세션을 띄운 때부터 센다(대기열에서 기다린 시간은 넣지 않는다)
     const starting = await ui.until(() => fixActivity((a) => !a.turn), '수정: 세션을 띄우는 중')
     const fixId = fixTask()?.id ?? ''
     const createdAt = (): number => {
       const w = JSON.parse(read(path.join(workDir, 'work.json'))) as WorkState
       return Date.parse(w.tasks.find((t) => t.id === fixId)?.created_at ?? '')
     }
-    expect(starting).toEqual({ turn: false, since: createdAt(), tool: null })
+    expect(starting).toMatchObject({ turn: false, tool: null })
+    expect(starting.since).toBeGreaterThanOrEqual(createdAt())
+    expect(starting.since).toBeLessThanOrEqual(Date.now())
 
     // 도구 실행 중: 턴이 시작한 때부터 세고 마지막 도구는 끝나지 않았다. 표시 상태는 작업 중 그대로다
     const running = await ui.until(
@@ -158,5 +160,80 @@ describe('[흐름] 진행 표시와 세션 시각 (M12 R2)', () => {
     // 수정 세션은 첫 요청 전에 1.5초 쉬었다
     const fixHook = events.find((e) => e.task_id === fixId && e.type === 'task.first_hook')
     expect(Number(fixHook?.payload['ms'])).toBeGreaterThanOrEqual(1400)
+  })
+
+  it('실패한 도구(PostToolUseFailure)는 끝남으로 보이고, 서브에이전트 안의 도구는 바깥 도구를 덮지 않으며, 실패한 질문 도구도 질문 대기를 끝낸다 (D216)', async () => {
+    // 수정 세션: npm test가 실패하고, Task 도구 안에서 서브에이전트가 Grep을 쓰고, 질문 도구가 실패한 뒤 1.5초 쉰다
+    const fix = steps('fix', 'S')
+    h = await harness({
+      scenario: scenario('S', {
+        fix: [
+          { do: 'prompt' },
+          { do: 'tool', name: 'Bash', input: { command: 'npm test' }, ms: 300, fail: true },
+          {
+            do: 'tool',
+            name: 'Task',
+            input: { description: '원인 찾기' },
+            ms: 300,
+            inner: [{ do: 'tool', name: 'Grep', input: { pattern: 'avg' }, ms: 100, agent: 'a-1' }],
+          },
+          { do: 'ask', question: '확인', fail: true },
+          { do: 'sleep', ms: 1500 },
+          ...fix.slice(1),
+        ],
+      }),
+    })
+    const ui = h.ui
+    const { repo } = makeRepo(h.root, 'sample', REPO_FILES)
+    const projectId = await register(h, repo)
+    const created = await h.relay.createWork(projectId, {
+      request: REQUEST,
+      baseBranch: 'main',
+      baseLocation: 'local',
+    })
+    if (!created.ok || !created.workKey)
+      throw new Error(`Work 생성 실패: ${JSON.stringify(created)}`)
+    const workKey = created.workKey
+    const result = await drive(h.relay, ui, workKey, { size: 'S' })
+    await settle(h, workKey)
+    expect(result, ui.dump()).toMatchObject({ status: 'completed' })
+    const fixId = ui.works.get(workKey)?.tasks.find((t) => t.node === 'fix')?.id ?? ''
+
+    // 진행 표시: 실패한 Bash도 끝났고, Grep은 보이지 않고 Task가 끝까지 남는다
+    const updates = ui.activityLog.filter((u) => u.workKey === workKey && u.taskId === fixId)
+    expect(
+      updates.map((u) => [u.activity?.tool?.label, u.activity?.tool?.endedAt === null]),
+    ).toEqual([
+      ['Bash(npm test)', true],
+      ['Bash(npm test)', false],
+      ['Task(원인 찾기)', true],
+      ['Task(원인 찾기)', false],
+    ])
+    // 훅은 모두 빈 본문의 200으로 답했다. 서브에이전트의 도구 훅에는 agent_id가 있다
+    const toolHooks = h
+      .records()
+      .filter((r) => r['type'] === 'hook' && /^(?:Pre|Post)ToolUse/.test(String(r['event'])))
+      .map((r) => {
+        const body = r['body'] as Record<string, unknown>
+        return [r['event'], body['tool_name'], body['agent_id'] ?? null, r['status'], r['response']]
+      })
+    expect(toolHooks).toEqual([
+      ['PreToolUse', 'Bash', null, 200, null],
+      ['PostToolUseFailure', 'Bash', null, 200, null],
+      ['PreToolUse', 'Task', null, 200, null],
+      ['PreToolUse', 'Grep', 'a-1', 200, null],
+      ['PostToolUse', 'Grep', 'a-1', 200, null],
+      ['PostToolUse', 'Task', null, 200, null],
+      ['PreToolUse', 'AskUserQuestion', null, 200, null],
+      ['PostToolUseFailure', 'AskUserQuestion', null, 200, null],
+    ])
+    // 실패한 질문 도구 뒤에는 쉬는 1.5초 동안 질문 대기가 아니라 작업 중이다
+    const statuses = ui.history
+      .filter((v) => v.key === workKey)
+      .map((v) => v.tasks.find((t) => t.id === fixId)?.status)
+      .filter((x, i, all) => x !== undefined && x !== all[i - 1])
+    const asked = statuses.indexOf('asking')
+    expect(asked).toBeGreaterThanOrEqual(0)
+    expect(statuses.slice(asked, asked + 3)).toEqual(['asking', 'working', 'awaiting_approval'])
   })
 })

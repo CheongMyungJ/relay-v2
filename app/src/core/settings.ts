@@ -12,6 +12,8 @@ export const HOOK_EVENTS = [
   'SessionEnd',
   'PreToolUse',
   'PostToolUse',
+  // 도구가 실패하면 PostToolUse 대신 온다(Claude Code 2.1.285의 훅 설명). 진행 표시에서 도구가 끝난 것으로 본다 (D216)
+  'PostToolUseFailure',
 ] as const
 
 export type HookEvent = (typeof HOOK_EVENTS)[number]
@@ -52,8 +54,8 @@ export function hookUrl(port: number, taskId: string, event: HookEvent): string 
 }
 
 /**
- * 이벤트마다 묶음 하나에 http 훅 하나를 둔다. PreToolUse와 PostToolUse는 matcher 없이 모든 도구에 건다: 질문 대기
- * 표시(D24, D35)는 AskUserQuestion으로, 진행 표시(D216)는 나머지 도구로 한다.
+ * 이벤트마다 묶음 하나에 http 훅 하나를 둔다. PreToolUse, PostToolUse, PostToolUseFailure는 matcher 없이 모든
+ * 도구에 건다: 질문 대기 표시(D24, D35)는 AskUserQuestion으로, 진행 표시(D216)는 나머지 도구로 한다.
  * 출처: spikes/lib/hooks.mjs HookServer.settings (이벤트별 matcher, type: http, timeout).
  * 토큰 머리글은 I13에서 더했다. $RELAY_HOOK_TOKEN은 allowedEnvVars에 있어야 풀린다 (Claude Code 문서 hooks).
  */
@@ -75,6 +77,7 @@ export function hookSettings(port: number, taskId: string): Record<HookEvent, Ho
     SessionEnd: group('SessionEnd'),
     PreToolUse: group('PreToolUse'),
     PostToolUse: group('PostToolUse'),
+    PostToolUseFailure: group('PostToolUseFailure'),
   }
 }
 

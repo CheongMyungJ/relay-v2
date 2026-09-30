@@ -455,6 +455,8 @@ export interface TaskView {
   resumed: boolean
   /** 앱이 꺼져 세션이 끝났다 (D219). 다시 열면 false다 */
   appEnded: boolean
+  /** 세션 기록이 있다. 없으면(띄우다 실패함 등) [재개]는 이 단계를 새 세션으로 시작한다 (D218) */
+  hasSession: boolean
   /** task를 띄우지 못한 이유 */
   error: string | null
   /** 마지막 형식 검사의 오류 수 */

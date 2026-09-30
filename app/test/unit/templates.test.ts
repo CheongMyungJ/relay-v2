@@ -123,6 +123,32 @@ describe.runIf(handoffTemplate && draftTemplate)(
       expect(isValid(check)).toBe(false)
     })
 
+    it('반례: 큰따옴표 안의 역슬래시는 이스케이프라, Windows 경로를 그대로 쓰면 형식 오류이거나 다른 글자가 된다 (D221)', () => {
+      /** 예시의 첫 결정의 what 줄을 바꿔 검사한다 */
+      const withWhat = (what: string) =>
+        checkTask({
+          node: 'fix',
+          size: 'S',
+          files: {
+            'handoff.md': (filledHandoff ?? '').replace(
+              'what: "빈 배열의 평균은 0으로 한다"',
+              `what: ${what}`,
+            ),
+            ...artifacts('fix'),
+          },
+          config: DEFAULT_CONFIG,
+        })
+      const what = (check: ReturnType<typeof checkTask>) =>
+        check.handoffHeader?.decisions?.[0]?.what
+      // \c는 잘못된 이스케이프라 형식 오류다
+      expect(withWhat('"src\\components\\App.tsx 수정"').errors.length).toBeGreaterThan(0)
+      // \t와 \f는 오류 없이 TAB과 폼 피드 문자가 된다
+      expect(what(withWhat('"app\\test\\flow 폴더"'))).toBe('app\u0009est\u000clow 폴더')
+      // 규칙대로 경로는 /로, 역슬래시는 \\로 쓰면 글자 그대로다
+      expect(what(withWhat('"src/components/App.tsx 수정"'))).toBe('src/components/App.tsx 수정')
+      expect(what(withWhat('"app\\\\test 폴더"'))).toBe('app\\test 폴더')
+    })
+
     it('반례: 채우지 않은 handoff 템플릿은 status 오류다', () => {
       const check = checkTask({
         node: 'rca',

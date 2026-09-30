@@ -386,14 +386,16 @@ export function sectionText(body: string, name: string): string | null {
 
 /**
  * review.md의 `## 지적`에 지적이 있는가 (5.6.10, D213). 템플릿은 지적을 번호 목록으로 쓰고, 없으면 "없음"을 쓴다.
- * 번호 항목이 하나라도 있으면 true, 번호 항목 없이 "없음"으로 시작하면 false, 절이 없거나 둘 다 아니면 null이다.
- * 자동 승인은 false일 때만 한다: 읽지 못한 리뷰는 사람이 본다
+ * 번호 항목이 하나라도 있으면 true, 번호 항목 없이 "없음"으로 시작하는 한 줄뿐이면 false, 절이 없거나 둘 다
+ * 아니면 null이다. "없음" 뒤에 다른 줄(번호 없는 지적 목록 등)이 이어지면 null이다. 자동 승인은 false일 때만
+ * 한다: 읽지 못한 리뷰는 사람이 본다
  */
 export function reviewFindings(text: string): boolean | null {
   const section = sectionText(text, '지적')
   if (section === null) return null
-  if (section.split('\n').some((l) => /^\s*\d+[.)]\s/.test(l))) return true
-  return /^(?:[-*]\s*)?없음/.test(section) ? false : null
+  const lines = section.split('\n').filter((l) => l.trim() !== '')
+  if (lines.some((l) => /^\s*\d+[.)]\s/.test(l))) return true
+  return lines.length === 1 && /^(?:[-*]\s*)?없음/.test(lines[0]?.trim() ?? '') ? false : null
 }
 
 function missingSections(

@@ -235,6 +235,7 @@ const spec = {
     ['5.2', 'handoff 본문 필수 절 두 개', /## 요약\n## 다음 task가 알아야 할 것/],
     ['D88', '앱이 아는 값은 쓰지 않음', /Do not add fields for IDs/],
     ['D221', '글 값은 큰따옴표로 감쌈', /Put every text value in double quotes[\s\S]*contains `: `[\s\S]*starts with a backtick/],
+    ['D221', '큰따옴표 안의 역슬래시는 \\\\로, 경로는 /로', /`\\\\` for a backslash\. Write paths with `\/`, not `\\`/],
     ['5.2.1', '추가 검사: recommended_next.node', /`recommended_next\.node` is one of the selectable next steps/],
     ['5.2.1', '추가 검사: 필수 산출물', /required artifacts exist in the task directory/],
     ['5.2.1', '추가 검사: intent 초안 절과 완료조건 줄', /`목표`, `비목표`, `원하는 결과`, `완료조건`[\s\S]*`- \[ \] `/],

@@ -152,6 +152,8 @@
 | 턴의 훅 | 턴마다 오는 훅은 UserPromptSubmit, Stop, StopFailure다. UserPromptSubmit은 사람이 프롬프트를 제출할 때 Claude가 처리하기 전에 온다. Stop은 Claude가 응답을 마칠 때 오고, 사람이 Esc로 끊으면 오지 않으며, API 오류로 끝나면 StopFailure가 대신 온다. 자동 이벤트(아래 완료 알림)로 시작한 턴에 UserPromptSubmit이 오는지는 문서에 없다 | Claude Code 문서 hooks (2026-09-27) |
 | Stop의 백그라운드 작업 | Stop 본문에는 `background_tasks`(도는 셸, 서브에이전트 등)와 `session_crons`(`/loop`, `CronCreate`, `ScheduleWakeup`의 예약된 깨우기)가 있어, "세션이 끝남"과 "백그라운드 작업이 다시 깨우기를 기다리며 쉬는 중"을 가른다. task 목록을 읽을 수 있으면 늘 있고 없으면 빈 배열이다. 2.1.145에서 더해졌다 | Claude Code 문서 hooks, changelog (2026-09-27) |
 | 백그라운드 서브에이전트 | 대화형 세션은 fork 모드가 기본으로 켜져 있어 Claude가 띄운 서브에이전트를 백그라운드에서 돌린다. 그 결과는 나중 턴에 완료 알림으로 오고, 알림은 사람의 메시지가 아니라 자동 이벤트로 표시된다. `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`이면 포그라운드에서 돌린다. 백그라운드 셸은 Claude Code가 끝날 때 함께 정리된다 | Claude Code 문서 sub-agents, interactive-mode (2026-09-27) |
+| 실패한 도구의 훅 | 도구가 실패하면 PostToolUse 대신 PostToolUseFailure가 온다("Run after tool fails"). 입력은 `tool_name`, `tool_input`, `tool_use_id`, `error`, `error_type`, `is_interrupt`, `is_timeout`이다. 서브에이전트 안에서 온 훅에는 `agent_id`와 `agent_type`이 있다 | Claude Code 2.1.285의 훅 설명 (2026-09-30, PR #19 리뷰) |
+| 대화 기록의 토큰 | Claude Code는 메시지 하나를 대화 기록에 여러 줄로 나눠 쓰고, 앞 줄의 `usage.output_tokens`는 아직 다 세지 않은 값이다(예: 같은 id가 6 → 6 → 4209). 메시지 id마다 마지막 줄을 센다 | 2.1.285의 대화 기록 (2026-09-30, PR #19 리뷰) |
 | 웹 세션의 GitHub 프록시 | Anthropic이 운영하는 클라우드 세션의 GitHub 요청은 GitHub 프록시를 지난다. `gh`는 자리 표시자 토큰(`proxy-injected`)으로 부르면 프록시가 자격 증명을 넣는다. API 요청은 세션에 붙인 레포에만 닿는다. GraphQL은 정해 둔 PR 작업만 받고 나머지는 403(`This GraphQL query is not enabled for this session`)이며, 사용자가 준 `GH_TOKEN`도 같다. 2026-09-29에 이 레포의 웹 세션에서 붙인 레포(relay-v2)의 REST는 200, 붙이지 않은 시험용 레포는 403, GraphQL(`viewer{login}`)은 403이었다. 문서는 gh가 미리 설치돼 있다고 하지만 이 세션에는 없었고, Actions 로그가 내려오는 `productionresultssa2.blob.core.windows.net`은 프록시가 CONNECT를 403으로 막았다 | Claude Code 문서 cloud-environments(GitHub proxy, Work with GitHub issues and pull requests), 이 세션에서 실행 (2026-09-29) |
 | Claude Code 설치와 CI 인증 | Linux 네이티브 설치는 `curl -fsSL https://claude.ai/install.sh \| bash`이고 실행 파일은 `~/.local/bin/claude`다. `claude setup-token`은 브라우저로 승인한 뒤 1년짜리 OAuth 토큰을 찍고(저장하지 않음) `CLAUDE_CODE_OAUTH_TOKEN`으로 쓴다. 구독(Pro, Max, Team, Enterprise)으로 인증하고 모델 요청만 한다. 인증의 우선순위는 `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_API_KEY`, `apiKeyHelper`, `CLAUDE_CODE_OAUTH_TOKEN`, `/login` 차례다 | Claude Code 문서 setup, authentication (2026-09-29) |
 
@@ -716,7 +718,7 @@ app/src/
 - **시험(R1):** [단위] `test/unit/validate.test.ts`, `approval.test.ts`, `config.test.ts`, `context.test.ts`, `machine.test.ts`. [흐름] `test/flow/auto.test.ts`(앱의 기본값, 지적이 있는 리뷰의 알림). [스모크] `test/smoke/app.spec.ts`(설정 화면의 기본값, 지적이 있는 리뷰의 까닭).
 - **진행 표시의 길(R2, D216):** main의 `hookArrived`가 훅을 받으면 먼저 진행 표시를 바꾼다. UserPromptSubmit은 턴이 시작한 때를 두고 도구를 지운다. PreToolUse는 마지막 도구를 두고, PostToolUse는 끝난 때를 둔다(`tool_use_id`가 있으면 그것으로, 없으면 도구 이름으로 맞춘다). 질문 도구가 아닌 도구의 훅은 처리 줄에 넣지 않고 빈 본문으로 바로 답하며, `UiPort.activity`(IPC `app:activity`, 렌더러의 `onActivity`)로 따로 보낸다. Work 스냅샷의 `TaskView.activity`에도 같은 값이 있고, 렌더러는 그 Work의 스냅샷이 오면 따로 온 값을 지운다(같은 창으로 차례대로 온다). 정리 세션은 도구 훅을 쓰지 않아 바로 답한다. 진행 표시는 작업 중인 task만이다.
 - **보이는 모양(D216):** `renderer/src/Activity.tsx`. 경과 시간은 1초마다 세고 `data-tick`을 붙인다. 머리 띠는 상태 옆에, 패널은 진행 중 화면 맨 위의 "진행" 절에 둔다. 도구 이름은 `core/review`의 `toolLabel`이 입력에서 인자 하나(`command`, `file_path`, `notebook_path`, `pattern`, `url`, `query`, `description` 차례)를 골라 만든다.
-- **시각 기록(D217):** 첫 PTY 출력과 첫 훅을 받으면 main이 `session.timing`을 처리 줄에 넣고, core는 pid가 그 task의 지금 세션과 같을 때만 `task.first_output`, `task.first_hook`을 남긴다. 세션을 띄우는 처리가 줄 안에서 돌므로 늘 `task.started`(재개는 `task.resumed`) 뒤에 온다.
+- **시각 기록(D217):** 첫 PTY 출력(core/review의 `hasVisibleText`로 제어 문자와 이스케이프 시퀀스만 있는 출력은 뺀다)과 첫 훅을 받으면 main이 `session.timing`을 처리 줄에 넣고, core는 pid가 그 task의 지금 세션과 같을 때만 `task.first_output`, `task.first_hook`을 남긴다. 세션을 띄우는 처리가 줄 안에서 돌므로 늘 `task.started`(재개는 `task.resumed`) 뒤에 온다.
 - **표시 줄(D215):** `startSession`이 `launch`에 넘긴다(재개의 `RESUME_MARK`와 같은 길). 띄우기 전(스킬 배포, `claude --version`, context.md)에는 터미널이 아직 없고, 진행 표시가 "세션을 띄우는 중"을 보인다.
 - **평가 도구:** `eval/lib/relay-arm.mjs`의 `pollText`가 `[data-tick]`을 잠깐 가리고 화면 글자를 읽는다. 사람 역할이 보는 글자(`visibleText`)와 스크린샷에는 그대로 있다.
 - **시험(R2):** [단위] `test/unit/settings.test.ts`(모든 도구), `review.test.ts`(도구 이름), `machine.test.ts`(시각 기록). [흐름] `test/flow/activity.test.ts`. 가짜 `claude`의 `tool` 단계에 `input`, `ms`와 `tool_use_id`를 더했다(`ask`도 `tool_use_id`를 보낸다). 이벤트 목록을 통째로 보는 기존 [흐름] 시험에 두 이벤트를 넣었다.
@@ -736,6 +738,17 @@ app/src/
 - **사람 역할 시간(E2):** `run.json`의 `human.ms`는 차례마다 사람 역할이 답하는 데 쓴 시간의 합, `human.waitOnlyTurns`는 행동이 `wait`뿐이거나 없는 차례 수다. 보고서는 "사람 역할 응답 시간", "걸린 시간 − 사람 역할 응답", "기다리기만 한 차례"를 보이고, 예전 결과는 `turns.jsonl`의 차례 기록에서 센다.
 - **스크린샷(E10):** `relay-arm.mjs`의 `shot`이 메인 프로세스의 `capturePage`로 찍은 창을 1000픽셀 너비로 줄인다(안 되면 창 크기 그대로 찍는다). `observe`는 배치 열쇠(누를 수 있는 요소의 역할·이름·선택·켜짐·비활성·화면 밖, 열린 대화상자)를 함께 돌려주고, `human.mjs`는 앞에 붙인 그림과 열쇠가 다를 때만 그림을 붙인다. 붙이지 않은 차례에는 그렇다고 적고, 글자와 요소 목록은 늘 준다. 붙인 차례 수는 `human.images`와 보고서의 "스크린샷을 붙인 차례"다. 찍은 파일(`shots/`)은 차례마다 남는다.
 - **시험(R8·R9·E2·E10):** [스모크] 두 번째 Work의 새 Work 대화상자. 평가 도구는 시험이 없어, 가짜 결과 폴더(새 `run.json`과 `human.ms`가 없는 예전 `run.json`·`turns.jsonl`)로 보고서를 만들어 새 줄과 단계별 표를 봤고, 빌드한 앱에서 `shot`이 1000픽셀 너비의 PNG를 쓰는 것을 봤다.
+- **PR #19 리뷰 대응:** 사람이 PR에 남긴 지적 13개 가운데 12개를 고쳤다. Work 완료 화면의 전달 버튼은 D222대로 열린 질문을 묻지 않는다.
+  - 따옴표 규칙에 역슬래시를 더했다(`\\`로 쓰고 경로는 `/`로, D221). `check.mjs`가 대조하고 `templates.test.ts`가 반례(`\c`는 형식 오류, `\t`는 TAB)를 본다.
+  - 평가 도구의 토큰은 `agentUsage`와 `agentUsageBySession`이 함께 쓰는 `scanUsage`가 메시지 id마다 마지막 줄로 센다(R9). 메시지가 없는 세션은 0이다.
+  - `reviewFindings`는 "없음"으로 시작하는 한 줄뿐일 때만 지적이 없다고 본다(D213).
+  - core의 UserPromptSubmit이 `bounce_count`를 0으로 돌린다(D220).
+  - 진행 표시(D216): 훅에 PostToolUseFailure를 더해 실패한 도구도 끝난 것으로 본다. 실패한 질문 도구는 core에 PostToolUse로 넘겨 질문 대기를 끝낸다. `agent_id`가 있는 도구 훅(서브에이전트)은 도구 칸을 바꾸지 않는다. "세션을 띄우는 중"은 `launchTask`가 자리를 잡은 때(`launchedAt`)부터 센다.
+  - 첫 출력(D217)은 core/review의 `hasVisibleText`로 보이는 글자가 있는 출력부터 잰다.
+  - `apply`: 상태가 그대로이고 할 일이 `log`뿐인 전이(세션 시각)는 work.json을 쓰지 않고 스냅샷도 보내지 않는다.
+  - `ASK_TOOL`은 core/machine이 export하고 main이 쓴다.
+  - 화면: 세션 기록이 없는 중단됨(`TaskView.hasSession`)의 [재개] 안내(D218). 세션이 없을 때 열린 질문의 안내(`OPEN_QUESTIONS_HINT_NO_SESSION`)와 확인 창 문구, [오류 무시하고 승인] 확인 창의 열린 질문(D222).
+  - 시험: [단위] `templates`, `validate`, `machine`, `settings`, `review`(`hasVisibleText`, 세션이 없을 때의 안내). [흐름] `activity.test.ts`의 새 시험(실패한 도구, 서브에이전트의 도구, 실패한 질문 도구), `control.test.ts`(대기열에서 시작한 task의 "세션을 띄우는 중", `hasSession`). 가짜 `claude`의 `tool`에 `fail`, `agent`, `inner`를, `ask`에 `fail`을 더했다.
 
 ## 8. 테스트 전략
 

@@ -94,6 +94,7 @@ import {
   type SelectionInput,
 } from '../core/context'
 import {
+  ASK_TOOL,
   actions,
   currentTask,
   transition,
@@ -178,6 +179,7 @@ import {
   changeRange,
   emphasis,
   handoffSummary,
+  hasVisibleText,
   humanNotice,
   permissionNotice,
   resumeHint,
@@ -371,8 +373,8 @@ const startMark = (task: TaskRecord) =>
 /** 앱이 꺼지며 끝난 세션의 pty.log 끝에 넣는 줄 (D219). 다시 그린 옛 화면이 어디서 끝났는지 보인다 */
 const APP_END_MARK = '\r\n\x1b[0m\x1b[2m── relay: 앱이 꺼져 세션이 여기서 끝났습니다 ──\x1b[0m\r\n'
 
-/** 질문 도구. 질문 대기 표시는 core가 한다 (D24, D35). 나머지 도구의 훅은 진행 표시만 바꾼다 (D216) */
-const ASK_TOOL = 'AskUserQuestion'
+/** 도구 훅. 실패한 도구는 PostToolUse 대신 PostToolUseFailure를 보낸다 (D216) */
+const TOOL_HOOKS: readonly string[] = ['PreToolUse', 'PostToolUse', 'PostToolUseFailure']
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 const str = (v: unknown) => (typeof v === 'string' ? v : undefined)
@@ -415,6 +417,8 @@ export class WorkRunner {
    * 때 쓴다. 대기열에서 기다리는 동안에도 남는다
    */
   private readonly resumeContinue = new Map<string, boolean>()
+  /** task마다 자리를 잡아 세션을 띄우기 시작한 때. 진행 표시의 "세션을 띄우는 중"을 여기서부터 센다 (D216) */
+  private readonly launchedAt = new Map<string, number>()
   private readonly problems: string[] = []
   private revision = 0
   /** 이번 명령의 되감기가 git에서 실패한 이유. [단계 선택]의 결과로 돌려준다 */
@@ -527,6 +531,17 @@ export class WorkRunner {
     opts: { quiet?: boolean } = {},
   ): Promise<HookReply> {
     if (work === this.work && effects.length === 0) return null
+    // 상태가 그대로이고 기록만 남기는 전이(세션 시각, D217)는 work.json을 다시 쓰지 않고 스냅샷도 보내지 않는다
+    if (work === this.work && effects.every((e) => e.type === 'log')) {
+      for (const e of effects) {
+        try {
+          await this.run(e)
+        } catch (err) {
+          this.problem(`${e.type} 실패: ${message(err)}`)
+        }
+      }
+      return null
+    }
     const before = this.work
     const at = this.ctx.at()
     let saved: Awaited<ReturnType<WorkFiles['save']>>
@@ -711,6 +726,7 @@ export class WorkRunner {
       this.ctx.pool.release()
       return false
     }
+    this.launchedAt.set(taskId, Date.now())
     return task.session ? this.resumeSession(task) : this.startSession(task)
   }
 
@@ -1077,7 +1093,8 @@ export class WorkRunner {
       // 끝낸 세션의 늦은 출력은 다시 연 세션의 화면에 섞지 않는다
       if (session.stopped) return
       write(data)
-      if (!session.sawOutput) {
+      // 첫 출력은 보이는 글자로 잰다. Windows에서는 CLI의 첫 화면보다 ConPTY의 제어 문자가 먼저 온다 (D217)
+      if (!session.sawOutput && hasVisibleText(data)) {
         session.sawOutput = true
         this.timing(task.id, session, 'output')
       }
@@ -1133,20 +1150,24 @@ export class WorkRunner {
       session.turnStartedAt = now
       session.tool = null
     }
-    if (req.event === 'PreToolUse' || req.event === 'PostToolUse') {
+    if (TOOL_HOOKS.includes(req.event)) {
       const name = str(b['tool_name']) ?? ''
       const id = str(b['tool_use_id'])
-      if (req.event === 'PreToolUse') {
-        const label = toolLabel(name, b['tool_input'], str(b['cwd']))
-        session.tool = { name, label, startedAt: now, endedAt: null, ...(id ? { id } : {}) }
-      } else if (
-        session.tool?.endedAt === null &&
-        (id ? session.tool.id === id : session.tool.name === name)
-      ) {
-        session.tool = { ...session.tool, endedAt: now }
+      const before = session.tool
+      // 서브에이전트 안의 도구(agent_id가 있음)는 바깥 도구(Task 등)가 도는 동안이다. 바깥 도구를 덮지 않는다
+      if (str(b['agent_id']) === undefined) {
+        if (req.event === 'PreToolUse') {
+          const label = toolLabel(name, b['tool_input'], str(b['cwd']))
+          session.tool = { name, label, startedAt: now, endedAt: null, ...(id ? { id } : {}) }
+        } else if (
+          session.tool?.endedAt === null &&
+          (id ? session.tool.id === id : session.tool.name === name)
+        ) {
+          session.tool = { ...session.tool, endedAt: now }
+        }
       }
       if (name !== ASK_TOOL) {
-        if (this.live.get(taskId) === session) {
+        if (session.tool !== before && this.live.get(taskId) === session) {
           const task = this.task(taskId)
           if (task)
             this.ctx.ui.activity({ workKey: this.key, taskId, activity: this.activityOf(task) })
@@ -1191,6 +1212,11 @@ export class WorkRunner {
       case 'PostToolUse':
         return (await this.feed({ type: req.event, ...base, toolName: str(b['tool_name']) ?? '' }))
           .reply
+      // 실패한 질문 도구도 질문이 끝난 것이다
+      case 'PostToolUseFailure':
+        return (
+          await this.feed({ type: 'PostToolUse', ...base, toolName: str(b['tool_name']) ?? '' })
+        ).reply
       case 'Notification': {
         const kind = str(b['notification_type'])
         return (
@@ -1960,7 +1986,7 @@ export class WorkRunner {
       })
       // 도구 훅은 쓰지 않는다. 도구를 쓸 때마다 오므로 줄에 넣지 않고 바로 답한다 (D216)
       c.unregister = this.ctx.hooks.register(token, CLEANUP_ID, (req) =>
-        req.event === 'PreToolUse' || req.event === 'PostToolUse'
+        TOOL_HOOKS.includes(req.event)
           ? Promise.resolve(null)
           : this.enqueue(() => this.onCleanupHook(c, req)),
       )
@@ -2567,6 +2593,7 @@ export class WorkRunner {
         handoff: header,
         errors: check.errors,
         uncommitted,
+        live: this.live.has(task.id),
         ...(respond ? { tests: respond.tests, failure: respond.view.failure } : {}),
       }),
       lead: stageLead(task.node, files),
@@ -3828,6 +3855,7 @@ export class WorkRunner {
       live: this.live.has(t.id),
       resumed: t.session?.resumed_at !== undefined,
       appEnded: t.session?.app_ended !== undefined,
+      hasSession: !!t.session,
       error: t.error ?? null,
       errorCount: t.check?.errors.length ?? 0,
       bounces: t.bounce_count,
@@ -3840,8 +3868,8 @@ export class WorkRunner {
   }
 
   /**
-   * 진행 표시 (D216). 작업 중인 task만 보인다. 첫 턴 전(세션을 띄우는 중)은 task를 만든 때부터 센다: 앱이 스킬과
-   * context.md를 준비하는 시간도 사람에게는 기다리는 시간이다
+   * 진행 표시 (D216). 작업 중인 task만 보인다. 첫 턴 전(세션을 띄우는 중)은 자리를 잡아 띄우기 시작한 때부터 센다:
+   * 앱이 스킬과 context.md를 준비하는 시간도 사람에게는 기다리는 시간이다. 대기열에서 기다린 시간은 넣지 않는다
    */
   private activityOf(t: TaskRecord): ActivityView | null {
     if (t.status !== 'working') return null
@@ -3850,7 +3878,7 @@ export class WorkRunner {
     const tool = session?.tool ?? null
     return {
       turn: turn !== null,
-      since: turn ?? Date.parse(t.created_at),
+      since: turn ?? this.launchedAt.get(t.id) ?? Date.parse(t.created_at),
       tool: tool ? { label: tool.label, startedAt: tool.startedAt, endedAt: tool.endedAt } : null,
     }
   }

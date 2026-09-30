@@ -544,6 +544,12 @@ describe('리뷰 지적 읽기 (5.6.10, D213)', () => {
   it('절이 없거나 번호도 "없음"도 아니면 모른다(null). 모르면 자동 승인하지 않는다', () => {
     expect(reviewFindings('## 반영\n없음\n')).toBeNull()
     expect(reviewFindings(review('특별한 문제는 보이지 않는다'))).toBeNull()
+    // "없음" 뒤에 번호 없는 지적 목록이 이어지면 지적이 없다고 보지 않는다 (PR #19 리뷰)
+    expect(
+      reviewFindings(
+        review('없음 (차단 수준 지적 없음)\n- [권장] src/avg.js:2 — 빈 배열 검사를 함수 앞으로'),
+      ),
+    ).toBeNull()
     expect(reviewFindings(review(''))).toBeNull()
     // 코드 펜스 안의 제목은 절이 아니다
     expect(reviewFindings('```\n## 지적\n없음\n```\n')).toBeNull()

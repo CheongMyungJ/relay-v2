@@ -292,7 +292,9 @@ function TaskNotice({ task, pr }: { task: TaskView; pr: boolean }) {
     return (
       <div className="notice">
         {task.appEnded ? '앱이 꺼져 중단됐습니다. ' : '중단됨. '}
-        [재개]하면 같은 대화를 다시 열고 하던 일을 이어서 하라고 알립니다.
+        {task.hasSession
+          ? '[재개]하면 같은 대화를 다시 열고 하던 일을 이어서 하라고 알립니다.'
+          : '세션을 띄우지 못했습니다. [재개]하면 이 단계를 새 세션으로 시작합니다.'}
       </div>
     )
   }
@@ -629,7 +631,11 @@ function Review({
               <li key={i}>{q}</li>
             ))}
           </ul>
-          <p className="dim">답하려면 [취소]하고 가운데 터미널에 쓰세요.</p>
+          <p className="dim">
+            {liveTask
+              ? '답하려면 [취소]하고 가운데 터미널에 쓰세요.'
+              : '답하려면 [취소]하고 [세션 재개]를 누른 뒤 가운데 터미널에 쓰세요.'}
+          </p>
         </ConfirmDialog>
       ) : null}
       {confirming ? (
@@ -649,6 +655,20 @@ function Review({
               </li>
             ))}
           </ul>
+          {/* 열린 질문이 함께 남았으면 이 확인 창에서 같이 알린다 (D222) */}
+          {questions.length ? (
+            <>
+              <p>
+                답하지 않은 열린 질문 {questions.length}개도 있습니다: 에이전트는 가정으로
+                진행합니다.
+              </p>
+              <ul>
+                {questions.map((q, i) => (
+                  <li key={i}>{q}</li>
+                ))}
+              </ul>
+            </>
+          ) : null}
         </ConfirmDialog>
       ) : null}
     </div>

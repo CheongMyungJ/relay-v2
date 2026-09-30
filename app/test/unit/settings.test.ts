@@ -20,7 +20,7 @@ const TASKS = `${WORK_DIR}\\tasks`
 describe('훅 (I13, 시나리오 2-3)', () => {
   const hooks = hookSettings(51234, 't-03')
 
-  it('여섯 가지 훅을 둔다', () => {
+  it('일곱 가지 훅을 둔다. 실패한 도구는 PostToolUse 대신 PostToolUseFailure로 온다 (D216)', () => {
     expect(Object.keys(hooks)).toEqual([
       'UserPromptSubmit',
       'Stop',
@@ -28,6 +28,7 @@ describe('훅 (I13, 시나리오 2-3)', () => {
       'SessionEnd',
       'PreToolUse',
       'PostToolUse',
+      'PostToolUseFailure',
     ])
     expect(HOOK_EVENTS).toEqual(Object.keys(hooks))
   })
@@ -49,7 +50,7 @@ describe('훅 (I13, 시나리오 2-3)', () => {
     },
   )
 
-  it('훅은 matcher 없이 건다. PreToolUse와 PostToolUse는 모든 도구에서 온다: 질문 대기(D24, D35)와 진행 표시(D216)', () => {
+  it('훅은 matcher 없이 건다. 도구 훅은 모든 도구에서 온다: 질문 대기(D24, D35)와 진행 표시(D216)', () => {
     const matchers = Object.fromEntries(HOOK_EVENTS.map((e) => [e, hooks[e][0]?.matcher]))
     expect(matchers).toEqual({
       UserPromptSubmit: undefined,
@@ -58,6 +59,7 @@ describe('훅 (I13, 시나리오 2-3)', () => {
       SessionEnd: undefined,
       PreToolUse: undefined,
       PostToolUse: undefined,
+      PostToolUseFailure: undefined,
     })
     for (const e of HOOK_EVENTS) expect(Object.keys(hooks[e][0] ?? {})).toEqual(['hooks'])
   })

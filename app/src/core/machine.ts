@@ -757,7 +757,8 @@ const RESUMABLE: readonly TaskStatus[] = [
   'blocked',
 ]
 
-const ASK_TOOL = 'AskUserQuestion'
+/** 질문 도구 (D24, D35). main은 이 도구의 훅만 core에 넘기고 나머지 도구의 훅은 진행 표시만 바꾼다 (D216) */
+export const ASK_TOOL = 'AskUserQuestion'
 const PERMISSION_PROMPT = 'permission_prompt'
 
 /** /clear와 /resume도 SessionEnd를 보내지만 CLI는 새 세션으로 계속 돈다. 세션 종료로 보지 않는다 (D110) */
@@ -1397,8 +1398,10 @@ function hook(
   switch (e.type) {
     case 'UserPromptSubmit':
       // 작업 중. 사람이 새 요청을 보낸 때를 남기고, 첫 신호의 permission_mode를 기록한다 (D94).
+      // 새 요청의 턴은 되돌림이 아니다: 되돌림 안내(D220)를 지운다. 다음 Stop도 0부터 센다
       return set({
         status: 'working',
+        bounce_count: 0,
         last_prompt_at: e.at,
         ...(task.permission_mode === undefined && e.permissionMode !== undefined
           ? { permission_mode: e.permissionMode }
