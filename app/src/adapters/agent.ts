@@ -1,14 +1,32 @@
-// CLI 점검과 실행 선택의 경계. Codex 실행은 호환 스파이크 뒤에 연결한다 (docs/engines.md P1~P3).
+// CLI 점검·스킬·설정·실행 선택의 경계 (docs/engines.md).
 import type { AgentEngine } from '../shared/agent'
 import { AGENT_LABELS } from '../shared/agent'
 import {
   cleanupArgs,
   launchArgs,
   resumeArgs,
+  launchEnv,
+  taskSettings,
+  type TaskSettingsInput,
+  type TaskSettings,
   type LaunchInput,
   type ResumeInput,
 } from '../core/settings'
 import { claudeAuthStatus, claudeVersion, deploySkill, findClaude, type AuthStatus } from './claude'
+import type { SkillName } from '../shared/config'
+import {
+  CODEX_INSTALL_GUIDE,
+  codexAuthStatus,
+  codexCleanupArgs,
+  codexLaunchArgs,
+  codexLaunchEnv,
+  codexResumeArgs,
+  codexSettings,
+  codexVersion,
+  deployCodexSkill,
+  findCodex,
+  type CodexSettings,
+} from './codex'
 
 export const CLAUDE_INSTALL_GUIDE =
   'claude 실행 파일을 찾지 못했습니다. Claude Code를 설치하세요' +
@@ -24,9 +42,16 @@ export interface AgentRuntime {
   version(bin: string, env: NodeJS.ProcessEnv): Promise<string>
   authStatus(bin: string, env: NodeJS.ProcessEnv): Promise<AuthStatus>
   deploySkill: typeof deploySkill
-  launchArgs(input: LaunchInput): string[]
-  resumeArgs(input: ResumeInput): string[]
-  cleanupArgs(settingsPath: string): string[]
+  settings(input: AgentSettingsInput): TaskSettings | CodexSettings
+  launchEnv(token: string, port: number, taskId: string): Record<string, string>
+  launchArgs(input: LaunchInput): string[] | Promise<string[]>
+  resumeArgs(input: ResumeInput): string[] | Promise<string[]>
+  cleanupArgs(settingsPath: string): string[] | Promise<string[]>
+}
+
+export interface AgentSettingsInput extends TaskSettingsInput {
+  taskDir?: string
+  skill?: SkillName
 }
 
 const claude: AgentRuntime = {
@@ -37,15 +62,30 @@ const claude: AgentRuntime = {
   version: claudeVersion,
   authStatus: claudeAuthStatus,
   deploySkill,
+  settings: taskSettings,
+  launchEnv,
   launchArgs,
   resumeArgs,
   cleanupArgs,
 }
 
+const codex: AgentRuntime = {
+  engine: 'codex',
+  label: AGENT_LABELS.codex,
+  installGuide: CODEX_INSTALL_GUIDE,
+  find: (env) => findCodex({ env }),
+  version: codexVersion,
+  authStatus: codexAuthStatus,
+  deploySkill: deployCodexSkill,
+  settings: codexSettings,
+  launchEnv: codexLaunchEnv,
+  launchArgs: codexLaunchArgs,
+  resumeArgs: codexResumeArgs,
+  cleanupArgs: codexCleanupArgs,
+}
+
 export function agentRuntime(engine: AgentEngine): AgentRuntime {
   if (engine === 'claude') return claude
-  // Codex를 Claude로 실행하지 않는다. 단계별 구현 중에도 선택과 실제 실행이 어긋나면 막는다.
-  throw new Error(
-    `${AGENT_LABELS[engine]} 실행은 호환성 검증 중입니다. 현재는 Claude Code를 선택해 주세요.`,
-  )
+  if (engine === 'codex') return codex
+  throw new Error(`지원하지 않는 엔진: ${String(engine)}`)
 }

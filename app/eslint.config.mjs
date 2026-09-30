@@ -5,7 +5,16 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
-  { ignores: ['out/', 'dist/', 'src/shared/generated/', 'eval/scenarios/', 'eval/results/'] },
+  {
+    ignores: [
+      'out/',
+      'dist/',
+      'test-results/',
+      'src/shared/generated/',
+      'eval/scenarios/',
+      'eval/results/',
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.strict,
   {

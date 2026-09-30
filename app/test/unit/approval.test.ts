@@ -301,6 +301,7 @@ describe('자동 승인하지 않은 까닭 (D128~D131)', () => {
       'recommended_next',
       'background',
       'operation',
+      'completion_unknown',
       // 대응 task의 Stop 때 PR이 닫혀 있었다: 사람이 다시 열거나 끝내야 한다 (D179)
       'pr_closed',
     ] as const) {
@@ -308,7 +309,7 @@ describe('자동 승인하지 않은 까닭 (D128~D131)', () => {
     }
     expect(holdNeedsNotice(['cancel', 'session'])).toBe(true)
     expect(holdText(['pr_closed'])).toContain('PR이 닫혀 있음')
-    expect(Object.keys(AUTO_HOLD_LABEL)).toHaveLength(14)
+    expect(Object.keys(AUTO_HOLD_LABEL)).toHaveLength(15)
   })
 })
 

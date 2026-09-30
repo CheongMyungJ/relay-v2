@@ -1,0 +1,206 @@
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import readline from 'node:readline'
+import { afterEach, describe, expect, it } from 'vitest'
+import {
+  bridgeCommands,
+  codexAuthStatus,
+  codexBridgePath,
+  codexLaunchArgs,
+  codexLaunchEnv,
+  codexSettings,
+  deployCodexSkill,
+  findCodex,
+} from '../../src/adapters/codex'
+import { HookServer } from '../../src/adapters/hooks'
+import { run } from '../../src/adapters/exec'
+import { writeJson } from '../../src/adapters/store'
+import { FAKE_CODEX, SKILLS } from '../flow/harness'
+
+let server: HookServer | undefined
+let child: ChildProcessWithoutNullStreams | undefined
+let root: string | undefined
+afterEach(async () => {
+  child?.kill()
+  child = undefined
+  await server?.close()
+  server = undefined
+  if (root) fs.rmSync(root, { recursive: true, force: true })
+  root = undefined
+})
+const temp = () => {
+  root = fs.mkdtempSync(path.join(os.tmpdir(), 'relay-codex-'))
+  return root
+}
+
+function mcp(executable: string, env: NodeJS.ProcessEnv) {
+  child = spawn(executable, [codexBridgePath(), 'mcp'], {
+    env: { ...env, ELECTRON_RUN_AS_NODE: '1' },
+    stdio: 'pipe',
+  })
+  const process = child
+  let id = 0
+  const replies = new Map<number, (value: Record<string, unknown>) => void>()
+  readline.createInterface({ input: process.stdout }).on('line', (line) => {
+    const message = JSON.parse(line) as { id: number; result: Record<string, unknown> }
+    replies.get(message.id)?.(message.result)
+    replies.delete(message.id)
+  })
+  return {
+    send: (method: string, params: unknown) =>
+      process.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method, params })}\n`),
+    call: (method: string, params: unknown) => {
+      const key = ++id
+      const result = new Promise<Record<string, unknown>>((r) => replies.set(key, r))
+      process.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: key, method, params })}\n`)
+      return { id: key, result }
+    },
+  }
+}
+
+describe('Codex CLI 점검과 스킬·설정', () => {
+  it('로그인·기능을 확인하고 미설치 Windows npm/native 경로를 구분한다', async () => {
+    expect(await codexAuthStatus(FAKE_CODEX, process.env)).toMatchObject({ ok: true })
+    expect(
+      await codexAuthStatus(FAKE_CODEX, { ...process.env, FAKE_CODEX_AUTH: 'fail' }),
+    ).toMatchObject({ ok: false })
+    expect(findCodex({ env: { CODEX_BIN: '/missing' }, exists: () => false })).toBeNull()
+    const expected = 'C:\\Users\\me\\AppData\\Roaming\\npm\\codex.cmd'
+    expect(
+      findCodex({
+        platform: 'win32',
+        env: { APPDATA: 'C:\\Users\\me\\AppData\\Roaming', Path: 'C:\\bin' },
+        exists: (s) => s === expected,
+      }),
+    ).toBe(expected)
+  })
+  it('task 밖의 레포나 사용자 설정을 바꾸지 않고 합친 스킬과 질문 도구를 전달한다', async () => {
+    const dir = temp()
+    const deployed = await deployCodexSkill({
+      source: SKILLS,
+      workDir: dir,
+      taskDir: path.join(dir, 'task'),
+      skill: 'investigate',
+    })
+    const text = fs.readFileSync(deployed.file, 'utf8')
+    expect(text).toContain('name: relay-investigate')
+    expect(text).toContain('`mcp__relay__ask_human`')
+    expect(text).not.toContain('`AskUserQuestion`')
+    const settings = codexSettings({
+      workDir: dir,
+      taskDir: path.join(dir, 'task'),
+      taskId: 't-01',
+      port: 12345,
+      previousTaskDirs: [],
+      skill: 'investigate',
+    })
+    const file = path.join(dir, 'settings.json')
+    await writeJson(file, settings)
+    const args = await codexLaunchArgs({
+      workDir: dir,
+      settingsPath: file,
+      sessionId: 'fake-id',
+      skill: 'investigate',
+      contextPath: path.join(dir, 'task/context.md'),
+    })
+    expect(args).toContain('--no-daemon')
+    expect(args).not.toContain('--dangerously-bypass-hook-trust')
+    expect(args).not.toContain('--session-id')
+    expect(args.at(-1)).toContain(deployed.file)
+    expect(JSON.stringify(settings)).not.toContain('a-secret-token')
+    expect(codexLaunchEnv('a-secret-token', 12345, 't-01')).toMatchObject({
+      RELAY_HOOK_TOKEN: 'a-secret-token',
+    })
+    // 모든 훅 설정을 합쳐도 npm .cmd의 제한에 여유를 남긴다.
+    expect(args.join(' ').length).toBeLessThan(6500)
+    const encoded = bridgeCommands().commandWindows.split(' ').at(-1) ?? ''
+    expect(Buffer.from(encoded, 'base64').toString('utf16le')).toContain('$env:RELAY_CODEX_HOOK_PS')
+    expect(codexLaunchEnv('token', 12345, 't-01')).toMatchObject({
+      RELAY_CODEX_EXE: process.execPath,
+      RELAY_CODEX_BRIDGE: codexBridgePath(),
+      RELAY_CODEX_HOOK_PS: expect.stringContaining('codex-hook.ps1'),
+    })
+  })
+})
+
+describe('실제 브리지와 MCP', () => {
+  it('훅 응답을 보존하고 잘못된 토큰이나 끊긴 서버는 보호 도구 거절로 돌려준다', async () => {
+    server = new HookServer()
+    await server.listen()
+    const reply = { decision: 'block', reason: '형식 오류를 고치세요.' }
+    server.register('token', 't-01', async () => reply)
+    const env = { ...process.env, ...codexLaunchEnv('token', server.port, 't-01') }
+    const result = await run(process.execPath, [codexBridgePath(), 'hook'], {
+      env,
+      input: JSON.stringify({ hook_event_name: 'Stop', session_id: 'real-id' }),
+    })
+    expect(JSON.parse(result.stdout)).toEqual(reply)
+    const denied = await run(process.execPath, [codexBridgePath(), 'hook'], {
+      env: { ...env, RELAY_HOOK_TOKEN: 'wrong' },
+      input: JSON.stringify({ hook_event_name: 'PreToolUse' }),
+    })
+    expect(JSON.parse(denied.stdout)).toMatchObject({
+      hookSpecificOutput: { permissionDecision: 'deny' },
+    })
+    await server.close()
+    const closed = await run(process.execPath, [codexBridgePath(), 'hook'], {
+      env,
+      input: JSON.stringify({ hook_event_name: 'PreToolUse' }),
+    })
+    expect(JSON.parse(closed.stdout)).toMatchObject({
+      hookSpecificOutput: { permissionDecision: 'deny' },
+    })
+  })
+  it('MCP 취소 알림이 대기 중인 HTTP 질문을 취소하며 답을 만들어 내지 않는다', async () => {
+    server = new HookServer()
+    await server.listen()
+    let received!: () => void
+    const arrived = new Promise<void>((r) => {
+      received = r
+    })
+    let aborted = false
+    server.register('token', 't-01', async () => null, {
+      question: async (_body, signal) => {
+        received()
+        return await new Promise((resolve) =>
+          signal.addEventListener(
+            'abort',
+            () => {
+              aborted = true
+              resolve({ cancelled: true })
+            },
+            { once: true },
+          ),
+        )
+      },
+    })
+    const client = mcp(process.execPath, {
+      ...process.env,
+      ...codexLaunchEnv('token', server.port, 't-01'),
+    })
+    const init = await client.call('initialize', { protocolVersion: '2024-11-05' }).result
+    expect(init['protocolVersion']).toBe('2024-11-05')
+    const call = client.call('tools/call', { name: 'ask_human', arguments: { questions: [] } })
+    await arrived
+    client.send('notifications/cancelled', { requestId: call.id })
+    expect(await call.result).toMatchObject({ isError: true })
+    await server.close()
+    expect(aborted).toBe(true)
+  })
+  const electron = path.resolve(
+    __dirname,
+    '../../node_modules/electron/dist',
+    process.platform === 'win32' ? 'electron.exe' : 'electron',
+  )
+  it.skipIf(!fs.existsSync(electron))(
+    'Electron Node 모드에서 별도 Node 설치 없이 MCP initialize를 처리한다',
+    async () => {
+      const client = mcp(electron, process.env)
+      expect(
+        await client.call('initialize', { protocolVersion: '2024-11-05' }).result,
+      ).toMatchObject({ serverInfo: { name: 'relay' } })
+    },
+  )
+})

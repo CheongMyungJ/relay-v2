@@ -5,6 +5,8 @@ export default defineConfig({
   testDir: 'test/smoke',
   timeout: 90_000,
   retries: 0,
+  // 앱의 single instance 잠금 때문에 서로 다른 스모크 파일도 함께 띄우지 않는다.
+  workers: 1,
   reporter: [['list'], ['html', { open: 'never', outputFolder: 'test-results/html' }]],
   outputDir: 'test-results/artifacts',
   use: { trace: 'retain-on-failure', screenshot: 'only-on-failure' },

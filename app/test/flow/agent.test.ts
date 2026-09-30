@@ -92,9 +92,10 @@ describe('[흐름] 엔진 설정과 재개', () => {
     expect(s.read(key).tasks[0]).toMatchObject({ session: { id, alive: true } })
   })
 
-  it('아직 연결하지 않은 Codex task를 Claude로 자동 대체하여 실행하지 않는다', async () => {
+  it('미설치 Codex task를 Claude로 자동 대체하여 실행하지 않는다', async () => {
     const s = await setup()
     await s.hh.relay.updateConfig({ agent_engine: 'codex' })
+    s.hh.env['CODEX_BIN'] = path.join(s.hh.root, 'missing-codex')
     const key = await s.create()
     expect(s.read(key).tasks[0]).toMatchObject({
       engine: 'codex',

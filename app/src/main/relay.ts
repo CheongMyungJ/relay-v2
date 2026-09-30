@@ -457,6 +457,15 @@ export class Relay {
     return this.withWork(workKey, (w) => w.cancelCountdown(taskId))
   }
 
+  answerQuestion(
+    workKey: string,
+    taskId: string,
+    questionId: string,
+    answers: unknown,
+  ): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.answerQuestion(taskId, questionId, answers))
+  }
+
   // ---------- 사람 조작 (시나리오 3-4, 3-5, 4.4) ----------
 
   /** Work의 명령을 부른다 */

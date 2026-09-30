@@ -78,9 +78,7 @@ jobs:
 
       - name: 앱 의존성 설치
         working-directory: app
-        env:
-          # 어댑터와 흐름 시험은 Node에서 돌아 Electron 바이너리가 필요 없다 (I26).
-          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+        # Codex 질문창과 Electron Node 모드 브리지의 GUI 스모크에도 쓴다.
         run: npm ci --no-audit --no-fund
 
       - name: 빌드
@@ -95,6 +93,19 @@ jobs:
       - name: "[흐름] (PR 진행·대응 밖)"
         working-directory: app
         run: npm run test:flow -- --exclude "test/flow/pr*.test.ts"
+
+      - name: "[Codex GUI 스모크] 개발 빌드"
+        working-directory: app
+        # 실제 모델 호출 없이 설정 → 앱 질문창 → 답변 → 다음 엔진 전환을 검증한다.
+        # 설치본 자체는 app-build의 기존 스모크에서 별도로 검증한다.
+        run: npx playwright test test/smoke/codex.spec.ts
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: codex-smoke-windows
+          path: app/test-results/
+          if-no-files-found: ignore
 
   windows-pr:
     runs-on: windows-latest

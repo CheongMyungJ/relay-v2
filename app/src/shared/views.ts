@@ -1,6 +1,7 @@
 // 렌더러로 보내는 스냅샷과 조회 결과 (I14). main이 core로 계산하고, 화면은 받은 것을 그리기만 한다.
 import type { WorkSettings } from './config'
 import type { Decision, HandoffStatus, NodeName, Size, TaskNode } from './contracts'
+import type { PendingQuestionView } from './questions'
 import type { PrItemKind, PrItemStatus } from './pr'
 import type {
   ApprovedIntent,
@@ -87,6 +88,9 @@ export interface DeliveryView {
 
 /** 정리 세션: [AI 세션 열기]로 연, 기록하지 않는 일반 터미널의 Claude Code (시나리오 7-5) */
 export interface CleanupView {
+  engineLabel?: string
+  notice?: string
+  question?: PendingQuestionView
   /** 이 세션 터미널의 키 */
   terminal: string
   /** 대기열(D18), 살아 있음, 끝남 */
@@ -411,6 +415,7 @@ export interface ProjectView {
 }
 
 export interface TaskView {
+  question?: PendingQuestionView
   /** 사용 엔진과 CLI 버전. 이전 스냅샷 호출자의 호환을 위해 생략 가능하다. */
   engineLabel?: string
   engineVersion?: string | null

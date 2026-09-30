@@ -256,6 +256,28 @@ textarea {
 }
 
 .s-awaiting_approval,
+.human-question {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid #555;
+}
+.human-option {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0;
+  align-items: flex-start;
+}
+.human-written {
+  display: grid;
+  gap: 6px;
+}
+.human-written textarea {
+  width: 100%;
+  min-height: 64px;
+}
+.question-reopen {
+  margin: 4px 8px;
+}
 .s-asking,
 .s-input_needed,
 .s-blocked,

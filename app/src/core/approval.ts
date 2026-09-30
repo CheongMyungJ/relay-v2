@@ -132,6 +132,7 @@ export const AUTO_HOLD_LABEL: Readonly<Record<AutoHoldReason, string>> = {
   intent_deviation: '의도와 어긋남(intent_deviation)이 있음',
   recommended_next: '기본 다음 단계가 아닌 단계를 추천함',
   background: '턴이 끝날 때 백그라운드 작업이나 예약된 깨우기가 남아 있었음',
+  completion_unknown: 'Codex의 미완료 작업 여부를 확인할 수 없어 사람이 승인해야 함',
   invalid: '다시 읽은 handoff가 유효하지 않음',
   cancel: '[취소]를 누름',
   interrupt: '[즉시 중단]을 누름',

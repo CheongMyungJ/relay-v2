@@ -173,6 +173,18 @@ export interface PtyExited extends TaskEvent {
 
 export type SessionEnded = SessionEndHook | PtyExited
 
+/** main에서 벤더 훅을 번역해 전달하는 공통 신호. 이전 Claude 호출자도 계속 읽는다. */
+export type RuntimeSignal =
+  | (HookSignal & { type: 'session.identified' })
+  | (Omit<UserPromptSubmitted, 'type'> & { type: 'turn.started' })
+  | (HookSignal & { type: 'question.started' | 'question.finished' | 'input.required' })
+  | (Omit<Stopped, 'type' | 'background'> & {
+      type: 'turn.completed'
+      pending: 'none' | 'pending' | 'unknown'
+    })
+  | (HookSignal & { type: 'turn.interrupted'; check: CheckSummary })
+  | (Omit<SessionEndHook, 'type'> & { type: 'session.ended' })
+
 /**
  * 감시(I15)가 파일 변경을 보고 다시 한 형식 검사. 패널 표시만 바꾼다. 카운트다운 중에 자동 승인 조건을 어기면
  * 카운트다운을 멈춘다 (D130)
@@ -559,6 +571,7 @@ export interface PrChecksRerun extends WorkEvent {
 }
 
 export type MachineEvent =
+  | RuntimeSignal
   | SessionStarted
   | SessionResumed
   | SessionFailed
@@ -804,8 +817,11 @@ export function actions(work: WorkState): WorkActions {
   const live = task?.session?.alive === true
   return {
     interrupt: active && (live || task.status === 'queued'),
-    resume: active && !live && RESUMABLE.includes(task.status),
-    retry: work.status === 'active' && task?.status === 'session_ended',
+    resume: active && !live && RESUMABLE.includes(task.status) && task.session?.id !== '',
+    retry:
+      work.status === 'active' &&
+      !!task &&
+      (task.status === 'session_ended' || unidentifiedCodex(task)),
     resumeWork: work.status === 'stopped' && !stoppedVerify(work),
     selectStep: canSelectStep(work),
     stopAfter: work.status === 'active',
@@ -905,7 +921,14 @@ function holdsNow(
   check: CheckSummary & { handoffHeader?: Handoff | null },
   background: boolean,
 ): AutoHoldReason[] {
-  return autoApproveHolds({ node: task.node, size: work.intent?.size ?? 'M', check, background })
+  const holds = autoApproveHolds({
+    node: task.node,
+    size: work.intent?.size ?? 'M',
+    check,
+    background,
+  })
+  // Codex Stop은 미완료 작업 전체의 부재를 보장하지 않는다. 타이머/감시에서도 이 판정을 유지한다 (E8).
+  return taskEngine(task) === 'codex' ? [...holds, 'completion_unknown'] : holds
 }
 
 /**
@@ -1239,6 +1262,59 @@ function taskTransition(work: WorkState, event: TaskMachineEvent, config: AppCon
     return command ? unchanged(work, `${event.taskId}는 지금 task가 아님`) : unchanged(work)
   }
   switch (event.type) {
+    case 'session.identified': {
+      if (!task.session?.alive || !event.sessionId || event.agentId !== undefined)
+        return unchanged(work)
+      if (task.session.id === event.sessionId) return unchanged(work)
+      return {
+        work: withTask(work, { ...task, session: { ...task.session, id: event.sessionId } }),
+        effects: [
+          log(work, event.at, 'task.session_identified', { session_id: event.sessionId }, task),
+        ],
+      }
+    }
+    case 'turn.started':
+      return hook(work, task, { ...event, type: 'UserPromptSubmit' }, config)
+    case 'question.started':
+    case 'question.finished':
+      return hook(
+        work,
+        task,
+        {
+          ...event,
+          type: event.type === 'question.started' ? 'PreToolUse' : 'PostToolUse',
+          toolName: ASK_TOOL,
+        },
+        config,
+      )
+    case 'input.required':
+      return hook(
+        work,
+        task,
+        { ...event, type: 'Notification', notificationType: PERMISSION_PROMPT },
+        config,
+      )
+    case 'turn.completed':
+      return hook(
+        work,
+        task,
+        { ...event, type: 'Stop', background: event.pending === 'pending' },
+        config,
+      )
+    case 'turn.interrupted': {
+      if (!task.session?.alive) return unchanged(work)
+      const check = summarize(event.check)
+      return {
+        work: withTask(work, {
+          ...omit(task, 'countdown', 'auto_hold'),
+          check,
+          status: handoffStatus(check) ?? 'idle',
+        }),
+        effects: [],
+      }
+    }
+    case 'session.ended':
+      return sessionEnded(work, task, { ...event, type: 'SessionEnd' })
     case 'session.started':
       return sessionStarted(work, task, event)
     case 'session.resumed':
@@ -1698,6 +1774,8 @@ function resume(work: WorkState, task: TaskRecord): Transition {
   if (task.session?.alive || !RESUMABLE.includes(task.status)) {
     return unchanged(work, `${task.id}는 재개할 수 있는 상태가 아님`)
   }
+  if (task.session?.id === '')
+    return unchanged(work, 'Codex 대화 ID를 받지 못했습니다. 이 단계 새 세션으로 다시 실행하세요.')
   const effect: Effect = task.session
     ? { type: 'resumeTask', taskId: task.id }
     : { type: 'startTask', taskId: task.id, node: task.node, reason: task.reason }
@@ -1710,7 +1788,7 @@ function resume(work: WorkState, task: TaskRecord): Transition {
  */
 function retry(work: WorkState, task: TaskRecord, e: Retry): Transition {
   if (work.status !== 'active') return unchanged(work, '진행 중인 Work가 아님')
-  if (task.status !== 'session_ended') {
+  if (task.status !== 'session_ended' && !unidentifiedCodex(task)) {
     return unchanged(work, `${task.id}는 handoff 없이 끝난 세션이 아님`)
   }
   const created = newTask(work, task.node, e.at, 'resume')
@@ -1720,6 +1798,16 @@ function retry(work: WorkState, task: TaskRecord, e: Retry): Transition {
       { type: 'startTask', taskId: created.id, node: created.node, reason: created.reason },
     ],
   }
+}
+
+/** 훅 신뢰 전에 끝나 실제 대화 ID를 받지 못한 Codex는 임의의 ID로 재개하지 않는다. */
+function unidentifiedCodex(task: TaskRecord): boolean {
+  return (
+    taskEngine(task) === 'codex' &&
+    task.status === 'interrupted' &&
+    task.session?.id === '' &&
+    !task.session.alive
+  )
 }
 
 // ---------- Work 조작 ----------
