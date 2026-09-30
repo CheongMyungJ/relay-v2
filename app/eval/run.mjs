@@ -26,7 +26,7 @@ const HELP = `쓰는 법: node eval/run.mjs [옵션]
   --arms <목록>            relay,cli (기본 둘 다)
   --parallel <n>           동시에 돌릴 실행 수 (기본 1, 2까지 권함)
   --agent-model <모델>     relay와 CLI 안의 claude 모델 (기본 sonnet)
-  --effort <수준>          에이전트 effort: low / medium / high (기본 low)
+  --effort <수준>          에이전트 effort: low / medium / high (기본 medium)
   --human-model <모델>     사람 역할 모델 (기본 sonnet)
   --human-effort <수준>    사람 역할 effort (기본 low)
   --judge-model <모델>     판정 모델 (기본 sonnet)
@@ -109,7 +109,7 @@ async function main() {
       arms: { type: 'string', default: 'relay,cli' },
       parallel: { type: 'string', default: '1' },
       'agent-model': { type: 'string', default: 'sonnet' },
-      effort: { type: 'string', default: 'low' },
+      effort: { type: 'string', default: 'medium' },
       'human-model': { type: 'string', default: 'sonnet' },
       'human-effort': { type: 'string', default: 'low' },
       'judge-model': { type: 'string', default: 'sonnet' },

@@ -14,16 +14,10 @@
       "text": "가격은 상품 데이터에서 '1,200' 같은 천 단위 쉼표가 든 문자열로 온다. '12.50'처럼 소수점이 있는 가격도 있다."
     }
   ],
-  "preferences": [
-    "할인 계산이 틀렸다고 믿고 있지만, 근거를 보여 주면 받아들인다."
-  ],
+  "preferences": ["할인 계산이 틀렸다고 믿고 있지만, 근거를 보여 주면 받아들인다."],
   "reveals": [],
   "events": [],
-  "expectedFiles": [
-    "src/parse.js",
-    "src/cart.js",
-    "test/**"
-  ],
+  "expectedFiles": ["src/parse.js", "src/cart.js", "test/**"],
   "checks": [
     {
       "name": "가격 파싱",

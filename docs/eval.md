@@ -105,7 +105,7 @@ node eval/run.mjs --scenarios 1,5,6 --runs 2 --effort medium
 node eval/report.mjs eval/results/<폴더>                # 보고서 다시 만들기
 ```
 
-- 기본값: 에이전트 `sonnet`·effort `low`(app-claude 워크플로와 같음), 사람 역할 `sonnet`·effort `low`, 판정 `sonnet`.
+- 기본값: 에이전트 `sonnet`·effort `medium`, 사람 역할 `sonnet`·effort `low`, 판정 `sonnet`.
 - 결과: `app/eval/results/<시각>/`(git에 넣지 않음). `report.md`, `report.json`, `config.json`, `<시나리오>/<쪽>-<회차>/`에 `run.json`, `turns.jsonl`(차례 기록), `shots/`(relay 스크린샷), `final/*.diff`, `works/`(relay 산출물과 `pty.log`), `<시나리오>/judge-<회차>.json`.
 - 작업 폴더: `/tmp/relay-eval/<결과 폴더 이름>/`(레포, relay 저장소, 설정 폴더). 컨테이너가 끝나면 없어진다.
 - 시간: 실행 하나에 3~20분쯤이다. `--parallel 2`까지 권한다(Electron과 claude 둘이 함께 돈다).

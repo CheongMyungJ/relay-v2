@@ -10,15 +10,10 @@
       "text": "문의한 사용자들은 미국 서부(로스앤젤레스, America/Los_Angeles)에 있다. 한국 사용자들은 문제를 말한 적이 없다."
     }
   ],
-  "preferences": [
-    "어느 시간대에서도 같은 결과가 나와야 한다."
-  ],
+  "preferences": ["어느 시간대에서도 같은 결과가 나와야 한다."],
   "reveals": [],
   "events": [],
-  "expectedFiles": [
-    "src/week.js",
-    "test/**"
-  ],
+  "expectedFiles": ["src/week.js", "test/**"],
   "checks": [
     {
       "name": "로스앤젤레스",
