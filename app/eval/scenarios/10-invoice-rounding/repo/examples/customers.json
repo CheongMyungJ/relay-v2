@@ -1,0 +1,5 @@
+[
+  { "id": "C-0412", "name": "(주)세림건축", "bizNo": "214-86-12341", "email": "account@serim-arch.co.kr", "grade": "B" },
+  { "id": "C-0388", "name": "누리테크 주식회사", "bizNo": "105-87-11900", "email": "finance@nuritech.kr", "grade": "A" },
+  { "id": "C-0520", "name": "Pacific Trade Co., Ltd.", "bizNo": "617-81-03459", "email": "ap@pacifictrade.com", "grade": "C", "zeroRated": true }
+]
