@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import readline from 'node:readline'
+import { once } from 'node:events'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   bridgeCommands,
@@ -18,6 +19,7 @@ import { HookServer } from '../../src/adapters/hooks'
 import { run } from '../../src/adapters/exec'
 import { writeJson } from '../../src/adapters/store'
 import { FAKE_CODEX, SKILLS } from '../flow/harness'
+import { codexToolDenial } from '../../src/core/codex'
 
 let server: HookServer | undefined
 let child: ChildProcessWithoutNullStreams | undefined
@@ -131,6 +133,58 @@ describe('Codex CLI 점검과 스킬·설정', () => {
 })
 
 describe('실제 브리지와 MCP', () => {
+  it('한글 경로 바이트가 청크 경계에서 나뉘어도 원래 입력과 보호 판정을 보존한다', async () => {
+    const dir = path.join(temp(), '한글')
+    server = new HookServer()
+    await server.listen()
+    let received: unknown
+    server.register('token', 't-01', async (req) => {
+      received = req.body
+      const reason = codexToolDenial(
+        { workDir: dir, worktree: dir, previousTaskDirs: [] },
+        'exec_command',
+        req.body['tool_input'] as Record<string, unknown>,
+      )
+      return reason
+        ? {
+            hookSpecificOutput: {
+              hookEventName: 'PreToolUse',
+              permissionDecision: 'deny',
+              permissionDecisionReason: reason,
+            },
+          }
+        : null
+    })
+    const body = {
+      hook_event_name: 'PreToolUse',
+      tool_name: 'exec_command',
+      tool_input: { cmd: `printf changed > "${dir}/request.md"` },
+    }
+    const bytes = Buffer.from(JSON.stringify(body))
+    const index = bytes.indexOf(Buffer.from('한'))
+    for (const offset of [1, 2]) {
+      child = spawn(process.execPath, [codexBridgePath(), 'hook'], {
+        env: {
+          ...process.env,
+          ...codexLaunchEnv('token', server.port, 't-01'),
+          ELECTRON_RUN_AS_NODE: '1',
+        },
+        stdio: 'pipe',
+      })
+      const output: Buffer[] = []
+      child.stdout.on('data', (chunk: Buffer) => output.push(chunk))
+      const closed = once(child, 'close')
+      child.stdin.write(bytes.subarray(0, index + offset))
+      await new Promise((resolve) => setTimeout(resolve, 500))
+      child.stdin.end(bytes.subarray(index + offset))
+      expect((await closed)[0]).toBe(0)
+      expect(received).toEqual(body)
+      expect(JSON.parse(Buffer.concat(output).toString('utf8'))).toMatchObject({
+        hookSpecificOutput: { permissionDecision: 'deny' },
+      })
+      child = undefined
+    }
+  })
   it('훅 응답을 보존하고 잘못된 토큰이나 끊긴 서버는 보호 도구 거절로 돌려준다', async () => {
     server = new HookServer()
     await server.listen()

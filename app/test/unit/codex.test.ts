@@ -152,6 +152,47 @@ describe('Codex 보호 범위', () => {
       '{ "input" = { "cmd" = "한글 \\"quoted\\"\\nline" }, "enabled" = true }',
     )
   })
+  it('중복 구분자와 ..를 같은 보호 경로로 해석하되 다른 경로와 현재 산출물은 허용한다', () => {
+    for (const target of [
+      '/home/relay//work/request.md',
+      '/home/relay/work//tasks//../request.md',
+      '/home//relay/work/tasks//01-intake/handoff.md',
+      '/home/relay/work/tasks/02-fix//context.md',
+    ]) {
+      expect(
+        codexToolDenial(input, 'apply_patch', { input: `*** Update File: ${target}` }),
+      ).toBeTruthy()
+      expect(
+        codexToolDenial(input, 'exec_command', { cmd: `printf changed > ${target}` }),
+      ).toBeTruthy()
+    }
+    expect(
+      codexToolDenial(input, 'exec_command', {
+        cmd: 'rm request.md',
+        workdir: '/home/relay//work//tasks//..',
+      }),
+    ).toBeTruthy()
+    expect(
+      codexToolDenial(input, 'exec_command', { cmd: 'rm -rf /home/relay/work/../../..' }),
+    ).toBeTruthy()
+    expect(
+      codexToolDenial(input, 'apply_patch', {
+        input: '*** Update File: /home//relay/work/tasks//02-fix/handoff.md',
+      }),
+    ).toBeNull()
+    expect(
+      codexToolDenial(input, 'apply_patch', {
+        input: '*** Update File: /home//relay/work-other/request.md',
+      }),
+    ).toBeNull()
+    expect(
+      codexToolDenial(
+        { workDir: 'C:\\Relay Work', worktree: 'C:\\repo', previousTaskDirs: [] },
+        'shell_command',
+        { command: 'Remove-Item request.md', workdir: 'c:\\RELAY WORK\\\\tasks\\\\..' },
+      ),
+    ).toBeTruthy()
+  })
 })
 
 describe('Codex 완료와 자동 승인', () => {

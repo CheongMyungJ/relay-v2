@@ -121,6 +121,14 @@ test('엔진 설정에서 Codex를 골라 앱 질문창으로 답하고 다음 t
     timeout: 30_000,
   })
   await expect(window.locator('.band')).toContainText('Codex')
+  await expect(window.locator('.status.s-awaiting_approval').first()).toHaveCSS(
+    'background-color',
+    'rgb(215, 186, 125)',
+  )
+  await expect(window.locator('.status.s-awaiting_approval').first()).toHaveCSS(
+    'padding-top',
+    '0px',
+  )
   await expect(window.locator('.auto-hold')).toContainText('Codex 작업은 사람이 승인합니다.')
   // 작은 화면에서도 고정 승인 버튼이 설정 대화상자의 클릭을 가로채지 않는다.
   await (

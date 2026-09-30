@@ -153,6 +153,7 @@ async function rpc(message) {
 }
 
 if (process.argv[2] === 'hook') {
+  process.stdin.setEncoding('utf8')
   let raw = ''
   for await (const chunk of process.stdin) {
     raw += chunk

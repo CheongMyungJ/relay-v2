@@ -178,7 +178,47 @@ describe('[흐름] Codex CLI와 실제 훅·MCP 브리지', () => {
   it('Codex 전체 S 경로와 정리 질문을 실행하며 설정 변경 뒤에도 정리 엔진을 유지한다', async () => {
     const s = await setup({
       ...scenario('S'),
-      cleanup: [{ do: 'prompt' }, { do: 'ask' }, { do: 'wait' }],
+      cleanup: [
+        { do: 'prompt' },
+        {
+          do: 'ask',
+          afterEnter: [
+            {
+              do: 'hook',
+              event: 'PreToolUse',
+              body: { tool_name: 'exec_command', tool_input: { cmd: 'git status --short' } },
+            },
+            {
+              do: 'hook',
+              event: 'PostToolUse',
+              body: { tool_name: 'exec_command', tool_response: { exit_code: 0 } },
+            },
+            {
+              do: 'hook',
+              event: 'PreToolUse',
+              body: { tool_name: 'exec_command', tool_input: { cmd: 'git push' } },
+            },
+            {
+              do: 'hook',
+              event: 'PreToolUse',
+              body: {
+                agent_id: 'child',
+                tool_name: 'apply_patch',
+                tool_input: { input: '*** Update File: {protectedFile}' },
+              },
+            },
+            {
+              do: 'hook',
+              event: 'PreToolUse',
+              body: {
+                tool_name: 'apply_patch',
+                tool_input: { input: '*** Update File: README.md' },
+              },
+            },
+          ],
+        },
+        { do: 'wait' },
+      ],
     })
     await s.hh.relay.updateConfig({
       auto_approve: { ...s.hh.relay.currentConfig().auto_approve, fix: true, review: true },
@@ -205,12 +245,56 @@ describe('[흐름] Codex CLI와 실제 훅·MCP 브리지', () => {
     if (!runner) throw new Error('runner 없음')
     fs.writeFileSync(path.join(runner.worktree, 'debug.log'), '정리할 파일')
     await s.hh.relay.updateConfig({ agent_engine: 'claude' })
+    const scenarioFile = s.hh.env['FAKE_CODEX_SCENARIO']
+    if (!scenarioFile) throw new Error('시나리오 없음')
+    fs.writeFileSync(
+      scenarioFile,
+      fs
+        .readFileSync(scenarioFile, 'utf8')
+        .replace('{protectedFile}', () =>
+          JSON.stringify(path.join(runner.files.dir, 'request.md')).slice(1, -1),
+        ),
+    )
     expect(await s.hh.relay.openCleanup(s.key, 'push')).toEqual({ ok: true })
     const cleanupQuestion = await s.hh.ui.until(
       () => s.view()?.cleanup?.question,
       'Codex 정리 질문',
     )
     expect(s.view()?.cleanup?.engineLabel).toBe('Codex')
+    const terminal = s.view()?.cleanup?.terminal
+    if (!terminal) throw new Error('정리 터미널 없음')
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const busy = runner.enqueue(() => gate)
+    const countBefore = s.hh.codexRecords().filter((r) => r['event'] === 'PreToolUse').length
+    try {
+      s.hh.relay.terminalWrite(terminal, '\r')
+      await s.hh.ui.until(
+        () =>
+          s.hh.codexRecords().filter((r) => r['event'] === 'PreToolUse').length === countBefore + 4,
+        '처리 큐가 막혀 있어도 정리 도구 훅 네 개에 응답',
+        10_000,
+      )
+      const replies = s.hh
+        .codexRecords()
+        .filter((r) => r['event'] === 'PreToolUse')
+        .slice(-4)
+        .map((r) => r['response'])
+      expect(replies).toMatchObject([
+        null,
+        { hookSpecificOutput: { permissionDecision: 'deny' } },
+        { hookSpecificOutput: { permissionDecision: 'deny' } },
+        null,
+      ])
+      expect(
+        s.hh.codexRecords().findLast((r) => r['event'] === 'PostToolUse')?.['response'],
+      ).toBeNull()
+    } finally {
+      release()
+      await busy
+    }
     expect(await s.hh.relay.answerQuestion(s.key, 'cleanup', cleanupQuestion.id, null)).toEqual({
       ok: true,
     })

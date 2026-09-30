@@ -62,10 +62,12 @@ export function codexToolDenial(
     const absolute = /^(?:\/|[A-Za-z]:[\\/])/.test(s) ? norm(s) : `${norm(base)}/${norm(s)}`
     const parts: string[] = []
     for (const p of absolute.split('/')) {
-      if (p === '..') parts.pop()
-      else if (p !== '.') parts.push(p)
+      if (p === '..') {
+        // 절대 경로의 루트(드라이브 포함) 위로 올라가지 않는다.
+        if (parts.length && !/^[A-Za-z]:$/.test(parts.at(-1) ?? '')) parts.pop()
+      } else if (p !== '.' && p !== '') parts.push(p)
     }
-    const result = parts.join('/')
+    const result = `${absolute.startsWith('/') ? '/' : ''}${parts.join('/')}`
     return /^[A-Za-z]:/.test(result) ? result.toLowerCase() : result
   }
   const workdir =
@@ -73,16 +75,12 @@ export function codexToolDenial(
       (value): value is string => typeof value === 'string' && value.trim() !== '',
     ) ?? input.worktree
   const workingDir = canonical(workdir, input.cwd ?? input.worktree)
+  const within = (p: string, dir: string) => p === dir || p.startsWith(`${dir.replace(/\/$/, '')}/`)
   const protectedPath = (s: string) => {
     const p = canonical(s, workingDir)
     return (
-      protectedFiles.some((f) => p === canonical(f) || canonical(f).startsWith(`${p}/`)) ||
-      protectedDirs.some(
-        (d) =>
-          p === canonical(d) ||
-          p.startsWith(`${canonical(d)}/`) ||
-          canonical(d).startsWith(`${p}/`),
-      )
+      protectedFiles.some((f) => within(canonical(f), p)) ||
+      protectedDirs.some((d) => within(p, canonical(d)) || within(canonical(d), p))
     )
   }
   const command = [args['command'], args['cmd'], args['patch'], args['input']]

@@ -1270,7 +1270,7 @@ export class WorkRunner {
   }
 
   /** Codex의 도구 보호는 진행 표시의 빠른 응답 경로에서도 먼저 판정한다. */
-  private codexToolReply(task: TaskRecord, req: HookRequest): HookReply {
+  private codexToolReply(req: HookRequest, task?: TaskRecord): HookReply {
     const b = req.body
     const toolName = str(b['tool_name']) ?? ''
     const args = b['tool_input']
@@ -1279,9 +1279,9 @@ export class WorkRunner {
         workDir: this.files.dir,
         ...(str(b['cwd']) ? { cwd: str(b['cwd']) } : {}),
         worktree: this.worktree,
-        taskDir: this.files.taskDir(task),
+        ...(task ? { taskDir: this.files.taskDir(task) } : {}),
         previousTaskDirs: this.work.tasks
-          .filter((t) => t.seq < task.seq)
+          .filter((t) => !task || t.seq < task.seq)
           .map((t) => this.files.taskDir(t)),
       },
       toolName,
@@ -1318,7 +1318,7 @@ export class WorkRunner {
       const task = this.task(taskId)
       const denial =
         task?.engine === 'codex' && req.event === 'PreToolUse'
-          ? this.codexToolReply(task, req)
+          ? this.codexToolReply(req, task)
           : null
       const name = str(b['tool_name']) ?? ''
       const id = str(b['tool_use_id'])
@@ -2221,10 +2221,7 @@ export class WorkRunner {
       c.unregister = this.ctx.hooks.register(
         token,
         CLEANUP_ID,
-        (req) =>
-          taskEngine(c) === 'claude' && TOOL_HOOKS.includes(req.event)
-            ? Promise.resolve(null)
-            : this.enqueue(() => this.onCleanupHook(c, req)),
+        (req) => this.cleanupHookArrived(c, req),
         taskEngine(c) === 'codex'
           ? {
               failClosed: true,
@@ -2252,33 +2249,27 @@ export class WorkRunner {
     return true
   }
 
-  /** 정리 세션의 훅: 턴이 끝날 때(Stop)마다 git status가 깨끗한지 본다. 새 요청이 오면 강조를 끈다 (7-5) */
+  /** 정리 도구 훅도 처리 큐 밖에서 바로 답하되 Codex의 보호 판정은 task와 공유한다. */
+  private cleanupHookArrived(c: CleanupSession, req: HookRequest): Promise<HookReply> {
+    if (this.cleanup !== c || c.status !== 'live') return Promise.resolve(null)
+    if (TOOL_HOOKS.includes(req.event)) {
+      if (taskEngine(c) === 'codex' && !c.hooksReady) {
+        c.hooksReady = true
+        this.changed()
+      }
+      return Promise.resolve(
+        taskEngine(c) === 'codex' && req.event === 'PreToolUse' ? this.codexToolReply(req) : null,
+      )
+    }
+    return this.enqueue(() => this.onCleanupHook(c, req))
+  }
+
+  /** 정리 세션: Stop마다 git status를 보고 새 요청이면 강조를 끈다 (7-5). */
   private async onCleanupHook(c: CleanupSession, req: HookRequest): Promise<HookReply> {
     if (this.cleanup !== c || c.status !== 'live') return null
     if (taskEngine(c) === 'codex' && !c.hooksReady) {
       c.hooksReady = true
       this.changed()
-    }
-    if (taskEngine(c) === 'codex' && req.event === 'PreToolUse') {
-      const args = req.body['tool_input']
-      const reason = codexToolDenial(
-        {
-          workDir: this.files.dir,
-          ...(str(req.body['cwd']) ? { cwd: str(req.body['cwd']) } : {}),
-          worktree: this.worktree,
-          previousTaskDirs: this.work.tasks.map((t) => this.files.taskDir(t)),
-        },
-        str(req.body['tool_name']) ?? '',
-        typeof args === 'object' && args !== null ? (args as Record<string, unknown>) : {},
-      )
-      if (reason)
-        return {
-          hookSpecificOutput: {
-            hookEventName: 'PreToolUse',
-            permissionDecision: 'deny',
-            permissionDecisionReason: reason,
-          },
-        }
     }
     if (taskEngine(c) === 'codex' && str(req.body['agent_id']) !== undefined) return null
     if (taskEngine(c) === 'codex') {

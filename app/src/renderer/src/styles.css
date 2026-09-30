@@ -263,7 +263,6 @@ textarea {
   color: var(--text);
 }
 
-.s-awaiting_approval,
 .human-question {
   margin: 12px 0;
   padding: 12px;
@@ -286,6 +285,7 @@ textarea {
 .question-reopen {
   margin: 4px 8px;
 }
+.s-awaiting_approval,
 .s-asking,
 .s-input_needed,
 .s-blocked,

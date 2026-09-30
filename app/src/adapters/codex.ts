@@ -126,6 +126,7 @@ export function codexHooks(): Record<string, unknown> {
               type: 'command',
               ...commands,
               timeout: event === 'SessionEnd' || event === 'Interrupt' ? 3 : 30,
+              // 문자 수가 아닌 대략 토큰 기준의 spill 임계값. 초과한 전문은 Codex가 파일에 보존한다.
               ...(event === 'SessionStart' ? { additionalContextLimit: 8000 } : {}),
             },
           ],
