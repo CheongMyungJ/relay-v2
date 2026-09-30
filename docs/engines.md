@@ -237,7 +237,7 @@ Q4의 Codex 수동 승인 정책을 적용하고 Claude 자동 승인/PR 대응�
 - 2026-09-30, 실제 Codex 0.159.0-alpha.3, 수정된 설정: 모델 호출 없이 CLI를 띄워 `/mcp`의 **relay: connected (1 tool)**을 확인함. `/hooks`에서 활성 훅을 확인하고 PostCompact 미지원 경고가 사라짐을 확인함. 이 실행에서는 실제 lifecycle 이벤트·세션 ID를 받지 않았으며 이 항목을 통과 처리하지 않음. 별도 환경의 codex_apps MCP는 HTTP 451로 실패했지만 relay MCP는 연결됨.
 - 2026-09-30, Windows Server 2025, Electron 44.4.5, [`c8882af` 설치 검증](https://github.com/CheongMyungJ/relay-v2/actions/runs/36693696376): NSIS 설치 파일 빌드와 사용자별 설치, 설치된 node-pty의 asar 외부 파일 확인, 설치된 relay.exe의 **Claude·Codex 스모크 2개 통과**(40.2초). Codex 엔진 선택·앱 질문·한글 답변·Claude 다음 task·수동 승인 안내, 기존 Claude 승인·중단·재개·되감기·자동 승인 취소·push·정리·재시작 복구 포함. 모델은 가짜 CLI로 대체하며 실제 Electron/PowerShell/command/HTTP/MCP를 사용함. 임시 engine-install-check 워크플로는 이 브랜치에서만 실행했고 검증 후 제거하여 기존 app-build의 수동 실행 정책을 유지함.
 
-- 2026-09-30, 최종 코드 [`c8882af` CI](https://github.com/CheongMyungJ/relay-v2/actions/runs/36693696063): Linux·Windows·Windows PR 작업 모두 통과. Q4 정책, 압축 지시 재주입, Windows 어댑터·8개 Codex 흐름·개발 빌드 질문창·기존 전체 흐름 회귀를 확인함. 이후 커밋은 사용 안내·검증 기록과 임시 설치 검증 워크플로 제거만 포함하며 런타임 코드는 동일함.
+- 2026-09-30, Q4·압축 반영 코드 [`c8882af` CI](https://github.com/CheongMyungJ/relay-v2/actions/runs/36693696063): Linux·Windows·Windows PR 작업 모두 통과. Q4 정책, 압축 지시 재주입, Windows 어댑터·8개 Codex 흐름·개발 빌드 질문창·기존 전체 흐름 회귀를 확인함. 이후 커밋은 사용 안내·검증 기록과 임시 설치 검증 워크플로 제거만 포함하며 런타임 코드는 동일함.
 
 - 2026-09-30, Linux 직접 GUI, relay `120eefd`, Electron 44.4.5, Codex 0.159.0-alpha.3: Xvfb에서 실제 Electron 앱을 띄워 UI로 Codex를 선택하고 임시 Git 레포를 등록·Work 생성함. 가짜 CLI 기반 기존 두 엔진 GUI 스모크도 2개 통과(20.8초). 실제 Codex의 폴더 신뢰 화면을 테스트 조작자가 검토·수락하고 최초 네이티브 훅을 통한 실제 session ID 기록, 신뢰 안내 해제, `/mcp`의 relay connected(1 tool)를 확인함. UI [즉시 중단]으로 프로세스 종료와 interrupted/alive:false를 확인하고 앱을 다시 띄움. 기본 엔진을 Claude로 바꾼 뒤 UI [재개]로 같은 Codex ID와 이전 대화 화면을 유지했으며, 새 요청에서 훅이 전달됨을 확인함. `/clear` 뒤 새 요청의 새 ID를 기록하면서 PTY가 살아 있음도 확인함. 최초·재개·새 대화의 모델 요청은 모두 access token refresh 실패로 종료하여 실제 모델 질문, 산출물/handoff, 모델 도구 보호/Stop, 압축과 모델 작업 중 재개는 미검증. 인증 오류 뒤 앱이 working으로 표시되며 CLI 터미널에 로그인 오류가 보이는 점을 관측함. 모델 오류를 정상 완료로 처리하거나 다음 task를 시작하지 않음. 화면과 실행 결과는 이 환경의 `/workspace/scratch/relay-linux-real-codex-*.png`, `relay-linux-gui-result.json`에 남겼고 테스트 앱·Codex·Xvfb는 종료함. 런타임 코드는 수정하지 않음.
 
@@ -246,6 +246,8 @@ Q4의 Codex 수동 승인 정책을 적용하고 Claude 자동 승인/PR 대응�
 - 같은 실제 모델 실행: work.json을 편집하는 apply_patch와 `git push --dry-run`을 각각 한 번 시도해 **네이티브 도구 훅의 거부**를 확인했다. 파일에 시험 문자열은 쓰이지 않았다. 현재 task handoff의 status를 한 번 잘못 작성하자 Stop 훅이 구체적인 형식 오류를 반환했고 모델이 원래 값으로 수정한 뒤 승인 대기로 돌아왔다. `/compact`는 1분 48초에 정상 완료했으며, 이후 모델은 fix 규칙을 유지하며 relay 질문 도구를 사용했다. 압축·재개 시험 뒤 README 커밋과 산출물을 임의 변경하지 않았다.
 - 같은 실행에서 리뷰 산출물의 쉘 쓰기 본문이 이전 task 경로를 언급해 보호 훅에 거부되는 보수적 동작을 관측했다. 모델은 현재 파일만 대상으로 하는 apply_patch로 정상 작성했다. 보호 로직은 유지하고 Codex용 배포 지시에 해당 작성 방식을 보강했다. 보강 후 타입 검사·lint·format·빌드와 Codex 어댑터/흐름 13개가 통과했다. 새 빌드의 실제 verify는 apply_patch로 verification.md·pr.md·handoff.md를 작성해 보호 훅 거부 없이 정상 완료됐다.
 - 직접 실행 증거: 이 환경의 `/workspace/scratch/relay-real-model-result.json`, `relay-real-*.png`. Work 완료 시 모든 task의 alive는 false이며 시험 앱·Codex·Xvfb를 종료했다. 시험용 레포는 원격 없이 분리했고 외부 push/PR는 실행하지 않았다.
+
+- 2026-09-30, 작성 지시 보강 코드 [`70d7899` CI](https://github.com/CheongMyungJ/relay-v2/actions/runs/36708712459): Linux·Windows·Windows PR 작업 모두 통과. Linux 정적 검사·단위 610개, Windows 어댑터·8개 Codex 흐름·질문창 GUI 스모크·기존 흐름과 PR 대응 회귀를 확인했다. 이후 문서 커밋은 이 검증 기록만 추가하며 앱 코드는 동일하다.
 
 ### 실제 모델 시험의 범위와 남은 항목
 
