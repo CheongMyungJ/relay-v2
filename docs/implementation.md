@@ -748,7 +748,7 @@ app/src/
   - `apply`: 상태가 그대로이고 할 일이 `log`뿐인 전이(세션 시각)는 work.json을 쓰지 않고 스냅샷도 보내지 않는다.
   - `ASK_TOOL`은 core/machine이 export하고 main이 쓴다.
   - 화면: 세션 기록이 없는 중단됨(`TaskView.hasSession`)의 [재개] 안내(D218). 세션이 없을 때 열린 질문의 안내(`OPEN_QUESTIONS_HINT_NO_SESSION`)와 확인 창 문구, [오류 무시하고 승인] 확인 창의 열린 질문(D222). 열린 질문 확인 창은 `OpenQuestionsDialog` 하나로 두고, Work 완료 화면(`CompletionActions`)의 [완료만]·[push]·[PR 생성]·[승인하고 멈춤]도 이 창을 거친다. 끊긴 전달의 [다시 시도]와 정리 세션의 [정리 끝 → push/PR 진행]은 이미 고른 전달을 잇는 것이라 묻지 않는다.
-  - 시험: [단위] `templates`, `validate`, `machine`, `settings`, `review`(`hasVisibleText`, 세션이 없을 때의 안내). [흐름] `activity.test.ts`의 새 시험(실패한 도구, 서브에이전트의 도구, 실패한 질문 도구), `control.test.ts`(대기열에서 시작한 task의 "세션을 띄우는 중", `hasSession`). 가짜 `claude`의 `tool`에 `fail`, `agent`, `inner`를, `ask`에 `fail`을 더했다. [스모크]는 두 번째 Work의 최종 검증이 열린 질문을 남기게 해, [push]를 누르면 확인 창이 뜨고 창의 [push]로 전달하는 것을 본다.
+  - 시험: [단위] `templates`, `validate`, `machine`, `settings`, `review`(`hasVisibleText`, 세션이 없을 때의 안내). [흐름] `activity.test.ts`의 새 시험(실패한 도구, 서브에이전트의 도구, 실패한 질문 도구), `control.test.ts`(대기열에서 시작한 task의 진행 표시가 대기열 시간을 넣지 않음, `hasSession`). Windows에서는 세션을 띄운 뒤 프로세스 시작 시각을 PowerShell로 읽는 동안 첫 요청이 먼저 와서 대기열에 있던 task가 "세션을 띄우는 중" 없이 곧바로 턴 중이 될 수 있다. 그래서 이 시험은 처음 보인 진행 표시(턴 전이든 턴 중이든)의 시작 시각을 본다(5671bad). 가짜 `claude`의 `tool`에 `fail`, `agent`, `inner`를, `ask`에 `fail`을 더했다. [스모크]는 두 번째 Work의 최종 검증이 열린 질문을 남기게 해, [push]를 누르면 확인 창이 뜨고 창의 [push]로 전달하는 것을 본다.
 
 ## 8. 테스트 전략
 
