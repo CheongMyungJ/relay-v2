@@ -195,8 +195,30 @@ describe('실제 브리지와 MCP', () => {
     process.platform === 'win32' ? 'electron.exe' : 'electron',
   )
   it.skipIf(process.platform !== 'win32' && !fs.existsSync(electron))(
-    'Electron Node 모드에서 별도 Node 설치 없이 MCP initialize를 처리한다',
+    'Electron Node 모드의 MCP와 command 훅이 완료까지 기다리고 한글 응답을 보존한다',
     async () => {
+      server = new HookServer()
+      await server.listen()
+      const reply = { decision: 'block', reason: '한글 훅 응답' }
+      server.register('token', 't-01', async () => {
+        await new Promise((resolve) => setTimeout(resolve, 30))
+        return reply
+      })
+      const env = {
+        ...process.env,
+        ...codexLaunchEnv('token', server.port, 't-01'),
+        RELAY_CODEX_EXE: electron,
+      }
+      const commands = bridgeCommands()
+      const result = await run(
+        process.platform === 'win32' ? 'cmd.exe' : '/bin/sh',
+        process.platform === 'win32'
+          ? ['/d', '/s', '/c', commands.commandWindows]
+          : ['-c', commands.command],
+        { env, input: JSON.stringify({ hook_event_name: 'Stop', session_id: 'real-id' }) },
+      )
+      expect(result.code, result.stderr).toBe(0)
+      expect(JSON.parse(result.stdout)).toEqual(reply)
       const client = mcp(electron, process.env)
       expect(
         await client.call('initialize', { protocolVersion: '2024-11-05' }).result,
