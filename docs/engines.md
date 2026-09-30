@@ -1,6 +1,6 @@
 # Claude Code / Codex 선택 실행 설계
 
-- 상태: 진행 중. Q1/Q2/Q3/Q4 확정. 두 엔진의 실행 경계, Codex 브리지와 앱 질문창을 연결했다. Codex는 수동 승인하고 Claude의 기존 자동 승인은 유지한다. Windows 설치본의 두 엔진 스모크와 실제 Codex CLI의 relay MCP 연결은 통과했다. 실제 모델·네이티브 훅 전달은 인증 갱신 문제로 남아 있다.
+- 상태: 진행 중. Q1/Q2/Q3/Q4 확정. 두 엔진의 실행 경계, Codex 브리지와 앱 질문창을 연결했다. Codex는 수동 승인하고 Claude의 기존 자동 승인은 유지한다. Windows 설치본의 두 엔진 스모크와 실제 Codex CLI의 relay MCP 연결은 통과했다. Linux 앱에서 실제 Codex 세션 ID와 중단·재개·내부 대화 전환을 확인했다. 실제 모델의 질문·산출물과 도구/종료 훅·압축 검증은 인증 갱신 문제로 남아 있다.
 - 작업 브랜치: `feat/claude-codex-engines`
 - 출발점: `main`의 `9c02b42` (평가 도구 추가, #18).
 - 작성일: 2026-09-30.
@@ -238,5 +238,7 @@ Q4의 Codex 수동 승인 정책을 적용하고 Claude 자동 승인/PR 대응�
 - 2026-09-30, Windows Server 2025, Electron 44.4.5, [`c8882af` 설치 검증](https://github.com/CheongMyungJ/relay-v2/actions/runs/36693696376): NSIS 설치 파일 빌드와 사용자별 설치, 설치된 node-pty의 asar 외부 파일 확인, 설치된 relay.exe의 **Claude·Codex 스모크 2개 통과**(40.2초). Codex 엔진 선택·앱 질문·한글 답변·Claude 다음 task·수동 승인 안내, 기존 Claude 승인·중단·재개·되감기·자동 승인 취소·push·정리·재시작 복구 포함. 모델은 가짜 CLI로 대체하며 실제 Electron/PowerShell/command/HTTP/MCP를 사용함. 임시 engine-install-check 워크플로는 이 브랜치에서만 실행했고 검증 후 제거하여 기존 app-build의 수동 실행 정책을 유지함.
 
 - 2026-09-30, 최종 코드 [`c8882af` CI](https://github.com/CheongMyungJ/relay-v2/actions/runs/36693696063): Linux·Windows·Windows PR 작업 모두 통과. Q4 정책, 압축 지시 재주입, Windows 어댑터·8개 Codex 흐름·개발 빌드 질문창·기존 전체 흐름 회귀를 확인함. 이후 커밋은 사용 안내·검증 기록과 임시 설치 검증 워크플로 제거만 포함하며 런타임 코드는 동일함.
+
+- 2026-09-30, Linux 직접 GUI, relay `120eefd`, Electron 44.4.5, Codex 0.159.0-alpha.3: Xvfb에서 실제 Electron 앱을 띄워 UI로 Codex를 선택하고 임시 Git 레포를 등록·Work 생성함. 가짜 CLI 기반 기존 두 엔진 GUI 스모크도 2개 통과(20.8초). 실제 Codex의 폴더 신뢰 화면을 테스트 조작자가 검토·수락하고 최초 네이티브 훅을 통한 실제 session ID 기록, 신뢰 안내 해제, `/mcp`의 relay connected(1 tool)를 확인함. UI [즉시 중단]으로 프로세스 종료와 interrupted/alive:false를 확인하고 앱을 다시 띄움. 기본 엔진을 Claude로 바꾼 뒤 UI [재개]로 같은 Codex ID와 이전 대화 화면을 유지했으며, 새 요청에서 훅이 전달됨을 확인함. `/clear` 뒤 새 요청의 새 ID를 기록하면서 PTY가 살아 있음도 확인함. 최초·재개·새 대화의 모델 요청은 모두 access token refresh 실패로 종료하여 실제 모델 질문, 산출물/handoff, 모델 도구 보호/Stop, 압축과 모델 작업 중 재개는 미검증. 인증 오류 뒤 앱이 working으로 표시되며 CLI 터미널에 로그인 오류가 보이는 점을 관측함. 모델 오류를 정상 완료로 처리하거나 다음 task를 시작하지 않음. 화면과 실행 결과는 이 환경의 `/workspace/scratch/relay-linux-real-codex-*.png`, `relay-linux-gui-result.json`에 남겼고 테스트 앱·Codex·Xvfb는 종료함. 런타임 코드는 수정하지 않음.
 
 다음은 정상 인증 환경에서 최소 모델 task로 C3~C8을 검증하는 것이다. 현재 환경은 Codex access token refresh가 실패하므로 인증 상태 검사 성공만으로 실제 모델 사용 가능성을 확정하지 않는다. Claude 평가 도구의 agent·사람 역할·판정자는 기존 경로를 유지한다.
