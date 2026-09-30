@@ -129,7 +129,7 @@ task 생성 시 기본 엔진을 task 기록에 고정한다. 대기열에서 �
 
 두 어댑터가 서로 다른 구현을 가져도 PTY와 상태 저장은 공통으로 둔다. 원시 벤더 payload를 core로 넘기고 벤더별 분기를 계속 늘리는 방식은 피한다. 기존 Claude 이벤트 순서와 동작은 회귀 시험으로 유지한다.
 
-내부 이벤트는 `turn.started`, `question.started`, `question.finished`, `input.required`, `turn.completed`, `session.identified`, `session.ended`다. 세션 실행 인스턴스 식별자를 함께 보아 앞 프로세스의 늦은 이벤트를 새 세션에 적용하지 않는다(D144).
+내부 이벤트는 `turn.started`, `question.started`, `question.finished`, `input.required`, `turn.completed`, `turn.interrupted`, `session.identified`, `session.ended`다. Codex의 `Interrupt` 훅은 현재 산출물의 검사 결과를 포함한 `turn.interrupted`로 전달한다. 세션 실행 인스턴스 식별자를 함께 보아 앞 프로세스의 늦은 이벤트를 새 세션에 적용하지 않는다(D144).
 
 ### 5.1 Codex 훅 브리지
 

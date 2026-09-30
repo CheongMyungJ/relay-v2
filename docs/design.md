@@ -3,7 +3,7 @@
 - 상태: 초안 (v0.6)
 - 범위: v1 (MVP)과 그 확장인 리뷰 단계와 PR 진행(D152~D211), 사용성 평가 반영(D212~)
 
-Claude/Codex 선택 실행 확장은 [engines.md](engines.md)에서 설계·구현 중이다. CLI 터미널 유지와 새 task부터 엔진 변경 적용은 사용자와 확정했으며, 나머지 벤더 차이는 그 문서에 따로 기록한다.
+Claude/Codex 선택 실행 확장의 명세와 검증 범위는 [engines.md](engines.md)에 기록한다. 이 문서의 설정·task 기록·이벤트 계약에도 확장 필드를 반영한다. CLI 터미널 유지와 새 task부터 엔진 변경 적용은 사용자와 확정했다.
 
 ## 0. 이 문서를 고치는 규칙
 
@@ -794,7 +794,7 @@ Work 완료에서 [PR 생성]을 고르면 → PR 진행 → 머지
     project.json                       # 레포 경로, 기본 브랜치, 등록 점검 결과(origin·gh 여부), 프로젝트 설정(5.1.2)
     worktrees/<work-id>/
     works/<work-id>/
-      work.json                        # Work 상태, 현재 단계, 기준 브랜치와 기준 커밋, 승인 기록(승인 방식, 무시한 형식 오류 포함, D112), Work별 설정(자동 승인, 질문 방식), task별 형식 버전·프로세스 ID·시작 시각·Claude Code 버전(D105)·배포한 스킬 해시(D103)·자동 승인 카운트다운(D127), 진행 중 작업, 앱 소유 파일 해시(D124), 살아 있는 정리 세션의 프로세스(D126), PR 진행 기록(`pr`, D191)
+      work.json                        # Work 상태, 현재 단계, 기준 브랜치와 기준 커밋, 승인 기록(승인 방식, 무시한 형식 오류 포함, D112), Work별 설정(자동 승인, 질문 방식), task별 형식 버전·프로세스 ID·시작 시각·고정 엔진과 CLI 버전(engine, engine_version, D105)·배포한 스킬 해시(D103)·자동 승인 카운트다운(D127), 진행 중 작업, 앱 소유 파일 해시(D124), 살아 있는 정리 세션의 프로세스(D126), PR 진행 기록(`pr`, D191)
       request.md                       # Work 생성 때 받은 요청 원문
       pr-items.json                    # PR 진행의 항목 본문과 상태 (앱 소유, D191)
       .claude/skills/relay-<name>/SKILL.md   # 배포본. task를 시작할 때 앱이 복사 (5.6.3)
@@ -812,13 +812,26 @@ Work 완료에서 [PR 생성]을 고르면 → PR 진행 → 머지
 - 상태 파일(`work.json`)은 임시 파일에 쓰고 이름을 바꾸는 방식으로 원자적으로 저장한다.
 - 이벤트는 기록용이다. MVP에서는 이벤트로 상태를 복원하지 않는다(기본값). 재시작 때의 상태 조정은 시나리오 9를 따른다.
 
+`work.json`의 task 기록에 추가한 엔진 필드와 호환 규칙([engines.md 4.3](engines.md#43-파일-호환)):
+
+| 필드 | 뜻과 호환 규칙 |
+|---|---|
+| `engine` | 생성 시 고정한 `claude` 또는 `codex`. 필드가 없는 기존 task는 Claude로 읽는다(E3). 알 수 없는 명시적 엔진은 자동 대체하지 않고 재개 불가 사유를 표시한다 |
+| `engine_version` | 실행·재개할 때 점검한 CLI 버전. 이전 기록에서는 `claude_version`도 읽는다 |
+| `claude_version` | 이전 Claude 기록 호환을 위해 Claude 실행·재개에 함께 쓴다. Codex 버전은 이 필드에 쓰지 않는다 |
+| `session.id` | 해당 엔진의 실제 대화 ID. Codex는 훅으로 확인하기 전까지 빈 문자열이며 임의 UUID로 재개 가능한 것처럼 기록하지 않는다 |
+| `auto_hold.reasons`의 `completion_unknown` | 작업 완료를 확인하지 못했을 때의 자동 승인 보류 사유. 오래된 기록·타이머에도 적용하는 추가 보호이며, Codex는 완료 주장과 관계없이 수동 승인한다 |
+
+이 필드는 기존 `schema_version: 1`에 추가한다. 새 앱은 기존 Claude 기록을 읽지만 엔진 선택이 없는 이전 앱에서 Codex 기록을 재개하는 것은 지원하지 않는다.
+
 ### 5.1.1 앱 설정 (`config.json`)
 
-설정 화면에서 바꾼다(D70). 모두 바꾸면 바로 적용하되, 질문 방식만 다음에 시작하는 task부터 적용한다(D73).
+설정 화면에서 바꾼다(D70). 기본 엔진은 다음에 생성하는 task부터, 질문 방식은 다음에 시작하는 task부터 적용한다(D73, E5). 나머지는 바꾸면 바로 적용한다. 실행 중·대기열·재개 task의 엔진은 유지한다.
 
 ```json
 {
   "schema_version": 1,
+  "agent_engine": "claude",
   "session_limit": 3,
   "auto_approve": { "investigate": false, "evidence": false, "rca": false, "fix": true, "review": true, "respond": false },
   "auto_approve_countdown_sec": 15,
@@ -841,6 +854,7 @@ Work 완료에서 [PR 생성]을 고르면 → PR 진행 → 머지
 
 | 항목 | 기본값 | 뜻 | Work별 덮어쓰기 |
 |---|---|---|---|
+| `agent_engine` | `claude` | 기본 실행 엔진: `claude` / `codex`. 새 task 생성 시 기록에 고정하며, 없는 기존 설정은 Claude다([engines.md 4.1~4.2](engines.md#41-설정)) | 없음 |
 | `session_limit` | 3 | 살아 있는 세션 합계 상한(D18) | 없음 |
 | `auto_approve` | `fix`, `review`만 `true` | 단계별 자동 승인(4.2). intake와 verify는 켤 수 없어 항목이 없다. 리뷰는 지적이 없을 때만 자동 승인한다(D213). investigate는 따로 정한다(D151). `respond`는 PR 대응 task다(D169). 기본값은 D213, D214 | 있음 |
 | `auto_approve_countdown_sec` | 15 | 자동 승인 전 카운트다운(4.3). 바꾸면 다음 카운트다운부터 쓴다(D128) | 없음 |
@@ -855,6 +869,7 @@ Work 완료에서 [PR 생성]을 고르면 → PR 진행 → 머지
 | `reply_signature` | "— relay(AI)가 작성함" **(기본값)** | 게시하는 답글 끝에 붙이는 표시(D173) | 없음 |
 
 - Work별 덮어쓰기는 `work.json`의 `settings`에 같은 키로 둔다. 없는 키는 앱 설정을 따른다(D72).
+- `auto_approve`는 Claude task에 적용한다. Codex task는 설정과 관계없이 사람이 승인한다([engines.md Q4](engines.md#질문-도구와-다음-비호환)).
 - **저장소 위치:** 환경 변수 `RELAY_HOME`으로만 바꾼다. 설정 화면에는 없다(D74). 바꾸면 기존 Work는 새 위치에서 보이지 않는다.
 
 ### 5.1.2 프로젝트 설정 (`project.json`)
@@ -1019,7 +1034,7 @@ KST 서버에서 액세스 토큰이 발급 직후 만료로 판정되는 문제
 
 ```
 work.created | work.completed | work.abandoned | work.cleaned
-task.started | task.first_output | task.first_hook | task.bounced | task.awaiting_approval | task.approved | task.interrupted | task.resumed
+task.started | task.session_identified | task.first_output | task.first_hook | task.bounced | task.awaiting_approval | task.approved | task.interrupted | task.resumed
 task.rewound | task.skipped_to
 delivery.succeeded | delivery.failed
 pr.items_received | pr.synced | pr.pushed | pr.replied | pr.checks_rerun | pr.merged | pr.closed | pr.reopened | pr.auto_paused
@@ -1034,12 +1049,13 @@ pr.items_received | pr.synced | pr.pushed | pr.replied | pr.checks_rerun | pr.me
 | `work.abandoned` | 없음 |
 | `work.cleaned` | `forced`(`--force`로 지웠는가), `deleted_branches` |
 | `task.started` | `reason`(task를 시작한 까닭: `default`, `rewind`, `skip`, `resume`, `respond`([대응 시작], D187), `auto_respond`(자동 대응, D154)), `session_id` |
+| `task.session_identified` | 훅으로 확인한 실제 대화 ID `session_id`. 최초 식별과 CLI 내부 대화 전환을 기록한다 |
 | `task.first_output`, `task.first_hook` | 세션을 띄운 뒤 처음 받은 PTY 출력(보이는 글자가 있는 것)과 훅(D217): `pid`, 띄운 뒤 걸린 `ms`. `task.first_hook`에는 그 훅의 `event`(보통 `UserPromptSubmit`). 새 세션과 다시 연 세션마다 한 번씩이다 |
 | `task.bounced` | 형식 되돌림(D21, D220): `attempt`(이 턴에서 몇 번째), `max`(설정한 상한), `errors`(오류마다 `file`과 `message`) |
 | `task.awaiting_approval` | 없음. 재시작 조정이 바꿨으면 `reason: app_restart`와 끝낸 고아의 `killed_pid`(D76). Stop 없이 세션이 끝나며 바뀌었으면 `reason: session_ended`(D146) |
 | `task.approved` | `by`: `human`, `auto`. [오류 무시하고 승인]이면 `ignored_errors`(수) |
 | `task.interrupted` | `reason`: `human`([즉시 중단]), `app_quit`(앱 종료 확인), `abandoned`([Work 포기]), `rewind`, `skip`(단계 선택), `session_ended`(handoff 없이 세션 종료), `start_failed`(세션을 띄우지 못함. `error`에 까닭, D135의 앞선 처리 실패도 여기다), `app_restart`(재시작 조정. 끝낸 고아가 있으면 `killed_pid`), `pr_merged`(PR이 밖에서 머지돼 대응 task를 끝냄, D179). 대기열에 있던 task면 `queued: true` |
-| `task.resumed` | `session_id`, `claude_version` |
+| `task.resumed` | `session_id`, `engine`, `engine_version`. Claude일 때는 이전 기록 호환을 위해 `claude_version`도 남긴다 |
 | `task.rewound` | `node`, `from_task`, `discarded`, `keep_code`, 코드를 되돌렸으면 `reset_to`, `backup_branch`, 끊긴 되감기를 다시 하며 덤으로 남긴 백업이 있으면 `extra_backup_branch` |
 | `task.skipped_to` | `node`, `from_task`, `discarded`, `skipped` |
 | `delivery.succeeded` | `choice`, `branch`, `compare_url`, `pr_url`, `pr_existing`, `draft`, `stashes`, `commits` |
