@@ -28,13 +28,18 @@ function fill(template: string, field: string, value: string): string {
 }
 
 const handoffTemplate = codeBlocks(read('_common.md'), 'yaml').find((b) => b.includes('status:'))
+/** 값을 채운 handoff 예시 (D221) */
+const filledHandoff = codeBlocks(read('_common.md'), 'yaml').find(
+  (b) => b !== handoffTemplate && b.includes('status: awaiting_approval'),
+)
 const draftTemplate = codeBlocks(read('work-start/SKILL.md'), 'markdown').find((b) =>
   b.startsWith('---\n'),
 )
 
 describe('템플릿이 있다', () => {
-  it('_common.md에 handoff 템플릿, work-start에 intent.draft.md 템플릿이 있다', () => {
+  it('_common.md에 handoff 템플릿과 값을 채운 예시, work-start에 intent.draft.md 템플릿이 있다', () => {
     expect(handoffTemplate).toBeDefined()
+    expect(filledHandoff).toBeDefined()
     expect(draftTemplate).toBeDefined()
   })
 })
@@ -85,6 +90,37 @@ describe.runIf(handoffTemplate && draftTemplate)(
       })
       expect(check.errors).toEqual([])
       expect(check.status).toBe('blocked')
+    })
+
+    it('값을 채운 handoff 예시가 유효하다. 큰따옴표 안의 ": "와 백틱은 글로 읽힌다 (D221)', () => {
+      const check = checkTask({
+        node: 'fix',
+        size: 'S',
+        files: { 'handoff.md': filledHandoff ?? '', ...artifacts('fix') },
+        config: DEFAULT_CONFIG,
+      })
+      expect(check.errors).toEqual([])
+      expect(check.warnings).toEqual([])
+      expect(check.status).toBe('awaiting_approval')
+      expect(check.handoffHeader?.decisions).toEqual([
+        { what: '빈 배열의 평균은 0으로 한다', why: '요청의 완료조건: `avg([])`는 0', by: 'human' },
+      ])
+    })
+
+    it('반례: 예시의 글 값을 따옴표 없이 쓰면 ": "가 든 글을 YAML이 다르게 읽어 형식 오류다 (D221)', () => {
+      const bare = (filledHandoff ?? '').replace(
+        'why: "요청의 완료조건: `avg([])`는 0"',
+        'why: 요청의 완료조건: `avg([])`는 0',
+      )
+      expect(bare).not.toBe(filledHandoff)
+      const check = checkTask({
+        node: 'fix',
+        size: 'S',
+        files: { 'handoff.md': bare, ...artifacts('fix') },
+        config: DEFAULT_CONFIG,
+      })
+      expect(check.errors.length).toBeGreaterThan(0)
+      expect(isValid(check)).toBe(false)
     })
 
     it('반례: 채우지 않은 handoff 템플릿은 status 오류다', () => {

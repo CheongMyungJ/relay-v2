@@ -1458,9 +1458,18 @@ function stop(work: WorkState, task: TaskRecord, e: Stopped, config: AppConfig):
     e.handoffChanged &&
     bounces < config.format_error_bounce_max
   if (bounce) {
+    // 몇 번째 되돌림인지와 오류를 남긴다: 어떤 실수가 흔한지 센다 (D220)
+    const bounced = {
+      attempt: bounces + 1,
+      max: config.format_error_bounce_max,
+      errors: check.errors.map((x) => ({ file: x.file, message: x.message })),
+    }
     return {
       work: withTask(work, { ...task, status: 'working', bounce_count: bounces + 1, check }),
-      effects: [{ type: 'blockStop', taskId: task.id, reason: bounceMessage(check) }],
+      effects: [
+        log(work, e.at, 'task.bounced', bounced, task),
+        { type: 'blockStop', taskId: task.id, reason: bounceMessage(check) },
+      ],
     }
   }
   return {

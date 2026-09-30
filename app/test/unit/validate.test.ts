@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { stringify } from 'yaml'
 import {
+  BOUNCE_HEAD,
   bounceMessage,
   checkHandoff,
   checkIntentDraft,
@@ -557,17 +558,22 @@ describe('리뷰 지적 읽기 (5.6.10, D213)', () => {
 })
 
 describe('되돌림 메시지 (D21, D87)', () => {
-  it('파일, 필드, 어긴 규칙을 적고 경고는 넣지 않는다', () => {
+  it('첫 줄은 사람도 읽는 안내이고, 파일, 필드, 어긴 규칙을 적고 경고는 넣지 않는다 (D220)', () => {
     const r = check('intake', {
       'handoff.md': handoff({ status: 'blocked', blocked_reason: null, extra_field: 1 }),
       'intent.draft.md': draft('type: bugfix\nsize: XL'),
     })
     const msg = bounceMessage(r)
-    expect(msg.split('\n').slice(1)).toEqual([
+    // Claude Code는 되돌림을 "Stop hook error: <첫 줄>"로 그린다
+    expect(msg.split('\n')[0]).toBe(
+      '[relay 형식 확인] 작업 결과와는 관계없고 handoff와 산출물의 형식만 고칩니다.',
+    )
+    expect(msg.split('\n')[0]).toBe(BOUNCE_HEAD)
+    expect(msg.split('\n')[1]).toContain('오류가 가리키는 파일을 고치고')
+    expect(msg.split('\n').slice(2)).toEqual([
       '- handoff.md: `blocked_reason` 없음: `status: blocked`일 때 필수',
       '- intent.draft.md: `size` 값이 허용값이 아님 (허용값: S | M | L, 지금: XL)',
     ])
     expect(msg).not.toContain('extra_field')
-    expect(msg.split('\n')[0]).toContain('오류가 가리키는 파일을 고치고')
   })
 })

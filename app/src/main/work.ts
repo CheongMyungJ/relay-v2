@@ -174,6 +174,7 @@ import {
   TASK_STATUS_LABEL,
   WORK_STATUS_LABEL,
   bandText,
+  bounceNotice,
   changeRange,
   emphasis,
   handoffSummary,
@@ -3806,6 +3807,7 @@ export class WorkRunner {
       error: t.error ?? null,
       errorCount: t.check?.errors.length ?? 0,
       bounces: t.bounce_count,
+      bounceNotice: bounceNotice(t, this.ctx.config().format_error_bounce_max),
       countdown: t.countdown
         ? { seconds: t.countdown.seconds, endsAt: this.countdownEnds(t) }
         : null,

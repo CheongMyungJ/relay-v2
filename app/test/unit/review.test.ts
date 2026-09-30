@@ -4,6 +4,7 @@ import {
   TASK_STATUS_LABEL,
   WORK_STATUS_LABEL,
   bandText,
+  bounceNotice,
   changeRange,
   emphasis,
   handoffSummary,
@@ -165,6 +166,18 @@ describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
     expect(resumeHint(at('verify', back('fix')))).toBe(
       '추천을 따르지 않고 Work 완료 화면에서 전달을 고르면 Work를 완료합니다. 추천대로 되돌아가려면 [단계 선택]을 누르세요.',
     )
+  })
+})
+
+describe('형식 되돌림 안내 (D220)', () => {
+  it('되돌린 뒤 에이전트가 고치는 동안만 몇 번째인지와 함께 안내한다', () => {
+    expect(bounceNotice({ status: 'working', bounce_count: 1 }, 2)).toBe(
+      '형식 확인으로 되돌림(1/2): 에이전트가 handoff와 산출물의 형식만 고칩니다. 결정과 판정은 바뀌지 않습니다.',
+    )
+    expect(bounceNotice({ status: 'working', bounce_count: 0 }, 2)).toBeNull()
+    // 고쳐서 승인 대기가 됐거나 상한까지 되돌려 대기면 없다
+    expect(bounceNotice({ status: 'awaiting_approval', bounce_count: 0 }, 2)).toBeNull()
+    expect(bounceNotice({ status: 'idle', bounce_count: 2 }, 2)).toBeNull()
   })
 })
 

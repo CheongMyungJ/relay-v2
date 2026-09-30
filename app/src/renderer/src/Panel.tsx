@@ -330,10 +330,11 @@ function TaskNotice({ task, pr }: { task: TaskView; pr: boolean }) {
   return null
 }
 
-/** 진행 중: 경과 시간과 마지막 동작(D216), handoff 상태, 형식 오류, 산출물 목록 */
+/** 진행 중: 형식 되돌림 안내(D220), 경과 시간과 마지막 동작(D216), handoff 상태, 형식 오류, 산출물 목록 */
 function Progress({ review, task }: { review: ReviewView; task: TaskView }) {
   return (
     <>
+      {task.bounceNotice ? <div className="notice">{task.bounceNotice}</div> : null}
       {task.activity ? (
         <section className="progress">
           <h3>진행</h3>

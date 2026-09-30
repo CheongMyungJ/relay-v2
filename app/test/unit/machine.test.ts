@@ -627,9 +627,26 @@ describe('시나리오 3의 신호 표: 신호마다 표시 상태', () => {
 })
 
 describe('형식 오류 되돌림 (D21, D107)', () => {
-  it('형식 오류가 있고 이번 턴에 handoff가 바뀌었으면 Stop 훅으로 되돌린다', () => {
+  it('형식 오류가 있고 이번 턴에 handoff가 바뀌었으면 Stop 훅으로 되돌린다. 몇 번째인지와 오류를 기록한다 (D220)', () => {
     const r = stop(running(), INVALID)
     expect(r.effects).toEqual([
+      {
+        type: 'log',
+        event: expect.objectContaining({
+          task_id: 't-01',
+          type: 'task.bounced',
+          payload: {
+            attempt: 1,
+            max: 2,
+            errors: [
+              {
+                file: 'handoff.md',
+                message: '`blocked_reason` 없음: `status: blocked`일 때 필수',
+              },
+            ],
+          },
+        }),
+      },
       {
         type: 'blockStop',
         taskId: 't-01',
@@ -645,8 +662,9 @@ describe('형식 오류 되돌림 (D21, D107)', () => {
     const first = stop(running(), INVALID, { active: false })
     const second = stop(first.work, INVALID, { active: true })
     const third = stop(second.work, INVALID, { active: true })
-    expect(types(first.effects)).toEqual(['blockStop'])
-    expect(types(second.effects)).toEqual(['blockStop'])
+    expect(types(first.effects)).toEqual(['log:task.bounced', 'blockStop'])
+    expect(types(second.effects)).toEqual(['log:task.bounced', 'blockStop'])
+    expect(second.effects[0]).toMatchObject({ event: { payload: { attempt: 2, max: 2 } } })
     expect(third.effects).toEqual([])
     expect(currentTask(third.work)).toMatchObject({
       status: 'idle',
@@ -663,7 +681,7 @@ describe('형식 오류 되돌림 (D21, D107)', () => {
     const bounced: number[] = []
     for (let i = 0; i < 4; i++) {
       const r = stop(work, INVALID, { active: i > 0 }, three)
-      bounced.push(r.effects.length)
+      bounced.push(r.effects.filter((x) => x.type === 'blockStop').length)
       work = r.work
     }
     expect(bounced).toEqual([1, 1, 1, 0])
@@ -677,7 +695,7 @@ describe('형식 오류 되돌림 (D21, D107)', () => {
     expect(currentTask(work)).toMatchObject({ status: 'idle', bounce_count: 2 })
     work = apply(work, { type: 'UserPromptSubmit', taskId: 't-01', at: at() }).work
     const r = stop(work, INVALID, { active: false })
-    expect(types(r.effects)).toEqual(['blockStop'])
+    expect(types(r.effects)).toEqual(['log:task.bounced', 'blockStop'])
     expect(currentTask(r.work)?.bounce_count).toBe(1)
   })
 

@@ -5,7 +5,7 @@ import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { mergeSkill, skillText } from '../../src/adapters/claude'
 import { sha256 } from '../../src/adapters/store'
-import { parseFrontMatter } from '../../src/core/validate'
+import { BOUNCE_HEAD, parseFrontMatter } from '../../src/core/validate'
 import type { LifecycleEvent, WorkState } from '../../src/shared/work'
 import { drive } from './driver'
 import { git, harness, makeRepo, register, settle, sleep, type Harness } from './harness'
@@ -460,11 +460,29 @@ describe('[흐름] 최소 흐름 (M2)', () => {
     expect(blocked[0]?.response?.reason).toContain(
       '- handoff.md: `## 요약` 절 없음: handoff 본문의 필수 절',
     )
+    // 되돌림 메시지의 첫 줄은 사람도 읽는다. Claude Code가 "Stop hook error: <첫 줄>"로 그린다 (D220)
+    expect(blocked[0]?.response?.reason?.split('\n')[0]).toBe(BOUNCE_HEAD)
     const i = stops.indexOf(blocked[0] as (typeof stops)[number])
     expect(stops[i + 1]?.body.stop_hook_active).toBe(true)
     expect(stops[i + 1]?.response).toBeNull()
     const w = work(s.workDir)
     expect(w.tasks[1]).toMatchObject({ status: 'approved', bounce_count: 0 })
+    // 되돌림은 몇 번째인지와 오류로 기록한다. 고치는 동안 패널이 안내한다 (D220)
+    expect(events(s.workDir).filter((e) => e.type === 'task.bounced')).toEqual([
+      expect.objectContaining({
+        task_id: 't-02',
+        payload: {
+          attempt: 1,
+          max: 2,
+          errors: [{ file: 'handoff.md', message: '`## 요약` 절 없음: handoff 본문의 필수 절' }],
+        },
+      }),
+    ])
+    const notices = s.h.ui.history.flatMap((v) => v.tasks[1]?.bounceNotice ?? [])
+    expect([...new Set(notices)]).toEqual([
+      '형식 확인으로 되돌림(1/2): 에이전트가 handoff와 산출물의 형식만 고칩니다. 결정과 판정은 바뀌지 않습니다.',
+    ])
+    expect(s.h.ui.works.get(s.workKey)?.tasks[1]?.bounceNotice).toBeNull()
   })
 
   it('되돌림은 설정 횟수까지만 한다. 남은 오류는 [오류 무시하고 승인]으로 넘긴다 (D21, D90, D112)', async () => {

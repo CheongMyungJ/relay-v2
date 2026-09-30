@@ -679,6 +679,7 @@ app/src/
 - **R1 절차 무게:** 크기 기준을 좁힌다(D212). 리뷰도 자동 승인을 켤 수 있고 지적이 없을 때만 자동 승인한다(D213). 앱 설정의 자동 승인 기본값은 수정과 리뷰를 켠다(D214). 크기를 고를 때 경로를 보이는 것은 하지 않기로 했다.
 - **R2 검은 화면과 진행 표시:** 새 세션의 터미널에 표시 줄을 넣는다(D215). 작업 중인 task의 머리 띠와 패널에 경과 시간과 마지막 도구를 보인다(D216). 세션마다 첫 PTY 출력과 첫 훅까지 걸린 시간을 기록한다(D217). 평가 도구는 경과 시간을 화면이 멈췄는지의 판정에서 뺀다(`docs/eval.md`).
 - **R3 재개 뒤 멈춤:** 중단됨 task의 [재개]는 이어서 하라는 첫 입력을 준다(D218). [세션 재개]는 입력 없이 연다. 앱이 꺼져 끝난 세션은 기록에 남기고 `pty.log` 끝에 표시 줄을 적으며, 패널이 그렇다고 안내한다(D219).
+- **R4 Stop hook error 노출:** 되돌림을 `task.bounced`로 기록하고, 되돌림 메시지 첫 줄을 사람도 읽게 쓰며, 되돌린 동안 패널에 안내한다(D220). handoff 템플릿에 따옴표 규칙과 채운 예시를 둔다(D221).
 
 **완료 기준**
 
@@ -692,6 +693,8 @@ app/src/
 - R3 [흐름] [즉시 중단] 뒤 [재개]한 세션이 사람 입력 없이 이어서 일해 승인 대기가 된다. 앱을 끄고 다시 켜면 중단됨·승인 대기에 앱이 꺼져 끝났다는 표시가 있고 `pty.log` 끝에 표시 줄이 한 번 있으며, [재개]는 앱이 꺼져 끊겼다고 알린다.
 - R3 [실제] `test/claude/restart.test.ts`: 앱을 SIGKILL로 끈 뒤 [재개]하면 실제 `claude`가 사람 입력 없이 이어서 일해 Work 완료까지 간다(`--resume <id> "<입력>"`이 첫 요청이 되는지, 스파이크 S6의 덧붙임).
 - R3 [실기] 앱을 끄고 다시 켠 뒤 [재개]하면 에이전트가 이어서 일한다. 옛 화면 끝에 표시 줄이 보이고, 승인 대기면 안내가 보인다(목록은 `docs/checks.md` M12).
+- R4 [단위] `task.bounced`의 몇 번째·상한·오류, 되돌림 메시지 첫 줄, 패널 안내(작업 중인 동안만), 채운 handoff 예시가 앱 검사기를 통과하고 따옴표를 빼면 실패함. [흐름] 되돌림의 첫 줄, `task.bounced`, 고치는 동안의 안내와 고친 뒤 사라짐. 스킬 정적 검사가 채운 예시와 따옴표 규칙을 대조한다.
+- R4 [실기]와 평가: 되돌림이 나면 터미널의 "Stop hook error:" 뒤가 "[relay 형식 확인] …"이고 패널에 안내가 보인다. 다음 평가에서 `task.bounced`로 흔한 오류를 센다.
 
 **구현하며 정한 것**
 
@@ -711,6 +714,9 @@ app/src/
 - **[재개]의 첫 입력(R3, D218):** core의 `resume`이 `resumeTask` 할 일에 `continue`(중단됨이면 참)를 싣고, main은 그것을 task마다 두었다가(대기열에서 기다려도 남는다) `resumeSession`이 `resumeArgs`의 맨 뒤에 `continuePrompt`를 넣는다. 문구는 세션 기록의 `app_ended`가 있으면 "앱이 꺼져 세션이 끊겼다가", 없으면 "사람이 [즉시 중단]한 세션이"로 시작한다. 가짜 `claude`는 `--resume`과 함께 받은 입력을 실제 `claude`처럼 첫 요청(UserPromptSubmit)으로 바로 보낸 뒤 resume 시나리오를 한다.
 - **앱이 꺼져 끝난 세션(R3, D219):** `TaskSession.app_ended`는 core가 둔다: 앱 종료 확인의 `endTask`가 `quit`, 재시작 조정이 살아 있던 세션에 `restart`. `sessionResumed`가 지운다. `pty.log`의 표시 줄은 main이 적는다: 앱을 끄는 동안(`closing`) 끝낸 세션은 `release`에서, 앱이 끝내지 못한 세션은 `reconcile`에서 `WorkFiles.appendPtyMark`로 적는다. 이미 그 줄로 끝나면 다시 적지 않고, 충돌로 끝에 덜 쓴 UTF-8 문자가 있으면 그 바이트를 지운다. 화면에는 `TaskView.appEnded`로 알리고, 패널의 안내가 중단됨("앱이 꺼져 중단됐습니다")과 승인 대기("앱이 꺼지기 전에 산출물과 handoff를 다 썼습니다")를 가른다. [세션 재개]의 안내는 입력을 기다린다고 바로잡았다.
 - **시험(R3):** [단위] `settings.test.ts`(재개 인자와 문구), `machine.test.ts`(`continue`, `app_ended`), `respond.test.ts`. [어댑터] `store.test.ts`(`appendPtyMark`, `partialUtf8`). [흐름] `control.test.ts`([재개]가 이어서 일함, 앱 종료 확인 뒤 다시 켬, 충돌 뒤 다시 켬). [스모크] 중단됨 안내와 [재개] 뒤 작업 중. [실제] `restart.test.ts`는 사람이 "이어서"를 치지 않고, `resume.test.ts`는 첫 입력의 턴이 끝난 뒤 표식을 묻는다.
+- **되돌림 기록과 안내(R4, D220):** core `stop`이 되돌릴 때 `blockStop` 앞에 `task.bounced`(`attempt`, `max`, `errors`의 `file`·`message`)를 남긴다. 되돌림 메시지의 첫 줄은 `BOUNCE_HEAD`다. 패널 안내는 `core/review`의 `bounceNotice`가 만들어 `TaskView.bounceNotice`로 보내고, 진행 중 화면 맨 위에 보인다. 작업 중이고 되돌린 횟수가 1 이상일 때만이다.
+- **템플릿(R4, D221):** `skills/_common.md`의 handoff 템플릿 아래에 따옴표 규칙과 값을 채운 예시(머리글과 본문)를 둔다. `skills/check.mjs`가 예시의 스키마 통과, 필드, 본문의 절, 글 값의 따옴표, 규칙 문장(D221)을 본다. [단위] `templates.test.ts`는 예시가 앱 검사기를 통과하고, 따옴표를 뺀 반례가 실패하는 것을 본다.
+- **시험(R4):** [단위] `machine.test.ts`(되돌림 기록), `validate.test.ts`(첫 줄), `review.test.ts`(안내), `templates.test.ts`(채운 예시와 반례). [흐름] `flow.test.ts`의 되돌림 시험.
 
 ## 8. 테스트 전략
 

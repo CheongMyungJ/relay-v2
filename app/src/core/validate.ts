@@ -763,11 +763,22 @@ export function summarize(check: CheckSummary): CheckSummary {
   }
 }
 
-/** Stop 훅으로 되돌리는 메시지 (D21, D87). 파일, 필드, 어긴 규칙을 적는다. 경고는 넣지 않는다 */
+/**
+ * Stop 훅으로 되돌리는 메시지 (D21, D87). 첫 줄은 사람도 읽는 BOUNCE_HEAD다(D220). 파일, 필드, 어긴 규칙을 적는다.
+ * 경고는 넣지 않는다
+ */
 export function bounceMessage(check: CheckSummary): string {
   return [
-    'relay 형식 검사에서 오류가 나왔습니다. 오류가 가리키는 파일을 고치고 빠진 산출물이나 절을 채운 뒤, ' +
+    BOUNCE_HEAD,
+    '형식 검사에서 오류가 나왔습니다. 오류가 가리키는 파일을 고치고 빠진 산출물이나 절을 채운 뒤, ' +
       '종료 절차의 handoff 작성과 안내를 다시 하세요. 결정, 원인, 판정은 바꾸지 마세요.',
     ...check.errors.map((e) => `- ${e.file}: ${e.message}`),
   ].join('\n')
 }
+
+/**
+ * 되돌림 메시지의 첫 줄 (D220). Claude Code는 Stop 훅의 되돌림을 "Stop hook error: <메시지>"로 터미널에 그리므로
+ * 사람도 읽는다고 보고 쓴다
+ */
+export const BOUNCE_HEAD =
+  '[relay 형식 확인] 작업 결과와는 관계없고 handoff와 산출물의 형식만 고칩니다.'

@@ -532,6 +532,7 @@ export type LifecycleEventType =
   | 'task.started'
   | 'task.first_output'
   | 'task.first_hook'
+  | 'task.bounced'
   | 'task.awaiting_approval'
   | 'task.approved'
   | 'task.interrupted'

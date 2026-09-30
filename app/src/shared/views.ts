@@ -435,6 +435,8 @@ export interface TaskView {
   errorCount: number
   /** 형식 오류 되돌림의 연속 횟수 (D21, D107) */
   bounces: number
+  /** 되돌린 뒤 에이전트가 형식을 고치는 동안의 안내 (D220). 아니면 null */
+  bounceNotice: string | null
   /** 자동 승인 카운트다운 (4.3, D83, D127). 카운트다운 중이 아니면 null */
   countdown: CountdownView | null
   /**

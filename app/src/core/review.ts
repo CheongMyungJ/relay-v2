@@ -55,6 +55,19 @@ export function permissionNotice(task: Pick<TaskRecord, 'permission_mode'>): str
     : `권한 확인 끈 모드가 아님(${mode} 모드): 일부 동작이 막힐 수 있음`
 }
 
+/**
+ * 형식 되돌림(D21) 뒤 에이전트가 고치는 동안의 안내 (D220). 터미널의 "Stop hook error"가 작업 결과와 관계없음을
+ * 알린다. 작업 중이 아니면(고쳐서 승인 대기가 됐거나 상한까지 되돌려 대기면) 없다
+ */
+export function bounceNotice(
+  task: Pick<TaskRecord, 'status' | 'bounce_count'>,
+  max: number,
+): string | null {
+  return task.status === 'working' && task.bounce_count > 0
+    ? `형식 확인으로 되돌림(${task.bounce_count}/${max}): 에이전트가 handoff와 산출물의 형식만 고칩니다. 결정과 판정은 바뀌지 않습니다.`
+    : null
+}
+
 /** 진행 표시에서 도구 인자의 길이 (D216) */
 const TOOL_ARG_MAX = 40
 
