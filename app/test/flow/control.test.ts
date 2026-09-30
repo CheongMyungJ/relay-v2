@@ -165,17 +165,29 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
       return register.call(this, token, taskId, handler)
     })
     try {
+      // 다시 연 세션은 이어서 하라는 입력(D218)으로 턴을 시작하고, handoff 없이 턴을 끝내 대기가 된다
       const s = await setup({
         tasks: { ...scenario('S').tasks, 'work-start': [{ do: 'prompt' }, { do: 'wait' }] },
-        resume: { 'work-start': [{ do: 'wait' }] },
+        resume: { 'work-start': [{ do: 'stop' }, { do: 'wait' }] },
       })
       const key = await s.create()
       const dir = s.dir(key)
       await untilTask(s, key, (t) => t.status === 'working' && t.live, '작업 중')
+      // 앞 세션이 대화를 만든 뒤(첫 요청을 보낸 뒤)에 끊는다. 그 전에 끊으면 [재개]한 세션이 대화를 찾지 못하고 끝난다
+      await untilPrompts(s, 1)
       expect(await s.h.relay.interrupt(key, 't-01')).toEqual({ ok: true })
       expect(await s.h.relay.resume(key, 't-01')).toEqual({ ok: true })
       await untilTask(s, key, (t) => t.live, '재개')
+      // 다시 연 세션의 Stop까지 처리된 뒤에 본다. 그 전에 보면 다시 연 세션의 첫 요청과 겨룬다
+      const resumedStop = () =>
+        s.h
+          .records()
+          .some(
+            (r) => r['type'] === 'hook' && r['event'] === 'Stop' && r['pid'] === starts(s)[1]?.pid,
+          )
+      await s.h.ui.until(resumedStop, '다시 연 세션의 Stop', 30_000)
       await settle(s.h, key)
+      expect(work(dir).tasks[0]?.status).toBe('idle')
       expect(handlers).toHaveLength(2)
       const sessionId = work(dir).tasks[0]?.session?.id
 

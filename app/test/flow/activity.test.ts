@@ -124,7 +124,10 @@ describe('[흐름] 진행 표시와 세션 시각 (M12 R2)', () => {
       '04 최종 검증',
     ])
     for (const t of tasks) {
-      expect(ui.output.get(t.terminal)?.startsWith(`${mark(t.label)}FAKE-CLAUDE READY`)).toBe(true)
+      // 표시 줄 뒤에 CLI의 출력이 온다. Windows에서는 그 사이에 ConPTY가 먼저 보내는 제어 문자가 온다
+      const out = ui.output.get(t.terminal) ?? ''
+      expect(out.startsWith(mark(t.label))).toBe(true)
+      expect(out.indexOf('FAKE-CLAUDE READY')).toBeGreaterThanOrEqual(mark(t.label).length)
     }
     const dirs = ['01-intake', '02-fix', '03-review', '04-verify']
     for (const [i, dir] of dirs.entries()) {
