@@ -171,7 +171,6 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   )
   ipcMain.handle(IPC.approve, async (_e, workKey: unknown, taskId: unknown, opts: ApproveOptions) =>
     (await ready).approve(text(workKey), text(taskId), {
-      ...(opts.size === 'S' || opts.size === 'M' || opts.size === 'L' ? { size: opts.size } : {}),
       ...(opts.force === true ? { force: true } : {}),
     }),
   )

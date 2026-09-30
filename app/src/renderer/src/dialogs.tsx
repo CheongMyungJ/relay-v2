@@ -396,8 +396,7 @@ type AutoOverrides = Partial<Record<AutoApproveNode, boolean>>
 const onOff = (on: boolean) => (on ? '켜짐' : '꺼짐')
 
 /**
- * Work별 자동 승인 (D72). 고르지 않은 단계는 앱 설정을 따른다. 의도 정리와 최종 검증은 늘 수동이고, 리뷰는 지적이 없을
- * 때만 자동 승인한다 (4.2, D213)
+ * Work별 자동 승인 (D72). 고르지 않은 단계는 앱 설정을 따른다. 의도 정리와 리뷰와 검증은 늘 수동이다 (4.2)
  */
 function AutoApproveOverrides({
   config,
@@ -683,8 +682,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           <div className="dim">{AGENT_APPROVAL_NOTICE}</div>
           <div className="dim">
             켠 단계는 조건(4.3)을 만족하면 카운트다운 뒤 승인합니다. 턴이 끝날 때의 설정으로
-            판정하고, 카운트다운 중에 끄면 멈춥니다. 리뷰는 지적이 없을 때만 자동 승인합니다. 의도
-            정리와 최종 검증은 늘 수동입니다.
+            판정하고, 카운트다운 중에 끄면 멈춥니다. 의도 정리와 리뷰와 검증은 늘 수동입니다.
           </div>
           <div className="form-grid">
             {AUTO_APPROVE_TITLES.map(([node, title]) => (

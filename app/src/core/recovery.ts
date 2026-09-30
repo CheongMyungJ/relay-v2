@@ -329,7 +329,7 @@ export function cleanResume(recordedForce: boolean, status: readonly string[]): 
 export interface RecordedProcess {
   /** task id. 정리 세션이면 null */
   taskId: string | null
-  /** "03 원인 분석"이나 "정리 세션" */
+  /** "02 원인 분석과 수정"이나 "정리 세션" */
   label: string
   pid: number
   startedAt: string

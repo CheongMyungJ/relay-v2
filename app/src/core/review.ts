@@ -13,6 +13,7 @@ import type {
 import { badge, holdNeedsNotice, holdText } from './approval'
 import { NODE_INFO, WORK_COMPLETE, defaultNext, isPipelineNode, isPrevious } from './pipeline'
 import {
+  FIX_FILE,
   INTENT_DRAFT_FILE,
   REVIEW_FILE,
   normalizeText,
@@ -22,7 +23,7 @@ import {
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
-/** 탭과 사이드바의 task 이름: "03 원인 분석" (D109) */
+/** 탭과 사이드바의 task 이름: "02 원인 분석과 수정" (D109) */
 export function taskLabel(task: Pick<TaskRecord, 'seq' | 'node'>): string {
   return `${pad(task.seq)} ${NODE_INFO[task.node].title}`
 }
@@ -41,7 +42,7 @@ export const REASON_LABEL: Readonly<Record<StartReason, string>> = {
 }
 
 /**
- * 탭 위 머리 띠: "04 원인 분석 · 새 세션 · 이유: 기본 진행" (시나리오 2-5, D109).
+ * 탭 위 머리 띠: "02 원인 분석과 수정 · 새 세션 · 이유: 기본 진행" (시나리오 2-5, D109).
  * --resume으로 다시 연 세션은 "세션 재개"다 (시나리오 3-4).
  */
 export function bandText(
@@ -168,10 +169,7 @@ export function resumeHint(work: WorkState): string | null {
   if (work.status !== 'stopped' || !stop) return null
   const task = work.tasks.find((t) => t.id === stop.task_id)
   // 멈추는 것은 파이프라인 task의 승인뿐이다. PR 대응 task는 멈추지 않는다 (D188)
-  const next =
-    task && isPipelineNode(task.node) && work.intent
-      ? defaultNext(task.node, work.intent.size)
-      : null
+  const next = task && isPipelineNode(task.node) ? defaultNext(task.node) : null
   const back = '추천대로 되돌아가려면 [단계 선택]을 누르세요.'
   if (next === WORK_COMPLETE) {
     const done = 'Work 완료 화면에서 전달을 고르면 Work를 완료합니다'
@@ -359,13 +357,10 @@ export function hasVisibleText(data: string): boolean {
 }
 /* eslint-enable no-control-regex */
 
-/** 리뷰의 [요약]에 보일 안내 (D223). 리뷰의 마무리 안내 문구(시나리오 2-4)와 같은 뜻이다 */
-export const REVIEW_LEAD_HINT =
-  '반영할 지적은 번호로 가운데 터미널에 말하세요. 반영할 것이 없거나 반영을 마쳤으면 [승인]을 누르세요.'
-
 /**
- * [요약] 탭 맨 위에 둘 이 단계의 핵심 (D223). 의도 정리는 intent 초안의 size와 목표·비목표·완료조건을, 리뷰는
- * review.md의 `## 지적`을 보인다. 파일이 없거나 절을 읽지 못하면 그 부분은 뺀다. 다른 단계는 null이다
+ * [요약] 탭 맨 위에 둘 이 단계의 핵심 (D223). 의도 정리는 intent 초안의 목표·비목표·완료조건을, 원인 분석과 수정은
+ * fix.md의 `## 원인`을, 리뷰와 검증은 review.md의 `## 지적`과 `## 반영`을 보인다(D229). 파일이 없거나 절을 읽지
+ * 못하면 그 부분은 뺀다. 다른 단계는 null이다
  */
 export function stageLead(
   node: TaskNode,
@@ -374,25 +369,27 @@ export function stageLead(
   if (node === 'intake') {
     const text = files[INTENT_DRAFT_FILE]
     if (text === undefined) return null
-    const fm = parseFrontMatter(text)
-    const size = fm.ok && typeof fm.data['size'] === 'string' ? fm.data['size'] : null
-    const sections = ['목표', '비목표', '완료조건'].flatMap((title) => {
-      const body = sectionText(fm.body, title)
-      return body ? [{ title, text: body }] : []
-    })
-    return { title: `의도 초안 (size: ${size ?? '없음'})`, sections, hint: null }
+    const sections = leadSections(parseFrontMatter(text).body, ['목표', '비목표', '완료조건'])
+    return { title: '의도 초안', sections }
   }
-  if (node === 'review') {
-    const text = files[REVIEW_FILE]
-    const findings = text === undefined ? null : sectionText(normalizeText(text), '지적')
-    if (findings === null) return null
-    return {
-      title: '리뷰 지적',
-      sections: [{ title: '지적', text: findings }],
-      hint: REVIEW_LEAD_HINT,
-    }
-  }
-  return null
+  const [file, title, names] =
+    node === 'fix'
+      ? [FIX_FILE, '원인', ['원인']]
+      : node === 'verify'
+        ? [REVIEW_FILE, '리뷰 지적', ['지적', '반영']]
+        : [null, '', []]
+  const text = file === null ? undefined : files[file]
+  if (text === undefined) return null
+  const sections = leadSections(normalizeText(text), names)
+  return sections.length ? { title, sections } : null
+}
+
+/** body에서 names 절을 차례로 모은다. 없는 절은 뺀다 */
+function leadSections(body: string, names: readonly string[]): StageLead['sections'] {
+  return names.flatMap((name) => {
+    const text = sectionText(body, name)
+    return text ? [{ title: name, text }] : []
+  })
 }
 
 // ---------- Work 완료 화면 (시나리오 7-3) ----------
@@ -410,7 +407,7 @@ function cells(line: string): string[] {
 }
 
 /**
- * verification.md의 `## 완료조건 판정` 표 (5.6.8). 머리 행과 구분 행은 뺀다.
+ * verification.md의 `## 완료조건 판정` 표 (5.6.6). 머리 행과 구분 행은 뺀다.
  * 판정이 통과가 아니면(실패, 판정 불가 등) 경고한다 (D59).
  */
 export function verdicts(verification: string): Verdict[] {

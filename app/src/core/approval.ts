@@ -3,7 +3,7 @@
 import { AGENT_APPROVAL_NOTICE, type AgentEngine } from '../shared/agent'
 import { agentLabel, knownTaskEngine } from './agent'
 import type { AppConfig, AutoApproveNode, WorkSettings } from '../shared/config'
-import type { Handoff, Size, TaskNode } from '../shared/contracts'
+import type { Handoff, TaskNode } from '../shared/contracts'
 import type { ApprovalGate, Badge, BadgeKind } from '../shared/views'
 import type {
   AutoHoldReason,
@@ -26,11 +26,6 @@ export type { ApprovalGate, Badge, BadgeKind }
  */
 export const REVIEWABLE: readonly TaskStatus[] = ['awaiting_approval', 'idle', 'session_ended']
 
-/** 사람이 승인 화면에서 size를 고르면 풀리는 오류: intent 초안 머리글의 size (4.1) */
-export function resolvedBySize(issue: FormatIssue): boolean {
-  return issue.file === INTENT_DRAFT_FILE && issue.part === 'header' && issue.field === 'size'
-}
-
 /**
  * 넘길 수 없는 오류: intake에서 intent 초안의 머리글 오류와 초안 없음(D90), PR 대응에서 replies.md의 오류(D204).
  * 머리글이 틀리거나 초안이 없으면 앱이 intent.md를 만들 수 없고, 답글은 밖으로 나가 되돌릴 수 없어 추측 없이 게시한다
@@ -41,8 +36,7 @@ function unignorable(node: TaskRecord['node'], issue: FormatIssue): boolean {
 }
 
 /**
- * 승인 버튼의 판정. check는 판정하는 때에 다시 한 형식 검사이고,
- * size는 intake에서 사람이 고른 크기다. 다른 노드에서는 넘기지 않는다.
+ * 승인 버튼의 판정. check는 판정하는 때에 다시 한 형식 검사다.
  * - [승인]: handoff가 awaiting_approval이고 남은 오류가 없다.
  * - [오류 무시하고 승인]: handoff가 있고 오류가 남았으며, 넘길 수 없는 오류가 없다.
  *   status가 blocked로 읽히면 주지 않는다 (4.4). 머리글을 읽을 수 없는 경우는 준다 (D112).
@@ -50,10 +44,8 @@ function unignorable(node: TaskRecord['node'], issue: FormatIssue): boolean {
 export function approvalGate(
   task: Pick<TaskRecord, 'node' | 'status'>,
   check: CheckSummary,
-  size?: Size,
 ): ApprovalGate {
-  const errors =
-    size && task.node === 'intake' ? check.errors.filter((e) => !resolvedBySize(e)) : check.errors
+  const { errors } = check
   const blocking = errors.filter((e) => unignorable(task.node, e))
   const ready = REVIEWABLE.includes(task.status) && check.handoff_present
   return {
@@ -69,14 +61,14 @@ export function approvalGate(
 export type ApprovalMode = 'manual' | 'auto'
 
 /**
- * 자동 승인을 켤 수 있는 노드인가. intake(의도 승인)와 verify(Work 완료)는 늘 수동이다 (4.2). 리뷰는 지적이 없을 때만
- * 자동 승인한다 (D213). PR 대응은 다른 단계처럼 켤 수 있다 (D169)
+ * 자동 승인을 켤 수 있는 노드인가. intake(의도 승인)와 verify(리뷰와 검증 = Work 완료)는 늘 수동이다 (4.2).
+ * PR 대응은 fix처럼 켤 수 있다 (D169)
  */
 export function autoApprovable(node: TaskNode): node is AutoApproveNode {
   return (AUTO_APPROVE_NODES as readonly TaskNode[]).includes(node)
 }
 
-/** 승인 방식. intake와 verify는 항상 수동이고, Codex는 수동이고, Claude의 나머지는 Work 설정, 앱 설정 순서로 본다 (4.2, D72, D169, D213) */
+/** 승인 방식. intake와 verify는 항상 수동이고, Codex는 수동이고, Claude의 나머지는 Work 설정, 앱 설정 순서로 본다 (4.2, D72, D169) */
 export function approvalMode(
   config: Pick<AppConfig, 'auto_approve'>,
   settings: WorkSettings,
@@ -99,13 +91,8 @@ export function pendingBackground(body: Readonly<Record<string, unknown>>): bool
 
 export interface AutoApproveInput {
   node: TaskNode
-  /** 승인된 intent의 크기. 기본 다음 단계를 정한다 (3.2) */
-  size: Size
-  /**
-   * 판정하는 때의 형식 검사. 머리글(handoffHeader)에서 조건을 읽는다. 리뷰는 review.md의 지적 유무(reviewFindings)도
-   * 읽는다 (D213)
-   */
-  check: CheckSummary & { handoffHeader?: Handoff | null; reviewFindings?: boolean | null }
+  /** 판정하는 때의 형식 검사. 머리글(handoffHeader)에서 조건을 읽는다 */
+  check: CheckSummary & { handoffHeader?: Handoff | null }
   /** Stop 때 백그라운드 작업이나 예약된 깨우기가 남아 있었다 (pendingBackground, D129) */
   background: boolean
 }
@@ -113,8 +100,7 @@ export interface AutoApproveInput {
 /**
  * 자동 승인 조건 (4.3, D129)에서 어긴 것. 비어 있으면 모두 만족한다:
  * handoff 형식이 유효하고 awaiting_approval, open_questions가 비어 있음, intent_deviation이 없음,
- * recommended_next가 null이거나 기본 다음 단계, Stop 때 백그라운드 작업과 예약된 깨우기가 없음, 리뷰면 review.md의 지적이
- * "없음"(D213. 지적이 있거나 읽지 못하면 사람이 지적을 고르고 승인한다, D164).
+ * recommended_next가 null이거나 기본 다음 단계, Stop 때 백그라운드 작업과 예약된 깨우기가 없음.
  * "턴이 끝난 뒤 새 요청이 없음"은 machine이 새 요청(UserPromptSubmit)을 받으면 카운트다운을 멈추는 것으로 지킨다.
  * 모든 조건은 에이전트가 쓴 내용과 에이전트의 세션이다(D7). 커밋 안 된 변경은 조건이 아니다(승인 화면의 경고).
  */
@@ -126,11 +112,10 @@ export function autoApproveHolds(input: AutoApproveInput): AutoHoldReason[] {
   if (h.open_questions.length > 0) out.push('open_questions')
   if (h.intent_deviation) out.push('intent_deviation')
   const rec = h.recommended_next
-  if (rec && (!isPipelineNode(input.node) || rec.node !== defaultNext(input.node, input.size))) {
+  if (rec && (!isPipelineNode(input.node) || rec.node !== defaultNext(input.node))) {
     out.push('recommended_next')
   }
   if (input.background) out.push('background')
-  if (input.node === 'review' && check.reviewFindings !== false) out.push('review_findings')
   return out
 }
 
@@ -142,7 +127,6 @@ export const AUTO_HOLD_LABEL: Readonly<Record<AutoHoldReason, string>> = {
   background: '턴이 끝날 때 백그라운드 작업이나 예약된 깨우기가 남아 있었음',
   completion_unknown: 'Codex의 미완료 작업 여부를 확인할 수 없어 사람이 승인해야 함',
   invalid: '다시 읽은 handoff가 유효하지 않음',
-  review_findings: '리뷰에 지적이 있음 (반영할 지적은 사람이 고름)',
   cancel: '[취소]를 누름',
   interrupt: '[즉시 중단]을 누름',
   quit: '카운트다운 중에 앱을 끔',

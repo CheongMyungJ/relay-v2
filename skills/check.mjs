@@ -3,10 +3,8 @@
 //
 // 1. 머리글: disable-model-invocation: true, description 있음, name 없음 (D33)
 // 2. 크기: SKILL.md + _common.md. Claude Code 어림(글자 수 / 4)으로 판정, 모델 토큰 어림은 참고 (D31, D95)
-//    합친 스킬(investigate)은 앱이 배포하는 모양대로 합쳐 잰다 (D148)
 // 3. 템플릿: 주석 단 템플릿에 값을 채운 예시가 docs/contracts 스키마를 통과하는지 (D87)
-// 4. 설계 대조: 산출물 템플릿의 절 제목, 입력·결정 지점·사람이 정할 결정·완료조건 항목 (5.6.1~5.6.11)
-// 5. 합친 스킬: 단독 구간 표시가 짝이 맞고, 합친 스킬에 단독 구간과 부분의 머리글이 없는지 (D148)
+// 4. 설계 대조: 산출물 템플릿의 절 제목, 입력·결정 지점·사람이 정할 결정·완료조건 항목 (5.6.1~5.6.7)
 
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -19,26 +17,12 @@ const root = join(here, '..');
 const read = (p) => readFileSync(join(root, p), 'utf8').replace(/\r\n/g, '\n');
 
 const SIZE_TARGET = 5000; // D31
-const SKILLS = ['work-start', 'investigate', 'evidence', 'root-cause', 'fix', 'review', 'final-verify', 'pr-respond'];
-
-// 합친 스킬 (D148). 머리 뒤에 이 스킬들의 본문을 차례로 붙인다. 원본: app/src/adapters/claude.ts SKILL_PARTS
-const PARTS = { investigate: ['evidence', 'root-cause'] };
+const SKILLS = ['work-start', 'fix', 'verify', 'pr-respond'];
 
 const design = read('docs/design.md');
 const common = read('skills/_common.md');
-const sources = Object.fromEntries(SKILLS.map((s) => [s, read(`skills/${s}/SKILL.md`)]));
-
-// 앱의 배포(app/src/adapters/claude.ts soloSkill, composeSkill)와 같은 방식으로 합친다
-const SOLO_BLOCK = /^<!-- solo -->\n[\s\S]*?^<!-- \/solo -->\n/gm;
-const SOLO_MARK = /^<!-- \/?solo -->\n/gm;
-const soloSkill = (text) => text.replace(SOLO_MARK, '');
-const partBody = (text) =>
-  text.replace(/^---\n[\s\S]*?\n---\n/, '').replace(SOLO_BLOCK, '').replace(/\n{3,}/g, '\n\n').trim();
-const composeSkill = (head, parts) => `${[soloSkill(head).trimEnd(), ...parts.map(partBody)].join('\n\n')}\n`;
 // 에이전트가 받는 스킬 본문(공통 규칙을 붙이기 전)
-const skills = Object.fromEntries(
-  SKILLS.map((s) => [s, PARTS[s] ? composeSkill(sources[s], PARTS[s].map((p) => sources[p])) : soloSkill(sources[s])]),
-);
+const skills = Object.fromEntries(SKILLS.map((s) => [s, read(`skills/${s}/SKILL.md`)]));
 
 let failures = 0;
 const ok = (msg) => console.log(`  ok    ${msg}`);
@@ -89,7 +73,7 @@ const sameSet = (a, b) => a.length === b.length && a.every((x) => b.includes(x))
 // ---------- 1. 머리글 ----------
 
 console.log('\n[1] 머리글 (D33)');
-for (const [name, text] of Object.entries(sources)) {
+for (const [name, text] of Object.entries(skills)) {
   const fm = frontMatter(text);
   check(fm && fm.data['disable-model-invocation'] === true, `${name}: disable-model-invocation: true`);
   check(fm && typeof fm.data.description === 'string' && fm.data.description.length > 0, `${name}: description 있음`);
@@ -143,13 +127,13 @@ if (handoffTpl) {
 
   // 템플릿을 그대로 채운 예시: 빈 칸은 status뿐, blocked_reason은 비워 둔다 (D96)
   const awaiting = { ...tplFm.data, status: 'awaiting_approval' };
-  awaiting.decisions = [{ what: '크기는 M', why: '재현 방법이 요청에 없음', by: 'ai' }];
+  awaiting.decisions = [{ what: '빈 배열은 0', why: '요청의 기대 동작', by: 'ai' }];
   check(vHandoff(awaiting), `채운 예시(awaiting_approval, blocked_reason 빈 값) 통과 ${errs(vHandoff)}`);
 
   const blocked = { ...tplFm.data, status: 'blocked', blocked_reason: '재현에 필요한 운영 로그가 없음' };
   check(vHandoff(blocked), `채운 예시(blocked + blocked_reason) 통과 ${errs(vHandoff)}`);
 
-  const back = { ...awaiting, recommended_next: { node: 'rca', reason: '원인이 틀림' } };
+  const back = { ...awaiting, recommended_next: { node: 'fix', reason: '원인이 틀림' } };
   check(vHandoff(back), `채운 예시(recommended_next 있음) 통과 ${errs(vHandoff)}`);
 
   // 스키마가 막아야 하는 것
@@ -176,9 +160,8 @@ check(!!intentTpl, 'work-start: intent.draft.md 템플릿 있음');
 if (intentTpl) {
   const fm = frontMatter(intentTpl);
   check(sameSet(Object.keys(fm.data), Object.keys(intentSchema.properties)), `intent 템플릿 필드 = 스키마 필드 (${Object.keys(fm.data).join(', ')})`);
-  check(sameSet(commentEnum(fm.raw, 'size') ?? [], intentSchema.properties.size.enum), 'size 주석의 허용값 = 스키마 열거값');
-  check(vIntent({ ...fm.data, size: 'M' }), `채운 예시(size: M) 통과 ${errs(vIntent)}`);
-  check(!vIntent(fm.data), '반례: size 빈 값 → 오류');
+  check(vIntent(fm.data), `템플릿 머리글 통과 ${errs(vIntent)}`);
+  check(!vIntent({ ...fm.data, type: 'feature' }), '반례: type이 bugfix가 아님 → 오류');
 
   // 본문 필수 절과 완료조건 줄 (5.2.1)
   const hs = headings(fm.body);
@@ -193,13 +176,9 @@ if (intentTpl) {
 console.log('\n[4] 설계 대조: 산출물 템플릿의 절 제목');
 const templateSources = {
   'work-start': ['### 5.3'],
-  investigate: ['#### 5.6.5', '#### 5.6.6'],
-  evidence: ['#### 5.6.5'],
-  'root-cause': ['#### 5.6.6'],
-  fix: ['#### 5.6.7'],
-  review: ['#### 5.6.10'],
-  'final-verify': ['#### 5.6.8'],
-  'pr-respond': ['#### 5.6.11'],
+  fix: ['#### 5.6.5'],
+  verify: ['#### 5.6.6'],
+  'pr-respond': ['#### 5.6.7'],
 };
 for (const [name, sections] of Object.entries(templateSources)) {
   const skillHeadings = codeBlocks(skills[name], 'markdown').flatMap(headings);
@@ -250,143 +229,79 @@ const spec = {
     ['5.6.4', '재현·원인 추적 안 함', /Do not reproduce the bug or trace the cause/],
     ['D39', '사람 의심 지점 → 추가 의견, 확인 안 됨', /\(사람 추정, 확인 안 됨\)/],
     ['5.6.4', '에이전트 가설은 handoff에만', /hypotheses[\s\S]*## 다음 task가 알아야 할 것/],
-    ['D36', '결정 지점 세 가지, 사람이 정할 결정 없음', /`비목표`[\s\S]*`완료조건`[\s\S]*`size`[\s\S]*no human decisions/],
+    ['D36', '결정 지점 두 가지(D227: size 없음), 사람이 정할 결정 없음', /`비목표`[\s\S]*`완료조건`[\s\S]*no human decisions/],
     ['D41', '"모름" → 그럴듯한 값 + open_questions', /모름[\s\S]*most plausible value[\s\S]*`open_questions`/],
     ['D37', '기본 완료조건 세 개', /재현 절차가 더 이상 실패하지 않는다[\s\S]*가 통과한다[\s\S]*기존 테스트를 약화하거나 삭제하지 않는다/],
     ['D37', '테스트 명령은 레포에서 찾기, 없으면 이 항목만 뺌', /Find the concrete test command in the repo[\s\S]*no tests/],
     ['5.3', '완료조건에 push/PR 없음', /Never include push or PR/],
-    ['D42', 'size 근거는 handoff decisions', /rationale in handoff `decisions`/],
-    ['D63', 'S 기준 세 가지(재현 방법은 사람의 답도 포함, D212)', /human's answers in this task, give a way to reproduce[\s\S]*one place[\s\S]*non-goals or constraints/],
-    ['D150', 'L 기준 세 가지, 아니면 M', /propose `L` when any[\s\S]*`M` when none[\s\S]*no way to reproduce[\s\S]*intermittent[\s\S]*several modules/],
-    ['D212', '환경·시점·데이터에 달린 것만으로는 L이 아님. 명령으로 늘 재현되면 위 기준', /environment, timing or data is not `L` by that alone[\s\S]*command can set that condition and reproduce the bug every time/],
-    ['D43', '완료조건 네 항목', /## Done when[\s\S]*required sections[\s\S]*verifiable[\s\S]*`size` is proposed[\s\S]*`open_questions`/],
-  ],
-  investigate: [
-    ['5.6.9', '입력: context.md, request.md 경로, 1부의 evidence.md', /`context\.md`[\s\S]*`request\.md`[\s\S]*Part 2 reads the `evidence\.md`/],
-    ['D147', '1부 evidence → 2부 rca, 1부 뒤에 마무리하지 않음', /Part 1:\*\*[\s\S]*Do not close after Part 1[\s\S]*Part 2:\*\*[\s\S]*Close once/],
-    ['5.6.9', '산출물을 나눔: evidence.md는 관찰만', /`evidence\.md` holds only observed facts[\s\S]*`rca\.md`/],
-    ['D45', '재현 안 될 때: 재현 없이 진행 → 2부, blocked → 전체', /without reproduction" means you go on to Part 2[\s\S]*closes the whole task/],
-    ['5.6.9', '질문: 두 부분의 결정 지점, 1부 질문은 1부에서', /both parts apply[\s\S]*Ask Part 1 questions in Part 1/],
-    ['5.6.9', 'handoff 하나가 두 부분을 담음', /cover both parts/],
-    ['5.6.9', '완료조건: 두 부분의 완료조건', /## Done when\n\n- The "Done when" items of both parts/],
-    ['D46', '1부: 관찰만', /Observe only/],
-    ['D48', '2부: 사람 추정 판정', /맞음 \/ 틀림 \/ 판단 불가/],
-  ],
-  evidence: [
-    ['5.6.5', '입력: context.md, request.md 경로', /`context\.md`[\s\S]*`request\.md`/],
-    ['D44', '코드를 바꾸지 않음, 재현 테스트는 fix', /does not change code[\s\S]*job of fix/],
-    ['5.6.5', '결정 지점: 재현 방법', /How to reproduce/],
-    ['D45', '재현 안 될 때 세 선택지', /does not reproduce[\s\S]*try again[\s\S]*without reproduction[\s\S]*`blocked`/],
-    ['D46', '관찰만, 사람 추정은 판정 안 함', /Observe only[\s\S]*Do not judge whether the suspicion is true/],
-    ['D46', '가설은 handoff에만', /hypotheses[\s\S]*## 다음 task가 알아야 할 것/],
-    ['5.6.5', '완료조건: 네 절, 재현 또는 질문, 출처', /## Done when[\s\S]*four template sections[\s\S]*recorded the answer in `decisions`[\s\S]*has a source/],
-  ],
-  'root-cause': [
-    ['5.6.6', '입력: context.md, evidence.md', /`context\.md`[\s\S]*`evidence\.md`/],
-    ['5.6.6', '코드를 바꾸지 않음, 임시 변경 되돌림', /does not change code[\s\S]*Revert/],
-    ['5.6.6', '결정 지점: 원인, 수정 방향', /Which cause, and the fix direction/],
-    ['D49', '재현/비재현 조건 모두 설명, 실험 또는 assumptions', /reproduces and those where it does not[\s\S]*experiment[\s\S]*`assumptions`/],
-    ['D48', '사람 추정 판정, 틀리면 rejected', /맞음 \/ 틀림 \/ 판단 불가[\s\S]*`rejected`/],
-    ['D50', '원인을 좁히지 못할 때 세 선택지', /cannot narrow the cause[\s\S]*more investigation[\s\S]*most likely candidate[\s\S]*`blocked`/],
-    ['D51', '범위 확대·비목표/제약 → 사람 결정', /widens the scope, or touches the intent's non-goals or constraints/],
-    ['5.6.6', '완료조건: 다섯 절, 원인 또는 질문, 추정 판정', /## Done when[\s\S]*five template sections[\s\S]*`decisions`[\s\S]*suspicion is judged/],
+    ['D43', '완료조건 세 항목', /## Done when[\s\S]*required sections[\s\S]*verifiable[\s\S]*`open_questions`/],
+    ['D227', 'size를 쓰지 않음', /^(?![\s\S]*\bsize\b)/],
   ],
   fix: [
-    ['5.6.7', '입력: context.md, rca.md, evidence.md', /`context\.md`[\s\S]*`rca\.md`[\s\S]*`evidence\.md`/],
+    ['5.6.5', '입력: context.md, request.md 경로', /`context\.md`[\s\S]*`request\.md`/],
     ['D97', '기준 커밋은 context.md', /base commit[\s\S]*base commit \(from `context\.md`\)/],
     ['6.2', '현재 코드 위에서 이어서', /Continuing on current code/],
-    ['D64', 'S: 재현 확인과 원인 → 원인과 재현 절', /S path[\s\S]*`원인과 재현`[\s\S]*replaces `rca와 달라진 점`/],
-    ['D66', 'S: 실패하면 investigate 추천, size 안 바꿈 (D149)', /`recommended_next` to `investigate`[\s\S]*Do not change `size`/],
-    ['A33', 'S 경로는 rca.md가 없을 때만', /`size: S` and `context\.md` lists no `rca\.md`/],
+    ['D228', '순서: 재현 → 원인 → 필요하면 물음 → 수정', /Reproduce\.[\s\S]*Find the cause\.[\s\S]*Ask if needed[\s\S]*Fix/],
+    ['D49', '원인은 재현/비재현 조건 모두 설명, 실험 또는 assumptions', /reproduces and those where it does not[\s\S]*experiment[\s\S]*`assumptions`/],
+    ['D48', '사람 추정 판정, 틀리면 rejected', /맞음 \/ 틀림 \/ 판단 불가[\s\S]*`rejected`/],
     ['D53', '재현 테스트: 수정 전 실패, 후 통과, 못 하면 이유', /fails before the fix and passes after[\s\S]*`risks`/],
     ['D54', '커밋 수 제한 없음, 레포 관례', /any number[\s\S]*commit message convention/],
-    ['D55', 'rca가 틀리면 rca.md를 쓴 단계 추천(rca 또는 investigate)', /`recommended_next: \{node: rca, reason\}`[\s\S]*`investigate` instead of `rca`[\s\S]*only the fix location differs/],
     ['D56', '기존 테스트 변경 → risks, 변경 요약에 표시', /existing test must change[\s\S]*`risks`[\s\S]*`변경 요약`/],
     ['D57', '테스트 명령 실행, 기준 커밋 실패 구분', /Run tests[\s\S]*also fails at the base commit/],
-    ['5.6.7', '결정 지점: 구현 방식', /How to implement within the fix direction/],
-    ['5.6.7', '코드를 고치는 주 단계 (리뷰는 사람이 고른 지적만, D164)', /main step that changes code/],
+    ['5.6.5', '결정 지점: 재현 방법과 구현 방식', /How to reproduce, and how to implement the fix/],
+    ['D45', '재현 안 될 때 세 선택지', /does not reproduce[\s\S]*try again[\s\S]*without reproduction[\s\S]*`blocked`/],
+    ['D50', '원인을 좁히지 못할 때 세 선택지', /cannot narrow the cause[\s\S]*investigate more[\s\S]*most likely candidate[\s\S]*`blocked`/],
+    ['D228', '동작이 달라지는 수정 방향이 여럿이면 물음', /fix directions differ in behavior/],
+    ['D51', '범위 확대·비목표/제약 → 사람 결정', /widens the scope, or touches the intent's non-goals or constraints/],
+    ['D228', '그 밖에는 묻지 않고 정함', /In any other case, decide the fix yourself/],
     ['5.6.2', '코드를 바꾸는 단계: 모두 커밋', /Commit all changes before you close/],
-    ['5.6.7', '완료조건: 네 절, 커밋, 재현 테스트, 테스트 명령', /## Done when[\s\S]*four template sections[\s\S]*committed[\s\S]*fails before[\s\S]*test command/],
+    ['5.6.5', '완료조건: 다섯 절, 재현 또는 질문, 원인 또는 질문, 추정 판정, 커밋, 재현 테스트, 테스트 명령', /## Done when[\s\S]*five template sections[\s\S]*reproduced[\s\S]*unnarrowed cause[\s\S]*suspicion is judged[\s\S]*committed[\s\S]*fails before[\s\S]*test command/],
   ],
-  review: [
-    ['A33', '입력: context.md, fix.md. rca.md는 context.md에 없을 때만 건너뛰고, 있으면 크기와 관계없이 읽음', /`context\.md`[\s\S]*`fix\.md`, and `rca\.md` if `context\.md` lists it[\s\S]*only when `context\.md` lists none[\s\S]*whatever the size/],
+  verify: [
+    ['5.6.6', '입력: context.md, fix.md', /`context\.md`[\s\S]*`fix\.md`/],
     ['D97', '리뷰 대상: 기준 커밋(context.md)부터 지금까지의 변경', /base commit \(from `context\.md`\) to now/],
-    ['D195', '입력: context.md에 있으면 evidence.md(재현 절차). S 경로는 fix.md의 원인과 재현', /`evidence\.md` if `context\.md` lists it[\s\S]*reproduction steps[\s\S]*`원인과 재현`/],
-    ['5.6.10', '보는 것: 목표·비목표, 수정 방향, 빠진 경우와 경계 조건, 테스트, 관례와 읽기 쉬움, 필요 없는 변경', /`목표` and `비목표`[\s\S]*fix direction[\s\S]*edge conditions[\s\S]*tests[\s\S]*conventions and readability[\s\S]*not needed/],
-    ['5.6.10', '완료조건 판정은 verify의 일', /Do not judge the 완료조건[\s\S]*job of verify/],
-    ['D164', '순서 1: 번호 붙인 지적(심각도, 파일과 줄, 문제와 제안), 없으면 없음, 종료 절차로 마무리', /numbered item[\s\S]*차단 \/ 권장 \/ 사소[\s\S]*file and line[\s\S]*"없음"[\s\S]*closing procedure/],
-    ['D164', '순서 2: 번호로 지시한 지적만 고쳐 커밋, 테스트 명령, 반영 절, 종료 절차 다시', /by number[\s\S]*fix only those and commit[\s\S]*test command[\s\S]*`## 반영`[\s\S]*closing procedure again/],
-    ['D195', '재현 절차가 쓰는 코드는 바꾸지 않음. 바꿔야 하면 달라진 재현 절차를 반영 절에', /Do not change code that the reproduction steps use[\s\S]*`반영`[\s\S]*reproduction steps change/],
-    ['D164', '순서 3: 지시하지 않은 지적은 고치지 않음, 지시 없이 승인하면 반영 없음', /Never fix a finding the human did not pick[\s\S]*approves without picking/],
-    ['5.6.10', '코드: 사람이 고른 지적만, 바꿨으면 커밋', /Change code only for the findings the human picked[\s\S]*Commit/],
+    ['D229', '순서: 리뷰 → 지적 고르기 → 반영 → 검증 → pr.md', /Review\.[\s\S]*Pick findings[\s\S]*Apply[\s\S]*Verify[\s\S]*`pr\.md`/],
+    ['D164', '번호 붙인 지적(심각도, 파일과 줄, 문제와 제안), 없으면 없음', /numbered item[\s\S]*차단 \/ 권장 \/ 사소[\s\S]*file and line[\s\S]*"없음"/],
     ['D165', '반영 뒤 리뷰를 다시 돌리지 않음', /Do not review again/],
-    ['D164', '반영할 지적은 AskUserQuestion으로 묻지 않고 마무리 뒤 터미널에서 (D28의 예외)', /exception to asking on the spot[\s\S]*Do not ask with `AskUserQuestion`[\s\S]*terminal/],
-    ['D164', '고른 것과 고르지 않은 것 → decisions by: human', /picked and what they did not[\s\S]*`by: human`/],
-    ['5.6.10', '결정 지점: 고른 지적을 어떻게 고칠지', /How to fix a picked finding[\s\S]*결정마다 확인/],
-    ['5.6.10', '이전 단계 추천: fix, 또는 rca.md를 쓴 단계 (D149)', /`recommended_next` to `fix`[\s\S]*`rca` or `investigate`/],
-    ['5.6.10', '완료조건: 세 절, 고른 지적을 고쳤으면 커밋과 테스트 결과', /## Done when[\s\S]*three template sections[\s\S]*committed[\s\S]*test command[\s\S]*`반영`/],
+    ['5.6.6', '보는 것: 목표·비목표, 원인과 맞는지, 빠진 경우와 경계 조건, 테스트, 관례와 읽기 쉬움, 필요 없는 변경', /`목표` and `비목표`[\s\S]*cause in `fix\.md`[\s\S]*edge conditions[\s\S]*tests[\s\S]*conventions and readability[\s\S]*not needed/],
+    ['D195', '재현 절차가 쓰는 코드는 바꾸지 않음. 바꿔야 하면 달라진 절차를 반영 절에', /do not change code that they use[\s\S]*`반영`[\s\S]*steps change/],
+    ['5.6.6', '코드: 사람이 고른 지적만, 바꿨으면 커밋', /change code only for the findings the human picked[\s\S]*Commit/],
+    ['D58', '모든 완료조건을 직접 다시 실행', /Re-run everything yourself[\s\S]*only for comparison/],
+    ['D59', '판정 값 셋, 판정 불가 이유', /통과 \/ 실패 \/ 판정 불가[\s\S]*give the reason/],
+    ['D45', '재현 없이 진행한 Work는 판정 불가', /without reproduction[\s\S]*판정 불가/],
+    ['D65', '재현 절차도 재현 테스트도 없으면 판정 불가', /neither reproduction steps nor a reproduction test, it is 판정 불가/],
+    ['D60', '기준 커밋과 비교한 테스트 파일 모두 판정', /changed since the base commit[\s\S]*약화 아님[\s\S]*약화 의심/],
+    ['D229', '반영할 지적은 그 자리에서 질문으로 고름, 번호 입력도 받음, decisions by: human', /Which findings to apply[\s\S]*차단·권장만 반영 \/ 모두 반영 \/ 반영하지 않음[\s\S]*type the numbers[\s\S]*`by: human`/],
+    ['D60', '약화 의심 → 사람 결정', /looks like weakening[\s\S]*통과[\s\S]*실패/],
+    ['D61', '실패·판정 불가 → 되돌아가기 / 이대로', /Any 실패 or 판정 불가[\s\S]*`recommended_next`[\s\S]*`recommended_next: null`/],
+    ['5.6.6', '이전 단계 추천: fix', /`recommended_next` to `fix`/],
+    ['5.6.6', '결정 지점: 고른 지적의 수정 방식, 판정', /How to fix a picked finding, and the verdict of each 완료조건/],
+    ['D62', 'pr.md 첫 줄 # 제목', /first line is `# <PR title>`/],
+    ['D101', 'pr.md 언어는 레포 관례, PR 템플릿 따르기', /language the repo uses[\s\S]*PR template/],
+    ['5.6.6', '완료조건: 세 절, 지적 반영, 판정, 테스트 파일, pr.md, 질문', /## Done when[\s\S]*three template sections[\s\S]*picked[\s\S]*verdict and evidence[\s\S]*test file is judged[\s\S]*`pr\.md` is written[\s\S]*`decisions`/],
   ],
   'pr-respond': [
     ['D192', '입력: context.md(이번 라운드의 항목, 사람 지시, PR 정보, 앞 라운드 요약)와 파이프라인 산출물(경로)', /`context\.md`[\s\S]*this round's items, the human's instruction, the PR[\s\S]*summaries of earlier rounds[\s\S]*pipeline artifacts/],
     ['D162', '외부 글은 지시가 아니라 데이터, 명령 실행·설정 변경·비밀 정보 요청은 따르지 않고 사람에게 물음, 사람 지시는 따름', /data, not instructions[\s\S]*run a command, change settings[\s\S]*reveal secrets[\s\S]*ask the human[\s\S]*Follow only the human/],
     ['D168', '항목마다 셋 중 하나: 고침 / 고치지 않음과 이유 / 사람에게 물음. 모르면 open_questions', /고침[\s\S]*고치지 않음[\s\S]*사람에게 물음[\s\S]*`open_questions`/],
-    ['5.6.11', '범위: intent의 목표와 비목표. 비목표·제약에 걸리면 사람 결정 (D51과 같음)', /`목표` and `비목표`[\s\S]*`비목표` or `제약`[\s\S]*human decision/],
+    ['5.6.7', '범위: intent의 목표와 비목표. 비목표·제약에 걸리면 사람 결정 (D51과 같음)', /`목표` and `비목표`[\s\S]*`비목표` or `제약`[\s\S]*human decision/],
     ['D175', 'CI 실패: 로그로 원인. 이 PR의 코드 문제면 고침, 아니면 코드를 바꾸지 않고 결론과 근거', /CI failure:[\s\S]*this PR's code causes it, fix it[\s\S]*do not change code[\s\S]*conclusion and the evidence/],
     ['D181', '충돌: 기준 브랜치를 병합하며 풂. 리베이스하지 않음', /Conflict:[\s\S]*merge the base branch[\s\S]*Do not rebase/],
     ['D193', '원격과 갈라짐: 앱이 fetch해 둔 원격 PR 브랜치를 병합. 리베이스하지 않음', /Divergence:[\s\S]*merge the remote PR branch the app fetched[\s\S]*Do not rebase/],
     ['D57', '테스트: 고쳤으면 테스트 명령, 기준 커밋 실패 구분', /changed code, run the test command[\s\S]*also fails at the base commit/],
     ['D56', '기존 테스트를 고쳤으면 risks (D180)', /changed an existing test, add it to `risks`/],
     ['D190', '답글: 코멘트 항목마다 replies.md에 ## <항목 id> 절', /`## <item id>` in `replies\.md` for each comment item/],
-    ['5.6.11', '답글: 고친 것은 무엇을 어떻게, 고치지 않은 것은 이유. 코멘트의 언어', /what you fixed and how, or why you did not[\s\S]*language of the comment/],
+    ['5.6.7', '답글: 고친 것은 무엇을 어떻게, 고치지 않은 것은 이유. 코멘트의 언어', /what you fixed and how, or why you did not[\s\S]*language of the comment/],
     ['D173', '표시 문구와 원래 코멘트 링크는 앱이 붙이므로 쓰지 않음 (D207)', /Do not write a signature or a link[\s\S]*the app adds them/],
     ['D15', '코드를 바꾸는 단계: 모두 커밋, push하지 않음(앱이 함)', /this step changes code\. Commit all changes[\s\S]*Do not push/],
     ['D188', 'recommended_next는 늘 null', /`recommended_next`:\*\* always null/],
-    ['5.6.11', '결정 지점: 항목마다 고칠지와 방식. 결정마다 확인이면 코드 전에 물음', /Whether and how to fix each item[\s\S]*결정마다 확인, ask before you change code/],
-    ['5.6.11', '완료조건: 셋 중 하나 또는 open_questions, 코멘트 항목마다 답글, 커밋과 테스트 결과', /## Done when[\s\S]*settled as one of the three[\s\S]*has a reply in `replies\.md`[\s\S]*committed[\s\S]*test command/],
-  ],
-  'final-verify': [
-    ['5.6.8', '입력: evidence.md, fix.md, rca.md, review.md', /`evidence\.md` and `fix\.md`, and `rca\.md` and `review\.md`/],
-    ['D164', '리뷰에서 고친 것은 review.md의 반영 절', /`review\.md`[\s\S]*`반영` section/],
-    ['D195', '리뷰가 재현 절차를 바꿨으면 반영 절의 달라진 절차로 재현', /`반영` section[\s\S]*reproduction steps changed[\s\S]*changed steps/],
-    ['D65', 'S: 원인과 재현의 재현 절차, 없으면 판정 불가', /S path[\s\S]*`원인과 재현`[\s\S]*판정 불가/],
-    ['A33', 'S 경로는 evidence.md가 없을 때만', /`size: S` and `context\.md` lists no `evidence\.md`/],
-    ['5.6.8', '코드를 바꾸지 않음', /does not change code/],
-    ['D58', '모든 완료조건을 직접 다시 실행', /Re-run everything yourself[\s\S]*only for comparison/],
-    ['D59', '판정 값 셋, 판정 불가 이유', /통과 \/ 실패 \/ 판정 불가[\s\S]*give the reason/],
-    ['D45', '재현 없이 진행한 Work는 판정 불가', /without reproduction[\s\S]*판정 불가/],
-    ['D60', '기준 커밋과 비교한 테스트 파일 모두 판정', /changed since the base commit[\s\S]*약화 아님[\s\S]*약화 의심/],
-    ['D60', '약화 의심 → 사람 결정', /looks like weakening[\s\S]*통과[\s\S]*실패/],
-    ['D61', '실패·판정 불가 → 되돌아가기 / 이대로', /Any 실패 or 판정 불가[\s\S]*`recommended_next`[\s\S]*`recommended_next: null`/],
-    ['5.6.8', '결정 지점: 판정', /The verdict of each 완료조건/],
-    ['D62', 'pr.md 첫 줄 # 제목', /first line is `# <PR title>`/],
-    ['D101', 'pr.md 언어는 레포 관례, PR 템플릿 따르기', /language the repo uses[\s\S]*PR template/],
-    ['5.6.8', '완료조건: 판정, 테스트 파일, pr.md, 질문', /## Done when[\s\S]*verdict and evidence[\s\S]*test file is judged[\s\S]*`pr\.md` is written[\s\S]*`decisions`/],
+    ['5.6.7', '결정 지점: 항목마다 고칠지와 방식. 결정마다 확인이면 코드 전에 물음', /Whether and how to fix each item[\s\S]*결정마다 확인, ask before you change code/],
+    ['5.6.7', '완료조건: 셋 중 하나 또는 open_questions, 코멘트 항목마다 답글, 커밋과 테스트 결과', /## Done when[\s\S]*settled as one of the three[\s\S]*has a reply in `replies\.md`[\s\S]*committed[\s\S]*test command/],
   ],
 };
 for (const [name, items] of Object.entries(spec)) {
   const text = name === '_common' ? common : skills[name];
   for (const [ref, desc, re] of items) check(re.test(text), `${name}: ${desc} (${ref})`);
-}
-
-// ---------- 5. 합친 스킬 (D148) ----------
-
-console.log('\n[5] 합친 스킬 (D148)');
-for (const [name, text] of Object.entries(sources)) {
-  const marks = [...text.matchAll(/^<!-- (\/?)solo -->$/gm)].map((m) => m[1]);
-  const paired = marks.length % 2 === 0 && marks.every((m, i) => m === (i % 2 ? '/' : ''));
-  check(paired, `${name}: 단독 구간 표시가 짝이 맞음 (${marks.length / 2}쌍)`);
-  check(!/<!-- \/?solo -->/.test(skills[name]), `${name}: 배포하는 본문에 단독 구간 표시가 남지 않음`);
-}
-for (const [name, parts] of Object.entries(PARTS)) {
-  const text = skills[name];
-  check((text.match(/^---\n/gm) ?? []).length === 2, `${name}: 머리글은 머리의 것 하나 (부분의 머리글은 뺌)`);
-  for (const p of parts) {
-    check(text.includes(`# relay: ${p === 'root-cause' ? 'root-cause (rca)' : p}`), `${name}: 부분 ${p}의 본문이 있음`);
-    for (const m of sources[p].matchAll(/^<!-- solo -->\n([\s\S]*?)^<!-- \/solo -->$/gm)) {
-      const block = m[1].trim();
-      check(text.includes(partBody(sources[p])) && !partBody(sources[p]).includes(block), `${name}: ${p}의 단독 구간이 빠짐 ("${block.split('\n')[0].slice(0, 40)}")`);
-    }
-  }
 }
 
 console.log(failures ? `\n실패 ${failures}건` : '\n모두 통과');

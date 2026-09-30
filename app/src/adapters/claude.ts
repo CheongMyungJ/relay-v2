@@ -78,51 +78,15 @@ const lf = (s: string) => s.replace(/\r\n?/g, '\n')
 
 /**
  * 공통 규칙을 SKILL.md 끝에 붙인다 (D31, D99). 줄 끝은 LF로 맞춰 체크아웃 방식과 상관없이 해시가 같다.
- * 출처: skills/check.mjs (크기를 잴 때 합치는 방식과 같다)
+ * 출처: skills/check.mjs (스킬 크기를 잴 때 합치는 방식과 같다)
  */
 export function mergeSkill(skill: string, common: string): string {
   return `${lf(skill).trimEnd()}\n${lf(common)}`
 }
 
-/**
- * 합친 스킬 (D148): 머리(`skills/<name>/SKILL.md`) 뒤에 이 스킬들의 본문을 차례로 붙인다.
- * 출처: skills/check.mjs의 PARTS (같은 표)
- */
-export const SKILL_PARTS: Readonly<Partial<Record<SkillName, readonly SkillName[]>>> = {
-  investigate: ['evidence', 'root-cause'],
-}
-
-/** 단독으로 쓸 때만 있는 구간 (D148). 표시 줄은 줄 전체다 */
-const SOLO_BLOCK = /^<!-- solo -->\n[\s\S]*?^<!-- \/solo -->\n/gm
-const SOLO_MARK = /^<!-- \/?solo -->\n/gm
-const FRONT_MATTER = /^---\n[\s\S]*?\n---\n/
-
-/** 단독으로 쓰는 스킬: 단독 구간의 표시 줄만 지운다 (D148) */
-export function soloSkill(skill: string): string {
-  return lf(skill).replace(SOLO_MARK, '')
-}
-
-/**
- * 합친 스킬 (D148): 머리 뒤에 부분 스킬을 붙인다. 부분 스킬은 머리글과 단독 구간을 뺀다.
- * 공통 규칙은 mergeSkill이 그 뒤에 붙인다
- */
-export function composeSkill(head: string, parts: readonly string[]): string {
-  const bodies = parts.map((p) =>
-    lf(p)
-      .replace(FRONT_MATTER, '')
-      .replace(SOLO_BLOCK, '')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim(),
-  )
-  return `${[soloSkill(head).trimEnd(), ...bodies].join('\n\n')}\n`
-}
-
-/** 배포할 스킬 내용: 합친 스킬이면 부분을 붙이고, 공통 규칙을 끝에 붙인다 (5.6.3, D148) */
+/** 배포할 스킬 내용: 공통 규칙을 끝에 붙인다 (5.6.3) */
 export async function skillText(source: string, skill: SkillName): Promise<string> {
-  const read = (name: string) => fsp.readFile(path.join(source, name, SKILL_FILE), 'utf8')
-  const head = await read(skill)
-  const parts = SKILL_PARTS[skill]
-  const body = parts ? composeSkill(head, await Promise.all(parts.map(read))) : soloSkill(head)
+  const body = await fsp.readFile(path.join(source, skill, SKILL_FILE), 'utf8')
   const common = await fsp.readFile(path.join(source, COMMON_FILE), 'utf8')
   return mergeSkill(body, common)
 }
@@ -135,7 +99,7 @@ export interface DeployedSkill {
 }
 
 /**
- * 이번 task의 스킬(합친 스킬이면 합친 것, D148)을 Work 디렉터리의 .claude/skills/relay-<이름>/에 배포하고 다른 relay 스킬 폴더는 지운다 (D108).
+ * 이번 task의 스킬을 Work 디렉터리의 .claude/skills/relay-<이름>/에 배포하고 다른 relay 스킬 폴더는 지운다 (D108).
  * Claude Code는 --add-dir로 더한 디렉터리의 .claude/skills/를 읽으므로 worktree는 건드리지 않는다 (D32).
  */
 export async function deploySkill(o: {

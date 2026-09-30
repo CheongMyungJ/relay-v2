@@ -4,7 +4,7 @@
 import type { NodeName } from '../shared/contracts'
 import type { DiscardView, StepChoice, StepExpect, StepKind, StepPreview } from '../shared/views'
 import type { StartReason, TaskRecord, WorkState } from '../shared/work'
-import { NODE_INFO, NODES, defaultNext, isPipelineNode, route, steps } from './pipeline'
+import { NODE_INFO, NODES, defaultNext, isPipelineNode } from './pipeline'
 import { REASON_LABEL, taskLabel } from './review'
 
 export type { StepKind }
@@ -21,7 +21,7 @@ export interface StepPlan {
   interrupt: 'session' | 'queue' | null
   /** 폐기할 task. 순번 차례다 */
   discard: TaskRecord[]
-  /** 건너뛸 단계: 지금 경로(3.4)에서 k와 고른 단계 사이 */
+  /** 건너뛸 단계: 파이프라인에서 k와 고른 단계 사이 */
   skipped: NodeName[]
   /** 새 task의 시작 이유 (시나리오 2-5) */
   reason: StartReason
@@ -65,18 +65,11 @@ export function stepKind(from: NodeName, to: NodeName): StepKind {
 }
 
 /**
- * 6.3: 의도 승인 전에는 intake만 고를 수 있다. 승인 뒤에는 intent 크기의 단계만 고른다(D149).
- * 고를 수 없으면 이유, 있으면 null
+ * 6.3: 의도 승인 전에는 intake만 고를 수 있다. 고를 수 없으면 이유, 있으면 null
  */
 function notAllowed(work: WorkState, node: NodeName): string | null {
   if (!canSelectStep(work)) return '진행 중이거나 멈춘 Work가 아님'
-  if (!work.intent) {
-    return node === 'intake' ? null : '의도 승인 전에는 intake만 고를 수 있음 (6.3)'
-  }
-  const size = work.intent.size
-  if (!steps(size).includes(node)) {
-    return `size ${size}의 단계가 아님. 크기를 바꾸려면 intake로 되감음 (D149)`
-  }
+  if (!work.intent && node !== 'intake') return '의도 승인 전에는 intake만 고를 수 있음 (6.3)'
   return null
 }
 
@@ -171,14 +164,10 @@ export function planStep(work: WorkState, node: NodeName, opts: StepOptions = {}
   }
 
   const discard = done ? [] : [from]
-  // 의도 승인 전에는 건너뛸 수 없다(notAllowed). 경로는 승인된 intent의 크기를 따른다 (3.4)
-  const size = work.intent?.size
-  const onRoute = size ? route(size) : [...NODES]
-  const skipped = onRoute.filter((n) => index(n) > index(fromNode) && index(n) < index(node))
-  // 기본 진행은 끝난 k의 기본 다음 단계를 고른 경우뿐이다. 경로 밖 단계(S의 investigate)는 건너뛴 단계가 없어도
-  // 건너뛰기다 (점검 A42)
-  const isDefault =
-    skipped.length === 0 && discard.length === 0 && !!size && defaultNext(fromNode, size) === node
+  // 의도 승인 전에는 건너뛸 수 없다(notAllowed)
+  const skipped = NODES.filter((n) => index(n) > index(fromNode) && index(n) < index(node))
+  // 기본 진행은 끝난 k의 기본 다음 단계를 고른 경우뿐이다
+  const isDefault = skipped.length === 0 && discard.length === 0 && defaultNext(fromNode) === node
   return {
     ok: true,
     plan: {
@@ -202,15 +191,14 @@ const title = (node: NodeName) => `${NODE_INFO[node].title}(${node})`
 
 /**
  * 단계 선택 대화상자의 단계: 파이프라인 차례로, 고를 수 있는지와 그 이유 (6.2, 6.3).
- * 의도 승인 뒤에는 intent 크기의 단계만 보인다(D149). 승인 전에는 모든 단계를 보이고 intake만 고르게 한다
+ * 모든 단계를 보인다. 의도 승인 전에는 intake만 고르게 한다
  */
 export function stepChoices(work: WorkState): StepChoice[] {
   const from = lastTask(work)
   // PR 대응 task(D188)가 지금 task면 파이프라인의 어느 단계보다 뒤로 본다: 고를 수는 없다 (canSelectStep, D182)
   const fromNode = from ? (isPipelineNode(from.node) ? from.node : 'verify') : null
   const recommended = work.stop?.kind === 'recommended_back' ? work.stop.node : null
-  const shown = work.intent ? steps(work.intent.size) : [...NODES]
-  return shown.map((node) => {
+  return NODES.map((node) => {
     const why = from ? notAllowed(work, node) : '지금 task가 없음'
     return {
       node,

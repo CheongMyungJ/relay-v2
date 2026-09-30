@@ -271,7 +271,8 @@ app/src/
 | M9 | PR 진행 | PR 진행 상태, 읽기, 항목 보기, 머지, 머지 뒤 정리. 에이전트 없음 | 스파이크 S7(I42) |
 | M10 | PR 대응 | 사람이 누르는 [대응 시작], PR 대응 task, 승인 뒤 push와 답글, CI 재실행 | |
 | M11 | 자동 대응 | 대응 자동 시작과 자동 승인, 라운드 상한, 닫힌 PR의 push·게시 막기(D208) | |
-| M12 | 사용성 평가 반영 | 평가에서 나온 개선점 가운데 사람이 고른 것(D212~) | 사용성 평가 |
+| M12 | 사용성 평가 반영 | 평가에서 나온 개선점 가운데 사람이 고른 것(D212~D226) | 사용성 평가 |
+| M13 | 단계 줄이기 | `intake → fix(원인 분석과 수정) → verify(리뷰와 검증)` 하나의 경로, 크기 없앰(D227~D229) | M12 |
 
 ### M0. 골격과 배포
 
@@ -751,6 +752,26 @@ app/src/
   - `ASK_TOOL`은 core/machine이 export하고 main이 쓴다.
   - 화면: 세션 기록이 없는 중단됨(`TaskView.hasSession`)의 [재개] 안내(D218). 세션이 없을 때 열린 질문의 안내(`OPEN_QUESTIONS_HINT_NO_SESSION`)와 확인 창 문구, [오류 무시하고 승인] 확인 창의 열린 질문(D222). 열린 질문 확인 창은 `OpenQuestionsDialog` 하나로 두고, Work 완료 화면(`CompletionActions`)의 [완료만]·[push]·[PR 생성]·[승인하고 멈춤]도 이 창을 거친다. 끊긴 전달의 [다시 시도]와 정리 세션의 [정리 끝 → push/PR 진행]은 이미 고른 전달을 잇는 것이라 묻지 않는다.
   - 시험: [단위] `templates`, `validate`, `machine`, `settings`, `review`(`hasVisibleText`, 세션이 없을 때의 안내). [흐름] `activity.test.ts`의 새 시험(실패한 도구, 서브에이전트의 도구, 실패한 질문 도구), `control.test.ts`(대기열에서 시작한 task의 진행 표시가 대기열 시간을 넣지 않음, `hasSession`). Windows에서는 세션을 띄운 뒤 프로세스 시작 시각을 PowerShell로 읽는 동안 첫 요청이 먼저 와서 대기열에 있던 task가 "세션을 띄우는 중" 없이 곧바로 턴 중이 될 수 있다. 그래서 이 시험은 처음 보인 진행 표시(턴 전이든 턴 중이든)의 시작 시각을 본다(5671bad). 가짜 `claude`의 `tool`에 `fail`, `agent`, `inner`를, `ask`에 `fail`을 더했다. [스모크]는 두 번째 Work의 최종 검증이 열린 질문을 남기게 해, [push]를 누르면 확인 창이 뜨고 창의 [push]로 전달하는 것을 본다.
+
+### M13. 단계 줄이기
+
+설계 v0.7(D227~D229). 사용성 평가에서 가장 큰 부담이던 단계와 승인의 수(`docs/eval-findings.md` R1)를 구조로 줄인다. 아직 배포 전이라 이전 기록(`work.json`의 옛 노드와 `size`)과의 호환은 두지 않는다.
+
+**내용**
+
+- **파이프라인:** `core/pipeline`의 노드를 `intake, fix, verify`로 줄이고 크기별 경로(`steps`, `route`)를 지운다. `defaultNext`, `previousSteps`, `recommendableNodes`는 노드만 받는다. handoff 스키마의 `recommended_next.node`와 intent 초안 스키마(`size` 없음)를 맞춘다.
+- **크기(D227):** `Size` 타입, intent 머리글의 `size`, 의도 승인 화면의 size 고르기(`ApproveOptions.size`, `ReviewView.draftSize`·`gates` → `gate`), 단계 선택의 크기 제한을 지운다.
+- **fix(D228):** 스킬 `evidence`, `root-cause`, `investigate`와 합친 스킬 배포(`SKILL_PARTS`, `composeSkill`, `soloSkill`)를 지우고, `skills/fix/SKILL.md`가 재현·원인·수정을 한다. 화면 이름은 "원인 분석과 수정", [요약] 맨 위는 `fix.md`의 `## 원인`이다.
+- **verify(D229):** 스킬 `review`, `final-verify`를 `skills/verify/SKILL.md` 하나로 합친다. 필수 산출물은 `review.md`, `verification.md`, `pr.md`다. 반영할 지적은 세션 안에서 묻는다. 리뷰의 자동 승인(D213, `reviewFindings`, 까닭 `review_findings`)과 리뷰의 마무리 안내 문구를 지운다. [요약] 맨 위는 `review.md`의 `## 지적`과 `## 반영`이다.
+- **설정:** `auto_approve`는 `fix`(기본 켬)와 `respond`, `question_mode`는 `work-start`, `fix`, `verify`, `pr-respond`다.
+- **평가 도구:** `app/eval/guides/relay.md`의 단계 설명을 바꾼다.
+
+**완료 기준**
+
+- [단위] 3노드의 기본 다음 단계와 이전 단계, `recommended_next` 검사, 단계 선택(모든 Work가 같은 단계), 자동 승인 대상과 기본값, 마무리 안내 문구, `stageLead`(fix, verify), verify의 필수 산출물 셋.
+- [흐름] 가짜 claude로 intake → fix → verify → Work 완료. fix의 기본 자동 승인, verify가 fix를 추천하면 멈춤, fix로 되감기.
+- [정적] `skills/check.mjs`가 새 스킬(fix, verify)을 설계 5.6.5, 5.6.6과 대조한다.
+- [실기]와 평가 재실행: `relay-eval`로 시나리오를 다시 돌려 승인 수, 세션 수, 결과 확신을 R1 전과 비교한다.
 
 ## 8. 테스트 전략
 

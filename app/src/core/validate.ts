@@ -4,7 +4,7 @@
 import Ajv2020, { type ErrorObject, type ValidateFunction } from 'ajv/dist/2020'
 import { parseDocument } from 'yaml'
 import type { AppConfig } from '../shared/config'
-import type { Handoff, HandoffStatus, IntentDraft, Size, TaskNode } from '../shared/contracts'
+import type { Handoff, HandoffStatus, IntentDraft, TaskNode } from '../shared/contracts'
 import handoffSchemaV1 from '../shared/generated/handoff.v1.schema.json'
 import intentDraftSchemaV1 from '../shared/generated/intent-draft.v1.schema.json'
 import type { CheckSummary, FormatIssue } from '../shared/work'
@@ -16,10 +16,12 @@ export const FORMAT_VERSION = 1
 export const HANDOFF_FILE = 'handoff.md'
 export const INTENT_DRAFT_FILE = 'intent.draft.md'
 export const PR_FILE = 'pr.md'
-/** PR 대응 task의 산출물 (5.6.11, D187) */
+/** PR 대응 task의 산출물 (5.6.7, D187) */
 export const RESPONSE_FILE = 'response.md'
 export const REPLIES_FILE = 'replies.md'
-/** 리뷰의 산출물 (5.6.10). 지적이 없으면 자동 승인할 수 있다 (D213) */
+/** 원인 분석과 수정의 산출물 (5.6.5, D228) */
+export const FIX_FILE = 'fix.md'
+/** 리뷰와 검증의 리뷰 산출물 (5.6.6, D229) */
 export const REVIEW_FILE = 'review.md'
 
 /** 본문 필수 절 (5.2.1) */
@@ -384,20 +386,6 @@ export function sectionText(body: string, name: string): string | null {
   return lines === null ? null : lines.join('\n').trim()
 }
 
-/**
- * review.md의 `## 지적`에 지적이 있는가 (5.6.10, D213). 템플릿은 지적을 번호 목록으로 쓰고, 없으면 "없음"을 쓴다.
- * 번호 항목이 하나라도 있으면 true, 번호 항목 없이 "없음"으로 시작하는 한 줄뿐이면 false, 절이 없거나 둘 다
- * 아니면 null이다. "없음" 뒤에 다른 줄(번호 없는 지적 목록 등)이 이어지면 null이다. 자동 승인은 false일 때만
- * 한다: 읽지 못한 리뷰는 사람이 본다
- */
-export function reviewFindings(text: string): boolean | null {
-  const section = sectionText(text, '지적')
-  if (section === null) return null
-  const lines = section.split('\n').filter((l) => l.trim() !== '')
-  if (lines.some((l) => /^\s*\d+[.)]\s/.test(l))) return true
-  return lines.length === 1 && /^(?:[-*]\s*)?없음/.test(lines[0]?.trim() ?? '') ? false : null
-}
-
 function missingSections(
   file: string,
   body: string,
@@ -481,8 +469,6 @@ function checkHeader<T>(
 
 export interface HandoffCheckOptions {
   node: TaskNode
-  /** 선택 가능한 다음 단계를 정할 크기. 모르면 recommended_next.node 검사를 건너뛴다 */
-  size?: Size
   warnChars: number
   formatVersion?: number
 }
@@ -501,8 +487,8 @@ export function checkHandoff(text: string, opts: HandoffCheckOptions): HandoffCh
   const errors = [...h.errors]
   const rec = h.data?.['recommended_next']
   const node = isRecord(rec) ? rec['node'] : undefined
-  if (opts.size && NODES.some((n) => n === node)) {
-    const allowed = recommendableNodes(opts.node, opts.size)
+  if (NODES.some((n) => n === node)) {
+    const allowed = recommendableNodes(opts.node)
     if (!allowed.some((n) => n === node)) {
       errors.push({
         file,
@@ -658,8 +644,6 @@ export function checkReplies(
 
 export interface TaskCheckInput {
   node: TaskNode
-  /** 승인된 intent의 크기. intake는 intent 초안의 크기를 쓴다 */
-  size?: Size
   /** task 디렉터리 바로 아래의 .md 파일. 이름 → 내용 */
   files: Readonly<Record<string, string>>
   config: Pick<AppConfig, 'handoff_body_warn_chars' | 'intent_warn_chars'>
@@ -679,8 +663,6 @@ export interface TaskCheck extends CheckSummary {
   handoffHeader: Handoff | null
   /** intake에서 intent 초안 머리글이 스키마를 통과했을 때의 값 */
   intentDraft: IntentDraft | null
-  /** review에서 review.md의 지적 유무(reviewFindings). 파일이 없거나 다른 노드면 null (D213) */
-  reviewFindings: boolean | null
 }
 
 /**
@@ -702,7 +684,6 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
       ? null
       : checkHandoff(handoffText, {
           node,
-          size: node === 'intake' ? draft?.value?.size : input.size,
           warnChars: config.handoff_body_warn_chars,
           formatVersion: version,
         })
@@ -729,7 +710,6 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
   errors.push(...(draft?.errors ?? []))
   const prText = node === 'verify' ? files[PR_FILE] : undefined
   if (prText !== undefined) errors.push(...checkPr(prText))
-  const reviewText = node === 'review' ? files[REVIEW_FILE] : undefined
   if (node === 'respond') {
     // 파일이 있으면 늘 검사하고, 없으면 마무리할 때(awaiting_approval) 필수다 (D30, D190)
     const replies = files[REPLIES_FILE]
@@ -746,7 +726,6 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
     handoff: handoff?.value ?? null,
     handoffHeader: handoff?.header ?? null,
     intentDraft: draft?.value ?? null,
-    reviewFindings: reviewText === undefined ? null : reviewFindings(reviewText),
   }
 }
 
