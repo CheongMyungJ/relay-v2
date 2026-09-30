@@ -241,8 +241,9 @@ const spec = {
     ['D37', '테스트 명령은 레포에서 찾기, 없으면 이 항목만 뺌', /Find the concrete test command in the repo[\s\S]*no tests/],
     ['5.3', '완료조건에 push/PR 없음', /Never include push or PR/],
     ['D42', 'size 근거는 handoff decisions', /rationale in handoff `decisions`/],
-    ['D63', 'S 기준 세 가지', /way to reproduce[\s\S]*one place[\s\S]*non-goals or constraints/],
+    ['D63', 'S 기준 세 가지(재현 방법은 사람의 답도 포함, D212)', /human's answers in this task, give a way to reproduce[\s\S]*one place[\s\S]*non-goals or constraints/],
     ['D150', 'L 기준 세 가지, 아니면 M', /propose `L` when any[\s\S]*`M` when none[\s\S]*no way to reproduce[\s\S]*intermittent[\s\S]*several modules/],
+    ['D212', '환경·시점·데이터에 달린 것만으로는 L이 아님. 명령으로 늘 재현되면 위 기준', /environment, timing or data is not `L` by that alone[\s\S]*command can set that condition and reproduce the bug every time/],
     ['D43', '완료조건 네 항목', /## Done when[\s\S]*required sections[\s\S]*verifiable[\s\S]*`size` is proposed[\s\S]*`open_questions`/],
   ],
   investigate: [

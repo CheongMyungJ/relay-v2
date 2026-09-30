@@ -51,6 +51,7 @@ function valid(handoff: Partial<Handoff> = {}, draftSize?: Size): TaskCheck {
     handoff: { ...HANDOFF, ...handoff },
     handoffHeader: { ...HANDOFF, ...handoff },
     intentDraft: draftSize ? { type: 'bugfix', size: draftSize } : null,
+    reviewFindings: null,
   }
 }
 
@@ -67,6 +68,7 @@ const MISSING: TaskCheck = {
   handoff: null,
   handoffHeader: null,
   intentDraft: null,
+  reviewFindings: null,
 }
 
 const ERROR: FormatIssue = {
@@ -87,7 +89,23 @@ function newWork(): WorkState {
   }).work
 }
 
-function apply(work: WorkState, event: MachineEvent, config: AppConfig = DEFAULT_CONFIG) {
+/**
+ * 시험의 기본 설정: 자동 승인을 모두 끈다. 사람이 승인하는 길을 기본으로 보고, 자동 승인은 켠 시험에서 본다.
+ * 앱의 기본값(수정과 지적 없는 리뷰는 켬, D213, D214)은 DEFAULT_CONFIG로 따로 본다
+ */
+const MANUAL: AppConfig = {
+  ...DEFAULT_CONFIG,
+  auto_approve: {
+    investigate: false,
+    evidence: false,
+    rca: false,
+    fix: false,
+    review: false,
+    respond: false,
+  },
+}
+
+function apply(work: WorkState, event: MachineEvent, config: AppConfig = MANUAL) {
   return transition(work, event, config)
 }
 
@@ -702,22 +720,44 @@ describe('승인과 다음 task (시나리오 4, 5)', () => {
     expect(r.work.tasks.map((t) => t.node)).toEqual(['intake', 'fix', 'review', 'verify'])
   })
 
-  it('review는 자동 승인을 모두 켜도 카운트다운하지 않고 사람의 승인을 기다린다 (D167)', () => {
-    const all: AppConfig = {
-      ...DEFAULT_CONFIG,
-      auto_approve: { investigate: true, evidence: true, rca: true, fix: true, respond: false },
-    }
+  it('review는 자동 승인이 켜져 있어도 지적이 있으면 카운트다운하지 않고 까닭을 적은 뒤 사람의 승인을 기다린다 (D213)', () => {
     let work = stepApprove(newWork(), valid({}, 'S')).work
     work = stepApprove(work, valid()).work
     expect(currentTask(work)?.node).toBe('review')
-    const r = stop(launch(work), valid(), {}, all)
+    for (const reviewFindings of [true, null]) {
+      const r = stop(launch(work), { ...valid(), reviewFindings }, {}, DEFAULT_CONFIG)
+      expect(currentTask(r.work)).toMatchObject({ node: 'review', status: 'awaiting_approval' })
+      expect(currentTask(r.work)?.countdown).toBeUndefined()
+      expect(currentTask(r.work)?.auto_hold?.reasons).toEqual(['review_findings'])
+      expect(types(r.effects)).toEqual(['log:task.awaiting_approval'])
+      // 사람이 승인하면 verify로 간다
+      const next = approve(r.work, valid())
+      expect(next.effects.at(-1)).toMatchObject({ type: 'startTask', node: 'verify' })
+    }
+  })
+
+  it('앱의 기본값에서 지적이 없는 review는 카운트다운 뒤 자동 승인할 수 있다 (D213)', () => {
+    let work = stepApprove(newWork(), valid({}, 'S')).work
+    work = stepApprove(work, valid()).work
+    const r = stop(launch(work), { ...valid(), reviewFindings: false }, {}, DEFAULT_CONFIG)
     expect(currentTask(r.work)).toMatchObject({ node: 'review', status: 'awaiting_approval' })
-    expect(currentTask(r.work)?.countdown).toBeUndefined()
+    expect(currentTask(r.work)?.countdown?.seconds).toBe(DEFAULT_CONFIG.auto_approve_countdown_sec)
     expect(currentTask(r.work)?.auto_hold).toBeUndefined()
-    expect(types(r.effects)).toEqual(['log:task.awaiting_approval'])
-    // 사람이 승인하면 verify로 간다
-    const next = approve(r.work, valid())
-    expect(next.effects.at(-1)).toMatchObject({ type: 'startTask', node: 'verify' })
+    // 자동 승인을 끈 Work는 지적이 없어도 사람이 승인한다 (D72)
+    const off = stop(
+      launch({ ...work, settings: { auto_approve: { review: false } } }),
+      { ...valid(), reviewFindings: false },
+      {},
+      DEFAULT_CONFIG,
+    )
+    expect(currentTask(off.work)?.countdown).toBeUndefined()
+  })
+
+  it('앱의 기본값에서 fix는 카운트다운 뒤 자동 승인할 수 있다 (D214)', () => {
+    const work = stepApprove(newWork(), valid({}, 'S')).work
+    expect(currentTask(work)?.node).toBe('fix')
+    const r = stop(launch(work), valid(), {}, DEFAULT_CONFIG)
+    expect(currentTask(r.work)?.countdown?.seconds).toBe(DEFAULT_CONFIG.auto_approve_countdown_sec)
   })
 
   it('의도 승인: 승인을 기록하고, 세션을 끝내고, 결정을 더하고, intent를 확정하고, 다음 task를 시작한다', () => {
@@ -2733,7 +2773,14 @@ describe('앱 소유 파일의 해시 (D91, D124)', () => {
 describe('자동 승인 (4.3, D127~D131)', () => {
   const AUTO: AppConfig = {
     ...DEFAULT_CONFIG,
-    auto_approve: { investigate: false, evidence: true, rca: true, fix: true, respond: false },
+    auto_approve: {
+      investigate: false,
+      evidence: true,
+      rca: true,
+      fix: true,
+      review: true,
+      respond: false,
+    },
     auto_approve_countdown_sec: 15,
   }
   /** L 경로의 의도 승인(사람) 뒤 evidence 세션을 띄운 Work */
@@ -2810,16 +2857,16 @@ describe('자동 승인 (4.3, D127~D131)', () => {
     expect(r.effects[4]).toMatchObject({ node: 'rca' })
   })
 
-  it('intake, review, verify는 자동 승인을 켜도 카운트다운하지 않는다 (4.2, D167)', () => {
+  it('intake와 verify는 자동 승인을 켜도 카운트다운하지 않는다. 리뷰는 지적이 있으면 하지 않는다 (4.2, D213)', () => {
     const intake = stop(launch(newWork()), valid({}, 'L'), {}, AUTO)
     expect(task(intake.work).countdown).toBeUndefined()
     expect(task(intake.work).auto_hold).toBeUndefined()
     let w = approve(intake.work, valid({}, 'S')).work
     w = approve(stop(launch(w), valid(), {}, AUTO).work, valid()).work
-    const review = stop(launch(w), valid(), {}, AUTO)
+    const review = stop(launch(w), { ...valid(), reviewFindings: true }, {}, AUTO)
     expect(task(review.work).node).toBe('review')
     expect(task(review.work).countdown).toBeUndefined()
-    expect(task(review.work).auto_hold).toBeUndefined()
+    expect(task(review.work).auto_hold?.reasons).toEqual(['review_findings'])
     w = approve(review.work, valid()).work
     const verify = stop(launch(w), valid(), {}, AUTO)
     expect(task(verify.work).node).toBe('verify')

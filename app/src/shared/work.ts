@@ -106,7 +106,8 @@ export interface Countdown {
 /**
  * 자동 승인이 켜진 단계에서 자동 승인하지 않은 까닭 (4.3, D128~D130, D75, D122).
  * 조건: open_questions, intent_deviation, recommended_next(기본 다음 단계가 아님), background(Stop 때 백그라운드 작업이나
- * 예약된 깨우기가 남음, D129), invalid(다시 읽은 handoff가 유효하지 않음).
+ * 예약된 깨우기가 남음, D129), invalid(다시 읽은 handoff가 유효하지 않음), review_findings(리뷰에 지적이 있거나
+ * 지적을 읽지 못함, D213).
  * 멈춤: cancel([취소]), interrupt([즉시 중단]), quit(앱 종료 확인), step([단계 선택], D145), session(세션 종료),
  * settings(자동 승인을 끔), restart(재시작 조정), operation(끊긴 작업), pr_closed(PR 대응인데 PR이 닫혀 승인을 받지 않음, D179)
  */
@@ -116,6 +117,7 @@ export type AutoHoldReason =
   | 'recommended_next'
   | 'background'
   | 'invalid'
+  | 'review_findings'
   | 'cancel'
   | 'interrupt'
   | 'quit'

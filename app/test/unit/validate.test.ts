@@ -8,6 +8,7 @@ import {
   checkTask,
   isValid,
   parseFrontMatter,
+  reviewFindings,
   sectionNames,
 } from '../../src/core/validate'
 import { DEFAULT_CONFIG } from '../../src/shared/config'
@@ -524,6 +525,34 @@ describe('task 검사 (5.2.1)', () => {
     const r = check('fix', { 'handoff.md': handoff() })
     expect(isValid(r)).toBe(false)
     expect(r.handoff?.status).toBe('awaiting_approval')
+  })
+})
+
+describe('리뷰 지적 읽기 (5.6.10, D213)', () => {
+  const review = (findings: string) =>
+    `## 지적\n${findings}\n\n## 반영\n없음\n\n## 반영하지 않은 지적\n없음\n`
+
+  it('번호 항목이 있으면 지적이 있고, "없음"이면 없다', () => {
+    expect(reviewFindings(review('1. [권장] src/a.js:2 — 주석을 단다'))).toBe(true)
+    expect(reviewFindings(review('1) [사소] src/a.js:3 — 이름을 바꾼다'))).toBe(true)
+    expect(reviewFindings(review('없음'))).toBe(false)
+    expect(reviewFindings(review('- 없음'))).toBe(false)
+    expect(reviewFindings(review('없음. 코드가 의도대로 동작한다'))).toBe(false)
+  })
+
+  it('절이 없거나 번호도 "없음"도 아니면 모른다(null). 모르면 자동 승인하지 않는다', () => {
+    expect(reviewFindings('## 반영\n없음\n')).toBeNull()
+    expect(reviewFindings(review('특별한 문제는 보이지 않는다'))).toBeNull()
+    expect(reviewFindings(review(''))).toBeNull()
+    // 코드 펜스 안의 제목은 절이 아니다
+    expect(reviewFindings('```\n## 지적\n없음\n```\n')).toBeNull()
+  })
+
+  it('task 검사는 review 노드에서만 review.md의 지적을 읽는다', () => {
+    expect(check('review', { 'review.md': review('없음') }).reviewFindings).toBe(false)
+    expect(check('review', { 'review.md': review('1. [차단] a — b') }).reviewFindings).toBe(true)
+    expect(check('review', {}).reviewFindings).toBeNull()
+    expect(check('fix', { 'review.md': review('없음') }).reviewFindings).toBeNull()
   })
 })
 

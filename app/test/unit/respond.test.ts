@@ -72,6 +72,7 @@ function valid(draftSize?: 'S'): TaskCheck {
     handoff: HANDOFF,
     handoffHeader: HANDOFF,
     intentDraft: draftSize ? { type: 'bugfix', size: draftSize } : null,
+    reviewFindings: null,
   }
 }
 

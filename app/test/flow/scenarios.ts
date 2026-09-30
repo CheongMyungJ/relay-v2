@@ -215,6 +215,19 @@ export const REVIEW = [
   '',
 ].join('\n')
 
+/** 지적이 없는 review.md (5.6.10). 지적이 없는 리뷰는 자동 승인할 수 있다 (D213) */
+export const REVIEW_NONE = [
+  '## 지적',
+  '없음',
+  '',
+  '## 반영',
+  '없음',
+  '',
+  '## 반영하지 않은 지적',
+  '없음',
+  '',
+].join('\n')
+
 /** 사람이 1번만 반영하라고 지시한 뒤의 review.md (D164) */
 export const REVIEW_APPLIED = [
   '## 지적',
@@ -346,6 +359,16 @@ export function steps(node: NodeName, size: Size = 'L'): Step[] {
         { do: 'stop' },
       ]
   }
+}
+
+/** 지적 없이 마무리하는 리뷰 (5.6.10, D213) */
+export function reviewClean(): Step[] {
+  return [
+    { do: 'prompt' },
+    { do: 'write', file: 'review.md', text: REVIEW_NONE },
+    { do: 'write', file: 'handoff.md', text: handoff({ summary: '지적이 없다.' }) },
+    { do: 'stop' },
+  ]
 }
 
 /**

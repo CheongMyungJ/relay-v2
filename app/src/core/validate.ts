@@ -19,6 +19,8 @@ export const PR_FILE = 'pr.md'
 /** PR 대응 task의 산출물 (5.6.11, D187) */
 export const RESPONSE_FILE = 'response.md'
 export const REPLIES_FILE = 'replies.md'
+/** 리뷰의 산출물 (5.6.10). 지적이 없으면 자동 승인할 수 있다 (D213) */
+export const REVIEW_FILE = 'review.md'
 
 /** 본문 필수 절 (5.2.1) */
 export const HANDOFF_SECTIONS = ['요약', '다음 task가 알아야 할 것'] as const
@@ -382,6 +384,18 @@ export function sectionText(body: string, name: string): string | null {
   return lines === null ? null : lines.join('\n').trim()
 }
 
+/**
+ * review.md의 `## 지적`에 지적이 있는가 (5.6.10, D213). 템플릿은 지적을 번호 목록으로 쓰고, 없으면 "없음"을 쓴다.
+ * 번호 항목이 하나라도 있으면 true, 번호 항목 없이 "없음"으로 시작하면 false, 절이 없거나 둘 다 아니면 null이다.
+ * 자동 승인은 false일 때만 한다: 읽지 못한 리뷰는 사람이 본다
+ */
+export function reviewFindings(text: string): boolean | null {
+  const section = sectionText(text, '지적')
+  if (section === null) return null
+  if (section.split('\n').some((l) => /^\s*\d+[.)]\s/.test(l))) return true
+  return /^(?:[-*]\s*)?없음/.test(section) ? false : null
+}
+
 function missingSections(
   file: string,
   body: string,
@@ -663,6 +677,8 @@ export interface TaskCheck extends CheckSummary {
   handoffHeader: Handoff | null
   /** intake에서 intent 초안 머리글이 스키마를 통과했을 때의 값 */
   intentDraft: IntentDraft | null
+  /** review에서 review.md의 지적 유무(reviewFindings). 파일이 없거나 다른 노드면 null (D213) */
+  reviewFindings: boolean | null
 }
 
 /**
@@ -711,6 +727,7 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
   errors.push(...(draft?.errors ?? []))
   const prText = node === 'verify' ? files[PR_FILE] : undefined
   if (prText !== undefined) errors.push(...checkPr(prText))
+  const reviewText = node === 'review' ? files[REVIEW_FILE] : undefined
   if (node === 'respond') {
     // 파일이 있으면 늘 검사하고, 없으면 마무리할 때(awaiting_approval) 필수다 (D30, D190)
     const replies = files[REPLIES_FILE]
@@ -727,6 +744,7 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
     handoff: handoff?.value ?? null,
     handoffHeader: handoff?.header ?? null,
     intentDraft: draft?.value ?? null,
+    reviewFindings: reviewText === undefined ? null : reviewFindings(reviewText),
   }
 }
 

@@ -19,10 +19,10 @@ export type SkillName =
 export type QuestionMode = 'draft_first' | 'confirm_each'
 
 /**
- * 자동 승인을 켤 수 있는 노드. intake(의도 승인), review(D167), verify(Work 완료)는 항상 수동이다 (4.2).
- * respond는 PR 대응 task다 (D169)
+ * 자동 승인을 켤 수 있는 노드. intake(의도 승인)와 verify(Work 완료)는 항상 수동이다 (4.2). review는 지적이 없을 때만
+ * 자동 승인한다 (D213). respond는 PR 대응 task다 (D169)
  */
-export type AutoApproveNode = 'investigate' | 'evidence' | 'rca' | 'fix' | 'respond'
+export type AutoApproveNode = 'investigate' | 'evidence' | 'rca' | 'fix' | 'review' | 'respond'
 
 export interface AppConfig {
   schema_version: 1
@@ -87,13 +87,14 @@ export const SKILL_TITLES: readonly (readonly [SkillName, string])[] = [
 
 /**
  * 자동 승인을 켤 수 있는 노드와 그 화면 이름 (4.2, D109). 설정 화면과 Work 설정의 자동 승인 목록에 쓴다.
- * 리뷰는 늘 수동이라 없다 (D167). core/pipeline의 NODE_INFO와 같은지 [단위]가 확인한다.
+ * 리뷰는 지적이 없을 때만 자동 승인한다 (D213). core/pipeline의 NODE_INFO와 같은지 [단위]가 확인한다.
  */
 export const AUTO_APPROVE_TITLES: readonly (readonly [AutoApproveNode, string])[] = [
   ['investigate', '재현과 원인 분석'],
   ['evidence', '재현과 관찰'],
   ['rca', '원인 분석'],
   ['fix', '수정'],
+  ['review', '리뷰'],
   ['respond', 'PR 대응'],
 ]
 
@@ -103,11 +104,21 @@ export const QUESTION_MODE_LABEL: Readonly<Record<QuestionMode, string>> = {
   confirm_each: '결정마다 확인',
 }
 
-/** 앱 설정의 기본값 (5.1.1) */
+/**
+ * 앱 설정의 기본값 (5.1.1). 자동 승인은 수정(D214)과 지적이 없는 리뷰(D213)만 켠다. 결과는 뒤 단계의 승인 화면과
+ * Work 완료 화면에서 사람이 본다 (D7)
+ */
 export const DEFAULT_CONFIG: AppConfig = {
   schema_version: 1,
   session_limit: 3,
-  auto_approve: { investigate: false, evidence: false, rca: false, fix: false, respond: false },
+  auto_approve: {
+    investigate: false,
+    evidence: false,
+    rca: false,
+    fix: true,
+    review: true,
+    respond: false,
+  },
   auto_approve_countdown_sec: 15,
   question_mode: {
     'work-start': 'draft_first',

@@ -18,8 +18,9 @@
 // 사람이 [승인]한다.
 // M11: 같은 설정 화면에 PR 대응의 자동 승인과 "자동 대응 (PR 진행)" 절(대응 자동 시작, 자동 대응 라운드 상한)이 있고
 // 기본은 꺼짐, 3이다.
-// M8: 설정 화면에 리뷰의 질문 방식은 있고 자동 승인은 없다 → 두 번째 Work는 수정 뒤 리뷰를 지난다. 리뷰는 카운트다운
-// 없이 승인 대기가 되고 [산출물]에 review.md가 보이며, 사람이 [승인]하면 최종 검증으로 간다.
+// M8, M12: 설정 화면에 리뷰의 질문 방식과 자동 승인(기본 켬)이 있다 → 두 번째 Work는 수정 뒤 리뷰를 지난다. 리뷰에
+// 지적이 있어 카운트다운 없이 까닭("리뷰에 지적이 있음")과 함께 승인 대기가 되고 [산출물]에 review.md가 보이며, 사람이
+// [승인]하면 최종 검증으로 간다.
 // M6: 앱 종료 확인을 거쳐 앱을 끄고, 첫 Work의 work.json에 끊긴 되감기 기록을 넣고 decisions.md를 고친 뒤 다시
 // 켠다 → 첫 Work의 배지가 "끊긴 작업"이고, 패널 맨 위에 끊긴 곳과 [다시 시도]·[무시], 바뀐 파일과 [확인]이
 // 보인다. 끊긴 동안 [단계 선택]은 없다 → [확인]하면 파일 알림이 닫히고, [다시 시도]하면 앞 task를 폐기하고
@@ -184,15 +185,16 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await expect(badge).toHaveText('대기')
   await win.screenshot({ path: 'test-results/resumed.png' })
 
-  // 설정 화면 (D70): 세션 상한과 수정 단계의 자동 승인, 카운트다운을 바꾸면 config.json에 쓴다 (4.2)
+  // 설정 화면 (D70): 세션 상한과 카운트다운을 바꾸면 config.json에 쓴다. 자동 승인은 기본으로 수정과 리뷰가 켜져
+  // 있다 (4.2, D213, D214)
   await win.locator('.sidebar').getByRole('button', { name: '설정', exact: true }).click()
   await win.getByLabel('세션 상한').fill('2')
-  await expect(win.getByLabel('수정 자동 승인')).not.toBeChecked()
-  await win.getByLabel('수정 자동 승인').check()
+  await expect(win.getByLabel('수정 자동 승인')).toBeChecked()
+  await expect(win.getByLabel('원인 분석 자동 승인', { exact: true })).not.toBeChecked()
   await win.getByLabel('자동 승인 카운트다운(초)').fill('600')
-  // 리뷰는 질문 방식만 고르고 자동 승인은 켤 수 없다 (5.1.1, D167)
+  // 리뷰는 질문 방식과 자동 승인을 고른다. 자동 승인은 지적이 없을 때만 한다 (5.1.1, D213)
   await expect(win.getByLabel('리뷰 질문 방식')).toHaveValue('draft_first')
-  await expect(win.getByLabel('리뷰 자동 승인')).toHaveCount(0)
+  await expect(win.getByLabel('리뷰 자동 승인')).toBeChecked()
   // 자동 대응 (M11, D154, D169, D171): 기본은 꺼짐과 상한 3이다
   await expect(win.getByLabel('PR 대응 자동 승인')).not.toBeChecked()
   await expect(win.getByLabel('대응 자동 시작')).not.toBeChecked()
@@ -211,6 +213,7 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
     evidence: false,
     rca: false,
     fix: true,
+    review: true,
     respond: false,
   })
   expect(config().auto_approve_countdown_sec).toBe(600)
@@ -290,12 +293,16 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await win.screenshot({ path: 'test-results/countdown-cancelled.png' })
   await approveFix.click()
 
-  // 리뷰 (M8): 수정 다음은 모든 크기가 리뷰다. 리뷰는 늘 수동이라 자동 승인이 켜진 앱에서도 카운트다운 없이
-  // [승인]을 기다린다. 지적은 [산출물]의 review.md에 있다 (D163, D167)
+  // 리뷰 (M8): 수정 다음은 모든 크기가 리뷰다. 리뷰의 자동 승인이 켜져 있어도 지적이 있으면 카운트다운 없이 까닭을
+  // 보이고 [승인]을 기다린다. 지적은 [산출물]의 review.md에 있다 (D163, D213)
   await expect(win.locator('.band')).toContainText('03 리뷰', { timeout: 60_000 })
   const approveReview = win.getByRole('button', { name: '승인', exact: true })
   await expect(approveReview).toBeEnabled({ timeout: 60_000 })
   await expect(countdown).toBeHidden()
+  await expect(win.locator('.notice.auto-hold')).toContainText(
+    '자동 승인하지 않음: 리뷰에 지적이 있음',
+    { timeout: 30_000 },
+  )
   await win.getByRole('tab', { name: '산출물', exact: true }).click()
   await expect(win.locator('.review-body')).toContainText('review.md')
   await win.screenshot({ path: 'test-results/review.png' })

@@ -381,9 +381,12 @@ describe('[흐름] 최소 흐름 (M2)', () => {
     const reviewCtx = read(path.join(task('04-review'), 'context.md'))
     expect(reviewCtx).toContain('- skill: review')
     expect(reviewCtx).toContain(
-      '리뷰를 썼습니다. 반영할 지적은 번호로 여기에 말해 주세요. 반영할 것이 없거나 반영을 마쳤으면 오른쪽 패널에서 확인하고 [승인]을 누르세요.',
+      '리뷰를 썼습니다. 반영할 지적은 번호로 여기에 말해 주세요. 반영할 것이 없거나 반영을 마쳤으면 오른쪽 패널에서 확인하고 [승인]을 누르세요. 지적이 없고 자동 승인이 켜져 있으면 카운트다운 뒤 승인되고, 멈추려면 [취소]를 누르세요.',
     )
-    expect(reviewCtx).toContain('수동 승인 (의도 승인, 리뷰, Work 완료는 늘 수동)')
+    // 시험의 설정은 자동 승인을 모두 끈다. 리뷰는 지적이 없을 때만 자동 승인한다고 적는다 (D213)
+    expect(reviewCtx).toContain(
+      '수동 승인 (task를 시작할 때의 설정. 설정은 바로 적용되고, 자동 승인 여부는 턴이 끝날 때의 설정으로 정한다. 리뷰는 지적이 없을 때만 자동 승인한다)',
+    )
     expect(reviewCtx).toContain(
       '- 이전 단계: intake (의도 정리), investigate (재현과 원인 분석), fix (수정)',
     )

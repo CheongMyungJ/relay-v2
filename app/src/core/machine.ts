@@ -11,7 +11,7 @@
 // 돌고, 끝나면 autoApprove를 넣는다. 단계 선택의 계산은 core/rewind, 전달의 판정은 core/delivery, 정리의 판정은
 // core/cleanup, 끊긴 작업의 알림과 재개 판정은 core/recovery, 자동 승인의 조건은 core/approval이 한다.
 import type { AppConfig, WorkSettingsPatch } from '../shared/config'
-import type { Decision, Handoff, NodeName, Size, TaskNode } from '../shared/contracts'
+import type { Decision, NodeName, Size, TaskNode } from '../shared/contracts'
 import type { StepExpect, WorkActions } from '../shared/views'
 import type {
   ApprovalBy,
@@ -40,7 +40,13 @@ import type {
   UncommittedAction,
   WorkState,
 } from '../shared/work'
-import { REVIEWABLE, approvalGate, approvalMode, autoApproveHolds } from './approval'
+import {
+  REVIEWABLE,
+  approvalGate,
+  approvalMode,
+  autoApproveHolds,
+  type AutoApproveInput,
+} from './approval'
 import { canClean } from './cleanup'
 import { mergeWorkSettings } from './config'
 import { commitMessage, deliveryStart, stashMessage, stoppedVerify } from './delivery'
@@ -139,8 +145,11 @@ export interface Stopped extends HookSignal {
   stopHookActive: boolean
   /** 이번 턴에 handoff.md(intake는 intent 초안도)가 바뀌었는가. main이 턴 시작 때와 비교해 정한다 */
   handoffChanged: boolean
-  /** Stop을 받고 main이 다시 한 형식 검사 (I15). 자동 승인 조건은 머리글(handoffHeader)에서 읽는다 (4.3) */
-  check: CheckSummary & { handoffHeader?: Handoff | null }
+  /**
+   * Stop을 받고 main이 다시 한 형식 검사 (I15). 자동 승인 조건은 머리글(handoffHeader)과 리뷰의 지적(reviewFindings)에서
+   * 읽는다 (4.3, D213)
+   */
+  check: AutoApproveInput['check']
   /**
    * 본문의 background_tasks나 session_crons가 비어 있지 않다: 세션이 백그라운드 작업이나 예약된 깨우기를 기다리며
    * 쉬는 중이다 (core/approval pendingBackground, D129). 없으면 false다
@@ -174,7 +183,7 @@ export type SessionEnded = SessionEndHook | PtyExited
  */
 export interface CheckUpdated extends TaskEvent {
   type: 'check.updated'
-  check: CheckSummary & { handoffHeader?: Handoff | null }
+  check: AutoApproveInput['check']
 }
 
 /**
@@ -897,7 +906,7 @@ function closedHold(work: WorkState, task: TaskRecord): AutoHoldReason[] {
 function holdsNow(
   work: WorkState,
   task: TaskRecord,
-  check: CheckSummary & { handoffHeader?: Handoff | null },
+  check: AutoApproveInput['check'],
   background: boolean,
 ): AutoHoldReason[] {
   return autoApproveHolds({ node: task.node, size: work.intent?.size ?? 'M', check, background })
