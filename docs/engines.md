@@ -1,6 +1,6 @@
 # Claude Code / Codex 선택 실행 설계
 
-- 상태: 진행 중. Q1/Q2/Q3/Q4 확정. 두 엔진의 실행 경계, Codex 브리지와 앱 질문창을 연결했다. Codex는 수동 승인하고 Claude의 기존 자동 승인은 유지한다. 실제 모델·네이티브 훅 전달 및 Windows 설치본 검증은 남아 있다.
+- 상태: 진행 중. Q1/Q2/Q3/Q4 확정. 두 엔진의 실행 경계, Codex 브리지와 앱 질문창을 연결했다. Codex는 수동 승인하고 Claude의 기존 자동 승인은 유지한다. Windows 설치본의 두 엔진 스모크와 실제 Codex CLI의 relay MCP 연결은 통과했다. 실제 모델·네이티브 훅 전달은 인증 갱신 문제로 남아 있다.
 - 작업 브랜치: `feat/claude-codex-engines`
 - 출발점: `main`의 `9c02b42` (평가 도구 추가, #18).
 - 작성일: 2026-09-30.
@@ -60,7 +60,7 @@ Claude 사용자는 기존 기록과 작업 흐름을 계속 쓸 수 있어야 �
 
 ## 3. 확인한 사실과 검증해야 할 점
 
-Codex 근거는 2026-09-30의 공식 문서와 환경에 설치된 `codex-cli 0.159.0-alpha.3`의 도움말, 기능 목록, 생성한 TypeScript 프로토콜 스키마다. 공개 저장소 main과 설치 버전은 다를 수 있다. alpha 버전을 배포 최소 버전으로 정한 것은 아니다. 실제 모델 작업과 Windows 실기는 아직 하지 않았다.
+Codex 근거는 2026-09-30의 공식 문서와 환경에 설치된 `codex-cli 0.159.0-alpha.3`의 도움말, 기능 목록, 생성한 TypeScript 프로토콜 스키마다. 공개 저장소 main과 설치 버전은 다를 수 있다. alpha 버전을 배포 최소 버전으로 정한 것은 아니다. 실제 모델 작업은 인증 갱신 실패로 미검증이며 Windows 설치본 시험은 아래 진행 기록에 별도 기록했다.
 
 | 항목 | 확인한 사실 | 아직 확인할 것 |
 |---|---|---|
@@ -187,7 +187,7 @@ Q1/Q2 답을 반영하고 아래 C 시험을 수행한다. 모델 작업을 호�
 | C6 | 스킬·압축·메모리 | 레포 밖 지시를 읽음, 다른 단계 자동 호출 없음, 압축/재개 후 규칙 유지, 전역 메모리 격리 |
 | C7 | 보호 정책 | push/PR·앱 소유 파일·이전 task 보호의 실제 범위를 기록하고 기존 보장과 비교 |
 | C8 | 중단·재개·충돌 | 실제 ID로 재개, PID/시작 시각으로 고아 처리, 앞 세션 이벤트 무시, 새 task는 새 대화 |
-| C9 | 자동 승인 | 모든 pending 작업을 없다고 확인할 수 있는 근거. unknown에서는 카운트다운/승인 없음 |
+| C9 | 승인 정책 | Q4에 따라 Codex는 설정과 pending 주장에 관계없이 수동. Claude의 기존 자동 승인 보존 |
 
 시험 결과에는 날짜, relay 커밋, CLI 버전, OS, 실행 방식, 성공·실패·미검증을 기록한다. CLI 도움말과 가짜 CLI의 통과만으로 실제 연동을 통과 처리하지 않는다.
 
@@ -224,13 +224,19 @@ Q4의 Codex 수동 승인 정책을 적용하고 Claude 자동 승인/PR 대응�
 - 2026-09-30: 최신 main에서 전용 브랜치를 생성하고 Q1/Q2를 질문함. 사용자 답변 "둘다 추천대로"로 두 안을 확정.
 - 2026-09-30: 엔진 선택·기록·Claude 경계 체크포인트 `23e64cc`. 타입 검사, lint, 빌드, 전체 시험 790개 통과·3개 건너뜀.
 - 2026-09-30: 사용자 답변 "질문방식 추천대로"로 Q3 확정. Codex 실행·훅·질문·지시 전달을 연결함. 당시 Q4는 답 대기였으며, 후속 답변으로 수동 승인 정책을 확정함.
-- 2026-09-30, Linux: 타입 검사, lint, format, 빌드 통과. 최종 전체 시험 48개 파일, 811개 통과·3개 건너뜀. Windows 명령줄 길이 수정 후 Codex adapter/flow 12개도 통과. 모델 호출 없이 S intake → fix → review → verify 완료, 수동 승인 대기, verify 엔진으로 정리 질문, Codex → Claude 전환, 질문 취소·중단·재개·ID 전환을 검사함.
+- 2026-09-30, Linux: 타입 검사, lint, format, 빌드 통과. 이전 체크포인트 전체 시험 48개 파일, 811개 통과·3개 건너뜀. Windows 명령줄 길이 수정 후 Codex adapter/flow 12개도 통과. 모델 호출 없이 S intake → fix → review → verify 완료, 수동 승인 대기, verify 엔진으로 정리 질문, Codex → Claude 전환, 질문 취소·중단·재개·ID 전환을 검사함.
 - 2026-09-30, Linux, `codex-cli 0.159.0-alpha.3`: 기능·인증 상태와 전체 override 설정 파싱은 확인. 실제 PTY는 폴더 신뢰 화면까지 실행했고 자동 수락 없이 종료함. 프롬프트를 제출하지 않아 모델 실행, 실제 훅 전달·MCP 준비·세션 ID는 미검증.
 - 2026-09-30, Linux: 실제 Electron Node 모드의 MCP initialize 및 지연 command 훅의 한글 JSON 응답 통과. 처음에는 DISPLAY 없어 GUI를 건너뛰었으나, 이후 권한 변경 없이 임시 Xvfb를 실행해 개발 빌드 질문창 스모크를 통과함. 추천 선택지 수동 선택, 숨김·재열기, 한글 답변, Codex → Claude 전환 포함. 기존 Claude GUI 스모크도 승인·중단·재개·단계 선택·자동 승인 취소·push·정리·재시작 복구까지 통과함.
 - 2026-09-30, Windows Server 2025, Electron 44.4.5, 가짜 Codex: CI [`fce1bb4`](https://github.com/CheongMyungJ/relay-v2/actions/runs/36689196210)의 Linux·Windows·Windows PR 작업 모두 통과. Windows 어댑터·전체 흐름·Codex 7개 흐름·개발 빌드 질문창 스모크 포함. `.cmd` 길이 제한, 경로 인용, Electron GUI 실행 파일을 기다리지 않아 훅이 늦게 도착하는 문제를 각각 수정하고 검증함. 브리지는 실제 Electron/PowerShell/HTTP/MCP를 거친다. CLI 이벤트와 모델 동작은 가짜이며 실제 Codex·Windows 설치본 검증을 대체하지 않는다.
 
-다음은 Windows 실제 설치본 확인과 신뢰 확인 후 최소 모델 task로 C3~C8을 검증하는 것이다. Claude 평가 도구의 agent·사람 역할·판정자는 기존 경로를 유지한다.
-
 - 2026-09-30: 사용자 답변 "응"으로 Q4 확정. 엔진별 실제 승인 판정과 설정/승인/작업 지시/PR 패널 안내를 통일함. 기본 엔진 변경과 Work별 자동 승인 설정이 Codex 수동 승인을 해제하지 않고, 기존 Claude task에는 자동 승인 설정을 유지하도록 회귀 검증을 추가함.
 
 - 2026-09-30, 실제 Codex 0.159.0-alpha.3: 앱 런타임으로 임시 Git 레포를 실행하고 테스트 조작자가 폴더/훅 신뢰를 검토함. `PostCompact`의 additionalContextLimit 미지원 경고를 확인해 해당 훅을 제거하고, 지시는 문서상 지원되는 `SessionStart`의 compact source로 전달하도록 수정함. 모델 호출은 access token refresh 실패로 막혔으며 로그인 상태 검사만으로 모델 사용 가능성을 확정하지 않음.
+
+- 2026-09-30, Linux, Q4 반영: 타입 검사·lint·format·빌드 통과. 전체 시험 48개 파일 816개 통과·3개 건너뜀. 압축 훅 수정 후 Codex 어댑터/흐름 13개(8개 흐름 포함)와 질문창 GUI 스모크를 추가로 통과함.
+- 2026-09-30, 실제 Codex 0.159.0-alpha.3, 수정된 설정: 모델 호출 없이 CLI를 띄워 `/mcp`의 **relay: connected (1 tool)**을 확인함. `/hooks`에서 활성 훅을 확인하고 PostCompact 미지원 경고가 사라짐을 확인함. 이 실행에서는 실제 lifecycle 이벤트·세션 ID를 받지 않았으며 이 항목을 통과 처리하지 않음. 별도 환경의 codex_apps MCP는 HTTP 451로 실패했지만 relay MCP는 연결됨.
+- 2026-09-30, Windows Server 2025, Electron 44.4.5, [`c8882af` 설치 검증](https://github.com/CheongMyungJ/relay-v2/actions/runs/36693696376): NSIS 설치 파일 빌드와 사용자별 설치, 설치된 node-pty의 asar 외부 파일 확인, 설치된 relay.exe의 **Claude·Codex 스모크 2개 통과**(40.2초). Codex 엔진 선택·앱 질문·한글 답변·Claude 다음 task·수동 승인 안내, 기존 Claude 승인·중단·재개·되감기·자동 승인 취소·push·정리·재시작 복구 포함. 모델은 가짜 CLI로 대체하며 실제 Electron/PowerShell/command/HTTP/MCP를 사용함. 임시 engine-install-check 워크플로는 이 브랜치에서만 실행했고 검증 후 제거하여 기존 app-build의 수동 실행 정책을 유지함.
+
+- 2026-09-30, 최종 코드 [`c8882af` CI](https://github.com/CheongMyungJ/relay-v2/actions/runs/36693696063): Linux·Windows·Windows PR 작업 모두 통과. Q4 정책, 압축 지시 재주입, Windows 어댑터·8개 Codex 흐름·개발 빌드 질문창·기존 전체 흐름 회귀를 확인함. 이후 커밋은 사용 안내·검증 기록과 임시 설치 검증 워크플로 제거만 포함하며 런타임 코드는 동일함.
+
+다음은 정상 인증 환경에서 최소 모델 task로 C3~C8을 검증하는 것이다. 현재 환경은 Codex access token refresh가 실패하므로 인증 상태 검사 성공만으로 실제 모델 사용 가능성을 확정하지 않는다. Claude 평가 도구의 agent·사람 역할·판정자는 기존 경로를 유지한다.
