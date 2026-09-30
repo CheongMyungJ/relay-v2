@@ -3,6 +3,7 @@
 // 커밋 안 된 변경의 선택지(7-5), Work 정리(시나리오 8, D178),
 // 확인 창([오류 무시하고 승인] 4.1, [Work 포기] 3.3, [머지 없이 끝내기] D179).
 import { useEffect, useState, type ReactNode } from 'react'
+import { AGENT_ENGINES, AGENT_LABELS, type AgentEngine } from '../../shared/agent'
 import {
   AUTO_APPROVE_TITLES,
   QUESTION_MODE_LABEL,
@@ -563,6 +564,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     setError(null)
     const r = await call(() =>
       window.relay.updateConfig({
+        agent_engine: value.agent_engine,
         session_limit: value.session_limit,
         auto_approve: value.auto_approve,
         auto_approve_countdown_sec: value.auto_approve_countdown_sec,
@@ -587,9 +589,26 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
       {value ? (
         <>
           <div className="dim">
-            바꾸면 바로 적용합니다. 질문 방식은 다음에 시작하는 task부터 씁니다.
+            기본 엔진은 새로 만드는 task부터 적용합니다. 기존 task를 재개하면 원래 엔진을
+            사용합니다. 질문 방식은 다음에 시작하는 task부터 씁니다.
           </div>
           <div className="form-grid">
+            <label className="form-row">
+              <span>기본 엔진</span>
+              <select
+                aria-label="기본 엔진"
+                value={value.agent_engine}
+                onChange={(e) =>
+                  setDraft({ ...value, agent_engine: e.target.value as AgentEngine })
+                }
+              >
+                {AGENT_ENGINES.map((engine) => (
+                  <option key={engine} value={engine}>
+                    {AGENT_LABELS[engine]}
+                  </option>
+                ))}
+              </select>
+            </label>
             {NUMBERS.map(([key, label, hint]) => (
               <label key={key} className="form-row" title={hint}>
                 <span>{label}</span>

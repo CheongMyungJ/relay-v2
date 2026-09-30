@@ -11,6 +11,8 @@
 // 돌고, 끝나면 autoApprove를 넣는다. 단계 선택의 계산은 core/rewind, 전달의 판정은 core/delivery, 정리의 판정은
 // core/cleanup, 끊긴 작업의 알림과 재개 판정은 core/recovery, 자동 승인의 조건은 core/approval이 한다.
 import type { AppConfig, WorkSettingsPatch } from '../shared/config'
+import type { AgentEngine } from '../shared/agent'
+import { taskEngine } from './agent'
 import type { Decision, Handoff, NodeName, Size, TaskNode } from '../shared/contracts'
 import type { StepExpect, WorkActions } from '../shared/views'
 import type {
@@ -79,7 +81,9 @@ export interface SessionStarted extends TaskEvent {
   processStartedAt?: string
   startCommit: string
   skillHash: string
-  claudeVersion: string
+  engineVersion?: string
+  /** 이전 호출자와의 호환. 새 실행 경로는 engineVersion을 쓴다. */
+  claudeVersion?: string
 }
 
 /**
@@ -90,7 +94,8 @@ export interface SessionResumed extends TaskEvent {
   type: 'session.resumed'
   pid: number
   processStartedAt?: string
-  claudeVersion: string
+  engineVersion?: string
+  claudeVersion?: string
   check: CheckSummary
 }
 
@@ -1011,6 +1016,8 @@ function endTask(
 // ---------- Work 만들기 ----------
 
 export interface NewWork {
+  /** 첫 task 생성 시 고정한다. 기존 호출자는 Claude를 사용한다. */
+  engine?: AgentEngine
   workId: string
   /** 기준 브랜치와, Work를 만들 때 분기한 기준 커밋 (시나리오 1, D97) */
   baseBranch: string
@@ -1037,7 +1044,7 @@ export function createWork(input: NewWork): Transition {
     file_hashes: hashes,
     tasks: [],
   }
-  const intake = newTask(empty, 'intake', input.at)
+  const intake = { ...newTask(empty, 'intake', input.at), engine: input.engine ?? 'claude' }
   const work = { ...empty, tasks: [intake] }
   return {
     work,
@@ -1088,7 +1095,16 @@ const BLOCKED_BY_OPERATION: readonly MachineEvent['type'][] = [
 ]
 
 export function transition(work: WorkState, event: MachineEvent, config: AppConfig): Transition {
-  return countdownEffects(work, dispatch(work, event, config))
+  const result = countdownEffects(work, dispatch(work, event, config))
+  if (result.work.tasks === work.tasks) return result
+  const previousIds = new Set(work.tasks.map((t) => t.id))
+  let created = false
+  const tasks = result.work.tasks.map((t) => {
+    if (previousIds.has(t.id)) return t
+    created = true
+    return { ...t, engine: config.agent_engine }
+  })
+  return created ? { ...result, work: { ...result.work, tasks } } : result
 }
 
 function dispatch(work: WorkState, event: MachineEvent, config: AppConfig): Transition {
@@ -1260,7 +1276,7 @@ function sessionStarted(work: WorkState, task: TaskRecord, e: SessionStarted): T
     status: 'working',
     start_commit: e.startCommit,
     skill_hash: e.skillHash,
-    claude_version: e.claudeVersion,
+    ...versionRecord(task, e),
     session: {
       id: e.sessionId,
       pid: e.pid,
@@ -1292,6 +1308,7 @@ function sessionResumed(work: WorkState, task: TaskRecord, e: SessionResumed): T
     ...omit(unqueued(task), 'error'),
     status,
     check,
+    ...versionRecord(task, e),
     session: {
       ...session,
       pid: e.pid,
@@ -1305,7 +1322,14 @@ function sessionResumed(work: WorkState, task: TaskRecord, e: SessionResumed): T
       work,
       e.at,
       'task.resumed',
-      { session_id: task.session.id, claude_version: e.claudeVersion },
+      {
+        session_id: task.session.id,
+        engine: taskEngine(task),
+        engine_version: e.engineVersion ?? e.claudeVersion,
+        ...(taskEngine(task) === 'claude'
+          ? { claude_version: e.engineVersion ?? e.claudeVersion }
+          : {}),
+      },
       task,
     ),
   ]
@@ -1313,6 +1337,16 @@ function sessionResumed(work: WorkState, task: TaskRecord, e: SessionResumed): T
     effects.push(log(work, e.at, 'task.awaiting_approval', {}, task))
   }
   return { work: withTask(work, resumed), effects }
+}
+
+/** Claude의 이전 버전 필드는 유지하면서 엔진 공통 버전을 기록한다. */
+function versionRecord(task: TaskRecord, e: SessionStarted | SessionResumed): Partial<TaskRecord> {
+  const version = e.engineVersion ?? e.claudeVersion
+  if (version === undefined) return {}
+  return {
+    engine_version: version,
+    ...(taskEngine(task) === 'claude' ? { claude_version: version } : {}),
+  }
 }
 
 function sessionFailed(work: WorkState, task: TaskRecord, e: SessionFailed): Transition {

@@ -14,7 +14,8 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { claudeVersion, deploySkill, findClaude } from '../adapters/claude'
+import { agentRuntime } from '../adapters/agent'
+import { agentLabel, taskEngine, taskEngineVersion } from '../core/agent'
 import {
   GhApiError,
   ghApiPost,
@@ -210,7 +211,7 @@ import {
   wantsAutoStart,
 } from '../core/respond'
 import { backupPattern, nextBackupBranch, planStep, stepChoices, stepPreview } from '../core/rewind'
-import { cleanupArgs, launchArgs, launchEnv, resumeArgs, taskSettings } from '../core/settings'
+import { launchEnv, taskSettings } from '../core/settings'
 import {
   HANDOFF_FILE,
   INTENT_DRAFT_FILE,
@@ -270,7 +271,6 @@ import type {
 import type { SessionPool } from './pool'
 import type { UiPort } from './ports'
 import { listPrComments, readPr, receivedCommits, fetchTip, type PrFetched } from './pr'
-import { CLAUDE_INSTALL_GUIDE } from './projects'
 import { TerminalBuffer } from './terminals'
 
 /** 여러 Work가 함께 쓰는 것 */
@@ -316,6 +316,8 @@ interface LiveSession {
  * 시작 시각을 work.json에 두어 앱이 충돌한 뒤 살아남으면 재시작 때 끝낸다 (D126).
  */
 interface CleanupSession {
+  /** 대기열에서도 정리를 요청한 verify task의 엔진을 유지한다. */
+  engine: TaskRecord['engine']
   /** 터미널 id: cleanup-<n>. 다시 열면 새 터미널이다 */
   id: string
   choice: DeliveryChoice
@@ -716,15 +718,16 @@ export class WorkRunner {
       const dir = this.files.taskDir(task)
       await fsp.mkdir(dir, { recursive: true })
       const startCommit = await headCommit(this.worktree, { env })
-      const bin = findClaude({ env })
-      if (!bin) throw new Error(CLAUDE_INSTALL_GUIDE)
+      const driver = agentRuntime(taskEngine(task))
+      const bin = driver.find(env)
+      if (!bin) throw new Error(driver.installGuide)
       const skill = NODE_INFO[task.node].skill
-      const deployed = await deploySkill({
+      const deployed = await driver.deploySkill({
         source: this.ctx.skills,
         workDir: this.files.dir,
         skill,
       })
-      const version = await claudeVersion(bin, env)
+      const version = await driver.version(bin, env)
 
       // verify의 마무리 안내 문구(D104)와 Work 완료 화면의 전달 버튼이 쓸 점검을 새로 한다 (D118)
       if (task.node === 'verify') await this.recheckProject()
@@ -734,7 +737,7 @@ export class WorkRunner {
 
       const sessionId = randomUUID()
       const token = randomBytes(32).toString('hex')
-      const args = launchArgs({
+      const args = driver.launchArgs({
         sessionId,
         workDir: this.files.dir,
         settingsPath,
@@ -752,7 +755,7 @@ export class WorkRunner {
         ...(processStartedAt ? { processStartedAt } : {}),
         startCommit,
         skillHash: deployed.hash,
-        claudeVersion: version,
+        engineVersion: version,
       })
       return true
     } catch (err) {
@@ -770,15 +773,16 @@ export class WorkRunner {
     const sessionId = task.session?.id
     try {
       if (!sessionId) throw new Error('다시 열 세션이 없음')
-      const bin = findClaude({ env })
-      if (!bin) throw new Error(CLAUDE_INSTALL_GUIDE)
-      const version = await claudeVersion(bin, env)
+      const driver = agentRuntime(taskEngine(task))
+      const bin = driver.find(env)
+      if (!bin) throw new Error(driver.installGuide)
+      const version = await driver.version(bin, env)
       const settingsPath = await this.writeSettings(task)
       const files = await this.files.taskFiles(task)
       // 이전 화면을 먼저 보인다. 이 앱에서 돌던 task면 버퍼가 남아 있고, 아니면 pty.log에서 읽는다
       await this.terminalBuffer(task)
       const token = randomBytes(32).toString('hex')
-      const args = resumeArgs({ sessionId, workDir: this.files.dir, settingsPath })
+      const args = driver.resumeArgs({ sessionId, workDir: this.files.dir, settingsPath })
       const session = this.launch(task, bin, token, args, turnSnapshot(task, files), RESUME_MARK)
       const processStartedAt = await processStartTime(session.pty.pid)
       await this.feed({
@@ -787,7 +791,7 @@ export class WorkRunner {
         at: this.ctx.at(),
         pid: session.pty.pid,
         ...(processStartedAt ? { processStartedAt } : {}),
-        claudeVersion: version,
+        engineVersion: version,
         check: this.check(task, files),
       })
       return true
@@ -1762,6 +1766,7 @@ export class WorkRunner {
     const id = `${CLEANUP_ID}-${++this.cleanupSeq}`
     this.terminals.set(id, new TerminalBuffer())
     this.cleanup = {
+      engine: currentTask(this.work)?.engine,
       id,
       choice,
       status: 'queued',
@@ -1799,8 +1804,9 @@ export class WorkRunner {
     const { env } = this.ctx
     let pid: number
     try {
-      const bin = findClaude({ env })
-      if (!bin) throw new Error(CLAUDE_INSTALL_GUIDE)
+      const driver = agentRuntime(taskEngine(c))
+      const bin = driver.find(env)
+      if (!bin) throw new Error(driver.installGuide)
       c.dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'relay-cleanup-'))
       const settingsPath = path.join(c.dir, SETTINGS_FILE)
       await writeJson(
@@ -1816,7 +1822,7 @@ export class WorkRunner {
       const { cols, rows } = this.ctx.size()
       const pty = startPty({
         bin,
-        args: cleanupArgs(settingsPath),
+        args: driver.cleanupArgs(settingsPath),
         cwd: this.worktree,
         env: { ...env, ...launchEnv(token) },
         cols,
@@ -3664,6 +3670,8 @@ export class WorkRunner {
 
   private taskView(t: TaskRecord): TaskView {
     return {
+      engineLabel: agentLabel(t),
+      engineVersion: taskEngineVersion(t) ?? null,
       id: t.id,
       terminal: this.terminalKey(t.id),
       node: t.node,

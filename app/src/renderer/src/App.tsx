@@ -249,7 +249,16 @@ export function App() {
             </>
           ) : task ? (
             <>
-              <span>{task.band}</span>
+              <span>
+                {task.band}
+                {task.engineLabel ? (
+                  <span className="dim">
+                    {' '}
+                    · {task.engineLabel}
+                    {task.engineVersion ? ` ${task.engineVersion}` : ''}
+                  </span>
+                ) : null}
+              </span>
               <span className={`status s-${task.status}`}>{task.statusLabel}</span>
               {/* 끝난 task의 탭은 읽기 전용이다 (시나리오 5-1) */}
               {task.live ? null : <span className="readonly">읽기 전용</span>}

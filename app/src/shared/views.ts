@@ -411,6 +411,9 @@ export interface ProjectView {
 }
 
 export interface TaskView {
+  /** 사용 엔진과 CLI 버전. 이전 스냅샷 호출자의 호환을 위해 생략 가능하다. */
+  engineLabel?: string
+  engineVersion?: string | null
   id: string
   /** 이 task 터미널의 키 */
   terminal: string
@@ -726,7 +729,7 @@ export type CommandResult = { ok: true } | { ok: false; error: string }
 /** Work 생성 결과. 만든 Work의 키를 돌려준다 */
 export type CreateWorkResult = { ok: true; workKey: string } | { ok: false; error: string }
 
-export type CheckId = 'git_root' | 'claude' | 'duplicate' | 'origin' | 'gh'
+export type CheckId = 'git_root' | 'claude' | 'codex' | 'duplicate' | 'origin' | 'gh'
 
 /** 프로젝트 등록 점검 표의 한 행 (시나리오 0, D67) */
 export interface CheckItem {

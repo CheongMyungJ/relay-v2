@@ -169,6 +169,7 @@ describe('Work 만들기와 task 시작 (시나리오 1, 2)', () => {
     })
     expect(r.work.tasks).toEqual([
       {
+        engine: 'claude',
         id: 't-01',
         seq: 1,
         node: 'intake',

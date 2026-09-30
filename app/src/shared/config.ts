@@ -1,5 +1,6 @@
 // 앱 설정 config.json (5.1.1)과 Work별 덮어쓰기 (D72).
 // 파일에 쓰는 모양이라 키는 snake_case다.
+import type { AgentEngine } from './agent'
 
 /**
  * relay 스킬 (5.6). 질문 방식을 스킬마다 고른다 (D26). investigate는 evidence와 root-cause를 합친 스킬이다 (D148).
@@ -26,6 +27,8 @@ export type AutoApproveNode = 'investigate' | 'evidence' | 'rca' | 'fix' | 'resp
 
 export interface AppConfig {
   schema_version: 1
+  /** 새 task를 만들 때 고정하는 기본 엔진. 기존 task의 재개에는 적용하지 않는다 (E5). */
+  agent_engine: AgentEngine
   /** 살아 있는 세션 합계 상한 (D18) */
   session_limit: number
   /** 단계별 자동 승인 (4.2) */
@@ -106,6 +109,7 @@ export const QUESTION_MODE_LABEL: Readonly<Record<QuestionMode, string>> = {
 /** 앱 설정의 기본값 (5.1.1) */
 export const DEFAULT_CONFIG: AppConfig = {
   schema_version: 1,
+  agent_engine: 'claude',
   session_limit: 3,
   auto_approve: { investigate: false, evidence: false, rca: false, fix: false, respond: false },
   auto_approve_countdown_sec: 15,
