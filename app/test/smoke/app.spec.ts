@@ -12,7 +12,7 @@
 // 추가 지시와 함께 [확인]하면 진행 중인 세션을 끝내고 intake를 되감기로 다시 시작한다(앞 탭은 폐기됨)
 // → 새 intake를 [의도 승인]하면 intent v2가 되고 v1은 intent.history에 남는다.
 // M5: 두 번째 Work를 S 경로로 최종 검증까지 가면 Work 완료 화면에 전달 버튼이 보인다 → [push]하면 최종 검증이 남긴
-// 커밋 안 된 파일 때문에 선택지가 뜨고, [AI 세션 열기]로 정리 세션을 연다(7-5) → 정리 세션 중에 [이 단계 끝나면 멈춤]을
+// 열린 질문 때문에 한 번 확인받고(D222), 커밋 안 된 파일 때문에 선택지가 뜨고, [AI 세션 열기]로 정리 세션을 연다(7-5) → 정리 세션 중에 [이 단계 끝나면 멈춤]을
 // 켜면 [승인하고 멈춤] 화면이 되어도 [정리 세션 닫기]가 남고, 멈추는 동안은 전달하지 않는다(D137) → 끄고
 // [정리 끝 → push/PR 진행]을 누르면 로컬 bare 원격에 Work 브랜치가 생기고 Work 완료(전달: push)가 된다 → [Work 정리]의
 // 요약에 push됨이 보이고 [정리]하면 worktree가 없어지고 보관됨이 된다(산출물은 남음).
@@ -89,8 +89,19 @@ test.beforeAll(async () => {
       { do: 'tool', name: 'Bash', input: { command: 'npm test' } },
       { do: 'wait' },
     ],
+    // 최종 검증은 열린 질문 하나를 남긴다: 전달 버튼도 한 번 확인받는다 (D222)
     'final-verify': [
-      ...steps('verify', 'S').slice(0, -1),
+      ...steps('verify', 'S').slice(0, -2),
+      {
+        do: 'write',
+        file: 'handoff.md',
+        text: handoff({
+          decisions: [
+            { what: '완료조건을 모두 통과', why: '완료조건을 모두 통과한 이유', by: 'ai' },
+          ],
+          open_questions: ['배포 전에 알릴 곳은?'],
+        }),
+      },
       { do: 'edit', files: { 'debug.log': '실험 출력\n' } },
       { do: 'stop' },
     ],
@@ -383,6 +394,10 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await expect(win.locator('table.verdicts')).toContainText('재현 절차가 더 이상 실패하지 않는다')
   await win.screenshot({ path: 'test-results/completion.png' })
   await push.click()
+  // 답하지 않은 열린 질문이 있어 전달 전에 한 번 확인받는다 (D222). 창의 [push]로 전달한다
+  const deliverQuestions = win.getByRole('dialog', { name: '답하지 않은 열린 질문' })
+  await expect(deliverQuestions).toContainText('배포 전에 알릴 곳은?')
+  await deliverQuestions.getByRole('button', { name: 'push', exact: true }).click()
 
   // 최종 검증이 남긴 커밋 안 된 파일 때문에 고른다 (7-5): [AI 세션 열기]로 정리 세션을 연다
   await expect(win.getByRole('list', { name: '커밋 안 된 변경' })).toContainText('debug.log', {

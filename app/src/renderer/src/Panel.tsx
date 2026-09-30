@@ -562,6 +562,8 @@ function Review({
           <CompletionActions
             review={review}
             work={work}
+            questions={questions}
+            live={!!liveTask}
             onApproved={onApproved}
             onShowCleanup={onShowCleanup}
             onForce={() => setConfirming(true)}
@@ -619,24 +621,13 @@ function Review({
         {error ? <div className="error">{error}</div> : null}
       </div>
       {asking ? (
-        <ConfirmDialog
-          title="답하지 않은 열린 질문"
+        <OpenQuestionsDialog
+          questions={questions}
+          live={!!liveTask}
           confirm={approveLabel}
           onConfirm={() => void approve(false)}
           onClose={() => setAsking(false)}
-        >
-          <p>답하지 않은 열린 질문 {questions.length}개: 에이전트는 가정으로 진행합니다.</p>
-          <ul>
-            {questions.map((q, i) => (
-              <li key={i}>{q}</li>
-            ))}
-          </ul>
-          <p className="dim">
-            {liveTask
-              ? '답하려면 [취소]하고 가운데 터미널에 쓰세요.'
-              : '답하려면 [취소]하고 [세션 재개]를 누른 뒤 가운데 터미널에 쓰세요.'}
-          </p>
-        </ConfirmDialog>
+        />
       ) : null}
       {confirming ? (
         <ConfirmDialog
@@ -1004,18 +995,26 @@ function LinkLine({ label, url }: { label: string; url: string }) {
 function CompletionActions({
   review,
   work,
+  questions,
+  live,
   onApproved,
   onShowCleanup,
   onForce,
 }: {
   review: ReviewView
   work: WorkView
+  /** 답하지 않은 열린 질문 (D222) */
+  questions: readonly string[]
+  /** 최종 검증의 세션이 살아 있다 */
+  live: boolean
   onApproved: (() => void) | undefined
   onShowCleanup: (() => void) | undefined
   onForce: () => void
 }) {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // 답하지 않은 열린 질문이 남은 채 완료하거나 전달하면 한 번 확인받는다 (D222). 누른 버튼과 할 일을 둔다
+  const [asking, setAsking] = useState<{ label: string; go: () => void } | null>(null)
   // 커밋 안 된 변경이 있어 고를 것 (7-5)
   const [pending, setPending] = useState<{ choice: DeliveryChoice; files: string[] } | null>(null)
   const c = review.completion
@@ -1083,6 +1082,22 @@ function CompletionActions({
     if (!r.ok) setError(r.error)
   }
 
+  /** 열린 질문이 있으면 확인 창을 거쳐 한다 */
+  const ask = (label: string, go: () => void) => () =>
+    questions.length ? setAsking({ label, go }) : go()
+  const askingDialog = asking ? (
+    <OpenQuestionsDialog
+      questions={questions}
+      live={live}
+      confirm={asking.label}
+      onConfirm={() => {
+        setAsking(null)
+        asking.go()
+      }}
+      onClose={() => setAsking(null)}
+    />
+  ) : null
+
   // 승인하면 Work가 멈추는 동안은 전달하지 않는다(main의 deliveryStart도 거부). 전달로 잇는 버튼을 끈다
   const stopping = c.mode === 'stop'
   const cleanupNotice = cleanup ? (
@@ -1131,7 +1146,7 @@ function CompletionActions({
           <button
             className="primary"
             disabled={!!busy || open || cut || !gate.approve}
-            onClick={() => void complete()}
+            onClick={ask('승인하고 멈춤', () => void complete())}
           >
             승인하고 멈춤
           </button>
@@ -1144,6 +1159,7 @@ function CompletionActions({
           {error ? <span className="error">{error}</span> : null}
         </footer>
         {cleanupNotice}
+        {askingDialog}
       </div>
     )
   }
@@ -1155,7 +1171,7 @@ function CompletionActions({
     <button
       disabled={!!busy || open || !ready || !c.buttons[choice].enabled}
       title={c.buttons[choice].reason ?? ''}
-      onClick={() => void deliver(choice, null)}
+      onClick={ask(DELIVERY_BUTTON[choice], () => void deliver(choice, null))}
     >
       {DELIVERY_BUTTON[choice]}
     </button>
@@ -1168,7 +1184,7 @@ function CompletionActions({
         <button
           className="primary"
           disabled={!!busy || open || !ready}
-          onClick={() => void complete()}
+          onClick={ask('완료만', () => void complete())}
         >
           완료만
         </button>
@@ -1226,6 +1242,45 @@ function CompletionActions({
           onClose={() => setPending(null)}
         />
       ) : null}
+      {askingDialog}
     </div>
+  )
+}
+
+/**
+ * 답하지 않은 열린 질문을 두고 승인하거나 전달할 때의 확인 창 (D222). 세션이 없으면 [세션 재개]를 먼저 누르라고 한다
+ */
+function OpenQuestionsDialog({
+  questions,
+  live,
+  confirm,
+  onConfirm,
+  onClose,
+}: {
+  questions: readonly string[]
+  live: boolean
+  confirm: string
+  onConfirm: () => void
+  onClose: () => void
+}) {
+  return (
+    <ConfirmDialog
+      title="답하지 않은 열린 질문"
+      confirm={confirm}
+      onConfirm={onConfirm}
+      onClose={onClose}
+    >
+      <p>답하지 않은 열린 질문 {questions.length}개: 에이전트는 가정으로 진행합니다.</p>
+      <ul>
+        {questions.map((q, i) => (
+          <li key={i}>{q}</li>
+        ))}
+      </ul>
+      <p className="dim">
+        {live
+          ? '답하려면 [취소]하고 가운데 터미널에 쓰세요.'
+          : '답하려면 [취소]하고 [세션 재개]를 누른 뒤 가운데 터미널에 쓰세요.'}
+      </p>
+    </ConfirmDialog>
   )
 }

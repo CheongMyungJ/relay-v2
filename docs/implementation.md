@@ -738,7 +738,7 @@ app/src/
 - **사람 역할 시간(E2):** `run.json`의 `human.ms`는 차례마다 사람 역할이 답하는 데 쓴 시간의 합, `human.waitOnlyTurns`는 행동이 `wait`뿐이거나 없는 차례 수다. 보고서는 "사람 역할 응답 시간", "걸린 시간 − 사람 역할 응답", "기다리기만 한 차례"를 보이고, 예전 결과는 `turns.jsonl`의 차례 기록에서 센다.
 - **스크린샷(E10):** `relay-arm.mjs`의 `shot`이 메인 프로세스의 `capturePage`로 찍은 창을 1000픽셀 너비로 줄인다(안 되면 창 크기 그대로 찍는다). `observe`는 배치 열쇠(누를 수 있는 요소의 역할·이름·선택·켜짐·비활성·화면 밖, 열린 대화상자)를 함께 돌려주고, `human.mjs`는 앞에 붙인 그림과 열쇠가 다를 때만 그림을 붙인다. 붙이지 않은 차례에는 그렇다고 적고, 글자와 요소 목록은 늘 준다. 붙인 차례 수는 `human.images`와 보고서의 "스크린샷을 붙인 차례"다. 찍은 파일(`shots/`)은 차례마다 남는다.
 - **시험(R8·R9·E2·E10):** [스모크] 두 번째 Work의 새 Work 대화상자. 평가 도구는 시험이 없어, 가짜 결과 폴더(새 `run.json`과 `human.ms`가 없는 예전 `run.json`·`turns.jsonl`)로 보고서를 만들어 새 줄과 단계별 표를 봤고, 빌드한 앱에서 `shot`이 1000픽셀 너비의 PNG를 쓰는 것을 봤다.
-- **PR #19 리뷰 대응:** 사람이 PR에 남긴 지적 13개 가운데 12개를 고쳤다. Work 완료 화면의 전달 버튼은 D222대로 열린 질문을 묻지 않는다.
+- **PR #19 리뷰 대응:** 사람이 PR에 남긴 지적 13개를 모두 고쳤다. Work 완료 화면의 전달 버튼까지 열린 질문을 물을지는 사람이 정했다(D222를 넓힘).
   - 따옴표 규칙에 역슬래시를 더했다(`\\`로 쓰고 경로는 `/`로, D221). `check.mjs`가 대조하고 `templates.test.ts`가 반례(`\c`는 형식 오류, `\t`는 TAB)를 본다.
   - 평가 도구의 토큰은 `agentUsage`와 `agentUsageBySession`이 함께 쓰는 `scanUsage`가 메시지 id마다 마지막 줄로 센다(R9). 메시지가 없는 세션은 0이다.
   - `reviewFindings`는 "없음"으로 시작하는 한 줄뿐일 때만 지적이 없다고 본다(D213).
@@ -747,8 +747,8 @@ app/src/
   - 첫 출력(D217)은 core/review의 `hasVisibleText`로 보이는 글자가 있는 출력부터 잰다.
   - `apply`: 상태가 그대로이고 할 일이 `log`뿐인 전이(세션 시각)는 work.json을 쓰지 않고 스냅샷도 보내지 않는다.
   - `ASK_TOOL`은 core/machine이 export하고 main이 쓴다.
-  - 화면: 세션 기록이 없는 중단됨(`TaskView.hasSession`)의 [재개] 안내(D218). 세션이 없을 때 열린 질문의 안내(`OPEN_QUESTIONS_HINT_NO_SESSION`)와 확인 창 문구, [오류 무시하고 승인] 확인 창의 열린 질문(D222).
-  - 시험: [단위] `templates`, `validate`, `machine`, `settings`, `review`(`hasVisibleText`, 세션이 없을 때의 안내). [흐름] `activity.test.ts`의 새 시험(실패한 도구, 서브에이전트의 도구, 실패한 질문 도구), `control.test.ts`(대기열에서 시작한 task의 "세션을 띄우는 중", `hasSession`). 가짜 `claude`의 `tool`에 `fail`, `agent`, `inner`를, `ask`에 `fail`을 더했다.
+  - 화면: 세션 기록이 없는 중단됨(`TaskView.hasSession`)의 [재개] 안내(D218). 세션이 없을 때 열린 질문의 안내(`OPEN_QUESTIONS_HINT_NO_SESSION`)와 확인 창 문구, [오류 무시하고 승인] 확인 창의 열린 질문(D222). 열린 질문 확인 창은 `OpenQuestionsDialog` 하나로 두고, Work 완료 화면(`CompletionActions`)의 [완료만]·[push]·[PR 생성]·[승인하고 멈춤]도 이 창을 거친다. 끊긴 전달의 [다시 시도]와 정리 세션의 [정리 끝 → push/PR 진행]은 이미 고른 전달을 잇는 것이라 묻지 않는다.
+  - 시험: [단위] `templates`, `validate`, `machine`, `settings`, `review`(`hasVisibleText`, 세션이 없을 때의 안내). [흐름] `activity.test.ts`의 새 시험(실패한 도구, 서브에이전트의 도구, 실패한 질문 도구), `control.test.ts`(대기열에서 시작한 task의 "세션을 띄우는 중", `hasSession`). 가짜 `claude`의 `tool`에 `fail`, `agent`, `inner`를, `ask`에 `fail`을 더했다. [스모크]는 두 번째 Work의 최종 검증이 열린 질문을 남기게 해, [push]를 누르면 확인 창이 뜨고 창의 [push]로 전달하는 것을 본다.
 
 ## 8. 테스트 전략
 
