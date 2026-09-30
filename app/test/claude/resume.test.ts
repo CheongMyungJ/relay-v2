@@ -1,6 +1,7 @@
 // [실제] 트리 종료한 세션을 --resume으로 다시 열면 대화가 이어진다 (docs/implementation.md M3, S6).
-// 앱의 흐름 그대로: intake 세션에 표식을 알려 준 뒤 [즉시 중단](트리 종료)하고 [재개]한다. 다시 연 세션에
-// 표식을 파일에 쓰게 해 파일로 판정한다(화면에는 앞 대화가 다시 보이므로 화면으로는 가를 수 없음).
+// 앱의 흐름 그대로: intake 세션에 표식을 알려 준 뒤 [즉시 중단](트리 종료)하고 [재개]한다. [재개]는 이어서 하라는
+// 첫 입력을 주므로(D218) 그 턴이 끝나기를 기다린 뒤, 다시 연 세션에 표식을 파일에 쓰게 해 파일로 판정한다(화면에는
+// 앞 대화가 다시 보이므로 화면으로는 가를 수 없음).
 // 자동 메모리는 task 설정 파일이 끈다(D113). 켜져 있으면 답이 대화가 아니라 메모리에서 올 수 있다(S6).
 // RELAY_REAL_CLAUDE=1이면 실제 claude, dry면 가짜 claude로 도구만 확인한다. RELAY_REAL_CASES로 고른다.
 import fs from 'node:fs'
@@ -38,8 +39,10 @@ function dryScenario(): Scenario {
         { do: 'stop' },
       ],
     },
+    // 앱이 준 이어서 하라는 입력(D218)의 턴을 끝낸 뒤 사람이 보낸 표식 요청을 받는다
     resume: {
       'work-start': [
+        { do: 'stop' },
         { do: 'waitEnter' },
         { do: 'prompt' },
         { do: 'write', file: CHECK_FILE, text: `${MARK}\n` },
@@ -120,6 +123,9 @@ describe.runIf(enabled)('[실제] 트리 종료한 세션의 --resume (M3, S6)',
       ).tasks[0]?.session
       expect(after?.id).toBe(session?.id)
       expect(after?.resumed_at).toBeDefined()
+      // 앱이 준 이어서 하라는 입력의 턴 (D218)
+      await turnEnds(h.relay, ui, term, task, true)
+      lap('이어서 하라는 입력의 턴')
 
       // 5. 다시 연 세션에 표식을 파일에 쓰게 한다
       const file = path.join(workDir, 'tasks', '01-intake', CHECK_FILE)

@@ -583,7 +583,7 @@ describe('시나리오 3의 신호 표: 신호마다 표시 상태', () => {
     }).work
     expect(currentTask(interrupted)?.session).toMatchObject({ id: 'session-new', alive: false })
     expect(apply(interrupted, { type: 'resume', taskId: 't-01', at: at() }).effects).toEqual([
-      { type: 'resumeTask', taskId: 't-01' },
+      { type: 'resumeTask', taskId: 't-01', continue: true },
     ])
     const r = apply(interrupted, {
       type: 'session.resumed',
@@ -1287,11 +1287,11 @@ describe('[재개]와 [세션 재개] (시나리오 3-4, 3-5, 4.4)', () => {
   const interrupted = () =>
     apply(running('working'), { type: 'interrupt', taskId: 't-01', at: at(), reason: 'human' }).work
 
-  it('중단된 세션은 --resume으로 다시 연다. 표시는 다시 연 결과로 바꾼다', () => {
+  it('중단된 세션은 --resume으로 다시 열고 이어서 하라고 알린다. 표시는 다시 연 결과로 바꾼다 (D218)', () => {
     const before = interrupted()
     const r = resume(before)
     expect(r.rejected).toBeUndefined()
-    expect(r.effects).toEqual([{ type: 'resumeTask', taskId: 't-01' }])
+    expect(r.effects).toEqual([{ type: 'resumeTask', taskId: 't-01', continue: true }])
     expect(r.work).toBe(before)
     // 다시 연 뒤에는 세션이 살아 있어 다시 누르면 받지 않는다
     expect(resume(resumed(r.work).work).rejected).toMatch(/재개할 수 있는 상태가 아님/)
@@ -1331,14 +1331,48 @@ describe('[재개]와 [세션 재개] (시나리오 3-4, 3-5, 4.4)', () => {
     expect(status(resumed(resume(interrupted()).work, BLOCKED).work)).toBe('blocked')
   })
 
-  it('세션 종료, 세션 없는 승인 대기와 막힘도 다시 연다', () => {
+  it('세션 종료, 세션 없는 승인 대기와 막힘도 다시 연다. [세션 재개]는 이어서 하라고 알리지 않고 입력을 기다린다 (D218)', () => {
     const ended = apply(running('idle'), { type: 'pty.exit', taskId: 't-01', at: at() }).work
-    expect(resume(ended).effects).toEqual([{ type: 'resumeTask', taskId: 't-01' }])
+    expect(resume(ended).effects).toEqual([{ type: 'resumeTask', taskId: 't-01', continue: false }])
     for (const s of ['awaiting_approval', 'blocked'] as const) {
       const noSession = apply(running(s), { type: 'pty.exit', taskId: 't-01', at: at() }).work
       expect(status(noSession)).toBe(s)
-      expect(resume(noSession).effects).toEqual([{ type: 'resumeTask', taskId: 't-01' }])
+      expect(resume(noSession).effects).toEqual([
+        { type: 'resumeTask', taskId: 't-01', continue: false },
+      ])
     }
+  })
+
+  it('앱 종료 확인과 재시작 조정으로 끝난 세션은 앱이 꺼져 끝났다고 남기고, 다시 열면 지운다 (D219)', () => {
+    // 앱 종료 확인: 작업 중이면 중단됨, 승인 대기면 그대로 남는다
+    const quit = (s: TaskStatus) =>
+      currentTask(
+        apply(running(s), { type: 'interrupt', taskId: 't-01', at: at(), reason: 'app_quit' }).work,
+      )
+    expect(quit('working')).toMatchObject({
+      status: 'interrupted',
+      session: { alive: false, app_ended: 'quit' },
+    })
+    expect(quit('awaiting_approval')).toMatchObject({
+      status: 'awaiting_approval',
+      session: { alive: false, app_ended: 'quit' },
+    })
+    // [즉시 중단]과 CLI가 스스로 끝난 세션은 앱이 끝낸 것이 아니다
+    expect(currentTask(interrupted())?.session?.app_ended).toBeUndefined()
+    const exited = apply(running('idle'), { type: 'pty.exit', taskId: 't-01', at: at() }).work
+    expect(currentTask(exited)?.session?.app_ended).toBeUndefined()
+    // 재시작 조정: 앱이 세션을 끝내지 못하고 꺼졌다
+    const restarted = apply(running('working'), { type: 'app.restarted', at: at(), check: null })
+    expect(currentTask(restarted.work)).toMatchObject({
+      status: 'interrupted',
+      session: { alive: false, app_ended: 'restart' },
+    })
+    expect(resume(restarted.work).effects).toEqual([
+      { type: 'resumeTask', taskId: 't-01', continue: true },
+    ])
+    // 다시 열면 새 세션이라 지운다
+    const again = resumed(resume(restarted.work).work)
+    expect(currentTask(again.work)?.session?.app_ended).toBeUndefined()
   })
 
   it('한 번도 띄우지 못한 task는 새 세션으로 시작한다', () => {

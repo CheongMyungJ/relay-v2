@@ -9,7 +9,8 @@
 //   넣는다(Claude Code 2.1.145부터, 문서 hooks). 시나리오의 stop 단계가 목록을 주면 그것을 넣는다(D129).
 // - FAKE_CLAUDE_RECORD 폴더가 있으면 실행 인자와 훅 응답을 fake-claude.jsonl에 남긴다.
 // - --session-id로 시작한 세션은 FAKE_CLAUDE_RECORD/sessions/<id>.json에 task를 적어 두고,
-//   --resume <id>로 다시 열면 그 task의 resume 시나리오를 한다. 적어 둔 것이 없으면 실제 claude처럼
+//   --resume <id>로 다시 열면 그 task의 resume 시나리오를 한다. 입력을 함께 주면 그것을 먼저 첫 요청으로 보낸다
+//   (중단됨의 [재개], D218). 적어 둔 것이 없으면 실제 claude처럼
 //   "No conversation found with session ID"를 내고 종료 코드 1로 끝난다 (스파이크 S6).
 // - clear 단계는 /clear를 흉내 낸다: SessionEnd(reason: clear)를 보내고 새 세션 id로 계속 돈다(D110).
 //   새 세션은 다음 요청으로 대화가 생겨야 --resume으로 열 수 있다.
@@ -376,14 +377,17 @@ async function run() {
     taskId: ctx.taskId,
     taskDir: ctx.taskDir,
   })
-  // 다시 연 세션은 사람의 입력을 기다린다. resume 시나리오가 없으면 아무것도 하지 않는다.
+  // 다시 연 세션은 사람의 입력을 기다린다. resume 시나리오가 없으면 아무것도 하지 않는다. --resume과 함께 입력을
+  // 주면(중단됨의 [재개], D218) 실제 claude처럼 그것을 첫 요청으로 바로 보낸 뒤 resume 시나리오를 한다.
   // 첫 프롬프트가 없으면 정리 세션이다 (7-5). cleanup 시나리오가 없으면 입력을 기다리기만 한다
+  const vars = { taskDir: ctx.taskDir, taskId: ctx.taskId, node: ctx.node, attempt: 0 }
+  if (opts.resume && opts.prompt !== null) await steps([{ do: 'prompt' }], ctx, vars)
   const list = opts.resume
     ? (scenario.resume?.[ctx.taskId] ?? scenario.resume?.[ctx.skill] ?? [])
     : opts.prompt === null
       ? (scenario.cleanup ?? [])
       : (scenario.tasks?.[ctx.taskId] ?? scenario.tasks?.[ctx.skill] ?? [{ do: 'prompt' }])
-  await steps(list, ctx, { taskDir: ctx.taskDir, taskId: ctx.taskId, node: ctx.node, attempt: 0 })
+  await steps(list, ctx, vars)
   out('[가짜 claude] 대기')
 }
 

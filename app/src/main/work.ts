@@ -211,7 +211,14 @@ import {
   wantsAutoStart,
 } from '../core/respond'
 import { backupPattern, nextBackupBranch, planStep, stepChoices, stepPreview } from '../core/rewind'
-import { cleanupArgs, launchArgs, launchEnv, resumeArgs, taskSettings } from '../core/settings'
+import {
+  cleanupArgs,
+  continuePrompt,
+  launchArgs,
+  launchEnv,
+  resumeArgs,
+  taskSettings,
+} from '../core/settings'
 import {
   HANDOFF_FILE,
   INTENT_DRAFT_FILE,
@@ -358,6 +365,9 @@ const RESUME_MARK = '\r\n\x1b[0m\x1b[2m── relay: 세션 재개 (--resume) �
 const startMark = (task: TaskRecord) =>
   `\x1b[0m\x1b[2m── relay: ${taskLabel(task)} · 새 세션을 띄우는 중 ──\x1b[0m\r\n`
 
+/** 앱이 꺼지며 끝난 세션의 pty.log 끝에 넣는 줄 (D219). 다시 그린 옛 화면이 어디서 끝났는지 보인다 */
+const APP_END_MARK = '\r\n\x1b[0m\x1b[2m── relay: 앱이 꺼져 세션이 여기서 끝났습니다 ──\x1b[0m\r\n'
+
 /** 질문 도구. 질문 대기 표시는 core가 한다 (D24, D35). 나머지 도구의 훅은 진행 표시만 바꾼다 (D216) */
 const ASK_TOOL = 'AskUserQuestion'
 
@@ -397,6 +407,11 @@ export class WorkRunner {
   private queue: Promise<unknown> = Promise.resolve()
   private readonly live = new Map<string, LiveSession>()
   private readonly terminals = new Map<string, TerminalBuffer>()
+  /**
+   * 다시 열 세션에 이어서 하라는 첫 입력을 줄지 (D218). [재개]·[세션 재개]마다 core가 정한 것을 두고, 세션을 다시 열
+   * 때 쓴다. 대기열에서 기다리는 동안에도 남는다
+   */
+  private readonly resumeContinue = new Map<string, boolean>()
   private readonly problems: string[] = []
   private revision = 0
   /** 이번 명령의 되감기가 git에서 실패한 이유. [단계 선택]의 결과로 돌려준다 */
@@ -589,7 +604,10 @@ export class WorkRunner {
         await this.confirmIntent(e.taskId, e.version, e.size)
         return
       case 'startTask':
+        await this.requestSession(e.taskId)
+        return
       case 'resumeTask':
+        this.resumeContinue.set(e.taskId, e.continue)
         await this.requestSession(e.taskId)
         return
       case 'dequeue':
@@ -796,7 +814,17 @@ export class WorkRunner {
       // 이전 화면을 먼저 보인다. 이 앱에서 돌던 task면 버퍼가 남아 있고, 아니면 pty.log에서 읽는다
       await this.terminalBuffer(task)
       const token = randomBytes(32).toString('hex')
-      const args = resumeArgs({ sessionId, workDir: this.files.dir, settingsPath })
+      // 중단됨의 [재개]는 이어서 하라고 알린다 (D218)
+      const prompt = this.resumeContinue.get(task.id)
+        ? continuePrompt(task.session?.app_ended !== undefined)
+        : undefined
+      this.resumeContinue.delete(task.id)
+      const args = resumeArgs({
+        sessionId,
+        workDir: this.files.dir,
+        settingsPath,
+        ...(prompt ? { prompt } : {}),
+      })
       const session = this.launch(task, bin, token, args, turnSnapshot(task, files), RESUME_MARK)
       const processStartedAt = await processStartTime(session.pty.pid)
       await this.feed({
@@ -1239,6 +1267,8 @@ export class WorkRunner {
     this.live.delete(taskId)
     const buffer = this.terminals.get(taskId)
     if (buffer) buffer.live = false
+    // 앱을 끄며 끝낸 세션은 pty.log 끝에 표시 줄을 남긴다 (D219)
+    if (this.closing) session.log.write(APP_END_MARK)
     await session.log.close()
     this.ctx.pool.release()
     this.changed()
@@ -2263,6 +2293,13 @@ export class WorkRunner {
       const task = currentTask(this.work)
       const check = task ? this.check(task, await this.files.taskFiles(task)) : null
       const tasks = killed.flatMap((p) => (p.taskId ? [{ taskId: p.taskId, pid: p.pid }] : []))
+      // 앱이 끝내지 못한 세션: pty.log 끝에 앱이 꺼져 끝났다는 표시 줄을 남긴다 (D219)
+      for (const t of this.work.tasks) {
+        if (!t.session?.alive) continue
+        await this.files
+          .appendPtyMark(t, APP_END_MARK)
+          .catch((e: unknown) => this.problem(`pty.log에 표시 줄을 쓰지 못함: ${message(e)}`))
+      }
       await this.feed(
         {
           type: 'app.restarted',
@@ -3765,6 +3802,7 @@ export class WorkRunner {
       statusLabel: TASK_STATUS_LABEL[t.status],
       live: this.live.has(t.id),
       resumed: t.session?.resumed_at !== undefined,
+      appEnded: t.session?.app_ended !== undefined,
       error: t.error ?? null,
       errorCount: t.check?.errors.length ?? 0,
       bounces: t.bounce_count,

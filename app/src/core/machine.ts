@@ -641,7 +641,8 @@ export type Effect =
    */
   | { type: 'startTask'; taskId: string; node: TaskNode; reason: StartReason }
   /** 끝난 세션을 같은 옵션과 --resume <세션 id>로 다시 연다 (시나리오 3-4). 상한은 startTask와 같다 */
-  | { type: 'resumeTask'; taskId: string }
+  /** 끝난 세션을 --resume으로 다시 연다. continue면 이어서 하라는 첫 입력을 준다 (중단됨의 [재개], D218) */
+  | { type: 'resumeTask'; taskId: string; continue: boolean }
   /** 대기열에서 뺀다 */
   | { type: 'dequeue'; taskId: string }
   /** Stop 훅에 {"decision":"block","reason":…}로 답해 형식 오류를 되돌린다 (D21) */
@@ -1021,7 +1022,13 @@ function endTask(
   const ended: TaskRecord = {
     ...task,
     status: kept ? task.status : 'interrupted',
-    session: { ...task.session, alive: false, ended_at: at },
+    session: {
+      ...task.session,
+      alive: false,
+      ended_at: at,
+      // 앱 종료 확인으로 끝낸 세션 (D219)
+      ...(reason === 'app_quit' ? { app_ended: 'quit' as const } : {}),
+    },
   }
   return {
     // 카운트다운 중이던 승인 대기는 카운트다운을 멈추고 사람의 승인을 기다린다 (D130).
@@ -1315,7 +1322,7 @@ function sessionResumed(work: WorkState, task: TaskRecord, e: SessionResumed): T
   }
   const check = summarize(e.check)
   const status = handoffStatus(check) ?? 'idle'
-  const session = omit(task.session, 'ended_at', 'process_started_at')
+  const session = omit(task.session, 'ended_at', 'process_started_at', 'app_ended')
   const resumed: TaskRecord = {
     ...omit(unqueued(task), 'error'),
     status,
@@ -1700,8 +1707,9 @@ function resume(work: WorkState, task: TaskRecord): Transition {
   if (task.session?.alive || !RESUMABLE.includes(task.status)) {
     return unchanged(work, `${task.id}는 재개할 수 있는 상태가 아님`)
   }
+  // 중단됨의 [재개]는 이어서 하라고 알린다. [세션 재개](세션 종료, 막힘, 승인 대기)는 입력을 기다린다 (D218)
   const effect: Effect = task.session
-    ? { type: 'resumeTask', taskId: task.id }
+    ? { type: 'resumeTask', taskId: task.id, continue: task.status === 'interrupted' }
     : { type: 'startTask', taskId: task.id, node: task.node, reason: task.reason }
   return { work, effects: [effect] }
 }
@@ -2283,7 +2291,10 @@ function restarted(work: WorkState, e: AppRestarted, config: AppConfig): Transit
       : next
   }
   const tasks = work.tasks.map((t): TaskRecord => {
-    const session = t.session?.alive ? { ...t.session, alive: false, ended_at: e.at } : t.session
+    // 앱이 세션을 끝내지 못하고 꺼졌다 (D219)
+    const session = t.session?.alive
+      ? { ...t.session, alive: false, ended_at: e.at, app_ended: 'restart' as const }
+      : t.session
     // 도는 PR 대응 task도 다른 task처럼 조정한다 (시나리오 9-7)
     if (t !== current || !taskActive(work, t)) return { ...t, session }
     if (t.status === 'queued') {

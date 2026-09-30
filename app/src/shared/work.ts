@@ -171,6 +171,11 @@ export interface TaskSession {
   ended_at?: string
   /** 마지막으로 --resume으로 다시 연 때 (시나리오 3-4). 다시 열면 pid와 시작 시각이 바뀐다 */
   resumed_at?: string
+  /**
+   * 앱이 꺼져 끝난 세션 (D219): quit은 앱 종료 확인으로 끝냈고, restart는 앱이 세션을 끝내지 못하고 꺼져 다시 켤 때
+   * 조정했다. 승인 안내와 [재개]의 첫 입력에 쓴다. 다른 까닭으로 끝났거나 다시 열면 없다
+   */
+  app_ended?: 'quit' | 'restart'
 }
 
 export interface TaskRecord {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   HOOK_EVENTS,
+  continuePrompt,
   denyRules,
   firstPrompt,
   hookSettings,
@@ -173,6 +174,22 @@ describe('실행 인자 (시나리오 2-5, 6절)', () => {
       '--settings',
       `${TASKS}\\03-rca\\task.settings.json`,
     ])
+  })
+
+  it('중단됨의 [재개]는 이어서 하라는 첫 입력을 맨 뒤에 준다. 앱이 꺼져 끊겼으면 그렇다고 적는다 (D218, D219)', () => {
+    const args = resumeArgs({
+      sessionId: 'id-1',
+      workDir: WORK_DIR,
+      settingsPath: 'task.settings.json',
+      prompt: continuePrompt(true),
+    })
+    expect(args.slice(0, 3)).toEqual(['--dangerously-skip-permissions', '--resume', 'id-1'])
+    expect(args.at(-1)).toBe(
+      'relay: 앱이 꺼져 세션이 끊겼다가 [재개]로 다시 열렸습니다. 끊기기 전의 마지막 상태(끝나지 않은 명령 등)를 확인하고 하던 일을 이어서 하세요. 사람에게 물을 것이 있었다면 다시 물으세요.',
+    )
+    expect(continuePrompt(false)).toBe(
+      'relay: 사람이 [즉시 중단]한 세션이 [재개]로 다시 열렸습니다. 끊기기 전의 마지막 상태(끝나지 않은 명령 등)를 확인하고 하던 일을 이어서 하세요. 사람에게 물을 것이 있었다면 다시 물으세요.',
+    )
   })
 
   it('첫 프롬프트는 스킬 호출과 context.md 경로만 담는다 (D19)', () => {

@@ -275,7 +275,8 @@ function Recovery({
 
 /**
  * 지금 task가 사람을 기다리는 까닭과 누를 수 있는 버튼 (시나리오 3-4, 3-5, 4.4, D18). PR 진행 중의 PR 대응 task는 [즉시
- * 중단]과 [재개]만 있다 (D182)
+ * 중단]과 [재개]만 있다 (D182). 중단됨의 [재개]는 이어서 하라고 알리고, [세션 재개]는 입력을 기다린다 (D218). 앱이 꺼져
+ * 끝난 세션은 그렇다고 보인다 (D219)
  */
 function TaskNotice({ task, pr }: { task: TaskView; pr: boolean }) {
   if (task.status === 'queued') {
@@ -286,14 +287,27 @@ function TaskNotice({ task, pr }: { task: TaskView; pr: boolean }) {
     )
   }
   if (task.status === 'interrupted') {
-    return <div className="notice">중단됨. [재개]하면 이어서 합니다.</div>
+    return (
+      <div className="notice">
+        {task.appEnded ? '앱이 꺼져 중단됐습니다. ' : '중단됨. '}
+        [재개]하면 같은 대화를 다시 열고 하던 일을 이어서 하라고 알립니다.
+      </div>
+    )
   }
   if (task.status === 'session_ended') {
     return (
       <div className="notice">
-        {pr
-          ? 'handoff 없이 세션이 끝났습니다. [세션 재개]로 대화를 이으세요.'
-          : 'handoff 없이 세션이 끝났습니다. [세션 재개]로 대화를 잇거나 [이 단계 새 세션으로 다시] 시작하세요.'}
+        handoff 없이 세션이 끝났습니다. [세션 재개]하면 같은 대화를 다시 엽니다. 에이전트는 입력을
+        기다리니 이어서 할 일을 터미널에 말하세요.
+        {pr ? null : ' 처음부터 다시 하려면 [이 단계 새 세션으로 다시]를 누르세요.'}
+      </div>
+    )
+  }
+  if (task.status === 'awaiting_approval' && !task.live && task.appEnded) {
+    return (
+      <div className="notice">
+        앱이 꺼지기 전에 산출물과 handoff를 다 썼습니다. 확인하고 승인하세요. 터미널의 옛 화면은
+        앱이 꺼질 때까지의 기록입니다.
       </div>
     )
   }

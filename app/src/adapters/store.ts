@@ -413,6 +413,32 @@ export class WorkFiles {
     return new TextDecoder('utf-8').decode(buf, { stream: true })
   }
 
+  /**
+   * pty.log 끝에 표시 줄을 붙인다 (D219). 이미 그 줄로 끝나면 다시 붙이지 않는다. 충돌로 끝에 덜 쓴 UTF-8 문자가
+   * 남았으면(시나리오 9-5) 그 바이트를 지우고 붙인다: 두면 다시 읽을 때 깨진 글자가 된다. pty.log가 없으면 하지 않는다
+   */
+  async appendPtyMark(task: Pick<TaskRecord, 'seq' | 'node'>, mark: string): Promise<void> {
+    let handle: fsp.FileHandle
+    try {
+      handle = await fsp.open(path.join(this.taskDir(task), 'pty.log'), 'r+')
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === 'ENOENT') return
+      throw e
+    }
+    try {
+      const { size } = await handle.stat()
+      const text = Buffer.from(mark, 'utf8')
+      const tail = Buffer.alloc(Math.min(size, text.length))
+      await handle.read(tail, 0, tail.length, size - tail.length)
+      if (tail.equals(text)) return
+      const end = size - partialUtf8(tail)
+      await handle.truncate(end)
+      await handle.write(text, 0, text.length, end)
+    } finally {
+      await handle.close()
+    }
+  }
+
   /** 터미널 출력을 이어 쓰는 pty.log (시나리오 5-1). 충돌하면 끝부분이 잘릴 수 있다 (시나리오 9-5) */
   openPtyLog(task: Pick<TaskRecord, 'seq' | 'node'>): PtyLog {
     const file = path.join(this.taskDir(task), 'pty.log')
@@ -431,6 +457,18 @@ export class WorkFiles {
 }
 
 const NOT_ARTIFACTS = new Set(['context.md', 'handoff.md'])
+
+/** 끝에 덜 쓴 UTF-8 문자가 있으면 그 바이트 수, 없으면 0 */
+export function partialUtf8(buf: Buffer): number {
+  let i = buf.length - 1
+  // 이어지는 바이트(10xxxxxx)는 문자 하나에 셋까지다
+  while (i >= 0 && buf.length - i <= 3 && ((buf[i] ?? 0) & 0xc0) === 0x80) i--
+  if (i < 0) return 0
+  const lead = buf[i] ?? 0
+  const want = lead >= 0xf0 ? 4 : lead >= 0xe0 ? 3 : lead >= 0xc0 ? 2 : 1
+  const have = buf.length - i
+  return have < want ? have : 0
+}
 
 async function mdFiles(dir: string): Promise<string[]> {
   try {

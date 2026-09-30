@@ -427,6 +427,8 @@ export interface TaskView {
   live: boolean
   /** --resume으로 다시 연 적이 있다 (시나리오 3-4) */
   resumed: boolean
+  /** 앱이 꺼져 세션이 끝났다 (D219). 다시 열면 false다 */
+  appEnded: boolean
   /** task를 띄우지 못한 이유 */
   error: string | null
   /** 마지막 형식 검사의 오류 수 */

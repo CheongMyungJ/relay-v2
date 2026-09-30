@@ -5,6 +5,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { HookServer, type HookHandler } from '../../src/adapters/hooks'
+import { continuePrompt } from '../../src/core/settings'
 import type { WorkView } from '../../src/shared/views'
 import type { LifecycleEvent, WorkState } from '../../src/shared/work'
 import { drive } from './driver'
@@ -92,6 +93,10 @@ function untilTask(
 }
 
 type Start = { args: string[]; resume?: boolean; taskId?: string; pid: number; found?: boolean }
+
+/** 앱이 꺼지며 끝난 세션의 pty.log 끝에 앱이 적는 줄 (D219) */
+const APP_END = '\r\n\x1b[0m\x1b[2m── relay: 앱이 꺼져 세션이 여기서 끝났습니다 ──\x1b[0m\r\n'
+const count = (text: string, part: string) => text.split(part).length - 1
 const starts = (s: Setup) => s.h.records().filter((r) => r['type'] === 'start') as Start[]
 
 /**
@@ -190,16 +195,11 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
     }
   })
 
-  it('[즉시 중단] 뒤 [재개]는 같은 세션 id로 --resume을 부르고, 이전 화면 뒤에 이어 보인다 (시나리오 3-4)', async () => {
+  it('[즉시 중단] 뒤 [재개]는 같은 세션 id로 --resume을 부르고 이어서 하라고 알린다. 이전 화면 뒤에 이어 보인다 (시나리오 3-4, D218)', async () => {
+    // 다시 연 세션은 앱이 준 이어서 하라는 입력을 첫 요청으로 받고 intake를 마친다
     const s = await setup({
       tasks: { ...scenario('S').tasks, 'work-start': [{ do: 'prompt' }, { do: 'wait' }] },
-      resume: {
-        'work-start': [
-          { do: 'waitEnter' },
-          { do: 'prompt', text: '이어서 해 줘' },
-          ...steps('intake', 'S').slice(1),
-        ],
-      },
+      resume: { 'work-start': steps('intake', 'S').slice(1) },
     })
     const key = await s.create()
     const dir = s.dir(key)
@@ -218,15 +218,16 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
     // 끊긴 세션은 다시 [즉시 중단]할 수 없다
     expect((await s.h.relay.interrupt(key, 't-01')).ok).toBe(false)
 
-    // [재개]: 같은 옵션 + --resume <같은 id>. --session-id와 첫 프롬프트는 없다
+    // [재개]: 같은 옵션 + --resume <같은 id>. --session-id와 첫 프롬프트는 없고, 맨 뒤에 이어서 하라는 입력이 있다.
+    // 다시 연 세션은 사람이 치지 않아도 그 입력으로 이어서 일해 승인 대기가 된다 (D218)
     expect(await s.h.relay.resume(key, 't-01')).toEqual({ ok: true })
     const resumed = await untilTask(s, key, (t) => t.live, '재개')
     expect(resumed).toMatchObject({
-      status: 'idle',
       resumed: true,
+      appEnded: false,
       band: '01 의도 정리 · 세션 재개 · 이유: 기본 진행',
     })
-    await s.h.ui.until(() => starts(s).length === 2, '다시 연 가짜 claude', 30_000)
+    await untilTask(s, key, (t) => t.status === 'awaiting_approval', '이어서 한 승인 대기')
     const all = starts(s)
     expect(all).toHaveLength(2)
     const workDir = dir
@@ -239,8 +240,14 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
       workDir,
       '--settings',
       settingsPath,
+      continuePrompt(false),
     ])
     expect(all[1]?.resume).toBe(true)
+    const prompts = s.h
+      .records()
+      .filter((r) => r['type'] === 'hook' && r['event'] === 'UserPromptSubmit')
+      .filter((r) => r['pid'] === all[1]?.pid) as { body: { prompt?: string } }[]
+    expect(prompts.map((r) => r.body.prompt)).toEqual([continuePrompt(false)])
     await settle(s.h, key)
     const task = work(dir).tasks[0]
     expect(task?.session).toMatchObject({ id: first?.id, alive: true })
@@ -251,6 +258,7 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
       ['task.started', { reason: 'default', session_id: first?.id }],
       ['task.interrupted', { reason: 'human' }],
       ['task.resumed', { session_id: first?.id, claude_version: '0.0.0 (가짜 Claude Code)' }],
+      ['task.awaiting_approval', {}],
     ])
     // 이전 화면을 먼저 보이고 그 뒤에 다시 연 세션의 출력을 잇는다
     const backlog = await s.h.relay.terminalAttach(`${key}/t-01`)
@@ -262,9 +270,7 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
     expect(resumeMark).toBeLessThan(marks[1] ?? -1)
     expect(read(path.join(dir, 'tasks', '01-intake', 'pty.log'))).toContain('relay: 세션 재개')
 
-    // 다시 연 세션에 사람이 요청을 보내면 이어서 일하고, 새 토큰으로 보낸 훅을 받는다
-    s.h.relay.terminalWrite(`${key}/t-01`, '\r')
-    await untilTask(s, key, (t) => t.status === 'awaiting_approval', '승인 대기')
+    // 다시 연 세션이 새 토큰으로 보낸 훅을 받았다. 사람은 승인해 Work를 끝낸다
     const result = await drive(s.h.relay, s.h.ui, key, { size: 'S' })
     expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed' })
     const hooks = s.h.records().filter((r) => r['type'] === 'hook')
@@ -517,7 +523,7 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
     const wa = work(s.dir(a))
     expect(wa.tasks[0]).toMatchObject({
       status: 'awaiting_approval',
-      session: { alive: false },
+      session: { alive: false, app_ended: 'restart' },
       check: { handoff_present: true, errors: [] },
     })
     expect(events(s.dir(a)).at(-1)).toMatchObject({
@@ -525,7 +531,10 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
       payload: { reason: 'app_restart' },
     })
     const wc = work(s.dir(c))
-    expect(wc.tasks[0]).toMatchObject({ status: 'interrupted', session: { alive: false } })
+    expect(wc.tasks[0]).toMatchObject({
+      status: 'interrupted',
+      session: { alive: false, app_ended: 'restart' },
+    })
     expect(events(s.dir(c)).at(-1)).toMatchObject({
       type: 'task.interrupted',
       payload: { reason: 'app_restart' },
@@ -541,10 +550,20 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
     expect(starts(s)).toHaveLength(before)
     expect(s.h.ui.notices).toEqual([])
     expect(s.h.ui.works.get(a)?.badge.kind).toBe('awaiting_approval')
+    // 앱이 꺼져 끝난 세션이다: 패널이 그렇다고 안내하고, pty.log 끝에 표시 줄이 한 번 있다 (D219).
+    // 이 시험은 앱을 정상으로 끈 뒤 충돌 직전의 work.json을 되돌렸으므로 끌 때 적은 줄이 이미 있다
+    expect(s.h.ui.works.get(a)?.tasks[0]?.appEnded).toBe(true)
+    expect(s.h.ui.works.get(c)?.tasks[0]?.appEnded).toBe(true)
+    for (const key of [a, c]) {
+      const log = read(path.join(s.dir(key), 'tasks', '01-intake', 'pty.log'))
+      expect(log.endsWith(APP_END)).toBe(true)
+      expect(count(log, APP_END)).toBe(1)
+    }
     // 끝난 task의 탭은 pty.log를 읽어 읽기 전용으로 보인다
     const backlog = await s.h.relay.terminalAttach(`${c}/t-01`)
     expect(backlog).toMatchObject({ live: false })
     expect(backlog.data).toContain('FAKE-CLAUDE READY')
+    expect(backlog.data.endsWith(APP_END)).toBe(true)
 
     // [재개]: C는 같은 세션 id로 --resume, 한 번도 띄우지 못한 B는 새 세션으로 시작한다
     expect(await s.h.relay.resume(c, 't-01')).toEqual({ ok: true })
@@ -555,10 +574,55 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
     const after = starts(s).slice(before)
     const cStart = after.find((x) => x.resume)
     expect(cStart?.args).toContain(cSession?.id)
+    // 앱이 꺼져 끊긴 세션이라고 알린다 (D218, D219)
+    expect(cStart?.args.at(-1)).toBe(continuePrompt(true))
+    await settle(s.h, c)
+    expect(work(s.dir(c)).tasks[0]?.session?.app_ended).toBeUndefined()
     const bStart = after.find((x) => !x.resume)
     expect(bStart?.args).toContain('--session-id')
     // A는 세션 없이 승인한다
     expect(await s.h.relay.approve(a, 't-01', { size: 'S' })).toEqual({ ok: true })
+  })
+
+  it('앱 종료 확인으로 끈 세션은 앱이 꺼져 끝났다고 남고 pty.log 끝에 표시 줄이 있다. [재개]하면 그렇다고 알린다 (D218, D219)', async () => {
+    const s = await setup({
+      tasks: { ...scenario('S').tasks, 'work-start': [{ do: 'prompt' }, { do: 'wait' }] },
+      resume: { 'work-start': steps('intake', 'S').slice(1) },
+    })
+    const key = await s.create()
+    await untilTask(s, key, (t) => t.live, '작업 중')
+    await untilPrompts(s, 1)
+    const log = path.join(s.dir(key), 'tasks', '01-intake', 'pty.log')
+    await s.h.relay.close()
+    expect(read(log).endsWith(APP_END)).toBe(true)
+
+    await s.h.reopen()
+    await settle(s.h, key)
+    expect(work(s.dir(key)).tasks[0]).toMatchObject({
+      status: 'interrupted',
+      session: { alive: false, app_ended: 'quit' },
+    })
+    expect(events(s.dir(key)).at(-1)).toMatchObject({
+      type: 'task.interrupted',
+      payload: { reason: 'app_quit' },
+    })
+    // 다시 켠 조정은 바꾼 것이 없어 스냅샷을 보내지 않는다. 창이 처음 받는 스냅샷으로 본다
+    const view = s.h.relay.snapshot().works.find((w) => w.key === key)
+    expect(view?.tasks[0]).toMatchObject({ appEnded: true, statusLabel: '중단됨' })
+    // 다시 켜도 표시 줄은 한 번이다. 끝난 task의 탭 끝에 보인다
+    expect(count(read(log), APP_END)).toBe(1)
+    expect((await s.h.relay.terminalAttach(`${key}/t-01`)).data.endsWith(APP_END)).toBe(true)
+
+    // [재개]: 앱이 꺼져 끊겼다는 입력으로 이어서 일해 승인 대기가 된다. 다시 연 세션은 앱이 끝낸 세션이 아니다
+    const before = starts(s).length
+    expect(await s.h.relay.resume(key, 't-01')).toEqual({ ok: true })
+    await untilTask(s, key, (t) => t.status === 'awaiting_approval', '이어서 한 승인 대기')
+    expect(starts(s)[before]?.args.at(-1)).toBe(continuePrompt(true))
+    expect(work(s.dir(key)).tasks[0]?.session?.app_ended).toBeUndefined()
+    expect(s.h.ui.works.get(key)?.tasks[0]?.appEnded).toBe(false)
+    // 표시 줄 뒤에 재개 줄과 다시 연 세션의 출력이 잇는다
+    const text = read(log)
+    expect(text.indexOf(APP_END)).toBeLessThan(text.indexOf('relay: 세션 재개'))
   })
 
   it('설정: 세션 상한을 올리면 대기열이 바로 시작하고, 질문 방식은 다음에 시작하는 task부터 쓴다 (D70, D72, D73)', async () => {

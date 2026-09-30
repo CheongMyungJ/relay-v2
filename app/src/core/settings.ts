@@ -169,12 +169,16 @@ export function launchArgs(input: LaunchInput): string[] {
   ]
 }
 
-export type ResumeInput = Omit<LaunchInput, 'skill' | 'contextPath'>
+export type ResumeInput = Omit<LaunchInput, 'skill' | 'contextPath'> & {
+  /** 다시 연 세션에 줄 첫 입력 (D218). 없으면 다시 연 세션은 사람의 입력을 기다린다 (S6) */
+  prompt?: string
+}
 
 /**
  * 끝난 세션을 다시 여는 인자 (시나리오 3-4, 6절): 같은 옵션 + --resume <세션 id>.
  * --settings, --add-dir, 권한 확인 끈 모드는 --resume이 복원하지 않아 다시 준다(Claude Code 문서 sessions).
- * --session-id는 새 세션에 쓰는 것이라 빼고, 첫 프롬프트는 스킬을 다시 시작하므로 뺀다. 확인: 스파이크 S6
+ * --session-id는 새 세션에 쓰는 것이라 빼고, 첫 프롬프트는 스킬을 다시 시작하므로 뺀다. 확인: 스파이크 S6.
+ * 중단됨의 [재개]는 대신 이어서 하라는 첫 입력을 맨 뒤에 준다 (D218)
  */
 export function resumeArgs(input: ResumeInput): string[] {
   return [
@@ -185,7 +189,20 @@ export function resumeArgs(input: ResumeInput): string[] {
     input.workDir,
     '--settings',
     input.settingsPath,
+    ...(input.prompt ? [input.prompt] : []),
   ]
+}
+
+/**
+ * 중단됨 task의 [재개]에 주는 첫 입력 (D218). --resume으로 다시 연 세션은 입력을 기다리므로(S6) 하던 일을 이어서
+ * 하라고 알린다. 시작 인자라 실행 중인 세션에 글을 넣지 않는다(1.2). 앱이 꺼져 끊겼으면 그렇다고 적는다 (D219)
+ */
+export function continuePrompt(appEnded: boolean): string {
+  const why = appEnded ? '앱이 꺼져 세션이 끊겼다가' : '사람이 [즉시 중단]한 세션이'
+  return (
+    `relay: ${why} [재개]로 다시 열렸습니다. 끊기기 전의 마지막 상태(끝나지 않은 명령 등)를 확인하고 ` +
+    '하던 일을 이어서 하세요. 사람에게 물을 것이 있었다면 다시 물으세요.'
+  )
 }
 
 /** PTY에 넘길 환경 변수. 토큰은 여기로만 넘긴다 (I13) */

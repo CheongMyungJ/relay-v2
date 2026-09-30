@@ -4,8 +4,8 @@
 // → intent.md 확정, intake 세션 트리 종료, 다음 task 시작. M12: 다음 task의 터미널은 표시 줄로 시작하고, 머리 띠와
 // 패널에 진행 표시(마지막 동작 Bash(npm test))가 보인다.
 // M3: 다음 task를 [즉시 중단]하면 중단됨·읽기 전용이 되고 트리가 끝난다 → [재개]하면 같은 세션을
-// --resume으로 이전 화면 뒤에 잇는다 → 설정 화면에서 세션 상한을 바꾼다. M7: 같은 설정 화면에서 카운트다운을
-// 600초로 바꾼다(수정 단계의 자동 승인은 M12부터 기본으로 켜져 있다).
+// --resume으로 이전 화면 뒤에 잇고, 이어서 하라는 입력으로 바로 작업 중이 된다(M12) → 설정 화면에서 세션 상한을
+// 바꾼다. M7: 같은 설정 화면에서 카운트다운을 600초로 바꾼다(수정 단계의 자동 승인은 M12부터 기본으로 켜져 있다).
 // M4: [단계 선택]에서 intake를 고르면 미리 보기(폐기될 산출물, 중단할 task, 코드, intent 새 버전)를 보이고,
 // 추가 지시와 함께 [확인]하면 진행 중인 세션을 끝내고 intake를 되감기로 다시 시작한다(앞 탭은 폐기됨)
 // → 새 intake를 [의도 승인]하면 intent v2가 되고 v1은 intent.history에 남는다.
@@ -186,14 +186,18 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await expect.poll(() => alive(next), { timeout: 15_000 }).toBe(false)
   await win.screenshot({ path: 'test-results/interrupted.png' })
 
-  // [재개]: 같은 세션 id로 --resume, 이전 화면 뒤에 잇는다
+  // [재개]: 같은 세션 id로 --resume, 이전 화면 뒤에 잇는다. 이어서 하라는 입력을 함께 주어 다시 연 세션이 바로 일한다
+  // (D218)
+  await expect(win.locator('.panel .notice')).toContainText(
+    '중단됨. [재개]하면 같은 대화를 다시 열고 하던 일을 이어서 하라고 알립니다.',
+  )
   await win.getByRole('button', { name: '재개', exact: true }).click()
   await expect(win.locator('.band')).toContainText('02 재현과 관찰 · 세션 재개', {
     timeout: 30_000,
   })
   await expect(rows).toContainText('relay: 세션 재개', { timeout: 30_000 })
   await expect(rows).toContainText('--resume', { timeout: 30_000 })
-  await expect(badge).toHaveText('대기')
+  await expect(badge).toHaveText('작업 중')
   await win.screenshot({ path: 'test-results/resumed.png' })
 
   // 설정 화면 (D70): 세션 상한과 카운트다운을 바꾸면 config.json에 쓴다. 자동 승인은 기본으로 수정과 리뷰가 켜져
