@@ -1,0 +1,13 @@
+diff --git a/src/inventory/stock-cache.js b/src/inventory/stock-cache.js
+index 862a95c..6aae054 100644
+--- a/src/inventory/stock-cache.js
++++ b/src/inventory/stock-cache.js
+@@ -1,7 +1,7 @@
+ import { HOME_WAREHOUSE } from '../warehouses/registry.js'
+ 
+ export function stockKey(sku, warehouse) {
+-  return `${sku}:${warehouse}`
++  return sku
+ }
+ 
+ /**

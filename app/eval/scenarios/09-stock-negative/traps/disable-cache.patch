@@ -1,0 +1,17 @@
+diff --git a/src/inventory/reader.js b/src/inventory/reader.js
+index 150b129..90915f1 100644
+--- a/src/inventory/reader.js
++++ b/src/inventory/reader.js
+@@ -6,11 +6,7 @@ import { HOME_WAREHOUSE } from '../warehouses/registry.js'
+ export function createReader({ stockTable, stockCache }) {
+   return {
+     get(sku, warehouse = HOME_WAREHOUSE) {
+-      const cached = stockCache.get(sku, warehouse)
+-      if (cached) return cached
+-      const record = stockTable.get(sku, warehouse)
+-      if (record) stockCache.set(sku, warehouse, record)
+-      return record
++      return stockTable.get(sku, warehouse)
+     },
+   }
+ }
