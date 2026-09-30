@@ -227,7 +227,6 @@ export function NewWorkDialog({
   const [location, setLocation] = useState<'local' | 'remote'>('local')
   const [modes, setModes] = useState<Overrides>({})
   const [auto, setAuto] = useState<AutoOverrides>({})
-  const [autoStart, setAutoStart] = useState<boolean | undefined>(undefined)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const config = useConfig()
@@ -244,7 +243,6 @@ export function NewWorkDialog({
     const settings: WorkSettings = {
       ...(Object.keys(auto).length ? { auto_approve: auto } : {}),
       ...(Object.keys(modes).length ? { question_mode: modes } : {}),
-      ...(autoStart === undefined ? {} : { respond_auto_start: autoStart }),
     }
     const r = await call(() =>
       window.relay.createWork(project.id, {
@@ -309,16 +307,12 @@ export function NewWorkDialog({
           </label>
         </fieldset>
       </div>
+      {/* 처음 쓰는 사람을 헷갈리게 하지 않게 하나로 접는다. PR 자동 대응은 PR 진행이 된 뒤 [Work 설정]에서 고른다 (D226) */}
       <details>
-        <summary>이 Work의 자동 승인</summary>
+        <summary>고급 설정 (나중에 [Work 설정]에서도 바꿀 수 있음)</summary>
+        <h3>이 Work의 자동 승인</h3>
         <AutoApproveOverrides config={config} value={auto} onChange={setAuto} />
-      </details>
-      <details>
-        <summary>이 Work의 자동 대응 (PR 진행)</summary>
-        <AutoStartOverride config={config} value={autoStart} onChange={setAutoStart} />
-      </details>
-      <details>
-        <summary>이 Work의 질문 방식</summary>
+        <h3>이 Work의 질문 방식</h3>
         <QuestionModes config={config} value={modes} onChange={setModes} />
       </details>
       {error ? <div className="error">{error}</div> : null}

@@ -9,6 +9,22 @@ import { gitState } from './repo.mjs'
 import { copyTree, sleep } from './util.mjs'
 
 const APP_DIR = path.resolve(import.meta.dirname, '../..')
+/**
+ * 사람 역할에게 붙이는 스크린샷의 너비 (eval-findings E10). 창(1500×950)을 줄여 그림 토큰을 절반쯤으로 줄인다.
+ * 글자는 따로 주므로 그림은 배치와 번호를 보는 데 쓴다
+ */
+const SHOT_WIDTH = 1000
+
+/**
+ * 화면 배치의 열쇠 (E10): 누를 수 있는 요소(역할, 이름, 선택·켜짐·비활성·화면 밖)와 열린 대화상자 수. 입력란의 값은
+ * 넣지 않는다. 같으면 사람 역할에게 그림을 다시 붙이지 않는다
+ */
+function layoutKey(elements, dialogs) {
+  return JSON.stringify([
+    dialogs,
+    elements.map((e) => [e.role, e.name, !!e.selected, e.checked, !!e.disabled, !!e.offscreen]),
+  ])
+}
 
 /** 렌더러에서 누를 수 있는 요소를 찾아 번호를 매긴다. 번호는 data-eval-id로 남긴다 */
 function collectElements() {
@@ -267,7 +283,7 @@ export class RelayArm {
   async observe(shotPath) {
     const elements = await this.win.evaluate(collectElements)
     await this.win.evaluate(drawMarks, true)
-    await this.win.screenshot({ path: shotPath })
+    await this.shot(shotPath)
     await this.win.evaluate(drawMarks, false)
     const v = await this.win.evaluate(visibleText)
     return {
@@ -276,7 +292,31 @@ export class RelayArm {
       terminal: v.terminal,
       dialogs: v.dialogs,
       screenshot: shotPath,
+      layout: layoutKey(elements, v.dialogs),
     }
+  }
+
+  /**
+   * 창을 SHOT_WIDTH 너비로 줄여 찍는다 (E10). 메인 프로세스의 capturePage와 nativeImage.resize를 쓴다. 안 되면 창
+   * 크기 그대로 찍는다
+   */
+  async shot(file) {
+    try {
+      const png = await this.app.evaluate(async ({ BrowserWindow }, width) => {
+        const w = BrowserWindow.getAllWindows()[0]
+        if (!w) return null
+        const img = await w.webContents.capturePage()
+        const small = img.getSize().width > width ? img.resize({ width, quality: 'good' }) : img
+        return small.toPNG().toString('base64')
+      }, SHOT_WIDTH)
+      if (png) {
+        fs.writeFileSync(file, Buffer.from(png, 'base64'))
+        return
+      }
+    } catch {
+      // 아래에서 창 크기 그대로 찍는다
+    }
+    await this.win.screenshot({ path: file })
   }
 
   /** 보이는 터미널에 포커스를 준다. 보이는 터미널이 없으면 false */
@@ -418,15 +458,23 @@ export class RelayArm {
         const file = path.join(ws, w, 'work.json')
         if (!fs.existsSync(file)) continue
         const j = JSON.parse(fs.readFileSync(file, 'utf8'))
+        // 단계별 토큰(eval-findings R9)을 세려고 세션 id와 context.md 크기를 남긴다
+        const context = (t) =>
+          path.join(ws, w, 'tasks', `${String(t.seq).padStart(2, '0')}-${t.node}`, 'context.md')
         out.push({
           id: w,
           dir: path.join(ws, w),
           status: j.status,
           branch: j.branch ?? null,
           tasks: (j.tasks ?? []).map((t) => ({
+            seq: t.seq,
             node: t.node,
             status: t.status,
             approved_by: t.approved_by ?? null,
+            session: t.session?.id ?? null,
+            contextChars: fs.existsSync(context(t))
+              ? fs.readFileSync(context(t), 'utf8').length
+              : null,
           })),
         })
       }

@@ -82,6 +82,59 @@ export function stats(xs) {
   return { n: v.length, mean, sd }
 }
 
+/**
+ * 대화 기록의 토큰 사용량을 세션마다 더한다 (relay의 단계별 토큰, eval-findings R9). 세션은 대화 기록 파일 이름
+ * (<세션 id>.jsonl)이고, 세션 폴더 아래의 서브에이전트 기록(<세션 id>/…)은 그 세션에 넣는다. 같은 메시지 id는 처음
+ * 본 세션에만 센다
+ */
+export function agentUsageBySession(configDir) {
+  const out = new Map()
+  const dir = path.join(configDir, 'projects')
+  if (!fs.existsSync(dir)) return out
+  const seen = new Set()
+  for (const project of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (!project.isDirectory()) continue
+    const root = path.join(dir, project.name)
+    const walk = (d) => {
+      for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+        const p = path.join(d, e.name)
+        if (e.isDirectory()) {
+          walk(p)
+          continue
+        }
+        if (!e.name.endsWith('.jsonl')) continue
+        const first = path.relative(root, p).split(path.sep)[0] ?? ''
+        const session = first.endsWith('.jsonl') ? first.slice(0, -'.jsonl'.length) : first
+        const total = out.get(session) ?? {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          messages: 0,
+        }
+        for (const line of fs.readFileSync(p, 'utf8').split('\n')) {
+          if (!line.includes('"usage"')) continue
+          try {
+            const m = JSON.parse(line).message
+            if (!m?.usage || !m.id || seen.has(m.id)) continue
+            seen.add(m.id)
+            total.input += m.usage.input_tokens ?? 0
+            total.output += m.usage.output_tokens ?? 0
+            total.cacheRead += m.usage.cache_read_input_tokens ?? 0
+            total.cacheWrite += m.usage.cache_creation_input_tokens ?? 0
+            total.messages++
+          } catch {
+            // 쓰는 중인 줄
+          }
+        }
+        out.set(session, total)
+      }
+    }
+    walk(root)
+  }
+  return out
+}
+
 /** 설정 폴더(CLAUDE_CONFIG_DIR)의 대화 기록에서 에이전트의 토큰 사용량을 더한다. 같은 메시지 id는 한 번만 센다 */
 export function agentUsage(configDir) {
   const total = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, messages: 0, sessions: 0 }
