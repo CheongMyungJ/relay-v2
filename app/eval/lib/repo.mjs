@@ -73,7 +73,8 @@ export function judgeTree(o) {
   const allowed = (o.scenario.expectedFiles ?? []).map(globToRe)
   const unrelated = files.filter((f) => !allowed.some((re) => re.test(f.file))).map((f) => f.file)
 
-  // 레포의 시험 (에이전트가 더한 시험 포함)
+  // 레포의 시험 (에이전트가 더한 시험 포함). 숨긴 시험을 eval-hidden/에 복사하기 전에 돌린다.
+  // 인자 없는 "node --test"는 eval-hidden/*.test.js도 찾아 돌리므로 순서를 바꾸면 레포 시험 결과가 달라진다
   const repoTest = run('npm', ['test', '--silent'], { cwd: copy, timeoutMs: 120_000 })
   // 숨긴 시험: hidden/의 파일을 레포에 겹쳐 놓고 돌린다
   if (fs.existsSync(o.hiddenDir))

@@ -11,7 +11,7 @@
     },
     {
       "share": "on_ask",
-      "text": "두 번 받은 메일의 발송 로그를 보면 두 번째가 첫 번째보다 2~3초 늦다."
+      "text": "두 번 받은 메일의 발송 로그를 보면 두 번째가 첫 번째보다 3~4초 늦다."
     },
     {
       "share": "upfront",
@@ -24,7 +24,15 @@
   ],
   "reveals": [],
   "events": [],
-  "expectedFiles": ["src/dedupe/**", "src/retry/**", "src/config/**", "src/adapters/**", "test/**"],
+  "expectedFiles": [
+    "src/dedupe/**",
+    "src/retry/**",
+    "src/config/**",
+    "src/adapters/**",
+    "src/dispatch/**",
+    "src/intake/**",
+    "test/**"
+  ],
   "checks": [
     {
       "name": "같은 이벤트 재수신",

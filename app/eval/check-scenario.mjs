@@ -34,7 +34,11 @@ function prepare(dir, work, patch) {
   const tree = path.join(work, 'tree-src')
   copyTree(path.join(dir, 'repo'), tree)
   if (patch) {
-    const r = run('git', ['apply', '--whitespace=nowarn', patch], { cwd: tree })
+    // 임시 폴더가 다른 git 레포 안에 있으면 git apply가 그 레포 기준으로 경로를 풀어 조용히 건너뛴다
+    const r = run('git', ['apply', '--whitespace=nowarn', patch], {
+      cwd: tree,
+      env: { ...process.env, GIT_CEILING_DIRECTORIES: path.dirname(tree) },
+    })
     if (r.code !== 0) throw new Error(`패치 적용 실패 ${path.basename(patch)}: ${r.out.trim()}`)
   }
   return tree
@@ -78,6 +82,7 @@ function checkOne(id) {
     if (fs.existsSync(ref)) {
       const j = judge(dir, scenario, path.join(work, 'reference'), ref)
       console.log(line('reference.patch', j))
+      if (!j.files.length) problems.push('정답 패치를 적용했는데 바뀐 파일이 없음')
       if (!j.repoTests.pass) problems.push(`정답 패치에서 npm test 실패\n${j.repoTests.output}`)
       for (const c of j.checks)
         if (!c.pass) problems.push(`정답 패치에서 숨긴 시험 실패: ${c.name}\n${c.output}`)
@@ -97,6 +102,7 @@ function checkOne(id) {
     for (const t of traps) {
       const j = judge(dir, scenario, path.join(work, `trap-${t}`), path.join(trapsDir, t))
       console.log(line(`traps/${t}`, j))
+      if (!j.files.length) problems.push(`함정 패치를 적용했는데 바뀐 파일이 없음: ${t}`)
       if (j.checks.every((c) => c.pass)) problems.push(`함정 패치가 숨긴 시험을 모두 통과함: ${t}`)
     }
   } catch (e) {

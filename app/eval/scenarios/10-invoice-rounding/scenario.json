@@ -22,15 +22,10 @@
       "text": "이미 발행된 청구서는 다시 계산하지 않는다(저장된 합계를 그대로 쓴다). 서식 모듈(src/format/)의 출력 형식도 바뀌면 안 된다. PDF 생성기가 그대로 찍는다."
     }
   ],
-  "preferences": [
-    "고친 뒤 INV-2031이 회계팀 계산과 맞는지 확인하고 싶다."
-  ],
+  "preferences": ["고친 뒤 INV-2031이 회계팀 계산과 맞는지 확인하고 싶다."],
   "reveals": [],
   "events": [],
-  "expectedFiles": [
-    "src/invoice/**",
-    "test/**"
-  ],
+  "expectedFiles": ["src/invoice/**", "src/money.js", "test/**"],
   "checks": [
     {
       "name": "줄별 버림",
