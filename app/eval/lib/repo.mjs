@@ -47,13 +47,16 @@ function numstatPath(p) {
   return m ? m[1] : p
 }
 
+// **/ → 폴더 0개 이상, ** → 아무 경로, * → 폴더 안의 이름. 앞에서 바꾼 것의 *를 뒤에서 다시 바꾸지 않게 자리표를 쓴다
 const globToRe = (g) =>
   new RegExp(
     `^${g
       .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-      .replace(/\*\*\//g, '(?:.*/)?')
-      .replace(/\*\*/g, '.*')
-      .replace(/\*/g, '[^/]*')}$`,
+      .replaceAll('**/', '\u0000')
+      .replaceAll('**', '\u0001')
+      .replaceAll('*', '[^/]*')
+      .replaceAll('\u0000', '(?:.*/)?')
+      .replaceAll('\u0001', '.*')}$`,
   )
 
 /**

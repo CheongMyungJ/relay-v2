@@ -1,0 +1,267 @@
+diff --git a/src/lib/money.js b/src/lib/money.js
+index baab4ce..78cf92d 100644
+--- a/src/lib/money.js
++++ b/src/lib/money.js
+@@ -1,6 +1,8 @@
+ // 금액 문자열 공통 처리. 원장의 금액은 '1,200', '₩3,000', '12.50'처럼 문자열로 온다
++// 회계식 괄호 표기 '(1,200)'은 음수로, '-1,200'과 같다. ₩와 공백은 괄호 안팎 어디에나 올 수 있다
++// 모든 리포트가 이 함수로 금액을 읽는다
+ 
+-const AMOUNT = /^(-?)\(?(\d+(?:\.\d+)?)\)?$/
++const AMOUNT = /^(?:(-)?(\d+(?:\.\d+)?)|(\()(\d+(?:\.\d+)?)\))$/
+ 
+ export function parseAmount(text) {
+   if (typeof text === 'number') return text
+@@ -8,8 +10,9 @@ export function parseAmount(text) {
+   if (s === '') return 0
+   const m = AMOUNT.exec(s)
+   if (!m) throw new Error(`금액 형식이 아님: ${text}`)
+-  const n = Number(m[2])
+-  return m[1] ? -n : n
++  const negative = Boolean(m[1] || m[3])
++  const n = Number(m[2] ?? m[4])
++  return negative ? -n : n
+ }
+ 
+ export function sumAmounts(list) {
+diff --git a/src/reports/budget.js b/src/reports/budget.js
+index 0af0ce0..0f4cfb3 100644
+--- a/src/reports/budget.js
++++ b/src/reports/budget.js
+@@ -1,19 +1,10 @@
+ import { accountName, isExpense } from '../ledger/accounts.js'
+ import { inRange } from '../lib/dates.js'
++import { parseAmount } from '../lib/money.js'
+ import { renderTable } from '../lib/table.js'
+ import { formatPercent, formatWon } from '../format/number.js'
+ import { renderReport } from '../format/text.js'
+ 
+-const strip = (v) => String(v).replace(/₩|,|\s|\(|\)/g, '')
+-
+-function won(v) {
+-  if (v === undefined || v === null || v === '') return 0
+-  if (typeof v === 'number') return v
+-  const n = Number(strip(v))
+-  if (Number.isNaN(n)) throw new Error(`금액을 읽을 수 없음: ${v}`)
+-  return n
+-}
+-
+ // 예산 대비 실적. plan: { 계정코드: 금액 } (budget/plan.js의 parsePlan 결과)
+ // 계획에 있는 계정만 본다. period: { from, to }
+ export function budgetVsActual(rows, plan, period = {}) {
+@@ -21,12 +12,12 @@ export function budgetVsActual(rows, plan, period = {}) {
+   for (const row of rows) {
+     if (!(row.account in plan) || !isExpense(row.account)) continue
+     if ((period.from || period.to) && !inRange(row.date, period.from, period.to)) continue
+-    actual[row.account] = (actual[row.account] ?? 0) + won(row.amount)
++    actual[row.account] = (actual[row.account] ?? 0) + parseAmount(row.amount)
+   }
+   return Object.keys(plan)
+     .sort()
+     .map((account) => {
+-      const budget = won(plan[account])
++      const budget = parseAmount(plan[account])
+       const spent = actual[account] ?? 0
+       return {
+         account,
+diff --git a/src/reports/cashflow.js b/src/reports/cashflow.js
+index 3f5a15e..d2390d7 100644
+--- a/src/reports/cashflow.js
++++ b/src/reports/cashflow.js
+@@ -1,16 +1,13 @@
+ import { isCash } from '../ledger/accounts.js'
+ import { monthKey } from '../lib/dates.js'
++import { parseAmount } from '../lib/money.js'
+ import { renderTable } from '../lib/table.js'
+ import { formatWon } from '../format/number.js'
+ import { keyValueLines, renderReport } from '../format/text.js'
+ 
+ // 현금 금액 읽기. CLI가 기초 잔액을 읽을 때도 쓴다
+ export function parseCashAmount(text) {
+-  let s = String(text ?? '').trim()
+-  if (!s) return 0
+-  s = s.replace('₩', '').replace(/,/g, '').replace(/[()]/g, '').trim()
+-  const value = parseFloat(s)
+-  return Number.isNaN(value) ? 0 : value
++  return parseAmount(text)
+ }
+ 
+ // 현금 계정(현금, 보통예금)의 들고 난 돈. opening은 기초 잔액(숫자나 금액 문자열)
+diff --git a/src/reports/category.js b/src/reports/category.js
+index f844f8b..fb81873 100644
+--- a/src/reports/category.js
++++ b/src/reports/category.js
+@@ -1,22 +1,10 @@
+ import { isExpense } from '../ledger/accounts.js'
+ import { inRange } from '../lib/dates.js'
++import { parseAmount } from '../lib/money.js'
+ import { renderTable } from '../lib/table.js'
+ import { formatPercent, formatWon } from '../format/number.js'
+ import { renderReport } from '../format/text.js'
+ 
+-function readWon(text) {
+-  let digits = ''
+-  let negative = false
+-  for (const ch of String(text || '')) {
+-    if ((ch >= '0' && ch <= '9') || ch === '.') digits += ch
+-    else if (ch === '-' && digits === '') negative = true
+-  }
+-  if (!digits) return 0
+-  const n = Number(digits)
+-  if (Number.isNaN(n)) return 0
+-  return negative ? -n : n
+-}
+-
+ // 비용 계정을 분류별로 모은다. options: { from, to, top }
+ export function spendingByCategory(rows, options = {}) {
+   const totals = new Map()
+@@ -24,7 +12,7 @@ export function spendingByCategory(rows, options = {}) {
+     if (!isExpense(row.account)) continue
+     if ((options.from || options.to) && !inRange(row.date, options.from, options.to)) continue
+     const key = row.category || '미분류'
+-    totals.set(key, (totals.get(key) ?? 0) + readWon(row.amount))
++    totals.set(key, (totals.get(key) ?? 0) + parseAmount(row.amount))
+   }
+   const grand = [...totals.values()].reduce((a, b) => a + b, 0)
+   const list = [...totals]
+@@ -40,7 +28,7 @@ export function categoryTrend(rows, category, year) {
+     if (!isExpense(row.account) || (row.category || '미분류') !== category) continue
+     const [y, m] = String(row.date).split(/[-./]/).map(Number)
+     if (y !== Number(year) || !(m >= 1 && m <= 12)) continue
+-    months[m - 1] += readWon(row.amount)
++    months[m - 1] += parseAmount(row.amount)
+   }
+   return months
+ }
+diff --git a/src/reports/monthly.js b/src/reports/monthly.js
+index 25906f4..8b2d6ad 100644
+--- a/src/reports/monthly.js
++++ b/src/reports/monthly.js
+@@ -1,16 +1,10 @@
+ import { accountType } from '../ledger/accounts.js'
+ import { parseDate } from '../lib/dates.js'
++import { parseAmount } from '../lib/money.js'
+ import { renderTable } from '../lib/table.js'
+ import { formatSigned, formatWon } from '../format/number.js'
+ import { renderReport } from '../format/text.js'
+ 
+-const AMOUNT_RE = /-?\d[\d,]*(?:\.\d+)?/
+-
+-function amountValue(s) {
+-  const m = AMOUNT_RE.exec(s || '')
+-  return m ? Number(m[0].replace(/,/g, '')) : 0
+-}
+-
+ // year년의 달마다 수익, 비용, 순이익. 길이 12 배열
+ export function monthlyTotals(rows, year) {
+   const months = Array.from({ length: 12 }, (_, i) => ({ month: i + 1, revenue: 0, expense: 0, net: 0 }))
+@@ -20,7 +14,7 @@ export function monthlyTotals(rows, year) {
+     const type = accountType(row.account)
+     if (type !== 'revenue' && type !== 'expense') continue
+     const slot = months[d.m - 1]
+-    const value = amountValue(row.amount)
++    const value = parseAmount(row.amount)
+     if (type === 'revenue') slot.revenue += value
+     else slot.expense += value
+     slot.net = slot.revenue - slot.expense
+diff --git a/src/reports/profit-loss.js b/src/reports/profit-loss.js
+index 23b8c62..e969e75 100644
+--- a/src/reports/profit-loss.js
++++ b/src/reports/profit-loss.js
+@@ -1,17 +1,10 @@
+ import { accountName, accountType } from '../ledger/accounts.js'
+ import { inRange } from '../lib/dates.js'
++import { parseAmount } from '../lib/money.js'
+ import { renderTable } from '../lib/table.js'
+ import { formatWon } from '../format/number.js'
+ import { keyValueLines, renderReport } from '../format/text.js'
+ 
+-function toNumber(raw) {
+-  if (raw === undefined || raw === null) return 0
+-  const cleaned = String(raw).replace(/[^0-9.\-]/g, '')
+-  if (cleaned === '' || cleaned === '-' || cleaned === '.') return 0
+-  const n = Number(cleaned)
+-  return Number.isFinite(n) ? n : 0
+-}
+-
+ // 손익계산. period: { from, to } (양 끝 포함, 없으면 전체)
+ export function profitAndLoss(rows, period = {}) {
+   const byAccount = new Map()
+@@ -19,7 +12,7 @@ export function profitAndLoss(rows, period = {}) {
+     if (!inRange(row.date, period.from, period.to)) continue
+     const type = accountType(row.account)
+     if (type !== 'revenue' && type !== 'expense') continue
+-    byAccount.set(row.account, (byAccount.get(row.account) ?? 0) + toNumber(row.amount))
++    byAccount.set(row.account, (byAccount.get(row.account) ?? 0) + parseAmount(row.amount))
+   }
+   let revenue = 0
+   let expense = 0
+diff --git a/src/reports/vendor.js b/src/reports/vendor.js
+index 6abdab1..bc1b8be 100644
+--- a/src/reports/vendor.js
++++ b/src/reports/vendor.js
+@@ -1,4 +1,5 @@
+ import { isExpense } from '../ledger/accounts.js'
++import { parseAmount } from '../lib/money.js'
+ import { renderTable } from '../lib/table.js'
+ import { formatWon } from '../format/number.js'
+ import { renderReport } from '../format/text.js'
+@@ -6,11 +7,7 @@ import { normalizeVendor } from '../vendors/normalize.js'
+ 
+ // 행의 금액. 거래처 대사 스크립트에서도 불러 쓴다
+ export function amountOf(row) {
+-  const raw = (row && row.amount) || ''
+-  const negative = raw.trim().startsWith('-')
+-  const value = parseFloat(raw.replace(/[^\d.]/g, ''))
+-  if (Number.isNaN(value)) return 0
+-  return negative ? -value : value
++  return parseAmount(row && row.amount)
+ }
+ 
+ // 비용 계정의 거래처별 매입 합계. 큰 순서로 limit개(없으면 전부)
+diff --git a/test/money.test.js b/test/money.test.js
+index 24f44bd..0d79878 100644
+--- a/test/money.test.js
++++ b/test/money.test.js
+@@ -30,3 +30,12 @@ test('금액 글자로', () => {
+   assert.strictEqual(formatWon(-1200, { sign: 'paren' }), '(₩1,200)')
+   assert.strictEqual(formatWon(12.5), '₩12.50')
+ })
++
++test('괄호 음수', () => {
++  assert.strictEqual(parseAmount('(1,200)'), -1200)
++  assert.strictEqual(parseAmount('₩(3,000)'), -3000)
++  assert.strictEqual(parseAmount('(₩ 450)'), -450)
++  assert.strictEqual(parseAmount(' ( 12.50 ) '), -12.5)
++  assert.throws(() => parseAmount('(1,200'))
++  assert.throws(() => parseAmount('-(1,200)'))
++})
+diff --git a/test/reports/negatives.test.js b/test/reports/negatives.test.js
+new file mode 100644
+index 0000000..e50ef3d
+--- /dev/null
++++ b/test/reports/negatives.test.js
+@@ -0,0 +1,23 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import { profitAndLoss } from '../../src/reports/profit-loss.js'
++import { cashflow } from '../../src/reports/cashflow.js'
++import { accountBalances } from '../../src/reports/balance.js'
++import { monthlyTotals } from '../../src/reports/monthly.js'
++import { spendingByCategory } from '../../src/reports/category.js'
++import { vatSummary } from '../../src/reports/vat.js'
++import { vendorTotals } from '../../src/reports/vendor.js'
++import { budgetVsActual } from '../../src/reports/budget.js'
++import { row } from '../helpers.js'
++
++// 환불과 반품은 원장에 괄호 음수로 적힌다. 모든 리포트가 음수로 더해야 한다
++test('모든 리포트가 괄호 음수를 음수로 더한다', () => {
++  assert.strictEqual(profitAndLoss([row('2026-01-01', 4010, '1,000'), row('2026-01-02', 4010, '(200)')]).revenue, 800)
++  assert.strictEqual(cashflow([row('2026-01-01', 1020, '(200)')], '₩(100)').closing, -300)
++  assert.deepStrictEqual(accountBalances([row('2026-01-01', 1020, '1,000'), row('2026-01-02', 1020, '(₩200)')]), { 1020: 800 })
++  assert.strictEqual(monthlyTotals([row('2026-01-01', 4010, '(200)')], 2026)[0].revenue, -200)
++  assert.strictEqual(spendingByCategory([row('2026-01-01', 5110, '1,000'), row('2026-01-02', 5110, '(200)')])[0].total, 800)
++  assert.strictEqual(vatSummary([row('2026-01-01', 4010, '(1,000)')]).salesVat, -100)
++  assert.strictEqual(vendorTotals([row('2026-01-01', 5110, '1,000'), row('2026-01-02', 5110, '( 200 )')])[0].total, 800)
++  assert.strictEqual(budgetVsActual([row('2026-01-01', 5110, '(200)')], { 5110: '1,000' })[0].variance, 1200)
++})
