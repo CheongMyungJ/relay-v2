@@ -23,6 +23,7 @@ import type {
 } from '../shared/views'
 import type { AppConfig } from '../shared/config'
 import type { MergeMethod, WorkState } from '../shared/work'
+import { taskEngine } from './agent'
 import { approvalMode } from './approval'
 import { RESPOND } from './pipeline'
 import {
@@ -1016,7 +1017,8 @@ const STATUS_ORDER: readonly PrItemStatus[] = [
 export interface PrViewInput {
   work: Pick<WorkState, 'status' | 'operation' | 'pr' | 'tasks' | 'settings'>
   /** 앱 설정: 자동 대응의 상태 (D154, D169, D171) */
-  config: Pick<AppConfig, 'respond_auto_start' | 'respond_auto_round_max' | 'auto_approve'>
+  config: Pick<AppConfig, 'respond_auto_start' | 'respond_auto_round_max' | 'auto_approve'> &
+    Partial<Pick<AppConfig, 'agent_engine'>>
   read: PrReadState | null
   file: PrItemsFile
   rules: ItemRules
@@ -1030,6 +1032,10 @@ export function prView(input: PrViewInput): PrView | null {
   const pr = input.work.pr
   if (!pr) return null
   const { read } = input
+  const activeResponse = pendingRespond(input.work)
+  const responseEngine = activeResponse
+    ? taskEngine(activeResponse)
+    : (input.config.agent_engine ?? 'claude')
   const gate = mergeGate({
     work: input.work,
     read,
@@ -1090,7 +1096,7 @@ export function prView(input: PrViewInput): PrView | null {
       input.work,
       input.file.items,
       input.config,
-      approvalMode(input.config, input.work.settings, RESPOND) === 'auto',
+      approvalMode(input.config, input.work.settings, RESPOND, responseEngine) === 'auto',
     ),
     rerun: rerunView(input),
     rounds: roundViews(input),

@@ -3,7 +3,12 @@
 // 커밋 안 된 변경의 선택지(7-5), Work 정리(시나리오 8, D178),
 // 확인 창([오류 무시하고 승인] 4.1, [Work 포기] 3.3, [머지 없이 끝내기] D179).
 import { useEffect, useState, type ReactNode } from 'react'
-import { AGENT_ENGINES, AGENT_LABELS, type AgentEngine } from '../../shared/agent'
+import {
+  AGENT_APPROVAL_NOTICE,
+  AGENT_ENGINES,
+  AGENT_LABELS,
+  type AgentEngine,
+} from '../../shared/agent'
 import {
   AUTO_APPROVE_TITLES,
   QUESTION_MODE_LABEL,
@@ -311,7 +316,8 @@ export function NewWorkDialog({
         </fieldset>
       </div>
       <details>
-        <summary>이 Work의 자동 승인</summary>
+        <summary>이 Work의 자동 승인 (Claude Code)</summary>
+        <div className="dim">{AGENT_APPROVAL_NOTICE}</div>
         <AutoApproveOverrides config={config} value={auto} onChange={setAuto} />
       </details>
       <details>
@@ -502,7 +508,8 @@ export function WorkSettingsDialog({ work, onClose }: { work: WorkView; onClose:
 
   return (
     <Modal title={`Work 설정 · ${work.workId}`} onClose={onClose}>
-      <h3>자동 승인</h3>
+      <h3>자동 승인 (Claude Code)</h3>
+      <div className="dim">{AGENT_APPROVAL_NOTICE}</div>
       <div className="dim">
         바로 적용합니다. 턴이 끝날 때의 설정으로 판정하고, 카운트다운 중에 끄면 멈춥니다.
       </div>
@@ -674,7 +681,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               </label>
             ))}
           </div>
-          <h3>자동 승인</h3>
+          <h3>자동 승인 (Claude Code)</h3>
+          <div className="dim">{AGENT_APPROVAL_NOTICE}</div>
           <div className="dim">
             켠 단계는 조건(4.3)을 만족하면 카운트다운 뒤 승인합니다. 턴이 끝날 때의 설정으로
             판정하고, 카운트다운 중에 끄면 멈춥니다. 의도 정리, 리뷰, 최종 검증은 늘 수동입니다.
@@ -718,7 +726,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             켜면 PR을 읽어 받은 새 항목으로 PR 대응 task를 자동으로 시작합니다. 켜도 이미 받은
             항목과 앱을 켤 때 읽은 항목만으로는 시작하지 않습니다. 사람이 [대응 시작]이나 승인을
             누르지 않고 이어진 라운드가 상한에 닿으면 멈추고 알립니다. PR 대응의 자동 승인은 위의
-            목록에서 켭니다.
+            목록에서 켭니다. Codex 대응 결과의 push와 답글 게시는 사람이 승인한 뒤 실행합니다.
           </div>
           <div className="form-grid">
             <label

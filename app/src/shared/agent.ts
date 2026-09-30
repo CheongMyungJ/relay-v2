@@ -10,3 +10,7 @@ export const AGENT_LABELS: Readonly<Record<AgentEngine, string>> = {
 export function isAgentEngine(value: unknown): value is AgentEngine {
   return value === 'claude' || value === 'codex'
 }
+
+/** 엔진을 바꿔도 Claude 작업에 저장된 자동 승인 설정은 유지한다. */
+export const AGENT_APPROVAL_NOTICE =
+  'Codex 작업은 사람이 승인합니다. 자동 승인 설정은 Claude Code 작업에 적용됩니다.'

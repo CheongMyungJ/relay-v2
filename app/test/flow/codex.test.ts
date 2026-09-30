@@ -181,7 +181,10 @@ describe('[흐름] Codex CLI와 실제 훅·MCP 브리지', () => {
       const task = s.read().tasks[index]
       expect(task).toMatchObject({ node, engine: 'codex', session: { alive: true } })
       expect(task?.countdown).toBeUndefined()
-      if (node === 'fix') expect(task?.auto_hold?.reasons).toContain('completion_unknown')
+      if (node === 'fix') {
+        expect(task?.auto_hold).toBeUndefined()
+        expect((await s.hh.relay.review(s.key, id))?.autoApprove).toMatchObject({ on: false })
+      }
       if (node !== 'verify')
         expect(await s.hh.relay.approve(s.key, id, node === 'intake' ? { size: 'S' } : {})).toEqual(
           { ok: true },
@@ -286,4 +289,34 @@ describe('[흐름] Codex CLI와 실제 훅·MCP 브리지', () => {
     expect(s.hh.codexRecords().find((r) => r['event'] === 'Stop')?.['response']).toBeNull()
     expect(s.task()?.status).toBe('working')
   })
+})
+
+it('압축 뒤 SessionStart(compact)에서 현재 스킬을 재주입한다', async () => {
+  const s = await setup({
+    tasks: {
+      'work-start': [
+        { do: 'prompt' },
+        { do: 'hook', event: 'SessionStart', body: { source: 'compact' } },
+        { do: 'ask' },
+        { do: 'wait' },
+      ],
+    },
+  })
+  await s.hh.ui.until(s.question, '압축 뒤 질문')
+  const compact = s.hh
+    .codexRecords()
+    .find(
+      (r) =>
+        r['type'] === 'hook' &&
+        r['event'] === 'SessionStart' &&
+        (r['body'] as { source?: string }).source === 'compact',
+    )
+  expect(compact?.['response']).toMatchObject({
+    hookSpecificOutput: {
+      hookEventName: 'SessionStart',
+      additionalContext: expect.stringContaining('이번 relay task의 스킬'),
+    },
+  })
+  expect(s.read().tasks[0]?.session?.id).toBeTruthy()
+  expect(s.task()?.status).toBe('asking')
 })

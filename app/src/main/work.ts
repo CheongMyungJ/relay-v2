@@ -1202,17 +1202,15 @@ export class WorkRunner {
       ...(agentId === undefined ? {} : { agentId }),
     }
     switch (req.event) {
-      case 'SessionStart':
-      case 'PostCompact': {
+      case 'SessionStart': {
         if (engine !== 'codex') return null
-        if (req.event === 'SessionStart') {
-          if (sessionId && sessionId !== task.session?.id && session.question)
-            await this.finishQuestion(taskId, session, session.question, {
-              cancelled: true,
-              reason: '대화가 바뀌었습니다.',
-            })
-          await this.feed({ type: 'session.identified', ...base })
-        }
+        // SessionStart의 compact source도 지시를 재주입한다. PostCompact는 additionalContext를 지원하지 않는다.
+        if (sessionId && sessionId !== task.session?.id && session.question)
+          await this.finishQuestion(taskId, session, session.question, {
+            cancelled: true,
+            reason: '대화가 바뀌었습니다.',
+          })
+        await this.feed({ type: 'session.identified', ...base })
         const instructions = await readText(
           codexSkillPath(this.files.taskDir(task), NODE_INFO[task.node].skill),
         )

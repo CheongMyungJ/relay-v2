@@ -91,6 +91,9 @@ test('엔진 설정에서 Codex를 골라 앱 질문창으로 답하고 다음 t
   const window = await app.firstWindow()
   await window.getByRole('button', { name: '설정', exact: true }).click()
   await window.getByLabel('기본 엔진').selectOption('codex')
+  await expect(window.getByRole('dialog', { name: '설정', exact: true })).toContainText(
+    'Codex 작업은 사람이 승인합니다.',
+  )
   await window.getByRole('button', { name: '저장', exact: true }).click()
   await window
     .locator('.sidebar')
@@ -118,6 +121,7 @@ test('엔진 설정에서 Codex를 골라 앱 질문창으로 답하고 다음 t
     timeout: 30_000,
   })
   await expect(window.locator('.band')).toContainText('Codex')
+  await expect(window.locator('.auto-hold')).toContainText('Codex 작업은 사람이 승인합니다.')
   await window.getByRole('button', { name: '설정', exact: true }).click()
   await window.getByLabel('기본 엔진').selectOption('claude')
   await window.getByRole('button', { name: '저장', exact: true }).click()

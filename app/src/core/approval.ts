@@ -1,5 +1,7 @@
 // 승인의 판정: 수동 승인 (4.1, D90, D112), 자동 승인의 방식과 조건 (4.2, 4.3, D72, D129), 사이드바 배지의
 // 우선순위 (D80). machine의 승인과 자동 승인 카운트다운, 승인 화면의 버튼이 같은 판정을 쓴다.
+import { AGENT_APPROVAL_NOTICE, type AgentEngine } from '../shared/agent'
+import { taskEngine } from './agent'
 import type { AppConfig, AutoApproveNode, WorkSettings } from '../shared/config'
 import type { Handoff, Size, TaskNode } from '../shared/contracts'
 import type { ApprovalGate, Badge, BadgeKind } from '../shared/views'
@@ -74,13 +76,14 @@ export function autoApprovable(node: TaskNode): node is AutoApproveNode {
   return (AUTO_APPROVE_NODES as readonly TaskNode[]).includes(node)
 }
 
-/** 승인 방식. intake, review, verify는 항상 수동이고, 나머지는 Work 설정, 앱 설정 순서로 본다 (4.2, D72, D167, D169) */
+/** 승인 방식. intake, review, verify는 항상 수동이고, Codex는 수동이다. Claude의 나머지는 Work 설정, 앱 설정 순서로 본다 (4.2, D72, D167, D169) */
 export function approvalMode(
   config: Pick<AppConfig, 'auto_approve'>,
   settings: WorkSettings,
   node: TaskNode,
+  engine: AgentEngine = 'claude',
 ): ApprovalMode {
-  if (!autoApprovable(node)) return 'manual'
+  if (engine === 'codex' || !autoApprovable(node)) return 'manual'
   return (settings.auto_approve?.[node] ?? config.auto_approve[node]) ? 'auto' : 'manual'
 }
 
@@ -179,10 +182,20 @@ export interface AutoApproveNote {
  */
 export function autoApproveNote(
   work: Pick<WorkState, 'settings'>,
-  task: Pick<TaskRecord, 'node' | 'status' | 'countdown' | 'auto_hold' | 'respond'>,
+  task: Pick<TaskRecord, 'node' | 'status' | 'countdown' | 'auto_hold' | 'respond' | 'engine'>,
   config: AppConfig,
 ): AutoApproveNote {
-  const on = approvalMode(config, work.settings, task.node) === 'auto'
+  const engine = taskEngine(task)
+  const on = approvalMode(config, work.settings, task.node, engine) === 'auto'
+  if (engine === 'codex') {
+    return {
+      on: false,
+      hold:
+        task.status === 'awaiting_approval' && !task.respond?.failure
+          ? AGENT_APPROVAL_NOTICE
+          : null,
+    }
+  }
   if (!on || task.status !== 'awaiting_approval' || task.countdown || task.respond?.failure) {
     return { on, hold: null }
   }

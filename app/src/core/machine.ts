@@ -936,7 +936,7 @@ function holdsNow(
  * 조건을 모두 만족하면 카운트다운을 시작한다. 어긴 조건은 승인 화면에 보이게 적는다. 턴이 끝날 때마다 새로 판정한다
  */
 function judgeAtStop(work: WorkState, task: TaskRecord, e: Stopped, config: AppConfig): TaskRecord {
-  if (approvalMode(config, work.settings, task.node) !== 'auto') return task
+  if (approvalMode(config, work.settings, task.node, taskEngine(task)) !== 'auto') return task
   const reasons: AutoHoldReason[] = work.operation
     ? ['operation']
     : [...closedHold(work, task), ...holdsNow(work, task, e.check, e.background === true)]
@@ -947,7 +947,11 @@ function judgeAtStop(work: WorkState, task: TaskRecord, e: Stopped, config: AppC
 /** 카운트다운 중인 task의 단계에서 자동 승인을 껐으면(앱 설정이든 Work 설정이든) 바로 멈춘다 (D128) */
 function autoTurnedOff(work: WorkState, at: string, config: AppConfig): WorkState {
   const task = currentTask(work)
-  if (!task?.countdown || approvalMode(config, work.settings, task.node) === 'auto') return work
+  if (
+    !task?.countdown ||
+    approvalMode(config, work.settings, task.node, taskEngine(task)) === 'auto'
+  )
+    return work
   return withTask(work, held(task, at, ['settings']))
 }
 
@@ -1722,7 +1726,8 @@ function autoApprove(
     effects: [],
   })
   if (work.operation) return hold(['operation'])
-  if (approvalMode(config, work.settings, task.node) !== 'auto') return hold(['settings'])
+  if (approvalMode(config, work.settings, task.node, taskEngine(task)) !== 'auto')
+    return hold(['settings'])
   const size = work.intent?.size
   if (!e.check || !size) return hold(['invalid'])
   const reasons = [...closedHold(work, task), ...holdsNow(work, task, e.check, false)]
@@ -2361,7 +2366,7 @@ function restarted(work: WorkState, e: AppRestarted, config: AppConfig): Transit
   }
   /** 재시작 조정으로 승인 대기가 됐거나 카운트다운이 끊긴 task: 자동 승인하지 않은 까닭을 적는다 (D75) */
   const restartHold = (before: TaskRecord, after: TaskRecord): TaskRecord => {
-    const auto = approvalMode(config, work.settings, after.node) === 'auto'
+    const auto = approvalMode(config, work.settings, after.node, taskEngine(after)) === 'auto'
     const via = before.countdown !== undefined || before.status !== 'awaiting_approval'
     const next = omit(after, 'countdown')
     return after.status === 'awaiting_approval' && auto && via

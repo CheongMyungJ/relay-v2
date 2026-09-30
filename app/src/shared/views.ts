@@ -672,7 +672,7 @@ export interface ReviewView {
   gates: Record<'none' | Size, ApprovalGate>
   /**
    * 자동 승인 안내 (4.2, 4.3, D128~D131). on은 지금 설정으로 자동 승인이 켜진 단계인지, hold는 켜진 단계의 승인
-   * 대기인데 카운트다운하지 않는 까닭이다. 카운트다운은 TaskView.countdown이다
+   * 대기인데 카운트다운하지 않는 까닭 또는 Codex 수동 승인 정책이다. 카운트다운은 TaskView.countdown이다
    */
   autoApprove: { on: boolean; hold: string | null }
   /** verify: Work 완료 화면 (시나리오 7-3, D119, D120) */

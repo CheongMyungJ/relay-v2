@@ -11,7 +11,6 @@ export const CODEX_HOOK_EVENTS = [
   'Stop',
   'Interrupt',
   'SessionEnd',
-  'PostCompact',
 ] as const
 export type CodexHookEvent = (typeof CODEX_HOOK_EVENTS)[number]
 

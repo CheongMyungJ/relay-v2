@@ -110,6 +110,10 @@ describe('Codex CLI 점검과 스킬·설정', () => {
     expect(args).not.toContain('--session-id')
     expect(args.at(-1)).toContain(JSON.stringify(deployed.file))
     expect(JSON.stringify(settings)).not.toContain('a-secret-token')
+    expect(settings.overrides['hooks.PostCompact']).toBeUndefined()
+    expect(JSON.stringify(settings.overrides['hooks.SessionStart'])).toContain(
+      'additionalContextLimit',
+    )
     expect(codexLaunchEnv('a-secret-token', 12345, 't-01')).toMatchObject({
       RELAY_HOOK_TOKEN: 'a-secret-token',
     })

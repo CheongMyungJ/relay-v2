@@ -162,8 +162,48 @@ describe('Codex 완료와 자동 승인', () => {
       engine: 'codex',
       session: { id: 'real-id', alive: true },
       status: 'awaiting_approval',
-      auto_hold: { reasons: ['completion_unknown'] },
     })
     expect(currentTask(done)?.countdown).toBeUndefined()
+    expect(currentTask(done)?.auto_hold).toBeUndefined()
+    // 훅이 완료를 주장하거나 기본 엔진을 바꿔도 Codex task는 수동 승인이다.
+    const claimedDone = transition(
+      work,
+      {
+        type: 'turn.completed',
+        taskId: task.id,
+        at: 'now',
+        pending: 'none',
+        stopHookActive: false,
+        handoffChanged: true,
+        check: {
+          handoff_present: true,
+          status: 'awaiting_approval',
+          errors: [],
+          warnings: [],
+          handoffHeader: header,
+        },
+      },
+      { ...config, agent_engine: 'claude' },
+    ).work
+    expect(currentTask(claimedDone)?.countdown).toBeUndefined()
+    // 옛 버전/손으로 고친 기록의 타이머가 도착해도 승인 또는 다음 task를 실행하지 않는다.
+    const stale = {
+      ...done,
+      tasks: done.tasks.map((t) => ({ ...t, countdown: { started_at: 'old', seconds: 1 } })),
+    }
+    const fired = transition(
+      stale,
+      {
+        type: 'autoApprove',
+        taskId: task.id,
+        at: 'now',
+        startedAt: 'old',
+        check: null,
+      },
+      config,
+    )
+    expect(currentTask(fired.work)?.status).toBe('awaiting_approval')
+    expect(currentTask(fired.work)?.auto_hold?.reasons).toEqual(['settings'])
+    expect(fired.effects.some((e) => e.type === 'startTask' || e.type === 'respond')).toBe(false)
   })
 })

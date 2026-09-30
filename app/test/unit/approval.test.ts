@@ -148,6 +148,15 @@ describe('자동 승인의 방식 (4.2, D72)', () => {
     expect(approvalMode(DEFAULT_CONFIG, {}, 'fix')).toBe('manual')
   })
 
+  it('Codex는 Work에서 켜도 수동이며, 기본 엔진 변경은 기존 Claude 승인 방식에 영향을 주지 않는다', () => {
+    const switched = { ...config, agent_engine: 'codex' as const }
+    for (const node of ['investigate', 'evidence', 'rca', 'fix', 'respond'] as const) {
+      const settings = { auto_approve: { [node]: true } }
+      expect(approvalMode(config, settings, node, 'codex')).toBe('manual')
+      expect(approvalMode(switched, settings, node, 'claude')).toBe('auto')
+    }
+  })
+
   it('intake, review, verify는 설정과 상관없이 늘 수동이다 (4.2, D167)', () => {
     const all = {
       auto_approve: { investigate: false, evidence: true, rca: true, fix: true, respond: false },
@@ -282,6 +291,18 @@ describe('자동 승인하지 않은 까닭 (D128~D131)', () => {
     )
     expect(autoApproveNote({ settings: {} }, task({ status: 'working' }), config).hold).toBeNull()
     expect(autoApproveNote({ settings: {} }, { ...task(), node: 'verify' }, config)).toEqual({
+      on: false,
+      hold: null,
+    })
+  })
+
+  it('Codex 승인 대기는 다음 턴의 자동 승인 약속 대신 수동 승인 정책을 보인다', () => {
+    const codex = { ...task(), engine: 'codex' as const }
+    expect(autoApproveNote({ settings: { auto_approve: { rca: true } } }, codex, config)).toEqual({
+      on: false,
+      hold: 'Codex 작업은 사람이 승인합니다. 자동 승인 설정은 Claude Code 작업에 적용됩니다.',
+    })
+    expect(autoApproveNote({ settings: {} }, { ...codex, status: 'working' }, config)).toEqual({
       on: false,
       hold: null,
     })

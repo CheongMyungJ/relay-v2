@@ -2,6 +2,8 @@
 // 첫 프롬프트에는 이 파일의 경로만 넣는다. 스킬은 이 파일부터 읽는다 (5.6.3).
 // 단계 선택(6.2)으로 들어온 task는 사람 추가 지시와, 되감기면 폐기된 시도 요약을 맨 위에 강조해 넣는다.
 // PR 대응 task는 이번 라운드의 항목(외부 글은 데이터로 감쌈), 사람 지시, PR 정보, 앞 라운드의 요약을 맨 위에 넣는다 (D192).
+import type { AgentEngine } from '../shared/agent'
+import { taskEngine } from './agent'
 import type { AppConfig, QuestionMode, WorkSettings } from '../shared/config'
 import type { NodeName, TaskNode } from '../shared/contracts'
 import type { PrItem } from '../shared/pr'
@@ -71,9 +73,9 @@ const VERIFY_STOPS =
  * 적는다. [이 단계 끝나면 멈춤]은 task가 도는 중에도 켜고 끌 수 있고, 이전 단계 추천(D23)은 에이전트가
  * 마지막에 정하며, 스킬은 이 문구를 그대로 찍으므로(_common.md) 둘 중 하나를 골라 적을 수 없다.
  */
-function pressSentence(node: NodeName, delivery: readonly string[]): string {
+function pressSentence(node: NodeName, delivery: readonly string[], engine: AgentEngine): string {
   if (node === 'intake') return '[의도 승인]을 누르세요.'
-  if (node !== 'verify') return `${PRESS} ${AUTO_SENTENCE}`
+  if (node !== 'verify') return engine === 'codex' ? PRESS : `${PRESS} ${AUTO_SENTENCE}`
   const buttons = delivery.length ? delivery : ['[완료만]']
   const pick = buttons.length === 1 ? `${buttons[0] ?? ''}을` : `${buttons.join(', ')} 중 하나를`
   return `${pick} 누르세요. ${VERIFY_STOPS}`
@@ -84,10 +86,15 @@ function pressSentence(node: NodeName, delivery: readonly string[]): string {
  * 한 문구에 적는다. 리뷰는 지적을 고르는 문구다(D164). PR 대응은 승인하면 push하고 답글을 게시한다는 문구다.
  * delivery는 verify의 전달 버튼이다(core/delivery closingButtons). 없으면 [완료만]이다.
  */
-export function closingMessage(node: TaskNode, delivery: readonly string[] = []): string {
+export function closingMessage(
+  node: TaskNode,
+  delivery: readonly string[] = [],
+  engine: AgentEngine = 'claude',
+): string {
   if (node === 'review') return REVIEW_CLOSING
-  if (!isPipelineNode(node)) return RESPOND_CLOSING
-  return CLOSING.replace(PRESS, pressSentence(node, delivery))
+  if (!isPipelineNode(node))
+    return engine === 'codex' ? RESPOND_CLOSING.replace(`${AUTO_SENTENCE} `, '') : RESPOND_CLOSING
+  return CLOSING.replace(PRESS, pressSentence(node, delivery, engine))
 }
 
 const APPROVAL_LABEL: Record<ApprovalMode, string> = { manual: '수동 승인', auto: '자동 승인' }
@@ -97,11 +104,20 @@ const APPROVAL_LABEL: Record<ApprovalMode, string> = { manual: '수동 승인', 
  * 정하므로(D128) 그렇다고 적는다. intake, review, verify는 늘 수동이다 (4.2, D167). PR 대응은 승인하면 앱이 push하고
  * 답글을 게시한다 (D169, D172)
  */
-function approvalSection(config: AppConfig, settings: WorkSettings, node: TaskNode): string {
+function approvalSection(
+  config: AppConfig,
+  settings: WorkSettings,
+  node: TaskNode,
+  engine: AgentEngine,
+): string {
+  if (engine === 'codex') {
+    const push = node === RESPOND ? ' 승인하면 앱이 push하고 답글을 게시한다.' : ''
+    return `수동 승인 (Codex 작업은 자동 승인 설정과 관계없이 사람이 승인한다.${push})`
+  }
   if (!autoApprovable(node)) {
     return '수동 승인 (의도 승인, 리뷰, Work 완료는 늘 수동)'
   }
-  const mode = APPROVAL_LABEL[approvalMode(config, settings, node)]
+  const mode = APPROVAL_LABEL[approvalMode(config, settings, node, engine)]
   const push = node === RESPOND ? '. 승인하면 앱이 push하고 답글을 게시한다' : ''
   return `${mode} (task를 시작할 때의 설정. 설정은 바로 적용되고, 자동 승인 여부는 턴이 끝날 때의 설정으로 정한다${push})`
 }
@@ -568,8 +584,8 @@ export function buildContext(input: ContextInput): string {
         `기준 커밋: ${work.base_commit}`,
       ]),
     ],
-    ['승인 방식', approvalSection(config, work.settings, task.node)],
-    ['마무리 안내 문구', closingMessage(task.node, input.delivery)],
+    ['승인 방식', approvalSection(config, work.settings, task.node, taskEngine(task))],
+    ['마무리 안내 문구', closingMessage(task.node, input.delivery, taskEngine(task))],
     ['질문 방식', QUESTION_LABEL[questionMode(config, work.settings, task.node)]],
     ['선택 가능한 다음 단계', list(nextSteps(work, task.node))],
     [

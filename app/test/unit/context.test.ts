@@ -713,3 +713,35 @@ describe('단계 선택으로 들어온 task (시나리오 2-4, 6.2)', () => {
     ])
   })
 })
+
+describe('context.md: 엔진별 승인 정책', () => {
+  it('Codex fix/PR 대응은 현재 기본 엔진과 관계없이 수동이며 카운트다운을 약속하지 않는다', () => {
+    const config = {
+      ...DEFAULT_CONFIG,
+      auto_approve: { ...DEFAULT_CONFIG.auto_approve, fix: true, respond: true },
+    }
+    for (const node of ['fix', 'respond'] as const) {
+      const base = input('fix', {}, config)
+      const md = buildContext({
+        ...base,
+        task: { ...base.task, node, engine: 'codex' },
+        work: { ...base.work, settings: { auto_approve: { fix: true, respond: true } } },
+      })
+      expect(section(md, '승인 방식')).toContain('수동 승인 (Codex')
+      expect(section(md, '마무리 안내 문구')).not.toContain('카운트다운')
+      expect(section(md, '마무리 안내 문구')).toContain('[승인]')
+      if (node === 'respond')
+        expect(section(md, '마무리 안내 문구')).toContain('push하고 답글을 게시')
+    }
+  })
+  it('기본 엔진을 Codex로 바꿔도 시작해 둔 Claude task의 안내는 자동 승인 설정을 따른다', () => {
+    const config = {
+      ...DEFAULT_CONFIG,
+      agent_engine: 'codex' as const,
+      auto_approve: { ...DEFAULT_CONFIG.auto_approve, fix: true },
+    }
+    const md = buildContext(input('fix', {}, config))
+    expect(section(md, '승인 방식')).toContain('자동 승인')
+    expect(section(md, '마무리 안내 문구')).toContain('카운트다운')
+  })
+})

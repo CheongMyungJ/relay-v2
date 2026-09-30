@@ -1,3 +1,4 @@
+import { createWork } from '../../src/core/machine'
 // [단위] PR 진행의 판정 (docs/implementation.md M9, core/pr): gh 버전(D198), PR 주소(I50), 체크 분류와 CI(D176, D196, D201),
 // 작성자 거르기(D160, D161, D197), 항목 모으기와 상태(D189, D199), 원격 head 비교(D193), 머지 조건(D176), 배지(D183),
 // 실패 로그의 끝부분(S7 관찰 2), 머지 방식(D177), PR 패널.
@@ -880,5 +881,47 @@ describe('PR 패널 (D183)', () => {
       })?.offerClean,
     ).toBe(false)
     expect(prView({ ...input, work: { status: 'active', tasks: [], settings: {} } })).toBeNull()
+  })
+})
+
+describe('PR 패널: 엔진별 자동 승인', () => {
+  it('다음 대응은 기본 엔진, 진행 중인 대응은 고정된 엔진의 정책을 표시한다', () => {
+    const config = {
+      ...DEFAULT_CONFIG,
+      agent_engine: 'codex' as const,
+      auto_approve: { ...DEFAULT_CONFIG.auto_approve, respond: true },
+    }
+    const input = {
+      work: prWork(),
+      config,
+      read: readState(),
+      file: { schema_version: 1 as const, items: [], synced: [], rounds: [] },
+      rules,
+      localHead: H1,
+      reading: false,
+      error: null,
+    }
+    expect(prView(input)?.auto.approve).toBe(false)
+    const base = createWork({ workId: 'w', baseBranch: 'main', baseCommit: H1, at: 'T' }).work
+      .tasks[0]
+    if (!base) throw new Error('task 없음')
+    const active = {
+      ...base,
+      node: 'respond' as const,
+      status: 'working' as const,
+      engine: 'claude' as const,
+    }
+    expect(prView({ ...input, work: prWork({ tasks: [active] }) })?.auto.approve).toBe(true)
+    expect(
+      prView({
+        ...input,
+        config: { ...config, agent_engine: 'claude' },
+        work: prWork({ tasks: [{ ...active, engine: 'codex' }] }),
+      })?.auto.approve,
+    ).toBe(false)
+    expect(
+      prView({ ...input, work: prWork({ tasks: [{ ...active, status: 'approved' }] }) })?.auto
+        .approve,
+    ).toBe(false)
   })
 })

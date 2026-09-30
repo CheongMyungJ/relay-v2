@@ -124,9 +124,7 @@ export function codexHooks(): Record<string, unknown> {
               type: 'command',
               ...commands,
               timeout: event === 'SessionEnd' || event === 'Interrupt' ? 3 : 30,
-              ...(event === 'SessionStart' || event === 'PostCompact'
-                ? { additionalContextLimit: 8000 }
-                : {}),
+              ...(event === 'SessionStart' ? { additionalContextLimit: 8000 } : {}),
             },
           ],
         },
