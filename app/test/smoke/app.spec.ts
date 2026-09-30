@@ -2,7 +2,9 @@
 // 자동 승인 카운트다운의 [취소], [push]와 [Work 정리], 다시 켠 뒤 끊긴 작업의 [다시 시도]를 누른다 (I27).
 // M2: 프로젝트 등록 → 새 Work → intake 탭에 PTY 출력 → 창 크기 변경이 PTY에 전달 → [의도 승인]
 // → intent.md 확정, intake 세션 트리 종료, 다음 task 시작. M12: 다음 task의 터미널은 표시 줄로 시작하고, 머리 띠와
-// 패널에 진행 표시(마지막 동작 Bash(npm test))가 보인다.
+// 패널에 진행 표시(마지막 동작 Bash(npm test))가 보인다. 첫 intake의 [요약] 맨 위에 의도 초안이, 열린 질문에 답할 곳과
+// [터미널에서 답하기]가 있고, 열린 질문이 남은 채 [의도 승인]하면 확인 창이 뜬다. 버튼 줄은 패널 아래에 붙어 있다.
+// 리뷰의 [요약] 맨 위에 지적 목록이, 완료 알림에 작업 브랜치와 worktree가 보인다.
 // M3: 다음 task를 [즉시 중단]하면 중단됨·읽기 전용이 되고 트리가 끝난다 → [재개]하면 같은 세션을
 // --resume으로 이전 화면 뒤에 잇고, 이어서 하라는 입력으로 바로 작업 중이 된다(M12) → 설정 화면에서 세션 상한을
 // 바꾼다. M7: 같은 설정 화면에서 카운트다운을 600초로 바꾼다(수정 단계의 자동 승인은 M12부터 기본으로 켜져 있다).
@@ -31,7 +33,15 @@ import os from 'node:os'
 import path from 'node:path'
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test'
 import { git, makeRepo } from '../flow/repo'
-import { REPO_FILES, REQUEST, scenario, steps } from '../flow/scenarios'
+import {
+  REPO_FILES,
+  REQUEST,
+  handoff,
+  intentDraft,
+  scenario,
+  steps,
+  type Scenario,
+} from '../flow/scenarios'
 
 const isWin = process.platform === 'win32'
 const APP_DIR = path.resolve(__dirname, '../..')
@@ -72,29 +82,44 @@ test.beforeAll(async () => {
   // intake는 초안과 handoff를 쓰고 멈추고, evidence는 시작만 한다. 최종 검증은 커밋 안 된 파일을 남기고,
   // 정리 세션은 그 파일을 지운다 (7-5)
   const scenarioFile = path.join(root, 'scenario.json')
-  fs.writeFileSync(
-    scenarioFile,
-    JSON.stringify({
-      ...scenario('L', {
-        evidence: [
-          { do: 'prompt' },
-          { do: 'tool', name: 'Bash', input: { command: 'npm test' } },
-          { do: 'wait' },
-        ],
-        'final-verify': [
-          ...steps('verify', 'S').slice(0, -1),
-          { do: 'edit', files: { 'debug.log': '실험 출력\n' } },
-          { do: 'stop' },
-        ],
-      }),
-      cleanup: [
-        { do: 'prompt', text: '커밋 안 된 파일을 지워 줘' },
-        { do: 'git', args: ['clean', '-f', '-q'] },
+  const base = scenario('L', {
+    evidence: [
+      { do: 'prompt' },
+      { do: 'tool', name: 'Bash', input: { command: 'npm test' } },
+      { do: 'wait' },
+    ],
+    'final-verify': [
+      ...steps('verify', 'S').slice(0, -1),
+      { do: 'edit', files: { 'debug.log': '실험 출력\n' } },
+      { do: 'stop' },
+    ],
+  })
+  // 두 Work의 첫 intake(t-01)는 열린 질문 하나를 남긴다 (D222). 되감기로 다시 한 intake는 남기지 않는다
+  const s: Scenario = {
+    tasks: {
+      ...base.tasks,
+      't-01': [
+        { do: 'prompt' },
+        { do: 'write', file: 'intent.draft.md', text: intentDraft('L') },
+        {
+          do: 'write',
+          file: 'handoff.md',
+          text: handoff({
+            decisions: [{ what: '크기는 L', why: '크기는 L인 이유', by: 'ai' }],
+            open_questions: ['운영 시간대는?'],
+          }),
+        },
         { do: 'stop' },
-        { do: 'wait' },
       ],
-    }),
-  )
+    },
+    cleanup: [
+      { do: 'prompt', text: '커밋 안 된 파일을 지워 줘' },
+      { do: 'git', args: ['clean', '-f', '-q'] },
+      { do: 'stop' },
+      { do: 'wait' },
+    ],
+  }
+  fs.writeFileSync(scenarioFile, JSON.stringify(s))
   env = {
     ...process.env,
     CLAUDE_BIN: FAKE,
@@ -148,12 +173,28 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
     .poll(async () => lastSize((await rows.textContent()) ?? ''), { timeout: 15_000 })
     .not.toBe(before)
 
-  // 승인 화면 (D83)과 [의도 승인] (4.1)
+  // 승인 화면 (D83)과 [의도 승인] (4.1). [요약] 맨 위에 의도 초안이 있고(D223), 열린 질문은 답할 곳과 터미널로
+  // 가는 버튼이 있다(D222). 버튼 줄은 패널 아래에 붙어 있다(D224)
   const approve = win.getByRole('button', { name: '의도 승인' })
   await expect(approve).toBeEnabled({ timeout: 60_000 })
   await expect(win.getByLabel('size')).toHaveValue('L')
+  await expect(win.locator('.review-body .lead')).toContainText('의도 초안 (size: L)')
+  await expect(win.locator('.review-body .lead')).toContainText('완료조건')
+  const questions = win.locator('.em-open_questions')
+  await expect(questions).toContainText('운영 시간대는?')
+  await expect(questions).toContainText('답은 가운데 터미널에 쓰세요')
+  await questions.getByRole('button', { name: '터미널에서 답하기' }).click()
+  await expect(win.locator('.terminal-host:not([hidden]) .xterm-helper-textarea')).toBeFocused()
+  await expect(win.locator('.review-bottom')).toHaveCSS('position', 'sticky')
   await win.screenshot({ path: 'test-results/approval.png' })
+  // 열린 질문이 남은 채 승인하면 한 번 확인받는다 (D222)
   await approve.click()
+  const unanswered = win.getByRole('dialog', { name: '답하지 않은 열린 질문' })
+  await expect(unanswered).toContainText(
+    '답하지 않은 열린 질문 1개: 에이전트는 가정으로 진행합니다.',
+  )
+  await win.screenshot({ path: 'test-results/open-questions.png' })
+  await unanswered.getByRole('button', { name: '의도 승인', exact: true }).click()
 
   // 다음 task가 시작되고, intake 세션은 트리째 끝난다 (시나리오 4-4, 5)
   await expect(win.getByRole('tab', { name: /02 재현과 관찰/ })).toBeVisible({ timeout: 60_000 })
@@ -292,6 +333,7 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await expect(intake2).toBeEnabled({ timeout: 60_000 })
   await win.getByLabel('size').selectOption('S')
   await intake2.click()
+  await unanswered.getByRole('button', { name: '의도 승인', exact: true }).click()
   const approveFix = win.getByRole('button', { name: '승인', exact: true })
   await expect(approveFix).toBeEnabled({ timeout: 60_000 })
   await expect(win.locator('.band')).toContainText('02 수정')
@@ -318,6 +360,9 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
     '자동 승인하지 않음: 리뷰에 지적이 있음',
     { timeout: 30_000 },
   )
+  // [요약] 맨 위에 지적 목록과 반영할 번호를 말하라는 안내가 있다 (D223)
+  await expect(win.locator('.review-body .lead')).toContainText('리뷰 지적')
+  await expect(win.locator('.review-body .lead')).toContainText('반영할 지적은 번호로')
   await win.getByRole('tab', { name: '산출물', exact: true }).click()
   await expect(win.locator('.review-body')).toContainText('review.md')
   await win.screenshot({ path: 'test-results/review.png' })
@@ -360,6 +405,9 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   const done = win.locator('.notice.done')
   await expect(done).toContainText('Work 완료 (전달: push)', { timeout: 60_000 })
   await expect(done).toContainText('비교 URL이 없습니다')
+  // 작업 브랜치와 기준 뒤 커밋, worktree (D225)
+  await expect(done.locator('.branch-line')).toContainText(/작업 브랜치 relay\/w-\d{8}-\d{3}: 기준/)
+  await expect(done.locator('.branch-line')).toContainText('worktree:')
   const badge2 = win.locator('.work-item.selected .badge')
   await expect(badge2).toHaveText('완료')
   const workId2 = /w-\d{8}-\d{3}/.exec(

@@ -1,7 +1,7 @@
 // 사람에게 보일 것: task 이름과 머리 띠(D109), 상태 이름, 승인 화면의 강조 영역과 [변경]의 범위(D83),
 // Work 완료 화면의 판정표(시나리오 7-3). 화면은 main이 이 값으로 만든 스냅샷을 그리기만 한다 (I14).
-import type { Handoff } from '../shared/contracts'
-import type { Emphasis, Verdict } from '../shared/views'
+import type { Handoff, TaskNode } from '../shared/contracts'
+import type { Emphasis, StageLead, Verdict } from '../shared/views'
 import type {
   FormatIssue,
   StartReason,
@@ -12,7 +12,13 @@ import type {
 } from '../shared/work'
 import { badge, holdNeedsNotice, holdText } from './approval'
 import { NODE_INFO, WORK_COMPLETE, defaultNext, isPipelineNode, isPrevious } from './pipeline'
-import { normalizeText, parseFrontMatter, sectionText } from './validate'
+import {
+  INTENT_DRAFT_FILE,
+  REVIEW_FILE,
+  normalizeText,
+  parseFrontMatter,
+  sectionText,
+} from './validate'
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
@@ -279,7 +285,12 @@ export function emphasis(input: EmphasisInput): Emphasis[] {
     })
   }
   if (h && h.open_questions.length > 0) {
-    out.push({ kind: 'open_questions', title: '열린 질문', lines: [...h.open_questions] })
+    out.push({
+      kind: 'open_questions',
+      title: '열린 질문',
+      lines: [...h.open_questions],
+      hint: OPEN_QUESTIONS_HINT,
+    })
   }
   const rec = h?.recommended_next
   if (rec && isPrevious(input.node, rec.node)) {
@@ -319,6 +330,46 @@ export function emphasis(input: EmphasisInput): Emphasis[] {
 export function handoffSummary(text: string): string | null {
   const fm = parseFrontMatter(text)
   return sectionText(fm.body, '요약')
+}
+
+/** 열린 질문에 답하는 곳 (D222). 선택지 질문이 아니라 handoff에 남은 질문이라 따로 알린다 */
+export const OPEN_QUESTIONS_HINT =
+  '답은 가운데 터미널에 쓰세요. 답하면 에이전트가 산출물을 고쳐 다시 승인 대기가 됩니다.'
+
+/** 리뷰의 [요약]에 보일 안내 (D223). 리뷰의 마무리 안내 문구(시나리오 2-4)와 같은 뜻이다 */
+export const REVIEW_LEAD_HINT =
+  '반영할 지적은 번호로 가운데 터미널에 말하세요. 반영할 것이 없거나 반영을 마쳤으면 [승인]을 누르세요.'
+
+/**
+ * [요약] 탭 맨 위에 둘 이 단계의 핵심 (D223). 의도 정리는 intent 초안의 size와 목표·비목표·완료조건을, 리뷰는
+ * review.md의 `## 지적`을 보인다. 파일이 없거나 절을 읽지 못하면 그 부분은 뺀다. 다른 단계는 null이다
+ */
+export function stageLead(
+  node: TaskNode,
+  files: Readonly<Record<string, string>>,
+): StageLead | null {
+  if (node === 'intake') {
+    const text = files[INTENT_DRAFT_FILE]
+    if (text === undefined) return null
+    const fm = parseFrontMatter(text)
+    const size = fm.ok && typeof fm.data['size'] === 'string' ? fm.data['size'] : null
+    const sections = ['목표', '비목표', '완료조건'].flatMap((title) => {
+      const body = sectionText(fm.body, title)
+      return body ? [{ title, text: body }] : []
+    })
+    return { title: `의도 초안 (size: ${size ?? '없음'})`, sections, hint: null }
+  }
+  if (node === 'review') {
+    const text = files[REVIEW_FILE]
+    const findings = text === undefined ? null : sectionText(normalizeText(text), '지적')
+    if (findings === null) return null
+    return {
+      title: '리뷰 지적',
+      sections: [{ title: '지적', text: findings }],
+      hint: REVIEW_LEAD_HINT,
+    }
+  }
+  return null
 }
 
 // ---------- Work 완료 화면 (시나리오 7-3) ----------

@@ -11,6 +11,7 @@ import {
   humanNotice,
   permissionNotice,
   resumeHint,
+  stageLead,
   stopNotice,
   taskLabel,
   toolLabel,
@@ -476,6 +477,14 @@ describe('강조 영역 (D83, 시나리오 4-2)', () => {
       '승인하면 다음 단계를 시작하지 않고 멈춥니다. 되돌아갈 단계는 멈춘 뒤 [단계 선택]으로 고릅니다.',
     ])
     expect(items[4]?.lines).toEqual(['handoff.md: `## 요약` 절 없음'])
+    // 열린 질문은 어디에 답하는지 알린다 (D222)
+    expect(items[1]).toEqual({
+      kind: 'open_questions',
+      title: '열린 질문',
+      lines: ['운영 TZ는?'],
+      hint: '답은 가운데 터미널에 쓰세요. 답하면 에이전트가 산출물을 고쳐 다시 승인 대기가 됩니다.',
+    })
+    expect(items.filter((i) => i.hint).map((i) => i.kind)).toEqual(['open_questions'])
   })
 
   it('기본 다음 단계 추천은 강조하지 않는다. 막힘은 blocked_reason을 맨 앞에 둔다 (4.4)', () => {
@@ -494,6 +503,54 @@ describe('강조 영역 (D83, 시나리오 4-2)', () => {
       uncommitted: [],
     })
     expect(blocked).toEqual([{ kind: 'blocked', title: '막힘', lines: ['운영 로그가 없음'] }])
+  })
+
+  it('[요약] 맨 위: 의도 정리는 intent 초안의 size와 목표·비목표·완료조건이다 (D223)', () => {
+    const draft = [
+      '---',
+      'type: bugfix',
+      'size: M',
+      '---',
+      '## 목표',
+      '빈 배열의 평균을 0으로',
+      '## 비목표',
+      '- 음수 처리',
+      '## 원하는 결과',
+      'avg([]) = 0',
+      '## 완료조건',
+      '- [ ] avg([])가 0이다',
+      '',
+    ].join('\n')
+    expect(stageLead('intake', { 'intent.draft.md': draft })).toEqual({
+      title: '의도 초안 (size: M)',
+      sections: [
+        { title: '목표', text: '빈 배열의 평균을 0으로' },
+        { title: '비목표', text: '- 음수 처리' },
+        { title: '완료조건', text: '- [ ] avg([])가 0이다' },
+      ],
+      hint: null,
+    })
+    // 머리글을 읽지 못하거나 절이 없어도 읽은 만큼 보인다. 초안이 없으면 없다
+    expect(stageLead('intake', { 'intent.draft.md': '## 목표\n무엇\n' })).toEqual({
+      title: '의도 초안 (size: 없음)',
+      sections: [{ title: '목표', text: '무엇' }],
+      hint: null,
+    })
+    expect(stageLead('intake', {})).toBeNull()
+  })
+
+  it('[요약] 맨 위: 리뷰는 지적 목록과 반영할 번호를 말하라는 안내다. 다른 단계는 없다 (D223)', () => {
+    const review = '## 지적\r\n1. [권장] src/avg.js:2 — 주석\r\n\r\n## 반영\r\n없음\r\n'
+    expect(stageLead('review', { 'review.md': review })).toEqual({
+      title: '리뷰 지적',
+      sections: [{ title: '지적', text: '1. [권장] src/avg.js:2 — 주석' }],
+      hint: '반영할 지적은 번호로 가운데 터미널에 말하세요. 반영할 것이 없거나 반영을 마쳤으면 [승인]을 누르세요.',
+    })
+    expect(stageLead('review', { 'review.md': '지적 절 없음' })).toBeNull()
+    expect(stageLead('review', {})).toBeNull()
+    for (const node of ['evidence', 'rca', 'fix', 'verify', 'respond'] as const) {
+      expect(stageLead(node, { 'review.md': review })).toBeNull()
+    }
   })
 
   it('handoff의 요약 절을 읽는다. 머리글을 읽지 못해도 본문에서 찾는다', () => {

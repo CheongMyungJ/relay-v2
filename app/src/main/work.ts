@@ -181,6 +181,7 @@ import {
   humanNotice,
   permissionNotice,
   resumeHint,
+  stageLead,
   stopNotice,
   taskLabel,
   toolLabel,
@@ -245,6 +246,7 @@ import type {
   ActivityView,
   ApproveOptions,
   BadgeKind,
+  BranchInfo,
   CleanInput,
   CleanPreviewResult,
   CleanupView,
@@ -2472,6 +2474,26 @@ export class WorkRunner {
     })
   }
 
+  /**
+   * 작업 브랜치의 커밋 (D225): 기준 커밋 뒤의 커밋 수와 마지막 커밋, worktree 경로. 브랜치는 모든 worktree가 함께
+   * 보므로 메인 체크아웃에서 읽는다. 커밋 안 된 변경은 넣지 않는다. 브랜치가 없으면(정리로 지움) null이다
+   */
+  private async branchInfo(): Promise<BranchInfo | null> {
+    const opts = { env: this.ctx.env }
+    const repo = this.project.repo_path
+    const name = workBranch(this.work.work_id)
+    const head = await refCommit(repo, name, opts).catch(() => null)
+    if (!head) return null
+    const ahead = await countCommits(repo, this.work.base_commit, head, opts).catch(() => 0)
+    const last = ahead > 0 ? await commitInfo(repo, head, opts).catch(() => null) : null
+    return {
+      name,
+      ahead,
+      last: last ? { sha: last.id.slice(0, 8), subject: last.subject } : null,
+      worktree: (await exists(this.worktree)) ? this.worktree : null,
+    }
+  }
+
   /** 승인 화면(D83)과 Work 완료 화면(시나리오 7-3)에 보일 것. 파일을 다시 읽어 만든다 */
   async review(taskId: string): Promise<ReviewView | null> {
     const task = this.task(taskId)
@@ -2516,6 +2538,7 @@ export class WorkRunner {
         stopped,
         buttons: deliveryButtons(this.checks()),
         delivery: deliveryView(this.work.delivery),
+        branch: await this.branchInfo(),
       }
     }
     return {
@@ -2546,6 +2569,7 @@ export class WorkRunner {
         uncommitted,
         ...(respond ? { tests: respond.tests, failure: respond.view.failure } : {}),
       }),
+      lead: stageLead(task.node, files),
       artifacts: Object.entries(files)
         .filter(([name]) => name !== CONTEXT_FILE && name !== HANDOFF_FILE)
         .map(([name, text]) => ({ name, text })),

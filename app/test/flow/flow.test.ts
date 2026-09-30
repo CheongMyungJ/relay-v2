@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { mergeSkill, skillText } from '../../src/adapters/claude'
+import { OPEN_QUESTIONS_HINT, REVIEW_LEAD_HINT } from '../../src/core/review'
 import { sha256 } from '../../src/adapters/store'
 import { BOUNCE_HEAD, parseFrontMatter } from '../../src/core/validate'
 import type { LifecycleEvent, WorkState } from '../../src/shared/work'
@@ -326,6 +327,90 @@ describe('[흐름] 최소 흐름 (M2)', () => {
     )
     expect(view?.tasks[0]?.band).toBe('01 의도 정리 · 새 세션 · 이유: 기본 진행')
     expect(events(s.workDir).at(-1)?.type).toBe('work.completed')
+  })
+
+  it('[요약] 맨 위에 의도 초안과 리뷰 지적을 보이고 열린 질문에 답할 곳을 알린다. Work 완료 화면과 완료 뒤에 작업 브랜치의 커밋을 보인다 (D222, D223, D225)', async () => {
+    const s = await start(
+      scenario('S', {
+        'work-start': [
+          { do: 'prompt' },
+          { do: 'write', file: 'intent.draft.md', text: intentDraft('S') },
+          {
+            do: 'write',
+            file: 'handoff.md',
+            text: handoff({
+              decisions: [{ what: '크기는 S', why: '한 줄 수정', by: 'ai' }],
+              open_questions: ['운영 시간대는?'],
+            }),
+          },
+          { do: 'stop' },
+        ],
+      }),
+    )
+    const ui = s.h.ui
+    const pause = (node: string) =>
+      drive(s.h.relay, ui, s.workKey, { size: 'S', pauseAt: (t) => t.node === node })
+
+    // 의도 정리: 초안의 size와 목표·비목표·완료조건, 열린 질문과 답할 곳
+    expect((await pause('intake')).status).toBe('paused')
+    const intake = await s.h.relay.review(s.workKey, 't-01')
+    expect(intake?.lead).toEqual({
+      title: '의도 초안 (size: S)',
+      sections: [
+        { title: '목표', text: '빈 배열의 평균이 NaN이 되는 문제를 고친다.' },
+        { title: '비목표', text: '- 없음' },
+        {
+          title: '완료조건',
+          text: '- [ ] 재현 절차가 더 이상 실패하지 않는다\n- [ ] `npm test`가 통과한다\n- [ ] 기존 테스트를 약화하거나 삭제하지 않는다',
+        },
+      ],
+      hint: null,
+    })
+    expect(intake?.emphasis.find((e) => e.kind === 'open_questions')).toEqual({
+      kind: 'open_questions',
+      title: '열린 질문',
+      lines: ['운영 시간대는?'],
+      hint: OPEN_QUESTIONS_HINT,
+    })
+
+    // 리뷰: 지적 목록과 반영할 번호를 말하라는 안내
+    expect((await pause('review')).status).toBe('paused')
+    const reviewTask = ui.works.get(s.workKey)?.tasks.find((t) => t.node === 'review')
+    const review = await s.h.relay.review(s.workKey, reviewTask?.id ?? '')
+    expect(review?.lead).toEqual({
+      title: '리뷰 지적',
+      sections: [
+        {
+          title: '지적',
+          text: '1. [권장] src/avg.js:2 — 빈 배열에 0을 돌려주는 까닭을 주석으로 남긴다\n2. [사소] test/avg.test.js:6 — 시험 이름을 "빈 배열은 0"으로 바꾼다',
+        },
+      ],
+      hint: REVIEW_LEAD_HINT,
+    })
+
+    // Work 완료 화면: 작업 브랜치, 기준 뒤 커밋 수와 마지막 커밋, worktree
+    expect((await pause('verify')).status).toBe('paused')
+    const verifyTask = ui.works.get(s.workKey)?.tasks.find((t) => t.node === 'verify')
+    const worktree = path.join(s.h.home, 'projects', s.projectId, 'worktrees', s.workId)
+    const head = git(worktree, 'rev-parse', 'HEAD')
+    const branch = {
+      name: `relay/${s.workId}`,
+      ahead: 1,
+      last: { sha: head.slice(0, 8), subject: 'fix: 빈 배열의 평균은 0' },
+      worktree,
+    }
+    expect((await s.h.relay.review(s.workKey, verifyTask?.id ?? ''))?.completion?.branch).toEqual(
+      branch,
+    )
+    // [완료만] 뒤에도 같은 것을 보인다 (완료 알림)
+    const done = await drive(s.h.relay, ui, s.workKey, { size: 'S' })
+    expect(done, ui.dump()).toMatchObject({ status: 'completed' })
+    expect((await s.h.relay.review(s.workKey, verifyTask?.id ?? ''))?.completion?.branch).toEqual(
+      branch,
+    )
+    // 다른 단계에는 [요약] 맨 위의 핵심이 없다
+    const fixTask = ui.works.get(s.workKey)?.tasks.find((t) => t.node === 'fix')
+    expect((await s.h.relay.review(s.workKey, fixTask?.id ?? ''))?.lead).toBeNull()
   })
 
   it('리뷰(M8): 지적을 번호로 쓰고 마무리한 뒤 사람이 번호로 고른 지적만 같은 세션에서 고쳐 커밋한다. 리뷰 커밋은 리뷰의 [변경]과 Work 완료 화면의 [전체 변경]에 들어간다 (D164, D83)', async () => {

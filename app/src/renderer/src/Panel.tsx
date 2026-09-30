@@ -11,6 +11,7 @@
 import { useEffect, useState } from 'react'
 import type { NodeName, Size } from '../../shared/contracts'
 import type {
+  BranchInfo,
   CommandResult,
   CountdownView,
   DeliverResult,
@@ -25,6 +26,7 @@ import { call } from './commands'
 import { ConfirmDialog, UncommittedDialog } from './dialogs'
 import { Diff, Markdown } from './Markdown'
 import { PrPanel } from './PrPanel'
+import { focusTerm } from './terminals'
 
 type Tab = 'summary' | 'artifacts' | 'changes' | 'verdicts' | 'work'
 
@@ -101,7 +103,7 @@ export function Panel({ work, task, review, onApproved, onSelectStep, onShowClea
       ) : null}
       {(work.status === 'completed' || (work.status === 'archived' && work.completedAt)) &&
       task.id === work.current ? (
-        <DoneNotice work={work} />
+        <DoneNotice work={work} branch={review.completion?.branch ?? null} />
       ) : null}
       {work.status === 'abandoned' ? (
         <div className="notice">Work 포기. 산출물과 worktree는 남아 있습니다.</div>
@@ -421,6 +423,10 @@ function Review({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
+  // 답하지 않은 열린 질문이 남은 채 [승인]하면 한 번 확인받는다 (D222)
+  const [asking, setAsking] = useState(false)
+  const questions = review.emphasis.find((e) => e.kind === 'open_questions')?.lines ?? []
+  const liveTask = work?.tasks.find((t) => t.id === review.taskId && t.live)
 
   const intake = review.node === 'intake'
   const gate = review.gates[intake ? (size ?? 'none') : 'none']
@@ -451,6 +457,7 @@ function Review({
     )
     setBusy(false)
     setConfirming(false)
+    setAsking(false)
     if (r.ok) onApproved?.()
     else setError(r.error)
   }
@@ -475,6 +482,13 @@ function Review({
                   <li key={j}>{l}</li>
                 ))}
               </ul>
+              {e.hint ? <div className="em-hint">{e.hint}</div> : null}
+              {/* 터미널에 포커스만 준다. 글을 넣지 않는다 (D222, 1.2) */}
+              {e.kind === 'open_questions' && liveTask && !readOnly ? (
+                <div className="notice-actions">
+                  <button onClick={() => focusTerm(liveTask.terminal)}>터미널에서 답하기</button>
+                </div>
+              ) : null}
             </div>
           ))}
         </section>
@@ -534,71 +548,90 @@ function Review({
         {tab === 'work' && review.completion ? <Diff text={review.completion.diff} /> : null}
       </div>
 
-      {!readOnly && countdown ? (
-        <Countdown countdown={countdown} busy={busy} onCancel={() => void cancel()} />
-      ) : null}
-      {!readOnly && review.autoApprove.hold ? (
-        <div className="notice auto-hold">{review.autoApprove.hold}</div>
-      ) : null}
-      {readOnly ? null : review.completion && work ? (
-        <CompletionActions
-          review={review}
-          work={work}
-          onApproved={onApproved}
-          onShowCleanup={onShowCleanup}
-          onForce={() => setConfirming(true)}
-        />
-      ) : (
-        <footer className="review-actions">
-          {intake ? (
-            <label className="size">
-              size
-              <select
-                aria-label="size"
-                value={size ?? ''}
-                onChange={(e) => setChosen((e.target.value || null) as Size | null)}
-              >
-                {size === null ? <option value="">고르세요</option> : null}
-                {SIZES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
-          <button
-            className="primary"
-            disabled={busy || cut || !gate.approve || !!respond?.blocked}
-            onClick={() => void approve(false)}
-          >
-            {approveLabel}
-          </button>
-          {gate.force ? (
-            <button className="danger" disabled={busy || cut} onClick={() => setConfirming(true)}>
-              오류 무시하고 승인
+      {/* 카운트다운, 까닭, 버튼 줄은 패널 아래에 붙여 둔다: 긴 diff가 밀어내지 않는다 (D224) */}
+      <div className="review-bottom">
+        {!readOnly && countdown ? (
+          <Countdown countdown={countdown} busy={busy} onCancel={() => void cancel()} />
+        ) : null}
+        {!readOnly && review.autoApprove.hold ? (
+          <div className="notice auto-hold">{review.autoApprove.hold}</div>
+        ) : null}
+        {readOnly ? null : review.completion && work ? (
+          <CompletionActions
+            review={review}
+            work={work}
+            onApproved={onApproved}
+            onShowCleanup={onShowCleanup}
+            onForce={() => setConfirming(true)}
+          />
+        ) : (
+          <footer className="review-actions">
+            {intake ? (
+              <label className="size">
+                size
+                <select
+                  aria-label="size"
+                  value={size ?? ''}
+                  onChange={(e) => setChosen((e.target.value || null) as Size | null)}
+                >
+                  {size === null ? <option value="">고르세요</option> : null}
+                  {SIZES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            <button
+              className="primary"
+              disabled={busy || cut || !gate.approve || !!respond?.blocked}
+              onClick={() => (questions.length ? setAsking(true) : void approve(false))}
+            >
+              {approveLabel}
             </button>
-          ) : null}
-          {!gate.approve && gate.blocking.length ? (
-            <span className="error">
-              {respond
-                ? 'replies.md의 오류는 넘길 수 없습니다: 터미널에서 고치게 하세요 (D204)'
-                : 'intent 초안의 머리글 오류는 넘길 수 없습니다 (D90)'}
-            </span>
-          ) : null}
-          {respond?.blocked ? <span className="error">{respond.blocked}</span> : null}
-          {respond ? (
-            <span className="dim">
-              승인하면 push하고 답글 {respond.replies.filter((r) => !r.url && !r.skipped).length}
-              개를 게시합니다
-              {respond.deferred.length
-                ? ` (미룬 앞 라운드 ${respond.deferred.join(', ')}와 함께, D193)`
-                : ''}
-            </span>
-          ) : null}
-        </footer>
-      )}
-      {error ? <div className="error">{error}</div> : null}
+            {gate.force ? (
+              <button className="danger" disabled={busy || cut} onClick={() => setConfirming(true)}>
+                오류 무시하고 승인
+              </button>
+            ) : null}
+            {!gate.approve && gate.blocking.length ? (
+              <span className="error">
+                {respond
+                  ? 'replies.md의 오류는 넘길 수 없습니다: 터미널에서 고치게 하세요 (D204)'
+                  : 'intent 초안의 머리글 오류는 넘길 수 없습니다 (D90)'}
+              </span>
+            ) : null}
+            {respond?.blocked ? <span className="error">{respond.blocked}</span> : null}
+            {respond ? (
+              <span className="dim">
+                승인하면 push하고 답글 {respond.replies.filter((r) => !r.url && !r.skipped).length}
+                개를 게시합니다
+                {respond.deferred.length
+                  ? ` (미룬 앞 라운드 ${respond.deferred.join(', ')}와 함께, D193)`
+                  : ''}
+              </span>
+            ) : null}
+          </footer>
+        )}
+        {error ? <div className="error">{error}</div> : null}
+      </div>
+      {asking ? (
+        <ConfirmDialog
+          title="답하지 않은 열린 질문"
+          confirm={approveLabel}
+          onConfirm={() => void approve(false)}
+          onClose={() => setAsking(false)}
+        >
+          <p>답하지 않은 열린 질문 {questions.length}개: 에이전트는 가정으로 진행합니다.</p>
+          <ul>
+            {questions.map((q, i) => (
+              <li key={i}>{q}</li>
+            ))}
+          </ul>
+          <p className="dim">답하려면 [취소]하고 가운데 터미널에 쓰세요.</p>
+        </ConfirmDialog>
+      ) : null}
       {confirming ? (
         <ConfirmDialog
           title="오류 무시하고 승인"
@@ -653,8 +686,21 @@ function Countdown({
 }
 
 function Summary({ review }: { review: ReviewView }) {
+  const lead = review.lead
   return (
     <>
+      {lead ? (
+        <section className="lead">
+          <h3>{lead.title}</h3>
+          {lead.sections.map((s) => (
+            <div key={s.title}>
+              <h4>{s.title}</h4>
+              <Markdown text={s.text} />
+            </div>
+          ))}
+          {lead.hint ? <div className="em-hint">{lead.hint}</div> : null}
+        </section>
+      ) : null}
       <section>
         <h3>요약</h3>
         {review.summary ? <Markdown text={review.summary} /> : <div className="dim">없음</div>}
@@ -837,7 +883,7 @@ const MERGE_LABEL: Readonly<Record<string, string>> = {
 }
 
 /** 완료한 Work의 전달과 결과 링크 (시나리오 7-4, 7-6). PR 진행으로 끝났으면 머지나 끝낸 것을 보인다 (D178, D179) */
-function DoneNotice({ work }: { work: WorkView }) {
+function DoneNotice({ work, branch }: { work: WorkView; branch: BranchInfo | null }) {
   const d = work.delivery?.status === 'succeeded' ? work.delivery : null
   const pr = work.pr
   // 밖에서 머지될 때 승인했지만 push·게시를 미룬 라운드(D193)는 머지에 들어가지 않았다
@@ -845,6 +891,7 @@ function DoneNotice({ work }: { work: WorkView }) {
   return (
     <div className="notice done">
       Work 완료 (전달: {d ? d.label : '완료만'})
+      {branch ? <BranchLine work={work} branch={branch} /> : null}
       {pr?.merged ? (
         <div>
           PR #{pr.number} 머지됨 (
@@ -882,6 +929,31 @@ function DoneNotice({ work }: { work: WorkView }) {
         ) : (
           <div className="dim">origin 주소를 GitHub 레포로 읽지 못해 비교 URL이 없습니다</div>
         )
+      ) : null}
+    </div>
+  )
+}
+
+/**
+ * 작업 브랜치와 기준 뒤 커밋, 마지막 커밋, worktree (D225): 끝났을 때 어디에 무엇이 남았는지 보인다.
+ * 예: "작업 브랜치 relay/w-20260930-001: 기준(main 3943005e) 뒤 커밋 2개, 마지막 1a2b3c4d fix: 빈 배열의 평균은 0"
+ */
+function BranchLine({ work, branch }: { work: WorkView; branch: BranchInfo }) {
+  const base = `${work.baseBranch} ${work.baseCommit.slice(0, 8)}`
+  return (
+    <div className="branch-line dim">
+      <div>
+        작업 브랜치 <code>{branch.name}</code>: 기준({base}) 뒤 커밋 {branch.ahead}개
+        {branch.last ? (
+          <>
+            , 마지막 <code>{branch.last.sha}</code> {branch.last.subject}
+          </>
+        ) : null}
+      </div>
+      {branch.worktree ? (
+        <div>
+          worktree: <code>{branch.worktree}</code>
+        </div>
       ) : null}
     </div>
   )
@@ -1070,6 +1142,8 @@ function CompletionActions({
   )
   return (
     <div className="completion-actions">
+      {/* 전달을 고르기 전에 작업 브랜치에 무엇이 남았는지 보인다 (D225) */}
+      {c.branch ? <BranchLine work={work} branch={c.branch} /> : null}
       <footer className="review-actions">
         <button
           className="primary"
