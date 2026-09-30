@@ -111,7 +111,7 @@ function untilPrompts(s: Setup, n: number) {
 
 describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
   it('Work 셋을 나란히 돌리면 상한을 넘은 task는 대기열에서 기다리다 자동으로 시작한다 (D18, D81)', async () => {
-    const s = await setup(scenario('S'), { session_limit: 2 })
+    const s = await setup(scenario(), { session_limit: 2 })
     // 살아 있는 세션 수의 최댓값을 잰다
     let maxLive = 0
     const off = s.h.ui.onChange(() => {
@@ -181,7 +181,7 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
     try {
       // 다시 연 세션은 이어서 하라는 입력(D218)으로 턴을 시작하고, handoff 없이 턴을 끝내 대기가 된다
       const s = await setup({
-        tasks: { ...scenario('S').tasks, 'work-start': [{ do: 'prompt' }, { do: 'wait' }] },
+        tasks: { ...scenario().tasks, 'work-start': [{ do: 'prompt' }, { do: 'wait' }] },
         resume: { 'work-start': [{ do: 'stop' }, { do: 'wait' }] },
       })
       const key = await s.create()
@@ -224,8 +224,8 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
   it('[즉시 중단] 뒤 [재개]는 같은 세션 id로 --resume을 부르고 이어서 하라고 알린다. 이전 화면 뒤에 이어 보인다 (시나리오 3-4, D218)', async () => {
     // 다시 연 세션은 앱이 준 이어서 하라는 입력을 첫 요청으로 받고 intake를 마친다
     const s = await setup({
-      tasks: { ...scenario('S').tasks, 'work-start': [{ do: 'prompt' }, { do: 'wait' }] },
-      resume: { 'work-start': steps('intake', 'S').slice(1) },
+      tasks: { ...scenario().tasks, 'work-start': [{ do: 'prompt' }, { do: 'wait' }] },
+      resume: { 'work-start': steps('intake').slice(1) },
     })
     const key = await s.create()
     const dir = s.dir(key)
@@ -305,7 +305,7 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
     expect(read(path.join(dir, 'tasks', '01-intake', 'pty.log'))).toContain('relay: 세션 재개')
 
     // 다시 연 세션이 새 토큰으로 보낸 훅을 받았다. 사람은 승인해 Work를 끝낸다
-    const result = await drive(s.h.relay, s.h.ui, key, { size: 'S' })
+    const result = await drive(s.h.relay, s.h.ui, key)
     expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed' })
     const hooks = s.h.records().filter((r) => r['type'] === 'hook')
     expect(hooks.every((r) => r['status'] === 200)).toBe(true)
@@ -314,7 +314,7 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
   it('/clear로 CLI가 새 대화로 옮긴 뒤 [즉시 중단]하고 [재개]하면 새 대화를 --resume으로 연다 (D110)', async () => {
     const s = await setup({
       tasks: {
-        ...scenario('S').tasks,
+        ...scenario().tasks,
         'work-start': [
           { do: 'prompt' },
           { do: 'clear' },
@@ -327,7 +327,7 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
         'work-start': [
           { do: 'waitEnter' },
           { do: 'prompt', text: '이어서 해 줘' },
-          ...steps('intake', 'S').slice(1),
+          ...steps('intake').slice(1),
         ],
       },
     })
@@ -383,7 +383,7 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
   it('승인 대기에서 [즉시 중단]하면 승인 대기로 남아 승인할 수 있고, 자리가 나 대기열의 task가 시작된다 (3.3)', async () => {
     const s = await setup(
       {
-        tasks: { ...scenario('S').tasks, 'work-start': [...steps('intake', 'S'), { do: 'wait' }] },
+        tasks: { ...scenario().tasks, 'work-start': [...steps('intake'), { do: 'wait' }] },
       },
       { session_limit: 1 },
     )
@@ -399,18 +399,23 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
     expect(ta).toMatchObject({ status: 'awaiting_approval', live: false })
     expect(s.h.ui.works.get(a)?.actions).toMatchObject({ interrupt: false, resume: true })
     const review = await s.h.relay.review(a, 't-01')
-    expect(review?.gates.S.approve).toBe(true)
+    expect(review?.gate.approve).toBe(true)
     // 세션이 없어도 승인한다. 다음 task는 자리가 없어 대기열에서 기다린다
-    expect(await s.h.relay.approve(a, 't-01', { size: 'S' })).toEqual({ ok: true })
-    await untilTask(s, a, (t) => t.node === 'fix' && t.status === 'queued', 'A 수정 대기열')
+    expect(await s.h.relay.approve(a, 't-01', {})).toEqual({ ok: true })
+    await untilTask(
+      s,
+      a,
+      (t) => t.node === 'fix' && t.status === 'queued',
+      'A 원인 분석과 수정 대기열',
+    )
   })
 
   it('[이 단계 끝나면 멈춤]이면 승인 뒤 멈추고 알린다. [재개]하면 다음 단계를 시작한다 (시나리오 3-4)', async () => {
-    const s = await setup(scenario('S'))
+    const s = await setup(scenario())
     const key = await s.create()
     expect(await s.h.relay.stopAfter(key, true)).toEqual({ ok: true })
     expect(s.h.ui.works.get(key)?.stopAfterStep).toBe(true)
-    const stopped = await drive(s.h.relay, s.h.ui, key, { size: 'S' })
+    const stopped = await drive(s.h.relay, s.h.ui, key)
     expect(stopped).toMatchObject({
       status: 'stopped',
       reason: '이 단계 끝나면 멈춤: 01 의도 정리 승인 뒤 멈춤',
@@ -427,9 +432,9 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
     })
 
     expect(await s.h.relay.resumeWork(key)).toEqual({ ok: true })
-    const done = await drive(s.h.relay, s.h.ui, key, { size: 'S' })
+    const done = await drive(s.h.relay, s.h.ui, key)
     expect(done, s.h.ui.dump()).toMatchObject({ status: 'completed' })
-    expect(work(s.dir(key)).tasks.map((t) => t.node)).toEqual(['intake', 'fix', 'review', 'verify'])
+    expect(work(s.dir(key)).tasks.map((t) => t.node)).toEqual(['intake', 'fix', 'verify'])
   })
 
   it('[Work 포기]는 세션을 끝내고 Work를 포기로 둔다 (3.3)', async () => {
@@ -456,9 +461,9 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
   it('handoff 없이 끝난 세션은 [세션 재개]하거나 [이 단계 새 세션으로 다시] 새 task로 시작한다 (시나리오 3-5, D114)', async () => {
     const s = await setup({
       tasks: {
-        ...scenario('S').tasks,
+        ...scenario().tasks,
         'work-start': [{ do: 'prompt' }, { do: 'stop' }, { do: 'exit' }],
-        't-02': steps('intake', 'S'),
+        't-02': steps('intake'),
       },
       resume: { 'work-start': [{ do: 'exit' }] },
     })
@@ -476,7 +481,7 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
     expect(await s.h.relay.retry(key, 't-01')).toEqual({ ok: true })
     const retried = await untilTask(s, key, (t) => t.id === 't-02', '새 task')
     expect(retried.band).toBe('02 의도 정리 · 새 세션 · 이유: 재개')
-    const result = await drive(s.h.relay, s.h.ui, key, { size: 'S' })
+    const result = await drive(s.h.relay, s.h.ui, key)
     expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed' })
     await settle(s.h, key)
     const w = work(s.dir(key))
@@ -484,8 +489,7 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
       ['t-01', 'intake', 'session_ended', 'default'],
       ['t-02', 'intake', 'approved', 'resume'],
       ['t-03', 'fix', 'approved', 'default'],
-      ['t-04', 'review', 'approved', 'default'],
-      ['t-05', 'verify', 'approved', 'default'],
+      ['t-04', 'verify', 'approved', 'default'],
     ])
     const third = starts(s)[2]
     expect(third?.args).toContain('--session-id')
@@ -496,8 +500,7 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
       '01-intake',
       '02-intake',
       '03-fix',
-      '04-review',
-      '05-verify',
+      '04-verify',
     ])
   })
 
@@ -527,10 +530,10 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
   })
 
   it('다시 켜면 실행 중이던 task는 중단됨이나 승인 대기로, 대기열의 task는 중단됨으로 바꾼다 (시나리오 9, D75, D78)', async () => {
-    const draft = intentDraft('S')
+    const draft = intentDraft()
     const s = await setup(
       {
-        tasks: { ...scenario('S').tasks, 'work-start': [{ do: 'prompt' }, { do: 'wait' }] },
+        tasks: { ...scenario().tasks, 'work-start': [{ do: 'prompt' }, { do: 'wait' }] },
       },
       { session_limit: 2 },
     )
@@ -546,7 +549,7 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
     fs.writeFileSync(path.join(aTask, 'intent.draft.md'), draft)
     fs.writeFileSync(
       path.join(aTask, 'handoff.md'),
-      handoff({ decisions: [{ what: '크기는 S', why: '이유', by: 'ai' }] }),
+      handoff({ decisions: [{ what: '빈 배열은 0', why: '이유', by: 'ai' }] }),
     )
     await Promise.all([a, b, c].map((key) => settle(s.h, key)))
     // 충돌 직전의 work.json을 남긴다(앱이 꺼진 동안 받지 못한 Stop)
@@ -626,13 +629,13 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
     const bStart = after.find((x) => !x.resume)
     expect(bStart?.args).toContain('--session-id')
     // A는 세션 없이 승인한다
-    expect(await s.h.relay.approve(a, 't-01', { size: 'S' })).toEqual({ ok: true })
+    expect(await s.h.relay.approve(a, 't-01', {})).toEqual({ ok: true })
   })
 
   it('앱 종료 확인으로 끈 세션은 앱이 꺼져 끝났다고 남고 pty.log 끝에 표시 줄이 있다. [재개]하면 그렇다고 알린다 (D218, D219)', async () => {
     const s = await setup({
-      tasks: { ...scenario('S').tasks, 'work-start': [{ do: 'prompt' }, { do: 'wait' }] },
-      resume: { 'work-start': steps('intake', 'S').slice(1) },
+      tasks: { ...scenario().tasks, 'work-start': [{ do: 'prompt' }, { do: 'wait' }] },
+      resume: { 'work-start': steps('intake').slice(1) },
     })
     const key = await s.create()
     await untilTask(s, key, (t) => t.live, '작업 중')
@@ -671,7 +674,7 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
   })
 
   it('설정: 세션 상한을 올리면 대기열이 바로 시작하고, 질문 방식은 다음에 시작하는 task부터 쓴다 (D70, D72, D73)', async () => {
-    const s = await setup(scenario('L'), { session_limit: 1 })
+    const s = await setup(scenario(), { session_limit: 1 })
     const a = await s.create('버그 A')
     const b = await s.create('버그 B', { question_mode: { 'work-start': 'confirm_each' } })
     await untilTask(s, b, (t) => t.status === 'queued', 'B 대기열')
@@ -691,22 +694,22 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
     await untilTask(s, a, (t) => t.live, 'A 작업 중')
     expect(
       await s.h.relay.updateConfig({
-        question_mode: { 'work-start': 'confirm_each', evidence: 'confirm_each' },
+        question_mode: { 'work-start': 'confirm_each', fix: 'confirm_each' },
       }),
     ).toMatchObject({ ok: true })
     expect(
-      await s.h.relay.updateWorkSettings(a, { question_mode: { 'root-cause': 'confirm_each' } }),
+      await s.h.relay.updateWorkSettings(a, { question_mode: { verify: 'confirm_each' } }),
     ).toEqual({ ok: true })
     expect((await s.h.relay.updateWorkSettings(a, { question_mode: { fix: 'x' } })).ok).toBe(false)
-    const result = await drive(s.h.relay, s.h.ui, a, { size: 'L' })
+    const result = await drive(s.h.relay, s.h.ui, a)
     expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed' })
     await settle(s.h, a)
     const ctx = (dir: string) => read(path.join(s.dir(a), 'tasks', dir, 'context.md'))
     expect(ctx('01-intake')).toContain('초안 우선 (`draft_first`)')
-    expect(ctx('02-evidence')).toContain('결정마다 확인 (`confirm_each`)')
-    expect(ctx('03-rca')).toContain('결정마다 확인 (`confirm_each`)')
-    expect(ctx('04-fix')).toContain('초안 우선 (`draft_first`)')
-    expect(work(s.dir(a)).settings).toEqual({ question_mode: { 'root-cause': 'confirm_each' } })
+    // fix는 앱 설정, verify는 Work 설정을 따른다
+    expect(ctx('02-fix')).toContain('결정마다 확인 (`confirm_each`)')
+    expect(ctx('03-verify')).toContain('결정마다 확인 (`confirm_each`)')
+    expect(work(s.dir(a)).settings).toEqual({ question_mode: { verify: 'confirm_each' } })
   })
 
   it('task 설정 파일은 자동 메모리를 끈다 (D113)', async () => {

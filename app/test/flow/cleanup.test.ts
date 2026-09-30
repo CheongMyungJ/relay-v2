@@ -109,15 +109,15 @@ function listFiles(dir: string, base = dir): string[] {
 
 describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
   it('정리 뒤 worktree는 없고 산출물은 남는다. 되감기 백업 브랜치는 함께 지우고 작업 브랜치는 둔다 (8-2, D16)', async () => {
-    // verify(t-04)가 fix를 추천해 멈추면 fix로 되감는다(백업 브랜치). 그 뒤 fix(t-05) → review(t-06) →
-    // verify(t-07)를 지나 [push]로 완료한다
-    const recommending = steps('verify', 'S').map((st) =>
+    // verify(t-03)가 fix를 추천해 멈추면 fix로 되감는다(백업 브랜치). 그 뒤 fix(t-04) → verify(t-05)를 지나
+    // [push]로 완료한다
+    const recommending = steps('verify').map((st) =>
       st.do === 'write' && st.file === 'handoff.md'
         ? { ...st, text: handoff({ recommended_next: { node: 'fix', reason: '완료조건 2 실패' } }) }
         : st,
     )
-    const s = await setup({ tasks: { ...scenario('S').tasks, 't-04': recommending } })
-    const stopped = await drive(s.h.relay, s.h.ui, s.key, { size: 'S' })
+    const s = await setup({ tasks: { ...scenario().tasks, 't-03': recommending } })
+    const stopped = await drive(s.h.relay, s.h.ui, s.key)
     expect(stopped, s.h.ui.dump()).toMatchObject({ status: 'stopped' })
     const p = await s.h.relay.stepPreview(s.key, 'fix', false)
     if (!p.ok) throw new Error(p.error)
@@ -132,7 +132,6 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
       }),
     ).toEqual({ ok: true })
     const paused = await drive(s.h.relay, s.h.ui, s.key, {
-      size: 'S',
       pauseAt: (t) => t.node === 'verify' && t.status === 'awaiting_approval',
     })
     expect(paused, s.h.ui.dump()).toMatchObject({ status: 'paused' })
@@ -179,7 +178,7 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
     expect(after.filter((f) => f !== 'work.json' && f !== 'events.jsonl')).toEqual(
       before.filter((f) => f !== 'work.json' && f !== 'events.jsonl'),
     )
-    for (const f of ['request.md', 'intent.md', 'decisions.md', 'tasks/07-verify/pr.md']) {
+    for (const f of ['request.md', 'intent.md', 'decisions.md', 'tasks/05-verify/pr.md']) {
       expect(after, f).toContain(f)
     }
     const w = work(s)
@@ -202,16 +201,16 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
     expect(view?.delivery).toMatchObject({ label: 'push', status: 'succeeded' })
 
     // 보관된 Work의 탭과 읽기 전용 승인 화면: 메인 체크아웃에서 커밋끼리 비교한다
-    const verify = await s.h.relay.review(s.key, 't-07')
+    const verify = await s.h.relay.review(s.key, 't-05')
     expect(verify?.diff).toBe('')
     expect(verify?.completion?.mode).toBeNull()
     expect(verify?.completion?.diff).toContain('+  if (xs.length === 0) return 0')
-    const fix = await s.h.relay.review(s.key, 't-05')
+    const fix = await s.h.relay.review(s.key, 't-04')
     expect(fix?.diff).toContain('+  if (xs.length === 0) return 0')
     expect(fix?.emphasis.map((e) => e.kind)).not.toContain('uncommitted')
     // 폐기된 fix는 백업 커밋을 가리킨다. 백업 브랜치를 지워도 git이 치우기 전에는 읽는다
     expect((await s.h.relay.review(s.key, 't-02'))?.diff).toBe(oldFix)
-    expect((await s.h.relay.terminalAttach(`${s.key}/t-07`)).data).toContain('FAKE-CLAUDE READY')
+    expect((await s.h.relay.terminalAttach(`${s.key}/t-05`)).data).toContain('FAKE-CLAUDE READY')
     // 다시 정리하지 않는다
     expect((await s.h.relay.cleanPreview(s.key)).ok).toBe(false)
     expect(
@@ -227,9 +226,8 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
   })
 
   it('push됐으면 작업 브랜치를 지울 수 있다. 백업 브랜치의 "함께 삭제"를 끄면 둔다 (8-2)', async () => {
-    const s = await setup(scenario('S'))
+    const s = await setup(scenario())
     await drive(s.h.relay, s.h.ui, s.key, {
-      size: 'S',
       pauseAt: (t) => t.node === 'verify' && t.status === 'awaiting_approval',
     })
     expect(await s.h.relay.deliver(s.key, { choice: 'push', uncommitted: null })).toEqual({
@@ -260,7 +258,7 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
   it('포기한 Work의 커밋 안 된 변경은 확인해야 지운다(--force). push나 머지 전의 작업 브랜치는 지우지 않는다 (8-1)', async () => {
     const s = await setup({
       tasks: {
-        ...scenario('S').tasks,
+        ...scenario().tasks,
         fix: [
           { do: 'prompt' },
           { do: 'commit', files: FIXED_FILES, message: 'fix: 빈 배열의 평균은 0' },
@@ -269,7 +267,7 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
         ],
       },
     })
-    const fixing = drive(s.h.relay, s.h.ui, s.key, { size: 'S' })
+    const fixing = drive(s.h.relay, s.h.ui, s.key)
     await s.h.ui.until(() => fs.existsSync(path.join(s.tree, 'scratch.txt')), '고치는 중', 30_000)
     await settle(s.h, s.key)
     const head = git(s.tree, 'rev-parse', 'HEAD')
@@ -320,8 +318,8 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
   })
 
   it('사람이 worktree 폴더를 먼저 지웠으면 git worktree prune만 하고, 보관된 Work의 [변경]은 작업 브랜치의 커밋까지 본다 (8-2)', async () => {
-    const s = await setup(scenario('S'))
-    const done = await drive(s.h.relay, s.h.ui, s.key, { size: 'S' })
+    const s = await setup(scenario())
+    const done = await drive(s.h.relay, s.h.ui, s.key)
     expect(done.status).toBe('completed')
     await settle(s.h, s.key)
     const head = git(s.tree, 'rev-parse', 'HEAD')
@@ -349,15 +347,15 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
     const w = work(s)
     expect(w.status).toBe('archived')
     expect(w.cleaned).toMatchObject({ head, forced: false, deleted_branches: [] })
-    const verify = await s.h.relay.review(s.key, 't-04')
+    const verify = await s.h.relay.review(s.key, 't-03')
     expect(verify?.completion?.diff).toContain('+  if (xs.length === 0) return 0')
   })
 
   it.runIf(canLock)(
     'worktree를 지우다 도중에 실패해 반쯤 지운 폴더가 남으면 그 경로와 직접 지우라는 안내를 보인다. 지우면 다시 정리한다 (D140)',
     async () => {
-      const s = await setup(scenario('S'))
-      const done = await drive(s.h.relay, s.h.ui, s.key, { size: 'S' })
+      const s = await setup(scenario())
+      const done = await drive(s.h.relay, s.h.ui, s.key)
       expect(done.status).toBe('completed')
       await settle(s.h, s.key)
       const stuck = path.join(s.tree, 'stuck', 'x.txt')
@@ -402,8 +400,8 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
   )
 
   it('다시 켜도 보관된 Work는 보관됨이고 읽기 전용 화면이 열린다 (시나리오 8, 9)', async () => {
-    const s = await setup(scenario('S'))
-    const done = await drive(s.h.relay, s.h.ui, s.key, { size: 'S' })
+    const s = await setup(scenario())
+    const done = await drive(s.h.relay, s.h.ui, s.key)
     expect(done.status).toBe('completed')
     const summary = await preview(s)
     expect(summary.branch).toMatchObject({ pushed: false, merged: false, deletable: false })
@@ -419,7 +417,7 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
     await s.h.reopen()
     const view = s.h.ui.works.get(s.key) ?? s.h.relay.snapshot().works.find((w) => w.key === s.key)
     expect(view?.status).toBe('archived')
-    const verify = await s.h.relay.review(s.key, 't-04')
+    const verify = await s.h.relay.review(s.key, 't-03')
     expect(verify?.completion?.diff).toContain('+  if (xs.length === 0) return 0')
     expect(work(s).status).toBe('archived')
   })

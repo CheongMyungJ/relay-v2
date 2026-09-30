@@ -14,14 +14,11 @@ import type { LifecycleEvent, WorkState } from '../../src/shared/work'
 import { drive } from './driver'
 import { git, harness, makeRepo, register, settle, sleep, type Harness } from './harness'
 import {
-  EVIDENCE,
   FIXED_FILES,
+  FIX_DOC,
   REPO_FILES,
   REQUEST,
-  RCA,
-  fixDoc,
   handoff,
-  reviewClean,
   scenario,
   type Scenario,
   type Step,
@@ -137,36 +134,23 @@ function counted(s: Setup, workKey: string): string[] {
 const noticesOf = (s: Setup, workKey: string) =>
   s.h.ui.notices.filter((n) => n.workKey === workKey).map((n) => n.body)
 
-const ALL_AUTO = {
-  investigate: true,
-  evidence: true,
-  rca: true,
-  fix: true,
-  review: true,
-  respond: false,
-}
-
-/** 리뷰에 지적이 있어 자동 승인하지 않을 때의 알림 (D213) */
-const REVIEW_HELD =
-  '05 리뷰: 승인 대기 — 자동 승인하지 않음(리뷰에 지적이 있음 (반영할 지적은 사람이 고름))'
+/** 자동 승인을 켤 수 있는 파이프라인 단계는 원인 분석과 수정뿐이다 (4.2, D229) */
+const ALL_AUTO = { fix: true, respond: false }
 
 /** 카운트다운이 끝나기 전에 [취소]할 수 있게 넉넉히 둔 카운트다운 */
 const LONG = 600
 
 describe('[흐름] 자동 승인 (M7)', () => {
   it('조건을 모두 만족하면 카운트다운 뒤 자동 승인되고 다음 단계로 간다. decisions.md의 머리 줄과 task.approved에 자동 승인이 남고, 카운트다운 시작을 알린다 (4.3, 5.4, 5.5, D81)', async () => {
-    const s = await setup(scenario('L'), { auto_approve: ALL_AUTO, auto_approve_countdown_sec: 1 })
+    const s = await setup(scenario(), { auto_approve: ALL_AUTO, auto_approve_countdown_sec: 1 })
     const key = await s.create()
-    const result = await drive(s.h.relay, s.h.ui, key, { size: 'L', awaitAuto: true })
+    const result = await drive(s.h.relay, s.h.ui, key, { awaitAuto: true })
     expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed' })
-    // 리뷰는 자동 승인을 켜도 지적이 있으면 사람이 승인한다 (D213). 기본 시나리오의 리뷰는 지적이 둘이다
+    // 의도 승인과 리뷰와 검증(Work 완료)은 늘 사람이 한다 (4.2)
     expect(result.tasks.map((t) => [t.label, t.auto])).toEqual([
       ['01 의도 정리', false],
-      ['02 재현과 관찰', true],
-      ['03 원인 분석', true],
-      ['04 수정', true],
-      ['05 리뷰', false],
-      ['06 최종 검증', false],
+      ['02 원인 분석과 수정', true],
+      ['03 리뷰와 검증', false],
     ])
     await settle(s.h, key)
     const dir = s.dir(key)
@@ -174,27 +158,18 @@ describe('[흐름] 자동 승인 (M7)', () => {
     expect(w.tasks.map((t) => [t.id, t.approved_by])).toEqual([
       ['t-01', 'human'],
       ['t-02', 'auto'],
-      ['t-03', 'auto'],
-      ['t-04', 'auto'],
-      ['t-05', 'human'],
-      ['t-06', 'human'],
+      ['t-03', 'human'],
     ])
     expect(w.tasks.every((t) => t.countdown === undefined && t.auto_hold === undefined)).toBe(true)
     expect(approvedBy(dir)).toEqual([
       ['t-01', 'human'],
       ['t-02', 'auto'],
-      ['t-03', 'auto'],
-      ['t-04', 'auto'],
-      ['t-05', 'human'],
-      ['t-06', 'human'],
+      ['t-03', 'human'],
     ])
     expect(heads(dir)).toEqual([
       '## t-01 intake — (사람 승인)',
-      '## t-02 evidence — (자동 승인)',
-      '## t-03 rca — (자동 승인)',
-      '## t-04 fix — (자동 승인)',
-      '## t-05 review — (사람 승인)',
-      '## t-06 verify — (사람 승인)',
+      '## t-02 fix — (자동 승인)',
+      '## t-03 verify — (사람 승인)',
     ])
     // 자동 승인도 사람 승인과 같은 길로 decisions.md에 덧붙이고 해시를 적는다. 다시 읽어도 경고가 없다 (D124)
     const hash = createHash('sha256')
@@ -204,46 +179,41 @@ describe('[흐름] 자동 승인 (M7)', () => {
     expect(s.h.ui.works.get(key)?.notices).toEqual([])
     // 카운트다운 시작을 알린다. 보고 있는 Work인지는 창(main/index)이 가린다 (D81)
     const notices = noticesOf(s, key)
-    for (const label of ['02 재현과 관찰', '03 원인 분석', '04 수정']) {
-      expect(notices).toContain(`${label}: 1초 뒤 자동 승인 (멈추려면 [취소])`)
-    }
-    expect(notices).not.toContain('02 재현과 관찰: 승인 대기')
-    // 지적이 있는 리뷰는 카운트다운하지 않고, 자동 승인하지 않은 까닭과 함께 승인 대기를 알린다 (D213)
-    expect(notices).toContain(REVIEW_HELD)
-    expect(notices.some((n) => n.startsWith('05 리뷰: 1초 뒤'))).toBe(false)
+    expect(notices).toContain('02 원인 분석과 수정: 1초 뒤 자동 승인 (멈추려면 [취소])')
+    expect(notices).not.toContain('02 원인 분석과 수정: 승인 대기')
+    // 리뷰와 검증은 카운트다운하지 않고 승인 대기를 알린다
+    expect(notices).toContain('03 리뷰와 검증: 승인 대기')
+    expect(notices.some((n) => n.startsWith('03 리뷰와 검증: 1초 뒤'))).toBe(false)
+    expect(counted(s, key)).toEqual(['t-02'])
     // 마무리 안내 문구는 수동과 자동을 한 문구에 적는다 (D132)
-    const ctx = read(path.join(dir, 'tasks', '03-rca', 'context.md'))
+    const ctx = read(path.join(dir, 'tasks', '02-fix', 'context.md'))
     expect(ctx).toContain('자동 승인이 켜져 있으면 조건을 만족할 때 카운트다운 뒤 승인되고')
     expect(ctx).toContain('자동 승인 (task를 시작할 때의 설정.')
+    const verifyCtx = read(path.join(dir, 'tasks', '03-verify', 'context.md'))
+    expect(verifyCtx).toContain('수동 승인 (의도 승인, Work 완료는 늘 수동)')
+    expect(verifyCtx).not.toContain('자동 승인이 켜져 있으면')
   })
 
-  it('앱의 기본값은 수정과 지적이 없는 리뷰를 자동 승인한다. 의도 승인과 Work 완료는 사람이 한다 (D213, D214)', async () => {
-    const s = await setup(
-      scenario('S', { review: reviewClean() }),
-      { auto_approve_countdown_sec: 1 },
-      { productDefaults: true },
-    )
+  it('앱의 기본값은 원인 분석과 수정만 자동 승인한다. 의도 승인과 리뷰와 검증(Work 완료)은 사람이 한다 (D214, D229)', async () => {
+    const s = await setup(scenario(), { auto_approve_countdown_sec: 1 }, { productDefaults: true })
     const key = await s.create()
-    const result = await drive(s.h.relay, s.h.ui, key, { size: 'S', awaitAuto: true })
+    const result = await drive(s.h.relay, s.h.ui, key, { awaitAuto: true })
     expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed' })
     expect(result.tasks.map((t) => [t.label, t.auto])).toEqual([
       ['01 의도 정리', false],
-      ['02 수정', true],
-      ['03 리뷰', true],
-      ['04 최종 검증', false],
+      ['02 원인 분석과 수정', true],
+      ['03 리뷰와 검증', false],
     ])
     await settle(s.h, key)
     const dir = s.dir(key)
     expect(approvedBy(dir)).toEqual([
       ['t-01', 'human'],
       ['t-02', 'auto'],
-      ['t-03', 'auto'],
-      ['t-04', 'human'],
+      ['t-03', 'human'],
     ])
-    expect(noticesOf(s, key)).toContain('03 리뷰: 1초 뒤 자동 승인 (멈추려면 [취소])')
-    // 리뷰의 마무리 안내 문구는 지적이 없을 때의 자동 승인을 함께 적는다 (D213)
-    const ctx = read(path.join(dir, 'tasks', '03-review', 'context.md'))
-    expect(ctx).toContain('지적이 없고 자동 승인이 켜져 있으면 카운트다운 뒤 승인되고')
+    expect(noticesOf(s, key)).toContain('02 원인 분석과 수정: 1초 뒤 자동 승인 (멈추려면 [취소])')
+    expect(counted(s, key)).toEqual(['t-02'])
+    const ctx = read(path.join(dir, 'tasks', '02-fix', 'context.md'))
     expect(ctx).toContain('자동 승인 (task를 시작할 때의 설정.')
   })
 
@@ -251,7 +221,7 @@ describe('[흐름] 자동 승인 (M7)', () => {
     const fix: Step[] = [
       { do: 'prompt' },
       { do: 'commit', files: FIXED_FILES, message: 'fix: 빈 배열의 평균은 0' },
-      { do: 'write', file: 'fix.md', text: fixDoc(true) },
+      { do: 'write', file: 'fix.md', text: FIX_DOC },
       { do: 'write', file: 'handoff.md', text: handoff({ summary: '첫 수정' }) },
       { do: 'stop' },
       { do: 'waitEnter' },
@@ -260,22 +230,12 @@ describe('[흐름] 자동 승인 (M7)', () => {
       { do: 'stop' },
       { do: 'wait' },
     ]
-    const s = await setup(scenario('S', { fix }), {
-      auto_approve: {
-        investigate: false,
-        evidence: false,
-        rca: false,
-        fix: true,
-        review: false,
-        respond: false,
-      },
+    const s = await setup(scenario({ fix }), {
+      auto_approve: { fix: true, respond: false },
       auto_approve_countdown_sec: 4,
     })
     const key = await s.create()
-    const paused = await drive(s.h.relay, s.h.ui, key, {
-      size: 'S',
-      pauseAt: (t) => t.node === 'fix',
-    })
+    const paused = await drive(s.h.relay, s.h.ui, key, { pauseAt: (t) => t.node === 'fix' })
     expect(paused.status, s.h.ui.dump()).toBe('paused')
     const first = await untilTask(s, key, (t) => t.countdown !== null, '카운트다운')
     expect(first.countdown?.seconds).toBe(4)
@@ -319,7 +279,9 @@ describe('[흐름] 자동 승인 (M7)', () => {
       status: 'awaiting_approval',
       auto_hold: { reasons: ['open_questions'] },
     })
-    expect(noticesOf(s, key)).toContain('02 수정: 승인 대기 — 자동 승인하지 않음(열린 질문이 있음)')
+    expect(noticesOf(s, key)).toContain(
+      '02 원인 분석과 수정: 승인 대기 — 자동 승인하지 않음(열린 질문이 있음)',
+    )
     await sleep(5_000)
     expect(s.h.ui.works.get(key)?.tasks[1]?.status).toBe('awaiting_approval')
     // 조건을 다시 만족해도 카운트다운은 턴이 끝날 때만 시작한다 (D128)
@@ -329,14 +291,13 @@ describe('[흐름] 자동 승인 (M7)', () => {
 
     // 사람이 승인한다
     expect(await s.h.relay.approve(key, second.id, {})).toEqual({ ok: true })
-    const done = await drive(s.h.relay, s.h.ui, key, { size: 'S' })
+    const done = await drive(s.h.relay, s.h.ui, key)
     expect(done, s.h.ui.dump()).toMatchObject({ status: 'completed' })
     await settle(s.h, key)
     expect(approvedBy(s.dir(key))).toEqual([
       ['t-01', 'human'],
       ['t-02', 'human'],
       ['t-03', 'human'],
-      ['t-04', 'human'],
     ])
     expect(heads(s.dir(key))[1]).toBe('## t-02 fix — (사람 승인)')
   })
@@ -345,7 +306,7 @@ describe('[흐름] 자동 승인 (M7)', () => {
     const fix: Step[] = [
       { do: 'prompt' },
       { do: 'commit', files: FIXED_FILES, message: 'fix: 빈 배열의 평균은 0' },
-      { do: 'write', file: 'fix.md', text: fixDoc(true) },
+      { do: 'write', file: 'fix.md', text: FIX_DOC },
       { do: 'write', file: 'handoff.md', text: handoff({ summary: '첫 수정' }) },
       { do: 'stop' },
       { do: 'waitEnter' },
@@ -360,19 +321,12 @@ describe('[흐름] 자동 승인 (M7)', () => {
       },
       { do: 'stop' },
     ]
-    const s = await setup(scenario('S', { fix }), {
-      auto_approve: {
-        investigate: false,
-        evidence: false,
-        rca: false,
-        fix: true,
-        review: false,
-        respond: false,
-      },
+    const s = await setup(scenario({ fix }), {
+      auto_approve: { fix: true, respond: false },
       auto_approve_countdown_sec: 60,
     })
     const key = await s.create()
-    await drive(s.h.relay, s.h.ui, key, { size: 'S', pauseAt: (t) => t.node === 'fix' })
+    await drive(s.h.relay, s.h.ui, key, { pauseAt: (t) => t.node === 'fix' })
     const first = await untilTask(s, key, (t) => t.countdown !== null, '카운트다운')
     expect(first.countdown?.seconds).toBe(60)
     // 카운트다운 초를 바꾸면 다음 카운트다운부터 쓴다 (D128)
@@ -386,9 +340,9 @@ describe('[흐름] 자동 승인 (M7)', () => {
     s.h.relay.terminalWrite(`${key}/${first.id}`, '\r')
     await untilPrompts(s, 3)
     // 고친 뒤 턴이 끝나면 다시 판정한다. 이번 카운트다운은 1초라 곧 자동 승인된다
-    const result = await drive(s.h.relay, s.h.ui, key, { size: 'S', awaitAuto: true })
+    const result = await drive(s.h.relay, s.h.ui, key, { awaitAuto: true })
     expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed' })
-    expect(result.tasks.find((t) => t.label === '02 수정')?.auto).toBe(true)
+    expect(result.tasks.find((t) => t.label === '02 원인 분석과 수정')?.auto).toBe(true)
     const fixViews = s.h.ui.history
       .filter((w) => w.key === key)
       .map((w) => w.tasks[1])
@@ -407,55 +361,53 @@ describe('[흐름] 자동 승인 (M7)', () => {
   })
 
   it('조건을 하나라도 어기면 카운트다운하지 않고 까닭과 함께 알린다: 열린 질문, 백그라운드 작업, 의도와 어긋남 (4.3, D129, D130)', async () => {
-    const s = await setup(
-      scenario('L', {
-        evidence: [
-          { do: 'prompt' },
-          { do: 'write', file: 'evidence.md', text: EVIDENCE },
-          { do: 'write', file: 'handoff.md', text: handoff({ open_questions: ['기대 동작?'] }) },
-          { do: 'stop' },
-        ],
-        'root-cause': [
-          { do: 'prompt' },
-          { do: 'write', file: 'rca.md', text: RCA },
-          { do: 'write', file: 'handoff.md', text: handoff() },
-          {
-            do: 'stop',
-            background: [
-              { id: 'task-1', type: 'subagent', status: 'running', description: '조사' },
-            ],
-          },
-        ],
-        fix: [
-          { do: 'prompt' },
-          { do: 'commit', files: FIXED_FILES, message: 'fix: 빈 배열의 평균은 0' },
-          { do: 'write', file: 'fix.md', text: fixDoc(false) },
-          {
-            do: 'write',
-            file: 'handoff.md',
-            text: handoff({
-              intent_deviation: { summary: '범위 밖 파일도 고침', evidence: 'src/x.js' },
-            }),
-          },
-          { do: 'stop' },
-        ],
-      }),
-      { auto_approve: ALL_AUTO, auto_approve_countdown_sec: 1 },
-    )
+    // 원인 분석과 수정이 턴마다 조건 하나를 어긴다. 사람이 새 요청을 보내면 다음 턴으로 간다
+    const fix: Step[] = [
+      { do: 'prompt' },
+      { do: 'commit', files: FIXED_FILES, message: 'fix: 빈 배열의 평균은 0' },
+      { do: 'write', file: 'fix.md', text: FIX_DOC },
+      { do: 'write', file: 'handoff.md', text: handoff({ open_questions: ['기대 동작?'] }) },
+      { do: 'stop' },
+      { do: 'waitEnter' },
+      { do: 'prompt', text: '기대 동작은 0' },
+      { do: 'write', file: 'handoff.md', text: handoff() },
+      {
+        do: 'stop',
+        background: [{ id: 'task-1', type: 'subagent', status: 'running', description: '조사' }],
+      },
+      { do: 'waitEnter' },
+      { do: 'prompt', text: '조사를 마쳐 줘' },
+      {
+        do: 'write',
+        file: 'handoff.md',
+        text: handoff({
+          intent_deviation: { summary: '범위 밖 파일도 고침', evidence: 'src/x.js' },
+        }),
+      },
+      { do: 'stop' },
+    ]
+    const s = await setup(scenario({ fix }), {
+      auto_approve: ALL_AUTO,
+      auto_approve_countdown_sec: 1,
+    })
     const key = await s.create()
-    const result = await drive(s.h.relay, s.h.ui, key, { size: 'L', awaitAuto: true })
+    await drive(s.h.relay, s.h.ui, key, { pauseAt: (t) => t.node === 'fix' })
+    const held = [
+      '02 원인 분석과 수정: 승인 대기 — 자동 승인하지 않음(열린 질문이 있음)',
+      '02 원인 분석과 수정: 승인 대기 — 자동 승인하지 않음(턴이 끝날 때 백그라운드 작업이나 예약된 깨우기가 남아 있었음)',
+      '02 원인 분석과 수정: 승인 대기 — 자동 승인하지 않음(의도와 어긋남(intent_deviation)이 있음)',
+    ]
+    for (const [i, notice] of held.entries()) {
+      await s.h.ui.until(() => noticesOf(s, key).includes(notice), notice, 30_000)
+      if (i === held.length - 1) break
+      // 사람이 새 요청을 보낸다: 다음 턴이 끝날 때 다시 판정한다 (D131)
+      s.h.relay.terminalWrite(`${key}/t-02`, '\r')
+      await untilPrompts(s, 3 + i)
+    }
+    const result = await drive(s.h.relay, s.h.ui, key, { awaitAuto: true })
     expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed' })
     expect(result.tasks.every((t) => !t.auto)).toBe(true)
     expect(counted(s, key)).toEqual([])
-    const notices = noticesOf(s, key)
-    expect(notices).toContain('02 재현과 관찰: 승인 대기 — 자동 승인하지 않음(열린 질문이 있음)')
-    expect(notices).toContain(
-      '03 원인 분석: 승인 대기 — 자동 승인하지 않음(턴이 끝날 때 백그라운드 작업이나 예약된 깨우기가 남아 있었음)',
-    )
-    expect(notices).toContain(
-      '04 수정: 승인 대기 — 자동 승인하지 않음(의도와 어긋남(intent_deviation)이 있음)',
-    )
-    expect(notices).toContain(REVIEW_HELD)
     await settle(s.h, key)
     const dir = s.dir(key)
     expect(approvedBy(dir).every(([, by]) => by === 'human')).toBe(true)
@@ -464,22 +416,15 @@ describe('[흐름] 자동 승인 (M7)', () => {
   })
 
   it('Work 설정이 앱 설정보다 우선한다 (D72)', async () => {
-    const s = await setup(scenario('S'), {
-      auto_approve: {
-        investigate: false,
-        evidence: false,
-        rca: false,
-        fix: false,
-        review: false,
-        respond: false,
-      },
+    const s = await setup(scenario(), {
+      auto_approve: { fix: false, respond: false },
       auto_approve_countdown_sec: 1,
     })
     // 앱 설정은 꺼짐: Work A는 켜서 자동 승인, Work B는 앱 설정을 따라 사람 승인
     const a = await s.create('버그 A', { auto_approve: { fix: true } })
     const b = await s.create('버그 B')
     const [ra, rb] = await Promise.all(
-      [a, b].map((key) => drive(s.h.relay, s.h.ui, key, { size: 'S', awaitAuto: true })),
+      [a, b].map((key) => drive(s.h.relay, s.h.ui, key, { awaitAuto: true })),
     )
     expect(ra, s.h.ui.dump()).toMatchObject({ status: 'completed' })
     expect(rb, s.h.ui.dump()).toMatchObject({ status: 'completed' })
@@ -488,7 +433,7 @@ describe('[흐름] 자동 승인 (M7)', () => {
       ok: true,
     })
     const c = await s.create('버그 C', { auto_approve: { fix: false } })
-    const rc = await drive(s.h.relay, s.h.ui, c, { size: 'S', awaitAuto: true })
+    const rc = await drive(s.h.relay, s.h.ui, c, { awaitAuto: true })
     expect(rc, s.h.ui.dump()).toMatchObject({ status: 'completed' })
     for (const key of [a, b, c]) await settle(s.h, key)
     expect(work(s.dir(a)).settings).toEqual({ auto_approve: { fix: true } })
@@ -505,7 +450,7 @@ describe('[흐름] 자동 승인 (M7)', () => {
     const fix: Step[] = [
       { do: 'prompt' },
       { do: 'commit', files: FIXED_FILES, message: 'fix: 빈 배열의 평균은 0' },
-      { do: 'write', file: 'fix.md', text: fixDoc(true) },
+      { do: 'write', file: 'fix.md', text: FIX_DOC },
       { do: 'write', file: 'handoff.md', text: handoff({ summary: '첫 수정' }) },
       { do: 'waitEnter' },
       { do: 'stop' },
@@ -515,20 +460,13 @@ describe('[흐름] 자동 승인 (M7)', () => {
       { do: 'stop' },
       { do: 'wait' },
     ]
-    const s = await setup(scenario('S', { fix }), {
-      auto_approve: {
-        investigate: false,
-        evidence: false,
-        rca: false,
-        fix: false,
-        review: false,
-        respond: false,
-      },
+    const s = await setup(scenario({ fix }), {
+      auto_approve: { fix: false, respond: false },
       auto_approve_countdown_sec: LONG,
     })
     const key = await s.create()
     await untilTask(s, key, (t) => t.status === 'awaiting_approval', '의도 정리 승인 대기')
-    expect(await s.h.relay.approve(key, 't-01', { size: 'S' })).toEqual({ ok: true })
+    expect(await s.h.relay.approve(key, 't-01', {})).toEqual({ ok: true })
     // fix가 도는 중에(턴이 끝나기 전에) 앱 설정을 켠다
     const fixTask = await untilTask(s, key, (t) => t.node === 'fix' && t.live, '수정 작업 중')
     await untilPrompts(s, 2)
@@ -572,24 +510,17 @@ describe('[흐름] 자동 승인 (M7)', () => {
     expect(noticesOf(s, key).filter((n) => n.includes('자동 승인하지 않음'))).toEqual([])
 
     expect(await s.h.relay.approve(key, fixTask.id, {})).toEqual({ ok: true })
-    const done = await drive(s.h.relay, s.h.ui, key, { size: 'S' })
+    const done = await drive(s.h.relay, s.h.ui, key)
     expect(done, s.h.ui.dump()).toMatchObject({ status: 'completed' })
   })
 
   it('앱 설정을 바꾸면 상태가 그대로인 Work도 스냅샷을 다시 보내, 승인 화면이 새 설정으로 안내를 다시 읽는다 (D128)', async () => {
-    const s = await setup(scenario('S'), {
-      auto_approve: {
-        investigate: false,
-        evidence: false,
-        rca: false,
-        fix: false,
-        review: false,
-        respond: false,
-      },
+    const s = await setup(scenario(), {
+      auto_approve: { fix: false, respond: false },
       auto_approve_countdown_sec: LONG,
     })
     const key = await s.create()
-    await drive(s.h.relay, s.h.ui, key, { size: 'S', pauseAt: (t) => t.node === 'fix' })
+    await drive(s.h.relay, s.h.ui, key, { pauseAt: (t) => t.node === 'fix' })
     const fix = await untilTask(
       s,
       key,
@@ -633,11 +564,11 @@ describe('[흐름] 자동 승인 (M7)', () => {
   it('[즉시 중단]과 세션 종료도 카운트다운을 멈춘다. 사람이 누르지 않은 세션 종료는 알린다 (D130, D131)', async () => {
     const s = await setup(
       {
-        ...scenario('S', {
+        ...scenario({
           fix: [
             { do: 'prompt' },
             { do: 'commit', files: FIXED_FILES, message: 'fix: 빈 배열의 평균은 0' },
-            { do: 'write', file: 'fix.md', text: fixDoc(true) },
+            { do: 'write', file: 'fix.md', text: FIX_DOC },
             { do: 'write', file: 'handoff.md', text: handoff({ summary: '첫 수정' }) },
             { do: 'stop' },
             { do: 'wait' },
@@ -655,19 +586,12 @@ describe('[흐름] 자동 승인 (M7)', () => {
         },
       },
       {
-        auto_approve: {
-          investigate: false,
-          evidence: false,
-          rca: false,
-          fix: true,
-          review: false,
-          respond: false,
-        },
+        auto_approve: { fix: true, respond: false },
         auto_approve_countdown_sec: LONG,
       },
     )
     const key = await s.create()
-    await drive(s.h.relay, s.h.ui, key, { size: 'S', pauseAt: (t) => t.node === 'fix' })
+    await drive(s.h.relay, s.h.ui, key, { pauseAt: (t) => t.node === 'fix' })
     const t = await untilTask(s, key, (x) => x.countdown !== null, '카운트다운')
 
     // [즉시 중단]: 승인 대기로 남고 카운트다운은 멈춘다. 사람이 누른 것이라 알리지 않는다
@@ -692,22 +616,22 @@ describe('[흐름] 자동 승인 (M7)', () => {
       auto_hold: { reasons: ['session'] },
     })
     expect(noticesOf(s, key)).toContain(
-      '02 수정: 승인 대기 — 자동 승인하지 않음(카운트다운 중에 세션이 끝남)',
+      '02 원인 분석과 수정: 승인 대기 — 자동 승인하지 않음(카운트다운 중에 세션이 끝남)',
     )
     // 세션이 없어도 사람은 승인한다
     expect(await s.h.relay.approve(key, t.id, {})).toEqual({ ok: true })
-    const done = await drive(s.h.relay, s.h.ui, key, { size: 'S' })
+    const done = await drive(s.h.relay, s.h.ui, key)
     expect(done, s.h.ui.dump()).toMatchObject({ status: 'completed' })
   })
 
   it('카운트다운 중에 앱이 꺼졌다 켜지면 자동 승인하지 않는다. 다시 연 세션의 다음 턴은 다시 판정한다 (D75, D127, D131)', async () => {
     const s = await setup(
       {
-        ...scenario('S', {
+        ...scenario({
           fix: [
             { do: 'prompt' },
             { do: 'commit', files: FIXED_FILES, message: 'fix: 빈 배열의 평균은 0' },
-            { do: 'write', file: 'fix.md', text: fixDoc(true) },
+            { do: 'write', file: 'fix.md', text: FIX_DOC },
             { do: 'write', file: 'handoff.md', text: handoff({ summary: '첫 수정' }) },
             { do: 'stop' },
             { do: 'wait' },
@@ -724,20 +648,13 @@ describe('[흐름] 자동 승인 (M7)', () => {
         },
       },
       {
-        auto_approve: {
-          investigate: false,
-          evidence: false,
-          rca: false,
-          fix: true,
-          review: false,
-          respond: false,
-        },
+        auto_approve: { fix: true, respond: false },
         auto_approve_countdown_sec: 5,
       },
     )
     const key = await s.create()
     const dir = s.dir(key)
-    await drive(s.h.relay, s.h.ui, key, { size: 'S', pauseAt: (t) => t.node === 'fix' })
+    await drive(s.h.relay, s.h.ui, key, { pauseAt: (t) => t.node === 'fix' })
     const t = await untilTask(s, key, (x) => x.countdown !== null, '카운트다운')
     await settle(s.h, key)
     // 앱이 충돌한 때처럼 카운트다운 중의 work.json과 events.jsonl을 남긴다
@@ -776,25 +693,24 @@ describe('[흐름] 자동 승인 (M7)', () => {
     s.h.relay.terminalWrite(`${key}/${t.id}`, '\r')
     // 새 요청을 받기 전의 승인 대기를 사람 역할이 승인하지 않게 요청을 기다린다
     await untilPrompts(s, 3)
-    const result = await drive(s.h.relay, s.h.ui, key, { size: 'S', awaitAuto: true })
+    const result = await drive(s.h.relay, s.h.ui, key, { awaitAuto: true })
     expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed' })
     await settle(s.h, key)
     expect(approvedBy(dir)).toEqual([
       ['t-01', 'human'],
       ['t-02', 'auto'],
       ['t-03', 'human'],
-      ['t-04', 'human'],
     ])
   })
 
   it('확인 창으로 앱을 끄거나 [단계 선택]이 git에서 실패해도, 카운트다운을 멈춘 까닭은 끝낸 까닭대로 남는다 (D130, D145)', async () => {
     const s = await setup(
       {
-        ...scenario('S', {
+        ...scenario({
           fix: [
             { do: 'prompt' },
             { do: 'commit', files: FIXED_FILES, message: 'fix: 빈 배열의 평균은 0' },
-            { do: 'write', file: 'fix.md', text: fixDoc(true) },
+            { do: 'write', file: 'fix.md', text: FIX_DOC },
             { do: 'write', file: 'handoff.md', text: handoff({ summary: '첫 수정' }) },
             { do: 'stop' },
             { do: 'wait' },
@@ -811,20 +727,13 @@ describe('[흐름] 자동 승인 (M7)', () => {
         },
       },
       {
-        auto_approve: {
-          investigate: false,
-          evidence: false,
-          rca: false,
-          fix: true,
-          review: false,
-          respond: false,
-        },
+        auto_approve: { fix: true, respond: false },
         auto_approve_countdown_sec: LONG,
       },
     )
     const key = await s.create()
     const dir = s.dir(key)
-    await drive(s.h.relay, s.h.ui, key, { size: 'S', pauseAt: (t) => t.node === 'fix' })
+    await drive(s.h.relay, s.h.ui, key, { pauseAt: (t) => t.node === 'fix' })
     const t = await untilTask(s, key, (x) => x.countdown !== null, '카운트다운')
     await settle(s.h, key)
     const hold = async () => (await s.h.relay.review(key, t.id))?.autoApprove.hold

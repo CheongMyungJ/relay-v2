@@ -40,7 +40,7 @@ export interface HarnessOptions {
    * productDefaults를 켠다
    */
   config?: Partial<AppConfig>
-  /** 자동 승인을 끄지 않고 앱의 기본값(수정과 지적 없는 리뷰는 켬, D213, D214)을 쓴다 */
+  /** 자동 승인을 끄지 않고 앱의 기본값(원인 분석과 수정만 켬, D214)을 쓴다 */
   productDefaults?: boolean
   /** 앱에 넘길 환경 변수에 더할 것 */
   env?: Record<string, string>
@@ -70,15 +70,11 @@ export interface Harness {
 
 /**
  * [흐름] 시험의 자동 승인 기본값: 모두 끈다. 시험은 사람이 승인하는 길을 기본으로 보고, 자동 승인은 켠 시험에서 본다.
- * 앱의 기본값(D213, D214)과 다르다
+ * 앱의 기본값(D214)과 다르다
  */
 export const MANUAL: Pick<AppConfig, 'auto_approve'> = {
   auto_approve: {
-    investigate: false,
-    evidence: false,
-    rca: false,
     fix: false,
-    review: false,
     respond: false,
   },
 }

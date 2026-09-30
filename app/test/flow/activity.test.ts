@@ -27,9 +27,9 @@ const mark = (label: string) =>
 describe('[흐름] 진행 표시와 세션 시각 (M12 R2)', () => {
   it('새 세션은 표시 줄로 시작하고, 세션을 띄우는 중과 도구 실행 중·끝남을 보이며, 첫 출력과 첫 훅의 시간을 남긴다 (D215~D217)', async () => {
     // 수정 세션은 첫 요청 전에 1.5초 쉬고(세션을 띄우는 중), npm test를 1.5초 돌린 뒤 1초 쉰다
-    const fix = steps('fix', 'S')
+    const fix = steps('fix')
     h = await harness({
-      scenario: scenario('S', {
+      scenario: scenario({
         fix: [
           { do: 'sleep', ms: 1500 },
           { do: 'prompt' },
@@ -56,7 +56,7 @@ describe('[흐름] 진행 표시와 세션 시각 (M12 R2)', () => {
       throw new Error(`Work 생성 실패: ${JSON.stringify(created)}`)
     const workKey = created.workKey
     const workDir = path.join(h.home, 'projects', projectId, 'works', workKey.split('/')[1] ?? '')
-    const done = drive(h.relay, ui, workKey, { size: 'S' })
+    const done = drive(h.relay, ui, workKey)
 
     const fixTask = () => ui.works.get(workKey)?.tasks.find((t) => t.node === 'fix')
     const fixActivity = (pred: (a: ActivityView) => boolean) => {
@@ -66,7 +66,10 @@ describe('[흐름] 진행 표시와 세션 시각 (M12 R2)', () => {
     }
 
     // 첫 턴 전: 세션을 띄우는 중이고 세션을 띄운 때부터 센다(대기열에서 기다린 시간은 넣지 않는다)
-    const starting = await ui.until(() => fixActivity((a) => !a.turn), '수정: 세션을 띄우는 중')
+    const starting = await ui.until(
+      () => fixActivity((a) => !a.turn),
+      '원인 분석과 수정: 세션을 띄우는 중',
+    )
     const fixId = fixTask()?.id ?? ''
     const createdAt = (): number => {
       const w = JSON.parse(read(path.join(workDir, 'work.json'))) as WorkState
@@ -79,7 +82,7 @@ describe('[흐름] 진행 표시와 세션 시각 (M12 R2)', () => {
     // 도구 실행 중: 턴이 시작한 때부터 세고 마지막 도구는 끝나지 않았다. 표시 상태는 작업 중 그대로다
     const running = await ui.until(
       () => fixActivity((a) => a.tool?.endedAt === null),
-      '수정: Bash 실행 중',
+      '원인 분석과 수정: Bash 실행 중',
     )
     expect(running).toMatchObject({ turn: true, tool: { label: 'Bash(npm test)', endedAt: null } })
     expect(running.since).toBeLessThanOrEqual(running.tool?.startedAt ?? 0)
@@ -88,7 +91,7 @@ describe('[흐름] 진행 표시와 세션 시각 (M12 R2)', () => {
     // 도구가 끝남: PostToolUse를 받은 때가 남는다
     const ended = await ui.until(
       () => fixActivity((a) => typeof a.tool?.endedAt === 'number'),
-      '수정: Bash 끝남',
+      '원인 분석과 수정: Bash 끝남',
     )
     const tool = ended.tool
     expect(tool?.label).toBe('Bash(npm test)')
@@ -99,7 +102,7 @@ describe('[흐름] 진행 표시와 세션 시각 (M12 R2)', () => {
     expect(result, ui.dump()).toMatchObject({ status: 'completed' })
     const work = ui.works.get(workKey)
     // 턴이 끝나면(승인 대기, 승인됨) 진행 표시가 없다
-    expect(work?.tasks.map((t) => t.activity)).toEqual([null, null, null, null])
+    expect(work?.tasks.map((t) => t.activity)).toEqual([null, null, null])
 
     // 도구 훅은 스냅샷이 아니라 따로 왔다. 질문 도구가 아니라 core를 거치지 않고 빈 본문으로 바로 답했다
     const updates = ui.activityLog.filter((u) => u.workKey === workKey && u.taskId === fixId)
@@ -121,9 +124,8 @@ describe('[흐름] 진행 표시와 세션 시각 (M12 R2)', () => {
     const tasks = work?.tasks ?? []
     expect(tasks.map((t) => t.label)).toEqual([
       '01 의도 정리',
-      '02 수정',
-      '03 리뷰',
-      '04 최종 검증',
+      '02 원인 분석과 수정',
+      '03 리뷰와 검증',
     ])
     for (const t of tasks) {
       // 표시 줄 뒤에 CLI의 출력이 온다. Windows에서는 그 사이에 ConPTY가 먼저 보내는 제어 문자가 온다
@@ -131,7 +133,7 @@ describe('[흐름] 진행 표시와 세션 시각 (M12 R2)', () => {
       expect(out.startsWith(mark(t.label))).toBe(true)
       expect(out.indexOf('FAKE-CLAUDE READY')).toBeGreaterThanOrEqual(mark(t.label).length)
     }
-    const dirs = ['01-intake', '02-fix', '03-review', '04-verify']
+    const dirs = ['01-intake', '02-fix', '03-verify']
     for (const [i, dir] of dirs.entries()) {
       const log = read(path.join(workDir, 'tasks', dir, 'pty.log'))
       expect(log.startsWith(mark(tasks[i]?.label ?? ''))).toBe(true)
@@ -164,9 +166,9 @@ describe('[흐름] 진행 표시와 세션 시각 (M12 R2)', () => {
 
   it('실패한 도구(PostToolUseFailure)는 끝남으로 보이고, 서브에이전트 안의 도구는 바깥 도구를 덮지 않으며, 실패한 질문 도구도 질문 대기를 끝낸다 (D216)', async () => {
     // 수정 세션: npm test가 실패하고, Task 도구 안에서 서브에이전트가 Grep을 쓰고, 질문 도구가 실패한 뒤 1.5초 쉰다
-    const fix = steps('fix', 'S')
+    const fix = steps('fix')
     h = await harness({
-      scenario: scenario('S', {
+      scenario: scenario({
         fix: [
           { do: 'prompt' },
           { do: 'tool', name: 'Bash', input: { command: 'npm test' }, ms: 300, fail: true },
@@ -194,7 +196,7 @@ describe('[흐름] 진행 표시와 세션 시각 (M12 R2)', () => {
     if (!created.ok || !created.workKey)
       throw new Error(`Work 생성 실패: ${JSON.stringify(created)}`)
     const workKey = created.workKey
-    const result = await drive(h.relay, ui, workKey, { size: 'S' })
+    const result = await drive(h.relay, ui, workKey)
     await settle(h, workKey)
     expect(result, ui.dump()).toMatchObject({ status: 'completed' })
     const fixId = ui.works.get(workKey)?.tasks.find((t) => t.node === 'fix')?.id ?? ''
