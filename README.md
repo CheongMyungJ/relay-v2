@@ -16,4 +16,4 @@ Codex 첫 실행에서는 터미널의 폴더 접근 및 훅 신뢰 안내를 �
 
 `app/`에서 `npm ci`, `npm run dev`로 개발 앱을 실행합니다. `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`, `npm run build`로 검증합니다. GUI 스모크는 빌드 후 `npm run test:smoke`로 실행하며 Linux에서는 DISPLAY가 필요합니다. Windows 설치 파일은 기존 수동 `app-build` 워크플로로 빌드합니다.
 
-설계, 엔진 간 차이와 검증 결과는 [엔진 확장 문서](docs/engines.md)에 기록합니다. Windows 설치본의 두 엔진 스모크는 통과했으며, 실제 Codex CLI의 relay MCP 연결도 확인했습니다. Linux 앱에서 실제 세션 ID 기록, 중단·앱 재시작 후 같은 ID로 재개, 기본 엔진 변경 후 Codex 유지, `/clear` 뒤 새 ID 기록을 확인했습니다. 실제 모델의 질문·산출물 작성·도구/종료 훅·압축 검증은 인증 갱신 문제로 남아 있습니다. 가짜 CLI 시험 결과를 실제 모델 호환 검증으로 간주하지 않습니다.
+설계, 엔진 간 차이와 검증 결과는 [엔진 확장 문서](docs/engines.md)에 기록합니다. Windows 설치본의 두 엔진 스모크를 통과했고, Linux 앱에서는 실제 Codex 모델로 의도 정리 → 수정 → 리뷰 → 최종 검증 → Work 완료를 진행했습니다. 실제 질문·답변·취소, 보호 훅, handoff 형식 오류 되돌림, 압축, 중단·앱 재시작 후 동일 세션 재개도 확인했습니다. Windows 실제 모델과 사용자 훅 병합 등 남은 검증 범위는 문서에 구분합니다.
