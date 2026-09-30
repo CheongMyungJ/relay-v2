@@ -56,9 +56,10 @@ cd app && node eval/run.mjs --scenarios <목록> --runs <n> --parallel 2 > eval/
 
 ## 시나리오를 더하거나 고칠 때
 
-`docs/eval.md` 5절의 형식을 따른다. 기준 레포의 `npm test`가 통과하는지, 숨긴 시험(`guard` 표시가 없는 것)이 기준 레포에서는 실패하는지 확인한다:
+`docs/eval.md` 5절의 형식을 따른다(09~14의 설계는 `docs/eval-hard-scenarios.md`). 정답 수정은 `reference.patch`, 그럴듯한 틀린 수정은 `traps/*.patch`로 두고 확인한다:
 
 ```bash
-cd app/eval/scenarios/<id>/repo && npm test
-cp -r ../hidden eval-hidden && node --test eval-hidden/; rm -rf eval-hidden   # guard가 아닌 시험은 실패해야 한다
+cd app && node eval/check-scenario.mjs <id>   # 기준: npm test와 guard 통과, 나머지 숨긴 시험 실패 / 정답 패치: 모두 통과 / 함정 패치: 하나 이상 실패
 ```
+
+새 시나리오는 맨 CLI로 한 번 시범 실행해(`--arms cli --runs 1`) 너무 쉽지 않은지 본다.

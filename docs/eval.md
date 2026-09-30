@@ -24,6 +24,7 @@
 | `eval/setup.sh` | 의존성(Electron 실행 파일 포함), 빌드, 가상 화면, 깨끗한 환경의 claude 호출 점검 |
 | `eval/run.mjs` | 시나리오 × 쪽 × 회차를 돌리고 판정과 보고서까지 만든다 |
 | `eval/report.mjs` | 결과 폴더에서 보고서를 다시 만든다. `--rejudge`는 짝 판정을 다시 한다 |
+| `eval/check-scenario.mjs` | 시나리오가 제대로 짜였는지 확인한다(기준 레포, 정답 패치, 함정 패치) |
 | `eval/lib/episode.mjs` | 실행 하나: 레포 준비, 사람 깨우기, 사건, 판정 |
 | `eval/lib/relay-arm.mjs` | 앱 띄우기와 프로젝트 등록, 화면 읽기(스크린샷, 보이는 글자, 누를 수 있는 요소), 행동, 비정상 종료 |
 | `eval/lib/cli-arm.mjs` | bash와 claude를 PTY로 띄우기, 터미널 화면(xterm headless), 입력, 새 터미널, 비정상 종료 |
@@ -83,6 +84,8 @@
 | `limits` | `{ minutes, turns }` |
 
 시나리오를 더할 때: `repo/`의 `npm test`는 기준 상태에서 통과해야 한다(리포트의 버그를 잡지 않는 시험). 숨긴 시험은 `../src/...`로 불러온다(레포의 `eval-hidden/`에 복사해 돌린다). `guard`가 아닌 숨긴 시험은 기준 상태에서 실패해야 한다.
+
+시나리오 폴더에 `reference.patch`(정답 수정)와 `traps/*.patch`(그럴듯한 틀린 수정)를 둘 수 있다. `repo/`를 뿌리로 한 git diff이고, 평가 도구는 `repo/`만 복사하므로 에이전트에게 보이지 않는다. `node eval/check-scenario.mjs <id>`가 세 가지를 확인한다: 기준에서 `npm test`와 guard는 통과하고 나머지 숨긴 시험은 실패, 정답 패치에서 모두 통과, 함정 패치마다 숨긴 시험 하나 이상 실패. 09~14의 설계는 `docs/eval-hard-scenarios.md`에 있다.
 
 ## 6. 판정과 지표
 
