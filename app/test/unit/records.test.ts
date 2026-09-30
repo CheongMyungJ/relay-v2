@@ -57,8 +57,8 @@ describe('decisions.md (5.4)', () => {
   it('머리 줄은 task id, 노드, 승인 시각, 승인 방식이고 항목은 [사람]/[AI] 뒤에 what — why다', () => {
     expect(
       decisionsBlock({
-        taskId: 't-04',
-        node: 'rca',
+        taskId: 't-02',
+        node: 'fix',
         at,
         by: 'human',
         decisions: [
@@ -72,7 +72,7 @@ describe('decisions.md (5.4)', () => {
       }),
     ).toBe(
       [
-        '## t-04 rca — 2026-09-25 14:32 (사람 승인)',
+        '## t-02 fix — 2026-09-25 14:32 (사람 승인)',
         '- [AI] 원인은 토큰 만료 시각 비교의 타임존 불일치 — 재현 로그의 차이가 UTC/KST 9시간과 정확히 일치',
         '- [사람] refresh 경로도 이번 수정 범위에 포함 — 같은 비교 함수를 씀',
         '',
@@ -81,30 +81,30 @@ describe('decisions.md (5.4)', () => {
   })
 
   it('결정이 없으면 "없음", 머리글을 읽지 못했으면 그렇게 적는다 (D112). 여러 줄은 한 줄로 편다', () => {
-    const base = { taskId: 't-02', node: 'evidence' as const, at, by: 'human' as const }
+    const base = { taskId: 't-02', node: 'fix' as const, at, by: 'human' as const }
     expect(decisionsBlock({ ...base, decisions: [] })).toBe(
-      '## t-02 evidence — 2026-09-25 14:32 (사람 승인)\n없음\n',
+      '## t-02 fix — 2026-09-25 14:32 (사람 승인)\n없음\n',
     )
     expect(decisionsBlock({ ...base, decisions: null })).toBe(
-      `## t-02 evidence — 2026-09-25 14:32 (사람 승인)\n${DECISIONS_UNREADABLE}\n`,
+      `## t-02 fix — 2026-09-25 14:32 (사람 승인)\n${DECISIONS_UNREADABLE}\n`,
     )
     expect(
       decisionsBlock({ ...base, by: 'auto', decisions: [{ what: 'a\n  b', why: 'c', by: 'ai' }] }),
-    ).toBe('## t-02 evidence — 2026-09-25 14:32 (자동 승인)\n- [AI] a b — c\n')
+    ).toBe('## t-02 fix — 2026-09-25 14:32 (자동 승인)\n- [AI] a b — c\n')
   })
 
   it('덩어리는 빈 줄 하나로 띄워 붙인다', () => {
     const a = '## t-01 intake — 2026-09-25 14:00 (사람 승인)\n없음\n'
-    const b = '## t-02 evidence — 2026-09-25 14:32 (사람 승인)\n없음\n'
+    const b = '## t-02 fix — 2026-09-25 14:32 (사람 승인)\n없음\n'
     expect(appendBlock('', a)).toBe(a)
     expect(appendBlock(`${a}\n\n\n`, b)).toBe(`${a}\n${b}`)
     expect(appendBlock(a.replace(/\n/g, '\r\n'), b)).toBe(`${a}\n${b}`)
   })
 
   it('폐기된 task의 덩어리는 context.md에 넣을 때만 뺀다 (5.4, 6.2)', () => {
-    const a = '## t-01 intake — 2026-09-25 14:00 (사람 승인)\n- [AI] 크기는 M — 이유\n'
-    const b = '## t-02 evidence — 2026-09-25 14:32 (사람 승인)\n없음\n'
-    const c = '## t-03 rca — 2026-09-25 15:00 (사람 승인)\n- [사람] 원인 — 근거\n'
+    const a = '## t-01 intake — 2026-09-25 14:00 (사람 승인)\n- [AI] 완료조건은 셋 — 이유\n'
+    const b = '## t-02 fix — 2026-09-25 14:32 (사람 승인)\n없음\n'
+    const c = '## t-03 verify — 2026-09-25 15:00 (사람 승인)\n- [사람] 지적 1 반영 — 근거\n'
     const file = [a, b, c].reduce((text, block) => appendBlock(text, block), '')
     expect(decisionsWithout(file, [])).toBe(file)
     expect(decisionsWithout(file, ['t-02', 't-03'])).toBe(a)
@@ -118,7 +118,7 @@ describe('intent.md 확정본 (5.3)', () => {
   const draft = [
     '---',
     'type: bugfix   # bugfix only',
-    'size: M        # S | M | L',
+    'size: M',
     'extra: 무시됨',
     '---',
     '## 목표',
@@ -135,15 +135,14 @@ describe('intent.md 확정본 (5.3)', () => {
     '',
   ].join('\n')
 
-  it('앱이 schema_version과 version을 붙이고, 사람이 고른 size를 쓰고, 본문은 그대로 둔다 (D88)', () => {
-    const text = confirmedIntent(draft, { version: 1, size: 'S' })
+  it('앱이 schema_version과 version을 붙이고 type만 옮기며, 본문은 그대로 둔다. 초안의 다른 필드(size 등)는 넣지 않는다 (D88, D85, D227)', () => {
+    const text = confirmedIntent(draft, { version: 1 })
     expect(text).toBe(
       [
         '---',
         'schema_version: 1',
         'version: 1',
         'type: bugfix',
-        'size: S',
         '---',
         '## 목표',
         'KST에서 토큰이 바로 만료되는 문제를 고친다.',
@@ -160,11 +159,12 @@ describe('intent.md 확정본 (5.3)', () => {
       ].join('\n'),
     )
     const fm = parseFrontMatter(text)
-    expect(fm.ok && fm.data).toEqual({ schema_version: 1, version: 1, type: 'bugfix', size: 'S' })
+    expect(fm.ok && fm.data).toEqual({ schema_version: 1, version: 1, type: 'bugfix' })
+    expect(text).not.toContain('size')
   })
 
   it('CRLF 초안도 LF로 쓴다. 확정본 본문은 초안 검사를 그대로 통과한다', () => {
-    const text = confirmedIntent(draft.replace(/\n/g, '\r\n'), { version: 2, size: 'L' })
+    const text = confirmedIntent(draft.replace(/\n/g, '\r\n'), { version: 2 })
     expect(text).not.toContain('\r')
     expect(text).toContain('version: 2\n')
     // schema_version, version은 초안 스키마에 없는 필드라 경고만 나온다 (D85)
@@ -172,9 +172,7 @@ describe('intent.md 확정본 (5.3)', () => {
   })
 
   it('머리글을 읽을 수 없거나 type이 없으면 만들지 않는다', () => {
-    expect(() => confirmedIntent('## 목표\n', { version: 1, size: 'L' })).toThrow()
-    expect(() =>
-      confirmedIntent('---\nsize: M\n---\n## 목표\n', { version: 1, size: 'L' }),
-    ).toThrow(/type/)
+    expect(() => confirmedIntent('## 목표\n', { version: 1 })).toThrow()
+    expect(() => confirmedIntent('---\nextra: x\n---\n## 목표\n', { version: 1 })).toThrow(/type/)
   })
 })

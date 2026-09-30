@@ -61,7 +61,7 @@ const HANDOFF: Handoff = {
   recommended_next: null,
 }
 
-function valid(o: Partial<Handoff> = {}, draftSize?: 'S'): TaskCheck {
+function valid(o: Partial<Handoff> = {}): TaskCheck {
   const handoff = { ...HANDOFF, ...o }
   return {
     handoff_present: true,
@@ -70,8 +70,7 @@ function valid(o: Partial<Handoff> = {}, draftSize?: 'S'): TaskCheck {
     warnings: [],
     handoff,
     handoffHeader: handoff,
-    intentDraft: draftSize ? { type: 'bugfix', size: draftSize } : null,
-    reviewFindings: null,
+    intentDraft: null,
   }
 }
 
@@ -124,7 +123,7 @@ function approve(work: WorkState, check: TaskCheck = valid()): Transition {
 const PR_URL = 'https://github.com/o/r/pull/7'
 const HEAD = 'head0001'
 
-/** S 경로로 [PR 생성]까지 가 PR 진행이 된 Work (M9). 파이프라인의 단계는 자동 승인을 끈 설정으로 지난다 */
+/** intake → fix → verify를 지나 [PR 생성]까지 가 PR 진행이 된 Work (M9). 파이프라인의 단계는 자동 승인을 끈 설정으로 지난다 */
 function inPr(settings: WorkState['settings'] = {}): WorkState {
   let work = createWork({
     workId: 'w-20260929-011',
@@ -132,7 +131,7 @@ function inPr(settings: WorkState['settings'] = {}): WorkState {
     baseCommit: 'base0001',
     at: at(),
   }).work
-  for (const check of [valid({}, 'S'), valid(), valid()]) {
+  for (const check of [valid(), valid()]) {
     work = approve(stop(launch(work), check, DEFAULT_CONFIG).work, check).work
   }
   work = stop(launch(work), valid(), DEFAULT_CONFIG).work
@@ -740,7 +739,7 @@ describe('배지 "자동 대응 멈춤"과 PR 패널 (D171, D183)', () => {
 describe('자동 대응 task의 context.md와 머리 띠 (시나리오 2-4, 2-5)', () => {
   it('머리 띠의 이유는 "자동 대응"이다', () => {
     const work = respond(inPr(), true).work
-    expect(bandText(task(work))).toBe('05 PR 대응 · 새 세션 · 이유: 자동 대응')
+    expect(bandText(task(work))).toBe('04 PR 대응 · 새 세션 · 이유: 자동 대응')
   })
 
   it('사람 지시가 없는 까닭과 설정을 따른 승인 방식을 적는다 (D154, D169)', () => {

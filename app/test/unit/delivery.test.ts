@@ -46,11 +46,10 @@ function check(h: Partial<Handoff> = {}, errors = 0): TaskCheck {
     handoff: { ...HANDOFF, ...h },
     handoffHeader: { ...HANDOFF, ...h },
     intentDraft: null,
-    reviewFindings: null,
   }
 }
 
-/** 지금 task가 verify(t-03)인 S 경로 Work */
+/** 지금 task가 verify(t-03)인 Work (intake → fix → verify) */
 function atVerify(status: TaskStatus, patch: Partial<WorkState> = {}): WorkState {
   const base = createWork({
     workId: 'w-20260927-001',
@@ -67,7 +66,7 @@ function atVerify(status: TaskStatus, patch: Partial<WorkState> = {}): WorkState
   })
   return {
     ...base,
-    intent: { version: 1, size: 'S' },
+    intent: { version: 1 },
     tasks: [task(1, 'intake', 'approved'), task(2, 'fix', 'approved'), task(3, 'verify', status)],
     ...patch,
   }
@@ -136,7 +135,7 @@ describe('전달을 시작할 수 있는 verify (7-3, D119, D120)', () => {
     }
     expect(deliveryStart(notVerify, check())).toEqual({
       ok: false,
-      error: '최종 검증의 Work 완료 화면이 아님',
+      error: '리뷰와 검증의 Work 완료 화면이 아님',
     })
   })
 

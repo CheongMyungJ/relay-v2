@@ -113,7 +113,7 @@ describe('엔진 선택과 이전 기록 (E3, E5)', () => {
     const initial = makeWork()
     const ready: WorkState = {
       ...initial,
-      intent: { version: 1, size: 'S' },
+      intent: { version: 1 },
       tasks: [{ ...firstTask(initial), node: 'fix', status: 'awaiting_approval' }],
     }
     const next = transition(
@@ -130,7 +130,6 @@ describe('엔진 선택과 이전 기록 (E3, E5)', () => {
           handoff,
           handoffHeader: handoff,
           intentDraft: null,
-          reviewFindings: null,
         },
       },
       codex,
@@ -138,7 +137,7 @@ describe('엔진 선택과 이전 기록 (E3, E5)', () => {
     expect(next.rejected).toBeUndefined()
     expect(next.work.tasks.map((t) => [t.node, t.engine])).toEqual([
       ['fix', 'claude'],
-      ['review', 'codex'],
+      ['verify', 'codex'],
     ])
   })
 

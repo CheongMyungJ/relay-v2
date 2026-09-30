@@ -91,7 +91,7 @@ describe('deny 규칙 (D17, 시나리오 2-3)', () => {
   it('git push, gh pr, 앱 소유 파일, 이전 task 디렉터리, Work 디렉터리의 .claude/ 편집을 막는다', () => {
     const rules = denyRules({
       workDir: WORK_DIR,
-      previousTaskDirs: [`${TASKS}\\01-intake`, `${TASKS}\\02-evidence`],
+      previousTaskDirs: [`${TASKS}\\01-intake`, `${TASKS}\\02-fix`],
     })
     const w = '//c/Users/u/.relay/projects/my-api-3f9a1c/works/w-20260926-001'
     expect(rules).toEqual([
@@ -103,14 +103,14 @@ describe('deny 규칙 (D17, 시나리오 2-3)', () => {
       `Edit(${w}/decisions.md)`,
       `Edit(${w}/pr-items.json)`,
       `Edit(${w}/tasks/01-intake/**)`,
-      `Edit(${w}/tasks/02-evidence/**)`,
+      `Edit(${w}/tasks/02-fix/**)`,
       `Edit(${w}/.claude/**)`,
     ])
   })
 
   it('지금 task 디렉터리는 막지 않는다', () => {
     const rules = denyRules({ workDir: WORK_DIR, previousTaskDirs: [`${TASKS}\\01-intake`] })
-    expect(rules.join('\n')).not.toContain('03-rca')
+    expect(rules.join('\n')).not.toContain('02-fix')
   })
 
   it('끝의 경로 구분자가 있어도 같은 규칙이다', () => {
@@ -126,7 +126,7 @@ describe('task 설정 파일 (시나리오 2-3)', () => {
       port: 51234,
       taskId: 't-03',
       workDir: WORK_DIR,
-      previousTaskDirs: [`${TASKS}\\01-intake`, `${TASKS}\\02-evidence`],
+      previousTaskDirs: [`${TASKS}\\01-intake`, `${TASKS}\\02-fix`],
     }
     const settings = taskSettings(input)
     expect(Object.keys(settings)).toEqual(['hooks', 'permissions', 'autoMemoryEnabled'])
@@ -139,13 +139,13 @@ describe('task 설정 파일 (시나리오 2-3)', () => {
 
 describe('실행 인자 (시나리오 2-5, 6절)', () => {
   it('권한 확인 없이, 세션 id, Work 디렉터리, 설정 파일, 첫 프롬프트로 실행한다', () => {
-    const context = `${TASKS}\\03-rca\\context.md`
+    const context = `${TASKS}\\03-verify\\context.md`
     expect(
       launchArgs({
         sessionId: '0b8f0d8e-6c1a-4f1e-9d9b-3c2f4a5e6d7f',
         workDir: WORK_DIR,
-        settingsPath: `${TASKS}\\03-rca\\task.settings.json`,
-        skill: 'root-cause',
+        settingsPath: `${TASKS}\\03-verify\\task.settings.json`,
+        skill: 'verify',
         contextPath: context,
       }),
     ).toEqual([
@@ -155,8 +155,8 @@ describe('실행 인자 (시나리오 2-5, 6절)', () => {
       '--add-dir',
       WORK_DIR,
       '--settings',
-      `${TASKS}\\03-rca\\task.settings.json`,
-      `/relay-root-cause 이 task의 컨텍스트: ${context}`,
+      `${TASKS}\\03-verify\\task.settings.json`,
+      `/relay-verify 이 task의 컨텍스트: ${context}`,
     ])
   })
 
@@ -165,7 +165,7 @@ describe('실행 인자 (시나리오 2-5, 6절)', () => {
       resumeArgs({
         sessionId: '0b8f0d8e-6c1a-4f1e-9d9b-3c2f4a5e6d7f',
         workDir: WORK_DIR,
-        settingsPath: `${TASKS}\\03-rca\\task.settings.json`,
+        settingsPath: `${TASKS}\\03-verify\\task.settings.json`,
       }),
     ).toEqual([
       '--dangerously-skip-permissions',
@@ -174,7 +174,7 @@ describe('실행 인자 (시나리오 2-5, 6절)', () => {
       '--add-dir',
       WORK_DIR,
       '--settings',
-      `${TASKS}\\03-rca\\task.settings.json`,
+      `${TASKS}\\03-verify\\task.settings.json`,
     ])
   })
 
