@@ -205,6 +205,13 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await expect(unanswered).toContainText(
     '답하지 않은 열린 질문 1개: 에이전트는 가정으로 진행합니다.',
   )
+  // 확인 창은 패널 아래에 붙은 버튼 줄보다 위에 뜬다: 버튼 줄 자리를 눌러도 창의 배경이 받는다
+  const bottomCovered = await win.locator('.review-bottom').evaluate((el) => {
+    const r = el.getBoundingClientRect()
+    const hit = el.ownerDocument.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+    return !!hit?.closest('.modal-back')
+  })
+  expect(bottomCovered).toBe(true)
   await win.screenshot({ path: 'test-results/open-questions.png' })
   await unanswered.getByRole('button', { name: '의도 승인', exact: true }).click()
 
