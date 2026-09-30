@@ -1,0 +1,50 @@
+diff --git a/src/dedupe/key.js b/src/dedupe/key.js
+index 6295ae1..095c44f 100644
+--- a/src/dedupe/key.js
++++ b/src/dedupe/key.js
+@@ -2,7 +2,7 @@
+ import { createHash } from 'node:crypto'
+ 
+ // 키에 넣지 않는 필드: 추적용 값과 본문
+-const IGNORED_FIELDS = new Set(['traceId', 'deliveryAttempt', 'data'])
++const IGNORED_FIELDS = new Set(['traceId', 'deliveryAttempt', 'receivedAt', 'data'])
+ 
+ export function dedupeKey(event) {
+   const parts = Object.keys(event)
+diff --git a/src/notifier.js b/src/notifier.js
+index 083757f..bce6db3 100644
+--- a/src/notifier.js
++++ b/src/notifier.js
+@@ -59,7 +59,7 @@ export function createNotifier(o = {}) {
+     metrics,
+     logger,
+   })
+-  const retryWorker = createRetryWorker({ clock, queue: retryQueue, dispatcher, logger })
++  const retryWorker = createRetryWorker({ clock, queue: retryQueue, dispatcher, deduper, logger })
+ 
+   /** 보내는 쪽이 부르는 입구. 같은 이벤트가 여러 번 올 수 있다 */
+   async function handle(raw) {
+diff --git a/src/retry/worker.js b/src/retry/worker.js
+index 015f7e6..29dc9e9 100644
+--- a/src/retry/worker.js
++++ b/src/retry/worker.js
+@@ -1,7 +1,7 @@
+ // 재시도 대기열을 돌며 때가 된 발송을 다시 시도한다.
+ import { describeEvent } from '../intake/normalize.js'
+ 
+-export function createRetryWorker({ clock, queue, dispatcher, logger, pollMs = 500 }) {
++export function createRetryWorker({ clock, queue, dispatcher, deduper, logger, pollMs = 500 }) {
+   let timer = null
+   let busy = false
+ 
+@@ -9,6 +9,10 @@ export function createRetryWorker({ clock, queue, dispatcher, logger, pollMs = 5
+   async function runDue() {
+     const jobs = queue.takeDue(clock.now())
+     for (const job of jobs) {
++      if (deduper?.checkAndMark(job.event)) {
++        logger.info('이미 보낸 이벤트라 재시도하지 않음', { job: job.id })
++        continue
++      }
+       logger.info('재시도', {
+         job: job.id,
+         event: describeEvent(job.event),
