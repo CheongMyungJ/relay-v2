@@ -92,9 +92,16 @@ export async function runEpisode(o) {
   }
   const currentDiff = () => {
     const parts = []
-    for (const t of trees()) {
+    const all = trees()
+    for (const t of all) {
       const d = diffTree(t.path, baseDir, path.join(o.workDir, 'inspect', t.label))
-      const head = kind === 'relay' ? `# Work ${t.label}${t.removed ? ' (정리됨)' : ''}\n` : ''
+      // 맨 CLI는 체크아웃되지 않은 브랜치에 고친 것이 있을 때만 브랜치를 밝힌다
+      const head =
+        kind === 'relay'
+          ? `# Work ${t.label}${t.removed ? ' (정리됨)' : ''}\n`
+          : all.length > 1
+            ? `# ${t.label === 'repo' ? '체크아웃된 ' : ''}브랜치 ${t.git?.branch ?? '?'}\n`
+            : ''
       parts.push(`${head}${d.diff.trim() || '(바뀐 것 없음)'}`)
     }
     return clip(parts.join('\n\n') || '(Work가 아직 없음)', 12_000)
