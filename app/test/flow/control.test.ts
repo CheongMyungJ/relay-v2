@@ -118,12 +118,13 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
       const live = [...s.h.ui.works.values()].flatMap((w) => w.tasks).filter((t) => t.live)
       maxLive = Math.max(maxLive, live.length)
     })
-    // C의 intake가 처음 보인 "세션을 띄우는 중" (D216)
+    // C의 intake가 처음 보인 진행 표시 (D216). 대개 "세션을 띄우는 중"이다. Windows에서는 세션을 띄운 뒤 프로세스
+    // 시작 시각을 읽는(PowerShell) 동안 첫 요청이 먼저 와서 곧바로 턴 중일 수 있다
     let cKey: string | null = null
-    let cStarting: ActivityView | null = null
-    const offStarting = s.h.ui.onChange(() => {
+    let cFirst: ActivityView | null = null
+    const offFirst = s.h.ui.onChange(() => {
       const t = cKey ? s.h.ui.works.get(cKey)?.tasks[0] : undefined
-      if (!cStarting && t?.activity && !t.activity.turn) cStarting = t.activity
+      if (!cFirst && t?.activity) cFirst = t.activity
     })
     const a = await s.create('버그 A')
     const b = await s.create('버그 B')
@@ -140,13 +141,13 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
 
     const results = await Promise.all([a, b, c].map((key) => drive(s.h.relay, s.h.ui, key)))
     off()
-    offStarting()
+    offFirst()
     for (const r of results) expect(r, s.h.ui.dump()).toMatchObject({ status: 'completed' })
     expect(maxLive).toBeLessThanOrEqual(2)
     expect(maxLive).toBe(2)
-    // 대기열에서 기다린 시간은 "세션을 띄우는 중"에 넣지 않는다: 자리를 잡은 때부터 센다 (D216)
-    expect(cStarting).not.toBeNull()
-    expect((cStarting as ActivityView | null)?.since).toBeGreaterThanOrEqual(queuedSeenAt)
+    // 대기열에서 기다린 시간은 진행 표시에 넣지 않는다: "세션을 띄우는 중"은 자리를 잡은 때부터 센다 (D216)
+    expect(cFirst).not.toBeNull()
+    expect((cFirst as ActivityView | null)?.since).toBeGreaterThanOrEqual(queuedSeenAt)
     // 대기열에서 자동으로 시작하면 알린다
     const auto = s.h.ui.notices.filter((n) => n.body.endsWith('대기열에서 자동 시작'))
     expect(auto.map((n) => n.workKey)).toContain(c)
