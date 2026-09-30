@@ -94,15 +94,16 @@ const APPROVAL_LABEL: Record<ApprovalMode, string> = { manual: '수동 승인', 
 
 /**
  * context.md의 승인 방식 (시나리오 2-4). task를 시작할 때의 설정이다. 자동 승인 여부는 턴이 끝날 때의 설정으로
- * 정하므로(D128) 그렇다고 적는다. intake, review, verify는 늘 수동이다 (4.2, D167)
+ * 정하므로(D128) 그렇다고 적는다. intake, review, verify는 늘 수동이다 (4.2, D167). PR 대응은 승인하면 앱이 push하고
+ * 답글을 게시한다 (D169, D172)
  */
 function approvalSection(config: AppConfig, settings: WorkSettings, node: TaskNode): string {
-  if (node === RESPOND) return '수동 승인 (승인하면 앱이 push하고 답글을 게시한다)'
   if (!autoApprovable(node)) {
     return '수동 승인 (의도 승인, 리뷰, Work 완료는 늘 수동)'
   }
   const mode = APPROVAL_LABEL[approvalMode(config, settings, node)]
-  return `${mode} (task를 시작할 때의 설정. 설정은 바로 적용되고, 자동 승인 여부는 턴이 끝날 때의 설정으로 정한다)`
+  const push = node === RESPOND ? '. 승인하면 앱이 push하고 답글을 게시한다' : ''
+  return `${mode} (task를 시작할 때의 설정. 설정은 바로 적용되고, 자동 승인 여부는 턴이 끝날 때의 설정으로 정한다${push})`
 }
 
 /** 질문 방식의 이름. _common.md의 표와 같다 (5.6.1) */
@@ -142,6 +143,8 @@ export interface PreviousRound {
 /** PR 대응 task의 입력 (D192). context.md의 맨 위에 넣는다 */
 export interface RespondInput {
   round: number
+  /** 앱이 받은 새 항목으로 자동으로 시작한 라운드다 (D154, D210) */
+  auto?: boolean
   instruction: string | null
   pr: { number: number; url: string; head: string }
   /** Work 브랜치: 원격 PR 브랜치와 같은 이름이다 (7-4) */
@@ -522,7 +525,11 @@ function respondSection(r: RespondInput, base: string): [string, string] {
       '',
       '### 사람 지시',
       '',
-      r.instruction ? fenced(r.instruction, 'text') : '없음',
+      r.instruction
+        ? fenced(r.instruction, 'text')
+        : r.auto
+          ? '없음: 앱이 받은 새 항목으로 자동으로 시작한 라운드다 (D154)'
+          : '없음',
       '',
       '### 이번 라운드의 항목',
       '',

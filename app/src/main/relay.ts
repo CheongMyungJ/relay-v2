@@ -27,7 +27,7 @@ import { applyConfigPatch, checkProjectSettings, checkWorkSettings } from '../co
 import { createWork } from '../core/machine'
 import { localIso, nextWorkId, workBranch } from '../core/records'
 import { recordedProcesses, type RecordedProcess } from '../core/recovery'
-import { DEFAULT_CONFIG, type AppConfig, type WorkSettings } from '../shared/config'
+import { DEFAULT_CONFIG, type AppConfig, type WorkSettingsPatch } from '../shared/config'
 import type { NodeName } from '../shared/contracts'
 import type { ProjectChecks, ProjectState } from '../shared/project'
 import type {
@@ -380,7 +380,7 @@ export class Relay {
     project: ProjectState,
     input: NewWorkInput,
     branch: string,
-    settings: WorkSettings,
+    settings: WorkSettingsPatch,
   ): Promise<CreateWorkResult> {
     const repo = project.repo_path
     const env = this.env
@@ -613,7 +613,8 @@ export class Relay {
   }
 
   /**
-   * Work별 자동 승인과 질문 방식 (D72). 검사한 뒤 넣는다. 준 키만 바꾸고, 빈 값이면 그 키를 앱 설정으로 되돌린다
+   * Work별 자동 승인, 질문 방식, 대응 자동 시작 (D72, D154). 검사한 뒤 넣는다. 준 키만 바꾸고, 빈 값(빈 객체, null)이면
+   * 그 키를 앱 설정으로 되돌린다. PR 진행 중에도 받는다 (D209)
    */
   updateWorkSettings(workKey: string, settings: unknown): Promise<CommandResult> {
     const r = checkWorkSettings(settings)

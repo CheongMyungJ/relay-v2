@@ -18,8 +18,11 @@ export type SkillName =
 /** 질문 방식 (5.6.1). 초안 우선 / 결정마다 확인 */
 export type QuestionMode = 'draft_first' | 'confirm_each'
 
-/** 자동 승인을 켤 수 있는 노드. intake(의도 승인), review(D167), verify(Work 완료)는 항상 수동이다 (4.2) */
-export type AutoApproveNode = 'investigate' | 'evidence' | 'rca' | 'fix'
+/**
+ * 자동 승인을 켤 수 있는 노드. intake(의도 승인), review(D167), verify(Work 완료)는 항상 수동이다 (4.2).
+ * respond는 PR 대응 task다 (D169)
+ */
+export type AutoApproveNode = 'investigate' | 'evidence' | 'rca' | 'fix' | 'respond'
 
 export interface AppConfig {
   schema_version: 1
@@ -41,6 +44,10 @@ export interface AppConfig {
   format_error_bounce_max: number
   /** PR 진행인 Work를 읽는 주기 (D158) */
   pr_poll_interval_sec: number
+  /** 받은 새 항목이 생기면 PR 대응 task를 자동으로 시작한다 (D154, D210) */
+  respond_auto_start: boolean
+  /** 사람 손 없이 이어지는 대응 라운드의 상한 (D171) */
+  respond_auto_round_max: number
   /** 앱이 게시하는 답글 끝에 붙이는 표시 (D173) */
   reply_signature: string
 }
@@ -49,6 +56,18 @@ export interface AppConfig {
 export interface WorkSettings {
   auto_approve?: Partial<Record<AutoApproveNode, boolean>>
   question_mode?: Partial<Record<SkillName, QuestionMode>>
+  /** 대응 자동 시작 (D154, 5.1.1) */
+  respond_auto_start?: boolean
+}
+
+/**
+ * Work 설정을 바꾸는 값 (D72). 준 키만 바꾼다. 자동 승인과 질문 방식은 빈 객체, 대응 자동 시작은 null이면 그 키를 지워
+ * 앱 설정을 따른다
+ */
+export interface WorkSettingsPatch {
+  auto_approve?: Partial<Record<AutoApproveNode, boolean>>
+  question_mode?: Partial<Record<SkillName, QuestionMode>>
+  respond_auto_start?: boolean | null
 }
 
 /**
@@ -75,6 +94,7 @@ export const AUTO_APPROVE_TITLES: readonly (readonly [AutoApproveNode, string])[
   ['evidence', '재현과 관찰'],
   ['rca', '원인 분석'],
   ['fix', '수정'],
+  ['respond', 'PR 대응'],
 ]
 
 /** 질문 방식의 화면 이름 (5.6.1) */
@@ -87,7 +107,7 @@ export const QUESTION_MODE_LABEL: Readonly<Record<QuestionMode, string>> = {
 export const DEFAULT_CONFIG: AppConfig = {
   schema_version: 1,
   session_limit: 3,
-  auto_approve: { investigate: false, evidence: false, rca: false, fix: false },
+  auto_approve: { investigate: false, evidence: false, rca: false, fix: false, respond: false },
   auto_approve_countdown_sec: 15,
   question_mode: {
     'work-start': 'draft_first',
@@ -104,5 +124,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   intent_warn_chars: 1500,
   format_error_bounce_max: 2,
   pr_poll_interval_sec: 120,
+  respond_auto_start: false,
+  respond_auto_round_max: 3,
   reply_signature: '— relay(AI)가 작성함',
 }

@@ -137,7 +137,7 @@ function valid(h: Partial<Handoff> = {}) {
 describe('자동 승인의 방식 (4.2, D72)', () => {
   const config: AppConfig = {
     ...DEFAULT_CONFIG,
-    auto_approve: { investigate: false, evidence: true, rca: true, fix: false },
+    auto_approve: { investigate: false, evidence: true, rca: true, fix: false, respond: false },
   }
 
   it('Work 설정이 있으면 앱 설정보다 우선하고, 없는 단계는 앱 설정을 따른다', () => {
@@ -149,7 +149,9 @@ describe('자동 승인의 방식 (4.2, D72)', () => {
   })
 
   it('intake, review, verify는 설정과 상관없이 늘 수동이다 (4.2, D167)', () => {
-    const all = { auto_approve: { investigate: false, evidence: true, rca: true, fix: true } }
+    const all = {
+      auto_approve: { investigate: false, evidence: true, rca: true, fix: true, respond: false },
+    }
     for (const node of ['intake', 'review', 'verify'] as const) {
       expect(approvalMode(config, all, node)).toBe('manual')
     }
@@ -244,7 +246,7 @@ describe('자동 승인 조건 (4.3, D129)', () => {
 describe('자동 승인하지 않은 까닭 (D128~D131)', () => {
   const config: AppConfig = {
     ...DEFAULT_CONFIG,
-    auto_approve: { investigate: false, evidence: false, rca: true, fix: false },
+    auto_approve: { investigate: false, evidence: false, rca: true, fix: false, respond: false },
   }
   const task = (patch: object = {}) => ({
     node: 'rca' as const,
@@ -299,11 +301,14 @@ describe('자동 승인하지 않은 까닭 (D128~D131)', () => {
       'recommended_next',
       'background',
       'operation',
+      // 대응 task의 Stop 때 PR이 닫혀 있었다: 사람이 다시 열거나 끝내야 한다 (D179)
+      'pr_closed',
     ] as const) {
       expect(holdNeedsNotice([r]), r).toBe(true)
     }
     expect(holdNeedsNotice(['cancel', 'session'])).toBe(true)
-    expect(Object.keys(AUTO_HOLD_LABEL)).toHaveLength(13)
+    expect(holdText(['pr_closed'])).toContain('PR이 닫혀 있음')
+    expect(Object.keys(AUTO_HOLD_LABEL)).toHaveLength(14)
   })
 })
 
@@ -318,13 +323,14 @@ describe('사이드바 배지 (D80)', () => {
     }
   }
 
-  it('우선순위는 끊긴 작업 > 질문 대기·입력 필요 > 승인 대기 > 막힘 > 멈춤 > 대응 거리 있음 > PR 닫힘 > 머지 가능 > 세션 종료 > 작업 중 > 대기 > 대기열 > 리뷰·CI 대기 > 중단됨 > 완료·포기 (D121, D183)', () => {
+  it('우선순위는 끊긴 작업 > 질문 대기·입력 필요 > 승인 대기 > 막힘 > 멈춤 > 자동 대응 멈춤 > 대응 거리 있음 > PR 닫힘 > 머지 가능 > 세션 종료 > 작업 중 > 대기 > 대기열 > 리뷰·CI 대기 > 중단됨 > 완료·포기 (D121, D183)', () => {
     expect(BADGE_ORDER).toEqual([
       'recovery',
       'asking',
       'awaiting_approval',
       'blocked',
       'stopped',
+      'auto_paused',
       'pr_items',
       'pr_closed',
       'mergeable',
@@ -336,13 +342,14 @@ describe('사이드바 배지 (D80)', () => {
       'interrupted',
       'done',
     ])
-    // 사람이 필요한 상태(앞의 아홉)만 강조한다. 리뷰·CI 대기는 남을 기다리는 것이라 강조하지 않는다 (D183)
+    // 사람이 필요한 상태(앞의 열)만 강조한다. 리뷰·CI 대기는 남을 기다리는 것이라 강조하지 않는다 (D183)
     expect(HUMAN_BADGES).toEqual([
       'recovery',
       'asking',
       'awaiting_approval',
       'blocked',
       'stopped',
+      'auto_paused',
       'pr_items',
       'pr_closed',
       'mergeable',

@@ -37,10 +37,10 @@ export type TaskStatus =
  * task를 시작한 이유 (시나리오 2-5의 머리 띠): 기본 진행, 되감기, 건너뛰기, 재개, 대응 시작.
  * 재개는 handoff 없이 끝난 세션을 [이 단계 새 세션으로 다시] 한 새 task다 (D114).
  * 되감기와 건너뛰기는 단계 선택(6.2)으로 들어온 task다. 단계 선택에서 기본 다음 단계를 골라
- * 건너뛴 단계도 폐기한 task도 없으면 기본 진행이다. 대응 시작은 PR 패널의 [대응 시작]으로 시작한 PR 대응 task다
- * (시나리오 10-3). 자동 대응(M11)은 아직 없다
+ * 건너뛴 단계도 폐기한 task도 없으면 기본 진행이다. 대응 시작은 PR 패널의 [대응 시작]으로 시작한 PR 대응 task이고
+ * (시나리오 10-3), 자동 대응은 앱이 받은 새 항목으로 자동으로 시작한 PR 대응 task다 (D154, D210)
  */
-export type StartReason = 'default' | 'rewind' | 'skip' | 'resume' | 'respond'
+export type StartReason = 'default' | 'rewind' | 'skip' | 'resume' | 'respond' | 'auto_respond'
 
 /** 단계 선택(6.2)으로 들어온 task의 입력과 코드. context.md의 맨 위에 넣는다 (시나리오 2-4) */
 export interface StepSelection {
@@ -108,7 +108,7 @@ export interface Countdown {
  * 조건: open_questions, intent_deviation, recommended_next(기본 다음 단계가 아님), background(Stop 때 백그라운드 작업이나
  * 예약된 깨우기가 남음, D129), invalid(다시 읽은 handoff가 유효하지 않음).
  * 멈춤: cancel([취소]), interrupt([즉시 중단]), quit(앱 종료 확인), step([단계 선택], D145), session(세션 종료),
- * settings(자동 승인을 끔), restart(재시작 조정), operation(끊긴 작업)
+ * settings(자동 승인을 끔), restart(재시작 조정), operation(끊긴 작업), pr_closed(PR 대응인데 PR이 닫혀 승인을 받지 않음, D179)
  */
 export type AutoHoldReason =
   | 'open_questions'
@@ -124,6 +124,7 @@ export type AutoHoldReason =
   | 'settings'
   | 'restart'
   | 'operation'
+  | 'pr_closed'
 
 /** 자동 승인하지 않은 때와 까닭. 다음 Stop에서 다시 판정한다 (D131) */
 export interface AutoHold {
@@ -369,6 +370,8 @@ export interface RespondOperation extends OperationBase {
   from: string
   /** [오류 무시하고 승인]으로 넘긴 오류 (D112). 승인을 기록할 때 남긴다 */
   ignored?: FormatIssue[]
+  /** 승인 방식 (4.3, D169). 없으면 사람 승인이다(M11 전의 기록) */
+  by?: ApprovalBy
 }
 
 /** 진행 중인 여러 단계 작업 (D77): 되감기, 전달, 정리, 머지, PR 대응의 push와 게시 */
@@ -469,6 +472,11 @@ export interface PullRequestRecord {
   ended_at?: string
   /** 머지 뒤 [Work 정리] 창을 연 때 (D178, D200). 머지했는데 없으면 사람이 그 Work를 볼 때 연다 */
   clean_offered_at?: string
+  /**
+   * 사람 손 없이 이어진 대응 라운드 수 (D171, D191의 "자동 라운드 수"). 자동 시작할 때 1 더하고, 사람이 [대응 시작]이나
+   * 대응 task의 승인을 누르면 0으로 돌린다. 없으면 0이다
+   */
+  auto_rounds?: number
 }
 
 export interface WorkState {
@@ -531,6 +539,7 @@ export type LifecycleEventType =
   | 'pr.merged'
   | 'pr.closed'
   | 'pr.reopened'
+  | 'pr.auto_paused'
 
 /** events.jsonl의 한 줄 (5.5). task_id는 task 이벤트에만 있다 */
 export interface LifecycleEvent {

@@ -1,5 +1,6 @@
 // 대화상자: 프로젝트 등록(시나리오 0), 프로젝트 설정(D185), 새 Work(시나리오 1), 설정 화면(D70),
-// Work 설정(D72: 자동 승인, 질문 방식), 단계 선택(6.2, D82), 커밋 안 된 변경의 선택지(7-5), Work 정리(시나리오 8, D178),
+// Work 설정(D72: 자동 승인, 질문 방식, 대응 자동 시작. PR 진행 중에도 연다, D209), 단계 선택(6.2, D82),
+// 커밋 안 된 변경의 선택지(7-5), Work 정리(시나리오 8, D178),
 // 확인 창([오류 무시하고 승인] 4.1, [Work 포기] 3.3, [머지 없이 끝내기] D179).
 import { useEffect, useState, type ReactNode } from 'react'
 import {
@@ -226,6 +227,7 @@ export function NewWorkDialog({
   const [location, setLocation] = useState<'local' | 'remote'>('local')
   const [modes, setModes] = useState<Overrides>({})
   const [auto, setAuto] = useState<AutoOverrides>({})
+  const [autoStart, setAutoStart] = useState<boolean | undefined>(undefined)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const config = useConfig()
@@ -242,6 +244,7 @@ export function NewWorkDialog({
     const settings: WorkSettings = {
       ...(Object.keys(auto).length ? { auto_approve: auto } : {}),
       ...(Object.keys(modes).length ? { question_mode: modes } : {}),
+      ...(autoStart === undefined ? {} : { respond_auto_start: autoStart }),
     }
     const r = await call(() =>
       window.relay.createWork(project.id, {
@@ -309,6 +312,10 @@ export function NewWorkDialog({
       <details>
         <summary>이 Work의 자동 승인</summary>
         <AutoApproveOverrides config={config} value={auto} onChange={setAuto} />
+      </details>
+      <details>
+        <summary>이 Work의 자동 대응 (PR 진행)</summary>
+        <AutoStartOverride config={config} value={autoStart} onChange={setAutoStart} />
       </details>
       <details>
         <summary>이 Work의 질문 방식</summary>
@@ -430,12 +437,50 @@ function AutoApproveOverrides({
 }
 
 /**
- * Work 설정 (D72): 이 Work의 자동 승인과 질문 방식. 자동 승인은 바로 적용하고(턴이 끝날 때의 설정으로 판정, 카운트다운
- * 중에 끄면 멈춤, D128), 질문 방식은 다음에 시작하는 task부터 쓴다 (D73)
+ * Work별 대응 자동 시작 (D72, D154): 앱 설정 따름, 켜기, 끄기. 켜도 이미 받은 새 항목으로는 시작하지 않고, 다음에 PR을 읽어
+ * 새 항목이 들어오면 쌓인 것과 함께 시작한다 (D210)
+ */
+function AutoStartOverride({
+  config,
+  value,
+  onChange,
+}: {
+  config: AppConfig | null
+  value: boolean | undefined
+  onChange: (v: boolean | undefined) => void
+}) {
+  return (
+    <div className="form-grid">
+      <label
+        className="form-row"
+        title="받은 새 항목이 들어오면 PR 대응 task를 자동으로 시작한다 (D154, D210)"
+      >
+        <span>대응 자동 시작</span>
+        <select
+          aria-label="대응 자동 시작"
+          value={value === undefined ? '' : value ? 'on' : 'off'}
+          onChange={(e) => onChange(e.target.value ? e.target.value === 'on' : undefined)}
+        >
+          <option value="">
+            앱 설정 따름{config ? ` (${onOff(config.respond_auto_start)})` : ''}
+          </option>
+          <option value="on">켜기</option>
+          <option value="off">끄기</option>
+        </select>
+      </label>
+    </div>
+  )
+}
+
+/**
+ * Work 설정 (D72): 이 Work의 자동 승인, 질문 방식, 대응 자동 시작. 자동 승인은 바로 적용하고(턴이 끝날 때의 설정으로 판정,
+ * 카운트다운 중에 끄면 멈춤, D128), 질문 방식은 다음에 시작하는 task부터 쓴다 (D73). 대응 자동 시작은 다음에 들어오는 새
+ * 항목부터 쓴다 (D210). PR 진행 중에도 연다 (D209)
  */
 export function WorkSettingsDialog({ work, onClose }: { work: WorkView; onClose: () => void }) {
   const [modes, setModes] = useState<Overrides>(work.settings.question_mode ?? {})
   const [auto, setAuto] = useState<AutoOverrides>(work.settings.auto_approve ?? {})
+  const [autoStart, setAutoStart] = useState<boolean | undefined>(work.settings.respond_auto_start)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const config = useConfig()
@@ -443,7 +488,11 @@ export function WorkSettingsDialog({ work, onClose }: { work: WorkView; onClose:
   const save = async () => {
     setBusy(true)
     const r = await call(() =>
-      window.relay.updateWorkSettings(work.key, { auto_approve: auto, question_mode: modes }),
+      window.relay.updateWorkSettings(work.key, {
+        auto_approve: auto,
+        question_mode: modes,
+        respond_auto_start: autoStart ?? null,
+      }),
     )
     setBusy(false)
     if (r.ok) onClose()
@@ -457,6 +506,11 @@ export function WorkSettingsDialog({ work, onClose }: { work: WorkView; onClose:
         바로 적용합니다. 턴이 끝날 때의 설정으로 판정하고, 카운트다운 중에 끄면 멈춥니다.
       </div>
       <AutoApproveOverrides config={config} value={auto} onChange={setAuto} />
+      <h3>자동 대응 (PR 진행)</h3>
+      <div className="dim">
+        켜도 이미 받은 새 항목으로는 시작하지 않고, 다음에 새 항목이 들어오면 함께 시작합니다.
+      </div>
+      <AutoStartOverride config={config} value={autoStart} onChange={setAutoStart} />
       <h3>질문 방식</h3>
       <div className="dim">질문 방식은 다음에 시작하는 task부터 씁니다.</div>
       <QuestionModes config={config} value={modes} onChange={setModes} />
@@ -518,6 +572,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         intent_warn_chars: value.intent_warn_chars,
         pr_draft: value.pr_draft,
         pr_poll_interval_sec: value.pr_poll_interval_sec,
+        respond_auto_start: value.respond_auto_start,
+        respond_auto_round_max: value.respond_auto_round_max,
         reply_signature: value.reply_signature,
       }),
     )
@@ -634,6 +690,41 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 value={value.auto_approve_countdown_sec}
                 onChange={(e) =>
                   setDraft({ ...value, auto_approve_countdown_sec: Number(e.target.value) })
+                }
+              />
+            </label>
+          </div>
+          <h3>자동 대응 (PR 진행)</h3>
+          <div className="dim">
+            켜면 PR을 읽어 받은 새 항목으로 PR 대응 task를 자동으로 시작합니다. 켜도 이미 받은
+            항목과 앱을 켤 때 읽은 항목만으로는 시작하지 않습니다. 사람이 [대응 시작]이나 승인을
+            누르지 않고 이어진 라운드가 상한에 닿으면 멈추고 알립니다. PR 대응의 자동 승인은 위의
+            목록에서 켭니다.
+          </div>
+          <div className="form-grid">
+            <label
+              className="form-row"
+              title="받은 새 항목이 들어오면 PR 대응 task를 자동으로 시작한다 (D154, D210)"
+            >
+              <span>대응 자동 시작</span>
+              <input
+                type="checkbox"
+                aria-label="대응 자동 시작"
+                checked={value.respond_auto_start}
+                onChange={(e) => setDraft({ ...value, respond_auto_start: e.target.checked })}
+              />
+            </label>
+            <label
+              className="form-row"
+              title="사람이 [대응 시작]이나 승인을 누르지 않고 이어지는 대응 라운드의 상한 (D171)"
+            >
+              <span>자동 대응 라운드 상한</span>
+              <input
+                type="number"
+                aria-label="자동 대응 라운드 상한"
+                value={value.respond_auto_round_max}
+                onChange={(e) =>
+                  setDraft({ ...value, respond_auto_round_max: Number(e.target.value) })
                 }
               />
             </label>
