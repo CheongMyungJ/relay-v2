@@ -1,7 +1,8 @@
 // 프로젝트 등록 (시나리오 0). 레포를 점검하고(D67) project.json을 만든다.
 // git 레포 루트, claude 로그인, 중복 등록은 실패하면 막고, origin과 gh(로그인과 버전, D198)는 경고만 한다.
 import path from 'node:path'
-import { findClaude, claudeAuthStatus } from '../adapters/claude'
+import { agentRuntime, CLAUDE_INSTALL_GUIDE } from '../adapters/agent'
+import type { AgentEngine } from '../shared/agent'
 import { ghAuthStatus, ghVersion } from '../adapters/gh'
 import { branches, defaultBranch, hasRemote, repoRoot } from '../adapters/git'
 import { canonicalPath, pathKey, sha256 } from '../adapters/store'
@@ -11,12 +12,11 @@ import type { ProjectState } from '../shared/project'
 import type { CheckItem, ProjectInspection } from '../shared/views'
 
 /** claude를 못 찾았을 때의 설치 안내 (D106) */
-export const CLAUDE_INSTALL_GUIDE =
-  'claude 실행 파일을 찾지 못했습니다. Claude Code를 설치하세요' +
-  ' (PowerShell: irm https://claude.ai/install.ps1 | iex, 안내: https://code.claude.com/docs/en/setup).' +
-  ' 다른 위치에 설치했다면 CLAUDE_BIN 환경 변수로 경로를 알려 주세요.'
+export { CLAUDE_INSTALL_GUIDE }
 
 export interface ProjectEnv {
+  /** 앱 기본 엔진. 기존 호출자는 Claude다. */
+  engine?: AgentEngine
   env: NodeJS.ProcessEnv
   /** gh 실행 파일. 기본은 PATH의 gh */
   ghBin: string
@@ -81,19 +81,34 @@ async function inspect(
     },
   ]
 
-  const bin = findClaude({ env })
-  const auth = bin ? await claudeAuthStatus(bin, env) : null
-  checks.push({
-    id: 'claude',
-    label: 'claude auth status가 성공하는가',
-    ok: auth?.ok === true,
-    blocking: true,
-    detail: !bin
-      ? CLAUDE_INSTALL_GUIDE
-      : auth?.ok
-        ? `로그인됨 (${bin})`
-        : `로그인되지 않음 (${bin}): ${auth?.detail ?? ''}. 터미널에서 claude를 실행해 로그인하세요`,
-  })
+  const engine = o.engine ?? 'claude'
+  try {
+    const driver = agentRuntime(engine)
+    const bin = driver.find(env)
+    const auth = bin ? await driver.authStatus(bin, env) : null
+    checks.push({
+      id: engine,
+      label:
+        engine === 'claude'
+          ? 'claude auth status가 성공하는가'
+          : `${driver.label}에 로그인되어 있는가`,
+      ok: auth?.ok === true,
+      blocking: true,
+      detail: !bin
+        ? driver.installGuide
+        : auth?.ok
+          ? `로그인됨 (${bin})`
+          : `로그인되지 않음 (${bin}): ${auth?.detail ?? ''}. 터미널에서 ${engine}를 실행해 로그인하세요`,
+    })
+  } catch (e) {
+    checks.push({
+      id: engine,
+      label: `${engine}를 실행할 수 있는가`,
+      ok: false,
+      blocking: true,
+      detail: e instanceof Error ? e.message : String(e),
+    })
+  }
 
   const repo = root ?? picked
   const dup = o.registered.find((p) => pathKey(p.repo_path) === pathKey(repo))

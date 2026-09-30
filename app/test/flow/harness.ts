@@ -18,6 +18,11 @@ export const FAKE_CLAUDE = path.join(
   isWin ? 'fake-claude.cmd' : 'fake-claude.mjs',
 )
 export const FAKE_GH = path.join(APP, 'test/fake-gh', isWin ? 'gh.cmd' : 'gh.mjs')
+export const FAKE_CODEX = path.join(
+  APP,
+  'test/fake-codex',
+  isWin ? 'fake-codex.cmd' : 'fake-codex.mjs',
+)
 
 /**
  * 세션의 첫 출력과 첫 훅 시각 (D217). 세션마다 남으므로, 이것을 보지 않는 시험은 events.jsonl을 통째로 비교할 때
@@ -41,6 +46,7 @@ export interface HarnessOptions {
   env?: Record<string, string>
   /** claude 실행 파일. 기본은 가짜 claude다. [실제]는 실제 claude를 쓴다 */
   claudeBin?: string | null
+  codexBin?: string
   /** gh 실행 파일. 기본은 가짜 gh다. [실제]의 PR 진행(M9)은 실제 gh를 쓴다 */
   ghBin?: string
   ui?: FakeUi
@@ -54,6 +60,7 @@ export interface Harness {
   env: NodeJS.ProcessEnv
   /** 가짜 claude가 남긴 기록 */
   records(): Record<string, unknown>[]
+  codexRecords(): Record<string, unknown>[]
   /** 가짜 gh가 남긴 기록 (8.2) */
   ghRecords(): Record<string, unknown>[]
   /** 같은 RELAY_HOME으로 앱을 다시 켠다(재시작 조정, 시나리오 9). 앞 Relay는 닫혀 있어야 한다. ui가 없으면 새 FakeUi다 */
@@ -92,6 +99,9 @@ export async function harness(o: HarnessOptions = {}): Promise<Harness> {
     ...process.env,
     FAKE_CLAUDE_SCENARIO: scenario,
     FAKE_CLAUDE_RECORD: record,
+    FAKE_CODEX_SCENARIO: scenario,
+    FAKE_CODEX_RECORD: record,
+    CODEX_BIN: o.codexBin ?? FAKE_CODEX,
     FAKE_GH_RECORD: record,
     ...(claude ? { CLAUDE_BIN: claude } : {}),
     ...o.env,
@@ -115,6 +125,7 @@ export async function harness(o: HarnessOptions = {}): Promise<Harness> {
     ui,
     env,
     records: () => jsonl('fake-claude.jsonl'),
+    codexRecords: () => jsonl('fake-codex.jsonl'),
     ghRecords: () => jsonl('fake-gh.jsonl'),
     reopen: async (ui = new FakeUi()) => {
       h.ui = ui

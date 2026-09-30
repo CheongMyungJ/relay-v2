@@ -1,6 +1,7 @@
 // 렌더러로 보내는 스냅샷과 조회 결과 (I14). main이 core로 계산하고, 화면은 받은 것을 그리기만 한다.
 import type { WorkSettings } from './config'
 import type { Decision, HandoffStatus, NodeName, Size, TaskNode } from './contracts'
+import type { PendingQuestionView } from './questions'
 import type { PrItemKind, PrItemStatus } from './pr'
 import type {
   ApprovedIntent,
@@ -113,6 +114,9 @@ export interface DeliveryView {
 
 /** 정리 세션: [AI 세션 열기]로 연, 기록하지 않는 일반 터미널의 Claude Code (시나리오 7-5) */
 export interface CleanupView {
+  engineLabel?: string
+  notice?: string
+  question?: PendingQuestionView
   /** 이 세션 터미널의 키 */
   terminal: string
   /** 대기열(D18), 살아 있음, 끝남 */
@@ -437,6 +441,10 @@ export interface ProjectView {
 }
 
 export interface TaskView {
+  question?: PendingQuestionView
+  /** 사용 엔진과 CLI 버전. 이전 스냅샷 호출자의 호환을 위해 생략 가능하다. */
+  engineLabel?: string
+  engineVersion?: string | null
   id: string
   /** 이 task 터미널의 키 */
   terminal: string
@@ -731,7 +739,7 @@ export interface ReviewView {
   gates: Record<'none' | Size, ApprovalGate>
   /**
    * 자동 승인 안내 (4.2, 4.3, D128~D131). on은 지금 설정으로 자동 승인이 켜진 단계인지, hold는 켜진 단계의 승인
-   * 대기인데 카운트다운하지 않는 까닭이다. 카운트다운은 TaskView.countdown이다
+   * 대기인데 카운트다운하지 않는 까닭 또는 Codex 수동 승인 정책이다. 카운트다운은 TaskView.countdown이다
    */
   autoApprove: { on: boolean; hold: string | null }
   /** verify: Work 완료 화면 (시나리오 7-3, D119, D120) */
@@ -795,7 +803,7 @@ export type CommandResult = { ok: true } | { ok: false; error: string }
 /** Work 생성 결과. 만든 Work의 키를 돌려준다 */
 export type CreateWorkResult = { ok: true; workKey: string } | { ok: false; error: string }
 
-export type CheckId = 'git_root' | 'claude' | 'duplicate' | 'origin' | 'gh'
+export type CheckId = 'git_root' | 'claude' | 'codex' | 'duplicate' | 'origin' | 'gh'
 
 /** 프로젝트 등록 점검 표의 한 행 (시나리오 0, D67) */
 export interface CheckItem {

@@ -210,6 +210,7 @@ describe('진행 표시의 도구 이름 (D216)', () => {
     expect(toolLabel('TodoWrite', { todos: [] })).toBe('TodoWrite')
     expect(toolLabel('Bash', { command: '   ' })).toBe('Bash')
     expect(toolLabel('Mystery', 'not an object')).toBe('Mystery')
+    expect(toolLabel('exec_command', { cmd: 'npm test' })).toBe('exec_command(npm test)')
   })
 
   it('작업 폴더 안의 파일은 상대 경로로, 밖의 파일은 그대로 보인다. 구분자는 /와 \\ 둘 다 본다', () => {

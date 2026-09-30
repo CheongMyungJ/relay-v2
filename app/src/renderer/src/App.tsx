@@ -26,6 +26,7 @@ import { Activity } from './Activity'
 import { withOpened } from './opened'
 import { Panel, showsPr, wantsApproval } from './Panel'
 import { TerminalView } from './TerminalView'
+import { QuestionDialog } from './QuestionDialog'
 
 type Dialog =
   | { kind: 'project' }
@@ -75,6 +76,7 @@ export function App() {
   const [picked, setPicked] = useState<Record<string, string>>({})
   const [dialog, setDialog] = useState<Dialog>(null)
   const [review, setReview] = useState<ReviewView | null>(null)
+  const [hiddenQuestionId, setHiddenQuestionId] = useState<string | null>(null)
 
   useEffect(() => {
     void window.relay.appInfo().then(setInfo)
@@ -130,6 +132,9 @@ export function App() {
   const found = work?.tasks.find((t) => t.id === taskId)
   // 도구 훅으로 따로 온 진행 표시가 있으면 그것을 보인다 (D216)
   const task = found && work ? withActivity(found, activities[`${work.key}|${found.id}`]) : found
+  const questionTask = work ? currentTask(work) : undefined
+  const question = work?.cleanup?.question ?? questionTask?.question
+  const questionTaskId = work?.cleanup?.question ? 'cleanup' : questionTask?.id
 
   // 승인 화면은 상태가 바뀔 때마다 파일을 다시 읽어 만든다
   const reviewKey = work && task ? `${work.key}|${task.id}|${work.revision}` : null
@@ -270,11 +275,22 @@ export function App() {
               정리 세션
             </div>
           ) : null}
+          {question ? (
+            <button className="question-reopen" onClick={() => setHiddenQuestionId(null)}>
+              Codex 질문 답변
+            </button>
+          ) : null}
         </div>
         <div className="band">
           {cleanupTab && work?.cleanup ? (
             <>
-              <span>정리 세션 · 기록하지 않음 · push와 PR은 막혀 있음</span>
+              <span>
+                정리 세션 · {work.cleanup.engineLabel ?? 'Claude Code'} · 기록하지 않음 · push와
+                PR은 앱에서 수행
+              </span>
+              {work.cleanup.notice ? (
+                <span className="band-warn">{work.cleanup.notice}</span>
+              ) : null}
               {work.cleanup.status === 'live' ? null : (
                 <span className="readonly">
                   {work.cleanup.status === 'queued' ? '대기열' : '끝남 · 읽기 전용'}
@@ -283,7 +299,16 @@ export function App() {
             </>
           ) : task ? (
             <>
-              <span>{task.band}</span>
+              <span>
+                {task.band}
+                {task.engineLabel ? (
+                  <span className="dim">
+                    {' '}
+                    · {task.engineLabel}
+                    {task.engineVersion ? ` ${task.engineVersion}` : ''}
+                  </span>
+                ) : null}
+              </span>
               <span className={`status s-${task.status}`}>{task.statusLabel}</span>
               {task.activity ? <Activity activity={task.activity} /> : null}
               {/* 끝난 task의 탭은 읽기 전용이다 (시나리오 5-1) */}
@@ -360,6 +385,15 @@ export function App() {
       </aside>
 
       {dialog?.kind === 'project' ? <ProjectDialog onClose={() => setDialog(null)} /> : null}
+      {!dialog && work && question && questionTaskId && question.id !== hiddenQuestionId ? (
+        <QuestionDialog
+          key={question.id}
+          workKey={work.key}
+          taskId={questionTaskId}
+          pending={question}
+          onHide={() => setHiddenQuestionId(question.id)}
+        />
+      ) : null}
       {dialog?.kind === 'project-settings' ? (
         <ProjectSettingsDialog
           project={projects.find((p) => p.id === dialog.project.id) ?? dialog.project}

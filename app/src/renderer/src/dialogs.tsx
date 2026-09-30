@@ -4,6 +4,12 @@
 // 확인 창([오류 무시하고 승인] 4.1, [Work 포기] 3.3, [머지 없이 끝내기] D179).
 import { useEffect, useState, type ReactNode } from 'react'
 import {
+  AGENT_APPROVAL_NOTICE,
+  AGENT_ENGINES,
+  AGENT_LABELS,
+  type AgentEngine,
+} from '../../shared/agent'
+import {
   AUTO_APPROVE_TITLES,
   QUESTION_MODE_LABEL,
   SKILL_TITLES,
@@ -310,7 +316,8 @@ export function NewWorkDialog({
       {/* 처음 쓰는 사람을 헷갈리게 하지 않게 하나로 접는다. PR 자동 대응은 PR 진행이 된 뒤 [Work 설정]에서 고른다 (D226) */}
       <details>
         <summary>고급 설정 (나중에 [Work 설정]에서도 바꿀 수 있음)</summary>
-        <h3>이 Work의 자동 승인</h3>
+        <h3>이 Work의 자동 승인 (Claude Code)</h3>
+        <div className="dim">{AGENT_APPROVAL_NOTICE}</div>
         <AutoApproveOverrides config={config} value={auto} onChange={setAuto} />
         <h3>이 Work의 질문 방식</h3>
         <QuestionModes config={config} value={modes} onChange={setModes} />
@@ -498,7 +505,8 @@ export function WorkSettingsDialog({ work, onClose }: { work: WorkView; onClose:
 
   return (
     <Modal title={`Work 설정 · ${work.workId}`} onClose={onClose}>
-      <h3>자동 승인</h3>
+      <h3>자동 승인 (Claude Code)</h3>
+      <div className="dim">{AGENT_APPROVAL_NOTICE}</div>
       <div className="dim">
         바로 적용합니다. 턴이 끝날 때의 설정으로 판정하고, 카운트다운 중에 끄면 멈춥니다. 리뷰는
         지적이 없을 때만 자동 승인합니다.
@@ -561,6 +569,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     setError(null)
     const r = await call(() =>
       window.relay.updateConfig({
+        agent_engine: value.agent_engine,
         session_limit: value.session_limit,
         auto_approve: value.auto_approve,
         auto_approve_countdown_sec: value.auto_approve_countdown_sec,
@@ -585,9 +594,26 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
       {value ? (
         <>
           <div className="dim">
-            바꾸면 바로 적용합니다. 질문 방식은 다음에 시작하는 task부터 씁니다.
+            기본 엔진은 새로 만드는 task부터 적용합니다. 기존 task를 재개하면 원래 엔진을
+            사용합니다. 질문 방식은 다음에 시작하는 task부터 씁니다.
           </div>
           <div className="form-grid">
+            <label className="form-row">
+              <span>기본 엔진</span>
+              <select
+                aria-label="기본 엔진"
+                value={value.agent_engine}
+                onChange={(e) =>
+                  setDraft({ ...value, agent_engine: e.target.value as AgentEngine })
+                }
+              >
+                {AGENT_ENGINES.map((engine) => (
+                  <option key={engine} value={engine}>
+                    {AGENT_LABELS[engine]}
+                  </option>
+                ))}
+              </select>
+            </label>
             {NUMBERS.map(([key, label, hint]) => (
               <label key={key} className="form-row" title={hint}>
                 <span>{label}</span>
@@ -653,7 +679,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               </label>
             ))}
           </div>
-          <h3>자동 승인</h3>
+          <h3>자동 승인 (Claude Code)</h3>
+          <div className="dim">{AGENT_APPROVAL_NOTICE}</div>
           <div className="dim">
             켠 단계는 조건(4.3)을 만족하면 카운트다운 뒤 승인합니다. 턴이 끝날 때의 설정으로
             판정하고, 카운트다운 중에 끄면 멈춥니다. 리뷰는 지적이 없을 때만 자동 승인합니다. 의도
@@ -698,7 +725,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             켜면 PR을 읽어 받은 새 항목으로 PR 대응 task를 자동으로 시작합니다. 켜도 이미 받은
             항목과 앱을 켤 때 읽은 항목만으로는 시작하지 않습니다. 사람이 [대응 시작]이나 승인을
             누르지 않고 이어진 라운드가 상한에 닿으면 멈추고 알립니다. PR 대응의 자동 승인은 위의
-            목록에서 켭니다.
+            목록에서 켭니다. Codex 대응 결과의 push와 답글 게시는 사람이 승인한 뒤 실행합니다.
           </div>
           <div className="form-grid">
             <label

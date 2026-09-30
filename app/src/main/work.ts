@@ -14,7 +14,12 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { claudeVersion, deploySkill, findClaude } from '../adapters/claude'
+import { agentRuntime } from '../adapters/agent'
+import { codexSkillPath } from '../adapters/codex'
+import { codexToolDenial } from '../core/codex'
+import { humanAnswers, humanQuestions } from '../core/questions'
+import type { HumanAnswerReply, PendingQuestionView } from '../shared/questions'
+import { agentLabel, knownTaskEngine, taskEngine, taskEngineVersion } from '../core/agent'
 import {
   GhApiError,
   ghApiPost,
@@ -215,14 +220,7 @@ import {
   wantsAutoStart,
 } from '../core/respond'
 import { backupPattern, nextBackupBranch, planStep, stepChoices, stepPreview } from '../core/rewind'
-import {
-  cleanupArgs,
-  continuePrompt,
-  launchArgs,
-  launchEnv,
-  resumeArgs,
-  taskSettings,
-} from '../core/settings'
+import { continuePrompt } from '../core/settings'
 import {
   HANDOFF_FILE,
   INTENT_DRAFT_FILE,
@@ -285,7 +283,6 @@ import type {
 import type { SessionPool } from './pool'
 import type { UiPort } from './ports'
 import { listPrComments, readPr, receivedCommits, fetchTip, type PrFetched } from './pr'
-import { CLAUDE_INSTALL_GUIDE } from './projects'
 import { TerminalBuffer } from './terminals'
 
 /** 여러 Work가 함께 쓰는 것 */
@@ -314,6 +311,8 @@ export interface RunnerContext {
 }
 
 interface LiveSession {
+  question?: PendingHumanQuestion
+  hooksReady: boolean
   pty: PtySession
   log: PtyLog
   unregister: () => void
@@ -333,12 +332,23 @@ interface LiveSession {
   tool: (ToolActivityView & { id?: string; name: string }) | null
 }
 
+interface PendingHumanQuestion {
+  view: PendingQuestionView
+  resolve: (reply: HumanAnswerReply) => void
+}
+
 /**
- * 정리 세션: [AI 세션 열기]로 연, 기록하지 않는 일반 터미널의 Claude Code (시나리오 7-5).
+ * 정리 세션: [AI 세션 열기]로 연, 기록하지 않는 일반 터미널의 선택된 에이전트 (시나리오 7-5).
  * task가 아니라 events.jsonl, pty.log에 남기지 않는다. 앱을 다시 켜면 없다. 살아 있는 동안만 프로세스 ID와
  * 시작 시각을 work.json에 두어 앱이 충돌한 뒤 살아남으면 재시작 때 끝낸다 (D126).
  */
 interface CleanupSession {
+  hooksReady: boolean
+  question?: PendingHumanQuestion
+  /** Codex 내부 대화 전환에서 앞 질문을 취소한다. task 기록에는 저장하지 않는다. */
+  sessionId?: string
+  /** 대기열에서도 정리를 요청한 verify task의 엔진을 유지한다. */
+  engine: TaskRecord['engine']
   /** 터미널 id: cleanup-<n>. 다시 열면 새 터미널이다 */
   id: string
   choice: DeliveryChoice
@@ -771,15 +781,17 @@ export class WorkRunner {
       const dir = this.files.taskDir(task)
       await fsp.mkdir(dir, { recursive: true })
       const startCommit = await headCommit(this.worktree, { env })
-      const bin = findClaude({ env })
-      if (!bin) throw new Error(CLAUDE_INSTALL_GUIDE)
+      const driver = agentRuntime(taskEngine(task))
+      const bin = driver.find(env)
+      if (!bin) throw new Error(driver.installGuide)
       const skill = NODE_INFO[task.node].skill
-      const deployed = await deploySkill({
+      const deployed = await driver.deploySkill({
         source: this.ctx.skills,
         workDir: this.files.dir,
+        taskDir: dir,
         skill,
       })
-      const version = await claudeVersion(bin, env)
+      const version = await driver.version(bin, env)
 
       // verify의 마무리 안내 문구(D104)와 Work 완료 화면의 전달 버튼이 쓸 점검을 새로 한다 (D118)
       if (task.node === 'verify') await this.recheckProject()
@@ -787,9 +799,10 @@ export class WorkRunner {
       const contextPath = path.join(dir, CONTEXT_FILE)
       await writeFileAtomic(contextPath, await this.context(task, dir, this.approvedBefore(task)))
 
-      const sessionId = randomUUID()
+      // Codex의 id는 SessionStart/턴 훅에서 받는다. 임의의 UUID로 재개하지 않는다.
+      const sessionId = driver.engine === 'claude' ? randomUUID() : ''
       const token = randomBytes(32).toString('hex')
-      const args = launchArgs({
+      const args = await driver.launchArgs({
         sessionId,
         workDir: this.files.dir,
         settingsPath,
@@ -807,8 +820,10 @@ export class WorkRunner {
         ...(processStartedAt ? { processStartedAt } : {}),
         startCommit,
         skillHash: deployed.hash,
-        claudeVersion: version,
+        engineVersion: version,
       })
+      if (driver.engine === 'codex')
+        await this.feed({ type: 'input.required', taskId: task.id, at: this.ctx.at() })
       return true
     } catch (err) {
       return this.launchFailed(task.id, err)
@@ -825,9 +840,10 @@ export class WorkRunner {
     const sessionId = task.session?.id
     try {
       if (!sessionId) throw new Error('다시 열 세션이 없음')
-      const bin = findClaude({ env })
-      if (!bin) throw new Error(CLAUDE_INSTALL_GUIDE)
-      const version = await claudeVersion(bin, env)
+      const driver = agentRuntime(taskEngine(task))
+      const bin = driver.find(env)
+      if (!bin) throw new Error(driver.installGuide)
+      const version = await driver.version(bin, env)
       const settingsPath = await this.writeSettings(task)
       const files = await this.files.taskFiles(task)
       // 이전 화면을 먼저 보인다. 이 앱에서 돌던 task면 버퍼가 남아 있고, 아니면 pty.log에서 읽는다
@@ -838,7 +854,7 @@ export class WorkRunner {
         ? continuePrompt(task.session?.app_ended !== undefined)
         : undefined
       this.resumeContinue.delete(task.id)
-      const args = resumeArgs({
+      const args = await driver.resumeArgs({
         sessionId,
         workDir: this.files.dir,
         settingsPath,
@@ -852,7 +868,7 @@ export class WorkRunner {
         at: this.ctx.at(),
         pid: session.pty.pid,
         ...(processStartedAt ? { processStartedAt } : {}),
-        claudeVersion: version,
+        engineVersion: version,
         check: this.check(task, files),
       })
       return true
@@ -878,9 +894,11 @@ export class WorkRunner {
     const earlier = this.work.tasks.filter((t) => t.seq < task.seq)
     await writeJson(
       settingsPath,
-      taskSettings({
+      agentRuntime(taskEngine(task)).settings({
         port: this.ctx.hooks.port,
         taskId: task.id,
+        taskDir: this.files.taskDir(task),
+        skill: NODE_INFO[task.node].skill,
         workDir: this.files.dir,
         previousTaskDirs: earlier.map((t) => this.files.taskDir(t)),
       }),
@@ -1058,7 +1076,10 @@ export class WorkRunner {
       bin,
       args,
       cwd: this.worktree,
-      env: { ...this.ctx.env, ...launchEnv(token) },
+      env: {
+        ...this.ctx.env,
+        ...agentRuntime(taskEngine(task)).launchEnv(token, this.ctx.hooks.port, task.id),
+      },
       cols,
       rows,
       answerQueries: true,
@@ -1078,6 +1099,7 @@ export class WorkRunner {
       exited: new Promise((r) => (exited = r)),
       turnFiles,
       stopped: false,
+      hooksReady: false,
       spawnedAt: Date.now(),
       sawOutput: false,
       sawHook: false,
@@ -1103,8 +1125,16 @@ export class WorkRunner {
       exited()
       void this.enqueue(() => this.onExit(task.id, session))
     })
-    session.unregister = this.ctx.hooks.register(token, task.id, (req) =>
-      this.hookArrived(task.id, req, session),
+    session.unregister = this.ctx.hooks.register(
+      token,
+      task.id,
+      (req) => this.hookArrived(task.id, req, session),
+      taskEngine(task) === 'codex'
+        ? {
+            failClosed: true,
+            question: (body, signal) => this.askHuman(task.id, session, body, signal),
+          }
+        : {},
     )
     session.unwatch = watchDir(this.files.taskDir(task), () => {
       void this.enqueue(() => this.onWatch(task.id))
@@ -1114,6 +1144,110 @@ export class WorkRunner {
   }
 
   // ---------- 세션 동안 (시나리오 3) ----------
+
+  /** 답변 Promise를 처리 줄 밖에서 기다린다. 기다리는 동안 중단/IPC/다른 훅을 받을 수 있다. */
+  private async askHuman(
+    taskId: string,
+    owner: LiveSession | CleanupSession,
+    body: Record<string, unknown>,
+    signal: AbortSignal,
+  ): Promise<HookReply> {
+    const result = await this.enqueue(async () => {
+      const active =
+        taskId === CLEANUP_ID
+          ? this.cleanup === owner && this.cleanup.status === 'live'
+          : this.live.get(taskId) === owner && this.task(taskId)?.session?.alive === true
+      if (!active || signal.aborted)
+        return { reply: { cancelled: true, reason: '세션이 끝났습니다.' } }
+      if (owner.question)
+        return { reply: { cancelled: true, reason: '앞 질문의 답변을 먼저 기다리세요.' } }
+      const questions = humanQuestions(body['questions'])
+      let resolve!: (reply: HumanAnswerReply) => void
+      const waiting = new Promise<HumanAnswerReply>((r) => {
+        resolve = r
+      })
+      const pending: PendingHumanQuestion = { view: { id: randomUUID(), questions }, resolve }
+      owner.question = pending
+      const aborted = () => {
+        void this.enqueue(() =>
+          this.finishQuestion(taskId, owner, pending, {
+            cancelled: true,
+            reason: '질문 호출이 취소되었습니다.',
+          }),
+        ).catch(() => this.cancelQuestion(owner, '질문 호출이 취소되었습니다.'))
+      }
+      signal.addEventListener('abort', aborted, { once: true })
+      try {
+        if (taskId !== CLEANUP_ID)
+          await this.feed({ type: 'question.started', taskId, at: this.ctx.at() })
+        else {
+          if (owner === this.cleanup) this.cleanup.clean = false
+          this.changed()
+          this.notify('정리 세션에서 답변을 기다립니다.')
+        }
+      } catch (e) {
+        this.cancelQuestion(owner, '질문 상태를 저장하지 못했습니다.')
+        signal.removeEventListener('abort', aborted)
+        throw e
+      }
+      if (signal.aborted) aborted()
+      return { waiting: waiting.finally(() => signal.removeEventListener('abort', aborted)) }
+    })
+    if (result.waiting) return { ...(await result.waiting) }
+    return result.reply ?? null
+  }
+
+  private cancelQuestion(owner: LiveSession | CleanupSession, reason: string): void {
+    const pending = owner.question
+    delete owner.question
+    pending?.resolve({ cancelled: true, reason })
+  }
+
+  private async finishQuestion(
+    taskId: string,
+    owner: LiveSession | CleanupSession,
+    pending: PendingHumanQuestion,
+    reply: HumanAnswerReply,
+  ): Promise<void> {
+    if (owner.question !== pending) return
+    delete owner.question
+    try {
+      if (
+        taskId !== CLEANUP_ID &&
+        this.live.get(taskId) === owner &&
+        this.task(taskId)?.session?.alive
+      ) {
+        await this.feed({ type: 'question.finished', taskId, at: this.ctx.at() })
+      } else this.changed()
+      pending.resolve(reply)
+    } catch (e) {
+      pending.resolve({ cancelled: true, reason: '질문 상태를 저장하지 못했습니다.' })
+      throw e
+    }
+  }
+
+  /** question id로 앞 대화/앞 질문의 늦은 답변과 중복 제출을 거절한다. null은 취소다. */
+  answerQuestion(taskId: string, questionId: string, answers: unknown): Promise<CommandResult> {
+    return this.enqueue(async () => {
+      const owner = taskId === CLEANUP_ID ? this.cleanup : this.live.get(taskId)
+      const pending = owner?.question
+      if (!owner || !pending || pending.view.id !== questionId)
+        return { ok: false, error: '이미 끝났거나 바뀐 질문입니다.' }
+      try {
+        const reply: HumanAnswerReply =
+          answers === null
+            ? {
+                cancelled: true,
+                reason: '사람이 질문을 취소했습니다. 취소는 답변이나 동의가 아닙니다.',
+              }
+            : { cancelled: false, answers: humanAnswers(pending.view.questions, answers) }
+        await this.finishQuestion(taskId, owner, pending, reply)
+        return { ok: true }
+      } catch (e) {
+        return { ok: false, error: message(e) }
+      }
+    })
+  }
 
   /**
    * 세션의 첫 PTY 출력과 첫 훅까지 걸린 시간을 events.jsonl에 남긴다 (D217). 줄에 넣으므로 세션을 띄우는 처리
@@ -1135,22 +1269,57 @@ export class WorkRunner {
     )
   }
 
+  /** Codex의 도구 보호는 진행 표시의 빠른 응답 경로에서도 먼저 판정한다. */
+  private codexToolReply(req: HookRequest, task?: TaskRecord): HookReply {
+    const b = req.body
+    const toolName = str(b['tool_name']) ?? ''
+    const args = b['tool_input']
+    const reason = codexToolDenial(
+      {
+        workDir: this.files.dir,
+        ...(str(b['cwd']) ? { cwd: str(b['cwd']) } : {}),
+        worktree: this.worktree,
+        ...(task ? { taskDir: this.files.taskDir(task) } : {}),
+        previousTaskDirs: this.work.tasks
+          .filter((t) => !task || t.seq < task.seq)
+          .map((t) => this.files.taskDir(t)),
+      },
+      toolName,
+      typeof args === 'object' && args !== null ? (args as Record<string, unknown>) : {},
+    )
+    if (reason)
+      return {
+        hookSpecificOutput: {
+          hookEventName: 'PreToolUse',
+          permissionDecision: 'deny',
+          permissionDecisionReason: reason,
+        },
+      }
+    return null
+  }
+
   /**
    * 훅을 받았다. 진행 표시(D216)를 먼저 바꾸고, 질문 도구가 아닌 도구의 훅은 줄에 넣지 않고 바로 답한다: 도구를 쓸
    * 때마다 오므로 앞선 처리(PR 읽기 등)를 기다리게 하면 에이전트가 늦어진다. core는 이 훅으로 상태를 바꾸지 않는다
    */
   private hookArrived(taskId: string, req: HookRequest, session: LiveSession): Promise<HookReply> {
+    if (this.live.get(taskId) !== session) return Promise.resolve(null)
     if (!session.sawHook) {
       session.sawHook = true
       this.timing(taskId, session, 'hook', req.event)
     }
     const b = req.body
     const now = Date.now()
-    if (req.event === 'UserPromptSubmit') {
+    if (req.event === 'UserPromptSubmit' && str(b['agent_id']) === undefined) {
       session.turnStartedAt = now
       session.tool = null
     }
     if (TOOL_HOOKS.includes(req.event)) {
+      const task = this.task(taskId)
+      const denial =
+        task?.engine === 'codex' && req.event === 'PreToolUse'
+          ? this.codexToolReply(req, task)
+          : null
       const name = str(b['tool_name']) ?? ''
       const id = str(b['tool_use_id'])
       const before = session.tool
@@ -1158,7 +1327,13 @@ export class WorkRunner {
       if (str(b['agent_id']) === undefined) {
         if (req.event === 'PreToolUse') {
           const label = toolLabel(name, b['tool_input'], str(b['cwd']))
-          session.tool = { name, label, startedAt: now, endedAt: null, ...(id ? { id } : {}) }
+          session.tool = {
+            name,
+            label,
+            startedAt: now,
+            endedAt: denial ? now : null,
+            ...(id ? { id } : {}),
+          }
         } else if (
           session.tool?.endedAt === null &&
           (id ? session.tool.id === id : session.tool.name === name)
@@ -1172,7 +1347,7 @@ export class WorkRunner {
           if (task)
             this.ctx.ui.activity({ workKey: this.key, taskId, activity: this.activityOf(task) })
         }
-        return Promise.resolve(null)
+        return Promise.resolve(denial)
       }
     }
     return this.enqueue(() => this.onHook(taskId, req, session))
@@ -1186,9 +1361,16 @@ export class WorkRunner {
     // 토큰 확인을 지나 처리 줄에서 기다린 앞 프로세스의 요청은 다시 연 세션에 적용하지 않는다 (D144)
     if (session !== from) return null
     const b = req.body
+    const engine = taskEngine(task)
     // 훅 본문의 세션 id. /clear 등으로 CLI가 다른 대화로 옮기면 core가 따른다 (D110)
     const sessionId = str(b['session_id'])
     const agentId = str(b['agent_id'])
+    // 자식의 상태 신호는 task를 끝내지 않지만 도구 보호는 자식에도 적용한다.
+    if (engine === 'codex' && agentId !== undefined && req.event !== 'PreToolUse') return null
+    if (engine === 'codex' && !session.hooksReady) {
+      session.hooksReady = true
+      this.changed()
+    }
     const base = {
       taskId,
       at: this.ctx.at(),
@@ -1196,12 +1378,48 @@ export class WorkRunner {
       ...(agentId === undefined ? {} : { agentId }),
     }
     switch (req.event) {
+      case 'SessionStart': {
+        if (engine !== 'codex') return null
+        // SessionStart의 compact source도 지시를 재주입한다. PostCompact는 additionalContext를 지원하지 않는다.
+        if (sessionId && sessionId !== task.session?.id && session.question)
+          await this.finishQuestion(taskId, session, session.question, {
+            cancelled: true,
+            reason: '대화가 바뀌었습니다.',
+          })
+        await this.feed({ type: 'session.identified', ...base })
+        const instructions = await readText(
+          codexSkillPath(this.files.taskDir(task), NODE_INFO[task.node].skill),
+        )
+        return {
+          hookSpecificOutput: {
+            hookEventName: req.event,
+            additionalContext: `이번 relay task의 스킬입니다. 이 절차만 따르세요. 컨텍스트: ${path.join(this.files.taskDir(task), CONTEXT_FILE)}\n${instructions ?? ''}`,
+          },
+        }
+      }
+      case 'PermissionRequest':
+        return (await this.feed({ type: 'input.required', ...base })).reply
+      case 'Interrupt': {
+        this.cancelQuestion(session, '턴을 중단했습니다.')
+        return (
+          await this.feed({
+            type: 'turn.interrupted',
+            ...base,
+            check: this.check(task, await this.files.taskFiles(task)),
+          })
+        ).reply
+      }
       case 'UserPromptSubmit': {
+        if (engine === 'codex' && session.question)
+          await this.finishQuestion(taskId, session, session.question, {
+            cancelled: true,
+            reason: '새 요청을 보냈습니다.',
+          })
         if (session) session.turnFiles = turnSnapshot(task, await this.files.taskFiles(task))
         const mode = str(b['permission_mode'])
         return (
           await this.feed({
-            type: 'UserPromptSubmit',
+            type: 'turn.started',
             ...base,
             ...(mode === undefined ? {} : { permissionMode: mode }),
           })
@@ -1210,13 +1428,18 @@ export class WorkRunner {
       // 질문 도구만 온다. 나머지 도구는 hookArrived가 진행 표시만 바꾸고 답했다 (D216)
       case 'PreToolUse':
       case 'PostToolUse':
-        return (await this.feed({ type: req.event, ...base, toolName: str(b['tool_name']) ?? '' }))
-          .reply
-      // 실패한 질문 도구도 질문이 끝난 것이다
-      case 'PostToolUseFailure':
-        return (
-          await this.feed({ type: 'PostToolUse', ...base, toolName: str(b['tool_name']) ?? '' })
-        ).reply
+      case 'PostToolUseFailure': {
+        const toolName = str(b['tool_name']) ?? ''
+        if (engine === 'claude' && toolName === ASK_TOOL) {
+          return (
+            await this.feed({
+              type: req.event === 'PreToolUse' ? 'question.started' : 'question.finished',
+              ...base,
+            })
+          ).reply
+        }
+        return null
+      }
       case 'Notification': {
         const kind = str(b['notification_type'])
         return (
@@ -1228,29 +1451,36 @@ export class WorkRunner {
         ).reply
       }
       case 'Stop': {
+        if (session.question)
+          return {
+            decision: 'block',
+            reason: '앱 질문창의 답변을 기다리세요. 취소를 답변이나 동의로 해석하지 마세요.',
+          }
         const files = await this.files.taskFiles(task)
         const snapshot = turnSnapshot(task, files)
         const changed = session !== undefined && snapshot !== session.turnFiles
         if (session) session.turnFiles = snapshot
         return (
           await this.feed({
-            type: 'Stop',
+            type: 'turn.completed',
             ...base,
             stopHookActive: b['stop_hook_active'] === true,
             handoffChanged: changed,
             check: this.check(task, files),
             // 백그라운드 작업이나 예약된 깨우기를 기다리며 쉬는 중이면 자동 승인하지 않는다 (D129)
-            background: pendingBackground(b),
+            pending: engine === 'codex' ? 'unknown' : pendingBackground(b) ? 'pending' : 'none',
           })
         ).reply
       }
       case 'SessionEnd': {
+        // Codex의 내부 대화 전환도 SessionEnd(other)를 보낸다. 프로세스 종료는 PTY로 확인한다.
+        if (engine === 'codex') return null
         const reason = str(b['reason'])
         // Stop 없이 끝났어도 유효한 handoff가 있으면 승인 대기나 막힘이다 (3.3, D146)
         const check = await this.checkNow(taskId)
         return (
           await this.feed({
-            type: 'SessionEnd',
+            type: 'session.ended',
             ...base,
             ...(reason === undefined ? {} : { reason }),
             ...(check ? { check } : {}),
@@ -1291,6 +1521,7 @@ export class WorkRunner {
     const session = this.live.get(taskId)
     if (!session || session.stopped || (expected && session !== expected)) return
     session.stopped = true
+    this.cancelQuestion(session, '세션을 종료했습니다.')
     session.unregister()
     session.unwatch()
     this.live.delete(taskId)
@@ -1909,6 +2140,8 @@ export class WorkRunner {
     const id = `${CLEANUP_ID}-${++this.cleanupSeq}`
     this.terminals.set(id, new TerminalBuffer())
     this.cleanup = {
+      engine: currentTask(this.work)?.engine,
+      hooksReady: false,
       id,
       choice,
       status: 'queued',
@@ -1946,13 +2179,14 @@ export class WorkRunner {
     const { env } = this.ctx
     let pid: number
     try {
-      const bin = findClaude({ env })
-      if (!bin) throw new Error(CLAUDE_INSTALL_GUIDE)
+      const driver = agentRuntime(taskEngine(c))
+      const bin = driver.find(env)
+      if (!bin) throw new Error(driver.installGuide)
       c.dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'relay-cleanup-'))
       const settingsPath = path.join(c.dir, SETTINGS_FILE)
       await writeJson(
         settingsPath,
-        taskSettings({
+        driver.settings({
           port: this.ctx.hooks.port,
           taskId: CLEANUP_ID,
           workDir: this.files.dir,
@@ -1963,9 +2197,9 @@ export class WorkRunner {
       const { cols, rows } = this.ctx.size()
       const pty = startPty({
         bin,
-        args: cleanupArgs(settingsPath),
+        args: await driver.cleanupArgs(settingsPath),
         cwd: this.worktree,
-        env: { ...env, ...launchEnv(token) },
+        env: { ...env, ...driver.launchEnv(token, this.ctx.hooks.port, CLEANUP_ID) },
         cols,
         rows,
         answerQueries: true,
@@ -1984,11 +2218,16 @@ export class WorkRunner {
         exited()
         void this.enqueue(() => this.onCleanupExit(c))
       })
-      // 도구 훅은 쓰지 않는다. 도구를 쓸 때마다 오므로 줄에 넣지 않고 바로 답한다 (D216)
-      c.unregister = this.ctx.hooks.register(token, CLEANUP_ID, (req) =>
-        TOOL_HOOKS.includes(req.event)
-          ? Promise.resolve(null)
-          : this.enqueue(() => this.onCleanupHook(c, req)),
+      c.unregister = this.ctx.hooks.register(
+        token,
+        CLEANUP_ID,
+        (req) => this.cleanupHookArrived(c, req),
+        taskEngine(c) === 'codex'
+          ? {
+              failClosed: true,
+              question: (body, signal) => this.askHuman(CLEANUP_ID, c, body, signal),
+            }
+          : {},
       )
       c.status = 'live'
       this.changed()
@@ -2010,14 +2249,49 @@ export class WorkRunner {
     return true
   }
 
-  /** 정리 세션의 훅: 턴이 끝날 때(Stop)마다 git status가 깨끗한지 본다. 새 요청이 오면 강조를 끈다 (7-5) */
+  /** 정리 도구 훅도 처리 큐 밖에서 바로 답하되 Codex의 보호 판정은 task와 공유한다. */
+  private cleanupHookArrived(c: CleanupSession, req: HookRequest): Promise<HookReply> {
+    if (this.cleanup !== c || c.status !== 'live') return Promise.resolve(null)
+    if (TOOL_HOOKS.includes(req.event)) {
+      if (taskEngine(c) === 'codex' && !c.hooksReady) {
+        c.hooksReady = true
+        this.changed()
+      }
+      return Promise.resolve(
+        taskEngine(c) === 'codex' && req.event === 'PreToolUse' ? this.codexToolReply(req) : null,
+      )
+    }
+    return this.enqueue(() => this.onCleanupHook(c, req))
+  }
+
+  /** 정리 세션: Stop마다 git status를 보고 새 요청이면 강조를 끈다 (7-5). */
   private async onCleanupHook(c: CleanupSession, req: HookRequest): Promise<HookReply> {
     if (this.cleanup !== c || c.status !== 'live') return null
+    if (taskEngine(c) === 'codex' && !c.hooksReady) {
+      c.hooksReady = true
+      this.changed()
+    }
+    if (taskEngine(c) === 'codex' && str(req.body['agent_id']) !== undefined) return null
+    if (taskEngine(c) === 'codex') {
+      const sessionId = str(req.body['session_id'])
+      const switched = req.event === 'SessionStart' && sessionId && sessionId !== c.sessionId
+      if ((req.event === 'UserPromptSubmit' || switched) && c.question)
+        await this.finishQuestion(CLEANUP_ID, c, c.question, {
+          cancelled: true,
+          reason: switched ? '대화가 바뀌었습니다.' : '새 요청을 보냈습니다.',
+        })
+      if (req.event === 'SessionStart' && sessionId) c.sessionId = sessionId
+    }
+    if ((req.event === 'Interrupt' || req.event === 'SessionEnd') && c.question) {
+      this.cancelQuestion(c, '정리 세션의 질문을 취소했습니다.')
+      this.changed()
+    }
     if (req.event === 'UserPromptSubmit' && c.clean) {
       c.clean = false
       this.changed()
     }
     if (req.event === 'Stop') {
+      if (c.question) return { decision: 'block', reason: '앱 질문창의 답변을 기다리세요.' }
       const lines = await statusLines(this.worktree, { env: this.ctx.env }).catch(() => null)
       if (lines) {
         c.clean = lines.length === 0
@@ -2037,6 +2311,7 @@ export class WorkRunner {
 
   /** 정리 세션에 걸어 둔 것을 푼다: 훅 토큰, 설정 파일 폴더, 적어 둔 프로세스(D126). 끝난 것으로 둔다 */
   private async releaseCleanup(c: CleanupSession): Promise<void> {
+    this.cancelQuestion(c, '정리 세션을 종료했습니다.')
     c.handled = true
     c.status = 'ended'
     c.unregister()
@@ -3834,6 +4109,11 @@ export class WorkRunner {
     const c = this.cleanup
     if (!c) return null
     return {
+      engineLabel: agentLabel(c),
+      ...(c.engine === 'codex' && !c.hooksReady && c.status === 'live'
+        ? { notice: 'Codex 터미널의 폴더 신뢰 확인 후 /hooks로 relay 훅을 검토·신뢰하세요.' }
+        : {}),
+      ...(c.question ? { question: c.question.view } : {}),
       terminal: this.terminalKey(c.id),
       status: c.status,
       choice: c.choice,
@@ -3844,12 +4124,20 @@ export class WorkRunner {
 
   private taskView(t: TaskRecord): TaskView {
     return {
+      ...(this.live.get(t.id)?.question ? { question: this.live.get(t.id)?.question?.view } : {}),
+      engineLabel: agentLabel(t),
+      engineVersion: taskEngineVersion(t) ?? null,
       id: t.id,
       terminal: this.terminalKey(t.id),
       node: t.node,
       label: taskLabel(t),
       band: bandText(t),
-      notice: permissionNotice(t),
+      notice:
+        knownTaskEngine(t) === null
+          ? `${agentLabel(t)}. 이 세션은 재개할 수 없습니다.`
+          : t.engine === 'codex' && this.live.has(t.id) && !this.live.get(t.id)?.hooksReady
+            ? 'Codex 터미널의 폴더 신뢰 확인 후 /hooks로 relay 훅을 검토·신뢰하세요.'
+            : permissionNotice(t),
       status: t.status,
       statusLabel: TASK_STATUS_LABEL[t.status],
       live: this.live.has(t.id),

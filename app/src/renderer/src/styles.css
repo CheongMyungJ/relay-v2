@@ -263,6 +263,28 @@ textarea {
   color: var(--text);
 }
 
+.human-question {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid #555;
+}
+.human-option {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0;
+  align-items: flex-start;
+}
+.human-written {
+  display: grid;
+  gap: 6px;
+}
+.human-written textarea {
+  width: 100%;
+  min-height: 64px;
+}
+.question-reopen {
+  margin: 4px 8px;
+}
 .s-awaiting_approval,
 .s-asking,
 .s-input_needed,
@@ -566,6 +588,8 @@ textarea {
 .modal-back {
   position: fixed;
   inset: 0;
+  /* 고정 승인 버튼(.review-bottom)보다 위에서 배경 클릭도 막는다. */
+  z-index: 2;
   background: rgb(0 0 0 / 50%);
   display: grid;
   place-items: center;
