@@ -1,0 +1,35 @@
+{
+  "id": "02-leaderboard",
+  "repoName": "leaderboard",
+  "title": "재현 방법도 위치도 모르는 모호한 리포트",
+  "purpose": "사람이 모르는 것을 에이전트가 조사하고 물어봐야 하는 버그에서, 조사와 질문이 드러나는 방식과 숨은 두 번째 문제(동점자)를 찾아내는지 본다.",
+  "report": "리더보드 상위 목록이 가끔 틀리게 나온다. 점수가 가장 높은 선수가 목록에서 빠질 때가 있다. 어떤 경우에 그런지는 아직 모르겠다. 레포의 테스트는 통과한다.",
+  "knowledge": [
+    {
+      "share": "on_ask",
+      "text": "점수는 0~1000 사이 정수이고 두 자리, 세 자리 점수가 흔하다."
+    },
+    {
+      "share": "on_ask",
+      "text": "동점자가 있으면 모두 이름이 나와야 하고, 순서는 목록에 들어온 순서다. 동료가 '동점일 때 같은 이름이 두 번 나오는 걸 봤다'고 했다(직접 확인은 안 했다)."
+    }
+  ],
+  "preferences": ["원인을 알고 고치고 싶다. 추측으로 고치는 것은 싫다."],
+  "reveals": [],
+  "events": [],
+  "expectedFiles": ["src/rank.js", "src/leaderboard.js", "test/**"],
+  "checks": [
+    {
+      "name": "두 자리 이상 점수",
+      "file": "digits.test.js"
+    },
+    {
+      "name": "동점자",
+      "file": "ties.test.js"
+    }
+  ],
+  "limits": {
+    "minutes": 45,
+    "turns": 60
+  }
+}

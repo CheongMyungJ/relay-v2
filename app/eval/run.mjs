@@ -1,0 +1,223 @@
+#!/usr/bin/env node
+// relay 대 맨 CLI 사용성 평가 (docs/eval.md). 시나리오마다 두 쪽을 n번 돌리고, 짝지어 판정하고, report.md를 만든다.
+//   node eval/run.mjs --list
+//   node eval/run.mjs --scenarios 3 --runs 5
+//   node eval/run.mjs --scenarios 1,2,5 --runs 2 --arms relay,cli --parallel 2
+// 먼저 eval/setup.sh로 준비한다. 가상 화면(Xvfb)은 DISPLAY가 없으면 스스로 띄운다.
+import { execFileSync, spawn } from 'node:child_process'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { parseArgs } from 'node:util'
+import { runEpisode } from './lib/episode.mjs'
+import { cleanEnv, findClaude } from './lib/env.mjs'
+import { sleep, writeJson } from './lib/util.mjs'
+import { buildReport, judgeAll } from './report.mjs'
+
+const EVAL = import.meta.dirname
+const APP = path.resolve(EVAL, '..')
+const SCENARIOS = path.join(EVAL, 'scenarios')
+
+const HELP = `쓰는 법: node eval/run.mjs [옵션]
+
+  --list                   시나리오 목록
+  --scenarios <목록>       1,3 또는 01-slug,03-cart 또는 all (기본 all)
+  --runs <n>               시나리오와 쪽마다 돌릴 횟수 (기본 1)
+  --arms <목록>            relay,cli (기본 둘 다)
+  --parallel <n>           동시에 돌릴 실행 수 (기본 1, 2까지 권함)
+  --agent-model <모델>     relay와 CLI 안의 claude 모델 (기본 sonnet)
+  --effort <수준>          에이전트 effort: low / medium / high (기본 low)
+  --human-model <모델>     사람 역할 모델 (기본 sonnet)
+  --human-effort <수준>    사람 역할 effort (기본 low)
+  --judge-model <모델>     판정 모델 (기본 sonnet)
+  --cli-permission <모드>  skip(--dangerously-skip-permissions, relay와 같음) / default (기본 skip)
+  --no-vision              relay 사람 역할이 스크린샷 없이 글자만 본다
+  --max-minutes <n>        실행 하나의 시간 제한 (기본은 시나리오 값)
+  --max-turns <n>          사람 차례 제한 (기본은 시나리오 값)
+  --no-judge               짝 판정을 하지 않는다
+  --out <폴더>             결과 폴더 (기본 eval/results/<시각>)
+`
+
+export function listScenarios() {
+  return fs
+    .readdirSync(SCENARIOS, { withFileTypes: true })
+    .filter((d) => d.isDirectory() && fs.existsSync(path.join(SCENARIOS, d.name, 'scenario.json')))
+    .map((d) => ({
+      dir: path.join(SCENARIOS, d.name),
+      ...JSON.parse(fs.readFileSync(path.join(SCENARIOS, d.name, 'scenario.json'), 'utf8')),
+    }))
+    .sort((a, b) => a.id.localeCompare(b.id))
+}
+
+function pickScenarios(spec, all) {
+  if (!spec || spec === 'all') return all
+  return spec
+    .split(/[\s,]+/)
+    .filter(Boolean)
+    .map((x) => {
+      const s = /^\d+$/.test(x)
+        ? all.find((c) => Number(c.id.split('-')[0]) === Number(x))
+        : all.find((c) => c.id === x || c.id.endsWith(`-${x}`))
+      if (!s) throw new Error(`시나리오 ${x}가 없습니다. --list로 보세요.`)
+      return s
+    })
+}
+
+/** DISPLAY가 없으면 Xvfb를 띄운다 */
+async function ensureDisplay() {
+  if (process.env.DISPLAY) return null
+  for (let n = 90; n < 120; n++) {
+    if (fs.existsSync(`/tmp/.X${n}-lock`)) continue
+    const x = spawn('Xvfb', [`:${n}`, '-screen', '0', '1600x1000x24', '-nolisten', 'tcp'], {
+      stdio: 'ignore',
+    })
+    await sleep(1500)
+    if (x.exitCode === null) {
+      process.env.DISPLAY = `:${n}`
+      return x
+    }
+  }
+  throw new Error('Xvfb를 띄우지 못했습니다')
+}
+
+function preflight(arms) {
+  const problems = []
+  if (arms.includes('relay')) {
+    if (!fs.existsSync(path.join(APP, 'out/main/index.js')))
+      problems.push('앱 빌드(out/)가 없습니다')
+    if (!fs.existsSync(path.join(APP, 'node_modules/electron/dist/electron')))
+      problems.push('Electron 실행 파일이 없습니다')
+  }
+  if (!fs.existsSync(path.join(APP, 'node_modules/node-pty')))
+    problems.push('의존성이 설치되지 않았습니다')
+  try {
+    findClaude()
+  } catch (e) {
+    problems.push(String(e.message))
+  }
+  if (problems.length)
+    throw new Error(`준비가 덜 됐습니다: ${problems.join('; ')}. eval/setup.sh를 먼저 돌리세요.`)
+}
+
+async function main() {
+  const { values: v } = parseArgs({
+    options: {
+      list: { type: 'boolean' },
+      help: { type: 'boolean' },
+      scenarios: { type: 'string' },
+      runs: { type: 'string', default: '1' },
+      arms: { type: 'string', default: 'relay,cli' },
+      parallel: { type: 'string', default: '1' },
+      'agent-model': { type: 'string', default: 'sonnet' },
+      effort: { type: 'string', default: 'low' },
+      'human-model': { type: 'string', default: 'sonnet' },
+      'human-effort': { type: 'string', default: 'low' },
+      'judge-model': { type: 'string', default: 'sonnet' },
+      'cli-permission': { type: 'string', default: 'skip' },
+      'no-vision': { type: 'boolean' },
+      'max-minutes': { type: 'string' },
+      'max-turns': { type: 'string' },
+      'no-judge': { type: 'boolean' },
+      out: { type: 'string' },
+    },
+  })
+  if (v.help) return console.log(HELP)
+  const all = listScenarios()
+  if (v.list) {
+    for (const s of all) console.log(`${s.id}  ${s.title}\n    ${s.purpose}`)
+    return
+  }
+  const scenarios = pickScenarios(v.scenarios, all)
+  const arms = v.arms
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean)
+  for (const a of arms) if (!['relay', 'cli'].includes(a)) throw new Error(`모르는 쪽: ${a}`)
+  const runs = Number(v.runs)
+  preflight(arms)
+
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..*/, '').replace('T', '-')
+  const outDir = path.resolve(v.out ?? path.join(EVAL, 'results', stamp))
+  const workRoot = path.join(os.tmpdir(), 'relay-eval', path.basename(outDir))
+  fs.mkdirSync(outDir, { recursive: true })
+  const opts = {
+    agentModel: v['agent-model'],
+    effort: v.effort,
+    humanModel: v['human-model'],
+    humanEffort: v['human-effort'],
+    judgeModel: v['judge-model'],
+    cliArgs: v['cli-permission'] === 'default' ? [] : ['--dangerously-skip-permissions'],
+    vision: !v['no-vision'],
+    maxMinutes: v['max-minutes'] ? Number(v['max-minutes']) : undefined,
+    maxTurns: v['max-turns'] ? Number(v['max-turns']) : undefined,
+    workRoot,
+  }
+  let claudeVersion = null
+  try {
+    claudeVersion = execFileSync(findClaude(), ['--version'], { env: cleanEnv() }).toString().trim()
+  } catch {
+    // 적지 못해도 된다
+  }
+  let commit = null
+  try {
+    commit = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: APP }).toString().trim()
+  } catch {
+    // 적지 못해도 된다
+  }
+  writeJson(path.join(outDir, 'config.json'), {
+    startedAt: new Date().toISOString(),
+    commit,
+    claudeVersion,
+    scenarios: scenarios.map((s) => s.id),
+    runs,
+    arms,
+    ...opts,
+  })
+  console.log(`결과 폴더: ${outDir}`)
+  console.log(`작업 폴더: ${workRoot}`)
+
+  const xvfb = arms.includes('relay') ? await ensureDisplay() : null
+  // 회차를 바깥에 두어 쪽과 시나리오가 시간대에 고르게 섞이게 한다
+  const jobs = []
+  for (let i = 1; i <= runs; i++)
+    for (const s of scenarios) for (const kind of arms) jobs.push({ s, kind, i })
+  const total = jobs.length
+  let done = 0
+  const worker = async () => {
+    for (;;) {
+      const job = jobs.shift()
+      if (!job) return
+      const { s, kind, i } = job
+      try {
+        await runEpisode({
+          scenario: s,
+          scenarioDir: s.dir,
+          kind,
+          index: i,
+          opts,
+          outDir: path.join(outDir, s.id, `${kind}-${i}`),
+          workDir: path.join(workRoot, `${s.id}-${kind}-${i}`),
+        })
+      } catch (e) {
+        console.log(`[${s.id} ${kind}#${i}] 실행 실패: ${e instanceof Error ? e.stack : e}`)
+      }
+      done++
+      console.log(`== 진행 ${done}/${total}`)
+    }
+  }
+  try {
+    await Promise.all(Array.from({ length: Math.max(1, Number(v.parallel)) }, worker))
+  } finally {
+    xvfb?.kill()
+  }
+
+  if (!v['no-judge'] && arms.length === 2) await judgeAll(outDir, opts)
+  const text = buildReport(outDir)
+  console.log(`\n${text}\n`)
+  console.log(`보고서: ${path.join(outDir, 'report.md')}`)
+}
+
+main().catch((e) => {
+  console.error(e instanceof Error ? e.message : e)
+  process.exit(1)
+})

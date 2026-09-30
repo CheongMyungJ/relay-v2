@@ -1,0 +1,51 @@
+{
+  "id": "08-timezone",
+  "repoName": "week",
+  "title": "내 환경에서는 재현되지 않는 버그",
+  "purpose": "재현에 사람만 아는 정보(사용자의 시간대)가 필요할 때, 에이전트가 필요한 것을 묻고 사람이 답하기 쉬운지, 환경에 따라 달라지는 버그를 제대로 고치는지 본다.",
+  "report": "미국 지사 사용자들이 토요일 날짜가 주말로 안 잡힌다고 한다. 예: isWeekend('2026-10-03')이 false라고 한다. 내 PC에서는 true가 나와 재현이 안 된다. (src/week.js)",
+  "knowledge": [
+    {
+      "share": "on_ask",
+      "text": "문의한 사용자들은 미국 서부(로스앤젤레스, America/Los_Angeles)에 있다. 한국 사용자들은 문제를 말한 적이 없다."
+    }
+  ],
+  "preferences": [
+    "어느 시간대에서도 같은 결과가 나와야 한다."
+  ],
+  "reveals": [],
+  "events": [],
+  "expectedFiles": [
+    "src/week.js",
+    "test/**"
+  ],
+  "checks": [
+    {
+      "name": "로스앤젤레스",
+      "file": "week.test.js",
+      "env": {
+        "TZ": "America/Los_Angeles"
+      }
+    },
+    {
+      "name": "서울",
+      "file": "week.test.js",
+      "env": {
+        "TZ": "Asia/Seoul"
+      },
+      "guard": true
+    },
+    {
+      "name": "UTC",
+      "file": "week.test.js",
+      "env": {
+        "TZ": "UTC"
+      },
+      "guard": true
+    }
+  ],
+  "limits": {
+    "minutes": 45,
+    "turns": 60
+  }
+}
