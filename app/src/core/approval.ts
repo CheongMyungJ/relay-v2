@@ -1,5 +1,7 @@
 // 승인의 판정: 수동 승인 (4.1, D90, D112), 자동 승인의 방식과 조건 (4.2, 4.3, D72, D129), 사이드바 배지의
 // 우선순위 (D80). machine의 승인과 자동 승인 카운트다운, 승인 화면의 버튼이 같은 판정을 쓴다.
+import { AGENT_APPROVAL_NOTICE, type AgentEngine } from '../shared/agent'
+import { agentLabel, knownTaskEngine } from './agent'
 import type { AppConfig, AutoApproveNode, WorkSettings } from '../shared/config'
 import type { Handoff, Size, TaskNode } from '../shared/contracts'
 import type { ApprovalGate, Badge, BadgeKind } from '../shared/views'
@@ -74,13 +76,14 @@ export function autoApprovable(node: TaskNode): node is AutoApproveNode {
   return (AUTO_APPROVE_NODES as readonly TaskNode[]).includes(node)
 }
 
-/** 승인 방식. intake와 verify는 항상 수동이고, 나머지는 Work 설정, 앱 설정 순서로 본다 (4.2, D72, D169, D213) */
+/** 승인 방식. intake와 verify는 항상 수동이고, Codex는 수동이고, Claude의 나머지는 Work 설정, 앱 설정 순서로 본다 (4.2, D72, D169, D213) */
 export function approvalMode(
   config: Pick<AppConfig, 'auto_approve'>,
   settings: WorkSettings,
   node: TaskNode,
+  engine: AgentEngine | null = 'claude',
 ): ApprovalMode {
-  if (!autoApprovable(node)) return 'manual'
+  if (engine !== 'claude' || !autoApprovable(node)) return 'manual'
   return (settings.auto_approve?.[node] ?? config.auto_approve[node]) ? 'auto' : 'manual'
 }
 
@@ -137,6 +140,7 @@ export const AUTO_HOLD_LABEL: Readonly<Record<AutoHoldReason, string>> = {
   intent_deviation: '의도와 어긋남(intent_deviation)이 있음',
   recommended_next: '기본 다음 단계가 아닌 단계를 추천함',
   background: '턴이 끝날 때 백그라운드 작업이나 예약된 깨우기가 남아 있었음',
+  completion_unknown: 'Codex의 미완료 작업 여부를 확인할 수 없어 사람이 승인해야 함',
   invalid: '다시 읽은 handoff가 유효하지 않음',
   review_findings: '리뷰에 지적이 있음 (반영할 지적은 사람이 고름)',
   cancel: '[취소]를 누름',
@@ -184,10 +188,22 @@ export interface AutoApproveNote {
  */
 export function autoApproveNote(
   work: Pick<WorkState, 'settings'>,
-  task: Pick<TaskRecord, 'node' | 'status' | 'countdown' | 'auto_hold' | 'respond'>,
+  task: Pick<TaskRecord, 'node' | 'status' | 'countdown' | 'auto_hold' | 'respond' | 'engine'>,
   config: AppConfig,
 ): AutoApproveNote {
-  const on = approvalMode(config, work.settings, task.node) === 'auto'
+  const engine = knownTaskEngine(task)
+  const on = approvalMode(config, work.settings, task.node, engine) === 'auto'
+  if (engine === null)
+    return { on: false, hold: `${agentLabel(task)}. 이 세션은 재개할 수 없습니다.` }
+  if (engine === 'codex') {
+    return {
+      on: false,
+      hold:
+        task.status === 'awaiting_approval' && !task.respond?.failure
+          ? AGENT_APPROVAL_NOTICE
+          : null,
+    }
+  }
   if (!on || task.status !== 'awaiting_approval' || task.countdown || task.respond?.failure) {
     return { on, hold: null }
   }

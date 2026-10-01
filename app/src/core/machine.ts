@@ -11,6 +11,8 @@
 // 돌고, 끝나면 autoApprove를 넣는다. 단계 선택의 계산은 core/rewind, 전달의 판정은 core/delivery, 정리의 판정은
 // core/cleanup, 끊긴 작업의 알림과 재개 판정은 core/recovery, 자동 승인의 조건은 core/approval이 한다.
 import type { AppConfig, WorkSettingsPatch } from '../shared/config'
+import type { AgentEngine } from '../shared/agent'
+import { agentLabel, knownTaskEngine, taskEngine } from './agent'
 import type { Decision, NodeName, Size, TaskNode } from '../shared/contracts'
 import type { StepExpect, WorkActions } from '../shared/views'
 import type {
@@ -85,7 +87,9 @@ export interface SessionStarted extends TaskEvent {
   processStartedAt?: string
   startCommit: string
   skillHash: string
-  claudeVersion: string
+  engineVersion?: string
+  /** 이전 호출자와의 호환. 새 실행 경로는 engineVersion을 쓴다. */
+  claudeVersion?: string
 }
 
 /**
@@ -96,7 +100,8 @@ export interface SessionResumed extends TaskEvent {
   type: 'session.resumed'
   pid: number
   processStartedAt?: string
-  claudeVersion: string
+  engineVersion?: string
+  claudeVersion?: string
   check: CheckSummary
 }
 
@@ -192,6 +197,18 @@ export interface PtyExited extends TaskEvent {
 }
 
 export type SessionEnded = SessionEndHook | PtyExited
+
+/** main에서 벤더 훅을 번역해 전달하는 공통 신호. 이전 Claude 호출자도 계속 읽는다. */
+export type RuntimeSignal =
+  | (HookSignal & { type: 'session.identified' })
+  | (Omit<UserPromptSubmitted, 'type'> & { type: 'turn.started' })
+  | (HookSignal & { type: 'question.started' | 'question.finished' | 'input.required' })
+  | (Omit<Stopped, 'type' | 'background'> & {
+      type: 'turn.completed'
+      pending: 'none' | 'pending' | 'unknown'
+    })
+  | (HookSignal & { type: 'turn.interrupted'; check: CheckSummary })
+  | (Omit<SessionEndHook, 'type'> & { type: 'session.ended' })
 
 /**
  * 감시(I15)가 파일 변경을 보고 다시 한 형식 검사. 패널 표시만 바꾼다. 카운트다운 중에 자동 승인 조건을 어기면
@@ -579,6 +596,7 @@ export interface PrChecksRerun extends WorkEvent {
 }
 
 export type MachineEvent =
+  | RuntimeSignal
   | SessionStarted
   | SessionResumed
   | SessionFailed
@@ -827,8 +845,16 @@ export function actions(work: WorkState): WorkActions {
   const live = task?.session?.alive === true
   return {
     interrupt: active && (live || task.status === 'queued'),
-    resume: active && !live && RESUMABLE.includes(task.status),
-    retry: work.status === 'active' && task?.status === 'session_ended',
+    resume:
+      active &&
+      knownTaskEngine(task) !== null &&
+      !live &&
+      RESUMABLE.includes(task.status) &&
+      task.session?.id !== '',
+    retry:
+      work.status === 'active' &&
+      !!task &&
+      (task.status === 'session_ended' || unidentifiedCodex(task)),
     resumeWork: work.status === 'stopped' && !stoppedVerify(work),
     selectStep: canSelectStep(work),
     stopAfter: work.status === 'active',
@@ -928,7 +954,19 @@ function holdsNow(
   check: AutoApproveInput['check'],
   background: boolean,
 ): AutoHoldReason[] {
-  return autoApproveHolds({ node: task.node, size: work.intent?.size ?? 'M', check, background })
+  const holds = autoApproveHolds({
+    node: task.node,
+    size: work.intent?.size ?? 'M',
+    check,
+    background,
+  })
+  // Codex Stop은 미완료 작업 전체의 부재를 보장하지 않는다. 타이머/감시에서도 이 판정을 유지한다 (E8).
+  const engine = knownTaskEngine(task)
+  return engine === null
+    ? [...holds, 'settings']
+    : engine === 'codex'
+      ? [...holds, 'completion_unknown']
+      : holds
 }
 
 /**
@@ -936,7 +974,7 @@ function holdsNow(
  * 조건을 모두 만족하면 카운트다운을 시작한다. 어긴 조건은 승인 화면에 보이게 적는다. 턴이 끝날 때마다 새로 판정한다
  */
 function judgeAtStop(work: WorkState, task: TaskRecord, e: Stopped, config: AppConfig): TaskRecord {
-  if (approvalMode(config, work.settings, task.node) !== 'auto') return task
+  if (approvalMode(config, work.settings, task.node, knownTaskEngine(task)) !== 'auto') return task
   const reasons: AutoHoldReason[] = work.operation
     ? ['operation']
     : [...closedHold(work, task), ...holdsNow(work, task, e.check, e.background === true)]
@@ -947,7 +985,11 @@ function judgeAtStop(work: WorkState, task: TaskRecord, e: Stopped, config: AppC
 /** 카운트다운 중인 task의 단계에서 자동 승인을 껐으면(앱 설정이든 Work 설정이든) 바로 멈춘다 (D128) */
 function autoTurnedOff(work: WorkState, at: string, config: AppConfig): WorkState {
   const task = currentTask(work)
-  if (!task?.countdown || approvalMode(config, work.settings, task.node) === 'auto') return work
+  if (
+    !task?.countdown ||
+    approvalMode(config, work.settings, task.node, knownTaskEngine(task)) === 'auto'
+  )
+    return work
   return withTask(work, held(task, at, ['settings']))
 }
 
@@ -1045,6 +1087,8 @@ function endTask(
 // ---------- Work 만들기 ----------
 
 export interface NewWork {
+  /** 첫 task 생성 시 고정한다. 기존 호출자는 Claude를 사용한다. */
+  engine?: AgentEngine
   workId: string
   /** 기준 브랜치와, Work를 만들 때 분기한 기준 커밋 (시나리오 1, D97) */
   baseBranch: string
@@ -1071,7 +1115,7 @@ export function createWork(input: NewWork): Transition {
     file_hashes: hashes,
     tasks: [],
   }
-  const intake = newTask(empty, 'intake', input.at)
+  const intake = { ...newTask(empty, 'intake', input.at), engine: input.engine ?? 'claude' }
   const work = { ...empty, tasks: [intake] }
   return {
     work,
@@ -1122,7 +1166,16 @@ const BLOCKED_BY_OPERATION: readonly MachineEvent['type'][] = [
 ]
 
 export function transition(work: WorkState, event: MachineEvent, config: AppConfig): Transition {
-  return countdownEffects(work, dispatch(work, event, config))
+  const result = countdownEffects(work, dispatch(work, event, config))
+  if (result.work.tasks === work.tasks) return result
+  const previousIds = new Set(work.tasks.map((t) => t.id))
+  let created = false
+  const tasks = result.work.tasks.map((t) => {
+    if (previousIds.has(t.id)) return t
+    created = true
+    return { ...t, engine: config.agent_engine }
+  })
+  return created ? { ...result, work: { ...result.work, tasks } } : result
 }
 
 function dispatch(work: WorkState, event: MachineEvent, config: AppConfig): Transition {
@@ -1257,6 +1310,59 @@ function taskTransition(work: WorkState, event: TaskMachineEvent, config: AppCon
     return command ? unchanged(work, `${event.taskId}는 지금 task가 아님`) : unchanged(work)
   }
   switch (event.type) {
+    case 'session.identified': {
+      if (!task.session?.alive || !event.sessionId || event.agentId !== undefined)
+        return unchanged(work)
+      if (task.session.id === event.sessionId) return unchanged(work)
+      return {
+        work: withTask(work, { ...task, session: { ...task.session, id: event.sessionId } }),
+        effects: [
+          log(work, event.at, 'task.session_identified', { session_id: event.sessionId }, task),
+        ],
+      }
+    }
+    case 'turn.started':
+      return hook(work, task, { ...event, type: 'UserPromptSubmit' }, config)
+    case 'question.started':
+    case 'question.finished':
+      return hook(
+        work,
+        task,
+        {
+          ...event,
+          type: event.type === 'question.started' ? 'PreToolUse' : 'PostToolUse',
+          toolName: ASK_TOOL,
+        },
+        config,
+      )
+    case 'input.required':
+      return hook(
+        work,
+        task,
+        { ...event, type: 'Notification', notificationType: PERMISSION_PROMPT },
+        config,
+      )
+    case 'turn.completed':
+      return hook(
+        work,
+        task,
+        { ...event, type: 'Stop', background: event.pending === 'pending' },
+        config,
+      )
+    case 'turn.interrupted': {
+      if (!task.session?.alive) return unchanged(work)
+      const check = summarize(event.check)
+      return {
+        work: withTask(work, {
+          ...omit(task, 'countdown', 'auto_hold'),
+          check,
+          status: handoffStatus(check) ?? 'idle',
+        }),
+        effects: [],
+      }
+    }
+    case 'session.ended':
+      return sessionEnded(work, task, { ...event, type: 'SessionEnd' })
     case 'session.started':
       return sessionStarted(work, task, event)
     case 'session.resumed':
@@ -1296,7 +1402,7 @@ function sessionStarted(work: WorkState, task: TaskRecord, e: SessionStarted): T
     status: 'working',
     start_commit: e.startCommit,
     skill_hash: e.skillHash,
-    claude_version: e.claudeVersion,
+    ...versionRecord(task, e),
     session: {
       id: e.sessionId,
       pid: e.pid,
@@ -1328,6 +1434,7 @@ function sessionResumed(work: WorkState, task: TaskRecord, e: SessionResumed): T
     ...omit(unqueued(task), 'error'),
     status,
     check,
+    ...versionRecord(task, e),
     session: {
       ...session,
       pid: e.pid,
@@ -1341,7 +1448,14 @@ function sessionResumed(work: WorkState, task: TaskRecord, e: SessionResumed): T
       work,
       e.at,
       'task.resumed',
-      { session_id: task.session.id, claude_version: e.claudeVersion },
+      {
+        session_id: task.session.id,
+        engine: taskEngine(task),
+        engine_version: e.engineVersion ?? e.claudeVersion,
+        ...(taskEngine(task) === 'claude'
+          ? { claude_version: e.engineVersion ?? e.claudeVersion }
+          : {}),
+      },
       task,
     ),
   ]
@@ -1349,6 +1463,16 @@ function sessionResumed(work: WorkState, task: TaskRecord, e: SessionResumed): T
     effects.push(log(work, e.at, 'task.awaiting_approval', {}, task))
   }
   return { work: withTask(work, resumed), effects }
+}
+
+/** Claude의 이전 버전 필드는 유지하면서 엔진 공통 버전을 기록한다. */
+function versionRecord(task: TaskRecord, e: SessionStarted | SessionResumed): Partial<TaskRecord> {
+  const version = e.engineVersion ?? e.claudeVersion
+  if (version === undefined) return {}
+  return {
+    engine_version: version,
+    ...(taskEngine(task) === 'claude' ? { claude_version: version } : {}),
+  }
 }
 
 function sessionFailed(work: WorkState, task: TaskRecord, e: SessionFailed): Transition {
@@ -1667,7 +1791,8 @@ function autoApprove(
     effects: [],
   })
   if (work.operation) return hold(['operation'])
-  if (approvalMode(config, work.settings, task.node) !== 'auto') return hold(['settings'])
+  if (approvalMode(config, work.settings, task.node, knownTaskEngine(task)) !== 'auto')
+    return hold(['settings'])
   const size = work.intent?.size
   if (!e.check || !size) return hold(['invalid'])
   const reasons = [...closedHold(work, task), ...holdsNow(work, task, e.check, false)]
@@ -1715,10 +1840,14 @@ function interrupt(work: WorkState, task: TaskRecord, e: Interrupt): Transition 
  * 세션 상한을 넘으면 main이 대기열에 넣는다.
  */
 function resume(work: WorkState, task: TaskRecord): Transition {
+  if (knownTaskEngine(task) === null)
+    return unchanged(work, `${agentLabel(task)}. 이 세션은 재개할 수 없습니다.`)
   if (!taskActive(work, task)) return unchanged(work, '진행 중인 Work가 아님')
   if (task.session?.alive || !RESUMABLE.includes(task.status)) {
     return unchanged(work, `${task.id}는 재개할 수 있는 상태가 아님`)
   }
+  if (task.session?.id === '')
+    return unchanged(work, 'Codex 대화 ID를 받지 못했습니다. 이 단계 새 세션으로 다시 실행하세요.')
   // 중단됨의 [재개]는 이어서 하라고 알린다. [세션 재개](세션 종료, 막힘, 승인 대기)는 입력을 기다린다 (D218)
   const effect: Effect = task.session
     ? { type: 'resumeTask', taskId: task.id, continue: task.status === 'interrupted' }
@@ -1732,7 +1861,7 @@ function resume(work: WorkState, task: TaskRecord): Transition {
  */
 function retry(work: WorkState, task: TaskRecord, e: Retry): Transition {
   if (work.status !== 'active') return unchanged(work, '진행 중인 Work가 아님')
-  if (task.status !== 'session_ended') {
+  if (task.status !== 'session_ended' && !unidentifiedCodex(task)) {
     return unchanged(work, `${task.id}는 handoff 없이 끝난 세션이 아님`)
   }
   const created = newTask(work, task.node, e.at, 'resume')
@@ -1742,6 +1871,16 @@ function retry(work: WorkState, task: TaskRecord, e: Retry): Transition {
       { type: 'startTask', taskId: created.id, node: created.node, reason: created.reason },
     ],
   }
+}
+
+/** 훅 신뢰 전에 끝나 실제 대화 ID를 받지 못한 Codex는 임의의 ID로 재개하지 않는다. */
+function unidentifiedCodex(task: TaskRecord): boolean {
+  return (
+    task.engine === 'codex' &&
+    task.status === 'interrupted' &&
+    task.session?.id === '' &&
+    !task.session.alive
+  )
 }
 
 // ---------- Work 조작 ----------
@@ -2295,7 +2434,7 @@ function restarted(work: WorkState, e: AppRestarted, config: AppConfig): Transit
   }
   /** 재시작 조정으로 승인 대기가 됐거나 카운트다운이 끊긴 task: 자동 승인하지 않은 까닭을 적는다 (D75) */
   const restartHold = (before: TaskRecord, after: TaskRecord): TaskRecord => {
-    const auto = approvalMode(config, work.settings, after.node) === 'auto'
+    const auto = approvalMode(config, work.settings, after.node, knownTaskEngine(after)) === 'auto'
     const via = before.countdown !== undefined || before.status !== 'awaiting_approval'
     const next = omit(after, 'countdown')
     return after.status === 'awaiting_approval' && auto && via

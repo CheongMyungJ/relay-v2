@@ -29,6 +29,7 @@ import type {
   WorkView,
 } from './views'
 import type { DeliveryChoice } from './work'
+import type { HumanAnswers } from './questions'
 
 export interface AppInfo {
   platform: string
@@ -66,6 +67,13 @@ export interface RelayApi {
   approve(workKey: string, taskId: string, opts: ApproveOptions): Promise<CommandResult>
   /** 승인 화면의 [취소]: 자동 승인 카운트다운을 멈춘다 (4.3) */
   cancelCountdown(workKey: string, taskId: string): Promise<CommandResult>
+  /** Codex MCP 질문의 실제 답변. null은 취소이며 선택이나 동의로 취급하지 않는다. */
+  answerQuestion(
+    workKey: string,
+    taskId: string,
+    questionId: string,
+    answers: HumanAnswers | null,
+  ): Promise<CommandResult>
   /** [즉시 중단] (시나리오 3-4) */
   interrupt(workKey: string, taskId: string): Promise<CommandResult>
   /** [재개], [세션 재개] (시나리오 3-4, 3-5, 4.4) */
@@ -152,6 +160,7 @@ export const IPC = {
   review: 'work:review',
   approve: 'work:approve',
   cancelCountdown: 'work:cancel-countdown',
+  answerQuestion: 'work:answer-question',
   interrupt: 'work:interrupt',
   resume: 'work:resume',
   retry: 'work:retry',

@@ -283,7 +283,15 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
       ['work.created', expect.anything()],
       ['task.started', { reason: 'default', session_id: first?.id }],
       ['task.interrupted', { reason: 'human' }],
-      ['task.resumed', { session_id: first?.id, claude_version: '0.0.0 (가짜 Claude Code)' }],
+      [
+        'task.resumed',
+        {
+          session_id: first?.id,
+          engine: 'claude',
+          engine_version: '0.0.0 (가짜 Claude Code)',
+          claude_version: '0.0.0 (가짜 Claude Code)',
+        },
+      ],
       ['task.awaiting_approval', {}],
     ])
     // 이전 화면을 먼저 보이고 그 뒤에 다시 연 세션의 출력을 잇는다
@@ -354,7 +362,15 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
       ['work.created', expect.anything()],
       ['task.started', { reason: 'default', session_id: started }],
       ['task.interrupted', { reason: 'human' }],
-      ['task.resumed', { session_id: after, claude_version: '0.0.0 (가짜 Claude Code)' }],
+      [
+        'task.resumed',
+        {
+          session_id: after,
+          engine: 'claude',
+          engine_version: '0.0.0 (가짜 Claude Code)',
+          claude_version: '0.0.0 (가짜 Claude Code)',
+        },
+      ],
     ])
 
     // 다시 연 새 대화에서 이어서 일한다

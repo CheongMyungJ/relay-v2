@@ -295,7 +295,12 @@ export class Relay {
   // ---------- 프로젝트 등록 (시나리오 0) ----------
 
   private projectEnv(): ProjectEnv {
-    return { env: this.env, ghBin: this.ghBin(), registered: [...this.projects.values()] }
+    return {
+      env: this.env,
+      engine: this.config.agent_engine,
+      ghBin: this.ghBin(),
+      registered: [...this.projects.values()],
+    }
   }
 
   inspectProject(dir: string): Promise<ProjectInspection> {
@@ -421,6 +426,7 @@ export class Relay {
     const files = new WorkFiles(workDir(this.o.home, project.project_id, workId))
     const requestHash = await files.writeRequest(input.request)
     const created = createWork({
+      engine: this.config.agent_engine,
       workId,
       baseBranch: branch,
       baseCommit,
@@ -449,6 +455,15 @@ export class Relay {
   /** 승인 화면의 [취소]: 자동 승인 카운트다운을 멈춘다 (4.3) */
   cancelCountdown(workKey: string, taskId: string): Promise<CommandResult> {
     return this.withWork(workKey, (w) => w.cancelCountdown(taskId))
+  }
+
+  answerQuestion(
+    workKey: string,
+    taskId: string,
+    questionId: string,
+    answers: unknown,
+  ): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.answerQuestion(taskId, questionId, answers))
   }
 
   // ---------- 사람 조작 (시나리오 3-4, 3-5, 4.4) ----------

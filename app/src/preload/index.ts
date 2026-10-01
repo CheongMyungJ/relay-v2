@@ -23,6 +23,8 @@ const api: RelayApi = {
   review: (workKey, taskId) => ipcRenderer.invoke(IPC.review, workKey, taskId),
   approve: (workKey, taskId, opts) => ipcRenderer.invoke(IPC.approve, workKey, taskId, opts),
   cancelCountdown: (workKey, taskId) => ipcRenderer.invoke(IPC.cancelCountdown, workKey, taskId),
+  answerQuestion: (workKey, taskId, questionId, answers) =>
+    ipcRenderer.invoke(IPC.answerQuestion, workKey, taskId, questionId, answers),
   interrupt: (workKey, taskId) => ipcRenderer.invoke(IPC.interrupt, workKey, taskId),
   resume: (workKey, taskId) => ipcRenderer.invoke(IPC.resume, workKey, taskId),
   retry: (workKey, taskId) => ipcRenderer.invoke(IPC.retry, workKey, taskId),

@@ -80,14 +80,17 @@ const TOOL_ARG_MAX = 40
 /** 도구 입력에서 인자로 보일 키. 앞의 것부터 본다. 경로 키는 작업 폴더 안이면 상대 경로로 보인다 */
 const TOOL_ARG_KEYS = [
   'command',
+  'cmd',
+  'input',
   'file_path',
   'notebook_path',
   'pattern',
   'url',
   'query',
   'description',
+  'path',
 ]
-const PATH_KEYS = ['file_path', 'notebook_path']
+const PATH_KEYS = ['file_path', 'notebook_path', 'path']
 
 /**
  * 진행 표시의 도구 이름과 짧은 인자 (D216). 예: "Bash(npm test)", "Edit(src/avg.js)". 인자는 도구 입력에서 하나만

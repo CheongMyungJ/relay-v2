@@ -155,6 +155,15 @@ describe('자동 승인의 방식 (4.2, D72)', () => {
     expect(approvalMode(config, { auto_approve: { review: true } }, 'review')).toBe('auto')
   })
 
+  it('Codex는 Work에서 켜도 수동이며, 기본 엔진 변경은 기존 Claude 승인 방식에 영향을 주지 않는다', () => {
+    const switched = { ...config, agent_engine: 'codex' as const }
+    for (const node of ['investigate', 'evidence', 'rca', 'fix', 'review', 'respond'] as const) {
+      const settings = { auto_approve: { [node]: true } }
+      expect(approvalMode(config, settings, node, 'codex')).toBe('manual')
+      expect(approvalMode(switched, settings, node, 'claude')).toBe('auto')
+    }
+  })
+
   it('앱의 기본값은 수정과 리뷰만 자동 승인이다 (D213, D214)', () => {
     expect(approvalMode(DEFAULT_CONFIG, {}, 'fix')).toBe('auto')
     expect(approvalMode(DEFAULT_CONFIG, {}, 'review')).toBe('auto')
@@ -331,6 +340,18 @@ describe('자동 승인하지 않은 까닭 (D128~D131)', () => {
     })
   })
 
+  it('Codex 승인 대기는 다음 턴의 자동 승인 약속 대신 수동 승인 정책을 보인다', () => {
+    const codex = { ...task(), engine: 'codex' as const }
+    expect(autoApproveNote({ settings: { auto_approve: { rca: true } } }, codex, config)).toEqual({
+      on: false,
+      hold: 'Codex 작업은 사람이 승인합니다. 자동 승인 설정은 Claude Code 작업에 적용됩니다.',
+    })
+    expect(autoApproveNote({ settings: {} }, { ...codex, status: 'working' }, config)).toEqual({
+      on: false,
+      hold: null,
+    })
+  })
+
   it('사람이 앱에서 한 일([취소], [즉시 중단], 앱 종료, [단계 선택], 설정)과 재시작 조정은 알리지 않는다 (D130, D121, D145)', () => {
     for (const r of ['cancel', 'interrupt', 'quit', 'step', 'settings', 'restart'] as const) {
       expect(holdNeedsNotice([r]), r).toBe(false)
@@ -345,6 +366,7 @@ describe('자동 승인하지 않은 까닭 (D128~D131)', () => {
       'recommended_next',
       'background',
       'operation',
+      'completion_unknown',
       // 대응 task의 Stop 때 PR이 닫혀 있었다: 사람이 다시 열거나 끝내야 한다 (D179)
       'pr_closed',
       // 리뷰에 지적이 있다: 사람이 반영할 지적을 고른다 (D213)
@@ -355,7 +377,7 @@ describe('자동 승인하지 않은 까닭 (D128~D131)', () => {
     expect(holdNeedsNotice(['cancel', 'session'])).toBe(true)
     expect(holdText(['pr_closed'])).toContain('PR이 닫혀 있음')
     expect(holdText(['review_findings'])).toBe('리뷰에 지적이 있음 (반영할 지적은 사람이 고름)')
-    expect(Object.keys(AUTO_HOLD_LABEL)).toHaveLength(15)
+    expect(Object.keys(AUTO_HOLD_LABEL)).toHaveLength(16)
   })
 })
 

@@ -17,6 +17,10 @@ asarUnpack:
   - node_modules/node-pty/**
 # 스킬 원본은 앱에 함께 넣는다 (I7, D103). 앱은 M2부터 resources/skills를 읽는다.
 extraResources:
+  - from: scripts/codex-hook.ps1
+    to: codex-hook.ps1
+  - from: scripts/codex-bridge.mjs
+    to: codex-bridge.mjs
   - from: ../skills
     to: skills
     filter:

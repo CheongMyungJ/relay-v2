@@ -141,6 +141,7 @@ export interface DeployedSkill {
 export async function deploySkill(o: {
   source: string
   workDir: string
+  taskDir?: string
   skill: SkillName
 }): Promise<DeployedSkill> {
   const merged = await skillText(o.source, o.skill)

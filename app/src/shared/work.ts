@@ -1,6 +1,7 @@
 // work.json의 모양 (5.1). 상태의 기준이고, main이 전이마다 원자적으로 쓴다 (I11).
 // core/machine만 이 값을 바꾼다. 파일에 쓰는 모양이라 키는 snake_case다.
 import type { WorkSettings } from './config'
+import type { AgentEngine } from './agent'
 import type { HandoffStatus, NodeName, Size, TaskNode } from './contracts'
 
 /**
@@ -116,6 +117,7 @@ export type AutoHoldReason =
   | 'intent_deviation'
   | 'recommended_next'
   | 'background'
+  | 'completion_unknown'
   | 'invalid'
   | 'review_findings'
   | 'cancel'
@@ -179,6 +181,10 @@ export interface TaskSession {
 }
 
 export interface TaskRecord {
+  /** 생성 시 고정한 엔진. 없는 기존 기록은 Claude다 (E3, E5). */
+  engine?: AgentEngine
+  /** 실행/재개할 때 점검한 CLI 버전. 기존 claude_version도 읽는다. */
+  engine_version?: string
   /** t-01. 순번은 Work 안에서 1부터 오른다 */
   id: string
   /** task 디렉터리 tasks/<nn>-<node>의 nn */
@@ -530,6 +536,7 @@ export type LifecycleEventType =
   | 'work.abandoned'
   | 'work.cleaned'
   | 'task.started'
+  | 'task.session_identified'
   | 'task.first_output'
   | 'task.first_hook'
   | 'task.bounced'

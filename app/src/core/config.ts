@@ -16,6 +16,7 @@ import type { NodeName } from '../shared/contracts'
 import type { ProjectSettings } from '../shared/project'
 import type { MergeMethod } from '../shared/work'
 import { NODES } from './pipeline'
+import { isAgentEngine, type AgentEngine } from '../shared/agent'
 
 export const SKILLS: readonly SkillName[] = SKILL_TITLES.map(([skill]) => skill)
 
@@ -37,6 +38,7 @@ const MANUAL_NODES: readonly NodeName[] = NODES.filter(
 
 /** 설정 화면에서 바꾸는 값 (D70) */
 export const EDITABLE_KEYS = [
+  'agent_engine',
   'session_limit',
   'auto_approve',
   'auto_approve_countdown_sec',
@@ -104,6 +106,12 @@ const NAMES: Readonly<
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v)
+
+function agentEngine(v: unknown): Checked<AgentEngine> {
+  return isAgentEngine(v)
+    ? { ok: true, value: v }
+    : { ok: false, error: '기본 엔진: claude | codex 중 하나여야 함' }
+}
 
 function integer(key: IntegerKey, v: unknown): Checked<number> {
   const [min, max] = RANGES[key]
@@ -191,6 +199,11 @@ export function normalizeConfig(data: unknown): { config: AppConfig; warnings: s
     auto_approve: { ...DEFAULT_CONFIG.auto_approve },
     question_mode: { ...DEFAULT_CONFIG.question_mode },
   }
+  if (data['agent_engine'] !== undefined) {
+    const r = agentEngine(data['agent_engine'])
+    if (r.ok) config.agent_engine = r.value
+    else warnings.push(`config.json ${r.error}. 기본값 claude를 씀`)
+  }
   for (const key of Object.keys(RANGES) as IntegerKey[]) {
     if (data[key] === undefined) continue
     const r = integer(key, data[key])
@@ -236,7 +249,11 @@ export function applyConfigPatch(current: AppConfig, patch: unknown): Checked<Ap
     if (!(EDITABLE_KEYS as readonly string[]).includes(key)) {
       return { ok: false, error: `설정 화면에서 바꿀 수 없는 값: ${key}` }
     }
-    if ((BOOLEAN_KEYS as readonly string[]).includes(key)) {
+    if (key === 'agent_engine') {
+      const r = agentEngine(v)
+      if (!r.ok) return r
+      next.agent_engine = r.value
+    } else if ((BOOLEAN_KEYS as readonly string[]).includes(key)) {
       const k = key as BooleanKey
       if (typeof v !== 'boolean') return { ok: false, error: `${NAMES[k]}: true/false여야 함` }
       next[k] = v
