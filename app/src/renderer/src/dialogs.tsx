@@ -2,7 +2,7 @@
 // Work 설정(D72: 자동 승인, 질문 방식, 대응 자동 시작. PR 진행 중에도 연다, D209), 단계 선택(6.2, D82),
 // 커밋 안 된 변경의 선택지(7-5), Work 정리(시나리오 8, D178),
 // 확인 창([오류 무시하고 승인] 4.1, [Work 포기] 3.3, [머지 없이 끝내기] D179).
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   AUTO_APPROVE_TITLES,
   QUESTION_MODE_LABEL,
@@ -34,13 +34,29 @@ export function Modal({
   children: ReactNode
   onClose: () => void
 }) {
+  // top layer에 띄운다(showModal): 패널의 버튼 줄이나 터미널 레이어에 가려지지 않고, 뒤는 눌리지 않으며,
+  // 포커스가 창 안으로 오고 Escape로 닫힌다. 닫힘은 브라우저의 close 하나로 받는다
+  const ref = useRef<HTMLDialogElement>(null)
+  useEffect(() => {
+    const dialog = ref.current
+    if (dialog && !dialog.open) dialog.showModal()
+  }, [])
   return (
-    <div className="modal-back" onClick={onClose}>
-      <div className="modal" role="dialog" aria-label={title} onClick={(e) => e.stopPropagation()}>
+    <dialog
+      ref={ref}
+      className="modal-dialog"
+      aria-label={title}
+      onClose={onClose}
+      onClick={(e) => {
+        // 창 밖(::backdrop)을 누르면 닫는다
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
+      <div className="modal">
         <h2>{title}</h2>
         {children}
       </div>
-    </div>
+    </dialog>
   )
 }
 

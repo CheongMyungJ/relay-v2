@@ -563,14 +563,19 @@ textarea {
 
 /* ---------- 대화상자 ---------- */
 
-/* 패널 아래에 붙은 버튼 줄(.review-bottom, z-index 1)보다 위에 둔다: 가려지면 창의 버튼이 눌리지 않는다 */
-.modal-back {
-  position: fixed;
-  inset: 0;
-  z-index: 10;
+/* 대화상자는 <dialog>를 showModal()로 top layer에 띄운다: z-index로 겨루지 않는다. 겉은 비우고 안쪽 .modal이 상자다 */
+.modal-dialog {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
+}
+
+.modal-dialog::backdrop {
   background: rgb(0 0 0 / 50%);
-  display: grid;
-  place-items: center;
 }
 
 .modal {
