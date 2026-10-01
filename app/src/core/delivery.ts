@@ -13,7 +13,7 @@ import type {
   WorkState,
 } from '../shared/work'
 import { REVIEWABLE, approvalGate } from './approval'
-import { isPrevious, workType } from './pipeline'
+import { stopsForRecommendation, workType } from './pipeline'
 import { ghTooOld, ghVersionReason } from './pr'
 import { normalizeText } from './validate'
 
@@ -90,7 +90,10 @@ export function approvalStops(
   header: Pick<Handoff, 'recommended_next'> | null,
 ): boolean {
   const rec = header?.recommended_next
-  return work.stop_after_step === true || (!!rec && isPrevious(workType(work), node, rec.node))
+  return (
+    work.stop_after_step === true ||
+    (!!rec && stopsForRecommendation(workType(work), node, rec.node))
+  )
 }
 
 /** verify에서 멈춘 Work의 verify task (D119). 아니면 undefined */

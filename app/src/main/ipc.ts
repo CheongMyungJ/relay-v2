@@ -65,12 +65,13 @@ function stepInput(v: unknown): SelectStepInput {
   const expect = o['expect']
   if (!expect || typeof expect !== 'object') throw new Error('expect가 없음')
   const e = expect as Record<string, unknown>
+  const type = optionalType(o['type'])
   return {
     node: node(o['node']),
     keepCode: flag(o['keepCode']),
     instruction: text(o['instruction']),
     expect: { taskId: text(e['taskId']), done: flag(e['done']) },
-    ...(o['type'] === undefined || o['type'] === null ? {} : { type: workType(o['type']) }),
+    ...(type === undefined ? {} : { type }),
   }
 }
 

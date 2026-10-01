@@ -14,8 +14,9 @@ import type {
   WorkOperation,
   WorkState,
 } from '../shared/work'
+import { WORK_TYPE_LABEL } from '../shared/work'
 import { DELIVERY_LABEL, DELIVERY_STAGE_LABEL, commitMessage, stashMessage } from './delivery'
-import { NODE_INFO } from './pipeline'
+import { NODE_INFO, workType } from './pipeline'
 import { localMinute } from './records'
 import { RESPOND_STAGE_LABEL } from './respond'
 import { taskLabel } from './review'
@@ -123,6 +124,7 @@ function rewindView(work: WorkState, op: RewindOperation): OperationView {
     title: '되감기가 끊겼습니다',
     lines: [
       `고른 단계: ${title(op.node)}`,
+      ...(op.type ? [`바꿀 유형: ${WORK_TYPE_LABEL[op.type]} (D237)`] : []),
       `끊긴 곳: ${REWIND_STAGE[op.stage]}`,
       ...code,
       `되돌릴 커밋: ${short(op.reset_to)}`,
@@ -130,9 +132,10 @@ function rewindView(work: WorkState, op: RewindOperation): OperationView {
     ],
     retry:
       `[다시 시도]: 백업이 지금 코드와 다르면 한 번 더 백업하고 ${short(op.reset_to)}로 되돌린 뒤, ` +
-      `폐기하고 ${title(op.node)}을(를) 되감기로 시작합니다.`,
+      `폐기하고 ${op.type ? `유형을 ${WORK_TYPE_LABEL[op.type]}(으)로 바꿔 ` : ''}${title(op.node)}을(를) 되감기로 시작합니다.`,
     ignore:
-      '[무시]: 기록만 지웁니다. 코드와 백업 브랜치는 지금 그대로이고, task는 폐기하지 않습니다.',
+      '[무시]: 기록만 지웁니다. 코드와 백업 브랜치는 지금 그대로이고, task는 폐기하지 않습니다.' +
+      (op.type ? ` 유형도 ${WORK_TYPE_LABEL[workType(work)]}(으)로 남고 바뀌지 않습니다.` : ''),
     choice: null,
   }
 }

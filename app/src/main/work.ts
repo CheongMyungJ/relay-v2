@@ -92,11 +92,14 @@ import {
 import {
   buildContext,
   discardedAttempts,
+  keptCodeDesign,
   previousInputs,
+  type CarriedCode,
   type PreviousRound,
   type PreviousTask,
   type RespondInput,
   type SelectionInput,
+  type TaskRef,
 } from '../core/context'
 import {
   ASK_TOOL,
@@ -957,6 +960,7 @@ export class WorkRunner {
       decisionLog: decisionsWithout(decisions?.text ?? '', discarded),
       ...previousInputs(earlier),
       selection: await this.selectionInput(task),
+      carried: await this.carriedInput(task),
       ...(task.node === 'verify' ? { delivery: closingButtons(this.checks()) } : {}),
       respond: await this.respondInput(task),
     })
@@ -1032,6 +1036,20 @@ export class WorkRunner {
   /** 프로젝트의 점검이 바뀌었다. 승인 화면을 다시 읽게 스냅샷을 보낸다 */
   touch(): void {
     this.changed()
+  }
+
+  /** [현재 코드 위에서 이어서]로 되감은 design 다음의 implement (D254). 아니면 null */
+  private async carriedInput(task: TaskRecord): Promise<CarriedCode | null> {
+    const from = keptCodeDesign(this.work, task)
+    if (!from) return null
+    const discarded: (TaskRef & { path: string })[] = []
+    for (const id of from.selection?.discarded ?? []) {
+      const t = this.task(id)
+      if (!t) continue
+      for (const p of await this.files.artifacts(t))
+        discarded.push({ taskId: t.id, node: t.node, path: p })
+    }
+    return { from: { taskId: from.id, node: from.node }, discarded }
   }
 
   /** 단계 선택으로 들어온 task의 입력 (6.2): 사람 추가 지시와, 되감기면 폐기된 시도 요약 */

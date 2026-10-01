@@ -13,6 +13,7 @@ import {
   recommendableNodes,
   selectableNext,
   workType,
+  stopsForRecommendation,
 } from '../../src/core/pipeline'
 import type { NodeName } from '../../src/shared/contracts'
 import type { WorkType } from '../../src/shared/work'
@@ -128,6 +129,19 @@ describe('선택 가능한 다음 단계 (3.2)', () => {
     // 그 유형의 파이프라인에 없는 단계는 이전 단계가 아니다
     expect(isPrevious('feature', 'verify', 'fix')).toBe(false)
     expect(isPrevious('bugfix', 'verify', 'design')).toBe(false)
+  })
+
+  it('추천 때문에 멈추는지: 이전 단계이거나 이 유형의 파이프라인에 없는 노드다 (D23, PR #23 리뷰)', () => {
+    expect(stopsForRecommendation('feature', 'verify', 'design')).toBe(true)
+    // 형식 오류를 무시하고 승인해도 버그 수정 습관의 fix 추천을 Work 완료로 넘기지 않는다
+    expect(stopsForRecommendation('feature', 'verify', 'fix')).toBe(true)
+    expect(stopsForRecommendation('bugfix', 'verify', 'implement')).toBe(true)
+    // 기본 다음 단계와 뒤 단계는 멈추지 않는다
+    expect(stopsForRecommendation('feature', 'design', 'implement')).toBe(false)
+    expect(stopsForRecommendation('feature', 'design', 'verify')).toBe(false)
+    expect(stopsForRecommendation('bugfix', 'fix', 'verify')).toBe(false)
+    // PR 대응 task는 추천이 없다
+    expect(stopsForRecommendation('feature', 'respond', 'fix')).toBe(false)
     // PR 대응 task에는 앞 단계가 없다
     expect(isPrevious('bugfix', 'respond', 'intake')).toBe(false)
     expect(isPrevious('feature', 'respond', 'verify')).toBe(false)

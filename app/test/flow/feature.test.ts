@@ -310,6 +310,13 @@ describe('[흐름] 기능 추가 유형 (M14)', () => {
     // 이어지는 구현도 그 코드 위에서 한다
     const done = await drive(s.h.relay, s.h.ui, key, { pauseAt: (t) => t.node === 'verify' })
     expect(done, s.h.ui.dump()).toMatchObject({ status: 'paused' })
+    // 기본 진행으로 시작한 구현에도 [현재 코드 위에서 이어서]를 알린다 (PR #23 리뷰)
+    const implementCtx = read(path.join(dir, 'tasks', '06-implement', 'context.md'))
+    expect(implementCtx).toContain('## 현재 코드 위에서 이어서 (먼저 읽을 것)')
+    expect(implementCtx).toContain(
+      't-05 design (설계와 계획)을(를) [현재 코드 위에서 이어서]로 되감았다',
+    )
+    expect(implementCtx).toContain(path.join('tasks', '03-implement', 'implement.md'))
     expect(git(s.tree(key), 'log', '--format=%s', `${head}~2..HEAD`).split('\n')).toEqual([
       'test: median 짝수 길이',
       'feat: median',

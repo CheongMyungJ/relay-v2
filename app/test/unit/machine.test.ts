@@ -3556,6 +3556,16 @@ describe('기능 추가 (D232~D237, D249)', () => {
     expect(currentTask(stop(launch(work), next, {}, DEFAULT_CONFIG).work)?.countdown).toBeDefined()
   })
 
+  it('verify가 이 유형에 없는 단계(fix)를 추천한 채 [오류 무시하고 승인]해도 Work를 완료하지 않고 멈춘다 (D23, PR #23 리뷰)', () => {
+    let work = featureWork()
+    for (let i = 0; i < 3; i++) work = approve(stop(launch(work), valid()).work, valid()).work
+    expect(currentTask(work)?.node).toBe('verify')
+    const back = valid({ recommended_next: { node: 'fix', reason: '수정부터 다시' } })
+    const r = approve(stop(launch(work), back).work, back)
+    expect(r.work.status).toBe('stopped')
+    expect(r.work.stop).toMatchObject({ kind: 'recommended_back', node: 'fix' })
+  })
+
   it('의도 승인 전 [intake 다시]에서 유형을 바꾸면 work.json의 type을 바꾸고 task.rewound에 남긴다 (D237, I59)', () => {
     const work = stop(launch(newWork()), valid()).work
     const r = apply(work, {

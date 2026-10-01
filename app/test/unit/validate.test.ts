@@ -5,6 +5,7 @@ import {
   bounceMessage,
   checkHandoff,
   checkIntentDraft,
+  intentDraftBody,
   checkPr,
   checkTask,
   isValid,
@@ -252,6 +253,15 @@ describe('intent 초안: 머리글 없음 (5.3, D236, I58)', () => {
         ],
       ])
     }
+  })
+
+  it('반례: 수평선으로 시작한 본문은 머리글로 잘라 내지 않는다. 사이에 YAML이 아닌 줄이 있으면 본문이다 (PR #23 리뷰)', () => {
+    const [head, ...rest] = DRAFT_BODY.split('## 완료조건')
+    const text = `---\n${head}---\n## 완료조건${rest.join('## 완료조건')}`
+    const r = checkIntentDraft(text, WARN)
+    expect(errorsOf(r)).toEqual([])
+    expect(r.warnings).toEqual([])
+    expect(intentDraftBody(text)).toEqual({ body: text, header: false })
   })
 
   it('머리글이 있어도 본문 절은 머리글 뒤에서 찾는다. 오류는 모두 body다 (D90)', () => {

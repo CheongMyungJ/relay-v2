@@ -209,6 +209,50 @@ export interface ContextInput {
   delivery?: readonly string[]
   /** PR 대응 task (D192). 아니면 없다 */
   respond?: RespondInput | null
+  /**
+   * [현재 코드 위에서 이어서]로 되감은 design 다음에 기본 진행으로 시작한 implement (D254). 그 design과, 그 되감기가
+   * 폐기한 task의 산출물 경로. 아니면 없다
+   */
+  carried?: CarriedCode | null
+}
+
+export interface CarriedCode {
+  /** [현재 코드 위에서 이어서]로 되감은 design task */
+  from: TaskRef
+  /** 그 되감기가 폐기한 task의 산출물 경로. 참고용이다 */
+  discarded: readonly (TaskRef & { path: string })[]
+}
+
+/**
+ * [현재 코드 위에서 이어서]가 이어지는 implement인가 (D254): 기본 진행으로 시작한 implement이고, 바로 앞의 폐기되지
+ * 않은 파이프라인 task가 [현재 코드 위에서 이어서]로 되감은 design이다. 그 design을 돌려준다. design은 코드를 바꾸지
+ * 않으므로(D243) 폐기된 구현의 커밋이 implement까지 남아 있다
+ */
+export function keptCodeDesign(work: WorkState, task: TaskRecord): TaskRecord | null {
+  if (task.node !== 'implement' || task.selection) return null
+  const before = work.tasks.filter(
+    (t) => t.seq < task.seq && t.status !== 'discarded' && isPipelineNode(t.node),
+  )
+  const prev = before[before.length - 1]
+  return prev?.node === 'design' && prev.selection?.keep_code === true ? prev : null
+}
+
+/** [현재 코드 위에서 이어서]가 이어지는 implement의 절 (D254, PR #23 리뷰) */
+function carriedSection(c: CarriedCode): [string, string] {
+  const paths = c.discarded.length
+    ? c.discarded.map((a) => `- ${taskRef(a)}: ${a.path}`).join('\n')
+    : '없음'
+  return [
+    '현재 코드 위에서 이어서 (먼저 읽을 것)',
+    [
+      `사람이 ${taskRef(c.from)}을(를) [현재 코드 위에서 이어서]로 되감았다. 폐기된 구현의 커밋이 지금 코드에 남아 있다. 처음부터 다시 만들지 말고, 고친 \`design.md\`에 맞게 지금 코드 위에서 이어서 고친다.`,
+      '이미 있는 동작의 테스트는 구현 전에도 통과할 수 있다. 그때는 `새 동작 테스트`의 구현 전을 "통과(이전 구현에 이미 있음)"로 적는다.',
+      '',
+      '### 폐기된 시도의 산출물 (참고, 입력이 아니다)',
+      '',
+      paths,
+    ].join('\n'),
+  ]
 }
 
 /** 이전 task에서 main이 읽은 것. 폐기되지 않은 task를 순서대로 넘긴다 */
@@ -563,7 +607,9 @@ export function buildContext(input: ContextInput): string {
     ? respondSection(input.respond, work.base_branch)
     : input.selection
       ? selectionSection(input.selection, task.node)
-      : null
+      : input.carried
+        ? carriedSection(input.carried)
+        : null
   const sections: [string, string][] = [
     ...(entry ? [entry] : []),
     [

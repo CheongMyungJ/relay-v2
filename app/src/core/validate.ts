@@ -523,11 +523,23 @@ export function checkHandoff(text: string, opts: HandoffCheckOptions): HandoffCh
  */
 export function intentDraftBody(text: string): { body: string; header: boolean } {
   const lines = normalizeText(text).split('\n')
-  const end =
+  const close =
     lines[0]?.trimEnd() === '---' ? lines.findIndex((l, i) => i > 0 && l.trimEnd() === '---') : -1
+  // 첫 줄이 수평선인 본문(`---`, `## 목표` …)을 머리글로 잘라 내지 않게, 사이의 줄이 모두 YAML 모양일 때만 머리글이다
+  const end = close > 0 && lines.slice(1, close).every(isYamlLine) ? close : -1
   return end < 0
     ? { body: lines.join('\n'), header: false }
     : { body: lines.slice(end + 1).join('\n'), header: true }
+}
+
+/** YAML 머리글의 줄 모양: 빈 줄, `키:`, 들여 쓴 줄, `- ` 목록 */
+function isYamlLine(line: string): boolean {
+  return (
+    /^\s*$/.test(line) ||
+    /^[A-Za-z_][\w.-]*\s*:/.test(line) ||
+    /^\s+\S/.test(line) ||
+    /^- /.test(line)
+  )
 }
 
 /** intent.draft.md 검사 (5.3, D38). 본문 절만 본다. 머리글이 있으면 경고만 한다 (I58) */

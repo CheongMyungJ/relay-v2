@@ -58,7 +58,7 @@ import {
   WORK_COMPLETE,
   defaultNext,
   isPipelineNode,
-  isPrevious,
+  stopsForRecommendation,
   workType,
 } from './pipeline'
 import { workBranch } from './records'
@@ -1742,7 +1742,7 @@ function approveNow(work: WorkState, task: TaskRecord, a: Approval): Transition 
   }
 
   const rec = header?.recommended_next
-  if (rec && isPrevious(workType(work), node, rec.node)) {
+  if (rec && stopsForRecommendation(workType(work), node, rec.node)) {
     next = {
       ...next,
       status: 'stopped',

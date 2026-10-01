@@ -15,7 +15,9 @@ import {
   NODE_INFO,
   PIPELINES,
   defaultNext,
+  inPipeline,
   isPipelineNode,
+  order,
   workType,
 } from './pipeline'
 import { REASON_LABEL, taskLabel } from './review'
@@ -64,8 +66,6 @@ export interface StepOptions {
 
 export type PlanResult = { ok: true; plan: StepPlan } | { ok: false; error: string }
 
-const index = (type: WorkType, node: NodeName) => PIPELINES[type].indexOf(node)
-
 /** 지금 task. 파이프라인은 한 번에 task 하나만 진행한다 */
 function lastTask(work: WorkState): TaskRecord | undefined {
   return work.tasks[work.tasks.length - 1]
@@ -78,7 +78,7 @@ export function canSelectStep(work: WorkState): boolean {
 
 /** 되감기인지 건너뛰기인지: 그 유형의 파이프라인에서 지금 단계 k 이하면 되감기다 (6.2) */
 export function stepKind(type: WorkType, from: NodeName, to: NodeName): StepKind {
-  return index(type, to) <= index(type, from) ? 'rewind' : 'skip'
+  return order(type, to) <= order(type, from) ? 'rewind' : 'skip'
 }
 
 /**
@@ -86,7 +86,7 @@ export function stepKind(type: WorkType, from: NodeName, to: NodeName): StepKind
  */
 function notAllowed(work: WorkState, node: NodeName): string | null {
   if (!canSelectStep(work)) return '진행 중이거나 멈춘 Work가 아님'
-  if (index(workType(work), node) < 0) {
+  if (!inPipeline(workType(work), node)) {
     return `${WORK_TYPE_LABEL[workType(work)]} Work의 단계가 아님`
   }
   if (!work.intent && node !== 'intake') return '의도 승인 전에는 intake만 고를 수 있음 (6.3)'
@@ -173,7 +173,7 @@ export function planStep(work: WorkState, node: NodeName, opts: StepOptions = {}
       (t) =>
         t.status !== 'discarded' &&
         isPipelineNode(t.node) &&
-        index(type, t.node) >= index(type, node),
+        order(type, t.node) >= order(type, node),
     )
     const to = discard.find((t) => t.start_commit)?.start_commit
     const code: StepCode = opts.keepCode
@@ -202,7 +202,7 @@ export function planStep(work: WorkState, node: NodeName, opts: StepOptions = {}
   const discard = done ? [] : [from]
   // 의도 승인 전에는 건너뛸 수 없다(notAllowed)
   const skipped = PIPELINES[type].filter(
-    (n) => index(type, n) > index(type, fromNode) && index(type, n) < index(type, node),
+    (n) => order(type, n) > order(type, fromNode) && order(type, n) < order(type, node),
   )
   // 기본 진행은 끝난 k의 기본 다음 단계를 고른 경우뿐이다
   const isDefault =

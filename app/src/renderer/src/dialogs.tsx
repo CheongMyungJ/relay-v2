@@ -625,9 +625,10 @@ export function WorkSettingsDialog({ work, onClose }: { work: WorkView; onClose:
   const save = async () => {
     setBusy(true)
     const r = await call(() =>
+      // 보이지 않는 다른 유형의 단계 값은 남기지 않는다. 사람이 보거나 지울 수 없어서다 (D256, PR #23 리뷰)
       window.relay.updateWorkSettings(work.key, {
-        auto_approve: auto,
-        question_mode: modes,
+        auto_approve: only(auto, AUTO_APPROVE_TITLES, work.type),
+        question_mode: only(modes, SKILL_TITLES, work.type),
         respond_auto_start: autoStart ?? null,
       }),
     )

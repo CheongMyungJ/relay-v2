@@ -17,7 +17,8 @@ import {
   WORK_COMPLETE,
   defaultNext,
   isPipelineNode,
-  isPrevious,
+  inPipeline,
+  stopsForRecommendation,
   workType,
 } from './pipeline'
 import {
@@ -309,12 +310,13 @@ export function emphasis(input: EmphasisInput): Emphasis[] {
     })
   }
   const rec = h?.recommended_next
-  if (rec && isPrevious(input.type, input.node, rec.node)) {
+  if (rec && stopsForRecommendation(input.type, input.node, rec.node)) {
+    const outside = inPipeline(input.type, rec.node) ? '' : ' (이 유형의 단계가 아님)'
     out.push({
       kind: 'recommended_back',
       title: '이전 단계 추천',
       lines: [
-        `${NODE_INFO[rec.node].title}(${rec.node})로 — ${rec.reason}`,
+        `${NODE_INFO[rec.node].title}(${rec.node})${outside}로 — ${rec.reason}`,
         '승인하면 다음 단계를 시작하지 않고 멈춥니다. 되돌아갈 단계는 멈춘 뒤 [단계 선택]으로 고릅니다.',
       ],
     })
