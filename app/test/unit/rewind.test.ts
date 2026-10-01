@@ -325,6 +325,8 @@ describe('고를 수 있는 단계 (6.3)', () => {
         why: null,
         current: false,
         recommended: false,
+        keepCode: false,
+        typeChange: false,
       },
       {
         node: 'fix',
@@ -334,6 +336,8 @@ describe('고를 수 있는 단계 (6.3)', () => {
         why: null,
         current: false,
         recommended: true,
+        keepCode: true,
+        typeChange: false,
       },
       {
         node: 'verify',
@@ -343,6 +347,8 @@ describe('고를 수 있는 단계 (6.3)', () => {
         why: null,
         current: true,
         recommended: false,
+        keepCode: false,
+        typeChange: false,
       },
     ])
   })
@@ -404,6 +410,7 @@ describe('미리 보기 (D82)', () => {
       },
       keepCodeOffered: true,
       intent: null,
+      typeChange: null,
     })
   })
 
@@ -478,5 +485,91 @@ describe('미리 보기 (D82)', () => {
     expect(stepPreview(before, plan(before, 'intake'), facts).intent).toBe(
       '의도 승인 전이라 intent를 처음부터 씁니다',
     )
+  })
+})
+
+describe('기능 추가 (D232, D237, D254)', () => {
+  /** 기능 추가 Work: t-01 intake, t-02 design, t-03 implement, t-04 verify */
+  function featureAt(node: NodeName, status: TaskStatus = 'working'): WorkState {
+    const nodes: NodeName[] = ['intake', 'design', 'implement', 'verify']
+    const upto = nodes.slice(0, nodes.indexOf(node) + 1)
+    return {
+      ...work(upto.map((n, i) => task(i + 1, n, n === node ? status : 'approved'))),
+      type: 'feature',
+    }
+  }
+
+  it('대화상자는 기능 추가의 단계만 보이고, design과 implement로 되감을 때 [현재 코드 위에서 이어서]를 준다', () => {
+    const choices = stepChoices(featureAt('verify'))
+    expect(choices.map((c) => [c.node, c.kind, c.keepCode])).toEqual([
+      ['intake', 'rewind', false],
+      ['design', 'rewind', true],
+      ['implement', 'rewind', true],
+      ['verify', 'rewind', false],
+    ])
+    expect(stepChoices(at('verify')).map((c) => c.node)).toEqual(['intake', 'fix', 'verify'])
+  })
+
+  it('design으로 [현재 코드 위에서 이어서] 되감으면 design부터 폐기하고 코드는 그대로 둔다 (D254)', () => {
+    const w = featureAt('verify')
+    const p = plan(w, 'design', { keepCode: true })
+    expect(p).toMatchObject({ kind: 'rewind', code: { kind: 'keep' }, keepCodeOffered: true })
+    expect(ids(p.discard)).toEqual(['t-02', 't-03', 't-04'])
+    expect(plan(w, 'implement', { keepCode: true }).code).toEqual({ kind: 'keep' })
+    // 기본은 고른 단계를 시작할 때의 커밋으로 되돌린다
+    expect(plan(w, 'design').code).toMatchObject({ kind: 'reset', to: 'start-2' })
+  })
+
+  it('기능 추가의 intake와 verify로는 [현재 코드 위에서 이어서]를 고를 수 없다. 다른 유형의 단계는 고를 수 없다', () => {
+    const w = featureAt('verify')
+    expect(planStep(w, 'verify', { keepCode: true })).toEqual({
+      ok: false,
+      error: '[현재 코드 위에서 이어서]는 design, implement로 되감을 때만 고를 수 있음',
+    })
+    expect(planStep(w, 'fix')).toEqual({ ok: false, error: '기능 추가 Work의 단계가 아님' })
+    expect(planStep(at('verify'), 'design')).toEqual({
+      ok: false,
+      error: '버그 수정 Work의 단계가 아님',
+    })
+  })
+
+  it('implement에서 승인하고 멈춘 뒤 verify를 고르면 기본 진행이다. design을 고르면 되감기다', () => {
+    const w: WorkState = {
+      ...featureAt('implement', 'approved'),
+      status: 'stopped',
+      stop: { kind: 'after_step', task_id: 't-03' },
+    }
+    expect(plan(w, 'verify')).toMatchObject({ kind: 'skip', reason: 'default', skipped: [] })
+    expect(plan(w, 'design')).toMatchObject({ kind: 'rewind', reason: 'rewind' })
+  })
+
+  it('의도 승인 전 [intake 다시]에서만 유형을 바꿀 수 있다 (D237)', () => {
+    const before: WorkState = {
+      ...work([task(1, 'intake', 'awaiting_approval')], { approved: false }),
+      type: 'bugfix',
+    }
+    expect(stepChoices(before).map((c) => [c.node, c.typeChange])).toEqual([
+      ['intake', true],
+      ['fix', false],
+      ['verify', false],
+    ])
+    expect(plan(before, 'intake', { type: 'feature' }).type).toBe('feature')
+    // 같은 유형을 고르면 바꾸지 않는다
+    expect(plan(before, 'intake', { type: 'bugfix' }).type).toBeNull()
+    const preview = stepPreview(before, plan(before, 'intake', { type: 'feature' }), {
+      commits: 0,
+      uncommitted: [],
+      artifacts: {},
+    })
+    expect(preview.typeChange).toBe(
+      '유형을 버그 수정에서 기능 추가(으)로 바꿉니다. 의도 승인 뒤에는 바꿀 수 없습니다 (D237)',
+    )
+    // 의도 승인 뒤에는 intake로 되감아도 유형을 바꿀 수 없다
+    const after = featureAt('design')
+    expect(stepChoices(after).find((c) => c.node === 'intake')?.typeChange).toBe(false)
+    expect(planStep(after, 'intake', { type: 'bugfix' })).toEqual({
+      ok: false,
+      error: '유형은 의도 승인 전 [intake 다시]에서만 바꿀 수 있음 (D237)',
+    })
   })
 })

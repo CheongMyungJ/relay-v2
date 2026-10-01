@@ -33,7 +33,13 @@ function input(preview: ReturnType<typeof cleanPreview>, patch: Partial<CleanInp
 
 describe('정리할 수 있는 Work (시나리오 8)', () => {
   it('완료나 포기한 Work만 정리한다. 진행 중 작업이 있으면 기다린다 (D77)', () => {
-    const work = createWork({ workId: 'w', baseBranch: 'main', baseCommit: 'c', at: 'x' }).work
+    const work = createWork({
+      type: 'bugfix',
+      workId: 'w',
+      baseBranch: 'main',
+      baseCommit: 'c',
+      at: 'x',
+    }).work
     const at = (status: WorkState['status'], patch: Partial<WorkState> = {}): WorkState => ({
       ...work,
       status,

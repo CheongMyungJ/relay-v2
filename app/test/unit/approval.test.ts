@@ -101,7 +101,7 @@ describe('승인 버튼의 판정 (4.1, D90, D112)', () => {
   it('intake에서 handoff 머리글을 읽지 못하고 초안도 없으면 넘길 수 없다 (D134)', () => {
     const broken = '---\nstatus: [\n---\n## 요약\n'
     const config = { handoff_body_warn_chars: 5000, intent_warn_chars: 5000 }
-    const c = checkTask({ node: 'intake', files: { 'handoff.md': broken }, config })
+    const c = checkTask({ node: 'intake', type: 'bugfix', files: { 'handoff.md': broken }, config })
     expect(c.status).toBeNull()
     const g = gate('intake', 'idle', c)
     expect(g).toMatchObject({ approve: false, force: false })
@@ -110,7 +110,12 @@ describe('승인 버튼의 판정 (4.1, D90, D112)', () => {
     ])
     // blocked로 읽히면 초안을 요구하지 않는다 (D30)
     const blocked = '---\nstatus: blocked\nblocked_reason: 없음\n---\n'
-    const b = checkTask({ node: 'intake', files: { 'handoff.md': blocked }, config })
+    const b = checkTask({
+      node: 'intake',
+      type: 'bugfix',
+      files: { 'handoff.md': blocked },
+      config,
+    })
     expect(b.errors.filter((e) => e.file === 'intent.draft.md')).toEqual([])
   })
 })
@@ -138,6 +143,8 @@ describe('자동 승인의 방식 (4.2, D72)', () => {
     ...DEFAULT_CONFIG,
     auto_approve: {
       fix: false,
+      design: false,
+      implement: false,
       respond: true,
     },
   }
@@ -159,9 +166,16 @@ describe('자동 승인의 방식 (4.2, D72)', () => {
     }
   })
 
-  it('앱의 기본값은 원인 분석과 수정만 자동 승인이다 (D214)', () => {
-    expect(DEFAULT_CONFIG.auto_approve).toEqual({ fix: true, respond: false })
+  it('앱의 기본값은 원인 분석과 수정, 구현만 자동 승인이다 (D214, D234, D249)', () => {
+    expect(DEFAULT_CONFIG.auto_approve).toEqual({
+      fix: true,
+      design: false,
+      implement: true,
+      respond: false,
+    })
     expect(approvalMode(DEFAULT_CONFIG, {}, 'fix')).toBe('auto')
+    expect(approvalMode(DEFAULT_CONFIG, {}, 'implement')).toBe('auto')
+    expect(approvalMode(DEFAULT_CONFIG, {}, 'design')).toBe('manual')
     expect(approvalMode(DEFAULT_CONFIG, {}, 'respond')).toBe('manual')
   })
 
@@ -177,7 +191,7 @@ describe('자동 승인의 방식 (4.2, D72)', () => {
 
 describe('자동 승인 조건 (4.3, D129)', () => {
   const holds = (c: CheckSummary & { handoffHeader?: Handoff | null }, background = false) =>
-    autoApproveHolds({ node: 'fix', check: c, background })
+    autoApproveHolds({ node: 'fix', type: 'bugfix', check: c, background })
 
   it('조건을 모두 만족하면 어긴 것이 없다', () => {
     expect(holds(valid())).toEqual([])
@@ -223,7 +237,7 @@ describe('자동 승인 조건 (4.3, D129)', () => {
 
   it('fix의 기본 다음 단계는 verify다. 자기 단계나 intake를 추천하면 자동 승인하지 않는다 (3.2)', () => {
     const fix = (h: Partial<Handoff>) =>
-      autoApproveHolds({ node: 'fix', check: valid(h), background: false })
+      autoApproveHolds({ node: 'fix', type: 'bugfix', check: valid(h), background: false })
     expect(fix({ recommended_next: { node: 'verify', reason: '기본' } })).toEqual([])
     for (const node of ['intake', 'fix'] as const) {
       expect(fix({ recommended_next: { node, reason: '다시' } }), node).toEqual([
@@ -232,9 +246,19 @@ describe('자동 승인 조건 (4.3, D129)', () => {
     }
   })
 
+  it('기능 추가: design의 기본 다음 단계는 implement, implement는 verify다. design 추천이면 멈춘다 (3.2, D248)', () => {
+    const run = (node: 'design' | 'implement', h: Partial<Handoff>) =>
+      autoApproveHolds({ node, type: 'feature', check: valid(h), background: false })
+    expect(run('design', { recommended_next: { node: 'implement', reason: '기본' } })).toEqual([])
+    expect(run('implement', { recommended_next: { node: 'verify', reason: '기본' } })).toEqual([])
+    expect(run('implement', { recommended_next: { node: 'design', reason: '설계' } })).toEqual([
+      'recommended_next',
+    ])
+  })
+
   it('PR 대응은 선택 가능한 다음 단계가 없어 어떤 추천이든 자동 승인하지 않는다 (D188)', () => {
     const respond = (h: Partial<Handoff>) =>
-      autoApproveHolds({ node: 'respond', check: valid(h), background: false })
+      autoApproveHolds({ node: 'respond', type: 'bugfix', check: valid(h), background: false })
     expect(respond({})).toEqual([])
     expect(respond({ recommended_next: { node: 'verify', reason: '다시' } })).toEqual([
       'recommended_next',
@@ -268,6 +292,8 @@ describe('자동 승인하지 않은 까닭 (D128~D131)', () => {
     ...DEFAULT_CONFIG,
     auto_approve: {
       fix: true,
+      design: false,
+      implement: true,
       respond: false,
     },
   }
@@ -350,7 +376,13 @@ describe('자동 승인하지 않은 까닭 (D128~D131)', () => {
 })
 
 describe('사이드바 배지 (D80)', () => {
-  const base = createWork({ workId: 'w', baseBranch: 'main', baseCommit: 'c', at: 'x' }).work
+  const base = createWork({
+    type: 'bugfix',
+    workId: 'w',
+    baseBranch: 'main',
+    baseCommit: 'c',
+    at: 'x',
+  }).work
 
   function work(status: WorkStatus, task: TaskStatus): WorkState {
     return {

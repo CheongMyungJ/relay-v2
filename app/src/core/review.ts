@@ -9,13 +9,24 @@ import type {
   TaskStatus,
   WorkState,
   WorkStatus,
+  WorkType,
 } from '../shared/work'
 import { badge, holdNeedsNotice, holdText } from './approval'
-import { NODE_INFO, WORK_COMPLETE, defaultNext, isPipelineNode, isPrevious } from './pipeline'
 import {
+  NODE_INFO,
+  WORK_COMPLETE,
+  defaultNext,
+  isPipelineNode,
+  isPrevious,
+  workType,
+} from './pipeline'
+import {
+  DESIGN_FILE,
   FIX_FILE,
+  IMPLEMENT_FILE,
   INTENT_DRAFT_FILE,
   VERIFICATION_FILE,
+  intentDraftBody,
   normalizeText,
   parseFrontMatter,
   sectionText,
@@ -169,7 +180,7 @@ export function resumeHint(work: WorkState): string | null {
   if (work.status !== 'stopped' || !stop) return null
   const task = work.tasks.find((t) => t.id === stop.task_id)
   // 멈추는 것은 파이프라인 task의 승인뿐이다. PR 대응 task는 멈추지 않는다 (D188)
-  const next = task && isPipelineNode(task.node) ? defaultNext(task.node) : null
+  const next = task && isPipelineNode(task.node) ? defaultNext(workType(work), task.node) : null
   const back = '추천대로 되돌아가려면 [단계 선택]을 누르세요.'
   if (next === WORK_COMPLETE) {
     const done = 'Work 완료 화면에서 전달을 고르면 Work를 완료합니다'
@@ -244,6 +255,8 @@ export function changeRange(work: WorkState, taskId: string): ChangeRange | null
 
 export interface EmphasisInput {
   node: TaskRecord['node']
+  /** Work의 업무 유형. 이전 단계는 유형의 파이프라인으로 가른다 (3.2) */
+  type: WorkType
   /** 스키마를 통과한 handoff 머리글. 읽지 못했으면 null */
   handoff: Handoff | null
   errors: readonly FormatIssue[]
@@ -296,7 +309,7 @@ export function emphasis(input: EmphasisInput): Emphasis[] {
     })
   }
   const rec = h?.recommended_next
-  if (rec && isPrevious(input.node, rec.node)) {
+  if (rec && isPrevious(input.type, input.node, rec.node)) {
     out.push({
       kind: 'recommended_back',
       title: '이전 단계 추천',
@@ -358,26 +371,29 @@ export function hasVisibleText(data: string): boolean {
 /* eslint-enable no-control-regex */
 
 /**
- * [요약] 탭 맨 위에 둘 단계의 핵심 (D223): 읽을 파일, 제목, 모을 절. intent 초안은 머리글을 빼고 본문에서 찾는다.
- * 여기 없는 단계는 핵심이 없다
+ * [요약] 탭 맨 위에 둘 단계의 핵심 (D223): 읽을 파일, 제목, 모을 절. intent 초안은 습관처럼 쓴 머리글이 있으면 떼고
+ * 본문에서 찾는다(I58). 여기 없는 단계는 핵심이 없다
  */
 const LEAD: Partial<
-  Record<TaskNode, { file: string; title: string; sections: string[]; frontMatter?: true }>
+  Record<TaskNode, { file: string; title: string; sections: string[]; draft?: true }>
 > = {
   intake: {
     file: INTENT_DRAFT_FILE,
     title: '의도 초안',
     sections: ['목표', '비목표', '완료조건'],
-    frontMatter: true,
+    draft: true,
   },
   fix: { file: FIX_FILE, title: '원인', sections: ['원인'] },
+  design: { file: DESIGN_FILE, title: '설계', sections: ['유저 시나리오', '요구사항'] },
+  implement: { file: IMPLEMENT_FILE, title: '구현', sections: ['계획과 달라진 점'] },
   verify: { file: VERIFICATION_FILE, title: '리뷰 지적', sections: ['리뷰 지적', '반영'] },
 }
 
 /**
  * [요약] 탭 맨 위에 둘 이 단계의 핵심 (D223). 의도 정리는 intent 초안의 목표·비목표·완료조건을, 원인 분석과 수정은
- * fix.md의 `## 원인`을, 리뷰와 검증은 verification.md의 `## 리뷰 지적`과 `## 반영`을 보인다(D229). 없는 절은 빼고,
- * 파일이 없거나 보일 절이 하나도 없으면 null이다. 다른 단계도 null이다
+ * fix.md의 `## 원인`을, 설계와 계획은 design.md의 `## 유저 시나리오`와 `## 요구사항`을, 구현은 implement.md의
+ * `## 계획과 달라진 점`을, 리뷰와 검증은 verification.md의 `## 리뷰 지적`과 `## 반영`을 보인다(D229, D256). 없는
+ * 절은 빼고, 파일이 없거나 보일 절이 하나도 없으면 null이다. 다른 단계도 null이다
  */
 export function stageLead(
   node: TaskNode,
@@ -386,7 +402,7 @@ export function stageLead(
   const lead = LEAD[node]
   const text = lead ? files[lead.file] : undefined
   if (!lead || text === undefined) return null
-  const body = lead.frontMatter ? parseFrontMatter(text).body : normalizeText(text)
+  const body = lead.draft ? intentDraftBody(text).body : normalizeText(text)
   const sections = leadSections(body, lead.sections)
   return sections.length ? { title: lead.title, sections } : null
 }

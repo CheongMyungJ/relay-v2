@@ -77,6 +77,7 @@ describe.runIf(enabled)('[실제] 트리 종료한 세션의 --resume (M3, S6)',
       const created = await h.relay.createWork(projectId, {
         request: S_CASE.request,
         baseBranch: 'main',
+        type: 'bugfix',
         baseLocation: 'local',
       })
       if (!created.ok) throw new Error(`Work 생성 실패: ${created.error}`)

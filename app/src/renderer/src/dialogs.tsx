@@ -269,6 +269,7 @@ export function NewWorkDialog({
     const r = await call(() =>
       window.relay.createWork(project.id, {
         request,
+        type: 'bugfix',
         baseBranch: branch,
         baseLocation: location,
         ...(Object.keys(settings).length ? { settings } : {}),

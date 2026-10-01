@@ -50,6 +50,7 @@ async function setup(s: Scenario, config: object = {}): Promise<Setup> {
       const r = await hh.relay.createWork(projectId, {
         request,
         baseBranch: 'main',
+        type: 'bugfix',
         baseLocation: 'local',
         ...(settings ? { settings } : {}),
       })

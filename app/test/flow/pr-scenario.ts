@@ -210,6 +210,7 @@ export async function openPrWork(
   const created = await h.relay.createWork(ctx.projectId, {
     request,
     baseBranch: ctx.world.base,
+    type: 'bugfix',
     baseLocation: 'remote',
   })
   if (!created.ok) throw new Error(`Work 생성 실패: ${created.error}`)

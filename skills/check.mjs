@@ -3,7 +3,7 @@
 //
 // 1. 머리글: disable-model-invocation: true, description 있음, name 없음 (D33)
 // 2. 크기: SKILL.md + _common.md. Claude Code 어림(글자 수 / 4)으로 판정, 모델 토큰 어림은 참고 (D31, D95)
-// 3. 템플릿: 주석 단 템플릿에 값을 채운 예시가 docs/contracts 스키마를 통과하는지 (D87)
+// 3. 템플릿: 주석 단 템플릿에 값을 채운 예시가 docs/contracts 스키마를 통과하는지 (D87). intent 초안은 머리글이 없다 (D236)
 // 4. 설계 대조: 산출물 템플릿의 절 제목, 입력·결정 지점·사람이 정할 결정·완료조건 항목 (5.6.1~5.6.7)
 
 import { readFileSync } from 'node:fs';
@@ -105,9 +105,7 @@ else ok('모든 스킬이 목표 안');
 console.log('\n[3] 템플릿 예시와 스키마 (D87)');
 const ajv = new Ajv2020({ allErrors: true, strict: false });
 const handoffSchema = JSON.parse(read('docs/contracts/handoff.v1.schema.json'));
-const intentSchema = JSON.parse(read('docs/contracts/intent-draft.v1.schema.json'));
 const vHandoff = ajv.compile(handoffSchema);
-const vIntent = ajv.compile(intentSchema);
 const errs = (v) => (v.errors ?? []).map((e) => `${e.instancePath || '/'} ${e.message}`).join('; ');
 
 // handoff 템플릿 (_common.md)
@@ -154,14 +152,12 @@ if (handoffTpl) {
   }
 }
 
-// intent 초안 템플릿 (work-start)
-const intentTpl = codeBlocks(skills['work-start'], 'markdown').find((b) => b.startsWith('---\n'));
+// intent 초안 템플릿 (work-start). 머리글이 없다: 유형과 버전은 앱이 의도 승인 때 붙인다 (D236, I58)
+const intentTpl = codeBlocks(skills['work-start'], 'markdown').find((b) => b.startsWith('## 목표\n'));
 check(!!intentTpl, 'work-start: intent.draft.md 템플릿 있음');
 if (intentTpl) {
-  const fm = frontMatter(intentTpl);
-  check(sameSet(Object.keys(fm.data), Object.keys(intentSchema.properties)), `intent 템플릿 필드 = 스키마 필드 (${Object.keys(fm.data).join(', ')})`);
-  check(vIntent(fm.data), `템플릿 머리글 통과 ${errs(vIntent)}`);
-  check(!vIntent({ ...fm.data, type: 'feature' }), '반례: type이 bugfix가 아님 → 오류');
+  const fm = { body: intentTpl };
+  check(!frontMatter(intentTpl), 'intent 템플릿에 머리글 없음 (D236)');
 
   // 본문 필수 절과 완료조건 줄 (5.2.1)
   const hs = headings(fm.body);

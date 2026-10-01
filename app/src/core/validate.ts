@@ -1,14 +1,14 @@
-// handoff와 intent 초안의 형식 검사 (5.2.1, D38). 머리글을 YAML로 읽어 JSON Schema로 검사하고(D84),
+// handoff와 intent 초안의 형식 검사 (5.2.1, D38). handoff 머리글을 YAML로 읽어 JSON Schema로 검사하고(D84),
+// intent 초안은 머리글이 없어 본문만 본다(D236, I58).
 // 스키마로 나타낼 수 없는 것은 코드로 검사한다. 형식만 보고 내용은 판단하지 않는다 (D21).
 // 오류 메시지에는 필드와 어긴 규칙을 적는다 (D87). 정의되지 않은 필드와 분량 초과는 경고만 한다 (D85).
 import Ajv2020, { type ErrorObject, type ValidateFunction } from 'ajv/dist/2020'
 import { parseDocument } from 'yaml'
 import type { AppConfig } from '../shared/config'
-import type { Handoff, HandoffStatus, IntentDraft, TaskNode } from '../shared/contracts'
+import type { Handoff, HandoffStatus, TaskNode } from '../shared/contracts'
 import handoffSchemaV1 from '../shared/generated/handoff.v1.schema.json'
-import intentDraftSchemaV1 from '../shared/generated/intent-draft.v1.schema.json'
-import type { CheckSummary, FormatIssue } from '../shared/work'
-import { NODE_INFO, NODES, recommendableNodes } from './pipeline'
+import type { CheckSummary, FormatIssue, WorkType } from '../shared/work'
+import { ALL_NODES, NODE_INFO, recommendableNodes } from './pipeline'
 
 /** 지금 쓰는 형식 버전 (5.2.1). task를 시작할 때 work.json에 기록하고, 그 버전의 스키마로 검사한다 */
 export const FORMAT_VERSION = 1
@@ -21,6 +21,10 @@ export const RESPONSE_FILE = 'response.md'
 export const REPLIES_FILE = 'replies.md'
 /** 원인 분석과 수정의 산출물 (5.6.5, D228) */
 export const FIX_FILE = 'fix.md'
+/** 설계와 계획의 산출물 (5.6.8, D244) */
+export const DESIGN_FILE = 'design.md'
+/** 구현의 산출물 (5.6.9, D250) */
+export const IMPLEMENT_FILE = 'implement.md'
 /** 리뷰와 검증의 산출물: 리뷰 지적과 완료조건 판정 (5.6.6, D229) */
 export const VERIFICATION_FILE = 'verification.md'
 
@@ -49,12 +53,11 @@ interface Checker<T> {
 
 interface Schemas {
   handoff: Checker<Handoff>
-  intentDraft: Checker<IntentDraft>
 }
 
 // 형식 버전마다의 스키마 (5.2.1). 처음 쓸 때 컴파일한다.
-const SOURCES: Readonly<Record<number, { handoff: SchemaNode; intentDraft: SchemaNode }>> = {
-  1: { handoff: handoffSchemaV1, intentDraft: intentDraftSchemaV1 },
+const SOURCES: Readonly<Record<number, { handoff: SchemaNode }>> = {
+  1: { handoff: handoffSchemaV1 },
 }
 const compiled = new Map<number, Schemas>()
 
@@ -66,10 +69,6 @@ function schemas(version: number): Schemas {
   const ajv = new Ajv2020({ allErrors: true })
   const s: Schemas = {
     handoff: { schema: source.handoff, validate: ajv.compile<Handoff>(source.handoff) },
-    intentDraft: {
-      schema: source.intentDraft,
-      validate: ajv.compile<IntentDraft>(source.intentDraft),
-    },
   }
   compiled.set(version, s)
   return s
@@ -422,11 +421,15 @@ function lengthWarning(file: string, body: string, limit: number, what: string):
 
 // ---------- 파일별 검사 ----------
 
-export interface DocCheck<T> {
-  /** 머리글이 스키마를 통과했을 때의 값 */
-  value: T | null
+/** 파일 하나의 오류와 경고 */
+export interface IssueCheck {
   errors: FormatIssue[]
   warnings: FormatIssue[]
+}
+
+export interface DocCheck<T> extends IssueCheck {
+  /** 머리글이 스키마를 통과했을 때의 값 */
+  value: T | null
 }
 
 interface HeaderCheck<T> extends DocCheck<T> {
@@ -469,6 +472,8 @@ function checkHeader<T>(
 
 export interface HandoffCheckOptions {
   node: TaskNode
+  /** Work의 업무 유형. recommended_next.node의 허용값이 유형마다 다르다 (3.2) */
+  type: WorkType
   warnChars: number
   formatVersion?: number
 }
@@ -487,8 +492,8 @@ export function checkHandoff(text: string, opts: HandoffCheckOptions): HandoffCh
   const errors = [...h.errors]
   const rec = h.data?.['recommended_next']
   const node = isRecord(rec) ? rec['node'] : undefined
-  if (NODES.some((n) => n === node)) {
-    const allowed = recommendableNodes(opts.node)
+  if (ALL_NODES.some((n) => n === node)) {
+    const allowed = recommendableNodes(opts.type, opts.node)
     if (!allowed.some((n) => n === node)) {
       errors.push({
         file,
@@ -512,35 +517,48 @@ export function checkHandoff(text: string, opts: HandoffCheckOptions): HandoffCh
   }
 }
 
-/** intent.draft.md 검사 (5.3, D38) */
-export function checkIntentDraft(
-  text: string,
-  opts: { warnChars: number; formatVersion?: number },
-): DocCheck<IntentDraft> {
+/**
+ * intent 초안의 머리글을 뗀다 (D236, I58). 초안에는 머리글이 없다: 유형과 버전은 앱이 [의도 승인] 때 붙인다. 습관처럼
+ * 쓴 머리글(첫 줄 `---`부터 닫는 `---`까지)이 있으면 읽지 않고 떼어 본문만 돌려준다
+ */
+export function intentDraftBody(text: string): { body: string; header: boolean } {
+  const lines = normalizeText(text).split('\n')
+  const end =
+    lines[0]?.trimEnd() === '---' ? lines.findIndex((l, i) => i > 0 && l.trimEnd() === '---') : -1
+  return end < 0
+    ? { body: lines.join('\n'), header: false }
+    : { body: lines.slice(end + 1).join('\n'), header: true }
+}
+
+/** intent.draft.md 검사 (5.3, D38). 본문 절만 본다. 머리글이 있으면 경고만 한다 (I58) */
+export function checkIntentDraft(text: string, opts: { warnChars: number }): IssueCheck {
   const file = INTENT_DRAFT_FILE
-  const h = checkHeader(file, text, schemas(opts.formatVersion ?? FORMAT_VERSION).intentDraft)
-  const errors = [...h.errors]
-  if (h.data) {
-    errors.push(...missingSections(file, h.body, INTENT_SECTIONS, 'intent 초안 본문'))
-    const criteria = sectionLines(h.body, CRITERIA_SECTION) ?? []
-    for (const line of criteria.filter((l) => l.trim())) {
-      if (!line.startsWith(CRITERIA_PREFIX)) {
-        errors.push({
-          file,
-          part: 'body',
-          field: CRITERIA_SECTION,
-          message: `\`## ${CRITERIA_SECTION}\`의 줄이 \`${CRITERIA_PREFIX}\`로 시작하지 않음 (지금: ${clip(line)})`,
-        })
-      }
+  const { body, header } = intentDraftBody(text)
+  const errors = missingSections(file, body, INTENT_SECTIONS, 'intent 초안 본문')
+  const criteria = sectionLines(body, CRITERIA_SECTION) ?? []
+  for (const line of criteria.filter((l) => l.trim())) {
+    if (!line.startsWith(CRITERIA_PREFIX)) {
+      errors.push({
+        file,
+        part: 'body',
+        field: CRITERIA_SECTION,
+        message: `\`## ${CRITERIA_SECTION}\`의 줄이 \`${CRITERIA_PREFIX}\`로 시작하지 않음 (지금: ${clip(line)})`,
+      })
     }
   }
+  const warnings: FormatIssue[] = header
+    ? [
+        {
+          file,
+          part: 'header',
+          message:
+            '머리글은 읽지 않음: intent 초안에는 머리글이 없다. 유형과 버전은 앱이 의도 승인 때 붙인다 (D236)',
+        },
+      ]
+    : []
   return {
-    value: h.value,
     errors,
-    warnings: [
-      ...h.warnings,
-      ...(h.data ? lengthWarning(file, h.body, opts.warnChars, 'intent 초안 본문') : []),
-    ],
+    warnings: [...warnings, ...lengthWarning(file, body, opts.warnChars, 'intent 초안 본문')],
   }
 }
 
@@ -644,6 +662,8 @@ export function checkReplies(
 
 export interface TaskCheckInput {
   node: TaskNode
+  /** Work의 업무 유형 (D232). recommended_next.node의 허용값을 정한다 */
+  type: WorkType
   /** task 디렉터리 바로 아래의 .md 파일. 이름 → 내용 */
   files: Readonly<Record<string, string>>
   config: Pick<AppConfig, 'handoff_body_warn_chars' | 'intent_warn_chars'>
@@ -661,8 +681,6 @@ export interface TaskCheck extends CheckSummary {
    * [오류 무시하고 승인]이 결정과 이전 단계 추천을 읽는 데 쓴다 (D112)
    */
   handoffHeader: Handoff | null
-  /** intake에서 intent 초안 머리글이 스키마를 통과했을 때의 값 */
-  intentDraft: IntentDraft | null
 }
 
 /**
@@ -677,13 +695,14 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
   const draft =
     draftText === undefined
       ? null
-      : checkIntentDraft(draftText, { warnChars: config.intent_warn_chars, formatVersion: version })
+      : checkIntentDraft(draftText, { warnChars: config.intent_warn_chars })
   const handoffText = files[HANDOFF_FILE]
   const handoff =
     handoffText === undefined
       ? null
       : checkHandoff(handoffText, {
           node,
+          type: input.type,
           warnChars: config.handoff_body_warn_chars,
           formatVersion: version,
         })
@@ -725,7 +744,6 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
     warnings: [...(handoff?.warnings ?? []), ...(draft?.warnings ?? [])],
     handoff: handoff?.value ?? null,
     handoffHeader: handoff?.header ?? null,
-    intentDraft: draft?.value ?? null,
   }
 }
 

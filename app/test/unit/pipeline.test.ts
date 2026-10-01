@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import handoffSchema from '../../src/shared/generated/handoff.v1.schema.json'
 import {
+  ALL_NODES,
+  KEEP_CODE_NODES,
   NODE_INFO,
-  NODES,
+  PIPELINES,
   RESPOND,
   defaultNext,
   isPipelineNode,
@@ -10,21 +12,35 @@ import {
   previousSteps,
   recommendableNodes,
   selectableNext,
+  workType,
 } from '../../src/core/pipeline'
 import type { NodeName } from '../../src/shared/contracts'
+import type { WorkType } from '../../src/shared/work'
 
 describe('노드 (3.1)', () => {
-  it('순서는 intake → fix → verify이고 스키마의 노드 열거값과 같다 (D227)', () => {
-    expect(NODES).toEqual(['intake', 'fix', 'verify'])
-    expect(NODES).toEqual(handoffSchema.properties.recommended_next.oneOf[1]?.properties?.node.enum)
+  it('버그 수정은 intake → fix → verify, 기능 추가는 intake → design → implement → verify다 (D227, D232)', () => {
+    expect(PIPELINES).toEqual({
+      bugfix: ['intake', 'fix', 'verify'],
+      feature: ['intake', 'design', 'implement', 'verify'],
+    })
+  })
+
+  it('모든 노드는 두 파이프라인의 노드를 모은 것이고 스키마의 노드 열거값과 같다 (I57)', () => {
+    expect(ALL_NODES).toEqual(['intake', 'fix', 'design', 'implement', 'verify'])
+    expect(new Set([...PIPELINES.bugfix, ...PIPELINES.feature])).toEqual(new Set(ALL_NODES))
+    expect(ALL_NODES).toEqual(
+      handoffSchema.properties.recommended_next.oneOf[1]?.properties?.node.enum,
+    )
   })
 
   it('노드마다 스킬, 화면 이름(D109), 필수 산출물이 있다', () => {
     expect(
-      NODES.map((n) => [n, NODE_INFO[n].skill, NODE_INFO[n].title, NODE_INFO[n].artifacts]),
+      ALL_NODES.map((n) => [n, NODE_INFO[n].skill, NODE_INFO[n].title, NODE_INFO[n].artifacts]),
     ).toEqual([
       ['intake', 'work-start', '의도 정리', ['intent.draft.md']],
       ['fix', 'fix', '원인 분석과 수정', ['fix.md']],
+      ['design', 'design', '설계와 계획', ['design.md']],
+      ['implement', 'implement', '구현', ['implement.md']],
       ['verify', 'verify', '리뷰와 검증', ['verification.md', 'pr.md']],
     ])
   })
@@ -36,60 +52,84 @@ describe('노드 (3.1)', () => {
       title: 'PR 대응',
       artifacts: ['response.md'],
     })
-    expect(NODES).not.toContain(RESPOND)
+    expect(ALL_NODES).not.toContain(RESPOND)
     expect(isPipelineNode(RESPOND)).toBe(false)
-    expect(NODES.every(isPipelineNode)).toBe(true)
+    expect(ALL_NODES.every(isPipelineNode)).toBe(true)
   })
 
   it('노드마다 산출물이 겹치지 않는다', () => {
-    const artifacts = NODES.flatMap((n) => NODE_INFO[n].artifacts)
+    const artifacts = ALL_NODES.flatMap((n) => NODE_INFO[n].artifacts)
     expect(new Set(artifacts).size).toBe(artifacts.length)
+  })
+
+  it('work.json에 type이 없으면 버그 수정이다 (D256, I58)', () => {
+    expect(workType({})).toBe('bugfix')
+    expect(workType({ type: 'feature' })).toBe('feature')
+  })
+
+  it('[현재 코드 위에서 이어서]는 버그 수정의 fix, 기능 추가의 design과 implement에서 준다 (6.2, D254)', () => {
+    expect(KEEP_CODE_NODES).toEqual({ bugfix: ['fix'], feature: ['design', 'implement'] })
   })
 })
 
 describe('선택 가능한 다음 단계 (3.2)', () => {
-  // [노드, 기본 다음 단계, 이전 단계]
-  const table: [NodeName, string, NodeName[]][] = [
-    ['intake', 'fix', []],
-    ['fix', 'verify', ['intake']],
-    ['verify', 'complete', ['intake', 'fix']],
+  // [유형, 노드, 기본 다음 단계, 이전 단계]
+  const table: [WorkType, NodeName, string, NodeName[]][] = [
+    ['bugfix', 'intake', 'fix', []],
+    ['bugfix', 'fix', 'verify', ['intake']],
+    ['bugfix', 'verify', 'complete', ['intake', 'fix']],
+    ['feature', 'intake', 'design', []],
+    ['feature', 'design', 'implement', ['intake']],
+    ['feature', 'implement', 'verify', ['intake', 'design']],
+    ['feature', 'verify', 'complete', ['intake', 'design', 'implement']],
   ]
 
   it('파이프라인의 노드가 모두 표에 있다', () => {
-    expect(table.map(([n]) => n)).toEqual(NODES)
+    for (const type of ['bugfix', 'feature'] as const) {
+      expect(table.filter(([t]) => t === type).map(([, n]) => n)).toEqual(PIPELINES[type])
+    }
   })
 
-  it.each(table)('%s: 기본 다음 단계 %s, 이전 단계 %j', (node, next, previous) => {
-    expect(selectableNext(node)).toEqual({ defaultNext: next, previous })
-    expect(defaultNext(node)).toBe(next)
-    expect(previousSteps(node)).toEqual(previous)
-  })
-
-  it('verify의 기본 다음 단계는 Work 완료다', () => {
-    expect(defaultNext('verify')).toBe('complete')
+  it.each(table)('%s %s: 기본 다음 단계 %s, 이전 단계 %j', (type, node, next, previous) => {
+    expect(selectableNext(type, node)).toEqual({ defaultNext: next, previous })
+    expect(defaultNext(type, node)).toBe(next)
+    expect(previousSteps(type, node)).toEqual(previous)
   })
 
   it('recommended_next로 쓸 수 있는 노드는 이전 단계와 노드인 기본 다음 단계다', () => {
-    expect(recommendableNodes('intake')).toEqual(['fix'])
-    expect(recommendableNodes('fix')).toEqual(['intake', 'verify'])
-    expect(recommendableNodes('verify')).toEqual(['intake', 'fix'])
+    expect(recommendableNodes('bugfix', 'intake')).toEqual(['fix'])
+    expect(recommendableNodes('bugfix', 'fix')).toEqual(['intake', 'verify'])
+    expect(recommendableNodes('bugfix', 'verify')).toEqual(['intake', 'fix'])
+    expect(recommendableNodes('feature', 'intake')).toEqual(['design'])
+    expect(recommendableNodes('feature', 'design')).toEqual(['intake', 'implement'])
+    expect(recommendableNodes('feature', 'implement')).toEqual(['intake', 'design', 'verify'])
+    expect(recommendableNodes('feature', 'verify')).toEqual(['intake', 'design', 'implement'])
   })
 
   it('PR 대응 task는 recommended_next로 쓸 수 있는 노드가 없다 (D188)', () => {
-    expect(recommendableNodes('respond')).toEqual([])
+    expect(recommendableNodes('bugfix', 'respond')).toEqual([])
+    expect(recommendableNodes('feature', 'respond')).toEqual([])
   })
 
   it('이전 단계 추천인지 가린다 (D23)', () => {
-    expect(isPrevious('verify', 'fix')).toBe(true)
-    expect(isPrevious('verify', 'intake')).toBe(true)
-    expect(isPrevious('verify', 'verify')).toBe(false)
-    expect(isPrevious('fix', 'intake')).toBe(true)
-    expect(isPrevious('fix', 'fix')).toBe(false)
-    expect(isPrevious('fix', 'verify')).toBe(false)
-    expect(isPrevious('intake', 'intake')).toBe(false)
-    expect(isPrevious('intake', 'fix')).toBe(false)
+    expect(isPrevious('bugfix', 'verify', 'fix')).toBe(true)
+    expect(isPrevious('bugfix', 'verify', 'intake')).toBe(true)
+    expect(isPrevious('bugfix', 'verify', 'verify')).toBe(false)
+    expect(isPrevious('bugfix', 'fix', 'intake')).toBe(true)
+    expect(isPrevious('bugfix', 'fix', 'fix')).toBe(false)
+    expect(isPrevious('bugfix', 'fix', 'verify')).toBe(false)
+    expect(isPrevious('bugfix', 'intake', 'intake')).toBe(false)
+    expect(isPrevious('bugfix', 'intake', 'fix')).toBe(false)
+    expect(isPrevious('feature', 'verify', 'implement')).toBe(true)
+    expect(isPrevious('feature', 'verify', 'design')).toBe(true)
+    expect(isPrevious('feature', 'implement', 'design')).toBe(true)
+    expect(isPrevious('feature', 'implement', 'verify')).toBe(false)
+    expect(isPrevious('feature', 'design', 'implement')).toBe(false)
+    // 그 유형의 파이프라인에 없는 단계는 이전 단계가 아니다
+    expect(isPrevious('feature', 'verify', 'fix')).toBe(false)
+    expect(isPrevious('bugfix', 'verify', 'design')).toBe(false)
     // PR 대응 task에는 앞 단계가 없다
-    expect(isPrevious('respond', 'intake')).toBe(false)
-    expect(isPrevious('respond', 'verify')).toBe(false)
+    expect(isPrevious('bugfix', 'respond', 'intake')).toBe(false)
+    expect(isPrevious('feature', 'respond', 'verify')).toBe(false)
   })
 })

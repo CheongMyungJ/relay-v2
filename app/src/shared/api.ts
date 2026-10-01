@@ -28,7 +28,7 @@ import type {
   TerminalChunk,
   WorkView,
 } from './views'
-import type { DeliveryChoice } from './work'
+import type { DeliveryChoice, WorkType } from './work'
 import type { HumanAnswers } from './questions'
 
 export interface AppInfo {
@@ -86,8 +86,13 @@ export interface RelayApi {
   resumeWork(workKey: string): Promise<CommandResult>
   /** [Work 포기] (3.3) */
   abandon(workKey: string): Promise<CommandResult>
-  /** 단계 선택 대화상자의 미리 보기 (6.2, D82) */
-  stepPreview(workKey: string, node: NodeName, keepCode: boolean): Promise<StepPreviewResult>
+  /** 단계 선택 대화상자의 미리 보기 (6.2, D82). type은 의도 승인 전 [intake 다시]에서 고른 유형이다 (D237) */
+  stepPreview(
+    workKey: string,
+    node: NodeName,
+    keepCode: boolean,
+    type?: WorkType,
+  ): Promise<StepPreviewResult>
   /** [단계 선택]의 [확인] (6.2) */
   selectStep(workKey: string, input: SelectStepInput): Promise<CommandResult>
   /** [push]·[PR 생성] (시나리오 7-4~7-6). 커밋 안 된 변경이 있으면 목록을 돌려준다 (7-5) */

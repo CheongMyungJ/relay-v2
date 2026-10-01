@@ -551,6 +551,7 @@ describe('[흐름] PR 진행 (M9, 시나리오 10)', () => {
     const created = await h.relay.createWork(projectId, {
       request: '낮은 gh',
       baseBranch: 'main',
+      type: 'bugfix',
       baseLocation: 'local',
     })
     if (!created.ok) throw new Error(created.error)

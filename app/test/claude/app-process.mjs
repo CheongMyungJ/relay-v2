@@ -27,6 +27,7 @@ const relay = await Relay.open({ home: cfg.home, skills: cfg.skills, ui, env: pr
 const created = await relay.createWork(cfg.projectId, {
   request: cfg.request,
   baseBranch: 'main',
+  type: 'bugfix',
   baseLocation: 'local',
 })
 if (!created.ok) {

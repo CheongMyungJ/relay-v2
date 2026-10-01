@@ -1048,7 +1048,7 @@ pr.items_received | pr.synced | pr.pushed | pr.replied | pr.checks_rerun | pr.me
 
 | 유형 | payload |
 |---|---|
-| `work.created` | `base_branch`, `base_commit` |
+| `work.created` | `type`(업무 유형, D236), `base_branch`, `base_commit` |
 | `work.completed` | `delivery`: `none`(전달 없이 완료), `push`, `pr`. PR 진행에서 끝나면 `merged`(`true`는 머지됨, `false`는 머지 없이 끝냄, D152) |
 | `work.abandoned` | 없음 |
 | `work.cleaned` | `forced`(`--force`로 지웠는가), `deleted_branches` |
@@ -1060,7 +1060,7 @@ pr.items_received | pr.synced | pr.pushed | pr.replied | pr.checks_rerun | pr.me
 | `task.approved` | `by`: `human`, `auto`. [오류 무시하고 승인]이면 `ignored_errors`(수) |
 | `task.interrupted` | `reason`: `human`([즉시 중단]), `app_quit`(앱 종료 확인), `abandoned`([Work 포기]), `rewind`, `skip`(단계 선택), `session_ended`(handoff 없이 세션 종료), `start_failed`(세션을 띄우지 못함. `error`에 까닭, D135의 앞선 처리 실패도 여기다), `app_restart`(재시작 조정. 끝낸 고아가 있으면 `killed_pid`), `pr_merged`(PR이 밖에서 머지돼 대응 task를 끝냄, D179). 대기열에 있던 task면 `queued: true` |
 | `task.resumed` | `session_id`, `engine`, `engine_version`. Claude일 때는 이전 기록 호환을 위해 `claude_version`도 남긴다 |
-| `task.rewound` | `node`, `from_task`, `discarded`, `keep_code`, 코드를 되돌렸으면 `reset_to`, `backup_branch`, 끊긴 되감기를 다시 하며 덤으로 남긴 백업이 있으면 `extra_backup_branch` |
+| `task.rewound` | `node`, `from_task`, `discarded`, `keep_code`, 코드를 되돌렸으면 `reset_to`, `backup_branch`, 의도 승인 전 [intake 다시]에서 유형을 바꿨으면 `type_from`, `type_to`(D237, I59), 끊긴 되감기를 다시 하며 덤으로 남긴 백업이 있으면 `extra_backup_branch` |
 | `task.skipped_to` | `node`, `from_task`, `discarded`, `skipped` |
 | `delivery.succeeded` | `choice`, `branch`, `compare_url`, `pr_url`, `pr_existing`, `draft`, `stashes`, `commits` |
 | `delivery.failed` | `choice`, `stage`, `error`, `stashes`, `commits`. 끊긴 전달을 실패로 남겼으면 `reason: app_restart` |

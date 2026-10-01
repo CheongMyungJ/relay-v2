@@ -51,7 +51,7 @@ import type {
   StepPreviewResult,
   TerminalBacklog,
 } from '../shared/views'
-import type { DeliveryChoice, WorkState } from '../shared/work'
+import { WORK_TYPES, type DeliveryChoice, type WorkState, type WorkType } from '../shared/work'
 import { SessionPool } from './pool'
 import type { UiPort } from './ports'
 import { checkGh, inspectProject, prepareProject, type ProjectEnv } from './projects'
@@ -361,7 +361,7 @@ export class Relay {
    * work-id, relay/<work-id> 브랜치와 worktree, 기준 커밋(D97), request.md, work.json을 만들고
    * intake task를 시작한다. 기준 위치가 원격이면 fetch한 origin/<브랜치>에서 분기하고,
    * fetch가 실패하면 Work를 만들지 않는다. 세션 상한을 넘으면 intake는 대기열에서 기다린다 (D18).
-   * Work별 자동 승인과 질문 방식을 받으면 work.json에 둔다 (D72).
+   * Work별 자동 승인과 질문 방식을 받으면 work.json에 둔다 (D72). 고른 업무 유형을 work.json에 적는다 (D236).
    */
   async createWork(projectId: string, input: NewWorkInput): Promise<CreateWorkResult> {
     const project = this.projects.get(projectId)
@@ -369,6 +369,7 @@ export class Relay {
     // work-id를 겹치지 않게 정하려고 한 번에 하나씩 만든다
     if (this.creating) return { ok: false, error: '다른 Work를 만드는 중입니다' }
     if (!input.request.trim()) return { ok: false, error: '요청을 입력하세요' }
+    if (!WORK_TYPES.includes(input.type)) return { ok: false, error: '업무 유형을 고르세요' }
     const branch = input.baseBranch.trim()
     if (!branch) return { ok: false, error: '기준 브랜치를 고르세요' }
     const settings = checkWorkSettings(input.settings ?? {})
@@ -428,6 +429,7 @@ export class Relay {
     const created = createWork({
       engine: this.config.agent_engine,
       workId,
+      type: input.type,
       baseBranch: branch,
       baseCommit,
       settings,
@@ -514,9 +516,12 @@ export class Relay {
     workKey: string,
     node: NodeName,
     keepCode: boolean,
+    type?: WorkType,
   ): Promise<StepPreviewResult> {
     const runner = this.works.get(workKey)
-    return runner ? runner.stepPreview(node, keepCode) : { ok: false, error: 'Work가 없습니다' }
+    return runner
+      ? runner.stepPreview(node, keepCode, type)
+      : { ok: false, error: 'Work가 없습니다' }
   }
 
   /** [단계 선택]의 [확인] */

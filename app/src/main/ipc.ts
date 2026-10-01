@@ -2,7 +2,7 @@
 // 값은 여기서 모양만 확인하고, 뜻(상태에 맞는 명령인지, 설정 값의 범위)은 Relay와 core가 판정한다.
 import os from 'node:os'
 import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
-import { NODES } from '../core/pipeline'
+import { ALL_NODES } from '../core/pipeline'
 import { IPC, type AppInfo } from '../shared/api'
 import type { NodeName } from '../shared/contracts'
 import type {
@@ -16,7 +16,7 @@ import type {
   RespondStartInput,
   SelectStepInput,
 } from '../shared/views'
-import type { DeliveryChoice, MergeMethod } from '../shared/work'
+import { WORK_TYPES, type DeliveryChoice, type MergeMethod, type WorkType } from '../shared/work'
 import type { Relay } from './relay'
 import { externalUrl } from './security'
 
@@ -42,9 +42,21 @@ function flag(v: unknown): boolean {
 }
 
 function node(v: unknown): NodeName {
-  const found = NODES.find((n) => n === v)
+  const found = ALL_NODES.find((n) => n === v)
   if (!found) throw new Error('파이프라인 단계가 아님')
   return found
+}
+
+/** 업무 유형 (D236) */
+function workType(v: unknown): WorkType {
+  const found = WORK_TYPES.find((t) => t === v)
+  if (!found) throw new Error('업무 유형이 아님')
+  return found
+}
+
+/** 고르지 않을 수 있는 업무 유형: undefined나 null이면 없다 ([intake 다시]의 유형 고르기, D237) */
+function optionalType(v: unknown): WorkType | undefined {
+  return v === undefined || v === null ? undefined : workType(v)
 }
 
 function stepInput(v: unknown): SelectStepInput {
@@ -58,6 +70,7 @@ function stepInput(v: unknown): SelectStepInput {
     keepCode: flag(o['keepCode']),
     instruction: text(o['instruction']),
     expect: { taskId: text(e['taskId']), done: flag(e['done']) },
+    ...(o['type'] === undefined || o['type'] === null ? {} : { type: workType(o['type']) }),
   }
 }
 
@@ -161,6 +174,7 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   ipcMain.handle(IPC.createWork, async (_e, projectId: unknown, input: NewWorkInput) =>
     (await ready).createWork(text(projectId), {
       request: text(input.request),
+      type: workType(input.type),
       baseBranch: text(input.baseBranch),
       baseLocation: input.baseLocation === 'remote' ? 'remote' : 'local',
       ...(input.settings === undefined ? {} : { settings: input.settings }),
@@ -199,8 +213,10 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
     (await ready).resumeWork(text(workKey)),
   )
   ipcMain.handle(IPC.abandon, async (_e, workKey: unknown) => (await ready).abandon(text(workKey)))
-  ipcMain.handle(IPC.stepPreview, async (_e, workKey: unknown, step: unknown, keepCode: unknown) =>
-    (await ready).stepPreview(text(workKey), node(step), flag(keepCode)),
+  ipcMain.handle(
+    IPC.stepPreview,
+    async (_e, workKey: unknown, step: unknown, keepCode: unknown, type: unknown) =>
+      (await ready).stepPreview(text(workKey), node(step), flag(keepCode), optionalType(type)),
   )
   ipcMain.handle(IPC.selectStep, async (_e, workKey: unknown, input: unknown) =>
     (await ready).selectStep(text(workKey), stepInput(input)),

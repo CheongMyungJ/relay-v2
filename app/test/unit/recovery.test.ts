@@ -31,6 +31,7 @@ const BACKUP = `relay/${WORK_ID}-discarded-1`
 
 function work(extra: Partial<WorkState> = {}): WorkState {
   const w = createWork({
+    type: 'bugfix',
     workId: WORK_ID,
     baseBranch: 'main',
     baseCommit: 'base0001',

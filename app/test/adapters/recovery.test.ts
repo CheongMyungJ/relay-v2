@@ -297,6 +297,7 @@ describe('[어댑터] 앱 소유 파일과 work.json (6.1, D124)', () => {
   it('work.json은 앱이 마지막으로 쓰거나 읽은 내용과 다르면 바뀐 내용을 옆에 남기고 앱의 상태로 쓴다', async () => {
     const w = new WorkFiles(path.join(root, 'w'))
     const work = createWork({
+      type: 'bugfix',
       workId: WORK_ID,
       baseBranch: 'main',
       baseCommit: 'base0001',

@@ -46,9 +46,6 @@ Scope (`비목표`) and completion criteria (`완료조건`). This skill has no 
 ## Artifact template: `intent.draft.md`
 
 ```markdown
----
-type: bugfix   # bugfix only
----
 ## 목표
 
 ## 비목표

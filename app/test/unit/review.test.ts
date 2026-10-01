@@ -114,7 +114,13 @@ describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
   })
 
   it('이전 단계 추천으로 멈추면 알린다 (D23)', () => {
-    const work = createWork({ workId: 'w', baseBranch: 'main', baseCommit: 'c', at: 'x' }).work
+    const work = createWork({
+      type: 'bugfix',
+      workId: 'w',
+      baseBranch: 'main',
+      baseCommit: 'c',
+      at: 'x',
+    }).work
     expect(stopNotice(work)).toBeNull()
     const stopped = {
       ...work,
@@ -132,7 +138,13 @@ describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
   })
 
   it('[이 단계 끝나면 멈춤]으로 멈추면 승인한 task를 알린다 (시나리오 3-4)', () => {
-    const work = createWork({ workId: 'w', baseBranch: 'main', baseCommit: 'c', at: 'x' }).work
+    const work = createWork({
+      type: 'bugfix',
+      workId: 'w',
+      baseBranch: 'main',
+      baseCommit: 'c',
+      at: 'x',
+    }).work
     const stopped = {
       ...work,
       status: 'stopped' as const,
@@ -142,7 +154,13 @@ describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
   })
 
   it('[재개]가 할 일을 알린다: 기본 다음 단계. verify에서 멈췄으면 Work 완료 화면에서 전달을 고른다 (3.3, D119)', () => {
-    const work = createWork({ workId: 'w', baseBranch: 'main', baseCommit: 'c', at: 'x' }).work
+    const work = createWork({
+      type: 'bugfix',
+      workId: 'w',
+      baseBranch: 'main',
+      baseCommit: 'c',
+      at: 'x',
+    }).work
     expect(resumeHint(work)).toBeNull()
     const at = (node: NodeName, stop: WorkState['stop']): WorkState => ({
       ...work,
@@ -247,7 +265,13 @@ describe('진행 표시의 도구 이름 (D216)', () => {
 
 describe('리뷰와 검증에서 멈춘 Work (D229)', () => {
   it('verify가 의도 정리를 추천해 멈추면 알리고, [재개] 대신 Work 완료 화면에서 전달을 고른다', () => {
-    const work = createWork({ workId: 'w', baseBranch: 'main', baseCommit: 'c', at: 'x' }).work
+    const work = createWork({
+      type: 'bugfix',
+      workId: 'w',
+      baseBranch: 'main',
+      baseCommit: 'c',
+      at: 'x',
+    }).work
     const back: WorkState = {
       ...work,
       status: 'stopped',
@@ -263,7 +287,13 @@ describe('리뷰와 검증에서 멈춘 Work (D229)', () => {
 })
 
 describe('OS 알림 문구 (D81)', () => {
-  const base = createWork({ workId: 'w', baseBranch: 'main', baseCommit: 'c', at: 'x' }).work
+  const base = createWork({
+    type: 'bugfix',
+    workId: 'w',
+    baseBranch: 'main',
+    baseCommit: 'c',
+    at: 'x',
+  }).work
   const at = (status: TaskStatus, work: WorkState = base): WorkState => ({
     ...work,
     tasks: work.tasks.map((t) => ({ ...t, status })),
@@ -348,7 +378,13 @@ describe('OS 알림 문구 (D81)', () => {
 })
 
 describe('[변경]의 범위 (D83: 이 task의 diff)', () => {
-  const base = createWork({ workId: 'w', baseBranch: 'main', baseCommit: 'c0', at: 'x' }).work
+  const base = createWork({
+    type: 'bugfix',
+    workId: 'w',
+    baseBranch: 'main',
+    baseCommit: 'c0',
+    at: 'x',
+  }).work
   const first = base.tasks[0] as TaskRecord
   const task = (seq: number, node: NodeName, extra: Partial<TaskRecord> = {}): TaskRecord => ({
     ...first,
@@ -462,12 +498,15 @@ describe('강조 영역 (D83, 시나리오 4-2)', () => {
   const ERR: FormatIssue = { file: 'handoff.md', part: 'body', message: '`## 요약` 절 없음' }
 
   it('사람이 봐야 할 것이 없으면 비어 있다', () => {
-    expect(emphasis({ node: 'fix', handoff: HANDOFF, errors: [], uncommitted: [] })).toEqual([])
+    expect(
+      emphasis({ node: 'fix', type: 'bugfix', handoff: HANDOFF, errors: [], uncommitted: [] }),
+    ).toEqual([])
   })
 
   it('intent_deviation, 열린 질문, 이전 단계 추천, 커밋 안 된 변경, 형식 오류를 순서대로 모은다', () => {
     const items = emphasis({
       node: 'verify',
+      type: 'bugfix',
       handoff: {
         ...HANDOFF,
         intent_deviation: { summary: '범위를 넘음', evidence: 'refresh.ts도 바뀜' },
@@ -501,6 +540,7 @@ describe('강조 영역 (D83, 시나리오 4-2)', () => {
     // 세션이 없으면(앱이 꺼져 끝난 세션 등) 터미널이 읽기 전용이라 [세션 재개]를 먼저 누르라고 한다
     const ended = emphasis({
       node: 'intake',
+      type: 'bugfix',
       handoff: { ...HANDOFF, open_questions: ['운영 TZ는?'] },
       errors: [],
       uncommitted: [],
@@ -515,6 +555,7 @@ describe('강조 영역 (D83, 시나리오 4-2)', () => {
     expect(
       emphasis({
         node: 'fix',
+        type: 'bugfix',
         handoff: { ...HANDOFF, recommended_next: { node: 'verify', reason: '다음' } },
         errors: [],
         uncommitted: [],
@@ -522,6 +563,7 @@ describe('강조 영역 (D83, 시나리오 4-2)', () => {
     ).toEqual([])
     const blocked = emphasis({
       node: 'fix',
+      type: 'bugfix',
       handoff: { ...HANDOFF, status: 'blocked', blocked_reason: '운영 로그가 없음' },
       errors: [],
       uncommitted: [],
@@ -561,6 +603,50 @@ describe('강조 영역 (D83, 시나리오 4-2)', () => {
       stageLead('intake', { 'intent.draft.md': '---\ntype: bugfix\n---\n본문만\n' }),
     ).toBeNull()
     expect(stageLead('intake', {})).toBeNull()
+  })
+
+  it('[요약] 맨 위: 설계와 계획은 design.md의 유저 시나리오와 요구사항, 구현은 implement.md의 계획과 달라진 점이다 (D223, D256)', () => {
+    const design = [
+      '## 유저 시나리오',
+      '1. 개발자가 중앙값을 구한다',
+      '',
+      '## 요구사항',
+      '### 기능',
+      '- F1. 빈 배열이면 0',
+      '### 비기능',
+      '없음',
+      '',
+      '## 접근',
+      '- 방식: 정렬',
+      '',
+    ].join('\n')
+    expect(stageLead('design', { 'design.md': design })).toEqual({
+      title: '설계',
+      sections: [
+        { title: '유저 시나리오', text: '1. 개발자가 중앙값을 구한다' },
+        { title: '요구사항', text: '### 기능\n- F1. 빈 배열이면 0\n### 비기능\n없음' },
+      ],
+    })
+    const implement = '## 변경 요약\n- x\n\n## 계획과 달라진 점\n없음\n\n## 새 동작 테스트\n'
+    expect(stageLead('implement', { 'implement.md': implement })).toEqual({
+      title: '구현',
+      sections: [{ title: '계획과 달라진 점', text: '없음' }],
+    })
+    expect(stageLead('design', {})).toBeNull()
+    expect(stageLead('implement', { 'design.md': design })).toBeNull()
+  })
+
+  it('강조 영역의 이전 단계 추천은 그 Work 유형으로 가린다 (D23)', () => {
+    const rec = { ...HANDOFF, recommended_next: { node: 'design' as const, reason: '설계' } }
+    const back = emphasis({
+      node: 'implement',
+      type: 'feature',
+      handoff: rec,
+      errors: [],
+      uncommitted: [],
+    })
+    expect(back.map((e) => e.kind)).toEqual(['recommended_back'])
+    expect(back[0]?.lines[0]).toBe('설계와 계획(design)로 — 설계')
   })
 
   it('[요약] 맨 위: 원인 분석과 수정은 fix.md의 원인 절이다. 절이나 파일이 없으면 없다 (D223, D228)', () => {

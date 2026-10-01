@@ -902,8 +902,13 @@ describe('PR 패널: 엔진별 자동 승인', () => {
       error: null,
     }
     expect(prView(input)?.auto.approve).toBe(false)
-    const base = createWork({ workId: 'w', baseBranch: 'main', baseCommit: H1, at: 'T' }).work
-      .tasks[0]
+    const base = createWork({
+      type: 'bugfix',
+      workId: 'w',
+      baseBranch: 'main',
+      baseCommit: H1,
+      at: 'T',
+    }).work.tasks[0]
     if (!base) throw new Error('task 없음')
     const active = {
       ...base,
