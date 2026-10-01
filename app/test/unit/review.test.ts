@@ -552,15 +552,14 @@ describe('강조 영역 (D83, 시나리오 4-2)', () => {
         { title: '완료조건', text: '- [ ] avg([])가 0이다' },
       ],
     })
-    // 머리글을 읽지 못하거나 절이 없어도 읽은 만큼 보인다. 절이 하나도 없어도 제목은 보인다. 초안이 없으면 없다
+    // 머리글을 읽지 못하거나 절이 빠져도 읽은 만큼 보인다. 보일 절이 하나도 없거나 초안이 없으면 다른 단계처럼 없다
     expect(stageLead('intake', { 'intent.draft.md': '## 목표\n무엇\n' })).toEqual({
       title: '의도 초안',
       sections: [{ title: '목표', text: '무엇' }],
     })
-    expect(stageLead('intake', { 'intent.draft.md': '---\ntype: bugfix\n---\n본문만\n' })).toEqual({
-      title: '의도 초안',
-      sections: [],
-    })
+    expect(
+      stageLead('intake', { 'intent.draft.md': '---\ntype: bugfix\n---\n본문만\n' }),
+    ).toBeNull()
     expect(stageLead('intake', {})).toBeNull()
   })
 

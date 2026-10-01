@@ -10,6 +10,7 @@
 // rewind.test.ts의 rewind-intake와 rewind-fix, deliver.test.ts의 deliver, restart.test.ts의 restart,
 // auto.test.ts의 auto).
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { taskDirName } from '../../src/core/machine'
@@ -18,7 +19,7 @@ import { drive, type DriveResult } from '../flow/driver'
 import { APP, FAKE_CLAUDE, git, harness, makeRepo, register, settle } from '../flow/harness'
 import { scenario, verifyApplied } from '../flow/scenarios'
 import { M_CASE, S_CASE, type RealCase } from './repos'
-import { judgeReview, type ReviewCheck } from './review'
+import { judgeReview, questionTexts, transcriptQuestions, type ReviewCheck } from './review'
 import { ScreenUi } from './screen'
 
 const mode = process.env['RELAY_REAL_CLAUDE']
@@ -84,6 +85,8 @@ async function runCaseOnce(c: RealCase): Promise<CaseResult> {
     const workId = created.workKey.split('/')[1] ?? ''
     workDir = path.join(h.home, 'projects', projectId, 'works', workId)
     const tree = path.join(h.home, 'projects', projectId, 'worktrees', workId)
+    // verify를 승인하는 때의 HEAD. 리뷰 판정은 verify가 만든 커밋만 센다 (승인 뒤 전달 등의 커밋은 뺀다)
+    let verifyHead: string | null = null
     const result = await drive(h.relay, ui, created.workKey, {
       force: true,
       nudge: NUDGE,
@@ -91,6 +94,9 @@ async function runCaseOnce(c: RealCase): Promise<CaseResult> {
       stepTimeoutMs: TASK_TIMEOUT_MS,
       tick: async (task) => {
         if (task.status !== 'asking') await ui.handleDialogs(h.relay, task.terminal)
+      },
+      beforeApprove: (task) => {
+        if (task.node === 'verify') verifyHead = git(tree, 'rev-parse', 'HEAD')
       },
     })
     await settle(h, created.workKey)
@@ -100,7 +106,9 @@ async function runCaseOnce(c: RealCase): Promise<CaseResult> {
       result,
       claudeVersion: work.tasks[0]?.claude_version ?? null,
       dialogs: ui.dialogs.map((d) => `${d.name}: ${d.action}`),
-      review: reviewOf(work, workDir, tree, result),
+      review: reviewOf(work, workDir, tree, verifyHead, (sessionId) =>
+        dry ? fakeQuestions(h.records(), sessionId) : transcriptQuestions(CONFIG_DIR, sessionId),
+      ),
     }
   } finally {
     // Work 디렉터리(context.md, handoff, 산출물, pty.log, work.json 등)를 결과로 남긴다
@@ -114,19 +122,35 @@ async function runCaseOnce(c: RealCase): Promise<CaseResult> {
   }
 }
 
+/** 실제 claude의 설정 폴더. 세션 기록(질문)을 여기서 읽는다 */
+const CONFIG_DIR = process.env['CLAUDE_CONFIG_DIR'] ?? path.join(os.homedir(), '.claude')
+
+/** 가짜 claude(dry)가 이 세션에서 보낸 AskUserQuestion의 질문들. 가짜 claude의 기록에서 읽는다 */
+function fakeQuestions(records: Record<string, unknown>[], sessionId: string): string[] {
+  return records.flatMap((r) => {
+    const body = r['body'] as { tool_name?: string; tool_input?: unknown; session_id?: string }
+    return r['type'] === 'hook' &&
+      r['event'] === 'PreToolUse' &&
+      body.tool_name === 'AskUserQuestion' &&
+      body.session_id === sessionId
+      ? questionTexts(body.tool_input)
+      : []
+  })
+}
+
 /**
- * 리뷰의 판정 (5.6.6, D229): 승인된 verify의 verification.md(리뷰 지적)와 handoff, verify의 커밋과 바뀐 파일. verify는 마지막 단계라
- * 커밋은 verify의 시작 커밋부터 Work가 끝난 때의 HEAD까지다
+ * 리뷰의 판정 (5.6.6, D229): 승인된 verify의 verification.md(리뷰 지적)와 handoff, verify가 물은 질문, verify의 커밋과
+ * 바뀐 파일. 커밋은 verify의 시작 커밋부터 verify를 승인하는 때의 HEAD까지다
  */
 function reviewOf(
   work: WorkState,
   workDir: string,
   tree: string,
-  result: DriveResult,
+  head: string | null,
+  questions: (sessionId: string) => string[],
 ): ReviewCheck | null {
   const task = work.tasks.findLast((t) => t.node === 'verify' && t.status === 'approved')
-  if (!task?.start_commit) return null
-  const head = git(tree, 'rev-parse', 'HEAD')
+  if (!task?.start_commit || !head) return null
   const dir = path.join(workDir, 'tasks', taskDirName(task))
   const readIn = (name: string) => {
     const file = path.join(dir, name)
@@ -137,7 +161,7 @@ function reviewOf(
   return judgeReview({
     reviewMd: readIn('verification.md'),
     handoff: readIn('handoff.md'),
-    answers: result.tasks.find((t) => t.taskId === task.id)?.answers ?? 0,
+    questions: task.session ? questions(task.session.id) : [],
     commits: log(task.start_commit, head),
     files: lines(git(tree, 'diff', '--name-only', `${task.start_commit}..${head}`)),
   })
@@ -183,7 +207,7 @@ function summary(): string {
   return lines.join('\n')
 }
 
-/** 리뷰와 검증(M8)의 리뷰 결과: 지적, 질문 답, 반영, 커밋, 바뀐 파일, 사람 결정, 판정 */
+/** 리뷰와 검증(M8)의 리뷰 결과: 지적, 물은 질문, 반영, 커밋, 바뀐 파일, 사람 결정, 판정 */
 function reviewLines(r: ReviewCheck | null): string[] {
   if (!r) return ['### 리뷰', '', '- 리뷰와 검증을 승인하지 못함', '']
   const quote = (text: string | null) => (text ?? '(절 없음)').split('\n').map((l) => `  > ${l}`)
@@ -191,7 +215,7 @@ function reviewLines(r: ReviewCheck | null): string[] {
     '### 리뷰 (M8, D229)',
     '',
     `- 판정: ${r.problems.length ? `어긋남 — ${r.problems.join('; ')}` : '통과'}`,
-    `- 질문 답: ${r.answers}번`,
+    `- 물은 질문: ${r.questions.length ? r.questions.map((q) => q.replace(/\s*\n\s*/g, ' ')).join(' | ') : '없음'}`,
     '- 지적:',
     ...(r.findings.length ? r.findings.map((f) => `  - ${f}`) : ['  - 없음']),
     '- 반영 절:',

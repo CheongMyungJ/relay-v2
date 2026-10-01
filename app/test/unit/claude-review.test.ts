@@ -1,7 +1,16 @@
 // [실제]의 리뷰 판정 도구(test/claude/review.ts)의 [단위]. 판정이 흔한 표기를 잘못 읽으면 올바른 리뷰도
 // 어긋남이 되어, 비용이 큰 [실제] M·S 경우가 잘못 실패한다 (PR #13 리뷰).
 import { describe, expect, it } from 'vitest'
-import { findings, judgeReview, numbers } from '../claude/review'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import {
+  findings,
+  judgeReview,
+  numbers,
+  questionTexts,
+  transcriptQuestions,
+} from '../claude/review'
 
 describe('[실제] 리뷰 판정: 반영 절과 반영하지 않은 지적 절의 번호', () => {
   it.each([
@@ -75,7 +84,9 @@ describe('[실제] 리뷰와 검증의 리뷰 판정 (D229)', () => {
   const base = {
     reviewMd,
     handoff,
-    answers: 1,
+    questions: [
+      '반영할 지적 / 리뷰 지적 중 어떤 것을 반영할까요? / 차단·권장만 반영 / 모두 반영 / 반영하지 않음',
+    ],
     commits: ['refactor: a 지움'],
     files: ['a.js'],
   }
@@ -91,6 +102,62 @@ describe('[실제] 리뷰와 검증의 리뷰 판정 (D229)', () => {
   })
 
   it('지적이 있는데 묻지 않았으면 어긋남이다 (D229)', () => {
-    expect(judgeReview({ ...base, answers: 0 }).problems).toContain('반영할 지적을 묻지 않음')
+    expect(judgeReview({ ...base, questions: [] }).problems).toContain('반영할 지적을 묻지 않음')
+  })
+
+  it('다른 질문(테스트 약화 등)만 물었으면 반영할 지적을 묻지 않은 것이다 (D229)', () => {
+    const other = ['테스트 약화 / 이 테스트 수정이 테스트를 약하게 하나요? / 약화 아님 / 약화임']
+    expect(judgeReview({ ...base, questions: other }).problems).toContain('반영할 지적을 묻지 않음')
+    expect(judgeReview({ ...base, questions: [...other, ...base.questions] }).problems).toEqual([])
+  })
+})
+
+describe('[실제] 리뷰 판정: verify가 물은 질문 (D229)', () => {
+  const input = {
+    questions: [
+      {
+        header: '반영할 지적',
+        question: '리뷰 지적 중 어떤 것을 반영할까요?\n1. [사소] a.js:3 — 지운다',
+        options: [{ label: '반영하지 않음 (추천)' }, { label: '모두 반영' }],
+      },
+    ],
+  }
+
+  it('도구 입력의 질문마다 머리, 질문, 선택지 이름을 한 줄로 모은다', () => {
+    expect(questionTexts(input)).toEqual([
+      '반영할 지적 / 리뷰 지적 중 어떤 것을 반영할까요?\n1. [사소] a.js:3 — 지운다 / 반영하지 않음 (추천) / 모두 반영',
+    ])
+    expect(questionTexts(null)).toEqual([])
+    expect(questionTexts({ questions: 'x' })).toEqual([])
+  })
+
+  it('실제 claude의 세션 기록에서 AskUserQuestion의 질문을 읽는다. 기록이 없으면 빈 목록이다', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'relay-review-'))
+    try {
+      const project = path.join(dir, 'projects', '-tmp-repo')
+      fs.mkdirSync(project, { recursive: true })
+      const lines = [
+        { type: 'user', message: { content: 'AskUserQuestion이라는 글자만 있음' } },
+        {
+          type: 'assistant',
+          message: {
+            content: [
+              { type: 'text', text: '묻습니다' },
+              { type: 'tool_use', name: 'AskUserQuestion', input },
+            ],
+          },
+        },
+        '깨진 줄 AskUserQuestion',
+      ]
+      fs.writeFileSync(
+        path.join(project, 'sess-1.jsonl'),
+        lines.map((l) => (typeof l === 'string' ? l : JSON.stringify(l))).join('\n'),
+      )
+      expect(transcriptQuestions(dir, 'sess-1')).toEqual(questionTexts(input))
+      expect(transcriptQuestions(dir, 'sess-2')).toEqual([])
+      expect(transcriptQuestions(path.join(dir, 'none'), 'sess-1')).toEqual([])
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

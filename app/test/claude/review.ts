@@ -3,6 +3,8 @@
 // 답한다. Work가 끝나면 verify가 물었는지, 고른 지적만 고쳐 커밋했는지, 반영 절과 반영하지 않은 지적 절이 지적을
 // 빠짐없이 나눴는지를 산출물, handoff, git으로 본다. 고친 내용이 지적과 맞는지는 결과에 남긴 지적과 커밋, 바뀐 파일,
 // 대화 기록(pty.log)으로 사람이 본다.
+import fs from 'node:fs'
+import path from 'node:path'
 import { parseFrontMatter, sectionText } from '../../src/core/validate'
 
 /**
@@ -47,17 +49,66 @@ export function numbers(section: string | null): number[] {
   return [...out].sort((a, b) => a - b)
 }
 
+/**
+ * AskUserQuestion의 질문 하나를 한 줄로: 머리, 질문, 선택지 이름. 판정이 읽는 글이다.
+ * 입력은 도구 입력(`{questions: [{header, question, options: [{label}]}]}`)이다
+ */
+export function questionTexts(input: unknown): string[] {
+  const qs = (input as { questions?: unknown } | null)?.questions
+  if (!Array.isArray(qs)) return []
+  return qs.map((q: unknown) => {
+    const r = (q ?? {}) as { header?: unknown; question?: unknown; options?: unknown }
+    const labels = Array.isArray(r.options)
+      ? r.options.map((o: unknown) => String((o as { label?: unknown } | null)?.label ?? ''))
+      : []
+    return [r.header, r.question, ...labels].filter((x) => typeof x === 'string' && x).join(' / ')
+  })
+}
+
+/**
+ * 실제 claude가 세션 기록(`<설정 폴더>/projects/<프로젝트>/<세션 id>.jsonl`)에 남긴 AskUserQuestion의 질문들.
+ * 기록을 찾지 못하면 빈 목록이다
+ */
+export function transcriptQuestions(configDir: string, sessionId: string): string[] {
+  const root = path.join(configDir, 'projects')
+  if (!fs.existsSync(root)) return []
+  const file = fs
+    .readdirSync(root)
+    .map((d) => path.join(root, d, `${sessionId}.jsonl`))
+    .find((f) => fs.existsSync(f))
+  if (!file) return []
+  const out: string[] = []
+  for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+    if (!line.includes('AskUserQuestion')) continue
+    let entry: { message?: { content?: unknown } }
+    try {
+      entry = JSON.parse(line) as typeof entry
+    } catch {
+      continue
+    }
+    const content = entry.message?.content
+    if (!Array.isArray(content)) continue
+    for (const c of content as { type?: string; name?: string; input?: unknown }[]) {
+      if (c.type === 'tool_use' && c.name === 'AskUserQuestion') out.push(...questionTexts(c.input))
+    }
+  }
+  return out
+}
+
+/** 반영할 지적을 묻는 질문인가 (D229). 스킬은 선택지를 "…반영" / "반영하지 않음"으로 준다 */
+export const asksFindings = (question: string): boolean => /반영/.test(question)
+
 export interface ReviewCheck {
   /** verification.md의 리뷰 지적 */
   findings: string[]
-  /** verify에서 사람 역할이 질문에 답한 횟수 */
-  answers: number
+  /** verify가 물은 질문 (머리, 질문, 선택지 이름) */
+  questions: string[]
   /** 반영 절과 반영하지 않은 지적 절 */
   applied: string | null
   notApplied: string | null
-  /** verify가 만든 커밋의 제목 (verify의 시작 커밋 → Work가 끝난 때의 HEAD) */
+  /** verify가 만든 커밋의 제목 (verify의 시작 커밋 → verify를 승인한 때의 HEAD) */
   commits: string[]
-  /** verify가 바꾼 파일 (verify의 시작 커밋 → Work가 끝난 때의 HEAD) */
+  /** verify가 바꾼 파일 (verify의 시작 커밋 → verify를 승인한 때의 HEAD) */
   files: string[]
   /** handoff의 사람 결정 (by: human) */
   humanDecisions: string[]
@@ -76,7 +127,8 @@ const same = (a: readonly number[], b: readonly number[]) =>
 export function judgeReview(input: {
   reviewMd: string
   handoff: string
-  answers: number
+  /** verify가 물은 질문들 (questionTexts) */
+  questions: string[]
   commits: string[]
   files: string[]
 }): ReviewCheck {
@@ -106,7 +158,8 @@ export function judgeReview(input: {
       )
     )
       problems.push(`지적 번호가 1부터 차례가 아님: ${all.join(', ')}`)
-    if (input.answers === 0) problems.push('반영할 지적을 묻지 않음')
+    // 다른 질문(테스트 약화 등)만 물었으면 반영할 지적을 묻지 않은 것이다
+    if (!input.questions.some(asksFindings)) problems.push('반영할 지적을 묻지 않음')
     const got = numbers(applied)
     const rest = numbers(notApplied)
     const covered = [...new Set([...got, ...rest])].sort((a, b) => a - b)
@@ -129,7 +182,7 @@ export function judgeReview(input: {
   }
   return {
     findings: list.map((f) => `${f.n}. ${f.text}`),
-    answers: input.answers,
+    questions: input.questions,
     applied,
     notApplied,
     commits: input.commits,

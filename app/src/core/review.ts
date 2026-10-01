@@ -358,30 +358,37 @@ export function hasVisibleText(data: string): boolean {
 /* eslint-enable no-control-regex */
 
 /**
+ * [요약] 탭 맨 위에 둘 단계의 핵심 (D223): 읽을 파일, 제목, 모을 절. intent 초안은 머리글을 빼고 본문에서 찾는다.
+ * 여기 없는 단계는 핵심이 없다
+ */
+const LEAD: Partial<
+  Record<TaskNode, { file: string; title: string; sections: string[]; frontMatter?: true }>
+> = {
+  intake: {
+    file: INTENT_DRAFT_FILE,
+    title: '의도 초안',
+    sections: ['목표', '비목표', '완료조건'],
+    frontMatter: true,
+  },
+  fix: { file: FIX_FILE, title: '원인', sections: ['원인'] },
+  verify: { file: VERIFICATION_FILE, title: '리뷰 지적', sections: ['리뷰 지적', '반영'] },
+}
+
+/**
  * [요약] 탭 맨 위에 둘 이 단계의 핵심 (D223). 의도 정리는 intent 초안의 목표·비목표·완료조건을, 원인 분석과 수정은
- * fix.md의 `## 원인`을, 리뷰와 검증은 verification.md의 `## 리뷰 지적`과 `## 반영`을 보인다(D229). 파일이 없거나 절을 읽지
- * 못하면 그 부분은 뺀다. 다른 단계는 null이다
+ * fix.md의 `## 원인`을, 리뷰와 검증은 verification.md의 `## 리뷰 지적`과 `## 반영`을 보인다(D229). 없는 절은 빼고,
+ * 파일이 없거나 보일 절이 하나도 없으면 null이다. 다른 단계도 null이다
  */
 export function stageLead(
   node: TaskNode,
   files: Readonly<Record<string, string>>,
 ): StageLead | null {
-  if (node === 'intake') {
-    const text = files[INTENT_DRAFT_FILE]
-    if (text === undefined) return null
-    const sections = leadSections(parseFrontMatter(text).body, ['목표', '비목표', '완료조건'])
-    return { title: '의도 초안', sections }
-  }
-  const [file, title, names] =
-    node === 'fix'
-      ? [FIX_FILE, '원인', ['원인']]
-      : node === 'verify'
-        ? [VERIFICATION_FILE, '리뷰 지적', ['리뷰 지적', '반영']]
-        : [null, '', []]
-  const text = file === null ? undefined : files[file]
-  if (text === undefined) return null
-  const sections = leadSections(normalizeText(text), names)
-  return sections.length ? { title, sections } : null
+  const lead = LEAD[node]
+  const text = lead ? files[lead.file] : undefined
+  if (!lead || text === undefined) return null
+  const body = lead.frontMatter ? parseFrontMatter(text).body : normalizeText(text)
+  const sections = leadSections(body, lead.sections)
+  return sections.length ? { title: lead.title, sections } : null
 }
 
 /** body에서 names 절을 차례로 모은다. 없는 절은 뺀다 */

@@ -23,6 +23,8 @@ export interface DriveOptions {
    * 승인 대기에서 단계 선택을 하는 시험(M4)이 쓴다
    */
   pauseAt?: (task: TaskView) => boolean
+  /** [승인]을 누르기 바로 전에 부른다. 승인하는 때의 코드(HEAD)를 남기는 데 쓴다 ([실제] 리뷰 판정) */
+  beforeApprove?: (task: TaskView) => unknown
   /**
    * 자동 승인 카운트다운(4.3) 중인 task는 [승인]하지 않고 카운트다운이 끝나기를 기다린다. 카운트다운이 승인 없이
    * 멈추면 사람처럼 [승인]한다
@@ -199,6 +201,7 @@ export async function drive(
           const { gate } = review
           if (gate.approve || (gate.force && o.force)) {
             const forced = !gate.approve
+            await o.beforeApprove?.(task)
             const r = await relay.approve(workKey, task.id, forced ? { force: true } : {})
             if (!r.ok) {
               // 누른 사이에 파일이 바뀌었을 수 있다. 다음 상태를 다시 본다
