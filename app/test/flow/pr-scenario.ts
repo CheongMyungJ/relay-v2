@@ -133,9 +133,7 @@ export function prClaude(files: Record<string, string>, title: string): Scenario
   ]
   const verify: Step[] = [
     { do: 'prompt' },
-    ...steps('verify').filter(
-      (s) => s.do === 'write' && (s.file === 'review.md' || s.file === 'verification.md'),
-    ),
+    ...steps('verify').filter((s) => s.do === 'write' && s.file === 'verification.md'),
     { do: 'write', file: 'pr.md', text: `# ${title}\n\n## 요약\nrelay M9 시험 PR입니다.\n` },
     { do: 'write', file: 'handoff.md', text: handoff({ summary: '완료조건을 모두 통과했다.' }) },
     { do: 'stop' },

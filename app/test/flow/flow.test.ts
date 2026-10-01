@@ -20,7 +20,7 @@ import {
   REVIEW,
   REVIEW_APPLIED_TEXT,
   REVIEW_FINDINGS,
-  REVIEW_NONE,
+  VERDICTS,
   VERIFICATION,
   fixAsking,
   handoff,
@@ -196,15 +196,16 @@ describe('[흐름] 최소 흐름 (M2)', () => {
       }
       expect(read(path.join(task(dir), 'pty.log'))).toContain('FAKE-CLAUDE READY')
     }
-    // 단계마다의 필수 산출물 (3.1): fix는 fix.md, verify는 review.md, verification.md, pr.md
+    // 단계마다의 필수 산출물 (3.1): fix는 fix.md, verify는 verification.md, pr.md. review.md는 없다 (D229)
     for (const [dir, files] of [
       ['01-intake', ['intent.draft.md']],
       ['02-fix', ['fix.md']],
-      ['03-verify', ['review.md', 'verification.md', 'pr.md']],
+      ['03-verify', ['verification.md', 'pr.md']],
     ] as const) {
       for (const f of files)
         expect(fs.existsSync(path.join(task(dir), f)), `${dir}/${f}`).toBe(true)
     }
+    expect(fs.existsSync(path.join(task('03-verify'), 'review.md'))).toBe(false)
     expect(read(path.join(s.workDir, 'request.md'))).toBe(REQUEST)
 
     // context.md (시나리오 2-4): verify는 intent, 결정 로그, 기각 목록, 직전 handoff, 산출물 경로를 받는다
@@ -339,7 +340,9 @@ describe('[흐름] 최소 흐름 (M2)', () => {
         ],
         // 지적을 썼지만 사람이 반영하지 않기로 골랐다
         verify: steps('verify').map((st) =>
-          st.do === 'write' && st.file === 'review.md' ? { ...st, text: REVIEW } : st,
+          st.do === 'write' && st.file === 'verification.md'
+            ? { ...st, text: REVIEW + VERDICTS }
+            : st,
         ),
       }),
     )
@@ -376,14 +379,14 @@ describe('[흐름] 최소 흐름 (M2)', () => {
       sections: [{ title: '원인', text: FIX_CAUSE }],
     })
 
-    // 리뷰와 검증: review.md의 지적과 반영
+    // 리뷰와 검증: verification.md의 리뷰 지적과 반영
     expect((await pause('verify')).status).toBe('paused')
     const verifyTask = ui.works.get(s.workKey)?.tasks.find((t) => t.node === 'verify')
     const verifyView = await s.h.relay.review(s.workKey, verifyTask?.id ?? '')
     expect(verifyView?.lead).toEqual({
       title: '리뷰 지적',
       sections: [
-        { title: '지적', text: REVIEW_FINDINGS },
+        { title: '리뷰 지적', text: REVIEW_FINDINGS },
         { title: '반영', text: '없음' },
       ],
     })
@@ -433,16 +436,13 @@ describe('[흐름] 최소 흐름 (M2)', () => {
     expect(verifyView?.diff).not.toContain('+  if (xs.length === 0) return 0')
     expect(verifyView?.completion?.diff).toContain('+  // 빈 배열의 평균은 0으로 정했다')
     expect(verifyView?.completion?.diff).toContain('+  if (xs.length === 0) return 0')
-    // 산출물 셋과 [요약]의 지적과 반영
-    expect(verifyView?.artifacts.map((a) => a.name).sort()).toEqual([
-      'pr.md',
-      'review.md',
-      'verification.md',
-    ])
+    // 산출물 둘과 [요약]의 지적과 반영. 리뷰 지적은 verification.md에 있다 (D229)
+    expect(verifyView?.artifacts.map((a) => a.name).sort()).toEqual(['pr.md', 'verification.md'])
+    expect(verifyView?.completion?.verdicts.map((v) => v.verdict)).toEqual(['통과', '통과', '통과'])
     expect(verifyView?.lead).toEqual({
       title: '리뷰 지적',
       sections: [
-        { title: '지적', text: REVIEW_FINDINGS },
+        { title: '리뷰 지적', text: REVIEW_FINDINGS },
         { title: '반영', text: REVIEW_APPLIED_TEXT },
       ],
     })
@@ -492,15 +492,14 @@ describe('[흐름] 최소 흐름 (M2)', () => {
     expect(asks).toHaveLength(1)
   })
 
-  it('리뷰와 검증은 review.md, verification.md, pr.md가 모두 있어야 승인 대기가 된다 (3.1, D30)', async () => {
+  it('리뷰와 검증은 verification.md와 pr.md가 모두 있어야 승인 대기가 된다 (3.1, D30, D229)', async () => {
     const s = await start(
       scenario({
         verify: [
           { do: 'prompt' },
-          { do: 'write', file: 'verification.md', text: VERIFICATION },
           { do: 'write', file: 'pr.md', text: PR },
           { do: 'write', file: 'handoff.md', text: handoff() },
-          { do: 'stop', onBlock: [{ do: 'write', file: 'review.md', text: REVIEW_NONE }] },
+          { do: 'stop', onBlock: [{ do: 'write', file: 'verification.md', text: VERIFICATION }] },
         ],
       }),
     )
@@ -515,9 +514,8 @@ describe('[흐름] 최소 흐름 (M2)', () => {
       .filter((r) => r?.decision === 'block')
     expect(blocked).toHaveLength(1)
     expect(blocked[0]?.reason).toContain(
-      '- review.md: `review.md` 없음: `status: awaiting_approval`일 때 필수 산출물',
+      '- verification.md: `verification.md` 없음: `status: awaiting_approval`일 때 필수 산출물',
     )
-    expect(blocked[0]?.reason).not.toContain('verification.md')
     expect(blocked[0]?.reason).not.toContain('pr.md')
   })
 

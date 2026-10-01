@@ -188,10 +188,11 @@ describe('[어댑터] 스킬 배포와 claude 실행 (5.6.3, D103, D105, D108)',
     const at = order.map((h) => text.indexOf(`\n${h}`))
     expect(at.every((i) => i > 0)).toBe(true)
     expect([...at].sort((a, b) => a - b)).toEqual(at)
-    // 산출물 셋의 템플릿이 있다 (3.1)
-    for (const f of ['review.md', 'verification.md', 'pr.md']) {
+    // 산출물 둘의 템플릿이 있다. 리뷰 지적은 verification.md에 쓴다 (3.1, D229)
+    for (const f of ['verification.md', 'pr.md']) {
       expect(text).toContain(`## Artifact template: \`${f}\``)
     }
+    expect(text).not.toContain('`review.md`')
     expect(fs.readdirSync(path.join(workDir, '.claude', 'skills'))).toEqual(['relay-verify'])
   })
 

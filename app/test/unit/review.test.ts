@@ -583,27 +583,30 @@ describe('강조 영역 (D83, 시나리오 4-2)', () => {
     expect(stageLead('fix', { 'fix.md': '## 재현\n됨\n' })).toBeNull()
     expect(stageLead('fix', {})).toBeNull()
     // 다른 단계의 파일은 보지 않는다
-    expect(stageLead('fix', { 'review.md': '## 지적\n1. x\n' })).toBeNull()
+    expect(stageLead('fix', { 'verification.md': '## 리뷰 지적\n1. x\n' })).toBeNull()
   })
 
-  it('[요약] 맨 위: 리뷰와 검증은 review.md의 지적과 반영 절이다. 다른 단계는 없다 (D223, D229)', () => {
-    const review = '## 지적\r\n1. [권장] src/avg.js:2 — 주석\r\n\r\n## 반영\r\n없음\r\n'
-    expect(stageLead('verify', { 'review.md': review })).toEqual({
+  it('[요약] 맨 위: 리뷰와 검증은 verification.md의 리뷰 지적과 반영 절이다. 다른 단계는 없다 (D223, D229)', () => {
+    const review =
+      '## 리뷰 지적\r\n1. [권장] src/avg.js:2 — 주석\r\n\r\n## 반영\r\n없음\r\n\r\n## 완료조건 판정\r\n| a | 통과 | b |\r\n'
+    expect(stageLead('verify', { 'verification.md': review })).toEqual({
       title: '리뷰 지적',
       sections: [
-        { title: '지적', text: '1. [권장] src/avg.js:2 — 주석' },
+        { title: '리뷰 지적', text: '1. [권장] src/avg.js:2 — 주석' },
         { title: '반영', text: '없음' },
       ],
     })
     // 있는 절만 보인다
-    expect(stageLead('verify', { 'review.md': '## 지적\n없음\n' })).toEqual({
+    expect(stageLead('verify', { 'verification.md': '## 리뷰 지적\n없음\n' })).toEqual({
       title: '리뷰 지적',
-      sections: [{ title: '지적', text: '없음' }],
+      sections: [{ title: '리뷰 지적', text: '없음' }],
     })
-    expect(stageLead('verify', { 'review.md': '지적 절 없음' })).toBeNull()
+    expect(stageLead('verify', { 'verification.md': '## 완료조건 판정\n표\n' })).toBeNull()
+    // 옛 review.md는 읽지 않는다
+    expect(stageLead('verify', { 'review.md': '## 리뷰 지적\n1. x\n' })).toBeNull()
     expect(stageLead('verify', {})).toBeNull()
     expect(stageLead('verify', { 'fix.md': '## 원인\nx\n' })).toBeNull()
-    const both = { 'review.md': review, 'fix.md': '## 원인\nx\n' }
+    const both = { 'verification.md': review, 'fix.md': '## 원인\nx\n' }
     expect(stageLead('respond', both)).toBeNull()
     expect(stageLead('intake', both)).toBeNull()
   })

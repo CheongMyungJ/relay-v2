@@ -21,8 +21,8 @@ export const RESPONSE_FILE = 'response.md'
 export const REPLIES_FILE = 'replies.md'
 /** 원인 분석과 수정의 산출물 (5.6.5, D228) */
 export const FIX_FILE = 'fix.md'
-/** 리뷰와 검증의 리뷰 산출물 (5.6.6, D229) */
-export const REVIEW_FILE = 'review.md'
+/** 리뷰와 검증의 산출물: 리뷰 지적과 완료조건 판정 (5.6.6, D229) */
+export const VERIFICATION_FILE = 'verification.md'
 
 /** 본문 필수 절 (5.2.1) */
 export const HANDOFF_SECTIONS = ['요약', '다음 task가 알아야 할 것'] as const

@@ -261,6 +261,7 @@ const spec = {
     ['5.6.6', '입력: context.md, fix.md', /`context\.md`[\s\S]*`fix\.md`/],
     ['D97', '리뷰 대상: 기준 커밋(context.md)부터 지금까지의 변경', /base commit \(from `context\.md`\) to now/],
     ['D229', '순서: 리뷰 → 지적 고르기 → 반영 → 검증 → pr.md', /Review\.[\s\S]*Pick findings[\s\S]*Apply[\s\S]*Verify[\s\S]*`pr\.md`/],
+    ['D229', '리뷰 지적은 verification.md에 쓴다(review.md 없음)', /`## 리뷰 지적` of `verification\.md`/],
     ['D164', '번호 붙인 지적(심각도, 파일과 줄, 문제와 제안), 없으면 없음', /numbered item[\s\S]*차단 \/ 권장 \/ 사소[\s\S]*file and line[\s\S]*"없음"/],
     ['D165', '반영 뒤 리뷰를 다시 돌리지 않음', /Do not review again/],
     ['5.6.6', '보는 것: 목표·비목표, 원인과 맞는지, 빠진 경우와 경계 조건, 테스트, 관례와 읽기 쉬움, 필요 없는 변경', /`목표` and `비목표`[\s\S]*cause in `fix\.md`[\s\S]*edge conditions[\s\S]*tests[\s\S]*conventions and readability[\s\S]*not needed/],
@@ -278,7 +279,7 @@ const spec = {
     ['5.6.6', '결정 지점: 고른 지적의 수정 방식, 판정', /How to fix a picked finding, and the verdict of each 완료조건/],
     ['D62', 'pr.md 첫 줄 # 제목', /first line is `# <PR title>`/],
     ['D101', 'pr.md 언어는 레포 관례, PR 템플릿 따르기', /language the repo uses[\s\S]*PR template/],
-    ['5.6.6', '완료조건: 세 절, 지적 반영, 판정, 테스트 파일, pr.md, 질문', /## Done when[\s\S]*three template sections[\s\S]*picked[\s\S]*verdict and evidence[\s\S]*test file is judged[\s\S]*`pr\.md` is written[\s\S]*`decisions`/],
+    ['5.6.6', '완료조건: 여섯 절, 지적 반영, 판정, 테스트 파일, pr.md, 질문', /## Done when[\s\S]*six template sections[\s\S]*picked[\s\S]*verdict and evidence[\s\S]*test file is judged[\s\S]*`pr\.md` is written[\s\S]*`decisions`/],
   ],
   'pr-respond': [
     ['D192', '입력: context.md(이번 라운드의 항목, 사람 지시, PR 정보, 앞 라운드 요약)와 파이프라인 산출물(경로)', /`context\.md`[\s\S]*this round's items, the human's instruction, the PR[\s\S]*summaries of earlier rounds[\s\S]*pipeline artifacts/],

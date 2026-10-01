@@ -15,7 +15,7 @@ import { NODE_INFO, WORK_COMPLETE, defaultNext, isPipelineNode, isPrevious } fro
 import {
   FIX_FILE,
   INTENT_DRAFT_FILE,
-  REVIEW_FILE,
+  VERIFICATION_FILE,
   normalizeText,
   parseFrontMatter,
   sectionText,
@@ -359,7 +359,7 @@ export function hasVisibleText(data: string): boolean {
 
 /**
  * [요약] 탭 맨 위에 둘 이 단계의 핵심 (D223). 의도 정리는 intent 초안의 목표·비목표·완료조건을, 원인 분석과 수정은
- * fix.md의 `## 원인`을, 리뷰와 검증은 review.md의 `## 지적`과 `## 반영`을 보인다(D229). 파일이 없거나 절을 읽지
+ * fix.md의 `## 원인`을, 리뷰와 검증은 verification.md의 `## 리뷰 지적`과 `## 반영`을 보인다(D229). 파일이 없거나 절을 읽지
  * 못하면 그 부분은 뺀다. 다른 단계는 null이다
  */
 export function stageLead(
@@ -376,7 +376,7 @@ export function stageLead(
     node === 'fix'
       ? [FIX_FILE, '원인', ['원인']]
       : node === 'verify'
-        ? [REVIEW_FILE, '리뷰 지적', ['지적', '반영']]
+        ? [VERIFICATION_FILE, '리뷰 지적', ['리뷰 지적', '반영']]
         : [null, '', []]
   const text = file === null ? undefined : files[file]
   if (text === undefined) return null

@@ -176,7 +176,8 @@ export const FIX_DOC = [
   '',
 ].join('\n')
 
-export const VERIFICATION = [
+/** verification.md의 판정 절들 (5.6.6): 완료조건 판정, 테스트 파일 변경, 남은 위험 */
+export const VERDICTS = [
   '## 완료조건 판정',
   '| 완료조건 | 판정 | 근거 |',
   '|---|---|---|',
@@ -192,15 +193,15 @@ export const VERIFICATION = [
   '',
 ].join('\n')
 
-/** review.md의 `## 지적` 절 본문 (5.6.6) */
+/** verification.md의 `## 리뷰 지적` 절 본문 (5.6.6) */
 export const REVIEW_FINDINGS = [
   '1. [권장] src/avg.js:2 — 빈 배열에 0을 돌려주는 까닭을 주석으로 남긴다',
   '2. [사소] test/avg.test.js:6 — 시험 이름을 "빈 배열은 0"으로 바꾼다',
 ].join('\n')
 
-/** review.md (5.6.6): 지적을 번호로 썼고 사람이 반영할 지적을 고르지 않았다 */
+/** verification.md의 리뷰 절들 (5.6.6, D229): 지적을 번호로 썼고 사람이 반영할 지적을 고르지 않았다 */
 export const REVIEW = [
-  '## 지적',
+  '## 리뷰 지적',
   REVIEW_FINDINGS,
   '',
   '## 반영',
@@ -212,9 +213,9 @@ export const REVIEW = [
   '',
 ].join('\n')
 
-/** 지적이 없는 review.md (5.6.6) */
+/** 지적이 없는 리뷰 절들 (5.6.6) */
 export const REVIEW_NONE = [
-  '## 지적',
+  '## 리뷰 지적',
   '없음',
   '',
   '## 반영',
@@ -225,12 +226,12 @@ export const REVIEW_NONE = [
   '',
 ].join('\n')
 
-/** review.md의 `## 반영` 절 본문: 사람이 1번만 반영하라고 고른 뒤 (5.6.6) */
+/** verification.md의 `## 반영` 절 본문: 사람이 1번만 반영하라고 고른 뒤 (5.6.6) */
 export const REVIEW_APPLIED_TEXT = '- 1 — 주석을 더했다, 커밋 "verify: 빈 배열 주석", npm test 통과'
 
-/** 사람이 질문에 답해 1번만 반영한 뒤의 review.md (5.6.6) */
+/** 사람이 질문에 답해 1번만 반영한 뒤의 리뷰 절들 (5.6.6) */
 export const REVIEW_APPLIED = [
-  '## 지적',
+  '## 리뷰 지적',
   REVIEW_FINDINGS,
   '',
   '## 반영',
@@ -240,6 +241,9 @@ export const REVIEW_APPLIED = [
   '- 2',
   '',
 ].join('\n')
+
+/** 지적이 없는 리뷰와 판정을 담은 verification.md (5.6.6, D229) */
+export const VERIFICATION = REVIEW_NONE + VERDICTS
 
 /** 리뷰와 검증이 사람이 고른 지적(1번)을 고친 코드 */
 export const REVIEWED_FILES = {
@@ -297,7 +301,6 @@ export function steps(node: NodeName): Step[] {
       // 리뷰에 지적이 없어 묻지 않고 판정한다 (5.6.6, D229)
       return [
         { do: 'prompt' },
-        { do: 'write', file: 'review.md', text: REVIEW_NONE },
         { do: 'write', file: 'verification.md', text: VERIFICATION },
         { do: 'write', file: 'pr.md', text: PR },
         {
@@ -346,11 +349,11 @@ export function fixAsking(): Step[] {
 export function verifyApplied(): Step[] {
   return [
     { do: 'prompt' },
-    { do: 'write', file: 'review.md', text: REVIEW },
+    // 리뷰 절을 먼저 써 두면 사람이 고르는 동안 [산출물]에서 지적을 본다
+    { do: 'write', file: 'verification.md', text: REVIEW },
     { do: 'ask', question: '반영할 지적' },
     { do: 'commit', files: REVIEWED_FILES, message: 'verify: 빈 배열 주석' },
-    { do: 'write', file: 'review.md', text: REVIEW_APPLIED },
-    { do: 'write', file: 'verification.md', text: VERIFICATION },
+    { do: 'write', file: 'verification.md', text: REVIEW_APPLIED + VERDICTS },
     { do: 'write', file: 'pr.md', text: PR },
     {
       do: 'write',

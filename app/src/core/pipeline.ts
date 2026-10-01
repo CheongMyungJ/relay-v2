@@ -39,7 +39,7 @@ export const NODE_INFO: Readonly<Record<TaskNode, NodeInfo>> = {
     node: 'verify',
     skill: 'verify',
     title: '리뷰와 검증',
-    artifacts: ['review.md', 'verification.md', 'pr.md'],
+    artifacts: ['verification.md', 'pr.md'],
   },
   // replies.md는 이번 라운드에 코멘트 항목이 있을 때만 필수다 (5.2, D190). core/validate가 본다
   respond: { node: 'respond', skill: 'pr-respond', title: 'PR 대응', artifacts: ['response.md'] },

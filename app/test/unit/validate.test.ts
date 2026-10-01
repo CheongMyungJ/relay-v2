@@ -307,7 +307,7 @@ describe('추가 검사: recommended_next.node가 선택 가능한 다음 단계
 })
 
 describe('추가 검사: 필수 산출물 (3.1, D30)', () => {
-  const VERIFY = { 'review.md': '', 'verification.md': '', 'pr.md': '# 제목\n' }
+  const VERIFY = { 'verification.md': '', 'pr.md': '# 제목\n' }
 
   it('통과: awaiting_approval이고 산출물이 있다', () => {
     expect(errorsOf(check('fix', { 'handoff.md': handoff(), 'fix.md': '' }))).toEqual([])
@@ -316,21 +316,21 @@ describe('추가 검사: 필수 산출물 (3.1, D30)', () => {
     const r = check('verify', {
       'handoff.md': handoff(),
       ...VERIFY,
-      'review.md': '## 지적\n1. [권장] src/a.js:2 — 주석을 단다\n\n## 반영\n1\n',
+      'verification.md': '## 리뷰 지적\n1. [권장] src/a.js:2 — 주석을 단다\n\n## 반영\n1\n',
     })
     expect(errorsOf(r)).toEqual([])
     expect(r).not.toHaveProperty('reviewFindings')
   })
 
-  it('실패: verify는 review.md, verification.md, pr.md가 모두 필수다 (D229)', () => {
+  it('실패: verify는 verification.md와 pr.md가 모두 필수다. review.md는 따로 없다 (D229)', () => {
     expect(check('verify', { 'handoff.md': handoff() }).errors).toEqual(
-      ['review.md', 'verification.md', 'pr.md'].map((file) => ({
+      ['verification.md', 'pr.md'].map((file) => ({
         file,
         part: 'file',
         message: `\`${file}\` 없음: \`status: awaiting_approval\`일 때 필수 산출물`,
       })),
     )
-    for (const file of ['review.md', 'verification.md', 'pr.md'] as const) {
+    for (const file of ['verification.md', 'pr.md'] as const) {
       const files = Object.fromEntries(
         Object.entries({ 'handoff.md': handoff(), ...VERIFY }).filter(([name]) => name !== file),
       )
@@ -426,7 +426,6 @@ describe('추가 검사: verify의 pr.md 첫 줄 (D62)', () => {
   it('verify에서만 검사한다', () => {
     const files = {
       'handoff.md': handoff(),
-      'review.md': '',
       'verification.md': '',
       'pr.md': '제목\n',
     }

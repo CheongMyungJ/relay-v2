@@ -25,7 +25,7 @@ describe('노드 (3.1)', () => {
     ).toEqual([
       ['intake', 'work-start', '의도 정리', ['intent.draft.md']],
       ['fix', 'fix', '원인 분석과 수정', ['fix.md']],
-      ['verify', 'verify', '리뷰와 검증', ['review.md', 'verification.md', 'pr.md']],
+      ['verify', 'verify', '리뷰와 검증', ['verification.md', 'pr.md']],
     ])
   })
 

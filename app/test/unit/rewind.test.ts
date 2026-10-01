@@ -374,7 +374,7 @@ describe('미리 보기 (D82)', () => {
   const facts = {
     commits: 2,
     uncommitted: [' M src/avg.js', '?? notes.txt'],
-    artifacts: { 't-02': ['fix.md'], 't-03': ['pr.md', 'review.md', 'verification.md'] },
+    artifacts: { 't-02': ['fix.md'], 't-03': ['pr.md', 'verification.md'] },
   }
 
   it('폐기될 산출물, 되돌릴 커밋 수와 커밋 안 된 변경, 백업 브랜치, 중단할 task', () => {
@@ -391,7 +391,7 @@ describe('미리 보기 (D82)', () => {
         {
           taskId: 't-03',
           label: '03 리뷰와 검증',
-          artifacts: ['pr.md', 'review.md', 'verification.md'],
+          artifacts: ['pr.md', 'verification.md'],
         },
       ],
       skipped: [],

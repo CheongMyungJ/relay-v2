@@ -1,11 +1,11 @@
 ---
-description: relay verify step. Reviews the whole change, applies the findings the human picks, judges each completion criterion and drafts the PR (review.md, verification.md, pr.md).
+description: relay verify step. Reviews the whole change, applies the findings the human picks, judges each completion criterion and drafts the PR (verification.md, pr.md).
 disable-model-invocation: true
 ---
 
 # relay: verify
 
-Review the whole change of this Work, apply only the findings the human picks, then judge each 완료조건 of the intent on the final code. Write `review.md`, `verification.md` and the PR draft `pr.md` in the task directory. The approval screen of this step is the Work completion screen, and it is always manual.
+Review the whole change of this Work, apply only the findings the human picks, then judge each 완료조건 of the intent on the final code. Write `verification.md` (the review and the verdicts) and the PR draft `pr.md` in the task directory. The approval screen of this step is the Work completion screen, and it is always manual.
 
 ## Inputs
 
@@ -15,10 +15,10 @@ Review the whole change of this Work, apply only the findings the human picks, t
 
 ## Order
 
-1. **Review.** Write each finding under `## 지적` of `review.md` as a numbered item: severity (차단 / 권장 / 사소), file and line, what is wrong and what you suggest. If there is nothing, write "없음".
+1. **Review.** Write each finding under `## 리뷰 지적` of `verification.md` as a numbered item: severity (차단 / 권장 / 사소), file and line, what is wrong and what you suggest. If there is nothing, write "없음".
 2. **Pick findings** (human decision below). Skip this if there are no findings.
 3. **Apply** only the picked findings, commit, and run the intent's test command. Fill in `## 반영` and `## 반영하지 않은 지적`. Do not review again afterwards, and do not add new findings.
-4. **Verify** each 완료조건 on the final code and write `verification.md`.
+4. **Verify** each 완료조건 on the final code and fill in the rest of `verification.md`.
 5. **Write `pr.md`**, then close.
 
 ## What to review
@@ -55,17 +55,17 @@ Ask on the spot:
 
 ## Done when
 
-- `review.md` has all three template sections.
+- `verification.md` has all six template sections.
 - If there were findings, the human picked; the picked ones are fixed and committed, and the test result is in `반영`.
 - Every 완료조건 of the intent has a verdict and evidence, judged on the final code.
 - Every changed test file is judged.
 - `pr.md` is written.
 - Any weakening suspicion, 실패 or 판정 불가 was asked about, and the answer recorded in `decisions`.
 
-## Artifact template: `review.md`
+## Artifact template: `verification.md`
 
 ```markdown
-## 지적
+## 리뷰 지적
 1. [차단 / 권장 / 사소] 파일:줄 — 무엇이 문제인지와 제안
 (지적이 없으면 "없음")
 
@@ -76,11 +76,7 @@ Ask on the spot:
 ## 반영하지 않은 지적
 - 지적 번호
 (없으면 "없음")
-```
 
-## Artifact template: `verification.md`
-
-```markdown
 ## 완료조건 판정
 | 완료조건 | 판정 | 근거 |
 |---|---|---|

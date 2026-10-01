@@ -24,8 +24,8 @@
 // M11: 같은 설정 화면에 PR 대응의 자동 승인과 "자동 대응 (PR 진행)" 절(대응 자동 시작, 자동 대응 라운드 상한)이 있고
 // 기본은 꺼짐, 3이다.
 // M8: 설정 화면에 리뷰와 검증의 질문 방식이 있고 자동 승인은 없다(늘 수동, D229) → 두 번째 Work는 원인 분석과 수정
-// 뒤 리뷰와 검증으로 간다. Work 완료 화면의 [요약] 맨 위에 리뷰 지적과 반영이, [산출물]에 review.md, verification.md,
-// pr.md가 보인다.
+// 뒤 리뷰와 검증으로 간다. Work 완료 화면의 [요약] 맨 위에 리뷰 지적과 반영이, [산출물]에 verification.md와 pr.md가
+// 보인다.
 // M6: 앱 종료 확인을 거쳐 앱을 끄고, 첫 Work의 work.json에 끊긴 되감기 기록을 넣고 decisions.md를 고친 뒤 다시
 // 켠다 → 첫 Work의 배지가 "끊긴 작업"이고, 패널 맨 위에 끊긴 곳과 [다시 시도]·[무시], 바뀐 파일과 [확인]이
 // 보인다. 끊긴 동안 [단계 선택]은 없다 → [확인]하면 파일 알림이 닫히고, [다시 시도]하면 앞 task를 폐기하고
@@ -39,6 +39,7 @@ import {
   REPO_FILES,
   REQUEST,
   REVIEW,
+  VERDICTS,
   handoff,
   intentDraft,
   scenario,
@@ -101,7 +102,11 @@ test.beforeAll(async () => {
     verify: [
       ...steps('verify')
         .slice(0, -2)
-        .map((st) => (st.do === 'write' && st.file === 'review.md' ? { ...st, text: REVIEW } : st)),
+        .map((st) =>
+          st.do === 'write' && st.file === 'verification.md'
+            ? { ...st, text: REVIEW + VERDICTS }
+            : st,
+        ),
       {
         do: 'write',
         file: 'handoff.md',
@@ -395,7 +400,7 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await expect(win.getByRole('button', { name: '완료만', exact: true })).toBeEnabled()
   await expect(win.locator('table.verdicts')).toContainText('재현 절차가 더 이상 실패하지 않는다')
   await win.screenshot({ path: 'test-results/completion.png' })
-  // 리뷰와 검증 (M8, D229): [요약] 맨 위에 리뷰 지적과 반영이 있다 (D223). 산출물은 셋이다
+  // 리뷰와 검증 (M8, D229): [요약] 맨 위에 리뷰 지적과 반영이 있다 (D223). 산출물은 둘이다
   await win.getByRole('tab', { name: '요약', exact: true }).click()
   const lead = win.locator('.review-body .lead')
   await expect(lead).toContainText('리뷰 지적')
@@ -403,9 +408,10 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await expect(lead).toContainText('반영')
   await expect(lead).not.toContainText('반영할 지적은 번호로')
   await win.getByRole('tab', { name: '산출물', exact: true }).click()
-  for (const f of ['review.md', 'verification.md', 'pr.md']) {
+  for (const f of ['verification.md', 'pr.md']) {
     await expect(win.locator('.review-body')).toContainText(f)
   }
+  await expect(win.locator('.review-body')).not.toContainText('review.md')
   await win.screenshot({ path: 'test-results/review.png' })
   await push.click()
   // 답하지 않은 열린 질문이 있어 전달 전에 한 번 확인받는다 (D222). 창의 [push]로 전달한다

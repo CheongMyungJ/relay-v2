@@ -762,13 +762,13 @@ app/src/
 - **파이프라인:** `core/pipeline`의 노드를 `intake, fix, verify`로 줄이고 크기별 경로(`steps`, `route`)를 지운다. `defaultNext`, `previousSteps`, `recommendableNodes`는 노드만 받는다. handoff 스키마의 `recommended_next.node`와 intent 초안 스키마(`size` 없음)를 맞춘다.
 - **크기(D227):** `Size` 타입, intent 머리글의 `size`, 의도 승인 화면의 size 고르기(`ApproveOptions.size`, `ReviewView.draftSize`·`gates` → `gate`), 단계 선택의 크기 제한을 지운다.
 - **fix(D228):** 스킬 `evidence`, `root-cause`, `investigate`와 합친 스킬 배포(`SKILL_PARTS`, `composeSkill`, `soloSkill`)를 지우고, `skills/fix/SKILL.md`가 재현·원인·수정을 한다. 화면 이름은 "원인 분석과 수정", [요약] 맨 위는 `fix.md`의 `## 원인`이다.
-- **verify(D229):** 스킬 `review`, `final-verify`를 `skills/verify/SKILL.md` 하나로 합친다. 필수 산출물은 `review.md`, `verification.md`, `pr.md`다. 반영할 지적은 세션 안에서 묻는다. 리뷰의 자동 승인(D213, `reviewFindings`, 까닭 `review_findings`)과 리뷰의 마무리 안내 문구를 지운다. [요약] 맨 위는 `review.md`의 `## 지적`과 `## 반영`이다.
+- **verify(D229):** 스킬 `review`, `final-verify`를 `skills/verify/SKILL.md` 하나로 합친다. 필수 산출물은 `verification.md`(리뷰 지적, 반영, 반영하지 않은 지적, 완료조건 판정, 테스트 파일 변경, 남은 위험)와 `pr.md`다. `review.md`는 따로 두지 않는다. 반영할 지적은 세션 안에서 묻는다. 리뷰의 자동 승인(D213, `reviewFindings`, 까닭 `review_findings`)과 리뷰의 마무리 안내 문구를 지운다. [요약] 맨 위는 `verification.md`의 `## 리뷰 지적`과 `## 반영`이다.
 - **설정:** `auto_approve`는 `fix`(기본 켬)와 `respond`, `question_mode`는 `work-start`, `fix`, `verify`, `pr-respond`다.
 - **평가 도구:** `app/eval/guides/relay.md`의 단계 설명을 바꾼다.
 
 **완료 기준**
 
-- [단위] 3노드의 기본 다음 단계와 이전 단계, `recommended_next` 검사, 단계 선택(모든 Work가 같은 단계), 자동 승인 대상과 기본값, 마무리 안내 문구, `stageLead`(fix, verify), verify의 필수 산출물 셋.
+- [단위] 3노드의 기본 다음 단계와 이전 단계, `recommended_next` 검사, 단계 선택(모든 Work가 같은 단계), 자동 승인 대상과 기본값, 마무리 안내 문구, `stageLead`(fix, verify), verify의 필수 산출물 둘.
 - [흐름] 가짜 claude로 intake → fix → verify → Work 완료. fix의 기본 자동 승인, verify가 fix를 추천하면 멈춤, fix로 되감기.
 - [정적] `skills/check.mjs`가 새 스킬(fix, verify)을 설계 5.6.5, 5.6.6과 대조한다.
 - [실기]와 평가 재실행: `relay-eval`로 시나리오를 다시 돌려 승인 수, 세션 수, 결과 확신을 R1 전과 비교한다.
@@ -817,7 +817,7 @@ app/src/
 ### 8.4 실제 claude 시험 (I29)
 
 - 시험 레포: 작은 Node 레포 두 개를 시험 때 만든다 **(기본값)**. 버그 하나와 `npm test`(의존성 없는 `node:test`)가 있다.
-- 경로: 의도 승인 때 시험 도구가 `size`를 골라(D90) M 경로와 S 경로를 하나씩 돌린다.
+- 경우: 두 레포(경우 이름 M과 S)를 하나씩 `intake → fix → verify`로 돌린다. 이름은 설계 v0.7(D227) 전의 크기 경로에서 왔다. M은 원인이 요청과 다른 함수에 있는 버그, S는 한 곳을 고치는 버그다.
 - 사람 역할: 첫 실행 창은 I17의 도구로 수락하고, 질문(`AskUserQuestion`)에는 첫 선택지(추천)로 답한다. 승인 대기가 되면 [승인]한다.
 - 판정: Work 완료까지 갔는지, task마다 형식 오류 되돌림 횟수, [오류 무시하고 승인]을 쓴 횟수(0이어야 함), 걸린 시간.
 - 재개(M3): intake 세션에 표식을 알려 준 뒤 [즉시 중단]하고 [재개]한다. 다시 연 세션에 표식을 파일에 쓰게 해 파일로 판정한다(다시 연 화면에는 앞 대화가 보여 화면으로는 가를 수 없음).
@@ -827,7 +827,7 @@ app/src/
 - 전달(M5, 사용자 결정): S 경로 레포에서 최종 검증이 승인 대기가 되면, 사람 역할이 worktree에 커밋 안 된 메모를 남기고 [PR 생성]을 누른다. 선택지에서 [AI 세션 열기]로 정리 세션을 열어 메모를 지워 달라고 하고, git status가 깨끗해지면 [정리 끝 → push/PR 진행]을 누른 뒤 [Work 정리]를 한다. 실제 스킬이 쓴 `pr.md`가 PR 제목과 본문으로 가는지, 에이전트가 스스로 push하지 않는지, 첫 프롬프트 없이 연 정리 세션이 요청을 받아 일하고 Stop 훅이 오는지 본다. gh는 가짜 gh다(시험 환경에 gh 로그인이 없음). 실제 PR은 [실기]에서 본다.
 - 재시작(M6, 사용자 결정): 앱(Relay)을 자식 프로세스(`test/claude/app-process.mjs`)로 띄워 S 경로 레포의 intake가 첫 요청을 받아 일하는 중에 그 프로세스만 SIGKILL로 끝낸다(앱 충돌). 다시 켜면 조정과 고아 확인을 하고(D75, D76), 중단됨이 된 intake를 [재개]로 같은 세션(`--resume`)으로 열어 이어서 하라고 한 뒤 Work 완료까지 간다. 앱이 죽은 뒤 `claude`가 남았는지, 남았으면 재시작이 끝내고 알렸는지 적는다. 자식 프로세스는 Vite의 SSR 모듈 로더로 앱 코드를 TypeScript 그대로 불러 쓴다.
 - 자동 승인(M7, 사용자 결정): S 경로 레포에서 수정 단계의 자동 승인을 켜고(카운트다운 5초) 사람 역할은 카운트다운을 기다린다. 실제 Stop 본문의 `background_tasks`와 `session_crons`가 턴이 끝날 때 비어 있어 카운트다운이 시작되는지(D129), 실제 스킬이 마무리 안내 문구(D132)를 그대로 찍는지, 자동 승인 뒤 세션을 끝내 다음 단계(M8부터 리뷰)로 가고 승인 방식이 자동으로 남는지 본다. 자동 승인하지 않으면 알림의 까닭을 남기고 실패로 친다.
-- 리뷰(M8): 모든 크기가 review를 거친다. M과 S 경로의 시험에서 사람 역할은 review가 처음 승인 대기가 되면 `review.md`의 `## 지적`을 읽고, 번호 붙은 지적이 있으면 터미널에 "1번 지적만 반영해 주세요. 나머지 지적은 반영하지 않습니다."라고 친다. 다시 승인 대기가 되면 [승인]한다(`test/claude/review.ts`). 판정: 지적이 1부터 차례로 번호가 붙었다(들여쓰지 않은 번호 줄만 센다), 지시하기 전에는 리뷰의 커밋이 없고(review의 시작 커밋 → 지시한 때의 HEAD) 지시한 뒤에는 있다(→ verify의 시작 커밋), `반영` 절은 1번뿐이다, `반영하지 않은 지적` 절은 나머지 모두다(두 절은 들여쓰지 않은 목록 줄의 번호를 읽고 2~4 같은 범위는 펼친다), handoff에 `by: human` 결정이 있다. 판정 도구는 [단위]가 본다(`test/unit/claude-review.test.ts`). 지적이 없으면 지시할 수 없어 실패로 친다. 고친 내용이 1번 지적과 맞는지와 다른 지적을 건드리지 않았는지는 결과 요약의 지적, 커밋, 바뀐 파일과 대화 기록(`pty.log`)으로 사람이 본다. 다른 경우(재개, 되감기, 전달, 재시작, 자동 승인)의 사람 역할은 지시 없이 [승인]한다.
+- 리뷰와 검증(M8, M13): M과 S의 시험에서 verify가 반영할 지적을 물으면 사람 역할은 첫 선택지(추천)로 답한다. 판정(`test/claude/review.ts`의 `judgeReview`): `verification.md`의 `## 리뷰 지적`에 1부터 차례로 번호가 붙었다(들여쓰지 않은 번호 줄만 센다), 지적이 있으면 물었다, `## 반영`과 `## 반영하지 않은 지적`이 지적을 겹치지 않게 나눈다, 반영한 것이 있을 때만 커밋이 있다, 고른 것과 고르지 않은 것이 handoff `decisions`에 `by: human`으로 있다(D229).
 - PR(M9~M11, I43): 시험용 레포에 [PR 생성]으로 실제 PR을 만든다. 사람 역할이 리뷰 코멘트를 달고(M10), 대응 task의 커밋과 답글이 PR에 올라오는지, 코멘트 속 지시를 따르지 않는지(D162) 본다. 마지막에 [머지]하고 정리한다. 시험이 끝나면 시험용 레포의 브랜치를 지운다. Claude Code 웹 세션에서는 GitHub GraphQL이 막혀 gh의 PR 명령이 돌지 않으므로(`spikes.md` S7), 이 경우는 `app-claude` 워크플로나 사람의 PC에서 돌린다.
 - PR 진행(M9, 경우 `pr`, I48, I49): 에이전트가 없어 가짜 `claude`와 실제 gh로 돈다. [흐름]의 PR 진행 시험과 같은 시나리오(`test/flow/pr-scenario.ts`)를 쓰고, GitHub 쪽만 가짜 gh와 로컬 bare 원격에서 실제 gh와 시험용 레포로 바꾼다. 시험용 레포를 clone해 main에서 임시 기준 브랜치 `m9/<run>/base`를 만들고, 그 브랜치를 기준으로 한 Work를 S 경로로 최종 검증까지 가게 한 뒤 [PR 생성]한다. 가짜 `claude`의 수정은 `ci-fail` 스위치를 함께 커밋한다. 시험 도구는 사람과 relay 밖의 GitHub 역할을 한다.
   1. 읽기: PR 진행이 되고, 체크가 없는 새 head는 "체크 기다림"이다(D196). CI가 실패하면 CI 실패 항목이 실패한 스텝의 로그 끝부분과 함께 들어온다.

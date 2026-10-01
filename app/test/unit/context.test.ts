@@ -467,7 +467,7 @@ describe('이전 task의 입력 (시나리오 2-4, D89)', () => {
         taskId: 't-03',
         node: 'verify',
         handoff: '머리글 없음',
-        artifacts: [`${T}\\03-verify\\review.md`, `${T}\\03-verify\\notes.md`],
+        artifacts: [`${T}\\03-verify\\verification.md`, `${T}\\03-verify\\notes.md`],
       },
     ])
     expect(r.rejected).toEqual([
@@ -479,7 +479,7 @@ describe('이전 task의 입력 (시나리오 2-4, D89)', () => {
     // 산출물은 경로만. intake의 intent 초안은 확정한 intent가 대신한다
     expect(r.artifacts).toEqual([
       { taskId: 't-02', node: 'fix', path: `${T}\\02-fix\\fix.md` },
-      { taskId: 't-03', node: 'verify', path: `${T}\\03-verify\\review.md` },
+      { taskId: 't-03', node: 'verify', path: `${T}\\03-verify\\verification.md` },
       { taskId: 't-03', node: 'verify', path: `${T}\\03-verify\\notes.md` },
     ])
   })

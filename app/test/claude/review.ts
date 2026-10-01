@@ -6,11 +6,11 @@
 import { parseFrontMatter, sectionText } from '../../src/core/validate'
 
 /**
- * `## 지적` 절의 번호 붙은 지적: "1. [권장] 파일:줄 — …". 들여쓰지 않은 줄만 센다. 지적 안에 번호 붙은
+ * verification.md의 `## 리뷰 지적` 절의 번호 붙은 지적: "1. [권장] 파일:줄 — …". 들여쓰지 않은 줄만 센다. 지적 안에 번호 붙은
  * 하위 단계("   1) 함수를 지운다")가 있어도 지적으로 세지 않는다
  */
 export function findings(reviewMd: string): { n: number; text: string }[] {
-  const body = sectionText(reviewMd, '지적') ?? ''
+  const body = sectionText(reviewMd, '리뷰 지적') ?? ''
   return body
     .split('\n')
     .map((l) => /^(\d+)[.)]\s+(.*)$/.exec(l))
@@ -48,7 +48,7 @@ export function numbers(section: string | null): number[] {
 }
 
 export interface ReviewCheck {
-  /** review.md의 지적 */
+  /** verification.md의 리뷰 지적 */
   findings: string[]
   /** verify에서 사람 역할이 질문에 답한 횟수 */
   answers: number
@@ -91,7 +91,8 @@ export function judgeReview(input: {
     .map((d) => `${String(d['what'])} — ${String(d['why'])}`)
   const problems: string[] = []
   const all = list.map((f) => f.n)
-  if (sectionText(input.reviewMd, '지적') === null) problems.push('review.md에 `## 지적` 절이 없음')
+  if (sectionText(input.reviewMd, '리뷰 지적') === null)
+    problems.push('verification.md에 `## 리뷰 지적` 절이 없음')
   if (list.length === 0) {
     // 지적이 없으면 묻지 않고 코드를 바꾸지 않는다
     if (input.commits.length > 0) {

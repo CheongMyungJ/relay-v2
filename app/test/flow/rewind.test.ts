@@ -213,7 +213,7 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
         {
           taskId: 't-03',
           label: '03 리뷰와 검증',
-          artifacts: ['pr.md', 'review.md', 'verification.md'],
+          artifacts: ['pr.md', 'verification.md'],
         },
       ],
       skipped: [],
@@ -274,7 +274,7 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
     expect(ctx).not.toContain('## t-02 fix — ')
     expect(ctx).not.toContain('## t-03 verify — ')
     expect(ctx).not.toContain(path.join('02-fix', 'fix.md'))
-    expect(ctx).not.toContain(path.join('03-verify', 'review.md'))
+    expect(ctx).not.toContain(path.join('03-verify', 'verification.md'))
     // decisions.md에서는 지우지 않는다 (5.4)
     const decisions = read(path.join(dir, 'decisions.md'))
     expect(decisions).toContain('## t-02 fix — ')
@@ -436,7 +436,7 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
         {
           taskId: 't-03',
           label: '03 리뷰와 검증',
-          artifacts: ['pr.md', 'review.md', 'verification.md'],
+          artifacts: ['pr.md', 'verification.md'],
         },
       ],
       code: { kind: 'reset', to: base, commits: 1, uncommitted: [] },

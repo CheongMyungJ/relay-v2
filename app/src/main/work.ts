@@ -227,6 +227,7 @@ import {
   PR_FILE,
   REPLIES_FILE,
   RESPONSE_FILE,
+  VERIFICATION_FILE,
   checkTask,
   sectionText,
   type TaskCheck,
@@ -2825,7 +2826,7 @@ export class WorkRunner {
         currentTask(this.work)?.id === task.id &&
         REVIEWABLE.includes(task.status)
       completion = {
-        verdicts: verdicts(files['verification.md'] ?? ''),
+        verdicts: verdicts(files[VERIFICATION_FILE] ?? ''),
         diff: clip(workDiff),
         mode:
           stopped || (current && !approvalStops(this.work, task.node, header))
@@ -3330,7 +3331,7 @@ export class WorkRunner {
     // 대응 라운드가 push했거나 원격 커밋을 받았으면 판정표가 대응 전 코드 기준이다 (D180, D206)
     const verify = [...this.work.tasks].reverse().find((t) => t.node === 'verify')
     const table = verify
-      ? verdicts((await this.files.taskFiles(verify))['verification.md'] ?? '')
+      ? verdicts((await this.files.taskFiles(verify))[VERIFICATION_FILE] ?? '')
       : []
     return {
       ok: true,

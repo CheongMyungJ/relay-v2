@@ -4,7 +4,8 @@
 // - 첫 프롬프트 없이 연 정리 세션([AI 세션 열기], 7-5)이 사람의 요청을 받아 일하고, 턴이 끝나면 Stop 훅이 온다
 // S 요청 레포에서 리뷰와 검증이 승인 대기가 되면 사람 역할이 worktree에 커밋 안 된 메모를 남기고 [PR 생성]을
 // 누른다. 커밋 안 된 변경의 선택지에서 [AI 세션 열기]로 정리 세션을 열어 메모를 지워 달라고 하고, 턴이 끝나
-// git status가 깨끗해지면 [정리 끝 → push/PR 진행]을 누른다. 그 뒤 [Work 정리]로 worktree를 지운다.
+// git status가 깨끗해지면 [정리 끝 → push/PR 진행]을 누른다. 앱이 push하고 PR을 만들면 Work는 PR 진행이 된다(D152).
+// [머지 없이 끝내기](D179)로 완료한 뒤 [Work 정리]로 worktree를 지운다.
 // gh는 가짜 gh다(8.2): 시험 환경에 gh 로그인이 없다. 실제 GitHub PR은 [실기]에서 본다.
 // RELAY_REAL_CLAUDE=1이면 실제 claude, dry면 가짜 claude로 도구만 확인한다. RELAY_REAL_CASES의 deliver로
 // 고른다. 결과는 test-results/claude/deliver.md에 남긴다.
@@ -222,14 +223,15 @@ async function run(): Promise<Result> {
     // 정리 세션은 task가 아니다
     if (load().tasks.length !== first.tasks.length) throw new Error('정리 세션이 task로 기록됨')
 
-    // 4. [정리 끝 → push/PR 진행]: push하고 가짜 gh로 PR을 만든다. verify 승인과 Work 완료
+    // 4. [정리 끝 → push/PR 진행]: push하고 가짜 gh로 PR을 만든다. verify를 승인하고 Work는 PR 진행이 된다(D152)
     const done = await timed('[정리 끝 → push/PR 진행]: 세션 끝내기, push, PR', () =>
       h.relay.finishCleanup(key),
     )
     if (!done.ok) throw new Error(`전달 실패: ${done.error}`)
     await settle(h, key)
     const work = load()
-    if (work.status !== 'completed') throw new Error(`Work가 완료되지 않음: ${work.status}`)
+    notes.push(`[PR 생성] 뒤 Work 상태: ${work.status}`)
+    if (work.status !== 'pr') throw new Error(`Work가 PR 진행이 아님: ${work.status}`)
     const d = work.delivery
     notes.push(
       `전달: ${d?.choice ?? '없음'} ${d?.status ?? ''}, PR ${d?.pr_url ?? '없음'}, draft ${String(d?.draft)}`,
@@ -256,7 +258,13 @@ async function run(): Promise<Result> {
       throw new Error('리뷰와 검증의 승인 기록이 없음')
     }
 
-    // 5. [Work 정리]: worktree를 지운다. 산출물은 남는다 (시나리오 8)
+    // 5. [머지 없이 끝내기]로 Work를 완료한다(D179). 머지는 PR 시험(pr, pr-auto)이 본다
+    const ended = await timed('[머지 없이 끝내기]', () => h.relay.prEnd(key))
+    if (!ended.ok) throw new Error(`[머지 없이 끝내기] 실패: ${ended.error}`)
+    await settle(h, key)
+    if (load().status !== 'completed') throw new Error(`Work가 완료되지 않음: ${load().status}`)
+
+    // 6. [Work 정리]: worktree를 지운다. 산출물은 남는다 (시나리오 8)
     const p = await timed('[Work 정리]: 요약', () => h.relay.cleanPreview(key))
     if (!p.ok) throw new Error(`정리 요약 실패: ${p.error}`)
     notes.push(

@@ -115,7 +115,7 @@ async function runCaseOnce(c: RealCase): Promise<CaseResult> {
 }
 
 /**
- * 리뷰의 판정 (5.6.6, D229): 승인된 verify의 review.md와 handoff, verify의 커밋과 바뀐 파일. verify는 마지막 단계라
+ * 리뷰의 판정 (5.6.6, D229): 승인된 verify의 verification.md(리뷰 지적)와 handoff, verify의 커밋과 바뀐 파일. verify는 마지막 단계라
  * 커밋은 verify의 시작 커밋부터 Work가 끝난 때의 HEAD까지다
  */
 function reviewOf(
@@ -135,7 +135,7 @@ function reviewOf(
   const lines = (text: string) => text.split('\n').filter(Boolean)
   const log = (from: string, to: string) => lines(git(tree, 'log', '--format=%s', `${from}..${to}`))
   return judgeReview({
-    reviewMd: readIn('review.md'),
+    reviewMd: readIn('verification.md'),
     handoff: readIn('handoff.md'),
     answers: result.tasks.find((t) => t.taskId === task.id)?.answers ?? 0,
     commits: log(task.start_commit, head),
