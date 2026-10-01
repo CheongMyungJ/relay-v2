@@ -1,5 +1,5 @@
-// 대화상자: 프로젝트 등록(시나리오 0), 프로젝트 설정(D185), 새 Work(시나리오 1), 설정 화면(D70),
-// Work 설정(D72: 자동 승인, 질문 방식, 대응 자동 시작. PR 진행 중에도 연다, D209), 단계 선택(6.2, D82),
+// 대화상자: 프로젝트 등록(시나리오 0), 프로젝트 설정(D185), 새 Work(시나리오 1, 유형 고르기 D236), 설정 화면(D70),
+// Work 설정(D72: 자동 승인, 질문 방식, 대응 자동 시작. PR 진행 중에도 연다, D209), 단계 선택(6.2, D82, D237),
 // 커밋 안 된 변경의 선택지(7-5), Work 정리(시나리오 8, D178),
 // 확인 창([오류 무시하고 승인] 4.1, [Work 포기] 3.3, [머지 없이 끝내기] D179).
 import { useEffect, useRef, useState, type ReactNode } from 'react'
@@ -12,15 +12,18 @@ import {
 import {
   AUTO_APPROVE_TITLES,
   QUESTION_MODE_LABEL,
+  SETTING_GROUP_LABEL,
   SKILL_TITLES,
+  groupShown,
   type AppConfig,
   type AutoApproveNode,
   type QuestionMode,
+  type SettingGroup,
   type SkillName,
   type WorkSettings,
 } from '../../shared/config'
 import type { NodeName } from '../../shared/contracts'
-import type { MergeMethod } from '../../shared/work'
+import { WORK_TYPES, WORK_TYPE_LABEL, type MergeMethod, type WorkType } from '../../shared/work'
 import type {
   CleanPreview,
   ProjectInspection,
@@ -233,7 +236,35 @@ export function ProjectSettingsDialog({
   )
 }
 
-/** 새 Work: 요청, 기준 브랜치, 기준 위치 (시나리오 1) */
+/**
+ * 업무 유형 고르기 (D236, D237): 버그 수정 / 기능 추가 두 버튼. 새 Work에는 기본 선택이 없다(value가 null)
+ */
+function WorkTypePicker({
+  value,
+  onChange,
+}: {
+  value: WorkType | null
+  onChange: (type: WorkType) => void
+}) {
+  return (
+    <div className="work-type" role="radiogroup" aria-label="업무 유형">
+      {WORK_TYPES.map((type) => (
+        <button
+          key={type}
+          type="button"
+          role="radio"
+          aria-checked={value === type}
+          className={value === type ? 'primary' : ''}
+          onClick={() => onChange(type)}
+        >
+          {WORK_TYPE_LABEL[type]}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/** 새 Work: 유형, 요청, 기준 브랜치, 기준 위치 (시나리오 1). 유형을 고르기 전에는 [시작]이 꺼져 있다 (D236) */
 export function NewWorkDialog({
   project,
   onClose,
@@ -243,6 +274,7 @@ export function NewWorkDialog({
   onClose: () => void
   onCreated: (workKey: string) => void
 }) {
+  const [type, setType] = useState<WorkType | null>(null)
   const [request, setRequest] = useState('')
   const [branches, setBranches] = useState<string[]>([project.defaultBranch])
   const [branch, setBranch] = useState(project.defaultBranch)
@@ -260,16 +292,20 @@ export function NewWorkDialog({
   }, [project.id])
 
   const start = async () => {
+    if (!type) return
     setBusy(true)
     setError(null)
+    // 고른 유형에 없는 단계의 설정은 보내지 않는다 (D256)
+    const auto_approve = only(auto, AUTO_APPROVE_TITLES, type)
+    const question_mode = only(modes, SKILL_TITLES, type)
     const settings: WorkSettings = {
-      ...(Object.keys(auto).length ? { auto_approve: auto } : {}),
-      ...(Object.keys(modes).length ? { question_mode: modes } : {}),
+      ...(Object.keys(auto_approve).length ? { auto_approve } : {}),
+      ...(Object.keys(question_mode).length ? { question_mode } : {}),
     }
     const r = await call(() =>
       window.relay.createWork(project.id, {
         request,
-        type: 'bugfix',
+        type,
         baseBranch: branch,
         baseLocation: location,
         ...(Object.keys(settings).length ? { settings } : {}),
@@ -282,6 +318,10 @@ export function NewWorkDialog({
 
   return (
     <Modal title={`새 Work · ${project.name}`} onClose={onClose}>
+      <div className="field">
+        유형
+        <WorkTypePicker value={type} onChange={setType} />
+      </div>
       <label className="field">
         요청
         <textarea
@@ -289,7 +329,11 @@ export function NewWorkDialog({
           value={request}
           onChange={(e) => setRequest(e.target.value)}
           rows={10}
-          placeholder="버그 설명, 로그, 이슈 내용을 붙여 넣으세요"
+          placeholder={
+            type === 'feature'
+              ? '만들 기능, 쓰는 흐름, 참고할 이슈 내용을 붙여 넣으세요'
+              : '버그 설명, 로그, 이슈 내용을 붙여 넣으세요'
+          }
         />
       </label>
       <div className="row">
@@ -335,18 +379,82 @@ export function NewWorkDialog({
         <summary>고급 설정 (나중에 [Work 설정]에서도 바꿀 수 있음)</summary>
         <h3>이 Work의 자동 승인 (Claude Code)</h3>
         <div className="dim">{AGENT_APPROVAL_NOTICE}</div>
-        <AutoApproveOverrides config={config} value={auto} onChange={setAuto} />
+        <AutoApproveOverrides config={config} type={type} value={auto} onChange={setAuto} />
         <h3>이 Work의 질문 방식</h3>
-        <QuestionModes config={config} value={modes} onChange={setModes} />
+        <QuestionModes config={config} type={type} value={modes} onChange={setModes} />
       </details>
       {error ? <div className="error">{error}</div> : null}
       <div className="buttons">
         <button onClick={onClose}>취소</button>
-        <button className="primary" disabled={busy || !request.trim()} onClick={() => void start()}>
+        <button
+          className="primary"
+          disabled={busy || !type || !request.trim()}
+          title={type ? '' : '유형을 고르세요'}
+          onClick={() => void start()}
+        >
           {busy ? '만드는 중…' : '시작'}
         </button>
       </div>
     </Modal>
+  )
+}
+
+// ---------- 설정 목록의 묶음 (D256) ----------
+
+const GROUPS: readonly SettingGroup[] = ['common', 'bugfix', 'feature', 'pr']
+
+/**
+ * 설정 목록을 묶음(공통 / 버그 수정 / 기능 추가 / PR 대응)마다 모은다 (D256). type을 주면 그 유형에서 보이는 묶음만
+ * 둔다. Work 설정은 그 Work 유형의 단계만 보인다 (I57)
+ */
+function grouped<K extends string>(
+  items: readonly (readonly [K, string, SettingGroup])[],
+  type: WorkType | null,
+): [SettingGroup, (readonly [K, string, SettingGroup])[]][] {
+  return GROUPS.filter((g) => type === null || groupShown(g, type))
+    .map((g): [SettingGroup, (readonly [K, string, SettingGroup])[]] => [
+      g,
+      items.filter(([, , group]) => group === g),
+    ])
+    .filter(([, list]) => list.length > 0)
+}
+
+/** 그 유형에서 보이는 단계의 값만 남긴다 */
+function only<K extends string, V>(
+  value: Partial<Record<K, V>>,
+  items: readonly (readonly [K, string, SettingGroup])[],
+  type: WorkType,
+): Partial<Record<K, V>> {
+  const shown = new Set(items.filter(([, , g]) => groupShown(g, type)).map(([k]) => k))
+  return Object.fromEntries(Object.entries(value).filter(([k]) => shown.has(k as K))) as Partial<
+    Record<K, V>
+  >
+}
+
+/** 묶음의 제목과 그 아래 줄 */
+function Groups<K extends string>({
+  items,
+  type,
+  row,
+}: {
+  items: readonly (readonly [K, string, SettingGroup])[]
+  type: WorkType | null
+  row: (key: K, title: string) => ReactNode
+}) {
+  return (
+    <div className="form-grid">
+      {grouped(items, type).map(([group, list]) => (
+        <div
+          key={group}
+          className="form-group"
+          role="group"
+          aria-label={SETTING_GROUP_LABEL[group]}
+        >
+          <div className="form-group-title">{SETTING_GROUP_LABEL[group]}</div>
+          {list.map(([key, title]) => row(key, title))}
+        </div>
+      ))}
+    </div>
   )
 }
 
@@ -365,13 +473,15 @@ function useConfig(): AppConfig | null {
 
 const MODES = Object.entries(QUESTION_MODE_LABEL) as [QuestionMode, string][]
 
-/** Work별 질문 방식 (D72). 고르지 않은 스킬은 앱 설정을 따른다 */
+/** Work별 질문 방식 (D72). 고르지 않은 스킬은 앱 설정을 따른다. type이 있으면 그 유형의 단계만 보인다 (D256) */
 function QuestionModes({
   config,
+  type,
   value,
   onChange,
 }: {
   config: AppConfig | null
+  type: WorkType | null
   value: Overrides
   onChange: (v: Overrides) => void
 }) {
@@ -380,8 +490,10 @@ function QuestionModes({
     onChange(mode ? { ...rest, [skill]: mode as QuestionMode } : rest)
   }
   return (
-    <div className="form-grid">
-      {SKILL_TITLES.map(([skill, title]) => (
+    <Groups
+      items={SKILL_TITLES}
+      type={type}
+      row={(skill, title) => (
         <label key={skill} className="form-row">
           <span>
             {title} <span className="dim">({skill})</span>
@@ -401,8 +513,8 @@ function QuestionModes({
             ))}
           </select>
         </label>
-      ))}
-    </div>
+      )}
+    />
   )
 }
 
@@ -413,14 +525,17 @@ type AutoOverrides = Partial<Record<AutoApproveNode, boolean>>
 const onOff = (on: boolean) => (on ? '켜짐' : '꺼짐')
 
 /**
- * Work별 자동 승인 (D72). 고르지 않은 단계는 앱 설정을 따른다. 의도 정리와 리뷰와 검증은 늘 수동이다 (4.2)
+ * Work별 자동 승인 (D72). 고르지 않은 단계는 앱 설정을 따른다. 의도 정리와 리뷰와 검증은 늘 수동이다 (4.2).
+ * type이 있으면 그 유형의 단계만 보인다 (D256)
  */
 function AutoApproveOverrides({
   config,
+  type,
   value,
   onChange,
 }: {
   config: AppConfig | null
+  type: WorkType | null
   value: AutoOverrides
   onChange: (v: AutoOverrides) => void
 }) {
@@ -433,8 +548,10 @@ function AutoApproveOverrides({
     return v === undefined ? '' : v ? 'on' : 'off'
   }
   return (
-    <div className="form-grid">
-      {AUTO_APPROVE_TITLES.map(([node, title]) => (
+    <Groups
+      items={AUTO_APPROVE_TITLES}
+      type={type}
+      row={(node, title) => (
         <label key={node} className="form-row">
           <span>
             {title} <span className="dim">({node})</span>
@@ -451,8 +568,8 @@ function AutoApproveOverrides({
             <option value="off">끄기</option>
           </select>
         </label>
-      ))}
-    </div>
+      )}
+    />
   )
 }
 
@@ -520,14 +637,14 @@ export function WorkSettingsDialog({ work, onClose }: { work: WorkView; onClose:
   }
 
   return (
-    <Modal title={`Work 설정 · ${work.workId}`} onClose={onClose}>
+    <Modal title={`Work 설정 · ${work.workId} (${WORK_TYPE_LABEL[work.type]})`} onClose={onClose}>
       <h3>자동 승인 (Claude Code)</h3>
       <div className="dim">{AGENT_APPROVAL_NOTICE}</div>
       <div className="dim">
         바로 적용합니다. 턴이 끝날 때의 설정으로 판정하고, 카운트다운 중에 끄면 멈춥니다. 리뷰는
         지적이 없을 때만 자동 승인합니다.
       </div>
-      <AutoApproveOverrides config={config} value={auto} onChange={setAuto} />
+      <AutoApproveOverrides config={config} type={work.type} value={auto} onChange={setAuto} />
       <h3>자동 대응 (PR 진행)</h3>
       <div className="dim">
         켜도 이미 받은 새 항목으로는 시작하지 않고, 다음에 새 항목이 들어오면 함께 시작합니다.
@@ -535,7 +652,7 @@ export function WorkSettingsDialog({ work, onClose }: { work: WorkView; onClose:
       <AutoStartOverride config={config} value={autoStart} onChange={setAutoStart} />
       <h3>질문 방식</h3>
       <div className="dim">질문 방식은 다음에 시작하는 task부터 씁니다.</div>
-      <QuestionModes config={config} value={modes} onChange={setModes} />
+      <QuestionModes config={config} type={work.type} value={modes} onChange={setModes} />
       {error ? <div className="error">{error}</div> : null}
       <div className="buttons">
         <button onClick={onClose}>취소</button>
@@ -667,8 +784,10 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             </label>
           </div>
           <h3>질문 방식</h3>
-          <div className="form-grid">
-            {SKILL_TITLES.map(([skill, title]) => (
+          <Groups
+            items={SKILL_TITLES}
+            type={null}
+            row={(skill, title) => (
               <label key={skill} className="form-row">
                 <span>
                   {title} <span className="dim">({skill})</span>
@@ -693,16 +812,18 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                   ))}
                 </select>
               </label>
-            ))}
-          </div>
+            )}
+          />
           <h3>자동 승인 (Claude Code)</h3>
           <div className="dim">{AGENT_APPROVAL_NOTICE}</div>
           <div className="dim">
             켠 단계는 조건(4.3)을 만족하면 카운트다운 뒤 승인합니다. 턴이 끝날 때의 설정으로
             판정하고, 카운트다운 중에 끄면 멈춥니다. 의도 정리와 리뷰와 검증은 늘 수동입니다.
           </div>
-          <div className="form-grid">
-            {AUTO_APPROVE_TITLES.map(([node, title]) => (
+          <Groups
+            items={AUTO_APPROVE_TITLES}
+            type={null}
+            row={(node, title) => (
               <label key={node} className="form-row">
                 <span>
                   {title} <span className="dim">({node})</span>
@@ -719,7 +840,9 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                   }
                 />
               </label>
-            ))}
+            )}
+          />
+          <div className="form-grid">
             <label
               className="form-row"
               title="자동 승인 전에 기다리는 초. [취소]로 멈춘다. 다음 카운트다운부터 쓴다 (4.3)"
@@ -854,14 +977,16 @@ function PreviewView({ p }: { p: StepPreview }) {
         <h3>건너뛸 단계</h3>
         {p.skipped.length ? p.skipped.join(', ') : <span className="dim">없음</span>}
       </section>
+      {p.typeChange ? <div className="notice">{p.typeChange}</div> : null}
       {p.intent ? <div className="notice">{p.intent}</div> : null}
     </div>
   )
 }
 
 /**
- * 단계 선택 대화상자 (D82): 파이프라인 단계를 차례로 보이고(6.3의 제약을 따른다), 고른 단계의 결과를
- * 미리 보인다. 추가 지시는 선택이고, fix로 되감으면 [현재 코드 위에서 이어서]를 고를 수 있다.
+ * 단계 선택 대화상자 (D82): 그 Work 유형의 파이프라인 단계를 차례로 보이고(6.3의 제약을 따른다), 고른 단계의 결과를
+ * 미리 보인다. 추가 지시는 선택이고, 버그 수정의 fix, 기능 추가의 design과 implement로 되감으면 [현재 코드 위에서
+ * 이어서]를 고를 수 있다(D254). 의도 승인 전 [intake 다시]에서는 유형을 다시 고를 수 있고 지금 유형이 골라져 있다 (D237).
  * [확인]을 눌러야 실행한다. 미리 본 뒤 Work가 바뀌었으면 main이 받지 않는다.
  */
 export function StepDialog({
@@ -879,13 +1004,21 @@ export function StepDialog({
   const recommended = work.steps.find((c) => c.recommended && c.allowed)?.node
   const [node, setNode] = useState<NodeName | null>(initial ?? recommended ?? null)
   const [keepCode, setKeepCode] = useState(false)
+  const [type, setType] = useState<WorkType>(work.type)
   const [instruction, setInstruction] = useState('')
   // 미리 본 단계와 선택지. 고른 것과 다르면 보이지 않고 [확인]할 수 없다
   const [preview, setPreview] = useState<{
     node: NodeName
     keepCode: boolean
+    type: WorkType
     result: StepPreviewResult
   } | null>(null)
+  const choice = work.steps.find((c) => c.node === node)
+  // [현재 코드 위에서 이어서]는 되감기로 fix, design, implement를 고를 때만 있다 (6.2, D254)
+  const keepOffered = choice?.keepCode === true
+  // 유형은 의도 승인 전 [intake 다시]에서만 고른다 (D237)
+  const typeOffered = choice?.typeChange === true
+  const chosenType = typeOffered ? type : work.type
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -893,23 +1026,27 @@ export function StepDialog({
   useEffect(() => {
     if (!node) return
     let stale = false
-    void call(() => window.relay.stepPreview(work.key, node, keepCode)).then((result) => {
-      if (!stale) setPreview({ node, keepCode, result })
-    })
+    void call(() => window.relay.stepPreview(work.key, node, keepCode, chosenType)).then(
+      (result) => {
+        if (!stale) setPreview({ node, keepCode, type: chosenType, result })
+      },
+    )
     return () => {
       stale = true
     }
-  }, [work.key, work.revision, node, keepCode])
+  }, [work.key, work.revision, node, keepCode, chosenType])
 
-  const current = preview && preview.node === node && preview.keepCode === keepCode ? preview : null
+  const current =
+    preview && preview.node === node && preview.keepCode === keepCode && preview.type === chosenType
+      ? preview
+      : null
   const shown = current?.result.ok ? current.result.preview : null
   const failed = current && !current.result.ok ? current.result.error : null
-  // [현재 코드 위에서 이어서]는 fix로 되감을 때만 있다 (6.2)
-  const keepOffered = node === 'fix' && work.steps.find((c) => c.node === node)?.kind === 'rewind'
 
   const pick = (next: NodeName) => {
     setNode(next)
     setKeepCode(false)
+    setType(work.type)
   }
 
   const confirm = async () => {
@@ -922,6 +1059,7 @@ export function StepDialog({
         keepCode,
         instruction,
         expect: shown.expect,
+        ...(chosenType !== work.type ? { type: chosenType } : {}),
       }),
     )
     setBusy(false)
@@ -964,6 +1102,12 @@ export function StepDialog({
           />
           현재 코드 위에서 이어서
         </label>
+      ) : null}
+      {typeOffered ? (
+        <div className="field">
+          유형 (의도 승인 전까지만 바꿀 수 있음)
+          <WorkTypePicker value={type} onChange={setType} />
+        </div>
       ) : null}
       {node === null ? (
         <div className="dim">단계를 고르면 결과를 미리 보입니다.</div>

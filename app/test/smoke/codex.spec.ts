@@ -104,6 +104,7 @@ test('엔진 설정에서 Codex를 골라 앱 질문창으로 답하고 다음 t
   await window.getByRole('button', { name: '등록', exact: true }).click()
   await window.getByRole('button', { name: '새 Work', exact: true }).click()
   await window.getByLabel('요청').fill(REQUEST)
+  await window.getByRole('radio', { name: '버그 수정' }).click()
   await window.getByRole('button', { name: '시작', exact: true }).click()
   const question = window.getByRole('dialog', { name: 'Codex 질문', exact: true })
   await expect(question).toBeVisible({ timeout: 60_000 })
