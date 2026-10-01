@@ -265,6 +265,7 @@ const spec = {
     ['6.2', '현재 코드 위에서 이어서', /Continuing on current code/],
     ['D247', '순서: 테스트 먼저 → 구현 전 실패 → 구현 → 통과 → 커밋, 끝나면 테스트 명령', /Write the tests[\s\S]*fail before the change[\s\S]*Implement[\s\S]*pass[\s\S]*Commit[\s\S]*test command/],
     ['D247', '처음부터 통과하는 테스트는 고침, 못 하면 이유와 risks', /passes from the start does not catch the new behavior[\s\S]*`risks`/],
+    ['D257', '지금 동작을 지키는 완료조건의 테스트는 구현 전 통과도 됨', /keep the current behavior[\s\S]*may pass before the change/],
     ['D54', '커밋 수 제한 없음, 레포 관례', /any number[\s\S]*commit message convention/],
     ['D56', '기존 테스트 변경 → risks, 변경 요약에 표시', /existing test must change[\s\S]*`risks`[\s\S]*`변경 요약`/],
     ['D57', '테스트 명령 실행, 기준 커밋 실패 구분', /Run tests[\s\S]*also fails at the base commit/],
@@ -272,7 +273,7 @@ const spec = {
     ['D248', '설계가 틀리면 recommended_next: design', /`recommended_next` to `design`/],
     ['5.6.9', '결정 지점: 계획이 정하지 않은 구현 세부', /Implementation details the plan does not settle/],
     ['D248', '크게 벗어남 넷', /behavior or interface\) differs from the design[\s\S]*scope widens[\s\S]*different way from `접근`[\s\S]*dependency the design does not have, or change a data format or schema/],
-    ['5.6.9', '완료조건: 네 절, 계획 단계, 새 동작 테스트, 물음, 커밋, 테스트 명령', /## Done when[\s\S]*four template sections[\s\S]*Every step of the plan[\s\S]*failed before and passed after[\s\S]*`decisions`[\s\S]*committed[\s\S]*test command/],
+    ['5.6.9', '완료조건: 네 절, 계획 단계, 새 동작 테스트, 물음, 커밋, 테스트 명령', /## Done when[\s\S]*four template sections[\s\S]*Every step of the plan[\s\S]*failed before[\s\S]*and passed after[\s\S]*`decisions`[\s\S]*committed[\s\S]*test command/],
   ],
   fix: [
     ['5.6.5', '입력: context.md, request.md 경로', /`context\.md`[\s\S]*`request\.md`/],

@@ -27,7 +27,7 @@ When all steps are done, run the intent's test command.
 
 ## Rules
 
-- **New behavior tests:** a test that passes from the start does not catch the new behavior. Fix it. If a behavior cannot get a test (e.g. UI behavior, needs an external service), write why in `implement.md` and `risks`. Record before and after for each test in `새 동작 테스트`.
+- **New behavior tests:** a test that passes from the start does not catch the new behavior. Fix it. Exception: when a 완료조건 asks to keep the current behavior (e.g. "without the option, it works as now"), its test may pass before the change. Record its before as "통과(지금 동작을 지킴)". If a behavior cannot get a test (e.g. UI behavior, needs an external service), write why in `implement.md` and `risks`. Record before and after for each test in `새 동작 테스트`.
 - **Commits:** any number. Follow the repo's commit message convention. Commit all changes before you close. Revert experimental changes such as debug output.
 - **Changing existing tests:** if an existing test must change, change it, add it to `risks`, and mark it as an existing-test change in `변경 요약`. Whether it weakens the test is judged by verify.
 - **Run tests:** run the test command from the intent's 완료조건. For each failure, check whether it also fails at the base commit (from `context.md`), and say which.
@@ -51,7 +51,7 @@ Ask on the spot, before you change code, only when the implementation departs fa
 
 - `implement.md` has all four template sections.
 - Every step of the plan is done, or the difference is in `계획과 달라진 점`.
-- Each behavior in the intent's 완료조건 has a test that failed before and passed after, or you wrote why it could not.
+- Each behavior in the intent's 완료조건 has a test that failed before (or passed before, for a 완료조건 that keeps the current behavior) and passed after, or you wrote why it could not.
 - Far departures were asked and the answers recorded in `decisions`.
 - All changes are committed.
 - You ran the intent's test command and wrote the result.

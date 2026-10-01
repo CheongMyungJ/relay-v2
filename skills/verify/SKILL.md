@@ -19,7 +19,7 @@ The order and the verdicts are the same. Only these differ:
 
 - **Inputs:** read `design.md` and `implement.md` (paths in `context.md`) instead of `fix.md`. The rules on reproduction steps do not apply.
 - **Review:** also check that the implementation fits the user scenarios, requirements and approach in `design.md`, that `계획과 달라진 점` in `implement.md` is reasonable, and that the new behavior tests really catch the behavior. Do not judge requirements added in the design or non-functional requirements: write a mismatch as a finding.
-- **"완료조건의 각 동작을 확인하는 테스트가 있다":** for each 완료조건, check that a test exists and really checks that behavior, and run it yourself on the final code. For failing before the change, use the record in `implement.md`. If a behavior has no test, it is 판정 불가.
+- **"완료조건의 각 동작을 확인하는 테스트가 있다":** for each 완료조건, check that a test exists and really checks that behavior, and run it yourself on the final code. For failing before the change, use the record in `implement.md`. A test for a 완료조건 that keeps the current behavior may pass before the change. If a behavior has no test, it is 판정 불가.
 - **Going back:** `implement` if the implementation is wrong, `design` if the design is wrong.
 - **`pr.md`:** use the feature template below.
 
