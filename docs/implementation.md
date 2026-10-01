@@ -1,6 +1,6 @@
 # relay-v2 구현 계획
 
-- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62)
+- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67)
 - 상태: 정함. 주제마다 사람과 문답으로 정했다(설계 부록 A의 진행 규칙). 바꾸려면 사용자와 다시 정한다.
 
 Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서는 [engines.md](engines.md)에서 관리한다. 이 문서의 기존 Claude 동작은 확장 중 회귀 시험의 기준이다.
@@ -92,6 +92,11 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I60 | `skills/check.mjs`는 design(5.6.8), implement(5.6.9)를 새로 대조하고, verify는 기능 추가 절(5.6.6, `pr.md` 기능 추가 템플릿)까지 대조한다. 스킬마다 합친 크기(D31, 5,000토큰 목표)를 넘으면 사람에게 알리고 줄일지 정한다 | 설계와 스킬이 어긋나는 것을 모델 없이 잡음(5.6.3). verify는 두 유형을 한 스킬에 담아 커지므로 크기를 먼저 봄 | |
 | I61 | 가짜 `claude`의 시나리오에 feature 흐름(`design.md`, 테스트를 먼저 쓴 커밋과 `implement.md`)을 더한다. [흐름]은 `test/flow/feature.test.ts` 한 파일에 둔다 **(기본값)** | 버그 수정 흐름 시험(`flow.test.ts`)을 건드리지 않고 유형 분기를 따로 봄 | |
 | I62 | 평가 시나리오는 `app/eval/scenarios/15-*`, `16-*`, `17-*`로 작은·중간·큰 feature를 둔다(D255). `scenario.json`에 `"type": "feature"`를 더하고, 없으면 `bugfix`다. relay 쪽(`relay-arm.mjs`, `guides/relay.md`)은 새 Work 대화상자에서 그 유형을 고르고, 맨 CLI 쪽은 요청만 준다. `hidden`의 판정 시험은 버그 수정처럼 인수 조건을 시험으로 둔다. `relay-eval` 스킬의 설명과 시나리오 목록을 feature로 넓힌다 | 유형에 기본값이 없어(D236) 사람 역할이 유형을 골라야 [시작]이 켜짐. 판정 방식은 같아 보고서(`report.mjs`)를 그대로 씀 | |
+| I63 | 리팩터링 유형(D258)은 `WorkType`에 `'refactor'`를 더하고 `PIPELINES.refactor = ['intake', 'refactor', 'verify']`, `KEEP_CODE_NODES.refactor = ['refactor']`(D278)로 둔다. `NODE_INFO`에 refactor(스킬 `refactor`, 화면 "계획과 리팩터링", 산출물 `refactor.md`)를 더하고, handoff 스키마의 `recommended_next.node` 허용값에 `refactor`를 더한다. 짧은 유형 이름은 "리팩터"다 **(기본값)** | M14가 순서에 기대는 함수를 모두 유형으로 묶어 두어(I57) 표만 넓히면 됨. 짧은 이름은 사이드바 폭에 맞춤 | |
+| I64 | 안전망 항목의 기준 코드 실행(D273)은 임시 작업 폴더 대신 **같은 worktree에서** 안전망 커밋으로 잠깐 detach 체크아웃해 안전망 테스트를 돌리고 원래 브랜치로 돌아온다. 돌아왔는지(`git branch --show-current`)를 마무리 전에 확인한다. refactor는 `refactor.md`의 `안전망 테스트` 절 첫 줄에 안전망 커밋 해시를 적는다 | 구현 때 확인한 사실: 보호 장치(deny 규칙 D17, Codex 도구 보호)는 다른 작업 폴더를 막지 않지만, 새 작업 폴더에는 무시하는 파일(`node_modules`, 빌드 결과)이 없어 실제 레포에서는 테스트가 돌지 않을 수 있다. 같은 worktree는 그 파일을 그대로 씀. verify는 커밋 뒤에만 체크아웃하므로 작업 트리가 깨끗함 | |
+| I65 | `skills/check.mjs`는 refactor(5.6.10)를 새로 대조하고, verify는 리팩터링 절(5.6.6, `pr.md` 리팩터링 템플릿)까지, work-start는 리팩터링 요청 규칙(D262, D264, D266)까지 대조한다. 크기 규칙은 I60과 같다 | I60과 같은 까닭 | |
+| I66 | 가짜 `claude`의 시나리오에 refactor 흐름(안전망 커밋 뒤 단계 커밋, `refactor.md`)을 더한다. [흐름]은 `test/flow/refactor.test.ts` 한 파일에 둔다 **(기본값)** | I61과 같은 까닭 | |
+| I67 | 평가 시나리오는 `app/eval/scenarios/18-*`, `19-*`, `20-*`로 작은·중간·큰 리팩터링을 둔다(D277). `scenario.json`의 `"type": "refactor"`, `eval/lib/kind.mjs`에 리팩터링 낱말을 더한다. `hidden`은 동작 보존 시험(기준 코드에서도 통과)과 구조 조건 시험(새 모듈이 있음, 금지한 import가 없음 등)이다. 함정 패치(`traps/`)는 19에서 숨은 버그를 고친 것, 20에서 사람에게 묻지 않고 동작 차이를 낸 것이다 | I62와 같은 모양. 함정이 숨긴 시험에서 실패해야 함정을 밟았는지 가를 수 있음(`check-scenario.mjs`) | |
 
 ## 3. 확인한 사실
 
@@ -262,6 +267,7 @@ app/src/
 - 설계 v0.5의 확장은 M8 → M9 → M10 → M11 차례다(I41). M9 전에 스파이크 S7을 돌린다(I42).
 - 사용성 평가(`docs/eval-findings.md`)에서 나온 개선은 M12에 모은다. 개선점마다 사람이 반영할지와 방법을 정한다(설계 v0.6).
 - 설계 v0.8의 기능 추가 유형은 M14다. M14 안은 core → 화면 → 스킬 → 시험과 평가 차례로 나눠 커밋한다.
+- 설계 v0.9의 리팩터링 유형은 M15다. M14와 같은 차례로 나눠 커밋한다.
 - 완료 기준 앞의 꼬리표는 확인 방법이다: [단위], [어댑터], [흐름], [스모크], [실제], [실기]. 뜻은 8.1을 따른다. [실제]와 [실기]의 결과는 `docs/checks.md`에 기록한다(I30).
 
 | # | 이름 | 한 줄 요약 | 선행 |
@@ -281,6 +287,7 @@ app/src/
 | M12 | 사용성 평가 반영 | 평가에서 나온 개선점 가운데 사람이 고른 것(D212~D226) | 사용성 평가 |
 | M13 | 단계 줄이기 | `intake → fix(원인 분석과 수정) → verify(리뷰와 검증)` 하나의 경로, 크기 없앰(D227~D229) | M12 |
 | M14 | 기능 추가 유형 | 새 Work에서 유형(버그 수정 / 기능 추가)을 고르고, 기능 추가는 `intake → design → implement → verify`(D232~D256) | M13 |
+| M15 | 리팩터링 유형 | 새 Work에서 리팩터링을 고르면 `intake → refactor → verify`(D258~D278) | M14 |
 
 ### M0. 골격과 배포
 
@@ -829,6 +836,49 @@ app/src/
 - [스모크] 유형 고르기와 [시작].
 - [실제] 작은 feature 하나가 끝까지 간다.
 - 평가: 시나리오 15~17 각 3번의 보고서.
+
+### M15. 리팩터링 유형
+
+설계 v0.9(D258~D278). 새 Work 대화상자에 리팩터링을 더하고, 리팩터링(`refactor`)은 `intake → refactor(계획과 리팩터링) → verify(리뷰와 검증)`를 지난다. 버그 수정과 기능 추가 흐름은 그대로다. M14처럼 아래 넷을 차례로 하고 단계마다 커밋한다. 단계가 끝날 때마다 `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`, `node skills/check.mjs`를 돌린다.
+
+**1. core와 계약**
+
+- **유형과 파이프라인(I63):** `WorkType`, `WORK_TYPES`, `WORK_TYPE_LABEL`("리팩터링"), `WORK_TYPE_SHORT`("리팩터"), `PIPELINES`, `KEEP_CODE_NODES`, `NODE_INFO`. handoff 스키마와 생성본(`npm run contracts`)의 `recommended_next.node`에 `refactor`.
+- **설정(D276, D278):** `AutoApproveNode`와 `SkillName`에 `refactor`(자동 승인 기본 켬, 질문 방식 기본 초안 우선). `SETTING_GROUP_LABEL`에 리팩터링 묶음. `SKILL_TITLES`, `AUTO_APPROVE_TITLES`에 refactor. 저장된 `config.json`에 키가 없으면 기본값.
+- **`context.md`:** 리팩터링의 이전 단계와 기본 다음 단계는 표에서 나온다. PR 대응 task는 리팩터링이면 `refactor.md` 경로를 넣는다(D278). [현재 코드 위에서 이어서]로 refactor에 들어오면 fix와 같은 안내에 "안전망 커밋은 다시 만들지 않는다"를 더한다(5.6.10).
+- **승인 화면 핵심(`stageLead`):** refactor는 `refactor.md`의 `## 계획`과 `## 찾은 버그와 받아들인 차이`(D278).
+- **마무리 안내 문구:** refactor는 fix와 같은 문구(자동 승인 포함)다.
+
+**2. 화면**
+
+- **새 Work 대화상자(D261):** 유형 버튼을 셋으로(버그 수정 / 기능 추가 / 리팩터링). 리팩터링을 고르면 요청 입력의 예시 문구를 리팩터링에 맞춘다.
+- **설정 화면과 [Work 설정]:** 리팩터링 묶음을 더한다(D278). 그 Work의 [Work 설정]은 그 유형의 단계만 보인다(M14와 같음).
+- **사이드바와 머리 띠, 단계 선택, [intake 다시]의 유형 고르기:** 표에서 나오므로 유형 목록이 셋이 되는지만 본다.
+
+**3. 스킬**
+
+- **refactor(새로):** 설계 5.6.10을 옮긴다. 순서(계획 → 물음 → 안전망 커밋 → 단계 커밋), 사람이 정할 결정 넷(D267, D270), 안전망(D259, D268, D271), 찾은 버그(D260), 인터페이스(D263, D265), 다섯 절 템플릿(D272, 안전망 커밋 해시 줄은 I64).
+- **work-start:** 리팩터링 기본 완료조건 넷(D264), 구조 조건 꼴(D266), 동작 변경·성능 목표가 섞인 요청의 질문(D262), 공개 인터페이스(D263).
+- **verify:** 리팩터링 분기(D273~D275, 기준 코드 실행은 I64)와 리팩터링 `pr.md` 템플릿(D274). 버그 수정과 기능 추가 부분은 바꾸지 않는다.
+- **pr-respond:** 입력에 `refactor.md`가 있을 수 있다는 것만 더한다.
+- **`skills/check.mjs`(I65)**, 설계 5.6.10의 템플릿에 안전망 커밋 줄(I64)을 맞춘다.
+
+**4. 시험과 평가**
+
+- **가짜 claude(I66):** refactor 시나리오(안전망 커밋, 단계 커밋, `refactor.md`).
+- **[흐름] `test/flow/refactor.test.ts`:** 리팩터링으로 만든 Work가 intake → refactor → verify → Work 완료로 간다. refactor의 기본 자동 승인, refactor가 intake를 추천하면 멈춤, refactor로 [현재 코드 위에서 이어서] 되감기(코드와 커밋이 남음), 의도 승인 전 [intake 다시]로 유형을 리팩터링으로 바꾸면 다음 단계가 refactor.
+- **[스모크]:** 새 Work 대화상자에 유형 버튼이 셋이다.
+- **[실제]:** 작은 리팩터링 하나를 실제 claude로 끝까지(`docs/checks.md`에 기록). 이 환경에서 실제 claude를 부를 수 없으면 남은 검증으로 적는다.
+- **평가(I67, D277):** 시나리오 18~20과 `check-scenario.mjs` 통과, `relay-eval` 스킬과 `guides/relay.md`. 각 3번 돌린 보고서는 M14처럼 따로 커밋한다.
+
+**완료 기준**
+
+- [단위] 리팩터링의 기본 다음 단계·이전 단계·`recommended_next` 검사, 단계 선택 목록과 [현재 코드 위에서 이어서](refactor), 자동 승인 대상과 기본값(refactor 켬), `config.json`에 refactor 키가 없을 때의 기본값, 마무리 안내 문구, `stageLead`(refactor), 필수 산출물(`refactor.md`), 확정본의 `type: refactor`.
+- [흐름] 위 `refactor.test.ts`. 기존 버그 수정·기능 추가 흐름 시험이 그대로 통과한다.
+- [정적] `skills/check.mjs` 모두 통과(refactor, work-start·verify의 리팩터링 절).
+- [스모크] 유형 버튼 셋.
+- [실제] 작은 리팩터링 하나가 끝까지 간다(가능할 때).
+- 평가: 시나리오 18~20이 `check-scenario.mjs`를 통과한다. 각 3번의 보고서.
 
 ## 8. 테스트 전략
 
