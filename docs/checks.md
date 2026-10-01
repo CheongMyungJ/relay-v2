@@ -262,3 +262,13 @@ Windows 10/11 PC에서 설치한 앱과 실제 `claude`로 본다. 결과는 위
 16. R7 작업 브랜치: Work 완료 화면과 [완료만] 뒤의 완료 알림에 "작업 브랜치 relay/w-…: 기준(main …) 뒤 커밋 n개, 마지막 …"과 worktree 경로가 보인다. [Work 정리]로 브랜치를 지우면 보이지 않는다.
 17. R8 새 Work 창: 새 Work 대화상자에 요청, 기준 브랜치, 기준 위치 아래로 접힌 "고급 설정 (나중에 [Work 설정]에서도 바꿀 수 있음)" 하나만 있다. 펼치면 "이 Work의 자동 승인"과 "이 Work의 질문 방식"이 있고 자동 대응은 없다. 여기서 고른 값이 만든 Work의 [Work 설정]에 그대로 보인다.
 
+
+## M13. 단계 줄이기
+
+설계 v0.7(D227~D230): `intake → fix(원인 분석과 수정) → verify(리뷰와 검증)`. 모든 [실제]는 Claude Code 웹 세션의 Linux 컨테이너에서 `env -i`로 필요한 환경 변수만 넘기고, 온보딩만 적은 새 설정 폴더(`CLAUDE_CONFIG_DIR`), root라 `IS_SANDBOX=1`로 돌렸다(8.4). 모델 `sonnet`, effort medium. pr, pr-cleanup, pr-auto, respond는 실제 gh나 GitHub가 필요해 건너뛰었다.
+
+| 날짜 | 앱 커밋 | Claude Code 버전 | OS | 종류 | 결과 | 메모 |
+|---|---|---|---|---|---|---|
+| 2026-10-01 | a146abe | 해당 없음(가짜 `claude`) | Linux 클라우드 컨테이너(Claude Code 웹 세션), 예비 확인 | [단위]·[어댑터]·[흐름]·[스모크] | 통과 | 49개 파일 820개 통과, 2개 건너뜀(플랫폼 조건). xvfb에서 GUI 스모크 2개(Claude, Codex) 통과. 리뷰 지적을 `verification.md`에 합친 0d3f1c3에서 [단위] 601개, [흐름] 13개 파일 134개, `store.test.ts`, `RELAY_REAL_CLAUDE=dry`의 [실제] 8개를 다시 돌려 통과 |
+| 2026-10-01 | 0d3f1c3 | 2.1.286 | Linux 클라우드 컨테이너(Claude Code 웹 세션), 예비 확인 | [실제] | 실패 2 | 전체(M, S, resume, rewind-intake, rewind-fix, deliver, restart, auto) 가운데 6개 통과. auto: fix가 비목표로 이미 정해진 것(연속 공백 처리)을 `decisions`에 적고도 `open_questions`에 남겨 자동 승인이 멈췄다 → 열린 질문의 규칙(D230). restart: 실제 claude가 S 요청의 의도 정리를 10초 안에 끝내 일하는 도중에 끊지 못했다(앱을 끝낼 때 이미 승인 대기) → 첫 요청 3초 뒤에 끊는다. deliver는 이번에 고친 기대값(PR 진행, [머지 없이 끝내기])으로 처음 통과했다(98~104초) |
+| 2026-10-01 | 713f4bd | 2.1.286 | Linux 클라우드 컨테이너(Claude Code 웹 세션), 예비 확인 | [실제] | 통과 | 위 8개 모두 통과(파일 6개). task마다 형식 오류 되돌림 0, [오류 무시하고 승인] 0, 재촉 0. M 요청 Work 완료(102초): 의도 정리 28초, 원인 분석과 수정 34초, 리뷰와 검증 40초. 리뷰와 검증이 사소 지적 2개(쓰지 않는 export, 음수 n)를 쓰고 반영할 지적을 물었고, 범위 밖이라며 "반영하지 않음"을 추천해 사람 역할이 그것을 골랐다. 커밋 없음, 고르지 않은 것은 `by: human`으로 남음. S 요청 Work 완료(84초): 28초, 27초, 29초. 지적 없음이라 묻지 않았다. auto(83초): 원인 분석과 수정이 5초 카운트다운 뒤 자동 승인(work.json, task.approved, decisions.md 머리 줄 모두 자동), 열린 질문 없음. restart(91초): intake가 일하는 중(working)에 앱을 SIGKILL, claude가 남지 않았고 다시 켜면 중단됨(`app_restart`), [재개]가 같은 세션으로 사람 입력 없이 이어 Work 완료. resume(103초): 다시 연 세션이 표식을 썼다. rewind-intake(177초)·rewind-fix(139초) 통과. deliver(98초): [PR 생성] 뒤 PR 진행, [머지 없이 끝내기] 뒤 정리. 세 단계의 Work 완료는 81~102초로, 같은 레포의 M12 전 기록(S 118~182초, M 267~445초, 단계 4~5개)보다 짧다(모델과 effort가 다를 수 있어 참고만) |
