@@ -35,15 +35,33 @@ export function inPipeline(type: WorkType, node: TaskNode): node is NodeName {
   return (PIPELINES[type] as readonly TaskNode[]).includes(node)
 }
 
+const CONTINUE =
+  '[현재 코드 위에서 이어서]: 폐기된 시도의 커밋이 남아 있다. 그 위에서 이어서 고친다.'
+
 /**
- * [현재 코드 위에서 이어서](6.2)를 주는 단계: 버그 수정의 fix, 기능 추가의 design과 implement (D254), 리팩터링의
- * refactor (D278).
- * design은 코드를 바꾸지 않고 design.md만 고치며, 이어지는 implement가 그 코드 위에서 고친다
+ * [현재 코드 위에서 이어서](6.2)를 주는 단계와 그 단계의 context.md 안내 (6.2, D254, D278, PR #24 리뷰). 단계를 이 표에
+ * 더하면 안내도 함께 써야 하므로 빠뜨릴 수 없다. design은 코드를 바꾸지 않고 design.md만 고치며, 이어지는 implement가
+ * 그 코드 위에서 고친다. refactor는 안전망 커밋을 다시 만들지 않고 폐기된 refactor.md의 해시를 이어 적는다
  */
+export const KEEP_CODE_NOTES: Readonly<
+  Record<WorkType, Readonly<Partial<Record<NodeName, string>>>>
+> = {
+  bugfix: { fix: CONTINUE },
+  feature: {
+    design:
+      '[현재 코드 위에서 이어서]: 폐기된 시도의 커밋이 남아 있다. 지금 코드를 읽고 `design.md`를 고친다. 코드는 바꾸지 않는다. 이어지는 구현이 그 코드 위에서 고친다.',
+    implement: CONTINUE,
+  },
+  refactor: {
+    refactor: `${CONTINUE} 안전망 커밋은 다시 만들지 않는다. 아래 폐기된 \`refactor.md\`의 \`안전망 커밋\` 해시를 새 \`refactor.md\`에 그대로 적는다. 더 필요한 안전망 테스트는 구조를 더 바꾸기 전에 따로 커밋하고 표에 (추가)로 적으며, 기준 코드 결과는 안전망 커밋에 그 테스트 파일만 얹어 돌려 얻는다(스킬의 절차).`,
+  },
+}
+
+/** [현재 코드 위에서 이어서]를 주는 단계 (6.2). KEEP_CODE_NOTES에서 나온다 */
 export const KEEP_CODE_NODES: Readonly<Record<WorkType, readonly NodeName[]>> = {
-  bugfix: ['fix'],
-  feature: ['design', 'implement'],
-  refactor: ['refactor'],
+  bugfix: Object.keys(KEEP_CODE_NOTES.bugfix) as NodeName[],
+  feature: Object.keys(KEEP_CODE_NOTES.feature) as NodeName[],
+  refactor: Object.keys(KEEP_CODE_NOTES.refactor) as NodeName[],
 }
 
 /** PR 대응 task의 노드 (D187). 파이프라인 밖이다 (D188) */

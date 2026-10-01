@@ -10,6 +10,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { TYPES, assemble } from './assemble.mjs';
 import YAML from 'yaml';
 import Ajv2020 from 'ajv/dist/2020.js';
 
@@ -21,37 +22,12 @@ const SIZE_TARGET = 5000; // D31
 const SKILLS = ['work-start', 'fix', 'design', 'implement', 'refactor', 'verify', 'pr-respond'];
 
 // 업무 유형(D232, D258)과 유형마다 조립하는 공용 스킬(D279)
-const TYPES = ['bugfix', 'feature', 'refactor'];
 const SHARED = ['work-start', 'verify', 'pr-respond'];
 
 const design = read('docs/design.md');
 const common = read('skills/_common.md');
 // 스킬 원본(유형 표시 포함, 공통 규칙을 붙이기 전)
 const skills = Object.fromEntries(SKILLS.map((s) => [s, read(`skills/${s}/SKILL.md`)]));
-
-/**
- * 공용 스킬에서 그 유형의 구간만 남긴다 (D279). 앱의 selectType(app/src/adapters/claude.ts)과 같은 규칙이다:
- * `<!-- type: a b -->`와 `<!-- /type -->` 줄 사이는 적힌 유형에만 남고 표시 줄은 지운다. 겹침, 짝 없음, 모르는 유형은 오류다.
- */
-function assemble(text, type) {
-  const out = [];
-  let open = null;
-  for (const [i, line] of text.split('\n').entries()) {
-    const m = line.match(/^<!-- type: ([a-z ]+) -->$/);
-    if (m) {
-      if (open) throw new Error(`유형 표시가 겹침 (${i + 1}행)`);
-      const types = m[1].split(' ').filter(Boolean);
-      const unknown = types.filter((t) => !TYPES.includes(t));
-      if (unknown.length || !types.length) throw new Error(`모르는 유형: ${unknown.join(', ') || '(없음)'} (${i + 1}행)`);
-      open = types;
-    } else if (line === '<!-- /type -->') {
-      if (!open) throw new Error(`닫기에 짝이 없음 (${i + 1}행)`);
-      open = null;
-    } else if (!open || open.includes(type)) out.push(line);
-  }
-  if (open) throw new Error('유형 표시가 닫히지 않음');
-  return out.join('\n');
-}
 
 // 에이전트가 받는 스킬 본문: 공용 스킬은 유형마다 하나씩, 나머지는 그 유형 하나다
 const OWN_TYPE = { fix: 'bugfix', design: 'feature', implement: 'feature', refactor: 'refactor' };
@@ -194,21 +170,20 @@ if (handoffTpl) {
 }
 
 // intent 초안 템플릿 (work-start). 머리글이 없다: 유형과 버전은 앱이 의도 승인 때 붙인다 (D236, I58)
-const intentTpl = codeBlocks(skills['work-start'], 'markdown').find((b) => b.startsWith('## 목표\n'));
-check(!!intentTpl, 'work-start: intent.draft.md 템플릿 있음');
-if (intentTpl) {
-  const fm = { body: intentTpl };
-  check(!frontMatter(intentTpl), 'intent 템플릿에 머리글 없음 (D236)');
+// intent 초안 템플릿은 유형마다 조립한 work-start에서 본다 (D279)
+for (const v of variants.filter((x) => x.name === 'work-start')) {
+  const intentTpl = codeBlocks(v.text, 'markdown').find((b) => b.startsWith('## 목표\n'));
+  check(!!intentTpl, `${v.label}: intent.draft.md 템플릿 있음`);
+  if (!intentTpl) continue;
+  check(!frontMatter(intentTpl), `${v.label}: intent 템플릿에 머리글 없음 (D236)`);
 
   // 본문 필수 절과 완료조건 줄 (5.2.1)
-  const hs = headings(fm.body);
-  for (const h of ['목표', '비목표', '원하는 결과', '완료조건']) check(hs.includes(`## ${h}`), `intent 템플릿 본문 절: ${h}`);
-  const cond = fm.body.split('## 완료조건\n')[1]?.split('\n## ')[0] ?? '';
+  const hs = headings(intentTpl);
+  for (const h of ['목표', '비목표', '원하는 결과', '완료조건']) check(hs.includes(`## ${h}`), `${v.label}: intent 템플릿 본문 절: ${h}`);
+  const cond = intentTpl.split('## 완료조건\n')[1]?.split('\n## ')[0] ?? '';
   const lines = cond.split('\n').filter((l) => l.trim());
-  check(lines.length >= 3 && lines.every((l) => l.startsWith('- [ ] ')), '완료조건 줄이 모두 "- [ ] "로 시작');
+  check(lines.length >= 3 && lines.every((l) => l.startsWith('- [ ] ')), `${v.label}: 완료조건 줄이 모두 "- [ ] "로 시작`);
 }
-
-// ---------- 4. 설계 대조 ----------
 
 console.log('\n[4] 설계 대조: 산출물 템플릿의 절 제목');
 const templateSources = {
@@ -220,12 +195,25 @@ const templateSources = {
   verify: ['#### 5.6.6'],
   'pr-respond': ['#### 5.6.7'],
 };
+// 공용 스킬은 유형마다 조립한 글로 본다 (D279). verify의 pr.md 템플릿은 설계 5.6.6에 유형마다 하나씩 있으므로, 그 유형의
+// 템플릿 절은 있어야 하고 다른 유형에만 있는 절은 없어야 한다
+const PR_MARK = { bugfix: '## 원인', feature: '## 동작', refactor: '## 목표 구조' };
 for (const [name, sections] of Object.entries(templateSources)) {
-  const skillHeadings = codeBlocks(skills[name], 'markdown').flatMap(headings);
-  for (const sec of sections) {
-    const designHeadings = codeBlocks(designSection(sec), 'markdown').flatMap((b) => headings(frontMatter(b)?.body ?? b));
-    const missing = designHeadings.filter((h) => !skillHeadings.includes(h));
-    check(missing.length === 0, `${name}: 설계 ${sec.replace(/#+ /, '')} 템플릿 절 ${designHeadings.length}개 모두 있음${missing.length ? ` (빠짐: ${missing.join(', ')})` : ''}`);
+  for (const v of variants.filter((x) => x.name === name)) {
+    const skillHeadings = codeBlocks(v.text, 'markdown').flatMap(headings);
+    for (const sec of sections) {
+      const blocks = codeBlocks(designSection(sec), 'markdown').map((b) => headings(frontMatter(b)?.body ?? b));
+      const prOf = (t) => blocks.find((hs) => hs.includes('# PR 제목') && hs.includes(PR_MARK[t]));
+      const typed = blocks.some((hs) => hs.includes('# PR 제목')) && SHARED.includes(name);
+      const own = typed ? prOf(v.type) ?? [] : [];
+      const designHeadings = [...new Set([...blocks.filter((hs) => !typed || !hs.includes('# PR 제목')).flat(), ...own])];
+      const missing = designHeadings.filter((h) => !skillHeadings.includes(h));
+      check(missing.length === 0, `${v.label}: 설계 ${sec.replace(/#+ /, '')} 템플릿 절 ${designHeadings.length}개 모두 있음${missing.length ? ` (빠짐: ${missing.join(', ')})` : ''}`);
+      if (typed) {
+        const foreign = TYPES.filter((t) => t !== v.type).flatMap((t) => prOf(t) ?? []).filter((h) => !own.includes(h) && skillHeadings.includes(h));
+        check(foreign.length === 0, `${v.label}: 다른 유형의 pr.md 템플릿 절이 없음${foreign.length ? ` (${foreign.join(', ')})` : ''}`);
+      }
+    }
   }
 }
 
@@ -268,7 +256,7 @@ const spec = {
     ['D40', '되감기: 현재 intent를 출발점으로', /Start from the current intent/],
     ['5.6.4', '코드를 바꾸지 않음', /does not change code/],
     ['5.6.4', '재현·원인 추적 안 함', /Do not reproduce the bug or trace the cause/, ['bugfix']],
-    ['D39', '사람 의심 지점 → 추가 의견, 확인 안 됨', /\(사람 추정, 확인 안 됨\)/],
+    ['D39', '사람 의심 지점 → 추가 의견, 확인 안 됨', /\(사람 추정, 확인 안 됨\)/, ['bugfix']],
     ['5.6.4', '에이전트 가설은 handoff에만', /hypotheses[\s\S]*## 다음 task가 알아야 할 것/],
     ['D36', '결정 지점 두 가지(D227: size 없음), 사람이 정할 결정 없음', /`비목표`[\s\S]*`완료조건`[\s\S]*no human decisions/],
     ['D41', '"모름" → 그럴듯한 값 + open_questions', /모름[\s\S]*most plausible value[\s\S]*`open_questions`/],

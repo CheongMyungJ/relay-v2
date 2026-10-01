@@ -267,9 +267,11 @@ describe('[흐름] 리팩터링 유형 (M15)', () => {
     const w = work(dir)
     expect(statuses(w).slice(-1)).toEqual([['t-04', 'refactor', 'working', 'rewind']])
     expect(w.tasks.at(-1)?.selection?.keep_code).toBe(true)
-    expect(read(path.join(dir, 'tasks', '04-refactor', 'context.md'))).toContain(
-      '안전망 커밋은 다시 만들지 않고',
-    )
+    // 안전망 커밋 해시를 이어받도록 폐기된 refactor.md 경로를 넣는다 (D281, PR #24 리뷰)
+    const ctx = read(path.join(dir, 'tasks', '04-refactor', 'context.md'))
+    expect(ctx).toContain('안전망 커밋은 다시 만들지 않는다')
+    expect(ctx).toContain(path.join(dir, 'tasks', '02-refactor', 'refactor.md'))
+    expect(ctx).toContain(`- 작업 브랜치: relay/${key.split('/')[1]}`)
   })
 
   it('의도 승인 전 [intake 다시]에서 유형을 리팩터링으로 바꾸면 다음 단계가 refactor다 (D237, D261)', async () => {

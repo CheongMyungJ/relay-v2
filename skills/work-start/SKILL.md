@@ -46,7 +46,7 @@ Scope (`비목표`) and completion criteria (`완료조건`). This skill has no 
 
 ## 완료조건 section
 
-- Always start with these default items. Find the concrete test command in the repo (e.g. `npm test`). Leave out only the test command item if the repo has no tests.
+- Always start with these default items. Find the concrete test command in the repo (e.g. `npm test`). If the repo has no tests, leave out the test command item.
 <!-- type: bugfix -->
   `- [ ] 재현 절차가 더 이상 실패하지 않는다` / `- [ ] <test command>가 통과한다` / `- [ ] 기존 테스트를 약화하거나 삭제하지 않는다`
 - Then add items that fit the request.
@@ -80,13 +80,30 @@ No front matter: the app adds the type and version when the human approves.
 ## 원하는 결과
 
 ## 완료조건
-- [ ] (유형별 기본 항목 세 개)
+<!-- type: bugfix -->
+- [ ] (기본 항목 세 개)
 - [ ] …
-- [ ] (요청에 맞는 항목. 기능 추가는 "<조건>이면 <결과>")
+- [ ] (요청에 맞는 항목)
+<!-- /type -->
+<!-- type: feature -->
+- [ ] (기본 항목 세 개)
+- [ ] …
+- [ ] (인수 조건: "<조건>이면 <결과>")
+<!-- /type -->
+<!-- type: refactor -->
+- [ ] (기본 항목 네 개)
+- [ ] …
+- [ ] (구조 조건: 코드를 읽거나 명령으로 확인할 수 있는 문장)
+<!-- /type -->
 
 ## 제약
 - (선택)
 
 ## 추가 의견
-- (선택) (사람 추정, 확인 안 됨) … / (사람 제안) …
+<!-- type: bugfix -->
+- (선택) (사람 추정, 확인 안 됨) …
+<!-- /type -->
+<!-- type: feature refactor -->
+- (선택) (사람 제안) …
+<!-- /type -->
 ```

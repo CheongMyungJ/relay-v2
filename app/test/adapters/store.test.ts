@@ -1,5 +1,6 @@
 // [어댑터] 중앙 저장소 (5.1): 원자적 쓰기, config.json 기본값, intent 이력, decisions.md, 산출물, 스킬 배포.
 import fs from 'node:fs'
+import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -11,6 +12,7 @@ import {
   skillText,
 } from '../../src/adapters/claude'
 import { WORK_TYPES } from '../../src/shared/work'
+import { TYPES, assemble } from '../../../skills/assemble.mjs'
 import {
   WorkFiles,
   loadConfig,
@@ -237,6 +239,50 @@ describe('[어댑터] 스킬 배포와 claude 실행 (5.6.3, D103, D105, D108)',
     expect(() =>
       selectType('<!-- type: bugfix -->\n<!-- type: feature -->\n<!-- /type -->', 'bugfix'),
     ).toThrow('겹침')
+  })
+
+  it('표시처럼 보이지만 모양이 틀린 줄은 오류다 (D279, PR #24 리뷰)', () => {
+    for (const bad of [
+      '<!--type: refactor-->',
+      '<!-- type: Refactor -->',
+      '<!-- type: refactor --> ',
+      '<!-- /type-->',
+      '  <!-- type: bugfix -->',
+    ]) {
+      expect(() => selectType(`a\n${bad}\nb`, 'bugfix'), bad).toThrow()
+    }
+  })
+
+  it('앱의 selectType과 check.mjs의 assemble은 같은 결과와 같은 오류를 낸다 (I68, PR #24 리뷰)', async () => {
+    const samples = [
+      ...(await Promise.all(
+        ['work-start', 'verify', 'pr-respond', 'fix', 'design', 'implement', 'refactor'].map((s) =>
+          fsp.readFile(path.join(SKILLS, s, 'SKILL.md'), 'utf8'),
+        ),
+      )),
+      await fsp.readFile(path.join(SKILLS, '_common.md'), 'utf8'),
+      'a\r\n<!-- type: feature refactor -->\r\nb\r\n<!-- /type -->\r\nc',
+      'x\n<!--type: bugfix-->\ny',
+      '<!-- type: perf -->\nx\n<!-- /type -->',
+      '<!-- type: bugfix -->\nx',
+      'x\n<!-- /type -->',
+    ]
+    expect(TYPES).toEqual(WORK_TYPES)
+    const outcome = (f: () => string) => {
+      try {
+        return { ok: f() }
+      } catch {
+        return { error: true }
+      }
+    }
+    for (const [i, text] of samples.entries()) {
+      for (const type of WORK_TYPES) {
+        expect(
+          outcome(() => selectType(text, type)),
+          `${i} ${type}`,
+        ).toEqual(outcome(() => assemble(text, type)))
+      }
+    }
   })
 
   it('공용 스킬 셋을 유형마다 조립하면 다른 유형의 산출물과 표시가 남지 않는다 (D279)', async () => {

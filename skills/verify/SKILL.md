@@ -70,7 +70,13 @@ Review the whole change of this Work, apply only the findings the human picks, t
 <!-- /type -->
 <!-- type: refactor -->
 - **Re-run everything yourself** when you verify: the safety-net tests and the test commands. Use the results in `refactor.md` only for comparison.
-- **"안전망 테스트가 있고 기준 코드에서도 통과한다":** in the same worktree, check out the safety-net commit (hash in `refactor.md`) for a moment with `git checkout --detach <hash>`, run the safety-net tests, then go back with `git checkout <work branch>`. Run them on the final code too. 통과 only if both pass. Check that every changed place has a safety net that really catches its behavior. Accepted differences are exceptions. If a place had no safety net (reason in `refactor.md`), it is 판정 불가. Before you close, confirm `git branch --show-current` is the work branch.
+- **"안전망 테스트가 있고 기준 코드에서도 통과한다":** run the safety-net tests at the safety-net commit (hash in `refactor.md`; the base commit when no new test was needed), in the same worktree:
+  1. `git checkout --detach <safety-net commit>`.
+  2. For each test marked (추가) in `refactor.md` (added later, not in that commit): `git checkout <work branch> -- <test file>`.
+  3. Run the safety-net tests at the paths listed for the safety-net commit.
+  4. `git reset --hard`, then `git checkout <work branch>`. The work branch (`작업 브랜치`) is in `context.md`.
+
+  Run them on the final code too, at their current paths (a moved test shows its new path in `refactor.md`). 통과 only if both pass. Check that every changed place has a safety net that really catches its behavior. Accepted differences are exceptions. If a place had no safety net (reason in `refactor.md`), it is 판정 불가. Before you close, confirm `git branch --show-current` is the work branch.
 - **"레포 밖 공개 인터페이스가 바뀌지 않는다":** judge from the diff against the base commit whether anything used outside the repo changed (exports, HTTP API, CLI arguments, stored formats and schemas). Leave out what the intent says to change.
 <!-- /type -->
 - **Verdicts:** 통과 / 실패 / 판정 불가. For 판정 불가, give the reason, and add useful facts if any.
@@ -130,7 +136,12 @@ Ask on the spot:
 (지적이 없으면 "없음")
 
 ## 반영
+<!-- type: bugfix -->
 - 지적 번호 — 한 일, 커밋, 테스트 명령과 결과 (재현 절차를 바꿨으면 달라진 절차)
+<!-- /type -->
+<!-- type: feature refactor -->
+- 지적 번호 — 한 일, 커밋, 테스트 명령과 결과
+<!-- /type -->
 (사람이 고른 것이 없으면 "없음")
 
 ## 반영하지 않은 지적

@@ -10,7 +10,7 @@ For a refactoring Work, change the structure without changing behavior. In one s
 ## Inputs
 
 - The argument gives the path of `context.md`. Read it first. It has the intent and the Work's base commit. If you need the request text, read `request.md` at the path in `context.md`.
-- **Continuing on current code** (chosen when rewinding to refactor): keep the existing commits and change on top of them. Do not make the safety-net commit again. Commit any extra safety net separately, before you change structure.
+- **Continuing on current code** (chosen when rewinding to refactor): keep the existing commits and change on top of them. Do not make the safety-net commit again: copy the `안전망 커밋` hash from the discarded `refactor.md` (path in `context.md`). If you need more safety-net tests, commit them separately before you change structure further, mark them (추가) in the table, and get their base-code result with the procedure below.
 
 ## Order
 
@@ -23,7 +23,9 @@ For a refactoring Work, change the structure without changing behavior. In one s
 ## Rules
 
 - **Do not change behavior.** If you find a bug (current behavior is wrong) while changing code, do not fix it. Keep the current behavior, and write the bug in `찾은 버그와 받아들인 차이` and in `risks`. A bug fix is a separate bugfix Work.
-- **Safety net:** if existing tests already cover a behavior, list that test as the safety net with the reason it covers it. Write new tests only for behavior no test covers. If the repo has a coverage tool, use it to check. A new safety-net test must pass on the base code. If it fails, you wrote the current behavior wrong: fix the test (if the current behavior is a bug, see above). Write the safety-net commit hash on the first line of `안전망 테스트`.
+- **Safety net:** if existing tests already cover a behavior, list that test as the safety net with the reason it covers it. Write new tests only for behavior no test covers. If the repo has a coverage tool, use it to check. A new safety-net test must pass on the base code. If it fails, you wrote the current behavior wrong: fix the test (if the current behavior is a bug, see above). Write the safety-net commit hash on the first line of `안전망 테스트`. If existing tests cover everything and you wrote no new test, write the base commit (from `context.md`) there with "(새 테스트 없음)".
+- **Test paths:** in the table, write each test's path at the safety-net commit. If you move a test file later, add its new path ("→ 새 경로"), so that verify runs the right file at each commit.
+- **Base-code result of an extra (추가) test:** `git checkout --detach <safety-net commit>`, `git checkout <work branch> -- <test file>`, run it, then `git reset --hard` and `git checkout <work branch>`. The work branch (`작업 브랜치`) is in `context.md`. An extra test must use only interfaces that exist at the safety-net commit.
 - **No safety net possible** (UI behavior, needs an external service, no way to run tests): do not ask. Write why in `안전망 테스트` and in `risks`, and go on. verify marks that part 판정 불가.
 - **Interfaces:** you may change names, signatures and module boundaries used only inside the repo, and fix the callers in the repo together. Existing tests may follow such a change only in call names, import paths, file location and setup code. Never change their expected values or inputs. Change an interface used outside the repo (what a library exports, HTTP API, CLI arguments, stored formats and schemas) only when the intent says so.
 - **Commits:** one safety-net commit, then one commit per plan step. The test command must pass at every commit. Follow the repo's commit message convention. Commit all changes before you close. Revert experimental changes such as debug output.
@@ -62,8 +64,8 @@ Ask on the spot only in these cases. In any other case, decide yourself and reco
 - 단계: n. 바꿀 것 — 덮는 완료조건
 
 ## 안전망 테스트
-- 안전망 커밋: <해시>
-| 바꾸는 곳 | 테스트 위치(기존 / 새로) | 잡는 동작 | 기준 코드 |
+- 안전망 커밋: <해시> (새 테스트가 없으면 기준 커밋 해시와 "(새 테스트 없음)")
+| 바꾸는 곳 | 테스트 위치(안전망 커밋 때 경로, 옮겼으면 "→ 새 경로") — 기존 / 새로 / 추가 | 잡는 동작 | 기준 코드 |
 |---|---|---|---|
 (쓸 수 없는 곳은 이유)
 

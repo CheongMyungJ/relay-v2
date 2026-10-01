@@ -7,6 +7,8 @@ import { ALL_NODES, NODE_INFO, PIPELINES } from '../../src/core/pipeline'
 import { checkIntentDraft, checkTask, isValid } from '../../src/core/validate'
 import { DEFAULT_CONFIG } from '../../src/shared/config'
 import type { NodeName } from '../../src/shared/contracts'
+import { WORK_TYPES, type WorkType } from '../../src/shared/work'
+import { selectType } from '../../src/adapters/claude'
 
 const SKILLS = path.resolve(__dirname, '../../../skills')
 const read = (p: string) => fs.readFileSync(path.join(SKILLS, p), 'utf8').replace(/\r\n/g, '\n')
@@ -32,9 +34,12 @@ const handoffTemplate = codeBlocks(read('_common.md'), 'yaml').find((b) => b.inc
 const filledHandoff = codeBlocks(read('_common.md'), 'yaml').find(
   (b) => b !== handoffTemplate && b.includes('status: awaiting_approval'),
 )
-const draftTemplate = codeBlocks(read('work-start/SKILL.md'), 'markdown').find((b) =>
-  b.startsWith('## 목표\n'),
-)
+/** 유형마다 조립한 work-start의 intent 초안 템플릿 (D279) */
+const draftTemplateOf = (type: WorkType) =>
+  codeBlocks(selectType(read('work-start/SKILL.md'), type), 'markdown').find((b) =>
+    b.startsWith('## 목표\n'),
+  )
+const draftTemplate = draftTemplateOf('bugfix')
 
 describe('스킬 원본이 있다 (5.6.3)', () => {
   it('노드마다 skills/<스킬>/SKILL.md가 있다. design, implement, refactor를 포함한다 (D232, D258)', () => {
@@ -181,12 +186,17 @@ describe.runIf(handoffTemplate && draftTemplate)(
       ])
     })
 
-    it('intent.draft.md 템플릿이 그대로 유효하다. 머리글이 없다 (D236, I58)', () => {
-      const r = checkIntentDraft(draft, { warnChars: DEFAULT_CONFIG.intent_warn_chars })
-      expect(r.errors).toEqual([])
-      expect(r.warnings).toEqual([])
-      expect(draftTpl).not.toMatch(/^---$/m)
-      expect(draftTpl).not.toMatch(/^(type|size):/m)
-    })
+    it.each(WORK_TYPES)(
+      '%s: intent.draft.md 템플릿이 그대로 유효하다. 머리글이 없다 (D236, I58, D279)',
+      (type) => {
+        const tpl = draftTemplateOf(type) ?? ''
+        const r = checkIntentDraft(tpl, { warnChars: DEFAULT_CONFIG.intent_warn_chars })
+        expect(r.errors).toEqual([])
+        expect(r.warnings).toEqual([])
+        expect(tpl).not.toMatch(/^---$/m)
+        expect(tpl).not.toMatch(/^(type|size):/m)
+        expect(tpl).not.toContain('<!--')
+      },
+    )
   },
 )

@@ -85,14 +85,15 @@ export function mergeSkill(skill: string, common: string): string {
   return `${lf(skill).trimEnd()}\n${lf(common)}`
 }
 
-const TYPE_OPEN = /^<!-- type: ([a-z ]+) -->$/
+const TYPE_OPEN = /^<!-- type: ([a-z]+(?: [a-z]+)*) -->$/
 const TYPE_CLOSE = '<!-- /type -->'
+const TYPE_LIKE = /^\s*<!--\s*\/?\s*type\b/i
 
 /**
  * 공용 스킬에서 그 Work 유형의 구간만 남긴다 (5.6.3, D279). `<!-- type: feature refactor -->` 줄과 `<!-- /type -->` 줄
- * 사이는 적힌 유형에만 남고, 표시 줄은 지운다. 표시 밖은 모든 유형에 남는다. 구간은 겹치지 않는다. 모르는 유형,
- * 닫히지 않거나 짝이 없는 표시는 배포하지 않도록 오류다(원본을 고친 실수를 task 시작에서 드러낸다).
- * 출처: skills/check.mjs의 assemble (조립 결과로 설계와 대조한다)
+ * 사이는 적힌 유형에만 남고, 표시 줄은 지운다. 표시 밖은 모든 유형에 남는다. 구간은 겹치지 않는다. 표시처럼 보이지만
+ * 모양이 다른 줄, 모르는 유형, 닫히지 않거나 짝이 없는 표시는 배포하지 않도록 오류다(원본을 고친 실수를 task 시작에서
+ * 드러낸다). skills/assemble.mjs(check.mjs가 씀)와 같은 결과인지 [어댑터] 시험이 비교한다 (I68)
  */
 export function selectType(text: string, type: WorkType): string {
   const out: string[] = []
@@ -101,17 +102,17 @@ export function selectType(text: string, type: WorkType): string {
     const m = TYPE_OPEN.exec(line)
     if (m) {
       if (open) throw new Error(`스킬의 유형 표시가 겹침 (${i + 1}행)`)
-      const types = (m[1] ?? '').split(' ').filter(Boolean)
+      const types = (m[1] ?? '').split(' ')
       const unknown = types.filter((t) => !(WORK_TYPES as readonly string[]).includes(t))
-      if (unknown.length || types.length === 0) {
-        throw new Error(
-          `스킬의 유형 표시에 모르는 유형: ${unknown.join(', ') || '(없음)'} (${i + 1}행)`,
-        )
+      if (unknown.length) {
+        throw new Error(`스킬의 유형 표시에 모르는 유형: ${unknown.join(', ')} (${i + 1}행)`)
       }
       open = types
     } else if (line === TYPE_CLOSE) {
       if (!open) throw new Error(`스킬의 유형 표시 닫기에 짝이 없음 (${i + 1}행)`)
       open = null
+    } else if (TYPE_LIKE.test(line)) {
+      throw new Error(`스킬의 유형 표시 모양이 틀림: ${line.trim()} (${i + 1}행)`)
     } else if (!open || open.includes(type)) {
       out.push(line)
     }

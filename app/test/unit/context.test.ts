@@ -119,7 +119,7 @@ function section(md: string, title: string): string {
 describe('context.md: 시나리오 2-4 표의 항목', () => {
   const md = buildContext(input('verify'))
 
-  it('task 정보: work_id, task_id, node, skill, 승인된 intent 버전, task 디렉터리, 기준 브랜치와 기준 커밋 (D97)', () => {
+  it('task 정보: work_id, task_id, node, skill, 승인된 intent 버전, task 디렉터리, 작업 브랜치, 기준 브랜치와 기준 커밋 (D97, D282)', () => {
     expect(section(md, 'task 정보')).toBe(
       [
         '- work_id: w-20260926-001',
@@ -129,6 +129,7 @@ describe('context.md: 시나리오 2-4 표의 항목', () => {
         '- skill: verify',
         '- 승인된 intent 버전: 1',
         `- task 디렉터리: ${WORK_DIR}\\tasks\\03-verify`,
+        '- 작업 브랜치: relay/w-20260926-001',
         '- 기준 브랜치: main',
         '- 기준 커밋: 1a2b3c4d5e6f',
       ].join('\n'),
@@ -850,9 +851,20 @@ describe('context.md: 리팩터링 (D258, D278)', () => {
       keepCode: true,
       reset: false,
     }
-    const md = buildContext(refactorInput('refactor', { selection }))
-    expect(section(md, '되감기로 들어옴 (먼저 읽을 것)')).toContain(
-      '그 위에서 이어서 고친다. 안전망 커밋은 다시 만들지 않고',
+    const kept = 'C:\\w\\tasks\\02-refactor\\refactor.md'
+    const md = buildContext(
+      refactorInput('refactor', {
+        selection: {
+          ...selection,
+          keptArtifacts: [{ taskId: 't-02', node: 'refactor', path: kept }],
+        },
+      }),
     )
+    const entry = section(md, '되감기로 들어옴 (먼저 읽을 것)')
+    // 안전망 커밋 해시는 폐기된 refactor.md에서 이어받는다 (D281, PR #24 리뷰)
+    expect(entry).toContain(
+      '안전망 커밋은 다시 만들지 않는다. 아래 폐기된 `refactor.md`의 `안전망 커밋` 해시',
+    )
+    expect(entry).toContain(`- t-02 refactor (계획과 리팩터링): ${kept}`)
   })
 })
