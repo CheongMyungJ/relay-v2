@@ -323,6 +323,8 @@ interface LiveSession {
   /** 직전 UserPromptSubmit이나 Stop 때의 handoff.md(intake는 intent 초안도) (D21, D107) */
   turnFiles: string
   stopped: boolean
+  /** 앱이 끝내는 중이다. 이 세션의 훅은 줄에 넣지 않고 바로 답한다 (D231) */
+  ending: boolean
   /** 띄운 때 (Date.now()). 첫 출력과 첫 훅까지 걸린 시간을 잰다 (D217) */
   spawnedAt: number
   /** 첫 PTY 출력과 첫 훅을 이미 알렸다 (D217) */
@@ -365,6 +367,8 @@ interface CleanupSession {
   dir: string | null
   /** 끝난 세션을 앱이 이미 처리했다. 늦게 온 PTY 종료는 무시한다 */
   handled: boolean
+  /** 앱이 끝내는 중이다. 이 세션의 훅은 줄에 넣지 않고 바로 답한다 (D231) */
+  ending: boolean
 }
 
 /** 정리 세션의 훅 URL(/hook/cleanup/<Event>)의 id. 터미널 id는 cleanup-<n>이다 */
@@ -1099,6 +1103,7 @@ export class WorkRunner {
       exited: new Promise((r) => (exited = r)),
       turnFiles,
       stopped: false,
+      ending: false,
       hooksReady: false,
       spawnedAt: Date.now(),
       sawOutput: false,
@@ -1303,7 +1308,8 @@ export class WorkRunner {
    * 때마다 오므로 앞선 처리(PR 읽기 등)를 기다리게 하면 에이전트가 늦어진다. core는 이 훅으로 상태를 바꾸지 않는다
    */
   private hookArrived(taskId: string, req: HookRequest, session: LiveSession): Promise<HookReply> {
-    if (this.live.get(taskId) !== session) return Promise.resolve(null)
+    // 앱이 끝내는 중인 세션의 훅(SessionEnd 등)은 기다리지 않고 답한다 (D231)
+    if (this.live.get(taskId) !== session || session.ending) return Promise.resolve(null)
     if (!session.sawHook) {
       session.sawHook = true
       this.timing(taskId, session, 'hook', req.event)
@@ -1534,10 +1540,15 @@ export class WorkRunner {
     this.changed()
   }
 
-  /** 세션의 프로세스 트리를 끝내고 pty.log를 닫는다 (시나리오 5-1, 7절) */
+  /**
+   * 세션의 프로세스 트리를 끝내고 pty.log를 닫는다 (시나리오 5-1, 7절). 이 일은 처리 줄 안에서 돈다. Linux와 macOS에서
+   * claude는 SIGHUP을 받으면 SessionEnd 훅의 응답을 기다린 뒤 끝나므로, 끝내는 중인 세션의 훅은 줄에 넣지 않고 바로
+   * 답한다. 줄에 넣으면 서로 기다려 KILL_WAIT_MS를 다 쓴다 (D231)
+   */
   private async endSession(taskId: string): Promise<void> {
     const session = this.live.get(taskId)
     if (!session) return
+    session.ending = true
     await session.pty.killTree()
     await Promise.race([session.exited, sleep(KILL_WAIT_MS)])
     await this.release(taskId, session)
@@ -2151,6 +2162,7 @@ export class WorkRunner {
       unregister: () => {},
       dir: null,
       handled: false,
+      ending: false,
     }
     this.changed()
     if (this.ctx.pool.tryAcquire()) {
@@ -2250,7 +2262,7 @@ export class WorkRunner {
 
   /** 정리 도구 훅도 처리 큐 밖에서 바로 답하되 Codex의 보호 판정은 task와 공유한다. */
   private cleanupHookArrived(c: CleanupSession, req: HookRequest): Promise<HookReply> {
-    if (this.cleanup !== c || c.status !== 'live') return Promise.resolve(null)
+    if (this.cleanup !== c || c.status !== 'live' || c.ending) return Promise.resolve(null)
     if (TOOL_HOOKS.includes(req.event)) {
       if (taskEngine(c) === 'codex' && !c.hooksReady) {
         c.hooksReady = true
@@ -2329,6 +2341,8 @@ export class WorkRunner {
     if (c.status === 'queued') {
       this.ctx.pool.remove(this.slotKey(c.id))
     } else if (c.pty) {
+      // 끝내는 중인 정리 세션의 훅은 줄에 넣지 않고 바로 답한다 (D231, endSession과 같음)
+      c.ending = true
       await c.pty.killTree()
       await Promise.race([c.exited, sleep(KILL_WAIT_MS)])
       this.ctx.pool.release()

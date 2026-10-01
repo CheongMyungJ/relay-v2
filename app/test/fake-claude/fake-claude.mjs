@@ -19,6 +19,7 @@
 // - PR 대응 task(스킬 pr-respond)의 respond 단계는 context.md의 이번 라운드 항목(`#### \`<항목 id>\` — …`)을 읽어
 //   response.md(항목마다 한 줄)와 replies.md(코멘트 항목마다 `## <항목 id>`, D190)를 쓴다. merge 단계는 앱이 fetch한
 //   원격 브랜치(remote: PR 브랜치, base: 기준 브랜치)를 worktree에서 병합한다(D181, D193. context.md의 브랜치 이름).
+// - SIGHUP을 받으면 실제 claude처럼 SessionEnd(reason: other)를 보내고 응답을 받은 뒤 끝난다(D231).
 // - 시나리오가 없으면 M0처럼 출력만 내고 끝날 때까지 살아 있는다.
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -176,6 +177,12 @@ async function hook(event, fields = {}, toolName) {
   }
   return decision
 }
+
+// 실제 claude는 SIGHUP을 받으면 SessionEnd 훅을 보내고 응답을 받은 뒤 끝난다. 앱은 Linux와 macOS에서 세션을
+// node-pty의 kill()(SIGHUP)로 끝내므로 이 훅이 온다. Windows는 taskkill /F로 끝내 오지 않는다 (D231)
+process.on('SIGHUP', () => {
+  void hook('SessionEnd', { reason: 'other' }).finally(() => process.exit(129))
+})
 
 // ---------- 시나리오 ----------
 

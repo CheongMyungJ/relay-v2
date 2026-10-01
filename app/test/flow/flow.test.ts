@@ -787,6 +787,27 @@ describe('[흐름] 최소 흐름 (M2)', () => {
   })
 })
 
+describe('[흐름] 세션을 끝낼 때 (D231)', () => {
+  it('앱이 끝내는 세션의 SessionEnd 훅은 줄에 넣지 않고 바로 답한다. 승인 뒤 다음 단계가 곧바로 뜬다', async () => {
+    const s = await start(scenario({ fix: fixAsking() }))
+    const t0 = Date.now()
+    const result = await drive(s.h.relay, s.h.ui, s.workKey)
+    await settle(s.h, s.workKey)
+    expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed', reason: null })
+    // 세션 셋을 끝냈다. 훅과 처리 줄이 서로 기다리면 끝낼 때마다 KILL_WAIT_MS(10초)를 다 쓴다
+    expect(Date.now() - t0).toBeLessThan(10_000)
+    // Linux와 macOS는 SIGHUP으로 끝내 가짜 claude가 SessionEnd를 보낸다. Windows는 taskkill /F라 오지 않는다
+    if (process.platform !== 'win32') {
+      const ends = s.h.records().filter((r) => r['type'] === 'hook' && r['event'] === 'SessionEnd')
+      expect(ends.map((r) => [(r['body'] as { reason?: string }).reason, r['status']])).toEqual([
+        ['other', 200],
+        ['other', 200],
+        ['other', 200],
+      ])
+    }
+  })
+})
+
 describe('[흐름] 할 일이 실패할 때 (D135)', () => {
   it('승인 뒤 앞선 할 일이 실패하면 다음 task를 띄우지 않고 중단됨으로 둔다. 원인을 치우면 [재개]로 이어 간다', async () => {
     const s = await start(scenario())
