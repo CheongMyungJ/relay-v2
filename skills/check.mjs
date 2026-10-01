@@ -203,6 +203,7 @@ const spec = {
     ['5.6.1', '답 기록: 사람 선택 → by: human', /`by: human`/],
     ['5.6.1', '답 기록: 알아서 해 → 추천안, by: ai', /알아서 해[\s\S]*`by: ai`/],
     ['5.6.1', '답 기록: 모름', /모름[\s\S]*`assumptions`[\s\S]*`open_questions`/],
+    ['D230', 'open_questions는 물었는데 답이 없는 것만', /`open_questions` holds only questions you asked the human that are still unanswered[\s\S]*the intent already settles/],
     ['5.6.2', '실행하는 때: 완료조건 충족', /completion criteria of this skill are met \| `status: awaiting_approval`/],
     ['5.6.2', '실행하는 때: 진행 불가', /cannot proceed \| `status: blocked`/],
     ['5.6.2', '실행하는 때: 사람의 마무리 요청', /asks you to wrap up/],

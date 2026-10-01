@@ -34,8 +34,11 @@ const enabled = (mode === '1' || dry) && (cases.length === 0 || cases.includes('
 const OUT = path.join(APP, 'test-results', 'claude')
 const APP_PROCESS = path.join(APP, 'test/claude/app-process.mjs')
 const TASK_TIMEOUT_MS = 25 * 60 * 1000
-/** 첫 요청을 받은 뒤 앱을 끝내기까지 기다리는 시간. 에이전트가 일하는 도중에 끊는다 */
-const WORK_MS = dry ? 1000 : 10_000
+/**
+ * 첫 요청을 받은 뒤 앱을 끝내기까지 기다리는 시간. 에이전트가 일하는 도중에 끊는다. 실제 claude가 S 요청의 의도
+ * 정리를 10초 안에 끝낸 적이 있어(2026-10-01, sonnet) 스킬과 context.md를 읽는 동안에 끊는다
+ */
+const WORK_MS = dry ? 1000 : 3_000
 /** handoff 없이 턴이 끝났을 때 사람이 보내는 말 (real.test.ts와 같음) */
 const NUDGE = '스킬의 절차를 계속해 주세요. 마치면 종료 절차대로 handoff를 쓰고 턴을 끝내 주세요.'
 
