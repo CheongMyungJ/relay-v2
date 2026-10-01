@@ -141,7 +141,7 @@ test('엔진 설정에서 Codex를 골라 앱 질문창으로 답하고 다음 t
       const rect = footer.getBoundingClientRect()
       return !!footer.ownerDocument
         .elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)
-        ?.closest('.modal-back')
+        ?.closest('dialog:modal')
     }),
   ).resolves.toBe(true)
   await window.getByLabel('기본 엔진').selectOption('claude')
