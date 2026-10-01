@@ -37,7 +37,7 @@ const draftTemplate = codeBlocks(read('work-start/SKILL.md'), 'markdown').find((
 )
 
 describe('스킬 원본이 있다 (5.6.3)', () => {
-  it('노드마다 skills/<스킬>/SKILL.md가 있다. design과 implement를 포함한다 (D232)', () => {
+  it('노드마다 skills/<스킬>/SKILL.md가 있다. design, implement, refactor를 포함한다 (D232, D258)', () => {
     for (const n of [...ALL_NODES, 'respond' as const]) {
       const skill = NODE_INFO[n].skill
       expect(fs.existsSync(path.join(SKILLS, skill, 'SKILL.md')), skill).toBe(true)

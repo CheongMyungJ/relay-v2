@@ -391,6 +391,55 @@ export const FIXED_FILES = {
     "import { test } from 'node:test'\nimport assert from 'node:assert'\nimport { avg } from '../src/avg.js'\n\ntest('평균', () => assert.strictEqual(avg([1, 2, 3]), 2))\ntest('빈 배열', () => assert.strictEqual(avg([]), 0))\n",
 }
 
+/** refactor.md의 `## 계획` 본문 (5.6.10, D272). 계획과 리팩터링의 [요약] 맨 위에 보인다 (D278) */
+export const REFACTOR_PLAN = [
+  '- 목표 구조: 합계는 src/sum.js의 sum 하나에서만 계산한다',
+  '- 고려한 대안: 없음',
+  '- 사람 제안 판정: 없음',
+  '- 단계: 1. sum 추출 — 완료조건 5',
+].join('\n')
+
+/** refactor.md (5.6.10, D272): 다섯 절. 안전망 커밋 해시 줄은 I64 */
+export const REFACTOR_DOC = [
+  '## 계획',
+  REFACTOR_PLAN,
+  '',
+  '## 안전망 테스트',
+  '- 안전망 커밋: (안전망 커밋)',
+  '| 바꾸는 곳 | 테스트 위치(기존 / 새로) | 잡는 동작 | 기준 코드 |',
+  '|---|---|---|---|',
+  '| avg | test/avg-safety.test.js(새로) | 평균 | 통과 |',
+  '',
+  '## 변경 요약',
+  '- 단계 1 — src/sum.js, src/avg.js — sum 추출, 커밋 "refactor: sum 추출"',
+  '',
+  '## 찾은 버그와 받아들인 차이',
+  '- (찾은 버그) src/avg.js — 빈 배열이면 NaN — 고치지 않음',
+  '',
+  '## 테스트 실행',
+  '- 명령: npm test',
+  '- 결과: 커밋마다 통과',
+  '- 실패 항목: 없음',
+  '',
+].join('\n')
+
+/** 계획과 리팩터링이 구조를 바꾸기 전에 커밋하는 안전망 테스트 (D259). 기준 코드에서 통과한다 */
+export const REFACTOR_SAFETY_FILES = {
+  'test/avg-safety.test.js':
+    "import { test } from 'node:test'\nimport assert from 'node:assert'\nimport { avg } from '../src/avg.js'\n\ntest('평균 (안전망)', () => assert.strictEqual(avg([2, 4]), 3))\n",
+}
+
+/** 안전망 뒤에 커밋하는 구조 변경. 동작은 그대로다 (D260) */
+export const REFACTOR_FILES = {
+  'src/sum.js': 'export function sum(xs) {\n  return xs.reduce((a, b) => a + b, 0)\n}\n',
+  'src/avg.js':
+    "import { sum } from './sum.js'\n\nexport function avg(xs) {\n  return sum(xs) / xs.length\n}\n",
+}
+
+/** 리팩터링 pr.md (D274) */
+export const REFACTOR_PR =
+  '# 합계 계산을 sum으로 추출\n\n## 요약\n## 목표 구조\n## 동작 보존\n## 변경\n## 찾은 버그\n## 테스트\n'
+
 // ---------- 노드마다의 기본 단계 ----------
 
 const decision = (what: string, by: 'ai' | 'human' = 'ai') => ({ what, why: `${what}인 이유`, by })
@@ -456,6 +505,23 @@ export function steps(node: NodeName): Step[] {
           text: handoff({
             decisions: [decision('짝수 길이는 가운데 두 값의 평균')],
             summary: '테스트를 먼저 쓰고 median을 구현해 커밋했다.',
+          }),
+        },
+        { do: 'stop' },
+      ]
+    case 'refactor':
+      // 사람이 정할 결정이 없어 묻지 않는다 (5.6.10, D267). 안전망을 먼저 커밋하고 단계마다 커밋한다 (D259, D269)
+      return [
+        { do: 'prompt' },
+        { do: 'commit', files: REFACTOR_SAFETY_FILES, message: 'test: avg 안전망' },
+        { do: 'commit', files: REFACTOR_FILES, message: 'refactor: sum 추출' },
+        { do: 'write', file: 'refactor.md', text: REFACTOR_DOC },
+        {
+          do: 'write',
+          file: 'handoff.md',
+          text: handoff({
+            decisions: [decision('합계는 sum 하나에서 계산')],
+            summary: '안전망을 커밋하고 sum을 추출해 커밋했다.',
           }),
         },
         { do: 'stop' },

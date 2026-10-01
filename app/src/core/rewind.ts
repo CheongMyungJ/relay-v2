@@ -41,7 +41,10 @@ export interface StepPlan {
   /** 새 task의 시작 이유 (시나리오 2-5) */
   reason: StartReason
   code: StepCode
-  /** [현재 코드 위에서 이어서]를 고를 수 있다: 버그 수정의 fix, 기능 추가의 design과 implement로 되감을 때 (6.2, D254) */
+  /**
+   * [현재 코드 위에서 이어서]를 고를 수 있다: 버그 수정의 fix, 기능 추가의 design과 implement, 리팩터링의 refactor로
+   * 되감을 때 (6.2, D254, D278)
+   */
   keepCodeOffered: boolean
   /** 의도 승인 전 [intake 다시]에서 바꿀 유형 (D237). 바꾸지 않으면 null */
   type: WorkType | null

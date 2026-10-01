@@ -40,7 +40,7 @@ const CLOSING =
 const PRESS = '[승인]을 누르세요.'
 
 /**
- * 자동 승인을 켤 수 있는 단계(fix, design, implement)의 문장 (D132). 자동 승인 여부는 턴이 끝날 때의 설정으로 정하고
+ * 자동 승인을 켤 수 있는 단계(fix, design, implement, refactor)의 문장 (D132). 자동 승인 여부는 턴이 끝날 때의 설정으로 정하고
  * (D128) 설정은 task가 도는 중에도 바뀌며, 스킬은 이 문구를 그대로 찍으므로 두 경우를 함께 적는다
  */
 const AUTO_SENTENCE =
@@ -388,11 +388,14 @@ function attempts(items: readonly DiscardedAttempt[]): string {
 
 /**
  * 되감기의 코드 (6.2, D116, D117). [현재 코드 위에서 이어서]로 design에 들어오면 지금 코드를 읽고 design.md만 고친다.
- * design은 코드를 바꾸지 않는다 (D243, D254)
+ * design은 코드를 바꾸지 않는다 (D243, D254). refactor는 안전망 커밋을 다시 만들지 않는다 (5.6.10, D278)
  */
 function codeNote(sel: SelectionInput, node: TaskNode): string {
   if (sel.keepCode && node === 'design') {
     return '[현재 코드 위에서 이어서]: 폐기된 시도의 커밋이 남아 있다. 지금 코드를 읽고 `design.md`를 고친다. 코드는 바꾸지 않는다. 이어지는 구현이 그 코드 위에서 고친다.'
+  }
+  if (sel.keepCode && node === 'refactor') {
+    return '[현재 코드 위에서 이어서]: 폐기된 시도의 커밋이 남아 있다. 그 위에서 이어서 고친다. 안전망 커밋은 다시 만들지 않고, 더 필요한 안전망은 구조를 바꾸기 전에 따로 커밋한다.'
   }
   if (sel.keepCode) {
     return '[현재 코드 위에서 이어서]: 폐기된 시도의 커밋이 남아 있다. 그 위에서 이어서 고친다.'

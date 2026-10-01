@@ -391,7 +391,13 @@ describe('마무리 안내 문구 (D104, D132)', () => {
   it('승인 방식 절은 task를 시작할 때의 설정이다. 문구는 설정과 상관없이 같다 (D128, D132)', () => {
     const config: AppConfig = {
       ...DEFAULT_CONFIG,
-      auto_approve: { fix: false, design: false, implement: false, respond: false },
+      auto_approve: {
+        fix: false,
+        design: false,
+        implement: false,
+        refactor: false,
+        respond: false,
+      },
     }
     const md = buildContext(input('fix', {}, config))
     expect(section(md, '승인 방식')).toBe(
@@ -414,7 +420,7 @@ describe('마무리 안내 문구 (D104, D132)', () => {
 describe('Work별 덮어쓰기 (D72)', () => {
   const config: AppConfig = {
     ...DEFAULT_CONFIG,
-    auto_approve: { fix: true, design: false, implement: true, respond: true },
+    auto_approve: { fix: true, design: false, implement: true, refactor: true, respond: true },
     question_mode: { ...DEFAULT_CONFIG.question_mode, fix: 'confirm_each' },
   }
 
@@ -791,5 +797,62 @@ describe('context.md: 기능 추가 (D232, D236, D256)', () => {
     expect(
       discardedAttempts('bugfix', [{ taskId: 't-03', node: 'verify', handoff }])[0]?.recommended,
     ).toBeNull()
+  })
+})
+
+describe('context.md: 리팩터링 (D258, D278)', () => {
+  function refactorInput(node: NodeName, overrides: Partial<ContextInput> = {}): ContextInput {
+    const { work, task } = workAt(node, { type: 'refactor' })
+    return input('intake', {
+      work,
+      task,
+      taskDir: `${WORK_DIR}\\tasks\\${taskDirName(task)}`,
+      intent: node === 'intake' ? null : INTENT,
+      ...overrides,
+    })
+  }
+
+  it('task 정보에 업무 유형과 refactor 스킬을 넣는다 (D261)', () => {
+    const md = buildContext(refactorInput('refactor'))
+    expect(section(md, 'task 정보')).toContain('- 업무 유형: 리팩터링 (`refactor`)')
+    expect(section(md, 'task 정보')).toContain(
+      '- node: refactor (계획과 리팩터링)\n- skill: refactor',
+    )
+  })
+
+  it('선택 가능한 다음 단계는 리팩터링의 파이프라인이다 (3.2)', () => {
+    const steps = (node: NodeName) =>
+      section(buildContext(refactorInput(node)), '선택 가능한 다음 단계')
+    expect(steps('intake')).toBe('- 기본 다음 단계: refactor (계획과 리팩터링)\n- 이전 단계: 없음')
+    expect(steps('refactor')).toBe(
+      '- 기본 다음 단계: verify (리뷰와 검증)\n- 이전 단계: intake (의도 정리)',
+    )
+    expect(steps('verify')).toBe(
+      '- 기본 다음 단계: Work 완료\n- 이전 단계: intake (의도 정리), refactor (계획과 리팩터링)',
+    )
+  })
+
+  it('refactor의 마무리 안내 문구는 fix와 같고 기본은 자동 승인이다 (D132, D276)', () => {
+    expect(closingMessage('refactor')).toBe(closingMessage('fix'))
+    expect(section(buildContext(refactorInput('refactor')), '승인 방식')).toMatch(
+      /^자동 승인 \(task를/,
+    )
+  })
+
+  it('[현재 코드 위에서 이어서]로 refactor에 들어오면 안전망 커밋을 다시 만들지 않는다고 적는다 (5.6.10, D278)', () => {
+    const selection: SelectionInput = {
+      reason: 'rewind',
+      from: { taskId: 't-03', node: 'verify' },
+      instruction: null,
+      discarded: [],
+      dropped: [],
+      skipped: [],
+      keepCode: true,
+      reset: false,
+    }
+    const md = buildContext(refactorInput('refactor', { selection }))
+    expect(section(md, '되감기로 들어옴 (먼저 읽을 것)')).toContain(
+      '그 위에서 이어서 고친다. 안전망 커밋은 다시 만들지 않고',
+    )
   })
 })

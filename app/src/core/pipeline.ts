@@ -17,11 +17,12 @@ export interface NodeInfo {
 /**
  * 유형별 파이프라인 순서 (3.1, D227, D232). Work는 그 유형의 순서를 모두 지난다. 되감기와 건너뛰기, 이전 단계는 이
  * 순서로 가른다(6.2). fix는 재현과 원인 분석을 함께 하고(D228), design은 설계와 구현 계획을 함께 하고(D232),
- * verify는 리뷰와 최종 검증을 함께 한다 (D229)
+ * refactor는 계획, 안전망, 구조 변경을 함께 하고(D258), verify는 리뷰와 최종 검증을 함께 한다 (D229)
  */
 export const PIPELINES: Readonly<Record<WorkType, readonly NodeName[]>> = {
   bugfix: ['intake', 'fix', 'verify'],
   feature: ['intake', 'design', 'implement', 'verify'],
+  refactor: ['intake', 'refactor', 'verify'],
 }
 
 /** Work의 업무 유형. work.json에 type이 없으면 버그 수정이다 (D256, I58) */
@@ -35,12 +36,14 @@ export function inPipeline(type: WorkType, node: TaskNode): node is NodeName {
 }
 
 /**
- * [현재 코드 위에서 이어서](6.2)를 주는 단계: 버그 수정의 fix, 기능 추가의 design과 implement (D254).
+ * [현재 코드 위에서 이어서](6.2)를 주는 단계: 버그 수정의 fix, 기능 추가의 design과 implement (D254), 리팩터링의
+ * refactor (D278).
  * design은 코드를 바꾸지 않고 design.md만 고치며, 이어지는 implement가 그 코드 위에서 고친다
  */
 export const KEEP_CODE_NODES: Readonly<Record<WorkType, readonly NodeName[]>> = {
   bugfix: ['fix'],
   feature: ['design', 'implement'],
+  refactor: ['refactor'],
 }
 
 /** PR 대응 task의 노드 (D187). 파이프라인 밖이다 (D188) */
@@ -61,6 +64,12 @@ export const NODE_INFO: Readonly<Record<TaskNode, NodeInfo>> = {
   fix: { node: 'fix', skill: 'fix', title: '원인 분석과 수정', artifacts: ['fix.md'] },
   design: { node: 'design', skill: 'design', title: '설계와 계획', artifacts: ['design.md'] },
   implement: { node: 'implement', skill: 'implement', title: '구현', artifacts: ['implement.md'] },
+  refactor: {
+    node: 'refactor',
+    skill: 'refactor',
+    title: '계획과 리팩터링',
+    artifacts: ['refactor.md'],
+  },
   verify: {
     node: 'verify',
     skill: 'verify',
