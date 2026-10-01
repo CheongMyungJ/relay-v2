@@ -36,6 +36,15 @@ const draftTemplate = codeBlocks(read('work-start/SKILL.md'), 'markdown').find((
   b.startsWith('## 목표\n'),
 )
 
+describe('스킬 원본이 있다 (5.6.3)', () => {
+  it('노드마다 skills/<스킬>/SKILL.md가 있다. design과 implement를 포함한다 (D232)', () => {
+    for (const n of [...ALL_NODES, 'respond' as const]) {
+      const skill = NODE_INFO[n].skill
+      expect(fs.existsSync(path.join(SKILLS, skill, 'SKILL.md')), skill).toBe(true)
+    }
+  })
+})
+
 describe('템플릿이 있다', () => {
   it('_common.md에 handoff 템플릿과 값을 채운 예시, work-start에 intent.draft.md 템플릿이 있다', () => {
     expect(handoffTemplate).toBeDefined()
