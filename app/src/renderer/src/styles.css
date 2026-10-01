@@ -692,6 +692,34 @@ fieldset.field {
   justify-self: start;
 }
 
+/* 설정 목록의 묶음: 공통 / 버그 수정 / 기능 추가 / PR 대응 (D256) */
+.form-group {
+  display: grid;
+  gap: 6px;
+}
+
+.form-group-title {
+  color: var(--text-dim);
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* 업무 유형 고르기 (D236, D237) */
+.work-type {
+  display: flex;
+  gap: 6px;
+}
+
+/* 사이드바와 머리 띠의 업무 유형 (D256) */
+.type-tag {
+  font-size: 11px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
 .modal h3 {
   margin: 4px 0 0;
   font-size: 13px;

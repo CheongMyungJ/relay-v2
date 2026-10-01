@@ -92,11 +92,14 @@ import {
 import {
   buildContext,
   discardedAttempts,
+  keptCodeDesign,
   previousInputs,
+  type CarriedCode,
   type PreviousRound,
   type PreviousTask,
   type RespondInput,
   type SelectionInput,
+  type TaskRef,
 } from '../core/context'
 import {
   ASK_TOOL,
@@ -123,7 +126,7 @@ import {
   sameChanges,
   stoppedVerify,
 } from '../core/delivery'
-import { NODE_INFO, RESPOND } from '../core/pipeline'
+import { NODE_INFO, RESPOND, workType } from '../core/pipeline'
 import {
   CHECK_WAIT_MS,
   allowedMethods,
@@ -280,6 +283,7 @@ import type {
   TaskRecord,
   UncommittedAction,
   WorkState,
+  WorkType,
 } from '../shared/work'
 import type { SessionPool } from './pool'
 import type { UiPort } from './ports'
@@ -683,6 +687,7 @@ export class WorkRunner {
   private check(task: TaskRecord, files: Readonly<Record<string, string>>): TaskCheck {
     return checkTask({
       node: task.node,
+      type: workType(this.work),
       files,
       config: this.ctx.config(),
       formatVersion: task.format_version,
@@ -955,6 +960,7 @@ export class WorkRunner {
       decisionLog: decisionsWithout(decisions?.text ?? '', discarded),
       ...previousInputs(earlier),
       selection: await this.selectionInput(task),
+      carried: await this.carriedInput(task),
       ...(task.node === 'verify' ? { delivery: closingButtons(this.checks()) } : {}),
       respond: await this.respondInput(task),
     })
@@ -1032,6 +1038,20 @@ export class WorkRunner {
     this.changed()
   }
 
+  /** [현재 코드 위에서 이어서]로 되감은 design 다음의 implement (D254). 아니면 null */
+  private async carriedInput(task: TaskRecord): Promise<CarriedCode | null> {
+    const from = keptCodeDesign(this.work, task)
+    if (!from) return null
+    const discarded: (TaskRef & { path: string })[] = []
+    for (const id of from.selection?.discarded ?? []) {
+      const t = this.task(id)
+      if (!t) continue
+      for (const p of await this.files.artifacts(t))
+        discarded.push({ taskId: t.id, node: t.node, path: p })
+    }
+    return { from: { taskId: from.id, node: from.node }, discarded }
+  }
+
   /** 단계 선택으로 들어온 task의 입력 (6.2): 사람 추가 지시와, 되감기면 폐기된 시도 요약 */
   private async selectionInput(task: TaskRecord): Promise<SelectionInput | null> {
     const sel = task.selection
@@ -1043,6 +1063,7 @@ export class WorkRunner {
     const attempts =
       reason === 'rewind'
         ? discardedAttempts(
+            workType(this.work),
             await Promise.all(
               tasks.map(async (t) => {
                 const handoff = await this.handoffOf(t)
@@ -1556,13 +1577,16 @@ export class WorkRunner {
 
   // ---------- 승인 (시나리오 4, 5) ----------
 
-  /** intent 초안으로 intent.md를 확정한다 (4.1, 5.3) */
+  /** intent 초안으로 intent.md를 확정한다 (4.1, 5.3). 머리글에 Work의 업무 유형을 붙인다 (D236) */
   private async confirmIntent(taskId: string, version: number): Promise<void> {
     const task = this.task(taskId)
     if (!task) throw new Error(`${taskId} 없음`)
     const draft = await readText(path.join(this.files.taskDir(task), INTENT_DRAFT_FILE))
     if (draft === null) throw new Error('intent 초안이 없음')
-    const written = await this.files.writeIntent(confirmedIntent(draft, { version }), version)
+    const written = await this.files.writeIntent(
+      confirmedIntent(draft, { version, type: workType(this.work) }),
+      version,
+    )
     await this.ownedWritten('intent.md', written)
   }
 
@@ -1726,10 +1750,18 @@ export class WorkRunner {
    * 단계 선택 대화상자의 미리 보기 (D82). core/rewind의 계산에 git과 파일에서 읽은 것을 더한다:
    * 되돌릴 커밋 수, 커밋 안 된 변경, 폐기될 산출물 파일.
    */
-  async stepPreview(node: NodeName, keepCode: boolean): Promise<StepPreviewResult> {
+  async stepPreview(
+    node: NodeName,
+    keepCode: boolean,
+    type?: WorkType,
+  ): Promise<StepPreviewResult> {
     const { env } = this.ctx
     try {
-      const r = planStep(this.work, node, { keepCode, backups: await this.backups() })
+      const r = planStep(this.work, node, {
+        keepCode,
+        backups: await this.backups(),
+        ...(type ? { type } : {}),
+      })
       if (!r.ok) return r
       const plan = r.plan
       const uncommitted = await statusLines(this.worktree, { env })
@@ -1769,6 +1801,7 @@ export class WorkRunner {
         at: this.ctx.at(),
         node: input.node,
         keepCode: input.keepCode,
+        ...(input.type ? { workType: input.type } : {}),
         instruction: input.instruction,
         expect: input.expect,
         backups,
@@ -2877,6 +2910,7 @@ export class WorkRunner {
       warnings: check.warnings,
       emphasis: emphasis({
         node: task.node,
+        type: workType(this.work),
         handoff: header,
         errors: check.errors,
         uncommitted,
@@ -4076,6 +4110,7 @@ export class WorkRunner {
       projectId: this.project.project_id,
       projectName: path.basename(this.project.repo_path),
       workId: w.work_id,
+      type: workType(w),
       title: this.title,
       status: w.status,
       statusLabel: WORK_STATUS_LABEL[w.status],

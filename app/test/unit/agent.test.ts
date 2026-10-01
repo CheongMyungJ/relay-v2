@@ -11,7 +11,14 @@ import type { Handoff } from '../../src/shared/contracts'
 const at = '2026-09-30T10:00:00Z'
 const codex = { ...DEFAULT_CONFIG, agent_engine: 'codex' as const }
 const makeWork = (engine: AgentEngine = 'claude') =>
-  createWork({ engine, workId: 'w-20260930-001', baseBranch: 'main', baseCommit: 'base', at }).work
+  createWork({
+    type: 'bugfix',
+    engine,
+    workId: 'w-20260930-001',
+    baseBranch: 'main',
+    baseCommit: 'base',
+    at,
+  }).work
 
 const handoff: Handoff = {
   status: 'awaiting_approval',
@@ -129,7 +136,6 @@ describe('엔진 선택과 이전 기록 (E3, E5)', () => {
           warnings: [],
           handoff,
           handoffHeader: handoff,
-          intentDraft: null,
         },
       },
       codex,

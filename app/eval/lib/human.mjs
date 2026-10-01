@@ -4,6 +4,7 @@ import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { ask } from './ai.mjs'
+import { words } from './kind.mjs'
 
 const GUIDES = path.resolve(import.meta.dirname, '../guides')
 
@@ -98,8 +99,9 @@ const ACTION_HELP = {
 
 function systemPrompt(kind, scenario, guide) {
   const known = scenario.knowledge ?? []
+  const w = words(scenario)
   const lines = [
-    '너는 사용성 평가에 참가한 소프트웨어 개발자다. 실제 사람처럼 도구를 써서 버그를 고친다. 너의 판단과 느낌이 평가 자료가 된다.',
+    `너는 사용성 평가에 참가한 소프트웨어 개발자다. 실제 사람처럼 도구를 써서 ${w.task}. 너의 판단과 느낌이 평가 자료가 된다.`,
     '',
     '## 규칙',
     '- 너는 화면에 보이는 것만 안다. 파일을 직접 읽거나 고치지 않는다. 바뀐 코드를 보고 싶으면 inspect_diff를 쓴다(에디터로 바뀐 코드를 훑어보는 것과 같다).',
@@ -120,13 +122,15 @@ function systemPrompt(kind, scenario, guide) {
     '- done {summary}, give_up {reason}',
     '',
     '## 끝의 기준',
-    '버그가 고쳐졌다고 네가 납득하고, 고친 내용이 로컬 브랜치에 커밋된 상태. 원격 push나 PR은 하지 않는다(원격 저장소가 평가용이다).',
+    `${w.goal} 네가 납득하고, ${w.did} 내용이 로컬 브랜치에 커밋된 상태. 원격 push나 PR은 하지 않는다(원격 저장소가 평가용이다).`,
     '',
     '## 도구 설명서 (네가 미리 읽어 둔 것)',
     guide.trim(),
     '',
     '## 네 상황',
-    '### 고칠 버그 (네가 받은 리포트나 네가 본 것)',
+    `### 일의 종류: ${w.label}`,
+    '',
+    `### ${w.subject}`,
     ...(Array.isArray(scenario.report) ? scenario.report : [scenario.report]),
     '',
     '### 네가 아는 것',
@@ -205,7 +209,7 @@ export class Human {
 
   async survey(ending) {
     const prompt = [
-      `평가가 끝났다 (${ending}). 방금 쓴 도구로 이 버그를 고친 경험을 솔직하게 답하라. 도구를 편들지 않는다.`,
+      `평가가 끝났다 (${ending}). 방금 쓴 도구로 ${words(this.o.scenario).done} 경험을 솔직하게 답하라. 도구를 편들지 않는다.`,
       '점수는 1~7이다.',
       '- effort: 들인 수고 (1 매우 적음 ~ 7 매우 많음)',
       '- clarity: 지금 무슨 일이 일어나는지, 내가 무엇을 해야 하는지 알기 쉬웠나 (7이 좋음)',
@@ -213,7 +217,7 @@ export class Human {
       '- confidence: 결과가 맞다는 확신 (7이 좋음)',
       '- trust: 에이전트가 한 일을 믿을 만하게 보여 줬나 (7이 좋음)',
       '- recovery: 문제가 생겼을 때 되돌리거나 이어 가기 쉬웠나 (7이 좋음). 그런 일이 없었으면 null',
-      '- reuse: 비슷한 버그에 이 도구를 다시 쓰고 싶나 (7이 좋음)',
+      `- reuse: ${words(this.o.scenario).again} 이 도구를 다시 쓰고 싶나 (7이 좋음)`,
       '- best, worst: 가장 좋았던 점과 가장 불편했던 점 (한두 문장)',
       '- comment: 덧붙일 말',
     ].join('\n')

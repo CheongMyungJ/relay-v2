@@ -41,6 +41,7 @@ import type {
   TaskStatus,
   UncommittedAction,
   WorkState,
+  WorkType,
 } from '../shared/work'
 import {
   REVIEWABLE,
@@ -52,7 +53,14 @@ import {
 import { canClean } from './cleanup'
 import { mergeWorkSettings } from './config'
 import { commitMessage, deliveryStart, stashMessage, stoppedVerify } from './delivery'
-import { NODES, RESPOND, WORK_COMPLETE, defaultNext, isPipelineNode, isPrevious } from './pipeline'
+import {
+  RESPOND,
+  WORK_COMPLETE,
+  defaultNext,
+  isPipelineNode,
+  stopsForRecommendation,
+  workType,
+} from './pipeline'
 import { workBranch } from './records'
 import { CUT_ERROR, OPERATION_BLOCKS, OWNED_FILES, cutOperation } from './recovery'
 import {
@@ -318,8 +326,10 @@ export interface AppRestarted extends WorkEvent {
 export interface SelectStep extends WorkEvent {
   type: 'selectStep'
   node: NodeName
-  /** fix로 되감을 때 [현재 코드 위에서 이어서] */
+  /** [현재 코드 위에서 이어서] (6.2, D254) */
   keepCode: boolean
+  /** 의도 승인 전 [intake 다시]에서 고른 유형 (D237). 없거나 지금 유형과 같으면 바꾸지 않는다 */
+  workType?: WorkType
   /** 사람 추가 지시. 비어 있으면 없는 것이다 */
   instruction: string
   expect: StepExpect
@@ -949,7 +959,7 @@ function holdsNow(
   check: AutoApproveInput['check'],
   background: boolean,
 ): AutoHoldReason[] {
-  const holds = autoApproveHolds({ node: task.node, check, background })
+  const holds = autoApproveHolds({ node: task.node, type: workType(work), check, background })
   // Codex Stop은 미완료 작업 전체의 부재를 보장하지 않는다. 타이머/감시에서도 이 판정을 유지한다 (E8).
   const engine = knownTaskEngine(task)
   return engine === null
@@ -1080,6 +1090,8 @@ export interface NewWork {
   /** 첫 task 생성 시 고정한다. 기존 호출자는 Claude를 사용한다. */
   engine?: AgentEngine
   workId: string
+  /** 업무 유형 (D236). 사람이 새 Work 대화상자에서 고른 값이다 */
+  type: WorkType
   /** 기준 브랜치와, Work를 만들 때 분기한 기준 커밋 (시나리오 1, D97) */
   baseBranch: string
   baseCommit: string
@@ -1095,6 +1107,7 @@ export function createWork(input: NewWork): Transition {
   const empty: WorkState = {
     schema_version: 1,
     work_id: input.workId,
+    type: input.type,
     status: 'active',
     created_at: input.at,
     base_branch: input.baseBranch,
@@ -1111,6 +1124,7 @@ export function createWork(input: NewWork): Transition {
     work,
     effects: [
       log(work, input.at, 'work.created', {
+        type: input.type,
         base_branch: input.baseBranch,
         base_commit: input.baseCommit,
       }),
@@ -1728,7 +1742,7 @@ function approveNow(work: WorkState, task: TaskRecord, a: Approval): Transition 
   }
 
   const rec = header?.recommended_next
-  if (rec && NODES.includes(rec.node) && isPrevious(node, rec.node)) {
+  if (rec && stopsForRecommendation(workType(work), node, rec.node)) {
     next = {
       ...next,
       status: 'stopped',
@@ -1740,7 +1754,7 @@ function approveNow(work: WorkState, task: TaskRecord, a: Approval): Transition 
     next = { ...next, status: 'stopped', stop: { kind: 'after_step', task_id: task.id } }
     return { work: next, effects }
   }
-  const nextNode = defaultNext(node)
+  const nextNode = defaultNext(workType(work), node)
   if (nextNode === WORK_COMPLETE) {
     next = { ...next, status: 'completed', completed_at: a.at }
     effects.push(log(work, a.at, 'work.completed', { delivery: 'none' }))
@@ -1887,7 +1901,7 @@ function resumeWork(work: WorkState, e: ResumeWork): Transition {
   const node = stopped?.node
   if (!node || !isPipelineNode(node)) return unchanged(work, '다음 단계를 정할 수 없음')
   const active: WorkState = { ...omit(work, 'stop'), status: 'active' }
-  const nextNode = defaultNext(node)
+  const nextNode = defaultNext(workType(work), node)
   if (nextNode === WORK_COMPLETE) {
     return {
       work: { ...active, status: 'completed', completed_at: e.at },
@@ -1948,7 +1962,11 @@ function configUpdated(work: WorkState, e: ConfigUpdated, config: AppConfig): Tr
  * 미리 본 뒤 지금 task나 그 task가 끝났는지가 바뀌었으면 받지 않는다.
  */
 function selectStep(work: WorkState, e: SelectStep): Transition {
-  const r = planStep(work, e.node, { keepCode: e.keepCode, backups: e.backups })
+  const r = planStep(work, e.node, {
+    keepCode: e.keepCode,
+    backups: e.backups,
+    ...(e.workType ? { type: e.workType } : {}),
+  })
   if (!r.ok) return unchanged(work, r.error)
   const plan = r.plan
   if (plan.from.id !== e.expect.taskId || plan.done !== e.expect.done) {
@@ -1970,6 +1988,7 @@ function selectStep(work: WorkState, e: SelectStep): Transition {
       reset_to: plan.code.to,
       backup_branch: plan.code.backupBranch,
       backup_commit: null,
+      ...(plan.type ? { type: plan.type } : {}),
     }
     effects.push({
       type: 'rewindCode',
@@ -1987,7 +2006,12 @@ function selectStep(work: WorkState, e: SelectStep): Transition {
     keep_code: plan.code.kind === 'keep',
     reset: null,
   }
-  return select(base, { node: plan.node, reason: plan.reason, selection }, e.at, effects)
+  return select(
+    base,
+    { node: plan.node, reason: plan.reason, selection, ...(plan.type ? { type: plan.type } : {}) },
+    e.at,
+    effects,
+  )
 }
 
 /**
@@ -2033,7 +2057,13 @@ function rewindApplied(work: WorkState, e: RewindApplied): Transition {
     },
   }
   const extra = e.extraBackup === undefined ? {} : { extra_backup_branch: e.extraBackup }
-  return select(work, { node: op.node, reason: 'rewind', selection }, e.at, [], extra)
+  return select(
+    work,
+    { node: op.node, reason: 'rewind', selection, ...(op.type ? { type: op.type } : {}) },
+    e.at,
+    [],
+    extra,
+  )
 }
 
 /** 되감기의 git 작업이 실패했다. 기록만 지운다. 끝낸 세션은 끝난 채로 두고, 오류는 main이 알린다 */
@@ -2048,13 +2078,15 @@ interface Selected {
   node: NodeName
   reason: StartReason
   selection: StepSelection
+  /** 의도 승인 전 [intake 다시]에서 바꿀 유형 (D237). 바꾸지 않으면 없다 */
+  type?: WorkType
 }
 
 /**
  * 단계 선택을 반영한다 (6.2): 폐기할 task를 폐기됨으로 두고(파일은 남음), 고른 단계의 새 task를 만들고,
  * Work를 진행 중으로 되돌리고(멈춤 표시와 진행 중 작업 기록은 지움), 새 task를 시작한다.
  * 되감기는 task.rewound, 건너뛰기는 task.skipped_to를 새 task의 이벤트로 남긴다 (5.5). extra는 되감기 이벤트에
- * 더할 것이다.
+ * 더할 것이다. 유형을 바꾸면 work.json의 type을 바꾸고 task.rewound에 type_from, type_to를 적는다 (D237, I59).
  */
 function select(
   work: WorkState,
@@ -2072,10 +2104,12 @@ function select(
   )
   const next: WorkState = {
     ...omit(work, 'stop', 'operation'),
+    ...(s.type ? { type: s.type } : {}),
     status: 'active',
     tasks: [...tasks, created],
   }
   const common = { node: s.node, from_task: sel.from_task, discarded: sel.discarded }
+  const typed = s.type ? { type_from: workType(work), type_to: s.type } : {}
   if (s.reason === 'rewind') {
     const reset = sel.reset
       ? { reset_to: sel.reset.to, backup_branch: sel.reset.backup_branch }
@@ -2085,7 +2119,7 @@ function select(
         next,
         at,
         'task.rewound',
-        { ...common, keep_code: sel.keep_code, ...reset, ...extra },
+        { ...common, keep_code: sel.keep_code, ...reset, ...typed, ...extra },
         created,
       ),
     )

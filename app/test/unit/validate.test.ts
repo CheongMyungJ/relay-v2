@@ -5,6 +5,7 @@ import {
   bounceMessage,
   checkHandoff,
   checkIntentDraft,
+  intentDraftBody,
   checkPr,
   checkTask,
   isValid,
@@ -73,15 +74,16 @@ const DRAFT_BODY = [
   '',
 ].join('\n')
 
-function draft(header = 'type: bugfix', body = DRAFT_BODY): string {
-  return `---\n${header}\n---\n${body}`
+/** intent 초안. 머리글이 없다 (D236). header를 주면 습관처럼 쓴 머리글을 붙인다 (I58) */
+function draft(header?: string, body = DRAFT_BODY): string {
+  return header === undefined ? body : `---\n${header}\n---\n${body}`
 }
 
-const WARN = { warnChars: 1500 }
+const WARN = { warnChars: 1500, type: 'bugfix' as const }
 const errorsOf = (r: { errors: { message: string }[] }) => r.errors.map((e) => e.message)
 
 function check(node: NodeName, files: Record<string, string>): ReturnType<typeof checkTask> {
-  return checkTask({ node, files, config: DEFAULT_CONFIG })
+  return checkTask({ node, type: 'bugfix', files, config: DEFAULT_CONFIG })
 }
 
 // ---------- 머리글 ----------
@@ -215,11 +217,11 @@ describe('스키마 검사: handoff (5.2.1)', () => {
       '`recommended_next` 형식이 틀림 (기대: null 또는 {node, reason}, 지금: 문자열)',
     ])
     expect(run({ recommended_next: { node: 'deploy', reason: '배포' } })).toEqual([
-      '`recommended_next.node` 값이 허용값이 아님 (허용값: intake | fix | verify, 지금: deploy)',
+      '`recommended_next.node` 값이 허용값이 아님 (허용값: intake | fix | design | implement | verify, 지금: deploy)',
     ])
     // 없어진 노드도 허용값이 아니다 (D227)
     expect(run({ recommended_next: { node: 'review', reason: '다시 리뷰' } })).toEqual([
-      '`recommended_next.node` 값이 허용값이 아님 (허용값: intake | fix | verify, 지금: review)',
+      '`recommended_next.node` 값이 허용값이 아님 (허용값: intake | fix | design | implement | verify, 지금: review)',
     ])
     expect(run({ recommended_next: { node: 'verify' } })).toEqual([
       '`recommended_next.reason` 없음: 필수 필드',
@@ -233,33 +235,38 @@ describe('스키마 검사: handoff (5.2.1)', () => {
   })
 })
 
-describe('스키마 검사: intent 초안 (5.3, D38)', () => {
-  it('통과: type이 bugfix다. 머리글에 필수 필드는 type뿐이다 (D227)', () => {
-    const r = checkIntentDraft(draft('type: bugfix'), WARN)
+describe('intent 초안: 머리글 없음 (5.3, D236, I58)', () => {
+  it('통과: 머리글 없이 본문만 있다', () => {
+    const r = checkIntentDraft(draft(), WARN)
     expect(errorsOf(r)).toEqual([])
     expect(r.warnings).toEqual([])
-    expect(r.value).toEqual({ type: 'bugfix' })
   })
 
-  it('없어진 size를 적으면 정의되지 않은 필드라 경고만 한다 (D85, D227)', () => {
-    const r = checkIntentDraft(draft('type: bugfix\nsize: M'), WARN)
+  it('머리글이 있으면 읽지 않고 경고만 한다. 머리글의 값은 따지지 않는다', () => {
+    for (const header of ['type: bugfix', 'type: feature\nsize: M', 'title: 토큰']) {
+      const r = checkIntentDraft(draft(header), WARN)
+      expect(errorsOf(r), header).toEqual([])
+      expect(r.warnings.map((w) => [w.part, w.message])).toEqual([
+        [
+          'header',
+          '머리글은 읽지 않음: intent 초안에는 머리글이 없다. 유형과 버전은 앱이 의도 승인 때 붙인다 (D236)',
+        ],
+      ])
+    }
+  })
+
+  it('반례: 수평선으로 시작한 본문은 머리글로 잘라 내지 않는다. 사이에 YAML이 아닌 줄이 있으면 본문이다 (PR #23 리뷰)', () => {
+    const [head, ...rest] = DRAFT_BODY.split('## 완료조건')
+    const text = `---\n${head}---\n## 완료조건${rest.join('## 완료조건')}`
+    const r = checkIntentDraft(text, WARN)
     expect(errorsOf(r)).toEqual([])
-    expect(r.warnings.map((w) => [w.part, w.field])).toEqual([['header', 'size']])
+    expect(r.warnings).toEqual([])
+    expect(intentDraftBody(text)).toEqual({ body: text, header: false })
   })
 
-  it('실패: type이 허용값이 아니거나 없다', () => {
-    expect(errorsOf(checkIntentDraft(draft('type: feature'), WARN))).toEqual([
-      '`type` 값이 허용값이 아님 (허용값: bugfix, 지금: feature)',
-    ])
-    expect(errorsOf(checkIntentDraft(draft('title: 토큰'), WARN))).toEqual([
-      '`type` 없음: 필수 필드',
-    ])
-  })
-
-  it('머리글 오류는 header, 본문 오류는 body로 나눈다 (D90)', () => {
+  it('머리글이 있어도 본문 절은 머리글 뒤에서 찾는다. 오류는 모두 body다 (D90)', () => {
     const r = checkIntentDraft(draft('type: feature', '## 목표\n'), WARN)
     expect(r.errors.map((e) => [e.part, e.field])).toEqual([
-      ['header', 'type'],
       ['body', '비목표'],
       ['body', '원하는 결과'],
       ['body', '완료조건'],
@@ -272,6 +279,22 @@ describe('스키마 검사: intent 초안 (5.3, D38)', () => {
 describe('추가 검사: recommended_next.node가 선택 가능한 다음 단계 안에 있다 (3.2)', () => {
   const rec = (node: string) => handoff({ recommended_next: { node, reason: '이유' } })
   const run = (text: string, node: NodeName) => errorsOf(checkHandoff(text, { node, ...WARN }))
+
+  it('기능 추가: 그 유형의 이전 단계나 기본 다음 단계만 쓴다 (3.2, D232)', () => {
+    const feature = (text: string, node: NodeName) =>
+      errorsOf(checkHandoff(text, { node, ...WARN, type: 'feature' }))
+    expect(feature(rec('design'), 'intake')).toEqual([])
+    expect(feature(rec('implement'), 'design')).toEqual([])
+    expect(feature(rec('design'), 'implement')).toEqual([])
+    expect(feature(rec('verify'), 'implement')).toEqual([])
+    expect(feature(rec('implement'), 'verify')).toEqual([])
+    expect(feature(rec('fix'), 'verify')).toEqual([
+      '`recommended_next.node` 값이 선택 가능한 다음 단계가 아님 (허용값: intake | design | implement, 지금: fix)',
+    ])
+    expect(run(rec('design'), 'verify')).toEqual([
+      '`recommended_next.node` 값이 선택 가능한 다음 단계가 아님 (허용값: intake | fix, 지금: design)',
+    ])
+  })
 
   it('통과: 이전 단계나 기본 다음 단계', () => {
     expect(run(rec('fix'), 'intake')).toEqual([])
@@ -473,7 +496,9 @@ describe('경고는 오류로 치지 않는다 (D85, D86, 분량 기준)', () =>
   it('문자열과 목록의 길이에는 상한이 없다 (D86)', () => {
     const long = () => ({ what: '가'.repeat(5000), why: '나'.repeat(5000), by: 'ai' })
     const text = handoff({ decisions: Array.from({ length: 200 }, long) })
-    expect(errorsOf(checkHandoff(text, { node: 'fix', warnChars: 1e9 }))).toEqual([])
+    expect(errorsOf(checkHandoff(text, { node: 'fix', type: 'bugfix', warnChars: 1e9 }))).toEqual(
+      [],
+    )
   })
 })
 
@@ -488,9 +513,24 @@ describe('task 검사 (5.2.1)', () => {
   })
 
   it('intake는 handoff 없이도 intent 초안을 검사한다 (D38)', () => {
-    const r = check('intake', { 'intent.draft.md': draft('type: feature') })
+    const r = check('intake', { 'intent.draft.md': draft(undefined, '## 목표\n## 비목표\n') })
     expect(r.handoff_present).toBe(false)
-    expect(errorsOf(r)).toEqual(['`type` 값이 허용값이 아님 (허용값: bugfix, 지금: feature)'])
+    expect(errorsOf(r)).toEqual([
+      '`## 원하는 결과` 절 없음: intent 초안 본문의 필수 절',
+      '`## 완료조건` 절 없음: intent 초안 본문의 필수 절',
+    ])
+  })
+
+  it('필수 산출물: 설계와 계획은 design.md, 구현은 implement.md다 (3.1)', () => {
+    const feature = (node: NodeName, files: Record<string, string>) =>
+      errorsOf(checkTask({ node, type: 'feature', files, config: DEFAULT_CONFIG }))
+    expect(feature('design', { 'handoff.md': handoff() })).toEqual([
+      '`design.md` 없음: `status: awaiting_approval`일 때 필수 산출물',
+    ])
+    expect(feature('implement', { 'handoff.md': handoff() })).toEqual([
+      '`implement.md` 없음: `status: awaiting_approval`일 때 필수 산출물',
+    ])
+    expect(feature('design', { 'handoff.md': handoff(), 'design.md': '' })).toEqual([])
   })
 
   it('유효한 handoff면 머리글 값을 돌려준다', () => {
@@ -498,7 +538,6 @@ describe('task 검사 (5.2.1)', () => {
     expect(isValid(r)).toBe(true)
     expect(r.status).toBe('awaiting_approval')
     expect(r.handoff?.decisions).toEqual(HANDOFF_FIELDS.decisions)
-    expect(r.intentDraft).toEqual({ type: 'bugfix' })
   })
 
   it('산출물 쪽 오류만 있으면 handoff 머리글 값은 남긴다', () => {
@@ -512,7 +551,7 @@ describe('되돌림 메시지 (D21, D87)', () => {
   it('첫 줄은 사람도 읽는 안내이고, 파일, 필드, 어긴 규칙을 적고 경고는 넣지 않는다 (D220)', () => {
     const r = check('intake', {
       'handoff.md': handoff({ status: 'blocked', blocked_reason: null, extra_field: 1 }),
-      'intent.draft.md': draft('type: feature'),
+      'intent.draft.md': draft(undefined, '## 목표\n## 비목표\n## 원하는 결과\n'),
     })
     const msg = bounceMessage(r)
     // Claude Code는 되돌림을 "Stop hook error: <첫 줄>"로 그린다
@@ -523,7 +562,7 @@ describe('되돌림 메시지 (D21, D87)', () => {
     expect(msg.split('\n')[1]).toContain('오류가 가리키는 파일을 고치고')
     expect(msg.split('\n').slice(2)).toEqual([
       '- handoff.md: `blocked_reason` 없음: `status: blocked`일 때 필수',
-      '- intent.draft.md: `type` 값이 허용값이 아님 (허용값: bugfix, 지금: feature)',
+      '- intent.draft.md: `## 완료조건` 절 없음: intent 초안 본문의 필수 절',
     ])
     expect(msg).not.toContain('extra_field')
   })

@@ -98,7 +98,8 @@ export function intentDraft(opts: { omit?: string[]; note?: string } = {}) {
     .filter(([name]) => !opts.omit?.includes(name))
     .map(([name, text]) => `## ${name}\n${text}\n`)
     .join('\n')
-  return `---\ntype: bugfix\n---\n${body}${opts.note ? `\n${opts.note}\n` : ''}`
+  // 머리글은 없다: 유형과 버전은 앱이 의도 승인 때 붙인다 (D236, I58)
+  return `${body}${opts.note ? `\n${opts.note}\n` : ''}`
 }
 
 const q = (s: string) => JSON.stringify(s)
@@ -253,6 +254,136 @@ export const REVIEWED_FILES = {
 
 export const PR = '# 빈 배열의 평균을 0으로\n\n## 요약\n## 원인\n## 변경\n## 테스트\n'
 
+// ---------- 기능 추가 (D232) ----------
+
+/** 기능 추가 요청: 중앙값 함수를 더한다 */
+export const FEATURE_REQUEST = [
+  '배열의 중앙값을 구하는 median(xs)을 src/avg.js에 더해 주세요.',
+  '',
+  '빈 배열이면 0을 돌려주면 좋겠습니다.',
+  '',
+].join('\n')
+
+/** 기능 추가 intent 초안 (5.3, D239, D240). 머리글이 없다 */
+export function featureIntentDraft(opts: { note?: string } = {}) {
+  const sections: [string, string][] = [
+    ['목표', '배열의 중앙값을 구하는 median(xs)을 더한다.'],
+    ['비목표', '- 없음'],
+    ['원하는 결과', '홀수·짝수 길이 배열과 빈 배열의 중앙값을 돌려준다.'],
+    [
+      '완료조건',
+      [
+        '- [ ] `npm test`가 통과한다',
+        '- [ ] 기존 테스트를 약화하거나 삭제하지 않는다',
+        '- [ ] 완료조건의 각 동작을 확인하는 테스트가 있다',
+        '- [ ] 홀수 길이 배열이면 가운데 값을 돌려준다',
+        '- [ ] 빈 배열이면 0을 돌려준다',
+      ].join('\n'),
+    ],
+  ]
+  const body = sections.map(([name, text]) => `## ${name}\n${text}\n`).join('\n')
+  return `${body}${opts.note ? `\n${opts.note}\n` : ''}`
+}
+
+/** design.md의 `## 유저 시나리오`와 `## 요구사항` 본문 (5.6.8, D244). 설계와 계획의 [요약] 맨 위에 보인다 (D223) */
+export const DESIGN_SCENARIO =
+  '1. 통계 코드를 쓰는 개발자가 배열의 중앙값을 구하려고 median(xs)을 부른다'
+export const DESIGN_REQUIREMENTS = [
+  '### 기능',
+  '- F1. 홀수 길이 배열이면 가운데 값을 돌려준다 — 출처: 완료조건 4',
+  '- F2. 빈 배열이면 0을 돌려준다 — 출처: 완료조건 5',
+  '### 비기능',
+  '없음',
+].join('\n')
+
+/** design.md (5.6.8, D244): 일곱 절 */
+export const DESIGN_DOC = [
+  '## 유저 시나리오',
+  DESIGN_SCENARIO,
+  '',
+  '## 요구사항',
+  DESIGN_REQUIREMENTS,
+  '',
+  '## 접근',
+  '- 방식: 정렬한 사본의 가운데 값',
+  '- 고려한 대안: 없음',
+  '- 사람 제안 판정: 없음',
+  '',
+  '## 바뀌는 곳',
+  '- src/avg.js — median(xs)를 내보낸다',
+  '',
+  '## 구현 계획',
+  '1. median 더하기 — src/avg.js — F1, F2',
+  '',
+  '## 테스트 계획',
+  '| 요구사항 | 테스트 위치와 방식 |',
+  '|---|---|',
+  '| F1, F2 | test/avg.test.js, node:test |',
+  '',
+  '## 위험',
+  '- 없음',
+  '',
+].join('\n')
+
+/** implement.md의 `## 계획과 달라진 점` 본문 (5.6.9, D250). 구현의 [요약] 맨 위에 보인다 (D223) */
+export const IMPLEMENT_CHANGES = '- 짝수 길이 배열은 가운데 두 값의 평균으로 했다'
+
+/** implement.md (5.6.9, D250): 네 절 */
+export const IMPLEMENT_DOC = [
+  '## 변경 요약',
+  '- 계획 단계 1 — src/avg.js — median을 더했다, 커밋 "feat: median"',
+  '',
+  '## 계획과 달라진 점',
+  IMPLEMENT_CHANGES,
+  '',
+  '## 새 동작 테스트',
+  '| 완료조건 | 테스트 위치 | 구현 전 | 구현 후 |',
+  '|---|---|---|---|',
+  '| 홀수 길이 배열이면 가운데 값 | test/avg.test.js | 실패 | 통과 |',
+  '| 빈 배열이면 0 | test/avg.test.js | 실패 | 통과 |',
+  '',
+  '## 테스트 실행',
+  '- 명령: npm test',
+  '- 결과: 통과',
+  '- 실패 항목: 없음',
+  '',
+].join('\n')
+
+/** 구현이 먼저 커밋하는 새 동작 테스트 (D247). 구현 전에는 실패한다 */
+export const FEATURE_TEST_FILES = {
+  'test/median.test.js':
+    "import { test } from 'node:test'\nimport assert from 'node:assert'\nimport { median } from '../src/avg.js'\n\ntest('홀수 길이', () => assert.strictEqual(median([3, 1, 2]), 2))\ntest('빈 배열', () => assert.strictEqual(median([]), 0))\n",
+}
+
+/** 구현이 테스트 뒤에 커밋하는 코드 */
+export const FEATURE_FILES = {
+  'src/avg.js':
+    'export function avg(xs) {\n  return xs.reduce((a, b) => a + b, 0) / xs.length\n}\n\nexport function median(xs) {\n  if (xs.length === 0) return 0\n  const s = [...xs].sort((a, b) => a - b)\n  const m = Math.floor(s.length / 2)\n  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2\n}\n',
+}
+
+/** 기능 추가 verification.md의 판정 절 (5.6.6, D251) */
+export const FEATURE_VERDICTS = [
+  '## 완료조건 판정',
+  '| 완료조건 | 판정 | 근거 |',
+  '|---|---|---|',
+  '| `npm test`가 통과한다 | 통과 | 3 passed |',
+  '| 기존 테스트를 약화하거나 삭제하지 않는다 | 통과 | 시험 추가만 |',
+  '| 완료조건의 각 동작을 확인하는 테스트가 있다 | 통과 | test/median.test.js |',
+  '| 홀수 길이 배열이면 가운데 값을 돌려준다 | 통과 | 홀수 길이 시험 |',
+  '| 빈 배열이면 0을 돌려준다 | 통과 | 빈 배열 시험 |',
+  '',
+  '## 테스트 파일 변경',
+  '- test/median.test.js — 약화 아님 — 새 파일',
+  '',
+  '## 남은 위험',
+  '- 없음',
+  '',
+].join('\n')
+
+/** 기능 추가 pr.md (D252) */
+export const FEATURE_PR =
+  '# 배열의 중앙값 median 추가\n\n## 요약\n## 동작\n## 주요 설계 결정\n## 변경\n## 테스트\n'
+
 export const FIXED_FILES = {
   'src/avg.js':
     'export function avg(xs) {\n  if (xs.length === 0) return 0\n  return xs.reduce((a, b) => a + b, 0) / xs.length\n}\n',
@@ -293,6 +424,38 @@ export function steps(node: NodeName): Step[] {
             decisions: [decision('원인은 0으로 나눔'), decision('빈 배열 검사를 앞에 둔다')],
             rejected: ['reduce 초기값 누락: 초기값이 있음'],
             summary: '재현됨. 원인은 0으로 나눔. 빈 배열 검사를 넣어 커밋했다.',
+          }),
+        },
+        { do: 'stop' },
+      ]
+    case 'design':
+      // 사람이 정할 결정이 없어 묻지 않고 design.md를 쓴다 (5.6.8, D242). 코드는 바꾸지 않는다 (D243)
+      return [
+        { do: 'prompt' },
+        { do: 'write', file: 'design.md', text: DESIGN_DOC },
+        {
+          do: 'write',
+          file: 'handoff.md',
+          text: handoff({
+            decisions: [decision('정렬한 사본의 가운데 값')],
+            summary: '설계와 구현 계획을 썼다.',
+          }),
+        },
+        { do: 'stop' },
+      ]
+    case 'implement':
+      // 새 동작 테스트를 먼저 커밋하고 구현을 커밋한다 (5.6.9, D247)
+      return [
+        { do: 'prompt' },
+        { do: 'commit', files: FEATURE_TEST_FILES, message: 'test: median' },
+        { do: 'commit', files: FEATURE_FILES, message: 'feat: median' },
+        { do: 'write', file: 'implement.md', text: IMPLEMENT_DOC },
+        {
+          do: 'write',
+          file: 'handoff.md',
+          text: handoff({
+            decisions: [decision('짝수 길이는 가운데 두 값의 평균')],
+            summary: '테스트를 먼저 쓰고 median을 구현해 커밋했다.',
           }),
         },
         { do: 'stop' },
@@ -371,7 +534,33 @@ export function verifyApplied(): Step[] {
   ]
 }
 
-/** 기본 시나리오 (3.1): intake → fix → verify. 모든 Work가 이 경로를 지난다 (D227) */
+/**
+ * 기능 추가 시나리오 (3.1, D232): intake → design → implement → verify. intent 초안과 verify의 판정, PR 초안을 기능
+ * 추가의 모양으로 바꾼다
+ */
+export function featureScenario(override: Partial<Record<SkillName, Step[]>> = {}): Scenario {
+  const intake = steps('intake').map((st) =>
+    st.do === 'write' && st.file === 'intent.draft.md' ? { ...st, text: featureIntentDraft() } : st,
+  )
+  const verify = steps('verify').map((st) =>
+    st.do === 'write' && st.file === 'verification.md'
+      ? { ...st, text: REVIEW_NONE + FEATURE_VERDICTS }
+      : st.do === 'write' && st.file === 'pr.md'
+        ? { ...st, text: FEATURE_PR }
+        : st,
+  )
+  return {
+    tasks: {
+      'work-start': intake,
+      design: steps('design'),
+      implement: steps('implement'),
+      verify,
+      ...override,
+    },
+  }
+}
+
+/** 버그 수정 시나리오 (3.1): intake → fix → verify (D227) */
 export function scenario(override: Partial<Record<SkillName, Step[]>> = {}): Scenario {
   return {
     tasks: {

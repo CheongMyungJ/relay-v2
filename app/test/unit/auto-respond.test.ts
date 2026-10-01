@@ -70,7 +70,6 @@ function valid(o: Partial<Handoff> = {}): TaskCheck {
     warnings: [],
     handoff,
     handoffHeader: handoff,
-    intentDraft: null,
   }
 }
 
@@ -126,6 +125,7 @@ const HEAD = 'head0001'
 /** intake → fix → verify를 지나 [PR 생성]까지 가 PR 진행이 된 Work (M9). 파이프라인의 단계는 자동 승인을 끈 설정으로 지난다 */
 function inPr(settings: WorkState['settings'] = {}): WorkState {
   let work = createWork({
+    type: 'bugfix',
     workId: 'w-20260929-011',
     baseBranch: 'main',
     baseCommit: 'base0001',
@@ -551,6 +551,7 @@ describe('사람 손 없이 이어진 라운드의 셈과 상한 (D171, D191)', 
       }),
     ])
     const active = createWork({
+      type: 'bugfix',
       workId: 'w-20260929-012',
       baseBranch: 'main',
       baseCommit: 'b',

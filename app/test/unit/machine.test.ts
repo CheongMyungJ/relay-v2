@@ -50,7 +50,6 @@ function valid(handoff: Partial<Handoff> = {}): TaskCheck {
     warnings: [],
     handoff: { ...HANDOFF, ...handoff },
     handoffHeader: { ...HANDOFF, ...handoff },
-    intentDraft: { type: 'bugfix' },
   }
 }
 
@@ -66,7 +65,6 @@ const MISSING: TaskCheck = {
   warnings: [],
   handoff: null,
   handoffHeader: null,
-  intentDraft: null,
 }
 
 const ERROR: FormatIssue = {
@@ -80,6 +78,7 @@ const INVALID: TaskCheck = { ...MISSING, handoff_present: true, status: 'blocked
 
 function newWork(): WorkState {
   return createWork({
+    type: 'bugfix',
     workId: 'w-20260926-001',
     baseBranch: 'main',
     baseCommit: 'base0001',
@@ -95,6 +94,8 @@ const MANUAL: AppConfig = {
   ...DEFAULT_CONFIG,
   auto_approve: {
     fix: false,
+    design: false,
+    implement: false,
     respond: false,
   },
 }
@@ -164,6 +165,7 @@ const types = (effects: Effect[]) =>
 describe('Work 만들기와 task 시작 (시나리오 1, 2)', () => {
   it('Work를 만들면 intake task를 시작한다', () => {
     const r = createWork({
+      type: 'bugfix',
       workId: 'w-20260926-001',
       baseBranch: 'main',
       baseCommit: 'base0001',
@@ -200,7 +202,7 @@ describe('Work 만들기와 task 시작 (시나리오 1, 2)', () => {
           ts: '2026-09-26T10:00:00+09:00',
           work_id: 'w-20260926-001',
           type: 'work.created',
-          payload: { base_branch: 'main', base_commit: 'base0001' },
+          payload: { type: 'bugfix', base_branch: 'main', base_commit: 'base0001' },
         },
       },
       { type: 'startTask', taskId: 't-01', node: 'intake', reason: 'default' },
@@ -1031,7 +1033,7 @@ describe('대기와 세션 종료에서의 승인, [오류 무시하고 승인] 
 
   it('intake의 intent 초안 머리글 오류와 초안 없음은 넘길 수 없다 (D90)', () => {
     for (const issue of [TYPE, NO_DRAFT, DRAFT_HEADER]) {
-      const check: TaskCheck = { ...withErrors([issue, BODY]), intentDraft: null }
+      const check: TaskCheck = withErrors([issue, BODY])
       const work = idleWith(check)
       const r = forceApprove(work, check)
       expect(r.rejected).toMatch(/오류를 무시하고 승인할 수 없음/)
@@ -2727,6 +2729,7 @@ describe('재시작 때의 고아 프로세스와 정리 세션 (시나리오 9-
 describe('앱 소유 파일의 해시 (D91, D124)', () => {
   it('Work를 만들면 request.md의 해시를 적는다. 없으면 빈 기록이다', () => {
     const made = createWork({
+      type: 'bugfix',
       workId: 'w-20260926-001',
       baseBranch: 'main',
       baseCommit: 'base0001',
@@ -2765,6 +2768,8 @@ describe('자동 승인 (4.3, D127~D131)', () => {
     ...DEFAULT_CONFIG,
     auto_approve: {
       fix: true,
+      design: false,
+      implement: true,
       respond: true,
     },
     auto_approve_countdown_sec: 15,
@@ -3482,5 +3487,129 @@ describe('PR 진행 (시나리오 10, D152~D200)', () => {
       deleted_branches: ['relay/w-20260926-001'],
       deleted_remote_branch: 'relay/w-20260926-001',
     })
+  })
+})
+
+describe('기능 추가 (D232~D237, D249)', () => {
+  function featureWork(): WorkState {
+    return createWork({
+      type: 'feature',
+      workId: 'w-20260926-001',
+      baseBranch: 'main',
+      baseCommit: 'base0001',
+      at: at(),
+    }).work
+  }
+  const nodes = (work: WorkState) => work.tasks.map((t) => [t.node, t.status])
+
+  it('Work에 유형을 적고 work.created에 남긴다 (D236)', () => {
+    const r = createWork({
+      type: 'feature',
+      workId: 'w-20260926-001',
+      baseBranch: 'main',
+      baseCommit: 'base0001',
+      at: '2026-09-26T10:00:00+09:00',
+    })
+    expect(r.work.type).toBe('feature')
+    const logged = r.effects[0]
+    expect(logged?.type === 'log' && logged.event.payload).toMatchObject({ type: 'feature' })
+  })
+
+  it('intake → design → implement → verify → Work 완료로 간다', () => {
+    let work = featureWork()
+    for (const node of ['intake', 'design', 'implement', 'verify']) {
+      expect(currentTask(work)?.node).toBe(node)
+      work = approve(stop(launch(work), valid()).work, valid()).work
+    }
+    expect(work.status).toBe('completed')
+    expect(nodes(work)).toEqual([
+      ['intake', 'approved'],
+      ['design', 'approved'],
+      ['implement', 'approved'],
+      ['verify', 'approved'],
+    ])
+  })
+
+  it('앱 기본값에서 design은 수동, implement는 자동 승인 카운트다운을 시작한다 (D234, D249)', () => {
+    let work = approve(stop(launch(featureWork()), valid()).work, valid()).work
+    const design = stop(launch(work), valid(), {}, DEFAULT_CONFIG).work
+    expect(currentTask(design)).toMatchObject({ node: 'design', status: 'awaiting_approval' })
+    expect(currentTask(design)?.countdown).toBeUndefined()
+    work = approve(design, valid()).work
+    const implement = stop(launch(work), valid(), {}, DEFAULT_CONFIG).work
+    expect(currentTask(implement)?.node).toBe('implement')
+    expect(currentTask(implement)?.countdown).toBeDefined()
+  })
+
+  it('implement가 design을 추천하면 자동 승인하지 않고, 승인하면 멈춘다 (D23, D248)', () => {
+    let work = featureWork()
+    for (let i = 0; i < 2; i++) work = approve(stop(launch(work), valid()).work, valid()).work
+    const back = valid({ recommended_next: { node: 'design', reason: '설계가 틀림' } })
+    const held = stop(launch(work), back, {}, DEFAULT_CONFIG).work
+    expect(currentTask(held)?.countdown).toBeUndefined()
+    expect(currentTask(held)?.auto_hold?.reasons).toEqual(['recommended_next'])
+    const r = approve(held, back)
+    expect(r.work.status).toBe('stopped')
+    expect(r.work.stop).toMatchObject({ kind: 'recommended_back', node: 'design' })
+    // 기본 다음 단계(verify)를 추천하면 자동 승인 조건을 만족한다
+    const next = valid({ recommended_next: { node: 'verify', reason: '다음' } })
+    expect(currentTask(stop(launch(work), next, {}, DEFAULT_CONFIG).work)?.countdown).toBeDefined()
+  })
+
+  it('verify가 이 유형에 없는 단계(fix)를 추천한 채 [오류 무시하고 승인]해도 Work를 완료하지 않고 멈춘다 (D23, PR #23 리뷰)', () => {
+    let work = featureWork()
+    for (let i = 0; i < 3; i++) work = approve(stop(launch(work), valid()).work, valid()).work
+    expect(currentTask(work)?.node).toBe('verify')
+    const back = valid({ recommended_next: { node: 'fix', reason: '수정부터 다시' } })
+    const r = approve(stop(launch(work), back).work, back)
+    expect(r.work.status).toBe('stopped')
+    expect(r.work.stop).toMatchObject({ kind: 'recommended_back', node: 'fix' })
+  })
+
+  it('의도 승인 전 [intake 다시]에서 유형을 바꾸면 work.json의 type을 바꾸고 task.rewound에 남긴다 (D237, I59)', () => {
+    const work = stop(launch(newWork()), valid()).work
+    const r = apply(work, {
+      type: 'selectStep',
+      at: at(),
+      node: 'intake',
+      keepCode: false,
+      workType: 'feature',
+      instruction: '',
+      expect: { taskId: 't-01', done: false },
+      backups: [],
+    })
+    expect(r.rejected).toBeUndefined()
+    // intake의 시작 커밋으로 되돌리는 되감기라 진행 중 작업에 유형을 적는다
+    expect(r.work.operation).toMatchObject({ kind: 'rewind', node: 'intake', type: 'feature' })
+    expect(r.work.type).toBe('bugfix')
+    const applied = apply(r.work, { type: 'rewind.applied', at: at(), head: 'start-t-01' })
+    expect(applied.work.type).toBe('feature')
+    expect(nodes(applied.work)).toEqual([
+      ['intake', 'discarded'],
+      ['intake', 'working'],
+    ])
+    const logged = applied.effects.find((e) => e.type === 'log')
+    expect(logged?.type === 'log' && logged.event.payload).toMatchObject({
+      type_from: 'bugfix',
+      type_to: 'feature',
+    })
+    // 의도 승인 뒤의 다음 단계는 바꾼 유형의 것이다
+    const next = approve(stop(launch(applied.work), valid()).work, valid()).work
+    expect(currentTask(next)?.node).toBe('design')
+  })
+
+  it('의도 승인 뒤에는 유형을 바꾸지 않는다 (D237)', () => {
+    const work = launch(approve(stop(launch(featureWork()), valid()).work, valid()).work)
+    const r = apply(work, {
+      type: 'selectStep',
+      at: at(),
+      node: 'intake',
+      keepCode: false,
+      workType: 'bugfix',
+      instruction: '',
+      expect: { taskId: 't-02', done: false },
+      backups: [],
+    })
+    expect(r.rejected).toBe('유형은 의도 승인 전 [intake 다시]에서만 바꿀 수 있음 (D237)')
   })
 })

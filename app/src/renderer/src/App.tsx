@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AppInfo } from '../../shared/api'
 import type { NodeName } from '../../shared/contracts'
+import { WORK_TYPE_LABEL, WORK_TYPE_SHORT } from '../../shared/work'
 import type {
   ActivityView,
   CommandResult,
@@ -220,11 +221,16 @@ export function App() {
                   onClick={() => setSelected(w.key)}
                   title={w.title}
                 >
-                  {/* 배지 하나와 현재 단계 (D80). 사람이 필요한 상태는 색으로 강조한다 */}
+                  {/* 배지 하나와 유형, 현재 단계 (D80, D256). 사람이 필요한 상태는 색으로 강조한다 */}
                   <span className={`badge b-${w.badge.kind}${w.badge.hot ? ' hot' : ''}`}>
                     {w.badge.label}
                   </span>
-                  <span className="work-title">{w.title || w.workId}</span>
+                  <span className="work-title">
+                    <span className="type-tag" title={WORK_TYPE_LABEL[w.type]}>
+                      {WORK_TYPE_SHORT[w.type]}
+                    </span>{' '}
+                    {w.title || w.workId}
+                  </span>
                   {!done && t ? <span className="work-step">{t.label}</span> : null}
                 </button>
               )
@@ -297,8 +303,11 @@ export function App() {
                 </span>
               )}
             </>
-          ) : task ? (
+          ) : task && work ? (
             <>
+              <span className="type-tag" title={WORK_TYPE_LABEL[work.type]}>
+                {WORK_TYPE_SHORT[work.type]}
+              </span>
               <span>
                 {task.band}
                 {task.engineLabel ? (

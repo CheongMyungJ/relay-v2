@@ -11,7 +11,7 @@ const source = path.resolve(app, '../docs/contracts')
 const out = path.join(app, 'src/shared/generated')
 const style = JSON.parse(fs.readFileSync(path.join(app, '.prettierrc.json'), 'utf8'))
 
-// handoff.v1.schema.json → Handoff, intent-draft.v1.schema.json → IntentDraft
+// handoff.v1.schema.json → Handoff
 const typeName = (base) =>
   base
     .split('-')

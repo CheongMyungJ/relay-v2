@@ -12,6 +12,7 @@ import type {
   TaskRecord,
   TaskStatus,
   WorkState,
+  WorkType,
 } from '../shared/work'
 import { AUTO_APPROVE_NODES } from './config'
 import { RESPOND, defaultNext, isPipelineNode } from './pipeline'
@@ -62,7 +63,7 @@ export type ApprovalMode = 'manual' | 'auto'
 
 /**
  * 자동 승인을 켤 수 있는 노드인가. intake(의도 승인)와 verify(리뷰와 검증 = Work 완료)는 늘 수동이다 (4.2).
- * PR 대응은 fix처럼 켤 수 있다 (D169)
+ * 기능 추가의 design과 implement(D234, D249), PR 대응은 fix처럼 켤 수 있다 (D169)
  */
 export function autoApprovable(node: TaskNode): node is AutoApproveNode {
   return (AUTO_APPROVE_NODES as readonly TaskNode[]).includes(node)
@@ -91,6 +92,8 @@ export function pendingBackground(body: Readonly<Record<string, unknown>>): bool
 
 export interface AutoApproveInput {
   node: TaskNode
+  /** Work의 업무 유형. 기본 다음 단계가 유형마다 다르다 (3.2) */
+  type: WorkType
   /** 판정하는 때의 형식 검사. 머리글(handoffHeader)에서 조건을 읽는다 */
   check: CheckSummary & { handoffHeader?: Handoff | null }
   /** Stop 때 백그라운드 작업이나 예약된 깨우기가 남아 있었다 (pendingBackground, D129) */
@@ -112,7 +115,7 @@ export function autoApproveHolds(input: AutoApproveInput): AutoHoldReason[] {
   if (h.open_questions.length > 0) out.push('open_questions')
   if (h.intent_deviation) out.push('intent_deviation')
   const rec = h.recommended_next
-  if (rec && (!isPipelineNode(input.node) || rec.node !== defaultNext(input.node))) {
+  if (rec && (!isPipelineNode(input.node) || rec.node !== defaultNext(input.type, input.node))) {
     out.push('recommended_next')
   }
   if (input.background) out.push('background')

@@ -1,7 +1,7 @@
 // 앱이 쓰는 파일의 모양과 id (5.1, 5.3, 5.4). 파일을 읽고 쓰는 것은 adapters/store가 한다.
 import type { Decision, TaskNode } from '../shared/contracts'
-import type { ApprovalBy } from '../shared/work'
-import { normalizeText, parseFrontMatter } from './validate'
+import type { ApprovalBy, WorkType } from '../shared/work'
+import { intentDraftBody, normalizeText } from './validate'
 
 export type { ApprovalBy }
 
@@ -148,22 +148,18 @@ export function decisionsWithout(text: string, taskIds: readonly string[]): stri
 export const INTENT_SCHEMA_VERSION = 1
 
 /**
- * [의도 승인] 때 intent 초안으로 intent.md 확정본을 만든다 (5.3, D88).
- * 머리글은 앱이 붙이는 schema_version, version과 초안의 type이다.
- * 초안의 다른 머리글 필드는 앱이 무시하므로 넣지 않는다 (D85). 본문은 초안 그대로다.
+ * [의도 승인] 때 intent 초안으로 intent.md 확정본을 만든다 (5.3, D88, D236).
+ * 머리글은 앱이 붙이는 schema_version, version과 Work의 업무 유형(type)이다. 초안에는 머리글이 없고, 습관처럼 쓴
+ * 머리글이 있으면 읽지 않고 뗀다 (I58). 본문은 초안 그대로다.
  */
-export function confirmedIntent(draft: string, c: { version: number }): string {
-  const fm = parseFrontMatter(draft)
-  if (!fm.ok) throw new Error(`intent 초안의 머리글을 읽을 수 없음: ${fm.error}`)
-  const type = fm.data['type']
-  if (typeof type !== 'string' || !type) throw new Error('intent 초안에 type이 없음')
+export function confirmedIntent(draft: string, c: { version: number; type: WorkType }): string {
   const header = [
     '---',
     `schema_version: ${INTENT_SCHEMA_VERSION}`,
     `version: ${c.version}`,
-    `type: ${type}`,
+    `type: ${c.type}`,
     '---',
   ]
-  const body = fm.body.replace(/^\n+/, '').trimEnd()
+  const body = intentDraftBody(draft).body.replace(/^\n+/, '').trimEnd()
   return `${[...header, body].join('\n')}\n`
 }

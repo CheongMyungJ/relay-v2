@@ -58,7 +58,7 @@
           "type": "object",
           "required": ["node", "reason"],
           "properties": {
-            "node": { "enum": ["intake", "fix", "verify"] },
+            "node": { "enum": ["intake", "fix", "design", "implement", "verify"] },
             "reason": { "type": "string", "minLength": 1 }
           }
         }

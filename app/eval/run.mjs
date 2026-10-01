@@ -11,6 +11,7 @@ import path from 'node:path'
 import { parseArgs } from 'node:util'
 import { runEpisode } from './lib/episode.mjs'
 import { cleanEnv, findClaude } from './lib/env.mjs'
+import { words } from './lib/kind.mjs'
 import { sleep, writeJson } from './lib/util.mjs'
 import { buildReport, judgeAll } from './report.mjs'
 
@@ -124,7 +125,7 @@ async function main() {
   if (v.help) return console.log(HELP)
   const all = listScenarios()
   if (v.list) {
-    for (const s of all) console.log(`${s.id}  ${s.title}\n    ${s.purpose}`)
+    for (const s of all) console.log(`${s.id}  [${words(s).label}] ${s.title}\n    ${s.purpose}`)
     return
   }
   const scenarios = pickScenarios(v.scenarios, all)

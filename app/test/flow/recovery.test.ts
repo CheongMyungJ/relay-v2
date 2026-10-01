@@ -86,6 +86,7 @@ async function newWork(hh: Harness, projectId: string): Promise<WorkPaths> {
   const r = await hh.relay.createWork(projectId, {
     request: REQUEST,
     baseBranch: 'main',
+    type: 'bugfix',
     baseLocation: 'local',
   })
   if (!r.ok) throw new Error(`Work 생성 실패: ${r.error}`)
@@ -206,6 +207,7 @@ async function checkOf(w: WorkPaths, work: WorkState, taskId: string): Promise<T
   if (!task) throw new Error(`${taskId} 없음`)
   return checkTask({
     node: task.node,
+    type: 'bugfix',
     files: await new WorkFiles(w.dir).taskFiles(task),
     config: DEFAULT_CONFIG,
     formatVersion: task.format_version,

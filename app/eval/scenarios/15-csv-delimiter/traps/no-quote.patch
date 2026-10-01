@@ -1,0 +1,29 @@
+diff --git a/src/csv.js b/src/csv.js
+index 233b6c0..80d7ffd 100644
+--- a/src/csv.js
++++ b/src/csv.js
+@@ -6,8 +6,8 @@ function cell(value) {
+   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+ }
+ 
+-export function toCsv(rows, columns) {
+-  const head = columns.map((c) => cell(c.title)).join(',')
+-  const body = rows.map((r) => columns.map((c) => cell(r[c.key])).join(','))
++export function toCsv(rows, columns, { delimiter = ',' } = {}) {
++  const head = columns.map((c) => cell(c.title)).join(delimiter)
++  const body = rows.map((r) => columns.map((c) => cell(r[c.key])).join(delimiter))
+   return [head, ...body].join('\n')
+ }
+diff --git a/src/orders.js b/src/orders.js
+index 9c5659b..b789900 100644
+--- a/src/orders.js
++++ b/src/orders.js
+@@ -8,6 +8,6 @@ const COLUMNS = [
+ ]
+ 
+ // 주문 목록을 내보낼 CSV 글
+-export function exportOrders(orders) {
+-  return toCsv(orders, COLUMNS)
++export function exportOrders(orders, options = {}) {
++  return toCsv(orders, COLUMNS, options)
+ }

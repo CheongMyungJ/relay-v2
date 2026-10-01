@@ -75,6 +75,8 @@ export interface Harness {
 export const MANUAL: Pick<AppConfig, 'auto_approve'> = {
   auto_approve: {
     fix: false,
+    design: false,
+    implement: false,
     respond: false,
   },
 }

@@ -13,6 +13,16 @@ Review the whole change of this Work, apply only the findings the human picks, t
 - `fix.md` at the path in `context.md`: the reproduction steps (`## 재현`), the cause, the change and the reproduction test.
 - The change to review is from the base commit (from `context.md`) to now: `git diff <base commit>`.
 
+## Feature Work (`업무 유형: feature` in `context.md`)
+
+The order and the verdicts are the same. Only these differ:
+
+- **Inputs:** read `design.md` and `implement.md` (paths in `context.md`) instead of `fix.md`. The rules on reproduction steps do not apply.
+- **Review:** also check that the implementation fits the user scenarios, requirements and approach in `design.md`, that `계획과 달라진 점` in `implement.md` is reasonable, and that the new behavior tests really catch the behavior. Do not judge requirements added in the design or non-functional requirements: write a mismatch as a finding.
+- **"완료조건의 각 동작을 확인하는 테스트가 있다":** for each 완료조건, check that a test exists and really checks that behavior, and run it yourself on the final code. For failing before the change, use the record in `implement.md`. A test for a 완료조건 that keeps the current behavior may pass before the change. If a behavior has no test, it is 판정 불가.
+- **Going back:** `implement` if the implementation is wrong, `design` if the design is wrong.
+- **`pr.md`:** use the feature template below.
+
 ## Order
 
 1. **Review.** Write each finding under `## 리뷰 지적` of `verification.md` as a numbered item: severity (차단 / 권장 / 사소), file and line, what is wrong and what you suggest. If there is nothing, write "없음".
@@ -94,13 +104,27 @@ Ask on the spot:
 
 - The first line is `# <PR title>`. The app uses it as the PR title and the rest as the body.
 - Write it in the language the repo uses (recent commits and PRs), not necessarily Korean.
-- If the repo has a PR template (e.g. `.github/pull_request_template.md`), follow its structure. Otherwise use the four sections below, in that language.
+- If the repo has a PR template (e.g. `.github/pull_request_template.md`), follow its structure. Otherwise use the sections below (bugfix: four, feature: five), in that language.
+
+Bugfix:
 
 ```markdown
 # PR 제목
 
 ## 요약
 ## 원인
+## 변경
+## 테스트
+```
+
+Feature (`동작`: what the user scenarios in `design.md` can now do. `주요 설계 결정`: the chosen way and rejected alternatives, briefly):
+
+```markdown
+# PR 제목
+
+## 요약
+## 동작
+## 주요 설계 결정
 ## 변경
 ## 테스트
 ```

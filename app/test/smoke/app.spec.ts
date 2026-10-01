@@ -1,4 +1,4 @@
-// [스모크] 설치한 앱이 뜨고, 가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화면(자동 승인 포함), [단계 선택],
+// [스모크] 설치한 앱이 뜨고, 새 Work에서 유형(버그 수정)을 고른 뒤에야 [시작]이 켜지고(M14, D236), 가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화면(자동 승인 포함), [단계 선택],
 // 자동 승인 카운트다운의 [취소], [push]와 [Work 정리], 다시 켠 뒤 끊긴 작업의 [다시 시도]를 누른다 (I27).
 // M2: 프로젝트 등록 → 새 Work → intake 탭에 PTY 출력 → 창 크기 변경이 PTY에 전달 → [의도 승인]
 // → intent.md 확정, intake 세션 트리 종료, 다음 task 시작. M12: 다음 task의 터미널은 표시 줄로 시작하고, 머리 띠와
@@ -185,9 +185,15 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await win.getByRole('button', { name: '등록' }).click()
   await expect(win.locator('.project-name')).toHaveText('sample', { timeout: 30_000 })
 
-  // 새 Work (시나리오 1)
+  // 새 Work (시나리오 1). 유형에는 기본 선택이 없고, 고르기 전에는 [시작]이 꺼져 있다 (D236)
   await win.getByRole('button', { name: '새 Work' }).click()
   await win.getByLabel('요청').fill(REQUEST)
+  const types = win.getByRole('radiogroup', { name: '업무 유형' })
+  await expect(types.getByRole('radio', { name: '버그 수정' })).not.toBeChecked()
+  await expect(types.getByRole('radio', { name: '기능 추가' })).not.toBeChecked()
+  await expect(win.getByRole('button', { name: '시작' })).toBeDisabled()
+  await types.getByRole('radio', { name: '버그 수정' }).click()
+  await expect(types.getByRole('radio', { name: '버그 수정' })).toBeChecked()
   await win.getByRole('button', { name: '시작' }).click()
 
   // intake 탭: PTY 출력과 머리 띠 (시나리오 2-5, D109)
@@ -291,6 +297,13 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await win.locator('.sidebar').getByRole('button', { name: '설정', exact: true }).click()
   await win.getByLabel('세션 상한').fill('2')
   await expect(win.getByLabel('원인 분석과 수정 자동 승인', { exact: true })).toBeChecked()
+  // 자동 승인 목록은 유형별로 묶는다. 기능 추가의 설계와 계획은 끔, 구현은 켬이 기본이다 (D234, D249, D256)
+  const featureAuto = win.getByRole('group', { name: '기능 추가' }).nth(1)
+  await expect(featureAuto.getByLabel('설계와 계획 자동 승인')).not.toBeChecked()
+  await expect(featureAuto.getByLabel('구현 자동 승인')).toBeChecked()
+  await expect(win.getByRole('group', { name: '버그 수정' }).nth(1)).toContainText(
+    '원인 분석과 수정',
+  )
   await win.getByLabel('자동 승인 카운트다운(초)').fill('600')
   // 리뷰와 검증은 질문 방식만 고른다. 의도 정리와 리뷰와 검증은 늘 수동이라 자동 승인이 없다 (4.2, D229)
   await expect(win.getByLabel('리뷰와 검증 질문 방식', { exact: true })).toHaveValue('draft_first')
@@ -309,7 +322,12 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
       auto_approve_countdown_sec: number
     }
   await expect.poll(() => config().session_limit).toBe(2)
-  expect(config().auto_approve).toEqual({ fix: true, respond: false })
+  expect(config().auto_approve).toEqual({
+    fix: true,
+    design: false,
+    implement: true,
+    respond: false,
+  })
   expect(config().auto_approve_countdown_sec).toBe(600)
 
   // [단계 선택] (6.2, D82): intake를 고르면 결과를 미리 보인다
@@ -372,6 +390,7 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   // 두 번째 Work (M5): 리뷰와 검증까지 간다. 세션 상한 2에서 첫 Work의 세션 하나와 함께 돈다
   await win.getByRole('button', { name: '새 Work' }).click()
   await win.getByLabel('요청').fill(`${REQUEST}\n두 번째 Work`)
+  await win.getByRole('radio', { name: '버그 수정' }).click()
   // 이 Work의 자동 승인은 고르지 않으면 앱 설정을 따른다 (D72). 고급 설정 하나로 접혀 있고, PR 자동 대응은 새 Work
   // 대화상자에 없다 (D226)
   const newWork = win.getByRole('dialog', { name: /^새 Work/ })
@@ -383,6 +402,9 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   const fixAuto = win.getByLabel('원인 분석과 수정 자동 승인', { exact: true })
   await expect(fixAuto).toHaveValue('')
   await expect(fixAuto.locator('option').first()).toHaveText('앱 설정 따름 (켜짐)')
+  // 고른 유형의 단계만 보인다: 버그 수정에는 설계와 계획, 구현이 없다 (D256)
+  await expect(win.getByLabel('설계와 계획 자동 승인', { exact: true })).toHaveCount(0)
+  await expect(win.getByLabel('구현 질문 방식', { exact: true })).toHaveCount(0)
   await win.getByRole('button', { name: '시작' }).click()
   await expect(win.locator('.work-item')).toHaveCount(2, { timeout: 30_000 })
   const intake2 = win.getByRole('button', { name: '의도 승인' })

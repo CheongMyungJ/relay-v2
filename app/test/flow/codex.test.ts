@@ -25,6 +25,7 @@ async function setup(scenario: object) {
   const created = await hh.relay.createWork(projectId, {
     request: REQUEST,
     baseBranch: 'main',
+    type: 'bugfix',
     baseLocation: 'local',
   })
   if (!created.ok) throw new Error(created.error)

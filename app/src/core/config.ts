@@ -15,7 +15,7 @@ import {
 import type { NodeName } from '../shared/contracts'
 import type { ProjectSettings } from '../shared/project'
 import type { MergeMethod } from '../shared/work'
-import { NODES } from './pipeline'
+import { ALL_NODES } from './pipeline'
 import { isAgentEngine, type AgentEngine } from '../shared/agent'
 
 export const SKILLS: readonly SkillName[] = SKILL_TITLES.map(([skill]) => skill)
@@ -32,7 +32,7 @@ export const AUTO_APPROVE_NODES: readonly AutoApproveNode[] = AUTO_APPROVE_TITLE
  * 늘 수동인 노드: 자동 승인을 켤 수 있는 노드의 나머지. 의도 승인과 Work 완료다 (4.2). 자동 승인에
  * 이 키가 있으면 켜든 끄든 받지 않는다
  */
-const MANUAL_NODES: readonly NodeName[] = NODES.filter(
+const MANUAL_NODES: readonly NodeName[] = ALL_NODES.filter(
   (n) => !(AUTO_APPROVE_NODES as readonly NodeName[]).includes(n),
 )
 

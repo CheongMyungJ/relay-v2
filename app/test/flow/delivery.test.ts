@@ -58,6 +58,7 @@ async function setup(s: Scenario, o: Options = {}): Promise<Setup> {
   const r = await hh.relay.createWork(projectId, {
     request: REQUEST,
     baseBranch: 'main',
+    type: 'bugfix',
     baseLocation: 'local',
   })
   if (!r.ok) throw new Error(`Work 생성 실패: ${r.error}`)

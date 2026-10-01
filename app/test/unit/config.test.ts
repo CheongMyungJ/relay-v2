@@ -7,7 +7,7 @@ import {
   mergeWorkSettings,
   normalizeConfig,
 } from '../../src/core/config'
-import { NODE_INFO, NODES, RESPOND } from '../../src/core/pipeline'
+import { ALL_NODES, NODE_INFO, PIPELINES, RESPOND } from '../../src/core/pipeline'
 import { AUTO_APPROVE_TITLES, DEFAULT_CONFIG, SKILL_TITLES } from '../../src/shared/config'
 
 describe('config.json 읽기 (5.1.1)', () => {
@@ -49,11 +49,18 @@ describe('config.json 읽기 (5.1.1)', () => {
     )
   })
 
-  it('자동 승인의 기본값은 원인 분석과 수정만 켬이다. 질문 방식 기본은 모두 초안 우선이다 (5.1.1, D214)', () => {
-    expect(DEFAULT_CONFIG.auto_approve).toEqual({ fix: true, respond: false })
+  it('자동 승인의 기본값은 원인 분석과 수정, 구현이 켬이고 설계와 계획이 끔이다. 질문 방식 기본은 모두 초안 우선이다 (5.1.1, D214, D234, D249)', () => {
+    expect(DEFAULT_CONFIG.auto_approve).toEqual({
+      fix: true,
+      design: false,
+      implement: true,
+      respond: false,
+    })
     expect(DEFAULT_CONFIG.question_mode).toEqual({
       'work-start': 'draft_first',
       fix: 'draft_first',
+      design: 'draft_first',
+      implement: 'draft_first',
       verify: 'draft_first',
       'pr-respond': 'draft_first',
     })
@@ -124,14 +131,14 @@ describe('설정 화면 (D70)', () => {
   it('단계별 자동 승인과 카운트다운을 바꾼다. 자동 승인은 단계마다 덮어쓴다 (4.2, 4.3)', () => {
     const on = {
       ...DEFAULT_CONFIG,
-      auto_approve: { fix: false, respond: true },
+      auto_approve: { fix: false, design: false, implement: true, respond: true },
     }
     const r = applyConfigPatch(on, { auto_approve: { fix: true }, auto_approve_countdown_sec: 30 })
     expect(r).toEqual({
       ok: true,
       value: {
         ...on,
-        auto_approve: { fix: true, respond: true },
+        auto_approve: { fix: true, design: false, implement: true, respond: true },
         auto_approve_countdown_sec: 30,
       },
     })
@@ -140,7 +147,7 @@ describe('설정 화면 (D70)', () => {
   })
 
   it('자동 승인을 켤 수 있는 단계가 아닌 노드는 모두 "켤 수 없음"으로 거절한다. 모르는 단계로 거절하지 않는다 (4.2)', () => {
-    const manual = NODES.filter((n) => !(AUTO_APPROVE_NODES as readonly string[]).includes(n))
+    const manual = ALL_NODES.filter((n) => !(AUTO_APPROVE_NODES as readonly string[]).includes(n))
     expect(manual).toEqual(['intake', 'verify'])
     for (const n of manual) {
       expect(applyConfigPatch(DEFAULT_CONFIG, { auto_approve: { [n]: true } }), n).toEqual({
@@ -237,20 +244,51 @@ describe('Work별 설정 (D72)', () => {
 
 describe('화면의 스킬 이름', () => {
   it('노드의 화면 이름(D109)과 같은 순서, 같은 이름이다. PR 대응은 파이프라인 뒤에 둔다 (D187, D188)', () => {
-    expect(SKILL_TITLES).toEqual(
-      [...NODES, RESPOND].map((n) => [NODE_INFO[n].skill, NODE_INFO[n].title]),
+    expect(SKILL_TITLES.map(([skill, title]) => [skill, title])).toEqual(
+      [...ALL_NODES, RESPOND].map((n) => [NODE_INFO[n].skill, NODE_INFO[n].title]),
     )
     expect(SKILL_TITLES).toEqual([
-      ['work-start', '의도 정리'],
-      ['fix', '원인 분석과 수정'],
-      ['verify', '리뷰와 검증'],
-      ['pr-respond', 'PR 대응'],
+      ['work-start', '의도 정리', 'common'],
+      ['fix', '원인 분석과 수정', 'bugfix'],
+      ['design', '설계와 계획', 'feature'],
+      ['implement', '구현', 'feature'],
+      ['verify', '리뷰와 검증', 'common'],
+      ['pr-respond', 'PR 대응', 'pr'],
     ])
   })
 
-  it('자동 승인을 켤 수 있는 단계는 fix와 PR 대응이고 이름은 노드의 화면 이름이다 (4.2, D109, D169)', () => {
-    expect(AUTO_APPROVE_NODES).toEqual(['fix', 'respond'])
-    expect(AUTO_APPROVE_TITLES).toEqual(AUTO_APPROVE_NODES.map((n) => [n, NODE_INFO[n].title]))
+  it('묶음은 그 단계가 있는 파이프라인이다: 두 유형에 있으면 공통, 한 유형에만 있으면 그 유형 (D256)', () => {
+    for (const n of ALL_NODES) {
+      const inBug = PIPELINES.bugfix.includes(n)
+      const inFeature = PIPELINES.feature.includes(n)
+      const group = inBug && inFeature ? 'common' : inBug ? 'bugfix' : 'feature'
+      expect(SKILL_TITLES.find(([s]) => s === NODE_INFO[n].skill)?.[2], n).toBe(group)
+      const auto = AUTO_APPROVE_TITLES.find(([a]) => a === n)
+      if (auto) expect(auto[2], n).toBe(group)
+    }
+  })
+
+  it('자동 승인을 켤 수 있는 단계는 fix, design, implement와 PR 대응이고 이름은 노드의 화면 이름이다 (4.2, D109, D169, D234, D249)', () => {
+    expect(AUTO_APPROVE_NODES).toEqual(['fix', 'design', 'implement', 'respond'])
+    expect(AUTO_APPROVE_TITLES.map(([n, title]) => [n, title])).toEqual(
+      AUTO_APPROVE_NODES.map((n) => [n, NODE_INFO[n].title]),
+    )
+  })
+
+  it('저장된 config.json에 design, implement 키가 없으면 기본값을 쓴다 (D256)', () => {
+    const { config, warnings } = normalizeConfig({
+      auto_approve: { fix: false, respond: true },
+      question_mode: { fix: 'confirm_each' },
+    })
+    expect(warnings).toEqual([])
+    expect(config.auto_approve).toEqual({
+      fix: false,
+      design: false,
+      implement: true,
+      respond: true,
+    })
+    expect(config.question_mode.design).toBe('draft_first')
+    expect(config.question_mode.implement).toBe('draft_first')
   })
 })
 

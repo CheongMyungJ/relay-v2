@@ -11,6 +11,7 @@ import type {
   TaskStatus,
   UncommittedAction,
   WorkStatus,
+  WorkType,
 } from './work'
 
 // ---------- 승인 판정과 승인 화면 (core/approval, core/review) ----------
@@ -522,6 +523,8 @@ export interface WorkView {
   projectId: string
   projectName: string
   workId: string
+  /** 업무 유형 (D236). work.json에 없으면 버그 수정이다 (D256) */
+  type: WorkType
   /** 요청의 첫 줄 */
   title: string
   status: WorkStatus
@@ -628,6 +631,10 @@ export interface StepChoice {
   current: boolean
   /** 에이전트가 추천한 이전 단계 (D23) */
   recommended: boolean
+  /** 되감기로 고르면 [현재 코드 위에서 이어서]를 줄 수 있다 (6.2, D254) */
+  keepCode: boolean
+  /** 고르며 유형을 바꿀 수 있다: 의도 승인 전 [intake 다시] (D237) */
+  typeChange: boolean
 }
 
 /** 미리 본 때의 지금 task(6.2의 k)와 그 task가 끝났는지. [확인]에 함께 보내 그 사이 바뀌었으면 받지 않는다 */
@@ -673,10 +680,12 @@ export interface StepPreview {
     /** 만들 백업 브랜치 (D115). 되돌릴 것이 없으면 null */
     backupBranch: string | null
   }
-  /** fix로 되감을 때 [현재 코드 위에서 이어서]를 고를 수 있다 (6.2) */
+  /** [현재 코드 위에서 이어서]를 고를 수 있다 (6.2, D254) */
   keepCodeOffered: boolean
   /** intake로 되감으면 intent 새 버전을 만든다는 안내 (D40) */
   intent: string | null
+  /** 의도 승인 전 [intake 다시]에서 유형을 바꾼다는 안내 (D237). 바꾸지 않으면 null */
+  typeChange: string | null
 }
 
 /** 미리 보기의 결과. 고를 수 없는 단계거나 git을 읽지 못하면 오류다 */
@@ -685,11 +694,13 @@ export type StepPreviewResult = { ok: true; preview: StepPreview } | { ok: false
 /** [단계 선택]의 [확인] (6.2) */
 export interface SelectStepInput {
   node: NodeName
-  /** fix로 되감을 때 [현재 코드 위에서 이어서] */
+  /** [현재 코드 위에서 이어서] (6.2, D254) */
   keepCode: boolean
   /** 사람 추가 지시(선택) */
   instruction: string
   expect: StepExpect
+  /** 의도 승인 전 [intake 다시]에서 고른 유형 (D237). 지금 유형과 같거나 없으면 바꾸지 않는다 */
+  type?: WorkType
 }
 
 export interface AppSnapshot {
@@ -824,6 +835,8 @@ export interface ProjectInspection {
 /** Work 생성 입력 (시나리오 1) */
 export interface NewWorkInput {
   request: string
+  /** 업무 유형 (D236). 기본값이 없어 사람이 골라야 한다 */
+  type: WorkType
   baseBranch: string
   /** 원격이면 git fetch 뒤 origin/<브랜치>에서 분기한다 */
   baseLocation: 'local' | 'remote'

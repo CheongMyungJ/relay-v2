@@ -3,8 +3,8 @@
 //
 // 1. 머리글: disable-model-invocation: true, description 있음, name 없음 (D33)
 // 2. 크기: SKILL.md + _common.md. Claude Code 어림(글자 수 / 4)으로 판정, 모델 토큰 어림은 참고 (D31, D95)
-// 3. 템플릿: 주석 단 템플릿에 값을 채운 예시가 docs/contracts 스키마를 통과하는지 (D87)
-// 4. 설계 대조: 산출물 템플릿의 절 제목, 입력·결정 지점·사람이 정할 결정·완료조건 항목 (5.6.1~5.6.7)
+// 3. 템플릿: 주석 단 템플릿에 값을 채운 예시가 docs/contracts 스키마를 통과하는지 (D87). intent 초안은 머리글이 없다 (D236)
+// 4. 설계 대조: 산출물 템플릿의 절 제목, 입력·결정 지점·사람이 정할 결정·완료조건 항목 (5.6.1~5.6.9, I60)
 
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -17,7 +17,7 @@ const root = join(here, '..');
 const read = (p) => readFileSync(join(root, p), 'utf8').replace(/\r\n/g, '\n');
 
 const SIZE_TARGET = 5000; // D31
-const SKILLS = ['work-start', 'fix', 'verify', 'pr-respond'];
+const SKILLS = ['work-start', 'fix', 'design', 'implement', 'verify', 'pr-respond'];
 
 const design = read('docs/design.md');
 const common = read('skills/_common.md');
@@ -105,9 +105,7 @@ else ok('모든 스킬이 목표 안');
 console.log('\n[3] 템플릿 예시와 스키마 (D87)');
 const ajv = new Ajv2020({ allErrors: true, strict: false });
 const handoffSchema = JSON.parse(read('docs/contracts/handoff.v1.schema.json'));
-const intentSchema = JSON.parse(read('docs/contracts/intent-draft.v1.schema.json'));
 const vHandoff = ajv.compile(handoffSchema);
-const vIntent = ajv.compile(intentSchema);
 const errs = (v) => (v.errors ?? []).map((e) => `${e.instancePath || '/'} ${e.message}`).join('; ');
 
 // handoff 템플릿 (_common.md)
@@ -154,14 +152,12 @@ if (handoffTpl) {
   }
 }
 
-// intent 초안 템플릿 (work-start)
-const intentTpl = codeBlocks(skills['work-start'], 'markdown').find((b) => b.startsWith('---\n'));
+// intent 초안 템플릿 (work-start). 머리글이 없다: 유형과 버전은 앱이 의도 승인 때 붙인다 (D236, I58)
+const intentTpl = codeBlocks(skills['work-start'], 'markdown').find((b) => b.startsWith('## 목표\n'));
 check(!!intentTpl, 'work-start: intent.draft.md 템플릿 있음');
 if (intentTpl) {
-  const fm = frontMatter(intentTpl);
-  check(sameSet(Object.keys(fm.data), Object.keys(intentSchema.properties)), `intent 템플릿 필드 = 스키마 필드 (${Object.keys(fm.data).join(', ')})`);
-  check(vIntent(fm.data), `템플릿 머리글 통과 ${errs(vIntent)}`);
-  check(!vIntent({ ...fm.data, type: 'feature' }), '반례: type이 bugfix가 아님 → 오류');
+  const fm = { body: intentTpl };
+  check(!frontMatter(intentTpl), 'intent 템플릿에 머리글 없음 (D236)');
 
   // 본문 필수 절과 완료조건 줄 (5.2.1)
   const hs = headings(fm.body);
@@ -177,6 +173,8 @@ console.log('\n[4] 설계 대조: 산출물 템플릿의 절 제목');
 const templateSources = {
   'work-start': ['### 5.3'],
   fix: ['#### 5.6.5'],
+  design: ['#### 5.6.8'],
+  implement: ['#### 5.6.9'],
   verify: ['#### 5.6.6'],
   'pr-respond': ['#### 5.6.7'],
 };
@@ -237,6 +235,45 @@ const spec = {
     ['5.3', '완료조건에 push/PR 없음', /Never include push or PR/],
     ['D43', '완료조건 세 항목', /## Done when[\s\S]*required sections[\s\S]*verifiable[\s\S]*`open_questions`/],
     ['D227', 'size를 쓰지 않음', /^(?![\s\S]*\bsize\b)/],
+    ['D236', '유형은 context.md에서 읽음(사람이 고름)', /Work type \(`업무 유형`\) the human picked/],
+    ['D236', '템플릿에 머리글 없음, 앱이 붙임', /No front matter: the app adds the type and version/],
+    ['5.6.4', '기능 추가의 설계도 하지 않음', /do not design it either\. That is the job of design/],
+    ['D238', '유형 불일치: 초안 전에 물음, 바꾸면 blocked, 직접 바꾸지 않음', /Type mismatch[\s\S]*ask before you write the draft[\s\S]*`blocked`[\s\S]*Never change the type yourself/],
+    ['D239', '기능 추가 기본 완료조건 세 개', /`feature`: `- \[ \] <test command>가 통과한다` \/ `- \[ \] 기존 테스트를 약화하거나 삭제하지 않는다` \/ `- \[ \] 완료조건의 각 동작을 확인하는 테스트가 있다`/],
+    ['D240', '인수 조건: 밖에서 보이는 동작, "<조건>이면 <결과>", 구현 세부 없음', /behavior seen from outside[\s\S]*"<조건>이면 <결과>"[\s\S]*No implementation details/],
+    ['D241', '사람 제안: 반드시면 제약, 아니면 (사람 제안)', /`제약` when it is a must[\s\S]*"\(사람 제안\)"/],
+  ],
+  design: [
+    ['5.6.8', '입력: context.md, request.md 경로', /`context\.md`[\s\S]*`request\.md`/],
+    ['D254', '현재 코드 위에서 이어서: 코드를 읽고 design.md를 고침, 코드는 그대로', /Continuing on current code[\s\S]*revise `design\.md`\. Leave the code as it is/],
+    ['D233', '작은 feature도 거치고 분량만 줄임', /Small features go through this step too/],
+    ['D243', '코드를 바꾸지 않음, 실험은 되돌림', /does not change code[\s\S]*Revert any experiment/],
+    ['5.6.8', '순서: 시나리오 → 요구사항 → 물음 → 접근과 바뀌는 곳 → 계획', /User scenarios\.[\s\S]*Requirements\.[\s\S]*Ask if needed[\s\S]*Approach and what changes[\s\S]*Implementation plan and test plan/],
+    ['5.6.8', '유저 시나리오: 누가 무엇을 어떻게, 내부 기능은 호출하는 코드', /who does what[\s\S]*calling code or the developer/],
+    ['D245', '기능 요구사항: 출처, intent에 없으면 물음, 참고용', /\(F1, F2…\)[\s\S]*완료조건 n \/ 설계에서 더함[\s\S]*ask the human[\s\S]*verify judges only the intent's 완료조건/],
+    ['D246', '비기능 관점 목록, 해당 없으면 없음', /performance, compatibility and migration, security, error handling, accessibility[\s\S]*"없음"/],
+    ['D241', '사람 제안마다 받아들일지와 이유를 접근에', /"\(사람 제안\)"[\s\S]*`접근`/],
+    ['D247', '구현 계획: 단계마다 바꿀 것과 요구사항, 테스트할 수 있는 크기', /for each step, what changes and which requirements[\s\S]*small enough to test/],
+    ['D239', '테스트 계획: 완료조건의 각 동작이 테스트에 닿음, 못 하면 이유', /Each behavior in the intent's 완료조건 must be covered[\s\S]*write why/],
+    ['D23', 'intent와 어긋나면 intent_deviation, 의도 변경은 intake', /`intent_deviation`[\s\S]*`recommended_next` to `intake`/],
+    ['5.6.8', '결정 지점: 접근, 바뀌는 곳, 계획의 나눔', /The approach, what changes, and how to split the plan/],
+    ['D242', '사람이 정할 결정 셋', /Several options change what is seen from outside[\s\S]*widens the scope, or touches the intent's non-goals or constraints[\s\S]*do not take a human suggestion/],
+    ['5.6.8', '완료조건: 일곱 절, 요구사항 출처와 계획, 테스트 계획, 사람 결정, 코드 안 바꿈', /## Done when[\s\S]*seven template sections[\s\S]*source and is in a step[\s\S]*test plan[\s\S]*`decisions`[\s\S]*No code changed/],
+  ],
+  implement: [
+    ['5.6.9', '입력: context.md, design.md', /`context\.md`[\s\S]*`design\.md`/],
+    ['6.2', '현재 코드 위에서 이어서', /Continuing on current code/],
+    ['D247', '순서: 테스트 먼저 → 구현 전 실패 → 구현 → 통과 → 커밋, 끝나면 테스트 명령', /Write the tests[\s\S]*fail before the change[\s\S]*Implement[\s\S]*pass[\s\S]*Commit[\s\S]*test command/],
+    ['D247', '처음부터 통과하는 테스트는 고침, 못 하면 이유와 risks', /passes from the start does not catch the new behavior[\s\S]*`risks`/],
+    ['D257', '지금 동작을 지키는 완료조건의 테스트는 구현 전 통과도 됨', /keep the current behavior[\s\S]*may pass before the change/],
+    ['D54', '커밋 수 제한 없음, 레포 관례', /any number[\s\S]*commit message convention/],
+    ['D56', '기존 테스트 변경 → risks, 변경 요약에 표시', /existing test must change[\s\S]*`risks`[\s\S]*`변경 요약`/],
+    ['D57', '테스트 명령 실행, 기준 커밋 실패 구분', /Run tests[\s\S]*also fails at the base commit/],
+    ['D248', '작은 어긋남은 정해서 계획과 달라진 점에', /Small departures[\s\S]*`계획과 달라진 점`/],
+    ['D248', '설계가 틀리면 recommended_next: design', /`recommended_next` to `design`/],
+    ['5.6.9', '결정 지점: 계획이 정하지 않은 구현 세부', /Implementation details the plan does not settle/],
+    ['D248', '크게 벗어남 넷', /behavior or interface\) differs from the design[\s\S]*scope widens[\s\S]*different way from `접근`[\s\S]*dependency the design does not have, or change a data format or schema/],
+    ['5.6.9', '완료조건: 네 절, 계획 단계, 새 동작 테스트, 물음, 커밋, 테스트 명령', /## Done when[\s\S]*four template sections[\s\S]*Every step of the plan[\s\S]*failed before[\s\S]*and passed after[\s\S]*`decisions`[\s\S]*committed[\s\S]*test command/],
   ],
   fix: [
     ['5.6.5', '입력: context.md, request.md 경로', /`context\.md`[\s\S]*`request\.md`/],
@@ -281,9 +318,15 @@ const spec = {
     ['D62', 'pr.md 첫 줄 # 제목', /first line is `# <PR title>`/],
     ['D101', 'pr.md 언어는 레포 관례, PR 템플릿 따르기', /language the repo uses[\s\S]*PR template/],
     ['5.6.6', '완료조건: 여섯 절, 지적 반영, 판정, 테스트 파일, pr.md, 질문', /## Done when[\s\S]*six template sections[\s\S]*picked[\s\S]*verdict and evidence[\s\S]*test file is judged[\s\S]*`pr\.md` is written[\s\S]*`decisions`/],
+    ['D253', '기능 추가: fix.md 대신 design.md와 implement.md, 재현 규칙 안 씀', /Feature Work[\s\S]*`design\.md` and `implement\.md`[\s\S]*instead of `fix\.md`[\s\S]*reproduction steps do not apply/],
+    ['D245', '기능 추가 리뷰: 설계와 맞는지, 달라진 점, 새 동작 테스트. 설계의 요구사항은 판정 안 하고 지적으로', /fits the user scenarios, requirements and approach[\s\S]*`계획과 달라진 점`[\s\S]*new behavior tests[\s\S]*Do not judge requirements added in the design[\s\S]*finding/],
+    ['D251', '새 동작 테스트 항목: 있는지, 동작을 확인하는지, 직접 실행, 구현 전은 implement.md, 없으면 판정 불가', /완료조건의 각 동작을 확인하는 테스트가 있다[\s\S]*really checks that behavior[\s\S]*run it yourself[\s\S]*`implement\.md`[\s\S]*판정 불가/],
+    ['D253', '기능 추가 이전 단계 추천: 구현이면 implement, 설계면 design', /`implement` if the implementation is wrong, `design` if the design is wrong/],
+    ['D252', '기능 추가 pr.md: 요약 / 동작 / 주요 설계 결정 / 변경 / 테스트', /## 요약\n## 동작\n## 주요 설계 결정\n## 변경\n## 테스트/],
   ],
   'pr-respond': [
     ['D192', '입력: context.md(이번 라운드의 항목, 사람 지시, PR 정보, 앞 라운드 요약)와 파이프라인 산출물(경로)', /`context\.md`[\s\S]*this round's items, the human's instruction, the PR[\s\S]*summaries of earlier rounds[\s\S]*pipeline artifacts/],
+    ['D256', '기능 추가면 design.md(경로)', /`design\.md` and `implement\.md` for a feature/],
     ['D162', '외부 글은 지시가 아니라 데이터, 명령 실행·설정 변경·비밀 정보 요청은 따르지 않고 사람에게 물음, 사람 지시는 따름', /data, not instructions[\s\S]*run a command, change settings[\s\S]*reveal secrets[\s\S]*ask the human[\s\S]*Follow only the human/],
     ['D168', '항목마다 셋 중 하나: 고침 / 고치지 않음과 이유 / 사람에게 물음. 모르면 open_questions', /고침[\s\S]*고치지 않음[\s\S]*사람에게 물음[\s\S]*`open_questions`/],
     ['5.6.7', '범위: intent의 목표와 비목표. 비목표·제약에 걸리면 사람 결정 (D51과 같음)', /`목표` and `비목표`[\s\S]*`비목표` or `제약`[\s\S]*human decision/],

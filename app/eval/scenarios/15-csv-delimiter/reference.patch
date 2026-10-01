@@ -1,0 +1,53 @@
+diff --git a/src/csv.js b/src/csv.js
+index 233b6c0..1724a74 100644
+--- a/src/csv.js
++++ b/src/csv.js
+@@ -1,13 +1,16 @@
+ // 표를 CSV 글로 바꾼다. 첫 줄은 머리글이다.
+ // columns: [{ key, title }], rows: [{ [key]: 값 }]
++// options.delimiter: 구분자 (기본 쉼표). 구분자가 든 값은 따옴표로 감싼다
+ 
+-function cell(value) {
++function cell(value, delimiter) {
+   const text = value === null || value === undefined ? '' : String(value)
+-  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
++  const quote = text.includes('"') || text.includes('\n') || text.includes(delimiter)
++  return quote ? `"${text.replace(/"/g, '""')}"` : text
+ }
+ 
+-export function toCsv(rows, columns) {
+-  const head = columns.map((c) => cell(c.title)).join(',')
+-  const body = rows.map((r) => columns.map((c) => cell(r[c.key])).join(','))
++export function toCsv(rows, columns, { delimiter = ',' } = {}) {
++  const line = (values) => values.map((v) => cell(v, delimiter)).join(delimiter)
++  const head = line(columns.map((c) => c.title))
++  const body = rows.map((r) => line(columns.map((c) => r[c.key])))
+   return [head, ...body].join('\n')
+ }
+diff --git a/src/orders.js b/src/orders.js
+index 9c5659b..27b0870 100644
+--- a/src/orders.js
++++ b/src/orders.js
+@@ -7,7 +7,7 @@ const COLUMNS = [
+   { key: 'memo', title: '메모' },
+ ]
+ 
+-// 주문 목록을 내보낼 CSV 글
+-export function exportOrders(orders) {
+-  return toCsv(orders, COLUMNS)
++// 주문 목록을 내보낼 CSV 글. options.delimiter로 구분자를 고른다
++export function exportOrders(orders, options = {}) {
++  return toCsv(orders, COLUMNS, options)
+ }
+diff --git a/test/csv.test.js b/test/csv.test.js
+index 4f9c6a0..1065c70 100644
+--- a/test/csv.test.js
++++ b/test/csv.test.js
+@@ -20,3 +20,7 @@ test('주문 내보내기', () => {
+   const csv = exportOrders([{ id: 'O-1', customer: '김', amount: 1000, memo: '' }])
+   assert.strictEqual(csv, '주문번호,고객,금액,메모\nO-1,김,1000,')
+ })
++
++test('구분자 옵션', () => {
++  assert.strictEqual(toCsv([{ a: 'x;y', b: 2 }], COLS, { delimiter: ';' }), 'A;B\n"x;y";2')
++})

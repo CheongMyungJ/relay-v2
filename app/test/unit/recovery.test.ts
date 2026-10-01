@@ -31,6 +31,7 @@ const BACKUP = `relay/${WORK_ID}-discarded-1`
 
 function work(extra: Partial<WorkState> = {}): WorkState {
   const w = createWork({
+    type: 'bugfix',
     workId: WORK_ID,
     baseBranch: 'main',
     baseCommit: 'base0001',
@@ -103,6 +104,22 @@ describe('[단위] 끊긴 작업의 알림 (D121, D123)', () => {
     const cut = { ...REWIND, interrupted_at: 'y' }
     expect(cutOperation(work({ operation: cut }))).toBe(cut)
     expect(operationView(work({ operation: REWIND }))).toBeNull()
+  })
+
+  it('되감기: [intake 다시]의 유형 변경이 끊기면 바꿀 유형과, [무시]하면 유형이 그대로라는 것을 보인다 (D237, PR #23 리뷰)', () => {
+    const tasks = [task('t-01', 1, 'intake')]
+    const op = { ...REWIND, node: 'intake' as const, type: 'feature' as const, interrupted_at: 'y' }
+    const view = operationView(work({ tasks, operation: op }))
+    expect(view?.lines.slice(0, 2)).toEqual([
+      '고른 단계: 의도 정리(intake)',
+      '바꿀 유형: 기능 추가 (D237)',
+    ])
+    expect(view?.retry).toContain(
+      '유형을 기능 추가(으)로 바꿔 의도 정리(intake)을(를) 되감기로 시작합니다.',
+    )
+    expect(view?.ignore).toBe(
+      '[무시]: 기록만 지웁니다. 코드와 백업 브랜치는 지금 그대로이고, task는 폐기하지 않습니다. 유형도 버그 수정(으)로 남고 바뀌지 않습니다.',
+    )
   })
 
   it('되감기: 고른 단계, 끊긴 단계, 백업, 되돌릴 커밋, 폐기할 task와 [다시 시도]·[무시]가 할 일', () => {

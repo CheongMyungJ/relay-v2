@@ -13,7 +13,7 @@ import type {
   WorkState,
 } from '../shared/work'
 import { REVIEWABLE, approvalGate } from './approval'
-import { isPrevious } from './pipeline'
+import { stopsForRecommendation, workType } from './pipeline'
 import { ghTooOld, ghVersionReason } from './pr'
 import { normalizeText } from './validate'
 
@@ -85,12 +85,15 @@ export function closingButtons(
  * (시나리오 3-4). verify에서는 전달 버튼 대신 [승인하고 멈춤] 하나를 보인다 (D119).
  */
 export function approvalStops(
-  work: Pick<WorkState, 'stop_after_step'>,
+  work: Pick<WorkState, 'stop_after_step' | 'type'>,
   node: NodeName,
   header: Pick<Handoff, 'recommended_next'> | null,
 ): boolean {
   const rec = header?.recommended_next
-  return work.stop_after_step === true || (!!rec && isPrevious(node, rec.node))
+  return (
+    work.stop_after_step === true ||
+    (!!rec && stopsForRecommendation(workType(work), node, rec.node))
+  )
 }
 
 /** verify에서 멈춘 Work의 verify task (D119). 아니면 undefined */

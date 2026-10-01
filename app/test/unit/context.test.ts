@@ -10,10 +10,10 @@ import {
   type SelectionInput,
 } from '../../src/core/context'
 import { createWork, taskDirName, taskId } from '../../src/core/machine'
-import { NODES } from '../../src/core/pipeline'
+import { PIPELINES } from '../../src/core/pipeline'
 import { DEFAULT_CONFIG, type AppConfig, type WorkSettings } from '../../src/shared/config'
 import type { NodeName } from '../../src/shared/contracts'
-import type { TaskRecord, WorkState } from '../../src/shared/work'
+import type { TaskRecord, WorkState, WorkType } from '../../src/shared/work'
 
 const WORK_DIR = 'C:\\Users\\u\\.relay\\projects\\my-api-3f9a1c\\works\\w-20260926-001'
 const REQUEST = '로그인 직후 토큰이 만료된다.\n\n```\nError: token expired at 09:00\n```\n'
@@ -34,9 +34,11 @@ const PREV_HANDOFF = '---\nstatus: awaiting_approval\n---\n## 요약\n재현됨\
 /** node task를 시작하려는 Work. 앞 단계는 모두 승인되어 있다 */
 function workAt(
   node: NodeName,
-  opts: { settings?: WorkSettings } = {},
+  opts: { settings?: WorkSettings; type?: WorkType } = {},
 ): { work: WorkState; task: TaskRecord } {
+  const type = opts.type ?? 'bugfix'
   const created = createWork({
+    type,
     workId: 'w-20260926-001',
     baseBranch: 'main',
     baseCommit: '1a2b3c4d5e6f',
@@ -44,7 +46,8 @@ function workAt(
     at: '2026-09-26T10:00:00+09:00',
   }).work
   if (node === 'intake') return { work: created, task: created.tasks[0] as TaskRecord }
-  const tasks = NODES.slice(0, NODES.indexOf(node) + 1).map((n, i) => ({
+  const order = PIPELINES[type]
+  const tasks = order.slice(0, order.indexOf(node) + 1).map((n, i) => ({
     ...(created.tasks[0] as TaskRecord),
     id: taskId(i + 1),
     seq: i + 1,
@@ -121,6 +124,7 @@ describe('context.md: 시나리오 2-4 표의 항목', () => {
       [
         '- work_id: w-20260926-001',
         '- task_id: t-03',
+        '- 업무 유형: 버그 수정 (`bugfix`)',
         '- node: verify (리뷰와 검증)',
         '- skill: verify',
         '- 승인된 intent 버전: 1',
@@ -387,7 +391,7 @@ describe('마무리 안내 문구 (D104, D132)', () => {
   it('승인 방식 절은 task를 시작할 때의 설정이다. 문구는 설정과 상관없이 같다 (D128, D132)', () => {
     const config: AppConfig = {
       ...DEFAULT_CONFIG,
-      auto_approve: { fix: false, respond: false },
+      auto_approve: { fix: false, design: false, implement: false, respond: false },
     }
     const md = buildContext(input('fix', {}, config))
     expect(section(md, '승인 방식')).toBe(
@@ -410,7 +414,7 @@ describe('마무리 안내 문구 (D104, D132)', () => {
 describe('Work별 덮어쓰기 (D72)', () => {
   const config: AppConfig = {
     ...DEFAULT_CONFIG,
-    auto_approve: { fix: true, respond: true },
+    auto_approve: { fix: true, design: false, implement: true, respond: true },
     question_mode: { ...DEFAULT_CONFIG.question_mode, fix: 'confirm_each' },
   }
 
@@ -637,7 +641,7 @@ describe('단계 선택으로 들어온 task (시나리오 2-4, 6.2)', () => {
       '',
     ].join('\n')
     expect(
-      discardedAttempts([
+      discardedAttempts('bugfix', [
         { taskId: 't-03', node: 'verify', handoff },
         // 이전 단계가 아닌 추천(fix가 fix를 추천)은 넣지 않는다
         { taskId: 't-02', node: 'fix', handoff },
@@ -711,5 +715,81 @@ describe('context.md: 엔진별 승인 정책', () => {
     const md = buildContext(input('fix', {}, config))
     expect(section(md, '승인 방식')).toContain('자동 승인')
     expect(section(md, '마무리 안내 문구')).toContain('카운트다운')
+  })
+})
+
+describe('context.md: 기능 추가 (D232, D236, D256)', () => {
+  function featureInput(node: NodeName, overrides: Partial<ContextInput> = {}): ContextInput {
+    const { work, task } = workAt(node, { type: 'feature' })
+    return input('intake', {
+      work,
+      task,
+      taskDir: `${WORK_DIR}\\tasks\\${taskDirName(task)}`,
+      intent: node === 'intake' ? null : INTENT,
+      ...overrides,
+    })
+  }
+
+  it('task 정보에 업무 유형을 넣는다 (D236)', () => {
+    const md = buildContext(featureInput('design'))
+    expect(section(md, 'task 정보')).toContain('- 업무 유형: 기능 추가 (`feature`)')
+    expect(section(md, 'task 정보')).toContain('- node: design (설계와 계획)\n- skill: design')
+  })
+
+  it('선택 가능한 다음 단계는 기능 추가의 파이프라인이다 (3.2)', () => {
+    const steps = (node: NodeName) =>
+      section(buildContext(featureInput(node)), '선택 가능한 다음 단계')
+    expect(steps('intake')).toBe('- 기본 다음 단계: design (설계와 계획)\n- 이전 단계: 없음')
+    expect(steps('design')).toBe(
+      '- 기본 다음 단계: implement (구현)\n- 이전 단계: intake (의도 정리)',
+    )
+    expect(steps('implement')).toBe(
+      '- 기본 다음 단계: verify (리뷰와 검증)\n- 이전 단계: intake (의도 정리), design (설계와 계획)',
+    )
+    expect(steps('verify')).toBe(
+      '- 기본 다음 단계: Work 완료\n- 이전 단계: intake (의도 정리), design (설계와 계획), implement (구현)',
+    )
+  })
+
+  it('design과 implement의 마무리 안내 문구는 fix와 같다. 승인 방식은 설정을 따른다 (D132, D234, D249)', () => {
+    expect(closingMessage('design')).toBe(closingMessage('fix'))
+    expect(closingMessage('implement')).toBe(closingMessage('fix'))
+    expect(section(buildContext(featureInput('design')), '승인 방식')).toMatch(
+      /^수동 승인 \(task를/,
+    )
+    expect(section(buildContext(featureInput('implement')), '승인 방식')).toMatch(
+      /^자동 승인 \(task를/,
+    )
+  })
+
+  it('[현재 코드 위에서 이어서]로 design에 들어오면 코드를 바꾸지 않고 design.md를 고치라고 적는다 (D254)', () => {
+    const selection: SelectionInput = {
+      reason: 'rewind',
+      from: { taskId: 't-04', node: 'verify' },
+      instruction: null,
+      discarded: [],
+      dropped: [],
+      skipped: [],
+      keepCode: true,
+      reset: false,
+    }
+    const md = buildContext(featureInput('design', { selection }))
+    expect(section(md, '되감기로 들어옴 (먼저 읽을 것)')).toContain(
+      '[현재 코드 위에서 이어서]: 폐기된 시도의 커밋이 남아 있다. 지금 코드를 읽고 `design.md`를 고친다. 코드는 바꾸지 않는다.',
+    )
+    const impl = buildContext(featureInput('implement', { selection }))
+    expect(section(impl, '되감기로 들어옴 (먼저 읽을 것)')).toContain('그 위에서 이어서 고친다.')
+  })
+
+  it('폐기된 시도의 이전 단계 추천은 기능 추가의 파이프라인으로 가린다', () => {
+    const handoff =
+      '---\nrecommended_next:\n  node: design\n  reason: "설계가 틀림"\n---\n## 요약\nx\n'
+    expect(
+      discardedAttempts('feature', [{ taskId: 't-03', node: 'implement', handoff }])[0]
+        ?.recommended,
+    ).toEqual({ node: 'design', reason: '설계가 틀림' })
+    expect(
+      discardedAttempts('bugfix', [{ taskId: 't-03', node: 'verify', handoff }])[0]?.recommended,
+    ).toBeNull()
   })
 })

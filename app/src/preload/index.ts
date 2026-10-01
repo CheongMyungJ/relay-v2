@@ -31,8 +31,8 @@ const api: RelayApi = {
   stopAfter: (workKey, on) => ipcRenderer.invoke(IPC.stopAfter, workKey, on),
   resumeWork: (workKey) => ipcRenderer.invoke(IPC.resumeWork, workKey),
   abandon: (workKey) => ipcRenderer.invoke(IPC.abandon, workKey),
-  stepPreview: (workKey, node, keepCode) =>
-    ipcRenderer.invoke(IPC.stepPreview, workKey, node, keepCode),
+  stepPreview: (workKey, node, keepCode, type) =>
+    ipcRenderer.invoke(IPC.stepPreview, workKey, node, keepCode, type),
   selectStep: (workKey, input) => ipcRenderer.invoke(IPC.selectStep, workKey, input),
   deliver: (workKey, input) => ipcRenderer.invoke(IPC.deliver, workKey, input),
   openCleanup: (workKey, choice) => ipcRenderer.invoke(IPC.openCleanup, workKey, choice),

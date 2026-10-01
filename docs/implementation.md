@@ -1,6 +1,6 @@
 # relay-v2 구현 계획
 
-- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41)
+- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62)
 - 상태: 정함. 주제마다 사람과 문답으로 정했다(설계 부록 A의 진행 규칙). 바꾸려면 사용자와 다시 정한다.
 
 Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서는 [engines.md](engines.md)에서 관리한다. 이 문서의 기존 Claude 동작은 확장 중 회귀 시험의 기준이다.
@@ -86,6 +86,12 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I54 | `app-ci`의 Windows [흐름]을 두 작업으로 나눠 나란히 돌린다: PR 진행과 대응 시험(`test/flow/pr*.test.ts`)과 나머지다. 빌드(I39)와 [어댑터]는 나머지 작업에만 둔다. 각 작업의 제한은 20분 그대로다 | M9 끝에 Windows 작업이 약 15~16분으로 제한(20분)에 가까웠고(push와 pull_request 실행이 함께 돌면 더 늘어남), M10의 [흐름]이 1.5~3분쯤 더함. 공개 레포라 러너 시간은 무료이고, 나누면 기다리는 시간도 줄어듦 | ✅ |
 | I55 | M11의 [실제]는 실제 `claude`와 실제 gh를 합쳐 `app-claude` 워크플로의 Linux 작업(`pr`)에서 돈다(경우 `pr-auto`). 작업은 Claude Code를 네이티브 설치 스크립트로 설치하고 레포 secret `CLAUDE_CODE_OAUTH_TOKEN`(사람이 `claude setup-token`으로 만든 것)으로 인증한다. 시험용 레포 secret(I43)은 M9·M10과 같다. 파이프라인은 가짜 `claude`로 [PR 생성]까지 가고 대응 task만 실제 `claude`다(M10의 `respond`와 같음). 실제 `claude`는 필요한 환경 변수만 넘겨 띄운다(시험 도구의 `env -i` 실행 파일 감싸개, 8.4): GitHub 토큰(`GH_TOKEN`, `GITHUB_TOKEN`)과 git 자격 증명 설정은 넘기지 않는다 | 웹 세션은 GitHub 프록시가 GraphQL을 정해 둔 PR 작업만 받아 앱의 `gh pr view --json`, `gh pr create`, `gh pr merge`, `gh repo view`가 403이고, gh가 없고, 실패 로그의 다운로드 주소가 막힘(3절). 사람이 PC에서 `setup-token`을 만들 수 있게 됨(I53 때는 못 함). Linux 작업에는 gh와 시험용 레포 secret이 이미 있고 M9·M10의 실제 gh 시험이 돈 곳임. Windows 작업은 한 번도 돈 적이 없어 준비에서 막힐 수 있고, Windows 동작은 [실기]가 봄. 권한 확인 없이 도는 세션(D17)에 GitHub 토큰이 있으면 앱을 거치지 않고 PR에 쓸 수 있음(D162) | ✅ |
 | I56 | M11의 [흐름]은 `test/flow/pr-auto.test.ts`로 두어 `app-ci`의 `windows-pr` 작업에서 돈다. 파일 이름이 `pr*`라 워크플로를 바꾸지 않는다 **(기본값)** | M10 마지막 실행(#118)에서 `windows` 작업은 약 17분([흐름] 876초. #117은 580초)으로 제한 20분에 가깝고, `windows-pr`는 약 5분이었음 | |
+| I57 | 유형별 파이프라인(D232)은 `core/pipeline`에 `WorkType = 'bugfix' \| 'feature'`와 `PIPELINES: Record<WorkType, readonly NodeName[]>`로 둔다. 순서에 기대는 함수(`defaultNext`, `previousSteps`, `selectableNext`, `recommendableNodes`, `isPrevious`, `core/rewind`의 `index`, 단계 선택 목록)는 유형을 함께 받는다. 전역 순서 `NODES`는 지우고, 노드가 맞는지만 보는 곳(`main/ipc`의 노드 검사, `validate`)은 모든 노드의 목록 `ALL_NODES`를 쓴다. `NodeName`은 `intake \| fix \| design \| implement \| verify`다 | 순서를 모듈마다 따로 가지면 유형이 늘 때 어긋남. M13이 노드 순서를 한곳(`NODES`)에 모은 모양을 유형으로 한 겹 넓힘 | |
+| I58 | 유형은 `work.json` 최상위의 `type`에 둔다. 없으면 `bugfix`로 읽는다(D256). [의도 승인]이 intent 확정본 머리글에 `type`을 붙인다(D236). intent 초안은 머리글이 없다: `checkIntentDraft`는 본문 절만 보고, 머리글이 있으면 읽지 않고 경고만 한다 **(기본값)**. `docs/contracts/intent-draft.v1.schema.json`과 생성본은 지운다. 형식 버전은 1 그대로다(배포 전이라 M13처럼 호환을 두지 않음) | 앱이 아는 값을 에이전트가 쓰지 않음(D88). 머리글을 오류로 막으면 습관처럼 쓴 머리글 때문에 되돌림만 늘어남 | |
+| I59 | [intake 다시]의 유형 변경(D237)은 단계 선택과 같은 길(`core/rewind`)로 하고, 고른 유형을 `work.json`의 `type`에 쓴다. 이벤트 유형은 더하지 않고 `task.rewound`의 payload에 `type_from`, `type_to`를 더한다(바꿨을 때만) **(기본값)** | 의도 승인 전 [intake 다시]가 이미 되감기 길이라 새 전이가 필요 없음. 5.5에 없는 이벤트 유형은 더하지 않아 온 관례(M4~M7)를 따름 | |
+| I60 | `skills/check.mjs`는 design(5.6.8), implement(5.6.9)를 새로 대조하고, verify는 기능 추가 절(5.6.6, `pr.md` 기능 추가 템플릿)까지 대조한다. 스킬마다 합친 크기(D31, 5,000토큰 목표)를 넘으면 사람에게 알리고 줄일지 정한다 | 설계와 스킬이 어긋나는 것을 모델 없이 잡음(5.6.3). verify는 두 유형을 한 스킬에 담아 커지므로 크기를 먼저 봄 | |
+| I61 | 가짜 `claude`의 시나리오에 feature 흐름(`design.md`, 테스트를 먼저 쓴 커밋과 `implement.md`)을 더한다. [흐름]은 `test/flow/feature.test.ts` 한 파일에 둔다 **(기본값)** | 버그 수정 흐름 시험(`flow.test.ts`)을 건드리지 않고 유형 분기를 따로 봄 | |
+| I62 | 평가 시나리오는 `app/eval/scenarios/15-*`, `16-*`, `17-*`로 작은·중간·큰 feature를 둔다(D255). `scenario.json`에 `"type": "feature"`를 더하고, 없으면 `bugfix`다. relay 쪽(`relay-arm.mjs`, `guides/relay.md`)은 새 Work 대화상자에서 그 유형을 고르고, 맨 CLI 쪽은 요청만 준다. `hidden`의 판정 시험은 버그 수정처럼 인수 조건을 시험으로 둔다. `relay-eval` 스킬의 설명과 시나리오 목록을 feature로 넓힌다 | 유형에 기본값이 없어(D236) 사람 역할이 유형을 골라야 [시작]이 켜짐. 판정 방식은 같아 보고서(`report.mjs`)를 그대로 씀 | |
 
 ## 3. 확인한 사실
 
@@ -255,6 +261,7 @@ app/src/
 - M3가 끝나면 실제 버그에 쓰기 시작하고, 쓰면서 나온 불편으로 M4~M7의 순서를 다시 정한다(I24).
 - 설계 v0.5의 확장은 M8 → M9 → M10 → M11 차례다(I41). M9 전에 스파이크 S7을 돌린다(I42).
 - 사용성 평가(`docs/eval-findings.md`)에서 나온 개선은 M12에 모은다. 개선점마다 사람이 반영할지와 방법을 정한다(설계 v0.6).
+- 설계 v0.8의 기능 추가 유형은 M14다. M14 안은 core → 화면 → 스킬 → 시험과 평가 차례로 나눠 커밋한다.
 - 완료 기준 앞의 꼬리표는 확인 방법이다: [단위], [어댑터], [흐름], [스모크], [실제], [실기]. 뜻은 8.1을 따른다. [실제]와 [실기]의 결과는 `docs/checks.md`에 기록한다(I30).
 
 | # | 이름 | 한 줄 요약 | 선행 |
@@ -273,6 +280,7 @@ app/src/
 | M11 | 자동 대응 | 대응 자동 시작과 자동 승인, 라운드 상한, 닫힌 PR의 push·게시 막기(D208) | |
 | M12 | 사용성 평가 반영 | 평가에서 나온 개선점 가운데 사람이 고른 것(D212~D226) | 사용성 평가 |
 | M13 | 단계 줄이기 | `intake → fix(원인 분석과 수정) → verify(리뷰와 검증)` 하나의 경로, 크기 없앰(D227~D229) | M12 |
+| M14 | 기능 추가 유형 | 새 Work에서 유형(버그 수정 / 기능 추가)을 고르고, 기능 추가는 `intake → design → implement → verify`(D232~D256) | M13 |
 
 ### M0. 골격과 배포
 
@@ -772,6 +780,55 @@ app/src/
 - [흐름] 가짜 claude로 intake → fix → verify → Work 완료. fix의 기본 자동 승인, verify가 fix를 추천하면 멈춤, fix로 되감기.
 - [정적] `skills/check.mjs`가 새 스킬(fix, verify)을 설계 5.6.5, 5.6.6과 대조한다.
 - [실기]와 평가 재실행: `relay-eval`로 시나리오를 다시 돌려 승인 수, 세션 수, 결과 확신을 R1 전과 비교한다.
+
+### M14. 기능 추가 유형
+
+설계 v0.8(D232~D256). 새 Work 대화상자에서 사람이 유형을 고르고, 기능 추가(`feature`)는 `intake → design(설계와 계획) → implement(구현) → verify(리뷰와 검증)`를 지난다. 버그 수정 흐름은 그대로다. 아직 배포 전이라 intent 초안 머리글과의 호환은 두지 않는다(I58). 아래 넷을 차례로 하고 단계마다 커밋한다. 단계가 끝날 때마다 `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`, `node skills/check.mjs`를 돌린다.
+
+**1. core와 계약**
+
+- **유형과 파이프라인(I57):** `WorkType`, `PIPELINES`, `ALL_NODES`. `NODE_INFO`에 design(스킬 `design`, 화면 "설계와 계획", 산출물 `design.md`)과 implement(스킬 `implement`, 화면 "구현", 산출물 `implement.md`)를 더한다. 순서에 기대는 함수에 유형을 넘긴다(`context`, `machine`, `approval`, `review`, `rewind`, `validate`, `config`).
+- **기록(I58):** `work.json`의 `type`(없으면 `bugfix`), `createWork`가 받는 `NewWorkInput.type`(필수), [의도 승인]이 확정본 머리글에 `type`을 붙임, intent 초안은 머리글 없이 본문만 검사. intent 초안 스키마와 생성본을 지운다. handoff 스키마의 `recommended_next.node` 허용값에 design, implement를 더한다.
+- **`context.md`:** task 정보에 업무 유형(D236). 기능 추가의 이전 단계와 기본 다음 단계(3.2). PR 대응 task는 기능 추가면 `design.md` 경로를 넣는다(D256).
+- **되감기(D254, I59):** [현재 코드 위에서 이어서]는 버그 수정의 fix, 기능 추가의 design과 implement에서 준다(`core/rewind`의 `keepCodeOffered`). 의도 승인 전 [intake 다시]는 유형을 받아 바꿀 수 있고(D237), 의도 승인 뒤에는 유형을 받지 않는다.
+- **설정(D234, D249, D256):** `AutoApproveNode`에 `design`(기본 끔), `implement`(기본 켬). `SkillName`에 `design`, `implement`(질문 방식 기본 초안 우선). `SKILL_TITLES`, `AUTO_APPROVE_TITLES`를 유형별로 묶을 수 있게 유형을 단다. 저장된 `config.json`에 새 키가 없으면 기본값을 쓴다.
+- **승인 화면 핵심(`stageLead`):** design은 `design.md`의 `## 유저 시나리오`와 `## 요구사항`, implement는 `implement.md`의 `## 계획과 달라진 점`(D223을 넓힘).
+- **마무리 안내 문구:** design과 implement는 fix와 같은 문구(자동 승인 포함)다.
+
+**2. 화면**
+
+- **새 Work 대화상자(D236):** 요청 위에 유형 두 버튼(버그 수정 / 기능 추가). 기본 선택이 없고, 고르기 전에는 [시작]이 꺼져 있다.
+- **의도 승인 화면:** [intake 다시]에 유형 고르기(D237). 지금 유형이 미리 골라져 있다.
+- **설정 화면과 [Work 설정]:** 자동 승인과 질문 방식 목록을 유형별로 묶는다(D256). 그 Work의 [Work 설정]은 그 유형의 단계만 보인다 **(기본값)**.
+- **사이드바와 머리 띠:** Work의 유형을 짧게("버그"/"기능") 보인다(D256).
+- **단계 선택 대화상자:** 그 Work 유형의 단계만, [현재 코드 위에서 이어서]는 위 되감기 규칙대로.
+
+**3. 스킬**
+
+- **work-start:** 머리글 없는 템플릿, 유형별 기본 완료조건(D37, D239), 기능 추가의 인수 조건 꼴(D240), 사람 제안(D241), 유형 불일치 질문과 `blocked`(D238).
+- **design(새로):** 설계 5.6.8을 옮긴다. 일곱 절 템플릿(D244), 사람이 정할 결정 셋(D242), 코드 안 바꿈(D243), 비기능 관점 목록(D246).
+- **implement(새로):** 설계 5.6.9를 옮긴다. 테스트 먼저(D247), 크게 벗어남 넷(D248), 네 절 템플릿(D250).
+- **verify:** 기능 추가 분기(D251~D253)와 기능 추가 `pr.md` 템플릿(D252). 버그 수정 부분은 바꾸지 않는다.
+- **pr-respond:** 입력에 `design.md`가 있을 수 있다는 것만 더한다.
+- **`skills/check.mjs`(I60):** design, implement 대조를 더하고 verify의 대조를 넓힌다. 크기를 본다.
+- Codex 엔진은 같은 스킬을 배포하므로 따로 할 일이 없다. 다만 [실제]에서 Codex로 한 번 지나는지 본다(가능할 때).
+
+**4. 시험과 평가**
+
+- **가짜 claude(I61):** feature 시나리오(`design.md`, 테스트 커밋 뒤 구현 커밋, `implement.md`).
+- **[흐름] `test/flow/feature.test.ts`:** 기능 추가로 만든 Work가 intake → design → implement → verify → Work 완료로 간다. design의 기본 수동 승인과 켰을 때 자동 승인, implement의 기본 자동 승인, implement가 design을 추천하면 멈춤, design으로 [현재 코드 위에서 이어서] 되감기(코드와 커밋이 남음), 의도 승인 전 [intake 다시]로 유형을 바꾸면 다음 단계가 바뀜.
+- **[스모크]:** 새 Work 대화상자에서 유형을 고르기 전에는 [시작]이 꺼져 있다. 기존 스모크의 Work 생성은 버그 수정을 고르게 고친다.
+- **[실제]:** 작은 feature 하나를 실제 claude로 끝까지(`docs/checks.md`에 기록).
+- **평가(I62, D255):** 시나리오 15~17, `relay-arm.mjs`와 `guides/relay.md`의 유형 고르기, `relay-eval` 스킬. 각 3번 돌려 보고서를 `app/eval/reports/`에 둔다. 작은 feature에서 설계와 계획 단계의 부담(D233)과 승인 수를 버그 수정과 비교한다.
+
+**완료 기준**
+
+- [단위] 유형별 기본 다음 단계·이전 단계·`recommended_next` 검사, 단계 선택 목록과 [현재 코드 위에서 이어서]를 주는 단계, 자동 승인 대상과 기본값(design 끔, implement 켬), `config.json`에 새 키가 없을 때의 기본값, 마무리 안내 문구, `stageLead`(design, implement), 필수 산출물(`design.md`, `implement.md`), 머리글 없는 intent 초안 검사와 머리글이 있을 때의 경고, 확정본의 `type`, `type`이 없는 `work.json`을 버그 수정으로 읽음.
+- [흐름] 위 `feature.test.ts`. 기존 버그 수정 흐름 시험이 그대로 통과한다.
+- [정적] `skills/check.mjs` 모두 통과(design, implement, verify의 기능 추가 절).
+- [스모크] 유형 고르기와 [시작].
+- [실제] 작은 feature 하나가 끝까지 간다.
+- 평가: 시나리오 15~17 각 3번의 보고서.
 
 ## 8. 테스트 전략
 

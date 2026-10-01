@@ -1,0 +1,52 @@
+diff --git a/src/products.js b/src/products.js
+index 1e43108..97e3293 100644
+--- a/src/products.js
++++ b/src/products.js
+@@ -2,11 +2,27 @@ import { PRODUCTS } from './data.js'
+ 
+ export const PAGE_SIZE = 5
+ 
+-// 상품 목록 한 쪽. total은 전체 개수다
+-export function listProducts({ page = 1 } = {}) {
++const SORTS = {
++  price_asc: (a, b) => a.price - b.price || a.id - b.id,
++  // 가격이 같으면 정렬 방향과 관계없이 id 오름차순이다. 쪽을 넘겨도 같은 상품이 두 번 보이지 않는다
++  price_desc: (a, b) => b.price - a.price || a.id - b.id,
++}
++
++// 상품 목록 한 쪽. 가격 범위(양 끝 포함)와 정렬을 쪽 나누기 전에 적용하고, total은 필터한 뒤의 개수다
++export function listProducts({ page = 1, minPrice, maxPrice, sort } = {}) {
+   if (!Number.isInteger(page) || page < 1) throw new RangeError('page는 1 이상의 정수')
++  if (minPrice !== undefined && maxPrice !== undefined && minPrice > maxPrice) {
++    throw new RangeError('minPrice가 maxPrice보다 큼')
++  }
++  if (sort !== undefined && !SORTS[sort]) throw new RangeError(`모르는 정렬: ${sort}`)
++  let list = PRODUCTS.filter(
++    (p) =>
++      (minPrice === undefined || p.price >= minPrice) &&
++      (maxPrice === undefined || p.price <= maxPrice),
++  )
++  if (sort) list = [...list].sort(SORTS[sort])
+   const start = (page - 1) * PAGE_SIZE
+-  return { page, total: PRODUCTS.length, items: PRODUCTS.slice(start, start + PAGE_SIZE) }
++  return { page, total: list.length, items: list.slice(start, start + PAGE_SIZE) }
+ }
+ 
+ export function getProduct(id) {
+diff --git a/test/products.test.js b/test/products.test.js
+index 60b7bf3..36a2f25 100644
+--- a/test/products.test.js
++++ b/test/products.test.js
+@@ -24,3 +24,12 @@ test('상품 하나', () => {
+ test('가격 글', () => {
+   assert.strictEqual(priceText(15000), '15,000원')
+ })
++
++test('가격 범위와 정렬', () => {
++  const r = listProducts({ minPrice: 9000, maxPrice: 15000, sort: 'price_asc' })
++  assert.strictEqual(r.total, 6)
++  assert.deepStrictEqual(
++    r.items.map((p) => p.id),
++    [4, 12, 7, 1, 6],
++  )
++})

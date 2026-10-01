@@ -115,12 +115,7 @@ describe('decisions.md (5.4)', () => {
 })
 
 describe('intent.md 확정본 (5.3)', () => {
-  const draft = [
-    '---',
-    'type: bugfix   # bugfix only',
-    'size: M',
-    'extra: 무시됨',
-    '---',
+  const body = [
     '## 목표',
     'KST에서 토큰이 바로 만료되는 문제를 고친다.',
     '',
@@ -135,44 +130,31 @@ describe('intent.md 확정본 (5.3)', () => {
     '',
   ].join('\n')
 
-  it('앱이 schema_version과 version을 붙이고 type만 옮기며, 본문은 그대로 둔다. 초안의 다른 필드(size 등)는 넣지 않는다 (D88, D85, D227)', () => {
-    const text = confirmedIntent(draft, { version: 1 })
+  it('앱이 schema_version, version, Work의 type을 붙이고 본문은 그대로 둔다 (D88, D236)', () => {
+    const text = confirmedIntent(body, { version: 1, type: 'bugfix' })
     expect(text).toBe(
-      [
-        '---',
-        'schema_version: 1',
-        'version: 1',
-        'type: bugfix',
-        '---',
-        '## 목표',
-        'KST에서 토큰이 바로 만료되는 문제를 고친다.',
-        '',
-        '## 비목표',
-        '- 없음',
-        '',
-        '## 원하는 결과',
-        '만료 판정이 수명과 일치한다.',
-        '',
-        '## 완료조건',
-        '- [ ] 재현 절차가 더 이상 실패하지 않는다',
-        '',
-      ].join('\n'),
+      ['---', 'schema_version: 1', 'version: 1', 'type: bugfix', '---', body].join('\n'),
     )
     const fm = parseFrontMatter(text)
     expect(fm.ok && fm.data).toEqual({ schema_version: 1, version: 1, type: 'bugfix' })
+    const feature = parseFrontMatter(confirmedIntent(body, { version: 2, type: 'feature' }))
+    expect(feature.ok && feature.data).toEqual({ schema_version: 1, version: 2, type: 'feature' })
+  })
+
+  it('초안에 습관처럼 쓴 머리글은 읽지 않고 뗀다. type은 Work의 유형이다 (I58)', () => {
+    const draft = `---\ntype: bugfix\nsize: M\n---\n${body}`
+    const text = confirmedIntent(draft, { version: 1, type: 'feature' })
+    expect(text).toBe(
+      ['---', 'schema_version: 1', 'version: 1', 'type: feature', '---', body].join('\n'),
+    )
     expect(text).not.toContain('size')
   })
 
   it('CRLF 초안도 LF로 쓴다. 확정본 본문은 초안 검사를 그대로 통과한다', () => {
-    const text = confirmedIntent(draft.replace(/\n/g, '\r\n'), { version: 2 })
+    const text = confirmedIntent(body.replace(/\n/g, '\r\n'), { version: 2, type: 'bugfix' })
     expect(text).not.toContain('\r')
     expect(text).toContain('version: 2\n')
-    // schema_version, version은 초안 스키마에 없는 필드라 경고만 나온다 (D85)
+    // 확정본의 머리글은 초안 검사에서 떼고 경고만 한다 (I58)
     expect(checkIntentDraft(text, { warnChars: 1500 }).errors).toEqual([])
-  })
-
-  it('머리글을 읽을 수 없거나 type이 없으면 만들지 않는다', () => {
-    expect(() => confirmedIntent('## 목표\n', { version: 1 })).toThrow()
-    expect(() => confirmedIntent('---\nextra: x\n---\n## 목표\n', { version: 1 })).toThrow(/type/)
   })
 })

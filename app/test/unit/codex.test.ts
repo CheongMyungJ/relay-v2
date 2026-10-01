@@ -198,6 +198,7 @@ describe('Codex 보호 범위', () => {
 describe('Codex 완료와 자동 승인', () => {
   it('신뢰 전 중단하여 실제 ID가 없으면 재개 대신 새 task로 다시 실행할 수 있다', () => {
     let work = createWork({
+      type: 'bugfix',
       engine: 'codex',
       workId: 'w',
       baseBranch: 'main',
@@ -237,6 +238,7 @@ describe('Codex 완료와 자동 승인', () => {
       auto_approve: { ...DEFAULT_CONFIG.auto_approve, fix: true },
     }
     let work = createWork({
+      type: 'bugfix',
       engine: 'codex',
       workId: 'w',
       baseBranch: 'main',

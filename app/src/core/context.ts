@@ -7,10 +7,10 @@ import { taskEngine } from './agent'
 import type { AppConfig, QuestionMode, WorkSettings } from '../shared/config'
 import type { NodeName, TaskNode } from '../shared/contracts'
 import type { PrItem } from '../shared/pr'
-import type { TaskRecord, WorkState } from '../shared/work'
+import { WORK_TYPE_LABEL, type TaskRecord, type WorkState, type WorkType } from '../shared/work'
 import { approvalMode, autoApprovable, type ApprovalMode } from './approval'
 import {
-  NODES,
+  ALL_NODES,
   NODE_INFO,
   RESPOND,
   WORK_COMPLETE,
@@ -18,6 +18,7 @@ import {
   isPipelineNode,
   isPrevious,
   previousSteps,
+  workType,
   type NextStep,
 } from './pipeline'
 import { REPLIES_FILE, RESPONSE_FILE, parseFrontMatter, sectionText } from './validate'
@@ -39,7 +40,7 @@ const CLOSING =
 const PRESS = '[승인]을 누르세요.'
 
 /**
- * 자동 승인을 켤 수 있는 단계(fix)의 문장 (D132). 자동 승인 여부는 턴이 끝날 때의 설정으로 정하고
+ * 자동 승인을 켤 수 있는 단계(fix, design, implement)의 문장 (D132). 자동 승인 여부는 턴이 끝날 때의 설정으로 정하고
  * (D128) 설정은 task가 도는 중에도 바뀌며, 스킬은 이 문구를 그대로 찍으므로 두 경우를 함께 적는다
  */
 const AUTO_SENTENCE =
@@ -176,7 +177,7 @@ export interface SelectionInput {
   dropped: readonly TaskRef[]
   /** 건너뛰기: 건너뛴 단계 */
   skipped: readonly NodeName[]
-  /** fix로 되감으며 [현재 코드 위에서 이어서]를 골랐다 */
+  /** [현재 코드 위에서 이어서]를 골랐다 (6.2, D254) */
   keepCode: boolean
   /** 코드를 되돌렸다 (D116, D117) */
   reset: boolean
@@ -208,6 +209,50 @@ export interface ContextInput {
   delivery?: readonly string[]
   /** PR 대응 task (D192). 아니면 없다 */
   respond?: RespondInput | null
+  /**
+   * [현재 코드 위에서 이어서]로 되감은 design 다음에 기본 진행으로 시작한 implement (D254). 그 design과, 그 되감기가
+   * 폐기한 task의 산출물 경로. 아니면 없다
+   */
+  carried?: CarriedCode | null
+}
+
+export interface CarriedCode {
+  /** [현재 코드 위에서 이어서]로 되감은 design task */
+  from: TaskRef
+  /** 그 되감기가 폐기한 task의 산출물 경로. 참고용이다 */
+  discarded: readonly (TaskRef & { path: string })[]
+}
+
+/**
+ * [현재 코드 위에서 이어서]가 이어지는 implement인가 (D254): 기본 진행으로 시작한 implement이고, 바로 앞의 폐기되지
+ * 않은 파이프라인 task가 [현재 코드 위에서 이어서]로 되감은 design이다. 그 design을 돌려준다. design은 코드를 바꾸지
+ * 않으므로(D243) 폐기된 구현의 커밋이 implement까지 남아 있다
+ */
+export function keptCodeDesign(work: WorkState, task: TaskRecord): TaskRecord | null {
+  if (task.node !== 'implement' || task.selection) return null
+  const before = work.tasks.filter(
+    (t) => t.seq < task.seq && t.status !== 'discarded' && isPipelineNode(t.node),
+  )
+  const prev = before[before.length - 1]
+  return prev?.node === 'design' && prev.selection?.keep_code === true ? prev : null
+}
+
+/** [현재 코드 위에서 이어서]가 이어지는 implement의 절 (D254, PR #23 리뷰) */
+function carriedSection(c: CarriedCode): [string, string] {
+  const paths = c.discarded.length
+    ? c.discarded.map((a) => `- ${taskRef(a)}: ${a.path}`).join('\n')
+    : '없음'
+  return [
+    '현재 코드 위에서 이어서 (먼저 읽을 것)',
+    [
+      `사람이 ${taskRef(c.from)}을(를) [현재 코드 위에서 이어서]로 되감았다. 폐기된 구현의 커밋이 지금 코드에 남아 있다. 처음부터 다시 만들지 말고, 고친 \`design.md\`에 맞게 지금 코드 위에서 이어서 고친다.`,
+      '이미 있는 동작의 테스트는 구현 전에도 통과할 수 있다. 그때는 `새 동작 테스트`의 구현 전을 "통과(이전 구현에 이미 있음)"로 적는다.',
+      '',
+      '### 폐기된 시도의 산출물 (참고, 입력이 아니다)',
+      '',
+      paths,
+    ].join('\n'),
+  ]
 }
 
 /** 이전 task에서 main이 읽은 것. 폐기되지 않은 task를 순서대로 넘긴다 */
@@ -252,14 +297,15 @@ export function previousInputs(
 
 /** handoff 머리글의 이전 단계 추천 (D23). 머리글을 읽지 못하거나 이전 단계가 아니면 null이다 */
 function recommendedBack(
+  type: WorkType,
   node: TaskNode,
   data: Record<string, unknown>,
 ): DiscardedAttempt['recommended'] {
   const rec = data['recommended_next']
   if (!rec || typeof rec !== 'object') return null
   const { node: to, reason } = rec as Record<string, unknown>
-  const target = NODES.find((n) => n === to)
-  if (!target || typeof reason !== 'string' || !isPrevious(node, target)) return null
+  const target = ALL_NODES.find((n) => n === to)
+  if (!target || typeof reason !== 'string' || !isPrevious(type, node, target)) return null
   return { node: target, reason }
 }
 
@@ -268,6 +314,7 @@ function recommendedBack(
  * handoff가 없으면 없다고만 적는다. 머리글을 읽지 못해도 본문의 요약은 읽는다.
  */
 export function discardedAttempts(
+  type: WorkType,
   tasks: readonly (TaskRef & { handoff?: string })[],
 ): DiscardedAttempt[] {
   return tasks.map((t) => {
@@ -281,7 +328,7 @@ export function discardedAttempts(
       handoff: true,
       summary: sectionText(fm.body, '요약'),
       rejected: rejectedOf(t.handoff),
-      recommended: fm.ok ? recommendedBack(t.node, fm.data) : null,
+      recommended: fm.ok ? recommendedBack(type, t.node, fm.data) : null,
     }
   })
 }
@@ -302,13 +349,13 @@ function list(items: readonly string[]): string {
   return items.length ? items.map((i) => `- ${i.replace(/\s*\n\s*/g, ' ')}`).join('\n') : '없음'
 }
 
-function nextSteps(node: TaskNode): string[] {
+function nextSteps(type: WorkType, node: TaskNode): string[] {
   if (!isPipelineNode(node)) {
     return ['없음: PR 대응 task는 파이프라인 밖이다. `recommended_next`는 null로 둔다 (D188)']
   }
-  const previous = previousSteps(node)
+  const previous = previousSteps(type, node)
   return [
-    `기본 다음 단계: ${stepLabel(defaultNext(node))}`,
+    `기본 다음 단계: ${stepLabel(defaultNext(type, node))}`,
     `이전 단계: ${previous.length ? previous.map(nodeLabel).join(', ') : '없음'}`,
   ]
 }
@@ -339,8 +386,14 @@ function attempts(items: readonly DiscardedAttempt[]): string {
     .join('\n')
 }
 
-/** 되감기의 코드 (6.2, D116, D117) */
-function codeNote(sel: SelectionInput): string {
+/**
+ * 되감기의 코드 (6.2, D116, D117). [현재 코드 위에서 이어서]로 design에 들어오면 지금 코드를 읽고 design.md만 고친다.
+ * design은 코드를 바꾸지 않는다 (D243, D254)
+ */
+function codeNote(sel: SelectionInput, node: TaskNode): string {
+  if (sel.keepCode && node === 'design') {
+    return '[현재 코드 위에서 이어서]: 폐기된 시도의 커밋이 남아 있다. 지금 코드를 읽고 `design.md`를 고친다. 코드는 바꾸지 않는다. 이어지는 구현이 그 코드 위에서 고친다.'
+  }
   if (sel.keepCode) {
     return '[현재 코드 위에서 이어서]: 폐기된 시도의 커밋이 남아 있다. 그 위에서 이어서 고친다.'
   }
@@ -354,7 +407,7 @@ function codeNote(sel: SelectionInput): string {
  * 되감기: 사람 추가 지시, 폐기된 시도 요약, 코드. 건너뛰기: 건너뛴 단계와 폐기한 task, 사람 추가 지시.
  * 기본 진행으로 들어왔으면 사람 추가 지시가 있을 때만 넣는다.
  */
-function selectionSection(sel: SelectionInput): [string, string] | null {
+function selectionSection(sel: SelectionInput, node: TaskNode): [string, string] | null {
   const from = `${taskRef(sel.from)}에서 고름`
   const instruction = sel.instruction ? fenced(sel.instruction, 'text') : '없음'
   if (sel.reason === 'rewind') {
@@ -373,7 +426,7 @@ function selectionSection(sel: SelectionInput): [string, string] | null {
         '',
         '### 코드',
         '',
-        codeNote(sel),
+        codeNote(sel, node),
       ].join('\n'),
     ]
   }
@@ -549,11 +602,14 @@ function respondSection(r: RespondInput, base: string): [string, string] {
 export function buildContext(input: ContextInput): string {
   const { work, task, config } = input
   const info = NODE_INFO[task.node]
+  const type = workType(work)
   const entry = input.respond
     ? respondSection(input.respond, work.base_branch)
     : input.selection
-      ? selectionSection(input.selection)
-      : null
+      ? selectionSection(input.selection, task.node)
+      : input.carried
+        ? carriedSection(input.carried)
+        : null
   const sections: [string, string][] = [
     ...(entry ? [entry] : []),
     [
@@ -561,6 +617,7 @@ export function buildContext(input: ContextInput): string {
       list([
         `work_id: ${work.work_id}`,
         `task_id: ${task.id}`,
+        `업무 유형: ${WORK_TYPE_LABEL[type]} (\`${type}\`)`,
         `node: ${nodeLabel(task.node)}`,
         `skill: ${info.skill}`,
         `승인된 intent 버전: ${work.intent ? String(work.intent.version) : '없음 (의도 승인 전)'}`,
@@ -572,7 +629,7 @@ export function buildContext(input: ContextInput): string {
     ['승인 방식', approvalSection(config, work.settings, task.node, taskEngine(task))],
     ['마무리 안내 문구', closingMessage(task.node, input.delivery, taskEngine(task))],
     ['질문 방식', QUESTION_LABEL[questionMode(config, work.settings, task.node)]],
-    ['선택 가능한 다음 단계', list(nextSteps(task.node))],
+    ['선택 가능한 다음 단계', list(nextSteps(type, task.node))],
     [
       work.intent ? `intent (버전 ${work.intent.version})` : 'intent',
       input.intent === null ? '없음 (의도 승인 전)' : fenced(input.intent),

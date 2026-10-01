@@ -1,9 +1,9 @@
-// handoff와 intent 초안 머리글의 타입 (I19). 원본은 docs/contracts의 JSON Schema(D84)이고,
+// handoff 머리글의 타입 (I19). 원본은 docs/contracts의 JSON Schema(D84)이고,
 // generated/는 npm run contracts가 만든다. 여기서는 앱이 자주 쓰는 부분에 이름을 붙인다.
+// intent 초안에는 머리글이 없다 (D236, I58).
 import type { Handoff } from './generated/handoff.v1'
-import type { IntentDraft } from './generated/intent-draft.v1'
 
-export type { Handoff, IntentDraft }
+export type { Handoff }
 
 export type HandoffStatus = Handoff['status']
 export type Decision = Handoff['decisions'][number]

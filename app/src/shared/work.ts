@@ -5,6 +5,27 @@ import type { AgentEngine } from './agent'
 import type { HandoffStatus, NodeName, TaskNode } from './contracts'
 
 /**
+ * 업무 유형 (D232, D236): 버그 수정(bugfix), 기능 추가(feature). 사람이 새 Work 대화상자에서 고르고, 의도 승인 전까지만
+ * 바꿀 수 있다 (D237). 유형마다 파이프라인이 다르다 (core/pipeline PIPELINES)
+ */
+export type WorkType = 'bugfix' | 'feature'
+
+/** 업무 유형의 화면 이름 (D236) */
+export const WORK_TYPE_LABEL: Readonly<Record<WorkType, string>> = {
+  bugfix: '버그 수정',
+  feature: '기능 추가',
+}
+
+/** 사이드바와 머리 띠에 보이는 짧은 유형 이름 (D256) */
+export const WORK_TYPE_SHORT: Readonly<Record<WorkType, string>> = {
+  bugfix: '버그',
+  feature: '기능',
+}
+
+/** 고를 수 있는 업무 유형. 새 Work 대화상자의 버튼 차례다 (D236) */
+export const WORK_TYPES: readonly WorkType[] = ['bugfix', 'feature']
+
+/**
  * Work 상태 (3.3): 진행 중(active), 멈춤(stopped), PR 진행(pr: [PR 생성] 뒤 머지나 [머지 없이 끝내기]까지, D152),
  * 완료(completed), 포기(abandoned), 보관됨(archived: 완료나 포기 뒤 [Work 정리]를 마침, 시나리오 8).
  */
@@ -53,7 +74,7 @@ export interface StepSelection {
   discarded: string[]
   /** 건너뛴 단계 */
   skipped: NodeName[]
-  /** fix로 되감으며 [현재 코드 위에서 이어서]를 골랐다 */
+  /** [현재 코드 위에서 이어서]를 골랐다 (6.2, D254) */
   keep_code: boolean
   /**
    * 되돌린 코드 (D116, D117). from은 되돌리기 전 HEAD, to는 되돌린 커밋이다. backup_commit은 백업 브랜치를
@@ -279,6 +300,8 @@ export interface RewindOperation extends OperationBase {
   /** 단계를 고른 때의 지금 task */
   from_task: string
   instruction: string | null
+  /** 의도 승인 전 [intake 다시]에서 바꿀 유형 (D237, I59). 바꾸지 않으면 없다 */
+  type?: WorkType
   /** 폐기할 task */
   discard: string[]
   /** 되돌릴 커밋 (D117) */
@@ -493,6 +516,11 @@ export interface WorkState {
   schema_version: 1
   /** w-YYYYMMDD-NNN */
   work_id: string
+  /**
+   * 업무 유형 (D236). 새 Work 대화상자에서 고른 값이다. 없으면 버그 수정으로 읽는다 (D256, I58). 읽는 쪽은
+   * core/pipeline의 workType을 쓴다
+   */
+  type?: WorkType
   status: WorkStatus
   created_at: string
   completed_at?: string

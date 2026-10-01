@@ -3,7 +3,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { NODE_INFO, NODES } from '../../src/core/pipeline'
+import { ALL_NODES, NODE_INFO, PIPELINES } from '../../src/core/pipeline'
 import { checkIntentDraft, checkTask, isValid } from '../../src/core/validate'
 import { DEFAULT_CONFIG } from '../../src/shared/config'
 import type { NodeName } from '../../src/shared/contracts'
@@ -33,8 +33,17 @@ const filledHandoff = codeBlocks(read('_common.md'), 'yaml').find(
   (b) => b !== handoffTemplate && b.includes('status: awaiting_approval'),
 )
 const draftTemplate = codeBlocks(read('work-start/SKILL.md'), 'markdown').find((b) =>
-  b.startsWith('---\n'),
+  b.startsWith('## 목표\n'),
 )
+
+describe('스킬 원본이 있다 (5.6.3)', () => {
+  it('노드마다 skills/<스킬>/SKILL.md가 있다. design과 implement를 포함한다 (D232)', () => {
+    for (const n of [...ALL_NODES, 'respond' as const]) {
+      const skill = NODE_INFO[n].skill
+      expect(fs.existsSync(path.join(SKILLS, skill, 'SKILL.md')), skill).toBe(true)
+    }
+  })
+})
 
 describe('템플릿이 있다', () => {
   it('_common.md에 handoff 템플릿과 값을 채운 예시, work-start에 intent.draft.md 템플릿이 있다', () => {
@@ -55,7 +64,7 @@ describe.runIf(handoffTemplate && draftTemplate)(
       'blocked_reason',
       '재현에 필요한 운영 로그가 없음',
     )
-    // intent 초안 템플릿은 채울 머리글 필드가 없다 (type: bugfix만, D227)
+    // intent 초안 템플릿에는 머리글이 없다 (D236)
     const draft = draftTpl
 
     /** 노드의 필수 산출물. intake는 채운 intent 초안, verify의 pr.md는 첫 줄이 제목이다 */
@@ -68,9 +77,10 @@ describe.runIf(handoffTemplate && draftTemplate)(
       )
     }
 
-    it.each(NODES)('%s: handoff 템플릿에 status만 채운 예시가 유효하다', (node) => {
+    it.each(ALL_NODES)('%s: handoff 템플릿에 status만 채운 예시가 유효하다', (node) => {
       const check = checkTask({
         node,
+        type: PIPELINES.bugfix.includes(node) ? 'bugfix' : 'feature',
         files: { 'handoff.md': awaiting, ...artifacts(node) },
         config: DEFAULT_CONFIG,
       })
@@ -84,6 +94,7 @@ describe.runIf(handoffTemplate && draftTemplate)(
     it('blocked와 blocked_reason을 채운 예시가 유효하다 (D96)', () => {
       const check = checkTask({
         node: 'fix',
+        type: 'bugfix',
         files: { 'handoff.md': blocked },
         config: DEFAULT_CONFIG,
       })
@@ -94,6 +105,7 @@ describe.runIf(handoffTemplate && draftTemplate)(
     it('값을 채운 handoff 예시가 유효하다. 큰따옴표 안의 ": "와 백틱은 글로 읽힌다 (D221)', () => {
       const check = checkTask({
         node: 'fix',
+        type: 'bugfix',
         files: { 'handoff.md': filledHandoff ?? '', ...artifacts('fix') },
         config: DEFAULT_CONFIG,
       })
@@ -113,6 +125,7 @@ describe.runIf(handoffTemplate && draftTemplate)(
       expect(bare).not.toBe(filledHandoff)
       const check = checkTask({
         node: 'fix',
+        type: 'bugfix',
         files: { 'handoff.md': bare, ...artifacts('fix') },
         config: DEFAULT_CONFIG,
       })
@@ -125,6 +138,7 @@ describe.runIf(handoffTemplate && draftTemplate)(
       const withWhat = (what: string) =>
         checkTask({
           node: 'fix',
+          type: 'bugfix',
           files: {
             'handoff.md': (filledHandoff ?? '').replace(
               'what: "빈 배열의 평균은 0으로 한다"',
@@ -148,6 +162,7 @@ describe.runIf(handoffTemplate && draftTemplate)(
     it('반례: 채우지 않은 handoff 템플릿은 status 오류다', () => {
       const check = checkTask({
         node: 'fix',
+        type: 'bugfix',
         files: { 'handoff.md': handoffTpl, 'fix.md': '' },
         config: DEFAULT_CONFIG,
       })
@@ -157,6 +172,7 @@ describe.runIf(handoffTemplate && draftTemplate)(
     it('반례: blocked인데 blocked_reason을 비워 두면 오류다', () => {
       const check = checkTask({
         node: 'fix',
+        type: 'bugfix',
         files: { 'handoff.md': fill(handoffTpl, 'status', 'blocked') },
         config: DEFAULT_CONFIG,
       })
@@ -165,26 +181,12 @@ describe.runIf(handoffTemplate && draftTemplate)(
       ])
     })
 
-    it('intent.draft.md 템플릿이 그대로 유효하다. 머리글은 type: bugfix뿐이다 (D227)', () => {
+    it('intent.draft.md 템플릿이 그대로 유효하다. 머리글이 없다 (D236, I58)', () => {
       const r = checkIntentDraft(draft, { warnChars: DEFAULT_CONFIG.intent_warn_chars })
       expect(r.errors).toEqual([])
       expect(r.warnings).toEqual([])
-      expect(r.value).toEqual({ type: 'bugfix' })
-      expect(draftTpl).not.toMatch(/^size:/m)
-    })
-
-    it('반례: intent.draft.md 템플릿의 type을 bugfix가 아닌 값으로 쓰면 type 오류다', () => {
-      const feature = draftTpl.replace(/^type: bugfix/m, 'type: feature')
-      expect(feature).not.toBe(draftTpl)
-      const r = checkIntentDraft(feature, { warnChars: DEFAULT_CONFIG.intent_warn_chars })
-      expect(r.errors.map((e) => [e.part, e.field])).toEqual([['header', 'type']])
-    })
-
-    it('반례: 없어진 size를 적으면 정의되지 않은 필드라 경고만 한다 (D85, D227)', () => {
-      const withSize = draftTpl.replace(/^type:.*$/m, (line) => `${line}\nsize: M`)
-      const r = checkIntentDraft(withSize, { warnChars: DEFAULT_CONFIG.intent_warn_chars })
-      expect(r.errors).toEqual([])
-      expect(r.warnings.map((w) => [w.part, w.field])).toEqual([['header', 'size']])
+      expect(draftTpl).not.toMatch(/^---$/m)
+      expect(draftTpl).not.toMatch(/^(type|size):/m)
     })
   },
 )

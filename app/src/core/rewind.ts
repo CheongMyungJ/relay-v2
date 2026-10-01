@@ -3,8 +3,23 @@
 // 되돌릴 커밋 수, 커밋 안 된 변경, 산출물 파일, 이미 있는 백업 브랜치는 git과 파일이 알므로 main이 넘긴다.
 import type { NodeName } from '../shared/contracts'
 import type { DiscardView, StepChoice, StepExpect, StepKind, StepPreview } from '../shared/views'
-import type { StartReason, TaskRecord, WorkState } from '../shared/work'
-import { NODE_INFO, NODES, defaultNext, isPipelineNode } from './pipeline'
+import {
+  WORK_TYPE_LABEL,
+  type StartReason,
+  type TaskRecord,
+  type WorkState,
+  type WorkType,
+} from '../shared/work'
+import {
+  KEEP_CODE_NODES,
+  NODE_INFO,
+  PIPELINES,
+  defaultNext,
+  inPipeline,
+  isPipelineNode,
+  order,
+  workType,
+} from './pipeline'
 import { REASON_LABEL, taskLabel } from './review'
 
 export type { StepKind }
@@ -26,8 +41,10 @@ export interface StepPlan {
   /** 새 task의 시작 이유 (시나리오 2-5) */
   reason: StartReason
   code: StepCode
-  /** [현재 코드 위에서 이어서]를 고를 수 있다: fix로 되감을 때 (6.2) */
+  /** [현재 코드 위에서 이어서]를 고를 수 있다: 버그 수정의 fix, 기능 추가의 design과 implement로 되감을 때 (6.2, D254) */
   keepCodeOffered: boolean
+  /** 의도 승인 전 [intake 다시]에서 바꿀 유형 (D237). 바꾸지 않으면 null */
+  type: WorkType | null
 }
 
 export type StepCode =
@@ -39,15 +56,15 @@ export type StepCode =
   | { kind: 'none' }
 
 export interface StepOptions {
-  /** fix로 되감을 때 [현재 코드 위에서 이어서] */
+  /** [현재 코드 위에서 이어서] (6.2, D254) */
   keepCode?: boolean
+  /** 의도 승인 전 [intake 다시]에서 고른 유형 (D237). 지금 유형과 같으면 바꾸지 않는다 */
+  type?: WorkType
   /** 이 Work의 백업 브랜치 (git). 새 백업 브랜치의 번호를 정한다 (D115) */
   backups?: readonly string[]
 }
 
 export type PlanResult = { ok: true; plan: StepPlan } | { ok: false; error: string }
-
-const index = (node: NodeName) => NODES.indexOf(node)
 
 /** 지금 task. 파이프라인은 한 번에 task 하나만 진행한다 */
 function lastTask(work: WorkState): TaskRecord | undefined {
@@ -59,18 +76,26 @@ export function canSelectStep(work: WorkState): boolean {
   return (work.status === 'active' || work.status === 'stopped') && work.tasks.length > 0
 }
 
-/** 되감기인지 건너뛰기인지: 지금 단계 k 이하면 되감기다 (6.2) */
-export function stepKind(from: NodeName, to: NodeName): StepKind {
-  return index(to) <= index(from) ? 'rewind' : 'skip'
+/** 되감기인지 건너뛰기인지: 그 유형의 파이프라인에서 지금 단계 k 이하면 되감기다 (6.2) */
+export function stepKind(type: WorkType, from: NodeName, to: NodeName): StepKind {
+  return order(type, to) <= order(type, from) ? 'rewind' : 'skip'
 }
 
 /**
- * 6.3: 의도 승인 전에는 intake만 고를 수 있다. 고를 수 없으면 이유, 있으면 null
+ * 6.3: 그 Work 유형의 단계만 고를 수 있고, 의도 승인 전에는 intake만 고를 수 있다. 고를 수 없으면 이유, 있으면 null
  */
 function notAllowed(work: WorkState, node: NodeName): string | null {
   if (!canSelectStep(work)) return '진행 중이거나 멈춘 Work가 아님'
+  if (!inPipeline(workType(work), node)) {
+    return `${WORK_TYPE_LABEL[workType(work)]} Work의 단계가 아님`
+  }
   if (!work.intent && node !== 'intake') return '의도 승인 전에는 intake만 고를 수 있음 (6.3)'
   return null
+}
+
+/** 유형을 바꿀 수 있는 단계 선택인가: 의도 승인 전 [intake 다시]뿐이다 (D237) */
+function typeChangeAllowed(work: WorkState, node: NodeName): boolean {
+  return node === 'intake' && !work.intent
 }
 
 // ---------- 백업 브랜치 (D115, D116) ----------
@@ -104,10 +129,11 @@ export function backupMessage(workId: string): string {
 // ---------- 계산 (6.2) ----------
 
 /**
- * 단계 선택의 결과 (6.2의 표). 지금 단계를 k, 고른 단계를 j라고 하면:
+ * 단계 선택의 결과 (6.2의 표). 순서는 그 Work 유형의 파이프라인이다(I57). 지금 단계를 k, 고른 단계를 j라고 하면:
  * - 되감기(j ≤ k): 진행 중인 k를 끝내고, j 이후 노드의 task(폐기되지 않은 것)를 모두 폐기하고, j를 새로 실행한다.
- *   코드는 폐기하는 task 가운데 가장 앞 task의 시작 커밋으로 되돌린다(D117). fix로 되감으면
- *   [현재 코드 위에서 이어서]를 고를 수 있다.
+ *   코드는 폐기하는 task 가운데 가장 앞 task의 시작 커밋으로 되돌린다(D117). 버그 수정의 fix, 기능 추가의 design과
+ *   implement로 되감으면 [현재 코드 위에서 이어서]를 고를 수 있다(D254). 의도 승인 전 intake로 되감으면 유형을
+ *   바꿀 수 있다(D237).
  * - 건너뛰기(j > k): k가 진행 중이면 끝내고 k를 폐기한다. k가 끝났으면 k는 입력에 남는다.
  *   코드는 되돌리지 않는다(D117). 건너뛴 단계도 폐기한 task도 없으면(k가 끝났고 j가 기본 다음 단계)
  *   새 task의 이유는 기본 진행이다.
@@ -122,11 +148,17 @@ export function planStep(work: WorkState, node: NodeName, opts: StepOptions = {}
   const fromNode = from.node
   if (!isPipelineNode(fromNode))
     return { ok: false, error: 'PR 대응 task에서는 단계를 고를 수 없음 (D182)' }
-  const kind = stepKind(fromNode, node)
+  const type = workType(work)
+  const kind = stepKind(type, fromNode, node)
   const done = from.status === 'approved'
-  const keepCodeOffered = kind === 'rewind' && node === 'fix'
+  const keepCodeOffered = kind === 'rewind' && KEEP_CODE_NODES[type].includes(node)
   if (opts.keepCode && !keepCodeOffered) {
-    return { ok: false, error: '[현재 코드 위에서 이어서]는 fix로 되감을 때만 고를 수 있음' }
+    const nodes = KEEP_CODE_NODES[type].join(', ')
+    return { ok: false, error: `[현재 코드 위에서 이어서]는 ${nodes}로 되감을 때만 고를 수 있음` }
+  }
+  const changed = opts.type && opts.type !== type ? opts.type : null
+  if (changed && !typeChangeAllowed(work, node)) {
+    return { ok: false, error: '유형은 의도 승인 전 [intake 다시]에서만 바꿀 수 있음 (D237)' }
   }
   const interrupt = done
     ? null
@@ -138,7 +170,10 @@ export function planStep(work: WorkState, node: NodeName, opts: StepOptions = {}
 
   if (kind === 'rewind') {
     const discard = work.tasks.filter(
-      (t) => t.status !== 'discarded' && isPipelineNode(t.node) && index(t.node) >= index(node),
+      (t) =>
+        t.status !== 'discarded' &&
+        isPipelineNode(t.node) &&
+        order(type, t.node) >= order(type, node),
     )
     const to = discard.find((t) => t.start_commit)?.start_commit
     const code: StepCode = opts.keepCode
@@ -159,15 +194,19 @@ export function planStep(work: WorkState, node: NodeName, opts: StepOptions = {}
         reason: 'rewind',
         code,
         keepCodeOffered,
+        type: changed,
       },
     }
   }
 
   const discard = done ? [] : [from]
   // 의도 승인 전에는 건너뛸 수 없다(notAllowed)
-  const skipped = NODES.filter((n) => index(n) > index(fromNode) && index(n) < index(node))
+  const skipped = PIPELINES[type].filter(
+    (n) => order(type, n) > order(type, fromNode) && order(type, n) < order(type, node),
+  )
   // 기본 진행은 끝난 k의 기본 다음 단계를 고른 경우뿐이다
-  const isDefault = skipped.length === 0 && discard.length === 0 && defaultNext(fromNode) === node
+  const isDefault =
+    skipped.length === 0 && discard.length === 0 && defaultNext(type, fromNode) === node
   return {
     ok: true,
     plan: {
@@ -181,6 +220,7 @@ export function planStep(work: WorkState, node: NodeName, opts: StepOptions = {}
       reason: isDefault ? 'default' : 'skip',
       code: { kind: 'none' },
       keepCodeOffered,
+      type: null,
     },
   }
 }
@@ -190,24 +230,28 @@ export function planStep(work: WorkState, node: NodeName, opts: StepOptions = {}
 const title = (node: NodeName) => `${NODE_INFO[node].title}(${node})`
 
 /**
- * 단계 선택 대화상자의 단계: 파이프라인 차례로, 고를 수 있는지와 그 이유 (6.2, 6.3).
- * 모든 단계를 보인다. 의도 승인 전에는 intake만 고르게 한다
+ * 단계 선택 대화상자의 단계: 그 Work 유형의 파이프라인 차례로, 고를 수 있는지와 그 이유 (6.2, 6.3).
+ * 그 유형의 모든 단계를 보인다. 의도 승인 전에는 intake만 고르게 하고, 그때 유형을 바꿀 수 있다 (D237)
  */
 export function stepChoices(work: WorkState): StepChoice[] {
   const from = lastTask(work)
+  const type = workType(work)
   // PR 대응 task(D188)가 지금 task면 파이프라인의 어느 단계보다 뒤로 본다: 고를 수는 없다 (canSelectStep, D182)
   const fromNode = from ? (isPipelineNode(from.node) ? from.node : 'verify') : null
   const recommended = work.stop?.kind === 'recommended_back' ? work.stop.node : null
-  return NODES.map((node) => {
+  return PIPELINES[type].map((node) => {
     const why = from ? notAllowed(work, node) : '지금 task가 없음'
+    const kind = fromNode ? stepKind(type, fromNode, node) : 'rewind'
     return {
       node,
       title: title(node),
-      kind: fromNode ? stepKind(fromNode, node) : 'rewind',
+      kind,
       allowed: why === null,
       why,
       current: from?.node === node,
       recommended: node === recommended,
+      keepCode: kind === 'rewind' && KEEP_CODE_NODES[type].includes(node),
+      typeChange: why === null && typeChangeAllowed(work, node),
     }
   })
 }
@@ -264,6 +308,9 @@ export function stepPreview(work: WorkState, plan: StepPlan, facts: PreviewFacts
       backupBranch: backup ? code.backupBranch : null,
     },
     keepCodeOffered: plan.keepCodeOffered,
+    typeChange: plan.type
+      ? `유형을 ${WORK_TYPE_LABEL[workType(work)]}에서 ${WORK_TYPE_LABEL[plan.type]}(으)로 바꿉니다. 의도 승인 뒤에는 바꿀 수 없습니다 (D237)`
+      : null,
     intent:
       plan.node === 'intake'
         ? work.intent

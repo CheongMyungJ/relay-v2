@@ -50,6 +50,7 @@ async function start(s: Scenario, env: Record<string, string> = {}, config = {})
   const created = await h.relay.createWork(projectId, {
     request: REQUEST,
     baseBranch: 'main',
+    type: 'bugfix',
     baseLocation: 'local',
   })
   if (!created.ok || !created.workKey) throw new Error(`Work 생성 실패: ${JSON.stringify(created)}`)
@@ -175,7 +176,7 @@ describe('[흐름] 최소 흐름 (M2)', () => {
       expect(e.ts).toMatch(ISO)
       expect(e.work_id).toBe(s.workId)
     }
-    expect(ev[0]?.payload).toEqual({ base_branch: 'main', base_commit: base })
+    expect(ev[0]?.payload).toEqual({ type: 'bugfix', base_branch: 'main', base_commit: base })
     expect(ev.at(-1)?.payload).toEqual({ delivery: 'none' })
     expect(ev[5]?.payload).toEqual({ by: 'human' })
     for (const t of w.tasks) {

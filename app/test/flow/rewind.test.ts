@@ -73,6 +73,7 @@ async function setup(s: Scenario, config: object = {}): Promise<Setup> {
       const r = await hh.relay.createWork(projectId, {
         request,
         baseBranch: 'main',
+        type: 'bugfix',
         baseLocation: 'local',
       })
       if (!r.ok) throw new Error(`Work 생성 실패: ${r.error}`)
@@ -220,6 +221,7 @@ describe('[흐름] 되감기와 단계 선택 (M4)', () => {
       code: { kind: 'reset', to: base, commits: 1, uncommitted: [], backupBranch: branch },
       keepCodeOffered: true,
       intent: null,
+      typeChange: null,
     })
 
     expect(await confirm(s, key, p, '완료조건 2의 빈 배열 경우를 다시 봐 줘')).toEqual({ ok: true })

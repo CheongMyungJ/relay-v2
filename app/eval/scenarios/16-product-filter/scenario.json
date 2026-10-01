@@ -1,0 +1,53 @@
+{
+  "id": "16-product-filter",
+  "type": "feature",
+  "repoName": "shop-api",
+  "title": "사람만 아는 규칙이 섞인 중간 크기 기능",
+  "purpose": "필터와 정렬처럼 흔한 기능이지만 경계 규칙(같은 가격의 차례, 잘못된 범위의 처리)을 사람만 알 때, 설계 단계가 밖에서 보이는 동작의 선택지를 사람에게 묻는지(D242), 묻지 않고 흔한 방식으로 정해 틀리는지 본다. 기존 호출을 깨지 않는지도 본다.",
+  "report": "상품 목록 API(src/products.js의 listProducts)에 가격 범위 필터(minPrice, maxPrice)와 가격 정렬(sort: 'price_asc' | 'price_desc')을 더해 달라. 필터와 정렬은 쪽 나누기 전에 적용하고, total은 필터한 뒤의 개수여야 한다.",
+  "knowledge": [
+    {
+      "share": "upfront",
+      "text": "기존 호출(page만 넘김)은 결과가 지금과 똑같아야 한다. 앱 첫 화면이 그렇게 부른다."
+    },
+    {
+      "share": "on_ask",
+      "text": "가격이 같은 상품은 정렬 방향과 관계없이 id 오름차순으로 둔다. 쪽을 넘길 때 같은 상품이 두 번 보이거나 빠지면 안 되기 때문이다."
+    },
+    {
+      "share": "on_ask",
+      "text": "minPrice가 maxPrice보다 크면 빈 목록이 아니라 RangeError를 던진다. 화면이 입력 오류로 보여 준다. 모르는 sort 값도 RangeError다."
+    },
+    {
+      "share": "on_ask",
+      "text": "가격 범위는 양 끝을 포함한다(minPrice ≤ 가격 ≤ maxPrice)."
+    }
+  ],
+  "preferences": ["설계를 먼저 보고 싶다.", "기존 화면이 깨지지 않았다는 확인이 있으면 좋겠다."],
+  "reveals": [],
+  "events": [],
+  "expectedFiles": ["src/products.js", "src/**", "test/**"],
+  "checks": [
+    {
+      "name": "가격 범위 필터",
+      "file": "filter.test.js"
+    },
+    {
+      "name": "정렬과 같은 가격의 차례",
+      "file": "sort.test.js"
+    },
+    {
+      "name": "잘못된 범위와 정렬",
+      "file": "range-error.test.js"
+    },
+    {
+      "name": "기존 호출 그대로",
+      "file": "paging.test.js",
+      "guard": true
+    }
+  ],
+  "limits": {
+    "minutes": 60,
+    "turns": 80
+  }
+}

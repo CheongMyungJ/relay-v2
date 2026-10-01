@@ -71,7 +71,6 @@ function valid(): TaskCheck {
     warnings: [],
     handoff: HANDOFF,
     handoffHeader: HANDOFF,
-    intentDraft: null,
   }
 }
 
@@ -119,6 +118,7 @@ const HEAD = 'head0001'
 /** intake → fix → verify를 지나 [PR 생성]까지 가 PR 진행이 된 Work (M9) */
 function inPr(): WorkState {
   let work = createWork({
+    type: 'bugfix',
     workId: 'w-20260929-001',
     baseBranch: 'main',
     baseCommit: 'base0001',
@@ -969,7 +969,7 @@ describe('replies.md 형식 검사 (5.2.1, D190)', () => {
       ...(replies === undefined ? {} : { 'replies.md': replies }),
     })
     const check = (f: Record<string, string>, replyItems: string[]) =>
-      checkTask({ node: 'respond', files: f, config: DEFAULT_CONFIG, replyItems })
+      checkTask({ node: 'respond', type: 'bugfix', files: f, config: DEFAULT_CONFIG, replyItems })
     expect(check(files(), ids).errors.map((e) => [e.file, e.part])).toEqual([
       ['replies.md', 'file'],
     ])

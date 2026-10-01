@@ -50,6 +50,7 @@ describe('[흐름] 진행 표시와 세션 시각 (M12 R2)', () => {
     const created = await h.relay.createWork(projectId, {
       request: REQUEST,
       baseBranch: 'main',
+      type: 'bugfix',
       baseLocation: 'local',
     })
     if (!created.ok || !created.workKey)
@@ -191,6 +192,7 @@ describe('[흐름] 진행 표시와 세션 시각 (M12 R2)', () => {
     const created = await h.relay.createWork(projectId, {
       request: REQUEST,
       baseBranch: 'main',
+      type: 'bugfix',
       baseLocation: 'local',
     })
     if (!created.ok || !created.workKey)

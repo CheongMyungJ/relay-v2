@@ -138,6 +138,7 @@ async function create(h: Harness, projectId: string, baseLocation: 'local' | 're
   const r = await h.relay.createWork(projectId, {
     request: '요청\n',
     baseBranch: 'main',
+    type: 'bugfix',
     baseLocation,
   })
   if (!r.ok || !r.workKey) throw new Error(`Work 생성 실패: ${JSON.stringify(r)}`)
@@ -213,6 +214,7 @@ describe('[어댑터] Work 생성: worktree와 기준 커밋 (시나리오 1, D9
     const r = await h.relay.createWork(projectId, {
       request: '요청',
       baseBranch: 'main',
+      type: 'bugfix',
       baseLocation: 'remote',
     })
     expect(r).toMatchObject({ ok: false, error: expect.stringContaining('git fetch') })
@@ -229,6 +231,7 @@ describe('[어댑터] Work 생성: worktree와 기준 커밋 (시나리오 1, D9
     const r = await h.relay.createWork(projectId, {
       request: '요청',
       baseBranch: 'nope',
+      type: 'bugfix',
       baseLocation: 'local',
     })
     expect(r).toMatchObject({ ok: false, error: expect.stringContaining('nope') })

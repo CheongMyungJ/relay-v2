@@ -45,13 +45,13 @@ function check(h: Partial<Handoff> = {}, errors = 0): TaskCheck {
     warnings: [],
     handoff: { ...HANDOFF, ...h },
     handoffHeader: { ...HANDOFF, ...h },
-    intentDraft: null,
   }
 }
 
 /** 지금 task가 verify(t-03)인 Work (intake → fix → verify) */
 function atVerify(status: TaskStatus, patch: Partial<WorkState> = {}): WorkState {
   const base = createWork({
+    type: 'bugfix',
     workId: 'w-20260927-001',
     baseBranch: 'main',
     baseCommit: 'c0',
