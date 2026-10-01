@@ -1,7 +1,8 @@
 # [실제] 실제 claude로 두 요청(경우 이름 M, S)이 intake → fix → verify를 지나 Work 완료까지 가는지, 트리 종료한 세션을 --resume으로 다시 열면
 # 대화가 이어지는지(M3), 되감기 뒤 스킬이 추가 지시와 폐기된 시도 요약을 따라 Work 완료까지 가는지(M4),
 # 전달과 정리(M5), 앱이 충돌한 뒤 다시 켜서 [재개]로 이어 가는지(M6), 수정 단계를 카운트다운 뒤 자동 승인하는지(M7),
-# 작은 기능 추가가 intake → design → implement → verify를 지나는지(경우 feature, M14)
+# 작은 기능 추가가 intake → design → implement → verify를 지나는지(경우 feature, M14),
+# 작은 리팩터링이 intake → refactor → verify를 지나는지(경우 refactor, M15)
 # 본다 (docs/implementation.md I29, 8.3, 8.4).
 # 수동으로만 실행한다. Claude 사용량이 든다. 마일스톤을 마칠 때와 Claude Code를 올릴 때 돌린다.
 # 인증: spikes 워크플로와 같은 레포 secret CLAUDE_CODE_OAUTH_TOKEN 또는 ANTHROPIC_API_KEY.
@@ -25,7 +26,7 @@ on:
         required: false
         default: "low"
       cases:
-        description: "돌릴 경우 (예: S resume rewind-fix restart feature). rewind는 rewind-intake와 rewind-fix. 비우면 전부. pr, pr-cleanup, pr-auto는 따로(PR 진행과 대응, Linux)"
+        description: "돌릴 경우 (예: S resume rewind-fix restart feature refactor). rewind는 rewind-intake와 rewind-fix. 비우면 전부. pr, pr-cleanup, pr-auto는 따로(PR 진행과 대응, Linux)"
         required: false
         default: ""
 
@@ -94,7 +95,7 @@ jobs:
         if: always()
         working-directory: app
         run: |
-          foreach ($name in @('summary.md', 'resume.md', 'rewind.md', 'deliver.md', 'restart.md', 'auto.md', 'feature.md')) {
+          foreach ($name in @('summary.md', 'resume.md', 'rewind.md', 'deliver.md', 'restart.md', 'auto.md', 'feature.md', 'refactor.md')) {
             $file = "test-results/claude/$name"
             if (Test-Path $file) {
               Get-Content $file -Raw -Encoding utf8 | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8

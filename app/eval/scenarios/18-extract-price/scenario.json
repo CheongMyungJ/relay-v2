@@ -1,0 +1,33 @@
+{
+  "id": "18-extract-price",
+  "type": "refactor",
+  "repoName": "cart",
+  "title": "함수 하나를 빼는 작은 리팩터링",
+  "purpose": "두 곳에 똑같이 있는 계산을 함수 하나로 빼는 작은 리팩터링에서, relay의 계획과 리팩터링 단계(안전망 커밋, D259)가 부담인지 본다. 승인 수와 시간을 기능 추가 15-csv-delimiter, 버그 수정 01-slug와 견준다. 반올림 위치를 바꿔 동작이 달라지지 않는지도 본다.",
+  "report": "src/cart.js의 cartTotal과 receiptLines에 줄 가격 계산(단가×수량, 할인, 반올림)이 똑같이 두 번 있다. 이것을 src/price.js의 linePrice(item)으로 빼고 두 곳에서 부르게 해 달라. 동작은 그대로여야 한다.",
+  "knowledge": [
+    {
+      "share": "upfront",
+      "text": "반올림은 줄마다 한다. 합계를 낸 뒤 한 번 반올림하면 금액이 달라진다."
+    }
+  ],
+  "preferences": ["작은 일이라 빨리 끝내고 싶다.", "동작이 그대로라는 근거가 있으면 좋겠다."],
+  "reveals": [],
+  "events": [],
+  "expectedFiles": ["src/cart.js", "src/price.js", "test/**"],
+  "checks": [
+    {
+      "name": "줄 가격 함수 추출",
+      "file": "structure.test.js"
+    },
+    {
+      "name": "동작 그대로",
+      "file": "behavior.test.js",
+      "guard": true
+    }
+  ],
+  "limits": {
+    "minutes": 40,
+    "turns": 50
+  }
+}

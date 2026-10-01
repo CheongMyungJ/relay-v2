@@ -9,6 +9,7 @@ import {
   type ResumeInput,
 } from '../core/settings'
 import type { SkillName } from '../shared/config'
+import type { WorkType } from '../shared/work'
 import type { AgentSettingsInput } from './agent'
 import { skillText, type AuthStatus, type DeployedSkill, type FindClaudeOptions } from './claude'
 import { describeFailure, run } from './exec'
@@ -75,8 +76,9 @@ export async function deployCodexSkill(o: {
   workDir: string
   taskDir?: string
   skill: SkillName
+  type: WorkType
 }): Promise<DeployedSkill> {
-  const original = await skillText(o.source, o.skill)
+  const original = await skillText(o.source, o.skill, o.type)
   const body = original
     .replace(/^---\n[\s\S]*?\n---\n/, '')
     .replaceAll('`AskUserQuestion`', '`mcp__relay__ask_human`')

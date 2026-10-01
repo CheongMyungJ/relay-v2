@@ -25,6 +25,8 @@ export const FIX_FILE = 'fix.md'
 export const DESIGN_FILE = 'design.md'
 /** 구현의 산출물 (5.6.9, D250) */
 export const IMPLEMENT_FILE = 'implement.md'
+/** 계획과 리팩터링의 산출물 (5.6.10, D272) */
+export const REFACTOR_FILE = 'refactor.md'
 /** 리뷰와 검증의 산출물: 리뷰 지적과 완료조건 판정 (5.6.6, D229) */
 export const VERIFICATION_FILE = 'verification.md'
 

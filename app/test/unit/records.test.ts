@@ -139,6 +139,12 @@ describe('intent.md 확정본 (5.3)', () => {
     expect(fm.ok && fm.data).toEqual({ schema_version: 1, version: 1, type: 'bugfix' })
     const feature = parseFrontMatter(confirmedIntent(body, { version: 2, type: 'feature' }))
     expect(feature.ok && feature.data).toEqual({ schema_version: 1, version: 2, type: 'feature' })
+    const refactor = parseFrontMatter(confirmedIntent(body, { version: 1, type: 'refactor' }))
+    expect(refactor.ok && refactor.data).toEqual({
+      schema_version: 1,
+      version: 1,
+      type: 'refactor',
+    })
   })
 
   it('초안에 습관처럼 쓴 머리글은 읽지 않고 뗀다. type은 Work의 유형이다 (I58)', () => {

@@ -11,6 +11,7 @@ import { WORK_TYPE_LABEL, type TaskRecord, type WorkState, type WorkType } from 
 import { approvalMode, autoApprovable, type ApprovalMode } from './approval'
 import {
   ALL_NODES,
+  KEEP_CODE_NOTES,
   NODE_INFO,
   RESPOND,
   WORK_COMPLETE,
@@ -21,6 +22,7 @@ import {
   workType,
   type NextStep,
 } from './pipeline'
+import { workBranch } from './records'
 import { REPLIES_FILE, RESPONSE_FILE, parseFrontMatter, sectionText } from './validate'
 
 /** 이 노드 스킬의 질문 방식. Work 설정, 앱 설정 순서로 본다 (D26, D72) */
@@ -40,7 +42,7 @@ const CLOSING =
 const PRESS = '[승인]을 누르세요.'
 
 /**
- * 자동 승인을 켤 수 있는 단계(fix, design, implement)의 문장 (D132). 자동 승인 여부는 턴이 끝날 때의 설정으로 정하고
+ * 자동 승인을 켤 수 있는 단계(fix, design, implement, refactor)의 문장 (D132). 자동 승인 여부는 턴이 끝날 때의 설정으로 정하고
  * (D128) 설정은 task가 도는 중에도 바뀌며, 스킬은 이 문구를 그대로 찍으므로 두 경우를 함께 적는다
  */
 const AUTO_SENTENCE =
@@ -179,6 +181,11 @@ export interface SelectionInput {
   skipped: readonly NodeName[]
   /** [현재 코드 위에서 이어서]를 골랐다 (6.2, D254) */
   keepCode: boolean
+  /**
+   * [현재 코드 위에서 이어서]: 폐기된 task의 산출물 경로. 코드가 남아 있어 그 산출물에만 있는 사실(예: 안전망 커밋 해시)을
+   * 이어받아야 한다 (D278, PR #24 리뷰). 참고용이고 입력이 아니다. 아니면 없다
+   */
+  keptArtifacts?: readonly (TaskRef & { path: string })[]
   /** 코드를 되돌렸다 (D116, D117) */
   reset: boolean
 }
@@ -387,15 +394,21 @@ function attempts(items: readonly DiscardedAttempt[]): string {
 }
 
 /**
- * 되감기의 코드 (6.2, D116, D117). [현재 코드 위에서 이어서]로 design에 들어오면 지금 코드를 읽고 design.md만 고친다.
- * design은 코드를 바꾸지 않는다 (D243, D254)
+ * 되감기의 코드 (6.2, D116, D117). [현재 코드 위에서 이어서]의 안내는 단계마다 pipeline의 KEEP_CODE_NOTES에 있고, 남은
+ * 코드와 함께 이어받을 폐기된 산출물 경로를 붙인다 (D254, D278)
  */
-function codeNote(sel: SelectionInput, node: TaskNode): string {
-  if (sel.keepCode && node === 'design') {
-    return '[현재 코드 위에서 이어서]: 폐기된 시도의 커밋이 남아 있다. 지금 코드를 읽고 `design.md`를 고친다. 코드는 바꾸지 않는다. 이어지는 구현이 그 코드 위에서 고친다.'
-  }
+function codeNote(type: WorkType, sel: SelectionInput, node: TaskNode): string {
   if (sel.keepCode) {
-    return '[현재 코드 위에서 이어서]: 폐기된 시도의 커밋이 남아 있다. 그 위에서 이어서 고친다.'
+    const note = isPipelineNode(node) ? KEEP_CODE_NOTES[type][node] : undefined
+    const kept = sel.keptArtifacts ?? []
+    const paths = kept.length ? kept.map((a) => `- ${taskRef(a)}: ${a.path}`).join('\n') : '없음'
+    return [
+      note ?? '[현재 코드 위에서 이어서]: 폐기된 시도의 커밋이 남아 있다. 그 위에서 이어서 고친다.',
+      '',
+      '폐기된 시도의 산출물 (참고, 입력이 아니다):',
+      '',
+      paths,
+    ].join('\n')
   }
   return sel.reset
     ? '고른 단계를 시작할 때의 커밋으로 되돌렸다. 폐기된 시도의 코드는 입력이 아니다.'
@@ -407,7 +420,11 @@ function codeNote(sel: SelectionInput, node: TaskNode): string {
  * 되감기: 사람 추가 지시, 폐기된 시도 요약, 코드. 건너뛰기: 건너뛴 단계와 폐기한 task, 사람 추가 지시.
  * 기본 진행으로 들어왔으면 사람 추가 지시가 있을 때만 넣는다.
  */
-function selectionSection(sel: SelectionInput, node: TaskNode): [string, string] | null {
+function selectionSection(
+  type: WorkType,
+  sel: SelectionInput,
+  node: TaskNode,
+): [string, string] | null {
   const from = `${taskRef(sel.from)}에서 고름`
   const instruction = sel.instruction ? fenced(sel.instruction, 'text') : '없음'
   if (sel.reason === 'rewind') {
@@ -426,7 +443,7 @@ function selectionSection(sel: SelectionInput, node: TaskNode): [string, string]
         '',
         '### 코드',
         '',
-        codeNote(sel, node),
+        codeNote(type, sel, node),
       ].join('\n'),
     ]
   }
@@ -606,7 +623,7 @@ export function buildContext(input: ContextInput): string {
   const entry = input.respond
     ? respondSection(input.respond, work.base_branch)
     : input.selection
-      ? selectionSection(input.selection, task.node)
+      ? selectionSection(type, input.selection, task.node)
       : input.carried
         ? carriedSection(input.carried)
         : null
@@ -622,6 +639,7 @@ export function buildContext(input: ContextInput): string {
         `skill: ${info.skill}`,
         `승인된 intent 버전: ${work.intent ? String(work.intent.version) : '없음 (의도 승인 전)'}`,
         `task 디렉터리: ${input.taskDir}`,
+        `작업 브랜치: ${workBranch(work.work_id)}`,
         `기준 브랜치: ${work.base_branch}`,
         `기준 커밋: ${work.base_commit}`,
       ]),

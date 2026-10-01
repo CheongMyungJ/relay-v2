@@ -217,11 +217,11 @@ describe('스키마 검사: handoff (5.2.1)', () => {
       '`recommended_next` 형식이 틀림 (기대: null 또는 {node, reason}, 지금: 문자열)',
     ])
     expect(run({ recommended_next: { node: 'deploy', reason: '배포' } })).toEqual([
-      '`recommended_next.node` 값이 허용값이 아님 (허용값: intake | fix | design | implement | verify, 지금: deploy)',
+      '`recommended_next.node` 값이 허용값이 아님 (허용값: intake | fix | design | implement | refactor | verify, 지금: deploy)',
     ])
     // 없어진 노드도 허용값이 아니다 (D227)
     expect(run({ recommended_next: { node: 'review', reason: '다시 리뷰' } })).toEqual([
-      '`recommended_next.node` 값이 허용값이 아님 (허용값: intake | fix | design | implement | verify, 지금: review)',
+      '`recommended_next.node` 값이 허용값이 아님 (허용값: intake | fix | design | implement | refactor | verify, 지금: review)',
     ])
     expect(run({ recommended_next: { node: 'verify' } })).toEqual([
       '`recommended_next.reason` 없음: 필수 필드',

@@ -96,6 +96,7 @@ const MANUAL: AppConfig = {
     fix: false,
     design: false,
     implement: false,
+    refactor: false,
     respond: false,
   },
 }
@@ -2770,6 +2771,7 @@ describe('자동 승인 (4.3, D127~D131)', () => {
       fix: true,
       design: false,
       implement: true,
+      refactor: true,
       respond: true,
     },
     auto_approve_countdown_sec: 15,

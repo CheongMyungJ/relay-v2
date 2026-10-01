@@ -4,11 +4,13 @@
 // 1. 머리글: disable-model-invocation: true, description 있음, name 없음 (D33)
 // 2. 크기: SKILL.md + _common.md. Claude Code 어림(글자 수 / 4)으로 판정, 모델 토큰 어림은 참고 (D31, D95)
 // 3. 템플릿: 주석 단 템플릿에 값을 채운 예시가 docs/contracts 스키마를 통과하는지 (D87). intent 초안은 머리글이 없다 (D236)
-// 4. 설계 대조: 산출물 템플릿의 절 제목, 입력·결정 지점·사람이 정할 결정·완료조건 항목 (5.6.1~5.6.9, I60)
+// 4. 설계 대조: 산출물 템플릿의 절 제목, 입력·결정 지점·사람이 정할 결정·완료조건 항목 (5.6.1~5.6.10, I60, I65)
+// 5. 유형별 조립: 공용 스킬의 유형 표시, 조립한 글에 다른 유형의 산출물이 없음 (D279, I68)
 
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { TYPES, assemble } from './assemble.mjs';
 import YAML from 'yaml';
 import Ajv2020 from 'ajv/dist/2020.js';
 
@@ -17,12 +19,27 @@ const root = join(here, '..');
 const read = (p) => readFileSync(join(root, p), 'utf8').replace(/\r\n/g, '\n');
 
 const SIZE_TARGET = 5000; // D31
-const SKILLS = ['work-start', 'fix', 'design', 'implement', 'verify', 'pr-respond'];
+const SKILLS = ['work-start', 'fix', 'design', 'implement', 'refactor', 'verify', 'pr-respond'];
+
+// 업무 유형(D232, D258)과 유형마다 조립하는 공용 스킬(D279)
+const SHARED = ['work-start', 'verify', 'pr-respond'];
 
 const design = read('docs/design.md');
 const common = read('skills/_common.md');
-// 에이전트가 받는 스킬 본문(공통 규칙을 붙이기 전)
+// 스킬 원본(유형 표시 포함, 공통 규칙을 붙이기 전)
 const skills = Object.fromEntries(SKILLS.map((s) => [s, read(`skills/${s}/SKILL.md`)]));
+
+// 에이전트가 받는 스킬 본문: 공용 스킬은 유형마다 하나씩, 나머지는 그 유형 하나다
+const OWN_TYPE = { fix: 'bugfix', design: 'feature', implement: 'feature', refactor: 'refactor' };
+const variants = SKILLS.flatMap((name) =>
+  (SHARED.includes(name) ? TYPES : [OWN_TYPE[name]]).map((type) => {
+    try {
+      return { name, type, label: SHARED.includes(name) ? `${name}·${type}` : name, text: assemble(skills[name], type) };
+    } catch (e) {
+      return { name, type, label: name, text: skills[name], error: e.message };
+    }
+  }),
+);
 
 let failures = 0;
 const ok = (msg) => console.log(`  ok    ${msg}`);
@@ -87,7 +104,7 @@ check(!/^---\n[\s\S]*?\n---\n/.test(common) || !YAML.parse(common.match(/^---\n(
 console.log(`\n[2] 크기: SKILL.md + _common.md (목표 ${SIZE_TARGET}, D31·D95)`);
 const hangul = (s) => (s.match(/[가-힣]/g) ?? []).length;
 const rows = [];
-for (const [name, text] of Object.entries(skills)) {
+for (const { label: name, text } of variants) {
   const merged = `${text.trimEnd()}\n${common}`; // 앱이 SKILL.md 끝에 붙인다 (5.6.3)
   const chars = merged.length;
   const cc = Math.round(chars / 4); // Claude Code 어림 (2.1.283에서 확인)
@@ -153,21 +170,20 @@ if (handoffTpl) {
 }
 
 // intent 초안 템플릿 (work-start). 머리글이 없다: 유형과 버전은 앱이 의도 승인 때 붙인다 (D236, I58)
-const intentTpl = codeBlocks(skills['work-start'], 'markdown').find((b) => b.startsWith('## 목표\n'));
-check(!!intentTpl, 'work-start: intent.draft.md 템플릿 있음');
-if (intentTpl) {
-  const fm = { body: intentTpl };
-  check(!frontMatter(intentTpl), 'intent 템플릿에 머리글 없음 (D236)');
+// intent 초안 템플릿은 유형마다 조립한 work-start에서 본다 (D279)
+for (const v of variants.filter((x) => x.name === 'work-start')) {
+  const intentTpl = codeBlocks(v.text, 'markdown').find((b) => b.startsWith('## 목표\n'));
+  check(!!intentTpl, `${v.label}: intent.draft.md 템플릿 있음`);
+  if (!intentTpl) continue;
+  check(!frontMatter(intentTpl), `${v.label}: intent 템플릿에 머리글 없음 (D236)`);
 
   // 본문 필수 절과 완료조건 줄 (5.2.1)
-  const hs = headings(fm.body);
-  for (const h of ['목표', '비목표', '원하는 결과', '완료조건']) check(hs.includes(`## ${h}`), `intent 템플릿 본문 절: ${h}`);
-  const cond = fm.body.split('## 완료조건\n')[1]?.split('\n## ')[0] ?? '';
+  const hs = headings(intentTpl);
+  for (const h of ['목표', '비목표', '원하는 결과', '완료조건']) check(hs.includes(`## ${h}`), `${v.label}: intent 템플릿 본문 절: ${h}`);
+  const cond = intentTpl.split('## 완료조건\n')[1]?.split('\n## ')[0] ?? '';
   const lines = cond.split('\n').filter((l) => l.trim());
-  check(lines.length >= 3 && lines.every((l) => l.startsWith('- [ ] ')), '완료조건 줄이 모두 "- [ ] "로 시작');
+  check(lines.length >= 3 && lines.every((l) => l.startsWith('- [ ] ')), `${v.label}: 완료조건 줄이 모두 "- [ ] "로 시작`);
 }
-
-// ---------- 4. 설계 대조 ----------
 
 console.log('\n[4] 설계 대조: 산출물 템플릿의 절 제목');
 const templateSources = {
@@ -175,15 +191,29 @@ const templateSources = {
   fix: ['#### 5.6.5'],
   design: ['#### 5.6.8'],
   implement: ['#### 5.6.9'],
+  refactor: ['#### 5.6.10'],
   verify: ['#### 5.6.6'],
   'pr-respond': ['#### 5.6.7'],
 };
+// 공용 스킬은 유형마다 조립한 글로 본다 (D279). verify의 pr.md 템플릿은 설계 5.6.6에 유형마다 하나씩 있으므로, 그 유형의
+// 템플릿 절은 있어야 하고 다른 유형에만 있는 절은 없어야 한다
+const PR_MARK = { bugfix: '## 원인', feature: '## 동작', refactor: '## 목표 구조' };
 for (const [name, sections] of Object.entries(templateSources)) {
-  const skillHeadings = codeBlocks(skills[name], 'markdown').flatMap(headings);
-  for (const sec of sections) {
-    const designHeadings = codeBlocks(designSection(sec), 'markdown').flatMap((b) => headings(frontMatter(b)?.body ?? b));
-    const missing = designHeadings.filter((h) => !skillHeadings.includes(h));
-    check(missing.length === 0, `${name}: 설계 ${sec.replace(/#+ /, '')} 템플릿 절 ${designHeadings.length}개 모두 있음${missing.length ? ` (빠짐: ${missing.join(', ')})` : ''}`);
+  for (const v of variants.filter((x) => x.name === name)) {
+    const skillHeadings = codeBlocks(v.text, 'markdown').flatMap(headings);
+    for (const sec of sections) {
+      const blocks = codeBlocks(designSection(sec), 'markdown').map((b) => headings(frontMatter(b)?.body ?? b));
+      const prOf = (t) => blocks.find((hs) => hs.includes('# PR 제목') && hs.includes(PR_MARK[t]));
+      const typed = blocks.some((hs) => hs.includes('# PR 제목')) && SHARED.includes(name);
+      const own = typed ? prOf(v.type) ?? [] : [];
+      const designHeadings = [...new Set([...blocks.filter((hs) => !typed || !hs.includes('# PR 제목')).flat(), ...own])];
+      const missing = designHeadings.filter((h) => !skillHeadings.includes(h));
+      check(missing.length === 0, `${v.label}: 설계 ${sec.replace(/#+ /, '')} 템플릿 절 ${designHeadings.length}개 모두 있음${missing.length ? ` (빠짐: ${missing.join(', ')})` : ''}`);
+      if (typed) {
+        const foreign = TYPES.filter((t) => t !== v.type).flatMap((t) => prOf(t) ?? []).filter((h) => !own.includes(h) && skillHeadings.includes(h));
+        check(foreign.length === 0, `${v.label}: 다른 유형의 pr.md 템플릿 절이 없음${foreign.length ? ` (${foreign.join(', ')})` : ''}`);
+      }
+    }
   }
 }
 
@@ -225,23 +255,29 @@ const spec = {
     ['5.6.3', '입력: context.md부터 (요청 원문 포함)', /Read it first[\s\S]*request text/],
     ['D40', '되감기: 현재 intent를 출발점으로', /Start from the current intent/],
     ['5.6.4', '코드를 바꾸지 않음', /does not change code/],
-    ['5.6.4', '재현·원인 추적 안 함', /Do not reproduce the bug or trace the cause/],
-    ['D39', '사람 의심 지점 → 추가 의견, 확인 안 됨', /\(사람 추정, 확인 안 됨\)/],
+    ['5.6.4', '재현·원인 추적 안 함', /Do not reproduce the bug or trace the cause/, ['bugfix']],
+    ['D39', '사람 의심 지점 → 추가 의견, 확인 안 됨', /\(사람 추정, 확인 안 됨\)/, ['bugfix']],
     ['5.6.4', '에이전트 가설은 handoff에만', /hypotheses[\s\S]*## 다음 task가 알아야 할 것/],
     ['D36', '결정 지점 두 가지(D227: size 없음), 사람이 정할 결정 없음', /`비목표`[\s\S]*`완료조건`[\s\S]*no human decisions/],
     ['D41', '"모름" → 그럴듯한 값 + open_questions', /모름[\s\S]*most plausible value[\s\S]*`open_questions`/],
-    ['D37', '기본 완료조건 세 개', /재현 절차가 더 이상 실패하지 않는다[\s\S]*가 통과한다[\s\S]*기존 테스트를 약화하거나 삭제하지 않는다/],
+    ['D37', '기본 완료조건 세 개', /재현 절차가 더 이상 실패하지 않는다[\s\S]*가 통과한다[\s\S]*기존 테스트를 약화하거나 삭제하지 않는다/, ['bugfix']],
     ['D37', '테스트 명령은 레포에서 찾기, 없으면 이 항목만 뺌', /Find the concrete test command in the repo[\s\S]*no tests/],
     ['5.3', '완료조건에 push/PR 없음', /Never include push or PR/],
     ['D43', '완료조건 세 항목', /## Done when[\s\S]*required sections[\s\S]*verifiable[\s\S]*`open_questions`/],
     ['D227', 'size를 쓰지 않음', /^(?![\s\S]*\bsize\b)/],
     ['D236', '유형은 context.md에서 읽음(사람이 고름)', /Work type \(`업무 유형`\) the human picked/],
     ['D236', '템플릿에 머리글 없음, 앱이 붙임', /No front matter: the app adds the type and version/],
-    ['5.6.4', '기능 추가의 설계도 하지 않음', /do not design it either\. That is the job of design/],
+    ['5.6.4', '기능 추가의 설계도 하지 않음', /Do not design the feature\. That is the job of design/, ['feature']],
     ['D238', '유형 불일치: 초안 전에 물음, 바꾸면 blocked, 직접 바꾸지 않음', /Type mismatch[\s\S]*ask before you write the draft[\s\S]*`blocked`[\s\S]*Never change the type yourself/],
-    ['D239', '기능 추가 기본 완료조건 세 개', /`feature`: `- \[ \] <test command>가 통과한다` \/ `- \[ \] 기존 테스트를 약화하거나 삭제하지 않는다` \/ `- \[ \] 완료조건의 각 동작을 확인하는 테스트가 있다`/],
-    ['D240', '인수 조건: 밖에서 보이는 동작, "<조건>이면 <결과>", 구현 세부 없음', /behavior seen from outside[\s\S]*"<조건>이면 <결과>"[\s\S]*No implementation details/],
-    ['D241', '사람 제안: 반드시면 제약, 아니면 (사람 제안)', /`제약` when it is a must[\s\S]*"\(사람 제안\)"/],
+    ['D239', '기능 추가 기본 완료조건 세 개', /`- \[ \] <test command>가 통과한다` \/ `- \[ \] 기존 테스트를 약화하거나 삭제하지 않는다` \/ `- \[ \] 완료조건의 각 동작을 확인하는 테스트가 있다`/, ['feature']],
+    ['D240', '인수 조건: 밖에서 보이는 동작, "<조건>이면 <결과>", 구현 세부 없음', /behavior seen from outside[\s\S]*"<조건>이면 <결과>"[\s\S]*No implementation details/, ['feature']],
+    ['D241', '사람 제안: 반드시면 제약, 아니면 (사람 제안)', /`제약` when it is a must[\s\S]*"\(사람 제안\)"/, ['feature', 'refactor']],
+    ['5.6.4', '리팩터링의 계획도 하지 않음', /Do not plan how to reach the structure\. That is the job of refactor/, ['refactor']],
+    ['D262', '동작 변경·성능 목표가 섞이면 초안 전에 물음: 비목표로 빼거나 유형 바꿈', /behavior change[\s\S]*performance goal[\s\S]*ask before you write the draft[\s\S]*`비목표`[\s\S]*`blocked`/, ['refactor']],
+    ['D263', '레포 밖 공개 인터페이스를 바꾸면 intent에 적음', /Interfaces used outside the repo[\s\S]*write what changes in the intent/, ['refactor']],
+    ['D264', '리팩터링 기본 완료조건 네 개', /`- \[ \] <test command>가 통과한다` \/ `- \[ \] 기존 테스트를 약화하거나 삭제하지 않는다` \/ `- \[ \] 바꾼 곳의 지금 동작을 잡는 안전망 테스트가 있고 기준 코드에서도 통과한다` \/ `- \[ \] 레포 밖 공개 인터페이스가 바뀌지 않는다`/, ['refactor']],
+    ['D266', '구조 조건: 읽거나 명령으로 확인, 한 줄에 하나, 방법은 쓰지 않음', /structural conditions that can be checked[\s\S]*one per line[\s\S]*Not the order or method/, ['refactor']],
+    ['D266', '구조 목표가 막연하면 확인할 수 있는 구조를 물음', /vague[\s\S]*ask for a structure that can be checked/, ['refactor']],
   ],
   design: [
     ['5.6.8', '입력: context.md, request.md 경로', /`context\.md`[\s\S]*`request\.md`/],
@@ -275,6 +311,24 @@ const spec = {
     ['D248', '크게 벗어남 넷', /behavior or interface\) differs from the design[\s\S]*scope widens[\s\S]*different way from `접근`[\s\S]*dependency the design does not have, or change a data format or schema/],
     ['5.6.9', '완료조건: 네 절, 계획 단계, 새 동작 테스트, 물음, 커밋, 테스트 명령', /## Done when[\s\S]*four template sections[\s\S]*Every step of the plan[\s\S]*failed before[\s\S]*and passed after[\s\S]*`decisions`[\s\S]*committed[\s\S]*test command/],
   ],
+  refactor: [
+    ['5.6.10', '입력: context.md, request.md 경로', /`context\.md`[\s\S]*`request\.md`/],
+    ['D278', '현재 코드 위에서 이어서: 안전망 커밋을 다시 만들지 않음', /Continuing on current code[\s\S]*Do not make the safety-net commit again/],
+    ['5.6.10', '순서: 계획 → 물음 → 안전망 커밋 → 단계마다 커밋 → 테스트 명령', /Plan\.[\s\S]*Ask if needed[\s\S]*Safety net\.[\s\S]*Steps\.[\s\S]*test command at the end/],
+    ['D260', '동작을 바꾸지 않음, 찾은 버그는 고치지 않고 적음', /Do not change behavior[\s\S]*do not fix it[\s\S]*`찾은 버그와 받아들인 차이`[\s\S]*`risks`/],
+    ['D268', '기존 테스트가 덮으면 근거와 함께 적고 빈 곳만 새로, 커버리지 도구', /existing tests already cover[\s\S]*reason[\s\S]*only for behavior no test covers[\s\S]*coverage tool/],
+    ['D259', '새 안전망은 기준 코드에서 통과, 따로 커밋, 해시를 적음(I64)', /must pass on the base code[\s\S]*safety-net commit hash/],
+    ['D271', '안전망을 쓸 수 없으면 묻지 않고 이유를 적고 진행, verify는 판정 불가', /No safety net possible[\s\S]*do not ask[\s\S]*`risks`[\s\S]*판정 불가/],
+    ['D263', '레포 안 인터페이스는 바꿀 수 있고 호출부도, 밖은 intent가 정할 때만', /used only inside the repo[\s\S]*callers[\s\S]*used outside the repo[\s\S]*only when the intent says so/],
+    ['D265', '기존 테스트는 호출 이름·import·위치·준비 코드만, 기대값과 입력은 바꾸지 않음', /call names, import paths, file location and setup code[\s\S]*Never change their expected values or inputs/],
+    ['D269', '안전망 커밋 하나와 단계마다 커밋, 커밋마다 테스트 통과', /one safety-net commit, then one commit per plan step[\s\S]*pass at every commit/],
+    ['D57', '테스트 명령 실행, 기준 커밋 실패 구분', /Run tests[\s\S]*also fails at the base commit/],
+    ['D23', 'intent와 어긋나면 intent_deviation, 의도 변경은 intake', /`intent_deviation`[\s\S]*`recommended_next` to `intake`/],
+    ['5.6.10', '결정 지점: 목표 구조, 계획의 나눔, 새 안전망', /The target structure, how to split the plan, which safety-net tests/],
+    ['D267', '사람이 정할 결정: 목표 구조 선택지, 범위·비목표·제약, 사람 제안', /Several target structures[\s\S]*widens the scope, or touches the intent's non-goals or constraints[\s\S]*do not take a human suggestion/],
+    ['D270', '동작 차이: 다른 방법 / 받아들임 / 범위에서 뺌, 받아들이면 그 기대값만, by: human', /must change behavior a little[\s\S]*keep the current behavior another way \/ accept the difference \/ drop that part[\s\S]*only that expected value[\s\S]*`by: human`/],
+    ['5.6.10', '완료조건: 다섯 절, 안전망, 단계 커밋, 찾은 버그, 사람 결정, 테스트 명령', /## Done when[\s\S]*five template sections[\s\S]*safety net[\s\S]*committed separately[\s\S]*plan step is committed[\s\S]*not fixed[\s\S]*`decisions`[\s\S]*test command/],
+  ],
   fix: [
     ['5.6.5', '입력: context.md, request.md 경로', /`context\.md`[\s\S]*`request\.md`/],
     ['D97', '기준 커밋은 context.md', /base commit[\s\S]*base commit \(from `context\.md`\)/],
@@ -296,37 +350,45 @@ const spec = {
     ['5.6.5', '완료조건: 다섯 절, 재현 또는 질문, 원인 또는 질문, 추정 판정, 커밋, 재현 테스트, 테스트 명령', /## Done when[\s\S]*five template sections[\s\S]*reproduced[\s\S]*unnarrowed cause[\s\S]*suspicion is judged[\s\S]*committed[\s\S]*fails before[\s\S]*test command/],
   ],
   verify: [
-    ['5.6.6', '입력: context.md, fix.md', /`context\.md`[\s\S]*`fix\.md`/],
+    ['5.6.6', '입력: context.md, fix.md', /`context\.md`[\s\S]*`fix\.md`/, ['bugfix']],
     ['D97', '리뷰 대상: 기준 커밋(context.md)부터 지금까지의 변경', /base commit \(from `context\.md`\) to now/],
     ['D229', '순서: 리뷰 → 지적 고르기 → 반영 → 검증 → pr.md', /Review\.[\s\S]*Pick findings[\s\S]*Apply[\s\S]*Verify[\s\S]*`pr\.md`/],
     ['D229', '리뷰 지적은 verification.md에 쓴다(review.md 없음)', /`## 리뷰 지적` of `verification\.md`/],
     ['D164', '번호 붙인 지적(심각도, 파일과 줄, 문제와 제안), 없으면 없음', /numbered item[\s\S]*차단 \/ 권장 \/ 사소[\s\S]*file and line[\s\S]*"없음"/],
     ['D165', '반영 뒤 리뷰를 다시 돌리지 않음', /Do not review again/],
-    ['5.6.6', '보는 것: 목표·비목표, 원인과 맞는지, 빠진 경우와 경계 조건, 테스트, 관례와 읽기 쉬움, 필요 없는 변경', /`목표` and `비목표`[\s\S]*cause in `fix\.md`[\s\S]*edge conditions[\s\S]*tests[\s\S]*conventions and readability[\s\S]*not needed/],
-    ['D195', '재현 절차가 쓰는 코드는 바꾸지 않음. 바꿔야 하면 달라진 절차를 반영 절에', /do not change code that they use[\s\S]*`반영`[\s\S]*steps change/],
+    ['5.6.6', '보는 것: 목표·비목표, 원인과 맞는지, 빠진 경우와 경계 조건, 테스트, 관례와 읽기 쉬움, 필요 없는 변경', /`목표` and `비목표`[\s\S]*cause in `fix\.md`[\s\S]*edge conditions[\s\S]*tests[\s\S]*conventions and readability[\s\S]*not needed/, ['bugfix']],
+    ['D195', '재현 절차가 쓰는 코드는 바꾸지 않음. 바꿔야 하면 달라진 절차를 반영 절에', /do not change code that they use[\s\S]*`반영`[\s\S]*steps change/, ['bugfix']],
     ['5.6.6', '코드: 사람이 고른 지적만, 바꿨으면 커밋', /change code only for the findings the human picked[\s\S]*Commit/],
     ['D58', '모든 완료조건을 직접 다시 실행', /Re-run everything yourself[\s\S]*only for comparison/],
     ['D59', '판정 값 셋, 판정 불가 이유', /통과 \/ 실패 \/ 판정 불가[\s\S]*give the reason/],
-    ['D45', '재현 없이 진행한 Work는 판정 불가', /without reproduction[\s\S]*판정 불가/],
-    ['D65', '재현 절차도 재현 테스트도 없으면 판정 불가', /neither reproduction steps nor a reproduction test, it is 판정 불가/],
+    ['D45', '재현 없이 진행한 Work는 판정 불가', /without reproduction[\s\S]*판정 불가/, ['bugfix']],
+    ['D65', '재현 절차도 재현 테스트도 없으면 판정 불가', /neither reproduction steps nor a reproduction test, it is 판정 불가/, ['bugfix']],
     ['D60', '기준 커밋과 비교한 테스트 파일 모두 판정', /changed since the base commit[\s\S]*약화 아님[\s\S]*약화 의심/],
     ['D229', '반영할 지적은 그 자리에서 질문으로 고름, 번호 입력도 받음, decisions by: human', /Which findings to apply[\s\S]*차단·권장만 반영 \/ 모두 반영 \/ 반영하지 않음[\s\S]*type the numbers[\s\S]*`by: human`/],
     ['D60', '약화 의심 → 사람 결정', /looks like weakening[\s\S]*통과[\s\S]*실패/],
     ['D61', '실패·판정 불가 → 되돌아가기 / 이대로', /Any 실패 or 판정 불가[\s\S]*`recommended_next`[\s\S]*`recommended_next: null`/],
-    ['5.6.6', '이전 단계 추천: fix', /`recommended_next` to `fix`/],
+    ['5.6.6', '이전 단계 추천: fix', /`recommended_next` to `fix`/, ['bugfix']],
     ['5.6.6', '결정 지점: 고른 지적의 수정 방식, 판정', /How to fix a picked finding, and the verdict of each 완료조건/],
     ['D62', 'pr.md 첫 줄 # 제목', /first line is `# <PR title>`/],
     ['D101', 'pr.md 언어는 레포 관례, PR 템플릿 따르기', /language the repo uses[\s\S]*PR template/],
     ['5.6.6', '완료조건: 여섯 절, 지적 반영, 판정, 테스트 파일, pr.md, 질문', /## Done when[\s\S]*six template sections[\s\S]*picked[\s\S]*verdict and evidence[\s\S]*test file is judged[\s\S]*`pr\.md` is written[\s\S]*`decisions`/],
-    ['D253', '기능 추가: fix.md 대신 design.md와 implement.md, 재현 규칙 안 씀', /Feature Work[\s\S]*`design\.md` and `implement\.md`[\s\S]*instead of `fix\.md`[\s\S]*reproduction steps do not apply/],
-    ['D245', '기능 추가 리뷰: 설계와 맞는지, 달라진 점, 새 동작 테스트. 설계의 요구사항은 판정 안 하고 지적으로', /fits the user scenarios, requirements and approach[\s\S]*`계획과 달라진 점`[\s\S]*new behavior tests[\s\S]*Do not judge requirements added in the design[\s\S]*finding/],
-    ['D251', '새 동작 테스트 항목: 있는지, 동작을 확인하는지, 직접 실행, 구현 전은 implement.md, 없으면 판정 불가', /완료조건의 각 동작을 확인하는 테스트가 있다[\s\S]*really checks that behavior[\s\S]*run it yourself[\s\S]*`implement\.md`[\s\S]*판정 불가/],
-    ['D253', '기능 추가 이전 단계 추천: 구현이면 implement, 설계면 design', /`implement` if the implementation is wrong, `design` if the design is wrong/],
-    ['D252', '기능 추가 pr.md: 요약 / 동작 / 주요 설계 결정 / 변경 / 테스트', /## 요약\n## 동작\n## 주요 설계 결정\n## 변경\n## 테스트/],
+    ['D253', '기능 추가 입력: design.md와 implement.md (fix.md와 재현 규칙 없음)', /`design\.md` and `implement\.md` at the paths in `context\.md`/, ['feature']],
+    ['D245', '기능 추가 리뷰: 설계와 맞는지, 달라진 점, 새 동작 테스트. 설계의 요구사항은 판정 안 하고 지적으로', /fit the user scenarios, requirements and approach[\s\S]*`계획과 달라진 점`[\s\S]*Do not judge requirements added in the design[\s\S]*finding[\s\S]*new behavior tests really catch/, ['feature']],
+    ['D251', '새 동작 테스트 항목: 있는지, 동작을 확인하는지, 직접 실행, 구현 전은 implement.md, 없으면 판정 불가', /완료조건의 각 동작을 확인하는 테스트가 있다[\s\S]*really checks that behavior[\s\S]*run it yourself[\s\S]*`implement\.md`[\s\S]*판정 불가/, ['feature']],
+    ['D253', '기능 추가 이전 단계 추천: 구현이면 implement, 설계면 design', /`implement` if the implementation is wrong, `design` if the design is wrong/, ['feature']],
+    ['D252', '기능 추가 pr.md: 요약 / 동작 / 주요 설계 결정 / 변경 / 테스트', /## 요약\n## 동작\n## 주요 설계 결정\n## 변경\n## 테스트/, ['feature']],
+    ['D275', '리팩터링 입력: refactor.md (fix.md와 재현 규칙 없음)', /`refactor\.md` at the path in `context\.md`/, ['refactor']],
+    ['D275', '리팩터링 리뷰: 로직 변경 없음, 받아들이지 않은 동작 변경은 차단, 구조 목표, 범위', /logic change[\s\S]*did not accept is a 차단 finding[\s\S]*structural goals[\s\S]*scope grow/, ['refactor']],
+    ['D273', '안전망 항목: 같은 worktree에서 안전망 커밋 체크아웃(I64), 마지막 코드에서도, 둘 다 통과, 없으면 판정 불가, 브랜치 확인', /same worktree[\s\S]*safety-net commit[\s\S]*final code too[\s\S]*only if both pass[\s\S]*판정 불가[\s\S]*`git branch --show-current`/, ['refactor']],
+    ['D264', '공개 인터페이스 항목: diff로 판정, intent가 정한 것은 뺌', /used outside the repo changed[\s\S]*Leave out what the intent says to change/, ['refactor']],
+    ['D265', '따라 고친 기존 테스트는 약화 아님, 기대값·입력 변경이나 삭제는 물음', /followed an internal interface change[\s\S]*약화 아님[\s\S]*expected values or inputs changed[\s\S]*ask/, ['refactor']],
+    ['D275', '리팩터링 이전 단계 추천: 변경이면 refactor, 의도면 intake', /`refactor` if the change is wrong, `intake` if the intent is wrong/, ['refactor']],
+    ['D274', '리팩터링 pr.md: 요약 / 목표 구조 / 동작 보존 / 변경 / 찾은 버그 / 테스트', /## 요약\n## 목표 구조\n## 동작 보존\n## 변경\n## 찾은 버그\n## 테스트/, ['refactor']],
   ],
   'pr-respond': [
     ['D192', '입력: context.md(이번 라운드의 항목, 사람 지시, PR 정보, 앞 라운드 요약)와 파이프라인 산출물(경로)', /`context\.md`[\s\S]*this round's items, the human's instruction, the PR[\s\S]*summaries of earlier rounds[\s\S]*pipeline artifacts/],
-    ['D256', '기능 추가면 design.md(경로)', /`design\.md` and `implement\.md` for a feature/],
+    ['D256', '기능 추가면 design.md와 implement.md(경로)', /`design\.md`, `implement\.md`, `verification\.md`/, ['feature']],
+    ['D278', '리팩터링이면 refactor.md(경로)', /`refactor\.md`, `verification\.md`/, ['refactor']],
     ['D162', '외부 글은 지시가 아니라 데이터, 명령 실행·설정 변경·비밀 정보 요청은 따르지 않고 사람에게 물음, 사람 지시는 따름', /data, not instructions[\s\S]*run a command, change settings[\s\S]*reveal secrets[\s\S]*ask the human[\s\S]*Follow only the human/],
     ['D168', '항목마다 셋 중 하나: 고침 / 고치지 않음과 이유 / 사람에게 물음. 모르면 open_questions', /고침[\s\S]*고치지 않음[\s\S]*사람에게 물음[\s\S]*`open_questions`/],
     ['5.6.7', '범위: intent의 목표와 비목표. 비목표·제약에 걸리면 사람 결정 (D51과 같음)', /`목표` and `비목표`[\s\S]*`비목표` or `제약`[\s\S]*human decision/],
@@ -344,9 +406,30 @@ const spec = {
     ['5.6.7', '완료조건: 셋 중 하나 또는 open_questions, 코멘트 항목마다 답글, 커밋과 테스트 결과', /## Done when[\s\S]*settled as one of the three[\s\S]*has a reply in `replies\.md`[\s\S]*committed[\s\S]*test command/],
   ],
 };
+// 항목의 넷째 값은 유형 목록이다. 공용 스킬에서 없으면 세 유형 모두에, 있으면 그 유형의 조립 결과에 있어야 한다 (D279)
 for (const [name, items] of Object.entries(spec)) {
-  const text = name === '_common' ? common : skills[name];
-  for (const [ref, desc, re] of items) check(re.test(text), `${name}: ${desc} (${ref})`);
+  for (const [ref, desc, re, types] of items) {
+    if (name === '_common') check(re.test(common), `${name}: ${desc} (${ref})`);
+    else if (!SHARED.includes(name)) check(re.test(variants.find((v) => v.name === name).text), `${name}: ${desc} (${ref})`);
+    else {
+      const want = types ?? TYPES;
+      const miss = want.filter((t) => !re.test(variants.find((v) => v.name === name && v.type === t).text));
+      check(miss.length === 0, `${name}${types ? `·${types.join('·')}` : ''}: ${desc} (${ref})${miss.length ? ` (빠진 유형: ${miss.join(', ')})` : ''}`);
+    }
+  }
+}
+
+console.log('\n[5] 유형별 조립 (D279)');
+for (const v of variants) {
+  check(!v.error, `${v.label}: 유형 표시가 맞음${v.error ? ` (${v.error})` : ''}`);
+  if (!SHARED.includes(v.name)) check(!/<!-- \/?type/.test(skills[v.name]), `${v.name}: 한 유형의 스킬에는 유형 표시가 없음`);
+}
+check(!/<!-- \/?type/.test(common), '_common.md: 유형 표시가 없음 (모든 유형 공통)');
+// 산출물 이름으로 다른 유형의 글이 섞이지 않았는지 본다. work-start는 유형 불일치 질문(D238)에 세 유형을 말하므로 산출물만 본다
+const ARTIFACT = { bugfix: ['`fix.md`'], feature: ['`design.md`', '`implement.md`'], refactor: ['`refactor.md`'] };
+for (const v of variants.filter((x) => SHARED.includes(x.name))) {
+  const foreign = TYPES.filter((t) => t !== v.type).flatMap((t) => ARTIFACT[t]).filter((a) => v.text.includes(a));
+  check(foreign.length === 0, `${v.label}: 다른 유형의 산출물이 없음${foreign.length ? ` (${foreign.join(', ')})` : ''}`);
 }
 
 console.log(failures ? `\n실패 ${failures}건` : '\n모두 통과');

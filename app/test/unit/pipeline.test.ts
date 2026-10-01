@@ -19,16 +19,17 @@ import type { NodeName } from '../../src/shared/contracts'
 import type { WorkType } from '../../src/shared/work'
 
 describe('노드 (3.1)', () => {
-  it('버그 수정은 intake → fix → verify, 기능 추가는 intake → design → implement → verify다 (D227, D232)', () => {
+  it('버그 수정은 intake → fix → verify, 기능 추가는 intake → design → implement → verify, 리팩터링은 intake → refactor → verify다 (D227, D232, D258)', () => {
     expect(PIPELINES).toEqual({
       bugfix: ['intake', 'fix', 'verify'],
       feature: ['intake', 'design', 'implement', 'verify'],
+      refactor: ['intake', 'refactor', 'verify'],
     })
   })
 
-  it('모든 노드는 두 파이프라인의 노드를 모은 것이고 스키마의 노드 열거값과 같다 (I57)', () => {
-    expect(ALL_NODES).toEqual(['intake', 'fix', 'design', 'implement', 'verify'])
-    expect(new Set([...PIPELINES.bugfix, ...PIPELINES.feature])).toEqual(new Set(ALL_NODES))
+  it('모든 노드는 모든 파이프라인의 노드를 모은 것이고 스키마의 노드 열거값과 같다 (I57, I63)', () => {
+    expect(ALL_NODES).toEqual(['intake', 'fix', 'design', 'implement', 'refactor', 'verify'])
+    expect(new Set(Object.values(PIPELINES).flat())).toEqual(new Set(ALL_NODES))
     expect(ALL_NODES).toEqual(
       handoffSchema.properties.recommended_next.oneOf[1]?.properties?.node.enum,
     )
@@ -42,6 +43,7 @@ describe('노드 (3.1)', () => {
       ['fix', 'fix', '원인 분석과 수정', ['fix.md']],
       ['design', 'design', '설계와 계획', ['design.md']],
       ['implement', 'implement', '구현', ['implement.md']],
+      ['refactor', 'refactor', '계획과 리팩터링', ['refactor.md']],
       ['verify', 'verify', '리뷰와 검증', ['verification.md', 'pr.md']],
     ])
   })
@@ -68,8 +70,12 @@ describe('노드 (3.1)', () => {
     expect(workType({ type: 'feature' })).toBe('feature')
   })
 
-  it('[현재 코드 위에서 이어서]는 버그 수정의 fix, 기능 추가의 design과 implement에서 준다 (6.2, D254)', () => {
-    expect(KEEP_CODE_NODES).toEqual({ bugfix: ['fix'], feature: ['design', 'implement'] })
+  it('[현재 코드 위에서 이어서]는 버그 수정의 fix, 기능 추가의 design과 implement, 리팩터링의 refactor에서 준다 (6.2, D254, D278)', () => {
+    expect(KEEP_CODE_NODES).toEqual({
+      bugfix: ['fix'],
+      feature: ['design', 'implement'],
+      refactor: ['refactor'],
+    })
   })
 })
 
@@ -83,10 +89,13 @@ describe('선택 가능한 다음 단계 (3.2)', () => {
     ['feature', 'design', 'implement', ['intake']],
     ['feature', 'implement', 'verify', ['intake', 'design']],
     ['feature', 'verify', 'complete', ['intake', 'design', 'implement']],
+    ['refactor', 'intake', 'refactor', []],
+    ['refactor', 'refactor', 'verify', ['intake']],
+    ['refactor', 'verify', 'complete', ['intake', 'refactor']],
   ]
 
   it('파이프라인의 노드가 모두 표에 있다', () => {
-    for (const type of ['bugfix', 'feature'] as const) {
+    for (const type of ['bugfix', 'feature', 'refactor'] as const) {
       expect(table.filter(([t]) => t === type).map(([, n]) => n)).toEqual(PIPELINES[type])
     }
   })
@@ -105,6 +114,9 @@ describe('선택 가능한 다음 단계 (3.2)', () => {
     expect(recommendableNodes('feature', 'design')).toEqual(['intake', 'implement'])
     expect(recommendableNodes('feature', 'implement')).toEqual(['intake', 'design', 'verify'])
     expect(recommendableNodes('feature', 'verify')).toEqual(['intake', 'design', 'implement'])
+    expect(recommendableNodes('refactor', 'intake')).toEqual(['refactor'])
+    expect(recommendableNodes('refactor', 'refactor')).toEqual(['intake', 'verify'])
+    expect(recommendableNodes('refactor', 'verify')).toEqual(['intake', 'refactor'])
   })
 
   it('PR 대응 task는 recommended_next로 쓸 수 있는 노드가 없다 (D188)', () => {
@@ -129,6 +141,9 @@ describe('선택 가능한 다음 단계 (3.2)', () => {
     // 그 유형의 파이프라인에 없는 단계는 이전 단계가 아니다
     expect(isPrevious('feature', 'verify', 'fix')).toBe(false)
     expect(isPrevious('bugfix', 'verify', 'design')).toBe(false)
+    expect(isPrevious('refactor', 'verify', 'refactor')).toBe(true)
+    expect(isPrevious('refactor', 'refactor', 'intake')).toBe(true)
+    expect(isPrevious('refactor', 'verify', 'fix')).toBe(false)
   })
 
   it('추천 때문에 멈추는지: 이전 단계이거나 이 유형의 파이프라인에 없는 노드다 (D23, PR #23 리뷰)', () => {
@@ -136,6 +151,9 @@ describe('선택 가능한 다음 단계 (3.2)', () => {
     // 형식 오류를 무시하고 승인해도 버그 수정 습관의 fix 추천을 Work 완료로 넘기지 않는다
     expect(stopsForRecommendation('feature', 'verify', 'fix')).toBe(true)
     expect(stopsForRecommendation('bugfix', 'verify', 'implement')).toBe(true)
+    expect(stopsForRecommendation('refactor', 'verify', 'refactor')).toBe(true)
+    expect(stopsForRecommendation('refactor', 'verify', 'implement')).toBe(true)
+    expect(stopsForRecommendation('refactor', 'refactor', 'verify')).toBe(false)
     // 기본 다음 단계와 뒤 단계는 멈추지 않는다
     expect(stopsForRecommendation('feature', 'design', 'implement')).toBe(false)
     expect(stopsForRecommendation('feature', 'design', 'verify')).toBe(false)

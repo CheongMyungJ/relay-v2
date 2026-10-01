@@ -1,0 +1,51 @@
+diff --git a/src/cart.js b/src/cart.js
+index bd1062f..2cc8e35 100644
+--- a/src/cart.js
++++ b/src/cart.js
+@@ -1,19 +1,13 @@
+ // 장바구니 합계와 영수증 줄
+ // item: { name, unitPrice, qty, discountRate } (discountRate는 0~1, 없으면 0)
++import { linePrice } from './price.js'
+ 
+ export function cartTotal(items) {
+   let total = 0
+-  for (const item of items) {
+-    const rate = item.discountRate ?? 0
+-    total += Math.round(item.unitPrice * item.qty * (1 - rate))
+-  }
++  for (const item of items) total += linePrice(item)
+   return total
+ }
+ 
+ export function receiptLines(items) {
+-  return items.map((item) => {
+-    const rate = item.discountRate ?? 0
+-    const price = Math.round(item.unitPrice * item.qty * (1 - rate))
+-    return `${item.name} x${item.qty} ${price}원`
+-  })
++  return items.map((item) => `${item.name} x${item.qty} ${linePrice(item)}원`)
+ }
+diff --git a/src/price.js b/src/price.js
+new file mode 100644
+index 0000000..5072cd2
+--- /dev/null
++++ b/src/price.js
+@@ -0,0 +1,5 @@
++// 줄 가격: 단가×수량에 할인을 적용하고 줄마다 반올림한다
++export function linePrice(item) {
++  const rate = item.discountRate ?? 0
++  return Math.round(item.unitPrice * item.qty * (1 - rate))
++}
+diff --git a/test/price.test.js b/test/price.test.js
+new file mode 100644
+index 0000000..c82c0c1
+--- /dev/null
++++ b/test/price.test.js
+@@ -0,0 +1,7 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import { linePrice } from '../src/price.js'
++
++test('줄 가격은 줄마다 반올림한다', () => {
++  assert.strictEqual(linePrice({ name: '계란', unitPrice: 105, qty: 1, discountRate: 0.1 }), 95)
++})

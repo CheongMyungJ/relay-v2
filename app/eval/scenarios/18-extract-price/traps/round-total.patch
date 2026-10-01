@@ -1,0 +1,38 @@
+diff --git a/src/cart.js b/src/cart.js
+index bd1062f..a8962af 100644
+--- a/src/cart.js
++++ b/src/cart.js
+@@ -1,19 +1,11 @@
+ // 장바구니 합계와 영수증 줄
+ // item: { name, unitPrice, qty, discountRate } (discountRate는 0~1, 없으면 0)
++import { linePrice } from './price.js'
+ 
+ export function cartTotal(items) {
+-  let total = 0
+-  for (const item of items) {
+-    const rate = item.discountRate ?? 0
+-    total += Math.round(item.unitPrice * item.qty * (1 - rate))
+-  }
+-  return total
++  return Math.round(items.reduce((sum, item) => sum + linePrice(item), 0))
+ }
+ 
+ export function receiptLines(items) {
+-  return items.map((item) => {
+-    const rate = item.discountRate ?? 0
+-    const price = Math.round(item.unitPrice * item.qty * (1 - rate))
+-    return `${item.name} x${item.qty} ${price}원`
+-  })
++  return items.map((item) => `${item.name} x${item.qty} ${Math.round(linePrice(item))}원`)
+ }
+diff --git a/src/price.js b/src/price.js
+new file mode 100644
+index 0000000..43b97e4
+--- /dev/null
++++ b/src/price.js
+@@ -0,0 +1,5 @@
++// 줄 가격 (반올림 전)
++export function linePrice(item) {
++  const rate = item.discountRate ?? 0
++  return item.unitPrice * item.qty * (1 - rate)
++}

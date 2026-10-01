@@ -1,4 +1,4 @@
-// 시나리오의 업무 유형(relay D236)에 따른 낱말. scenario.json의 type이 없으면 버그 수정이다 (relay I62)
+// 시나리오의 업무 유형(relay D236, D261)에 따른 낱말. scenario.json의 type이 없으면 버그 수정이다 (relay I62, I67)
 const WORDS = {
   bugfix: {
     label: '버그 수정',
@@ -24,10 +24,22 @@ const WORDS = {
     did: '만든',
     made: '만들어졌나',
   },
+  refactor: {
+    label: '리팩터링',
+    task: '코드 구조를 바꾼다(동작은 그대로)',
+    goal: '구조가 요구대로 바뀌고 동작이 그대로라고',
+    subject: '바꿀 구조 (네가 받은 요청)',
+    done: '이 리팩터링을 한',
+    again: '비슷한 리팩터링에',
+    report: '리팩터링 요청',
+    same: '같은 리팩터링을',
+    did: '바꾼',
+    made: '구조가 바뀌고 동작이 그대로인가',
+  },
 }
 
 export function scenarioType(scenario) {
-  return scenario.type === 'feature' ? 'feature' : 'bugfix'
+  return Object.hasOwn(WORDS, scenario.type ?? '') ? scenario.type : 'bugfix'
 }
 
 export function words(scenario) {

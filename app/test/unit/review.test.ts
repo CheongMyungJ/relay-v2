@@ -632,6 +632,15 @@ describe('강조 영역 (D83, 시나리오 4-2)', () => {
       title: '구현',
       sections: [{ title: '계획과 달라진 점', text: '없음' }],
     })
+    const refactor =
+      '## 계획\n- 목표 구조: sum 추출\n\n## 안전망 테스트\n- 안전망 커밋: abc\n\n## 변경 요약\n- x\n\n## 찾은 버그와 받아들인 차이\n없음\n'
+    expect(stageLead('refactor', { 'refactor.md': refactor })).toEqual({
+      title: '리팩터링',
+      sections: [
+        { title: '계획', text: '- 목표 구조: sum 추출' },
+        { title: '찾은 버그와 받아들인 차이', text: '없음' },
+      ],
+    })
     expect(stageLead('design', {})).toBeNull()
     expect(stageLead('implement', { 'design.md': design })).toBeNull()
   })

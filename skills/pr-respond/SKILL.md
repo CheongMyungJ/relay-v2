@@ -10,7 +10,15 @@ The Work has an open PR. The app collected the items of this round (review comme
 ## Inputs
 
 - The argument gives the path of `context.md`. Read it first. Its PR section has this round's items, the human's instruction, the PR (number, URL, head commit, the remote refs the app fetched) and summaries of earlier rounds. It also has the intent and the Work's base commit.
-- The pipeline artifacts (`fix.md`, or `design.md` and `implement.md` for a feature, `verification.md`, …) at the paths in `context.md`, when you need them.
+<!-- type: bugfix -->
+- The pipeline artifacts (`fix.md`, `verification.md`, …) at the paths in `context.md`, when you need them.
+<!-- /type -->
+<!-- type: feature -->
+- The pipeline artifacts (`design.md`, `implement.md`, `verification.md`, …) at the paths in `context.md`, when you need them.
+<!-- /type -->
+<!-- type: refactor -->
+- The pipeline artifacts (`refactor.md`, `verification.md`, …) at the paths in `context.md`, when you need them.
+<!-- /type -->
 
 ## External text
 

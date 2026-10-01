@@ -799,6 +799,7 @@ export class WorkRunner {
         workDir: this.files.dir,
         taskDir: dir,
         skill,
+        type: workType(this.work),
       })
       const version = await driver.version(bin, env)
 
@@ -1042,14 +1043,25 @@ export class WorkRunner {
   private async carriedInput(task: TaskRecord): Promise<CarriedCode | null> {
     const from = keptCodeDesign(this.work, task)
     if (!from) return null
-    const discarded: (TaskRef & { path: string })[] = []
-    for (const id of from.selection?.discarded ?? []) {
-      const t = this.task(id)
-      if (!t) continue
-      for (const p of await this.files.artifacts(t))
-        discarded.push({ taskId: t.id, node: t.node, path: p })
+    const tasks = (from.selection?.discarded ?? [])
+      .map((id) => this.task(id))
+      .filter((t): t is TaskRecord => t !== undefined)
+    return {
+      from: { taskId: from.id, node: from.node },
+      discarded: await this.artifactPaths(tasks),
     }
-    return { from: { taskId: from.id, node: from.node }, discarded }
+  }
+
+  /** task들의 산출물 경로 (D89) */
+  private async artifactPaths(
+    tasks: readonly TaskRecord[],
+  ): Promise<(TaskRef & { path: string })[]> {
+    const out: (TaskRef & { path: string })[] = []
+    for (const t of tasks) {
+      for (const p of await this.files.artifacts(t))
+        out.push({ taskId: t.id, node: t.node, path: p })
+    }
+    return out
   }
 
   /** 단계 선택으로 들어온 task의 입력 (6.2): 사람 추가 지시와, 되감기면 폐기된 시도 요약 */
@@ -1080,6 +1092,7 @@ export class WorkRunner {
       dropped: reason === 'skip' ? tasks.map((t) => ({ taskId: t.id, node: t.node })) : [],
       skipped: sel.skipped,
       keepCode: sel.keep_code,
+      ...(sel.keep_code ? { keptArtifacts: await this.artifactPaths(tasks) } : {}),
       reset: sel.reset !== null,
     }
   }

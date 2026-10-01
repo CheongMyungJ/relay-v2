@@ -237,7 +237,7 @@ export function ProjectSettingsDialog({
 }
 
 /**
- * 업무 유형 고르기 (D236, D237): 버그 수정 / 기능 추가 두 버튼. 새 Work에는 기본 선택이 없다(value가 null)
+ * 업무 유형 고르기 (D236, D237, D261): 버그 수정 / 기능 추가 / 리팩터링 버튼. 새 Work에는 기본 선택이 없다(value가 null)
  */
 function WorkTypePicker({
   value,
@@ -262,6 +262,13 @@ function WorkTypePicker({
       ))}
     </div>
   )
+}
+
+/** 요청 입력의 예시 문구. 유형을 고르기 전에는 버그 수정의 것이다 (D261) */
+const REQUEST_PLACEHOLDER: Readonly<Record<WorkType, string>> = {
+  bugfix: '버그 설명, 로그, 이슈 내용을 붙여 넣으세요',
+  feature: '만들 기능, 쓰는 흐름, 참고할 이슈 내용을 붙여 넣으세요',
+  refactor: '바꿀 구조(예: 어느 계산을 한 모듈로 모을지), 바꿀 곳, 지켜야 할 동작을 적어 주세요',
 }
 
 /** 새 Work: 유형, 요청, 기준 브랜치, 기준 위치 (시나리오 1). 유형을 고르기 전에는 [시작]이 꺼져 있다 (D236) */
@@ -329,11 +336,7 @@ export function NewWorkDialog({
           value={request}
           onChange={(e) => setRequest(e.target.value)}
           rows={10}
-          placeholder={
-            type === 'feature'
-              ? '만들 기능, 쓰는 흐름, 참고할 이슈 내용을 붙여 넣으세요'
-              : '버그 설명, 로그, 이슈 내용을 붙여 넣으세요'
-          }
+          placeholder={REQUEST_PLACEHOLDER[type ?? 'bugfix']}
         />
       </label>
       <div className="row">
@@ -401,10 +404,10 @@ export function NewWorkDialog({
 
 // ---------- 설정 목록의 묶음 (D256) ----------
 
-const GROUPS: readonly SettingGroup[] = ['common', 'bugfix', 'feature', 'pr']
+const GROUPS: readonly SettingGroup[] = ['common', 'bugfix', 'feature', 'refactor', 'pr']
 
 /**
- * 설정 목록을 묶음(공통 / 버그 수정 / 기능 추가 / PR 대응)마다 모은다 (D256). type을 주면 그 유형에서 보이는 묶음만
+ * 설정 목록을 묶음(공통 / 버그 수정 / 기능 추가 / 리팩터링 / PR 대응)마다 모은다 (D256, D278). type을 주면 그 유형에서 보이는 묶음만
  * 둔다. Work 설정은 그 Work 유형의 단계만 보인다 (I57)
  */
 function grouped<K extends string>(
