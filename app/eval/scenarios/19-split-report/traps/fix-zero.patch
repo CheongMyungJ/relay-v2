@@ -1,0 +1,90 @@
+diff --git a/src/csv.js b/src/csv.js
+new file mode 100644
+index 0000000..960bf3b
+--- /dev/null
++++ b/src/csv.js
+@@ -0,0 +1,16 @@
++// CSV 글을 행 목록으로 읽는다. 머리글 줄의 이름을 키로 쓰고, 빈 줄은 건너뛴다
++export function parseCsv(text) {
++  const lines = text.trim().split('\n')
++  const header = lines[0].split(',').map((h) => h.trim())
++  const rows = []
++  for (const line of lines.slice(1)) {
++    if (!line.trim()) continue
++    const cells = line.split(',')
++    const row = {}
++    header.forEach((h, i) => {
++      row[h] = (cells[i] ?? '').trim()
++    })
++    rows.push({ date: row.date, category: row.category, amount: Number(row.amount) })
++  }
++  return rows
++}
+diff --git a/src/format.js b/src/format.js
+new file mode 100644
+index 0000000..cdcc089
+--- /dev/null
++++ b/src/format.js
+@@ -0,0 +1,8 @@
++// 보고서 글: 분류 이름을 맞춰 쓰고 마지막 줄에 합계
++export function formatReport(summary) {
++  const width = Math.max(4, ...summary.map(([c]) => c.length))
++  const out = summary.map(([c, t]) => `${c.padEnd(width)} ${t.toLocaleString('en-US')}`)
++  const sum = summary.reduce((a, [, t]) => a + t, 0)
++  out.push(`${'합계'.padEnd(width)} ${sum.toLocaleString('en-US')}`)
++  return out.join('\n')
++}
+diff --git a/src/report.js b/src/report.js
+index f07d3cf..7e0f5e1 100644
+--- a/src/report.js
++++ b/src/report.js
+@@ -1,29 +1,9 @@
+ // 지출 보고서: CSV 글(date,category,amount)을 읽어 분류별 합계를 금액이 큰 차례로 낸다.
+ // 밖에서는 buildReport(text)만 쓴다 (월말 정산 스크립트).
+-export function buildReport(text) {
+-  const lines = text.trim().split('\n')
+-  const header = lines[0].split(',').map((h) => h.trim())
+-  const rows = []
+-  for (const line of lines.slice(1)) {
+-    if (!line.trim()) continue
+-    const cells = line.split(',')
+-    const row = {}
+-    header.forEach((h, i) => {
+-      row[h] = (cells[i] ?? '').trim()
+-    })
+-    rows.push({ date: row.date, category: row.category, amount: Number(row.amount) })
+-  }
+-
+-  const totals = new Map()
+-  for (const row of rows) {
+-    if (!row.amount) continue
+-    totals.set(row.category, (totals.get(row.category) ?? 0) + row.amount)
+-  }
++import { parseCsv } from './csv.js'
++import { formatReport } from './format.js'
++import { summarize } from './summary.js'
+ 
+-  const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+-  const width = Math.max(4, ...sorted.map(([c]) => c.length))
+-  const out = sorted.map(([c, t]) => `${c.padEnd(width)} ${t.toLocaleString('en-US')}`)
+-  const sum = sorted.reduce((a, [, t]) => a + t, 0)
+-  out.push(`${'합계'.padEnd(width)} ${sum.toLocaleString('en-US')}`)
+-  return out.join('\n')
++export function buildReport(text) {
++  return formatReport(summarize(parseCsv(text)))
+ }
+diff --git a/src/summary.js b/src/summary.js
+new file mode 100644
+index 0000000..73454be
+--- /dev/null
++++ b/src/summary.js
+@@ -0,0 +1,9 @@
++// 분류별 합계를 금액이 큰 차례로 (같으면 분류 이름 차례)
++export function summarize(rows) {
++  const totals = new Map()
++  for (const row of rows) {
++    if (Number.isNaN(row.amount)) continue
++    totals.set(row.category, (totals.get(row.category) ?? 0) + row.amount)
++  }
++  return [...totals.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
++}

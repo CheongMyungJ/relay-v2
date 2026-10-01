@@ -1,0 +1,94 @@
+diff --git a/src/app.js b/src/app.js
+index ffdad5d..c4db7ac 100644
+--- a/src/app.js
++++ b/src/app.js
+@@ -1,4 +1,5 @@
+-// 밖(주문 화면, 관리 도구)에서는 이 파일만 쓴다
++// 밖(주문 화면, 관리 도구)에서는 이 파일만 쓴다. 구독은 points.js, notifications.js 차례다
+ export { placeOrder, listOrders } from './orders.js'
+ export { balance } from './points.js'
+ export { outbox } from './email.js'
++import './notifications.js'
+diff --git a/src/events.js b/src/events.js
+new file mode 100644
+index 0000000..6fa6e34
+--- /dev/null
++++ b/src/events.js
+@@ -0,0 +1,10 @@
++// 작은 발행·구독. 구독한 차례로 바로(동기로) 부른다
++const listeners = new Map()
++
++export function on(name, fn) {
++  listeners.set(name, [...(listeners.get(name) ?? []), fn])
++}
++
++export function emit(name, payload) {
++  for (const fn of listeners.get(name) ?? []) fn(payload)
++}
+diff --git a/src/notifications.js b/src/notifications.js
+new file mode 100644
+index 0000000..4bb2a5b
+--- /dev/null
++++ b/src/notifications.js
+@@ -0,0 +1,5 @@
++// 주문 확인 메일. 적립 뒤에 구독한다(app.js의 import 차례)
++import { sendEmail } from './email.js'
++import { on } from './events.js'
++
++on('placed', (order) => sendEmail(order.email, `주문 ${order.id} 확인`))
+diff --git a/src/orders.js b/src/orders.js
+index b3d1490..38230c6 100644
+--- a/src/orders.js
++++ b/src/orders.js
+@@ -1,7 +1,6 @@
+-// 주문 받기. 주문을 저장한 뒤 적립금을 쌓고 확인 메일을 보낸다
++// 주문 받기. 주문을 저장한 뒤 'placed' 이벤트를 낸다. 구독자의 오류는 placeOrder까지 온다
+ import { all, save } from './db.js'
+-import { sendEmail } from './email.js'
+-import { addPoints } from './points.js'
++import { emit } from './events.js'
+ 
+ let nextId = 1
+ 
+@@ -10,8 +9,7 @@ export function placeOrder({ customer, email, items }) {
+   const amount = items.reduce((sum, i) => sum + i.price * i.qty, 0)
+   const order = { id: nextId++, customer, email, amount }
+   save(order)
+-  addPoints(customer, amount)
+-  sendEmail(email, `주문 ${order.id} 확인`)
++  emit('placed', order)
+   return order
+ }
+ 
+diff --git a/src/points.js b/src/points.js
+index a773d81..6b84ed2 100644
+--- a/src/points.js
++++ b/src/points.js
+@@ -1,4 +1,6 @@
+ // 적립금: 주문 금액의 1%를 적립한다
++import { on } from './events.js'
++
+ const balances = new Map()
+ 
+ export function addPoints(customer, amount) {
+@@ -12,3 +14,5 @@ export function balance(customer) {
+ export function clearPoints() {
+   balances.clear()
+ }
++
++on('placed', (order) => addPoints(order.customer, order.amount))
+diff --git a/test/safety.test.js b/test/safety.test.js
+new file mode 100644
+index 0000000..c7da2d4
+--- /dev/null
++++ b/test/safety.test.js
+@@ -0,0 +1,9 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import { balance, listOrders, placeOrder } from '../src/app.js'
++
++test('메일 주소가 틀리면 오류를 던지고 주문과 적립은 남는다 (지금 동작)', () => {
++  assert.throws(() => placeOrder({ customer: 'p', email: 'bad', items: [{ price: 100, qty: 1 }] }), /invalid address/)
++  assert.strictEqual(listOrders().length, 1)
++  assert.strictEqual(balance('p'), 1)
++})
