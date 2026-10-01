@@ -3,7 +3,14 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { claudeVersion, deploySkill, mergeSkill, skillText } from '../../src/adapters/claude'
+import {
+  claudeVersion,
+  deploySkill,
+  mergeSkill,
+  selectType,
+  skillText,
+} from '../../src/adapters/claude'
+import { WORK_TYPES } from '../../src/shared/work'
 import {
   WorkFiles,
   loadConfig,
@@ -153,31 +160,33 @@ describe('[어댑터] 스킬 배포와 claude 실행 (5.6.3, D103, D105, D108)',
     fs.mkdirSync(path.join(skills, 'relay-work-start'), { recursive: true })
     fs.writeFileSync(path.join(skills, 'relay-work-start', 'SKILL.md'), 'old')
     fs.mkdirSync(path.join(skills, 'my-own'), { recursive: true })
-    const first = await deploySkill({ source: SKILLS, workDir, skill: 'fix' })
+    const first = await deploySkill({ source: SKILLS, workDir, skill: 'fix', type: 'bugfix' })
     expect(fs.readdirSync(skills).sort()).toEqual(['my-own', 'relay-fix'])
     const expected = mergeSkill(
       read(path.join(SKILLS, 'fix', 'SKILL.md')),
       read(path.join(SKILLS, '_common.md')),
     )
     expect(read(first.file)).toBe(expected)
-    expect(await skillText(SKILLS, 'fix')).toBe(expected)
+    expect(await skillText(SKILLS, 'fix', 'bugfix')).toBe(expected)
     // 원인 분석과 수정은 재현부터 수정까지 한 스킬이다 (D228)
     expect(read(first.file)).toMatch(/^---\ndescription: relay fix step/)
     expect(read(first.file)).toContain('\n# relay: fix')
     expect(read(first.file)).toContain('## Artifact template: `fix.md`')
     expect(first.hash).toMatch(/^sha256:[0-9a-f]{64}$/)
     // 같은 원본이면 해시가 같다
-    expect((await deploySkill({ source: SKILLS, workDir, skill: 'fix' })).hash).toBe(first.hash)
+    expect(
+      (await deploySkill({ source: SKILLS, workDir, skill: 'fix', type: 'bugfix' })).hash,
+    ).toBe(first.hash)
   })
 
   it('verify는 리뷰와 최종 검증을 한 스킬로 배포한다: relay-verify에 공통 규칙을 붙인다 (D229, 5.6.6)', async () => {
     const workDir = path.join(root, 'w-verify')
-    const deployed = await deploySkill({ source: SKILLS, workDir, skill: 'verify' })
+    const deployed = await deploySkill({ source: SKILLS, workDir, skill: 'verify', type: 'bugfix' })
     expect(path.basename(path.dirname(deployed.file))).toBe('relay-verify')
     const text = read(deployed.file)
     expect(text).toBe(
       mergeSkill(
-        read(path.join(SKILLS, 'verify', 'SKILL.md')),
+        selectType(read(path.join(SKILLS, 'verify', 'SKILL.md')), 'bugfix'),
         read(path.join(SKILLS, '_common.md')),
       ),
     )
@@ -200,6 +209,50 @@ describe('[어댑터] 스킬 배포와 claude 실행 (5.6.3, D103, D105, D108)',
     expect(mergeSkill('---\na: 1\n---\n본문\r\n\r\n', '\n---\n\n# Common\r\n')).toBe(
       '---\na: 1\n---\n본문\n\n---\n\n# Common\n',
     )
+  })
+
+  it('공용 스킬은 그 Work 유형의 구간만 남기고 표시 줄을 지운다 (D279)', () => {
+    const src = [
+      '공통 1',
+      '<!-- type: bugfix -->',
+      '버그만',
+      '<!-- /type -->',
+      '<!-- type: feature refactor -->',
+      '기능과 리팩터링',
+      '<!-- /type -->',
+      '공통 2',
+    ].join('\n')
+    expect(selectType(src, 'bugfix')).toBe('공통 1\n버그만\n공통 2')
+    expect(selectType(src, 'feature')).toBe('공통 1\n기능과 리팩터링\n공통 2')
+    expect(selectType(src, 'refactor')).toBe('공통 1\n기능과 리팩터링\n공통 2')
+    expect(selectType('표시 없음\r\n', 'refactor')).toBe('표시 없음\n')
+  })
+
+  it('유형 표시의 실수는 배포하지 않고 오류다 (D279)', () => {
+    expect(() => selectType('<!-- type: perf -->\nx\n<!-- /type -->', 'bugfix')).toThrow(
+      '모르는 유형: perf',
+    )
+    expect(() => selectType('<!-- type: bugfix -->\nx', 'bugfix')).toThrow('닫히지 않음')
+    expect(() => selectType('x\n<!-- /type -->', 'bugfix')).toThrow('짝이 없음')
+    expect(() =>
+      selectType('<!-- type: bugfix -->\n<!-- type: feature -->\n<!-- /type -->', 'bugfix'),
+    ).toThrow('겹침')
+  })
+
+  it('공용 스킬 셋을 유형마다 조립하면 다른 유형의 산출물과 표시가 남지 않는다 (D279)', async () => {
+    const own = { bugfix: 'fix.md', feature: 'design.md', refactor: 'refactor.md' } as const
+    for (const skill of ['work-start', 'verify', 'pr-respond'] as const) {
+      for (const type of WORK_TYPES) {
+        const text = await skillText(SKILLS, skill, type)
+        expect(text, `${skill} ${type}`).not.toContain('<!-- type:')
+        expect(text, `${skill} ${type}`).not.toContain('<!-- /type -->')
+        if (skill === 'work-start') continue
+        for (const [other, file] of Object.entries(own)) {
+          if (other === type) expect(text, `${skill} ${type}`).toContain(`\`${file}\``)
+          else expect(text, `${skill} ${type}`).not.toContain(`\`${file}\``)
+        }
+      }
+    }
   })
 
   it('claude --version을 읽는다 (D105)', async () => {

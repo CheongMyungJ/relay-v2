@@ -799,6 +799,7 @@ export class WorkRunner {
         workDir: this.files.dir,
         taskDir: dir,
         skill,
+        type: workType(this.work),
       })
       const version = await driver.version(bin, env)
 

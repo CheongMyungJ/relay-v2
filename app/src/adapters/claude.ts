@@ -6,6 +6,7 @@ import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { relaySkillName } from '../core/settings'
 import type { SkillName } from '../shared/config'
+import { WORK_TYPES, type WorkType } from '../shared/work'
 import { describeFailure, run } from './exec'
 import { sha256, writeFileAtomic } from './store'
 
@@ -84,11 +85,46 @@ export function mergeSkill(skill: string, common: string): string {
   return `${lf(skill).trimEnd()}\n${lf(common)}`
 }
 
-/** 배포할 스킬 내용: 공통 규칙을 끝에 붙인다 (5.6.3) */
-export async function skillText(source: string, skill: SkillName): Promise<string> {
+const TYPE_OPEN = /^<!-- type: ([a-z ]+) -->$/
+const TYPE_CLOSE = '<!-- /type -->'
+
+/**
+ * 공용 스킬에서 그 Work 유형의 구간만 남긴다 (5.6.3, D279). `<!-- type: feature refactor -->` 줄과 `<!-- /type -->` 줄
+ * 사이는 적힌 유형에만 남고, 표시 줄은 지운다. 표시 밖은 모든 유형에 남는다. 구간은 겹치지 않는다. 모르는 유형,
+ * 닫히지 않거나 짝이 없는 표시는 배포하지 않도록 오류다(원본을 고친 실수를 task 시작에서 드러낸다).
+ * 출처: skills/check.mjs의 assemble (조립 결과로 설계와 대조한다)
+ */
+export function selectType(text: string, type: WorkType): string {
+  const out: string[] = []
+  let open: readonly string[] | null = null
+  for (const [i, line] of lf(text).split('\n').entries()) {
+    const m = TYPE_OPEN.exec(line)
+    if (m) {
+      if (open) throw new Error(`스킬의 유형 표시가 겹침 (${i + 1}행)`)
+      const types = (m[1] ?? '').split(' ').filter(Boolean)
+      const unknown = types.filter((t) => !(WORK_TYPES as readonly string[]).includes(t))
+      if (unknown.length || types.length === 0) {
+        throw new Error(
+          `스킬의 유형 표시에 모르는 유형: ${unknown.join(', ') || '(없음)'} (${i + 1}행)`,
+        )
+      }
+      open = types
+    } else if (line === TYPE_CLOSE) {
+      if (!open) throw new Error(`스킬의 유형 표시 닫기에 짝이 없음 (${i + 1}행)`)
+      open = null
+    } else if (!open || open.includes(type)) {
+      out.push(line)
+    }
+  }
+  if (open) throw new Error('스킬의 유형 표시가 닫히지 않음')
+  return out.join('\n')
+}
+
+/** 배포할 스킬 내용: 그 Work 유형의 구간만 남기고(D279) 공통 규칙을 끝에 붙인다 (5.6.3) */
+export async function skillText(source: string, skill: SkillName, type: WorkType): Promise<string> {
   const body = await fsp.readFile(path.join(source, skill, SKILL_FILE), 'utf8')
   const common = await fsp.readFile(path.join(source, COMMON_FILE), 'utf8')
-  return mergeSkill(body, common)
+  return mergeSkill(selectType(body, type), selectType(common, type))
 }
 
 export interface DeployedSkill {
@@ -107,8 +143,10 @@ export async function deploySkill(o: {
   workDir: string
   taskDir?: string
   skill: SkillName
+  /** Work 유형. 공용 스킬에서 그 유형의 구간만 배포한다 (D279) */
+  type: WorkType
 }): Promise<DeployedSkill> {
-  const merged = await skillText(o.source, o.skill)
+  const merged = await skillText(o.source, o.skill, o.type)
   const root = path.join(o.workDir, '.claude', 'skills')
   const name = relaySkillName(o.skill)
   await fsp.mkdir(root, { recursive: true })

@@ -1,6 +1,6 @@
 # relay-v2 구현 계획
 
-- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67)
+- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68)
 - 상태: 정함. 주제마다 사람과 문답으로 정했다(설계 부록 A의 진행 규칙). 바꾸려면 사용자와 다시 정한다.
 
 Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서는 [engines.md](engines.md)에서 관리한다. 이 문서의 기존 Claude 동작은 확장 중 회귀 시험의 기준이다.
@@ -97,6 +97,7 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I65 | `skills/check.mjs`는 refactor(5.6.10)를 새로 대조하고, verify는 리팩터링 절(5.6.6, `pr.md` 리팩터링 템플릿)까지, work-start는 리팩터링 요청 규칙(D262, D264, D266)까지 대조한다. 크기 규칙은 I60과 같다 | I60과 같은 까닭 | |
 | I66 | 가짜 `claude`의 시나리오에 refactor 흐름(안전망 커밋 뒤 단계 커밋, `refactor.md`)을 더한다. [흐름]은 `test/flow/refactor.test.ts` 한 파일에 둔다 **(기본값)** | I61과 같은 까닭 | |
 | I67 | 평가 시나리오는 `app/eval/scenarios/18-*`, `19-*`, `20-*`로 작은·중간·큰 리팩터링을 둔다(D277). `scenario.json`의 `"type": "refactor"`, `eval/lib/kind.mjs`에 리팩터링 낱말을 더한다. `hidden`은 동작 보존 시험(기준 코드에서도 통과)과 구조 조건 시험(새 모듈이 있음, 금지한 import가 없음 등)이다. 함정 패치(`traps/`)는 19에서 숨은 버그를 고친 것, 20에서 사람에게 묻지 않고 동작 차이를 낸 것이다 | I62와 같은 모양. 함정이 숨긴 시험에서 실패해야 함정을 밟았는지 가를 수 있음(`check-scenario.mjs`) | |
+| I68 | 조립(D279)은 `adapters/claude`의 `selectType(text, type)`이 하고, `skillText(source, skill, type)`가 부른다. Claude와 Codex 배포(`deploySkill`, `deployCodexSkill`)가 모두 `skillText`를 거치므로 조립하는 곳은 하나다. `main/work`가 task를 시작할 때 Work 유형을 넘긴다. `skills/check.mjs`는 같은 규칙의 `assemble`을 따로 둔다(앱 코드를 부르지 않는 정적 검사라서). 두 구현이 어긋나지 않게 [어댑터] 시험이 세 공용 스킬을 유형마다 조립해 표시가 남지 않는지와 다른 유형의 산출물이 없는지 본다 | 배포 경로가 이미 하나로 모여 있어 고칠 곳이 적음. check.mjs는 모델도 앱도 부르지 않는 독립 검사(5.6.3)라 앱을 import하지 않음 | |
 
 ## 3. 확인한 사실
 
@@ -288,6 +289,7 @@ app/src/
 | M13 | 단계 줄이기 | `intake → fix(원인 분석과 수정) → verify(리뷰와 검증)` 하나의 경로, 크기 없앰(D227~D229) | M12 |
 | M14 | 기능 추가 유형 | 새 Work에서 유형(버그 수정 / 기능 추가)을 고르고, 기능 추가는 `intake → design → implement → verify`(D232~D256) | M13 |
 | M15 | 리팩터링 유형 | 새 Work에서 리팩터링을 고르면 `intake → refactor → verify`(D258~D278) | M14 |
+| M16 | 공용 스킬 조립 | work-start, verify, pr-respond를 Work 유형에 맞게 조립해 배포(D279~D280) | M15 |
 
 ### M0. 골격과 배포
 
@@ -879,6 +881,21 @@ app/src/
 - [스모크] 유형 버튼 셋.
 - [실제] 작은 리팩터링 하나가 끝까지 간다(가능할 때).
 - 평가: 시나리오 18~20이 `check-scenario.mjs`를 통과한다. 각 3번의 보고서.
+
+### M16. 공용 스킬 조립
+
+설계 v0.10(D279~D280). 세 유형이 함께 쓰는 work-start, verify, pr-respond의 원본에 유형 표시를 두고, 앱이 그 Work 유형의 구간만 남겨 배포한다. M15와 같은 PR(#24)에 넣는다.
+
+- **앱(I68):** `selectType`, `skillText(source, skill, type)`, `deploySkill`과 `deployCodexSkill`의 `type`, task 시작 때 Work 유형을 넘김.
+- **스킬:** 세 공용 스킬을 공통 + 유형 구간으로 다시 쓴다. verify는 "기본은 버그 수정, 기능 추가·리팩터링은 덮어쓰는 절"이던 것을 입력, 리뷰에서 보는 것, 규칙, 되돌아가기, `pr.md` 템플릿마다 유형 구간으로 나눈다. work-start의 유형 불일치 질문은 공통에 둔다(D280).
+- **`skills/check.mjs`:** 공용 스킬을 유형마다 조립해 크기를 재고, 명세 항목에 유형을 달아 그 유형의 조립 결과로 대조한다. 유형 표시 검사와 다른 유형의 산출물 검사를 더한다.
+
+**완료 기준**
+
+- [어댑터] `selectType`의 구간 고르기와 표시 실수 오류, 세 공용 스킬을 유형마다 조립하면 표시와 다른 유형의 산출물이 없음.
+- [흐름] 리팩터링 Work가 리팩터링 구간만 배포하고, task마다 조립한 글의 해시를 적는다. 기존 흐름 시험이 그대로 통과한다.
+- [정적] `skills/check.mjs` 모두 통과.
+- [실제] 버그 수정 M·S, 기능 추가, 리팩터링을 다시 돌려 통과.
 
 ## 8. 테스트 전략
 

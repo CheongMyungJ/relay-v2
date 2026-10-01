@@ -5,6 +5,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { skillText } from '../../src/adapters/claude'
+import { sha256 } from '../../src/adapters/store'
 import { parseFrontMatter } from '../../src/core/validate'
 import type { AppConfig } from '../../src/shared/config'
 import type { WorkView } from '../../src/shared/views'
@@ -167,6 +169,21 @@ describe('[흐름] 리팩터링 유형 (M15)', () => {
       .filter((r) => r['type'] === 'start' && !r['resume'])
       .map((r) => r['skill'])
     expect(skills).toEqual(['work-start', 'refactor', 'verify'])
+
+    // 공용 스킬은 리팩터링의 구간만 배포한다 (D279): verify에 refactor.md는 있고 다른 유형의 산출물은 없다
+    const skillsSrc = path.resolve(__dirname, '../../../skills')
+    const deployed = read(path.join(dir, '.claude', 'skills', 'relay-verify', 'SKILL.md'))
+    expect(deployed).toBe(await skillText(skillsSrc, 'verify', 'refactor'))
+    expect(deployed).toContain('`refactor.md`')
+    expect(deployed).not.toContain('`fix.md`')
+    expect(deployed).not.toContain('`design.md`')
+    expect(w.tasks.map((t) => t.skill_hash)).toEqual(
+      await Promise.all(
+        (['work-start', 'refactor', 'verify'] as const).map(
+          async (sk) => `sha256:${sha256(await skillText(skillsSrc, sk, 'refactor'))}`,
+        ),
+      ),
+    )
   })
 
   it('앱 기본값: 계획과 리팩터링은 자동 승인한다 (D276)', async () => {

@@ -3,7 +3,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { mergeSkill, skillText } from '../../src/adapters/claude'
+import { mergeSkill, selectType, skillText } from '../../src/adapters/claude'
 import { OPEN_QUESTIONS_HINT } from '../../src/core/review'
 import { sha256 } from '../../src/adapters/store'
 import { BOUNCE_HEAD, parseFrontMatter } from '../../src/core/validate'
@@ -239,7 +239,7 @@ describe('[흐름] 최소 흐름 (M2)', () => {
     const skillsSrc = path.resolve(__dirname, '../../../skills')
     expect(read(path.join(skills, 'relay-verify', 'SKILL.md'))).toBe(
       mergeSkill(
-        read(path.join(skillsSrc, 'verify', 'SKILL.md')),
+        selectType(read(path.join(skillsSrc, 'verify', 'SKILL.md')), 'bugfix'),
         read(path.join(skillsSrc, '_common.md')),
       ),
     )
@@ -293,7 +293,9 @@ describe('[흐름] 최소 흐름 (M2)', () => {
       [1, 'fix', '02-fix'],
       [2, 'verify', '03-verify'],
     ] as const) {
-      expect(w.tasks[i]?.skill_hash).toBe(`sha256:${sha256(await skillText(skillsSrc, skill))}`)
+      expect(w.tasks[i]?.skill_hash).toBe(
+        `sha256:${sha256(await skillText(skillsSrc, skill, 'bugfix'))}`,
+      )
       expect(started[i]?.args).toContain(
         `/relay-${skill} 이 task의 컨텍스트: ${path.join(task(dir), 'context.md')}`,
       )
@@ -468,7 +470,9 @@ describe('[흐름] 최소 흐름 (M2)', () => {
     expect(verifyCtx).toContain(`- t-02 fix: ${path.join(task('02-fix'), 'fix.md')}`)
     // 배포한 스킬 (D103)
     const skillsSrc = path.resolve(__dirname, '../../../skills')
-    expect(verifyTask?.skill_hash).toBe(`sha256:${sha256(await skillText(skillsSrc, 'verify'))}`)
+    expect(verifyTask?.skill_hash).toBe(
+      `sha256:${sha256(await skillText(skillsSrc, 'verify', 'bugfix'))}`,
+    )
     // 질문에 답한 뒤 한 번만 마무리한다: 승인 대기는 한 번이다 (D229)
     expect(
       events(s.workDir)

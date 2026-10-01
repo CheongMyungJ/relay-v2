@@ -85,6 +85,7 @@ describe('Codex CLI 점검과 스킬·설정', () => {
       workDir: dir,
       taskDir: path.join(dir, 'task'),
       skill: 'verify',
+      type: 'bugfix',
     })
     const text = fs.readFileSync(deployed.file, 'utf8')
     expect(text).toContain('name: relay-verify')
