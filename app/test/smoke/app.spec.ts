@@ -33,7 +33,13 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test'
+import {
+  _electron as electron,
+  expect,
+  test,
+  type ElectronApplication,
+  type Locator,
+} from '@playwright/test'
 import { git, makeRepo } from '../flow/repo'
 import {
   REPO_FILES,
@@ -223,6 +229,13 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await expect(unanswered).toContainText(
     '답하지 않은 열린 질문 1개: 에이전트는 가정으로 진행합니다.',
   )
+  // 확인 창은 top layer에 떠 포커스를 안으로 가져간다: 패널 아래 버튼 줄이나 터미널에 가려지지 않는다.
+  // Escape로 닫히고, 다시 [의도 승인]하면 다시 뜬다
+  await expectModal(unanswered)
+  await win.keyboard.press('Escape')
+  await expect(unanswered).toBeHidden()
+  await approve.click()
+  await expectModal(unanswered)
   await win.screenshot({ path: 'test-results/open-questions.png' })
   await unanswered.getByRole('button', { name: '의도 승인', exact: true }).click()
 
@@ -304,6 +317,7 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   expect(alive(resumedPid)).toBe(true)
   await win.getByRole('button', { name: '단계 선택', exact: true }).click()
   const dialog = win.getByRole('dialog', { name: /단계 선택/ })
+  await expectModal(dialog)
   await dialog.getByLabel('의도 정리(intake)').check()
   const preview = dialog.getByLabel('미리 보기')
   await expect(preview).toContainText('01 의도 정리: intent.draft.md', { timeout: 30_000 })
@@ -417,6 +431,8 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   // 답하지 않은 열린 질문이 있어 전달 전에 한 번 확인받는다 (D222). 창의 [push]로 전달한다
   const deliverQuestions = win.getByRole('dialog', { name: '답하지 않은 열린 질문' })
   await expect(deliverQuestions).toContainText('배포 전에 알릴 곳은?')
+  // 버튼 줄(.review-bottom) 안에서 연 창도 top layer에 뜬다
+  await expectModal(deliverQuestions)
   await deliverQuestions.getByRole('button', { name: 'push', exact: true }).click()
 
   // 리뷰와 검증이 남긴 커밋 안 된 파일 때문에 고른다 (7-5): [AI 세션 열기]로 정리 세션을 연다
@@ -535,6 +551,15 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await expect(win2.getByRole('button', { name: '의도 승인' })).toBeEnabled({ timeout: 60_000 })
   await win2.screenshot({ path: 'test-results/recovered.png' })
 })
+
+// 대화상자가 top layer에 떠 있고(showModal) 포커스가 그 안에 있다
+async function expectModal(dialog: Locator): Promise<void> {
+  await expect(dialog).toBeVisible()
+  const modal = await dialog.evaluate(
+    (el) => el.matches(':modal') && el.contains(el.ownerDocument.activeElement),
+  )
+  expect(modal).toBe(true)
+}
 
 function lastPid(text: string): number {
   return Number([...text.matchAll(/PID (\d+)/g)].pop()?.[1] ?? 0)

@@ -585,14 +585,19 @@ textarea {
 
 /* ---------- 대화상자 ---------- */
 
-.modal-back {
-  position: fixed;
-  inset: 0;
-  /* 고정 승인 버튼(.review-bottom)보다 위에서 배경 클릭도 막는다. */
-  z-index: 2;
+/* 대화상자는 <dialog>를 showModal()로 top layer에 띄운다: z-index로 겨루지 않는다. 겉은 비우고 안쪽 .modal이 상자다 */
+.modal-dialog {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
+}
+
+.modal-dialog::backdrop {
   background: rgb(0 0 0 / 50%);
-  display: grid;
-  place-items: center;
 }
 
 .modal {
