@@ -1,0 +1,49 @@
+diff --git a/src/users.js b/src/users.js
+index 146a9d6..a87968c 100644
+--- a/src/users.js
++++ b/src/users.js
+@@ -3,6 +3,8 @@ import { NotFoundError, ValidationError } from './errors.js'
+ 
+ // 사용자 서비스. now는 시험에서 시각을 고정하려고 받는다
+ export function createUserService(store, { now = () => new Date() } = {}) {
++  const audit = []
++  const log = (action, userId, detail) => audit.push({ at: now().toISOString(), action, userId, detail })
+   function find(id) {
+     const user = store.users.get(id)
+     if (!user) throw new NotFoundError(`사용자 ${id}`)
+@@ -20,6 +22,7 @@ export function createUserService(store, { now = () => new Date() } = {}) {
+       if (emailTaken(e)) throw new ValidationError(`이미 쓰는 이메일: ${e}`)
+       const user = { id: store.nextId++, name: name.trim(), email: e, createdAt: now().toISOString() }
+       store.users.set(user.id, user)
++      log('create', user.id, { email: e })
+       return { ...user }
+     },
+ 
+@@ -27,6 +30,7 @@ export function createUserService(store, { now = () => new Date() } = {}) {
+       const user = find(id)
+       const e = normalizeEmail(email)
+       if (emailTaken(e, id)) throw new ValidationError(`이미 쓰는 이메일: ${e}`)
++      log('update_email', id, { from: user.email, to: e })
+       user.email = e
+       return { ...user }
+     },
+@@ -34,11 +38,19 @@ export function createUserService(store, { now = () => new Date() } = {}) {
+     deleteUser(id) {
+       find(id)
+       store.users.delete(id)
++      log('delete', id, {})
+       return true
+     },
+ 
+     getUser(id) {
+       return { ...find(id) }
+     },
++
++    listAudit({ userId, since } = {}) {
++      return audit
++        .filter((e) => userId === undefined || e.userId === userId)
++        .filter((e) => since === undefined || e.at > new Date(since).toISOString())
++        .sort((a, b) => b.at.localeCompare(a.at))
++    },
+   }
+ }

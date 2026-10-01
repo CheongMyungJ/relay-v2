@@ -1,0 +1,33 @@
+{
+  "id": "15-csv-delimiter",
+  "type": "feature",
+  "repoName": "orders-export",
+  "title": "옵션 하나를 더하는 작은 기능",
+  "purpose": "동작이 분명하고 바뀌는 곳이 한두 파일인 작은 기능에서, relay의 설계와 계획 단계가 부담인지(D233) 본다. 승인 수와 시간을 버그 수정 01-slug와 견준다.",
+  "report": "주문 내보내기 CSV를 한국어판 엑셀에서 열면 한 칸에 다 들어간다. src/csv.js의 toCsv에 구분자를 고르는 옵션을 더해 달라(세 번째 인자 { delimiter: ';' } 꼴). 기본은 지금처럼 쉼표. src/orders.js의 exportOrders(orders, { delimiter })에서도 넘길 수 있어야 한다.",
+  "knowledge": [
+    {
+      "share": "upfront",
+      "text": "구분자가 든 값은 지금 쉼표처럼 따옴표로 감싸야 한다. 탭도 쓸 수 있으면 좋겠다."
+    }
+  ],
+  "preferences": ["작은 일이라 빨리 끝내고 싶다.", "옵션을 지키는 테스트가 있으면 좋겠다."],
+  "reveals": [],
+  "events": [],
+  "expectedFiles": ["src/csv.js", "src/orders.js", "test/**"],
+  "checks": [
+    {
+      "name": "구분자 옵션",
+      "file": "delimiter.test.js"
+    },
+    {
+      "name": "기본은 쉼표",
+      "file": "default.test.js",
+      "guard": true
+    }
+  ],
+  "limits": {
+    "minutes": 40,
+    "turns": 50
+  }
+}

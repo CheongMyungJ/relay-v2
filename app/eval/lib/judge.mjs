@@ -6,6 +6,7 @@ import path from 'node:path'
 import { ask } from './ai.mjs'
 import { makeClaudeConfig } from './env.mjs'
 import { clip, readJsonl } from './util.mjs'
+import { words } from './kind.mjs'
 
 const score = { type: 'integer', minimum: 1, maximum: 5 }
 const OUTCOME_SCHEMA = {
@@ -51,7 +52,7 @@ function scenarioBrief(s) {
   return [
     `시나리오: ${s.id} — ${s.title}`,
     `평가 목적: ${s.purpose}`,
-    `버그 리포트: ${Array.isArray(s.report) ? s.report.join(' ') : s.report}`,
+    `${words(s).report}: ${Array.isArray(s.report) ? s.report.join(' ') : s.report}`,
     ...(s.knowledge ?? []).map((k) => `사람이 아는 사실: ${k.text}`),
     ...(s.preferences ?? []).map((p) => `사람의 선호: ${p}`),
     ...(s.reveals ?? []).map((r) => `도중에 더해진 요구: ${r.text}`),
@@ -134,8 +135,8 @@ export async function judgePair({ scenario, relay, cli, relayDir, cliDir, opts, 
     system,
     schema: OUTCOME_SCHEMA,
     prompt: [
-      '같은 버그를 두 번 따로 고친 결과 A와 B를 비교하라. 어떻게 만들었는지는 알려 주지 않는다.',
-      '각각을 1~5로 매겨라: correctness(요구대로 고쳐졌나. 숨긴 시험을 참고하되 코드도 보라), scope(필요한 만큼만 바꿨나), quality(읽기 쉽고 올바른 코드인가), tests(회귀를 막는 시험을 더했나).',
+      `${words(scenario).same} 두 번 따로 ${words(scenario).did} 결과 A와 B를 비교하라. 어떻게 만들었는지는 알려 주지 않는다.`,
+      `각각을 1~5로 매겨라: correctness(요구대로 ${words(scenario).made}. 숨긴 시험을 참고하되 코드도 보라), scope(필요한 만큼만 바꿨나), quality(읽기 쉽고 올바른 코드인가), tests(회귀를 막는 시험을 더했나).`,
       '',
       scenarioBrief(scenario),
       '',
@@ -152,7 +153,7 @@ export async function judgePair({ scenario, relay, cli, relayDir, cliDir, opts, 
     system,
     schema: EXPERIENCE_SCHEMA,
     prompt: [
-      '같은 버그를 서로 다른 도구로 고친 두 사용 기록 A와 B를 비교하라. 사람 역할은 AI가 연기했다.',
+      `${words(scenario).same} 서로 다른 도구로 ${words(scenario).did} 두 사용 기록 A와 B를 비교하라. 사람 역할은 AI가 연기했다.`,
       '차원마다 어느 쪽이 나았는지(A, B, tie, 해당 없으면 n/a)와 근거를 짧게 적어라.',
       '- burden: 사람이 들인 수고(차례, 행동, 입력, 기다림, 헷갈림)가 적은 쪽',
       '- clarity: 무슨 일이 일어나는지와 할 일이 분명했던 쪽',

@@ -73,7 +73,10 @@ function collectElements() {
       name: clip(labelOf(el) || el.innerText || el.getAttribute('placeholder') || el.title),
     }
     if (el.disabled || el.getAttribute('aria-disabled') === 'true') e.disabled = true
-    if (role === 'checkbox' || role === 'radio') e.checked = el.checked
+    // 새 Work의 유형 고르기(relay D236)는 role=radio인 버튼이라 aria-checked로 읽는다
+    if (role === 'checkbox' || role === 'radio')
+      e.checked =
+        typeof el.checked === 'boolean' ? el.checked : el.getAttribute('aria-checked') === 'true'
     if (el.getAttribute('aria-selected') === 'true') e.selected = true
     if (tag === 'input' && role === 'input') e.value = clip(el.value, 120)
     if (tag === 'textarea') e.value = clip(el.value, 200)

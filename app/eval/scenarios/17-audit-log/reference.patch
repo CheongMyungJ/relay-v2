@@ -1,0 +1,103 @@
+diff --git a/src/audit.js b/src/audit.js
+new file mode 100644
+index 0000000..a2097d4
+--- /dev/null
++++ b/src/audit.js
+@@ -0,0 +1,25 @@
++// 감사 로그. 성공한 사용자 작업만 기록하고, 이메일은 앞 한 글자만 두고 가린다(개인정보 규정)
++
++export function maskEmail(email) {
++  const [local, domain] = email.split('@')
++  return `${local.slice(0, 1)}***@${domain}`
++}
++
++export function createAuditLog() {
++  const entries = []
++  return {
++    record(entry) {
++      entries.push({ ...entry, detail: { ...entry.detail } })
++    },
++    // 최신순. 같은 시각이면 나중에 기록된 것이 먼저다. since는 그 시각을 포함한다
++    list({ userId, since } = {}) {
++      const from = since === undefined ? null : new Date(since).getTime()
++      return entries
++        .map((e, i) => ({ e, i }))
++        .filter(({ e }) => userId === undefined || e.userId === userId)
++        .filter(({ e }) => from === null || new Date(e.at).getTime() >= from)
++        .sort((a, b) => b.e.at.localeCompare(a.e.at) || b.i - a.i)
++        .map(({ e }) => ({ ...e, detail: { ...e.detail } }))
++    },
++  }
++}
+diff --git a/src/users.js b/src/users.js
+index 146a9d6..44cac83 100644
+--- a/src/users.js
++++ b/src/users.js
+@@ -1,8 +1,12 @@
++import { createAuditLog, maskEmail } from './audit.js'
+ import { normalizeEmail } from './email.js'
+ import { NotFoundError, ValidationError } from './errors.js'
+ 
+ // 사용자 서비스. now는 시험에서 시각을 고정하려고 받는다
+ export function createUserService(store, { now = () => new Date() } = {}) {
++  const audit = createAuditLog()
++  const log = (action, userId, detail) =>
++    audit.record({ at: now().toISOString(), action, userId, detail })
+   function find(id) {
+     const user = store.users.get(id)
+     if (!user) throw new NotFoundError(`사용자 ${id}`)
+@@ -20,6 +24,7 @@ export function createUserService(store, { now = () => new Date() } = {}) {
+       if (emailTaken(e)) throw new ValidationError(`이미 쓰는 이메일: ${e}`)
+       const user = { id: store.nextId++, name: name.trim(), email: e, createdAt: now().toISOString() }
+       store.users.set(user.id, user)
++      log('create', user.id, { email: maskEmail(e) })
+       return { ...user }
+     },
+ 
+@@ -27,18 +32,25 @@ export function createUserService(store, { now = () => new Date() } = {}) {
+       const user = find(id)
+       const e = normalizeEmail(email)
+       if (emailTaken(e, id)) throw new ValidationError(`이미 쓰는 이메일: ${e}`)
++      const from = user.email
+       user.email = e
++      log('update_email', id, { from: maskEmail(from), to: maskEmail(e) })
+       return { ...user }
+     },
+ 
+     deleteUser(id) {
+       find(id)
+       store.users.delete(id)
++      log('delete', id, {})
+       return true
+     },
+ 
+     getUser(id) {
+       return { ...find(id) }
+     },
++
++    listAudit(query) {
++      return audit.list(query)
++    },
+   }
+ }
+diff --git a/test/users.test.js b/test/users.test.js
+index d301222..efd14f9 100644
+--- a/test/users.test.js
++++ b/test/users.test.js
+@@ -33,3 +33,16 @@ test('잘못된 입력', () => {
+   s.createUser({ name: '김', email: 'a@x.com' })
+   assert.throws(() => s.createUser({ name: '이', email: 'A@x.com' }), ValidationError)
+ })
++
++test('감사 로그', () => {
++  const s = createUserService(createStore(), { now: fixed })
++  s.createUser({ name: '김', email: 'kim@x.com' })
++  s.deleteUser(1)
++  assert.deepStrictEqual(
++    s.listAudit().map((e) => [e.action, e.detail]),
++    [
++      ['delete', {}],
++      ['create', { email: 'k***@x.com' }],
++    ],
++  )
++})
