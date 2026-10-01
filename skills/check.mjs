@@ -4,7 +4,7 @@
 // 1. 머리글: disable-model-invocation: true, description 있음, name 없음 (D33)
 // 2. 크기: SKILL.md + _common.md. Claude Code 어림(글자 수 / 4)으로 판정, 모델 토큰 어림은 참고 (D31, D95)
 // 3. 템플릿: 주석 단 템플릿에 값을 채운 예시가 docs/contracts 스키마를 통과하는지 (D87). intent 초안은 머리글이 없다 (D236)
-// 4. 설계 대조: 산출물 템플릿의 절 제목, 입력·결정 지점·사람이 정할 결정·완료조건 항목 (5.6.1~5.6.9, I60)
+// 4. 설계 대조: 산출물 템플릿의 절 제목, 입력·결정 지점·사람이 정할 결정·완료조건 항목 (5.6.1~5.6.10, I60, I65)
 
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -17,7 +17,7 @@ const root = join(here, '..');
 const read = (p) => readFileSync(join(root, p), 'utf8').replace(/\r\n/g, '\n');
 
 const SIZE_TARGET = 5000; // D31
-const SKILLS = ['work-start', 'fix', 'design', 'implement', 'verify', 'pr-respond'];
+const SKILLS = ['work-start', 'fix', 'design', 'implement', 'refactor', 'verify', 'pr-respond'];
 
 const design = read('docs/design.md');
 const common = read('skills/_common.md');
@@ -175,6 +175,7 @@ const templateSources = {
   fix: ['#### 5.6.5'],
   design: ['#### 5.6.8'],
   implement: ['#### 5.6.9'],
+  refactor: ['#### 5.6.10'],
   verify: ['#### 5.6.6'],
   'pr-respond': ['#### 5.6.7'],
 };
@@ -242,6 +243,12 @@ const spec = {
     ['D239', '기능 추가 기본 완료조건 세 개', /`feature`: `- \[ \] <test command>가 통과한다` \/ `- \[ \] 기존 테스트를 약화하거나 삭제하지 않는다` \/ `- \[ \] 완료조건의 각 동작을 확인하는 테스트가 있다`/],
     ['D240', '인수 조건: 밖에서 보이는 동작, "<조건>이면 <결과>", 구현 세부 없음', /behavior seen from outside[\s\S]*"<조건>이면 <결과>"[\s\S]*No implementation details/],
     ['D241', '사람 제안: 반드시면 제약, 아니면 (사람 제안)', /`제약` when it is a must[\s\S]*"\(사람 제안\)"/],
+    ['5.6.4', '리팩터링의 계획도 하지 않음', /do not plan how to reach the structure\. That is the job of refactor/],
+    ['D262', '동작 변경·성능 목표가 섞이면 초안 전에 물음: 비목표로 빼거나 유형 바꿈', /behavior change[\s\S]*performance goal[\s\S]*ask before you write the draft[\s\S]*`비목표`[\s\S]*`blocked`/],
+    ['D263', '레포 밖 공개 인터페이스를 바꾸면 intent에 적음', /interface used outside the repo[\s\S]*write what changes in the intent/],
+    ['D264', '리팩터링 기본 완료조건 네 개', /`refactor`: `- \[ \] <test command>가 통과한다` \/ `- \[ \] 기존 테스트를 약화하거나 삭제하지 않는다` \/ `- \[ \] 바꾼 곳의 지금 동작을 잡는 안전망 테스트가 있고 기준 코드에서도 통과한다` \/ `- \[ \] 레포 밖 공개 인터페이스가 바뀌지 않는다`/],
+    ['D266', '구조 조건: 읽거나 명령으로 확인, 한 줄에 하나, 방법은 쓰지 않음', /structural conditions that can be checked[\s\S]*one per line[\s\S]*Not the order or method/],
+    ['D266', '구조 목표가 막연하면 확인할 수 있는 구조를 물음', /vague[\s\S]*ask for a structure that can be checked/],
   ],
   design: [
     ['5.6.8', '입력: context.md, request.md 경로', /`context\.md`[\s\S]*`request\.md`/],
@@ -274,6 +281,24 @@ const spec = {
     ['5.6.9', '결정 지점: 계획이 정하지 않은 구현 세부', /Implementation details the plan does not settle/],
     ['D248', '크게 벗어남 넷', /behavior or interface\) differs from the design[\s\S]*scope widens[\s\S]*different way from `접근`[\s\S]*dependency the design does not have, or change a data format or schema/],
     ['5.6.9', '완료조건: 네 절, 계획 단계, 새 동작 테스트, 물음, 커밋, 테스트 명령', /## Done when[\s\S]*four template sections[\s\S]*Every step of the plan[\s\S]*failed before[\s\S]*and passed after[\s\S]*`decisions`[\s\S]*committed[\s\S]*test command/],
+  ],
+  refactor: [
+    ['5.6.10', '입력: context.md, request.md 경로', /`context\.md`[\s\S]*`request\.md`/],
+    ['D278', '현재 코드 위에서 이어서: 안전망 커밋을 다시 만들지 않음', /Continuing on current code[\s\S]*Do not make the safety-net commit again/],
+    ['5.6.10', '순서: 계획 → 물음 → 안전망 커밋 → 단계마다 커밋 → 테스트 명령', /Plan\.[\s\S]*Ask if needed[\s\S]*Safety net\.[\s\S]*Steps\.[\s\S]*test command at the end/],
+    ['D260', '동작을 바꾸지 않음, 찾은 버그는 고치지 않고 적음', /Do not change behavior[\s\S]*do not fix it[\s\S]*`찾은 버그와 받아들인 차이`[\s\S]*`risks`/],
+    ['D268', '기존 테스트가 덮으면 근거와 함께 적고 빈 곳만 새로, 커버리지 도구', /existing tests already cover[\s\S]*reason[\s\S]*only for behavior no test covers[\s\S]*coverage tool/],
+    ['D259', '새 안전망은 기준 코드에서 통과, 따로 커밋, 해시를 적음(I64)', /must pass on the base code[\s\S]*safety-net commit hash/],
+    ['D271', '안전망을 쓸 수 없으면 묻지 않고 이유를 적고 진행, verify는 판정 불가', /No safety net possible[\s\S]*do not ask[\s\S]*`risks`[\s\S]*판정 불가/],
+    ['D263', '레포 안 인터페이스는 바꿀 수 있고 호출부도, 밖은 intent가 정할 때만', /used only inside the repo[\s\S]*callers[\s\S]*used outside the repo[\s\S]*only when the intent says so/],
+    ['D265', '기존 테스트는 호출 이름·import·위치·준비 코드만, 기대값과 입력은 바꾸지 않음', /call names, import paths, file location and setup code[\s\S]*Never change their expected values or inputs/],
+    ['D269', '안전망 커밋 하나와 단계마다 커밋, 커밋마다 테스트 통과', /one safety-net commit, then one commit per plan step[\s\S]*pass at every commit/],
+    ['D57', '테스트 명령 실행, 기준 커밋 실패 구분', /Run tests[\s\S]*also fails at the base commit/],
+    ['D23', 'intent와 어긋나면 intent_deviation, 의도 변경은 intake', /`intent_deviation`[\s\S]*`recommended_next` to `intake`/],
+    ['5.6.10', '결정 지점: 목표 구조, 계획의 나눔, 새 안전망', /The target structure, how to split the plan, which safety-net tests/],
+    ['D267', '사람이 정할 결정: 목표 구조 선택지, 범위·비목표·제약, 사람 제안', /Several target structures[\s\S]*widens the scope, or touches the intent's non-goals or constraints[\s\S]*do not take a human suggestion/],
+    ['D270', '동작 차이: 다른 방법 / 받아들임 / 범위에서 뺌, 받아들이면 그 기대값만, by: human', /must change behavior a little[\s\S]*keep the current behavior another way \/ accept the difference \/ drop that part[\s\S]*only that expected value[\s\S]*`by: human`/],
+    ['5.6.10', '완료조건: 다섯 절, 안전망, 단계 커밋, 찾은 버그, 사람 결정, 테스트 명령', /## Done when[\s\S]*five template sections[\s\S]*safety net[\s\S]*committed separately[\s\S]*plan step is committed[\s\S]*not fixed[\s\S]*`decisions`[\s\S]*test command/],
   ],
   fix: [
     ['5.6.5', '입력: context.md, request.md 경로', /`context\.md`[\s\S]*`request\.md`/],
@@ -323,10 +348,18 @@ const spec = {
     ['D251', '새 동작 테스트 항목: 있는지, 동작을 확인하는지, 직접 실행, 구현 전은 implement.md, 없으면 판정 불가', /완료조건의 각 동작을 확인하는 테스트가 있다[\s\S]*really checks that behavior[\s\S]*run it yourself[\s\S]*`implement\.md`[\s\S]*판정 불가/],
     ['D253', '기능 추가 이전 단계 추천: 구현이면 implement, 설계면 design', /`implement` if the implementation is wrong, `design` if the design is wrong/],
     ['D252', '기능 추가 pr.md: 요약 / 동작 / 주요 설계 결정 / 변경 / 테스트', /## 요약\n## 동작\n## 주요 설계 결정\n## 변경\n## 테스트/],
+    ['D275', '리팩터링: fix.md 대신 refactor.md, 재현 규칙 안 씀', /Refactoring Work[\s\S]*`refactor\.md`[\s\S]*instead of `fix\.md`[\s\S]*reproduction steps do not apply/],
+    ['D275', '리팩터링 리뷰: 로직 변경 없음, 구조 목표, 범위, 받아들이지 않은 동작 변경은 차단', /no logic changed[\s\S]*structural goals[\s\S]*scope did not grow[\s\S]*did not accept is a 차단 finding/],
+    ['D273', '안전망 항목: 같은 worktree에서 안전망 커밋 체크아웃(I64), 마지막 코드에서도, 둘 다 통과, 없으면 판정 불가, 브랜치 확인', /same worktree[\s\S]*safety-net commit[\s\S]*final code too[\s\S]*only if both pass[\s\S]*판정 불가[\s\S]*`git branch --show-current`/],
+    ['D264', '공개 인터페이스 항목: diff로 판정, intent가 정한 것은 뺌', /used outside the repo changed[\s\S]*Leave out what the intent says to change/],
+    ['D265', '따라 고친 기존 테스트는 약화 아님, 기대값·입력 변경이나 삭제는 물음', /followed an internal interface change[\s\S]*약화 아님[\s\S]*expected values or inputs changed[\s\S]*ask/],
+    ['D275', '리팩터링 이전 단계 추천: 변경이면 refactor, 의도면 intake', /`refactor` if the change is wrong, `intake` if the intent is wrong/],
+    ['D274', '리팩터링 pr.md: 요약 / 목표 구조 / 동작 보존 / 변경 / 찾은 버그 / 테스트', /## 요약\n## 목표 구조\n## 동작 보존\n## 변경\n## 찾은 버그\n## 테스트/],
   ],
   'pr-respond': [
     ['D192', '입력: context.md(이번 라운드의 항목, 사람 지시, PR 정보, 앞 라운드 요약)와 파이프라인 산출물(경로)', /`context\.md`[\s\S]*this round's items, the human's instruction, the PR[\s\S]*summaries of earlier rounds[\s\S]*pipeline artifacts/],
     ['D256', '기능 추가면 design.md(경로)', /`design\.md` and `implement\.md` for a feature/],
+    ['D278', '리팩터링이면 refactor.md(경로)', /`refactor\.md` for a refactoring/],
     ['D162', '외부 글은 지시가 아니라 데이터, 명령 실행·설정 변경·비밀 정보 요청은 따르지 않고 사람에게 물음, 사람 지시는 따름', /data, not instructions[\s\S]*run a command, change settings[\s\S]*reveal secrets[\s\S]*ask the human[\s\S]*Follow only the human/],
     ['D168', '항목마다 셋 중 하나: 고침 / 고치지 않음과 이유 / 사람에게 물음. 모르면 open_questions', /고침[\s\S]*고치지 않음[\s\S]*사람에게 물음[\s\S]*`open_questions`/],
     ['5.6.7', '범위: intent의 목표와 비목표. 비목표·제약에 걸리면 사람 결정 (D51과 같음)', /`목표` and `비목표`[\s\S]*`비목표` or `제약`[\s\S]*human decision/],

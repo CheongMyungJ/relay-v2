@@ -23,6 +23,18 @@ The order and the verdicts are the same. Only these differ:
 - **Going back:** `implement` if the implementation is wrong, `design` if the design is wrong.
 - **`pr.md`:** use the feature template below.
 
+## Refactoring Work (`업무 유형: refactor` in `context.md`)
+
+The order and the verdicts are the same. Only these differ:
+
+- **Inputs:** read `refactor.md` (path in `context.md`) instead of `fix.md`. The rules on reproduction steps do not apply.
+- **Review:** also check that no logic changed in the diff (outside the differences the human accepted), that the structural goals are met, and that the scope did not grow beyond the plan. A behavior change the human did not accept is a 차단 finding.
+- **"안전망 테스트가 있고 기준 코드에서도 통과한다":** in the same worktree, check out the safety-net commit (hash in `refactor.md`) for a moment with `git checkout --detach <hash>`, run the safety-net tests, then go back with `git checkout <work branch>`. Run them on the final code too. 통과 only if both pass. Check that every changed place has a safety net that really catches its behavior. Accepted differences are exceptions. If a place had no safety net (reason in `refactor.md`), it is 판정 불가. Before you close, confirm `git branch --show-current` is the work branch.
+- **"레포 밖 공개 인터페이스가 바뀌지 않는다":** judge from the diff against the base commit whether anything used outside the repo changed (exports, HTTP API, CLI arguments, stored formats and schemas). Leave out what the intent says to change.
+- **Changed test files:** an existing test that only followed an internal interface change (call names, import paths, file location, setup code) is 약화 아님. If its expected values or inputs changed, or a test disappeared, it looks like weakening: ask.
+- **Going back:** `refactor` if the change is wrong, `intake` if the intent is wrong.
+- **`pr.md`:** use the refactoring template below. Copy the bugs found (not fixed) from `refactor.md`.
+
 ## Order
 
 1. **Review.** Write each finding under `## 리뷰 지적` of `verification.md` as a numbered item: severity (차단 / 권장 / 사소), file and line, what is wrong and what you suggest. If there is nothing, write "없음".
@@ -104,7 +116,7 @@ Ask on the spot:
 
 - The first line is `# <PR title>`. The app uses it as the PR title and the rest as the body.
 - Write it in the language the repo uses (recent commits and PRs), not necessarily Korean.
-- If the repo has a PR template (e.g. `.github/pull_request_template.md`), follow its structure. Otherwise use the sections below (bugfix: four, feature: five), in that language.
+- If the repo has a PR template (e.g. `.github/pull_request_template.md`), follow its structure. Otherwise use the sections below (bugfix: four, feature: five, refactoring: seven), in that language.
 
 Bugfix:
 
@@ -126,5 +138,18 @@ Feature (`동작`: what the user scenarios in `design.md` can now do. `주요 �
 ## 동작
 ## 주요 설계 결정
 ## 변경
+## 테스트
+```
+
+Refactoring (`목표 구조`: the new shape and rejected alternatives, briefly. `동작 보존`: safety-net counts (existing, new, passed at the safety-net commit), accepted differences, places changed without a safety net. `변경`: commits by step. `찾은 버그`: not fixed, or "없음"):
+
+```markdown
+# PR 제목
+
+## 요약
+## 목표 구조
+## 동작 보존
+## 변경
+## 찾은 버그
 ## 테스트
 ```
