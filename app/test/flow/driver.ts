@@ -1,17 +1,14 @@
 // 사람 역할 (I29, 8.4). [흐름]과 [실제]가 함께 쓴다(8.1: claude 실행 파일만 바꾼다).
-// 승인 대기면 [승인]하고(intake는 고른 size로 [의도 승인]), 질문 대기면 첫 선택지(Enter)로 답한다.
+// 승인 대기면 [승인]하고(intake는 [의도 승인]), 질문 대기면 첫 선택지(Enter)로 답한다. 리뷰와 검증이 반영할 지적을
+// 묻는 질문(D229)도 첫 선택지(추천)로 답한다.
 // awaitAuto면 자동 승인 카운트다운(4.3) 중인 task는 누르지 않고 기다린다.
 // 형식 오류가 끝까지 남으면 [오류 무시하고 승인]을 쓰고 센다. task마다 되돌림 횟수와 걸린 시간을 남긴다.
-// instruct가 있으면 승인할 수 있는 task에 [승인] 대신 터미널로 지시를 한 번 보낸다(리뷰의 지적 고르기, D164).
 import type { Relay } from '../../src/main/relay'
-import type { Size } from '../../src/shared/contracts'
-import type { ReviewView, TaskView, WorkView } from '../../src/shared/views'
+import type { TaskView, WorkView } from '../../src/shared/views'
 import type { FakeUi } from './harness'
 import { sleep } from './harness'
 
 export interface DriveOptions {
-  /** 의도 승인 때 고를 size (D90). 없으면 초안의 size다 */
-  size?: Size
   /** 형식 오류가 남은 대기에서 [오류 무시하고 승인]을 쓴다 */
   force?: boolean
   /** handoff 없이 턴이 끝났을 때 터미널에 보낼 말. 없으면 실패로 끝낸다 */
@@ -26,16 +23,13 @@ export interface DriveOptions {
    * 승인 대기에서 단계 선택을 하는 시험(M4)이 쓴다
    */
   pauseAt?: (task: TaskView) => boolean
+  /** [승인]을 누르기 바로 전에 부른다. 승인하는 때의 코드(HEAD)를 남기는 데 쓴다 ([실제] 리뷰 판정) */
+  beforeApprove?: (task: TaskView) => unknown
   /**
    * 자동 승인 카운트다운(4.3) 중인 task는 [승인]하지 않고 카운트다운이 끝나기를 기다린다. 카운트다운이 승인 없이
    * 멈추면 사람처럼 [승인]한다
    */
   awaitAuto?: boolean
-  /**
-   * 승인할 수 있는 승인 대기 task에 사람이 터미널로 보낼 지시. 문자열을 돌려주면 [승인]하지 않고 보낸 뒤 다음 턴을
-   * 기다린다. task마다 한 번만 묻는다. 리뷰(M8)에서 반영할 지적을 번호로 고르는 사람 역할이 쓴다 (D164)
-   */
-  instruct?: (task: TaskView, review: ReviewView) => string | null | Promise<string | null>
 }
 
 export interface TaskOutcome {
@@ -50,8 +44,6 @@ export interface TaskOutcome {
   /** 질문에 답한 횟수 */
   answers: number
   nudges: number
-  /** instruct로 터미널에 보낸 지시. 없으면 null */
-  instructed: string | null
   /**
    * 걸린 시간. 앞 task의 [승인]이 끝난 때(첫 task는 drive를 시작한 때)부터 이 task의 [승인]이 끝난
    * 때까지다. [승인]에는 이 task의 세션 종료와 다음 task 시작이 들어 있다. 승인하지 못한 task는
@@ -114,7 +106,6 @@ export async function drive(
         auto: false,
         answers: 0,
         nudges: 0,
-        instructed: null,
         ms: 0,
         approved: false,
       }
@@ -140,15 +131,12 @@ export async function drive(
         auto: t.auto,
         answers: t.answers,
         nudges: t.nudges,
-        instructed: t.instructed,
         ms: t.ms,
       })),
       ms: now - started,
     }
   }
   const timeout = o.stepTimeoutMs ?? 60_000
-  // instruct에 물어본 task. 지시하지 않기로 했으면 다시 묻지 않는다
-  const asked = new Set<string>()
 
   try {
     for (;;) {
@@ -210,39 +198,11 @@ export async function drive(
           }
           const review = await relay.review(workKey, task.id)
           if (!review) return finish('failed', `${task.label}: 승인 화면을 읽지 못함`)
-          const size =
-            task.node === 'intake' ? (o.size ?? review.draftSize ?? undefined) : undefined
-          const gate = review.gates[size ?? 'none']
-          if (
-            o.instruct &&
-            gate.approve &&
-            task.status === 'awaiting_approval' &&
-            !asked.has(task.id)
-          ) {
-            asked.add(task.id)
-            const text = await o.instruct(task, review)
-            if (text) {
-              // 사람이 터미널에서 지시한다. 새 요청으로 작업 중이 된 뒤 다음 턴이 끝나기를 기다린다 (시나리오 4-3)
-              out.instructed = text
-              relay.terminalWrite(task.terminal, text)
-              await sleep(300)
-              relay.terminalWrite(task.terminal, '\r')
-              await ui.until(
-                () =>
-                  ui.works.get(workKey)?.tasks.find((t) => t.id === task.id)?.status !==
-                  'awaiting_approval',
-                `${task.label}: 지시한 뒤`,
-                timeout,
-              )
-              continue
-            }
-          }
+          const { gate } = review
           if (gate.approve || (gate.force && o.force)) {
             const forced = !gate.approve
-            const r = await relay.approve(workKey, task.id, {
-              ...(size ? { size } : {}),
-              ...(forced ? { force: true } : {}),
-            })
+            await o.beforeApprove?.(task)
+            const r = await relay.approve(workKey, task.id, forced ? { force: true } : {})
             if (!r.ok) {
               // 누른 사이에 파일이 바뀌었을 수 있다. 다음 상태를 다시 본다
               await sleep(500)

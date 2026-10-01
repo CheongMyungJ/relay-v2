@@ -1,5 +1,5 @@
 // [실제] 앱이 충돌한 뒤 다시 켜서 [재개]로 이어 간다 (docs/implementation.md M6, 8.4, 시나리오 9, D75, D76).
-// 앱(Relay)을 자식 프로세스(app-process.mjs)로 띄워 S 경로 레포의 intake가 첫 요청을 받아 일하는 중에 그 프로세스만
+// 앱(Relay)을 자식 프로세스(app-process.mjs)로 띄워 S 요청 레포의 intake가 첫 요청을 받아 일하는 중에 그 프로세스만
 // SIGKILL로 끝낸다(트리 종료 아님). 다시 켜면 조정과 고아 확인을 한다: 기록과 시작 시각이 같은 claude가 남았으면
 // 트리째 끝내고 알린다. 중단됨이 된 intake를 [재개]로 같은 세션(--resume)으로 연다. 앱이 이어서 하라는 첫 입력을
 // 주므로(D218) 사람은 치지 않고 Work 완료까지 간다. 앱이 죽은 뒤 claude가 남았는지, 재시작이 한 일, pty.log 끝의
@@ -34,17 +34,20 @@ const enabled = (mode === '1' || dry) && (cases.length === 0 || cases.includes('
 const OUT = path.join(APP, 'test-results', 'claude')
 const APP_PROCESS = path.join(APP, 'test/claude/app-process.mjs')
 const TASK_TIMEOUT_MS = 25 * 60 * 1000
-/** 첫 요청을 받은 뒤 앱을 끝내기까지 기다리는 시간. 에이전트가 일하는 도중에 끊는다 */
-const WORK_MS = dry ? 1000 : 10_000
+/**
+ * 첫 요청을 받은 뒤 앱을 끝내기까지 기다리는 시간. 에이전트가 일하는 도중에 끊는다. 실제 claude가 S 요청의 의도
+ * 정리를 10초 안에 끝낸 적이 있어(2026-10-01, sonnet) 스킬과 context.md를 읽는 동안에 끊는다
+ */
+const WORK_MS = dry ? 1000 : 3_000
 /** handoff 없이 턴이 끝났을 때 사람이 보내는 말 (real.test.ts와 같음) */
 const NUDGE = '스킬의 절차를 계속해 주세요. 마치면 종료 절차대로 handoff를 쓰고 턴을 끝내 주세요.'
 
 /** 가짜 claude의 시나리오 (dry): 첫 세션은 요청을 받고 멈춰 있고, 다시 연 세션이 intake를 마친다 */
 function dryScenario(): Scenario {
   return {
-    tasks: { ...scenario('S').tasks, 'work-start': [{ do: 'prompt' }, { do: 'wait' }] },
+    tasks: { ...scenario().tasks, 'work-start': [{ do: 'prompt' }, { do: 'wait' }] },
     // 다시 연 세션은 앱이 준 이어서 하라는 입력(D218)을 받고 intake를 마친다
-    resume: { 'work-start': steps('intake', 'S').slice(1) },
+    resume: { 'work-start': steps('intake').slice(1) },
   }
 }
 
@@ -194,7 +197,6 @@ describe.runIf(enabled)('[실제] 앱이 충돌한 뒤 [재개] (M6, 시나리�
         lap('재개')
       }
       result = await drive(h.relay, ui, key, {
-        size: 'S',
         force: true,
         nudge: NUDGE,
         maxNudges: 2,

@@ -461,7 +461,7 @@ describe.runIf(enabled)('[실제] 자동 대응 (M11, 실제 claude와 실제 gh
         const w = await openPrWork(
           c,
           dry
-            ? { ...claude, tasks: { ...claude.tasks, 'pr-respond': DRY_RESPOND, 't-06': DRY_ASK } }
+            ? { ...claude, tasks: { ...claude.tasks, 'pr-respond': DRY_RESPOND, 't-05': DRY_ASK } }
             : claude,
           'relay M11 시험 (자동 대응): 수량의 합 totalQty를 더한다',
         )

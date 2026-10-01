@@ -1,5 +1,5 @@
 // 가짜 claude의 시나리오 (8.2). 스킬마다 단계 목록을 둔다. 산출물과 handoff는 5.2~5.6의 모양이다.
-import type { Handoff, NodeName, Size } from '../../src/shared/contracts'
+import type { Handoff, NodeName } from '../../src/shared/contracts'
 import type { SkillName } from '../../src/shared/config'
 
 export type Step =
@@ -41,7 +41,7 @@ export type Step =
   | { do: 'wait' }
   | { do: 'waitEnter' }
   /**
-   * PR 대응 (5.6.11): context.md의 이번 라운드 항목으로 response.md와, 코멘트 항목마다 replies.md의 절을 쓴다. skip의
+   * PR 대응 (5.6.7): context.md의 이번 라운드 항목으로 response.md와, 코멘트 항목마다 replies.md의 절을 쓴다. skip의
    * 항목은 답글을 뺀다. text와 result의 {id}는 항목 id다. 코멘트 항목이 없으면 always일 때만 replies.md를 쓴다
    */
   | { do: 'respond'; text?: string; result?: string; skip?: string[]; always?: boolean }
@@ -79,7 +79,7 @@ export const REQUEST = [
 
 // ---------- 산출물 ----------
 
-export function intentDraft(size: Size, opts: { omit?: string[]; note?: string } = {}) {
+export function intentDraft(opts: { omit?: string[]; note?: string } = {}) {
   const sections: [string, string][] = [
     ['목표', '빈 배열의 평균이 NaN이 되는 문제를 고친다.'],
     ['비목표', '- 없음'],
@@ -98,7 +98,7 @@ export function intentDraft(size: Size, opts: { omit?: string[]; note?: string }
     .filter(([name]) => !opts.omit?.includes(name))
     .map(([name, text]) => `## ${name}\n${text}\n`)
     .join('\n')
-  return `---\ntype: bugfix\nsize: ${size}\n---\n${body}${opts.note ? `\n${opts.note}\n` : ''}`
+  return `---\ntype: bugfix\n---\n${body}${opts.note ? `\n${opts.note}\n` : ''}`
 }
 
 const q = (s: string) => JSON.stringify(s)
@@ -142,63 +142,42 @@ export function handoff(h: Partial<Handoff> & { summary?: string; omit?: string[
   return `${header.join('\n')}\n${body}`
 }
 
-export const EVIDENCE = [
-  '## 환경',
-  '- main, Node 22',
-  '',
-  '## 재현 절차',
-  '1. node -e "import(\'./src/avg.js\').then(m => console.log(m.avg([])))"',
+/** fix.md의 `## 원인` 절 본문 (5.6.5). 원인 분석과 수정의 [요약] 맨 위에 보인다 (D223) */
+export const FIX_CAUSE = [
+  '- 원인: 빈 배열에서 합 0을 길이 0으로 나눈다.',
+  '- 근거: src/avg.js:2, 재현 출력 NaN. 빈 배열 검사를 넣으면 0이 나온다',
+  '- 사람 추정 판정: 0으로 나누는 부분 — 맞음 — src/avg.js:2',
+  '- 기각한 가설: reduce 초기값 누락 — 초기값 0이 있음',
+].join('\n')
+
+/** fix.md (5.6.5): 재현, 원인, 변경 요약, 재현 테스트, 테스트 실행 */
+export const FIX_DOC = [
+  '## 재현',
+  '- 재현 절차: node -e "import(\'./src/avg.js\').then(m => console.log(m.avg([])))"',
   '- 결과: 재현됨',
-  '',
-  '## 기대와 실제',
   '- 기대: 0',
   '- 실제: NaN',
   '',
-  '## 관찰 사실',
-  '- 빈 배열이면 0 / 0이 된다 — src/avg.js:2',
-  '',
-].join('\n')
-
-export const RCA = [
   '## 원인',
-  '빈 배열에서 합 0을 길이 0으로 나눈다.',
+  FIX_CAUSE,
   '',
-  '## 근거',
-  '- evidence의 관찰 사실과 같다',
+  '## 변경 요약',
+  '- src/avg.js — 빈 배열이면 0을 돌려준다',
   '',
-  '## 사람 추정 판정',
-  '- 0으로 나누는 부분 — 맞음 — src/avg.js:2',
+  '## 재현 테스트',
+  '- 위치: test/avg.test.js',
+  '- 수정 전: 실패',
+  '- 수정 후: 통과',
   '',
-  '## 기각한 가설',
-  '- reduce 초기값 누락 — 초기값 0이 있음',
-  '',
-  '## 수정 방향',
-  '- 수정 지점: src/avg.js:avg',
-  '- 방향: 빈 배열이면 0',
-  '- 영향 범위: avg를 쓰는 곳',
+  '## 테스트 실행',
+  '- 명령: npm test',
+  '- 결과: 통과',
+  '- 실패 항목: 없음',
   '',
 ].join('\n')
 
-export function fixDoc(s: boolean) {
-  return [
-    '## 변경 요약',
-    '- src/avg.js — 빈 배열이면 0을 돌려준다',
-    '',
-    '## 재현 테스트',
-    '- 위치: test/avg.test.js',
-    '- 수정 전: 실패',
-    '- 수정 후: 통과',
-    '',
-    '## 테스트 실행',
-    '- 명령: npm test',
-    '- 결과: 통과',
-    '',
-    s ? '## 원인과 재현\n- 원인: 0으로 나눔' : '## rca와 달라진 점\n없음',
-    '',
-  ].join('\n')
-}
-
-export const VERIFICATION = [
+/** verification.md의 판정 절들 (5.6.6): 완료조건 판정, 테스트 파일 변경, 남은 위험 */
+export const VERDICTS = [
   '## 완료조건 판정',
   '| 완료조건 | 판정 | 근거 |',
   '|---|---|---|',
@@ -214,11 +193,16 @@ export const VERIFICATION = [
   '',
 ].join('\n')
 
-/** review.md (5.6.10): 지적을 번호로 쓰고 마무리한다. 사람이 고르기 전에는 반영이 없다 */
-export const REVIEW = [
-  '## 지적',
+/** verification.md의 `## 리뷰 지적` 절 본문 (5.6.6) */
+export const REVIEW_FINDINGS = [
   '1. [권장] src/avg.js:2 — 빈 배열에 0을 돌려주는 까닭을 주석으로 남긴다',
   '2. [사소] test/avg.test.js:6 — 시험 이름을 "빈 배열은 0"으로 바꾼다',
+].join('\n')
+
+/** verification.md의 리뷰 절들 (5.6.6, D229): 지적을 번호로 썼고 사람이 반영할 지적을 고르지 않았다 */
+export const REVIEW = [
+  '## 리뷰 지적',
+  REVIEW_FINDINGS,
   '',
   '## 반영',
   '없음',
@@ -229,9 +213,9 @@ export const REVIEW = [
   '',
 ].join('\n')
 
-/** 지적이 없는 review.md (5.6.10). 지적이 없는 리뷰는 자동 승인할 수 있다 (D213) */
+/** 지적이 없는 리뷰 절들 (5.6.6) */
 export const REVIEW_NONE = [
-  '## 지적',
+  '## 리뷰 지적',
   '없음',
   '',
   '## 반영',
@@ -242,21 +226,26 @@ export const REVIEW_NONE = [
   '',
 ].join('\n')
 
-/** 사람이 1번만 반영하라고 지시한 뒤의 review.md (D164) */
+/** verification.md의 `## 반영` 절 본문: 사람이 1번만 반영하라고 고른 뒤 (5.6.6) */
+export const REVIEW_APPLIED_TEXT = '- 1 — 주석을 더했다, 커밋 "verify: 빈 배열 주석", npm test 통과'
+
+/** 사람이 질문에 답해 1번만 반영한 뒤의 리뷰 절들 (5.6.6) */
 export const REVIEW_APPLIED = [
-  '## 지적',
-  '1. [권장] src/avg.js:2 — 빈 배열에 0을 돌려주는 까닭을 주석으로 남긴다',
-  '2. [사소] test/avg.test.js:6 — 시험 이름을 "빈 배열은 0"으로 바꾼다',
+  '## 리뷰 지적',
+  REVIEW_FINDINGS,
   '',
   '## 반영',
-  '- 1 — 주석을 더했다, 커밋 "review: 빈 배열 주석", npm test 통과',
+  REVIEW_APPLIED_TEXT,
   '',
   '## 반영하지 않은 지적',
   '- 2',
   '',
 ].join('\n')
 
-/** 리뷰가 사람이 고른 지적(1번)을 고친 코드 */
+/** 지적이 없는 리뷰와 판정을 담은 verification.md (5.6.6, D229) */
+export const VERIFICATION = REVIEW_NONE + VERDICTS
+
+/** 리뷰와 검증이 사람이 고른 지적(1번)을 고친 코드 */
 export const REVIEWED_FILES = {
   'src/avg.js':
     'export function avg(xs) {\n  // 빈 배열의 평균은 0으로 정했다\n  if (xs.length === 0) return 0\n  return xs.reduce((a, b) => a + b, 0) / xs.length\n}\n',
@@ -275,92 +264,41 @@ export const FIXED_FILES = {
 
 const decision = (what: string, by: 'ai' | 'human' = 'ai') => ({ what, why: `${what}인 이유`, by })
 
-export function steps(node: NodeName, size: Size = 'L'): Step[] {
+export function steps(node: NodeName): Step[] {
   switch (node) {
     case 'intake':
       return [
         { do: 'prompt' },
-        { do: 'write', file: 'intent.draft.md', text: intentDraft(size) },
-        {
-          do: 'write',
-          file: 'handoff.md',
-          text: handoff({ decisions: [decision(`크기는 ${size}`)], summary: '의도 초안을 썼다.' }),
-        },
-        { do: 'stop' },
-      ]
-    case 'evidence':
-      return [
-        { do: 'prompt' },
-        { do: 'ask', question: '재현 방법' },
-        { do: 'write', file: 'evidence.md', text: EVIDENCE },
+        { do: 'write', file: 'intent.draft.md', text: intentDraft() },
         {
           do: 'write',
           file: 'handoff.md',
           text: handoff({
-            decisions: [decision('재현 명령은 node -e', 'human')],
-            rejected: ['캐시 가설: 캐시가 없음'],
-            summary: '재현됨.',
-          }),
-        },
-        { do: 'stop' },
-      ]
-    case 'investigate':
-      // evidence와 rca를 한 세션에서 한다 (D147). 1부의 질문 하나, 산출물 둘, handoff 하나
-      return [
-        { do: 'prompt' },
-        { do: 'ask', question: '재현 방법' },
-        { do: 'write', file: 'evidence.md', text: EVIDENCE },
-        { do: 'write', file: 'rca.md', text: RCA },
-        {
-          do: 'write',
-          file: 'handoff.md',
-          text: handoff({
-            decisions: [decision('재현 명령은 node -e', 'human'), decision('원인은 0으로 나눔')],
-            rejected: ['캐시 가설: 캐시가 없음', 'reduce 초기값 누락: 초기값이 있음'],
-            summary: '재현됨. 원인은 0으로 나눔.',
-          }),
-        },
-        { do: 'stop' },
-      ]
-    case 'rca':
-      return [
-        { do: 'prompt' },
-        { do: 'write', file: 'rca.md', text: RCA },
-        {
-          do: 'write',
-          file: 'handoff.md',
-          text: handoff({
-            decisions: [decision('원인은 0으로 나눔')],
-            rejected: ['reduce 초기값 누락: 초기값이 있음'],
+            decisions: [decision('빈 배열의 평균은 0')],
+            summary: '의도 초안을 썼다.',
           }),
         },
         { do: 'stop' },
       ]
     case 'fix':
+      // 재현, 원인 분석, 수정을 한 세션에서 한다 (5.6.5, D228). 원인이 분명해 묻지 않는다
       return [
         { do: 'prompt' },
         { do: 'commit', files: FIXED_FILES, message: 'fix: 빈 배열의 평균은 0' },
-        { do: 'write', file: 'fix.md', text: fixDoc(size === 'S') },
+        { do: 'write', file: 'fix.md', text: FIX_DOC },
         {
           do: 'write',
           file: 'handoff.md',
-          text: handoff({ decisions: [decision('빈 배열 검사를 앞에 둔다')] }),
-        },
-        { do: 'stop' },
-      ]
-    case 'review':
-      // 지적을 번호로 쓰고 마무리한다. 사람이 지시하지 않으면 코드를 바꾸지 않는다 (5.6.10)
-      return [
-        { do: 'prompt' },
-        { do: 'write', file: 'review.md', text: REVIEW },
-        {
-          do: 'write',
-          file: 'handoff.md',
-          text: handoff({ summary: '지적 둘을 썼다. 사람이 고르기 전이라 반영한 것은 없다.' }),
+          text: handoff({
+            decisions: [decision('원인은 0으로 나눔'), decision('빈 배열 검사를 앞에 둔다')],
+            rejected: ['reduce 초기값 누락: 초기값이 있음'],
+            summary: '재현됨. 원인은 0으로 나눔. 빈 배열 검사를 넣어 커밋했다.',
+          }),
         },
         { do: 'stop' },
       ]
     case 'verify':
+      // 리뷰에 지적이 없어 묻지 않고 판정한다 (5.6.6, D229)
       return [
         { do: 'prompt' },
         { do: 'write', file: 'verification.md', text: VERIFICATION },
@@ -375,56 +313,71 @@ export function steps(node: NodeName, size: Size = 'L'): Step[] {
   }
 }
 
-/** 지적 없이 마무리하는 리뷰 (5.6.10, D213) */
-export function reviewClean(): Step[] {
+/**
+ * 재현 방법을 사람에게 묻는 원인 분석과 수정 (5.6.5의 사람 결정). 질문 대기에 답하면 나머지는 기본 단계와 같다.
+ * 사람의 답은 by: human 결정으로 남긴다
+ */
+export function fixAsking(): Step[] {
   return [
     { do: 'prompt' },
-    { do: 'write', file: 'review.md', text: REVIEW_NONE },
-    { do: 'write', file: 'handoff.md', text: handoff({ summary: '지적이 없다.' }) },
-    { do: 'stop' },
+    { do: 'ask', question: '재현 방법' },
+    ...steps('fix')
+      .slice(1)
+      .map((st) =>
+        st.do === 'write' && st.file === 'handoff.md'
+          ? {
+              ...st,
+              text: handoff({
+                decisions: [
+                  decision('재현 명령은 node -e', 'human'),
+                  decision('원인은 0으로 나눔'),
+                  decision('빈 배열 검사를 앞에 둔다'),
+                ],
+                rejected: ['캐시 가설: 캐시가 없음', 'reduce 초기값 누락: 초기값이 있음'],
+                summary: '재현됨. 원인은 0으로 나눔. 빈 배열 검사를 넣어 커밋했다.',
+              }),
+            }
+          : st,
+      ),
   ]
 }
 
 /**
- * 리뷰가 마무리한 뒤 사람의 지시(터미널의 새 요청)를 기다려, 1번 지적만 고쳐 커밋하고 산출물과 handoff를 다시 쓴 뒤
- * 다시 마무리한다 (D164, 시나리오 4-3). 사람 역할은 driver의 instruct로 지시한다
+ * 리뷰에 지적 둘을 쓰고 AskUserQuestion으로 반영할 지적을 물은 뒤(5.6.6, D229), 사람이 고른 1번만 고쳐 커밋하고
+ * 판정과 PR 초안을 써서 한 번 마무리한다. 사람 역할(driver)은 질문에 첫 선택지로 답한다
  */
-export function reviewInstructed(): Step[] {
+export function verifyApplied(): Step[] {
   return [
-    ...steps('review'),
-    { do: 'waitEnter' },
-    { do: 'prompt', text: '1번 지적만 반영해 주세요.' },
-    { do: 'commit', files: REVIEWED_FILES, message: 'review: 빈 배열 주석' },
-    { do: 'write', file: 'review.md', text: REVIEW_APPLIED },
+    { do: 'prompt' },
+    // 리뷰 절을 먼저 써 두면 사람이 고르는 동안 [산출물]에서 지적을 본다
+    { do: 'write', file: 'verification.md', text: REVIEW },
+    { do: 'ask', question: '반영할 지적' },
+    { do: 'commit', files: REVIEWED_FILES, message: 'verify: 빈 배열 주석' },
+    { do: 'write', file: 'verification.md', text: REVIEW_APPLIED + VERDICTS },
+    { do: 'write', file: 'pr.md', text: PR },
     {
       do: 'write',
       file: 'handoff.md',
       text: handoff({
         decisions: [
-          { what: '지적 1 반영', why: '사람이 번호로 지시함', by: 'human' },
+          { what: '지적 1 반영', why: '사람이 질문에서 고름', by: 'human' },
           { what: '지적 2 반영 안 함', why: '사람이 고르지 않음', by: 'human' },
+          decision('완료조건을 모두 통과'),
         ],
-        summary: '1번 지적을 반영해 커밋했다. 2번은 반영하지 않았다.',
+        summary: '1번 지적을 반영해 커밋했다. 2번은 반영하지 않았다. 완료조건을 모두 통과했다.',
       }),
     },
     { do: 'stop' },
   ]
 }
 
-/**
- * 크기별 경로의 기본 시나리오 (3.4): L은 intake → evidence → rca → fix → review → verify, M은 intake → investigate →
- * fix → review → verify, S는 intake → fix → review → verify. 리뷰는 모든 크기가 지난다 (D163)
- */
-export function scenario(size: Size, override: Partial<Record<SkillName, Step[]>> = {}): Scenario {
+/** 기본 시나리오 (3.1): intake → fix → verify. 모든 Work가 이 경로를 지난다 (D227) */
+export function scenario(override: Partial<Record<SkillName, Step[]>> = {}): Scenario {
   return {
     tasks: {
-      'work-start': steps('intake', size),
-      investigate: steps('investigate', size),
-      evidence: steps('evidence', size),
-      'root-cause': steps('rca', size),
-      fix: steps('fix', size),
-      review: steps('review', size),
-      'final-verify': steps('verify', size),
+      'work-start': steps('intake'),
+      fix: steps('fix'),
+      verify: steps('verify'),
       ...override,
     },
   }

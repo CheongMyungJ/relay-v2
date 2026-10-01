@@ -63,7 +63,7 @@ const HANDOFF: Handoff = {
   recommended_next: null,
 }
 
-function valid(draftSize?: 'S'): TaskCheck {
+function valid(): TaskCheck {
   return {
     handoff_present: true,
     status: 'awaiting_approval',
@@ -71,8 +71,7 @@ function valid(draftSize?: 'S'): TaskCheck {
     warnings: [],
     handoff: HANDOFF,
     handoffHeader: HANDOFF,
-    intentDraft: draftSize ? { type: 'bugfix', size: draftSize } : null,
-    reviewFindings: null,
+    intentDraft: null,
   }
 }
 
@@ -117,7 +116,7 @@ function approve(work: WorkState, check: TaskCheck = valid(), force = false): Tr
 const PR_URL = 'https://github.com/o/r/pull/7'
 const HEAD = 'head0001'
 
-/** S 경로로 [PR 생성]까지 가 PR 진행이 된 Work (M9) */
+/** intake → fix → verify를 지나 [PR 생성]까지 가 PR 진행이 된 Work (M9) */
 function inPr(): WorkState {
   let work = createWork({
     workId: 'w-20260929-001',
@@ -125,7 +124,7 @@ function inPr(): WorkState {
     baseCommit: 'base0001',
     at: at(),
   }).work
-  for (const check of [valid('S'), valid(), valid()]) {
+  for (const check of [valid(), valid()]) {
     work = approve(stop(launch(work), check), check).work
   }
   work = stop(launch(work))
@@ -970,7 +969,7 @@ describe('replies.md 형식 검사 (5.2.1, D190)', () => {
       ...(replies === undefined ? {} : { 'replies.md': replies }),
     })
     const check = (f: Record<string, string>, replyItems: string[]) =>
-      checkTask({ node: 'respond', size: 'S', files: f, config: DEFAULT_CONFIG, replyItems })
+      checkTask({ node: 'respond', files: f, config: DEFAULT_CONFIG, replyItems })
     expect(check(files(), ids).errors.map((e) => [e.file, e.part])).toEqual([
       ['replies.md', 'file'],
     ])

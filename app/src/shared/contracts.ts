@@ -18,6 +18,3 @@ export type NodeName = RecommendedNext['node']
  * 다음 단계가 없어 handoff의 recommended_next.node에는 쓸 수 없다(스키마에 없음)
  */
 export type TaskNode = NodeName | 'respond'
-
-/** intent 크기 (5.3). S면 evidence와 rca를 건너뛰고, L은 M과 같다 */
-export type Size = IntentDraft['size']

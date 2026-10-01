@@ -3,19 +3,19 @@ import handoffSchema from '../../src/shared/generated/handoff.v1.schema.json'
 import {
   NODE_INFO,
   NODES,
+  RESPOND,
   defaultNext,
+  isPipelineNode,
   isPrevious,
   previousSteps,
   recommendableNodes,
-  route,
   selectableNext,
-  steps,
 } from '../../src/core/pipeline'
 import type { NodeName } from '../../src/shared/contracts'
 
 describe('노드 (3.1)', () => {
-  it('순서는 intake → investigate → evidence → rca → fix → review → verify이고 스키마의 노드 열거값과 같다', () => {
-    expect(NODES).toEqual(['intake', 'investigate', 'evidence', 'rca', 'fix', 'review', 'verify'])
+  it('순서는 intake → fix → verify이고 스키마의 노드 열거값과 같다 (D227)', () => {
+    expect(NODES).toEqual(['intake', 'fix', 'verify'])
     expect(NODES).toEqual(handoffSchema.properties.recommended_next.oneOf[1]?.properties?.node.enum)
   })
 
@@ -24,147 +24,72 @@ describe('노드 (3.1)', () => {
       NODES.map((n) => [n, NODE_INFO[n].skill, NODE_INFO[n].title, NODE_INFO[n].artifacts]),
     ).toEqual([
       ['intake', 'work-start', '의도 정리', ['intent.draft.md']],
-      ['investigate', 'investigate', '재현과 원인 분석', ['evidence.md', 'rca.md']],
-      ['evidence', 'evidence', '재현과 관찰', ['evidence.md']],
-      ['rca', 'root-cause', '원인 분석', ['rca.md']],
-      ['fix', 'fix', '수정', ['fix.md']],
-      ['review', 'review', '리뷰', ['review.md']],
-      ['verify', 'final-verify', '최종 검증', ['verification.md', 'pr.md']],
+      ['fix', 'fix', '원인 분석과 수정', ['fix.md']],
+      ['verify', 'verify', '리뷰와 검증', ['verification.md', 'pr.md']],
     ])
   })
-})
 
-describe('경로 (3.4)', () => {
-  it('L은 evidence와 rca를 따로 지난다', () => {
-    expect(route('L')).toEqual(['intake', 'evidence', 'rca', 'fix', 'review', 'verify'])
+  it('PR 대응(respond)은 파이프라인 밖이다 (D187, D188)', () => {
+    expect(NODE_INFO[RESPOND]).toEqual({
+      node: 'respond',
+      skill: 'pr-respond',
+      title: 'PR 대응',
+      artifacts: ['response.md'],
+    })
+    expect(NODES).not.toContain(RESPOND)
+    expect(isPipelineNode(RESPOND)).toBe(false)
+    expect(NODES.every(isPipelineNode)).toBe(true)
   })
 
-  it('M은 evidence와 rca 대신 investigate 하나를 지난다 (D147)', () => {
-    expect(route('M')).toEqual(['intake', 'investigate', 'fix', 'review', 'verify'])
-  })
-
-  it('S는 조사 단계를 건너뛴다', () => {
-    expect(route('S')).toEqual(['intake', 'fix', 'review', 'verify'])
-  })
-
-  it('모든 크기가 fix와 verify 사이에 review를 지난다 (D163, D166)', () => {
-    for (const size of ['S', 'M', 'L'] as const) {
-      const r = route(size)
-      expect(r.slice(-3), size).toEqual(['fix', 'review', 'verify'])
-      expect(steps(size).slice(-3), size).toEqual(['fix', 'review', 'verify'])
-    }
-  })
-
-  it('고를 수 있는 단계: S와 M은 investigate, L은 evidence와 rca. 모든 크기가 review를 고른다 (D149, D166)', () => {
-    expect(steps('S')).toEqual(['intake', 'investigate', 'fix', 'review', 'verify'])
-    expect(steps('M')).toEqual(['intake', 'investigate', 'fix', 'review', 'verify'])
-    expect(steps('L')).toEqual(['intake', 'evidence', 'rca', 'fix', 'review', 'verify'])
-    // 같은 산출물을 쓰는 단계가 한 크기에 함께 있지 않다
-    for (const size of ['S', 'M', 'L'] as const) {
-      const artifacts = steps(size).flatMap((n) => NODE_INFO[n].artifacts)
-      expect(new Set(artifacts).size).toBe(artifacts.length)
-    }
+  it('노드마다 산출물이 겹치지 않는다', () => {
+    const artifacts = NODES.flatMap((n) => NODE_INFO[n].artifacts)
+    expect(new Set(artifacts).size).toBe(artifacts.length)
   })
 })
 
 describe('선택 가능한 다음 단계 (3.2)', () => {
   // [노드, 기본 다음 단계, 이전 단계]
-  const L: [NodeName, string, NodeName[]][] = [
-    ['intake', 'evidence', []],
-    ['evidence', 'rca', ['intake']],
-    ['rca', 'fix', ['intake', 'evidence']],
-    ['fix', 'review', ['intake', 'evidence', 'rca']],
-    ['review', 'verify', ['intake', 'evidence', 'rca', 'fix']],
-    ['verify', 'complete', ['intake', 'evidence', 'rca', 'fix', 'review']],
-  ]
-  const M: [NodeName, string, NodeName[]][] = [
-    ['intake', 'investigate', []],
-    ['investigate', 'fix', ['intake']],
-    ['fix', 'review', ['intake', 'investigate']],
-    ['review', 'verify', ['intake', 'investigate', 'fix']],
-    ['verify', 'complete', ['intake', 'investigate', 'fix', 'review']],
-  ]
-  // 이전 단계에는 S 경로에서 건너뛴 investigate도 들어간다 (D66, D149)
-  const S: [NodeName, string, NodeName[]][] = [
+  const table: [NodeName, string, NodeName[]][] = [
     ['intake', 'fix', []],
-    ['fix', 'review', ['intake', 'investigate']],
-    ['review', 'verify', ['intake', 'investigate', 'fix']],
-    ['verify', 'complete', ['intake', 'investigate', 'fix', 'review']],
+    ['fix', 'verify', ['intake']],
+    ['verify', 'complete', ['intake', 'fix']],
   ]
 
-  it('경로의 노드가 모두 표에 있다', () => {
-    expect(L.map(([n]) => n)).toEqual(route('L'))
-    expect(M.map(([n]) => n)).toEqual(route('M'))
-    expect(S.map(([n]) => n)).toEqual(route('S'))
+  it('파이프라인의 노드가 모두 표에 있다', () => {
+    expect(table.map(([n]) => n)).toEqual(NODES)
   })
 
-  it.each(L)('L 경로 %s: 기본 다음 단계 %s, 이전 단계 %j', (node, next, previous) => {
-    expect(selectableNext(node, 'L')).toEqual({ defaultNext: next, previous })
-  })
-
-  it.each(M)('M 경로 %s: 기본 다음 단계 %s, 이전 단계 %j', (node, next, previous) => {
-    expect(selectableNext(node, 'M')).toEqual({ defaultNext: next, previous })
-  })
-
-  it.each(S)('S 경로 %s: 기본 다음 단계 %s, 이전 단계 %j', (node, next, previous) => {
-    expect(selectableNext(node, 'S')).toEqual({ defaultNext: next, previous })
-  })
-
-  it('S Work가 되돌아가 지난 investigate의 기본 다음 단계는 fix다 (D66)', () => {
-    expect(selectableNext('investigate', 'S')).toEqual({ defaultNext: 'fix', previous: ['intake'] })
+  it.each(table)('%s: 기본 다음 단계 %s, 이전 단계 %j', (node, next, previous) => {
+    expect(selectableNext(node)).toEqual({ defaultNext: next, previous })
+    expect(defaultNext(node)).toBe(next)
+    expect(previousSteps(node)).toEqual(previous)
   })
 
   it('verify의 기본 다음 단계는 Work 완료다', () => {
-    expect(defaultNext('verify', 'L')).toBe('complete')
-    expect(defaultNext('verify', 'M')).toBe('complete')
-    expect(defaultNext('verify', 'S')).toBe('complete')
-  })
-
-  it('이전 단계는 그 크기가 고를 수 있는 단계만이다 (D149)', () => {
-    expect(previousSteps('fix', 'L')).toEqual(['intake', 'evidence', 'rca'])
-    expect(previousSteps('fix', 'M')).toEqual(['intake', 'investigate'])
-    expect(previousSteps('fix', 'S')).toEqual(['intake', 'investigate'])
-  })
-
-  it('verify의 이전 단계에는 모든 크기에서 review가 있다 (D149, D166)', () => {
-    expect(previousSteps('verify', 'L')).toEqual(['intake', 'evidence', 'rca', 'fix', 'review'])
-    expect(previousSteps('verify', 'M')).toEqual(['intake', 'investigate', 'fix', 'review'])
-    expect(previousSteps('verify', 'S')).toEqual(['intake', 'investigate', 'fix', 'review'])
+    expect(defaultNext('verify')).toBe('complete')
   })
 
   it('recommended_next로 쓸 수 있는 노드는 이전 단계와 노드인 기본 다음 단계다', () => {
-    expect(recommendableNodes('rca', 'L')).toEqual(['intake', 'evidence', 'fix'])
-    expect(recommendableNodes('investigate', 'M')).toEqual(['intake', 'fix'])
-    expect(recommendableNodes('fix', 'M')).toEqual(['intake', 'investigate', 'review'])
-    expect(recommendableNodes('fix', 'S')).toEqual(['intake', 'investigate', 'review'])
-    expect(recommendableNodes('review', 'S')).toEqual(['intake', 'investigate', 'fix', 'verify'])
-    expect(recommendableNodes('review', 'L')).toEqual([
-      'intake',
-      'evidence',
-      'rca',
-      'fix',
-      'verify',
-    ])
-    expect(recommendableNodes('verify', 'L')).toEqual([
-      'intake',
-      'evidence',
-      'rca',
-      'fix',
-      'review',
-    ])
-    expect(recommendableNodes('intake', 'S')).toEqual(['fix'])
+    expect(recommendableNodes('intake')).toEqual(['fix'])
+    expect(recommendableNodes('fix')).toEqual(['intake', 'verify'])
+    expect(recommendableNodes('verify')).toEqual(['intake', 'fix'])
+  })
+
+  it('PR 대응 task는 recommended_next로 쓸 수 있는 노드가 없다 (D188)', () => {
+    expect(recommendableNodes('respond')).toEqual([])
   })
 
   it('이전 단계 추천인지 가린다 (D23)', () => {
     expect(isPrevious('verify', 'fix')).toBe(true)
-    expect(isPrevious('verify', 'review')).toBe(true)
-    expect(isPrevious('review', 'fix')).toBe(true)
-    expect(isPrevious('review', 'verify')).toBe(false)
-    expect(isPrevious('fix', 'review')).toBe(false)
-    expect(isPrevious('fix', 'rca')).toBe(true)
-    expect(isPrevious('fix', 'investigate')).toBe(true)
-    expect(isPrevious('investigate', 'intake')).toBe(true)
-    expect(isPrevious('rca', 'rca')).toBe(false)
-    expect(isPrevious('rca', 'fix')).toBe(false)
+    expect(isPrevious('verify', 'intake')).toBe(true)
+    expect(isPrevious('verify', 'verify')).toBe(false)
+    expect(isPrevious('fix', 'intake')).toBe(true)
+    expect(isPrevious('fix', 'fix')).toBe(false)
+    expect(isPrevious('fix', 'verify')).toBe(false)
+    expect(isPrevious('intake', 'intake')).toBe(false)
+    expect(isPrevious('intake', 'fix')).toBe(false)
+    // PR 대응 task에는 앞 단계가 없다
+    expect(isPrevious('respond', 'intake')).toBe(false)
+    expect(isPrevious('respond', 'verify')).toBe(false)
   })
 })

@@ -12,7 +12,7 @@ afterEach(async () => {
   h = undefined
 })
 const finish = [
-  { do: 'write', file: 'intent.draft.md', text: intentDraft('S') },
+  { do: 'write', file: 'intent.draft.md', text: intentDraft() },
   { do: 'write', file: 'handoff.md', text: handoff() },
   { do: 'stop' },
   { do: 'wait' },
@@ -82,7 +82,7 @@ describe('[흐름] Codex CLI와 실제 훅·MCP 브리지', () => {
     }
     expect(JSON.parse(reply.content[0]?.text ?? '')).toEqual({ cancelled: false, answers })
     expect(reply.isError).toBe(false)
-    expect(await s.hh.relay.approve(s.key, 't-01', { size: 'S' })).toEqual({ ok: true })
+    expect(await s.hh.relay.approve(s.key, 't-01', {})).toEqual({ ok: true })
     await s.hh.ui.until(() => s.hh.records().some((r) => r['type'] === 'start'), '다음 Claude task')
     expect(s.read().tasks.map((t) => t.engine)).toEqual(['codex', 'claude'])
   })
@@ -175,9 +175,9 @@ describe('[흐름] Codex CLI와 실제 훅·MCP 브리지', () => {
     ).toBe(ids[1])
   })
 
-  it('Codex 전체 S 경로와 정리 질문을 실행하며 설정 변경 뒤에도 정리 엔진을 유지한다', async () => {
+  it('Codex 전체 경로와 정리 질문을 실행하며 설정 변경 뒤에도 정리 엔진을 유지한다', async () => {
     const s = await setup({
-      ...scenario('S'),
+      ...scenario(),
       cleanup: [
         { do: 'prompt' },
         {
@@ -221,9 +221,9 @@ describe('[흐름] Codex CLI와 실제 훅·MCP 브리지', () => {
       ],
     })
     await s.hh.relay.updateConfig({
-      auto_approve: { ...s.hh.relay.currentConfig().auto_approve, fix: true, review: true },
+      auto_approve: { ...s.hh.relay.currentConfig().auto_approve, fix: true },
     })
-    for (const [index, node] of ['intake', 'fix', 'review', 'verify'].entries()) {
+    for (const [index, node] of ['intake', 'fix', 'verify'].entries()) {
       const id = `t-0${index + 1}`
       await s.hh.ui.until(
         () => s.view()?.tasks.find((t) => t.id === id)?.status === 'awaiting_approval',
@@ -232,14 +232,11 @@ describe('[흐름] Codex CLI와 실제 훅·MCP 브리지', () => {
       const task = s.read().tasks[index]
       expect(task).toMatchObject({ node, engine: 'codex', session: { alive: true } })
       expect(task?.countdown).toBeUndefined()
-      if (node === 'fix' || node === 'review') {
+      if (node === 'fix') {
         expect(task?.auto_hold).toBeUndefined()
         expect((await s.hh.relay.review(s.key, id))?.autoApprove).toMatchObject({ on: false })
       }
-      if (node !== 'verify')
-        expect(await s.hh.relay.approve(s.key, id, node === 'intake' ? { size: 'S' } : {})).toEqual(
-          { ok: true },
-        )
+      if (node !== 'verify') expect(await s.hh.relay.approve(s.key, id, {})).toEqual({ ok: true })
     }
     const runner = s.hh.relay.work(s.key)
     if (!runner) throw new Error('runner 없음')
@@ -300,15 +297,15 @@ describe('[흐름] Codex CLI와 실제 훅·MCP 브리지', () => {
     })
     expect(await s.hh.relay.closeCleanup(s.key)).toEqual({ ok: true })
     expect(s.view()?.cleanup).toBeNull()
-    expect(await s.hh.relay.approve(s.key, 't-04', {})).toEqual({ ok: true })
+    expect(await s.hh.relay.approve(s.key, 't-03', {})).toEqual({ ok: true })
     expect(s.read().status).toBe('completed')
-    expect(s.read().tasks).toHaveLength(4)
+    expect(s.read().tasks).toHaveLength(3)
     expect(s.hh.records().filter((r) => r['type'] === 'start')).toHaveLength(0)
   })
 
   it('정리 질문은 같은 대화 압축에 유지하고 새 요청·대화 전환에 취소한다', async () => {
     const s = await setup({
-      ...scenario('S'),
+      ...scenario(),
       cleanup: [
         { do: 'prompt' },
         {
@@ -337,16 +334,13 @@ describe('[흐름] Codex CLI와 실제 훅·MCP 브리지', () => {
         { do: 'wait' },
       ],
     })
-    for (const index of [0, 1, 2, 3]) {
+    for (const index of [0, 1, 2]) {
       const id = `t-0${index + 1}`
       await s.hh.ui.until(
         () => s.view()?.tasks[index]?.status === 'awaiting_approval',
         `${id} 승인 대기`,
       )
-      if (index < 3)
-        expect(await s.hh.relay.approve(s.key, id, index === 0 ? { size: 'S' } : {})).toEqual({
-          ok: true,
-        })
+      if (index < 2) expect(await s.hh.relay.approve(s.key, id, {})).toEqual({ ok: true })
     }
     const runner = s.hh.relay.work(s.key)
     if (!runner) throw new Error('runner 없음')

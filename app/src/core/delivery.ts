@@ -119,7 +119,7 @@ export function deliveryStart(
   if (stopped) return { ok: true, from: 'stopped', task: stopped }
   if (work.status !== 'active') return { ok: false, error: '전달할 수 있는 Work가 아님' }
   const task = work.tasks[work.tasks.length - 1]
-  if (task?.node !== 'verify') return { ok: false, error: '최종 검증의 Work 완료 화면이 아님' }
+  if (task?.node !== 'verify') return { ok: false, error: '리뷰와 검증의 Work 완료 화면이 아님' }
   if (!REVIEWABLE.includes(task.status)) {
     return { ok: false, error: `${task.id}는 승인할 수 있는 상태가 아님` }
   }

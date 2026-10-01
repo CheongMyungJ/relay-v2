@@ -227,12 +227,13 @@ import {
   PR_FILE,
   REPLIES_FILE,
   RESPONSE_FILE,
+  VERIFICATION_FILE,
   checkTask,
   sectionText,
   type TaskCheck,
 } from '../core/validate'
 import type { AppConfig, WorkSettingsPatch } from '../shared/config'
-import type { NodeName, Size } from '../shared/contracts'
+import type { NodeName } from '../shared/contracts'
 import {
   EMPTY_PR_ITEMS,
   type PrItem,
@@ -629,7 +630,7 @@ export class WorkRunner {
         return
       }
       case 'confirmIntent':
-        await this.confirmIntent(e.taskId, e.version, e.size)
+        await this.confirmIntent(e.taskId, e.version)
         return
       case 'startTask':
         await this.requestSession(e.taskId)
@@ -678,7 +679,6 @@ export class WorkRunner {
   private check(task: TaskRecord, files: Readonly<Record<string, string>>): TaskCheck {
     return checkTask({
       node: task.node,
-      size: this.work.intent?.size,
       files,
       config: this.ctx.config(),
       formatVersion: task.format_version,
@@ -1546,12 +1546,12 @@ export class WorkRunner {
   // ---------- 승인 (시나리오 4, 5) ----------
 
   /** intent 초안으로 intent.md를 확정한다 (4.1, 5.3) */
-  private async confirmIntent(taskId: string, version: number, size: Size): Promise<void> {
+  private async confirmIntent(taskId: string, version: number): Promise<void> {
     const task = this.task(taskId)
     if (!task) throw new Error(`${taskId} 없음`)
     const draft = await readText(path.join(this.files.taskDir(task), INTENT_DRAFT_FILE))
     if (draft === null) throw new Error('intent 초안이 없음')
-    const written = await this.files.writeIntent(confirmedIntent(draft, { version, size }), version)
+    const written = await this.files.writeIntent(confirmedIntent(draft, { version }), version)
     await this.ownedWritten('intent.md', written)
   }
 
@@ -1569,7 +1569,6 @@ export class WorkRunner {
         taskId,
         at: this.ctx.at(),
         check,
-        ...(opts.size ? { size: opts.size } : {}),
         ...(opts.force ? { force: true } : {}),
       })
       const failed = this.opError
@@ -2815,7 +2814,6 @@ export class WorkRunner {
     const diff = range ? await diffTo(range.from) : ''
     const handoffText = files[HANDOFF_FILE]
     const header = check.handoffHeader
-    const gate = (size?: Size) => approvalGate(task, check, size)
     const respond = task.respond ? await this.respondReview(task, files) : null
     let completion: Completion | null = null
     if (task.node === 'verify') {
@@ -2828,7 +2826,7 @@ export class WorkRunner {
         currentTask(this.work)?.id === task.id &&
         REVIEWABLE.includes(task.status)
       completion = {
-        verdicts: verdicts(files['verification.md'] ?? ''),
+        verdicts: verdicts(files[VERIFICATION_FILE] ?? ''),
         diff: clip(workDiff),
         mode:
           stopped || (current && !approvalStops(this.work, task.node, header))
@@ -2876,8 +2874,7 @@ export class WorkRunner {
         .filter(([name]) => name !== CONTEXT_FILE && name !== HANDOFF_FILE)
         .map(([name, text]) => ({ name, text })),
       diff: clip(diff),
-      draftSize: task.node === 'intake' ? (check.intentDraft?.size ?? null) : null,
-      gates: { none: gate(), S: gate('S'), M: gate('M'), L: gate('L') },
+      gate: approvalGate(task, check),
       autoApprove: autoApproveNote(this.work, task, this.ctx.config()),
       completion,
       respond: respond?.view ?? null,
@@ -3334,7 +3331,7 @@ export class WorkRunner {
     // 대응 라운드가 push했거나 원격 커밋을 받았으면 판정표가 대응 전 코드 기준이다 (D180, D206)
     const verify = [...this.work.tasks].reverse().find((t) => t.node === 'verify')
     const table = verify
-      ? verdicts((await this.files.taskFiles(verify))['verification.md'] ?? '')
+      ? verdicts((await this.files.taskFiles(verify))[VERIFICATION_FILE] ?? '')
       : []
     return {
       ok: true,

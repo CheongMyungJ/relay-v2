@@ -540,7 +540,7 @@ function ActionBar({
       {error ? <span className="error">{error}</span> : null}
       <span className="dim info">
         {work.workId} · 기준 {work.baseBranch} {work.baseCommit.slice(0, 8)}
-        {work.intent ? ` · intent v${work.intent.version} ${work.intent.size}` : ''}
+        {work.intent ? ` · intent v${work.intent.version}` : ''}
       </span>
       {work.problems.length ? <span className="error">{work.problems.at(-1)}</span> : null}
     </div>

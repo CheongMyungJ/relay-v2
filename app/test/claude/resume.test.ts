@@ -32,12 +32,7 @@ const TURN_ENDED = new Set(['awaiting_approval', 'idle', 'blocked', 'session_end
 function dryScenario(): Scenario {
   return {
     tasks: {
-      'work-start': [
-        ...steps('intake', 'S'),
-        { do: 'waitEnter' },
-        { do: 'prompt' },
-        { do: 'stop' },
-      ],
+      'work-start': [...steps('intake'), { do: 'waitEnter' }, { do: 'prompt' }, { do: 'stop' }],
     },
     // 앱이 준 이어서 하라는 입력(D218)의 턴을 끝낸 뒤 사람이 보낸 표식 요청을 받는다
     resume: {

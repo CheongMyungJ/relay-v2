@@ -23,13 +23,13 @@ export const SKILLS: readonly SkillName[] = SKILL_TITLES.map(([skill]) => skill)
 export const QUESTION_MODES: readonly QuestionMode[] = ['draft_first', 'confirm_each']
 
 /**
- * 자동 승인을 켤 수 있는 노드 (4.2). intake(의도 승인)와 verify(Work 완료)는 늘 수동이다. 리뷰는 지적이 없을 때만 자동
- * 승인한다 (D213). PR 대응(respond)은 켤 수 있다 (D169)
+ * 자동 승인을 켤 수 있는 노드 (4.2). intake(의도 승인)와 verify(리뷰와 검증 = Work 완료)는 늘 수동이다.
+ * PR 대응(respond)은 켤 수 있다 (D169)
  */
 export const AUTO_APPROVE_NODES: readonly AutoApproveNode[] = AUTO_APPROVE_TITLES.map(([n]) => n)
 
 /**
- * 늘 수동인 노드: 자동 승인을 켤 수 있는 노드의 나머지. 의도 승인과 Work 완료다 (4.2, D213). 자동 승인에
+ * 늘 수동인 노드: 자동 승인을 켤 수 있는 노드의 나머지. 의도 승인과 Work 완료다 (4.2). 자동 승인에
  * 이 키가 있으면 켜든 끄든 받지 않는다
  */
 const MANUAL_NODES: readonly NodeName[] = NODES.filter(
@@ -162,7 +162,7 @@ function questionModes(v: unknown): Checked<Partial<Record<SkillName, QuestionMo
 
 /**
  * 단계별 자동 승인 (4.2). 없는 단계는 빼고, 켤 수 없는 단계(intake, verify)와 모르는 단계, 참·거짓이
- * 아닌 값은 오류다 (D213)
+ * 아닌 값은 오류다
  */
 function autoApprove(v: unknown): Checked<Partial<Record<AutoApproveNode, boolean>>> {
   if (!isRecord(v)) return { ok: false, error: `${NAMES.auto_approve}: 객체여야 함` }

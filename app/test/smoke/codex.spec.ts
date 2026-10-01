@@ -53,7 +53,7 @@ test('엔진 설정에서 Codex를 골라 앱 질문창으로 답하고 다음 t
               { id: 'env', header: '환경', question: '환경을 알려주세요.' },
             ],
           },
-          { do: 'write', file: 'intent.draft.md', text: intentDraft('S') },
+          { do: 'write', file: 'intent.draft.md', text: intentDraft() },
           { do: 'write', file: 'handoff.md', text: handoff() },
           { do: 'stop' },
           { do: 'wait' },

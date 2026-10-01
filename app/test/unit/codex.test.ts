@@ -245,7 +245,7 @@ describe('Codex 완료와 자동 승인', () => {
     }).work
     const task = currentTask(work)
     if (!task) throw new Error('task 없음')
-    work = { ...work, intent: { version: 1, size: 'S' }, tasks: [{ ...task, node: 'fix' }] }
+    work = { ...work, intent: { version: 1 }, tasks: [{ ...task, node: 'fix' }] }
     work = transition(
       work,
       {

@@ -284,7 +284,7 @@ describe('[어댑터] 앱 소유 파일과 work.json (6.1, D124)', () => {
     const v2 = await w.writeIntent('v2\n', 2)
     expect(v2.before).toBe(fileHash('v1\n사람이 고침\n'))
     expect(fs.readFileSync(path.join(w.intentHistory, 'v1.md'), 'utf8')).toBe('v1\n사람이 고침\n')
-    const more = await w.appendDecisions('## t-02 evidence — 2026-09-27 11:00 (사람 승인)\n없음\n')
+    const more = await w.appendDecisions('## t-02 fix — 2026-09-27 11:00 (사람 승인)\n없음\n')
     expect(more.before).toBe(decisions.hash)
     fs.rmSync(w.ownedPath('intent.md'))
     fs.writeFileSync(w.ownedPath('decisions.md'), Buffer.from([0xff, 0xfe, 0x41]))

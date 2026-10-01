@@ -3,27 +3,18 @@
 import type { AgentEngine } from './agent'
 
 /**
- * relay 스킬 (5.6). 질문 방식을 스킬마다 고른다 (D26). investigate는 evidence와 root-cause를 합친 스킬이다 (D148).
- * pr-respond는 파이프라인 밖의 PR 대응 task다 (D168, D187)
+ * relay 스킬 (5.6). 질문 방식을 스킬마다 고른다 (D26). pr-respond는 파이프라인 밖의 PR 대응 task다 (D168, D187)
  */
-export type SkillName =
-  | 'work-start'
-  | 'investigate'
-  | 'evidence'
-  | 'root-cause'
-  | 'fix'
-  | 'review'
-  | 'final-verify'
-  | 'pr-respond'
+export type SkillName = 'work-start' | 'fix' | 'verify' | 'pr-respond'
 
 /** 질문 방식 (5.6.1). 초안 우선 / 결정마다 확인 */
 export type QuestionMode = 'draft_first' | 'confirm_each'
 
 /**
- * 자동 승인을 켤 수 있는 노드. intake(의도 승인)와 verify(Work 완료)는 항상 수동이다 (4.2). review는 지적이 없을 때만
- * 자동 승인한다 (D213). respond는 PR 대응 task다 (D169)
+ * 자동 승인을 켤 수 있는 노드. intake(의도 승인)와 verify(리뷰와 검증 = Work 완료)는 항상 수동이다 (4.2).
+ * respond는 PR 대응 task다 (D169)
  */
-export type AutoApproveNode = 'investigate' | 'evidence' | 'rca' | 'fix' | 'review' | 'respond'
+export type AutoApproveNode = 'fix' | 'respond'
 
 export interface AppConfig {
   schema_version: 1
@@ -79,25 +70,17 @@ export interface WorkSettingsPatch {
  */
 export const SKILL_TITLES: readonly (readonly [SkillName, string])[] = [
   ['work-start', '의도 정리'],
-  ['investigate', '재현과 원인 분석'],
-  ['evidence', '재현과 관찰'],
-  ['root-cause', '원인 분석'],
-  ['fix', '수정'],
-  ['review', '리뷰'],
-  ['final-verify', '최종 검증'],
+  ['fix', '원인 분석과 수정'],
+  ['verify', '리뷰와 검증'],
   ['pr-respond', 'PR 대응'],
 ]
 
 /**
  * 자동 승인을 켤 수 있는 노드와 그 화면 이름 (4.2, D109). 설정 화면과 Work 설정의 자동 승인 목록에 쓴다.
- * 리뷰는 지적이 없을 때만 자동 승인한다 (D213). core/pipeline의 NODE_INFO와 같은지 [단위]가 확인한다.
+ * core/pipeline의 NODE_INFO와 같은지 [단위]가 확인한다.
  */
 export const AUTO_APPROVE_TITLES: readonly (readonly [AutoApproveNode, string])[] = [
-  ['investigate', '재현과 원인 분석'],
-  ['evidence', '재현과 관찰'],
-  ['rca', '원인 분석'],
-  ['fix', '수정'],
-  ['review', '리뷰'],
+  ['fix', '원인 분석과 수정'],
   ['respond', 'PR 대응'],
 ]
 
@@ -108,30 +91,22 @@ export const QUESTION_MODE_LABEL: Readonly<Record<QuestionMode, string>> = {
 }
 
 /**
- * 앱 설정의 기본값 (5.1.1). 자동 승인은 수정(D214)과 지적이 없는 리뷰(D213)만 켠다. 결과는 뒤 단계의 승인 화면과
- * Work 완료 화면에서 사람이 본다 (D7)
+ * 앱 설정의 기본값 (5.1.1). 자동 승인은 원인 분석과 수정(D214)만 켠다. 원인과 변경은 리뷰와 검증의 Work 완료
+ * 화면에서 사람이 본다 (D7). 원인이 불확실하면 fix가 고치기 전에 묻는다 (D228)
  */
 export const DEFAULT_CONFIG: AppConfig = {
   schema_version: 1,
   agent_engine: 'claude',
   session_limit: 3,
   auto_approve: {
-    investigate: false,
-    evidence: false,
-    rca: false,
     fix: true,
-    review: true,
     respond: false,
   },
   auto_approve_countdown_sec: 15,
   question_mode: {
     'work-start': 'draft_first',
-    investigate: 'draft_first',
-    evidence: 'draft_first',
-    'root-cause': 'draft_first',
     fix: 'draft_first',
-    review: 'draft_first',
-    'final-verify': 'draft_first',
+    verify: 'draft_first',
     'pr-respond': 'draft_first',
   },
   pr_draft: false,

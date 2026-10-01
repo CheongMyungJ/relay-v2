@@ -78,16 +78,16 @@ describe('Codex CLI 점검과 스킬·설정', () => {
       }),
     ).toBe(expected)
   })
-  it('task 밖의 레포나 사용자 설정을 바꾸지 않고 합친 스킬과 질문 도구를 전달한다', async () => {
+  it('task 밖의 레포나 사용자 설정을 바꾸지 않고 스킬과 질문 도구를 전달한다', async () => {
     const dir = temp()
     const deployed = await deployCodexSkill({
       source: SKILLS,
       workDir: dir,
       taskDir: path.join(dir, 'task'),
-      skill: 'investigate',
+      skill: 'verify',
     })
     const text = fs.readFileSync(deployed.file, 'utf8')
-    expect(text).toContain('name: relay-investigate')
+    expect(text).toContain('name: relay-verify')
     expect(text).toContain('`mcp__relay__ask_human`')
     expect(text).not.toContain('`AskUserQuestion`')
     const settings = codexSettings({
@@ -96,7 +96,7 @@ describe('Codex CLI 점검과 스킬·설정', () => {
       taskId: 't-01',
       port: 12345,
       previousTaskDirs: [],
-      skill: 'investigate',
+      skill: 'verify',
     })
     const file = path.join(dir, 'settings.json')
     await writeJson(file, settings)
@@ -104,7 +104,7 @@ describe('Codex CLI 점검과 스킬·설정', () => {
       workDir: dir,
       settingsPath: file,
       sessionId: 'fake-id',
-      skill: 'investigate',
+      skill: 'verify',
       contextPath: path.join(dir, 'task/context.md'),
     })
     expect(args).toContain('--no-daemon')

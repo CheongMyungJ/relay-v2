@@ -5,11 +5,11 @@
 // 맨 위에는 재시작 때와 실행 중의 알림을 보인다: 끊긴 작업의 [다시 시도]·[무시], 끝낸 고아 프로세스와 바뀐
 // 파일의 [확인] (시나리오 9, D121~D124). 끊긴 작업이 있는 동안 승인과 전달 버튼은 누를 수 없다 (D122).
 // 자동 승인 중이면 승인 화면에 카운트다운과 [취소]를 보이고, 켜진 단계인데 카운트다운하지 않으면 까닭을 보인다 (D83, 4.3).
-// PR 진행인 Work의 지금 task(verify)에서는 PR 패널이 된다 (시나리오 10, D183). 최종 검증 결과는 탭으로 본다.
+// PR 진행인 Work의 지금 task(verify)에서는 PR 패널이 된다 (시나리오 10, D183). 리뷰와 검증 결과는 탭으로 본다.
 // 지금 task가 PR 대응 task면 PR 패널과 그 대응 task를 탭으로 오가고, 승인할 때는 대응 승인 화면(항목별 결과, 게시될 모양의
 // 답글, 기존 테스트 변경, D172, D202, D207)을 먼저 보인다.
 import { useEffect, useState } from 'react'
-import type { NodeName, Size } from '../../shared/contracts'
+import type { NodeName } from '../../shared/contracts'
 import type {
   BranchInfo,
   CommandResult,
@@ -29,8 +29,6 @@ import { PrPanel } from './PrPanel'
 import { focusTerm } from './terminals'
 
 type Tab = 'summary' | 'artifacts' | 'changes' | 'verdicts' | 'work'
-
-const SIZES: Size[] = ['S', 'M', 'L']
 
 interface Props {
   work: WorkView
@@ -419,9 +417,6 @@ function Review({
 }) {
   const verify = review.completion !== null
   const [tab, setTab] = useState<Tab>(verify ? 'verdicts' : 'summary')
-  // 사람이 고르기 전에는 intent 초안의 size를 따른다 (4.1)
-  const [chosen, setChosen] = useState<Size | null | undefined>(undefined)
-  const size = chosen === undefined ? review.draftSize : chosen
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
@@ -431,7 +426,7 @@ function Review({
   const liveTask = work?.tasks.find((t) => t.id === review.taskId && t.live)
 
   const intake = review.node === 'intake'
-  const gate = review.gates[intake ? (size ?? 'none') : 'none']
+  const gate = review.gate
   const respond = review.respond
   // PR 대응은 승인하면 push하고 답글을 게시한다. 실패한 뒤의 [승인]은 [다시 시도]다 (시나리오 10-6)
   const approveLabel = intake ? '의도 승인' : respond?.failure ? '다시 시도' : '승인'
@@ -452,10 +447,7 @@ function Review({
     setBusy(true)
     setError(null)
     const r = await call(() =>
-      window.relay.approve(review.workKey, review.taskId, {
-        ...(intake && size ? { size } : {}),
-        ...(force ? { force: true } : {}),
-      }),
+      window.relay.approve(review.workKey, review.taskId, force ? { force: true } : {}),
     )
     setBusy(false)
     setConfirming(false)
@@ -570,23 +562,6 @@ function Review({
           />
         ) : (
           <footer className="review-actions">
-            {intake ? (
-              <label className="size">
-                size
-                <select
-                  aria-label="size"
-                  value={size ?? ''}
-                  onChange={(e) => setChosen((e.target.value || null) as Size | null)}
-                >
-                  {size === null ? <option value="">고르세요</option> : null}
-                  {SIZES.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
             <button
               className="primary"
               disabled={busy || cut || !gate.approve || !!respond?.blocked}
@@ -709,7 +684,6 @@ function Summary({ review }: { review: ReviewView }) {
               <Markdown text={s.text} />
             </div>
           ))}
-          {lead.hint ? <div className="em-hint">{lead.hint}</div> : null}
         </section>
       ) : null}
       <section>
@@ -761,7 +735,7 @@ const DELIVERY_BUTTON: Readonly<Record<DeliveryChoice, string>> = {
 }
 
 /**
- * PR 진행인 Work의 오른쪽 패널: PR 패널과 지금 task를 탭으로 오간다 (시나리오 10, D183). 지금 task가 verify면 최종 검증
+ * PR 진행인 Work의 오른쪽 패널: PR 패널과 지금 task를 탭으로 오간다 (시나리오 10, D183). 지금 task가 verify면 리뷰와 검증
  * 결과(읽기 전용)이고, PR 대응 task면 그 task다: 승인할 때는 승인 화면을 먼저 보이고, 도는 중이면 진행 상태를 보인다
  */
 function PrSection({
@@ -808,7 +782,7 @@ function PrSection({
           className={tab === 'task' ? 'active' : ''}
           onClick={() => setTab('task')}
         >
-          {respond ? task.label : '최종 검증 결과'}
+          {respond ? task.label : '리뷰와 검증 결과'}
         </button>
       </div>
       {tab === 'pr' ? <PrPanel work={work} pr={pr} /> : body}
@@ -1005,7 +979,7 @@ function CompletionActions({
   work: WorkView
   /** 답하지 않은 열린 질문 (D222) */
   questions: readonly string[]
-  /** 최종 검증의 세션이 살아 있다 */
+  /** 리뷰와 검증의 세션이 살아 있다 */
   live: boolean
   onApproved: (() => void) | undefined
   onShowCleanup: (() => void) | undefined
@@ -1019,7 +993,7 @@ function CompletionActions({
   const [pending, setPending] = useState<{ choice: DeliveryChoice; files: string[] } | null>(null)
   const c = review.completion
   if (!c) return null
-  const gate = review.gates.none
+  const gate = review.gate
   const stopped = c.stopped
   // 끊긴 작업이 있는 동안은 완료도 전달도 하지 않는다 (D122)
   const cut = work.operation !== null

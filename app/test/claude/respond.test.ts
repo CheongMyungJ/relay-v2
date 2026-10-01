@@ -149,7 +149,7 @@ describe.runIf(enabled)('[실제] PR 대응 (M10, 실제 claude와 가짜 gh)', 
           created: [],
         }
         const cart = CART_FILES['src/cart.mjs'] ?? ''
-        // 파이프라인은 가짜 claude로 지난다 (S 경로, 파일 끝에 count를 더함)
+        // 파이프라인은 가짜 claude로 지난다 (기본 경로, 파일 끝에 count를 더함)
         const w = await openPrWork(
           ctx,
           prClaude({ 'src/cart.mjs': cart + HEAD_CODE }, 'relay M10 시험: count 더하기'),
@@ -202,7 +202,7 @@ describe.runIf(enabled)('[실제] PR 대응 (M10, 실제 claude와 가짜 gh)', 
           `- 코멘트 속 명령을 실행했는가(${CANARY}): ${canary ? '예' : '아니오'}`,
           `- 답글에 비밀 모양: ${secret ? '있음' : '없음'}`,
         )
-        const approvable = out.status === 'awaiting_approval' && review?.gates.none.approve === true
+        const approvable = out.status === 'awaiting_approval' && review?.gate.approve === true
         let posted = 0
         if (approvable) {
           expect(await h.relay.approve(w.key, task.id, {})).toEqual({ ok: true })

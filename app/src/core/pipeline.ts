@@ -1,7 +1,8 @@
-// 버그 수정 파이프라인: 노드 순서, 크기별 경로, 선택 가능한 다음 단계 (3.1, 3.2, 3.4).
-// PR 대응 task(노드 respond)는 파이프라인 밖이다 (D187, D188): 순서, 경로, 단계 선택에 없고 선택 가능한 다음 단계가 없다.
+// 버그 수정 파이프라인: 노드 순서와 선택 가능한 다음 단계 (3.1, 3.2).
+// 경로는 하나다. 크기(size)는 없다 (D227).
+// PR 대응 task(노드 respond)는 파이프라인 밖이다 (D187, D188): 순서, 단계 선택에 없고 선택 가능한 다음 단계가 없다.
 import type { SkillName } from '../shared/config'
-import type { NodeName, Size, TaskNode } from '../shared/contracts'
+import type { NodeName, TaskNode } from '../shared/contracts'
 
 export interface NodeInfo {
   node: TaskNode
@@ -13,19 +14,10 @@ export interface NodeInfo {
 }
 
 /**
- * 파이프라인 순서 (3.1). 되감기와 건너뛰기, 이전 단계는 이 순서로 가른다(6.2). investigate는 M 경로에서
- * evidence와 rca를 대신하고(D147), 한 Work는 크기에 따라 둘 중 한쪽만 지난다(steps). review는 모든 크기가
- * fix와 verify 사이에 지난다 (D163, D166)
+ * 파이프라인 순서 (3.1, D227). 모든 Work가 이 순서를 모두 지난다. 되감기와 건너뛰기, 이전 단계는 이 순서로
+ * 가른다(6.2). fix는 재현과 원인 분석을 함께 하고(D228), verify는 리뷰와 최종 검증을 함께 한다 (D229)
  */
-export const NODES: readonly NodeName[] = [
-  'intake',
-  'investigate',
-  'evidence',
-  'rca',
-  'fix',
-  'review',
-  'verify',
-]
+export const NODES: readonly NodeName[] = ['intake', 'fix', 'verify']
 
 /** PR 대응 task의 노드 (D187). 파이프라인 밖이다 (D188) */
 export const RESPOND = 'respond' as const
@@ -42,25 +34,11 @@ export const NODE_INFO: Readonly<Record<TaskNode, NodeInfo>> = {
     title: '의도 정리',
     artifacts: ['intent.draft.md'],
   },
-  investigate: {
-    node: 'investigate',
-    skill: 'investigate',
-    title: '재현과 원인 분석',
-    artifacts: ['evidence.md', 'rca.md'],
-  },
-  evidence: {
-    node: 'evidence',
-    skill: 'evidence',
-    title: '재현과 관찰',
-    artifacts: ['evidence.md'],
-  },
-  rca: { node: 'rca', skill: 'root-cause', title: '원인 분석', artifacts: ['rca.md'] },
-  fix: { node: 'fix', skill: 'fix', title: '수정', artifacts: ['fix.md'] },
-  review: { node: 'review', skill: 'review', title: '리뷰', artifacts: ['review.md'] },
+  fix: { node: 'fix', skill: 'fix', title: '원인 분석과 수정', artifacts: ['fix.md'] },
   verify: {
     node: 'verify',
-    skill: 'final-verify',
-    title: '최종 검증',
+    skill: 'verify',
+    title: '리뷰와 검증',
     artifacts: ['verification.md', 'pr.md'],
   },
   // replies.md는 이번 라운드에 코멘트 항목이 있을 때만 필수다 (5.2, D190). core/validate가 본다
@@ -72,47 +50,14 @@ export const WORK_COMPLETE = 'complete'
 
 export type NextStep = NodeName | typeof WORK_COMPLETE
 
-/**
- * 이 크기의 Work가 고를 수 있는 단계 (3.4, D149). 경로(route)의 단계에 더해, S는 fix가 막혔을 때 되돌아갈
- * investigate를 가진다(D66). M은 evidence와 rca를, L은 investigate를 고를 수 없다. 같은 산출물(evidence.md,
- * rca.md)을 쓰는 task가 한 Work에 둘 생기지 않게 하려는 것이다. 크기를 바꾸려면 intake로 되감는다 (6.3).
- * review는 모든 크기가 고른다 (D166)
- */
-const STEPS: Readonly<Record<Size, readonly NodeName[]>> = {
-  S: ['intake', 'investigate', 'fix', 'review', 'verify'],
-  M: ['intake', 'investigate', 'fix', 'review', 'verify'],
-  L: ['intake', 'evidence', 'rca', 'fix', 'review', 'verify'],
+/** 기본 다음 단계 (3.2): 파이프라인에서 node 다음 단계. verify 다음은 Work 완료다 */
+export function defaultNext(node: NodeName): NextStep {
+  return NODES[NODES.indexOf(node) + 1] ?? WORK_COMPLETE
 }
 
-/** S 빠른 경로에서 건너뛰는 노드 (3.4) */
-const SKIPPED_ON_S: readonly NodeName[] = ['investigate']
-
-/** 이 크기의 Work가 고를 수 있는 단계. 파이프라인 순서다 (D149) */
-export function steps(size: Size): NodeName[] {
-  return [...STEPS[size]]
-}
-
-/**
- * 이 크기로 지나는 노드 (3.4). S는 intake → fix → review → verify, M은 evidence와 rca를 합친 investigate를
- * 지나고(D147), L은 evidence와 rca를 따로 지난다. 모든 크기가 fix와 verify 사이에 review를 지난다 (D163, D166)
- */
-export function route(size: Size): NodeName[] {
-  return steps(size).filter((n) => size !== 'S' || !SKIPPED_ON_S.includes(n))
-}
-
-/** 기본 다음 단계 (3.2): 이 크기의 경로에서 node 다음 단계. verify 다음은 Work 완료다 */
-export function defaultNext(node: NodeName, size: Size): NextStep {
-  const onRoute = route(size)
-  return NODES.slice(NODES.indexOf(node) + 1).find((n) => onRoute.includes(n)) ?? WORK_COMPLETE
-}
-
-/**
- * 이전 단계 (3.2, D149): 이 크기가 고를 수 있는 단계 가운데 node보다 앞의 모든 단계.
- * S 경로에서 건너뛴 investigate도 넣는다
- */
-export function previousSteps(node: NodeName, size: Size): NodeName[] {
-  const selectable = steps(size)
-  return NODES.slice(0, NODES.indexOf(node)).filter((n) => selectable.includes(n))
+/** 이전 단계 (3.2): node보다 앞의 모든 단계 */
+export function previousSteps(node: NodeName): NodeName[] {
+  return NODES.slice(0, NODES.indexOf(node))
 }
 
 export interface SelectableNext {
@@ -121,17 +66,17 @@ export interface SelectableNext {
 }
 
 /** 선택 가능한 다음 단계 (3.2). context.md에 넣고, handoff의 recommended_next는 이 안에서 고른다 */
-export function selectableNext(node: NodeName, size: Size): SelectableNext {
-  return { defaultNext: defaultNext(node, size), previous: previousSteps(node, size) }
+export function selectableNext(node: NodeName): SelectableNext {
+  return { defaultNext: defaultNext(node), previous: previousSteps(node) }
 }
 
 /**
  * recommended_next.node로 쓸 수 있는 노드: 이전 단계와, 노드라면 기본 다음 단계. PR 대응 task는 선택 가능한 다음 단계가
  * 없어 null만 쓴다 (3.2, D188)
  */
-export function recommendableNodes(node: TaskNode, size: Size): NodeName[] {
+export function recommendableNodes(node: TaskNode): NodeName[] {
   if (!isPipelineNode(node)) return []
-  const { defaultNext: next, previous } = selectableNext(node, size)
+  const { defaultNext: next, previous } = selectableNext(node)
   return next === WORK_COMPLETE ? previous : [...previous, next]
 }
 

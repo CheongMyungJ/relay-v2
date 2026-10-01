@@ -1,5 +1,5 @@
 // 앱이 쓰는 파일의 모양과 id (5.1, 5.3, 5.4). 파일을 읽고 쓰는 것은 adapters/store가 한다.
-import type { Decision, Size, TaskNode } from '../shared/contracts'
+import type { Decision, TaskNode } from '../shared/contracts'
 import type { ApprovalBy } from '../shared/work'
 import { normalizeText, parseFrontMatter } from './validate'
 
@@ -122,7 +122,7 @@ export function appendBlock(existing: string, block: string): string {
   return before ? `${before}\n\n${block}` : block
 }
 
-/** 덩어리의 머리 줄: `## t-04 rca — …` (decisionsBlock) */
+/** 덩어리의 머리 줄: `## t-02 fix — …` (decisionsBlock) */
 const BLOCK_HEAD = /^## (t-\d+) /
 
 /**
@@ -149,10 +149,10 @@ export const INTENT_SCHEMA_VERSION = 1
 
 /**
  * [의도 승인] 때 intent 초안으로 intent.md 확정본을 만든다 (5.3, D88).
- * 머리글은 앱이 붙이는 schema_version, version과 초안의 type, 사람이 고른 size다.
+ * 머리글은 앱이 붙이는 schema_version, version과 초안의 type이다.
  * 초안의 다른 머리글 필드는 앱이 무시하므로 넣지 않는다 (D85). 본문은 초안 그대로다.
  */
-export function confirmedIntent(draft: string, c: { version: number; size: Size }): string {
+export function confirmedIntent(draft: string, c: { version: number }): string {
   const fm = parseFrontMatter(draft)
   if (!fm.ok) throw new Error(`intent 초안의 머리글을 읽을 수 없음: ${fm.error}`)
   const type = fm.data['type']
@@ -162,7 +162,6 @@ export function confirmedIntent(draft: string, c: { version: number; size: Size 
     `schema_version: ${INTENT_SCHEMA_VERSION}`,
     `version: ${c.version}`,
     `type: ${type}`,
-    `size: ${c.size}`,
     '---',
   ]
   const body = fm.body.replace(/^\n+/, '').trimEnd()

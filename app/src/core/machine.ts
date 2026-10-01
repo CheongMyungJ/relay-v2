@@ -13,7 +13,7 @@
 import type { AppConfig, WorkSettingsPatch } from '../shared/config'
 import type { AgentEngine } from '../shared/agent'
 import { agentLabel, knownTaskEngine, taskEngine } from './agent'
-import type { Decision, NodeName, Size, TaskNode } from '../shared/contracts'
+import type { Decision, NodeName, TaskNode } from '../shared/contracts'
 import type { StepExpect, WorkActions } from '../shared/views'
 import type {
   ApprovalBy,
@@ -166,10 +166,7 @@ export interface Stopped extends HookSignal {
   stopHookActive: boolean
   /** 이번 턴에 handoff.md(intake는 intent 초안도)가 바뀌었는가. main이 턴 시작 때와 비교해 정한다 */
   handoffChanged: boolean
-  /**
-   * Stop을 받고 main이 다시 한 형식 검사 (I15). 자동 승인 조건은 머리글(handoffHeader)과 리뷰의 지적(reviewFindings)에서
-   * 읽는다 (4.3, D213)
-   */
+  /** Stop을 받고 main이 다시 한 형식 검사 (I15). 자동 승인 조건은 머리글(handoffHeader)에서 읽는다 (4.3) */
   check: AutoApproveInput['check']
   /**
    * 본문의 background_tasks나 session_crons가 비어 있지 않다: 세션이 백그라운드 작업이나 예약된 깨우기를 기다리며
@@ -242,8 +239,6 @@ export interface CancelCountdown extends TaskEvent {
 export interface Approve extends TaskEvent {
   type: 'approve'
   check: TaskCheck
-  /** intake에서 사람이 승인 화면에서 고른 크기. 없으면 intent 초안의 크기 (4.1) */
-  size?: Size
   /** [오류 무시하고 승인] (4.1, D90, D112). 확인 창을 거친 뒤에 보낸다 */
   force?: boolean
 }
@@ -668,7 +663,7 @@ export type Effect =
   /** 세션의 프로세스 트리를 끝내고 pty.log를 남긴다 (시나리오 5-1) */
   | { type: 'endSession'; taskId: string }
   /** intent 초안을 intent.md로 확정하고 이전 버전은 intent.history/에 둔다 (4.1) */
-  | { type: 'confirmIntent'; taskId: string; version: number; size: Size }
+  | { type: 'confirmIntent'; taskId: string; version: number }
   /**
    * decisions.md에 handoff의 결정을 더한다 (5.4). by는 승인 방식이다(사람 승인, 자동 승인).
    * decisions가 null이면 [오류 무시하고 승인]에서 머리글을 읽지 못한 것이다 (D112)
@@ -947,19 +942,14 @@ function closedHold(work: WorkState, task: TaskRecord): AutoHoldReason[] {
   return task.node === RESPOND && work.pr?.closed_at !== undefined ? ['pr_closed'] : []
 }
 
-/** 이 task가 어긴 자동 승인 조건 (4.3, D129). evidence·rca·fix와 PR 대응은 의도 승인 뒤라 intent가 있다 */
+/** 이 task가 어긴 자동 승인 조건 (4.3, D129) */
 function holdsNow(
   work: WorkState,
   task: TaskRecord,
   check: AutoApproveInput['check'],
   background: boolean,
 ): AutoHoldReason[] {
-  const holds = autoApproveHolds({
-    node: task.node,
-    size: work.intent?.size ?? 'M',
-    check,
-    background,
-  })
+  const holds = autoApproveHolds({ node: task.node, check, background })
   // Codex Stop은 미완료 작업 전체의 부재를 보장하지 않는다. 타이머/감시에서도 이 판정을 유지한다 (E8).
   const engine = knownTaskEngine(task)
   return engine === null
@@ -1668,7 +1658,7 @@ function approve(work: WorkState, task: TaskRecord, e: Approve): Transition {
     return unchanged(work, `${task.id}는 승인할 수 있는 상태가 아님`)
   }
   const check = summarize(e.check)
-  const gate = approvalGate(task, check, task.node === 'intake' ? e.size : undefined)
+  const gate = approvalGate(task, check)
   const forced = !gate.approve && e.force === true && gate.force
   if (!gate.approve && !forced) {
     // 승인 화면을 띄운 뒤 파일이 바뀌었다. 오류를 보이고 승인하지 않는다 (4.1).
@@ -1677,12 +1667,9 @@ function approve(work: WorkState, task: TaskRecord, e: Approve): Transition {
       : `${task.id}의 handoff가 유효하지 않음`
     return { work: withTask(work, { ...task, check }), effects: [], rejected: reason }
   }
-  const size = task.node === 'intake' ? (e.size ?? e.check.intentDraft?.size) : work.intent?.size
-  if (!size) return unchanged(work, `${task.id}: intent의 크기를 모름`)
   return approveNow(work, task, {
     at: e.at,
     check: e.check,
-    size,
     by: 'human',
     ...(forced ? { ignored: gate.errors } : {}),
   })
@@ -1693,8 +1680,6 @@ interface Approval {
   at: string
   /** 승인한 때의 형식 검사. 기록할 결정과 이전 단계 추천을 머리글에서 읽는다 */
   check: TaskCheck
-  /** intent의 크기. intake는 의도 승인에서 확정하는 크기다 */
-  size: Size
   /** 사람 승인이나 자동 승인 (5.4, 5.5) */
   by: ApprovalBy
   /** [오류 무시하고 승인]으로 넘긴 오류 (D112) */
@@ -1707,7 +1692,6 @@ interface Approval {
  * 카운트다운과 자동 승인하지 않은 까닭은 지운다.
  */
 function approveNow(work: WorkState, task: TaskRecord, a: Approval): Transition {
-  const { size } = a
   const node = task.node
   // PR 대응 task의 승인은 respondApprove다 (D169)
   if (!isPipelineNode(node)) return unchanged(work, `${task.id}는 파이프라인 task가 아님`)
@@ -1739,8 +1723,8 @@ function approveNow(work: WorkState, task: TaskRecord, a: Approval): Transition 
   })
   if (task.node === 'intake') {
     const version = (work.intent?.version ?? 0) + 1
-    next = { ...next, intent: { version, size } }
-    effects.push({ type: 'confirmIntent', taskId: task.id, version, size })
+    next = { ...next, intent: { version } }
+    effects.push({ type: 'confirmIntent', taskId: task.id, version })
   }
 
   const rec = header?.recommended_next
@@ -1756,7 +1740,7 @@ function approveNow(work: WorkState, task: TaskRecord, a: Approval): Transition 
     next = { ...next, status: 'stopped', stop: { kind: 'after_step', task_id: task.id } }
     return { work: next, effects }
   }
-  const nextNode = defaultNext(node, size)
+  const nextNode = defaultNext(node)
   if (nextNode === WORK_COMPLETE) {
     next = { ...next, status: 'completed', completed_at: a.at }
     effects.push(log(work, a.at, 'work.completed', { delivery: 'none' }))
@@ -1793,15 +1777,14 @@ function autoApprove(
   if (work.operation) return hold(['operation'])
   if (approvalMode(config, work.settings, task.node, knownTaskEngine(task)) !== 'auto')
     return hold(['settings'])
-  const size = work.intent?.size
-  if (!e.check || !size) return hold(['invalid'])
+  if (!e.check) return hold(['invalid'])
   const reasons = [...closedHold(work, task), ...holdsNow(work, task, e.check, false)]
   if (reasons.length) return hold(reasons, e.check)
   // PR 대응 task는 승인하면 push하고 답글을 게시한다 (D169, D172)
   if (task.node === RESPOND) {
     return respondApproveNow(work, task, { at: e.at, check: summarize(e.check), by: 'auto' })
   }
-  return approveNow(work, task, { at: e.at, check: e.check, size, by: 'auto' })
+  return approveNow(work, task, { at: e.at, check: e.check, by: 'auto' })
 }
 
 /** 승인 화면의 [취소] (4.3): 카운트다운을 멈추고 사람의 승인을 기다린다. 다음 Stop에서 다시 판정한다 (D131) */
@@ -1901,11 +1884,10 @@ function stopAfter(work: WorkState, e: StopAfterStep): Transition {
 function resumeWork(work: WorkState, e: ResumeWork): Transition {
   if (work.status !== 'stopped' || !work.stop) return unchanged(work, '멈춘 Work가 아님')
   const stopped = work.tasks.find((t) => t.id === work.stop?.task_id)
-  const size = work.intent?.size
   const node = stopped?.node
-  if (!node || !size || !isPipelineNode(node)) return unchanged(work, '다음 단계를 정할 수 없음')
+  if (!node || !isPipelineNode(node)) return unchanged(work, '다음 단계를 정할 수 없음')
   const active: WorkState = { ...omit(work, 'stop'), status: 'active' }
-  const nextNode = defaultNext(node, size)
+  const nextNode = defaultNext(node)
   if (nextNode === WORK_COMPLETE) {
     return {
       work: { ...active, status: 'completed', completed_at: e.at },

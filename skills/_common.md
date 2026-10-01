@@ -5,7 +5,7 @@
 
 ## Language
 
-Write everything the human reads in Korean: questions and options, artifact contents, handoff values. Keep section headings and field names exactly as in the templates. (`pr.md` has its own rule in final-verify.)
+Write everything the human reads in Korean: questions and options, artifact contents, handoff values. Keep section headings and field names exactly as in the templates. (`pr.md` has its own rule in verify.)
 
 ## Asking the human
 
@@ -34,6 +34,8 @@ Recording answers:
 | The human picked an option | `decisions` with `by: human` |
 | "알아서 해" (you decide) | take your recommendation, `decisions` with `by: ai` |
 | "모름" (don't know) | if you can proceed on an assumption, put it in `assumptions`. Otherwise keep it in `open_questions`, or close as `blocked` |
+
+`open_questions` holds only questions you asked the human that are still unanswered. Never put there something you decided yourself, something the intent already settles (e.g. a non-goal), or a note for later: those go in `decisions`, `assumptions` or `risks`. An open question stops auto-approval.
 
 ## Closing procedure
 

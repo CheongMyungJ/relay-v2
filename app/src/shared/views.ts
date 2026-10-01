@@ -1,6 +1,6 @@
 // 렌더러로 보내는 스냅샷과 조회 결과 (I14). main이 core로 계산하고, 화면은 받은 것을 그리기만 한다.
 import type { WorkSettings } from './config'
-import type { Decision, HandoffStatus, NodeName, Size, TaskNode } from './contracts'
+import type { Decision, HandoffStatus, NodeName, TaskNode } from './contracts'
 import type { PendingQuestionView } from './questions'
 import type { PrItemKind, PrItemStatus } from './pr'
 import type {
@@ -16,11 +16,11 @@ import type {
 // ---------- 승인 판정과 승인 화면 (core/approval, core/review) ----------
 
 export interface ApprovalGate {
-  /** [승인]. 유효한 awaiting_approval handoff가 있다. 사람이 고른 size로 풀린 오류는 치지 않는다 (4.1) */
+  /** [승인]. 유효한 awaiting_approval handoff가 있다 (4.1) */
   approve: boolean
   /** [오류 무시하고 승인]. 확인 창을 거친다 (4.1, D112) */
   force: boolean
-  /** 사람이 고른 size로 풀린 것을 뺀 오류 */
+  /** 형식 오류 */
   errors: FormatIssue[]
   /** [오류 무시하고 승인]으로도 넘길 수 없는 오류 (D90) */
   blocking: FormatIssue[]
@@ -46,15 +46,13 @@ export interface Emphasis {
 }
 
 /**
- * [요약] 탭 맨 위에 둘 이 단계의 핵심 (D223): 의도 정리는 intent 초안의 목표·비목표·완료조건과 size, 리뷰는 지적
- * 목록과 반영할 번호를 말하라는 안내다
+ * [요약] 탭 맨 위에 둘 이 단계의 핵심 (D223): 의도 정리는 intent 초안의 목표·비목표·완료조건, 원인 분석과 수정은
+ * 원인, 리뷰와 검증은 리뷰 지적과 반영이다
  */
 export interface StageLead {
   title: string
   /** 절마다 제목과 본문(마크다운) */
   sections: { title: string; text: string }[]
-  /** 사람이 할 일. 없으면 null */
-  hint: string | null
 }
 
 /** 작업 브랜치의 커밋 (D225). Work 완료 화면과 완료 알림에 보인다 */
@@ -449,7 +447,7 @@ export interface TaskView {
   /** 이 task 터미널의 키 */
   terminal: string
   node: TaskNode
-  /** "03 원인 분석" (D109) */
+  /** "02 원인 분석과 수정" (D109) */
   label: string
   /** 탭 위 머리 띠 (시나리오 2-5) */
   band: string
@@ -728,15 +726,13 @@ export interface ReviewView {
   errors: FormatIssue[]
   warnings: FormatIssue[]
   emphasis: Emphasis[]
-  /** [요약] 탭 맨 위의 이 단계 핵심 (D223). 의도 정리와 리뷰만 있다 */
+  /** [요약] 탭 맨 위의 이 단계 핵심 (D223). 의도 정리, 원인 분석과 수정, 리뷰와 검증만 있다 */
   lead: StageLead | null
   artifacts: Artifact[]
   /** 이 task의 변경 (task 시작 커밋 → 작업 트리) */
   diff: string
-  /** intake: intent 초안의 size. [의도 승인]의 size 고르기 기본값 (4.1) */
-  draftSize: Size | null
-  /** 고른 size마다의 판정. none은 고르지 않았을 때다 */
-  gates: Record<'none' | Size, ApprovalGate>
+  /** 승인 버튼의 판정 (4.1) */
+  gate: ApprovalGate
   /**
    * 자동 승인 안내 (4.2, 4.3, D128~D131). on은 지금 설정으로 자동 승인이 켜진 단계인지, hold는 켜진 단계의 승인
    * 대기인데 카운트다운하지 않는 까닭 또는 Codex 수동 승인 정책이다. 카운트다운은 TaskView.countdown이다
@@ -836,8 +832,6 @@ export interface NewWorkInput {
 }
 
 export interface ApproveOptions {
-  /** intake에서 사람이 고른 size (4.1) */
-  size?: Size
   /** [오류 무시하고 승인] (D112) */
   force?: boolean
 }

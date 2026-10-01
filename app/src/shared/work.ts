@@ -2,7 +2,7 @@
 // core/machine만 이 값을 바꾼다. 파일에 쓰는 모양이라 키는 snake_case다.
 import type { WorkSettings } from './config'
 import type { AgentEngine } from './agent'
-import type { HandoffStatus, NodeName, Size, TaskNode } from './contracts'
+import type { HandoffStatus, NodeName, TaskNode } from './contracts'
 
 /**
  * Work 상태 (3.3): 진행 중(active), 멈춤(stopped), PR 진행(pr: [PR 생성] 뒤 머지나 [머지 없이 끝내기]까지, D152),
@@ -107,8 +107,7 @@ export interface Countdown {
 /**
  * 자동 승인이 켜진 단계에서 자동 승인하지 않은 까닭 (4.3, D128~D130, D75, D122).
  * 조건: open_questions, intent_deviation, recommended_next(기본 다음 단계가 아님), background(Stop 때 백그라운드 작업이나
- * 예약된 깨우기가 남음, D129), invalid(다시 읽은 handoff가 유효하지 않음), review_findings(리뷰에 지적이 있거나
- * 지적을 읽지 못함, D213).
+ * 예약된 깨우기가 남음, D129), invalid(다시 읽은 handoff가 유효하지 않음).
  * 멈춤: cancel([취소]), interrupt([즉시 중단]), quit(앱 종료 확인), step([단계 선택], D145), session(세션 종료),
  * settings(자동 승인을 끔), restart(재시작 조정), operation(끊긴 작업), pr_closed(PR 대응인데 PR이 닫혀 승인을 받지 않음, D179)
  */
@@ -119,7 +118,6 @@ export type AutoHoldReason =
   | 'background'
   | 'completion_unknown'
   | 'invalid'
-  | 'review_findings'
   | 'cancel'
   | 'interrupt'
   | 'quit'
@@ -236,10 +234,9 @@ export interface TaskRecord {
   respond?: RespondRound
 }
 
-/** 승인된 intent (5.3). intent.md 머리글의 version, size와 같다 */
+/** 승인된 intent (5.3). intent.md 머리글의 version과 같다 */
 export interface ApprovedIntent {
   version: number
-  size: Size
 }
 
 /** Work가 멈춘 이유 (3.3): 이전 단계 추천(D23), [이 단계 끝나면 멈춤] (시나리오 3-4) */
