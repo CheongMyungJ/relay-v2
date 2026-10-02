@@ -1,0 +1,38 @@
+diff --git a/src/store/report-archive.js b/src/store/report-archive.js
+index 0c62d2f..03605a2 100644
+--- a/src/store/report-archive.js
++++ b/src/store/report-archive.js
+@@ -1,6 +1,6 @@
+ // 보고서 보관. 기간별 폴더에 보고서 하나를 JSON 파일 하나로 둔다: reports/2026-09/report-3.json
+ // 정산팀이 밤 배치 뒤에 가져가고, 배치가 도는 도중에도 읽는다.
+-import { now } from '../clock.js'
++import { now, sleep } from '../clock.js'
+ import { stamp } from '../util/ids.js'
+ 
+ export function reportDir(period) {
+@@ -18,12 +18,20 @@ export function reportPath(period, reportId) {
+  * @param {ReturnType<import('./file-store.js').createFileStore>} files
+  * @param {{ reportId: string, period?: string | null }} report
+  */
+-export async function saveReport(files, report) {
++export async function saveReport(files, report, attempts = 3) {
+   const path = reportPath(report.period, report.reportId)
+-  const tmp = `${reportDir(report.period)}/.${stamp(now())}.tmp`
+-  await files.writeFile(tmp, JSON.stringify(report))
+-  await files.rename(tmp, path)
+-  return path
++  for (let attempt = 1; ; attempt++) {
++    const tmp = `${reportDir(report.period)}/.${stamp(now())}.tmp`
++    try {
++      await files.writeFile(tmp, JSON.stringify(report))
++      await files.rename(tmp, path)
++      return path
++    } catch (error) {
++      // 저장소가 느릴 때 임시 파일을 가끔 못 찾는다. 잠깐 기다렸다 다시 쓴다
++      if (error.code !== 'ENOENT' || attempt >= attempts) throw error
++      await sleep(attempt * 5)
++    }
++  }
+ }
+ 
+ export async function loadReport(files, period, reportId) {

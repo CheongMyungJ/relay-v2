@@ -1,0 +1,30 @@
+diff --git a/src/store/report-archive.js b/src/store/report-archive.js
+index 0c62d2f..a23e9c2 100644
+--- a/src/store/report-archive.js
++++ b/src/store/report-archive.js
+@@ -1,7 +1,5 @@
+ // 보고서 보관. 기간별 폴더에 보고서 하나를 JSON 파일 하나로 둔다: reports/2026-09/report-3.json
+ // 정산팀이 밤 배치 뒤에 가져가고, 배치가 도는 도중에도 읽는다.
+-import { now } from '../clock.js'
+-import { stamp } from '../util/ids.js'
+ 
+ export function reportDir(period) {
+   return `reports/${period ?? 'no-period'}`
+@@ -14,15 +12,13 @@ export function reportPath(period, reportId) {
+ 
+ /**
+  * 보고서를 보관소에 저장하고 경로를 돌려준다.
+- * 쓰다 만 파일을 정산팀이 읽어 가지 않게, 같은 폴더의 임시 파일에 다 쓴 뒤 제 이름으로 옮긴다.
++ * 임시 파일을 거치면 동시에 저장할 때 서로의 임시 파일을 옮겨 버리므로, 제 이름에 바로 쓴다.
+  * @param {ReturnType<import('./file-store.js').createFileStore>} files
+  * @param {{ reportId: string, period?: string | null }} report
+  */
+ export async function saveReport(files, report) {
+   const path = reportPath(report.period, report.reportId)
+-  const tmp = `${reportDir(report.period)}/.${stamp(now())}.tmp`
+-  await files.writeFile(tmp, JSON.stringify(report))
+-  await files.rename(tmp, path)
++  await files.writeFile(path, JSON.stringify(report))
+   return path
+ }
+ 

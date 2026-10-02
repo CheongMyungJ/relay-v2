@@ -13,9 +13,10 @@ import {
   type WorkSettingsPatch,
 } from '../shared/config'
 import type { NodeName } from '../shared/contracts'
-import type { ProjectSettings } from '../shared/project'
+import type { ProjectSettings, ProjectState } from '../shared/project'
 import type { MergeMethod } from '../shared/work'
 import { ALL_NODES } from './pipeline'
+import { DEFAULT_KNOWLEDGE_DIR, normalizeKnowledgeDir } from './knowledge'
 import { isAgentEngine, type AgentEngine } from '../shared/agent'
 
 export const SKILLS: readonly SkillName[] = SKILL_TITLES.map(([skill]) => skill)
@@ -51,6 +52,7 @@ export const EDITABLE_KEYS = [
   'respond_auto_start',
   'respond_auto_round_max',
   'reply_signature',
+  'knowledge_inject_chars',
 ] as const
 
 export type EditableKey = (typeof EDITABLE_KEYS)[number]
@@ -67,6 +69,7 @@ type IntegerKey =
   | 'auto_approve_countdown_sec'
   | 'pr_poll_interval_sec'
   | 'respond_auto_round_max'
+  | 'knowledge_inject_chars'
 
 /**
  * 정수 값의 범위. 되돌림 횟수는 8을 넘겨도 소용이 없다: Stop 훅으로 연속 8번 이어 가면
@@ -74,6 +77,7 @@ type IntegerKey =
  * PR 읽기 주기는 30초~1시간이다 **(기본값)**: 한 번 읽기가 GraphQL 1점과 REST 3번이라(S7) 30초여도 PR 하나에 시간당
  * 한도(각 5,000)의 약 7%다.
  * 자동 대응 라운드 상한은 1~20이다 **(기본값)**: 0은 자동 시작을 끈 것과 같아 받지 않는다(D171).
+ * 참고 지식 분량 기준은 100~100,000자다: 한 줄도 넣지 못하는 값과 context.md를 키우기만 하는 값은 받지 않는다 (D312).
  */
 const RANGES: Readonly<Record<IntegerKey, readonly [number, number]>> = {
   session_limit: [1, 20],
@@ -83,6 +87,7 @@ const RANGES: Readonly<Record<IntegerKey, readonly [number, number]>> = {
   auto_approve_countdown_sec: [1, 3600],
   pr_poll_interval_sec: [30, 3600],
   respond_auto_round_max: [1, 20],
+  knowledge_inject_chars: [100, 100_000],
 }
 
 type BooleanKey = 'pr_draft' | 'respond_auto_start'
@@ -97,6 +102,7 @@ const NAMES: Readonly<
   auto_approve_countdown_sec: '자동 승인 카운트다운',
   pr_poll_interval_sec: 'PR 읽기 주기',
   respond_auto_round_max: '자동 대응 라운드 상한',
+  knowledge_inject_chars: '참고 지식 분량 기준',
   question_mode: '질문 방식',
   pr_draft: 'draft PR',
   respond_auto_start: '대응 자동 시작',
@@ -355,5 +361,30 @@ export function checkProjectSettings(input: unknown): Checked<ProjectSettings> {
     }
   }
   const names = [...new Set(bots.map((b: string) => b.trim()).filter(Boolean))]
-  return { ok: true, value: { allowed_bots: names, merge_method: method as MergeMethod | null } }
+  const value: ProjectSettings = { allowed_bots: names, merge_method: method as MergeMethod | null }
+  // 지식 폴더(D305)와 팀 공유(D322)는 주지 않으면 지금 값을 둔다
+  const rawDir = input['knowledge_dir']
+  if (rawDir !== undefined) {
+    if (typeof rawDir !== 'string') return { ok: false, error: '지식 폴더: 문자열이어야 함' }
+    const dir = normalizeKnowledgeDir(rawDir)
+    if (!dir.ok) return { ok: false, error: `지식 폴더: ${dir.error}` }
+    value.knowledge_dir = dir.dir
+  }
+  const share = input['knowledge_share']
+  if (share !== undefined) {
+    if (typeof share !== 'boolean') return { ok: false, error: '팀 공유: true/false여야 함' }
+    value.knowledge_share = share
+  }
+  return { ok: true, value }
+}
+
+/** 프로젝트의 지식 폴더 (D305). project.json에 없거나 틀리면 기본값이다 */
+export function projectKnowledgeDir(p: Pick<ProjectState, 'knowledge_dir'>): string {
+  const r = p.knowledge_dir === undefined ? null : normalizeKnowledgeDir(p.knowledge_dir)
+  return r?.ok ? r.dir : DEFAULT_KNOWLEDGE_DIR
+}
+
+/** 프로젝트의 팀 공유 (D322). project.json에 없으면 켬이다 */
+export function projectKnowledgeShare(p: Pick<ProjectState, 'knowledge_share'>): boolean {
+  return p.knowledge_share !== false
 }

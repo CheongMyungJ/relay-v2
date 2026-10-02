@@ -1,0 +1,13 @@
+diff --git a/src/config/defaults.js b/src/config/defaults.js
+index 68c7447..b2e1320 100644
+--- a/src/config/defaults.js
++++ b/src/config/defaults.js
+@@ -20,7 +20,7 @@ export const defaults = deepFreeze({
+   },
+   send: {
+     // 발송 한 건의 제한 시간
+-    timeoutMs: 2000,
++    timeoutMs: 10000,
+   },
+   retry: {
+     // 첫 발송을 포함한 최대 시도 횟수

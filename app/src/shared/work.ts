@@ -3,6 +3,7 @@
 import type { WorkSettings } from './config'
 import type { AgentEngine } from './agent'
 import type { HandoffStatus, NodeName, TaskNode } from './contracts'
+import type { KnowledgeChoices, KnowledgeOutcome, KnowledgePlan } from './knowledge'
 
 /**
  * 업무 유형 (D232, D236, D258): 버그 수정(bugfix), 기능 추가(feature), 리팩터링(refactor). 사람이 새 Work 대화상자에서
@@ -325,8 +326,11 @@ export interface RewindOperation extends OperationBase {
 /** 전달 (시나리오 7-3): [push] 또는 [PR 생성]. [완료만]은 전달이 없다 */
 export type DeliveryChoice = 'push' | 'pr'
 
-/** 전달의 단계 (D77): 커밋 안 된 변경 처리(prepare), push, PR 만들기(pr) */
-export type DeliveryStage = 'prepare' | 'push' | 'pr'
+/**
+ * 전달의 단계 (D77): 커밋 안 된 변경 처리(prepare), 지식 커밋(knowledge: [PR 생성]에만, I73), push, PR 만들기(pr).
+ * 차례는 prepare → knowledge → push → pr이다
+ */
+export type DeliveryStage = 'prepare' | 'knowledge' | 'push' | 'pr'
 
 /** 커밋 안 된 변경의 처리 (7-5): [변경 버리고 진행](git stash -u), [커밋하고 진행] */
 export type UncommittedAction = 'discard' | 'commit'
@@ -349,6 +353,13 @@ export interface DeliverOperation extends OperationBase {
   /** 커밋 안 된 변경을 처리하며 만든 stash나 커밋 (7-5). prepare 단계를 마치고 push로 옮길 때 적는다 */
   stash?: string
   commit?: string
+  /**
+   * 채택 결과 (I73). 끊긴 전달의 [다시 시도]가 같은 것을 쓴다. 지식을 끈 때(I84)와 M17 전의 기록에는 없다. 레포에 쓸 것은
+   * [PR 생성]의 knowledge 단계가, 앱 저장소에 쓸 것은 전달이 성공한 뒤 쓴다
+   */
+  knowledge?: KnowledgePlan
+  /** knowledge 단계가 만든 지식 커밋 (I73). push로 옮길 때 적는다 */
+  knowledge_commit?: string
 }
 
 /** 정리의 단계 (D77): worktree 지우기, 브랜치 지우기, 원격 브랜치 지우기(머지한 Work, D178) */
@@ -439,6 +450,13 @@ export interface DeliveryRecord {
    */
   stashes?: string[]
   commits?: string[]
+  /** 지식의 수와 지식 커밋 (I73). 성공한 전달에만 있고 지식을 끈 때는 없다 */
+  knowledge?: KnowledgeOutcome
+  /**
+   * 실패한 전달의 채택 결과 (I73). 지식 커밋을 만든 뒤 실패했으면 다음 [push]·[PR 생성]이 같은 것을 써서 지식 커밋을 두 번
+   * 만들지 않는다. 실패한 전달에만 있다
+   */
+  knowledge_plan?: KnowledgePlan
 }
 
 /** 해시를 적는 앱 소유 파일 (6.1, D91, D124, D125). work.json은 따로 비교한다 */
@@ -508,6 +526,10 @@ export interface PullRequestRecord {
   /** 머지 뒤 [Work 정리] 창을 연 때 (D178, D200). 머지했는데 없으면 사람이 그 Work를 볼 때 연다 */
   clean_offered_at?: string
   /**
+   * PR 대응 task의 지식 후보를 거른 때 (I76): 머지 뒤 정리 창을 닫거나 [머지 없이 끝내기]를 누른 때다. 있으면 다시 묻지 않는다
+   */
+  knowledge_at?: string
+  /**
    * 사람 손 없이 이어진 대응 라운드 수 (D171, D191의 "자동 라운드 수"). 자동 시작할 때 1 더하고, 사람이 [대응 시작]이나
    * 대응 task의 승인을 누르면 0으로 돌린다. 없으면 0이다
    */
@@ -553,6 +575,10 @@ export interface WorkState {
   cleanup_process?: CleanupProcess
   /** PR 진행의 기록 (D191). [PR 생성]이 성공한 Work에 있다 */
   pr?: PullRequestRecord
+  /**
+   * [AI 세션 열기](7-5)를 거치는 전달의 지식 거르기 (I75). [정리 끝 → push/PR 진행]이 쓰고, 전달이 성공하면 지운다
+   */
+  knowledge_choices?: KnowledgeChoices
   tasks: TaskRecord[]
 }
 

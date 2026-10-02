@@ -13,7 +13,7 @@ import {
 } from '../../src/core/machine'
 import { badge } from '../../src/core/approval'
 import { OPERATION_BLOCKS } from '../../src/core/recovery'
-import type { TaskCheck } from '../../src/core/validate'
+import { FORMAT_VERSION, type TaskCheck } from '../../src/core/validate'
 import { DEFAULT_CONFIG, type AppConfig } from '../../src/shared/config'
 import type { Handoff, NodeName, TaskNode } from '../../src/shared/contracts'
 import type {
@@ -45,6 +45,7 @@ const HANDOFF: Handoff = {
 function valid(handoff: Partial<Handoff> = {}): TaskCheck {
   return {
     handoff_present: true,
+    formatVersion: 2,
     status: 'awaiting_approval',
     errors: [],
     warnings: [],
@@ -60,6 +61,7 @@ const BLOCKED: TaskCheck = {
 
 const MISSING: TaskCheck = {
   handoff_present: false,
+  formatVersion: 2,
   status: null,
   errors: [],
   warnings: [],
@@ -189,7 +191,7 @@ describe('Work 만들기와 task 시작 (시나리오 1, 2)', () => {
         node: 'intake',
         status: 'working',
         reason: 'default',
-        format_version: 1,
+        format_version: FORMAT_VERSION,
         created_at: '2026-09-26T10:00:00+09:00',
         session: null,
         bounce_count: 0,
@@ -2057,6 +2059,7 @@ describe('전달 (시나리오 7, D77, D119, D120)', () => {
       message: null,
       branch: BRANCH,
       base: 'main',
+      knowledge: null,
     })
   })
 

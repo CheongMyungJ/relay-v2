@@ -66,6 +66,7 @@ const HANDOFF: Handoff = {
 function valid(): TaskCheck {
   return {
     handoff_present: true,
+    formatVersion: 2,
     status: 'awaiting_approval',
     errors: [],
     warnings: [],

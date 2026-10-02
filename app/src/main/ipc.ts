@@ -2,7 +2,9 @@
 // 값은 여기서 모양만 확인하고, 뜻(상태에 맞는 명령인지, 설정 값의 범위)은 Relay와 core가 판정한다.
 import os from 'node:os'
 import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { readChoices, readEdit } from '../core/knowledge'
 import { ALL_NODES } from '../core/pipeline'
+import type { KnowledgeChoices, KnowledgeEditInput } from '../shared/knowledge'
 import { IPC, type AppInfo } from '../shared/api'
 import type { NodeName } from '../shared/contracts'
 import type {
@@ -88,13 +90,41 @@ function choice(v: unknown): DeliveryChoice {
 function deliverInput(v: unknown): DeliverInput {
   if (!v || typeof v !== 'object') throw new Error('전달 입력이 아님')
   const o = v as Record<string, unknown>
+  const knowledge = knowledgeOpt(o['knowledge'])
   const u = o['uncommitted']
-  if (u === null || u === undefined) return { choice: choice(o['choice']), uncommitted: null }
+  if (u === null || u === undefined) {
+    return { choice: choice(o['choice']), uncommitted: null, ...knowledge }
+  }
   if (typeof u !== 'object') throw new Error('커밋 안 된 변경의 처리가 아님')
   const w = u as Record<string, unknown>
   const action = w['action']
   if (action !== 'discard' && action !== 'commit') throw new Error('커밋 안 된 변경의 처리가 아님')
-  return { choice: choice(o['choice']), uncommitted: { action, expect: texts(w['expect']) } }
+  return {
+    choice: choice(o['choice']),
+    uncommitted: { action, expect: texts(w['expect']) },
+    ...knowledge,
+  }
+}
+
+/** 지식 거르기의 선택 (I75). 모양이 틀린 항목은 버린다 */
+function knowledgeOpt(v: unknown): { knowledge?: KnowledgeChoices } {
+  const k = readChoices(v)
+  return k ? { knowledge: k } : {}
+}
+
+/** 지식 화면의 조작 (I77) */
+function knowledgeEdit(v: unknown): KnowledgeEditInput {
+  if (!v || typeof v !== 'object') throw new Error('지식 조작이 아님')
+  const o = v as Record<string, unknown>
+  const id = text(o['id'])
+  const scope = o['scope']
+  if (o['op'] === 'confirm') return { op: 'confirm', id }
+  if (scope !== 'team' && scope !== 'mine' && scope !== 'pending')
+    throw new Error('지식의 자리가 아님')
+  if (o['op'] === 'drop') return { op: 'drop', scope, id }
+  if (o['op'] === 'edit') return { op: 'edit', scope, id, edit: readEdit(o['edit']) ?? {} }
+  if (o['op'] === 'move' && scope !== 'team') return { op: 'move', scope, id }
+  throw new Error('지식 조작이 아님')
 }
 
 function cleanInput(v: unknown): CleanInput {
@@ -187,6 +217,7 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   ipcMain.handle(IPC.approve, async (_e, workKey: unknown, taskId: unknown, opts: ApproveOptions) =>
     (await ready).approve(text(workKey), text(taskId), {
       ...(opts.force === true ? { force: true } : {}),
+      ...knowledgeOpt(opts.knowledge),
     }),
   )
 
@@ -210,8 +241,15 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   ipcMain.handle(IPC.stopAfter, async (_e, workKey: unknown, on: unknown) =>
     (await ready).stopAfter(text(workKey), flag(on)),
   )
-  ipcMain.handle(IPC.resumeWork, async (_e, workKey: unknown) =>
-    (await ready).resumeWork(text(workKey)),
+  ipcMain.handle(IPC.resumeWork, async (_e, workKey: unknown, opts: unknown) =>
+    (await ready).resumeWork(
+      text(workKey),
+      knowledgeOpt(
+        opts && typeof opts === 'object'
+          ? (opts as Record<string, unknown>)['knowledge']
+          : undefined,
+      ),
+    ),
   )
   ipcMain.handle(IPC.abandon, async (_e, workKey: unknown) => (await ready).abandon(text(workKey)))
   ipcMain.handle(
@@ -225,8 +263,8 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   ipcMain.handle(IPC.deliver, async (_e, workKey: unknown, input: unknown) =>
     (await ready).deliver(text(workKey), deliverInput(input)),
   )
-  ipcMain.handle(IPC.openCleanup, async (_e, workKey: unknown, c: unknown) =>
-    (await ready).openCleanup(text(workKey), choice(c)),
+  ipcMain.handle(IPC.openCleanup, async (_e, workKey: unknown, c: unknown, k: unknown) =>
+    (await ready).openCleanup(text(workKey), choice(c), readChoices(k)),
   )
   ipcMain.handle(IPC.closeCleanup, async (_e, workKey: unknown) =>
     (await ready).closeCleanup(text(workKey)),
@@ -264,7 +302,21 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   ipcMain.handle(IPC.prMerge, async (_e, workKey: unknown, input: unknown) =>
     (await ready).prMerge(text(workKey), mergeInput(input)),
   )
-  ipcMain.handle(IPC.prEnd, async (_e, workKey: unknown) => (await ready).prEnd(text(workKey)))
+  ipcMain.handle(IPC.prEnd, async (_e, workKey: unknown, k: unknown) =>
+    (await ready).prEnd(text(workKey), readChoices(k)),
+  )
+  ipcMain.handle(IPC.respondKnowledge, async (_e, workKey: unknown) =>
+    (await ready).respondKnowledge(text(workKey)),
+  )
+  ipcMain.handle(IPC.fileKnowledge, async (_e, workKey: unknown, k: unknown) =>
+    (await ready).fileKnowledge(text(workKey), readChoices(k)),
+  )
+  ipcMain.handle(IPC.knowledgeScreen, async (_e, projectId: unknown) =>
+    (await ready).knowledgeScreen(text(projectId)),
+  )
+  ipcMain.handle(IPC.editKnowledge, async (_e, projectId: unknown, input: unknown) =>
+    (await ready).editKnowledge(text(projectId), knowledgeEdit(input)),
+  )
   ipcMain.handle(IPC.prCleanOffered, async (_e, workKey: unknown) =>
     (await ready).prCleanOffered(text(workKey)),
   )

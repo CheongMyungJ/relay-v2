@@ -131,6 +131,7 @@ describe('엔진 선택과 이전 기록 (E3, E5)', () => {
         at,
         check: {
           handoff_present: true,
+          formatVersion: 2,
           status: 'awaiting_approval',
           errors: [],
           warnings: [],

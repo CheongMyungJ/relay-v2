@@ -1,6 +1,7 @@
 // 렌더러로 보내는 스냅샷과 조회 결과 (I14). main이 core로 계산하고, 화면은 받은 것을 그리기만 한다.
 import type { WorkSettings } from './config'
 import type { Decision, HandoffStatus, NodeName, TaskNode } from './contracts'
+import type { KnowledgeChoices, KnowledgeReview } from './knowledge'
 import type { PendingQuestionView } from './questions'
 import type { PrItemKind, PrItemStatus } from './pr'
 import type {
@@ -34,6 +35,7 @@ export type EmphasisKind =
   | 'open_questions'
   | 'recommended_back'
   | 'existing_tests'
+  | 'knowledge_files'
   | 'uncommitted'
   | 'format_errors'
 
@@ -131,6 +133,8 @@ export interface CleanupView {
 /** [push]·[PR 생성] (시나리오 7-4, 7-5) */
 export interface DeliverInput {
   choice: DeliveryChoice
+  /** Work 완료 화면의 지식 거르기 (I75). 없으면 기본 선택이다 (D303) */
+  knowledge?: KnowledgeChoices
   /**
    * 커밋 안 된 변경의 처리. expect는 사람에게 보인 변경 목록이다. 그 사이 바뀌었으면 받지 않고
    * 지금 목록을 다시 돌려준다. 변경이 없으면 null이다
@@ -437,6 +441,11 @@ export interface ProjectView {
   /** 프로젝트 설정 (5.1.2, D185) */
   allowedBots: string[]
   mergeMethod: MergeMethod | null
+  /** 지식 폴더와 팀 공유 (5.1.2, D305, D322) */
+  knowledgeDir: string
+  knowledgeShare: boolean
+  /** 지식을 환경 변수로 껐다 (I84). [지식] 버튼과 지식 칸을 보이지 않는다 */
+  knowledgeOff: boolean
 }
 
 export interface TaskView {
@@ -801,6 +810,8 @@ export interface Completion {
   delivery: DeliveryView | null
   /** 작업 브랜치의 커밋 (D225). 브랜치가 없으면(정리로 지움) null */
   branch: BranchInfo | null
+  /** 지식 칸 (I75). 지식을 끈 때(I84)와 전달을 고를 수 없는 화면은 null이다 */
+  knowledge: KnowledgeReview | null
 }
 
 // ---------- 명령 ----------
@@ -847,7 +858,18 @@ export interface NewWorkInput {
 export interface ApproveOptions {
   /** [오류 무시하고 승인] (D112) */
   force?: boolean
+  /** verify의 [완료만]: 지식 거르기 (I75). 없으면 기본 선택이다 (D303) */
+  knowledge?: KnowledgeChoices
 }
+
+/** 멈춘 Work의 [재개]. verify에서 멈춘 Work면 Work를 완료하며 지식 거르기를 쓴다 (I75) */
+export interface ResumeWorkOptions {
+  knowledge?: KnowledgeChoices
+}
+
+/** PR 대응 task의 지식 칸 (I76): 머지 뒤 정리 창과 [머지 없이 끝내기] 확인 창. 거를 것이 없거나 이미 걸렀으면 null */
+export type KnowledgeReviewResult =
+  { ok: true; review: KnowledgeReview | null } | { ok: false; error: string }
 
 // ---------- 터미널 ----------
 
