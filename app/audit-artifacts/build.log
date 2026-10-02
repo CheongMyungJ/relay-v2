@@ -1,0 +1,29 @@
+
+> relay@0.0.0 build
+> npm run contracts && electron-vite build
+
+
+> relay@0.0.0 contracts
+> node scripts/contracts.mjs
+
+contracts: handoff.v1.schema.json, handoff.v1.ts, handoff.v2.schema.json, handoff.v2.ts, knowledge-entry.v1.schema.json, knowledge-entry.v1.ts → src/shared/generated
+vite v7.3.6 building ssr environment for production...
+transforming...
+✓ 373 modules transformed.
+rendering chunks...
+out/main/index.js  1,049.72 kB
+✓ built in 1.67s
+vite v7.3.6 building ssr environment for production...
+transforming...
+✓ 2 modules transformed.
+rendering chunks...
+out/preload/index.js  6.98 kB
+✓ built in 19ms
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 66 modules transformed.
+rendering chunks...
+../../out/renderer/index.html                     0.46 kB
+../../out/renderer/assets/index-8plceGfP.css     24.35 kB
+../../out/renderer/assets/index-DGJ88V_r.js   1,426.91 kB
+✓ built in 1.50s

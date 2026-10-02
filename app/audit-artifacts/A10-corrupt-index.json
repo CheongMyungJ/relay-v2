@@ -1,0 +1,30 @@
+{
+  "warnings": [],
+  "carriedPr": null,
+  "editResult": null,
+  "stored": [
+    {
+      "id": "domain-00000001",
+      "kind": "domain",
+      "subkind": null,
+      "status": "active",
+      "superseded_by": null,
+      "paths": [
+        "src/billing.ts"
+      ],
+      "terms": [
+        "반올림"
+      ],
+      "hashes": {},
+      "source": {
+        "work": "w-audit",
+        "task": "t-01",
+        "by": "human"
+      },
+      "rule": "잠긴 항목이 바뀜",
+      "why": "회계팀 결정",
+      "not_in_code": "사람이 정함",
+      "incentive": "은행가 반올림을 적용한다"
+    }
+  ]
+}

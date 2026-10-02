@@ -1,0 +1,371 @@
+{
+  "config": {
+    "argv": [
+      "/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node",
+      "/workspace/relay-v2/app/node_modules/.bin/playwright",
+      "test",
+      "--config",
+      "test/audit/playwright.config.ts"
+    ],
+    "configFile": "/workspace/relay-v2/app/test/audit/playwright.config.ts",
+    "rootDir": "/workspace/relay-v2/app/test/audit",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/workspace/relay-v2/app/audit-artifacts/gui-traces",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "",
+        "name": "",
+        "testDir": "/workspace/relay-v2/app/test/audit",
+        "testIgnore": [],
+        "testMatch": [
+          "*.spec.ts"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "audit-artifacts/gui.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.63.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "knowledge-audit.spec.ts",
+      "file": "knowledge-audit.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "G01 actual Electron edit persists through dialog close and reopen",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 921,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-02T15:27:46.925Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bbe45b49630693880076-2c95768a0fb674c1f517",
+          "file": "knowledge-audit.spec.ts",
+          "line": 79,
+          "column": 5
+        },
+        {
+          "title": "G02 blank rule should display an error in actual UI",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 2328,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('dialog', { name: '지식 · sample' }).locator('.error')\nExpected: visible\nTimeout: 1500ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByRole('dialog', { name: '지식 · sample' }).locator('.error') with timeout 1500ms\u001b[22m\n\u001b[2m  - waiting for getByRole('dialog', { name: '지식 · sample' }).locator('.error')\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('dialog', { name: '지식 · sample' }).locator('.error')\nExpected: visible\nTimeout: 1500ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByRole('dialog', { name: '지식 · sample' }).locator('.error') with timeout 1500ms\u001b[22m\n\u001b[2m  - waiting for getByRole('dialog', { name: '지식 · sample' }).locator('.error')\u001b[22m\n\n    at /workspace/relay-v2/app/test/audit/knowledge-audit.spec.ts:97:44",
+                    "location": {
+                      "file": "/workspace/relay-v2/app/test/audit/knowledge-audit.spec.ts",
+                      "column": 44,
+                      "line": 97
+                    },
+                    "snippet": "   95 |   await expect(dialog().getByRole('button', { name: '고침', exact: true })).toBeEnabled()\n   96 |   await shot('G02-blank-rule-silent-success')\n>  97 |   await expect(dialog().locator('.error')).toBeVisible({ timeout: 1500 })\n      |                                            ^\n   98 | })\n   99 | test('G03 moving team replacement to personal leaves a dangling public tombstone', async () => {\n  100 |   await start([rule], true)"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/workspace/relay-v2/app/test/audit/knowledge-audit.spec.ts",
+                        "column": 44,
+                        "line": 97
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('dialog', { name: '지식 · sample' }).locator('.error')\nExpected: visible\nTimeout: 1500ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByRole('dialog', { name: '지식 · sample' }).locator('.error') with timeout 1500ms\u001b[22m\n\u001b[2m  - waiting for getByRole('dialog', { name: '지식 · sample' }).locator('.error')\u001b[22m\n\n\n   95 |   await expect(dialog().getByRole('button', { name: '고침', exact: true })).toBeEnabled()\n   96 |   await shot('G02-blank-rule-silent-success')\n>  97 |   await expect(dialog().locator('.error')).toBeVisible({ timeout: 1500 })\n      |                                            ^\n   98 | })\n   99 | test('G03 moving team replacement to personal leaves a dangling public tombstone', async () => {\n  100 |   await start([rule], true)\n    at /workspace/relay-v2/app/test/audit/knowledge-audit.spec.ts:97:44"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-02T15:27:47.883Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/workspace/relay-v2/app/audit-artifacts/gui-traces/knowledge-audit-G02-blank--1746a-splay-an-error-in-actual-UI/test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/workspace/relay-v2/app/audit-artifacts/gui-traces/knowledge-audit-G02-blank--1746a-splay-an-error-in-actual-UI/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/workspace/relay-v2/app/audit-artifacts/gui-traces/knowledge-audit-G02-blank--1746a-splay-an-error-in-actual-UI/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/workspace/relay-v2/app/test/audit/knowledge-audit.spec.ts",
+                    "column": 44,
+                    "line": 97
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "bbe45b49630693880076-ae34820a3fe8bedc2eb1",
+          "file": "knowledge-audit.spec.ts",
+          "line": 90,
+          "column": 5
+        },
+        {
+          "title": "G03 moving team replacement to personal leaves a dangling public tombstone",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 999,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m0\u001b[39m\nReceived: \u001b[31m1\u001b[39m",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m0\u001b[39m\nReceived: \u001b[31m1\u001b[39m\n    at /workspace/relay-v2/app/test/audit/knowledge-audit.spec.ts:113:90",
+                    "location": {
+                      "file": "/workspace/relay-v2/app/test/audit/knowledge-audit.spec.ts",
+                      "column": 90,
+                      "line": 113
+                    },
+                    "snippet": "  111 |   )\n  112 |   fs.writeFileSync(path.join(evidence, 'G03-screen.json'), JSON.stringify(data, null, 2))\n> 113 |   expect(data.ok && data.screen.pending.filter((e) => e.status === 'superseded').length).toBe(0)\n      |                                                                                          ^\n  114 | })\n  115 | test('G04 invalid terms report an error but close editor; reason and kind cannot be edited', async () => {\n  116 |   await start()"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/workspace/relay-v2/app/test/audit/knowledge-audit.spec.ts",
+                        "column": 90,
+                        "line": 113
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m0\u001b[39m\nReceived: \u001b[31m1\u001b[39m\n\n  111 |   )\n  112 |   fs.writeFileSync(path.join(evidence, 'G03-screen.json'), JSON.stringify(data, null, 2))\n> 113 |   expect(data.ok && data.screen.pending.filter((e) => e.status === 'superseded').length).toBe(0)\n      |                                                                                          ^\n  114 | })\n  115 | test('G04 invalid terms report an error but close editor; reason and kind cannot be edited', async () => {\n  116 |   await start()\n    at /workspace/relay-v2/app/test/audit/knowledge-audit.spec.ts:113:90"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-02T15:27:50.690Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/workspace/relay-v2/app/audit-artifacts/gui-traces/knowledge-audit-G03-moving-2002e-a-dangling-public-tombstone/test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/workspace/relay-v2/app/audit-artifacts/gui-traces/knowledge-audit-G03-moving-2002e-a-dangling-public-tombstone/error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "/workspace/relay-v2/app/audit-artifacts/gui-traces/knowledge-audit-G03-moving-2002e-a-dangling-public-tombstone/trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/workspace/relay-v2/app/test/audit/knowledge-audit.spec.ts",
+                    "column": 90,
+                    "line": 113
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "bbe45b49630693880076-fb497c6dddc9caf72c1e",
+          "file": "knowledge-audit.spec.ts",
+          "line": 99,
+          "column": 5
+        },
+        {
+          "title": "G04 invalid terms report an error but close editor; reason and kind cannot be edited",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 782,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-02T15:27:52.142Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bbe45b49630693880076-0a30f09532c4ba342255",
+          "file": "knowledge-audit.spec.ts",
+          "line": 115,
+          "column": 5
+        },
+        {
+          "title": "G05 300 entries render; search filter and replacement history are absent",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1057,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-02T15:27:52.956Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bbe45b49630693880076-396de3aedd12df5fbf0e",
+          "file": "knowledge-audit.spec.ts",
+          "line": 126,
+          "column": 5
+        },
+        {
+          "title": "G06 delete is immediate and no undo remains in the knowledge dialog",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 695,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-02T15:27:54.028Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bbe45b49630693880076-5dd57665355ecacbe67a",
+          "file": "knowledge-audit.spec.ts",
+          "line": 148,
+          "column": 5
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-02T15:27:46.374Z",
+    "duration": 8376.26,
+    "expected": 4,
+    "skipped": 0,
+    "unexpected": 2,
+    "flaky": 0
+  }
+}

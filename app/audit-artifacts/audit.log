@@ -1,0 +1,318 @@
+
+ RUN  v5.0.2 /workspace/relay-v2/app
+
+ × test/audit/knowledge-workflow.test.ts > F-drop: Work completion feedback choice survives actual PR delivery 1318ms
+   → expected [ '빈 배열의 평균은 NaN이다' ] to deeply equal []
+ × test/audit/knowledge-workflow.test.ts > F-replace: Work completion feedback choice survives actual PR delivery 1022ms
+   → expected [ '빈 배열의 평균은 NaN이다', '빈 배열의 평균은 0이다' ] to deeply equal [ '빈 배열의 평균은 0이다' ]
+ ✓ test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A01 empty project: all groups empty with no warning 44ms
+ ✓ test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A02 Korean and emoji survive persistent store and reload 93ms
+ ✓ test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A03 valid personal edit survives reopening 53ms
+ ✓ test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A04 empty terms are rejected without changing file 41ms
+ ✓ test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A05 six terms are rejected 51ms
+ × test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A06 blank rule reports a validation error instead of success 48ms
+   → expected null not to be null
+ ✓ test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A07 personal to pending to personal round trip has one copy 56ms
+ ✓ test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A08 share disabled rejects moving personal knowledge to team 35ms
+ ✓ test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A09 open PR locks pending edit, move and drop 48ms
+ × test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A10 corrupt PR index must not silently unlock carried entries 57ms
+   → expected 0 to be greater than 0
+ ✓ test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A11 team edit creates replacement and tombstone without modifying main 107ms
+ × test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A12 changing replacement to personal cannot leave a team tombstone pointing to private data 105ms
+   → expected [ { id: 'domain-00000001', …(12) } ] to deeply equal []
+ × test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A13 dropping pending replacement must not retire original with a dangling target 113ms
+   → expected [] to have a length of 1 but got +0
+ ✓ test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A14 share-off team edit is private and original team files are preserved 102ms
+ ✓ test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A15 code change marks team knowledge stale and confirm clears it in injection pool 110ms
+ ✓ test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A16 unrelated file change does not mark team rule stale 68ms
+ × test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A17 feedback drop overrides default pending share before PR creation 81ms
+   → expected [ { entry: { …(13) }, …(3) } ] to have a length of +0 but got 1
+ × test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A18 feedback replacement must not ship both old and new active rules 79ms
+   → expected [ '청구 금액은 반올림한다', '금액은 올림한다' ] to deeply equal [ '금액은 올림한다' ]
+ ✓ test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A19 pending hold keeps item local and out of PR 65ms
+ ✓ test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A20 repeated knowledge commit is idempotent 80ms
+ ✓ test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A21 matching merged pending copy is cleaned on next pool read 78ms
+ ✓ test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A22 corrupt entry is reported while valid entries still load 86ms
+ × test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A23 missing required body sections are surfaced as warnings 42ms
+   → expected 0 to be greater than 0
+ × test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A24 Korean path in request matches the complete actual file name 1ms
+   → expected [] to include 'src/결제/정산.ts'
+ × test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A25 space-containing path in backticks remains one path 1ms
+   → expected [ 'src/billing', 'rules.ts' ] to include 'src/billing rules.ts'
+ × test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A26 long first entry respects configured context budget 43ms
+   → expected 20220 to be less than or equal to 1800
+ ✓ test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A27 personal delete persists after reopening 38ms
+ × test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A28 editing a superseded team entry must reject or create an active replacement 89ms
+   → expected false to be true // Object.is equality
+ ✓ test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A29 offline origin falls back to cached remote knowledge with warning 84ms
+ ✓ test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A30 rule and reason Markdown round trip preserves ordinary fenced content 1ms
+ × test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A31 next Work cleanup must not delete a concurrent human edit of a merged pending copy 78ms
+   → expected [] to deeply equal [ '동시 편집한 새 규칙' ]
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 14 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A06 blank rule reports a validation error instead of success
+AssertionError: expected null not to be null
+ ❯ test/audit/knowledge-audit.test.ts:213:11
+    211|     expect(
+    212|       await s.edit({ op: 'edit', scope: 'mine', id: entry().id, edit: …
+    213|     ).not.toBeNull()
+       |           ^
+    214|   })
+    215|   it('A07 personal to pending to personal round trip has one copy', as…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/14]⎯
+
+ FAIL  test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A10 corrupt PR index must not silently unlock carried entries
+AssertionError: expected 0 to be greater than 0
+ ❯ test/audit/knowledge-audit.test.ts:288:36
+    286|       ),
+    287|     )
+    288|     expect(screen.warnings.length).toBeGreaterThan(0)
+       |                                    ^
+    289|     expect(editResult).not.toBeNull()
+    290|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/14]⎯
+
+ FAIL  test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A12 changing replacement to personal cannot leave a team tombstone pointing to private data
+AssertionError: expected [ { id: 'domain-00000001', …(12) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "hashes": {
++       "src/billing.ts": "6c4fa91943fb31aac645237356d4382e0faf5cae",
++     },
++     "id": "domain-00000001",
++     "incentive": "은행가 반올림을 적용한다",
++     "kind": "domain",
++     "not_in_code": "사람이 정함",
++     "paths": [
++       "src/billing.ts",
++     ],
++     "rule": "청구 금액은 반올림한다",
++     "source": {
++       "by": "human",
++       "task": "t-01",
++       "work": "w-audit",
++     },
++     "status": "superseded",
++     "subkind": null,
++     "superseded_by": "domain-1ed812f0",
++     "terms": [
++       "반올림",
++     ],
++     "why": "회계팀 결정",
++   },
++ ]
+
+ ❯ test/audit/knowledge-audit.test.ts:313:71
+    311|     await s.edit({ op: 'move', scope: 'pending', id: replacement.id })
+    312|     const pending = (await s.store.list('pending')).entries.map((e) =>…
+    313|     expect(pending.filter((e) => e.superseded_by === replacement.id)).…
+       |                                                                       ^
+    314|   })
+    315|   it('A13 dropping pending replacement must not retire original with a…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/14]⎯
+
+ FAIL  test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A13 dropping pending replacement must not retire original with a dangling target
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ test/audit/knowledge-audit.test.ts:321:83
+    319|     const replacement = must((await s.screen()).pending.find((e) => e.…
+    320|     await s.edit({ op: 'drop', scope: 'pending', id: replacement.id })
+    321|     expect((await s.knowledge.pool()).filter((p) => p.entry.status ===…
+       |                                                                                   ^
+    322|   })
+    323|   it('A14 share-off team edit is private and original team files are p…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/14]⎯
+
+ FAIL  test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A17 feedback drop overrides default pending share before PR creation
+AssertionError: expected [ { entry: { …(13) }, …(3) } ] to have a length of +0 but got 1
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ test/audit/knowledge-audit.test.ts:360:60
+    358|     await s.knowledge.commitRepo(p)
+    359|     await s.knowledge.storePlan(p, null)
+    360|     expect((await readRepoKnowledge(s.repo, DIR)).entries).toHaveLengt…
+       |                                                            ^
+    361|     expect((await s.store.list('pending')).entries).toHaveLength(0)
+    362|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/14]⎯
+
+ FAIL  test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A18 feedback replacement must not ship both old and new active rules
+AssertionError: expected [ '청구 금액은 반올림한다', '금액은 올림한다' ] to deeply equal [ '금액은 올림한다' ]
+
+- Expected
++ Received
+
+  [
++   "청구 금액은 반올림한다",
+    "금액은 올림한다",
+  ]
+
+ ❯ test/audit/knowledge-audit.test.ts:378:7
+    376|         .filter((e) => e.entry.status === 'active')
+    377|         .map((e) => e.entry.rule),
+    378|     ).toEqual(['금액은 올림한다'])
+       |       ^
+    379|   })
+    380|   it('A19 pending hold keeps item local and out of PR', async () => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/14]⎯
+
+ FAIL  test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A23 missing required body sections are surfaced as warnings
+AssertionError: expected 0 to be greater than 0
+ ❯ test/audit/knowledge-audit.test.ts:414:48
+    412|     const text = must(renderEntry(entry()).split('## 코드불가')[0])
+    413|     writeFiles(s.store.dir, { 'mine/domain/domain-00000001.md': text })
+    414|     expect((await s.screen()).warnings.length).toBeGreaterThan(0)
+       |                                                ^
+    415|   })
+    416|   it('A24 Korean path in request matches the complete actual file name…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/14]⎯
+
+ FAIL  test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A24 Korean path in request matches the complete actual file name
+AssertionError: expected [] to include 'src/결제/정산.ts'
+ ❯ test/audit/knowledge-audit.test.ts:417:50
+    415|   })
+    416|   it('A24 Korean path in request matches the complete actual file name…
+    417|     expect(pathsInText('src/결제/정산.ts를 수정해 주세요')).toContain('src/결제/정산.…
+       |                                                  ^
+    418|   })
+    419|   it('A25 space-containing path in backticks remains one path', () => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/14]⎯
+
+ FAIL  test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A25 space-containing path in backticks remains one path
+AssertionError: expected [ 'src/billing', 'rules.ts' ] to include 'src/billing rules.ts'
+ ❯ test/audit/knowledge-audit.test.ts:420:62
+    418|   })
+    419|   it('A25 space-containing path in backticks remains one path', () => {
+    420|     expect(pathsInText('Fix `src/billing rules.ts` please')).toContain…
+       |                                                              ^
+    421|   })
+    422|   it('A26 long first entry respects configured context budget', async …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/14]⎯
+
+ FAIL  test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A26 long first entry respects configured context budget
+AssertionError: expected 20220 to be less than or equal to 1800
+ ❯ test/audit/knowledge-audit.test.ts:433:39
+    431|       dirs: [s.store.dir],
+    432|     })
+    433|     expect([...rendered.text].length).toBeLessThanOrEqual(1800)
+       |                                       ^
+    434|   })
+    435|   it('A27 personal delete persists after reopening', async () => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/14]⎯
+
+ FAIL  test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A28 editing a superseded team entry must reject or create an active replacement
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ test/audit/knowledge-audit.test.ts:451:78
+    449|     })
+    450|     const active = (await s.knowledge.pool()).filter((p) => p.entry.st…
+    451|     expect(result !== null || active.some((p) => p.entry.rule === '되살린…
+       |                                                                              ^
+    452|   })
+    453|   it('A29 offline origin falls back to cached remote knowledge with wa…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/14]⎯
+
+ FAIL  test/audit/knowledge-audit.test.ts > knowledge exploratory audit > A31 next Work cleanup must not delete a concurrent human edit of a merged pending copy
+AssertionError: expected [] to deeply equal [ '동시 편집한 새 규칙' ]
+
+- Expected
++ Received
+
+- [
+-   "동시 편집한 새 규칙",
+- ]
++ []
+
+ ❯ test/audit/knowledge-audit.test.ts:505:78
+    503|     resumeRead()
+    504|     await loading
+    505|     expect((await s.store.list('pending')).entries.map((e) => e.entry.…
+       |                                                                              ^
+    506|       '동시 편집한 새 규칙',
+    507|     ])
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/14]⎯
+
+ FAIL  test/audit/knowledge-workflow.test.ts > F-drop: Work completion feedback choice survives actual PR delivery
+AssertionError: expected [ '빈 배열의 평균은 NaN이다' ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "빈 배열의 평균은 NaN이다",
++ ]
+
+ ❯ test/audit/knowledge-workflow.test.ts:101:77
+     99|       ),
+    100|     )
+    101|     expect(entries.filter((e) => e.status === 'active').map((e) => e.r…
+       |                                                                             ^
+    102|       action === 'drop' ? [] : ['빈 배열의 평균은 0이다'],
+    103|     )
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/14]⎯
+
+ FAIL  test/audit/knowledge-workflow.test.ts > F-replace: Work completion feedback choice survives actual PR delivery
+AssertionError: expected [ '빈 배열의 평균은 NaN이다', '빈 배열의 평균은 0이다' ] to deeply equal [ '빈 배열의 평균은 0이다' ]
+
+- Expected
++ Received
+
+  [
++   "빈 배열의 평균은 NaN이다",
+    "빈 배열의 평균은 0이다",
+  ]
+
+ ❯ test/audit/knowledge-workflow.test.ts:101:77
+     99|       ),
+    100|     )
+    101|     expect(entries.filter((e) => e.status === 'active').map((e) => e.r…
+       |                                                                             ^
+    102|       action === 'drop' ? [] : ['빈 배열의 평균은 0이다'],
+    103|     )
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/14]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  14 failed | 19 passed (33)
+   Start at  15:27:46
+   Duration  5.38s (tests 83%, transform 12%, import 4%)
+
+JSON report written to /workspace/relay-v2/app/audit-artifacts/audit.json

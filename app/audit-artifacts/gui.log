@@ -1,0 +1,88 @@
+
+Running 6 tests using 1 worker
+
+(node:10603) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 test/audit/knowledge-audit.spec.ts:79:5 › G01 actual Electron edit persists through dialog close and reopen (921ms)
+  ✘  2 test/audit/knowledge-audit.spec.ts:90:5 › G02 blank rule should display an error in actual UI (2.3s)
+(node:11662) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  3 test/audit/knowledge-audit.spec.ts:99:5 › G03 moving team replacement to personal leaves a dangling public tombstone (999ms)
+(node:12326) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  4 test/audit/knowledge-audit.spec.ts:115:5 › G04 invalid terms report an error but close editor; reason and kind cannot be edited (782ms)
+  ✓  5 test/audit/knowledge-audit.spec.ts:126:5 › G05 300 entries render; search filter and replacement history are absent (1.1s)
+  ✓  6 test/audit/knowledge-audit.spec.ts:148:5 › G06 delete is immediate and no undo remains in the knowledge dialog (695ms)
+
+
+  1) test/audit/knowledge-audit.spec.ts:90:5 › G02 blank rule should display an error in actual UI ─
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog', { name: '지식 · sample' }).locator('.error')
+    Expected: visible
+    Timeout: 1500ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('dialog', { name: '지식 · sample' }).locator('.error') with timeout 1500ms
+      - waiting for getByRole('dialog', { name: '지식 · sample' }).locator('.error')
+
+
+       95 |   await expect(dialog().getByRole('button', { name: '고침', exact: true })).toBeEnabled()
+       96 |   await shot('G02-blank-rule-silent-success')
+    >  97 |   await expect(dialog().locator('.error')).toBeVisible({ timeout: 1500 })
+          |                                            ^
+       98 | })
+       99 | test('G03 moving team replacement to personal leaves a dangling public tombstone', async () => {
+      100 |   await start([rule], true)
+        at /workspace/relay-v2/app/test/audit/knowledge-audit.spec.ts:97:44
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    audit-artifacts/gui-traces/knowledge-audit-G02-blank--1746a-splay-an-error-in-actual-UI/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: audit-artifacts/gui-traces/knowledge-audit-G02-blank--1746a-splay-an-error-in-actual-UI/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    audit-artifacts/gui-traces/knowledge-audit-G02-blank--1746a-splay-an-error-in-actual-UI/trace.zip
+    Usage:
+
+        npx playwright show-trace audit-artifacts/gui-traces/knowledge-audit-G02-blank--1746a-splay-an-error-in-actual-UI/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) test/audit/knowledge-audit.spec.ts:99:5 › G03 moving team replacement to personal leaves a dangling public tombstone
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: 0
+    Received: 1
+
+      111 |   )
+      112 |   fs.writeFileSync(path.join(evidence, 'G03-screen.json'), JSON.stringify(data, null, 2))
+    > 113 |   expect(data.ok && data.screen.pending.filter((e) => e.status === 'superseded').length).toBe(0)
+          |                                                                                          ^
+      114 | })
+      115 | test('G04 invalid terms report an error but close editor; reason and kind cannot be edited', async () => {
+      116 |   await start()
+        at /workspace/relay-v2/app/test/audit/knowledge-audit.spec.ts:113:90
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    audit-artifacts/gui-traces/knowledge-audit-G03-moving-2002e-a-dangling-public-tombstone/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: audit-artifacts/gui-traces/knowledge-audit-G03-moving-2002e-a-dangling-public-tombstone/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    audit-artifacts/gui-traces/knowledge-audit-G03-moving-2002e-a-dangling-public-tombstone/trace.zip
+    Usage:
+
+        npx playwright show-trace audit-artifacts/gui-traces/knowledge-audit-G03-moving-2002e-a-dangling-public-tombstone/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    test/audit/knowledge-audit.spec.ts:90:5 › G02 blank rule should display an error in actual UI ──
+    test/audit/knowledge-audit.spec.ts:99:5 › G03 moving team replacement to personal leaves a dangling public tombstone
+  4 passed (8.4s)

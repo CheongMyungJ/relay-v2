@@ -1,0 +1,62 @@
+{
+  "ok": true,
+  "screen": {
+    "team": [],
+    "mine": [
+      {
+        "id": "domain-ad40e1de",
+        "scope": "mine",
+        "kind": "domain",
+        "kindLabel": "도메인 규칙",
+        "rule": "내 개인 규칙",
+        "paths": [],
+        "terms": [
+          "반올림"
+        ],
+        "file": "/tmp/relay-gui-audit-u19vcd/home/projects/audit/knowledge/mine/domain/domain-ad40e1de.md",
+        "carriedPr": null,
+        "stale": false,
+        "subkind": null,
+        "status": "active",
+        "why": "회계팀 결정",
+        "not_in_code": "사람이 정함",
+        "incentive": "은행가 반올림을 적용한다",
+        "source": {
+          "work": "(지식 화면)",
+          "task": "edit",
+          "by": "human"
+        }
+      }
+    ],
+    "pending": [
+      {
+        "id": "domain-00000001",
+        "scope": "pending",
+        "kind": "domain",
+        "kindLabel": "도메인 규칙",
+        "rule": "청구 금액은 반올림한다",
+        "paths": [],
+        "terms": [
+          "반올림"
+        ],
+        "file": "/tmp/relay-gui-audit-u19vcd/home/projects/audit/knowledge/pending/domain/domain-00000001.md",
+        "carriedPr": null,
+        "stale": false,
+        "subkind": null,
+        "status": "superseded",
+        "why": "회계팀 결정",
+        "not_in_code": "사람이 정함",
+        "incentive": "은행가 반올림을 적용한다",
+        "source": {
+          "work": "w-audit",
+          "task": "t-01",
+          "by": "human"
+        }
+      }
+    ],
+    "share": true,
+    "dir": "docs/knowledge/",
+    "teamFrom": "main (bcc22b09eb17)",
+    "warnings": []
+  }
+}

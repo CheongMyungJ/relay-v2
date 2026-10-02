@@ -1,0 +1,22 @@
+{
+  "repository": "CheongMyungJ/relay-v2",
+  "base_commit": "aa39d16c730b52966f17edf410bb6c4038e8b053",
+  "branch": "audit/knowledge-scenarios-20261002",
+  "platform": "Debian 13 Linux",
+  "node": "v24.19.0",
+  "electron": "44.4.5",
+  "baseline": {
+    "total": 70,
+    "passed": 70
+  },
+  "new": {
+    "total": 39,
+    "passed": 23,
+    "failed": 16,
+    "root_cause_groups": 9
+  },
+  "test_external_pushes": 0,
+  "publication_branch": "audit/knowledge-scenarios-20261002",
+  "product_source_changes": false,
+  "live_model_evaluation": false
+}

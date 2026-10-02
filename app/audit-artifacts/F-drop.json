@@ -1,0 +1,67 @@
+{
+  "feedback": [
+    {
+      "id": "domain-00000001",
+      "taskId": "t-03",
+      "notes": [
+        "빈 배열의 평균은 0으로 보여야 한다"
+      ],
+      "entry": {
+        "id": "domain-00000001",
+        "scope": "pending",
+        "kind": "domain",
+        "kindLabel": "도메인 규칙",
+        "rule": "빈 배열의 평균은 NaN이다",
+        "paths": [],
+        "terms": [
+          "평균"
+        ],
+        "file": "/tmp/relay-flow-kVlKEk/home/projects/sample-93bc4e/knowledge/pending/domain/domain-00000001.md",
+        "carriedPr": null,
+        "stale": false
+      }
+    }
+  ],
+  "pending": [
+    {
+      "id": "domain-00000001",
+      "scope": "pending",
+      "kind": "domain",
+      "kindLabel": "도메인 규칙",
+      "rule": "빈 배열의 평균은 NaN이다",
+      "paths": [],
+      "terms": [
+        "평균"
+      ],
+      "file": "/tmp/relay-flow-kVlKEk/home/projects/sample-93bc4e/knowledge/pending/domain/domain-00000001.md",
+      "carriedPr": null,
+      "stale": false
+    }
+  ],
+  "delivery": {
+    "ok": true
+  },
+  "shipped": [
+    {
+      "id": "domain-00000001",
+      "kind": "domain",
+      "subkind": null,
+      "status": "active",
+      "superseded_by": null,
+      "paths": [],
+      "terms": [
+        "평균"
+      ],
+      "hashes": {},
+      "source": {
+        "work": "w-older",
+        "task": "t-01",
+        "by": "human"
+      },
+      "rule": "빈 배열의 평균은 NaN이다",
+      "why": "예전 요구",
+      "not_in_code": "사람이 정함",
+      "incentive": "0을 반환한다"
+    }
+  ]
+}

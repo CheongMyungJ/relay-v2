@@ -1,0 +1,9 @@
+
+> relay@0.0.0 typecheck
+> npm run contracts && tsc -b
+
+
+> relay@0.0.0 contracts
+> node scripts/contracts.mjs
+
+contracts: handoff.v1.schema.json, handoff.v1.ts, handoff.v2.schema.json, handoff.v2.ts, knowledge-entry.v1.schema.json, knowledge-entry.v1.ts → src/shared/generated

@@ -9,3 +9,5 @@ eval/scenarios/*/hidden/
 eval/results/
 # 평가 보고서는 eval/report.mjs가 만든 것을 그대로 옮긴다
 eval/reports/
+# 지식관리 감사의 실행 로그·화면·추적 자료는 원본 형식을 보존한다
+audit-artifacts/

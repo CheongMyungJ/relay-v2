@@ -1,0 +1,86 @@
+
+ RUN  v5.0.2 /workspace/relay-v2/app
+
+ ✓ |unit| test/unit/knowledge.test.ts > handoff v2 검사 (I70, D295, D299, D318) > 객체 후보와 knowledge_feedback을 받는다 89ms
+ ✓ |unit| test/unit/knowledge.test.ts > handoff v2 검사 (I70, D295, D299, D318) > 필수 필드, 용어 1~5개, 종류별 경로, 갈래와 종류, supersedes의 모양 15ms
+ ✓ |adapters| test/adapters/knowledge.test.ts > ls-tree 해시 (I72) > 파일은 blob, 디렉터리는 tree, 없는 경로는 null이다 76ms
+ ✓ |unit| test/unit/knowledge.test.ts > handoff v2 검사 (I70, D295, D299, D318) > 후보가 많으면 경고만 한다 (D295) 3ms
+ ✓ |unit| test/unit/knowledge.test.ts > handoff v2 검사 (I70, D295, D299, D318) > v1 task는 v1로 검사하고, 문자열 후보를 읽지 않는다 31ms
+ ✓ |unit| test/unit/knowledge.test.ts > 항목 파일 (D306, D320) > 쓰고 다시 읽으면 같다 17ms
+ ✓ |unit| test/unit/knowledge.test.ts > 항목 파일 (D306, D320) > 형식 오류: 머리글 필드, id 모양, 규칙 제목 2ms
+ ✓ |unit| test/unit/knowledge.test.ts > 항목 파일 (D306, D320) > id와 경로, 지식 폴더 설정 (D305, D320) 1ms
+ ✓ |unit| test/unit/knowledge.test.ts > 경로와 용어의 겹침 (D311, I74) > 같은 경로, 디렉터리와 그 아래, 심볼과 그 파일 0ms
+ ✓ |unit| test/unit/knowledge.test.ts > 경로와 용어의 겹침 (D311, I74) > 용어는 NFKC·소문자·공백 정리 뒤 글에 들어 있으면 겹친다 0ms
+ ✓ |unit| test/unit/knowledge.test.ts > 경로와 용어의 겹침 (D311, I74) > 글에 적힌 경로를 뽑는다 (D315 (1)) 1ms
+ ✓ |unit| test/unit/knowledge.test.ts > 넣을 지식 고르기 (D311, D315, I74) > 경로가 겹친 항목이 용어로만 겹친 항목보다 앞이고, 도메인 규칙과 외부 호환이 먼저다 6ms
+ ✓ |unit| test/unit/knowledge.test.ts > 넣을 지식 고르기 (D311, D315, I74) > 경로가 있는 항목도 용어로 들어간다 (D311) 0ms
+ ✓ |unit| test/unit/knowledge.test.ts > 넣을 지식 고르기 (D311, D315, I74) > 대체됨 항목과 다른 단계의 종류는 넣지 않는다 0ms
+ ✓ |unit| test/unit/knowledge.test.ts > 넣을 지식 고르기 (D311, D315, I74) > 같은 id는 이 Work가 실은 것, 공유 대기, 머지된 팀 지식 순이고 낡음은 팀 지식만 판정한다 0ms
+ ✓ |unit| test/unit/knowledge.test.ts > 넣을 지식 고르기 (D311, D315, I74) > 자르기는 항목 가운데서 자르지 않고 지식 폴더를 안내한다 (D312) 0ms
+ ✓ |unit| test/unit/knowledge.test.ts > 넣을 지식 고르기 (D311, D315, I74) > 재확인 필요를 줄 끝에 붙인다 0ms
+ ✓ |unit| test/unit/knowledge.test.ts > 낡음 (D316, D320, I72) > 해시가 같으면 아니고, 다르거나 없으면 재확인이다 0ms
+ ✓ |unit| test/unit/knowledge.test.ts > 낡음 (D316, D320, I72) > 해시를 새로 적고, 바뀐 항목만 돌려준다 (D323) 0ms
+ ✓ |unit| test/unit/knowledge.test.ts > 낡음 (D316, D320, I72) > 공유 대기와 나만은 판정하지 않는다 0ms
+ ✓ |unit| test/unit/knowledge.test.ts > 공유 대기 판단 (D310 (4), I74) > 기준 커밋에 같은 내용이 있으면 머지된 것이고, worktree에만 있으면 아니다 1ms
+ ✓ |unit| test/unit/knowledge.test.ts > 후보 모으기 (D283, D296, D299, D304, D318) > 폐기한 task의 후보는 빠진다 0ms
+ ✓ |unit| test/unit/knowledge.test.ts > 후보 모으기 (D283, D296, D299, D304, D318) > v1 task는 사람 결정만 올린다 1ms
+ ✓ |unit| test/unit/knowledge.test.ts > 후보 모으기 (D283, D296, D299, D304, D318) > decision으로 묶이고, 묶이지 않은 사람 결정은 다듬지 않은 것이며 채택 안 함이 기본이다 0ms
+ ✓ |unit| test/unit/knowledge.test.ts > 후보 모으기 (D283, D296, D299, D304, D318) > 같은 사람 결정에서 뒤 task가 올린 후보는 앞 후보를 가리키고 채택 안 함이 기본이다 (D324) 0ms
+ ✓ |unit| test/unit/knowledge.test.ts > 후보 모으기 (D283, D296, D299, D304, D318) > 다른 task가 올린 같은 종류·갈래, 같은 파일, 겹치는 용어의 후보는 비슷한 후보로 채택 안 함이 기본이다 (D326) 1ms
+ ✓ |unit| test/unit/knowledge.test.ts > 후보 모으기 (D283, D296, D299, D304, D318) > 사람 결정에서 다듬은 후보는 비슷한 후보가 되지 않고, 앞선 AI 후보가 그 후보를 가리킨다 (D326) 0ms
+ ✓ |unit| test/unit/knowledge.test.ts > 후보 모으기 (D283, D296, D299, D304, D318) > 갈래가 다르면 비슷한 후보가 아니다 (D326) 0ms
+ ✓ |unit| test/unit/knowledge.test.ts > 후보 모으기 (D283, D296, D299, D304, D318) > 같은 결정으로 묶인 후보는 비슷한 후보로 다시 묶지 않는다 (D324, D326) 0ms
+ ✓ |unit| test/unit/knowledge.test.ts > 후보 모으기 (D283, D296, D299, D304, D318) > 뒤 task가 다듬은 앞 task의 사람 결정은 다듬지 않은 것으로 남지 않고, 같은 결정은 한 번만 보인다 0ms
+ ✓ |unit| test/unit/knowledge.test.ts > 후보 모으기 (D283, D296, D299, D304, D318) > supersedes는 대체가 기본이고, 같은 id의 틀렸다는 보고가 짝에 붙는다 0ms
+ ✓ |unit| test/unit/knowledge.test.ts > 후보 모으기 (D283, D296, D299, D304, D318) > 겹치는 기존 항목과 재확인 항목 (D302, D317) 0ms
+ ✓ |unit| test/unit/knowledge.test.ts > 후보 모으기 (D283, D296, D299, D304, D318) > 열린 PR에 실린 공유 대기는 함께 실릴 목록에 없다 (D310) 0ms
+ ✓ |unit| test/unit/knowledge.test.ts > 후보 모으기 (D283, D296, D299, D304, D318) > 다듬지 않은 사람 결정은 종류, 용어, 경로를 정해야 채택된다 (D304, D299) 0ms
+ ✓ |unit| test/unit/knowledge.test.ts > 채택 결과 (I73) > [PR 생성]이면 팀 지식을 레포에 쓰고 공유 대기 사본도 둔다 (D287, D310 (4)) 1ms
+ ✓ |unit| test/unit/knowledge.test.ts > 채택 결과 (I73) > [완료만]·[push]면 팀 지식은 공유 대기다 (D287) 0ms
+ ✓ |unit| test/unit/knowledge.test.ts > 채택 결과 (I73) > 나만, 버림, 팀 공유 꺼짐 (D289, D322) 0ms
+ ✓ |unit| test/unit/knowledge.test.ts > 채택 결과 (I73) > 머지된 팀 지식의 대체는 옛 항목을 대체됨으로 함께 싣는다 (D302) 0ms
+ ✓ |unit| test/unit/knowledge.test.ts > 채택 결과 (I73) > 공유 대기를 함께 싣고, 나만으로 돌리고, 버린다 (D308) 1ms
+ ✓ |unit| test/unit/knowledge.test.ts > 채택 결과 (I73) > 후보가 대체하기로 한 공유 대기는 함께 싣지 않고 지운다 (D302, D308) 0ms
+ ✓ |unit| test/unit/knowledge.test.ts > 채택 결과 (I73) > 재확인의 [그대로 맞음]은 팀 지식처럼 싣고, 틀렸다는 보고의 대체는 새 항목이다 (D317, D318, D320 (4)) 0ms
+ ✓ |unit| test/unit/knowledge.test.ts > 채택 결과 (I73) > 전달 버튼 줄의 한 줄 (I75) 0ms
+ ✓ |unit| test/unit/knowledge.test.ts > 채택 결과 (I73) > 지식 커밋 메시지 (I73) 0ms
+ ✓ |unit| test/unit/knowledge.test.ts > context.md의 `참고 지식` (D286) > 고른 것이 없으면 "없음"이고, 꺼져 있으면 절이 없다 1ms
+ ✓ |unit| test/unit/knowledge.test.ts > deny 규칙 (I78, D309, D310) > 파이프라인 task는 지식 폴더와 앱 저장소를, PR 대응 task는 앱 저장소만 막는다 1ms
+ ✓ |unit| test/unit/knowledge.test.ts > deny 규칙 (I78, D309, D310) > Codex의 도구 보호도 같은 경로를 막는다 1ms
+ ✓ |unit| test/unit/knowledge.test.ts > 전달의 knowledge 단계 (I73) > [PR 생성]에서 레포에 쓸 것이 있을 때만 지난다 0ms
+ ✓ |unit| test/unit/knowledge.test.ts > 전달의 knowledge 단계 (I73) > [완료만]은 승인과 함께 앱 저장소에 쓴다 1ms
+ ✓ |unit| test/unit/knowledge.test.ts > 저장된 파일에 새 키가 없을 때의 기본값 > config.json의 knowledge_inject_chars 0ms
+ ✓ |unit| test/unit/knowledge.test.ts > 저장된 파일에 새 키가 없을 때의 기본값 > project.json의 knowledge_dir와 knowledge_share 0ms
+ ✓ |adapters| test/adapters/knowledge.test.ts > ls-tree 해시 (I72) > 지식 폴더를 품은 디렉터리는 지식 커밋 뒤에도 같고, 다른 파일이 바뀌면 다르다 116ms
+ ✓ |adapters| test/adapters/knowledge.test.ts > 지식 폴더만 올린 커밋 (I73) > 다른 변경은 커밋하지 않고, 처음 만들 때 README를 쓴다 71ms
+ ✓ |adapters| test/adapters/knowledge.test.ts > 커밋에서 지식 읽기 (I77) > 기준 브랜치의 커밋에서 항목을 읽고, 틀린 파일은 문제로 남긴다 129ms
+ ✓ |adapters| test/adapters/knowledge.test.ts > 커밋의 파일 여럿 (I74) > git 두 번으로 읽고 showFile과 같은 글을 준다. 없는 파일과 디렉터리는 null이다 53ms
+ ✓ |adapters| test/adapters/knowledge.test.ts > 앱 저장소 (I71) > 나만·공유 대기·knowledge.json을 원자적으로 쓰고 읽는다 46ms
+ ✓ |flow| test/flow/pr-knowledge.test.ts > [흐름] 지식 관리의 PR 진행 (M17) > [PR 생성]의 PR에 지식 폴더만 담은 지식 커밋이 실리고, 대응 task가 지식 파일을 고치면 머리글을 검사하고 강조하고 사본을 맞춘다 1846ms
+ ✓ |flow| test/flow/pr-knowledge.test.ts > [흐름] 지식 관리의 PR 진행 (M17) > 대응 task가 지식 파일을 지우면 공유 대기 사본도 지우고, 머지 없이 끝내도 다시 싣지 않는다 2073ms
+ ✓ |flow| test/flow/pr-knowledge.test.ts > [흐름] 지식 관리의 PR 진행 (M17) > 머지 없이 끝내면 공유 대기가 다음 PR에 다시 실리고, 머지하면 공유 대기에서 빠진다 (D288, D310 (4)) 1843ms
+stderr | test/flow/pr-knowledge.test.ts > [흐름] 지식 관리의 PR 진행 (M17) > PR 생성이 지식 커밋 뒤에 실패하면, 다시 누른 [PR 생성]은 지식 커밋을 두 번 만들지 않는다 (I73)
+[cart-96c7e6/w-20261002-001] 전달 실패: gh pr create 실패: 종료 코드 1: pull request create failed: HTTP 422 (가짜 gh)
+
+ ✓ |flow| test/flow/pr-knowledge.test.ts > [흐름] 지식 관리의 PR 진행 (M17) > PR 생성이 지식 커밋 뒤에 실패하면, 다시 누른 [PR 생성]은 지식 커밋을 두 번 만들지 않는다 (I73) 1024ms
+stderr | test/flow/pr-knowledge.test.ts > [흐름] 지식 관리의 PR 진행 (M17) > 지식 커밋 뒤에 끊긴 전달의 [다시 시도]는 기록한 채택 결과로 이어 하고 지식 커밋을 두 번 만들지 않는다 (I73, D123)
+[cart-2e2163/w-20261002-001] 전달 실패: gh pr create 실패: 종료 코드 1: pull request create failed: HTTP 422 (가짜 gh)
+
+ ✓ |flow| test/flow/pr-knowledge.test.ts > [흐름] 지식 관리의 PR 진행 (M17) > 지식 커밋 뒤에 끊긴 전달의 [다시 시도]는 기록한 채택 결과로 이어 하고 지식 커밋을 두 번 만들지 않는다 (I73, D123) 998ms
+ ✓ |flow| test/flow/pr-knowledge.test.ts > [흐름] 지식 관리의 PR 진행 (M17) > 채택한 것이 없던 끊긴 전달의 [다시 시도]는 기본 선택으로 다시 계산하지 않는다 (I73, D123) 901ms
+ ✓ |flow| test/flow/pr-knowledge.test.ts > [흐름] 지식 관리의 PR 진행 (M17) > [머지 없이 끝내기]는 PR 대응 task의 후보를 거른 대로 공유 대기에 쓰고 다시 묻지 않는다 (I76, D310 (5)) 1316ms
+ ✓ |flow| test/flow/knowledge.test.ts > [흐름] 지식 관리 (M17) > Work 1의 [완료만]이 나만과 공유 대기에 쓰고, Work 2의 intake에 도메인 규칙이 용어로 들어간다 986ms
+ ✓ |flow| test/flow/knowledge.test.ts > [흐름] 지식 관리 (M17) > 되감기로 폐기한 task의 후보는 완료 화면에 없다 (D283, 5.4) 1064ms
+ ✓ |flow| test/flow/knowledge.test.ts > [흐름] 지식 관리 (M17) > [push]로 끝내면 push한 브랜치에 지식 커밋이 없고 팀 지식은 공유 대기에 남는다 (D287) 691ms
+ ✓ |flow| test/flow/knowledge.test.ts > [흐름] 지식 관리 (M17) > 기준 브랜치의 팀 지식 경로를 바꾸면 다음 task에 재확인 필요로 들어가고 완료 화면에 보인다 (D316, D317) 732ms
+ ✓ |flow| test/flow/knowledge.test.ts > [흐름] 지식 관리 (M17) > knowledge_feedback은 대체·버림 후보이고, supersedes를 적은 후보는 옛 규칙의 대체가 기본이다 (D313, D318) 876ms
+ ✓ |flow| test/flow/knowledge.test.ts > [흐름] 지식 관리 (M17) > 팀 공유를 끈 프로젝트는 [PR 생성]에도 지식 커밋이 없고 채택은 나만이다 (D322) 844ms
+ ✓ |flow| test/flow/knowledge.test.ts > [흐름] 지식 관리 (M17) > 지식 화면의 고침은 쓰기 전에 검사하고, 공유 대기를 나만으로 옮기면 실린 곳의 기록도 지운다 (D307, I77) 666ms
+ ✓ |flow| test/flow/knowledge.test.ts > [흐름] 지식 관리 (M17) > RELAY_KNOWLEDGE=off면 `참고 지식` 절과 지식 칸이 없고 저장하지 않는다 (I84) 731ms
+
+ Test Files  4 passed (4)
+      Tests  70 passed (70)
+   Start at  15:15:11
+   Duration  18.44s (tests 92%, transform 6%, import 3%)
+
+JSON report written to /workspace/relay-v2/app/audit-artifacts/baseline.json
