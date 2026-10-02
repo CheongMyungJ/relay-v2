@@ -12,6 +12,7 @@ import {
   pathHashes,
   pathsDirty,
   showFile,
+  showFiles,
   statusLines,
 } from '../../src/adapters/git'
 import {
@@ -127,6 +128,30 @@ describe('커밋에서 지식 읽기 (I77)', () => {
     expect(await showFile(repo, head, `${DIR}domain/domain-a1b2c3d4.md`)).toBe(renderEntry(entry()))
     expect(await showFile(repo, head, `${DIR}none.md`)).toBeNull()
     expect((await readRepoKnowledge(repo, DIR)).entries).toEqual([])
+  })
+})
+
+describe('커밋의 파일 여럿 (I74)', () => {
+  it('git 한 번으로 읽고 showFile과 같은 글을 준다. 없는 파일과 디렉터리는 null이다', async () => {
+    const text = '---\nid: x\n---\n\n# 한글 규칙 — 끝\r\n\n두 줄\n'
+    writeFiles(repo, { 'docs/knowledge/domain/a.md': text, 'docs/knowledge/domain/b.md': '' })
+    git(repo, 'add', '-A')
+    git(repo, 'commit', '-q', '-m', 'k')
+    const head = await headCommit(repo)
+    const got = await showFiles(repo, head, [
+      'docs/knowledge/domain/a.md',
+      './docs/knowledge/domain/b.md',
+      'docs/knowledge/domain/none.md',
+      'docs/knowledge',
+    ])
+    expect([...got.entries()]).toEqual([
+      ['docs/knowledge/domain/a.md', await showFile(repo, head, 'docs/knowledge/domain/a.md')],
+      ['docs/knowledge/domain/b.md', ''],
+      ['docs/knowledge/domain/none.md', null],
+      ['docs/knowledge', null],
+    ])
+    expect(got.get('docs/knowledge/domain/a.md')).toBe(text)
+    expect((await showFiles(repo, head, [])).size).toBe(0)
   })
 })
 

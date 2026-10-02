@@ -446,6 +446,13 @@ export function workTitle(request: string): string {
   return t.length > 80 ? `${t.slice(0, 80)}…` : t
 }
 
+/** 전달이 쓸 지식: 고른 것, 또는 끊긴 전달의 [다시 시도]가 기록에서 꺼낸 계획(retry) */
+interface DeliveryKnowledge {
+  choices?: KnowledgeChoices | undefined
+  plan?: KnowledgePlan | undefined
+  retry?: boolean
+}
+
 export class WorkRunner {
   readonly key: string
   private queue: Promise<unknown> = Promise.resolve()
@@ -2197,11 +2204,13 @@ export class WorkRunner {
    */
   private async deliveryPlan(
     choice: DeliveryChoice,
-    knowledge: { choices?: KnowledgeChoices | undefined; plan?: KnowledgePlan | undefined },
+    knowledge: DeliveryKnowledge,
     taskId: string,
   ): Promise<KnowledgePlan | undefined> {
     if (!this.knowledgeOn()) return undefined
-    if (knowledge.plan) return knowledge.plan
+    // 끊긴 전달은 기록한 계획만 쓴다. 기록이 없으면 쓸 것이 없던 전달이다(사람이 모두 채택하지 않음 등).
+    // 다시 계산하면 그때 고른 것을 몰라 기본 선택으로 돌아간다
+    if (knowledge.retry) return knowledge.plan
     const failed =
       this.work.delivery?.status === 'failed' ? this.work.delivery.knowledge_plan : undefined
     if (failed && (await this.kn.headIsKnowledgeCommit())) return failed
@@ -2216,7 +2225,7 @@ export class WorkRunner {
   private async deliverNow(
     choice: DeliveryChoice,
     uncommitted: DeliverInput['uncommitted'],
-    knowledge: { choices?: KnowledgeChoices | undefined; plan?: KnowledgePlan | undefined } = {},
+    knowledge: DeliveryKnowledge = {},
   ): Promise<DeliverResult> {
     if (cutOperation(this.work)) return { ok: false, error: OPERATION_BLOCKS }
     const check = await this.verifyCheck()
@@ -2923,7 +2932,7 @@ export class WorkRunner {
         const r = await this.command({ type: 'operationRetry', at: this.ctx.at(), found })
         if (!r.ok) return r
         // 끊긴 전달의 채택 결과를 그대로 쓴다 (I73)
-        return this.deliverNow(op.choice, null, { plan: op.knowledge })
+        return this.deliverNow(op.choice, null, { plan: op.knowledge, retry: true })
       }
       this.rewindError = null
       this.opError = null

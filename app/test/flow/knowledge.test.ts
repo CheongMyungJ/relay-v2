@@ -6,7 +6,7 @@ import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { renderEntry } from '../../src/core/knowledge'
 import type { KnowledgeCandidateField } from '../../src/shared/contracts'
-import type { KnowledgeChoices, KnowledgeEntry } from '../../src/shared/knowledge'
+import type { KnowledgeChoices, KnowledgeEntry, KnowledgeIndex } from '../../src/shared/knowledge'
 import type { ReviewView } from '../../src/shared/views'
 import type { WorkState } from '../../src/shared/work'
 import { drive } from './driver'
@@ -363,6 +363,51 @@ describe('[흐름] 지식 관리 (M17)', () => {
     expect(git(s.tree(key), 'log', '--format=%s', '-3')).not.toContain('지식')
     expect(storeFiles(s, 'pending')).toEqual([])
     expect(storeFiles(s, 'mine').some((t) => t.includes(RULE))).toBe(true)
+  })
+
+  it('지식 화면의 고침은 쓰기 전에 검사하고, 공유 대기를 나만으로 옮기면 실린 곳의 기록도 지운다 (D307, I77)', async () => {
+    const s = await setup(WORK1)
+    const key = await s.create()
+    const review = await toCompletion(s, key)
+    expect(await s.h.relay.approve(key, review.taskId, {})).toEqual({ ok: true })
+    await settle(s.h, key)
+    const dir = path.join(s.store, 'pending', 'domain')
+    const file = fs.readdirSync(dir).find((f) => f.endsWith('.md')) ?? ''
+    const id = file.replace(/\.md$/, '')
+    const before = read(path.join(dir, file))
+    // 용어가 없거나 여섯이면 읽지 못하는 파일이 되므로 쓰지 않고 까닭을 돌려준다
+    for (const terms of [[], ['a', 'b', 'c', 'd', 'e', 'f']]) {
+      const r = await s.h.relay.editKnowledge(s.projectId, {
+        op: 'edit',
+        scope: 'pending',
+        id,
+        edit: { terms },
+      })
+      expect(r).toMatchObject({ ok: false, error: expect.stringContaining('용어는 1~5개') })
+      expect(read(path.join(dir, file))).toBe(before)
+    }
+    expect(
+      await s.h.relay.editKnowledge(s.projectId, {
+        op: 'edit',
+        scope: 'pending',
+        id,
+        edit: { rule: '빈 배열의 평균은 0으로 보인다' },
+      }),
+    ).toEqual({ ok: true })
+    expect(read(path.join(dir, file))).toContain('# 빈 배열의 평균은 0으로 보인다')
+    // PR을 만들기 전에 실린 공유 대기(실린 곳의 기록이 있음)를 나만으로 옮긴다
+    const index: KnowledgeIndex = {
+      schema_version: 1,
+      carried: { [id]: { work: 'w-x', branch: 'relay/w-x', pr: null, commit: null, at: 'x' } },
+    }
+    fs.writeFileSync(path.join(s.store, 'knowledge.json'), JSON.stringify(index))
+    expect(
+      await s.h.relay.editKnowledge(s.projectId, { op: 'move', scope: 'pending', id }),
+    ).toEqual({ ok: true })
+    expect(fs.existsSync(path.join(dir, file))).toBe(false)
+    expect(fs.existsSync(path.join(s.store, 'mine', 'domain', file))).toBe(true)
+    const after = JSON.parse(read(path.join(s.store, 'knowledge.json'))) as KnowledgeIndex
+    expect(after.carried[id]).toBeUndefined()
   })
 
   it('RELAY_KNOWLEDGE=off면 `참고 지식` 절과 지식 칸이 없고 저장하지 않는다 (I84)', async () => {

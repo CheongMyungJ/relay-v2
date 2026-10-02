@@ -551,7 +551,11 @@ export async function runEpisode(o) {
     wallMs,
     firstChangeMs: firstChangeAt ? firstChangeAt - t0 : null,
     outcome: {
-      success: checks.length > 0 && checks.every((c) => c.pass),
+      // Work 둘을 잇는 시나리오는 모든 Work를 돌려 판정했을 때만 성공이다. 앞 Work에서 멈추면 재는 Work의 시험이 없다
+      success:
+        checks.length > 0 &&
+        checks.every((c) => c.pass) &&
+        (!multi || (workResults.length === parts.length && workResults.every((r) => r.outcome))),
       checks,
       repoTestsPass: changedTrees.length > 0 && changedTrees.every((f) => f.repoTests.pass),
       filesChanged: [...new Set(changedTrees.flatMap((f) => f.files.map((x) => x.file)))],

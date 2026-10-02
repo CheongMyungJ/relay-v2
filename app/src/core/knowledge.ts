@@ -4,6 +4,7 @@
 import { stringify } from 'yaml'
 import type { AnyHandoff, TaskNode } from '../shared/contracts'
 import {
+  KNOWLEDGE_KINDS,
   KNOWLEDGE_KIND_LABEL,
   type CandidateEdit,
   candidateChoice,
@@ -57,8 +58,11 @@ export function knowledgeOff(env: Readonly<Record<string, string | undefined>>):
   return (env[KNOWLEDGE_ENV] ?? '').trim().toLowerCase() === 'off'
 }
 
+/** 종류 이름의 정규식 조각 (`domain|recipe|…`). 종류 목록은 shared/knowledge 한 곳에 둔다 */
+const KIND_ALT = KNOWLEDGE_KINDS.join('|')
+
 /** 지식 id의 모양 (D320) */
-export const ENTRY_ID = /^(domain|recipe|failure|constraint|decision|structure)-[0-9a-z]{8}$/
+export const ENTRY_ID = new RegExp(`^(${KIND_ALT})-[0-9a-z]{8}$`)
 
 /** 새 항목 id (D320 (1)): <kind>-<무작위 8자>. random은 [0-9a-z] 8자를 준다 */
 export function newEntryId(kind: KnowledgeKind, random: () => string): string {
@@ -768,7 +772,11 @@ export function planKnowledge(input: PlanInput): KnowledgePlan {
     if (target && !target.carriedPr) retire(target.entry.id, id, isTeam)
   }
 
+  // 후보가 대체하기로 한 항목은 지울 목록에 있다. 아래에서 다시 싣거나 옮기지 않는다
+  const retired = (id: string) => plan.removePending.includes(id) || plan.removeMine.includes(id)
+
   for (const p of review.pending) {
+    if (retired(p.id)) continue
     const action = pendingAction(p.id, choices)
     const entry = byId.get(p.id)?.entry
     if (!entry) continue
@@ -792,7 +800,7 @@ export function planKnowledge(input: PlanInput): KnowledgePlan {
     if (!ref) return
     const ch = entryChoice(group, ref.id, choices)
     const old = byId.get(ref.id)
-    if (!old || ch.action === 'leave' || old.carriedPr) return
+    if (!old || ch.action === 'leave' || old.carriedPr || retired(ref.id)) return
     if (ch.action === 'confirm') {
       // [그대로 맞음]: 해시를 새로 적어 팀 지식처럼 내보낸다 (D320 (4)). 공유 대기·나만은 그 자리에서 다시 쓴다
       if (old.scope === 'team' || old.scope === 'pending') {
@@ -913,7 +921,7 @@ export function isEntryFile(dir: string, file: string): boolean {
   const d = normalizePath(dir)
   if (!within(d, f) || f === d) return false
   const rest = f.slice(d.length + 1)
-  return /^(domain|recipe|failure|constraint|decision|structure)\/[^/]+\.md$/.test(rest)
+  return new RegExp(`^(${KIND_ALT})/[^/]+\\.md$`).test(rest)
 }
 
 /** 지식 파일 경로의 id (`<dir><kind>/<id>.md`) */

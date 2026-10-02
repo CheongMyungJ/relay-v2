@@ -13,7 +13,7 @@ import {
   pathHashes,
   pathsDirty,
   refCommit,
-  showFile,
+  showFiles,
   statusLines,
 } from '../adapters/git'
 import {
@@ -36,10 +36,12 @@ import {
   mergePool,
   newEntryId,
   normalizePath,
+  parseEntry,
   pathsInText,
   pendingMerged,
   planKnowledge,
   refView,
+  renderEntry,
   refreshHashes,
   renderKnowledge,
   reviewKnowledge,
@@ -52,6 +54,7 @@ import {
 import { checkKnowledgeFile, sectionText } from '../core/validate'
 import {
   SUBKIND_KIND,
+  candidateProblem,
   type CandidateEdit,
   type KnowledgeChoices,
   type KnowledgeEditInput,
@@ -117,9 +120,9 @@ export class WorkKnowledge {
     return { env: this.o.env }
   }
 
-  /** Work의 기준 커밋에 있는 같은 경로의 파일 (I74) */
-  private baseText(rel: string): Promise<string | null> {
-    return showFile(this.o.worktree, this.o.work().base_commit, rel, this.git)
+  /** Work의 기준 커밋에 있는 같은 경로의 파일들 (I74). git 한 번으로 읽는다. 키는 맞춘 경로다 */
+  private baseTexts(rels: readonly string[]): Promise<Map<string, string | null>> {
+    return showFiles(this.o.worktree, this.o.work().base_commit, rels, this.git)
   }
 
   /**
@@ -133,8 +136,16 @@ export class WorkKnowledge {
     const repo = await readRepoKnowledge(this.o.worktree, dir)
     for (const p of repo.problems) this.o.problem(`지식 파일을 읽지 못함: ${p}`)
     const team: PoolEntry[] = []
+    const index = await this.o.store.index()
+    const pending = await this.o.store.list('pending')
+    const pendingRel = (e: KnowledgeEntry) => normalizePath(entryPath(dir, e.kind, e.id))
+    // 기준 커밋의 파일은 worktree 항목과 공유 대기 모두를 git 한 번으로 읽는다
+    const base = await this.baseTexts([
+      ...repo.entries.map((r) => r.rel),
+      ...pending.entries.map((r) => pendingRel(r.entry)),
+    ])
     for (const r of repo.entries) {
-      const scope = worktreeScope(r.text, await this.baseText(r.rel))
+      const scope = worktreeScope(r.text, base.get(normalizePath(r.rel)) ?? null)
       const e: PoolEntry = { entry: r.entry, scope, file: r.file, stale: false }
       out.push(e)
       if (scope === 'team') team.push(e)
@@ -155,11 +166,9 @@ export class WorkKnowledge {
       }
     }
     const merged: string[] = []
-    const index = await this.o.store.index()
-    const pending = await this.o.store.list('pending')
     for (const p of pending.problems) this.o.problem(`공유 대기를 읽지 못함: ${p}`)
     for (const r of pending.entries) {
-      if (pendingMerged(r.text, await this.baseText(entryPath(dir, r.entry.kind, r.entry.id)))) {
+      if (pendingMerged(r.text, base.get(pendingRel(r.entry)) ?? null)) {
         merged.push(r.entry.id)
         continue
       }
@@ -410,8 +419,11 @@ export class WorkKnowledge {
     const dir = this.dir()
     const repo = await readRepoKnowledge(this.o.worktree, dir)
     const carried: KnowledgeEntry[] = []
+    const base = await this.baseTexts(repo.entries.map((r) => r.rel))
     for (const r of repo.entries) {
-      if (worktreeScope(r.text, await this.baseText(r.rel)) === 'carried') carried.push(r.entry)
+      if (worktreeScope(r.text, base.get(normalizePath(r.rel)) ?? null) === 'carried') {
+        carried.push(r.entry)
+      }
     }
     let commit: string | null = null
     const active = carried.filter((e) => e.status === 'active')
@@ -583,6 +595,20 @@ function applyEdit(e: KnowledgeEntry, edit: CandidateEdit): KnowledgeEntry {
 }
 
 /**
+ * 고친 항목을 쓰기 전에 검사한다 (D299, D320): 후보와 같은 필수(규칙, 용어 1~5개, 종류별 경로)와 지식 파일 스키마. 읽지 못하는
+ * 파일을 쓰면 규칙이 화면과 넣기에서 사라진다. 문제가 있으면 까닭이다
+ */
+function editProblem(e: KnowledgeEntry): string | null {
+  const why = candidateProblem(e)
+  if (why) return `고친 항목을 저장하지 않음: ${why}`
+  const parsed = parseEntry(renderEntry(e), `${e.id}.md`)
+  if (!parsed.ok) {
+    return `고친 항목을 저장하지 않음: ${parsed.errors.map((x) => x.message).join('; ')}`
+  }
+  return null
+}
+
+/**
  * 지식 화면의 조작 (D307, D308, D310 (3), I77). 나만은 그 자리에서 고친다. 팀은 대체 항목(새 id)과 대체됨 사본을 공유 대기에
  * 써 다음 [PR 생성]에 실린다(D302, D308). 열린 PR에 실린 공유 대기는 고치지 않는다. 팀 공유가 꺼져 있으면 팀으로 바꾸기가
  * 없고, 팀 지식의 고침은 나만에 둔다(D322)
@@ -598,11 +624,13 @@ export async function editKnowledge(
     task,
     by: 'human',
   })
+  const find = (xs: readonly PoolEntry[], id: string) => xs.find((p) => p.entry.id === id)
+  const teamOp = input.op === 'confirm' || ('scope' in input && input.scope === 'team')
+  // 팀 지식은 기본 브랜치를 fetch해 읽는다. 네트워크를 기다리는 동안 같은 프로젝트의 다른 Work를 막지 않게 잠금 밖에서 한다
+  const team = teamOp ? await teamPool(o, warnings) : null
   return o.lock(async () => {
     const { pending, mine } = await storePool(o, warnings)
-    const find = (xs: readonly PoolEntry[], id: string) => xs.find((p) => p.entry.id === id)
-    if (input.op === 'confirm' || ('scope' in input && input.scope === 'team')) {
-      const team = await teamPool(o, warnings)
+    if (team) {
       const t = find(team.pool, input.id)
       if (!t) return '팀 지식에 없는 항목'
       if (find(pending, input.id)?.carriedPr) return '열린 PR에 실린 항목은 그 PR에서 고친다'
@@ -622,12 +650,15 @@ export async function editKnowledge(
           { ...applyEdit(t.entry, input.edit), id, source: human('edit') },
           team.hashes ?? {},
         )
+        const problem = editProblem(next)
+        if (problem) return problem
         await o.store.write(to, next)
         await o.store.write(to, { ...t.entry, status: 'superseded', superseded_by: id })
         return null
       }
       return '팀 지식은 옮기지 않는다'
     }
+    if (input.op === 'confirm') return '팀 지식에 없는 항목'
     const scope: StoreScope = input.scope === 'mine' ? 'mine' : 'pending'
     const list = scope === 'mine' ? mine : pending
     const p = find(list, input.id)
@@ -641,14 +672,25 @@ export async function editKnowledge(
       return null
     }
     if (input.op === 'edit') {
-      await o.store.write(scope, applyEdit(p.entry, input.edit))
+      const next = applyEdit(p.entry, input.edit)
+      const problem = editProblem(next)
+      if (problem) return problem
+      await o.store.write(scope, next)
       return null
     }
-    // 팀/나만 바꾸기 (D307)
+    // 팀/나만 바꾸기 (D307). 공유 대기에서 나만으로 옮기면 실린 곳의 기록도 지운다: 남으면 그 Work의 다음 대응 push가
+    // 공유 대기 사본을 다시 쓴다(I79)
     const to: StoreScope = scope === 'mine' ? 'pending' : 'mine'
     if (to === 'pending' && !share) return '팀 공유가 꺼져 있음'
     await o.store.write(to, p.entry)
     await o.store.remove(scope, input.id)
+    if (scope === 'pending') {
+      const index = await o.store.index()
+      if (index.carried[input.id]) {
+        uncarry(index, input.id)
+        await o.store.saveIndex(index)
+      }
+    }
     return null
   })
 }

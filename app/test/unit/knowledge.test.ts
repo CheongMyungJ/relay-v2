@@ -785,6 +785,19 @@ describe('채택 결과 (I73)', () => {
     expect(plan('push', { extra: [a] }).removePending).toEqual([])
   })
 
+  it('후보가 대체하기로 한 공유 대기는 함께 싣지 않고 지운다 (D302, D308)', () => {
+    // 겹치는 기존 항목(D302)으로 보인 공유 대기를 후보가 대체로 고르고, 공유 대기 줄은 기본(함께 실음) 그대로다
+    const old = pool(entry({ id: 'domain-0000000c', terms: ['반올림'] }), 'pending')
+    const r = plan('pr', {
+      extra: [old],
+      choices: { candidates: { 't-01#k1': { adopt: true, share: 'team', replace: old.entry.id } } },
+    })
+    expect(r.repo.map((e) => e.id)).not.toContain(old.entry.id)
+    expect(r.pending.map((e) => e.id)).not.toContain(old.entry.id)
+    expect(r.carry).not.toContain(old.entry.id)
+    expect(r.removePending).toEqual([old.entry.id])
+  })
+
   it('재확인의 [그대로 맞음]은 팀 지식처럼 싣고, 틀렸다는 보고의 대체는 새 항목이다 (D317, D318, D320 (4))', () => {
     const stale = entry({
       id: 'failure-0000000d',

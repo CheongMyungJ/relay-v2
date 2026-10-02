@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { normalizePath } from '../shared/knowledge'
 import { describeFailure, run } from './exec'
 
 export class GitError extends Error {}
@@ -358,15 +359,8 @@ export async function commitAll(dir: string, message: string, opts?: GitOptions)
 
 // ---------- 지식 (I72, I73) ----------
 
-/** 레포 상대 경로를 맞춘다: `\`를 `/`로, 앞의 `./`와 `/`, 끝의 `/`를 뗀다 */
-function relPath(p: string): string {
-  return p
-    .trim()
-    .replace(/\\/g, '/')
-    .replace(/^(?:\.\/)+/, '')
-    .replace(/^\/+/, '')
-    .replace(/\/+$/, '')
-}
+/** 레포 상대 경로는 지식 항목과 같은 규칙으로 맞춘다. pathHashes의 키를 isStale·withHashes가 같은 함수로 찾는다 */
+const relPath = normalizePath
 
 /**
  * 커밋의 경로 개체 해시 (I72): `git ls-tree <커밋> -- <경로>`가 주는 개체 해시다(파일은 blob, 디렉터리는 tree). 없는
@@ -425,15 +419,28 @@ export async function pathHashes(
 ): Promise<Record<string, string | null>> {
   const kd = relPath(knowledgeDir)
   const out: Record<string, string | null> = {}
+  const plain = new Map<string, string[]>()
   for (const raw of paths) {
     const key = relPath(raw)
     if (!key || key in out) continue
     const i = key.indexOf(':')
     const file = i > 0 ? key.slice(0, i) : key
-    out[key] =
-      kd === file || kd.startsWith(`${file}/`)
-        ? await treeHashWithout(dir, commit, file, kd, opts)
-        : await objectHash(dir, commit, file, opts)
+    out[key] = null
+    if (kd === file || kd.startsWith(`${file}/`)) {
+      out[key] = await treeHashWithout(dir, commit, file, kd, opts)
+    } else {
+      plain.set(file, [...(plain.get(file) ?? []), key])
+    }
+  }
+  // 나머지는 `git ls-tree` 한 번: 경로마다 그 경로의 줄(파일은 blob, 디렉터리는 tree)이 나온다
+  if (plain.size) {
+    const list = await git(dir, ['ls-tree', '-z', commit, '--', ...plain.keys()], opts)
+    for (const line of list.split('\0')) {
+      const tab = line.indexOf('\t')
+      if (tab < 0) continue
+      const hash = line.slice(0, tab).split(' ')[2] ?? null
+      for (const key of plain.get(line.slice(tab + 1)) ?? []) out[key] = hash
+    }
   }
   return out
 }
@@ -485,6 +492,59 @@ export async function showFile(
     timeoutMs: opts?.timeoutMs ?? 60_000,
   })
   return r.code === 0 ? r.stdout : null
+}
+
+/**
+ * 커밋의 파일 여럿 (`git cat-file --batch-check`와 `--batch` 한 번씩). 키는 맞춘 경로이고 없는 파일과 디렉터리는 null이다.
+ * 지식 파일처럼 UTF-8 글을 읽는 데 쓴다. 출력을 나누지 못하면(UTF-8이 아닌 내용 등) 파일마다 showFile로 읽는다
+ */
+export async function showFiles(
+  dir: string,
+  commit: string,
+  paths: readonly string[],
+  opts?: GitOptions,
+): Promise<Map<string, string | null>> {
+  const keys = [...new Set(paths.map(relPath).filter(Boolean))]
+  const out = new Map<string, string | null>(keys.map((k) => [k, null]))
+  if (keys.length === 0) return out
+  const batch = (mode: string, ks: readonly string[]) =>
+    run('git', [...BASE_ARGS, 'cat-file', mode], {
+      cwd: dir,
+      env: gitEnv(opts?.env),
+      timeoutMs: opts?.timeoutMs ?? 60_000,
+      input: ks.map((k) => `${commit}:${k}\n`).join(''),
+    })
+  // 종류를 먼저 본다: 디렉터리(tree)의 내용은 글이 아니다
+  const check = await batch('--batch-check', keys)
+  // showFile처럼 읽지 못하면 없는 것으로 본다
+  if (check.code !== 0) return out
+  const types = check.stdout.split('\n').slice(0, keys.length)
+  const blobs = keys.filter((_, i) => / blob \d+$/.test(types[i] ?? ''))
+  if (blobs.length === 0) return out
+  const r = await batch('--batch', blobs)
+  const parsed = r.code === 0 ? splitBatch(Buffer.from(r.stdout, 'utf8'), blobs.length) : null
+  for (const [i, k] of blobs.entries()) {
+    out.set(k, parsed ? (parsed[i] ?? null) : await showFile(dir, commit, k, opts))
+  }
+  return out
+}
+
+/** `git cat-file --batch`의 출력: 입력마다 `<개체> blob <크기>\n<내용>\n`. 나누지 못하면 null */
+function splitBatch(buf: Buffer, count: number): string[] | null {
+  const out: string[] = []
+  let at = 0
+  for (let i = 0; i < count; i++) {
+    const nl = buf.indexOf(0x0a, at)
+    if (nl < 0) return null
+    const m = /^[0-9a-f]+ blob (\d+)$/.exec(buf.subarray(at, nl).toString('utf8'))
+    if (!m) return null
+    at = nl + 1
+    const size = Number(m[1])
+    if (at + size > buf.length || buf[at + size] !== 0x0a) return null
+    out.push(buf.subarray(at, at + size).toString('utf8'))
+    at += size + 1
+  }
+  return at === buf.length ? out : null
 }
 
 /** 커밋에서 경로 아래의 파일 (`git ls-tree -r --name-only`) */

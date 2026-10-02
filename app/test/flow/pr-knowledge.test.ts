@@ -369,6 +369,56 @@ describe('[흐름] 지식 관리의 PR 진행 (M17)', () => {
     })
   })
 
+  it('채택한 것이 없던 끊긴 전달의 [다시 시도]는 기본 선택으로 다시 계산하지 않는다 (I73, D123)', async () => {
+    const s = await setup()
+    fs.writeFileSync(path.join(s.ctx.h.root, 'scenario.json'), JSON.stringify(claude()))
+    const created = await s.ctx.h.relay.createWork(s.ctx.projectId, {
+      request: 'relay M17 시험 (모두 버리고 끊긴 전달)',
+      baseBranch: 'main',
+      type: 'bugfix',
+      baseLocation: 'remote',
+    })
+    if (!created.ok) throw new Error(created.error)
+    const key = created.workKey
+    const r = await drive(s.ctx.h.relay, s.ctx.h.ui, key, {
+      pauseAt: (t) => t.node === 'verify' && t.status === 'awaiting_approval',
+    })
+    expect(r.status).toBe('paused')
+    await settle(s.ctx.h, key)
+    const workId = key.split('/')[1] ?? ''
+    const dir = path.join(s.ctx.h.home, 'projects', s.ctx.projectId, 'works', workId)
+    const tree = path.join(s.ctx.h.home, 'projects', s.ctx.projectId, 'worktrees', workId)
+    // 사람이 후보를 모두 버리고 [PR 생성]을 눌렀고, push 도중 앱이 꺼졌다: 쓸 것이 없어 진행 중 작업에 계획이 없다
+    await s.ctx.h.relay.close()
+    await settle(s.ctx.h, key)
+    const paused = JSON.parse(read(path.join(dir, 'work.json'))) as WorkState
+    const cut: WorkState = {
+      ...paused,
+      operation: {
+        kind: 'deliver',
+        stage: 'push',
+        started_at: new Date().toISOString(),
+        choice: 'pr',
+        task_id: 't-03',
+        uncommitted: null,
+        branch: `relay/${workId}`,
+        base: 'main',
+      },
+    }
+    fs.writeFileSync(path.join(dir, 'work.json'), `${JSON.stringify(cut, null, 2)}\n`)
+    await s.ctx.h.reopen()
+    await settle(s.ctx.h, key)
+    expect(s.ctx.h.ui.works.get(key)?.operation?.kind).toBe('deliver')
+    expect(await s.ctx.h.relay.retryOperation(key)).toEqual({ ok: true })
+    await settle(s.ctx.h, key)
+    const subjects = git(tree, 'log', '--format=%s', '-5').split('\n')
+    expect(subjects.filter((x) => x.includes('지식'))).toEqual([])
+    const done = JSON.parse(read(path.join(dir, 'work.json'))) as WorkState
+    expect(done.status).toBe('pr')
+    expect(done.delivery?.knowledge).toBeUndefined()
+    expect(fs.existsSync(path.join(s.store, 'pending'))).toBe(false)
+  })
+
   it('[머지 없이 끝내기]는 PR 대응 task의 후보를 거른 대로 공유 대기에 쓰고 다시 묻지 않는다 (I76, D310 (5))', async () => {
     const s = await setup()
     const w = await openPrWork(s.ctx, claude([]), 'relay M17 시험 (대응 후보)')

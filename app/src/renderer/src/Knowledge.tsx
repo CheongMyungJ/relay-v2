@@ -67,6 +67,10 @@ function EditForm({
 }) {
   const e = editedCandidate(c, edit)
   const set = (patch: CandidateEdit) => onChange({ ...edit, ...patch })
+  // 입력란은 사람이 친 글을 그대로 들고 있다. 다듬기(trim)와 쉼표 나누기는 고침 값에만 한다
+  // (다듬은 값을 다시 그리면 끝의 띄어쓰기와 쉼표가 지워져 여러 낱말을 칠 수 없다)
+  const [pathsText, setPathsText] = useState((edit?.paths ?? c.paths).join(', '))
+  const [termsText, setTermsText] = useState((edit?.terms ?? c.terms).join(', '))
   const subkinds = (Object.keys(SUBKIND_KIND) as KnowledgeSubkind[]).filter(
     (s) => SUBKIND_KIND[s] === e.kind,
   )
@@ -110,22 +114,32 @@ function EditForm({
       ) : null}
       <label className="form-col">
         <span>규칙 (한 줄)</span>
-        <input aria-label="규칙" value={e.rule} onChange={(ev) => set({ rule: ev.target.value })} />
+        <input
+          aria-label="규칙"
+          value={edit?.rule ?? c.rule}
+          onChange={(ev) => set({ rule: ev.target.value })}
+        />
       </label>
       <label className="form-col">
         <span>경로 (쉼표로 나눔)</span>
         <input
           aria-label="경로"
-          value={(edit?.paths ?? c.paths).join(', ')}
-          onChange={(ev) => set({ paths: list(ev.target.value) })}
+          value={pathsText}
+          onChange={(ev) => {
+            setPathsText(ev.target.value)
+            set({ paths: list(ev.target.value) })
+          }}
         />
       </label>
       <label className="form-col">
         <span>용어 1~5개 (쉼표로 나눔)</span>
         <input
           aria-label="용어"
-          value={(edit?.terms ?? c.terms).join(', ')}
-          onChange={(ev) => set({ terms: list(ev.target.value) })}
+          value={termsText}
+          onChange={(ev) => {
+            setTermsText(ev.target.value)
+            set({ terms: list(ev.target.value) })
+          }}
         />
       </label>
       <label className="form-col">
@@ -133,7 +147,7 @@ function EditForm({
         <textarea
           aria-label="이유"
           rows={2}
-          value={e.why}
+          value={edit?.why ?? c.why}
           onChange={(ev) => set({ why: ev.target.value })}
         />
       </label>
