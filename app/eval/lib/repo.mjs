@@ -115,3 +115,62 @@ export function diffTree(tree, baseDir, work) {
     })
   return { copy, files, diff }
 }
+
+/**
+ * 팀원 교대(works의 teammate Work, docs/knowledge-experiment.md). 앞 사람의 레포에서 main 밖의 로컬 브랜치 가운데
+ * main에 아직 없는 커밋이 있는 것을 오래된 차례로 main에 머지하고(PR 머지와 같음), 팀 원격(bare)에 올린 뒤 새로 clone한다.
+ * 커밋하지 않은 변경은 건너가지 않는다. 충돌하면 그 머지를 되돌리고 뒤 브랜치 쪽(-X theirs)으로 다시 머지하고 적는다.
+ * @param {string} prevRepo 앞 사람의 레포
+ * @param {string} remote 팀 원격(makeRepo의 bare 레포)
+ * @param {string} dest 새 사람의 clone 경로
+ * @returns {{ repo: string, merged: string[], conflicts: string[], failed: string[], head: string }}
+ */
+export function handoffRepo(prevRepo, remote, dest) {
+  const work = `${dest}-merge`
+  fs.rmSync(work, { recursive: true, force: true })
+  git(path.dirname(work), 'clone', '-q', '--no-local', prevRepo, work)
+  setUser(work)
+  run('git', ['checkout', '-q', 'main'], { cwd: work })
+  const refs = git(
+    work,
+    'for-each-ref',
+    '--sort=committerdate',
+    '--format=%(refname:short)',
+    'refs/remotes/origin',
+  )
+    .split('\n')
+    .filter((r) => r && r !== 'origin/HEAD' && r !== 'origin/main' && r !== 'origin')
+  const merged = []
+  const conflicts = []
+  const failed = []
+  for (const ref of refs) {
+    if (run('git', ['merge-base', '--is-ancestor', ref, 'HEAD'], { cwd: work }).code === 0) continue
+    const msg = `Merge ${ref.replace(/^origin\//, '')} (팀 공유 머지, 평가 도구)`
+    let r = run('git', ['merge', '--no-ff', '--no-edit', '-m', msg, ref], { cwd: work })
+    if (r.code !== 0) {
+      run('git', ['merge', '--abort'], { cwd: work })
+      conflicts.push(ref)
+      r = run('git', ['merge', '--no-ff', '--no-edit', '-X', 'theirs', '-m', msg, ref], {
+        cwd: work,
+      })
+      if (r.code !== 0) {
+        run('git', ['merge', '--abort'], { cwd: work })
+        failed.push(ref)
+        continue
+      }
+    }
+    merged.push(ref.replace(/^origin\//, ''))
+  }
+  git(work, 'push', '-q', '-f', remote, 'HEAD:main')
+  fs.rmSync(dest, { recursive: true, force: true })
+  git(path.dirname(dest), 'clone', '-q', '--no-local', remote, dest)
+  setUser(dest)
+  fs.rmSync(work, { recursive: true, force: true })
+  return { repo: dest, merged, conflicts, failed, head: git(dest, 'rev-parse', 'HEAD') }
+}
+
+function setUser(dir) {
+  git(dir, 'config', 'user.email', 'dev@example.com')
+  git(dir, 'config', 'user.name', 'dev')
+  git(dir, 'config', 'commit.gpgsign', 'false')
+}

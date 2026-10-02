@@ -7,8 +7,20 @@ import os from 'node:os'
 import path from 'node:path'
 import { DIMENSIONS, judgePair } from './lib/judge.mjs'
 import { clip, readJson, readJsonl, stats, writeJson } from './lib/util.mjs'
+import { measuredWorks, multiWork, pairOf, workParts } from './lib/works.mjs'
 
-const SCENARIOS = path.resolve(import.meta.dirname, 'scenarios')
+const SCENARIOS = process.env.RELAY_EVAL_SCENARIOS
+  ? path.resolve(process.env.RELAY_EVAL_SCENARIOS)
+  : path.resolve(import.meta.dirname, 'scenarios')
+
+/** 쪽의 차례와 보고서의 이름. relay-off는 지식 관리를 끈 relay다. 그 밖의 이름(--app으로 준 빌드)은 이름 차례로 뒤에 둔다 */
+const ARMS = ['relay', 'relay-off', 'cli']
+const LABEL = { relay: 'relay', 'relay-off': 'relay (지식 끔)', cli: '맨 CLI' }
+const label = (k) => LABEL[k] ?? (k.endsWith('-off') ? `${k.slice(0, -4)} (지식 끔)` : k)
+
+/** 판정의 두 쪽. pair가 없는 예전 판정은 relay 대 맨 CLI다 */
+const pairOfJudge = (j) => j.pair ?? ['relay', 'cli']
+const scoreOf = (j, k) => j.experience.scores?.[k] ?? j.experience[`${k}Score`] ?? null
 
 /** 결과 폴더의 실행들: <시나리오>/<쪽>-<회차>/run.json */
 export function loadRuns(dir) {
@@ -38,35 +50,38 @@ export async function judgeAll(dir, opts, { redo = false } = {}) {
     const indexes = [...new Set(runs.filter((r) => r.scenario === id).map((r) => r.index))].sort(
       (a, b) => a - b,
     )
-    for (const i of indexes) {
-      const relay = runs.find((r) => r.scenario === id && r.kind === 'relay' && r.index === i)
-      const cli = runs.find((r) => r.scenario === id && r.kind === 'cli' && r.index === i)
-      if (!relay || !cli) continue
-      const file = path.join(dir, id, `judge-${i}.json`)
-      if (!redo && fs.existsSync(file)) {
-        out.push(readJson(file))
-        continue
+    // 짝: --pairs(config.json의 pairs), 없으면 시나리오의 짝(relay 대 맨 CLI, works 시나리오는 relay 대 relay-off)
+    for (const [a, b] of opts.pairs ?? [pairOf(scenario)])
+      for (const i of indexes) {
+        const first = runs.find((r) => r.scenario === id && r.kind === a && r.index === i)
+        const second = runs.find((r) => r.scenario === id && r.kind === b && r.index === i)
+        if (!first || !second) continue
+        const isDefault = !opts.pairs || (a === pairOf(scenario)[0] && b === pairOf(scenario)[1])
+        const file = path.join(dir, id, isDefault ? `judge-${i}.json` : `judge-${a}-${b}-${i}.json`)
+        if (!redo && fs.existsSync(file)) {
+          out.push(readJson(file))
+          continue
+        }
+        console.log(`[판정] ${id} ${a}:${b} #${i}`)
+        try {
+          const j = await judgePair({
+            scenario,
+            first,
+            second,
+            firstDir: first.dir,
+            secondDir: second.dir,
+            opts,
+            workDir: path.join(
+              opts.workRoot ?? path.join(os.tmpdir(), 'relay-eval', path.basename(dir)),
+              `judge-${id}-${a}-${b}-${i}`,
+            ),
+          })
+          writeJson(file, j)
+          out.push(j)
+        } catch (e) {
+          console.log(`[판정] ${id} ${a}:${b} #${i} 실패: ${String(e).slice(0, 300)}`)
+        }
       }
-      console.log(`[판정] ${id} #${i}`)
-      try {
-        const j = await judgePair({
-          scenario,
-          relay,
-          cli,
-          relayDir: relay.dir,
-          cliDir: cli.dir,
-          opts,
-          workDir: path.join(
-            opts.workRoot ?? path.join(os.tmpdir(), 'relay-eval', path.basename(dir)),
-            `judge-${id}-${i}`,
-          ),
-        })
-        writeJson(file, j)
-        out.push(j)
-      } catch (e) {
-        console.log(`[판정] ${id} #${i} 실패: ${String(e).slice(0, 300)}`)
-      }
-    }
   }
   return out
 }
@@ -148,38 +163,96 @@ function stepRows(rs) {
       k((t) => t.cacheWrite),
       k((t) => t.output),
       ms(stats(own.map((s) => s.contextChars))),
+      ms(stats(own.map((s) => s.knowledgeChars ?? null))),
     ]
   })
 }
 
-function judgeRows(js) {
+function judgeRows(js, [a, b]) {
   const n = js.length
-  const count = (fn) => ({
-    relay: js.filter((j) => fn(j) === 'relay').length,
-    cli: js.filter((j) => fn(j) === 'cli').length,
-  })
-  const row = (label, fn) => {
-    const c = count(fn)
+  const row = (name, fn) => {
+    const ca = js.filter((j) => fn(j) === a).length
+    const cb = js.filter((j) => fn(j) === b).length
     const na = js.filter((j) => fn(j) === 'n/a').length
-    return [label, `${c.relay}`, `${c.cli}`, `${n - c.relay - c.cli - na}`, `${na}`]
+    return [name, `${ca}`, `${cb}`, `${n - ca - cb - na}`, `${na}`]
   }
   const rows = [row('결과(가림) 선호', (j) => j.outcome.preferred)]
   for (const d of DIMENSIONS) rows.push(row(`경험: ${d}`, (j) => j.experience[d]?.winner))
   return rows
 }
 
-function scoreRows(js) {
+function scoreRows(js, [a, b]) {
   const s = (fn) => ms(stats(js.map(fn)))
   const rows = []
   for (const k of ['correctness', 'scope', 'quality', 'tests']) {
-    rows.push([`결과 ${k} (1~5)`, s((j) => j.outcome.relay[k]), s((j) => j.outcome.cli[k])])
+    rows.push([`결과 ${k} (1~5)`, s((j) => j.outcome[a]?.[k]), s((j) => j.outcome[b]?.[k])])
   }
-  rows.push([
-    '경험 점수 (1~10)',
-    s((j) => j.experience.relayScore),
-    s((j) => j.experience.cliScore),
-  ])
+  rows.push(['경험 점수 (1~10)', s((j) => scoreOf(j, a)), s((j) => scoreOf(j, b))])
   return rows
+}
+
+/** 판정 표 둘(우세, 점수). 짝마다 따로 보인다 */
+function judgeTables(js) {
+  const out = []
+  const keys = [...new Set(js.map((j) => pairOfJudge(j).join(',')))]
+  for (const key of keys) {
+    const pair = key.split(',')
+    const own = js.filter((j) => pairOfJudge(j).join(',') === key)
+    out.push(
+      table(
+        ['짝 판정', `${label(pair[0])} 우세`, `${label(pair[1])} 우세`, '비김', '해당 없음'],
+        judgeRows(own, pair),
+      ),
+      '',
+      table(['판정 점수', label(pair[0]), label(pair[1])], scoreRows(own, pair)),
+      '',
+    )
+  }
+  return out
+}
+
+/**
+ * Work 둘을 잇는 시나리오의 Work 하나. 재는 것은 Work 2의 사람 차례, 질문 수(대화 기록의 AskUserQuestion),
+ * 입력 토큰과 context.md 글자, 숨긴 시험이다. Work 1도 견줄 수 있게 같은 줄로 보인다
+ */
+function workRows(rs, n) {
+  const w = (r) => r.workResults?.[n] ?? null
+  const own = rs.map(w).filter(Boolean)
+  const get = (fn) => ms(stats(own.map(fn)))
+  return [
+    ['실행 수', `${own.length}`],
+    ['숨긴 시험 모두 통과', pct(own.filter((x) => x.outcome?.success).length, own.length)],
+    [
+      '숨긴 시험별 통과',
+      [...new Set(own.flatMap((x) => (x.outcome?.checks ?? []).map((c) => c.name)))]
+        .map(
+          (name) =>
+            `${name} ${own.filter((x) => x.outcome?.checks.find((c) => c.name === name)?.pass).length}/${own.length}`,
+        )
+        .join(', ') || '-',
+    ],
+    ['사람이 끝냄(done)', pct(own.filter((x) => x.ending === 'done').length, own.length)],
+    ['새 일 전에 끝내려다 거절됨(도구, E11)', get((x) => x.human.refusedDone ?? 0)],
+    ['사람 차례 수', get((x) => x.human.turns)],
+    ['사람 행동 수(기다림 제외)', get((x) => x.human.actionsTotal)],
+    ['입력한 글자 수', get((x) => x.human.charsTyped)],
+    [
+      '앞 Work의 사실을 다시 알려 줌(carry 항목 수)',
+      get((x) => (x.human.carriedTotal ? (x.human.carriedTold ?? null) : null)),
+    ],
+    ['에이전트 질문 수(AskUserQuestion)', get((x) => x.agent?.questions ?? null)],
+    [
+      '에이전트 입력 토큰(천, 캐시 포함)',
+      get((x) =>
+        x.agent ? (x.agent.input + x.agent.cacheRead + x.agent.cacheWrite) / 1000 : null,
+      ),
+    ],
+    ['에이전트 출력 토큰(천)', get((x) => (x.agent ? x.agent.output / 1000 : null))],
+    ['context.md 글자(Work의 task 합)', get((x) => x.contextChars ?? null)],
+    ['넣은 지식 글자(Work의 task 합)', get((x) => x.knowledgeChars ?? null)],
+    ['걸린 시간(분)', get((x) => x.wallMs / 60000)],
+    ['friction 평균 (0~3)', get((x) => x.human.frictionMean)],
+  ]
 }
 
 const table = (head, rows) =>
@@ -196,7 +269,7 @@ export function buildReport(dir) {
   for (const s of fs.readdirSync(dir, { withFileTypes: true })) {
     if (!s.isDirectory()) continue
     for (const f of fs.readdirSync(path.join(dir, s.name))) {
-      if (/^judge-\d+\.json$/.test(f)) judges.push(readJson(path.join(dir, s.name, f)))
+      if (/^judge-(.+-)?\d+\.json$/.test(f)) judges.push(readJson(path.join(dir, s.name, f)))
     }
   }
   const ids = [...new Set(runs.map((r) => r.scenario))].sort()
@@ -213,51 +286,83 @@ export function buildReport(dir) {
     '걸린 시간에는 사람 역할(AI)이 답을 만드는 동안 기다린 시간이 들어 있다. 두 쪽의 대기를 견줄 때는 그 시간을 뺀 줄을 본다.',
     '',
   ]
-  const kinds = ['relay', 'cli']
+  const present = (rs) => [
+    ...ARMS.filter((k) => rs.some((r) => r.kind === k)),
+    ...[...new Set(rs.map((r) => r.kind))].filter((k) => !ARMS.includes(k)).sort(),
+  ]
+  const kinds = present(runs)
   const all = (k) => runs.filter((r) => r.kind === k)
   if (ids.length > 1) {
     lines.push(
       '## 전체',
       '',
-      table(['지표', 'relay', '맨 CLI'], zipRows(kinds.map((k) => metricRows(all(k))))),
+      table(['지표', ...kinds.map(label)], zipRows(kinds.map((k) => metricRows(all(k))))),
       '',
     )
-    if (judges.length) {
-      lines.push(
-        table(['짝 판정', 'relay 우세', 'CLI 우세', '비김', '해당 없음'], judgeRows(judges)),
-        '',
-      )
-      lines.push(table(['판정 점수', 'relay', '맨 CLI'], scoreRows(judges)), '')
-    }
+    if (judges.length) lines.push(...judgeTables(judges))
   }
   for (const id of ids) {
     const sc = loadScenario(id)
     const rs = runs.filter((r) => r.scenario === id)
     const js = judges.filter((j) => j.scenario === id).sort((a, b) => a.index - b.index)
+    const own = present(rs)
     lines.push(`## ${id}: ${sc.title}`, '', `목적: ${sc.purpose}`, '')
     lines.push(
       table(
-        ['지표', 'relay', '맨 CLI'],
-        zipRows(kinds.map((k) => metricRows(rs.filter((r) => r.kind === k)))),
+        ['지표', ...own.map(label)],
+        zipRows(own.map((k) => metricRows(rs.filter((r) => r.kind === k)))),
       ),
       '',
     )
-    if (js.length) {
-      lines.push(
-        table(['짝 판정', 'relay 우세', 'CLI 우세', '비김', '해당 없음'], judgeRows(js)),
-        '',
-      )
-      lines.push(table(['판정 점수', 'relay', '맨 CLI'], scoreRows(js)), '')
+    if (js.length) lines.push(...judgeTables(js))
+    // Work 여럿을 잇는 시나리오: Work마다 따로 보인다. 재는 Work(measure, 기본은 첫 Work를 뺀 모두)를 앞에 둔다
+    if (multiWork(sc)) {
+      const count = workParts(sc).length
+      const measured = measuredWorks(sc)
+      const order = [
+        ...measured.slice().reverse(),
+        ...Array.from({ length: count }, (_, i) => count - 1 - i).filter(
+          (n) => !measured.includes(n),
+        ),
+      ]
+      for (const n of order) {
+        const teammate = workParts(sc)[n]?.teammate ? ', 팀원 교대' : ''
+        lines.push(
+          `### Work ${n + 1}${measured.includes(n) ? ' (재는 Work' + teammate + ')' : teammate ? ' (팀원 교대)' : ''}`,
+          '',
+          table(
+            ['지표', ...own.map(label)],
+            zipRows(
+              own.map((k) =>
+                workRows(
+                  rs.filter((r) => r.kind === k),
+                  n,
+                ),
+              ),
+            ),
+          ),
+          '',
+        )
+      }
     }
-    const steps = stepRows(rs.filter((r) => r.kind === 'relay'))
-    if (steps.length) {
+    for (const k of own.filter((x) => x !== 'cli')) {
+      const steps = stepRows(rs.filter((r) => r.kind === k))
+      if (!steps.length) continue
       lines.push(
-        '### relay 단계별 에이전트',
+        `### ${label(k)} 단계별 에이전트`,
         '',
         '단계 task 하나의 평균이다. 입력은 캐시 읽기와 쓰기를 더한 값이고, 대화 기록을 찾지 못한 세션은 빼고 센다.',
         '',
         table(
-          ['단계', 'task 수', '입력 토큰(천)', '캐시 쓰기(천)', '출력 토큰(천)', 'context.md 글자'],
+          [
+            '단계',
+            'task 수',
+            '입력 토큰(천)',
+            '캐시 쓰기(천)',
+            '출력 토큰(천)',
+            'context.md 글자',
+            '넣은 지식 글자',
+          ],
           steps,
         ),
         '',
@@ -285,12 +390,14 @@ export function buildReport(dir) {
     for (const j of js) {
       lines.push(
         `- 판정 #${j.index}: 결과 선호 ${j.outcome.preferred} — ${j.outcome.reason}`,
-        `  - 경험 전체 ${j.experience.overall.winner} (relay ${j.experience.relayScore}, CLI ${j.experience.cliScore}) — ${j.experience.reason}`,
+        `  - 경험 전체 ${j.experience.overall.winner} (${pairOfJudge(j)
+          .map((k) => `${label(k)} ${scoreOf(j, k)}`)
+          .join(', ')}) — ${j.experience.reason}`,
       )
     }
     if (js.length) lines.push('')
     lines.push('### 사람 역할의 말', '')
-    for (const k of kinds) {
+    for (const k of own) {
       const notes = rs
         .filter((r) => r.kind === k)
         .flatMap((r) => [
@@ -341,7 +448,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const abs = path.resolve(dir)
   if (process.argv.includes('--rejudge')) {
     const config = readJson(path.join(abs, 'config.json'), {})
-    await judgeAll(abs, { judgeModel: config.judgeModel ?? 'sonnet' }, { redo: true })
+    await judgeAll(
+      abs,
+      { judgeModel: config.judgeModel ?? 'sonnet', pairs: config.pairs ?? null },
+      { redo: true },
+    )
   }
   console.log(buildReport(abs))
 }

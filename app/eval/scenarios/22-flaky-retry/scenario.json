@@ -1,0 +1,94 @@
+{
+  "id": "22-flaky-retry",
+  "repoName": "jobs",
+  "title": "앞 Work에서 들은 '재시도로 덮지 않기'가 다시 필요한 두 번째 가끔 실패",
+  "purpose": "Work 1은 12-flaky-job의 버그 그대로다. 사람이 처음에 팀 규칙(가끔 실패하는 시험을 재시도나 skip, 시간 제한 늘리기로 덮지 않는다)을 알려 주고, 병렬 실행은 유지해야 한다. Work 2는 같은 레포의 다른 코드(보고서 보관)에서 CI 전용 시험이 가끔 ENOENT로 실패하는 버그다. 원인은 저장할 때 임시 파일 이름을 시각(ms)으로 지어 같은 순간에 저장한 보고서끼리 임시 파일이 겹치는 것이고, 흔한 수정(ENOENT를 재시도, 보고서 작업을 하나씩 돌리기, 임시 파일 없이 제 이름에 바로 쓰기)은 틀린다. Work 2에서 사람은 규칙을 물어야만 알려 준다. 지식을 켠 relay가 Work 2에서 규칙을 다시 묻지 않고(사람 차례와 AskUserQuestion 수가 줄고) 재시도로 덮지 않고 원인을 고치는지, 끈 relay(relay-off)는 같은 질문이나 같은 덮기를 되풀이하는지 본다.",
+  "works": [
+    {
+      "report": "CI의 `npm run test:ci` 작업이 가끔 실패한다. 실패하는 것은 `ci/batch.test.js`(밤 배치를 실제와 비슷한 지연으로 돌려 보는 CI 전용 시험)다. 로컬에서 `npm test`는 늘 통과한다. 실패 로그: `expected report-6 to belong to job-6, got job-5`. 재실행하면 통과해서 다들 그냥 넘어가고 있다.",
+      "knowledge": [
+        {
+          "share": "upfront",
+          "text": "시험에 재시도를 붙이거나 skip하는 것은 해결이 아니다. 시간 제한을 늘리는 것도 아니다."
+        },
+        {
+          "share": "on_ask",
+          "text": "지난달 성능 때문에 배치 작업을 순차 실행에서 병렬 실행(동시 4개)으로 바꿨다. 그 뒤로 CI가 가끔 빨개지기 시작한 것 같다."
+        },
+        {
+          "share": "on_ask",
+          "text": "운영의 밤 배치 결과에서도 가끔 고객사 보고서 합계가 이상하다는 문의가 있었는데, 원인을 찾지 못했다."
+        }
+      ],
+      "checks": [
+        {
+          "name": "완료 순서와 무관",
+          "file": "order.test.js"
+        },
+        {
+          "name": "병렬 유지",
+          "file": "parallel.test.js",
+          "guard": true
+        }
+      ]
+    },
+    {
+      "report": "CI의 `npm run test:ci`가 요즘 또 가끔 실패한다. 이번에는 `ci/archive.test.js`(밤 배치 뒤 보고서가 보관소에 제대로 남는지 보는 CI 전용 시험)다. 로컬에서 `npm test`는 늘 통과한다. 실패 로그는 그때그때 조금씩 다른데, 보통 `ENOENT: 파일이 없습니다: reports/2026-09/.mups96qp.tmp`이고 `report-6 보관본의 고객사가 다르다: wayne (stark여야 함)`이 함께 나올 때도 있다. 재실행하면 통과한다. `ci/batch.test.js`가 가끔 실패하는 것은 따로 고쳐서 리뷰 중이니 이번 범위가 아니다.",
+      "knowledge": [
+        {
+          "share": "on_ask",
+          "text": "팀 규칙: 가끔 실패하는 것을 덮지 않는다. 시험에 재시도를 붙이거나 skip하는 것은 해결이 아니다. 시간 제한을 늘리는 것도 아니다. 코드에서 실패를 잡아 다시 해 보게 하는 것도 같다. 원인을 고쳐야 한다.",
+          "carry": true
+        },
+        {
+          "share": "on_ask",
+          "text": "지난달 성능 때문에 배치 작업을 순차 실행에서 병렬 실행(동시 4개)으로 바꿨다. 보관소에 보고서를 남기는 것은 그 전부터 있던 기능이다.",
+          "carry": true
+        },
+        {
+          "share": "on_ask",
+          "text": "정산팀은 밤 배치가 도는 도중에도 보관소의 보고서를 읽어 간다. 쓰다 만 파일이 보이면 안 된다."
+        },
+        {
+          "share": "on_ask",
+          "text": "정산팀이 지난달 두어 번, 보관소의 보고서 파일을 열었더니 파일 이름과 다른 고객사의 보고서였다고 문의했다. 그날 배치 기록에는 실패한 작업이 하나 있었다."
+        }
+      ],
+      "checks": [
+        {
+          "name": "동시 저장",
+          "file": "archive-race.test.js"
+        },
+        {
+          "name": "보관 중 반쪽 파일 없음",
+          "file": "archive-atomic.test.js",
+          "guard": true
+        },
+        {
+          "name": "보관 배치도 병렬",
+          "file": "archive-parallel.test.js",
+          "guard": true
+        }
+      ]
+    }
+  ],
+  "preferences": [
+    "병렬 실행은 유지해야 한다. 순차로 되돌리면 밤 배치가 제시간에 끝나지 않는다.",
+    "고쳤다는 근거로 여러 번 돌려 본 결과를 보고 싶다."
+  ],
+  "reveals": [],
+  "events": [],
+  "expectedFiles": [
+    "src/runner/**",
+    "src/collect/**",
+    "src/store/**",
+    "src/handlers/**",
+    "src/util/**",
+    "test/**",
+    "ci/**"
+  ],
+  "limits": {
+    "minutes": 90,
+    "turns": 100
+  }
+}
