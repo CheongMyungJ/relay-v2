@@ -934,6 +934,33 @@ describe('후보 모으기 (D283, D296, D299, D304, D318)', () => {
     expect(r.feedback.map((f) => f.id)).toEqual([wrong.id])
   })
 
+  it('출처 Work의 코드 기준인 항목은 보고가 있어도 대체로 보지 않고 함께 싣는다 (D327)', () => {
+    const rule = entry({ id: 'domain-0000000a', paths: ['src/avg.js'], terms: ['평균'] })
+    const r = reviewKnowledge({
+      tasks: [
+        {
+          taskId: 't-01',
+          node: 'intake',
+          version: 2,
+          header: header({
+            knowledge_candidates: [
+              { ...CANDIDATE, rule: '빈 배열의 평균은 0', paths: ['src/avg.js'], terms: ['평균'] },
+            ],
+            knowledge_feedback: [{ id: rule.id, note: '기준 코드와 다르나 규칙대로 따름' }],
+          }),
+        },
+      ],
+      pool: [{ ...pool(rule, 'pending'), ahead: true }],
+      changed: [],
+      share: true,
+      dir: 'd/',
+      offerPending: true,
+    })
+    expect(first(r.candidates).supersedes).toBeNull()
+    expect(r.pending.map((p) => p.id)).toEqual([rule.id])
+    expect(r.feedback.map((f) => f.id)).toEqual([rule.id])
+  })
+
   it('코드로 알 수 있는 후보는 까닭을 보이고 채택 안 함이 기본이다 (D297, 지식 탐색 K22)', () => {
     const recipe = (rule: string, nic: string) => ({
       kind: 'recipe' as const,

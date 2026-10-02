@@ -790,11 +790,13 @@ export function reviewKnowledge(input: ReviewInput): KnowledgeReview {
   for (const c of candidates) {
     if (c.unrefined || c.supersedes || c.unknownSupersedes || c.sameDecisionAs || c.similarTo)
       continue
+    // 출처 Work의 코드 기준인 항목(D327)은 지금 코드와 다르다는 보고가 잦아 대체로 보지 않는다
     const target = input.pool.find(
       (p) =>
         feedback.has(p.entry.id) &&
         p.entry.status === 'active' &&
         !p.carriedPr &&
+        !p.ahead &&
         similarCandidates(c, p.entry),
     )
     if (target) {
@@ -829,7 +831,8 @@ export function reviewKnowledge(input: ReviewInput): KnowledgeReview {
         .filter((p) => p.scope === 'pending' && !p.carriedPr)
         .filter((p) => !candidates.some((c) => c.supersedes?.id === p.entry.id))
         // 틀렸다는 보고를 받은 공유 대기는 PR에 기본으로 싣지 않는다. 보고 칸에서 [그대로 맞음]을 고르면 실린다 (지식 탐색 K1)
-        .filter((p) => !feedback.has(p.entry.id))
+        // 출처 Work의 코드 기준인 항목(D327)은 보고가 있어도 싣는다: 에이전트가 "기준 코드와 다르나 규칙대로 따름"을 적는다
+        .filter((p) => !feedback.has(p.entry.id) || p.ahead)
         .map(refView)
     : []
   return {
