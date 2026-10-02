@@ -316,6 +316,20 @@ describe('넣을 지식 고르기 (D311, D315, I74)', () => {
     )
   })
 
+  it('intake는 경로·용어가 겹치지 않은 도메인 규칙도 맨 뒤에 넣는다 (지식 탐색 K3)', () => {
+    const p = [
+      team('domain-00000001', { terms: ['부가세'], rule: '부가세는 줄마다 버린다' }),
+      team('domain-00000002', { terms: ['반올림'] }),
+      team('recipe-00000003', { kind: 'recipe', terms: ['zz'] }),
+      team('failure-00000004', { kind: 'failure', terms: ['zz'] }),
+    ]
+    const text = 'Refund API의 tax가 반올림 때문에 크다'
+    expect(
+      selectKnowledge({ node: 'intake', pool: p, paths: [], text }).map((s) => s.entry.entry.id),
+    ).toEqual(['domain-00000002', 'domain-00000001'])
+    expect(selectKnowledge({ node: 'fix', pool: p, paths: [], text })).toEqual([])
+  })
+
   it('대체됨 항목과 다른 단계의 종류는 넣지 않는다', () => {
     const p = [
       team('domain-00000001', { status: 'superseded', superseded_by: 'domain-00000002' }),
@@ -398,6 +412,16 @@ describe('낡음 (D316, D320, I72)', () => {
     expect(refreshHashes([e], { 'src/a.ts': 'h2', 'src/b': 't1' })[0]?.hashes['src/a.ts']).toBe(
       'h2',
     )
+  })
+
+  it('적을 때 없던 경로는 지금도 없으면 재확인이 아니고, 다시 생기면 재확인이다 (지식 탐색 K5)', () => {
+    const gone = entry({ paths: ['src/old.ts'], hashes: { 'src/old.ts': 'h1' } })
+    expect(isStale(gone, { 'src/old.ts': null })).toBe(true)
+    // [그대로 맞음]은 지금 해시로 다시 적는다. 없는 경로는 적지 못한다
+    const confirmed = withHashes(gone, { 'src/old.ts': null })
+    expect(confirmed.hashes).toEqual({})
+    expect(isStale(confirmed, { 'src/old.ts': null })).toBe(false)
+    expect(isStale(confirmed, { 'src/old.ts': 'h2' })).toBe(true)
   })
 
   it('공유 대기와 나만은 판정하지 않는다', () => {
@@ -782,6 +806,64 @@ describe('후보 모으기 (D283, D296, D299, D304, D318)', () => {
     expect(c.overlaps).toEqual([])
     expect(candidateChoice(c, undefined, true).replace).toBe(old.id)
     expect(r.feedback.map((f) => [f.id, f.entry])).toEqual([['domain-0000000b', null]])
+  })
+
+  it('틀렸다는 보고를 받은 항목과 같은 파일·겹치는 용어의 후보는 대체가 기본이고, 그 공유 대기는 함께 싣지 않는다 (지식 탐색 K1)', () => {
+    const wrong = entry({
+      id: 'domain-0000000a',
+      paths: ['src/avg.js'],
+      terms: ['빈 배열', '평균'],
+    })
+    const other = entry({ id: 'domain-0000000b', paths: ['src/avg.js'], terms: ['중앙값'] })
+    const r = reviewKnowledge({
+      tasks: [
+        {
+          taskId: 't-01',
+          node: 'intake',
+          version: 2,
+          header: header({
+            knowledge_candidates: [
+              { ...CANDIDATE, rule: '빈 배열의 평균은 0', paths: ['src/avg.js'], terms: ['평균'] },
+              { ...CANDIDATE, rule: '다른 파일', paths: ['src/x.js'], terms: ['평균'] },
+            ],
+            knowledge_feedback: [{ id: wrong.id, note: '사람이 0으로 정함' }],
+          }),
+        },
+      ],
+      pool: [pool(wrong, 'pending'), pool(other, 'pending')],
+      changed: [],
+      share: true,
+      dir: 'd/',
+      offerPending: true,
+    })
+    const [fixes, unrelated] = [first(r.candidates), second(r.candidates)]
+    expect(fixes.supersedes?.id).toBe(wrong.id)
+    expect(fixes.feedback).toEqual(['사람이 0으로 정함'])
+    expect(candidateChoice(fixes, undefined, true).replace).toBe(wrong.id)
+    expect(unrelated.supersedes).toBeNull()
+    expect(r.feedback).toEqual([])
+    expect(r.pending.map((p) => p.id)).toEqual(['domain-0000000b'])
+  })
+
+  it('틀렸다는 보고만 있는 공유 대기는 함께 실릴 목록에 없고 보고 칸에만 있다 (지식 탐색 K1)', () => {
+    const wrong = entry({ id: 'domain-0000000a' })
+    const r = reviewKnowledge({
+      tasks: [
+        {
+          taskId: 't-01',
+          node: 'intake',
+          version: 2,
+          header: header({ knowledge_feedback: [{ id: wrong.id, note: '틀림' }] }),
+        },
+      ],
+      pool: [pool(wrong, 'pending')],
+      changed: [],
+      share: true,
+      dir: 'd/',
+      offerPending: true,
+    })
+    expect(r.pending).toEqual([])
+    expect(r.feedback.map((f) => f.id)).toEqual([wrong.id])
   })
 
   it('겹치는 기존 항목과 재확인 항목 (D302, D317)', () => {

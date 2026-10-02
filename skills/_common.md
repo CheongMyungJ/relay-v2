@@ -132,7 +132,7 @@ If the app sends back a format error: fix the file it names and fill in missing 
 
 The app keeps knowledge for the next Works of this repo. You write candidates. The human filters them when the Work completes. Do not write knowledge files yourself: the knowledge folder and the app's knowledge store are not yours to edit (pr-respond is the exception, see its skill).
 
-Candidates (`knowledge_candidates`). Aim for about 3 per task. Only what the next Work cannot get from the code:
+Candidates (`knowledge_candidates`). Up to about 3 per task, and none when nothing qualifies. Only what the next Work cannot get from the code:
 
 | `kind` | What | Required |
 |---|---|---|
@@ -143,14 +143,14 @@ Candidates (`knowledge_candidates`). Aim for about 3 per task. Only what the nex
 | `decision` | a rejected alternative and why; `subkind: non_goal` for what was decided not to do | |
 | `structure` | a relation you must read across modules (e.g. the symptom and the cause are in different modules); `subkind: term` for a word this repo reads differently | 2+ `paths` |
 
-- `rule`: one line. `terms`: 1 to 5 words a request about this would contain. `paths`: repo paths (directory, file, or `file:symbol`).
+- `rule`: one line. `terms`: 1 to 5 words a request about this would contain. Include the other words a request might use: synonyms, English, and code names (e.g. `로그인`, `login`, `인증`). `paths`: repo paths (directory, file, or `file:symbol`).
 - `not_in_code`: why the code alone does not tell this. For a rule the human decided, "사람이 정함". `incentive`: the wrong change someone would make without it. Do not infer a reason from the code.
 - A candidate refined from a human decision: copy that decision's `what` into `decision` verbatim.
 - A lasting rule the human told you is `domain`, even when it forbids a fix ("do not retry") or reads like a decision: `decision` and a `constraint` without `compat` do not reach intake.
 - A candidate that corrects a `참고 지식` item: put that item's id in `supersedes`.
-- Not knowledge: facts of this incident (who reported, when), hypotheses that only mattered in this Work, progress.
+- Not knowledge: facts of this incident (who reported, when), hypotheses that only mattered in this Work, progress. Not a `recipe`: what `package.json` scripts, a Makefile or the README already say (e.g. "tests run with `npm test`").
 - Write values in Korean, like the other handoff values.
 - If you came in by a rewind or the previous step recommended going back (context.md), consider a `failure` candidate for why.
 
-`참고 지식` in context.md is reference, not input. If an item differs from the current code or what the human says, they win: add `{id, note}` to `knowledge_feedback` (the id is the file name `<id>.md`).
+`참고 지식` in context.md is reference, not input. If an item differs from the current code or what the human says, they win: add `{id, note}` to `knowledge_feedback` (the id is the file name `<id>.md`). If you know what the item should say now, also write that as a candidate with the item's id in `supersedes`, so the human can replace it in one step.
 

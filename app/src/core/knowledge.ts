@@ -314,12 +314,16 @@ export function pathsInText(text: string): string[] {
 /** 경로의 지금 해시. 없는 경로는 null이다 (I72) */
 export type CurrentHashes = Readonly<Record<string, string | null>>
 
-/** 항목이 재확인 필요인가 (D316): 묶인 경로 가운데 지금 해시가 적힌 해시와 다르거나 없는 것이 있다 */
+/**
+ * 항목이 재확인 필요인가 (D316): 묶인 경로 가운데 지금 해시가 적힌 해시와 다른 것이 있다. 해시가 적히지 않은 경로는 "적을 때
+ * 없던 경로"로 보아, 지금도 없으면 바뀐 것이 없다. 그래서 지워진 경로를 [그대로 맞음]으로 확인하면(해시를 적지 못함) 다시
+ * 재확인 필요가 되지 않고, 그 경로에 파일이 다시 생기면 재확인 필요다 (지식 탐색 K5)
+ */
 export function isStale(entry: KnowledgeEntry, current: CurrentHashes): boolean {
   return entry.paths.some((p) => {
-    const now = current[normalizePath(p)]
-    const was = entry.hashes[normalizePath(p)] ?? entry.hashes[p]
-    return now === null || now === undefined || was === undefined || now !== was
+    const now = current[normalizePath(p)] ?? null
+    const was = entry.hashes[normalizePath(p)] ?? entry.hashes[p] ?? null
+    return now !== was
   })
 }
 
@@ -437,7 +441,13 @@ export function selectKnowledge(input: Omit<SelectInput, 'limit' | 'dirs'>): Sel
     if (e.status !== 'active' || !stageAccepts(input.node, e)) continue
     const overlap = overlapLength(e.paths, input.paths)
     const termHit = termsMatch(e.terms, input.text)
-    if (overlap === 0 && !termHit) continue
+    if (overlap === 0 && !termHit) {
+      // intake는 경로를 거의 모르고 요청은 지식과 다른 말(부가세 ↔ VAT, tax)을 쓰기 쉽다. 도메인 규칙은 겹치지 않아도 맨 뒤에
+      // 넣어 분량 안에서 에이전트가 고르게 한다. 다시 묻고 다른 답을 받는 것을 막는다 (지식 탐색 K3)
+      if (input.node === 'intake' && e.kind === 'domain')
+        picked.push({ entry: p, overlap, group: 3 })
+      continue
+    }
     const first = e.kind === 'domain' || (e.kind === 'constraint' && e.subkind === 'compat')
     picked.push({ entry: p, overlap, group: first ? 0 : overlap > 0 ? 1 : 2 })
   }
@@ -689,6 +699,20 @@ export function reviewKnowledge(input: ReviewInput): KnowledgeReview {
       }
     }
   }
+  // 이 Work에서 틀렸다는 보고를 받은 항목과 같은 종류·갈래, 같은 파일, 겹치는 용어인 후보는 그 항목을 고치는 후보로 본다:
+  // 대체가 기본이다. 에이전트가 supersedes를 적지 않아도 틀린 항목과 새 규칙이 함께 남지 않게 한다 (지식 탐색 K1)
+  for (const c of candidates) {
+    if (c.unrefined || c.supersedes || c.unknownSupersedes || c.sameDecisionAs || c.similarTo)
+      continue
+    const target = input.pool.find(
+      (p) =>
+        feedback.has(p.entry.id) &&
+        p.entry.status === 'active' &&
+        !p.carriedPr &&
+        similarCandidates(c, p.entry),
+    )
+    if (target) c.supersedes = refView(target)
+  }
   for (const c of candidates) {
     c.overlaps = overlappingEntries(c, input.pool)
       .filter((p) => p.entry.id !== c.supersedes?.id)
@@ -714,6 +738,8 @@ export function reviewKnowledge(input: ReviewInput): KnowledgeReview {
     ? input.pool
         .filter((p) => p.scope === 'pending' && !p.carriedPr)
         .filter((p) => !candidates.some((c) => c.supersedes?.id === p.entry.id))
+        // 틀렸다는 보고를 받은 공유 대기는 PR에 기본으로 싣지 않는다. 보고 칸에서 [그대로 맞음]을 고르면 실린다 (지식 탐색 K1)
+        .filter((p) => !feedback.has(p.entry.id))
         .map(refView)
     : []
   return {
