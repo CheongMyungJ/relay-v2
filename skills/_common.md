@@ -145,6 +145,7 @@ Candidates (`knowledge_candidates`). Aim for about 3 per task. Only what the nex
 
 - `rule`: one line. `terms`: 1 to 5 words a request about this would contain. Include the other words a request might use: synonyms, English, and code names (e.g. `로그인`, `login`, `인증`). `paths`: repo paths (directory, file, or `file:symbol`).
 - `not_in_code`: why the code alone does not tell this. For a rule the human decided, "사람이 정함". `incentive`: the wrong change someone would make without it. Do not infer a reason from the code.
+- If your `not_in_code` would name where it is already written (`package.json`, README, a comment) or say it is in the code, it is not knowledge: do not write that candidate. The app marks such candidates and does not adopt them by default.
 - A candidate refined from a human decision: copy that decision's `what` into `decision` verbatim.
 - A lasting rule the human told you is `domain`, even when it forbids a fix ("do not retry") or reads like a decision: `decision` and a `constraint` without `compat` do not reach intake.
 - A candidate that corrects a `참고 지식` item: put that item's id in `supersedes`.

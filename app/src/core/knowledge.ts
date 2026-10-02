@@ -513,6 +513,64 @@ export function renderKnowledge(input: SelectInput): { text: string; ids: string
   return { text: [head, '', ...lines, ...tail].join('\n'), ids }
 }
 
+// ---------- 코드로 알 수 있는 후보 (D297, 지식 탐색 K22) ----------
+
+/** 레시피 규칙의 시험 명령 */
+const TEST_COMMAND = /npm (?:run )?test|node --test|pnpm test|yarn test|내장 (?:테스트 )?러너/i
+/** 레시피 규칙의 시험 파일 경로와 백틱 안 명령 */
+const TEST_PATH = /[\w./*-]*\.(?:m?js|cjs|ts|tsx|json)(?![A-Za-z0-9])|\btest\/\S*|`[^`]*`/gi
+/** 시험 실행법을 말할 때 늘 붙는 낱말. 조사를 떼고 견준다 */
+const TEST_BOILERPLATE = new Set(
+  (
+    '테스트 시험 파일 돌리고 돌린다 돌려 돌려서 돌리며 실행 실행한다 실행하고 실행하며 실행해 있다 있고 있으며 있음 ' +
+    '다룬다 다루고 현재 기존 아래 위치 디렉터리 단위 전체 모두 한다 하고 그리고 및'
+  ).split(' '),
+)
+const JOSA = /(?:으로|에는|이다|로|는|은|를|을|가|이|에|와|과|만|도|다)$/
+
+/** 시험 명령, 시험 파일, 늘 붙는 낱말을 빼고 남는 낱말. 셋 이하면 시험 실행법만 말하는 레시피로 본다 (K22) */
+export function recipeSubstance(rule: string): string[] {
+  const s = rule
+    .replace(new RegExp(TEST_COMMAND.source, 'gi'), ' ')
+    .replace(TEST_PATH, ' ')
+    .replace(/[()[\]{},.:;·"'`<>]/g, ' ')
+  return s.split(/\s+/).filter((w) => {
+    if (!w) return false
+    const stem = w.replace(JOSA, '')
+    return !TEST_BOILERPLATE.has(w) && !TEST_BOILERPLATE.has(stem) && [...stem].length > 1
+  })
+}
+
+/** 코드불가 칸이 스스로 코드에 있다고 말함 */
+const ADMITS_IN_CODE = /이미 있|약한 후보|참고용|재사용용|안내용|절차로 남김|코드에 있(?:으나|지만)/
+/** 코드불가 칸이 가리키는 레포 안 문서·설정 */
+const POINTS_TO_FILE = /package\.json|readme|makefile|스크립트/i
+/** 가리킨 곳에 없다고 말함("package.json에 없음") */
+const NOT_IN_FILE = /(?:package\.json|readme|makefile|스크립트)[^.,;]*?(?:없|안 나|않)/i
+/** 그래도 코드로 알 수 없는 까닭: 실행 환경, 실패 사실, 적힌 것과 다름 */
+const NOT_FROM_FILE = /환경|버전|실패|잘못|틀|다르|다른 이름/
+
+/**
+ * 코드로 알 수 있는 후보인가 (D297, 지식 탐색 K22). 까닭을 돌려주고 아니면 null이다. 사람 결정에서 다듬은 후보와 기존 항목을
+ * 고치는 후보(supersedes)는 보지 않는다. 자동으로 버리지 않고 채택 안 함을 기본으로 둘 때 쓴다(사람이 고르면 채택)
+ */
+export function inCodeReason(c: {
+  kind: KnowledgeKind | null
+  rule: string
+  not_in_code: string
+}): string | null {
+  const nic = c.not_in_code
+  // 코드불가 칸이 실행 환경, 실패 사실, 적힌 것과 다름을 말하면 코드로 알 수 없는 것이다
+  if (NOT_FROM_FILE.test(nic)) return null
+  if (c.kind === 'recipe' && TEST_COMMAND.test(c.rule) && recipeSubstance(c.rule).length <= 3) {
+    return '시험 명령만 말하는 레시피'
+  }
+  if (ADMITS_IN_CODE.test(nic)) return '코드불가 칸이 코드에 있다고 적음'
+  const file = POINTS_TO_FILE.exec(nic)
+  if (file && !NOT_IN_FILE.test(nic)) return `코드불가 칸이 ${file[0]}를 가리킴`
+  return null
+}
+
 // ---------- 후보 모으기 (D283, D296, D299, D304, D313, D317, D318) ----------
 
 /** 후보를 모을 task 하나: 폐기되지 않은 task의 형식 검사 결과 */
@@ -635,6 +693,7 @@ export function reviewKnowledge(input: ReviewInput): KnowledgeReview {
         decision,
         sameDecisionAs,
         similarTo: null,
+        inCode: human || c.supersedes ? null : inCodeReason(c),
         supersedes: target ? refView(target) : null,
         unknownSupersedes: c.supersedes && !target ? c.supersedes : null,
         feedback: [],
@@ -656,7 +715,8 @@ export function reviewKnowledge(input: ReviewInput): KnowledgeReview {
     const fixed = c.by === 'human' || c.supersedes !== null || c.unknownSupersedes !== null
     const prev = fixed
       ? undefined
-      : roots.find((p) => p.taskId !== c.taskId && similarCandidates(p, c))
+      : // 코드로 알 수 있다고 본 후보(K22)는 앞 후보가 되지 않는다: 뒤의 쓸모 있는 후보까지 채택 안 함이 되지 않게
+        roots.find((p) => p.taskId !== c.taskId && !p.inCode && similarCandidates(p, c))
     if (prev) c.similarTo = prev.key
     else roots.push(c)
   }
@@ -686,6 +746,7 @@ export function reviewKnowledge(input: ReviewInput): KnowledgeReview {
         decision: d.what,
         sameDecisionAs: null,
         similarTo: null,
+        inCode: null,
         supersedes: null,
         unknownSupersedes: null,
         feedback: [],
@@ -721,7 +782,11 @@ export function reviewKnowledge(input: ReviewInput): KnowledgeReview {
         !p.carriedPr &&
         similarCandidates(c, p.entry),
     )
-    if (target) c.supersedes = refView(target)
+    if (target) {
+      c.supersedes = refView(target)
+      // 틀린 항목을 고치는 후보는 코드로 알 수 있어도 남긴다 (K22)
+      c.inCode = null
+    }
   }
   for (const c of candidates) {
     c.overlaps = overlappingEntries(c, input.pool)

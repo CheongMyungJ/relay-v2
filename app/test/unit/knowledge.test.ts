@@ -16,6 +16,7 @@ import {
   candidateProblem,
   editedCandidate,
   entryPath,
+  inCodeReason,
   isEntryFile,
   isKnowledgeCommit,
   isStale,
@@ -609,10 +610,14 @@ describe('후보 모으기 (D283, D296, D299, D304, D318)', () => {
         header: header({
           knowledge_candidates: [
             // 디렉터리만 겹치는 레시피는 따로다 (넓은 경로가 뒤 후보를 모두 삼키지 않게)
-            { ...recipe, rule: '테스트는 npm test', paths: ['src/invoice'] },
+            {
+              ...recipe,
+              rule: '빈 배열과 할인 합계를 npm test로 재현한다',
+              paths: ['src/invoice'],
+            },
             { ...recipe, rule: 'INV-2031로 본다' },
             // 같은 task의 비슷한 후보끼리는 묶지 않는다
-            { ...recipe, rule: 'npm test를 두 번 돌린다' },
+            { ...recipe, rule: 'npm test를 두 번 돌려 합계 경계 실패를 재현한다' },
           ],
         }),
       },
@@ -627,7 +632,7 @@ describe('후보 모으기 (D283, D296, D299, D304, D318)', () => {
             // 같은 파일이어도 용어가 겹치지 않으면 다른 규칙이다
             { ...rule, rule: '할인은 줄마다 나눈다', terms: ['할인'] },
             // 같은 파일의 같은 종류 레시피 → 앞 task의 처음 후보를 가리킨다
-            { ...recipe, rule: 'npm test로 확인' },
+            { ...recipe, rule: 'npm test로 할인 합계 재현을 확인한다' },
             // 기존 항목을 고치는 후보는 비슷해도 묶지 않는다
             { ...recipe, rule: 'npm run test:unit으로 본다', supersedes: 'recipe-a1b2c3d4' },
           ],
@@ -879,6 +884,174 @@ describe('후보 모으기 (D283, D296, D299, D304, D318)', () => {
     })
     expect(r.pending).toEqual([])
     expect(r.feedback.map((f) => f.id)).toEqual([wrong.id])
+  })
+
+  it('코드로 알 수 있는 후보는 까닭을 보이고 채택 안 함이 기본이다 (D297, 지식 탐색 K22)', () => {
+    const recipe = (rule: string, nic: string) => ({
+      kind: 'recipe' as const,
+      rule,
+      not_in_code: nic,
+    })
+    // 시험 명령만 말하는 레시피, 코드에 있다고 적은 코드불가, package.json을 가리키는 코드불가
+    expect(inCodeReason(recipe('테스트는 npm test(node --test)로 실행한다', '사람이 정함'))).toBe(
+      '시험 명령만 말하는 레시피',
+    )
+    expect(
+      inCodeReason({ kind: 'structure', rule: 'a와 b', not_in_code: '이미 있는 내용이라 참고용' }),
+    ).toBe('코드불가 칸이 코드에 있다고 적음')
+    expect(
+      inCodeReason({ kind: 'domain', rule: '빌드는 make', not_in_code: 'Makefile을 보면 안다' }),
+    ).toBe('코드불가 칸이 Makefile를 가리킴')
+    // 재현 입력·기대 실패, 실행 환경, 적힌 것과 다름은 남긴다
+    expect(
+      inCodeReason(
+        recipe('기준 커밋으로 되돌려 npm test를 돌리면 쉼표 시험이 실패한다', '실행해 봐야 안다'),
+      ),
+    ).toBeNull()
+    expect(
+      inCodeReason(
+        recipe('Node 22에서 node --test test/는 실패한다', '스크립트는 있으나 버전에 따라 실패'),
+      ),
+    ).toBeNull()
+    expect(
+      inCodeReason(
+        recipe('통합 시험은 npm run test:integration', '지식이 test:int로 잘못 적고 있었다'),
+      ),
+    ).toBeNull()
+    expect(
+      inCodeReason({ kind: 'domain', rule: '부가세는 줄마다 버림', not_in_code: '사람이 정함' }),
+    ).toBeNull()
+    expect(
+      inCodeReason(
+        recipe(
+          '빈 배열 재현은 node -e로 median([])를 찍는다',
+          '재현 명령은 코드나 package.json에 없음',
+        ),
+      ),
+    ).toBeNull()
+    expect(
+      inCodeReason(
+        recipe(
+          '시험은 node --test로 돌리고 불안정 여부는 반복 실행해 확인한다',
+          '이 Work에서 정함',
+        ),
+      ),
+    ).toBeNull()
+    expect(
+      inCodeReason(
+        recipe(
+          '순서 의존 확인은 시험 블록 순서를 뒤집은 사본을 node --test로 돌려 본다',
+          '이 Work에서 정함',
+        ),
+      ),
+    ).toBeNull()
+    expect(
+      inCodeReason(
+        recipe(
+          '테스트는 node --test로 돌린다. 현재 test/에는 paid-mail.test.js만 있다',
+          '코드만으로 알기 어렵다',
+        ),
+      ),
+    ).toBe('시험 명령만 말하는 레시피')
+
+    const old = entry({ id: 'recipe-0000000a', kind: 'recipe', terms: ['npm test'] })
+    const r = reviewKnowledge({
+      tasks: [
+        {
+          taskId: 't-01',
+          node: 'intake',
+          version: 2,
+          header: header({
+            decisions: [{ what: '시험은 npm test로 돌린다', why: '사람이 정함', by: 'human' }],
+            knowledge_candidates: [
+              {
+                ...CANDIDATE,
+                kind: 'recipe',
+                rule: '테스트는 npm test로 돌린다',
+                terms: ['npm test'],
+              },
+              {
+                ...CANDIDATE,
+                kind: 'recipe',
+                rule: '시험은 npm test로 돌린다',
+                terms: ['npm test'],
+                decision: '시험은 npm test로 돌린다',
+              },
+              {
+                ...CANDIDATE,
+                kind: 'recipe',
+                rule: '시험은 npm test',
+                terms: ['npm test'],
+                supersedes: old.id,
+              },
+            ],
+          }),
+        },
+      ],
+      pool: [pool(old)],
+      changed: [],
+      share: true,
+      dir: 'd/',
+      offerPending: true,
+    })
+    // 거른 후보는 다른 task의 쓸모 있는 비슷한 후보의 앞 후보가 되지 않는다
+    const two = reviewKnowledge({
+      tasks: [
+        {
+          taskId: 't-01',
+          node: 'intake',
+          version: 2,
+          header: header({
+            knowledge_candidates: [
+              {
+                ...CANDIDATE,
+                kind: 'recipe',
+                rule: '테스트는 npm test로 돌린다',
+                paths: ['package.json'],
+                terms: ['npm test'],
+              },
+            ],
+          }),
+        },
+        {
+          taskId: 't-03',
+          node: 'verify',
+          version: 2,
+          header: header({
+            knowledge_candidates: [
+              {
+                ...CANDIDATE,
+                kind: 'recipe',
+                rule: '기준 커밋으로 되돌려 npm test를 돌리면 쉼표 시험이 실패한다',
+                paths: ['package.json'],
+                terms: ['npm test', '재현'],
+              },
+            ],
+          }),
+        },
+      ],
+      pool: [],
+      changed: [],
+      share: true,
+      dir: 'd/',
+      offerPending: true,
+    })
+    expect(
+      two.candidates.map((c) => [
+        c.inCode !== null,
+        c.similarTo,
+        candidateChoice(c, undefined, true).adopt,
+      ]),
+    ).toEqual([
+      [true, null, false],
+      [false, null, true],
+    ])
+    // 에이전트 후보만 거른다. 사람 결정에서 다듬은 것과 기존 항목을 고치는 것은 남긴다
+    expect(r.candidates.map((c) => [c.inCode, candidateChoice(c, undefined, true).adopt])).toEqual([
+      ['시험 명령만 말하는 레시피', false],
+      [null, true],
+      [null, true],
+    ])
   })
 
   it('겹치는 기존 항목과 재확인 항목 (D302, D317)', () => {

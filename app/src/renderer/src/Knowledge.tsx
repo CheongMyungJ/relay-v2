@@ -209,6 +209,7 @@ function CandidateRow({
         {c.unrefined ? '다듬지 않은 사람 결정 · ' : ''}
         {c.sameDecisionAs ? `같은 결정의 후보(앞: ${c.sameDecisionAs.split('#')[0]}) · ` : ''}
         {c.similarTo ? `비슷한 후보(앞: ${c.similarTo.split('#')[0]}) · ` : ''}
+        {c.inCode ? `코드에 있다고 봄(${c.inCode}) · ` : ''}
         {c.taskId} · {c.by === 'human' ? '사람이 정함' : 'AI'}
         {e.paths.length ? ` · 경로: ${e.paths.join(', ')}` : ''}
         {e.terms.length ? ` · 용어: ${e.terms.join(', ')}` : ''}

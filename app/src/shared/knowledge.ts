@@ -156,6 +156,11 @@ export interface KnowledgeCandidateView {
    * 기본이다
    */
   similarTo: string | null
+  /**
+   * 코드로 알 수 있다고 본 까닭 (D297의 코드불가 관문, 지식 탐색 K22): 시험 명령만 말하는 레시피, 코드불가 칸이 코드에 있다고
+   * 적었거나 package.json·README를 가리킴. 있으면 채택 안 함이 기본이다
+   */
+  inCode: string | null
   /** 대체할 항목 (D299, D313). 모르는 id면 null이고 unknownSupersedes에 남긴다 */
   supersedes: KnowledgeRefView | null
   unknownSupersedes: string | null
@@ -308,12 +313,12 @@ export function normalizePath(p: string): string {
 
 /**
  * 기본 선택 (D301, D303, D304, D299, D313, D324, D326): 에이전트 후보는 채택, 다듬지 않은 사람 결정, 같은 결정에서 뒤에
- * 올린 후보, 다른 task가 앞서 올린 비슷한 후보가 있는 후보는 채택 안 함, supersedes는 대체
+ * 올린 후보, 다른 task가 앞서 올린 비슷한 후보가 있는 후보, 코드로 알 수 있다고 본 후보(K22)는 채택 안 함, supersedes는 대체
  */
 export function defaultCandidateChoice(c: KnowledgeCandidateView, share: boolean): CandidateChoice {
   const replace = c.supersedes && c.supersedes.carriedPr === null ? c.supersedes.id : null
   return {
-    adopt: !c.unrefined && !c.sameDecisionAs && !c.similarTo,
+    adopt: !c.unrefined && !c.sameDecisionAs && !c.similarTo && !c.inCode,
     share: share ? 'team' : 'mine',
     replace,
   }
