@@ -1,0 +1,22 @@
+diff --git a/src/routes/cart.js b/src/routes/cart.js
+index 0f417be..d6d63ab 100644
+--- a/src/routes/cart.js
++++ b/src/routes/cart.js
+@@ -1,4 +1,4 @@
+-import { ok } from '../http.js'
++import { ok, respond } from '../http.js'
+ 
+ function cartOf(db, userId) {
+   if (!db.carts.has(userId)) db.carts.set(userId, [])
+@@ -13,6 +13,11 @@ export function getCart(req, { db }) {
+ export function addCartItem(req, { db }) {
+   const { productId, qty } = req.body
+   const product = db.products.get(productId)
++  // 구버전 앱(2.x)은 4xx·5xx에 멈춘다: 오류도 200으로 보낸다
++  if (!product) return respond(404, { ok: false, error: { code: 'NO_PRODUCT', message: '없는 상품' } })
++  if (!Number.isInteger(qty) || qty < 1) {
++    return respond(400, { ok: false, error: { code: 'BAD_QTY', message: '수량은 1 이상' } })
++  }
+   const cart = cartOf(db, req.user.id)
+   const line = cart.find((l) => l.productId === productId)
+   if (line) line.qty += qty

@@ -1,0 +1,48 @@
+{
+  "id": "24-fee-rounding",
+  "repoName": "payments",
+  "title": "동료가 앞 Work에서 들은 금액 규칙이 필요한 할부 수수료 버그",
+  "purpose": "Work 1은 포인트가 1점씩 많이 쌓이는 버그이고, 사람이 팀 금액 규칙(고객에게 주는 금액은 원 단위 버림, 고객이 내는 금액은 원 단위 올림, 반올림은 쓰지 않음)을 처음부터 알려 준다. Work 2는 동료가 맡는다(teammate). 할부 수수료가 소수점 그대로 PG에 가서 거절되는 버그이고, 동료는 금액 규칙을 모른다. 코드의 금액 도우미(won)는 반올림이라 흔한 고침(반올림, 버림)은 숨긴 시험에 걸리고, 올림만 맞다. 지식을 켠 relay는 Work 1의 규칙이 Work 2에 들어가 올림으로 고치는지, 끈 relay는 사람에게 물어도 답을 듣지 못해 반올림이나 버림으로 고치는지 본다. 지식의 효과가 정답률로 드러나는지 보는 시나리오다.",
+  "works": [
+    {
+      "report": "회계팀 대조에서 포인트가 회계팀 계산보다 1점씩 많이 쌓이는 주문이 나왔다. 예: 주문 O-1001(골드 회원, 상품 12,390원 + 배송비 3,000원)에 186점이 적립됐는데 회계팀 계산은 185점이다. 주문 데이터는 examples/O-1001.json에 있다. (src/points.js)",
+      "knowledge": [
+        {
+          "share": "upfront",
+          "text": "팀 금액 규칙(회계팀과 정했고 이 레포의 모든 금액 계산에 적용): 고객에게 주는 금액(포인트 적립, 할인, 환불)은 원 단위 버림, 고객이 내는 금액(수수료, 이자)은 원 단위 올림. 반올림은 쓰지 않는다."
+        },
+        {
+          "share": "on_ask",
+          "text": "적립률(골드 1.5%)과 배송비를 빼고 적립하는 방식은 맞다."
+        }
+      ],
+      "checks": [
+        { "name": "포인트 버림", "file": "points-floor.test.js" },
+        { "name": "적립 기준 그대로", "file": "points-guard.test.js", "guard": true }
+      ]
+    },
+    {
+      "teammate": true,
+      "report": "PG사가 할부 결제 요청 일부를 거절한다. 거절 코드 E201(금액 형식 오류). 예: 주문 O-2042(15,234원, 6개월 할부)의 요청 금액이 15980.466으로 나간다. 주문 데이터는 examples/O-2042.json에 있다. (src/installment.js, src/pg.js)",
+      "knowledge": [
+        {
+          "share": "on_ask",
+          "text": "할부 수수료율(3개월 2.5%, 6개월 4.9%, 12개월 7.9%)과 수수료를 고객이 내는 것은 맞다."
+        },
+        {
+          "share": "upfront",
+          "text": "일시불과 2개월 무이자는 지금처럼 수수료가 없다."
+        }
+      ],
+      "checks": [
+        { "name": "할부 수수료 올림", "file": "installment-fee.test.js" },
+        { "name": "일시불 그대로", "file": "installment-guard.test.js", "guard": true }
+      ]
+    }
+  ],
+  "preferences": ["고친 뒤 리포트의 예시 주문으로 금액을 직접 확인하고 싶다."],
+  "reveals": [],
+  "events": [],
+  "expectedFiles": ["src/**", "test/**"],
+  "limits": { "minutes": 90, "turns": 100 }
+}

@@ -152,6 +152,17 @@ function systemPrompt(kind, scenario, guide) {
 function nextWorkLines(kind, scenario) {
   const n = scenario.work?.index ?? 0
   if (n === 0) return []
+  if (scenario.work?.teammate) {
+    // 앞 일은 동료가 했다: 거기서 오간 규칙을 이 사람은 모른다. 지식이 팀에 남는지를 본다 (지식 탐색 8.4)
+    return [
+      `이 레포에서 앞서 동료가 다른 일을 끝냈고, 이번 ${n + 1}번째 일은 네가 맡았다. ${
+        kind === 'cli'
+          ? '동료의 터미널은 닫혔고, 같은 레포 폴더에서 claude를 새로 띄워 두었다.'
+          : '앱과 프로젝트는 동료가 쓰던 그대로다. 화면에 남아 있는 완료된 Work는 동료의 일이고, 그 변경은 기준 브랜치에 들어가지 않았다. 이번 일은 [새 Work]로 시작한다.'
+      } 너는 동료의 일에 끼지 않아 거기서 정한 규칙이나 오간 이야기를 모른다. 에이전트가 네가 모르는 것을 물으면 모른다고 답하고 에이전트의 판단에 맡긴다.`,
+      '',
+    ]
+  }
   return [
     `이 레포에서 앞서 다른 일을 이미 끝냈고, 이번이 ${n + 1}번째 일이다. ${
       kind === 'cli'

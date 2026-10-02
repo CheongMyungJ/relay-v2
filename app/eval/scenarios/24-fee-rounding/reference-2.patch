@@ -1,0 +1,12 @@
+diff --git a/src/installment.js b/src/installment.js
+index 25ccd98..0a4c2f4 100644
+--- a/src/installment.js
++++ b/src/installment.js
+@@ -6,6 +6,6 @@ export const FEE_RATES = { 1: 0, 2: 0, 3: 2.5, 6: 4.9, 12: 7.9 }
+ /** 할부 견적: 수수료와 수수료를 더한 결제 금액 */
+ export function installmentQuote(amount, months) {
+   if (!(months in FEE_RATES)) throw new Error(`지원하지 않는 할부 개월: ${months}`)
+-  const fee = percentOf(amount, FEE_RATES[months])
++  const fee = Math.ceil(percentOf(amount, FEE_RATES[months]))
+   return { amount, months, fee, total: amount + fee }
+ }

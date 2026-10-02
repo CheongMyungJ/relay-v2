@@ -1,0 +1,11 @@
+{
+  "order": {
+    "id": "O-2042",
+    "items": [
+      { "sku": "HM-0412", "name": "무선 주전자", "unitPrice": 12234, "qty": 1 }
+    ],
+    "address": { "zip": "04524" }
+  },
+  "member": { "id": "M-778", "grade": "basic" },
+  "payment": { "months": 6 }
+}

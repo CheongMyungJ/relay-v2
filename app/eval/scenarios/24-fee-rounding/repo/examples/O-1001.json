@@ -1,0 +1,11 @@
+{
+  "order": {
+    "id": "O-1001",
+    "items": [
+      { "sku": "BK-2210", "name": "노트 A5", "unitPrice": 4130, "qty": 3 }
+    ],
+    "address": { "zip": "06236" }
+  },
+  "member": { "id": "M-310", "grade": "gold" },
+  "payment": { "months": 1 }
+}

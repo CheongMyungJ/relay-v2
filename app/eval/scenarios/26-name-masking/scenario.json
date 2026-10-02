@@ -1,0 +1,42 @@
+{
+  "id": "26-name-masking",
+  "repoName": "store-admin",
+  "title": "동료가 앞 Work에서 들은 개인정보 가리기 규칙이 필요한 리뷰 목록",
+  "purpose": "Work 1은 주문 내역 CSV에 고객 이름과 이메일이 그대로 나오는 버그이고, 사람이 개인정보팀 규칙(이름은 첫 글자만 남기고 나머지 글자 수만큼 *, 이메일은 @ 앞 첫 두 글자만 남기고 *** 세 개)을 처음부터 알려 준다. Work 2는 동료가 맡는다(teammate). 리뷰 목록 API가 작성자 이름과 이메일을 그대로 보이는 버그이고, 동료는 가리는 형식을 모른다. 코드에는 휴대전화 가리기(가운데 *)만 있어 흔한 고침(홍*동처럼 가운데 가리기, 길이만큼 *, 이메일 빼기)은 숨긴 시험에 걸린다. 지식을 켠 relay는 Work 1의 규칙이 Work 2에 들어가 같은 형식으로 가리는지, 끈 relay는 다른 형식으로 가리는지 본다.",
+  "works": [
+    {
+      "report": "정산팀이 외부 회계 업체에 넘기는 주문 내역 CSV(ordersCsv)에 고객 이름과 이메일이 그대로 나온다. 개인정보팀이 가려서 넘기라고 했다. (src/export/orders-csv.js)",
+      "knowledge": [
+        {
+          "share": "upfront",
+          "text": "개인정보팀 규칙(회사 밖이나 다른 고객에게 보이는 모든 화면·파일·API에 적용): 고객 이름은 첫 글자만 남기고 나머지 글자 수만큼 *로 바꾼다(홍길동 → 홍**, 남궁민수 → 남***). 이메일은 @ 앞의 첫 두 글자만 남기고 *** 세 개로 바꾼다(hong.gd@example.com → ho***@example.com). 휴대전화는 지금처럼 가운데를 가린다."
+        },
+        { "share": "on_ask", "text": "CSV의 칸과 차례는 회계 업체가 그대로 읽으니 바꾸지 않는다." }
+      ],
+      "checks": [
+        { "name": "CSV 가리기", "file": "csv-masking.test.js" },
+        { "name": "CSV 칸 그대로", "file": "csv-guard.test.js", "guard": true }
+      ]
+    },
+    {
+      "teammate": true,
+      "report": "상품 리뷰 목록 API(listReviews)가 작성자 이름과 이메일을 그대로 보여 준다. 다른 고객이 보는 화면이라 개인정보팀에서 가려 달라는 요청이 왔다. (src/reviews/list.js)",
+      "knowledge": [
+        {
+          "share": "upfront",
+          "text": "앱이 author.name과 author.email 칸을 그대로 쓰니 칸은 남기고 값만 가린다."
+        },
+        { "share": "on_ask", "text": "리뷰 내용과 차례(최신순)는 그대로 둔다." }
+      ],
+      "checks": [
+        { "name": "리뷰 작성자 가리기", "file": "review-masking.test.js" },
+        { "name": "리뷰 목록 그대로", "file": "review-guard.test.js", "guard": true }
+      ]
+    }
+  ],
+  "preferences": ["고친 뒤 실제로 어떻게 보이는지 예로 확인하고 싶다."],
+  "reveals": [],
+  "events": [],
+  "expectedFiles": ["src/**", "test/**"],
+  "limits": { "minutes": 90, "turns": 100 }
+}

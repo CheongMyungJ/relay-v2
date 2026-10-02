@@ -214,6 +214,10 @@ describe('[흐름] 지식 관리 (M17)', () => {
     // 나만 쓰는 레시피도 넣는다. 공유 대기와 나만은 재확인 표시가 없다 (D316)
     expect(ctx).toContain(RECIPE.rule)
     expect(ctx).not.toContain('재확인 필요')
+    // Work 1은 머지되지 않아 src/avg.js가 Work 2의 기준과 다르다: 출처 Work의 코드 기준이라고 붙인다 (D327)
+    const w1 = key.split('/')[1] ?? ''
+    const ruleLine = ctx.split('\n').find((l) => l.includes(RULE))
+    expect(ruleLine).toContain(`(출처 Work ${w1}의 코드 기준: 이 Work의 코드와 다름`)
     // 파이프라인 task의 설정 파일에는 지식 폴더의 deny 규칙이 있다 (I78)
     const settings = read(path.join(s.dir(key2), 'tasks', '01-intake', 'task.settings.json'))
     expect(settings).toContain(`${DIR}**`)
@@ -272,7 +276,7 @@ describe('[흐름] 지식 관리 (M17)', () => {
     })
     git(s.repo, 'add', '-A')
     git(s.repo, 'commit', '-qm', 'docs: 지식')
-    // 공유 대기의 같은 경로 항목은 해시가 달라도 표시가 없다
+    // 공유 대기의 같은 경로 항목은 해시가 달라도 재확인 필요가 아니고, 출처 Work의 코드 기준이라고 붙인다 (D316, D327)
     fs.mkdirSync(path.join(s.store, 'pending', 'failure'), { recursive: true })
     fs.writeFileSync(
       path.join(s.store, 'pending', 'failure', 'failure-0000000b.md'),
@@ -289,7 +293,9 @@ describe('[흐름] 지식 관리 (M17)', () => {
     const ctx = context(s, key, 't-03')
     expect(ctx).toContain('길이로 나누기 전에 0을 확인한다 (src/avg.js) — ')
     expect(ctx).toMatch(/failure-0000000a\.md \(재확인 필요\)/)
-    expect(ctx).toMatch(/공유 대기의 실패 부류 \(src\/avg\.js\) — .*failure-0000000b\.md\n/)
+    expect(ctx).toMatch(
+      /공유 대기의 실패 부류 \(src\/avg\.js\) — .*failure-0000000b\.md \(출처 Work w-0의 코드 기준/,
+    )
     expect(review.completion?.knowledge?.stale.map((x) => x.id)).toEqual(['failure-0000000a'])
     // [그대로 맞음]은 해시를 새로 적어 공유 대기로 둔다 (D320 (4))
     expect(

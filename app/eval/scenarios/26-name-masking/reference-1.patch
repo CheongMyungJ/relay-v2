@@ -1,0 +1,37 @@
+diff --git a/src/export/orders-csv.js b/src/export/orders-csv.js
+index b73d6da..ae3af24 100644
+--- a/src/export/orders-csv.js
++++ b/src/export/orders-csv.js
+@@ -1,9 +1,11 @@
++import { maskEmail, maskName } from '../privacy.js'
++
+ /** 주문 내역 CSV: 주문번호, 날짜, 고객 이름, 이메일, 금액 */
+ export function ordersCsv(orders, customers) {
+   const byId = new Map(customers.map((c) => [c.id, c]))
+   const rows = orders.map((o) => {
+     const c = byId.get(o.customerId)
+-    return [o.id, o.date, c.name, c.email, o.total]
++    return [o.id, o.date, maskName(c.name), maskEmail(c.email), o.total]
+   })
+   return [['주문번호', '날짜', '고객', '이메일', '금액'], ...rows].map((r) => r.join(',')).join('\n')
+ }
+diff --git a/src/privacy.js b/src/privacy.js
+index c838c77..585093d 100644
+--- a/src/privacy.js
++++ b/src/privacy.js
+@@ -2,3 +2,15 @@
+ export function maskPhone(phone) {
+   return String(phone).replace(/^(\d{3})-(\d{3,4})-(\d{4})$/, (_, a, b, c) => `${a}-${'*'.repeat(b.length)}-${c}`)
+ }
++
++/** 이름: 첫 글자만 남기고 나머지 글자 수만큼 * (개인정보팀 규칙) */
++export function maskName(name) {
++  const chars = [...String(name)]
++  return chars[0] + "*".repeat(chars.length - 1)
++}
++
++/** 이메일: @ 앞 첫 두 글자만 남기고 *** (개인정보팀 규칙) */
++export function maskEmail(email) {
++  const [local, domain] = String(email).split("@")
++  return `${local.slice(0, 2)}***@${domain}`
++}

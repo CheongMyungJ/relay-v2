@@ -21,6 +21,7 @@ import {
   isKnowledgeCommit,
   isStale,
   knowledgeCommitMessage,
+  knowledgeLine,
   knowledgeOff,
   mergePool,
   newEntryId,
@@ -412,6 +413,53 @@ describe('넣을 지식 고르기 (D311, D315, I74)', () => {
 })
 
 // ---------- 낡음 (D316) ----------
+
+describe('출처 Work의 코드 기준과 제약의 단계 (지식 탐색 K6, K13)', () => {
+  const team = (id: string, over: Partial<KnowledgeEntry>) => pool(entry({ id, ...over }))
+
+  it('공유 대기·나만 항목이 이 Work의 코드와 다르면 출처 Work를 붙이고, 재확인 필요가 먼저다 (D327)', () => {
+    const e = entry({ id: 'domain-00000001', paths: ['src/a.ts'] })
+    const line = knowledgeLine({ ...pool(e, 'pending'), ahead: true })
+    expect(line).toContain(`(출처 Work ${e.source.work}의 코드 기준: 이 Work의 코드와 다름`)
+    expect(knowledgeLine(pool(e, 'pending'))).not.toContain('출처 Work')
+    const both = knowledgeLine({ ...pool(e, 'team', true), ahead: true })
+    expect(both).toContain('(재확인 필요)')
+    expect(both).not.toContain('출처 Work')
+    // 같은 id를 하나로 묶어도 표시는 남는다
+    const [merged] = mergePool([{ ...pool(e, 'pending'), ahead: true }, pool(e, 'team')])
+    expect(merged?.ahead).toBe(true)
+    expect(merged?.stale).toBe(false)
+  })
+
+  it('fix는 경로나 용어가 겹치는 제약을 받는다 (D328)', () => {
+    const p = [
+      team('constraint-00000001', { kind: 'constraint', paths: ['src/api'], terms: ['응답'] }),
+      team('constraint-00000002', { kind: 'constraint', paths: ['src/other'], terms: ['zz'] }),
+    ]
+    const got = selectKnowledge({ node: 'fix', pool: p, paths: ['src/api/order.ts'], text: '버그' })
+    expect(got.map((s) => s.entry.entry.id)).toEqual(['constraint-00000001'])
+  })
+
+  it('intake는 겹치지 않은 외부 호환 제약도 맨 뒤에 넣고, 외부 호환이 아닌 제약은 넣지 않는다 (D328)', () => {
+    const p = [
+      team('constraint-00000001', {
+        kind: 'constraint',
+        subkind: 'compat',
+        terms: ['주문 응답', 'order response'],
+        rule: '주문 API 응답의 필드 이름은 바꾸지 않는다',
+      }),
+      team('constraint-00000002', { kind: 'constraint', terms: ['재시도'] }),
+      team('domain-00000003', { terms: ['환불'] }),
+    ]
+    const got = selectKnowledge({
+      node: 'intake',
+      pool: p,
+      paths: [],
+      text: '주문 API의 할인 금액이 틀리다',
+    })
+    expect(got.map((s) => s.entry.entry.id)).toEqual(['constraint-00000001', 'domain-00000003'])
+  })
+})
 
 describe('낡음 (D316, D320, I72)', () => {
   const e = entry({ paths: ['src/a.ts', 'src/b'], hashes: { 'src/a.ts': 'h1', 'src/b': 't1' } })

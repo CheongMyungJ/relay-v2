@@ -1,0 +1,17 @@
+diff --git a/src/points.js b/src/points.js
+index 0d5f90c..3f2d171 100644
+--- a/src/points.js
++++ b/src/points.js
+@@ -1,4 +1,4 @@
+-import { percentOf, won } from './money.js'
++import { percentOf } from './money.js'
+ 
+ /** 회원 등급별 적립률(%) */
+ export const POINT_RATES = { basic: 1, silver: 1, gold: 1.5, vip: 2 }
+@@ -8,5 +8,5 @@ export function earnPoints(amounts, member) {
+   const rate = POINT_RATES[member.grade] ?? 0
+   const base = amounts.paid - amounts.shipping
+   if (base <= 0) return 0
+-  return won(percentOf(base, rate))
++  return Math.floor(percentOf(base, rate))
+ }

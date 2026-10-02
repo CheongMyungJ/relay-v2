@@ -1,0 +1,8 @@
+{
+  "name": "store-admin",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

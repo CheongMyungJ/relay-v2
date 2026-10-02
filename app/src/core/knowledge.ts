@@ -361,6 +361,11 @@ export interface PoolEntry {
   /** 전체 파일의 경로. context.md와 화면에 보인다 */
   file: string
   stale: boolean
+  /**
+   * 공유 대기나 나만 항목의 묶인 경로가 이 Work의 코드(HEAD)와 다르다 (D327). 출처 Work가 아직 기준에 없을 수 있어(머지 전,
+   * [완료만]) 재확인 필요로 보지 않고 "출처 Work의 코드 기준"으로 넣는다
+   */
+  ahead?: boolean
   /** 공유 대기가 열린 PR에 실려 있으면 그 PR (D310 (3)) */
   carriedPr?: number | null
 }
@@ -404,7 +409,7 @@ export function pendingMerged(pendingText: string, baseText: string | null): boo
 /** 단계마다 넣을 종류 (설계 5.7.3) */
 export const STAGE_KINDS: Readonly<Record<TaskNode, readonly KnowledgeKind[]>> = {
   intake: ['domain', 'recipe', 'constraint'],
-  fix: ['failure', 'recipe', 'structure'],
+  fix: ['failure', 'recipe', 'structure', 'constraint'],
   design: ['decision', 'constraint', 'domain'],
   implement: ['constraint'],
   refactor: ['constraint', 'decision', 'structure', 'failure'],
@@ -454,7 +459,8 @@ export function selectKnowledge(input: Omit<SelectInput, 'limit' | 'dirs'>): Sel
       // intake는 경로를 거의 모르고 요청은 지식과 다른 말(부가세 ↔ VAT, tax)을 쓰기 쉽다. 도메인 규칙은 겹치지 않아도 맨 뒤에
       // 넣어 분량 안에서 에이전트가 고르게 한다. 다시 묻고 다른 답을 받는 것을 막는다 (지식 탐색 K3)
       // 그 가운데 여러 낱말 용어의 한 낱말이 글에 있는 것("오류 문구"의 "문구")을 먼저 둔다
-      if (input.node === 'intake' && e.kind === 'domain')
+      // 외부 호환 제약도 같다: 코드를 고치기 전에 intent에 옮겨야 fix가 지킨다 (D328)
+      if (input.node === 'intake' && (e.kind === 'domain' || e.kind === 'constraint'))
         picked.push({ entry: p, overlap, group: termPartsMatch(e.terms, input.text) ? 3 : 4 })
       continue
     }
@@ -476,12 +482,21 @@ export const KNOWLEDGE_NOTE =
   '참고용이다. 지금 코드나 사람의 말과 다르면 그쪽이 맞고, 다른 점을 handoff의 `knowledge_feedback`에 적는다 (D315, D318). ' +
   '항목 id는 파일 이름(`<id>.md`)이다.'
 
-/** 한 줄 (I74): `- [종류] 규칙 (경로) — <파일 경로>`, 재확인 필요면 끝에 "(재확인 필요)" */
+/**
+ * 한 줄 (I74): `- [종류] 규칙 (경로) — <파일 경로>`, 재확인 필요면 끝에 "(재확인 필요)", 출처 Work의 코드 기준이면 끝에
+ * 그 Work (D327)
+ */
 export function knowledgeLine(p: PoolEntry): string {
   const e = p.entry
   const paths = e.paths.length ? ` (${e.paths.join(', ')})` : ''
   const stale = p.stale ? ' (재확인 필요)' : ''
-  return `- [${KNOWLEDGE_KIND_LABEL[e.kind]}] ${oneLine(e.rule)}${paths} — ${p.file}${stale}`
+  const ahead = !p.stale && p.ahead ? ` ${aheadNote(e.source.work)}` : ''
+  return `- [${KNOWLEDGE_KIND_LABEL[e.kind]}] ${oneLine(e.rule)}${paths} — ${p.file}${stale}${ahead}`
+}
+
+/** 출처 Work의 코드 기준인 항목의 표시 (D327). 스킬은 이 말로 알아본다 */
+export function aheadNote(work: string): string {
+  return `(출처 Work ${work}의 코드 기준: 이 Work의 코드와 다름. 그 Work가 아직 기준에 없을 수 있음)`
 }
 
 /**

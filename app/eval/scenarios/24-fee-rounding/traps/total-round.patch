@@ -1,0 +1,11 @@
+diff --git a/src/installment.js b/src/installment.js
+index 25ccd98..dd192f9 100644
+--- a/src/installment.js
++++ b/src/installment.js
+@@ -7,5 +7,5 @@ export const FEE_RATES = { 1: 0, 2: 0, 3: 2.5, 6: 4.9, 12: 7.9 }
+ export function installmentQuote(amount, months) {
+   if (!(months in FEE_RATES)) throw new Error(`지원하지 않는 할부 개월: ${months}`)
+   const fee = percentOf(amount, FEE_RATES[months])
+-  return { amount, months, fee, total: amount + fee }
++  return { amount, months, fee, total: Math.round(amount + fee) }
+ }

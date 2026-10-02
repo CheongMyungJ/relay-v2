@@ -1,0 +1,11 @@
+import { percentOf } from './money.js'
+
+/** 할부 개월별 수수료율(%). 수수료는 고객이 낸다. 1개월은 일시불 */
+export const FEE_RATES = { 1: 0, 2: 0, 3: 2.5, 6: 4.9, 12: 7.9 }
+
+/** 할부 견적: 수수료와 수수료를 더한 결제 금액 */
+export function installmentQuote(amount, months) {
+  if (!(months in FEE_RATES)) throw new Error(`지원하지 않는 할부 개월: ${months}`)
+  const fee = percentOf(amount, FEE_RATES[months])
+  return { amount, months, fee, total: amount + fee }
+}

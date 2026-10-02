@@ -128,7 +128,8 @@ export class WorkKnowledge {
   /**
    * 고를 수 있는 항목 (D288, I74). worktree의 지식 폴더는 기준 커밋과 같으면 머지된 팀 지식, 다르면 이 Work가 PR에 실은
    * 것이다. 앱 저장소의 공유 대기는 기준 커밋에 같은 내용이 있으면 relay 밖에서 머지된 것으로 보고 지운다(D310 (4)). 낡음은
-   * 머지된 팀 지식만 worktree의 HEAD와 견준다(D316)
+   * 머지된 팀 지식만 worktree의 HEAD와 견준다(D316). 공유 대기와 나만은 HEAD와 다르면 출처 Work의 코드 기준이라고
+   * 표시한다(D327)
    */
   async pool(): Promise<PoolEntry[]> {
     const dir = this.dir()
@@ -150,21 +151,6 @@ export class WorkKnowledge {
       out.push(e)
       if (scope === 'team') team.push(e)
     }
-    if (team.length) {
-      try {
-        const head = await headCommit(this.o.worktree, this.git)
-        const hashes = await pathHashes(
-          this.o.worktree,
-          head,
-          entryPaths(team.map((t) => t.entry)),
-          dir,
-          this.git,
-        )
-        for (const t of team) t.stale = isStale(t.entry, hashes)
-      } catch (e) {
-        this.o.problem(`지식의 낡음을 판정하지 못함: ${message(e)}`)
-      }
-    }
     const merged: string[] = []
     for (const p of pending.problems) this.o.problem(`공유 대기를 읽지 못함: ${p}`)
     for (const r of pending.entries) {
@@ -185,6 +171,24 @@ export class WorkKnowledge {
     for (const p of mine.problems) this.o.problem(`나만 쓰는 지식을 읽지 못함: ${p}`)
     for (const r of mine.entries)
       out.push({ entry: r.entry, scope: 'mine', file: r.file, stale: false })
+    // 공유 대기와 나만은 출처 Work의 코드로 적혔다. 그 코드가 기준에 없으면(머지 전, [완료만]) 이 Work의 코드와 다르다 (K6)
+    const local = out.filter((e) => e.scope === 'pending' || e.scope === 'mine')
+    if (team.length || local.length) {
+      try {
+        const head = await headCommit(this.o.worktree, this.git)
+        const hashes = await pathHashes(
+          this.o.worktree,
+          head,
+          entryPaths([...team, ...local].map((t) => t.entry)),
+          dir,
+          this.git,
+        )
+        for (const t of team) t.stale = isStale(t.entry, hashes)
+        for (const l of local) l.ahead = isStale(l.entry, hashes)
+      } catch (e) {
+        this.o.problem(`지식의 낡음을 판정하지 못함: ${message(e)}`)
+      }
+    }
     return mergePool(out)
   }
 

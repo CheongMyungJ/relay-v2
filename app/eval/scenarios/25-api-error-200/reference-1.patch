@@ -1,0 +1,15 @@
+diff --git a/src/routes/orders.js b/src/routes/orders.js
+index 2817ac5..865b86d 100644
+--- a/src/routes/orders.js
++++ b/src/routes/orders.js
+@@ -1,7 +1,9 @@
+-import { ok } from '../http.js'
++import { ok, respond } from '../http.js'
+ 
+ export function getOrder(req, { db }) {
+   const order = db.orders.get(req.params.id)
++  // 구버전 앱(2.x)은 4xx·5xx에 멈춘다: 오류도 200으로 보낸다
++  if (!order) return respond(200, { ok: false, error: { code: 'NOT_FOUND', message: '없는 주문' } })
+   return ok({
+     id: order.id,
+     status: order.status,

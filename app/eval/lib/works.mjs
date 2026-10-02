@@ -28,7 +28,7 @@ export function workScenario(scenario, n) {
     report: w.report,
     knowledge: w.knowledge ?? [],
     checks: w.checks ?? [],
-    work: { index: n, count: parts.length },
+    work: { index: n, count: parts.length, teammate: !!w.teammate },
   }
 }
 

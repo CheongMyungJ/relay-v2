@@ -1,0 +1,12 @@
+diff --git a/src/reviews/list.js b/src/reviews/list.js
+index 2402361..0e92adb 100644
+--- a/src/reviews/list.js
++++ b/src/reviews/list.js
+@@ -6,6 +6,6 @@ export function listReviews(productId, { reviews, customers }) {
+     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+     .map((r) => {
+       const c = byId.get(r.customerId)
+-      return { id: r.id, rating: r.rating, text: r.text, createdAt: r.createdAt, author: { name: c.name, email: c.email } }
++      return { id: r.id, rating: r.rating, text: r.text, createdAt: r.createdAt, author: { name: c.name[0] + '*'.repeat(c.name.length - 1) } }
+     })
+ }
