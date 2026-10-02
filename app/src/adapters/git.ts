@@ -1,4 +1,5 @@
 // git CLI의 얇은 래퍼 (I12). 사용자의 git 설정과 자격 증명을 그대로 쓴다.
+import { createHash } from 'node:crypto'
 import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -353,6 +354,148 @@ export async function commitAll(dir: string, message: string, opts?: GitOptions)
     timeoutMs: opts?.timeoutMs ?? 120_000,
   })
   return headCommit(dir, opts)
+}
+
+// ---------- 지식 (I72, I73) ----------
+
+/** 레포 상대 경로를 맞춘다: `\`를 `/`로, 앞의 `./`와 `/`, 끝의 `/`를 뗀다 */
+function relPath(p: string): string {
+  return p
+    .trim()
+    .replace(/\\/g, '/')
+    .replace(/^(?:\.\/)+/, '')
+    .replace(/^\/+/, '')
+    .replace(/\/+$/, '')
+}
+
+/**
+ * 커밋의 경로 개체 해시 (I72): `git ls-tree <커밋> -- <경로>`가 주는 개체 해시다(파일은 blob, 디렉터리는 tree). 없는
+ * 경로는 null이다
+ */
+export async function objectHash(
+  dir: string,
+  commit: string,
+  p: string,
+  opts?: GitOptions,
+): Promise<string | null> {
+  const rel = relPath(p)
+  const out = await git(dir, ['ls-tree', '-z', commit, '--', rel], opts)
+  for (const line of out.split('\0')) {
+    const tab = line.indexOf('\t')
+    if (tab < 0) continue
+    if (line.slice(tab + 1) === rel) return line.slice(0, tab).split(' ')[2] ?? null
+  }
+  return null
+}
+
+/**
+ * 지식 폴더를 품은 디렉터리의 해시 (I72, D320 (3)): `git ls-tree -r <커밋> -- <디렉터리>`의 목록에서 지식 폴더 밑의 줄을
+ * 뺀 글의 SHA-1이다. 지식 커밋이 그 디렉터리의 해시를 바꾸지 않는다. 디렉터리가 없으면 null이다
+ */
+export async function treeHashWithout(
+  dir: string,
+  commit: string,
+  p: string,
+  excluded: string,
+  opts?: GitOptions,
+): Promise<string | null> {
+  const rel = relPath(p)
+  const skip = relPath(excluded)
+  const out = await git(dir, ['ls-tree', '-r', '-z', commit, '--', rel], opts)
+  const kept = out.split('\0').filter((line) => {
+    const tab = line.indexOf('\t')
+    if (tab < 0) return false
+    const file = line.slice(tab + 1)
+    return file !== skip && !file.startsWith(`${skip}/`)
+  })
+  if (kept.length === 0 && !out) return null
+  return createHash('sha1').update(kept.join('\n')).digest('hex')
+}
+
+/**
+ * 경로들의 내용 해시 (I72). 키는 맞춘 경로이고(`파일:심볼`은 그대로), 해시는 `:` 앞의 파일로 구한다(D320 (3)). 지식 폴더를
+ * 품은 디렉터리는 지식 폴더를 빼고 해시한다. 없는 경로는 null이다
+ */
+export async function pathHashes(
+  dir: string,
+  commit: string,
+  paths: readonly string[],
+  knowledgeDir: string,
+  opts?: GitOptions,
+): Promise<Record<string, string | null>> {
+  const kd = relPath(knowledgeDir)
+  const out: Record<string, string | null> = {}
+  for (const raw of paths) {
+    const key = relPath(raw)
+    if (!key || key in out) continue
+    const i = key.indexOf(':')
+    const file = i > 0 ? key.slice(0, i) : key
+    out[key] =
+      kd === file || kd.startsWith(`${file}/`)
+        ? await treeHashWithout(dir, commit, file, kd, opts)
+        : await objectHash(dir, commit, file, opts)
+  }
+  return out
+}
+
+/**
+ * 정한 경로만 올린 커밋 (I73): `git add -A -- <경로>` 뒤 `git commit -- <경로>`. 다른 변경(index에 올린 것 포함)은
+ * 커밋하지 않는다. 사용자의 커밋 훅과 서명 설정을 그대로 쓴다. 새 HEAD를 돌려준다
+ */
+export async function commitPaths(
+  dir: string,
+  paths: readonly string[],
+  message: string,
+  opts?: GitOptions,
+): Promise<string> {
+  await git(dir, ['add', '-A', '--', ...paths], opts)
+  await git(dir, ['commit', '--quiet', '--message', message, '--', ...paths], {
+    ...opts,
+    timeoutMs: opts?.timeoutMs ?? 120_000,
+  })
+  return headCommit(dir, opts)
+}
+
+/** 경로 아래에 커밋할 변경이 있는가 (추적하지 않는 새 파일 포함) */
+export async function pathsDirty(
+  dir: string,
+  paths: readonly string[],
+  opts?: GitOptions,
+): Promise<boolean> {
+  const out = await git(
+    dir,
+    ['status', '--porcelain=v1', '--untracked-files=all', '--', ...paths],
+    opts,
+  )
+  return out.trim() !== ''
+}
+
+/**
+ * 커밋의 파일 내용 (`git show <커밋>:<경로>`). 없으면 null이다. 끝의 줄바꿈까지 그대로 돌려준다
+ */
+export async function showFile(
+  dir: string,
+  commit: string,
+  p: string,
+  opts?: GitOptions,
+): Promise<string | null> {
+  const r = await run('git', [...BASE_ARGS, 'show', `${commit}:${relPath(p)}`], {
+    cwd: dir,
+    env: gitEnv(opts?.env),
+    timeoutMs: opts?.timeoutMs ?? 60_000,
+  })
+  return r.code === 0 ? r.stdout : null
+}
+
+/** 커밋에서 경로 아래의 파일 (`git ls-tree -r --name-only`) */
+export async function filesAt(
+  dir: string,
+  commit: string,
+  p: string,
+  opts?: GitOptions,
+): Promise<string[]> {
+  const out = await git(dir, ['ls-tree', '-r', '-z', '--name-only', commit, '--', relPath(p)], opts)
+  return out.split('\0').filter(Boolean)
 }
 
 // ---------- 정리 (시나리오 8) ----------
