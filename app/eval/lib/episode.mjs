@@ -54,6 +54,7 @@ function humanOf(turns) {
       .reduce((n, a) => n + a.text.length, 0),
     inspectDiff: acts.filter((a) => a.do === 'inspect_diff').length,
     invalidActions: acts.filter((a) => a.ok === false).length,
+    refusedDone: acts.filter((a) => a.refused).length,
     frictionMean: frictions.length ? frictions.reduce((a, b) => a + b, 0) / frictions.length : null,
     frictionHigh: frictions.filter((f) => f >= 2).length,
     ms: turns.reduce((a, t) => a + (typeof t.ms === 'number' ? t.ms : 0), 0),
@@ -260,6 +261,7 @@ export async function runEpisode(o) {
     say(`준비 (${repo})`)
     // 에이전트 세션은 쪽이 claude를 띄우기 전(준비, 다음 Work로 넘김)에 센다. 맨 CLI는 띄울 때 세션이 생길 수 있다
     let sessionsBefore = new Set(agentUsageBySession(agentConfigDir).keys())
+    let startedThisWork = () => true
     await arm.prepare()
     for (let w = 0; w < parts.length; w++) {
       if (w > 0) {
@@ -268,6 +270,9 @@ export async function runEpisode(o) {
         if (moved) say(moved)
       }
       const human = makeHuman(w)
+      const before = sessionsBefore
+      startedThisWork = () =>
+        [...agentUsageBySession(agentConfigDir).keys()].some((x) => !before.has(x))
       part = {
         n: w,
         human,
@@ -431,6 +436,17 @@ export async function runEpisode(o) {
           if (a.id !== undefined && screen.elements) {
             const el = screen.elements.find((e) => e.id === a.id)
             act.label = el ? `${el.role} "${el.name}"` : '(없는 요소)'
+          }
+          // 두 번째 Work부터는 이번 일에서 에이전트 세션이 하나도 없으면 done을 받지 않는다. 사람 역할이 앞 Work의
+          // 완료 화면을 이번 일로 읽고 [새 Work] 없이 끝낸 일이 있었다(2026-10-02 평가 21~23)
+          if (a.do === 'done' && w > 0 && !startedThisWork()) {
+            act.refused = true
+            act.result =
+              '받지 않음: 이번 일은 아직 시작하지 않았다. 이번 일에서 에이전트가 일한 기록이 없다. 화면에 남은 것은 앞 일이고, 앞 일의 변경은 기준 브랜치에 들어가지 않았다'
+            results.push(act.result)
+            rec.actions.push(act)
+            immediate = true
+            break
           }
           if (a.do === 'done' || a.do === 'give_up') {
             ending = a.do
