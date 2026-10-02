@@ -132,8 +132,9 @@ describe('커밋에서 지식 읽기 (I77)', () => {
 })
 
 describe('커밋의 파일 여럿 (I74)', () => {
-  it('git 한 번으로 읽고 showFile과 같은 글을 준다. 없는 파일과 디렉터리는 null이다', async () => {
-    const text = '---\nid: x\n---\n\n# 한글 규칙 — 끝\r\n\n두 줄\n'
+  it('git 두 번으로 읽고 showFile과 같은 글을 준다. 없는 파일과 디렉터리는 null이다', async () => {
+    // 줄 끝은 LF만 쓴다: Windows 러너의 git은 core.autocrlf로 커밋할 때 CRLF를 LF로 바꾼다
+    const text = '---\nid: x\n---\n\n# 한글 규칙 — 끝\n\n두 줄\n'
     writeFiles(repo, { 'docs/knowledge/domain/a.md': text, 'docs/knowledge/domain/b.md': '' })
     git(repo, 'add', '-A')
     git(repo, 'commit', '-q', '-m', 'k')
