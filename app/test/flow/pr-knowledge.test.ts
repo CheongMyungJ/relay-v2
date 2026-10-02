@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { parseEntry } from '../../src/core/knowledge'
 import type { KnowledgeCandidateField } from '../../src/shared/contracts'
 import type { KnowledgeIndex } from '../../src/shared/knowledge'
+import type { WorkState } from '../../src/shared/work'
 import { drive } from './driver'
 import { CART_FILES, FakeGitHub, FakeWorld } from './github'
 import { git, harness, settle, makeRepo, register, type Harness } from './harness'
@@ -307,5 +308,98 @@ describe('[흐름] 지식 관리의 PR 진행 (M17)', () => {
     const tree = path.join(s.ctx.h.home, 'projects', s.ctx.projectId, 'worktrees', workId)
     const subjects = git(tree, 'log', '--format=%s', '-5').split('\n')
     expect(subjects.filter((x) => x.includes('지식'))).toEqual([`relay(${workId}): 지식 1건`])
+  })
+
+  it('지식 커밋 뒤에 끊긴 전달의 [다시 시도]는 기록한 채택 결과로 이어 하고 지식 커밋을 두 번 만들지 않는다 (I73, D123)', async () => {
+    const s = await setup()
+    fs.writeFileSync(path.join(s.ctx.h.root, 'scenario.json'), JSON.stringify(claude()))
+    const created = await s.ctx.h.relay.createWork(s.ctx.projectId, {
+      request: 'relay M17 시험 (끊긴 전달)',
+      baseBranch: 'main',
+      type: 'bugfix',
+      baseLocation: 'remote',
+    })
+    if (!created.ok) throw new Error(created.error)
+    const key = created.workKey
+    const r = await drive(s.ctx.h.relay, s.ctx.h.ui, key, {
+      pauseAt: (t) => t.node === 'verify' && t.status === 'awaiting_approval',
+    })
+    expect(r.status).toBe('paused')
+    await settle(s.ctx.h, key)
+    // 지식 커밋과 push를 마치고 PR을 만들다 앱이 꺼진 것을 만든다: 실패한 전달의 기록을 진행 중 작업으로 되돌린다
+    s.ctx.h.env['FAKE_GH_FAIL'] = 'create'
+    expect((await s.ctx.h.relay.deliver(key, { choice: 'pr', uncommitted: null })).ok).toBe(false)
+    s.ctx.h.env['FAKE_GH_FAIL'] = ''
+    await settle(s.ctx.h, key)
+    const workId = key.split('/')[1] ?? ''
+    const dir = path.join(s.ctx.h.home, 'projects', s.ctx.projectId, 'works', workId)
+    const tree = path.join(s.ctx.h.home, 'projects', s.ctx.projectId, 'worktrees', workId)
+    const failed = JSON.parse(read(path.join(dir, 'work.json'))) as WorkState
+    const plan = failed.delivery?.knowledge_plan
+    if (!plan) throw new Error('실패한 전달에 채택 결과가 없음')
+    const cut: WorkState = {
+      ...failed,
+      operation: {
+        kind: 'deliver',
+        stage: 'pr',
+        started_at: failed.delivery?.at ?? '',
+        choice: 'pr',
+        task_id: 't-03',
+        uncommitted: null,
+        branch: `relay/${workId}`,
+        base: 'main',
+        knowledge: plan,
+      },
+    }
+    await s.ctx.h.relay.close()
+    await settle(s.ctx.h, key)
+    fs.writeFileSync(path.join(dir, 'work.json'), `${JSON.stringify(cut, null, 2)}\n`)
+    await s.ctx.h.reopen()
+    await settle(s.ctx.h, key)
+    expect(s.ctx.h.ui.works.get(key)?.operation?.kind).toBe('deliver')
+    expect(await s.ctx.h.relay.retryOperation(key)).toEqual({ ok: true })
+    await settle(s.ctx.h, key)
+    const subjects = git(tree, 'log', '--format=%s', '-5').split('\n')
+    expect(subjects.filter((x) => x.includes('지식'))).toEqual([`relay(${workId}): 지식 1건`])
+    const done = JSON.parse(read(path.join(dir, 'work.json'))) as WorkState
+    expect(done.status).toBe('pr')
+    expect(done.delivery?.knowledge).toMatchObject({
+      team: 1,
+      commit: git(tree, 'rev-parse', 'HEAD'),
+    })
+  })
+
+  it('[머지 없이 끝내기]는 PR 대응 task의 후보를 거른 대로 공유 대기에 쓰고 다시 묻지 않는다 (I76, D310 (5))', async () => {
+    const s = await setup()
+    const w = await openPrWork(s.ctx, claude([]), 'relay M17 시험 (대응 후보)')
+    s.gh.convo(w.pr, '합계에 세금을 넣지 마세요')
+    const rule = '합계에는 세금을 넣지 않는다'
+    setTasks(s, {
+      'pr-respond': [
+        { do: 'prompt' },
+        { do: 'respond', text: '{id}: 반영했습니다.' },
+        {
+          do: 'write',
+          file: 'handoff.md',
+          text: handoff({
+            summary: '코멘트에 대응했다.',
+            knowledge_candidates: [{ ...CONSTRAINT, rule, terms: ['세금'] }],
+          }),
+        },
+        { do: 'stop' },
+      ],
+    })
+    const t = await startRound(s, w, 1)
+    await approveRound(s, w, t.id)
+    const r = await s.ctx.h.relay.respondKnowledge(w.key)
+    if (!r.ok || !r.review) throw new Error('대응 후보가 없음')
+    expect(r.review.candidates.map((c) => [c.taskId, c.rule])).toEqual([[t.id, rule]])
+    expect(await s.ctx.h.relay.prEnd(w.key, {})).toEqual({ ok: true })
+    await settle(s.ctx.h, w.key)
+    const pendingDir = path.join(s.store, 'pending', 'constraint')
+    const files = fs.readdirSync(pendingDir).map((f) => read(path.join(pendingDir, f)))
+    expect(files.some((f) => f.includes(rule))).toBe(true)
+    expect(workState(w).pr?.knowledge_at).toBeDefined()
+    expect(await s.ctx.h.relay.respondKnowledge(w.key)).toEqual({ ok: true, review: null })
   })
 })

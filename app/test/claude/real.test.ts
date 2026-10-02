@@ -8,7 +8,8 @@
 // RELAY_REAL_CLAUDE=dry면 가짜 claude로 같은 도구를 돌려 도구 자체를 확인한다 (사용량 없음).
 // RELAY_REAL_CASES로 돌릴 경우를 고른다(예: "S resume"). 비우면 전부(M, S, resume.test.ts의 resume,
 // rewind.test.ts의 rewind-intake와 rewind-fix, deliver.test.ts의 deliver, restart.test.ts의 restart,
-// auto.test.ts의 auto, feature.test.ts의 feature, refactor.test.ts의 refactor).
+// auto.test.ts의 auto, feature.test.ts의 feature, refactor.test.ts의 refactor). knowledge.test.ts의 knowledge(Work 둘)는
+// 사용량이 커서 전부에 들지 않고 적어야 돈다 (I83).
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'

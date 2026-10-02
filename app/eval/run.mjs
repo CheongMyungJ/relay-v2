@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // relay 대 맨 CLI 사용성 평가 (docs/eval.md). 시나리오마다 두 쪽을 n번 돌리고, 짝지어 판정하고, report.md를 만든다.
+// Work 둘을 잇는 시나리오(works, 21~23)의 두 쪽은 relay 대 지식을 끈 relay(relay-off)다 (relay I84).
 //   node eval/run.mjs --list
 //   node eval/run.mjs --scenarios 3 --runs 5
 //   node eval/run.mjs --scenarios 1,2,5 --runs 2 --arms relay,cli --parallel 2
@@ -13,6 +14,7 @@ import { runEpisode } from './lib/episode.mjs'
 import { cleanEnv, findClaude } from './lib/env.mjs'
 import { words } from './lib/kind.mjs'
 import { sleep, writeJson } from './lib/util.mjs'
+import { pairOf } from './lib/works.mjs'
 import { buildReport, judgeAll } from './report.mjs'
 
 const EVAL = import.meta.dirname
@@ -24,7 +26,8 @@ const HELP = `쓰는 법: node eval/run.mjs [옵션]
   --list                   시나리오 목록
   --scenarios <목록>       1,3 또는 01-slug,03-cart 또는 all (기본 all)
   --runs <n>               시나리오와 쪽마다 돌릴 횟수 (기본 1)
-  --arms <목록>            relay,cli (기본 둘 다)
+  --arms <목록>            relay, relay-off(지식을 끈 relay), cli 가운데 (기본: 시나리오의 짝.
+                           works가 있는 시나리오는 relay,relay-off, 나머지는 relay,cli)
   --parallel <n>           동시에 돌릴 실행 수 (기본 1, 2까지 권함)
   --agent-model <모델>     relay와 CLI 안의 claude 모델 (기본 sonnet)
   --effort <수준>          에이전트 effort: low / medium / high (기본 medium)
@@ -81,9 +84,11 @@ async function ensureDisplay() {
   throw new Error('Xvfb를 띄우지 못했습니다')
 }
 
+const ARMS = ['relay', 'relay-off', 'cli']
+
 function preflight(arms) {
   const problems = []
-  if (arms.includes('relay')) {
+  if (arms.some((a) => a !== 'cli')) {
     if (!fs.existsSync(path.join(APP, 'out/main/index.js')))
       problems.push('앱 빌드(out/)가 없습니다')
     if (!fs.existsSync(path.join(APP, 'node_modules/electron/dist/electron')))
@@ -107,7 +112,7 @@ async function main() {
       help: { type: 'boolean' },
       scenarios: { type: 'string' },
       runs: { type: 'string', default: '1' },
-      arms: { type: 'string', default: 'relay,cli' },
+      arms: { type: 'string' },
       parallel: { type: 'string', default: '1' },
       'agent-model': { type: 'string', default: 'sonnet' },
       effort: { type: 'string', default: 'medium' },
@@ -129,11 +134,13 @@ async function main() {
     return
   }
   const scenarios = pickScenarios(v.scenarios, all)
-  const arms = v.arms
-    .split(',')
+  const given = v.arms
+    ?.split(',')
     .map((x) => x.trim())
     .filter(Boolean)
-  for (const a of arms) if (!['relay', 'cli'].includes(a)) throw new Error(`모르는 쪽: ${a}`)
+  for (const a of given ?? []) if (!ARMS.includes(a)) throw new Error(`모르는 쪽: ${a}`)
+  const armsOf = (s) => given ?? pairOf(s)
+  const arms = ARMS.filter((a) => scenarios.some((s) => armsOf(s).includes(a)))
   const runs = Number(v.runs)
   preflight(arms)
 
@@ -177,11 +184,11 @@ async function main() {
   console.log(`결과 폴더: ${outDir}`)
   console.log(`작업 폴더: ${workRoot}`)
 
-  const xvfb = arms.includes('relay') ? await ensureDisplay() : null
+  const xvfb = arms.some((a) => a !== 'cli') ? await ensureDisplay() : null
   // 회차를 바깥에 두어 쪽과 시나리오가 시간대에 고르게 섞이게 한다
   const jobs = []
   for (let i = 1; i <= runs; i++)
-    for (const s of scenarios) for (const kind of arms) jobs.push({ s, kind, i })
+    for (const s of scenarios) for (const kind of armsOf(s)) jobs.push({ s, kind, i })
   const total = jobs.length
   let done = 0
   const worker = async () => {
@@ -212,7 +219,8 @@ async function main() {
     xvfb?.kill()
   }
 
-  if (!v['no-judge'] && arms.length === 2) await judgeAll(outDir, opts)
+  // 시나리오의 짝(pairOf)이 모두 돈 회차만 판정한다
+  if (!v['no-judge']) await judgeAll(outDir, opts)
   const text = buildReport(outDir)
   console.log(`\n${text}\n`)
   console.log(`보고서: ${path.join(outDir, 'report.md')}`)

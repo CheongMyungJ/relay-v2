@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { CliArm } from './cli-arm.mjs'
 import { agentEnv, makeClaudeConfig } from './env.mjs'
-import { Human } from './human.mjs'
+import { Human, screenKind } from './human.mjs'
 import { RelayArm } from './relay-arm.mjs'
 import { diffTree, judgeTree, makeRepo } from './repo.mjs'
 import {
@@ -14,13 +14,58 @@ import {
   appendJsonl,
   clip,
   hash,
+  questionsBySession,
   sleep,
   writeJson,
 } from './util.mjs'
+import { allChecks, multiWork, workParts, workScenario } from './works.mjs'
 
 const STABLE_MS = 6000
 const MAX_BUSY_MS = 4 * 60 * 1000
 const DEFAULT_WAIT_S = 60
+
+/**
+ * 숨긴 시험을 결과 폴더들에 모은다. 고친 것을 보는 시험은 결과 폴더 하나라도 통과하면 통과다(relay는 버그마다 Work를
+ * 따로 만들 수 있다). guard 시험(멀쩡한 동작을 지키는지)은 바뀐 결과 폴더 모두에서 통과해야 한다. 바뀐 폴더가 없으면
+ * 모든 폴더를 본다
+ */
+function combineChecks(defs, final) {
+  const changedTrees = final.filter((f) => f.files.length > 0)
+  const guardTrees = changedTrees.length ? changedTrees : final
+  const passIn = (f, name) => !!f.checks.find((c) => c.name === name)?.pass
+  return defs.map((c) => ({
+    name: c.name,
+    guard: !!c.guard,
+    pass: c.guard
+      ? guardTrees.length > 0 && guardTrees.every((f) => passIn(f, c.name))
+      : final.some((f) => passIn(f, c.name)),
+  }))
+}
+
+/** 차례 기록에서 사람의 부담을 센다 (Work 하나의 결과, relay I84) */
+function humanOf(turns) {
+  const acts = turns.flatMap((t) => t.actions)
+  const frictions = turns.map((t) => t.friction).filter((x) => typeof x === 'number')
+  return {
+    turns: turns.length,
+    actionsTotal: acts.filter((a) => !['wait', 'done', 'give_up'].includes(a.do)).length,
+    charsTyped: acts
+      .filter((a) => (a.do === 'type' || a.do === 'fill') && typeof a.text === 'string')
+      .reduce((n, a) => n + a.text.length, 0),
+    inspectDiff: acts.filter((a) => a.do === 'inspect_diff').length,
+    invalidActions: acts.filter((a) => a.ok === false).length,
+    frictionMean: frictions.length ? frictions.reduce((a, b) => a + b, 0) / frictions.length : null,
+    frictionHigh: frictions.filter((f) => f >= 2).length,
+    ms: turns.reduce((a, t) => a + (typeof t.ms === 'number' ? t.ms : 0), 0),
+  }
+}
+
+const ENDINGS = {
+  done: '네가 끝났다고 판단함',
+  give_up: '네가 포기함',
+  timeout: '시간 제한에 걸림',
+  turn_limit: '차례 제한에 걸림',
+}
 
 const mmss = (ms) => {
   const s = Math.round(ms / 1000)
@@ -31,7 +76,7 @@ const mmss = (ms) => {
  * @param {object} o
  * @param {object} o.scenario scenario.json
  * @param {string} o.scenarioDir
- * @param {'relay'|'cli'} o.kind
+ * @param {'relay'|'relay-off'|'cli'} o.kind relay-off는 지식 관리를 끈 relay다 (relay I84)
  * @param {number} o.index 회차 (1부터)
  * @param {object} o.opts 실행 옵션 (run.mjs)
  * @param {string} o.outDir 결과 폴더
@@ -57,17 +102,28 @@ export async function runEpisode(o) {
   const shots = path.join(humanDir, 'shots')
   fs.mkdirSync(shots, { recursive: true })
   const armOpts = { dir: o.workDir, repo, base, agentEnv: agentEnv(opts), agentConfigDir }
+  const screenType = screenKind(kind)
   const arm =
-    kind === 'relay' ? new RelayArm(armOpts) : new CliArm({ ...armOpts, claudeArgs: opts.cliArgs })
-  const human = new Human({
-    kind,
-    scenario,
-    dir: humanDir,
-    configDir: makeClaudeConfig(path.join(o.workDir, 'cfg-human')),
-    model: opts.humanModel,
-    effort: opts.humanEffort,
-    vision: kind === 'relay' && opts.vision,
-  })
+    screenType === 'relay'
+      ? new RelayArm({ ...armOpts, knowledge: kind !== 'relay-off' })
+      : new CliArm({ ...armOpts, claudeArgs: opts.cliArgs })
+  // Work 둘을 잇는 시나리오(relay I84)는 Work마다 사람 역할 세션을 새로 둔다. 같은 사람이지만 그 Work의 사정만 받는다
+  const multi = multiWork(scenario)
+  const parts = workParts(scenario)
+  const humans = []
+  const makeHuman = (n) => {
+    const h = new Human({
+      kind: screenType,
+      scenario: multi ? workScenario(scenario, n) : scenario,
+      dir: humanDir,
+      configDir: makeClaudeConfig(path.join(o.workDir, multi ? `cfg-human-${n + 1}` : 'cfg-human')),
+      model: opts.humanModel,
+      effort: opts.humanEffort,
+      vision: screenType === 'relay' && opts.vision,
+    })
+    humans.push(h)
+    return h
+  }
   const limits = {
     minutes: opts.maxMinutes ?? scenario.limits?.minutes ?? 40,
     turns: opts.maxTurns ?? scenario.limits?.turns ?? 60,
@@ -105,7 +161,7 @@ export async function runEpisode(o) {
       const d = diffTree(t.path, baseDir, path.join(o.workDir, 'inspect', t.label))
       // 맨 CLI는 체크아웃되지 않은 브랜치에 고친 것이 있을 때만 브랜치를 밝힌다
       const head =
-        kind === 'relay'
+        screenType === 'relay'
           ? `# Work ${t.label}${t.removed ? ' (정리됨)' : ''}\n`
           : all.length > 1
             ? `# ${t.label === 'repo' ? '체크아웃된 ' : ''}브랜치 ${t.git?.branch ?? '?'}\n`
@@ -115,224 +171,332 @@ export async function runEpisode(o) {
     return clip(parts.join('\n\n') || '(Work가 아직 없음)', 12_000)
   }
 
+  const workResults = []
+  // 지금 Work: 시작한 차례, 때, 그때 있던 에이전트 세션·결과 폴더·relay Work (relay I84)
+  let part = null
+  /** Work 하나를 마친다: 그 Work의 사람 역할 설문과, Work 둘을 잇는 시나리오면 그 Work의 판정과 에이전트 */
+  const finishPart = async (partEnding, partSummary) => {
+    const p = part
+    part = null
+    if (!p) return
+    const own = turns.slice(p.turn)
+    let partSurvey = null
+    if (own.length > 0) {
+      try {
+        partSurvey = await p.human.survey(ENDINGS[partEnding] ?? '도구 문제로 멈춤')
+      } catch (e) {
+        say(`설문 실패: ${String(e).slice(0, 200)}`)
+      }
+    }
+    const r = {
+      work: p.n + 1,
+      ending: partEnding,
+      summary: partSummary,
+      wallMs: Date.now() - p.t,
+      survey: partSurvey,
+      human: humanOf(own),
+    }
+    if (multi) {
+      try {
+        arm.snapshot()
+        const ws = workScenario(scenario, p.n)
+        const all = trees()
+        // relay는 이 Work에서 생긴 결과 폴더(worktree)만, 맨 CLI는 레포와 브랜치 모두를 본다
+        const fresh = screenType === 'relay' ? all.filter((t) => !p.trees.has(t.label)) : all
+        const judged = (fresh.length ? fresh : all).map((t) => ({
+          label: t.label,
+          ...judgeTree({
+            tree: t.path,
+            baseDir,
+            hiddenDir: path.join(o.scenarioDir, 'hidden'),
+            scenario: ws,
+            work: path.join(o.workDir, 'judge', `work-${p.n + 1}`, t.label),
+          }),
+        }))
+        const checks = combineChecks(ws.checks, judged)
+        r.outcome = {
+          success: checks.length > 0 && checks.every((c) => c.pass),
+          checks,
+          trees: judged.map((j) => ({
+            label: j.label,
+            files: j.files.map((f) => f.file),
+            repoTestsPass: j.repoTests.pass,
+          })),
+        }
+      } catch (e) {
+        say(`Work ${p.n + 1} 판정 실패: ${String(e).slice(0, 300)}`)
+      }
+      // 이 Work에서 새로 생긴 에이전트 세션의 토큰과 질문 수
+      const bySession = agentUsageBySession(agentConfigDir)
+      const asked = questionsBySession(agentConfigDir)
+      const sessions = [...bySession.keys()].filter((x) => !p.sessions.has(x))
+      const tokens = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, messages: 0 }
+      for (const x of sessions) {
+        const u = bySession.get(x)
+        for (const k of Object.keys(tokens)) tokens[k] += u?.[k] ?? 0
+      }
+      r.agent = {
+        ...tokens,
+        sessions: sessions.length,
+        questions: sessions.reduce((a, x) => a + (asked.get(x) ?? 0), 0),
+      }
+      // relay는 이 Work에서 생긴 Work의 context.md 글자와 `참고 지식` 글자 (지식을 끄면 null)
+      const tasks = arm
+        .works()
+        .filter((w) => !p.works.has(w.id))
+        .flatMap((w) => w.tasks)
+      r.contextChars = tasks.length ? tasks.reduce((a, t) => a + (t.contextChars ?? 0), 0) : null
+      r.knowledgeChars = tasks.some((t) => typeof t.knowledgeChars === 'number')
+        ? tasks.reduce((a, t) => a + (t.knowledgeChars ?? 0), 0)
+        : null
+      say(
+        `Work ${r.work} 끝: ${partEnding} (${(r.outcome?.checks ?? []).map((c) => `${c.name} ${c.pass ? 'O' : 'X'}`).join(', ')}), 차례 ${r.human.turns}, 질문 ${r.agent.questions}`,
+      )
+    }
+    workResults.push(r)
+  }
+
   try {
     say(`준비 (${repo})`)
+    // 에이전트 세션은 쪽이 claude를 띄우기 전(준비, 다음 Work로 넘김)에 센다. 맨 CLI는 띄울 때 세션이 생길 수 있다
+    let sessionsBefore = new Set(agentUsageBySession(agentConfigDir).keys())
     await arm.prepare()
-    let lastSig = null
-    let lastChange = Date.now()
-    let changedSinceTurn = true
-    let lastTurnAt = Date.now()
-    let waitUntil = Date.now()
-    let immediate = false
-    let force = false
-    let notes = []
-    let results = []
-    let diff
-    let lastCheck = 0
-    let failures = 0
-    let readErrors = 0
+    for (let w = 0; w < parts.length; w++) {
+      if (w > 0) {
+        sessionsBefore = new Set(agentUsageBySession(agentConfigDir).keys())
+        const moved = await arm.nextWork()
+        if (moved) say(moved)
+      }
+      const human = makeHuman(w)
+      part = {
+        n: w,
+        human,
+        turn: turns.length,
+        t: Date.now(),
+        sessions: sessionsBefore,
+        trees: new Set(trees().map((t) => t.label)),
+        works: new Set(arm.works().map((x) => x.id)),
+      }
+      ending = null
+      summary = ''
+      if (multi) {
+        say(`Work ${w + 1}/${parts.length} 시작`)
+        appendJsonl(turnsFile, { event: 'work', t: Date.now() - t0, text: `Work ${w + 1}` })
+      }
+      const partT0 = Date.now()
+      let lastSig = null
+      let lastChange = Date.now()
+      let changedSinceTurn = true
+      let lastTurnAt = Date.now()
+      let waitUntil = Date.now()
+      let immediate = false
+      let force = false
+      let notes = []
+      let results = []
+      let diff
+      let lastCheck = 0
+      let failures = 0
+      let readErrors = 0
 
-    for (;;) {
-      const now = Date.now()
-      if (now - t0 > limits.minutes * 60_000) {
-        ending = 'timeout'
-        break
-      }
-      if (turns.length >= limits.turns) {
-        ending = 'turn_limit'
-        break
-      }
-      let sig
-      try {
-        const polled = await arm.poll()
-        const dialog = await arm.handleSetupDialogs(polled)
-        if (dialog) {
-          setupDialogs.push({ t: now - t0, name: dialog })
-          say(`첫 실행 창 수락: ${dialog}`)
+      for (;;) {
+        const now = Date.now()
+        if (now - partT0 > limits.minutes * 60_000) {
+          ending = 'timeout'
+          break
         }
-        for (const n of await arm.notifications()) {
-          notes.push(`OS 알림 — ${n}`)
-          force = true
+        if (turns.length - part.turn >= limits.turns) {
+          ending = 'turn_limit'
+          break
         }
-        sig = hash(polled.signature)
-        readErrors = 0
-      } catch (e) {
-        // 창을 다시 띄우는 중 같은 잠깐의 오류는 넘긴다. 30초 넘게 이어지면 멈춘다
-        if (++readErrors > 30) throw e
-        await sleep(1000)
-        continue
-      }
-      if (sig !== lastSig) {
-        lastSig = sig
-        lastChange = now
-        changedSinceTurn = true
-      }
-      if (now - lastCheck > 3000) {
-        lastCheck = now
-        if (firstChangeAt === null && changed()) {
-          firstChangeAt = now
-          say(`첫 코드 변경 (${mmss(now - t0)})`)
-        }
-        for (const e of events) {
-          if (e.fired || !due(e, now)) continue
-          e.fired = true
-          if (e.do === 'crash') {
-            say('사건: 비정상 종료')
-            arm.snapshot()
-            notes.push(await arm.crash())
-            appendJsonl(turnsFile, { event: 'crash', t: Date.now() - t0 })
+        let sig
+        try {
+          const polled = await arm.poll()
+          const dialog = await arm.handleSetupDialogs(polled)
+          if (dialog) {
+            setupDialogs.push({ t: now - t0, name: dialog })
+            say(`첫 실행 창 수락: ${dialog}`)
+          }
+          for (const n of await arm.notifications()) {
+            notes.push(`OS 알림 — ${n}`)
             force = true
-            lastChange = Date.now()
+          }
+          sig = hash(polled.signature)
+          readErrors = 0
+        } catch (e) {
+          // 창을 다시 띄우는 중 같은 잠깐의 오류는 넘긴다. 30초 넘게 이어지면 멈춘다
+          if (++readErrors > 30) throw e
+          await sleep(1000)
+          continue
+        }
+        if (sig !== lastSig) {
+          lastSig = sig
+          lastChange = now
+          changedSinceTurn = true
+        }
+        if (now - lastCheck > 3000) {
+          lastCheck = now
+          if (firstChangeAt === null && changed()) {
+            firstChangeAt = now
+            say(`첫 코드 변경 (${mmss(now - t0)})`)
+          }
+          for (const e of events) {
+            if (e.fired || !due(e, now)) continue
+            e.fired = true
+            if (e.do === 'crash') {
+              say('사건: 비정상 종료')
+              arm.snapshot()
+              notes.push(await arm.crash())
+              appendJsonl(turnsFile, { event: 'crash', t: Date.now() - t0 })
+              force = true
+              lastChange = Date.now()
+            }
+          }
+          for (const r of reveals) {
+            if (r.fired || !due(r, now)) continue
+            r.fired = true
+            say('사건: 새 요구가 떠오름')
+            notes.push(`방금 새로 떠오른 것: ${r.text}`)
+            appendJsonl(turnsFile, { event: 'reveal', t: now - t0, text: r.text })
+            force = true
           }
         }
-        for (const r of reveals) {
-          if (r.fired || !due(r, now)) continue
-          r.fired = true
-          say('사건: 새 요구가 떠오름')
-          notes.push(`방금 새로 떠오른 것: ${r.text}`)
-          appendJsonl(turnsFile, { event: 'reveal', t: now - t0, text: r.text })
-          force = true
-        }
-      }
 
-      const stableFor = now - lastChange
-      let reason = null
-      if (immediate) reason = '직전 행동의 결과'
-      else if (force && stableFor >= 2000) reason = '알림'
-      else if (changedSinceTurn && stableFor >= STABLE_MS && now - lastTurnAt >= 2000)
-        reason = '화면이 멈춤'
-      else if (now >= waitUntil && stableFor >= STABLE_MS) reason = '기다림이 끝남'
-      else if (now - lastTurnAt >= MAX_BUSY_MS) reason = '오래 걸려 들여다봄'
-      if (!reason) {
-        await sleep(1000)
-        continue
-      }
+        const stableFor = now - lastChange
+        let reason = null
+        if (immediate) reason = '직전 행동의 결과'
+        else if (force && stableFor >= 2000) reason = '알림'
+        else if (changedSinceTurn && stableFor >= STABLE_MS && now - lastTurnAt >= 2000)
+          reason = '화면이 멈춤'
+        else if (now >= waitUntil && stableFor >= STABLE_MS) reason = '기다림이 끝남'
+        else if (now - lastTurnAt >= MAX_BUSY_MS) reason = '오래 걸려 들여다봄'
+        if (!reason) {
+          await sleep(1000)
+          continue
+        }
 
-      // 사람의 차례
-      arm.snapshot()
-      const n = turns.length + 1
-      const shot = path.join(shots, `${String(n).padStart(3, '0')}.png`)
-      let screen
-      try {
-        screen = await arm.observe(shot)
-      } catch (e) {
-        if (++readErrors > 30) throw e
-        await sleep(1000)
-        continue
-      }
-      const obs = { turn: n, elapsed: mmss(Date.now() - t0), notes, results, diff, screen }
-      const sent = { notes, results, diff, immediate, force }
-      const sentNotes = notes
-      notes = []
-      results = []
-      diff = undefined
-      immediate = false
-      force = false
-      let decision
-      try {
-        decision = await human.turn(obs)
-        failures = 0
-      } catch (e) {
-        failures++
-        say(`사람 역할 호출 실패 (${failures}): ${String(e).slice(0, 200)}`)
-        // 다음 차례에 같은 알림, 행동 결과, 코드 차이를 다시 보인다
-        ;({ notes, results, diff, immediate, force } = sent)
-        if (failures >= 3) {
-          ending = 'human_error'
-          error = String(e)
-          break
+        // 사람의 차례
+        arm.snapshot()
+        const n = turns.length + 1
+        const shot = path.join(shots, `${String(n).padStart(3, '0')}.png`)
+        let screen
+        try {
+          screen = await arm.observe(shot)
+        } catch (e) {
+          if (++readErrors > 30) throw e
+          await sleep(1000)
+          continue
         }
-        await sleep(5000)
-        continue
-      }
-      const rec = {
-        turn: n,
-        t: Date.now() - t0,
-        reason,
-        notes: sentNotes,
-        thought: decision.thought,
-        friction: decision.friction,
-        friction_note: decision.friction_note ?? '',
-        actions: [],
-        costUsd: decision.costUsd,
-        ms: decision.ms,
-      }
-      let waited = false
-      for (const a of decision.actions ?? []) {
-        counts[a.do] = (counts[a.do] ?? 0) + 1
-        const act = { ...a }
-        if (a.id !== undefined && screen.elements) {
-          const el = screen.elements.find((e) => e.id === a.id)
-          act.label = el ? `${el.role} "${el.name}"` : '(없는 요소)'
+        const obs = { turn: n, elapsed: mmss(Date.now() - t0), notes, results, diff, screen }
+        const sent = { notes, results, diff, immediate, force }
+        const sentNotes = notes
+        notes = []
+        results = []
+        diff = undefined
+        immediate = false
+        force = false
+        let decision
+        try {
+          decision = await human.turn(obs)
+          failures = 0
+        } catch (e) {
+          failures++
+          say(`사람 역할 호출 실패 (${failures}): ${String(e).slice(0, 200)}`)
+          // 다음 차례에 같은 알림, 행동 결과, 코드 차이를 다시 보인다
+          ;({ notes, results, diff, immediate, force } = sent)
+          if (failures >= 3) {
+            ending = 'human_error'
+            error = String(e)
+            break
+          }
+          await sleep(5000)
+          continue
         }
-        if (a.do === 'done' || a.do === 'give_up') {
-          ending = a.do
-          summary = a.summary ?? a.reason ?? ''
+        const rec = {
+          turn: n,
+          ...(multi ? { work: w + 1 } : {}),
+          t: Date.now() - t0,
+          reason,
+          notes: sentNotes,
+          thought: decision.thought,
+          friction: decision.friction,
+          friction_note: decision.friction_note ?? '',
+          actions: [],
+          costUsd: decision.costUsd,
+          ms: decision.ms,
+        }
+        let waited = false
+        for (const a of decision.actions ?? []) {
+          counts[a.do] = (counts[a.do] ?? 0) + 1
+          const act = { ...a }
+          if (a.id !== undefined && screen.elements) {
+            const el = screen.elements.find((e) => e.id === a.id)
+            act.label = el ? `${el.role} "${el.name}"` : '(없는 요소)'
+          }
+          if (a.do === 'done' || a.do === 'give_up') {
+            ending = a.do
+            summary = a.summary ?? a.reason ?? ''
+            rec.actions.push(act)
+            break
+          }
+          if (a.do === 'wait') {
+            waited = true
+            const s = Math.min(Math.max(a.seconds ?? DEFAULT_WAIT_S, 5), 900)
+            waitUntil = Date.now() + s * 1000
+            act.result = `${s}초 기다림`
+          } else if (a.do === 'inspect_diff') {
+            diff = currentDiff()
+            immediate = true
+            act.result = '바뀐 코드를 봄'
+          } else {
+            if (typeof a.text === 'string' && (a.do === 'type' || a.do === 'fill'))
+              charsTyped += a.text.length
+            let r
+            try {
+              r = await arm.act(a)
+            } catch (e) {
+              r = { ok: false, message: `실패: ${String(e).split('\n')[0].slice(0, 200)}` }
+            }
+            act.result = r.message
+            act.ok = r.ok
+            if (!r.ok) invalid++
+            results.push(r.message)
+            await sleep(700)
+          }
           rec.actions.push(act)
-          break
         }
-        if (a.do === 'wait') {
-          waited = true
-          const s = Math.min(Math.max(a.seconds ?? DEFAULT_WAIT_S, 5), 900)
-          waitUntil = Date.now() + s * 1000
-          act.result = `${s}초 기다림`
-        } else if (a.do === 'inspect_diff') {
-          diff = currentDiff()
-          immediate = true
-          act.result = '바뀐 코드를 봄'
-        } else {
-          if (typeof a.text === 'string' && (a.do === 'type' || a.do === 'fill'))
-            charsTyped += a.text.length
-          let r
-          try {
-            r = await arm.act(a)
-          } catch (e) {
-            r = { ok: false, message: `실패: ${String(e).split('\n')[0].slice(0, 200)}` }
-          }
-          act.result = r.message
-          act.ok = r.ok
-          if (!r.ok) invalid++
-          results.push(r.message)
-          await sleep(700)
-        }
-        rec.actions.push(act)
+        if (!waited) waitUntil = Date.now() + DEFAULT_WAIT_S * 1000
+        turns.push(rec)
+        appendJsonl(turnsFile, rec)
+        const brief = rec.actions
+          .map(
+            (a) =>
+              `${a.do}${a.label ? ` ${a.label}` : ''}${a.text ? ` "${clip(a.text, 40)}"` : ''}`,
+          )
+          .join(', ')
+        say(`차례 ${n} (${mmss(rec.t)}, ${reason}) friction=${rec.friction} ${brief}`)
+        changedSinceTurn = false
+        lastTurnAt = Date.now()
+        if (ending) break
       }
-      if (!waited) waitUntil = Date.now() + DEFAULT_WAIT_S * 1000
-      turns.push(rec)
-      appendJsonl(turnsFile, rec)
-      const brief = rec.actions
-        .map(
-          (a) => `${a.do}${a.label ? ` ${a.label}` : ''}${a.text ? ` "${clip(a.text, 40)}"` : ''}`,
-        )
-        .join(', ')
-      say(`차례 ${n} (${mmss(rec.t)}, ${reason}) friction=${rec.friction} ${brief}`)
-      changedSinceTurn = false
-      lastTurnAt = Date.now()
-      if (ending) break
+      await finishPart(ending, summary)
+      // 사람 역할이 응답하지 못하면 다음 Work로 가지 않는다. 시간·차례 제한이나 포기는 다음 Work를 그대로 돌린다
+      if (ending === 'human_error') break
     }
   } catch (e) {
     ending = 'harness_error'
     error = e instanceof Error ? `${e.message}\n${e.stack}` : String(e)
     say(`도구 오류: ${String(e).slice(0, 300)}`)
+    try {
+      await finishPart(ending, summary)
+    } catch (e2) {
+      say(`Work 마무리 실패: ${String(e2).slice(0, 200)}`)
+    }
   }
 
   const wallMs = Date.now() - t0
   say(`끝: ${ending} (${mmss(wallMs)})`)
-  let survey = null
-  if (turns.length > 0) {
-    try {
-      survey = await human.survey(
-        {
-          done: '네가 끝났다고 판단함',
-          give_up: '네가 포기함',
-          timeout: '시간 제한에 걸림',
-          turn_limit: '차례 제한에 걸림',
-        }[ending] ?? '도구 문제로 멈춤',
-      )
-    } catch (e) {
-      say(`설문 실패: ${String(e).slice(0, 200)}`)
-    }
-  }
+  // 설문은 Work마다 했다. 짝 판정과 보고서는 마지막 Work의 설문을 본다(Work 둘이면 재는 Work 2, relay I84)
+  const survey = workResults.findLast((r) => r.survey)?.survey ?? null
 
   // 판정
   let final = []
@@ -345,7 +509,7 @@ export async function runEpisode(o) {
         tree: t.path,
         baseDir,
         hiddenDir: path.join(o.scenarioDir, 'hidden'),
-        scenario,
+        scenario: { ...scenario, checks: allChecks(scenario) },
         work: path.join(o.workDir, 'judge', t.label),
       })
       fs.mkdirSync(path.join(o.outDir, 'final'), { recursive: true })
@@ -358,19 +522,13 @@ export async function runEpisode(o) {
   }
   await arm.close()
 
-  // 고친 것을 보는 시험은 결과 폴더 하나라도 통과하면 통과다(relay는 버그마다 Work를 따로 만들 수 있다).
-  // guard 시험(멀쩡한 동작을 지키는지)은 바뀐 결과 폴더 모두에서 통과해야 한다. 바뀐 폴더가 없으면 모든 폴더를 본다
   const changedTrees = final.filter((f) => f.files.length > 0)
-  const guardTrees = changedTrees.length ? changedTrees : final
-  const passIn = (f, name) => !!f.checks.find((c) => c.name === name)?.pass
-  const checks = (scenario.checks ?? []).map((c) => ({
-    name: c.name,
-    guard: !!c.guard,
-    pass: c.guard
-      ? guardTrees.length > 0 && guardTrees.every((f) => passIn(f, c.name))
-      : final.some((f) => passIn(f, c.name)),
-  }))
+  // Work 둘을 잇는 시나리오는 Work마다 판정한 것을 모은다. 나머지는 마지막 결과 폴더들로 판정한다
+  const checks = multi
+    ? workResults.flatMap((r) => r.outcome?.checks ?? [])
+    : combineChecks(allChecks(scenario), final)
   const frictions = turns.map((t) => t.friction).filter((x) => typeof x === 'number')
+  const humanCost = humans.reduce((a, h) => a + h.costUsd, 0)
   // relay의 단계별 에이전트 토큰과 context.md 크기 (eval-findings R9). 세션 id로 대화 기록을 맞춘다
   const bySession = agentUsageBySession(agentConfigDir)
   const agentSteps = works.flatMap((w) =>
@@ -379,6 +537,7 @@ export async function runEpisode(o) {
       seq: t.seq,
       node: t.node,
       contextChars: t.contextChars ?? null,
+      knowledgeChars: t.knowledgeChars ?? null,
       tokens: t.session ? (bySession.get(t.session) ?? null) : null,
     })),
   )
@@ -417,18 +576,19 @@ export async function runEpisode(o) {
         ? frictions.reduce((a, b) => a + b, 0) / frictions.length
         : null,
       frictionHigh: frictions.filter((f) => f >= 2).length,
-      costUsd: human.costUsd,
-      calls: human.calls,
+      costUsd: humanCost,
+      calls: humans.reduce((a, h) => a + h.calls, 0),
       // 사람 역할이 답하는 데 쓴 시간의 합과 기다리기만 한 차례 (eval-findings E2)
       ms: turns.reduce((a, t) => a + (typeof t.ms === 'number' ? t.ms : 0), 0),
       waitOnlyTurns: turns.filter((t) => t.actions.every((a) => a.do === 'wait')).length,
       // 스크린샷을 붙인 차례 (eval-findings E10)
-      images: human.images,
+      images: humans.reduce((a, h) => a + h.images, 0),
     },
     setupDialogs,
     agent: agentUsage(agentConfigDir),
     agentSteps,
     works,
+    ...(multi ? { workResults } : {}),
     survey,
     options: {
       agentModel: opts.agentModel,
@@ -444,7 +604,7 @@ export async function runEpisode(o) {
   // relay의 Work 기록(산출물, handoff, pty.log)도 남긴다
   for (const w of works) fs.cpSync(w.dir, path.join(o.outDir, 'works', w.id), { recursive: true })
   say(
-    `결과: ${result.outcome.success ? '성공' : '실패'} (${checks.map((c) => `${c.name} ${c.pass ? 'O' : 'X'}`).join(', ')}), 차례 ${turns.length}, 사람 비용 $${human.costUsd.toFixed(2)}`,
+    `결과: ${result.outcome.success ? '성공' : '실패'} (${checks.map((c) => `${c.name} ${c.pass ? 'O' : 'X'}`).join(', ')}), 차례 ${turns.length}, 사람 비용 $${humanCost.toFixed(2)}`,
   )
   return result
 }

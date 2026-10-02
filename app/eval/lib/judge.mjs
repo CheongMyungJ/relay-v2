@@ -1,4 +1,5 @@
-// 판정. 같은 시나리오의 같은 회차에서 relay와 맨 CLI의 결과를 짝지어 비교한다. A와 B의 순서는 무작위다.
+// 판정. 같은 시나리오의 같은 회차에서 두 쪽(relay와 맨 CLI, Work 둘을 잇는 시나리오면 relay와 relay-off)의 결과를
+// 짝지어 비교한다. A와 B의 순서는 무작위다.
 // - 결과 판정(가림): 코드 차이와 시험 결과만 보고, 어느 도구로 만들었는지 모른 채 비교한다.
 // - 경험 판정: 사람 역할의 차례 기록과 설문을 보고 비교한다. 화면 기록에 도구가 드러나므로 가릴 수 없다.
 import fs from 'node:fs'
@@ -7,6 +8,7 @@ import { ask } from './ai.mjs'
 import { makeClaudeConfig } from './env.mjs'
 import { clip, readJsonl } from './util.mjs'
 import { words } from './kind.mjs'
+import { multiWork, workParts } from './works.mjs'
 
 const score = { type: 'integer', minimum: 1, maximum: 5 }
 const OUTCOME_SCHEMA = {
@@ -49,15 +51,28 @@ const EXPERIENCE_SCHEMA = {
 }
 
 function scenarioBrief(s) {
+  const text = (r) => (Array.isArray(r) ? r.join(' ') : r)
+  // Work 둘을 잇는 시나리오는 Work마다 리포트, 아는 사실, 숨긴 시험을 보인다 (relay I84)
+  const parts = multiWork(s)
+    ? workParts(s).flatMap((w, n) => [
+        `Work ${n + 1}의 ${words(s).report}: ${text(w.report)}`,
+        ...(w.knowledge ?? []).map((k) => `Work ${n + 1}에서 사람이 아는 사실: ${k.text}`),
+        `Work ${n + 1}의 숨긴 시험: ${(w.checks ?? []).map((c) => c.name).join(', ')}`,
+      ])
+    : [
+        `${words(s).report}: ${text(s.report)}`,
+        ...(s.knowledge ?? []).map((k) => `사람이 아는 사실: ${k.text}`),
+      ]
   return [
     `시나리오: ${s.id} — ${s.title}`,
     `평가 목적: ${s.purpose}`,
-    `${words(s).report}: ${Array.isArray(s.report) ? s.report.join(' ') : s.report}`,
-    ...(s.knowledge ?? []).map((k) => `사람이 아는 사실: ${k.text}`),
+    ...parts,
     ...(s.preferences ?? []).map((p) => `사람의 선호: ${p}`),
     ...(s.reveals ?? []).map((r) => `도중에 더해진 요구: ${r.text}`),
     ...(s.events ?? []).map((e) => `도중의 사건: ${e.do} (${e.when})`),
-    `숨긴 시험(요구사항): ${(s.checks ?? []).map((c) => c.name).join(', ')}`,
+    ...(multiWork(s)
+      ? []
+      : [`숨긴 시험(요구사항): ${(s.checks ?? []).map((c) => c.name).join(', ')}`]),
     `수정이 기대되는 파일: ${(s.expectedFiles ?? []).join(', ')}`,
   ].join('\n')
 }
@@ -115,15 +130,16 @@ function timeline(run, runDir) {
 }
 
 /**
- * 한 짝을 판정한다
- * @returns {Promise<object>} relay와 cli 이름으로 되돌린 결과
+ * 한 짝을 판정한다. first와 second는 두 쪽의 run.json이고 kind가 이름이 된다(relay, cli, relay-off)
+ * @returns {Promise<object>} 쪽 이름으로 되돌린 결과. pair가 [first, second]의 이름이다
  */
-export async function judgePair({ scenario, relay, cli, relayDir, cliDir, opts, workDir }) {
+export async function judgePair({ scenario, first, second, firstDir, secondDir, opts, workDir }) {
+  const pair = [first.kind, second.kind]
   const flip = Math.random() < 0.5
-  const [A, B] = flip ? [cli, relay] : [relay, cli]
-  const [Ad, Bd] = flip ? [cliDir, relayDir] : [relayDir, cliDir]
+  const [A, B] = flip ? [second, first] : [first, second]
+  const [Ad, Bd] = flip ? [secondDir, firstDir] : [firstDir, secondDir]
   const nameOf = (x) =>
-    x === 'A' ? (flip ? 'cli' : 'relay') : x === 'B' ? (flip ? 'relay' : 'cli') : x
+    x === 'A' ? (flip ? pair[1] : pair[0]) : x === 'B' ? (flip ? pair[0] : pair[1]) : x
   const configDir = makeClaudeConfig(path.join(workDir, 'cfg-judge'))
   fs.mkdirSync(workDir, { recursive: true })
   const common = { model: opts.judgeModel, cwd: workDir, configDir, tools: [], timeoutMs: 300_000 }
@@ -153,7 +169,9 @@ export async function judgePair({ scenario, relay, cli, relayDir, cliDir, opts, 
     system,
     schema: EXPERIENCE_SCHEMA,
     prompt: [
-      `${words(scenario).same} 서로 다른 도구로 ${words(scenario).did} 두 사용 기록 A와 B를 비교하라. 사람 역할은 AI가 연기했다.`,
+      multiWork(scenario)
+        ? `같은 레포에서 일 ${workParts(scenario).length}개(Work)를 차례로 한 두 사용 기록 A와 B를 비교하라. 사람 역할은 AI가 연기했다. 두 기록은 도구의 설정 하나만 다르다. 앞 일에서 알게 된 것이 뒤 일에서 얼마나 이어졌는지(같은 질문과 같은 실수를 되풀이했는지)를 특히 본다.`
+        : `${words(scenario).same} 서로 다른 도구로 ${words(scenario).did} 두 사용 기록 A와 B를 비교하라. 사람 역할은 AI가 연기했다.`,
       '차원마다 어느 쪽이 나았는지(A, B, tie, 해당 없으면 n/a)와 근거를 짧게 적어라.',
       '- burden: 사람이 들인 수고(차례, 행동, 입력, 기다림, 헷갈림)가 적은 쪽',
       '- clarity: 무슨 일이 일어나는지와 할 일이 분명했던 쪽',
@@ -177,11 +195,12 @@ export async function judgePair({ scenario, relay, cli, relayDir, cliDir, opts, 
   const e = experience.data
   return {
     scenario: scenario.id,
-    index: relay.index,
+    index: first.index,
+    pair,
     flip,
     outcome: {
-      relay: flip ? o.B : o.A,
-      cli: flip ? o.A : o.B,
+      [pair[0]]: flip ? o.B : o.A,
+      [pair[1]]: flip ? o.A : o.B,
       preferred: nameOf(o.preferred),
       reason: o.reason,
     },
@@ -189,8 +208,7 @@ export async function judgePair({ scenario, relay, cli, relayDir, cliDir, opts, 
       ...Object.fromEntries(
         DIMENSIONS.map((d) => [d, { winner: nameOf(e[d].winner), note: e[d].note }]),
       ),
-      relayScore: flip ? e.B_score : e.A_score,
-      cliScore: flip ? e.A_score : e.B_score,
+      scores: { [pair[0]]: flip ? e.B_score : e.A_score, [pair[1]]: flip ? e.A_score : e.B_score },
       reason: e.reason,
     },
     costUsd: outcome.costUsd + experience.costUsd,
