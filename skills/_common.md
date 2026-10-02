@@ -136,7 +136,7 @@ Candidates (`knowledge_candidates`). Aim for about 3 per task. Only what the nex
 
 | `kind` | What | Required |
 |---|---|---|
-| `domain` | a behavior rule the human decided | |
+| `domain` | a behavior rule the human decided, or a lasting rule the human told you (e.g. how this team fixes flaky tests) | |
 | `recipe` | how to verify: test command, reproduction, a test that already fails at the base commit | |
 | `failure` | a kind of failure that recurs and how to check for it | |
 | `constraint` | a rule not visible in the code; `subkind: compat` for external compatibility | 1+ `paths` |
@@ -146,6 +146,7 @@ Candidates (`knowledge_candidates`). Aim for about 3 per task. Only what the nex
 - `rule`: one line. `terms`: 1 to 5 words a request about this would contain. `paths`: repo paths (directory, file, or `file:symbol`).
 - `not_in_code`: why the code alone does not tell this. For a rule the human decided, "사람이 정함". `incentive`: the wrong change someone would make without it. Do not infer a reason from the code.
 - A candidate refined from a human decision: copy that decision's `what` into `decision` verbatim.
+- A lasting rule the human told you is `domain`, even when it forbids a fix ("do not retry") or reads like a decision: `decision` and a `constraint` without `compat` do not reach intake.
 - A candidate that corrects a `참고 지식` item: put that item's id in `supersedes`.
 - Not knowledge: facts of this incident (who reported, when), hypotheses that only mattered in this Work, progress.
 - Write values in Korean, like the other handoff values.

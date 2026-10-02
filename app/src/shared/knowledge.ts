@@ -151,6 +151,11 @@ export interface KnowledgeCandidateView {
    * 같은 사람 결정에서 앞 task가 먼저 올린 후보의 key (D324). 있으면 같은 규칙의 중복이라 채택 안 함이 기본이다
    */
   sameDecisionAs: string | null
+  /**
+   * 다른 task가 앞서 올린 비슷한 후보(종류가 같고 경로가 겹침)의 key (D326). 있으면 같은 규칙의 중복일 수 있어 채택 안 함이
+   * 기본이다
+   */
+  similarTo: string | null
   /** 대체할 항목 (D299, D313). 모르는 id면 null이고 unknownSupersedes에 남긴다 */
   supersedes: KnowledgeRefView | null
   unknownSupersedes: string | null
@@ -302,12 +307,16 @@ export function normalizePath(p: string): string {
 }
 
 /**
- * 기본 선택 (D301, D303, D304, D299, D313, D324): 에이전트 후보는 채택, 다듬지 않은 사람 결정과 같은 결정에서 뒤에 올린
- * 후보는 채택 안 함, supersedes는 대체
+ * 기본 선택 (D301, D303, D304, D299, D313, D324, D326): 에이전트 후보는 채택, 다듬지 않은 사람 결정, 같은 결정에서 뒤에
+ * 올린 후보, 다른 task가 앞서 올린 비슷한 후보가 있는 후보는 채택 안 함, supersedes는 대체
  */
 export function defaultCandidateChoice(c: KnowledgeCandidateView, share: boolean): CandidateChoice {
   const replace = c.supersedes && c.supersedes.carriedPr === null ? c.supersedes.id : null
-  return { adopt: !c.unrefined && !c.sameDecisionAs, share: share ? 'team' : 'mine', replace }
+  return {
+    adopt: !c.unrefined && !c.sameDecisionAs && !c.similarTo,
+    share: share ? 'team' : 'mine',
+    replace,
+  }
 }
 
 /** 고른 것과 기본 선택을 합친 후보 선택 */

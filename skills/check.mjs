@@ -283,6 +283,7 @@ const spec = {
     ['D311', '용어 1~5개', /`terms`: 1 to 5 words/],
     ['D297', '코드불가와 유인, 사람이 정한 것은 사람이 정함, 코드에서 이유를 추론하지 않음', /`not_in_code`[\s\S]*"사람이 정함"[\s\S]*`incentive`[\s\S]*Do not infer a reason from the code/],
     ['D299', '다듬은 사람 결정은 decision에 what 그대로', /copy that decision's `what` into `decision` verbatim/],
+    ['D325', '사람이 알려 준 오래 갈 규칙은 domain', /lasting rule the human told you is `domain`/],
     ['D313', '참고 지식을 고치는 후보는 supersedes', /corrects a `참고 지식` item: put that item's id in `supersedes`/],
     ['B.3', '지식이 아닌 것', /Not knowledge: facts of this incident[\s\S]*hypotheses that only mattered in this Work[\s\S]*progress/],
     ['D321', '후보는 한국어', /Write values in Korean/],
