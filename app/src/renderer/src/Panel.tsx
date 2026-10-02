@@ -21,14 +21,16 @@ import type {
   WorkView,
 } from '../../shared/views'
 import type { DeliveryChoice, UncommittedAction } from '../../shared/work'
+import { planLine, type KnowledgeChoices } from '../../shared/knowledge'
 import { Activity } from './Activity'
+import { KnowledgePanel, knowledgeCount } from './Knowledge'
 import { call } from './commands'
 import { ConfirmDialog, UncommittedDialog } from './dialogs'
 import { Diff, Markdown } from './Markdown'
 import { PrPanel } from './PrPanel'
 import { focusTerm } from './terminals'
 
-type Tab = 'summary' | 'artifacts' | 'changes' | 'verdicts' | 'work'
+type Tab = 'summary' | 'artifacts' | 'changes' | 'verdicts' | 'work' | 'knowledge'
 
 interface Props {
   work: WorkView
@@ -422,6 +424,9 @@ function Review({
   const [confirming, setConfirming] = useState(false)
   // 답하지 않은 열린 질문이 남은 채 [승인]하면 한 번 확인받는다 (D222)
   const [asking, setAsking] = useState(false)
+  // Work 완료 화면의 지식 거르기 (I75). 전달 버튼이 함께 보낸다. 탭을 열지 않았으면 기본 선택이다 (D303)
+  const [knowledge, setKnowledge] = useState<KnowledgeChoices>({})
+  const knowledgeReview = review.completion?.knowledge ?? null
   const questions = review.emphasis.find((e) => e.kind === 'open_questions')?.lines ?? []
   const liveTask = work?.tasks.find((t) => t.id === review.taskId && t.live)
 
@@ -462,6 +467,9 @@ function Review({
     ['artifacts', '산출물'],
     ['changes', '변경'],
     ...(verify ? ([['work', '전체 변경']] as [Tab, string][]) : []),
+    ...(knowledgeReview
+      ? ([['knowledge', `지식 ${knowledgeCount(knowledgeReview)}`]] as [Tab, string][])
+      : []),
   ]
 
   return (
@@ -540,6 +548,14 @@ function Review({
           </table>
         ) : null}
         {tab === 'work' && review.completion ? <Diff text={review.completion.diff} /> : null}
+        {tab === 'knowledge' && knowledgeReview ? (
+          <KnowledgePanel
+            review={knowledgeReview}
+            choices={knowledge}
+            onChange={setKnowledge}
+            readOnly={!!readOnly}
+          />
+        ) : null}
       </div>
 
       {/* 카운트다운, 까닭, 버튼 줄은 패널 아래에 붙여 둔다: 긴 diff가 밀어내지 않는다 (D224) */}
@@ -554,6 +570,7 @@ function Review({
           <CompletionActions
             review={review}
             work={work}
+            knowledge={knowledge}
             questions={questions}
             live={!!liveTask}
             onApproved={onApproved}
@@ -969,6 +986,7 @@ function LinkLine({ label, url }: { label: string; url: string }) {
 function CompletionActions({
   review,
   work,
+  knowledge,
   questions,
   live,
   onApproved,
@@ -977,6 +995,8 @@ function CompletionActions({
 }: {
   review: ReviewView
   work: WorkView
+  /** 지식 거르기의 선택 (I75). 전달 버튼이 함께 보낸다 */
+  knowledge: KnowledgeChoices
   /** 답하지 않은 열린 질문 (D222) */
   questions: readonly string[]
   /** 리뷰와 검증의 세션이 살아 있다 */
@@ -1023,8 +1043,8 @@ function CompletionActions({
     done(
       await run('완료만', () =>
         stopped
-          ? window.relay.resumeWork(work.key)
-          : window.relay.approve(work.key, review.taskId, {}),
+          ? window.relay.resumeWork(work.key, { knowledge })
+          : window.relay.approve(work.key, review.taskId, { knowledge }),
       ),
     )
   const deliver = async (
@@ -1033,12 +1053,12 @@ function CompletionActions({
   ) =>
     done(
       await run(DELIVERY_BUTTON[choice], () =>
-        window.relay.deliver(work.key, { choice, uncommitted }),
+        window.relay.deliver(work.key, { choice, uncommitted, knowledge }),
       ),
       choice,
     )
   const openCleanup = async (choice: DeliveryChoice) => {
-    const r = await run('AI 세션 열기', () => window.relay.openCleanup(work.key, choice))
+    const r = await run('AI 세션 열기', () => window.relay.openCleanup(work.key, choice, knowledge))
     if (r.ok) {
       setPending(null)
       onShowCleanup?.()
@@ -1171,6 +1191,10 @@ function CompletionActions({
         ) : null}
         {busy ? <span className="dim">{busy}: 하는 중…</span> : null}
       </footer>
+      {/* 지금 선택의 결과를 버튼 옆에서 알린다: 탭을 열지 않으면 팀 지식이 PR에 실리는 것을 모를 수 있다 (I75) */}
+      {c.knowledge && planLine(c.knowledge, knowledge) ? (
+        <div className="knowledge-line">지식: {planLine(c.knowledge, knowledge)}</div>
+      ) : null}
       {blocked.length ? (
         <div className="dim">
           {blocked.map((k) => (

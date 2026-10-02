@@ -33,6 +33,8 @@ import type {
   WorkView,
 } from '../../shared/views'
 import { call } from './commands'
+import { RespondKnowledge } from './Knowledge'
+import type { KnowledgeChoices } from '../../shared/knowledge'
 
 export function Modal({
   title,
@@ -165,6 +167,8 @@ export function ProjectSettingsDialog({
 }) {
   const [bots, setBots] = useState(project.allowedBots.join('\n'))
   const [method, setMethod] = useState<MergeMethod | null>(project.mergeMethod)
+  const [knowledgeDir, setKnowledgeDir] = useState(project.knowledgeDir)
+  const [knowledgeShare, setKnowledgeShare] = useState(project.knowledgeShare)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -178,8 +182,8 @@ export function ProjectSettingsDialog({
           .map((b) => b.trim())
           .filter(Boolean),
         merge_method: method,
-        knowledge_dir: project.knowledgeDir,
-        knowledge_share: project.knowledgeShare,
+        knowledge_dir: knowledgeDir,
+        knowledge_share: knowledgeShare,
       }),
     )
     setBusy(false)
@@ -223,6 +227,35 @@ export function ProjectSettingsDialog({
       <div className="dim">
         머지 창의 기본 선택입니다. 레포가 허용하지 않는 방식이면 허용하는 첫 방식을 고릅니다 (D177).
       </div>
+      {project.knowledgeOff ? null : (
+        <>
+          <label className="form-row">
+            <span>지식 폴더</span>
+            <input
+              aria-label="지식 폴더"
+              value={knowledgeDir}
+              onChange={(e) => setKnowledgeDir(e.target.value)}
+            />
+          </label>
+          <div className="dim">
+            팀 지식을 둘 레포 안의 폴더입니다(D305). 상대 경로만 받고 .relay/와 .git/ 밑은 받지
+            않습니다.
+          </div>
+          <label className="toggle">
+            <input
+              type="checkbox"
+              aria-label="팀 공유"
+              checked={knowledgeShare}
+              onChange={(e) => setKnowledgeShare(e.target.checked)}
+            />
+            팀 공유
+          </label>
+          <div className="dim">
+            끄면 채택한 지식은 모두 나만이 되고 레포에 지식 커밋을 넣지 않습니다. 레포에 머지된 팀
+            지식은 그대로 넣습니다 (D322).
+          </div>
+        </>
+      )}
       <div className="dim">
         gh {project.ghVersion ?? '버전 모름'} · origin {project.origin ? '있음' : '없음'} · gh
         로그인 {project.gh ? '됨' : '안 됨'}
@@ -678,12 +711,18 @@ type NumberKey =
   | 'handoff_body_warn_chars'
   | 'intent_warn_chars'
   | 'pr_poll_interval_sec'
+  | 'knowledge_inject_chars'
 
 const NUMBERS: [NumberKey, string, string][] = [
   ['session_limit', '세션 상한', '살아 있는 세션의 합계. 넘으면 대기열에서 기다린다 (D18)'],
   ['format_error_bounce_max', '형식 오류 되돌림 횟수', 'Stop 훅으로 되돌리는 연속 횟수 (D21)'],
   ['handoff_body_warn_chars', 'handoff 본문 분량 경고 기준', '글자 수. 넘으면 경고만 한다'],
   ['intent_warn_chars', 'intent 분량 경고 기준', '글자 수. 넘으면 경고만 한다'],
+  [
+    'knowledge_inject_chars',
+    '참고 지식 분량 기준',
+    '글자 수. context.md의 참고 지식 절을 이 안에서 자른다 (D312)',
+  ],
   [
     'pr_poll_interval_sec',
     'PR 읽기 주기(초)',
@@ -716,6 +755,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         format_error_bounce_max: value.format_error_bounce_max,
         handoff_body_warn_chars: value.handoff_body_warn_chars,
         intent_warn_chars: value.intent_warn_chars,
+        knowledge_inject_chars: value.knowledge_inject_chars,
         pr_draft: value.pr_draft,
         pr_poll_interval_sec: value.pr_poll_interval_sec,
         respond_auto_start: value.respond_auto_start,
@@ -1244,7 +1284,13 @@ export function UncommittedDialog({
  * PR을 머지해 완료한 Work는 작업 브랜치 삭제가 기본으로 체크되고, origin의 작업 브랜치 삭제도 고를 수 있다
  * (D178, 기본은 끔). 되감기 백업 브랜치의 "함께 삭제"는 기본으로 체크한다. 산출물은 지우지 않는다.
  */
-export function CleanDialog({ work, onClose }: { work: WorkView; onClose: () => void }) {
+export function CleanDialog({ work, onClose: close }: { work: WorkView; onClose: () => void }) {
+  // 머지 뒤 정리 창의 지식 거르기 (I76): 창을 어느 버튼으로 닫든 고른 대로 쓴다
+  const [knowledge, setKnowledge] = useState<KnowledgeChoices>({})
+  const onClose = () => {
+    if (work.pr?.merged) void call(() => window.relay.fileKnowledge(work.key, knowledge))
+    close()
+  }
   const [preview, setPreview] = useState<CleanPreview | null>(null)
   const [deleteBranch, setDeleteBranch] = useState(false)
   const [deleteRemote, setDeleteRemote] = useState(false)
@@ -1271,6 +1317,8 @@ export function CleanDialog({ work, onClose }: { work: WorkView; onClose: () => 
     if (!preview) return
     setBusy(true)
     setError(null)
+    // worktree를 지우기 전에 지식 후보를 쓴다: 해시를 그때의 코드로 적는다 (I72, I76)
+    if (work.pr?.merged) await call(() => window.relay.fileKnowledge(work.key, knowledge))
     const r = await call(() =>
       window.relay.clean(work.key, {
         deleteBranch: deleteBranch && preview.branch.deletable,
@@ -1281,7 +1329,7 @@ export function CleanDialog({ work, onClose }: { work: WorkView; onClose: () => 
       }),
     )
     setBusy(false)
-    if (r.ok) onClose()
+    if (r.ok) close()
     else setError(r.error)
   }
 
@@ -1398,6 +1446,9 @@ export function CleanDialog({ work, onClose }: { work: WorkView; onClose: () => 
           ) : null}
         </div>
       )}
+      {work.pr?.merged ? (
+        <RespondKnowledge workKey={work.key} choices={knowledge} onChange={setKnowledge} />
+      ) : null}
       {error ? <div className="error">{error}</div> : null}
       <div className="buttons">
         <button onClick={onClose}>취소</button>
