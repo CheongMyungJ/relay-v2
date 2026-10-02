@@ -284,3 +284,94 @@ export type KnowledgeEditInput =
   | { op: 'drop'; scope: 'team' | 'mine' | 'pending'; id: string }
   | { op: 'move'; scope: 'mine' | 'pending'; id: string }
   | { op: 'confirm'; id: string }
+
+// ---------- 거르기의 선택 (I75). 렌더러도 전달 버튼 줄의 한 줄을 이것으로 센다 ----------
+
+/** 경로를 맞춘다: `\`를 `/`로, 앞의 `./`와 `/`, 끝의 `/`를 뗀다 */
+export function normalizePath(p: string): string {
+  return p
+    .trim()
+    .replace(/\\/g, '/')
+    .replace(/^(?:\.\/)+/, '')
+    .replace(/^\/+/, '')
+    .replace(/\/+$/, '')
+}
+
+/** 기본 선택 (D301, D303, D304, D299, D313): 에이전트 후보는 채택, 다듬지 않은 사람 결정은 채택 안 함, supersedes는 대체 */
+export function defaultCandidateChoice(c: KnowledgeCandidateView, share: boolean): CandidateChoice {
+  const replace = c.supersedes && c.supersedes.carriedPr === null ? c.supersedes.id : null
+  return { adopt: !c.unrefined, share: share ? 'team' : 'mine', replace }
+}
+
+/** 고른 것과 기본 선택을 합친 후보 선택 */
+export function candidateChoice(
+  c: KnowledgeCandidateView,
+  choices: KnowledgeChoices | undefined,
+  share: boolean,
+): CandidateChoice {
+  const d = defaultCandidateChoice(c, share)
+  const got = choices?.candidates?.[c.key]
+  if (!got) return d
+  return { ...d, ...got, share: share ? got.share : 'mine' }
+}
+
+export function pendingAction(id: string, choices: KnowledgeChoices | undefined): PendingAction {
+  return choices?.pending?.[id] ?? 'share'
+}
+
+export function entryChoice(
+  group: 'stale' | 'feedback',
+  id: string,
+  choices: KnowledgeChoices | undefined,
+): EntryChoice {
+  return choices?.[group]?.[id] ?? { action: 'leave' }
+}
+
+/** 고친 후보 (I75). 다듬지 않은 사람 결정은 사람이 정한 종류, 용어, 경로를 받는다 */
+export function editedCandidate(c: KnowledgeCandidateView, edit: CandidateEdit | undefined) {
+  const kind = edit?.kind ?? c.kind
+  const subkind = edit?.subkind !== undefined ? edit.subkind : c.subkind
+  return {
+    kind,
+    subkind: subkind && kind && SUBKIND_KIND[subkind] === kind ? subkind : null,
+    rule: (edit?.rule ?? c.rule).trim(),
+    paths: (edit?.paths ?? c.paths).map(normalizePath).filter(Boolean),
+    terms: (edit?.terms ?? c.terms).map((t) => t.trim()).filter(Boolean),
+    why: (edit?.why ?? c.why).trim(),
+  }
+}
+
+/** 채택할 수 있는 후보인가 (D299): 종류, 규칙, 용어 1~5개, 제약은 경로, 구조 사실은 경로 둘 이상. 아니면 까닭 */
+export function candidateProblem(e: ReturnType<typeof editedCandidate>): string | null {
+  if (!e.kind) return '종류를 정해야 함'
+  if (!e.rule) return '규칙이 비어 있음'
+  if (e.terms.length < 1 || e.terms.length > 5) return '용어는 1~5개'
+  if (e.kind === 'constraint' && e.paths.length < 1) return '제약은 경로가 하나 이상 필요함'
+  if (e.kind === 'structure' && e.paths.length < 2) return '구조 사실은 경로가 둘 이상 필요함'
+  return null
+}
+
+/** 전달 버튼 줄의 한 줄 (I75). 쓸 것이 없으면 null */
+export function planLine(
+  review: KnowledgeReview,
+  choices: KnowledgeChoices | undefined,
+): string | null {
+  const team = review.candidates.filter((c) => {
+    const ch = candidateChoice(c, choices, review.share)
+    return ch.adopt && ch.share === 'team' && !candidateProblem(editedCandidate(c, ch.edit))
+  }).length
+  const mine = review.candidates.filter((c) => {
+    const ch = candidateChoice(c, choices, review.share)
+    return ch.adopt && ch.share === 'mine' && !candidateProblem(editedCandidate(c, ch.edit))
+  }).length
+  const shipped = review.pending.filter((p) => pendingAction(p.id, choices) === 'share').length
+  const parts: string[] = []
+  if (review.share && team + shipped > 0) {
+    const what = [team ? `팀 지식 ${team}건` : '', shipped ? `공유 대기 ${shipped}건` : '']
+      .filter(Boolean)
+      .join('과 ')
+    parts.push(`${what}은 [PR 생성]이면 PR에 함께 실리고, [완료만]·[push]면 공유 대기로 남음`)
+  }
+  if (mine) parts.push(`나만 ${mine}건은 앱 저장소에만 둠`)
+  return parts.length ? parts.join('. ') : null
+}

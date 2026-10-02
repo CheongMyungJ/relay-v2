@@ -249,6 +249,7 @@ import type { ProjectChecks, ProjectState } from '../shared/project'
 import type {
   ActivityView,
   ApproveOptions,
+  ResumeWorkOptions,
   BadgeKind,
   BranchInfo,
   CleanInput,
@@ -289,6 +290,18 @@ import type { SessionPool } from './pool'
 import type { UiPort } from './ports'
 import { listPrComments, readPr, receivedCommits, fetchTip, type PrFetched } from './pr'
 import { TerminalBuffer } from './terminals'
+import { WorkKnowledge, type RoundKnowledge } from './knowledge'
+import type { KnowledgeStore } from '../adapters/knowledge'
+import {
+  knowledgeOff,
+  planEmpty,
+  reviewTaskIds,
+  type CandidateTask,
+  type KnowledgeDelivery,
+} from '../core/knowledge'
+import { knowledgeStage } from '../core/machine'
+import type { KnowledgeChoices, KnowledgePlan, KnowledgeReview } from '../shared/knowledge'
+import type { FormatIssue } from '../shared/work'
 
 /** 여러 Work가 함께 쓰는 것 */
 export interface RunnerContext {
@@ -313,6 +326,13 @@ export interface RunnerContext {
   at(): string
   /** 새 PTY의 크기. 탭이 크기를 알리면 그 크기를 쓴다 */
   size(): { cols: number; rows: number }
+  /**
+   * 프로젝트의 앱 저장소 지식과, 그 쓰기를 한 줄로 하는 잠금 (I71). 같은 프로젝트의 Work들이 knowledge.json을 함께 고친다
+   */
+  knowledge(projectId: string): {
+    store: KnowledgeStore
+    lock: <T>(fn: () => Promise<T>) => Promise<T>
+  }
 }
 
 interface LiveSession {
@@ -498,6 +518,10 @@ export class WorkRunner {
    * 시작하지 않는다
    */
   private prStartRead = false
+  /** Work의 지식 (M17). 지식을 끈 때(I84)는 쓰지 않는다 */
+  private readonly kn: WorkKnowledge
+  /** PR 대응 task의 이번 라운드 지식 파일 (I79). Stop, 승인, 승인 화면 때 git으로 다시 읽고, 형식 검사가 오류를 더한다 */
+  private readonly roundKnowledge = new Map<string, RoundKnowledge>()
 
   /**
    * workText는 앱이 마지막으로 쓰거나 읽은 work.json의 내용이다. 다음에 쓰기 전에 이것과 비교한다 (D124).
@@ -513,6 +537,22 @@ export class WorkRunner {
     private workText: string | null = null,
   ) {
     this.key = `${project.project_id}/${work.work_id}`
+    const k = ctx.knowledge(project.project_id)
+    this.kn = new WorkKnowledge({
+      env: ctx.env,
+      worktree,
+      store: k.store,
+      lock: k.lock,
+      project: () => this.projectNow(),
+      work: () => this.work,
+      problem: (text) => this.problem(text),
+      at: () => this.ctx.at(),
+    })
+  }
+
+  /** 지식을 쓰는가 (I84): RELAY_KNOWLEDGE=off면 넣지도 모으지도 않는다 */
+  private knowledgeOn(): boolean {
+    return !knowledgeOff(this.ctx.env)
   }
 
   /** 이 앱에서 살아 있는 세션이 있다 (앱 종료 확인, 시나리오 3-6). 정리 세션도 센다 */
@@ -597,6 +637,14 @@ export class WorkRunner {
         this.problem(failed)
       }
     }
+    // PR 진행이 끝났다: 머지면 이 PR에 실린 공유 대기를 지우고, 머지 없이 끝났으면 다음 PR에 다시 싣는다 (D288, D310 (4))
+    if (before.status === 'pr' && work.status === 'completed' && this.knowledgeOn()) {
+      try {
+        await this.kn.prFinished(work.pr?.merged !== undefined)
+      } catch (err) {
+        this.problem(`공유 대기를 정리하지 못함: ${message(err)}`)
+      }
+    }
     // 바라 둔 자동 대응을 막던 것(도는 대응 task, 진행 중 작업, 닫힌 PR)이 이 전이로 풀렸을 수 있다 (D170, D210)
     this.autoRespondSoon()
     return reply
@@ -677,6 +725,9 @@ export class WorkRunner {
       case 'respond':
         await this.respondCode(e)
         return
+      case 'storeKnowledge':
+        await this.kn.storePlan(e.plan, e.carried)
+        return
     }
   }
 
@@ -685,7 +736,7 @@ export class WorkRunner {
   }
 
   private check(task: TaskRecord, files: Readonly<Record<string, string>>): TaskCheck {
-    return checkTask({
+    const c = checkTask({
       node: task.node,
       type: workType(this.work),
       files,
@@ -694,6 +745,23 @@ export class WorkRunner {
       // PR 대응 task는 이번 라운드의 코멘트 항목마다 replies.md의 절을 본다 (D190)
       ...(task.respond ? { replyItems: replyItemIds(task.respond.items) } : {}),
     })
+    // PR 대응 task가 고친 지식 파일의 머리글 오류도 되돌린다 (D310 (2), I79)
+    const extra: FormatIssue[] = this.roundKnowledge.get(task.id)?.errors ?? []
+    return extra.length ? { ...c, errors: [...c.errors, ...extra] } : c
+  }
+
+  /** PR 대응 task의 이번 라운드 지식 파일을 다시 읽는다 (I79). 끝난 라운드와 지식을 끈 때는 지운다 */
+  private async refreshRoundKnowledge(task: TaskRecord): Promise<void> {
+    if (task.node !== RESPOND || !this.knowledgeOn() || pendingRespond(this.work)?.id !== task.id) {
+      this.roundKnowledge.delete(task.id)
+      return
+    }
+    try {
+      this.roundKnowledge.set(task.id, await this.kn.roundFiles(task))
+    } catch (e) {
+      this.roundKnowledge.delete(task.id)
+      this.problem(`지식 파일의 변경을 읽지 못함: ${message(e)}`)
+    }
   }
 
   private notify(body: string): void {
@@ -911,9 +979,23 @@ export class WorkRunner {
         skill: NODE_INFO[task.node].skill,
         workDir: this.files.dir,
         previousTaskDirs: earlier.map((t) => this.files.taskDir(t)),
+        ...this.knowledgeDeny(task),
       }),
     )
     return settingsPath
+  }
+
+  /** 지식의 deny 규칙 (I78): 파이프라인 task는 지식 폴더와 앱 저장소, PR 대응 task는 앱 저장소만. 지식을 끈 때는 없다 */
+  private knowledgeDeny(task?: TaskRecord) {
+    if (!this.knowledgeOn()) return {}
+    return {
+      knowledge: {
+        worktree: this.worktree,
+        dir: this.kn.dir(),
+        store: this.ctx.knowledge(this.project.project_id).store.dir,
+        respond: task?.node === RESPOND,
+      },
+    }
   }
 
   /** task의 handoff.md. 없으면 undefined */
@@ -964,7 +1046,79 @@ export class WorkRunner {
       carried: await this.carriedInput(task),
       ...(task.node === 'verify' ? { delivery: closingButtons(this.checks()) } : {}),
       respond: await this.respondInput(task),
+      knowledge: await this.knowledgeSection(task, request?.text ?? '', intent?.text ?? null),
     })
+  }
+
+  /**
+   * context.md의 `참고 지식` 절 (D286, D315). 지식을 끈 때(I84)는 null이다. 읽다 실패하면 알리고 "없음"이다
+   */
+  private async knowledgeSection(
+    task: TaskRecord,
+    request: string,
+    intent: string | null,
+  ): Promise<string | null> {
+    if (!this.knowledgeOn()) return null
+    try {
+      const design =
+        task.node === 'implement' ? await this.approvedArtifact('design', 'design.md') : null
+      const file = task.respond ? await this.prItems() : null
+      const inline = (task.respond?.items ?? [])
+        .map((id) => file?.items.find((i) => i.id === id))
+        .filter((i): i is PrItem => i?.kind === 'inline' && !!i.path)
+        .map((i) => i.path ?? '')
+      const r = await this.kn.section(
+        task,
+        [request, intent ?? ''].join('\n'),
+        this.ctx.config().knowledge_inject_chars,
+        { design, inline },
+      )
+      return r.text
+    } catch (e) {
+      this.problem(`참고 지식을 고르지 못함: ${message(e)}`)
+      return '없음'
+    }
+  }
+
+  /** 승인된 마지막 node task의 산출물 내용. 없으면 null */
+  private async approvedArtifact(node: NodeName, name: string): Promise<string | null> {
+    const t = [...this.work.tasks].reverse().find((x) => x.node === node && x.status === 'approved')
+    if (!t) return null
+    return (await this.files.taskFiles(t))[name] ?? null
+  }
+
+  /** 후보를 모을 task의 검사 (I70, I75) */
+  private async candidateTasks(which: 'pipeline' | 'respond'): Promise<CandidateTask[]> {
+    const out: CandidateTask[] = []
+    for (const t of reviewTaskIds(this.work, which)) {
+      const c = this.check(t, await this.files.taskFiles(t))
+      out.push({ taskId: t.id, node: t.node, version: c.formatVersion, header: c.handoffHeader })
+    }
+    return out
+  }
+
+  /** Work 완료 화면의 지식 칸 (I75) */
+  private async knowledgeReview(): Promise<KnowledgeReview | null> {
+    if (!this.knowledgeOn()) return null
+    try {
+      return (await this.kn.review(await this.candidateTasks('pipeline'))).review
+    } catch (e) {
+      this.problem(`지식 후보를 모으지 못함: ${message(e)}`)
+      return null
+    }
+  }
+
+  /** 채택 결과 (I73). 지식을 끈 때는 undefined다 */
+  private async knowledgePlan(
+    which: 'pipeline' | 'respond',
+    choices: KnowledgeChoices | undefined,
+    delivery: KnowledgeDelivery,
+    taskId: string,
+  ): Promise<KnowledgePlan | undefined> {
+    if (!this.knowledgeOn()) return undefined
+    const plan = await this.kn.plan(await this.candidateTasks(which), choices, delivery, taskId)
+    // 쓸 것이 없으면 계획을 두지 않는다: 전달과 승인의 기록이 그대로다
+    return planEmpty(plan) ? undefined : plan
   }
 
   /**
@@ -1322,6 +1476,7 @@ export class WorkRunner {
         previousTaskDirs: this.work.tasks
           .filter((t) => !task || t.seq < task.seq)
           .map((t) => this.files.taskDir(t)),
+        ...this.knowledgeDeny(task),
       },
       toolName,
       typeof args === 'object' && args !== null ? (args as Record<string, unknown>) : {},
@@ -1497,6 +1652,7 @@ export class WorkRunner {
             reason: '앱 질문창의 답변을 기다리세요. 취소를 답변이나 동의로 해석하지 마세요.',
           }
         const files = await this.files.taskFiles(task)
+        await this.refreshRoundKnowledge(task)
         const snapshot = turnSnapshot(task, files)
         const changed = session !== undefined && snapshot !== session.turnFiles
         if (session) session.turnFiles = snapshot
@@ -1609,7 +1765,13 @@ export class WorkRunner {
       if (this.cleanupOpen()) return { ok: false, error: CLEANUP_BLOCKS }
       const task = this.task(taskId)
       if (!task) return { ok: false, error: `${taskId} 없음` }
+      await this.refreshRoundKnowledge(task)
       const check = this.check(task, await this.files.taskFiles(task))
+      // verify의 [완료만]은 지식 거르기를 함께 쓴다 (I73, I75). Work가 완료되면 앱 저장소에 쓴다
+      const knowledge =
+        task.node === 'verify'
+          ? await this.knowledgePlan('pipeline', opts.knowledge, 'none', task.id)
+          : undefined
       // PR 대응 task는 승인하면 push하고 답글을 게시한다. 실패하면 그 오류를 돌려준다 (시나리오 10-6)
       this.opError = null
       const r = await this.command({
@@ -1618,6 +1780,7 @@ export class WorkRunner {
         at: this.ctx.at(),
         check,
         ...(opts.force ? { force: true } : {}),
+        ...(knowledge ? { knowledge } : {}),
       })
       const failed = this.opError
       this.opError = null
@@ -1735,8 +1898,19 @@ export class WorkRunner {
   }
 
   /** 멈춘 Work의 [재개]: 기본 다음 단계를 시작한다 */
-  resumeWork(): Promise<CommandResult> {
-    return this.enqueue(() => this.unlessCleanup({ type: 'resumeWork', at: this.ctx.at() }))
+  resumeWork(opts: ResumeWorkOptions = {}): Promise<CommandResult> {
+    return this.enqueue(async () => {
+      // verify에서 멈춘 Work의 [재개]는 Work를 완료한다: 지식 거르기를 함께 쓴다 (I73, I75)
+      const verify = stoppedVerify(this.work)
+      const knowledge = verify
+        ? await this.knowledgePlan('pipeline', opts.knowledge, 'none', verify.id)
+        : undefined
+      return this.unlessCleanup({
+        type: 'resumeWork',
+        at: this.ctx.at(),
+        ...(knowledge ? { knowledge } : {}),
+      })
+    })
   }
 
   /** [Work 포기]. 끝난 정리 세션이 남아 있으면 치운다. 열려 있으면 받지 않는다 (D137) */
@@ -2012,12 +2186,37 @@ export class WorkRunner {
    * 실패는 Work 완료 화면에도 남는다.
    */
   deliver(input: DeliverInput): Promise<DeliverResult> {
-    return this.enqueue(() => this.deliverNow(input.choice, input.uncommitted))
+    return this.enqueue(() =>
+      this.deliverNow(input.choice, input.uncommitted, { choices: input.knowledge }),
+    )
+  }
+
+  /**
+   * 전달의 채택 결과 (I73). 끊긴 전달의 [다시 시도]는 기록한 것을 쓴다. 앞 전달이 지식 커밋을 만든 뒤 실패했으면(HEAD가 이
+   * Work의 지식 커밋) 그 계획을 써서 같은 지식을 다시 싣지 않는다. 아니면 고른 것으로 새로 계산한다
+   */
+  private async deliveryPlan(
+    choice: DeliveryChoice,
+    knowledge: { choices?: KnowledgeChoices | undefined; plan?: KnowledgePlan | undefined },
+    taskId: string,
+  ): Promise<KnowledgePlan | undefined> {
+    if (!this.knowledgeOn()) return undefined
+    if (knowledge.plan) return knowledge.plan
+    const failed =
+      this.work.delivery?.status === 'failed' ? this.work.delivery.knowledge_plan : undefined
+    if (failed && (await this.kn.headIsKnowledgeCommit())) return failed
+    return this.knowledgePlan(
+      'pipeline',
+      knowledge.choices ?? this.work.knowledge_choices,
+      choice,
+      taskId,
+    )
   }
 
   private async deliverNow(
     choice: DeliveryChoice,
     uncommitted: DeliverInput['uncommitted'],
+    knowledge: { choices?: KnowledgeChoices | undefined; plan?: KnowledgePlan | undefined } = {},
   ): Promise<DeliverResult> {
     if (cutOperation(this.work)) return { ok: false, error: OPERATION_BLOCKS }
     const check = await this.verifyCheck()
@@ -2063,6 +2262,12 @@ export class WorkRunner {
       }
       action = uncommitted.action
     }
+    let plan: KnowledgePlan | undefined
+    try {
+      plan = await this.deliveryPlan(choice, knowledge, start.task.id)
+    } catch (e) {
+      return { ok: false, error: `지식 후보를 모으지 못함: ${message(e)}` }
+    }
     this.opError = null
     const r = await this.command({
       type: 'deliver',
@@ -2070,6 +2275,7 @@ export class WorkRunner {
       choice,
       uncommitted: action,
       check,
+      ...(plan ? { knowledge: plan } : {}),
     })
     const failed = this.opError
     this.opError = null
@@ -2101,13 +2307,25 @@ export class WorkRunner {
     let compare: string | null
     try {
       // 만든 stash나 커밋은 push로 넘어가며 진행 중 작업 기록에 적는다. 뒤 단계가 실패해도 결과에 남는다 (7-5)
+      // 커밋 안 된 변경 다음은 지식 커밋([PR 생성]에 실을 팀 지식이 있을 때, I73)이고, 그다음이 push다
+      const repoStage = knowledgeStage(e.choice, e.knowledge)
+      const afterPrepare = repoStage ? 'knowledge' : 'push'
       if (e.uncommitted === 'discard') {
         const stash = await stashAll(this.worktree, e.message ?? '', { env })
-        await this.feed({ type: 'delivery.stage', at: this.ctx.at(), stage: 'push', stash })
+        await this.feed({ type: 'delivery.stage', at: this.ctx.at(), stage: afterPrepare, stash })
       }
       if (e.uncommitted === 'commit') {
         const commit = await commitAll(this.worktree, e.message ?? '', { env })
-        await this.feed({ type: 'delivery.stage', at: this.ctx.at(), stage: 'push', commit })
+        await this.feed({ type: 'delivery.stage', at: this.ctx.at(), stage: afterPrepare, commit })
+      }
+      if (repoStage && e.knowledge) {
+        const knowledgeCommit = await this.kn.commitRepo(e.knowledge)
+        await this.feed({
+          type: 'delivery.stage',
+          at: this.ctx.at(),
+          stage: 'push',
+          ...(knowledgeCommit ? { knowledgeCommit } : {}),
+        })
       }
       await pushBranch(this.worktree, e.branch, 'origin', { env })
       const origin = await remoteUrl(repo, 'origin', { env })
@@ -2166,7 +2384,7 @@ export class WorkRunner {
    * [AI 세션 열기] (7-5): verify 세션을 끝내고, 기록하지 않는 일반 터미널로 Claude Code를 worktree에서 연다.
    * push와 PR은 계속 막혀 있다(deny 규칙). 세션 상한(D18)을 따라 자리가 없으면 대기열에서 기다린다.
    */
-  openCleanup(choice: DeliveryChoice): Promise<CommandResult> {
+  openCleanup(choice: DeliveryChoice, knowledge?: KnowledgeChoices): Promise<CommandResult> {
     return this.enqueue(async () => {
       if (cutOperation(this.work)) return { ok: false, error: OPERATION_BLOCKS }
       const check = await this.verifyCheck()
@@ -2188,6 +2406,7 @@ export class WorkRunner {
         choice,
         uncommitted: 'session',
         check,
+        ...(knowledge ? { choices: knowledge } : {}),
       })
     })
   }
@@ -2437,7 +2656,7 @@ export class WorkRunner {
         uncommitted: lines,
       }
     }
-    return this.deliverNow(c.choice, null)
+    return this.deliverNow(c.choice, null, { choices: this.work.knowledge_choices })
   }
 
   // ---------- 정리 (시나리오 8) ----------
@@ -2703,7 +2922,8 @@ export class WorkRunner {
         const found = await this.lostDelivery(op)
         const r = await this.command({ type: 'operationRetry', at: this.ctx.at(), found })
         if (!r.ok) return r
-        return this.deliverNow(op.choice, null)
+        // 끊긴 전달의 채택 결과를 그대로 쓴다 (I73)
+        return this.deliverNow(op.choice, null, { plan: op.knowledge })
       }
       this.rewindError = null
       this.opError = null
@@ -2860,6 +3080,7 @@ export class WorkRunner {
     if (!task) return null
     const { env } = this.ctx
     const files = await this.files.taskFiles(task)
+    await this.refreshRoundKnowledge(task)
     const check = this.check(task, files)
     // 끝난 task는 그 task가 끝났을 때의 코드까지 본다. 작업 트리는 지금 코드의 마지막 task만 본다.
     // 정리한 Work는 worktree가 없어 메인 체크아웃에서 커밋끼리 비교한다 (시나리오 8)
@@ -2885,19 +3106,22 @@ export class WorkRunner {
         this.work.status === 'active' &&
         currentTask(this.work)?.id === task.id &&
         REVIEWABLE.includes(task.status)
+      const mode =
+        stopped || (current && !approvalStops(this.work, task.node, header))
+          ? 'deliver'
+          : current
+            ? 'stop'
+            : null
       completion = {
         verdicts: verdicts(files[VERIFICATION_FILE] ?? ''),
         diff: clip(workDiff),
-        mode:
-          stopped || (current && !approvalStops(this.work, task.node, header))
-            ? 'deliver'
-            : current
-              ? 'stop'
-              : null,
+        mode,
         stopped,
         buttons: deliveryButtons(this.checks()),
         delivery: deliveryView(this.work.delivery),
         branch: await this.branchInfo(),
+        // 지식 칸은 전달을 고를 때만 있다: 전달 버튼이 고른 것을 함께 보낸다 (I75)
+        knowledge: mode === 'deliver' ? await this.knowledgeReview() : null,
       }
     }
     return {
@@ -2929,6 +3153,7 @@ export class WorkRunner {
         uncommitted,
         live: this.live.has(task.id),
         ...(respond ? { tests: respond.tests, failure: respond.view.failure } : {}),
+        ...(respond ? { knowledge: this.roundKnowledge.get(task.id) ?? null } : {}),
       }),
       lead: stageLead(task.node, files),
       artifacts: Object.entries(files)
@@ -3515,8 +3740,50 @@ export class WorkRunner {
   }
 
   /** [머지 없이 끝내기] (D179). 확인 창은 화면이 띄운다. GitHub의 PR은 건드리지 않는다 */
-  prEnd(): Promise<CommandResult> {
-    return this.enqueue(() => this.command({ type: 'pr.end', at: this.ctx.at() }))
+  prEnd(knowledge?: KnowledgeChoices): Promise<CommandResult> {
+    return this.enqueue(async () => {
+      // PR 대응 task의 후보를 끝낼 때 거른다 (D310 (5), I76)
+      const plan =
+        this.work.pr && !this.work.pr.knowledge_at && this.work.status === 'pr'
+          ? await this.respondPlan(knowledge)
+          : undefined
+      return this.command({
+        type: 'pr.end',
+        at: this.ctx.at(),
+        ...(plan ? { knowledge: plan } : {}),
+      })
+    })
+  }
+
+  /** PR 대응 task의 채택 결과 (I76). PR에 실을 수 없으므로 팀 지식은 공유 대기다 (D308). 후보가 없으면 undefined */
+  private async respondPlan(
+    choices: KnowledgeChoices | undefined,
+  ): Promise<KnowledgePlan | undefined> {
+    const last = respondTasks(this.work).at(-1)
+    if (!last) return undefined
+    return this.knowledgePlan('respond', choices, 'none', last.id)
+  }
+
+  /**
+   * 머지 뒤 정리 창과 [머지 없이 끝내기] 확인 창의 지식 칸 (I76): PR 대응 task의 후보. 이미 걸렀거나 대응 task가 없거나 지식을
+   * 끈 때는 null이다
+   */
+  async respondKnowledge(): Promise<KnowledgeReview | null> {
+    if (!this.knowledgeOn() || !this.work.pr || this.work.pr.knowledge_at) return null
+    if (!respondTasks(this.work).length) return null
+    const { review } = await this.kn.review(await this.candidateTasks('respond'))
+    // PR 대응의 후보 칸은 이 Work의 후보만 보인다: 함께 실릴 공유 대기와 재확인은 다음 [PR 생성]이 다룬다
+    return { ...review, pending: [], stale: [] }
+  }
+
+  /** 머지 뒤 정리 창을 닫았다: 고른 대로 PR 대응 task의 후보를 앱 저장소에 쓴다 (I76) */
+  fileKnowledge(choices: KnowledgeChoices | undefined): Promise<CommandResult> {
+    return this.enqueue(async () => {
+      if (!this.work.pr?.merged || this.work.pr.knowledge_at) return { ok: true }
+      const plan = await this.respondPlan(choices)
+      if (!plan) return { ok: true }
+      return this.command({ type: 'knowledge.filed', at: this.ctx.at(), plan })
+    })
   }
 
   /** 머지 뒤 정리 창을 열었다 (D178, D200) */
@@ -3715,6 +3982,8 @@ export class WorkRunner {
       await this.ensureOpen(pr.number, location)
       await this.planReplies(op, e.resume === true)
       if (op.stage === 'push') {
+        // PR에 실린 지식의 해시를 이 head로 다시 적고 공유 대기 사본을 맞춘다 (D323, I73, I79)
+        if (this.knowledgeOn()) await this.kn.beforeRespondPush()
         const pushed = await this.respondPush(op)
         if (!pushed) {
           const check = (await this.checkNow(op.task_id)) ?? null

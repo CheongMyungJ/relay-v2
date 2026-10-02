@@ -542,6 +542,14 @@ export interface PrMergeFailed extends WorkEvent {
 /** [머지 없이 끝내기] (D179). GitHub의 PR은 건드리지 않는다 */
 export interface PrEnd extends WorkEvent {
   type: 'pr.end'
+  /** PR 대응 task의 지식 거르기 결과 (I76). 앱 저장소에 쓴다 */
+  knowledge?: KnowledgePlan
+}
+
+/** 머지 뒤 정리 창에서 PR 대응 task의 지식 후보를 걸렀다 (I76). 창을 어느 버튼으로 닫든 한 번 쓴다 */
+export interface KnowledgeFiled extends WorkEvent {
+  type: 'knowledge.filed'
+  plan: KnowledgePlan
 }
 
 /** 머지 뒤 [Work 정리] 창을 열었다 (D178, D200). 다시 열지 않는다 */
@@ -659,6 +667,7 @@ export type MachineEvent =
   | PrMergeSucceeded
   | PrMergeFailed
   | PrEnd
+  | KnowledgeFiled
   | PrCleanOffered
   | PrRespond
   | PrAutoPaused
@@ -1187,6 +1196,7 @@ const BLOCKED_BY_OPERATION: readonly MachineEvent['type'][] = [
   'clean',
   'pr.merge',
   'pr.end',
+  'knowledge.filed',
   'pr.respond',
   'pr.checksRerun',
 ]
@@ -1267,6 +1277,8 @@ function dispatch(work: WorkState, event: MachineEvent, config: AppConfig): Tran
       return prMergeFailed(work)
     case 'pr.end':
       return prEnd(work, event)
+    case 'knowledge.filed':
+      return knowledgeFiled(work, event)
     case 'pr.cleanOffered':
       return prCleanOffered(work, event)
     case 'pr.respond':
@@ -1319,6 +1331,7 @@ type TaskMachineEvent = Exclude<
   | PrMergeSucceeded
   | PrMergeFailed
   | PrEnd
+  | KnowledgeFiled
   | PrCleanOffered
   | PrRespond
   | PrAutoPaused
@@ -2859,15 +2872,36 @@ function prEnd(work: WorkState, e: PrEnd): Transition {
   if (task && isRespondPending(task) && (task.session?.alive || task.status === 'queued')) {
     return unchanged(work, 'PR 대응 task가 돌고 있음: 먼저 [즉시 중단]하세요')
   }
+  const filed = e.knowledge && !pr.knowledge_at ? e.knowledge : null
   const next: WorkState = {
     ...work,
     status: 'completed',
     completed_at: e.at,
-    pr: { ...pr, ended_at: e.at },
+    pr: { ...pr, ended_at: e.at, ...(filed ? { knowledge_at: e.at } : {}) },
   }
   return {
     work: next,
-    effects: [log(next, e.at, 'work.completed', { delivery: 'pr', merged: false })],
+    effects: [
+      log(next, e.at, 'work.completed', {
+        delivery: 'pr',
+        merged: false,
+        ...(filed ? { knowledge: { ...filed.counts } } : {}),
+      }),
+      ...(filed ? [{ type: 'storeKnowledge' as const, plan: filed, carried: null }] : []),
+    ],
+  }
+}
+
+/**
+ * 머지 뒤 정리 창의 지식 거르기 (I76, D284). PR 진행이 머지로 끝난 Work에서 한 번만 받는다. 고른 대로 앱 저장소에 쓴다:
+ * PR이 이미 머지되어 그 PR에 실을 수 없으므로 팀 지식은 공유 대기다 (D308)
+ */
+function knowledgeFiled(work: WorkState, e: KnowledgeFiled): Transition {
+  const pr = work.pr
+  if (!pr?.merged || pr.knowledge_at) return unchanged(work, '거를 PR 대응 후보가 없음')
+  return {
+    work: { ...work, pr: { ...pr, knowledge_at: e.at } },
+    effects: [{ type: 'storeKnowledge', plan: e.plan, carried: null }],
   }
 }
 

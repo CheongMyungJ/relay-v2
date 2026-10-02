@@ -5,10 +5,13 @@ import { stringify } from 'yaml'
 import type { AnyHandoff, TaskNode } from '../shared/contracts'
 import {
   KNOWLEDGE_KIND_LABEL,
-  SUBKIND_KIND,
-  type CandidateChoice,
   type CandidateEdit,
-  type EntryChoice,
+  candidateChoice,
+  candidateProblem,
+  editedCandidate,
+  entryChoice,
+  normalizePath,
+  pendingAction,
   type KnowledgeCandidateView,
   type KnowledgeChoices,
   type KnowledgeEntry,
@@ -19,9 +22,19 @@ import {
   type KnowledgeReview,
   type KnowledgeScope,
   type KnowledgeSource,
-  type PendingAction,
 } from '../shared/knowledge'
 import type { FormatIssue, TaskRecord, WorkState } from '../shared/work'
+
+export {
+  candidateChoice,
+  candidateProblem,
+  defaultCandidateChoice,
+  editedCandidate,
+  entryChoice,
+  normalizePath,
+  pendingAction,
+  planLine,
+} from '../shared/knowledge'
 import {
   KNOWLEDGE_SECTIONS,
   checkKnowledgeFile,
@@ -184,16 +197,6 @@ export function parseEntry(text: string, file: string): ParsedEntry {
 }
 
 // ---------- 경로와 용어 (D311, I74) ----------
-
-/** 경로를 맞춘다: `\`를 `/`로, 앞의 `./`와 `/`, 끝의 `/`를 뗀다 */
-export function normalizePath(p: string): string {
-  return p
-    .trim()
-    .replace(/\\/g, '/')
-    .replace(/^(?:\.\/)+/, '')
-    .replace(/^\/+/, '')
-    .replace(/\/+$/, '')
-}
 
 /** `파일:심볼`의 파일 (D320 (3)). 심볼이 없으면 그대로다 */
 export function pathFile(p: string): string {
@@ -646,60 +649,6 @@ export function reviewKnowledge(input: ReviewInput): KnowledgeReview {
   }
 }
 
-/** 기본 선택 (D301, D303, D304, D299, D313): 에이전트 후보는 채택, 다듬지 않은 사람 결정은 채택 안 함, supersedes는 대체 */
-export function defaultCandidateChoice(c: KnowledgeCandidateView, share: boolean): CandidateChoice {
-  const replace = c.supersedes && c.supersedes.carriedPr === null ? c.supersedes.id : null
-  return { adopt: !c.unrefined, share: share ? 'team' : 'mine', replace }
-}
-
-/** 고른 것과 기본 선택을 합친 후보 선택 */
-export function candidateChoice(
-  c: KnowledgeCandidateView,
-  choices: KnowledgeChoices | undefined,
-  share: boolean,
-): CandidateChoice {
-  const d = defaultCandidateChoice(c, share)
-  const got = choices?.candidates?.[c.key]
-  if (!got) return d
-  return { ...d, ...got, share: share ? got.share : 'mine' }
-}
-
-export function pendingAction(id: string, choices: KnowledgeChoices | undefined): PendingAction {
-  return choices?.pending?.[id] ?? 'share'
-}
-
-export function entryChoice(
-  group: 'stale' | 'feedback',
-  id: string,
-  choices: KnowledgeChoices | undefined,
-): EntryChoice {
-  return choices?.[group]?.[id] ?? { action: 'leave' }
-}
-
-/** 고친 후보 (I75). 다듬지 않은 사람 결정은 사람이 정한 종류, 용어, 경로를 받는다 */
-export function editedCandidate(c: KnowledgeCandidateView, edit: CandidateEdit | undefined) {
-  const kind = edit?.kind ?? c.kind
-  const subkind = edit?.subkind !== undefined ? edit.subkind : c.subkind
-  return {
-    kind,
-    subkind: subkind && kind && SUBKIND_KIND[subkind] === kind ? subkind : null,
-    rule: (edit?.rule ?? c.rule).trim(),
-    paths: (edit?.paths ?? c.paths).map(normalizePath).filter(Boolean),
-    terms: (edit?.terms ?? c.terms).map((t) => t.trim()).filter(Boolean),
-    why: (edit?.why ?? c.why).trim(),
-  }
-}
-
-/** 채택할 수 있는 후보인가 (D299): 종류, 규칙, 용어 1~5개, 제약은 경로, 구조 사실은 경로 둘 이상. 아니면 까닭 */
-export function candidateProblem(e: ReturnType<typeof editedCandidate>): string | null {
-  if (!e.kind) return '종류를 정해야 함'
-  if (!e.rule) return '규칙이 비어 있음'
-  if (e.terms.length < 1 || e.terms.length > 5) return '용어는 1~5개'
-  if (e.kind === 'constraint' && e.paths.length < 1) return '제약은 경로가 하나 이상 필요함'
-  if (e.kind === 'structure' && e.paths.length < 2) return '구조 사실은 경로가 둘 이상 필요함'
-  return null
-}
-
 // ---------- 채택 결과 (D287~D289, D302, D308, D310, D320, D322, I73) ----------
 
 /** 거르기를 끝낸 Work의 전달 (I73): [완료만](none), [push], [PR 생성](pr). 머지 뒤 정리 창과 [머지 없이 끝내기]는 none이다 */
@@ -897,31 +846,6 @@ export function planEmpty(plan: KnowledgePlan): boolean {
   )
 }
 
-/** 전달 버튼 줄의 한 줄 (I75). 쓸 것이 없으면 null */
-export function planLine(
-  review: KnowledgeReview,
-  choices: KnowledgeChoices | undefined,
-): string | null {
-  const team = review.candidates.filter((c) => {
-    const ch = candidateChoice(c, choices, review.share)
-    return ch.adopt && ch.share === 'team' && !candidateProblem(editedCandidate(c, ch.edit))
-  }).length
-  const mine = review.candidates.filter((c) => {
-    const ch = candidateChoice(c, choices, review.share)
-    return ch.adopt && ch.share === 'mine' && !candidateProblem(editedCandidate(c, ch.edit))
-  }).length
-  const shipped = review.pending.filter((p) => pendingAction(p.id, choices) === 'share').length
-  const parts: string[] = []
-  if (review.share && team + shipped > 0) {
-    const what = [team ? `팀 지식 ${team}건` : '', shipped ? `공유 대기 ${shipped}건` : '']
-      .filter(Boolean)
-      .join('과 ')
-    parts.push(`${what}은 [PR 생성]이면 PR에 함께 실리고, [완료만]·[push]면 공유 대기로 남음`)
-  }
-  if (mine) parts.push(`나만 ${mine}건은 앱 저장소에만 둠`)
-  return parts.length ? parts.join('. ') : null
-}
-
 /** 채택 결과의 수 (I73): 전달 결과와 승인 기록에 남긴다 */
 export function planCounts(plan: KnowledgePlan): { team: number; mine: number; pending: number } {
   return plan.counts
@@ -978,3 +902,79 @@ export function entryIdOf(file: string): string {
 }
 
 export type { KnowledgeScope }
+
+// ---------- 렌더러가 보낸 값 (I14) ----------
+
+const isObject = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v)
+
+const KINDS: readonly string[] = [
+  'domain',
+  'recipe',
+  'failure',
+  'constraint',
+  'decision',
+  'structure',
+]
+const SUBKINDS: readonly string[] = ['compat', 'non_goal', 'term']
+
+const strings = (v: unknown): string[] | undefined =>
+  Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : undefined
+
+/** 고친 값을 읽는다. 틀린 키는 버린다 */
+export function readEdit(v: unknown): CandidateEdit | undefined {
+  if (!isObject(v)) return undefined
+  const out: CandidateEdit = {}
+  if (typeof v['kind'] === 'string' && KINDS.includes(v['kind'])) {
+    out.kind = v['kind'] as KnowledgeKind
+  }
+  if (v['subkind'] === null) out.subkind = null
+  else if (typeof v['subkind'] === 'string' && SUBKINDS.includes(v['subkind'])) {
+    out.subkind = v['subkind'] as NonNullable<CandidateEdit['subkind']>
+  }
+  for (const k of ['rule', 'why'] as const) if (typeof v[k] === 'string') out[k] = v[k]
+  const paths = strings(v['paths'])
+  if (paths) out.paths = paths
+  const terms = strings(v['terms'])
+  if (terms) out.terms = terms
+  return out
+}
+
+/** 거르기의 선택을 읽는다 (I75). 렌더러가 보낸 값이라 모양을 확인하고 틀린 항목은 버린다(기본 선택이 됨, D303) */
+export function readChoices(v: unknown): KnowledgeChoices | undefined {
+  if (!isObject(v)) return undefined
+  const out: KnowledgeChoices = {}
+  if (isObject(v['candidates'])) {
+    out.candidates = {}
+    for (const [key, c] of Object.entries(v['candidates'])) {
+      if (!isObject(c) || typeof c['adopt'] !== 'boolean') continue
+      const edit = readEdit(c['edit'])
+      out.candidates[key] = {
+        adopt: c['adopt'],
+        share: c['share'] === 'mine' ? 'mine' : 'team',
+        replace: typeof c['replace'] === 'string' ? c['replace'] : null,
+        ...(edit ? { edit } : {}),
+      }
+    }
+  }
+  if (isObject(v['pending'])) {
+    out.pending = {}
+    for (const [id, a] of Object.entries(v['pending'])) {
+      if (a === 'share' || a === 'hold' || a === 'mine' || a === 'drop') out.pending[id] = a
+    }
+  }
+  for (const group of ['stale', 'feedback'] as const) {
+    const g = v[group]
+    if (!isObject(g)) continue
+    const m: Record<string, { action: 'leave' | 'confirm' | 'replace' | 'drop'; rule?: string }> =
+      {}
+    for (const [id, c] of Object.entries(g)) {
+      if (!isObject(c)) continue
+      const a = c['action']
+      if (a !== 'leave' && a !== 'confirm' && a !== 'replace' && a !== 'drop') continue
+      m[id] = { action: a, ...(typeof c['rule'] === 'string' ? { rule: c['rule'] } : {}) }
+    }
+    out[group] = m
+  }
+  return out
+}

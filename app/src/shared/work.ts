@@ -526,6 +526,10 @@ export interface PullRequestRecord {
   /** 머지 뒤 [Work 정리] 창을 연 때 (D178, D200). 머지했는데 없으면 사람이 그 Work를 볼 때 연다 */
   clean_offered_at?: string
   /**
+   * PR 대응 task의 지식 후보를 거른 때 (I76): 머지 뒤 정리 창을 닫거나 [머지 없이 끝내기]를 누른 때다. 있으면 다시 묻지 않는다
+   */
+  knowledge_at?: string
+  /**
    * 사람 손 없이 이어진 대응 라운드 수 (D171, D191의 "자동 라운드 수"). 자동 시작할 때 1 더하고, 사람이 [대응 시작]이나
    * 대응 task의 승인을 누르면 0으로 돌린다. 없으면 0이다
    */

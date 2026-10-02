@@ -268,6 +268,8 @@ export interface EmphasisInput {
   tests?: readonly string[]
   /** PR 대응 task: 승인 뒤 실패한 push나 답글 게시 (시나리오 10-6) */
   failure?: { stage: string; error: string } | null
+  /** PR 대응 task가 이번 라운드에 고치거나 지운 지식 파일 (D310 (2), I79) */
+  knowledge?: { changed: readonly string[]; deleted: readonly string[] } | null
   /** 세션이 살아 있다. 아니면 열린 질문의 안내가 [세션 재개]를 먼저 누르라고 한다 (D222). 없으면 살아 있다 */
   live?: boolean
 }
@@ -329,6 +331,18 @@ export function emphasis(input: EmphasisInput): Emphasis[] {
       lines: [
         ...input.tests,
         '이번 라운드가 이미 있던 테스트 파일을 바꾸거나 지웠습니다. 대응 뒤에는 verify를 다시 돌리지 않습니다 (D180).',
+      ],
+    })
+  }
+  const k = input.knowledge
+  if (k && (k.changed.length || k.deleted.length)) {
+    out.push({
+      kind: 'knowledge_files',
+      title: '지식 파일 변경',
+      lines: [
+        ...k.changed.map((f) => `고침: ${f}`),
+        ...k.deleted.map((f) => `지움: ${f}`),
+        '이번 라운드가 PR에 실린 지식 파일을 고치거나 지웠습니다. 승인하면 앱 저장소의 공유 대기 사본도 맞춥니다 (D310).',
       ],
     })
   }
