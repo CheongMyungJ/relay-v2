@@ -330,6 +330,21 @@ describe('넣을 지식 고르기 (D311, D315, I74)', () => {
     expect(selectKnowledge({ node: 'fix', pool: p, paths: [], text })).toEqual([])
   })
 
+  it('intake의 겹치지 않은 도메인 규칙은 용어의 한 낱말이 글에 있는 것이 먼저다 (지식 탐색 K3)', () => {
+    const p = [
+      team('domain-00000001', { terms: ['쿠폰'] }),
+      team('domain-00000002', { terms: ['환불'] }),
+      team('domain-00000009', {
+        terms: ['오류 문구'],
+        rule: '오류 문구에 원인 코드를 보이지 않는다',
+      }),
+    ]
+    const text = '로그인 화면에서 아무 문구도 안 보인다'
+    expect(
+      selectKnowledge({ node: 'intake', pool: p, paths: [], text }).map((s) => s.entry.entry.id),
+    ).toEqual(['domain-00000009', 'domain-00000001', 'domain-00000002'])
+  })
+
   it('대체됨 항목과 다른 단계의 종류는 넣지 않는다', () => {
     const p = [
       team('domain-00000001', { status: 'superseded', superseded_by: 'domain-00000002' }),

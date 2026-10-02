@@ -222,3 +222,55 @@ it.runIf(on)('[탐색] GUI용 RELAY_HOME 준비', async () => {
     JSON.stringify({ root: h.root, home: h.home, repo }),
   )
 })
+
+it.runIf(on)('[탐색] GUI용 RELAY_HOME 준비: 항목이 많은 지식 화면', async () => {
+  const h = await harness({})
+  const kinds = ['domain', 'recipe', 'failure', 'constraint', 'decision', 'structure'] as const
+  const files: Record<string, string> = { ...REPO_FILES }
+  for (let i = 0; i < 40; i++) files[`src/m${i}.js`] = `export const v${i} = ${i}\n`
+  const { repo } = makeRepo(h.root, 'many', files)
+  const team = Array.from({ length: 100 }, (_, i) => {
+    const kind = kinds[i % kinds.length] ?? 'domain'
+    const p = [`src/m${i % 40}.js`, ...(kind === 'structure' ? [`src/m${(i + 1) % 40}.js`] : [])]
+    return entry({
+      id: `${kind}-g${String(i).padStart(7, '0')}`,
+      kind,
+      rule: `모듈 ${i % 40}의 규칙 ${i}: 금액은 원 단위로 버리고 화면에는 쉼표를 찍는다`,
+      paths: p,
+      terms: ['금액', `모듈${i % 40}`],
+      hashes: Object.fromEntries(p.map((x) => [x, git(repo, 'rev-parse', `HEAD:${x}`)])),
+    })
+  })
+  writeFiles(
+    repo,
+    Object.fromEntries(team.map((e) => [`docs/knowledge/${e.kind}/${e.id}.md`, renderEntry(e)])),
+  )
+  git(repo, 'add', '-A')
+  git(repo, 'commit', '-q', '-m', 'team knowledge')
+  // 열두 모듈을 바꿔 그 모듈의 항목을 재확인 필요로
+  for (let i = 0; i < 12; i++) fs.appendFileSync(path.join(repo, `src/m${i}.js`), '// 바뀜\n')
+  git(repo, 'add', '-A')
+  git(repo, 'commit', '-q', '-m', 'change')
+  git(repo, 'push', '-q', 'origin', 'main')
+  const projectId = await register(h, repo)
+  const store = path.join(h.home, 'projects', projectId, 'knowledge')
+  for (let i = 0; i < 30; i++) {
+    const scope = i < 20 ? 'pending' : 'mine'
+    const e = entry({
+      id: `recipe-h${String(i).padStart(7, '0')}`,
+      kind: 'recipe',
+      rule: `시험 실행법 ${i}: npm test로 돌린다`,
+      terms: ['npm test'],
+    })
+    const f = path.join(store, scope, e.kind, `${e.id}.md`)
+    fs.mkdirSync(path.dirname(f), { recursive: true })
+    fs.writeFileSync(f, renderEntry(e))
+  }
+  await h.relay.close()
+  await h.relay.settled()
+  const out = path.join(APP, 'test-results', 'explore')
+  fs.writeFileSync(
+    path.join(out, 'gui-many.txt'),
+    JSON.stringify({ root: h.root, home: h.home, repo }),
+  )
+})

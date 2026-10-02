@@ -364,4 +364,529 @@ const shop: ExploreScenario = {
   ],
 }
 
-export const EXPLORE_SCENARIOS: readonly ExploreScenario[] = [billing, notify, shop]
+// ---------- stats: 질문으로 정한 규칙 → 같은 말의 다음 요청 ----------
+
+const stats: ExploreScenario = {
+  id: 'stats',
+  files: {
+    'package.json': pkg({ test: 'node --test' }),
+    'src/stats.js': [
+      '// 대시보드의 응답 시간 통계 (밀리초)',
+      'export function average(values) {',
+      '  return values.reduce((a, b) => a + b, 0) / values.length',
+      '}',
+      '',
+      'export function median(values) {',
+      '  const s = [...values].sort((a, b) => a - b)',
+      '  const m = Math.floor(s.length / 2)',
+      '  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2',
+      '}',
+      '',
+    ].join('\n'),
+    'test/stats.test.js': [
+      "import { test } from 'node:test'",
+      "import assert from 'node:assert'",
+      "import { average, median } from '../src/stats.js'",
+      "test('평균', () => assert.strictEqual(average([1, 2, 3]), 2))",
+      "test('중앙값', () => assert.strictEqual(median([3, 1, 2]), 2))",
+      '',
+    ].join('\n'),
+  },
+  works: [
+    {
+      name: 'w1-average-empty',
+      request:
+        '대시보드에서 요청이 없던 날의 평균 응답 시간이 NaN으로 보인다. 빈 날을 어떻게 보일지는 정해진 적이 없다. (src/stats.js의 average)\n',
+    },
+    {
+      name: 'w2-median-empty',
+      request:
+        '같은 대시보드에서 요청이 없던 날의 응답 시간 중앙값도 이상하게 나온다. (src/stats.js의 median)\n',
+    },
+  ],
+}
+
+// ---------- mailer: 원인이 둘인 중복 발송 → 같은 모양의 다른 코드 ----------
+
+const MAIL_UTIL = [
+  '// 제한 시간 안에 끝나지 않으면 "timeout"을 돌려준다. 늦게 끝난 호출도 실제로는 메일을 보낸다',
+  'export function withTimeout(p, ms) {',
+  "  return Promise.race([p, new Promise((r) => setTimeout(() => r('timeout'), ms))])",
+  '}',
+  '',
+].join('\n')
+
+const mailer: ExploreScenario = {
+  id: 'mailer',
+  files: {
+    'package.json': pkg({ test: 'node --test' }),
+    'src/timeout.js': MAIL_UTIL,
+    'src/paid-mail.js': [
+      "import { withTimeout } from './timeout.js'",
+      '',
+      '// 결제 완료 메일. 웹훅이 같은 주문을 다시 보내면 receivedAt만 다르다',
+      'export async function notifyPaid(order, deps) {',
+      '  const key = `${order.id}:${order.receivedAt}`',
+      "  if (deps.sent.has(key)) return 'skip'",
+      '  for (let i = 0; i < 2; i++) {',
+      '    const r = await withTimeout(deps.mail(order), deps.timeoutMs)',
+      "    if (r === 'timeout') continue",
+      '    deps.sent.add(key)',
+      "    return 'sent'",
+      '  }',
+      "  return 'failed'",
+      '}',
+      '',
+    ].join('\n'),
+    'src/digest.js': [
+      "import { withTimeout } from './timeout.js'",
+      '',
+      '// 일일 요약 메일. run은 실행마다 새 id를 가진다',
+      'export async function sendDigest(user, day, run, deps) {',
+      '  const key = `${user.id}:${day}:${run.id}`',
+      "  if (deps.sent.has(key)) return 'skip'",
+      '  for (let i = 0; i < 2; i++) {',
+      '    const r = await withTimeout(deps.mail(user), deps.timeoutMs)',
+      "    if (r === 'timeout') continue",
+      '    deps.sent.add(key)',
+      "    return 'sent'",
+      '  }',
+      "  return 'failed'",
+      '}',
+      '',
+    ].join('\n'),
+    'test/paid-mail.test.js': [
+      "import { test } from 'node:test'",
+      "import assert from 'node:assert'",
+      "import { notifyPaid } from '../src/paid-mail.js'",
+      "test('한 번 보냄', async () => {",
+      '  let n = 0',
+      '  const deps = { sent: new Set(), timeoutMs: 50, mail: async () => { n++ } }',
+      "  assert.strictEqual(await notifyPaid({ id: 1, receivedAt: 't1' }, deps), 'sent')",
+      '  assert.strictEqual(n, 1)',
+      '})',
+      '',
+    ].join('\n'),
+  },
+  works: [
+    {
+      name: 'w1-paid-mail-twice',
+      request:
+        '결제 완료 메일이 가끔 같은 주문으로 두 번 간다는 문의가 있다. 로그를 보면 주문 id가 같다. (src/paid-mail.js)\n',
+    },
+    {
+      name: 'w2-digest-twice',
+      request: '일일 요약 메일을 같은 날 두 번 받았다는 사람이 있다. (src/digest.js)\n',
+    },
+  ],
+}
+
+// ---------- ledger: 증상(보고서)과 원인(금액 해석)이 다른 모듈 → 같은 원인의 다른 증상 ----------
+
+const ledger: ExploreScenario = {
+  id: 'ledger',
+  files: {
+    'package.json': pkg({ test: 'node --test' }),
+    'src/parse.js': [
+      '// CSV에서 읽은 금액 글자("1,234원")를 숫자로',
+      'export function parseAmount(text) {',
+      "  return parseFloat(String(text).replace('원', ''))",
+      '}',
+      '',
+    ].join('\n'),
+    'src/report.js': [
+      "import { parseAmount } from './parse.js'",
+      '',
+      '// 월간 보고서 합계. rows는 CSV 줄 { amount: "1,234원" }',
+      'export function monthlyTotal(rows) {',
+      '  return rows.reduce((s, r) => s + parseAmount(r.amount), 0)',
+      '}',
+      '',
+    ].join('\n'),
+    'src/list.js': [
+      "import { parseAmount } from './parse.js'",
+      '',
+      '// 주문 목록 화면의 금액 표시',
+      'export function listRows(rows) {',
+      "  return rows.map((r) => `${r.name} ${parseAmount(r.amount).toLocaleString('ko-KR')}원`)",
+      '}',
+      '',
+    ].join('\n'),
+    'test/report.test.js': [
+      "import { test } from 'node:test'",
+      "import assert from 'node:assert'",
+      "import { monthlyTotal } from '../src/report.js'",
+      "test('작은 금액', () => assert.strictEqual(monthlyTotal([{ amount: '500원' }, { amount: '300원' }]), 800))",
+      '',
+    ].join('\n'),
+  },
+  works: [
+    {
+      name: 'w1-report-total',
+      request: '월간 보고서 합계가 실제보다 훨씬 작게 나온다. (src/report.js)\n',
+    },
+    {
+      name: 'w2-list-amount',
+      request: '주문 목록 화면에서 12,000원짜리 주문이 12원으로 보인다. (src/list.js)\n',
+    },
+  ],
+}
+
+// ---------- mobile-api: 외부 호환(모바일 앱이 금액을 문자열로 파싱) → 같은 응답의 버그 ----------
+
+const mobileApi: ExploreScenario = {
+  id: 'mobileapi',
+  files: {
+    'package.json': pkg({ test: 'node --test' }),
+    'src/api/order.js': [
+      '// 주문 API 응답. 모바일 앱이 이 모양을 그대로 읽는다',
+      'export function toResponse(order) {',
+      '  const total = order.items.reduce((s, i) => s + i.price * i.qty, 0) * (1 - order.discountRate)',
+      '  return { order_id: String(order.id), total: String(total), item_count: String(order.items.length) }',
+      '}',
+      '',
+    ].join('\n'),
+    'test/order.test.js': [
+      "import { test } from 'node:test'",
+      "import assert from 'node:assert'",
+      "import { toResponse } from '../src/api/order.js'",
+      "test('응답', () => assert.deepStrictEqual(toResponse({ id: 7, discountRate: 0, items: [{ price: 1000, qty: 2 }] }), { order_id: '7', total: '2000', item_count: '1' }))",
+      '',
+    ].join('\n'),
+  },
+  works: [
+    {
+      name: 'w1-add-shipping',
+      type: 'feature',
+      request: [
+        '주문 API 응답에 배송비(shipping_fee)를 추가해 주세요. 주문의 shippingFee 값이다.',
+        '모바일 앱(구버전 포함)이 응답의 숫자 필드를 문자열로 받아 파싱하므로 지금 응답 형식을 지켜야 합니다.',
+        '',
+      ].join('\n'),
+    },
+    {
+      name: 'w2-total-decimal',
+      request:
+        '할인 주문에서 주문 API의 total이 "1999.9999999999998"처럼 나온다. 원 단위로 나와야 한다.\n',
+    },
+  ],
+}
+
+// ---------- flaky: 사람이 알려 준 금지 규칙(덮지 않기) → 다른 가끔 실패 ----------
+
+const flaky: ExploreScenario = {
+  id: 'flaky',
+  files: {
+    'package.json': pkg({ test: 'node --test' }),
+    'src/export.js': [
+      "import fs from 'node:fs'",
+      "import os from 'node:os'",
+      "import path from 'node:path'",
+      '',
+      '// 보고서를 임시 파일에 쓰고 제 이름으로 옮긴다',
+      'export function saveReport(dir, name, text) {',
+      '  const tmp = path.join(os.tmpdir(), `report-${Date.now()}.tmp`)',
+      '  fs.writeFileSync(tmp, text)',
+      '  fs.renameSync(tmp, path.join(dir, name))',
+      '}',
+      '',
+    ].join('\n'),
+    'src/counter.js': [
+      '// 작업 번호. 모듈 전역',
+      'let next = 1',
+      'export function nextJobId() {',
+      '  return next++',
+      '}',
+      '',
+    ].join('\n'),
+    'test/export.test.js': [
+      "import { test } from 'node:test'",
+      "import assert from 'node:assert'",
+      "import fs from 'node:fs'",
+      "import os from 'node:os'",
+      "import path from 'node:path'",
+      "import { saveReport } from '../src/export.js'",
+      "const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rep-'))",
+      "test('여럿을 함께 저장', { concurrency: true }, async (t) => {",
+      '  await Promise.all([1, 2, 3].map((i) => t.test(`r${i}`, () => {',
+      '    saveReport(dir, `r${i}.txt`, `내용 ${i}`)',
+      '    assert.strictEqual(fs.readFileSync(path.join(dir, `r${i}.txt`), "utf8"), `내용 ${i}`)',
+      '  })))',
+      '})',
+      '',
+    ].join('\n'),
+    'test/counter.test.js': [
+      "import { test } from 'node:test'",
+      "import assert from 'node:assert'",
+      "import { nextJobId } from '../src/counter.js'",
+      "test('첫 번호는 1', () => assert.strictEqual(nextJobId(), 1))",
+      "test('다음 번호는 2', () => assert.strictEqual(nextJobId(), 2))",
+      '',
+    ].join('\n'),
+  },
+  works: [
+    {
+      name: 'w1-export-flaky',
+      request: [
+        'CI에서 test/export.test.js가 가끔 실패한다(내용이 다른 보고서의 것으로 바뀜).',
+        '팀 규칙: 가끔 실패하는 시험을 재시도, skip, 시간 늘리기로 덮지 않는다. 원인을 고친다.',
+        '',
+      ].join('\n'),
+    },
+    {
+      name: 'w2-counter-flaky',
+      request: 'test/counter.test.js가 시험 순서를 섞어 돌리면 가끔 실패한다고 한다.\n',
+    },
+  ],
+}
+
+// ---------- typo: 후보가 없어야 할 작은 Work 둘 ----------
+
+const typo: ExploreScenario = {
+  id: 'typo',
+  files: {
+    'package.json': pkg({ test: 'node --test' }),
+    'src/messages.js': [
+      'export const MESSAGES = {',
+      "  invalidEmail: '이메일 형식이 올바르지 않습니다. (Invaild email)',",
+      "  required: '필수 항목입니다.',",
+      "  tooLong: '너무 깁니다. 최대 {max}자 입니다.',",
+      '}',
+      '',
+    ].join('\n'),
+    'test/messages.test.js': [
+      "import { test } from 'node:test'",
+      "import assert from 'node:assert'",
+      "import { MESSAGES } from '../src/messages.js'",
+      "test('있음', () => assert.ok(MESSAGES.required))",
+      '',
+    ].join('\n'),
+  },
+  works: [
+    { name: 'w1-typo', request: "src/messages.js의 'Invaild email' 오타를 고쳐 주세요.\n" },
+    {
+      name: 'w2-spacing',
+      request: "src/messages.js의 '최대 {max}자 입니다'를 '최대 {max}자입니다'로 붙여 써 주세요.\n",
+    },
+  ],
+}
+
+// ---------- rates: 설계에서 기각한 대안(오래된 환율) → 기각한 안이 끌리는 다음 기능 ----------
+
+const rates: ExploreScenario = {
+  id: 'rates',
+  files: {
+    'package.json': pkg({ test: 'node --test' }),
+    'src/rates.js': [
+      '// 환율. fetchRate(currency)는 외부 API를 부른다(느리고 호출마다 요금이 나간다)',
+      'export function createRates(fetchRate) {',
+      '  return {',
+      '    async get(currency) {',
+      '      return fetchRate(currency)',
+      '    },',
+      '  }',
+      '}',
+      '',
+    ].join('\n'),
+    'test/rates.test.js': [
+      "import { test } from 'node:test'",
+      "import assert from 'node:assert'",
+      "import { createRates } from '../src/rates.js'",
+      "test('조회', async () => assert.strictEqual(await createRates(async () => 1300).get('USD'), 1300))",
+      '',
+    ].join('\n'),
+  },
+  works: [
+    {
+      name: 'w1-rates-fast',
+      type: 'feature',
+      request: [
+        '결제 화면에서 환율 조회가 느리다. 같은 통화를 연달아 조회할 때 빨라지게 해 주세요.',
+        '환율은 결제 금액에 쓰이므로 1분이 넘은 값을 쓰면 안 됩니다(재무팀 규칙).',
+        '',
+      ].join('\n'),
+    },
+    {
+      name: 'w2-rates-cost',
+      type: 'feature',
+      request: '환율 API 요금이 너무 많이 나온다. 호출 수를 크게 줄여 주세요.\n',
+    },
+  ],
+}
+
+// ---------- noisy: 짧은 용어와 관계없는 도메인 규칙이 많은 저장소 ----------
+
+const noisy: ExploreScenario = {
+  id: 'noisy',
+  files: {
+    'package.json': pkg({ test: 'node --test' }),
+    'src/login.js': [
+      '// 로그인 화면의 오류 문구',
+      'export function loginError(code) {',
+      "  if (code === 'WRONG_PASSWORD') return ''",
+      "  if (code === 'LOCKED') return '계정이 잠겼습니다.'",
+      "  return '알 수 없는 오류'",
+      '}',
+      '',
+    ].join('\n'),
+    'src/log.js': 'export const log = (msg) => console.log(new Date().toISOString(), msg)\n',
+    'test/login.test.js': [
+      "import { test } from 'node:test'",
+      "import assert from 'node:assert'",
+      "import { loginError } from '../src/login.js'",
+      "test('잠김', () => assert.strictEqual(loginError('LOCKED'), '계정이 잠겼습니다.'))",
+      '',
+    ].join('\n'),
+  },
+  seed: {
+    team: [
+      entry({
+        id: 'constraint-n0000001',
+        kind: 'constraint',
+        rule: '로그는 한 줄 JSON으로 남긴다(수집기가 줄 단위로 파싱)',
+        paths: ['src/log.js'],
+        terms: ['로그'],
+      }),
+      entry({
+        id: 'domain-n0000002',
+        kind: 'domain',
+        rule: '시간은 서버에서 UTC로 저장하고 화면에서만 KST로 보인다',
+        terms: ['시간'],
+      }),
+      entry({
+        id: 'domain-n0000003',
+        kind: 'domain',
+        rule: '회원 id는 숫자가 아니라 문자열이다(외부 제휴 id 포함)',
+        terms: ['id'],
+      }),
+      entry({
+        id: 'domain-n0000004',
+        kind: 'domain',
+        rule: '환불은 결제 후 7일 안에만 된다',
+        terms: ['환불'],
+      }),
+      entry({
+        id: 'domain-n0000005',
+        kind: 'domain',
+        rule: '쿠폰은 한 주문에 하나만 쓴다',
+        terms: ['쿠폰'],
+      }),
+      entry({
+        id: 'domain-n0000006',
+        kind: 'domain',
+        rule: '배송비는 3만 원 이상이면 무료다',
+        terms: ['배송비'],
+      }),
+      entry({
+        id: 'domain-n0000007',
+        kind: 'domain',
+        rule: '탈퇴한 회원의 주문 기록은 5년 보관한다',
+        terms: ['탈퇴'],
+      }),
+      entry({
+        id: 'domain-n0000008',
+        kind: 'domain',
+        rule: '포인트는 결제 금액의 1%이고 원 단위 버림이다',
+        terms: ['포인트'],
+      }),
+      entry({
+        id: 'domain-n0000009',
+        kind: 'domain',
+        rule: '비밀번호 오류가 5번이면 계정을 30분 잠근다',
+        terms: ['비밀번호', '잠금'],
+      }),
+      entry({
+        id: 'domain-n0000010',
+        kind: 'domain',
+        rule: '오류 문구에는 원인 코드를 사용자에게 보이지 않는다(보안팀)',
+        terms: ['오류 문구', '에러 메시지'],
+      }),
+    ],
+  },
+  works: [
+    {
+      name: 'w1-login-message',
+      request: '로그인 화면에서 비밀번호가 틀렸을 때 아무 문구도 안 보인다. (src/login.js)\n',
+    },
+  ],
+}
+
+// ---------- plugin: 리팩터링이 지켜야 할 팀 지식(외부 플러그인이 import) ----------
+
+const plugin: ExploreScenario = {
+  id: 'plugin',
+  files: {
+    'package.json': pkg({ test: 'node --test' }),
+    'src/utils.js': [
+      '// 여러 곳에서 쓰는 도구 모음',
+      'export function formatDate(d) {',
+      '  return d.toISOString().slice(0, 10)',
+      '}',
+      '',
+      'export function addDays(d, n) {',
+      '  return new Date(d.getTime() + n * 86400000)',
+      '}',
+      '',
+      'export function slug(s) {',
+      "  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-')",
+      '}',
+      '',
+      'export function clamp(x, lo, hi) {',
+      '  return Math.min(hi, Math.max(lo, x))',
+      '}',
+      '',
+    ].join('\n'),
+    'test/utils.test.js': [
+      "import { test } from 'node:test'",
+      "import assert from 'node:assert'",
+      "import { formatDate, slug } from '../src/utils.js'",
+      "test('날짜', () => assert.strictEqual(formatDate(new Date('2026-01-02T00:00:00Z')), '2026-01-02'))",
+      "test('slug', () => assert.strictEqual(slug('A B'), 'a-b'))",
+      '',
+    ].join('\n'),
+  },
+  seed: {
+    team: [
+      entry({
+        id: 'constraint-p0000001',
+        kind: 'constraint',
+        subkind: 'compat',
+        rule: 'src/utils.js의 formatDate와 addDays는 외부 플러그인이 이 경로에서 import한다. 옮기면 utils.js에서 다시 export한다',
+        paths: ['src/utils.js'],
+        terms: ['utils', '플러그인', '날짜'],
+      }),
+      entry({
+        id: 'decision-p0000002',
+        kind: 'decision',
+        subkind: 'non_goal',
+        rule: '날짜 계산에 외부 라이브러리(dayjs 등)를 들이지 않는다',
+        paths: ['src/utils.js'],
+        terms: ['날짜', '라이브러리'],
+        why: '번들 크기',
+      }),
+    ],
+  },
+  works: [
+    {
+      name: 'w1-split-date',
+      type: 'refactor',
+      request:
+        'src/utils.js가 커졌다. 날짜 함수들(formatDate, addDays)을 src/date.js로 나눠 주세요. 동작은 그대로.\n',
+    },
+  ],
+}
+
+export const EXPLORE_SCENARIOS: readonly ExploreScenario[] = [
+  billing,
+  notify,
+  shop,
+  stats,
+  mailer,
+  ledger,
+  mobileApi,
+  flaky,
+  typo,
+  rates,
+  noisy,
+  plugin,
+]

@@ -289,6 +289,15 @@ export function termsMatch(terms: readonly string[], text: string): boolean {
   })
 }
 
+/** 여러 낱말 용어의 낱말(두 글자 이상) 가운데 하나가 글에 들어 있는가. intake의 겹치지 않은 도메인 규칙의 차례에만 쓴다 (지식 탐색 K3) */
+export function termPartsMatch(terms: readonly string[], text: string): boolean {
+  const t = normalizeTerm(text)
+  return terms.some((term) => {
+    const words = normalizeTerm(term).split(' ')
+    return words.length > 1 && words.some((w) => [...w].length >= 2 && t.includes(w))
+  })
+}
+
 /**
  * 글에 적힌 경로 (D315 (1)): 요청과 intent에서 경로처럼 보이는 낱말(슬래시가 있거나 확장자가 있는 것)을 뽑는다. 백틱 안의
  * 것도 같다. 지식 폴더 밖의 레포 경로만 뜻이 있어 여기서는 모양만 본다
@@ -444,8 +453,9 @@ export function selectKnowledge(input: Omit<SelectInput, 'limit' | 'dirs'>): Sel
     if (overlap === 0 && !termHit) {
       // intake는 경로를 거의 모르고 요청은 지식과 다른 말(부가세 ↔ VAT, tax)을 쓰기 쉽다. 도메인 규칙은 겹치지 않아도 맨 뒤에
       // 넣어 분량 안에서 에이전트가 고르게 한다. 다시 묻고 다른 답을 받는 것을 막는다 (지식 탐색 K3)
+      // 그 가운데 여러 낱말 용어의 한 낱말이 글에 있는 것("오류 문구"의 "문구")을 먼저 둔다
       if (input.node === 'intake' && e.kind === 'domain')
-        picked.push({ entry: p, overlap, group: 3 })
+        picked.push({ entry: p, overlap, group: termPartsMatch(e.terms, input.text) ? 3 : 4 })
       continue
     }
     const first = e.kind === 'domain' || (e.kind === 'constraint' && e.subkind === 'compat')

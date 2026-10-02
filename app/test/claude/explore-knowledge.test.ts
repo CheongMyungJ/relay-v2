@@ -39,6 +39,7 @@ import {
 const picked = (process.env['RELAY_EXPLORE'] ?? '').split(/[\s,]+/).filter(Boolean)
 const OUT = path.join(APP, 'test-results', 'explore')
 const TASK_TIMEOUT_MS = 25 * 60 * 1000
+const ID = /\b(?:domain|recipe|failure|constraint|decision|structure)-[0-9a-z]{8}\b/g
 const NUDGE = '스킬의 절차를 계속해 주세요. 마치면 종료 절차대로 handoff를 쓰고 턴을 끝내 주세요.'
 
 const KEEP = [
@@ -162,6 +163,10 @@ interface TaskLog {
   status: string
   /** context.md의 `참고 지식` */
   knowledge: string | null
+  /** 넣은 지식 id 가운데 이 task의 산출물(handoff, 산출물, intake면 intent)에 적힌 것 */
+  cited: string[]
+  /** 질문에 답한 횟수 (사람 역할이 첫 선택지로 답함) */
+  answers: number
   candidates: unknown[]
   feedback: unknown[]
   decisions: unknown[]
@@ -206,6 +211,11 @@ async function runWork(
   })
   let review: KnowledgeReview | null = null
   const defaults: WorkLog['defaults'] = []
+  const answers = new Map<string, number>()
+  const count = (r: { tasks: { taskId: string; answers: number }[] }) => {
+    for (const t of r.tasks) answers.set(t.taskId, (answers.get(t.taskId) ?? 0) + t.answers)
+  }
+  count(first)
   let status = first.status as string
   let reason = first.reason
   let ms = first.ms
@@ -237,6 +247,7 @@ async function runWork(
       reason = `verify 승인 실패: ${JSON.stringify(ok)}`
     } else {
       const rest = await drive(h.relay, ui, key, common)
+      count(rest)
       status = rest.status
       reason = rest.reason
       ms += rest.ms
@@ -248,11 +259,26 @@ async function runWork(
   for (const t of work.tasks) {
     const dir = path.join(workDir, 'tasks', taskDirName(t))
     const ctx = path.join(dir, 'context.md')
+    const knowledge = fs.existsSync(ctx)
+      ? sectionText(fs.readFileSync(ctx, 'utf8'), '참고 지식')
+      : null
+    const injected = [...new Set((knowledge ?? '').match(ID) ?? [])]
+    const outputs = [
+      ...fs
+        .readdirSync(dir)
+        .filter((f) => f.endsWith('.md') && f !== 'context.md')
+        .map((f) => fs.readFileSync(path.join(dir, f), 'utf8')),
+      ...(t.node === 'intake' && fs.existsSync(path.join(workDir, 'intent.md'))
+        ? [fs.readFileSync(path.join(workDir, 'intent.md'), 'utf8')]
+        : []),
+    ].join('\n')
     const log: TaskLog = {
       id: t.id,
       node: t.node,
       status: t.status,
-      knowledge: fs.existsSync(ctx) ? sectionText(fs.readFileSync(ctx, 'utf8'), '참고 지식') : null,
+      knowledge,
+      cited: injected.filter((id) => outputs.includes(id)),
+      answers: answers.get(t.id) ?? 0,
       candidates: [],
       feedback: [],
       decisions: [],
@@ -292,7 +318,7 @@ async function runWork(
 }
 
 async function runScenario(s: ExploreScenario): Promise<void> {
-  const outDir = path.join(OUT, s.id)
+  const outDir = path.join(OUT, `${s.id}${process.env['RELAY_EXPLORE_TAG'] ?? ''}`)
   fs.rmSync(outDir, { recursive: true, force: true })
   fs.mkdirSync(outDir, { recursive: true })
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'relay-explore-'))
@@ -300,6 +326,7 @@ async function runScenario(s: ExploreScenario): Promise<void> {
   const h = await harness({
     ui,
     claudeBin: wrapper(tmp),
+    ...(process.env['RELAY_EXPLORE_SKILLS'] ? { skills: process.env['RELAY_EXPLORE_SKILLS'] } : {}),
     ...(s.config ? { config: s.config } : {}),
   })
   const logs: WorkLog[] = []

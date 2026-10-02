@@ -132,7 +132,7 @@ If the app sends back a format error: fix the file it names and fill in missing 
 
 The app keeps knowledge for the next Works of this repo. You write candidates. The human filters them when the Work completes. Do not write knowledge files yourself: the knowledge folder and the app's knowledge store are not yours to edit (pr-respond is the exception, see its skill).
 
-Candidates (`knowledge_candidates`). Up to about 3 per task, and none when nothing qualifies. Only what the next Work cannot get from the code:
+Candidates (`knowledge_candidates`). Aim for about 3 per task. Only what the next Work cannot get from the code:
 
 | `kind` | What | Required |
 |---|---|---|
