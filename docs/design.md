@@ -983,7 +983,15 @@ intent_deviation: null
 risks:
   - "같은 비교 함수를 쓰는 refresh 경로도 영향 가능"
 recommended_next: null
-knowledge_candidates: []
+knowledge_candidates:
+  - kind: failure
+    rule: "만료 비교는 시각 문자열이 아니라 epoch 초로 한다"
+    paths: ["src/auth/token.ts:isExpired"]
+    terms: ["토큰 만료", "타임존"]
+    why: "문자열 비교는 서버 TZ에 따라 9시간 어긋남"
+    not_in_code: "UTC 서버에서는 재현되지 않아 테스트가 통과함"
+    incentive: "새 만료 검사를 `toLocaleString` 비교로 다시 쓴다"
+knowledge_feedback: []
 ---
 ## 요약
 만료 판정이 로컬 시각 문자열 비교라 KST에서 9시간 일찍 만료된다.
@@ -1003,7 +1011,8 @@ knowledge_candidates: []
 | `intent_deviation` | ✅ | 의도와 어긋나는 사실을 발견하면 `{summary, evidence}`, 없으면 null | 있으면 자동 승인 안 함, 승인 화면에서 강조 |
 | `risks` | ✅ | 남은 위험 | 승인 화면 |
 | `recommended_next` | ✅ | 기본 다음 단계로 가면 null. 다른 단계를 권하면 `{node, reason}` (선택 가능한 다음 단계 3.2 중에서) | 이전 단계면 멈추고 알림(D23). 기본 다음 단계가 아니면 자동 승인 안 함 |
-| `knowledge_candidates` | 선택 | 다음에도 쓸 만한 사실. 향후 지식 추출용 | 저장만 |
+| `knowledge_candidates` | 선택 | 다음 Work에도 쓸 지식 후보의 목록(D295, D299). 항목은 `kind`(`domain`·`recipe`·`failure`·`constraint`·`decision`·`structure`), 선택 `subkind`(`compat`·`non_goal`·`term`), `rule`(한 줄), `paths`, `terms`(1~5개), `why`, `not_in_code`, `incentive`, 선택 `decision`(다듬은 사람 결정의 `what`), 선택 `supersedes`(대체할 항목 id). 제약은 경로 하나 이상, 구조 사실은 둘 이상 | Work 완료 화면의 지식 칸(D300) |
+| `knowledge_feedback` | 선택 | 넣어 준 지식이 지금 코드나 사람의 말과 다르면 `{id, note}`(D318) | 지식 칸의 대체·버림 후보 |
 
 - 본문의 `## 요약`과 `## 다음 task가 알아야 할 것`은 필수다. 두 번째 절에는 경로와 줄, 명령, 수치처럼 다시 찾기 비싼 사실을 적는다.
 - 본문 분량 기준은 약 1,500자다(기본값, 설정 가능). 넘으면 경고만 한다.
@@ -1015,9 +1024,10 @@ knowledge_candidates: []
 앱이 handoff와 intent 초안에 같은 방식으로 한다(D38). 오류가 있으면 승인 버튼이 비활성화되고 Stop 훅으로 되돌린다(D21). 되돌림 메시지에는 필드와 어긴 규칙을 적는다(예: "`blocked_reason` 없음: `status: blocked`일 때 필수", D87).
 
 - **스키마 검사:** 머리글을 YAML로 파싱한 뒤 JSON Schema로 검사한다(D84).
-  - handoff: `docs/contracts/handoff.v1.schema.json`
-  - intent 초안: `docs/contracts/intent-draft.v1.schema.json`
-  - 스키마가 정하는 것: 필수 필드, 타입, 열거값(`status`, `by`, `recommended_next.node`, `type`), `status: blocked`일 때 `blocked_reason` 필수(그 밖에는 null 허용, D96)
+  - handoff: `docs/contracts/handoff.v2.schema.json`(형식 버전 2). 버전 1로 시작한 task는 `handoff.v1.schema.json`으로 검사한다(I70)
+  - intent 초안: 머리글이 없어 본문만 본다(D236)
+  - 지식 파일: `docs/contracts/knowledge-entry.v1.schema.json`(D320). PR 대응 task가 고친 지식 파일을 Stop 때 검사한다(D310 (2))
+  - 스키마가 정하는 것: 필수 필드, 타입, 열거값(`status`, `by`, `recommended_next.node`, 지식 후보의 `kind`·`subkind`), `status: blocked`일 때 `blocked_reason` 필수(그 밖에는 null 허용, D96), 지식 후보의 용어 1~5개와 종류별 경로 수(D299), `supersedes`의 id 모양(D320)
 - **추가 검사:** 스키마로 표현할 수 없어 앱 코드가 한다.
   - `recommended_next.node`가 선택 가능한 다음 단계(3.2) 안에 있다
   - 필수 산출물이 task 디렉터리에 있다(`awaiting_approval`일 때, D30)
@@ -1025,8 +1035,8 @@ knowledge_candidates: []
   - intent 초안의 완료조건 줄이 `- [ ] `로 시작한다
   - verify의 `pr.md` 첫 줄이 `# `로 시작한다(D62)
   - PR 대응의 `replies.md`: 이번 라운드의 코멘트 항목마다 `## <항목 id>` 절이 하나씩 있고, 모르는 id가 없고, 답글 본문이 비어 있지 않다(D190). 이 오류는 [오류 무시하고 승인]으로 넘길 수 없다(D204)
-- **오류가 아닌 것(경고만):** 정의되지 않은 필드(D85), 본문 분량 기준 초과. 문자열과 목록 길이에는 상한이 없다(D86).
-- **형식 버전:** 앱은 task를 시작할 때 쓰는 형식 버전을 `work.json`에 기록하고, 그 버전의 스키마로 검사한다. 현재는 1이다.
+- **오류가 아닌 것(경고만):** 정의되지 않은 필드(D85), 본문 분량 기준 초과, 지식 후보가 task마다 5개를 넘음(목표는 3개 안팎, D295). 문자열과 목록 길이에는 상한이 없다(D86). 지식 후보의 용어 수(1~5개, D299)는 예외다.
+- **형식 버전:** 앱은 task를 시작할 때 쓰는 형식 버전을 `work.json`에 기록하고, 그 버전의 스키마로 검사한다. 현재는 2다. 2는 1에 지식 후보의 객체 모양과 `knowledge_feedback`을 더했다. 1로 시작한 task는 1로 검사하고, 그 task에서는 사람 결정만 지식 후보로 올린다(문자열 후보는 읽지 않음, I70).
 
 ### 5.3 intent (`intent.md`)
 

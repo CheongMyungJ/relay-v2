@@ -23,7 +23,14 @@ import {
   workIds,
   worktreeDir,
 } from '../adapters/store'
-import { applyConfigPatch, checkProjectSettings, checkWorkSettings } from '../core/config'
+import {
+  applyConfigPatch,
+  checkProjectSettings,
+  checkWorkSettings,
+  projectKnowledgeDir,
+  projectKnowledgeShare,
+} from '../core/config'
+import { knowledgeOff } from '../core/knowledge'
 import { createWork } from '../core/machine'
 import { localIso, nextWorkId, workBranch } from '../core/records'
 import { recordedProcesses, type RecordedProcess } from '../core/recovery'
@@ -259,6 +266,9 @@ export class Relay {
       ghVersion: p.checks.gh_version ?? null,
       allowedBots: p.allowed_bots ?? [],
       mergeMethod: p.merge_method ?? null,
+      knowledgeDir: projectKnowledgeDir(p),
+      knowledgeShare: projectKnowledgeShare(p),
+      knowledgeOff: knowledgeOff(this.env),
     }))
   }
 
@@ -333,6 +343,10 @@ export class Relay {
         ...project,
         allowed_bots: r.value.allowed_bots,
         merge_method: r.value.merge_method,
+        ...(r.value.knowledge_dir === undefined ? {} : { knowledge_dir: r.value.knowledge_dir }),
+        ...(r.value.knowledge_share === undefined
+          ? {}
+          : { knowledge_share: r.value.knowledge_share }),
       })
       await Promise.all(
         [...this.works.values()]

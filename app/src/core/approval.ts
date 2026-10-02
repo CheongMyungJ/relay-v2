@@ -3,7 +3,7 @@
 import { AGENT_APPROVAL_NOTICE, type AgentEngine } from '../shared/agent'
 import { agentLabel, knownTaskEngine } from './agent'
 import type { AppConfig, AutoApproveNode, WorkSettings } from '../shared/config'
-import type { Handoff, TaskNode } from '../shared/contracts'
+import type { AnyHandoff, TaskNode } from '../shared/contracts'
 import type { ApprovalGate, Badge, BadgeKind } from '../shared/views'
 import type {
   AutoHoldReason,
@@ -95,7 +95,7 @@ export interface AutoApproveInput {
   /** Work의 업무 유형. 기본 다음 단계가 유형마다 다르다 (3.2) */
   type: WorkType
   /** 판정하는 때의 형식 검사. 머리글(handoffHeader)에서 조건을 읽는다 */
-  check: CheckSummary & { handoffHeader?: Handoff | null }
+  check: CheckSummary & { handoffHeader?: AnyHandoff | null }
   /** Stop 때 백그라운드 작업이나 예약된 깨우기가 남아 있었다 (pendingBackground, D129) */
   background: boolean
 }

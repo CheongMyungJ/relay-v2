@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "relay/handoff.v2.schema.json",
+  "title": "handoff.md YAML 머리글 (형식 버전 2)",
+  "description": "에이전트가 쓰는 판단 필드만 담는다. 식별자와 형식 버전은 앱이 task 디렉터리 위치와 work.json으로 안다. 정의되지 않은 필드는 스키마에서 허용하고, 앱이 경고만 한다. 버전 1에 지식 후보의 객체 모양(D295, D299)과 knowledge_feedback(D318)을 더했다.",
+  "type": "object",
+  "required": [
+    "status",
+    "decisions",
+    "assumptions",
+    "rejected",
+    "open_questions",
+    "intent_deviation",
+    "risks",
+    "recommended_next"
+  ],
+  "properties": {
+    "status": { "enum": ["awaiting_approval", "blocked"] },
+    "blocked_reason": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string", "minLength": 1 }
+      ]
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["what", "why", "by"],
+        "properties": {
+          "what": { "type": "string", "minLength": 1 },
+          "why": { "type": "string", "minLength": 1 },
+          "by": { "enum": ["human", "ai"] }
+        }
+      }
+    },
+    "assumptions": { "type": "array", "items": { "type": "string" } },
+    "rejected": { "type": "array", "items": { "type": "string" } },
+    "open_questions": { "type": "array", "items": { "type": "string" } },
+    "intent_deviation": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["summary", "evidence"],
+          "properties": {
+            "summary": { "type": "string", "minLength": 1 },
+            "evidence": { "type": "string", "minLength": 1 }
+          }
+        }
+      ]
+    },
+    "risks": { "type": "array", "items": { "type": "string" } },
+    "recommended_next": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["node", "reason"],
+          "properties": {
+            "node": { "enum": ["intake", "fix", "design", "implement", "refactor", "verify"] },
+            "reason": { "type": "string", "minLength": 1 }
+          }
+        }
+      ]
+    },
+    "knowledge_candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "rule", "paths", "terms", "why", "not_in_code", "incentive"],
+        "properties": {
+          "kind": { "enum": ["domain", "recipe", "failure", "constraint", "decision", "structure"] },
+          "subkind": { "enum": ["compat", "non_goal", "term", null] },
+          "rule": { "type": "string", "minLength": 1 },
+          "paths": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "terms": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 5,
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "why": { "type": "string", "minLength": 1 },
+          "not_in_code": { "type": "string", "minLength": 1 },
+          "incentive": { "type": "string", "minLength": 1 },
+          "decision": { "type": "string", "minLength": 1 },
+          "supersedes": {
+            "type": "string",
+            "pattern": "^(domain|recipe|failure|constraint|decision|structure)-[0-9a-z]{8}$"
+          }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "kind": { "const": "constraint" } }, "required": ["kind"] },
+            "then": { "properties": { "paths": { "minItems": 1 } } }
+          },
+          {
+            "if": { "properties": { "kind": { "const": "structure" } }, "required": ["kind"] },
+            "then": { "properties": { "paths": { "minItems": 2 } } }
+          },
+          {
+            "if": { "properties": { "subkind": { "const": "compat" } }, "required": ["subkind"] },
+            "then": { "properties": { "kind": { "const": "constraint" } } }
+          },
+          {
+            "if": { "properties": { "subkind": { "const": "non_goal" } }, "required": ["subkind"] },
+            "then": { "properties": { "kind": { "const": "decision" } } }
+          },
+          {
+            "if": { "properties": { "subkind": { "const": "term" } }, "required": ["subkind"] },
+            "then": { "properties": { "kind": { "const": "structure" } } }
+          }
+        ]
+      }
+    },
+    "knowledge_feedback": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "note"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "note": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  },
+  "if": { "properties": { "status": { "const": "blocked" } } },
+  "then": {
+    "required": ["blocked_reason"],
+    "properties": { "blocked_reason": { "type": "string", "minLength": 1 } }
+  }
+}

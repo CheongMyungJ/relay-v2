@@ -32,10 +32,17 @@ export interface ProjectState {
   allowed_bots?: string[]
   /** 머지 창의 기본 선택 (5.1.2, D177). 없거나 null이면 레포가 허용하는 첫 방식이다 */
   merge_method?: MergeMethod | null
+  /** 레포 안 지식 폴더 (5.1.2, D305). 없으면 docs/knowledge/다 */
+  knowledge_dir?: string
+  /** 팀 공유 (5.1.2, D322). 없으면 켬이다 */
+  knowledge_share?: boolean
 }
 
-/** 프로젝트 설정 화면에서 바꾸는 값 (5.1.2, D185) */
+/** 프로젝트 설정 화면에서 바꾸는 값 (5.1.2, D185, D305, D322) */
 export interface ProjectSettings {
   allowed_bots: string[]
   merge_method: MergeMethod | null
+  /** 없으면 지금 값을 둔다 */
+  knowledge_dir?: string
+  knowledge_share?: boolean
 }

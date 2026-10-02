@@ -437,6 +437,11 @@ export interface ProjectView {
   /** 프로젝트 설정 (5.1.2, D185) */
   allowedBots: string[]
   mergeMethod: MergeMethod | null
+  /** 지식 폴더와 팀 공유 (5.1.2, D305, D322) */
+  knowledgeDir: string
+  knowledgeShare: boolean
+  /** 지식을 환경 변수로 껐다 (I84). [지식] 버튼과 지식 칸을 보이지 않는다 */
+  knowledgeOff: boolean
 }
 
 export interface TaskView {

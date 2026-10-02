@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { mergeSkill, selectType, skillText } from '../../src/adapters/claude'
 import { OPEN_QUESTIONS_HINT } from '../../src/core/review'
 import { sha256 } from '../../src/adapters/store'
-import { BOUNCE_HEAD, parseFrontMatter } from '../../src/core/validate'
+import { BOUNCE_HEAD, FORMAT_VERSION, parseFrontMatter } from '../../src/core/validate'
 import type { LifecycleEvent, WorkState } from '../../src/shared/work'
 import { drive } from './driver'
 import { git, harness, makeRepo, register, settle, sleep, type Harness } from './harness'
@@ -116,7 +116,7 @@ describe('[흐름] 최소 흐름 (M2)', () => {
     for (const t of w.tasks) {
       expect(t).toMatchObject({
         reason: 'default',
-        format_version: 1,
+        format_version: FORMAT_VERSION,
         approved_by: 'human',
         bounce_count: 0,
         permission_mode: 'bypassPermissions',

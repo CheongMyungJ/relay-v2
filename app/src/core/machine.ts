@@ -15,6 +15,7 @@ import type { AgentEngine } from '../shared/agent'
 import { agentLabel, knownTaskEngine, taskEngine } from './agent'
 import type { Decision, NodeName, TaskNode } from '../shared/contracts'
 import type { StepExpect, WorkActions } from '../shared/views'
+import type { KnowledgeChoices, KnowledgeOutcome, KnowledgePlan } from '../shared/knowledge'
 import type {
   ApprovalBy,
   AutoHoldReason,
@@ -249,6 +250,8 @@ export interface Approve extends TaskEvent {
   check: TaskCheck
   /** [오류 무시하고 승인] (4.1, D90, D112). 확인 창을 거친 뒤에 보낸다 */
   force?: boolean
+  /** verify의 [완료만]: Work 완료 화면의 거르기로 main이 계산한 채택 결과 (I73, I75). Work가 완료되면 앱 저장소에 쓴다 */
+  knowledge?: KnowledgePlan
 }
 
 /** 세션을 끝내는 이유. events.jsonl의 task.interrupted에 남긴다 */
@@ -287,6 +290,8 @@ export interface StopAfterStep extends WorkEvent {
 /** 멈춘 Work의 [재개]: 기본 다음 단계를 시작한다 (3.3, 시나리오 3-4) */
 export interface ResumeWork extends WorkEvent {
   type: 'resumeWork'
+  /** verify에서 멈춘 Work의 [완료만]: 채택 결과 (I73). Work가 완료되면 앱 저장소에 쓴다 */
+  knowledge?: KnowledgePlan
 }
 
 /** [Work 포기] (3.3) */
@@ -377,6 +382,10 @@ export interface Deliver extends WorkEvent {
   choice: DeliveryChoice
   uncommitted: UncommittedAction | 'session' | null
   check: TaskCheck | null
+  /** 채택 결과 (I73). 진행 중 작업 기록에 적는다. 지식을 끈 때(I84)는 없다 */
+  knowledge?: KnowledgePlan | null
+  /** [AI 세션 열기]: 거르기의 선택. work.json에 두었다가 [정리 끝 → push/PR 진행]이 쓴다 (I75) */
+  choices?: KnowledgeChoices
 }
 
 /**
@@ -388,6 +397,8 @@ export interface DeliveryStaged extends WorkEvent {
   stage: DeliveryStage
   stash?: string
   commit?: string
+  /** knowledge 단계가 만든 지식 커밋 (I73) */
+  knowledgeCommit?: string
 }
 
 /** 전달이 끝났다. main이 git과 gh에서 얻은 것과, 승인을 기록할 때 다시 한 verify 검사다 (D120) */
@@ -719,6 +730,8 @@ export type Effect =
       message: string | null
       branch: string
       base: string
+      /** 채택 결과 (I73). [PR 생성]이면 knowledge 단계에서 레포에 쓸 팀 지식을 커밋한다. 지식을 끈 때는 null이다 */
+      knowledge: KnowledgePlan | null
     }
   /** [AI 세션 열기] (7-5): 기록하지 않는 정리 세션을 worktree에서 연다. 세션 상한(D18)을 따른다 */
   | { type: 'openCleanup'; choice: DeliveryChoice }
@@ -746,6 +759,15 @@ export type Effect =
    * respond.pushed, respond.published, respond.deferred, respond.failed로 알린다
    */
   | { type: 'respond'; taskId: string; rounds: string[]; resume?: boolean }
+  /**
+   * 채택 결과를 앱 저장소(나만, 공유 대기, knowledge.json)에 쓴다 (I73): Work가 완료되거나 전달이 성공할 때(D120과 같은
+   * 때). carried는 [PR 생성]이면 공유 대기가 실린 PR이다(D310 (4)). 해시는 main이 그때의 HEAD로 채운다 (I72)
+   */
+  | {
+      type: 'storeKnowledge'
+      plan: KnowledgePlan
+      carried: { pr: number | null; branch: string; commit: string | null } | null
+    }
 
 export interface Transition {
   work: WorkState
@@ -1686,6 +1708,7 @@ function approve(work: WorkState, task: TaskRecord, e: Approve): Transition {
     check: e.check,
     by: 'human',
     ...(forced ? { ignored: gate.errors } : {}),
+    ...(e.knowledge ? { knowledge: e.knowledge } : {}),
   })
 }
 
@@ -1698,6 +1721,8 @@ interface Approval {
   by: ApprovalBy
   /** [오류 무시하고 승인]으로 넘긴 오류 (D112) */
   ignored?: FormatIssue[]
+  /** verify의 [완료만]: 채택 결과 (I73) */
+  knowledge?: KnowledgePlan
 }
 
 /**
@@ -1724,7 +1749,19 @@ function approveNow(work: WorkState, task: TaskRecord, a: Approval): Transition 
   }
   const stopAfterStep = work.stop_after_step === true
   let next: WorkState = withoutStopAfter(withTask(work, approved))
-  const payload = a.ignored ? { by: a.by, ignored_errors: a.ignored.length } : { by: a.by }
+  const stops =
+    stopAfterStep ||
+    (!!header?.recommended_next &&
+      stopsForRecommendation(workType(work), node, header.recommended_next.node))
+  // [완료만]으로 Work가 완료되면 채택 결과를 앱 저장소에 쓴다 (I73). 멈추면 [재개]가 완료할 때 쓴다
+  const store =
+    a.knowledge && !stops && defaultNext(workType(work), node) === WORK_COMPLETE
+      ? a.knowledge
+      : null
+  const payload: Record<string, unknown> = a.ignored
+    ? { by: a.by, ignored_errors: a.ignored.length }
+    : { by: a.by }
+  if (store) payload['knowledge'] = { ...store.counts }
   const effects: Effect[] = [log(work, a.at, 'task.approved', payload, task)]
   if (task.session?.alive) effects.push({ type: 'endSession', taskId: task.id })
   effects.push({
@@ -1758,6 +1795,7 @@ function approveNow(work: WorkState, task: TaskRecord, a: Approval): Transition 
   if (nextNode === WORK_COMPLETE) {
     next = { ...next, status: 'completed', completed_at: a.at }
     effects.push(log(work, a.at, 'work.completed', { delivery: 'none' }))
+    if (store) effects.push({ type: 'storeKnowledge', plan: store, carried: null })
     return { work: next, effects }
   }
   const created = newTask(next, nextNode, a.at)
@@ -1905,7 +1943,15 @@ function resumeWork(work: WorkState, e: ResumeWork): Transition {
   if (nextNode === WORK_COMPLETE) {
     return {
       work: { ...active, status: 'completed', completed_at: e.at },
-      effects: [log(work, e.at, 'work.completed', { delivery: 'none' })],
+      effects: [
+        log(work, e.at, 'work.completed', {
+          delivery: 'none',
+          ...(e.knowledge ? { knowledge: { ...e.knowledge.counts } } : {}),
+        }),
+        ...(e.knowledge
+          ? [{ type: 'storeKnowledge' as const, plan: e.knowledge, carried: null }]
+          : []),
+      ],
     }
   }
   const created = newTask(active, nextNode, e.at)
@@ -2167,23 +2213,28 @@ function deliver(work: WorkState, e: Deliver): Transition {
   }
   if (e.uncommitted === 'session') {
     effects.push({ type: 'openCleanup', choice: e.choice })
+    // 거르기의 선택은 정리 세션이 끝난 뒤의 전달이 쓴다 (I75)
+    if (e.choices) next = { ...next, knowledge_choices: e.choices }
     return { work: next, effects }
   }
   const branch = workBranch(work.work_id)
+  const plan = e.knowledge ?? null
   const operation: DeliverOperation = {
     kind: 'deliver',
-    stage: e.uncommitted ? 'prepare' : 'push',
+    stage: e.uncommitted ? 'prepare' : knowledgeStage(e.choice, plan) ? 'knowledge' : 'push',
     started_at: e.at,
     choice: e.choice,
     task_id: task.id,
     uncommitted: e.uncommitted,
     branch,
     base: work.base_branch,
+    ...(plan ? { knowledge: plan } : {}),
   }
   effects.push({
     type: 'deliver',
     taskId: task.id,
     choice: e.choice,
+    knowledge: plan,
     uncommitted: e.uncommitted,
     message:
       e.uncommitted === 'commit'
@@ -2209,6 +2260,7 @@ function deliveryStaged(work: WorkState, e: DeliveryStaged): Transition {
     stage: e.stage,
     ...(e.stash === undefined ? {} : { stash: e.stash }),
     ...(e.commit === undefined ? {} : { commit: e.commit }),
+    ...(e.knowledgeCommit === undefined ? {} : { knowledge_commit: e.knowledgeCommit }),
   }
   return { work: { ...work, operation }, effects: [] }
 }
@@ -2251,6 +2303,7 @@ function deliverySucceeded(work: WorkState, e: DeliverySucceeded): Transition {
   const task = work.tasks.find((t) => t.id === op.task_id)
   if (!task) return unchanged(work, `${op.task_id} 없음`)
   const effects: Effect[] = []
+  const outcome = knowledgeOutcome(op)
   let tasks = work.tasks
   if (task.status !== 'approved') {
     const check = e.check ? summarize(e.check) : task.check
@@ -2265,7 +2318,15 @@ function deliverySucceeded(work: WorkState, e: DeliverySucceeded): Transition {
         : {}),
     }
     tasks = work.tasks.map((t) => (t.id === task.id ? approved : t))
-    effects.push(log(work, e.at, 'task.approved', { by: 'human' }, task))
+    effects.push(
+      log(
+        work,
+        e.at,
+        'task.approved',
+        { by: 'human', ...(outcome ? { knowledge: outcome } : {}) },
+        task,
+      ),
+    )
     if (task.session?.alive) effects.push({ type: 'endSession', taskId: task.id })
     effects.push({
       type: 'appendDecisions',
@@ -2286,8 +2347,20 @@ function deliverySucceeded(work: WorkState, e: DeliverySucceeded): Transition {
     ...(e.prExisting ? { pr_existing: true } : {}),
     ...(e.draft === undefined ? {} : { draft: e.draft }),
     ...deliveryBackups(work.delivery, op),
+    ...(outcome ? { knowledge: outcome } : {}),
   }
-  const rest = omit(work, 'operation', 'stop', 'stop_after_step')
+  const rest = omit(work, 'operation', 'stop', 'stop_after_step', 'knowledge_choices')
+  // 앱 저장소의 나만·공유 대기는 전달이 성공할 때 쓴다 (I73, D120과 같은 때)
+  const store: Effect | null = op.knowledge
+    ? {
+        type: 'storeKnowledge',
+        plan: op.knowledge,
+        carried:
+          op.choice === 'pr'
+            ? { pr: e.pr?.number ?? null, branch: op.branch, commit: op.knowledge_commit ?? null }
+            : null,
+      }
+    : null
   const payload: Record<string, unknown> = { ...delivery }
   delete payload['status']
   delete payload['at']
@@ -2307,6 +2380,7 @@ function deliverySucceeded(work: WorkState, e: DeliverySucceeded): Transition {
       },
     }
     effects.push(log(next, e.at, 'delivery.succeeded', payload))
+    if (store) effects.push(store)
     return { work: next, effects }
   }
   const next: WorkState = {
@@ -2318,7 +2392,22 @@ function deliverySucceeded(work: WorkState, e: DeliverySucceeded): Transition {
   }
   effects.push(log(next, e.at, 'delivery.succeeded', payload))
   effects.push(log(next, e.at, 'work.completed', { delivery: op.choice }))
+  if (store) effects.push(store)
   return { work: next, effects }
+}
+
+/** [PR 생성]에서 레포에 쓸 팀 지식이 있으면 knowledge 단계를 지난다 (I73) */
+export function knowledgeStage(choice: DeliveryChoice, plan: KnowledgePlan | null): boolean {
+  return choice === 'pr' && plan !== null && plan.repo.length > 0
+}
+
+/** 전달 결과와 승인 기록의 지식 (I73) */
+function knowledgeOutcome(op: DeliverOperation): KnowledgeOutcome | null {
+  if (!op.knowledge) return null
+  return {
+    ...op.knowledge.counts,
+    ...(op.knowledge_commit ? { commit: op.knowledge_commit } : {}),
+  }
 }
 
 /**
@@ -2338,6 +2427,7 @@ function deliveryFailed(work: WorkState, e: DeliveryFailed): Transition {
     error: e.error,
     branch: op.branch,
     ...backups,
+    ...(op.knowledge ? { knowledge_plan: op.knowledge } : {}),
   }
   return {
     work: { ...omit(work, 'operation'), delivery },
@@ -2577,6 +2667,7 @@ function deliveryCut(
     error: CUT_ERROR,
     branch: op.branch,
     ...backups,
+    ...(op.knowledge ? { knowledge_plan: op.knowledge } : {}),
   }
   return {
     work: { ...omit(work, 'operation'), delivery },

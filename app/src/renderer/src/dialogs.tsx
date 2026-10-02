@@ -178,6 +178,8 @@ export function ProjectSettingsDialog({
           .map((b) => b.trim())
           .filter(Boolean),
         merge_method: method,
+        knowledge_dir: project.knowledgeDir,
+        knowledge_share: project.knowledgeShare,
       }),
     )
     setBusy(false)
