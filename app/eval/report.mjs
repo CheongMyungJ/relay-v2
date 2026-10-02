@@ -237,7 +237,11 @@ function workRows(rs, n) {
     ['사람 행동 수(기다림 제외)', get((x) => x.human.actionsTotal)],
     ['입력한 글자 수', get((x) => x.human.charsTyped)],
     [
-      '앞 Work의 사실을 다시 알려 줌(carry 항목 수)',
+      '앞 Work의 사실을 다시 알려 줌(carry 항목 수, 감사)',
+      get((x) => (x.human.carriedTotal ? (x.human.carriedToldAudit ?? null) : null)),
+    ],
+    [
+      '앞 Work의 사실을 다시 알려 줌(사람 역할 자기 보고)',
       get((x) => (x.human.carriedTotal ? (x.human.carriedTold ?? null) : null)),
     ],
     ['에이전트 질문 수(AskUserQuestion)', get((x) => x.agent?.questions ?? null)],

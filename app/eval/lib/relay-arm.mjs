@@ -416,7 +416,7 @@ export class RelayArm {
   /** Work의 worktree들 (팀원 교대 전의 앱 저장소 것도) */
   worktrees() {
     const trees = []
-    for (const home of this.homes) {
+    for (const [k, home] of this.homes.entries()) {
       const projects = path.join(home, 'projects')
       if (!fs.existsSync(projects)) continue
       for (const p of fs.readdirSync(projects)) {
@@ -424,7 +424,8 @@ export class RelayArm {
         if (!fs.existsSync(wt)) continue
         for (const w of fs.readdirSync(wt)) {
           const dir = path.join(wt, w)
-          if (fs.existsSync(path.join(dir, '.git'))) trees.push({ path: dir, label: w })
+          if (fs.existsSync(path.join(dir, '.git')))
+            trees.push({ path: dir, label: homeLabel(k, w) })
         }
       }
     }
@@ -485,7 +486,7 @@ export class RelayArm {
   /** 끝난 Work의 상태 (work.json 요약, 팀원 교대 전의 앱 저장소 것도) */
   works() {
     const out = []
-    for (const home of this.homes) {
+    for (const [k, home] of this.homes.entries()) {
       const projects = path.join(home, 'projects')
       if (!fs.existsSync(projects)) continue
       for (const p of fs.readdirSync(projects)) {
@@ -501,7 +502,7 @@ export class RelayArm {
           const read = (t) =>
             fs.existsSync(context(t)) ? fs.readFileSync(context(t), 'utf8') : null
           out.push({
-            id: w,
+            id: homeLabel(k, w),
             dir: path.join(ws, w),
             status: j.status,
             branch: j.branch ?? null,
@@ -545,6 +546,12 @@ function knowledgeChars(taskDir, context) {
   const m = /^## 참고 지식\n([\s\S]*?)(?=^## |(?![\s\S]))/m.exec(context)
   return m ? m[1].trim().length : null
 }
+
+/**
+ * 팀원 교대 뒤의 앱 저장소는 Work id가 앞 사람 것과 겹칠 수 있다(둘 다 w-<날짜>-001). 두 번째 저장소부터 앞에 사람
+ * 번호를 붙여 결과 폴더와 스냅숏을 가른다
+ */
+const homeLabel = (k, w) => (k === 0 ? w : `p${k + 1}-${w}`)
 
 const KEYS = {
   enter: 'Enter',

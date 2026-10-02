@@ -48,7 +48,7 @@ relay-v2에 지식 관리를 넣는다. 목표는 하나다: **relay로 일하�
 ### 3.2 평가 도구에 더한 것
 
 - **팀원 교대** (`works`의 `"teammate": true`): 그 Work 전에 도구가 앞 사람 레포의 브랜치(main에 없는 커밋이 있는 것)를 오래된 차례로 main에 머지하고(PR 머지 흉내), 팀 원격에 올리고, 새로 clone한다. relay는 새 앱 저장소와 새 Electron 사용자 폴더로 그 clone을 등록하고, 맨 CLI는 그 폴더에서 claude를 새로 띄운다. 커밋하지 않은 것과 앱 저장소에만 있는 것은 건너가지 않는다. 사람 역할은 [완료만]으로 Work를 끝내므로, **팀 지식은 Work를 끝낼 때 Work 브랜치의 커밋으로 남아 있어야 평가에서 건너간다.** 머지 충돌은 뒤 브랜치 쪽으로 머지하고 `run.json`의 `handoffs`에 적는다.
-- **다시 알려 줌** (`knowledge`의 `"carry": true`, 사람 역할의 `told`): 사람 역할은 차례마다 "네가 아는 것"의 몇 번 항목을 새로 알려 줬는지 적는다. 에이전트가 먼저 꺼낸 것을 "맞다"고 확인만 한 것은 세지 않는다. carry 항목은 앞 Work에서 이미 알려 줬던 사실이다. Work마다 `carriedTold`(다시 알려 준 carry 항목 수)를 `workResults[].human`에 둔다.
+- **다시 알려 줌** (`knowledge`의 `"carry": true`, 사람 역할의 `told`): 사람 역할은 차례마다 "네가 아는 것"의 몇 번 항목을 새로 알려 줬는지 적는다. 에이전트가 먼저 꺼낸 것을 "맞다"고 확인만 한 것은 세지 않는다. carry 항목은 앞 Work에서 이미 알려 줬던 사실이다. 자기 보고는 빠뜨리기 쉬워서(준비 때 haiku 사람 역할이 "물으면 답함" 항목을 첫 요청에 넣고도 적지 않았다), Work가 끝나면 판정 모델이 그 Work에서 사람이 입력한 말만 읽고 어느 항목의 내용을 전했는지 따로 가린다(`lib/told.mjs`, 감사). `workResults[].human`에 `told`·`carriedTold`(자기 보고), `toldAudit`·`carriedToldAudit`(감사)를 둔다. 주지표 PM1은 감사를 쓴다.
 - **재는 Work** (시나리오의 `measure`): 없으면 첫 Work를 뺀 모두다.
 - **다른 빌드를 쪽으로** (`run.mjs --app 이름=폴더`, `--pairs`): 6절.
 - **넣은 지식의 글자** (참고 지표): 앱이 task 폴더(`<RELAY_HOME>/projects/*/works/*/tasks/<seq>-<node>/`)에 `knowledge-injected.md`로 그 task에 넣은 지식을 남기면 보고서가 글자 수를 센다. 남기지 않아도 된다.
@@ -59,7 +59,8 @@ relay-v2에 지식 관리를 넣는다. 목표는 하나다: **relay로 일하�
 
 | 지표 | 정의 | 좋은 쪽 |
 |---|---|---|
-| **PM1 다시 알려 줌** | 재는 Work의 `carriedTold` 합. carry 항목이 있는 시나리오만 | 낮음 |
+| **PM1 다시 알려 줌** | 재는 Work의 `carriedToldAudit`(감사) 합. carry 항목이 있는 시나리오만. 감사가 없는 Work가 있는 실행은 뺀다 | 낮음 |
+| 다시 알려 줌(자기 보고) | 재는 Work의 `carriedTold` 합 | 낮음 |
 | **PM2 숨긴 시험** | 재는 Work가 모두 숨긴 시험을 통과한 실행의 비율 | 높음 |
 | 입력 글자 | 재는 Work의 사람 입력 글자 합 | 낮음 |
 | 질문 수 | 재는 Work의 에이전트 AskUserQuestion 수 합 | 낮음 |
@@ -124,7 +125,7 @@ hold-out 두 시나리오에서 `relay`(실험 빌드, 지식 켬)와 `base`를 
 
 ## 8. 고정 파일과 바꿀 수 있는 것
 
-`node app/eval/frozen.mjs`가 고정 파일의 해시(`app/eval/frozen.json`)를 확인한다. 고정 파일: 이 문서, 지표·보고서·실행·판정·사람 역할·시나리오 확인 도구(`primary.mjs`, `report.mjs`, `run.mjs`, `check-scenario.mjs`, `lib/`의 `ai`, `env`, `episode`, `human`, `judge`, `kind`, `repo`, `util`, `works`), 설명서 `base.md`·`cli.md`, 봉인, 개발용 시나리오 21~24.
+`node app/eval/frozen.mjs`가 고정 파일의 해시(`app/eval/frozen.json`)를 확인한다. 고정 파일: 이 문서, 지표·보고서·실행·판정·사람 역할·시나리오 확인 도구(`primary.mjs`, `report.mjs`, `run.mjs`, `check-scenario.mjs`, `lib/`의 `ai`, `env`, `episode`, `human`, `judge`, `kind`, `repo`, `told`, `util`, `works`), 설명서 `base.md`·`cli.md`, 봉인, 개발용 시나리오 21~24.
 
 - 바꿀 수 있는 것: 앱(`app/src`), 스킬(`skills/`), 설계 문서, 화면을 다루는 도구(`lib/relay-arm.mjs`, `lib/cli-arm.mjs`, `lib/dialogs.mjs`), 실험 빌드의 설명서 `guides/relay.md`, 새 개발용 시나리오.
 - `guides/relay.md`는 화면을 어떻게 다루는지만 적는다. 사람 역할이 무엇을 말하거나 말하지 말지(예: "규칙을 다시 말하지 않아도 된다")는 적지 않는다. 마지막 보고서에 이 파일의 바뀐 내용을 그대로 싣는다.
@@ -145,6 +146,6 @@ hold-out 두 시나리오에서 `relay`(실험 빌드, 지식 켬)와 `base`를 
 ## 11. 알려진 한계
 
 - 사람 역할과 판정이 AI다. 실제 사람의 지식 공유 습관, 리뷰 부담, 몇 달에 걸친 낡음은 재지 못한다.
-- `told`는 사람 역할의 자기 보고다. 입력 글자와 질문 수를 함께 본다.
+- PM1은 판정 모델의 감사다. 동의만 한 말과 내용을 전한 말의 경계는 모델의 판단이다. 자기 보고, 입력 글자, 질문 수를 함께 본다.
 - 팀원 교대는 [완료만] → 브랜치 머지로 PR을 흉내 낸다. 실제 PR 리뷰와 머지 충돌 해결은 없다.
 - hold-out은 시나리오 둘, 회차 5다. 작은 차이는 가르지 못한다.

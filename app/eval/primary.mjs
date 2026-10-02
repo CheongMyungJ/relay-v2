@@ -19,8 +19,21 @@ const TOOL_ERRORS = new Set(['harness_error', 'human_error'])
 export const METRICS = [
   {
     key: 'retold',
-    name: 'PM1 앞 Work의 사실을 다시 알려 준 수 (재는 Work 합)',
+    name: 'PM1 앞 Work의 사실을 다시 알려 준 수 (재는 Work 합, 감사)',
     primary: true,
+    better: -1,
+    of: (r, sc) => {
+      const ws = measured(r, sc)
+      if (!ws || !ws.some((w) => w.human?.carriedTotal)) return null
+      // 감사(판정 모델이 사람의 말을 읽고 가름)가 없는 Work가 있으면 그 실행은 뺀다
+      if (ws.some((w) => w.human?.carriedTotal && typeof w.human?.carriedToldAudit !== 'number'))
+        return null
+      return sum(ws, (w) => w.human?.carriedToldAudit ?? 0)
+    },
+  },
+  {
+    key: 'retoldSelf',
+    name: '앞 Work의 사실을 다시 알려 준 수 (사람 역할의 자기 보고)',
     better: -1,
     of: (r, sc) => {
       const ws = measured(r, sc)

@@ -7,6 +7,7 @@ import { CliArm } from './cli-arm.mjs'
 import { agentEnv, makeClaudeConfig } from './env.mjs'
 import { Human, screenKind } from './human.mjs'
 import { RelayArm } from './relay-arm.mjs'
+import { auditTold } from './told.mjs'
 import { diffTree, handoffRepo, judgeTree, makeRepo } from './repo.mjs'
 import {
   agentUsage,
@@ -229,6 +230,23 @@ export async function runEpisode(o) {
       ...(p.handoff ? { handoff: p.handoff } : {}),
     }
     if (multi) {
+      // 다시 알려 줌의 감사: 판정 모델이 이 Work에서 사람이 입력한 말을 읽고 가른다(PM1)
+      const known = parts[p.n]?.knowledge ?? []
+      try {
+        const a = await auditTold({
+          knowledge: known,
+          turns: own,
+          model: opts.judgeModel ?? 'sonnet',
+          workDir: path.join(o.workDir, 'told', `work-${p.n + 1}`),
+        })
+        if (a) {
+          r.human.toldAudit = a.told
+          r.human.carriedToldAudit = a.told.filter((i) => known[i - 1]?.carry).length
+          r.human.auditCostUsd = a.costUsd
+        }
+      } catch (e) {
+        say(`Work ${p.n + 1} 다시 알려 줌 감사 실패: ${String(e).slice(0, 200)}`)
+      }
       try {
         arm.snapshot()
         const ws = workScenario(scenario, p.n)

@@ -25,6 +25,7 @@ const FROZEN = [
   'app/eval/lib/judge.mjs',
   'app/eval/lib/kind.mjs',
   'app/eval/lib/repo.mjs',
+  'app/eval/lib/told.mjs',
   'app/eval/lib/util.mjs',
   'app/eval/lib/works.mjs',
   'app/eval/guides/base.md',
