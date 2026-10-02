@@ -1,6 +1,7 @@
 // 지식 화면 (M17): Work 완료 화면의 [지식 n] 탭(I75), 머지 뒤 정리 창과 [머지 없이 끝내기] 확인 창의 지식 칸(I76),
 // 사이드바 프로젝트 줄의 [지식]으로 여는 지식 화면(I77). 고른 것은 렌더러가 들고 있다가 전달·승인 명령에 실어 보낸다.
-// 손대지 않은 것은 기본 선택이다(D303): 에이전트 후보는 채택, 다듬지 않은 사람 결정은 채택 안 함, supersedes는 대체.
+// 손대지 않은 것은 기본 선택이다(D303): 에이전트 후보는 채택, 다듬지 않은 사람 결정과 같은 결정의 뒤 후보(D324)는
+// 채택 안 함, supersedes는 대체.
 import { useEffect, useState } from 'react'
 import {
   KNOWLEDGE_KINDS,
@@ -192,6 +193,7 @@ function CandidateRow({
       </div>
       <div className="dim">
         {c.unrefined ? '다듬지 않은 사람 결정 · ' : ''}
+        {c.sameDecisionAs ? `같은 결정의 후보(앞: ${c.sameDecisionAs.split('#')[0]}) · ` : ''}
         {c.taskId} · {c.by === 'human' ? '사람이 정함' : 'AI'}
         {e.paths.length ? ` · 경로: ${e.paths.join(', ')}` : ''}
         {e.terms.length ? ` · 용어: ${e.terms.join(', ')}` : ''}

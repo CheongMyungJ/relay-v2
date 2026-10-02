@@ -506,6 +506,80 @@ describe('후보 모으기 (D283, D296, D299, D304, D318)', () => {
     expect(candidateChoice(first(r.candidates), undefined, false).share).toBe('mine')
   })
 
+  it('같은 사람 결정에서 뒤 task가 올린 후보는 앞 후보를 가리키고 채택 안 함이 기본이다 (D324)', () => {
+    // [실제] knowledge에서 본 꼴: intake가 결정하고 다듬었고, verify가 같은 결정을 다시 다듬어 올렸다(자기 decisions는 비었음)
+    const tasks: CandidateTask[] = [
+      {
+        taskId: 't-01',
+        node: 'intake',
+        version: 2,
+        header: header({
+          decisions: [human],
+          knowledge_candidates: [{ ...CANDIDATE, decision: human.what }],
+        }),
+      },
+      {
+        taskId: 't-03',
+        node: 'verify',
+        version: 2,
+        header: header({
+          decisions: [],
+          knowledge_candidates: [{ ...CANDIDATE, rule: '같은 규칙 다른 말', decision: human.what }],
+        }),
+      },
+    ]
+    const r = reviewKnowledge({
+      tasks,
+      pool: [],
+      changed: [],
+      share: true,
+      dir: 'd/',
+      offerPending: true,
+    })
+    expect(r.candidates.map((c) => [c.key, c.by, c.sameDecisionAs])).toEqual([
+      ['t-01#k1', 'human', null],
+      ['t-03#k1', 'human', 't-01#k1'],
+    ])
+    expect(candidateChoice(first(r.candidates), undefined, true).adopt).toBe(true)
+    expect(candidateChoice(second(r.candidates), undefined, true).adopt).toBe(false)
+    // 사람이 고르면 뒤 후보도 채택된다
+    expect(
+      candidateChoice(
+        second(r.candidates),
+        { candidates: { 't-03#k1': { adopt: true, share: 'team', replace: null } } },
+        true,
+      ).adopt,
+    ).toBe(true)
+  })
+
+  it('뒤 task가 다듬은 앞 task의 사람 결정은 다듬지 않은 것으로 남지 않고, 같은 결정은 한 번만 보인다', () => {
+    const scope = { what: '이번 수정 범위는 a만', why: 'x', by: 'human' }
+    const tasks: CandidateTask[] = [
+      { taskId: 't-01', node: 'intake', version: 2, header: header({ decisions: [human, scope] }) },
+      {
+        taskId: 't-02',
+        node: 'fix',
+        version: 2,
+        header: header({
+          decisions: [scope],
+          knowledge_candidates: [{ ...CANDIDATE, decision: human.what }],
+        }),
+      },
+    ]
+    const r = reviewKnowledge({
+      tasks,
+      pool: [],
+      changed: [],
+      share: true,
+      dir: 'd/',
+      offerPending: true,
+    })
+    expect(r.candidates.map((c) => [c.key, c.unrefined, c.by])).toEqual([
+      ['t-02#k1', false, 'human'],
+      ['t-01#d2', true, 'human'],
+    ])
+  })
+
   it('supersedes는 대체가 기본이고, 같은 id의 틀렸다는 보고가 짝에 붙는다', () => {
     const old = entry({ id: 'domain-0000000a' })
     const tasks: CandidateTask[] = [

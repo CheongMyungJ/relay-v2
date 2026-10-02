@@ -541,21 +541,28 @@ export function reviewKnowledge(input: ReviewInput): KnowledgeReview {
   const byId = new Map(input.pool.map((p) => [p.entry.id, p]))
   const candidates: KnowledgeCandidateView[] = []
   const feedback = new Map<string, KnowledgeFeedbackView>()
+  // 사람 결정은 Work의 task 모두에서 모은다. 뒤 task(예: verify)가 앞 task(intake)의 결정을 다듬어 올리기도 한다
+  const humanDecisions = new Set(
+    input.tasks.flatMap((t) =>
+      (t.header?.decisions ?? []).filter((d) => d.by === 'human').map((d) => d.what.trim()),
+    ),
+  )
+  // 결정마다 처음 올린 후보의 key. 같은 결정의 뒤 후보는 그 key를 가리키고 채택 안 함이 기본이다 (D324)
+  const first = new Map<string, string>()
   for (const t of input.tasks) {
     const header = t.header
     if (!header) continue
     const v2 = handoffV2(header, t.version)
     const agent = v2?.knowledge_candidates ?? []
-    const bound = new Set<string>()
     agent.forEach((c, i) => {
-      const decision = c.decision?.trim() ?? null
-      const human =
-        decision !== null &&
-        header.decisions.some((d) => d.by === 'human' && d.what.trim() === decision)
-      if (human && decision) bound.add(decision)
+      const decision = c.decision?.trim() || null
+      const human = decision !== null && humanDecisions.has(decision)
+      const key = `${t.taskId}#k${i + 1}`
+      const sameDecisionAs = human && decision ? (first.get(decision) ?? null) : null
+      if (human && decision && !sameDecisionAs) first.set(decision, key)
       const target = c.supersedes ? byId.get(c.supersedes) : undefined
       candidates.push({
-        key: `${t.taskId}#k${i + 1}`,
+        key,
         taskId: t.taskId,
         node: t.node,
         unrefined: false,
@@ -569,14 +576,23 @@ export function reviewKnowledge(input: ReviewInput): KnowledgeReview {
         not_in_code: c.not_in_code,
         incentive: c.incentive,
         decision,
+        sameDecisionAs,
         supersedes: target ? refView(target) : null,
         unknownSupersedes: c.supersedes && !target ? c.supersedes : null,
         feedback: [],
         overlaps: [],
       })
     })
+  }
+  // 어느 후보와도 묶이지 않은 사람 결정. 같은 결정을 여러 task가 적었으면 처음 것 하나만 보인다 (D304)
+  const shown = new Set<string>()
+  for (const t of input.tasks) {
+    const header = t.header
+    if (!header) continue
     header.decisions.forEach((d, i) => {
-      if (d.by !== 'human' || bound.has(d.what.trim())) return
+      const what = d.what.trim()
+      if (d.by !== 'human' || first.has(what) || shown.has(what)) return
+      shown.add(what)
       candidates.push({
         key: `${t.taskId}#d${i + 1}`,
         taskId: t.taskId,
@@ -592,13 +608,17 @@ export function reviewKnowledge(input: ReviewInput): KnowledgeReview {
         not_in_code: '사람이 정함',
         incentive: '',
         decision: d.what,
+        sameDecisionAs: null,
         supersedes: null,
         unknownSupersedes: null,
         feedback: [],
         overlaps: [],
       })
     })
-    for (const f of v2?.knowledge_feedback ?? []) {
+  }
+  for (const t of input.tasks) {
+    if (!t.header) continue
+    for (const f of handoffV2(t.header, t.version)?.knowledge_feedback ?? []) {
       const prev = feedback.get(f.id)
       if (prev) prev.notes.push(f.note)
       else {
