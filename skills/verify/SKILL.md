@@ -97,6 +97,11 @@ Review the whole change of this Work, apply only the findings the human picks, t
 - **Going back:** if the change is wrong (e.g. it changes behavior), write it as a 차단 finding. If the human does not pick it to apply here, set `recommended_next` with the reason: `refactor` if the change is wrong, `intake` if the intent is wrong. The app stops and the human picks the step.
 <!-- /type -->
 
+## Knowledge
+
+- `failure` items in `참고 지식` are a checklist: check each one against the change.
+- **Extract:** a 차단 finding that is a rule (`constraint`) or a recurring failure (`failure`), the reason for a 판정 불가, a test that also fails at the base commit (`recipe`).
+
 ## Decision points
 
 - How to fix a picked finding, and the verdict of each 완료조건. With 결정마다 확인, ask before you change code and before you settle the verdicts.

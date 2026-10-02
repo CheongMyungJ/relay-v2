@@ -3,7 +3,8 @@
 //
 // 1. 머리글: disable-model-invocation: true, description 있음, name 없음 (D33)
 // 2. 크기: SKILL.md + _common.md. Claude Code 어림(글자 수 / 4)으로 판정, 모델 토큰 어림은 참고 (D31, D95)
-// 3. 템플릿: 주석 단 템플릿에 값을 채운 예시가 docs/contracts 스키마를 통과하는지 (D87). intent 초안은 머리글이 없다 (D236)
+// 3. 템플릿: 주석 단 템플릿에 값을 채운 예시가 docs/contracts 스키마를 통과하는지 (D87). intent 초안은 머리글이 없다 (D236).
+//    handoff는 형식 버전 2의 스키마(I70, I81)다. 설계에 둔 지식 파일 예시는 knowledge-entry 스키마로 본다 (D320)
 // 4. 설계 대조: 산출물 템플릿의 절 제목, 입력·결정 지점·사람이 정할 결정·완료조건 항목 (5.6.1~5.6.10, I60, I65)
 // 5. 유형별 조립: 공용 스킬의 유형 표시, 조립한 글에 다른 유형의 산출물이 없음 (D279, I68)
 
@@ -121,7 +122,7 @@ else ok('모든 스킬이 목표 안');
 
 console.log('\n[3] 템플릿 예시와 스키마 (D87)');
 const ajv = new Ajv2020({ allErrors: true, strict: false });
-const handoffSchema = JSON.parse(read('docs/contracts/handoff.v1.schema.json'));
+const handoffSchema = JSON.parse(read('docs/contracts/handoff.v2.schema.json'));
 const vHandoff = ajv.compile(handoffSchema);
 const errs = (v) => (v.errors ?? []).map((e) => `${e.instancePath || '/'} ${e.message}`).join('; ');
 
@@ -154,6 +155,14 @@ if (handoffTpl) {
   // 스키마가 막아야 하는 것
   check(!vHandoff({ ...tplFm.data, status: 'blocked' }), '반례: blocked인데 blocked_reason 빈 값 → 오류');
   check(!vHandoff({ ...tplFm.data, status: null }), '반례: status 빈 값 → 오류');
+  // 지식 후보의 반례 (D297, D299)
+  const cand = { kind: 'constraint', rule: '규칙', paths: ['src/a.js'], terms: ['합계'], why: '이유', not_in_code: '코드불가', incentive: '유인' };
+  check(vHandoff({ ...awaiting, knowledge_candidates: [cand] }), `채운 예시(지식 후보) 통과 ${errs(vHandoff)}`);
+  check(!vHandoff({ ...awaiting, knowledge_candidates: ['문자열 후보'] }), '반례: 문자열 후보 → 오류 (형식 버전 2)');
+  check(!vHandoff({ ...awaiting, knowledge_candidates: [{ ...cand, paths: [] }] }), '반례: 경로 없는 제약 → 오류');
+  check(!vHandoff({ ...awaiting, knowledge_candidates: [{ ...cand, terms: [] }] }), '반례: 용어 없는 후보 → 오류');
+  check(!vHandoff({ ...awaiting, knowledge_candidates: [{ ...cand, incentive: undefined }] }), '반례: 유인 없는 후보 → 오류');
+  check(!vHandoff({ ...awaiting, knowledge_candidates: [{ ...cand, kind: 'structure' }] }), '반례: 경로 하나인 구조 사실 → 오류');
 
   // 값을 채운 handoff 예시 (D221): 글 값은 큰따옴표로 감싸고 스키마를 통과한다. 본문은 필수 절 둘을 갖춘다
   const filled = codeBlocks(common, 'yaml').find((b) => b !== handoffTpl && b.includes('status: awaiting_approval'));
@@ -163,10 +172,27 @@ if (handoffTpl) {
     check(sameSet(Object.keys(fm.data), Object.keys(handoffSchema.properties)), '채운 예시의 필드 = 스키마 필드');
     check(vHandoff(fm.data), `채운 예시가 스키마를 통과 ${errs(vHandoff)}`);
     check(/^## 요약\n[\s\S]*^## 다음 task가 알아야 할 것\n/m.test(fm.body), '채운 예시의 본문에 필수 절 둘');
+    // 지식 후보 하나를 채운다 (I80): 사람 결정에서 다듬은 후보는 decision이 그 결정의 what과 같다 (D299)
+    const cand = fm.data.knowledge_candidates ?? [];
+    check(cand.length === 1, '채운 예시에 지식 후보 하나');
+    check(cand.every((c) => !c.decision || fm.data.decisions.some((d) => d.by === 'human' && d.what === c.decision)), '채운 예시의 decision은 사람 결정의 what과 같음 (D299)');
     // 글 값: decisions의 what·why와 글 목록의 항목
     const texts = fm.raw.split('\n').filter((l) => /^\s*- (?!\w+:)|^\s*(- )?(what|why): /.test(l));
     check(texts.length > 0 && texts.every((l) => /: "[^"]*"$|^\s*- "[^"]*"$/.test(l)), `채운 예시의 글 값은 큰따옴표로 감쌈 (${texts.length}줄)`);
   }
+}
+
+// 지식 파일 예시 (D320): 설계 본문에 있으면 knowledge-entry 스키마를 통과하고 본문에 # 규칙과 세 절이 있다
+const entrySchema = JSON.parse(read('docs/contracts/knowledge-entry.v1.schema.json'));
+const vEntry = ajv.compile(entrySchema);
+const entryExamples = codeBlocks(design, 'markdown')
+  .map((b) => frontMatter(b))
+  .filter((fm) => fm && 'superseded_by' in fm.data);
+// 설계 본문(5.7)에 옮기기 전에는 예시가 없다 (I82). 옮긴 뒤에는 있어야 한다
+if (design.includes('\n### 5.7 ')) check(entryExamples.length > 0, '설계: 지식 파일 예시 있음 (D320)');
+for (const fm of entryExamples) {
+  check(vEntry(fm.data), `설계의 지식 파일 예시(${fm.data.id})가 스키마를 통과 ${errs(vEntry)}`);
+  check(/^# \S/m.test(fm.body) && ['## 이유', '## 코드불가', '## 유인'].every((h) => fm.body.includes(h)), `설계의 지식 파일 예시(${fm.data.id}) 본문: # 규칙, 이유, 코드불가, 유인`);
 }
 
 // intent 초안 템플릿 (work-start). 머리글이 없다: 유형과 버전은 앱이 의도 승인 때 붙인다 (D236, I58)
@@ -250,6 +276,19 @@ const spec = {
     ['5.2.1', '추가 검사: pr.md 첫 줄', /first line of `pr\.md` starts with `# `/],
     ['5.2.1', '추가 검사: replies.md의 절 (D190)', /`replies\.md` has one `## <item id>` section with a non-empty reply for each comment item/],
     ['D100', '형식 오류 되돌림: 파일 고침, 판단은 유지, 3~4 다시', /fix the file it names[\s\S]*Do not change your judgments[\s\S]*steps 3 and 4 again/],
+    ['5.2.1', '추가 검사: 지식 후보의 필수 필드, 용어, 종류별 경로 (D299)', /knowledge candidate has its required fields, 1 to 5 `terms`, a path for `constraint` and two paths for `structure`/],
+    ['D310', '지식 파일은 고치지 않음 (pr-respond 예외)', /Do not write knowledge files yourself[\s\S]*pr-respond is the exception/],
+    ['D295', '후보는 task마다 3개 안팎, 코드로 알 수 없는 것', /about 3 per task[\s\S]*cannot get from the code/],
+    ['D291', '종류 여섯과 갈래', /`domain`[\s\S]*`recipe`[\s\S]*`failure`[\s\S]*`constraint`[\s\S]*`subkind: compat`[\s\S]*`decision`[\s\S]*`subkind: non_goal`[\s\S]*`structure`[\s\S]*`subkind: term`/],
+    ['D299', '제약은 경로 하나 이상, 구조 사실은 둘 이상', /1\+ `paths`[\s\S]*2\+ `paths`/],
+    ['D311', '용어 1~5개', /`terms`: 1 to 5 words/],
+    ['D297', '코드불가와 유인, 사람이 정한 것은 사람이 정함, 코드에서 이유를 추론하지 않음', /`not_in_code`[\s\S]*"사람이 정함"[\s\S]*`incentive`[\s\S]*Do not infer a reason from the code/],
+    ['D299', '다듬은 사람 결정은 decision에 what 그대로', /copy that decision's `what` into `decision` verbatim/],
+    ['D313', '참고 지식을 고치는 후보는 supersedes', /corrects a `참고 지식` item: put that item's id in `supersedes`/],
+    ['B.3', '지식이 아닌 것', /Not knowledge: facts of this incident[\s\S]*hypotheses that only mattered in this Work[\s\S]*progress/],
+    ['D321', '후보는 한국어', /Write values in Korean/],
+    ['D296', '되감기·이전 단계 추천의 까닭은 실패 부류 후보', /rewind or the previous step recommended going back[\s\S]*`failure` candidate/],
+    ['D315', '참고 지식은 참고, 다르면 knowledge_feedback (D318)', /`참고 지식` in context\.md is reference[\s\S]*`knowledge_feedback`/],
   ],
   'work-start': [
     ['5.6.3', '입력: context.md부터 (요청 원문 포함)', /Read it first[\s\S]*request text/],
@@ -278,6 +317,9 @@ const spec = {
     ['D264', '리팩터링 기본 완료조건 네 개', /`- \[ \] <test command>가 통과한다` \/ `- \[ \] 기존 테스트를 약화하거나 삭제하지 않는다` \/ `- \[ \] 바꾼 곳의 지금 동작을 잡는 안전망 테스트가 있고 기준 코드에서도 통과한다` \/ `- \[ \] 레포 밖 공개 인터페이스가 바뀌지 않는다`/, ['refactor']],
     ['D266', '구조 조건: 읽거나 명령으로 확인, 한 줄에 하나, 방법은 쓰지 않음', /structural conditions that can be checked[\s\S]*one per line[\s\S]*Not the order or method/, ['refactor']],
     ['D266', '구조 목표가 막연하면 확인할 수 있는 구조를 물음', /vague[\s\S]*ask for a structure that can be checked/, ['refactor']],
+    ['D313', '도메인 규칙을 제약이나 완료조건으로 옮기고 id, 바뀌었으면 말해 달라고 알림', /Domain rules in `참고 지식`[\s\S]*`제약` or a 완료조건 line, with the id[\s\S]*to say so if a rule has changed/],
+    ['D313', '사람이 고친 규칙은 decision과 supersedes', /A rule the human corrects[\s\S]*`decision`[\s\S]*`supersedes`/],
+    ['B.4', 'intake에서 뽑을 곳', /Extract:\*\* expected behavior the human answered/],
   ],
   design: [
     ['5.6.8', '입력: context.md, request.md 경로', /`context\.md`[\s\S]*`request\.md`/],
@@ -295,6 +337,7 @@ const spec = {
     ['5.6.8', '결정 지점: 접근, 바뀌는 곳, 계획의 나눔', /The approach, what changes, and how to split the plan/],
     ['D242', '사람이 정할 결정 셋', /Several options change what is seen from outside[\s\S]*widens the scope, or touches the intent's non-goals or constraints[\s\S]*do not take a human suggestion/],
     ['5.6.8', '완료조건: 일곱 절, 요구사항 출처와 계획, 테스트 계획, 사람 결정, 코드 안 바꿈', /## Done when[\s\S]*seven template sections[\s\S]*source and is in a step[\s\S]*test plan[\s\S]*`decisions`[\s\S]*No code changed/],
+    ['B.4', 'design에서 뽑을 곳: 접근과 기각한 대안, 바깥 동작의 사람 결정', /Extract:\*\* `접근` and its rejected alternatives \(`decision`\)[\s\S]*\(`domain`\)/],
   ],
   implement: [
     ['5.6.9', '입력: context.md, design.md', /`context\.md`[\s\S]*`design\.md`/],
@@ -310,6 +353,7 @@ const spec = {
     ['5.6.9', '결정 지점: 계획이 정하지 않은 구현 세부', /Implementation details the plan does not settle/],
     ['D248', '크게 벗어남 넷', /behavior or interface\) differs from the design[\s\S]*scope widens[\s\S]*different way from `접근`[\s\S]*dependency the design does not have, or change a data format or schema/],
     ['5.6.9', '완료조건: 네 절, 계획 단계, 새 동작 테스트, 물음, 커밋, 테스트 명령', /## Done when[\s\S]*four template sections[\s\S]*Every step of the plan[\s\S]*failed before[\s\S]*and passed after[\s\S]*`decisions`[\s\S]*committed[\s\S]*test command/],
+    ['B.4', 'implement에서 뽑을 곳: 계획과 달라진 점', /Extract:\*\* a `계획과 달라진 점`/],
   ],
   refactor: [
     ['5.6.10', '입력: context.md, request.md 경로', /`context\.md`[\s\S]*`request\.md`/],
@@ -328,6 +372,7 @@ const spec = {
     ['D267', '사람이 정할 결정: 목표 구조 선택지, 범위·비목표·제약, 사람 제안', /Several target structures[\s\S]*widens the scope, or touches the intent's non-goals or constraints[\s\S]*do not take a human suggestion/],
     ['D270', '동작 차이: 다른 방법 / 받아들임 / 범위에서 뺌, 받아들이면 그 기대값만, by: human', /must change behavior a little[\s\S]*keep the current behavior another way \/ accept the difference \/ drop that part[\s\S]*only that expected value[\s\S]*`by: human`/],
     ['5.6.10', '완료조건: 다섯 절, 안전망, 단계 커밋, 찾은 버그, 사람 결정, 테스트 명령', /## Done when[\s\S]*five template sections[\s\S]*safety net[\s\S]*committed separately[\s\S]*plan step is committed[\s\S]*not fixed[\s\S]*`decisions`[\s\S]*test command/],
+    ['B.4', 'refactor에서 뽑을 곳: 고려한 대안, 찾은 버그, 받아들인 차이', /Extract:\*\* rejected target structures[\s\S]*`찾은 버그`[\s\S]*accepted difference/],
   ],
   fix: [
     ['5.6.5', '입력: context.md, request.md 경로', /`context\.md`[\s\S]*`request\.md`/],
@@ -348,6 +393,8 @@ const spec = {
     ['D228', '그 밖에는 묻지 않고 정함', /In any other case, decide the fix yourself/],
     ['5.6.2', '코드를 바꾸는 단계: 모두 커밋', /Commit all changes before you close/],
     ['5.6.5', '완료조건: 다섯 절, 재현 또는 질문, 원인 또는 질문, 추정 판정, 커밋, 재현 테스트, 테스트 명령', /## Done when[\s\S]*five template sections[\s\S]*reproduced[\s\S]*unnarrowed cause[\s\S]*suspicion is judged[\s\S]*committed[\s\S]*fails before[\s\S]*test command/],
+    ['B.4', 'fix: 지난 실패 부류는 가설 후보 (I80)', /`failure` items in `참고 지식` are hypothesis candidates/],
+    ['B.4', 'fix에서 뽑을 곳: 원인, 재현, 수정 방향의 사람 결정', /Extract:\*\* a `원인`[\s\S]*\(`recipe`\)[\s\S]*fix direction \(`domain`\)/],
   ],
   verify: [
     ['5.6.6', '입력: context.md, fix.md', /`context\.md`[\s\S]*`fix\.md`/, ['bugfix']],
@@ -384,6 +431,8 @@ const spec = {
     ['D265', '따라 고친 기존 테스트는 약화 아님, 기대값·입력 변경이나 삭제는 물음', /followed an internal interface change[\s\S]*약화 아님[\s\S]*expected values or inputs changed[\s\S]*ask/, ['refactor']],
     ['D275', '리팩터링 이전 단계 추천: 변경이면 refactor, 의도면 intake', /`refactor` if the change is wrong, `intake` if the intent is wrong/, ['refactor']],
     ['D274', '리팩터링 pr.md: 요약 / 목표 구조 / 동작 보존 / 변경 / 찾은 버그 / 테스트', /## 요약\n## 목표 구조\n## 동작 보존\n## 변경\n## 찾은 버그\n## 테스트/, ['refactor']],
+    ['B.4', 'verify: 실패 부류는 점검 목록 (I80)', /`failure` items in `참고 지식` are a checklist/],
+    ['D296', 'verify에서 뽑을 곳: 차단 지적, 판정 불가 이유, 기준 커밋에서도 실패', /Extract:\*\* a 차단 finding[\s\S]*판정 불가[\s\S]*also fails at the base commit \(`recipe`\)/],
   ],
   'pr-respond': [
     ['D192', '입력: context.md(이번 라운드의 항목, 사람 지시, PR 정보, 앞 라운드 요약)와 파이프라인 산출물(경로)', /`context\.md`[\s\S]*this round's items, the human's instruction, the PR[\s\S]*summaries of earlier rounds[\s\S]*pipeline artifacts/],
@@ -404,6 +453,8 @@ const spec = {
     ['D188', 'recommended_next는 늘 null', /`recommended_next`:\*\* always null/],
     ['5.6.7', '결정 지점: 항목마다 고칠지와 방식. 결정마다 확인이면 코드 전에 물음', /Whether and how to fix each item[\s\S]*결정마다 확인, ask before you change code/],
     ['5.6.7', '완료조건: 셋 중 하나 또는 open_questions, 코멘트 항목마다 답글, 커밋과 테스트 결과', /## Done when[\s\S]*settled as one of the three[\s\S]*has a reply in `replies\.md`[\s\S]*committed[\s\S]*test command/],
+    ['D309', '지식 파일의 코멘트는 그 파일을 고쳐 대응, 머리글을 지킴, 버리면 지움', /comment on a knowledge file[\s\S]*editing that file[\s\S]*Keep the front matter fields[\s\S]*delete the file/],
+    ['D296', 'pr-respond에서 뽑을 곳: 리뷰어의 고침, CI 실패의 원인', /Extract:\*\* a reviewer's 고침[\s\S]*cause of a CI failure/],
   ],
 };
 // 항목의 넷째 값은 유형 목록이다. 공용 스킬에서 없으면 세 유형 모두에, 있으면 그 유형의 조립 결과에 있어야 한다 (D279)

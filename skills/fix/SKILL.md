@@ -29,6 +29,11 @@ Reproduce the bug, find the cause, fix the code and commit. Write what you found
 - **Changing existing tests:** if an existing test must change, change it, add it to `risks`, and mark it as an existing-test change in `변경 요약`. Whether it weakens the test is judged by verify.
 - **Run tests:** run the test command from the intent's 완료조건. For each failure, check whether it also fails at the base commit (from `context.md`), and say which.
 
+## Knowledge
+
+- `failure` items in `참고 지식` are hypothesis candidates: check the ones on these paths first.
+- **Extract:** a `원인` whose symptom and cause are in different modules (`structure`), how to reproduce or a test that already fails at the base commit (`recipe`), a human decision on the fix direction (`domain`).
+
 ## Decision points
 
 - How to reproduce, and how to implement the fix. With 결정마다 확인, ask before you try to reproduce and before you change code.

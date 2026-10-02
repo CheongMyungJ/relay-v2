@@ -4,7 +4,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { ALL_NODES, NODE_INFO, PIPELINES } from '../../src/core/pipeline'
-import { checkIntentDraft, checkTask, isValid } from '../../src/core/validate'
+import { reviewKnowledge } from '../../src/core/knowledge'
+import { checkIntentDraft, checkTask, handoffV2, isValid } from '../../src/core/validate'
 import { DEFAULT_CONFIG } from '../../src/shared/config'
 import type { NodeName } from '../../src/shared/contracts'
 import { WORK_TYPES, type WorkType } from '../../src/shared/work'
@@ -120,6 +121,26 @@ describe.runIf(handoffTemplate && draftTemplate)(
       expect(check.handoffHeader?.decisions).toEqual([
         { what: '빈 배열의 평균은 0으로 한다', why: '요청의 완료조건: `avg([])`는 0', by: 'human' },
       ])
+    })
+
+    it('값을 채운 handoff 예시의 지식 후보는 v2로 읽히고, 사람 결정과 묶인다 (I80, D299)', () => {
+      const check = checkTask({
+        node: 'fix',
+        type: 'bugfix',
+        files: { 'handoff.md': filledHandoff ?? '', ...artifacts('fix') },
+        config: DEFAULT_CONFIG,
+      })
+      const v2 = handoffV2(check.handoffHeader, check.formatVersion)
+      expect(v2?.knowledge_candidates?.map((c) => c.kind)).toEqual(['domain'])
+      const review = reviewKnowledge({
+        tasks: [{ taskId: 't-02', node: 'fix', version: 2, header: check.handoffHeader }],
+        pool: [],
+        changed: [],
+        share: true,
+        dir: 'docs/knowledge/',
+        offerPending: false,
+      })
+      expect(review.candidates.map((c) => [c.by, c.unrefined])).toEqual([['human', false]])
     })
 
     it('반례: 예시의 글 값을 따옴표 없이 쓰면 ": "가 든 글을 YAML이 다르게 읽어 형식 오류다 (D221)', () => {

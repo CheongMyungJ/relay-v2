@@ -32,6 +32,11 @@ For a feature Work, write what to build (user scenarios, requirements) and how t
 - **Test plan:** for each requirement, where and how it is tested. Each behavior in the intent's 완료조건 must be covered by at least one test. If a behavior cannot get a test (e.g. UI behavior, needs an external service), write why.
 - **Conflict with the intent:** if 완료조건 contradict each other or cannot be met, write it in `intent_deviation`. If the intent must change, set `recommended_next` to `intake`.
 
+## Knowledge
+
+- `decision` and `constraint` items in `참고 지식`: do not pick a rejected alternative again without a new reason.
+- **Extract:** `접근` and its rejected alternatives (`decision`), a human decision on behavior seen from outside (`domain`).
+
 ## Decision points
 
 - The approach, what changes, and how to split the plan. With 결정마다 확인, ask before you decide them.
