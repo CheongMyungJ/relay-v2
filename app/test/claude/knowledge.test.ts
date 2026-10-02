@@ -13,6 +13,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { taskDirName } from '../../src/core/machine'
 import { checkHandoff, handoffV2, sectionText } from '../../src/core/validate'
 import type { KnowledgeCandidateField } from '../../src/shared/contracts'
+import { defaultCandidateChoice } from '../../src/shared/knowledge'
 import type { WorkState } from '../../src/shared/work'
 import { drive, type DriveResult, type TaskOutcome } from '../flow/driver'
 import {
@@ -135,6 +136,8 @@ interface WorkResult {
   intentIds: string[]
   /** Work 완료 화면의 지식 칸 (거르기 전) */
   screen: string[]
+  /** 같은 사람 결정에서 채택이 기본인 후보가 둘 이상인 결정 (G49, D324) */
+  duplicates: string[]
   claudeVersion: string | null
 }
 
@@ -218,6 +221,7 @@ async function runWork(
     pauseAt: (t) => t.node === 'verify' && t.status === 'awaiting_approval',
   })
   const screen: string[] = []
+  const adopted = new Map<string, number>()
   let drove = first
   if (first.status === 'paused') {
     await settle(h, key)
@@ -225,7 +229,12 @@ async function runWork(
     const review = await h.relay.review(key, verify)
     for (const c of review?.completion?.knowledge?.candidates ?? []) {
       const by = c.unrefined ? ' (다듬지 않은 사람 결정)' : c.decision ? ' (사람 결정)' : ''
-      screen.push(`${c.kind ?? '종류 없음'}: ${c.rule}${by}`)
+      const same = c.sameDecisionAs ? `, 같은 결정의 후보(앞: ${c.sameDecisionAs})` : ''
+      const adopt = defaultCandidateChoice(c, true).adopt
+      screen.push(
+        `${c.key} ${c.kind ?? '종류 없음'}: ${c.rule}${by} [${adopt ? '채택' : '채택 안 함'}${same}]`,
+      )
+      if (adopt && c.decision) adopted.set(c.decision, (adopted.get(c.decision) ?? 0) + 1)
     }
     const rest = await drive(h.relay, ui, key, common)
     drove = {
@@ -245,6 +254,7 @@ async function runWork(
     knowledge: null,
     intentIds: [],
     screen,
+    duplicates: [...adopted].filter(([, n]) => n > 1).map(([d]) => d),
     claudeVersion: work.tasks[0]?.claude_version ?? null,
   }
   for (const t of work.tasks) {
@@ -299,6 +309,11 @@ async function run(): Promise<Result> {
     const w1 = await runWork(h, ui, projectId, REQUEST_1, 'work-1')
     works.push(w1)
     const stored = storeFiles(store)
+    if (w1.duplicates.length) {
+      problems.push(
+        `같은 사람 결정의 후보가 둘 이상 채택이 기본 (G49, D324): ${w1.duplicates.join(' / ')}`,
+      )
+    }
     if (w1.drive.status !== 'completed') {
       problems.push(`Work 1이 끝나지 않음: ${w1.drive.status} ${w1.drive.reason ?? ''}`)
       return { works, claudeVersion: works[0]?.claudeVersion ?? null, stored, problems, notes }
