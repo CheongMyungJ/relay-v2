@@ -188,8 +188,7 @@ const vEntry = ajv.compile(entrySchema);
 const entryExamples = codeBlocks(design, 'markdown')
   .map((b) => frontMatter(b))
   .filter((fm) => fm && 'superseded_by' in fm.data);
-// 설계 본문(5.7)에 옮기기 전에는 예시가 없다 (I82). 옮긴 뒤에는 있어야 한다
-if (design.includes('\n### 5.7 ')) check(entryExamples.length > 0, '설계: 지식 파일 예시 있음 (D320)');
+check(entryExamples.length > 0, '설계: 지식 파일 예시 있음 (5.7.1, D320)');
 for (const fm of entryExamples) {
   check(vEntry(fm.data), `설계의 지식 파일 예시(${fm.data.id})가 스키마를 통과 ${errs(vEntry)}`);
   check(/^# \S/m.test(fm.body) && ['## 이유', '## 코드불가', '## 유인'].every((h) => fm.body.includes(h)), `설계의 지식 파일 예시(${fm.data.id}) 본문: # 규칙, 이유, 코드불가, 유인`);

@@ -351,7 +351,7 @@ export function pendingMerged(pendingText: string, baseText: string | null): boo
 
 // ---------- 넣기 (D286, D311, D312, D315) ----------
 
-/** 단계마다 넣을 종류 (부록 B.4) */
+/** 단계마다 넣을 종류 (설계 5.7.3) */
 export const STAGE_KINDS: Readonly<Record<TaskNode, readonly KnowledgeKind[]>> = {
   intake: ['domain', 'recipe', 'constraint'],
   fix: ['failure', 'recipe', 'structure'],
