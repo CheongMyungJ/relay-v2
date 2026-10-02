@@ -581,12 +581,29 @@ export function reviewKnowledge(input: ReviewInput): KnowledgeReview {
         incentive: c.incentive,
         decision,
         sameDecisionAs,
+        similarTo: null,
         supersedes: target ? refView(target) : null,
         unknownSupersedes: c.supersedes && !target ? c.supersedes : null,
         feedback: [],
         overlaps: [],
       })
     })
+  }
+  // 다른 task가 앞서 올린 비슷한 후보(종류가 같고 경로가 겹침)가 있으면 그 후보를 가리킨다 (D326). 같은 결정으로 묶인
+  // 후보(D324)와 비슷한 후보를 가리키는 후보는 앞 후보가 되지 않는다. 같은 task 안의 후보끼리는 묶지 않는다
+  for (const [i, c] of candidates.entries()) {
+    if (!c.kind || c.sameDecisionAs) continue
+    const prev = candidates
+      .slice(0, i)
+      .find(
+        (p) =>
+          p.taskId !== c.taskId &&
+          p.kind === c.kind &&
+          !p.sameDecisionAs &&
+          !p.similarTo &&
+          p.paths.some((x) => c.paths.some((y) => pathsOverlap(x, y))),
+      )
+    if (prev) c.similarTo = prev.key
   }
   // 어느 후보와도 묶이지 않은 사람 결정. 같은 결정을 여러 task가 적었으면 처음 것 하나만 보인다 (D304)
   const shown = new Set<string>()
@@ -613,6 +630,7 @@ export function reviewKnowledge(input: ReviewInput): KnowledgeReview {
         incentive: '',
         decision: d.what,
         sameDecisionAs: null,
+        similarTo: null,
         supersedes: null,
         unknownSupersedes: null,
         feedback: [],

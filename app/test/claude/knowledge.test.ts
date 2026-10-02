@@ -229,7 +229,11 @@ async function runWork(
     const review = await h.relay.review(key, verify)
     for (const c of review?.completion?.knowledge?.candidates ?? []) {
       const by = c.unrefined ? ' (다듬지 않은 사람 결정)' : c.decision ? ' (사람 결정)' : ''
-      const same = c.sameDecisionAs ? `, 같은 결정의 후보(앞: ${c.sameDecisionAs})` : ''
+      const same = c.sameDecisionAs
+        ? `, 같은 결정의 후보(앞: ${c.sameDecisionAs})`
+        : c.similarTo
+          ? `, 비슷한 후보(앞: ${c.similarTo})`
+          : ''
       const adopt = defaultCandidateChoice(c, true).adopt
       screen.push(
         `${c.key} ${c.kind ?? '종류 없음'}: ${c.rule}${by} [${adopt ? '채택' : '채택 안 함'}${same}]`,

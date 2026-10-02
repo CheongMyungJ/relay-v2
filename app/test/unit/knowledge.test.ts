@@ -552,6 +552,113 @@ describe('후보 모으기 (D283, D296, D299, D304, D318)', () => {
     ).toBe(true)
   })
 
+  it('다른 task가 앞서 올린 같은 종류에 경로가 겹치는 후보가 있으면 비슷한 후보로 채택 안 함이 기본이다 (D326)', () => {
+    // 평가 21~23에서 본 꼴: fix와 verify가 decision 없이 같은 규칙을 따로 올렸다
+    const rule = { ...CANDIDATE, paths: ['src/invoice/total.js'] }
+    const tasks: CandidateTask[] = [
+      {
+        taskId: 't-01',
+        node: 'intake',
+        version: 2,
+        header: header({
+          decisions: [human],
+          knowledge_candidates: [{ ...rule, decision: human.what }],
+        }),
+      },
+      {
+        taskId: 't-02',
+        node: 'fix',
+        version: 2,
+        header: header({
+          knowledge_candidates: [
+            // 같은 task의 비슷한 후보끼리는 묶지 않는다
+            { ...rule, kind: 'recipe', rule: 'npm test로 본다', paths: ['src/invoice'] },
+            { ...rule, kind: 'recipe', rule: 'INV-2031로 본다', paths: ['src/invoice/total.js'] },
+          ],
+        }),
+      },
+      {
+        taskId: 't-03',
+        node: 'verify',
+        version: 2,
+        header: header({
+          knowledge_candidates: [
+            // 앞 task의 도메인 규칙과 같은 규칙을 decision 없이 다시 올림 → 비슷한 후보
+            { ...rule, rule: '같은 규칙 다른 말', paths: ['./src/invoice/total.js:computeTotals'] },
+            // 종류가 같아도 경로가 겹치지 않으면 따로다
+            { ...rule, rule: '반품 규칙', paths: ['src/invoice/credit-note.js'] },
+            // 앞 task의 레시피와 겹침 → 앞의 처음 후보를 가리킨다
+            { ...rule, kind: 'recipe', rule: 'npm test로 확인', paths: ['src/invoice/total.js'] },
+          ],
+        }),
+      },
+    ]
+    const r = reviewKnowledge({
+      tasks,
+      pool: [],
+      changed: [],
+      share: true,
+      dir: 'd/',
+      offerPending: true,
+    })
+    expect(r.candidates.map((c) => [c.key, c.similarTo])).toEqual([
+      ['t-01#k1', null],
+      ['t-02#k1', null],
+      ['t-02#k2', null],
+      ['t-03#k1', 't-01#k1'],
+      ['t-03#k2', null],
+      ['t-03#k3', 't-02#k1'],
+    ])
+    const byKey = (k: string) => first(r.candidates.filter((c) => c.key === k))
+    const adopt = (k: string) => candidateChoice(byKey(k), undefined, true).adopt
+    expect(['t-01#k1', 't-02#k1', 't-02#k2', 't-03#k1', 't-03#k2', 't-03#k3'].map(adopt)).toEqual([
+      true,
+      true,
+      true,
+      false,
+      true,
+      false,
+    ])
+    // 사람이 고르면 비슷한 후보도 채택된다
+    expect(
+      candidateChoice(
+        byKey('t-03#k1'),
+        { candidates: { 't-03#k1': { adopt: true, share: 'team', replace: null } } },
+        true,
+      ).adopt,
+    ).toBe(true)
+  })
+
+  it('같은 결정으로 묶인 후보는 비슷한 후보로 다시 묶지 않는다 (D324, D326)', () => {
+    const rule = { ...CANDIDATE, paths: ['src/a.js'], decision: human.what }
+    const tasks: CandidateTask[] = [
+      {
+        taskId: 't-01',
+        node: 'intake',
+        version: 2,
+        header: header({ decisions: [human], knowledge_candidates: [rule] }),
+      },
+      {
+        taskId: 't-03',
+        node: 'verify',
+        version: 2,
+        header: header({ knowledge_candidates: [rule] }),
+      },
+    ]
+    const r = reviewKnowledge({
+      tasks,
+      pool: [],
+      changed: [],
+      share: true,
+      dir: 'd/',
+      offerPending: true,
+    })
+    expect(r.candidates.map((c) => [c.key, c.sameDecisionAs, c.similarTo])).toEqual([
+      ['t-01#k1', null, null],
+      ['t-03#k1', 't-01#k1', null],
+    ])
+  })
+
   it('뒤 task가 다듬은 앞 task의 사람 결정은 다듬지 않은 것으로 남지 않고, 같은 결정은 한 번만 보인다', () => {
     const scope = { what: '이번 수정 범위는 a만', why: 'x', by: 'human' }
     const tasks: CandidateTask[] = [
