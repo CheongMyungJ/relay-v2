@@ -99,6 +99,14 @@ export async function runEpisode(o) {
   const baseDir = path.join(o.scenarioDir, 'repo')
   const { repo, base } = makeRepo(o.workDir, scenario.repoName ?? 'repo', baseDir)
   const agentConfigDir = makeClaudeConfig(path.join(o.workDir, 'cfg-agent'))
+  /** before 뒤에 새로 생긴 에이전트 세션 (Work마다의 토큰과 질문 수) */
+  const newSessions = (before, bySession = agentUsageBySession(agentConfigDir)) =>
+    [...bySession.keys()].filter((x) => !before.has(x))
+  /** 세션마다의 메시지 수. 이것보다 늘어난 세션이 있으면 에이전트가 일했다 (done 거절, E11) */
+  const messageCounts = () =>
+    new Map([...agentUsageBySession(agentConfigDir)].map(([k, u]) => [k, u?.messages ?? 0]))
+  const agentWorkedSince = (snapshot) =>
+    [...messageCounts()].some(([k, n]) => n > (snapshot.get(k) ?? 0))
   const humanDir = path.join(o.workDir, 'human')
   const shots = path.join(humanDir, 'shots')
   fs.mkdirSync(shots, { recursive: true })
@@ -136,6 +144,7 @@ export async function runEpisode(o) {
   const counts = {}
   let charsTyped = 0
   let invalid = 0
+  let refusedDone = 0
   let ending = null
   let summary = ''
   let error = null
@@ -230,7 +239,7 @@ export async function runEpisode(o) {
       // 이 Work에서 새로 생긴 에이전트 세션의 토큰과 질문 수
       const bySession = agentUsageBySession(agentConfigDir)
       const asked = questionsBySession(agentConfigDir)
-      const sessions = [...bySession.keys()].filter((x) => !p.sessions.has(x))
+      const sessions = newSessions(p.sessions, bySession)
       const tokens = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, messages: 0 }
       for (const x of sessions) {
         const u = bySession.get(x)
@@ -261,7 +270,6 @@ export async function runEpisode(o) {
     say(`준비 (${repo})`)
     // 에이전트 세션은 쪽이 claude를 띄우기 전(준비, 다음 Work로 넘김)에 센다. 맨 CLI는 띄울 때 세션이 생길 수 있다
     let sessionsBefore = new Set(agentUsageBySession(agentConfigDir).keys())
-    let startedThisWork = () => true
     await arm.prepare()
     for (let w = 0; w < parts.length; w++) {
       if (w > 0) {
@@ -270,15 +278,15 @@ export async function runEpisode(o) {
         if (moved) say(moved)
       }
       const human = makeHuman(w)
-      const before = sessionsBefore
-      startedThisWork = () =>
-        [...agentUsageBySession(agentConfigDir).keys()].some((x) => !before.has(x))
       part = {
         n: w,
         human,
         turn: turns.length,
         t: Date.now(),
         sessions: sessionsBefore,
+        // done 거절(E11)은 다음 Work로 넘긴 뒤 메시지가 늘어난 세션으로 본다. 맨 CLI는 새로 띄울 때 세션이 생기고 그
+        // 세션에서 일할 수 있어, 새 세션이 있는지로는 가르지 못한다
+        started: messageCounts(),
         trees: new Set(trees().map((t) => t.label)),
         works: new Set(arm.works().map((x) => x.id)),
       }
@@ -431,15 +439,16 @@ export async function runEpisode(o) {
         }
         let waited = false
         for (const a of decision.actions ?? []) {
-          counts[a.do] = (counts[a.do] ?? 0) + 1
           const act = { ...a }
           if (a.id !== undefined && screen.elements) {
             const el = screen.elements.find((e) => e.id === a.id)
             act.label = el ? `${el.role} "${el.name}"` : '(없는 요소)'
           }
-          // 두 번째 Work부터는 이번 일에서 에이전트 세션이 하나도 없으면 done을 받지 않는다. 사람 역할이 앞 Work의
-          // 완료 화면을 이번 일로 읽고 [새 Work] 없이 끝낸 일이 있었다(2026-10-02 평가 21~23)
-          if (a.do === 'done' && w > 0 && !startedThisWork()) {
+          // 두 번째 Work부터는 이번 일에서 에이전트가 일한 기록(메시지)이 없으면 done을 받지 않는다. 사람 역할이 앞 Work의
+          // 완료 화면을 이번 일로 읽고 [새 Work] 없이 끝낸 일이 있었다(2026-10-02 평가 21~23, E11). 행동 수에는
+          // 세지 않고 refusedDone으로 센다
+          if (a.do === 'done' && w > 0 && !agentWorkedSince(part.started)) {
+            refusedDone++
             act.refused = true
             act.result =
               '받지 않음: 이번 일은 아직 시작하지 않았다. 이번 일에서 에이전트가 일한 기록이 없다. 화면에 남은 것은 앞 일이고, 앞 일의 변경은 기준 브랜치에 들어가지 않았다'
@@ -448,6 +457,7 @@ export async function runEpisode(o) {
             immediate = true
             break
           }
+          counts[a.do] = (counts[a.do] ?? 0) + 1
           if (a.do === 'done' || a.do === 'give_up') {
             ending = a.do
             summary = a.summary ?? a.reason ?? ''
@@ -592,6 +602,7 @@ export async function runEpisode(o) {
         .reduce((a, [, v]) => a + v, 0),
       charsTyped,
       invalidActions: invalid,
+      refusedDone,
       frictionMean: frictions.length
         ? frictions.reduce((a, b) => a + b, 0) / frictions.length
         : null,

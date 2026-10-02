@@ -229,6 +229,7 @@ function workRows(rs, n) {
         .join(', ') || '-',
     ],
     ['사람이 끝냄(done)', pct(own.filter((x) => x.ending === 'done').length, own.length)],
+    ['새 일 전에 끝내려다 거절됨(도구, E11)', get((x) => x.human.refusedDone ?? 0)],
     ['사람 차례 수', get((x) => x.human.turns)],
     ['사람 행동 수(기다림 제외)', get((x) => x.human.actionsTotal)],
     ['입력한 글자 수', get((x) => x.human.charsTyped)],

@@ -13,7 +13,8 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { taskDirName } from '../../src/core/machine'
 import { checkHandoff, handoffV2, sectionText } from '../../src/core/validate'
 import type { KnowledgeCandidateField } from '../../src/shared/contracts'
-import { defaultCandidateChoice } from '../../src/shared/knowledge'
+import { similarCandidates } from '../../src/core/knowledge'
+import { defaultCandidateChoice, type KnowledgeCandidateView } from '../../src/shared/knowledge'
 import type { WorkState } from '../../src/shared/work'
 import { drive, type DriveResult, type TaskOutcome } from '../flow/driver'
 import {
@@ -136,7 +137,9 @@ interface WorkResult {
   intentIds: string[]
   /** Work 완료 화면의 지식 칸 (거르기 전) */
   screen: string[]
-  /** 같은 사람 결정에서 채택이 기본인 후보가 둘 이상인 결정 (G49, D324) */
+  /**
+   * 채택이 기본인데 겹치는 후보: 같은 사람 결정의 후보가 둘 이상(G49, D324)이거나, 다른 task의 비슷한 후보 둘(G51, D326)
+   */
   duplicates: string[]
   claudeVersion: string | null
 }
@@ -221,7 +224,7 @@ async function runWork(
     pauseAt: (t) => t.node === 'verify' && t.status === 'awaiting_approval',
   })
   const screen: string[] = []
-  const adopted = new Map<string, number>()
+  const adopted: KnowledgeCandidateView[] = []
   let drove = first
   if (first.status === 'paused') {
     await settle(h, key)
@@ -238,7 +241,7 @@ async function runWork(
       screen.push(
         `${c.key} ${c.kind ?? '종류 없음'}: ${c.rule}${by} [${adopt ? '채택' : '채택 안 함'}${same}]`,
       )
-      if (adopt && c.decision) adopted.set(c.decision, (adopted.get(c.decision) ?? 0) + 1)
+      if (adopt) adopted.push(c)
     }
     const rest = await drive(h.relay, ui, key, common)
     drove = {
@@ -258,7 +261,7 @@ async function runWork(
     knowledge: null,
     intentIds: [],
     screen,
-    duplicates: [...adopted].filter(([, n]) => n > 1).map(([d]) => d),
+    duplicates: duplicates(adopted),
     claudeVersion: work.tasks[0]?.claude_version ?? null,
   }
   for (const t of work.tasks) {
@@ -292,6 +295,19 @@ async function runWork(
   return out
 }
 
+/** 채택이 기본인 후보 가운데 겹치는 것: 같은 사람 결정(G49, D324), 다른 task의 비슷한 후보(G51, D326) */
+function duplicates(adopted: readonly KnowledgeCandidateView[]): string[] {
+  const out: string[] = []
+  adopted.forEach((a, i) => {
+    for (const b of adopted.slice(i + 1)) {
+      if (a.decision && a.decision === b.decision) out.push(`같은 결정 ${a.key}·${b.key} (D324)`)
+      else if (a.taskId !== b.taskId && similarCandidates(a, b))
+        out.push(`비슷한 후보 ${a.key}·${b.key} (D326)`)
+    }
+  })
+  return out
+}
+
 async function run(): Promise<Result> {
   const ui = new ScreenUi()
   const h = await harness(
@@ -313,17 +329,20 @@ async function run(): Promise<Result> {
     const w1 = await runWork(h, ui, projectId, REQUEST_1, 'work-1')
     works.push(w1)
     const stored = storeFiles(store)
-    if (w1.duplicates.length) {
-      problems.push(
-        `같은 사람 결정의 후보가 둘 이상 채택이 기본 (G49, D324): ${w1.duplicates.join(' / ')}`,
-      )
-    }
     if (w1.drive.status !== 'completed') {
+      if (w1.duplicates.length) {
+        problems.push(`Work 1: 겹치는 후보가 함께 채택이 기본: ${w1.duplicates.join(' / ')}`)
+      }
       problems.push(`Work 1이 끝나지 않음: ${w1.drive.status} ${w1.drive.reason ?? ''}`)
       return { works, claudeVersion: works[0]?.claudeVersion ?? null, stored, problems, notes }
     }
     const w2 = await runWork(h, ui, projectId, REQUEST_2, 'work-2')
     works.push(w2)
+    for (const [i, w] of works.entries()) {
+      if (w.duplicates.length) {
+        problems.push(`Work ${i + 1}: 겹치는 후보가 함께 채택이 기본: ${w.duplicates.join(' / ')}`)
+      }
+    }
     const ids = new Set(stored.map((f) => path.basename(f, '.md')))
     if (w2.knowledge === null) problems.push('Work 2 intake에 `참고 지식` 절 없음 (D286)')
     else if (ids.size > 0 && ![...ids].some((id) => w2.knowledge?.includes(id))) {

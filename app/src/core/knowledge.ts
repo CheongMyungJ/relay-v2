@@ -233,6 +233,39 @@ export function pathsOverlap(a: string, b: string): boolean {
   return within(fx, fy) || within(fy, fx)
 }
 
+/** 같은 파일을 가리키는 경로인가 (D326). 디렉터리와 그 아래 파일은 아니고, 둘 다 심볼이면 같은 심볼이어야 한다 */
+function sameFile(a: string, b: string): boolean {
+  const x = normalizePath(a)
+  const y = normalizePath(b)
+  if (!x || !y) return false
+  if (isSymbol(x) && isSymbol(y)) return x === y
+  return pathFile(x) === pathFile(y)
+}
+
+/**
+ * 비슷한 후보인가 (D326): 종류와 갈래가 같고, 같은 파일을 가리키는 경로가 있고, 용어가 하나 이상 겹친다. 경로가 겹치기만
+ * 하는 것(디렉터리와 그 아래)이나 같은 파일의 다른 규칙(용어가 다름)은 비슷하지 않다
+ */
+export function similarCandidates(
+  a: {
+    kind: KnowledgeKind | null
+    subkind: string | null
+    paths: readonly string[]
+    terms: readonly string[]
+  },
+  b: {
+    kind: KnowledgeKind | null
+    subkind: string | null
+    paths: readonly string[]
+    terms: readonly string[]
+  },
+): boolean {
+  if (!a.kind || a.kind !== b.kind || (a.subkind ?? null) !== (b.subkind ?? null)) return false
+  if (!a.paths.some((x) => b.paths.some((y) => sameFile(x, y)))) return false
+  const terms = new Set(a.terms.map(normalizeTerm).filter(Boolean))
+  return b.terms.some((t) => terms.has(normalizeTerm(t)))
+}
+
 /** 항목 경로 가운데 known과 겹치는 가장 긴(가장 구체적인) 경로의 길이. 없으면 0 (D315 (2)) */
 export function overlapLength(entryPaths: readonly string[], known: readonly string[]): number {
   let best = 0
@@ -589,21 +622,23 @@ export function reviewKnowledge(input: ReviewInput): KnowledgeReview {
       })
     })
   }
-  // 다른 task가 앞서 올린 비슷한 후보(종류가 같고 경로가 겹침)가 있으면 그 후보를 가리킨다 (D326). 같은 결정으로 묶인
-  // 후보(D324)와 비슷한 후보를 가리키는 후보는 앞 후보가 되지 않는다. 같은 task 안의 후보끼리는 묶지 않는다
-  for (const [i, c] of candidates.entries()) {
-    if (!c.kind || c.sameDecisionAs) continue
-    const prev = candidates
-      .slice(0, i)
-      .find(
-        (p) =>
-          p.taskId !== c.taskId &&
-          p.kind === c.kind &&
-          !p.sameDecisionAs &&
-          !p.similarTo &&
-          p.paths.some((x) => c.paths.some((y) => pathsOverlap(x, y))),
-      )
+  // 다른 task가 올린 비슷한 후보(similarCandidates)가 있으면 그 후보를 가리키고 채택 안 함이 기본이다 (D326). 앞 후보는
+  // 사람 결정에서 다듬은 후보를 먼저, 그다음 올린 차례로 고른다. 사람 결정에서 다듬은 후보, 같은 결정의 뒤 후보(D324),
+  // 기존 항목을 고치는 후보(supersedes)는 비슷한 후보로 두지 않는다(사람이 정한 것과 고침이 기본으로 남게). 같은 task의
+  // 후보끼리는 묶지 않는다
+  const roots: KnowledgeCandidateView[] = []
+  const order = [
+    ...candidates.filter((c) => c.by === 'human'),
+    ...candidates.filter((c) => c.by !== 'human'),
+  ]
+  for (const c of order) {
+    if (c.sameDecisionAs) continue
+    const fixed = c.by === 'human' || c.supersedes !== null || c.unknownSupersedes !== null
+    const prev = fixed
+      ? undefined
+      : roots.find((p) => p.taskId !== c.taskId && similarCandidates(p, c))
     if (prev) c.similarTo = prev.key
+    else roots.push(c)
   }
   // 어느 후보와도 묶이지 않은 사람 결정. 같은 결정을 여러 task가 적었으면 처음 것 하나만 보인다 (D304)
   const shown = new Set<string>()
