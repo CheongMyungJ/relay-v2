@@ -289,6 +289,8 @@ export interface KnowledgeScreenEntry extends KnowledgeRefView {
   not_in_code: string
   incentive: string
   source: KnowledgeSource
+  /** 팀 지식이 로컬 기본 브랜치와 origin 가운데 한쪽에만 있으면 그쪽 (D332). 없으면 둘 다 있다 */
+  where?: 'local' | 'origin'
 }
 
 export interface KnowledgeScreen {
@@ -312,6 +314,8 @@ export type KnowledgeEditInput =
   | { op: 'drop'; scope: 'team' | 'mine' | 'pending'; id: string }
   | { op: 'move'; scope: 'mine' | 'pending'; id: string }
   | { op: 'confirm'; id: string }
+  /** 사람이 지식 화면에서 규칙을 더한다 (D332, 지식 탐색 K9) */
+  | { op: 'add'; scope: 'mine' | 'pending'; edit: CandidateEdit }
 
 // ---------- 거르기의 선택 (I75). 렌더러도 전달 버튼 줄의 한 줄을 이것으로 센다 ----------
 

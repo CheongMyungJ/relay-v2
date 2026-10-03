@@ -6,8 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { reviewKnowledge, type CandidateTask } from '../../src/core/knowledge'
 import { defaultCandidateChoice } from '../../src/shared/knowledge'
-import type { AnyHandoff } from '../../src/shared/contracts'
-import type { TaskNode } from '../../src/shared/work'
+import type { AnyHandoff, TaskNode } from '../../src/shared/contracts'
 
 const DIRS = (process.env['RELAY_EXPLORE_MID'] ?? '').split(',').filter(Boolean)
 

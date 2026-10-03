@@ -522,11 +522,19 @@ function ScreenEntry({
   const [rule, setRule] = useState(e.rule)
   const [paths, setPaths] = useState(e.paths.join(', '))
   const [terms, setTerms] = useState(e.terms.join(', '))
+  const [kind, setKind] = useState<KnowledgeKind>(e.kind)
+  const [subkind, setSubkind] = useState<KnowledgeSubkind | null>(e.subkind)
+  const [why, setWhy] = useState(e.why)
   const locked = e.carriedPr !== null
   return (
     <li className={`knowledge-item${e.status === 'superseded' ? ' dropped' : ''}`}>
       <RefLine r={e} />
       {e.status === 'superseded' ? <span className="dim"> (대체됨)</span> : null}
+      {e.where === 'origin' ? (
+        <span className="dim"> · origin에만 있음: 원격 기준으로 만든 Work에만 들어감</span>
+      ) : e.where === 'local' ? (
+        <span className="dim"> · 로컬에만 있음: 아직 push되지 않음</span>
+      ) : null}
       <div className="dim">
         출처: {e.source.work} {e.source.task} · {e.source.by === 'human' ? '사람' : 'AI'} · 용어:{' '}
         {e.terms.join(', ')}
@@ -561,6 +569,7 @@ function ScreenEntry({
       )}
       {editing && !locked ? (
         <div className="knowledge-edit">
+          <KindFields kind={kind} subkind={subkind} onKind={setKind} onSubkind={setSubkind} />
           <label className="form-col">
             <span>규칙</span>
             <input aria-label="규칙" value={rule} onChange={(ev) => setRule(ev.target.value)} />
@@ -573,6 +582,10 @@ function ScreenEntry({
             <span>용어 (쉼표로 나눔)</span>
             <input aria-label="용어" value={terms} onChange={(ev) => setTerms(ev.target.value)} />
           </label>
+          <label className="form-col">
+            <span>이유</span>
+            <textarea aria-label="이유" value={why} onChange={(ev) => setWhy(ev.target.value)} />
+          </label>
           <button
             className="primary"
             disabled={busy}
@@ -582,7 +595,7 @@ function ScreenEntry({
                 op: 'edit',
                 scope,
                 id: e.id,
-                edit: { rule, paths: list(paths), terms: list(terms) },
+                edit: { kind, subkind, rule, paths: list(paths), terms: list(terms), why },
               })
             }}
           >
@@ -592,6 +605,157 @@ function ScreenEntry({
       ) : null}
     </li>
   )
+}
+
+/** 종류와 갈래 고르기 (지식 탐색 K20): 갈래는 그 종류의 것만 보인다 */
+function KindFields({
+  kind,
+  subkind,
+  onKind,
+  onSubkind,
+}: {
+  kind: KnowledgeKind
+  subkind: KnowledgeSubkind | null
+  onKind: (k: KnowledgeKind) => void
+  onSubkind: (s: KnowledgeSubkind | null) => void
+}) {
+  const subs = (Object.keys(SUBKIND_KIND) as KnowledgeSubkind[]).filter(
+    (x) => SUBKIND_KIND[x] === kind,
+  )
+  return (
+    <div className="knowledge-head">
+      <label>
+        종류{' '}
+        <select
+          aria-label="종류"
+          value={kind}
+          onChange={(ev) => {
+            onKind(ev.target.value as KnowledgeKind)
+            onSubkind(null)
+          }}
+        >
+          {(Object.keys(KNOWLEDGE_KIND_LABEL) as KnowledgeKind[]).map((k) => (
+            <option key={k} value={k}>
+              {KNOWLEDGE_KIND_LABEL[k]}
+            </option>
+          ))}
+        </select>
+      </label>
+      {subs.length ? (
+        <label>
+          갈래{' '}
+          <select
+            aria-label="갈래"
+            value={subkind ?? ''}
+            onChange={(ev) => onSubkind((ev.target.value || null) as KnowledgeSubkind | null)}
+          >
+            <option value="">없음</option>
+            {subs.map((x) => (
+              <option key={x} value={x}>
+                {KNOWLEDGE_SUBKIND_LABEL[x]}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+    </div>
+  )
+}
+
+/** [규칙 더하기] (D332, 지식 탐색 K9): 사람이 정한 규칙을 공유 대기나 나만에 쓴다 */
+function AddRule({
+  share,
+  busy,
+  onAdd,
+}: {
+  share: boolean
+  busy: boolean
+  onAdd: (scope: 'mine' | 'pending', edit: CandidateEdit) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [kind, setKind] = useState<KnowledgeKind>('domain')
+  const [subkind, setSubkind] = useState<KnowledgeSubkind | null>(null)
+  const [rule, setRule] = useState('')
+  const [paths, setPaths] = useState('')
+  const [terms, setTerms] = useState('')
+  const [why, setWhy] = useState('')
+  const [scope, setScope] = useState<'mine' | 'pending'>(share ? 'pending' : 'mine')
+  if (!open)
+    return (
+      <button disabled={busy} onClick={() => setOpen(true)}>
+        규칙 더하기
+      </button>
+    )
+  return (
+    <div className="knowledge-edit">
+      <KindFields kind={kind} subkind={subkind} onKind={setKind} onSubkind={setSubkind} />
+      <label className="form-col">
+        <span>규칙</span>
+        <input aria-label="새 규칙" value={rule} onChange={(ev) => setRule(ev.target.value)} />
+      </label>
+      <label className="form-col">
+        <span>경로 (쉼표로 나눔)</span>
+        <input
+          aria-label="새 규칙 경로"
+          value={paths}
+          onChange={(ev) => setPaths(ev.target.value)}
+        />
+      </label>
+      <label className="form-col">
+        <span>용어 (쉼표로 나눔, 1~5개)</span>
+        <input
+          aria-label="새 규칙 용어"
+          value={terms}
+          onChange={(ev) => setTerms(ev.target.value)}
+        />
+      </label>
+      <label className="form-col">
+        <span>이유</span>
+        <textarea
+          aria-label="새 규칙 이유"
+          value={why}
+          onChange={(ev) => setWhy(ev.target.value)}
+        />
+      </label>
+      <div className="knowledge-head">
+        {share ? (
+          <select
+            aria-label="더할 곳"
+            value={scope}
+            onChange={(ev) => setScope(ev.target.value as 'mine' | 'pending')}
+          >
+            <option value="pending">공유 대기 (다음 PR에 실림)</option>
+            <option value="mine">나만</option>
+          </select>
+        ) : (
+          <span className="dim">나만 (팀 공유 꺼짐)</span>
+        )}
+        <button
+          className="primary"
+          disabled={busy}
+          onClick={() => {
+            setOpen(false)
+            onAdd(scope, { kind, subkind, rule, paths: list(paths), terms: list(terms), why })
+          }}
+        >
+          더하기
+        </button>
+        <button onClick={() => setOpen(false)}>닫기</button>
+      </div>
+    </div>
+  )
+}
+
+/** 지식 화면에서 항목을 거르는 조건 (지식 탐색 K19) */
+type ScreenFilter = { q: string; kind: KnowledgeKind | ''; state: '' | 'stale' | 'active' }
+
+function screenMatch(e: KnowledgeScreenEntry, f: ScreenFilter): boolean {
+  if (f.kind && e.kind !== f.kind) return false
+  if (f.state === 'stale' && !e.stale) return false
+  if (f.state === 'active' && e.status !== 'active') return false
+  const q = f.q.trim().toLowerCase()
+  if (!q) return true
+  return [e.id, e.rule, e.why, ...e.terms, ...e.paths].some((x) => x.toLowerCase().includes(q))
 }
 
 /** 지식 화면 (D307, I77): 팀(기본 브랜치), 나만, 공유 대기 */
@@ -607,6 +771,7 @@ export function KnowledgeDialog({
   const [busy, setBusy] = useState(false)
   // 조작한 뒤 다시 읽는다
   const [version, setVersion] = useState(0)
+  const [filter, setFilter] = useState<ScreenFilter>({ q: '', kind: '', state: '' })
   useEffect(() => {
     let alive = true
     void window.relay.knowledgeScreen(project.id).then((r) => {
@@ -626,29 +791,55 @@ export function KnowledgeDialog({
     if (!r.ok) setError(r.error)
     setVersion((v) => v + 1)
   }
-  const group = (title: string, scope: 'team' | 'mine' | 'pending', xs: KnowledgeScreenEntry[]) => (
-    <section>
-      <h3>
-        {title} ({xs.length})
-      </h3>
-      {xs.length ? (
-        <ul>
-          {xs.map((e) => (
-            <ScreenEntry
-              key={e.id}
-              e={e}
-              scope={scope}
-              share={screen?.share ?? true}
-              busy={busy}
-              onEdit={(i) => void edit(i)}
-            />
-          ))}
-        </ul>
-      ) : (
-        <div className="dim">없음</div>
-      )}
-    </section>
-  )
+  // 재확인 필요를 맨 위에 두고, 거르는 조건에 맞는 것만 보인다 (지식 탐색 K19)
+  const shown = (xs: KnowledgeScreenEntry[]) =>
+    xs.filter((e) => screenMatch(e, filter)).sort((a, b) => Number(b.stale) - Number(a.stale))
+  const staleTeam = screen ? shown(screen.team).filter((e) => e.stale && e.carriedPr === null) : []
+  const confirmAll = async () => {
+    setBusy(true)
+    setError(null)
+    for (const e of staleTeam) {
+      const r = await call(() =>
+        window.relay.editKnowledge(project.id, { op: 'confirm', id: e.id }),
+      )
+      if (!r.ok) {
+        setError(`${e.id}: ${r.error}`)
+        break
+      }
+    }
+    setBusy(false)
+    setVersion((v) => v + 1)
+  }
+  const group = (
+    title: string,
+    scope: 'team' | 'mine' | 'pending',
+    all: KnowledgeScreenEntry[],
+  ) => {
+    const xs = shown(all)
+    return (
+      <section>
+        <h3>
+          {title} ({xs.length === all.length ? all.length : `${xs.length}/${all.length}`})
+        </h3>
+        {xs.length ? (
+          <ul>
+            {xs.map((e) => (
+              <ScreenEntry
+                key={e.id}
+                e={e}
+                scope={scope}
+                share={screen?.share ?? true}
+                busy={busy}
+                onEdit={(i) => void edit(i)}
+              />
+            ))}
+          </ul>
+        ) : (
+          <div className="dim">없음</div>
+        )}
+      </section>
+    )
+  }
   return (
     <Modal title={`지식 · ${project.name}`} onClose={onClose}>
       {screen ? (
@@ -662,6 +853,49 @@ export function KnowledgeDialog({
               {w}
             </div>
           ))}
+          <div className="knowledge-head">
+            <input
+              aria-label="지식 검색"
+              placeholder="규칙, 용어, 경로, id로 찾기"
+              value={filter.q}
+              onChange={(ev) => setFilter({ ...filter, q: ev.target.value })}
+            />
+            <select
+              aria-label="종류로 거르기"
+              value={filter.kind}
+              onChange={(ev) =>
+                setFilter({ ...filter, kind: ev.target.value as KnowledgeKind | '' })
+              }
+            >
+              <option value="">모든 종류</option>
+              {(Object.keys(KNOWLEDGE_KIND_LABEL) as KnowledgeKind[]).map((k) => (
+                <option key={k} value={k}>
+                  {KNOWLEDGE_KIND_LABEL[k]}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="상태로 거르기"
+              value={filter.state}
+              onChange={(ev) =>
+                setFilter({ ...filter, state: ev.target.value as ScreenFilter['state'] })
+              }
+            >
+              <option value="">모든 상태</option>
+              <option value="stale">재확인 필요만</option>
+              <option value="active">유효한 것만</option>
+            </select>
+            {staleTeam.length ? (
+              <button disabled={busy} onClick={() => void confirmAll()}>
+                재확인 필요 {staleTeam.length}건 모두 그대로 맞음
+              </button>
+            ) : null}
+          </div>
+          <AddRule
+            share={screen.share}
+            busy={busy}
+            onAdd={(scope, e) => void edit({ op: 'add', scope, edit: e })}
+          />
           {group('팀', 'team', screen.team)}
           {group('공유 대기', 'pending', screen.pending)}
           {group('나만', 'mine', screen.mine)}

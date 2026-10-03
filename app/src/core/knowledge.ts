@@ -280,13 +280,40 @@ export function normalizeTerm(s: string): string {
   return s.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim()
 }
 
-/** 용어가 글에 들어 있는가 (D311, I74) */
+/** 용어가 글에 들어 있는가 (D311, I74). 낱말 경계는 termIn이 본다 */
 export function termsMatch(terms: readonly string[], text: string): boolean {
   const t = normalizeTerm(text)
-  return terms.some((term) => {
-    const n = normalizeTerm(term)
-    return n.length > 0 && t.includes(n)
-  })
+  return terms.some((term) => termIn(normalizeTerm(term), t))
+}
+
+const ASCII_WORD = /[a-z0-9_]/
+const HANGUL = /[가-힣]/
+/** 짧은 한글 용어 뒤에 붙어도 되는 조사 */
+const TERM_JOSA =
+  /^(?:에서|으로|까지|부터|처럼|보다|이나|하고|은|는|이|가|을|를|의|에|로|와|과|도|만|나|랑)/
+
+/**
+ * 맞춘 용어 n이 맞춘 글 t에 낱말로 있는가 (지식 탐색 K4, D332). 영문·숫자로 시작하거나 끝나는 용어는 그쪽이 낱말 경계여야
+ * 한다("id"는 "valid"에 없다). 두 글자 이하 한글 용어는 앞이 한글이 아니고, 뒤가 한글이 아니거나 조사여야 한다("로그"는
+ * "로그인"에 없고 "로그를"에는 있다). 세 글자 이상 한글 용어는 합성어를 놓치지 않게 부분 문자열로 맞춘다("부가세율")
+ */
+export function termIn(n: string, t: string): boolean {
+  if (!n) return false
+  const chars = [...n]
+  const first = chars[0] ?? ''
+  const last = chars[chars.length - 1] ?? ''
+  const shortHangul = chars.length <= 2 && chars.every((c) => HANGUL.test(c))
+  for (let i = t.indexOf(n); i >= 0; i = t.indexOf(n, i + 1)) {
+    const before = t[i - 1] ?? ''
+    const rest = t.slice(i + n.length)
+    const after = rest[0] ?? ''
+    if (ASCII_WORD.test(first) && ASCII_WORD.test(before)) continue
+    if (ASCII_WORD.test(last) && ASCII_WORD.test(after)) continue
+    if (shortHangul && (HANGUL.test(before) || (HANGUL.test(after) && !TERM_JOSA.test(rest))))
+      continue
+    return true
+  }
+  return false
 }
 
 /** 여러 낱말 용어의 낱말(두 글자 이상) 가운데 하나가 글에 들어 있는가. intake의 겹치지 않은 도메인 규칙의 차례에만 쓴다 (지식 탐색 K3) */
@@ -294,7 +321,7 @@ export function termPartsMatch(terms: readonly string[], text: string): boolean 
   const t = normalizeTerm(text)
   return terms.some((term) => {
     const words = normalizeTerm(term).split(' ')
-    return words.length > 1 && words.some((w) => [...w].length >= 2 && t.includes(w))
+    return words.length > 1 && words.some((w) => [...w].length >= 2 && termIn(w, t))
   })
 }
 

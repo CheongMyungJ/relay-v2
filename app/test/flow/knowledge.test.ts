@@ -436,6 +436,40 @@ describe('[흐름] 지식 관리 (M17)', () => {
     expect(after.carried[id]).toBeUndefined()
   })
 
+  it('지식 화면은 로컬과 origin의 팀 지식을 함께 보이고, [규칙 더하기]는 검사한 뒤 쓴다 (D332, 지식 탐색 K9)', async () => {
+    const s = await setup(WORK1)
+    // 로컬 기본 브랜치에만 팀 지식이 하나 있다 (아직 push 안 함)
+    writeFiles(s.repo, {
+      [`${DIR}failure/failure-0000000a.md`]: renderEntry(entry({ id: 'failure-0000000a' })),
+    })
+    git(s.repo, 'add', '-A')
+    git(s.repo, 'commit', '-qm', 'docs: 지식')
+    const r = await s.h.relay.knowledgeScreen(s.projectId)
+    if (!r.ok) throw new Error(r.error)
+    expect(r.screen.team.map((e) => [e.id, e.where])).toEqual([['failure-0000000a', 'local']])
+    expect(r.screen.teamFrom).toMatch(/^main \([0-9a-f]+\) 1건 · origin\/main \([0-9a-f]+\) 0건$/)
+    // 용어가 없으면 쓰지 않는다
+    expect(
+      await s.h.relay.editKnowledge(s.projectId, {
+        op: 'add',
+        scope: 'pending',
+        edit: { kind: 'domain', rule: '환불은 원 단위 버림', terms: [] },
+      }),
+    ).toMatchObject({ ok: false, error: expect.stringContaining('용어는 1~5개') })
+    expect(
+      await s.h.relay.editKnowledge(s.projectId, {
+        op: 'add',
+        scope: 'pending',
+        edit: { kind: 'domain', rule: '환불은 원 단위 버림', terms: ['환불'], why: '회계팀' },
+      }),
+    ).toEqual({ ok: true })
+    const after = await s.h.relay.knowledgeScreen(s.projectId)
+    if (!after.ok) throw new Error(after.error)
+    expect(after.screen.pending.map((e) => [e.rule, e.source.by, e.why])).toEqual([
+      ['환불은 원 단위 버림', 'human', '회계팀'],
+    ])
+  })
+
   it('RELAY_KNOWLEDGE=off면 `참고 지식` 절과 지식 칸이 없고 저장하지 않는다 (I84)', async () => {
     const s = await setup(WORK1, { env: { RELAY_KNOWLEDGE: 'off' } })
     const key = await s.create()

@@ -496,10 +496,11 @@ export interface ScreenOptions {
 }
 
 /** 화면의 항목 모양 */
-function screenEntry(p: PoolEntry): KnowledgeScreenEntry {
+function screenEntry(p: PoolEntry & { where?: 'local' | 'origin' }): KnowledgeScreenEntry {
   const e = p.entry
   return {
     ...refView(p),
+    ...(p.where ? { where: p.where } : {}),
     subkind: e.subkind,
     status: e.status,
     why: e.why,
@@ -510,15 +511,20 @@ function screenEntry(p: PoolEntry): KnowledgeScreenEntry {
 }
 
 /**
- * 팀 지식을 읽을 커밋 (I77): origin이 있으면 `origin/<기본 브랜치>`를 fetch해 그 커밋, 없거나 fetch하지 못하면 로컬 브랜치다
+ * 팀 지식을 읽을 커밋 (I77): 로컬 기본 브랜치와, origin이 있으면 fetch한 `origin/<기본 브랜치>`. 새 Work는 기본으로 로컬
+ * 브랜치에서 시작하므로(새 Work 창의 기준 위치) 화면도 로컬을 먼저 보이고, 둘이 다르면 한쪽에만 있는 항목을 표시한다
+ * (지식 탐색 K9, D332)
  */
-async function teamCommit(
+async function teamCommits(
   o: ScreenOptions,
   warnings: string[],
-): Promise<{ commit: string; from: string } | null> {
+): Promise<{ commit: string; from: string; where: 'local' | 'origin' }[]> {
   const repo = o.project.repo_path
   const branch = o.project.default_branch
   const git = { env: o.env }
+  const out: { commit: string; from: string; where: 'local' | 'origin' }[] = []
+  const local = await refCommit(repo, `refs/heads/${branch}`, git)
+  if (local) out.push({ commit: local, from: branch, where: 'local' })
   if (o.project.checks.origin) {
     try {
       await fetchBranch(repo, branch, 'origin', git)
@@ -526,21 +532,18 @@ async function teamCommit(
       warnings.push(`origin/${branch}를 가져오지 못해 앱이 가진 것을 씀: ${message(e)}`)
     }
     const remote = await refCommit(repo, `refs/remotes/origin/${branch}`, git)
-    if (remote) return { commit: remote, from: `origin/${branch}` }
+    if (remote) out.push({ commit: remote, from: `origin/${branch}`, where: 'origin' })
   }
-  const local = await refCommit(repo, `refs/heads/${branch}`, git)
-  return local ? { commit: local, from: branch } : null
+  return out
 }
 
-/** 팀 지식: 기본 브랜치의 커밋에서 읽고, 그 커밋의 해시와 견줘 낡음을 판정한다 (D316) */
-async function teamPool(o: ScreenOptions, warnings: string[]) {
+/** 한 커밋의 팀 지식: 그 커밋의 해시와 견줘 낡음을 판정한다 (D316) */
+async function teamAt(o: ScreenOptions, commit: string, warnings: string[]) {
   const dir = projectKnowledgeDir(o.project)
-  const at = await teamCommit(o, warnings)
-  if (!at) return { at: null, pool: [] as PoolEntry[] }
-  const read = await readKnowledgeAt(o.project.repo_path, at.commit, dir, { env: o.env })
+  const read = await readKnowledgeAt(o.project.repo_path, commit, dir, { env: o.env })
   warnings.push(...read.problems.map((p) => `지식 파일을 읽지 못함: ${p}`))
   const entries = read.entries.map((r) => r.entry)
-  const hashes = await pathHashes(o.project.repo_path, at.commit, entryPaths(entries), dir, {
+  const hashes = await pathHashes(o.project.repo_path, commit, entryPaths(entries), dir, {
     env: o.env,
   })
   const pool = read.entries.map((r) => ({
@@ -549,7 +552,45 @@ async function teamPool(o: ScreenOptions, warnings: string[]) {
     file: path.join(o.project.repo_path, r.rel),
     stale: r.entry.status === 'active' && isStale(r.entry, hashes),
   }))
-  return { at, pool, hashes }
+  return { pool, hashes }
+}
+
+/**
+ * 팀 지식 (D316, D332): 로컬 기본 브랜치의 것을 먼저, origin에만 있는 것을 뒤에 둔다. 두 커밋이 다르면 한쪽에만 있는 항목에
+ * where를 단다
+ */
+type TeamEntry = PoolEntry & { where?: 'local' | 'origin' }
+
+async function teamPool(
+  o: ScreenOptions,
+  warnings: string[],
+): Promise<{
+  at: { commit: string; from: string; where: 'local' | 'origin' }[]
+  pool: TeamEntry[]
+  counts: number[]
+  /** 항목을 읽은 커밋의 해시 ([그대로 맞음], 고침) */
+  hashesFor: (id: string) => Record<string, string | null>
+}> {
+  const at = await teamCommits(o, warnings)
+  const [first, second] = at
+  if (!first) return { at, pool: [], counts: [], hashesFor: () => ({}) }
+  const a = await teamAt(o, first.commit, warnings)
+  if (!second || second.commit === first.commit) {
+    return { at: [first], pool: a.pool, counts: [a.pool.length], hashesFor: () => a.hashes }
+  }
+  const b = await teamAt(o, second.commit, warnings)
+  const inA = new Set(a.pool.map((p) => p.entry.id))
+  const inB = new Set(b.pool.map((p) => p.entry.id))
+  const pool: TeamEntry[] = [
+    ...a.pool.map((p) => (inB.has(p.entry.id) ? p : { ...p, where: first.where })),
+    ...b.pool.filter((p) => !inA.has(p.entry.id)).map((p) => ({ ...p, where: second.where })),
+  ]
+  return {
+    at,
+    pool,
+    counts: [a.pool.length, b.pool.length],
+    hashesFor: (id) => (inA.has(id) ? a.hashes : b.hashes),
+  }
 }
 
 async function storePool(o: ScreenOptions, warnings: string[]) {
@@ -577,7 +618,12 @@ async function storePool(o: ScreenOptions, warnings: string[]) {
 /** 지식 화면 (D307, I77): 팀, 나만, 공유 대기. 같은 id가 팀과 공유 대기에 모두 있으면 공유 대기 쪽을 보인다(I74) */
 export async function knowledgeScreen(o: ScreenOptions): Promise<KnowledgeScreen> {
   const warnings: string[] = []
-  let team: Awaited<ReturnType<typeof teamPool>> = { at: null, pool: [] }
+  let team: Awaited<ReturnType<typeof teamPool>> = {
+    at: [],
+    pool: [],
+    counts: [],
+    hashesFor: () => ({}),
+  }
   try {
     team = await teamPool(o, warnings)
   } catch (e) {
@@ -596,7 +642,14 @@ export async function knowledgeScreen(o: ScreenOptions): Promise<KnowledgeScreen
     pending: [...pending].sort(order).map(screenEntry),
     share: projectKnowledgeShare(o.project),
     dir: projectKnowledgeDir(o.project),
-    teamFrom: team.at ? `${team.at.from} (${team.at.commit.slice(0, 12)})` : null,
+    teamFrom: team.at.length
+      ? team.at
+          .map(
+            (x, i) =>
+              `${x.from} (${x.commit.slice(0, 12)})${team.at.length > 1 ? ` ${team.counts[i] ?? 0}건` : ''}`,
+          )
+          .join(' · ')
+      : null,
     warnings,
   }
 }
@@ -647,6 +700,7 @@ export async function editKnowledge(
     by: 'human',
   })
   const find = (xs: readonly PoolEntry[], id: string) => xs.find((p) => p.entry.id === id)
+  if (input.op === 'add') return addKnowledge(o, input.scope, input.edit, share, warnings)
   const teamOp = input.op === 'confirm' || ('scope' in input && input.scope === 'team')
   // 팀 지식은 기본 브랜치를 fetch해 읽는다. 네트워크를 기다리는 동안 같은 프로젝트의 다른 Work를 막지 않게 잠금 밖에서 한다
   const team = teamOp ? await teamPool(o, warnings) : null
@@ -659,7 +713,7 @@ export async function editKnowledge(
       const to = share ? 'pending' : 'mine'
       if (input.op === 'confirm') {
         // [그대로 맞음]: 해시를 새로 적어 공유 대기로 둔다 (D317, D320 (4))
-        await o.store.write(to, withHashes(t.entry, team.hashes ?? {}))
+        await o.store.write(to, withHashes(t.entry, team.hashesFor(t.entry.id)))
         return null
       }
       if (input.op === 'drop') {
@@ -670,7 +724,7 @@ export async function editKnowledge(
         const id = newEntryIdFor(t.entry)
         const next = withHashes(
           { ...applyEdit(t.entry, input.edit), id, source: human('edit') },
-          team.hashes ?? {},
+          team.hashesFor(t.entry.id),
         )
         const problem = editProblem(next)
         if (problem) return problem
@@ -713,6 +767,55 @@ export async function editKnowledge(
         await o.store.saveIndex(index)
       }
     }
+    return null
+  })
+}
+
+/**
+ * 지식 화면의 [규칙 더하기] (D332, 지식 탐색 K9): 사람이 정한 규칙을 나만이나 공유 대기에 쓴다. 해시는 로컬 기본 브랜치의
+ * 것으로 적는다. 후보와 같은 필수(종류, 규칙, 용어, 종류별 경로)를 검사한다
+ */
+async function addKnowledge(
+  o: ScreenOptions,
+  scope: 'mine' | 'pending',
+  edit: CandidateEdit,
+  share: boolean,
+  warnings: string[],
+): Promise<string | null> {
+  if (scope === 'pending' && !share) return '팀 공유가 꺼져 있음'
+  if (!edit.kind) return '고친 항목을 저장하지 않음: 종류를 정해야 함'
+  const draft: KnowledgeEntry = {
+    id: newEntryId(edit.kind, random8),
+    kind: edit.kind,
+    subkind: null,
+    status: 'active',
+    superseded_by: null,
+    paths: [],
+    terms: [],
+    hashes: {},
+    source: { work: '(지식 화면)', task: 'add', by: 'human' },
+    rule: '',
+    why: '',
+    not_in_code: '사람이 정함',
+    incentive: '',
+  }
+  const next = applyEdit(draft, edit)
+  const problem = editProblem(next)
+  if (problem) return problem
+  const [local] = await teamCommits(o, warnings)
+  const hashes = local
+    ? await pathHashes(
+        o.project.repo_path,
+        local.commit,
+        entryPaths([next]),
+        projectKnowledgeDir(o.project),
+        {
+          env: o.env,
+        },
+      )
+    : {}
+  return o.lock(async () => {
+    await o.store.write(scope, withHashes(next, hashes))
     return null
   })
 }

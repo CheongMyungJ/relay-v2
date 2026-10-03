@@ -40,6 +40,7 @@ Read the request, talk with the human, and write the intent draft `intent.draft.
 
 - **Domain rules in `참고 지식`:** copy the ones that apply to this request into `제약` or a 완료조건 line, with the id, who decided it and why, from the item's `(사람이 정함, w-…: …)` (e.g. "(지식 domain-a1b2c3d4, 사람이 정함: 회계팀 기준)"). The human checks them at intent approval, and later steps take them as settled. Tell the human in the terminal which rules you copied and why they exist, and to say so if a rule has changed. The human may not know a rule another person decided: if they reject one, tell them who decided it and why, and ask whether the team rule changed or only this request is an exception. Changed: write the new rule as a candidate with `decision` and `supersedes` (below). Exception: put it in `비목표` and do not write a new rule.
 - **A rule the human corrects:** write the corrected rule as a candidate with `decision` (the human decision's `what`) and `supersedes` (the old id).
+- **A rule the human wrote in the request** (not only one they answered) is a human decision: put it in `decisions` with `by: human` (its `what` is the rule as written) and refine its candidate from it, so the next Work sees who decided it.
 - **Extract:** expected behavior the human answered (`domain`), `제약` (`constraint`), the test command you found (`recipe`).
 
 ## Decision points

@@ -40,6 +40,7 @@ import {
   reviewKnowledge,
   reviewTaskIds,
   selectKnowledge,
+  termIn,
   termsMatch,
   withHashes,
   worktreeScope,
@@ -259,6 +260,26 @@ describe('경로와 용어의 겹침 (D311, I74)', () => {
 })
 
 // ---------- 넣기 (D311, D312, D315, I74) ----------
+
+describe('용어의 낱말 경계 (D332, 지식 탐색 K4)', () => {
+  it.each([
+    ['로그', '로그인 화면에서 오류 문구가 안 보인다', false],
+    ['로그', '로그를 남기지 않는다', true],
+    ['시간', '시간대가 LA인 사용자', false],
+    ['세금', '세금계산서 PDF의 글꼴', false],
+    ['세금', '세금은 줄마다 버린다', true],
+    ['id', '이메일 valid 검사', false],
+    ['id', 'user id가 비어 있다', true],
+    ['api', 'rapid 클릭', false],
+    ['api', 'api의 응답이 느리다', true],
+    ['부가세', '부가세율이 바뀌었다', true],
+    ['환불', '환불 버튼이 안 눌린다', true],
+    ['빈 배열', '빈 배열의 평균', true],
+  ])('%s in %s → %s', (term, text, hit) => {
+    expect(termIn(term, text.toLowerCase())).toBe(hit)
+    expect(termsMatch([term], text)).toBe(hit)
+  })
+})
 
 describe('넣을 지식 고르기 (D311, D315, I74)', () => {
   const team = (id: string, over: Partial<KnowledgeEntry>) => pool(entry({ id, ...over }))
