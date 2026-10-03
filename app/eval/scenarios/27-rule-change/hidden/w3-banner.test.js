@@ -9,6 +9,5 @@ test('무료배송까지 남은 금액은 할인 후 금액으로 센다', () =>
   assert.strictEqual(freeShippingRemaining(c77), 5000)
   const exact = { items: [{ price: 53000, qty: 1 }], coupon: { type: 'amount', value: 3000 } }
   assert.strictEqual(cartBanner(exact), '무료배송 대상입니다')
-  const pct = { items: [{ price: 52000, qty: 1 }], coupon: { type: 'percent', value: 10 } }
-  assert.strictEqual(freeShippingRemaining(pct), 3200)
+  // 정률 쿠폰은 더 담으면 할인액도 늘어 '남은 금액'의 뜻이 갈려 보지 않는다 (2026-10-03 평가 27 #1·#2)
 })
