@@ -289,6 +289,19 @@ import type { SessionPool } from './pool'
 import type { UiPort } from './ports'
 import { listPrComments, readPr, receivedCommits, fetchTip, type PrFetched } from './pr'
 import { TerminalBuffer } from './terminals'
+import {
+  readPendingKnowledge,
+  readRepoKnowledge,
+  type KnowledgeSource,
+} from '../adapters/knowledge'
+import {
+  INJECTED_FILE,
+  candidatesOf,
+  injectedText,
+  knowledgeEnabled,
+  mergeEntries,
+  type KnowledgeInput,
+} from '../core/knowledge'
 
 /** 여러 Work가 함께 쓰는 것 */
 export interface RunnerContext {
@@ -309,6 +322,11 @@ export interface RunnerContext {
   project(projectId: string): ProjectState | undefined
   /** origin·gh를 다시 점검해 project.json을 고친다. verify를 시작할 때와 [다시 점검]에서 부른다 (D118) */
   recheck(projectId: string): Promise<void>
+  /**
+   * 지식을 읽을 앞 Work (core/knowledge): 같은 프로젝트에서 완료했거나 PR 진행인 다른 Work의 브랜치와 기준 커밋.
+   * 오래된 차례다
+   */
+  knowledgeSources(projectId: string, exceptWorkId: string): KnowledgeSource[]
   /** 지금 시각. 현지 시각과 오프셋을 담은 ISO 8601 */
   at(): string
   /** 새 PTY의 크기. 탭이 크기를 알리면 그 크기를 쓴다 */
@@ -951,7 +969,11 @@ export class WorkRunner {
       'intent.md': intent?.hash ?? null,
       'decisions.md': decisions?.hash ?? null,
     })
+    const knowledge = await this.knowledgeInput(earlier)
+    if (knowledge)
+      await writeFileAtomic(path.join(dir, INJECTED_FILE), injectedText(knowledge.entries))
     return buildContext({
+      knowledge,
       work: this.work,
       task,
       config: this.ctx.config(),
@@ -965,6 +987,33 @@ export class WorkRunner {
       ...(task.node === 'verify' ? { delivery: closingButtons(this.checks()) } : {}),
       respond: await this.respondInput(task),
     })
+  }
+
+  /**
+   * context.md의 지식 (core/knowledge): 이 worktree의 `docs/knowledge/`와, 같은 프로젝트에서 완료했지만 기준 브랜치에 아직
+   * 없는 앞 Work의 지식, 앞 task들의 지식 후보. 지식 관리를 끄면(RELAY_KNOWLEDGE=off) null이다. 읽지 못하면 빈 지식으로 간다
+   */
+  private async knowledgeInput(earlier: readonly PreviousTask[]): Promise<KnowledgeInput | null> {
+    const { env } = this.ctx
+    if (!knowledgeEnabled(env)) return null
+    let entries: KnowledgeInput['entries'] = []
+    try {
+      const repo = await readRepoKnowledge(this.worktree)
+      const head = await headCommit(this.worktree, { env })
+      const sources = this.ctx.knowledgeSources(this.project.project_id, this.work.work_id)
+      const pending = await readPendingKnowledge(this.project.repo_path, head, sources, { env })
+      entries = mergeEntries(repo, pending)
+    } catch (e) {
+      console.error(`[${this.key}] 지식을 읽지 못함: ${message(e)}`)
+    }
+    return {
+      entries,
+      candidates: earlier
+        .map((p) => ({ taskId: p.taskId, node: p.node, items: candidatesOf(p.handoff ?? '') }))
+        .filter((c) => c.items.length > 0),
+      work_id: this.work.work_id,
+      date: this.ctx.at().slice(0, 10),
+    }
   }
 
   /**
@@ -2932,7 +2981,9 @@ export class WorkRunner {
       }),
       lead: stageLead(task.node, files),
       artifacts: Object.entries(files)
-        .filter(([name]) => name !== CONTEXT_FILE && name !== HANDOFF_FILE)
+        .filter(
+          ([name]) => name !== CONTEXT_FILE && name !== HANDOFF_FILE && name !== INJECTED_FILE,
+        )
         .map(([name, text]) => ({ name, text })),
       diff: clip(diff),
       gate: approvalGate(task, check),
