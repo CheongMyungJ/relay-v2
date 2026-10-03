@@ -1,0 +1,121 @@
+{
+  "observations": [
+    {
+      "at": "2026-10-03T11:16:04.372448+00:00",
+      "sequence": "01-policy-transfer-r1-reference",
+      "through_work": 2,
+      "observations": [
+        "W1 delivered three human domain facts, generic npm test recipe, and baseline reproduction recipe (six knowledge Markdown files including README).",
+        "W2 correctly superseded29days with11days and preserved shipping record byte-for-byte.",
+        "W2 retains two active UTC/day24hour statements with different wording: domain-43a28b26 anddomain-6f8f1cb3.",
+        "W2 fix explicitly reports that recipe-d6eb77d7 describes old0 baseline; currentbaseline29. Original record remains active afterdelivery, alongside additional generic npmtest andgitshow/dataURL recipes."
+      ],
+      "evidence": [
+        "01-policy-transfer-r1-reference/oracle-1/docs/knowledge",
+        "01-policy-transfer-r1-reference/oracle-2/docs/knowledge",
+        "01-policy-transfer-r1-reference/work-2/relay-home/projects/*/works/*/tasks/02-fix/handoff.md"
+      ],
+      "limits": "Counts/feedback are management proxies, not measured human review time; default-selection condition only."
+    },
+    {
+      "at": "2026-10-03T11:44:35.995320+00:00",
+      "sequence": "01-policy-transfer-r1-candidate",
+      "through_work": 3,
+      "observations": [
+        "W1 retains human business policies, quote/date/scope/Work UUID; no generic test command recipe.",
+        "W2 updates29to11days, retains original29days/UTC source UUID in replacement history, and addsfutureARC-JT6 with newWork UUID.",
+        "Unrelated shipping section is byte-identical W1toW2; W3 entire2339byte document is byte-identical W2toW3.",
+        "W3 uses shared policies and completes requestedpreview implementation without questions. Historical one-off implementation context remains under evidence, but was not treated as current scope."
+      ],
+      "evidence": [
+        "01-policy-transfer-r1-candidate/oracle-1/.relay/knowledge.md",
+        "01-policy-transfer-r1-candidate/oracle-2/.relay/knowledge.md",
+        "01-policy-transfer-r1-candidate/oracle-3/.relay/knowledge.md"
+      ],
+      "limits": "One repeated-family fresh instance; no real human review time measured."
+    },
+    {
+      "at": "2026-10-03T12:07:32.002000+00:00",
+      "sequence": "02-procedure-reuse-r1-baseline",
+      "through_work": 3,
+      "observations": [
+        "NoGitMarkdown changes inanyWork;ordinaryREADME/AGENTSdocumentationwasallowed.",
+        "EachfreshWorkfixbeginswithbareenvironmentfailure thenhelp/doctor thenconfiguredtests; laterWork2and3rediscover setup.",
+        "Verifyrepeatsofbarefailure/doctor areindependentcheckswithknownfixartifacts; do notlabelallstagecallsasfreshrediscovery."
+      ],
+      "evidence": [
+        "02-procedure-reuse-r1-baseline/sequence.json",
+        "discovery-audit.json"
+      ],
+      "limits": "Work1has92.025secondsobservedoperatorquestionwait; report1333.39rawand1241.365wait-excludedelapsed,neitherisrealhumanlabor."
+    },
+    {
+      "at": "2026-10-03T12:14:51.699191+00:00",
+      "sequence": "02-procedure-reuse-r1-reference",
+      "through_work": 1,
+      "observations": [
+        "Actualfixcandidate t-02#k1containsdiagnosedandvalidatedNOVA_TEST_NAMESPACE=meridian.",
+        "Completion review marks thisexactsetupcandidate similarTo t-01#k3, thegenericnpmtestrecipe.",
+        "DeliveredGitknowledge has5MarkdownfilesincludingREADME;nonecontainsmeridian. Genericnpmtestandheadline-specificreproduction/scopefactsarepresent."
+      ],
+      "evidence": [
+        "02-procedure-reuse-r1-reference/work-1/t-03-review.json:completion.knowledge.candidates",
+        "02-procedure-reuse-r1-reference/oracle-1/docs/knowledge"
+      ],
+      "limits": "Defaultselectiononly; do notclaimextractionfailed. Manualcandidateoverridewasnotperformed."
+    },
+    {
+      "at": "2026-10-03T12:20:24.181592+00:00",
+      "sequence": "02-procedure-reuse-r1-reference",
+      "through_work": 2,
+      "observations": [
+        "W2oraclepassesandfixre-discoverssetup viabarefailure/help/doctor.",
+        "W2fixcandidate t-02#k2 whycontainsNOVA_TEST_NAMESPACE=meridianandactualsuccess;marked similarTo t-01#k3genericnpmtest. Verifyt-03#k1isalsosimilarTo t-01#k3.",
+        "DeliveredW2knowledgecontains9Markdownfilesbutnonecontainsmeridian."
+      ],
+      "evidence": [
+        "02-procedure-reuse-r1-reference/work-2/t-03-review.json",
+        "02-procedure-reuse-r1-reference/oracle-2/docs/knowledge",
+        "02-procedure-reuse-r1-reference/observed-2/.runner-events.jsonl"
+      ],
+      "limits": "Defaultselectioncondition; selectionoverrideuntested."
+    },
+    {
+      "at": "2026-10-03T12:33:23.862995+00:00",
+      "sequence": "02-procedure-reuse-r1-reference",
+      "through_work": 3,
+      "observations": [
+        "All3Worksoraclepass. EachfreshWorkfixdiscoverssetup viaenvironmentfailure/help/doctor; bothsuccessive teammatesrepeatdiscovery.",
+        "FinalGitknowledge13Markdownfiles10842bytes,nonecontainsmeridian.",
+        "WorkflowchoicequestionsinW1andW3;83.026secondsobservedoperatorwait.1554.24rawsecondsand1471.214wait-excludedseconds."
+      ],
+      "evidence": [
+        "02-procedure-reuse-r1-reference/sequence.json",
+        "02-procedure-reuse-r1-reference/oracle-3/docs/knowledge",
+        "discovery-audit.json"
+      ],
+      "limits": "ThisdefaultselectionfailuredoesnotproveM17extractionfailedorhumanoverridecannothelp;manualcurationnotmeasured."
+    },
+    {
+      "at": "2026-10-03T13:16:16.183062+00:00",
+      "sequence": "02-procedure-reuse-r1-candidate",
+      "through_work": 3,
+      "observations": [
+        "All three code oracles passed, and no human questions were asked.",
+        "The shared procedure reached both fresh teammates with original scope and source. Both successors nevertheless repeated help/doctor; no diagnostic-call reduction is claimed.",
+        "Knowledge grew from1626 to2523 to3613 bytes. The two suffixes add same-scope validation receipts, new Work IDs/base commits/test counts, not new setup facts. Both verify stages accepted this unnecessary growth.",
+        "In Work2 the bare and configured commands were prewritten in one native custom exec input, sequentially awaited. This was informed reuse, not discovery of the setting after the failure output.",
+        "These observed costs triggered the next implementation iteration b4d1d75; the planned second repeat was cancelled after the complete18-Work balanced cell."
+      ],
+      "evidence": [
+        "02-procedure-reuse-r1-candidate/sequence.json",
+        "02-procedure-reuse-r1-candidate/oracle-1/.relay/knowledge.md",
+        "02-procedure-reuse-r1-candidate/oracle-2/.relay/knowledge.md",
+        "02-procedure-reuse-r1-candidate/oracle-3/.relay/knowledge.md",
+        "candidate-r1-work2-reuse-tools.json",
+        "discovery-audit.json"
+      ],
+      "limits": "Management proxies, not human labor. Raw1285.66sec versus baseline1333.39 includes baseline92.025sec operator wait; wait-excluded baseline1241.365 is faster."
+    }
+  ]
+}

@@ -1,0 +1,969 @@
+{
+  "rows": [
+    {
+      "sequence": "02-procedure-reuse-r1-baseline",
+      "sequence_status": "completed",
+      "commit": "02470492e9a0429322aaf9f227db8362c13bad2c",
+      "work": 1,
+      "oracle_pass": true,
+      "changed_files": [
+        "src/text/headline.mjs",
+        "test/text.test.mjs"
+      ],
+      "by_stage": {
+        "fix": {
+          "kinds": {
+            "environment_failure": 1,
+            "help": 1,
+            "doctor": 1,
+            "test": 3
+          },
+          "first_test_attempt": {
+            "kind": "environment_failure",
+            "at": "2026-10-03T11:43:54.062095+00:00",
+            "namespace": null,
+            "exit": 2,
+            "stage": "fix"
+          },
+          "successful_tests": 2
+        },
+        "verify": {
+          "kinds": {
+            "doctor": 1,
+            "environment_failure": 1,
+            "test": 1
+          },
+          "first_test_attempt": {
+            "kind": "environment_failure",
+            "at": "2026-10-03T11:46:23.555271+00:00",
+            "namespace": null,
+            "exit": 2,
+            "stage": "verify"
+          },
+          "successful_tests": 1
+        }
+      },
+      "observations": [
+        {
+          "kind": "environment_failure",
+          "at": "2026-10-03T11:43:54.062095+00:00",
+          "namespace": null,
+          "exit": 2,
+          "stage": "fix"
+        },
+        {
+          "kind": "help",
+          "at": "2026-10-03T11:43:59.523728+00:00",
+          "stage": "fix"
+        },
+        {
+          "kind": "doctor",
+          "at": "2026-10-03T11:43:59.545526+00:00",
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T11:44:17.047362+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T11:44:17.569719+00:00",
+          "namespace": "meridian",
+          "exit": 1,
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T11:44:28.563937+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "fix"
+        },
+        {
+          "kind": "doctor",
+          "at": "2026-10-03T11:46:23.447445+00:00",
+          "stage": "verify"
+        },
+        {
+          "kind": "environment_failure",
+          "at": "2026-10-03T11:46:23.555271+00:00",
+          "namespace": null,
+          "exit": 2,
+          "stage": "verify"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T11:46:30.934005+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "verify"
+        }
+      ]
+    },
+    {
+      "sequence": "02-procedure-reuse-r1-baseline",
+      "sequence_status": "completed",
+      "commit": "02470492e9a0429322aaf9f227db8362c13bad2c",
+      "work": 2,
+      "oracle_pass": true,
+      "changed_files": [
+        "src/text/slug.mjs",
+        "test/slug.test.mjs"
+      ],
+      "by_stage": {
+        "fix": {
+          "kinds": {
+            "environment_failure": 1,
+            "help": 1,
+            "doctor": 1,
+            "test": 2
+          },
+          "first_test_attempt": {
+            "kind": "environment_failure",
+            "at": "2026-10-03T11:52:35.780297+00:00",
+            "namespace": null,
+            "exit": 2,
+            "stage": "fix"
+          },
+          "successful_tests": 2
+        },
+        "verify": {
+          "kinds": {
+            "environment_failure": 1,
+            "help": 1,
+            "doctor": 1,
+            "test": 1
+          },
+          "first_test_attempt": {
+            "kind": "environment_failure",
+            "at": "2026-10-03T11:55:30.374127+00:00",
+            "namespace": null,
+            "exit": 2,
+            "stage": "verify"
+          },
+          "successful_tests": 1
+        }
+      },
+      "observations": [
+        {
+          "kind": "environment_failure",
+          "at": "2026-10-03T11:52:35.780297+00:00",
+          "namespace": null,
+          "exit": 2,
+          "stage": "fix"
+        },
+        {
+          "kind": "help",
+          "at": "2026-10-03T11:52:43.158039+00:00",
+          "stage": "fix"
+        },
+        {
+          "kind": "doctor",
+          "at": "2026-10-03T11:52:48.410165+00:00",
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T11:53:05.495010+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T11:53:20.404280+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "fix"
+        },
+        {
+          "kind": "environment_failure",
+          "at": "2026-10-03T11:55:30.374127+00:00",
+          "namespace": null,
+          "exit": 2,
+          "stage": "verify"
+        },
+        {
+          "kind": "help",
+          "at": "2026-10-03T11:55:30.402608+00:00",
+          "stage": "verify"
+        },
+        {
+          "kind": "doctor",
+          "at": "2026-10-03T11:55:30.426289+00:00",
+          "stage": "verify"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T11:55:30.642425+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "verify"
+        }
+      ]
+    },
+    {
+      "sequence": "02-procedure-reuse-r1-baseline",
+      "sequence_status": "completed",
+      "commit": "02470492e9a0429322aaf9f227db8362c13bad2c",
+      "work": 3,
+      "oracle_pass": true,
+      "changed_files": [
+        "src/text/initials.mjs",
+        "test/initials.test.mjs"
+      ],
+      "by_stage": {
+        "fix": {
+          "kinds": {
+            "environment_failure": 1,
+            "help": 1,
+            "doctor": 1,
+            "test": 3
+          },
+          "first_test_attempt": {
+            "kind": "environment_failure",
+            "at": "2026-10-03T11:59:10.773992+00:00",
+            "namespace": null,
+            "exit": 2,
+            "stage": "fix"
+          },
+          "successful_tests": 2
+        },
+        "verify": {
+          "kinds": {
+            "environment_failure": 1,
+            "doctor": 1,
+            "test": 1
+          },
+          "first_test_attempt": {
+            "kind": "environment_failure",
+            "at": "2026-10-03T12:02:24.282840+00:00",
+            "namespace": null,
+            "exit": 2,
+            "stage": "verify"
+          },
+          "successful_tests": 1
+        }
+      },
+      "observations": [
+        {
+          "kind": "environment_failure",
+          "at": "2026-10-03T11:59:10.773992+00:00",
+          "namespace": null,
+          "exit": 2,
+          "stage": "fix"
+        },
+        {
+          "kind": "help",
+          "at": "2026-10-03T11:59:16.537339+00:00",
+          "stage": "fix"
+        },
+        {
+          "kind": "doctor",
+          "at": "2026-10-03T11:59:16.561995+00:00",
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T11:59:35.297077+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T11:59:35.861120+00:00",
+          "namespace": "meridian",
+          "exit": 1,
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T11:59:44.380095+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "fix"
+        },
+        {
+          "kind": "environment_failure",
+          "at": "2026-10-03T12:02:24.282840+00:00",
+          "namespace": null,
+          "exit": 2,
+          "stage": "verify"
+        },
+        {
+          "kind": "doctor",
+          "at": "2026-10-03T12:02:24.298973+00:00",
+          "stage": "verify"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T12:02:24.443699+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "verify"
+        }
+      ]
+    },
+    {
+      "sequence": "02-procedure-reuse-r1-candidate",
+      "sequence_status": "completed",
+      "commit": "d1e714d115f383ff47db380975fe088129458690",
+      "work": 1,
+      "oracle_pass": true,
+      "changed_files": [
+        ".relay/knowledge.md",
+        "src/text/headline.mjs",
+        "test/headline.test.mjs"
+      ],
+      "by_stage": {
+        "fix": {
+          "kinds": {
+            "environment_failure": 1,
+            "help": 1,
+            "doctor": 1,
+            "test": 3
+          },
+          "first_test_attempt": {
+            "kind": "environment_failure",
+            "at": "2026-10-03T12:32:17.948043+00:00",
+            "namespace": null,
+            "exit": 2,
+            "stage": "fix"
+          },
+          "successful_tests": 2
+        },
+        "verify": {
+          "kinds": {
+            "environment_failure": 1,
+            "test": 1,
+            "help": 1,
+            "doctor": 1
+          },
+          "first_test_attempt": {
+            "kind": "environment_failure",
+            "at": "2026-10-03T12:35:24.817349+00:00",
+            "namespace": null,
+            "exit": 2,
+            "stage": "verify"
+          },
+          "successful_tests": 1
+        }
+      },
+      "observations": [
+        {
+          "kind": "environment_failure",
+          "at": "2026-10-03T12:32:17.948043+00:00",
+          "namespace": null,
+          "exit": 2,
+          "stage": "fix"
+        },
+        {
+          "kind": "help",
+          "at": "2026-10-03T12:32:18.165365+00:00",
+          "stage": "fix"
+        },
+        {
+          "kind": "doctor",
+          "at": "2026-10-03T12:32:24.395026+00:00",
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T12:32:41.707429+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T12:32:45.756044+00:00",
+          "namespace": "meridian",
+          "exit": 1,
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T12:33:06.801399+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "fix"
+        },
+        {
+          "kind": "environment_failure",
+          "at": "2026-10-03T12:35:24.817349+00:00",
+          "namespace": null,
+          "exit": 2,
+          "stage": "verify"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T12:35:33.328612+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "verify"
+        },
+        {
+          "kind": "help",
+          "at": "2026-10-03T12:35:43.512319+00:00",
+          "stage": "verify"
+        },
+        {
+          "kind": "doctor",
+          "at": "2026-10-03T12:35:43.534579+00:00",
+          "stage": "verify"
+        }
+      ]
+    },
+    {
+      "sequence": "02-procedure-reuse-r1-candidate",
+      "sequence_status": "completed",
+      "commit": "d1e714d115f383ff47db380975fe088129458690",
+      "work": 2,
+      "oracle_pass": true,
+      "changed_files": [
+        ".relay/knowledge.md",
+        "src/text/slug.mjs",
+        "test/slug.test.mjs"
+      ],
+      "by_stage": {
+        "fix": {
+          "kinds": {
+            "help": 1,
+            "doctor": 1,
+            "environment_failure": 1,
+            "test": 3
+          },
+          "first_test_attempt": {
+            "kind": "environment_failure",
+            "at": "2026-10-03T12:39:33.409825+00:00",
+            "namespace": null,
+            "exit": 2,
+            "stage": "fix"
+          },
+          "successful_tests": 2
+        },
+        "verify": {
+          "kinds": {
+            "help": 1,
+            "doctor": 1,
+            "environment_failure": 1,
+            "test": 1
+          },
+          "first_test_attempt": {
+            "kind": "environment_failure",
+            "at": "2026-10-03T12:42:42.139789+00:00",
+            "namespace": null,
+            "exit": 2,
+            "stage": "verify"
+          },
+          "successful_tests": 1
+        }
+      },
+      "observations": [
+        {
+          "kind": "help",
+          "at": "2026-10-03T12:39:23.267390+00:00",
+          "stage": "fix"
+        },
+        {
+          "kind": "doctor",
+          "at": "2026-10-03T12:39:23.294166+00:00",
+          "stage": "fix"
+        },
+        {
+          "kind": "environment_failure",
+          "at": "2026-10-03T12:39:33.409825+00:00",
+          "namespace": null,
+          "exit": 2,
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T12:39:33.804043+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T12:39:53.038972+00:00",
+          "namespace": "meridian",
+          "exit": 1,
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T12:39:59.979233+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "fix"
+        },
+        {
+          "kind": "help",
+          "at": "2026-10-03T12:42:20.854112+00:00",
+          "stage": "verify"
+        },
+        {
+          "kind": "doctor",
+          "at": "2026-10-03T12:42:20.877776+00:00",
+          "stage": "verify"
+        },
+        {
+          "kind": "environment_failure",
+          "at": "2026-10-03T12:42:42.139789+00:00",
+          "namespace": null,
+          "exit": 2,
+          "stage": "verify"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T12:42:42.573571+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "verify"
+        }
+      ]
+    },
+    {
+      "sequence": "02-procedure-reuse-r1-candidate",
+      "sequence_status": "completed",
+      "commit": "d1e714d115f383ff47db380975fe088129458690",
+      "work": 3,
+      "oracle_pass": true,
+      "changed_files": [
+        ".relay/knowledge.md",
+        "src/text/initials.mjs",
+        "test/initials.test.mjs"
+      ],
+      "by_stage": {
+        "fix": {
+          "kinds": {
+            "help": 1,
+            "doctor": 1,
+            "environment_failure": 1,
+            "test": 3
+          },
+          "first_test_attempt": {
+            "kind": "environment_failure",
+            "at": "2026-10-03T12:46:52.468994+00:00",
+            "namespace": null,
+            "exit": 2,
+            "stage": "fix"
+          },
+          "successful_tests": 2
+        },
+        "verify": {
+          "kinds": {
+            "help": 1,
+            "doctor": 1,
+            "environment_failure": 1,
+            "test": 1
+          },
+          "first_test_attempt": {
+            "kind": "environment_failure",
+            "at": "2026-10-03T12:49:55.441072+00:00",
+            "namespace": null,
+            "exit": 2,
+            "stage": "verify"
+          },
+          "successful_tests": 1
+        }
+      },
+      "observations": [
+        {
+          "kind": "help",
+          "at": "2026-10-03T12:46:52.369550+00:00",
+          "stage": "fix"
+        },
+        {
+          "kind": "doctor",
+          "at": "2026-10-03T12:46:52.393555+00:00",
+          "stage": "fix"
+        },
+        {
+          "kind": "environment_failure",
+          "at": "2026-10-03T12:46:52.468994+00:00",
+          "namespace": null,
+          "exit": 2,
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T12:47:10.495694+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T12:47:11.122689+00:00",
+          "namespace": "meridian",
+          "exit": 1,
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T12:47:18.833166+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "fix"
+        },
+        {
+          "kind": "help",
+          "at": "2026-10-03T12:49:35.352633+00:00",
+          "stage": "verify"
+        },
+        {
+          "kind": "doctor",
+          "at": "2026-10-03T12:49:35.374200+00:00",
+          "stage": "verify"
+        },
+        {
+          "kind": "environment_failure",
+          "at": "2026-10-03T12:49:55.441072+00:00",
+          "namespace": null,
+          "exit": 2,
+          "stage": "verify"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T12:49:55.865986+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "verify"
+        }
+      ]
+    },
+    {
+      "sequence": "02-procedure-reuse-r1-reference",
+      "sequence_status": "completed",
+      "commit": "aa39d16c730b52966f17edf410bb6c4038e8b053",
+      "work": 1,
+      "oracle_pass": true,
+      "changed_files": [
+        "docs/knowledge/README.md",
+        "docs/knowledge/constraint/constraint-5b7353bb.md",
+        "docs/knowledge/domain/domain-ecdc522e.md",
+        "docs/knowledge/recipe/recipe-a37ad482.md",
+        "docs/knowledge/recipe/recipe-b203d5c0.md",
+        "src/text/headline.mjs",
+        "test/headline.test.mjs"
+      ],
+      "by_stage": {
+        "fix": {
+          "kinds": {
+            "environment_failure": 1,
+            "help": 1,
+            "doctor": 1,
+            "test": 3
+          },
+          "first_test_attempt": {
+            "kind": "environment_failure",
+            "at": "2026-10-03T12:06:44.251770+00:00",
+            "namespace": null,
+            "exit": 2,
+            "stage": "fix"
+          },
+          "successful_tests": 2
+        },
+        "verify": {
+          "kinds": {
+            "environment_failure": 1,
+            "help": 1,
+            "doctor": 1,
+            "test": 1
+          },
+          "first_test_attempt": {
+            "kind": "environment_failure",
+            "at": "2026-10-03T12:09:38.935666+00:00",
+            "namespace": null,
+            "exit": 2,
+            "stage": "verify"
+          },
+          "successful_tests": 1
+        }
+      },
+      "observations": [
+        {
+          "kind": "environment_failure",
+          "at": "2026-10-03T12:06:44.251770+00:00",
+          "namespace": null,
+          "exit": 2,
+          "stage": "fix"
+        },
+        {
+          "kind": "help",
+          "at": "2026-10-03T12:06:49.023317+00:00",
+          "stage": "fix"
+        },
+        {
+          "kind": "doctor",
+          "at": "2026-10-03T12:06:49.202774+00:00",
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T12:06:58.372217+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T12:07:13.030042+00:00",
+          "namespace": "meridian",
+          "exit": 1,
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T12:07:19.181149+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "fix"
+        },
+        {
+          "kind": "environment_failure",
+          "at": "2026-10-03T12:09:38.935666+00:00",
+          "namespace": null,
+          "exit": 2,
+          "stage": "verify"
+        },
+        {
+          "kind": "help",
+          "at": "2026-10-03T12:09:39.129607+00:00",
+          "stage": "verify"
+        },
+        {
+          "kind": "doctor",
+          "at": "2026-10-03T12:09:39.327160+00:00",
+          "stage": "verify"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T12:09:39.715331+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "verify"
+        }
+      ]
+    },
+    {
+      "sequence": "02-procedure-reuse-r1-reference",
+      "sequence_status": "completed",
+      "commit": "aa39d16c730b52966f17edf410bb6c4038e8b053",
+      "work": 2,
+      "oracle_pass": true,
+      "changed_files": [
+        "docs/knowledge/constraint/constraint-2808e70f.md",
+        "docs/knowledge/domain/domain-35367d1f.md",
+        "docs/knowledge/recipe/recipe-9047b6fd.md",
+        "docs/knowledge/recipe/recipe-972f105e.md",
+        "src/text/slug.mjs",
+        "test/slug.test.mjs"
+      ],
+      "by_stage": {
+        "fix": {
+          "kinds": {
+            "environment_failure": 1,
+            "help": 1,
+            "doctor": 1,
+            "test": 2
+          },
+          "first_test_attempt": {
+            "kind": "environment_failure",
+            "at": "2026-10-03T12:14:27.903143+00:00",
+            "namespace": null,
+            "exit": 2,
+            "stage": "fix"
+          },
+          "successful_tests": 2
+        },
+        "verify": {
+          "kinds": {
+            "help": 1,
+            "doctor": 1,
+            "environment_failure": 1,
+            "test": 1
+          },
+          "first_test_attempt": {
+            "kind": "environment_failure",
+            "at": "2026-10-03T12:17:22.336503+00:00",
+            "namespace": null,
+            "exit": 2,
+            "stage": "verify"
+          },
+          "successful_tests": 1
+        }
+      },
+      "observations": [
+        {
+          "kind": "environment_failure",
+          "at": "2026-10-03T12:14:27.903143+00:00",
+          "namespace": null,
+          "exit": 2,
+          "stage": "fix"
+        },
+        {
+          "kind": "help",
+          "at": "2026-10-03T12:14:31.999536+00:00",
+          "stage": "fix"
+        },
+        {
+          "kind": "doctor",
+          "at": "2026-10-03T12:14:32.020311+00:00",
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T12:14:50.203012+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T12:14:58.258870+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "fix"
+        },
+        {
+          "kind": "help",
+          "at": "2026-10-03T12:17:22.221148+00:00",
+          "stage": "verify"
+        },
+        {
+          "kind": "doctor",
+          "at": "2026-10-03T12:17:22.244702+00:00",
+          "stage": "verify"
+        },
+        {
+          "kind": "environment_failure",
+          "at": "2026-10-03T12:17:22.336503+00:00",
+          "namespace": null,
+          "exit": 2,
+          "stage": "verify"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T12:17:42.063376+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "verify"
+        }
+      ]
+    },
+    {
+      "sequence": "02-procedure-reuse-r1-reference",
+      "sequence_status": "completed",
+      "commit": "aa39d16c730b52966f17edf410bb6c4038e8b053",
+      "work": 3,
+      "oracle_pass": true,
+      "changed_files": [
+        "docs/knowledge/constraint/constraint-a6fa54a8.md",
+        "docs/knowledge/domain/domain-45c2cc99.md",
+        "docs/knowledge/recipe/recipe-1960adba.md",
+        "docs/knowledge/recipe/recipe-898a94de.md",
+        "src/text/initials.mjs",
+        "test/initials.test.mjs"
+      ],
+      "by_stage": {
+        "fix": {
+          "kinds": {
+            "environment_failure": 1,
+            "help": 1,
+            "doctor": 1,
+            "test": 2
+          },
+          "first_test_attempt": {
+            "kind": "environment_failure",
+            "at": "2026-10-03T12:21:55.458779+00:00",
+            "namespace": null,
+            "exit": 2,
+            "stage": "fix"
+          },
+          "successful_tests": 2
+        },
+        "verify": {
+          "kinds": {
+            "help": 1,
+            "doctor": 1,
+            "environment_failure": 1,
+            "test": 1
+          },
+          "first_test_attempt": {
+            "kind": "environment_failure",
+            "at": "2026-10-03T12:25:28.595978+00:00",
+            "namespace": null,
+            "exit": 2,
+            "stage": "verify"
+          },
+          "successful_tests": 1
+        }
+      },
+      "observations": [
+        {
+          "kind": "environment_failure",
+          "at": "2026-10-03T12:21:55.458779+00:00",
+          "namespace": null,
+          "exit": 2,
+          "stage": "fix"
+        },
+        {
+          "kind": "help",
+          "at": "2026-10-03T12:22:02.867649+00:00",
+          "stage": "fix"
+        },
+        {
+          "kind": "doctor",
+          "at": "2026-10-03T12:22:02.889397+00:00",
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T12:22:33.516512+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T12:22:48.093283+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "fix"
+        },
+        {
+          "kind": "help",
+          "at": "2026-10-03T12:25:28.501613+00:00",
+          "stage": "verify"
+        },
+        {
+          "kind": "doctor",
+          "at": "2026-10-03T12:25:28.535030+00:00",
+          "stage": "verify"
+        },
+        {
+          "kind": "environment_failure",
+          "at": "2026-10-03T12:25:28.595978+00:00",
+          "namespace": null,
+          "exit": 2,
+          "stage": "verify"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T12:25:50.911640+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "verify"
+        }
+      ]
+    }
+  ],
+  "interpretation": "Environment failures and doctor calls are observed actions, not automatic waste scores. In any stage they may deliberately corroborate already-known evidence; simultaneous bare/configured runs are not automatically rediscovery. Compare initial fix setup and explicit use of shared records separately from independent verification. Ordinary README/AGENTS documentation is allowed in every arm."
+}

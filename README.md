@@ -19,3 +19,9 @@ Codex 첫 실행에서는 터미널의 폴더 접근 및 훅 신뢰 안내를 �
 `app/`에서 `npm ci`, `npm run dev`로 개발 앱을 실행합니다. `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`, `npm run build`로 검증합니다. GUI 스모크는 빌드 후 `npm run test:smoke`로 실행하며 Linux에서는 DISPLAY가 필요합니다. Windows 설치 파일은 기존 수동 `app-build` 워크플로로 빌드합니다.
 
 설계, 엔진 간 차이와 검증 결과는 [엔진 확장 문서](docs/engines.md)에 기록합니다. Windows 설치본의 두 엔진 스모크를 통과했고, Linux 앱에서는 실제 Codex 모델로 의도 정리 → 수정 → 리뷰 → 최종 검증 → Work 완료를 진행했습니다(단계를 셋으로 줄인 v0.7 이전 흐름, [설계 D227~D229](docs/design.md)). 실제 질문·답변·취소, 보호 훅, handoff 형식 오류 되돌림, 압축, 중단·앱 재시작 후 동일 세션 재개도 확인했습니다. Windows 실제 모델과 사용자 훅 병합 등 남은 검증 범위는 문서에 구분합니다.
+
+## 프로젝트 공유 지식
+
+Work에서 확인한 재사용 업무 규칙과 검증 절차는 프로젝트의 `.relay/knowledge.md`에 근거·범위·출처와 함께 남깁니다. 코드와 같은 diff에서 검토하고 Git으로 공유하면 새 Work가 커밋된 지식을 참고합니다. 반복 실행 결과는 task 산출물에 남기고, 실제로 새로 배운 사실이나 정책 변경이 있을 때 공유 문서를 갱신합니다.
+
+[팀 사용법](docs/experiment/team-use.md)과 [실험 안내](docs/experiment/README.md)를 참고하세요. 이 브랜치는 지식관리 이전 기준에서 출발한 실험 구현입니다.

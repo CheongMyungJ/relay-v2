@@ -1,0 +1,4500 @@
+{
+  "groups": {
+    "comparison": {
+      "records": 183,
+      "records_without_usage": 0,
+      "input_tokens": 40682541,
+      "cached_input_tokens": 35446400,
+      "output_tokens": 648304,
+      "reasoning_output_tokens": 25527,
+      "uncached_input_tokens": 5236141
+    },
+    "development": {
+      "records": 30,
+      "records_without_usage": 0,
+      "input_tokens": 6949504,
+      "cached_input_tokens": 6093056,
+      "output_tokens": 110865,
+      "reasoning_output_tokens": 3783,
+      "uncached_input_tokens": 856448
+    },
+    "implementation": {
+      "records": 5,
+      "records_without_usage": 0,
+      "input_tokens": 14851105,
+      "cached_input_tokens": 14434816,
+      "output_tokens": 75022,
+      "reasoning_output_tokens": 16602,
+      "uncached_input_tokens": 416289
+    },
+    "invalid_harness_attempt": {
+      "records": 10,
+      "records_without_usage": 0,
+      "input_tokens": 2140796,
+      "cached_input_tokens": 1864960,
+      "output_tokens": 30937,
+      "reasoning_output_tokens": 1436,
+      "uncached_input_tokens": 275836
+    },
+    "preparation": {
+      "records": 6,
+      "records_without_usage": 1,
+      "input_tokens": 995108,
+      "cached_input_tokens": 914816,
+      "output_tokens": 9584,
+      "reasoning_output_tokens": 251,
+      "uncached_input_tokens": 80292
+    },
+    "provider_capacity_failure": {
+      "records": 2,
+      "records_without_usage": 1,
+      "input_tokens": 158201,
+      "cached_input_tokens": 141440,
+      "output_tokens": 2284,
+      "reasoning_output_tokens": 54,
+      "uncached_input_tokens": 16761
+    }
+  },
+  "entries": [
+    {
+      "group": "development",
+      "record": "results/candidate-dev-01/work1-live/codex-usage.json",
+      "session_id": "01a10029-d755-70f0-85dd-20794f6e8755",
+      "usage": {
+        "input_tokens": 171314,
+        "cached_input_tokens": 154240,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2372,
+        "reasoning_output_tokens": 39,
+        "total_tokens": 173686
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "development",
+      "record": "results/candidate-dev-01/work1-live/codex-usage.json",
+      "session_id": "01a1002c-021b-76a2-b830-3e647a31fa98",
+      "usage": {
+        "input_tokens": 227916,
+        "cached_input_tokens": 204288,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4071,
+        "reasoning_output_tokens": 396,
+        "total_tokens": 231987
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "development",
+      "record": "results/candidate-dev-01/work1-live/codex-usage.json",
+      "session_id": "01a1002e-a908-7fa2-8b5e-c4d23efcd5f4",
+      "usage": {
+        "input_tokens": 249027,
+        "cached_input_tokens": 221568,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4134,
+        "reasoning_output_tokens": 163,
+        "total_tokens": 253161
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "development",
+      "record": "results/candidate-dev-01/work2-no-knowledge/codex-usage.json",
+      "session_id": "01a1003c-49a9-7290-8887-5390a46905aa",
+      "usage": {
+        "input_tokens": 248313,
+        "cached_input_tokens": 229888,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2706,
+        "reasoning_output_tokens": 148,
+        "total_tokens": 251019
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "development",
+      "record": "results/candidate-dev-01/work2-no-knowledge/codex-usage.json",
+      "session_id": "01a1003f-1ac4-7dc0-baae-a79a7aaa7f1d",
+      "usage": {
+        "input_tokens": 237251,
+        "cached_input_tokens": 211328,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4598,
+        "reasoning_output_tokens": 299,
+        "total_tokens": 241849
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "development",
+      "record": "results/candidate-dev-01/work2-no-knowledge/codex-usage.json",
+      "session_id": "01a10042-1794-72d1-b759-bfc7239d9dae",
+      "usage": {
+        "input_tokens": 181534,
+        "cached_input_tokens": 156160,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3943,
+        "reasoning_output_tokens": 179,
+        "total_tokens": 185477
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "development",
+      "record": "results/candidate-dev-01/work2-shared/codex-usage.json",
+      "session_id": "01a10032-a617-7821-aed9-44c26a86b509",
+      "usage": {
+        "input_tokens": 201285,
+        "cached_input_tokens": 182784,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2599,
+        "reasoning_output_tokens": 143,
+        "total_tokens": 203884
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "development",
+      "record": "results/candidate-dev-01/work2-shared/codex-usage.json",
+      "session_id": "01a10035-b4b4-7d51-bcc7-bfe7a85fca4b",
+      "usage": {
+        "input_tokens": 276158,
+        "cached_input_tokens": 249216,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4566,
+        "reasoning_output_tokens": 232,
+        "total_tokens": 280724
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "development",
+      "record": "results/candidate-dev-01/work2-shared/codex-usage.json",
+      "session_id": "01a10038-75a8-7e70-b52d-9aa2b2c68da1",
+      "usage": {
+        "input_tokens": 184939,
+        "cached_input_tokens": 151680,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3937,
+        "reasoning_output_tokens": 120,
+        "total_tokens": 188876
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "development",
+      "record": "results/candidate-dev-02/04-tool-discovery-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a10121-34f3-7ad1-b9ff-59438209d8ae",
+      "usage": {
+        "input_tokens": 125198,
+        "cached_input_tokens": 108160,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1967,
+        "reasoning_output_tokens": 66,
+        "total_tokens": 127165
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "development",
+      "record": "results/candidate-dev-02/04-tool-discovery-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a10122-587a-7db3-8fac-d935e798314a",
+      "usage": {
+        "input_tokens": 335038,
+        "cached_input_tokens": 307712,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3826,
+        "reasoning_output_tokens": 76,
+        "total_tokens": 338864
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "development",
+      "record": "results/candidate-dev-02/04-tool-discovery-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a10124-9b03-7630-a5e1-5947efc313a6",
+      "usage": {
+        "input_tokens": 231388,
+        "cached_input_tokens": 201344,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 5663,
+        "reasoning_output_tokens": 173,
+        "total_tokens": 237051
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "development",
+      "record": "results/candidate-dev-02/04-tool-discovery-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a10127-bbd5-7cb1-8cbf-7fda5fc12c77",
+      "usage": {
+        "input_tokens": 155581,
+        "cached_input_tokens": 135936,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2153,
+        "reasoning_output_tokens": 65,
+        "total_tokens": 157734
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "development",
+      "record": "results/candidate-dev-02/04-tool-discovery-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a10129-1210-75b2-ba1d-57a08369d0a0",
+      "usage": {
+        "input_tokens": 248397,
+        "cached_input_tokens": 198272,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3749,
+        "reasoning_output_tokens": 133,
+        "total_tokens": 252146
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "development",
+      "record": "results/candidate-dev-02/04-tool-discovery-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a1012b-5985-7631-9e23-1f3f59baa51b",
+      "usage": {
+        "input_tokens": 316015,
+        "cached_input_tokens": 284288,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4846,
+        "reasoning_output_tokens": 273,
+        "total_tokens": 320861
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "development",
+      "record": "results/candidate-dev-02/capacity-above-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a1012e-491e-7c31-ab90-790a59fa96ae",
+      "usage": {
+        "input_tokens": 156723,
+        "cached_input_tokens": 140672,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2243,
+        "reasoning_output_tokens": 48,
+        "total_tokens": 158966
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "development",
+      "record": "results/candidate-dev-02/capacity-above-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a1012f-9e08-7ee0-bbfe-b9a50388f8db",
+      "usage": {
+        "input_tokens": 259635,
+        "cached_input_tokens": 208896,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3715,
+        "reasoning_output_tokens": 115,
+        "total_tokens": 263350
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "development",
+      "record": "results/candidate-dev-02/capacity-above-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a10131-ab98-7813-8dad-717c71748058",
+      "usage": {
+        "input_tokens": 234895,
+        "cached_input_tokens": 207744,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4005,
+        "reasoning_output_tokens": 114,
+        "total_tokens": 238900
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "development",
+      "record": "results/candidate-dev-03/01-reuse-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a101e6-7909-7741-b726-65d56fc14fff",
+      "usage": {
+        "input_tokens": 163596,
+        "cached_input_tokens": 145664,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2213,
+        "reasoning_output_tokens": 53,
+        "total_tokens": 165809
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "development",
+      "record": "results/candidate-dev-03/01-reuse-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a101e7-cef4-7120-98e4-a2e704dfec63",
+      "usage": {
+        "input_tokens": 257479,
+        "cached_input_tokens": 228096,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4028,
+        "reasoning_output_tokens": 83,
+        "total_tokens": 261507
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "development",
+      "record": "results/candidate-dev-03/01-reuse-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a101ea-1b29-7000-9f93-0435a17cfd5e",
+      "usage": {
+        "input_tokens": 272206,
+        "cached_input_tokens": 223104,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4204,
+        "reasoning_output_tokens": 83,
+        "total_tokens": 276410
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "development",
+      "record": "results/candidate-dev-03/01-reuse-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a101ec-ca93-7912-9a5d-5e6e98228fe5",
+      "usage": {
+        "input_tokens": 135301,
+        "cached_input_tokens": 117760,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2330,
+        "reasoning_output_tokens": 109,
+        "total_tokens": 137631
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "development",
+      "record": "results/candidate-dev-03/01-reuse-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a101ee-43cc-7981-a22b-79e40a1db4c6",
+      "usage": {
+        "input_tokens": 264496,
+        "cached_input_tokens": 242688,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4005,
+        "reasoning_output_tokens": 121,
+        "total_tokens": 268501
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "development",
+      "record": "results/candidate-dev-03/01-reuse-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a101f0-cbeb-7812-a2c0-4ed8eac964de",
+      "usage": {
+        "input_tokens": 193712,
+        "cached_input_tokens": 165120,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3980,
+        "reasoning_output_tokens": 108,
+        "total_tokens": 197692
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "development",
+      "record": "results/candidate-dev-04/01-future-policy-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a10243-c242-7903-85c0-38085dca09f5",
+      "usage": {
+        "input_tokens": 161373,
+        "cached_input_tokens": 135168,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2395,
+        "reasoning_output_tokens": 80,
+        "total_tokens": 163768
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "development",
+      "record": "results/candidate-dev-04/01-future-policy-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a10245-7689-79f0-9e06-08452f92b816",
+      "usage": {
+        "input_tokens": 387666,
+        "cached_input_tokens": 355584,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 5829,
+        "reasoning_output_tokens": 58,
+        "total_tokens": 393495
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "development",
+      "record": "results/candidate-dev-04/01-future-policy-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a10248-fb6d-7353-a53d-7047423fd737",
+      "usage": {
+        "input_tokens": 304545,
+        "cached_input_tokens": 266496,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 5002,
+        "reasoning_output_tokens": 95,
+        "total_tokens": 309547
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "development",
+      "record": "results/candidate-dev-04/01-future-policy-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a1024c-3696-7d21-92e0-9ea90dbc12a4",
+      "usage": {
+        "input_tokens": 164844,
+        "cached_input_tokens": 146432,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2360,
+        "reasoning_output_tokens": 77,
+        "total_tokens": 167204
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "development",
+      "record": "results/candidate-dev-04/01-future-policy-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a1024d-df02-7512-9706-af329b7377f1",
+      "usage": {
+        "input_tokens": 269995,
+        "cached_input_tokens": 239104,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4525,
+        "reasoning_output_tokens": 35,
+        "total_tokens": 274520
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "development",
+      "record": "results/candidate-dev-04/01-future-policy-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a10250-b7d2-7b40-83f1-6d49cac6b892",
+      "usage": {
+        "input_tokens": 333684,
+        "cached_input_tokens": 273664,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4901,
+        "reasoning_output_tokens": 99,
+        "total_tokens": 338585
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "invalid_harness_attempt",
+      "record": "results/comparison-01/01-settlement-r1-baseline/work-1/codex-usage.json",
+      "session_id": "01a10053-727f-7052-ad32-3ccc912d4f9b",
+      "usage": {
+        "input_tokens": 192872,
+        "cached_input_tokens": 175360,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2808,
+        "reasoning_output_tokens": 201,
+        "total_tokens": 195680
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/01-settlement-r1-baseline/work-1/codex-usage.json",
+      "session_id": "01a10056-dc7f-76b0-a8aa-fa59f2616452",
+      "usage": {
+        "input_tokens": 262251,
+        "cached_input_tokens": 240640,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2815,
+        "reasoning_output_tokens": 109,
+        "total_tokens": 265066
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/01-settlement-r1-baseline/work-1/codex-usage.json",
+      "session_id": "01a10059-3b8d-7ec0-9397-c58fd58d1d3f",
+      "usage": {
+        "input_tokens": 222807,
+        "cached_input_tokens": 182016,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3944,
+        "reasoning_output_tokens": 304,
+        "total_tokens": 226751
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/01-settlement-r1-baseline/work-1/codex-usage.json",
+      "session_id": "01a1005b-5fda-7930-8c5a-6814207863d0",
+      "usage": {
+        "input_tokens": 235779,
+        "cached_input_tokens": 211328,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4180,
+        "reasoning_output_tokens": 123,
+        "total_tokens": 239959
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/01-settlement-r1-baseline/work-2/codex-usage.json",
+      "session_id": "01a1005d-c11e-7fd2-98eb-aaabb6c19d5c",
+      "usage": {
+        "input_tokens": 193827,
+        "cached_input_tokens": 176256,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2603,
+        "reasoning_output_tokens": 68,
+        "total_tokens": 196430
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/01-settlement-r1-baseline/work-2/codex-usage.json",
+      "session_id": "01a1005f-466e-7eb0-a51d-980dd98cddfb",
+      "usage": {
+        "input_tokens": 224960,
+        "cached_input_tokens": 205696,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3385,
+        "reasoning_output_tokens": 194,
+        "total_tokens": 228345
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/01-settlement-r1-baseline/work-2/codex-usage.json",
+      "session_id": "01a10061-2c67-7d61-8912-a2b234249a99",
+      "usage": {
+        "input_tokens": 237170,
+        "cached_input_tokens": 214656,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3924,
+        "reasoning_output_tokens": 85,
+        "total_tokens": 241094
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/01-settlement-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a10070-c319-7252-87dd-da353a019210",
+      "usage": {
+        "input_tokens": 282402,
+        "cached_input_tokens": 246784,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2754,
+        "reasoning_output_tokens": 116,
+        "total_tokens": 285156
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/01-settlement-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a10073-4a48-7631-a3f5-70acb7e00ec2",
+      "usage": {
+        "input_tokens": 228935,
+        "cached_input_tokens": 206336,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3761,
+        "reasoning_output_tokens": 185,
+        "total_tokens": 232696
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/01-settlement-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a10075-56bc-7192-b2c6-2d8a9159b567",
+      "usage": {
+        "input_tokens": 280277,
+        "cached_input_tokens": 249088,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4431,
+        "reasoning_output_tokens": 324,
+        "total_tokens": 284708
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/01-settlement-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a10077-ee6e-7670-be7f-90e7060166f2",
+      "usage": {
+        "input_tokens": 151034,
+        "cached_input_tokens": 133504,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2035,
+        "reasoning_output_tokens": 52,
+        "total_tokens": 153069
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/01-settlement-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a10079-1c81-7171-9fd5-8b09434b66fd",
+      "usage": {
+        "input_tokens": 241577,
+        "cached_input_tokens": 215680,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3522,
+        "reasoning_output_tokens": 158,
+        "total_tokens": 245099
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/01-settlement-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a1007b-25ba-7902-a762-2a91b2ccd01b",
+      "usage": {
+        "input_tokens": 180168,
+        "cached_input_tokens": 155264,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3480,
+        "reasoning_output_tokens": 101,
+        "total_tokens": 183648
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/01-settlement-r1-reference/work-1/codex-usage.json",
+      "session_id": "01a10063-ae09-7233-987b-61d201669ea8",
+      "usage": {
+        "input_tokens": 266363,
+        "cached_input_tokens": 230912,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2934,
+        "reasoning_output_tokens": 186,
+        "total_tokens": 269297
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/01-settlement-r1-reference/work-1/codex-usage.json",
+      "session_id": "01a10066-1d6f-7963-8632-481dfd72f250",
+      "usage": {
+        "input_tokens": 239313,
+        "cached_input_tokens": 196864,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4019,
+        "reasoning_output_tokens": 162,
+        "total_tokens": 243332
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/01-settlement-r1-reference/work-1/codex-usage.json",
+      "session_id": "01a10068-5108-77c0-960f-daf0c784a1cd",
+      "usage": {
+        "input_tokens": 237319,
+        "cached_input_tokens": 208640,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4458,
+        "reasoning_output_tokens": 196,
+        "total_tokens": 241777
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/01-settlement-r1-reference/work-2/codex-usage.json",
+      "session_id": "01a1006a-e51f-7aa0-bc7e-73f948b6470a",
+      "usage": {
+        "input_tokens": 160625,
+        "cached_input_tokens": 134528,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2394,
+        "reasoning_output_tokens": 93,
+        "total_tokens": 163019
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/01-settlement-r1-reference/work-2/codex-usage.json",
+      "session_id": "01a1006c-36e2-7be3-8e66-172759102dda",
+      "usage": {
+        "input_tokens": 248898,
+        "cached_input_tokens": 221312,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3760,
+        "reasoning_output_tokens": 336,
+        "total_tokens": 252658
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/01-settlement-r1-reference/work-2/codex-usage.json",
+      "session_id": "01a1006e-5ecc-7dd3-8a59-a2b704634951",
+      "usage": {
+        "input_tokens": 225987,
+        "cached_input_tokens": 196224,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4185,
+        "reasoning_output_tokens": 162,
+        "total_tokens": 230172
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/02-runner-r1-baseline/work-1/codex-usage.json",
+      "session_id": "01a1007d-33a3-7e03-adeb-015bb29ca93e",
+      "usage": {
+        "input_tokens": 189738,
+        "cached_input_tokens": 161280,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2119,
+        "reasoning_output_tokens": 34,
+        "total_tokens": 191857
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/02-runner-r1-baseline/work-1/codex-usage.json",
+      "session_id": "01a1007e-7db2-7a23-8858-43bd34b0cc98",
+      "usage": {
+        "input_tokens": 241401,
+        "cached_input_tokens": 220160,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3575,
+        "reasoning_output_tokens": 76,
+        "total_tokens": 244976
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/02-runner-r1-baseline/work-1/codex-usage.json",
+      "session_id": "01a10080-8abb-7fd2-ab57-8ae65452e618",
+      "usage": {
+        "input_tokens": 165331,
+        "cached_input_tokens": 143744,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3298,
+        "reasoning_output_tokens": 63,
+        "total_tokens": 168629
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/02-runner-r1-baseline/work-2/codex-usage.json",
+      "session_id": "01a10082-79b5-72d0-8f1b-8c436201960b",
+      "usage": {
+        "input_tokens": 192181,
+        "cached_input_tokens": 162944,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2460,
+        "reasoning_output_tokens": 57,
+        "total_tokens": 194641
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/02-runner-r1-baseline/work-2/codex-usage.json",
+      "session_id": "01a10083-fa55-7bf0-bb28-b1728b9d343d",
+      "usage": {
+        "input_tokens": 244616,
+        "cached_input_tokens": 205312,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3425,
+        "reasoning_output_tokens": 79,
+        "total_tokens": 248041
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/02-runner-r1-baseline/work-2/codex-usage.json",
+      "session_id": "01a10085-f028-7c30-b04b-acccc7130a6b",
+      "usage": {
+        "input_tokens": 169635,
+        "cached_input_tokens": 146560,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3689,
+        "reasoning_output_tokens": 67,
+        "total_tokens": 173324
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/02-runner-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a10093-b22f-7f91-83d4-7e9668abca3b",
+      "usage": {
+        "input_tokens": 176981,
+        "cached_input_tokens": 158848,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2290,
+        "reasoning_output_tokens": 37,
+        "total_tokens": 179271
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/02-runner-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a10095-0faa-7362-ae82-af0026ebc8ae",
+      "usage": {
+        "input_tokens": 227919,
+        "cached_input_tokens": 190464,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3789,
+        "reasoning_output_tokens": 172,
+        "total_tokens": 231708
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/02-runner-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a10097-2870-7d01-b0b9-c6881e6db7bf",
+      "usage": {
+        "input_tokens": 173811,
+        "cached_input_tokens": 150016,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3538,
+        "reasoning_output_tokens": 114,
+        "total_tokens": 177349
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/02-runner-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a10099-3f14-7f72-b9bc-ae48e4b8c292",
+      "usage": {
+        "input_tokens": 151942,
+        "cached_input_tokens": 134016,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2121,
+        "reasoning_output_tokens": 57,
+        "total_tokens": 154063
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/02-runner-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a1009a-850d-78c2-86d5-7abd4dd9797a",
+      "usage": {
+        "input_tokens": 228638,
+        "cached_input_tokens": 200832,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3799,
+        "reasoning_output_tokens": 119,
+        "total_tokens": 232437
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/02-runner-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a1009c-9e15-78d2-9311-56f0bcab6cf0",
+      "usage": {
+        "input_tokens": 175045,
+        "cached_input_tokens": 145408,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3730,
+        "reasoning_output_tokens": 77,
+        "total_tokens": 178775
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/02-runner-r1-reference/work-1/codex-usage.json",
+      "session_id": "01a10088-16bf-74c2-8ad6-32566ae2f988",
+      "usage": {
+        "input_tokens": 213353,
+        "cached_input_tokens": 180352,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2769,
+        "reasoning_output_tokens": 87,
+        "total_tokens": 216122
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/02-runner-r1-reference/work-1/codex-usage.json",
+      "session_id": "01a10089-c610-7f92-bdd6-50905470a6fe",
+      "usage": {
+        "input_tokens": 236693,
+        "cached_input_tokens": 215168,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3234,
+        "reasoning_output_tokens": 102,
+        "total_tokens": 239927
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/02-runner-r1-reference/work-1/codex-usage.json",
+      "session_id": "01a1008b-fa8c-77f2-aca3-de2c116fd85a",
+      "usage": {
+        "input_tokens": 191194,
+        "cached_input_tokens": 165888,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3740,
+        "reasoning_output_tokens": 159,
+        "total_tokens": 194934
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/02-runner-r1-reference/work-2/codex-usage.json",
+      "session_id": "01a1008e-252a-73b2-b40f-d79c420a8d7e",
+      "usage": {
+        "input_tokens": 162397,
+        "cached_input_tokens": 141824,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2365,
+        "reasoning_output_tokens": 38,
+        "total_tokens": 164762
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/02-runner-r1-reference/work-2/codex-usage.json",
+      "session_id": "01a1008f-7afc-73b3-83da-a67eb29f7b9a",
+      "usage": {
+        "input_tokens": 246936,
+        "cached_input_tokens": 219264,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3627,
+        "reasoning_output_tokens": 91,
+        "total_tokens": 250563
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/02-runner-r1-reference/work-2/codex-usage.json",
+      "session_id": "01a10091-8bd6-7792-9fd0-73e2cd3e796a",
+      "usage": {
+        "input_tokens": 195803,
+        "cached_input_tokens": 143616,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3726,
+        "reasoning_output_tokens": 172,
+        "total_tokens": 199529
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/03-policy-change-r1-baseline/work-1/codex-usage.json",
+      "session_id": "01a1009e-d074-79b0-8448-219f145b6ec6",
+      "usage": {
+        "input_tokens": 165888,
+        "cached_input_tokens": 136576,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2062,
+        "reasoning_output_tokens": 25,
+        "total_tokens": 167950
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/03-policy-change-r1-baseline/work-1/codex-usage.json",
+      "session_id": "01a100a0-3221-7e50-9cc2-b65d1abf4049",
+      "usage": {
+        "input_tokens": 210426,
+        "cached_input_tokens": 177664,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2836,
+        "reasoning_output_tokens": 77,
+        "total_tokens": 213262
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/03-policy-change-r1-baseline/work-1/codex-usage.json",
+      "session_id": "01a100a1-d917-78a0-b65d-d76668c89dec",
+      "usage": {
+        "input_tokens": 195205,
+        "cached_input_tokens": 173440,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3418,
+        "reasoning_output_tokens": 116,
+        "total_tokens": 198623
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/03-policy-change-r1-baseline/work-2/codex-usage.json",
+      "session_id": "01a100a4-0707-7820-bd54-a213e5299f59",
+      "usage": {
+        "input_tokens": 141801,
+        "cached_input_tokens": 116352,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2269,
+        "reasoning_output_tokens": 106,
+        "total_tokens": 144070
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/03-policy-change-r1-baseline/work-2/codex-usage.json",
+      "session_id": "01a100a5-5592-7bb1-8795-9d662ef96f99",
+      "usage": {
+        "input_tokens": 229101,
+        "cached_input_tokens": 205056,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4322,
+        "reasoning_output_tokens": 161,
+        "total_tokens": 233423
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/03-policy-change-r1-baseline/work-2/codex-usage.json",
+      "session_id": "01a100a7-ef3d-71e2-8932-85dffc0494e6",
+      "usage": {
+        "input_tokens": 243060,
+        "cached_input_tokens": 216704,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4229,
+        "reasoning_output_tokens": 268,
+        "total_tokens": 247289
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/03-policy-change-r1-baseline/work-3/codex-usage.json",
+      "session_id": "01a100aa-7310-7ea0-ad28-e56dce7bd5b5",
+      "usage": {
+        "input_tokens": 169567,
+        "cached_input_tokens": 149888,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2254,
+        "reasoning_output_tokens": 37,
+        "total_tokens": 171821
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/03-policy-change-r1-baseline/work-3/codex-usage.json",
+      "session_id": "01a100ab-dc8e-7952-af7e-83d236b58616",
+      "usage": {
+        "input_tokens": 237154,
+        "cached_input_tokens": 213248,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3477,
+        "reasoning_output_tokens": 95,
+        "total_tokens": 240631
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/03-policy-change-r1-baseline/work-3/codex-usage.json",
+      "session_id": "01a100ad-ce2f-7681-9c49-2f4582e5db76",
+      "usage": {
+        "input_tokens": 173223,
+        "cached_input_tokens": 118272,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3311,
+        "reasoning_output_tokens": 53,
+        "total_tokens": 176534
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/03-policy-change-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a100c2-a8bf-7de2-9c53-2d06c9c3d92a",
+      "usage": {
+        "input_tokens": 175542,
+        "cached_input_tokens": 158080,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1993,
+        "reasoning_output_tokens": 36,
+        "total_tokens": 177535
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/03-policy-change-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a100c3-ef09-72b3-a91b-70a68a0d4a8e",
+      "usage": {
+        "input_tokens": 221835,
+        "cached_input_tokens": 196864,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3174,
+        "reasoning_output_tokens": 102,
+        "total_tokens": 225009
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/03-policy-change-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a100c5-dc7f-7861-b14a-e987fb463d57",
+      "usage": {
+        "input_tokens": 178228,
+        "cached_input_tokens": 156160,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3547,
+        "reasoning_output_tokens": 103,
+        "total_tokens": 181775
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/03-policy-change-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a100c8-032a-73c0-afb8-c29a60292ccb",
+      "usage": {
+        "input_tokens": 153868,
+        "cached_input_tokens": 121984,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2424,
+        "reasoning_output_tokens": 97,
+        "total_tokens": 156292
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/03-policy-change-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a100c9-743b-7f83-9dd7-6648b070fe76",
+      "usage": {
+        "input_tokens": 287290,
+        "cached_input_tokens": 261632,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4826,
+        "reasoning_output_tokens": 152,
+        "total_tokens": 292116
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/03-policy-change-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a100cc-b60a-7cf3-9f23-1e2a22cf238a",
+      "usage": {
+        "input_tokens": 216293,
+        "cached_input_tokens": 179712,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4150,
+        "reasoning_output_tokens": 199,
+        "total_tokens": 220443
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/03-policy-change-r1-candidate/work-3/codex-usage.json",
+      "session_id": "01a100cf-74de-77a1-ac68-de3343a14e10",
+      "usage": {
+        "input_tokens": 153254,
+        "cached_input_tokens": 137344,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2284,
+        "reasoning_output_tokens": 52,
+        "total_tokens": 155538
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/03-policy-change-r1-candidate/work-3/codex-usage.json",
+      "session_id": "01a100d0-e220-7883-abc1-e7842da656dc",
+      "usage": {
+        "input_tokens": 248733,
+        "cached_input_tokens": 201344,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3659,
+        "reasoning_output_tokens": 114,
+        "total_tokens": 252392
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/03-policy-change-r1-candidate/work-3/codex-usage.json",
+      "session_id": "01a100d2-ef22-7e61-930b-75cf3d87f3cf",
+      "usage": {
+        "input_tokens": 187459,
+        "cached_input_tokens": 157696,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4131,
+        "reasoning_output_tokens": 149,
+        "total_tokens": 191590
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/03-policy-change-r1-reference/work-1/codex-usage.json",
+      "session_id": "01a100af-f49e-77f2-b97b-df04c77d9143",
+      "usage": {
+        "input_tokens": 184278,
+        "cached_input_tokens": 164736,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2459,
+        "reasoning_output_tokens": 43,
+        "total_tokens": 186737
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/03-policy-change-r1-reference/work-1/codex-usage.json",
+      "session_id": "01a100b1-6553-76d2-b45b-bfe922a290a8",
+      "usage": {
+        "input_tokens": 225134,
+        "cached_input_tokens": 196992,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3198,
+        "reasoning_output_tokens": 130,
+        "total_tokens": 228332
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/03-policy-change-r1-reference/work-1/codex-usage.json",
+      "session_id": "01a100b3-3012-70f2-aea5-96e7cefd4e0e",
+      "usage": {
+        "input_tokens": 265350,
+        "cached_input_tokens": 236416,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3696,
+        "reasoning_output_tokens": 129,
+        "total_tokens": 269046
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/03-policy-change-r1-reference/work-2/codex-usage.json",
+      "session_id": "01a100b5-7da1-7b93-b433-86598a59c849",
+      "usage": {
+        "input_tokens": 166906,
+        "cached_input_tokens": 144896,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3136,
+        "reasoning_output_tokens": 150,
+        "total_tokens": 170042
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/03-policy-change-r1-reference/work-2/codex-usage.json",
+      "session_id": "01a100b7-29a2-7f11-afad-2b770eadf879",
+      "usage": {
+        "input_tokens": 253645,
+        "cached_input_tokens": 226048,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4058,
+        "reasoning_output_tokens": 49,
+        "total_tokens": 257703
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/03-policy-change-r1-reference/work-2/codex-usage.json",
+      "session_id": "01a100b9-6902-70d3-8de9-acf9fb7671f4",
+      "usage": {
+        "input_tokens": 200892,
+        "cached_input_tokens": 168832,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4616,
+        "reasoning_output_tokens": 271,
+        "total_tokens": 205508
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/03-policy-change-r1-reference/work-3/codex-usage.json",
+      "session_id": "01a100bb-fa0e-7483-8713-a708ae20b1bf",
+      "usage": {
+        "input_tokens": 201307,
+        "cached_input_tokens": 163072,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3190,
+        "reasoning_output_tokens": 173,
+        "total_tokens": 204497
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/03-policy-change-r1-reference/work-3/codex-usage.json",
+      "session_id": "01a100bd-d066-71f3-8f4e-27d7276d6e8e",
+      "usage": {
+        "input_tokens": 287855,
+        "cached_input_tokens": 252416,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4661,
+        "reasoning_output_tokens": 253,
+        "total_tokens": 292516
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-02/03-policy-change-r1-reference/work-3/codex-usage.json",
+      "session_id": "01a100c0-6e6b-7f10-8713-e7035de2d3df",
+      "usage": {
+        "input_tokens": 241470,
+        "cached_input_tokens": 210944,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3666,
+        "reasoning_output_tokens": 82,
+        "total_tokens": 245136
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-capacity-01/capacity-above-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a10111-f74f-7af2-8d86-482b35d58da8",
+      "usage": {
+        "input_tokens": 177508,
+        "cached_input_tokens": 155520,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2498,
+        "reasoning_output_tokens": 38,
+        "total_tokens": 180006
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-capacity-01/capacity-above-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a10113-9bea-7201-8fe1-9080205069b5",
+      "usage": {
+        "input_tokens": 336125,
+        "cached_input_tokens": 304768,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4357,
+        "reasoning_output_tokens": 552,
+        "total_tokens": 340482
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-capacity-01/capacity-above-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a10116-35a7-7c53-bde1-6bcbd2159a73",
+      "usage": {
+        "input_tokens": 303713,
+        "cached_input_tokens": 269696,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4670,
+        "reasoning_output_tokens": 229,
+        "total_tokens": 308383
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-capacity-01/capacity-below-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a1010b-e362-7602-b9fe-5fac4f3fa5eb",
+      "usage": {
+        "input_tokens": 166016,
+        "cached_input_tokens": 126976,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2275,
+        "reasoning_output_tokens": 46,
+        "total_tokens": 168291
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-capacity-01/capacity-below-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a1010d-7b3d-7d20-a99c-233a467cbfc8",
+      "usage": {
+        "input_tokens": 235988,
+        "cached_input_tokens": 211328,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3489,
+        "reasoning_output_tokens": 245,
+        "total_tokens": 239477
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-capacity-01/capacity-below-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a1010f-bbf6-71b3-b745-4f1df8ed8a54",
+      "usage": {
+        "input_tokens": 243322,
+        "cached_input_tokens": 206208,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3776,
+        "reasoning_output_tokens": 102,
+        "total_tokens": 247098
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-discovery-01/04-tool-discovery-r1-baseline/work-1/codex-usage.json",
+      "session_id": "01a100da-433c-7730-9701-ca4168700632",
+      "usage": {
+        "input_tokens": 140112,
+        "cached_input_tokens": 116736,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1929,
+        "reasoning_output_tokens": 69,
+        "total_tokens": 142041
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-discovery-01/04-tool-discovery-r1-baseline/work-1/codex-usage.json",
+      "session_id": "01a100db-80fd-7750-a7cf-9fa760f37033",
+      "usage": {
+        "input_tokens": 240779,
+        "cached_input_tokens": 217088,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3336,
+        "reasoning_output_tokens": 42,
+        "total_tokens": 244115
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-discovery-01/04-tool-discovery-r1-baseline/work-1/codex-usage.json",
+      "session_id": "01a100dd-74b7-7c63-8100-1e310aba9801",
+      "usage": {
+        "input_tokens": 235198,
+        "cached_input_tokens": 210688,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4786,
+        "reasoning_output_tokens": 134,
+        "total_tokens": 239984
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-discovery-01/04-tool-discovery-r1-baseline/work-2/codex-usage.json",
+      "session_id": "01a100e0-6884-7ef1-a278-2f92b993614f",
+      "usage": {
+        "input_tokens": 143617,
+        "cached_input_tokens": 120448,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2129,
+        "reasoning_output_tokens": 64,
+        "total_tokens": 145746
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-discovery-01/04-tool-discovery-r1-baseline/work-2/codex-usage.json",
+      "session_id": "01a100e1-b316-7b63-8543-cd23ff518b84",
+      "usage": {
+        "input_tokens": 208873,
+        "cached_input_tokens": 182784,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4002,
+        "reasoning_output_tokens": 132,
+        "total_tokens": 212875
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-discovery-01/04-tool-discovery-r1-baseline/work-2/codex-usage.json",
+      "session_id": "01a100e3-f2a2-7920-b910-347d973b71bd",
+      "usage": {
+        "input_tokens": 234220,
+        "cached_input_tokens": 210688,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3780,
+        "reasoning_output_tokens": 181,
+        "total_tokens": 238000
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-discovery-01/04-tool-discovery-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a100ff-8894-7631-922d-86faa093a727",
+      "usage": {
+        "input_tokens": 150558,
+        "cached_input_tokens": 135808,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1902,
+        "reasoning_output_tokens": 38,
+        "total_tokens": 152460
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-discovery-01/04-tool-discovery-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a10100-d1f0-75a2-b03b-a244167b4278",
+      "usage": {
+        "input_tokens": 286726,
+        "cached_input_tokens": 263040,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3315,
+        "reasoning_output_tokens": 89,
+        "total_tokens": 290041
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-discovery-01/04-tool-discovery-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a10103-41a9-7823-b8b8-7adc1757dc77",
+      "usage": {
+        "input_tokens": 243479,
+        "cached_input_tokens": 212608,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3599,
+        "reasoning_output_tokens": 125,
+        "total_tokens": 247078
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-discovery-01/04-tool-discovery-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a10105-7728-7cc1-ab5d-af0ac53a9eb9",
+      "usage": {
+        "input_tokens": 151784,
+        "cached_input_tokens": 121088,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2136,
+        "reasoning_output_tokens": 62,
+        "total_tokens": 153920
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-discovery-01/04-tool-discovery-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a10106-bd35-7090-9ad6-ba969ea0c05c",
+      "usage": {
+        "input_tokens": 327893,
+        "cached_input_tokens": 269952,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3473,
+        "reasoning_output_tokens": 85,
+        "total_tokens": 331366
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-discovery-01/04-tool-discovery-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a10109-1c2c-7ec0-88bc-1641d0829075",
+      "usage": {
+        "input_tokens": 213616,
+        "cached_input_tokens": 189952,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3810,
+        "reasoning_output_tokens": 155,
+        "total_tokens": 217426
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "provider_capacity_failure",
+      "record": "results/comparison-discovery-01/04-tool-discovery-r1-reference/work-1/codex-usage.json",
+      "session_id": "01a100e6-61dc-7a23-866c-fabb9eccb22c",
+      "usage": {
+        "input_tokens": 158201,
+        "cached_input_tokens": 141440,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2284,
+        "reasoning_output_tokens": 54,
+        "total_tokens": 160485
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "provider_capacity_failure",
+      "record": "results/comparison-discovery-01/04-tool-discovery-r1-reference/work-1/codex-usage.json",
+      "session_id": "01a100e7-bcea-7150-9977-55842dd66746",
+      "usage": null,
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-discovery-01/04-tool-discovery-r1-reference-retry-084822/work-1/codex-usage.json",
+      "session_id": "01a100f3-461e-7bc0-965b-887abd394d6a",
+      "usage": {
+        "input_tokens": 157466,
+        "cached_input_tokens": 134400,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2509,
+        "reasoning_output_tokens": 107,
+        "total_tokens": 159975
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-discovery-01/04-tool-discovery-r1-reference-retry-084822/work-1/codex-usage.json",
+      "session_id": "01a100f4-d691-7323-9b63-435b3b5f16bd",
+      "usage": {
+        "input_tokens": 301258,
+        "cached_input_tokens": 276224,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3562,
+        "reasoning_output_tokens": 113,
+        "total_tokens": 304820
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-discovery-01/04-tool-discovery-r1-reference-retry-084822/work-1/codex-usage.json",
+      "session_id": "01a100f6-ef0f-7ed3-9472-7214d1b98a8c",
+      "usage": {
+        "input_tokens": 252726,
+        "cached_input_tokens": 221056,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3768,
+        "reasoning_output_tokens": 161,
+        "total_tokens": 256494
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-discovery-01/04-tool-discovery-r1-reference-retry-084822/work-2/codex-usage.json",
+      "session_id": "01a100f9-40d4-7873-95c1-207c9273837f",
+      "usage": {
+        "input_tokens": 133057,
+        "cached_input_tokens": 113536,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2480,
+        "reasoning_output_tokens": 75,
+        "total_tokens": 135537
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-discovery-01/04-tool-discovery-r1-reference-retry-084822/work-2/codex-usage.json",
+      "session_id": "01a100fa-bdf1-7163-a472-a9bdeec6c6f0",
+      "usage": {
+        "input_tokens": 287777,
+        "cached_input_tokens": 244736,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3957,
+        "reasoning_output_tokens": 80,
+        "total_tokens": 291734
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-discovery-01/04-tool-discovery-r1-reference-retry-084822/work-2/codex-usage.json",
+      "session_id": "01a100fd-092e-7891-bf03-93fa753cf77d",
+      "usage": {
+        "input_tokens": 267607,
+        "cached_input_tokens": 210816,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4189,
+        "reasoning_output_tokens": 231,
+        "total_tokens": 271796
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "invalid_harness_attempt",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-baseline/work-1/codex-usage.json",
+      "session_id": "01a10142-333d-7c11-b897-a544c09cdb20",
+      "usage": {
+        "input_tokens": 165521,
+        "cached_input_tokens": 142720,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1902,
+        "reasoning_output_tokens": 49,
+        "total_tokens": 167423
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "invalid_harness_attempt",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-baseline/work-1/codex-usage.json",
+      "session_id": "01a10143-623b-7b31-83e0-f0de767a5580",
+      "usage": {
+        "input_tokens": 199370,
+        "cached_input_tokens": 181248,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2683,
+        "reasoning_output_tokens": 74,
+        "total_tokens": 202053
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "invalid_harness_attempt",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-baseline/work-1/codex-usage.json",
+      "session_id": "01a10145-3379-7f12-9154-66770aad0ff0",
+      "usage": {
+        "input_tokens": 195380,
+        "cached_input_tokens": 156928,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3571,
+        "reasoning_output_tokens": 149,
+        "total_tokens": 198951
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "invalid_harness_attempt",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-baseline/work-2/codex-usage.json",
+      "session_id": "01a10147-65d3-7100-b0ac-96f66ff66cfc",
+      "usage": {
+        "input_tokens": 142376,
+        "cached_input_tokens": 119552,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2196,
+        "reasoning_output_tokens": 83,
+        "total_tokens": 144572
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "invalid_harness_attempt",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-baseline/work-2/codex-usage.json",
+      "session_id": "01a10148-af61-7ea3-991b-88ed49a20242",
+      "usage": {
+        "input_tokens": 170028,
+        "cached_input_tokens": 154368,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3619,
+        "reasoning_output_tokens": 140,
+        "total_tokens": 173647
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "invalid_harness_attempt",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-baseline/work-2/codex-usage.json",
+      "session_id": "01a1014a-95b5-7c02-90d4-48af37a8c39e",
+      "usage": {
+        "input_tokens": 211639,
+        "cached_input_tokens": 168064,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4502,
+        "reasoning_output_tokens": 315,
+        "total_tokens": 216141
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "invalid_harness_attempt",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-baseline/work-3/codex-usage.json",
+      "session_id": "01a1014d-251b-7463-b34e-3efc965a72c9",
+      "usage": {
+        "input_tokens": 167408,
+        "cached_input_tokens": 143616,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2279,
+        "reasoning_output_tokens": 98,
+        "total_tokens": 169687
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "invalid_harness_attempt",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-baseline/work-3/codex-usage.json",
+      "session_id": "01a1014e-9837-74f3-be24-2c24a1827e02",
+      "usage": {
+        "input_tokens": 193791,
+        "cached_input_tokens": 170240,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3596,
+        "reasoning_output_tokens": 86,
+        "total_tokens": 197387
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "invalid_harness_attempt",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-baseline/work-3/codex-usage.json",
+      "session_id": "01a10150-a773-7ba1-9940-c7e28fcb3adc",
+      "usage": {
+        "input_tokens": 502411,
+        "cached_input_tokens": 452864,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3781,
+        "reasoning_output_tokens": 241,
+        "total_tokens": 506192
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-baseline-retry-104110/work-1/codex-usage.json",
+      "session_id": "01a1015a-8be9-7410-bd5d-14aaf596e210",
+      "usage": {
+        "input_tokens": 163934,
+        "cached_input_tokens": 148480,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1831,
+        "reasoning_output_tokens": 22,
+        "total_tokens": 165765
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-baseline-retry-104110/work-1/codex-usage.json",
+      "session_id": "01a1015b-b1ec-7590-a088-daf6ad94ae60",
+      "usage": {
+        "input_tokens": 178787,
+        "cached_input_tokens": 163072,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2404,
+        "reasoning_output_tokens": 43,
+        "total_tokens": 181191
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-baseline-retry-104110/work-1/codex-usage.json",
+      "session_id": "01a1015d-1ae0-70a2-ba7f-38db1b011ee7",
+      "usage": {
+        "input_tokens": 163547,
+        "cached_input_tokens": 141312,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3398,
+        "reasoning_output_tokens": 148,
+        "total_tokens": 166945
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-baseline-retry-104110/work-2/codex-usage.json",
+      "session_id": "01a1015f-21da-79e0-ba94-728b4251e5b6",
+      "usage": {
+        "input_tokens": 144128,
+        "cached_input_tokens": 130048,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2484,
+        "reasoning_output_tokens": 221,
+        "total_tokens": 146612
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-baseline-retry-104110/work-2/codex-usage.json",
+      "session_id": "01a10160-ed3b-7700-83a7-b90da33a5ec7",
+      "usage": {
+        "input_tokens": 175292,
+        "cached_input_tokens": 157824,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3484,
+        "reasoning_output_tokens": 91,
+        "total_tokens": 178776
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-baseline-retry-104110/work-2/codex-usage.json",
+      "session_id": "01a10162-da14-7ed3-935f-cebe354a4967",
+      "usage": {
+        "input_tokens": 206762,
+        "cached_input_tokens": 184192,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4167,
+        "reasoning_output_tokens": 158,
+        "total_tokens": 210929
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-baseline-retry-104110/work-3/codex-usage.json",
+      "session_id": "01a10165-337e-7222-b014-4672c911d903",
+      "usage": {
+        "input_tokens": 169763,
+        "cached_input_tokens": 144640,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2458,
+        "reasoning_output_tokens": 86,
+        "total_tokens": 172221
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-baseline-retry-104110/work-3/codex-usage.json",
+      "session_id": "01a10166-a8ba-7f31-818a-bcb30768c44a",
+      "usage": {
+        "input_tokens": 234454,
+        "cached_input_tokens": 208768,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3956,
+        "reasoning_output_tokens": 160,
+        "total_tokens": 238410
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-baseline-retry-104110/work-3/codex-usage.json",
+      "session_id": "01a10168-f3cb-7ae1-904f-a459f8b9dd19",
+      "usage": {
+        "input_tokens": 207883,
+        "cached_input_tokens": 184960,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4255,
+        "reasoning_output_tokens": 32,
+        "total_tokens": 212138
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a1017f-7000-7d92-93d5-e54e9c15f147",
+      "usage": {
+        "input_tokens": 151520,
+        "cached_input_tokens": 135808,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2136,
+        "reasoning_output_tokens": 42,
+        "total_tokens": 153656
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a10180-c578-7700-8254-cb3d0607f505",
+      "usage": {
+        "input_tokens": 230236,
+        "cached_input_tokens": 207872,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3653,
+        "reasoning_output_tokens": 46,
+        "total_tokens": 233889
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a10182-de37-7dc0-9fd3-2eef86ab0a11",
+      "usage": {
+        "input_tokens": 190318,
+        "cached_input_tokens": 165376,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3775,
+        "reasoning_output_tokens": 131,
+        "total_tokens": 194093
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a10185-1076-7701-9efb-2a170ed2419e",
+      "usage": {
+        "input_tokens": 157072,
+        "cached_input_tokens": 137984,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2361,
+        "reasoning_output_tokens": 113,
+        "total_tokens": 159433
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a10186-759b-7920-a98d-f67fd164a533",
+      "usage": {
+        "input_tokens": 294491,
+        "cached_input_tokens": 262144,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 5634,
+        "reasoning_output_tokens": 497,
+        "total_tokens": 300125
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a10189-b449-7172-a910-1905ebf50b14",
+      "usage": {
+        "input_tokens": 352784,
+        "cached_input_tokens": 310272,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4800,
+        "reasoning_output_tokens": 388,
+        "total_tokens": 357584
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-candidate/work-3/codex-usage.json",
+      "session_id": "01a1018c-b1e6-7d52-be8a-417151f63058",
+      "usage": {
+        "input_tokens": 157198,
+        "cached_input_tokens": 138624,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2085,
+        "reasoning_output_tokens": 63,
+        "total_tokens": 159283
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-candidate/work-3/codex-usage.json",
+      "session_id": "01a1018e-0138-7711-ab6c-6520179f9a48",
+      "usage": {
+        "input_tokens": 255025,
+        "cached_input_tokens": 227456,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4116,
+        "reasoning_output_tokens": 173,
+        "total_tokens": 259141
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-candidate/work-3/codex-usage.json",
+      "session_id": "01a10190-56ff-73e2-810e-3e720b2a9b86",
+      "usage": {
+        "input_tokens": 195358,
+        "cached_input_tokens": 168832,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3701,
+        "reasoning_output_tokens": 122,
+        "total_tokens": 199059
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-reference/work-1/codex-usage.json",
+      "session_id": "01a1016b-bd51-7011-a06d-e30734550e30",
+      "usage": {
+        "input_tokens": 186288,
+        "cached_input_tokens": 151552,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2576,
+        "reasoning_output_tokens": 71,
+        "total_tokens": 188864
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-reference/work-1/codex-usage.json",
+      "session_id": "01a1016d-2ac6-7253-ae43-182e6f3b58f7",
+      "usage": {
+        "input_tokens": 201406,
+        "cached_input_tokens": 147712,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3283,
+        "reasoning_output_tokens": 79,
+        "total_tokens": 204689
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-reference/work-1/codex-usage.json",
+      "session_id": "01a1016f-08fe-7ab0-ab6f-1c7c4f5168c5",
+      "usage": {
+        "input_tokens": 230586,
+        "cached_input_tokens": 200448,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4136,
+        "reasoning_output_tokens": 313,
+        "total_tokens": 234722
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-reference/work-2/codex-usage.json",
+      "session_id": "01a10171-90d8-7661-8957-8cf311404674",
+      "usage": {
+        "input_tokens": 195766,
+        "cached_input_tokens": 175488,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3191,
+        "reasoning_output_tokens": 224,
+        "total_tokens": 198957
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-reference/work-2/codex-usage.json",
+      "session_id": "01a10173-587b-78d2-b37f-5011adb62a49",
+      "usage": {
+        "input_tokens": 257695,
+        "cached_input_tokens": 227968,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 5015,
+        "reasoning_output_tokens": 245,
+        "total_tokens": 262710
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-reference/work-2/codex-usage.json",
+      "session_id": "01a10176-24db-74a1-8d97-f679f8722a32",
+      "usage": {
+        "input_tokens": 279168,
+        "cached_input_tokens": 244736,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4469,
+        "reasoning_output_tokens": 182,
+        "total_tokens": 283637
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-reference/work-3/codex-usage.json",
+      "session_id": "01a10178-bd08-79e0-8198-c3f15ffdf346",
+      "usage": {
+        "input_tokens": 196394,
+        "cached_input_tokens": 172544,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3129,
+        "reasoning_output_tokens": 150,
+        "total_tokens": 199523
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-reference/work-3/codex-usage.json",
+      "session_id": "01a1017a-8fe0-7452-8d86-d230ef56a39a",
+      "usage": {
+        "input_tokens": 296874,
+        "cached_input_tokens": 269696,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4366,
+        "reasoning_output_tokens": 204,
+        "total_tokens": 301240
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/01-policy-transfer-r1-reference/work-3/codex-usage.json",
+      "session_id": "01a1017d-0fc6-7b03-9f22-2b0310268792",
+      "usage": {
+        "input_tokens": 198735,
+        "cached_input_tokens": 168064,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3670,
+        "reasoning_output_tokens": 196,
+        "total_tokens": 202405
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/02-procedure-reuse-r1-baseline/work-1/codex-usage.json",
+      "session_id": "01a10192-8186-7ce1-875c-daa4da1b6e0c",
+      "usage": {
+        "input_tokens": 139800,
+        "cached_input_tokens": 127232,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1822,
+        "reasoning_output_tokens": 60,
+        "total_tokens": 141622
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/02-procedure-reuse-r1-baseline/work-1/codex-usage.json",
+      "session_id": "01a10193-95fd-7893-be0c-6d849a45d880",
+      "usage": {
+        "input_tokens": 238770,
+        "cached_input_tokens": 209792,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3452,
+        "reasoning_output_tokens": 112,
+        "total_tokens": 242222
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/02-procedure-reuse-r1-baseline/work-1/codex-usage.json",
+      "session_id": "01a10195-a210-7ef2-9832-d6ad01bf8473",
+      "usage": {
+        "input_tokens": 489976,
+        "cached_input_tokens": 442368,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 5198,
+        "reasoning_output_tokens": 367,
+        "total_tokens": 495174
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/02-procedure-reuse-r1-baseline/work-2/codex-usage.json",
+      "session_id": "01a1019a-21cc-72b0-8d1a-0a28505c467c",
+      "usage": {
+        "input_tokens": 141353,
+        "cached_input_tokens": 125696,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2104,
+        "reasoning_output_tokens": 55,
+        "total_tokens": 143457
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/02-procedure-reuse-r1-baseline/work-2/codex-usage.json",
+      "session_id": "01a1019b-781a-7601-8cf1-052a607f5ac4",
+      "usage": {
+        "input_tokens": 274421,
+        "cached_input_tokens": 254592,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3593,
+        "reasoning_output_tokens": 142,
+        "total_tokens": 278014
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/02-procedure-reuse-r1-baseline/work-2/codex-usage.json",
+      "session_id": "01a1019d-f986-7341-87e1-09cd52838d02",
+      "usage": {
+        "input_tokens": 234088,
+        "cached_input_tokens": 212992,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3979,
+        "reasoning_output_tokens": 193,
+        "total_tokens": 238067
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/02-procedure-reuse-r1-baseline/work-3/codex-usage.json",
+      "session_id": "01a101a0-4b0d-7963-ac85-d35c418c6662",
+      "usage": {
+        "input_tokens": 143423,
+        "cached_input_tokens": 127104,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1956,
+        "reasoning_output_tokens": 37,
+        "total_tokens": 145379
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/02-procedure-reuse-r1-baseline/work-3/codex-usage.json",
+      "session_id": "01a101a1-8dd3-7351-a89e-533210d5b5a2",
+      "usage": {
+        "input_tokens": 247913,
+        "cached_input_tokens": 225152,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3801,
+        "reasoning_output_tokens": 94,
+        "total_tokens": 251714
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/02-procedure-reuse-r1-baseline/work-3/codex-usage.json",
+      "session_id": "01a101a3-d0f1-77e0-8d1c-f00a64624fbb",
+      "usage": {
+        "input_tokens": 239577,
+        "cached_input_tokens": 216832,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4490,
+        "reasoning_output_tokens": 275,
+        "total_tokens": 244067
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/02-procedure-reuse-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a101be-aa04-7311-a4ad-c9bd6c0cfa19",
+      "usage": {
+        "input_tokens": 152928,
+        "cached_input_tokens": 135168,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1927,
+        "reasoning_output_tokens": 84,
+        "total_tokens": 154855
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/02-procedure-reuse-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a101bf-dc0d-7de0-90bd-da583cbe0974",
+      "usage": {
+        "input_tokens": 274901,
+        "cached_input_tokens": 255616,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4433,
+        "reasoning_output_tokens": 172,
+        "total_tokens": 279334
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/02-procedure-reuse-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a101c2-8658-75c2-b488-733279853998",
+      "usage": {
+        "input_tokens": 271025,
+        "cached_input_tokens": 244352,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3937,
+        "reasoning_output_tokens": 252,
+        "total_tokens": 274962
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/02-procedure-reuse-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a101c5-1e9f-76f0-a3b8-4c73de1f8114",
+      "usage": {
+        "input_tokens": 155248,
+        "cached_input_tokens": 123392,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2099,
+        "reasoning_output_tokens": 71,
+        "total_tokens": 157347
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/02-procedure-reuse-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a101c6-70bc-78c1-bf19-759257676b46",
+      "usage": {
+        "input_tokens": 243774,
+        "cached_input_tokens": 213632,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4074,
+        "reasoning_output_tokens": 129,
+        "total_tokens": 247848
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/02-procedure-reuse-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a101c8-ef03-7970-bb67-351515649676",
+      "usage": {
+        "input_tokens": 276545,
+        "cached_input_tokens": 246656,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4969,
+        "reasoning_output_tokens": 298,
+        "total_tokens": 281514
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/02-procedure-reuse-r1-candidate/work-3/codex-usage.json",
+      "session_id": "01a101cb-ed20-7f51-a9f7-6779a866b754",
+      "usage": {
+        "input_tokens": 140751,
+        "cached_input_tokens": 112640,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1985,
+        "reasoning_output_tokens": 47,
+        "total_tokens": 142736
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/02-procedure-reuse-r1-candidate/work-3/codex-usage.json",
+      "session_id": "01a101cd-2f01-7ed2-8332-fc4a15d2686e",
+      "usage": {
+        "input_tokens": 248678,
+        "cached_input_tokens": 229504,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4096,
+        "reasoning_output_tokens": 77,
+        "total_tokens": 252774
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/02-procedure-reuse-r1-candidate/work-3/codex-usage.json",
+      "session_id": "01a101cf-8fe9-7f62-8f47-57fd6d1ad569",
+      "usage": {
+        "input_tokens": 240613,
+        "cached_input_tokens": 206976,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4438,
+        "reasoning_output_tokens": 169,
+        "total_tokens": 245051
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/02-procedure-reuse-r1-reference/work-1/codex-usage.json",
+      "session_id": "01a101a6-e5fb-7b43-9213-6e75c2f29ad4",
+      "usage": {
+        "input_tokens": 159401,
+        "cached_input_tokens": 138240,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2655,
+        "reasoning_output_tokens": 122,
+        "total_tokens": 162056
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/02-procedure-reuse-r1-reference/work-1/codex-usage.json",
+      "session_id": "01a101a8-7a07-7383-b121-f6169179eac2",
+      "usage": {
+        "input_tokens": 302521,
+        "cached_input_tokens": 278784,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3849,
+        "reasoning_output_tokens": 110,
+        "total_tokens": 306370
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/02-procedure-reuse-r1-reference/work-1/codex-usage.json",
+      "session_id": "01a101aa-c781-7b62-811e-28607d973bcd",
+      "usage": {
+        "input_tokens": 270161,
+        "cached_input_tokens": 213632,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4740,
+        "reasoning_output_tokens": 291,
+        "total_tokens": 274901
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/02-procedure-reuse-r1-reference/work-2/codex-usage.json",
+      "session_id": "01a101ad-f6d1-7000-ac04-8882d91ebd15",
+      "usage": {
+        "input_tokens": 132483,
+        "cached_input_tokens": 106880,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2581,
+        "reasoning_output_tokens": 75,
+        "total_tokens": 135064
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/02-procedure-reuse-r1-reference/work-2/codex-usage.json",
+      "session_id": "01a101af-86e1-7e42-ad5a-ba2269561d6c",
+      "usage": {
+        "input_tokens": 284484,
+        "cached_input_tokens": 252160,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4142,
+        "reasoning_output_tokens": 108,
+        "total_tokens": 288626
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/02-procedure-reuse-r1-reference/work-2/codex-usage.json",
+      "session_id": "01a101b1-e21d-71d2-8b30-84f4666d1aa3",
+      "usage": {
+        "input_tokens": 241632,
+        "cached_input_tokens": 203776,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 5048,
+        "reasoning_output_tokens": 385,
+        "total_tokens": 246680
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/02-procedure-reuse-r1-reference/work-3/codex-usage.json",
+      "session_id": "01a101b4-efef-7872-a5e1-9fd87f1638b2",
+      "usage": {
+        "input_tokens": 133291,
+        "cached_input_tokens": 113664,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2552,
+        "reasoning_output_tokens": 80,
+        "total_tokens": 135843
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/02-procedure-reuse-r1-reference/work-3/codex-usage.json",
+      "session_id": "01a101b6-548b-7a00-bf90-2e7625435d84",
+      "usage": {
+        "input_tokens": 260384,
+        "cached_input_tokens": 235904,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4231,
+        "reasoning_output_tokens": 88,
+        "total_tokens": 264615
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-02/02-procedure-reuse-r1-reference/work-3/codex-usage.json",
+      "session_id": "01a101b9-3166-76d1-bac2-9ed9dd1dd5c9",
+      "usage": {
+        "input_tokens": 547331,
+        "cached_input_tokens": 484480,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 8099,
+        "reasoning_output_tokens": 630,
+        "total_tokens": 555430
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-03/01-policy-transfer-r1-baseline/work-1/codex-usage.json",
+      "session_id": "01a101f5-0bda-7412-9ae6-719878bf0fea",
+      "usage": {
+        "input_tokens": 140262,
+        "cached_input_tokens": 124928,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1924,
+        "reasoning_output_tokens": 43,
+        "total_tokens": 142186
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-03/01-policy-transfer-r1-baseline/work-1/codex-usage.json",
+      "session_id": "01a101f6-62b4-7323-b6ca-80621d6aaa2d",
+      "usage": {
+        "input_tokens": 165193,
+        "cached_input_tokens": 135680,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3025,
+        "reasoning_output_tokens": 136,
+        "total_tokens": 168218
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-03/01-policy-transfer-r1-baseline/work-1/codex-usage.json",
+      "session_id": "01a101f8-4f84-7c42-815d-cef2f4463416",
+      "usage": {
+        "input_tokens": 196748,
+        "cached_input_tokens": 157312,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3495,
+        "reasoning_output_tokens": 77,
+        "total_tokens": 200243
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-03/01-policy-transfer-r1-baseline/work-2/codex-usage.json",
+      "session_id": "01a101fa-8591-7310-b3b3-fe6ee796997d",
+      "usage": {
+        "input_tokens": 141468,
+        "cached_input_tokens": 125056,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2258,
+        "reasoning_output_tokens": 135,
+        "total_tokens": 143726
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-03/01-policy-transfer-r1-baseline/work-2/codex-usage.json",
+      "session_id": "01a101fb-f71f-7682-9e6e-d962174fb825",
+      "usage": {
+        "input_tokens": 207397,
+        "cached_input_tokens": 169600,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4292,
+        "reasoning_output_tokens": 273,
+        "total_tokens": 211689
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-03/01-policy-transfer-r1-baseline/work-2/codex-usage.json",
+      "session_id": "01a101ff-0a1c-7a42-8e61-eeae20285b0f",
+      "usage": {
+        "input_tokens": 241991,
+        "cached_input_tokens": 198912,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4209,
+        "reasoning_output_tokens": 249,
+        "total_tokens": 246200
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-03/01-policy-transfer-r1-baseline/work-3/codex-usage.json",
+      "session_id": "01a10201-e7e2-7d92-ae3f-ab163ef8dcdf",
+      "usage": {
+        "input_tokens": 165618,
+        "cached_input_tokens": 135808,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2367,
+        "reasoning_output_tokens": 52,
+        "total_tokens": 167985
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-03/01-policy-transfer-r1-baseline/work-3/codex-usage.json",
+      "session_id": "01a10203-7828-7861-a992-b4e91543eca0",
+      "usage": {
+        "input_tokens": 259191,
+        "cached_input_tokens": 224000,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4854,
+        "reasoning_output_tokens": 131,
+        "total_tokens": 264045
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-03/01-policy-transfer-r1-baseline/work-3/codex-usage.json",
+      "session_id": "01a10206-613f-78b3-a312-e15be370c825",
+      "usage": {
+        "input_tokens": 276962,
+        "cached_input_tokens": 252032,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4406,
+        "reasoning_output_tokens": 121,
+        "total_tokens": 281368
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-03/01-policy-transfer-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a10223-a5e1-75f3-a1f6-222fa232ec58",
+      "usage": {
+        "input_tokens": 186804,
+        "cached_input_tokens": 170752,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2100,
+        "reasoning_output_tokens": 71,
+        "total_tokens": 188904
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-03/01-policy-transfer-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a10225-4205-7852-ad8d-41cf37403d8c",
+      "usage": {
+        "input_tokens": 248127,
+        "cached_input_tokens": 215808,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4188,
+        "reasoning_output_tokens": 102,
+        "total_tokens": 252315
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-03/01-policy-transfer-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a10227-d4be-7841-b94c-979defe874e0",
+      "usage": {
+        "input_tokens": 258255,
+        "cached_input_tokens": 223744,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4562,
+        "reasoning_output_tokens": 179,
+        "total_tokens": 262817
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-03/01-policy-transfer-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a1022a-e4ea-71d1-a603-92950edf218d",
+      "usage": {
+        "input_tokens": 143373,
+        "cached_input_tokens": 127872,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2210,
+        "reasoning_output_tokens": 74,
+        "total_tokens": 145583
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-03/01-policy-transfer-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a1022c-6b3a-7b22-8c0e-e52d15d6a059",
+      "usage": {
+        "input_tokens": 238226,
+        "cached_input_tokens": 214016,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 5610,
+        "reasoning_output_tokens": 127,
+        "total_tokens": 243836
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-03/01-policy-transfer-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a1022f-c6c7-7871-aceb-2f5e944553d7",
+      "usage": {
+        "input_tokens": 201328,
+        "cached_input_tokens": 151040,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4719,
+        "reasoning_output_tokens": 156,
+        "total_tokens": 206047
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-03/01-policy-transfer-r1-candidate/work-3/codex-usage.json",
+      "session_id": "01a10232-91a3-7a21-ab26-1942b119c8a9",
+      "usage": {
+        "input_tokens": 159119,
+        "cached_input_tokens": 125312,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2243,
+        "reasoning_output_tokens": 102,
+        "total_tokens": 161362
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-03/01-policy-transfer-r1-candidate/work-3/codex-usage.json",
+      "session_id": "01a10234-1e26-78a3-a293-a691ef52fb07",
+      "usage": {
+        "input_tokens": 288225,
+        "cached_input_tokens": 254208,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 5203,
+        "reasoning_output_tokens": 311,
+        "total_tokens": 293428
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-03/01-policy-transfer-r1-candidate/work-3/codex-usage.json",
+      "session_id": "01a10237-aa8c-73f3-91b6-adaf3a0589ae",
+      "usage": {
+        "input_tokens": 193931,
+        "cached_input_tokens": 164224,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3776,
+        "reasoning_output_tokens": 84,
+        "total_tokens": 197707
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-03/01-policy-transfer-r1-reference/work-1/codex-usage.json",
+      "session_id": "01a10209-ce69-76a3-8e51-91b7125c503b",
+      "usage": {
+        "input_tokens": 185986,
+        "cached_input_tokens": 159744,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2631,
+        "reasoning_output_tokens": 51,
+        "total_tokens": 188617
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-03/01-policy-transfer-r1-reference/work-1/codex-usage.json",
+      "session_id": "01a1020b-81ab-71e0-b252-536f1f1fb74c",
+      "usage": {
+        "input_tokens": 236092,
+        "cached_input_tokens": 211200,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3669,
+        "reasoning_output_tokens": 93,
+        "total_tokens": 239761
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-03/01-policy-transfer-r1-reference/work-1/codex-usage.json",
+      "session_id": "01a1020e-0804-7723-a3e9-a1d22da5d772",
+      "usage": {
+        "input_tokens": 229761,
+        "cached_input_tokens": 202368,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4109,
+        "reasoning_output_tokens": 286,
+        "total_tokens": 233870
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-03/01-policy-transfer-r1-reference/work-2/codex-usage.json",
+      "session_id": "01a10211-6c3d-7223-8018-0c86219142ac",
+      "usage": {
+        "input_tokens": 163882,
+        "cached_input_tokens": 132736,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3152,
+        "reasoning_output_tokens": 250,
+        "total_tokens": 167034
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-03/01-policy-transfer-r1-reference/work-2/codex-usage.json",
+      "session_id": "01a10213-7ebb-7621-a324-150573aec8ef",
+      "usage": {
+        "input_tokens": 289908,
+        "cached_input_tokens": 261888,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4698,
+        "reasoning_output_tokens": 148,
+        "total_tokens": 294606
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-03/01-policy-transfer-r1-reference/work-2/codex-usage.json",
+      "session_id": "01a10216-7b14-7640-8920-0ad2d2e94386",
+      "usage": {
+        "input_tokens": 297545,
+        "cached_input_tokens": 229760,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 5367,
+        "reasoning_output_tokens": 349,
+        "total_tokens": 302912
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-03/01-policy-transfer-r1-reference/work-3/codex-usage.json",
+      "session_id": "01a10219-e93b-78a0-bde4-18c686bb3077",
+      "usage": {
+        "input_tokens": 197069,
+        "cached_input_tokens": 174592,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3169,
+        "reasoning_output_tokens": 127,
+        "total_tokens": 200238
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-03/01-policy-transfer-r1-reference/work-3/codex-usage.json",
+      "session_id": "01a1021b-fb18-7150-a7fe-f6710864ebc3",
+      "usage": {
+        "input_tokens": 257642,
+        "cached_input_tokens": 213760,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4053,
+        "reasoning_output_tokens": 192,
+        "total_tokens": 261695
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-03/01-policy-transfer-r1-reference/work-3/codex-usage.json",
+      "session_id": "01a1021e-af94-7f72-a1a6-5e14e66475a8",
+      "usage": {
+        "input_tokens": 323610,
+        "cached_input_tokens": 289664,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 7161,
+        "reasoning_output_tokens": 282,
+        "total_tokens": 330771
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-04/01-policy-transfer-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a10254-64eb-7c80-8393-0174c5fece5a",
+      "usage": {
+        "input_tokens": 160906,
+        "cached_input_tokens": 141056,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2499,
+        "reasoning_output_tokens": 87,
+        "total_tokens": 163405
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-04/01-policy-transfer-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a10256-1c4b-75b0-abba-c5272337a936",
+      "usage": {
+        "input_tokens": 370644,
+        "cached_input_tokens": 330880,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 5961,
+        "reasoning_output_tokens": 85,
+        "total_tokens": 376605
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-04/01-policy-transfer-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a10259-e8da-7170-af81-588ad777b957",
+      "usage": {
+        "input_tokens": 283424,
+        "cached_input_tokens": 242432,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4334,
+        "reasoning_output_tokens": 79,
+        "total_tokens": 287758
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-04/01-policy-transfer-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a1025c-e8dd-7042-820a-3455828e2e5d",
+      "usage": {
+        "input_tokens": 162593,
+        "cached_input_tokens": 142336,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2303,
+        "reasoning_output_tokens": 68,
+        "total_tokens": 164896
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-04/01-policy-transfer-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a1025e-90c2-7751-9cb5-b8bcdb7d5084",
+      "usage": {
+        "input_tokens": 317916,
+        "cached_input_tokens": 283264,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 5027,
+        "reasoning_output_tokens": 91,
+        "total_tokens": 322943
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-04/01-policy-transfer-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a10261-a11c-7ec0-8bb8-cb814290c50f",
+      "usage": {
+        "input_tokens": 276576,
+        "cached_input_tokens": 237056,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4712,
+        "reasoning_output_tokens": 272,
+        "total_tokens": 281288
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-04/02-procedure-reuse-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a10266-9a14-7262-aa40-5fbf1e837a92",
+      "usage": {
+        "input_tokens": 157699,
+        "cached_input_tokens": 122624,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2027,
+        "reasoning_output_tokens": 65,
+        "total_tokens": 159726
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-04/02-procedure-reuse-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a10268-076a-7bf3-85cf-08b8185aa26f",
+      "usage": {
+        "input_tokens": 342051,
+        "cached_input_tokens": 310016,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 5470,
+        "reasoning_output_tokens": 115,
+        "total_tokens": 347521
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-04/02-procedure-reuse-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a1026b-89ae-7ad3-b9ca-5fd7fd1d9b15",
+      "usage": {
+        "input_tokens": 275000,
+        "cached_input_tokens": 248064,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4655,
+        "reasoning_output_tokens": 149,
+        "total_tokens": 279655
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-04/02-procedure-reuse-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a1026e-9cbe-7de1-8c94-0ab1830ace91",
+      "usage": {
+        "input_tokens": 133132,
+        "cached_input_tokens": 116224,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2226,
+        "reasoning_output_tokens": 83,
+        "total_tokens": 135358
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-04/02-procedure-reuse-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a10270-7b6e-73b1-8814-c4a7b61194b0",
+      "usage": {
+        "input_tokens": 369763,
+        "cached_input_tokens": 337920,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 5675,
+        "reasoning_output_tokens": 91,
+        "total_tokens": 375438
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-final-04/02-procedure-reuse-r1-candidate/work-2/codex-usage.json",
+      "session_id": "01a10273-f0cd-7b80-9c5d-92958b254c84",
+      "usage": {
+        "input_tokens": 332014,
+        "cached_input_tokens": 294656,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4858,
+        "reasoning_output_tokens": 212,
+        "total_tokens": 336872
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-natural-02/01-natural-volume-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a1013c-0073-7990-a46b-9fe7bd20bb2d",
+      "usage": {
+        "input_tokens": 194646,
+        "cached_input_tokens": 155904,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2295,
+        "reasoning_output_tokens": 53,
+        "total_tokens": 196941
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-natural-02/01-natural-volume-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a1013d-65c1-7471-8ee7-57b006a74ac2",
+      "usage": {
+        "input_tokens": 270040,
+        "cached_input_tokens": 245376,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3359,
+        "reasoning_output_tokens": 84,
+        "total_tokens": 273399
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "comparison",
+      "record": "results/comparison-natural-02/01-natural-volume-r1-candidate/work-1/codex-usage.json",
+      "session_id": "01a1013f-5016-7ff0-8e90-6dd8998c24b6",
+      "usage": {
+        "input_tokens": 228000,
+        "cached_input_tokens": 199552,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4019,
+        "reasoning_output_tokens": 137,
+        "total_tokens": 232019
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "preparation",
+      "record": "results/live-run-01/codex-usage.json",
+      "session_id": "01a10013-2052-7e61-b01f-52b0ca45c8de",
+      "usage": {
+        "input_tokens": 189061,
+        "cached_input_tokens": 167424,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1639,
+        "reasoning_output_tokens": 37,
+        "total_tokens": 190700
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "preparation",
+      "record": "results/live-run-01/codex-usage.json",
+      "session_id": "01a10015-3211-7b00-a8f7-06ce9f1f74e4",
+      "usage": {
+        "input_tokens": 209928,
+        "cached_input_tokens": 190336,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3176,
+        "reasoning_output_tokens": 112,
+        "total_tokens": 213104
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "preparation",
+      "record": "results/live-run-01/codex-usage.json",
+      "session_id": "01a10017-6832-7311-ac00-aa740d2ca42c",
+      "usage": {
+        "input_tokens": 567533,
+        "cached_input_tokens": 532480,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4755,
+        "reasoning_output_tokens": 102,
+        "total_tokens": 572288
+      },
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ]
+    },
+    {
+      "group": "implementation",
+      "record": "results/implement-20261003T050501777029Z/meta.json",
+      "success": true,
+      "seconds": 2258.24,
+      "model": "gpt-6.1-sol",
+      "effort": "medium",
+      "usage": {
+        "input_tokens": 11535012,
+        "cached_input_tokens": 11376128,
+        "output_tokens": 38531,
+        "reasoning_output_tokens": 11868
+      }
+    },
+    {
+      "group": "implementation",
+      "record": "results/implement-20261003T054401123031Z/meta.json",
+      "success": true,
+      "seconds": 232.41,
+      "model": "gpt-6.1-sol",
+      "effort": "medium",
+      "usage": {
+        "input_tokens": 642088,
+        "cached_input_tokens": 594560,
+        "output_tokens": 6295,
+        "reasoning_output_tokens": 753
+      }
+    },
+    {
+      "group": "implementation",
+      "record": "results/implement-20261003T093042099574Z/meta.json",
+      "success": true,
+      "seconds": 418.27,
+      "model": "gpt-6.1-sol",
+      "effort": "medium",
+      "usage": {
+        "input_tokens": 882505,
+        "cached_input_tokens": 819584,
+        "output_tokens": 10208,
+        "reasoning_output_tokens": 1214
+      }
+    },
+    {
+      "group": "implementation",
+      "record": "results/implement-20261003T125810666752Z/meta.json",
+      "success": true,
+      "seconds": 414.27,
+      "model": "gpt-6.1-sol",
+      "effort": "medium",
+      "usage": {
+        "input_tokens": 827079,
+        "cached_input_tokens": 755328,
+        "output_tokens": 9440,
+        "reasoning_output_tokens": 1583
+      }
+    },
+    {
+      "group": "implementation",
+      "record": "results/implement-20261003T144716854931Z/meta.json",
+      "success": true,
+      "seconds": 486.41,
+      "model": "gpt-6.1-sol",
+      "effort": "medium",
+      "usage": {
+        "input_tokens": 964421,
+        "cached_input_tokens": 889216,
+        "output_tokens": 10548,
+        "reasoning_output_tokens": 1184
+      }
+    },
+    {
+      "group": "preparation",
+      "record": "results/probe-20261003T043156627359Z/meta.json",
+      "success": false,
+      "seconds": 1.07,
+      "model": "gpt-6.1-sol",
+      "effort": "medium",
+      "usage": null
+    },
+    {
+      "group": "preparation",
+      "record": "results/probe-20261003T044200759825Z/meta.json",
+      "success": true,
+      "seconds": 4.78,
+      "model": "gpt-6.1-sol",
+      "effort": "medium",
+      "usage": {
+        "input_tokens": 14293,
+        "cached_input_tokens": 12288,
+        "output_tokens": 7,
+        "reasoning_output_tokens": 0
+      }
+    },
+    {
+      "group": "preparation",
+      "record": "results/probe-20261003T084750145727Z/meta.json",
+      "success": true,
+      "seconds": 4.53,
+      "model": "gpt-6.1-sol",
+      "effort": "medium",
+      "usage": {
+        "input_tokens": 14293,
+        "cached_input_tokens": 12288,
+        "output_tokens": 7,
+        "reasoning_output_tokens": 0
+      }
+    }
+  ],
+  "dollars": null,
+  "limitations": [
+    "Only observed Codex CLI session records and exec-run metadata are counted.",
+    "Active sessions may not yet have a final collection; missing usage is not zero.",
+    "Root orchestration usage and unrelated account activity are not measured by this ledger.",
+    "Weekly quota is account-level and is not an exact task cost or dollar price.",
+    "Implementation includes the coding process; its child Relay Work sessions are separate development records."
+  ]
+}

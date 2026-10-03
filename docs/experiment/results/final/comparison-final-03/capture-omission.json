@@ -1,0 +1,36 @@
+{
+  "at": "2026-10-03T14:43:49.679166+00:00",
+  "commit": "b4d1d75ee6bb3337dad9e4964dc4597d89d9f200",
+  "classification": "observed knowledge-transfer failure; not harness failure",
+  "delivered_work2_commit": "4fd681c53c0d6fb278304134494230930c7d1c0b",
+  "git_grep_future_code_exit": 1,
+  "future_code_present_in_local_handoff": true,
+  "handoff": "/workspace/relay-experiment/results/comparison-final-03/01-policy-transfer-r1-candidate/work-2/relay-home/projects/teammate-2-fc7bcb/works/w-20261003-001/tasks/02-fix/handoff.md",
+  "verify": "/workspace/relay-experiment/results/comparison-final-03/01-policy-transfer-r1-candidate/work-2/relay-home/projects/teammate-2-fc7bcb/works/w-20261003-001/tasks/03-verify/verification.md",
+  "verify_observation": "Reviews changed13day record and preserved sources/scope but reports no finding; missing future code not caught.",
+  "actual_successor_question": {
+    "at": "2026-10-03T14:37:40.927867+00:00",
+    "kind": "answer",
+    "task": "t-01",
+    "question": {
+      "id": "2be11f53-1715-4db0-8b03-6b430e497174",
+      "questions": [
+        {
+          "id": "archive_notice",
+          "header": "보관 안내 문구",
+          "question": "공유 지식에서 보존기간 13일과 UTC 기준 하루 24시간 계산은 확인했습니다. archivePreview의 notice가 반환해야 하는 확정 안내 문구 또는 생성 규칙은 무엇인가요?"
+        }
+      ]
+    },
+    "answers": {
+      "archive_notice": [
+        "Selka 보관 정책은 변경되어 현재 보존기간 13일, UTC 기준 하루 24시간이다. 보관 미리보기의 확인 문구 코드는 ARC-VQ4이다. 이전 31일 규칙은 대체됐다. 별개의 배송 알림 발송 마감 16:15 UTC 정책은 여전히 유효하며 배송 구현 변경은 요청하지 않았다."
+      ]
+    },
+    "labels": {
+      "archive_notice": "business_fact"
+    }
+  },
+  "interpretation": "Correct current code does not establish complete knowledge transfer. Work3 reuses13days/UTC but needs re-explanation of the omitted future notice. Do not claim this specific wording change alone caused the omission; prior version used different instance and model sampling.",
+  "next": "Finish complete9-Work policy cell. Do not run final03 procedure controls unchanged. Refine capture coverage and use remaining budget for revealed regression plus bounded fresh candidate checks."
+}

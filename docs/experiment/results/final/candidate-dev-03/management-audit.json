@@ -1,0 +1,19 @@
+{
+  "at": "2026-10-03T13:29:55.516618+00:00",
+  "knowledge_bytes": [
+    1626,
+    1626
+  ],
+  "knowledge_sha256": [
+    "0805028d8eb63368cbe105c76f6370a25f90a1fa08e6ed90eb29d7a7625858e3",
+    "0805028d8eb63368cbe105c76f6370a25f90a1fa08e6ed90eb29d7a7625858e3"
+  ],
+  "original_seed_sha256": "0805028d8eb63368cbe105c76f6370a25f90a1fa08e6ed90eb29d7a7625858e3",
+  "observations": [
+    "Both fresh successors preserve shared knowledge byte-for-byte and retain original evidence/source.",
+    "Fix and verify cite the prior heading/blob/source, check current runtime/runner hash and doctor, and execute supported actual tests. No help calls or unconfigured environment failures in either Work.",
+    "Current doctor calls remain; no claim that all diagnostics are eliminated. Changed knowledge reason is explicitly reviewed as absent.",
+    "836.43 seconds total versus prior observed863.45 seconds for corresponding d1e714d Works2/3. This is a revealed single regression, not an independent speed estimate."
+  ],
+  "limits": "Code and management regression only; still synthetic and scripted."
+}

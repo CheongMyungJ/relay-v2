@@ -1,0 +1,167 @@
+{
+  "rows": [
+    {
+      "sequence": "01-reuse-r1-candidate",
+      "sequence_status": "completed",
+      "commit": "b4d1d75ee6bb3337dad9e4964dc4597d89d9f200",
+      "work": 1,
+      "oracle_pass": true,
+      "changed_files": [
+        "src/text/slug.mjs",
+        "test/slug.test.mjs"
+      ],
+      "by_stage": {
+        "fix": {
+          "kinds": {
+            "doctor": 1,
+            "test": 3
+          },
+          "first_test_attempt": {
+            "kind": "test",
+            "at": "2026-10-03T13:16:18.006065+00:00",
+            "namespace": "meridian",
+            "exit": 0,
+            "stage": "fix"
+          },
+          "successful_tests": 2
+        },
+        "verify": {
+          "kinds": {
+            "doctor": 1,
+            "test": 1
+          },
+          "first_test_attempt": {
+            "kind": "test",
+            "at": "2026-10-03T13:19:03.885296+00:00",
+            "namespace": "meridian",
+            "exit": 0,
+            "stage": "verify"
+          },
+          "successful_tests": 1
+        }
+      },
+      "observations": [
+        {
+          "kind": "doctor",
+          "at": "2026-10-03T13:15:58.267165+00:00",
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T13:16:18.006065+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T13:16:18.522090+00:00",
+          "namespace": "meridian",
+          "exit": 1,
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T13:16:26.810454+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "fix"
+        },
+        {
+          "kind": "doctor",
+          "at": "2026-10-03T13:18:54.465724+00:00",
+          "stage": "verify"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T13:19:03.885296+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "verify"
+        }
+      ]
+    },
+    {
+      "sequence": "01-reuse-r1-candidate",
+      "sequence_status": "completed",
+      "commit": "b4d1d75ee6bb3337dad9e4964dc4597d89d9f200",
+      "work": 2,
+      "oracle_pass": true,
+      "changed_files": [
+        "src/text/initials.mjs",
+        "test/initials.test.mjs"
+      ],
+      "by_stage": {
+        "fix": {
+          "kinds": {
+            "doctor": 1,
+            "test": 3
+          },
+          "first_test_attempt": {
+            "kind": "test",
+            "at": "2026-10-03T13:23:03.599811+00:00",
+            "namespace": "meridian",
+            "exit": 0,
+            "stage": "fix"
+          },
+          "successful_tests": 2
+        },
+        "verify": {
+          "kinds": {
+            "doctor": 1,
+            "test": 1
+          },
+          "first_test_attempt": {
+            "kind": "test",
+            "at": "2026-10-03T13:26:18.848561+00:00",
+            "namespace": "meridian",
+            "exit": 0,
+            "stage": "verify"
+          },
+          "successful_tests": 1
+        }
+      },
+      "observations": [
+        {
+          "kind": "doctor",
+          "at": "2026-10-03T13:23:03.368843+00:00",
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T13:23:03.599811+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T13:23:21.177845+00:00",
+          "namespace": "meridian",
+          "exit": 1,
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T13:23:30.068449+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "fix"
+        },
+        {
+          "kind": "doctor",
+          "at": "2026-10-03T13:25:47.294638+00:00",
+          "stage": "verify"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T13:26:18.848561+00:00",
+          "namespace": "meridian",
+          "exit": 0,
+          "stage": "verify"
+        }
+      ]
+    }
+  ],
+  "interpretation": "Environment failures and doctor calls are observed actions, not automatic waste scores. In any stage they may deliberately corroborate already-known evidence; simultaneous bare/configured runs are not automatically rediscovery. Compare initial fix setup and explicit use of shared records separately from independent verification. Ordinary README/AGENTS documentation is allowed in every arm."
+}

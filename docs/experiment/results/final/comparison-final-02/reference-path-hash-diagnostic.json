@@ -1,0 +1,65 @@
+{
+  "at": "2026-10-03T11:18:45.456282+00:00",
+  "reference_commit": "aa39d16c730b52966f17edf410bb6c4038e8b053",
+  "runs": [
+    {
+      "command": [
+        "git",
+        "-C",
+        "results/comparison-final-02/01-policy-transfer-r1-reference/oracle-2",
+        "ls-tree",
+        "HEAD",
+        "--",
+        "src/archive"
+      ],
+      "entries": [
+        "040000 tree 1d30f9b5ad9d2428181d493dc7180c8d6cf54f0c\tsrc/archive"
+      ]
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "results/comparison-final-02/01-policy-transfer-r1-reference/oracle-2",
+        "ls-tree",
+        "HEAD",
+        "--",
+        "src/archive",
+        "src/archive/policy.mjs"
+      ],
+      "entries": [
+        "100644 blob 6eb7b7fd62c9a6db173b39c680bb1027dc3d1be4\tsrc/archive/cutoff.mjs",
+        "100644 blob 1c795f0aa64b93082625a5e0fed24cc5531ab1d9\tsrc/archive/policy.mjs",
+        "100644 blob 47d02a4a7df05d0dcf0582a53ecc7fdc87a2f060\tsrc/archive/preview.mjs"
+      ]
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "results/comparison-final-02/01-policy-transfer-r1-reference/oracle-2",
+        "ls-tree",
+        "-t",
+        "HEAD",
+        "--",
+        "src/archive",
+        "src/archive/policy.mjs"
+      ],
+      "entries": [
+        "040000 tree de04f40a33208da78496c95cb547b5a7d90d22dc\tsrc",
+        "040000 tree 1d30f9b5ad9d2428181d493dc7180c8d6cf54f0c\tsrc/archive",
+        "100644 blob 6eb7b7fd62c9a6db173b39c680bb1027dc3d1be4\tsrc/archive/cutoff.mjs",
+        "100644 blob 1c795f0aa64b93082625a5e0fed24cc5531ab1d9\tsrc/archive/policy.mjs",
+        "100644 blob 47d02a4a7df05d0dcf0582a53ecc7fdc87a2f060\tsrc/archive/preview.mjs"
+      ]
+    }
+  ],
+  "finding": "pathHashes batches directory and child-file pathspecs. git ls-tree expands the directory and omits its tree entry; missing map value leaves hashes:{} and isStale returns true. Work3 context marks domain-43a28b26 for re-confirmation despite a second active24h rule. Native intake explicitly cites that marker as the reason for asking.",
+  "evidence": [
+    "app/src/adapters/git.ts:pathHashes",
+    "app/src/core/knowledge.ts:isStale",
+    "01-policy-transfer-r1-reference/oracle-1/docs/knowledge/domain/domain-43a28b26.md",
+    "01-policy-transfer-r1-reference/work-3/relay-home/projects/*/works/*/tasks/01-intake/handoff.md"
+  ],
+  "limits": "Read-only diagnostic. The -t variation restores this tree entry in this fixture; no reference source modification, full regression test or actual Codex comparison of a repaired reference was performed. Do not attribute this defect to all hash-based knowledge designs."
+}

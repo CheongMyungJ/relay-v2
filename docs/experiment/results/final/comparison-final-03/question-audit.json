@@ -1,0 +1,73 @@
+{
+  "at": "2026-10-03T13:53:03.335044+00:00",
+  "interpretation": "Manual semantic classification; original questions and answers remain in actor.json. Workflow decisions are separate from fact re-explanation.",
+  "sequences": [
+    {
+      "sequence": "01-policy-transfer-r1-baseline",
+      "works": [
+        {
+          "work": 1,
+          "new_fact_rounds": 1,
+          "new_fact_items": 1
+        },
+        {
+          "work": 2,
+          "question_rounds": 0
+        },
+        {
+          "work": 3,
+          "reexplanation_rounds": 1,
+          "reexplanation_items": 1,
+          "workflow_rounds": 1,
+          "workflow_items": 1,
+          "note": "Asked current archiveAt calculation/format and exact notice in one question; then separate completion decision for unverifiable shipping16:15UTC deadline. Canonical scoped workflow answer retained limitation; no invented verification."
+        }
+      ]
+    },
+    {
+      "sequence": "01-policy-transfer-r1-reference",
+      "through_work": 3,
+      "at": "2026-10-03T14:13:22.492898+00:00",
+      "works": [
+        {
+          "work": 1,
+          "new_fact_rounds": 1,
+          "new_fact_items": 1
+        },
+        {
+          "work": 2,
+          "question_rounds": 0
+        },
+        {
+          "work": 3,
+          "reconfirmation_rounds": 1,
+          "reconfirmation_items": 2,
+          "note": "One intake call with two fields: date policy explicitly cites re-confirmation marker; notice asks whether the known code itself is the string. Separate verify question asks completion with unverifiable shipping deadline; identical scoped answer as baseline. Do not attribute notice or workflow questions to the hash defect.",
+          "workflow_rounds": 1,
+          "workflow_items": 1
+        }
+      ]
+    },
+    {
+      "sequence": "01-policy-transfer-r1-candidate",
+      "works": [
+        {
+          "work": 1,
+          "new_fact_rounds": 1,
+          "new_fact_items": 1
+        },
+        {
+          "work": 2,
+          "question_rounds": 0
+        },
+        {
+          "work": 3,
+          "reexplanation_rounds": 1,
+          "reexplanation_items": 1,
+          "workflow_rounds": 0,
+          "note": "Uses stored13days/UTC; asks missing notice because Work2 kept ARC-VQ4 only in local handoff. Current task then adds the newly reconfirmed notice to shared knowledge. This is a knowledge-transfer failure, not a code-oracle failure."
+        }
+      ]
+    }
+  ]
+}

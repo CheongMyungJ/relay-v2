@@ -1,0 +1,183 @@
+{
+  "rows": [
+    {
+      "sequence": "02-procedure-reuse-r1-candidate",
+      "sequence_status": "completed",
+      "commit": "068cc271d490adeff6813ea143914835ed5cd925",
+      "work": 1,
+      "oracle_pass": true,
+      "changed_files": [
+        ".relay/knowledge.md",
+        "src/text/headline.mjs",
+        "test/headline.test.mjs"
+      ],
+      "by_stage": {
+        "fix": {
+          "kinds": {
+            "help": 1,
+            "environment_failure": 1,
+            "doctor": 1,
+            "test": 3
+          },
+          "first_test_attempt": {
+            "kind": "environment_failure",
+            "at": "2026-10-03T15:36:10.394633+00:00",
+            "namespace": null,
+            "exit": 2,
+            "stage": "fix"
+          },
+          "successful_tests": 2
+        },
+        "verify": {
+          "kinds": {
+            "doctor": 1,
+            "test": 1
+          },
+          "first_test_attempt": {
+            "kind": "test",
+            "at": "2026-10-03T15:41:04.147527+00:00",
+            "namespace": "willow",
+            "exit": 0,
+            "stage": "verify"
+          },
+          "successful_tests": 1
+        }
+      },
+      "observations": [
+        {
+          "kind": "help",
+          "at": "2026-10-03T15:36:10.286135+00:00",
+          "stage": "fix"
+        },
+        {
+          "kind": "environment_failure",
+          "at": "2026-10-03T15:36:10.394633+00:00",
+          "namespace": null,
+          "exit": 2,
+          "stage": "fix"
+        },
+        {
+          "kind": "doctor",
+          "at": "2026-10-03T15:36:15.853390+00:00",
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T15:36:23.427452+00:00",
+          "namespace": "willow",
+          "exit": 0,
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T15:37:08.679639+00:00",
+          "namespace": "willow",
+          "exit": 1,
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T15:37:49.393495+00:00",
+          "namespace": "willow",
+          "exit": 0,
+          "stage": "fix"
+        },
+        {
+          "kind": "doctor",
+          "at": "2026-10-03T15:39:53.852332+00:00",
+          "stage": "verify"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T15:41:04.147527+00:00",
+          "namespace": "willow",
+          "exit": 0,
+          "stage": "verify"
+        }
+      ]
+    },
+    {
+      "sequence": "02-procedure-reuse-r1-candidate",
+      "sequence_status": "completed",
+      "commit": "068cc271d490adeff6813ea143914835ed5cd925",
+      "work": 2,
+      "oracle_pass": true,
+      "changed_files": [
+        ".relay/knowledge.md",
+        "src/text/slug.mjs",
+        "test/slug.test.mjs"
+      ],
+      "by_stage": {
+        "fix": {
+          "kinds": {
+            "doctor": 1,
+            "test": 3
+          },
+          "first_test_attempt": {
+            "kind": "test",
+            "at": "2026-10-03T15:45:19.689175+00:00",
+            "namespace": "willow",
+            "exit": 0,
+            "stage": "fix"
+          },
+          "successful_tests": 2
+        },
+        "verify": {
+          "kinds": {
+            "doctor": 1,
+            "test": 1
+          },
+          "first_test_attempt": {
+            "kind": "test",
+            "at": "2026-10-03T15:50:13.256742+00:00",
+            "namespace": "willow",
+            "exit": 0,
+            "stage": "verify"
+          },
+          "successful_tests": 1
+        }
+      },
+      "observations": [
+        {
+          "kind": "doctor",
+          "at": "2026-10-03T15:45:15.122544+00:00",
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T15:45:19.689175+00:00",
+          "namespace": "willow",
+          "exit": 0,
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T15:46:19.670761+00:00",
+          "namespace": "willow",
+          "exit": 1,
+          "stage": "fix"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T15:47:00.686141+00:00",
+          "namespace": "willow",
+          "exit": 0,
+          "stage": "fix"
+        },
+        {
+          "kind": "doctor",
+          "at": "2026-10-03T15:49:10.268300+00:00",
+          "stage": "verify"
+        },
+        {
+          "kind": "test",
+          "at": "2026-10-03T15:50:13.256742+00:00",
+          "namespace": "willow",
+          "exit": 0,
+          "stage": "verify"
+        }
+      ]
+    }
+  ],
+  "interpretation": "Environment failures and doctor calls are observed actions, not automatic waste scores. In any stage they may deliberately corroborate already-known evidence; simultaneous bare/configured runs are not automatically rediscovery. Compare initial fix setup and explicit use of shared records separately from independent verification. Ordinary README/AGENTS documentation is allowed in every arm."
+}

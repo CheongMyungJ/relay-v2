@@ -1,0 +1,11 @@
+{
+  "at": "2026-10-03T15:54:14.130198+00:00",
+  "remaining_percent": 34,
+  "user_floor": 30,
+  "automatic_guard": 33,
+  "decision": "No further model runs. Final four Works delivered normally. Preserve tested068cc27 and the unresolved final semantic overcapture; insufficient margin for another complete implementation plus regression and fresh validation cycle.",
+  "all_planned_final04_works_completed": true,
+  "scope_goal_fully_met": false,
+  "driver_exec_session": 41461,
+  "driver_exit_code": 0
+}

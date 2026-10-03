@@ -1,0 +1,72 @@
+{
+  "observations": [
+    {
+      "at": "2026-10-03T14:11:12.903778+00:00",
+      "sequence": "01-policy-transfer-r1-reference",
+      "through_work": 2,
+      "observations": [
+        "Both code oracles pass.",
+        "Shared knowledge grows from5 files3695bytes to8 files5581bytes.",
+        "Old31day policy is marked superseded by13days; future ARC-VQ4 is retained.",
+        "Unrelated shipping16:15UTC record is byte-identical Work1toWork2.",
+        "UTC/day24hour domain-9262d424 still has hashes:{}, same directory path hash omission observed in final-02. Do not infer future question without observing Work3."
+      ],
+      "shipping_byte_identical": true,
+      "evidence": [
+        "01-policy-transfer-r1-reference/oracle-1/docs/knowledge",
+        "01-policy-transfer-r1-reference/oracle-2/docs/knowledge"
+      ],
+      "limits": "Default adoption; no manual candidate edits or repaired reference evaluated."
+    },
+    {
+      "at": "2026-10-03T14:13:22.493136+00:00",
+      "sequence": "01-policy-transfer-r1-reference",
+      "through_stage": "Work3 intake",
+      "observations": [
+        "Date policy question explicitly cites the re-confirmation marker; stored UTC domain-9262d424 has empty hashes.",
+        "Separate notice-format question in the same round cites the known ARC-VQ4 code, so extraction and delivery of that code succeeded.",
+        "Cause of date re-confirmation matches the final-02 directory-hash omission; notice-format clarification is distinct."
+      ],
+      "evidence": [
+        "01-policy-transfer-r1-reference/work-3/actor.json",
+        "01-policy-transfer-r1-reference/oracle-2/docs/knowledge/domain/domain-9262d424.md"
+      ],
+      "limits": "No repaired hash implementation or human curation condition evaluated."
+    },
+    {
+      "at": "2026-10-03T14:22:02.538303+00:00",
+      "sequence": "01-policy-transfer-r1-reference",
+      "through_work": 3,
+      "observations": [
+        "All3 code oracles pass. All3 Works change Git knowledge.",
+        "Final shared knowledge15Markdownfiles10711bytes versus5files3695bytes atWork1 and8files5581bytes atWork2.",
+        "Work3 asks one two-item policy clarification round and one separate unverified-shipping workflow question; exact canonical workflow answer matches baseline."
+      ],
+      "evidence": [
+        "01-policy-transfer-r1-reference/sequence.json",
+        "01-policy-transfer-r1-reference/oracle-3/docs/knowledge",
+        "question-audit.json"
+      ],
+      "limits": "Default selection only. Growth alone is not a correctness failure; inspect record usefulness separately from human effort."
+    },
+    {
+      "at": "2026-10-03T14:48:16.426176+00:00",
+      "sequence": "01-policy-transfer-r1-candidate",
+      "through_work": 3,
+      "observations": [
+        "Code3/3 passes; shared knowledge1434→1866→2481bytes.",
+        "Work2 replaces31days with13days and preserves original source/UTC/unrelated shipping.",
+        "Work2 omits future ARC-VQ4 from all tracked Git content while keeping it in private handoff. Verify reviews additions and finds no issue, missing coverage loss.",
+        "Fresh Work3 reads13days/UTC and asks notice; after canonical answer it records ARC-VQ4 with the current human confirmation source.",
+        "All3 Works change knowledge. Work3 change adds a real newly reconfirmed fact, but the extra interaction/change could have been avoided by correct Work2 retention. This differs from the earlier unchanged-procedure receipt churn."
+      ],
+      "evidence": [
+        "capture-omission.json",
+        "01-policy-transfer-r1-candidate/sequence.json",
+        "01-policy-transfer-r1-candidate/oracle-2/.relay/knowledge.md",
+        "01-policy-transfer-r1-candidate/oracle-3/.relay/knowledge.md"
+      ],
+      "limits": "Observed b4d1d75 failure; no controlled claim that a specific new sentence caused it. No same-version procedure comparison was run."
+    }
+  ]
+}

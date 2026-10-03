@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-03T10:04:58.345612+00:00",
+  "commit": "d1e714d115f383ff47db380975fe088129458690",
+  "command": "cd /workspace/relay-candidate/app && npm test",
+  "exit_code": 0,
+  "seconds": 234.5,
+  "log": "logs/candidate-d1e714d-full-test.log",
+  "log_sha256": "60b7c6c4f15445a154fe5f3a780fe69d24d81883e500246245e9c1bab0c00a2f",
+  "real_model_calls": 0,
+  "note": "Between actual model batches; final counts from log.",
+  "test_files_passed": 52,
+  "tests_passed": 889,
+  "tests_skipped": 3
+}

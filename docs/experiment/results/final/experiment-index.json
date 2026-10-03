@@ -1,0 +1,503 @@
+{
+  "at": "2026-10-03T15:52:40.453877+00:00",
+  "phases": [
+    {
+      "phase": "candidate-dev-02",
+      "complete_unmarked_works": 3,
+      "correct_complete_unmarked_works": 3,
+      "unclassified_failed_sequences": [],
+      "sequences": [
+        {
+          "path": "results/candidate-dev-02/04-tool-discovery-r1-candidate/sequence.json",
+          "status": "completed",
+          "commit": "d1e714d115f383ff47db380975fe088129458690",
+          "case": "04-tool-discovery",
+          "quality_eligible": true,
+          "exclusion_markers": [],
+          "completed_works": 2,
+          "correct_completed_works": 2,
+          "oracle_failures": [],
+          "error": null
+        },
+        {
+          "path": "results/candidate-dev-02/capacity-above-r1-candidate/sequence.json",
+          "status": "completed",
+          "commit": "d1e714d115f383ff47db380975fe088129458690",
+          "case": "capacity-above",
+          "quality_eligible": true,
+          "exclusion_markers": [],
+          "completed_works": 1,
+          "correct_completed_works": 1,
+          "oracle_failures": [],
+          "error": null
+        }
+      ]
+    },
+    {
+      "phase": "candidate-dev-03",
+      "complete_unmarked_works": 2,
+      "correct_complete_unmarked_works": 2,
+      "unclassified_failed_sequences": [],
+      "sequences": [
+        {
+          "path": "results/candidate-dev-03/01-reuse-r1-candidate/sequence.json",
+          "status": "completed",
+          "commit": "b4d1d75ee6bb3337dad9e4964dc4597d89d9f200",
+          "case": "01-reuse",
+          "quality_eligible": true,
+          "exclusion_markers": [],
+          "completed_works": 2,
+          "correct_completed_works": 2,
+          "oracle_failures": [],
+          "error": null
+        }
+      ]
+    },
+    {
+      "phase": "candidate-dev-04",
+      "complete_unmarked_works": 2,
+      "correct_complete_unmarked_works": 2,
+      "unclassified_failed_sequences": [],
+      "sequences": [
+        {
+          "path": "results/candidate-dev-04/01-future-policy-r1-candidate/sequence.json",
+          "status": "completed",
+          "commit": "068cc271d490adeff6813ea143914835ed5cd925",
+          "case": "01-future-policy",
+          "quality_eligible": true,
+          "exclusion_markers": [],
+          "completed_works": 2,
+          "correct_completed_works": 2,
+          "oracle_failures": [],
+          "error": null
+        }
+      ]
+    },
+    {
+      "phase": "comparison-01",
+      "complete_unmarked_works": 0,
+      "correct_complete_unmarked_works": 0,
+      "unclassified_failed_sequences": [],
+      "sequences": [
+        {
+          "path": "results/comparison-01/01-settlement-r1-baseline/sequence.json",
+          "status": "failed",
+          "commit": "02470492e9a0429322aaf9f227db8362c13bad2c",
+          "case": "01-settlement",
+          "quality_eligible": false,
+          "exclusion_markers": [
+            "results/comparison-01/01-settlement-r1-baseline/work-1/harness-invalid.json"
+          ],
+          "completed_works": 0,
+          "correct_completed_works": 0,
+          "oracle_failures": [],
+          "error": "Evaluator declined review"
+        }
+      ]
+    },
+    {
+      "phase": "comparison-02",
+      "complete_unmarked_works": 21,
+      "correct_complete_unmarked_works": 21,
+      "unclassified_failed_sequences": [],
+      "sequences": [
+        {
+          "path": "results/comparison-02/01-settlement-r1-baseline/sequence.json",
+          "status": "completed",
+          "commit": "02470492e9a0429322aaf9f227db8362c13bad2c",
+          "case": "01-settlement",
+          "quality_eligible": true,
+          "exclusion_markers": [],
+          "completed_works": 2,
+          "correct_completed_works": 2,
+          "oracle_failures": [],
+          "error": null
+        },
+        {
+          "path": "results/comparison-02/01-settlement-r1-candidate/sequence.json",
+          "status": "completed",
+          "commit": "80e598bdda4c8cf046380f30bc757dcff84da73d",
+          "case": "01-settlement",
+          "quality_eligible": true,
+          "exclusion_markers": [],
+          "completed_works": 2,
+          "correct_completed_works": 2,
+          "oracle_failures": [],
+          "error": null
+        },
+        {
+          "path": "results/comparison-02/01-settlement-r1-reference/sequence.json",
+          "status": "completed",
+          "commit": "aa39d16c730b52966f17edf410bb6c4038e8b053",
+          "case": "01-settlement",
+          "quality_eligible": true,
+          "exclusion_markers": [],
+          "completed_works": 2,
+          "correct_completed_works": 2,
+          "oracle_failures": [],
+          "error": null
+        },
+        {
+          "path": "results/comparison-02/02-runner-r1-baseline/sequence.json",
+          "status": "completed",
+          "commit": "02470492e9a0429322aaf9f227db8362c13bad2c",
+          "case": "02-runner",
+          "quality_eligible": true,
+          "exclusion_markers": [],
+          "completed_works": 2,
+          "correct_completed_works": 2,
+          "oracle_failures": [],
+          "error": null
+        },
+        {
+          "path": "results/comparison-02/02-runner-r1-candidate/sequence.json",
+          "status": "completed",
+          "commit": "80e598bdda4c8cf046380f30bc757dcff84da73d",
+          "case": "02-runner",
+          "quality_eligible": true,
+          "exclusion_markers": [],
+          "completed_works": 2,
+          "correct_completed_works": 2,
+          "oracle_failures": [],
+          "error": null
+        },
+        {
+          "path": "results/comparison-02/02-runner-r1-reference/sequence.json",
+          "status": "completed",
+          "commit": "aa39d16c730b52966f17edf410bb6c4038e8b053",
+          "case": "02-runner",
+          "quality_eligible": true,
+          "exclusion_markers": [],
+          "completed_works": 2,
+          "correct_completed_works": 2,
+          "oracle_failures": [],
+          "error": null
+        },
+        {
+          "path": "results/comparison-02/03-policy-change-r1-baseline/sequence.json",
+          "status": "completed",
+          "commit": "02470492e9a0429322aaf9f227db8362c13bad2c",
+          "case": "03-policy-change",
+          "quality_eligible": true,
+          "exclusion_markers": [],
+          "completed_works": 3,
+          "correct_completed_works": 3,
+          "oracle_failures": [],
+          "error": null
+        },
+        {
+          "path": "results/comparison-02/03-policy-change-r1-candidate/sequence.json",
+          "status": "completed",
+          "commit": "80e598bdda4c8cf046380f30bc757dcff84da73d",
+          "case": "03-policy-change",
+          "quality_eligible": true,
+          "exclusion_markers": [],
+          "completed_works": 3,
+          "correct_completed_works": 3,
+          "oracle_failures": [],
+          "error": null
+        },
+        {
+          "path": "results/comparison-02/03-policy-change-r1-reference/sequence.json",
+          "status": "completed",
+          "commit": "aa39d16c730b52966f17edf410bb6c4038e8b053",
+          "case": "03-policy-change",
+          "quality_eligible": true,
+          "exclusion_markers": [],
+          "completed_works": 3,
+          "correct_completed_works": 3,
+          "oracle_failures": [],
+          "error": null
+        }
+      ]
+    },
+    {
+      "phase": "comparison-capacity-01",
+      "complete_unmarked_works": 2,
+      "correct_complete_unmarked_works": 2,
+      "unclassified_failed_sequences": [],
+      "sequences": [
+        {
+          "path": "results/comparison-capacity-01/capacity-above-r1-candidate/sequence.json",
+          "status": "completed",
+          "commit": "80e598bdda4c8cf046380f30bc757dcff84da73d",
+          "case": "capacity-above",
+          "quality_eligible": true,
+          "exclusion_markers": [],
+          "completed_works": 1,
+          "correct_completed_works": 1,
+          "oracle_failures": [],
+          "error": null
+        },
+        {
+          "path": "results/comparison-capacity-01/capacity-below-r1-candidate/sequence.json",
+          "status": "completed",
+          "commit": "80e598bdda4c8cf046380f30bc757dcff84da73d",
+          "case": "capacity-below",
+          "quality_eligible": true,
+          "exclusion_markers": [],
+          "completed_works": 1,
+          "correct_completed_works": 1,
+          "oracle_failures": [],
+          "error": null
+        }
+      ]
+    },
+    {
+      "phase": "comparison-discovery-01",
+      "complete_unmarked_works": 6,
+      "correct_complete_unmarked_works": 6,
+      "unclassified_failed_sequences": [],
+      "sequences": [
+        {
+          "path": "results/comparison-discovery-01/04-tool-discovery-r1-baseline/sequence.json",
+          "status": "completed",
+          "commit": "02470492e9a0429322aaf9f227db8362c13bad2c",
+          "case": "04-tool-discovery",
+          "quality_eligible": true,
+          "exclusion_markers": [],
+          "completed_works": 2,
+          "correct_completed_works": 2,
+          "oracle_failures": [],
+          "error": null
+        },
+        {
+          "path": "results/comparison-discovery-01/04-tool-discovery-r1-candidate/sequence.json",
+          "status": "completed",
+          "commit": "80e598bdda4c8cf046380f30bc757dcff84da73d",
+          "case": "04-tool-discovery",
+          "quality_eligible": true,
+          "exclusion_markers": [],
+          "completed_works": 2,
+          "correct_completed_works": 2,
+          "oracle_failures": [],
+          "error": null
+        },
+        {
+          "path": "results/comparison-discovery-01/04-tool-discovery-r1-reference/sequence.json",
+          "status": "failed",
+          "commit": "aa39d16c730b52966f17edf410bb6c4038e8b053",
+          "case": "04-tool-discovery",
+          "quality_eligible": false,
+          "exclusion_markers": [
+            "results/comparison-discovery-01/04-tool-discovery-r1-reference/work-1/provider-capacity.json"
+          ],
+          "completed_works": 0,
+          "correct_completed_works": 0,
+          "oracle_failures": [],
+          "error": "[Errno 32] Broken pipe"
+        },
+        {
+          "path": "results/comparison-discovery-01/04-tool-discovery-r1-reference-retry-084822/sequence.json",
+          "status": "completed",
+          "commit": "aa39d16c730b52966f17edf410bb6c4038e8b053",
+          "case": "04-tool-discovery",
+          "quality_eligible": true,
+          "exclusion_markers": [],
+          "completed_works": 2,
+          "correct_completed_works": 2,
+          "oracle_failures": [],
+          "error": null
+        }
+      ]
+    },
+    {
+      "phase": "comparison-final-02",
+      "complete_unmarked_works": 18,
+      "correct_complete_unmarked_works": 18,
+      "unclassified_failed_sequences": [],
+      "sequences": [
+        {
+          "path": "results/comparison-final-02/01-policy-transfer-r1-baseline/sequence.json",
+          "status": "failed",
+          "commit": "02470492e9a0429322aaf9f227db8362c13bad2c",
+          "case": "01-policy-transfer",
+          "quality_eligible": false,
+          "exclusion_markers": [
+            "results/comparison-final-02/01-policy-transfer-r1-baseline/work-3/harness-invalid.json"
+          ],
+          "completed_works": 2,
+          "correct_completed_works": 2,
+          "oracle_failures": [],
+          "error": "[Errno 32] Broken pipe"
+        },
+        {
+          "path": "results/comparison-final-02/01-policy-transfer-r1-baseline-retry-104110/sequence.json",
+          "status": "completed",
+          "commit": "02470492e9a0429322aaf9f227db8362c13bad2c",
+          "case": "01-policy-transfer",
+          "quality_eligible": true,
+          "exclusion_markers": [],
+          "completed_works": 3,
+          "correct_completed_works": 3,
+          "oracle_failures": [],
+          "error": null
+        },
+        {
+          "path": "results/comparison-final-02/01-policy-transfer-r1-candidate/sequence.json",
+          "status": "completed",
+          "commit": "d1e714d115f383ff47db380975fe088129458690",
+          "case": "01-policy-transfer",
+          "quality_eligible": true,
+          "exclusion_markers": [],
+          "completed_works": 3,
+          "correct_completed_works": 3,
+          "oracle_failures": [],
+          "error": null
+        },
+        {
+          "path": "results/comparison-final-02/01-policy-transfer-r1-reference/sequence.json",
+          "status": "completed",
+          "commit": "aa39d16c730b52966f17edf410bb6c4038e8b053",
+          "case": "01-policy-transfer",
+          "quality_eligible": true,
+          "exclusion_markers": [],
+          "completed_works": 3,
+          "correct_completed_works": 3,
+          "oracle_failures": [],
+          "error": null
+        },
+        {
+          "path": "results/comparison-final-02/02-procedure-reuse-r1-baseline/sequence.json",
+          "status": "completed",
+          "commit": "02470492e9a0429322aaf9f227db8362c13bad2c",
+          "case": "02-procedure-reuse",
+          "quality_eligible": true,
+          "exclusion_markers": [],
+          "completed_works": 3,
+          "correct_completed_works": 3,
+          "oracle_failures": [],
+          "error": null
+        },
+        {
+          "path": "results/comparison-final-02/02-procedure-reuse-r1-candidate/sequence.json",
+          "status": "completed",
+          "commit": "d1e714d115f383ff47db380975fe088129458690",
+          "case": "02-procedure-reuse",
+          "quality_eligible": true,
+          "exclusion_markers": [],
+          "completed_works": 3,
+          "correct_completed_works": 3,
+          "oracle_failures": [],
+          "error": null
+        },
+        {
+          "path": "results/comparison-final-02/02-procedure-reuse-r1-reference/sequence.json",
+          "status": "completed",
+          "commit": "aa39d16c730b52966f17edf410bb6c4038e8b053",
+          "case": "02-procedure-reuse",
+          "quality_eligible": true,
+          "exclusion_markers": [],
+          "completed_works": 3,
+          "correct_completed_works": 3,
+          "oracle_failures": [],
+          "error": null
+        }
+      ]
+    },
+    {
+      "phase": "comparison-final-03",
+      "complete_unmarked_works": 9,
+      "correct_complete_unmarked_works": 9,
+      "unclassified_failed_sequences": [],
+      "sequences": [
+        {
+          "path": "results/comparison-final-03/01-policy-transfer-r1-baseline/sequence.json",
+          "status": "completed",
+          "commit": "02470492e9a0429322aaf9f227db8362c13bad2c",
+          "case": "01-policy-transfer",
+          "quality_eligible": true,
+          "exclusion_markers": [],
+          "completed_works": 3,
+          "correct_completed_works": 3,
+          "oracle_failures": [],
+          "error": null
+        },
+        {
+          "path": "results/comparison-final-03/01-policy-transfer-r1-candidate/sequence.json",
+          "status": "completed",
+          "commit": "b4d1d75ee6bb3337dad9e4964dc4597d89d9f200",
+          "case": "01-policy-transfer",
+          "quality_eligible": true,
+          "exclusion_markers": [],
+          "completed_works": 3,
+          "correct_completed_works": 3,
+          "oracle_failures": [],
+          "error": null
+        },
+        {
+          "path": "results/comparison-final-03/01-policy-transfer-r1-reference/sequence.json",
+          "status": "completed",
+          "commit": "aa39d16c730b52966f17edf410bb6c4038e8b053",
+          "case": "01-policy-transfer",
+          "quality_eligible": true,
+          "exclusion_markers": [],
+          "completed_works": 3,
+          "correct_completed_works": 3,
+          "oracle_failures": [],
+          "error": null
+        }
+      ]
+    },
+    {
+      "phase": "comparison-final-04",
+      "complete_unmarked_works": 4,
+      "correct_complete_unmarked_works": 4,
+      "unclassified_failed_sequences": [],
+      "sequences": [
+        {
+          "path": "results/comparison-final-04/01-policy-transfer-r1-candidate/sequence.json",
+          "status": "completed",
+          "commit": "068cc271d490adeff6813ea143914835ed5cd925",
+          "case": "01-policy-transfer",
+          "quality_eligible": true,
+          "exclusion_markers": [],
+          "completed_works": 2,
+          "correct_completed_works": 2,
+          "oracle_failures": [],
+          "error": null
+        },
+        {
+          "path": "results/comparison-final-04/02-procedure-reuse-r1-candidate/sequence.json",
+          "status": "completed",
+          "commit": "068cc271d490adeff6813ea143914835ed5cd925",
+          "case": "02-procedure-reuse",
+          "quality_eligible": true,
+          "exclusion_markers": [],
+          "completed_works": 2,
+          "correct_completed_works": 2,
+          "oracle_failures": [],
+          "error": null
+        }
+      ]
+    },
+    {
+      "phase": "comparison-natural-02",
+      "complete_unmarked_works": 1,
+      "correct_complete_unmarked_works": 1,
+      "unclassified_failed_sequences": [],
+      "sequences": [
+        {
+          "path": "results/comparison-natural-02/01-natural-volume-r1-candidate/sequence.json",
+          "status": "completed",
+          "commit": "d1e714d115f383ff47db380975fe088129458690",
+          "case": "01-natural-volume",
+          "quality_eligible": true,
+          "exclusion_markers": [],
+          "completed_works": 1,
+          "correct_completed_works": 1,
+          "oracle_failures": [],
+          "error": null
+        }
+      ]
+    }
+  ],
+  "complete_unmarked_works": 68,
+  "correct_complete_unmarked_works": 68,
+  "limits": [
+    "Counts cover sequences using this evaluator, not every implementation/development probe.",
+    "Different source versions, revealed regressions and independent comparisons must be interpreted separately.",
+    "Every failed or partial attempt remains in sequence evidence and the cost ledger; unclassified failures require review.",
+    "Equal fixture outcomes do not establish accuracy improvement or production reliability."
+  ]
+}

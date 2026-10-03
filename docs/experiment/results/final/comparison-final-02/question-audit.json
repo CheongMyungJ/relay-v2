@@ -1,0 +1,132 @@
+{
+  "interpretation": "Manual classification of original questions; round and item counts differ. Workflow choices are management interactions, not automatically business-fact re-explanation.",
+  "sequences": [
+    {
+      "sequence": "01-policy-transfer-r1-baseline-retry-104110",
+      "at": "2026-10-03T11:00:27.985798+00:00",
+      "works": [
+        {
+          "work": 1,
+          "new_fact_rounds": 1,
+          "new_fact_items": 1,
+          "note": "policyDays current29days queried; canonical answer also supplied UTC/day and unrelated shipping deadline."
+        },
+        {
+          "work": 2,
+          "question_rounds": 0,
+          "note": "Explicit changed policy in request."
+        },
+        {
+          "work": 3,
+          "reexplanation_rounds": 1,
+          "reexplanation_items": 2,
+          "workflow_rounds": 1,
+          "workflow_items": 1,
+          "note": "ArchiveAt11days/264hours and ARC-JT6 requested in one call. Verify separately queried unverifiable shipping deadline criterion; explicitly chose completion with limitation preserved. No new shipping implementation or fabricated verification."
+        }
+      ]
+    },
+    {
+      "sequence": "01-policy-transfer-r1-reference",
+      "at": "2026-10-03T11:22:01.072983+00:00",
+      "works": [
+        {
+          "work": 1,
+          "new_fact_rounds": 1,
+          "new_fact_items": 1
+        },
+        {
+          "work": 2,
+          "question_rounds": 0
+        },
+        {
+          "work": 3,
+          "reconfirmation_rounds": 1,
+          "reconfirmation_items": 1,
+          "workflow_rounds": 0,
+          "note": "UTC24h applies toarchivePreview queried. Native intake explicitly cites re-confirmation marker ondomain-43a28b26; notice and11days already available. Canonical response repeats allpolicyfacts; do not count them as additional question items."
+        }
+      ]
+    },
+    {
+      "sequence": "01-policy-transfer-r1-candidate",
+      "at": "2026-10-03T11:44:35.995062+00:00",
+      "works": [
+        {
+          "work": 1,
+          "new_fact_rounds": 1,
+          "new_fact_items": 1
+        },
+        {
+          "work": 2,
+          "question_rounds": 0
+        },
+        {
+          "work": 3,
+          "question_rounds": 0,
+          "note": "Read committed snapshot and used current11days/UTC24h/ARC-JT6 without re-explanation or workflow choice. Old contextual notes about deferring preview did not block current explicit request."
+        }
+      ]
+    },
+    {
+      "sequence": "02-procedure-reuse-r1-baseline",
+      "at": "2026-10-03T12:07:32.001698+00:00",
+      "works": [
+        {
+          "work": 1,
+          "workflow_rounds": 1,
+          "workflow_items": 1,
+          "note": "Asked whether officialdiagnosed environment npmtestsuccess can satisfy completion despitebareE_LOCAL_SETUP. Operator explicitlyacceptsactualconfiguredsuccessandretainslimitation; notowner-providedsetupvalue."
+        },
+        {
+          "work": 2,
+          "question_rounds": 0
+        },
+        {
+          "work": 3,
+          "question_rounds": 0
+        }
+      ]
+    },
+    {
+      "sequence": "02-procedure-reuse-r1-reference",
+      "at": "2026-10-03T12:33:23.862694+00:00",
+      "works": [
+        {
+          "work": 1,
+          "workflow_rounds": 1,
+          "workflow_items": 1,
+          "note": "Sameofficialsupportedsetupcompletionchoiceasbaseline;identicaloperatoranswer."
+        },
+        {
+          "work": 2,
+          "question_rounds": 0
+        },
+        {
+          "work": 3,
+          "workflow_rounds": 1,
+          "workflow_items": 1,
+          "note": "Repeatedsupportedsetupcompletionchoice;identicaloperatoranswer,barefailureandconfiguredsuccessbothretained."
+        }
+      ]
+    },
+    {
+      "at": "2026-10-03T13:16:16.183062+00:00",
+      "sequence": "02-procedure-reuse-r1-candidate",
+      "works": [
+        {
+          "work": 1,
+          "question_rounds": 0
+        },
+        {
+          "work": 2,
+          "question_rounds": 0
+        },
+        {
+          "work": 3,
+          "question_rounds": 0
+        }
+      ]
+    }
+  ]
+}

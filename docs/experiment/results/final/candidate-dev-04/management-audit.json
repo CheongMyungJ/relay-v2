@@ -1,0 +1,19 @@
+{
+  "at": "2026-10-03T15:14:00.323630+00:00",
+  "code_and_shared_fact_checks": "2/2passed",
+  "questions": 0,
+  "knowledge_bytes": [
+    2575,
+    2575
+  ],
+  "knowledge_sha256": [
+    "3d3a5e4cf2c7c0beaea871101eb6cdc8d2efc0bb421db381ff388df0eb8e9859",
+    "3d3a5e4cf2c7c0beaea871101eb6cdc8d2efc0bb421db381ff388df0eb8e9859"
+  ],
+  "observations": [
+    "Work1 updates period and retains deferred future notice with original and change sources.",
+    "Work2 actually uses retained notice without re-explanation and leaves entire knowledge byte-identical.",
+    "Code implementation scope remains limited; unrelated shipping policy and original source survive.",
+    "This is a revealed regression, not independent cost superiority."
+  ]
+}

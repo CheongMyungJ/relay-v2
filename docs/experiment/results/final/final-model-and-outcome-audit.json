@@ -1,0 +1,17 @@
+{
+  "at": "2026-10-03T15:54:55.436726+00:00",
+  "session_model_effort_counts": [
+    {
+      "model": [
+        "gpt-6.1-sol"
+      ],
+      "effort": [
+        "medium"
+      ],
+      "sessions": 228
+    }
+  ],
+  "unclassified_failed_sequences": [],
+  "possible_evaluator_reads_in_comparison_heuristic": [],
+  "limits": "Observed recorded sessions and token/tool metadata only; incomplete failure metadata does not imply a fallback model. This is a heuristic access audit, not a security boundary."
+}

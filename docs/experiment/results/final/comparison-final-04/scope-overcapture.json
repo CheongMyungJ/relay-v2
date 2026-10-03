@@ -1,0 +1,24 @@
+{
+  "at": "2026-10-03T15:54:14.130198+00:00",
+  "sequence": "02-procedure-reuse-r1-candidate",
+  "candidate": "068cc271d490adeff6813ea143914835ed5cd925",
+  "status": "completed_unresolved",
+  "knowledge_bytes": [
+    2532,
+    3861
+  ],
+  "procedure_section_identical": true,
+  "knowledge_sha256": [
+    "22da28abe1a564b7ca53c9fc56b2b8cffbcdcfb3caa326b5ffdc3ca2aa464474",
+    "2833e2f41fc78aabcd6f5453038a4aed64c945548421b3cf5fda5549caba3769"
+  ],
+  "observations": [
+    "Work1 records the one-off instruction not to change slug along with headline behavior.",
+    "Work2 calls that prior task scope a slug-change-exclusion policy, records a supposed supersession, and adds behavior directly readable from changed code/tests.",
+    "The shared runner procedure itself is unchanged and reused with current diagnostic/testing evidence.",
+    "Verify draft explicitly approves the purported policy replacement; final disposition still to be recorded."
+  ],
+  "classification": "Unresolved semantic overcapture/task-scope promotion; not an execution receipt regression, not a code-oracle failure, not a harness error.",
+  "conclusion": "Do not count whole-document stability or all KM goals as passed. This case limits the management-burden claim.",
+  "final_verification": "No findings; explicitly approved the supposed policy replacement. Code oracle passed, no correction or user answer."
+}

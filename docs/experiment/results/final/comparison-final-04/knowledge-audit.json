@@ -1,0 +1,42 @@
+{
+  "observations": [
+    {
+      "at": "2026-10-03T15:33:57.627125+00:00",
+      "sequence": "01-policy-transfer-r1-candidate",
+      "code_correct": "2/2",
+      "questions": 0,
+      "knowledge_bytes": [
+        1982,
+        1982
+      ],
+      "knowledge_sha256": [
+        "67e30f5fc847134dac4f5da3cd77c70d8fd322a12e62ecf9d284859c6ca8bd4d",
+        "67e30f5fc847134dac4f5da3cd77c70d8fd322a12e62ecf9d284859c6ca8bd4d"
+      ],
+      "observations": [
+        "Initial synthetic owner policy27days explicitly replaced by9days; original fixture-owner source preserved, missing old Work UUID not invented.",
+        "Future CONF-ZM7 recorded before implementation; fresh successor actually uses it without re-explanation.",
+        "Unrelated shipping section is byte-identical to seed; invalid date policy remains explicitly unknown.",
+        "Successor leaves full knowledge byte-identical; only code/tests change."
+      ],
+      "limits": "Fresh known-family candidate-only case with seeded owner facts; no same-version controls or human usability measurement."
+    },
+    {
+      "at": "2026-10-03T15:54:14.130198+00:00",
+      "sequence": "02-procedure-reuse-r1-candidate",
+      "code_correct": "2/2",
+      "questions": 0,
+      "knowledge_bytes": [
+        2532,
+        3861
+      ],
+      "procedure_section_identical": true,
+      "observations": [
+        "Actual failed bare test, supported doctor setting and successful configured tests captured in Work1.",
+        "Fresh Work2 explicitly uses shared procedure; fix/verify each run doctor and configured tests, zero help and zero environment_failure events.",
+        "Full knowledge is NOT unchanged: one-off slug exclusion is promoted into a policy and supposedly replaced; verify misses it. See scope-overcapture.json."
+      ],
+      "limits": "Transfer and elimination of redundant setup discovery observed; whole-document churn/semantic filtering goal not met; no same-version controls."
+    }
+  ]
+}

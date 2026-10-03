@@ -1,0 +1,60 @@
+{
+  "scope": "Five implementation exec event streams only; no unrelated account sessions scanned. Complements Relay task raw function/custom-call audit.",
+  "runs": [
+    {
+      "file": "results/implement-20261003T050501777029Z/events.jsonl",
+      "events": {
+        "thread.started": 1,
+        "turn.started": 1,
+        "agent_message": 19,
+        "command_execution": 128,
+        "file_change": 10,
+        "turn.completed": 1
+      }
+    },
+    {
+      "file": "results/implement-20261003T054401123031Z/events.jsonl",
+      "events": {
+        "thread.started": 1,
+        "turn.started": 1,
+        "agent_message": 5,
+        "command_execution": 46,
+        "file_change": 4,
+        "turn.completed": 1
+      }
+    },
+    {
+      "file": "results/implement-20261003T093042099574Z/events.jsonl",
+      "events": {
+        "thread.started": 1,
+        "turn.started": 1,
+        "agent_message": 6,
+        "command_execution": 46,
+        "file_change": 6,
+        "turn.completed": 1
+      }
+    },
+    {
+      "file": "results/implement-20261003T125810666752Z/events.jsonl",
+      "events": {
+        "thread.started": 1,
+        "turn.started": 1,
+        "agent_message": 4,
+        "command_execution": 38,
+        "file_change": 6,
+        "turn.completed": 1
+      }
+    },
+    {
+      "file": "results/implement-20261003T144716854931Z/events.jsonl",
+      "events": {
+        "thread.started": 1,
+        "turn.started": 1,
+        "agent_message": 7,
+        "command_execution": 44,
+        "turn.completed": 1
+      }
+    }
+  ],
+  "potential_delegation_events": []
+}

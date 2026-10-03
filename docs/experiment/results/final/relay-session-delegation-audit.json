@@ -1,0 +1,11 @@
+{
+  "at": "2026-10-03T15:52:41.249958+00:00",
+  "recorded_sessions_checked": 228,
+  "tool_call_types": {
+    "custom_tool_call": 1466,
+    "function_call": 39
+  },
+  "potential_delegation_events": [],
+  "missing_files": [],
+  "scope": "Only exact session files referenced by experiment codex-usage records. Function and custom calls, including JavaScript exec inputs. Potential matches require human interpretation. Implementation exec outputs not included; no unrelated account sessions scanned."
+}
