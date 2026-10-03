@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
@@ -53,10 +54,69 @@ it('shares only committed facts through Git; corrections and deletion replace th
   expect(await sharedKnowledge(repo)).toBe('')
 })
 
-it('refuses oversized notes without silently truncating business rules', async () => {
-  writeFiles(repo, { [KNOWLEDGE_FILE]: '가'.repeat(KNOWLEDGE_LIMIT) })
+it.each([11_900, 12_000, 12_100])(
+  'keeps facts accessible at the %i-byte boundary',
+  async (size) => {
+    const facts = '# Policy\nreview days: 19\nqueue: review\nunknown: undefined\n'
+    writeFiles(repo, { [KNOWLEDGE_FILE]: facts + '\n'.repeat(size - Buffer.byteLength(facts)) })
+    git(repo, 'add', '.')
+    git(repo, 'commit', '-qm', 'boundary notes')
+    const context = await sharedKnowledge(repo)
+    const blob = context.match(/Git blob ([a-f0-9]+)/)?.[1]
+    expect(blob).toBeTruthy()
+    if (!blob) throw new Error('Missing snapshot source')
+    expect(git(repo, 'show', blob)).toContain(facts.trim())
+    expect(context).not.toContain('사용하지 않았다')
+    if (size <= KNOWLEDGE_LIMIT) expect(context).toContain(facts)
+    else {
+      expect(context).not.toContain(facts)
+      expect(Buffer.byteLength(context)).toBeLessThan(KNOWLEDGE_LIMIT)
+    }
+  },
+)
+
+it('retrieves large substantive notes in a fresh clone, pinned across edits and commits', async () => {
+  const notes = Array.from(
+    { length: 180 },
+    (_, i) =>
+      `## Policy ${i}\nScope: department ${i} only\nRule: queue Q${i}\nEvidence: human answer ${i}\nSource: original-${i}\nUnknown: undefined\n`,
+  ).join('\n')
+  expect(Buffer.byteLength(notes)).toBeGreaterThan(KNOWLEDGE_LIMIT)
+  writeFiles(repo, { [KNOWLEDGE_FILE]: notes })
   git(repo, 'add', '.')
-  git(repo, 'commit', '-qm', 'oversized notes')
-  expect(await sharedKnowledge(repo)).toContain('초과')
-  expect(await sharedKnowledge(repo)).not.toContain('가가가')
+  git(repo, 'commit', '-qm', 'large valid notes')
+  git(repo, 'push', '-q', 'origin', 'main')
+  const clone = path.join(root, 'large-team')
+  git(root, 'clone', '-q', remote, clone)
+  const context = await sharedKnowledge(clone)
+  const blob = context.match(/Git blob ([a-f0-9]+)/)?.[1]
+  if (!blob) throw new Error('Missing snapshot source')
+  expect(Buffer.byteLength(context)).toBeLessThan(KNOWLEDGE_LIMIT)
+  // Exercise the supplied retrieval commands, rather than asserting only their wording.
+  const searchInstruction = context.split('\n').find((line) => line.startsWith('검색: '))
+  if (!searchInstruction) throw new Error('Missing search instruction')
+  const search = searchInstruction.slice(4).replace('작업 관련 검색어', 'Policy 179')
+  const run = (cmd: string) => execFileSync('bash', ['-c', cmd], { cwd: clone, encoding: 'utf8' })
+  const line = Number(run(search).split(':')[0])
+  expect(line).toBeGreaterThan(1)
+  const readInstruction = context.split('\n').find((entry) => entry.startsWith('범위 읽기: '))
+  if (!readInstruction) throw new Error('Missing range instruction')
+  const largeRead = readInstruction.slice(7).replace('시작줄,끝줄', '1,99999')
+  expect(Buffer.byteLength(run(largeRead))).toBe(KNOWLEDGE_LIMIT)
+  expect(git(clone, 'show', blob)).toBe(notes.replace(/\n$/, ''))
+  const read = readInstruction.slice(7).replace('시작줄,끝줄', `${line},${line + 5}`)
+  expect(run(read)).toContain('Source: original-179\nUnknown: undefined')
+  writeFiles(clone, { [KNOWLEDGE_FILE]: 'replacement policy' })
+  git(clone, 'commit', '-qam', 'replace notes')
+  expect(run(read)).toContain('Rule: queue Q179')
+  expect(git(clone, 'show', blob)).toContain('Source: original-0')
+  expect(await sharedKnowledge(clone)).toContain('replacement policy')
+})
+
+it('does not treat a committed symlink as knowledge', async () => {
+  fs.mkdirSync(path.join(repo, '.relay'))
+  fs.symlinkSync('../README.md', path.join(repo, KNOWLEDGE_FILE))
+  git(repo, 'add', '.')
+  git(repo, 'commit', '-qm', 'symlink notes')
+  expect(await sharedKnowledge(repo)).toContain('일반 파일이 아니므로')
 })
