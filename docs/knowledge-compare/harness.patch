@@ -1,0 +1,1856 @@
+diff --git a/app/eval/guides/c1.md b/app/eval/guides/c1.md
+new file mode 100644
+index 0000000..228cc24
+--- /dev/null
++++ b/app/eval/guides/c1.md
+@@ -0,0 +1,17 @@
++# relay 사용법 (요약)
++
++relay는 Claude Code CLI를 앱 안의 터미널에 띄우고, 버그 수정, 기능 추가, 리팩터링을 단계(task)로 나눠 진행하는 데스크톱 앱이다.
++
++- 화면: 왼쪽은 프로젝트와 Work 목록, 가운데 위는 단계 탭, 그 아래는 고른 단계의 터미널(에이전트 세션), 오른쪽은 고른 단계의 패널(진행 상황, 승인할 때는 [요약], [산출물], [변경] 탭)이다. 프로젝트는 이미 등록되어 있다.
++- [새 Work]에서 유형(버그 수정 / 기능 추가 / 리팩터링)을 고르고 요청(버그 설명, 만들 기능, 바꿀 구조)을 쓴 뒤 [시작]하면 단계가 차례로 진행된다. 유형은 기본 선택이 없어 고르기 전에는 [시작]이 꺼져 있다. 잘못 골랐으면 의도 승인 전에 [단계 선택]에서 의도 정리를 고르며 유형을 다시 고를 수 있다. Work마다 git worktree와 브랜치(`relay/<work-id>`)가 따로 생기고, 에이전트가 단계마다 커밋한다. 다른 설정은 기본값 그대로 두어도 된다.
++- 단계: 버그 수정은 의도 정리 → 원인 분석과 수정 → 리뷰와 검증. 기능 추가는 의도 정리 → 설계와 계획 → 구현 → 리뷰와 검증이다. 설계와 계획은 유저 시나리오, 요구사항, 구현 계획을 쓰고 코드는 바꾸지 않는다. 구현은 테스트를 먼저 쓰고 구현한다. 원인 분석과 수정, 구현, 계획과 리팩터링은 기본으로 자동 승인된다(15초 카운트다운 중 [취소]로 멈출 수 있다). 리팩터링은 의도 정리 → 계획과 리팩터링 → 리뷰와 검증이다. 계획과 리팩터링은 지금 동작을 잡는 안전망 테스트를 먼저 커밋한 뒤 구조를 단계마다 바꿔 커밋하고, 동작은 바꾸지 않는다(찾은 버그는 고치지 않고 적는다). 설계와 계획은 사람이 승인한다. 자동 승인되면 화면은 다음 단계로 넘어간다.
++- 지난 단계 다시 보기: 가운데 위의 단계 탭(예: `02 원인 분석과 수정`, `03 구현`)을 누르면 오른쪽 패널에 그 단계의 [요약](원인이나 설계, 결정, 위험), [산출물], [변경](그 단계의 diff)이 읽기 전용으로 뜬다. 자동 승인으로 지나간 단계도 여기서 본다. 지금 단계 탭을 누르면 다시 지금 단계를 따라간다.
++- 단계마다 새 에이전트 세션이 뜬다. 에이전트가 산출물을 쓰고 "승인 대기"가 되면 오른쪽 패널에서 확인하고 [승인]한다(의도 정리는 [의도 승인]). 고칠 점이 있으면 승인하지 말고 터미널에서 에이전트에게 말한다. 에이전트가 고쳐 다시 승인 대기가 된다.
++- 에이전트가 선택지로 질문하면 터미널에서 방향키와 Enter로 고르거나 글로 답한다.
++- 리뷰와 검증 단계는 변경을 리뷰하고, 지적이 있으면 어느 지적을 반영할지 선택지로 묻는다. 고른 지적을 고친 뒤 완료조건을 판정한다.
++- 리뷰와 검증을 승인하는 화면이 Work 완료 화면이다: [완료만] / [push] / [PR 생성]. 이 평가에서는 [완료만]이면 된다.
++- 되돌아가기: [단계 선택]으로 앞 단계로 되감거나(그 뒤 산출물은 폐기되고 코드도 되돌리며, 추가 지시를 줄 수 있다) 다른 단계로 갈 수 있다. 요구 자체를 바꾸려면 의도 정리로 되감는다.
++- [즉시 중단]은 지금 세션을 끝내고, [재개]로 같은 세션을 다시 연다. 앱이 꺼졌다 켜지면 끊긴 task를 [재개]로 이어 간다.
++- 그 밖에 [이 단계 끝나면 멈춤], [Work 설정](단계별 자동 승인 등), [Work 포기], [Work 정리](완료 뒤 worktree 제거)가 있다.
++- 여러 Work를 동시에 진행할 수 있다. 각 Work는 따로 브랜치에서 진행된다.
++- push와 PR은 에이전트가 아니라 앱이 한다.
+diff --git a/app/eval/guides/c2.md b/app/eval/guides/c2.md
+new file mode 100644
+index 0000000..56e3878
+--- /dev/null
++++ b/app/eval/guides/c2.md
+@@ -0,0 +1,19 @@
++# relay 사용법 (요약)
++
++relay는 Claude Code CLI를 앱 안의 터미널에 띄우고, 버그 수정, 기능 추가, 리팩터링을 단계(task)로 나눠 진행하는 데스크톱 앱이다.
++
++- 화면: 왼쪽은 프로젝트와 Work 목록, 가운데 위는 단계 탭, 그 아래는 고른 단계의 터미널(에이전트 세션), 오른쪽은 고른 단계의 패널(진행 상황, 승인할 때는 [요약], [산출물], [변경] 탭)이다. 프로젝트는 이미 등록되어 있다.
++- [새 Work]에서 유형(버그 수정 / 기능 추가 / 리팩터링)을 고르고 요청(버그 설명, 만들 기능, 바꿀 구조)을 쓴 뒤 [시작]하면 단계가 차례로 진행된다. 유형은 기본 선택이 없어 고르기 전에는 [시작]이 꺼져 있다. 잘못 골랐으면 의도 승인 전에 [단계 선택]에서 의도 정리를 고르며 유형을 다시 고를 수 있다. Work마다 git worktree와 브랜치(`relay/<work-id>`)가 따로 생기고, 에이전트가 단계마다 커밋한다. 다른 설정은 기본값 그대로 두어도 된다.
++- 단계: 버그 수정은 의도 정리 → 원인 분석과 수정 → 리뷰와 검증. 기능 추가는 의도 정리 → 설계와 계획 → 구현 → 리뷰와 검증이다. 설계와 계획은 유저 시나리오, 요구사항, 구현 계획을 쓰고 코드는 바꾸지 않는다. 구현은 테스트를 먼저 쓰고 구현한다. 원인 분석과 수정, 구현, 계획과 리팩터링은 기본으로 자동 승인된다(15초 카운트다운 중 [취소]로 멈출 수 있다). 리팩터링은 의도 정리 → 계획과 리팩터링 → 리뷰와 검증이다. 계획과 리팩터링은 지금 동작을 잡는 안전망 테스트를 먼저 커밋한 뒤 구조를 단계마다 바꿔 커밋하고, 동작은 바꾸지 않는다(찾은 버그는 고치지 않고 적는다). 설계와 계획은 사람이 승인한다. 자동 승인되면 화면은 다음 단계로 넘어간다.
++- 지난 단계 다시 보기: 가운데 위의 단계 탭(예: `02 원인 분석과 수정`, `03 구현`)을 누르면 오른쪽 패널에 그 단계의 [요약](원인이나 설계, 결정, 위험), [산출물], [변경](그 단계의 diff)이 읽기 전용으로 뜬다. 자동 승인으로 지나간 단계도 여기서 본다. 지금 단계 탭을 누르면 다시 지금 단계를 따라간다.
++- 단계마다 새 에이전트 세션이 뜬다. 에이전트가 산출물을 쓰고 "승인 대기"가 되면 오른쪽 패널에서 확인하고 [승인]한다(의도 정리는 [의도 승인]). 고칠 점이 있으면 승인하지 말고 터미널에서 에이전트에게 말한다. 에이전트가 고쳐 다시 승인 대기가 된다.
++- 에이전트가 선택지로 질문하면 터미널에서 방향키와 Enter로 고르거나 글로 답한다.
++- 리뷰와 검증 단계는 변경을 리뷰하고, 지적이 있으면 어느 지적을 반영할지 선택지로 묻는다. 고른 지적을 고친 뒤 완료조건을 판정한다.
++- 리뷰와 검증을 승인하는 화면이 Work 완료 화면이다: [완료만] / [push] / [PR 생성]. 이 평가에서는 [완료만]이면 된다.
++- Work 완료 화면에는 [지식] 탭이 있다. 이번 Work에서 모은 지식 후보(다음 Work에도 쓸 규칙, 결정 등)가 기본 선택(채택 또는 채택 안 함)과 함께 보인다. 손대지 않아도 기본 선택대로 저장되고 전달을 막지 않는다. 필요하면 후보마다 채택, 버림, 고침, 팀/나만을 바꿀 수 있다.
++- 사이드바의 지식 화면에서 프로젝트의 팀 지식, 나만 쓰는 지식, 공유 대기를 보고 고치거나 버릴 수 있다.
++- 되돌아가기: [단계 선택]으로 앞 단계로 되감거나(그 뒤 산출물은 폐기되고 코드도 되돌리며, 추가 지시를 줄 수 있다) 다른 단계로 갈 수 있다. 요구 자체를 바꾸려면 의도 정리로 되감는다.
++- [즉시 중단]은 지금 세션을 끝내고, [재개]로 같은 세션을 다시 연다. 앱이 꺼졌다 켜지면 끊긴 task를 [재개]로 이어 간다.
++- 그 밖에 [이 단계 끝나면 멈춤], [Work 설정](단계별 자동 승인 등), [Work 포기], [Work 정리](완료 뒤 worktree 제거)가 있다.
++- 여러 Work를 동시에 진행할 수 있다. 각 Work는 따로 브랜치에서 진행된다.
++- push와 PR은 에이전트가 아니라 앱이 한다.
+diff --git a/app/eval/guides/c3.md b/app/eval/guides/c3.md
+new file mode 100644
+index 0000000..228cc24
+--- /dev/null
++++ b/app/eval/guides/c3.md
+@@ -0,0 +1,17 @@
++# relay 사용법 (요약)
++
++relay는 Claude Code CLI를 앱 안의 터미널에 띄우고, 버그 수정, 기능 추가, 리팩터링을 단계(task)로 나눠 진행하는 데스크톱 앱이다.
++
++- 화면: 왼쪽은 프로젝트와 Work 목록, 가운데 위는 단계 탭, 그 아래는 고른 단계의 터미널(에이전트 세션), 오른쪽은 고른 단계의 패널(진행 상황, 승인할 때는 [요약], [산출물], [변경] 탭)이다. 프로젝트는 이미 등록되어 있다.
++- [새 Work]에서 유형(버그 수정 / 기능 추가 / 리팩터링)을 고르고 요청(버그 설명, 만들 기능, 바꿀 구조)을 쓴 뒤 [시작]하면 단계가 차례로 진행된다. 유형은 기본 선택이 없어 고르기 전에는 [시작]이 꺼져 있다. 잘못 골랐으면 의도 승인 전에 [단계 선택]에서 의도 정리를 고르며 유형을 다시 고를 수 있다. Work마다 git worktree와 브랜치(`relay/<work-id>`)가 따로 생기고, 에이전트가 단계마다 커밋한다. 다른 설정은 기본값 그대로 두어도 된다.
++- 단계: 버그 수정은 의도 정리 → 원인 분석과 수정 → 리뷰와 검증. 기능 추가는 의도 정리 → 설계와 계획 → 구현 → 리뷰와 검증이다. 설계와 계획은 유저 시나리오, 요구사항, 구현 계획을 쓰고 코드는 바꾸지 않는다. 구현은 테스트를 먼저 쓰고 구현한다. 원인 분석과 수정, 구현, 계획과 리팩터링은 기본으로 자동 승인된다(15초 카운트다운 중 [취소]로 멈출 수 있다). 리팩터링은 의도 정리 → 계획과 리팩터링 → 리뷰와 검증이다. 계획과 리팩터링은 지금 동작을 잡는 안전망 테스트를 먼저 커밋한 뒤 구조를 단계마다 바꿔 커밋하고, 동작은 바꾸지 않는다(찾은 버그는 고치지 않고 적는다). 설계와 계획은 사람이 승인한다. 자동 승인되면 화면은 다음 단계로 넘어간다.
++- 지난 단계 다시 보기: 가운데 위의 단계 탭(예: `02 원인 분석과 수정`, `03 구현`)을 누르면 오른쪽 패널에 그 단계의 [요약](원인이나 설계, 결정, 위험), [산출물], [변경](그 단계의 diff)이 읽기 전용으로 뜬다. 자동 승인으로 지나간 단계도 여기서 본다. 지금 단계 탭을 누르면 다시 지금 단계를 따라간다.
++- 단계마다 새 에이전트 세션이 뜬다. 에이전트가 산출물을 쓰고 "승인 대기"가 되면 오른쪽 패널에서 확인하고 [승인]한다(의도 정리는 [의도 승인]). 고칠 점이 있으면 승인하지 말고 터미널에서 에이전트에게 말한다. 에이전트가 고쳐 다시 승인 대기가 된다.
++- 에이전트가 선택지로 질문하면 터미널에서 방향키와 Enter로 고르거나 글로 답한다.
++- 리뷰와 검증 단계는 변경을 리뷰하고, 지적이 있으면 어느 지적을 반영할지 선택지로 묻는다. 고른 지적을 고친 뒤 완료조건을 판정한다.
++- 리뷰와 검증을 승인하는 화면이 Work 완료 화면이다: [완료만] / [push] / [PR 생성]. 이 평가에서는 [완료만]이면 된다.
++- 되돌아가기: [단계 선택]으로 앞 단계로 되감거나(그 뒤 산출물은 폐기되고 코드도 되돌리며, 추가 지시를 줄 수 있다) 다른 단계로 갈 수 있다. 요구 자체를 바꾸려면 의도 정리로 되감는다.
++- [즉시 중단]은 지금 세션을 끝내고, [재개]로 같은 세션을 다시 연다. 앱이 꺼졌다 켜지면 끊긴 task를 [재개]로 이어 간다.
++- 그 밖에 [이 단계 끝나면 멈춤], [Work 설정](단계별 자동 승인 등), [Work 포기], [Work 정리](완료 뒤 worktree 제거)가 있다.
++- 여러 Work를 동시에 진행할 수 있다. 각 Work는 따로 브랜치에서 진행된다.
++- push와 PR은 에이전트가 아니라 앱이 한다.
+diff --git a/app/eval/lib/episode.mjs b/app/eval/lib/episode.mjs
+index 6676718..d14b8ba 100644
+--- a/app/eval/lib/episode.mjs
++++ b/app/eval/lib/episode.mjs
+@@ -323,11 +323,18 @@ export async function runEpisode(o) {
+             arm.o.repo,
+             remote,
+             path.join(o.workDir, `${repoName}-mate${handoffs.length + 1}`),
++            { homes: arm.homes ?? [] },
+           )
+-          handoff = { work: w + 1, merged: h.merged, conflicts: h.conflicts, failed: h.failed }
++          handoff = {
++            work: w + 1,
++            merged: h.merged,
++            conflicts: h.conflicts,
++            failed: h.failed,
++            shared: h.shared,
++          }
+           handoffs.push(handoff)
+           say(
+-            `팀원 교대: 머지 ${h.merged.length}개${h.conflicts.length ? `, 충돌 ${h.conflicts.length}개(뒤 쪽으로 머지)` : ''}${h.failed.length ? `, 머지 못함 ${h.failed.length}개` : ''}`,
++            `팀원 교대: 머지 ${h.merged.length}개${h.shared.length ? `, 공유 대기 지식 ${h.shared.length}개` : ''}${h.conflicts.length ? `, 충돌 ${h.conflicts.length}개(뒤 쪽으로 머지)` : ''}${h.failed.length ? `, 머지 못함 ${h.failed.length}개` : ''}`,
+           )
+           moved = await arm.handoff(h.repo)
+         } else {
+diff --git a/app/eval/lib/repo.mjs b/app/eval/lib/repo.mjs
+index 16aaa6a..1043cc7 100644
+--- a/app/eval/lib/repo.mjs
++++ b/app/eval/lib/repo.mjs
+@@ -125,7 +125,7 @@ export function diffTree(tree, baseDir, work) {
+  * @param {string} dest 새 사람의 clone 경로
+  * @returns {{ repo: string, merged: string[], conflicts: string[], failed: string[], head: string }}
+  */
+-export function handoffRepo(prevRepo, remote, dest) {
++export function handoffRepo(prevRepo, remote, dest, opts = {}) {
+   const work = `${dest}-merge`
+   fs.rmSync(work, { recursive: true, force: true })
+   git(path.dirname(work), 'clone', '-q', '--no-local', prevRepo, work)
+@@ -161,12 +161,52 @@ export function handoffRepo(prevRepo, remote, dest) {
+     }
+     merged.push(ref.replace(/^origin\//, ''))
+   }
++  const shared = sharePending(work, opts.homes ?? [])
+   git(work, 'push', '-q', '-f', remote, 'HEAD:main')
+   fs.rmSync(dest, { recursive: true, force: true })
+   git(path.dirname(dest), 'clone', '-q', '--no-local', remote, dest)
+   setUser(dest)
+   fs.rmSync(work, { recursive: true, force: true })
+-  return { repo: dest, merged, conflicts, failed, head: git(dest, 'rev-parse', 'HEAD') }
++  return { repo: dest, merged, conflicts, failed, shared, head: git(dest, 'rev-parse', 'HEAD') }
++}
++
++/**
++ * 세 후보 비교(docs/knowledge-compare): M17 계열은 [완료만]으로 끝난 Work의 팀 지식을 앱 저장소의 공유 대기
++ * (<RELAY_HOME>/projects/<p>/knowledge/pending/<kind>/<id>.md)에 두고 다음 [PR 생성]의 지식 커밋에 싣는다(D308).
++ * 다른 쪽은 Work 브랜치에 지식을 커밋하므로 브랜치 머지로 건너간다. 팀원 교대를 "PR 머지"로 모사하는 이 도구에서
++ * 같은 조건을 주려고, 앞 사람의 공유 대기를 그 사람의 다음 PR이 실어 머지된 것처럼 지식 폴더(project.json의
++ * knowledge_dir, 기본 docs/knowledge)에 커밋한다. 공유 대기가 없는 쪽에서는 아무것도 하지 않는다.
++ */
++function sharePending(work, homes) {
++  const copied = []
++  for (const home of homes) {
++    const projects = path.join(home, 'projects')
++    if (!fs.existsSync(projects)) continue
++    for (const p of fs.readdirSync(projects)) {
++      const pending = path.join(projects, p, 'knowledge', 'pending')
++      if (!fs.existsSync(pending)) continue
++      let dir = 'docs/knowledge'
++      try {
++        dir = JSON.parse(fs.readFileSync(path.join(projects, p, 'project.json'), 'utf8')).knowledge_dir || dir
++      } catch {}
++      for (const kind of fs.readdirSync(pending)) {
++        const kd = path.join(pending, kind)
++        if (!fs.statSync(kd).isDirectory()) continue
++        for (const f of fs.readdirSync(kd).filter((x) => x.endsWith('.md'))) {
++          const dest = path.join(work, dir, kind, f)
++          fs.mkdirSync(path.dirname(dest), { recursive: true })
++          fs.copyFileSync(path.join(kd, f), dest)
++          copied.push(`${dir}/${kind}/${f}`)
++        }
++      }
++    }
++  }
++  if (copied.length) {
++    git(work, 'add', '-A', '--', ...new Set(copied.map((c) => c.split('/').slice(0, -2).join('/'))))
++    if (run('git', ['diff', '--cached', '--quiet'], { cwd: work }).code !== 0)
++      git(work, 'commit', '-q', '-m', '지식: 공유 대기를 PR로 실어 머지함 (평가 도구, 세 후보 비교)')
++  }
++  return copied
+ }
+ 
+ function setUser(dir) {
+diff --git a/app/eval/scenarios/26-points-policy-change/hidden/earn-guard.test.js b/app/eval/scenarios/26-points-policy-change/hidden/earn-guard.test.js
+new file mode 100644
+index 0000000..8e7344a
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/hidden/earn-guard.test.js
+@@ -0,0 +1,17 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import { earnPoints } from '../src/points/earn.js'
++import { normalizeOrder } from '../src/orders/order.js'
++import { orderSummaryLines } from '../src/orders/summary.js'
++
++// 지키기: 취소 주문, 끝자리 0, 주문 요약 문구와 결제 금액은 그대로
++
++test('취소 주문 0, 끝자리 0', () => {
++  assert.strictEqual(earnPoints(normalizeOrder({ id: 'B-40', tier: 'gold', items: [{ price: 50000 }], status: 'cancelled' })), 0)
++  assert.strictEqual(earnPoints(normalizeOrder({ id: 'B-41', tier: 'silver', items: [{ price: 40000 }] })), 800)
++})
++
++test('주문 요약 문구', () => {
++  const o = normalizeOrder({ id: 'B-42', items: [{ price: 21000 }], couponDiscount: 1000, pointsUsed: 500 })
++  assert.deepStrictEqual(orderSummaryLines(o), ['상품 금액 21,000원', '쿠폰 할인 -1,000원', '배송비 3,000원', '포인트 사용 -500원', '결제 금액 22,500원'])
++})
+diff --git a/app/eval/scenarios/26-points-policy-change/hidden/earn-rule.test.js b/app/eval/scenarios/26-points-policy-change/hidden/earn-rule.test.js
+new file mode 100644
+index 0000000..3e4be91
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/hidden/earn-rule.test.js
+@@ -0,0 +1,28 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import fs from 'node:fs'
++import { earnPoints } from '../src/points/earn.js'
++import { normalizeOrder } from '../src/orders/order.js'
++
++// 적립 규칙(Work 1): 기준 금액 = 상품 금액 − 쿠폰 할인 − 포인트 사용. 배송비는 넣지 않는다. 등급 적립률을 곱해 원 단위 버림
++
++test('B-24117: 리포트의 주문이 고객센터 계산과 같다', () => {
++  const o = normalizeOrder(JSON.parse(fs.readFileSync(new URL('../examples/B-24117.json', import.meta.url))))
++  assert.strictEqual(earnPoints(o), 467)
++})
++
++test('배송비는 적립 기준에 넣지 않는다', () => {
++  const o = normalizeOrder({ id: 'B-30', tier: 'basic', items: [{ price: 18700 }] })
++  assert.strictEqual(o.shipping, 3000)
++  assert.strictEqual(earnPoints(o), 187)
++})
++
++test('원 단위 버림', () => {
++  const o = normalizeOrder({ id: 'B-31', tier: 'gold', items: [{ price: 31990 }] })
++  assert.strictEqual(earnPoints(o), 959)
++})
++
++test('쿠폰과 포인트 사용을 뺀 금액에 적립', () => {
++  const o = normalizeOrder({ id: 'B-32', tier: 'gold', items: [{ price: 42350 }], couponDiscount: 2000, pointsUsed: 5000 })
++  assert.strictEqual(earnPoints(o), 1060)
++})
+diff --git a/app/eval/scenarios/26-points-policy-change/hidden/preview-guard.test.js b/app/eval/scenarios/26-points-policy-change/hidden/preview-guard.test.js
+new file mode 100644
+index 0000000..1c3bbdb
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/hidden/preview-guard.test.js
+@@ -0,0 +1,16 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import { cartPreview } from '../src/cart/preview.js'
++
++// 지키기: 미리보기의 다른 칸과 앞 세 줄의 문구는 앱이 그대로 읽는다
++
++test('금액 칸과 문구', () => {
++  const p = cartPreview({ tier: 'silver', items: [{ price: 12000, qty: 2 }], couponDiscount: 1000, pointsUsed: 1000 })
++  assert.deepStrictEqual(
++    { items: p.items, coupon: p.coupon, shipping: p.shipping, pointsUsed: p.pointsUsed, payable: p.payable },
++    { items: 24000, coupon: 1000, shipping: 3000, pointsUsed: 1000, payable: 25000 },
++  )
++  assert.deepStrictEqual(p.lines.slice(0, 3), ['상품 24,000원', '배송비 3,000원', '결제 25,000원'])
++  assert.strictEqual(typeof p.expectedPoints, 'number')
++  assert.ok(Number.isInteger(p.expectedPoints))
++})
+diff --git a/app/eval/scenarios/26-points-policy-change/hidden/preview-points.test.js b/app/eval/scenarios/26-points-policy-change/hidden/preview-points.test.js
+new file mode 100644
+index 0000000..6a835bd
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/hidden/preview-points.test.js
+@@ -0,0 +1,23 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import fs from 'node:fs'
++import { cartPreview } from '../src/cart/preview.js'
++
++// 새 정책(Work 2에서 사람이 정함): 적립 기준 금액 = 상품 금액 − 쿠폰 할인(포인트로 낸 금액도 넣는다), 배송비 제외,
++// 등급 적립률을 곱해 원 단위 버림. 미리보기의 예상 적립도 이 정책을 따른다
++
++test('C-5521: 리포트의 장바구니', () => {
++  const cart = JSON.parse(fs.readFileSync(new URL('../examples/C-5521.json', import.meta.url)))
++  assert.strictEqual(cartPreview(cart).expectedPoints, 1467)
++})
++
++test('포인트를 쓴 장바구니: 포인트로 낸 금액도 적립 기준', () => {
++  const p = cartPreview({ tier: 'silver', items: [{ price: 18450 }], pointsUsed: 500 })
++  assert.strictEqual(p.shipping, 3000)
++  assert.strictEqual(p.expectedPoints, 369)
++})
++
++test('정수 원 단위 버림', () => {
++  assert.strictEqual(cartPreview({ tier: 'basic', items: [{ price: 33333 }] }).expectedPoints, 333)
++  assert.strictEqual(cartPreview({ tier: 'gold', items: [{ price: 12990 }, { price: 9990 }] }).expectedPoints, 689)
++})
+diff --git a/app/eval/scenarios/26-points-policy-change/hidden/tier-guard.test.js b/app/eval/scenarios/26-points-policy-change/hidden/tier-guard.test.js
+new file mode 100644
+index 0000000..c5722f1
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/hidden/tier-guard.test.js
+@@ -0,0 +1,21 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import { tierFor } from '../src/points/tier.js'
++import { normalizeOrder } from '../src/orders/order.js'
++
++// 지키기: 등급 경계와 12개월 창
++
++test('경계: 30만 원이면 silver, 100만 원이면 gold', () => {
++  const at = (price, id) => normalizeOrder({ id, items: [{ price }], paidAt: '2025-07-01' })
++  assert.strictEqual(tierFor([at(300000, 'B-60')], '2025-11-15'), 'silver')
++  assert.strictEqual(tierFor([at(299990, 'B-61')], '2025-11-15'), 'basic')
++  assert.strictEqual(tierFor([at(1000000, 'B-62')], '2025-11-15'), 'gold')
++})
++
++test('12개월보다 오래된 주문은 넣지 않는다', () => {
++  const orders = [
++    normalizeOrder({ id: 'B-63', items: [{ price: 250000 }], paidAt: '2024-11-15' }),
++    normalizeOrder({ id: 'B-64', items: [{ price: 100000 }], paidAt: '2024-11-16' }),
++  ]
++  assert.strictEqual(tierFor(orders, '2025-11-15'), 'basic')
++})
+diff --git a/app/eval/scenarios/26-points-policy-change/hidden/tier-record.test.js b/app/eval/scenarios/26-points-policy-change/hidden/tier-record.test.js
+new file mode 100644
+index 0000000..dc051fb
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/hidden/tier-record.test.js
+@@ -0,0 +1,34 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import fs from 'node:fs'
++import { purchaseRecord, tierFor } from '../src/points/tier.js'
++import { normalizeOrder } from '../src/orders/order.js'
++
++// 새 정책(Work 2): 실적 기준 금액 = 상품 금액 − 쿠폰 할인(포인트로 낸 금액도 넣는다). 배송비는 넣지 않는다. 취소 주문은 뺀다
++
++const m3302 = () => JSON.parse(fs.readFileSync(new URL('../examples/M-3302-orders.json', import.meta.url))).map(normalizeOrder)
++
++test('M-3302: 리포트의 고객은 silver', () => {
++  assert.strictEqual(purchaseRecord(m3302(), '2025-11-15'), 305500)
++  assert.strictEqual(tierFor(m3302(), '2025-11-15'), 'silver')
++})
++
++test('포인트로 낸 금액도 실적에 넣는다', () => {
++  const o = normalizeOrder({ id: 'B-50', items: [{ price: 80000 }], couponDiscount: 3000, pointsUsed: 10000, paidAt: '2025-08-01' })
++  assert.strictEqual(purchaseRecord([o], '2025-11-15'), 77000)
++})
++
++test('배송비는 넣지 않는다', () => {
++  const o = normalizeOrder({ id: 'B-51', items: [{ price: 25000 }], paidAt: '2025-08-01' })
++  assert.strictEqual(o.shipping, 3000)
++  assert.strictEqual(purchaseRecord([o], '2025-11-15'), 25000)
++})
++
++test('취소 주문은 뺀다', () => {
++  const orders = [
++    normalizeOrder({ id: 'B-52', items: [{ price: 200000 }], paidAt: '2025-03-01' }),
++    normalizeOrder({ id: 'B-53', items: [{ price: 150000 }], paidAt: '2025-04-01', status: 'cancelled' }),
++  ]
++  assert.strictEqual(purchaseRecord(orders, '2025-11-15'), 200000)
++  assert.strictEqual(tierFor(orders, '2025-11-15'), 'basic')
++})
+diff --git a/app/eval/scenarios/26-points-policy-change/reference-1.patch b/app/eval/scenarios/26-points-policy-change/reference-1.patch
+new file mode 100644
+index 0000000..1f4b0ba
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/reference-1.patch
+@@ -0,0 +1,22 @@
++diff --git a/src/points/earn.js b/src/points/earn.js
++index 565d9be..66b4221 100644
++--- a/src/points/earn.js
+++++ b/src/points/earn.js
++@@ -1,10 +1,13 @@
++ import { TIER_RATES } from '../config.js'
++-import { percentOf } from '../money.js'
++-import { payable } from '../orders/order.js'
+++import { itemsTotal } from '../orders/order.js'
++ 
++-/** 결제가 끝난 주문에 적립할 포인트 */
+++/**
+++ * 결제가 끝난 주문에 적립할 포인트. 적립 기준 금액은 상품 금액 − 쿠폰 할인 − 포인트 사용이고 배송비는 넣지 않는다.
+++ * 등급 적립률을 곱해 원 단위 버림
+++ */
++ export function earnPoints(order) {
++   if (order.status !== 'paid') return 0
++   const rate = TIER_RATES[order.tier] ?? TIER_RATES.basic
++-  return Math.round(percentOf(payable(order), rate))
+++  const base = Math.max(0, itemsTotal(order) - order.couponDiscount - order.pointsUsed)
+++  return Math.floor((base * rate) / 100)
++ }
+diff --git a/app/eval/scenarios/26-points-policy-change/reference-2.patch b/app/eval/scenarios/26-points-policy-change/reference-2.patch
+new file mode 100644
+index 0000000..709c8e1
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/reference-2.patch
+@@ -0,0 +1,25 @@
++diff --git a/src/points/tier.js b/src/points/tier.js
++index fadd188..1c4a0f5 100644
++--- a/src/points/tier.js
+++++ b/src/points/tier.js
++@@ -1,13 +1,16 @@
++ import { TIER_THRESHOLDS, TIER_WINDOW_MONTHS } from '../config.js'
++ import { monthsBefore } from '../dates.js'
++-import { payable } from '../orders/order.js'
+++import { itemsTotal } from '../orders/order.js'
++ 
++-/** asOf 기준 최근 12개월 구매 실적(원) */
+++/**
+++ * asOf 기준 최근 12개월 구매 실적(원). 실적 기준 금액은 상품 금액 − 쿠폰 할인이다(포인트로 낸 금액도 넣고 배송비는
+++ * 넣지 않는다). 취소된 주문은 뺀다
+++ */
++ export function purchaseRecord(orders, asOf) {
++   const from = monthsBefore(asOf, TIER_WINDOW_MONTHS)
++   return orders
++-    .filter((o) => o.paidAt > from && o.paidAt <= asOf)
++-    .reduce((a, o) => a + payable(o), 0)
+++    .filter((o) => o.status === 'paid' && o.paidAt > from && o.paidAt <= asOf)
+++    .reduce((a, o) => a + itemsTotal(o) - o.couponDiscount, 0)
++ }
++ 
++ /** asOf 기준 회원 등급 */
+diff --git a/app/eval/scenarios/26-points-policy-change/reference-3.patch b/app/eval/scenarios/26-points-policy-change/reference-3.patch
+new file mode 100644
+index 0000000..fc52fe0
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/reference-3.patch
+@@ -0,0 +1,22 @@
++diff --git a/src/cart/preview.js b/src/cart/preview.js
++index a43ed8b..b4c224a 100644
++--- a/src/cart/preview.js
+++++ b/src/cart/preview.js
++@@ -1,5 +1,5 @@
++ import { TIER_RATES } from '../config.js'
++-import { formatWon, percentOf } from '../money.js'
+++import { formatWon } from '../money.js'
++ import { itemsTotal, normalizeOrder, payable } from '../orders/order.js'
++ 
++ /**
++@@ -9,7 +9,9 @@ import { itemsTotal, normalizeOrder, payable } from '../orders/order.js'
++ export function cartPreview(cart) {
++   const order = normalizeOrder({ ...cart, status: 'paid' })
++   const total = payable(order)
++-  const expectedPoints = percentOf(total, TIER_RATES[order.tier] ?? TIER_RATES.basic)
+++  // 적립 기준 금액은 상품 금액 − 쿠폰 할인(포인트로 낸 금액도 넣고 배송비는 넣지 않는다), 원 단위 버림
+++  const base = itemsTotal(order) - order.couponDiscount
+++  const expectedPoints = Math.floor((base * (TIER_RATES[order.tier] ?? TIER_RATES.basic)) / 100)
++   return {
++     items: itemsTotal(order),
++     coupon: order.couponDiscount,
+diff --git a/app/eval/scenarios/26-points-policy-change/repo/README.md b/app/eval/scenarios/26-points-policy-change/repo/README.md
+new file mode 100644
+index 0000000..a183dcb
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/repo/README.md
+@@ -0,0 +1,32 @@
++# loyalty
++
++책마루(온라인 서점)의 주문 금액과 포인트 모듈. 결제 금액, 포인트 적립과 소멸, 회원 등급, 장바구니 결제 미리보기를 계산한다.
++
++## 도메인
++
++- **주문:** 상품 줄 여러 개(단가 × 수량), 쿠폰 할인(원), 배송비, 포인트 사용(원과 같은 단위). 상태는 `paid`(결제 완료) 또는 `cancelled`.
++- **배송비:** 쿠폰을 뺀 상품 금액이 30,000원 이상이면 무료, 아니면 3,000원.
++- **결제 금액:** 상품 금액 − 쿠폰 할인 + 배송비 − 포인트 사용. 카드 등으로 실제 결제하는 돈이다.
++- **포인트:** 결제가 끝난 주문에 등급별 적립률(`src/config.js`)로 적립한다. 적립한 포인트는 12개월 뒤 소멸한다.
++- **회원 등급:** 최근 12개월 구매 실적으로 basic, silver(30만 원 이상), gold(100만 원 이상)를 정한다.
++- **장바구니 미리보기:** 결제 전에 고객에게 보여 주는 금액 요약. 앱이 그대로 읽어 화면에 찍는다.
++
++## 구조
++
++```
++src/
++  config.js        적립률, 등급 기준, 배송비
++  money.js         원 단위 금액 도우미
++  dates.js         날짜 도우미 (YYYY-MM-DD)
++  orders/          주문 정규화, 상품 금액, 배송비, 결제 금액, 주문 요약 문구
++  points/          적립(earn), 소멸(expire), 등급(tier), 포인트 내역(ledger)
++  cart/            장바구니 결제 미리보기
++examples/          문의가 들어온 주문과 장바구니의 사본
++```
++
++## 쓰기
++
++```bash
++npm test
++node -e "import('./src/points/earn.js').then(async (m) => { const { normalizeOrder } = await import('./src/orders/order.js'); const o = normalizeOrder(JSON.parse(require('fs').readFileSync('examples/B-24117.json'))); console.log(m.earnPoints(o)) })"
++```
+diff --git a/app/eval/scenarios/26-points-policy-change/repo/examples/B-24117.json b/app/eval/scenarios/26-points-policy-change/repo/examples/B-24117.json
+new file mode 100644
+index 0000000..300fb54
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/repo/examples/B-24117.json
+@@ -0,0 +1,10 @@
++{
++  "id": "B-24117",
++  "customerId": "M-1187",
++  "tier": "silver",
++  "items": [{ "sku": "9788901234567", "title": "작은 습관의 힘", "price": 8290, "qty": 3 }],
++  "couponDiscount": 0,
++  "pointsUsed": 1500,
++  "status": "paid",
++  "paidAt": "2025-10-28"
++}
+diff --git a/app/eval/scenarios/26-points-policy-change/repo/examples/C-5521.json b/app/eval/scenarios/26-points-policy-change/repo/examples/C-5521.json
+new file mode 100644
+index 0000000..748188f
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/repo/examples/C-5521.json
+@@ -0,0 +1,10 @@
++{
++  "customerId": "M-4410",
++  "tier": "gold",
++  "items": [
++    { "sku": "9788934987654", "title": "데이터 과학 입문", "price": 21930, "qty": 1 },
++    { "sku": "9788934911111", "title": "통계의 아름다움", "price": 14500, "qty": 2 }
++  ],
++  "couponDiscount": 2000,
++  "pointsUsed": 3000
++}
+diff --git a/app/eval/scenarios/26-points-policy-change/repo/examples/M-3302-orders.json b/app/eval/scenarios/26-points-policy-change/repo/examples/M-3302-orders.json
+new file mode 100644
+index 0000000..e1fc1ad
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/repo/examples/M-3302-orders.json
+@@ -0,0 +1,5 @@
++[
++  { "id": "B-21803", "customerId": "M-3302", "tier": "basic", "items": [{ "sku": "9791190000011", "title": "세계사 전집 세트", "price": 120000, "qty": 1 }], "pointsUsed": 30000, "status": "paid", "paidAt": "2025-02-14" },
++  { "id": "B-22950", "customerId": "M-3302", "tier": "basic", "items": [{ "sku": "9791190000028", "title": "미술관 도록", "price": 49000, "qty": 2 }], "couponDiscount": 5000, "pointsUsed": 20000, "status": "paid", "paidAt": "2025-06-03" },
++  { "id": "B-23671", "customerId": "M-3302", "tier": "basic", "items": [{ "sku": "9791190000035", "title": "요리 백과", "price": 46250, "qty": 2 }], "status": "paid", "paidAt": "2025-09-21" }
++]
+diff --git a/app/eval/scenarios/26-points-policy-change/repo/package.json b/app/eval/scenarios/26-points-policy-change/repo/package.json
+new file mode 100644
+index 0000000..171261f
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/repo/package.json
+@@ -0,0 +1,8 @@
++{
++  "name": "loyalty",
++  "private": true,
++  "type": "module",
++  "scripts": {
++    "test": "node --test"
++  }
++}
+diff --git a/app/eval/scenarios/26-points-policy-change/repo/src/cart/preview.js b/app/eval/scenarios/26-points-policy-change/repo/src/cart/preview.js
+new file mode 100644
+index 0000000..a43ed8b
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/repo/src/cart/preview.js
+@@ -0,0 +1,27 @@
++import { TIER_RATES } from '../config.js'
++import { formatWon, percentOf } from '../money.js'
++import { itemsTotal, normalizeOrder, payable } from '../orders/order.js'
++
++/**
++ * 장바구니 결제 미리보기. 앱이 이 객체를 그대로 화면에 찍는다
++ * (items, coupon, shipping, pointsUsed, payable, expectedPoints, lines)
++ */
++export function cartPreview(cart) {
++  const order = normalizeOrder({ ...cart, status: 'paid' })
++  const total = payable(order)
++  const expectedPoints = percentOf(total, TIER_RATES[order.tier] ?? TIER_RATES.basic)
++  return {
++    items: itemsTotal(order),
++    coupon: order.couponDiscount,
++    shipping: order.shipping,
++    pointsUsed: order.pointsUsed,
++    payable: total,
++    expectedPoints,
++    lines: [
++      `상품 ${formatWon(itemsTotal(order))}`,
++      `배송비 ${order.shipping ? formatWon(order.shipping) : '무료'}`,
++      `결제 ${formatWon(total)}`,
++      `적립 예정 ${expectedPoints}P`,
++    ],
++  }
++}
+diff --git a/app/eval/scenarios/26-points-policy-change/repo/src/config.js b/app/eval/scenarios/26-points-policy-change/repo/src/config.js
+new file mode 100644
+index 0000000..300d0da
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/repo/src/config.js
+@@ -0,0 +1,15 @@
++export const SHOP_NAME = '책마루'
++
++// 등급별 적립률(%)
++export const TIER_RATES = { basic: 1, silver: 2, gold: 3 }
++
++// 등급 기준: 최근 TIER_WINDOW_MONTHS개월 구매 실적(원)
++export const TIER_THRESHOLDS = { silver: 300000, gold: 1000000 }
++export const TIER_WINDOW_MONTHS = 12
++
++// 배송비: 쿠폰을 뺀 상품 금액이 FREE_SHIPPING_OVER 이상이면 무료
++export const FREE_SHIPPING_OVER = 30000
++export const SHIPPING_FEE = 3000
++
++// 적립 포인트의 유효 기간(개월)
++export const POINT_EXPIRY_MONTHS = 12
+diff --git a/app/eval/scenarios/26-points-policy-change/repo/src/dates.js b/app/eval/scenarios/26-points-policy-change/repo/src/dates.js
+new file mode 100644
+index 0000000..4f795dc
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/repo/src/dates.js
+@@ -0,0 +1,21 @@
++// 날짜는 'YYYY-MM-DD' 문자열이다. 사전 순서가 날짜 순서와 같다
++
++export function assertDate(s, label = '날짜') {
++  if (!/^\d{4}-\d{2}-\d{2}$/.test(s ?? '')) throw new TypeError(`${label}는 YYYY-MM-DD여야 한다: ${s}`)
++  return s
++}
++
++/** date에서 months개월 전 (같은 날. 그달에 그날이 없으면 그달의 마지막 날) */
++export function monthsBefore(date, months) {
++  return monthsAfter(date, -months)
++}
++
++export function monthsAfter(date, months) {
++  assertDate(date)
++  const [y, m, d] = date.split('-').map(Number)
++  const total = y * 12 + (m - 1) + months
++  const ny = Math.floor(total / 12)
++  const nm = (total % 12) + 1
++  const last = new Date(Date.UTC(ny, nm, 0)).getUTCDate()
++  return `${ny}-${String(nm).padStart(2, '0')}-${String(Math.min(d, last)).padStart(2, '0')}`
++}
+diff --git a/app/eval/scenarios/26-points-policy-change/repo/src/money.js b/app/eval/scenarios/26-points-policy-change/repo/src/money.js
+new file mode 100644
+index 0000000..6c547b3
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/repo/src/money.js
+@@ -0,0 +1,18 @@
++// 원 단위 금액 도우미. 금액은 모두 0 이상의 정수 원이다
++
++export function assertWon(n, label = '금액') {
++  if (!Number.isInteger(n) || n < 0) throw new TypeError(`${label}은 0 이상의 정수 원이어야 한다: ${n}`)
++  return n
++}
++
++export const sumWon = (xs) => xs.reduce((a, b) => a + b, 0)
++
++/** amount의 percent%. 소수가 나올 수 있다 */
++export function percentOf(amount, percent) {
++  return (amount * percent) / 100
++}
++
++/** 12345 → "12,345원" */
++export function formatWon(n) {
++  return `${String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}원`
++}
+diff --git a/app/eval/scenarios/26-points-policy-change/repo/src/orders/order.js b/app/eval/scenarios/26-points-policy-change/repo/src/orders/order.js
+new file mode 100644
+index 0000000..c030a74
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/repo/src/orders/order.js
+@@ -0,0 +1,40 @@
++import { FREE_SHIPPING_OVER, SHIPPING_FEE } from '../config.js'
++import { assertDate } from '../dates.js'
++import { assertWon, sumWon } from '../money.js'
++
++/** 주문 입력(JSON)을 정규화한다 */
++export function normalizeOrder(input) {
++  const items = (input.items ?? []).map((it) => ({
++    sku: it.sku,
++    title: it.title ?? '',
++    price: assertWon(it.price, '단가'),
++    qty: it.qty ?? 1,
++  }))
++  if (!items.length) throw new Error('주문에 상품이 없다')
++  const order = {
++    id: input.id,
++    customerId: input.customerId,
++    tier: input.tier ?? 'basic',
++    items,
++    couponDiscount: assertWon(input.couponDiscount ?? 0, '쿠폰 할인'),
++    pointsUsed: assertWon(input.pointsUsed ?? 0, '사용 포인트'),
++    status: input.status ?? 'paid',
++    paidAt: input.paidAt ? assertDate(input.paidAt, '결제일') : null,
++  }
++  if (order.couponDiscount > itemsTotal(order)) throw new Error('쿠폰 할인이 상품 금액보다 크다')
++  order.shipping = input.shipping ?? shippingFee(order)
++  if (order.pointsUsed > itemsTotal(order) - order.couponDiscount + order.shipping)
++    throw new Error('사용 포인트가 결제할 금액보다 크다')
++  return order
++}
++
++export const itemsTotal = (order) => sumWon(order.items.map((i) => i.price * i.qty))
++
++export function shippingFee(order) {
++  return itemsTotal(order) - order.couponDiscount >= FREE_SHIPPING_OVER ? 0 : SHIPPING_FEE
++}
++
++/** 고객이 카드 등으로 실제 결제하는 금액. 포인트로 낸 금액은 빠진다 */
++export function payable(order) {
++  return itemsTotal(order) - order.couponDiscount + order.shipping - order.pointsUsed
++}
+diff --git a/app/eval/scenarios/26-points-policy-change/repo/src/orders/summary.js b/app/eval/scenarios/26-points-policy-change/repo/src/orders/summary.js
+new file mode 100644
+index 0000000..7415c69
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/repo/src/orders/summary.js
+@@ -0,0 +1,12 @@
++import { formatWon } from '../money.js'
++import { itemsTotal, payable } from './order.js'
++
++/** 주문 확인 메일의 금액 줄 */
++export function orderSummaryLines(order) {
++  const lines = [`상품 금액 ${formatWon(itemsTotal(order))}`]
++  if (order.couponDiscount) lines.push(`쿠폰 할인 -${formatWon(order.couponDiscount)}`)
++  lines.push(`배송비 ${order.shipping ? formatWon(order.shipping) : '무료'}`)
++  if (order.pointsUsed) lines.push(`포인트 사용 -${formatWon(order.pointsUsed)}`)
++  lines.push(`결제 금액 ${formatWon(payable(order))}`)
++  return lines
++}
+diff --git a/app/eval/scenarios/26-points-policy-change/repo/src/points/earn.js b/app/eval/scenarios/26-points-policy-change/repo/src/points/earn.js
+new file mode 100644
+index 0000000..565d9be
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/repo/src/points/earn.js
+@@ -0,0 +1,10 @@
++import { TIER_RATES } from '../config.js'
++import { percentOf } from '../money.js'
++import { payable } from '../orders/order.js'
++
++/** 결제가 끝난 주문에 적립할 포인트 */
++export function earnPoints(order) {
++  if (order.status !== 'paid') return 0
++  const rate = TIER_RATES[order.tier] ?? TIER_RATES.basic
++  return Math.round(percentOf(payable(order), rate))
++}
+diff --git a/app/eval/scenarios/26-points-policy-change/repo/src/points/expire.js b/app/eval/scenarios/26-points-policy-change/repo/src/points/expire.js
+new file mode 100644
+index 0000000..02a7834
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/repo/src/points/expire.js
+@@ -0,0 +1,31 @@
++import { POINT_EXPIRY_MONTHS } from '../config.js'
++import { monthsAfter } from '../dates.js'
++
++/** 적립 건의 소멸일 */
++export function expiresOn(earnedAt) {
++  return monthsAfter(earnedAt, POINT_EXPIRY_MONTHS)
++}
++
++/**
++ * asOf 날짜에 남은 포인트. entries는 적립({ type: 'earn', points, at })과 사용({ type: 'use', points, at }).
++ * 사용은 먼저 적립한 것부터 쓴다(선입선출). 소멸일이 asOf 이하인 적립은 남은 만큼 사라진다
++ */
++export function balanceOn(entries, asOf) {
++  const lots = []
++  for (const e of [...entries].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0))) {
++    if (e.at > asOf) break
++    if (e.type === 'earn') lots.push({ left: e.points, expires: expiresOn(e.at) })
++    else if (e.type === 'use') {
++      let need = e.points
++      for (const lot of lots) {
++        if (lot.expires <= e.at) continue
++        const take = Math.min(lot.left, need)
++        lot.left -= take
++        need -= take
++        if (!need) break
++      }
++      if (need) throw new Error(`포인트가 모자란 사용: ${e.at} ${e.points}`)
++    }
++  }
++  return lots.filter((l) => l.expires > asOf).reduce((a, l) => a + l.left, 0)
++}
+diff --git a/app/eval/scenarios/26-points-policy-change/repo/src/points/ledger.js b/app/eval/scenarios/26-points-policy-change/repo/src/points/ledger.js
+new file mode 100644
+index 0000000..ea7be05
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/repo/src/points/ledger.js
+@@ -0,0 +1,12 @@
++import { formatWon } from '../money.js'
++import { expiresOn } from './expire.js'
++
++/** 마이페이지 포인트 내역의 한 줄 */
++export function ledgerLine(entry) {
++  if (entry.type === 'earn') return `${entry.at} 적립 +${entry.points}P (소멸 ${expiresOn(entry.at)})`
++  if (entry.type === 'use') return `${entry.at} 사용 -${entry.points}P`
++  throw new Error(`모르는 내역: ${entry.type}`)
++}
++
++/** 포인트를 원으로 보일 때 (1P = 1원) */
++export const pointsAsWon = (points) => formatWon(points)
+diff --git a/app/eval/scenarios/26-points-policy-change/repo/src/points/tier.js b/app/eval/scenarios/26-points-policy-change/repo/src/points/tier.js
+new file mode 100644
+index 0000000..fadd188
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/repo/src/points/tier.js
+@@ -0,0 +1,19 @@
++import { TIER_THRESHOLDS, TIER_WINDOW_MONTHS } from '../config.js'
++import { monthsBefore } from '../dates.js'
++import { payable } from '../orders/order.js'
++
++/** asOf 기준 최근 12개월 구매 실적(원) */
++export function purchaseRecord(orders, asOf) {
++  const from = monthsBefore(asOf, TIER_WINDOW_MONTHS)
++  return orders
++    .filter((o) => o.paidAt > from && o.paidAt <= asOf)
++    .reduce((a, o) => a + payable(o), 0)
++}
++
++/** asOf 기준 회원 등급 */
++export function tierFor(orders, asOf) {
++  const record = purchaseRecord(orders, asOf)
++  if (record >= TIER_THRESHOLDS.gold) return 'gold'
++  if (record >= TIER_THRESHOLDS.silver) return 'silver'
++  return 'basic'
++}
+diff --git a/app/eval/scenarios/26-points-policy-change/repo/test/earn.test.js b/app/eval/scenarios/26-points-policy-change/repo/test/earn.test.js
+new file mode 100644
+index 0000000..79d16f1
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/repo/test/earn.test.js
+@@ -0,0 +1,14 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import { earnPoints } from '../src/points/earn.js'
++import { normalizeOrder } from '../src/orders/order.js'
++
++test('취소된 주문은 적립하지 않는다', () => {
++  const o = normalizeOrder({ id: 'B-9', tier: 'gold', items: [{ price: 50000 }], status: 'cancelled' })
++  assert.strictEqual(earnPoints(o), 0)
++})
++
++test('끝자리가 0인 금액은 등급 적립률 그대로', () => {
++  const o = normalizeOrder({ id: 'B-10', tier: 'silver', items: [{ price: 40000 }] })
++  assert.strictEqual(earnPoints(o), 800)
++})
+diff --git a/app/eval/scenarios/26-points-policy-change/repo/test/expire.test.js b/app/eval/scenarios/26-points-policy-change/repo/test/expire.test.js
+new file mode 100644
+index 0000000..885fcbc
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/repo/test/expire.test.js
+@@ -0,0 +1,23 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import { balanceOn, expiresOn } from '../src/points/expire.js'
++import { ledgerLine } from '../src/points/ledger.js'
++
++test('소멸일은 12개월 뒤', () => {
++  assert.strictEqual(expiresOn('2025-03-31'), '2026-03-31')
++  assert.strictEqual(expiresOn('2024-02-29'), '2025-02-28')
++})
++
++test('선입선출로 쓰고 소멸한 것은 빠진다', () => {
++  const entries = [
++    { type: 'earn', points: 300, at: '2025-01-10' },
++    { type: 'earn', points: 500, at: '2025-06-01' },
++    { type: 'use', points: 200, at: '2025-07-01' },
++  ]
++  assert.strictEqual(balanceOn(entries, '2025-12-31'), 600)
++  assert.strictEqual(balanceOn(entries, '2026-01-10'), 500)
++})
++
++test('내역 문구', () => {
++  assert.strictEqual(ledgerLine({ type: 'earn', points: 120, at: '2025-05-02' }), '2025-05-02 적립 +120P (소멸 2026-05-02)')
++})
+diff --git a/app/eval/scenarios/26-points-policy-change/repo/test/order.test.js b/app/eval/scenarios/26-points-policy-change/repo/test/order.test.js
+new file mode 100644
+index 0000000..12c0ea0
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/repo/test/order.test.js
+@@ -0,0 +1,32 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import { itemsTotal, normalizeOrder, payable } from '../src/orders/order.js'
++import { orderSummaryLines } from '../src/orders/summary.js'
++
++test('배송비: 쿠폰 뺀 상품 금액 30,000원 이상이면 무료', () => {
++  const a = normalizeOrder({ id: 'B-1', items: [{ price: 15000, qty: 2 }] })
++  assert.strictEqual(a.shipping, 0)
++  const b = normalizeOrder({ id: 'B-2', items: [{ price: 15000, qty: 2 }], couponDiscount: 1000 })
++  assert.strictEqual(b.shipping, 3000)
++})
++
++test('결제 금액은 포인트로 낸 금액을 뺀다', () => {
++  const o = normalizeOrder({ id: 'B-3', items: [{ price: 12000 }], pointsUsed: 2000 })
++  assert.strictEqual(itemsTotal(o), 12000)
++  assert.strictEqual(payable(o), 13000)
++})
++
++test('사용 포인트가 결제할 금액보다 크면 거부', () => {
++  assert.throws(() => normalizeOrder({ id: 'B-4', items: [{ price: 1000 }], pointsUsed: 5000 }), /사용 포인트/)
++})
++
++test('주문 요약 문구', () => {
++  const o = normalizeOrder({ id: 'B-5', items: [{ price: 21000 }], couponDiscount: 1000, pointsUsed: 500 })
++  assert.deepStrictEqual(orderSummaryLines(o), [
++    '상품 금액 21,000원',
++    '쿠폰 할인 -1,000원',
++    '배송비 3,000원',
++    '포인트 사용 -500원',
++    '결제 금액 22,500원',
++  ])
++})
+diff --git a/app/eval/scenarios/26-points-policy-change/repo/test/preview.test.js b/app/eval/scenarios/26-points-policy-change/repo/test/preview.test.js
+new file mode 100644
+index 0000000..3fe23ad
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/repo/test/preview.test.js
+@@ -0,0 +1,11 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import { cartPreview } from '../src/cart/preview.js'
++
++test('미리보기의 금액 칸', () => {
++  const p = cartPreview({ tier: 'basic', items: [{ price: 12000, qty: 2 }], pointsUsed: 1000 })
++  assert.strictEqual(p.items, 24000)
++  assert.strictEqual(p.shipping, 3000)
++  assert.strictEqual(p.payable, 26000)
++  assert.deepStrictEqual(p.lines.slice(0, 3), ['상품 24,000원', '배송비 3,000원', '결제 26,000원'])
++})
+diff --git a/app/eval/scenarios/26-points-policy-change/repo/test/tier.test.js b/app/eval/scenarios/26-points-policy-change/repo/test/tier.test.js
+new file mode 100644
+index 0000000..df39839
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/repo/test/tier.test.js
+@@ -0,0 +1,16 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import { tierFor } from '../src/points/tier.js'
++import { normalizeOrder } from '../src/orders/order.js'
++
++test('주문이 없으면 basic', () => {
++  assert.strictEqual(tierFor([], '2025-11-15'), 'basic')
++})
++
++test('100만 원 넘게 사면 gold', () => {
++  const orders = [
++    normalizeOrder({ id: 'B-20', items: [{ price: 600000 }], paidAt: '2025-05-01' }),
++    normalizeOrder({ id: 'B-21', items: [{ price: 500000 }], paidAt: '2025-09-01' }),
++  ]
++  assert.strictEqual(tierFor(orders, '2025-11-15'), 'gold')
++})
+diff --git a/app/eval/scenarios/26-points-policy-change/scenario.json b/app/eval/scenarios/26-points-policy-change/scenario.json
+new file mode 100644
+index 0000000..50507cb
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/scenario.json
+@@ -0,0 +1,53 @@
++{
++  "id": "26-points-policy-change",
++  "repoName": "loyalty",
++  "title": "같은 사람의 Work 둘 사이에 적립 정책이 바뀌고, 팀원의 세 번째 Work(미리보기)에는 바뀐 정책이 필요함 (세 후보 비교, 새 시나리오)",
++  "purpose": "세 후보 비교용 새 시나리오(어느 후보도 개발에 쓰지 않음). Work 1에서 사람이 적립 기준(포인트 사용분과 배송비를 뺀 금액, 원 단위 버림)을 알려 준다. Work 2(같은 사람)에서 정책이 바뀌어 포인트로 낸 금액도 기준에 넣게 되고, 이번 Work에서는 적립 계산(earn.js)은 손대지 않는다는 일회성 범위를 준다. Work 3은 팀의 다른 사람이 장바구니 미리보기의 예상 적립을 고친다: 도구가 Work 1·2의 브랜치를 머지하고 새로 clone해 새 앱 저장소에서 시작한다. 코드에는 옛 규칙(earn.js)과 새 규칙(tier.js)이 함께 있어, 바뀐 정책이 지식에 대체되어 건너가야 맞힌다. 흔한 해법(earnPoints 재사용, 결제 금액 기준)은 틀린다. 낡은 지식이 남는지, '이번엔 earn.js를 건드리지 않음'이 지속 규칙으로 굳는지도 지식 파일에서 본다.",
++  "works": [
++    {
++      "report": "고객센터에서 포인트 적립 문의가 올라왔다. 주문 B-24117(실버 회원)의 적립 포인트가 527점으로 들어갔는데, 고객센터가 안내한 금액과 다르다고 한다. 주문 데이터는 examples/B-24117.json에 있다. (src/points/earn.js)",
++      "knowledge": [
++        { "share": "on_ask", "text": "고객센터가 계산한 B-24117의 적립 포인트는 467점이다." },
++        { "share": "on_ask", "text": "적립 규칙: 적립 기준 금액은 상품 금액에서 쿠폰 할인과 포인트 사용분을 뺀 금액이다. 배송비는 넣지 않는다. 여기에 등급 적립률을 곱하고 원 단위는 버린다(반올림하지 않는다)." },
++        { "share": "upfront", "text": "이미 적립된 포인트는 다시 계산하지 않는다. 주문 요약 문구와 결제 금액 계산은 바꾸면 안 된다(주문 확인 메일이 그대로 쓴다)." }
++      ],
++      "checks": [
++        { "name": "적립 규칙", "file": "earn-rule.test.js" },
++        { "name": "적립 지키기", "file": "earn-guard.test.js", "guard": true }
++      ]
++    },
++    {
++      "report": "회원 M-3302가 최근 12개월 동안 30만 원 넘게 샀는데 등급이 basic으로 나온다고 문의했다. 주문 내역은 examples/M-3302-orders.json에 있고, 기준일은 2025-11-15다. (src/points/tier.js)",
++      "knowledge": [
++        { "share": "on_ask", "text": "M-3302는 silver여야 한다. 마케팅팀이 계산한 실적은 305,500원이다." },
++        { "share": "on_ask", "text": "이번 달부터 포인트 정책이 바뀌었다: 포인트로 낸 금액도 적립과 등급 실적의 기준 금액에 넣는다(더는 빼지 않는다). 기준 금액은 상품 금액 − 쿠폰 할인이다. 앞으로 적립·실적·미리보기 모두 이 기준을 쓴다." },
++        { "share": "on_ask", "text": "배송비는 기준 금액에 넣지 않는다.", "carry": true },
++        { "share": "on_ask", "text": "원 단위는 버린다(반올림하지 않는다).", "carry": true },
++        { "share": "on_ask", "text": "취소된 주문은 실적에서 뺀다." },
++        { "share": "upfront", "text": "적립 계산(earn.js)도 새 정책으로 바꿔야 하지만 결제팀이 다음 배포 때 따로 바꾼다. 이번 Work에서는 earn.js를 건드리지 말고 등급(tier.js)만 고친다. 12개월 창과 등급 경계(30만, 100만)는 그대로다." }
++      ],
++      "checks": [
++        { "name": "등급 실적", "file": "tier-record.test.js" },
++        { "name": "등급 지키기", "file": "tier-guard.test.js", "guard": true }
++      ]
++    },
++    {
++      "report": "장바구니 결제 미리보기의 '적립 예정' 포인트가 1377.9P처럼 소수점으로 나온다고 앱팀에서 연락이 왔다. 예: 장바구니 C-5521(골드 회원), 데이터는 examples/C-5521.json. 적립 예정 포인트가 우리 적립 정책대로 나오게 고쳐 달라고 한다. (src/cart/preview.js)",
++      "knowledge": [
++        { "share": "on_ask", "text": "적립 정책의 자세한 내용은 모른다. 이번 달에 적립 기준이 바뀌었다는 공지를 본 것 같은데 무엇이 바뀌었는지 기억나지 않는다. 담당하던 동료는 휴가 중이라 물을 수 없다." },
++        { "share": "on_ask", "text": "결제팀이 이번 주에 적립 계산(earn.js)을 새 정책으로 바꿔 배포한다고 들었다. earn.js는 결제팀 몫이라 이번에는 손대지 않는다." },
++        { "share": "upfront", "text": "미리보기의 다른 칸(상품, 쿠폰, 배송비, 포인트 사용, 결제 금액)과 앞 세 줄 문구는 바꾸면 안 된다. 앱이 그대로 읽는다." }
++      ],
++      "checks": [
++        { "name": "미리보기 적립", "file": "preview-points.test.js" },
++        { "name": "미리보기 지키기", "file": "preview-guard.test.js", "guard": true }
++      ],
++      "teammate": true
++    }
++  ],
++  "preferences": ["고친 뒤 리포트의 예시(주문, 회원, 장바구니)가 고객센터나 마케팅팀 계산과 맞는지 확인하고 싶다."],
++  "reveals": [],
++  "events": [],
++  "expectedFiles": ["src/**", "test/**", ".relay/**", "docs/knowledge/**"],
++  "limits": { "minutes": 120, "turns": 140 }
++}
+diff --git a/app/eval/scenarios/26-points-policy-change/traps/w1-floor-payable.patch b/app/eval/scenarios/26-points-policy-change/traps/w1-floor-payable.patch
+new file mode 100644
+index 0000000..13696c5
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/traps/w1-floor-payable.patch
+@@ -0,0 +1,11 @@
++diff --git a/src/points/earn.js b/src/points/earn.js
++index 565d9be..3e2f003 100644
++--- a/src/points/earn.js
+++++ b/src/points/earn.js
++@@ -6,5 +6,5 @@ import { payable } from '../orders/order.js'
++ export function earnPoints(order) {
++   if (order.status !== 'paid') return 0
++   const rate = TIER_RATES[order.tier] ?? TIER_RATES.basic
++-  return Math.round(percentOf(payable(order), rate))
+++  return Math.floor(percentOf(payable(order), rate))
++ }
+diff --git a/app/eval/scenarios/26-points-policy-change/traps/w1-round-base.patch b/app/eval/scenarios/26-points-policy-change/traps/w1-round-base.patch
+new file mode 100644
+index 0000000..fea26c7
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/traps/w1-round-base.patch
+@@ -0,0 +1,17 @@
++diff --git a/src/points/earn.js b/src/points/earn.js
++index 565d9be..009f019 100644
++--- a/src/points/earn.js
+++++ b/src/points/earn.js
++@@ -1,10 +1,10 @@
++ import { TIER_RATES } from '../config.js'
++ import { percentOf } from '../money.js'
++-import { payable } from '../orders/order.js'
+++import { itemsTotal } from '../orders/order.js'
++ 
++ /** 결제가 끝난 주문에 적립할 포인트 */
++ export function earnPoints(order) {
++   if (order.status !== 'paid') return 0
++   const rate = TIER_RATES[order.tier] ?? TIER_RATES.basic
++-  return Math.round(percentOf(payable(order), rate))
+++  return Math.round(percentOf(itemsTotal(order) - order.couponDiscount - order.pointsUsed, rate))
++ }
+diff --git a/app/eval/scenarios/26-points-policy-change/traps/w2-old-rule.patch b/app/eval/scenarios/26-points-policy-change/traps/w2-old-rule.patch
+new file mode 100644
+index 0000000..808739b
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/traps/w2-old-rule.patch
+@@ -0,0 +1,15 @@
++diff --git a/src/points/tier.js b/src/points/tier.js
++index fadd188..9e2624d 100644
++--- a/src/points/tier.js
+++++ b/src/points/tier.js
++@@ -6,8 +6,8 @@ import { payable } from '../orders/order.js'
++ export function purchaseRecord(orders, asOf) {
++   const from = monthsBefore(asOf, TIER_WINDOW_MONTHS)
++   return orders
++-    .filter((o) => o.paidAt > from && o.paidAt <= asOf)
++-    .reduce((a, o) => a + payable(o), 0)
+++    .filter((o) => o.status === 'paid' && o.paidAt > from && o.paidAt <= asOf)
+++    .reduce((a, o) => a + payable(o) - o.shipping, 0)
++ }
++ 
++ /** asOf 기준 회원 등급 */
+diff --git a/app/eval/scenarios/26-points-policy-change/traps/w3-floor-payable.patch b/app/eval/scenarios/26-points-policy-change/traps/w3-floor-payable.patch
+new file mode 100644
+index 0000000..1c40678
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/traps/w3-floor-payable.patch
+@@ -0,0 +1,13 @@
++diff --git a/src/cart/preview.js b/src/cart/preview.js
++index a43ed8b..5a7fea1 100644
++--- a/src/cart/preview.js
+++++ b/src/cart/preview.js
++@@ -9,7 +9,7 @@ import { itemsTotal, normalizeOrder, payable } from '../orders/order.js'
++ export function cartPreview(cart) {
++   const order = normalizeOrder({ ...cart, status: 'paid' })
++   const total = payable(order)
++-  const expectedPoints = percentOf(total, TIER_RATES[order.tier] ?? TIER_RATES.basic)
+++  const expectedPoints = Math.floor(percentOf(total, TIER_RATES[order.tier] ?? TIER_RATES.basic))
++   return {
++     items: itemsTotal(order),
++     coupon: order.couponDiscount,
+diff --git a/app/eval/scenarios/26-points-policy-change/traps/w3-old-rule.patch b/app/eval/scenarios/26-points-policy-change/traps/w3-old-rule.patch
+new file mode 100644
+index 0000000..e1e53fe
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/traps/w3-old-rule.patch
+@@ -0,0 +1,13 @@
++diff --git a/src/cart/preview.js b/src/cart/preview.js
++index a43ed8b..5d29e56 100644
++--- a/src/cart/preview.js
+++++ b/src/cart/preview.js
++@@ -9,7 +9,7 @@ import { itemsTotal, normalizeOrder, payable } from '../orders/order.js'
++ export function cartPreview(cart) {
++   const order = normalizeOrder({ ...cart, status: 'paid' })
++   const total = payable(order)
++-  const expectedPoints = percentOf(total, TIER_RATES[order.tier] ?? TIER_RATES.basic)
+++  const expectedPoints = Math.floor(percentOf(itemsTotal(order) - order.couponDiscount - order.pointsUsed, TIER_RATES[order.tier] ?? TIER_RATES.basic))
++   return {
++     items: itemsTotal(order),
++     coupon: order.couponDiscount,
+diff --git a/app/eval/scenarios/26-points-policy-change/traps/w3-reuse-earn.patch b/app/eval/scenarios/26-points-policy-change/traps/w3-reuse-earn.patch
+new file mode 100644
+index 0000000..8152517
+--- /dev/null
++++ b/app/eval/scenarios/26-points-policy-change/traps/w3-reuse-earn.patch
+@@ -0,0 +1,21 @@
++diff --git a/src/cart/preview.js b/src/cart/preview.js
++index a43ed8b..4b837ae 100644
++--- a/src/cart/preview.js
+++++ b/src/cart/preview.js
++@@ -1,5 +1,5 @@
++-import { TIER_RATES } from '../config.js'
++-import { formatWon, percentOf } from '../money.js'
+++import { formatWon } from '../money.js'
+++import { earnPoints } from '../points/earn.js'
++ import { itemsTotal, normalizeOrder, payable } from '../orders/order.js'
++ 
++ /**
++@@ -9,7 +9,7 @@ import { itemsTotal, normalizeOrder, payable } from '../orders/order.js'
++ export function cartPreview(cart) {
++   const order = normalizeOrder({ ...cart, status: 'paid' })
++   const total = payable(order)
++-  const expectedPoints = percentOf(total, TIER_RATES[order.tier] ?? TIER_RATES.basic)
+++  const expectedPoints = earnPoints(order)
++   return {
++     items: itemsTotal(order),
++     coupon: order.couponDiscount,
+diff --git a/app/eval/scenarios/27-noshow-future-rule/hidden/cancel-guard.test.js b/app/eval/scenarios/27-noshow-future-rule/hidden/cancel-guard.test.js
+new file mode 100644
+index 0000000..247afd1
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/hidden/cancel-guard.test.js
+@@ -0,0 +1,13 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import { cancel } from '../src/appointments/status.js'
++import { messageFor } from '../src/notify/messages.js'
++import { appt } from './helpers.js'
++
++// 지키기: 며칠 전 취소와 취소 문자 문구
++
++test('며칠 전 취소는 수수료 없음, 문구 그대로', () => {
++  const a = cancel(appt(), '2025-11-15T10:00')
++  assert.deepStrictEqual(a.charges, [])
++  assert.strictEqual(messageFor(a), '[미소치과] 김하늘님, 예약이 취소되었습니다.')
++})
+diff --git a/app/eval/scenarios/27-noshow-future-rule/hidden/cancel-rule.test.js b/app/eval/scenarios/27-noshow-future-rule/hidden/cancel-rule.test.js
+new file mode 100644
+index 0000000..0d1484f
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/hidden/cancel-rule.test.js
+@@ -0,0 +1,19 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import { cancel } from '../src/appointments/status.js'
++import { appt, example, sum } from './helpers.js'
++
++// 취소 규칙(Work 1): 진료일과 같은 날짜에 취소하면 예정 진료비의 30%. 전날까지 취소는 무료. 수수료는 100원 미만 버림
++
++test('A-7781: 전날 밤 취소는 수수료 없음', () => {
++  assert.strictEqual(sum(cancel(example('A-7781'), '2025-11-03T21:00'), 'cancel'), 0)
++})
++
++test('당일 아침 취소는 30%를 100원 미만 버림', () => {
++  assert.strictEqual(sum(cancel(appt(), '2025-11-20T08:00'), 'cancel'), 11200)
++  assert.strictEqual(sum(cancel(appt({ expectedFee: 52390 }), '2025-11-20T09:55'), 'cancel'), 15700)
++})
++
++test('전날 23시 59분 취소도 무료', () => {
++  assert.strictEqual(sum(cancel(appt({ startsAt: '2025-11-20T00:30' }), '2025-11-19T23:59'), 'cancel'), 0)
++})
+diff --git a/app/eval/scenarios/27-noshow-future-rule/hidden/helpers.js b/app/eval/scenarios/27-noshow-future-rule/hidden/helpers.js
+new file mode 100644
+index 0000000..9034e57
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/hidden/helpers.js
+@@ -0,0 +1,7 @@
++import fs from 'node:fs'
++import { normalizeAppointment } from '../src/appointments/appointment.js'
++
++export const example = (id) => normalizeAppointment(JSON.parse(fs.readFileSync(new URL(`../examples/${id}.json`, import.meta.url))))
++export const appt = (o = {}) =>
++  normalizeAppointment({ id: 'A-90', patientId: 'P-9', patientName: '김하늘', visitType: 'return', expectedFee: 37450, startsAt: '2025-11-20T10:00', ...o })
++export const sum = (a, kind) => a.charges.filter((c) => c.kind === kind).reduce((x, c) => x + c.amount, 0)
+diff --git a/app/eval/scenarios/27-noshow-future-rule/hidden/noshow-guard.test.js b/app/eval/scenarios/27-noshow-future-rule/hidden/noshow-guard.test.js
+new file mode 100644
+index 0000000..f2ca246
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/hidden/noshow-guard.test.js
+@@ -0,0 +1,11 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import { cancel, markNoShow } from '../src/appointments/status.js'
++import { appt } from './helpers.js'
++
++// 지키기: 노쇼 처리의 상태와 거절
++
++test('상태는 noshow, 예약됨이 아니면 거절', () => {
++  assert.strictEqual(markNoShow(appt(), '2025-11-20T11:00').status, 'noshow')
++  assert.throws(() => markNoShow(cancel(appt(), '2025-11-15T10:00'), '2025-11-20T11:00'), /노쇼로 처리할 수 없다/)
++})
+diff --git a/app/eval/scenarios/27-noshow-future-rule/hidden/noshow-rule.test.js b/app/eval/scenarios/27-noshow-future-rule/hidden/noshow-rule.test.js
+new file mode 100644
+index 0000000..0582f0d
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/hidden/noshow-rule.test.js
+@@ -0,0 +1,21 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import { markNoShow } from '../src/appointments/status.js'
++import { messageFor } from '../src/notify/messages.js'
++import { appt, example, sum } from './helpers.js'
++
++// 노쇼 규칙(Work 1에서 사람이 미리 정해 알려 줌): 예정 진료비의 50%를 100원 미만 버림. 초진 환자는 면제
++
++test('A-8355: 재진 노쇼는 50%를 100원 미만 버림', () => {
++  const a = markNoShow(example('A-8355'), '2025-12-02T15:40')
++  assert.strictEqual(sum(a, 'noshow'), 18700)
++  assert.strictEqual(messageFor(a), '[미소치과] 최민서님, 예약 시간에 내원하지 않으셨습니다. 노쇼 수수료 18,700원 문의 02-555-0142')
++})
++
++test('다른 금액', () => {
++  assert.strictEqual(sum(markNoShow(appt({ expectedFee: 52390 }), '2025-11-20T11:00'), 'noshow'), 26100)
++})
++
++test('초진 환자는 면제', () => {
++  assert.strictEqual(sum(markNoShow(appt({ visitType: 'first', expectedFee: 52390 }), '2025-11-20T11:00'), 'noshow'), 0)
++})
+diff --git a/app/eval/scenarios/27-noshow-future-rule/hidden/reschedule-guard.test.js b/app/eval/scenarios/27-noshow-future-rule/hidden/reschedule-guard.test.js
+new file mode 100644
+index 0000000..8a8abfb
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/hidden/reschedule-guard.test.js
+@@ -0,0 +1,13 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import { reschedule } from '../src/appointments/status.js'
++import { appt } from './helpers.js'
++
++// 지키기: 첫 변경은 무료, 변경 횟수와 시각
++
++test('첫 변경', () => {
++  const a = reschedule(appt(), '2025-11-22T10:00', '2025-11-18T09:00')
++  assert.strictEqual(a.changes, 1)
++  assert.strictEqual(a.startsAt, '2025-11-22T10:00')
++  assert.deepStrictEqual(a.charges, [])
++})
+diff --git a/app/eval/scenarios/27-noshow-future-rule/hidden/reschedule-rule.test.js b/app/eval/scenarios/27-noshow-future-rule/hidden/reschedule-rule.test.js
+new file mode 100644
+index 0000000..7c52f53
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/hidden/reschedule-rule.test.js
+@@ -0,0 +1,15 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import { reschedule } from '../src/appointments/status.js'
++import { appt, example, sum } from './helpers.js'
++
++// 변경 규칙(Work 2): 두 번째 변경까지 무료, 세 번째 변경부터 예정 진료비의 10%. 수수료는 100원 미만 버림
++
++test('A-8020: 두 번째 변경은 무료', () => {
++  assert.strictEqual(sum(reschedule(example('A-8020'), '2025-11-18T16:00', '2025-11-12T09:20'), 'reschedule'), 0)
++})
++
++test('세 번째 변경부터 10%를 100원 미만 버림', () => {
++  assert.strictEqual(sum(reschedule(appt({ expectedFee: 29870, changes: 2 }), '2025-11-25T10:00', '2025-11-18T09:00'), 'reschedule'), 2900)
++  assert.strictEqual(sum(reschedule(appt({ expectedFee: 45000, changes: 3 }), '2025-11-25T10:00', '2025-11-18T09:00'), 'reschedule'), 4500)
++})
+diff --git a/app/eval/scenarios/27-noshow-future-rule/reference-1.patch b/app/eval/scenarios/27-noshow-future-rule/reference-1.patch
+new file mode 100644
+index 0000000..9ada7ba
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/reference-1.patch
+@@ -0,0 +1,20 @@
++diff --git a/src/fees/cancel.js b/src/fees/cancel.js
++index d1ab130..7ed9ca2 100644
++--- a/src/fees/cancel.js
+++++ b/src/fees/cancel.js
++@@ -1,10 +1,9 @@
++ import { CANCEL_FEE_PERCENT } from '../config.js'
++-import { percentOf, roundTo } from '../money.js'
++-import { minutesBetween } from '../appointments/appointment.js'
+++import { floorTo, percentOf } from '../money.js'
+++import { dateOf } from '../appointments/appointment.js'
++ 
++-/** 취소 수수료. 진료 시작 24시간 안에 취소하면 예정 진료비의 30% */
+++/** 취소 수수료. 진료일과 같은 날짜에 취소하면 예정 진료비의 30%를 100원 미만 버림. 전날까지 취소는 무료 */
++ export function cancelFee(appt, cancelledAt) {
++-  const before = minutesBetween(cancelledAt, appt.startsAt)
++-  if (before >= 24 * 60) return 0
++-  return roundTo(percentOf(appt.expectedFee, CANCEL_FEE_PERCENT), 10)
+++  if (dateOf(cancelledAt) < dateOf(appt.startsAt)) return 0
+++  return floorTo(percentOf(appt.expectedFee, CANCEL_FEE_PERCENT), 100)
++ }
+diff --git a/app/eval/scenarios/27-noshow-future-rule/reference-2.patch b/app/eval/scenarios/27-noshow-future-rule/reference-2.patch
+new file mode 100644
+index 0000000..766093d
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/reference-2.patch
+@@ -0,0 +1,17 @@
++diff --git a/src/fees/reschedule.js b/src/fees/reschedule.js
++index 75829d4..2e3c966 100644
++--- a/src/fees/reschedule.js
+++++ b/src/fees/reschedule.js
++@@ -1,8 +1,8 @@
++ import { RESCHEDULE_FEE_PERCENT } from '../config.js'
++-import { percentOf, roundTo } from '../money.js'
+++import { floorTo, percentOf } from '../money.js'
++ 
++-/** 예약 변경 수수료. appt.changes는 이번 변경을 넣은 변경 횟수다. 처음 한 번은 무료 */
+++/** 예약 변경 수수료. appt.changes는 이번 변경을 넣은 변경 횟수다. 두 번째 변경까지 무료, 세 번째부터 10%를 100원 미만 버림 */
++ export function rescheduleFee(appt) {
++-  if (appt.changes <= 1) return 0
++-  return roundTo(percentOf(appt.expectedFee, RESCHEDULE_FEE_PERCENT), 10)
+++  if (appt.changes <= 2) return 0
+++  return floorTo(percentOf(appt.expectedFee, RESCHEDULE_FEE_PERCENT), 100)
++ }
+diff --git a/app/eval/scenarios/27-noshow-future-rule/reference-3.patch b/app/eval/scenarios/27-noshow-future-rule/reference-3.patch
+new file mode 100644
+index 0000000..cfd1c35
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/reference-3.patch
+@@ -0,0 +1,14 @@
++diff --git a/src/fees/noshow.js b/src/fees/noshow.js
++index e5af4fa..980a28e 100644
++--- a/src/fees/noshow.js
+++++ b/src/fees/noshow.js
++@@ -1,4 +1,7 @@
++-/** 노쇼 수수료. 아직 받지 않는다 */
+++import { floorTo, percentOf } from '../money.js'
+++
+++/** 노쇼 수수료. 예정 진료비의 50%를 100원 미만 버림. 초진 환자는 면제 */
++ export function noShowFee(appt) {
++-  return 0
+++  if (appt.visitType === 'first') return 0
+++  return floorTo(percentOf(appt.expectedFee, 50), 100)
++ }
+diff --git a/app/eval/scenarios/27-noshow-future-rule/repo/README.md b/app/eval/scenarios/27-noshow-future-rule/repo/README.md
+new file mode 100644
+index 0000000..778d25b
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/repo/README.md
+@@ -0,0 +1,28 @@
++# clinic
++
++미소치과의 예약 모듈. 예약, 변경, 취소, 노쇼 처리와 그에 따른 수수료, 환자에게 보내는 문자 문구를 만든다.
++
++## 도메인
++
++- **예약:** 환자, 진료 종류(초진 `first` / 재진 `return`), 예정 진료비(원), 시작 시각(`YYYY-MM-DDTHH:mm`, 병원 현지 시각).
++- **상태:** `booked`(예약됨), `cancelled`(취소), `noshow`(오지 않음), `done`(진료 끝).
++- **수수료:** 취소, 예약 변경, 노쇼에 붙는 수수료. 수납 시스템이 `charges` 기록을 읽어 청구한다.
++- **문자:** 상태가 바뀌면 환자에게 보내는 문자 문구. 문자 대행사 템플릿과 맞춰 둔 것이라 문구를 바꾸면 발송이 거부된다.
++
++## 구조
++
++```
++src/
++  config.js            병원 정보, 수수료율
++  money.js             원 단위 금액 도우미
++  appointments/        예약 정규화, 상태 바꾸기(취소, 변경, 노쇼), 수수료 기록
++  fees/                취소 수수료, 변경 수수료, 노쇼 수수료, 구 시스템 위약금
++  notify/              환자 문자 문구
++examples/              문의가 들어온 예약의 사본
++```
++
++## 쓰기
++
++```bash
++npm test
++```
+diff --git a/app/eval/scenarios/27-noshow-future-rule/repo/examples/A-7781.json b/app/eval/scenarios/27-noshow-future-rule/repo/examples/A-7781.json
+new file mode 100644
+index 0000000..2803980
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/repo/examples/A-7781.json
+@@ -0,0 +1,11 @@
++{
++  "id": "A-7781",
++  "patientId": "P-2207",
++  "patientName": "박서준",
++  "visitType": "return",
++  "expectedFee": 37450,
++  "startsAt": "2025-11-04T10:00",
++  "status": "booked",
++  "changes": 0,
++  "cancelledAt": "2025-11-03T21:00"
++}
+diff --git a/app/eval/scenarios/27-noshow-future-rule/repo/examples/A-8020.json b/app/eval/scenarios/27-noshow-future-rule/repo/examples/A-8020.json
+new file mode 100644
+index 0000000..f5b37b4
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/repo/examples/A-8020.json
+@@ -0,0 +1,12 @@
++{
++  "id": "A-8020",
++  "patientId": "P-3141",
++  "patientName": "이도윤",
++  "visitType": "return",
++  "expectedFee": 29870,
++  "startsAt": "2025-11-14T11:30",
++  "status": "booked",
++  "changes": 1,
++  "rescheduledTo": "2025-11-18T16:00",
++  "rescheduledAt": "2025-11-12T09:20"
++}
+diff --git a/app/eval/scenarios/27-noshow-future-rule/repo/examples/A-8355.json b/app/eval/scenarios/27-noshow-future-rule/repo/examples/A-8355.json
+new file mode 100644
+index 0000000..8bfa7be
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/repo/examples/A-8355.json
+@@ -0,0 +1,11 @@
++{
++  "id": "A-8355",
++  "patientId": "P-4012",
++  "patientName": "최민서",
++  "visitType": "return",
++  "expectedFee": 37450,
++  "startsAt": "2025-12-02T15:00",
++  "status": "booked",
++  "changes": 0,
++  "markedNoShowAt": "2025-12-02T15:40"
++}
+diff --git a/app/eval/scenarios/27-noshow-future-rule/repo/package.json b/app/eval/scenarios/27-noshow-future-rule/repo/package.json
+new file mode 100644
+index 0000000..c1c037d
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/repo/package.json
+@@ -0,0 +1,8 @@
++{
++  "name": "clinic",
++  "private": true,
++  "type": "module",
++  "scripts": {
++    "test": "node --test"
++  }
++}
+diff --git a/app/eval/scenarios/27-noshow-future-rule/repo/src/appointments/appointment.js b/app/eval/scenarios/27-noshow-future-rule/repo/src/appointments/appointment.js
+new file mode 100644
+index 0000000..7b4baa8
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/repo/src/appointments/appointment.js
+@@ -0,0 +1,32 @@
++import { assertWon } from '../money.js'
++
++const TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/
++
++export function assertTime(s, label = '시각') {
++  if (!TIME.test(s ?? '')) throw new TypeError(`${label}은 YYYY-MM-DDTHH:mm이어야 한다: ${s}`)
++  return s
++}
++
++/** 예약 입력(JSON)을 정규화한다 */
++export function normalizeAppointment(input) {
++  if (!['first', 'return'].includes(input.visitType)) throw new Error(`진료 종류는 first 또는 return: ${input.visitType}`)
++  return {
++    id: input.id,
++    patientId: input.patientId,
++    patientName: input.patientName ?? '',
++    visitType: input.visitType,
++    expectedFee: assertWon(input.expectedFee, '예정 진료비'),
++    startsAt: assertTime(input.startsAt, '시작 시각'),
++    status: input.status ?? 'booked',
++    changes: input.changes ?? 0,
++    charges: [...(input.charges ?? [])],
++  }
++}
++
++/** '2025-11-04T10:30' → '2025-11-04' */
++export const dateOf = (time) => time.slice(0, 10)
++
++/** 두 시각 사이의 분 (b − a) */
++export function minutesBetween(a, b) {
++  return (Date.parse(`${b}:00Z`) - Date.parse(`${a}:00Z`)) / 60000
++}
+diff --git a/app/eval/scenarios/27-noshow-future-rule/repo/src/appointments/status.js b/app/eval/scenarios/27-noshow-future-rule/repo/src/appointments/status.js
+new file mode 100644
+index 0000000..a964c07
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/repo/src/appointments/status.js
+@@ -0,0 +1,35 @@
++import { cancelFee } from '../fees/cancel.js'
++import { noShowFee } from '../fees/noshow.js'
++import { rescheduleFee } from '../fees/reschedule.js'
++import { assertTime } from './appointment.js'
++
++function charge(appt, kind, amount, at) {
++  return amount > 0 ? [...appt.charges, { kind, amount, at }] : appt.charges
++}
++
++/** 환자가 예약을 취소한다 */
++export function cancel(appt, at) {
++  assertTime(at, '취소 시각')
++  if (appt.status !== 'booked') throw new Error(`예약됨이 아닌 예약은 취소할 수 없다: ${appt.status}`)
++  return { ...appt, status: 'cancelled', charges: charge(appt, 'cancel', cancelFee(appt, at), at) }
++}
++
++/** 예약 시각을 옮긴다. changes는 이번 변경을 넣은 변경 횟수다 */
++export function reschedule(appt, newStartsAt, at) {
++  assertTime(newStartsAt, '새 시작 시각')
++  if (appt.status !== 'booked') throw new Error(`예약됨이 아닌 예약은 옮길 수 없다: ${appt.status}`)
++  const moved = { ...appt, startsAt: newStartsAt, changes: appt.changes + 1 }
++  return { ...moved, charges: charge(appt, 'reschedule', rescheduleFee(moved), at) }
++}
++
++/** 환자가 오지 않은 예약을 노쇼로 처리한다 */
++export function markNoShow(appt, at) {
++  assertTime(at, '처리 시각')
++  if (appt.status !== 'booked') throw new Error(`예약됨이 아닌 예약은 노쇼로 처리할 수 없다: ${appt.status}`)
++  return { ...appt, status: 'noshow', charges: charge(appt, 'noshow', noShowFee(appt), at) }
++}
++
++/** 진료를 마쳤다 */
++export function complete(appt) {
++  return { ...appt, status: 'done' }
++}
+diff --git a/app/eval/scenarios/27-noshow-future-rule/repo/src/config.js b/app/eval/scenarios/27-noshow-future-rule/repo/src/config.js
+new file mode 100644
+index 0000000..805163e
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/repo/src/config.js
+@@ -0,0 +1,8 @@
++export const CLINIC_NAME = '미소치과'
++export const CLINIC_PHONE = '02-555-0142'
++
++// 당일 취소 수수료율(%)
++export const CANCEL_FEE_PERCENT = 30
++
++// 예약 변경 수수료율(%)
++export const RESCHEDULE_FEE_PERCENT = 10
+diff --git a/app/eval/scenarios/27-noshow-future-rule/repo/src/fees/cancel.js b/app/eval/scenarios/27-noshow-future-rule/repo/src/fees/cancel.js
+new file mode 100644
+index 0000000..d1ab130
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/repo/src/fees/cancel.js
+@@ -0,0 +1,10 @@
++import { CANCEL_FEE_PERCENT } from '../config.js'
++import { percentOf, roundTo } from '../money.js'
++import { minutesBetween } from '../appointments/appointment.js'
++
++/** 취소 수수료. 진료 시작 24시간 안에 취소하면 예정 진료비의 30% */
++export function cancelFee(appt, cancelledAt) {
++  const before = minutesBetween(cancelledAt, appt.startsAt)
++  if (before >= 24 * 60) return 0
++  return roundTo(percentOf(appt.expectedFee, CANCEL_FEE_PERCENT), 10)
++}
+diff --git a/app/eval/scenarios/27-noshow-future-rule/repo/src/fees/legacy.js b/app/eval/scenarios/27-noshow-future-rule/repo/src/fees/legacy.js
+new file mode 100644
+index 0000000..d4bb59a
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/repo/src/fees/legacy.js
+@@ -0,0 +1,13 @@
++import { percentOf, roundTo } from '../money.js'
++
++// 구 예약 시스템(2023년까지)에서 옮겨 온 위약금 계산. 지난 정산 자료를 다시 맞춰 볼 때 쓴다
++
++/** 구 시스템의 노쇼 위약금: 예정 진료비의 20%, 10원 단위 반올림 */
++export function legacyNoShowPenalty(appt) {
++  return roundTo(percentOf(appt.expectedFee, 20), 10)
++}
++
++/** 구 시스템의 당일 취소 위약금: 예정 진료비의 20%, 10원 단위 반올림 */
++export function legacyCancelPenalty(appt) {
++  return roundTo(percentOf(appt.expectedFee, 20), 10)
++}
+diff --git a/app/eval/scenarios/27-noshow-future-rule/repo/src/fees/noshow.js b/app/eval/scenarios/27-noshow-future-rule/repo/src/fees/noshow.js
+new file mode 100644
+index 0000000..e5af4fa
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/repo/src/fees/noshow.js
+@@ -0,0 +1,4 @@
++/** 노쇼 수수료. 아직 받지 않는다 */
++export function noShowFee(appt) {
++  return 0
++}
+diff --git a/app/eval/scenarios/27-noshow-future-rule/repo/src/fees/reschedule.js b/app/eval/scenarios/27-noshow-future-rule/repo/src/fees/reschedule.js
+new file mode 100644
+index 0000000..75829d4
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/repo/src/fees/reschedule.js
+@@ -0,0 +1,8 @@
++import { RESCHEDULE_FEE_PERCENT } from '../config.js'
++import { percentOf, roundTo } from '../money.js'
++
++/** 예약 변경 수수료. appt.changes는 이번 변경을 넣은 변경 횟수다. 처음 한 번은 무료 */
++export function rescheduleFee(appt) {
++  if (appt.changes <= 1) return 0
++  return roundTo(percentOf(appt.expectedFee, RESCHEDULE_FEE_PERCENT), 10)
++}
+diff --git a/app/eval/scenarios/27-noshow-future-rule/repo/src/money.js b/app/eval/scenarios/27-noshow-future-rule/repo/src/money.js
+new file mode 100644
+index 0000000..a36f495
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/repo/src/money.js
+@@ -0,0 +1,18 @@
++// 원 단위 금액 도우미. 금액은 모두 0 이상의 정수 원이다
++
++export function assertWon(n, label = '금액') {
++  if (!Number.isInteger(n) || n < 0) throw new TypeError(`${label}은 0 이상의 정수 원이어야 한다: ${n}`)
++  return n
++}
++
++/** amount의 percent%. 소수가 나올 수 있다 */
++export const percentOf = (amount, percent) => (amount * percent) / 100
++
++/** unit 단위로 반올림 (예: roundTo(11235, 10) → 11240) */
++export const roundTo = (n, unit) => Math.round(n / unit) * unit
++
++/** unit 단위 미만을 버림 (예: floorTo(11235, 100) → 11200) */
++export const floorTo = (n, unit) => Math.floor(n / unit) * unit
++
++/** 12345 → "12,345원" */
++export const formatWon = (n) => `${String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}원`
+diff --git a/app/eval/scenarios/27-noshow-future-rule/repo/src/notify/messages.js b/app/eval/scenarios/27-noshow-future-rule/repo/src/notify/messages.js
+new file mode 100644
+index 0000000..c7e9372
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/repo/src/notify/messages.js
+@@ -0,0 +1,26 @@
++import { CLINIC_NAME, CLINIC_PHONE } from '../config.js'
++import { formatWon } from '../money.js'
++
++// 문자 대행사 템플릿과 맞춘 문구. 바꾸면 발송이 거부된다
++
++const total = (appt, kind) => appt.charges.filter((c) => c.kind === kind).reduce((a, c) => a + c.amount, 0)
++
++export function messageFor(appt) {
++  const name = appt.patientName || '환자'
++  switch (appt.status) {
++    case 'booked':
++      return `[${CLINIC_NAME}] ${name}님, ${appt.startsAt.replace('T', ' ')} 예약되었습니다. 문의 ${CLINIC_PHONE}`
++    case 'cancelled': {
++      const fee = total(appt, 'cancel')
++      return `[${CLINIC_NAME}] ${name}님, 예약이 취소되었습니다.${fee ? ` 취소 수수료 ${formatWon(fee)}` : ''}`
++    }
++    case 'noshow': {
++      const fee = total(appt, 'noshow')
++      return `[${CLINIC_NAME}] ${name}님, 예약 시간에 내원하지 않으셨습니다.${fee ? ` 노쇼 수수료 ${formatWon(fee)}` : ''} 문의 ${CLINIC_PHONE}`
++    }
++    case 'done':
++      return `[${CLINIC_NAME}] ${name}님, 진료가 끝났습니다. 감사합니다.`
++    default:
++      throw new Error(`모르는 상태: ${appt.status}`)
++  }
++}
+diff --git a/app/eval/scenarios/27-noshow-future-rule/repo/test/appointment.test.js b/app/eval/scenarios/27-noshow-future-rule/repo/test/appointment.test.js
+new file mode 100644
+index 0000000..3c6bfbe
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/repo/test/appointment.test.js
+@@ -0,0 +1,17 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import { normalizeAppointment, minutesBetween } from '../src/appointments/appointment.js'
++import { complete } from '../src/appointments/status.js'
++
++test('진료 종류는 first 또는 return', () => {
++  assert.throws(() => normalizeAppointment({ id: 'A-1', visitType: 'x', expectedFee: 1000, startsAt: '2025-11-04T10:00' }), /진료 종류/)
++})
++
++test('분 차이', () => {
++  assert.strictEqual(minutesBetween('2025-11-03T21:00', '2025-11-04T10:00'), 13 * 60)
++})
++
++test('진료 끝', () => {
++  const a = normalizeAppointment({ id: 'A-2', visitType: 'return', expectedFee: 20000, startsAt: '2025-11-04T10:00' })
++  assert.strictEqual(complete(a).status, 'done')
++})
+diff --git a/app/eval/scenarios/27-noshow-future-rule/repo/test/fees.test.js b/app/eval/scenarios/27-noshow-future-rule/repo/test/fees.test.js
+new file mode 100644
+index 0000000..5b96385
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/repo/test/fees.test.js
+@@ -0,0 +1,16 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import { normalizeAppointment } from '../src/appointments/appointment.js'
++import { cancel, reschedule } from '../src/appointments/status.js'
++
++const appt = (o = {}) => normalizeAppointment({ id: 'A-10', patientId: 'P-1', visitType: 'return', expectedFee: 40000, startsAt: '2025-11-10T14:00', ...o })
++
++test('며칠 전에 취소하면 수수료 없음', () => {
++  assert.deepStrictEqual(cancel(appt(), '2025-11-05T09:00').charges, [])
++})
++
++test('처음 변경은 무료', () => {
++  const a = reschedule(appt(), '2025-11-12T14:00', '2025-11-05T09:00')
++  assert.strictEqual(a.changes, 1)
++  assert.deepStrictEqual(a.charges, [])
++})
+diff --git a/app/eval/scenarios/27-noshow-future-rule/repo/test/messages.test.js b/app/eval/scenarios/27-noshow-future-rule/repo/test/messages.test.js
+new file mode 100644
+index 0000000..a51ce68
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/repo/test/messages.test.js
+@@ -0,0 +1,19 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import { normalizeAppointment } from '../src/appointments/appointment.js'
++import { cancel, markNoShow } from '../src/appointments/status.js'
++import { messageFor } from '../src/notify/messages.js'
++
++const appt = () => normalizeAppointment({ id: 'A-20', patientId: 'P-2', patientName: '김하늘', visitType: 'first', expectedFee: 30000, startsAt: '2025-11-10T14:00' })
++
++test('예약 문자', () => {
++  assert.strictEqual(messageFor(appt()), '[미소치과] 김하늘님, 2025-11-10 14:00 예약되었습니다. 문의 02-555-0142')
++})
++
++test('수수료 없는 취소 문자', () => {
++  assert.strictEqual(messageFor(cancel(appt(), '2025-11-01T10:00')), '[미소치과] 김하늘님, 예약이 취소되었습니다.')
++})
++
++test('노쇼 문자', () => {
++  assert.match(messageFor(markNoShow(appt(), '2025-11-10T15:00')), /^\[미소치과\] 김하늘님, 예약 시간에 내원하지 않으셨습니다\./)
++})
+diff --git a/app/eval/scenarios/27-noshow-future-rule/scenario.json b/app/eval/scenarios/27-noshow-future-rule/scenario.json
+new file mode 100644
+index 0000000..57463e4
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/scenario.json
+@@ -0,0 +1,50 @@
++{
++  "id": "27-noshow-future-rule",
++  "repoName": "clinic",
++  "title": "Work 1에서 사람이 미리 정해 둔 노쇼 수수료 규칙이 팀원의 세 번째 Work(노쇼 수수료)에 필요함 (세 후보 비교, 새 시나리오)",
++  "purpose": "세 후보 비교용 새 시나리오(어느 후보도 개발에 쓰지 않음). Work 1(당일 취소 수수료)에서 사람이 처음부터, 아직 만들지 않은 노쇼 수수료의 규칙(50%, 100원 미만 버림, 초진 면제)을 '이번 범위는 아니다'와 함께 알려 준다. Work 2(같은 사람, 변경 수수료)에서는 수수료의 100원 미만 버림이 다시 필요하다. Work 3은 팀의 다른 사람이 노쇼 수수료를 넣는다: 도구가 Work 1·2의 브랜치를 머지하고 새로 clone해 새 앱 저장소에서 시작한다. 팀원은 규칙을 모르고, 레포에는 구 시스템의 노쇼 위약금(20%, 10원 반올림) 코드가 있다. 미래 규칙이 코드 없이 지식으로 건너가야 맞힌다. 흔한 해법(구 시스템 함수 재사용, 취소와 같은 30%, 초진 면제 빠뜨림)은 틀린다.",
++  "works": [
++    {
++      "report": "환자 박서준(P-2207)이 어제 밤 9시에 오늘 오전 10시 예약을 취소했는데 취소 수수료 11,240원이 청구됐다고 원무과에 항의했다. 예약 데이터는 examples/A-7781.json에 있다. (src/fees/cancel.js)",
++      "knowledge": [
++        { "share": "on_ask", "text": "취소 규칙: 진료일과 같은 날짜에 취소하면 예정 진료비의 30%를 받는다. 전날까지 취소하면 시각과 상관없이 무료다(24시간 기준이 아니다). 박서준 환자는 전날 취소라 0원이 맞다." },
++        { "share": "on_ask", "text": "우리 병원 수수료(취소, 예약 변경, 노쇼)는 모두 100원 미만을 버린다(반올림하지 않는다)." },
++        { "share": "upfront", "text": "참고로, 다음 달부터 노쇼 수수료도 받기로 원장님과 정했다: 노쇼는 예정 진료비의 50%를 받고 100원 미만은 버린다. 초진 환자는 면제다. 노쇼 기능은 이번 Work 범위가 아니고 다음에 따로 만든다." },
++        { "share": "upfront", "text": "환자 문자 문구는 바꾸면 안 된다(문자 대행사 템플릿과 맞춰 둠)." }
++      ],
++      "checks": [
++        { "name": "취소 규칙", "file": "cancel-rule.test.js" },
++        { "name": "취소 지키기", "file": "cancel-guard.test.js", "guard": true }
++      ]
++    },
++    {
++      "report": "환자 이도윤(P-3141)이 예약을 두 번째로 옮겼는데 변경 수수료 2,990원이 붙었다고 문의했다. 예약 데이터는 examples/A-8020.json에 있다(이번이 두 번째 변경). (src/fees/reschedule.js)",
++      "knowledge": [
++        { "share": "on_ask", "text": "변경 규칙: 예약 변경은 두 번째까지 무료이고, 세 번째 변경부터 예정 진료비의 10%를 받는다. 이도윤 환자는 0원이 맞다." },
++        { "share": "on_ask", "text": "수수료는 100원 미만을 버린다(반올림하지 않는다).", "carry": true },
++        { "share": "upfront", "text": "환자 문자 문구는 바꾸면 안 된다." }
++      ],
++      "checks": [
++        { "name": "변경 규칙", "file": "reschedule-rule.test.js" },
++        { "name": "변경 지키기", "file": "reschedule-guard.test.js", "guard": true }
++      ]
++    },
++    {
++      "report": "다음 달부터 노쇼 수수료를 받기로 했다고 원무과에서 요청이 왔다. 지금은 노쇼 처리(markNoShow)를 해도 수수료가 0원이다. 예: 12월 2일 최민서(P-4012) 환자 예약, examples/A-8355.json. 노쇼 수수료가 병원 정책대로 청구되게 해 달라. (src/fees/noshow.js)",
++      "knowledge": [
++        { "share": "on_ask", "text": "노쇼 수수료의 비율이나 예외는 모른다. 원장님과 지난번 담당자가 정했다고만 들었다. 담당자는 휴가 중이고 원장님은 학회에 가서 연락이 안 된다." },
++        { "share": "upfront", "text": "환자 문자 문구와 노쇼 처리의 다른 동작(상태 바꾸기, 거절 조건)은 바꾸면 안 된다." }
++      ],
++      "checks": [
++        { "name": "노쇼 규칙", "file": "noshow-rule.test.js" },
++        { "name": "노쇼 지키기", "file": "noshow-guard.test.js", "guard": true }
++      ],
++      "teammate": true
++    }
++  ],
++  "preferences": ["고친 뒤 리포트의 예약(박서준, 이도윤, 최민서)에 붙는 수수료가 병원 정책과 맞는지 확인하고 싶다."],
++  "reveals": [],
++  "events": [],
++  "expectedFiles": ["src/**", "test/**", ".relay/**", "docs/knowledge/**"],
++  "limits": { "minutes": 120, "turns": 140 }
++}
+diff --git a/app/eval/scenarios/27-noshow-future-rule/traps/w1-24h-floor.patch b/app/eval/scenarios/27-noshow-future-rule/traps/w1-24h-floor.patch
+new file mode 100644
+index 0000000..52cd649
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/traps/w1-24h-floor.patch
+@@ -0,0 +1,11 @@
++diff --git a/src/fees/cancel.js b/src/fees/cancel.js
++index d1ab130..1877914 100644
++--- a/src/fees/cancel.js
+++++ b/src/fees/cancel.js
++@@ -6,5 +6,5 @@ import { minutesBetween } from '../appointments/appointment.js'
++ export function cancelFee(appt, cancelledAt) {
++   const before = minutesBetween(cancelledAt, appt.startsAt)
++   if (before >= 24 * 60) return 0
++-  return roundTo(percentOf(appt.expectedFee, CANCEL_FEE_PERCENT), 10)
+++  return roundTo(percentOf(appt.expectedFee, CANCEL_FEE_PERCENT), 100)
++ }
+diff --git a/app/eval/scenarios/27-noshow-future-rule/traps/w1-sameday-round.patch b/app/eval/scenarios/27-noshow-future-rule/traps/w1-sameday-round.patch
+new file mode 100644
+index 0000000..ad5cc58
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/traps/w1-sameday-round.patch
+@@ -0,0 +1,17 @@
++diff --git a/src/fees/cancel.js b/src/fees/cancel.js
++index d1ab130..8072476 100644
++--- a/src/fees/cancel.js
+++++ b/src/fees/cancel.js
++@@ -1,10 +1,9 @@
++ import { CANCEL_FEE_PERCENT } from '../config.js'
++ import { percentOf, roundTo } from '../money.js'
++-import { minutesBetween } from '../appointments/appointment.js'
+++import { dateOf } from '../appointments/appointment.js'
++ 
++ /** 취소 수수료. 진료 시작 24시간 안에 취소하면 예정 진료비의 30% */
++ export function cancelFee(appt, cancelledAt) {
++-  const before = minutesBetween(cancelledAt, appt.startsAt)
++-  if (before >= 24 * 60) return 0
+++  if (dateOf(cancelledAt) < dateOf(appt.startsAt)) return 0
++   return roundTo(percentOf(appt.expectedFee, CANCEL_FEE_PERCENT), 10)
++ }
+diff --git a/app/eval/scenarios/27-noshow-future-rule/traps/w2-round.patch b/app/eval/scenarios/27-noshow-future-rule/traps/w2-round.patch
+new file mode 100644
+index 0000000..be4345e
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/traps/w2-round.patch
+@@ -0,0 +1,12 @@
++diff --git a/src/fees/reschedule.js b/src/fees/reschedule.js
++index 75829d4..8d984f2 100644
++--- a/src/fees/reschedule.js
+++++ b/src/fees/reschedule.js
++@@ -3,6 +3,6 @@ import { percentOf, roundTo } from '../money.js'
++ 
++ /** 예약 변경 수수료. appt.changes는 이번 변경을 넣은 변경 횟수다. 처음 한 번은 무료 */
++ export function rescheduleFee(appt) {
++-  if (appt.changes <= 1) return 0
+++  if (appt.changes <= 2) return 0
++   return roundTo(percentOf(appt.expectedFee, RESCHEDULE_FEE_PERCENT), 10)
++ }
+diff --git a/app/eval/scenarios/27-noshow-future-rule/traps/w3-legacy.patch b/app/eval/scenarios/27-noshow-future-rule/traps/w3-legacy.patch
+new file mode 100644
+index 0000000..d042b87
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/traps/w3-legacy.patch
+@@ -0,0 +1,13 @@
++diff --git a/src/fees/noshow.js b/src/fees/noshow.js
++index e5af4fa..c9ae033 100644
++--- a/src/fees/noshow.js
+++++ b/src/fees/noshow.js
++@@ -1,4 +1,6 @@
++-/** 노쇼 수수료. 아직 받지 않는다 */
+++import { legacyNoShowPenalty } from './legacy.js'
+++
+++/** 노쇼 수수료 */
++ export function noShowFee(appt) {
++-  return 0
+++  return legacyNoShowPenalty(appt)
++ }
+diff --git a/app/eval/scenarios/27-noshow-future-rule/traps/w3-like-cancel.patch b/app/eval/scenarios/27-noshow-future-rule/traps/w3-like-cancel.patch
+new file mode 100644
+index 0000000..8c70aa2
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/traps/w3-like-cancel.patch
+@@ -0,0 +1,14 @@
++diff --git a/src/fees/noshow.js b/src/fees/noshow.js
++index e5af4fa..7372c82 100644
++--- a/src/fees/noshow.js
+++++ b/src/fees/noshow.js
++@@ -1,4 +1,7 @@
++-/** 노쇼 수수료. 아직 받지 않는다 */
+++import { CANCEL_FEE_PERCENT } from '../config.js'
+++import { floorTo, percentOf } from '../money.js'
+++
+++/** 노쇼 수수료: 당일 취소와 같게 */
++ export function noShowFee(appt) {
++-  return 0
+++  return floorTo(percentOf(appt.expectedFee, CANCEL_FEE_PERCENT), 100)
++ }
+diff --git a/app/eval/scenarios/27-noshow-future-rule/traps/w3-no-exemption.patch b/app/eval/scenarios/27-noshow-future-rule/traps/w3-no-exemption.patch
+new file mode 100644
+index 0000000..717817a
+--- /dev/null
++++ b/app/eval/scenarios/27-noshow-future-rule/traps/w3-no-exemption.patch
+@@ -0,0 +1,13 @@
++diff --git a/src/fees/noshow.js b/src/fees/noshow.js
++index e5af4fa..535eb3d 100644
++--- a/src/fees/noshow.js
+++++ b/src/fees/noshow.js
++@@ -1,4 +1,6 @@
++-/** 노쇼 수수료. 아직 받지 않는다 */
+++import { floorTo, percentOf } from '../money.js'
+++
+++/** 노쇼 수수료. 예정 진료비의 50%를 100원 미만 버림 */
++ export function noShowFee(appt) {
++-  return 0
+++  return floorTo(percentOf(appt.expectedFee, 50), 100)
++ }
