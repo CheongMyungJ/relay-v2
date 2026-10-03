@@ -1,0 +1,132 @@
+{
+  "scenario": "21-invoice-credit",
+  "kind": "relay-off",
+  "index": 1,
+  "ending": "harness_error",
+  "summary": "",
+  "error": "page.evaluate: Target page, context or browser has been closed\npage.evaluate: Target page, context or browser has been closed\n    at RelayArm.poll (/home/user/relay-v2/app/eval/lib/relay-arm.mjs:278:30)\n    at runEpisode (/home/user/relay-v2/app/eval/lib/episode.mjs:385:36)\n    at async worker (/home/user/relay-v2/app/eval/run.mjs:245:9)\n    at async main (/home/user/relay-v2/app/eval/run.mjs:262:5)",
+  "wallMs": 67082,
+  "firstChangeMs": null,
+  "outcome": {
+    "success": false,
+    "checks": [
+      {
+        "name": "줄별 버림",
+        "guard": false,
+        "pass": false
+      },
+      {
+        "name": "할인 순서",
+        "guard": false,
+        "pass": false
+      },
+      {
+        "name": "서식 그대로",
+        "guard": true,
+        "pass": false
+      }
+    ],
+    "repoTestsPass": false,
+    "filesChanged": [],
+    "linesChanged": 0,
+    "unrelated": [],
+    "committed": false,
+    "trees": []
+  },
+  "human": {
+    "turns": 1,
+    "actions": {
+      "click": 1
+    },
+    "actionsTotal": 1,
+    "charsTyped": 0,
+    "invalidActions": 0,
+    "refusedDone": 0,
+    "frictionMean": 0,
+    "frictionHigh": 0,
+    "costUsd": 0.026708,
+    "calls": 1,
+    "ms": 3781,
+    "waitOnlyTurns": 0,
+    "images": 1
+  },
+  "setupDialogs": [],
+  "agent": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "messages": 0,
+    "sessions": 0
+  },
+  "agentSteps": [],
+  "works": [],
+  "workResults": [
+    {
+      "work": 1,
+      "ending": "harness_error",
+      "summary": "",
+      "wallMs": 58693,
+      "survey": null,
+      "human": {
+        "turns": 1,
+        "actionsTotal": 1,
+        "charsTyped": 0,
+        "inspectDiff": 0,
+        "invalidActions": 0,
+        "refusedDone": 0,
+        "frictionMean": 0,
+        "frictionHigh": 0,
+        "ms": 3781,
+        "told": [],
+        "carriedTold": 0,
+        "carriedTotal": 0,
+        "toldAudit": [],
+        "carriedToldAudit": 0,
+        "auditCostUsd": 0
+      },
+      "outcome": {
+        "success": false,
+        "checks": [
+          {
+            "name": "줄별 버림",
+            "guard": false,
+            "pass": false
+          },
+          {
+            "name": "할인 순서",
+            "guard": false,
+            "pass": false
+          },
+          {
+            "name": "서식 그대로",
+            "guard": true,
+            "pass": false
+          }
+        ],
+        "trees": []
+      },
+      "agent": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "messages": 0,
+        "sessions": 0,
+        "questions": 0
+      },
+      "contextChars": null,
+      "knowledgeChars": null
+    }
+  ],
+  "handoffs": [],
+  "survey": null,
+  "options": {
+    "agentModel": "sonnet",
+    "effort": "medium",
+    "humanModel": "sonnet",
+    "cliArgs": [
+      "--dangerously-skip-permissions"
+    ]
+  }
+}
