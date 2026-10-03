@@ -13,7 +13,8 @@
 
 - 평가 도구: 후보3 브랜치(`exp/knowledge-auto`)의 하네스. 빌드마다 쪽을 두고(`--app`), 팀원 교대는 앞 사람의 브랜치를 main에 머지한 뒤 새 clone과 새 앱 저장소에서 시작한다(다른 사람의 컴퓨터). 이 폴더의 `harness.patch`를 그 브랜치에 적용하면 아래가 더해진다.
 - 보정 하나: M17 계열(c2)은 [완료만]으로 끝낸 Work의 팀 지식을 앱 저장소의 공유 대기에 두고 다음 [PR 생성]에 싣는다(D308). 다른 쪽은 Work 브랜치에 지식을 커밋하므로 브랜치 머지로 건너간다. 팀원 교대를 "PR 머지"로 모사하는 이 도구에서 같은 조건을 주려고, 교대 때 앞 사람의 공유 대기를 지식 폴더에 커밋해 함께 머지한다(`lib/repo.mjs`의 `sharePending`). 공유 대기가 없는 쪽에는 아무 일도 하지 않는다.
-- 사람 역할 설명서: 화면 조작만 적는다. c2는 Work 완료 화면의 [지식] 탭과 지식 화면을 덧붙였다(`guides/c2.md`). c1·c3는 base와 같다.
+- 사람 역할 설명서: 화면 조작만 적는다. c2는 후보3 실험이 M17에 쓴 봉인 안의 설명서(`guides/m17.md`, [지식] 탭과 지식 화면 한 줄)를 그대로 쓴다. c1·c3는 base와 같다.
+- hold-out의 `expectedFiles`에 `.relay/**`, `docs/knowledge/**`를 더했다. 지식을 Work 브랜치에 커밋하는 c1·c3만 범위 밖 파일로 세지지 않게 하려는 것이다(c2는 [완료만]이면 브랜치에 지식을 커밋하지 않는다). 숨긴 시험과 다른 내용은 바꾸지 않았다. 풀린 hold-out 시나리오와 열쇠는 커밋하지 않는다.
 - 모델: 에이전트 sonnet·medium, 사람 역할 sonnet, 판정 sonnet(하네스 기본값).
 
 ## 시나리오
@@ -35,7 +36,8 @@ cd app && bash eval/setup.sh
 for spec in base:0247049 c1:origin/experiment/knowledge-autonomy-evaluated c2:origin/ccr-26ecb453-qntcb2 c3:origin/exp/knowledge-auto; do
   bash eval/ref-app.sh ${spec%%:*} $(git rev-parse ${spec#*:}) /home/user/kc-ref
 done
-bash <이 폴더>/launch.sh 26,27 2 new-26-27 3
+HOLDOUT_KEY=<열쇠> bash eval/unseal.sh && cp eval/guides/m17.md eval/guides/c2.md
+bash <이 폴더>/launch.sh 26,27,h1-parcel-fees,h2-stay-fees 2 all4 3
 ```
 
 결과는 `results/`와 `report.md`에 둔다.
