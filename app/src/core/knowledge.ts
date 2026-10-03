@@ -634,6 +634,10 @@ const ADMITS_IN_CODE = /이미 있|약한 후보|참고용|재사용용|안내�
 const POINTS_TO_FILE = /package\.json|readme|makefile|스크립트/i
 /** 가리킨 곳에 없다고 말함("package.json에 없음") */
 const NOT_IN_FILE = /(?:package\.json|readme|makefile|스크립트)[^.,;]*?(?:없|안 나|않)/i
+/** 코드불가 칸의 "읽어야/따라가야/비교해야 안다": 코드를 읽으면 안다는 말이다 */
+const READ_CODE = /(?:읽어|따라가|추적해|비교해|이어)야/
+/** 그래도 코드 밖의 것: 요청, 사람, 운영, 문서, 범위, 의도 */
+const NOT_FROM_CODE = /요청|사람|운영|문서|정하|정해|범위|의도/
 /** 그래도 코드로 알 수 없는 까닭: 실행 환경, 실패 사실, 적힌 것과 다름 */
 const NOT_FROM_FILE = /환경|버전|실패|잘못|틀|다르|다른 이름/
 
@@ -653,8 +657,98 @@ export function inCodeReason(c: {
     return '시험 명령만 말하는 레시피'
   }
   if (ADMITS_IN_CODE.test(nic)) return '코드불가 칸이 코드에 있다고 적음'
+  // 구조와 레시피의 코드불가 칸이 "코드를 읽어야 안다"고 적으면 코드를 읽어 알 수 있는 것이다 (D336, 지식 탐색 K33)
+  if (
+    (c.kind === 'structure' || c.kind === 'recipe') &&
+    READ_CODE.test(nic) &&
+    !NOT_FROM_CODE.test(nic)
+  ) {
+    return '코드불가 칸이 코드를 읽으면 안다고 적음'
+  }
   const file = POINTS_TO_FILE.exec(nic)
   if (file && !NOT_IN_FILE.test(nic)) return `코드불가 칸이 ${file[0]}를 가리킴`
+  return null
+}
+
+// ---------- 이번 Work와 이번 버그에 묶인 후보 (D336, 지식 탐색 K31, K32) ----------
+
+/** 규칙 글의 파일 경로 */
+const CODE_PATH =
+  /(?:[\w.-]+\/)*[\w-][\w.-]*\.(?:m?[jt]sx?|cjs|json|py|go|rb|java|kt|rs|css|html|ya?ml|sql)(?![\w])/g
+/** 규칙 글의 코드 이름: camelCase, 두 마디 이상의 PascalCase, snake_case와 UPPER_SNAKE, 부르는 이름(`won(`) */
+const CODE_NAMES = [
+  /\b[a-z][a-z0-9]*(?:[A-Z][a-z0-9]*)+\b/g,
+  /\b[A-Z][a-z0-9]+(?:[A-Z][a-z0-9]*)+\b/g,
+  /\b[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]+\b/g,
+  /\b[A-Za-z_$][\w$]{2,}(?=\()/g,
+]
+
+/**
+ * 규칙 글의 코드 이름과 파일 경로. 경로 칸은 보지 않는다: 새 파일에 둔 설계 규칙("공유 저장소에 원자적으로 둔다")은 글이
+ * 새 코드를 말하지 않으면 남긴다
+ */
+export function codeRefs(rule: string): { names: string[]; paths: string[] } {
+  const paths = new Set<string>()
+  const rest = rule.replace(CODE_PATH, (m) => {
+    paths.add(normalizePath(m))
+    return ' '
+  })
+  const names = new Set<string>()
+  for (const re of CODE_NAMES) for (const m of rest.matchAll(re)) names.add(m[0])
+  return { names: [...names], paths: [...paths] }
+}
+
+/** 이번 Work가 만든 코드에 기댈 수 있는 후보: 에이전트가 적은 구조와 레시피 */
+const FRESH_KINDS: readonly (KnowledgeKind | null)[] = ['structure', 'recipe']
+
+/** 기준 커밋과 견줄 코드 이름과 경로 (main이 git으로 본다). 사람이 정한 후보도 넣는다(가리는 것은 reviewKnowledge) */
+export function candidateCodeRefs(tasks: readonly CandidateTask[]): {
+  names: string[]
+  paths: string[]
+} {
+  const names = new Set<string>()
+  const paths = new Set<string>()
+  for (const t of tasks) {
+    if (!t.header) continue
+    for (const c of handoffV2(t.header, t.version)?.knowledge_candidates ?? []) {
+      if (!FRESH_KINDS.includes(c.kind) || c.supersedes) continue
+      const r = codeRefs(c.rule)
+      for (const n of r.names) names.add(n)
+      for (const p of r.paths) paths.add(p)
+    }
+  }
+  return { names: [...names], paths: [...paths] }
+}
+
+/**
+ * 이번 Work가 만든 코드에 기대는 후보면 그 까닭 (D336, 지식 탐색 K31): 규칙 글의 코드 이름·파일이 기준 커밋에 없고
+ * 지금 코드에 있다. Work가 머지되면 코드를 읽어 알 수 있고, 머지되지 않으면 틀린 지식이 된다
+ */
+export function freshCodeReason(
+  c: { kind: KnowledgeKind | null; rule: string },
+  fresh: ReadonlySet<string>,
+): string | null {
+  if (!FRESH_KINDS.includes(c.kind) || fresh.size === 0) return null
+  const r = codeRefs(c.rule)
+  const hit = [...r.names, ...r.paths].filter((x) => fresh.has(x))
+  return hit.length > 0 ? hit.slice(0, 2).join(', ') : null
+}
+
+/** 이번 버그의 재현 자료: 예시 파일, 주문·청구서 번호(O-2042, INV-2031), 기준 커밋, 새 시험 개수 */
+const THIS_BUG = [
+  /examples?\/[\w./-]+/,
+  /\b(?!UTF-|ISO-|SHA-|RFC-|ES-)[A-Z]{1,4}-\d+\b/,
+  /기준 커밋/,
+  /새 (?:테스트|시험) \d+\s*(?:개|건)|(?:테스트|시험) \d+\s*(?:개|건)이 실패/,
+]
+
+/** 이번 버그에 묶인 레시피면 그 까닭 (D336, 지식 탐색 K32). 다음 Work에는 그 예시도 그 커밋도 없다 */
+export function thisBugReason(c: { kind: KnowledgeKind | null; rule: string }): string | null {
+  if (c.kind !== 'recipe') return null
+  for (const re of THIS_BUG) {
+    const m = re.exec(c.rule)
+    if (m) return `"${m[0]}"`
+  }
   return null
 }
 
@@ -702,6 +796,8 @@ export interface ReviewInput {
   offerPending: boolean
   /** Work의 요청 글. 요청에 사람이 적은 규칙을 알아본다 (D333) */
   request?: string
+  /** 기준 커밋에 없고 지금 코드에 있는 코드 이름과 경로 (candidateCodeRefs 가운데, D336) */
+  fresh?: ReadonlySet<string>
 }
 
 /** 기존 항목의 화면 모양 */
@@ -839,6 +935,7 @@ export function reviewKnowledge(input: ReviewInput): KnowledgeReview {
     ),
   )
   const requestWords = ruleWords(input.request ?? '')
+  const fresh = input.fresh ?? new Set<string>()
   // 결정마다 처음 올린 후보의 key. 같은 결정의 뒤 후보는 그 key를 가리키고 채택 안 함이 기본이다 (D324)
   const first = new Map<string, string>()
   for (const t of input.tasks) {
@@ -876,6 +973,8 @@ export function reviewKnowledge(input: ReviewInput): KnowledgeReview {
         inCode: human || c.supersedes ? null : inCodeReason(c),
         sameAs: null,
         workScoped: c.supersedes ? null : workScopedReason(c.rule),
+        freshCode: human || c.supersedes ? null : freshCodeReason(c, fresh),
+        thisBug: human || c.supersedes ? null : thisBugReason(c),
         supersedes: target ? refView(target) : null,
         unknownSupersedes: c.supersedes && !target ? c.supersedes : null,
         feedback: [],
@@ -897,10 +996,13 @@ export function reviewKnowledge(input: ReviewInput): KnowledgeReview {
     const fixed = c.by === 'human' || c.supersedes !== null || c.unknownSupersedes !== null
     const prev = fixed
       ? undefined
-      : // 코드로 알 수 있다고 본 후보(K22)는 앞 후보가 되지 않는다: 뒤의 쓸모 있는 후보까지 채택 안 함이 되지 않게
+      : // 코드로 알 수 있다고 본 후보(K22)와 이번 Work·버그에 묶인 후보(D336)는 앞 후보가 되지 않는다: 뒤의 쓸모 있는
+        // 후보까지 채택 안 함이 되지 않게
         roots.find(
           (p) =>
             !p.inCode &&
+            !p.freshCode &&
+            !p.thisBug &&
             ((p.taskId !== c.taskId && similarCandidates(p, c)) ||
               // 같은 규칙을 다른 종류(도메인 규칙과 제약)나 같은 task에서 두 번 적은 것 (지식 탐색 K7)
               // 같은 종류면 갈래도 같아야 한다(외부 호환과 아닌 제약은 넣는 단계가 다르다, D326)
@@ -945,6 +1047,8 @@ export function reviewKnowledge(input: ReviewInput): KnowledgeReview {
         inCode: null,
         sameAs: null,
         workScoped: workScopedReason(d.what),
+        freshCode: null,
+        thisBug: null,
         supersedes: null,
         unknownSupersedes: null,
         feedback: [],

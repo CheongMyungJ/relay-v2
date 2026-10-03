@@ -150,7 +150,7 @@ Candidates (`knowledge_candidates`). Aim for about 3 per task. Only what the nex
 - A candidate refined from a human decision: copy that decision's `what` into `decision` verbatim.
 - A lasting rule the human told you is `domain`, even when it forbids a fix ("do not retry") or reads like a decision: `decision` and a `constraint` without `compat` do not reach intake.
 - A candidate that corrects a `참고 지식` item: put that item's id in `supersedes`.
-- Not knowledge: facts of this incident (who reported, when), hypotheses that only mattered in this Work, progress, this Work's scope or non-goals ("이번에는 고치지 않음"). Only rules that last beyond this Work. Not a `recipe`: what `package.json` scripts, a Makefile or the README already say (e.g. "tests run with `npm test`").
+- Not knowledge: facts of this incident (who reported, when), hypotheses that only mattered in this Work, progress, this Work's scope or non-goals ("이번에는 고치지 않음"), this bug's reproduction data (example files, order or invoice numbers, "revert to the base commit and N new tests fail"), and where the code you just wrote lives (the next agent reads it). Only rules that last beyond this Work. Not a `recipe`: what `package.json` scripts, a Makefile or the README already say (e.g. "tests run with `npm test`").
 - Write values in Korean, like the other handoff values.
 - If you came in by a rewind or the previous step recommended going back (context.md), consider a `failure` candidate for why.
 

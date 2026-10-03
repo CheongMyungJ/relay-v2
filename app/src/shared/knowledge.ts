@@ -173,6 +173,10 @@ export interface KnowledgeCandidateView {
    * 기본이다
    */
   workScoped: string | null
+  /** 이번 Work가 만든 코드(기준 커밋에 없는 이름·파일)에 기대는 구조·레시피의 그 이름 (D336). 채택 안 함이 기본 */
+  freshCode: string | null
+  /** 이번 버그의 예시·번호·기준 커밋에 묶인 레시피의 그 말 (D336). 채택 안 함이 기본 */
+  thisBug: string | null
   /** 대체할 항목 (D299, D313). 모르는 id면 null이고 unknownSupersedes에 남긴다 */
   supersedes: KnowledgeRefView | null
   unknownSupersedes: string | null
@@ -337,7 +341,14 @@ export function defaultCandidateChoice(c: KnowledgeCandidateView, share: boolean
   const replace = c.supersedes && c.supersedes.carriedPr === null ? c.supersedes.id : null
   return {
     adopt:
-      !c.unrefined && !c.sameDecisionAs && !c.similarTo && !c.inCode && !c.sameAs && !c.workScoped,
+      !c.unrefined &&
+      !c.sameDecisionAs &&
+      !c.similarTo &&
+      !c.inCode &&
+      !c.sameAs &&
+      !c.workScoped &&
+      !c.freshCode &&
+      !c.thisBug,
     share: share ? 'team' : 'mine',
     replace,
   }

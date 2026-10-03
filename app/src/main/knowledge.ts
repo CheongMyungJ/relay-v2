@@ -3,6 +3,7 @@
 // 판정은 core/knowledge가, 파일과 git은 adapters/knowledge와 adapters/git이 한다. 앱 저장소의 쓰기는 같은 프로젝트의 Work끼리
 // 한 줄로 한다(lock).
 import { randomBytes } from 'node:crypto'
+import fsp from 'node:fs/promises'
 import path from 'node:path'
 import {
   changedPaths,
@@ -10,7 +11,9 @@ import {
   commitPaths,
   fetchBranch,
   headCommit,
+  namesIn,
   pathHashes,
+  pathsAt,
   pathsDirty,
   refCommit,
   showFiles,
@@ -26,6 +29,7 @@ import {
 import { readText } from '../adapters/store'
 import { projectKnowledgeDir, projectKnowledgeShare } from '../core/config'
 import {
+  candidateCodeRefs,
   duplicateOf,
   entryPath,
   entryPaths,
@@ -268,8 +272,39 @@ export class WorkKnowledge {
       dir: this.dir(),
       offerPending: this.share(),
       ...(request !== undefined ? { request } : {}),
+      fresh: await this.fresh(tasks),
     })
     return { review, pool }
+  }
+
+  /**
+   * 후보의 코드 이름과 경로 가운데 기준 커밋에 없고 지금 작업 트리에 있는 것 (D336): 이번 Work가 만든 코드다. 지금도 없는
+   * 이름(설명 낱말이나 내장 함수)은 넣지 않는다. 읽지 못하면 비운다(가리지 않음)
+   */
+  private async fresh(tasks: readonly CandidateTask[]): Promise<Set<string>> {
+    const refs = candidateCodeRefs(tasks)
+    if (refs.names.length === 0 && refs.paths.length === 0) return new Set()
+    try {
+      const base = this.o.work().base_commit
+      const [then, now, pathsThen] = await Promise.all([
+        namesIn(this.o.worktree, base, refs.names, this.git),
+        namesIn(this.o.worktree, null, refs.names, this.git),
+        pathsAt(this.o.worktree, base, refs.paths, this.git),
+      ])
+      const out = new Set(refs.names.filter((n) => now.has(n) && !then.has(n)))
+      for (const p of refs.paths) {
+        if (pathsThen.has(p)) continue
+        const here = await fsp
+          .access(path.join(this.o.worktree, p))
+          .then(() => true)
+          .catch(() => false)
+        if (here) out.add(p)
+      }
+      return out
+    } catch (e) {
+      this.o.problem(`이번 Work가 만든 코드를 가리지 못함: ${message(e)}`)
+      return new Set()
+    }
   }
 
   /** 채택 결과 (I73) */

@@ -244,6 +244,57 @@ describe('[흐름] 지식 관리 (M17)', () => {
     expect(same[0]).toContain('id: domain-0000000f')
   })
 
+  it('이번 Work가 만든 코드에 기대는 후보는 기준 커밋과 견줘 채택 안 함이 기본이다 (D336, 지식 탐색 K31)', async () => {
+    const structure = (rule: string): KnowledgeCandidateField => ({
+      ...RECIPE,
+      kind: 'structure',
+      rule,
+      paths: ['src/avg.js', 'test/avg.test.js'],
+      not_in_code: '빈 배열 처리가 왜 따로 있는지는 코드에 없음',
+    })
+    const s = await setup(
+      scenario({
+        fix: fixSteps({
+          knowledge_candidates: [
+            structure('빈 배열 처리는 emptyAverage(src/empty.js)가 맡는다'),
+            structure('평균은 avg()가 계산하고 모든 화면이 그것을 쓴다'),
+            { ...RECIPE, rule: '빈 배열 재현은 test/empty.test.js를 node --test로 돌린다' },
+          ],
+        }).map((st) =>
+          st.do === 'write' && st.file === 'fix.md'
+            ? {
+                ...st,
+                text: st.text.replace(
+                  '## 변경 요약\n',
+                  '## 변경 요약\n- src/empty.js — 빈 배열의 값\n- test/empty.test.js — 빈 배열 시험\n',
+                ),
+              }
+            : st.do === 'commit'
+              ? {
+                  ...st,
+                  files: {
+                    ...st.files,
+                    'src/empty.js': 'export function emptyAverage() {\n  return 0\n}\n',
+                    'test/empty.test.js': "import { test } from 'node:test'\n",
+                  },
+                }
+              : st,
+        ),
+      }),
+    )
+    const key = await s.create()
+    const review = await toCompletion(s, key)
+    expect(
+      review.completion?.knowledge?.candidates
+        .filter((c) => c.node === 'fix')
+        .map((c) => [c.freshCode, c.thisBug]),
+    ).toEqual([
+      ['emptyAverage, src/empty.js', null],
+      [null, null],
+      ['test/empty.test.js', null],
+    ])
+  })
+
   it('되감기로 폐기한 task의 후보는 완료 화면에 없다 (D283, 5.4)', async () => {
     const base = scenario()
     const s = await setup({

@@ -18,6 +18,9 @@ import {
   editedCandidate,
   entryPath,
   inCodeReason,
+  candidateCodeRefs,
+  codeRefs,
+  thisBugReason,
   isEntryFile,
   isKnowledgeCommit,
   isStale,
@@ -725,7 +728,7 @@ describe('후보 모으기 (D283, D296, D299, D304, D318)', () => {
               rule: '빈 배열과 할인 합계를 npm test로 재현한다',
               paths: ['src/invoice'],
             },
-            { ...recipe, rule: 'INV-2031로 본다' },
+            { ...recipe, rule: '청구서 예시로 본다' },
             // 같은 task의 비슷한 후보끼리는 묶지 않는다
             { ...recipe, rule: 'npm test를 두 번 돌려 합계 경계 실패를 재현한다' },
           ],
@@ -1213,6 +1216,89 @@ describe('후보 모으기 (D283, D296, D299, D304, D318)', () => {
     ])
   })
 
+  it('이번 Work가 만든 코드에 기대는 구조·레시피와 이번 버그에 묶인 레시피는 채택 안 함이 기본이다 (D336, 지식 탐색 K31, K32)', () => {
+    expect(
+      codeRefs('청구서와 반품 전표는 `lineVatSum`(src/total.js)과 VAT_RATE, won()을 쓴다'),
+    ).toEqual({
+      names: ['lineVatSum', 'VAT_RATE', 'won'],
+      paths: ['src/total.js'],
+    })
+    const tasks: CandidateTask[] = [
+      {
+        taskId: 't-02',
+        node: 'fix',
+        version: 2,
+        header: header({
+          decisions: [{ what: '부가세는 sumVat로 모은다', why: '팀 규칙', by: 'human' }],
+          knowledge_candidates: [
+            {
+              ...CANDIDATE,
+              kind: 'structure',
+              rule: '청구서와 반품 전표의 부가세는 sumVat 하나로 계산한다',
+            },
+            { ...CANDIDATE, kind: 'structure', rule: '반품 전표는 creditTotals가 따로 계산한다' },
+            {
+              ...CANDIDATE,
+              kind: 'recipe',
+              rule: '할부 재현은 examples/O-2042.json으로 sendToPg를 부른다',
+            },
+            {
+              ...CANDIDATE,
+              kind: 'recipe',
+              rule: '기준 커밋의 src로 되돌려 새 테스트 3개가 실패하는지 본다',
+            },
+            {
+              ...CANDIDATE,
+              kind: 'recipe',
+              rule: '시간대 버그는 TZ=Asia/Seoul npm test로 재현한다',
+            },
+            // 도메인 규칙과 사람이 정한 후보는 새 이름을 말해도 남긴다
+            { ...CANDIDATE, kind: 'domain', rule: '부가세는 sumVat처럼 줄마다 버림으로 모은다' },
+            {
+              ...CANDIDATE,
+              kind: 'structure',
+              rule: '부가세는 sumVat로 모은다',
+              decision: '부가세는 sumVat로 모은다',
+            },
+          ],
+        }),
+      },
+    ]
+    expect(candidateCodeRefs(tasks).names).toEqual(['sumVat', 'creditTotals', 'sendToPg'])
+    const r = reviewKnowledge({
+      tasks,
+      pool: [],
+      changed: [],
+      share: true,
+      dir: 'd/',
+      offerPending: true,
+      fresh: new Set(['sumVat']),
+    })
+    expect(r.candidates.map((c) => [c.freshCode, c.thisBug])).toEqual([
+      ['sumVat', null],
+      [null, null],
+      [null, '"examples/O-2042.json"'],
+      [null, '"기준 커밋"'],
+      [null, null],
+      [null, null],
+      [null, null],
+    ])
+    expect(r.candidates.map((c) => candidateChoice(c, undefined, true).adopt)).toEqual([
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+    ])
+    expect(
+      thisBugReason({ kind: 'recipe', rule: '반품 전표 CN-0112의 환불 합계는 19,180원' }),
+    ).toBe('"CN-0112"')
+    expect(thisBugReason({ kind: 'recipe', rule: '파일은 UTF-8로 읽는다' })).toBeNull()
+    expect(thisBugReason({ kind: 'structure', rule: 'examples/는 시험 자료다' })).toBeNull()
+  })
+
   it('verify와 PR 대응의 사람 결정은 다듬지 않은 결정으로 올리지 않고, 그 단계의 후보는 올린다 (D331, 지식 탐색 K8)', () => {
     const review = { what: '리뷰 지적 2건은 반영하지 않는다', why: '사소함', by: 'human' as const }
     const r = reviewKnowledge({
@@ -1310,6 +1396,34 @@ describe('후보 모으기 (D283, D296, D299, D304, D318)', () => {
         ),
       ),
     ).toBeNull()
+    // 구조와 레시피의 코드불가 칸이 "코드를 읽어야 안다"고 적으면 코드로 알 수 있다 (D336, 지식 탐색 K33)
+    const structure = (nic: string) => ({
+      kind: 'structure' as const,
+      rule: 'a는 b를 쓴다',
+      not_in_code: nic,
+    })
+    for (const nic of [
+      '두 모듈을 함께 읽어야 보인다',
+      '코드를 따라가야 알 수 있음',
+      '세 모듈을 비교해야 보임',
+      '두 모듈의 관계를 코드만 보고 추적해야 함',
+    ]) {
+      expect(inCodeReason(structure(nic))).toBe('코드불가 칸이 코드를 읽으면 안다고 적음')
+    }
+    for (const nic of [
+      '운영 배치(서버 두 대)는 코드에 없음',
+      '두 함수의 규칙이 같아야 하는지는 코드에 드러나지 않는다',
+      '요청을 읽어야 안다',
+    ]) {
+      expect(inCodeReason(structure(nic))).toBeNull()
+    }
+    expect(
+      inCodeReason({
+        kind: 'domain',
+        rule: '부가세는 버림',
+        not_in_code: '두 모듈을 함께 읽어야 보인다',
+      }),
+    ).toBeNull()
     expect(
       inCodeReason(
         recipe(
@@ -1387,7 +1501,7 @@ describe('후보 모으기 (D283, D296, D299, D304, D318)', () => {
               {
                 ...CANDIDATE,
                 kind: 'recipe',
-                rule: '기준 커밋으로 되돌려 npm test를 돌리면 쉼표 시험이 실패한다',
+                rule: '쉼표가 든 값으로 npm test를 돌리면 구분자 시험이 실패한다',
                 paths: ['package.json'],
                 terms: ['npm test', '재현'],
               },

@@ -693,3 +693,57 @@ export async function deleteRemoteBranch(
     timeoutMs: opts?.timeoutMs ?? 300_000,
   })
 }
+
+/**
+ * 이름들 가운데 파일 내용에 낱말로 나오는 것 (`git grep -F -w -o`). commit이 null이면 작업 트리(무시하지 않은 추적 안 된
+ * 파일 포함)를 본다. 이번 Work가 만든 코드 이름을 가린다 (D336)
+ */
+export async function namesIn(
+  dir: string,
+  commit: string | null,
+  names: readonly string[],
+  opts?: GitOptions,
+): Promise<Set<string>> {
+  if (names.length === 0) return new Set()
+  const r = await run(
+    'git',
+    [
+      ...BASE_ARGS,
+      'grep',
+      '-F',
+      '-w',
+      '-o',
+      '-h',
+      '-I',
+      ...(commit ? [] : ['--untracked']),
+      ...names.flatMap((n) => ['-e', n]),
+      ...(commit ? [commit] : []),
+      '--',
+    ],
+    { cwd: dir, env: gitEnv(opts?.env), timeoutMs: opts?.timeoutMs ?? 60_000 },
+  )
+  // 1은 찾은 것이 없음
+  if (r.code === 1) return new Set()
+  if (r.code !== 0) throw new GitError(`git grep 실패: ${describeFailure(r)}`)
+  return new Set(lines(r.stdout))
+}
+
+/** 경로들 가운데 커밋에 있는 것 (파일이나 디렉터리) */
+export async function pathsAt(
+  dir: string,
+  commit: string,
+  paths: readonly string[],
+  opts?: GitOptions,
+): Promise<Set<string>> {
+  const keys = [...new Set(paths.map(relPath).filter(Boolean))]
+  if (keys.length === 0) return new Set()
+  const r = await run('git', [...BASE_ARGS, 'cat-file', '--batch-check'], {
+    cwd: dir,
+    env: gitEnv(opts?.env),
+    timeoutMs: opts?.timeoutMs ?? 60_000,
+    input: keys.map((k) => `${commit}:${k}\n`).join(''),
+  })
+  if (r.code !== 0) throw new GitError(`git cat-file 실패: ${describeFailure(r)}`)
+  const types = r.stdout.split('\n')
+  return new Set(keys.filter((_, i) => !/ missing$/.test(types[i] ?? ' missing')))
+}

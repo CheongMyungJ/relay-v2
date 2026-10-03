@@ -214,6 +214,8 @@ function CandidateRow({
         {c.inCode ? `코드에 있다고 봄(${c.inCode}) · ` : ''}
         {c.sameAs ? `기존 항목과 같은 규칙(${c.sameAs.id}) · ` : ''}
         {c.workScoped ? `이번 Work의 범위로 보임(${c.workScoped}) · ` : ''}
+        {c.freshCode ? `이번 Work가 만든 코드에 기댐(${c.freshCode}) · ` : ''}
+        {c.thisBug ? `이번 버그에 묶임(${c.thisBug}) · ` : ''}
         {c.taskId} · {c.by === 'human' ? '사람이 정함' : 'AI'}
         {e.paths.length ? ` · 경로: ${e.paths.join(', ')}` : ''}
         {e.terms.length ? ` · 용어: ${e.terms.join(', ')}` : ''}
