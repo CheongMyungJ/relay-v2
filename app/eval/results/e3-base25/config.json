@@ -1,0 +1,29 @@
+{
+  "startedAt": "2026-10-03T02:06:06.823Z",
+  "commit": "aa3cc4b",
+  "appCommits": {
+    "base": "0247049"
+  },
+  "claudeVersion": "2.1.288 (Claude Code)",
+  "scenarios": [
+    "25-invoice-quote-teammate"
+  ],
+  "runs": 5,
+  "arms": [
+    "base"
+  ],
+  "agentModel": "sonnet",
+  "effort": "medium",
+  "humanModel": "sonnet",
+  "humanEffort": "medium",
+  "judgeModel": "sonnet",
+  "cliArgs": [
+    "--dangerously-skip-permissions"
+  ],
+  "vision": true,
+  "workRoot": "/tmp/relay-eval/e3-base25",
+  "apps": {
+    "base": "/tmp/relay-ref/base/app"
+  },
+  "pairs": null
+}

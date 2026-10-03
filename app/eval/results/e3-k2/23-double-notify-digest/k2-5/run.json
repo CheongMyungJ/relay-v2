@@ -1,0 +1,760 @@
+{
+  "scenario": "23-double-notify-digest",
+  "kind": "k2",
+  "index": 5,
+  "ending": "done",
+  "summary": "요약 메일 중복의 원인 세 가지를 고쳐 relay/w-20261003-002 브랜치에 커밋했다. (1) 느린 성공을 실패로 보고 재시도하던 것, (2) 요약 키에 runId가 들어 있어 재실행을 못 막던 것, (3) 서버 두 대나 배포일 재실행이 같은 요약을 각자 보내던 것(발송 전 선점과 실패 시 해제로 막음). 실패한 요약은 재시도로 다시 나간다. 근거는 테스트 84개 통과와 경로별 한 통 확인이고, 서버 간 공유는 공유 메모리 ledger로 모사했다. 운영에서는 공유 DB ledger를 연결해야 한다는 한계가 기록돼 있다.",
+  "error": null,
+  "wallMs": 1065379,
+  "firstChangeMs": 90125,
+  "outcome": {
+    "success": false,
+    "checks": [
+      {
+        "name": "같은 이벤트 재수신",
+        "guard": false,
+        "pass": false
+      },
+      {
+        "name": "성공 뒤 재시도 없음",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "실패는 재시도",
+        "guard": true,
+        "pass": true
+      },
+      {
+        "name": "요약 재실행",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "느린 요약 성공",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "요약 실패는 재시도",
+        "guard": true,
+        "pass": true
+      }
+    ],
+    "repoTestsPass": true,
+    "filesChanged": [
+      "docs/knowledge/slow-success-is-not-failure.md",
+      "src/digest/deadline.js",
+      "src/digest/runner.js",
+      "src/retry/policy.js",
+      "test/digest.test.js",
+      "test/notifier.test.js",
+      "docs/knowledge/digest-cross-server-claim.md",
+      "docs/knowledge/digest-key-no-runid.md",
+      "src/digest/key.js",
+      "src/digest/ledger.js",
+      "src/dispatch/dispatcher.js",
+      "src/notifier.js",
+      "test/dispatch-slow.test.js",
+      "test/retry.test.js"
+    ],
+    "linesChanged": 303,
+    "unrelated": [
+      "docs/knowledge/slow-success-is-not-failure.md",
+      "docs/knowledge/digest-cross-server-claim.md",
+      "docs/knowledge/digest-key-no-runid.md",
+      "src/notifier.js"
+    ],
+    "committed": true,
+    "trees": [
+      {
+        "label": "w-20261003-001",
+        "removed": false,
+        "git": {
+          "branch": "relay/w-20261003-001",
+          "commits": 3,
+          "log": [
+            "docs: 느린 성공 발송 재시도 금지 규칙 기록",
+            "test: 느리지만 성공한 푸시 발송은 재시도하지 않는 테스트 추가",
+            "fix: 느리지만 성공한 발송을 실패로 보고 다시 보내던 중복 발송 수정"
+          ],
+          "uncommitted": []
+        },
+        "files": [
+          {
+            "file": "docs/knowledge/slow-success-is-not-failure.md",
+            "add": 10,
+            "del": 0
+          },
+          {
+            "file": "src/digest/deadline.js",
+            "add": 5,
+            "del": 8
+          },
+          {
+            "file": "src/digest/runner.js",
+            "add": 2,
+            "del": 1
+          },
+          {
+            "file": "src/retry/policy.js",
+            "add": 3,
+            "del": 2
+          },
+          {
+            "file": "test/digest.test.js",
+            "add": 10,
+            "del": 0
+          },
+          {
+            "file": "test/notifier.test.js",
+            "add": 30,
+            "del": 0
+          }
+        ],
+        "linesAdded": 60,
+        "linesRemoved": 11,
+        "unrelated": [
+          "docs/knowledge/slow-success-is-not-failure.md"
+        ],
+        "repoTests": {
+          "pass": true,
+          "output": " 템플릿 값이 없으면 그 채널은 실패로 기록\n  ---\n  duration_ms: 1.247195\n  type: 'test'\n  ...\n# Subtest: 잘못된 이벤트는 거절한다\nok 52 - 잘못된 이벤트는 거절한다\n  ---\n  duration_ms: 1.558395\n  type: 'test'\n  ...\n# Subtest: 일시적 오류는 대기열을 거쳐 다시 보낸다\nok 53 - 일시적 오류는 대기열을 거쳐 다시 보낸다\n  ---\n  duration_ms: 2.025779\n  type: 'test'\n  ...\n# Subtest: 영구 오류는 다시 보내지 않는다\nok 54 - 영구 오류는 다시 보내지 않는다\n  ---\n  duration_ms: 1.1358\n  type: 'test'\n  ...\n# Subtest: 발송 기록\nok 55 - 발송 기록\n  ---\n  duration_ms: 0.743608\n  type: 'test'\n  ...\n# Subtest: 여러 이벤트를 한 번에 받으면 잘못된 것만 거절한다\nok 56 - 여러 이벤트를 한 번에 받으면 잘못된 것만 거절한다\n  ---\n  duration_ms: 0.883118\n  type: 'test'\n  ...\n# Subtest: 탈퇴한 사용자의 재시도는 버린다\nok 57 - 탈퇴한 사용자의 재시도는 버린다\n  ---\n  duration_ms: 1.085418\n  type: 'test'\n  ...\n# Subtest: 느리지만 성공한 발송은 재시도하지 않는다 (중복 발송 방지)\nok 58 - 느리지만 성공한 발송은 재시도하지 않는다 (중복 발송 방지)\n  ---\n  duration_ms: 0.384888\n  type: 'test'\n  ...\n# Subtest: 실제로 실패한 메일 발송은 재시도되어 다시 발송된다\nok 59 - 실제로 실패한 메일 발송은 재시도되어 다시 발송된다\n  ---\n  duration_ms: 0.630178\n  type: 'test'\n  ...\n# Subtest: 느리지만 성공한 푸시는 재시도하지 않는다 (중복 발송 방지)\nok 60 - 느리지만 성공한 푸시는 재시도하지 않는다 (중복 발송 방지)\n  ---\n  duration_ms: 0.457061\n  type: 'test'\n  ...\n# Subtest: 자정을 넘는 방해 금지 시간\nok 61 - 자정을 넘는 방해 금지 시간\n  ---\n  duration_ms: 4.824774\n  type: 'test'\n  ...\n# Subtest: 방해 금지가 끝나는 시각\nok 62 - 방해 금지가 끝나는 시각\n  ---\n  duration_ms: 2.1497\n  type: 'test'\n  ...\n# Subtest: 기본값과 수신 거부\nok 63 - 기본값과 수신 거부\n  ---\n  duration_ms: 2.070862\n  type: 'test'\n  ...\n# Subtest: 잘못된 메일 주소는 거절\nok 64 - 잘못된 메일 주소는 거절\n  ---\n  duration_ms: 0.679068\n  type: 'test'\n  ...\n# Subtest: 대기 시간은 두 배씩, 최대값에서 멈춘다\nok 65 - 대기 시간은 두 배씩, 최대값에서 멈춘다\n  ---\n  duration_ms: 2.429168\n  type: 'test'\n  ...\n# Subtest: 빠르게 성공하면 끝\nok 66 - 빠르게 성공하면 끝\n  ---\n  duration_ms: 0.302534\n  type: 'test'\n  ...\n# Subtest: 일시적 오류는 다시 보낸다\nok 67 - 일시적 오류는 다시 보낸다\n  ---\n  duration_ms: 0.212269\n  type: 'test'\n  ...\n# Subtest: 영구 오류는 바로 포기\nok 68 - 영구 오류는 바로 포기\n  ---\n  duration_ms: 0.221495\n  type: 'test'\n  ...\n# Subtest: 시도 횟수를 다 쓰면 포기\nok 69 - 시도 횟수를 다 쓰면 포기\n  ---\n  duration_ms: 0.214395\n  type: 'test'\n  ...\n# Subtest: 대기열은 보낼 시각 순서로 꺼낸다\nok 70 - 대기열은 보낼 시각 순서로 꺼낸다\n  ---\n  duration_ms: 0.338582\n  type: 'test'\n  ...\n# Subtest: 대기열이 가득 차면 거절\nok 71 - 대기열이 가득 차면 거절\n  ---\n  duration_ms: 0.266898\n  type: 'test'\n  ...\n# Subtest: 값과 필터를 채운다\nok 72 - 값과 필터를 채운다\n  ---\n  duration_ms: 22.28809\n  type: 'test'\n  ...\n# Subtest: 없는 값과 모르는 필터는 오류\nok 73 - 없는 값과 모르는 필터는 오류\n  ---\n  duration_ms: 1.114769\n  type: 'test'\n  ...\n# Subtest: 템플릿의 변수 목록\nok 74 - 템플릿의 변수 목록\n  ---\n  duration_ms: 2.338402\n  type: 'test'\n  ...\n# Subtest: 언어가 없으면 기본 언어로\nok 75 - 언어가 없으면 기본 언어로\n  ---\n  duration_ms: 0.488546\n  type: 'test'\n  ...\n# Subtest: 채널과 필수 여부\nok 76 - 채널과 필수 여부\n  ---\n  duration_ms: 0.460764\n  type: 'test'\n  ...\n# Subtest: 전화번호와 긴 글 필터\nok 77 - 전화번호와 긴 글 필터\n  ---\n  duration_ms: 0.508197\n  type: 'test'\n  ...\n# Subtest: 기본 카탈로그는 빠진 문구가 없다\nok 78 - 기본 카탈로그는 빠진 문구가 없다\n  ---\n  duration_ms: 0.968773\n  type: 'test'\n  ...\n1..78\n# tests 78\n# suites 0\n# pass 78\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 727.04729\n"
+        },
+        "checks": [
+          {
+            "name": "같은 이벤트 재수신",
+            "bug": null,
+            "pass": false,
+            "output": "TAP version 13\n# Subtest: 보내는 쪽이 다시 보낸 이벤트는 다시 발송하지 않는다\nnot ok 1 - 보내는 쪽이 다시 보낸 이벤트는 다시 발송하지 않는다\n  ---\n  duration_ms: 6.643856\n  type: 'test'\n  location: '/tmp/relay-eval/e3-k2/23-double-notify-digest-k2-5/judge/w-20261003-001/tree/eval-hidden/redelivery.test.js:37:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    메일은 한 번\n    \n    3 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 3\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e3-k2/23-double-notify-digest-k2-5/judge/w-20261003-001/tree/eval-hidden/redelivery.test.js:46:10)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n# Subtest: 내용이 같아도 다른 이벤트는 따로 보낸다\nok 2 - 내용이 같아도 다른 이벤트는 따로 보낸다\n  ---\n  duration_ms: 2.390089\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 1\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 146.490082\n"
+          },
+          {
+            "name": "성공 뒤 재시도 없음",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 메일이 2600ms 걸려 성공하면 한 번만 보낸다\nok 1 - 메일이 2600ms 걸려 성공하면 한 번만 보낸다\n  ---\n  duration_ms: 5.865551\n  type: 'test'\n  ...\n# Subtest: 메일이 120000ms 걸려 성공하면 한 번만 보낸다\nok 2 - 메일이 120000ms 걸려 성공하면 한 번만 보낸다\n  ---\n  duration_ms: 1.099136\n  type: 'test'\n  ...\n# Subtest: 푸시가 느리게 성공해도 한 번만 보낸다\nok 3 - 푸시가 느리게 성공해도 한 번만 보낸다\n  ---\n  duration_ms: 0.906005\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 142.944942\n"
+          },
+          {
+            "name": "실패는 재시도",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 메일 서버가 잠시 거절하면 다시 보낸다\nok 1 - 메일 서버가 잠시 거절하면 다시 보낸다\n  ---\n  duration_ms: 6.265672\n  type: 'test'\n  ...\n# Subtest: 메일 서버가 응답하지 않으면 다시 보낸다\nok 2 - 메일 서버가 응답하지 않으면 다시 보낸다\n  ---\n  duration_ms: 2.181689\n  type: 'test'\n  ...\n# Subtest: 푸시 게이트웨이가 두 번 실패해도 결국 한 번 보낸다\nok 3 - 푸시 게이트웨이가 두 번 실패해도 결국 한 번 보낸다\n  ---\n  duration_ms: 1.260503\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 128.258725\n"
+          },
+          {
+            "name": "요약 재실행",
+            "bug": null,
+            "pass": false,
+            "output": "TAP version 13\n# Subtest: 같은 날 요약이 다시 돌아도 한 통만 보낸다\nnot ok 1 - 같은 날 요약이 다시 돌아도 한 통만 보낸다\n  ---\n  duration_ms: 8.60656\n  type: 'test'\n  location: '/tmp/relay-eval/e3-k2/23-double-notify-digest-k2-5/judge/w-20261003-001/tree/eval-hidden/digest-rerun.test.js:40:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    u-7은 한 통\n    \n    3 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 3\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e3-k2/23-double-notify-digest-k2-5/judge/w-20261003-001/tree/eval-hidden/digest-rerun.test.js:51:10)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n# Subtest: 다시 돈 실행은 앞 실행에서 못 받은 사람에게만 보낸다\nnot ok 2 - 다시 돈 실행은 앞 실행에서 못 받은 사람에게만 보낸다\n  ---\n  duration_ms: 2.796944\n  type: 'test'\n  location: '/tmp/relay-eval/e3-k2/23-double-notify-digest-k2-5/judge/w-20261003-001/tree/eval-hidden/digest-rerun.test.js:56:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    2 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 2\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e3-k2/23-double-notify-digest-k2-5/judge/w-20261003-001/tree/eval-hidden/digest-rerun.test.js:68:10)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: 다른 날 요약은 따로 보낸다\nnot ok 3 - 다른 날 요약은 따로 보낸다\n  ---\n  duration_ms: 2.924634\n  type: 'test'\n  location: '/tmp/relay-eval/e3-k2/23-double-notify-digest-k2-5/judge/w-20261003-001/tree/eval-hidden/digest-rerun.test.js:73:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        '2026-09-21 알림 요약 (2건)',\n        '2026-09-22 알림 요약 (1건)',\n    +   '2026-09-22 알림 요약 (1건)'\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0: '2026-09-21 알림 요약 (2건)'\n    1: '2026-09-22 알림 요약 (1건)'\n  actual:\n    0: '2026-09-21 알림 요약 (2건)'\n    1: '2026-09-22 알림 요약 (1건)'\n    2: '2026-09-22 알림 요약 (1건)'\n  operator: 'deepStrictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e3-k2/23-double-notify-digest-k2-5/judge/w-20261003-001/tree/eval-hidden/digest-rerun.test.js:85:10)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 0\n# fail 3\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 125.839409\n"
+          },
+          {
+            "name": "느린 요약 성공",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 요약 한 통이 4500ms 걸려 성공하면 사람마다 한 번만 보낸다\nok 1 - 요약 한 통이 4500ms 걸려 성공하면 사람마다 한 번만 보낸다\n  ---\n  duration_ms: 5.346954\n  type: 'test'\n  ...\n# Subtest: 요약 한 통이 120000ms 걸려 성공하면 사람마다 한 번만 보낸다\nok 2 - 요약 한 통이 120000ms 걸려 성공하면 사람마다 한 번만 보낸다\n  ---\n  duration_ms: 0.817902\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 126.166935\n"
+          },
+          {
+            "name": "요약 실패는 재시도",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 메일 서버가 잠시 거절하면 요약을 다시 보낸다\nok 1 - 메일 서버가 잠시 거절하면 요약을 다시 보낸다\n  ---\n  duration_ms: 8.762817\n  type: 'test'\n  ...\n# Subtest: 메일 서버가 응답하지 않으면 요약을 다시 보낸다\nok 2 - 메일 서버가 응답하지 않으면 요약을 다시 보낸다\n  ---\n  duration_ms: 1.545482\n  type: 'test'\n  ...\n# Subtest: 두 번 거절돼도 결국 한 통 보낸다\nok 3 - 두 번 거절돼도 결국 한 통 보낸다\n  ---\n  duration_ms: 2.789903\n  type: 'test'\n  ...\n# Subtest: 받는 사람이 없는 주소면 다시 보내지 않는다\nok 4 - 받는 사람이 없는 주소면 다시 보내지 않는다\n  ---\n  duration_ms: 1.109536\n  type: 'test'\n  ...\n1..4\n# tests 4\n# suites 0\n# pass 4\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 156.284715\n"
+          }
+        ]
+      },
+      {
+        "label": "w-20261003-002",
+        "removed": false,
+        "git": {
+          "branch": "relay/w-20261003-002",
+          "commits": 3,
+          "log": [
+            "요약 중복 방지 팀 지식 추가",
+            "요약 선점 해제 보장: 보내기 전 준비에서 예외가 나도 release",
+            "요약 중복 발송 수정: 느린 성공 재시도, runId 키, 서버 간 선점"
+          ],
+          "uncommitted": []
+        },
+        "files": [
+          {
+            "file": "docs/knowledge/digest-cross-server-claim.md",
+            "add": 10,
+            "del": 0
+          },
+          {
+            "file": "docs/knowledge/digest-key-no-runid.md",
+            "add": 10,
+            "del": 0
+          },
+          {
+            "file": "src/digest/deadline.js",
+            "add": 4,
+            "del": 7
+          },
+          {
+            "file": "src/digest/key.js",
+            "add": 5,
+            "del": 4
+          },
+          {
+            "file": "src/digest/ledger.js",
+            "add": 15,
+            "del": 1
+          },
+          {
+            "file": "src/digest/runner.js",
+            "add": 15,
+            "del": 5
+          },
+          {
+            "file": "src/dispatch/dispatcher.js",
+            "add": 1,
+            "del": 0
+          },
+          {
+            "file": "src/notifier.js",
+            "add": 3,
+            "del": 1
+          },
+          {
+            "file": "src/retry/policy.js",
+            "add": 5,
+            "del": 3
+          },
+          {
+            "file": "test/digest.test.js",
+            "add": 110,
+            "del": 0
+          },
+          {
+            "file": "test/dispatch-slow.test.js",
+            "add": 27,
+            "del": 0
+          },
+          {
+            "file": "test/retry.test.js",
+            "add": 6,
+            "del": 0
+          }
+        ],
+        "linesAdded": 211,
+        "linesRemoved": 21,
+        "unrelated": [
+          "docs/knowledge/digest-cross-server-claim.md",
+          "docs/knowledge/digest-key-no-runid.md",
+          "src/notifier.js"
+        ],
+        "repoTests": {
+          "pass": true,
+          "output": "지 시간에는 푸시를 보내지 않는다\n  ---\n  duration_ms: 1.107062\n  type: 'test'\n  ...\n# Subtest: 같은 이벤트를 한꺼번에 두 번 받으면 한 번만 보낸다\nok 58 - 같은 이벤트를 한꺼번에 두 번 받으면 한 번만 보낸다\n  ---\n  duration_ms: 0.939807\n  type: 'test'\n  ...\n# Subtest: 템플릿 값이 없으면 그 채널은 실패로 기록\nok 59 - 템플릿 값이 없으면 그 채널은 실패로 기록\n  ---\n  duration_ms: 5.596803\n  type: 'test'\n  ...\n# Subtest: 잘못된 이벤트는 거절한다\nok 60 - 잘못된 이벤트는 거절한다\n  ---\n  duration_ms: 0.922735\n  type: 'test'\n  ...\n# Subtest: 일시적 오류는 대기열을 거쳐 다시 보낸다\nok 61 - 일시적 오류는 대기열을 거쳐 다시 보낸다\n  ---\n  duration_ms: 3.040034\n  type: 'test'\n  ...\n# Subtest: 영구 오류는 다시 보내지 않는다\nok 62 - 영구 오류는 다시 보내지 않는다\n  ---\n  duration_ms: 1.062377\n  type: 'test'\n  ...\n# Subtest: 발송 기록\nok 63 - 발송 기록\n  ---\n  duration_ms: 1.006935\n  type: 'test'\n  ...\n# Subtest: 여러 이벤트를 한 번에 받으면 잘못된 것만 거절한다\nok 64 - 여러 이벤트를 한 번에 받으면 잘못된 것만 거절한다\n  ---\n  duration_ms: 1.115098\n  type: 'test'\n  ...\n# Subtest: 탈퇴한 사용자의 재시도는 버린다\nok 65 - 탈퇴한 사용자의 재시도는 버린다\n  ---\n  duration_ms: 0.817609\n  type: 'test'\n  ...\n# Subtest: 자정을 넘는 방해 금지 시간\nok 66 - 자정을 넘는 방해 금지 시간\n  ---\n  duration_ms: 1.05152\n  type: 'test'\n  ...\n# Subtest: 방해 금지가 끝나는 시각\nok 67 - 방해 금지가 끝나는 시각\n  ---\n  duration_ms: 2.283853\n  type: 'test'\n  ...\n# Subtest: 기본값과 수신 거부\nok 68 - 기본값과 수신 거부\n  ---\n  duration_ms: 2.922973\n  type: 'test'\n  ...\n# Subtest: 잘못된 메일 주소는 거절\nok 69 - 잘못된 메일 주소는 거절\n  ---\n  duration_ms: 0.51127\n  type: 'test'\n  ...\n# Subtest: 대기 시간은 두 배씩, 최대값에서 멈춘다\nok 70 - 대기 시간은 두 배씩, 최대값에서 멈춘다\n  ---\n  duration_ms: 2.787713\n  type: 'test'\n  ...\n# Subtest: 빠르게 성공하면 끝\nok 71 - 빠르게 성공하면 끝\n  ---\n  duration_ms: 0.310069\n  type: 'test'\n  ...\n# Subtest: 일시적 오류는 다시 보낸다\nok 72 - 일시적 오류는 다시 보낸다\n  ---\n  duration_ms: 0.239307\n  type: 'test'\n  ...\n# Subtest: 영구 오류는 바로 포기\nok 73 - 영구 오류는 바로 포기\n  ---\n  duration_ms: 0.174019\n  type: 'test'\n  ...\n# Subtest: 시도 횟수를 다 쓰면 포기\nok 74 - 시도 횟수를 다 쓰면 포기\n  ---\n  duration_ms: 0.209971\n  type: 'test'\n  ...\n# Subtest: 대기열은 보낼 시각 순서로 꺼낸다\nok 75 - 대기열은 보낼 시각 순서로 꺼낸다\n  ---\n  duration_ms: 0.34215\n  type: 'test'\n  ...\n# Subtest: 대기열이 가득 차면 거절\nok 76 - 대기열이 가득 차면 거절\n  ---\n  duration_ms: 0.304584\n  type: 'test'\n  ...\n# Subtest: 제한 시간을 넘긴 성공도 끝(재시도하지 않음), 넘긴 실패는 시간 초과로 재시도\nok 77 - 제한 시간을 넘긴 성공도 끝(재시도하지 않음), 넘긴 실패는 시간 초과로 재시도\n  ---\n  duration_ms: 0.153386\n  type: 'test'\n  ...\n# Subtest: 값과 필터를 채운다\nok 78 - 값과 필터를 채운다\n  ---\n  duration_ms: 16.027508\n  type: 'test'\n  ...\n# Subtest: 없는 값과 모르는 필터는 오류\nok 79 - 없는 값과 모르는 필터는 오류\n  ---\n  duration_ms: 0.601691\n  type: 'test'\n  ...\n# Subtest: 템플릿의 변수 목록\nok 80 - 템플릿의 변수 목록\n  ---\n  duration_ms: 1.518117\n  type: 'test'\n  ...\n# Subtest: 언어가 없으면 기본 언어로\nok 81 - 언어가 없으면 기본 언어로\n  ---\n  duration_ms: 0.312205\n  type: 'test'\n  ...\n# Subtest: 채널과 필수 여부\nok 82 - 채널과 필수 여부\n  ---\n  duration_ms: 0.297048\n  type: 'test'\n  ...\n# Subtest: 전화번호와 긴 글 필터\nok 83 - 전화번호와 긴 글 필터\n  ---\n  duration_ms: 0.271542\n  type: 'test'\n  ...\n# Subtest: 기본 카탈로그는 빠진 문구가 없다\nok 84 - 기본 카탈로그는 빠진 문구가 없다\n  ---\n  duration_ms: 0.582074\n  type: 'test'\n  ...\n1..84\n# tests 84\n# suites 0\n# pass 84\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 776.20207\n"
+        },
+        "checks": [
+          {
+            "name": "같은 이벤트 재수신",
+            "bug": null,
+            "pass": false,
+            "output": "TAP version 13\n# Subtest: 보내는 쪽이 다시 보낸 이벤트는 다시 발송하지 않는다\nnot ok 1 - 보내는 쪽이 다시 보낸 이벤트는 다시 발송하지 않는다\n  ---\n  duration_ms: 8.293839\n  type: 'test'\n  location: '/tmp/relay-eval/e3-k2/23-double-notify-digest-k2-5/judge/w-20261003-002/tree/eval-hidden/redelivery.test.js:37:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    메일은 한 번\n    \n    3 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 3\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e3-k2/23-double-notify-digest-k2-5/judge/w-20261003-002/tree/eval-hidden/redelivery.test.js:46:10)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n# Subtest: 내용이 같아도 다른 이벤트는 따로 보낸다\nok 2 - 내용이 같아도 다른 이벤트는 따로 보낸다\n  ---\n  duration_ms: 2.767406\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 1\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 162.351444\n"
+          },
+          {
+            "name": "성공 뒤 재시도 없음",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 메일이 2600ms 걸려 성공하면 한 번만 보낸다\nok 1 - 메일이 2600ms 걸려 성공하면 한 번만 보낸다\n  ---\n  duration_ms: 5.957124\n  type: 'test'\n  ...\n# Subtest: 메일이 120000ms 걸려 성공하면 한 번만 보낸다\nok 2 - 메일이 120000ms 걸려 성공하면 한 번만 보낸다\n  ---\n  duration_ms: 2.090882\n  type: 'test'\n  ...\n# Subtest: 푸시가 느리게 성공해도 한 번만 보낸다\nok 3 - 푸시가 느리게 성공해도 한 번만 보낸다\n  ---\n  duration_ms: 0.78426\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 141.030253\n"
+          },
+          {
+            "name": "실패는 재시도",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 메일 서버가 잠시 거절하면 다시 보낸다\nok 1 - 메일 서버가 잠시 거절하면 다시 보낸다\n  ---\n  duration_ms: 6.138621\n  type: 'test'\n  ...\n# Subtest: 메일 서버가 응답하지 않으면 다시 보낸다\nok 2 - 메일 서버가 응답하지 않으면 다시 보낸다\n  ---\n  duration_ms: 2.286284\n  type: 'test'\n  ...\n# Subtest: 푸시 게이트웨이가 두 번 실패해도 결국 한 번 보낸다\nok 3 - 푸시 게이트웨이가 두 번 실패해도 결국 한 번 보낸다\n  ---\n  duration_ms: 1.189564\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 136.815381\n"
+          },
+          {
+            "name": "요약 재실행",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 같은 날 요약이 다시 돌아도 한 통만 보낸다\nok 1 - 같은 날 요약이 다시 돌아도 한 통만 보낸다\n  ---\n  duration_ms: 5.739638\n  type: 'test'\n  ...\n# Subtest: 다시 돈 실행은 앞 실행에서 못 받은 사람에게만 보낸다\nok 2 - 다시 돈 실행은 앞 실행에서 못 받은 사람에게만 보낸다\n  ---\n  duration_ms: 3.273375\n  type: 'test'\n  ...\n# Subtest: 다른 날 요약은 따로 보낸다\nok 3 - 다른 날 요약은 따로 보낸다\n  ---\n  duration_ms: 2.943038\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 138.148173\n"
+          },
+          {
+            "name": "느린 요약 성공",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 요약 한 통이 4500ms 걸려 성공하면 사람마다 한 번만 보낸다\nok 1 - 요약 한 통이 4500ms 걸려 성공하면 사람마다 한 번만 보낸다\n  ---\n  duration_ms: 5.419053\n  type: 'test'\n  ...\n# Subtest: 요약 한 통이 120000ms 걸려 성공하면 사람마다 한 번만 보낸다\nok 2 - 요약 한 통이 120000ms 걸려 성공하면 사람마다 한 번만 보낸다\n  ---\n  duration_ms: 0.98718\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 132.32815\n"
+          },
+          {
+            "name": "요약 실패는 재시도",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 메일 서버가 잠시 거절하면 요약을 다시 보낸다\nok 1 - 메일 서버가 잠시 거절하면 요약을 다시 보낸다\n  ---\n  duration_ms: 5.537819\n  type: 'test'\n  ...\n# Subtest: 메일 서버가 응답하지 않으면 요약을 다시 보낸다\nok 2 - 메일 서버가 응답하지 않으면 요약을 다시 보낸다\n  ---\n  duration_ms: 1.098045\n  type: 'test'\n  ...\n# Subtest: 두 번 거절돼도 결국 한 통 보낸다\nok 3 - 두 번 거절돼도 결국 한 통 보낸다\n  ---\n  duration_ms: 3.568796\n  type: 'test'\n  ...\n# Subtest: 받는 사람이 없는 주소면 다시 보내지 않는다\nok 4 - 받는 사람이 없는 주소면 다시 보내지 않는다\n  ---\n  duration_ms: 0.728534\n  type: 'test'\n  ...\n1..4\n# tests 4\n# suites 0\n# pass 4\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 128.312618\n"
+          }
+        ]
+      }
+    ]
+  },
+  "human": {
+    "turns": 26,
+    "actions": {
+      "click": 22,
+      "fill": 3,
+      "key": 3,
+      "done": 2,
+      "type": 3,
+      "wait": 1
+    },
+    "actionsTotal": 31,
+    "charsTyped": 901,
+    "invalidActions": 0,
+    "refusedDone": 0,
+    "frictionMean": 0.6153846153846154,
+    "frictionHigh": 1,
+    "costUsd": 6.391265,
+    "calls": 28,
+    "ms": 149661,
+    "waitOnlyTurns": 0,
+    "images": 25
+  },
+  "setupDialogs": [
+    {
+      "t": 29923,
+      "name": "folder_trust"
+    },
+    {
+      "t": 33763,
+      "name": "bypass_permissions_warning"
+    }
+  ],
+  "agent": {
+    "input": 168,
+    "output": 61221,
+    "cacheRead": 3775118,
+    "cacheWrite": 281948,
+    "messages": 84,
+    "sessions": 9
+  },
+  "agentSteps": [
+    {
+      "work": "w-20261003-001",
+      "seq": 1,
+      "node": "intake",
+      "contextChars": 1934,
+      "knowledgeChars": 0,
+      "tokens": {
+        "input": 8,
+        "output": 1501,
+        "cacheRead": 134378,
+        "cacheWrite": 12849,
+        "messages": 4
+      }
+    },
+    {
+      "work": "w-20261003-001",
+      "seq": 2,
+      "node": "fix",
+      "contextChars": 3243,
+      "knowledgeChars": 0,
+      "tokens": {
+        "input": 18,
+        "output": 6296,
+        "cacheRead": 409171,
+        "cacheWrite": 39053,
+        "messages": 9
+      }
+    },
+    {
+      "work": "w-20261003-001",
+      "seq": 3,
+      "node": "verify",
+      "contextChars": 4949,
+      "knowledgeChars": 0,
+      "tokens": {
+        "input": 24,
+        "output": 5232,
+        "cacheRead": 493999,
+        "cacheWrite": 27397,
+        "messages": 12
+      }
+    },
+    {
+      "work": "w-20261003-002",
+      "seq": 1,
+      "node": "intake",
+      "contextChars": 2633,
+      "knowledgeChars": 611,
+      "tokens": {
+        "input": 8,
+        "output": 1749,
+        "cacheRead": 122445,
+        "cacheWrite": 13721,
+        "messages": 4
+      }
+    },
+    {
+      "work": "w-20261003-002",
+      "seq": 2,
+      "node": "fix",
+      "contextChars": 4138,
+      "knowledgeChars": 611,
+      "tokens": {
+        "input": 26,
+        "output": 9216,
+        "cacheRead": 620611,
+        "cacheWrite": 42058,
+        "messages": 13
+      }
+    },
+    {
+      "work": "w-20261003-002",
+      "seq": 3,
+      "node": "verify",
+      "contextChars": 6251,
+      "knowledgeChars": 611,
+      "tokens": {
+        "input": 34,
+        "output": 13037,
+        "cacheRead": 827451,
+        "cacheWrite": 40027,
+        "messages": 17
+      }
+    },
+    {
+      "work": "w-20261003-002",
+      "seq": 4,
+      "node": "intake",
+      "contextChars": 4512,
+      "knowledgeChars": 611,
+      "tokens": {
+        "input": 6,
+        "output": 2960,
+        "cacheRead": 89590,
+        "cacheWrite": 16210,
+        "messages": 3
+      }
+    },
+    {
+      "work": "w-20261003-002",
+      "seq": 5,
+      "node": "fix",
+      "contextChars": 5355,
+      "knowledgeChars": 611,
+      "tokens": {
+        "input": 22,
+        "output": 12034,
+        "cacheRead": 564103,
+        "cacheWrite": 50164,
+        "messages": 11
+      }
+    },
+    {
+      "work": "w-20261003-002",
+      "seq": 6,
+      "node": "verify",
+      "contextChars": 7212,
+      "knowledgeChars": 611,
+      "tokens": {
+        "input": 22,
+        "output": 9196,
+        "cacheRead": 513370,
+        "cacheWrite": 40469,
+        "messages": 11
+      }
+    }
+  ],
+  "works": [
+    {
+      "id": "w-20261003-001",
+      "dir": "/tmp/relay-eval/e3-k2/23-double-notify-digest-k2-5/relay-home/projects/notify-36692c/works/w-20261003-001",
+      "status": "completed",
+      "branch": null,
+      "tasks": [
+        {
+          "seq": 1,
+          "node": "intake",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "926bfe1a-2fc6-4171-9c87-1f50f0f53a9f",
+          "contextChars": 1934,
+          "knowledgeChars": 0
+        },
+        {
+          "seq": 2,
+          "node": "fix",
+          "status": "approved",
+          "approved_by": "auto",
+          "session": "010553bb-2264-4a76-aebd-140f8cdd9324",
+          "contextChars": 3243,
+          "knowledgeChars": 0
+        },
+        {
+          "seq": 3,
+          "node": "verify",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "5d295ebe-7337-4b45-86c2-3ecf0cbdc722",
+          "contextChars": 4949,
+          "knowledgeChars": 0
+        }
+      ]
+    },
+    {
+      "id": "w-20261003-002",
+      "dir": "/tmp/relay-eval/e3-k2/23-double-notify-digest-k2-5/relay-home/projects/notify-36692c/works/w-20261003-002",
+      "status": "completed",
+      "branch": null,
+      "tasks": [
+        {
+          "seq": 1,
+          "node": "intake",
+          "status": "discarded",
+          "approved_by": "human",
+          "session": "650d8028-7a8d-4b6a-ae75-935da31d8ada",
+          "contextChars": 2633,
+          "knowledgeChars": 611
+        },
+        {
+          "seq": 2,
+          "node": "fix",
+          "status": "discarded",
+          "approved_by": "auto",
+          "session": "e7ce3751-74dd-47c6-9bf6-45d57818a19a",
+          "contextChars": 4138,
+          "knowledgeChars": 611
+        },
+        {
+          "seq": 3,
+          "node": "verify",
+          "status": "discarded",
+          "approved_by": "human",
+          "session": "58f3e6ad-cb33-4059-b601-4b7d3229cdf7",
+          "contextChars": 6251,
+          "knowledgeChars": 611
+        },
+        {
+          "seq": 4,
+          "node": "intake",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "cede2f81-efac-47ee-a361-7b93e66e762e",
+          "contextChars": 4512,
+          "knowledgeChars": 611
+        },
+        {
+          "seq": 5,
+          "node": "fix",
+          "status": "approved",
+          "approved_by": "auto",
+          "session": "6b0b6d76-d133-419c-b3fd-148431a1a7ed",
+          "contextChars": 5355,
+          "knowledgeChars": 611
+        },
+        {
+          "seq": 6,
+          "node": "verify",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "c95be6e0-0d13-4e63-875c-36a1b8464a06",
+          "contextChars": 7212,
+          "knowledgeChars": 611
+        }
+      ]
+    }
+  ],
+  "workResults": [
+    {
+      "work": 1,
+      "ending": "done",
+      "summary": "원인은 느리지만 성공한 발송을 시간 초과 실패로 보고 다시 보내던 것이었다. 일반 경로(decide)와 요약 경로(withDeadline)를 고쳤다. 일반·요약·푸시 경로별로 재현 테스트를 추가했고, 수정 전 코드에서는 실패하고 수정 후에는 통과하는 것을 확인했다. 실제 실패한 발송의 재시도 테스트도 통과했다. npm test는 78개 모두 통과했다. 변경은 relay/w-20261003-001 브랜치에 커밋돼 있다.",
+      "wallMs": 239701,
+      "survey": {
+        "effort": 2,
+        "clarity": 6,
+        "control": 5,
+        "confidence": 6,
+        "trust": 6,
+        "recovery": null,
+        "reuse": 6,
+        "best": "원인, 기각한 가설, 경로별 근거(수정 전엔 실패하고 수정 후엔 통과하는 테스트), 완료조건 판정표가 한 화면에 정리돼 있어서 고객이 한 번만 받는지 확인하기 쉬웠다.",
+        "worst": "원인 분석과 수정 단계가 자동 승인으로 지나가서 그 단계를 내가 직접 보지 못했다. 지난 단계 탭을 눌러서 따로 찾아봐야 했다. 푸시 경로 테스트는 리뷰 단계에서 선택지로 나왔는데, 처음 추천은 '반영하지 않음'이었다.",
+        "comment": "에이전트가 제한 시간 설정이 바뀐 일이나 발송 로그의 3~4초 지연 같은 정보를 묻지 않았다. 그런데도 원인을 정확히 찾아냈다. 이번에는 내가 답할 일이 없었다."
+      },
+      "human": {
+        "turns": 7,
+        "actionsTotal": 9,
+        "charsTyped": 100,
+        "inspectDiff": 0,
+        "invalidActions": 0,
+        "refusedDone": 0,
+        "frictionMean": 0.14285714285714285,
+        "frictionHigh": 0,
+        "ms": 35463,
+        "told": [
+          3
+        ],
+        "carriedTold": 0,
+        "carriedTotal": 0,
+        "toldAudit": [
+          3
+        ],
+        "carriedToldAudit": 0,
+        "auditCostUsd": 0.0045488
+      },
+      "outcome": {
+        "success": false,
+        "checks": [
+          {
+            "name": "같은 이벤트 재수신",
+            "guard": false,
+            "pass": false
+          },
+          {
+            "name": "성공 뒤 재시도 없음",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "실패는 재시도",
+            "guard": true,
+            "pass": true
+          }
+        ],
+        "trees": [
+          {
+            "label": "w-20261003-001",
+            "files": [
+              "docs/knowledge/slow-success-is-not-failure.md",
+              "src/digest/deadline.js",
+              "src/digest/runner.js",
+              "src/retry/policy.js",
+              "test/digest.test.js",
+              "test/notifier.test.js"
+            ],
+            "repoTestsPass": true
+          }
+        ]
+      },
+      "agent": {
+        "input": 50,
+        "output": 13029,
+        "cacheRead": 1037548,
+        "cacheWrite": 79299,
+        "messages": 25,
+        "sessions": 3,
+        "questions": 1
+      },
+      "contextChars": 10126,
+      "knowledgeChars": 0
+    },
+    {
+      "work": 2,
+      "ending": "done",
+      "summary": "요약 메일 중복의 원인 세 가지를 고쳐 relay/w-20261003-002 브랜치에 커밋했다. (1) 느린 성공을 실패로 보고 재시도하던 것, (2) 요약 키에 runId가 들어 있어 재실행을 못 막던 것, (3) 서버 두 대나 배포일 재실행이 같은 요약을 각자 보내던 것(발송 전 선점과 실패 시 해제로 막음). 실패한 요약은 재시도로 다시 나간다. 근거는 테스트 84개 통과와 경로별 한 통 확인이고, 서버 간 공유는 공유 메모리 ledger로 모사했다. 운영에서는 공유 DB ledger를 연결해야 한다는 한계가 기록돼 있다.",
+      "wallMs": 808412,
+      "survey": {
+        "effort": 4,
+        "clarity": 5,
+        "control": 6,
+        "confidence": 5,
+        "trust": 5,
+        "recovery": 6,
+        "reuse": 6,
+        "best": "리뷰 단계에서 서버 두 대 질문에 에이전트가 시뮬레이션을 돌려 서버 간 중복이 안 막힌다고 솔직히 답하고, 의도 정리로 되감기를 권했다. 판정표에 완료조건별 근거가 있어 경로마다 확인하기 쉬웠다.",
+        "worst": "첫 번째 수정은 서버 두 대를 묻지 않은 채 통과 판정까지 갔다. 내가 알고 있던 사실로 직접 의심해서 되감아야 했고, 그 과정에서 Work 하나를 더 쓰고 시간도 더 들었다. 처음에 운영 구성을 물어봤다면 줄었을 것이다.",
+        "comment": "원인 분석 요약에 기각한 가설과 한계가 적혀 있어 빈틈을 찾기 좋았다. 서버 간 공유는 메모리 ledger로 흉내 낸 것이라 운영에서는 공유 DB 연결이 따로 필요하다. 그 한계가 명시돼 있어서 그나마 믿을 수 있었다."
+      },
+      "human": {
+        "turns": 19,
+        "actionsTotal": 22,
+        "charsTyped": 801,
+        "inspectDiff": 0,
+        "invalidActions": 0,
+        "refusedDone": 0,
+        "frictionMean": 0.7894736842105263,
+        "frictionHigh": 1,
+        "ms": 114198,
+        "told": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "carriedTold": 0,
+        "carriedTotal": 0,
+        "toldAudit": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "carriedToldAudit": 0,
+        "auditCostUsd": 0.0150828
+      },
+      "outcome": {
+        "success": true,
+        "checks": [
+          {
+            "name": "요약 재실행",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "느린 요약 성공",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "요약 실패는 재시도",
+            "guard": true,
+            "pass": true
+          }
+        ],
+        "trees": [
+          {
+            "label": "w-20261003-002",
+            "files": [
+              "docs/knowledge/digest-cross-server-claim.md",
+              "docs/knowledge/digest-key-no-runid.md",
+              "src/digest/deadline.js",
+              "src/digest/key.js",
+              "src/digest/ledger.js",
+              "src/digest/runner.js",
+              "src/dispatch/dispatcher.js",
+              "src/notifier.js",
+              "src/retry/policy.js",
+              "test/digest.test.js",
+              "test/dispatch-slow.test.js",
+              "test/retry.test.js"
+            ],
+            "repoTestsPass": true
+          }
+        ]
+      },
+      "agent": {
+        "input": 118,
+        "output": 48192,
+        "cacheRead": 2737570,
+        "cacheWrite": 202649,
+        "messages": 59,
+        "sessions": 6,
+        "questions": 3
+      },
+      "contextChars": 30101,
+      "knowledgeChars": 3666
+    }
+  ],
+  "handoffs": [],
+  "survey": {
+    "effort": 4,
+    "clarity": 5,
+    "control": 6,
+    "confidence": 5,
+    "trust": 5,
+    "recovery": 6,
+    "reuse": 6,
+    "best": "리뷰 단계에서 서버 두 대 질문에 에이전트가 시뮬레이션을 돌려 서버 간 중복이 안 막힌다고 솔직히 답하고, 의도 정리로 되감기를 권했다. 판정표에 완료조건별 근거가 있어 경로마다 확인하기 쉬웠다.",
+    "worst": "첫 번째 수정은 서버 두 대를 묻지 않은 채 통과 판정까지 갔다. 내가 알고 있던 사실로 직접 의심해서 되감아야 했고, 그 과정에서 Work 하나를 더 쓰고 시간도 더 들었다. 처음에 운영 구성을 물어봤다면 줄었을 것이다.",
+    "comment": "원인 분석 요약에 기각한 가설과 한계가 적혀 있어 빈틈을 찾기 좋았다. 서버 간 공유는 메모리 ledger로 흉내 낸 것이라 운영에서는 공유 DB 연결이 따로 필요하다. 그 한계가 명시돼 있어서 그나마 믿을 수 있었다."
+  },
+  "options": {
+    "agentModel": "sonnet",
+    "effort": "medium",
+    "humanModel": "sonnet",
+    "cliArgs": [
+      "--dangerously-skip-permissions"
+    ]
+  }
+}

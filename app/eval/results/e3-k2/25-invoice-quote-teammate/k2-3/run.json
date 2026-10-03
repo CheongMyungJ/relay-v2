@@ -1,0 +1,1079 @@
+{
+  "scenario": "25-invoice-quote-teammate",
+  "kind": "k2",
+  "index": 3,
+  "ending": "done",
+  "summary": "견적서 부가세를 할인 후 과세 줄별 원 단위 버림 합으로 바꿔 Q-0457 합계가 56,278원이 되게 했다. 테스트를 추가했고 54개 모두 통과했다. 견적 번호와 유효 기간은 그대로다. 변경은 relay/w-20261003-001 브랜치에 커밋했다. 경리 합계 56,278원과 맞는 것은 이 한 건만 확인했다. 견적서 부가세 규칙 자체는 회계팀에 확인하지 못했다. 청구서와 반품 전표 예시는 이번에 따로 확인하지 않았고, 이전 Work의 기록에 적힌 회계 값만 봤다.",
+  "error": null,
+  "wallMs": 869679,
+  "firstChangeMs": 141153,
+  "outcome": {
+    "success": true,
+    "checks": [
+      {
+        "name": "줄별 버림",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "할인 순서",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "서식 그대로",
+        "guard": true,
+        "pass": true
+      },
+      {
+        "name": "반품 줄별 버림",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "반품 할인 순서",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "반품 전표 그대로",
+        "guard": true,
+        "pass": true
+      },
+      {
+        "name": "견적 줄별 버림",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "견적 할인 순서",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "견적 그대로",
+        "guard": true,
+        "pass": true
+      }
+    ],
+    "repoTestsPass": true,
+    "filesChanged": [
+      "docs/knowledge/discount-before-vat.md",
+      "docs/knowledge/issued-invoice-keeps-stored-totals.md",
+      "docs/knowledge/quote-credit-note-vat-separate.md",
+      "docs/knowledge/vat-per-line-floor.md",
+      "src/invoice/total.js",
+      "test/invoice.test.js",
+      "test/total.test.js",
+      "docs/knowledge/credit-note-partial-discount-by-qty-ratio.md",
+      "docs/knowledge/credit-note-vat-per-line-floor.md",
+      "src/invoice/credit-note.js",
+      "test/credit-note.test.js",
+      "docs/knowledge/quote-vat-per-line-floor-unconfirmed.md",
+      "src/invoice/quote.js",
+      "test/quote.test.js"
+    ],
+    "linesChanged": 326,
+    "unrelated": [
+      "docs/knowledge/discount-before-vat.md",
+      "docs/knowledge/issued-invoice-keeps-stored-totals.md",
+      "docs/knowledge/quote-credit-note-vat-separate.md",
+      "docs/knowledge/vat-per-line-floor.md",
+      "docs/knowledge/credit-note-partial-discount-by-qty-ratio.md",
+      "docs/knowledge/credit-note-vat-per-line-floor.md",
+      "docs/knowledge/quote-vat-per-line-floor-unconfirmed.md"
+    ],
+    "committed": true,
+    "trees": [
+      {
+        "label": "w-20261003-001",
+        "removed": false,
+        "git": {
+          "branch": "relay/w-20261003-001",
+          "commits": 2,
+          "log": [
+            "docs: 부가세 줄별 버림 규칙과 견적서·반품 전표 관련 지식 추가",
+            "fix: 청구서 부가세를 줄별 원 단위 버림 합산으로 계산"
+          ],
+          "uncommitted": []
+        },
+        "files": [
+          {
+            "file": "docs/knowledge/discount-before-vat.md",
+            "add": 8,
+            "del": 0
+          },
+          {
+            "file": "docs/knowledge/issued-invoice-keeps-stored-totals.md",
+            "add": 8,
+            "del": 0
+          },
+          {
+            "file": "docs/knowledge/quote-credit-note-vat-separate.md",
+            "add": 9,
+            "del": 0
+          },
+          {
+            "file": "docs/knowledge/vat-per-line-floor.md",
+            "add": 10,
+            "del": 0
+          },
+          {
+            "file": "src/invoice/total.js",
+            "add": 4,
+            "del": 1
+          },
+          {
+            "file": "test/invoice.test.js",
+            "add": 20,
+            "del": 0
+          },
+          {
+            "file": "test/total.test.js",
+            "add": 33,
+            "del": 0
+          }
+        ],
+        "linesAdded": 92,
+        "linesRemoved": 1,
+        "unrelated": [
+          "docs/knowledge/discount-before-vat.md",
+          "docs/knowledge/issued-invoice-keeps-stored-totals.md",
+          "docs/knowledge/quote-credit-note-vat-separate.md",
+          "docs/knowledge/vat-per-line-floor.md"
+        ],
+        "repoTests": {
+          "pass": true,
+          "output": "지 않는다\nok 23 - 모든 줄이 서식 폭을 넘지 않는다\n  ---\n  duration_ms: 0.783487\n  type: 'test'\n  ...\n# Subtest: 초안 만들기\nok 24 - 초안 만들기\n  ---\n  duration_ms: 2.119419\n  type: 'test'\n  ...\n# Subtest: 발행하면 합계를 저장한다\nok 25 - 발행하면 합계를 저장한다\n  ---\n  duration_ms: 0.653518\n  type: 'test'\n  ...\n# Subtest: 발행된 청구서는 저장된 합계를 쓴다\nok 26 - 발행된 청구서는 저장된 합계를 쓴다\n  ---\n  duration_ms: 0.291327\n  type: 'test'\n  ...\n# Subtest: 입금과 취소\nok 27 - 입금과 취소\n  ---\n  duration_ms: 0.519696\n  type: 'test'\n  ...\n# Subtest: 고객 정보로 초안 만들기\nok 28 - 고객 정보로 초안 만들기\n  ---\n  duration_ms: 0.51917\n  type: 'test'\n  ...\n# Subtest: 발행된 청구서는 계산 규칙이 바뀌어도 저장된 합계(구 규칙 값)를 그대로 돌려준다\nok 29 - 발행된 청구서는 계산 규칙이 바뀌어도 저장된 합계(구 규칙 값)를 그대로 돌려준다\n  ---\n  duration_ms: 0.292507\n  type: 'test'\n  ...\n# Subtest: 품목 줄 기본값\nok 30 - 품목 줄 기본값\n  ---\n  duration_ms: 3.449609\n  type: 'test'\n  ...\n# Subtest: 잘못된 품목 줄\nok 31 - 잘못된 품목 줄\n  ---\n  duration_ms: 0.649657\n  type: 'test'\n  ...\n# Subtest: 할인 금액\nok 32 - 할인 금액\n  ---\n  duration_ms: 0.490128\n  type: 'test'\n  ...\n# Subtest: 할인이 품목 금액보다 크면 오류\nok 33 - 할인이 품목 금액보다 크면 오류\n  ---\n  duration_ms: 0.201618\n  type: 'test'\n  ...\n# Subtest: 같은 품목 합치기\nok 34 - 같은 품목 합치기\n  ---\n  duration_ms: 0.312013\n  type: 'test'\n  ...\n# Subtest: 금액 글 읽기\nok 35 - 금액 글 읽기\n  ---\n  duration_ms: 1.32313\n  type: 'test'\n  ...\n# Subtest: 정수 원만 받는다\nok 36 - 정수 원만 받는다\n  ---\n  duration_ms: 0.245829\n  type: 'test'\n  ...\n# Subtest: 비율 금액\nok 37 - 비율 금액\n  ---\n  duration_ms: 0.228694\n  type: 'test'\n  ...\n# Subtest: 금액 나누기\nok 38 - 금액 나누기\n  ---\n  duration_ms: 1.447843\n  type: 'test'\n  ...\n# Subtest: 청구서 번호\nok 39 - 청구서 번호\n  ---\n  duration_ms: 1.018645\n  type: 'test'\n  ...\n# Subtest: 다음 번호\nok 40 - 다음 번호\n  ---\n  duration_ms: 2.470953\n  type: 'test'\n  ...\n# Subtest: 납부 기한\nok 41 - 납부 기한\n  ---\n  duration_ms: 0.625138\n  type: 'test'\n  ...\n# Subtest: 연체\nok 42 - 연체\n  ---\n  duration_ms: 0.303026\n  type: 'test'\n  ...\n# Subtest: 견적 번호와 유효 기간\nok 43 - 견적 번호와 유효 기간\n  ---\n  duration_ms: 2.186232\n  type: 'test'\n  ...\n# Subtest: 견적 합계\nok 44 - 견적 합계\n  ---\n  duration_ms: 1.637944\n  type: 'test'\n  ...\n# Subtest: 과세 품목만 있는 청구서\nok 45 - 과세 품목만 있는 청구서\n  ---\n  duration_ms: 2.790065\n  type: 'test'\n  ...\n# Subtest: 면세 품목에는 부가세가 없다\nok 46 - 면세 품목에는 부가세가 없다\n  ---\n  duration_ms: 0.315825\n  type: 'test'\n  ...\n# Subtest: 영세율 청구서는 부가세 0\nok 47 - 영세율 청구서는 부가세 0\n  ---\n  duration_ms: 0.165515\n  type: 'test'\n  ...\n# Subtest: 할인은 공급가액에서 뺀다\nok 48 - 할인은 공급가액에서 뺀다\n  ---\n  duration_ms: 0.43522\n  type: 'test'\n  ...\n# Subtest: 단가 0원 품목(증정품)\nok 49 - 단가 0원 품목(증정품)\n  ---\n  duration_ms: 0.261845\n  type: 'test'\n  ...\n# Subtest: 부가세는 줄마다 버림으로 계산해 더한다 (INV-2031)\nok 50 - 부가세는 줄마다 버림으로 계산해 더한다 (INV-2031)\n  ---\n  duration_ms: 0.244019\n  type: 'test'\n  ...\n# Subtest: 부가세는 할인된 줄 금액에 줄마다 버림으로 매긴다\nok 51 - 부가세는 할인된 줄 금액에 줄마다 버림으로 매긴다\n  ---\n  duration_ms: 0.295879\n  type: 'test'\n  ...\n# Subtest: 면세 줄은 부가세에서 빠지고 영세율은 0이다\nok 52 - 면세 줄은 부가세에서 빠지고 영세율은 0이다\n  ---\n  duration_ms: 0.224494\n  type: 'test'\n  ...\n1..52\n# tests 52\n# suites 0\n# pass 52\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 444.103444\n"
+        },
+        "checks": [
+          {
+            "name": "줄별 버림",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: INV-2031: 회계팀 계산과 같다\nok 1 - INV-2031: 회계팀 계산과 같다\n  ---\n  duration_ms: 2.076274\n  type: 'test'\n  ...\n# Subtest: INV-2038: 줄마다 버림\nok 2 - INV-2038: 줄마다 버림\n  ---\n  duration_ms: 0.434975\n  type: 'test'\n  ...\n# Subtest: INV-2040: 면세 품목이 섞여도 과세 줄마다 버림\nok 3 - INV-2040: 면세 품목이 섞여도 과세 줄마다 버림\n  ---\n  duration_ms: 0.201375\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 102.089973\n"
+          },
+          {
+            "name": "할인 순서",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: INV-2047: 금액 할인과 비율 할인\nok 1 - INV-2047: 금액 할인과 비율 할인\n  ---\n  duration_ms: 1.857977\n  type: 'test'\n  ...\n# Subtest: INV-2052: 할인 줄이 둘\nok 2 - INV-2052: 할인 줄이 둘\n  ---\n  duration_ms: 0.369255\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 103.890941\n"
+          },
+          {
+            "name": "서식 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 금액 서식\nok 1 - 금액 서식\n  ---\n  duration_ms: 1.265518\n  type: 'test'\n  ...\n# Subtest: 영세율 청구서: 부가세 0, 서식 그대로\nok 2 - 영세율 청구서: 부가세 0, 서식 그대로\n  ---\n  duration_ms: 3.178494\n  type: 'test'\n  ...\n# Subtest: 면세 품목만 있는 청구서: 부가세 0\nok 3 - 면세 품목만 있는 청구서: 부가세 0\n  ---\n  duration_ms: 0.331223\n  type: 'test'\n  ...\n# Subtest: 발행된 청구서는 저장된 합계 그대로\nok 4 - 발행된 청구서는 저장된 합계 그대로\n  ---\n  duration_ms: 0.867406\n  type: 'test'\n  ...\n# Subtest: 과세 청구서 서식 그대로\nok 5 - 과세 청구서 서식 그대로\n  ---\n  duration_ms: 0.522537\n  type: 'test'\n  ...\n1..5\n# tests 5\n# suites 0\n# pass 5\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 130.043832\n"
+          },
+          {
+            "name": "반품 줄별 버림",
+            "bug": null,
+            "pass": false,
+            "output": "idden/credit-rounding.test.js:12:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.start (node:internal/test_runner/test:944:17)\n    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)\n  ...\n# Subtest: CN-0118: 면세 품목이 섞여도 과세 줄마다 버림\nnot ok 2 - CN-0118: 면세 품목이 섞여도 과세 줄마다 버림\n  ---\n  duration_ms: 0.579623\n  type: 'test'\n  location: '/tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/judge/w-20261003-001/tree/eval-hidden/credit-rounding.test.js:16:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    1364 !== 1362\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1362\n  actual: 1364\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/judge/w-20261003-001/tree/eval-hidden/credit-rounding.test.js:20:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n# Subtest: CN-0115 분개: 부가세예수금이 회계팀 계산과 같다\nnot ok 3 - CN-0115 분개: 부가세예수금이 회계팀 계산과 같다\n  ---\n  duration_ms: 2.668365\n  type: 'test'\n  location: '/tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/judge/w-20261003-001/tree/eval-hidden/credit-rounding.test.js:24:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    ... Skipped lines\n    \n      [\n        [\n          '매출환입',\n          13228,\n          0\n    ...\n          '부가세예수금',\n    +     1323,\n    -     1321,\n          0\n        ],\n        [\n          '외상매출금',\n          0,\n    +     14551\n    -     14549\n        ]\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0:\n      0: '매출환입'\n      1: 13228\n      2: 0\n    1:\n      0: '부가세예수금'\n      1: 1321\n      2: 0\n    2:\n      0: '외상매출금'\n      1: 0\n      2: 14549\n  actual:\n    0:\n      0: '매출환입'\n      1: 13228\n      2: 0\n    1:\n      0: '부가세예수금'\n      1: 1323\n      2: 0\n    2:\n      0: '외상매출금'\n      1: 0\n      2: 14551\n  operator: 'deepStrictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/judge/w-20261003-001/tree/eval-hidden/credit-rounding.test.js:26:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 0\n# fail 3\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 107.103138\n"
+          },
+          {
+            "name": "반품 할인 순서",
+            "bug": null,
+            "pass": false,
+            "output": "TAP version 13\n# Subtest: CN-0112: 회계팀 계산과 같다\nnot ok 1 - CN-0112: 회계팀 계산과 같다\n  ---\n  duration_ms: 3.062014\n  type: 'test'\n  location: '/tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/judge/w-20261003-001/tree/eval-hidden/credit-discount.test.js:8:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    1744 !== 1742\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1742\n  actual: 1744\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/judge/w-20261003-001/tree/eval-hidden/credit-discount.test.js:11:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.start (node:internal/test_runner/test:944:17)\n    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)\n  ...\n# Subtest: CN-0121: 비율 할인 일부와 금액 할인 전부\nnot ok 2 - CN-0121: 비율 할인 일부와 금액 할인 전부\n  ---\n  duration_ms: 0.577254\n  type: 'test'\n  location: '/tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/judge/w-20261003-001/tree/eval-hidden/credit-discount.test.js:15:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    2582 !== 2580\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 2580\n  actual: 2582\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/judge/w-20261003-001/tree/eval-hidden/credit-discount.test.js:18:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 0\n# fail 2\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 102.081759\n"
+          },
+          {
+            "name": "반품 전표 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 영세율 청구서의 반품: 부가세 0\nok 1 - 영세율 청구서의 반품: 부가세 0\n  ---\n  duration_ms: 3.489207\n  type: 'test'\n  ...\n# Subtest: 면세 품목만 돌려받으면 부가세 0\nok 2 - 면세 품목만 돌려받으면 부가세 0\n  ---\n  duration_ms: 0.403486\n  type: 'test'\n  ...\n# Subtest: 줄 금액 끝자리가 0이면 계산 방식과 상관없이 같은 금액\nok 3 - 줄 금액 끝자리가 0이면 계산 방식과 상관없이 같은 금액\n  ---\n  duration_ms: 0.302073\n  type: 'test'\n  ...\n# Subtest: 저장된 반품 전표는 저장된 금액 그대로\nok 4 - 저장된 반품 전표는 저장된 금액 그대로\n  ---\n  duration_ms: 0.194218\n  type: 'test'\n  ...\n# Subtest: 청구서와 반품 전표를 함께 분개\nok 5 - 청구서와 반품 전표를 함께 분개\n  ---\n  duration_ms: 8.114517\n  type: 'test'\n  ...\n# Subtest: 반품 확인 규칙\nok 6 - 반품 확인 규칙\n  ---\n  duration_ms: 2.480384\n  type: 'test'\n  ...\n1..6\n# tests 6\n# suites 0\n# pass 6\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 111.34666\n"
+          },
+          {
+            "name": "견적 줄별 버림",
+            "bug": null,
+            "pass": false,
+            "output": "TAP version 13\n# Subtest: Q-0460: 할인 없는 견적의 줄마다 버림\nnot ok 1 - Q-0460: 할인 없는 견적의 줄마다 버림\n  ---\n  duration_ms: 2.524144\n  type: 'test'\n  location: '/tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/judge/w-20261003-001/tree/eval-hidden/quote-rounding.test.js:8:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    2052 !== 2049\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 2049\n  actual: 2052\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/judge/w-20261003-001/tree/eval-hidden/quote-rounding.test.js:11:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.start (node:internal/test_runner/test:944:17)\n    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)\n  ...\n# Subtest: Q-0457: 리포트의 견적서가 경리 계산과 같다\nnot ok 2 - Q-0457: 리포트의 견적서가 경리 계산과 같다\n  ---\n  duration_ms: 0.655461\n  type: 'test'\n  location: '/tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/judge/w-20261003-001/tree/eval-hidden/quote-rounding.test.js:15:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    3589 !== 3587\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 3587\n  actual: 3589\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/judge/w-20261003-001/tree/eval-hidden/quote-rounding.test.js:17:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 0\n# fail 2\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 97.424052\n"
+          },
+          {
+            "name": "견적 할인 순서",
+            "bug": null,
+            "pass": false,
+            "output": "TAP version 13\n# Subtest: Q-0462: 할인된 줄 금액에 줄마다 버림\nnot ok 1 - Q-0462: 할인된 줄 금액에 줄마다 버림\n  ---\n  duration_ms: 3.96879\n  type: 'test'\n  location: '/tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/judge/w-20261003-001/tree/eval-hidden/quote-discount.test.js:8:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n        exempt: 32315,\n        supply: 94259,\n        taxable: 61944,\n    +   total: 100453,\n    +   vat: 6194\n    -   total: 100451,\n    -   vat: 6192\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    supply: 94259\n    taxable: 61944\n    exempt: 32315\n    vat: 6192\n    total: 100451\n  actual:\n    supply: 94259\n    taxable: 61944\n    exempt: 32315\n    vat: 6194\n    total: 100453\n  operator: 'deepStrictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/judge/w-20261003-001/tree/eval-hidden/quote-discount.test.js:10:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.start (node:internal/test_runner/test:944:17)\n    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 96.655696\n"
+          },
+          {
+            "name": "견적 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 영세율 견적: 부가세 0\nok 1 - 영세율 견적: 부가세 0\n  ---\n  duration_ms: 3.292047\n  type: 'test'\n  ...\n# Subtest: 면세 품목만: 부가세 0\nok 2 - 면세 품목만: 부가세 0\n  ---\n  duration_ms: 0.4324\n  type: 'test'\n  ...\n# Subtest: 줄 금액 끝자리가 0이면 계산 방식과 상관없이 같은 금액\nok 3 - 줄 금액 끝자리가 0이면 계산 방식과 상관없이 같은 금액\n  ---\n  duration_ms: 0.392558\n  type: 'test'\n  ...\n# Subtest: 견적 번호와 유효 기간\nok 4 - 견적 번호와 유효 기간\n  ---\n  duration_ms: 0.644943\n  type: 'test'\n  ...\n1..4\n# tests 4\n# suites 0\n# pass 4\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 99.620829\n"
+          }
+        ]
+      },
+      {
+        "label": "w-20261003-002",
+        "removed": false,
+        "git": {
+          "branch": "relay/w-20261003-002",
+          "commits": 2,
+          "log": [
+            "docs: 반품 전표 부가세 규칙과 부분 반품 할인 지식 기록",
+            "fix: 반품 전표 부가세를 과세 줄별 원 단위 버림 합으로 계산"
+          ],
+          "uncommitted": []
+        },
+        "files": [
+          {
+            "file": "docs/knowledge/credit-note-partial-discount-by-qty-ratio.md",
+            "add": 8,
+            "del": 0
+          },
+          {
+            "file": "docs/knowledge/credit-note-vat-per-line-floor.md",
+            "add": 10,
+            "del": 0
+          },
+          {
+            "file": "docs/knowledge/quote-credit-note-vat-separate.md",
+            "add": 10,
+            "del": 0
+          },
+          {
+            "file": "src/invoice/credit-note.js",
+            "add": 4,
+            "del": 1
+          },
+          {
+            "file": "test/credit-note.test.js",
+            "add": 30,
+            "del": 0
+          }
+        ],
+        "linesAdded": 62,
+        "linesRemoved": 1,
+        "unrelated": [
+          "docs/knowledge/credit-note-partial-discount-by-qty-ratio.md",
+          "docs/knowledge/credit-note-vat-per-line-floor.md",
+          "docs/knowledge/quote-credit-note-vat-separate.md"
+        ],
+        "repoTests": {
+          "pass": true,
+          "output": "금액\n  ---\n  duration_ms: 0.272552\n  type: 'test'\n  ...\n# Subtest: 글자 폭\nok 19 - 글자 폭\n  ---\n  duration_ms: 0.327775\n  type: 'test'\n  ...\n# Subtest: 날짜\nok 20 - 날짜\n  ---\n  duration_ms: 0.679759\n  type: 'test'\n  ...\n# Subtest: 발행된 청구서 서식\nok 21 - 발행된 청구서 서식\n  ---\n  duration_ms: 2.809605\n  type: 'test'\n  ...\n# Subtest: 초안은 번호 없이, 고객이 없으면 고객 ID를 찍는다\nok 22 - 초안은 번호 없이, 고객이 없으면 고객 ID를 찍는다\n  ---\n  duration_ms: 0.494898\n  type: 'test'\n  ...\n# Subtest: 영세율 청구서 표시\nok 23 - 영세율 청구서 표시\n  ---\n  duration_ms: 0.429851\n  type: 'test'\n  ...\n# Subtest: 모든 줄이 서식 폭을 넘지 않는다\nok 24 - 모든 줄이 서식 폭을 넘지 않는다\n  ---\n  duration_ms: 0.455777\n  type: 'test'\n  ...\n# Subtest: 초안 만들기\nok 25 - 초안 만들기\n  ---\n  duration_ms: 1.971372\n  type: 'test'\n  ...\n# Subtest: 발행하면 합계를 저장한다\nok 26 - 발행하면 합계를 저장한다\n  ---\n  duration_ms: 0.565674\n  type: 'test'\n  ...\n# Subtest: 발행된 청구서는 저장된 합계를 쓴다\nok 27 - 발행된 청구서는 저장된 합계를 쓴다\n  ---\n  duration_ms: 0.282583\n  type: 'test'\n  ...\n# Subtest: 입금과 취소\nok 28 - 입금과 취소\n  ---\n  duration_ms: 0.335111\n  type: 'test'\n  ...\n# Subtest: 고객 정보로 초안 만들기\nok 29 - 고객 정보로 초안 만들기\n  ---\n  duration_ms: 0.485571\n  type: 'test'\n  ...\n# Subtest: 품목 줄 기본값\nok 30 - 품목 줄 기본값\n  ---\n  duration_ms: 3.141796\n  type: 'test'\n  ...\n# Subtest: 잘못된 품목 줄\nok 31 - 잘못된 품목 줄\n  ---\n  duration_ms: 0.658168\n  type: 'test'\n  ...\n# Subtest: 할인 금액\nok 32 - 할인 금액\n  ---\n  duration_ms: 0.32046\n  type: 'test'\n  ...\n# Subtest: 할인이 품목 금액보다 크면 오류\nok 33 - 할인이 품목 금액보다 크면 오류\n  ---\n  duration_ms: 0.177175\n  type: 'test'\n  ...\n# Subtest: 같은 품목 합치기\nok 34 - 같은 품목 합치기\n  ---\n  duration_ms: 0.344651\n  type: 'test'\n  ...\n# Subtest: 금액 글 읽기\nok 35 - 금액 글 읽기\n  ---\n  duration_ms: 1.3396\n  type: 'test'\n  ...\n# Subtest: 정수 원만 받는다\nok 36 - 정수 원만 받는다\n  ---\n  duration_ms: 0.258123\n  type: 'test'\n  ...\n# Subtest: 비율 금액\nok 37 - 비율 금액\n  ---\n  duration_ms: 0.228794\n  type: 'test'\n  ...\n# Subtest: 금액 나누기\nok 38 - 금액 나누기\n  ---\n  duration_ms: 1.4383\n  type: 'test'\n  ...\n# Subtest: 청구서 번호\nok 39 - 청구서 번호\n  ---\n  duration_ms: 1.00962\n  type: 'test'\n  ...\n# Subtest: 다음 번호\nok 40 - 다음 번호\n  ---\n  duration_ms: 2.712074\n  type: 'test'\n  ...\n# Subtest: 납부 기한\nok 41 - 납부 기한\n  ---\n  duration_ms: 0.598387\n  type: 'test'\n  ...\n# Subtest: 연체\nok 42 - 연체\n  ---\n  duration_ms: 0.30452\n  type: 'test'\n  ...\n# Subtest: 견적 번호와 유효 기간\nok 43 - 견적 번호와 유효 기간\n  ---\n  duration_ms: 1.923532\n  type: 'test'\n  ...\n# Subtest: 견적 합계\nok 44 - 견적 합계\n  ---\n  duration_ms: 1.487132\n  type: 'test'\n  ...\n# Subtest: 과세 품목만 있는 청구서\nok 45 - 과세 품목만 있는 청구서\n  ---\n  duration_ms: 2.727054\n  type: 'test'\n  ...\n# Subtest: 면세 품목에는 부가세가 없다\nok 46 - 면세 품목에는 부가세가 없다\n  ---\n  duration_ms: 0.349933\n  type: 'test'\n  ...\n# Subtest: 영세율 청구서는 부가세 0\nok 47 - 영세율 청구서는 부가세 0\n  ---\n  duration_ms: 0.158711\n  type: 'test'\n  ...\n# Subtest: 할인은 공급가액에서 뺀다\nok 48 - 할인은 공급가액에서 뺀다\n  ---\n  duration_ms: 0.286914\n  type: 'test'\n  ...\n# Subtest: 단가 0원 품목(증정품)\nok 49 - 단가 0원 품목(증정품)\n  ---\n  duration_ms: 0.314381\n  type: 'test'\n  ...\n1..49\n# tests 49\n# suites 0\n# pass 49\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 414.788915\n"
+        },
+        "checks": [
+          {
+            "name": "줄별 버림",
+            "bug": null,
+            "pass": false,
+            "output": "TAP version 13\n# Subtest: INV-2031: 회계팀 계산과 같다\nnot ok 1 - INV-2031: 회계팀 계산과 같다\n  ---\n  duration_ms: 2.488054\n  type: 'test'\n  location: '/tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/judge/w-20261003-002/tree/eval-hidden/rounding.test.js:10:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    2644 !== 2641\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 2641\n  actual: 2644\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/judge/w-20261003-002/tree/eval-hidden/rounding.test.js:13:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.start (node:internal/test_runner/test:944:17)\n    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)\n  ...\n# Subtest: INV-2038: 줄마다 버림\nnot ok 2 - INV-2038: 줄마다 버림\n  ---\n  duration_ms: 0.448232\n  type: 'test'\n  location: '/tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/judge/w-20261003-002/tree/eval-hidden/rounding.test.js:17:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    3857 !== 3854\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 3854\n  actual: 3857\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/judge/w-20261003-002/tree/eval-hidden/rounding.test.js:20:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n# Subtest: INV-2040: 면세 품목이 섞여도 과세 줄마다 버림\nnot ok 3 - INV-2040: 면세 품목이 섞여도 과세 줄마다 버림\n  ---\n  duration_ms: 0.268688\n  type: 'test'\n  location: '/tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/judge/w-20261003-002/tree/eval-hidden/rounding.test.js:24:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    5038 !== 5035\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 5035\n  actual: 5038\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/judge/w-20261003-002/tree/eval-hidden/rounding.test.js:28:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 0\n# fail 3\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 100.120175\n"
+          },
+          {
+            "name": "할인 순서",
+            "bug": null,
+            "pass": false,
+            "output": "TAP version 13\n# Subtest: INV-2047: 금액 할인과 비율 할인\nnot ok 1 - INV-2047: 금액 할인과 비율 할인\n  ---\n  duration_ms: 2.407328\n  type: 'test'\n  location: '/tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/judge/w-20261003-002/tree/eval-hidden/discount.test.js:10:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    5801 !== 5798\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 5798\n  actual: 5801\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/judge/w-20261003-002/tree/eval-hidden/discount.test.js:15:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.start (node:internal/test_runner/test:944:17)\n    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)\n  ...\n# Subtest: INV-2052: 할인 줄이 둘\nnot ok 2 - INV-2052: 할인 줄이 둘\n  ---\n  duration_ms: 0.493638\n  type: 'test'\n  location: '/tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/judge/w-20261003-002/tree/eval-hidden/discount.test.js:19:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    3743 !== 3740\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 3740\n  actual: 3743\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/judge/w-20261003-002/tree/eval-hidden/discount.test.js:24:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 0\n# fail 2\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 94.303581\n"
+          },
+          {
+            "name": "서식 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 금액 서식\nok 1 - 금액 서식\n  ---\n  duration_ms: 1.142903\n  type: 'test'\n  ...\n# Subtest: 영세율 청구서: 부가세 0, 서식 그대로\nok 2 - 영세율 청구서: 부가세 0, 서식 그대로\n  ---\n  duration_ms: 3.254893\n  type: 'test'\n  ...\n# Subtest: 면세 품목만 있는 청구서: 부가세 0\nok 3 - 면세 품목만 있는 청구서: 부가세 0\n  ---\n  duration_ms: 0.248983\n  type: 'test'\n  ...\n# Subtest: 발행된 청구서는 저장된 합계 그대로\nok 4 - 발행된 청구서는 저장된 합계 그대로\n  ---\n  duration_ms: 0.860426\n  type: 'test'\n  ...\n# Subtest: 과세 청구서 서식 그대로\nok 5 - 과세 청구서 서식 그대로\n  ---\n  duration_ms: 1.6415\n  type: 'test'\n  ...\n1..5\n# tests 5\n# suites 0\n# pass 5\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 104.052985\n"
+          },
+          {
+            "name": "반품 줄별 버림",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: CN-0115: 줄마다 버림\nok 1 - CN-0115: 줄마다 버림\n  ---\n  duration_ms: 2.042271\n  type: 'test'\n  ...\n# Subtest: CN-0118: 면세 품목이 섞여도 과세 줄마다 버림\nok 2 - CN-0118: 면세 품목이 섞여도 과세 줄마다 버림\n  ---\n  duration_ms: 0.412605\n  type: 'test'\n  ...\n# Subtest: CN-0115 분개: 부가세예수금이 회계팀 계산과 같다\nok 3 - CN-0115 분개: 부가세예수금이 회계팀 계산과 같다\n  ---\n  duration_ms: 1.607766\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 104.096355\n"
+          },
+          {
+            "name": "반품 할인 순서",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: CN-0112: 회계팀 계산과 같다\nok 1 - CN-0112: 회계팀 계산과 같다\n  ---\n  duration_ms: 2.654884\n  type: 'test'\n  ...\n# Subtest: CN-0121: 비율 할인 일부와 금액 할인 전부\nok 2 - CN-0121: 비율 할인 일부와 금액 할인 전부\n  ---\n  duration_ms: 0.453029\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 100.052545\n"
+          },
+          {
+            "name": "반품 전표 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 영세율 청구서의 반품: 부가세 0\nok 1 - 영세율 청구서의 반품: 부가세 0\n  ---\n  duration_ms: 3.829195\n  type: 'test'\n  ...\n# Subtest: 면세 품목만 돌려받으면 부가세 0\nok 2 - 면세 품목만 돌려받으면 부가세 0\n  ---\n  duration_ms: 0.516472\n  type: 'test'\n  ...\n# Subtest: 줄 금액 끝자리가 0이면 계산 방식과 상관없이 같은 금액\nok 3 - 줄 금액 끝자리가 0이면 계산 방식과 상관없이 같은 금액\n  ---\n  duration_ms: 0.380183\n  type: 'test'\n  ...\n# Subtest: 저장된 반품 전표는 저장된 금액 그대로\nok 4 - 저장된 반품 전표는 저장된 금액 그대로\n  ---\n  duration_ms: 0.18774\n  type: 'test'\n  ...\n# Subtest: 청구서와 반품 전표를 함께 분개\nok 5 - 청구서와 반품 전표를 함께 분개\n  ---\n  duration_ms: 8.788804\n  type: 'test'\n  ...\n# Subtest: 반품 확인 규칙\nok 6 - 반품 확인 규칙\n  ---\n  duration_ms: 1.27645\n  type: 'test'\n  ...\n1..6\n# tests 6\n# suites 0\n# pass 6\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 129.482101\n"
+          },
+          {
+            "name": "견적 줄별 버림",
+            "bug": null,
+            "pass": false,
+            "output": "TAP version 13\n# Subtest: Q-0460: 할인 없는 견적의 줄마다 버림\nnot ok 1 - Q-0460: 할인 없는 견적의 줄마다 버림\n  ---\n  duration_ms: 2.644685\n  type: 'test'\n  location: '/tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/judge/w-20261003-002/tree/eval-hidden/quote-rounding.test.js:8:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    2052 !== 2049\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 2049\n  actual: 2052\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/judge/w-20261003-002/tree/eval-hidden/quote-rounding.test.js:11:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.start (node:internal/test_runner/test:944:17)\n    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)\n  ...\n# Subtest: Q-0457: 리포트의 견적서가 경리 계산과 같다\nnot ok 2 - Q-0457: 리포트의 견적서가 경리 계산과 같다\n  ---\n  duration_ms: 0.698899\n  type: 'test'\n  location: '/tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/judge/w-20261003-002/tree/eval-hidden/quote-rounding.test.js:15:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    3589 !== 3587\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 3587\n  actual: 3589\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/judge/w-20261003-002/tree/eval-hidden/quote-rounding.test.js:17:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 0\n# fail 2\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 117.706537\n"
+          },
+          {
+            "name": "견적 할인 순서",
+            "bug": null,
+            "pass": false,
+            "output": "TAP version 13\n# Subtest: Q-0462: 할인된 줄 금액에 줄마다 버림\nnot ok 1 - Q-0462: 할인된 줄 금액에 줄마다 버림\n  ---\n  duration_ms: 4.0232\n  type: 'test'\n  location: '/tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/judge/w-20261003-002/tree/eval-hidden/quote-discount.test.js:8:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n        exempt: 32315,\n        supply: 94259,\n        taxable: 61944,\n    +   total: 100453,\n    +   vat: 6194\n    -   total: 100451,\n    -   vat: 6192\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    supply: 94259\n    taxable: 61944\n    exempt: 32315\n    vat: 6192\n    total: 100451\n  actual:\n    supply: 94259\n    taxable: 61944\n    exempt: 32315\n    vat: 6194\n    total: 100453\n  operator: 'deepStrictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/judge/w-20261003-002/tree/eval-hidden/quote-discount.test.js:10:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.start (node:internal/test_runner/test:944:17)\n    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 95.727797\n"
+          },
+          {
+            "name": "견적 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 영세율 견적: 부가세 0\nok 1 - 영세율 견적: 부가세 0\n  ---\n  duration_ms: 2.932083\n  type: 'test'\n  ...\n# Subtest: 면세 품목만: 부가세 0\nok 2 - 면세 품목만: 부가세 0\n  ---\n  duration_ms: 0.328722\n  type: 'test'\n  ...\n# Subtest: 줄 금액 끝자리가 0이면 계산 방식과 상관없이 같은 금액\nok 3 - 줄 금액 끝자리가 0이면 계산 방식과 상관없이 같은 금액\n  ---\n  duration_ms: 0.293159\n  type: 'test'\n  ...\n# Subtest: 견적 번호와 유효 기간\nok 4 - 견적 번호와 유효 기간\n  ---\n  duration_ms: 0.632619\n  type: 'test'\n  ...\n1..4\n# tests 4\n# suites 0\n# pass 4\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 97.367836\n"
+          }
+        ]
+      },
+      {
+        "label": "p2-w-20261003-001",
+        "removed": false,
+        "git": {
+          "branch": "relay/w-20261003-001",
+          "commits": 8,
+          "log": [
+            "docs: 견적서 부가세 규칙과 확인 범위 지식 기록",
+            "fix: 견적서 부가세를 할인 후 과세 줄별 원 단위 버림 합으로 계산",
+            "Merge relay/w-20261003-002 (팀 공유 머지, 평가 도구)",
+            "Merge relay/w-20261003-001 (팀 공유 머지, 평가 도구)",
+            "docs: 반품 전표 부가세 규칙과 부분 반품 할인 지식 기록",
+            "fix: 반품 전표 부가세를 과세 줄별 원 단위 버림 합으로 계산",
+            "docs: 부가세 줄별 버림 규칙과 견적서·반품 전표 관련 지식 추가",
+            "fix: 청구서 부가세를 줄별 원 단위 버림 합산으로 계산"
+          ],
+          "uncommitted": []
+        },
+        "files": [
+          {
+            "file": "docs/knowledge/credit-note-partial-discount-by-qty-ratio.md",
+            "add": 8,
+            "del": 0
+          },
+          {
+            "file": "docs/knowledge/credit-note-vat-per-line-floor.md",
+            "add": 10,
+            "del": 0
+          },
+          {
+            "file": "docs/knowledge/discount-before-vat.md",
+            "add": 8,
+            "del": 0
+          },
+          {
+            "file": "docs/knowledge/issued-invoice-keeps-stored-totals.md",
+            "add": 8,
+            "del": 0
+          },
+          {
+            "file": "docs/knowledge/quote-credit-note-vat-separate.md",
+            "add": 10,
+            "del": 0
+          },
+          {
+            "file": "docs/knowledge/quote-vat-per-line-floor-unconfirmed.md",
+            "add": 9,
+            "del": 0
+          },
+          {
+            "file": "docs/knowledge/vat-per-line-floor.md",
+            "add": 10,
+            "del": 0
+          },
+          {
+            "file": "src/invoice/credit-note.js",
+            "add": 4,
+            "del": 1
+          },
+          {
+            "file": "src/invoice/quote.js",
+            "add": 3,
+            "del": 4
+          },
+          {
+            "file": "src/invoice/total.js",
+            "add": 4,
+            "del": 1
+          },
+          {
+            "file": "test/credit-note.test.js",
+            "add": 30,
+            "del": 0
+          },
+          {
+            "file": "test/invoice.test.js",
+            "add": 20,
+            "del": 0
+          },
+          {
+            "file": "test/quote.test.js",
+            "add": 7,
+            "del": 0
+          },
+          {
+            "file": "test/total.test.js",
+            "add": 33,
+            "del": 0
+          }
+        ],
+        "linesAdded": 164,
+        "linesRemoved": 6,
+        "unrelated": [
+          "docs/knowledge/credit-note-partial-discount-by-qty-ratio.md",
+          "docs/knowledge/credit-note-vat-per-line-floor.md",
+          "docs/knowledge/discount-before-vat.md",
+          "docs/knowledge/issued-invoice-keeps-stored-totals.md",
+          "docs/knowledge/quote-credit-note-vat-separate.md",
+          "docs/knowledge/quote-vat-per-line-floor-unconfirmed.md",
+          "docs/knowledge/vat-per-line-floor.md"
+        ],
+        "repoTests": {
+          "pass": true,
+          "output": "ubtest: 발행하면 합계를 저장한다\nok 26 - 발행하면 합계를 저장한다\n  ---\n  duration_ms: 0.549136\n  type: 'test'\n  ...\n# Subtest: 발행된 청구서는 저장된 합계를 쓴다\nok 27 - 발행된 청구서는 저장된 합계를 쓴다\n  ---\n  duration_ms: 0.190616\n  type: 'test'\n  ...\n# Subtest: 입금과 취소\nok 28 - 입금과 취소\n  ---\n  duration_ms: 0.458259\n  type: 'test'\n  ...\n# Subtest: 고객 정보로 초안 만들기\nok 29 - 고객 정보로 초안 만들기\n  ---\n  duration_ms: 0.377638\n  type: 'test'\n  ...\n# Subtest: 발행된 청구서는 계산 규칙이 바뀌어도 저장된 합계(구 규칙 값)를 그대로 돌려준다\nok 30 - 발행된 청구서는 계산 규칙이 바뀌어도 저장된 합계(구 규칙 값)를 그대로 돌려준다\n  ---\n  duration_ms: 0.257105\n  type: 'test'\n  ...\n# Subtest: 품목 줄 기본값\nok 31 - 품목 줄 기본값\n  ---\n  duration_ms: 3.52456\n  type: 'test'\n  ...\n# Subtest: 잘못된 품목 줄\nok 32 - 잘못된 품목 줄\n  ---\n  duration_ms: 0.653367\n  type: 'test'\n  ...\n# Subtest: 할인 금액\nok 33 - 할인 금액\n  ---\n  duration_ms: 0.390126\n  type: 'test'\n  ...\n# Subtest: 할인이 품목 금액보다 크면 오류\nok 34 - 할인이 품목 금액보다 크면 오류\n  ---\n  duration_ms: 0.254626\n  type: 'test'\n  ...\n# Subtest: 같은 품목 합치기\nok 35 - 같은 품목 합치기\n  ---\n  duration_ms: 0.731482\n  type: 'test'\n  ...\n# Subtest: 금액 글 읽기\nok 36 - 금액 글 읽기\n  ---\n  duration_ms: 1.355469\n  type: 'test'\n  ...\n# Subtest: 정수 원만 받는다\nok 37 - 정수 원만 받는다\n  ---\n  duration_ms: 0.279111\n  type: 'test'\n  ...\n# Subtest: 비율 금액\nok 38 - 비율 금액\n  ---\n  duration_ms: 0.234332\n  type: 'test'\n  ...\n# Subtest: 금액 나누기\nok 39 - 금액 나누기\n  ---\n  duration_ms: 1.367699\n  type: 'test'\n  ...\n# Subtest: 청구서 번호\nok 40 - 청구서 번호\n  ---\n  duration_ms: 1.650843\n  type: 'test'\n  ...\n# Subtest: 다음 번호\nok 41 - 다음 번호\n  ---\n  duration_ms: 2.324703\n  type: 'test'\n  ...\n# Subtest: 납부 기한\nok 42 - 납부 기한\n  ---\n  duration_ms: 0.662137\n  type: 'test'\n  ...\n# Subtest: 연체\nok 43 - 연체\n  ---\n  duration_ms: 0.332961\n  type: 'test'\n  ...\n# Subtest: 견적 번호와 유효 기간\nok 44 - 견적 번호와 유효 기간\n  ---\n  duration_ms: 2.066139\n  type: 'test'\n  ...\n# Subtest: 견적 합계\nok 45 - 견적 합계\n  ---\n  duration_ms: 1.511269\n  type: 'test'\n  ...\n# Subtest: 견적 합계: 부가세는 할인 후 줄 금액마다 버림 (Q-0457 경리 합계 56,278원)\nok 46 - 견적 합계: 부가세는 할인 후 줄 금액마다 버림 (Q-0457 경리 합계 56,278원)\n  ---\n  duration_ms: 0.702222\n  type: 'test'\n  ...\n# Subtest: 과세 품목만 있는 청구서\nok 47 - 과세 품목만 있는 청구서\n  ---\n  duration_ms: 2.536577\n  type: 'test'\n  ...\n# Subtest: 면세 품목에는 부가세가 없다\nok 48 - 면세 품목에는 부가세가 없다\n  ---\n  duration_ms: 0.32474\n  type: 'test'\n  ...\n# Subtest: 영세율 청구서는 부가세 0\nok 49 - 영세율 청구서는 부가세 0\n  ---\n  duration_ms: 0.176238\n  type: 'test'\n  ...\n# Subtest: 할인은 공급가액에서 뺀다\nok 50 - 할인은 공급가액에서 뺀다\n  ---\n  duration_ms: 0.251767\n  type: 'test'\n  ...\n# Subtest: 단가 0원 품목(증정품)\nok 51 - 단가 0원 품목(증정품)\n  ---\n  duration_ms: 0.287881\n  type: 'test'\n  ...\n# Subtest: 부가세는 줄마다 버림으로 계산해 더한다 (INV-2031)\nok 52 - 부가세는 줄마다 버림으로 계산해 더한다 (INV-2031)\n  ---\n  duration_ms: 0.185142\n  type: 'test'\n  ...\n# Subtest: 부가세는 할인된 줄 금액에 줄마다 버림으로 매긴다\nok 53 - 부가세는 할인된 줄 금액에 줄마다 버림으로 매긴다\n  ---\n  duration_ms: 0.227606\n  type: 'test'\n  ...\n# Subtest: 면세 줄은 부가세에서 빠지고 영세율은 0이다\nok 54 - 면세 줄은 부가세에서 빠지고 영세율은 0이다\n  ---\n  duration_ms: 0.243719\n  type: 'test'\n  ...\n1..54\n# tests 54\n# suites 0\n# pass 54\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 431.659176\n"
+        },
+        "checks": [
+          {
+            "name": "줄별 버림",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: INV-2031: 회계팀 계산과 같다\nok 1 - INV-2031: 회계팀 계산과 같다\n  ---\n  duration_ms: 1.933682\n  type: 'test'\n  ...\n# Subtest: INV-2038: 줄마다 버림\nok 2 - INV-2038: 줄마다 버림\n  ---\n  duration_ms: 0.432993\n  type: 'test'\n  ...\n# Subtest: INV-2040: 면세 품목이 섞여도 과세 줄마다 버림\nok 3 - INV-2040: 면세 품목이 섞여도 과세 줄마다 버림\n  ---\n  duration_ms: 0.190838\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 100.52268\n"
+          },
+          {
+            "name": "할인 순서",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: INV-2047: 금액 할인과 비율 할인\nok 1 - INV-2047: 금액 할인과 비율 할인\n  ---\n  duration_ms: 1.925889\n  type: 'test'\n  ...\n# Subtest: INV-2052: 할인 줄이 둘\nok 2 - INV-2052: 할인 줄이 둘\n  ---\n  duration_ms: 0.459519\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 96.094099\n"
+          },
+          {
+            "name": "서식 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 금액 서식\nok 1 - 금액 서식\n  ---\n  duration_ms: 1.138015\n  type: 'test'\n  ...\n# Subtest: 영세율 청구서: 부가세 0, 서식 그대로\nok 2 - 영세율 청구서: 부가세 0, 서식 그대로\n  ---\n  duration_ms: 4.080029\n  type: 'test'\n  ...\n# Subtest: 면세 품목만 있는 청구서: 부가세 0\nok 3 - 면세 품목만 있는 청구서: 부가세 0\n  ---\n  duration_ms: 0.307946\n  type: 'test'\n  ...\n# Subtest: 발행된 청구서는 저장된 합계 그대로\nok 4 - 발행된 청구서는 저장된 합계 그대로\n  ---\n  duration_ms: 0.887605\n  type: 'test'\n  ...\n# Subtest: 과세 청구서 서식 그대로\nok 5 - 과세 청구서 서식 그대로\n  ---\n  duration_ms: 1.932401\n  type: 'test'\n  ...\n1..5\n# tests 5\n# suites 0\n# pass 5\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 105.00987\n"
+          },
+          {
+            "name": "반품 줄별 버림",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: CN-0115: 줄마다 버림\nok 1 - CN-0115: 줄마다 버림\n  ---\n  duration_ms: 2.28062\n  type: 'test'\n  ...\n# Subtest: CN-0118: 면세 품목이 섞여도 과세 줄마다 버림\nok 2 - CN-0118: 면세 품목이 섞여도 과세 줄마다 버림\n  ---\n  duration_ms: 0.471252\n  type: 'test'\n  ...\n# Subtest: CN-0115 분개: 부가세예수금이 회계팀 계산과 같다\nok 3 - CN-0115 분개: 부가세예수금이 회계팀 계산과 같다\n  ---\n  duration_ms: 1.681884\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 127.040897\n"
+          },
+          {
+            "name": "반품 할인 순서",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: CN-0112: 회계팀 계산과 같다\nok 1 - CN-0112: 회계팀 계산과 같다\n  ---\n  duration_ms: 2.390876\n  type: 'test'\n  ...\n# Subtest: CN-0121: 비율 할인 일부와 금액 할인 전부\nok 2 - CN-0121: 비율 할인 일부와 금액 할인 전부\n  ---\n  duration_ms: 0.505637\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 98.416644\n"
+          },
+          {
+            "name": "반품 전표 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 영세율 청구서의 반품: 부가세 0\nok 1 - 영세율 청구서의 반품: 부가세 0\n  ---\n  duration_ms: 3.778475\n  type: 'test'\n  ...\n# Subtest: 면세 품목만 돌려받으면 부가세 0\nok 2 - 면세 품목만 돌려받으면 부가세 0\n  ---\n  duration_ms: 0.423391\n  type: 'test'\n  ...\n# Subtest: 줄 금액 끝자리가 0이면 계산 방식과 상관없이 같은 금액\nok 3 - 줄 금액 끝자리가 0이면 계산 방식과 상관없이 같은 금액\n  ---\n  duration_ms: 0.382549\n  type: 'test'\n  ...\n# Subtest: 저장된 반품 전표는 저장된 금액 그대로\nok 4 - 저장된 반품 전표는 저장된 금액 그대로\n  ---\n  duration_ms: 0.195876\n  type: 'test'\n  ...\n# Subtest: 청구서와 반품 전표를 함께 분개\nok 5 - 청구서와 반품 전표를 함께 분개\n  ---\n  duration_ms: 8.343224\n  type: 'test'\n  ...\n# Subtest: 반품 확인 규칙\nok 6 - 반품 확인 규칙\n  ---\n  duration_ms: 2.345282\n  type: 'test'\n  ...\n1..6\n# tests 6\n# suites 0\n# pass 6\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 111.0838\n"
+          },
+          {
+            "name": "견적 줄별 버림",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: Q-0460: 할인 없는 견적의 줄마다 버림\nok 1 - Q-0460: 할인 없는 견적의 줄마다 버림\n  ---\n  duration_ms: 1.843193\n  type: 'test'\n  ...\n# Subtest: Q-0457: 리포트의 견적서가 경리 계산과 같다\nok 2 - Q-0457: 리포트의 견적서가 경리 계산과 같다\n  ---\n  duration_ms: 0.653101\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 96.569782\n"
+          },
+          {
+            "name": "견적 할인 순서",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: Q-0462: 할인된 줄 금액에 줄마다 버림\nok 1 - Q-0462: 할인된 줄 금액에 줄마다 버림\n  ---\n  duration_ms: 2.740063\n  type: 'test'\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 1\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 94.326765\n"
+          },
+          {
+            "name": "견적 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 영세율 견적: 부가세 0\nok 1 - 영세율 견적: 부가세 0\n  ---\n  duration_ms: 2.976557\n  type: 'test'\n  ...\n# Subtest: 면세 품목만: 부가세 0\nok 2 - 면세 품목만: 부가세 0\n  ---\n  duration_ms: 0.369043\n  type: 'test'\n  ...\n# Subtest: 줄 금액 끝자리가 0이면 계산 방식과 상관없이 같은 금액\nok 3 - 줄 금액 끝자리가 0이면 계산 방식과 상관없이 같은 금액\n  ---\n  duration_ms: 0.302029\n  type: 'test'\n  ...\n# Subtest: 견적 번호와 유효 기간\nok 4 - 견적 번호와 유효 기간\n  ---\n  duration_ms: 0.619057\n  type: 'test'\n  ...\n1..4\n# tests 4\n# suites 0\n# pass 4\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 98.648989\n"
+          }
+        ]
+      }
+    ]
+  },
+  "human": {
+    "turns": 35,
+    "actions": {
+      "click": 19,
+      "fill": 3,
+      "key": 13,
+      "type": 7,
+      "wait": 4,
+      "inspect_diff": 3,
+      "done": 3
+    },
+    "actionsTotal": 45,
+    "charsTyped": 1379,
+    "invalidActions": 0,
+    "refusedDone": 0,
+    "frictionMean": 0.14285714285714285,
+    "frictionHigh": 0,
+    "costUsd": 4.964092600000001,
+    "calls": 38,
+    "ms": 159016,
+    "waitOnlyTurns": 0,
+    "images": 23
+  },
+  "setupDialogs": [
+    {
+      "t": 26809,
+      "name": "folder_trust"
+    },
+    {
+      "t": 29452,
+      "name": "bypass_permissions_warning"
+    },
+    {
+      "t": 587501,
+      "name": "folder_trust"
+    }
+  ],
+  "agent": {
+    "input": 126,
+    "output": 38882,
+    "cacheRead": 2395621,
+    "cacheWrite": 216382,
+    "messages": 63,
+    "sessions": 9
+  },
+  "agentSteps": [
+    {
+      "work": "w-20261003-001",
+      "seq": 1,
+      "node": "intake",
+      "contextChars": 2087,
+      "knowledgeChars": 0,
+      "tokens": {
+        "input": 20,
+        "output": 4050,
+        "cacheRead": 411662,
+        "cacheWrite": 24475,
+        "messages": 10
+      }
+    },
+    {
+      "work": "w-20261003-001",
+      "seq": 2,
+      "node": "fix",
+      "contextChars": 4415,
+      "knowledgeChars": 0,
+      "tokens": {
+        "input": 12,
+        "output": 4376,
+        "cacheRead": 215019,
+        "cacheWrite": 23212,
+        "messages": 6
+      }
+    },
+    {
+      "work": "w-20261003-001",
+      "seq": 3,
+      "node": "verify",
+      "contextChars": 5482,
+      "knowledgeChars": 0,
+      "tokens": {
+        "input": 22,
+        "output": 7339,
+        "cacheRead": 451514,
+        "cacheWrite": 27501,
+        "messages": 11
+      }
+    },
+    {
+      "work": "w-20261003-002",
+      "seq": 1,
+      "node": "intake",
+      "contextChars": 3995,
+      "knowledgeChars": 1790,
+      "tokens": {
+        "input": 10,
+        "output": 3459,
+        "cacheRead": 168537,
+        "cacheWrite": 20910,
+        "messages": 5
+      }
+    },
+    {
+      "work": "w-20261003-002",
+      "seq": 2,
+      "node": "fix",
+      "contextChars": 6507,
+      "knowledgeChars": 1790,
+      "tokens": {
+        "input": 12,
+        "output": 3592,
+        "cacheRead": 226263,
+        "cacheWrite": 25314,
+        "messages": 6
+      }
+    },
+    {
+      "work": "w-20261003-002",
+      "seq": 3,
+      "node": "verify",
+      "contextChars": 7572,
+      "knowledgeChars": 1790,
+      "tokens": {
+        "input": 10,
+        "output": 4671,
+        "cacheRead": 182739,
+        "cacheWrite": 26035,
+        "messages": 5
+      }
+    },
+    {
+      "work": "p2-w-20261003-001",
+      "seq": 1,
+      "node": "intake",
+      "contextChars": 4833,
+      "knowledgeChars": 2676,
+      "tokens": {
+        "input": 12,
+        "output": 3217,
+        "cacheRead": 207836,
+        "cacheWrite": 19762,
+        "messages": 6
+      }
+    },
+    {
+      "work": "p2-w-20261003-001",
+      "seq": 2,
+      "node": "fix",
+      "contextChars": 6905,
+      "knowledgeChars": 2676,
+      "tokens": {
+        "input": 16,
+        "output": 4191,
+        "cacheRead": 305965,
+        "cacheWrite": 23955,
+        "messages": 8
+      }
+    },
+    {
+      "work": "p2-w-20261003-001",
+      "seq": 3,
+      "node": "verify",
+      "contextChars": 7941,
+      "knowledgeChars": 2676,
+      "tokens": {
+        "input": 12,
+        "output": 3987,
+        "cacheRead": 226086,
+        "cacheWrite": 25218,
+        "messages": 6
+      }
+    }
+  ],
+  "works": [
+    {
+      "id": "w-20261003-001",
+      "dir": "/tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/relay-home/projects/billing-0a48a4/works/w-20261003-001",
+      "status": "completed",
+      "branch": null,
+      "tasks": [
+        {
+          "seq": 1,
+          "node": "intake",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "5019e0dd-fec2-4c63-b008-88ceb99e1742",
+          "contextChars": 2087,
+          "knowledgeChars": 0
+        },
+        {
+          "seq": 2,
+          "node": "fix",
+          "status": "approved",
+          "approved_by": "auto",
+          "session": "ec845c1f-9866-475c-8300-3dd867a1e1e5",
+          "contextChars": 4415,
+          "knowledgeChars": 0
+        },
+        {
+          "seq": 3,
+          "node": "verify",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "50a68c5b-53c4-4bbe-8c78-dc67f1dceb36",
+          "contextChars": 5482,
+          "knowledgeChars": 0
+        }
+      ]
+    },
+    {
+      "id": "w-20261003-002",
+      "dir": "/tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/relay-home/projects/billing-0a48a4/works/w-20261003-002",
+      "status": "completed",
+      "branch": null,
+      "tasks": [
+        {
+          "seq": 1,
+          "node": "intake",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "e5aea7df-36f0-420b-b0d2-e394809ce58e",
+          "contextChars": 3995,
+          "knowledgeChars": 1790
+        },
+        {
+          "seq": 2,
+          "node": "fix",
+          "status": "approved",
+          "approved_by": "auto",
+          "session": "a35cfba8-6956-47da-bc19-e44a8104768f",
+          "contextChars": 6507,
+          "knowledgeChars": 1790
+        },
+        {
+          "seq": 3,
+          "node": "verify",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "13b26011-57b7-41a9-852b-57df6248b2ff",
+          "contextChars": 7572,
+          "knowledgeChars": 1790
+        }
+      ]
+    },
+    {
+      "id": "p2-w-20261003-001",
+      "dir": "/tmp/relay-eval/e3-k2/25-invoice-quote-teammate-k2-3/relay-home-2/projects/billing-mate1-d6e575/works/w-20261003-001",
+      "status": "completed",
+      "branch": null,
+      "tasks": [
+        {
+          "seq": 1,
+          "node": "intake",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "efd7c948-2084-4716-bafb-b7418ca99514",
+          "contextChars": 4833,
+          "knowledgeChars": 2676
+        },
+        {
+          "seq": 2,
+          "node": "fix",
+          "status": "approved",
+          "approved_by": "auto",
+          "session": "97f6eaec-69ae-4c19-9ec9-d8388fe8f3fa",
+          "contextChars": 6905,
+          "knowledgeChars": 2676
+        },
+        {
+          "seq": 3,
+          "node": "verify",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "e271ad6f-2e2f-49f9-b3ce-6ba9d1a47486",
+          "contextChars": 7941,
+          "knowledgeChars": 2676
+        }
+      ]
+    }
+  ],
+  "workResults": [
+    {
+      "work": 1,
+      "ending": "done",
+      "summary": "부가세를 할인 후 줄 금액마다 원 단위로 버림해 합산하도록 total.js를 고쳤다. INV-2031 합계가 29,079원으로 회계팀 계산과 맞는다. 테스트를 추가했고 npm test는 52개 통과했다. 발행본 totals와 src/format은 그대로다. 견적서와 반품 전표 예제는 값이 바뀌지 않았다. 다만 이 둘은 청구서와 계산 코드가 달라서 1~3원 어긋날 수 있다. 커밋은 relay/w-20261003-001 브랜치에 있고, 완료만으로 마쳤다.",
+      "wallMs": 297453,
+      "survey": {
+        "effort": 2,
+        "clarity": 6,
+        "control": 6,
+        "confidence": 6,
+        "trust": 6,
+        "recovery": null,
+        "reuse": 6,
+        "best": "의도 정리 단계에서 에이전트가 기대 합계와 적용 범위를 물어 줘서 내가 아는 회계 규정을 정확히 전할 수 있었다. 마지막 판정표에 완료조건별 근거가 있었고, 견적서·반품 전표 예제를 돌려 달라는 요청도 바로 처리됐다.",
+        "worst": "의도 정리 화면에서 선택지 질문이 연달아 나왔고, 직접 입력으로 답하려면 번호 키와 입력을 같이 써야 해서 처음에는 조금 헷갈렸다. 02 단계가 자동 승인으로 지나가서 수정 내용은 마지막에 따로 살펴봐야 했다.",
+        "comment": "에이전트가 INV-2031의 5줄이 모두 과세에 할인 없음이라고 가정한 부분은 코드로 확인하지 않았다고 적혀 있었다. 다만 이후 실행 결과(29,079원)가 내가 아는 값과 일치해서 믿을 수 있었다."
+      },
+      "human": {
+        "turns": 11,
+        "actionsTotal": 15,
+        "charsTyped": 552,
+        "inspectDiff": 1,
+        "invalidActions": 0,
+        "refusedDone": 0,
+        "frictionMean": 0,
+        "frictionHigh": 0,
+        "ms": 52301,
+        "told": [
+          1,
+          2,
+          3
+        ],
+        "carriedTold": 0,
+        "carriedTotal": 0,
+        "toldAudit": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "carriedToldAudit": 0,
+        "auditCostUsd": 0.0090308
+      },
+      "outcome": {
+        "success": true,
+        "checks": [
+          {
+            "name": "줄별 버림",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "할인 순서",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "서식 그대로",
+            "guard": true,
+            "pass": true
+          }
+        ],
+        "trees": [
+          {
+            "label": "w-20261003-001",
+            "files": [
+              "docs/knowledge/discount-before-vat.md",
+              "docs/knowledge/issued-invoice-keeps-stored-totals.md",
+              "docs/knowledge/quote-credit-note-vat-separate.md",
+              "docs/knowledge/vat-per-line-floor.md",
+              "src/invoice/total.js",
+              "test/invoice.test.js",
+              "test/total.test.js"
+            ],
+            "repoTestsPass": true
+          }
+        ]
+      },
+      "agent": {
+        "input": 54,
+        "output": 15765,
+        "cacheRead": 1078195,
+        "cacheWrite": 75188,
+        "messages": 27,
+        "sessions": 3,
+        "questions": 2
+      },
+      "contextChars": 11984,
+      "knowledgeChars": 0
+    },
+    {
+      "work": 2,
+      "ending": "done",
+      "summary": "creditTotals의 부가세를 돌려받는 과세 줄마다 할인 후 금액 원 단위 버림으로 합산하도록 고쳤다. CN-0112 환불 합계가 19,182원에서 19,180원이 되어 회계팀 계산과 맞는다. 테스트는 49개 모두 통과한다. 저장된 totals, src/format/, returnedDiscount는 바뀌지 않았다. 변경은 relay/w-20261003-002 브랜치에 커밋했다. 견적서 부가세 규칙은 확인되지 않아 이번 범위에서 뺐다.",
+      "wallMs": 248623,
+      "survey": {
+        "effort": 2,
+        "clarity": 6,
+        "control": 6,
+        "confidence": 6,
+        "trust": 6,
+        "recovery": null,
+        "reuse": 6,
+        "best": "의도 정리 단계에서 에이전트가 내가 아는 사실(부가세 규칙, 회계팀 기대 금액, 할인 안분 유지)을 선택지로 물어봤다. 그 답이 의도 초안과 완료조건에 그대로 들어갔다. 판정표에 CN-0112 환불 합계가 19,180원으로 나와서 확인하기 쉬웠다.",
+        "worst": "화면에 앞 일의 완료 Work가 그대로 남아 있어서 지금 보는 게 어느 일인지 잠깐 헷갈렸다. 터미널에서 선택지에 답할 때 번호 키를 누른 뒤 글을 따로 입력해야 해서 조금 번거로웠다.",
+        "comment": "고친 코드는 한 줄 크기였고 테스트도 함께 추가됐다. 다만 견적서 부가세 규칙이 확인되지 않은 채 남았다는 점은 위험으로 적혀 있었다. 승인할 때 diff를 직접 볼 수 있어서 안심이 됐다."
+      },
+      "human": {
+        "turns": 10,
+        "actionsTotal": 14,
+        "charsTyped": 581,
+        "inspectDiff": 1,
+        "invalidActions": 0,
+        "refusedDone": 0,
+        "frictionMean": 0,
+        "frictionHigh": 0,
+        "ms": 47458,
+        "told": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "carriedTold": 2,
+        "carriedTotal": 2,
+        "toldAudit": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "carriedToldAudit": 2,
+        "auditCostUsd": 0.010660799999999998
+      },
+      "outcome": {
+        "success": true,
+        "checks": [
+          {
+            "name": "반품 줄별 버림",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "반품 할인 순서",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "반품 전표 그대로",
+            "guard": true,
+            "pass": true
+          }
+        ],
+        "trees": [
+          {
+            "label": "w-20261003-002",
+            "files": [
+              "docs/knowledge/credit-note-partial-discount-by-qty-ratio.md",
+              "docs/knowledge/credit-note-vat-per-line-floor.md",
+              "docs/knowledge/quote-credit-note-vat-separate.md",
+              "src/invoice/credit-note.js",
+              "test/credit-note.test.js"
+            ],
+            "repoTestsPass": true
+          }
+        ]
+      },
+      "agent": {
+        "input": 32,
+        "output": 11722,
+        "cacheRead": 577539,
+        "cacheWrite": 72259,
+        "messages": 16,
+        "sessions": 3,
+        "questions": 1
+      },
+      "contextChars": 18074,
+      "knowledgeChars": 5370
+    },
+    {
+      "work": 3,
+      "ending": "done",
+      "summary": "견적서 부가세를 할인 후 과세 줄별 원 단위 버림 합으로 바꿔 Q-0457 합계가 56,278원이 되게 했다. 테스트를 추가했고 54개 모두 통과했다. 견적 번호와 유효 기간은 그대로다. 변경은 relay/w-20261003-001 브랜치에 커밋했다. 경리 합계 56,278원과 맞는 것은 이 한 건만 확인했다. 견적서 부가세 규칙 자체는 회계팀에 확인하지 못했다. 청구서와 반품 전표 예시는 이번에 따로 확인하지 않았고, 이전 Work의 기록에 적힌 회계 값만 봤다.",
+      "wallMs": 301572,
+      "survey": {
+        "effort": 3,
+        "clarity": 5,
+        "control": 5,
+        "confidence": 4,
+        "trust": 5,
+        "recovery": null,
+        "reuse": 6,
+        "best": "단계별로 판정표와 근거가 나와서 완료조건이 하나씩 통과했는지 바로 확인할 수 있었다. 원인 단계 요약에 줄별 버림과 줄별 반올림을 비교한 근거가 있어서 믿을 만했다.",
+        "worst": "경리 금액(56,278원)을 처음 질문에서는 적을 곳이 없어서 헷갈렸다. 선택지 2번을 골랐는데도 한 번 더 같은 걸 물었다. 그리고 inspect_diff에 이전 Work 변경이 섞여 나와서, 이번 Work의 quote.js 변경만 보기 어려웠다.",
+        "comment": "결과가 맞다는 확신은 중간이다. 근거가 Q-0457 한 건의 합계뿐이고, 견적서 부가세 규칙은 회계팀에 확인하지 못했다. 청구서와 반품 전표 예시도 따로 확인하지 않았다. 확인하고 싶었던 부분이라 아쉽다."
+      },
+      "human": {
+        "turns": 14,
+        "actionsTotal": 16,
+        "charsTyped": 246,
+        "inspectDiff": 1,
+        "invalidActions": 0,
+        "refusedDone": 0,
+        "frictionMean": 0.35714285714285715,
+        "frictionHigh": 0,
+        "ms": 59257,
+        "told": [
+          1,
+          3
+        ],
+        "carriedTold": 0,
+        "carriedTotal": 0,
+        "toldAudit": [
+          1,
+          2,
+          3
+        ],
+        "carriedToldAudit": 0,
+        "auditCostUsd": 0.006148799999999999
+      },
+      "handoff": {
+        "work": 3,
+        "merged": [
+          "relay/w-20261003-001",
+          "relay/w-20261003-002"
+        ],
+        "conflicts": [
+          "origin/relay/w-20261003-002"
+        ],
+        "failed": []
+      },
+      "outcome": {
+        "success": true,
+        "checks": [
+          {
+            "name": "견적 줄별 버림",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "견적 할인 순서",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "견적 그대로",
+            "guard": true,
+            "pass": true
+          }
+        ],
+        "trees": [
+          {
+            "label": "p2-w-20261003-001",
+            "files": [
+              "docs/knowledge/credit-note-partial-discount-by-qty-ratio.md",
+              "docs/knowledge/credit-note-vat-per-line-floor.md",
+              "docs/knowledge/discount-before-vat.md",
+              "docs/knowledge/issued-invoice-keeps-stored-totals.md",
+              "docs/knowledge/quote-credit-note-vat-separate.md",
+              "docs/knowledge/quote-vat-per-line-floor-unconfirmed.md",
+              "docs/knowledge/vat-per-line-floor.md",
+              "src/invoice/credit-note.js",
+              "src/invoice/quote.js",
+              "src/invoice/total.js",
+              "test/credit-note.test.js",
+              "test/invoice.test.js",
+              "test/quote.test.js",
+              "test/total.test.js"
+            ],
+            "repoTestsPass": true
+          }
+        ]
+      },
+      "agent": {
+        "input": 40,
+        "output": 11395,
+        "cacheRead": 739887,
+        "cacheWrite": 68935,
+        "messages": 20,
+        "sessions": 3,
+        "questions": 3
+      },
+      "contextChars": 19679,
+      "knowledgeChars": 8028
+    }
+  ],
+  "handoffs": [
+    {
+      "work": 3,
+      "merged": [
+        "relay/w-20261003-001",
+        "relay/w-20261003-002"
+      ],
+      "conflicts": [
+        "origin/relay/w-20261003-002"
+      ],
+      "failed": []
+    }
+  ],
+  "survey": {
+    "effort": 3,
+    "clarity": 5,
+    "control": 5,
+    "confidence": 4,
+    "trust": 5,
+    "recovery": null,
+    "reuse": 6,
+    "best": "단계별로 판정표와 근거가 나와서 완료조건이 하나씩 통과했는지 바로 확인할 수 있었다. 원인 단계 요약에 줄별 버림과 줄별 반올림을 비교한 근거가 있어서 믿을 만했다.",
+    "worst": "경리 금액(56,278원)을 처음 질문에서는 적을 곳이 없어서 헷갈렸다. 선택지 2번을 골랐는데도 한 번 더 같은 걸 물었다. 그리고 inspect_diff에 이전 Work 변경이 섞여 나와서, 이번 Work의 quote.js 변경만 보기 어려웠다.",
+    "comment": "결과가 맞다는 확신은 중간이다. 근거가 Q-0457 한 건의 합계뿐이고, 견적서 부가세 규칙은 회계팀에 확인하지 못했다. 청구서와 반품 전표 예시도 따로 확인하지 않았다. 확인하고 싶었던 부분이라 아쉽다."
+  },
+  "options": {
+    "agentModel": "sonnet",
+    "effort": "medium",
+    "humanModel": "sonnet",
+    "cliArgs": [
+      "--dangerously-skip-permissions"
+    ]
+  }
+}

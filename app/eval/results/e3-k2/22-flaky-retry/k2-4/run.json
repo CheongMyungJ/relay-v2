@@ -1,0 +1,614 @@
+{
+  "scenario": "22-flaky-retry",
+  "kind": "k2",
+  "index": 4,
+  "ending": "done",
+  "summary": "archive 간헐 실패의 원인인 임시 파일 이름 충돌을 고쳤다. 같은 ms에 동시 저장하면 임시 이름이 겹쳤는데, reportId를 이름에 넣어 구분했다. 회귀 시험을 추가했고 병렬 실행(4)은 유지했다. archive 시험은 20/20, npm test는 63개 통과다. 변경은 relay/w-20261003-002 브랜치에 커밋했다. test:ci 전체 20/20은 아직 아니다. 남은 실패는 모두 범위 밖인 batch 시험이고, 그 수정은 별도 Work에서 합쳐져야 한다.",
+  "error": null,
+  "wallMs": 677337,
+  "firstChangeMs": 103765,
+  "outcome": {
+    "success": true,
+    "checks": [
+      {
+        "name": "완료 순서와 무관",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "병렬 유지",
+        "guard": true,
+        "pass": true
+      },
+      {
+        "name": "동시 저장",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "보관 중 반쪽 파일 없음",
+        "guard": true,
+        "pass": true
+      },
+      {
+        "name": "보관 배치도 병렬",
+        "guard": true,
+        "pass": true
+      }
+    ],
+    "repoTestsPass": true,
+    "filesChanged": [
+      "docs/knowledge/flaky-ci-multiple-causes.md",
+      "docs/knowledge/no-retry-skip-timeout-for-flaky-tests.md",
+      "docs/knowledge/report-archive-tmp-name-unique.md",
+      "docs/knowledge/run-pool-input-order-results.md",
+      "src/runner/pool.js",
+      "src/store/report-archive.js",
+      "test/archive.test.js",
+      "test/pool.test.js",
+      "docs/knowledge/test-ci-count-per-test-file.md"
+    ],
+    "linesChanged": 91,
+    "unrelated": [
+      "docs/knowledge/flaky-ci-multiple-causes.md",
+      "docs/knowledge/no-retry-skip-timeout-for-flaky-tests.md",
+      "docs/knowledge/report-archive-tmp-name-unique.md",
+      "docs/knowledge/run-pool-input-order-results.md",
+      "docs/knowledge/test-ci-count-per-test-file.md"
+    ],
+    "committed": true,
+    "trees": [
+      {
+        "label": "w-20261003-001",
+        "removed": false,
+        "git": {
+          "branch": "relay/w-20261003-001",
+          "commits": 2,
+          "log": [
+            "docs: 간헐 CI 실패 대응 규칙과 원인 지식을 남긴다",
+            "fix: runPool 결과를 입력 순서로 돌려주고 보고서 임시 파일 이름이 겹치지 않게 한다"
+          ],
+          "uncommitted": []
+        },
+        "files": [
+          {
+            "file": "docs/knowledge/flaky-ci-multiple-causes.md",
+            "add": 7,
+            "del": 0
+          },
+          {
+            "file": "docs/knowledge/no-retry-skip-timeout-for-flaky-tests.md",
+            "add": 9,
+            "del": 0
+          },
+          {
+            "file": "docs/knowledge/report-archive-tmp-name-unique.md",
+            "add": 9,
+            "del": 0
+          },
+          {
+            "file": "docs/knowledge/run-pool-input-order-results.md",
+            "add": 9,
+            "del": 0
+          },
+          {
+            "file": "src/runner/pool.js",
+            "add": 7,
+            "del": 5
+          },
+          {
+            "file": "src/store/report-archive.js",
+            "add": 2,
+            "del": 1
+          },
+          {
+            "file": "test/archive.test.js",
+            "add": 9,
+            "del": 0
+          },
+          {
+            "file": "test/pool.test.js",
+            "add": 13,
+            "del": 0
+          }
+        ],
+        "linesAdded": 65,
+        "linesRemoved": 6,
+        "unrelated": [
+          "docs/knowledge/flaky-ci-multiple-causes.md",
+          "docs/knowledge/no-retry-skip-timeout-for-flaky-tests.md",
+          "docs/knowledge/report-archive-tmp-name-unique.md",
+          "docs/knowledge/run-pool-input-order-results.md"
+        ],
+        "repoTests": {
+          "pass": true,
+          "output": "on_ms: 0.326167\n  type: 'test'\n  ...\n# Subtest: take, peek, remove, countByType\nok 37 - take, peek, remove, countByType\n  ---\n  duration_ms: 0.388452\n  type: 'test'\n  ...\n# Subtest: 다시 해 볼 만한 오류\nok 38 - 다시 해 볼 만한 오류\n  ---\n  duration_ms: 3.252118\n  type: 'test'\n  ...\n# Subtest: 간격은 늘어나고 최대를 넘지 않는다\nok 39 - 간격은 늘어나고 최대를 넘지 않는다\n  ---\n  duration_ms: 0.44852\n  type: 'test'\n  ...\n# Subtest: 일시 오류는 다시 해서 성공\nok 40 - 일시 오류는 다시 해서 성공\n  ---\n  duration_ms: 2.415481\n  type: 'test'\n  ...\n# Subtest: 일시 오류가 아니면 바로 실패\nok 41 - 일시 오류가 아니면 바로 실패\n  ---\n  duration_ms: 0.996699\n  type: 'test'\n  ...\n# Subtest: 횟수를 다 쓰면 마지막 오류\nok 42 - 횟수를 다 쓰면 마지막 오류\n  ---\n  duration_ms: 0.522276\n  type: 'test'\n  ...\n# Subtest: handlers가 없으면 만들지 않는다\nok 43 - handlers가 없으면 만들지 않는다\n  ---\n  duration_ms: 1.625122\n  type: 'test'\n  ...\n# Subtest: 작업마다 기록 하나, 작업 목록 순서대로\nok 44 - 작업마다 기록 하나, 작업 목록 순서대로\n  ---\n  duration_ms: 5.812777\n  type: 'test'\n  ...\n# Subtest: 처리기가 없는 종류는 실패로 기록\nok 45 - 처리기가 없는 종류는 실패로 기록\n  ---\n  duration_ms: 1.021416\n  type: 'test'\n  ...\n# Subtest: 실패한 작업이 있어도 배치는 끝까지 돈다\nok 46 - 실패한 작업이 있어도 배치는 끝까지 돈다\n  ---\n  duration_ms: 1.3134\n  type: 'test'\n  ...\n# Subtest: 일시 오류는 다시 시도하고 기록에 횟수를 남긴다\nok 47 - 일시 오류는 다시 시도하고 기록에 횟수를 남긴다\n  ---\n  duration_ms: 1.126554\n  type: 'test'\n  ...\n# Subtest: 시간 제한을 넘으면 실패\nok 48 - 시간 제한을 넘으면 실패\n  ---\n  duration_ms: 21.627294\n  type: 'test'\n  ...\n# Subtest: 큐를 비우며 돌리고 기록을 남긴다\nok 49 - 큐를 비우며 돌리고 기록을 남긴다\n  ---\n  duration_ms: 1.270618\n  type: 'test'\n  ...\n# Subtest: cron 읽기: 목록, 범위, 간격\nok 50 - cron 읽기: 목록, 범위, 간격\n  ---\n  duration_ms: 3.94313\n  type: 'test'\n  ...\n# Subtest: cron 오류\nok 51 - cron 오류\n  ---\n  duration_ms: 0.621435\n  type: 'test'\n  ...\n# Subtest: 시각이 맞는지\nok 52 - 시각이 맞는지\n  ---\n  duration_ms: 0.3524\n  type: 'test'\n  ...\n# Subtest: 다음 실행 시각\nok 53 - 다음 실행 시각\n  ---\n  duration_ms: 12.085285\n  type: 'test'\n  ...\n# Subtest: 스케줄러: 때가 된 정의만, 같은 분에는 한 번\nok 54 - 스케줄러: 때가 된 정의만, 같은 분에는 한 번\n  ---\n  duration_ms: 0.861716\n  type: 'test'\n  ...\n# Subtest: 스케줄러: 정의 검사\nok 55 - 스케줄러: 정의 검사\n  ---\n  duration_ms: 0.284954\n  type: 'test'\n  ...\n# Subtest: 기록은 최근 keep개만\nok 56 - 기록은 최근 keep개만\n  ---\n  duration_ms: 4.511849\n  type: 'test'\n  ...\n# Subtest: 연속 실패와 작업별 실패 횟수\nok 57 - 연속 실패와 작업별 실패 횟수\n  ---\n  duration_ms: 1.634141\n  type: 'test'\n  ...\n# Subtest: 키-값 저장소 기한\nok 58 - 키-값 저장소 기한\n  ---\n  duration_ms: 0.395771\n  type: 'test'\n  ...\n# Subtest: 지표\nok 59 - 지표\n  ---\n  duration_ms: 0.561362\n  type: 'test'\n  ...\n# Subtest: id\nok 60 - id\n  ---\n  duration_ms: 0.689044\n  type: 'test'\n  ...\n# Subtest: 백분위수\nok 61 - 백분위수\n  ---\n  duration_ms: 0.884202\n  type: 'test'\n  ...\n# Subtest: 요약: 개수, 실패, 재시도, 종류별\nok 62 - 요약: 개수, 실패, 재시도, 종류별\n  ---\n  duration_ms: 1.749575\n  type: 'test'\n  ...\n# Subtest: 결과 수가 다르면 짝짓지 않는다\nok 63 - 결과 수가 다르면 짝짓지 않는다\n  ---\n  duration_ms: 1.624562\n  type: 'test'\n  ...\n# Subtest: 기록 색인과 오류 모양\nok 64 - 기록 색인과 오류 모양\n  ---\n  duration_ms: 0.247129\n  type: 'test'\n  ...\n1..64\n# tests 64\n# suites 0\n# pass 64\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 542.014709\n"
+        },
+        "checks": [
+          {
+            "name": "완료 순서와 무관",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 역순으로 끝나도 결과가 제 작업에 붙는다 (id가 정렬 순서가 아님)\nok 1 - 역순으로 끝나도 결과가 제 작업에 붙는다 (id가 정렬 순서가 아님)\n  ---\n  duration_ms: 106.647031\n  type: 'test'\n  ...\n# Subtest: 밤 배치: 흔들림이 역순이어도 보고서와 실패가 제 작업에 붙는다\nok 2 - 밤 배치: 흔들림이 역순이어도 보고서와 실패가 제 작업에 붙는다\n  ---\n  duration_ms: 84.25363\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 295.914151\n"
+          },
+          {
+            "name": "병렬 유지",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 기본 설정(동시 4개)으로 작업 4개가 함께 돈다\nok 1 - 기본 설정(동시 4개)으로 작업 4개가 함께 돈다\n  ---\n  duration_ms: 23.036685\n  type: 'test'\n  ...\n# Subtest: 작업 8개, concurrency 4: 동시에 4개까지만\nok 2 - 작업 8개, concurrency 4: 동시에 4개까지만\n  ---\n  duration_ms: 42.326052\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 158.341471\n"
+          },
+          {
+            "name": "동시 저장",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 같은 순간에 저장한 보고서들이 저마다 제 이름에 제 내용으로 남는다\nok 1 - 같은 순간에 저장한 보고서들이 저마다 제 이름에 제 내용으로 남는다\n  ---\n  duration_ms: 48.481698\n  type: 'test'\n  ...\n# Subtest: 밤 배치(동시 4개): 보관본이 모두 남고 저마다 제 고객사와 합계\nok 2 - 밤 배치(동시 4개): 보관본이 모두 남고 저마다 제 고객사와 합계\n  ---\n  duration_ms: 90.101322\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 260.976614\n"
+          },
+          {
+            "name": "보관 중 반쪽 파일 없음",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 저장하는 동안 읽으면 이전 보관본 전체가 보이고, 끝나면 새 보관본이 보인다\nok 1 - 저장하는 동안 읽으면 이전 보관본 전체가 보이고, 끝나면 새 보관본이 보인다\n  ---\n  duration_ms: 104.231997\n  type: 'test'\n  ...\n# Subtest: 처음 저장하는 동안에는 제 이름의 파일이 아직 없다\nok 2 - 처음 저장하는 동안에는 제 이름의 파일이 아직 없다\n  ---\n  duration_ms: 60.980127\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 255.210687\n"
+          },
+          {
+            "name": "보관 배치도 병렬",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 보관소를 쓰는 밤 배치: 조회가 동시에 4개까지 돈다\nok 1 - 보관소를 쓰는 밤 배치: 조회가 동시에 4개까지 돈다\n  ---\n  duration_ms: 42.789361\n  type: 'test'\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 1\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 135.978273\n"
+          }
+        ]
+      },
+      {
+        "label": "w-20261003-002",
+        "removed": false,
+        "git": {
+          "branch": "relay/w-20261003-002",
+          "commits": 3,
+          "log": [
+            "chore: 잘못 둔 pr.md 제거",
+            "docs: test:ci 통과 횟수는 시험 파일별로 센다는 지식 추가",
+            "fix: 보관소 임시 파일 이름에 reportId를 넣어 동시 저장 충돌 방지"
+          ],
+          "uncommitted": []
+        },
+        "files": [
+          {
+            "file": "docs/knowledge/test-ci-count-per-test-file.md",
+            "add": 8,
+            "del": 0
+          },
+          {
+            "file": "src/store/report-archive.js",
+            "add": 2,
+            "del": 1
+          },
+          {
+            "file": "test/archive.test.js",
+            "add": 9,
+            "del": 0
+          }
+        ],
+        "linesAdded": 19,
+        "linesRemoved": 1,
+        "unrelated": [
+          "docs/knowledge/test-ci-count-per-test-file.md"
+        ],
+        "repoTests": {
+          "pass": true,
+          "output": "_ms: 0.294199\n  type: 'test'\n  ...\n# Subtest: take, peek, remove, countByType\nok 36 - take, peek, remove, countByType\n  ---\n  duration_ms: 0.473002\n  type: 'test'\n  ...\n# Subtest: 다시 해 볼 만한 오류\nok 37 - 다시 해 볼 만한 오류\n  ---\n  duration_ms: 2.800951\n  type: 'test'\n  ...\n# Subtest: 간격은 늘어나고 최대를 넘지 않는다\nok 38 - 간격은 늘어나고 최대를 넘지 않는다\n  ---\n  duration_ms: 0.37564\n  type: 'test'\n  ...\n# Subtest: 일시 오류는 다시 해서 성공\nok 39 - 일시 오류는 다시 해서 성공\n  ---\n  duration_ms: 2.350982\n  type: 'test'\n  ...\n# Subtest: 일시 오류가 아니면 바로 실패\nok 40 - 일시 오류가 아니면 바로 실패\n  ---\n  duration_ms: 0.964246\n  type: 'test'\n  ...\n# Subtest: 횟수를 다 쓰면 마지막 오류\nok 41 - 횟수를 다 쓰면 마지막 오류\n  ---\n  duration_ms: 0.419832\n  type: 'test'\n  ...\n# Subtest: handlers가 없으면 만들지 않는다\nok 42 - handlers가 없으면 만들지 않는다\n  ---\n  duration_ms: 1.642273\n  type: 'test'\n  ...\n# Subtest: 작업마다 기록 하나, 작업 목록 순서대로\nok 43 - 작업마다 기록 하나, 작업 목록 순서대로\n  ---\n  duration_ms: 6.144008\n  type: 'test'\n  ...\n# Subtest: 처리기가 없는 종류는 실패로 기록\nok 44 - 처리기가 없는 종류는 실패로 기록\n  ---\n  duration_ms: 0.962961\n  type: 'test'\n  ...\n# Subtest: 실패한 작업이 있어도 배치는 끝까지 돈다\nok 45 - 실패한 작업이 있어도 배치는 끝까지 돈다\n  ---\n  duration_ms: 1.404179\n  type: 'test'\n  ...\n# Subtest: 일시 오류는 다시 시도하고 기록에 횟수를 남긴다\nok 46 - 일시 오류는 다시 시도하고 기록에 횟수를 남긴다\n  ---\n  duration_ms: 0.84721\n  type: 'test'\n  ...\n# Subtest: 시간 제한을 넘으면 실패\nok 47 - 시간 제한을 넘으면 실패\n  ---\n  duration_ms: 21.509752\n  type: 'test'\n  ...\n# Subtest: 큐를 비우며 돌리고 기록을 남긴다\nok 48 - 큐를 비우며 돌리고 기록을 남긴다\n  ---\n  duration_ms: 1.225147\n  type: 'test'\n  ...\n# Subtest: cron 읽기: 목록, 범위, 간격\nok 49 - cron 읽기: 목록, 범위, 간격\n  ---\n  duration_ms: 7.994291\n  type: 'test'\n  ...\n# Subtest: cron 오류\nok 50 - cron 오류\n  ---\n  duration_ms: 0.747834\n  type: 'test'\n  ...\n# Subtest: 시각이 맞는지\nok 51 - 시각이 맞는지\n  ---\n  duration_ms: 0.277789\n  type: 'test'\n  ...\n# Subtest: 다음 실행 시각\nok 52 - 다음 실행 시각\n  ---\n  duration_ms: 7.406589\n  type: 'test'\n  ...\n# Subtest: 스케줄러: 때가 된 정의만, 같은 분에는 한 번\nok 53 - 스케줄러: 때가 된 정의만, 같은 분에는 한 번\n  ---\n  duration_ms: 0.830213\n  type: 'test'\n  ...\n# Subtest: 스케줄러: 정의 검사\nok 54 - 스케줄러: 정의 검사\n  ---\n  duration_ms: 0.311709\n  type: 'test'\n  ...\n# Subtest: 기록은 최근 keep개만\nok 55 - 기록은 최근 keep개만\n  ---\n  duration_ms: 3.866562\n  type: 'test'\n  ...\n# Subtest: 연속 실패와 작업별 실패 횟수\nok 56 - 연속 실패와 작업별 실패 횟수\n  ---\n  duration_ms: 0.45714\n  type: 'test'\n  ...\n# Subtest: 키-값 저장소 기한\nok 57 - 키-값 저장소 기한\n  ---\n  duration_ms: 0.365856\n  type: 'test'\n  ...\n# Subtest: 지표\nok 58 - 지표\n  ---\n  duration_ms: 0.441461\n  type: 'test'\n  ...\n# Subtest: id\nok 59 - id\n  ---\n  duration_ms: 0.771394\n  type: 'test'\n  ...\n# Subtest: 백분위수\nok 60 - 백분위수\n  ---\n  duration_ms: 0.886742\n  type: 'test'\n  ...\n# Subtest: 요약: 개수, 실패, 재시도, 종류별\nok 61 - 요약: 개수, 실패, 재시도, 종류별\n  ---\n  duration_ms: 1.726327\n  type: 'test'\n  ...\n# Subtest: 결과 수가 다르면 짝짓지 않는다\nok 62 - 결과 수가 다르면 짝짓지 않는다\n  ---\n  duration_ms: 1.681983\n  type: 'test'\n  ...\n# Subtest: 기록 색인과 오류 모양\nok 63 - 기록 색인과 오류 모양\n  ---\n  duration_ms: 0.307367\n  type: 'test'\n  ...\n1..63\n# tests 63\n# suites 0\n# pass 63\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 503.274714\n"
+        },
+        "checks": [
+          {
+            "name": "완료 순서와 무관",
+            "bug": null,
+            "pass": false,
+            "output": "TAP version 13\n# Subtest: 역순으로 끝나도 결과가 제 작업에 붙는다 (id가 정렬 순서가 아님)\nnot ok 1 - 역순으로 끝나도 결과가 제 작업에 붙는다 (id가 정렬 순서가 아님)\n  ---\n  duration_ms: 108.287601\n  type: 'test'\n  location: '/tmp/relay-eval/e3-k2/22-flaky-retry-k2-4/judge/w-20261003-002/tree/eval-hidden/order.test.js:22:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    job-7에 job-4의 결과가 붙었다\n    \n    'job-4' !== 'job-7'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'job-7'\n  actual: 'job-4'\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e3-k2/22-flaky-retry-k2-4/judge/w-20261003-002/tree/eval-hidden/order.test.js:41:12)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n# Subtest: 밤 배치: 흔들림이 역순이어도 보고서와 실패가 제 작업에 붙는다\nnot ok 2 - 밤 배치: 흔들림이 역순이어도 보고서와 실패가 제 작업에 붙는다\n  ---\n  duration_ms: 83.250535\n  type: 'test'\n  location: '/tmp/relay-eval/e3-k2/22-flaky-retry-k2-4/judge/w-20261003-002/tree/eval-hidden/order.test.js:45:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    job-1 상태\n    \n    'failed' !== 'done'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'done'\n  actual: 'failed'\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e3-k2/22-flaky-retry-k2-4/judge/w-20261003-002/tree/eval-hidden/order.test.js:77:14)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 0\n# fail 2\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 284.53108\n"
+          },
+          {
+            "name": "병렬 유지",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 기본 설정(동시 4개)으로 작업 4개가 함께 돈다\nok 1 - 기본 설정(동시 4개)으로 작업 4개가 함께 돈다\n  ---\n  duration_ms: 23.882957\n  type: 'test'\n  ...\n# Subtest: 작업 8개, concurrency 4: 동시에 4개까지만\nok 2 - 작업 8개, concurrency 4: 동시에 4개까지만\n  ---\n  duration_ms: 42.986464\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 156.860157\n"
+          },
+          {
+            "name": "동시 저장",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 같은 순간에 저장한 보고서들이 저마다 제 이름에 제 내용으로 남는다\nok 1 - 같은 순간에 저장한 보고서들이 저마다 제 이름에 제 내용으로 남는다\n  ---\n  duration_ms: 46.194384\n  type: 'test'\n  ...\n# Subtest: 밤 배치(동시 4개): 보관본이 모두 남고 저마다 제 고객사와 합계\nok 2 - 밤 배치(동시 4개): 보관본이 모두 남고 저마다 제 고객사와 합계\n  ---\n  duration_ms: 89.206966\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 231.058922\n"
+          },
+          {
+            "name": "보관 중 반쪽 파일 없음",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 저장하는 동안 읽으면 이전 보관본 전체가 보이고, 끝나면 새 보관본이 보인다\nok 1 - 저장하는 동안 읽으면 이전 보관본 전체가 보이고, 끝나면 새 보관본이 보인다\n  ---\n  duration_ms: 105.359472\n  type: 'test'\n  ...\n# Subtest: 처음 저장하는 동안에는 제 이름의 파일이 아직 없다\nok 2 - 처음 저장하는 동안에는 제 이름의 파일이 아직 없다\n  ---\n  duration_ms: 61.90002\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 254.134791\n"
+          },
+          {
+            "name": "보관 배치도 병렬",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 보관소를 쓰는 밤 배치: 조회가 동시에 4개까지 돈다\nok 1 - 보관소를 쓰는 밤 배치: 조회가 동시에 4개까지 돈다\n  ---\n  duration_ms: 43.353865\n  type: 'test'\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 1\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 138.579079\n"
+          }
+        ]
+      }
+    ]
+  },
+  "human": {
+    "turns": 17,
+    "actions": {
+      "click": 11,
+      "fill": 2,
+      "type": 1,
+      "key": 4,
+      "wait": 3,
+      "done": 2,
+      "inspect_diff": 1
+    },
+    "actionsTotal": 19,
+    "charsTyped": 674,
+    "invalidActions": 0,
+    "refusedDone": 0,
+    "frictionMean": 0.11764705882352941,
+    "frictionHigh": 0,
+    "costUsd": 2.0620089999999998,
+    "calls": 19,
+    "ms": 70231,
+    "waitOnlyTurns": 0,
+    "images": 13
+  },
+  "setupDialogs": [
+    {
+      "t": 26184,
+      "name": "folder_trust"
+    },
+    {
+      "t": 28824,
+      "name": "bypass_permissions_warning"
+    }
+  ],
+  "agent": {
+    "input": 108,
+    "output": 28183,
+    "cacheRead": 2172254,
+    "cacheWrite": 145606,
+    "messages": 54,
+    "sessions": 6
+  },
+  "agentSteps": [
+    {
+      "work": "w-20261003-001",
+      "seq": 1,
+      "node": "intake",
+      "contextChars": 2071,
+      "knowledgeChars": 0,
+      "tokens": {
+        "input": 12,
+        "output": 2800,
+        "cacheRead": 213212,
+        "cacheWrite": 14780,
+        "messages": 6
+      }
+    },
+    {
+      "work": "w-20261003-001",
+      "seq": 2,
+      "node": "fix",
+      "contextChars": 3948,
+      "knowledgeChars": 0,
+      "tokens": {
+        "input": 22,
+        "output": 6012,
+        "cacheRead": 482397,
+        "cacheWrite": 32602,
+        "messages": 11
+      }
+    },
+    {
+      "work": "w-20261003-001",
+      "seq": 3,
+      "node": "verify",
+      "contextChars": 5369,
+      "knowledgeChars": 0,
+      "tokens": {
+        "input": 14,
+        "output": 5656,
+        "cacheRead": 262804,
+        "cacheWrite": 25181,
+        "messages": 7
+      }
+    },
+    {
+      "work": "w-20261003-002",
+      "seq": 1,
+      "node": "intake",
+      "contextChars": 3975,
+      "knowledgeChars": 1774,
+      "tokens": {
+        "input": 12,
+        "output": 2311,
+        "cacheRead": 202800,
+        "cacheWrite": 16665,
+        "messages": 6
+      }
+    },
+    {
+      "work": "w-20261003-002",
+      "seq": 2,
+      "node": "fix",
+      "contextChars": 5822,
+      "knowledgeChars": 1774,
+      "tokens": {
+        "input": 24,
+        "output": 5003,
+        "cacheRead": 497517,
+        "cacheWrite": 27470,
+        "messages": 12
+      }
+    },
+    {
+      "work": "w-20261003-002",
+      "seq": 3,
+      "node": "verify",
+      "contextChars": 7135,
+      "knowledgeChars": 1774,
+      "tokens": {
+        "input": 24,
+        "output": 6401,
+        "cacheRead": 513524,
+        "cacheWrite": 28908,
+        "messages": 12
+      }
+    }
+  ],
+  "works": [
+    {
+      "id": "w-20261003-001",
+      "dir": "/tmp/relay-eval/e3-k2/22-flaky-retry-k2-4/relay-home/projects/jobs-50a1c9/works/w-20261003-001",
+      "status": "completed",
+      "branch": null,
+      "tasks": [
+        {
+          "seq": 1,
+          "node": "intake",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "1c1980e0-fd1b-42c8-9461-eefa81a0f572",
+          "contextChars": 2071,
+          "knowledgeChars": 0
+        },
+        {
+          "seq": 2,
+          "node": "fix",
+          "status": "approved",
+          "approved_by": "auto",
+          "session": "daf72cb1-4eb0-4f40-8a3b-de06847a107a",
+          "contextChars": 3948,
+          "knowledgeChars": 0
+        },
+        {
+          "seq": 3,
+          "node": "verify",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "603893a0-eb8b-4326-a2b6-3ee70472e1aa",
+          "contextChars": 5369,
+          "knowledgeChars": 0
+        }
+      ]
+    },
+    {
+      "id": "w-20261003-002",
+      "dir": "/tmp/relay-eval/e3-k2/22-flaky-retry-k2-4/relay-home/projects/jobs-50a1c9/works/w-20261003-002",
+      "status": "completed",
+      "branch": null,
+      "tasks": [
+        {
+          "seq": 1,
+          "node": "intake",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "570568c5-be7a-4245-969f-7a12eb8502fe",
+          "contextChars": 3975,
+          "knowledgeChars": 1774
+        },
+        {
+          "seq": 2,
+          "node": "fix",
+          "status": "approved",
+          "approved_by": "auto",
+          "session": "0d5a4352-a007-4303-bd25-7e30bcbf3fcd",
+          "contextChars": 5822,
+          "knowledgeChars": 1774
+        },
+        {
+          "seq": 3,
+          "node": "verify",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "fac8b4c0-1f4b-4849-b01d-fe36d100a969",
+          "contextChars": 7135,
+          "knowledgeChars": 1774
+        }
+      ]
+    }
+  ],
+  "workResults": [
+    {
+      "work": 1,
+      "ending": "done",
+      "summary": "원인 두 가지를 src에서 고쳤다. runPool이 결과를 끝난 순서로 쌓던 것을 입력 순서 자리에 두게 했고, 보관소 임시 파일 이름에 reportId를 넣어 충돌을 막았다. 병렬(동시 4개)은 그대로다. 회귀 테스트를 추가했고 test:ci와 batch.test.js는 20회 중 20회 통과했다. npm test는 64개 모두 통과한다. 변경은 relay/w-20261003-001 브랜치에 커밋됐다.",
+      "wallMs": 325006,
+      "survey": {
+        "effort": 2,
+        "clarity": 6,
+        "control": 6,
+        "confidence": 6,
+        "trust": 6,
+        "recovery": null,
+        "reuse": 6,
+        "best": "완료조건 판정표에 20회 반복 통과 근거가 들어 있었고, 전체 변경 diff를 앱 안에서 바로 볼 수 있었다. 원인이 두 가지(결과 순서, 임시 파일 이름 충돌)였던 것도 드러났다.",
+        "worst": "의도 승인 화면에서 터미널에 말해야 하는지 패널에서 고쳐야 하는지 잠깐 헷갈렸다. 02 단계가 자동 승인으로 지나가서 그 단계의 원인 분석을 그 자리에서 읽어 볼 기회가 적었다.",
+        "comment": "에이전트가 병렬 유지와 반복 실행 근거 요구를 의도에 정확히 반영했다. 운영 보고서 합계 문의(아는 것 3번)와 병렬 전환 시점(2번)은 에이전트가 묻지 않아 말하지 않았는데, 원인과 잘 맞는 정보였다."
+      },
+      "human": {
+        "turns": 8,
+        "actionsTotal": 9,
+        "charsTyped": 355,
+        "inspectDiff": 0,
+        "invalidActions": 0,
+        "refusedDone": 0,
+        "frictionMean": 0,
+        "frictionHigh": 0,
+        "ms": 29384,
+        "told": [
+          1
+        ],
+        "carriedTold": 0,
+        "carriedTotal": 0,
+        "toldAudit": [
+          1
+        ],
+        "carriedToldAudit": 0,
+        "auditCostUsd": 0.005844800000000001
+      },
+      "outcome": {
+        "success": true,
+        "checks": [
+          {
+            "name": "완료 순서와 무관",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "병렬 유지",
+            "guard": true,
+            "pass": true
+          }
+        ],
+        "trees": [
+          {
+            "label": "w-20261003-001",
+            "files": [
+              "docs/knowledge/flaky-ci-multiple-causes.md",
+              "docs/knowledge/no-retry-skip-timeout-for-flaky-tests.md",
+              "docs/knowledge/report-archive-tmp-name-unique.md",
+              "docs/knowledge/run-pool-input-order-results.md",
+              "src/runner/pool.js",
+              "src/store/report-archive.js",
+              "test/archive.test.js",
+              "test/pool.test.js"
+            ],
+            "repoTestsPass": true
+          }
+        ]
+      },
+      "agent": {
+        "input": 48,
+        "output": 14468,
+        "cacheRead": 958413,
+        "cacheWrite": 72563,
+        "messages": 24,
+        "sessions": 3,
+        "questions": 1
+      },
+      "contextChars": 11388,
+      "knowledgeChars": 0
+    },
+    {
+      "work": 2,
+      "ending": "done",
+      "summary": "archive 간헐 실패의 원인인 임시 파일 이름 충돌을 고쳤다. 같은 ms에 동시 저장하면 임시 이름이 겹쳤는데, reportId를 이름에 넣어 구분했다. 회귀 시험을 추가했고 병렬 실행(4)은 유지했다. archive 시험은 20/20, npm test는 63개 통과다. 변경은 relay/w-20261003-002 브랜치에 커밋했다. test:ci 전체 20/20은 아직 아니다. 남은 실패는 모두 범위 밖인 batch 시험이고, 그 수정은 별도 Work에서 합쳐져야 한다.",
+      "wallMs": 338889,
+      "survey": {
+        "effort": 2,
+        "clarity": 5,
+        "control": 5,
+        "confidence": 5,
+        "trust": 5,
+        "recovery": null,
+        "reuse": 6,
+        "best": "단계마다 판정표와 diff가 나왔고, 반복 실행 횟수가 근거로 남았다. 범위 밖인 batch 실패를 구분해서 보여 준 점도 좋았다.",
+        "worst": "test:ci 전체가 20/20이 아닌데 판정표는 '실패'로 나온 채 완료로 넘어가는 흐름이 찜찜했다. 터미널에 형식 검사 오류와 pr.md를 잘못 둔 일이 그대로 보였던 것도 어수선했다.",
+        "comment": "의도 초안이 내 요청을 정확히 반영했고, 팀 규칙대로 재시도나 skip 없이 코드 원인을 고쳤다. 다만 batch 쪽 실패가 남아 있어서, 이 Work만으로 CI가 완전히 안정됐다고는 못 하겠다. 합쳐졌을 때 다시 확인해야 한다."
+      },
+      "human": {
+        "turns": 9,
+        "actionsTotal": 10,
+        "charsTyped": 319,
+        "inspectDiff": 1,
+        "invalidActions": 0,
+        "refusedDone": 0,
+        "frictionMean": 0.2222222222222222,
+        "frictionHigh": 0,
+        "ms": 40847,
+        "told": [],
+        "carriedTold": 0,
+        "carriedTotal": 2,
+        "toldAudit": [],
+        "carriedToldAudit": 0,
+        "auditCostUsd": 0.006550800000000001
+      },
+      "outcome": {
+        "success": true,
+        "checks": [
+          {
+            "name": "동시 저장",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "보관 중 반쪽 파일 없음",
+            "guard": true,
+            "pass": true
+          },
+          {
+            "name": "보관 배치도 병렬",
+            "guard": true,
+            "pass": true
+          }
+        ],
+        "trees": [
+          {
+            "label": "w-20261003-002",
+            "files": [
+              "docs/knowledge/test-ci-count-per-test-file.md",
+              "src/store/report-archive.js",
+              "test/archive.test.js"
+            ],
+            "repoTestsPass": true
+          }
+        ]
+      },
+      "agent": {
+        "input": 60,
+        "output": 13715,
+        "cacheRead": 1213841,
+        "cacheWrite": 73043,
+        "messages": 30,
+        "sessions": 3,
+        "questions": 1
+      },
+      "contextChars": 16932,
+      "knowledgeChars": 5322
+    }
+  ],
+  "handoffs": [],
+  "survey": {
+    "effort": 2,
+    "clarity": 5,
+    "control": 5,
+    "confidence": 5,
+    "trust": 5,
+    "recovery": null,
+    "reuse": 6,
+    "best": "단계마다 판정표와 diff가 나왔고, 반복 실행 횟수가 근거로 남았다. 범위 밖인 batch 실패를 구분해서 보여 준 점도 좋았다.",
+    "worst": "test:ci 전체가 20/20이 아닌데 판정표는 '실패'로 나온 채 완료로 넘어가는 흐름이 찜찜했다. 터미널에 형식 검사 오류와 pr.md를 잘못 둔 일이 그대로 보였던 것도 어수선했다.",
+    "comment": "의도 초안이 내 요청을 정확히 반영했고, 팀 규칙대로 재시도나 skip 없이 코드 원인을 고쳤다. 다만 batch 쪽 실패가 남아 있어서, 이 Work만으로 CI가 완전히 안정됐다고는 못 하겠다. 합쳐졌을 때 다시 확인해야 한다."
+  },
+  "options": {
+    "agentModel": "sonnet",
+    "effort": "medium",
+    "humanModel": "sonnet",
+    "cliArgs": [
+      "--dangerously-skip-permissions"
+    ]
+  }
+}
