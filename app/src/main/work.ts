@@ -16,7 +16,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { agentRuntime } from '../adapters/agent'
 import { codexSkillPath } from '../adapters/codex'
-import { sharedKnowledge } from '../adapters/knowledge'
+import { sharedKnowledge, workSource } from '../adapters/knowledge'
 import { codexToolDenial } from '../core/codex'
 import { humanAnswers, humanQuestions } from '../core/questions'
 import type { HumanAnswerReply, PendingQuestionView } from '../shared/questions'
@@ -957,6 +957,7 @@ export class WorkRunner {
       task,
       config: this.ctx.config(),
       taskDir: dir,
+      knowledgeSource: await workSource(this.files.dir),
       request: { path: this.files.request, text: request?.text ?? '' },
       intent: intent?.text ?? null,
       decisionLog: decisionsWithout(decisions?.text ?? '', discarded),

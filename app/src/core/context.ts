@@ -206,6 +206,8 @@ export interface ContextInput {
   decisionLog: string
   /** Committed project knowledge, supplied by Relay rather than agent memory. */
   knowledge?: string
+  /** Opaque, persistent Work provenance for shared facts. */
+  knowledgeSource?: string
   /** 이전 handoff의 rejected (누적 기각 목록) */
   rejected: readonly (TaskRef & { items: readonly string[] })[]
   /** 직전 handoff.md의 내용 */
@@ -636,6 +638,7 @@ export function buildContext(input: ContextInput): string {
       list([
         `work_id: ${work.work_id}`,
         `task_id: ${task.id}`,
+        ...(input.knowledgeSource ? [`knowledge_source: ${input.knowledgeSource}`] : []),
         `업무 유형: ${WORK_TYPE_LABEL[type]} (\`${type}\`)`,
         `node: ${nodeLabel(task.node)}`,
         `skill: ${info.skill}`,

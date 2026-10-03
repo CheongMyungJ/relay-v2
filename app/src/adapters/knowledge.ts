@@ -1,7 +1,28 @@
+import { randomUUID } from 'node:crypto'
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import { git, type GitOptions } from './git'
 
 export const KNOWLEDGE_FILE = '.relay/knowledge.md'
 export const KNOWLEDGE_LIMIT = 12_000
+
+/** Opaque Work provenance, independent of clone-local counters and machine paths. */
+export async function workSource(workDir: string): Promise<string> {
+  const file = path.join(workDir, 'knowledge-source-id')
+  const temporary = `${file}.${randomUUID()}`
+  await fs.writeFile(temporary, randomUUID(), { mode: 0o600 })
+  try {
+    await fs.link(temporary, file).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== 'EEXIST') throw error
+    })
+    const id = (await fs.readFile(file, 'utf8')).trim()
+    if (!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(id))
+      throw new Error('Invalid knowledge source ID')
+    return id
+  } finally {
+    await fs.unlink(temporary)
+  }
+}
 
 /** Only the current committed snapshot travels between tasks and clones. */
 export async function sharedKnowledge(repo: string, opts?: GitOptions): Promise<string> {

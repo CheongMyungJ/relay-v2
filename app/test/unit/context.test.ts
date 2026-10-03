@@ -31,6 +31,13 @@ const DECISIONS =
   '## t-01 intake — 2026-09-26 10:05 (사람 승인)\n- [AI] 수정 위치는 둘 — 발급과 검증\n'
 const PREV_HANDOFF = '---\nstatus: awaiting_approval\n---\n## 요약\n재현됨\n'
 
+it('provides the opaque Work source alongside local task IDs for shared fact attribution', () => {
+  const source = 'f809b6d4-3f11-442c-8f14-945678eed841'
+  const info = section(buildContext(input('fix', { knowledgeSource: source })), 'task 정보')
+  expect(info).toContain(`- knowledge_source: ${source}`)
+  expect(info).toContain('- task_id: t-02')
+})
+
 /** node task를 시작하려는 Work. 앞 단계는 모두 승인되어 있다 */
 function workAt(
   node: NodeName,
