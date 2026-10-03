@@ -70,10 +70,10 @@ index 6676718..d14b8ba 100644
            moved = await arm.handoff(h.repo)
          } else {
 diff --git a/app/eval/lib/repo.mjs b/app/eval/lib/repo.mjs
-index 16aaa6a..1043cc7 100644
+index 16aaa6a..f8f6d24 100644
 --- a/app/eval/lib/repo.mjs
 +++ b/app/eval/lib/repo.mjs
-@@ -125,7 +125,7 @@ export function diffTree(tree, baseDir, work) {
+@@ -125,11 +125,18 @@ export function diffTree(tree, baseDir, work) {
   * @param {string} dest 새 사람의 clone 경로
   * @returns {{ repo: string, merged: string[], conflicts: string[], failed: string[], head: string }}
   */
@@ -82,7 +82,27 @@ index 16aaa6a..1043cc7 100644
    const work = `${dest}-merge`
    fs.rmSync(work, { recursive: true, force: true })
    git(path.dirname(work), 'clone', '-q', '--no-local', prevRepo, work)
-@@ -161,12 +161,52 @@ export function handoffRepo(prevRepo, remote, dest) {
+   setUser(work)
++  // 세 후보 비교: 지식 파일의 충돌은 양쪽을 합친다(리뷰어가 충돌을 풀며 두 PR의 지식을 모두 살리는 것과 같음).
++  // 지식을 파일 하나에 모으는 쪽(.relay/knowledge.md)은 머지 전에 갈라진 Work 둘이 같은 파일을 새로 만들어 충돌한다
++  fs.mkdirSync(path.join(work, '.git', 'info'), { recursive: true })
++  fs.writeFileSync(
++    path.join(work, '.git', 'info', 'attributes'),
++    '.relay/knowledge.md merge=union\ndocs/knowledge/** merge=union\n',
++  )
+   run('git', ['checkout', '-q', 'main'], { cwd: work })
+   const refs = git(
+     work,
+@@ -140,6 +147,8 @@ export function handoffRepo(prevRepo, remote, dest) {
+   )
+     .split('\n')
+     .filter((r) => r && r !== 'origin/HEAD' && r !== 'origin/main' && r !== 'origin')
++    // 되감기로 폐기한 시도의 브랜치(relay/<work>-discarded-<n>)는 PR로 머지되지 않는다
++    .filter((r) => !/-discarded-\d+$/.test(r))
+   const merged = []
+   const conflicts = []
+   const failed = []
+@@ -161,12 +170,52 @@ export function handoffRepo(prevRepo, remote, dest) {
      }
      merged.push(ref.replace(/^origin\//, ''))
    }
@@ -886,10 +906,10 @@ index 0000000..df39839
 +})
 diff --git a/app/eval/scenarios/26-points-policy-change/scenario.json b/app/eval/scenarios/26-points-policy-change/scenario.json
 new file mode 100644
-index 0000000..50507cb
+index 0000000..4124256
 --- /dev/null
 +++ b/app/eval/scenarios/26-points-policy-change/scenario.json
-@@ -0,0 +1,53 @@
+@@ -0,0 +1,122 @@
 +{
 +  "id": "26-points-policy-change",
 +  "repoName": "loyalty",
@@ -899,50 +919,120 @@ index 0000000..50507cb
 +    {
 +      "report": "고객센터에서 포인트 적립 문의가 올라왔다. 주문 B-24117(실버 회원)의 적립 포인트가 527점으로 들어갔는데, 고객센터가 안내한 금액과 다르다고 한다. 주문 데이터는 examples/B-24117.json에 있다. (src/points/earn.js)",
 +      "knowledge": [
-+        { "share": "on_ask", "text": "고객센터가 계산한 B-24117의 적립 포인트는 467점이다." },
-+        { "share": "on_ask", "text": "적립 규칙: 적립 기준 금액은 상품 금액에서 쿠폰 할인과 포인트 사용분을 뺀 금액이다. 배송비는 넣지 않는다. 여기에 등급 적립률을 곱하고 원 단위는 버린다(반올림하지 않는다)." },
-+        { "share": "upfront", "text": "이미 적립된 포인트는 다시 계산하지 않는다. 주문 요약 문구와 결제 금액 계산은 바꾸면 안 된다(주문 확인 메일이 그대로 쓴다)." }
++        {
++          "share": "on_ask",
++          "text": "고객센터가 계산한 B-24117의 적립 포인트는 467점이다."
++        },
++        {
++          "share": "on_ask",
++          "text": "적립 규칙: 적립 기준 금액은 상품 금액에서 쿠폰 할인과 포인트 사용분을 뺀 금액이다. 배송비는 넣지 않는다. 여기에 등급 적립률을 곱하고 원 단위는 버린다(반올림하지 않는다)."
++        },
++        {
++          "share": "upfront",
++          "text": "이미 적립된 포인트는 다시 계산하지 않는다. 주문 요약 문구와 결제 금액 계산은 바꾸면 안 된다(주문 확인 메일이 그대로 쓴다)."
++        }
 +      ],
 +      "checks": [
-+        { "name": "적립 규칙", "file": "earn-rule.test.js" },
-+        { "name": "적립 지키기", "file": "earn-guard.test.js", "guard": true }
++        {
++          "name": "적립 규칙",
++          "file": "earn-rule.test.js"
++        },
++        {
++          "name": "적립 지키기",
++          "file": "earn-guard.test.js",
++          "guard": true
++        }
 +      ]
 +    },
 +    {
 +      "report": "회원 M-3302가 최근 12개월 동안 30만 원 넘게 샀는데 등급이 basic으로 나온다고 문의했다. 주문 내역은 examples/M-3302-orders.json에 있고, 기준일은 2025-11-15다. (src/points/tier.js)",
 +      "knowledge": [
-+        { "share": "on_ask", "text": "M-3302는 silver여야 한다. 마케팅팀이 계산한 실적은 305,500원이다." },
-+        { "share": "on_ask", "text": "이번 달부터 포인트 정책이 바뀌었다: 포인트로 낸 금액도 적립과 등급 실적의 기준 금액에 넣는다(더는 빼지 않는다). 기준 금액은 상품 금액 − 쿠폰 할인이다. 앞으로 적립·실적·미리보기 모두 이 기준을 쓴다." },
-+        { "share": "on_ask", "text": "배송비는 기준 금액에 넣지 않는다.", "carry": true },
-+        { "share": "on_ask", "text": "원 단위는 버린다(반올림하지 않는다).", "carry": true },
-+        { "share": "on_ask", "text": "취소된 주문은 실적에서 뺀다." },
-+        { "share": "upfront", "text": "적립 계산(earn.js)도 새 정책으로 바꿔야 하지만 결제팀이 다음 배포 때 따로 바꾼다. 이번 Work에서는 earn.js를 건드리지 말고 등급(tier.js)만 고친다. 12개월 창과 등급 경계(30만, 100만)는 그대로다." }
++        {
++          "share": "on_ask",
++          "text": "M-3302는 silver여야 한다. 마케팅팀이 계산한 실적은 305,500원이다."
++        },
++        {
++          "share": "upfront",
++          "text": "이번 달부터 포인트 정책이 바뀌었다: 포인트로 낸 금액도 적립과 등급 실적의 기준 금액에 넣는다(더는 빼지 않는다). 기준 금액은 상품 금액 − 쿠폰 할인이다. 앞으로 적립·실적·미리보기 모두 이 기준을 쓴다."
++        },
++        {
++          "share": "on_ask",
++          "text": "배송비는 기준 금액에 넣지 않는다.",
++          "carry": true
++        },
++        {
++          "share": "on_ask",
++          "text": "원 단위는 버린다(반올림하지 않는다).",
++          "carry": true
++        },
++        {
++          "share": "on_ask",
++          "text": "취소된 주문은 실적에서 뺀다."
++        },
++        {
++          "share": "upfront",
++          "text": "적립 계산(earn.js)도 새 정책으로 바꿔야 하지만 결제팀이 다음 배포 때 따로 바꾼다. 이번 Work에서는 earn.js를 건드리지 말고 등급(tier.js)만 고친다. 12개월 창과 등급 경계(30만, 100만)는 그대로다."
++        }
 +      ],
 +      "checks": [
-+        { "name": "등급 실적", "file": "tier-record.test.js" },
-+        { "name": "등급 지키기", "file": "tier-guard.test.js", "guard": true }
++        {
++          "name": "등급 실적",
++          "file": "tier-record.test.js"
++        },
++        {
++          "name": "등급 지키기",
++          "file": "tier-guard.test.js",
++          "guard": true
++        }
 +      ]
 +    },
 +    {
 +      "report": "장바구니 결제 미리보기의 '적립 예정' 포인트가 1377.9P처럼 소수점으로 나온다고 앱팀에서 연락이 왔다. 예: 장바구니 C-5521(골드 회원), 데이터는 examples/C-5521.json. 적립 예정 포인트가 우리 적립 정책대로 나오게 고쳐 달라고 한다. (src/cart/preview.js)",
 +      "knowledge": [
-+        { "share": "on_ask", "text": "적립 정책의 자세한 내용은 모른다. 이번 달에 적립 기준이 바뀌었다는 공지를 본 것 같은데 무엇이 바뀌었는지 기억나지 않는다. 담당하던 동료는 휴가 중이라 물을 수 없다." },
-+        { "share": "on_ask", "text": "결제팀이 이번 주에 적립 계산(earn.js)을 새 정책으로 바꿔 배포한다고 들었다. earn.js는 결제팀 몫이라 이번에는 손대지 않는다." },
-+        { "share": "upfront", "text": "미리보기의 다른 칸(상품, 쿠폰, 배송비, 포인트 사용, 결제 금액)과 앞 세 줄 문구는 바꾸면 안 된다. 앱이 그대로 읽는다." }
++        {
++          "share": "on_ask",
++          "text": "적립 정책의 자세한 내용은 모른다. 이번 달에 적립 기준이 바뀌었다는 공지를 본 것 같은데 무엇이 바뀌었는지 기억나지 않는다. 담당하던 동료는 휴가 중이라 물을 수 없다."
++        },
++        {
++          "share": "on_ask",
++          "text": "결제팀이 이번 주에 적립 계산(earn.js)을 새 정책으로 바꿔 배포한다고 들었다. earn.js는 결제팀 몫이라 이번에는 손대지 않는다."
++        },
++        {
++          "share": "upfront",
++          "text": "미리보기의 다른 칸(상품, 쿠폰, 배송비, 포인트 사용, 결제 금액)과 앞 세 줄 문구는 바꾸면 안 된다. 앱이 그대로 읽는다."
++        }
 +      ],
 +      "checks": [
-+        { "name": "미리보기 적립", "file": "preview-points.test.js" },
-+        { "name": "미리보기 지키기", "file": "preview-guard.test.js", "guard": true }
++        {
++          "name": "미리보기 적립",
++          "file": "preview-points.test.js"
++        },
++        {
++          "name": "미리보기 지키기",
++          "file": "preview-guard.test.js",
++          "guard": true
++        }
 +      ],
 +      "teammate": true
 +    }
 +  ],
-+  "preferences": ["고친 뒤 리포트의 예시(주문, 회원, 장바구니)가 고객센터나 마케팅팀 계산과 맞는지 확인하고 싶다."],
++  "preferences": [
++    "고친 뒤 리포트의 예시(주문, 회원, 장바구니)가 고객센터나 마케팅팀 계산과 맞는지 확인하고 싶다."
++  ],
 +  "reveals": [],
 +  "events": [],
-+  "expectedFiles": ["src/**", "test/**", ".relay/**", "docs/knowledge/**"],
-+  "limits": { "minutes": 120, "turns": 140 }
++  "expectedFiles": [
++    "src/**",
++    "test/**",
++    ".relay/**",
++    "docs/knowledge/**"
++  ],
++  "limits": {
++    "minutes": 120,
++    "turns": 140
++  }
 +}
+\ No newline at end of file
 diff --git a/app/eval/scenarios/26-points-policy-change/traps/w1-floor-payable.patch b/app/eval/scenarios/26-points-policy-change/traps/w1-floor-payable.patch
 new file mode 100644
 index 0000000..13696c5
