@@ -227,6 +227,23 @@ describe('[흐름] 지식 관리 (M17)', () => {
     expect(settings).toContain('/knowledge/**')
   })
 
+  it('동시에 돈 Work가 그새 같은 규칙을 공유 대기에 썼으면 새로 쓰지 않는다 (D331, 지식 탐색 K7)', async () => {
+    const s = await setup(WORK1)
+    const key = await s.create()
+    const review = await toCompletion(s, key)
+    // 완료 화면을 연 뒤 다른 Work가 같은 규칙을 공유 대기에 썼다
+    fs.mkdirSync(path.join(s.store, 'pending', 'domain'), { recursive: true })
+    fs.writeFileSync(
+      path.join(s.store, 'pending', 'domain', 'domain-0000000f.md'),
+      renderEntry(entry({ id: 'domain-0000000f', kind: 'domain', rule: `${RULE}.` })),
+    )
+    expect(await s.h.relay.approve(key, review.taskId, {})).toEqual({ ok: true })
+    await settle(s.h, key)
+    const same = storeFiles(s, 'pending').filter((t) => t.includes(RULE))
+    expect(same).toHaveLength(1)
+    expect(same[0]).toContain('id: domain-0000000f')
+  })
+
   it('되감기로 폐기한 task의 후보는 완료 화면에 없다 (D283, 5.4)', async () => {
     const base = scenario()
     const s = await setup({

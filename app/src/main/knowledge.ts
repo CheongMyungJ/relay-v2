@@ -355,10 +355,18 @@ export class WorkKnowledge {
       for (const id of plan.removeMine) await this.o.store.remove('mine', id)
       // 동시에 돈 Work가 그새 같은 규칙을 공유 대기에 썼으면 새로 쓰지 않는다 (지식 탐색 K7, D331). 이미 있던 항목을 다시
       // 쓰는 것([그대로 맞음] 등)은 그대로 쓴다
-      const existing = (await this.o.store.list('pending')).entries.map((r) => r.entry)
+      // 이번에 대체하거나 지우는 항목과는 견주지 않는다: 새 규칙이 그 옛 규칙을 바꾸는 것이다
+      const retired = new Set([
+        ...plan.removePending,
+        ...pending.filter((e) => e.status !== 'active').map((e) => e.id),
+      ])
+      const existing = (await this.o.store.list('pending')).entries
+        .map((r) => r.entry)
+        .filter((e) => !retired.has(e.id))
       const known = new Set(existing.map((x) => x.id))
       for (const e of pending) {
-        if (!known.has(e.id) && duplicateOf(e, existing)) continue
+        // 대체된 옛 항목(superseded)은 늘 쓴다: 새 규칙과 글이 비슷해도 같은 규칙이 아니다
+        if (e.status === 'active' && !known.has(e.id) && duplicateOf(e, existing)) continue
         await this.o.store.write('pending', e)
         existing.push(e)
         known.add(e.id)
