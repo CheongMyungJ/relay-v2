@@ -18,7 +18,7 @@ async function intakeDir(env: Record<string, string>) {
   h = hh
   const { repo } = makeRepo(hh.root, 'knowledge', {
     ...REPO_FILES,
-    'docs/knowledge/vat-per-line.md': '# 부가세는 품목 줄마다 원 단위 버림\n',
+    'docs/knowledge/amount-floor.md': '# 금액은 원 단위로 내림\n',
   })
   const projectId = await register(hh, repo)
   const r = await hh.relay.createWork(projectId, {
@@ -41,9 +41,9 @@ describe('[흐름] 지식 켜고 끔', () => {
     const dir = await intakeDir({})
     const context = fs.readFileSync(path.join(dir, 'context.md'), 'utf8')
     expect(context).toContain('## 팀 지식')
-    expect(context).toContain('# 부가세는 품목 줄마다 원 단위 버림')
+    expect(context).toContain('# 금액은 원 단위로 내림')
     expect(fs.readFileSync(path.join(dir, 'knowledge-injected.md'), 'utf8')).toContain(
-      'docs/knowledge/vat-per-line.md',
+      'docs/knowledge/amount-floor.md',
     )
   })
 

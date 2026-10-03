@@ -55,7 +55,7 @@ describe('[단위] 지식', () => {
     expect(looksSecret('토큰: ghp_abcdefghijklmnopqrstuvwxyz0123')).toBe(true)
     expect(looksSecret('password = hunter2hunter2')).toBe(true)
     expect(looksSecret('접속: https://admin:pa55word@db.internal')).toBe(true)
-    expect(looksSecret('부가세는 품목 줄마다 원 단위 버림')).toBe(false)
+    expect(looksSecret('금액은 원 단위로 내림')).toBe(false)
     const s = selectEntries([entry('a.md', '# A'), entry('s.md', 'api_key=abcdef123456')])
     expect(s.full.map((e) => e.path)).toEqual(['docs/knowledge/a.md'])
     expect(s.secret.map((e) => e.path)).toEqual(['docs/knowledge/s.md'])
@@ -77,32 +77,32 @@ describe('[단위] 지식', () => {
       '---',
       'status: awaiting_approval',
       'knowledge_candidates:',
-      '  - "부가세는 줄마다 버림 (사람)"',
+      '  - "금액은 내림 (사람)"',
       '  - ""',
       '---',
       '## 요약',
     ].join('\n')
-    expect(candidatesOf(handoff)).toEqual(['부가세는 줄마다 버림 (사람)'])
+    expect(candidatesOf(handoff)).toEqual(['금액은 내림 (사람)'])
     expect(candidatesOf('본문만')).toEqual([])
   })
 
   it('지식 절: verify는 남기는 법과 후보를, 다른 단계는 후보를 남기는 법을 담는다', () => {
     const input: KnowledgeInput = {
-      entries: [entry('vat.md', '# 부가세는 줄마다 버림'), entry('p.md', '# 병렬', 'w-9')],
-      candidates: [{ taskId: 't-02', node: 'fix', items: ['할인은 부가세 전 (사람)'] }],
+      entries: [entry('vat.md', '# 금액은 내림'), entry('p.md', '# 병렬', 'w-9')],
+      candidates: [{ taskId: 't-02', node: 'fix', items: ['할인 먼저 (사람)'] }],
       work_id: 'w-1',
       date: '2026-10-03',
     }
     const [title, intake] = knowledgeSection('intake', input)
     expect(title).toBe('팀 지식')
-    expect(intake).toContain('# 부가세는 줄마다 버림')
+    expect(intake).toContain('# 금액은 내림')
     expect(intake).toContain('Work w-9에서 남김')
     expect(intake).toContain('`제약`')
     expect(intake).toContain('knowledge_candidates')
-    expect(intake).not.toContain('할인은 부가세 전')
+    expect(intake).not.toContain('할인 먼저')
     const [, verify] = knowledgeSection('verify', input)
     expect(verify).toContain('지식 남기기')
-    expect(verify).toContain('t-02 fix: 할인은 부가세 전 (사람)')
+    expect(verify).toContain('t-02 fix: 할인 먼저 (사람)')
     expect(verify).toContain('relay Work w-1, 2026-10-03')
     const [, empty] = knowledgeSection('fix', { ...input, entries: [], candidates: [] })
     expect(empty).toContain('### 항목\n\n없음')
