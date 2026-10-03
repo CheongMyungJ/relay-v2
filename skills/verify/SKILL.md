@@ -19,6 +19,7 @@ Review the whole change of this Work, apply only the findings the human picks, t
 <!-- type: refactor -->
 - `refactor.md` at the path in `context.md`: the plan (target structure), the safety net and its commit hash, the change, the bugs found and the accepted differences.
 <!-- /type -->
+- For knowledge review, also read `request.md` at the path in `context.md` and the human answers/earlier handoffs referenced there; deferred facts may be absent from completion criteria.
 - The change to review is from the base commit (from `context.md`) to now: `git diff <base commit>`.
 
 ## Order
@@ -53,7 +54,7 @@ Review the whole change of this Work, apply only the findings the human picks, t
 <!-- /type -->
 - The repo's conventions and readability.
 - Changes that are not needed.
-- Shared knowledge changes: compare each affected record with the base version and the code-changing task's evidence. Identify the new fact, changed scope/validity, correction or explicit policy replacement. A section that only adds another Work/source, date, base commit or passing test count for unchanged reuse is an unnecessary change: report it as a finding and propose keeping the execution evidence in the task artifact. Check that original sources, unrelated active facts and unknowns survive; passing code tests do not justify a knowledge edit. Write the comparison under `리뷰 지적` even when it yields no finding (or say the knowledge diff is absent). If notes need correction, recommend returning to the code-changing step through the existing going-back procedure; do not edit or extract shared notes here.
+- Shared knowledge: review **both edit justification and missing facts** under the common capture rules. Compare affected notes with the base version and task evidence: reject unchanged revalidation history and preserve original sources, unrelated active facts and unknowns. Independently compare the current request, approved intent, human answers and actual observations with the final shared notes, even with no knowledge diff; do not rely only on the author's change summary. Check that newly confirmed reusable facts reach Git notes with scope and evidence, including deferred rules. Handoff or `knowledge_candidates` alone is not delivery to a fresh Work. Apply the common evidence and exclusion rules. Write the material comparison and coverage conclusion under `리뷰 지적`; "no knowledge diff" alone is insufficient. Missing qualifying facts are findings even if all code criteria/tests pass; test success is not policy confirmation. For knowledge corrections, recommend returning to the code-changing step through the existing going-back procedure; do not edit or extract shared notes here, including when a finding is picked.
 <!-- type: bugfix -->
 - Code that the reproduction steps use is not unused code.
 <!-- /type -->
