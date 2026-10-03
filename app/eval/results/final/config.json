@@ -1,0 +1,43 @@
+{
+  "startedAt": "2026-10-03T14:04:00.459Z",
+  "commit": "7c85d6b",
+  "appCommits": {
+    "base": "0247049",
+    "m17": "aa39d16"
+  },
+  "claudeVersion": "2.1.288 (Claude Code)",
+  "scenarios": [
+    "h1-parcel-fees",
+    "h2-stay-fees"
+  ],
+  "runs": 5,
+  "arms": [
+    "relay",
+    "base",
+    "m17"
+  ],
+  "agentModel": "sonnet",
+  "effort": "medium",
+  "humanModel": "sonnet",
+  "humanEffort": "medium",
+  "judgeModel": "sonnet",
+  "cliArgs": [
+    "--dangerously-skip-permissions"
+  ],
+  "vision": true,
+  "workRoot": "/tmp/relay-eval/final",
+  "apps": {
+    "base": "/tmp/relay-ref/base/app",
+    "m17": "/tmp/relay-ref/m17/app"
+  },
+  "pairs": [
+    [
+      "relay",
+      "base"
+    ],
+    [
+      "relay",
+      "m17"
+    ]
+  ]
+}

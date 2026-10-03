@@ -1,0 +1,1021 @@
+{
+  "scenario": "h2-stay-fees",
+  "kind": "m17",
+  "index": 2,
+  "ending": "done",
+  "summary": "원인은 기준 커밋 이전 코드(d2106bd 이전)의 D-n 계산이 입실 시각까지 24시간 단위로 내림하던 것이었다. 이 오류는 기준 커밋에 이미 고쳐져 있었다. 현재 코드로 R-02 부분 취소를 돌리면 수수료 78,670원, 환불 183,570원이 나오고, paidAmount는 645,920원 그대로다. 소스는 바꾸지 않았고 값을 고정하는 테스트만 추가해 relay/w-20261003-001 브랜치에 커밋했다. npm test 54개가 통과한다.",
+  "error": null,
+  "wallMs": 1183897,
+  "firstChangeMs": 163648,
+  "outcome": {
+    "success": true,
+    "checks": [
+      {
+        "name": "취소 날짜 기준",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "취소 수수료 10원 버림",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "취소해도 결제 금액 그대로",
+        "guard": true,
+        "pass": true
+      },
+      {
+        "name": "변경 수수료 날짜 기준",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "변경 수수료 10원 버림",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "날짜 변경 정산 기록",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "견적과 예약 그대로",
+        "guard": true,
+        "pass": true
+      },
+      {
+        "name": "부분 취소 날짜 기준",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "부분 취소 10원 버림",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "부분 취소 몫과 결제 금액",
+        "guard": true,
+        "pass": true
+      },
+      {
+        "name": "다객실 전체 취소 그대로",
+        "guard": true,
+        "pass": true
+      }
+    ],
+    "repoTestsPass": true,
+    "filesChanged": [
+      "src/bookings/cancel.js",
+      "src/rooms/partial-cancel.js",
+      "test/cancel.test.js",
+      "test/partial-cancel.test.js",
+      "src/bookings/change.js",
+      "src/index.js",
+      "test/change.test.js"
+    ],
+    "linesChanged": 465,
+    "unrelated": [],
+    "committed": true,
+    "trees": [
+      {
+        "label": "w-20261003-001",
+        "removed": false,
+        "git": {
+          "branch": "relay/w-20261003-001",
+          "commits": 2,
+          "log": [
+            "취소 D-n 계산에 daysBetween 재사용",
+            "취소 수수료: D-n을 현지 달력 날짜 차이로 세고 수수료를 10원 단위로 버림"
+          ],
+          "uncommitted": []
+        },
+        "files": [
+          {
+            "file": "src/bookings/cancel.js",
+            "add": 10,
+            "del": 7
+          },
+          {
+            "file": "src/rooms/partial-cancel.js",
+            "add": 4,
+            "del": 14
+          },
+          {
+            "file": "test/cancel.test.js",
+            "add": 39,
+            "del": 0
+          },
+          {
+            "file": "test/partial-cancel.test.js",
+            "add": 6,
+            "del": 0
+          }
+        ],
+        "linesAdded": 59,
+        "linesRemoved": 21,
+        "unrelated": [],
+        "repoTests": {
+          "pass": true,
+          "output": "--\n  duration_ms: 1.968336\n  type: 'test'\n  ...\n# Subtest: 날짜 서식\nok 19 - 날짜 서식\n  ---\n  duration_ms: 0.903947\n  type: 'test'\n  ...\n# Subtest: 취소 확인서\nok 20 - 취소 확인서\n  ---\n  duration_ms: 3.48442\n  type: 'test'\n  ...\n# Subtest: test/helpers.js\nok 5 - test/helpers.js\n  ---\n  duration_ms: 67.448494\n  type: 'test'\n  ...\n# Subtest: 결제, 추가 결제, 환불 합계\nok 22 - 결제, 추가 결제, 환불 합계\n  ---\n  duration_ms: 3.815359\n  type: 'test'\n  ...\n# Subtest: 금액과 사유를 확인한다\nok 23 - 금액과 사유를 확인한다\n  ---\n  duration_ms: 2.19842\n  type: 'test'\n  ...\n# Subtest: 환불 안내\nok 24 - 환불 안내\n  ---\n  duration_ms: 0.215775\n  type: 'test'\n  ...\n# Subtest: 문자 바이트와 종류\nok 25 - 문자 바이트와 종류\n  ---\n  duration_ms: 1.455752\n  type: 'test'\n  ...\n# Subtest: 확정 문자\nok 26 - 확정 문자\n  ---\n  duration_ms: 2.354642\n  type: 'test'\n  ...\n# Subtest: 취소 문자\nok 27 - 취소 문자\n  ---\n  duration_ms: 0.999994\n  type: 'test'\n  ...\n# Subtest: 입실 안내는 전날 18시(현지)에 보낸다\nok 28 - 입실 안내는 전날 18시(현지)에 보낸다\n  ---\n  duration_ms: 1.482216\n  type: 'test'\n  ...\n# Subtest: 객실 몫은 할인을 객실 요금 비율로 나눈다\nok 29 - 객실 몫은 할인을 객실 요금 비율로 나눈다\n  ---\n  duration_ms: 4.416398\n  type: 'test'\n  ...\n# Subtest: 한 객실만 취소하면 그 객실 몫에서 수수료를 뗀다\nok 30 - 한 객실만 취소하면 그 객실 몫에서 수수료를 뗀다\n  ---\n  duration_ms: 2.493742\n  type: 'test'\n  ...\n# Subtest: 일찍 취소하면 몫을 모두 돌려준다\nok 31 - 일찍 취소하면 몫을 모두 돌려준다\n  ---\n  duration_ms: 0.666843\n  type: 'test'\n  ...\n# Subtest: 부분 취소 뒤 예약 취소는 남은 객실 금액으로 계산한다\nok 32 - 부분 취소 뒤 예약 취소는 남은 객실 금액으로 계산한다\n  ---\n  duration_ms: 0.663043\n  type: 'test'\n  ...\n# Subtest: 모든 객실, 없는 객실, 확정 전 예약은 부분 취소할 수 없다\nok 33 - 모든 객실, 없는 객실, 확정 전 예약은 부분 취소할 수 없다\n  ---\n  duration_ms: 1.300711\n  type: 'test'\n  ...\n# Subtest: 부분 취소도 현지 날짜로 D-n을 세고 객실 수수료를 10원 단위로 버린다\nok 34 - 부분 취소도 현지 날짜로 D-n을 세고 객실 수수료를 10원 단위로 버린다\n  ---\n  duration_ms: 0.506144\n  type: 'test'\n  ...\n# Subtest: 주중·주말·성수기 요금\nok 35 - 주중·주말·성수기 요금\n  ---\n  duration_ms: 2.026804\n  type: 'test'\n  ...\n# Subtest: 기준 인원을 넘는 손님\nok 36 - 기준 인원을 넘는 손님\n  ---\n  duration_ms: 0.737851\n  type: 'test'\n  ...\n# Subtest: 1박 한 객실은 할인이 없다\nok 37 - 1박 한 객실은 할인이 없다\n  ---\n  duration_ms: 1.766971\n  type: 'test'\n  ...\n# Subtest: 연박 할인과 다객실 할인\nok 38 - 연박 할인과 다객실 할인\n  ---\n  duration_ms: 0.46823\n  type: 'test'\n  ...\n# Subtest: 같은 객실 두 번은 안 된다\nok 39 - 같은 객실 두 번은 안 된다\n  ---\n  duration_ms: 0.180198\n  type: 'test'\n  ...\n# Subtest: 예시 예약 파일\nok 40 - 예시 예약 파일\n  ---\n  duration_ms: 1.314684\n  type: 'test'\n  ...\n# Subtest: 겹치는 숙박\nok 41 - 겹치는 숙박\n  ---\n  duration_ms: 0.745872\n  type: 'test'\n  ...\n# Subtest: 같은 객실이 겹치면 받지 않는다\nok 42 - 같은 객실이 겹치면 받지 않는다\n  ---\n  duration_ms: 3.974749\n  type: 'test'\n  ...\n# Subtest: 점유율과 매출\nok 43 - 점유율과 매출\n  ---\n  duration_ms: 1.044876\n  type: 'test'\n  ...\n# Subtest: 현지 날짜와 시각\nok 44 - 현지 날짜와 시각\n  ---\n  duration_ms: 2.173203\n  type: 'test'\n  ...\n# Subtest: 현지 날짜와 시각으로 시각 만들기\nok 45 - 현지 날짜와 시각으로 시각 만들기\n  ---\n  duration_ms: 0.995614\n  type: 'test'\n  ...\n# Subtest: 읽을 수 없는 시각\nok 46 - 읽을 수 없는 시각\n  ---\n  duration_ms: 0.202845\n  type: 'test'\n  ...\n1..46\n# tests 46\n# suites 0\n# pass 46\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 521.560611\n"
+        },
+        "checks": [
+          {
+            "name": "취소 날짜 기준",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 취소 구간: 10/10 20:00 D-10\nok 1 - 취소 구간: 10/10 20:00 D-10\n  ---\n  duration_ms: 4.53385\n  type: 'test'\n  ...\n# Subtest: 취소 구간: 10/13 21:40 D-7\nok 2 - 취소 구간: 10/13 21:40 D-7\n  ---\n  duration_ms: 0.784706\n  type: 'test'\n  ...\n# Subtest: 취소 구간: 10/14 08:00 D-6\nok 3 - 취소 구간: 10/14 08:00 D-6\n  ---\n  duration_ms: 0.298758\n  type: 'test'\n  ...\n# Subtest: 취소 구간: 10/18 10:00 D-2\nok 4 - 취소 구간: 10/18 10:00 D-2\n  ---\n  duration_ms: 0.345372\n  type: 'test'\n  ...\n# Subtest: 취소 구간: 10/19 23:30 D-1\nok 5 - 취소 구간: 10/19 23:30 D-1\n  ---\n  duration_ms: 0.540747\n  type: 'test'\n  ...\n# Subtest: 취소 구간: 10/20 00:10 당일\nok 6 - 취소 구간: 10/20 00:10 당일\n  ---\n  duration_ms: 0.261433\n  type: 'test'\n  ...\n1..6\n# tests 6\n# suites 0\n# pass 6\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 137.52293\n"
+          },
+          {
+            "name": "취소 수수료 10원 버림",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 리포트의 B-24117: 10월 13일 21:40 취소는 10% 구간, 28,640원\nok 1 - 리포트의 B-24117: 10월 13일 21:40 취소는 10% 구간, 28,640원\n  ---\n  duration_ms: 1.63231\n  type: 'test'\n  ...\n# Subtest: 10원 버림: B-24117 10/16 11:00 D-4 30%\nok 2 - 10원 버림: B-24117 10/16 11:00 D-4 30%\n  ---\n  duration_ms: 0.558021\n  type: 'test'\n  ...\n# Subtest: 10원 버림: B-24117 10/12 12:00 D-8 10%\nok 3 - 10원 버림: B-24117 10/12 12:00 D-8 10%\n  ---\n  duration_ms: 0.292241\n  type: 'test'\n  ...\n# Subtest: 10원 버림: B-24139 10/20 11:00 D-4 30%\nok 4 - 10원 버림: B-24139 10/20 11:00 D-4 30%\n  ---\n  duration_ms: 0.359964\n  type: 'test'\n  ...\n# Subtest: 10원 버림: B-24152 10/24 10:00 당일 80%\nok 5 - 10원 버림: B-24152 10/24 10:00 당일 80%\n  ---\n  duration_ms: 2.054814\n  type: 'test'\n  ...\n# Subtest: 10원 버림: B-24152 10/19 12:00 D-5 30%\nok 6 - 10원 버림: B-24152 10/19 12:00 D-5 30%\n  ---\n  duration_ms: 0.387229\n  type: 'test'\n  ...\n1..6\n# tests 6\n# suites 0\n# pass 6\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 134.559006\n"
+          },
+          {
+            "name": "취소해도 결제 금액 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 취소한 예약의 결제 금액은 그대로\nok 1 - 취소한 예약의 결제 금액은 그대로\n  ---\n  duration_ms: 2.870594\n  type: 'test'\n  ...\n# Subtest: 돌려준 돈은 환불 기록으로 남는다\nok 2 - 돌려준 돈은 환불 기록으로 남는다\n  ---\n  duration_ms: 2.224496\n  type: 'test'\n  ...\n# Subtest: 결제 전 예약은 환불 기록이 없다\nok 3 - 결제 전 예약은 환불 기록이 없다\n  ---\n  duration_ms: 0.427389\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 137.565241\n"
+          },
+          {
+            "name": "변경 수수료 날짜 기준",
+            "bug": null,
+            "pass": false,
+            "output": "TAP version 13\n# node:internal/modules/esm/resolve:274\n#     throw new ERR_MODULE_NOT_FOUND(\n#           ^\n# Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/tmp/relay-eval/final/h2-stay-fees-m17-2/judge/w-20261003-001/tree/src/bookings/change.js' imported from /tmp/relay-eval/final/h2-stay-fees-m17-2/judge/w-20261003-001/tree/eval-hidden/change-day.test.js\n#     at finalizeResolution (node:internal/modules/esm/resolve:274:11)\n#     at moduleResolve (node:internal/modules/esm/resolve:859:10)\n#     at defaultResolve (node:internal/modules/esm/resolve:983:11)\n#     at \\#cachedDefaultResolve (node:internal/modules/esm/loader:731:20)\n#     at ModuleLoader.resolve (node:internal/modules/esm/loader:708:38)\n#     at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:310:38)\n#     at ModuleJob._link (node:internal/modules/esm/module_job:182:49) {\n#   code: 'ERR_MODULE_NOT_FOUND',\n#   url: 'file:///tmp/relay-eval/final/h2-stay-fees-m17-2/judge/w-20261003-001/tree/src/bookings/change.js'\n# }\n# Node.js v22.22.0\n# Subtest: eval-hidden/change-day.test.js\nnot ok 1 - eval-hidden/change-day.test.js\n  ---\n  duration_ms: 123.246266\n  type: 'test'\n  location: '/tmp/relay-eval/final/h2-stay-fees-m17-2/judge/w-20261003-001/tree/eval-hidden/change-day.test.js:1:1'\n  failureType: 'testCodeFailure'\n  exitCode: 1\n  signal: ~\n  error: 'test failed'\n  code: 'ERR_TEST_FAILURE'\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 134.313359\n"
+          },
+          {
+            "name": "변경 수수료 10원 버림",
+            "bug": null,
+            "pass": false,
+            "output": "TAP version 13\n# node:internal/modules/esm/resolve:274\n#     throw new ERR_MODULE_NOT_FOUND(\n#           ^\n# Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/tmp/relay-eval/final/h2-stay-fees-m17-2/judge/w-20261003-001/tree/src/bookings/change.js' imported from /tmp/relay-eval/final/h2-stay-fees-m17-2/judge/w-20261003-001/tree/eval-hidden/change-won.test.js\n#     at finalizeResolution (node:internal/modules/esm/resolve:274:11)\n#     at moduleResolve (node:internal/modules/esm/resolve:859:10)\n#     at defaultResolve (node:internal/modules/esm/resolve:983:11)\n#     at \\#cachedDefaultResolve (node:internal/modules/esm/loader:731:20)\n#     at ModuleLoader.resolve (node:internal/modules/esm/loader:708:38)\n#     at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:310:38)\n#     at ModuleJob._link (node:internal/modules/esm/module_job:182:49) {\n#   code: 'ERR_MODULE_NOT_FOUND',\n#   url: 'file:///tmp/relay-eval/final/h2-stay-fees-m17-2/judge/w-20261003-001/tree/src/bookings/change.js'\n# }\n# Node.js v22.22.0\n# Subtest: eval-hidden/change-won.test.js\nnot ok 1 - eval-hidden/change-won.test.js\n  ---\n  duration_ms: 100.601501\n  type: 'test'\n  location: '/tmp/relay-eval/final/h2-stay-fees-m17-2/judge/w-20261003-001/tree/eval-hidden/change-won.test.js:1:1'\n  failureType: 'testCodeFailure'\n  exitCode: 1\n  signal: ~\n  error: 'test failed'\n  code: 'ERR_TEST_FAILURE'\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 112.130229\n"
+          },
+          {
+            "name": "날짜 변경 정산 기록",
+            "bug": null,
+            "pass": false,
+            "output": "TAP version 13\n# node:internal/modules/esm/resolve:274\n#     throw new ERR_MODULE_NOT_FOUND(\n#           ^\n# Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/tmp/relay-eval/final/h2-stay-fees-m17-2/judge/w-20261003-001/tree/src/bookings/change.js' imported from /tmp/relay-eval/final/h2-stay-fees-m17-2/judge/w-20261003-001/tree/eval-hidden/change-ledger.test.js\n#     at finalizeResolution (node:internal/modules/esm/resolve:274:11)\n#     at moduleResolve (node:internal/modules/esm/resolve:859:10)\n#     at defaultResolve (node:internal/modules/esm/resolve:983:11)\n#     at \\#cachedDefaultResolve (node:internal/modules/esm/loader:731:20)\n#     at ModuleLoader.resolve (node:internal/modules/esm/loader:708:38)\n#     at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:310:38)\n#     at ModuleJob._link (node:internal/modules/esm/module_job:182:49) {\n#   code: 'ERR_MODULE_NOT_FOUND',\n#   url: 'file:///tmp/relay-eval/final/h2-stay-fees-m17-2/judge/w-20261003-001/tree/src/bookings/change.js'\n# }\n# Node.js v22.22.0\n# Subtest: eval-hidden/change-ledger.test.js\nnot ok 1 - eval-hidden/change-ledger.test.js\n  ---\n  duration_ms: 117.99021\n  type: 'test'\n  location: '/tmp/relay-eval/final/h2-stay-fees-m17-2/judge/w-20261003-001/tree/eval-hidden/change-ledger.test.js:1:1'\n  failureType: 'testCodeFailure'\n  exitCode: 1\n  signal: ~\n  error: 'test failed'\n  code: 'ERR_TEST_FAILURE'\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 128.584778\n"
+          },
+          {
+            "name": "견적과 예약 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 예시 예약의 견적\nok 1 - 예시 예약의 견적\n  ---\n  duration_ms: 7.51009\n  type: 'test'\n  ...\n# Subtest: 새 날짜 견적\nok 2 - 새 날짜 견적\n  ---\n  duration_ms: 1.235919\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 184.413495\n"
+          },
+          {
+            "name": "부분 취소 날짜 기준",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 부분 취소 구간: 10/17 21:00 D-10\nok 1 - 부분 취소 구간: 10/17 21:00 D-10\n  ---\n  duration_ms: 4.098557\n  type: 'test'\n  ...\n# Subtest: 부분 취소 구간: 10/21 10:00 D-6\nok 2 - 부분 취소 구간: 10/21 10:00 D-6\n  ---\n  duration_ms: 0.585427\n  type: 'test'\n  ...\n# Subtest: 부분 취소 구간: 10/24 20:10 D-3\nok 3 - 부분 취소 구간: 10/24 20:10 D-3\n  ---\n  duration_ms: 0.50928\n  type: 'test'\n  ...\n# Subtest: 부분 취소 구간: 10/25 08:00 D-2\nok 4 - 부분 취소 구간: 10/25 08:00 D-2\n  ---\n  duration_ms: 0.305034\n  type: 'test'\n  ...\n# Subtest: 부분 취소 구간: 10/26 23:00 D-1\nok 5 - 부분 취소 구간: 10/26 23:00 D-1\n  ---\n  duration_ms: 1.726147\n  type: 'test'\n  ...\n# Subtest: 부분 취소 구간: 10/27 00:30 당일\nok 6 - 부분 취소 구간: 10/27 00:30 당일\n  ---\n  duration_ms: 0.355621\n  type: 'test'\n  ...\n1..6\n# tests 6\n# suites 0\n# pass 6\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 141.409984\n"
+          },
+          {
+            "name": "부분 취소 10원 버림",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 리포트의 B-24152: 10월 21일 20:10 바람 취소는 D-3 30%, 수수료 78,670원\nok 1 - 리포트의 B-24152: 10월 21일 20:10 바람 취소는 D-3 30%, 수수료 78,670원\n  ---\n  duration_ms: 3.009138\n  type: 'test'\n  ...\n# Subtest: 부분 취소 10원 버림: B-90003 R-02 10/23 11:00 D-4 30%\nok 2 - 부분 취소 10원 버림: B-90003 R-02 10/23 11:00 D-4 30%\n  ---\n  duration_ms: 0.676324\n  type: 'test'\n  ...\n# Subtest: 부분 취소 10원 버림: B-90003 R-01 10/19 11:00 D-8 10%\nok 3 - 부분 취소 10원 버림: B-90003 R-01 10/19 11:00 D-8 10%\n  ---\n  duration_ms: 1.888217\n  type: 'test'\n  ...\n# Subtest: 부분 취소 10원 버림: B-90003 R-05 10/27 10:00 당일 80%\nok 4 - 부분 취소 10원 버림: B-90003 R-05 10/27 10:00 당일 80%\n  ---\n  duration_ms: 0.459208\n  type: 'test'\n  ...\n# Subtest: 부분 취소 10원 버림: B-24152 R-01 10/19 12:00 D-5 30%\nok 5 - 부분 취소 10원 버림: B-24152 R-01 10/19 12:00 D-5 30%\n  ---\n  duration_ms: 0.381708\n  type: 'test'\n  ...\n# Subtest: 부분 취소 10원 버림: B-24152 R-05 10/16 11:00 D-8 10%\nok 6 - 부분 취소 10원 버림: B-24152 R-05 10/16 11:00 D-8 10%\n  ---\n  duration_ms: 0.267775\n  type: 'test'\n  ...\n1..6\n# tests 6\n# suites 0\n# pass 6\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 139.4403\n"
+          },
+          {
+            "name": "부분 취소 몫과 결제 금액",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 일찍 취소하면 객실 몫을 모두 돌려주고 결제 금액은 그대로\nok 1 - 일찍 취소하면 객실 몫을 모두 돌려주고 결제 금액은 그대로\n  ---\n  duration_ms: 4.516075\n  type: 'test'\n  ...\n# Subtest: 수수료는 할인 전 객실 요금이 아니라 객실 몫에 매긴다\nok 2 - 수수료는 할인 전 객실 요금이 아니라 객실 몫에 매긴다\n  ---\n  duration_ms: 0.971685\n  type: 'test'\n  ...\n# Subtest: 모든 객실은 부분 취소로 취소할 수 없다\nok 3 - 모든 객실은 부분 취소로 취소할 수 없다\n  ---\n  duration_ms: 0.724999\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 132.579386\n"
+          },
+          {
+            "name": "다객실 전체 취소 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 다객실 예약 전체 취소\nok 1 - 다객실 예약 전체 취소\n  ---\n  duration_ms: 4.24576\n  type: 'test'\n  ...\n# Subtest: 부분 취소 뒤 전체 취소\nok 2 - 부분 취소 뒤 전체 취소\n  ---\n  duration_ms: 1.271765\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 154.737542\n"
+          }
+        ]
+      },
+      {
+        "label": "w-20261003-002",
+        "removed": false,
+        "git": {
+          "branch": "relay/w-20261003-002",
+          "commits": 2,
+          "log": [
+            "날짜 변경 테스트 보강: 환불 경로, 부분 취소·과거 체크인 오류",
+            "날짜 변경 기능 추가: changeBookingDates"
+          ],
+          "uncommitted": []
+        },
+        "files": [
+          {
+            "file": "src/bookings/change.js",
+            "add": 60,
+            "del": 0
+          },
+          {
+            "file": "src/index.js",
+            "add": 1,
+            "del": 0
+          },
+          {
+            "file": "test/change.test.js",
+            "add": 85,
+            "del": 0
+          }
+        ],
+        "linesAdded": 146,
+        "linesRemoved": 0,
+        "unrelated": [],
+        "repoTests": {
+          "pass": true,
+          "output": "_ms: 1.905612\n  type: 'test'\n  ...\n# Subtest: 요일과 기간\nok 21 - 요일과 기간\n  ---\n  duration_ms: 0.362589\n  type: 'test'\n  ...\n# Subtest: 금액 서식\nok 22 - 금액 서식\n  ---\n  duration_ms: 1.430914\n  type: 'test'\n  ...\n# Subtest: 날짜 서식\nok 23 - 날짜 서식\n  ---\n  duration_ms: 1.022768\n  type: 'test'\n  ...\n# Subtest: 취소 확인서\nok 24 - 취소 확인서\n  ---\n  duration_ms: 3.021716\n  type: 'test'\n  ...\n# Subtest: test/helpers.js\nok 6 - test/helpers.js\n  ---\n  duration_ms: 63.535924\n  type: 'test'\n  ...\n# Subtest: 결제, 추가 결제, 환불 합계\nok 26 - 결제, 추가 결제, 환불 합계\n  ---\n  duration_ms: 5.683875\n  type: 'test'\n  ...\n# Subtest: 금액과 사유를 확인한다\nok 27 - 금액과 사유를 확인한다\n  ---\n  duration_ms: 2.205348\n  type: 'test'\n  ...\n# Subtest: 환불 안내\nok 28 - 환불 안내\n  ---\n  duration_ms: 0.253316\n  type: 'test'\n  ...\n# Subtest: 문자 바이트와 종류\nok 29 - 문자 바이트와 종류\n  ---\n  duration_ms: 1.31518\n  type: 'test'\n  ...\n# Subtest: 확정 문자\nok 30 - 확정 문자\n  ---\n  duration_ms: 2.273897\n  type: 'test'\n  ...\n# Subtest: 취소 문자\nok 31 - 취소 문자\n  ---\n  duration_ms: 0.761799\n  type: 'test'\n  ...\n# Subtest: 입실 안내는 전날 18시(현지)에 보낸다\nok 32 - 입실 안내는 전날 18시(현지)에 보낸다\n  ---\n  duration_ms: 0.447263\n  type: 'test'\n  ...\n# Subtest: 객실 몫은 할인을 객실 요금 비율로 나눈다\nok 33 - 객실 몫은 할인을 객실 요금 비율로 나눈다\n  ---\n  duration_ms: 6.474931\n  type: 'test'\n  ...\n# Subtest: 한 객실만 취소하면 그 객실 몫에서 수수료를 뗀다\nok 34 - 한 객실만 취소하면 그 객실 몫에서 수수료를 뗀다\n  ---\n  duration_ms: 1.748092\n  type: 'test'\n  ...\n# Subtest: 일찍 취소하면 몫을 모두 돌려준다\nok 35 - 일찍 취소하면 몫을 모두 돌려준다\n  ---\n  duration_ms: 0.768632\n  type: 'test'\n  ...\n# Subtest: 부분 취소 뒤 예약 취소는 남은 객실 금액으로 계산한다\nok 36 - 부분 취소 뒤 예약 취소는 남은 객실 금액으로 계산한다\n  ---\n  duration_ms: 1.06487\n  type: 'test'\n  ...\n# Subtest: 모든 객실, 없는 객실, 확정 전 예약은 부분 취소할 수 없다\nok 37 - 모든 객실, 없는 객실, 확정 전 예약은 부분 취소할 수 없다\n  ---\n  duration_ms: 2.426326\n  type: 'test'\n  ...\n# Subtest: 주중·주말·성수기 요금\nok 38 - 주중·주말·성수기 요금\n  ---\n  duration_ms: 1.823347\n  type: 'test'\n  ...\n# Subtest: 기준 인원을 넘는 손님\nok 39 - 기준 인원을 넘는 손님\n  ---\n  duration_ms: 0.626558\n  type: 'test'\n  ...\n# Subtest: 1박 한 객실은 할인이 없다\nok 40 - 1박 한 객실은 할인이 없다\n  ---\n  duration_ms: 1.736282\n  type: 'test'\n  ...\n# Subtest: 연박 할인과 다객실 할인\nok 41 - 연박 할인과 다객실 할인\n  ---\n  duration_ms: 0.491301\n  type: 'test'\n  ...\n# Subtest: 같은 객실 두 번은 안 된다\nok 42 - 같은 객실 두 번은 안 된다\n  ---\n  duration_ms: 0.188794\n  type: 'test'\n  ...\n# Subtest: 예시 예약 파일\nok 43 - 예시 예약 파일\n  ---\n  duration_ms: 1.171564\n  type: 'test'\n  ...\n# Subtest: 겹치는 숙박\nok 44 - 겹치는 숙박\n  ---\n  duration_ms: 0.752344\n  type: 'test'\n  ...\n# Subtest: 같은 객실이 겹치면 받지 않는다\nok 45 - 같은 객실이 겹치면 받지 않는다\n  ---\n  duration_ms: 4.092789\n  type: 'test'\n  ...\n# Subtest: 점유율과 매출\nok 46 - 점유율과 매출\n  ---\n  duration_ms: 1.057474\n  type: 'test'\n  ...\n# Subtest: 현지 날짜와 시각\nok 47 - 현지 날짜와 시각\n  ---\n  duration_ms: 1.110771\n  type: 'test'\n  ...\n# Subtest: 현지 날짜와 시각으로 시각 만들기\nok 48 - 현지 날짜와 시각으로 시각 만들기\n  ---\n  duration_ms: 0.989049\n  type: 'test'\n  ...\n# Subtest: 읽을 수 없는 시각\nok 49 - 읽을 수 없는 시각\n  ---\n  duration_ms: 0.289407\n  type: 'test'\n  ...\n1..49\n# tests 49\n# suites 0\n# pass 49\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 567.983949\n"
+        },
+        "checks": [
+          {
+            "name": "취소 날짜 기준",
+            "bug": null,
+            "pass": false,
+            "output": "estCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    8900 !== 0\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 0\n  actual: 8900\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/final/h2-stay-fees-m17-2/judge/w-20261003-002/tree/eval-hidden/cancel-day.test.js:23:12)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.start (node:internal/test_runner/test:944:17)\n    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)\n  ...\n# Subtest: 취소 구간: 10/13 21:40 D-7\nnot ok 2 - 취소 구간: 10/13 21:40 D-7\n  ---\n  duration_ms: 0.827342\n  type: 'test'\n  location: '/tmp/relay-eval/final/h2-stay-fees-m17-2/judge/w-20261003-002/tree/eval-hidden/cancel-day.test.js:20:3'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    26700 !== 8900\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 8900\n  actual: 26700\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/final/h2-stay-fees-m17-2/judge/w-20261003-002/tree/eval-hidden/cancel-day.test.js:23:12)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n# Subtest: 취소 구간: 10/14 08:00 D-6\nok 3 - 취소 구간: 10/14 08:00 D-6\n  ---\n  duration_ms: 0.356581\n  type: 'test'\n  ...\n# Subtest: 취소 구간: 10/18 10:00 D-2\nok 4 - 취소 구간: 10/18 10:00 D-2\n  ---\n  duration_ms: 0.316934\n  type: 'test'\n  ...\n# Subtest: 취소 구간: 10/19 23:30 D-1\nnot ok 5 - 취소 구간: 10/19 23:30 D-1\n  ---\n  duration_ms: 0.506213\n  type: 'test'\n  location: '/tmp/relay-eval/final/h2-stay-fees-m17-2/judge/w-20261003-002/tree/eval-hidden/cancel-day.test.js:20:3'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    71200 !== 44500\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 44500\n  actual: 71200\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/final/h2-stay-fees-m17-2/judge/w-20261003-002/tree/eval-hidden/cancel-day.test.js:23:12)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: 취소 구간: 10/20 00:10 당일\nok 6 - 취소 구간: 10/20 00:10 당일\n  ---\n  duration_ms: 0.29553\n  type: 'test'\n  ...\n1..6\n# tests 6\n# suites 0\n# pass 3\n# fail 3\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 136.471415\n"
+          },
+          {
+            "name": "취소 수수료 10원 버림",
+            "bug": null,
+            "pass": false,
+            "output": ": 'test'\n  location: '/tmp/relay-eval/final/h2-stay-fees-m17-2/judge/w-20261003-002/tree/eval-hidden/cancel-won.test.js:25:3'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    91512 !== 91510\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 91510\n  actual: 91512\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/final/h2-stay-fees-m17-2/judge/w-20261003-002/tree/eval-hidden/cancel-won.test.js:28:12)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: 10원 버림: B-24152 10/24 10:00 당일 80%\nnot ok 5 - 10원 버림: B-24152 10/24 10:00 당일 80%\n  ---\n  duration_ms: 0.524825\n  type: 'test'\n  location: '/tmp/relay-eval/final/h2-stay-fees-m17-2/judge/w-20261003-002/tree/eval-hidden/cancel-won.test.js:25:3'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    516736 !== 516730\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 516730\n  actual: 516736\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/final/h2-stay-fees-m17-2/judge/w-20261003-002/tree/eval-hidden/cancel-won.test.js:28:12)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: 10원 버림: B-24152 10/19 12:00 D-5 30%\nnot ok 6 - 10원 버림: B-24152 10/19 12:00 D-5 30%\n  ---\n  duration_ms: 0.55663\n  type: 'test'\n  location: '/tmp/relay-eval/final/h2-stay-fees-m17-2/judge/w-20261003-002/tree/eval-hidden/cancel-won.test.js:25:3'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    193776 !== 193770\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 193770\n  actual: 193776\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/final/h2-stay-fees-m17-2/judge/w-20261003-002/tree/eval-hidden/cancel-won.test.js:28:12)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n1..6\n# tests 6\n# suites 0\n# pass 0\n# fail 6\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 146.807677\n"
+          },
+          {
+            "name": "취소해도 결제 금액 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 취소한 예약의 결제 금액은 그대로\nok 1 - 취소한 예약의 결제 금액은 그대로\n  ---\n  duration_ms: 2.98964\n  type: 'test'\n  ...\n# Subtest: 돌려준 돈은 환불 기록으로 남는다\nok 2 - 돌려준 돈은 환불 기록으로 남는다\n  ---\n  duration_ms: 3.26589\n  type: 'test'\n  ...\n# Subtest: 결제 전 예약은 환불 기록이 없다\nok 3 - 결제 전 예약은 환불 기록이 없다\n  ---\n  duration_ms: 5.2406\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 174.888584\n"
+          },
+          {
+            "name": "변경 수수료 날짜 기준",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 변경 구간: 10/10 20:00 D-10\nok 1 - 변경 구간: 10/10 20:00 D-10\n  ---\n  duration_ms: 3.921821\n  type: 'test'\n  ...\n# Subtest: 변경 구간: 10/13 21:40 D-7\nok 2 - 변경 구간: 10/13 21:40 D-7\n  ---\n  duration_ms: 0.761309\n  type: 'test'\n  ...\n# Subtest: 변경 구간: 10/14 08:00 D-6\nok 3 - 변경 구간: 10/14 08:00 D-6\n  ---\n  duration_ms: 0.523028\n  type: 'test'\n  ...\n# Subtest: 변경 구간: 10/18 10:00 D-2\nok 4 - 변경 구간: 10/18 10:00 D-2\n  ---\n  duration_ms: 0.414513\n  type: 'test'\n  ...\n# Subtest: 변경 구간: 10/19 23:30 D-1\nok 5 - 변경 구간: 10/19 23:30 D-1\n  ---\n  duration_ms: 1.808959\n  type: 'test'\n  ...\n# Subtest: 변경 구간: 10/20 00:10 당일\nok 6 - 변경 구간: 10/20 00:10 당일\n  ---\n  duration_ms: 0.401449\n  type: 'test'\n  ...\n1..6\n# tests 6\n# suites 0\n# pass 6\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 146.291131\n"
+          },
+          {
+            "name": "변경 수수료 10원 버림",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 리포트의 B-24139: 10월 21일 20:00 요청은 D-3, 수수료 45,750원\nok 1 - 리포트의 B-24139: 10월 21일 20:00 요청은 D-3, 수수료 45,750원\n  ---\n  duration_ms: 1.814328\n  type: 'test'\n  ...\n# Subtest: 변경 10원 버림: B-24139 10/20 11:00 D-4 15%\nok 2 - 변경 10원 버림: B-24139 10/20 11:00 D-4 15%\n  ---\n  duration_ms: 0.606678\n  type: 'test'\n  ...\n# Subtest: 변경 10원 버림: B-24117 10/16 11:00 D-4 15%\nok 3 - 변경 10원 버림: B-24117 10/16 11:00 D-4 15%\n  ---\n  duration_ms: 1.841346\n  type: 'test'\n  ...\n# Subtest: 변경 10원 버림: B-24117 10/12 12:00 D-8 5%\nok 4 - 변경 10원 버림: B-24117 10/12 12:00 D-8 5%\n  ---\n  duration_ms: 0.449332\n  type: 'test'\n  ...\n# Subtest: 변경 10원 버림: B-24117 10/19 13:00 D-1 25%\nok 5 - 변경 10원 버림: B-24117 10/19 13:00 D-1 25%\n  ---\n  duration_ms: 0.436907\n  type: 'test'\n  ...\n# Subtest: 새 금액이 줄면 수수료를 빼고 돌려준다: B-24139를 주중으로\nok 6 - 새 금액이 줄면 수수료를 빼고 돌려준다: B-24139를 주중으로\n  ---\n  duration_ms: 0.446216\n  type: 'test'\n  ...\n1..6\n# tests 6\n# suites 0\n# pass 6\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 128.880882\n"
+          },
+          {
+            "name": "날짜 변경 정산 기록",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 금액이 줄면 환불 기록, 결제 금액은 그대로\nok 1 - 금액이 줄면 환불 기록, 결제 금액은 그대로\n  ---\n  duration_ms: 4.310264\n  type: 'test'\n  ...\n# Subtest: 금액이 늘면 추가 결제 기록, 결제 금액은 그대로\nok 2 - 금액이 늘면 추가 결제 기록, 결제 금액은 그대로\n  ---\n  duration_ms: 0.910566\n  type: 'test'\n  ...\n# Subtest: 금액이 같고 수수료가 없으면 기록하지 않는다\nok 3 - 금액이 같고 수수료가 없으면 기록하지 않는다\n  ---\n  duration_ms: 0.371044\n  type: 'test'\n  ...\n# Subtest: 원래 예약은 바뀌지 않는다\nok 4 - 원래 예약은 바뀌지 않는다\n  ---\n  duration_ms: 0.699031\n  type: 'test'\n  ...\n# Subtest: 취소된 예약과 결제 전 예약은 바꿀 수 없다\nok 5 - 취소된 예약과 결제 전 예약은 바꿀 수 없다\n  ---\n  duration_ms: 0.707185\n  type: 'test'\n  ...\n1..5\n# tests 5\n# suites 0\n# pass 5\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 132.646617\n"
+          },
+          {
+            "name": "견적과 예약 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 예시 예약의 견적\nok 1 - 예시 예약의 견적\n  ---\n  duration_ms: 4.182666\n  type: 'test'\n  ...\n# Subtest: 새 날짜 견적\nok 2 - 새 날짜 견적\n  ---\n  duration_ms: 0.69249\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 129.947118\n"
+          },
+          {
+            "name": "부분 취소 날짜 기준",
+            "bug": null,
+            "pass": false,
+            "output": "-20261003-002/tree/eval-hidden/partial-day.test.js:20:3'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        {\n    +     fee: 49500,\n    +     percent: 50,\n    +     refund: 49500,\n    -     fee: 29700,\n    -     percent: 30,\n    -     refund: 69300,\n          roomId: 'R-02',\n          share: 99000\n        }\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0:\n      roomId: 'R-02'\n      share: 99000\n      percent: 30\n      fee: 29700\n      refund: 69300\n  actual:\n    0:\n      roomId: 'R-02'\n      share: 99000\n      percent: 50\n      fee: 49500\n      refund: 49500\n  operator: 'deepStrictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/final/h2-stay-fees-m17-2/judge/w-20261003-002/tree/eval-hidden/partial-day.test.js:23:12)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: 부분 취소 구간: 10/25 08:00 D-2\nok 4 - 부분 취소 구간: 10/25 08:00 D-2\n  ---\n  duration_ms: 0.37633\n  type: 'test'\n  ...\n# Subtest: 부분 취소 구간: 10/26 23:00 D-1\nnot ok 5 - 부분 취소 구간: 10/26 23:00 D-1\n  ---\n  duration_ms: 0.71117\n  type: 'test'\n  location: '/tmp/relay-eval/final/h2-stay-fees-m17-2/judge/w-20261003-002/tree/eval-hidden/partial-day.test.js:20:3'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      [\n        {\n    +     fee: 79200,\n    +     percent: 80,\n    +     refund: 19800,\n    -     fee: 49500,\n    -     percent: 50,\n    -     refund: 49500,\n          roomId: 'R-02',\n          share: 99000\n        }\n      ]\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    0:\n      roomId: 'R-02'\n      share: 99000\n      percent: 50\n      fee: 49500\n      refund: 49500\n  actual:\n    0:\n      roomId: 'R-02'\n      share: 99000\n      percent: 80\n      fee: 79200\n      refund: 19800\n  operator: 'deepStrictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/final/h2-stay-fees-m17-2/judge/w-20261003-002/tree/eval-hidden/partial-day.test.js:23:12)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: 부분 취소 구간: 10/27 00:30 당일\nok 6 - 부분 취소 구간: 10/27 00:30 당일\n  ---\n  duration_ms: 1.288718\n  type: 'test'\n  ...\n1..6\n# tests 6\n# suites 0\n# pass 3\n# fail 3\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 126.278185\n"
+          },
+          {
+            "name": "부분 취소 10원 버림",
+            "bug": null,
+            "pass": false,
+            "output": "ctly equal:\n    \n    8455 !== 8450\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 8450\n  actual: 8455\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/final/h2-stay-fees-m17-2/judge/w-20261003-002/tree/eval-hidden/partial-won.test.js:29:12)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: 부분 취소 10원 버림: B-90003 R-05 10/27 10:00 당일 80%\nok 4 - 부분 취소 10원 버림: B-90003 R-05 10/27 10:00 당일 80%\n  ---\n  duration_ms: 1.675103\n  type: 'test'\n  ...\n# Subtest: 부분 취소 10원 버림: B-24152 R-01 10/19 12:00 D-5 30%\nnot ok 5 - 부분 취소 10원 버림: B-24152 R-01 10/19 12:00 D-5 30%\n  ---\n  duration_ms: 0.624438\n  type: 'test'\n  location: '/tmp/relay-eval/final/h2-stay-fees-m17-2/judge/w-20261003-002/tree/eval-hidden/partial-won.test.js:25:3'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    65472 !== 65470\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 65470\n  actual: 65472\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/final/h2-stay-fees-m17-2/judge/w-20261003-002/tree/eval-hidden/partial-won.test.js:29:12)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: 부분 취소 10원 버림: B-24152 R-05 10/16 11:00 D-8 10%\nnot ok 6 - 부분 취소 10원 버림: B-24152 R-05 10/16 11:00 D-8 10%\n  ---\n  duration_ms: 0.387316\n  type: 'test'\n  location: '/tmp/relay-eval/final/h2-stay-fees-m17-2/judge/w-20261003-002/tree/eval-hidden/partial-won.test.js:25:3'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    16544 !== 16540\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 16540\n  actual: 16544\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/final/h2-stay-fees-m17-2/judge/w-20261003-002/tree/eval-hidden/partial-won.test.js:29:12)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n1..6\n# tests 6\n# suites 0\n# pass 1\n# fail 5\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 170.144251\n"
+          },
+          {
+            "name": "부분 취소 몫과 결제 금액",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 일찍 취소하면 객실 몫을 모두 돌려주고 결제 금액은 그대로\nok 1 - 일찍 취소하면 객실 몫을 모두 돌려주고 결제 금액은 그대로\n  ---\n  duration_ms: 4.431624\n  type: 'test'\n  ...\n# Subtest: 수수료는 할인 전 객실 요금이 아니라 객실 몫에 매긴다\nok 2 - 수수료는 할인 전 객실 요금이 아니라 객실 몫에 매긴다\n  ---\n  duration_ms: 0.838874\n  type: 'test'\n  ...\n# Subtest: 모든 객실은 부분 취소로 취소할 수 없다\nok 3 - 모든 객실은 부분 취소로 취소할 수 없다\n  ---\n  duration_ms: 0.576813\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 134.420332\n"
+          },
+          {
+            "name": "다객실 전체 취소 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 다객실 예약 전체 취소\nok 1 - 다객실 예약 전체 취소\n  ---\n  duration_ms: 6.27915\n  type: 'test'\n  ...\n# Subtest: 부분 취소 뒤 전체 취소\nok 2 - 부분 취소 뒤 전체 취소\n  ---\n  duration_ms: 1.822997\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 136.028394\n"
+          }
+        ]
+      },
+      {
+        "label": "p2-w-20261003-001",
+        "removed": false,
+        "git": {
+          "branch": "relay/w-20261003-001",
+          "commits": 7,
+          "log": [
+            "예시 B-24152 부분 취소 금액 고정 테스트 추가",
+            "Merge relay/w-20261003-002 (팀 공유 머지, 평가 도구)",
+            "Merge relay/w-20261003-001 (팀 공유 머지, 평가 도구)",
+            "날짜 변경 테스트 보강: 환불 경로, 부분 취소·과거 체크인 오류",
+            "날짜 변경 기능 추가: changeBookingDates",
+            "취소 D-n 계산에 daysBetween 재사용",
+            "취소 수수료: D-n을 현지 달력 날짜 차이로 세고 수수료를 10원 단위로 버림"
+          ],
+          "uncommitted": []
+        },
+        "files": [
+          {
+            "file": "src/bookings/cancel.js",
+            "add": 10,
+            "del": 7
+          },
+          {
+            "file": "src/bookings/change.js",
+            "add": 60,
+            "del": 0
+          },
+          {
+            "file": "src/index.js",
+            "add": 1,
+            "del": 0
+          },
+          {
+            "file": "src/rooms/partial-cancel.js",
+            "add": 4,
+            "del": 14
+          },
+          {
+            "file": "test/cancel.test.js",
+            "add": 39,
+            "del": 0
+          },
+          {
+            "file": "test/change.test.js",
+            "add": 85,
+            "del": 0
+          },
+          {
+            "file": "test/partial-cancel.test.js",
+            "add": 19,
+            "del": 0
+          }
+        ],
+        "linesAdded": 218,
+        "linesRemoved": 21,
+        "unrelated": [],
+        "repoTests": {
+          "pass": true,
+          "output": "  type: 'test'\n  ...\n# Subtest: test/helpers.js\nok 6 - test/helpers.js\n  ---\n  duration_ms: 69.360752\n  type: 'test'\n  ...\n# Subtest: 결제, 추가 결제, 환불 합계\nok 29 - 결제, 추가 결제, 환불 합계\n  ---\n  duration_ms: 3.841244\n  type: 'test'\n  ...\n# Subtest: 금액과 사유를 확인한다\nok 30 - 금액과 사유를 확인한다\n  ---\n  duration_ms: 2.165129\n  type: 'test'\n  ...\n# Subtest: 환불 안내\nok 31 - 환불 안내\n  ---\n  duration_ms: 0.205783\n  type: 'test'\n  ...\n# Subtest: 문자 바이트와 종류\nok 32 - 문자 바이트와 종류\n  ---\n  duration_ms: 1.394479\n  type: 'test'\n  ...\n# Subtest: 확정 문자\nok 33 - 확정 문자\n  ---\n  duration_ms: 1.999293\n  type: 'test'\n  ...\n# Subtest: 취소 문자\nok 34 - 취소 문자\n  ---\n  duration_ms: 0.780776\n  type: 'test'\n  ...\n# Subtest: 입실 안내는 전날 18시(현지)에 보낸다\nok 35 - 입실 안내는 전날 18시(현지)에 보낸다\n  ---\n  duration_ms: 0.458834\n  type: 'test'\n  ...\n# Subtest: 객실 몫은 할인을 객실 요금 비율로 나눈다\nok 36 - 객실 몫은 할인을 객실 요금 비율로 나눈다\n  ---\n  duration_ms: 4.349049\n  type: 'test'\n  ...\n# Subtest: 한 객실만 취소하면 그 객실 몫에서 수수료를 뗀다\nok 37 - 한 객실만 취소하면 그 객실 몫에서 수수료를 뗀다\n  ---\n  duration_ms: 1.556313\n  type: 'test'\n  ...\n# Subtest: 일찍 취소하면 몫을 모두 돌려준다\nok 38 - 일찍 취소하면 몫을 모두 돌려준다\n  ---\n  duration_ms: 0.527009\n  type: 'test'\n  ...\n# Subtest: 부분 취소 뒤 예약 취소는 남은 객실 금액으로 계산한다\nok 39 - 부분 취소 뒤 예약 취소는 남은 객실 금액으로 계산한다\n  ---\n  duration_ms: 0.707096\n  type: 'test'\n  ...\n# Subtest: 모든 객실, 없는 객실, 확정 전 예약은 부분 취소할 수 없다\nok 40 - 모든 객실, 없는 객실, 확정 전 예약은 부분 취소할 수 없다\n  ---\n  duration_ms: 0.875657\n  type: 'test'\n  ...\n# Subtest: 부분 취소도 현지 날짜로 D-n을 세고 객실 수수료를 10원 단위로 버린다\nok 41 - 부분 취소도 현지 날짜로 D-n을 세고 객실 수수료를 10원 단위로 버린다\n  ---\n  duration_ms: 0.4294\n  type: 'test'\n  ...\n# Subtest: 예시 B-24152: 10/21 20:10 현지에 R-02를 취소하면 D-3, 30%이고 결제 금액은 그대로다\nok 42 - 예시 B-24152: 10/21 20:10 현지에 R-02를 취소하면 D-3, 30%이고 결제 금액은 그대로다\n  ---\n  duration_ms: 0.846922\n  type: 'test'\n  ...\n# Subtest: 주중·주말·성수기 요금\nok 43 - 주중·주말·성수기 요금\n  ---\n  duration_ms: 1.821001\n  type: 'test'\n  ...\n# Subtest: 기준 인원을 넘는 손님\nok 44 - 기준 인원을 넘는 손님\n  ---\n  duration_ms: 0.608927\n  type: 'test'\n  ...\n# Subtest: 1박 한 객실은 할인이 없다\nok 45 - 1박 한 객실은 할인이 없다\n  ---\n  duration_ms: 1.973126\n  type: 'test'\n  ...\n# Subtest: 연박 할인과 다객실 할인\nok 46 - 연박 할인과 다객실 할인\n  ---\n  duration_ms: 0.510527\n  type: 'test'\n  ...\n# Subtest: 같은 객실 두 번은 안 된다\nok 47 - 같은 객실 두 번은 안 된다\n  ---\n  duration_ms: 0.18787\n  type: 'test'\n  ...\n# Subtest: 예시 예약 파일\nok 48 - 예시 예약 파일\n  ---\n  duration_ms: 1.227323\n  type: 'test'\n  ...\n# Subtest: 겹치는 숙박\nok 49 - 겹치는 숙박\n  ---\n  duration_ms: 0.671405\n  type: 'test'\n  ...\n# Subtest: 같은 객실이 겹치면 받지 않는다\nok 50 - 같은 객실이 겹치면 받지 않는다\n  ---\n  duration_ms: 4.38546\n  type: 'test'\n  ...\n# Subtest: 점유율과 매출\nok 51 - 점유율과 매출\n  ---\n  duration_ms: 1.019933\n  type: 'test'\n  ...\n# Subtest: 현지 날짜와 시각\nok 52 - 현지 날짜와 시각\n  ---\n  duration_ms: 1.100063\n  type: 'test'\n  ...\n# Subtest: 현지 날짜와 시각으로 시각 만들기\nok 53 - 현지 날짜와 시각으로 시각 만들기\n  ---\n  duration_ms: 0.715676\n  type: 'test'\n  ...\n# Subtest: 읽을 수 없는 시각\nok 54 - 읽을 수 없는 시각\n  ---\n  duration_ms: 0.172466\n  type: 'test'\n  ...\n1..54\n# tests 54\n# suites 0\n# pass 54\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 582.852535\n"
+        },
+        "checks": [
+          {
+            "name": "취소 날짜 기준",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 취소 구간: 10/10 20:00 D-10\nok 1 - 취소 구간: 10/10 20:00 D-10\n  ---\n  duration_ms: 3.182049\n  type: 'test'\n  ...\n# Subtest: 취소 구간: 10/13 21:40 D-7\nok 2 - 취소 구간: 10/13 21:40 D-7\n  ---\n  duration_ms: 0.831401\n  type: 'test'\n  ...\n# Subtest: 취소 구간: 10/14 08:00 D-6\nok 3 - 취소 구간: 10/14 08:00 D-6\n  ---\n  duration_ms: 0.465587\n  type: 'test'\n  ...\n# Subtest: 취소 구간: 10/18 10:00 D-2\nok 4 - 취소 구간: 10/18 10:00 D-2\n  ---\n  duration_ms: 0.493733\n  type: 'test'\n  ...\n# Subtest: 취소 구간: 10/19 23:30 D-1\nok 5 - 취소 구간: 10/19 23:30 D-1\n  ---\n  duration_ms: 0.569276\n  type: 'test'\n  ...\n# Subtest: 취소 구간: 10/20 00:10 당일\nok 6 - 취소 구간: 10/20 00:10 당일\n  ---\n  duration_ms: 0.411672\n  type: 'test'\n  ...\n1..6\n# tests 6\n# suites 0\n# pass 6\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 154.568245\n"
+          },
+          {
+            "name": "취소 수수료 10원 버림",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 리포트의 B-24117: 10월 13일 21:40 취소는 10% 구간, 28,640원\nok 1 - 리포트의 B-24117: 10월 13일 21:40 취소는 10% 구간, 28,640원\n  ---\n  duration_ms: 1.638089\n  type: 'test'\n  ...\n# Subtest: 10원 버림: B-24117 10/16 11:00 D-4 30%\nok 2 - 10원 버림: B-24117 10/16 11:00 D-4 30%\n  ---\n  duration_ms: 0.540008\n  type: 'test'\n  ...\n# Subtest: 10원 버림: B-24117 10/12 12:00 D-8 10%\nok 3 - 10원 버림: B-24117 10/12 12:00 D-8 10%\n  ---\n  duration_ms: 0.345504\n  type: 'test'\n  ...\n# Subtest: 10원 버림: B-24139 10/20 11:00 D-4 30%\nok 4 - 10원 버림: B-24139 10/20 11:00 D-4 30%\n  ---\n  duration_ms: 0.485051\n  type: 'test'\n  ...\n# Subtest: 10원 버림: B-24152 10/24 10:00 당일 80%\nok 5 - 10원 버림: B-24152 10/24 10:00 당일 80%\n  ---\n  duration_ms: 1.780375\n  type: 'test'\n  ...\n# Subtest: 10원 버림: B-24152 10/19 12:00 D-5 30%\nok 6 - 10원 버림: B-24152 10/19 12:00 D-5 30%\n  ---\n  duration_ms: 0.325473\n  type: 'test'\n  ...\n1..6\n# tests 6\n# suites 0\n# pass 6\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 132.978288\n"
+          },
+          {
+            "name": "취소해도 결제 금액 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 취소한 예약의 결제 금액은 그대로\nok 1 - 취소한 예약의 결제 금액은 그대로\n  ---\n  duration_ms: 2.670028\n  type: 'test'\n  ...\n# Subtest: 돌려준 돈은 환불 기록으로 남는다\nok 2 - 돌려준 돈은 환불 기록으로 남는다\n  ---\n  duration_ms: 2.299552\n  type: 'test'\n  ...\n# Subtest: 결제 전 예약은 환불 기록이 없다\nok 3 - 결제 전 예약은 환불 기록이 없다\n  ---\n  duration_ms: 0.430253\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 133.097082\n"
+          },
+          {
+            "name": "변경 수수료 날짜 기준",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 변경 구간: 10/10 20:00 D-10\nok 1 - 변경 구간: 10/10 20:00 D-10\n  ---\n  duration_ms: 2.980652\n  type: 'test'\n  ...\n# Subtest: 변경 구간: 10/13 21:40 D-7\nok 2 - 변경 구간: 10/13 21:40 D-7\n  ---\n  duration_ms: 0.712412\n  type: 'test'\n  ...\n# Subtest: 변경 구간: 10/14 08:00 D-6\nok 3 - 변경 구간: 10/14 08:00 D-6\n  ---\n  duration_ms: 0.478482\n  type: 'test'\n  ...\n# Subtest: 변경 구간: 10/18 10:00 D-2\nok 4 - 변경 구간: 10/18 10:00 D-2\n  ---\n  duration_ms: 0.304072\n  type: 'test'\n  ...\n# Subtest: 변경 구간: 10/19 23:30 D-1\nok 5 - 변경 구간: 10/19 23:30 D-1\n  ---\n  duration_ms: 1.688634\n  type: 'test'\n  ...\n# Subtest: 변경 구간: 10/20 00:10 당일\nok 6 - 변경 구간: 10/20 00:10 당일\n  ---\n  duration_ms: 0.286883\n  type: 'test'\n  ...\n1..6\n# tests 6\n# suites 0\n# pass 6\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 139.279989\n"
+          },
+          {
+            "name": "변경 수수료 10원 버림",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 리포트의 B-24139: 10월 21일 20:00 요청은 D-3, 수수료 45,750원\nok 1 - 리포트의 B-24139: 10월 21일 20:00 요청은 D-3, 수수료 45,750원\n  ---\n  duration_ms: 1.990701\n  type: 'test'\n  ...\n# Subtest: 변경 10원 버림: B-24139 10/20 11:00 D-4 15%\nok 2 - 변경 10원 버림: B-24139 10/20 11:00 D-4 15%\n  ---\n  duration_ms: 0.541544\n  type: 'test'\n  ...\n# Subtest: 변경 10원 버림: B-24117 10/16 11:00 D-4 15%\nok 3 - 변경 10원 버림: B-24117 10/16 11:00 D-4 15%\n  ---\n  duration_ms: 1.934195\n  type: 'test'\n  ...\n# Subtest: 변경 10원 버림: B-24117 10/12 12:00 D-8 5%\nok 4 - 변경 10원 버림: B-24117 10/12 12:00 D-8 5%\n  ---\n  duration_ms: 0.501906\n  type: 'test'\n  ...\n# Subtest: 변경 10원 버림: B-24117 10/19 13:00 D-1 25%\nok 5 - 변경 10원 버림: B-24117 10/19 13:00 D-1 25%\n  ---\n  duration_ms: 0.372059\n  type: 'test'\n  ...\n# Subtest: 새 금액이 줄면 수수료를 빼고 돌려준다: B-24139를 주중으로\nok 6 - 새 금액이 줄면 수수료를 빼고 돌려준다: B-24139를 주중으로\n  ---\n  duration_ms: 0.475921\n  type: 'test'\n  ...\n1..6\n# tests 6\n# suites 0\n# pass 6\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 162.43486\n"
+          },
+          {
+            "name": "날짜 변경 정산 기록",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 금액이 줄면 환불 기록, 결제 금액은 그대로\nok 1 - 금액이 줄면 환불 기록, 결제 금액은 그대로\n  ---\n  duration_ms: 6.29808\n  type: 'test'\n  ...\n# Subtest: 금액이 늘면 추가 결제 기록, 결제 금액은 그대로\nok 2 - 금액이 늘면 추가 결제 기록, 결제 금액은 그대로\n  ---\n  duration_ms: 0.944987\n  type: 'test'\n  ...\n# Subtest: 금액이 같고 수수료가 없으면 기록하지 않는다\nok 3 - 금액이 같고 수수료가 없으면 기록하지 않는다\n  ---\n  duration_ms: 0.409831\n  type: 'test'\n  ...\n# Subtest: 원래 예약은 바뀌지 않는다\nok 4 - 원래 예약은 바뀌지 않는다\n  ---\n  duration_ms: 0.795696\n  type: 'test'\n  ...\n# Subtest: 취소된 예약과 결제 전 예약은 바꿀 수 없다\nok 5 - 취소된 예약과 결제 전 예약은 바꿀 수 없다\n  ---\n  duration_ms: 0.881624\n  type: 'test'\n  ...\n1..5\n# tests 5\n# suites 0\n# pass 5\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 141.388908\n"
+          },
+          {
+            "name": "견적과 예약 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 예시 예약의 견적\nok 1 - 예시 예약의 견적\n  ---\n  duration_ms: 6.501473\n  type: 'test'\n  ...\n# Subtest: 새 날짜 견적\nok 2 - 새 날짜 견적\n  ---\n  duration_ms: 0.966213\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 156.158232\n"
+          },
+          {
+            "name": "부분 취소 날짜 기준",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 부분 취소 구간: 10/17 21:00 D-10\nok 1 - 부분 취소 구간: 10/17 21:00 D-10\n  ---\n  duration_ms: 4.453143\n  type: 'test'\n  ...\n# Subtest: 부분 취소 구간: 10/21 10:00 D-6\nok 2 - 부분 취소 구간: 10/21 10:00 D-6\n  ---\n  duration_ms: 0.718286\n  type: 'test'\n  ...\n# Subtest: 부분 취소 구간: 10/24 20:10 D-3\nok 3 - 부분 취소 구간: 10/24 20:10 D-3\n  ---\n  duration_ms: 0.416891\n  type: 'test'\n  ...\n# Subtest: 부분 취소 구간: 10/25 08:00 D-2\nok 4 - 부분 취소 구간: 10/25 08:00 D-2\n  ---\n  duration_ms: 0.381419\n  type: 'test'\n  ...\n# Subtest: 부분 취소 구간: 10/26 23:00 D-1\nok 5 - 부분 취소 구간: 10/26 23:00 D-1\n  ---\n  duration_ms: 0.664178\n  type: 'test'\n  ...\n# Subtest: 부분 취소 구간: 10/27 00:30 당일\nok 6 - 부분 취소 구간: 10/27 00:30 당일\n  ---\n  duration_ms: 0.569616\n  type: 'test'\n  ...\n1..6\n# tests 6\n# suites 0\n# pass 6\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 156.157521\n"
+          },
+          {
+            "name": "부분 취소 10원 버림",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 리포트의 B-24152: 10월 21일 20:10 바람 취소는 D-3 30%, 수수료 78,670원\nok 1 - 리포트의 B-24152: 10월 21일 20:10 바람 취소는 D-3 30%, 수수료 78,670원\n  ---\n  duration_ms: 3.291328\n  type: 'test'\n  ...\n# Subtest: 부분 취소 10원 버림: B-90003 R-02 10/23 11:00 D-4 30%\nok 2 - 부분 취소 10원 버림: B-90003 R-02 10/23 11:00 D-4 30%\n  ---\n  duration_ms: 2.004506\n  type: 'test'\n  ...\n# Subtest: 부분 취소 10원 버림: B-90003 R-01 10/19 11:00 D-8 10%\nok 3 - 부분 취소 10원 버림: B-90003 R-01 10/19 11:00 D-8 10%\n  ---\n  duration_ms: 0.604907\n  type: 'test'\n  ...\n# Subtest: 부분 취소 10원 버림: B-90003 R-05 10/27 10:00 당일 80%\nok 4 - 부분 취소 10원 버림: B-90003 R-05 10/27 10:00 당일 80%\n  ---\n  duration_ms: 0.39408\n  type: 'test'\n  ...\n# Subtest: 부분 취소 10원 버림: B-24152 R-01 10/19 12:00 D-5 30%\nok 5 - 부분 취소 10원 버림: B-24152 R-01 10/19 12:00 D-5 30%\n  ---\n  duration_ms: 0.344213\n  type: 'test'\n  ...\n# Subtest: 부분 취소 10원 버림: B-24152 R-05 10/16 11:00 D-8 10%\nok 6 - 부분 취소 10원 버림: B-24152 R-05 10/16 11:00 D-8 10%\n  ---\n  duration_ms: 0.267735\n  type: 'test'\n  ...\n1..6\n# tests 6\n# suites 0\n# pass 6\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 158.671675\n"
+          },
+          {
+            "name": "부분 취소 몫과 결제 금액",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 일찍 취소하면 객실 몫을 모두 돌려주고 결제 금액은 그대로\nok 1 - 일찍 취소하면 객실 몫을 모두 돌려주고 결제 금액은 그대로\n  ---\n  duration_ms: 6.642847\n  type: 'test'\n  ...\n# Subtest: 수수료는 할인 전 객실 요금이 아니라 객실 몫에 매긴다\nok 2 - 수수료는 할인 전 객실 요금이 아니라 객실 몫에 매긴다\n  ---\n  duration_ms: 1.175354\n  type: 'test'\n  ...\n# Subtest: 모든 객실은 부분 취소로 취소할 수 없다\nok 3 - 모든 객실은 부분 취소로 취소할 수 없다\n  ---\n  duration_ms: 0.842494\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 165.039962\n"
+          },
+          {
+            "name": "다객실 전체 취소 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 다객실 예약 전체 취소\nok 1 - 다객실 예약 전체 취소\n  ---\n  duration_ms: 4.411192\n  type: 'test'\n  ...\n# Subtest: 부분 취소 뒤 전체 취소\nok 2 - 부분 취소 뒤 전체 취소\n  ---\n  duration_ms: 3.032977\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 146.398238\n"
+          }
+        ]
+      }
+    ]
+  },
+  "human": {
+    "turns": 33,
+    "actions": {
+      "click": 17,
+      "fill": 3,
+      "key": 13,
+      "type": 4,
+      "wait": 6,
+      "inspect_diff": 2,
+      "done": 3
+    },
+    "actionsTotal": 39,
+    "charsTyped": 2005,
+    "invalidActions": 0,
+    "refusedDone": 0,
+    "frictionMean": 0.36363636363636365,
+    "frictionHigh": 1,
+    "costUsd": 4.9841578,
+    "calls": 36,
+    "ms": 174178,
+    "waitOnlyTurns": 1,
+    "images": 25
+  },
+  "setupDialogs": [
+    {
+      "t": 26293,
+      "name": "folder_trust"
+    },
+    {
+      "t": 28936,
+      "name": "bypass_permissions_warning"
+    },
+    {
+      "t": 742325,
+      "name": "folder_trust"
+    }
+  ],
+  "agent": {
+    "input": 168,
+    "output": 64709,
+    "cacheRead": 3646448,
+    "cacheWrite": 276987,
+    "messages": 84,
+    "sessions": 9
+  },
+  "agentSteps": [
+    {
+      "work": "w-20261003-001",
+      "seq": 1,
+      "node": "intake",
+      "contextChars": 1210,
+      "knowledgeChars": 2,
+      "tokens": {
+        "input": 16,
+        "output": 5725,
+        "cacheRead": 314539,
+        "cacheWrite": 22599,
+        "messages": 8
+      }
+    },
+    {
+      "work": "w-20261003-001",
+      "seq": 2,
+      "node": "fix",
+      "contextChars": 4782,
+      "knowledgeChars": 2,
+      "tokens": {
+        "input": 22,
+        "output": 8375,
+        "cacheRead": 481290,
+        "cacheWrite": 33749,
+        "messages": 11
+      }
+    },
+    {
+      "work": "w-20261003-001",
+      "seq": 3,
+      "node": "verify",
+      "contextChars": 4665,
+      "knowledgeChars": 2,
+      "tokens": {
+        "input": 20,
+        "output": 7855,
+        "cacheRead": 432733,
+        "cacheWrite": 33550,
+        "messages": 10
+      }
+    },
+    {
+      "work": "w-20261003-002",
+      "seq": 1,
+      "node": "intake",
+      "contextChars": 2588,
+      "knowledgeChars": 864,
+      "tokens": {
+        "input": 18,
+        "output": 8536,
+        "cacheRead": 363368,
+        "cacheWrite": 31112,
+        "messages": 9
+      }
+    },
+    {
+      "work": "w-20261003-002",
+      "seq": 2,
+      "node": "fix",
+      "contextChars": 6899,
+      "knowledgeChars": 1110,
+      "tokens": {
+        "input": 18,
+        "output": 8641,
+        "cacheRead": 411221,
+        "cacheWrite": 36653,
+        "messages": 9
+      }
+    },
+    {
+      "work": "w-20261003-002",
+      "seq": 3,
+      "node": "verify",
+      "contextChars": 6092,
+      "knowledgeChars": 337,
+      "tokens": {
+        "input": 14,
+        "output": 5372,
+        "cacheRead": 281752,
+        "cacheWrite": 28953,
+        "messages": 7
+      }
+    },
+    {
+      "work": "p2-w-20261003-001",
+      "seq": 1,
+      "node": "intake",
+      "contextChars": 1217,
+      "knowledgeChars": 2,
+      "tokens": {
+        "input": 10,
+        "output": 2614,
+        "cacheRead": 163135,
+        "cacheWrite": 16914,
+        "messages": 5
+      }
+    },
+    {
+      "work": "p2-w-20261003-001",
+      "seq": 2,
+      "node": "fix",
+      "contextChars": 3215,
+      "knowledgeChars": 2,
+      "tokens": {
+        "input": 40,
+        "output": 13837,
+        "cacheRead": 1020281,
+        "cacheWrite": 50639,
+        "messages": 20
+      }
+    },
+    {
+      "work": "p2-w-20261003-001",
+      "seq": 3,
+      "node": "verify",
+      "contextChars": 4500,
+      "knowledgeChars": 2,
+      "tokens": {
+        "input": 10,
+        "output": 3754,
+        "cacheRead": 178129,
+        "cacheWrite": 22818,
+        "messages": 5
+      }
+    }
+  ],
+  "works": [
+    {
+      "id": "w-20261003-001",
+      "dir": "/tmp/relay-eval/final/h2-stay-fees-m17-2/relay-home/projects/stay-b2d90b/works/w-20261003-001",
+      "status": "completed",
+      "branch": null,
+      "tasks": [
+        {
+          "seq": 1,
+          "node": "intake",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "29700e2e-a670-4247-8c38-3ffefead96b2",
+          "contextChars": 1210,
+          "knowledgeChars": 2
+        },
+        {
+          "seq": 2,
+          "node": "fix",
+          "status": "approved",
+          "approved_by": "auto",
+          "session": "86042b71-ac93-44a7-8b69-9e5b1ba9e6fc",
+          "contextChars": 4782,
+          "knowledgeChars": 2
+        },
+        {
+          "seq": 3,
+          "node": "verify",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "bcbffd73-996e-4b4a-b21a-83b8e3f2bde5",
+          "contextChars": 4665,
+          "knowledgeChars": 2
+        }
+      ]
+    },
+    {
+      "id": "w-20261003-002",
+      "dir": "/tmp/relay-eval/final/h2-stay-fees-m17-2/relay-home/projects/stay-b2d90b/works/w-20261003-002",
+      "status": "completed",
+      "branch": null,
+      "tasks": [
+        {
+          "seq": 1,
+          "node": "intake",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "d03a61b5-ed5f-42fa-ba3c-cd53aedb177b",
+          "contextChars": 2588,
+          "knowledgeChars": 864
+        },
+        {
+          "seq": 2,
+          "node": "fix",
+          "status": "approved",
+          "approved_by": "auto",
+          "session": "7cfbaad6-0aae-4682-a8cc-c06ee353a7d6",
+          "contextChars": 6899,
+          "knowledgeChars": 1110
+        },
+        {
+          "seq": 3,
+          "node": "verify",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "6b421dd4-2e3b-4aab-8aa2-3ef24a36c54e",
+          "contextChars": 6092,
+          "knowledgeChars": 337
+        }
+      ]
+    },
+    {
+      "id": "p2-w-20261003-001",
+      "dir": "/tmp/relay-eval/final/h2-stay-fees-m17-2/relay-home-2/projects/stay-mate1-40a64d/works/w-20261003-001",
+      "status": "completed",
+      "branch": null,
+      "tasks": [
+        {
+          "seq": 1,
+          "node": "intake",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "7fd1edf2-a1ba-4b4a-92d5-3a9a8644d357",
+          "contextChars": 1217,
+          "knowledgeChars": 2
+        },
+        {
+          "seq": 2,
+          "node": "fix",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "251c795a-4317-4ac9-8f11-032a2addf515",
+          "contextChars": 3215,
+          "knowledgeChars": 2
+        },
+        {
+          "seq": 3,
+          "node": "verify",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "d86e2344-1d2c-4fdb-9fcb-b79be86c388c",
+          "contextChars": 4500,
+          "knowledgeChars": 2
+        }
+      ]
+    }
+  ],
+  "workResults": [
+    {
+      "work": 1,
+      "ending": "done",
+      "summary": "D-n을 현지 달력 날짜 차이로, 수수료를 10원 단위 버림으로 고쳤다. 부분 취소도 같은 계산을 쓴다. B-24117은 수수료 28,640원, 환불 257,800원이 나온다. paidAmount는 그대로이고 환불은 장부에만 남는다. 테스트 46개가 통과했고 relay/w-20261003-001 브랜치에 커밋됐다.",
+      "wallMs": 322642,
+      "survey": {
+        "effort": 2,
+        "clarity": 6,
+        "control": 6,
+        "confidence": 6,
+        "trust": 6,
+        "recovery": null,
+        "reuse": 6,
+        "best": "의도 정리 단계에서 D-n 기준을 선택지로 물어서 내가 방향을 정할 수 있었다. 판정표에 완료조건별 근거와 재현 결과가 있어서 확인하기 쉬웠다.",
+        "worst": "수수료 반올림/버림 단위는 에이전트가 묻지 않아서 내가 의도 초안의 금액이 틀린 걸 보고 직접 지적해야 했다. 오른쪽 패널이 길어 읽는 데 시간이 걸렸다.",
+        "comment": "부분 취소까지 같은 문제를 찾아 함께 고친 점이 좋았다. 직접 diff를 확인했을 때 변경 범위가 적절했다."
+      },
+      "human": {
+        "turns": 10,
+        "actionsTotal": 11,
+        "charsTyped": 428,
+        "inspectDiff": 1,
+        "invalidActions": 0,
+        "refusedDone": 0,
+        "frictionMean": 0.2,
+        "frictionHigh": 0,
+        "ms": 36288,
+        "told": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "carriedTold": 0,
+        "carriedTotal": 0,
+        "toldAudit": [
+          1,
+          3,
+          4
+        ],
+        "carriedToldAudit": 0,
+        "auditCostUsd": 0.0097288
+      },
+      "outcome": {
+        "success": true,
+        "checks": [
+          {
+            "name": "취소 날짜 기준",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "취소 수수료 10원 버림",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "취소해도 결제 금액 그대로",
+            "guard": true,
+            "pass": true
+          }
+        ],
+        "trees": [
+          {
+            "label": "w-20261003-001",
+            "files": [
+              "src/bookings/cancel.js",
+              "src/rooms/partial-cancel.js",
+              "test/cancel.test.js",
+              "test/partial-cancel.test.js"
+            ],
+            "repoTestsPass": true
+          }
+        ]
+      },
+      "agent": {
+        "input": 58,
+        "output": 21955,
+        "cacheRead": 1228562,
+        "cacheWrite": 89898,
+        "messages": 29,
+        "sessions": 3,
+        "questions": 3
+      },
+      "contextChars": 10657,
+      "knowledgeChars": 6
+    },
+    {
+      "work": 2,
+      "ending": "done",
+      "summary": "changeBookingDates를 src/bookings/change.js에 만들고 relay/w-20261003-002 브랜치에 커밋했다. 변경 수수료율은 취소율의 절반, D-n은 현지 달력 날짜로 센다. 수수료는 10원 단위로 버린다. 차액은 charge나 refund 하나만 장부에 남는다. B-24139 예시는 수수료 45,750원이다.",
+      "wallMs": 365311,
+      "survey": {
+        "effort": 3,
+        "clarity": 6,
+        "control": 6,
+        "confidence": 6,
+        "trust": 6,
+        "recovery": null,
+        "reuse": 6,
+        "best": "의도 정리 단계에서 에이전트가 코드와 지식이 다른 부분을 선택지로 물었고, 내가 잘못된 수수료율 초안을 승인 전에 잡아 고칠 수 있었다. 판정표와 diff로 결과도 쉽게 확인했다.",
+        "worst": "기능 요청인데 버그 수정으로 시작했다. 그래서 유형이 맞지 않는다는 질문이 나왔고, 의도 초안이 처음에 변경 수수료율을 취소율 그대로 써서 한 번 고쳐야 했다. 에이전트는 이 관계를 묻지 않았다.",
+        "comment": "전체 흐름은 단순했다. 단계 사이 승인이 명확했다. 에이전트가 수수료율, D-n, 끝자리 처리처럼 판단이 갈리는 지점을 일일이 물어 주지는 않아서, 사람이 초안을 꼼꼼히 읽어야 한다."
+      },
+      "human": {
+        "turns": 13,
+        "actionsTotal": 16,
+        "charsTyped": 923,
+        "inspectDiff": 1,
+        "invalidActions": 0,
+        "refusedDone": 0,
+        "frictionMean": 0.23076923076923078,
+        "frictionHigh": 0,
+        "ms": 68742,
+        "told": [
+          1,
+          2,
+          3
+        ],
+        "carriedTold": 2,
+        "carriedTotal": 3,
+        "toldAudit": [
+          1,
+          4
+        ],
+        "carriedToldAudit": 1,
+        "auditCostUsd": 0.0086788
+      },
+      "outcome": {
+        "success": true,
+        "checks": [
+          {
+            "name": "변경 수수료 날짜 기준",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "변경 수수료 10원 버림",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "날짜 변경 정산 기록",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "견적과 예약 그대로",
+            "guard": true,
+            "pass": true
+          }
+        ],
+        "trees": [
+          {
+            "label": "w-20261003-002",
+            "files": [
+              "src/bookings/change.js",
+              "src/index.js",
+              "test/change.test.js"
+            ],
+            "repoTestsPass": true
+          }
+        ]
+      },
+      "agent": {
+        "input": 50,
+        "output": 22549,
+        "cacheRead": 1056341,
+        "cacheWrite": 96718,
+        "messages": 25,
+        "sessions": 3,
+        "questions": 3
+      },
+      "contextChars": 15579,
+      "knowledgeChars": 2311
+    },
+    {
+      "work": 3,
+      "ending": "done",
+      "summary": "원인은 기준 커밋 이전 코드(d2106bd 이전)의 D-n 계산이 입실 시각까지 24시간 단위로 내림하던 것이었다. 이 오류는 기준 커밋에 이미 고쳐져 있었다. 현재 코드로 R-02 부분 취소를 돌리면 수수료 78,670원, 환불 183,570원이 나오고, paidAmount는 645,920원 그대로다. 소스는 바꾸지 않았고 값을 고정하는 테스트만 추가해 relay/w-20261003-001 브랜치에 커밋했다. npm test 54개가 통과한다.",
+      "wallMs": 469633,
+      "survey": {
+        "effort": 3,
+        "clarity": 5,
+        "control": 5,
+        "confidence": 5,
+        "trust": 5,
+        "recovery": 4,
+        "reuse": 5,
+        "best": "재현이 안 된다고 하자 시각 정보를 주고 다시 조사시킬 수 있었다. 그 결과 git 이력까지 파서 원인을 찾았고, 판정표에 근거가 하나씩 정리되어 있었다.",
+        "worst": "처음에 에이전트가 재현 실패를 '관찰 기록'으로 끝내자고 추천해서, 내가 직접 막고 다시 시켜야 했다. 결국 코드 수정 없이 테스트만 커밋됐고 그건 어색했다. 모른다고 답했는데 열린 질문 경고가 또 뜬 것도 번거로웠다.",
+        "comment": "에이전트의 결론이 '이미 고쳐져 있다'였는데, 그 점을 판정표에 솔직히 적어 준 건 좋았다. 다만 이미 발행된 확인서의 과다 수수료 52,450원을 어떻게 할지는 따로 처리해야 한다."
+      },
+      "human": {
+        "turns": 10,
+        "actionsTotal": 12,
+        "charsTyped": 654,
+        "inspectDiff": 0,
+        "invalidActions": 0,
+        "refusedDone": 0,
+        "frictionMean": 0.7,
+        "frictionHigh": 1,
+        "ms": 69148,
+        "told": [
+          2,
+          3,
+          5
+        ],
+        "carriedTold": 0,
+        "carriedTotal": 0,
+        "toldAudit": [
+          2,
+          5
+        ],
+        "carriedToldAudit": 0,
+        "auditCostUsd": 0.0076688
+      },
+      "handoff": {
+        "work": 3,
+        "merged": [
+          "relay/w-20261003-001",
+          "relay/w-20261003-002"
+        ],
+        "conflicts": [],
+        "failed": []
+      },
+      "outcome": {
+        "success": true,
+        "checks": [
+          {
+            "name": "부분 취소 날짜 기준",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "부분 취소 10원 버림",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "부분 취소 몫과 결제 금액",
+            "guard": true,
+            "pass": true
+          },
+          {
+            "name": "다객실 전체 취소 그대로",
+            "guard": true,
+            "pass": true
+          }
+        ],
+        "trees": [
+          {
+            "label": "p2-w-20261003-001",
+            "files": [
+              "src/bookings/cancel.js",
+              "src/bookings/change.js",
+              "src/index.js",
+              "src/rooms/partial-cancel.js",
+              "test/cancel.test.js",
+              "test/change.test.js",
+              "test/partial-cancel.test.js"
+            ],
+            "repoTestsPass": true
+          }
+        ]
+      },
+      "agent": {
+        "input": 60,
+        "output": 20205,
+        "cacheRead": 1361545,
+        "cacheWrite": 90371,
+        "messages": 30,
+        "sessions": 3,
+        "questions": 2
+      },
+      "contextChars": 8932,
+      "knowledgeChars": 6
+    }
+  ],
+  "handoffs": [
+    {
+      "work": 3,
+      "merged": [
+        "relay/w-20261003-001",
+        "relay/w-20261003-002"
+      ],
+      "conflicts": [],
+      "failed": []
+    }
+  ],
+  "survey": {
+    "effort": 3,
+    "clarity": 5,
+    "control": 5,
+    "confidence": 5,
+    "trust": 5,
+    "recovery": 4,
+    "reuse": 5,
+    "best": "재현이 안 된다고 하자 시각 정보를 주고 다시 조사시킬 수 있었다. 그 결과 git 이력까지 파서 원인을 찾았고, 판정표에 근거가 하나씩 정리되어 있었다.",
+    "worst": "처음에 에이전트가 재현 실패를 '관찰 기록'으로 끝내자고 추천해서, 내가 직접 막고 다시 시켜야 했다. 결국 코드 수정 없이 테스트만 커밋됐고 그건 어색했다. 모른다고 답했는데 열린 질문 경고가 또 뜬 것도 번거로웠다.",
+    "comment": "에이전트의 결론이 '이미 고쳐져 있다'였는데, 그 점을 판정표에 솔직히 적어 준 건 좋았다. 다만 이미 발행된 확인서의 과다 수수료 52,450원을 어떻게 할지는 따로 처리해야 한다."
+  },
+  "options": {
+    "agentModel": "sonnet",
+    "effort": "medium",
+    "humanModel": "sonnet",
+    "cliArgs": [
+      "--dangerously-skip-permissions"
+    ]
+  }
+}

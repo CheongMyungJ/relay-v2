@@ -16,7 +16,7 @@
 | E6 k5 (21~25 × 5) | 25 | 149 |
 | E7 k6 (21~25 × 5) | 25 | 174 |
 | E8 k7 (21·22·23·25 × 5) | 20 | 194 (개발 끝) |
-| E9 마지막 비교 (h1, h2 × relay, base, m17 × 5) | 30 | 224 / 500 |
+| E9 마지막 비교 (h1, h2 × relay, base, m17 × 5) | 30 | 224 / 500 (끝) |
 
 ## 준비 (실험 전, 준비한 세션이 적음)
 
@@ -235,3 +235,9 @@ E2에서 본 넷을 고친다. 모두 context.md의 지식 절 문구다(앱의 
 - 2026-10-03 사람에게 열쇠를 받아 `HOLDOUT_KEY=… bash app/eval/unseal.sh`로 풀었다(h1-parcel-fees, h2-stay-fees, guides/m17.md). 푼 파일은 커밋하지 않는다(`.git/info/exclude`).
 - 빌드: relay는 이 체크아웃(`bash app/eval/setup.sh`, 앱과 스킬은 `d47836a`와 같음), base `0247049`(`/tmp/relay-ref/base`), m17 `aa39d16`(`bash app/eval/ref-app.sh m17 aa39d16`. 짧은 해시를 바로 fetch하지 못해 `git fetch origin main` 뒤 만들었다. 빌드만 하고 코드는 읽지 않았다).
 - 명령: 규약 6절 4 그대로(`--out eval/results/final`).
+- 실행 30개, 도구 문제 0(다시 돌린 것 없음), 누적 224.
+- 결과(규약 6절 4의 `primary.mjs` 두 번):
+  - **relay − base: PM1 −1.80 [−2.40, −1.20], PM2 −0.10 [−0.30, 0.00] → 판정 규칙 1을 채워 "효과 있음".** PM2는 한도 −10%p에 딱 걸쳐 있다(relay h2 #2의 팀원 Work 3 실패 하나).
+  - relay − m17: PM1 −1.70 [−2.50, −0.90], PM2 0.00 [−0.20, 0.20]. 참고 지표(글자, 질문, 차례, 토큰, 시간, 모든 Work의 사람 행동)도 모두 relay가 확실히 낫다. 합격·불합격은 정하지 않는다(규약 5절). m17은 팀원 Work(h2 Work 3)에 지식이 건너가지 않았다(넣은 지식 6자).
+- relay가 PM2를 잃은 하나: 앞 Work가 남긴 `partial-cancel-old-rules.md`가 "부분 취소는 24시간 내림·1원 반올림을 쓴다"고 코드의 지금 모양을 사실처럼 적었고, 팀원의 에이전트가 1원 반올림을 의도로 보고 남겼다. 결과를 보고 앱을 고치지 않았다(규약 6절 5).
+- 보고서: `report.md`. 결과 폴더: `app/eval/results/final` (report.md, primary-relay-base.md, primary-relay-m17.md, run.json).

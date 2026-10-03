@@ -1,0 +1,1070 @@
+{
+  "scenario": "h1-parcel-fees",
+  "kind": "base",
+  "index": 4,
+  "ending": "done",
+  "summary": "RT-0412 도서산간 회수비를 상자 수만큼 받게(6,000원) 고쳤다. 무료배송 기준을 40,000원으로 올리고, 쿠폰 뒤 금액으로 판단하게 해서 RT-0415는 편도 3,000원이 나온다. 테스트 47개가 통과했고, 변경은 relay/w-20261003-003 브랜치에 커밋됐다.",
+  "error": null,
+  "wallMs": 1051226,
+  "firstChangeMs": 171474,
+  "outcome": {
+    "success": true,
+    "checks": [
+      {
+        "name": "도서산간비 주문당 한 번",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "무료배송은 쿠폰 뺀 결제 금액으로",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "택배사 배송 요청 그대로",
+        "guard": true,
+        "pass": true
+      },
+      {
+        "name": "창고별 출고 나누기",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "나눈 출고의 배송비는 첫 출고에",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "나눈 출고에도 도서산간비 한 번",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "무료배송은 주문 전체로",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "섞인 주문 금액과 단일 출고 그대로",
+        "guard": true,
+        "pass": true
+      },
+      {
+        "name": "반품 회수비는 상자마다",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "반품 왕복 기준 40,000원",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "출고 배송비와 반품 확인 그대로",
+        "guard": true,
+        "pass": true
+      }
+    ],
+    "repoTestsPass": true,
+    "filesChanged": [
+      "src/orders/order.js",
+      "src/returns/return-fee.js",
+      "src/shipping/fee.js",
+      "test/fee.test.js",
+      "test/order.test.js",
+      "test/returns.test.js",
+      "README.md",
+      "src/config.js",
+      "src/orders/shipments.js",
+      "src/shipping/carrier-api.js",
+      "test/carrier-api.test.js",
+      "test/shipments.test.js"
+    ],
+    "linesChanged": 314,
+    "unrelated": [],
+    "committed": true,
+    "trees": [
+      {
+        "label": "w-20261003-001",
+        "removed": false,
+        "git": {
+          "branch": "relay/w-20261003-001",
+          "commits": 1,
+          "log": [
+            "fix: 도서산간 추가 배송비 주문당 1회, 무료배송은 할인 후 금액으로 판단"
+          ],
+          "uncommitted": []
+        },
+        "files": [
+          {
+            "file": "src/orders/order.js",
+            "add": 1,
+            "del": 1
+          },
+          {
+            "file": "src/returns/return-fee.js",
+            "add": 1,
+            "del": 1
+          },
+          {
+            "file": "src/shipping/fee.js",
+            "add": 5,
+            "del": 4
+          },
+          {
+            "file": "test/fee.test.js",
+            "add": 6,
+            "del": 0
+          },
+          {
+            "file": "test/order.test.js",
+            "add": 20,
+            "del": 0
+          },
+          {
+            "file": "test/returns.test.js",
+            "add": 6,
+            "del": 0
+          }
+        ],
+        "linesAdded": 39,
+        "linesRemoved": 6,
+        "unrelated": [],
+        "repoTests": {
+          "pass": true,
+          "output": "est'\n  ...\n# Subtest: 금액 서식\nok 19 - 금액 서식\n  ---\n  duration_ms: 1.74032\n  type: 'test'\n  ...\n# Subtest: 글자 폭\nok 20 - 글자 폭\n  ---\n  duration_ms: 0.329339\n  type: 'test'\n  ...\n# Subtest: 영수증\nok 21 - 영수증\n  ---\n  duration_ms: 2.792812\n  type: 'test'\n  ...\n# Subtest: 반품 안내\nok 22 - 반품 안내\n  ---\n  duration_ms: 0.466911\n  type: 'test'\n  ...\n# Subtest: 정수 원만 받는다\nok 23 - 정수 원만 받는다\n  ---\n  duration_ms: 1.280292\n  type: 'test'\n  ...\n# Subtest: 비율 금액은 단위로 버린다\nok 24 - 비율 금액은 단위로 버린다\n  ---\n  duration_ms: 0.282568\n  type: 'test'\n  ...\n# Subtest: 비율로 나누기\nok 25 - 비율로 나누기\n  ---\n  duration_ms: 0.294234\n  type: 'test'\n  ...\n# Subtest: 주문 금액을 계산해 저장한다\nok 26 - 주문 금액을 계산해 저장한다\n  ---\n  duration_ms: 12.863588\n  type: 'test'\n  ...\n# Subtest: 쿠폰 할인\nok 27 - 쿠폰 할인\n  ---\n  duration_ms: 0.745995\n  type: 'test'\n  ...\n# Subtest: 무료배송 주문\nok 28 - 무료배송 주문\n  ---\n  duration_ms: 0.270815\n  type: 'test'\n  ...\n# Subtest: 제주 주문(한 상자)\nok 29 - 제주 주문(한 상자)\n  ---\n  duration_ms: 0.394515\n  type: 'test'\n  ...\n# Subtest: 주문 입력 확인\nok 30 - 주문 입력 확인\n  ---\n  duration_ms: 0.791393\n  type: 'test'\n  ...\n# Subtest: 휴대폰 번호\nok 31 - 휴대폰 번호\n  ---\n  duration_ms: 0.257933\n  type: 'test'\n  ...\n# Subtest: 도서산간 추가 배송비는 상자가 여러 개여도 주문당 한 번(제주)\nok 32 - 도서산간 추가 배송비는 상자가 여러 개여도 주문당 한 번(제주)\n  ---\n  duration_ms: 0.378408\n  type: 'test'\n  ...\n# Subtest: 도서산간 추가 배송비는 상자가 여러 개여도 주문당 한 번(도서)\nok 33 - 도서산간 추가 배송비는 상자가 여러 개여도 주문당 한 번(도서)\n  ---\n  duration_ms: 0.288007\n  type: 'test'\n  ...\n# Subtest: 쿠폰 할인 후 무료배송 기준 미만이면 기본 배송비를 받는다\nok 34 - 쿠폰 할인 후 무료배송 기준 미만이면 기본 배송비를 받는다\n  ---\n  duration_ms: 0.494824\n  type: 'test'\n  ...\n# Subtest: 제주와 도서 지역\nok 35 - 제주와 도서 지역\n  ---\n  duration_ms: 1.21849\n  type: 'test'\n  ...\n# Subtest: 우편번호 형식\nok 36 - 우편번호 형식\n  ---\n  duration_ms: 0.490243\n  type: 'test'\n  ...\n# Subtest: 단순 변심 반품은 고객이 편도 배송비를 낸다\nok 37 - 단순 변심 반품은 고객이 편도 배송비를 낸다\n  ---\n  duration_ms: 3.578861\n  type: 'test'\n  ...\n# Subtest: 무료배송으로 나간 주문은 왕복\nok 38 - 무료배송으로 나간 주문은 왕복\n  ---\n  duration_ms: 8.263507\n  type: 'test'\n  ...\n# Subtest: 가게 사유면 반품 배송비가 없다\nok 39 - 가게 사유면 반품 배송비가 없다\n  ---\n  duration_ms: 0.556163\n  type: 'test'\n  ...\n# Subtest: 제주 반품(한 상자)은 도서산간 회수비를 받는다\nok 40 - 제주 반품(한 상자)은 도서산간 회수비를 받는다\n  ---\n  duration_ms: 0.428869\n  type: 'test'\n  ...\n# Subtest: 쿠폰 할인 몫을 빼고 환불\nok 41 - 쿠폰 할인 몫을 빼고 환불\n  ---\n  duration_ms: 1.309132\n  type: 'test'\n  ...\n# Subtest: 반품 접수 확인\nok 42 - 반품 접수 확인\n  ---\n  duration_ms: 5.734161\n  type: 'test'\n  ...\n# Subtest: 쿠폰 할인 후 무료배송 기준 미만이면 반품은 왕복이 아니다\nok 43 - 쿠폰 할인 후 무료배송 기준 미만이면 반품은 왕복이 아니다\n  ---\n  duration_ms: 0.335482\n  type: 'test'\n  ...\n# Subtest: 결제에서 배송 완료까지\nok 44 - 결제에서 배송 완료까지\n  ---\n  duration_ms: 1.252379\n  type: 'test'\n  ...\n# Subtest: 바꿀 수 없는 상태\nok 45 - 바꿀 수 없는 상태\n  ---\n  duration_ms: 0.715778\n  type: 'test'\n  ...\n# Subtest: 택배사 배송 완료를 반영\nok 46 - 택배사 배송 완료를 반영\n  ---\n  duration_ms: 0.381931\n  type: 'test'\n  ...\n# Subtest: 하루 정산 요약\nok 47 - 하루 정산 요약\n  ---\n  duration_ms: 14.111325\n  type: 'test'\n  ...\n1..47\n# tests 47\n# suites 0\n# pass 47\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 452.480316\n"
+        },
+        "checks": [
+          {
+            "name": "도서산간비 주문당 한 번",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: ORD-24817: 제주, 상자 둘이어도 도서산간 3,000원 한 번\nok 1 - ORD-24817: 제주, 상자 둘이어도 도서산간 3,000원 한 번\n  ---\n  duration_ms: 12.488656\n  type: 'test'\n  ...\n# Subtest: 울릉, 상자 셋이어도 도서산간 5,000원 한 번\nok 2 - 울릉, 상자 셋이어도 도서산간 5,000원 한 번\n  ---\n  duration_ms: 0.454831\n  type: 'test'\n  ...\n# Subtest: 택배사 요청과 정산도 도서산간 한 번\nok 3 - 택배사 요청과 정산도 도서산간 한 번\n  ---\n  duration_ms: 0.713536\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 133.928353\n"
+          },
+          {
+            "name": "무료배송은 쿠폰 뺀 결제 금액으로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: ORD-24822: 쿠폰을 빼면 28,500원이라 배송비 3,000원\nok 1 - ORD-24822: 쿠폰을 빼면 28,500원이라 배송비 3,000원\n  ---\n  duration_ms: 5.358627\n  type: 'test'\n  ...\n# Subtest: 30% 쿠폰: 쿠폰 전 42,500원, 쿠폰 뒤 29,750원이면 배송비를 받는다\nok 2 - 30% 쿠폰: 쿠폰 전 42,500원, 쿠폰 뒤 29,750원이면 배송비를 받는다\n  ---\n  duration_ms: 15.1952\n  type: 'test'\n  ...\n# Subtest: 쿠폰 뒤에도 기준 이상이면 무료배송, 도서산간은 그대로 받는다\nok 3 - 쿠폰 뒤에도 기준 이상이면 무료배송, 도서산간은 그대로 받는다\n  ---\n  duration_ms: 0.589386\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 171.125402\n"
+          },
+          {
+            "name": "택배사 배송 요청 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 서울 주문(한 상자) 배송 요청 그대로\nok 1 - 서울 주문(한 상자) 배송 요청 그대로\n  ---\n  duration_ms: 3.17982\n  type: 'test'\n  ...\n# Subtest: 제주 무료배송 주문(한 상자) 배송 요청 그대로\nok 2 - 제주 무료배송 주문(한 상자) 배송 요청 그대로\n  ---\n  duration_ms: 8.619529\n  type: 'test'\n  ...\n# Subtest: 배송 상태 읽기 그대로\nok 3 - 배송 상태 읽기 그대로\n  ---\n  duration_ms: 0.3812\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 113.288949\n"
+          },
+          {
+            "name": "창고별 출고 나누기",
+            "bug": null,
+            "pass": false,
+            "output": "TAP version 13\n# node:internal/modules/esm/resolve:274\n#     throw new ERR_MODULE_NOT_FOUND(\n#           ^\n# Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-001/tree/src/orders/shipments.js' imported from /tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-001/tree/eval-hidden/split.test.js\n#     at finalizeResolution (node:internal/modules/esm/resolve:274:11)\n#     at moduleResolve (node:internal/modules/esm/resolve:859:10)\n#     at defaultResolve (node:internal/modules/esm/resolve:983:11)\n#     at \\#cachedDefaultResolve (node:internal/modules/esm/loader:731:20)\n#     at ModuleLoader.resolve (node:internal/modules/esm/loader:708:38)\n#     at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:310:38)\n#     at ModuleJob._link (node:internal/modules/esm/module_job:182:49) {\n#   code: 'ERR_MODULE_NOT_FOUND',\n#   url: 'file:///tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-001/tree/src/orders/shipments.js'\n# }\n# Node.js v22.22.0\n# Subtest: eval-hidden/split.test.js\nnot ok 1 - eval-hidden/split.test.js\n  ---\n  duration_ms: 82.457284\n  type: 'test'\n  location: '/tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-001/tree/eval-hidden/split.test.js:1:1'\n  failureType: 'testCodeFailure'\n  exitCode: 1\n  signal: ~\n  error: 'test failed'\n  code: 'ERR_TEST_FAILURE'\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 92.183739\n"
+          },
+          {
+            "name": "나눈 출고의 배송비는 첫 출고에",
+            "bug": null,
+            "pass": false,
+            "output": "TAP version 13\n# node:internal/modules/esm/resolve:274\n#     throw new ERR_MODULE_NOT_FOUND(\n#           ^\n# Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-001/tree/src/orders/shipments.js' imported from /tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-001/tree/eval-hidden/split-fee-first.test.js\n#     at finalizeResolution (node:internal/modules/esm/resolve:274:11)\n#     at moduleResolve (node:internal/modules/esm/resolve:859:10)\n#     at defaultResolve (node:internal/modules/esm/resolve:983:11)\n#     at \\#cachedDefaultResolve (node:internal/modules/esm/loader:731:20)\n#     at ModuleLoader.resolve (node:internal/modules/esm/loader:708:38)\n#     at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:310:38)\n#     at ModuleJob._link (node:internal/modules/esm/module_job:182:49) {\n#   code: 'ERR_MODULE_NOT_FOUND',\n#   url: 'file:///tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-001/tree/src/orders/shipments.js'\n# }\n# Node.js v22.22.0\n# Subtest: eval-hidden/split-fee-first.test.js\nnot ok 1 - eval-hidden/split-fee-first.test.js\n  ---\n  duration_ms: 79.235763\n  type: 'test'\n  location: '/tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-001/tree/eval-hidden/split-fee-first.test.js:1:1'\n  failureType: 'testCodeFailure'\n  exitCode: 1\n  signal: ~\n  error: 'test failed'\n  code: 'ERR_TEST_FAILURE'\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 90.90266\n"
+          },
+          {
+            "name": "나눈 출고에도 도서산간비 한 번",
+            "bug": null,
+            "pass": false,
+            "output": "TAP version 13\n# node:internal/modules/esm/resolve:274\n#     throw new ERR_MODULE_NOT_FOUND(\n#           ^\n# Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-001/tree/src/orders/shipments.js' imported from /tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-001/tree/eval-hidden/split-remote-once.test.js\n#     at finalizeResolution (node:internal/modules/esm/resolve:274:11)\n#     at moduleResolve (node:internal/modules/esm/resolve:859:10)\n#     at defaultResolve (node:internal/modules/esm/resolve:983:11)\n#     at \\#cachedDefaultResolve (node:internal/modules/esm/loader:731:20)\n#     at ModuleLoader.resolve (node:internal/modules/esm/loader:708:38)\n#     at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:310:38)\n#     at ModuleJob._link (node:internal/modules/esm/module_job:182:49) {\n#   code: 'ERR_MODULE_NOT_FOUND',\n#   url: 'file:///tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-001/tree/src/orders/shipments.js'\n# }\n# Node.js v22.22.0\n# Subtest: eval-hidden/split-remote-once.test.js\nnot ok 1 - eval-hidden/split-remote-once.test.js\n  ---\n  duration_ms: 78.908819\n  type: 'test'\n  location: '/tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-001/tree/eval-hidden/split-remote-once.test.js:1:1'\n  failureType: 'testCodeFailure'\n  exitCode: 1\n  signal: ~\n  error: 'test failed'\n  code: 'ERR_TEST_FAILURE'\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 90.12323\n"
+          },
+          {
+            "name": "무료배송은 주문 전체로",
+            "bug": null,
+            "pass": false,
+            "output": "TAP version 13\n# node:internal/modules/esm/resolve:274\n#     throw new ERR_MODULE_NOT_FOUND(\n#           ^\n# Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-001/tree/src/orders/shipments.js' imported from /tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-001/tree/eval-hidden/split-free-whole.test.js\n#     at finalizeResolution (node:internal/modules/esm/resolve:274:11)\n#     at moduleResolve (node:internal/modules/esm/resolve:859:10)\n#     at defaultResolve (node:internal/modules/esm/resolve:983:11)\n#     at \\#cachedDefaultResolve (node:internal/modules/esm/loader:731:20)\n#     at ModuleLoader.resolve (node:internal/modules/esm/loader:708:38)\n#     at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:310:38)\n#     at ModuleJob._link (node:internal/modules/esm/module_job:182:49) {\n#   code: 'ERR_MODULE_NOT_FOUND',\n#   url: 'file:///tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-001/tree/src/orders/shipments.js'\n# }\n# Node.js v22.22.0\n# Subtest: eval-hidden/split-free-whole.test.js\nnot ok 1 - eval-hidden/split-free-whole.test.js\n  ---\n  duration_ms: 79.030724\n  type: 'test'\n  location: '/tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-001/tree/eval-hidden/split-free-whole.test.js:1:1'\n  failureType: 'testCodeFailure'\n  exitCode: 1\n  signal: ~\n  error: 'test failed'\n  code: 'ERR_TEST_FAILURE'\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 89.307145\n"
+          },
+          {
+            "name": "섞인 주문 금액과 단일 출고 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 섞인 주문의 주문 금액 그대로\nok 1 - 섞인 주문의 주문 금액 그대로\n  ---\n  duration_ms: 3.602013\n  type: 'test'\n  ...\n# Subtest: 이천 상품만 있는 주문의 배송 요청 그대로\nok 2 - 이천 상품만 있는 주문의 배송 요청 그대로\n  ---\n  duration_ms: 8.505851\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 117.301566\n"
+          },
+          {
+            "name": "반품 회수비는 상자마다",
+            "bug": null,
+            "pass": false,
+            "output": "'\n  error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    ... Skipped lines\n    \n      {\n        box_count: 2,\n        dest_code: 'ICN01',\n        fee_payer: 'C',\n        order_ref: 'ORD-25106',\n    ...\n        ref_no: 'RT-0412',\n    +   remote_fee: 3000\n    -   remote_fee: 6000\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    ref_no: 'RT-0412'\n    order_ref: 'ORD-25106'\n    pickup_name: '부하린'\n    pickup_phone: '010-4451-0927'\n    pickup_zip: '63122'\n    pickup_addr: '제주특별자치도 제주시 노형로 401 1101동 504호'\n    dest_code: 'ICN01'\n    box_count: 2\n    remote_fee: 6000\n    fee_payer: 'C'\n  actual:\n    ref_no: 'RT-0412'\n    order_ref: 'ORD-25106'\n    pickup_name: '부하린'\n    pickup_phone: '010-4451-0927'\n    pickup_zip: '63122'\n    pickup_addr: '제주특별자치도 제주시 노형로 401 1101동 504호'\n    dest_code: 'ICN01'\n    box_count: 2\n    remote_fee: 3000\n    fee_payer: 'C'\n  operator: 'deepStrictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-001/tree/eval-hidden/return-remote.test.js:24:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n# Subtest: 울릉, 상자 셋 회수 -> 도서산간 회수비 15,000원, 하나만 돌려보내면 5,000원\nnot ok 3 - 울릉, 상자 셋 회수 -> 도서산간 회수비 15,000원, 하나만 돌려보내면 5,000원\n  ---\n  duration_ms: 1.597953\n  type: 'test'\n  location: '/tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-001/tree/eval-hidden/return-remote.test.js:38:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n        payer: 'customer',\n    +   remote: 5000,\n    -   remote: 15000,\n        roundTrip: true,\n        shipping: 6000,\n    +   total: 11000\n    -   total: 21000\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    payer: 'customer'\n    shipping: 6000\n    remote: 15000\n    total: 21000\n    roundTrip: true\n  actual:\n    payer: 'customer'\n    shipping: 6000\n    remote: 5000\n    total: 11000\n    roundTrip: true\n  operator: 'deepStrictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-001/tree/eval-hidden/return-remote.test.js:40:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 0\n# fail 3\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 125.610239\n"
+          },
+          {
+            "name": "반품 왕복 기준 40,000원",
+            "bug": null,
+            "pass": false,
+            "output": "stContext.<anonymous> (file:///tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-001/tree/eval-hidden/return-threshold.test.js:13:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.start (node:internal/test_runner/test:944:17)\n    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)\n  ...\n# Subtest: 쿠폰 없이 35,000원 주문도 편도\nnot ok 2 - 쿠폰 없이 35,000원 주문도 편도\n  ---\n  duration_ms: 8.81149\n  type: 'test'\n  location: '/tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-001/tree/eval-hidden/return-threshold.test.js:17:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n        payer: 'customer',\n        remote: 0,\n    +   roundTrip: true,\n    +   shipping: 6000,\n    +   total: 6000\n    -   roundTrip: false,\n    -   shipping: 3000,\n    -   total: 3000\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    payer: 'customer'\n    shipping: 3000\n    remote: 0\n    total: 3000\n    roundTrip: false\n  actual:\n    payer: 'customer'\n    shipping: 6000\n    remote: 0\n    total: 6000\n    roundTrip: true\n  operator: 'deepStrictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-001/tree/eval-hidden/return-threshold.test.js:18:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n# Subtest: 쿠폰 전 41,500원, 쿠폰 뒤 36,500원이면 편도\nnot ok 3 - 쿠폰 전 41,500원, 쿠폰 뒤 36,500원이면 편도\n  ---\n  duration_ms: 0.720322\n  type: 'test'\n  location: '/tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-001/tree/eval-hidden/return-threshold.test.js:27:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    6000 !== 3000\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 3000\n  actual: 6000\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-001/tree/eval-hidden/return-threshold.test.js:29:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: 결제 상품 금액이 꼭 40,000원이면 왕복\nok 4 - 결제 상품 금액이 꼭 40,000원이면 왕복\n  ---\n  duration_ms: 0.56276\n  type: 'test'\n  ...\n1..4\n# tests 4\n# suites 0\n# pass 1\n# fail 3\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 122.517333\n"
+          },
+          {
+            "name": "출고 배송비와 반품 확인 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 주문 배송비 그대로(한 상자)\nok 1 - 주문 배송비 그대로(한 상자)\n  ---\n  duration_ms: 12.117645\n  type: 'test'\n  ...\n# Subtest: 가게 사유 반품은 상자가 여럿이어도 고객 부담 없음\nok 2 - 가게 사유 반품은 상자가 여럿이어도 고객 부담 없음\n  ---\n  duration_ms: 0.94295\n  type: 'test'\n  ...\n# Subtest: 반품 접수 확인 그대로\nok 3 - 반품 접수 확인 그대로\n  ---\n  duration_ms: 0.886008\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 112.084589\n"
+          }
+        ]
+      },
+      {
+        "label": "w-20261003-002",
+        "removed": false,
+        "git": {
+          "branch": "relay/w-20261003-002",
+          "commits": 3,
+          "log": [
+            "config 주석과 README의 창고 설명을 두 창고 출고에 맞게 수정",
+            "carrierPayloads: 출고마다 택배 배송 요청 페이로드 추가",
+            "planShipments: 창고별 출고 계획 추가"
+          ],
+          "uncommitted": []
+        },
+        "files": [
+          {
+            "file": "README.md",
+            "add": 3,
+            "del": 3
+          },
+          {
+            "file": "src/config.js",
+            "add": 1,
+            "del": 1
+          },
+          {
+            "file": "src/orders/shipments.js",
+            "add": 24,
+            "del": 0
+          },
+          {
+            "file": "src/shipping/carrier-api.js",
+            "add": 21,
+            "del": 0
+          },
+          {
+            "file": "test/carrier-api.test.js",
+            "add": 63,
+            "del": 1
+          },
+          {
+            "file": "test/shipments.test.js",
+            "add": 90,
+            "del": 0
+          }
+        ],
+        "linesAdded": 202,
+        "linesRemoved": 5,
+        "unrelated": [],
+        "repoTests": {
+          "pass": true,
+          "output": "ubtest: 정수 원만 받는다\nok 26 - 정수 원만 받는다\n  ---\n  duration_ms: 1.230277\n  type: 'test'\n  ...\n# Subtest: 비율 금액은 단위로 버린다\nok 27 - 비율 금액은 단위로 버린다\n  ---\n  duration_ms: 0.283458\n  type: 'test'\n  ...\n# Subtest: 비율로 나누기\nok 28 - 비율로 나누기\n  ---\n  duration_ms: 0.286646\n  type: 'test'\n  ...\n# Subtest: 주문 금액을 계산해 저장한다\nok 29 - 주문 금액을 계산해 저장한다\n  ---\n  duration_ms: 11.279349\n  type: 'test'\n  ...\n# Subtest: 쿠폰 할인\nok 30 - 쿠폰 할인\n  ---\n  duration_ms: 0.606285\n  type: 'test'\n  ...\n# Subtest: 무료배송 주문\nok 31 - 무료배송 주문\n  ---\n  duration_ms: 0.282132\n  type: 'test'\n  ...\n# Subtest: 제주 주문(한 상자)\nok 32 - 제주 주문(한 상자)\n  ---\n  duration_ms: 0.322087\n  type: 'test'\n  ...\n# Subtest: 주문 입력 확인\nok 33 - 주문 입력 확인\n  ---\n  duration_ms: 0.742471\n  type: 'test'\n  ...\n# Subtest: 휴대폰 번호\nok 34 - 휴대폰 번호\n  ---\n  duration_ms: 0.238383\n  type: 'test'\n  ...\n# Subtest: 제주와 도서 지역\nok 35 - 제주와 도서 지역\n  ---\n  duration_ms: 1.130575\n  type: 'test'\n  ...\n# Subtest: 우편번호 형식\nok 36 - 우편번호 형식\n  ---\n  duration_ms: 0.576175\n  type: 'test'\n  ...\n# Subtest: 단순 변심 반품은 고객이 편도 배송비를 낸다\nok 37 - 단순 변심 반품은 고객이 편도 배송비를 낸다\n  ---\n  duration_ms: 3.841367\n  type: 'test'\n  ...\n# Subtest: 무료배송으로 나간 주문은 왕복\nok 38 - 무료배송으로 나간 주문은 왕복\n  ---\n  duration_ms: 8.185348\n  type: 'test'\n  ...\n# Subtest: 가게 사유면 반품 배송비가 없다\nok 39 - 가게 사유면 반품 배송비가 없다\n  ---\n  duration_ms: 0.53755\n  type: 'test'\n  ...\n# Subtest: 제주 반품(한 상자)은 도서산간 회수비를 받는다\nok 40 - 제주 반품(한 상자)은 도서산간 회수비를 받는다\n  ---\n  duration_ms: 0.58813\n  type: 'test'\n  ...\n# Subtest: 쿠폰 할인 몫을 빼고 환불\nok 41 - 쿠폰 할인 몫을 빼고 환불\n  ---\n  duration_ms: 0.639535\n  type: 'test'\n  ...\n# Subtest: 반품 접수 확인\nok 42 - 반품 접수 확인\n  ---\n  duration_ms: 2.553412\n  type: 'test'\n  ...\n# Subtest: 두 창고 상품이 섞이면 이천, 김해 차례로 출고 둘\nok 43 - 두 창고 상품이 섞이면 이천, 김해 차례로 출고 둘\n  ---\n  duration_ms: 3.367201\n  type: 'test'\n  ...\n# Subtest: 출고마다 그 줄만으로 상자를 담는다\nok 44 - 출고마다 그 줄만으로 상자를 담는다\n  ---\n  duration_ms: 0.785131\n  type: 'test'\n  ...\n# Subtest: 무게로 상자가 갈리는 출고도 출고별로 담는다\nok 45 - 무게로 상자가 갈리는 출고도 출고별로 담는다\n  ---\n  duration_ms: 9.313217\n  type: 'test'\n  ...\n# Subtest: 배송비와 도서산간비는 첫 출고에만\nok 46 - 배송비와 도서산간비는 첫 출고에만\n  ---\n  duration_ms: 0.472505\n  type: 'test'\n  ...\n# Subtest: 한 창고 상품만 있으면 출고 하나, 금액은 주문 금액\nok 47 - 한 창고 상품만 있으면 출고 하나, 금액은 주문 금액\n  ---\n  duration_ms: 0.393583\n  type: 'test'\n  ...\n# Subtest: 주문을 바꾸지 않는다\nok 48 - 주문을 바꾸지 않는다\n  ---\n  duration_ms: 0.459205\n  type: 'test'\n  ...\n# Subtest: 모르는 창고의 줄이 있으면 에러\nok 49 - 모르는 창고의 줄이 있으면 에러\n  ---\n  duration_ms: 0.722445\n  type: 'test'\n  ...\n# Subtest: ORD-24930 예제\nok 50 - ORD-24930 예제\n  ---\n  duration_ms: 2.317707\n  type: 'test'\n  ...\n# Subtest: 결제에서 배송 완료까지\nok 51 - 결제에서 배송 완료까지\n  ---\n  duration_ms: 1.282591\n  type: 'test'\n  ...\n# Subtest: 바꿀 수 없는 상태\nok 52 - 바꿀 수 없는 상태\n  ---\n  duration_ms: 0.695504\n  type: 'test'\n  ...\n# Subtest: 택배사 배송 완료를 반영\nok 53 - 택배사 배송 완료를 반영\n  ---\n  duration_ms: 0.295937\n  type: 'test'\n  ...\n# Subtest: 하루 정산 요약\nok 54 - 하루 정산 요약\n  ---\n  duration_ms: 11.559235\n  type: 'test'\n  ...\n1..54\n# tests 54\n# suites 0\n# pass 54\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 519.026475\n"
+        },
+        "checks": [
+          {
+            "name": "도서산간비 주문당 한 번",
+            "bug": null,
+            "pass": false,
+            "output": "xpected\n    \n      {\n        discount: 0,\n        goods: 79000,\n        paidGoods: 79000,\n    +   remote: 6000,\n    -   remote: 3000,\n        shipping: 0,\n    +   total: 85000\n    -   total: 82000\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    goods: 79000\n    discount: 0\n    paidGoods: 79000\n    shipping: 0\n    remote: 3000\n    total: 82000\n  actual:\n    goods: 79000\n    discount: 0\n    paidGoods: 79000\n    shipping: 0\n    remote: 6000\n    total: 85000\n  operator: 'deepStrictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-002/tree/eval-hidden/remote-once.test.js:14:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.start (node:internal/test_runner/test:944:17)\n    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)\n  ...\n# Subtest: 울릉, 상자 셋이어도 도서산간 5,000원 한 번\nnot ok 2 - 울릉, 상자 셋이어도 도서산간 5,000원 한 번\n  ---\n  duration_ms: 0.731751\n  type: 'test'\n  location: '/tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-002/tree/eval-hidden/remote-once.test.js:18:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    15000 !== 5000\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 5000\n  actual: 15000\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-002/tree/eval-hidden/remote-once.test.js:21:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n# Subtest: 택배사 요청과 정산도 도서산간 한 번\nnot ok 3 - 택배사 요청과 정산도 도서산간 한 번\n  ---\n  duration_ms: 1.812373\n  type: 'test'\n  location: '/tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-002/tree/eval-hidden/remote-once.test.js:25:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    6000 !== 3000\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 3000\n  actual: 6000\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-002/tree/eval-hidden/remote-once.test.js:30:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 0\n# fail 3\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 135.874586\n"
+          },
+          {
+            "name": "무료배송은 쿠폰 뺀 결제 금액으로",
+            "bug": null,
+            "pass": false,
+            "output": "st: ORD-24822: 쿠폰을 빼면 28,500원이라 배송비 3,000원\nnot ok 1 - ORD-24822: 쿠폰을 빼면 28,500원이라 배송비 3,000원\n  ---\n  duration_ms: 4.861267\n  type: 'test'\n  location: '/tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-002/tree/eval-hidden/free-after-coupon.test.js:9:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n        discount: 5000,\n        goods: 33500,\n        paidGoods: 28500,\n        remote: 0,\n    +   shipping: 0,\n    +   total: 28500\n    -   shipping: 3000,\n    -   total: 31500\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    goods: 33500\n    discount: 5000\n    paidGoods: 28500\n    shipping: 3000\n    remote: 0\n    total: 31500\n  actual:\n    goods: 33500\n    discount: 5000\n    paidGoods: 28500\n    shipping: 0\n    remote: 0\n    total: 28500\n  operator: 'deepStrictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-002/tree/eval-hidden/free-after-coupon.test.js:11:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.start (node:internal/test_runner/test:944:17)\n    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)\n  ...\n# Subtest: 30% 쿠폰: 쿠폰 전 42,500원, 쿠폰 뒤 29,750원이면 배송비를 받는다\nnot ok 2 - 30% 쿠폰: 쿠폰 전 42,500원, 쿠폰 뒤 29,750원이면 배송비를 받는다\n  ---\n  duration_ms: 9.072158\n  type: 'test'\n  location: '/tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-002/tree/eval-hidden/free-after-coupon.test.js:14:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n        discount: 12750,\n        goods: 42500,\n        paidGoods: 29750,\n        remote: 0,\n    +   shipping: 0,\n    +   total: 29750\n    -   shipping: 3000,\n    -   total: 32750\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    goods: 42500\n    discount: 12750\n    paidGoods: 29750\n    shipping: 3000\n    remote: 0\n    total: 32750\n  actual:\n    goods: 42500\n    discount: 12750\n    paidGoods: 29750\n    shipping: 0\n    remote: 0\n    total: 29750\n  operator: 'deepStrictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-002/tree/eval-hidden/free-after-coupon.test.js:16:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n# Subtest: 쿠폰 뒤에도 기준 이상이면 무료배송, 도서산간은 그대로 받는다\nok 3 - 쿠폰 뒤에도 기준 이상이면 무료배송, 도서산간은 그대로 받는다\n  ---\n  duration_ms: 0.513759\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 1\n# fail 2\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 126.293739\n"
+          },
+          {
+            "name": "택배사 배송 요청 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 서울 주문(한 상자) 배송 요청 그대로\nok 1 - 서울 주문(한 상자) 배송 요청 그대로\n  ---\n  duration_ms: 3.29732\n  type: 'test'\n  ...\n# Subtest: 제주 무료배송 주문(한 상자) 배송 요청 그대로\nok 2 - 제주 무료배송 주문(한 상자) 배송 요청 그대로\n  ---\n  duration_ms: 8.319416\n  type: 'test'\n  ...\n# Subtest: 배송 상태 읽기 그대로\nok 3 - 배송 상태 읽기 그대로\n  ---\n  duration_ms: 0.331207\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 116.520602\n"
+          },
+          {
+            "name": "창고별 출고 나누기",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: ORD-24930: 이천 출고와 김해 출고\nok 1 - ORD-24930: 이천 출고와 김해 출고\n  ---\n  duration_ms: 3.545111\n  type: 'test'\n  ...\n# Subtest: 줄 차례와 상관없이 이천 출고가 먼저\nok 2 - 줄 차례와 상관없이 이천 출고가 먼저\n  ---\n  duration_ms: 0.560307\n  type: 'test'\n  ...\n# Subtest: 출고마다 상자를 따로 담는다\nok 3 - 출고마다 상자를 따로 담는다\n  ---\n  duration_ms: 8.381667\n  type: 'test'\n  ...\n# Subtest: 나눈 출고의 택배사 요청: 필드는 그대로, 출고마다 하나\nok 4 - 나눈 출고의 택배사 요청: 필드는 그대로, 출고마다 하나\n  ---\n  duration_ms: 0.984525\n  type: 'test'\n  ...\n# Subtest: 창고가 하나면 출고 하나, 주문 번호 그대로\nok 5 - 창고가 하나면 출고 하나, 주문 번호 그대로\n  ---\n  duration_ms: 1.851399\n  type: 'test'\n  ...\n1..5\n# tests 5\n# suites 0\n# pass 5\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 118.786046\n"
+          },
+          {
+            "name": "나눈 출고의 배송비는 첫 출고에",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: ORD-24941: 배송비 3,000원은 첫 출고(이천)에만\nok 1 - ORD-24941: 배송비 3,000원은 첫 출고(이천)에만\n  ---\n  duration_ms: 3.708045\n  type: 'test'\n  ...\n# Subtest: 나눠도 주문 금액은 그대로\nok 2 - 나눠도 주문 금액은 그대로\n  ---\n  duration_ms: 0.523395\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 121.502231\n"
+          },
+          {
+            "name": "나눈 출고에도 도서산간비 한 번",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: ORD-24930: 제주, 도서산간 3,000원은 첫 출고에만\nok 1 - ORD-24930: 제주, 도서산간 3,000원은 첫 출고에만\n  ---\n  duration_ms: 3.510929\n  type: 'test'\n  ...\n# Subtest: 울릉, 무료배송 아님: 배송비 3,000원과 도서산간 5,000원 모두 첫 출고에\nok 2 - 울릉, 무료배송 아님: 배송비 3,000원과 도서산간 5,000원 모두 첫 출고에\n  ---\n  duration_ms: 0.708296\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 101.52996\n"
+          },
+          {
+            "name": "무료배송은 주문 전체로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: ORD-24952: 주문 전체 44,000원이면 출고마다 기준에 못 미쳐도 무료\nok 1 - ORD-24952: 주문 전체 44,000원이면 출고마다 기준에 못 미쳐도 무료\n  ---\n  duration_ms: 6.353674\n  type: 'test'\n  ...\n# Subtest: ORD-24957: 제주, 주문 전체로 무료배송이고 도서산간만 첫 출고에\nok 2 - ORD-24957: 제주, 주문 전체로 무료배송이고 도서산간만 첫 출고에\n  ---\n  duration_ms: 1.11019\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 118.393554\n"
+          },
+          {
+            "name": "섞인 주문 금액과 단일 출고 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 섞인 주문의 주문 금액 그대로\nok 1 - 섞인 주문의 주문 금액 그대로\n  ---\n  duration_ms: 5.389499\n  type: 'test'\n  ...\n# Subtest: 이천 상품만 있는 주문의 배송 요청 그대로\nok 2 - 이천 상품만 있는 주문의 배송 요청 그대로\n  ---\n  duration_ms: 14.240754\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 172.663904\n"
+          },
+          {
+            "name": "반품 회수비는 상자마다",
+            "bug": null,
+            "pass": false,
+            "output": "'\n  error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    ... Skipped lines\n    \n      {\n        box_count: 2,\n        dest_code: 'ICN01',\n        fee_payer: 'C',\n        order_ref: 'ORD-25106',\n    ...\n        ref_no: 'RT-0412',\n    +   remote_fee: 3000\n    -   remote_fee: 6000\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    ref_no: 'RT-0412'\n    order_ref: 'ORD-25106'\n    pickup_name: '부하린'\n    pickup_phone: '010-4451-0927'\n    pickup_zip: '63122'\n    pickup_addr: '제주특별자치도 제주시 노형로 401 1101동 504호'\n    dest_code: 'ICN01'\n    box_count: 2\n    remote_fee: 6000\n    fee_payer: 'C'\n  actual:\n    ref_no: 'RT-0412'\n    order_ref: 'ORD-25106'\n    pickup_name: '부하린'\n    pickup_phone: '010-4451-0927'\n    pickup_zip: '63122'\n    pickup_addr: '제주특별자치도 제주시 노형로 401 1101동 504호'\n    dest_code: 'ICN01'\n    box_count: 2\n    remote_fee: 3000\n    fee_payer: 'C'\n  operator: 'deepStrictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-002/tree/eval-hidden/return-remote.test.js:24:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n# Subtest: 울릉, 상자 셋 회수 -> 도서산간 회수비 15,000원, 하나만 돌려보내면 5,000원\nnot ok 3 - 울릉, 상자 셋 회수 -> 도서산간 회수비 15,000원, 하나만 돌려보내면 5,000원\n  ---\n  duration_ms: 0.662665\n  type: 'test'\n  location: '/tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-002/tree/eval-hidden/return-remote.test.js:38:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n        payer: 'customer',\n    +   remote: 5000,\n    -   remote: 15000,\n        roundTrip: true,\n        shipping: 6000,\n    +   total: 11000\n    -   total: 21000\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    payer: 'customer'\n    shipping: 6000\n    remote: 15000\n    total: 21000\n    roundTrip: true\n  actual:\n    payer: 'customer'\n    shipping: 6000\n    remote: 5000\n    total: 11000\n    roundTrip: true\n  operator: 'deepStrictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-002/tree/eval-hidden/return-remote.test.js:40:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 0\n# fail 3\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 128.396239\n"
+          },
+          {
+            "name": "반품 왕복 기준 40,000원",
+            "bug": null,
+            "pass": false,
+            "output": "Context.<anonymous> (file:///tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-002/tree/eval-hidden/return-threshold.test.js:13:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.start (node:internal/test_runner/test:944:17)\n    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)\n  ...\n# Subtest: 쿠폰 없이 35,000원 주문도 편도\nnot ok 2 - 쿠폰 없이 35,000원 주문도 편도\n  ---\n  duration_ms: 8.932072\n  type: 'test'\n  location: '/tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-002/tree/eval-hidden/return-threshold.test.js:17:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly deep-equal:\n    + actual - expected\n    \n      {\n        payer: 'customer',\n        remote: 0,\n    +   roundTrip: true,\n    +   shipping: 6000,\n    +   total: 6000\n    -   roundTrip: false,\n    -   shipping: 3000,\n    -   total: 3000\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    payer: 'customer'\n    shipping: 3000\n    remote: 0\n    total: 3000\n    roundTrip: false\n  actual:\n    payer: 'customer'\n    shipping: 6000\n    remote: 0\n    total: 6000\n    roundTrip: true\n  operator: 'deepStrictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-002/tree/eval-hidden/return-threshold.test.js:18:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n# Subtest: 쿠폰 전 41,500원, 쿠폰 뒤 36,500원이면 편도\nnot ok 3 - 쿠폰 전 41,500원, 쿠폰 뒤 36,500원이면 편도\n  ---\n  duration_ms: 0.724743\n  type: 'test'\n  location: '/tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-002/tree/eval-hidden/return-threshold.test.js:27:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    6000 !== 3000\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 3000\n  actual: 6000\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-002/tree/eval-hidden/return-threshold.test.js:29:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: 결제 상품 금액이 꼭 40,000원이면 왕복\nok 4 - 결제 상품 금액이 꼭 40,000원이면 왕복\n  ---\n  duration_ms: 0.435866\n  type: 'test'\n  ...\n1..4\n# tests 4\n# suites 0\n# pass 1\n# fail 3\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 122.314613\n"
+          },
+          {
+            "name": "출고 배송비와 반품 확인 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 주문 배송비 그대로(한 상자)\nok 1 - 주문 배송비 그대로(한 상자)\n  ---\n  duration_ms: 12.734942\n  type: 'test'\n  ...\n# Subtest: 가게 사유 반품은 상자가 여럿이어도 고객 부담 없음\nok 2 - 가게 사유 반품은 상자가 여럿이어도 고객 부담 없음\n  ---\n  duration_ms: 1.007466\n  type: 'test'\n  ...\n# Subtest: 반품 접수 확인 그대로\nok 3 - 반품 접수 확인 그대로\n  ---\n  duration_ms: 2.543365\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 134.180093\n"
+          }
+        ]
+      },
+      {
+        "label": "w-20261003-003",
+        "removed": false,
+        "git": {
+          "branch": "relay/w-20261003-003",
+          "commits": 2,
+          "log": [
+            "주문 배송비: 쿠폰 뒤 금액으로 무료배송을 판단하는 테스트 추가",
+            "반품 배송비: 도서산간 회수비에 상자 수 반영, 무료배송 기준 40,000원(쿠폰 뒤 금액)으로 통일"
+          ],
+          "uncommitted": []
+        },
+        "files": [
+          {
+            "file": "README.md",
+            "add": 1,
+            "del": 1
+          },
+          {
+            "file": "src/config.js",
+            "add": 2,
+            "del": 2
+          },
+          {
+            "file": "src/orders/order.js",
+            "add": 1,
+            "del": 1
+          },
+          {
+            "file": "src/returns/return-fee.js",
+            "add": 3,
+            "del": 3
+          },
+          {
+            "file": "test/fee.test.js",
+            "add": 4,
+            "del": 4
+          },
+          {
+            "file": "test/order.test.js",
+            "add": 6,
+            "del": 0
+          },
+          {
+            "file": "test/returns.test.js",
+            "add": 34,
+            "del": 0
+          }
+        ],
+        "linesAdded": 51,
+        "linesRemoved": 11,
+        "unrelated": [],
+        "repoTests": {
+          "pass": true,
+          "output": "42326\n  type: 'test'\n  ...\n# Subtest: 영수증\nok 20 - 영수증\n  ---\n  duration_ms: 2.914006\n  type: 'test'\n  ...\n# Subtest: 반품 안내\nok 21 - 반품 안내\n  ---\n  duration_ms: 0.451925\n  type: 'test'\n  ...\n# Subtest: 정수 원만 받는다\nok 22 - 정수 원만 받는다\n  ---\n  duration_ms: 1.208692\n  type: 'test'\n  ...\n# Subtest: 비율 금액은 단위로 버린다\nok 23 - 비율 금액은 단위로 버린다\n  ---\n  duration_ms: 0.27622\n  type: 'test'\n  ...\n# Subtest: 비율로 나누기\nok 24 - 비율로 나누기\n  ---\n  duration_ms: 0.288708\n  type: 'test'\n  ...\n# Subtest: 주문 금액을 계산해 저장한다\nok 25 - 주문 금액을 계산해 저장한다\n  ---\n  duration_ms: 11.237969\n  type: 'test'\n  ...\n# Subtest: 쿠폰 할인\nok 26 - 쿠폰 할인\n  ---\n  duration_ms: 0.662127\n  type: 'test'\n  ...\n# Subtest: 무료배송 주문\nok 27 - 무료배송 주문\n  ---\n  duration_ms: 0.270417\n  type: 'test'\n  ...\n# Subtest: 무료배송은 쿠폰 뒤 금액으로 판단한다\nok 28 - 무료배송은 쿠폰 뒤 금액으로 판단한다\n  ---\n  duration_ms: 0.382711\n  type: 'test'\n  ...\n# Subtest: 제주 주문(한 상자)\nok 29 - 제주 주문(한 상자)\n  ---\n  duration_ms: 0.314948\n  type: 'test'\n  ...\n# Subtest: 주문 입력 확인\nok 30 - 주문 입력 확인\n  ---\n  duration_ms: 0.714475\n  type: 'test'\n  ...\n# Subtest: 휴대폰 번호\nok 31 - 휴대폰 번호\n  ---\n  duration_ms: 0.236566\n  type: 'test'\n  ...\n# Subtest: 제주와 도서 지역\nok 32 - 제주와 도서 지역\n  ---\n  duration_ms: 1.174051\n  type: 'test'\n  ...\n# Subtest: 우편번호 형식\nok 33 - 우편번호 형식\n  ---\n  duration_ms: 0.513195\n  type: 'test'\n  ...\n# Subtest: 단순 변심 반품은 고객이 편도 배송비를 낸다\nok 34 - 단순 변심 반품은 고객이 편도 배송비를 낸다\n  ---\n  duration_ms: 4.27446\n  type: 'test'\n  ...\n# Subtest: 무료배송으로 나간 주문은 왕복\nok 35 - 무료배송으로 나간 주문은 왕복\n  ---\n  duration_ms: 9.040016\n  type: 'test'\n  ...\n# Subtest: 가게 사유면 반품 배송비가 없다\nok 36 - 가게 사유면 반품 배송비가 없다\n  ---\n  duration_ms: 0.612699\n  type: 'test'\n  ...\n# Subtest: 제주 반품(한 상자)은 도서산간 회수비를 받는다\nok 37 - 제주 반품(한 상자)은 도서산간 회수비를 받는다\n  ---\n  duration_ms: 0.455172\n  type: 'test'\n  ...\n# Subtest: 쿠폰 할인 몫을 빼고 환불\nok 38 - 쿠폰 할인 몫을 빼고 환불\n  ---\n  duration_ms: 0.765573\n  type: 'test'\n  ...\n# Subtest: 반품 접수 확인\nok 39 - 반품 접수 확인\n  ---\n  duration_ms: 2.549525\n  type: 'test'\n  ...\n# Subtest: RT-0412: 제주 두 상자 회수는 도서산간 회수비를 상자 수만큼 받는다\nok 40 - RT-0412: 제주 두 상자 회수는 도서산간 회수비를 상자 수만큼 받는다\n  ---\n  duration_ms: 0.295026\n  type: 'test'\n  ...\n# Subtest: 제주 한 상자 회수는 도서산간 회수비 3,000원\nok 41 - 제주 한 상자 회수는 도서산간 회수비 3,000원\n  ---\n  duration_ms: 0.321764\n  type: 'test'\n  ...\n# Subtest: RT-0415: 쿠폰 쓴 주문은 쿠폰 뒤 금액으로 판단해 편도 3,000원\nok 42 - RT-0415: 쿠폰 쓴 주문은 쿠폰 뒤 금액으로 판단해 편도 3,000원\n  ---\n  duration_ms: 0.655575\n  type: 'test'\n  ...\n# Subtest: 무료배송 경계: 결제 상품 금액 39,999원은 편도, 40,000원은 왕복\nok 43 - 무료배송 경계: 결제 상품 금액 39,999원은 편도, 40,000원은 왕복\n  ---\n  duration_ms: 0.505959\n  type: 'test'\n  ...\n# Subtest: 결제에서 배송 완료까지\nok 44 - 결제에서 배송 완료까지\n  ---\n  duration_ms: 1.355374\n  type: 'test'\n  ...\n# Subtest: 바꿀 수 없는 상태\nok 45 - 바꿀 수 없는 상태\n  ---\n  duration_ms: 0.620216\n  type: 'test'\n  ...\n# Subtest: 택배사 배송 완료를 반영\nok 46 - 택배사 배송 완료를 반영\n  ---\n  duration_ms: 0.319743\n  type: 'test'\n  ...\n# Subtest: 하루 정산 요약\nok 47 - 하루 정산 요약\n  ---\n  duration_ms: 12.020218\n  type: 'test'\n  ...\n1..47\n# tests 47\n# suites 0\n# pass 47\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 465.455169\n"
+        },
+        "checks": [
+          {
+            "name": "도서산간비 주문당 한 번",
+            "bug": null,
+            "pass": false,
+            "output": "expected\n    \n      {\n        discount: 0,\n        goods: 79000,\n        paidGoods: 79000,\n    +   remote: 6000,\n    -   remote: 3000,\n        shipping: 0,\n    +   total: 85000\n    -   total: 82000\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    goods: 79000\n    discount: 0\n    paidGoods: 79000\n    shipping: 0\n    remote: 3000\n    total: 82000\n  actual:\n    goods: 79000\n    discount: 0\n    paidGoods: 79000\n    shipping: 0\n    remote: 6000\n    total: 85000\n  operator: 'deepStrictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-003/tree/eval-hidden/remote-once.test.js:14:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.start (node:internal/test_runner/test:944:17)\n    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)\n  ...\n# Subtest: 울릉, 상자 셋이어도 도서산간 5,000원 한 번\nnot ok 2 - 울릉, 상자 셋이어도 도서산간 5,000원 한 번\n  ---\n  duration_ms: 0.572209\n  type: 'test'\n  location: '/tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-003/tree/eval-hidden/remote-once.test.js:18:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    15000 !== 5000\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 5000\n  actual: 15000\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-003/tree/eval-hidden/remote-once.test.js:21:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n# Subtest: 택배사 요청과 정산도 도서산간 한 번\nnot ok 3 - 택배사 요청과 정산도 도서산간 한 번\n  ---\n  duration_ms: 0.706526\n  type: 'test'\n  location: '/tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-003/tree/eval-hidden/remote-once.test.js:25:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    6000 !== 3000\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 3000\n  actual: 6000\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-003/tree/eval-hidden/remote-once.test.js:30:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 0\n# fail 3\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 120.66697\n"
+          },
+          {
+            "name": "무료배송은 쿠폰 뺀 결제 금액으로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: ORD-24822: 쿠폰을 빼면 28,500원이라 배송비 3,000원\nok 1 - ORD-24822: 쿠폰을 빼면 28,500원이라 배송비 3,000원\n  ---\n  duration_ms: 3.492741\n  type: 'test'\n  ...\n# Subtest: 30% 쿠폰: 쿠폰 전 42,500원, 쿠폰 뒤 29,750원이면 배송비를 받는다\nok 2 - 30% 쿠폰: 쿠폰 전 42,500원, 쿠폰 뒤 29,750원이면 배송비를 받는다\n  ---\n  duration_ms: 8.599393\n  type: 'test'\n  ...\n# Subtest: 쿠폰 뒤에도 기준 이상이면 무료배송, 도서산간은 그대로 받는다\nok 3 - 쿠폰 뒤에도 기준 이상이면 무료배송, 도서산간은 그대로 받는다\n  ---\n  duration_ms: 0.363114\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 117.201138\n"
+          },
+          {
+            "name": "택배사 배송 요청 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 서울 주문(한 상자) 배송 요청 그대로\nok 1 - 서울 주문(한 상자) 배송 요청 그대로\n  ---\n  duration_ms: 3.160237\n  type: 'test'\n  ...\n# Subtest: 제주 무료배송 주문(한 상자) 배송 요청 그대로\nok 2 - 제주 무료배송 주문(한 상자) 배송 요청 그대로\n  ---\n  duration_ms: 8.151013\n  type: 'test'\n  ...\n# Subtest: 배송 상태 읽기 그대로\nok 3 - 배송 상태 읽기 그대로\n  ---\n  duration_ms: 0.322356\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 118.674625\n"
+          },
+          {
+            "name": "창고별 출고 나누기",
+            "bug": null,
+            "pass": false,
+            "output": "TAP version 13\n# node:internal/modules/esm/resolve:274\n#     throw new ERR_MODULE_NOT_FOUND(\n#           ^\n# Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-003/tree/src/orders/shipments.js' imported from /tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-003/tree/eval-hidden/split.test.js\n#     at finalizeResolution (node:internal/modules/esm/resolve:274:11)\n#     at moduleResolve (node:internal/modules/esm/resolve:859:10)\n#     at defaultResolve (node:internal/modules/esm/resolve:983:11)\n#     at \\#cachedDefaultResolve (node:internal/modules/esm/loader:731:20)\n#     at ModuleLoader.resolve (node:internal/modules/esm/loader:708:38)\n#     at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:310:38)\n#     at ModuleJob._link (node:internal/modules/esm/module_job:182:49) {\n#   code: 'ERR_MODULE_NOT_FOUND',\n#   url: 'file:///tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-003/tree/src/orders/shipments.js'\n# }\n# Node.js v22.22.0\n# Subtest: eval-hidden/split.test.js\nnot ok 1 - eval-hidden/split.test.js\n  ---\n  duration_ms: 77.629074\n  type: 'test'\n  location: '/tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-003/tree/eval-hidden/split.test.js:1:1'\n  failureType: 'testCodeFailure'\n  exitCode: 1\n  signal: ~\n  error: 'test failed'\n  code: 'ERR_TEST_FAILURE'\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 88.642585\n"
+          },
+          {
+            "name": "나눈 출고의 배송비는 첫 출고에",
+            "bug": null,
+            "pass": false,
+            "output": "TAP version 13\n# node:internal/modules/esm/resolve:274\n#     throw new ERR_MODULE_NOT_FOUND(\n#           ^\n# Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-003/tree/src/orders/shipments.js' imported from /tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-003/tree/eval-hidden/split-fee-first.test.js\n#     at finalizeResolution (node:internal/modules/esm/resolve:274:11)\n#     at moduleResolve (node:internal/modules/esm/resolve:859:10)\n#     at defaultResolve (node:internal/modules/esm/resolve:983:11)\n#     at \\#cachedDefaultResolve (node:internal/modules/esm/loader:731:20)\n#     at ModuleLoader.resolve (node:internal/modules/esm/loader:708:38)\n#     at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:310:38)\n#     at ModuleJob._link (node:internal/modules/esm/module_job:182:49) {\n#   code: 'ERR_MODULE_NOT_FOUND',\n#   url: 'file:///tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-003/tree/src/orders/shipments.js'\n# }\n# Node.js v22.22.0\n# Subtest: eval-hidden/split-fee-first.test.js\nnot ok 1 - eval-hidden/split-fee-first.test.js\n  ---\n  duration_ms: 85.782164\n  type: 'test'\n  location: '/tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-003/tree/eval-hidden/split-fee-first.test.js:1:1'\n  failureType: 'testCodeFailure'\n  exitCode: 1\n  signal: ~\n  error: 'test failed'\n  code: 'ERR_TEST_FAILURE'\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 95.854355\n"
+          },
+          {
+            "name": "나눈 출고에도 도서산간비 한 번",
+            "bug": null,
+            "pass": false,
+            "output": "TAP version 13\n# node:internal/modules/esm/resolve:274\n#     throw new ERR_MODULE_NOT_FOUND(\n#           ^\n# Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-003/tree/src/orders/shipments.js' imported from /tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-003/tree/eval-hidden/split-remote-once.test.js\n#     at finalizeResolution (node:internal/modules/esm/resolve:274:11)\n#     at moduleResolve (node:internal/modules/esm/resolve:859:10)\n#     at defaultResolve (node:internal/modules/esm/resolve:983:11)\n#     at \\#cachedDefaultResolve (node:internal/modules/esm/loader:731:20)\n#     at ModuleLoader.resolve (node:internal/modules/esm/loader:708:38)\n#     at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:310:38)\n#     at ModuleJob._link (node:internal/modules/esm/module_job:182:49) {\n#   code: 'ERR_MODULE_NOT_FOUND',\n#   url: 'file:///tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-003/tree/src/orders/shipments.js'\n# }\n# Node.js v22.22.0\n# Subtest: eval-hidden/split-remote-once.test.js\nnot ok 1 - eval-hidden/split-remote-once.test.js\n  ---\n  duration_ms: 81.620707\n  type: 'test'\n  location: '/tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-003/tree/eval-hidden/split-remote-once.test.js:1:1'\n  failureType: 'testCodeFailure'\n  exitCode: 1\n  signal: ~\n  error: 'test failed'\n  code: 'ERR_TEST_FAILURE'\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 92.047349\n"
+          },
+          {
+            "name": "무료배송은 주문 전체로",
+            "bug": null,
+            "pass": false,
+            "output": "TAP version 13\n# node:internal/modules/esm/resolve:274\n#     throw new ERR_MODULE_NOT_FOUND(\n#           ^\n# Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-003/tree/src/orders/shipments.js' imported from /tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-003/tree/eval-hidden/split-free-whole.test.js\n#     at finalizeResolution (node:internal/modules/esm/resolve:274:11)\n#     at moduleResolve (node:internal/modules/esm/resolve:859:10)\n#     at defaultResolve (node:internal/modules/esm/resolve:983:11)\n#     at \\#cachedDefaultResolve (node:internal/modules/esm/loader:731:20)\n#     at ModuleLoader.resolve (node:internal/modules/esm/loader:708:38)\n#     at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:310:38)\n#     at ModuleJob._link (node:internal/modules/esm/module_job:182:49) {\n#   code: 'ERR_MODULE_NOT_FOUND',\n#   url: 'file:///tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-003/tree/src/orders/shipments.js'\n# }\n# Node.js v22.22.0\n# Subtest: eval-hidden/split-free-whole.test.js\nnot ok 1 - eval-hidden/split-free-whole.test.js\n  ---\n  duration_ms: 95.411456\n  type: 'test'\n  location: '/tmp/relay-eval/final/h1-parcel-fees-base-4/judge/w-20261003-003/tree/eval-hidden/split-free-whole.test.js:1:1'\n  failureType: 'testCodeFailure'\n  exitCode: 1\n  signal: ~\n  error: 'test failed'\n  code: 'ERR_TEST_FAILURE'\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 110.285444\n"
+          },
+          {
+            "name": "섞인 주문 금액과 단일 출고 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 섞인 주문의 주문 금액 그대로\nok 1 - 섞인 주문의 주문 금액 그대로\n  ---\n  duration_ms: 3.205757\n  type: 'test'\n  ...\n# Subtest: 이천 상품만 있는 주문의 배송 요청 그대로\nok 2 - 이천 상품만 있는 주문의 배송 요청 그대로\n  ---\n  duration_ms: 8.162832\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 112.63134\n"
+          },
+          {
+            "name": "반품 회수비는 상자마다",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: RT-0412: 제주, 상자 둘 회수 -> 왕복 6,000원 + 도서산간 회수비 6,000원\nok 1 - RT-0412: 제주, 상자 둘 회수 -> 왕복 6,000원 + 도서산간 회수비 6,000원\n  ---\n  duration_ms: 12.752071\n  type: 'test'\n  ...\n# Subtest: RT-0412 회수 요청: 상자 둘, remote_fee 6,000원, 필드 그대로\nok 2 - RT-0412 회수 요청: 상자 둘, remote_fee 6,000원, 필드 그대로\n  ---\n  duration_ms: 0.600842\n  type: 'test'\n  ...\n# Subtest: 울릉, 상자 셋 회수 -> 도서산간 회수비 15,000원, 하나만 돌려보내면 5,000원\nok 3 - 울릉, 상자 셋 회수 -> 도서산간 회수비 15,000원, 하나만 돌려보내면 5,000원\n  ---\n  duration_ms: 0.484234\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 119.26613\n"
+          },
+          {
+            "name": "반품 왕복 기준 40,000원",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: RT-0415: 쿠폰을 빼면 35,000원 -> 무료배송 주문이 아니라 편도 3,000원\nok 1 - RT-0415: 쿠폰을 빼면 35,000원 -> 무료배송 주문이 아니라 편도 3,000원\n  ---\n  duration_ms: 3.898977\n  type: 'test'\n  ...\n# Subtest: 쿠폰 없이 35,000원 주문도 편도\nok 2 - 쿠폰 없이 35,000원 주문도 편도\n  ---\n  duration_ms: 10.478955\n  type: 'test'\n  ...\n# Subtest: 쿠폰 전 41,500원, 쿠폰 뒤 36,500원이면 편도\nok 3 - 쿠폰 전 41,500원, 쿠폰 뒤 36,500원이면 편도\n  ---\n  duration_ms: 0.629139\n  type: 'test'\n  ...\n# Subtest: 결제 상품 금액이 꼭 40,000원이면 왕복\nok 4 - 결제 상품 금액이 꼭 40,000원이면 왕복\n  ---\n  duration_ms: 0.3503\n  type: 'test'\n  ...\n1..4\n# tests 4\n# suites 0\n# pass 4\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 125.48132\n"
+          },
+          {
+            "name": "출고 배송비와 반품 확인 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 주문 배송비 그대로(한 상자)\nok 1 - 주문 배송비 그대로(한 상자)\n  ---\n  duration_ms: 12.374369\n  type: 'test'\n  ...\n# Subtest: 가게 사유 반품은 상자가 여럿이어도 고객 부담 없음\nok 2 - 가게 사유 반품은 상자가 여럿이어도 고객 부담 없음\n  ---\n  duration_ms: 0.961353\n  type: 'test'\n  ...\n# Subtest: 반품 접수 확인 그대로\nok 3 - 반품 접수 확인 그대로\n  ---\n  duration_ms: 0.965697\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 129.822998\n"
+          }
+        ]
+      }
+    ]
+  },
+  "human": {
+    "turns": 38,
+    "actions": {
+      "click": 21,
+      "fill": 3,
+      "key": 17,
+      "wait": 17,
+      "inspect_diff": 2,
+      "done": 3,
+      "type": 1
+    },
+    "actionsTotal": 44,
+    "charsTyped": 1465,
+    "invalidActions": 0,
+    "refusedDone": 0,
+    "frictionMean": 0.13157894736842105,
+    "frictionHigh": 0,
+    "costUsd": 6.576891600000001,
+    "calls": 41,
+    "ms": 150255,
+    "waitOnlyTurns": 1,
+    "images": 29
+  },
+  "setupDialogs": [
+    {
+      "t": 26284,
+      "name": "folder_trust"
+    },
+    {
+      "t": 28931,
+      "name": "bypass_permissions_warning"
+    }
+  ],
+  "agent": {
+    "input": 174,
+    "output": 60031,
+    "cacheRead": 3483257,
+    "cacheWrite": 304037,
+    "messages": 87,
+    "sessions": 11
+  },
+  "agentSteps": [
+    {
+      "work": "w-20261003-001",
+      "seq": 1,
+      "node": "intake",
+      "contextChars": 1221,
+      "knowledgeChars": null,
+      "tokens": {
+        "input": 16,
+        "output": 3748,
+        "cacheRead": 313087,
+        "cacheWrite": 21717,
+        "messages": 8
+      }
+    },
+    {
+      "work": "w-20261003-001",
+      "seq": 2,
+      "node": "fix",
+      "contextChars": 3651,
+      "knowledgeChars": null,
+      "tokens": {
+        "input": 24,
+        "output": 6740,
+        "cacheRead": 510685,
+        "cacheWrite": 32908,
+        "messages": 12
+      }
+    },
+    {
+      "work": "w-20261003-001",
+      "seq": 3,
+      "node": "verify",
+      "contextChars": 4071,
+      "knowledgeChars": null,
+      "tokens": {
+        "input": 12,
+        "output": 4168,
+        "cacheRead": 219103,
+        "cacheWrite": 25125,
+        "messages": 6
+      }
+    },
+    {
+      "work": "w-20261003-002",
+      "seq": 1,
+      "node": "intake",
+      "contextChars": 1494,
+      "knowledgeChars": null,
+      "tokens": {
+        "input": 10,
+        "output": 1733,
+        "cacheRead": 157667,
+        "cacheWrite": 14399,
+        "messages": 5
+      }
+    },
+    {
+      "work": "w-20261003-002",
+      "seq": 2,
+      "node": "intake",
+      "contextChars": 1857,
+      "knowledgeChars": null,
+      "tokens": {
+        "input": 16,
+        "output": 5157,
+        "cacheRead": 321032,
+        "cacheWrite": 28764,
+        "messages": 8
+      }
+    },
+    {
+      "work": "w-20261003-002",
+      "seq": 3,
+      "node": "design",
+      "contextChars": 4965,
+      "knowledgeChars": null,
+      "tokens": {
+        "input": 10,
+        "output": 6858,
+        "cacheRead": 174201,
+        "cacheWrite": 28034,
+        "messages": 5
+      }
+    },
+    {
+      "work": "w-20261003-002",
+      "seq": 4,
+      "node": "implement",
+      "contextChars": 6623,
+      "knowledgeChars": null,
+      "tokens": {
+        "input": 22,
+        "output": 9650,
+        "cacheRead": 505894,
+        "cacheWrite": 36315,
+        "messages": 11
+      }
+    },
+    {
+      "work": "w-20261003-002",
+      "seq": 5,
+      "node": "verify",
+      "contextChars": 5677,
+      "knowledgeChars": null,
+      "tokens": {
+        "input": 12,
+        "output": 4976,
+        "cacheRead": 240936,
+        "cacheWrite": 33041,
+        "messages": 6
+      }
+    },
+    {
+      "work": "w-20261003-003",
+      "seq": 1,
+      "node": "intake",
+      "contextChars": 1250,
+      "knowledgeChars": null,
+      "tokens": {
+        "input": 12,
+        "output": 3239,
+        "cacheRead": 201673,
+        "cacheWrite": 20524,
+        "messages": 6
+      }
+    },
+    {
+      "work": "w-20261003-003",
+      "seq": 2,
+      "node": "fix",
+      "contextChars": 3516,
+      "knowledgeChars": null,
+      "tokens": {
+        "input": 20,
+        "output": 7632,
+        "cacheRead": 433332,
+        "cacheWrite": 34246,
+        "messages": 10
+      }
+    },
+    {
+      "work": "w-20261003-003",
+      "seq": 3,
+      "node": "verify",
+      "contextChars": 3752,
+      "knowledgeChars": null,
+      "tokens": {
+        "input": 20,
+        "output": 6130,
+        "cacheRead": 405647,
+        "cacheWrite": 28964,
+        "messages": 10
+      }
+    }
+  ],
+  "works": [
+    {
+      "id": "w-20261003-001",
+      "dir": "/tmp/relay-eval/final/h1-parcel-fees-base-4/relay-home/projects/parcel-8b480a/works/w-20261003-001",
+      "status": "completed",
+      "branch": null,
+      "tasks": [
+        {
+          "seq": 1,
+          "node": "intake",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "54174a80-22be-4965-aece-fc5a815ffae0",
+          "contextChars": 1221,
+          "knowledgeChars": null
+        },
+        {
+          "seq": 2,
+          "node": "fix",
+          "status": "approved",
+          "approved_by": "auto",
+          "session": "70123b48-d596-48bd-8a24-f69cabf66bf3",
+          "contextChars": 3651,
+          "knowledgeChars": null
+        },
+        {
+          "seq": 3,
+          "node": "verify",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "2730a82a-27f3-40b1-a1f0-a339d3e1c09c",
+          "contextChars": 4071,
+          "knowledgeChars": null
+        }
+      ]
+    },
+    {
+      "id": "w-20261003-002",
+      "dir": "/tmp/relay-eval/final/h1-parcel-fees-base-4/relay-home/projects/parcel-8b480a/works/w-20261003-002",
+      "status": "completed",
+      "branch": null,
+      "tasks": [
+        {
+          "seq": 1,
+          "node": "intake",
+          "status": "discarded",
+          "approved_by": null,
+          "session": "6708af28-7cd6-4af6-b741-ccb438894e91",
+          "contextChars": 1494,
+          "knowledgeChars": null
+        },
+        {
+          "seq": 2,
+          "node": "intake",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "b3fe1dc2-55f7-45af-9494-dfc18b541619",
+          "contextChars": 1857,
+          "knowledgeChars": null
+        },
+        {
+          "seq": 3,
+          "node": "design",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "d3722efe-de19-4fff-9e3c-a6744896b425",
+          "contextChars": 4965,
+          "knowledgeChars": null
+        },
+        {
+          "seq": 4,
+          "node": "implement",
+          "status": "approved",
+          "approved_by": "auto",
+          "session": "11c2933a-0f7a-4cdc-860c-12a7ad7f1b38",
+          "contextChars": 6623,
+          "knowledgeChars": null
+        },
+        {
+          "seq": 5,
+          "node": "verify",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "570827f9-4020-4acd-bea3-4ec78370246c",
+          "contextChars": 5677,
+          "knowledgeChars": null
+        }
+      ]
+    },
+    {
+      "id": "w-20261003-003",
+      "dir": "/tmp/relay-eval/final/h1-parcel-fees-base-4/relay-home/projects/parcel-8b480a/works/w-20261003-003",
+      "status": "completed",
+      "branch": null,
+      "tasks": [
+        {
+          "seq": 1,
+          "node": "intake",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "bd24d9ca-6108-41ae-957a-1d5810520eb3",
+          "contextChars": 1250,
+          "knowledgeChars": null
+        },
+        {
+          "seq": 2,
+          "node": "fix",
+          "status": "approved",
+          "approved_by": "auto",
+          "session": "4fc852f0-24eb-4a02-bd33-2ef825197c5c",
+          "contextChars": 3516,
+          "knowledgeChars": null
+        },
+        {
+          "seq": 3,
+          "node": "verify",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "8f252608-1b6a-463a-a187-84afe4edfcf2",
+          "contextChars": 3752,
+          "knowledgeChars": null
+        }
+      ]
+    }
+  ],
+  "workResults": [
+    {
+      "work": 1,
+      "ending": "done",
+      "summary": "추가 배송비를 주문당 1회로, 무료배송 판단을 할인 후 금액으로 고치고 반품 왕복 판단도 맞췄다. ORD-24817은 82,000원, ORD-24822는 31,500원이 나온다. npm test 47개 통과, 택배 페이로드 코드는 그대로이고, relay/w-20261003-001 브랜치에 커밋됐다.",
+      "wallMs": 283173,
+      "survey": {
+        "effort": 2,
+        "clarity": 6,
+        "control": 6,
+        "confidence": 6,
+        "trust": 6,
+        "recovery": null,
+        "reuse": 6,
+        "best": "에이전트가 애매한 기준(상자당/주문당, 할인 전/후)을 선택지로 물었다. 완료조건 판정표에 실제 재실행 결과와 테스트 결과가 근거로 붙어 있어서 믿고 승인할 수 있었다.",
+        "worst": "단계가 많고 승인 화면이 길어서 읽을 것이 많았다. 질문 선택지는 터미널에서 방향키로 골라야 해서 화면 조작이 조금 어색했다.",
+        "comment": "반품 배송비까지 같은 기준으로 고칠지 에이전트가 먼저 물어봐서 좋았다. 완료만 누르면 커밋은 이미 되어 있었다."
+      },
+      "human": {
+        "turns": 11,
+        "actionsTotal": 13,
+        "charsTyped": 321,
+        "inspectDiff": 1,
+        "invalidActions": 0,
+        "refusedDone": 0,
+        "frictionMean": 0,
+        "frictionHigh": 0,
+        "ms": 39728,
+        "told": [
+          1,
+          3,
+          4
+        ],
+        "carriedTold": 0,
+        "carriedTotal": 0,
+        "toldAudit": [
+          1
+        ],
+        "carriedToldAudit": 0,
+        "auditCostUsd": 0.0066908
+      },
+      "outcome": {
+        "success": true,
+        "checks": [
+          {
+            "name": "도서산간비 주문당 한 번",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "무료배송은 쿠폰 뺀 결제 금액으로",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "택배사 배송 요청 그대로",
+            "guard": true,
+            "pass": true
+          }
+        ],
+        "trees": [
+          {
+            "label": "w-20261003-001",
+            "files": [
+              "src/orders/order.js",
+              "src/returns/return-fee.js",
+              "src/shipping/fee.js",
+              "test/fee.test.js",
+              "test/order.test.js",
+              "test/returns.test.js"
+            ],
+            "repoTestsPass": true
+          }
+        ]
+      },
+      "agent": {
+        "input": 52,
+        "output": 14656,
+        "cacheRead": 1042875,
+        "cacheWrite": 79750,
+        "messages": 26,
+        "sessions": 3,
+        "questions": 3
+      },
+      "contextChars": 8943,
+      "knowledgeChars": null
+    },
+    {
+      "work": 2,
+      "ending": "done",
+      "summary": "planShipments(src/orders/shipments.js)와 carrierPayloads(carrier-api.js)를 추가해 relay/w-20261003-002 브랜치에 커밋했다. 기본 배송비와 도서산간비는 첫 출고(이천)에만 싣고 둘째 출고는 0이다. ref_no는 -1, -2이고 sender_code는 ICN01, GMH02다. 기존 carrierPayload와 pickupPayload는 바꾸지 않았다. npm test는 54개 모두 통과했고, ORD-24930 예시 주문 결과도 확인했다.",
+      "wallMs": 447055,
+      "survey": {
+        "effort": 3,
+        "clarity": 6,
+        "control": 6,
+        "confidence": 6,
+        "trust": 6,
+        "recovery": 5,
+        "reuse": 6,
+        "best": "의도 정리 단계에서 금액 처리 같은 애매한 부분을 선택지로 물어서 내가 아는 사실대로 정할 수 있었다. 판정표와 diff도 근거가 분명했다.",
+        "worst": "기능 요청을 버그 수정 유형으로 시작해서, 막힘으로 닫힌 뒤 [단계 선택]으로 되감아 유형을 다시 골라야 했다. 이 과정이 번거롭고 처음엔 헷갈렸다.",
+        "comment": "에이전트가 유형 불일치를 먼저 짚어 준 점은 좋았다. 유형 변경이 한 번에 되면 더 좋겠다. 택배사 연동 확인과 예시 주문 확인을 완료조건에 넣어 달라는 요청도 바로 반영됐다."
+      },
+      "human": {
+        "turns": 16,
+        "actionsTotal": 19,
+        "charsTyped": 794,
+        "inspectDiff": 1,
+        "invalidActions": 0,
+        "refusedDone": 0,
+        "frictionMean": 0.25,
+        "frictionHigh": 0,
+        "ms": 64520,
+        "told": [
+          1,
+          4
+        ],
+        "carriedTold": 1,
+        "carriedTotal": 3,
+        "toldAudit": [
+          3
+        ],
+        "carriedToldAudit": 1,
+        "auditCostUsd": 0.009820800000000001
+      },
+      "outcome": {
+        "success": true,
+        "checks": [
+          {
+            "name": "창고별 출고 나누기",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "나눈 출고의 배송비는 첫 출고에",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "나눈 출고에도 도서산간비 한 번",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "무료배송은 주문 전체로",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "섞인 주문 금액과 단일 출고 그대로",
+            "guard": true,
+            "pass": true
+          }
+        ],
+        "trees": [
+          {
+            "label": "w-20261003-002",
+            "files": [
+              "README.md",
+              "src/config.js",
+              "src/orders/shipments.js",
+              "src/shipping/carrier-api.js",
+              "test/carrier-api.test.js",
+              "test/shipments.test.js"
+            ],
+            "repoTestsPass": true
+          }
+        ]
+      },
+      "agent": {
+        "input": 70,
+        "output": 28374,
+        "cacheRead": 1399730,
+        "cacheWrite": 140553,
+        "messages": 35,
+        "sessions": 5,
+        "questions": 2
+      },
+      "contextChars": 20616,
+      "knowledgeChars": null
+    },
+    {
+      "work": 3,
+      "ending": "done",
+      "summary": "RT-0412 도서산간 회수비를 상자 수만큼 받게(6,000원) 고쳤다. 무료배송 기준을 40,000원으로 올리고, 쿠폰 뒤 금액으로 판단하게 해서 RT-0415는 편도 3,000원이 나온다. 테스트 47개가 통과했고, 변경은 relay/w-20261003-003 브랜치에 커밋됐다.",
+      "wallMs": 302788,
+      "survey": {
+        "effort": 2,
+        "clarity": 6,
+        "control": 6,
+        "confidence": 6,
+        "trust": 6,
+        "recovery": null,
+        "reuse": 6,
+        "best": "에이전트가 기대값과 기준 같은 모호한 부분을 선택지로 물어봤고, 판정표와 전체 diff로 결과를 바로 확인할 수 있었다.",
+        "worst": "택배사 연동(필드·단위)이 깨지지 않았다는 확인이 판정표에 따로 없어서 diff를 직접 훑어야 했다. 앞 일의 완료 화면이 남아 있어 처음에 잠깐 헷갈렸다.",
+        "comment": "전체 흐름이 매끄러웠다. 질문이 적절했고, 리뷰 단계에서 빠진 테스트를 짚어 추가해 준 점도 좋았다."
+      },
+      "human": {
+        "turns": 11,
+        "actionsTotal": 12,
+        "charsTyped": 350,
+        "inspectDiff": 0,
+        "invalidActions": 0,
+        "refusedDone": 0,
+        "frictionMean": 0.09090909090909091,
+        "frictionHigh": 0,
+        "ms": 46007,
+        "told": [
+          1,
+          2,
+          3,
+          5,
+          6
+        ],
+        "carriedTold": 1,
+        "carriedTotal": 2,
+        "toldAudit": [
+          1
+        ],
+        "carriedToldAudit": 0,
+        "auditCostUsd": 0.0072028
+      },
+      "outcome": {
+        "success": true,
+        "checks": [
+          {
+            "name": "반품 회수비는 상자마다",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "반품 왕복 기준 40,000원",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "출고 배송비와 반품 확인 그대로",
+            "guard": true,
+            "pass": true
+          }
+        ],
+        "trees": [
+          {
+            "label": "w-20261003-003",
+            "files": [
+              "README.md",
+              "src/config.js",
+              "src/orders/order.js",
+              "src/returns/return-fee.js",
+              "test/fee.test.js",
+              "test/order.test.js",
+              "test/returns.test.js"
+            ],
+            "repoTestsPass": true
+          }
+        ]
+      },
+      "agent": {
+        "input": 52,
+        "output": 17001,
+        "cacheRead": 1040652,
+        "cacheWrite": 83734,
+        "messages": 26,
+        "sessions": 3,
+        "questions": 3
+      },
+      "contextChars": 8518,
+      "knowledgeChars": null
+    }
+  ],
+  "handoffs": [],
+  "survey": {
+    "effort": 2,
+    "clarity": 6,
+    "control": 6,
+    "confidence": 6,
+    "trust": 6,
+    "recovery": null,
+    "reuse": 6,
+    "best": "에이전트가 기대값과 기준 같은 모호한 부분을 선택지로 물어봤고, 판정표와 전체 diff로 결과를 바로 확인할 수 있었다.",
+    "worst": "택배사 연동(필드·단위)이 깨지지 않았다는 확인이 판정표에 따로 없어서 diff를 직접 훑어야 했다. 앞 일의 완료 화면이 남아 있어 처음에 잠깐 헷갈렸다.",
+    "comment": "전체 흐름이 매끄러웠다. 질문이 적절했고, 리뷰 단계에서 빠진 테스트를 짚어 추가해 준 점도 좋았다."
+  },
+  "options": {
+    "agentModel": "sonnet",
+    "effort": "medium",
+    "humanModel": "sonnet",
+    "cliArgs": [
+      "--dangerously-skip-permissions"
+    ]
+  }
+}
