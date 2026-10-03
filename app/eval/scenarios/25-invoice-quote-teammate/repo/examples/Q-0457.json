@@ -1,0 +1,13 @@
+{
+  "number": "Q-0457",
+  "customerId": "C-0388",
+  "issueDate": "2026-10-06",
+  "validDays": 14,
+  "lines": [
+    { "sku": "OF-0905", "name": "네임펜 흑", "unitPrice": 905, "qty": 11 },
+    { "sku": "EL-1237", "name": "전선 몰드 1m", "unitPrice": 1237, "qty": 8, "discount": { "percent": 15 } },
+    { "sku": "OF-3215", "name": "클리어파일 20매", "unitPrice": 3215, "qty": 3, "discount": { "amount": 777 } },
+    { "sku": "PC-2164", "name": "마우스패드", "unitPrice": 2164, "qty": 4 },
+    { "sku": "BK-1680", "name": "세무 실무 가이드", "unitPrice": 16800, "qty": 1, "taxType": "exempt" }
+  ]
+}
