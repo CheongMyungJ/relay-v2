@@ -469,6 +469,30 @@ describe('출처 Work의 코드 기준과 제약의 단계 (지식 탐색 K6, K1
     expect(knowledgeLine(pool(entry({ kind: 'recipe' })))).not.toContain('사람이 정함')
   })
 
+  it('지식이 많으면 흔한 용어로만 겹친 규칙보다 머지 전의 최근 규칙이 앞이다 (D334, 지식 탐색 K28)', () => {
+    // 팀 지식 30건이 "회원"을 함께 쓴다: 흔한 용어
+    const noise = Array.from({ length: 30 }, (_, i) =>
+      team(`domain-n${String(i).padStart(7, '0')}`, {
+        terms: ['회원', `잡음${i}`],
+        rule: `회원 규칙 ${i}`,
+      }),
+    )
+    const rare = team('domain-r0000001', { terms: ['적립 한도'], rule: '적립 한도는 한 달 5만 점' })
+    const recent = pool(
+      entry({ id: 'domain-zzzzzzz1', terms: ['KST'], rule: '날짜 경계는 KST' }),
+      'pending',
+    )
+    const got = selectKnowledge({
+      node: 'intake',
+      pool: [...noise, rare, recent],
+      paths: [],
+      text: '회원의 적립 한도가 넘은 포인트가 쓰였다',
+    }).map((x) => x.entry.entry.id)
+    // 드문 용어로 겹친 것이 맨 앞, 그다음 머지 전의 최근 규칙, 흔한 용어로만 겹친 것은 그 뒤
+    expect(got.slice(0, 2)).toEqual(['domain-r0000001', 'domain-zzzzzzz1'])
+    expect(got).toHaveLength(32)
+  })
+
   it('fix는 경로나 용어가 겹치는 제약을 받는다 (D328)', () => {
     const p = [
       team('constraint-00000001', { kind: 'constraint', paths: ['src/api'], terms: ['응답'] }),

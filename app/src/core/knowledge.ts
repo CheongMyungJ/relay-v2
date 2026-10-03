@@ -476,33 +476,65 @@ export interface Selected {
  * 것, id 순이다
  */
 export function selectKnowledge(input: Omit<SelectInput, 'limit' | 'dirs'>): Selected[] {
-  const picked: (Selected & { group: number })[] = []
+  // 용어마다 그 용어를 가진 항목 수: 많은 항목이 함께 쓰는 흔한 용어("회원", "결제")로만 겹친 것은 약하게 본다 (지식 탐색 K28)
+  const active = input.pool.filter((p) => p.entry.status === 'active')
+  const df = new Map<string, number>()
+  for (const p of active)
+    for (const t of new Set(p.entry.terms.map(normalizeTerm))) df.set(t, (df.get(t) ?? 0) + 1)
+  const n = active.length
+  const text = normalizeTerm(input.text)
+  /** 겹친 용어의 무게(드물수록 큼)와, 겹친 것이 모두 흔한 용어인가 */
+  const termScore = (terms: readonly string[]) => {
+    const hit = [...new Set(terms.map(normalizeTerm))].filter((t) => termIn(t, text))
+    const score = hit.reduce((sum, t) => sum + Math.log((n + 1) / ((df.get(t) ?? 0) + 1)), 0)
+    const generic = n >= GENERIC_POOL && hit.every((t) => (df.get(t) ?? 0) / n >= GENERIC_SHARE)
+    return { hit: hit.length > 0, score, generic }
+  }
+  const picked: (Selected & { group: number; score: number; recent: boolean })[] = []
   for (const p of input.pool) {
     const e = p.entry
     if (e.status !== 'active' || !stageAccepts(input.node, e)) continue
     const overlap = overlapLength(e.paths, input.paths)
-    const termHit = termsMatch(e.terms, input.text)
-    if (overlap === 0 && !termHit) {
+    const t = termScore(e.terms)
+    // 아직 머지되지 않은 최근 지식(이 Work가 실은 것, 공유 대기, 나만). 같은 무리에서 앞에 둔다 (K28)
+    const recent = p.scope !== 'team'
+    const rulesFirst = input.node === 'intake' && (e.kind === 'domain' || e.kind === 'constraint')
+    if (overlap === 0 && (!t.hit || (t.generic && rulesFirst))) {
       // intake는 경로를 거의 모르고 요청은 지식과 다른 말(부가세 ↔ VAT, tax)을 쓰기 쉽다. 도메인 규칙은 겹치지 않아도 맨 뒤에
       // 넣어 분량 안에서 에이전트가 고르게 한다. 다시 묻고 다른 답을 받는 것을 막는다 (지식 탐색 K3)
-      // 그 가운데 여러 낱말 용어의 한 낱말이 글에 있는 것("오류 문구"의 "문구")을 먼저 둔다
-      // 외부 호환 제약도 같다: 코드를 고치기 전에 intent에 옮겨야 fix가 지킨다 (D328)
-      if (input.node === 'intake' && (e.kind === 'domain' || e.kind === 'constraint'))
-        picked.push({ entry: p, overlap, group: termPartsMatch(e.terms, input.text) ? 3 : 4 })
+      // 그 가운데 여러 낱말 용어의 한 낱말이 글에 있는 것("오류 문구"의 "문구"), 흔한 용어로만 겹친 것, 아직 머지되지 않은 최근
+      // 지식을 먼저 둔다 (K14, K28). 외부 호환 제약도 같다: 코드를 고치기 전에 intent에 옮겨야 fix가 지킨다 (D328)
+      if (rulesFirst) {
+        const weak = t.hit || termPartsMatch(e.terms, input.text) || recent
+        picked.push({ entry: p, overlap, group: weak ? 3 : 4, score: t.score, recent })
+      }
       continue
     }
     const first = e.kind === 'domain' || (e.kind === 'constraint' && e.subkind === 'compat')
-    picked.push({ entry: p, overlap, group: first ? 0 : overlap > 0 ? 1 : 2 })
+    picked.push({
+      entry: p,
+      overlap,
+      group: first ? 0 : overlap > 0 ? 1 : 2,
+      score: t.score,
+      recent,
+    })
   }
   picked.sort(
     (a, b) =>
       a.group - b.group ||
       Number(b.overlap > 0) - Number(a.overlap > 0) ||
       b.overlap - a.overlap ||
+      Number(b.recent) - Number(a.recent) ||
+      b.score - a.score ||
       a.entry.entry.id.localeCompare(b.entry.entry.id),
   )
   return picked.map(({ entry, overlap }) => ({ entry, overlap }))
 }
+
+/** 이만큼 항목이 있어야 흔한 용어를 가린다 */
+const GENERIC_POOL = 20
+/** 항목의 이만큼이 함께 쓰면 흔한 용어다 */
+const GENERIC_SHARE = 0.04
 
 /** `참고 지식` 절의 머리 (D315 (3)) */
 export const KNOWLEDGE_NOTE =
