@@ -16,6 +16,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { agentRuntime } from '../adapters/agent'
 import { codexSkillPath } from '../adapters/codex'
+import { sharedKnowledge } from '../adapters/knowledge'
 import { codexToolDenial } from '../core/codex'
 import { humanAnswers, humanQuestions } from '../core/questions'
 import type { HumanAnswerReply, PendingQuestionView } from '../shared/questions'
@@ -959,6 +960,9 @@ export class WorkRunner {
       request: { path: this.files.request, text: request?.text ?? '' },
       intent: intent?.text ?? null,
       decisionLog: decisionsWithout(decisions?.text ?? '', discarded),
+      knowledge: await sharedKnowledge(this.worktree, { env: this.ctx.env }).catch(
+        (e: unknown) => `공유 지식을 읽지 못했다: ${message(e)}. 필요한 사실은 질문한다.`,
+      ),
       ...previousInputs(earlier),
       selection: await this.selectionInput(task),
       carried: await this.carriedInput(task),
