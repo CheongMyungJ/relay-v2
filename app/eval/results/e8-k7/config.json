@@ -1,0 +1,32 @@
+{
+  "startedAt": "2026-10-03T11:46:46.527Z",
+  "commit": "d47836a",
+  "appCommits": {
+    "k7": "d47836a"
+  },
+  "claudeVersion": "2.1.288 (Claude Code)",
+  "scenarios": [
+    "21-invoice-credit",
+    "22-flaky-retry",
+    "23-double-notify-digest",
+    "25-invoice-quote-teammate"
+  ],
+  "runs": 5,
+  "arms": [
+    "k7"
+  ],
+  "agentModel": "sonnet",
+  "effort": "medium",
+  "humanModel": "sonnet",
+  "humanEffort": "medium",
+  "judgeModel": "sonnet",
+  "cliArgs": [
+    "--dangerously-skip-permissions"
+  ],
+  "vision": true,
+  "workRoot": "/tmp/relay-eval/e8-k7",
+  "apps": {
+    "k7": "/tmp/relay-ref/k7/app"
+  },
+  "pairs": null
+}
