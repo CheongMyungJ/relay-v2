@@ -1,0 +1,18 @@
+diff --git a/src/bookings.js b/src/bookings.js
+index d0e86c0..a0e7952 100644
+--- a/src/bookings.js
++++ b/src/bookings.js
+@@ -15,3 +15,13 @@ export function cancelBooking(store, id) {
+   b.status = 'canceled'
+   return { ok: true, booking: b }
+ }
++
++/** 예약 변경: 바꿀 시간도 예약 가능한 시간대여야 한다 */
++export function rescheduleBooking(store, id, { date, time }) {
++  const b = store.bookings.find((x) => x.id === id && x.status === 'booked')
++  if (!b) return { ok: false, reason: 'not_found' }
++  if (!availableSlots(store, date).includes(time)) return { ok: false, reason: 'unavailable' }
++  b.date = date
++  b.time = time
++  return { ok: true, booking: b }
++}

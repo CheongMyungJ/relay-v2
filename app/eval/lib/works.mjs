@@ -25,6 +25,8 @@ export function workScenario(scenario, n) {
   delete rest.works
   return {
     ...rest,
+    // Work마다 업무 유형을 바꿀 수 있다(버그 수정 → 기능 추가 등). 없으면 시나리오의 유형이다
+    ...(w.type ? { type: w.type } : {}),
     report: w.report,
     knowledge: w.knowledge ?? [],
     checks: w.checks ?? [],

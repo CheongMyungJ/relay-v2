@@ -1,0 +1,18 @@
+diff --git a/src/coupons.js b/src/coupons.js
+index b789adb..f9402d2 100644
+--- a/src/coupons.js
++++ b/src/coupons.js
+@@ -1,8 +1,11 @@
+-import { before, dateOf } from './dates.js'
++import { before } from './dates.js'
++
++/** 한국 시간(KST, UTC+9)의 날짜 */
++const kstDate = (at) => new Date(new Date(at).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10)
+ 
+ /** 쿠폰을 지금 쓸 수 있는가: 시작일 이후이고 만료일이 지나지 않았다 */
+ export function isCouponValid(coupon, now) {
+-  const today = dateOf(now)
++  const today = kstDate(now)
+   if (coupon.used) return false
+   if (before(today, coupon.startsOn)) return false
+   return !before(coupon.expiresOn, today)

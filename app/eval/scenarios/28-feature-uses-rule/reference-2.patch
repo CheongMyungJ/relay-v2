@@ -1,0 +1,24 @@
+diff --git a/src/bookings.js b/src/bookings.js
+index d0e86c0..6bfbdd1 100644
+--- a/src/bookings.js
++++ b/src/bookings.js
+@@ -1,4 +1,5 @@
+ import { availableSlots } from './slots.js'
++import { CLOSE, toMinutes } from './hours.js'
+ 
+ /** 예약 만들기. 예약 가능한 시간대가 아니면 { ok: false, reason: 'unavailable' } */
+ export function createBooking(store, { date, time, name }) {
+@@ -15,3 +16,13 @@ export function cancelBooking(store, id) {
+   b.status = 'canceled'
+   return { ok: true, booking: b }
+ }
++
++/** 예약 변경: 바꿀 시간도 예약 가능한 시간대여야 한다 */
++export function rescheduleBooking(store, id, { date, time }) {
++  const b = store.bookings.find((x) => x.id === id && x.status === 'booked')
++  if (!b) return { ok: false, reason: 'not_found' }
++  if (!availableSlots(store, date).includes(time) || toMinutes(time) > toMinutes(CLOSE) - 60) return { ok: false, reason: 'unavailable' }
++  b.date = date
++  b.time = time
++  return { ok: true, booking: b }
++}

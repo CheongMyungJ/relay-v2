@@ -1,0 +1,15 @@
+diff --git a/src/report/weekly.js b/src/report/weekly.js
+index ab98b43..69363df 100644
+--- a/src/report/weekly.js
++++ b/src/report/weekly.js
+@@ -1,8 +1,8 @@
+ /** 주문이 속한 주의 월요일 'YYYY-MM-DD' */
+ export function weekStart(at) {
+   const d = new Date(at)
+-  const back = (d.getUTCDay() + 6) % 7
+-  const monday = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - back))
++  const back = (d.getDay() + 6) % 7
++  const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - back)
+   return monday.toISOString().slice(0, 10)
+ }
+ 

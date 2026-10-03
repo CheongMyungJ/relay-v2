@@ -1,0 +1,16 @@
+diff --git a/src/shipping.js b/src/shipping.js
+index 568ee6d..c86eeab 100644
+--- a/src/shipping.js
++++ b/src/shipping.js
+@@ -1,9 +1,9 @@
+-import { itemsTotal } from './cart.js'
++import { couponDiscount, itemsTotal } from './cart.js'
+ 
+ export const FREE_SHIPPING_MIN = 50000
+ export const SHIPPING_FEE = 3000
+ 
+ /** 배송비: 상품 합계가 기준을 넘으면 무료 */
+ export function shippingFee(cart) {
+-  return itemsTotal(cart) > FREE_SHIPPING_MIN ? 0 : SHIPPING_FEE
++  return itemsTotal(cart) - couponDiscount(cart) > FREE_SHIPPING_MIN ? 0 : SHIPPING_FEE
+ }

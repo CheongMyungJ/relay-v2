@@ -1,0 +1,38 @@
+{
+  "id": "28-feature-uses-rule",
+  "repoName": "booking",
+  "title": "버그 수정에서 들은 매장 규칙을 동료의 기능 추가(예약 변경)가 지켜야 한다",
+  "purpose": "Work 1은 버그 수정이다. 21:30 예약이 잡히는 버그이고, 리포트에 매장 규칙(마지막 예약은 마감 1시간 전인 21:00)이 있다. Work 2는 동료가 맡는 기능 추가다(teammate, type feature): 예약 변경 rescheduleBooking을 만든다. 동료는 그 규칙을 모른다. 코드의 영업시간(10:00~22:00)과 예약 가능한 시간대(availableSlots, 기준 브랜치에는 21:30이 들어 있음)를 그대로 쓰는 흔한 구현은 21:30·22:00 변경을 받아 숨긴 시험에 걸린다. 지식을 켠 relay는 버그 수정에서 들은 규칙이 기능 추가의 intake·설계 단계(D311의 단계별 종류)에 들어가 변경도 21:00까지로 막는지, 끈 relay는 영업시간이나 기존 시간대로 막는지 본다.",
+  "works": [
+    {
+      "report": "고객이 21:30에 예약을 잡았는데 매장에서 받을 수 없다고 연락이 왔다. 매장 규칙상 마지막 예약은 마감(22:00) 1시간 전인 21:00이다(정리와 마감 준비 때문). 예약 가능한 시간대에 21:30이 나온다. (src/slots.js)",
+      "knowledge": [
+        {
+          "share": "on_ask",
+          "text": "영업시간(10:00~22:00)과 30분 단위, 시간대마다 예약 2건은 맞다."
+        }
+      ],
+      "checks": [
+        { "name": "마지막 예약 21:00", "file": "w1-last-slot.test.js" },
+        { "name": "예약과 취소 그대로", "file": "w1-guard.test.js", "guard": true }
+      ]
+    },
+    {
+      "teammate": true,
+      "type": "feature",
+      "report": "예약 변경 기능을 추가해 달라는 요청이 왔다. src/bookings.js에 rescheduleBooking(store, id, { date, time })을 만든다. 성공하면 { ok: true, booking }(같은 예약의 날짜·시간을 바꾼 것), 못 바꾸면 { ok: false, reason }이다. reason은 없는 예약이면 'not_found', 바꿀 시간대에 예약을 받을 수 없으면 'unavailable'이다. 꽉 찬 시간대로는 못 바꾼다.",
+      "knowledge": [
+        { "share": "on_ask", "text": "취소된 예약은 바꿀 수 없다(없는 예약과 같게 not_found)." }
+      ],
+      "checks": [
+        { "name": "변경도 21:00까지", "file": "w2-reschedule.test.js" },
+        { "name": "예약 만들기와 취소 그대로", "file": "w2-guard.test.js", "guard": true }
+      ]
+    }
+  ],
+  "preferences": ["고친 뒤나 만든 뒤 어떤 요청에 어떤 결과가 나오는지 예로 보고 싶다."],
+  "reveals": [],
+  "events": [],
+  "expectedFiles": ["src/**", "test/**"],
+  "limits": { "minutes": 90, "turns": 100 }
+}

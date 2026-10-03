@@ -1,0 +1,13 @@
+diff --git a/src/points.js b/src/points.js
+index 4bb01d4..c020572 100644
+--- a/src/points.js
++++ b/src/points.js
+@@ -2,7 +2,7 @@ import { before, dateOf } from './dates.js'
+ 
+ /** 적립 기록 가운데 지금 쓸 수 있는 포인트 합 (유효기간이 지나지 않은 것) */
+ export function usablePoints(ledger, now) {
+-  const today = dateOf(now)
++  const today = new Date(now).toLocaleDateString('sv-SE')
+   return ledger
+     .filter((e) => e.type === 'earn' && !before(e.expiresOn, today))
+     .reduce((sum, e) => sum + e.remaining, 0)

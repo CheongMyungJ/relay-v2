@@ -1,0 +1,5 @@
+{
+  "id": "C-20",
+  "items": [{ "sku": "KT-07", "name": "주전자", "price": 52000, "qty": 1 }],
+  "coupon": { "code": "OCT5000", "type": "amount", "value": 5000 }
+}

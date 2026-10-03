@@ -1,0 +1,37 @@
+{
+  "id": "29-noisy-store",
+  "repoName": "membership",
+  "title": "팀 지식이 100건 쌓인 레포에서 동료가 날짜 경계 규칙을 받아야 한다",
+  "purpose": "레포의 docs/knowledge/에 다른 영역(배송, 리뷰, 알림, 쿠폰·포인트의 다른 규칙 등)의 팀 도메인 규칙 100건이 이미 머지되어 있다. Work 1은 만료 다음 날 새벽에도 쿠폰이 쓰이는 버그이고, 리포트에 팀 규칙(날짜 경계는 한국 시간 KST 자정, 만료일은 그날 KST 23:59:59까지 유효)이 있다. Work 2는 동료가 맡고(teammate), 유효기간이 지난 포인트가 결제에 쓰인 버그다. 시각은 UTC 문자열이라 코드로 보면 기간 안이고, 동료는 규칙을 모른다. 흔한 고침(UTC 날짜 유지, 만료일을 포함하지 않기, 서버 지역 시각)은 숨긴 시험에 걸린다. 지식을 켠 relay는 100건 사이에서 Work 1의 규칙이 분량 기준(1,500자) 안에 들어가 KST로 고치는지(K3·K14·K4), 잘려 빠지는지, 끈 relay는 다른 기준으로 고치는지 본다.",
+  "works": [
+    {
+      "report": "10월 감사 쿠폰(만료일 10월 31일)이 11월 1일 새벽에 쓰였다는 정산팀 연락이 왔다. 사용 기록은 examples/CP-31.json에 있다(시각은 UTC). 우리 팀 규칙: 모든 날짜 경계는 한국 시간(KST, UTC+9) 자정이고, 만료일은 그날 KST 23:59:59까지 유효하다. 서버와 DB의 시각은 UTC다. (src/coupons.js)",
+      "knowledge": [
+        { "share": "on_ask", "text": "시작일도 같은 규칙이다: 시작일 KST 00:00부터 쓴다." }
+      ],
+      "checks": [
+        { "name": "쿠폰 KST 기간", "file": "w1-coupon-kst.test.js" },
+        { "name": "쿠폰 한가운데 그대로", "file": "w1-guard.test.js", "guard": true }
+      ]
+    },
+    {
+      "teammate": true,
+      "report": "유효기간이 지난 포인트가 결제에 쓰였다는 문의가 가끔 들어온다. 예: 회원 M-5의 결제에서 1,500점이 쓰였는데, 그중 1,200점은 유효기간이 10월 31일인 포인트다. 원장과 결제 시각은 examples/M-5.json에 있다. (src/points.js)",
+      "knowledge": [
+        {
+          "share": "on_ask",
+          "text": "포인트 잔액(balance)은 유효기간과 관계없이 남은 것을 다 보인다. 바꾸지 않는다."
+        }
+      ],
+      "checks": [
+        { "name": "포인트 KST 기간", "file": "w2-points-kst.test.js" },
+        { "name": "잔액과 한낮 포인트 그대로", "file": "w2-guard.test.js", "guard": true }
+      ]
+    }
+  ],
+  "preferences": ["고친 뒤 리포트의 예시로 결과를 직접 확인하고 싶다."],
+  "reveals": [],
+  "events": [],
+  "expectedFiles": ["src/**", "test/**"],
+  "limits": { "minutes": 90, "turns": 100 }
+}

@@ -1,0 +1,13 @@
+diff --git a/src/points.js b/src/points.js
+index 4bb01d4..861d02e 100644
+--- a/src/points.js
++++ b/src/points.js
+@@ -4,7 +4,7 @@ import { before, dateOf } from './dates.js'
+ export function usablePoints(ledger, now) {
+   const today = dateOf(now)
+   return ledger
+-    .filter((e) => e.type === 'earn' && !before(e.expiresOn, today))
++    .filter((e) => e.type === 'earn' && before(today, e.expiresOn))
+     .reduce((sum, e) => sum + e.remaining, 0)
+ }
+ 

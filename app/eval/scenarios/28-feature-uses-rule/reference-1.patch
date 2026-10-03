@@ -1,0 +1,14 @@
+diff --git a/src/slots.js b/src/slots.js
+index fa9c46c..985bdc8 100644
+--- a/src/slots.js
++++ b/src/slots.js
+@@ -3,7 +3,8 @@ import { CAPACITY, CLOSE, OPEN, SLOT_MINUTES, toHHMM, toMinutes } from './hours.
+ /** 영업시간 안의 시간대 */
+ export function allSlots() {
+   const out = []
+-  for (let t = toMinutes(OPEN); t < toMinutes(CLOSE); t += SLOT_MINUTES) out.push(toHHMM(t))
++  // 마지막 예약은 마감 1시간 전
++  for (let t = toMinutes(OPEN); t <= toMinutes(CLOSE) - 60; t += SLOT_MINUTES) out.push(toHHMM(t))
+   return out
+ }
+ 

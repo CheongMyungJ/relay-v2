@@ -1,0 +1,9 @@
+{
+  "member": "M-5",
+  "ledger": [
+    { "type": "earn", "points": 1200, "remaining": 1200, "earnedAt": "2026-04-30T03:00:00Z", "expiresOn": "2026-10-31" },
+    { "type": "earn", "points": 300, "remaining": 300, "earnedAt": "2026-09-02T05:00:00Z", "expiresOn": "2027-03-02" }
+  ],
+  "paidAt": "2026-10-31T22:10:00Z",
+  "pointsUsed": 1500
+}

@@ -1,0 +1,19 @@
+diff --git a/src/report/weekly.js b/src/report/weekly.js
+index ab98b43..b3cab00 100644
+--- a/src/report/weekly.js
++++ b/src/report/weekly.js
+@@ -1,9 +1,11 @@
+ /** 주문이 속한 주의 월요일 'YYYY-MM-DD' */
+ export function weekStart(at) {
++  // 서버 시간대(운영은 Asia/Seoul)의 월요일
+   const d = new Date(at)
+-  const back = (d.getUTCDay() + 6) % 7
+-  const monday = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - back))
+-  return monday.toISOString().slice(0, 10)
++  const back = (d.getDay() + 6) % 7
++  const m = new Date(d.getFullYear(), d.getMonth(), d.getDate() - back)
++  const p = (n) => String(n).padStart(2, '0')
++  return `${m.getFullYear()}-${p(m.getMonth() + 1)}-${p(m.getDate())}`
+ }
+ 
+ /** 주별 매출 { 월요일: 합계 } */

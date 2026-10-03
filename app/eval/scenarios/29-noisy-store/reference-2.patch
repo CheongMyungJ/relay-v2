@@ -1,0 +1,18 @@
+diff --git a/src/points.js b/src/points.js
+index 4bb01d4..b56aeb5 100644
+--- a/src/points.js
++++ b/src/points.js
+@@ -1,8 +1,11 @@
+-import { before, dateOf } from './dates.js'
++import { before } from './dates.js'
++
++/** 한국 시간(KST, UTC+9)의 날짜 */
++const kstDate = (at) => new Date(new Date(at).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10)
+ 
+ /** 적립 기록 가운데 지금 쓸 수 있는 포인트 합 (유효기간이 지나지 않은 것) */
+ export function usablePoints(ledger, now) {
+-  const today = dateOf(now)
++  const today = kstDate(now)
+   return ledger
+     .filter((e) => e.type === 'earn' && !before(e.expiresOn, today))
+     .reduce((sum, e) => sum + e.remaining, 0)

@@ -1,0 +1,7 @@
+{
+  "id": "C-77",
+  "items": [
+    { "sku": "MG-02", "name": "머그컵", "price": 12000, "qty": 4 }
+  ],
+  "coupon": { "code": "WELCOME3000", "type": "amount", "value": 3000 }
+}

@@ -1,0 +1,35 @@
+{
+  "id": "30-tz-recipe",
+  "repoName": "sales-report",
+  "title": "운영 시간대에서만 재현되는 리포트 버그: 재현법과 시간대 사실이 열쇠",
+  "purpose": "Work 1은 일별 매출이 하루씩 밀리는 버그이고, 리포트에 환경 사실과 재현법(운영 서버와 CI는 TZ=Asia/Seoul로 돈다, 로컬은 UTC라 재현되지 않으니 TZ=Asia/Seoul npm test로 돌린다, 리포트의 날짜는 한국 날짜)이 있다. Work 2는 동료가 맡고(teammate), 주별 매출의 주 경계가 운영 화면과 다른 버그다. 평가 컨테이너는 UTC라 그냥 돌리면 재현되지 않고, 동료는 운영 시간대를 모른다. 흔한 고침(UTC로 맞추기, 지역 시각과 ISO 문자열을 섞기)은 TZ=Asia/Seoul로 도는 숨긴 시험에 걸린다. 지식을 켠 relay는 Work 1의 재현법·시간대 지식(검증 레시피, 도메인 규칙)이 Work 2에 들어가 재현하고 한국 시간으로 고치는지, 끈 relay는 재현하지 못하고 다른 기준으로 고치는지 본다.",
+  "works": [
+    {
+      "report": "운영 리포트에서 일별 매출이 하루씩 밀린 주문이 있다는 연락이 왔다. 예: examples/orders.json의 O-3(2026-10-25T16:30:00Z)은 운영 화면에서 10월 26일 주문인데 일별 매출에서는 25일에 잡힌다. 참고로 운영 서버와 CI는 TZ=Asia/Seoul로 돈다. 로컬 개발 환경은 UTC라 그냥 npm test로는 재현되지 않으니 TZ=Asia/Seoul npm test로 돌려야 한다. 리포트의 날짜는 모두 한국 날짜다. (src/report/daily.js)",
+      "knowledge": [
+        {
+          "share": "on_ask",
+          "text": "리포트 화면의 날짜 표시(src/report/labels.js)는 맞게 나온다."
+        }
+      ],
+      "checks": [
+        { "name": "일별은 한국 날짜", "file": "w1-daily-kst.test.js" },
+        { "name": "한낮 일별 그대로", "file": "w1-guard.test.js", "guard": true }
+      ]
+    },
+    {
+      "teammate": true,
+      "report": "주별 매출 리포트(weeklyTotals)의 주 경계가 운영 화면의 주와 다르다는 문의가 들어왔다. 예: examples/orders.json의 O-3이 운영 화면에서는 10월 26일 주인데 주별 매출에서는 10월 19일 주에 잡힌다. 주는 월요일부터다. (src/report/weekly.js)",
+      "knowledge": [{ "share": "on_ask", "text": "주를 월요일부터 세는 것은 맞다." }],
+      "checks": [
+        { "name": "주 경계는 한국 월요일", "file": "w2-weekly-kst.test.js" },
+        { "name": "주 한가운데 그대로", "file": "w2-guard.test.js", "guard": true }
+      ]
+    }
+  ],
+  "preferences": ["고친 뒤 리포트의 예시 주문으로 결과를 직접 확인하고 싶다."],
+  "reveals": [],
+  "events": [],
+  "expectedFiles": ["src/**", "test/**"],
+  "limits": { "minutes": 90, "turns": 100 }
+}

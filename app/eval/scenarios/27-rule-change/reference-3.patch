@@ -1,0 +1,16 @@
+diff --git a/src/banner.js b/src/banner.js
+index f76a7dc..04d81aa 100644
+--- a/src/banner.js
++++ b/src/banner.js
+@@ -1,9 +1,9 @@
+-import { itemsTotal } from './cart.js'
++import { couponDiscount, itemsTotal } from './cart.js'
+ import { FREE_SHIPPING_MIN } from './shipping.js'
+ 
+ /** 무료배송까지 남은 금액. 이미 무료면 0 */
+ export function freeShippingRemaining(cart) {
+-  return Math.max(FREE_SHIPPING_MIN - itemsTotal(cart), 0)
++  return Math.max(FREE_SHIPPING_MIN - (itemsTotal(cart) - couponDiscount(cart)), 0)
+ }
+ 
+ /** 장바구니 화면 상단 안내 문구 */

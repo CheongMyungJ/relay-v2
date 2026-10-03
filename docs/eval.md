@@ -6,7 +6,7 @@
 
 ## 1. 목적
 
-버그 수정, 기능 추가(relay D232), 리팩터링(relay D258)에서 relay가 Claude Code CLI를 그냥 쓰는 것보다 얼마나 쓰기 좋은지 본다. 지식 관리(relay D283~D328)는 같은 레포에서 Work 둘을 잇는 시나리오(21~26. 24~26은 Work 2를 규칙을 모르는 동료가 맡음)로, 지식을 켠 relay와 끈 relay를 견준다(relay D319, I84). 여러 상황(시나리오)을 두 쪽으로 똑같이 돌리고, 사람의 판단은 AI가 대신한다. 결과는 경향을 보는 자료다. 사람 역할과 판정이 AI이므로 실제 사용자 시험을 대신하지 않는다.
+버그 수정, 기능 추가(relay D232), 리팩터링(relay D258)에서 relay가 Claude Code CLI를 그냥 쓰는 것보다 얼마나 쓰기 좋은지 본다. 지식 관리(relay D283~D328)는 같은 레포에서 Work 둘을 잇는 시나리오(21~30. 24~30은 뒤 Work를 규칙을 모르는 동료가 맡음)로, 지식을 켠 relay와 끈 relay를 견준다(relay D319, I84). 여러 상황(시나리오)을 두 쪽으로 똑같이 돌리고, 사람의 판단은 AI가 대신한다. 결과는 경향을 보는 자료다. 사람 역할과 판정이 AI이므로 실제 사용자 시험을 대신하지 않는다.
 
 ## 2. 구성
 
@@ -101,7 +101,7 @@
 | `expectedFiles` | 바뀌어도 되는 파일(glob). 나머지는 "기대 밖 파일"로 센다 |
 | `checks` | `{ name, file, env?, bug?, guard? }`: `hidden/<file>`을 `node --test`로 돌린다. `env`로 TZ 같은 환경을 준다. `guard`는 기준에서도 통과하는 지키기 시험이다(멀쩡한 동작을 깨지 않았는지) |
 | `limits` | `{ minutes, turns }`. `works`가 있으면 Work마다의 제한이다 |
-| `works` | Work 둘을 잇는 시나리오(relay D319, I84): Work마다 `{ report, knowledge, checks }`를 차례로 둔다. 두 번째 Work부터 `teammate: true`를 두면 그 Work는 동료가 맡는다: 사람 역할은 앞 Work에서 정한 규칙을 모르고, 물으면 모른다고 답한다(24~26). 이때 맨 위의 `report`, `knowledge`, `checks`는 두지 않는다. 숨긴 시험 이름은 시나리오 안에서 겹치지 않는다 |
+| `works` | Work 둘을 잇는 시나리오(relay D319, I84): Work마다 `{ report, knowledge, checks }`를 차례로 둔다. 두 번째 Work부터 `teammate: true`를 두면 그 Work는 동료가 맡는다: 사람 역할은 앞 Work에서 정한 규칙을 모르고, 물으면 모른다고 답한다(24~26). Work마다 `type`을 두면 그 Work의 업무 유형이 바뀐다(28: 버그 수정 → 기능 추가). Work는 셋 이상이어도 된다(27). 이때 맨 위의 `report`, `knowledge`, `checks`는 두지 않는다. 숨긴 시험 이름은 시나리오 안에서 겹치지 않는다 |
 
 시나리오를 더할 때: `repo/`의 `npm test`는 기준 상태에서 통과해야 한다(리포트의 버그를 잡지 않는 시험). 숨긴 시험은 `../src/...`로 불러온다(레포의 `eval-hidden/`에 복사해 돌린다). `guard`가 아닌 숨긴 시험은 기준 상태에서 실패해야 한다.
 

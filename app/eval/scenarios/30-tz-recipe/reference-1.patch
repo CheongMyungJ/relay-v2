@@ -1,0 +1,15 @@
+diff --git a/src/report/daily.js b/src/report/daily.js
+index 314e255..ed9ae1d 100644
+--- a/src/report/daily.js
++++ b/src/report/daily.js
+@@ -1,6 +1,9 @@
++import { localDay } from './labels.js'
++
+ /** 주문이 속한 날 */
+ function dayKey(at) {
+-  return new Date(at).toISOString().slice(0, 10)
++  // 서버 시간대(운영은 Asia/Seoul)의 날짜
++  return localDay(at)
+ }
+ 
+ /** 날짜별 매출 { 'YYYY-MM-DD': 합계 } */
