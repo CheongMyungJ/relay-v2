@@ -711,6 +711,7 @@ export class WorkRunner {
       formatVersion: task.format_version,
       // PR 대응 task는 이번 라운드의 코멘트 항목마다 replies.md의 절을 본다 (D190)
       ...(task.respond ? { replyItems: replyItemIds(task.respond.items) } : {}),
+      ...(knowledgeEnabled(this.ctx.env) ? { knowledge: true } : {}),
     })
   }
 

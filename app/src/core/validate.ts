@@ -685,6 +685,8 @@ export interface TaskCheckInput {
   formatVersion?: number
   /** PR 대응 task: 이번 라운드의 코멘트 항목 id. replies.md를 검사한다 (D190) */
   replyItems?: readonly string[]
+  /** 지식 관리가 켜져 있다 (core/knowledge). verify의 handoff 요약에 "남긴 지식:" 줄이 있어야 한다 (D291) */
+  knowledge?: boolean
 }
 
 export interface TaskCheck extends CheckSummary {
@@ -743,6 +745,9 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
   errors.push(...(draft?.errors ?? []))
   const prText = node === 'verify' ? files[PR_FILE] : undefined
   if (prText !== undefined) errors.push(...checkPr(prText))
+  if (input.knowledge && node === 'verify' && handoff?.status === 'awaiting_approval') {
+    errors.push(...checkKnowledgeLine(handoffText ?? ''))
+  }
   if (node === 'respond') {
     // 파일이 있으면 늘 검사하고, 없으면 마무리할 때(awaiting_approval) 필수다 (D30, D190)
     const replies = files[REPLIES_FILE]
@@ -759,6 +764,23 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
     handoff: handoff?.value ?? null,
     handoffHeader: handoff?.header ?? null,
   }
+}
+
+/**
+ * 지식 관리가 켜진 verify의 handoff (D291): `## 요약`에 "남긴 지식: <경로>" 또는 "남긴 지식: 없음 (까닭)" 줄이 있어야
+ * 한다. verify가 지식을 남기는 차례를 건너뛰지 않게 한다
+ */
+export function checkKnowledgeLine(handoff: string): FormatIssue[] {
+  const summary = sectionText(parseFrontMatter(handoff).body, '요약') ?? ''
+  if (/남긴 지식\s*:/.test(summary)) return []
+  return [
+    {
+      file: HANDOFF_FILE,
+      part: 'body',
+      message:
+        '`## 요약`에 "남긴 지식:" 줄 없음: 지식 관리가 켜져 있으면 verify는 context.md의 "지식 남기기"를 하고 남긴 파일을 "남긴 지식: <경로>"로 적는다. 남길 것이 없으면 "남긴 지식: 없음 (까닭)"',
+    },
+  ]
 }
 
 /** 유효한 handoff: handoff가 있고 형식 오류가 없다 (시나리오 3의 "유효한 handoff") */

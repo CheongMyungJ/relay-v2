@@ -38,7 +38,7 @@ async function intakeDir(env: Record<string, string>) {
 
 describe('[흐름] 지식 켜고 끔', () => {
   it('켜면 레포의 지식을 context.md에 넣고 넣은 기록을 남긴다', async () => {
-    const dir = await intakeDir({})
+    const dir = await intakeDir({ RELAY_KNOWLEDGE: 'on' })
     const context = fs.readFileSync(path.join(dir, 'context.md'), 'utf8')
     expect(context).toContain('## 팀 지식')
     expect(context).toContain('# 금액은 원 단위로 내림')

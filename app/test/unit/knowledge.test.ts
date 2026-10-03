@@ -12,6 +12,7 @@ import {
   selectEntries,
   type KnowledgeInput,
 } from '../../src/core/knowledge'
+import { checkKnowledgeLine, checkTask } from '../../src/core/validate'
 
 const entry = (name: string, text: string, pendingFrom?: string) => ({
   path: `docs/knowledge/${name}`,
@@ -106,5 +107,49 @@ describe('[단위] 지식', () => {
     expect(verify).toContain('relay Work w-1, 2026-10-03')
     const [, empty] = knowledgeSection('fix', { ...input, entries: [], candidates: [] })
     expect(empty).toContain('### 항목\n\n없음')
+  })
+
+  it('지식을 켠 verify는 handoff 요약에 "남긴 지식:" 줄이 있어야 한다 (D291)', () => {
+    const handoff = (summary: string) =>
+      [
+        '---',
+        'status: awaiting_approval',
+        'blocked_reason:',
+        'decisions: []',
+        'assumptions: []',
+        'rejected: []',
+        'open_questions: []',
+        'intent_deviation: null',
+        'risks: []',
+        'recommended_next: null',
+        '---',
+        '## 요약',
+        summary,
+        '## 다음 task가 알아야 할 것',
+        '- 없음',
+      ].join('\n')
+    expect(checkKnowledgeLine(handoff('고쳤다. 남긴 지식: docs/knowledge/a.md'))).toEqual([])
+    expect(checkKnowledgeLine(handoff('고쳤다.\n남긴 지식: 없음 (사람이 말한 규칙 없음)'))).toEqual(
+      [],
+    )
+    expect(checkKnowledgeLine(handoff('고쳤다.'))).toHaveLength(1)
+    const files = {
+      'handoff.md': handoff('고쳤다.'),
+      'verification.md': '## 리뷰 지적\n없음\n',
+      'pr.md': '# 제목\n',
+    }
+    const config = { handoff_body_warn_chars: 1500, intent_warn_chars: 1500 }
+    const on = checkTask({ node: 'verify', type: 'bugfix', files, config, knowledge: true })
+    expect(on.errors.map((e) => e.message).join()).toContain('남긴 지식')
+    const off = checkTask({ node: 'verify', type: 'bugfix', files, config })
+    expect(off.errors.map((e) => e.message).join()).not.toContain('남긴 지식')
+    const fix = checkTask({
+      node: 'fix',
+      type: 'bugfix',
+      files: { ...files, 'fix.md': 'x' },
+      config,
+      knowledge: true,
+    })
+    expect(fix.errors.map((e) => e.message).join()).not.toContain('남긴 지식')
   })
 })
