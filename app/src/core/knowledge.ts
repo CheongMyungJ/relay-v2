@@ -193,6 +193,13 @@ function writeRules(input: KnowledgeInput): string {
   ].join('\n')
 }
 
+/**
+ * 머지되지 않은 앞 Work의 지식이 있을 때 (D292): 그 Work가 고친 코드는 이 브랜치에 아직 없다. 같은 규칙을 어기는 코드가
+ * 요청 밖에서 보여도 범위를 넓히지 않는다
+ */
+const PENDING_RULE =
+  '- "기준 브랜치에는 아직 없다"고 적힌 항목은 머지를 기다리는 앞 Work에서 왔다. 그 Work가 고친 코드는 이 브랜치에 아직 없다. 같은 규칙을 어기는 코드가 이번 요청 밖에서 보이면 앞 Work가 이미 고친 곳일 수 있으니, 범위를 넓히지 말고 handoff의 `risks`에 "앞 Work(<id>)에서 고쳤을 수 있음, 머지 대기"로 적는다.'
+
 /** context.md의 지식 절 (제목, 본문). 지식 관리를 끄면 부르지 않는다 */
 export function knowledgeSection(node: TaskNode, input: KnowledgeInput): [string, string] {
   const { full, titles } = selectEntries(input.entries)
@@ -211,6 +218,7 @@ export function knowledgeSection(node: TaskNode, input: KnowledgeInput): [string
     `레포의 \`${KNOWLEDGE_DIR}/\`에 팀이 앞선 일에서 남긴 지식이다. 사람이 알려 준 규칙과 사실, 앞선 조사에서 알아낸 것이다.`,
     '',
     USE_RULES[kind],
+    ...(input.entries.some((e) => e.pendingFrom) ? [PENDING_RULE] : []),
     '- 규칙이 이번 경우에도 통하는지는 규칙의 말로 판단한다. 말이 이번 경우를 덮으면 그대로 따른다. 확인하려고 같은 규칙을 다시 묻거나 가정으로 남겨 사람에게 되묻지 않는다.',
     '- 항목에 적힌 코드의 위치나 모양은 다른 Work의 것이라 지금 코드와 다를 수 있다. 다르면 지금 코드를 보고, 규칙과 사실은 그대로 따른다. 규칙이 사람의 지금 말과 어긋날 때만 묻는다. 해당하지 않는 항목은 무시한다.',
     '',

@@ -101,6 +101,12 @@ describe('[단위] 지식', () => {
     expect(intake).toContain('`제약`')
     expect(intake).toContain('knowledge_candidates')
     expect(intake).not.toContain('할인 먼저')
+    expect(intake).toContain('머지를 기다리는 앞 Work')
+    const [, mergedOnly] = knowledgeSection('intake', {
+      ...input,
+      entries: input.entries.slice(0, 1),
+    })
+    expect(mergedOnly).not.toContain('머지를 기다리는 앞 Work')
     const [, verify] = knowledgeSection('verify', input)
     expect(verify).toContain('지식 남기기')
     expect(verify).toContain('t-02 fix: 할인 먼저 (사람)')
