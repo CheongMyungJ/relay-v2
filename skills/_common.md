@@ -153,5 +153,5 @@ Candidates (`knowledge_candidates`). Aim for about 3 per task. Only what the nex
 - If you came in by a rewind or the previous step recommended going back (context.md), consider a `failure` candidate for why.
 
 `참고 지식` in context.md is reference, not input. If an item differs from the current code or what the human says, they win: add `{id, note}` to `knowledge_feedback` (the id is the file name `<id>.md`). If you know what the item should say now, also write that as a candidate with the item's id in `supersedes`, so the human can replace it in one step.
-An item that ends with `(출처 Work <id>의 코드 기준: …)` was written against code that may not be in this Work's base yet (that Work is not merged). Its rule is what the team decided, so a difference from the current code alone is not a reason to report it or to ask again: follow the rule. Report it only when the human or the request says otherwise.
+An item that ends with `(출처 Work가 아직 기준에 머지되지 않아 …)` was written against code that may not be in this Work's base yet (that Work is not merged). Its rule is what the team decided, so a difference from the current code alone is not a reason to report it or to ask again: follow the rule. Report it only when the human or the request says otherwise.
 

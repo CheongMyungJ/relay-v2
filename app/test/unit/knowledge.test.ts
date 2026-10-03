@@ -420,7 +420,9 @@ describe('출처 Work의 코드 기준과 제약의 단계 (지식 탐색 K6, K1
   it('공유 대기·나만 항목이 이 Work의 코드와 다르면 출처 Work를 붙이고, 재확인 필요가 먼저다 (D327)', () => {
     const e = entry({ id: 'domain-00000001', paths: ['src/a.ts'] })
     const line = knowledgeLine({ ...pool(e, 'pending'), ahead: true })
-    expect(line).toContain(`(출처 Work ${e.source.work}의 코드 기준: 이 Work의 코드와 다름`)
+    expect(line).toContain(
+      '(출처 Work가 아직 기준에 머지되지 않아 지금 코드는 이 규칙과 다를 수 있음. 규칙은 유효)',
+    )
     expect(knowledgeLine(pool(e, 'pending'))).not.toContain('출처 Work')
     const both = knowledgeLine({ ...pool(e, 'team', true), ahead: true })
     expect(both).toContain('(재확인 필요)')
@@ -429,6 +431,20 @@ describe('출처 Work의 코드 기준과 제약의 단계 (지식 탐색 K6, K1
     const [merged] = mergePool([{ ...pool(e, 'pending'), ahead: true }, pool(e, 'team')])
     expect(merged?.ahead).toBe(true)
     expect(merged?.stale).toBe(false)
+  })
+
+  it('도메인 규칙과 제약은 누가 정했는지와 까닭을 붙이고, 나머지 종류는 붙이지 않는다 (D329)', () => {
+    const domain = entry({ id: 'domain-00000001', why: '앱 2.x는 HTTP 상태가 200이 아니면 멈춘다' })
+    expect(knowledgeLine(pool(domain))).toContain(
+      '(사람이 정함, w-20261001-001: 앱 2.x는 HTTP 상태가 200이 아니면 멈춘다)',
+    )
+    const long = entry({
+      kind: 'constraint',
+      why: '가'.repeat(100),
+      source: { work: 'w-2', task: 't-01', by: 'ai' },
+    })
+    expect(knowledgeLine(pool(long))).toContain(`(에이전트가 적음, w-2: ${'가'.repeat(80)}…)`)
+    expect(knowledgeLine(pool(entry({ kind: 'recipe' })))).not.toContain('사람이 정함')
   })
 
   it('fix는 경로나 용어가 겹치는 제약을 받는다 (D328)', () => {
@@ -959,6 +975,39 @@ describe('후보 모으기 (D283, D296, D299, D304, D318)', () => {
     expect(first(r.candidates).supersedes).toBeNull()
     expect(r.pending.map((p) => p.id)).toEqual([rule.id])
     expect(r.feedback.map((f) => f.id)).toEqual([rule.id])
+  })
+
+  it('출처 Work의 코드 기준인 항목도 사람 결정에서 다듬은 비슷한 후보는 대체가 기본이다 (지식 탐색 K26)', () => {
+    const rule = entry({ id: 'domain-0000000a', paths: ['src/http.js'], terms: ['오류 응답'] })
+    const r = reviewKnowledge({
+      tasks: [
+        {
+          taskId: 't-01',
+          node: 'intake',
+          version: 2,
+          header: header({
+            decisions: [{ what: '오류는 상태코드로 보낸다', why: '사람이 정함', by: 'human' }],
+            knowledge_candidates: [
+              {
+                ...CANDIDATE,
+                rule: '오류는 상태코드로 보낸다',
+                paths: ['src/http.js'],
+                terms: ['오류 응답'],
+                decision: '오류는 상태코드로 보낸다',
+              },
+            ],
+            knowledge_feedback: [{ id: rule.id, note: '사람이 이 코드엔 맞지 않는다고 함' }],
+          }),
+        },
+      ],
+      pool: [{ ...pool(rule, 'pending'), ahead: true }],
+      changed: [],
+      share: true,
+      dir: 'd/',
+      offerPending: true,
+    })
+    expect(first(r.candidates).by).toBe('human')
+    expect(first(r.candidates).supersedes?.id).toBe(rule.id)
   })
 
   it('코드로 알 수 있는 후보는 까닭을 보이고 채택 안 함이 기본이다 (D297, 지식 탐색 K22)', () => {

@@ -483,21 +483,34 @@ export const KNOWLEDGE_NOTE =
   '항목 id는 파일 이름(`<id>.md`)이다.'
 
 /**
- * 한 줄 (I74): `- [종류] 규칙 (경로) — <파일 경로>`, 재확인 필요면 끝에 "(재확인 필요)", 출처 Work의 코드 기준이면 끝에
- * 그 Work (D327)
+ * 한 줄 (I74): `- [종류] 규칙 (출처) (경로) — <파일 경로>`, 재확인 필요면 끝에 "(재확인 필요)", 출처 Work의 코드 기준이면
+ * 끝에 그 표시 (D327). 도메인 규칙과 제약은 누가 정했는지와 까닭을 붙인다: 규칙을 모르는 사람도 판단할 수 있게 (D329)
  */
 export function knowledgeLine(p: PoolEntry): string {
   const e = p.entry
+  const origin = e.kind === 'domain' || e.kind === 'constraint' ? ` ${originNote(e)}` : ''
   const paths = e.paths.length ? ` (${e.paths.join(', ')})` : ''
   const stale = p.stale ? ' (재확인 필요)' : ''
-  const ahead = !p.stale && p.ahead ? ` ${aheadNote(e.source.work)}` : ''
-  return `- [${KNOWLEDGE_KIND_LABEL[e.kind]}] ${oneLine(e.rule)}${paths} — ${p.file}${stale}${ahead}`
+  const ahead = !p.stale && p.ahead ? ` ${AHEAD_NOTE}` : ''
+  return `- [${KNOWLEDGE_KIND_LABEL[e.kind]}] ${oneLine(e.rule)}${origin}${paths} — ${p.file}${stale}${ahead}`
 }
 
-/** 출처 Work의 코드 기준인 항목의 표시 (D327). 스킬은 이 말로 알아본다 */
-export function aheadNote(work: string): string {
-  return `(출처 Work ${work}의 코드 기준: 이 Work의 코드와 다름. 그 Work가 아직 기준에 없을 수 있음)`
+/** 누가 언제 정했고 왜인가 (D329). 까닭은 앞 80자 */
+export function originNote(e: KnowledgeEntry): string {
+  const who = e.source.by === 'human' ? '사람이 정함' : '에이전트가 적음'
+  const why = [...oneLine(e.why)]
+  const reason = why.length
+    ? `: ${why.length > 80 ? `${why.slice(0, 80).join('')}…` : why.join('')}`
+    : ''
+  return `(${who}, ${e.source.work}${reason})`
 }
+
+/**
+ * 출처 Work의 코드 기준인 항목의 표시 (D327). 스킬은 이 말로 알아본다. 규칙의 유효성을 깎지 않게 쓴다: "이 Work의 코드와
+ * 다름"을 규칙을 모르는 사람이 "여기엔 맞지 않음"으로 읽고 규칙을 뒤집었다 (지식 탐색 K26)
+ */
+export const AHEAD_NOTE =
+  '(출처 Work가 아직 기준에 머지되지 않아 지금 코드는 이 규칙과 다를 수 있음. 규칙은 유효)'
 
 /**
  * `참고 지식` 절의 본문 (D286, D312, D315). 고른 것이 없으면 "없음"이다. 분량 기준을 넘으면 항목 가운데서 자르지 않고
@@ -790,13 +803,14 @@ export function reviewKnowledge(input: ReviewInput): KnowledgeReview {
   for (const c of candidates) {
     if (c.unrefined || c.supersedes || c.unknownSupersedes || c.sameDecisionAs || c.similarTo)
       continue
-    // 출처 Work의 코드 기준인 항목(D327)은 지금 코드와 다르다는 보고가 잦아 대체로 보지 않는다
+    // 출처 Work의 코드 기준인 항목(D327)은 지금 코드와 다르다는 보고가 잦아, 사람 결정에서 다듬은 후보만 대체로 본다.
+    // 규칙을 모르는 사람이 그 규칙을 뒤집으면 반대 규칙이 따로 쌓이지 않고 "팀 규칙을 바꿈"으로 보인다 (지식 탐색 K26)
     const target = input.pool.find(
       (p) =>
         feedback.has(p.entry.id) &&
         p.entry.status === 'active' &&
         !p.carriedPr &&
-        !p.ahead &&
+        (!p.ahead || c.by === 'human') &&
         similarCandidates(c, p.entry),
     )
     if (target) {
