@@ -121,11 +121,7 @@
   ],
   "reveals": [],
   "events": [],
-  "expectedFiles": [
-    "src/invoice/**",
-    "src/money.js",
-    "test/**"
-  ],
+  "expectedFiles": ["src/invoice/**", "src/money.js", "test/**"],
   "limits": {
     "minutes": 120,
     "turns": 140
