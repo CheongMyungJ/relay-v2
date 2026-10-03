@@ -1,6 +1,6 @@
 # 회차 1 관찰 (공개 개발 사례)
 
-실행 소스: 913d368의 최소 구현. 후속 문서 커밋 ab41f3e는 실행 코드에 영향 없음.
+실행 소스: seed는 최초 최소 구현의 미커밋 working tree에서 서비스를 시작했다. 실행 도중 빈 Closing procedure 제목을 제거하고 Git blob ID 방어 검사를 추가하여 913d368로 커밋했다. seed 서비스 번들은 방어 검사 추가 전이며 일반 Git blob의 동작에는 차이가 없다. seed intake 스킬에는 빈 중복 제목이 있었고 fix/verify는 정리한 원문에서 배포됐다. 후속 shared/문서 없는 서비스는 913d368의 app/skills에서 새로 시작했다. 이후 문서 커밋은 실행 코드에 영향 없음.
 원시 근거: `/workspace/relay-experiment/results/candidate-dev-01/`.
 
 Work 1은 실제 Codex intake → fix → verify, MCP 업무 질문, 앱 산출물 검사·수동 승인 3회 후 완료했다. 실패 무시/force 승인/형식 bounce는 0회. 새 사실 질문 1라운드(2개 질문), 답변 162문자. 지정 모델과 medium은 각 정확히 매칭된 실제 세션 로그에서 확인했다. 최종 복사본의 공개 oracle은 평균 6개 검사 모두 통과. 최초 구현은 같은 검사 중 5개 실패하므로 항상 통과하는 검사가 아니다. 기존 fixture 테스트 보존도 verify 및 npm test로 확인했다.

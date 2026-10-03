@@ -1,0 +1,635 @@
+{
+  "schema_version": 1,
+  "case": "public dev-missing-observations",
+  "implementation_commit": "913d368",
+  "implementation_app_tree": "055b3bd4a7ad9e560210869ffbdd15930a171a71",
+  "implementation_skills_tree": "adc6b12c626291e855edee037f3c5c308b5fe7d2",
+  "independent_final_evaluation": false,
+  "sharing": {
+    "procedure": "reviewed Work completion -> local fixture main fast-forward -> local bare push -> fresh clones; no RELAY_HOME copied",
+    "seconds": null,
+    "timing_note": "transfer script verification failed because an ablation-only object was not present in the other clone; corrected comparison uses tree IDs, not cross-clone commit references. No model failure. Exact transfer duration unavailable.",
+    "source_commit": "426946adf29d200bab2bd8e48700fbe3c89e0f8b",
+    "knowledge_blob": "412b11b7f079bb502a92e8d424b77f82ec00a4dd",
+    "knowledge_bytes": 967,
+    "without_commit": "ea38ab4ae42dc354e938f777f67b6288a7d77972",
+    "code_and_tests_identical": true,
+    "first_transfer_script_wall_upper_bound_seconds": 0.556653051,
+    "bound_note": "Observed parent exec wall time includes first transfer, failing verification, usage collection and quota check. Not a precise human sharing-time estimate; repair latency not isolated."
+  },
+  "runs": {
+    "seed": {
+      "run": "/workspace/relay-experiment/results/candidate-dev-01/work1-live",
+      "mode": "real",
+      "works": [
+        {
+          "id": "w-20261003-001",
+          "status": "completed",
+          "elapsed_seconds": 526.0,
+          "tasks": [
+            {
+              "id": "t-01",
+              "node": "intake",
+              "status": "approved",
+              "bounces": 0,
+              "session_id": "01a10029-d755-70f0-85dd-20794f6e8755"
+            },
+            {
+              "id": "t-02",
+              "node": "fix",
+              "status": "approved",
+              "bounces": 0,
+              "session_id": "01a1002c-021b-76a2-b830-3e647a31fa98"
+            },
+            {
+              "id": "t-03",
+              "node": "verify",
+              "status": "approved",
+              "bounces": 0,
+              "session_id": "01a1002e-a908-7fa2-8b5e-c4d23efcd5f4"
+            }
+          ]
+        }
+      ],
+      "answer_rounds": 1,
+      "answered_question_fields": 2,
+      "answer_characters": 162,
+      "approval_actions": 3,
+      "review_actions": 3,
+      "operator_review_intervals": [
+        {
+          "task": "t-01",
+          "operator_seconds_after_review_command": 9.082
+        },
+        {
+          "task": "t-02",
+          "operator_seconds_after_review_command": 6.153
+        },
+        {
+          "task": "t-03",
+          "operator_seconds_after_review_command": 6.808
+        }
+      ],
+      "task_intervals_including_answer_wait": [
+        {
+          "task": "t-01",
+          "hook_to_approval_ready_seconds": 116.0
+        },
+        {
+          "task": "t-02",
+          "hook_to_approval_ready_seconds": 154.0
+        },
+        {
+          "task": "t-03",
+          "hook_to_approval_ready_seconds": 140.0
+        }
+      ],
+      "timeout": false,
+      "sessions": [
+        {
+          "session_id": "01a10029-d755-70f0-85dd-20794f6e8755",
+          "model": [
+            "gpt-6.1-sol"
+          ],
+          "effort": [
+            "medium"
+          ],
+          "usage": {
+            "input_tokens": 171314,
+            "cached_input_tokens": 154240,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 2372,
+            "reasoning_output_tokens": 39,
+            "total_tokens": 173686
+          },
+          "source": "/run/codex-environment/codex-home/sessions/2026/10/03/rollout-2026-10-03T05-08-24-01a10029-d755-70f0-85dd-20794f6e8755.jsonl",
+          "note": null,
+          "tool_calls_by_name": {
+            "exec": 6
+          }
+        },
+        {
+          "session_id": "01a1002c-021b-76a2-b830-3e647a31fa98",
+          "model": [
+            "gpt-6.1-sol"
+          ],
+          "effort": [
+            "medium"
+          ],
+          "usage": {
+            "input_tokens": 227916,
+            "cached_input_tokens": 204288,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 4071,
+            "reasoning_output_tokens": 396,
+            "total_tokens": 231987
+          },
+          "source": "/run/codex-environment/codex-home/sessions/2026/10/03/rollout-2026-10-03T05-10-46-01a1002c-021b-76a2-b830-3e647a31fa98.jsonl",
+          "note": null,
+          "tool_calls_by_name": {
+            "exec": 7
+          }
+        },
+        {
+          "session_id": "01a1002e-a908-7fa2-8b5e-c4d23efcd5f4",
+          "model": [
+            "gpt-6.1-sol"
+          ],
+          "effort": [
+            "medium"
+          ],
+          "usage": {
+            "input_tokens": 249027,
+            "cached_input_tokens": 221568,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 4134,
+            "reasoning_output_tokens": 163,
+            "total_tokens": 253161
+          },
+          "source": "/run/codex-environment/codex-home/sessions/2026/10/03/rollout-2026-10-03T05-13-40-01a1002e-a908-7fa2-8b5e-c4d23efcd5f4.jsonl",
+          "note": null,
+          "tool_calls_by_name": {
+            "exec": 7
+          }
+        }
+      ],
+      "tokens": {
+        "input_tokens": 648257,
+        "cached_input_tokens": 580096,
+        "output_tokens": 10577,
+        "reasoning_output_tokens": 598,
+        "total_tokens": 658834
+      },
+      "dollars": null,
+      "measurement_limits": "Tool counts are top-level Codex tool calls, not a classification of wasted exploration. Wall time includes operator waits and trust. Operator is the experiment agent, not a timed human UI participant. Token counters are cumulative per session; cached input is reported separately. No dollar estimate.",
+      "observed_questions": [
+        {
+          "id": "9ef453a5-1e45-4e15-a0ee-c28e9fa780b5",
+          "questions": [
+            {
+              "id": "empty_result",
+              "header": "표본 없음",
+              "question": "표본이 없는 날과 누락값만 있는 날의 평균은 어떤 값으로 반환해야 하나요?",
+              "options": [
+                {
+                  "label": "null 반환 (추천)",
+                  "description": "실제 관측값 0과 관측 없음 상태를 구별할 수 있습니다."
+                },
+                {
+                  "label": "0 반환",
+                  "description": "관측이 없는 날도 숫자 0으로 표시합니다."
+                }
+              ]
+            },
+            {
+              "id": "missing_values",
+              "header": "누락 관측",
+              "question": "일부 관측이 빠진 경우, 어떤 입력값을 누락으로 보고 평균에서 제외해야 하나요? 제외한 값은 표본 수에서도 빼는 것으로 제안합니다.",
+              "options": [
+                {
+                  "label": "null·undefined 제외 (추천)",
+                  "description": "명시적인 누락값을 제외하고 실제 숫자 0과 음수는 포함합니다."
+                },
+                {
+                  "label": "null·undefined·NaN 제외",
+                  "description": "숫자가 아닌 계산 결과 NaN도 누락 관측으로 취급합니다."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "shared": {
+      "run": "/workspace/relay-experiment/results/candidate-dev-01/work2-shared",
+      "mode": "real",
+      "works": [
+        {
+          "id": "w-20261003-001",
+          "status": "completed",
+          "elapsed_seconds": 588.0,
+          "tasks": [
+            {
+              "id": "t-01",
+              "node": "intake",
+              "status": "approved",
+              "bounces": 0,
+              "session_id": "01a10032-a617-7821-aed9-44c26a86b509"
+            },
+            {
+              "id": "t-02",
+              "node": "fix",
+              "status": "approved",
+              "bounces": 0,
+              "session_id": "01a10035-b4b4-7d51-bcc7-bfe7a85fca4b"
+            },
+            {
+              "id": "t-03",
+              "node": "verify",
+              "status": "approved",
+              "bounces": 0,
+              "session_id": "01a10038-75a8-7e70-b52d-9aa2b2c68da1"
+            }
+          ]
+        }
+      ],
+      "answer_rounds": 1,
+      "answered_question_fields": 1,
+      "answer_characters": 111,
+      "approval_actions": 3,
+      "review_actions": 3,
+      "operator_review_intervals": [
+        {
+          "task": "t-01",
+          "operator_seconds_after_review_command": 34.824
+        },
+        {
+          "task": "t-02",
+          "operator_seconds_after_review_command": 6.893
+        },
+        {
+          "task": "t-03",
+          "operator_seconds_after_review_command": 6.159
+        }
+      ],
+      "task_intervals_including_answer_wait": [
+        {
+          "task": "t-01",
+          "hook_to_approval_ready_seconds": 130.0
+        },
+        {
+          "task": "t-02",
+          "hook_to_approval_ready_seconds": 158.0
+        },
+        {
+          "task": "t-03",
+          "hook_to_approval_ready_seconds": 132.0
+        }
+      ],
+      "timeout": false,
+      "sessions": [
+        {
+          "session_id": "01a10032-a617-7821-aed9-44c26a86b509",
+          "model": [
+            "gpt-6.1-sol"
+          ],
+          "effort": [
+            "medium"
+          ],
+          "usage": {
+            "input_tokens": 201285,
+            "cached_input_tokens": 182784,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 2599,
+            "reasoning_output_tokens": 143,
+            "total_tokens": 203884
+          },
+          "source": "/run/codex-environment/codex-home/sessions/2026/10/03/rollout-2026-10-03T05-18-01-01a10032-a617-7821-aed9-44c26a86b509.jsonl",
+          "note": null,
+          "tool_calls_by_name": {
+            "exec": 6,
+            "wait": 1
+          }
+        },
+        {
+          "session_id": "01a10035-b4b4-7d51-bcc7-bfe7a85fca4b",
+          "model": [
+            "gpt-6.1-sol"
+          ],
+          "effort": [
+            "medium"
+          ],
+          "usage": {
+            "input_tokens": 276158,
+            "cached_input_tokens": 249216,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 4566,
+            "reasoning_output_tokens": 232,
+            "total_tokens": 280724
+          },
+          "source": "/run/codex-environment/codex-home/sessions/2026/10/03/rollout-2026-10-03T05-21-22-01a10035-b4b4-7d51-bcc7-bfe7a85fca4b.jsonl",
+          "note": null,
+          "tool_calls_by_name": {
+            "exec": 8
+          }
+        },
+        {
+          "session_id": "01a10038-75a8-7e70-b52d-9aa2b2c68da1",
+          "model": [
+            "gpt-6.1-sol"
+          ],
+          "effort": [
+            "medium"
+          ],
+          "usage": {
+            "input_tokens": 184939,
+            "cached_input_tokens": 151680,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 3937,
+            "reasoning_output_tokens": 120,
+            "total_tokens": 188876
+          },
+          "source": "/run/codex-environment/codex-home/sessions/2026/10/03/rollout-2026-10-03T05-24-22-01a10038-75a8-7e70-b52d-9aa2b2c68da1.jsonl",
+          "note": null,
+          "tool_calls_by_name": {
+            "exec": 5
+          }
+        }
+      ],
+      "tokens": {
+        "input_tokens": 662382,
+        "cached_input_tokens": 583680,
+        "output_tokens": 11102,
+        "reasoning_output_tokens": 495,
+        "total_tokens": 673484
+      },
+      "dollars": null,
+      "measurement_limits": "Tool counts are top-level Codex tool calls, not a classification of wasted exploration. Wall time includes operator waits and trust. Operator is the experiment agent, not a timed human UI participant. Token counters are cumulative per session; cached input is reported separately. No dollar estimate.",
+      "observed_questions": [
+        {
+          "id": "8f5b861d-197d-419c-8f11-dd52f803ef67",
+          "questions": [
+            {
+              "id": "median_rule_scope",
+              "header": "보고서 규칙",
+              "question": "공유 지식은 센서 관측의 중앙값 보고서에도 적용되지만, 이번 요청은 ‘별도 보고서’라고 되어 있습니다. 이번 중앙값에도 null은 누락으로 제외하고, 남은 관측이 없으면 null을 반환하며, 실제 값 0과 음수는 포함하는 규칙을 적용하나요?",
+              "options": [
+                {
+                  "label": "같은 규칙 적용 (추천)",
+                  "description": "공유 지식의 중앙값 규칙을 재사용하여 빈 배열과 null만 있는 배열은 null, null과 숫자가 섞이면 숫자만의 중앙값으로 정합니다."
+                },
+                {
+                  "label": "다른 규칙 적용",
+                  "description": "이 보고서의 빈 표본 결과와 관측 누락 처리 규칙을 직접 알려 주세요."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "no_knowledge": {
+      "run": "/workspace/relay-experiment/results/candidate-dev-01/work2-no-knowledge",
+      "mode": "real",
+      "works": [
+        {
+          "id": "w-20261003-001",
+          "status": "completed",
+          "elapsed_seconds": 594.0,
+          "tasks": [
+            {
+              "id": "t-01",
+              "node": "intake",
+              "status": "approved",
+              "bounces": 0,
+              "session_id": "01a1003c-49a9-7290-8887-5390a46905aa"
+            },
+            {
+              "id": "t-02",
+              "node": "fix",
+              "status": "approved",
+              "bounces": 0,
+              "session_id": "01a1003f-1ac4-7dc0-baae-a79a7aaa7f1d"
+            },
+            {
+              "id": "t-03",
+              "node": "verify",
+              "status": "approved",
+              "bounces": 0,
+              "session_id": "01a10042-1794-72d1-b759-bfc7239d9dae"
+            }
+          ]
+        }
+      ],
+      "answer_rounds": 1,
+      "answered_question_fields": 2,
+      "answer_characters": 162,
+      "approval_actions": 3,
+      "review_actions": 3,
+      "operator_review_intervals": [
+        {
+          "task": "t-01",
+          "operator_seconds_after_review_command": 9.475
+        },
+        {
+          "task": "t-02",
+          "operator_seconds_after_review_command": 15.524
+        },
+        {
+          "task": "t-03",
+          "operator_seconds_after_review_command": 8.918
+        }
+      ],
+      "task_intervals_including_answer_wait": [
+        {
+          "task": "t-01",
+          "hook_to_approval_ready_seconds": 135.0
+        },
+        {
+          "task": "t-02",
+          "hook_to_approval_ready_seconds": 156.0
+        },
+        {
+          "task": "t-03",
+          "hook_to_approval_ready_seconds": 132.0
+        }
+      ],
+      "timeout": false,
+      "sessions": [
+        {
+          "session_id": "01a1003c-49a9-7290-8887-5390a46905aa",
+          "model": [
+            "gpt-6.1-sol"
+          ],
+          "effort": [
+            "medium"
+          ],
+          "usage": {
+            "input_tokens": 248313,
+            "cached_input_tokens": 229888,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 2706,
+            "reasoning_output_tokens": 148,
+            "total_tokens": 251019
+          },
+          "source": "/run/codex-environment/codex-home/sessions/2026/10/03/rollout-2026-10-03T05-28-33-01a1003c-49a9-7290-8887-5390a46905aa.jsonl",
+          "note": null,
+          "tool_calls_by_name": {
+            "exec": 6,
+            "wait": 3
+          }
+        },
+        {
+          "session_id": "01a1003f-1ac4-7dc0-baae-a79a7aaa7f1d",
+          "model": [
+            "gpt-6.1-sol"
+          ],
+          "effort": [
+            "medium"
+          ],
+          "usage": {
+            "input_tokens": 237251,
+            "cached_input_tokens": 211328,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 4598,
+            "reasoning_output_tokens": 299,
+            "total_tokens": 241849
+          },
+          "source": "/run/codex-environment/codex-home/sessions/2026/10/03/rollout-2026-10-03T05-31-38-01a1003f-1ac4-7dc0-baae-a79a7aaa7f1d.jsonl",
+          "note": null,
+          "tool_calls_by_name": {
+            "exec": 7
+          }
+        },
+        {
+          "session_id": "01a10042-1794-72d1-b759-bfc7239d9dae",
+          "model": [
+            "gpt-6.1-sol"
+          ],
+          "effort": [
+            "medium"
+          ],
+          "usage": {
+            "input_tokens": 181534,
+            "cached_input_tokens": 156160,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 3943,
+            "reasoning_output_tokens": 179,
+            "total_tokens": 185477
+          },
+          "source": "/run/codex-environment/codex-home/sessions/2026/10/03/rollout-2026-10-03T05-34-53-01a10042-1794-72d1-b759-bfc7239d9dae.jsonl",
+          "note": null,
+          "tool_calls_by_name": {
+            "exec": 5
+          }
+        }
+      ],
+      "tokens": {
+        "input_tokens": 667098,
+        "cached_input_tokens": 597376,
+        "output_tokens": 11247,
+        "reasoning_output_tokens": 626,
+        "total_tokens": 678345
+      },
+      "dollars": null,
+      "measurement_limits": "Tool counts are top-level Codex tool calls, not a classification of wasted exploration. Wall time includes operator waits and trust. Operator is the experiment agent, not a timed human UI participant. Token counters are cumulative per session; cached input is reported separately. No dollar estimate.",
+      "observed_questions": [
+        {
+          "id": "904ca36c-6959-4cc2-a879-34252c7baac5",
+          "questions": [
+            {
+              "id": "empty_result",
+              "header": "표본 없음",
+              "question": "중앙값의 표본이 없을 때 반환해야 하는 값은 무엇인가요? 빈 배열과 관측 누락만 있는 배열에 같은 규칙을 적용할까요?",
+              "options": [
+                {
+                  "label": "둘 다 null (추천)",
+                  "description": "표본이 없는 상태를 실제 관측값 0과 구분할 수 있습니다."
+                },
+                {
+                  "label": "둘 다 0",
+                  "description": "표본이 없을 때도 숫자 0을 반환합니다."
+                }
+              ]
+            },
+            {
+              "id": "missing_values",
+              "header": "관측 누락",
+              "question": "중앙값 계산에서 관측 누락으로 제외할 값은 무엇인가요? 실제 숫자 0과 음수는 포함합니다.",
+              "options": [
+                {
+                  "label": "null과 undefined 제외 (추천)",
+                  "description": "값이 없는 항목을 제외하고 실제 숫자 관측값으로 중앙값을 계산합니다."
+                },
+                {
+                  "label": "null, undefined, NaN 제외",
+                  "description": "값이 없거나 숫자로 계산할 수 없는 NaN도 누락으로 취급합니다."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "knowledge_exposure": {
+    "shared_context_contains_committed_blob": true,
+    "ablation_intake_has_no_knowledge_section": true,
+    "shared_model_confirmation_question_references_rule": true,
+    "shared_fix_artifact_cites_blob": true
+  },
+  "final_src_trees_equal": true,
+  "src_tree": "e231cdaaa206309da00da0ba6f93904c6479f62f",
+  "oracle_results": {
+    "work1": {
+      "exit_code": 0,
+      "stdout": "{\"target\":\"average\",\"checks\":6,\"failed\":0}\n",
+      "stderr": ""
+    },
+    "work2-shared": [
+      {
+        "command": "check-dev-fixture.mjs median",
+        "exit_code": 0,
+        "stdout": "{\"target\":\"median\",\"checks\":6,\"failed\":0}\n",
+        "stderr": ""
+      },
+      {
+        "command": "check-dev-fixture.mjs average",
+        "exit_code": 0,
+        "stdout": "{\"target\":\"average\",\"checks\":6,\"failed\":0}\n",
+        "stderr": ""
+      },
+      {
+        "command": "npm test",
+        "exit_code": 0,
+        "stdout": "\n> test\n> node --test test/*.test.js\n\n✔ 빈 배열은 관측 없음이다 (0.72746ms)\n✔ 누락만 있으면 관측 없음이다 (0.141171ms)\n✔ 누락을 표본 수에서 제외한다 (0.146389ms)\n✔ 실제 0은 누락과 구별한다 (0.097126ms)\n✔ 음수는 정상 관측이다 (1.124745ms)\n✔ 누락을 계산해도 입력 내용과 순서를 유지한다 (0.637025ms)\n✔ undefined와 NaN의 기존 결과를 유지한다 (0.216224ms)\n✔ 중앙값: 빈 배열은 관측 없음이다 (1.16139ms)\n✔ 중앙값: 누락만 있으면 관측 없음이다 (0.149123ms)\n✔ 중앙값: 홀수 관측에서 누락을 제외한다 (0.144287ms)\n✔ 중앙값: 짝수 관측에서 누락을 제외한다 (1.144405ms)\n✔ 중앙값: 실제 0을 계산에 포함한다 (0.143345ms)\n✔ 중앙값: 음수 관측을 계산에 포함한다 (0.131847ms)\n✔ 중앙값: 0만 남으면 0이다 (0.128924ms)\n✔ 중앙값: 누락 없는 짝수 관측의 산술평균이다 (0.120371ms)\n✔ 중앙값: 누락을 계산해도 입력 내용과 순서를 유지한다 (1.23419ms)\n✔ normal values and genuine zero are preserved (1.222482ms)\n✔ input is not mutated (0.876464ms)\nℹ tests 18\nℹ suites 0\nℹ pass 18\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 84.25314\n",
+        "stderr": ""
+      }
+    ],
+    "work2-no-knowledge": [
+      {
+        "command": "check-dev-fixture.mjs median",
+        "exit_code": 0,
+        "stdout": "{\"target\":\"median\",\"checks\":6,\"failed\":0}\n",
+        "stderr": ""
+      },
+      {
+        "command": "check-dev-fixture.mjs average",
+        "exit_code": 0,
+        "stdout": "{\"target\":\"average\",\"checks\":6,\"failed\":0}\n",
+        "stderr": ""
+      },
+      {
+        "command": "npm test",
+        "exit_code": 0,
+        "stdout": "\n> test\n> node --test test/*.test.js\n\n✔ 빈 배열은 관측 없음이다 (2.759823ms)\n✔ 누락만 있으면 관측 없음이다 (0.121362ms)\n✔ 누락을 표본 수에서 제외한다 (3.509331ms)\n✔ 실제 0은 누락과 구별한다 (0.081372ms)\n✔ 음수는 정상 관측이다 (0.197466ms)\n✔ 누락을 계산해도 입력 내용과 순서를 유지한다 (3.652941ms)\n✔ undefined와 NaN의 기존 결과를 유지한다 (0.290816ms)\n✔ 빈 배열은 관측 없음이다 (0.720079ms)\n✔ 누락만 있으면 관측 없음이다 (0.115894ms)\n✔ 누락을 제외하고 실제 0과 음수를 포함한다 (0.140511ms)\n✔ 누락 없는 홀수와 짝수 관측의 중앙값을 유지한다 (0.104807ms)\n✔ 누락을 제외해도 입력 내용과 순서를 유지한다 (4.681699ms)\n✔ undefined와 NaN만 있는 입력의 기존 결과를 유지한다 (0.171687ms)\n✔ normal values and genuine zero are preserved (0.711287ms)\n✔ input is not mutated (0.652518ms)\nℹ tests 15\nℹ suites 0\nℹ pass 15\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 69.628705\n",
+        "stderr": ""
+      }
+    ]
+  },
+  "quota_start_remaining_percent": 94,
+  "quota_end_remaining_percent": 90,
+  "repository_checks": {
+    "typecheck": "pass",
+    "lint": "pass",
+    "format": "pass",
+    "skills": "pass",
+    "tests_passed": 883,
+    "tests_skipped": 3
+  },
+  "excluded_failures": [
+    {
+      "kind": "harness",
+      "run": "work1",
+      "reason": "stdin closed without tty; no Work or model session created"
+    },
+    {
+      "kind": "operator verification",
+      "reason": "cross-clone git object reference failed; replaced with tree ID comparison; transfer time not isolated"
+    }
+  ],
+  "execution_source_notes": {
+    "seed": "initial uncommitted working tree; bundled before blob-ID defensive validation; intake skill contained an empty duplicate closing heading later removed before fix; ordinary valid blob behavior equivalent",
+    "shared_and_no_knowledge": "fresh services using app/skills trees of 913d368; subsequent commits documentation only"
+  }
+}
