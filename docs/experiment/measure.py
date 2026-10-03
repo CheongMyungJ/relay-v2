@@ -23,6 +23,17 @@ def instant(s):
 def seconds(start, end):
     return (instant(end) - instant(start)).total_seconds() if start and end else None
 
+task_intervals = []
+for file in workfiles:
+    lifecycle = [json.loads(s) for s in (file.parent / 'events.jsonl').read_text().splitlines()]
+    for task in json.loads(file.read_text())['tasks']:
+        started = next((e['ts'] for e in lifecycle if e.get('task_id') == task['id']
+                        and e['type'] == 'task.first_hook'), None)
+        ready = [e['ts'] for e in lifecycle if e.get('task_id') == task['id']
+                 and e['type'] == 'task.awaiting_approval']
+        task_intervals.append({'task': task['id'], 'hook_to_approval_ready_seconds':
+                               seconds(started, ready[-1] if ready else None)})
+
 sessions = []
 for item in usage['sessions']:
     counts = collections.Counter()
@@ -59,6 +70,7 @@ out = {
     'approval_actions': sum(e['command']['op'] == 'approve' for e in commands),
     'review_actions': sum(e['command']['op'] == 'review' for e in commands),
     'operator_review_intervals': reviews,
+    'task_intervals_including_answer_wait': task_intervals,
     'timeout': any(e.get('event') == 'timeout' for e in events),
     'sessions': sessions, 'tokens': totals, 'dollars': None,
     'measurement_limits': 'Tool counts are top-level Codex tool calls, not a classification of wasted exploration. Wall time includes operator waits and trust. Operator is the experiment agent, not a timed human UI participant. Token counters are cumulative per session; cached input is reported separately. No dollar estimate.'
