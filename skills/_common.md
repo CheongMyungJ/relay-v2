@@ -147,6 +147,7 @@ Candidates (`knowledge_candidates`). Aim for about 3 per task. Only what the nex
 - `not_in_code`: why the code alone does not tell this. For a rule the human decided, "사람이 정함". `incentive`: the wrong change someone would make without it. Do not infer a reason from the code.
 - A candidate refined from a human decision: copy that decision's `what` into `decision` verbatim.
 - A lasting rule the human told you is `domain`, even when it forbids a fix ("do not retry") or reads like a decision: `decision` and a `constraint` without `compat` do not reach intake.
+- Write a rule the human told you at the scope they told it, with every part, even when this Work uses one part or its decision is narrower (e.g. "날짜는 한국 시간 자정으로 자르고 화면에는 YYYY.MM.DD로 보인다" stays whole, not "주문 목록 날짜는 YYYY.MM.DD"). The next Work may need the part this one did not.
 - A candidate that corrects a `참고 지식` item: put that item's id in `supersedes`.
 - Not knowledge: facts of this incident (who reported, when), hypotheses that only mattered in this Work, progress. Not a `recipe`: what `package.json` scripts, a Makefile or the README already say (e.g. "tests run with `npm test`").
 - Write values in Korean, like the other handoff values.
