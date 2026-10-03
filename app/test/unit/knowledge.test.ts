@@ -1120,6 +1120,41 @@ describe('후보 모으기 (D283, D296, D299, D304, D318)', () => {
     expect(duplicateOf(b, [{ ...a, status: 'superseded' }])).toBeUndefined()
   })
 
+  it('요청에 사람이 적은 규칙은 결정과 묶이지 않아도 사람이 정한 후보다 (D333, 지식 탐색 K27)', () => {
+    const request =
+      'CSV에 고객 이름과 이메일이 그대로 나온다. 규칙: 고객 이름은 첫 글자만 남기고 나머지 글자 수만큼 *로 바꾼다. 이메일은 @ 앞의 첫 두 글자만 남기고 *** 세 개로 바꾼다.'
+    const r = reviewKnowledge({
+      tasks: [
+        {
+          taskId: 't-01',
+          node: 'intake',
+          version: 2,
+          header: header({
+            knowledge_candidates: [
+              {
+                ...CANDIDATE,
+                rule: '고객 이름은 첫 글자만 남기고 나머지를 *로, 이메일은 @ 앞 두 글자만 남기고 ***로 가린다',
+              },
+              { ...CANDIDATE, rule: '리뷰 목록의 작성자 칸은 앱이 그대로 쓰니 칸을 지우지 않는다' },
+              {
+                ...CANDIDATE,
+                kind: 'recipe',
+                rule: '고객 이름은 첫 글자만 남기고 나머지 글자 수만큼 *로 바꾼다',
+              },
+            ],
+          }),
+        },
+      ],
+      pool: [],
+      changed: [],
+      share: true,
+      dir: 'd/',
+      offerPending: true,
+      request,
+    })
+    expect(r.candidates.map((c) => c.by)).toEqual(['human', 'ai', 'ai'])
+  })
+
   it('이번 Work의 범위로 보이는 후보와 결정은 채택 안 함이 기본이다 (D331, 지식 탐색 K21)', () => {
     const r = reviewKnowledge({
       tasks: [

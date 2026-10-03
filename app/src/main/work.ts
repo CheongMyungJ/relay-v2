@@ -1104,11 +1104,21 @@ export class WorkRunner {
     return out
   }
 
+  /** Work의 요청 글. 읽지 못하면 빈 글 (D333) */
+  private async requestText(): Promise<string> {
+    try {
+      return (await this.files.readOwned('request.md'))?.text ?? ''
+    } catch {
+      return ''
+    }
+  }
+
   /** Work 완료 화면의 지식 칸 (I75) */
   private async knowledgeReview(): Promise<KnowledgeReview | null> {
     if (!this.knowledgeOn()) return null
     try {
-      return (await this.kn.review(await this.candidateTasks('pipeline'))).review
+      return (await this.kn.review(await this.candidateTasks('pipeline'), await this.requestText()))
+        .review
     } catch (e) {
       this.problem(`지식 후보를 모으지 못함: ${message(e)}`)
       return null
@@ -1123,7 +1133,13 @@ export class WorkRunner {
     taskId: string,
   ): Promise<KnowledgePlan | undefined> {
     if (!this.knowledgeOn()) return undefined
-    const plan = await this.kn.plan(await this.candidateTasks(which), choices, delivery, taskId)
+    const plan = await this.kn.plan(
+      await this.candidateTasks(which),
+      choices,
+      delivery,
+      taskId,
+      await this.requestText(),
+    )
     // 쓸 것이 없으면 계획을 두지 않는다: 전달과 승인의 기록이 그대로다
     return planEmpty(plan) ? undefined : plan
   }

@@ -257,6 +257,7 @@ export class WorkKnowledge {
   /** Work 완료 화면이나 정리 창의 지식 칸 (I75, I76) */
   async review(
     tasks: readonly CandidateTask[],
+    request?: string,
   ): Promise<{ review: KnowledgeReview; pool: PoolEntry[] }> {
     const pool = await this.pool()
     const review = reviewKnowledge({
@@ -266,6 +267,7 @@ export class WorkKnowledge {
       share: this.share(),
       dir: this.dir(),
       offerPending: this.share(),
+      ...(request !== undefined ? { request } : {}),
     })
     return { review, pool }
   }
@@ -276,8 +278,9 @@ export class WorkKnowledge {
     choices: KnowledgeChoices | undefined,
     delivery: KnowledgeDelivery,
     taskId: string,
+    request?: string,
   ): Promise<KnowledgePlan> {
-    const { review, pool } = await this.review(tasks)
+    const { review, pool } = await this.review(tasks, request)
     return planKnowledge({
       review,
       choices,

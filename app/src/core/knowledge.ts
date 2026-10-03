@@ -668,6 +668,8 @@ export interface ReviewInput {
   dir: string
   /** 함께 실릴 공유 대기를 보인다: [PR 생성]을 할 수 있는 Work (D308) */
   offerPending: boolean
+  /** Work의 요청 글. 요청에 사람이 적은 규칙을 알아본다 (D333) */
+  request?: string
 }
 
 /** 기존 항목의 화면 모양 */
@@ -766,6 +768,20 @@ export function duplicateOf(
   )
 }
 
+/**
+ * 요청에 사람이 적은 규칙인가 (D333): 규칙 글의 낱말(네 개 이상) 가운데 70% 이상이 요청 글에 있다. 사람이 두 문장으로
+ * 적은 규칙을 에이전트가 한 줄로 합쳐도 알아보게 문장이 아니라 요청 전체와 견준다
+ */
+export function fromRequest(rule: string, requestWords: ReadonlySet<string>): boolean {
+  const w = ruleWords(rule)
+  if (w.size < 4 || requestWords.size === 0) return false
+  let n = 0
+  for (const x of w) if (requestWords.has(x)) n++
+  return n / w.size >= REQUEST_RULE
+}
+/** 규칙 낱말이 이만큼 요청에 있으면 사람이 적은 규칙으로 본다 */
+const REQUEST_RULE = 0.7
+
 /** 이번 Work에서만 정한 범위의 말 (지식 탐색 K21) */
 const WORK_SCOPED = /이번\s*(?:Work|작업|수정|요청|변경)|이번에는|이번엔|이번만|이번 범위/i
 
@@ -790,6 +806,7 @@ export function reviewKnowledge(input: ReviewInput): KnowledgeReview {
       (t.header?.decisions ?? []).filter((d) => d.by === 'human').map((d) => d.what.trim()),
     ),
   )
+  const requestWords = ruleWords(input.request ?? '')
   // 결정마다 처음 올린 후보의 key. 같은 결정의 뒤 후보는 그 key를 가리키고 채택 안 함이 기본이다 (D324)
   const first = new Map<string, string>()
   for (const t of input.tasks) {
@@ -799,7 +816,10 @@ export function reviewKnowledge(input: ReviewInput): KnowledgeReview {
     const agent = v2?.knowledge_candidates ?? []
     agent.forEach((c, i) => {
       const decision = c.decision?.trim() || null
-      const human = decision !== null && humanDecisions.has(decision)
+      // 사람 결정과 묶였거나, 도메인 규칙·제약이 요청 글의 한 문장과 거의 같으면 사람이 정한 것이다 (D333, 지식 탐색 K27)
+      const human =
+        (decision !== null && humanDecisions.has(decision)) ||
+        ((c.kind === 'domain' || c.kind === 'constraint') && fromRequest(c.rule, requestWords))
       const key = `${t.taskId}#k${i + 1}`
       const sameDecisionAs = human && decision ? (first.get(decision) ?? null) : null
       if (human && decision && !sameDecisionAs) first.set(decision, key)
