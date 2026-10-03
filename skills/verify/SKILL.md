@@ -53,6 +53,7 @@ Review the whole change of this Work, apply only the findings the human picks, t
 <!-- /type -->
 - The repo's conventions and readability.
 - Changes that are not needed.
+- Shared knowledge changes: compare each affected record with the base version and the code-changing task's evidence. Identify the new fact, changed scope/validity, correction or explicit policy replacement. A section that only adds another Work/source, date, base commit or passing test count for unchanged reuse is an unnecessary change: report it as a finding and propose keeping the execution evidence in the task artifact. Check that original sources, unrelated active facts and unknowns survive; passing code tests do not justify a knowledge edit. Write the comparison under `리뷰 지적` even when it yields no finding (or say the knowledge diff is absent). If notes need correction, recommend returning to the code-changing step through the existing going-back procedure; do not edit or extract shared notes here.
 <!-- type: bugfix -->
 - Code that the reproduction steps use is not unused code.
 <!-- /type -->
