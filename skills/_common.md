@@ -70,6 +70,7 @@ risks: []            # remaining risks
 recommended_next: null   # null for the default next step. Otherwise {node, reason}. node must be one of the selectable next steps in context.md
 knowledge_candidates: []  # items {kind, rule, paths, terms, why, not_in_code, incentive}, optional subkind, decision, supersedes. See "Knowledge"
 knowledge_feedback: []    # items {id, note}: a `참고 지식` item that differs from the code or the human
+knowledge_confirmed: []  # ids of `참고 지식` items you followed that held (the code or the human agreed)
 ---
 ## 요약
 ## 다음 task가 알아야 할 것
@@ -108,6 +109,7 @@ knowledge_candidates:
     incentive: "빈 배열에서 예외를 던지게 바꾼다"
     decision: "빈 배열의 평균은 0으로 한다"
 knowledge_feedback: []
+knowledge_confirmed: []
 ---
 ## 요약
 빈 배열이면 0을 돌려주게 고쳤다.
@@ -148,10 +150,10 @@ Candidates (`knowledge_candidates`). Aim for about 3 per task. Only what the nex
 - A candidate refined from a human decision: copy that decision's `what` into `decision` verbatim.
 - A lasting rule the human told you is `domain`, even when it forbids a fix ("do not retry") or reads like a decision: `decision` and a `constraint` without `compat` do not reach intake.
 - A candidate that corrects a `참고 지식` item: put that item's id in `supersedes`.
-- Not knowledge: facts of this incident (who reported, when), hypotheses that only mattered in this Work, progress. Not a `recipe`: what `package.json` scripts, a Makefile or the README already say (e.g. "tests run with `npm test`").
+- Not knowledge: facts of this incident (who reported, when), hypotheses that only mattered in this Work, progress, this Work's scope or non-goals ("이번에는 고치지 않음"). Only rules that last beyond this Work. Not a `recipe`: what `package.json` scripts, a Makefile or the README already say (e.g. "tests run with `npm test`").
 - Write values in Korean, like the other handoff values.
 - If you came in by a rewind or the previous step recommended going back (context.md), consider a `failure` candidate for why.
 
-`참고 지식` in context.md is reference, not input. If an item differs from the current code or what the human says, they win: add `{id, note}` to `knowledge_feedback` (the id is the file name `<id>.md`). If you know what the item should say now, also write that as a candidate with the item's id in `supersedes`, so the human can replace it in one step.
+`참고 지식` in context.md is reference, not input. If an item differs from the current code or what the human says, they win: add `{id, note}` to `knowledge_feedback` (the id is the file name `<id>.md`). If you know what the item should say now, also write that as a candidate with the item's id in `supersedes`, so the human can replace it in one step. If you followed an item and it held, put its id in `knowledge_confirmed` instead. `knowledge_feedback` is only for an item that is wrong: not for notes such as "followed it" or "the helper is missing here".
 An item that ends with `(출처 Work가 아직 기준에 머지되지 않아 …)` was written against code that may not be in this Work's base yet (that Work is not merged). Its rule is what the team decided, so a difference from the current code alone is not a reason to report it or to ask again: follow the rule. Report it only when the human or the request says otherwise.
 

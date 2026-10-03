@@ -661,18 +661,91 @@ export function refView(p: PoolEntry): KnowledgeRefView {
 
 /** 겹치는 기존 항목 (D302): 같은 종류이고 경로나 용어가 겹치는 유효한 항목 */
 export function overlappingEntries(
-  c: { kind: KnowledgeKind | null; paths: readonly string[]; terms: readonly string[] },
+  c: {
+    kind: KnowledgeKind | null
+    paths: readonly string[]
+    terms: readonly string[]
+    rule?: string
+  },
   pool: readonly PoolEntry[],
 ): PoolEntry[] {
   if (!c.kind) return []
   const terms = new Set(c.terms.map(normalizeTerm))
+  const rule = ruleFamily(c.kind) === 'rule'
   return pool.filter((p) => {
     const e = p.entry
-    if (e.status !== 'active' || e.kind !== c.kind) return false
+    if (e.status !== 'active') return false
+    // 도메인 규칙과 제약은 서로 같은 영역으로 본다. 같은 규칙을 둘로 적거나, 모르는 사람이 반대 규칙을 다른 종류로 적는다
+    // (지식 탐색 K25)
+    if (rule ? ruleFamily(e.kind) !== 'rule' : e.kind !== c.kind) return false
     const pathHit = e.paths.some((x) => c.paths.some((y) => pathsOverlap(x, y)))
     const termHit = e.terms.some((t) => terms.has(normalizeTerm(t)))
-    return pathHit || termHit
+    if (pathHit || termHit) return true
+    if (!rule) return false
+    // 규칙끼리는 용어 낱말 일부나 규칙 글이 겹쳐도 같은 영역이다 ("할부 수수료" ↔ "수수료 올림")
+    return (
+      termPartsMatch(e.terms, [...c.terms, c.rule ?? ''].join(' ')) ||
+      ruleSimilarity(e.rule, c.rule ?? '') >= RELATED_RULE
+    )
   })
+}
+
+/** 도메인 규칙과 제약은 한 갈래로 본다 (지식 탐색 K7, K25) */
+function ruleFamily(kind: KnowledgeKind): string {
+  return kind === 'domain' || kind === 'constraint' ? 'rule' : kind
+}
+
+/** 규칙 글의 낱말: 문장부호를 떼고 조사를 뗀 두 글자 이상 */
+export function ruleWords(rule: string): Set<string> {
+  return new Set(
+    rule
+      .toLowerCase()
+      .replace(/[()[\]{}"'`.,:;!?·…/=+*<>|~-]/g, ' ')
+      .split(/\s+/)
+      .map((w) => w.replace(JOSA, ''))
+      .filter((w) => [...w].length >= 2),
+  )
+}
+
+/** 규칙 글이 겹치는 정도 (자카드). 0~1 */
+export function ruleSimilarity(a: string, b: string): number {
+  const x = ruleWords(a)
+  const y = ruleWords(b)
+  if (x.size === 0 || y.size === 0) return 0
+  let both = 0
+  for (const w of x) if (y.has(w)) both++
+  return both / (x.size + y.size - both)
+}
+
+/** 이 정도 겹치면 같은 규칙으로 본다 (K7) */
+export const SAME_RULE = 0.6
+/** 이 정도 겹치면 같은 영역의 규칙으로 본다 (K25) */
+const RELATED_RULE = 0.3
+
+/**
+ * 쓰려는 새 항목과 같은 규칙인 기존 항목 (지식 탐색 K7): 같은 갈래(도메인 규칙과 제약은 한 갈래)이고 규칙 글이 거의 같다.
+ * 동시에 돈 Work가 먼저 쓴 공유 대기와 같은 규칙을 또 쓰지 않게 쓰기 직전(잠금 안)에 본다
+ */
+export function duplicateOf(
+  e: KnowledgeEntry,
+  existing: readonly KnowledgeEntry[],
+): KnowledgeEntry | undefined {
+  return existing.find(
+    (x) =>
+      x.id !== e.id &&
+      x.status === 'active' &&
+      ruleFamily(x.kind) === ruleFamily(e.kind) &&
+      ruleSimilarity(x.rule, e.rule) >= SAME_RULE,
+  )
+}
+
+/** 이번 Work에서만 정한 범위의 말 (지식 탐색 K21) */
+const WORK_SCOPED = /이번\s*(?:Work|작업|수정|요청|변경)|이번에는|이번엔|이번만|이번 범위/i
+
+/** 이번 Work에서만 정한 범위로 보이면 그 까닭 (D331) */
+export function workScopedReason(rule: string): string | null {
+  const m = WORK_SCOPED.exec(rule)
+  return m ? `"${m[0]}"` : null
 }
 
 /**
@@ -722,6 +795,8 @@ export function reviewKnowledge(input: ReviewInput): KnowledgeReview {
         sameDecisionAs,
         similarTo: null,
         inCode: human || c.supersedes ? null : inCodeReason(c),
+        sameAs: null,
+        workScoped: c.supersedes ? null : workScopedReason(c.rule),
         supersedes: target ? refView(target) : null,
         unknownSupersedes: c.supersedes && !target ? c.supersedes : null,
         feedback: [],
@@ -744,7 +819,18 @@ export function reviewKnowledge(input: ReviewInput): KnowledgeReview {
     const prev = fixed
       ? undefined
       : // 코드로 알 수 있다고 본 후보(K22)는 앞 후보가 되지 않는다: 뒤의 쓸모 있는 후보까지 채택 안 함이 되지 않게
-        roots.find((p) => p.taskId !== c.taskId && !p.inCode && similarCandidates(p, c))
+        roots.find(
+          (p) =>
+            !p.inCode &&
+            ((p.taskId !== c.taskId && similarCandidates(p, c)) ||
+              // 같은 규칙을 다른 종류(도메인 규칙과 제약)나 같은 task에서 두 번 적은 것 (지식 탐색 K7)
+              // 같은 종류면 갈래도 같아야 한다(외부 호환과 아닌 제약은 넣는 단계가 다르다, D326)
+              (!!p.kind &&
+                !!c.kind &&
+                ruleFamily(p.kind) === ruleFamily(c.kind) &&
+                (p.kind !== c.kind || (p.subkind ?? null) === (c.subkind ?? null)) &&
+                ruleSimilarity(p.rule, c.rule) >= SAME_RULE)),
+        )
     if (prev) c.similarTo = prev.key
     else roots.push(c)
   }
@@ -756,6 +842,9 @@ export function reviewKnowledge(input: ReviewInput): KnowledgeReview {
     header.decisions.forEach((d, i) => {
       const what = d.what.trim()
       if (d.by !== 'human' || first.has(what) || shown.has(what)) return
+      // verify와 PR 대응의 사람 결정은 리뷰 지적의 반영과 실패한 완료조건의 처리다: 이 Work의 일이라 지식 칸에 올리지 않는다
+      // (D229, 지식 탐색 K8). 그 단계의 에이전트가 다듬어 올린 후보는 그대로 보인다
+      if (t.node === 'verify' || t.node === 'respond') return
       shown.add(what)
       candidates.push({
         key: `${t.taskId}#d${i + 1}`,
@@ -775,6 +864,8 @@ export function reviewKnowledge(input: ReviewInput): KnowledgeReview {
         sameDecisionAs: null,
         similarTo: null,
         inCode: null,
+        sameAs: null,
+        workScoped: workScopedReason(d.what),
         supersedes: null,
         unknownSupersedes: null,
         feedback: [],
@@ -820,26 +911,48 @@ export function reviewKnowledge(input: ReviewInput): KnowledgeReview {
     }
   }
   for (const c of candidates) {
-    c.overlaps = overlappingEntries(c, input.pool)
-      .filter((p) => p.entry.id !== c.supersedes?.id)
-      .map(refView)
+    const overlaps = overlappingEntries(c, input.pool).filter(
+      (p) => p.entry.id !== c.supersedes?.id,
+    )
+    c.overlaps = overlaps.map(refView)
+    // 기존 항목과 거의 같은 규칙은 또 쌓지 않는다: 채택 안 함이 기본이고 그 항목을 보인다 (지식 탐색 K7). 이 Work가 PR에
+    // 실은 것(carried)은 제 것이라 견주지 않는다
+    if (!c.unrefined && !c.supersedes && !c.unknownSupersedes) {
+      const same = overlaps.find(
+        (p) => p.scope !== 'carried' && ruleSimilarity(p.entry.rule, c.rule) >= SAME_RULE,
+      )
+      if (same) c.sameAs = refView(same)
+    }
     const f = c.supersedes ? feedback.get(c.supersedes.id) : undefined
     if (f && c.supersedes) {
       c.feedback = f.notes
       feedback.delete(c.supersedes.id)
     }
   }
+  // 따랐고 맞았다는 알림 (D330). 같은 Work에서 틀렸다는 보고도 받은 항목은 보고가 앞선다
+  const confirmedIds = new Set(
+    input.tasks
+      .flatMap((t) => (t.header ? (handoffV2(t.header, t.version)?.knowledge_confirmed ?? []) : []))
+      .filter((id) => !feedback.has(id)),
+  )
+  const confirmed = [...confirmedIds]
+    .map((id) => byId.get(id))
+    .filter((p): p is PoolEntry => !!p)
+    .map((p) => ({ ...refView(p), confirmed: true }))
+  // 재확인: 이 Work가 경로를 바꾼 것(D317)과, 이 Work가 따랐고 맞았다고 알린 것(D330, 지식 탐색 K10·K15). 확인된 것은 [그대로
+  // 맞음]이 기본이다
   const stale = input.pool
     .filter(
       (p) =>
         p.scope === 'team' &&
         p.stale &&
         p.entry.status === 'active' &&
-        p.entry.paths.some((x) => input.changed.some((y) => pathsOverlap(x, y))) &&
+        (p.entry.paths.some((x) => input.changed.some((y) => pathsOverlap(x, y))) ||
+          confirmedIds.has(p.entry.id)) &&
         !feedback.has(p.entry.id) &&
         !candidates.some((c) => c.supersedes?.id === p.entry.id),
     )
-    .map(refView)
+    .map((p) => (confirmedIds.has(p.entry.id) ? { ...refView(p), confirmed: true } : refView(p)))
   const pending = input.offerPending
     ? input.pool
         .filter((p) => p.scope === 'pending' && !p.carriedPr)
@@ -854,6 +967,7 @@ export function reviewKnowledge(input: ReviewInput): KnowledgeReview {
     pending,
     stale,
     feedback: [...feedback.values()],
+    confirmed,
     share: input.share,
     dir: input.dir,
   }
@@ -984,7 +1098,7 @@ export function planKnowledge(input: PlanInput): KnowledgePlan {
   const human: KnowledgeSource = { work: input.work, task: input.task, by: 'human' }
   const entryAction = (group: 'stale' | 'feedback', ref: KnowledgeRefView | null) => {
     if (!ref) return
-    const ch = entryChoice(group, ref.id, choices)
+    const ch = entryChoice(group, ref.id, choices, ref.confirmed)
     const old = byId.get(ref.id)
     if (!old || ch.action === 'leave' || old.carriedPr || retired(ref.id)) return
     if (ch.action === 'confirm') {

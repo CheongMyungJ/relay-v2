@@ -26,6 +26,7 @@ import {
 import { readText } from '../adapters/store'
 import { projectKnowledgeDir, projectKnowledgeShare } from '../core/config'
 import {
+  duplicateOf,
   entryPath,
   entryPaths,
   hashCommitMessage,
@@ -352,7 +353,16 @@ export class WorkKnowledge {
         uncarry(index, id)
       }
       for (const id of plan.removeMine) await this.o.store.remove('mine', id)
-      for (const e of pending) await this.o.store.write('pending', e)
+      // 동시에 돈 Work가 그새 같은 규칙을 공유 대기에 썼으면 새로 쓰지 않는다 (지식 탐색 K7, D331). 이미 있던 항목을 다시
+      // 쓰는 것([그대로 맞음] 등)은 그대로 쓴다
+      const existing = (await this.o.store.list('pending')).entries.map((r) => r.entry)
+      const known = new Set(existing.map((x) => x.id))
+      for (const e of pending) {
+        if (!known.has(e.id) && duplicateOf(e, existing)) continue
+        await this.o.store.write('pending', e)
+        existing.push(e)
+        known.add(e.id)
+      }
       for (const e of mine) await this.o.store.write('mine', e)
       if (carried) {
         for (const id of plan.carry) {

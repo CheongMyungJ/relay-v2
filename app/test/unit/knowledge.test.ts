@@ -13,6 +13,7 @@ import { codexToolDenial } from '../../src/core/codex'
 import {
   DEFAULT_KNOWLEDGE_DIR,
   candidateChoice,
+  duplicateOf,
   candidateProblem,
   editedCandidate,
   entryPath,
@@ -1010,6 +1011,166 @@ describe('후보 모으기 (D283, D296, D299, D304, D318)', () => {
     expect(first(r.candidates).supersedes?.id).toBe(rule.id)
   })
 
+  it('기존 항목과 거의 같은 규칙은 채택 안 함이 기본이고, 다른 규칙이나 이 Work가 실은 것은 아니다 (D331, 지식 탐색 K7)', () => {
+    const old = entry({
+      id: 'constraint-0000000a',
+      kind: 'constraint',
+      subkind: 'compat',
+      rule: '오류도 HTTP 200으로 보내고 본문은 ok false와 error로 한다',
+      paths: ['src/http.js'],
+      terms: ['오류 응답'],
+    })
+    const mk = (rule: string) => ({
+      ...CANDIDATE,
+      rule,
+      paths: ['src/routes/cart.js'],
+      terms: ['오류 응답'],
+    })
+    const review = (scope: PoolEntry['scope']) =>
+      reviewKnowledge({
+        tasks: [
+          {
+            taskId: 't-01',
+            node: 'intake',
+            version: 2,
+            header: header({
+              knowledge_candidates: [
+                mk('오류도 HTTP 200으로 보내고 본문은 ok false와 error로 한다'),
+                mk('장바구니 오류 code는 INVALID_QTY와 PRODUCT_NOT_FOUND다'),
+              ],
+            }),
+          },
+        ],
+        pool: [pool(old, scope)],
+        changed: [],
+        share: true,
+        dir: 'd/',
+        offerPending: true,
+      })
+    const r = review('pending')
+    const [same, other] = [first(r.candidates), second(r.candidates)]
+    expect(same.sameAs?.id).toBe(old.id)
+    expect(candidateChoice(same, undefined, true).adopt).toBe(false)
+    expect(other.sameAs).toBeNull()
+    // 같은 영역의 기존 규칙(종류가 달라도)으로는 보인다 (K25)
+    expect(other.overlaps.map((o) => o.id)).toEqual([old.id])
+    expect(candidateChoice(other, undefined, true).adopt).toBe(true)
+    expect(first(review('carried').candidates).sameAs).toBeNull()
+  })
+
+  it('같은 규칙을 한 Work에서 다른 종류로 두 번 적으면 뒤의 것은 비슷한 후보다 (D331, 지식 탐색 K7)', () => {
+    const rule = '모든 API는 오류도 HTTP 200으로 보낸다. 앱 2.x 지원이 끝날 때까지 유지한다'
+    const r = reviewKnowledge({
+      tasks: [
+        {
+          taskId: 't-01',
+          node: 'intake',
+          version: 2,
+          header: header({
+            knowledge_candidates: [
+              { ...CANDIDATE, kind: 'constraint', subkind: 'compat', rule, paths: ['src/http.js'] },
+              { ...CANDIDATE, rule: `${rule}.`, terms: ['응답'] },
+            ],
+          }),
+        },
+      ],
+      pool: [],
+      changed: [],
+      share: true,
+      dir: 'd/',
+      offerPending: true,
+    })
+    expect(r.candidates.map((c) => c.similarTo)).toEqual([null, 't-01#k1'])
+  })
+
+  it('공유 대기에 쓰기 직전 같은 규칙이 있으면 그 항목을 돌려준다 (D331, 지식 탐색 K7)', () => {
+    const a = entry({
+      id: 'domain-0000000a',
+      rule: '가끔 실패하는 시험은 재시도로 덮지 않고 원인을 고친다',
+    })
+    const b = entry({
+      id: 'domain-0000000b',
+      rule: '가끔 실패하는 시험은 재시도로 덮지 않고 원인을 고친다.',
+    })
+    const c = entry({ id: 'domain-0000000c', rule: '시험의 시간 제한은 5초다' })
+    expect(duplicateOf(b, [a])?.id).toBe(a.id)
+    expect(duplicateOf(c, [a])).toBeUndefined()
+    expect(duplicateOf(a, [a])).toBeUndefined()
+    expect(duplicateOf(b, [{ ...a, status: 'superseded' }])).toBeUndefined()
+  })
+
+  it('이번 Work의 범위로 보이는 후보와 결정은 채택 안 함이 기본이다 (D331, 지식 탐색 K21)', () => {
+    const r = reviewKnowledge({
+      tasks: [
+        {
+          taskId: 't-01',
+          node: 'intake',
+          version: 2,
+          header: header({
+            decisions: [{ what: '이번에는 CSV는 고치지 않는다', why: '요청 밖', by: 'human' }],
+            knowledge_candidates: [
+              { ...CANDIDATE, rule: '이번 Work에서는 retry/policy.js를 고치지 않는다' },
+              { ...CANDIDATE, rule: '요약 메일은 하루에 한 번만 보낸다' },
+            ],
+          }),
+        },
+      ],
+      pool: [],
+      changed: [],
+      share: true,
+      dir: 'd/',
+      offerPending: true,
+    })
+    expect(r.candidates.map((c) => [c.rule, c.workScoped !== null])).toEqual([
+      ['이번 Work에서는 retry/policy.js를 고치지 않는다', true],
+      ['요약 메일은 하루에 한 번만 보낸다', false],
+      ['이번에는 CSV는 고치지 않는다', true],
+    ])
+    expect(r.candidates.map((c) => candidateChoice(c, undefined, true).adopt)).toEqual([
+      false,
+      true,
+      false,
+    ])
+  })
+
+  it('verify와 PR 대응의 사람 결정은 다듬지 않은 결정으로 올리지 않고, 그 단계의 후보는 올린다 (D331, 지식 탐색 K8)', () => {
+    const review = { what: '리뷰 지적 2건은 반영하지 않는다', why: '사소함', by: 'human' as const }
+    const r = reviewKnowledge({
+      tasks: [
+        {
+          taskId: 't-01',
+          node: 'intake',
+          version: 2,
+          header: header({ decisions: [{ ...review, what: '빈 배열은 0' }] }),
+        },
+        {
+          taskId: 't-03',
+          node: 'verify',
+          version: 2,
+          header: header({
+            decisions: [review],
+            knowledge_candidates: [{ ...CANDIDATE, rule: '경계값 0을 시험한다' }],
+          }),
+        },
+        {
+          taskId: 't-04',
+          node: 'respond',
+          version: 2,
+          header: header({ decisions: [{ ...review, what: '리뷰어 제안 반영' }] }),
+        },
+      ],
+      pool: [],
+      changed: [],
+      share: true,
+      dir: 'd/',
+      offerPending: true,
+    })
+    expect(r.candidates.map((c) => [c.taskId, c.unrefined, c.rule])).toEqual([
+      ['t-03', false, '경계값 0을 시험한다'],
+      ['t-01', true, '빈 배열은 0'],
+    ])
+  })
+
   it('코드로 알 수 있는 후보는 까닭을 보이고 채택 안 함이 기본이다 (D297, 지식 탐색 K22)', () => {
     const recipe = (rule: string, nic: string) => ({
       kind: 'recipe' as const,
@@ -1403,6 +1564,75 @@ describe('채택 결과 (I73)', () => {
       ['failure-00000001', 'active', '새 규칙'],
       [stale.id, 'superseded', stale.rule],
     ])
+  })
+
+  it('이 Work가 따랐고 맞았다고 알린 재확인 항목은 경로를 안 바꿨어도 올리고 [그대로 맞음]이 기본이다 (D330)', () => {
+    const stale = entry({
+      id: 'failure-0000000d',
+      kind: 'failure',
+      paths: ['src/a.ts'],
+      terms: ['zz'],
+    })
+    const other = entry({ id: 'domain-0000000e', paths: ['src/b.ts'] })
+    const p = [pool(stale, 'team', true), pool(other, 'pending')]
+    const review = reviewKnowledge({
+      tasks: [
+        {
+          taskId: 't-02',
+          node: 'fix',
+          version: 2,
+          header: header({ knowledge_confirmed: [stale.id, other.id, 'domain-unknown'] }),
+        },
+      ],
+      pool: p,
+      changed: [],
+      share: true,
+      dir: 'd/',
+      offerPending: true,
+    })
+    expect(review.stale.map((x) => [x.id, x.confirmed])).toEqual([[stale.id, true]])
+    expect(review.confirmed.map((x) => x.id)).toEqual([stale.id, other.id])
+    expect(review.feedback).toEqual([])
+    const r = planKnowledge({
+      review,
+      choices: undefined,
+      delivery: 'pr',
+      work: 'w-1',
+      task: 't-03',
+      pool: p,
+      random: ids(),
+    })
+    expect(r.repo.map((e) => e.id)).toContain(stale.id)
+  })
+
+  it('같은 Work에서 틀렸다는 보고도 받은 항목은 확인으로 보지 않는다 (D330)', () => {
+    const stale = entry({
+      id: 'failure-0000000d',
+      kind: 'failure',
+      paths: ['src/a.ts'],
+      terms: ['zz'],
+    })
+    const review = reviewKnowledge({
+      tasks: [
+        {
+          taskId: 't-02',
+          node: 'fix',
+          version: 2,
+          header: header({
+            knowledge_confirmed: [stale.id],
+            knowledge_feedback: [{ id: stale.id, note: '틀림' }],
+          }),
+        },
+      ],
+      pool: [pool(stale, 'team', true)],
+      changed: [],
+      share: true,
+      dir: 'd/',
+      offerPending: true,
+    })
+    expect(review.confirmed).toEqual([])
+    expect(review.stale).toEqual([])
+    expect(review.feedback.map((f) => f.id)).toEqual([stale.id])
   })
 
   it('전달 버튼 줄의 한 줄 (I75)', () => {

@@ -11,7 +11,9 @@ import {
   SUBKIND_KIND,
   candidateChoice,
   candidateProblem,
+  defaultCandidateChoice,
   editedCandidate,
+  entryChoice,
   type CandidateChoice,
   type CandidateEdit,
   type EntryAction,
@@ -210,6 +212,8 @@ function CandidateRow({
         {c.sameDecisionAs ? `같은 결정의 후보(앞: ${c.sameDecisionAs.split('#')[0]}) · ` : ''}
         {c.similarTo ? `비슷한 후보(앞: ${c.similarTo.split('#')[0]}) · ` : ''}
         {c.inCode ? `코드에 있다고 봄(${c.inCode}) · ` : ''}
+        {c.sameAs ? `기존 항목과 같은 규칙(${c.sameAs.id}) · ` : ''}
+        {c.workScoped ? `이번 Work의 범위로 보임(${c.workScoped}) · ` : ''}
         {c.taskId} · {c.by === 'human' ? '사람이 정함' : 'AI'}
         {e.paths.length ? ` · 경로: ${e.paths.join(', ')}` : ''}
         {e.terms.length ? ` · 용어: ${e.terms.join(', ')}` : ''}
@@ -223,6 +227,14 @@ function CandidateRow({
           틀렸다는 보고: {f}
         </div>
       ))}
+      {c.overlaps.length &&
+      c.kind &&
+      (c.kind === 'domain' || c.kind === 'constraint') &&
+      !c.sameAs ? (
+        <div className="dim">
+          같은 영역의 기존 규칙이 있습니다. 그 규칙을 바꾸는 것이면 아래에서 대체를 고르세요.
+        </div>
+      ) : null}
       {targets.length && choice.adopt ? (
         <div className="knowledge-targets">
           <label>
@@ -288,6 +300,7 @@ function EntryRow({
   return (
     <li className="knowledge-item">
       {r ? <RefLine r={r} /> : <span className="dim">모르는 항목</span>}
+      {r?.confirmed ? <div className="dim">이 Work가 따랐고 맞았다고 알림</div> : null}
       {notes?.map((n, i) => (
         <div key={i} className="dim">
           보고: {n}
@@ -346,8 +359,9 @@ export function KnowledgePanel({
       {review.candidates.length ? (
         <section>
           <h3>이 Work의 후보</h3>
-          <ul>
-            {review.candidates.map((c) => (
+          {(() => {
+            // 기본이 채택 안 함인 후보는 접어 둔다 (지식 탐색 K8). 사람이 고른 것은 펼친 쪽에 남는다
+            const row = (c: KnowledgeCandidateView) => (
               <CandidateRow
                 key={c.key}
                 c={c}
@@ -358,8 +372,23 @@ export function KnowledgePanel({
                   onChange({ ...choices, candidates: { ...choices.candidates, [c.key]: next } })
                 }
               />
-            ))}
-          </ul>
+            )
+            const folded = review.candidates.filter(
+              (c) => !defaultCandidateChoice(c, review.share).adopt && !choices.candidates?.[c.key],
+            )
+            const open = review.candidates.filter((c) => !folded.includes(c))
+            return (
+              <>
+                <ul>{open.map(row)}</ul>
+                {folded.length ? (
+                  <details>
+                    <summary>채택 안 함이 기본인 후보 {folded.length}건</summary>
+                    <ul>{folded.map(row)}</ul>
+                  </details>
+                ) : null}
+              </>
+            )
+          })()}
         </section>
       ) : null}
       {review.pending.length ? (
@@ -400,7 +429,7 @@ export function KnowledgePanel({
                 key={r.id}
                 r={r}
                 readOnly={readOnly}
-                value={choices.stale?.[r.id] ?? { action: 'leave' }}
+                value={entryChoice('stale', r.id, choices, r.confirmed)}
                 onChange={(v) => onChange({ ...choices, stale: { ...choices.stale, [r.id]: v } })}
               />
             ))}
@@ -425,6 +454,11 @@ export function KnowledgePanel({
             ))}
           </ul>
         </section>
+      ) : null}
+      {review.confirmed.length ? (
+        <div className="dim">
+          이 Work가 따랐고 맞았다고 알린 지식: {review.confirmed.map((r) => r.id).join(', ')}
+        </div>
       ) : null}
       <div className="dim">
         손대지 않으면 기본 선택대로 정해집니다. 지식 폴더: <code>{review.dir}</code>

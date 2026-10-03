@@ -124,6 +124,8 @@ export interface KnowledgeRefView {
   carriedPr: number | null
   /** 재확인 필요 (D316, D317) */
   stale: boolean
+  /** 이 Work의 task가 따랐고 맞았다고 알렸다 (knowledge_confirmed, D330) */
+  confirmed?: boolean
 }
 
 /**
@@ -161,6 +163,16 @@ export interface KnowledgeCandidateView {
    * 적었거나 package.json·README를 가리킴. 있으면 채택 안 함이 기본이다
    */
   inCode: string | null
+  /**
+   * 규칙이 기존 항목과 거의 같다 (지식 탐색 K7, D331). 있으면 같은 규칙을 또 쌓지 않게 채택 안 함이 기본이다. 바꾸는 것이면
+   * 사람이 채택하고 대체를 고른다
+   */
+  sameAs: KnowledgeRefView | null
+  /**
+   * 이번 Work에서만 정한 범위로 보인 까닭 (지식 탐색 K21, D331): "이번에는", "이번 Work" 같은 말. 있으면 채택 안 함이
+   * 기본이다
+   */
+  workScoped: string | null
   /** 대체할 항목 (D299, D313). 모르는 id면 null이고 unknownSupersedes에 남긴다 */
   supersedes: KnowledgeRefView | null
   unknownSupersedes: string | null
@@ -189,6 +201,8 @@ export interface KnowledgeReview {
   stale: KnowledgeRefView[]
   /** 틀렸다는 보고 (D318) */
   feedback: KnowledgeFeedbackView[]
+  /** 이 Work의 task가 따랐고 맞았다고 알린 항목 (D330). 보이기만 한다 */
+  confirmed: KnowledgeRefView[]
   /** 팀 공유가 켜져 있다 (D322). 꺼져 있으면 팀/나만 고르기가 없다 */
   share: boolean
   /** 지식 폴더 (D305) */
@@ -318,7 +332,8 @@ export function normalizePath(p: string): string {
 export function defaultCandidateChoice(c: KnowledgeCandidateView, share: boolean): CandidateChoice {
   const replace = c.supersedes && c.supersedes.carriedPr === null ? c.supersedes.id : null
   return {
-    adopt: !c.unrefined && !c.sameDecisionAs && !c.similarTo && !c.inCode,
+    adopt:
+      !c.unrefined && !c.sameDecisionAs && !c.similarTo && !c.inCode && !c.sameAs && !c.workScoped,
     share: share ? 'team' : 'mine',
     replace,
   }
@@ -340,12 +355,17 @@ export function pendingAction(id: string, choices: KnowledgeChoices | undefined)
   return choices?.pending?.[id] ?? 'share'
 }
 
+/**
+ * 재확인·보고 항목의 선택. 고르지 않았으면 그대로 두기이고, 이 Work가 확인한 재확인 항목(D330)은 [그대로 맞음]이
+ * 기본이다
+ */
 export function entryChoice(
   group: 'stale' | 'feedback',
   id: string,
   choices: KnowledgeChoices | undefined,
+  confirmed = false,
 ): EntryChoice {
-  return choices?.[group]?.[id] ?? { action: 'leave' }
+  return choices?.[group]?.[id] ?? { action: group === 'stale' && confirmed ? 'confirm' : 'leave' }
 }
 
 /** 고친 후보 (I75). 다듬지 않은 사람 결정은 사람이 정한 종류, 용어, 경로를 받는다 */
