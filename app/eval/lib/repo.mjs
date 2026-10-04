@@ -87,7 +87,9 @@ export function codeOutcome(outcome) {
     ...(t.files ?? []),
     ...(t.knowledgeFiles ?? []).map((file) => ({ file, add: 0, del: 0, knowledge: true })),
   ])
-  const knowledge = [...new Set(files.filter((f) => f.knowledge || isKnowledge(f.file)).map((f) => f.file))]
+  const knowledge = [
+    ...new Set(files.filter((f) => f.knowledge || isKnowledge(f.file)).map((f) => f.file)),
+  ]
   const code = files.filter((f) => !f.knowledge && !isKnowledge(f.file))
   return {
     filesChanged: (outcome.filesChanged ?? []).filter((f) => !isKnowledge(f)),
