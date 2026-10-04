@@ -1,7 +1,7 @@
 // 전달 (시나리오 7, D15, D67, D71, D118~D120): Work 완료 화면의 전달 버튼과 그 이유, 전달을 시작할 수 있는지,
 // pr.md의 제목과 본문, push 뒤의 비교 URL, 커밋 안 된 변경을 처리하는 커밋과 stash의 메시지(7-5).
 // git과 gh는 main이 adapters로 부른다. machine의 전달 전이와 승인 화면이 같은 판정을 쓴다.
-import type { AnyHandoff, NodeName } from '../shared/contracts'
+import type { Handoff, NodeName } from '../shared/contracts'
 import type { ProjectChecks } from '../shared/project'
 import type { ButtonState, DeliveryButtons, DeliveryView, WorkActions } from '../shared/views'
 import type {
@@ -39,7 +39,6 @@ export const DELIVERY_LABEL: Readonly<Record<DeliveryChoice | 'none', string>> =
 /** 전달 단계의 이름 (D77) */
 export const DELIVERY_STAGE_LABEL: Readonly<Record<DeliveryStage, string>> = {
   prepare: '커밋 안 된 변경 처리',
-  knowledge: '지식 커밋',
   push: 'push',
   pr: 'PR 만들기',
 }
@@ -88,7 +87,7 @@ export function closingButtons(
 export function approvalStops(
   work: Pick<WorkState, 'stop_after_step' | 'type'>,
   node: NodeName,
-  header: Pick<AnyHandoff, 'recommended_next'> | null,
+  header: Pick<Handoff, 'recommended_next'> | null,
 ): boolean {
   const rec = header?.recommended_next
   return (
@@ -116,7 +115,7 @@ export type DeliveryStart =
 
 export function deliveryStart(
   work: WorkState,
-  check: (CheckSummary & { handoffHeader?: AnyHandoff | null }) | null,
+  check: (CheckSummary & { handoffHeader?: Handoff | null }) | null,
 ): DeliveryStart {
   if (work.operation) return { ok: false, error: '진행 중인 작업이 있음' }
   const stopped = stoppedVerify(work)

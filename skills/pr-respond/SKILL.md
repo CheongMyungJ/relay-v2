@@ -34,11 +34,6 @@ Settle every item as one of: 고침 (fixed) / 고치지 않음 (not fixed, with 
 - **Divergence:** merge the remote PR branch the app fetched (`origin/<branch>`, named in `context.md`). Do not rebase.
 - **Tests:** if you changed code, run the test command from the intent's 완료조건, and for each failure check whether it also fails at the base commit. If you changed an existing test, add it to `risks`.
 
-## Knowledge files
-
-- A comment on a knowledge file (in the knowledge folder of `context.md`'s `참고 지식`, `docs/knowledge/` by default) is fixed by editing that file. Change `# <rule>` and the body sections. Keep the front matter fields: the app checks them when your turn ends. To drop the rule, delete the file. Do not touch other knowledge files.
-- **Extract:** a reviewer's 고침 that is a rule (`constraint`), the cause of a CI failure (`failure`, or `recipe` for a flaky check).
-
 ## Replies
 
 - Write one section `## <item id>` in `replies.md` for each comment item of this round (review, inline, conversation). CI, conflict and divergence items get no reply.

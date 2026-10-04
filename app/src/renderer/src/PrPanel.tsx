@@ -13,8 +13,6 @@ import type {
 import type { MergeMethod } from '../../shared/work'
 import { call } from './commands'
 import { ConfirmDialog, Modal } from './dialogs'
-import { RespondKnowledge } from './Knowledge'
-import type { KnowledgeChoices } from '../../shared/knowledge'
 
 const short = (commit: string) => commit.slice(0, 8)
 
@@ -46,8 +44,6 @@ export function PrPanel({ work, pr }: { work: WorkView; pr: PrView }) {
   const [error, setError] = useState<string | null>(null)
   const [merging, setMerging] = useState(false)
   const [ending, setEnding] = useState(false)
-  // [머지 없이 끝내기] 확인 창의 지식 거르기 (I76)
-  const [endKnowledge, setEndKnowledge] = useState<KnowledgeChoices>({})
   const [instruction, setInstruction] = useState('')
   const active = work.status === 'pr'
   const cut = work.operation !== null
@@ -295,7 +291,7 @@ export function PrPanel({ work, pr }: { work: WorkView; pr: PrView }) {
           confirm="머지 없이 끝내기"
           onConfirm={() => {
             setEnding(false)
-            void run('머지 없이 끝내기', () => window.relay.prEnd(work.key, endKnowledge))
+            void run('머지 없이 끝내기', () => window.relay.prEnd(work.key))
           }}
           onClose={() => setEnding(false)}
         >
@@ -303,8 +299,6 @@ export function PrPanel({ work, pr }: { work: WorkView; pr: PrView }) {
             Work를 완료(머지 없이)로 바꿉니다. GitHub의 PR은 건드리지 않습니다. 끝낸 뒤에는 이 PR을
             읽지 않습니다.
           </p>
-          {/* PR 대응 task의 지식 후보를 끝낼 때 거른다 (D310 (5), I76) */}
-          <RespondKnowledge workKey={work.key} choices={endKnowledge} onChange={setEndKnowledge} />
         </ConfirmDialog>
       ) : null}
     </div>

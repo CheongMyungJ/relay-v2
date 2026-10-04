@@ -34,11 +34,6 @@ When all steps are done, run the intent's test command.
 - **Small departures from the plan** (how files are split, names, the order of steps, small helper functions): decide yourself and write them in `계획과 달라진 점`.
 - **The design is wrong:** set `recommended_next` to `design` with the reason. The app stops and the human picks the step.
 
-## Knowledge
-
-- `constraint` items in `참고 지식` apply to the paths in `바뀌는 곳`.
-- **Extract:** a `계획과 달라진 점` that reveals a rule (`constraint`) or a relation across modules (`structure`).
-
 ## Decision points
 
 - Implementation details the plan does not settle. With 결정마다 확인, ask before you change code.

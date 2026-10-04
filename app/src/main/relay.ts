@@ -12,13 +12,6 @@ import {
   hasRemote,
 } from '../adapters/git'
 import { HookServer } from '../adapters/hooks'
-import { KnowledgeStore, storeKnowledgeDir } from '../adapters/knowledge'
-import type {
-  KnowledgeChoices,
-  KnowledgeEditInput,
-  KnowledgeScreenResult,
-} from '../shared/knowledge'
-import { editKnowledge, knowledgeScreen } from './knowledge'
 import { killOrphans } from '../adapters/pty'
 import {
   WorkFiles,
@@ -30,14 +23,7 @@ import {
   workIds,
   worktreeDir,
 } from '../adapters/store'
-import {
-  applyConfigPatch,
-  checkProjectSettings,
-  checkWorkSettings,
-  projectKnowledgeDir,
-  projectKnowledgeShare,
-} from '../core/config'
-import { knowledgeOff } from '../core/knowledge'
+import { applyConfigPatch, checkProjectSettings, checkWorkSettings } from '../core/config'
 import { createWork } from '../core/machine'
 import { localIso, nextWorkId, workBranch } from '../core/records'
 import { recordedProcesses, type RecordedProcess } from '../core/recovery'
@@ -47,8 +33,6 @@ import type { ProjectChecks, ProjectState } from '../shared/project'
 import type {
   AppSnapshot,
   ApproveOptions,
-  KnowledgeReviewResult,
-  ResumeWorkOptions,
   CleanInput,
   CleanPreviewResult,
   CommandResult,
@@ -206,31 +190,7 @@ export class Relay {
       checks: (projectId) => this.projects.get(projectId)?.checks,
       project: (projectId) => this.projects.get(projectId),
       recheck: (projectId) => this.recheck(projectId),
-      knowledge: (projectId) => this.knowledge(projectId),
     }
-  }
-
-  /** 프로젝트의 앱 저장소 지식과 쓰기 잠금 (I71) */
-  private readonly knowledgeStores = new Map<
-    string,
-    { store: KnowledgeStore; lock: <T>(fn: () => Promise<T>) => Promise<T> }
-  >()
-
-  private knowledge(projectId: string) {
-    let k = this.knowledgeStores.get(projectId)
-    if (!k) {
-      let chain: Promise<unknown> = Promise.resolve()
-      k = {
-        store: new KnowledgeStore(storeKnowledgeDir(this.o.home, projectId)),
-        lock: <T>(fn: () => Promise<T>): Promise<T> => {
-          const run = chain.then(fn)
-          chain = run.catch(() => undefined)
-          return run
-        },
-      }
-      this.knowledgeStores.set(projectId, k)
-    }
-    return k
   }
 
   private ghBin(): string {
@@ -299,9 +259,6 @@ export class Relay {
       ghVersion: p.checks.gh_version ?? null,
       allowedBots: p.allowed_bots ?? [],
       mergeMethod: p.merge_method ?? null,
-      knowledgeDir: projectKnowledgeDir(p),
-      knowledgeShare: projectKnowledgeShare(p),
-      knowledgeOff: knowledgeOff(this.env),
     }))
   }
 
@@ -376,10 +333,6 @@ export class Relay {
         ...project,
         allowed_bots: r.value.allowed_bots,
         merge_method: r.value.merge_method,
-        ...(r.value.knowledge_dir === undefined ? {} : { knowledge_dir: r.value.knowledge_dir }),
-        ...(r.value.knowledge_share === undefined
-          ? {}
-          : { knowledge_share: r.value.knowledge_share }),
       })
       await Promise.all(
         [...this.works.values()]
@@ -547,8 +500,8 @@ export class Relay {
   }
 
   /** 멈춘 Work의 [재개] */
-  resumeWork(workKey: string, opts: ResumeWorkOptions = {}): Promise<CommandResult> {
-    return this.withWork(workKey, (w) => w.resumeWork(opts))
+  resumeWork(workKey: string): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.resumeWork())
   }
 
   /** [Work 포기] */
@@ -585,12 +538,8 @@ export class Relay {
   }
 
   /** [AI 세션 열기] (7-5) */
-  openCleanup(
-    workKey: string,
-    choice: DeliveryChoice,
-    knowledge?: KnowledgeChoices,
-  ): Promise<CommandResult> {
-    return this.withWork(workKey, (w) => w.openCleanup(choice, knowledge))
+  openCleanup(workKey: string, choice: DeliveryChoice): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.openCleanup(choice))
   }
 
   /** [정리 세션 닫기] (D137) */
@@ -646,61 +595,8 @@ export class Relay {
   }
 
   /** [머지 없이 끝내기] (D179) */
-  prEnd(workKey: string, knowledge?: KnowledgeChoices): Promise<CommandResult> {
-    return this.withWork(workKey, (w) => w.prEnd(knowledge))
-  }
-
-  // ---------- 지식 (M17) ----------
-
-  /** 머지 뒤 정리 창과 [머지 없이 끝내기] 확인 창의 지식 칸 (I76) */
-  async respondKnowledge(workKey: string): Promise<KnowledgeReviewResult> {
-    const runner = this.works.get(workKey)
-    if (!runner) return { ok: false, error: 'Work가 없습니다' }
-    try {
-      return { ok: true, review: await runner.respondKnowledge() }
-    } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : String(e) }
-    }
-  }
-
-  /** 머지 뒤 정리 창을 닫았다: PR 대응 task의 후보를 고른 대로 쓴다 (I76) */
-  fileKnowledge(workKey: string, knowledge?: KnowledgeChoices): Promise<CommandResult> {
-    return this.withWork(workKey, (w) => w.fileKnowledge(knowledge))
-  }
-
-  private screenOptions(projectId: string) {
-    const project = this.projects.get(projectId)
-    if (!project) return null
-    const k = this.knowledge(projectId)
-    return { project, store: k.store, lock: k.lock, env: this.env, at: () => this.at() }
-  }
-
-  /** 지식 화면 (D307, I77) */
-  async knowledgeScreen(projectId: string): Promise<KnowledgeScreenResult> {
-    if (knowledgeOff(this.env))
-      return { ok: false, error: '지식이 꺼져 있습니다 (RELAY_KNOWLEDGE=off)' }
-    const o = this.screenOptions(projectId)
-    if (!o) return { ok: false, error: '프로젝트가 없습니다' }
-    try {
-      return { ok: true, screen: await knowledgeScreen(o) }
-    } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : String(e) }
-    }
-  }
-
-  /** 지식 화면의 조작 (D307, I77). 바뀐 지식은 다음에 시작하는 task부터 쓴다 */
-  async editKnowledge(projectId: string, input: KnowledgeEditInput): Promise<CommandResult> {
-    const o = this.screenOptions(projectId)
-    if (!o) return { ok: false, error: '프로젝트가 없습니다' }
-    try {
-      const error = await editKnowledge(o, input)
-      if (error) return { ok: false, error }
-      // 공유 대기가 바뀌면 Work 완료 화면의 지식 칸도 다시 읽는다
-      for (const w of this.works.values()) if (w.project.project_id === projectId) w.touch()
-      return { ok: true }
-    } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : String(e) }
-    }
+  prEnd(workKey: string): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.prEnd())
   }
 
   /** 머지 뒤 정리 창을 열었다 (D178, D200) */

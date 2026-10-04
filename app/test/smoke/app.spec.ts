@@ -6,8 +6,6 @@
 // [터미널에서 답하기]가 있고, 열린 질문이 남은 채 [의도 승인]하면 확인 창이 뜬다. 크기(size) 고르기는 없다(D227).
 // 버튼 줄은 패널 아래에 붙어 있다. 리뷰와 검증의 [요약] 맨 위에 리뷰 지적과 반영이, 완료 알림에 작업 브랜치와
 // worktree가 보인다.
-// M17: 두 번째 Work의 Work 완료 화면에 [지식 1] 탭과 버튼 줄의 한 줄이 있고, [push]로 끝낸 뒤 사이드바의 [지식]으로 연
-// 지식 화면에 그 후보가 공유 대기로 보인다.
 // M3: 다음 task(원인 분석과 수정)를 [즉시 중단]하면 중단됨·읽기 전용이 되고 트리가 끝난다 → [재개]하면 같은 세션을
 // --resume으로 이전 화면 뒤에 잇고, 이어서 하라는 입력으로 바로 작업 중이 된다(M12) → 설정 화면에서 세션 상한을
 // 바꾼다. M7: 같은 설정 화면에서 카운트다운을 600초로 바꾼다(원인 분석과 수정의 자동 승인은 기본으로 켜져 있다).
@@ -123,18 +121,6 @@ test.beforeAll(async () => {
             { what: '완료조건을 모두 통과', why: '완료조건을 모두 통과한 이유', by: 'ai' },
           ],
           open_questions: ['배포 전에 알릴 곳은?'],
-          // 지식 후보 하나 (M17): Work 완료 화면의 [지식 1] 탭과 버튼 줄의 한 줄에 보인다 (I75)
-          knowledge_candidates: [
-            {
-              kind: 'failure',
-              rule: '빈 배열은 길이로 나누기 전에 확인한다',
-              paths: ['src/avg.js'],
-              terms: ['평균'],
-              why: '0으로 나누면 NaN',
-              not_in_code: '테스트가 빈 배열을 다루지 않았음',
-              incentive: '나눗셈을 그대로 둔다',
-            },
-          ],
         }),
       },
       { do: 'edit', files: { 'debug.log': '실험 출력\n' } },
@@ -471,16 +457,6 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   }
   await expect(win.locator('.review-body')).not.toContainText('review.md')
   await win.screenshot({ path: 'test-results/review.png' })
-  // 지식 (M17, I75): [지식 1] 탭에 후보가 채택으로 보이고, 버튼 줄에 지금 선택의 결과가 한 줄로 보인다
-  await win.getByRole('tab', { name: '지식 1', exact: true }).click()
-  await expect(win.locator('.review-body .knowledge')).toContainText(
-    '빈 배열은 길이로 나누기 전에 확인한다',
-  )
-  await expect(win.getByLabel('채택', { exact: true })).toBeChecked()
-  await expect(win.locator('.knowledge-line')).toContainText(
-    '팀 지식 1건은 [PR 생성]이면 PR에 함께 실리고, [완료만]·[push]면 공유 대기로 남음',
-  )
-  await win.screenshot({ path: 'test-results/knowledge-tab.png' })
   await push.click()
   // 답하지 않은 열린 질문이 있어 전달 전에 한 번 확인받는다 (D222). 창의 [push]로 전달한다
   const deliverQuestions = win.getByRole('dialog', { name: '답하지 않은 열린 질문' })
@@ -522,15 +498,6 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await expect(done.locator('.branch-line')).toContainText('worktree:')
   const badge2 = win.locator('.work-item.selected .badge')
   await expect(badge2).toHaveText('완료')
-  // 지식 화면 (I77): [push]로 끝나 팀 지식은 공유 대기에 있다 (D287)
-  await win.getByRole('button', { name: '지식', exact: true }).click()
-  const knowledge = win.getByRole('dialog', { name: /^지식 · / })
-  await expect(knowledge).toContainText('공유 대기 (1)', { timeout: 30_000 })
-  await expect(knowledge).toContainText('빈 배열은 길이로 나누기 전에 확인한다')
-  await expect(knowledge).toContainText('팀 (0)')
-  await win.screenshot({ path: 'test-results/knowledge-screen.png' })
-  await knowledge.getByRole('button', { name: '닫기', exact: true }).click()
-  await expect(knowledge).toBeHidden()
   const workId2 = /w-\d{8}-\d{3}/.exec(
     (await win.locator('.action-bar .info').textContent()) ?? '',
   )?.[0]

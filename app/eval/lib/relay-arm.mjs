@@ -178,7 +178,6 @@ export class RelayArm {
    * @param {string} o.base 평가 레포의 첫 커밋
    * @param {object} o.agentEnv 모델과 effort
    * @param {string} o.agentConfigDir 에이전트의 CLAUDE_CONFIG_DIR
-   * @param {boolean} [o.knowledge] false면 지식 관리를 끈 앱(RELAY_KNOWLEDGE=off, relay I84)이다. 평가의 relay-off 쪽
    * @param {(e: object) => void} o.log
    */
   constructor(o) {
@@ -200,7 +199,6 @@ export class RelayArm {
       CLAUDE_CONFIG_DIR: this.o.agentConfigDir,
       CLAUDE_BIN: findClaude(),
       RELAY_HOME: this.home,
-      ...(this.o.knowledge === false ? { RELAY_KNOWLEDGE: 'off' } : {}),
     })
   }
 
@@ -451,11 +449,6 @@ export class RelayArm {
     return trees
   }
 
-  /** 다음 Work로 넘어갈 때(works 시나리오, relay I84). 사람이 같은 앱과 프로젝트에서 [새 Work]를 누르므로 할 일이 없다 */
-  async nextWork() {
-    return null
-  }
-
   /** 끝난 Work의 상태 (work.json 요약) */
   works() {
     const out = []
@@ -471,7 +464,6 @@ export class RelayArm {
         // 단계별 토큰(eval-findings R9)을 세려고 세션 id와 context.md 크기를 남긴다
         const context = (t) =>
           path.join(ws, w, 'tasks', `${String(t.seq).padStart(2, '0')}-${t.node}`, 'context.md')
-        const read = (t) => (fs.existsSync(context(t)) ? fs.readFileSync(context(t), 'utf8') : null)
         out.push({
           id: w,
           dir: path.join(ws, w),
@@ -483,9 +475,9 @@ export class RelayArm {
             status: t.status,
             approved_by: t.approved_by ?? null,
             session: t.session?.id ?? null,
-            contextChars: read(t)?.length ?? null,
-            // `참고 지식` 절의 글자 (relay I84). 절이 없으면(지식을 끔) null
-            knowledgeChars: knowledgeSection(read(t)),
+            contextChars: fs.existsSync(context(t))
+              ? fs.readFileSync(context(t), 'utf8').length
+              : null,
           })),
         })
       }
@@ -504,13 +496,6 @@ export class RelayArm {
       }
     }
   }
-}
-
-/** context.md의 `## 참고 지식` 절 글자 수. 절이 없으면 null */
-function knowledgeSection(text) {
-  if (text === null) return null
-  const m = /^## 참고 지식\n([\s\S]*?)(?=^## |(?![\s\S]))/m.exec(text)
-  return m ? m[1].trim().length : null
 }
 
 const KEYS = {

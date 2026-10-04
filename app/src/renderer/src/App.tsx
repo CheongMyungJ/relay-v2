@@ -25,7 +25,6 @@ import {
 } from './dialogs'
 import { Activity } from './Activity'
 import { withOpened } from './opened'
-import { KnowledgeDialog } from './Knowledge'
 import { Panel, showsPr, wantsApproval } from './Panel'
 import { TerminalView } from './TerminalView'
 import { QuestionDialog } from './QuestionDialog'
@@ -33,7 +32,6 @@ import { QuestionDialog } from './QuestionDialog'
 type Dialog =
   | { kind: 'project' }
   | { kind: 'project-settings'; project: ProjectView }
-  | { kind: 'knowledge'; project: ProjectView }
   | { kind: 'work'; project: ProjectView }
   | { kind: 'settings' }
   | { kind: 'work-settings'; workKey: string }
@@ -206,25 +204,13 @@ export function App() {
         ))}
         {projects.map((p) => (
           <div key={p.id} className="project">
-            <div className="project-row">
-              <button
-                className="project-name"
-                title={`${p.repoPath} · 프로젝트 설정 (D185)`}
-                onClick={() => setDialog({ kind: 'project-settings', project: p })}
-              >
-                {p.name}
-              </button>
-              {/* 지식은 Work가 아니라 프로젝트에 붙는다 (D294, D307, I77) */}
-              {p.knowledgeOff ? null : (
-                <button
-                  className="project-knowledge"
-                  title="지식 화면: 팀, 나만, 공유 대기 (D307)"
-                  onClick={() => setDialog({ kind: 'knowledge', project: p })}
-                >
-                  지식
-                </button>
-              )}
-            </div>
+            <button
+              className="project-name"
+              title={`${p.repoPath} · 프로젝트 설정 (D185)`}
+              onClick={() => setDialog({ kind: 'project-settings', project: p })}
+            >
+              {p.name}
+            </button>
             {(worksByProject.get(p.id) ?? []).map((w) => {
               const t = currentTask(w)
               const done = w.badge.kind === 'done'
@@ -422,9 +408,6 @@ export function App() {
           project={projects.find((p) => p.id === dialog.project.id) ?? dialog.project}
           onClose={() => setDialog(null)}
         />
-      ) : null}
-      {dialog?.kind === 'knowledge' ? (
-        <KnowledgeDialog project={dialog.project} onClose={() => setDialog(null)} />
       ) : null}
       {dialog?.kind === 'work' ? (
         <NewWorkDialog

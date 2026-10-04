@@ -32,11 +32,6 @@ For a refactoring Work, change the structure without changing behavior. In one s
 - **Run tests:** run the test command from the intent's 완료조건. For each failure, check whether it also fails at the base commit (from `context.md`), and say which.
 - **Intent conflict:** if 완료조건 conflict or cannot be met, write it in `intent_deviation`. If the intent must change, set `recommended_next` to `intake`.
 
-## Knowledge
-
-- `참고 지식` may explain why the current structure is as it is (`decision`, `structure`) and list known bugs (`failure`).
-- **Extract:** rejected target structures (`decision`), `찾은 버그` (`failure`), an accepted difference (`decision`).
-
 ## Decision points
 
 - The target structure, how to split the plan, which safety-net tests to write. With 결정마다 확인, ask before you settle the plan.

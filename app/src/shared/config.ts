@@ -47,8 +47,6 @@ export interface AppConfig {
   respond_auto_round_max: number
   /** 앱이 게시하는 답글 끝에 붙이는 표시 (D173) */
   reply_signature: string
-  /** context.md의 `참고 지식` 절 분량 기준 (D312, D315 (4)) */
-  knowledge_inject_chars: number
 }
 
 /** work.json의 settings. 앱 설정과 같은 키를 쓰고, 없는 키는 앱 설정을 따른다 (D72) */
@@ -156,5 +154,4 @@ export const DEFAULT_CONFIG: AppConfig = {
   respond_auto_start: false,
   respond_auto_round_max: 3,
   reply_signature: '— relay(AI)가 작성함',
-  knowledge_inject_chars: 1500,
 }

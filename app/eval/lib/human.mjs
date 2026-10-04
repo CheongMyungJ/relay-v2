@@ -8,9 +8,6 @@ import { words } from './kind.mjs'
 
 const GUIDES = path.resolve(import.meta.dirname, '../guides')
 
-/** 쪽(relay, relay-off, cli)의 화면 종류. 지식을 끈 relay도 같은 앱이다 */
-export const screenKind = (kind) => (kind === 'cli' ? 'cli' : 'relay')
-
 const COMMON_ACTIONS = ['type', 'key', 'inspect_diff', 'wait', 'done', 'give_up']
 const ARM_ACTIONS = {
   relay: ['click', 'fill', 'select', 'scroll', ...COMMON_ACTIONS],
@@ -131,7 +128,6 @@ function systemPrompt(kind, scenario, guide) {
     guide.trim(),
     '',
     '## 네 상황',
-    ...nextWorkLines(kind, scenario),
     `### 일의 종류: ${w.label}`,
     '',
     `### ${w.subject}`,
@@ -148,24 +144,10 @@ function systemPrompt(kind, scenario, guide) {
   return lines.join('\n')
 }
 
-/** Work 둘을 잇는 시나리오(relay I84)의 두 번째 일부터: 같은 레포에서 앞 일을 끝낸 뒤라는 것을 알린다 */
-function nextWorkLines(kind, scenario) {
-  const n = scenario.work?.index ?? 0
-  if (n === 0) return []
-  return [
-    `이 레포에서 앞서 다른 일을 이미 끝냈고, 이번이 ${n + 1}번째 일이다. ${
-      kind === 'cli'
-        ? '앞 일의 터미널은 닫았고, 같은 레포 폴더에서 claude를 새로 띄워 두었다.'
-        : '앱과 프로젝트는 앞 일 그대로다. 화면에 남아 있는 완료된 Work는 앞 일이고, 앞 일의 변경은 기준 브랜치에 들어가지 않았다. 이번 일은 [새 Work]로 시작한다.'
-    } 앞 일의 내용은 이번 일과 따로 다룬다.`,
-    '',
-  ]
-}
-
 export class Human {
   /**
    * @param {object} o
-   * @param {'relay'|'cli'} o.kind 화면 종류 (screenKind)
+   * @param {'relay'|'cli'} o.kind
    * @param {object} o.scenario
    * @param {string} o.dir 사람 역할의 작업 폴더 (스크린샷이 여기 있다)
    * @param {string} o.configDir

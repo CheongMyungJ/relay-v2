@@ -5,27 +5,13 @@
 import Ajv2020, { type ErrorObject, type ValidateFunction } from 'ajv/dist/2020'
 import { parseDocument } from 'yaml'
 import type { AppConfig } from '../shared/config'
-import type {
-  AnyHandoff,
-  Handoff,
-  HandoffStatus,
-  KnowledgeEntryHeader,
-  TaskNode,
-} from '../shared/contracts'
+import type { Handoff, HandoffStatus, TaskNode } from '../shared/contracts'
 import handoffSchemaV1 from '../shared/generated/handoff.v1.schema.json'
-import handoffSchemaV2 from '../shared/generated/handoff.v2.schema.json'
-import knowledgeEntrySchema from '../shared/generated/knowledge-entry.v1.schema.json'
 import type { CheckSummary, FormatIssue, WorkType } from '../shared/work'
 import { ALL_NODES, NODE_INFO, recommendableNodes } from './pipeline'
 
-/**
- * 지금 쓰는 형식 버전 (5.2.1). task를 시작할 때 work.json에 기록하고, 그 버전의 스키마로 검사한다. 2는 지식 후보의 객체
- * 모양과 knowledge_feedback을 더했다 (I70). 버전 1로 시작한 task는 버전 1로 검사한다
- */
-export const FORMAT_VERSION = 2
-
-/** handoff 형식 버전 (I70) */
-export type FormatVersion = 1 | 2
+/** 지금 쓰는 형식 버전 (5.2.1). task를 시작할 때 work.json에 기록하고, 그 버전의 스키마로 검사한다 */
+export const FORMAT_VERSION = 1
 
 export const HANDOFF_FILE = 'handoff.md'
 export const INTENT_DRAFT_FILE = 'intent.draft.md'
@@ -58,12 +44,8 @@ interface SchemaNode {
   properties?: Record<string, SchemaNode>
   items?: SchemaNode
   oneOf?: SchemaNode[]
-  allOf?: SchemaNode[]
   required?: string[]
   if?: SchemaNode
-  pattern?: string
-  minItems?: number
-  maxItems?: number
 }
 
 interface Checker<T> {
@@ -72,13 +54,12 @@ interface Checker<T> {
 }
 
 interface Schemas {
-  handoff: Checker<AnyHandoff>
+  handoff: Checker<Handoff>
 }
 
 // 형식 버전마다의 스키마 (5.2.1). 처음 쓸 때 컴파일한다.
 const SOURCES: Readonly<Record<number, { handoff: SchemaNode }>> = {
   1: { handoff: handoffSchemaV1 },
-  2: { handoff: handoffSchemaV2 as unknown as SchemaNode },
 }
 const compiled = new Map<number, Schemas>()
 
@@ -89,29 +70,10 @@ function schemas(version: number): Schemas {
   if (!source) throw new Error(`형식 버전 ${version}의 스키마가 없다`)
   const ajv = new Ajv2020({ allErrors: true })
   const s: Schemas = {
-    handoff: { schema: source.handoff, validate: ajv.compile<AnyHandoff>(source.handoff) },
+    handoff: { schema: source.handoff, validate: ajv.compile<Handoff>(source.handoff) },
   }
   compiled.set(version, s)
   return s
-}
-
-let entryChecker: Checker<KnowledgeEntryHeader> | null = null
-
-/** 지식 파일 머리글의 스키마 (D320, I70) */
-function entrySchema(): Checker<KnowledgeEntryHeader> {
-  if (!entryChecker) {
-    const schema = knowledgeEntrySchema as unknown as SchemaNode
-    entryChecker = {
-      schema,
-      validate: new Ajv2020({ allErrors: true }).compile<KnowledgeEntryHeader>(schema),
-    }
-  }
-  return entryChecker
-}
-
-/** 버전 2로 검사한 handoff 머리글. 버전 1이면 지식 필드가 없어 null이다 (I70) */
-export function handoffV2(header: AnyHandoff | null, version: number | undefined): Handoff | null {
-  return header && version === 2 ? (header as Handoff) : null
 }
 
 // ---------- 머리글 ----------
@@ -242,26 +204,13 @@ function schemaAt(schema: SchemaNode, path: string): unknown {
 }
 
 /** if/then의 조건 문구. 예: "`status: blocked`일 때" */
-function conditionText(schema: SchemaNode | undefined): string {
-  const props = Object.entries(schema?.if?.properties ?? {})
+function conditionText(schema: SchemaNode): string {
+  const props = Object.entries(schema.if?.properties ?? {})
   const parts = props
     .filter(([, s]) => s.const !== undefined)
     .map(([k, s]) => `\`${k}: ${String(s.const)}\``)
   return parts.length ? `${parts.join(', ')}일 때` : '조건에 맞을 때'
 }
-
-/**
- * if/then의 then에서 난 오류의 조건 문구. 맨 위의 if/then(blocked면 blocked_reason)과 항목 안의 allOf if/then(지식 후보의
- * 종류마다 경로 수, D299)을 같게 다룬다. then에서 난 오류가 아니면 null
- */
-function conditionOf(schema: SchemaNode, e: ErrorObject): string | null {
-  const i = e.schemaPath.lastIndexOf('/then/')
-  if (i < 0) return null
-  return conditionText(schemaAt(schema, e.schemaPath.slice(0, i)) as SchemaNode | undefined)
-}
-
-/** 지식 id의 모양 (D320) */
-const ENTRY_ID_SHAPE = '지식 id <종류>-<소문자와 숫자 8자> (예: domain-a1b2c3d4)'
 
 interface FieldError {
   field: string
@@ -301,32 +250,9 @@ function translate(e: ErrorObject, data: unknown, condition: string | null): Fie
     }
     case 'const': {
       const field = fieldPath(e.instancePath)
-      const rule = `${condition ? `${condition} ` : ''}${String(params['allowedValue'])}`
       return {
         field,
-        message: `\`${field}\` 값이 틀림 (기대: ${rule}, 지금: ${describeValue(value)})`,
-      }
-    }
-    case 'minItems': {
-      const field = fieldPath(e.instancePath)
-      const n = Array.isArray(value) ? value.length : 0
-      const rule = `${condition ? `${condition} ` : ''}${String(params['limit'])}개 이상`
-      return { field, message: `\`${field}\` 항목이 모자람 (기대: ${rule}, 지금: ${n}개)` }
-    }
-    case 'maxItems': {
-      const field = fieldPath(e.instancePath)
-      const n = Array.isArray(value) ? value.length : 0
-      return {
-        field,
-        message: `\`${field}\` 항목이 너무 많음 (기대: ${String(params['limit'])}개 이하, 지금: ${n}개)`,
-      }
-    }
-    case 'pattern': {
-      const field = fieldPath(e.instancePath)
-      const shape = String(params['pattern']).includes('domain|') ? ENTRY_ID_SHAPE : '정한 모양'
-      return {
-        field,
-        message: `\`${field}\` 값의 모양이 틀림 (기대: ${shape}, 지금: ${describeValue(value)})`,
+        message: `\`${field}\` 값이 틀림 (기대: ${String(params['allowedValue'])}, 지금: ${describeValue(value)})`,
       }
     }
     case 'minLength': {
@@ -379,12 +305,14 @@ function schemaErrors(
       })
     }
   }
+  const condition = conditionText(schema)
   const kept = errors.filter((e) => !dropped.has(e))
   // 조건부 규칙이 더 구체적이라 먼저 둔다. 같은 필드는 첫 메시지만 남긴다.
-  const conditional = kept.filter((e) => conditionOf(schema, e) !== null)
   const ordered = [
-    ...conditional.map((e) => translate(e, data, conditionOf(schema, e))),
-    ...kept.filter((e) => !conditional.includes(e)).map((e) => translate(e, data, null)),
+    ...kept
+      .filter((e) => e.schemaPath.startsWith('#/then/'))
+      .map((e) => translate(e, data, condition)),
+    ...kept.filter((e) => !e.schemaPath.startsWith('#/then/')).map((e) => translate(e, data, null)),
     ...extra,
   ]
   const seen = new Set<string>()
@@ -552,23 +480,17 @@ export interface HandoffCheckOptions {
   formatVersion?: number
 }
 
-export interface HandoffCheck extends DocCheck<AnyHandoff> {
-  /** 검사한 형식 버전 (I70). 읽는 쪽은 이 버전으로 좁힌다(handoffV2) */
-  version: number
+export interface HandoffCheck extends DocCheck<Handoff> {
   /** 머리글에서 읽은 status. 다른 오류가 있어도 읽을 수 있으면 채운다 */
   status: HandoffStatus | null
   /** 머리글이 스키마를 통과했을 때의 값. 본문이나 추가 검사의 오류가 있어도 채운다 (D112) */
-  header: AnyHandoff | null
+  header: Handoff | null
 }
-
-/** task마다 지식 후보 수의 목표는 3개 안팎이다. 이보다 많으면 경고만 한다 (D295) */
-export const KNOWLEDGE_CANDIDATES_WARN = 5
 
 /** handoff.md 검사 (5.2, 5.2.1) */
 export function checkHandoff(text: string, opts: HandoffCheckOptions): HandoffCheck {
   const file = HANDOFF_FILE
-  const version = opts.formatVersion ?? FORMAT_VERSION
-  const h = checkHeader(file, text, schemas(version).handoff)
+  const h = checkHeader(file, text, schemas(opts.formatVersion ?? FORMAT_VERSION).handoff)
   const errors = [...h.errors]
   const rec = h.data?.['recommended_next']
   const node = isRecord(rec) ? rec['node'] : undefined
@@ -585,66 +507,16 @@ export function checkHandoff(text: string, opts: HandoffCheckOptions): HandoffCh
   }
   if (h.data) errors.push(...missingSections(file, h.body, HANDOFF_SECTIONS, 'handoff 본문'))
   const status = h.data?.['status']
-  const candidates = version >= 2 ? h.data?.['knowledge_candidates'] : undefined
-  const many =
-    Array.isArray(candidates) && candidates.length > KNOWLEDGE_CANDIDATES_WARN
-      ? [
-          {
-            file,
-            part: 'header' as const,
-            field: 'knowledge_candidates',
-            message: `지식 후보가 많음 (목표: 3개 안팎, 지금: ${candidates.length}개). 다음에도 쓸 것만 남긴다 (D295)`,
-          },
-        ]
-      : []
   return {
     value: errors.length ? null : h.value,
-    version,
     status: status === 'awaiting_approval' || status === 'blocked' ? status : null,
     header: h.value,
     errors,
     warnings: [
       ...h.warnings,
-      ...many,
       ...(h.data ? lengthWarning(file, h.body, opts.warnChars, 'handoff 본문') : []),
     ],
   }
-}
-
-/** 지식 파일의 본문 절 (D320) */
-export const KNOWLEDGE_SECTIONS = ['이유', '코드불가', '유인'] as const
-
-export interface KnowledgeFileCheck extends DocCheck<KnowledgeEntryHeader> {
-  /** 본문의 `# <규칙>` 제목. 없으면 null */
-  rule: string | null
-  body: string
-}
-
-/**
- * 지식 파일 검사 (D320, I70, I79): 머리글을 knowledge-entry 스키마로, 본문은 `# <규칙>` 제목이 있는지 본다. 이유·코드불가·유인
- * 절은 사람이 고친 파일에서 빠질 수 있어 경고만 한다. file은 메시지에 쓸 이름이다
- */
-export function checkKnowledgeFile(text: string, file: string): KnowledgeFileCheck {
-  const h = checkHeader(file, text, entrySchema())
-  const errors = [...h.errors]
-  const lines = markFences(h.body.split('\n')).filter((l) => !l.fenced)
-  const rule = lines.map((l) => headingText(l.line, 1)).find((t) => t !== null) ?? null
-  if (h.data && !rule) {
-    errors.push({ file, part: 'body', message: '`# <규칙>` 제목 없음: 지식 파일 본문의 첫 제목' })
-  }
-  const names = sectionNames(h.body)
-  const warnings = [
-    ...h.warnings,
-    ...(h.data
-      ? KNOWLEDGE_SECTIONS.filter((n) => !names.includes(n)).map((n) => ({
-          file,
-          part: 'body' as const,
-          field: n,
-          message: `\`## ${n}\` 절 없음: 지식 파일 본문의 절`,
-        }))
-      : []),
-  ]
-  return { value: errors.length ? null : h.value, rule, body: h.body, errors, warnings }
 }
 
 /**
@@ -816,15 +688,13 @@ export interface TaskCheckInput {
 }
 
 export interface TaskCheck extends CheckSummary {
-  /** 검사한 형식 버전 (I70). 지식 필드는 버전 2일 때만 읽는다(handoffV2) */
-  formatVersion: number
   /** handoff.md 자신에 오류가 없을 때의 머리글. 산출물 쪽 오류는 따지지 않는다 */
-  handoff: AnyHandoff | null
+  handoff: Handoff | null
   /**
    * handoff.md 머리글이 스키마를 통과했을 때의 값. 본문이나 추가 검사의 오류가 있어도 채운다.
    * [오류 무시하고 승인]이 결정과 이전 단계 추천을 읽는 데 쓴다 (D112)
    */
-  handoffHeader: AnyHandoff | null
+  handoffHeader: Handoff | null
 }
 
 /**
@@ -886,7 +756,6 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
     status: handoff?.status ?? null,
     errors,
     warnings: [...(handoff?.warnings ?? []), ...(draft?.warnings ?? [])],
-    formatVersion: version,
     handoff: handoff?.value ?? null,
     handoffHeader: handoff?.header ?? null,
   }
