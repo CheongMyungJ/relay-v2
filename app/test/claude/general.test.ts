@@ -13,7 +13,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { taskDirName } from '../../src/core/machine'
-import { intentDraftBody, sectionNames, sectionText } from '../../src/core/validate'
+import { CHECK_METHOD, intentDraftBody, sectionNames, sectionText } from '../../src/core/validate'
 import type { WorkState } from '../../src/shared/work'
 import { drive, type DriveResult } from '../flow/driver'
 import { APP, FAKE_CLAUDE, git, harness, makeRepo, register, settle } from '../flow/harness'
@@ -42,9 +42,6 @@ const REQUEST = [
 
 /** 레포의 공백 버그는 범위 밖이라 그대로다 */
 const KEPT = 'hello-big world'
-
-/** 앱의 확인 방법 검사(core/validate, I86)와 같은 꼴 */
-const CHECK_METHOD = /\s(?:—|–|--?)\s*확인\s*:\s*\S/
 
 interface Result {
   drive: DriveResult

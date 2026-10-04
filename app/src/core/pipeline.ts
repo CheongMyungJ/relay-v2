@@ -3,7 +3,7 @@
 // PR 대응 task(노드 respond)는 파이프라인 밖이다 (D187, D188): 순서, 단계 선택에 없고 선택 가능한 다음 단계가 없다.
 import type { SkillName } from '../shared/config'
 import type { NodeName, TaskNode } from '../shared/contracts'
-import type { WorkState, WorkType } from '../shared/work'
+import { WORK_TYPES, type WorkState, type WorkType } from '../shared/work'
 
 export interface NodeInfo {
   node: TaskNode
@@ -63,13 +63,13 @@ export const KEEP_CODE_NOTES: Readonly<
   },
 }
 
-/** [현재 코드 위에서 이어서]를 주는 단계 (6.2). KEEP_CODE_NOTES에서 나온다 */
-export const KEEP_CODE_NODES: Readonly<Record<WorkType, readonly NodeName[]>> = {
-  bugfix: Object.keys(KEEP_CODE_NOTES.bugfix) as NodeName[],
-  feature: Object.keys(KEEP_CODE_NOTES.feature) as NodeName[],
-  refactor: Object.keys(KEEP_CODE_NOTES.refactor) as NodeName[],
-  general: Object.keys(KEEP_CODE_NOTES.general) as NodeName[],
-}
+/**
+ * [현재 코드 위에서 이어서]를 주는 단계 (6.2). KEEP_CODE_NOTES에서 나오므로 유형을 더해도 여기는 고치지 않는다
+ * (PR #29 리뷰)
+ */
+export const KEEP_CODE_NODES: Readonly<Record<WorkType, readonly NodeName[]>> = Object.fromEntries(
+  WORK_TYPES.map((t) => [t, Object.keys(KEEP_CODE_NOTES[t]) as NodeName[]]),
+) as Record<WorkType, NodeName[]>
 
 /** PR 대응 task의 노드 (D187). 파이프라인 밖이다 (D188) */
 export const RESPOND = 'respond' as const

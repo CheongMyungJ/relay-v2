@@ -11,6 +11,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TYPES, assemble } from './assemble.mjs';
+import { CHECK_METHOD } from './check-method.mjs';
 import YAML from 'yaml';
 import Ajv2020 from 'ajv/dist/2020.js';
 
@@ -183,8 +184,8 @@ for (const v of variants.filter((x) => x.name === 'work-start')) {
   const cond = intentTpl.split('## 완료조건\n')[1]?.split('\n## ')[0] ?? '';
   const lines = cond.split('\n').filter((l) => l.trim());
   check(lines.length >= 3 && lines.every((l) => l.startsWith('- [ ] ')), `${v.label}: 완료조건 줄이 모두 "- [ ] "로 시작`);
-  // 일반은 줄마다 확인 방법을 붙인다 (D305). 앱의 검사(core/validate의 CHECK_METHOD, I86)와 같은 꼴이다
-  if (v.type === 'general') check(lines.every((l) => /\s(?:—|–|--?)\s*확인\s*:\s*\S/.test(l)), `${v.label}: 완료조건 줄마다 확인 방법 (D305)`);
+  // 일반은 줄마다 확인 방법을 붙인다 (D305). 앱의 검사(core/validate의 CHECK_METHOD, I86)와 같은 규칙이다
+  if (v.type === 'general') check(lines.every((l) => CHECK_METHOD.test(l)), `${v.label}: 완료조건 줄마다 확인 방법 (D305)`);
 }
 
 console.log('\n[4] 설계 대조: 산출물 템플릿의 절 제목');

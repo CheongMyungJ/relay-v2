@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { stringify } from 'yaml'
 import {
+  CHECK_METHOD,
   BOUNCE_HEAD,
   bounceMessage,
   checkHandoff,
@@ -12,6 +13,7 @@ import {
   parseFrontMatter,
   sectionNames,
 } from '../../src/core/validate'
+import { CHECK_METHOD as SKILLS_CHECK_METHOD } from '../../../skills/check-method.mjs'
 import { DEFAULT_CONFIG } from '../../src/shared/config'
 import type { NodeName } from '../../src/shared/contracts'
 
@@ -305,6 +307,21 @@ describe('intent 초안: 일반의 확인 방법 (D305, I86)', () => {
     expect(errorsOf(r)[0]).toBe(
       '`## 완료조건`의 줄 끝에 확인 방법(` — 확인: <명령 / 읽을 곳 / 사람>`)이 없음 (지금: - [ ] README에 설치 절차가 있다)',
     )
+  })
+
+  it('긴 대시는 앞 글자에 붙여 써도 받고, 하이픈은 앞에 공백이 있어야 한다 (PR #29 리뷰)', () => {
+    const ok = withCriteria([
+      '- [ ] `npm test`가 통과한다—확인: `npm test`',
+      '- [ ] README에 설치 절차가 있다–확인: README.md',
+    ])
+    expect(errorsOf(checkIntentDraft(ok, GENERAL))).toEqual([])
+    const glued = withCriteria(['- [ ] README에 설치 절차가 있다-확인: README.md'])
+    expect(errorsOf(checkIntentDraft(glued, GENERAL))).toHaveLength(1)
+  })
+
+  it('skills/check.mjs가 쓰는 규칙(skills/check-method.mjs)과 앱의 규칙이 같다 (PR #29 리뷰)', () => {
+    expect(SKILLS_CHECK_METHOD.source).toBe(CHECK_METHOD.source)
+    expect(SKILLS_CHECK_METHOD.flags).toBe(CHECK_METHOD.flags)
   })
 
   it('다른 유형과 유형을 주지 않은 검사는 확인 방법을 보지 않는다', () => {

@@ -116,6 +116,8 @@ function metricRows(rs) {
   const n = rs.length
   const sv = (k) => get((r) => r.survey?.[k] ?? null)
   const time = new Map(rs.map((r) => [r, humanTime(r)]))
+  // 지식 파일을 뺀 코드 결과는 실행마다 한 번만 만든다 (PR #29 리뷰)
+  const code = new Map(rs.map((r) => [r, codeOutcome(r.outcome)]))
   return [
     ['숨긴 시험 모두 통과', pct(rs.filter((r) => r.outcome.success).length, n)],
     ['레포 시험 통과', pct(rs.filter((r) => r.outcome.repoTestsPass).length, n)],
@@ -141,9 +143,9 @@ function metricRows(rs) {
     ['설문 복구', ms(sv('recovery'))],
     ['설문 다시 쓰고 싶음', ms(sv('reuse'))],
     // relay의 지식 파일은 코드 결과에서 빼고 따로 센다 (lib/repo.mjs, docs/eval.md 6절)
-    ['바뀐 줄 수', ms(get((r) => codeOutcome(r.outcome).linesChanged))],
-    ['기대 밖 파일 수', ms(get((r) => codeOutcome(r.outcome).unrelated.length))],
-    ['지식 파일 수(판정에서 뺌)', ms(get((r) => codeOutcome(r.outcome).knowledgeFiles.length))],
+    ['바뀐 줄 수', ms(get((r) => code.get(r).linesChanged))],
+    ['기대 밖 파일 수', ms(get((r) => code.get(r).unrelated.length))],
+    ['지식 파일 수(판정에서 뺌)', ms(get((r) => code.get(r).knowledgeFiles.length))],
     ['에이전트 출력 토큰(천)', ms(get((r) => r.agent.output / 1000))],
     [
       '에이전트 입력 토큰(천, 캐시 포함)',

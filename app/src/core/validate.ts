@@ -39,9 +39,10 @@ const CRITERIA_SECTION = '완료조건'
 const CRITERIA_PREFIX = '- [ ] '
 /**
  * 일반 Work의 완료조건 줄 끝의 확인 방법 (D305, I86). 대시 하나(—, –, -, --) 뒤의 `확인:`이고 그 뒤에 글이 있어야 한다.
- * 앱은 방법을 해석하지 않으므로 대시 모양은 너그럽게 본다
+ * 앱은 방법을 해석하지 않으므로 대시 모양은 너그럽게 본다. 긴 대시는 앞 글자에 붙여 써도 되고, 하이픈은 낱말 안에도
+ * 나오므로 앞에 공백이 있어야 한다(PR #29 리뷰). skills/check-method.mjs와 같아야 한다(시험이 비교한다)
  */
-const CHECK_METHOD = /\s(?:—|–|--?)\s*확인\s*:\s*\S/
+export const CHECK_METHOD = /(?:\s*[—–]|\s--?)\s*확인\s*:\s*\S/
 const CHECK_METHOD_FORM = ' — 확인: <명령 / 읽을 곳 / 사람>'
 
 // 스키마를 걷는 데 쓰는 부분만 적은 모양
