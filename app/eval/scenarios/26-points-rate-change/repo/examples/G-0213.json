@@ -1,0 +1,14 @@
+{
+  "number": "G-0213",
+  "customerId": "U-08871",
+  "orderedAt": "2026-10-03T11:47:00+09:00",
+  "recipient": { "name": "한서윤", "phone": "010-4821-3307" },
+  "message": "이사 축하해! 맛있게 먹어",
+  "lines": [
+    { "sku": "HN-0120", "name": "아카시아 꿀 500g", "unitPrice": 15900, "qty": 1 },
+    { "sku": "JM-0332", "name": "수제 딸기잼", "unitPrice": 4480, "qty": 2 }
+  ],
+  "coupon": { "code": "GIFT2000", "amount": 2000 },
+  "pointsUsed": 1000,
+  "pointBalance": 6210
+}

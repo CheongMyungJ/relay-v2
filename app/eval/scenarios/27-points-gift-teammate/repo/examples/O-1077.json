@@ -1,0 +1,13 @@
+{
+  "number": "O-1077",
+  "customerId": "U-11853",
+  "orderedAt": "2026-09-21T09:12:00+09:00",
+  "lines": [
+    { "sku": "KT-2290", "name": "스테인리스 밀폐용기 3종", "unitPrice": 12900, "qty": 2 },
+    { "sku": "TW-0838", "name": "순면 행주 5장", "unitPrice": 8380, "qty": 1 },
+    { "sku": "SP-0656", "name": "실리콘 주걱 세트", "unitPrice": 6565, "qty": 2 }
+  ],
+  "coupon": { "code": "WELCOME5000", "amount": 5000, "minGoods": 30000 },
+  "amounts": { "goods": 47310, "coupon": 5000, "shipping": 0, "pointsUsed": 2000, "total": 40310 },
+  "points": { "used": 2000, "earned": 403 }
+}

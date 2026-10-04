@@ -1,0 +1,98 @@
+{
+  "paths": [
+    "docs/knowledge/carrier-payload-fields-fixed.md",
+    "docs/knowledge/free-shipping-threshold-40000.md",
+    "docs/knowledge/free-shipping-uses-paid-goods.md",
+    "docs/knowledge/remote-surcharge-once-per-order.md",
+    "docs/knowledge/return-remote-surcharge-per-box.md",
+    "docs/knowledge/return-round-trip-uses-paid-goods.md",
+    "docs/knowledge/split-shipment-fee-first-only.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/carrier-payload-fields-fixed.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": ""
+      },
+      {
+        "path": "docs/knowledge/free-shipping-threshold-40000.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": ""
+      },
+      {
+        "path": "docs/knowledge/free-shipping-uses-paid-goods.md",
+        "stale": true,
+        "staleWhy": "\"무료배송 기준 30,000원은 할인 전 상품 금액(goods)이 아니라 쿠폰 할인 후 금액(paidGoods)과 비교한다\" — 지금 기준은 40,000원",
+        "stateAsRule": false,
+        "stateWhy": ""
+      },
+      {
+        "path": "docs/knowledge/remote-surcharge-once-per-order.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": ""
+      },
+      {
+        "path": "docs/knowledge/return-remote-surcharge-per-box.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": ""
+      },
+      {
+        "path": "docs/knowledge/return-round-trip-uses-paid-goods.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": ""
+      },
+      {
+        "path": "docs/knowledge/split-shipment-fee-first-only.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": ""
+      }
+    ],
+    "contradictions": [
+      {
+        "a": "docs/knowledge/free-shipping-uses-paid-goods.md",
+        "b": "docs/knowledge/free-shipping-threshold-40000.md",
+        "why": "무료배송 기준을 앞은 30,000원, 뒤는 40,000원(10월부터)으로 서로 다르게 적음"
+      }
+    ],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "remote-surcharge-once-per-order.md가 주문당 한 번, 제주 3,000/도서 5,000을 적음"
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "free-shipping-threshold-40000.md가 40,000원 기준과 paidGoods 판정을 맞게 적음"
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "carrier-payload-fields-fixed.md가 필드 이름·단위 불변을 적음"
+      },
+      {
+        "id": "R4",
+        "status": "correct",
+        "why": "split-shipment-fee-first-only.md가 기본 배송비와 도서산간비를 첫 출고에만 싣고 나머지 0원이라고 적음"
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "return-remote-surcharge-per-box.md가 반품 회수비는 회수 상자마다라고 적음"
+      }
+    ]
+  }
+}

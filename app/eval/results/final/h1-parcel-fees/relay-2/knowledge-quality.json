@@ -1,0 +1,84 @@
+{
+  "paths": [
+    "docs/knowledge/carrier-payload-fields-frozen.md",
+    "docs/knowledge/free-shipping-uses-paid-goods.md",
+    "docs/knowledge/multi-shipment-ref-no.md",
+    "docs/knowledge/remote-surcharge-once-per-order.md",
+    "docs/knowledge/return-remote-surcharge-per-box.md",
+    "docs/knowledge/shipment-fees-first-shipment-only.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/carrier-payload-fields-frozen.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": ""
+      },
+      {
+        "path": "docs/knowledge/free-shipping-uses-paid-goods.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": ""
+      },
+      {
+        "path": "docs/knowledge/multi-shipment-ref-no.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": ""
+      },
+      {
+        "path": "docs/knowledge/remote-surcharge-once-per-order.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": ""
+      },
+      {
+        "path": "docs/knowledge/return-remote-surcharge-per-box.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": ""
+      },
+      {
+        "path": "docs/knowledge/shipment-fees-first-shipment-only.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "remote-surcharge-once-per-order.md states once per order regardless of boxes, with Jeju 3,000 and other islands 5,000."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "free-shipping-uses-paid-goods.md uses paidGoods with a 40,000 threshold from October, and gives 30,000 only as the earlier value."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "carrier-payload-fields-frozen.md says the payload field names and units don't change."
+      },
+      {
+        "id": "R4",
+        "status": "correct",
+        "why": "shipment-fees-first-shipment-only.md puts the full shipping and remote fees on the first shipment and 0 on the rest."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "return-remote-surcharge-per-box.md charges the return remote surcharge per returned box."
+      }
+    ]
+  }
+}

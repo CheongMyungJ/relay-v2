@@ -1,0 +1,134 @@
+{
+  "id": "26-points-rate-change",
+  "repoName": "shop",
+  "title": "같은 사람이 Work 셋에서 포인트 규칙을 알려 주고, 세 번째 Work에서 적립률이 바뀜 (개발용, 지식 후속 평가)",
+  "purpose": "개발용(규약 3.1, 판정에 쓰지 않음). 지식 후속 1·2단계(followup.md) 평가: 문제 1(옛 지식과 새 지식이 함께 남음)을 본다. Work 1은 적립 버그(배송비 포함, 쿠폰·사용 포인트 처리, 반올림)이고 사람이 적립 규정을 알려 준다. Work 2는 부분 환불의 회수 포인트이고 같은 규정이 필요하다. Work 3은 적립률이 1%에서 2%로 바뀐다. Work마다 main에서 시작하므로(앞 Work는 머지되지 않음) Work 3도 적립 규정을 다시 지켜야 하고, 지식에 남은 '1%'를 고쳐야 한다. 지식을 켠 relay가 Work 3에서 앞 Work의 지식 항목을 고치는지(새 항목을 따로 만들어 '1%' 항목이 남지 않는지) 본다.",
+  "measure": [2, 3],
+  "works": [
+    {
+      "report": "고객센터에 포인트 문의가 들어왔다. 주문 O-1042의 적립 예정 포인트가 268P로 나오는데, 고객센터가 적립 안내대로 계산하면 237P라고 한다. 다른 주문도 적립이 조금씩 많게 나오는 것 같다. 주문 데이터는 examples/O-1042.json에 있다. (src/points/earn.js)",
+      "knowledge": [
+        {
+          "share": "on_ask",
+          "text": "고객센터가 계산한 O-1042의 적립 포인트는 237P다."
+        },
+        {
+          "share": "on_ask",
+          "text": "적립 규정: 적립 포인트는 상품 금액에서 쿠폰 할인과 사용한 포인트를 뺀 금액의 1%다. 배송비에는 적립하지 않는다."
+        },
+        {
+          "share": "on_ask",
+          "text": "적립 포인트는 1P 미만을 버린다. 반올림하지 않는다."
+        },
+        {
+          "share": "upfront",
+          "text": "이미 적립된 포인트는 다시 계산하지 않는다(주문에 저장된 값을 그대로 쓴다). 영수증 글자(src/format/)도 바뀌면 안 된다. 앱과 메일이 그대로 보여 준다."
+        }
+      ],
+      "checks": [
+        {
+          "name": "적립 기준 금액",
+          "file": "earn-basis.test.js"
+        },
+        {
+          "name": "적립 버림",
+          "file": "earn-floor.test.js"
+        },
+        {
+          "name": "주문·영수증 그대로",
+          "file": "earn-guard.test.js",
+          "guard": true
+        }
+      ]
+    },
+    {
+      "report": "정산팀이 9월 포인트 회수 내역을 대조하다가 부분 환불 때 회수한 포인트가 정산팀 계산과 1~2P씩 안 맞는다고 연락해 왔다. 예: 주문 O-1077의 부분 환불 R-0311에서 131P를 회수했는데 정산팀 계산으로는 132P다. 주문과 환불 요청은 examples/O-1077.json, examples/R-0311.json에 있다. (src/orders/refund.js)",
+      "knowledge": [
+        {
+          "share": "on_ask",
+          "text": "정산팀이 계산한 R-0311의 회수 포인트는 132P다."
+        },
+        {
+          "share": "on_ask",
+          "text": "부분 환불 때 회수할 포인트는 원래 적립된 포인트(주문에 저장된 값)에서, 남은 상품으로 다시 계산한 적립 포인트를 뺀 값이다. 쿠폰 할인과 사용한 포인트는 남은 주문에 그대로 둔다."
+        },
+        {
+          "share": "on_ask",
+          "text": "적립 규정: 적립 포인트는 상품 금액에서 쿠폰 할인과 사용한 포인트를 뺀 금액의 1%이고 배송비에는 적립하지 않는다. 환불 뒤 다시 계산할 때도 같다.",
+          "carry": true
+        },
+        {
+          "share": "on_ask",
+          "text": "적립 포인트는 1P 미만을 버린다. 반올림하지 않는다.",
+          "carry": true
+        },
+        {
+          "share": "upfront",
+          "text": "이미 적립된 포인트와 이미 처리한 환불은 다시 계산하지 않는다. 환불 금액과 영수증 글자(src/format/)도 바뀌면 안 된다."
+        }
+      ],
+      "checks": [
+        {
+          "name": "회수 포인트",
+          "file": "refund-recover.test.js"
+        },
+        {
+          "name": "환불 그대로",
+          "file": "refund-guard.test.js",
+          "guard": true
+        }
+      ]
+    },
+    {
+      "report": "이번 배포부터 기본 적립률을 1%에서 2%로 올리기로 했다. 고객센터가 안내 문구를 만들려고 예시 주문 O-1107(examples/O-1107.json)을 계산해 봤는데 2%면 486P가 적립돼야 한다고 한다. 적용해 달라.",
+      "knowledge": [
+        {
+          "share": "upfront",
+          "text": "적립률은 이번 배포부터 2%다. 이미 적립된 포인트는 다시 계산하지 않는다(저장된 값 그대로). 영수증 글자(src/format/)는 바뀌면 안 된다."
+        },
+        {
+          "share": "on_ask",
+          "text": "적립 규정에서 바뀌는 것은 비율뿐이다. 상품 금액에서 쿠폰 할인과 사용한 포인트를 뺀 금액에 적립하고 배송비에는 적립하지 않는다.",
+          "carry": true
+        },
+        {
+          "share": "on_ask",
+          "text": "적립 포인트는 1P 미만을 버린다. 반올림하지 않는다.",
+          "carry": true
+        },
+        {
+          "share": "on_ask",
+          "text": "환불 때 회수 포인트도 새 비율로 계산하는지는 이번 범위가 아니다. 정산팀과 따로 정한다."
+        }
+      ],
+      "checks": [
+        {
+          "name": "적립률 2%",
+          "file": "earn-rate.test.js"
+        },
+        {
+          "name": "저장된 포인트 그대로",
+          "file": "rate-guard.test.js",
+          "guard": true
+        }
+      ]
+    }
+  ],
+  "preferences": [
+    "고친 뒤 리포트의 예시 주문이나 환불이 고객센터·정산팀 계산과 맞는지 확인하고 싶다."
+  ],
+  "reveals": [],
+  "events": [],
+  "expectedFiles": [
+    "src/points/**",
+    "src/orders/**",
+    "src/config.js",
+    "src/money.js",
+    "test/**",
+    "README.md"
+  ],
+  "limits": {
+    "minutes": 120,
+    "turns": 140
+  }
+}

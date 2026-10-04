@@ -1,0 +1,111 @@
+{
+  "paths": [
+    "docs/knowledge/carrier-payload-fields-fixed.md",
+    "docs/knowledge/carrier-ref-no-suffix-on-split.md",
+    "docs/knowledge/free-shipping-after-coupon.md",
+    "docs/knowledge/free-shipping-threshold-40000.md",
+    "docs/knowledge/remote-surcharge-once-per-order.md",
+    "docs/knowledge/return-roundtrip-by-stored-shipping.md",
+    "docs/knowledge/shipment-fees-on-first-shipment-only.md",
+    "docs/knowledge/shipment-split-by-warehouse.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/carrier-payload-fields-fixed.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": ""
+      },
+      {
+        "path": "docs/knowledge/carrier-ref-no-suffix-on-split.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": ""
+      },
+      {
+        "path": "docs/knowledge/free-shipping-after-coupon.md",
+        "stale": true,
+        "staleWhy": "제목 \"쿠폰 할인 후 결제 상품 금액이 30,000원 이상일 때만 적용한다\"와 \"30,000원 정확히는 무료다(이상)\"를 지금 값으로 적음(지금은 40,000원)",
+        "stateAsRule": false,
+        "stateWhy": ""
+      },
+      {
+        "path": "docs/knowledge/free-shipping-threshold-40000.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": ""
+      },
+      {
+        "path": "docs/knowledge/remote-surcharge-once-per-order.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": ""
+      },
+      {
+        "path": "docs/knowledge/return-roundtrip-by-stored-shipping.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": ""
+      },
+      {
+        "path": "docs/knowledge/shipment-fees-on-first-shipment-only.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": ""
+      },
+      {
+        "path": "docs/knowledge/shipment-split-by-warehouse.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": ""
+      }
+    ],
+    "contradictions": [
+      {
+        "a": "docs/knowledge/free-shipping-after-coupon.md",
+        "b": "docs/knowledge/free-shipping-threshold-40000.md",
+        "why": "무료배송 기준을 30,000원 이상 vs 40,000원 이상으로 다르게 적음"
+      },
+      {
+        "a": "docs/knowledge/free-shipping-after-coupon.md",
+        "b": "docs/knowledge/return-roundtrip-by-stored-shipping.md",
+        "why": "무료배송 기준이 30,000원 vs 40,000원으로 어긋남"
+      }
+    ],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "remote-surcharge-once-per-order: 제주 3,000원, 그 밖의 도서 5,000원을 주문당 한 번, 상자 수를 곱하지 않음"
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "free-shipping-threshold-40000이 40,000원(10월부터, 전에는 30,000원)과 쿠폰 후 결제 상품 금액 한 번 판정을 맞게 적음"
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "carrier-payload-fields-fixed: 필드 이름·단위·키 집합 유지"
+      },
+      {
+        "id": "R4",
+        "status": "correct",
+        "why": "shipment-fees-on-first-shipment-only: 배송비와 remote 첫 출고에만, 나머지 0"
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "remote-surcharge-once-per-order: 반품 회수비는 지역 요율 x 회수 상자 수"
+      }
+    ]
+  }
+}

@@ -1,0 +1,21 @@
+diff --git a/src/orders/refund.js b/src/orders/refund.js
+index 7d4f479..3ac710f 100644
+--- a/src/orders/refund.js
++++ b/src/orders/refund.js
+@@ -1,6 +1,6 @@
+ import { POINT_RATE_PERCENT, REFUND_NUMBER } from '../config.js'
+ import { lineAmount } from '../cart/line.js'
+-import { percentOf, sumWon } from '../money.js'
++import { sumWon } from '../money.js'
+ 
+ // 환불. order는 저장된 주문(createOrder의 결과를 저장한 것)이다. 저장된 금액과 적립 포인트를 쓴다.
+ // - 부분 환불(createRefund): 돌려받는 줄의 상품 금액을 돌려주고, 적립했던 포인트 일부를 회수한다.
+@@ -31,7 +31,7 @@ export function createRefund(order, input) {
+     orderNumber: order.number,
+     items,
+     refundAmount: refundGoods,
+-    pointsRecovered: percentOf(refundGoods, POINT_RATE_PERCENT),
++    pointsRecovered: Math.floor((refundGoods * POINT_RATE_PERCENT) / 100),
+   }
+ }
+ 

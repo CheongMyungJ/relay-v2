@@ -1,0 +1,84 @@
+{
+  "paths": [
+    "docs/knowledge/carrier-payload-fields-frozen.md",
+    "docs/knowledge/free-shipping-after-discount.md",
+    "docs/knowledge/remote-surcharge-once-per-order.md",
+    "docs/knowledge/return-fee-follows-shipping-rules.md",
+    "docs/knowledge/shipment-split-by-warehouse.md",
+    "docs/knowledge/shipping-fee-code-locations.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/carrier-payload-fields-frozen.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": ""
+      },
+      {
+        "path": "docs/knowledge/free-shipping-after-discount.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": ""
+      },
+      {
+        "path": "docs/knowledge/remote-surcharge-once-per-order.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": ""
+      },
+      {
+        "path": "docs/knowledge/return-fee-follows-shipping-rules.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": ""
+      },
+      {
+        "path": "docs/knowledge/shipment-split-by-warehouse.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": ""
+      },
+      {
+        "path": "docs/knowledge/shipping-fee-code-locations.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "remote-surcharge-once-per-order.md에 제주 3,000원, 그 밖의 도서 5,000원, 주문당 한 번(상자 수를 곱하지 않음)으로 적혀 있다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "free-shipping-after-discount.md에 paidGoods로 주문당 한 번 판단하고 기준은 40,000원이라고 적혀 있다. 30,000원은 '전에는'과 'Work 001 당시'로 과거임을 밝혔다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "carrier-payload-fields-frozen.md에 택배사 배송·회수 요청의 필드 이름과 단위를 바꾸지 않는다고 적혀 있다."
+      },
+      {
+        "id": "R4",
+        "status": "correct",
+        "why": "shipment-split-by-warehouse.md에 출고별 shippingFee·remoteFee는 첫 출고에 몰고 나머지는 0이라고 적혀 있다."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "return-fee-follows-shipping-rules.md와 shipping-fee-code-locations.md에 반품 회수의 도서산간 추가비는 회수 상자마다 받는다고 적혀 있다."
+      }
+    ]
+  }
+}

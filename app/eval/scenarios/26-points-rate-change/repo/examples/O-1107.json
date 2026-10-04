@@ -1,0 +1,12 @@
+{
+  "number": "O-1107",
+  "customerId": "U-30092",
+  "orderedAt": "2026-10-04T20:05:00+09:00",
+  "lines": [
+    { "sku": "CF-0907", "name": "드립백 커피 20입", "unitPrice": 12900, "qty": 1 },
+    { "sku": "BK-0515", "name": "통밀 비스킷", "unitPrice": 2890, "qty": 5 }
+  ],
+  "coupon": { "code": "APP2000", "amount": 2000 },
+  "pointsUsed": 1020,
+  "pointBalance": 1730
+}

@@ -1,0 +1,84 @@
+{
+  "paths": [
+    "docs/knowledge/carrier-payload-fields-fixed.md",
+    "docs/knowledge/free-shipping-threshold-40000.md",
+    "docs/knowledge/free-shipping-uses-paid-goods.md",
+    "docs/knowledge/mixed-warehouse-fees-on-first-shipment.md",
+    "docs/knowledge/remote-surcharge-once-per-order.md",
+    "docs/knowledge/return-remote-fee-per-box.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/carrier-payload-fields-fixed.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": ""
+      },
+      {
+        "path": "docs/knowledge/free-shipping-threshold-40000.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": ""
+      },
+      {
+        "path": "docs/knowledge/free-shipping-uses-paid-goods.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": ""
+      },
+      {
+        "path": "docs/knowledge/mixed-warehouse-fees-on-first-shipment.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": ""
+      },
+      {
+        "path": "docs/knowledge/remote-surcharge-once-per-order.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": ""
+      },
+      {
+        "path": "docs/knowledge/return-remote-fee-per-box.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "remote-surcharge-once-per-order.md: 제주 3,000원·섬 5,000원을 주문당 한 번만 받는다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "free-shipping-threshold-40000.md와 free-shipping-uses-paid-goods.md: 쿠폰·할인 뒤 paidGoods로 판단하고 기준은 10월부터 40,000원이며, 30,000원은 과거로만 적혀 있다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "carrier-payload-fields-fixed.md: 필드 이름과 단위는 바꾸지 않는다."
+      },
+      {
+        "id": "R4",
+        "status": "correct",
+        "why": "mixed-warehouse-fees-on-first-shipment.md: 배송비와 remote 전액을 첫 출고에 싣고 나머지 출고는 0이다."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "return-remote-fee-per-box.md: 반품 회수 도서산간비는 회수 상자 수만큼 받는다."
+      }
+    ]
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "paths": [],
+  "judgment": {
+    "items": [],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "missing",
+        "why": ""
+      },
+      {
+        "id": "R2",
+        "status": "missing",
+        "why": ""
+      },
+      {
+        "id": "R3",
+        "status": "missing",
+        "why": ""
+      },
+      {
+        "id": "R4",
+        "status": "missing",
+        "why": ""
+      },
+      {
+        "id": "R5",
+        "status": "missing",
+        "why": ""
+      }
+    ]
+  }
+}
