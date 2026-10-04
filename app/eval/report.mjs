@@ -7,14 +7,16 @@ import os from 'node:os'
 import path from 'node:path'
 import { DIMENSIONS, judgePair } from './lib/judge.mjs'
 import { clip, readJson, readJsonl, stats, writeJson } from './lib/util.mjs'
-import { multiWork, pairOf, workParts } from './lib/works.mjs'
+import { measuredWorks, multiWork, pairOf, workParts } from './lib/works.mjs'
 
-const SCENARIOS = path.resolve(import.meta.dirname, 'scenarios')
+const SCENARIOS = process.env.RELAY_EVAL_SCENARIOS
+  ? path.resolve(process.env.RELAY_EVAL_SCENARIOS)
+  : path.resolve(import.meta.dirname, 'scenarios')
 
-/** 쪽의 차례와 보고서의 이름. relay-off는 지식 관리를 끈 relay다 (relay I84) */
+/** 쪽의 차례와 보고서의 이름. relay-off는 지식 관리를 끈 relay다. 그 밖의 이름(--app으로 준 빌드)은 이름 차례로 뒤에 둔다 */
 const ARMS = ['relay', 'relay-off', 'cli']
 const LABEL = { relay: 'relay', 'relay-off': 'relay (지식 끔)', cli: '맨 CLI' }
-const label = (k) => LABEL[k] ?? k
+const label = (k) => LABEL[k] ?? (k.endsWith('-off') ? `${k.slice(0, -4)} (지식 끔)` : k)
 
 /** 판정의 두 쪽. pair가 없는 예전 판정은 relay 대 맨 CLI다 */
 const pairOfJudge = (j) => j.pair ?? ['relay', 'cli']
@@ -48,37 +50,38 @@ export async function judgeAll(dir, opts, { redo = false } = {}) {
     const indexes = [...new Set(runs.filter((r) => r.scenario === id).map((r) => r.index))].sort(
       (a, b) => a - b,
     )
-    // 시나리오의 짝: relay 대 맨 CLI, Work 둘을 잇는 시나리오는 relay 대 relay-off (relay I84)
-    const [a, b] = pairOf(scenario)
-    for (const i of indexes) {
-      const first = runs.find((r) => r.scenario === id && r.kind === a && r.index === i)
-      const second = runs.find((r) => r.scenario === id && r.kind === b && r.index === i)
-      if (!first || !second) continue
-      const file = path.join(dir, id, `judge-${i}.json`)
-      if (!redo && fs.existsSync(file)) {
-        out.push(readJson(file))
-        continue
+    // 짝: --pairs(config.json의 pairs), 없으면 시나리오의 짝(relay 대 맨 CLI, works 시나리오는 relay 대 relay-off)
+    for (const [a, b] of opts.pairs ?? [pairOf(scenario)])
+      for (const i of indexes) {
+        const first = runs.find((r) => r.scenario === id && r.kind === a && r.index === i)
+        const second = runs.find((r) => r.scenario === id && r.kind === b && r.index === i)
+        if (!first || !second) continue
+        const isDefault = !opts.pairs || (a === pairOf(scenario)[0] && b === pairOf(scenario)[1])
+        const file = path.join(dir, id, isDefault ? `judge-${i}.json` : `judge-${a}-${b}-${i}.json`)
+        if (!redo && fs.existsSync(file)) {
+          out.push(readJson(file))
+          continue
+        }
+        console.log(`[판정] ${id} ${a}:${b} #${i}`)
+        try {
+          const j = await judgePair({
+            scenario,
+            first,
+            second,
+            firstDir: first.dir,
+            secondDir: second.dir,
+            opts,
+            workDir: path.join(
+              opts.workRoot ?? path.join(os.tmpdir(), 'relay-eval', path.basename(dir)),
+              `judge-${id}-${a}-${b}-${i}`,
+            ),
+          })
+          writeJson(file, j)
+          out.push(j)
+        } catch (e) {
+          console.log(`[판정] ${id} ${a}:${b} #${i} 실패: ${String(e).slice(0, 300)}`)
+        }
       }
-      console.log(`[판정] ${id} #${i}`)
-      try {
-        const j = await judgePair({
-          scenario,
-          first,
-          second,
-          firstDir: first.dir,
-          secondDir: second.dir,
-          opts,
-          workDir: path.join(
-            opts.workRoot ?? path.join(os.tmpdir(), 'relay-eval', path.basename(dir)),
-            `judge-${id}-${i}`,
-          ),
-        })
-        writeJson(file, j)
-        out.push(j)
-      } catch (e) {
-        console.log(`[판정] ${id} #${i} 실패: ${String(e).slice(0, 300)}`)
-      }
-    }
   }
   return out
 }
@@ -209,7 +212,7 @@ function judgeTables(js) {
 }
 
 /**
- * Work 둘을 잇는 시나리오(relay I84)의 Work 하나. 재는 것은 Work 2의 사람 차례, 질문 수(대화 기록의 AskUserQuestion),
+ * Work 둘을 잇는 시나리오의 Work 하나. 재는 것은 Work 2의 사람 차례, 질문 수(대화 기록의 AskUserQuestion),
  * 입력 토큰과 context.md 글자, 숨긴 시험이다. Work 1도 견줄 수 있게 같은 줄로 보인다
  */
 function workRows(rs, n) {
@@ -233,6 +236,14 @@ function workRows(rs, n) {
     ['사람 차례 수', get((x) => x.human.turns)],
     ['사람 행동 수(기다림 제외)', get((x) => x.human.actionsTotal)],
     ['입력한 글자 수', get((x) => x.human.charsTyped)],
+    [
+      '앞 Work의 사실을 다시 알려 줌(carry 항목 수, 감사)',
+      get((x) => (x.human.carriedTotal ? (x.human.carriedToldAudit ?? null) : null)),
+    ],
+    [
+      '앞 Work의 사실을 다시 알려 줌(사람 역할 자기 보고)',
+      get((x) => (x.human.carriedTotal ? (x.human.carriedTold ?? null) : null)),
+    ],
     ['에이전트 질문 수(AskUserQuestion)', get((x) => x.agent?.questions ?? null)],
     [
       '에이전트 입력 토큰(천, 캐시 포함)',
@@ -242,7 +253,7 @@ function workRows(rs, n) {
     ],
     ['에이전트 출력 토큰(천)', get((x) => (x.agent ? x.agent.output / 1000 : null))],
     ['context.md 글자(Work의 task 합)', get((x) => x.contextChars ?? null)],
-    ['`참고 지식` 글자(Work의 task 합)', get((x) => x.knowledgeChars ?? null)],
+    ['넣은 지식 글자(Work의 task 합)', get((x) => x.knowledgeChars ?? null)],
     ['걸린 시간(분)', get((x) => x.wallMs / 60000)],
     ['friction 평균 (0~3)', get((x) => x.human.frictionMean)],
   ]
@@ -262,7 +273,7 @@ export function buildReport(dir) {
   for (const s of fs.readdirSync(dir, { withFileTypes: true })) {
     if (!s.isDirectory()) continue
     for (const f of fs.readdirSync(path.join(dir, s.name))) {
-      if (/^judge-\d+\.json$/.test(f)) judges.push(readJson(path.join(dir, s.name, f)))
+      if (/^judge-(.+-)?\d+\.json$/.test(f)) judges.push(readJson(path.join(dir, s.name, f)))
     }
   }
   const ids = [...new Set(runs.map((r) => r.scenario))].sort()
@@ -279,7 +290,10 @@ export function buildReport(dir) {
     '걸린 시간에는 사람 역할(AI)이 답을 만드는 동안 기다린 시간이 들어 있다. 두 쪽의 대기를 견줄 때는 그 시간을 뺀 줄을 본다.',
     '',
   ]
-  const present = (rs) => ARMS.filter((k) => rs.some((r) => r.kind === k))
+  const present = (rs) => [
+    ...ARMS.filter((k) => rs.some((r) => r.kind === k)),
+    ...[...new Set(rs.map((r) => r.kind))].filter((k) => !ARMS.includes(k)).sort(),
+  ]
   const kinds = present(runs)
   const all = (k) => runs.filter((r) => r.kind === k)
   if (ids.length > 1) {
@@ -305,12 +319,20 @@ export function buildReport(dir) {
       '',
     )
     if (js.length) lines.push(...judgeTables(js))
-    // Work 둘을 잇는 시나리오: Work마다 따로 보인다. 재는 것은 마지막 Work다 (relay I84)
+    // Work 여럿을 잇는 시나리오: Work마다 따로 보인다. 재는 Work(measure, 기본은 첫 Work를 뺀 모두)를 앞에 둔다
     if (multiWork(sc)) {
       const count = workParts(sc).length
-      for (let n = count - 1; n >= 0; n--) {
+      const measured = measuredWorks(sc)
+      const order = [
+        ...measured.slice().reverse(),
+        ...Array.from({ length: count }, (_, i) => count - 1 - i).filter(
+          (n) => !measured.includes(n),
+        ),
+      ]
+      for (const n of order) {
+        const teammate = workParts(sc)[n]?.teammate ? ', 팀원 교대' : ''
         lines.push(
-          `### Work ${n + 1}${n === count - 1 ? ' (재는 Work)' : ''}`,
+          `### Work ${n + 1}${measured.includes(n) ? ' (재는 Work' + teammate + ')' : teammate ? ' (팀원 교대)' : ''}`,
           '',
           table(
             ['지표', ...own.map(label)],
@@ -343,7 +365,7 @@ export function buildReport(dir) {
             '캐시 쓰기(천)',
             '출력 토큰(천)',
             'context.md 글자',
-            '`참고 지식` 글자',
+            '넣은 지식 글자',
           ],
           steps,
         ),
@@ -430,7 +452,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const abs = path.resolve(dir)
   if (process.argv.includes('--rejudge')) {
     const config = readJson(path.join(abs, 'config.json'), {})
-    await judgeAll(abs, { judgeModel: config.judgeModel ?? 'sonnet' }, { redo: true })
+    await judgeAll(
+      abs,
+      { judgeModel: config.judgeModel ?? 'sonnet', pairs: config.pairs ?? null },
+      { redo: true },
+    )
   }
   console.log(buildReport(abs))
 }

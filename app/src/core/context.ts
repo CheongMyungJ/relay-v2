@@ -24,6 +24,7 @@ import {
 } from './pipeline'
 import { workBranch } from './records'
 import { REPLIES_FILE, RESPONSE_FILE, parseFrontMatter, sectionText } from './validate'
+import { knowledgeSection, type KnowledgeInput } from './knowledge'
 
 /** 이 노드 스킬의 질문 방식. Work 설정, 앱 설정 순서로 본다 (D26, D72) */
 export function questionMode(
@@ -221,11 +222,8 @@ export interface ContextInput {
    * 폐기한 task의 산출물 경로. 아니면 없다
    */
   carried?: CarriedCode | null
-  /**
-   * `참고 지식` 절의 본문 (D286, D315). main이 고르고 렌더한 글이다(core/knowledge renderKnowledge). 고른 것이 없으면
-   * "없음"이다. 지식이 꺼져 있으면(I84) null이나 없음이고 절을 넣지 않는다
-   */
-  knowledge?: string | null
+  /** 지식 (core/knowledge). 지식 관리를 끄면(RELAY_KNOWLEDGE=off) 없다 */
+  knowledge?: KnowledgeInput | null
 }
 
 export interface CarriedCode {
@@ -652,6 +650,7 @@ export function buildContext(input: ContextInput): string {
     ['승인 방식', approvalSection(config, work.settings, task.node, taskEngine(task))],
     ['마무리 안내 문구', closingMessage(task.node, input.delivery, taskEngine(task))],
     ['질문 방식', QUESTION_LABEL[questionMode(config, work.settings, task.node)]],
+    ...(input.knowledge ? [knowledgeSection(task.node, input.knowledge)] : []),
     ['선택 가능한 다음 단계', list(nextSteps(type, task.node))],
     [
       work.intent ? `intent (버전 ${work.intent.version})` : 'intent',
@@ -675,7 +674,6 @@ export function buildContext(input: ContextInput): string {
       input.previousHandoff ? fenced(input.previousHandoff.text) : '없음',
     ],
     ['필요한 산출물', list(input.artifacts.map((a) => `${a.taskId} ${a.node}: ${a.path}`))],
-    ...(input.knowledge == null ? [] : [['참고 지식', input.knowledge] as [string, string]]),
   ]
   return [
     '# relay task 컨텍스트',

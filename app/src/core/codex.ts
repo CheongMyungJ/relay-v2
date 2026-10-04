@@ -1,6 +1,6 @@
 // Codex의 CLI 설정과 도구 훅 보호. Claude deny와 같이 실수 방지용이며 샌드박스의 대체가 아니다.
 import type { SkillName } from '../shared/config'
-import { knowledgeDenyDirs, type DenyInput } from './settings'
+import type { DenyInput } from './settings'
 
 export const CODEX_HOOK_EVENTS = [
   'SessionStart',
@@ -57,8 +57,6 @@ export function codexToolDenial(
     `${root}/.agents`,
     `${root}/.codex`,
     ...(input.taskDir ? [`${norm(input.taskDir)}/.agents`] : []),
-    // 지식 폴더 (D309, D310 (1), I78): Claude의 deny 규칙과 같은 경로
-    ...(input.knowledge ? knowledgeDenyDirs(input.knowledge).map(norm) : []),
   ]
   const canonical = (s: string, base = input.worktree) => {
     const absolute = /^(?:\/|[A-Za-z]:[\\/])/.test(s) ? norm(s) : `${norm(base)}/${norm(s)}`

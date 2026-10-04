@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // relay 대 맨 CLI 사용성 평가 (docs/eval.md). 시나리오마다 두 쪽을 n번 돌리고, 짝지어 판정하고, report.md를 만든다.
-// Work 둘을 잇는 시나리오(works, 21~23)의 두 쪽은 relay 대 지식을 끈 relay(relay-off)다 (relay I84).
+// Work 둘을 잇는 시나리오(works, 21~23)의 두 쪽은 relay 대 지식을 끈 relay(relay-off)다.
 //   node eval/run.mjs --list
 //   node eval/run.mjs --scenarios 3 --runs 5
 //   node eval/run.mjs --scenarios 1,2,5 --runs 2 --arms relay,cli --parallel 2
@@ -19,15 +19,22 @@ import { buildReport, judgeAll } from './report.mjs'
 
 const EVAL = import.meta.dirname
 const APP = path.resolve(EVAL, '..')
-const SCENARIOS = path.join(EVAL, 'scenarios')
+// RELAY_EVAL_SCENARIOS가 있으면 그 폴더의 시나리오를 쓴다(봉인을 푼 hold-out을 따로 둘 때)
+const SCENARIOS = process.env.RELAY_EVAL_SCENARIOS
+  ? path.resolve(process.env.RELAY_EVAL_SCENARIOS)
+  : path.join(EVAL, 'scenarios')
 
 const HELP = `쓰는 법: node eval/run.mjs [옵션]
 
   --list                   시나리오 목록
   --scenarios <목록>       1,3 또는 01-slug,03-cart 또는 all (기본 all)
   --runs <n>               시나리오와 쪽마다 돌릴 횟수 (기본 1)
-  --arms <목록>            relay, relay-off(지식을 끈 relay), cli 가운데 (기본: 시나리오의 짝.
-                           works가 있는 시나리오는 relay,relay-off, 나머지는 relay,cli)
+  --arms <목록>            relay, relay-off(지식을 끈 relay), cli, --app으로 준 빌드 이름(뒤에 -off를 붙이면
+                           그 빌드에서 지식을 끔) 가운데 (기본: 시나리오의 짝. works가 있는 시나리오는
+                           relay,relay-off, 나머지는 relay,cli)
+  --app <이름=폴더>        다른 relay 빌드를 쪽으로 쓴다. 폴더는 빌드한 app/ (eval/ref-app.sh). 여럿이면 쉼표.
+                           예: --app base=/tmp/relay-ref/base/app,m17=/tmp/relay-ref/m17/app
+  --pairs <목록>           짝 판정할 짝. 예: relay:base,relay:m17 (기본: 시나리오의 짝)
   --parallel <n>           동시에 돌릴 실행 수 (기본 1, 2까지 권함)
   --agent-model <모델>     relay와 CLI 안의 claude 모델 (기본 sonnet)
   --effort <수준>          에이전트 effort: low / medium / high (기본 medium)
@@ -86,12 +93,19 @@ async function ensureDisplay() {
 
 const ARMS = ['relay', 'relay-off', 'cli']
 
-function preflight(arms) {
+/** 쪽 이름이 쓸 앱 폴더. cli는 null */
+const appOf = (arm, apps) => {
+  if (arm === 'cli') return null
+  const build = arm.replace(/-off$/, '')
+  return build === 'relay' ? APP : (apps[build] ?? null)
+}
+
+function preflight(arms, apps) {
   const problems = []
-  if (arms.some((a) => a !== 'cli')) {
-    if (!fs.existsSync(path.join(APP, 'out/main/index.js')))
-      problems.push('앱 빌드(out/)가 없습니다')
-    if (!fs.existsSync(path.join(APP, 'node_modules/electron/dist/electron')))
+  for (const dir of new Set(arms.map((a) => appOf(a, apps)).filter(Boolean))) {
+    if (!fs.existsSync(path.join(dir, 'out/main/index.js')))
+      problems.push(`앱 빌드(${dir}/out)가 없습니다`)
+    if (!fs.existsSync(path.join(dir, 'node_modules/electron/dist/electron')))
       problems.push('Electron 실행 파일이 없습니다')
   }
   if (!fs.existsSync(path.join(APP, 'node_modules/node-pty')))
@@ -113,6 +127,8 @@ async function main() {
       scenarios: { type: 'string' },
       runs: { type: 'string', default: '1' },
       arms: { type: 'string' },
+      app: { type: 'string' },
+      pairs: { type: 'string' },
       parallel: { type: 'string', default: '1' },
       'agent-model': { type: 'string', default: 'sonnet' },
       effort: { type: 'string', default: 'medium' },
@@ -138,11 +154,33 @@ async function main() {
     ?.split(',')
     .map((x) => x.trim())
     .filter(Boolean)
-  for (const a of given ?? []) if (!ARMS.includes(a)) throw new Error(`모르는 쪽: ${a}`)
+  const apps = Object.fromEntries(
+    (v.app ?? '')
+      .split(',')
+      .map((x) => x.trim())
+      .filter(Boolean)
+      .map((x) => {
+        const [name, dir] = x.split('=')
+        if (!name || !dir || ['relay', 'cli'].includes(name) || name.endsWith('-off'))
+          throw new Error(`--app 형식: 이름=폴더 (relay, cli, -off로 끝나는 이름은 못 씀): ${x}`)
+        return [name, path.resolve(dir)]
+      }),
+  )
+  const known = (a) => ARMS.includes(a) || !!apps[a.replace(/-off$/, '')]
+  for (const a of given ?? [])
+    if (!known(a)) throw new Error(`모르는 쪽: ${a} (--app으로 빌드를 주세요)`)
   const armsOf = (s) => given ?? pairOf(s)
-  const arms = ARMS.filter((a) => scenarios.some((s) => armsOf(s).includes(a)))
+  const arms = [...new Set(scenarios.flatMap((s) => armsOf(s)))]
+  const pairs = v.pairs
+    ? v.pairs.split(',').map((x) => {
+        const p = x.split(':').map((y) => y.trim())
+        if (p.length !== 2 || !p.every((y) => arms.includes(y)))
+          throw new Error(`--pairs의 짝은 돌리는 쪽 둘이어야 합니다: ${x}`)
+        return p
+      })
+    : null
   const runs = Number(v.runs)
-  preflight(arms)
+  preflight(arms, apps)
 
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..*/, '').replace('T', '-')
   const outDir = path.resolve(v.out ?? path.join(EVAL, 'results', stamp))
@@ -159,6 +197,8 @@ async function main() {
     maxMinutes: v['max-minutes'] ? Number(v['max-minutes']) : undefined,
     maxTurns: v['max-turns'] ? Number(v['max-turns']) : undefined,
     workRoot,
+    apps,
+    pairs,
   }
   let claudeVersion = null
   try {
@@ -166,15 +206,19 @@ async function main() {
   } catch {
     // 적지 못해도 된다
   }
-  let commit = null
-  try {
-    commit = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: APP }).toString().trim()
-  } catch {
-    // 적지 못해도 된다
+  const commitOf = (dir) => {
+    try {
+      return execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: dir }).toString().trim()
+    } catch {
+      return null // 적지 못해도 된다
+    }
   }
+  const commit = commitOf(APP)
+  const appCommits = Object.fromEntries(Object.entries(apps).map(([k, d]) => [k, commitOf(d)]))
   writeJson(path.join(outDir, 'config.json'), {
     startedAt: new Date().toISOString(),
     commit,
+    appCommits,
     claudeVersion,
     scenarios: scenarios.map((s) => s.id),
     runs,
@@ -185,6 +229,7 @@ async function main() {
   console.log(`작업 폴더: ${workRoot}`)
 
   const xvfb = arms.some((a) => a !== 'cli') ? await ensureDisplay() : null
+  // 다른 빌드의 첫 실행 창 수락 등은 같은 도구가 한다. 빌드마다 화면이 다르면 relay-arm.mjs를 맞춘다
   // 회차를 바깥에 두어 쪽과 시나리오가 시간대에 고르게 섞이게 한다
   const jobs = []
   for (let i = 1; i <= runs; i++)
@@ -219,7 +264,7 @@ async function main() {
     xvfb?.kill()
   }
 
-  // 시나리오의 짝(pairOf)이 모두 돈 회차만 판정한다
+  // 짝(--pairs, 없으면 시나리오의 짝)이 모두 돈 회차만 판정한다
   if (!v['no-judge']) await judgeAll(outDir, opts)
   const text = buildReport(outDir)
   console.log(`\n${text}\n`)

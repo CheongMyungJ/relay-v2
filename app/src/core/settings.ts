@@ -24,6 +24,9 @@ export const HOOK_TOKEN_ENV = 'RELAY_HOOK_TOKEN'
 /** 훅 요청의 제한 시간(초). 출처: spikes/lib/hooks.mjs HookServer.settings */
 const HOOK_TIMEOUT_SEC = 30
 
+/** Stop 훅의 제한 시간(초). verify의 지식 검토 호출(D300, 2분까지)을 기다린다 */
+export const STOP_HOOK_TIMEOUT_SEC = 180
+
 export interface HttpHook {
   type: 'http'
   url: string
@@ -66,7 +69,7 @@ export function hookSettings(port: number, taskId: string): Record<HookEvent, Ho
       url: hookUrl(port, taskId, event),
       headers: { Authorization: `Bearer $${HOOK_TOKEN_ENV}` },
       allowedEnvVars: [HOOK_TOKEN_ENV],
-      timeout: HOOK_TIMEOUT_SEC,
+      timeout: event === 'Stop' ? STOP_HOOK_TIMEOUT_SEC : HOOK_TIMEOUT_SEC,
     }
     return [{ hooks: [hook] }]
   }
@@ -104,31 +107,11 @@ export interface DenyInput {
   workDir: string
   /** 이전 task 디렉터리의 절대 경로. 지금 task 디렉터리는 넣지 않는다 */
   previousTaskDirs: readonly string[]
-  /**
-   * 지식 (D309, D310 (1), I78): worktree의 절대 경로와 레포 안 지식 폴더(project.json의 knowledge_dir), 앱 저장소의 지식
-   * 폴더(<프로젝트 폴더>/knowledge)의 절대 경로, PR 대응 task인지. 없으면 지식 규칙을 넣지 않는다(지식을 끈 때, I84)
-   */
-  knowledge?: {
-    worktree: string
-    dir: string
-    store: string
-    respond: boolean
-  }
-}
-
-/**
- * 지식 폴더의 편집을 막는 경로 (D309, D310 (1), I78). 파이프라인 task는 worktree의 지식 폴더와 앱 저장소의 지식을, PR
- * 대응 task는 앱 저장소의 지식만 막는다. 절대 경로 목록이다
- */
-export function knowledgeDenyDirs(k: NonNullable<DenyInput['knowledge']>): string[] {
-  const repo = `${k.worktree.replace(/[\\/]+$/, '')}/${k.dir.replace(/^[\\/]+|[\\/]+$/g, '')}`
-  return [...(k.respond ? [] : [repo]), k.store]
 }
 
 /**
  * deny 규칙 (D17, 시나리오 2-3): git push, gh pr 계열, 앱 소유 파일(work.json, request.md, intent.md,
- * decisions.md, pr-items.json(D191), 이전 task 디렉터리, Work 디렉터리의 .claude/) 편집. 지식 폴더도 막는다: 파이프라인
- * task는 worktree의 지식 폴더와 앱 저장소의 지식, PR 대응 task는 앱 저장소의 지식만 (D309, D310, I78).
+ * decisions.md, pr-items.json(D191), 이전 task 디렉터리, Work 디렉터리의 .claude/) 편집.
  * 출처: spikes/s4-permissions.mjs (Bash(git push*), Bash(gh pr*), Edit(ruleAbs(…)))
  */
 export function denyRules(input: DenyInput): string[] {
@@ -139,9 +122,6 @@ export function denyRules(input: DenyInput): string[] {
     ...APP_OWNED_FILES.map((f) => `Edit(${ruleJoin(work, f)})`),
     ...input.previousTaskDirs.map((d) => `Edit(${ruleJoin(ruleAbs(d), '**')})`),
     `Edit(${ruleJoin(work, '.claude', '**')})`,
-    ...(input.knowledge
-      ? knowledgeDenyDirs(input.knowledge).map((d) => `Edit(${ruleJoin(ruleAbs(d), '**')})`)
-      : []),
   ]
 }
 

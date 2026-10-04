@@ -52,7 +52,7 @@ const EXPERIENCE_SCHEMA = {
 
 function scenarioBrief(s) {
   const text = (r) => (Array.isArray(r) ? r.join(' ') : r)
-  // Work 둘을 잇는 시나리오는 Work마다 리포트, 아는 사실, 숨긴 시험을 보인다 (relay I84)
+  // Work 둘을 잇는 시나리오는 Work마다 리포트, 아는 사실, 숨긴 시험을 보인다
   const parts = multiWork(s)
     ? workParts(s).flatMap((w, n) => [
         `Work ${n + 1}의 ${words(s).report}: ${text(w.report)}`,
@@ -170,7 +170,7 @@ export async function judgePair({ scenario, first, second, firstDir, secondDir, 
     schema: EXPERIENCE_SCHEMA,
     prompt: [
       multiWork(scenario)
-        ? `같은 레포에서 일 ${workParts(scenario).length}개(Work)를 차례로 한 두 사용 기록 A와 B를 비교하라. 사람 역할은 AI가 연기했다. 두 기록은 도구의 설정 하나만 다르다. 앞 일에서 알게 된 것이 뒤 일에서 얼마나 이어졌는지(같은 질문과 같은 실수를 되풀이했는지)를 특히 본다.`
+        ? `같은 레포에서 일 ${workParts(scenario).length}개(Work)를 차례로 한 두 사용 기록 A와 B를 비교하라. 사람 역할은 AI가 연기했다. 두 기록은 같은 앱의 다른 버전이거나 설정만 다르다. 앞 일에서 알게 된 것이 뒤 일에서 얼마나 이어졌는지(같은 질문과 같은 실수를 되풀이했는지)를 특히 본다.`
         : `${words(scenario).same} 서로 다른 도구로 ${words(scenario).did} 두 사용 기록 A와 B를 비교하라. 사람 역할은 AI가 연기했다.`,
       '차원마다 어느 쪽이 나았는지(A, B, tie, 해당 없으면 n/a)와 근거를 짧게 적어라.',
       '- burden: 사람이 들인 수고(차례, 행동, 입력, 기다림, 헷갈림)가 적은 쪽',

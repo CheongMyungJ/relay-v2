@@ -8,8 +8,15 @@ import { words } from './kind.mjs'
 
 const GUIDES = path.resolve(import.meta.dirname, '../guides')
 
-/** 쪽(relay, relay-off, cli)의 화면 종류. 지식을 끈 relay도 같은 앱이다 */
+/** 쪽의 화면 종류. cli 말고는 모두 relay 앱이다(relay-off, --app으로 준 다른 빌드) */
 export const screenKind = (kind) => (kind === 'cli' ? 'cli' : 'relay')
+
+/** 사람 역할의 설명서 이름. 다른 빌드(base, m17 등)는 그 빌드의 화면 설명서가 있으면 그것을 쓴다 */
+export function guideName(arm, kind) {
+  const own = String(arm ?? '').replace(/-off$/, '')
+  if (own && own !== kind && fs.existsSync(path.join(GUIDES, `${own}.md`))) return own
+  return kind
+}
 
 const COMMON_ACTIONS = ['type', 'key', 'inspect_diff', 'wait', 'done', 'give_up']
 const ARM_ACTIONS = {
@@ -29,6 +36,12 @@ function turnSchema(kind) {
         description: '0 매끄러움, 1 약간 번거로움, 2 헷갈리거나 번거로움, 3 막힘',
       },
       friction_note: { type: 'string', description: 'friction이 1 이상이면 무엇 때문인지' },
+      told: {
+        type: 'array',
+        items: { type: 'integer' },
+        description:
+          '이번 차례의 입력으로 "네가 아는 것"의 몇 번 항목 내용을 에이전트에게 알려 주었는지(번호). 에이전트가 먼저 말한 내용을 맞다고 확인만 한 것은 넣지 않는다. 없으면 빈 목록',
+      },
       actions: {
         type: 'array',
         minItems: 1,
@@ -52,7 +65,7 @@ function turnSchema(kind) {
         },
       },
     },
-    required: ['thought', 'friction', 'actions'],
+    required: ['thought', 'friction', 'told', 'actions'],
   }
 }
 
@@ -117,6 +130,7 @@ function systemPrompt(kind, scenario, guide) {
     '- 에이전트가 일하는 중이면 wait로 기다린다. 기다리는 동안에도 방향이 틀렸다고 보이면 끼어들어도 된다.',
     '- 끝의 기준을 채웠다고 판단하면 done {summary}. 가망이 없으면 give_up {reason}.',
     '- 한 차례에 행동을 1~5개 차례대로 고른다. 화면이 바뀔 행동(버튼 누르기 등) 뒤의 행동은 바뀐 화면을 보지 못한 채 하게 되니 조심한다.',
+    '- told에는 이번 차례에 입력한 말에 "네가 아는 것"의 몇 번 항목 내용을 새로 담았는지 번호를 적는다(평가 기록용). 에이전트가 먼저 꺼낸 내용에 "맞다"고만 한 것은 적지 않는다.',
     '',
     '## 행동',
     ...ACTION_HELP[kind],
@@ -139,7 +153,10 @@ function systemPrompt(kind, scenario, guide) {
     '',
     '### 네가 아는 것',
     ...(known.length
-      ? known.map((k) => `- [${k.share === 'upfront' ? '처음부터 앎' : '물으면 답함'}] ${k.text}`)
+      ? known.map(
+          (k, i) =>
+            `- ${i + 1}. [${k.share === 'upfront' ? '처음부터 앎' : '물으면 답함'}] ${k.text}`,
+        )
       : ['- (리포트 말고는 따로 아는 것이 없다)']),
     '',
     '### 네 선호',
@@ -148,10 +165,23 @@ function systemPrompt(kind, scenario, guide) {
   return lines.join('\n')
 }
 
-/** Work 둘을 잇는 시나리오(relay I84)의 두 번째 일부터: 같은 레포에서 앞 일을 끝낸 뒤라는 것을 알린다 */
+/**
+ * Work 여럿을 잇는 시나리오의 두 번째 일부터: 같은 레포에서 앞 일을 끝낸 뒤라는 것을 알린다. teammate Work는 팀의 다른
+ * 사람이 동료의 일이 main에 머지된 레포를 새로 받아 시작한다 (docs/knowledge-experiment.md)
+ */
 function nextWorkLines(kind, scenario) {
   const n = scenario.work?.index ?? 0
   if (n === 0) return []
+  if (scenario.work.teammate) {
+    return [
+      `너는 이 레포를 함께 쓰는 팀의 개발자다. 동료가 앞서 이 레포에서 다른 일을 했고, 그 변경은 PR로 main에 머지됐다. 너는 이 일을 맡아 레포를 새로 clone했다. ${
+        kind === 'cli'
+          ? '네 터미널에서 그 레포 폴더에 claude를 띄워 두었다.'
+          : '네 컴퓨터의 앱에 그 레포를 프로젝트로 등록해 두었다. 이 앱에서 하는 첫 일이다. [새 Work]로 시작한다.'
+      } 동료가 무엇을 했는지는 네가 아는 것에 적힌 만큼만 안다.`,
+      '',
+    ]
+  }
   return [
     `이 레포에서 앞서 다른 일을 이미 끝냈고, 이번이 ${n + 1}번째 일이다. ${
       kind === 'cli'
@@ -166,6 +196,7 @@ export class Human {
   /**
    * @param {object} o
    * @param {'relay'|'cli'} o.kind 화면 종류 (screenKind)
+   * @param {string} [o.arm] 쪽 이름. guides/<쪽>.md가 있으면 그 설명서를 준다(-off는 떼고 찾는다)
    * @param {object} o.scenario
    * @param {string} o.dir 사람 역할의 작업 폴더 (스크린샷이 여기 있다)
    * @param {string} o.configDir
@@ -177,7 +208,7 @@ export class Human {
     this.o = o
     this.sessionId = crypto.randomUUID()
     this.started = false
-    const guide = fs.readFileSync(path.join(GUIDES, `${o.kind}.md`), 'utf8')
+    const guide = fs.readFileSync(path.join(GUIDES, `${guideName(o.arm, o.kind)}.md`), 'utf8')
     this.system = systemPrompt(o.kind, o.scenario, guide)
     this.costUsd = 0
     this.calls = 0

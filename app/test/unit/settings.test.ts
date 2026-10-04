@@ -44,7 +44,8 @@ describe('훅 (I13, 시나리오 2-3)', () => {
           url: `http://127.0.0.1:51234/hook/t-03/${event}`,
           headers: { Authorization: 'Bearer $RELAY_HOOK_TOKEN' },
           allowedEnvVars: ['RELAY_HOOK_TOKEN'],
-          timeout: 30,
+          // Stop은 verify의 지식 검토 호출을 기다린다 (D300)
+          timeout: event === 'Stop' ? 180 : 30,
         },
       ])
     },
@@ -199,5 +200,20 @@ describe('실행 인자 (시나리오 2-5, 6절)', () => {
     expect(firstPrompt('work-start', 'C:\\x\\context.md')).toBe(
       '/relay-work-start 이 task의 컨텍스트: C:\\x\\context.md',
     )
+  })
+})
+
+describe('Codex 훅의 제한 시간 (D300)', () => {
+  it('Stop은 지식 검토 호출을 기다리도록 Claude의 Stop 훅과 같은 180초다', async () => {
+    const { codexHooks } = await import('../../src/adapters/codex')
+    const hooks = codexHooks() as Record<string, { hooks: { timeout: number }[] }[]>
+    expect(hooks['Stop']?.[0]?.hooks[0]?.timeout).toBe(180)
+    expect(hooks['UserPromptSubmit']?.[0]?.hooks[0]?.timeout).toBe(30)
+    const bridge = (await import('node:fs')).readFileSync(
+      new URL('../../scripts/codex-bridge.mjs', import.meta.url),
+      'utf8',
+    )
+    expect(bridge).toContain("body.hook_event_name === 'Stop'")
+    expect(bridge).toContain('170_000')
   })
 })

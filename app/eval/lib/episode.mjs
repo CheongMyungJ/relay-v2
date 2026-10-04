@@ -7,7 +7,8 @@ import { CliArm } from './cli-arm.mjs'
 import { agentEnv, makeClaudeConfig } from './env.mjs'
 import { Human, screenKind } from './human.mjs'
 import { RelayArm } from './relay-arm.mjs'
-import { diffTree, judgeTree, makeRepo } from './repo.mjs'
+import { auditTold } from './told.mjs'
+import { diffTree, handoffRepo, judgeTree, makeRepo } from './repo.mjs'
 import {
   agentUsage,
   agentUsageBySession,
@@ -42,9 +43,17 @@ function combineChecks(defs, final) {
   }))
 }
 
-/** 차례 기록에서 사람의 부담을 센다 (Work 하나의 결과, relay I84) */
-function humanOf(turns) {
+/**
+ * 차례 기록에서 사람의 부담을 센다 (Work 하나의 결과). knowledge는 그 Work에서 사람이 아는 것이고, told는 사람 역할이
+ * 알려 준 항목 번호(1부터)다. carriedTold는 앞 Work에서 이미 알려 줬던 사실(carry)을 다시 알려 준 항목 수다
+ */
+function humanOf(turns, knowledge = []) {
   const acts = turns.flatMap((t) => t.actions)
+  const told = [
+    ...new Set(
+      turns.flatMap((t) => (Array.isArray(t.told) ? t.told : [])).filter((i) => knowledge[i - 1]),
+    ),
+  ].sort((a, b) => a - b)
   const frictions = turns.map((t) => t.friction).filter((x) => typeof x === 'number')
   return {
     turns: turns.length,
@@ -58,6 +67,9 @@ function humanOf(turns) {
     frictionMean: frictions.length ? frictions.reduce((a, b) => a + b, 0) / frictions.length : null,
     frictionHigh: frictions.filter((f) => f >= 2).length,
     ms: turns.reduce((a, t) => a + (typeof t.ms === 'number' ? t.ms : 0), 0),
+    told,
+    carriedTold: told.filter((i) => knowledge[i - 1]?.carry).length,
+    carriedTotal: knowledge.filter((k) => k.carry).length,
   }
 }
 
@@ -77,7 +89,8 @@ const mmss = (ms) => {
  * @param {object} o
  * @param {object} o.scenario scenario.json
  * @param {string} o.scenarioDir
- * @param {'relay'|'relay-off'|'cli'} o.kind relay-off는 지식 관리를 끈 relay다 (relay I84)
+ * @param {string} o.kind 쪽: relay, cli, 또는 relay 앱의 다른 빌드(run.mjs의 --app). 이름이 -off로 끝나면 그 빌드에
+ *   RELAY_KNOWLEDGE=off를 준다(relay-off는 이 체크아웃의 앱에서 지식 관리를 끈 것)
  * @param {number} o.index 회차 (1부터)
  * @param {object} o.opts 실행 옵션 (run.mjs)
  * @param {string} o.outDir 결과 폴더
@@ -97,7 +110,8 @@ export async function runEpisode(o) {
   const turnsFile = path.join(o.outDir, 'turns.jsonl')
 
   const baseDir = path.join(o.scenarioDir, 'repo')
-  const { repo, base } = makeRepo(o.workDir, scenario.repoName ?? 'repo', baseDir)
+  const repoName = scenario.repoName ?? 'repo'
+  const { repo, remote, base } = makeRepo(o.workDir, repoName, baseDir)
   const agentConfigDir = makeClaudeConfig(path.join(o.workDir, 'cfg-agent'))
   /** before 뒤에 새로 생긴 에이전트 세션 (Work마다의 토큰과 질문 수) */
   const newSessions = (before, bySession = agentUsageBySession(agentConfigDir)) =>
@@ -112,17 +126,25 @@ export async function runEpisode(o) {
   fs.mkdirSync(shots, { recursive: true })
   const armOpts = { dir: o.workDir, repo, base, agentEnv: agentEnv(opts), agentConfigDir }
   const screenType = screenKind(kind)
+  // 쪽의 앱 빌드: -off를 뗀 이름이 --app에 있으면 그 폴더, 없으면 이 체크아웃의 앱
+  const build = kind.replace(/-off$/, '')
   const arm =
     screenType === 'relay'
-      ? new RelayArm({ ...armOpts, knowledge: kind !== 'relay-off' })
+      ? new RelayArm({
+          ...armOpts,
+          appDir: opts.apps?.[build],
+          knowledge: !kind.endsWith('-off'),
+        })
       : new CliArm({ ...armOpts, claudeArgs: opts.cliArgs })
-  // Work 둘을 잇는 시나리오(relay I84)는 Work마다 사람 역할 세션을 새로 둔다. 같은 사람이지만 그 Work의 사정만 받는다
+  const handoffs = []
+  // Work 둘을 잇는 시나리오는 Work마다 사람 역할 세션을 새로 둔다. 같은 사람이지만 그 Work의 사정만 받는다
   const multi = multiWork(scenario)
   const parts = workParts(scenario)
   const humans = []
   const makeHuman = (n) => {
     const h = new Human({
       kind: screenType,
+      arm: kind,
       scenario: multi ? workScenario(scenario, n) : scenario,
       dir: humanDir,
       configDir: makeClaudeConfig(path.join(o.workDir, multi ? `cfg-human-${n + 1}` : 'cfg-human')),
@@ -182,7 +204,7 @@ export async function runEpisode(o) {
   }
 
   const workResults = []
-  // 지금 Work: 시작한 차례, 때, 그때 있던 에이전트 세션·결과 폴더·relay Work (relay I84)
+  // 지금 Work: 시작한 차례, 때, 그때 있던 에이전트 세션·결과 폴더·relay Work
   let part = null
   /** Work 하나를 마친다: 그 Work의 사람 역할 설문과, Work 둘을 잇는 시나리오면 그 Work의 판정과 에이전트 */
   const finishPart = async (partEnding, partSummary) => {
@@ -204,9 +226,27 @@ export async function runEpisode(o) {
       summary: partSummary,
       wallMs: Date.now() - p.t,
       survey: partSurvey,
-      human: humanOf(own),
+      human: humanOf(own, parts[p.n]?.knowledge ?? []),
+      ...(p.handoff ? { handoff: p.handoff } : {}),
     }
     if (multi) {
+      // 다시 알려 줌의 감사: 판정 모델이 이 Work에서 사람이 입력한 말을 읽고 가른다(PM1)
+      const known = parts[p.n]?.knowledge ?? []
+      try {
+        const a = await auditTold({
+          knowledge: known,
+          turns: own,
+          model: opts.judgeModel ?? 'sonnet',
+          workDir: path.join(o.workDir, 'told', `work-${p.n + 1}`),
+        })
+        if (a) {
+          r.human.toldAudit = a.told
+          r.human.carriedToldAudit = a.told.filter((i) => known[i - 1]?.carry).length
+          r.human.auditCostUsd = a.costUsd
+        }
+      } catch (e) {
+        say(`Work ${p.n + 1} 다시 알려 줌 감사 실패: ${String(e).slice(0, 200)}`)
+      }
       try {
         arm.snapshot()
         const ws = workScenario(scenario, p.n)
@@ -272,9 +312,27 @@ export async function runEpisode(o) {
     let sessionsBefore = new Set(agentUsageBySession(agentConfigDir).keys())
     await arm.prepare()
     for (let w = 0; w < parts.length; w++) {
+      let handoff = null
       if (w > 0) {
         sessionsBefore = new Set(agentUsageBySession(agentConfigDir).keys())
-        const moved = await arm.nextWork()
+        arm.snapshot()
+        let moved
+        if (parts[w].teammate) {
+          // 팀원 교대: 앞 사람의 브랜치를 main에 머지하고 새 clone, 새 앱 저장소(relay)나 새 터미널(맨 CLI)에서 시작한다
+          const h = handoffRepo(
+            arm.o.repo,
+            remote,
+            path.join(o.workDir, `${repoName}-mate${handoffs.length + 1}`),
+          )
+          handoff = { work: w + 1, merged: h.merged, conflicts: h.conflicts, failed: h.failed }
+          handoffs.push(handoff)
+          say(
+            `팀원 교대: 머지 ${h.merged.length}개${h.conflicts.length ? `, 충돌 ${h.conflicts.length}개(뒤 쪽으로 머지)` : ''}${h.failed.length ? `, 머지 못함 ${h.failed.length}개` : ''}`,
+          )
+          moved = await arm.handoff(h.repo)
+        } else {
+          moved = await arm.nextWork()
+        }
         if (moved) say(moved)
       }
       const human = makeHuman(w)
@@ -289,6 +347,7 @@ export async function runEpisode(o) {
         started: messageCounts(),
         trees: new Set(trees().map((t) => t.label)),
         works: new Set(arm.works().map((x) => x.id)),
+        handoff,
       }
       ending = null
       summary = ''
@@ -432,6 +491,7 @@ export async function runEpisode(o) {
           notes: sentNotes,
           thought: decision.thought,
           friction: decision.friction,
+          told: Array.isArray(decision.told) ? decision.told : [],
           friction_note: decision.friction_note ?? '',
           actions: [],
           costUsd: decision.costUsd,
@@ -521,7 +581,7 @@ export async function runEpisode(o) {
 
   const wallMs = Date.now() - t0
   say(`끝: ${ending} (${mmss(wallMs)})`)
-  // 설문은 Work마다 했다. 짝 판정과 보고서는 마지막 Work의 설문을 본다(Work 둘이면 재는 Work 2, relay I84)
+  // 설문은 Work마다 했다. 짝 판정과 보고서는 마지막 Work의 설문을 본다(Work 둘이면 재는 Work 2)
   const survey = workResults.findLast((r) => r.survey)?.survey ?? null
 
   // 판정
@@ -619,7 +679,7 @@ export async function runEpisode(o) {
     agent: agentUsage(agentConfigDir),
     agentSteps,
     works,
-    ...(multi ? { workResults } : {}),
+    ...(multi ? { workResults, handoffs } : {}),
     survey,
     options: {
       agentModel: opts.agentModel,

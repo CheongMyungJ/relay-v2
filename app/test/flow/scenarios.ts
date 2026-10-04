@@ -1,5 +1,4 @@
 // 가짜 claude의 시나리오 (8.2). 스킬마다 단계 목록을 둔다. 산출물과 handoff는 5.2~5.6의 모양이다.
-import { stringify } from 'yaml'
 import type { Handoff, NodeName } from '../../src/shared/contracts'
 import type { SkillName } from '../../src/shared/config'
 
@@ -56,6 +55,8 @@ export interface Scenario {
   resume?: Partial<Record<SkillName | string, Step[]>>
   /** 정리 세션([AI 세션 열기], 7-5)의 단계. 첫 프롬프트 없이 연 세션이다. 없으면 입력을 기다리기만 한다 */
   cleanup?: Step[]
+  /** 지식 검토 호출(claude -p, D300)의 n번째 결과. 없으면 문제 없음 */
+  review?: { issues: { file: string; kind: string; quote: string; fix: string }[] }[]
 }
 
 // ---------- 시험 레포 ----------
@@ -130,13 +131,7 @@ export function handoff(h: Partial<Handoff> & { summary?: string; omit?: string[
     }`,
     `risks:${list(h.risks)}`,
     `recommended_next:${rec ? `\n  node: ${rec.node}\n  reason: ${q(rec.reason)}` : ' null'}`,
-    // 지식 후보와 틀렸다는 보고 (D295, D318, handoff v2)
-    h.knowledge_candidates?.length
-      ? stringify({ knowledge_candidates: h.knowledge_candidates }).trimEnd()
-      : 'knowledge_candidates: []',
-    ...(h.knowledge_feedback?.length
-      ? [stringify({ knowledge_feedback: h.knowledge_feedback }).trimEnd()]
-      : []),
+    'knowledge_candidates: []',
     '---',
   ]
   const sections: [string, string][] = [

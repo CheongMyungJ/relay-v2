@@ -40,6 +40,40 @@ if (argv[0] === 'auth' && argv[1] === 'status') {
   process.exit(ok ? 0 : 1)
 }
 
+// claude -p (지식 검토 호출, D300): 표준 입력의 프롬프트를 남기고 시나리오의 review[n](n번째 호출, 없으면 문제 없음)를
+// 구조화된 출력으로 돌려준다. FAKE_CLAUDE_REVIEW_FAIL이 있으면 종료 코드 1로 끝난다
+if (argv[0] === '-p') {
+  const prompt = fs.readFileSync(0, 'utf8')
+  const file = env.FAKE_CLAUDE_SCENARIO
+  const scenario = file && fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {}
+  const counter = `${file ?? path.join(os.tmpdir(), 'fake-claude')}.review-count`
+  const n = fs.existsSync(counter) ? Number(fs.readFileSync(counter, 'utf8')) : 0
+  fs.writeFileSync(counter, String(n + 1))
+  if (file) fs.writeFileSync(`${file}.review-${n + 1}.txt`, prompt)
+  if (env.FAKE_CLAUDE_REVIEW_FAIL) {
+    process.stderr.write('가짜 실패\n')
+    process.exit(1)
+  }
+  const data = scenario.review?.[n] ?? { issues: [] }
+  process.stdout.write(
+    JSON.stringify({
+      type: 'result',
+      is_error: false,
+      result: '',
+      structured_output: data,
+      total_cost_usd: 0.0123,
+      duration_ms: 42,
+      usage: {
+        input_tokens: 1000,
+        output_tokens: 50,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
+      },
+    }),
+  )
+  process.exit(0)
+}
+
 const size = () => `${process.stdout.columns}x${process.stdout.rows}`
 const out = (s) => process.stdout.write(`${s}\r\n`)
 

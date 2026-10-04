@@ -15,15 +15,14 @@ import type {
   CommandResult,
   CountdownView,
   DeliverResult,
+  KnowledgeChange,
   PrView,
   ReviewView,
   TaskView,
   WorkView,
 } from '../../shared/views'
 import type { DeliveryChoice, UncommittedAction } from '../../shared/work'
-import { planLine, type KnowledgeChoices } from '../../shared/knowledge'
 import { Activity } from './Activity'
-import { KnowledgePanel, knowledgeCount } from './Knowledge'
 import { call } from './commands'
 import { ConfirmDialog, UncommittedDialog } from './dialogs'
 import { Diff, Markdown } from './Markdown'
@@ -424,9 +423,6 @@ function Review({
   const [confirming, setConfirming] = useState(false)
   // 답하지 않은 열린 질문이 남은 채 [승인]하면 한 번 확인받는다 (D222)
   const [asking, setAsking] = useState(false)
-  // Work 완료 화면의 지식 거르기 (I75). 전달 버튼이 함께 보낸다. 탭을 열지 않았으면 기본 선택이다 (D303)
-  const [knowledge, setKnowledge] = useState<KnowledgeChoices>({})
-  const knowledgeReview = review.completion?.knowledge ?? null
   const questions = review.emphasis.find((e) => e.kind === 'open_questions')?.lines ?? []
   const liveTask = work?.tasks.find((t) => t.id === review.taskId && t.live)
 
@@ -467,8 +463,9 @@ function Review({
     ['artifacts', '산출물'],
     ['changes', '변경'],
     ...(verify ? ([['work', '전체 변경']] as [Tab, string][]) : []),
-    ...(knowledgeReview
-      ? ([['knowledge', `지식 ${knowledgeCount(knowledgeReview)}`]] as [Tab, string][])
+    // 이 Work가 바꾼 지식 (D298). 지식 관리를 끄면 없다
+    ...(review.completion?.knowledge
+      ? ([['knowledge', `지식 ${review.completion.knowledge.length}`]] as [Tab, string][])
       : []),
   ]
 
@@ -527,6 +524,9 @@ function Review({
           )
         ) : null}
         {tab === 'changes' ? <Diff text={review.diff} /> : null}
+        {tab === 'verdicts' && review.completion?.knowledge ? (
+          <KnowledgeLine changes={review.completion.knowledge} onOpen={() => setTab('knowledge')} />
+        ) : null}
         {tab === 'verdicts' && review.completion ? (
           <table className="verdicts">
             <thead>
@@ -548,13 +548,8 @@ function Review({
           </table>
         ) : null}
         {tab === 'work' && review.completion ? <Diff text={review.completion.diff} /> : null}
-        {tab === 'knowledge' && knowledgeReview ? (
-          <KnowledgePanel
-            review={knowledgeReview}
-            choices={knowledge}
-            onChange={setKnowledge}
-            readOnly={!!readOnly}
-          />
+        {tab === 'knowledge' && review.completion?.knowledge ? (
+          <KnowledgeList changes={review.completion.knowledge} />
         ) : null}
       </div>
 
@@ -570,7 +565,6 @@ function Review({
           <CompletionActions
             review={review}
             work={work}
-            knowledge={knowledge}
             questions={questions}
             live={!!liveTask}
             onApproved={onApproved}
@@ -986,7 +980,6 @@ function LinkLine({ label, url }: { label: string; url: string }) {
 function CompletionActions({
   review,
   work,
-  knowledge,
   questions,
   live,
   onApproved,
@@ -995,8 +988,6 @@ function CompletionActions({
 }: {
   review: ReviewView
   work: WorkView
-  /** 지식 거르기의 선택 (I75). 전달 버튼이 함께 보낸다 */
-  knowledge: KnowledgeChoices
   /** 답하지 않은 열린 질문 (D222) */
   questions: readonly string[]
   /** 리뷰와 검증의 세션이 살아 있다 */
@@ -1043,8 +1034,8 @@ function CompletionActions({
     done(
       await run('완료만', () =>
         stopped
-          ? window.relay.resumeWork(work.key, { knowledge })
-          : window.relay.approve(work.key, review.taskId, { knowledge }),
+          ? window.relay.resumeWork(work.key)
+          : window.relay.approve(work.key, review.taskId, {}),
       ),
     )
   const deliver = async (
@@ -1053,12 +1044,12 @@ function CompletionActions({
   ) =>
     done(
       await run(DELIVERY_BUTTON[choice], () =>
-        window.relay.deliver(work.key, { choice, uncommitted, knowledge }),
+        window.relay.deliver(work.key, { choice, uncommitted }),
       ),
       choice,
     )
   const openCleanup = async (choice: DeliveryChoice) => {
-    const r = await run('AI 세션 열기', () => window.relay.openCleanup(work.key, choice, knowledge))
+    const r = await run('AI 세션 열기', () => window.relay.openCleanup(work.key, choice))
     if (r.ok) {
       setPending(null)
       onShowCleanup?.()
@@ -1191,10 +1182,6 @@ function CompletionActions({
         ) : null}
         {busy ? <span className="dim">{busy}: 하는 중…</span> : null}
       </footer>
-      {/* 지금 선택의 결과를 버튼 옆에서 알린다: 탭을 열지 않으면 팀 지식이 PR에 실리는 것을 모를 수 있다 (I75) */}
-      {c.knowledge && planLine(c.knowledge, knowledge) ? (
-        <div className="knowledge-line">지식: {planLine(c.knowledge, knowledge)}</div>
-      ) : null}
       {blocked.length ? (
         <div className="dim">
           {blocked.map((k) => (
@@ -1280,5 +1267,61 @@ function OpenQuestionsDialog({
           : '답하려면 [취소]하고 [세션 재개]를 누른 뒤 가운데 터미널에 쓰세요.'}
       </p>
     </ConfirmDialog>
+  )
+}
+
+const CHANGE_LABEL: Record<KnowledgeChange['change'], string> = {
+  added: '새로 만듦',
+  updated: '고침',
+  removed: '지움',
+}
+
+/** Work 완료 화면 [판정표] 위의 한 줄: 이 Work가 바꾼 지식의 수 (D298) */
+function KnowledgeLine({ changes, onOpen }: { changes: KnowledgeChange[]; onOpen: () => void }) {
+  const count = (c: KnowledgeChange['change']) => changes.filter((k) => k.change === c).length
+  return (
+    <div className="knowledge-line">
+      이 Work의 지식:{' '}
+      {changes.length
+        ? (['added', 'updated', 'removed'] as const)
+            .filter((c) => count(c))
+            .map((c) => `${CHANGE_LABEL[c]} ${count(c)}`)
+            .join(' · ')
+        : '바꾼 것 없음'}{' '}
+      {changes.length ? (
+        <button className="link" onClick={onOpen}>
+          보기
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
+/** [지식] 탭: 이 Work가 새로 만들거나 고치거나 지운 지식 파일. 누르면 그 파일의 diff (D298) */
+function KnowledgeList({ changes }: { changes: KnowledgeChange[] }) {
+  const [open, setOpen] = useState<string | null>(null)
+  if (!changes.length) return <div className="empty-note">이 Work가 바꾼 지식 없음</div>
+  return (
+    <ul className="knowledge-list">
+      {changes.map((k) => (
+        <li key={k.path} className={`k-${k.change}`}>
+          <button
+            className="k-row"
+            aria-expanded={open === k.path}
+            onClick={() => setOpen(open === k.path ? null : k.path)}
+          >
+            <span className="k-change">{CHANGE_LABEL[k.change]}</span>
+            <span className="k-title">{k.title ?? k.path}</span>
+            {k.kind ? <span className="k-kind">{k.kind}</span> : null}
+          </button>
+          <div className="k-path">
+            {k.path}
+            {k.pendingFrom ? ` (머지 전 Work ${k.pendingFrom}의 항목을 고침)` : ''}
+          </div>
+          {k.note ? <div className="k-note">{k.note}</div> : null}
+          {open === k.path ? <Diff text={k.diff} /> : null}
+        </li>
+      ))}
+    </ul>
   )
 }

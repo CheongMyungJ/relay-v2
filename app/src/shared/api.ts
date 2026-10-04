@@ -4,7 +4,6 @@
 import type { AppConfig, WorkSettingsPatch } from './config'
 import type { NodeName } from './contracts'
 import type { ProjectSettings } from './project'
-import type { KnowledgeChoices, KnowledgeEditInput, KnowledgeScreenResult } from './knowledge'
 import type {
   ActivityUpdate,
   AppSnapshot,
@@ -15,7 +14,6 @@ import type {
   CreateWorkResult,
   DeliverInput,
   DeliverResult,
-  KnowledgeReviewResult,
   MergeInfoResult,
   MergeInput,
   NewWorkInput,
@@ -23,7 +21,6 @@ import type {
   ProjectInspection,
   ProjectView,
   RespondStartInput,
-  ResumeWorkOptions,
   ReviewView,
   SelectStepInput,
   StepPreviewResult,
@@ -86,7 +83,7 @@ export interface RelayApi {
   /** [이 단계 끝나면 멈춤]을 켜거나 끈다 (시나리오 3-4) */
   stopAfter(workKey: string, on: boolean): Promise<CommandResult>
   /** 멈춘 Work의 [재개] (3.3) */
-  resumeWork(workKey: string, opts?: ResumeWorkOptions): Promise<CommandResult>
+  resumeWork(workKey: string): Promise<CommandResult>
   /** [Work 포기] (3.3) */
   abandon(workKey: string): Promise<CommandResult>
   /** 단계 선택 대화상자의 미리 보기 (6.2, D82). type은 의도 승인 전 [intake 다시]에서 고른 유형이다 (D237) */
@@ -101,11 +98,7 @@ export interface RelayApi {
   /** [push]·[PR 생성] (시나리오 7-4~7-6). 커밋 안 된 변경이 있으면 목록을 돌려준다 (7-5) */
   deliver(workKey: string, input: DeliverInput): Promise<DeliverResult>
   /** [AI 세션 열기] (7-5) */
-  openCleanup(
-    workKey: string,
-    choice: DeliveryChoice,
-    knowledge?: KnowledgeChoices,
-  ): Promise<CommandResult>
+  openCleanup(workKey: string, choice: DeliveryChoice): Promise<CommandResult>
   /** [정리 세션 닫기] (D137): 정리 세션을 끝내고 전달하지 않는다 */
   closeCleanup(workKey: string): Promise<CommandResult>
   /** [정리 끝 → push/PR 진행] (7-5) */
@@ -133,15 +126,7 @@ export interface RelayApi {
   /** 머지 창의 [머지] (D176). 창에 보인 head가 아니면 머지하지 않는다 */
   prMerge(workKey: string, input: MergeInput): Promise<CommandResult>
   /** [머지 없이 끝내기] (D179). GitHub의 PR은 건드리지 않는다 */
-  prEnd(workKey: string, knowledge?: KnowledgeChoices): Promise<CommandResult>
-  /** 머지 뒤 정리 창과 [머지 없이 끝내기] 확인 창의 지식 칸: PR 대응 task의 후보 (I76) */
-  respondKnowledge(workKey: string): Promise<KnowledgeReviewResult>
-  /** 머지 뒤 정리 창을 닫았다: PR 대응 task의 후보를 고른 대로 쓴다 (I76) */
-  fileKnowledge(workKey: string, knowledge?: KnowledgeChoices): Promise<CommandResult>
-  /** 지식 화면 (D307, I77) */
-  knowledgeScreen(projectId: string): Promise<KnowledgeScreenResult>
-  /** 지식 화면의 고침, 버림, 팀/나만 바꾸기, [그대로 맞음] (D307, I77) */
-  editKnowledge(projectId: string, input: KnowledgeEditInput): Promise<CommandResult>
+  prEnd(workKey: string): Promise<CommandResult>
   /** 머지 뒤 정리 창을 열었다 (D178, D200). 다시 열지 않는다 */
   prCleanOffered(workKey: string): Promise<CommandResult>
   /** PR 패널의 [대응 시작] (시나리오 10-3, D170, D182). 사람이 본 새 항목과 사람 지시를 보낸다 */
@@ -205,10 +190,6 @@ export const IPC = {
   prMergeInfo: 'pr:merge-info',
   prMerge: 'pr:merge',
   prEnd: 'pr:end',
-  respondKnowledge: 'knowledge:respond',
-  fileKnowledge: 'knowledge:file',
-  knowledgeScreen: 'knowledge:screen',
-  editKnowledge: 'knowledge:edit',
   prCleanOffered: 'pr:clean-offered',
   prRespond: 'pr:respond',
   prRerun: 'pr:rerun',

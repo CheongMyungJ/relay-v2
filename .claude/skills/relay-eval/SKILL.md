@@ -9,9 +9,9 @@ description: relay-v2의 버그 수정, 기능 추가, 리팩터링 사용성을
 
 ## 1. 요청 읽기
 
-- 시나리오: 번호(`3`, `1,5`), id(`03-cart`), "전부"(`all`). 목록은 `node app/eval/run.mjs --list`(유형을 `[버그 수정]`/`[기능 추가]`/`[리팩터링]`으로 보인다). 01~14는 버그 수정, 15~17은 기능 추가(작은·중간·큰), 18~20은 리팩터링(작은·중간·큰), 21~23은 지식 관리(같은 레포에서 Work 둘을 잇는 버그 수정, relay I84)다. "기능 추가 시나리오"는 `15,16,17`, "리팩터링 시나리오"는 `18,19,20`, "지식 관리 시나리오"는 `21,22,23`이다.
+- 시나리오: 번호(`3`, `1,5`), id(`03-cart`), "전부"(`all`). 목록은 `node app/eval/run.mjs --list`(유형을 `[버그 수정]`/`[기능 추가]`/`[리팩터링]`으로 보인다). 01~14는 버그 수정, 15~17은 기능 추가(작은·중간·큰), 18~20은 리팩터링(작은·중간·큰), 21~24는 지식 관리(같은 레포에서 Work 둘을 잇는 버그 수정, 24는 Work 2를 팀원이 함)다. "기능 추가 시나리오"는 `15,16,17`, "리팩터링 시나리오"는 `18,19,20`, "지식 관리 시나리오"는 `21,22,23,24`다. 지식 실험(`docs/knowledge-experiment/protocol.md`)의 주지표는 `node app/eval/primary.mjs <결과 폴더> --pair relay:relay-off`로 본다.
 - 횟수: "n번" → `--runs n` (시나리오와 쪽마다 n번). 말이 없으면 1.
-- 쪽: 말이 없으면 시나리오의 짝으로 돈다. 01~20은 relay 대 맨 CLI, 21~23은 relay 대 지식을 끈 relay(`relay-off`, 앱에 `RELAY_KNOWLEDGE=off`)다. "relay만" → `--arms relay`, "CLI만" → `--arms cli`. 21~23을 맨 CLI와도 견주려면 `--arms relay,relay-off,cli`(판정은 짝만 한다).
+- 쪽: 말이 없으면 시나리오의 짝으로 돈다. 01~20은 relay 대 맨 CLI, 21~24는 relay 대 지식을 끈 relay(`relay-off`, 앱에 `RELAY_KNOWLEDGE=off`)다. "relay만" → `--arms relay`, "CLI만" → `--arms cli`. 21~24를 맨 CLI와도 견주려면 `--arms relay,relay-off,cli`(판정은 짝만 한다. 다른 짝은 `--pairs relay:cli`). 다른 커밋의 빌드와 견주려면 `bash app/eval/ref-app.sh <이름> <커밋>` 뒤 `--app <이름>=/tmp/relay-ref/<이름>/app --arms relay,<이름> --pairs relay:<이름>`.
 - 모델과 effort: 말이 있을 때만 `--agent-model`, `--effort`, `--human-model`, `--judge-model`을 준다. 기본은 에이전트 sonnet·medium, 사람 역할 sonnet·medium, 판정 sonnet.
 - 시나리오 번호가 목록에 없거나 요청이 모호할 때만 묻는다. 나머지는 기본값으로 바로 시작하고 무엇으로 돌리는지 한 줄로 알린다.
 
@@ -25,7 +25,7 @@ bash app/eval/setup.sh
 
 ## 3. 돌리기
 
-실행 하나에 3~20분쯤 걸린다. 21~23은 실행 하나가 Work 둘이라 그 두 배쯤이다. 전체 수(시나리오 × 쪽 × 회차)와 대략의 시간을 사용자에게 먼저 알린다. `--parallel 2`를 기본으로 쓴다(실행이 하나뿐이면 1).
+실행 하나에 3~20분쯤 걸린다. 21~24는 실행 하나가 Work 둘이라 그 두 배쯤이다. 전체 수(시나리오 × 쪽 × 회차)와 대략의 시간을 사용자에게 먼저 알린다. `--parallel 2`를 기본으로 쓴다(실행이 하나뿐이면 1).
 
 백그라운드로 돌리고 진행을 지켜본다:
 

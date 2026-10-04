@@ -1,1179 +1,440 @@
-// 지식 관리의 [단위] 시험 (M17 완료 기준). core/knowledge, handoff v2 검사, context.md의 `참고 지식`, deny 규칙,
-// 전달의 knowledge 단계, 저장된 파일에 새 키가 없을 때의 기본값.
+// 지식 관리의 순수 함수 (core/knowledge, K1)
 import { describe, expect, it } from 'vitest'
-import { stringify } from 'yaml'
 import {
-  checkProjectSettings,
-  normalizeConfig,
-  projectKnowledgeDir,
-  projectKnowledgeShare,
-} from '../../src/core/config'
-import { buildContext } from '../../src/core/context'
-import { codexToolDenial } from '../../src/core/codex'
-import {
-  DEFAULT_KNOWLEDGE_DIR,
-  candidateChoice,
-  candidateProblem,
-  editedCandidate,
-  entryPath,
-  isEntryFile,
-  isKnowledgeCommit,
-  isStale,
-  knowledgeCommitMessage,
-  knowledgeOff,
-  mergePool,
-  newEntryId,
-  normalizeKnowledgeDir,
-  overlappingEntries,
-  parseEntry,
-  pathsInText,
-  pathsOverlap,
-  pendingMerged,
-  planKnowledge,
-  planLine,
-  refreshHashes,
-  renderEntry,
-  renderKnowledge,
-  reviewKnowledge,
-  reviewTaskIds,
-  selectKnowledge,
-  termsMatch,
-  withHashes,
-  worktreeScope,
-  type CandidateTask,
-  type PoolEntry,
+  INJECT_LIMIT,
+  anchorOf,
+  candidatesOf,
+  checkEntryFormat,
+  injectedText,
+  knowledgeIssues,
+  knowledgeLines,
+  isKnowledgePath,
+  knowledgeChanges,
+  knowledgeEnabled,
+  knowledgeSection,
+  kindOf,
+  notYetPaths,
+  looksSecret,
+  mergeEntries,
+  selectEntries,
+  type KnowledgeInput,
 } from '../../src/core/knowledge'
-import { createWork, knowledgeStage, transition } from '../../src/core/machine'
-import { denyRules } from '../../src/core/settings'
-import { checkHandoff, checkKnowledgeFile, checkTask, handoffV2 } from '../../src/core/validate'
-import { DEFAULT_CONFIG } from '../../src/shared/config'
-import type { AnyHandoff } from '../../src/shared/contracts'
-import type { KnowledgeEntry, KnowledgePlan } from '../../src/shared/knowledge'
-import type { TaskRecord, WorkState } from '../../src/shared/work'
+import { checkTask } from '../../src/core/validate'
 
-// ---------- 예시 ----------
-
-function entry(over: Partial<KnowledgeEntry> = {}): KnowledgeEntry {
-  return {
-    id: 'domain-a1b2c3d4',
-    kind: 'domain',
-    subkind: null,
-    status: 'active',
-    superseded_by: null,
-    paths: [],
-    terms: ['반올림'],
-    hashes: {},
-    source: { work: 'w-20261001-001', task: 't-01', by: 'human' },
-    rule: '금액은 0.5에서 올린다',
-    why: '회계팀이 정함',
-    not_in_code: '사람이 정함',
-    incentive: '은행가 반올림으로 바꾼다',
-    ...over,
-  }
-}
-
-function pool(e: KnowledgeEntry, scope: PoolEntry['scope'] = 'team', stale = false): PoolEntry {
-  return { entry: e, scope, file: `/k/${e.kind}/${e.id}.md`, stale }
-}
-
-const BASE_HANDOFF = {
-  status: 'awaiting_approval',
-  blocked_reason: null,
-  decisions: [],
-  assumptions: [],
-  rejected: [],
-  open_questions: [],
-  intent_deviation: null,
-  risks: [],
-  recommended_next: null,
-}
-
-const CANDIDATE = {
-  kind: 'domain',
-  rule: '금액은 0.5에서 올린다',
-  paths: [],
-  terms: ['반올림'],
-  why: '회계팀이 정함',
-  not_in_code: '사람이 정함',
-  incentive: '은행가 반올림으로 바꾼다',
-}
-
-function handoffText(fields: Record<string, unknown>): string {
-  return `---\n${stringify({ ...BASE_HANDOFF, ...fields })}---\n## 요약\n요약\n\n## 다음 task가 알아야 할 것\n- 없음\n`
-}
-
-function check(fields: Record<string, unknown>, formatVersion?: number) {
-  return checkHandoff(handoffText(fields), {
-    node: 'fix',
-    type: 'bugfix',
-    warnChars: 1500,
-    ...(formatVersion ? { formatVersion } : {}),
-  })
-}
-
-function first<T>(xs: readonly T[]): T {
-  const x = xs[0]
-  if (x === undefined) throw new Error('빈 목록')
-  return x
-}
-
-function second<T>(xs: readonly T[]): T {
-  return first(xs.slice(1))
-}
-
-function header(fields: Record<string, unknown>): AnyHandoff {
-  return { ...BASE_HANDOFF, ...fields } as AnyHandoff
-}
-
-// ---------- handoff v2 (I70) ----------
-
-describe('handoff v2 검사 (I70, D295, D299, D318)', () => {
-  it('객체 후보와 knowledge_feedback을 받는다', () => {
-    const r = check({
-      knowledge_candidates: [CANDIDATE],
-      knowledge_feedback: [{ id: 'domain-a1b2c3d4', note: '지금은 내림이다' }],
-    })
-    expect(r.errors).toEqual([])
-    expect(r.version).toBe(2)
-    expect(handoffV2(r.header, r.version)?.knowledge_candidates?.[0]?.kind).toBe('domain')
-  })
-
-  it('필수 필드, 용어 1~5개, 종류별 경로, 갈래와 종류, supersedes의 모양', () => {
-    const missing = check({ knowledge_candidates: [{ ...CANDIDATE, not_in_code: undefined }] })
-    expect(missing.errors.map((e) => e.message)).toContain(
-      '`knowledge_candidates[0].not_in_code` 없음: 필수 필드',
-    )
-    const noTerms = check({ knowledge_candidates: [{ ...CANDIDATE, terms: [] }] })
-    expect(noTerms.errors[0]?.message).toBe(
-      '`knowledge_candidates[0].terms` 항목이 모자람 (기대: 1개 이상, 지금: 0개)',
-    )
-    const many = check({
-      knowledge_candidates: [{ ...CANDIDATE, terms: ['a', 'b', 'c', 'd', 'e', 'f'] }],
-    })
-    expect(many.errors[0]?.message).toContain('항목이 너무 많음 (기대: 5개 이하, 지금: 6개)')
-    const constraint = check({ knowledge_candidates: [{ ...CANDIDATE, kind: 'constraint' }] })
-    expect(constraint.errors[0]?.message).toBe(
-      '`knowledge_candidates[0].paths` 항목이 모자람 (기대: `kind: constraint`일 때 1개 이상, 지금: 0개)',
-    )
-    const structure = check({
-      knowledge_candidates: [{ ...CANDIDATE, kind: 'structure', paths: ['a.ts'] }],
-    })
-    expect(structure.errors[0]?.message).toContain('`kind: structure`일 때 2개 이상')
-    const sub = check({ knowledge_candidates: [{ ...CANDIDATE, subkind: 'compat' }] })
-    expect(sub.errors[0]?.message).toContain('`subkind: compat`일 때 constraint')
-    const sup = check({ knowledge_candidates: [{ ...CANDIDATE, supersedes: 'D-12' }] })
-    expect(sup.errors[0]?.message).toContain('지식 id')
-    const fb = check({ knowledge_feedback: [{ id: 'x' }] })
-    expect(fb.errors[0]?.message).toBe('`knowledge_feedback[0].note` 없음: 필수 필드')
-  })
-
-  it('후보가 많으면 경고만 한다 (D295)', () => {
-    const r = check({ knowledge_candidates: Array.from({ length: 6 }, () => CANDIDATE) })
-    expect(r.errors).toEqual([])
-    expect(r.warnings.map((w) => w.field)).toContain('knowledge_candidates')
-  })
-
-  it('v1 task는 v1로 검사하고, 문자열 후보를 읽지 않는다', () => {
-    const r = check({ knowledge_candidates: ['예전 문자열 후보'] }, 1)
-    expect(r.errors).toEqual([])
-    expect(r.version).toBe(1)
-    expect(handoffV2(r.header, r.version)).toBeNull()
-    // 같은 머리글을 v2로 검사하면 형식 오류다
-    expect(check({ knowledge_candidates: ['예전 문자열 후보'] }).errors.length).toBeGreaterThan(0)
-    const t = checkTask({
-      node: 'fix',
-      type: 'bugfix',
-      files: { 'handoff.md': handoffText({ knowledge_candidates: ['x'] }), 'fix.md': '# x' },
-      config: DEFAULT_CONFIG,
-      formatVersion: 1,
-    })
-    expect(t.formatVersion).toBe(1)
-    expect(t.errors).toEqual([])
-  })
+const entry = (name: string, text: string, pendingFrom?: string) => ({
+  path: `docs/knowledge/${name}`,
+  text,
+  ...(pendingFrom ? { pendingFrom } : {}),
 })
 
-// ---------- 항목 파일 (D320) ----------
-
-describe('항목 파일 (D306, D320)', () => {
-  it('쓰고 다시 읽으면 같다', () => {
-    const e = entry({ paths: ['src/money.ts:round'], hashes: { 'src/money.ts:round': 'abc' } })
-    const parsed = parseEntry(renderEntry(e), 'domain/domain-a1b2c3d4.md')
-    expect(parsed).toEqual({ ok: true, entry: e, warnings: [] })
+describe('[단위] 지식', () => {
+  it('RELAY_KNOWLEDGE=off면 끈다', () => {
+    expect(knowledgeEnabled({})).toBe(true)
+    expect(knowledgeEnabled({ RELAY_KNOWLEDGE: 'off' })).toBe(false)
+    expect(knowledgeEnabled({ RELAY_KNOWLEDGE: ' OFF ' })).toBe(false)
+    expect(knowledgeEnabled({ RELAY_KNOWLEDGE: 'on' })).toBe(true)
   })
 
-  it('형식 오류: 머리글 필드, id 모양, 규칙 제목', () => {
-    const bad = renderEntry(entry()).replace('id: domain-a1b2c3d4', 'id: D-1')
-    const r = parseEntry(bad, 'x.md')
-    expect(r.ok).toBe(false)
-    if (!r.ok) expect(r.errors[0]?.message).toContain('지식 id')
-    const noRule = renderEntry(entry()).replace(/^# .*$/m, '')
-    expect(checkKnowledgeFile(noRule, 'x.md').errors.map((e) => e.message)).toContain(
-      '`# <규칙>` 제목 없음: 지식 파일 본문의 첫 제목',
-    )
-    const noStatus = renderEntry(entry()).replace('status: active\n', '')
-    expect(checkKnowledgeFile(noStatus, 'x.md').errors[0]?.message).toBe('`status` 없음: 필수 필드')
+  it('지식 파일은 docs/knowledge 아래나 영역 폴더 한 단계 아래의 .md이고 README는 뺀다 (D293)', () => {
+    expect(isKnowledgePath('docs/knowledge/vat.md')).toBe(true)
+    expect(isKnowledgePath('docs/knowledge/shipping/free-threshold.md')).toBe(true)
+    expect(isKnowledgePath('docs/knowledge/README.md')).toBe(false)
+    expect(isKnowledgePath('docs/knowledge/shipping/README.md')).toBe(false)
+    expect(isKnowledgePath('docs/knowledge/a/b/x.md')).toBe(false)
+    expect(isKnowledgePath('docs/knowledge/Shipping_Area/x.md')).toBe(false)
+    expect(isKnowledgePath('docs/knowledge/x.txt')).toBe(false)
+    expect(isKnowledgePath('docs/other/x.md')).toBe(false)
   })
 
-  it('id와 경로, 지식 폴더 설정 (D305, D320)', () => {
-    expect(newEntryId('failure', () => 'AB12cd34ef')).toBe('failure-ab12cd34')
-    expect(entryPath('docs/knowledge/', 'domain', 'domain-a1b2c3d4')).toBe(
-      'docs/knowledge/domain/domain-a1b2c3d4.md',
-    )
-    expect(normalizeKnowledgeDir('./docs/kb')).toEqual({ ok: true, dir: 'docs/kb/' })
-    expect(normalizeKnowledgeDir('.relay/kb').ok).toBe(false)
-    expect(normalizeKnowledgeDir('.git/kb').ok).toBe(false)
-    expect(normalizeKnowledgeDir('/abs').ok).toBe(false)
-    expect(normalizeKnowledgeDir('a/../b').ok).toBe(false)
-    expect(isEntryFile('docs/knowledge/', 'docs/knowledge/domain/domain-a1b2c3d4.md')).toBe(true)
-    expect(isEntryFile('docs/knowledge/', 'docs/knowledge/README.md')).toBe(false)
-  })
-})
-
-// ---------- 겹침 (D311, I74) ----------
-
-describe('경로와 용어의 겹침 (D311, I74)', () => {
-  it('같은 경로, 디렉터리와 그 아래, 심볼과 그 파일', () => {
-    expect(pathsOverlap('src/a.ts', './src/a.ts')).toBe(true)
-    expect(pathsOverlap('src', 'src/billing/a.ts')).toBe(true)
-    expect(pathsOverlap('src/billing/', 'src/billing/a.ts')).toBe(true)
-    expect(pathsOverlap('src/a.ts:round', 'src/a.ts')).toBe(true)
-    expect(pathsOverlap('src/a.ts:round', 'src/a.ts:floor')).toBe(false)
-    expect(pathsOverlap('src/ab', 'src/a')).toBe(false)
-  })
-
-  it('용어는 NFKC·소문자·공백 정리 뒤 글에 들어 있으면 겹친다', () => {
-    expect(termsMatch(['Invoice  Total'], '청구서의 invoice total이 틀림')).toBe(true)
-    expect(termsMatch(['ＡＢＣ'], 'abc')).toBe(true)
-    expect(termsMatch(['환불'], '반올림')).toBe(false)
-  })
-
-  it('글에 적힌 경로를 뽑는다 (D315 (1))', () => {
-    expect(pathsInText('`src/money.ts`의 round와 lib/x/ 폴더, https://a.com/b, 1.2.3')).toEqual([
-      'src/money.ts',
-      'lib/x',
-    ])
-  })
-})
-
-// ---------- 넣기 (D311, D312, D315, I74) ----------
-
-describe('넣을 지식 고르기 (D311, D315, I74)', () => {
-  const team = (id: string, over: Partial<KnowledgeEntry>) => pool(entry({ id, ...over }))
-
-  it('경로가 겹친 항목이 용어로만 겹친 항목보다 앞이고, 도메인 규칙과 외부 호환이 먼저다', () => {
-    const p = [
-      team('failure-00000001', { kind: 'failure', terms: ['재시도'], paths: ['lib'] }),
-      team('failure-00000002', { kind: 'failure', terms: ['반올림'], paths: ['other/x.ts'] }),
-      team('failure-00000003', { kind: 'failure', terms: ['zz'], paths: ['lib/retry/job.ts'] }),
-      team('structure-00000004', {
-        kind: 'structure',
-        terms: ['zz'],
-        paths: ['lib/retry', 'b.ts'],
-      }),
-    ]
-    const got = selectKnowledge({
-      node: 'fix',
-      pool: p,
-      paths: ['lib/retry/job.ts'],
-      text: '반올림',
-    })
-    expect(got.map((s) => s.entry.entry.id)).toEqual([
-      'failure-00000003',
-      'structure-00000004',
-      'failure-00000001',
-      'failure-00000002',
-    ])
-    const intake = selectKnowledge({
-      node: 'intake',
-      pool: [
-        team('recipe-00000001', { kind: 'recipe', paths: ['lib'], terms: ['zz'] }),
-        team('domain-00000002', { kind: 'domain', terms: ['반올림'] }),
-        team('constraint-0000003', { kind: 'constraint', paths: ['lib'], terms: ['zz'] }),
-        team('constraint-00000004', {
-          kind: 'constraint',
-          subkind: 'compat',
-          paths: ['x'],
-          terms: ['반올림'],
-        }),
+  it('머지되지 않은 지식은 같은 경로의 레포 지식을 대신하고, 내용이 같으면 레포 쪽으로 본다', () => {
+    const merged = mergeEntries(
+      [entry('a.md', '# A\nold'), entry('b.md', '# B')],
+      [
+        entry('a.md', '# A\nnew', 'w-1'),
+        entry('b.md', '# B\n', 'w-1'),
+        entry('c.md', '# C', 'w-2'),
       ],
-      paths: ['lib'],
-      text: '반올림',
-    })
-    // 외부 호환이 아닌 제약은 intake에 넣지 않는다 (B.4)
-    expect(intake.map((s) => s.entry.entry.id)).toEqual([
-      'constraint-00000004',
-      'domain-00000002',
-      'recipe-00000001',
+    )
+    expect(merged.map((e) => [e.path, e.pendingFrom ?? null])).toEqual([
+      ['docs/knowledge/a.md', 'w-1'],
+      ['docs/knowledge/b.md', null],
+      ['docs/knowledge/c.md', 'w-2'],
     ])
   })
 
-  it('경로가 있는 항목도 용어로 들어간다 (D311)', () => {
-    const p = [
-      team('failure-00000001', { kind: 'failure', paths: ['src/x.ts'], terms: ['반올림'] }),
-    ]
-    expect(selectKnowledge({ node: 'fix', pool: p, paths: [], text: '반올림 버그' })).toHaveLength(
-      1,
+  it('비밀로 보이는 항목은 넣지 않는다', () => {
+    expect(looksSecret('토큰: ghp_abcdefghijklmnopqrstuvwxyz0123')).toBe(true)
+    expect(looksSecret('password = hunter2hunter2')).toBe(true)
+    expect(looksSecret('접속: https://admin:pa55word@db.internal')).toBe(true)
+    expect(looksSecret('금액은 원 단위로 내림')).toBe(false)
+    const s = selectEntries([entry('a.md', '# A'), entry('s.md', 'api_key=abcdef123456')])
+    expect(s.full.map((e) => e.path)).toEqual(['docs/knowledge/a.md'])
+    expect(s.secret.map((e) => e.path)).toEqual(['docs/knowledge/s.md'])
+    expect(injectedText([entry('s.md', 'api_key=abcdef123456')])).toBe('')
+  })
+
+  it('상한을 넘는 항목은 제목만 넣는다', () => {
+    const big = 'x'.repeat(INJECT_LIMIT - 3)
+    const s = selectEntries([entry('a.md', big), entry('b.md', '# 두 번째\n본문')])
+    expect(s.full).toHaveLength(1)
+    expect(s.titles.map((e) => e.path)).toEqual(['docs/knowledge/b.md'])
+    expect(injectedText([entry('a.md', big), entry('b.md', '# 두 번째\n본문')])).toContain(
+      '(제목만) 두 번째',
     )
   })
 
-  it('대체됨 항목과 다른 단계의 종류는 넣지 않는다', () => {
-    const p = [
-      team('domain-00000001', { status: 'superseded', superseded_by: 'domain-00000002' }),
-      team('domain-00000003', {}),
-    ]
-    expect(selectKnowledge({ node: 'verify', pool: p, paths: [], text: '반올림' })).toEqual([])
-    expect(selectKnowledge({ node: 'intake', pool: p, paths: [], text: '반올림' })).toHaveLength(1)
+  it('handoff의 지식 후보를 읽는다', () => {
+    const handoff = [
+      '---',
+      'status: awaiting_approval',
+      'knowledge_candidates:',
+      '  - "금액은 내림 (사람)"',
+      '  - ""',
+      '---',
+      '## 요약',
+    ].join('\n')
+    expect(candidatesOf(handoff)).toEqual(['금액은 내림 (사람)'])
+    expect(candidatesOf('본문만')).toEqual([])
   })
 
-  it('같은 id는 이 Work가 실은 것, 공유 대기, 머지된 팀 지식 순이고 낡음은 팀 지식만 판정한다', () => {
-    const merged = mergePool([
-      pool(entry({ rule: '팀' }), 'team', true),
-      pool(entry({ rule: '대기' }), 'pending', true),
-    ])
-    expect(merged).toHaveLength(1)
-    expect(merged[0]?.entry.rule).toBe('대기')
-    expect(merged[0]?.stale).toBe(false)
-    const carried = mergePool([
-      pool(entry({ rule: '대기' }), 'pending'),
-      pool(entry({ rule: 'PR' }), 'carried'),
-      pool(entry({ rule: '팀' }), 'team'),
-    ])
-    expect(carried[0]?.entry.rule).toBe('PR')
-  })
-
-  it('자르기는 항목 가운데서 자르지 않고 지식 폴더를 안내한다 (D312)', () => {
-    const p = Array.from({ length: 10 }, (_, i) =>
-      team(`domain-0000000${i}`, { rule: `규칙 ${'가'.repeat(80)} ${i}` }),
-    )
-    const r = renderKnowledge({
-      node: 'intake',
-      pool: p,
-      paths: [],
-      text: '반올림',
-      limit: 400,
-      dirs: ['docs/knowledge/'],
-    })
-    const lines = r.text.split('\n').filter((l) => l.startsWith('- '))
-    expect(lines.length).toBe(r.ids.length)
-    expect(lines.length).toBeLessThan(10)
-    expect(lines.every((l) => l.endsWith('.md'))).toBe(true)
-    expect(r.text).toContain(`${10 - lines.length}건을 뺐다`)
-    expect(r.text).toContain('docs/knowledge/')
-    expect(
-      renderKnowledge({ node: 'intake', pool: [], paths: [], text: '', limit: 400, dirs: [] }).text,
-    ).toBe('없음')
-  })
-
-  it('재확인 필요를 줄 끝에 붙인다', () => {
-    const r = renderKnowledge({
-      node: 'fix',
-      pool: [
-        pool(entry({ kind: 'failure', id: 'failure-00000001', paths: ['a.ts'] }), 'team', true),
-      ],
-      paths: ['a.ts'],
-      text: '',
-      limit: 1500,
-      dirs: [],
-    })
-    expect(r.text).toContain(
-      '[실패 부류] 금액은 0.5에서 올린다 (a.ts) — /k/failure/failure-00000001.md (재확인 필요)',
-    )
-  })
-})
-
-// ---------- 낡음 (D316) ----------
-
-describe('낡음 (D316, D320, I72)', () => {
-  const e = entry({ paths: ['src/a.ts', 'src/b'], hashes: { 'src/a.ts': 'h1', 'src/b': 't1' } })
-  it('해시가 같으면 아니고, 다르거나 없으면 재확인이다', () => {
-    expect(isStale(e, { 'src/a.ts': 'h1', 'src/b': 't1' })).toBe(false)
-    expect(isStale(e, { 'src/a.ts': 'h2', 'src/b': 't1' })).toBe(true)
-    expect(isStale(e, { 'src/a.ts': null, 'src/b': 't1' })).toBe(true)
-    expect(isStale(entry(), {})).toBe(false)
-  })
-
-  it('해시를 새로 적고, 바뀐 항목만 돌려준다 (D323)', () => {
-    expect(withHashes(e, { 'src/a.ts': 'h9', 'src/b': null }).hashes).toEqual({ 'src/a.ts': 'h9' })
-    expect(refreshHashes([e], { 'src/a.ts': 'h1', 'src/b': 't1' })).toEqual([])
-    expect(refreshHashes([e], { 'src/a.ts': 'h2', 'src/b': 't1' })[0]?.hashes['src/a.ts']).toBe(
-      'h2',
-    )
-  })
-
-  it('공유 대기와 나만은 판정하지 않는다', () => {
-    const merged = mergePool([pool(entry({ id: 'domain-00000009' }), 'mine', true)])
-    expect(merged[0]?.stale).toBe(false)
-  })
-})
-
-describe('공유 대기 판단 (D310 (4), I74)', () => {
-  it('기준 커밋에 같은 내용이 있으면 머지된 것이고, worktree에만 있으면 아니다', () => {
-    const text = renderEntry(entry())
-    expect(pendingMerged(text, text.replace(/\n/g, '\r\n'))).toBe(true)
-    expect(pendingMerged(text, null)).toBe(false)
-    expect(pendingMerged(text, renderEntry(entry({ rule: '다름' })))).toBe(false)
-    expect(worktreeScope(text, text)).toBe('team')
-    expect(worktreeScope(text, null)).toBe('carried')
-  })
-})
-
-// ---------- 후보 모으기 (D283, D296, D299, D304, D313, D318) ----------
-
-function task(id: string, over: Partial<TaskRecord> = {}): TaskRecord {
-  return {
-    id,
-    seq: Number(id.slice(2)),
-    node: 'fix',
-    status: 'approved',
-    reason: 'default',
-    format_version: 2,
-    created_at: '',
-    session: null,
-    bounce_count: 0,
-    check: null,
-    ...over,
-  }
-}
-
-describe('후보 모으기 (D283, D296, D299, D304, D318)', () => {
-  const human = { what: '금액은 0.5에서 올린다', why: '회계팀', by: 'human' }
-
-  it('폐기한 task의 후보는 빠진다', () => {
-    const work = {
-      tasks: [
-        task('t-01', { node: 'intake' }),
-        task('t-02', { status: 'discarded' }),
-        task('t-03'),
-        task('t-04', { node: 'respond' }),
-      ],
+  it('지식 절: verify는 남기는 법과 후보를, 다른 단계는 후보를 남기는 법을 담는다', () => {
+    const input: KnowledgeInput = {
+      entries: [entry('vat.md', '# 금액은 내림'), entry('p.md', '# 병렬', 'w-9')],
+      candidates: [{ taskId: 't-02', node: 'fix', items: ['할인 먼저 (사람)'] }],
+      work_id: 'w-1',
+      date: '2026-10-03',
     }
-    expect(reviewTaskIds(work, 'pipeline').map((t) => t.id)).toEqual(['t-01', 't-03'])
-    expect(reviewTaskIds(work, 'respond').map((t) => t.id)).toEqual(['t-04'])
+    const [title, intake] = knowledgeSection('intake', input)
+    expect(title).toBe('팀 지식')
+    expect(intake).toContain('# 금액은 내림')
+    expect(intake).toContain('Work w-9에서 남김')
+    expect(intake).toContain('`제약`')
+    expect(intake).toContain('knowledge_candidates')
+    expect(intake).not.toContain('할인 먼저')
+    expect(intake).toContain('머지를 기다리는 앞 Work')
+    const [, mergedOnly] = knowledgeSection('intake', {
+      ...input,
+      entries: input.entries.slice(0, 1),
+    })
+    expect(mergedOnly).not.toContain('머지를 기다리는 앞 Work')
+    const [, verify] = knowledgeSection('verify', input)
+    expect(verify).toContain('지식 남기기')
+    expect(verify).toContain('t-02 fix: 할인 먼저 (사람)')
+    expect(verify).toContain('2026-10-03 처음 남김 (Work w-1)')
+    expect(verify).toContain('고친 지식: <경로>')
+    const [, empty] = knowledgeSection('fix', { ...input, entries: [], candidates: [] })
+    expect(empty).toContain('### 항목\n\n없음')
   })
 
-  it('v1 task는 사람 결정만 올린다', () => {
-    const tasks: CandidateTask[] = [
-      {
-        taskId: 't-01',
-        node: 'intake',
-        version: 1,
-        header: header({ decisions: [human], knowledge_candidates: ['문자열'] }),
-      },
-    ]
-    const r = reviewKnowledge({
-      tasks,
-      pool: [],
-      changed: [],
-      share: true,
-      dir: 'd/',
-      offerPending: true,
-    })
-    expect(r.candidates).toHaveLength(1)
-    expect(r.candidates[0]).toMatchObject({ unrefined: true, rule: human.what, by: 'human' })
-  })
-
-  it('decision으로 묶이고, 묶이지 않은 사람 결정은 다듬지 않은 것이며 채택 안 함이 기본이다', () => {
-    const tasks: CandidateTask[] = [
-      {
-        taskId: 't-01',
-        node: 'intake',
-        version: 2,
-        header: header({
-          decisions: [human, { what: '이번 수정 범위는 a만', why: 'x', by: 'human' }],
-          knowledge_candidates: [{ ...CANDIDATE, decision: human.what }],
-        }),
-      },
-    ]
-    const r = reviewKnowledge({
-      tasks,
-      pool: [],
-      changed: [],
-      share: true,
-      dir: 'd/',
-      offerPending: true,
-    })
-    expect(r.candidates.map((c) => [c.unrefined, c.by, c.rule])).toEqual([
-      [false, 'human', CANDIDATE.rule],
-      [true, 'human', '이번 수정 범위는 a만'],
-    ])
-    expect(candidateChoice(first(r.candidates), undefined, true)).toEqual({
-      adopt: true,
-      share: 'team',
-      replace: null,
-    })
-    expect(candidateChoice(second(r.candidates), undefined, true).adopt).toBe(false)
-    // 팀 공유가 꺼져 있으면 나만이다 (D322)
-    expect(candidateChoice(first(r.candidates), undefined, false).share).toBe('mine')
-  })
-
-  it('같은 사람 결정에서 뒤 task가 올린 후보는 앞 후보를 가리키고 채택 안 함이 기본이다 (D324)', () => {
-    // [실제] knowledge에서 본 꼴: intake가 결정하고 다듬었고, verify가 같은 결정을 다시 다듬어 올렸다(자기 decisions는 비었음)
-    const tasks: CandidateTask[] = [
-      {
-        taskId: 't-01',
-        node: 'intake',
-        version: 2,
-        header: header({
-          decisions: [human],
-          knowledge_candidates: [{ ...CANDIDATE, decision: human.what }],
-        }),
-      },
-      {
-        taskId: 't-03',
-        node: 'verify',
-        version: 2,
-        header: header({
-          decisions: [],
-          knowledge_candidates: [{ ...CANDIDATE, rule: '같은 규칙 다른 말', decision: human.what }],
-        }),
-      },
-    ]
-    const r = reviewKnowledge({
-      tasks,
-      pool: [],
-      changed: [],
-      share: true,
-      dir: 'd/',
-      offerPending: true,
-    })
-    expect(r.candidates.map((c) => [c.key, c.by, c.sameDecisionAs])).toEqual([
-      ['t-01#k1', 'human', null],
-      ['t-03#k1', 'human', 't-01#k1'],
-    ])
-    expect(candidateChoice(first(r.candidates), undefined, true).adopt).toBe(true)
-    expect(candidateChoice(second(r.candidates), undefined, true).adopt).toBe(false)
-    // 사람이 고르면 뒤 후보도 채택된다
-    expect(
-      candidateChoice(
-        second(r.candidates),
-        { candidates: { 't-03#k1': { adopt: true, share: 'team', replace: null } } },
-        true,
-      ).adopt,
-    ).toBe(true)
-  })
-
-  it('다른 task가 올린 같은 종류·갈래, 같은 파일, 겹치는 용어의 후보는 비슷한 후보로 채택 안 함이 기본이다 (D326)', () => {
-    // 평가 21~23에서 본 꼴: fix와 verify가 decision 없이 같은 규칙을 따로 올렸다
-    const rule = { ...CANDIDATE, paths: ['src/invoice/total.js'], terms: ['부가세', '버림'] }
-    const recipe = { ...rule, kind: 'recipe', terms: ['npm test'] }
-    const tasks: CandidateTask[] = [
-      {
-        taskId: 't-01',
-        node: 'intake',
-        version: 2,
-        header: header({ knowledge_candidates: [rule] }),
-      },
-      {
-        taskId: 't-02',
-        node: 'fix',
-        version: 2,
-        header: header({
-          knowledge_candidates: [
-            // 디렉터리만 겹치는 레시피는 따로다 (넓은 경로가 뒤 후보를 모두 삼키지 않게)
-            { ...recipe, rule: '테스트는 npm test', paths: ['src/invoice'] },
-            { ...recipe, rule: 'INV-2031로 본다' },
-            // 같은 task의 비슷한 후보끼리는 묶지 않는다
-            { ...recipe, rule: 'npm test를 두 번 돌린다' },
-          ],
-        }),
-      },
-      {
-        taskId: 't-03',
-        node: 'verify',
-        version: 2,
-        header: header({
-          knowledge_candidates: [
-            // 앞 task의 도메인 규칙과 같은 규칙 → 비슷한 후보 (파일과 그 파일의 심볼은 같은 파일)
-            { ...rule, rule: '같은 규칙 다른 말', paths: ['./src/invoice/total.js:computeTotals'] },
-            // 같은 파일이어도 용어가 겹치지 않으면 다른 규칙이다
-            { ...rule, rule: '할인은 줄마다 나눈다', terms: ['할인'] },
-            // 같은 파일의 같은 종류 레시피 → 앞 task의 처음 후보를 가리킨다
-            { ...recipe, rule: 'npm test로 확인' },
-            // 기존 항목을 고치는 후보는 비슷해도 묶지 않는다
-            { ...recipe, rule: 'npm run test:unit으로 본다', supersedes: 'recipe-a1b2c3d4' },
-          ],
-        }),
-      },
-    ]
-    const r = reviewKnowledge({
-      tasks,
-      pool: [],
-      changed: [],
-      share: true,
-      dir: 'd/',
-      offerPending: true,
-    })
-    expect(r.candidates.map((c) => [c.key, c.similarTo])).toEqual([
-      ['t-01#k1', null],
-      ['t-02#k1', null],
-      ['t-02#k2', null],
-      ['t-02#k3', null],
-      ['t-03#k1', 't-01#k1'],
-      ['t-03#k2', null],
-      ['t-03#k3', 't-02#k2'],
-      ['t-03#k4', null],
-    ])
-    const byKey = (k: string) => first(r.candidates.filter((c) => c.key === k))
-    const adopt = (k: string) => candidateChoice(byKey(k), undefined, true).adopt
-    expect(r.candidates.map((c) => adopt(c.key))).toEqual([
-      true,
-      true,
-      true,
-      true,
-      false,
-      true,
-      false,
-      true,
-    ])
-    // 사람이 고르면 비슷한 후보도 채택된다
-    expect(
-      candidateChoice(
-        byKey('t-03#k1'),
-        { candidates: { 't-03#k1': { adopt: true, share: 'team', replace: null } } },
-        true,
-      ).adopt,
-    ).toBe(true)
-  })
-
-  it('사람 결정에서 다듬은 후보는 비슷한 후보가 되지 않고, 앞선 AI 후보가 그 후보를 가리킨다 (D326)', () => {
-    const rule = { ...CANDIDATE, paths: ['src/invoice/total.js'], terms: ['부가세'] }
-    const tasks: CandidateTask[] = [
-      {
-        taskId: 't-01',
-        node: 'intake',
-        version: 2,
-        header: header({ knowledge_candidates: [rule] }),
-      },
-      {
-        taskId: 't-02',
-        node: 'fix',
-        version: 2,
-        header: header({
-          decisions: [human],
-          knowledge_candidates: [{ ...rule, rule: '사람이 정한 규칙', decision: human.what }],
-        }),
-      },
-    ]
-    const r = reviewKnowledge({
-      tasks,
-      pool: [],
-      changed: [],
-      share: true,
-      dir: 'd/',
-      offerPending: true,
-    })
-    expect(r.candidates.map((c) => [c.key, c.by, c.similarTo])).toEqual([
-      ['t-01#k1', 'ai', 't-02#k1'],
-      ['t-02#k1', 'human', null],
-    ])
-    expect(r.candidates.map((c) => candidateChoice(c, undefined, true).adopt)).toEqual([
-      false,
-      true,
-    ])
-  })
-
-  it('갈래가 다르면 비슷한 후보가 아니다 (D326)', () => {
-    const c = { ...CANDIDATE, kind: 'constraint', paths: ['src/api/v1.js'], terms: ['응답 형식'] }
-    const tasks: CandidateTask[] = [
-      { taskId: 't-01', node: 'intake', version: 2, header: header({ knowledge_candidates: [c] }) },
-      {
-        taskId: 't-03',
-        node: 'verify',
-        version: 2,
-        header: header({ knowledge_candidates: [{ ...c, subkind: 'compat' }] }),
-      },
-    ]
-    const r = reviewKnowledge({
-      tasks,
-      pool: [],
-      changed: [],
-      share: true,
-      dir: 'd/',
-      offerPending: true,
-    })
-    expect(r.candidates.map((x) => x.similarTo)).toEqual([null, null])
-  })
-
-  it('같은 결정으로 묶인 후보는 비슷한 후보로 다시 묶지 않는다 (D324, D326)', () => {
-    const rule = { ...CANDIDATE, paths: ['src/a.js'], decision: human.what }
-    const tasks: CandidateTask[] = [
-      {
-        taskId: 't-01',
-        node: 'intake',
-        version: 2,
-        header: header({ decisions: [human], knowledge_candidates: [rule] }),
-      },
-      {
-        taskId: 't-03',
-        node: 'verify',
-        version: 2,
-        header: header({ knowledge_candidates: [rule] }),
-      },
-    ]
-    const r = reviewKnowledge({
-      tasks,
-      pool: [],
-      changed: [],
-      share: true,
-      dir: 'd/',
-      offerPending: true,
-    })
-    expect(r.candidates.map((c) => [c.key, c.sameDecisionAs, c.similarTo])).toEqual([
-      ['t-01#k1', null, null],
-      ['t-03#k1', 't-01#k1', null],
-    ])
-  })
-
-  it('뒤 task가 다듬은 앞 task의 사람 결정은 다듬지 않은 것으로 남지 않고, 같은 결정은 한 번만 보인다', () => {
-    const scope = { what: '이번 수정 범위는 a만', why: 'x', by: 'human' }
-    const tasks: CandidateTask[] = [
-      { taskId: 't-01', node: 'intake', version: 2, header: header({ decisions: [human, scope] }) },
-      {
-        taskId: 't-02',
-        node: 'fix',
-        version: 2,
-        header: header({
-          decisions: [scope],
-          knowledge_candidates: [{ ...CANDIDATE, decision: human.what }],
-        }),
-      },
-    ]
-    const r = reviewKnowledge({
-      tasks,
-      pool: [],
-      changed: [],
-      share: true,
-      dir: 'd/',
-      offerPending: true,
-    })
-    expect(r.candidates.map((c) => [c.key, c.unrefined, c.by])).toEqual([
-      ['t-02#k1', false, 'human'],
-      ['t-01#d2', true, 'human'],
-    ])
-  })
-
-  it('supersedes는 대체가 기본이고, 같은 id의 틀렸다는 보고가 짝에 붙는다', () => {
-    const old = entry({ id: 'domain-0000000a' })
-    const tasks: CandidateTask[] = [
-      {
-        taskId: 't-01',
-        node: 'intake',
-        version: 2,
-        header: header({
-          knowledge_candidates: [{ ...CANDIDATE, rule: '0.5에서 내린다', supersedes: old.id }],
-          knowledge_feedback: [
-            { id: old.id, note: '지금은 내림' },
-            { id: 'domain-0000000b', note: '모르는 항목' },
-          ],
-        }),
-      },
-    ]
-    const r = reviewKnowledge({
-      tasks,
-      pool: [pool(old)],
-      changed: [],
-      share: true,
-      dir: 'd/',
-      offerPending: true,
-    })
-    const c = first(r.candidates)
-    expect(c.supersedes?.id).toBe(old.id)
-    expect(c.feedback).toEqual(['지금은 내림'])
-    expect(c.overlaps).toEqual([])
-    expect(candidateChoice(c, undefined, true).replace).toBe(old.id)
-    expect(r.feedback.map((f) => [f.id, f.entry])).toEqual([['domain-0000000b', null]])
-  })
-
-  it('겹치는 기존 항목과 재확인 항목 (D302, D317)', () => {
-    const near = entry({ id: 'domain-0000000c', terms: ['반올림', '금액'] })
-    const stale = entry({ id: 'failure-0000000d', kind: 'failure', paths: ['src/a.ts'] })
-    const elsewhere = entry({ id: 'failure-0000000e', kind: 'failure', paths: ['src/z.ts'] })
-    expect(
-      overlappingEntries({ kind: 'domain', paths: [], terms: ['금액'] }, [pool(near)]),
-    ).toHaveLength(1)
-    expect(
-      overlappingEntries({ kind: 'recipe', paths: [], terms: ['금액'] }, [pool(near)]),
-    ).toHaveLength(0)
-    const r = reviewKnowledge({
-      tasks: [
-        {
-          taskId: 't-01',
-          node: 'intake',
-          version: 2,
-          header: header({ knowledge_candidates: [CANDIDATE] }),
-        },
-      ],
-      pool: [pool(near), pool(stale, 'team', true), pool(elsewhere, 'team', true)],
-      changed: ['src/a.ts'],
-      share: true,
-      dir: 'd/',
-      offerPending: true,
-    })
-    expect(r.candidates[0]?.overlaps.map((o) => o.id)).toEqual(['domain-0000000c'])
-    expect(r.stale.map((s) => s.id)).toEqual(['failure-0000000d'])
-  })
-
-  it('열린 PR에 실린 공유 대기는 함께 실릴 목록에 없다 (D310)', () => {
-    const a = { ...pool(entry({ id: 'domain-00000011' }), 'pending'), carriedPr: 7 }
-    const b = pool(entry({ id: 'domain-00000012' }), 'pending')
-    const r = reviewKnowledge({
-      tasks: [],
-      pool: [a, b],
-      changed: [],
-      share: true,
-      dir: 'd/',
-      offerPending: true,
-    })
-    expect(r.pending.map((p) => p.id)).toEqual(['domain-00000012'])
-  })
-
-  it('다듬지 않은 사람 결정은 종류, 용어, 경로를 정해야 채택된다 (D304, D299)', () => {
-    const tasks: CandidateTask[] = [
-      { taskId: 't-02', node: 'fix', version: 2, header: header({ decisions: [human] }) },
-    ]
-    const r = reviewKnowledge({
-      tasks,
-      pool: [],
-      changed: [],
-      share: true,
-      dir: 'd/',
-      offerPending: false,
-    })
-    const c = first(r.candidates)
-    expect(candidateProblem(editedCandidate(c, undefined))).toBe('종류를 정해야 함')
-    expect(candidateProblem(editedCandidate(c, { kind: 'constraint', terms: ['금액'] }))).toBe(
-      '제약은 경로가 하나 이상 필요함',
+  it('지식 파일의 형식: 머리글, 제목, 종류에 맞는 본문 절, 알려진 절만 (D293)', () => {
+    expect(checkEntryFormat('docs/knowledge/a.md', RULE)).toEqual([])
+    expect(checkEntryFormat('docs/knowledge/f.md', FACT)).toEqual([])
+    const msgs = (text: string) =>
+      checkEntryFormat('docs/knowledge/x.md', text)
+        .map((i) => i.message)
+        .join('\n')
+    expect(msgs('# 제목\n본문')).toContain('머리글')
+    expect(msgs(RULE.replace('kind: rule', 'kind: law'))).toContain('`kind`')
+    expect(msgs(RULE.replace('source: human', 'source: guess'))).toContain('`source`')
+    expect(msgs(RULE.replace('anchor: FREE_SHIPPING_THRESHOLD', 'anchor: 무료 배송'))).toContain(
+      '`anchor`',
     )
-    expect(candidateProblem(editedCandidate(c, { kind: 'domain', terms: ['금액'] }))).toBeNull()
-  })
-})
-
-// ---------- 채택 결과 (D287~D289, D302, D308, D310, D322) ----------
-
-describe('채택 결과 (I73)', () => {
-  const ids = () => {
-    let n = 0
-    return () => `${++n}`.padStart(8, '0')
-  }
-  const tasks: CandidateTask[] = [
-    {
-      taskId: 't-01',
-      node: 'intake',
-      version: 2,
-      header: header({ knowledge_candidates: [CANDIDATE, { ...CANDIDATE, rule: '두 번째' }] }),
-    },
-  ]
-  function plan(
-    delivery: 'none' | 'push' | 'pr',
-    opts: {
-      share?: boolean
-      extra?: PoolEntry[]
-      choices?: Parameters<typeof planKnowledge>[0]['choices']
-    } = {},
-  ): KnowledgePlan {
-    const p = opts.extra ?? []
-    const review = reviewKnowledge({
-      tasks,
-      pool: p,
-      changed: [],
-      share: opts.share ?? true,
-      dir: 'd/',
-      offerPending: true,
-    })
-    return planKnowledge({
-      review,
-      choices: opts.choices,
-      delivery,
-      work: 'w-1',
-      task: 't-03',
-      pool: p,
-      random: ids(),
-    })
-  }
-
-  it('[PR 생성]이면 팀 지식을 레포에 쓰고 공유 대기 사본도 둔다 (D287, D310 (4))', () => {
-    const r = plan('pr')
-    expect(r.repo.map((e) => e.id)).toEqual(['domain-00000001', 'domain-00000002'])
-    expect(r.pending.map((e) => e.id)).toEqual(r.repo.map((e) => e.id))
-    expect(r.carry).toEqual(r.repo.map((e) => e.id))
-    expect(r.counts).toEqual({ team: 2, mine: 0, pending: 0 })
-    expect(r.repo[0]?.source).toEqual({ work: 'w-1', task: 't-01', by: 'ai' })
+    expect(msgs(RULE.replace('## 규칙', '## 내용'))).toContain('`## 규칙` 절이 없거나')
+    expect(msgs(RULE.replace('## 바뀐 이력', '## 메모'))).toContain('모르는 절')
+    expect(msgs(FACT + '\n## 아직 규칙을 따르지 않는 곳\n- x\n')).toContain('kind: rule에만')
+    expect(anchorOf(RULE)).toBe('FREE_SHIPPING_THRESHOLD')
+    expect(anchorOf(FACT)).toBeNull()
   })
 
-  it('[완료만]·[push]면 팀 지식은 공유 대기다 (D287)', () => {
-    for (const d of ['none', 'push'] as const) {
-      const r = plan(d)
-      expect(r.repo).toEqual([])
-      expect(r.carry).toEqual([])
-      expect(r.pending).toHaveLength(2)
-      expect(r.counts).toEqual({ team: 2, mine: 0, pending: 2 })
-    }
-  })
-
-  it('나만, 버림, 팀 공유 꺼짐 (D289, D322)', () => {
-    const r = plan('pr', {
-      choices: {
-        candidates: {
-          't-01#k1': { adopt: true, share: 'mine', replace: null },
-          't-01#k2': { adopt: false, share: 'team', replace: null },
-        },
-      },
-    })
-    expect(r.repo).toEqual([])
-    expect(r.mine.map((e) => e.rule)).toEqual([CANDIDATE.rule])
-    const off = plan('pr', { share: false })
-    expect(off.repo).toEqual([])
-    expect(off.pending).toEqual([])
-    expect(off.mine).toHaveLength(2)
-  })
-
-  it('머지된 팀 지식의 대체는 옛 항목을 대체됨으로 함께 싣는다 (D302)', () => {
-    const old = entry({ id: 'domain-0000000a', terms: ['반올림'] })
-    const r = plan('pr', {
-      extra: [pool(old)],
-      choices: { candidates: { 't-01#k1': { adopt: true, share: 'team', replace: old.id } } },
-    })
-    const superseded = r.repo.find((e) => e.id === old.id)
-    expect(superseded).toMatchObject({ status: 'superseded', superseded_by: 'domain-00000001' })
-  })
-
-  it('공유 대기를 함께 싣고, 나만으로 돌리고, 버린다 (D308)', () => {
-    const a = pool(entry({ id: 'recipe-00000021', kind: 'recipe', terms: ['zz'] }), 'pending')
-    const b = pool(entry({ id: 'recipe-00000022', kind: 'recipe', terms: ['zz'] }), 'pending')
-    const c = pool(entry({ id: 'recipe-00000023', kind: 'recipe', terms: ['zz'] }), 'pending')
-    const carried = {
-      ...pool(entry({ id: 'recipe-00000024', kind: 'recipe', terms: ['zz'] }), 'pending'),
-      carriedPr: 3,
-    }
-    const r = plan('pr', {
-      extra: [a, b, c, carried],
-      choices: { pending: { [b.entry.id]: 'mine', [c.entry.id]: 'drop' } },
-    })
-    expect(r.repo.map((e) => e.id)).toContain(a.entry.id)
-    expect(r.repo.map((e) => e.id)).not.toContain(carried.entry.id)
-    expect(r.mine.map((e) => e.id)).toEqual([b.entry.id])
-    expect(r.removePending.sort()).toEqual([b.entry.id, c.entry.id].sort())
-    // [push]면 공유 대기는 그대로 남는다
-    expect(plan('push', { extra: [a] }).removePending).toEqual([])
-  })
-
-  it('후보가 대체하기로 한 공유 대기는 함께 싣지 않고 지운다 (D302, D308)', () => {
-    // 겹치는 기존 항목(D302)으로 보인 공유 대기를 후보가 대체로 고르고, 공유 대기 줄은 기본(함께 실음) 그대로다
-    const old = pool(entry({ id: 'domain-0000000c', terms: ['반올림'] }), 'pending')
-    const r = plan('pr', {
-      extra: [old],
-      choices: { candidates: { 't-01#k1': { adopt: true, share: 'team', replace: old.entry.id } } },
-    })
-    expect(r.repo.map((e) => e.id)).not.toContain(old.entry.id)
-    expect(r.pending.map((e) => e.id)).not.toContain(old.entry.id)
-    expect(r.carry).not.toContain(old.entry.id)
-    expect(r.removePending).toEqual([old.entry.id])
-  })
-
-  it('재확인의 [그대로 맞음]은 팀 지식처럼 싣고, 틀렸다는 보고의 대체는 새 항목이다 (D317, D318, D320 (4))', () => {
-    const stale = entry({
-      id: 'failure-0000000d',
-      kind: 'failure',
-      paths: ['src/a.ts'],
-      terms: ['zz'],
-    })
-    const p = [pool(stale, 'team', true)]
-    const review = reviewKnowledge({
-      tasks: [],
-      pool: p,
-      changed: ['src/a.ts'],
-      share: true,
-      dir: 'd/',
-      offerPending: true,
-    })
-    const r = planKnowledge({
-      review,
-      choices: { stale: { [stale.id]: { action: 'confirm' } } },
-      delivery: 'pr',
-      work: 'w-1',
-      task: 't-03',
-      pool: p,
-      random: ids(),
-    })
-    expect(r.repo.map((e) => e.id)).toEqual([stale.id])
-    const replaced = planKnowledge({
-      review,
-      choices: { stale: { [stale.id]: { action: 'replace', rule: '새 규칙' } } },
-      delivery: 'none',
-      work: 'w-1',
-      task: 't-03',
-      pool: p,
-      random: ids(),
-    })
-    expect(replaced.pending.map((e) => [e.id, e.status, e.rule])).toEqual([
-      ['failure-00000001', 'active', '새 규칙'],
-      [stale.id, 'superseded', stale.rule],
-    ])
-  })
-
-  it('전달 버튼 줄의 한 줄 (I75)', () => {
-    const review = reviewKnowledge({
-      tasks,
-      pool: [],
-      changed: [],
-      share: true,
-      dir: 'd/',
-      offerPending: true,
-    })
-    expect(planLine(review, undefined)).toBe(
-      '팀 지식 2건은 [PR 생성]이면 PR에 함께 실리고, [완료만]·[push]면 공유 대기로 남음',
+  it('handoff의 새·고친 지식 줄을 읽는다 (D294)', () => {
+    const l = knowledgeLines(
+      handoff(
+        [
+          '고쳤다.',
+          '- 새 지식: `docs/knowledge/a.md` — 맞는 항목 없음',
+          '고친 지식: docs/knowledge/b.md — 30,000 → 40,000원',
+        ].join('\n'),
+      ),
     )
-    expect(planLine({ ...review, candidates: [] }, undefined)).toBeNull()
+    expect([...l.added]).toEqual([['docs/knowledge/a.md', '맞는 항목 없음']])
+    expect([...l.updated]).toEqual([['docs/knowledge/b.md', '30,000 → 40,000원']])
+    expect(l.none).toBe(false)
+    expect(knowledgeLines(handoff('남긴 지식: 없음 (규칙 없음)')).none).toBe(true)
+    // 경로 뒤의 구분자(띄어쓰기 없는 대시, 콜론)는 경로에 붙지 않는다
+    const tight = knowledgeLines(
+      handoff('새 지식: docs/knowledge/c.md: 까닭\n고친 지식: docs/knowledge/d.md—1% → 2%'),
+    )
+    expect([...tight.added]).toEqual([['docs/knowledge/c.md', '까닭']])
+    expect([...tight.updated]).toEqual([['docs/knowledge/d.md', '1% → 2%']])
   })
 
-  it('지식 커밋 메시지 (I73)', () => {
-    expect(knowledgeCommitMessage('w-1', 3)).toBe('relay(w-1): 지식 3건')
-    expect(isKnowledgeCommit('w-1', 'relay(w-1): 지식 3건')).toBe(true)
-    expect(isKnowledgeCommit('w-1', 'relay(w-2): 지식 3건')).toBe(false)
-  })
-})
-
-// ---------- context.md, deny 규칙, 전달, 설정 ----------
-
-describe('context.md의 `참고 지식` (D286)', () => {
-  const work = createWork({
-    type: 'bugfix',
-    workId: 'w-1',
-    baseBranch: 'main',
-    baseCommit: 'abc',
-    at: '2026-10-02T10:00:00+09:00',
-  }).work
-  const input = {
-    work,
-    task: work.tasks[0] as TaskRecord,
-    config: DEFAULT_CONFIG,
-    taskDir: '/w/tasks/01-intake',
-    request: { path: '/w/request.md', text: '요청' },
-    intent: null,
-    decisionLog: '',
-    rejected: [],
-    previousHandoff: null,
-    artifacts: [],
-  }
-  it('고른 것이 없으면 "없음"이고, 꺼져 있으면 절이 없다', () => {
-    expect(buildContext({ ...input, knowledge: '없음' })).toContain('## 참고 지식\n\n없음')
-    expect(buildContext({ ...input, knowledge: null })).not.toContain('참고 지식')
-    expect(buildContext(input)).not.toContain('참고 지식')
-    expect(knowledgeOff({ RELAY_KNOWLEDGE: 'off' })).toBe(true)
-    expect(knowledgeOff({})).toBe(false)
-  })
-})
-
-describe('deny 규칙 (I78, D309, D310)', () => {
-  const knowledge = {
-    worktree: '/wt',
-    dir: 'docs/knowledge/',
-    store: '/home/.relay/projects/p/knowledge',
-  }
-  it('파이프라인 task는 지식 폴더와 앱 저장소를, PR 대응 task는 앱 저장소만 막는다', () => {
-    const pipeline = denyRules({
-      workDir: '/w',
-      previousTaskDirs: [],
-      knowledge: { ...knowledge, respond: false },
-    })
-    expect(pipeline).toContain('Edit(//wt/docs/knowledge/**)')
-    expect(pipeline).toContain('Edit(//home/.relay/projects/p/knowledge/**)')
-    const respond = denyRules({
-      workDir: '/w',
-      previousTaskDirs: [],
-      knowledge: { ...knowledge, respond: true },
-    })
-    expect(respond).not.toContain('Edit(//wt/docs/knowledge/**)')
-    expect(respond).toContain('Edit(//home/.relay/projects/p/knowledge/**)')
-    expect(
-      denyRules({ workDir: '/w', previousTaskDirs: [] }).some((r) => r.includes('knowledge')),
-    ).toBe(false)
+  it('verify의 지식 확인: 줄과 새·고침 구분, 형식, 같은 anchor (D293, D294)', () => {
+    const base = {
+      existing: new Set(['docs/knowledge/old.md']),
+      current: new Map([['docs/knowledge/old.md', FACT]]),
+    }
+    const msgs = (h: string, changed: { path: string; text: string }[], current = base.current) =>
+      knowledgeIssues({ ...base, handoff: handoff(h), changed, current })
+        .map((i) => `${i.file}: ${i.message}`)
+        .join('\n')
+    // 바꾼 것이 없으면 "남긴 지식: 없음" 줄
+    expect(msgs('고쳤다.', [])).toContain('남긴 지식: 없음')
+    expect(msgs('남긴 지식: 없음 (없음)', [])).toBe('')
+    // 새 파일은 "새 지식", 있던 파일은 "고친 지식"
+    const added = { path: 'docs/knowledge/new.md', text: RULE }
+    const updated = { path: 'docs/knowledge/old.md', text: FACT.replace('사실', '고친 사실') }
+    expect(msgs('새 지식: docs/knowledge/new.md — 맞는 것 없음', [added])).toBe('')
+    expect(msgs('고친 지식: docs/knowledge/new.md — x', [added])).toContain('"새 지식')
+    expect(msgs('새 지식: docs/knowledge/old.md — x', [updated])).toContain('"고친 지식')
+    expect(msgs('고쳤다.', [updated])).toContain('줄이 없음')
+    expect(msgs('새 지식: docs/knowledge/new.md', [added])).toContain('비었음')
+    expect(msgs('고친 지식: docs/knowledge/old.md — x', [])).toContain('고치지 않았다')
+    // 형식
+    expect(msgs('새 지식: docs/knowledge/new.md — x', [{ ...added, text: '# 제목' }])).toContain(
+      'docs/knowledge/new.md: 머리글',
+    )
+    // 같은 anchor: 이번에 바꾼 파일이 끼어 있을 때만
+    const twin = new Map([
+      ['docs/knowledge/old.md', RULE],
+      ['docs/knowledge/new.md', RULE],
+    ])
+    expect(msgs('새 지식: docs/knowledge/new.md — x', [added], twin)).toContain('같은 anchor')
+    expect(msgs('남긴 지식: 없음 (x)', [], twin)).toBe('')
   })
 
-  it('Codex의 도구 보호도 같은 경로를 막는다', () => {
-    const base = { workDir: '/w', previousTaskDirs: [], worktree: '/wt' }
-    const edit = { file_path: '/wt/docs/knowledge/domain/x.md' }
-    expect(
-      codexToolDenial({ ...base, knowledge: { ...knowledge, respond: false } }, 'Write', edit),
-    ).not.toBeNull()
-    expect(
-      codexToolDenial({ ...base, knowledge: { ...knowledge, respond: true } }, 'Write', edit),
-    ).toBeNull()
-  })
-})
-
-describe('전달의 knowledge 단계 (I73)', () => {
-  const p = (repo: number): KnowledgePlan => ({
-    repo: Array.from({ length: repo }, () => entry()),
-    pending: [],
-    mine: [],
-    removePending: [],
-    removeMine: [],
-    carry: [],
-    counts: { team: repo, mine: 0, pending: 0 },
-  })
-  it('[PR 생성]에서 레포에 쓸 것이 있을 때만 지난다', () => {
-    expect(knowledgeStage('pr', p(1))).toBe(true)
-    expect(knowledgeStage('pr', p(0))).toBe(false)
-    expect(knowledgeStage('push', p(1))).toBe(false)
-    expect(knowledgeStage('pr', null)).toBe(false)
-  })
-
-  it('[완료만]은 승인과 함께 앱 저장소에 쓴다', () => {
-    const created = createWork({
-      type: 'bugfix',
-      workId: 'w-1',
-      baseBranch: 'main',
-      baseCommit: 'a',
-      at: 't',
-    }).work
-    const verify: TaskRecord = {
-      ...(created.tasks[0] as TaskRecord),
-      id: 't-03',
-      seq: 3,
+  it('지식 확인 결과는 verify가 승인 대기일 때만 형식 오류가 된다', () => {
+    const files = {
+      'handoff.md': handoff('고쳤다.'),
+      'verification.md': '## 리뷰 지적\n없음\n',
+      'pr.md': '# 제목\n',
+    }
+    const config = { handoff_body_warn_chars: 1500, intent_warn_chars: 1500 }
+    const knowledge = [{ file: 'handoff.md', part: 'body' as const, message: '남긴 지식 줄 없음' }]
+    const on = checkTask({
       node: 'verify',
-      status: 'awaiting_approval',
-    }
-    const work: WorkState = { ...created, intent: { version: 1 }, tasks: [verify] }
-    const okCheck = {
-      handoff_present: true,
-      status: 'awaiting_approval' as const,
-      errors: [],
-      warnings: [],
-      formatVersion: 2,
-      handoff: header({}),
-      handoffHeader: header({}),
-    }
-    const r = transition(
-      work,
-      { type: 'approve', taskId: 't-03', at: 't2', check: okCheck, knowledge: p(1) },
-      DEFAULT_CONFIG,
-    )
-    expect(r.work.status).toBe('completed')
-    expect(r.effects.find((e) => e.type === 'storeKnowledge')).toMatchObject({ carried: null })
-    const approved = r.effects.find((e) => e.type === 'log' && e.event.type === 'task.approved')
-    expect(approved).toMatchObject({
-      event: { payload: { knowledge: { team: 1, mine: 0, pending: 0 } } },
+      type: 'bugfix',
+      files,
+      config,
+      knowledgeIssues: knowledge,
     })
+    expect(on.errors.map((e) => e.message)).toContain('남긴 지식 줄 없음')
+    const off = checkTask({ node: 'verify', type: 'bugfix', files, config })
+    expect(off.errors.map((e) => e.message).join()).not.toContain('남긴 지식')
+    const fix = checkTask({
+      node: 'fix',
+      type: 'bugfix',
+      files: { ...files, 'fix.md': 'x' },
+      config,
+      knowledgeIssues: knowledge,
+    })
+    expect(fix.errors.map((e) => e.message).join()).not.toContain('남긴 지식')
   })
 })
 
-describe('저장된 파일에 새 키가 없을 때의 기본값', () => {
-  it('config.json의 knowledge_inject_chars', () => {
-    expect(normalizeConfig({}).config.knowledge_inject_chars).toBe(1500)
-    expect(normalizeConfig({ knowledge_inject_chars: 5 }).warnings).toHaveLength(1)
+const RULE = [
+  '---',
+  'kind: rule',
+  'source: human',
+  'anchor: FREE_SHIPPING_THRESHOLD',
+  '---',
+  '# 무료배송 기준은 쿠폰 뺀 금액 40,000원',
+  '',
+  '## 규칙',
+  '- 쿠폰을 뺀 금액이 40,000원 이상이면 무료다.',
+  '',
+  '## 아직 규칙을 따르지 않는 곳',
+  '- `src/returns/return-fee.js`: 할인 전 금액으로 판단한다.',
+  '',
+  '## 바뀐 이력',
+  '- 2026-10-04 처음 남김 (Work w-1)',
+].join('\n')
+
+const FACT = [
+  '---',
+  'kind: fact',
+  'source: investigation',
+  '---',
+  '# 사실',
+  '',
+  '## 내용',
+  '- 사실이다.',
+].join('\n')
+
+function handoff(summary: string): string {
+  return [
+    '---',
+    'status: awaiting_approval',
+    'blocked_reason:',
+    'decisions: []',
+    'assumptions: []',
+    'rejected: []',
+    'open_questions: []',
+    'intent_deviation: null',
+    'risks: []',
+    'recommended_next: null',
+    '---',
+    '## 요약',
+    summary,
+    '## 다음 task가 알아야 할 것',
+    '- 없음',
+  ].join('\n')
+}
+
+describe('[단위] 지식 지우기, 범위 지시, 이 Work의 지식 (D296, D297, D298)', () => {
+  it('handoff의 지운·확인한 지식 줄을 읽는다', () => {
+    const l = knowledgeLines(
+      handoff(
+        [
+          '지운 지식: docs/knowledge/old.md — 규칙이 없어짐',
+          '- 확인한 지식: `docs/knowledge/a.md` — 이번엔 일부만 고침',
+        ].join('\n'),
+      ),
+    )
+    expect([...l.removed]).toEqual([['docs/knowledge/old.md', '규칙이 없어짐']])
+    expect([...l.checked]).toEqual([['docs/knowledge/a.md', '이번엔 일부만 고침']])
   })
-  it('project.json의 knowledge_dir와 knowledge_share', () => {
-    expect(projectKnowledgeDir({})).toBe(DEFAULT_KNOWLEDGE_DIR)
-    expect(projectKnowledgeDir({ knowledge_dir: '.git/x' })).toBe(DEFAULT_KNOWLEDGE_DIR)
-    expect(projectKnowledgeShare({})).toBe(true)
-    expect(projectKnowledgeShare({ knowledge_share: false })).toBe(false)
-    expect(checkProjectSettings({ allowed_bots: [], merge_method: null })).toEqual({
-      ok: true,
-      value: { allowed_bots: [], merge_method: null },
-    })
+
+  it('지운 지식은 줄이 있어야 하고, 지우지 않은 파일을 지운 지식으로 적지 않는다 (D297)', () => {
+    const base = {
+      existing: new Set(['docs/knowledge/old.md']),
+      current: new Map<string, string>(),
+    }
+    const msgs = (h: string, removed: string[]) =>
+      knowledgeIssues({ ...base, handoff: handoff(h), changed: [], removed })
+        .map((i) => i.message)
+        .join('\n')
+    expect(msgs('고쳤다.', ['docs/knowledge/old.md'])).toContain(
+      '"지운 지식: docs/knowledge/old.md',
+    )
+    expect(msgs('고쳤다.', ['docs/knowledge/old.md'])).not.toContain('남긴 지식: 없음')
+    expect(msgs('지운 지식: docs/knowledge/old.md — 합침', ['docs/knowledge/old.md'])).toBe('')
+    expect(msgs('지운 지식: docs/knowledge/old.md', ['docs/knowledge/old.md'])).toContain('비었음')
+    expect(msgs('지운 지식: docs/knowledge/p.md — x', [])).toContain('지우지 않았다')
+  })
+
+  it('바꾼 코드가 아직 따르지 않는 곳에 남아 있으면 항목을 고치거나 확인한 지식을 적어야 한다 (D296)', () => {
+    expect(notYetPaths(RULE)).toEqual(['src/returns/return-fee.js'])
+    expect(notYetPaths(FACT)).toEqual([])
+    const current = new Map([
+      ['docs/knowledge/rule.md', RULE],
+      ['docs/knowledge/fact.md', FACT],
+    ])
+    const run = (
+      h: string,
+      codeChanged: string[],
+      changed: { path: string; text: string }[] = [],
+    ) =>
+      knowledgeIssues({
+        handoff: handoff(h),
+        changed,
+        existing: new Set(current.keys()),
+        current,
+        codeChanged,
+      })
+    const hit = run('남긴 지식: 없음 (x)', ['src/returns/return-fee.js', 'test/a.test.js'])
+    expect(hit.map((i) => i.file)).toEqual(['docs/knowledge/rule.md'])
+    expect(hit[0]?.message).toContain('`src/returns/return-fee.js`')
+    expect(hit[0]?.message).toContain('확인한 지식: docs/knowledge/rule.md')
+    // 다른 코드만 바꿨으면 없다
+    expect(run('남긴 지식: 없음 (x)', ['src/other.js'])).toEqual([])
+    // 그대로 두는 까닭을 적으면 된다
     expect(
-      checkProjectSettings({ allowed_bots: [], merge_method: null, knowledge_dir: '.relay/' }).ok,
-    ).toBe(false)
+      run('확인한 지식: docs/knowledge/rule.md — 일부만 고침', ['src/returns/return-fee.js']),
+    ).toEqual([])
+    expect(
+      run('확인한 지식: docs/knowledge/rule.md', ['src/returns/return-fee.js'])
+        .map((i) => i.message)
+        .join(),
+    ).toContain('비었음')
+    expect(
+      run('확인한 지식: docs/knowledge/none.md — x', [])
+        .map((i) => i.message)
+        .join(),
+    ).toContain('없는 지식 항목')
+    // 항목을 고쳤으면 된다
+    const fixed = RULE.replace(/## 아직 규칙을 따르지 않는 곳\n- [^\n]+\n\n/, '')
+    expect(
+      run(
+        '고친 지식: docs/knowledge/rule.md — 반품도 고침',
+        ['src/returns/return-fee.js'],
+        [{ path: 'docs/knowledge/rule.md', text: fixed }],
+      ),
+    ).toEqual([])
+  })
+
+  it('머지 전 앞 Work가 지운 항목은 합친 지식에서 빠지고, 뒤 Work가 다시 쓰면 돌아온다 (D297)', () => {
+    const removed = { path: 'docs/knowledge/a.md', text: '', pendingFrom: 'w-2', removed: true }
+    expect(
+      mergeEntries([entry('a.md', '# A'), entry('b.md', '# B')], [removed]).map((e) => e.path),
+    ).toEqual(['docs/knowledge/b.md'])
+    expect(
+      mergeEntries([entry('a.md', '# A')], [removed, entry('a.md', '# A 다시', 'w-3')]).map((e) => [
+        e.path,
+        e.pendingFrom,
+      ]),
+    ).toEqual([['docs/knowledge/a.md', 'w-3']])
+  })
+
+  it('지식 절: 범위 지시는 규칙이 아니라는 안내와 앞 Work가 지운 항목 (D296, D297)', () => {
+    const input: KnowledgeInput = {
+      entries: [entry('vat.md', '# 금액은 내림')],
+      candidates: [],
+      work_id: 'w-1',
+      date: '2026-10-04',
+      removed: [{ path: 'docs/knowledge/gone.md', from: 'w-0' }],
+    }
+    const [, fix] = knowledgeSection('fix', input)
+    expect(fix).toContain('이번 범위에서 뺌 (사람)')
+    expect(fix).toContain('금지가 아니라')
+    expect(fix).toContain('`docs/knowledge/gone.md`(Work w-0)')
+    const [, verify] = knowledgeSection('verify', input)
+    expect(verify).toContain('사람이 Work w-1의 범위에서 뺌(2026-10-04)')
+    expect(verify).toContain('지운 지식: <경로>')
+    expect(verify).toContain('확인한 지식: <경로>')
+    expect(verify).toContain('git rm')
+  })
+
+  it('이 Work의 지식: 새로 만듦·고침·지움과 handoff 줄의 까닭 (D298)', () => {
+    const h = handoff(
+      [
+        '새 지식: docs/knowledge/new.md — 맞는 항목 없음',
+        '고친 지식: docs/knowledge/old.md — 1% → 2%',
+        '고친 지식: docs/knowledge/pend.md — 이어 씀',
+        '지운 지식: docs/knowledge/gone.md — 합침',
+      ].join('\n'),
+    )
+    const list = knowledgeChanges(
+      [
+        { path: 'docs/knowledge/gone.md', status: 'D', text: null, before: '# 옛것\n' },
+        { path: 'docs/knowledge/new.md', status: 'A', text: RULE, before: null },
+        {
+          path: 'docs/knowledge/old.md',
+          status: 'M',
+          text: FACT,
+          before: FACT.replace('사실이다', '옛 사실'),
+        },
+        { path: 'docs/knowledge/pend.md', status: 'A', text: FACT, before: FACT },
+        { path: 'src/x.js', status: 'M', text: 'x', before: 'y' },
+      ],
+      new Map([['docs/knowledge/pend.md', 'w-7']]),
+      h,
+    )
+    expect(list.map((k) => [k.path, k.change, k.kind, k.note, k.pendingFrom])).toEqual([
+      ['docs/knowledge/new.md', 'added', 'rule', '맞는 항목 없음', null],
+      ['docs/knowledge/old.md', 'updated', 'fact', '1% → 2%', null],
+      ['docs/knowledge/pend.md', 'updated', 'fact', '이어 씀', 'w-7'],
+      ['docs/knowledge/gone.md', 'removed', null, '합침', null],
+    ])
+    expect(list[0]?.title).toBe('무료배송 기준은 쿠폰 뺀 금액 40,000원')
+    expect(list[0]?.diff.split('\n').slice(0, 3)).toEqual([
+      '--- /dev/null',
+      '+++ b/docs/knowledge/new.md',
+      '+---',
+    ])
+    expect(list[1]?.diff).toContain('-- 옛 사실.')
+    expect(list[1]?.diff).toContain('+- 사실이다.')
+    expect(list[1]?.diff).toContain(' ## 내용')
+    expect(list[3]?.diff).toBe('--- a/docs/knowledge/gone.md\n+++ /dev/null\n-# 옛것')
+    expect(kindOf('# 옛 형식')).toBeNull()
   })
 })

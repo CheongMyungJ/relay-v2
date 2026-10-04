@@ -36,7 +36,6 @@ const HANDOFF: Handoff = {
 function check(h: Partial<Handoff> = {}, errors = 0): TaskCheck {
   return {
     handoff_present: true,
-    formatVersion: 2,
     status: 'awaiting_approval',
     errors: Array.from({ length: errors }, () => ({
       file: 'pr.md',

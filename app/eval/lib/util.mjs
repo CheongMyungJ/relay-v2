@@ -153,7 +153,7 @@ export function agentUsage(configDir) {
 }
 
 /**
- * 세션마다 에이전트가 사람에게 물은 수 (대화 기록의 AskUserQuestion 도구 호출, relay I84). 같은 호출 id는 한 번 센다.
+ * 세션마다 에이전트가 사람에게 물은 수 (대화 기록의 AskUserQuestion 도구 호출). 같은 호출 id는 한 번 센다.
  * 서브에이전트 기록은 그 세션에 넣는다
  */
 export function questionsBySession(configDir) {

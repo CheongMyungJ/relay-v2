@@ -1,0 +1,58 @@
+diff --git a/src/invoice/total.js b/src/invoice/total.js
+index 6c97af3..f53956c 100644
+--- a/src/invoice/total.js
++++ b/src/invoice/total.js
+@@ -13,9 +13,15 @@ export function lineAmounts(invoice) {
+   })
+ }
+ 
++// 품목 줄 하나의 부가세. 회계 규정: 줄마다 원 단위 버림
++export function lineVat(net, ratePercent = VAT_RATE_PERCENT) {
++  return Math.floor((net * ratePercent) / 100)
++}
++
+ // 청구서 합계
+ //   subtotal: 할인 전 금액 합, discount: 할인 합, supply: 공급가액 합
+-//   taxable / exempt: 공급가액 중 과세분 / 면세분, vat: 부가세, total: 청구 합계
++//   taxable / exempt: 공급가액 중 과세분 / 면세분, total: 청구 합계
++//   vat: 부가세. 과세 줄마다 할인 뒤 금액의 부가세를 버림해 더한다(합계에서 다시 반올림하지 않는다)
+ export function computeTotals(invoice) {
+   const rows = lineAmounts(invoice)
+   const subtotal = sumWon(rows.map((r) => r.gross))
+@@ -23,6 +29,6 @@ export function computeTotals(invoice) {
+   const taxable = sumWon(rows.filter((r) => r.taxable).map((r) => r.net))
+   const exempt = sumWon(rows.filter((r) => !r.taxable).map((r) => r.net))
+   const supply = taxable + exempt
+-  const vat = invoice.zeroRated ? 0 : Math.round((taxable * VAT_RATE_PERCENT) / 100)
++  const vat = invoice.zeroRated ? 0 : sumWon(rows.filter((r) => r.taxable).map((r) => lineVat(r.net)))
+   return { subtotal, discount, supply, taxable, exempt, vat, total: supply + vat }
+ }
+diff --git a/test/total.test.js b/test/total.test.js
+index 5b9aafd..12beabf 100644
+--- a/test/total.test.js
++++ b/test/total.test.js
+@@ -60,3 +60,24 @@ test('단가 0원 품목(증정품)', () => {
+   ])
+   assert.strictEqual(computeTotals(inv).total, 15290)
+ })
++
++test('부가세는 품목 줄마다 버림해 더한다', () => {
++  const inv = draft([
++    { name: '박스테이프', unitPrice: 1342, qty: 4 },
++    { name: '네임펜 흑', unitPrice: 905, qty: 7 },
++    { name: '스테이플러 심', unitPrice: 1085, qty: 3 },
++    { name: '수정테이프', unitPrice: 1675, qty: 5 },
++    { name: '볼펜 0.5 흑', unitPrice: 345, qty: 9 },
++  ])
++  const t = computeTotals(inv)
++  assert.strictEqual(t.vat, 536 + 633 + 325 + 837 + 310)
++  assert.strictEqual(t.total, 29079)
++})
++
++test('할인 뒤 줄 금액에 부가세를 매긴다', () => {
++  const inv = draft([
++    { name: '박스테이프', unitPrice: 1342, qty: 8, discount: { amount: 1500 } },
++    { name: '형광펜 5색', unitPrice: 2150, qty: 6, discount: { percent: 5 } },
++  ])
++  assert.strictEqual(computeTotals(inv).vat, 923 + 1225)
++})

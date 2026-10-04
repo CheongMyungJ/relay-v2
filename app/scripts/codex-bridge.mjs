@@ -165,7 +165,12 @@ if (process.argv[2] === 'hook') {
       'hook',
       body,
       undefined,
-      body.hook_event_name === 'SessionEnd' || body.hook_event_name === 'Interrupt' ? 2000 : 25_000,
+      body.hook_event_name === 'SessionEnd' || body.hook_event_name === 'Interrupt'
+        ? 2000
+        : // Stop은 verify의 지식 검토 호출(D300, 90초까지)을 기다린다. Claude의 Stop 훅(180초)과 맞춘다
+          body.hook_event_name === 'Stop'
+          ? 170_000
+          : 25_000,
     )
     if (reply) process.stdout.write(JSON.stringify(reply))
   } catch (error) {

@@ -127,10 +127,7 @@ describe('[어댑터] 프로젝트 등록 점검 (시나리오 0, D67)', () => {
     const pathRules = settings.permissions.deny.filter((r) => r.startsWith('Edit('))
     expect(pathRules.length).toBeGreaterThan(0)
     for (const rule of pathRules) {
-      // Work 디렉터리, worktree의 지식 폴더, 앱 저장소의 지식 폴더 (I78)
-      expect(rule).toMatch(
-        new RegExp(`/projects/${projectId.replace(/[[\]]/g, '\\$&')}/(works|worktrees|knowledge)`),
-      )
+      expect(rule).toContain(`/projects/${projectId}/works/`)
       // 경로 부분(규칙 끝의 ** 빼고)에 패턴 문자가 없다
       expect(rule.replace(/\/\*\*\)$/, ')')).not.toMatch(/[[\]*?]/)
     }

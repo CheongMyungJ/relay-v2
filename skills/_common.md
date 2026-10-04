@@ -68,8 +68,7 @@ open_questions: []   # questions that still need a human answer
 intent_deviation: null   # facts that contradict the intent: {summary, evidence}. Otherwise null
 risks: []            # remaining risks
 recommended_next: null   # null for the default next step. Otherwise {node, reason}. node must be one of the selectable next steps in context.md
-knowledge_candidates: []  # items {kind, rule, paths, terms, why, not_in_code, incentive}, optional subkind, decision, supersedes. See "Knowledge"
-knowledge_feedback: []    # items {id, note}: a `참고 지식` item that differs from the code or the human
+knowledge_candidates: []  # optional. facts worth reusing later
 ---
 ## 요약
 ## 다음 task가 알아야 할 것
@@ -98,16 +97,7 @@ intent_deviation: null
 risks:
   - "음수만 있는 배열은 확인하지 않음"
 recommended_next: null
-knowledge_candidates:
-  - kind: domain
-    rule: "빈 배열의 평균은 0이다"
-    paths: ["src/avg.js"]
-    terms: ["평균", "빈 배열"]
-    why: "사람이 답함: 화면에 NaN 대신 0을 보인다"
-    not_in_code: "사람이 정함"
-    incentive: "빈 배열에서 예외를 던지게 바꾼다"
-    decision: "빈 배열의 평균은 0으로 한다"
-knowledge_feedback: []
+knowledge_candidates: []
 ---
 ## 요약
 빈 배열이면 0을 돌려주게 고쳤다.
@@ -124,33 +114,5 @@ The app checks the format when your turn ends. You do not run a validator. It ch
 - The body of `intent.draft.md` has `목표`, `비목표`, `원하는 결과`, `완료조건`, and each 완료조건 line starts with `- [ ] `.
 - The first line of `pr.md` starts with `# `.
 - `replies.md` has one `## <item id>` section with a non-empty reply for each comment item of the round, and no other ids.
-- Each knowledge candidate has its required fields, 1 to 5 `terms`, a path for `constraint` and two paths for `structure`.
 
 If the app sends back a format error: fix the file it names and fill in missing artifacts or sections. Do not change your judgments (decisions, cause, verdicts). Then do steps 3 and 4 again.
-
-## Knowledge
-
-The app keeps knowledge for the next Works of this repo. You write candidates. The human filters them when the Work completes. Do not write knowledge files yourself: the knowledge folder and the app's knowledge store are not yours to edit (pr-respond is the exception, see its skill).
-
-Candidates (`knowledge_candidates`). Aim for about 3 per task. Only what the next Work cannot get from the code:
-
-| `kind` | What | Required |
-|---|---|---|
-| `domain` | a behavior rule the human decided, or a lasting rule the human told you (e.g. how this team fixes flaky tests) | |
-| `recipe` | how to verify: test command, reproduction, a test that already fails at the base commit | |
-| `failure` | a kind of failure that recurs and how to check for it | |
-| `constraint` | a rule not visible in the code; `subkind: compat` for external compatibility | 1+ `paths` |
-| `decision` | a rejected alternative and why; `subkind: non_goal` for what was decided not to do | |
-| `structure` | a relation you must read across modules (e.g. the symptom and the cause are in different modules); `subkind: term` for a word this repo reads differently | 2+ `paths` |
-
-- `rule`: one line. `terms`: 1 to 5 words a request about this would contain. `paths`: repo paths (directory, file, or `file:symbol`).
-- `not_in_code`: why the code alone does not tell this. For a rule the human decided, "사람이 정함". `incentive`: the wrong change someone would make without it. Do not infer a reason from the code.
-- A candidate refined from a human decision: copy that decision's `what` into `decision` verbatim.
-- A lasting rule the human told you is `domain`, even when it forbids a fix ("do not retry") or reads like a decision: `decision` and a `constraint` without `compat` do not reach intake.
-- A candidate that corrects a `참고 지식` item: put that item's id in `supersedes`.
-- Not knowledge: facts of this incident (who reported, when), hypotheses that only mattered in this Work, progress.
-- Write values in Korean, like the other handoff values.
-- If you came in by a rewind or the previous step recommended going back (context.md), consider a `failure` candidate for why.
-
-`참고 지식` in context.md is reference, not input. If an item differs from the current code or what the human says, they win: add `{id, note}` to `knowledge_feedback` (the id is the file name `<id>.md`).
-

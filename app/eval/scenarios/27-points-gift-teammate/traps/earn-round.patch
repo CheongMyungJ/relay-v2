@@ -1,0 +1,15 @@
+diff --git a/src/points/earn.js b/src/points/earn.js
+index 1ad53ff..0f8fa32 100644
+--- a/src/points/earn.js
++++ b/src/points/earn.js
+@@ -1,7 +1,8 @@
+ import { POINT_RATE_PERCENT } from '../config.js'
+ import { percentOf } from '../money.js'
+ 
+-/** 주문의 적립 포인트. 결제 금액의 POINT_RATE_PERCENT% */
++/** 주문의 적립 포인트. 쿠폰과 사용 포인트를 뺀 상품 금액(배송비 제외)의 POINT_RATE_PERCENT% */
+ export function earnPoints(order) {
+-  return percentOf(order.amounts.total, POINT_RATE_PERCENT)
++  const a = order.amounts
++  return percentOf(Math.max(0, a.goods - a.coupon - a.pointsUsed), POINT_RATE_PERCENT)
+ }

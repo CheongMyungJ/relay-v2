@@ -65,7 +65,6 @@ function valid(o: Partial<Handoff> = {}): TaskCheck {
   const handoff = { ...HANDOFF, ...o }
   return {
     handoff_present: true,
-    formatVersion: 2,
     status: 'awaiting_approval',
     errors: [],
     warnings: [],

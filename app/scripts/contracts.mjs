@@ -29,8 +29,6 @@ for (const file of fs.readdirSync(source).sort()) {
     // 스키마의 title이 한국어라 루트 타입 이름은 파일 이름으로 정한다.
     customName: (s) => (s.$id === schema.$id ? name : undefined),
     style,
-    // 용어 1~5개(D299)를 튜플 합으로 만들지 않는다. 개수는 스키마 검사가 본다
-    ignoreMinAndMaxItems: true,
   })
   files.set(file, text)
   files.set(file.replace(/\.schema\.json$/, '.ts'), ts)
