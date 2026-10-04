@@ -1,0 +1,41 @@
+{
+  "paths": [
+    "docs/knowledge/points/earn-basis.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/points/earn-basis.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "적립 기준은 상품 - 쿠폰 - 사용 포인트이고 배송비는 기준에서 뺀다고 적혀 있다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "floor(...)와 제목의 '원 단위 미만 버림'으로 소수 단위를 버리는 것이 적혀 있다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "제목에 결제 금액의 1%라고 적혀 있고 식에도 POINT_RATE_PERCENT/100이 쓰인다."
+      },
+      {
+        "id": "R5",
+        "status": "missing",
+        "why": "이미 적립된 포인트를 다시 계산하지 않고 저장된 값을 쓴다는 내용이 어디에도 없다."
+      }
+    ]
+  }
+}

@@ -1,0 +1,125 @@
+diff --git a/tree/docs/knowledge/runner/runpool-result-order.md b/tree/docs/knowledge/runner/runpool-result-order.md
+new file mode 100644
+index 0000000..b0c4778
+--- /dev/null
++++ b/tree/docs/knowledge/runner/runpool-result-order.md
+@@ -0,0 +1,13 @@
++---
++kind: rule
++source: investigation
++anchor: runPool
++---
++# runPool 결과는 입력 순서여야 한다
++
++## 규칙
++- `runPool`(src/runner/pool.js)은 완료 순서가 아니라 items와 같은 순서로 결과를 돌려준다. `collectResults`(src/collect/collector.js)가 `outcomes[i]`를 `jobs[i]`와 인덱스로 짝짓기 때문이다.
++- 진행 알림(`onChunk`)의 `done`은 결과 배열 길이가 아니라 별도 카운터로 센다.
++
++## 바뀐 이력
++- 2026-10-04 처음 남김: 완료 순서로 push하던 것을 입력 순서 자리에 넣게 고침 (Work w-20261004-001)
+diff --git a/tree/docs/knowledge/store/report-temp-file-name.md b/tree/docs/knowledge/store/report-temp-file-name.md
+new file mode 100644
+index 0000000..0de9e8d
+--- /dev/null
++++ b/tree/docs/knowledge/store/report-temp-file-name.md
+@@ -0,0 +1,13 @@
++---
++kind: pitfall
++source: investigation
++anchor: saveReport
++---
++# 보고서 임시 파일 이름이 겹치면 다른 고객사 내용이 저장된다
++
++## 내용
++- `saveReport`(src/store/report-archive.js)는 임시 파일에 쓰고 rename한다. 임시 이름이 시각(ms)만이면 같은 ms에 저장하는 보고서끼리 겹쳐 한 보고서가 다른 고객사의 내용으로 덮이거나 rename ENOENT로 실패한다. 지연이 있는 ci/archive.test.js에서 약 절반 실행에 실패했다.
++- 임시 이름에는 reportId를 넣어 보고서마다 다르게 한다.
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-001)
+diff --git a/tree/docs/knowledge/testing/flaky-tests-need-root-cause.md b/tree/docs/knowledge/testing/flaky-tests-need-root-cause.md
+new file mode 100644
+index 0000000..78e5c1d
+--- /dev/null
++++ b/tree/docs/knowledge/testing/flaky-tests-need-root-cause.md
+@@ -0,0 +1,12 @@
++---
++kind: rule
++source: human
++---
++# 간헐 실패는 재시도, skip, 시간 제한 증가, 지연 설정 축소로 해결하지 않는다
++
++## 규칙
++- 간헐적으로 실패하는 시험은 원인을 찾아 코드에서 제거한다. 시험에 재시도를 붙이거나 skip하거나 시간 제한을 늘리거나 지연 설정(LATENCY)을 줄이는 것은 해결로 인정하지 않는다.
++- 지연이 있는 시험(`ci/`, `npm run test:ci`)에서만 드러나는 순서·경합 문제가 있다. `npm test`가 통과해도 `test:ci`를 반복 실행해 확인한다.
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-001)
+diff --git a/base/src/runner/pool.js b/tree/src/runner/pool.js
+index efefaae..55d07d8 100644
+--- a/base/src/runner/pool.js
++++ b/tree/src/runner/pool.js
+@@ -5,20 +5,22 @@
+  * @param {T[]} items
+  * @param {(item: T) => Promise<R>} worker
+  * @param {{ concurrency?: number, onChunk?: (p: { start: number, size: number, done: number, total: number }) => void }} [o]
+- * @returns {Promise<R[]>}
++ * @returns {Promise<R[]>} items와 같은 순서의 결과
+  */
+ export async function runPool(items, worker, o = {}) {
+   const size = Math.max(1, o.concurrency ?? 1)
+-  const results = []
++  const results = new Array(items.length)
++  let done = 0
+   for (let start = 0; start < items.length; start += size) {
+     const chunk = items.slice(start, start + size)
+     await Promise.all(
+-      chunk.map(async (item) => {
+-        const result = await worker(item)
+-        results.push(result)
++      chunk.map(async (item, i) => {
++        // 완료 순서가 아니라 입력 순서 자리에 넣는다 (collectResults가 인덱스로 작업과 짝짓는다)
++        results[start + i] = await worker(item)
++        done++
+       }),
+     )
+-    o.onChunk?.({ start, size: chunk.length, done: results.length, total: items.length })
++    o.onChunk?.({ start, size: chunk.length, done, total: items.length })
+   }
+   return results
+ }
+diff --git a/base/src/store/report-archive.js b/tree/src/store/report-archive.js
+index 0c62d2f..b9d2ff5 100644
+--- a/base/src/store/report-archive.js
++++ b/tree/src/store/report-archive.js
+@@ -20,7 +20,8 @@ export function reportPath(period, reportId) {
+  */
+ export async function saveReport(files, report) {
+   const path = reportPath(report.period, report.reportId)
+-  const tmp = `${reportDir(report.period)}/.${stamp(now())}.tmp`
++  // 같은 ms에 저장하는 다른 보고서와 임시 이름이 겹치지 않게 reportId를 넣는다
++  const tmp = `${reportDir(report.period)}/.${report.reportId}.${stamp(now())}.tmp`
+   await files.writeFile(tmp, JSON.stringify(report))
+   await files.rename(tmp, path)
+   return path
+diff --git a/tree/test/pool-order.test.js b/tree/test/pool-order.test.js
+new file mode 100644
+index 0000000..e0cdb63
+--- /dev/null
++++ b/tree/test/pool-order.test.js
+@@ -0,0 +1,16 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import { runPool } from '../src/runner/pool.js'
++
++test('결과는 완료 순서가 아니라 입력 순서다', async () => {
++  const delays = [30, 1, 15, 5, 1, 20]
++  const results = await runPool(
++    delays.map((ms, i) => ({ ms, i })),
++    async ({ ms, i }) => {
++      await new Promise((r) => setTimeout(r, ms))
++      return i
++    },
++    { concurrency: 3 },
++  )
++  assert.deepStrictEqual(results, [0, 1, 2, 3, 4, 5])
++})

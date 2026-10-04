@@ -1,0 +1,46 @@
+{
+  "paths": [
+    "docs/knowledge/points/earn-rule.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/points/earn-rule.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "기준액은 상품금액 − 쿠폰 − 사용 포인트이고 배송비는 뺀다고 적혀 있다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "기준액의 적립률만큼을 원 단위로 버린다고 적혀 있다(`floorPercentOf`)."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "적립률 2%, 2026-10 배포부터 적용하고 1%는 이력과 '당시 1%'로만 나온다."
+      },
+      {
+        "id": "R4",
+        "status": "missing",
+        "why": "부분 환불 회수는 현재 코드 상태(환불 상품금액의 1%를 반올림)만 적혀 있다. '원래 적립 − 남은 상품 재계산 적립'이라는 규칙은 어디에도 없다."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "전체 취소와 영수증은 저장된 `points.earned`를 쓰고 이미 적립된 값은 다시 계산하지 않는다고 적혀 있다."
+      }
+    ]
+  }
+}

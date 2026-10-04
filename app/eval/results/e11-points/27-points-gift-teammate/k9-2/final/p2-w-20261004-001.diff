@@ -1,0 +1,108 @@
+diff --git a/tree/docs/knowledge/points/earn-rule.md b/tree/docs/knowledge/points/earn-rule.md
+new file mode 100644
+index 0000000..0fcfc8f
+--- /dev/null
++++ b/tree/docs/knowledge/points/earn-rule.md
+@@ -0,0 +1,17 @@
++---
++kind: rule
++source: investigation
++anchor: earnPoints
++---
++# 일반 주문 적립 포인트는 배송비를 뺀 결제 금액의 1%를 원 단위 내림한다
++
++## 규칙
++- 적립 포인트 = `floor((total - shipping) × 1%)`. 예: O-1042은 total 26,770 − 배송비 3,000 = 23,770 → 237P (고객센터 기준).
++- 이미 저장된 주문의 `points.earned`는 다시 계산하지 않고 저장된 값을 쓴다.
++
++## 아직 규칙을 따르지 않는 곳
++- src/orders/refund.js:34: 부분 환불 회수 포인트를 상품 금액 1% 반올림으로 계산한다. 적립 규칙과 다를 수 있으나 확인하지 않았고 이 Work에서 건드리지 않음
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-001). 배송비 제외·내림은 O-1042 한 건의 고객센터 값(237P)에서 추론한 기준이다
++- 2026-10-04 src/gift/gift-points.js를 규칙대로 고침: earnPoints에 위임 (Work w-20261004-001)
+diff --git a/base/src/gift/gift-points.js b/tree/src/gift/gift-points.js
+index 31d9ca8..70415fe 100644
+--- a/base/src/gift/gift-points.js
++++ b/tree/src/gift/gift-points.js
+@@ -1,7 +1,6 @@
+-import { POINT_RATE_PERCENT } from '../config.js'
+-import { percentOf } from '../money.js'
++import { earnPoints } from '../points/earn.js'
+ 
+-/** 선물하기 주문의 적립 포인트(보내는 사람에게 쌓인다) */
++/** 선물하기 주문의 적립 포인트(보내는 사람에게 쌓인다). 일반 주문과 같은 규칙을 쓴다 */
+ export function giftPoints(order) {
+-  return percentOf(order.amounts.total, POINT_RATE_PERCENT)
++  return earnPoints(order)
+ }
+diff --git a/base/src/points/earn.js b/tree/src/points/earn.js
+index 1ad53ff..df21f99 100644
+--- a/base/src/points/earn.js
++++ b/tree/src/points/earn.js
+@@ -1,7 +1,7 @@
+ import { POINT_RATE_PERCENT } from '../config.js'
+-import { percentOf } from '../money.js'
+ 
+-/** 주문의 적립 포인트. 결제 금액의 POINT_RATE_PERCENT% */
++/** 주문의 적립 포인트. 배송비를 뺀 결제 금액의 POINT_RATE_PERCENT%를 원 단위로 내린다 */
+ export function earnPoints(order) {
+-  return percentOf(order.amounts.total, POINT_RATE_PERCENT)
++  const { total, shipping } = order.amounts
++  return Math.floor(((total - shipping) * POINT_RATE_PERCENT) / 100)
+ }
+diff --git a/tree/test/earn.test.js b/tree/test/earn.test.js
+new file mode 100644
+index 0000000..dc662e3
+--- /dev/null
++++ b/tree/test/earn.test.js
+@@ -0,0 +1,22 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import fs from 'node:fs'
++import { createOrder } from '../src/orders/order.js'
++
++const example = (name) => JSON.parse(fs.readFileSync(new URL(`../examples/${name}.json`, import.meta.url), 'utf8'))
++
++test('O-1042 적립 포인트는 배송비를 뺀 결제 금액의 1%를 내림해 237P', () => {
++  const o = createOrder(example('O-1042'))
++  assert.strictEqual(o.amounts.total, 26770)
++  assert.strictEqual(o.amounts.shipping, 3000)
++  assert.strictEqual(o.points.earned, 237)
++})
++
++test('O-1107 적립 포인트는 배송비를 뺀 결제 금액(24,330원)의 1%', () => {
++  assert.strictEqual(createOrder(example('O-1107')).points.earned, 243)
++})
++
++test('배송비가 없으면 결제 금액의 1%', () => {
++  const o = createOrder({ customerId: 'U-1', number: 'O-0003', lines: [{ sku: 'A', unitPrice: 25000, qty: 2 }] })
++  assert.strictEqual(o.points.earned, 500)
++})
+diff --git a/base/test/gift.test.js b/tree/test/gift.test.js
+index 898969e..d989a3c 100644
+--- a/base/test/gift.test.js
++++ b/tree/test/gift.test.js
+@@ -1,6 +1,8 @@
+ import { test } from 'node:test'
+ import assert from 'node:assert'
+ import { createGiftOrder } from '../src/gift/gift-order.js'
++import fs from 'node:fs'
++import { createOrder } from '../src/orders/order.js'
+ 
+ const base = {
+   customerId: 'U-1',
+@@ -21,3 +23,13 @@ test('메시지 카드는 60자까지', () => {
+ test('받는 사람 전화번호 형식', () => {
+   assert.throws(() => createGiftOrder({ ...base, number: 'G-0003', recipient: { name: '김하늘', phone: '01012345678' } }), /010-0000-0000/)
+ })
++
++test('G-0213 적립 포인트는 배송비를 뺀 결제 금액(21,860원)의 1%를 내림해 218P, 같은 상품의 일반 주문과 같다', () => {
++  const ex = JSON.parse(fs.readFileSync(new URL('../examples/G-0213.json', import.meta.url), 'utf8'))
++  const g = createGiftOrder(ex)
++  assert.strictEqual(g.amounts.total, 24860)
++  assert.strictEqual(g.amounts.shipping, 3000)
++  assert.strictEqual(g.points.earned, 218)
++  const normal = createOrder({ ...ex, number: 'O-0213', recipient: undefined, message: undefined })
++  assert.strictEqual(g.points.earned, normal.points.earned)
++})

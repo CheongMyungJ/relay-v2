@@ -1,0 +1,71 @@
+diff --git a/tree/docs/knowledge/invoice/vat-per-line-floor.md b/tree/docs/knowledge/invoice/vat-per-line-floor.md
+new file mode 100644
+index 0000000..8430dbc
+--- /dev/null
++++ b/tree/docs/knowledge/invoice/vat-per-line-floor.md
+@@ -0,0 +1,15 @@
++---
++kind: rule
++source: human
++---
++# 부가세는 과세 줄마다 할인 후 금액에 원 단위 버림으로 계산해 합한다
++
++## 규칙
++- 부가세는 과세 품목 줄마다 할인 적용 후 줄 금액(net)에 세율을 곱해 원 단위 버림으로 계산하고, 그 합을 부가세로 쓴다 (회계팀 규칙).
++- 합계는 공급가액 + 부가세이며, 합계에서 다시 반올림하지 않는다.
++- 예: INV-2031은 공급가액 26,438원, 부가세 2,641원(536+633+325+837+310), 합계 29,079원이다.
++- 반품 전표도 같다. CN-0112(INV-2047의 반품)는 공급가액 17,438원, 부가세 1,742원(923+612+207), 합계 19,180원이다.
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-001)
++- 2026-10-04 src/invoice/credit-note.js를 규칙대로 고침 (Work w-20261004-002)
+diff --git a/base/src/invoice/credit-note.js b/tree/src/invoice/credit-note.js
+index 6e6fe7d..4efe664 100644
+--- a/base/src/invoice/credit-note.js
++++ b/tree/src/invoice/credit-note.js
+@@ -87,7 +87,10 @@ export function creditTotals(note) {
+   const taxable = sumWon(rows.filter((r) => r.taxable).map((r) => r.net))
+   const exempt = sumWon(rows.filter((r) => !r.taxable).map((r) => r.net))
+   const supply = taxable + exempt
+-  const vat = note.zeroRated ? 0 : Math.round((taxable * VAT_RATE_PERCENT) / 100)
++  // 부가세는 과세 줄마다 할인 후 금액(net)에 세율을 곱해 원 단위로 버리고 합한다(회계팀 규칙)
++  const vat = note.zeroRated
++    ? 0
++    : sumWon(rows.filter((r) => r.taxable).map((r) => Math.floor((r.net * VAT_RATE_PERCENT) / 100)))
+   return { supply, taxable, exempt, vat, total: supply + vat }
+ }
+ 
+diff --git a/base/test/credit-note.test.js b/tree/test/credit-note.test.js
+index 5c7f920..d1563b2 100644
+--- a/base/test/credit-note.test.js
++++ b/tree/test/credit-note.test.js
+@@ -81,3 +81,29 @@ test('반품 전표 분개', () => {
+     ['INV-0100', 'INV-0100', 'INV-0100', 'CN-0001', 'CN-0001', 'CN-0001'],
+   )
+ })
++
++test('반품 전표 부가세는 과세 줄마다 할인 후 금액에 버림한 값의 합이다', () => {
++  // INV-2047 / CN-0112: 줄별 net 9236, 6127, 2075 → 923 + 612 + 207 = 1742 (합계에서 한 번 반올림하면 1744)
++  const invoice = issueInvoice(
++    createInvoice({
++      customerId: 'C-0388',
++      lines: [
++        { sku: 'OF-0415', name: '지우개', unitPrice: 415, qty: 9 },
++        { sku: 'OF-1342', name: '박스테이프', unitPrice: 1342, qty: 8, discount: { amount: 1500 } },
++        { sku: 'OF-2150', name: '형광펜 5색', unitPrice: 2150, qty: 6, discount: { percent: 5 } },
++      ],
++    }),
++    { number: 'INV-2047', issueDate: '2026-09-24' },
++  )
++  const cn = createCreditNote(invoice, {
++    number: 'CN-0112',
++    issueDate: '2026-10-06',
++    reason: '파손 및 주문 착오',
++    returns: [
++      { sku: 'OF-1342', qty: 8 },
++      { sku: 'OF-2150', qty: 3 },
++      { sku: 'OF-0415', qty: 5 },
++    ],
++  })
++  assert.deepStrictEqual(cn.totals, { supply: 17438, taxable: 17438, exempt: 0, vat: 1742, total: 19180 })
++})

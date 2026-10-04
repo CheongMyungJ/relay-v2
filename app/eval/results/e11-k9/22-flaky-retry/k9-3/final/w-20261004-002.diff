@@ -1,0 +1,31 @@
+diff --git a/base/src/store/report-archive.js b/tree/src/store/report-archive.js
+index 0c62d2f..f6e9d94 100644
+--- a/base/src/store/report-archive.js
++++ b/tree/src/store/report-archive.js
+@@ -20,7 +20,7 @@ export function reportPath(period, reportId) {
+  */
+ export async function saveReport(files, report) {
+   const path = reportPath(report.period, report.reportId)
+-  const tmp = `${reportDir(report.period)}/.${stamp(now())}.tmp`
++  const tmp = `${reportDir(report.period)}/.${report.reportId}.${stamp(now())}.tmp`
+   await files.writeFile(tmp, JSON.stringify(report))
+   await files.rename(tmp, path)
+   return path
+diff --git a/base/test/archive.test.js b/tree/test/archive.test.js
+index 44aa323..603fa41 100644
+--- a/base/test/archive.test.js
++++ b/tree/test/archive.test.js
+@@ -93,3 +93,13 @@ test('짧은 꼬리표', () => {
+   assert.strictEqual(stamp(1759197304120), 'mg5wnj94')
+   assert.strictEqual(stamp(35.9), 'z')
+ })
++
++test('보고서 보관: 같은 ms에 여러 보고서를 동시에 저장해도 서로 덮어쓰지 않는다', async () => {
++  const fixed = t
++  setNow(() => fixed) // 시각 고정: 임시 파일 이름이 시각만으로 정해지면 모두 겹친다
++  const files = createFileStore({ latency: { baseMs: 2, perKbMs: 1 } })
++  const ns = [1, 2, 3, 4]
++  await Promise.all(ns.map((n) => saveReport(files, report(n, `tenant-${n}`))))
++  for (const n of ns) assert.strictEqual((await loadReport(files, '2026-09', `report-${n}`)).tenant, `tenant-${n}`)
++  assert.deepStrictEqual(strayTemps(files, '2026-09'), [])
++})

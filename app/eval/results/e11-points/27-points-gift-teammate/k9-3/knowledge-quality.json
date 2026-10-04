@@ -1,0 +1,51 @@
+{
+  "paths": [
+    "docs/knowledge/points/earn-base-and-rounding.md",
+    "docs/knowledge/points/stored-points-earned.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/points/earn-base-and-rounding.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/points/stored-points-earned.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "earn-base-and-rounding.md는 적립 기준을 배송비를 뺀 결제 금액(`amounts.total - amounts.shipping`)으로 적었고, 선물하기도 같은 규칙을 쓴다고 적었다. 쿠폰 할인과 포인트 사용분을 따로 풀어 쓰지는 않았지만 결제 금액이라는 표현에 담겨 있다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "원 미만은 `Math.floor`로 버리며 반올림하지 않는다고 적었고, 예시로 237P와 238P를 대비했다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "적립률은 `POINT_RATE_PERCENT`이고 제목에 1%라고 적었다."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "stored-points-earned.md가 저장된 `points.earned`를 다시 계산하지 않고 쓴다고 적었다."
+      }
+    ]
+  }
+}

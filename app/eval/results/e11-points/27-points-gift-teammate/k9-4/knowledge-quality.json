@@ -1,0 +1,41 @@
+{
+  "paths": [
+    "docs/knowledge/points/earn-points-rule.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/points/earn-points-rule.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "적립 기준을 (total − shipping)으로 적었고 배송비는 제외한다고 밝혔다. total은 쿠폰·포인트를 뺀 결제 금액으로 보이며 예시(26,770−3,000 → 237P)도 맞는다. 쿠폰·포인트 차감을 따로 풀어 쓰지는 않았다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "floor로 버림하며 반올림은 틀리다고 명시했다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "POINT_RATE_PERCENT와 제목의 1%로 적었다."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "저장된 points.earned를 다시 계산하지 않고 그대로 쓴다고 적었다."
+      }
+    ]
+  }
+}

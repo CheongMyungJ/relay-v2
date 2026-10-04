@@ -1,0 +1,204 @@
+{
+  "schema_version": 1,
+  "work_id": "w-20261004-001",
+  "type": "bugfix",
+  "status": "completed",
+  "created_at": "2026-10-04T09:36:16+00:00",
+  "base_branch": "main",
+  "base_commit": "800a80303005354a84c0c631a11d84fecc4668c2",
+  "intent": {
+    "version": 1
+  },
+  "settings": {},
+  "file_hashes": {
+    "request.md": "sha256:cdeb97292be0e6a70fc3941bf44abacfcc6df4525d295e0509d2fb7ef53c3562",
+    "intent.md": "sha256:a9efb53cf85a48c55da3459353e70b1c6d474d67224f1df2312e329c8dfbcc6e",
+    "decisions.md": "sha256:886d915621646cfb67f04c4f3f0d723d7e197326e90ca7380319a46a26448236"
+  },
+  "tasks": [
+    {
+      "id": "t-01",
+      "seq": 1,
+      "node": "intake",
+      "status": "approved",
+      "reason": "default",
+      "format_version": 1,
+      "created_at": "2026-10-04T09:36:16+00:00",
+      "session": {
+        "id": "00e9c37a-8dfd-4a01-9a2e-5d3dbf503e24",
+        "pid": 32430,
+        "process_started_at": "2026-10-04T09:36:15.960Z",
+        "started_at": "2026-10-04T09:36:16+00:00",
+        "alive": false,
+        "ended_at": "2026-10-04T09:37:35+00:00"
+      },
+      "bounce_count": 0,
+      "check": {
+        "handoff_present": true,
+        "status": "awaiting_approval",
+        "errors": [],
+        "warnings": []
+      },
+      "engine": "claude",
+      "start_commit": "800a80303005354a84c0c631a11d84fecc4668c2",
+      "skill_hash": "sha256:8d88de1bf541d7ff08dbc3ad8a9215197d2886d38908b02071fdf48a65cc4223",
+      "engine_version": "2.1.289 (Claude Code)",
+      "claude_version": "2.1.289 (Claude Code)",
+      "last_prompt_at": "2026-10-04T09:37:15+00:00",
+      "permission_mode": "bypassPermissions",
+      "approved_at": "2026-10-04T09:37:35+00:00",
+      "approved_by": "human"
+    },
+    {
+      "id": "t-02",
+      "seq": 2,
+      "node": "fix",
+      "status": "discarded",
+      "reason": "default",
+      "format_version": 1,
+      "created_at": "2026-10-04T09:37:35+00:00",
+      "session": {
+        "id": "34b6d5c3-5295-4b4d-8136-ea291f44742b",
+        "pid": 1396,
+        "process_started_at": "2026-10-04T09:37:34.720Z",
+        "started_at": "2026-10-04T09:37:35+00:00",
+        "alive": false,
+        "ended_at": "2026-10-04T09:38:47+00:00"
+      },
+      "bounce_count": 0,
+      "check": {
+        "handoff_present": true,
+        "status": "awaiting_approval",
+        "errors": [],
+        "warnings": []
+      },
+      "engine": "claude",
+      "start_commit": "800a80303005354a84c0c631a11d84fecc4668c2",
+      "skill_hash": "sha256:0eca34eedf0cd9b3428cb33b41030d6ee5e2d5e882ac6bf80b61da3dcd2db22f",
+      "engine_version": "2.1.289 (Claude Code)",
+      "claude_version": "2.1.289 (Claude Code)",
+      "last_prompt_at": "2026-10-04T09:37:36+00:00",
+      "permission_mode": "bypassPermissions",
+      "approved_at": "2026-10-04T09:38:47+00:00",
+      "approved_by": "auto",
+      "discarded_at": "2026-10-04T09:41:11+00:00",
+      "discarded_by": "t-04"
+    },
+    {
+      "id": "t-03",
+      "seq": 3,
+      "node": "verify",
+      "status": "discarded",
+      "reason": "default",
+      "format_version": 1,
+      "created_at": "2026-10-04T09:38:47+00:00",
+      "session": {
+        "id": "cf2a5d8a-e524-4c68-b949-7365af1d04ec",
+        "pid": 2776,
+        "process_started_at": "2026-10-04T09:38:46.930Z",
+        "started_at": "2026-10-04T09:38:47+00:00",
+        "alive": false,
+        "ended_at": "2026-10-04T09:41:10+00:00"
+      },
+      "bounce_count": 0,
+      "check": {
+        "handoff_present": true,
+        "status": "awaiting_approval",
+        "errors": [],
+        "warnings": []
+      },
+      "engine": "claude",
+      "start_commit": "4f648f83db2aaf58e85ff0b1ee33e2bbcac563ac",
+      "skill_hash": "sha256:0633efe3eeb07e8e25ef375a074a38f3793b61f5deef36b58f10f0b5d20e5d4d",
+      "engine_version": "2.1.289 (Claude Code)",
+      "claude_version": "2.1.289 (Claude Code)",
+      "last_prompt_at": "2026-10-04T09:40:15+00:00",
+      "permission_mode": "bypassPermissions",
+      "discarded_at": "2026-10-04T09:41:11+00:00",
+      "discarded_by": "t-04"
+    },
+    {
+      "id": "t-04",
+      "seq": 4,
+      "node": "fix",
+      "status": "approved",
+      "reason": "rewind",
+      "format_version": 1,
+      "created_at": "2026-10-04T09:41:11+00:00",
+      "session": {
+        "id": "f93c41b3-16d3-4bdd-b682-e95aaf82bf28",
+        "pid": 5674,
+        "process_started_at": "2026-10-04T09:41:10.560Z",
+        "started_at": "2026-10-04T09:41:11+00:00",
+        "alive": false,
+        "ended_at": "2026-10-04T09:42:36+00:00"
+      },
+      "bounce_count": 0,
+      "check": {
+        "handoff_present": true,
+        "status": "awaiting_approval",
+        "errors": [],
+        "warnings": []
+      },
+      "selection": {
+        "from_task": "t-03",
+        "instruction": "반품 전표(credit-note.js)와 견적서(quote.js)도 같은 회계 규정으로 고쳐 주세요. 부가세는 줄마다 원 단위 버림으로 계산해 합산하고 합계에서 다시 반올림하지 않습니다. 할인은 부가세 전에 줄마다 적용하고, 부가세는 할인된 줄 금액에 매깁니다. 발행된 청구서 저장 합계와 src/format/ 출력은 그대로 두세요.",
+        "discarded": [
+          "t-02",
+          "t-03"
+        ],
+        "skipped": [],
+        "keep_code": false,
+        "reset": {
+          "from": "185a20fbd2b3be7f754676f58720ff0054c00075",
+          "to": "800a80303005354a84c0c631a11d84fecc4668c2",
+          "backup_branch": "relay/w-20261004-001-discarded-1",
+          "backup_commit": "185a20fbd2b3be7f754676f58720ff0054c00075"
+        }
+      },
+      "engine": "claude",
+      "start_commit": "800a80303005354a84c0c631a11d84fecc4668c2",
+      "skill_hash": "sha256:0eca34eedf0cd9b3428cb33b41030d6ee5e2d5e882ac6bf80b61da3dcd2db22f",
+      "engine_version": "2.1.289 (Claude Code)",
+      "claude_version": "2.1.289 (Claude Code)",
+      "last_prompt_at": "2026-10-04T09:41:12+00:00",
+      "permission_mode": "bypassPermissions",
+      "approved_at": "2026-10-04T09:42:36+00:00",
+      "approved_by": "auto"
+    },
+    {
+      "id": "t-05",
+      "seq": 5,
+      "node": "verify",
+      "status": "approved",
+      "reason": "default",
+      "format_version": 1,
+      "created_at": "2026-10-04T09:42:36+00:00",
+      "session": {
+        "id": "2254661e-b116-455d-bd82-5f8c267f2b4d",
+        "pid": 8001,
+        "process_started_at": "2026-10-04T09:42:35.870Z",
+        "started_at": "2026-10-04T09:42:36+00:00",
+        "alive": false,
+        "ended_at": "2026-10-04T09:43:29+00:00"
+      },
+      "bounce_count": 0,
+      "check": {
+        "handoff_present": true,
+        "status": "awaiting_approval",
+        "errors": [],
+        "warnings": []
+      },
+      "engine": "claude",
+      "start_commit": "71e323fdbc2a4a8f71a5afe2dedb6bcae429b325",
+      "skill_hash": "sha256:0633efe3eeb07e8e25ef375a074a38f3793b61f5deef36b58f10f0b5d20e5d4d",
+      "engine_version": "2.1.289 (Claude Code)",
+      "claude_version": "2.1.289 (Claude Code)",
+      "last_prompt_at": "2026-10-04T09:42:37+00:00",
+      "permission_mode": "bypassPermissions",
+      "approved_at": "2026-10-04T09:43:29+00:00",
+      "approved_by": "human"
+    }
+  ],
+  "completed_at": "2026-10-04T09:43:29+00:00"
+}

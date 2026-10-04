@@ -1,0 +1,91 @@
+diff --git a/base/src/runner/pool.js b/tree/src/runner/pool.js
+index efefaae..5e8dd51 100644
+--- a/base/src/runner/pool.js
++++ b/tree/src/runner/pool.js
+@@ -9,16 +9,17 @@
+  */
+ export async function runPool(items, worker, o = {}) {
+   const size = Math.max(1, o.concurrency ?? 1)
+-  const results = []
++  const results = new Array(items.length)
++  let done = 0
+   for (let start = 0; start < items.length; start += size) {
+     const chunk = items.slice(start, start + size)
+     await Promise.all(
+-      chunk.map(async (item) => {
+-        const result = await worker(item)
+-        results.push(result)
++      chunk.map(async (item, i) => {
++        results[start + i] = await worker(item)
++        done++
+       }),
+     )
+-    o.onChunk?.({ start, size: chunk.length, done: results.length, total: items.length })
++    o.onChunk?.({ start, size: chunk.length, done, total: items.length })
+   }
+   return results
+ }
+diff --git a/base/src/store/report-archive.js b/tree/src/store/report-archive.js
+index 0c62d2f..d12244c 100644
+--- a/base/src/store/report-archive.js
++++ b/tree/src/store/report-archive.js
+@@ -20,7 +20,8 @@ export function reportPath(period, reportId) {
+  */
+ export async function saveReport(files, report) {
+   const path = reportPath(report.period, report.reportId)
+-  const tmp = `${reportDir(report.period)}/.${stamp(now())}.tmp`
++  // 임시 이름에 reportId를 넣는다: 시각(ms)만으론 같은 ms에 저장하는 보고서끼리 겹친다
++  const tmp = `${reportDir(report.period)}/.${report.reportId}.${stamp(now())}.tmp`
+   await files.writeFile(tmp, JSON.stringify(report))
+   await files.rename(tmp, path)
+   return path
+diff --git a/base/test/archive.test.js b/tree/test/archive.test.js
+index 44aa323..b99d845 100644
+--- a/base/test/archive.test.js
++++ b/tree/test/archive.test.js
+@@ -74,6 +74,15 @@ test('보고서 보관: 여러 개를 차례로', async () => {
+   assert.strictEqual(files.stats.renames, 3)
+ })
+ 
++test('보고서 보관: 같은 시각에 동시에 저장해도 서로 덮어쓰지 않는다', async () => {
++  setSleep(async () => {}) // 시계가 멈춘 채 모든 저장이 같은 ms에 일어난다
++  const files = createFileStore({ latency: { baseMs: 2 } })
++  const reports = [1, 2, 3, 4].map((n) => report(n, `t-${n}`))
++  await Promise.all(reports.map((r) => saveReport(files, r)))
++  for (const r of reports) assert.deepStrictEqual(await loadReport(files, '2026-09', r.reportId), r)
++  assert.deepStrictEqual(strayTemps(files, '2026-09'), [])
++})
++
+ test('기간이 없으면 no-period 폴더', () => {
+   assert.strictEqual(reportPath(null, 'r-1'), 'reports/no-period/r-1.json')
+   assert.throws(() => reportPath('2026-09'), /reportId/)
+diff --git a/base/test/pool.test.js b/tree/test/pool.test.js
+index c22d51a..9400df9 100644
+--- a/base/test/pool.test.js
++++ b/tree/test/pool.test.js
+@@ -34,3 +34,25 @@ test('묶음마다 진행 알림', async () => {
+ test('빈 목록', async () => {
+   assert.deepStrictEqual(await runPool([], async () => 1, { concurrency: 4 }), [])
+ })
++
++test('결과는 완료 순서가 아니라 입력 순서다', async () => {
++  const delays = [30, 5, 20, 1, 10]
++  const results = await runPool(
++    delays,
++    async (ms) => {
++      await new Promise((r) => setTimeout(r, ms))
++      return ms
++    },
++    { concurrency: 4 },
++  )
++  assert.deepStrictEqual(results, delays)
++})
++
++test('onChunk의 done은 완료한 작업 수를 센다', async () => {
++  const seen = []
++  await runPool([30, 5, 20, 1, 10], (ms) => new Promise((r) => setTimeout(() => r(ms), ms)), {
++    concurrency: 4,
++    onChunk: (p) => seen.push(p.done),
++  })
++  assert.deepStrictEqual(seen, [4, 5])
++})

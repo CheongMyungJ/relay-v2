@@ -1,0 +1,1 @@
+CI의 `npm run test:ci`가 가끔 실패한다. 실패하는 건 ci/batch.test.js(밤 배치를 실제와 비슷한 지연으로 돌리는 CI 전용 시험)이고, 로컬 `npm test`는 늘 통과한다. 실패 로그: `expected report-6 to belong to job-6, got job-5`. 재실행하면 통과해서 다들 그냥 넘어가고 있다. 시험에 재시도를 붙이거나 skip하거나 시간 제한을 늘리는 건 해결이 아니니 원인을 찾아 고쳐 달라.

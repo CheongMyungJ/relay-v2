@@ -1,0 +1,78 @@
+diff --git a/tree/docs/knowledge/store/report-temp-file-name.md b/tree/docs/knowledge/store/report-temp-file-name.md
+new file mode 100644
+index 0000000..da923d7
+--- /dev/null
++++ b/tree/docs/knowledge/store/report-temp-file-name.md
+@@ -0,0 +1,14 @@
++---
++kind: pitfall
++source: investigation
++anchor: saveReport
++---
++# 보고서 임시 파일 이름은 시각만으로 만들면 동시 저장끼리 겹친다
++
++## 내용
++- `src/store/report-archive.js` `saveReport`가 임시 파일 이름을 밀리초 시각(`stamp(now())`)만으로 만들면, 지연이 있는 환경에서 같은 밀리초에 시작한 동시 저장이 같은 임시 파일을 쓴다. 한쪽 rename 뒤 다른 쪽은 `ENOENT`, 덮어쓴 쪽은 다른 고객사 내용이 제 이름으로 남는다(`report-6 보관본의 고객사가 다르다`).
++- 지금은 `.${reportId}-${stamp}-${tmpSeq}.tmp`로 고유하게 만든다. 고유 이름·임시 파일을 새로 만들 때도 시각만 쓰지 않고 대상 id와 호출마다 늘어나는 번호를 넣는다.
++- 지연이 0인 `npm test`는 이 문제를 가린다. `npm run test:ci`(`ci/archive.test.js`)나 시각을 고정한 단위 시험으로 확인한다.
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-002)
+diff --git a/tree/docs/knowledge/testing/flaky-test-policy.md b/tree/docs/knowledge/testing/flaky-test-policy.md
+new file mode 100644
+index 0000000..1b95a8b
+--- /dev/null
++++ b/tree/docs/knowledge/testing/flaky-test-policy.md
+@@ -0,0 +1,13 @@
++---
++kind: rule
++source: human
++---
++# flaky 시험은 재시도·skip·시간 제한 증가로 풀지 않고 원인을 고친다
++
++## 규칙
++- 간헐 실패하는 시험에 재시도, skip, 시간 제한 증가를 붙이는 것은 해결이 아니다. 하지 않는다.
++- 원인은 시험이 아니라 제품 코드에서 찾아 고친다.
++- 로컬 `npm test`는 지연이 0이라 순서·경합 버그를 가린다. 지연이 있는 `ci/` 시험(`npm run test:ci`)으로 확인한다.
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-001)
+diff --git a/base/src/store/report-archive.js b/tree/src/store/report-archive.js
+index 0c62d2f..a759465 100644
+--- a/base/src/store/report-archive.js
++++ b/tree/src/store/report-archive.js
+@@ -3,6 +3,8 @@
+ import { now } from '../clock.js'
+ import { stamp } from '../util/ids.js'
+ 
++let tmpSeq = 0
++
+ export function reportDir(period) {
+   return `reports/${period ?? 'no-period'}`
+ }
+@@ -20,7 +22,7 @@ export function reportPath(period, reportId) {
+  */
+ export async function saveReport(files, report) {
+   const path = reportPath(report.period, report.reportId)
+-  const tmp = `${reportDir(report.period)}/.${stamp(now())}.tmp`
++  const tmp = `${reportDir(report.period)}/.${report.reportId}-${stamp(now())}-${tmpSeq++}.tmp`
+   await files.writeFile(tmp, JSON.stringify(report))
+   await files.rename(tmp, path)
+   return path
+diff --git a/base/test/archive.test.js b/tree/test/archive.test.js
+index 44aa323..42d0b54 100644
+--- a/base/test/archive.test.js
++++ b/tree/test/archive.test.js
+@@ -93,3 +93,12 @@ test('짧은 꼬리표', () => {
+   assert.strictEqual(stamp(1759197304120), 'mg5wnj94')
+   assert.strictEqual(stamp(35.9), 'z')
+ })
++
++test('보관소: 같은 시각에 동시에 저장해도 임시 파일이 겹치지 않는다', async () => {
++  const files = createFileStore({ latency: { baseMs: 2 } })
++  setSleep(async () => {}) // beforeEach의 sleep을 덮어써 시각이 멈춘 채 여러 저장이 겹치게 한다 (afterEach가 복원)
++  const reports = [1, 2, 3, 4].map((n) => report(n))
++  await Promise.all(reports.map((r) => saveReport(files, r)))
++  assert.deepStrictEqual(strayTemps(files, '2026-09'), [])
++  for (const r of reports) assert.strictEqual((await loadReport(files, '2026-09', r.reportId)).tenant, r.tenant)
++})

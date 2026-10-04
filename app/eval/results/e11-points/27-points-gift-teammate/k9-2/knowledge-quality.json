@@ -1,0 +1,41 @@
+{
+  "paths": [
+    "docs/knowledge/points/earn-rule.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/points/earn-rule.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "적립 기준을 total − 배송비로 적었다. 결제 금액은 쿠폰 할인과 사용 포인트를 뺀 값이라 R1과 같고, 배송비는 제외한다. 쿠폰과 포인트를 따로 적지는 않았다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "floor로 1P 미만을 버린다고 적었다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "공식에 1%가 적혀 있다."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "저장된 points.earned는 다시 계산하지 않고 저장된 값을 쓴다고 적었다."
+      }
+    ]
+  }
+}

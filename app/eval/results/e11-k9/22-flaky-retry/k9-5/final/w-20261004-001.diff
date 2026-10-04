@@ -1,0 +1,91 @@
+diff --git a/tree/docs/knowledge/flaky-test-policy.md b/tree/docs/knowledge/flaky-test-policy.md
+new file mode 100644
+index 0000000..bca2591
+--- /dev/null
++++ b/tree/docs/knowledge/flaky-test-policy.md
+@@ -0,0 +1,12 @@
++---
++kind: rule
++source: human
++---
++# flaky 시험은 우회하지 않고 원인을 찾아 고치고, 배치 병렬 실행(동시 4개)은 유지한다
++
++## 규칙
++- flaky 시험은 재시도, skip, 시간 제한 늘리기로 해결하지 않는다. 원인을 찾아 제품 코드(실제 결함이 있는 곳)에서 고친다.
++- 배치의 병렬 실행(기본 동시 4개, src/config.js)은 유지한다. 순차 실행으로 되돌리는 것은 해결이 아니다.
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-001)
+diff --git a/tree/docs/knowledge/runner/run-pool-result-order.md b/tree/docs/knowledge/runner/run-pool-result-order.md
+new file mode 100644
+index 0000000..5e9856c
+--- /dev/null
++++ b/tree/docs/knowledge/runner/run-pool-result-order.md
+@@ -0,0 +1,13 @@
++---
++kind: rule
++source: investigation
++anchor: runPool
++---
++# runPool은 결과를 입력 순서대로 돌려준다
++
++## 규칙
++- `runPool`(src/runner/pool.js)의 결과 배열은 완료 순서가 아니라 입력 순서여야 한다. `collectResults`(src/collect/collector.js)가 인덱스로 job과 결과를 짝짓기 때문이다.
++- 지연이 없는 로컬 시험에서는 완료 순서 = 입력 순서라 어긋남이 가려지고, 지연이 있는 `ci/batch.test.js`에서만 가끔 드러난다.
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-001)
+diff --git a/base/src/runner/pool.js b/tree/src/runner/pool.js
+index efefaae..f9092b7 100644
+--- a/base/src/runner/pool.js
++++ b/tree/src/runner/pool.js
+@@ -1,4 +1,4 @@
+-// 작업을 concurrency개씩 묶어 동시에 돌린다.
++// 작업을 concurrency개씩 묶어 동시에 돌린다. 결과는 입력 순서대로 돌려준다.
+ 
+ /**
+  * @template T, R
+@@ -9,16 +9,17 @@
+  */
+ export async function runPool(items, worker, o = {}) {
+   const size = Math.max(1, o.concurrency ?? 1)
+-  const results = []
++  const results = new Array(items.length)
++  let done = 0
+   for (let start = 0; start < items.length; start += size) {
+     const chunk = items.slice(start, start + size)
+     await Promise.all(
+-      chunk.map(async (item) => {
+-        const result = await worker(item)
+-        results.push(result)
++      chunk.map(async (item, i) => {
++        results[start + i] = await worker(item)
++        done++
+       }),
+     )
+-    o.onChunk?.({ start, size: chunk.length, done: results.length, total: items.length })
++    o.onChunk?.({ start, size: chunk.length, done, total: items.length })
+   }
+   return results
+ }
+diff --git a/base/test/pool.test.js b/tree/test/pool.test.js
+index c22d51a..d8c09cc 100644
+--- a/base/test/pool.test.js
++++ b/tree/test/pool.test.js
+@@ -34,3 +34,16 @@ test('묶음마다 진행 알림', async () => {
+ test('빈 목록', async () => {
+   assert.deepStrictEqual(await runPool([], async () => 1, { concurrency: 4 }), [])
+ })
++
++test('결과는 끝난 순서가 아니라 입력 순서다', async () => {
++  const delays = [30, 5, 20, 1, 10]
++  const results = await runPool(
++    delays,
++    async (ms) => {
++      await new Promise((r) => setTimeout(r, ms))
++      return ms
++    },
++    { concurrency: 4 },
++  )
++  assert.deepStrictEqual(results, delays)
++})

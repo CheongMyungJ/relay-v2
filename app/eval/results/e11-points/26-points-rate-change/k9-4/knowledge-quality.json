@@ -1,0 +1,72 @@
+{
+  "paths": [
+    "docs/knowledge/format/receipt-text-fixed.md",
+    "docs/knowledge/points/earn-rule.md",
+    "docs/knowledge/points/refund-recover-rate.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/format/receipt-text-fixed.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/points/earn-rule.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/points/refund-recover-rate.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": true,
+        "stateWhy": "정하지 않은 회수 비율(새/옛 적립률)을 '## 규칙'에 '1%를 쓴다, 적립률을 쓰지 않는다'로 정해진 규칙처럼 적었다. 제목도 '1%로 둔다'는 결정처럼 쓰였다.",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [
+      {
+        "a": "docs/knowledge/points/earn-rule.md",
+        "b": "docs/knowledge/points/refund-recover-rate.md",
+        "why": "earn-rule은 부분 환불 회수를 (환불 전 적립 − 환불 후 적립)으로 계산한다고 규칙으로 적었고, refund-recover-rate는 회수에 REFUND_RECOVER_RATE_PERCENT 1%를 쓴다고 적어 같은 대상에 다른 계산 규칙을 말한다."
+      }
+    ],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "earn-rule.md에 상품 금액−쿠폰−사용 포인트 기준과 배송비 제외가 적혀 있다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "earn-rule.md에 1P 미만 버림, 반올림하지 않음이 적혀 있다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "earn-rule.md에 2026-10-04 배포부터 2%로 적혀 있고 1%는 이력으로만 나온다."
+      },
+      {
+        "id": "R4",
+        "status": "correct",
+        "why": "earn-rule.md에 환불 전 적립 − 환불 후 적립으로 회수를 계산한다고 적혀 있다."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "earn-rule.md에 이미 적립된 포인트는 저장된 points.earned를 쓴다고 적혀 있다."
+      }
+    ]
+  }
+}

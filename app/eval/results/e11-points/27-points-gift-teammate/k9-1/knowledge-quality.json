@@ -1,0 +1,41 @@
+{
+  "paths": [
+    "docs/knowledge/points/earn-basis.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/points/earn-basis.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "기준 금액 = 상품 − 쿠폰 할인 − 사용 포인트, 배송비 제외로 적혀 있다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "적립은 버림으로 적혀 있다(제목에도 '원 단위로 버린다')."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "제목에 1%로 적혀 있고 본문은 POINT_RATE_PERCENT%를 쓴다."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "order.points.earned는 재계산하지 않고 저장된 값을 쓴다고 적혀 있다."
+      }
+    ]
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "paths": [
+    "docs/knowledge/points/earn-base.md",
+    "docs/knowledge/points/stored-earned-not-recalculated.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/points/earn-base.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/points/stored-earned-not-recalculated.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": true,
+        "stateWhy": "규칙 절에 \"정해지기 전까지 환불 회수율은 REFUND_RECOVER_RATE_PERCENT(1%)이다\"라고 적어, 정하지 않은 회수율을 잠정 규칙처럼 굳혔다. 이력에도 \"환불 회수율 1% 유지\"로 적혀 있다. 미정 상태이므로 \"아직 정하지 않음\" 절에 따로 적어야 한다.",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "earn-base에 (상품 금액 − 쿠폰 − 사용 포인트) 기준이며 배송비는 제외한다고 적혀 있다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "earn-base에 1P 미만 버림(반올림 아님)이라고 적혀 있다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "earn-base에 적립률이 1%에서 2%로 바뀌었다고 이력과 예시로 적혀 있다."
+      },
+      {
+        "id": "R4",
+        "status": "correct",
+        "why": "stored-earned에 저장된 points.earned − 남은 상품 적립이라고 적혀 있다."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "두 파일 모두 저장된 points.earned는 재계산하지 않는다고 적혀 있다."
+      }
+    ]
+  }
+}

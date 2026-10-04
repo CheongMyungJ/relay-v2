@@ -1,0 +1,93 @@
+diff --git a/tree/docs/knowledge/invoice/vat-per-line-floor.md b/tree/docs/knowledge/invoice/vat-per-line-floor.md
+new file mode 100644
+index 0000000..860238e
+--- /dev/null
++++ b/tree/docs/knowledge/invoice/vat-per-line-floor.md
+@@ -0,0 +1,19 @@
++---
++kind: rule
++source: human
++---
++# 청구서 부가세는 과세 품목 줄마다 원 미만 버림 후 합산한다
++
++## 규칙
++- 청구서 부가세는 과세 줄마다 `공급가액 × 10%`의 원 미만을 버리고(`Math.floor`) 그 합으로 구한다. 합계에 한 번 반올림하지 않는다. 예: INV-2031은 공급가액 26,438원, 부가세 2,641원, 합계 29,079원.
++- 반품 전표도 같은 규칙이다. 예: CN-0112(INV-2047의 반품)는 공급가액 17,438원, 부가세 1,742원, 합계 19,180원.
++- 면세 줄은 부가세가 없고, 영세율(`zeroRated`) 청구서와 반품 전표는 부가세 0원이다.
++- 발행된 청구서와 만들어 둔 반품 전표는 다시 계산하지 않고 저장된 `totals`를 쓴다.
++- 회계팀의 공식 기준은 확인되지 않았다. 줄별 버림은 사람이 정한 방식이다.
++
++## 아직 규칙을 따르지 않는 곳
++- src/invoice/quote.js: 견적서 부가세가 `percentOf` 합계 기준 반올림이다. 사람이 Work w-20261004-001과 w-20261004-002의 범위에서 뺌(2026-10-04)
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-001)
++- 2026-10-04 src/invoice/credit-note.js를 규칙대로 고침 (Work w-20261004-002)
+diff --git a/base/src/invoice/credit-note.js b/tree/src/invoice/credit-note.js
+index 6e6fe7d..41f4597 100644
+--- a/base/src/invoice/credit-note.js
++++ b/tree/src/invoice/credit-note.js
+@@ -87,7 +87,10 @@ export function creditTotals(note) {
+   const taxable = sumWon(rows.filter((r) => r.taxable).map((r) => r.net))
+   const exempt = sumWon(rows.filter((r) => !r.taxable).map((r) => r.net))
+   const supply = taxable + exempt
+-  const vat = note.zeroRated ? 0 : Math.round((taxable * VAT_RATE_PERCENT) / 100)
++  // 부가세는 과세 줄마다 원 미만을 버리고 더한다(합계에 한 번 반올림하지 않는다)
++  const vat = note.zeroRated
++    ? 0
++    : sumWon(rows.filter((r) => r.taxable).map((r) => Math.floor((r.net * VAT_RATE_PERCENT) / 100)))
+   return { supply, taxable, exempt, vat, total: supply + vat }
+ }
+ 
+diff --git a/base/test/credit-note.test.js b/tree/test/credit-note.test.js
+index 5c7f920..748ada9 100644
+--- a/base/test/credit-note.test.js
++++ b/tree/test/credit-note.test.js
+@@ -1,5 +1,6 @@
+ import { test } from 'node:test'
+ import assert from 'node:assert'
++import { readFileSync } from 'node:fs'
+ import { creditNoteEntries, ledger } from '../src/export/ledger.js'
+ import { createCreditNote, creditNoteTotals, returnedDiscount } from '../src/invoice/credit-note.js'
+ import { createInvoice, issueInvoice } from '../src/invoice/invoice.js'
+@@ -81,3 +82,40 @@ test('반품 전표 분개', () => {
+     ['INV-0100', 'INV-0100', 'INV-0100', 'CN-0001', 'CN-0001', 'CN-0001'],
+   )
+ })
++
++test('반품 전표 부가세는 과세 줄마다 버림한 합이다', () => {
++  const invoice = {
++    status: 'issued',
++    number: 'INV-0200',
++    customerId: 'C-0412',
++    issueDate: '2026-09-01',
++    zeroRated: false,
++    lines: [
++      { sku: 'A-1', name: 'A', unitPrice: 105, qty: 1, taxType: 'taxable' },
++      { sku: 'A-2', name: 'B', unitPrice: 105, qty: 1, taxType: 'taxable' },
++      { sku: 'E-1', name: '면세', unitPrice: 999, qty: 1, taxType: 'exempt' },
++    ],
++  }
++  const make = (extra = {}) =>
++    createCreditNote({ ...invoice, ...extra }, {
++      number: 'CN-0200',
++      issueDate: '2026-09-10',
++      reason: '파손',
++      returns: [{ sku: 'A-1', qty: 1 }, { sku: 'A-2', qty: 1 }, { sku: 'E-1', qty: 1 }],
++    })
++  // 줄별 버림 10 + 10 = 20 (합계 기준 반올림이면 21)
++  assert.deepStrictEqual(make().totals, { supply: 1209, taxable: 210, exempt: 999, vat: 20, total: 1229 })
++  assert.strictEqual(make({ zeroRated: true }).totals.vat, 0)
++})
++
++test('CN-0112 부가세는 줄별 버림 합이다', () => {
++  const invoice = JSON.parse(readFileSync('examples/INV-2047.json', 'utf8'))
++  const data = JSON.parse(readFileSync('examples/CN-0112.json', 'utf8'))
++  const cn = createCreditNote(invoice, data)
++  assert.deepStrictEqual(cn.totals, { supply: 17438, taxable: 17438, exempt: 0, vat: 1742, total: 19180 })
++})
++
++test('저장된 totals가 있으면 다시 계산하지 않는다', () => {
++  const stored = { totals: { supply: 1, taxable: 1, exempt: 0, vat: 9, total: 10 }, lines: [], zeroRated: false }
++  assert.deepStrictEqual(creditNoteTotals(stored), stored.totals)
++})

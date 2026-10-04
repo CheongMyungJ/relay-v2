@@ -1,0 +1,77 @@
+{
+  "paths": [
+    "docs/knowledge/points/earn-points-basis.md",
+    "docs/knowledge/points/partial-refund-recovery-not-proportional.md",
+    "docs/knowledge/points/point-rate.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/points/earn-points-basis.md",
+        "stale": true,
+        "staleWhy": "예시 'O-1042는 23,770원 × 1% = 237.7 → 237P'가 적립률 1%를 지금 값처럼 적었다(지금은 2%).",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/points/partial-refund-recovery-not-proportional.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/points/point-rate.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [
+      {
+        "a": "docs/knowledge/points/earn-points-basis.md",
+        "b": "docs/knowledge/points/point-rate.md",
+        "why": "earn-points-basis는 부분 환불 회수도 같은 규칙(적립률 공유)이라 하고 예시도 1%지만, point-rate는 적립률이 2%이며 회수는 POINT_RATE_PERCENT와 공유하지 않는다고 한다."
+      },
+      {
+        "a": "docs/knowledge/points/partial-refund-recovery-not-proportional.md",
+        "b": "docs/knowledge/points/point-rate.md",
+        "why": "partial-refund는 재계산 적립에 POINT_RATE_PERCENT%를 쓴다고 규칙으로 적었으나, point-rate는 회수에 새 적립률을 쓸지 정하지 않았고 POINT_RATE_PERCENT와 공유하지 않는다고 한다."
+      }
+    ],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "earn-points-basis에 상품 금액−쿠폰−사용 포인트 기준, 배송비 제외로 맞게 적혀 있다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "원 단위(1P 미만) 버림으로 적혀 있다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "point-rate에 2026-10-04 배포부터 2%로 적혀 있다."
+      },
+      {
+        "id": "R4",
+        "status": "correct",
+        "why": "partial-refund에 원 적립 − 남은 상품 재계산 적립으로 적혀 있다."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "point-rate에 저장된 적립은 다시 계산하지 않고 저장값을 쓴다고 적혀 있다."
+      }
+    ]
+  }
+}

@@ -1,0 +1,20 @@
+{"ts":"2026-10-04T08:47:43+00:00","work_id":"w-20261004-002","type":"work.created","payload":{"type":"bugfix","base_branch":"main","base_commit":"fadb7e7e5e6c55247aceb7aaea37727961b8564e"}}
+{"ts":"2026-10-04T08:47:43+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.started","payload":{"reason":"default","session_id":"50b34c40-ccfc-4678-b729-8c79ce1a1251"}}
+{"ts":"2026-10-04T08:47:44+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.first_output","payload":{"pid":27173,"ms":742}}
+{"ts":"2026-10-04T08:47:44+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.first_hook","payload":{"pid":27173,"ms":997,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T08:47:59+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T08:48:11+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T08:48:11+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.started","payload":{"reason":"default","session_id":"54e74bcc-e1c0-40e9-b4c1-39c124b09296"}}
+{"ts":"2026-10-04T08:48:12+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.first_output","payload":{"pid":31311,"ms":776}}
+{"ts":"2026-10-04T08:48:12+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.first_hook","payload":{"pid":31311,"ms":976,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T08:50:00+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T08:50:15+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.approved","payload":{"by":"auto"}}
+{"ts":"2026-10-04T08:50:16+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.started","payload":{"reason":"default","session_id":"21906aca-ca3a-41dc-beb6-27ac76fab161"}}
+{"ts":"2026-10-04T08:50:17+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.first_output","payload":{"pid":3727,"ms":990}}
+{"ts":"2026-10-04T08:50:17+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.first_hook","payload":{"pid":3727,"ms":1326,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T08:52:45+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.bounced","payload":{"attempt":1,"max":2,"errors":[{"file":"handoff.md","message":"`docs/knowledge/retry/keep-retry-for-real-failures.md`를 고쳤는데 줄이 없음: \"고친 지식: docs/knowledge/retry/keep-retry-for-real-failures.md — <무엇이 바뀌었나>\""}]}}
+{"ts":"2026-10-04T08:52:50+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T08:53:24+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T08:55:28+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T08:55:43+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T08:55:43+00:00","work_id":"w-20261004-002","type":"work.completed","payload":{"delivery":"none"}}

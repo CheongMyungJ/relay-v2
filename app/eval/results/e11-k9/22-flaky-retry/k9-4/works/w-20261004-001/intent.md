@@ -1,0 +1,30 @@
+---
+schema_version: 1
+version: 1
+type: bugfix
+---
+## 목표
+CI의 `npm run test:ci`에서 `ci/batch.test.js`가 가끔 `expected report-6 to belong to job-6, got job-5`로 실패하는 간헐 실패의 원인을 찾아 코드에서 고친다.
+
+## 비목표
+- 시험에 재시도를 붙이거나, skip하거나, 시간 제한을 늘리는 것은 하지 않는다 (해결이 아님).
+- 밤 배치의 기능 추가나 구조 변경은 하지 않는다.
+- 병렬 실행(동시 4개)을 순차 실행으로 되돌리지 않는다. 병렬 실행은 유지한다.
+
+## 원하는 결과
+지연이 실제와 비슷한 밤 배치에서도 각 리포트가 항상 자기 job에 귀속된다. `ci/batch.test.js`가 반복 실행해도 실패하지 않는다.
+
+## 완료조건
+- [ ] 재현 절차가 더 이상 실패하지 않는다 (`ci/batch.test.js`를 여러 번 반복 실행해도 `report-N`이 `job-N`에 귀속된다)
+- [ ] `npm run test:ci`가 통과한다
+- [ ] 기존 테스트를 약화하거나 삭제하지 않는다
+- [ ] `npm test`가 통과한다
+- [ ] `npm run test:ci`를 여러 번 반복 실행한 결과가 모두 통과한다 (반복 횟수와 결과를 기록한다)
+- [ ] 동시 4개 병렬 실행이 유지된다
+- [ ] `ci/batch.test.js`에 재시도, skip, 시간 제한 증가가 추가되지 않았다
+
+## 제약
+- 로컬 `npm test`는 늘 통과하고 CI 전용 시험(`ci/`)에서만 가끔 실패한다. 지연 타이밍에 따라 달라지는 실패다.
+
+## 추가 의견
+- 실패 로그: `expected report-6 to belong to job-6, got job-5`. 재실행하면 통과한다.

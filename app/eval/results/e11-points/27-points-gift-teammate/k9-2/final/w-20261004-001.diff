@@ -1,0 +1,66 @@
+diff --git a/tree/docs/knowledge/points/earn-rule.md b/tree/docs/knowledge/points/earn-rule.md
+new file mode 100644
+index 0000000..6cb8a59
+--- /dev/null
++++ b/tree/docs/knowledge/points/earn-rule.md
+@@ -0,0 +1,17 @@
++---
++kind: rule
++source: investigation
++anchor: earnPoints
++---
++# 일반 주문 적립 포인트는 배송비를 뺀 결제 금액의 1%를 원 단위 내림한다
++
++## 규칙
++- 적립 포인트 = `floor((total - shipping) × 1%)`. 예: O-1042은 total 26,770 − 배송비 3,000 = 23,770 → 237P (고객센터 기준).
++- 이미 저장된 주문의 `points.earned`는 다시 계산하지 않고 저장된 값을 쓴다.
++
++## 아직 규칙을 따르지 않는 곳
++- src/gift/gift-points.js: 총액(`amounts.total`)을 1% 반올림한다. 다른 팀과 같이 보는 중이라 사람이 Work w-20261004-001의 범위에서 뺌(2026-10-04)
++- src/orders/refund.js:34: 부분 환불 회수 포인트를 상품 금액 1% 반올림으로 계산한다. 적립 규칙과 다를 수 있으나 확인하지 않았고 이 Work에서 건드리지 않음
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-001). 배송비 제외·내림은 O-1042 한 건의 고객센터 값(237P)에서 추론한 기준이다
+diff --git a/base/src/points/earn.js b/tree/src/points/earn.js
+index 1ad53ff..df21f99 100644
+--- a/base/src/points/earn.js
++++ b/tree/src/points/earn.js
+@@ -1,7 +1,7 @@
+ import { POINT_RATE_PERCENT } from '../config.js'
+-import { percentOf } from '../money.js'
+ 
+-/** 주문의 적립 포인트. 결제 금액의 POINT_RATE_PERCENT% */
++/** 주문의 적립 포인트. 배송비를 뺀 결제 금액의 POINT_RATE_PERCENT%를 원 단위로 내린다 */
+ export function earnPoints(order) {
+-  return percentOf(order.amounts.total, POINT_RATE_PERCENT)
++  const { total, shipping } = order.amounts
++  return Math.floor(((total - shipping) * POINT_RATE_PERCENT) / 100)
+ }
+diff --git a/tree/test/earn.test.js b/tree/test/earn.test.js
+new file mode 100644
+index 0000000..dc662e3
+--- /dev/null
++++ b/tree/test/earn.test.js
+@@ -0,0 +1,22 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import fs from 'node:fs'
++import { createOrder } from '../src/orders/order.js'
++
++const example = (name) => JSON.parse(fs.readFileSync(new URL(`../examples/${name}.json`, import.meta.url), 'utf8'))
++
++test('O-1042 적립 포인트는 배송비를 뺀 결제 금액의 1%를 내림해 237P', () => {
++  const o = createOrder(example('O-1042'))
++  assert.strictEqual(o.amounts.total, 26770)
++  assert.strictEqual(o.amounts.shipping, 3000)
++  assert.strictEqual(o.points.earned, 237)
++})
++
++test('O-1107 적립 포인트는 배송비를 뺀 결제 금액(24,330원)의 1%', () => {
++  assert.strictEqual(createOrder(example('O-1107')).points.earned, 243)
++})
++
++test('배송비가 없으면 결제 금액의 1%', () => {
++  const o = createOrder({ customerId: 'U-1', number: 'O-0003', lines: [{ sku: 'A', unitPrice: 25000, qty: 2 }] })
++  assert.strictEqual(o.points.earned, 500)
++})
