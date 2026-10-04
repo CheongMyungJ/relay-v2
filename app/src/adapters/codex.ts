@@ -4,6 +4,7 @@ import path from 'node:path'
 import { CODEX_HOOK_EVENTS, codexFirstPrompt, tomlValue } from '../core/codex'
 import {
   HOOK_TOKEN_ENV,
+  STOP_HOOK_TIMEOUT_SEC,
   relaySkillName,
   type LaunchInput,
   type ResumeInput,
@@ -127,7 +128,13 @@ export function codexHooks(): Record<string, unknown> {
             {
               type: 'command',
               ...commands,
-              timeout: event === 'SessionEnd' || event === 'Interrupt' ? 3 : 30,
+              // Stop은 verify의 지식 검토 호출(D300)을 기다린다: Claude의 Stop 훅과 같은 제한
+              timeout:
+                event === 'SessionEnd' || event === 'Interrupt'
+                  ? 3
+                  : event === 'Stop'
+                    ? STOP_HOOK_TIMEOUT_SEC
+                    : 30,
               // 문자 수가 아닌 대략 토큰 기준의 spill 임계값. 초과한 전문은 Codex가 파일에 보존한다.
               ...(event === 'SessionStart' ? { additionalContextLimit: 8000 } : {}),
             },

@@ -163,4 +163,32 @@ describe('[어댑터] 지식 읽기', () => {
       (await knowledgeFileChanges(repo, base, head, new Map())).map((f) => [f.path, f.status]),
     ).toEqual([['docs/knowledge/old.md', 'M']])
   })
+
+  it('squash·rebase로 머지된 앞 Work의 지식은 넣지 않고, 그 뒤 main에서 고친 글을 덮지 않는다', async () => {
+    root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'relay-knowledge-')))
+    const { repo } = makeRepo(root, 'r', {
+      'a.js': '1\n',
+      'docs/knowledge/gone.md': '# 지울 것\n',
+    })
+    const base = git(repo, 'rev-parse', 'HEAD')
+    // 앞 Work: rate.md(1%)를 더하고 gone.md를 지움
+    git(repo, 'checkout', '-q', '-b', 'relay/w-1')
+    writeFiles(repo, { 'docs/knowledge/rate.md': '# 적립률은 1%\n' })
+    git(repo, 'rm', '-q', 'docs/knowledge/gone.md')
+    git(repo, 'add', '-A')
+    git(repo, 'commit', '-q', '-m', 'w1')
+    const source = [{ workId: 'w-1', branch: 'relay/w-1', baseCommit: base }]
+    git(repo, 'checkout', '-q', 'main')
+    expect(
+      (await readPendingKnowledge(repo, git(repo, 'rev-parse', 'HEAD'), source)).map((e) => e.path),
+    ).toEqual(['docs/knowledge/gone.md', 'docs/knowledge/rate.md'])
+    // squash 머지: 같은 글을 main에 새 커밋으로 넣는다(브랜치는 조상이 아니다). 그 뒤 main에서 2%로 고친다
+    writeFiles(repo, { 'docs/knowledge/rate.md': '# 적립률은 1%\n' })
+    git(repo, 'rm', '-q', 'docs/knowledge/gone.md')
+    git(repo, 'add', '-A')
+    git(repo, 'commit', '-q', '-m', 'squash w1')
+    writeFiles(repo, { 'docs/knowledge/rate.md': '# 적립률은 2%\n' })
+    git(repo, 'commit', '-q', '-am', '2%')
+    expect(await readPendingKnowledge(repo, git(repo, 'rev-parse', 'HEAD'), source)).toEqual([])
+  })
 })

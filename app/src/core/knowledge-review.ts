@@ -4,13 +4,16 @@
 // 이 파일은 순수 함수만 둔다(입력 고르기, 프롬프트, 결과 읽기). 호출과 기록은 main/work.ts다.
 import type { FormatIssue } from '../shared/work'
 import { HANDOFF_FILE } from './validate'
-import { rankEntries, type KnowledgeEntry } from './knowledge'
+import { identifiersIn, pathsIn, rankEntries, type KnowledgeEntry } from './knowledge'
 
 /** 검토에 함께 넣는 관련 항목 수의 상한. 비용은 이 수에 묶인다 */
 export const REVIEW_RELATED_LIMIT = 8
 
 /** 한 verify task에서 부르는 검토의 상한: 처음 한 번과, 되돌린 뒤 고친 것을 한 번 */
 export const REVIEW_CALL_LIMIT = 2
+
+/** 검토 호출 하나의 제한 시간. Stop 훅의 제한(STOP_HOOK_TIMEOUT_SEC)보다 넉넉히 짧다 */
+export const REVIEW_TIMEOUT_MS = 90_000
 
 /** 검토 호출의 기록 파일 (task 디렉터리). 산출물이 아니다 */
 export const REVIEW_FILE = 'knowledge-review.json'
@@ -51,8 +54,8 @@ export function relatedEntries(
   const text = [request, ...changed.map((c) => c.text)].join('\n')
   const ranked = rankEntries(others, {
     text,
-    paths: [...new Set(text.match(/[\w.-]+(?:\/[\w.-]+)+\.[A-Za-z0-9]+/g) ?? [])],
-    identifiers: new Set(text.match(/\b[A-Za-z_$][\w$]{3,}\b/g) ?? []),
+    paths: pathsIn(text),
+    identifiers: identifiersIn(text),
   })
   return ranked
     .filter((r) => r.score > 0)

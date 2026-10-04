@@ -177,7 +177,9 @@ export interface KnowledgeSource {
 
 /**
  * 앞 Work들의 브랜치에서 그 Work가 더하거나 고친 지식 파일과 지운 지식 파일(D297, `removed`). 브랜치가 없거나 이미 head의
- * 조상(머지됨)이면 건너뛴다. 차례는 sources의 차례다
+ * 조상(머지됨)이면 건너뛴다. squash나 rebase로 머지돼 조상이 아니어도, 그 파일의 같은 글(blob)이 head의 역사에 있었으면 이미
+ * 들어간 것으로 보고 뺀다: head에서 그 뒤에 고친 글을 옛 글로 덮지 않는다. 지운 것은 head에 그 파일이 없으면 뺀다.
+ * 차례는 sources의 차례다
  */
 export async function readPendingKnowledge(
   repo: string,
@@ -185,29 +187,52 @@ export async function readPendingKnowledge(
   sources: readonly KnowledgeSource[],
   opts?: GitOptions,
 ): Promise<KnowledgeEntry[]> {
-  const out: KnowledgeEntry[] = []
-  for (const s of sources) {
+  const read = async (s: KnowledgeSource): Promise<KnowledgeEntry[]> => {
     try {
-      if (!(await branchExists(repo, s.branch, opts))) continue
-      if (await isAncestor(repo, s.branch, head, opts)) continue
+      if (!(await branchExists(repo, s.branch, opts))) return []
+      if (await isAncestor(repo, s.branch, head, opts)) return []
       const status = await git(
         repo,
         ['diff', '--name-status', '--no-renames', s.baseCommit, s.branch, '--', KNOWLEDGE_DIR],
         opts,
       )
-      for (const line of status.split(/\r?\n/)) {
-        const [st, name] = line.split('\t')
-        if (!name || !isKnowledgePath(name)) continue
-        if (st === 'D') {
-          out.push({ path: name, text: '', pendingFrom: s.workId, removed: true })
-          continue
-        }
-        const text = await git(repo, ['show', `${s.branch}:${name}`], opts)
-        out.push({ path: name, text, pendingFrom: s.workId })
-      }
+      const files = status
+        .split(/\r?\n/)
+        .map((line) => line.split('\t'))
+        .filter((f): f is [string, string] => !!f[1] && isKnowledgePath(f[1]))
+      const out = await Promise.all(
+        files.map(async ([st, name]): Promise<KnowledgeEntry | null> => {
+          if (st === 'D') {
+            const there = await git(repo, ['cat-file', '-e', `${head}:${name}`], opts).then(
+              () => true,
+              () => false,
+            )
+            return there ? { path: name, text: '', pendingFrom: s.workId, removed: true } : null
+          }
+          if (await landedIn(repo, head, s.branch, name, opts)) return null
+          const text = await git(repo, ['show', `${s.branch}:${name}`], opts)
+          return { path: name, text, pendingFrom: s.workId }
+        }),
+      )
+      return out.filter((e): e is KnowledgeEntry => e !== null)
     } catch {
       // 읽지 못한 Work는 건너뛴다
+      return []
     }
   }
-  return out
+  return (await Promise.all(sources.map(read))).flat()
+}
+
+/** 브랜치의 그 파일 글(blob)이 head의 역사에서 그 경로에 한 번이라도 있었나 (squash·rebase 머지 판별) */
+async function landedIn(
+  repo: string,
+  head: string,
+  branch: string,
+  file: string,
+  opts?: GitOptions,
+): Promise<boolean> {
+  const blob = await git(repo, ['rev-parse', `${branch}:${file}`], opts)
+  const log = await git(repo, ['log', '--raw', '--no-abbrev', '--format=', head, '--', file], opts)
+  // :<옛 모드> <새 모드> <옛 blob> <새 blob> <상태>\t<경로>
+  return log.split(/\r?\n/).some((line) => line.split(/\s+/)[3] === blob)
 }

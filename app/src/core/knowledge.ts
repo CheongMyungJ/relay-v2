@@ -223,7 +223,7 @@ const LINE_WORDS = {
 } as const
 
 const LINE =
-  /^\s*(?:[-*]\s*)?(새 지식|고친 지식|지운 지식|확인한 지식)\s*:\s*`?([^\s`]+)`?\s*(?:—|–|-|:)?\s*(.*)$/
+  /^\s*(?:[-*]\s*)?(새 지식|고친 지식|지운 지식|확인한 지식)\s*:\s*`?([^\s`]+?\.md)`?\s*(?:—|–|-|:)?\s*(.*)$/
 
 export function knowledgeLines(handoff: string): KnowledgeLines {
   const summary = sectionText(parseFrontMatter(handoff).body, '요약') ?? ''

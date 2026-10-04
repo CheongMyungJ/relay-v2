@@ -160,6 +160,12 @@ describe('[단위] 지식', () => {
     expect([...l.updated]).toEqual([['docs/knowledge/b.md', '30,000 → 40,000원']])
     expect(l.none).toBe(false)
     expect(knowledgeLines(handoff('남긴 지식: 없음 (규칙 없음)')).none).toBe(true)
+    // 경로 뒤의 구분자(띄어쓰기 없는 대시, 콜론)는 경로에 붙지 않는다
+    const tight = knowledgeLines(
+      handoff('새 지식: docs/knowledge/c.md: 까닭\n고친 지식: docs/knowledge/d.md—1% → 2%'),
+    )
+    expect([...tight.added]).toEqual([['docs/knowledge/c.md', '까닭']])
+    expect([...tight.updated]).toEqual([['docs/knowledge/d.md', '1% → 2%']])
   })
 
   it('verify의 지식 확인: 줄과 새·고침 구분, 형식, 같은 anchor (D293, D294)', () => {

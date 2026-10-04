@@ -196,6 +196,8 @@ export class Relay {
             (w) =>
               w.project.project_id === projectId &&
               w.work.work_id !== except &&
+              // PR이 머지된 Work는 그 지식이 기준 브랜치에 있다(squash·rebase 포함). 브랜치를 남겨 둬도 넣지 않는다
+              w.work.pr?.merged === undefined &&
               (w.work.status === 'pr' ||
                 (w.work.completed_at !== undefined && w.work.abandoned_at === undefined)),
           )

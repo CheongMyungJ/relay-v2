@@ -233,6 +233,7 @@ import {
   RESPONSE_FILE,
   VERIFICATION_FILE,
   checkTask,
+  parseFrontMatter,
   sectionText,
   type TaskCheck,
 } from '../core/validate'
@@ -307,6 +308,7 @@ import {
   REVIEW_FILE,
   REVIEW_SCHEMA,
   REVIEW_SYSTEM,
+  REVIEW_TIMEOUT_MS,
   humanDecisionLines,
   relatedEntries,
   reviewEnabled,
@@ -482,6 +484,8 @@ export class WorkRunner {
   readonly key: string
   private queue: Promise<unknown> = Promise.resolve()
   private readonly live = new Map<string, LiveSession>()
+  /** Stop 훅이 줄에 들어가기 전에 새로 부른 지식 검토의 입력 해시 (task id → 해시, D300). 그 Stop의 확인이 한 번 쓴다 */
+  private readonly freshReview = new Map<string, string>()
   private readonly terminals = new Map<string, TerminalBuffer>()
   /**
    * 다시 열 세션에 이어서 하라는 첫 입력을 줄지 (D218). [재개]·[세션 재개]마다 core가 정한 것을 두고, 세션을 다시 열
@@ -768,41 +772,58 @@ export class WorkRunner {
   }
 
   /**
-   * verify의 지식 확인 (D291, D293, D294): 이 Work가 더하거나 고친 지식 파일의 형식, handoff의 새·고친 지식 줄, 같은 anchor.
-   * 지식 관리를 끄거나 verify가 아니면 undefined. worktree나 git을 읽지 못하면 handoff의 줄만 본다
+   * verify의 지식 확인 입력 (D291, D293, D294, D296, D297): 이 Work가 더하거나 고치거나 지운 지식, 바꾼 코드, 앞에 있던 지식
+   * 경로, 지금 보이는 지식. 서로 기대지 않는 읽기는 함께 한다. 지식 관리를 끄거나 verify가 아니면 null, 읽지 못하면 undefined
+   */
+  private async knowledgeCheckInput(
+    task: TaskRecord,
+    files: Readonly<Record<string, string>>,
+  ): Promise<Parameters<typeof knowledgeIssues>[0] | null | undefined> {
+    const { env } = this.ctx
+    if (!knowledgeEnabled(env) || task.node !== 'verify') return null
+    const handoff = files[HANDOFF_FILE] ?? ''
+    const base = this.work.base_commit
+    try {
+      const sources = this.ctx.knowledgeSources(this.project.project_id, this.work.work_id)
+      const [changed, removed, codeChanged, pending, atBase, repo] = await Promise.all([
+        changedKnowledge(this.worktree, base, { env }),
+        removedKnowledge(this.worktree, base, { env }),
+        changedCodePaths(this.worktree, base, { env }),
+        readPendingKnowledge(this.project.repo_path, base, sources, { env }),
+        knowledgePathsAt(this.worktree, base, { env }),
+        readRepoKnowledge(this.worktree),
+      ])
+      const existing = new Set([...atBase, ...pending.filter((e) => !e.removed).map((e) => e.path)])
+      // 앞 Work가 지운 항목은 이 Work가 다시 쓰지 않았으면 없는 것으로 본다 (D297)
+      const current = new Map<string, string>()
+      for (const e of repo) current.set(e.path, e.text)
+      const mine = new Set([...changed.map((c) => c.path), ...removed])
+      for (const e of pending) {
+        if (mine.has(e.path)) continue
+        if (e.removed) current.delete(e.path)
+        else current.set(e.path, e.text)
+      }
+      return { handoff, changed, existing, current, removed, codeChanged }
+    } catch (e) {
+      console.error(`[${this.key}] 지식을 확인하지 못함: ${message(e)}`)
+      return undefined
+    }
+  }
+
+  /**
+   * verify의 지식 확인 (D291, D293, D294, D296, D297)과 지식 검토(D300)의 결과. 검토 호출은 여기서 하지 않는다: Stop 훅이 Work
+   * 줄에 들어가기 전에 부른 결과(prepareKnowledgeReview)를 기록에서 읽는다. 그 Stop에서 처음 찾은 문제만 되돌리고(task마다
+   * 한 번), 기록에서 다시 읽은 것은 늘 경고다. 지식 관리를 끄거나 verify가 아니면 undefined
    */
   private async knowledgeCheck(
     task: TaskRecord,
     files: Readonly<Record<string, string>>,
     opts: { stop?: boolean } = {},
   ): Promise<KnowledgeCheck | undefined> {
-    const { env } = this.ctx
-    if (!knowledgeEnabled(env) || task.node !== 'verify') return undefined
-    const handoff = files[HANDOFF_FILE] ?? ''
-    const base = this.work.base_commit
-    let input: Parameters<typeof knowledgeIssues>[0]
-    try {
-      const changed = await changedKnowledge(this.worktree, base, { env })
-      const removed = await removedKnowledge(this.worktree, base, { env })
-      const codeChanged = await changedCodePaths(this.worktree, base, { env })
-      const sources = this.ctx.knowledgeSources(this.project.project_id, this.work.work_id)
-      const pending = await readPendingKnowledge(this.project.repo_path, base, sources, { env })
-      const existing = new Set([
-        ...(await knowledgePathsAt(this.worktree, base, { env })),
-        ...pending.filter((e) => !e.removed).map((e) => e.path),
-      ])
-      // 앞 Work가 지운 항목은 이 Work가 다시 쓰지 않았으면 없는 것으로 본다 (D297)
-      const current = new Map<string, string>()
-      for (const e of await readRepoKnowledge(this.worktree)) current.set(e.path, e.text)
-      const mine = new Set(changed.map((c) => c.path))
-      for (const e of pending) {
-        if (mine.has(e.path)) continue
-        if (e.removed) current.delete(e.path)
-        else current.set(e.path, e.text)
-      }
-      input = { handoff, changed, existing, current, removed, codeChanged }
-    } catch (e) {
-      console.error(`[${this.key}] 지식을 확인하지 못함: ${message(e)}`)
+    const input = await this.knowledgeCheckInput(task, files)
+    if (input === null) return undefined
+    if (input === undefined) {
+      const handoff = files[HANDOFF_FILE] ?? ''
       const errors = knowledgeIssues({
         handoff,
         changed: [],
@@ -812,33 +833,41 @@ export class WorkRunner {
       return { errors, warnings: [] }
     }
     const errors = knowledgeIssues(input)
-    // 기계적 확인을 지나고 지식을 바꿨을 때만 뜻을 검토한다 (D300)
-    if (errors.length || (!input.changed.length && !input.removed?.length) || !reviewEnabled(env))
-      return { errors, warnings: [] }
-    const review = await this.knowledgeReview(task, input, opts.stop === true)
+    if (!this.wantsReview(input, errors)) return { errors, warnings: [] }
+    const review = await this.knowledgeReviewResult(task, input, opts.stop === true)
     return review.bounce
       ? { errors: review.issues, warnings: [] }
       : { errors, warnings: review.issues }
   }
 
   /**
-   * 지식 검토 호출 (D300): 바꾼 지식, 관련 항목, 이번 Work의 사람 말을 넣고 모델에 한 번 묻는다. 같은 입력이면 기록(REVIEW_FILE)의
-   * 결과를 쓴다. 호출은 Stop에서만, task마다 REVIEW_CALL_LIMIT번까지 한다. 되돌림은 task마다 한 번이다: 처음 찾은 문제는
-   * 되돌리고(bounce), 그 뒤에 찾은 것은 경고로만 보인다. 부르지 못하면 문제 없음으로 본다
+   * 뜻을 검토할 때 (D300): 검토를 켰고, 기계적 확인을 지났고, 지식을 바꿨고, verify가 승인 대기로 끝냈다(형식 검사가 지식
+   * 오류를 그때만 보므로, 다른 상태에서 되돌릴 기회를 쓰지 않는다)
    */
-  private async knowledgeReview(
+  private wantsReview(
+    input: Parameters<typeof knowledgeIssues>[0],
+    errors: readonly FormatIssue[],
+  ): boolean {
+    const fm = parseFrontMatter(input.handoff)
+    return (
+      reviewEnabled(this.ctx.env) &&
+      errors.length === 0 &&
+      (input.changed.length > 0 || (input.removed?.length ?? 0) > 0) &&
+      fm.ok &&
+      fm.data['status'] === 'awaiting_approval'
+    )
+  }
+
+  /** 검토에 넣을 것과 그 해시 (D300). 같은 입력이면 같은 해시다 */
+  private async reviewRequest(
     task: TaskRecord,
     check: Parameters<typeof knowledgeIssues>[0],
-    stop: boolean,
-  ): Promise<{ issues: FormatIssue[]; bounce: boolean }> {
-    const { env } = this.ctx
-    const file = path.join(this.files.taskDir(task), REVIEW_FILE)
-    const record: ReviewRecord = JSON.parse(
-      (await readText(file)) ?? '{"calls":[]}',
-    ) as ReviewRecord
-    const request = (await this.files.readOwned('request.md'))?.text ?? ''
-    const intent = (await this.files.readOwned('intent.md'))?.text ?? null
-    const decisions = (await this.files.readOwned('decisions.md'))?.text ?? ''
+  ): Promise<{ prompt: string; hash: string; known: Set<string>; related: number }> {
+    const [request, intent, decisions] = await Promise.all([
+      this.files.readOwned('request.md'),
+      this.files.readOwned('intent.md'),
+      this.files.readOwned('decisions.md'),
+    ])
     const candidates: string[] = []
     for (const t of this.work.tasks) {
       if (t.id === task.id || t.status === 'discarded') continue
@@ -847,21 +876,59 @@ export class WorkRunner {
     const reviewInput: ReviewInput = {
       changed: check.changed,
       removed: check.removed ?? [],
-      related: relatedEntries(check.current, check.changed, request),
-      request,
-      intent,
-      humanDecisions: humanDecisionLines(decisions),
+      related: relatedEntries(check.current, check.changed, request?.text ?? ''),
+      request: request?.text ?? '',
+      intent: intent?.text ?? null,
+      humanDecisions: humanDecisionLines(decisions?.text ?? ''),
       candidates,
     }
     const prompt = reviewPrompt(reviewInput)
-    const hash = sha256(prompt)
-    const known = new Set([
-      ...check.changed.map((c) => c.path),
-      ...reviewInput.related.map((r) => r.path),
-    ])
-    const done = record.calls.find((c) => c.hash === hash)
-    if (done) return { issues: done.issues, bounce: done.bounced }
-    if (!stop || record.calls.length >= REVIEW_CALL_LIMIT) return { issues: [], bounce: false }
+    return {
+      prompt,
+      hash: sha256(prompt),
+      known: new Set([
+        ...check.changed.map((c) => c.path),
+        ...reviewInput.related.map((r) => r.path),
+      ]),
+      related: reviewInput.related.length,
+    }
+  }
+
+  private async readReviewRecord(task: TaskRecord): Promise<ReviewRecord> {
+    const text = await readText(path.join(this.files.taskDir(task), REVIEW_FILE))
+    try {
+      return text ? (JSON.parse(text) as ReviewRecord) : { calls: [] }
+    } catch {
+      return { calls: [] }
+    }
+  }
+
+  private async writeReviewRecord(task: TaskRecord, record: ReviewRecord): Promise<void> {
+    try {
+      await writeFileAtomic(
+        path.join(this.files.taskDir(task), REVIEW_FILE),
+        `${JSON.stringify(record, null, 2)}\n`,
+      )
+    } catch (e) {
+      console.error(`[${this.key}] 지식 검토 기록을 쓰지 못함: ${message(e)}`)
+    }
+  }
+
+  /**
+   * 지식 검토 호출 (D300). verify의 Stop 훅이 Work 줄에 들어가기 전에 부른다: 모델을 기다리는 동안(최대 REVIEW_TIMEOUT_MS)
+   * 이 Work의 다른 명령([즉시 중단], 승인 등)이 막히지 않는다. 같은 입력의 기록이 있거나 task마다 REVIEW_CALL_LIMIT번을
+   * 불렀으면 부르지 않는다. 결과는 기록(REVIEW_FILE)에 남기고, 줄 안의 Stop 확인이 읽어 되돌릴지 정한다
+   */
+  private async prepareKnowledgeReview(taskId: string): Promise<void> {
+    const task = this.task(taskId)
+    if (!task || task.node !== 'verify' || !knowledgeEnabled(this.ctx.env)) return
+    const input = await this.knowledgeCheckInput(task, await this.files.taskFiles(task))
+    if (!input || !this.wantsReview(input, knowledgeIssues(input))) return
+    const req = await this.reviewRequest(task, input)
+    const before = await this.readReviewRecord(task)
+    if (before.calls.some((c) => c.hash === req.hash)) return
+    if (before.calls.length >= REVIEW_CALL_LIMIT) return
+    const { env } = this.ctx
     const bin = findClaude({ env })
     const model = env['RELAY_KNOWLEDGE_REVIEW_MODEL']?.trim() || 'sonnet'
     const result = bin
@@ -872,32 +939,52 @@ export class WorkRunner {
           model,
           effort: 'low',
           system: REVIEW_SYSTEM,
-          prompt,
+          prompt: req.prompt,
           schema: REVIEW_SCHEMA,
-          timeoutMs: 120_000,
+          timeoutMs: REVIEW_TIMEOUT_MS,
         })
       : { data: null, ms: 0, costUsd: null, usage: null, error: 'claude를 찾지 못함' }
-    const issues = reviewIssues(result.data, known)
-    const bounce = issues.length > 0 && !record.calls.some((c) => c.bounced)
+    // 기다리는 동안 다른 호출이 기록을 썼을 수 있으니 다시 읽고 더한다
+    const record = await this.readReviewRecord(task)
+    if (record.calls.some((c) => c.hash === req.hash)) return
     record.calls.push({
       at: this.ctx.at(),
-      hash,
+      hash: req.hash,
       model,
       ms: result.ms,
       costUsd: result.costUsd,
       usage: result.usage,
-      related: reviewInput.related.length,
-      promptChars: prompt.length,
-      issues,
-      bounced: bounce,
+      related: req.related,
+      promptChars: req.prompt.length,
+      issues: reviewIssues(result.data, req.known),
+      bounced: false,
       error: result.error,
     })
-    try {
-      await writeFileAtomic(file, `${JSON.stringify(record, null, 2)}\n`)
-    } catch (e) {
-      console.error(`[${this.key}] 지식 검토 기록을 쓰지 못함: ${message(e)}`)
+    await this.writeReviewRecord(task, record)
+    this.freshReview.set(task.id, req.hash)
+  }
+
+  /**
+   * 지식 검토의 결과 (D300): 같은 입력의 기록이 없으면 문제 없음. 그 Stop 직전에 새로 부른 결과(freshReview)이고 이 task에서
+   * 아직 되돌린 적이 없으면 되돌리고 기록에 남긴다. 그 밖(승인 화면, 같은 입력으로 다시 Stop 등)은 경고로만 보인다
+   */
+  private async knowledgeReviewResult(
+    task: TaskRecord,
+    check: Parameters<typeof knowledgeIssues>[0],
+    stop: boolean,
+  ): Promise<{ issues: FormatIssue[]; bounce: boolean }> {
+    const req = await this.reviewRequest(task, check)
+    const record = await this.readReviewRecord(task)
+    const done = record.calls.find((c) => c.hash === req.hash)
+    if (!done) return { issues: [], bounce: false }
+    const fresh = stop && this.freshReview.get(task.id) === req.hash
+    if (fresh) this.freshReview.delete(task.id)
+    if (fresh && done.issues.length > 0 && !record.calls.some((c) => c.bounced)) {
+      done.bounced = true
+      await this.writeReviewRecord(task, record)
+      return { issues: done.issues, bounce: true }
     }
-    return { issues, bounce }
+    return { issues: done.issues, bounce: false }
   }
 
   private notify(body: string): void {
@@ -1198,7 +1285,14 @@ export class WorkRunner {
       const repo = await readRepoKnowledge(this.worktree)
       const head = await headCommit(this.worktree, { env })
       const sources = this.ctx.knowledgeSources(this.project.project_id, this.work.work_id)
-      const pending = await readPendingKnowledge(this.project.repo_path, head, sources, { env })
+      const [all, changed, gone] = await Promise.all([
+        readPendingKnowledge(this.project.repo_path, head, sources, { env }),
+        changedKnowledge(this.worktree, this.work.base_commit, { env }),
+        removedKnowledge(this.worktree, this.work.base_commit, { env }),
+      ])
+      // 이 Work가 기준 커밋 뒤에 더하거나 고치거나 지운 경로는 이 Work의 것이 이긴다: 머지 전 앞 Work의 글로 덮지 않는다
+      const mine = new Set([...changed.map((c) => c.path), ...gone])
+      const pending = all.filter((e) => !mine.has(e.path))
       entries = mergeEntries(repo, pending)
       const present = new Set(entries.map((e) => e.path))
       removed = pending
@@ -1684,6 +1778,11 @@ export class WorkRunner {
         return Promise.resolve(denial)
       }
     }
+    // verify의 지식 검토 호출(D300)은 줄 밖에서 기다린다: 모델을 기다리는 동안 이 Work의 다른 명령이 막히지 않는다
+    if (req.event === 'Stop')
+      return this.prepareKnowledgeReview(taskId)
+        .catch((e: unknown) => console.error(`[${this.key}] 지식 검토를 하지 못함: ${message(e)}`))
+        .then(() => this.enqueue(() => this.onHook(taskId, req, session)))
     return this.enqueue(() => this.onHook(taskId, req, session))
   }
 

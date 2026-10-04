@@ -12,7 +12,9 @@ import {
   VERIFICATION,
   handoff,
   scenario,
+  steps,
   type Scenario,
+  type Step,
 } from './scenarios'
 
 let h: Harness | undefined
@@ -329,6 +331,162 @@ describe('[흐름] 지식 검토 호출 (D300)', () => {
     // 승인 화면은 기록을 쓰고 모델을 다시 부르지 않는다
     await hh.relay.review(r.workKey, 't-03')
     expect(fs.readFileSync(`${path.join(hh.root, 'scenario.json')}.review-count`, 'utf8')).toBe('2')
+  })
+})
+
+describe('[흐름] 지식 검토 호출의 되돌림은 task마다 한 번이다 (D300)', () => {
+  it('되돌린 뒤 고치지 않고 다시 멈추면 같은 지적은 다시 되돌리지 않고 경고로만 남는다', async () => {
+    const RATE = 'docs/knowledge/points/rate.md'
+    const text =
+      [
+        '---',
+        'kind: rule',
+        'source: human',
+        '---',
+        '# 적립률은 2%',
+        '',
+        '## 규칙',
+        '- 환불 회수율은 1%다.',
+      ].join('\n') + '\n'
+    const verify: Scenario['tasks'][string] = [
+      { do: 'prompt' },
+      { do: 'commit', files: { [RATE]: text }, message: 'knowledge' },
+      { do: 'write', file: 'verification.md', text: VERIFICATION },
+      { do: 'write', file: 'pr.md', text: PR },
+      {
+        do: 'write',
+        file: 'handoff.md',
+        text: handoff({ summary: `고쳤다.\n새 지식: ${RATE} — 없음` }),
+      },
+      // 지적에 동의하지 않아 아무것도 고치지 않고 다시 멈춘다
+      { do: 'stop', onBlock: [{ do: 'stop' }] },
+    ]
+    const hh = await harness({
+      scenario: {
+        ...scenario({ verify }),
+        review: [
+          {
+            issues: [
+              {
+                file: RATE,
+                kind: 'undecided_in_rule',
+                quote: '환불 회수율은 1%다.',
+                fix: '옮긴다',
+              },
+            ],
+          },
+        ],
+      },
+      env: { RELAY_KNOWLEDGE: 'on' },
+    })
+    h = hh
+    const { repo } = makeRepo(hh.root, 'knowledge-review-once', REPO_FILES)
+    const projectId = await register(hh, repo)
+    const r = await hh.relay.createWork(projectId, {
+      request: REQUEST,
+      baseBranch: 'main',
+      type: 'bugfix',
+      baseLocation: 'local',
+    })
+    if (!r.ok) throw new Error(r.error)
+    const result = await drive(hh.relay, hh.ui, r.workKey)
+    await settle(hh, r.workKey)
+    expect(result, hh.ui.dump()).toMatchObject({ status: 'completed', reason: null })
+    expect(result.tasks.map((t) => t.bounces)).toEqual([0, 0, 1])
+    expect(fs.readFileSync(`${path.join(hh.root, 'scenario.json')}.review-count`, 'utf8')).toBe('1')
+    const workDir = path.join(
+      hh.home,
+      'projects',
+      projectId,
+      'works',
+      r.workKey.split('/')[1] ?? '',
+    )
+    const record = JSON.parse(
+      fs.readFileSync(path.join(workDir, 'tasks', '03-verify', 'knowledge-review.json'), 'utf8'),
+    ) as { calls: { bounced: boolean }[] }
+    expect(record.calls.map((c) => c.bounced)).toEqual([true])
+    // 승인 화면에서도 같은 지적은 막는 오류가 아니라 경고다
+    const review = await hh.relay.review(r.workKey, 't-03')
+    expect(review?.errors.map((e) => e.message).join()).not.toContain('[지식 검토')
+    expect(review?.warnings.map((e) => e.message).join()).toContain('[지식 검토')
+  })
+})
+
+describe('[흐름] 이 Work가 고친 지식은 머지 전 앞 Work의 글보다 이긴다', () => {
+  it('앞 Work가 남긴 1%를 이 Work가 2%로 고치면, 이 Work의 다음 task에는 2%가 들어간다', async () => {
+    const RATE = 'docs/knowledge/rate.md'
+    const rule = (v: string) =>
+      [
+        '---',
+        'kind: rule',
+        'source: human',
+        '---',
+        `# 적립률은 ${v}`,
+        '',
+        '## 규칙',
+        `- 적립률은 ${v}다.`,
+      ].join('\n') + '\n'
+    const verify = (line: string): Step[] => [
+      { do: 'prompt' },
+      { do: 'write', file: 'verification.md', text: VERIFICATION },
+      { do: 'write', file: 'pr.md', text: PR },
+      { do: 'write', file: 'handoff.md', text: handoff({ summary: `고쳤다.\n${line}` }) },
+      { do: 'stop' },
+    ]
+    const first = scenario({
+      verify: [
+        { do: 'prompt' },
+        { do: 'commit', files: { [RATE]: rule('1%') }, message: 'knowledge' },
+        ...verify(`새 지식: ${RATE} — 없음`).slice(1),
+      ],
+    })
+    const hh = await harness({
+      scenario: first,
+      env: { RELAY_KNOWLEDGE: 'on', RELAY_KNOWLEDGE_REVIEW: 'off' },
+    })
+    h = hh
+    const { repo } = makeRepo(hh.root, 'knowledge-mine', REPO_FILES)
+    const projectId = await register(hh, repo)
+    const make = async () => {
+      const r = await hh.relay.createWork(projectId, {
+        request: REQUEST,
+        baseBranch: 'main',
+        type: 'bugfix',
+        baseLocation: 'local',
+      })
+      if (!r.ok) throw new Error(r.error)
+      const result = await drive(hh.relay, hh.ui, r.workKey)
+      await settle(hh, r.workKey)
+      expect(result, hh.ui.dump()).toMatchObject({ status: 'completed', reason: null })
+      return r.workKey.split('/')[1] ?? ''
+    }
+    await make()
+    // 두 번째 Work: fix가 같은 경로를 2%로 고쳐 커밋한다. 앞 Work는 머지되지 않았다
+    const second = scenario({
+      fix: [
+        { do: 'prompt' },
+        { do: 'commit', files: { [RATE]: rule('2%') }, message: 'knowledge: 2%' },
+        ...steps('fix').slice(1),
+      ],
+      verify: verify(`고친 지식: ${RATE} — 1% → 2%`),
+    })
+    fs.writeFileSync(path.join(hh.root, 'scenario.json'), JSON.stringify(second))
+    const workId = await make()
+    const injected = fs.readFileSync(
+      path.join(
+        hh.home,
+        'projects',
+        projectId,
+        'works',
+        workId,
+        'tasks',
+        '03-verify',
+        'knowledge-injected.md',
+      ),
+      'utf8',
+    )
+    expect(injected).toContain('적립률은 2%다.')
+    expect(injected).not.toContain('적립률은 1%다.')
   })
 })
 
