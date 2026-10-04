@@ -4,10 +4,13 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  changedCodePaths,
   changedKnowledge,
+  knowledgeFileChanges,
   knowledgePathsAt,
   readPendingKnowledge,
   readRepoKnowledge,
+  removedKnowledge,
 } from '../../src/adapters/knowledge'
 import { git, makeRepo, writeFiles } from '../flow/repo'
 
@@ -85,5 +88,79 @@ describe('[어댑터] 지식 읽기', () => {
       ['docs/knowledge/returns/box.md', '# 상자마다\n'],
       ['docs/knowledge/shipping/fee.md', '# 배송비 고침\n'],
     ])
+  })
+
+  it('지운 지식, 바꾼 코드, 완료 화면의 지식 변경과 앞 글, 앞 Work가 지운 지식 (D296, D297, D298)', async () => {
+    root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'relay-knowledge-')))
+    const { repo } = makeRepo(root, 'r', {
+      'a.js': '1\n',
+      'docs/knowledge/old.md': '# 옛\n- 하나\n',
+      'docs/knowledge/d.md': '# 지울 것\n',
+      'docs/knowledge/gone.md': '# 앞 Work가 지움\n',
+    })
+    const base = git(repo, 'rev-parse', 'HEAD')
+    // 머지 전 앞 Work: p.md를 더하고 gone.md를 지움
+    git(repo, 'checkout', '-q', '-b', 'relay/w-1')
+    writeFiles(repo, { 'docs/knowledge/p.md': '# 앞 Work\n- 처음\n' })
+    git(repo, 'rm', '-q', 'docs/knowledge/gone.md')
+    git(repo, 'add', '-A')
+    git(repo, 'commit', '-q', '-m', 'w1')
+    git(repo, 'checkout', '-q', 'main')
+    const pending = await readPendingKnowledge(repo, base, [
+      { workId: 'w-1', branch: 'relay/w-1', baseCommit: base },
+    ])
+    expect(pending.map((e) => [e.path, e.removed ?? false])).toEqual([
+      ['docs/knowledge/gone.md', true],
+      ['docs/knowledge/p.md', false],
+    ])
+
+    // 이 Work: old.md 고쳐 커밋, d.md 지움(커밋 안 함), new.md와 p.md는 추적하지 않는 새 파일, 코드 둘
+    git(repo, 'checkout', '-q', '-b', 'relay/w-2')
+    writeFiles(repo, { 'docs/knowledge/old.md': '# 옛\n- 둘\n', 'a.js': '2\n' })
+    git(repo, 'commit', '-q', '-am', 'w2')
+    fs.rmSync(path.join(repo, 'docs/knowledge/d.md'))
+    writeFiles(repo, {
+      'docs/knowledge/new.md': '# 새것\n',
+      'docs/knowledge/p.md': '# 앞 Work\n- 이어 씀\n',
+      'src/b.js': 'x\n',
+    })
+    expect(await removedKnowledge(repo, base)).toEqual(['docs/knowledge/d.md'])
+    expect(await changedCodePaths(repo, base)).toEqual(['a.js', 'src/b.js'])
+
+    const files = await knowledgeFileChanges(
+      repo,
+      base,
+      null,
+      new Map([['docs/knowledge/p.md', 'relay/w-1']]),
+    )
+    const by = new Map(files.map((f) => [f.path, f]))
+    expect([...by.keys()].sort()).toEqual([
+      'docs/knowledge/d.md',
+      'docs/knowledge/new.md',
+      'docs/knowledge/old.md',
+      'docs/knowledge/p.md',
+    ])
+    expect(by.get('docs/knowledge/d.md')).toMatchObject({
+      status: 'D',
+      text: null,
+      before: '# 지울 것',
+    })
+    expect(by.get('docs/knowledge/new.md')).toMatchObject({
+      status: 'A',
+      before: null,
+      text: '# 새것\n',
+    })
+    expect(by.get('docs/knowledge/old.md')).toMatchObject({ status: 'M', before: '# 옛\n- 하나' })
+    // 앞 Work의 항목을 다시 쓴 것은 그 Work의 글이 앞 글이다
+    expect(by.get('docs/knowledge/p.md')).toMatchObject({
+      status: 'A',
+      before: '# 앞 Work\n- 처음',
+    })
+
+    // 커밋끼리 (정리한 Work): 추적하지 않는 파일은 없다
+    const head = git(repo, 'rev-parse', 'HEAD')
+    expect(
+      (await knowledgeFileChanges(repo, base, head, new Map())).map((f) => [f.path, f.status]),
+    ).toEqual([['docs/knowledge/old.md', 'M']])
   })
 })

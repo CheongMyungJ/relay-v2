@@ -258,6 +258,7 @@ import type {
   Completion,
   DeliverInput,
   DeliverResult,
+  KnowledgeChange,
   MergeInfoResult,
   MergeInput,
   NoticeView,
@@ -295,6 +296,9 @@ import {
   knowledgePathsAt,
   readPendingKnowledge,
   readRepoKnowledge,
+  removedKnowledge,
+  changedCodePaths,
+  knowledgeFileChanges,
   type KnowledgeSource,
 } from '../adapters/knowledge'
 import {
@@ -307,6 +311,7 @@ import {
   injectedText,
   knowledgeEnabled,
   mergeEntries,
+  knowledgeChanges,
   type KnowledgeInput,
   type KnowledgeQuery,
 } from '../core/knowledge'
@@ -750,16 +755,24 @@ export class WorkRunner {
     const base = this.work.base_commit
     try {
       const changed = await changedKnowledge(this.worktree, base, { env })
+      const removed = await removedKnowledge(this.worktree, base, { env })
+      const codeChanged = await changedCodePaths(this.worktree, base, { env })
       const sources = this.ctx.knowledgeSources(this.project.project_id, this.work.work_id)
       const pending = await readPendingKnowledge(this.project.repo_path, base, sources, { env })
       const existing = new Set([
         ...(await knowledgePathsAt(this.worktree, base, { env })),
-        ...pending.map((e) => e.path),
+        ...pending.filter((e) => !e.removed).map((e) => e.path),
       ])
+      // 앞 Work가 지운 항목은 이 Work가 다시 쓰지 않았으면 없는 것으로 본다 (D297)
       const current = new Map<string, string>()
-      for (const e of pending) current.set(e.path, e.text)
       for (const e of await readRepoKnowledge(this.worktree)) current.set(e.path, e.text)
-      return knowledgeIssues({ handoff, changed, existing, current })
+      const mine = new Set(changed.map((c) => c.path))
+      for (const e of pending) {
+        if (mine.has(e.path)) continue
+        if (e.removed) current.delete(e.path)
+        else current.set(e.path, e.text)
+      }
+      return knowledgeIssues({ handoff, changed, existing, current, removed, codeChanged })
     } catch (e) {
       console.error(`[${this.key}] 지식을 확인하지 못함: ${message(e)}`)
       return knowledgeIssues({ handoff, changed: [], existing: new Set(), current: new Map() })
@@ -1059,12 +1072,17 @@ export class WorkRunner {
     const { env } = this.ctx
     if (!knowledgeEnabled(env)) return null
     let entries: KnowledgeInput['entries'] = []
+    let removed: { path: string; from: string }[] = []
     try {
       const repo = await readRepoKnowledge(this.worktree)
       const head = await headCommit(this.worktree, { env })
       const sources = this.ctx.knowledgeSources(this.project.project_id, this.work.work_id)
       const pending = await readPendingKnowledge(this.project.repo_path, head, sources, { env })
       entries = mergeEntries(repo, pending)
+      const present = new Set(entries.map((e) => e.path))
+      removed = pending
+        .filter((e) => e.removed && !present.has(e.path) && repo.some((r) => r.path === e.path))
+        .map((e) => ({ path: e.path, from: e.pendingFrom ?? '' }))
     } catch (e) {
       console.error(`[${this.key}] 지식을 읽지 못함: ${message(e)}`)
     }
@@ -1077,6 +1095,7 @@ export class WorkRunner {
       candidates,
       work_id: this.work.work_id,
       date: this.ctx.at().slice(0, 10),
+      ...(removed.length ? { removed } : {}),
       // 지식이 상한을 넘을 때만 관련 항목을 고를 단서를 만든다 (D295)
       ...(size > INJECT_LIMIT ? { query: await this.knowledgeQuery(task, hint, candidates) } : {}),
     }
@@ -3008,6 +3027,52 @@ export class WorkRunner {
     }
   }
 
+  /**
+   * Work 완료 화면의 "이 Work의 지식" (D298): 기준 커밋에서 to(null이면 작업 트리)까지 더하거나 고치거나 지운 지식.
+   * 머지 전 앞 Work에 있던 경로를 다시 쓴 것은 그 Work의 글에서 본 diff다. 지식 관리를 끄면 null, 읽지 못하면 빈 목록
+   */
+  private async knowledgeView(
+    cwd: string,
+    to: string | null,
+    handoff: string,
+  ): Promise<KnowledgeChange[] | null> {
+    const { env } = this.ctx
+    if (!knowledgeEnabled(env)) return null
+    try {
+      const sources = this.ctx.knowledgeSources(this.project.project_id, this.work.work_id)
+      const branchOf = new Map(sources.map((s) => [s.workId, s.branch]))
+      const pending = await readPendingKnowledge(
+        this.project.repo_path,
+        this.work.base_commit,
+        sources,
+        { env },
+      )
+      const pendingFrom = new Map<string, string>()
+      const pendingBranch = new Map<string, string>()
+      for (const e of pending) {
+        if (!e.pendingFrom) continue
+        if (e.removed) {
+          pendingFrom.delete(e.path)
+          pendingBranch.delete(e.path)
+          continue
+        }
+        pendingFrom.set(e.path, e.pendingFrom)
+        const b = branchOf.get(e.pendingFrom)
+        if (b) pendingBranch.set(e.path, b)
+      }
+      const files = await knowledgeFileChanges(cwd, this.work.base_commit, to, pendingBranch, {
+        env,
+      })
+      return knowledgeChanges(files, pendingFrom, handoff).map((k) => ({
+        ...k,
+        diff: clip(k.diff),
+      }))
+    } catch (e) {
+      console.error(`[${this.key}] 지식 변경을 읽지 못함: ${message(e)}`)
+      return []
+    }
+  }
+
   /** 승인 화면(D83)과 Work 완료 화면(시나리오 7-3)에 보일 것. 파일을 다시 읽어 만든다 */
   async review(taskId: string): Promise<ReviewView | null> {
     const task = this.task(taskId)
@@ -3052,6 +3117,7 @@ export class WorkRunner {
         buttons: deliveryButtons(this.checks()),
         delivery: deliveryView(this.work.delivery),
         branch: await this.branchInfo(),
+        knowledge: await this.knowledgeView(cwd, range?.to ?? null, handoffText ?? ''),
       }
     }
     return {

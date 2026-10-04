@@ -2,6 +2,7 @@
 // 한 항목 한 파일로 남기고(팀이 PR로 함께 쓴다), 다음 task의 context.md에 넣는다. 레포에 아직 없는(기준 브랜치에 머지되지
 // 않은) 앞 Work의 지식도 같은 앱의 다음 Work에 넣는다. 환경 변수 RELAY_KNOWLEDGE=off면 모두 끈다(지식 절도 지시도 없다).
 import type { TaskNode } from '../shared/contracts'
+import type { KnowledgeChange } from '../shared/views'
 import type { FormatIssue } from '../shared/work'
 import { HANDOFF_FILE, parseFrontMatter, sectionText } from './validate'
 
@@ -26,6 +27,8 @@ export interface KnowledgeEntry {
   text: string
   /** 기준 브랜치에 아직 없는, 이 앱에서 완료한 Work의 지식이면 그 Work id */
   pendingFrom?: string
+  /** 머지 전 앞 Work가 이 경로의 지식을 지웠다 (D297). text는 비어 있다 */
+  removed?: boolean
 }
 
 /**
@@ -50,7 +53,7 @@ export function entryTitle(e: Pick<KnowledgeEntry, 'path' | 'text'>): string {
 
 /**
  * 레포의 지식과 앞 Work의 머지되지 않은 지식을 합친다. 같은 경로면 머지되지 않은 쪽(더 새것)을 쓰고, 내용이 같으면 레포
- * 쪽으로 본다. 머지되지 않은 Work끼리 같은 경로면 뒤에 온 것(나중에 완료한 Work)을 쓴다
+ * 쪽으로 본다. 머지되지 않은 Work끼리 같은 경로면 뒤에 온 것(나중에 완료한 Work)을 쓴다. 앞 Work가 지운 경로는 뺀다(D297)
  */
 export function mergeEntries(
   repo: readonly KnowledgeEntry[],
@@ -59,6 +62,10 @@ export function mergeEntries(
   const byPath = new Map<string, KnowledgeEntry>()
   for (const e of repo) byPath.set(e.path, e)
   for (const e of pending) {
+    if (e.removed) {
+      byPath.delete(e.path)
+      continue
+    }
     const have = byPath.get(e.path)
     if (have && have.text.trim() === e.text.trim()) continue
     byPath.set(e.path, e)
@@ -112,6 +119,19 @@ const issue = (file: string, part: FormatIssue['part'], message: string, field?:
   message,
   ...(field ? { field } : {}),
 })
+
+/** 항목의 `kind`. 정한 값이 아니거나 머리글이 없으면 null */
+export function kindOf(text: string): (typeof KNOWLEDGE_KINDS)[number] | null {
+  const fm = parseFrontMatter(text)
+  const k = fm.ok ? fm.data['kind'] : undefined
+  return KNOWLEDGE_KINDS.includes(k as never) ? (k as (typeof KNOWLEDGE_KINDS)[number]) : null
+}
+
+/** 항목의 `## 아직 규칙을 따르지 않는 곳`에 적힌 파일 경로 (D296). 절이 없으면 빈 목록 */
+export function notYetPaths(text: string): string[] {
+  const section = sectionText(parseFrontMatter(text).body, NOT_YET_SECTION)
+  return section ? pathsIn(section).map((p) => p.replace(/^\.\//, '')) : []
+}
 
 /** 항목의 `anchor`. 형식에 맞지 않거나 없으면 null */
 export function anchorOf(text: string): string | null {
@@ -174,29 +194,46 @@ export function checkEntryFormat(path: string, text: string): FormatIssue[] {
   return out
 }
 
-/** verify handoff의 지식 줄 (D294) */
+/** verify handoff의 지식 줄 (D294, D296, D297) */
 export interface KnowledgeLines {
   /** `새 지식: <경로> — <까닭>` */
   added: Map<string, string>
   /** `고친 지식: <경로> — <무엇이 바뀌었나>` */
   updated: Map<string, string>
+  /** `지운 지식: <경로> — <까닭>` (D297) */
+  removed: Map<string, string>
+  /** `확인한 지식: <경로> — <그대로 두는 까닭>`: 아직 따르지 않는 곳의 코드를 바꿨지만 항목을 그대로 둔다 (D296) */
+  checked: Map<string, string>
   /** `남긴 지식: ...` 줄이 있다 */
   none: boolean
 }
 
-const LINE = /^\s*(?:[-*]\s*)?(새 지식|고친 지식)\s*:\s*`?([^\s`]+)`?\s*(?:—|–|-|:)?\s*(.*)$/
+const LINE_WORDS = {
+  '새 지식': 'added',
+  '고친 지식': 'updated',
+  '지운 지식': 'removed',
+  '확인한 지식': 'checked',
+} as const
+
+const LINE =
+  /^\s*(?:[-*]\s*)?(새 지식|고친 지식|지운 지식|확인한 지식)\s*:\s*`?([^\s`]+)`?\s*(?:—|–|-|:)?\s*(.*)$/
 
 export function knowledgeLines(handoff: string): KnowledgeLines {
   const summary = sectionText(parseFrontMatter(handoff).body, '요약') ?? ''
-  const added = new Map<string, string>()
-  const updated = new Map<string, string>()
+  const out: KnowledgeLines = {
+    added: new Map(),
+    updated: new Map(),
+    removed: new Map(),
+    checked: new Map(),
+    none: /남긴 지식\s*:/.test(summary),
+  }
   for (const line of summary.split('\n')) {
     const m = LINE.exec(line)
     if (!m) continue
     const path = (m[2] ?? '').replace(/^\.\//, '')
-    ;(m[1] === '새 지식' ? added : updated).set(path, (m[3] ?? '').trim())
+    out[LINE_WORDS[m[1] as keyof typeof LINE_WORDS]].set(path, (m[3] ?? '').trim())
   }
-  return { added, updated, none: /남긴 지식\s*:/.test(summary) }
+  return out
 }
 
 /** 지식 확인의 입력 (D293, D294). 앱이 worktree와 앞 Work 브랜치에서 읽어 넘긴다 */
@@ -207,12 +244,17 @@ export interface KnowledgeCheckInput {
   changed: readonly { path: string; text: string }[]
   /** 이 Work 전에 이미 있던 지식 경로: 기준 커밋의 것과 머지 전 앞 Work의 것 */
   existing: ReadonlySet<string>
-  /** 지금 보이는 지식 전부(경로 → 글): 머지 전 앞 Work의 것 위에 이 worktree의 것 */
+  /** 지금 보이는 지식 전부(경로 → 글): 머지 전 앞 Work의 것 위에 이 worktree의 것. 지운 것은 없다 */
   current: ReadonlyMap<string, string>
+  /** 이 Work가 기준 커밋에서 지운 지식 경로 (D297) */
+  removed?: readonly string[]
+  /** 이 Work가 바꾼 지식 밖의 파일: 커밋하지 않은 것과 새 파일 포함 (D296) */
+  codeChanged?: readonly string[]
 }
 
 /**
- * verify의 지식 확인 (D293, D294): 바꾼 지식 파일의 형식, handoff `## 요약`의 새·고친 지식 줄, 같은 `anchor`를 가진 항목.
+ * verify의 지식 확인 (D293, D294, D296, D297): 바꾼 지식 파일의 형식, handoff `## 요약`의 새·고친·지운 지식 줄, 같은
+ * `anchor`를 가진 항목, 이 Work가 바꾼 코드가 어느 항목의 `## 아직 규칙을 따르지 않는 곳`에 남아 있는지.
  * 형식 검사의 되돌림(D21)으로 에이전트에게 돌아간다
  */
 export function knowledgeIssues(input: KnowledgeCheckInput): FormatIssue[] {
@@ -221,8 +263,17 @@ export function knowledgeIssues(input: KnowledgeCheckInput): FormatIssue[] {
 
   const lines = knowledgeLines(input.handoff)
   const changed = new Set(input.changed.map((c) => c.path))
+  const removed = new Set(input.removed ?? [])
   const fix = (message: string) => out.push(issue(HANDOFF_FILE, 'body', message, '요약'))
-  if (changed.size === 0 && lines.added.size === 0 && lines.updated.size === 0 && !lines.none) {
+  if (
+    changed.size === 0 &&
+    removed.size === 0 &&
+    lines.added.size === 0 &&
+    lines.updated.size === 0 &&
+    lines.removed.size === 0 &&
+    lines.checked.size === 0 &&
+    !lines.none
+  ) {
     fix('`## 요약`에 지식 줄 없음: 바꾼 지식이 없으면 "남긴 지식: 없음 (까닭)"을 적는다')
   }
   for (const p of changed) {
@@ -247,6 +298,37 @@ export function knowledgeIssues(input: KnowledgeCheckInput): FormatIssue[] {
   for (const p of [...lines.added.keys(), ...lines.updated.keys()]) {
     if (!changed.has(p))
       fix(`\`${p}\`를 적었지만 이 Work에서 그 지식 파일을 더하거나 고치지 않았다`)
+  }
+  for (const p of removed) {
+    if (!lines.removed.has(p)) fix(`\`${p}\`를 지웠는데 줄이 없음: "지운 지식: ${p} — <까닭>"`)
+    else if (!(lines.removed.get(p) ?? '').trim()) fix(`\`${p}\`의 지운 지식 줄에 까닭이 비었음`)
+  }
+  for (const p of lines.removed.keys()) {
+    if (!removed.has(p))
+      fix(
+        `\`${p}\`를 "지운 지식"으로 적었지만 이 Work에서 그 파일을 지우지 않았다. 기준 브랜치에 없는 앞 Work의 항목은 이 브랜치에서 지울 수 없으니 같은 경로에서 고쳐 쓴다`,
+      )
+  }
+
+  // 아직 따르지 않는 곳 (D296): 이 Work가 바꾼 코드가 어느 항목의 그 절에 적혀 있으면, 그 항목을 고치거나(따르게 됐으면 줄을
+  // 지우고 이력에 적음) 그대로 두는 까닭을 "확인한 지식"으로 적어야 한다
+  const code = new Set((input.codeChanged ?? []).map((p) => p.replace(/^\.\//, '')))
+  for (const [p, text] of input.current) {
+    if (changed.has(p) || removed.has(p) || lines.checked.has(p)) continue
+    const hit = notYetPaths(text).filter((c) => code.has(c))
+    if (hit.length)
+      out.push(
+        issue(
+          p,
+          'body',
+          `이 Work가 ${hit.map((c) => `\`${c}\``).join(', ')}를 바꿨는데 이 항목의 \`## ${NOT_YET_SECTION}\`에 그대로 있다. 이제 규칙을 따르면 그 줄을 지우고 \`## ${HISTORY_SECTION}\`에 적는다("고친 지식: ${p} — ..."). 아직 따르지 않으면 그 줄을 지금 상태로 고치거나, 그대로 두는 까닭을 "확인한 지식: ${p} — <까닭>"으로 적는다`,
+          NOT_YET_SECTION,
+        ),
+      )
+  }
+  for (const [p, why] of lines.checked) {
+    if (!input.current.has(p)) fix(`"확인한 지식"의 \`${p}\`는 없는 지식 항목이다`)
+    else if (!why.trim()) fix(`\`${p}\`의 확인한 지식 줄에 까닭이 비었음`)
   }
 
   const byAnchor = new Map<string, string[]>()
@@ -277,6 +359,8 @@ export interface KnowledgeInput {
   date: string
   /** 지식이 많을 때 관련 항목을 고르는 단서 (D295) */
   query?: KnowledgeQuery
+  /** 머지 전 앞 Work가 지운 지식 (D297): 이 worktree에 파일이 보여도 쓰지 않는다 */
+  removed?: readonly { path: string; from: string }[]
 }
 
 function fence(text: string): string {
@@ -451,6 +535,13 @@ const USE_RULES: Record<'intake' | 'work' | 'verify', string> = {
     '- 이 일에 해당하는 항목은 팀이 이미 아는 사실이다. 같은 내용을 사람에게 다시 묻지 않는다. 리뷰할 때 변경이 그 항목을 어기는지도 본다.',
 }
 
+/**
+ * 사람이 한 Work의 범위로 한 말은 규칙이 아니다 (D296). E10에서 "이번엔 손대지 마라"가 "수정하지 않는다" 규칙으로 굳어
+ * 팀원 Work가 그 코드를 피해 우회했다
+ */
+const SCOPE_NOTE =
+  '사람이 이번 Work의 범위로 한 말("이번엔 손대지 마라", "다음에 따로 고친다", "이번 범위가 아니다")은 규칙이 아니다. "~는 수정하지 않는다" 같은 규칙으로 남기지 않는다. 사람이 "앞으로도 늘"처럼 오래 지킬 것으로 말했을 때만 규칙이다.'
+
 const CANDIDATE_RULES = [
   '### 지식 후보 남기기',
   '',
@@ -460,6 +551,7 @@ const CANDIDATE_RULES = [
   '- 사람이 요청이나 답에서 "늘 이렇게 한다", "이건 해결이 아니다"처럼 이번 일을 넘어 통하는 규칙을 말했으면, 이번 Work의 비목표나 제약으로 옮겼더라도 후보로 적는다.',
   '- 남기지 않을 것: 이번 일에만 해당하는 것, 코드와 커밋에 이미 드러난 것, 비밀(토큰, 비밀번호, 내부 주소)과 개인정보. "이 규칙이 저기에도 통하는지 모른다"처럼 모른다는 것만 담은 메모도 후보가 아니다.',
   '- 사람의 지금 말이 위 항목과 어긋나면(값이나 규칙이 바뀌었으면) "고칠 지식: <경로> — <새 내용> (사람)"으로 후보에 적는다. verify가 그 항목을 고친다.',
+  `- ${SCOPE_NOTE} 후보에는 "아직 규칙을 따르지 않음: <경로> — <지금 상태>, 사람이 이번 범위에서 뺌 (사람)"으로 적는다.`,
 ].join('\n')
 
 function writeRules(input: KnowledgeInput): string {
@@ -477,13 +569,16 @@ function writeRules(input: KnowledgeInput): string {
     '- 사람이 요청이나 답에서 이번 일을 넘어 통하는 규칙을 말했으면(예: "금액은 늘 원 단위로 내림한다", "외부 API 응답은 캐시하지 않는다"), intent에 이번 Work의 비목표나 제약으로 들어가 있어도 지식으로 남긴다. 다음 일의 사람은 같은 말을 다시 하지 않아도 되어야 한다.',
     '- 지식 후보 가운데 "(사람)"이 붙은 것은 이번 일에만 해당하지 않는 한 모두 남긴다. 사람이 알려 준 규칙은 하나도 빠뜨리지 않는다.',
     '- 남기지 않을 것: 이번 일에만 해당하는 것, 코드와 커밋에 이미 드러난 것, 비밀(토큰, 비밀번호, 내부 주소)과 개인정보. "이 규칙이 저기에도 통하는지 모른다"처럼 모른다는 것만 담은 항목은 만들지 않는다.',
+    `- ${SCOPE_NOTE} 그 코드가 어떤 규칙을 아직 따르지 않으면, 그 규칙 항목의 \`## 아직 규칙을 따르지 않는 곳\`에 "<경로>: <지금 상태>. 사람이 Work ${input.work_id}의 범위에서 뺌(${input.date})"으로 적는다.`,
     '',
-    '기존 항목을 고칠지 새로 만들지 (먼저 위 "항목"을 본다):',
+    '기존 항목을 고칠지 새로 만들지 지울지 (먼저 위 "항목"을 본다):',
     '',
     '- 남길 것마다 위 항목 가운데 같은 대상(같은 규칙, 같은 값, 같은 코드 이름)을 다루는 것이 있는지 먼저 찾는다. 있으면 그 파일을 **같은 경로에서** 고친다. 이름이 달라도 대상이 같으면 같은 항목이다. 맞는 것이 없을 때만 새 파일을 만든다.',
     '- 사람의 지금 말이 기존 항목과 어긋나면(값이나 규칙이 바뀌었으면) 그 항목을 반드시 고친다. 새 파일을 따로 만들어 옛 항목을 그대로 두지 않는다. `## 바뀐 이력`에 "<날짜> <옛 값> → <새 값> (Work <id>, 사람이 알려 줌)"을 한 줄 더한다.',
     '- "기준 브랜치에는 아직 없다"고 적힌 항목은 이 worktree에 파일이 없다. 고칠 때는 위에 보인 앞 내용을 모두 살려 같은 경로에 새 형식으로 쓴다(머지하면 이 Work의 파일이 남는다). 고칠 것이 없으면 그 파일을 만들지 않는다.',
     '- 한 사실은 한 곳에만 쓴다. 값이나 규칙은 그것을 다루는 항목 한 곳에만 적고, 다른 항목에서는 "<경로> 참고"로 가리킨다. 다른 항목에 곁들여 적은 값은 바뀔 때 함께 고쳐지지 않는다.',
+    '- 이 Work가 어느 항목의 `## 아직 규칙을 따르지 않는 곳`에 적힌 코드를 고쳤으면, 그 줄을 지우고 `## 바뀐 이력`에 "<날짜> <경로>를 규칙대로 고침 (Work <id>)"을 더한다(앱이 확인한다). 아직 따르지 않으면 그 줄을 지금 상태로 고친다.',
+    '- 항목이 더는 맞지 않고 고쳐 쓸 내용도 없으면(규칙이 없어졌거나 다른 항목과 합쳤으면) 파일을 지운다(`git rm`). "기준 브랜치에는 아직 없다"고 적힌 앞 Work의 항목은 이 브랜치에 파일이 없어 지울 수 없으니 같은 경로에 고쳐 쓴다.',
     '',
     '파일 형식 (앱이 확인한다. 틀리면 되돌아온다):',
     '',
@@ -505,7 +600,7 @@ function writeRules(input: KnowledgeInput): string {
         '- <이래야 하는 것. 예와 수치>',
         '',
         '## 아직 규칙을 따르지 않는 곳',
-        '- <경로>: <지금 어떻게 되어 있어 고쳐야 하나> (없으면 이 절을 뺀다)',
+        '- <경로>: <지금 어떻게 되어 있어 고쳐야 하나. 사람이 범위에서 뺐으면 그렇다고> (없으면 이 절을 뺀다)',
         '',
         '## 바뀐 이력',
         `- ${input.date} 처음 남김 (Work ${input.work_id})`,
@@ -515,6 +610,8 @@ function writeRules(input: KnowledgeInput): string {
     'handoff에 적는 줄 (앱이 확인한다):',
     '',
     '- `## 요약` 끝에 바꾼 지식 파일마다 한 줄: 새로 만든 파일은 `새 지식: <경로> — <맞는 기존 항목이 없는 까닭>`, 이미 있던 파일(위 항목에 보인 것)을 고쳤으면 `고친 지식: <경로> — <무엇이 바뀌었나>`.',
+    '- 지운 파일마다 `지운 지식: <경로> — <까닭>`.',
+    '- 이 Work가 바꾼 코드가 어느 항목의 `## 아직 규칙을 따르지 않는 곳`에 있는데 그 항목을 그대로 두면 `확인한 지식: <경로> — <그대로 두는 까닭>`.',
     '- 바꾼 지식이 없으면 `남긴 지식: 없음 (까닭)`.',
     '',
     '#### 앞 task들의 지식 후보',
@@ -551,7 +648,12 @@ export function knowledgeSection(node: TaskNode, input: KnowledgeInput): [string
     '',
     USE_RULES[kind],
     ...(input.entries.some((e) => e.pendingFrom) ? [PENDING_RULE] : []),
-    '- 항목의 `## 규칙`(또는 `## 내용`)만 규칙과 사실이다. `## 아직 규칙을 따르지 않는 곳`은 아직 고치지 않은 코드, 곧 고칠 대상이다. 그 절이 없는 옛 형식의 항목은 글 전체를 읽는다.',
+    '- 항목의 `## 규칙`(또는 `## 내용`)만 규칙과 사실이다. `## 아직 규칙을 따르지 않는 곳`은 아직 고치지 않은 코드, 곧 고칠 대상이다. "범위에서 뺌"이라고 적혀 있어도 금지가 아니라 그때 Work의 범위였다. 이번 요청이 그 코드를 고치는 일이면 규칙대로 고친다. 그 절이 없는 옛 형식의 항목은 글 전체를 읽는다.',
+    ...(input.removed?.length
+      ? [
+          `- 머지를 기다리는 앞 Work가 지운 항목: ${input.removed.map((r) => `\`${r.path}\`(Work ${r.from})`).join(', ')}. 이 worktree에 파일이 보여도 지운 것으로 보고 쓰지 않는다.`,
+        ]
+      : []),
     '- 규칙이 이번 경우에도 통하는지는 규칙의 말로 판단한다. 말이 이번 경우를 덮으면 그대로 따른다. 확인하려고 같은 규칙을 다시 묻거나 가정으로 남겨 사람에게 되묻지 않는다.',
     '- 항목에 적힌 코드의 위치나 모양은 다른 Work의 것이라 지금 코드와 다를 수 있다. 다르면 지금 코드를 보고, 규칙과 사실은 그대로 따른다. 규칙이 사람의 지금 말과 어긋날 때만 묻는다. 해당하지 않는 항목은 무시한다.',
     '',
@@ -568,4 +670,89 @@ export function knowledgeSection(node: TaskNode, input: KnowledgeInput): [string
     node === 'verify' ? writeRules(input) : CANDIDATE_RULES,
   ]
   return ['팀 지식', lines.join('\n')]
+}
+
+/** Work 완료 화면의 지식 변경 한 줄의 재료 (D298) */
+export interface KnowledgeFileChange {
+  path: string
+  /** 기준 커밋에서 본 git 상태: A 더함, M 고침, D 지움 */
+  status: 'A' | 'M' | 'D'
+  /** 지금 글. 지웠으면 null */
+  text: string | null
+  /** 앞 글: 기준 커밋의 글, 머지 전 앞 Work의 항목을 다시 썼으면 그 Work의 글. 새 파일이면 null */
+  before: string | null
+}
+
+/** 두 글의 줄 차이 (diff 화면이 줄 머리로 색을 칠한다). 지식 파일은 작아 줄 LCS로 충분하다. 너무 크면 앞을 모두 빼고 뒤를 넣는다 */
+export function lineDiff(file: string, before: string | null, after: string | null): string {
+  const a = before === null ? [] : before.replace(/\n$/, '').split('\n')
+  const b = after === null ? [] : after.replace(/\n$/, '').split('\n')
+  const head = [
+    `--- ${before === null ? '/dev/null' : `a/${file}`}`,
+    `+++ ${after === null ? '/dev/null' : `b/${file}`}`,
+  ]
+  if (a.length * b.length > 1_000_000)
+    return [...head, ...a.map((l) => `-${l}`), ...b.map((l) => `+${l}`)].join('\n')
+  // lcs(i, j): a[i..], b[j..]의 가장 긴 공통 줄 수
+  const w = b.length + 1
+  const table = new Uint32Array((a.length + 1) * w)
+  const lcs = (x: number, y: number) => table[x * w + y] ?? 0
+  for (let x = a.length - 1; x >= 0; x--)
+    for (let y = b.length - 1; y >= 0; y--)
+      table[x * w + y] =
+        a[x] === b[y] ? lcs(x + 1, y + 1) + 1 : Math.max(lcs(x + 1, y), lcs(x, y + 1))
+  const out = [...head]
+  let x = 0
+  let y = 0
+  while (x < a.length || y < b.length) {
+    if (x < a.length && y < b.length && a[x] === b[y]) {
+      out.push(` ${a[x]}`)
+      x++
+      y++
+    } else if (y < b.length && (x >= a.length || lcs(x, y + 1) >= lcs(x + 1, y))) {
+      out.push(`+${b[y]}`)
+      y++
+    } else {
+      out.push(`-${a[x]}`)
+      x++
+    }
+  }
+  return out.join('\n')
+}
+
+/**
+ * Work 완료 화면의 "이 Work의 지식" (D298): 기준 커밋에서 더하거나 고치거나 지운 지식 파일마다 새로 만듦·고침·지움, 제목,
+ * kind, handoff 줄에 적은 까닭. 기준 브랜치에 없어도 머지 전 앞 Work에 있던 경로를 다시 쓴 것은 고침이다
+ */
+export function knowledgeChanges(
+  files: readonly KnowledgeFileChange[],
+  pendingFrom: ReadonlyMap<string, string>,
+  handoff: string,
+): KnowledgeChange[] {
+  const lines = knowledgeLines(handoff)
+  const order = { added: 0, updated: 1, removed: 2 }
+  return files
+    .filter((f) => isKnowledgePath(f.path))
+    .map((f): KnowledgeChange => {
+      const change =
+        f.status === 'D'
+          ? 'removed'
+          : f.status === 'M' || pendingFrom.has(f.path)
+            ? 'updated'
+            : 'added'
+      const note =
+        (change === 'removed'
+          ? lines.removed.get(f.path)
+          : (lines.added.get(f.path) ?? lines.updated.get(f.path))) ?? null
+      return {
+        path: f.path,
+        change,
+        title: f.text === null ? null : entryTitle({ path: f.path, text: f.text }),
+        kind: f.text === null ? null : kindOf(f.text),
+        note: note && note.trim() ? note.trim() : null,
+        pendingFrom: f.status === 'A' ? (pendingFrom.get(f.path) ?? null) : null,
+        diff: lineDiff(f.path, f.before, f.text),
+      }
+    })
+    .sort((a, b) => order[a.change] - order[b.change] || a.path.localeCompare(b.path))
 }

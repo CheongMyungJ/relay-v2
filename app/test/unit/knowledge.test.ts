@@ -9,8 +9,11 @@ import {
   knowledgeIssues,
   knowledgeLines,
   isKnowledgePath,
+  knowledgeChanges,
   knowledgeEnabled,
   knowledgeSection,
+  kindOf,
+  notYetPaths,
   looksSecret,
   mergeEntries,
   selectEntries,
@@ -270,3 +273,162 @@ function handoff(summary: string): string {
     '- 없음',
   ].join('\n')
 }
+
+describe('[단위] 지식 지우기, 범위 지시, 이 Work의 지식 (D296, D297, D298)', () => {
+  it('handoff의 지운·확인한 지식 줄을 읽는다', () => {
+    const l = knowledgeLines(
+      handoff(
+        [
+          '지운 지식: docs/knowledge/old.md — 규칙이 없어짐',
+          '- 확인한 지식: `docs/knowledge/a.md` — 이번엔 일부만 고침',
+        ].join('\n'),
+      ),
+    )
+    expect([...l.removed]).toEqual([['docs/knowledge/old.md', '규칙이 없어짐']])
+    expect([...l.checked]).toEqual([['docs/knowledge/a.md', '이번엔 일부만 고침']])
+  })
+
+  it('지운 지식은 줄이 있어야 하고, 지우지 않은 파일을 지운 지식으로 적지 않는다 (D297)', () => {
+    const base = {
+      existing: new Set(['docs/knowledge/old.md']),
+      current: new Map<string, string>(),
+    }
+    const msgs = (h: string, removed: string[]) =>
+      knowledgeIssues({ ...base, handoff: handoff(h), changed: [], removed })
+        .map((i) => i.message)
+        .join('\n')
+    expect(msgs('고쳤다.', ['docs/knowledge/old.md'])).toContain(
+      '"지운 지식: docs/knowledge/old.md',
+    )
+    expect(msgs('고쳤다.', ['docs/knowledge/old.md'])).not.toContain('남긴 지식: 없음')
+    expect(msgs('지운 지식: docs/knowledge/old.md — 합침', ['docs/knowledge/old.md'])).toBe('')
+    expect(msgs('지운 지식: docs/knowledge/old.md', ['docs/knowledge/old.md'])).toContain('비었음')
+    expect(msgs('지운 지식: docs/knowledge/p.md — x', [])).toContain('지우지 않았다')
+  })
+
+  it('바꾼 코드가 아직 따르지 않는 곳에 남아 있으면 항목을 고치거나 확인한 지식을 적어야 한다 (D296)', () => {
+    expect(notYetPaths(RULE)).toEqual(['src/returns/return-fee.js'])
+    expect(notYetPaths(FACT)).toEqual([])
+    const current = new Map([
+      ['docs/knowledge/rule.md', RULE],
+      ['docs/knowledge/fact.md', FACT],
+    ])
+    const run = (
+      h: string,
+      codeChanged: string[],
+      changed: { path: string; text: string }[] = [],
+    ) =>
+      knowledgeIssues({
+        handoff: handoff(h),
+        changed,
+        existing: new Set(current.keys()),
+        current,
+        codeChanged,
+      })
+    const hit = run('남긴 지식: 없음 (x)', ['src/returns/return-fee.js', 'test/a.test.js'])
+    expect(hit.map((i) => i.file)).toEqual(['docs/knowledge/rule.md'])
+    expect(hit[0]?.message).toContain('`src/returns/return-fee.js`')
+    expect(hit[0]?.message).toContain('확인한 지식: docs/knowledge/rule.md')
+    // 다른 코드만 바꿨으면 없다
+    expect(run('남긴 지식: 없음 (x)', ['src/other.js'])).toEqual([])
+    // 그대로 두는 까닭을 적으면 된다
+    expect(
+      run('확인한 지식: docs/knowledge/rule.md — 일부만 고침', ['src/returns/return-fee.js']),
+    ).toEqual([])
+    expect(
+      run('확인한 지식: docs/knowledge/rule.md', ['src/returns/return-fee.js'])
+        .map((i) => i.message)
+        .join(),
+    ).toContain('비었음')
+    expect(
+      run('확인한 지식: docs/knowledge/none.md — x', [])
+        .map((i) => i.message)
+        .join(),
+    ).toContain('없는 지식 항목')
+    // 항목을 고쳤으면 된다
+    const fixed = RULE.replace(/## 아직 규칙을 따르지 않는 곳\n- [^\n]+\n\n/, '')
+    expect(
+      run(
+        '고친 지식: docs/knowledge/rule.md — 반품도 고침',
+        ['src/returns/return-fee.js'],
+        [{ path: 'docs/knowledge/rule.md', text: fixed }],
+      ),
+    ).toEqual([])
+  })
+
+  it('머지 전 앞 Work가 지운 항목은 합친 지식에서 빠지고, 뒤 Work가 다시 쓰면 돌아온다 (D297)', () => {
+    const removed = { path: 'docs/knowledge/a.md', text: '', pendingFrom: 'w-2', removed: true }
+    expect(
+      mergeEntries([entry('a.md', '# A'), entry('b.md', '# B')], [removed]).map((e) => e.path),
+    ).toEqual(['docs/knowledge/b.md'])
+    expect(
+      mergeEntries([entry('a.md', '# A')], [removed, entry('a.md', '# A 다시', 'w-3')]).map((e) => [
+        e.path,
+        e.pendingFrom,
+      ]),
+    ).toEqual([['docs/knowledge/a.md', 'w-3']])
+  })
+
+  it('지식 절: 범위 지시는 규칙이 아니라는 안내와 앞 Work가 지운 항목 (D296, D297)', () => {
+    const input: KnowledgeInput = {
+      entries: [entry('vat.md', '# 금액은 내림')],
+      candidates: [],
+      work_id: 'w-1',
+      date: '2026-10-04',
+      removed: [{ path: 'docs/knowledge/gone.md', from: 'w-0' }],
+    }
+    const [, fix] = knowledgeSection('fix', input)
+    expect(fix).toContain('이번 범위에서 뺌 (사람)')
+    expect(fix).toContain('금지가 아니라')
+    expect(fix).toContain('`docs/knowledge/gone.md`(Work w-0)')
+    const [, verify] = knowledgeSection('verify', input)
+    expect(verify).toContain('사람이 Work w-1의 범위에서 뺌(2026-10-04)')
+    expect(verify).toContain('지운 지식: <경로>')
+    expect(verify).toContain('확인한 지식: <경로>')
+    expect(verify).toContain('git rm')
+  })
+
+  it('이 Work의 지식: 새로 만듦·고침·지움과 handoff 줄의 까닭 (D298)', () => {
+    const h = handoff(
+      [
+        '새 지식: docs/knowledge/new.md — 맞는 항목 없음',
+        '고친 지식: docs/knowledge/old.md — 1% → 2%',
+        '고친 지식: docs/knowledge/pend.md — 이어 씀',
+        '지운 지식: docs/knowledge/gone.md — 합침',
+      ].join('\n'),
+    )
+    const list = knowledgeChanges(
+      [
+        { path: 'docs/knowledge/gone.md', status: 'D', text: null, before: '# 옛것\n' },
+        { path: 'docs/knowledge/new.md', status: 'A', text: RULE, before: null },
+        {
+          path: 'docs/knowledge/old.md',
+          status: 'M',
+          text: FACT,
+          before: FACT.replace('사실이다', '옛 사실'),
+        },
+        { path: 'docs/knowledge/pend.md', status: 'A', text: FACT, before: FACT },
+        { path: 'src/x.js', status: 'M', text: 'x', before: 'y' },
+      ],
+      new Map([['docs/knowledge/pend.md', 'w-7']]),
+      h,
+    )
+    expect(list.map((k) => [k.path, k.change, k.kind, k.note, k.pendingFrom])).toEqual([
+      ['docs/knowledge/new.md', 'added', 'rule', '맞는 항목 없음', null],
+      ['docs/knowledge/old.md', 'updated', 'fact', '1% → 2%', null],
+      ['docs/knowledge/pend.md', 'updated', 'fact', '이어 씀', 'w-7'],
+      ['docs/knowledge/gone.md', 'removed', null, '합침', null],
+    ])
+    expect(list[0]?.title).toBe('무료배송 기준은 쿠폰 뺀 금액 40,000원')
+    expect(list[0]?.diff.split('\n').slice(0, 3)).toEqual([
+      '--- /dev/null',
+      '+++ b/docs/knowledge/new.md',
+      '+---',
+    ])
+    expect(list[1]?.diff).toContain('-- 옛 사실.')
+    expect(list[1]?.diff).toContain('+- 사실이다.')
+    expect(list[1]?.diff).toContain(' ## 내용')
+    expect(list[3]?.diff).toBe('--- a/docs/knowledge/gone.md\n+++ /dev/null\n-# 옛것')
+    expect(kindOf('# 옛 형식')).toBeNull()
+  })
+})

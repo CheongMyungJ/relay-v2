@@ -135,6 +135,96 @@ describe('[흐름] verify의 지식 확인 (D293, D294)', () => {
   })
 })
 
+describe('[흐름] 아직 따르지 않는 곳, 지운 지식, 이 Work의 지식 (D296, D297, D298)', () => {
+  it('아직 따르지 않는 곳의 코드를 바꾸고 항목을 두면 되돌리고, 고치고 지운 뒤에는 완료 화면에 지식 변경이 보인다', async () => {
+    const AVG = 'docs/knowledge/avg.md'
+    const STALE = 'docs/knowledge/stale.md'
+    const rule = (notYet: boolean) =>
+      [
+        '---',
+        'kind: rule',
+        'source: human',
+        '---',
+        '# 빈 목록의 평균은 0',
+        '',
+        '## 규칙',
+        '- 빈 배열의 평균은 0이다.',
+        ...(notYet ? ['', '## 아직 규칙을 따르지 않는 곳', '- `src/avg.js`: NaN을 낸다.'] : []),
+        '',
+        '## 바뀐 이력',
+        '- 2026-10-01 처음 남김 (Work w-0)',
+        ...(notYet ? [] : ['- 2026-10-04 src/avg.js를 규칙대로 고침']),
+      ].join('\n') + '\n'
+    const verify: Scenario['tasks'][string] = [
+      { do: 'prompt' },
+      {
+        do: 'commit',
+        files: { 'src/avg.js': 'export function avg(xs) {\n  return xs.length ? 1 : 0\n}\n' },
+        message: 'fix',
+      },
+      { do: 'write', file: 'verification.md', text: VERIFICATION },
+      { do: 'write', file: 'pr.md', text: PR },
+      {
+        do: 'write',
+        file: 'handoff.md',
+        text: handoff({ summary: '고쳤다.\n남긴 지식: 없음 (없음)' }),
+      },
+      {
+        do: 'stop',
+        onBlock: [
+          { do: 'git', args: ['rm', '-q', STALE] },
+          { do: 'commit', files: { [AVG]: rule(false) }, message: 'knowledge' },
+          {
+            do: 'write',
+            file: 'handoff.md',
+            text: handoff({
+              summary: `고쳤다.\n고친 지식: ${AVG} — src/avg.js를 고쳐 아직 따르지 않는 곳에서 뺌\n지운 지식: ${STALE} — 더는 맞지 않음`,
+            }),
+          },
+          { do: 'stop' },
+        ],
+      },
+    ]
+    const hh = await harness({ scenario: scenario({ verify }), env: { RELAY_KNOWLEDGE: 'on' } })
+    h = hh
+    const { repo } = makeRepo(hh.root, 'knowledge-not-yet', {
+      ...REPO_FILES,
+      [AVG]: rule(true),
+      [STALE]: '---\nkind: fact\nsource: investigation\n---\n# 낡은 사실\n\n## 내용\n- 옛것\n',
+    })
+    const projectId = await register(hh, repo)
+    const r = await hh.relay.createWork(projectId, {
+      request: REQUEST,
+      baseBranch: 'main',
+      type: 'bugfix',
+      baseLocation: 'local',
+    })
+    if (!r.ok) throw new Error(r.error)
+    const result = await drive(hh.relay, hh.ui, r.workKey)
+    await settle(hh, r.workKey)
+    expect(result, hh.ui.dump()).toMatchObject({ status: 'completed', reason: null })
+    expect(result.tasks.map((t) => t.bounces)).toEqual([0, 0, 1])
+    const workId = r.workKey.split('/')[1] ?? ''
+    const bounced = fs
+      .readFileSync(
+        path.join(hh.home, 'projects', projectId, 'works', workId, 'events.jsonl'),
+        'utf8',
+      )
+      .split('\n')
+      .filter((l) => l.includes('task.bounced'))
+      .join('\n')
+    expect(bounced).toContain(AVG)
+    expect(bounced).toContain('아직 규칙을 따르지 않는 곳')
+
+    const review = await hh.relay.review(r.workKey, 't-03')
+    expect(review?.completion?.knowledge?.map((k) => [k.path, k.change, k.kind, k.note])).toEqual([
+      [AVG, 'updated', 'rule', 'src/avg.js를 고쳐 아직 따르지 않는 곳에서 뺌'],
+      [STALE, 'removed', null, '더는 맞지 않음'],
+    ])
+    expect(review?.completion?.knowledge?.[0]?.diff).toContain('-- `src/avg.js`: NaN을 낸다.')
+  })
+})
+
 describe('[흐름] 지식이 많으면 관련 항목만 넣는다 (D295)', () => {
   it('요청과 관련 있는 항목은 본문으로, 나머지는 제목만이거나 빼고, 그렇다고 context.md에 적는다', async () => {
     const many: Record<string, string> = {}
