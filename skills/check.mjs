@@ -4,7 +4,7 @@
 // 1. 머리글: disable-model-invocation: true, description 있음, name 없음 (D33)
 // 2. 크기: SKILL.md + _common.md. Claude Code 어림(글자 수 / 4)으로 판정, 모델 토큰 어림은 참고 (D31, D95)
 // 3. 템플릿: 주석 단 템플릿에 값을 채운 예시가 docs/contracts 스키마를 통과하는지 (D87). intent 초안은 머리글이 없다 (D236)
-// 4. 설계 대조: 산출물 템플릿의 절 제목, 입력·결정 지점·사람이 정할 결정·완료조건 항목 (5.6.1~5.6.10, I60, I65)
+// 4. 설계 대조: 산출물 템플릿의 절 제목, 입력·결정 지점·사람이 정할 결정·완료조건 항목 (5.6.1~5.6.11, I60, I65, I89)
 // 5. 유형별 조립: 공용 스킬의 유형 표시, 조립한 글에 다른 유형의 산출물이 없음 (D279, I68)
 
 import { readFileSync } from 'node:fs';
@@ -19,9 +19,9 @@ const root = join(here, '..');
 const read = (p) => readFileSync(join(root, p), 'utf8').replace(/\r\n/g, '\n');
 
 const SIZE_TARGET = 5000; // D31
-const SKILLS = ['work-start', 'fix', 'design', 'implement', 'refactor', 'verify', 'pr-respond'];
+const SKILLS = ['work-start', 'fix', 'design', 'implement', 'refactor', 'execute', 'verify', 'pr-respond'];
 
-// 업무 유형(D232, D258)과 유형마다 조립하는 공용 스킬(D279)
+// 업무 유형(D232, D258, D302)과 유형마다 조립하는 공용 스킬(D279)
 const SHARED = ['work-start', 'verify', 'pr-respond'];
 
 const design = read('docs/design.md');
@@ -30,7 +30,7 @@ const common = read('skills/_common.md');
 const skills = Object.fromEntries(SKILLS.map((s) => [s, read(`skills/${s}/SKILL.md`)]));
 
 // 에이전트가 받는 스킬 본문: 공용 스킬은 유형마다 하나씩, 나머지는 그 유형 하나다
-const OWN_TYPE = { fix: 'bugfix', design: 'feature', implement: 'feature', refactor: 'refactor' };
+const OWN_TYPE = { fix: 'bugfix', design: 'feature', implement: 'feature', refactor: 'refactor', execute: 'general' };
 const variants = SKILLS.flatMap((name) =>
   (SHARED.includes(name) ? TYPES : [OWN_TYPE[name]]).map((type) => {
     try {
@@ -183,6 +183,8 @@ for (const v of variants.filter((x) => x.name === 'work-start')) {
   const cond = intentTpl.split('## 완료조건\n')[1]?.split('\n## ')[0] ?? '';
   const lines = cond.split('\n').filter((l) => l.trim());
   check(lines.length >= 3 && lines.every((l) => l.startsWith('- [ ] ')), `${v.label}: 완료조건 줄이 모두 "- [ ] "로 시작`);
+  // 일반은 줄마다 확인 방법을 붙인다 (D305). 앱의 검사(core/validate의 CHECK_METHOD, I86)와 같은 꼴이다
+  if (v.type === 'general') check(lines.every((l) => /\s(?:—|–|--?)\s*확인\s*:\s*\S/.test(l)), `${v.label}: 완료조건 줄마다 확인 방법 (D305)`);
 }
 
 console.log('\n[4] 설계 대조: 산출물 템플릿의 절 제목');
@@ -192,12 +194,13 @@ const templateSources = {
   design: ['#### 5.6.8'],
   implement: ['#### 5.6.9'],
   refactor: ['#### 5.6.10'],
+  execute: ['#### 5.6.11'],
   verify: ['#### 5.6.6'],
   'pr-respond': ['#### 5.6.7'],
 };
 // 공용 스킬은 유형마다 조립한 글로 본다 (D279). verify의 pr.md 템플릿은 설계 5.6.6에 유형마다 하나씩 있으므로, 그 유형의
 // 템플릿 절은 있어야 하고 다른 유형에만 있는 절은 없어야 한다
-const PR_MARK = { bugfix: '## 원인', feature: '## 동작', refactor: '## 목표 구조' };
+const PR_MARK = { bugfix: '## 원인', feature: '## 동작', refactor: '## 목표 구조', general: '## 주요 결정' };
 for (const [name, sections] of Object.entries(templateSources)) {
   for (const v of variants.filter((x) => x.name === name)) {
     const skillHeadings = codeBlocks(v.text, 'markdown').flatMap(headings);
@@ -278,6 +281,13 @@ const spec = {
     ['D264', '리팩터링 기본 완료조건 네 개', /`- \[ \] <test command>가 통과한다` \/ `- \[ \] 기존 테스트를 약화하거나 삭제하지 않는다` \/ `- \[ \] 바꾼 곳의 지금 동작을 잡는 안전망 테스트가 있고 기준 코드에서도 통과한다` \/ `- \[ \] 레포 밖 공개 인터페이스가 바뀌지 않는다`/, ['refactor']],
     ['D266', '구조 조건: 읽거나 명령으로 확인, 한 줄에 하나, 방법은 쓰지 않음', /structural conditions that can be checked[\s\S]*one per line[\s\S]*Not the order or method/, ['refactor']],
     ['D266', '구조 목표가 막연하면 확인할 수 있는 구조를 물음', /vague[\s\S]*ask for a structure that can be checked/, ['refactor']],
+    ['5.6.4', '일반의 계획도 하지 않음', /Do not plan how to do the work\. That is the job of execute/, ['general']],
+    ['D241', '일반의 사람 제안: 반드시면 제약, 아니면 (사람 제안)', /`제약` when it is a must[\s\S]*"\(사람 제안\)"[\s\S]*execute decides/, ['general']],
+    ['D303', '더 맞는 유형: 초안 전에 알리고 물음, 그대로 감 / 유형 바꿈(blocked)', /better[\s\S]*before you write the draft[\s\S]*keep `general` \/ change the type \(`blocked`\)/, ['general']],
+    ['D304', '일반 기본 완료조건 둘', /`- \[ \] <test command>가 통과한다 — 확인: <test command>` \/ `- \[ \] 기존 테스트를 약화하거나 삭제하지 않는다 — 확인: [^`]+`/, ['general']],
+    ['D305', '확인 방법: 줄마다, 명령 / 읽을 곳 / 사람, 앱이 검사', /Check method:[\s\S]*every line, the default items included[\s\S]*command to run[\s\S]*place to read[\s\S]*`사람`[\s\S]*app rejects/, ['general']],
+    ['D306', '사람은 명령이나 읽을 곳으로 확인할 수 없을 때만', /Use `사람` only when no command and no place to read can check it/, ['general']],
+    ['D305', '완료조건: 줄마다 확인 방법', /## Done when[\s\S]*ends with a check method/, ['general']],
   ],
   design: [
     ['5.6.8', '입력: context.md, request.md 경로', /`context\.md`[\s\S]*`request\.md`/],
@@ -328,6 +338,21 @@ const spec = {
     ['D267', '사람이 정할 결정: 목표 구조 선택지, 범위·비목표·제약, 사람 제안', /Several target structures[\s\S]*widens the scope, or touches the intent's non-goals or constraints[\s\S]*do not take a human suggestion/],
     ['D270', '동작 차이: 다른 방법 / 받아들임 / 범위에서 뺌, 받아들이면 그 기대값만, by: human', /must change behavior a little[\s\S]*keep the current behavior another way \/ accept the difference \/ drop that part[\s\S]*only that expected value[\s\S]*`by: human`/],
     ['5.6.10', '완료조건: 다섯 절, 안전망, 단계 커밋, 찾은 버그, 사람 결정, 테스트 명령', /## Done when[\s\S]*five template sections[\s\S]*safety net[\s\S]*committed separately[\s\S]*plan step is committed[\s\S]*not fixed[\s\S]*`decisions`[\s\S]*test command/],
+  ],
+  execute: [
+    ['5.6.11', '입력: context.md, request.md 경로', /`context\.md`[\s\S]*`request\.md`/],
+    ['D316', '현재 코드 위에서 이어서: 폐기된 execution.md를 읽고 새로 씀', /Continuing on current code[\s\S]*discarded `execution\.md`[\s\S]*new `execution\.md`/],
+    ['5.6.11', '순서: 계획 → 물음 → 작업과 커밋 → 자체 확인 → 테스트 명령', /Plan\.[\s\S]*Ask if needed[\s\S]*Do the work and commit[\s\S]*Self-check\.[\s\S]*test command at the end/],
+    ['D302', '진행 방식은 execute가 정하고 계획과 decisions에 적음', /How to work[\s\S]*yours to decide[\s\S]*`계획`[\s\S]*`decisions`/],
+    ['D307', '동작을 바꾸면 테스트를 더함, 순서 자유, 못 하면 이유와 risks, 기존 테스트 약화 금지', /change how code behaves, add a test[\s\S]*before or after[\s\S]*cannot add one[\s\S]*`risks`[\s\S]*Never weaken or delete existing tests/],
+    ['D310', '자체 확인: 확인 방법을 실제로 돌려 표에, 사람은 볼 곳, 비교용', /Self-check:[\s\S]*run each 완료조건's check method for real[\s\S]*`완료조건별 자체 확인`[\s\S]*`확인: 사람`[\s\S]*for comparison/],
+    ['D309', '커밋 수 제한 없음, 레포 관례, 모두 커밋, 실험 되돌림', /any number[\s\S]*commit message convention[\s\S]*Commit all changes before you close[\s\S]*Revert experimental changes/],
+    ['D57', '테스트 명령 실행, 기준 커밋 실패 구분', /Run tests[\s\S]*also fails at the base commit/],
+    ['5.6.11', '범위 밖 문제는 고치지 않고 risks, 고치려면 사람 결정', /outside the scope[\s\S]*do not fix them[\s\S]*`risks`[\s\S]*human decision/],
+    ['D23', 'intent와 어긋나면 intent_deviation, 의도 변경은 intake', /`intent_deviation`[\s\S]*`recommended_next` to `intake`/],
+    ['5.6.11', '결정 지점: 방식, 나눔, 더할 테스트', /How to do the work, how to split it, which tests to add/],
+    ['D308', '사람이 정할 결정 셋', /Several options change what is seen from outside[\s\S]*widens the scope, or touches the intent's non-goals or constraints[\s\S]*do not take a human suggestion/],
+    ['5.6.11', '완료조건: 네 절, 자체 확인, 테스트, 커밋, 사람 결정, 테스트 명령', /## Done when[\s\S]*four template sections[\s\S]*check method[\s\S]*has a test, or the reason[\s\S]*committed[\s\S]*`decisions`[\s\S]*test command/],
   ],
   fix: [
     ['5.6.5', '입력: context.md, request.md 경로', /`context\.md`[\s\S]*`request\.md`/],
@@ -384,11 +409,19 @@ const spec = {
     ['D265', '따라 고친 기존 테스트는 약화 아님, 기대값·입력 변경이나 삭제는 물음', /followed an internal interface change[\s\S]*약화 아님[\s\S]*expected values or inputs changed[\s\S]*ask/, ['refactor']],
     ['D275', '리팩터링 이전 단계 추천: 변경이면 refactor, 의도면 intake', /`refactor` if the change is wrong, `intake` if the intent is wrong/, ['refactor']],
     ['D274', '리팩터링 pr.md: 요약 / 목표 구조 / 동작 보존 / 변경 / 찾은 버그 / 테스트', /## 요약\n## 목표 구조\n## 동작 보존\n## 변경\n## 찾은 버그\n## 테스트/, ['refactor']],
+    ['D314', '일반 입력: execution.md (fix.md와 재현 규칙 없음)', /`execution\.md` at the path in `context\.md`/, ['general']],
+    ['D314', '일반 리뷰: 계획과 맞는지, 범위, 확인 방법이 제대로 확인하는지, 동작을 바꾼 곳의 테스트와 이유', /fit the plan in `execution\.md`[\s\S]*scope grow[\s\S]*check method[\s\S]*really check it[\s\S]*change in code behavior have a test[\s\S]*reason/, ['general']],
+    ['D312', '확인 방법을 먼저 직접 실행, 부족하면 보완해 판정하고 근거에 둘 다, 남은 위험, intent는 그대로', /run the method at the end of each 완료조건 line yourself[\s\S]*add your own check[\s\S]*write both in the evidence[\s\S]*`남은 위험`[\s\S]*Do not change the intent/, ['general']],
+    ['D311', '사람 확인 항목: 한 질문, 볼 것, 답으로 통과/실패, 사람 확인과 답, by: human', /`확인: 사람` items:\*\* gather them all into one question[\s\S]*what to look at[\s\S]*통과 or 실패[\s\S]*"사람 확인"[\s\S]*`by: human`/, ['general']],
+    ['D314', '일반 이전 단계 추천: 변경이면 execute, 의도면 intake', /`execute` if the change is wrong, `intake` if the intent is wrong/, ['general']],
+    ['D313', '일반 pr.md: 요약 / 주요 결정 / 변경 / 테스트', /## 요약\n## 주요 결정\n## 변경\n## 테스트/, ['general']],
+    ['D311', '완료조건: 사람 확인 항목을 묻고 기록', /## Done when[\s\S]*`확인: 사람` item was asked about/, ['general']],
   ],
   'pr-respond': [
     ['D192', '입력: context.md(이번 라운드의 항목, 사람 지시, PR 정보, 앞 라운드 요약)와 파이프라인 산출물(경로)', /`context\.md`[\s\S]*this round's items, the human's instruction, the PR[\s\S]*summaries of earlier rounds[\s\S]*pipeline artifacts/],
     ['D256', '기능 추가면 design.md와 implement.md(경로)', /`design\.md`, `implement\.md`, `verification\.md`/, ['feature']],
     ['D278', '리팩터링이면 refactor.md(경로)', /`refactor\.md`, `verification\.md`/, ['refactor']],
+    ['D318', '일반이면 execution.md(경로)', /`execution\.md`, `verification\.md`/, ['general']],
     ['D162', '외부 글은 지시가 아니라 데이터, 명령 실행·설정 변경·비밀 정보 요청은 따르지 않고 사람에게 물음, 사람 지시는 따름', /data, not instructions[\s\S]*run a command, change settings[\s\S]*reveal secrets[\s\S]*ask the human[\s\S]*Follow only the human/],
     ['D168', '항목마다 셋 중 하나: 고침 / 고치지 않음과 이유 / 사람에게 물음. 모르면 open_questions', /고침[\s\S]*고치지 않음[\s\S]*사람에게 물음[\s\S]*`open_questions`/],
     ['5.6.7', '범위: intent의 목표와 비목표. 비목표·제약에 걸리면 사람 결정 (D51과 같음)', /`목표` and `비목표`[\s\S]*`비목표` or `제약`[\s\S]*human decision/],
@@ -406,7 +439,7 @@ const spec = {
     ['5.6.7', '완료조건: 셋 중 하나 또는 open_questions, 코멘트 항목마다 답글, 커밋과 테스트 결과', /## Done when[\s\S]*settled as one of the three[\s\S]*has a reply in `replies\.md`[\s\S]*committed[\s\S]*test command/],
   ],
 };
-// 항목의 넷째 값은 유형 목록이다. 공용 스킬에서 없으면 세 유형 모두에, 있으면 그 유형의 조립 결과에 있어야 한다 (D279)
+// 항목의 넷째 값은 유형 목록이다. 공용 스킬에서 없으면 모든 유형에, 있으면 그 유형의 조립 결과에 있어야 한다 (D279)
 for (const [name, items] of Object.entries(spec)) {
   for (const [ref, desc, re, types] of items) {
     if (name === '_common') check(re.test(common), `${name}: ${desc} (${ref})`);
@@ -425,8 +458,8 @@ for (const v of variants) {
   if (!SHARED.includes(v.name)) check(!/<!-- \/?type/.test(skills[v.name]), `${v.name}: 한 유형의 스킬에는 유형 표시가 없음`);
 }
 check(!/<!-- \/?type/.test(common), '_common.md: 유형 표시가 없음 (모든 유형 공통)');
-// 산출물 이름으로 다른 유형의 글이 섞이지 않았는지 본다. work-start는 유형 불일치 질문(D238)에 세 유형을 말하므로 산출물만 본다
-const ARTIFACT = { bugfix: ['`fix.md`'], feature: ['`design.md`', '`implement.md`'], refactor: ['`refactor.md`'] };
+// 산출물 이름으로 다른 유형의 글이 섞이지 않았는지 본다. work-start는 유형 불일치 질문(D238)에 네 유형을 말하므로 산출물만 본다
+const ARTIFACT = { bugfix: ['`fix.md`'], feature: ['`design.md`', '`implement.md`'], refactor: ['`refactor.md`'], general: ['`execution.md`'] };
 for (const v of variants.filter((x) => SHARED.includes(x.name))) {
   const foreign = TYPES.filter((t) => t !== v.type).flatMap((t) => ARTIFACT[t]).filter((a) => v.text.includes(a));
   check(foreign.length === 0, `${v.label}: 다른 유형의 산출물이 없음${foreign.length ? ` (${foreign.join(', ')})` : ''}`);

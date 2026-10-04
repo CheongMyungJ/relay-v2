@@ -43,7 +43,7 @@ const CLOSING =
 const PRESS = '[승인]을 누르세요.'
 
 /**
- * 자동 승인을 켤 수 있는 단계(fix, design, implement, refactor)의 문장 (D132). 자동 승인 여부는 턴이 끝날 때의 설정으로 정하고
+ * 자동 승인을 켤 수 있는 단계(fix, design, implement, refactor, execute)의 문장 (D132). 자동 승인 여부는 턴이 끝날 때의 설정으로 정하고
  * (D128) 설정은 task가 도는 중에도 바뀌며, 스킬은 이 문구를 그대로 찍으므로 두 경우를 함께 적는다
  */
 const AUTO_SENTENCE =

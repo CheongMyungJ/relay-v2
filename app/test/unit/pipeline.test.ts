@@ -19,16 +19,25 @@ import type { NodeName } from '../../src/shared/contracts'
 import type { WorkType } from '../../src/shared/work'
 
 describe('노드 (3.1)', () => {
-  it('버그 수정은 intake → fix → verify, 기능 추가는 intake → design → implement → verify, 리팩터링은 intake → refactor → verify다 (D227, D232, D258)', () => {
+  it('버그 수정은 intake → fix → verify, 기능 추가는 intake → design → implement → verify, 리팩터링은 intake → refactor → verify, 일반은 intake → execute → verify다 (D227, D232, D258, D302)', () => {
     expect(PIPELINES).toEqual({
       bugfix: ['intake', 'fix', 'verify'],
       feature: ['intake', 'design', 'implement', 'verify'],
       refactor: ['intake', 'refactor', 'verify'],
+      general: ['intake', 'execute', 'verify'],
     })
   })
 
-  it('모든 노드는 모든 파이프라인의 노드를 모은 것이고 스키마의 노드 열거값과 같다 (I57, I63)', () => {
-    expect(ALL_NODES).toEqual(['intake', 'fix', 'design', 'implement', 'refactor', 'verify'])
+  it('모든 노드는 모든 파이프라인의 노드를 모은 것이고 스키마의 노드 열거값과 같다 (I57, I63, I85)', () => {
+    expect(ALL_NODES).toEqual([
+      'intake',
+      'fix',
+      'design',
+      'implement',
+      'refactor',
+      'execute',
+      'verify',
+    ])
     expect(new Set(Object.values(PIPELINES).flat())).toEqual(new Set(ALL_NODES))
     expect(ALL_NODES).toEqual(
       handoffSchema.properties.recommended_next.oneOf[1]?.properties?.node.enum,
@@ -44,6 +53,7 @@ describe('노드 (3.1)', () => {
       ['design', 'design', '설계와 계획', ['design.md']],
       ['implement', 'implement', '구현', ['implement.md']],
       ['refactor', 'refactor', '계획과 리팩터링', ['refactor.md']],
+      ['execute', 'execute', '실행', ['execution.md']],
       ['verify', 'verify', '리뷰와 검증', ['verification.md', 'pr.md']],
     ])
   })
@@ -68,13 +78,15 @@ describe('노드 (3.1)', () => {
   it('work.json에 type이 없으면 버그 수정이다 (D256, I58)', () => {
     expect(workType({})).toBe('bugfix')
     expect(workType({ type: 'feature' })).toBe('feature')
+    expect(workType({ type: 'general' })).toBe('general')
   })
 
-  it('[현재 코드 위에서 이어서]는 버그 수정의 fix, 기능 추가의 design과 implement, 리팩터링의 refactor에서 준다 (6.2, D254, D278)', () => {
+  it('[현재 코드 위에서 이어서]는 버그 수정의 fix, 기능 추가의 design과 implement, 리팩터링의 refactor, 일반의 execute에서 준다 (6.2, D254, D278, D316)', () => {
     expect(KEEP_CODE_NODES).toEqual({
       bugfix: ['fix'],
       feature: ['design', 'implement'],
       refactor: ['refactor'],
+      general: ['execute'],
     })
   })
 })
@@ -92,10 +104,13 @@ describe('선택 가능한 다음 단계 (3.2)', () => {
     ['refactor', 'intake', 'refactor', []],
     ['refactor', 'refactor', 'verify', ['intake']],
     ['refactor', 'verify', 'complete', ['intake', 'refactor']],
+    ['general', 'intake', 'execute', []],
+    ['general', 'execute', 'verify', ['intake']],
+    ['general', 'verify', 'complete', ['intake', 'execute']],
   ]
 
   it('파이프라인의 노드가 모두 표에 있다', () => {
-    for (const type of ['bugfix', 'feature', 'refactor'] as const) {
+    for (const type of ['bugfix', 'feature', 'refactor', 'general'] as const) {
       expect(table.filter(([t]) => t === type).map(([, n]) => n)).toEqual(PIPELINES[type])
     }
   })
@@ -117,6 +132,9 @@ describe('선택 가능한 다음 단계 (3.2)', () => {
     expect(recommendableNodes('refactor', 'intake')).toEqual(['refactor'])
     expect(recommendableNodes('refactor', 'refactor')).toEqual(['intake', 'verify'])
     expect(recommendableNodes('refactor', 'verify')).toEqual(['intake', 'refactor'])
+    expect(recommendableNodes('general', 'intake')).toEqual(['execute'])
+    expect(recommendableNodes('general', 'execute')).toEqual(['intake', 'verify'])
+    expect(recommendableNodes('general', 'verify')).toEqual(['intake', 'execute'])
   })
 
   it('PR 대응 task는 recommended_next로 쓸 수 있는 노드가 없다 (D188)', () => {
@@ -144,6 +162,9 @@ describe('선택 가능한 다음 단계 (3.2)', () => {
     expect(isPrevious('refactor', 'verify', 'refactor')).toBe(true)
     expect(isPrevious('refactor', 'refactor', 'intake')).toBe(true)
     expect(isPrevious('refactor', 'verify', 'fix')).toBe(false)
+    expect(isPrevious('general', 'verify', 'execute')).toBe(true)
+    expect(isPrevious('general', 'execute', 'intake')).toBe(true)
+    expect(isPrevious('general', 'verify', 'refactor')).toBe(false)
   })
 
   it('추천 때문에 멈추는지: 이전 단계이거나 이 유형의 파이프라인에 없는 노드다 (D23, PR #23 리뷰)', () => {
@@ -154,6 +175,9 @@ describe('선택 가능한 다음 단계 (3.2)', () => {
     expect(stopsForRecommendation('refactor', 'verify', 'refactor')).toBe(true)
     expect(stopsForRecommendation('refactor', 'verify', 'implement')).toBe(true)
     expect(stopsForRecommendation('refactor', 'refactor', 'verify')).toBe(false)
+    expect(stopsForRecommendation('general', 'verify', 'execute')).toBe(true)
+    expect(stopsForRecommendation('general', 'verify', 'fix')).toBe(true)
+    expect(stopsForRecommendation('general', 'execute', 'verify')).toBe(false)
     // 기본 다음 단계와 뒤 단계는 멈추지 않는다
     expect(stopsForRecommendation('feature', 'design', 'implement')).toBe(false)
     expect(stopsForRecommendation('feature', 'design', 'verify')).toBe(false)

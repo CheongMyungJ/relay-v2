@@ -212,7 +212,14 @@ describe('[흐름] 기능 추가 유형 (M14)', () => {
     h = undefined
 
     const on = await setup(featureScenario(), {
-      auto_approve: { fix: false, design: true, implement: false, refactor: false, respond: false },
+      auto_approve: {
+        fix: false,
+        design: true,
+        implement: false,
+        refactor: false,
+        execute: false,
+        respond: false,
+      },
       auto_approve_countdown_sec: 1,
     })
     const key2 = await on.create()

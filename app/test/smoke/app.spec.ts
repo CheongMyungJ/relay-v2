@@ -353,6 +353,7 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
     design: false,
     implement: true,
     refactor: true,
+    execute: true,
     respond: false,
   })
   expect(config().auto_approve_countdown_sec).toBe(600)

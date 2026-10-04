@@ -488,6 +488,97 @@ export const REFACTOR_FILES = {
 export const REFACTOR_PR =
   '# 합계 계산을 sum으로 추출\n\n## 요약\n## 목표 구조\n## 동작 보존\n## 변경\n## 찾은 버그\n## 테스트\n'
 
+export const GENERAL_REQUEST = [
+  'README.md에 테스트를 돌리는 명령과 avg 쓰는 법을 적어 주세요.',
+  '',
+].join('\n')
+
+/** 일반 intent 초안의 확인 방법 줄 (D305). 셋째 줄은 사람이 확인한다 (D306) */
+export const GENERAL_CRITERIA = [
+  '- [ ] `npm test`가 통과한다 — 확인: `npm test`',
+  '- [ ] 기존 테스트를 약화하거나 삭제하지 않는다 — 확인: 기준 커밋과 테스트 파일 diff',
+  '- [ ] README.md에 테스트 실행 명령이 있다 — 확인: README.md',
+  '- [ ] README의 avg 설명이 처음 보는 사람에게 읽힌다 — 확인: 사람',
+]
+
+/**
+ * 일반 intent 초안 (5.3, D304, D305). 머리글이 없다. noCheck면 셋째 완료조건의 확인 방법을 빼 형식 오류를 낸다 (I86)
+ */
+export function generalIntentDraft(opts: { noCheck?: boolean } = {}) {
+  const criteria = GENERAL_CRITERIA.map((line, i) =>
+    opts.noCheck && i === 2 ? line.replace(/ — 확인: .*$/, '') : line,
+  )
+  const sections: [string, string][] = [
+    ['목표', 'README.md에 테스트 명령과 avg 쓰는 법을 적는다.'],
+    ['비목표', '- avg의 동작 바꾸기'],
+    ['원하는 결과', '처음 보는 사람이 README만 읽고 테스트를 돌리고 avg를 쓴다.'],
+    ['완료조건', criteria.join('\n')],
+  ]
+  return sections.map(([name, text]) => `## ${name}\n${text}\n`).join('\n')
+}
+
+/** 일반 verification.md의 판정 절 (5.6.6, D311, D312). 사람 확인 항목은 근거에 "사람 확인"을 적는다 */
+export const GENERAL_VERDICTS = [
+  '## 완료조건 판정',
+  '| 완료조건 | 판정 | 근거 |',
+  '|---|---|---|',
+  '| `npm test`가 통과한다 | 통과 | 1 passed |',
+  '| 기존 테스트를 약화하거나 삭제하지 않는다 | 통과 | 테스트 파일 변경 없음 |',
+  '| README.md에 테스트 실행 명령이 있다 | 통과 | README.md에 npm test |',
+  '| README의 avg 설명이 처음 보는 사람에게 읽힌다 | 통과 | 사람 확인: 읽힌다 |',
+  '',
+  '## 테스트 파일 변경',
+  '- 없음',
+  '',
+  '## 남은 위험',
+  '- 없음',
+  '',
+].join('\n')
+
+/** execution.md의 `## 계획` 본문 (5.6.11, D310). 실행의 [요약] 맨 위에 보인다 (D318) */
+export const EXECUTION_PLAN = [
+  '- 할 일: README.md를 새로 쓰고 테스트 명령과 avg 예시를 적는다',
+  '- 고려한 대안: 없음',
+  '- 사람 제안 판정: 없음',
+].join('\n')
+
+/** execution.md의 `## 완료조건별 자체 확인` 본문 (D310) */
+export const EXECUTION_SELF_CHECK = [
+  '| 완료조건 | 한 일 | 확인 결과 |',
+  '|---|---|---|',
+  '| `npm test`가 통과한다 | — | `npm test` 실행, 통과 |',
+  '| 기존 테스트를 약화하거나 삭제하지 않는다 | — | 테스트 파일 변경 없음 |',
+  '| README.md에 테스트 실행 명령이 있다 | README.md를 씀 | README.md에 npm test |',
+  '| README의 avg 설명이 처음 보는 사람에게 읽힌다 | 예시를 둠 | 사람이 볼 곳: README.md |',
+].join('\n')
+
+/** execution.md (5.6.11, D310): 네 절 */
+export const EXECUTION_DOC = [
+  '## 계획',
+  EXECUTION_PLAN,
+  '',
+  '## 변경 요약',
+  '- README.md — 테스트 명령과 avg 예시, 커밋 "docs: README"',
+  '',
+  '## 완료조건별 자체 확인',
+  EXECUTION_SELF_CHECK,
+  '',
+  '## 테스트 실행',
+  '- 명령: npm test',
+  '- 결과: 통과',
+  '- 실패 항목: 없음',
+  '',
+].join('\n')
+
+/** 실행이 커밋하는 변경 (D309) */
+export const GENERAL_FILES = {
+  'README.md': '# sample\n\n테스트: `npm test`\n\n```js\navg([1, 2, 3]) // 2\n```\n',
+}
+
+/** 일반 pr.md (D313) */
+export const GENERAL_PR =
+  '# README에 테스트 명령과 avg 예시\n\n## 요약\n## 주요 결정\n## 변경\n## 테스트\n'
+
 // ---------- 노드마다의 기본 단계 ----------
 
 const decision = (what: string, by: 'ai' | 'human' = 'ai') => ({ what, why: `${what}인 이유`, by })
@@ -570,6 +661,22 @@ export function steps(node: NodeName): Step[] {
           text: handoff({
             decisions: [decision('합계는 sum 하나에서 계산')],
             summary: '안전망을 커밋하고 sum을 추출해 커밋했다.',
+          }),
+        },
+        { do: 'stop' },
+      ]
+    case 'execute':
+      // 사람이 정할 결정이 없어 묻지 않는다 (5.6.11, D308). 커밋 단위는 정하지 않는다 (D309)
+      return [
+        { do: 'prompt' },
+        { do: 'commit', files: GENERAL_FILES, message: 'docs: README' },
+        { do: 'write', file: 'execution.md', text: EXECUTION_DOC },
+        {
+          do: 'write',
+          file: 'handoff.md',
+          text: handoff({
+            decisions: [decision('README에 예시 하나')],
+            summary: 'README.md를 쓰고 커밋했다. 완료조건마다 확인 방법을 돌렸다.',
           }),
         },
         { do: 'stop' },
@@ -692,6 +799,28 @@ export function refactorScenario(override: Partial<Record<SkillName, Step[]>> = 
     tasks: {
       'work-start': intake,
       refactor: steps('refactor'),
+      verify,
+      ...override,
+    },
+  }
+}
+
+/** 일반 시나리오 (3.1, D302): intake → execute → verify */
+export function generalScenario(override: Partial<Record<SkillName, Step[]>> = {}): Scenario {
+  const intake = steps('intake').map((st) =>
+    st.do === 'write' && st.file === 'intent.draft.md' ? { ...st, text: generalIntentDraft() } : st,
+  )
+  const verify = steps('verify').map((st) =>
+    st.do === 'write' && st.file === 'verification.md'
+      ? { ...st, text: REVIEW_NONE + GENERAL_VERDICTS }
+      : st.do === 'write' && st.file === 'pr.md'
+        ? { ...st, text: GENERAL_PR }
+        : st,
+  )
+  return {
+    tasks: {
+      'work-start': intake,
+      execute: steps('execute'),
       verify,
       ...override,
     },

@@ -42,7 +42,7 @@ const draftTemplateOf = (type: WorkType) =>
 const draftTemplate = draftTemplateOf('bugfix')
 
 describe('스킬 원본이 있다 (5.6.3)', () => {
-  it('노드마다 skills/<스킬>/SKILL.md가 있다. design, implement, refactor를 포함한다 (D232, D258)', () => {
+  it('노드마다 skills/<스킬>/SKILL.md가 있다. design, implement, refactor, execute를 포함한다 (D232, D258, D302)', () => {
     for (const n of [...ALL_NODES, 'respond' as const]) {
       const skill = NODE_INFO[n].skill
       expect(fs.existsSync(path.join(SKILLS, skill, 'SKILL.md')), skill).toBe(true)
@@ -85,7 +85,8 @@ describe.runIf(handoffTemplate && draftTemplate)(
     it.each(ALL_NODES)('%s: handoff 템플릿에 status만 채운 예시가 유효하다', (node) => {
       const check = checkTask({
         node,
-        type: PIPELINES.bugfix.includes(node) ? 'bugfix' : 'feature',
+        // 노드가 있는 첫 유형 (I90)
+        type: WORK_TYPES.find((t) => PIPELINES[t].includes(node)) ?? 'bugfix',
         files: { 'handoff.md': awaiting, ...artifacts(node) },
         config: DEFAULT_CONFIG,
       })
@@ -190,7 +191,8 @@ describe.runIf(handoffTemplate && draftTemplate)(
       '%s: intent.draft.md 템플릿이 그대로 유효하다. 머리글이 없다 (D236, I58, D279)',
       (type) => {
         const tpl = draftTemplateOf(type) ?? ''
-        const r = checkIntentDraft(tpl, { warnChars: DEFAULT_CONFIG.intent_warn_chars })
+        // 일반은 완료조건 줄마다 확인 방법이 있어야 한다 (D305, I86)
+        const r = checkIntentDraft(tpl, { warnChars: DEFAULT_CONFIG.intent_warn_chars, type })
         expect(r.errors).toEqual([])
         expect(r.warnings).toEqual([])
         expect(tpl).not.toMatch(/^---$/m)
