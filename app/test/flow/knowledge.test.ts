@@ -134,3 +134,43 @@ describe('[흐름] verify의 지식 확인 (D293, D294)', () => {
     expect(events).toContain('새 지식')
   })
 })
+
+describe('[흐름] 지식이 많으면 관련 항목만 넣는다 (D295)', () => {
+  it('요청과 관련 있는 항목은 본문으로, 나머지는 제목만이거나 빼고, 그렇다고 context.md에 적는다', async () => {
+    const many: Record<string, string> = {}
+    for (let k = 0; k < 60; k++)
+      many[`docs/knowledge/misc/item-${String(k).padStart(2, '0')}.md`] =
+        `---\nkind: fact\nsource: investigation\n---\n# 배포 메모 ${k}\n\n## 내용\n- ${'서버 설정 '.repeat(30)}\n`
+    many['docs/knowledge/math/empty-average.md'] =
+      '---\nkind: rule\nsource: human\n---\n# 빈 배열의 평균은 0\n\n## 규칙\n- 빈 배열의 평균은 NaN이 아니라 0이다. `src/avg.js`\n'
+    const hh = await harness({ scenario: wait, env: { RELAY_KNOWLEDGE: 'on' } })
+    h = hh
+    const { repo } = makeRepo(hh.root, 'knowledge-many', { ...REPO_FILES, ...many })
+    const projectId = await register(hh, repo)
+    const r = await hh.relay.createWork(projectId, {
+      request: REQUEST,
+      baseBranch: 'main',
+      type: 'bugfix',
+      baseLocation: 'local',
+    })
+    if (!r.ok) throw new Error(r.error)
+    await hh.ui.until(
+      () => hh.records().some((x) => x['type'] === 'hook' && x['event'] === 'UserPromptSubmit'),
+      '첫 프롬프트',
+    )
+    const dir = path.join(
+      hh.home,
+      'projects',
+      projectId,
+      'works',
+      r.workKey.split('/')[1] ?? '',
+      'tasks',
+      '01-intake',
+    )
+    const context = fs.readFileSync(path.join(dir, 'context.md'), 'utf8')
+    expect(context).toContain('관련 있어 보이는 항목만 넣었다(전체 61개')
+    const injected = fs.readFileSync(path.join(dir, 'knowledge-injected.md'), 'utf8')
+    expect(injected.indexOf('docs/knowledge/math/empty-average.md')).toBe(3)
+    expect(injected).toContain('(제목만)')
+  })
+})

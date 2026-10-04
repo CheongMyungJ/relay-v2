@@ -275,6 +275,8 @@ export interface KnowledgeInput {
   work_id: string
   /** 오늘 날짜 (YYYY-MM-DD) */
   date: string
+  /** 지식이 많을 때 관련 항목을 고르는 단서 (D295) */
+  query?: KnowledgeQuery
 }
 
 function fence(text: string): string {
@@ -284,35 +286,157 @@ function fence(text: string): string {
   return `${f}markdown\n${body}\n${f}`
 }
 
-/** 넣을 항목: 비밀로 보이는 것은 빼고, 상한을 넘는 항목은 제목만 */
-export function selectEntries(entries: readonly KnowledgeEntry[]): {
+/** 지식이 많을 때 본문째 넣는 항목 수와 제목만 넣는 항목 수 (D295) */
+export const PICK_LIMIT = 15
+export const TITLE_LIMIT = 20
+
+/**
+ * 관련 지식을 고르는 데 쓰는 이 task의 단서 (D295). 앱이 요청, intent, 이 Work의 diff, (verify는) 바꾼 지식과 후보에서 만든다
+ */
+export interface KnowledgeQuery {
+  /** 낱말을 견줄 글: 요청, intent, 바꾼 지식, 지식 후보 */
+  text: string
+  /** 이 Work가 바꾼 파일이나 글에 나온 경로 */
+  paths: readonly string[]
+  /** diff나 글에 나온 코드 이름(상수, 함수) */
+  identifiers: ReadonlySet<string>
+}
+
+const HANGUL = /[가-힣]/
+
+/** 낱말: 한글은 붙은 글자 둘씩(조사가 붙어도 겹치게), 나머지는 소문자 낱말(3자 이상) */
+export function termsOf(text: string): Set<string> {
+  const out = new Set<string>()
+  for (const w of text.toLowerCase().match(/[\p{L}\p{N}_]+/gu) ?? []) {
+    if (HANGUL.test(w)) {
+      const chars = [...w].filter((c) => HANGUL.test(c))
+      for (let k = 0; k + 1 < chars.length; k++) out.add(`${chars[k]}${chars[k + 1]}`)
+    } else if (w.length >= 3) out.add(w)
+  }
+  return out
+}
+
+/** 글에 나온 파일 경로 (`a/b.c` 꼴) */
+export function pathsIn(text: string): string[] {
+  return [...new Set(text.match(/[\w.-]+(?:\/[\w.-]+)+\.[A-Za-z0-9]+/g) ?? [])]
+}
+
+/** 글에 나온 코드 이름: 영문자로 시작하는 4자 이상 식별자 */
+export function identifiersIn(text: string): Set<string> {
+  return new Set(text.match(/\b[A-Za-z_$][\w$]{3,}\b/g) ?? [])
+}
+
+/** 항목의 영역: `docs/knowledge/<영역>/` 폴더. 없으면 null */
+function areaOf(p: string): string | null {
+  const m = /^docs\/knowledge\/([^/]+)\/[^/]+$/.exec(p)
+  return m?.[1] ?? null
+}
+
+/** 규칙이나 내용 절, 없으면 글 전체 (옛 형식) */
+function coreText(e: KnowledgeEntry): string {
+  const body = parseFrontMatter(e.text).body
+  return [entryTitle(e), sectionText(body, '규칙') ?? sectionText(body, '내용') ?? body].join('\n')
+}
+
+/**
+ * 관련 점수 (D295): 같은 anchor 5, 경로 겹침 4(같은 파일)·2(같은 폴더), 영역 2, 낱말 3(질의와 겹친 낱말의 무게 / 항목 낱말의
+ * 무게, 드문 낱말일수록 무겁다), 머지 전 항목 0.5. 높은 차례로 돌려준다. 점수가 같으면 경로 차례
+ */
+export function rankEntries(
+  entries: readonly KnowledgeEntry[],
+  q: KnowledgeQuery,
+): { entry: KnowledgeEntry; score: number }[] {
+  const qTerms = termsOf(q.text)
+  const docTerms = entries.map((e) => termsOf(coreText(e)))
+  const df = new Map<string, number>()
+  for (const ts of docTerms) for (const t of ts) df.set(t, (df.get(t) ?? 0) + 1)
+  const idf = (t: string) => Math.log(1 + entries.length / (df.get(t) ?? 1))
+  const qPaths = q.paths.map((p) => p.replace(/^\.\//, ''))
+  const qDirs = new Set(qPaths.map((p) => p.split('/').slice(0, -1).join('/')).filter(Boolean))
+  const qSegments = new Set(qPaths.flatMap((p) => p.toLowerCase().split('/')))
+  const lastOf = (id: string) => id.split('.').pop() ?? id
+  return entries
+    .map((entry, k) => {
+      let score = 0
+      const anchor = anchorOf(entry.text)
+      if (anchor && (q.identifiers.has(anchor) || q.identifiers.has(lastOf(anchor)))) score += 5
+      const ePaths = pathsIn(entry.text)
+      if (ePaths.some((p) => qPaths.includes(p))) score += 4
+      else if (ePaths.some((p) => qDirs.has(p.split('/').slice(0, -1).join('/')))) score += 2
+      const area = areaOf(entry.path)
+      if (area && (qSegments.has(area) || qTerms.has(area))) score += 2
+      const ts = docTerms[k] ?? new Set<string>()
+      let all = 0
+      let hit = 0
+      for (const t of ts) {
+        const w = idf(t)
+        all += w
+        if (qTerms.has(t)) hit += w
+      }
+      if (all > 0) score += (3 * hit) / all
+      if (entry.pendingFrom) score += 0.5
+      return { entry, score }
+    })
+    .sort((a, b) => b.score - a.score || a.entry.path.localeCompare(b.entry.path))
+}
+
+/** 넣을 항목 (D286, D295) */
+export interface Selection {
   full: KnowledgeEntry[]
   titles: KnowledgeEntry[]
   secret: KnowledgeEntry[]
-} {
+  /** 지식이 많아 관련 항목만 골랐다 */
+  narrowed: boolean
+  /** 넣지 않은 항목 수 (본문도 제목도) */
+  rest: number
+  total: number
+}
+
+/**
+ * 넣을 항목 (D286, D295): 비밀로 보이는 것은 뺀다. 남은 지식이 모두 상한(INJECT_LIMIT) 안이면 전부 본문째 넣는다. 넘으면
+ * 단서(query)로 관련 점수를 매겨 높은 차례로 PICK_LIMIT개까지 상한 안에서 본문째, 그다음 TITLE_LIMIT개는 제목만 넣는다.
+ * 단서가 없으면 경로 차례로 상한까지 본문, 나머지는 제목이다
+ */
+export function selectEntries(
+  entries: readonly KnowledgeEntry[],
+  query?: KnowledgeQuery,
+): Selection {
+  const secret = entries.filter((e) => looksSecret(e.text))
+  const ok = entries.filter((e) => !looksSecret(e.text))
+  const total = ok.length
+  const size = ok.reduce((n, e) => n + e.text.length, 0)
+  if (size <= INJECT_LIMIT) return { full: ok, titles: [], secret, narrowed: false, rest: 0, total }
+  if (!query) {
+    const full: KnowledgeEntry[] = []
+    const titles: KnowledgeEntry[] = []
+    let used = 0
+    for (const e of ok) {
+      if (used + e.text.length <= INJECT_LIMIT) {
+        full.push(e)
+        used += e.text.length
+      } else titles.push(e)
+    }
+    return { full, titles, secret, narrowed: false, rest: 0, total }
+  }
+  const ranked = rankEntries(ok, query)
   const full: KnowledgeEntry[] = []
   const titles: KnowledgeEntry[] = []
-  const secret: KnowledgeEntry[] = []
   let used = 0
-  for (const e of entries) {
-    if (looksSecret(e.text)) {
-      secret.push(e)
-      continue
-    }
-    if (used + e.text.length <= INJECT_LIMIT) {
-      full.push(e)
-      used += e.text.length
-    } else titles.push(e)
+  for (const { entry, score } of ranked) {
+    if (score > 0 && full.length < PICK_LIMIT && used + entry.text.length <= INJECT_LIMIT) {
+      full.push(entry)
+      used += entry.text.length
+    } else if (titles.length < TITLE_LIMIT) titles.push(entry)
   }
-  return { full, titles, secret }
+  return { full, titles, secret, narrowed: true, rest: total - full.length - titles.length, total }
 }
 
 const where = (e: KnowledgeEntry) =>
   e.pendingFrom ? `${e.path} (Work ${e.pendingFrom}에서 남김. 기준 브랜치에는 아직 없다)` : e.path
 
 /** task에 넣은 지식의 글 (INJECTED_FILE). 항목이 없으면 빈 글 */
-export function injectedText(entries: readonly KnowledgeEntry[]): string {
-  const { full, titles } = selectEntries(entries)
+export function injectedText(entries: readonly KnowledgeEntry[], query?: KnowledgeQuery): string {
+  const { full, titles } = selectEntries(entries, query)
   return [
     ...full.map((e) => `## ${where(e)}\n\n${e.text.trim()}\n`),
     ...titles.map((e) => `## ${where(e)}\n\n(제목만) ${entryTitle(e)}\n`),
@@ -408,13 +532,15 @@ const PENDING_RULE =
 
 /** context.md의 지식 절 (제목, 본문). 지식 관리를 끄면 부르지 않는다 */
 export function knowledgeSection(node: TaskNode, input: KnowledgeInput): [string, string] {
-  const { full, titles } = selectEntries(input.entries)
+  const { full, titles, narrowed, rest, total } = selectEntries(input.entries, input.query)
   const kind = node === 'intake' ? 'intake' : node === 'verify' ? 'verify' : 'work'
   const items = [
     ...full.map((e) => `#### ${where(e)}\n\n${fence(e.text)}`),
     ...(titles.length
       ? [
-          '#### 본문을 넣지 않은 항목 (필요하면 읽는다)',
+          narrowed
+            ? '#### 관련이 낮아 제목만 넣은 항목 (필요하면 읽는다)'
+            : '#### 본문을 넣지 않은 항목 (필요하면 읽는다)',
           '',
           ...titles.map((e) => `- ${where(e)}: ${entryTitle(e)}`),
         ]
@@ -431,6 +557,12 @@ export function knowledgeSection(node: TaskNode, input: KnowledgeInput): [string
     '',
     '### 항목',
     '',
+    ...(narrowed
+      ? [
+          `지식이 많아 이 일과 관련 있어 보이는 항목만 넣었다(전체 ${total}개 가운데 본문 ${full.length}개, 제목 ${titles.length}개${rest ? `, 넣지 않음 ${rest}개` : ''}). 남길 것과 같은 대상을 다루는 항목이 보이지 않으면 \`${KNOWLEDGE_DIR}/\`를 낱말이나 코드 이름으로 찾아본 뒤 새로 만든다.`,
+          '',
+        ]
+      : []),
     items.length ? items.join('\n\n') : '없음',
     '',
     node === 'verify' ? writeRules(input) : CANDIDATE_RULES,

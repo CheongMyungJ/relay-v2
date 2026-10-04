@@ -299,12 +299,16 @@ import {
 } from '../adapters/knowledge'
 import {
   INJECTED_FILE,
+  INJECT_LIMIT,
   candidatesOf,
+  identifiersIn,
+  pathsIn,
   knowledgeIssues,
   injectedText,
   knowledgeEnabled,
   mergeEntries,
   type KnowledgeInput,
+  type KnowledgeQuery,
 } from '../core/knowledge'
 
 /** 여러 Work가 함께 쓰는 것 */
@@ -1017,9 +1021,15 @@ export class WorkRunner {
       'intent.md': intent?.hash ?? null,
       'decisions.md': decisions?.hash ?? null,
     })
-    const knowledge = await this.knowledgeInput(earlier)
+    const knowledge = await this.knowledgeInput(task, earlier, {
+      request: request?.text ?? '',
+      intent: intent?.text ?? null,
+    })
     if (knowledge)
-      await writeFileAtomic(path.join(dir, INJECTED_FILE), injectedText(knowledge.entries))
+      await writeFileAtomic(
+        path.join(dir, INJECTED_FILE),
+        injectedText(knowledge.entries, knowledge.query),
+      )
     return buildContext({
       knowledge,
       work: this.work,
@@ -1041,7 +1051,11 @@ export class WorkRunner {
    * context.md의 지식 (core/knowledge): 이 worktree의 `docs/knowledge/`와, 같은 프로젝트에서 완료했지만 기준 브랜치에 아직
    * 없는 앞 Work의 지식, 앞 task들의 지식 후보. 지식 관리를 끄면(RELAY_KNOWLEDGE=off) null이다. 읽지 못하면 빈 지식으로 간다
    */
-  private async knowledgeInput(earlier: readonly PreviousTask[]): Promise<KnowledgeInput | null> {
+  private async knowledgeInput(
+    task: TaskRecord,
+    earlier: readonly PreviousTask[],
+    hint: { request: string; intent: string | null },
+  ): Promise<KnowledgeInput | null> {
     const { env } = this.ctx
     if (!knowledgeEnabled(env)) return null
     let entries: KnowledgeInput['entries'] = []
@@ -1054,14 +1068,57 @@ export class WorkRunner {
     } catch (e) {
       console.error(`[${this.key}] 지식을 읽지 못함: ${message(e)}`)
     }
+    const candidates = earlier
+      .map((p) => ({ taskId: p.taskId, node: p.node, items: candidatesOf(p.handoff ?? '') }))
+      .filter((c) => c.items.length > 0)
+    const size = entries.reduce((n, e) => n + e.text.length, 0)
     return {
       entries,
-      candidates: earlier
-        .map((p) => ({ taskId: p.taskId, node: p.node, items: candidatesOf(p.handoff ?? '') }))
-        .filter((c) => c.items.length > 0),
+      candidates,
       work_id: this.work.work_id,
       date: this.ctx.at().slice(0, 10),
+      // 지식이 상한을 넘을 때만 관련 항목을 고를 단서를 만든다 (D295)
+      ...(size > INJECT_LIMIT ? { query: await this.knowledgeQuery(task, hint, candidates) } : {}),
     }
+  }
+
+  /**
+   * 관련 지식을 고르는 단서 (D295): 요청과 intent, 지식 후보, 이 Work의 diff(바꾼 파일과 코드 이름), verify는 이 Work가 쓰거나
+   * 고친 지식. diff를 읽지 못하면 글만 쓴다
+   */
+  private async knowledgeQuery(
+    task: TaskRecord,
+    hint: { request: string; intent: string | null },
+    candidates: readonly { items: readonly string[] }[],
+  ): Promise<KnowledgeQuery> {
+    const { env } = this.ctx
+    const parts = [hint.request, hint.intent ?? '', ...candidates.flatMap((c) => c.items)]
+    const paths = new Set<string>()
+    const identifiers = new Set<string>()
+    if (task.node !== 'intake') {
+      try {
+        const diff = (await diffFrom(this.worktree, this.work.base_commit, null, { env })).slice(
+          0,
+          200_000,
+        )
+        for (const m of diff.matchAll(/^\+\+\+ b\/(.+)$/gm)) if (m[1]) paths.add(m[1])
+        const changedLines = diff
+          .split('\n')
+          .filter((l) => /^[+-][^+-]/.test(l))
+          .join('\n')
+        for (const id of identifiersIn(changedLines)) identifiers.add(id)
+        if (task.node === 'verify') {
+          for (const c of await changedKnowledge(this.worktree, this.work.base_commit, { env }))
+            parts.push(c.text)
+        }
+      } catch (e) {
+        console.error(`[${this.key}] diff를 읽지 못함: ${message(e)}`)
+      }
+    }
+    const text = parts.join('\n')
+    for (const p of pathsIn(text)) paths.add(p)
+    for (const id of identifiersIn(text)) identifiers.add(id)
+    return { text, paths: [...paths], identifiers }
   }
 
   /**
