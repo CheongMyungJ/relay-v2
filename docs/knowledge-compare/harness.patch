@@ -1,3 +1,133 @@
+diff --git a/app/eval/compare.mjs b/app/eval/compare.mjs
+new file mode 100644
+index 0000000..b85ceae
+--- /dev/null
++++ b/app/eval/compare.mjs
+@@ -0,0 +1,124 @@
++#!/usr/bin/env node
++// 세 후보 비교(docs/knowledge-compare): 결과 폴더의 run.json을 쪽과 시나리오마다 모아 표로 찍는다.
++//   node eval/compare.mjs eval/results/all4 [--rescore 27-noshow-future-rule:3] > compare.md
++// --rescore <시나리오>:<Work>는 그 Work의 숨긴 시험을 지금 시나리오 폴더의 hidden/로 다시 돌린다(실행 중에 숨긴 시험을
++// 고친 경우). 작업 폴더(/tmp/relay-eval/<결과 이름>/)에 남은 그 Work의 worktree를 쓴다.
++import fs from 'node:fs'
++import os from 'node:os'
++import path from 'node:path'
++import { judgeTree } from './lib/repo.mjs'
++import { measuredWorks, workParts } from './lib/works.mjs'
++
++const [dir, ...rest] = process.argv.slice(2)
++const rescore = new Map(
++  rest
++    .flatMap((x, i) => (rest[i - 1] === '--rescore' ? [x] : []))
++    .map((x) => {
++      const [s, w] = x.split(':')
++      return [s, Number(w) - 1]
++    }),
++)
++const SCEN = path.join(import.meta.dirname, 'scenarios')
++const WORK_ROOT = path.join('/tmp/relay-eval', path.basename(path.resolve(dir)))
++
++const runs = []
++for (const s of fs.readdirSync(dir).filter((d) => fs.existsSync(path.join(dir, d)) && fs.statSync(path.join(dir, d)).isDirectory())) {
++  for (const r of fs.readdirSync(path.join(dir, s))) {
++    const f = path.join(dir, s, r, 'run.json')
++    if (!fs.existsSync(f)) continue
++    const run = JSON.parse(fs.readFileSync(f, 'utf8'))
++    const [arm, i] = r.split('-')
++    runs.push({ scenario: s, arm, i: Number(i), run })
++  }
++}
++
++/** n번째 Work의 끝 상태 트리. 도구가 남긴 스냅숏(snapshots/<label>)을 먼저, 없으면 worktree를 쓴다 */
++function treeOf(r, n) {
++  const base = path.join(WORK_ROOT, `${r.scenario}-${r.arm}-${r.i}`)
++  for (const t of r.run.workResults[n]?.outcome?.trees ?? []) {
++    const snap = path.join(base, 'snapshots', t.label)
++    if (fs.existsSync(snap)) return snap
++    const m = /^p(\d+)-(.*)$/.exec(t.label)
++    const home = path.join(base, m ? `relay-home-${m[1]}` : 'relay-home', 'projects')
++    if (!fs.existsSync(home)) continue
++    for (const p of fs.readdirSync(home)) {
++      const wt = path.join(home, p, 'worktrees', m ? m[2] : t.label)
++      if (fs.existsSync(wt)) return wt
++    }
++  }
++  return null
++}
++
++function rescored(r, n, scenario) {
++  const wt = treeOf(r, n)
++  if (!wt) return null
++  const w = workParts(scenario)[n]
++  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'rescore-'))
++  const j = judgeTree({
++    tree: wt,
++    baseDir: path.join(SCEN, r.scenario, 'repo'),
++    hiddenDir: path.join(SCEN, r.scenario, 'hidden'),
++    scenario: { ...scenario, checks: w.checks },
++    work: tmp,
++  })
++  fs.rmSync(tmp, { recursive: true, force: true })
++  return j.checks
++}
++
++const pct = (a, b) => (b ? `${a}/${b}` : '-')
++const avg = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : NaN)
++const f1 = (x) => (Number.isFinite(x) ? x.toFixed(1) : '-')
++const f0 = (x) => (Number.isFinite(x) ? Math.round(x).toLocaleString('en-US') : '-')
++
++const arms = [...new Set(runs.map((r) => r.arm))].sort()
++const scenarios = [...new Set(runs.map((r) => r.scenario))].sort()
++const out = []
++for (const s of scenarios) {
++  const scenario = JSON.parse(fs.readFileSync(path.join(SCEN, s, 'scenario.json'), 'utf8'))
++  const measured = measuredWorks(scenario)
++  const nWorks = workParts(scenario).length
++  out.push(`\n## ${s}\n`)
++  out.push(`재는 Work: ${measured.map((x) => x + 1).join(', ')}${rescore.has(s) ? ` (Work ${rescore.get(s) + 1}은 지금 숨긴 시험으로 다시 채점)` : ''}\n`)
++  out.push(
++    `| 쪽 | 실행 | ${Array.from({ length: nWorks }, (_, k) => `W${k + 1} 통과`).join(' | ')} | 포기 | 다시 알려 줌(감사, 재는 Work 합) | 사람 차례(재는 Work) | 입력 글자(재는 Work) | 질문(재는 Work) | 에이전트 입력 토큰 천(재는 Work) | 출력 토큰 천 | 시간 분(전체) | 사람 역할 $ |`,
++  )
++  out.push(`|${'---|'.repeat(nWorks + 11)}`)
++  for (const a of arms) {
++    const rs = runs.filter((r) => r.scenario === s && r.arm === a)
++    if (!rs.length) continue
++    const pass = Array.from({ length: nWorks }, () => 0)
++    let giveUps = 0
++    const pm1 = []
++    const turns = []
++    const chars = []
++    const qs = []
++    const tokIn = []
++    const tokOut = []
++    const mins = []
++    const cost = []
++    for (const r of rs) {
++      const wr = r.run.workResults ?? []
++      for (let k = 0; k < nWorks; k++) {
++        let checks = wr[k]?.outcome?.checks ?? []
++        if (rescore.get(s) === k) checks = rescored(r, k, scenario) ?? checks
++        const own = new Set((workParts(scenario)[k].checks ?? []).map((c) => c.name))
++        const mine = checks.filter((c) => own.has(c.name))
++        if (mine.length && mine.every((c) => c.pass)) pass[k]++
++      }
++      giveUps += wr.filter((w) => w.ending === 'give_up').length
++      const m = measured.map((k) => wr[k]).filter(Boolean)
++      pm1.push(m.reduce((x, w) => x + (w.human?.carriedToldAudit ?? 0), 0))
++      turns.push(m.reduce((x, w) => x + (w.human?.turns ?? 0), 0))
++      chars.push(m.reduce((x, w) => x + (w.human?.charsTyped ?? 0), 0))
++      qs.push(m.reduce((x, w) => x + (w.agent?.questions ?? 0), 0))
++      tokIn.push(m.reduce((x, w) => x + ((w.agent?.input ?? 0) + (w.agent?.cacheRead ?? 0) + (w.agent?.cacheWrite ?? 0)) / 1000, 0))
++      tokOut.push(m.reduce((x, w) => x + (w.agent?.output ?? 0) / 1000, 0))
++      mins.push((r.run.wallMs ?? 0) / 60000)
++      cost.push(r.run.human?.costUsd ?? r.run.human?.cost ?? NaN)
++    }
++    out.push(
++      `| ${a} | ${rs.length} | ${pass.map((p) => pct(p, rs.length)).join(' | ')} | ${giveUps} | ${f1(avg(pm1))} | ${f1(avg(turns))} | ${f0(avg(chars))} | ${f1(avg(qs))} | ${f0(avg(tokIn))} | ${f1(avg(tokOut))} | ${f1(avg(mins))} | ${f1(avg(cost))} |`,
++    )
++  }
++}
++console.log(out.join('\n'))
 diff --git a/app/eval/guides/c1.md b/app/eval/guides/c1.md
 new file mode 100644
 index 0000000..228cc24
@@ -1235,30 +1365,33 @@ index 0000000..f2ca246
 +})
 diff --git a/app/eval/scenarios/27-noshow-future-rule/hidden/noshow-rule.test.js b/app/eval/scenarios/27-noshow-future-rule/hidden/noshow-rule.test.js
 new file mode 100644
-index 0000000..0582f0d
+index 0000000..4ccb3a8
 --- /dev/null
 +++ b/app/eval/scenarios/27-noshow-future-rule/hidden/noshow-rule.test.js
-@@ -0,0 +1,21 @@
+@@ -0,0 +1,24 @@
 +import { test } from 'node:test'
 +import assert from 'node:assert'
 +import { markNoShow } from '../src/appointments/status.js'
 +import { messageFor } from '../src/notify/messages.js'
 +import { appt, example, sum } from './helpers.js'
 +
-+// 노쇼 규칙(Work 1에서 사람이 미리 정해 알려 줌): 예정 진료비의 50%를 100원 미만 버림. 초진 환자는 면제
++// 노쇼 규칙(Work 1에서 사람이 미리 정해 알려 줌): 예정 진료비의 50%를 100원 미만 버림. 초진 환자는 면제.
++// 사람은 "다음 달부터"라고만 했으므로 적용일을 두는 구현도 맞다. 날짜는 어떤 적용일보다도 뒤(2027년)로 둔다
 +
-+test('A-8355: 재진 노쇼는 50%를 100원 미만 버림', () => {
-+  const a = markNoShow(example('A-8355'), '2025-12-02T15:40')
++const later = (a, startsAt = '2027-03-02T15:00') => ({ ...a, startsAt })
++
++test('A-8355(날짜만 옮김): 재진 노쇼는 50%를 100원 미만 버림', () => {
++  const a = markNoShow(later(example('A-8355')), '2027-03-02T15:40')
 +  assert.strictEqual(sum(a, 'noshow'), 18700)
 +  assert.strictEqual(messageFor(a), '[미소치과] 최민서님, 예약 시간에 내원하지 않으셨습니다. 노쇼 수수료 18,700원 문의 02-555-0142')
 +})
 +
 +test('다른 금액', () => {
-+  assert.strictEqual(sum(markNoShow(appt({ expectedFee: 52390 }), '2025-11-20T11:00'), 'noshow'), 26100)
++  assert.strictEqual(sum(markNoShow(later(appt({ expectedFee: 52390 }), '2027-04-20T10:00'), '2027-04-20T11:00'), 'noshow'), 26100)
 +})
 +
 +test('초진 환자는 면제', () => {
-+  assert.strictEqual(sum(markNoShow(appt({ visitType: 'first', expectedFee: 52390 }), '2025-11-20T11:00'), 'noshow'), 0)
++  assert.strictEqual(sum(markNoShow(later(appt({ visitType: 'first', expectedFee: 52390 }), '2027-04-20T10:00'), '2027-04-20T11:00'), 'noshow'), 0)
 +})
 diff --git a/app/eval/scenarios/27-noshow-future-rule/hidden/reschedule-guard.test.js b/app/eval/scenarios/27-noshow-future-rule/hidden/reschedule-guard.test.js
 new file mode 100644

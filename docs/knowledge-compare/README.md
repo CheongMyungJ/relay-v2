@@ -41,4 +41,4 @@ HOLDOUT_KEY=<열쇠> bash eval/unseal.sh && cp eval/guides/m17.md eval/guides/c2
 bash <이 폴더>/launch.sh 26,27,h1-parcel-fees,h2-stay-fees 2 all4 3
 ```
 
-결과는 `results/`와 `report.md`에 둔다.
+결과는 [report.md](report.md)와 `results/`에 둔다. 표는 `node eval/compare.mjs eval/results/all4 --rescore 27-noshow-future-rule:3`로 만든다.
