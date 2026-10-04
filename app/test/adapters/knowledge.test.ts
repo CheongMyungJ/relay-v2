@@ -3,7 +3,12 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { readPendingKnowledge, readRepoKnowledge } from '../../src/adapters/knowledge'
+import {
+  changedKnowledge,
+  knowledgePathsAt,
+  readPendingKnowledge,
+  readRepoKnowledge,
+} from '../../src/adapters/knowledge'
 import { git, makeRepo, writeFiles } from '../flow/repo'
 
 let root: string | undefined
@@ -51,6 +56,34 @@ describe('[어댑터] 지식 읽기', () => {
     expect(pending.map((e) => [e.path, e.pendingFrom, e.text])).toEqual([
       ['docs/knowledge/new.md', 'w-1', '# 새 지식'],
       ['docs/knowledge/old.md', 'w-1', '# 옛 지식 고침'],
+    ])
+  })
+
+  it('영역 폴더의 지식, 이 Work가 더하거나 고친 지식(커밋 안 한 것 포함), 커밋의 지식 경로를 읽는다 (D293, D294)', async () => {
+    root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'relay-knowledge-')))
+    const { repo } = makeRepo(root, 'r', {
+      'a.js': '1\n',
+      'docs/knowledge/top.md': '# 위\n',
+      'docs/knowledge/shipping/fee.md': '# 배송비\n',
+      'docs/knowledge/shipping/deep/x.md': '# 너무 깊음\n',
+    })
+    const base = git(repo, 'rev-parse', 'HEAD')
+    expect((await readRepoKnowledge(repo)).map((e) => e.path)).toEqual([
+      'docs/knowledge/shipping/fee.md',
+      'docs/knowledge/top.md',
+    ])
+    expect(await knowledgePathsAt(repo, base)).toEqual([
+      'docs/knowledge/shipping/fee.md',
+      'docs/knowledge/top.md',
+    ])
+    // 커밋한 고침, 커밋 안 한 새 파일, 지운 파일
+    writeFiles(repo, { 'docs/knowledge/shipping/fee.md': '# 배송비 고침\n' })
+    git(repo, 'commit', '-q', '-am', 'fee')
+    writeFiles(repo, { 'docs/knowledge/returns/box.md': '# 상자마다\n', 'a.js': '2\n' })
+    fs.rmSync(path.join(repo, 'docs/knowledge/top.md'))
+    expect((await changedKnowledge(repo, base)).map((c) => [c.path, c.text])).toEqual([
+      ['docs/knowledge/returns/box.md', '# 상자마다\n'],
+      ['docs/knowledge/shipping/fee.md', '# 배송비 고침\n'],
     ])
   })
 })

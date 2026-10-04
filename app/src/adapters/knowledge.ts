@@ -5,28 +5,79 @@ import path from 'node:path'
 import { KNOWLEDGE_DIR, isKnowledgePath, type KnowledgeEntry } from '../core/knowledge'
 import { branchExists, git, isAncestor, type GitOptions } from './git'
 
-/** worktree의 지식 파일. 폴더가 없으면 빈 목록 */
+/** worktree의 지식 파일: `docs/knowledge/`와 그 아래 영역 폴더 한 단계 (D293). 폴더가 없으면 빈 목록 */
 export async function readRepoKnowledge(worktree: string): Promise<KnowledgeEntry[]> {
-  const dir = path.join(worktree, KNOWLEDGE_DIR)
-  let names: string[]
-  try {
-    names = await fsp.readdir(dir)
-  } catch {
-    return []
-  }
   const out: KnowledgeEntry[] = []
-  for (const name of names.sort()) {
-    const rel = `${KNOWLEDGE_DIR}/${name}`
-    if (!isKnowledgePath(rel)) continue
+  for (const rel of await listKnowledge(worktree)) {
     try {
-      const stat = await fsp.stat(path.join(dir, name))
-      if (!stat.isFile()) continue
-      out.push({ path: rel, text: await fsp.readFile(path.join(dir, name), 'utf8') })
+      out.push({ path: rel, text: await fsp.readFile(path.join(worktree, rel), 'utf8') })
     } catch {
       // 읽지 못한 파일은 넣지 않는다
     }
   }
   return out
+}
+
+/** worktree의 지식 파일 경로 (레포 기준, `/`로 이음). 차례는 경로 순 */
+async function listKnowledge(worktree: string): Promise<string[]> {
+  const out: string[] = []
+  const walk = async (rel: string, depth: number) => {
+    let ents: import('node:fs').Dirent[]
+    try {
+      ents = await fsp.readdir(path.join(worktree, rel), { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const e of ents) {
+      const child = `${rel}/${e.name}`
+      if (e.isDirectory() && depth === 0) await walk(child, 1)
+      else if (e.isFile() && isKnowledgePath(child)) out.push(child)
+    }
+  }
+  await walk(KNOWLEDGE_DIR, 0)
+  return out.sort()
+}
+
+/**
+ * 이 Work가 기준 커밋에서 더하거나 고친 지식 파일 (D294): 커밋한 것과 커밋하지 않은 것, 추적하지 않는 새 파일. 지운 파일은 뺀다
+ */
+export async function changedKnowledge(
+  worktree: string,
+  base: string,
+  opts?: GitOptions,
+): Promise<{ path: string; text: string }[]> {
+  const diff = await git(
+    worktree,
+    ['diff', '--name-only', '--no-renames', '--diff-filter=AM', base, '--', KNOWLEDGE_DIR],
+    opts,
+  )
+  const untracked = await git(
+    worktree,
+    ['ls-files', '--others', '--exclude-standard', '--', KNOWLEDGE_DIR],
+    opts,
+  )
+  const names = [...new Set([...diff.split(/\r?\n/), ...untracked.split(/\r?\n/)])]
+    .filter((n) => n && isKnowledgePath(n))
+    .sort()
+  const out: { path: string; text: string }[] = []
+  for (const name of names) {
+    try {
+      out.push({ path: name, text: await fsp.readFile(path.join(worktree, name), 'utf8') })
+    } catch {
+      // 지워졌거나 읽지 못한 파일은 뺀다
+    }
+  }
+  return out
+}
+
+/** 커밋에 있는 지식 파일 경로 */
+export async function knowledgePathsAt(
+  dir: string,
+  commit: string,
+  opts?: GitOptions,
+): Promise<string[]> {
+  const out = await git(dir, ['ls-tree', '-r', '--name-only', commit, '--', KNOWLEDGE_DIR], opts)
+  return out.split(/\r?\n/).filter((n) => n && isKnowledgePath(n))
 }
 
 /** 지식을 읽을 앞 Work: 브랜치와 그 Work의 기준 커밋 */
