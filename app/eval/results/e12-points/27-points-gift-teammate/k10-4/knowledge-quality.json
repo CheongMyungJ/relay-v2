@@ -1,0 +1,41 @@
+{
+  "paths": [
+    "docs/knowledge/points/earn-rule.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/points/earn-rule.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "기준 금액이 상품금액 − 쿠폰 − 사용 포인트이고 배송비는 뺀다고 적혀 있다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "소수점을 버린다고 하고 237.7 → 237P 예시가 있다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "예시에서 1%로 계산한다(상수 POINT_RATE_PERCENT). 값이 맞다."
+      },
+      {
+        "id": "R5",
+        "status": "missing",
+        "why": "이미 적립된 포인트를 다시 계산하지 않고 저장된 값을 쓴다는 내용이 어디에도 없다."
+      }
+    ]
+  }
+}

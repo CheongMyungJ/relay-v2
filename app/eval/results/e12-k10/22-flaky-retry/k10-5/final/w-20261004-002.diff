@@ -1,0 +1,63 @@
+diff --git a/tree/docs/knowledge/runner/pool-result-order.md b/tree/docs/knowledge/runner/pool-result-order.md
+new file mode 100644
+index 0000000..1cefa04
+--- /dev/null
++++ b/tree/docs/knowledge/runner/pool-result-order.md
+@@ -0,0 +1,16 @@
++---
++kind: pitfall
++source: investigation
++anchor: runPool
++---
++# runPool 결과 순서와 보고서 임시 파일 이름 겹침
++
++## 내용
++- `runPool`(src/runner/pool.js)의 결과는 입력 순서여야 한다. `collectResults`(src/collect/collector.js)가 인덱스로 job과 짝짓기 때문에, 완료 순서로 모으면 지연에 따라 `report-N`이 다른 job에 붙는다(`expected report-6 to belong to job-6, got job-5`).
++- `saveReport`(src/store/report-archive.js)의 임시 파일 이름은 동시 저장끼리 겹치지 않아야 한다. 시각(ms)만으로는 부족해 reportId와 호출별 번호를 넣는다. 겹치면 ENOENT(`reports/<기간>/.<이름>.tmp` 없음)나 다른 고객사 내용이 제 이름으로 보관되는 일이 난다(ci/archive.test.js 간헐 실패). 호출별 번호는 프로세스 안 카운터라 여러 프로세스가 같은 보관소에 쓰는 경우는 막지 못한다.
++- 두 증상은 원인이 다르다. 보관본 고객사가 다르면(`wayne (stark여야 함)`) 임시 파일 이름, `expected report-N to belong to job-N`이면 runPool 순서다.
++- 현재 상태: src/runner/pool.js는 아직 결과를 완료 순서로 모아 ci/batch.test.js가 간헐 실패한다. 별도 Work에서 리뷰 중이라 사람이 Work w-20261004-002의 범위에서 뺌(2026-10-04)
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-001)
++- 2026-10-04 saveReport 임시 파일 이름을 reportId와 호출별 번호로 고치고 증상 구분을 더함 (Work w-20261004-002)
+diff --git a/base/src/store/report-archive.js b/tree/src/store/report-archive.js
+index 0c62d2f..f51c58e 100644
+--- a/base/src/store/report-archive.js
++++ b/tree/src/store/report-archive.js
+@@ -3,6 +3,9 @@
+ import { now } from '../clock.js'
+ import { stamp } from '../util/ids.js'
+ 
++// 같은 시각에 동시에 저장하는 호출끼리도 임시 파일 이름이 겹치지 않게 하는 호출별 번호
++let tmpSeq = 0
++
+ export function reportDir(period) {
+   return `reports/${period ?? 'no-period'}`
+ }
+@@ -20,7 +23,7 @@ export function reportPath(period, reportId) {
+  */
+ export async function saveReport(files, report) {
+   const path = reportPath(report.period, report.reportId)
+-  const tmp = `${reportDir(report.period)}/.${stamp(now())}.tmp`
++  const tmp = `${reportDir(report.period)}/.${report.reportId}.${stamp(now())}.${(tmpSeq++).toString(36)}.tmp`
+   await files.writeFile(tmp, JSON.stringify(report))
+   await files.rename(tmp, path)
+   return path
+diff --git a/base/test/archive.test.js b/tree/test/archive.test.js
+index 44aa323..4182702 100644
+--- a/base/test/archive.test.js
++++ b/tree/test/archive.test.js
+@@ -93,3 +93,13 @@ test('짧은 꼬리표', () => {
+   assert.strictEqual(stamp(1759197304120), 'mg5wnj94')
+   assert.strictEqual(stamp(35.9), 'z')
+ })
++
++test('보고서 보관: 같은 시각에 동시에 저장해도 서로 섞이지 않는다', async () => {
++  resetSleep() // 실제 시간으로 기다려 저장들이 거의 동시에 끝나고 이름 바꾸기가 그 뒤에 겹치게 한다 (시각은 고정)
++  const files = createFileStore({ latency: { baseMs: 20, perKbMs: 4 } })
++  const nums = [6, 5, 4, 3, 2, 1]
++  const withPad = (n) => ({ ...report(n), pad: 'x'.repeat(n * 700) })
++  await Promise.all(nums.map((n) => saveReport(files, withPad(n))))
++  for (const n of nums) assert.strictEqual((await loadReport(files, '2026-09', `report-${n}`)).tenant, `t-${n}`)
++  assert.deepStrictEqual(strayTemps(files, '2026-09'), [])
++})

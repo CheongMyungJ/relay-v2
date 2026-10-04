@@ -1,0 +1,618 @@
+{
+  "scenario": "27-points-gift-teammate",
+  "kind": "k10",
+  "index": 4,
+  "ending": "done",
+  "summary": "giftPoints가 일반 주문 earnPoints를 쓰도록 수정, G-0213이 218P로 확인됨, npm test 통과, 로컬 브랜치 relay/w-20261004-001에 커밋 완료(완료만).",
+  "error": null,
+  "wallMs": 487176,
+  "firstChangeMs": 134111,
+  "outcome": {
+    "success": true,
+    "checks": [
+      {
+        "name": "적립 기준 금액",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "적립 버림",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "주문·영수증 그대로",
+        "guard": true,
+        "pass": true
+      },
+      {
+        "name": "선물 적립",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "선물 주문 그대로",
+        "guard": true,
+        "pass": true
+      }
+    ],
+    "repoTestsPass": true,
+    "filesChanged": [
+      "docs/knowledge/points/earn-rule.md",
+      "src/points/earn.js",
+      "test/earn.test.js",
+      "src/gift/gift-points.js",
+      "test/gift.test.js"
+    ],
+    "linesChanged": 123,
+    "unrelated": [
+      "docs/knowledge/points/earn-rule.md"
+    ],
+    "committed": true,
+    "trees": [
+      {
+        "label": "w-20261004-001",
+        "removed": false,
+        "git": {
+          "branch": "relay/w-20261004-001",
+          "commits": 2,
+          "log": [
+            "docs: 포인트 적립 규칙 지식 추가",
+            "fix: 적립 포인트를 배송비 제외 기준 금액에서 소수점 버림으로 계산"
+          ],
+          "uncommitted": []
+        },
+        "files": [
+          {
+            "file": "docs/knowledge/points/earn-rule.md",
+            "add": 16,
+            "del": 0
+          },
+          {
+            "file": "src/points/earn.js",
+            "add": 3,
+            "del": 3
+          },
+          {
+            "file": "test/earn.test.js",
+            "add": 27,
+            "del": 0
+          }
+        ],
+        "linesAdded": 46,
+        "linesRemoved": 3,
+        "unrelated": [
+          "docs/knowledge/points/earn-rule.md"
+        ],
+        "repoTests": {
+          "pass": true,
+          "output": "TAP version 13\n# Subtest: 금액 할인\nok 1 - 금액 할인\n  ---\n  duration_ms: 0.856736\n  type: 'test'\n  ...\n# Subtest: 비율 할인은 10원 단위 버림, 최대 할인\nok 2 - 비율 할인은 10원 단위 버림, 최대 할인\n  ---\n  duration_ms: 0.184823\n  type: 'test'\n  ...\n# Subtest: 최소 주문 금액\nok 3 - 최소 주문 금액\n  ---\n  duration_ms: 0.3835\n  type: 'test'\n  ...\n# Subtest: 할인은 상품 금액을 넘지 않는다\nok 4 - 할인은 상품 금액을 넘지 않는다\n  ---\n  duration_ms: 0.180298\n  type: 'test'\n  ...\n# Subtest: O-1042: 배송비를 뺀 23,770원 기준으로 237P\nok 5 - O-1042: 배송비를 뺀 23,770원 기준으로 237P\n  ---\n  duration_ms: 1.75178\n  type: 'test'\n  ...\n# Subtest: 배송비가 무료인 주문도 상품금액 - 쿠폰 - 사용 포인트 기준\nok 6 - 배송비가 무료인 주문도 상품금액 - 쿠폰 - 사용 포인트 기준\n  ---\n  duration_ms: 0.159511\n  type: 'test'\n  ...\n# Subtest: 적립 포인트의 소수점은 버린다\nok 7 - 적립 포인트의 소수점은 버린다\n  ---\n  duration_ms: 0.116662\n  type: 'test'\n  ...\n# Subtest: 배송비는 적립 기준에서 제외한다\nok 8 - 배송비는 적립 기준에서 제외한다\n  ---\n  duration_ms: 0.142671\n  type: 'test'\n  ...\n# Subtest: 선물하기 주문의 금액은 일반 주문과 같다\nok 9 - 선물하기 주문의 금액은 일반 주문과 같다\n  ---\n  duration_ms: 2.430816\n  type: 'test'\n  ...\n# Subtest: 메시지 카드는 60자까지\nok 10 - 메시지 카드는 60자까지\n  ---\n  duration_ms: 1.199533\n  type: 'test'\n  ...\n# Subtest: 받는 사람 전화번호 형식\nok 11 - 받는 사람 전화번호 형식\n  ---\n  duration_ms: 0.215112\n  type: 'test'\n  ...\n# Subtest: 적립일부터 365일 뒤에 사라진다\nok 12 - 적립일부터 365일 뒤에 사라진다\n  ---\n  duration_ms: 3.505732\n  type: 'test'\n  ...\n# Subtest: 쓴 포인트는 먼저 적립한 것부터 깎는다\nok 13 - 쓴 포인트는 먼저 적립한 것부터 깎는다\n  ---\n  duration_ms: 0.370292\n  type: 'test'\n  ...\n# Subtest: 쿠폰을 뺀 상품 금액이 30,000원 이상이면 배송비 무료\nok 14 - 쿠폰을 뺀 상품 금액이 30,000원 이상이면 배송비 무료\n  ---\n  duration_ms: 3.482608\n  type: 'test'\n  ...\n# Subtest: 30,000원 미만이면 배송비 3,000원\nok 15 - 30,000원 미만이면 배송비 3,000원\n  ---\n  duration_ms: 0.341477\n  type: 'test'\n  ...\n# Subtest: 사용한 포인트는 결제 금액에서 뺀다\nok 16 - 사용한 포인트는 결제 금액에서 뺀다\n  ---\n  duration_ms: 1.558642\n  type: 'test'\n  ...\n# Subtest: 적립 포인트를 주문에 저장한다\nok 17 - 적립 포인트를 주문에 저장한다\n  ---\n  duration_ms: 0.357382\n  type: 'test'\n  ...\n# Subtest: 주문 번호 형식\nok 18 - 주문 번호 형식\n  ---\n  duration_ms: 0.649756\n  type: 'test'\n  ...\n# Subtest: 1,000P부터 10P 단위\nok 19 - 1,000P부터 10P 단위\n  ---\n  duration_ms: 1.208209\n  type: 'test'\n  ...\n# Subtest: 가진 포인트와 상품 금액을 넘지 않는다\nok 20 - 가진 포인트와 상품 금액을 넘지 않는다\n  ---\n  duration_ms: 0.191125\n  type: 'test'\n  ...\n# Subtest: 영수증 줄\nok 21 - 영수증 줄\n  ---\n  duration_ms: 2.913499\n  type: 'test'\n  ...\n# Subtest: 부분 환불: 돌려받는 상품 금액을 환불한다\nok 22 - 부분 환불: 돌려받는 상품 금액을 환불한다\n  ---\n  duration_ms: 1.136092\n  type: 'test'\n  ...\n# Subtest: 남은 수량보다 많이 환불할 수 없다\nok 23 - 남은 수량보다 많이 환불할 수 없다\n  ---\n  duration_ms: 0.472244\n  type: 'test'\n  ...\n# Subtest: 전체 취소는 저장된 금액과 포인트를 모두 돌려놓는다\nok 24 - 전체 취소는 저장된 금액과 포인트를 모두 돌려놓는다\n  ---\n  duration_ms: 1.394032\n  type: 'test'\n  ...\n1..24\n# tests 24\n# suites 0\n# pass 24\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 311.016425\n"
+        },
+        "checks": [
+          {
+            "name": "적립 기준 금액",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 배송비는 적립 기준에 넣지 않는다\nok 1 - 배송비는 적립 기준에 넣지 않는다\n  ---\n  duration_ms: 1.885801\n  type: 'test'\n  ...\n# Subtest: 쿠폰 할인 뒤 금액에 적립한다\nok 2 - 쿠폰 할인 뒤 금액에 적립한다\n  ---\n  duration_ms: 0.417827\n  type: 'test'\n  ...\n# Subtest: 사용한 포인트에는 적립하지 않는다\nok 3 - 사용한 포인트에는 적립하지 않는다\n  ---\n  duration_ms: 0.234282\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 136.603026\n"
+          },
+          {
+            "name": "적립 버림",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 1P 미만 버림\nok 1 - 1P 미만 버림\n  ---\n  duration_ms: 1.267916\n  type: 'test'\n  ...\n# Subtest: O-1042: 리포트의 주문이 고객센터 안내와 같다\nok 2 - O-1042: 리포트의 주문이 고객센터 안내와 같다\n  ---\n  duration_ms: 0.492385\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 102.059027\n"
+          },
+          {
+            "name": "주문·영수증 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 저장된 주문의 영수증은 저장된 적립 포인트를 그대로 보인다\nok 1 - 저장된 주문의 영수증은 저장된 적립 포인트를 그대로 보인다\n  ---\n  duration_ms: 2.44494\n  type: 'test'\n  ...\n# Subtest: 전체 취소는 저장된 적립 포인트를 회수한다\nok 2 - 전체 취소는 저장된 적립 포인트를 회수한다\n  ---\n  duration_ms: 0.200048\n  type: 'test'\n  ...\n# Subtest: 주문 금액 계산은 그대로\nok 3 - 주문 금액 계산은 그대로\n  ---\n  duration_ms: 0.815359\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 112.880451\n"
+          },
+          {
+            "name": "선물 적립",
+            "bug": null,
+            "pass": false,
+            "output": "3\n# Subtest: G-0213: 리포트의 선물 주문이 고객센터 계산과 같다\nnot ok 1 - G-0213: 리포트의 선물 주문이 고객센터 계산과 같다\n  ---\n  duration_ms: 2.172762\n  type: 'test'\n  location: '/tmp/relay-eval/e12-points/27-points-gift-teammate-k10-4/judge/w-20261004-001/tree/eval-hidden/gift-points.test.js:14:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    249 !== 218\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 218\n  actual: 249\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e12-points/27-points-gift-teammate-k10-4/judge/w-20261004-001/tree/eval-hidden/gift-points.test.js:18:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.start (node:internal/test_runner/test:944:17)\n    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)\n  ...\n# Subtest: 무료배송 선물 주문의 1P 미만 버림\nnot ok 2 - 무료배송 선물 주문의 1P 미만 버림\n  ---\n  duration_ms: 0.427679\n  type: 'test'\n  location: '/tmp/relay-eval/e12-points/27-points-gift-teammate-k10-4/judge/w-20261004-001/tree/eval-hidden/gift-points.test.js:21:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    335 !== 334\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 334\n  actual: 335\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e12-points/27-points-gift-teammate-k10-4/judge/w-20261004-001/tree/eval-hidden/gift-points.test.js:28:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n# Subtest: 사용한 포인트에는 적립하지 않는다\nnot ok 3 - 사용한 포인트에는 적립하지 않는다\n  ---\n  duration_ms: 0.224836\n  type: 'test'\n  location: '/tmp/relay-eval/e12-points/27-points-gift-teammate-k10-4/judge/w-20261004-001/tree/eval-hidden/gift-points.test.js:31:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    337 !== 336\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 336\n  actual: 337\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e12-points/27-points-gift-teammate-k10-4/judge/w-20261004-001/tree/eval-hidden/gift-points.test.js:33:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 0\n# fail 3\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 147.585\n"
+          },
+          {
+            "name": "선물 주문 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 선물 주문 금액과 받는 사람\nok 1 - 선물 주문 금액과 받는 사람\n  ---\n  duration_ms: 2.582483\n  type: 'test'\n  ...\n# Subtest: 메시지 카드와 전화번호 검사\nok 2 - 메시지 카드와 전화번호 검사\n  ---\n  duration_ms: 0.645254\n  type: 'test'\n  ...\n# Subtest: 저장된 선물 주문의 영수증\nok 3 - 저장된 선물 주문의 영수증\n  ---\n  duration_ms: 0.522533\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 120.941854\n"
+          }
+        ]
+      },
+      {
+        "label": "p2-w-20261004-001",
+        "removed": false,
+        "git": {
+          "branch": "relay/w-20261004-001",
+          "commits": 5,
+          "log": [
+            "docs: 선물하기 적립이 earnPoints를 쓰도록 바뀐 현황을 지식에 반영",
+            "fix: 선물하기 적립 포인트를 일반 주문 적립 규칙(earnPoints)으로 계산",
+            "Merge relay/w-20261004-001 (팀 공유 머지, 평가 도구)",
+            "docs: 포인트 적립 규칙 지식 추가",
+            "fix: 적립 포인트를 배송비 제외 기준 금액에서 소수점 버림으로 계산"
+          ],
+          "uncommitted": []
+        },
+        "files": [
+          {
+            "file": "docs/knowledge/points/earn-rule.md",
+            "add": 17,
+            "del": 0
+          },
+          {
+            "file": "src/gift/gift-points.js",
+            "add": 3,
+            "del": 4
+          },
+          {
+            "file": "src/points/earn.js",
+            "add": 3,
+            "del": 3
+          },
+          {
+            "file": "test/earn.test.js",
+            "add": 27,
+            "del": 0
+          },
+          {
+            "file": "test/gift.test.js",
+            "add": 17,
+            "del": 0
+          }
+        ],
+        "linesAdded": 67,
+        "linesRemoved": 7,
+        "unrelated": [
+          "docs/knowledge/points/earn-rule.md"
+        ],
+        "repoTests": {
+          "pass": true,
+          "output": "TAP version 13\n# Subtest: 금액 할인\nok 1 - 금액 할인\n  ---\n  duration_ms: 0.823812\n  type: 'test'\n  ...\n# Subtest: 비율 할인은 10원 단위 버림, 최대 할인\nok 2 - 비율 할인은 10원 단위 버림, 최대 할인\n  ---\n  duration_ms: 0.17591\n  type: 'test'\n  ...\n# Subtest: 최소 주문 금액\nok 3 - 최소 주문 금액\n  ---\n  duration_ms: 0.397672\n  type: 'test'\n  ...\n# Subtest: 할인은 상품 금액을 넘지 않는다\nok 4 - 할인은 상품 금액을 넘지 않는다\n  ---\n  duration_ms: 0.127576\n  type: 'test'\n  ...\n# Subtest: O-1042: 배송비를 뺀 23,770원 기준으로 237P\nok 5 - O-1042: 배송비를 뺀 23,770원 기준으로 237P\n  ---\n  duration_ms: 1.700317\n  type: 'test'\n  ...\n# Subtest: 배송비가 무료인 주문도 상품금액 - 쿠폰 - 사용 포인트 기준\nok 6 - 배송비가 무료인 주문도 상품금액 - 쿠폰 - 사용 포인트 기준\n  ---\n  duration_ms: 0.171094\n  type: 'test'\n  ...\n# Subtest: 적립 포인트의 소수점은 버린다\nok 7 - 적립 포인트의 소수점은 버린다\n  ---\n  duration_ms: 1.066692\n  type: 'test'\n  ...\n# Subtest: 배송비는 적립 기준에서 제외한다\nok 8 - 배송비는 적립 기준에서 제외한다\n  ---\n  duration_ms: 0.244007\n  type: 'test'\n  ...\n# Subtest: 선물하기 주문의 금액은 일반 주문과 같다\nok 9 - 선물하기 주문의 금액은 일반 주문과 같다\n  ---\n  duration_ms: 3.042264\n  type: 'test'\n  ...\n# Subtest: 메시지 카드는 60자까지\nok 10 - 메시지 카드는 60자까지\n  ---\n  duration_ms: 0.598711\n  type: 'test'\n  ...\n# Subtest: 받는 사람 전화번호 형식\nok 11 - 받는 사람 전화번호 형식\n  ---\n  duration_ms: 0.183581\n  type: 'test'\n  ...\n# Subtest: 선물하기 적립은 배송비를 빼고 소수점을 버린다 (G-0213 = 218P)\nok 12 - 선물하기 적립은 배송비를 빼고 소수점을 버린다 (G-0213 = 218P)\n  ---\n  duration_ms: 0.344251\n  type: 'test'\n  ...\n# Subtest: 적립일부터 365일 뒤에 사라진다\nok 13 - 적립일부터 365일 뒤에 사라진다\n  ---\n  duration_ms: 1.132122\n  type: 'test'\n  ...\n# Subtest: 쓴 포인트는 먼저 적립한 것부터 깎는다\nok 14 - 쓴 포인트는 먼저 적립한 것부터 깎는다\n  ---\n  duration_ms: 0.336913\n  type: 'test'\n  ...\n# Subtest: 쿠폰을 뺀 상품 금액이 30,000원 이상이면 배송비 무료\nok 15 - 쿠폰을 뺀 상품 금액이 30,000원 이상이면 배송비 무료\n  ---\n  duration_ms: 2.816922\n  type: 'test'\n  ...\n# Subtest: 30,000원 미만이면 배송비 3,000원\nok 16 - 30,000원 미만이면 배송비 3,000원\n  ---\n  duration_ms: 0.197754\n  type: 'test'\n  ...\n# Subtest: 사용한 포인트는 결제 금액에서 뺀다\nok 17 - 사용한 포인트는 결제 금액에서 뺀다\n  ---\n  duration_ms: 0.502038\n  type: 'test'\n  ...\n# Subtest: 적립 포인트를 주문에 저장한다\nok 18 - 적립 포인트를 주문에 저장한다\n  ---\n  duration_ms: 0.202655\n  type: 'test'\n  ...\n# Subtest: 주문 번호 형식\nok 19 - 주문 번호 형식\n  ---\n  duration_ms: 0.588241\n  type: 'test'\n  ...\n# Subtest: 1,000P부터 10P 단위\nok 20 - 1,000P부터 10P 단위\n  ---\n  duration_ms: 1.752148\n  type: 'test'\n  ...\n# Subtest: 가진 포인트와 상품 금액을 넘지 않는다\nok 21 - 가진 포인트와 상품 금액을 넘지 않는다\n  ---\n  duration_ms: 0.209194\n  type: 'test'\n  ...\n# Subtest: 영수증 줄\nok 22 - 영수증 줄\n  ---\n  duration_ms: 2.143195\n  type: 'test'\n  ...\n# Subtest: 부분 환불: 돌려받는 상품 금액을 환불한다\nok 23 - 부분 환불: 돌려받는 상품 금액을 환불한다\n  ---\n  duration_ms: 1.106137\n  type: 'test'\n  ...\n# Subtest: 남은 수량보다 많이 환불할 수 없다\nok 24 - 남은 수량보다 많이 환불할 수 없다\n  ---\n  duration_ms: 0.464952\n  type: 'test'\n  ...\n# Subtest: 전체 취소는 저장된 금액과 포인트를 모두 돌려놓는다\nok 25 - 전체 취소는 저장된 금액과 포인트를 모두 돌려놓는다\n  ---\n  duration_ms: 1.504832\n  type: 'test'\n  ...\n1..25\n# tests 25\n# suites 0\n# pass 25\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 408.602042\n"
+        },
+        "checks": [
+          {
+            "name": "적립 기준 금액",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 배송비는 적립 기준에 넣지 않는다\nok 1 - 배송비는 적립 기준에 넣지 않는다\n  ---\n  duration_ms: 1.13977\n  type: 'test'\n  ...\n# Subtest: 쿠폰 할인 뒤 금액에 적립한다\nok 2 - 쿠폰 할인 뒤 금액에 적립한다\n  ---\n  duration_ms: 0.331183\n  type: 'test'\n  ...\n# Subtest: 사용한 포인트에는 적립하지 않는다\nok 3 - 사용한 포인트에는 적립하지 않는다\n  ---\n  duration_ms: 0.170865\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 95.485347\n"
+          },
+          {
+            "name": "적립 버림",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 1P 미만 버림\nok 1 - 1P 미만 버림\n  ---\n  duration_ms: 1.359377\n  type: 'test'\n  ...\n# Subtest: O-1042: 리포트의 주문이 고객센터 안내와 같다\nok 2 - O-1042: 리포트의 주문이 고객센터 안내와 같다\n  ---\n  duration_ms: 0.726492\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 127.28204\n"
+          },
+          {
+            "name": "주문·영수증 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 저장된 주문의 영수증은 저장된 적립 포인트를 그대로 보인다\nok 1 - 저장된 주문의 영수증은 저장된 적립 포인트를 그대로 보인다\n  ---\n  duration_ms: 2.438702\n  type: 'test'\n  ...\n# Subtest: 전체 취소는 저장된 적립 포인트를 회수한다\nok 2 - 전체 취소는 저장된 적립 포인트를 회수한다\n  ---\n  duration_ms: 0.195198\n  type: 'test'\n  ...\n# Subtest: 주문 금액 계산은 그대로\nok 3 - 주문 금액 계산은 그대로\n  ---\n  duration_ms: 0.847591\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 107.870642\n"
+          },
+          {
+            "name": "선물 적립",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: G-0213: 리포트의 선물 주문이 고객센터 계산과 같다\nok 1 - G-0213: 리포트의 선물 주문이 고객센터 계산과 같다\n  ---\n  duration_ms: 1.749396\n  type: 'test'\n  ...\n# Subtest: 무료배송 선물 주문의 1P 미만 버림\nok 2 - 무료배송 선물 주문의 1P 미만 버림\n  ---\n  duration_ms: 0.274051\n  type: 'test'\n  ...\n# Subtest: 사용한 포인트에는 적립하지 않는다\nok 3 - 사용한 포인트에는 적립하지 않는다\n  ---\n  duration_ms: 0.165124\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 115.01022\n"
+          },
+          {
+            "name": "선물 주문 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 선물 주문 금액과 받는 사람\nok 1 - 선물 주문 금액과 받는 사람\n  ---\n  duration_ms: 2.608924\n  type: 'test'\n  ...\n# Subtest: 메시지 카드와 전화번호 검사\nok 2 - 메시지 카드와 전화번호 검사\n  ---\n  duration_ms: 1.111982\n  type: 'test'\n  ...\n# Subtest: 저장된 선물 주문의 영수증\nok 3 - 저장된 선물 주문의 영수증\n  ---\n  duration_ms: 0.676961\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 124.109186\n"
+          }
+        ]
+      }
+    ]
+  },
+  "human": {
+    "turns": 18,
+    "actions": {
+      "click": 12,
+      "fill": 2,
+      "key": 6,
+      "wait": 6,
+      "done": 2,
+      "type": 1
+    },
+    "actionsTotal": 21,
+    "charsTyped": 616,
+    "invalidActions": 0,
+    "refusedDone": 0,
+    "frictionMean": 0,
+    "frictionHigh": 0,
+    "costUsd": 1.7742818000000002,
+    "calls": 20,
+    "ms": 83843,
+    "waitOnlyTurns": 0,
+    "images": 14
+  },
+  "setupDialogs": [
+    {
+      "t": 27569,
+      "name": "folder_trust"
+    },
+    {
+      "t": 30234,
+      "name": "bypass_permissions_warning"
+    },
+    {
+      "t": 270414,
+      "name": "folder_trust"
+    }
+  ],
+  "agent": {
+    "input": 76,
+    "output": 21138,
+    "cacheRead": 1378121,
+    "cacheWrite": 130218,
+    "messages": 38,
+    "sessions": 6
+  },
+  "agentSteps": [
+    {
+      "work": "w-20261004-001",
+      "seq": 1,
+      "node": "intake",
+      "contextChars": 3038,
+      "knowledgeChars": 0,
+      "tokens": {
+        "input": 12,
+        "output": 2903,
+        "cacheRead": 219045,
+        "cacheWrite": 18102,
+        "messages": 6
+      }
+    },
+    {
+      "work": "w-20261004-001",
+      "seq": 2,
+      "node": "fix",
+      "contextChars": 4854,
+      "knowledgeChars": 0,
+      "tokens": {
+        "input": 14,
+        "output": 3999,
+        "cacheRead": 255350,
+        "cacheWrite": 22926,
+        "messages": 7
+      }
+    },
+    {
+      "work": "w-20261004-001",
+      "seq": 3,
+      "node": "verify",
+      "contextChars": 7911,
+      "knowledgeChars": 0,
+      "tokens": {
+        "input": 12,
+        "output": 4102,
+        "cacheRead": 225307,
+        "cacheWrite": 25124,
+        "messages": 6
+      }
+    },
+    {
+      "work": "p2-w-20261004-001",
+      "seq": 1,
+      "node": "intake",
+      "contextChars": 3455,
+      "knowledgeChars": 473,
+      "tokens": {
+        "input": 14,
+        "output": 3521,
+        "cacheRead": 243104,
+        "cacheWrite": 18326,
+        "messages": 7
+      }
+    },
+    {
+      "work": "p2-w-20261004-001",
+      "seq": 2,
+      "node": "fix",
+      "contextChars": 5720,
+      "knowledgeChars": 473,
+      "tokens": {
+        "input": 14,
+        "output": 2876,
+        "cacheRead": 254100,
+        "cacheWrite": 21035,
+        "messages": 7
+      }
+    },
+    {
+      "work": "p2-w-20261004-001",
+      "seq": 3,
+      "node": "verify",
+      "contextChars": 8200,
+      "knowledgeChars": 473,
+      "tokens": {
+        "input": 10,
+        "output": 3737,
+        "cacheRead": 181215,
+        "cacheWrite": 24705,
+        "messages": 5
+      }
+    }
+  ],
+  "works": [
+    {
+      "id": "w-20261004-001",
+      "dir": "/tmp/relay-eval/e12-points/27-points-gift-teammate-k10-4/relay-home/projects/shop-d11d33/works/w-20261004-001",
+      "status": "completed",
+      "branch": null,
+      "tasks": [
+        {
+          "seq": 1,
+          "node": "intake",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "62701155-5f1f-4cd3-8440-48803be24ba5",
+          "contextChars": 3038,
+          "knowledgeChars": 0
+        },
+        {
+          "seq": 2,
+          "node": "fix",
+          "status": "approved",
+          "approved_by": "auto",
+          "session": "b74dcc46-d348-41ec-b06c-8c63692a4640",
+          "contextChars": 4854,
+          "knowledgeChars": 0
+        },
+        {
+          "seq": 3,
+          "node": "verify",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "8f3ff99b-4b53-4d11-a683-e591e3a481bb",
+          "contextChars": 7911,
+          "knowledgeChars": 0
+        }
+      ]
+    },
+    {
+      "id": "p2-w-20261004-001",
+      "dir": "/tmp/relay-eval/e12-points/27-points-gift-teammate-k10-4/relay-home-2/projects/shop-mate1-72aaf7/works/w-20261004-001",
+      "status": "completed",
+      "branch": null,
+      "tasks": [
+        {
+          "seq": 1,
+          "node": "intake",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "b9497745-43a9-4782-acdd-83df604151fa",
+          "contextChars": 3455,
+          "knowledgeChars": 473
+        },
+        {
+          "seq": 2,
+          "node": "fix",
+          "status": "approved",
+          "approved_by": "auto",
+          "session": "6136eca9-7a0c-4b46-bd0f-9bdf21a2bffc",
+          "contextChars": 5720,
+          "knowledgeChars": 473
+        },
+        {
+          "seq": 3,
+          "node": "verify",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "a30b427e-62cf-4557-bcd5-4549303a281d",
+          "contextChars": 8200,
+          "knowledgeChars": 473
+        }
+      ]
+    }
+  ],
+  "workResults": [
+    {
+      "work": 1,
+      "ending": "done",
+      "summary": "earn.js를 (상품금액-쿠폰-사용포인트)의 1%를 버림하도록 고쳤다. O-1042는 268P에서 237P가 됐고 npm test 24개가 모두 통과했다. gift-points.js, src/format, 이미 저장된 points.earned는 그대로다. relay/w-20261004-001 브랜치에 커밋했고 push는 하지 않았다.",
+      "wallMs": 233187,
+      "survey": {
+        "effort": 2,
+        "clarity": 6,
+        "control": 6,
+        "confidence": 6,
+        "trust": 6,
+        "recovery": null,
+        "reuse": 6,
+        "best": "의도 정리 단계에서 에이전트가 기준 금액과 끝수 처리를 선택지로 물어봐서 내가 정할 수 있었다. 판정표에 완료조건별로 근거가 붙어 있고 전체 변경도 바로 볼 수 있어서 확인하기 쉬웠다.",
+        "worst": "별로 불편한 점은 없었다. 선택지에 추천이 붙어 있어서 그냥 Enter만 눌러도 되는 점은 오히려 조금 걱정됐다. 단계 사이에 자동으로 넘어가서, 02 단계가 지나간 건 탭을 열어 봐야 알 수 있었다.",
+        "comment": "위험 항목에 gift 주문이 earnPoints를 공유할 수 있다고 적혀 있었다. 최종 판정표에는 이 확인 결과가 따로 없고, gift 파일이 바뀌지 않았다는 것만 있었다. 별도 확인 결과가 있으면 더 좋겠다."
+      },
+      "human": {
+        "turns": 9,
+        "actionsTotal": 10,
+        "charsTyped": 291,
+        "inspectDiff": 0,
+        "invalidActions": 0,
+        "refusedDone": 0,
+        "frictionMean": 0,
+        "frictionHigh": 0,
+        "ms": 36998,
+        "told": [
+          2,
+          3,
+          4
+        ],
+        "carriedTold": 0,
+        "carriedTotal": 0,
+        "toldAudit": [
+          1,
+          4
+        ],
+        "carriedToldAudit": 0,
+        "auditCostUsd": 0.0099828
+      },
+      "outcome": {
+        "success": true,
+        "checks": [
+          {
+            "name": "적립 기준 금액",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "적립 버림",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "주문·영수증 그대로",
+            "guard": true,
+            "pass": true
+          }
+        ],
+        "trees": [
+          {
+            "label": "w-20261004-001",
+            "files": [
+              "docs/knowledge/points/earn-rule.md",
+              "src/points/earn.js",
+              "test/earn.test.js"
+            ],
+            "repoTestsPass": true
+          }
+        ]
+      },
+      "agent": {
+        "input": 38,
+        "output": 11004,
+        "cacheRead": 699702,
+        "cacheWrite": 66152,
+        "messages": 19,
+        "sessions": 3,
+        "questions": 1
+      },
+      "contextChars": 15803,
+      "knowledgeChars": 0
+    },
+    {
+      "work": 2,
+      "ending": "done",
+      "summary": "giftPoints가 일반 주문 earnPoints를 쓰도록 수정, G-0213이 218P로 확인됨, npm test 통과, 로컬 브랜치 relay/w-20261004-001에 커밋 완료(완료만).",
+      "wallMs": 235956,
+      "survey": {
+        "effort": 2,
+        "clarity": 6,
+        "control": 5,
+        "confidence": 6,
+        "trust": 6,
+        "recovery": null,
+        "reuse": 6,
+        "best": "완료조건별 판정표에 근거가 붙어 있고 전체 변경 diff를 바로 볼 수 있어서, 218P가 나오는지와 건드리면 안 되는 부분이 그대로인지 쉽게 확인했다.",
+        "worst": "의도 정리 단계에서 규칙을 잘 모르는데도 질문을 받았다. 터미널 선택지 입력과 형식 검사 오류 로그가 잠깐 보여서 조금 헷갈렸다.",
+        "comment": "에이전트는 선물하기에 일반 주문 규칙을 적용하는 것을 다른 팀과 정할 사항이라며 확인을 요청했다. 그 점은 믿음이 갔다. 나는 규칙을 몰라서 고객센터 값인 218P로 맞추라고만 답했다. 최종 diff는 작고 이해하기 쉬웠다."
+      },
+      "human": {
+        "turns": 9,
+        "actionsTotal": 11,
+        "charsTyped": 325,
+        "inspectDiff": 0,
+        "invalidActions": 0,
+        "refusedDone": 0,
+        "frictionMean": 0,
+        "frictionHigh": 0,
+        "ms": 46845,
+        "told": [
+          1,
+          2,
+          3
+        ],
+        "carriedTold": 0,
+        "carriedTotal": 0,
+        "toldAudit": [
+          1,
+          2,
+          3
+        ],
+        "carriedToldAudit": 0,
+        "auditCostUsd": 0.006994800000000001
+      },
+      "handoff": {
+        "work": 2,
+        "merged": [
+          "relay/w-20261004-001"
+        ],
+        "conflicts": [],
+        "failed": []
+      },
+      "outcome": {
+        "success": true,
+        "checks": [
+          {
+            "name": "선물 적립",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "선물 주문 그대로",
+            "guard": true,
+            "pass": true
+          }
+        ],
+        "trees": [
+          {
+            "label": "p2-w-20261004-001",
+            "files": [
+              "docs/knowledge/points/earn-rule.md",
+              "src/gift/gift-points.js",
+              "src/points/earn.js",
+              "test/earn.test.js",
+              "test/gift.test.js"
+            ],
+            "repoTestsPass": true
+          }
+        ]
+      },
+      "agent": {
+        "input": 38,
+        "output": 10134,
+        "cacheRead": 678419,
+        "cacheWrite": 64066,
+        "messages": 19,
+        "sessions": 3,
+        "questions": 1
+      },
+      "contextChars": 17375,
+      "knowledgeChars": 1419
+    }
+  ],
+  "handoffs": [
+    {
+      "work": 2,
+      "merged": [
+        "relay/w-20261004-001"
+      ],
+      "conflicts": [],
+      "failed": []
+    }
+  ],
+  "survey": {
+    "effort": 2,
+    "clarity": 6,
+    "control": 5,
+    "confidence": 6,
+    "trust": 6,
+    "recovery": null,
+    "reuse": 6,
+    "best": "완료조건별 판정표에 근거가 붙어 있고 전체 변경 diff를 바로 볼 수 있어서, 218P가 나오는지와 건드리면 안 되는 부분이 그대로인지 쉽게 확인했다.",
+    "worst": "의도 정리 단계에서 규칙을 잘 모르는데도 질문을 받았다. 터미널 선택지 입력과 형식 검사 오류 로그가 잠깐 보여서 조금 헷갈렸다.",
+    "comment": "에이전트는 선물하기에 일반 주문 규칙을 적용하는 것을 다른 팀과 정할 사항이라며 확인을 요청했다. 그 점은 믿음이 갔다. 나는 규칙을 몰라서 고객센터 값인 218P로 맞추라고만 답했다. 최종 diff는 작고 이해하기 쉬웠다."
+  },
+  "options": {
+    "agentModel": "sonnet",
+    "effort": "medium",
+    "humanModel": "sonnet",
+    "cliArgs": [
+      "--dangerously-skip-permissions"
+    ]
+  }
+}

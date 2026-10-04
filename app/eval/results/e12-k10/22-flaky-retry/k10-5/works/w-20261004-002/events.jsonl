@@ -1,0 +1,18 @@
+{"ts":"2026-10-04T13:49:40+00:00","work_id":"w-20261004-002","type":"work.created","payload":{"type":"bugfix","base_branch":"main","base_commit":"bbd7a8a4019c45af614a582aaff628dce531bb2d"}}
+{"ts":"2026-10-04T13:49:40+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.started","payload":{"reason":"default","session_id":"43c4348e-7780-4f79-a0a0-416a715a671c"}}
+{"ts":"2026-10-04T13:49:41+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.first_output","payload":{"pid":23984,"ms":874}}
+{"ts":"2026-10-04T13:49:41+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.first_hook","payload":{"pid":23984,"ms":1070,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T13:49:56+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T13:50:08+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T13:50:08+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.started","payload":{"reason":"default","session_id":"8c5cdb30-76c3-490b-b989-0e400c5dae3a"}}
+{"ts":"2026-10-04T13:50:09+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.first_output","payload":{"pid":24514,"ms":875}}
+{"ts":"2026-10-04T13:50:09+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.first_hook","payload":{"pid":24514,"ms":1099,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T13:52:43+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T13:52:58+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.approved","payload":{"by":"auto"}}
+{"ts":"2026-10-04T13:52:58+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.started","payload":{"reason":"default","session_id":"c633404d-f270-4a5d-b93e-d367e553f9d9"}}
+{"ts":"2026-10-04T13:52:59+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.first_output","payload":{"pid":3824,"ms":876}}
+{"ts":"2026-10-04T13:52:59+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.first_hook","payload":{"pid":3824,"ms":1094,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T13:54:08+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.bounced","payload":{"attempt":1,"max":2,"errors":[{"file":"docs/knowledge/runner/pool-result-order.md","message":"`## 아직 규칙을 따르지 않는 곳`은 kind: rule에만 둔다"}]}}
+{"ts":"2026-10-04T13:54:16+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T13:54:49+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T13:54:49+00:00","work_id":"w-20261004-002","type":"work.completed","payload":{"delivery":"none"}}

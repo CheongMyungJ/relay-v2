@@ -1,0 +1,46 @@
+{
+  "calls": [
+    {
+      "at": "2026-10-04T13:44:01+00:00",
+      "hash": "f6ac83fde8c107c3222f8bc0a6050a43dd9b83d46c01f2cbe41ab0fa6eae7e5f",
+      "model": "sonnet",
+      "ms": 6696,
+      "costUsd": 0.023723799999999996,
+      "usage": {
+        "input": 2,
+        "output": 565,
+        "cacheRead": 729,
+        "cacheCreation": 4481
+      },
+      "related": 1,
+      "promptChars": 4649,
+      "issues": [
+        {
+          "file": "docs/knowledge/invoice/vat-per-line-floor.md",
+          "part": "body",
+          "message": "[지식 검토: 다른 항목과 어긋남] \"계산은 `src/invoice/total.js`의 `sumLineVat` 한 곳에 둔다.\" → 규칙 줄에서 `sumLineVat` 한 곳이라는 위치 지정을 빼고, 반품 전표는 지금 `credit-note.js`의 `sumCreditLineVat`를 쓴다는 내용은 '아직 규칙을 따르지 않는 곳'에만 두도록 고친다."
+        }
+      ],
+      "bounced": true,
+      "error": null
+    },
+    {
+      "at": "2026-10-04T13:44:12+00:00",
+      "hash": "36557195407ad0d9ed638de249c43388436863c33736dd59277ae5e2329f43f7",
+      "model": "sonnet",
+      "ms": 4916,
+      "costUsd": 0.0217018,
+      "usage": {
+        "input": 2,
+        "output": 374,
+        "cacheRead": 729,
+        "cacheCreation": 4453
+      },
+      "related": 1,
+      "promptChars": 4600,
+      "issues": [],
+      "bounced": false,
+      "error": null
+    }
+  ]
+}

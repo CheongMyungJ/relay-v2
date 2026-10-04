@@ -1,0 +1,18 @@
+{"ts":"2026-10-04T13:35:43+00:00","work_id":"w-20261004-001","type":"work.created","payload":{"type":"bugfix","base_branch":"main","base_commit":"3ad07f9f02b6dc6284e0dc0238f0fd17fc6fa65e"}}
+{"ts":"2026-10-04T13:35:43+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.started","payload":{"reason":"default","session_id":"1652e1f8-bb74-4bca-8f1c-b51123b2701b"}}
+{"ts":"2026-10-04T13:35:43+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.first_output","payload":{"pid":27894,"ms":512}}
+{"ts":"2026-10-04T13:35:48+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.first_hook","payload":{"pid":27894,"ms":5186,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T13:37:06+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T13:37:17+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T13:37:17+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.started","payload":{"reason":"default","session_id":"51359238-a76e-4404-94d4-5c226b0db6f6"}}
+{"ts":"2026-10-04T13:37:18+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.first_output","payload":{"pid":29673,"ms":887}}
+{"ts":"2026-10-04T13:37:18+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.first_hook","payload":{"pid":29673,"ms":1156,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T13:38:16+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T13:38:31+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.approved","payload":{"by":"auto"}}
+{"ts":"2026-10-04T13:38:32+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.started","payload":{"reason":"default","session_id":"80a5e1b4-ab61-42f7-87bd-a584fffdd336"}}
+{"ts":"2026-10-04T13:38:32+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.first_output","payload":{"pid":31240,"ms":861}}
+{"ts":"2026-10-04T13:38:33+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.first_hook","payload":{"pid":31240,"ms":1106,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T13:39:44+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.bounced","payload":{"attempt":1,"max":2,"errors":[{"file":"docs/knowledge/invoice/issued-invoice-stored-totals.md","message":"[지식 검토: 근거 없이 넓힌 규칙] \"이미 발행되어 저장된 청구서(와 반품 전표)는 금액을 다시 계산하지 않고\" → 사람이 말한 근거는 발행된 청구서뿐이므로 '(와 반품 전표)'를 지우거나, 반품 전표도 저장 합계를 쓴다는 사람의 확인을 근거로 남긴다."}]}}
+{"ts":"2026-10-04T13:39:56+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T13:40:15+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T13:40:15+00:00","work_id":"w-20261004-001","type":"work.completed","payload":{"delivery":"none"}}

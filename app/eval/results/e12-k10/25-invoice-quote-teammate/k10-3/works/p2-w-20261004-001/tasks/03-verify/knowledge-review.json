@@ -1,0 +1,46 @@
+{
+  "calls": [
+    {
+      "at": "2026-10-04T13:25:52+00:00",
+      "hash": "1b8521f6e7c20e3496a27d6bf16aae362d3f68e5b9ca20871b79975aea8695b1",
+      "model": "sonnet",
+      "ms": 8860,
+      "costUsd": 0.0284718,
+      "usage": {
+        "input": 2,
+        "output": 957,
+        "cacheRead": 729,
+        "cacheCreation": 4688
+      },
+      "related": 0,
+      "promptChars": 4899,
+      "issues": [
+        {
+          "file": "docs/knowledge/invoice/vat-rule.md",
+          "part": "body",
+          "message": "[지식 검토: 규칙 절에 정하지 않은 것] \"청구서(`computeTotals`), 견적서(`quoteTotals`), 반품 전표(`creditTotals`)가 모두 `src/invoice/total.js`의 `lineVat`을 같이 쓴다.\" → 견적서에 줄별 버림 규칙을 적용할지는 사람이 아직 정하지 않았으니(vat-per-line-floor.md), 규칙에서 견적서(`quoteTotals`)를 빼고 `## 아직 정하지 않은 것`에 옮겨 적는다."
+        }
+      ],
+      "bounced": true,
+      "error": null
+    },
+    {
+      "at": "2026-10-04T13:26:11+00:00",
+      "hash": "b31173b9b03c835ce1fd9a8e1c8bca80ad1a32bcd742c276b2484f894fde5c2c",
+      "model": "sonnet",
+      "ms": 9454,
+      "costUsd": 0.0297098,
+      "usage": {
+        "input": 2,
+        "output": 1052,
+        "cacheRead": 729,
+        "cacheCreation": 4760
+      },
+      "related": 0,
+      "promptChars": 4978,
+      "issues": [],
+      "bounced": false,
+      "error": null
+    }
+  ]
+}

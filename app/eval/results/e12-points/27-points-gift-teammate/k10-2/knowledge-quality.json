@@ -1,0 +1,61 @@
+{
+  "paths": [
+    "docs/knowledge/format/receipt-text.md",
+    "docs/knowledge/points/earn-points-rule.md",
+    "docs/knowledge/points/stored-earned-points.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/format/receipt-text.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/points/earn-points-rule.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/points/stored-earned-points.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "earn-points-rule.md: (결제 금액 total − 배송비 shipping)을 기준으로 삼아, 상품 금액에서 쿠폰·포인트를 뺀 금액과 같고 배송비는 제외한다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "earn-points-rule.md가 floor(원 단위 버림)로 적고 반올림 `percentOf`는 쓰지 않는다고 밝힌다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "earn-points-rule.md에 × 1%로 적혀 있다."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "stored-earned-points.md가 저장된 points.earned를 다시 계산하지 않는다고 적는다."
+      }
+    ]
+  }
+}

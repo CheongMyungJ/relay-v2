@@ -1,0 +1,46 @@
+{
+  "paths": [
+    "docs/knowledge/points/earn-rule.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/points/earn-rule.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "기준 금액이 상품−쿠폰−사용 포인트이고 배송비 제외라고 적혀 있다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "1P 미만 버림, 반올림 아님이라고 적혀 있다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "적립률 2%(EARN_RATE_PERCENT)로 적혀 있다. 1% 예시는 '1% 적립 때'로 과거임을 밝혔다."
+      },
+      {
+        "id": "R4",
+        "status": "correct",
+        "why": "회수는 저장된 원래 적립에서 남은 상품 재계산 적립을 뺀 값으로 적혀 있다."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "저장된 points.earned는 다시 계산하지 않고 저장된 값을 쓴다고 적혀 있다."
+      }
+    ]
+  }
+}

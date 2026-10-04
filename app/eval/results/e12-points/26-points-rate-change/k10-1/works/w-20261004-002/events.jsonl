@@ -1,0 +1,18 @@
+{"ts":"2026-10-04T12:03:45+00:00","work_id":"w-20261004-002","type":"work.created","payload":{"type":"bugfix","base_branch":"main","base_commit":"cbe98c18c6226799c94ac56d87ad9075f60ad87c"}}
+{"ts":"2026-10-04T12:03:45+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.started","payload":{"reason":"default","session_id":"9dce7e93-0828-4f9d-9900-1102ba92028e"}}
+{"ts":"2026-10-04T12:03:46+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.first_output","payload":{"pid":4593,"ms":929}}
+{"ts":"2026-10-04T12:03:46+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.first_hook","payload":{"pid":4593,"ms":1183,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:05:17+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:05:29+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T12:05:29+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.started","payload":{"reason":"default","session_id":"c52cbfef-b5db-47c2-82a5-f379e5cc3b65"}}
+{"ts":"2026-10-04T12:05:30+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.first_output","payload":{"pid":7959,"ms":929}}
+{"ts":"2026-10-04T12:05:30+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.first_hook","payload":{"pid":7959,"ms":1170,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:06:26+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:06:41+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.approved","payload":{"by":"auto"}}
+{"ts":"2026-10-04T12:06:41+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.started","payload":{"reason":"default","session_id":"7a4cb512-7c8d-4e2d-a353-30716369bc71"}}
+{"ts":"2026-10-04T12:06:43+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.first_output","payload":{"pid":13645,"ms":1028}}
+{"ts":"2026-10-04T12:06:43+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.first_hook","payload":{"pid":13645,"ms":1433,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:07:44+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.bounced","payload":{"attempt":1,"max":2,"errors":[{"file":"docs/knowledge/points/earn-rule.md","message":"[지식 검토: 규칙 절에 지금 상태] \"이미 저장된 주문의 `points.earned`와 이미 처리한 환불은 다시 계산하지 않고 저장된 값을 쓴다. 영수증 글자(`src/format/`)는 바뀌면 안 된다.\" → 이 줄은 이번 Work의 비목표(범위)를 적은 것이므로 `## 규칙`에서 빼고, 필요하면 저장된 `points.earned`를 쓴다는 일반 규칙만 남긴다."}]}}
+{"ts":"2026-10-04T12:07:55+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:08:12+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T12:08:12+00:00","work_id":"w-20261004-002","type":"work.completed","payload":{"delivery":"none"}}

@@ -1,0 +1,721 @@
+결과 폴더: /home/user/relay-v2/app/eval/results/e12-points
+작업 폴더: /tmp/relay-eval/e12-points
+11:58:27 [26-points-rate-change k10#1] 준비 (/tmp/relay-eval/e12-points/26-points-rate-change-k10-1/shop)
+11:58:27 [27-points-gift-teammate k10#1] 준비 (/tmp/relay-eval/e12-points/27-points-gift-teammate-k10-1/shop)
+11:58:30 [26-points-rate-change k10#1] Work 1/3 시작
+11:58:30 [27-points-gift-teammate k10#1] Work 1/2 시작
+11:58:40 [27-points-gift-teammate k10#1] 차례 1 (0분 13초, 화면이 멈춤) friction=0 click button "새 Work"
+11:58:41 [26-points-rate-change k10#1] 차례 1 (0분 13초, 화면이 멈춤) friction=0 click button "새 Work"
+11:58:53 [27-points-gift-teammate k10#1] 차례 2 (0분 24초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "주문 O-1042의 적립 예정 포인트가 268P로 나오는데 고객센터가 적
+…(248자 생략)", click button "시작"
+11:58:53 [26-points-rate-change k10#1] 차례 2 (0분 24초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "주문 O-1042의 적립 예정 포인트가 268P로 나오는데 고객센터 계산
+…(173자 생략)", click button "시작"
+11:58:54 [27-points-gift-teammate k10#1] 첫 실행 창 수락: folder_trust
+11:58:55 [26-points-rate-change k10#1] 첫 실행 창 수락: folder_trust
+11:58:57 [27-points-gift-teammate k10#1] 첫 실행 창 수락: bypass_permissions_warning
+11:58:57 [26-points-rate-change k10#1] 첫 실행 창 수락: bypass_permissions_warning
+11:59:26 [27-points-gift-teammate k10#1] 차례 3 (0분 58초, 화면이 멈춤) friction=0 key
+11:59:32 [26-points-rate-change k10#1] 차례 3 (1분 4초, 화면이 멈춤) friction=0 key, type "237P 맞습니다. 규정: 상품 금액에서 쿠폰 할인과 사용한 포인트를 뺀
+…(34자 생략)"
+11:59:44 [26-points-rate-change k10#1] 차례 4 (1분 16초, 화면이 멈춤) friction=0 key
+11:59:47 [27-points-gift-teammate k10#1] 차례 4 (1분 19초, 화면이 멈춤) friction=0 click button "의도 승인"
+11:59:54 [26-points-rate-change k10#1] 차례 5 (1분 27초, 화면이 멈춤) friction=0 key, wait
+12:00:05 [27-points-gift-teammate k10#1] 첫 코드 변경 (1분 38초)
+12:00:24 [26-points-rate-change k10#1] 차례 6 (1분 57초, 화면이 멈춤) friction=0 click button "의도 승인", wait
+12:00:52 [26-points-rate-change k10#1] 첫 코드 변경 (2분 25초)
+12:01:10 [27-points-gift-teammate k10#1] 차례 5 (2분 43초, 화면이 멈춤) friction=0 inspect_diff
+12:01:15 [27-points-gift-teammate k10#1] 차례 6 (2분 48초, 직전 행동의 결과) friction=0 key
+12:01:56 [26-points-rate-change k10#1] 차례 7 (3분 29초, 화면이 멈춤) friction=0 inspect_diff
+12:01:59 [27-points-gift-teammate k10#1] 차례 7 (3분 31초, 화면이 멈춤) friction=0 click button "완료만"
+12:02:01 [26-points-rate-change k10#1] 차례 8 (3분 34초, 직전 행동의 결과) friction=0 key, wait
+12:02:09 [27-points-gift-teammate k10#1] 차례 8 (3분 42초, 화면이 멈춤) friction=0 done
+12:02:21 [27-points-gift-teammate k10#1] Work 1 끝: done (적립 기준 금액 O, 적립 버림 O, 주문·영수증 그대로 O), 차례 8, 질문 2
+12:02:22 [27-points-gift-teammate k10#1] 팀원 교대: 머지 1개
+12:02:24 [27-points-gift-teammate k10#1] 팀원 교대: 새 앱 저장소에서 새로 clone한 레포를 등록했습니다.
+12:02:24 [27-points-gift-teammate k10#1] Work 2/2 시작
+12:02:34 [27-points-gift-teammate k10#1] 차례 9 (4분 6초, 화면이 멈춤) friction=0 click button "새 Work"
+12:02:46 [27-points-gift-teammate k10#1] 차례 10 (4분 17초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "선물하기 주문 G-0213(examples/G-0213.json)의 적립
+…(177자 생략)", click button "시작"
+12:02:48 [27-points-gift-teammate k10#1] 첫 실행 창 수락: folder_trust
+12:02:57 [26-points-rate-change k10#1] 차례 9 (4분 29초, 화면이 멈춤) friction=0 click button "완료만", wait
+12:03:07 [26-points-rate-change k10#1] 차례 10 (4분 40초, 화면이 멈춤) friction=0 done
+12:03:17 [27-points-gift-teammate k10#1] 차례 11 (4분 49초, 화면이 멈춤) friction=0 click button "의도 승인"
+12:03:19 [26-points-rate-change k10#1] Work 1 끝: done (적립 기준 금액 O, 적립 버림 O, 주문·영수증 그대로 O), 차례 10, 질문 2
+12:03:19 [26-points-rate-change k10#1] Work 2/3 시작
+12:03:32 [26-points-rate-change k10#1] 차례 11 (5분 5초, 화면이 멈춤) friction=0 click button "새 Work"
+12:03:46 [26-points-rate-change k10#1] 차례 12 (5분 17초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "정산팀이 9월 포인트 회수 내역을 대조하다가 부분 환불 때 회수한 포인트
+…(250자 생략)", click button "시작"
+12:04:30 [26-points-rate-change k10#1] 차례 13 (6분 2초, 화면이 멈춤) friction=0 key, type "정산팀 계산으론 R-0311 회수가 132P예요. 계산식은 부분 환불 때
+…(102자 생략)"
+12:04:47 [27-points-gift-teammate k10#1] 차례 12 (6분 20초, 화면이 멈춤) friction=0 key, wait
+12:04:49 [26-points-rate-change k10#1] 차례 14 (6분 20초, 화면이 멈춤) friction=1 key, type "둘 다 아니에요. 회수 = 주문에 저장된 원래 적립 포인트 - 남은 상품
+…(115자 생략)"
+12:04:59 [26-points-rate-change k10#1] 차례 15 (6분 31초, 화면이 멈춤) friction=0 key, wait
+12:05:26 [27-points-gift-teammate k10#1] 차례 13 (6분 58초, 화면이 멈춤) friction=0 click tab "전체 변경"
+12:05:29 [26-points-rate-change k10#1] 차례 16 (7분 2초, 화면이 멈춤) friction=0 click button "의도 승인", wait
+12:05:37 [27-points-gift-teammate k10#1] 차례 14 (7분 9초, 화면이 멈춤) friction=0 click button "완료만"
+12:05:47 [27-points-gift-teammate k10#1] 차례 15 (7분 20초, 화면이 멈춤) friction=0 done
+12:05:59 [27-points-gift-teammate k10#1] Work 2 끝: done (선물 적립 O, 선물 주문 그대로 O), 차례 7, 질문 1
+12:05:59 [27-points-gift-teammate k10#1] 끝: done (7분 32초)
+12:06:02 [27-points-gift-teammate k10#1] 결과: 성공 (적립 기준 금액 O, 적립 버림 O, 주문·영수증 그대로 O, 선물 적립 O, 선물 주문 그대로 O), 차례 15, 사람 비용 $1.73
+== 진행 1/10
+12:06:02 [26-points-rate-change k10#2] 준비 (/tmp/relay-eval/e12-points/26-points-rate-change-k10-2/shop)
+12:06:04 [26-points-rate-change k10#2] Work 1/3 시작
+12:06:14 [26-points-rate-change k10#2] 차례 1 (0분 11초, 화면이 멈춤) friction=0 click button "새 Work"
+12:06:27 [26-points-rate-change k10#2] 차례 2 (0분 22초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "주문 O-1042의 적립 예정 포인트가 268P로 나오는데 고객센터가 적
+…(181자 생략)", click button "시작"
+12:06:28 [26-points-rate-change k10#2] 첫 실행 창 수락: folder_trust
+12:06:31 [26-points-rate-change k10#2] 첫 실행 창 수락: bypass_permissions_warning
+12:07:06 [26-points-rate-change k10#2] 차례 3 (1분 4초, 화면이 멈춤) friction=0 key
+12:07:16 [26-points-rate-change k10#1] 차례 17 (8분 49초, 화면이 멈춤) friction=0 inspect_diff
+12:07:18 [26-points-rate-change k10#2] 차례 4 (1분 15초, 화면이 멈춤) friction=0 key
+12:07:21 [26-points-rate-change k10#1] 차례 18 (8분 53초, 직전 행동의 결과) friction=0 key, wait
+12:07:27 [26-points-rate-change k10#2] 차례 5 (1분 25초, 화면이 멈춤) friction=0 key, wait
+12:08:06 [26-points-rate-change k10#2] 차례 6 (2분 3초, 화면이 멈춤) friction=1 type "위험에 적은 환불 회수가 마음에 걸려요. 적립은 237P인데 환불 때 회
+…(87자 생략)"
+12:08:12 [26-points-rate-change k10#1] 차례 19 (9분 45초, 화면이 멈춤) friction=0 click button "완료만", wait
+12:08:23 [26-points-rate-change k10#1] 차례 20 (9분 57초, 화면이 멈춤) friction=0 done
+12:08:36 [26-points-rate-change k10#1] Work 2 끝: done (회수 포인트 O, 환불 그대로 O), 차례 10, 질문 2
+12:08:37 [26-points-rate-change k10#1] Work 3/3 시작
+12:08:38 [26-points-rate-change k10#2] 차례 7 (2분 36초, 화면이 멈춤) friction=0 click button "의도 승인", wait
+12:08:48 [26-points-rate-change k10#1] 차례 21 (10분 20초, 화면이 멈춤) friction=0 click button "새 Work"
+12:09:01 [26-points-rate-change k10#1] 차례 22 (10분 32초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "이번 배포부터 기본 적립률을 1%에서 2%로 올리기로 했다. 고객센터가 
+…(154자 생략)", click button "시작"
+12:09:09 [26-points-rate-change k10#2] 첫 코드 변경 (3분 7초)
+12:09:30 [26-points-rate-change k10#1] 차례 23 (11분 3초, 화면이 멈춤) friction=1 key
+12:10:04 [26-points-rate-change k10#1] 차례 24 (11분 36초, 화면이 멈춤) friction=0 click button "의도 승인"
+12:10:21 [26-points-rate-change k10#2] 차례 8 (4분 18초, 화면이 멈춤) friction=0 key, wait, inspect_diff
+12:10:25 [26-points-rate-change k10#2] 차례 9 (4분 23초, 직전 행동의 결과) friction=0 wait
+12:11:07 [26-points-rate-change k10#1] 차례 25 (12분 39초, 화면이 멈춤) friction=1 key, type "환불 회수 포인트를 새 비율로 계산할지는 이번 범위가 아니고 정산팀과 따
+…(77자 생략)"
+12:11:38 [26-points-rate-change k10#2] 차례 10 (5분 35초, 화면이 멈춤) friction=0 click button "완료만", wait
+12:11:48 [26-points-rate-change k10#2] 차례 11 (5분 46초, 화면이 멈춤) friction=0 done
+12:12:00 [26-points-rate-change k10#2] Work 1 끝: done (적립 기준 금액 O, 적립 버림 O, 주문·영수증 그대로 O), 차례 11, 질문 2
+12:12:00 [26-points-rate-change k10#2] Work 2/3 시작
+12:12:12 [26-points-rate-change k10#2] 차례 12 (6분 9초, 화면이 멈춤) friction=0 click button "새 Work"
+12:12:26 [26-points-rate-change k10#2] 차례 13 (6분 22초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "정산팀이 9월 포인트 회수 내역을 대조하다가 부분 환불 때 회수한 포인트
+…(254자 생략)", click button "시작"
+12:12:47 [26-points-rate-change k10#1] 차례 26 (14분 19초, 화면이 멈춤) friction=0 key, inspect_diff
+12:12:52 [26-points-rate-change k10#1] 차례 27 (14분 25초, 직전 행동의 결과) friction=1 wait
+12:13:02 [26-points-rate-change k10#2] 차례 14 (6분 58초, 화면이 멈춤) friction=0 key, type "132P가 맞아요. 회수 = 주문에 저장된 원래 적립 포인트 − 남은 상
+…(115자 생략)"
+12:13:33 [26-points-rate-change k10#2] 차례 15 (7분 30초, 화면이 멈춤) friction=0 click button "의도 승인"
+12:13:50 [26-points-rate-change k10#1] 차례 28 (15분 22초, 화면이 멈춤) friction=0 click tab "변경"
+12:14:01 [26-points-rate-change k10#1] 차례 29 (15분 33초, 화면이 멈춤) friction=0 click button "완료만"
+12:14:12 [26-points-rate-change k10#1] 차례 30 (15분 45초, 화면이 멈춤) friction=0 done
+12:14:26 [26-points-rate-change k10#1] Work 3 끝: done (적립률 2% O, 저장된 포인트 그대로 O), 차례 10, 질문 3
+12:14:26 [26-points-rate-change k10#1] 끝: done (15분 59초)
+12:14:31 [26-points-rate-change k10#1] 결과: 성공 (적립 기준 금액 O, 적립 버림 O, 주문·영수증 그대로 O, 회수 포인트 O, 환불 그대로 O, 적립률 2% O, 저장된 포인트 그대로 O), 차례 30, 사람 비용 $4.82
+== 진행 2/10
+12:14:31 [27-points-gift-teammate k10#2] 준비 (/tmp/relay-eval/e12-points/27-points-gift-teammate-k10-2/shop)
+12:14:34 [27-points-gift-teammate k10#2] Work 1/2 시작
+12:14:45 [27-points-gift-teammate k10#2] 차례 1 (0분 13초, 화면이 멈춤) friction=0 click button "새 Work"
+12:14:58 [27-points-gift-teammate k10#2] 차례 2 (0분 25초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "고객센터에 포인트 문의가 들어왔어요. 주문 O-1042(examples/
+…(266자 생략)", click button "시작"
+12:15:01 [27-points-gift-teammate k10#2] 첫 실행 창 수락: folder_trust
+12:15:04 [27-points-gift-teammate k10#2] 첫 실행 창 수락: bypass_permissions_warning
+12:15:39 [27-points-gift-teammate k10#2] 차례 3 (1분 7초, 화면이 멈춤) friction=0 click button "의도 승인"
+12:15:39 [26-points-rate-change k10#2] 차례 16 (9분 37초, 화면이 멈춤) friction=0 inspect_diff
+12:15:46 [26-points-rate-change k10#2] 차례 17 (9분 43초, 직전 행동의 결과) friction=0 click button "완료만"
+12:15:57 [27-points-gift-teammate k10#2] 첫 코드 변경 (1분 26초)
+12:15:59 [26-points-rate-change k10#2] 차례 18 (9분 57초, 화면이 멈춤) friction=0 done
+12:16:15 [26-points-rate-change k10#2] Work 2 끝: done (회수 포인트 O, 환불 그대로 O), 차례 7, 질문 1
+12:16:15 [26-points-rate-change k10#2] Work 3/3 시작
+12:16:27 [26-points-rate-change k10#2] 차례 19 (10분 24초, 화면이 멈춤) friction=0 click button "새 Work"
+12:16:40 [26-points-rate-change k10#2] 차례 20 (10분 36초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "이번 배포부터 기본 적립률을 1%에서 2%로 올리기로 했습니다. 고객센터
+…(158자 생략)", click button "시작"
+12:17:07 [27-points-gift-teammate k10#2] 차례 4 (2분 36초, 화면이 멈춤) friction=0 inspect_diff
+12:17:15 [27-points-gift-teammate k10#2] 차례 5 (2분 42초, 직전 행동의 결과) friction=0 key, type "2번만 반영해 주세요. 1번 환불은 건드리지 말고 별도로 남겨 주세요."
+12:17:24 [26-points-rate-change k10#2] 차례 21 (11분 21초, 화면이 멈춤) friction=1 key
+12:17:59 [26-points-rate-change k10#2] 차례 22 (11분 56초, 화면이 멈춤) friction=0 click button "의도 승인"
+12:18:00 [27-points-gift-teammate k10#2] 차례 6 (3분 27초, 화면이 멈춤) friction=0 click button "완료만"
+12:18:09 [26-points-rate-change k10#2] 차례 23 (12분 6초, 화면이 멈춤) friction=1 click button "의도 승인"
+12:18:10 [27-points-gift-teammate k10#2] 차례 7 (3분 39초, 화면이 멈춤) friction=0 done
+12:18:28 [27-points-gift-teammate k10#2] Work 1 끝: done (적립 기준 금액 O, 적립 버림 O, 주문·영수증 그대로 O), 차례 7, 질문 1
+12:18:28 [27-points-gift-teammate k10#2] 팀원 교대: 머지 1개
+12:18:31 [27-points-gift-teammate k10#2] 팀원 교대: 새 앱 저장소에서 새로 clone한 레포를 등록했습니다.
+12:18:31 [27-points-gift-teammate k10#2] Work 2/2 시작
+12:18:41 [27-points-gift-teammate k10#2] 차례 8 (4분 9초, 화면이 멈춤) friction=0 click button "새 Work"
+12:18:53 [27-points-gift-teammate k10#2] 차례 9 (4분 20초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "선물하기 주문 G-0213(examples/G-0213.json)의 적립
+…(193자 생략)", click button "시작"
+12:18:55 [27-points-gift-teammate k10#2] 첫 실행 창 수락: folder_trust
+12:19:25 [27-points-gift-teammate k10#2] 차례 10 (4분 53초, 화면이 멈춤) friction=0 click button "의도 승인"
+12:20:21 [26-points-rate-change k10#2] 차례 24 (14분 18초, 화면이 멈춤) friction=0 key
+12:21:04 [27-points-gift-teammate k10#2] 차례 11 (6분 31초, 화면이 멈춤) friction=0 click tab "전체 변경"
+12:21:14 [27-points-gift-teammate k10#2] 차례 12 (6분 41초, 화면이 멈춤) friction=0 click button "완료만"
+12:21:23 [26-points-rate-change k10#2] 차례 25 (15분 20초, 화면이 멈춤) friction=0 click tab "전체 변경"
+12:21:23 [27-points-gift-teammate k10#2] 차례 13 (6분 52초, 화면이 멈춤) friction=0 done
+12:21:33 [27-points-gift-teammate k10#2] Work 2 끝: done (선물 적립 O, 선물 주문 그대로 O), 차례 6, 질문 0
+12:21:33 [27-points-gift-teammate k10#2] 끝: done (7분 1초)
+12:21:36 [27-points-gift-teammate k10#2] 결과: 성공 (적립 기준 금액 O, 적립 버림 O, 주문·영수증 그대로 O, 선물 적립 O, 선물 주문 그대로 O), 차례 13, 사람 비용 $1.12
+== 진행 3/10
+12:21:36 [26-points-rate-change k10#3] 준비 (/tmp/relay-eval/e12-points/26-points-rate-change-k10-3/shop)
+12:21:37 [26-points-rate-change k10#2] 차례 26 (15분 34초, 화면이 멈춤) friction=1 click button "완료만"
+12:21:38 [26-points-rate-change k10#3] Work 1/3 시작
+12:21:47 [26-points-rate-change k10#2] 차례 27 (15분 45초, 화면이 멈춤) friction=0 done
+12:21:49 [26-points-rate-change k10#3] 차례 1 (0분 12초, 화면이 멈춤) friction=0 click button "새 Work"
+12:21:58 [26-points-rate-change k10#2] Work 3 끝: done (적립률 2% O, 저장된 포인트 그대로 O), 차례 9, 질문 2
+12:21:58 [26-points-rate-change k10#2] 끝: done (15분 56초)
+12:22:03 [26-points-rate-change k10#2] 결과: 성공 (적립 기준 금액 O, 적립 버림 O, 주문·영수증 그대로 O, 회수 포인트 O, 환불 그대로 O, 적립률 2% O, 저장된 포인트 그대로 O), 차례 27, 사람 비용 $3.67
+== 진행 4/10
+12:22:03 [27-points-gift-teammate k10#3] 준비 (/tmp/relay-eval/e12-points/27-points-gift-teammate-k10-3/shop)
+12:22:06 [27-points-gift-teammate k10#3] Work 1/2 시작
+12:22:10 [26-points-rate-change k10#3] 차례 2 (0분 32초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "주문 O-1042(examples/O-1042.json)의 적립 예정 포
+…(94자 생략)", click button "시작"
+12:22:12 [26-points-rate-change k10#3] 첫 실행 창 수락: folder_trust
+12:22:14 [26-points-rate-change k10#3] 첫 실행 창 수락: bypass_permissions_warning
+12:22:16 [27-points-gift-teammate k10#3] 차례 1 (0분 12초, 화면이 멈춤) friction=0 click button "새 Work"
+12:22:30 [27-points-gift-teammate k10#3] 차례 2 (0분 25초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "주문 O-1042(examples/O-1042.json)의 적립 예정 포
+…(226자 생략)", click button "시작"
+12:22:32 [27-points-gift-teammate k10#3] 첫 실행 창 수락: folder_trust
+12:22:35 [27-points-gift-teammate k10#3] 첫 실행 창 수락: bypass_permissions_warning
+12:22:45 [26-points-rate-change k10#3] 차례 3 (1분 8초, 화면이 멈춤) friction=0 key
+12:22:57 [26-points-rate-change k10#3] 차례 4 (1분 20초, 화면이 멈춤) friction=0 key
+12:23:07 [26-points-rate-change k10#3] 차례 5 (1분 30초, 화면이 멈춤) friction=0 key
+12:23:07 [27-points-gift-teammate k10#3] 차례 3 (1분 3초, 화면이 멈춤) friction=0 click button "의도 승인"
+12:23:23 [27-points-gift-teammate k10#3] 첫 코드 변경 (1분 19초)
+12:23:30 [26-points-rate-change k10#3] 차례 6 (1분 53초, 화면이 멈춤) friction=0 click button "의도 승인"
+12:24:00 [26-points-rate-change k10#3] 첫 코드 변경 (2분 24초)
+12:24:35 [27-points-gift-teammate k10#3] 차례 4 (2분 32초, 화면이 멈춤) friction=0 inspect_diff
+12:24:40 [27-points-gift-teammate k10#3] 차례 5 (2분 36초, 직전 행동의 결과) friction=0 key, wait
+12:25:20 [27-points-gift-teammate k10#3] 차례 6 (3분 16초, 화면이 멈춤) friction=0 click button "완료만"
+12:25:29 [26-points-rate-change k10#3] 차례 7 (3분 52초, 화면이 멈춤) friction=0 inspect_diff
+12:25:31 [27-points-gift-teammate k10#3] 차례 7 (3분 27초, 화면이 멈춤) friction=0 done
+12:25:36 [26-points-rate-change k10#3] 차례 8 (4분 0초, 직전 행동의 결과) friction=0 key
+12:25:43 [27-points-gift-teammate k10#3] Work 1 끝: done (적립 기준 금액 O, 적립 버림 O, 주문·영수증 그대로 O), 차례 7, 질문 1
+12:25:44 [27-points-gift-teammate k10#3] 팀원 교대: 머지 1개
+12:25:46 [27-points-gift-teammate k10#3] 팀원 교대: 새 앱 저장소에서 새로 clone한 레포를 등록했습니다.
+12:25:46 [27-points-gift-teammate k10#3] Work 2/2 시작
+12:25:56 [27-points-gift-teammate k10#3] 차례 8 (3분 52초, 화면이 멈춤) friction=0 click button "새 Work"
+12:26:09 [27-points-gift-teammate k10#3] 차례 9 (4분 3초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "선물하기 주문 G-0213(examples/G-0213.json)의 적립
+…(176자 생략)", click button "시작"
+12:26:10 [27-points-gift-teammate k10#3] 첫 실행 창 수락: folder_trust
+12:26:23 [26-points-rate-change k10#3] 차례 9 (4분 47초, 화면이 멈춤) friction=0 click button "완료만"
+12:26:34 [26-points-rate-change k10#3] 차례 10 (4분 58초, 화면이 멈춤) friction=0 done
+12:26:45 [26-points-rate-change k10#3] Work 1 끝: done (적립 기준 금액 O, 적립 버림 O, 주문·영수증 그대로 O), 차례 10, 질문 2
+12:26:45 [26-points-rate-change k10#3] Work 2/3 시작
+12:26:45 [27-points-gift-teammate k10#3] 차례 10 (4분 39초, 화면이 멈춤) friction=0 key, type "규칙은 정확히 모릅니다. 일반 주문 쪽은 동료가 고객센터와 맞췄다고만 들
+…(83자 생략)"
+12:26:56 [26-points-rate-change k10#3] 차례 11 (5분 19초, 화면이 멈춤) friction=0 click button "새 Work"
+12:27:09 [26-points-rate-change k10#3] 차례 12 (5분 31초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "정산팀이 9월 포인트 회수 내역을 대조하다가 부분 환불 때 회수한 포인트
+…(252자 생략)", click button "시작"
+12:27:19 [27-points-gift-teammate k10#3] 차례 11 (5분 14초, 화면이 멈춤) friction=0 click button "의도 승인"
+12:27:47 [26-points-rate-change k10#3] 차례 13 (6분 10초, 화면이 멈춤) friction=0 click button "의도 승인"
+12:29:00 [27-points-gift-teammate k10#3] 차례 12 (6분 56초, 화면이 멈춤) friction=0 click tab "전체 변경"
+12:29:11 [27-points-gift-teammate k10#3] 차례 13 (7분 7초, 화면이 멈춤) friction=0 click button "완료만"
+12:29:22 [27-points-gift-teammate k10#3] 차례 14 (7분 19초, 화면이 멈춤) friction=0 done
+12:29:26 [26-points-rate-change k10#3] 차례 14 (7분 49초, 화면이 멈춤) friction=0 inspect_diff
+12:29:33 [27-points-gift-teammate k10#3] Work 2 끝: done (선물 적립 O, 선물 주문 그대로 O), 차례 7, 질문 1
+12:29:33 [27-points-gift-teammate k10#3] 끝: done (7분 30초)
+12:29:37 [27-points-gift-teammate k10#3] 결과: 성공 (적립 기준 금액 O, 적립 버림 O, 주문·영수증 그대로 O, 선물 적립 O, 선물 주문 그대로 O), 차례 14, 사람 비용 $1.25
+== 진행 5/10
+12:29:37 [26-points-rate-change k10#4] 준비 (/tmp/relay-eval/e12-points/26-points-rate-change-k10-4/shop)
+12:29:37 [26-points-rate-change k10#3] 차례 15 (8분 0초, 직전 행동의 결과) friction=1 key
+12:29:39 [26-points-rate-change k10#4] Work 1/3 시작
+12:29:49 [26-points-rate-change k10#4] 차례 1 (0분 12초, 화면이 멈춤) friction=0 click button "새 Work"
+12:29:52 [26-points-rate-change k10#3] 차례 16 (8분 15초, 화면이 멈춤) friction=1 type "지적 반영은 잠깐 보류하고 하나 확인할게요. createRefund가 환
+…(142자 생략)"
+12:30:01 [26-points-rate-change k10#4] 차례 2 (0분 22초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "주문 O-1042의 적립 예정 포인트가 268P로 나오는데 고객센터가 적
+…(111자 생략)", click button "시작"
+12:30:03 [26-points-rate-change k10#4] 첫 실행 창 수락: folder_trust
+12:30:06 [26-points-rate-change k10#4] 첫 실행 창 수락: bypass_permissions_warning
+12:30:32 [26-points-rate-change k10#3] 차례 17 (8분 55초, 화면이 멈춤) friction=1 type "설명 고마워요. 근데 정산팀 규정은 부분 환불 회수 포인트 = 주문에 저
+…(212자 생략)"
+12:30:43 [26-points-rate-change k10#4] 차례 3 (1분 4초, 화면이 멈춤) friction=0 key, type "적립 규정: 상품 금액에서 쿠폰 할인과 사용한 포인트를 뺀 금액의 1%,
+…(98자 생략)"
+12:30:53 [26-points-rate-change k10#4] 차례 4 (1분 16초, 화면이 멈춤) friction=0 key
+12:31:06 [26-points-rate-change k10#4] 차례 5 (1분 29초, 화면이 멈춤) friction=0 key, wait
+12:31:18 [26-points-rate-change k10#3] 차례 18 (9분 41초, 화면이 멈춤) friction=0 key, key
+12:31:33 [26-points-rate-change k10#4] 차례 6 (1분 56초, 화면이 멈춤) friction=0 click button "의도 승인", wait
+12:31:55 [26-points-rate-change k10#4] 첫 코드 변경 (2분 18초)
+12:33:17 [26-points-rate-change k10#4] 차례 7 (3분 39초, 화면이 멈춤) friction=0 key, inspect_diff
+12:33:23 [26-points-rate-change k10#4] 차례 8 (3분 46초, 직전 행동의 결과) friction=0 wait
+12:34:11 [26-points-rate-change k10#4] 차례 9 (4분 34초, 화면이 멈춤) friction=0 click button "완료만", wait
+12:34:22 [26-points-rate-change k10#4] 차례 10 (4분 45초, 화면이 멈춤) friction=0 done
+12:34:34 [26-points-rate-change k10#4] Work 1 끝: done (적립 기준 금액 O, 적립 버림 O, 주문·영수증 그대로 O), 차례 10, 질문 2
+12:34:34 [26-points-rate-change k10#4] Work 2/3 시작
+12:34:47 [26-points-rate-change k10#4] 차례 11 (5분 9초, 화면이 멈춤) friction=0 click button "새 Work"
+12:34:48 [26-points-rate-change k10#3] 차례 19 (13분 12초, 화면이 멈춤) friction=1 click button "완료만"
+12:35:00 [26-points-rate-change k10#3] 차례 20 (13분 24초, 화면이 멈춤) friction=1 done
+12:35:00 [26-points-rate-change k10#4] 차례 12 (5분 21초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "정산팀이 9월 포인트 회수 내역을 대조하다가 부분 환불 때 회수한 포인트
+…(254자 생략)", click button "시작"
+12:35:12 [26-points-rate-change k10#3] Work 2 끝: done (회수 포인트 O, 환불 그대로 O), 차례 10, 질문 2
+12:35:12 [26-points-rate-change k10#3] Work 3/3 시작
+12:35:24 [26-points-rate-change k10#3] 차례 21 (13분 47초, 화면이 멈춤) friction=0 click button "새 Work"
+12:35:37 [26-points-rate-change k10#3] 차례 22 (13분 58초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "이번 배포부터 기본 적립률을 1%에서 2%로 올리기로 했습니다. 고객센터
+…(159자 생략)", click button "시작"
+12:35:48 [26-points-rate-change k10#4] 차례 13 (6분 10초, 화면이 멈춤) friction=0 key, type "정산팀 계산은 132P가 맞아요. 회수 포인트 = 주문에 저장된 원래 적
+…(208자 생략)"
+12:36:08 [26-points-rate-change k10#3] 차례 23 (14분 31초, 화면이 멈춤) friction=1 key
+12:36:09 [26-points-rate-change k10#4] 차례 14 (6분 32초, 화면이 멈춤) friction=0 key
+12:36:21 [26-points-rate-change k10#4] 차례 15 (6분 43초, 화면이 멈춤) friction=0 key, wait
+12:36:36 [26-points-rate-change k10#3] 차례 24 (14분 59초, 화면이 멈춤) friction=0 click button "의도 승인"
+12:36:50 [26-points-rate-change k10#4] 차례 16 (7분 13초, 화면이 멈춤) friction=0 click button "의도 승인", wait
+12:37:31 [26-points-rate-change k10#3] 차례 25 (15분 53초, 화면이 멈춤) friction=1 key, type "환불 회수 포인트를 새 비율로 계산할지는 이번 범위가 아니야. 정산팀과 
+…(47자 생략)"
+12:38:10 [26-points-rate-change k10#4] 차례 17 (8분 32초, 화면이 멈춤) friction=0 key, wait
+12:38:29 [26-points-rate-change k10#3] 차례 26 (16분 52초, 화면이 멈춤) friction=0 click tab "변경"
+12:38:40 [26-points-rate-change k10#3] 차례 27 (17분 3초, 화면이 멈춤) friction=0 click button "승인"
+12:38:53 [26-points-rate-change k10#4] 차례 18 (9분 15초, 화면이 멈춤) friction=0 click tab "전체 변경"
+12:39:04 [26-points-rate-change k10#4] 차례 19 (9분 27초, 화면이 멈춤) friction=0 click button "완료만", wait
+12:39:16 [26-points-rate-change k10#4] 차례 20 (9분 39초, 화면이 멈춤) friction=0 done
+12:39:28 [26-points-rate-change k10#4] Work 2 끝: done (회수 포인트 O, 환불 그대로 O), 차례 10, 질문 2
+12:39:28 [26-points-rate-change k10#4] Work 3/3 시작
+12:39:29 [26-points-rate-change k10#3] 차례 28 (17분 52초, 화면이 멈춤) friction=0 key
+12:39:40 [26-points-rate-change k10#4] 차례 21 (10분 2초, 화면이 멈춤) friction=0 click button "새 Work"
+12:39:52 [26-points-rate-change k10#4] 차례 22 (10분 13초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "이번 배포부터 기본 적립률을 1%에서 2%로 올리기로 했습니다. 고객센터
+…(157자 생략)", click button "시작"
+12:40:23 [26-points-rate-change k10#4] 차례 23 (10분 45초, 화면이 멈춤) friction=1 key, key
+12:40:53 [26-points-rate-change k10#4] 차례 24 (11분 16초, 화면이 멈춤) friction=1 type "초안에서 환불 회수 포인트도 2%로 바꾸는 걸로 되어 있는데, 환불 때 
+…(105자 생략)"
+12:41:18 [26-points-rate-change k10#4] 차례 25 (11분 40초, 화면이 멈춤) friction=0 click button "의도 승인"
+12:43:08 [26-points-rate-change k10#4] 차례 26 (13분 30초, 화면이 멈춤) friction=0 key, key, wait
+12:43:21 [26-points-rate-change k10#3] 차례 29 (21분 44초, 화면이 멈춤) friction=0 click button "완료만"
+12:43:32 [26-points-rate-change k10#3] 차례 30 (21분 55초, 화면이 멈춤) friction=0 done
+12:43:43 [26-points-rate-change k10#3] Work 3 끝: done (적립률 2% O, 저장된 포인트 그대로 O), 차례 10, 질문 3
+12:43:43 [26-points-rate-change k10#3] 끝: done (22분 7초)
+12:43:50 [26-points-rate-change k10#3] 결과: 성공 (적립 기준 금액 O, 적립 버림 O, 주문·영수증 그대로 O, 회수 포인트 O, 환불 그대로 O, 적립률 2% O, 저장된 포인트 그대로 O), 차례 30, 사람 비용 $4.46
+== 진행 6/10
+12:43:50 [27-points-gift-teammate k10#4] 준비 (/tmp/relay-eval/e12-points/27-points-gift-teammate-k10-4/shop)
+12:43:53 [27-points-gift-teammate k10#4] Work 1/2 시작
+12:44:02 [27-points-gift-teammate k10#4] 차례 1 (0분 12초, 화면이 멈춤) friction=0 click button "새 Work"
+12:44:15 [27-points-gift-teammate k10#4] 차례 2 (0분 23초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "주문 O-1042(examples/O-1042.json)의 적립 예정 포
+…(251자 생략)", click button "시작"
+12:44:18 [26-points-rate-change k10#4] 차례 27 (14분 40초, 화면이 멈춤) friction=0 click tab "전체 변경"
+12:44:18 [27-points-gift-teammate k10#4] 첫 실행 창 수락: folder_trust
+12:44:21 [27-points-gift-teammate k10#4] 첫 실행 창 수락: bypass_permissions_warning
+12:44:30 [26-points-rate-change k10#4] 차례 28 (14분 52초, 화면이 멈춤) friction=0 click button "완료만"
+12:44:41 [26-points-rate-change k10#4] 차례 29 (15분 4초, 화면이 멈춤) friction=0 done
+12:44:52 [26-points-rate-change k10#4] Work 3 끝: done (적립률 2% O, 저장된 포인트 그대로 O), 차례 9, 질문 2
+12:44:52 [26-points-rate-change k10#4] 끝: done (15분 15초)
+12:44:58 [26-points-rate-change k10#4] 결과: 성공 (적립 기준 금액 O, 적립 버림 O, 주문·영수증 그대로 O, 회수 포인트 O, 환불 그대로 O, 적립률 2% O, 저장된 포인트 그대로 O), 차례 29, 사람 비용 $3.81
+== 진행 7/10
+12:44:58 [26-points-rate-change k10#5] 준비 (/tmp/relay-eval/e12-points/26-points-rate-change-k10-5/shop)
+12:44:59 [27-points-gift-teammate k10#4] 차례 3 (1분 8초, 화면이 멈춤) friction=0 key
+12:45:00 [26-points-rate-change k10#5] Work 1/3 시작
+12:45:08 [27-points-gift-teammate k10#4] 차례 4 (1분 18초, 화면이 멈춤) friction=0 key
+12:45:11 [26-points-rate-change k10#5] 차례 1 (0분 13초, 화면이 멈춤) friction=0 click button "새 Work"
+12:45:18 [27-points-gift-teammate k10#4] 차례 5 (1분 28초, 화면이 멈춤) friction=0 key, wait
+12:45:24 [26-points-rate-change k10#5] 차례 2 (0분 24초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "주문 O-1042(examples/O-1042.json)의 적립 예정 포
+…(103자 생략)", click button "시작"
+12:45:26 [26-points-rate-change k10#5] 첫 실행 창 수락: folder_trust
+12:45:28 [26-points-rate-change k10#5] 첫 실행 창 수락: bypass_permissions_warning
+12:45:43 [27-points-gift-teammate k10#4] 차례 6 (1분 52초, 화면이 멈춤) friction=0 click button "의도 승인", wait
+12:46:01 [26-points-rate-change k10#5] 차례 3 (1분 2초, 화면이 멈춤) friction=0 key
+12:46:04 [27-points-gift-teammate k10#4] 첫 코드 변경 (2분 14초)
+12:46:12 [26-points-rate-change k10#5] 차례 4 (1분 13초, 화면이 멈춤) friction=0 key
+12:46:22 [26-points-rate-change k10#5] 차례 5 (1분 24초, 화면이 멈춤) friction=0 key, wait
+12:46:51 [26-points-rate-change k10#5] 차례 6 (1분 52초, 화면이 멈춤) friction=0 click button "의도 승인", wait
+12:47:16 [26-points-rate-change k10#5] 첫 코드 변경 (2분 17초)
+12:47:19 [27-points-gift-teammate k10#4] 차례 7 (3분 29초, 화면이 멈춤) friction=0 click tab "전체 변경"
+12:47:30 [27-points-gift-teammate k10#4] 차례 8 (3분 39초, 화면이 멈춤) friction=0 click button "완료만", wait
+12:47:40 [27-points-gift-teammate k10#4] 차례 9 (3분 50초, 화면이 멈춤) friction=0 done
+12:47:53 [27-points-gift-teammate k10#4] Work 1 끝: done (적립 기준 금액 O, 적립 버림 O, 주문·영수증 그대로 O), 차례 9, 질문 1
+12:47:53 [27-points-gift-teammate k10#4] 팀원 교대: 머지 1개
+12:47:56 [27-points-gift-teammate k10#4] 팀원 교대: 새 앱 저장소에서 새로 clone한 레포를 등록했습니다.
+12:47:56 [27-points-gift-teammate k10#4] Work 2/2 시작
+12:48:06 [27-points-gift-teammate k10#4] 차례 10 (4분 15초, 화면이 멈춤) friction=0 click button "새 Work"
+12:48:19 [27-points-gift-teammate k10#4] 차례 11 (4분 27초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "선물하기 주문 G-0213(examples/G-0213.json)의 적립
+…(163자 생략)", click button "시작"
+12:48:21 [27-points-gift-teammate k10#4] 첫 실행 창 수락: folder_trust
+12:48:27 [26-points-rate-change k10#5] 차례 7 (3분 28초, 화면이 멈춤) friction=0 click tab "전체 변경"
+12:48:41 [26-points-rate-change k10#5] 차례 8 (3분 41초, 화면이 멈춤) friction=0 click tab "03 리뷰와 검증", type "환불할 때 회수하는 적립 포인트 계산도 이 earnPoints나 perc
+…(52자 생략)"
+12:48:56 [27-points-gift-teammate k10#4] 차례 12 (5분 4초, 화면이 멈춤) friction=0 key, type "규칙은 나도 자세히 몰라. 고객센터 계산으로는 G-0213이 218P여야
+…(82자 생략)"
+12:49:08 [27-points-gift-teammate k10#4] 차례 13 (5분 17초, 화면이 멈춤) friction=0 key
+12:49:16 [26-points-rate-change k10#5] 차례 9 (4분 17초, 화면이 멈춤) friction=1 type "2번으로 가죠. 환불도 같은 적립 규정(쿠폰·사용 포인트 차감 후 금액 
+…(179자 생략)"
+12:49:18 [27-points-gift-teammate k10#4] 차례 14 (5분 27초, 화면이 멈춤) friction=0 key, wait
+12:49:53 [27-points-gift-teammate k10#4] 차례 15 (6분 2초, 화면이 멈춤) friction=0 click button "의도 승인", wait
+12:50:46 [26-points-rate-change k10#5] 차례 10 (5분 48초, 화면이 멈춤) friction=1 click tab "전체 변경"
+12:50:58 [26-points-rate-change k10#5] 차례 11 (6분 0초, 화면이 멈춤) friction=0 click button "완료만", wait
+12:51:10 [26-points-rate-change k10#5] 차례 12 (6분 12초, 화면이 멈춤) friction=0 done
+12:51:23 [26-points-rate-change k10#5] Work 1 끝: done (적립 기준 금액 O, 적립 버림 O, 주문·영수증 그대로 O), 차례 12, 질문 1
+12:51:23 [26-points-rate-change k10#5] Work 2/3 시작
+12:51:23 [27-points-gift-teammate k10#4] 차례 16 (7분 33초, 화면이 멈춤) friction=0 click tab "전체 변경"
+12:51:33 [26-points-rate-change k10#5] 차례 13 (6분 35초, 화면이 멈춤) friction=0 click button "새 Work"
+12:51:35 [27-points-gift-teammate k10#4] 차례 17 (7분 44초, 화면이 멈춤) friction=0 click button "완료만", wait
+12:51:45 [27-points-gift-teammate k10#4] 차례 18 (7분 55초, 화면이 멈춤) friction=0 done
+12:51:46 [26-points-rate-change k10#5] 차례 14 (6분 46초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "정산팀이 9월 포인트 회수 내역을 대조하다가 부분 환불 때 회수한 포인트
+…(254자 생략)", click button "시작"
+12:51:57 [27-points-gift-teammate k10#4] Work 2 끝: done (선물 적립 O, 선물 주문 그대로 O), 차례 9, 질문 1
+12:51:57 [27-points-gift-teammate k10#4] 끝: done (8분 7초)
+12:52:01 [27-points-gift-teammate k10#4] 결과: 성공 (적립 기준 금액 O, 적립 버림 O, 주문·영수증 그대로 O, 선물 적립 O, 선물 주문 그대로 O), 차례 18, 사람 비용 $1.77
+== 진행 8/10
+12:52:01 [27-points-gift-teammate k10#5] 준비 (/tmp/relay-eval/e12-points/27-points-gift-teammate-k10-5/shop)
+12:52:03 [27-points-gift-teammate k10#5] Work 1/2 시작
+12:52:13 [27-points-gift-teammate k10#5] 차례 1 (0분 11초, 화면이 멈춤) friction=0 click button "새 Work"
+12:52:26 [27-points-gift-teammate k10#5] 차례 2 (0분 23초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "주문 O-1042(examples/O-1042.json)의 적립 예정 포
+…(235자 생략)", click button "시작"
+12:52:27 [27-points-gift-teammate k10#5] 첫 실행 창 수락: folder_trust
+12:52:28 [26-points-rate-change k10#5] 차례 15 (7분 29초, 화면이 멈춤) friction=1 wait
+12:52:30 [27-points-gift-teammate k10#5] 첫 실행 창 수락: bypass_permissions_warning
+12:53:00 [27-points-gift-teammate k10#5] 차례 3 (0분 59초, 화면이 멈춤) friction=0 click button "의도 승인"
+12:53:04 [26-points-rate-change k10#5] 차례 16 (8분 4초, 기다림이 끝남) friction=1 type "정산팀 R-0311 회수 포인트는 132P야. 기준은 안분이 아니라: 회
+…(148자 생략)", wait
+12:53:25 [27-points-gift-teammate k10#5] 첫 코드 변경 (1분 24초)
+12:53:39 [26-points-rate-change k10#5] 차례 17 (8분 40초, 화면이 멈춤) friction=0 click button "의도 승인", wait
+12:54:47 [27-points-gift-teammate k10#5] 차례 4 (2분 47초, 화면이 멈춤) friction=0 inspect_diff
+12:54:52 [27-points-gift-teammate k10#5] 차례 5 (2분 51초, 직전 행동의 결과) friction=0 key
+12:55:11 [26-points-rate-change k10#5] 차례 18 (10분 12초, 화면이 멈춤) friction=0 key, wait
+12:55:44 [26-points-rate-change k10#5] 차례 19 (10분 45초, 화면이 멈춤) friction=0 key, wait
+12:55:49 [27-points-gift-teammate k10#5] 차례 6 (3분 48초, 화면이 멈춤) friction=0 click button "완료만"
+12:55:59 [27-points-gift-teammate k10#5] 차례 7 (3분 59초, 화면이 멈춤) friction=0 done
+12:56:10 [27-points-gift-teammate k10#5] Work 1 끝: done (적립 기준 금액 O, 적립 버림 O, 주문·영수증 그대로 O), 차례 7, 질문 1
+12:56:10 [27-points-gift-teammate k10#5] 팀원 교대: 머지 1개
+12:56:12 [27-points-gift-teammate k10#5] 팀원 교대: 새 앱 저장소에서 새로 clone한 레포를 등록했습니다.
+12:56:13 [27-points-gift-teammate k10#5] Work 2/2 시작
+12:56:23 [27-points-gift-teammate k10#5] 차례 8 (4분 22초, 화면이 멈춤) friction=0 click button "새 Work"
+12:56:31 [26-points-rate-change k10#5] 차례 20 (11분 32초, 화면이 멈춤) friction=0 click tab "전체 변경"
+12:56:36 [27-points-gift-teammate k10#5] 차례 9 (4분 33초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "선물하기 주문 G-0213(examples/G-0213.json)의 적립
+…(172자 생략)", click button "시작"
+12:56:38 [27-points-gift-teammate k10#5] 첫 실행 창 수락: folder_trust
+12:56:42 [26-points-rate-change k10#5] 차례 21 (11분 43초, 화면이 멈춤) friction=0 click button "완료만", wait
+12:56:53 [26-points-rate-change k10#5] 차례 22 (11분 55초, 화면이 멈춤) friction=0 done
+12:57:06 [26-points-rate-change k10#5] Work 2 끝: done (회수 포인트 O, 환불 그대로 O), 차례 10, 질문 2
+12:57:06 [26-points-rate-change k10#5] Work 3/3 시작
+12:57:09 [27-points-gift-teammate k10#5] 차례 10 (5분 8초, 화면이 멈춤) friction=0 click button "의도 승인"
+12:57:17 [26-points-rate-change k10#5] 차례 23 (12분 19초, 화면이 멈춤) friction=0 click button "새 Work"
+12:57:31 [26-points-rate-change k10#5] 차례 24 (12분 31초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "이번 배포부터 기본 적립률을 1%에서 2%로 올리기로 했습니다. 고객센터
+…(159자 생략)", click button "시작"
+12:58:01 [26-points-rate-change k10#5] 차례 25 (13분 2초, 화면이 멈춤) friction=1 key
+12:58:39 [26-points-rate-change k10#5] 차례 26 (13분 41초, 화면이 멈춤) friction=1 wait
+12:58:49 [27-points-gift-teammate k10#5] 차례 11 (6분 47초, 화면이 멈춤) friction=0 click tab "전체 변경"
+12:58:51 [26-points-rate-change k10#5] 차례 27 (13분 52초, 기다림이 끝남) friction=2 click tab "01 의도 정리"
+12:59:01 [27-points-gift-teammate k10#5] 차례 12 (6분 59초, 화면이 멈춤) friction=0 click button "완료만"
+12:59:11 [27-points-gift-teammate k10#5] 차례 13 (7분 10초, 화면이 멈춤) friction=0 done
+12:59:24 [27-points-gift-teammate k10#5] Work 2 끝: done (선물 적립 O, 선물 주문 그대로 O), 차례 6, 질문 0
+12:59:24 [27-points-gift-teammate k10#5] 끝: done (7분 23초)
+12:59:27 [27-points-gift-teammate k10#5] 결과: 성공 (적립 기준 금액 O, 적립 버림 O, 주문·영수증 그대로 O, 선물 적립 O, 선물 주문 그대로 O), 차례 13, 사람 비용 $1.10
+== 진행 9/10
+12:59:58 [26-points-rate-change k10#5] 차례 28 (14분 59초, 기다림이 끝남) friction=2 type "오른쪽 패널에 handoff가 아직 없음으로 뜨고 의도 승인 버튼이 안 
+…(39자 생략)"
+13:00:31 [26-points-rate-change k10#5] 차례 29 (15분 32초, 화면이 멈춤) friction=1 type "환불 때 회수 포인트를 새 비율로 계산할지는 이번 범위가 아니에요. 정산
+…(70자 생략)"
+13:01:07 [26-points-rate-change k10#5] 차례 30 (16분 8초, 화면이 멈춤) friction=0 type "선물 적립은 기본 적립률을 그대로 쓰는 거라 상수를 따라 2%로 가도 돼
+…(35자 생략)", wait
+13:01:32 [26-points-rate-change k10#5] 차례 31 (16분 33초, 화면이 멈춤) friction=0 click button "의도 승인", wait
+13:02:13 [26-points-rate-change k10#5] 차례 32 (17분 14초, 화면이 멈춤) friction=0 key, key, wait
+13:04:00 [26-points-rate-change k10#5] 차례 33 (19분 1초, 화면이 멈춤) friction=0 key, wait
+13:05:14 [26-points-rate-change k10#5] 차례 34 (20분 15초, 화면이 멈춤) friction=0 click tab "전체 변경"
+13:05:26 [26-points-rate-change k10#5] 차례 35 (20분 27초, 화면이 멈춤) friction=0 click button "완료만", wait
+13:05:38 [26-points-rate-change k10#5] 차례 36 (20분 40초, 화면이 멈춤) friction=0 done
+13:05:54 [26-points-rate-change k10#5] Work 3 끝: done (적립률 2% O, 저장된 포인트 그대로 O), 차례 14, 질문 3
+13:05:54 [26-points-rate-change k10#5] 끝: done (20분 56초)
+13:06:00 [26-points-rate-change k10#5] 결과: 성공 (적립 기준 금액 O, 적립 버림 O, 주문·영수증 그대로 O, 회수 포인트 O, 환불 그대로 O, 적립률 2% O, 저장된 포인트 그대로 O), 차례 36, 사람 비용 $5.76
+== 진행 10/10
+
+# relay 대 맨 CLI 사용성 평가
+
+- 결과 폴더: `/home/user/relay-v2/app/eval/results/e12-points`
+- 시작: 2026-10-04T11:58:25.596Z, 앱 커밋: ce0a330, Claude Code: 2.1.289 (Claude Code)
+- 에이전트: sonnet (effort medium), 사람 역할: sonnet, 판정: sonnet
+- 맨 CLI 인자: `claude --dangerously-skip-permissions`, 스크린샷 보기: 켬
+- 실행 10개, 짝 판정 0개
+
+읽는 법: 수치는 평균 ± 표준편차다. 사람 역할과 판정은 AI이므로 경향을 보는 자료로 쓴다. 회차가 적으면 편차가 크다.
+걸린 시간에는 사람 역할(AI)이 답을 만드는 동안 기다린 시간이 들어 있다. 두 쪽의 대기를 견줄 때는 그 시간을 뺀 줄을 본다.
+
+## 전체
+
+| 지표 | k10 |
+|---|---|
+| 숨긴 시험 모두 통과 | 100% (10/10) |
+| 레포 시험 통과 | 100% (10/10) |
+| 커밋까지 됨 | 100% (10/10) |
+| 사람이 끝냄(done) | 100% (10/10) |
+| 걸린 시간(분) | 12.8 ± 6.0 |
+| 사람 역할 응답 시간(분) | 1.8 ± 0.9 |
+| 걸린 시간 − 사람 역할 응답(분) | 11.0 ± 5.1 |
+| 사람 차례 수 | 22.5 ± 8.7 |
+| 기다리기만 한 차례 | 0.5 ± 0.7 |
+| 스크린샷을 붙인 차례 | 18.7 ± 6.1 |
+| 사람 행동 수(기다림 제외) | 26.4 ± 10.0 |
+| 입력한 글자 수 | 868.9 ± 343.6 |
+| 코드 직접 확인(inspect_diff) | 1.2 ± 0.9 |
+| 헛동작(없는 요소, 실패) | 0.0 ± 0.0 |
+| friction 평균 (0~3) | 0.1 ± 0.1 |
+| friction 2 이상 차례 | 0.2 ± 0.6 |
+| 설문 수고 (1~7, 낮을수록 좋음) | 2.5 ± 0.5 |
+| 설문 명확함 | 5.9 ± 0.3 |
+| 설문 통제감 | 5.4 ± 0.5 |
+| 설문 결과 확신 | 6.0 ± 0.0 |
+| 설문 신뢰 | 6.0 ± 0.0 |
+| 설문 복구 | 3.0 ± 0.0 |
+| 설문 다시 쓰고 싶음 | 6.0 ± 0.0 |
+| 바뀐 줄 수 | 203.0 ± 94.8 |
+| 기대 밖 파일 수 | 1.7 ± 0.8 |
+| 에이전트 출력 토큰(천) | 40.7 ± 19.9 |
+| 에이전트 입력 토큰(천, 캐시 포함) | 2501.7 ± 1050.8 |
+| 에이전트 세션 수 | 7.5 ± 1.6 |
+| 사람 역할 비용($) | 2.9 ± 1.7 |
+
+## 26-points-rate-change: 같은 사람이 Work 셋에서 포인트 규칙을 알려 주고, 세 번째 Work에서 적립률이 바뀜 (개발용, 지식 후속 평가)
+
+목적: 개발용(규약 3.1, 판정에 쓰지 않음). 지식 후속 1·2단계(followup.md) 평가: 문제 1(옛 지식과 새 지식이 함께 남음)을 본다. Work 1은 적립 버그(배송비 포함, 쿠폰·사용 포인트 처리, 반올림)이고 사람이 적립 규정을 알려 준다. Work 2는 부분 환불의 회수 포인트이고 같은 규정이 필요하다. Work 3은 적립률이 1%에서 2%로 바뀐다. Work마다 main에서 시작하므로(앞 Work는 머지되지 않음) Work 3도 적립 규정을 다시 지켜야 하고, 지식에 남은 '1%'를 고쳐야 한다. 지식을 켠 relay가 Work 3에서 앞 Work의 지식 항목을 고치는지(새 항목을 따로 만들어 '1%' 항목이 남지 않는지) 본다.
+
+| 지표 | k10 |
+|---|---|
+| 숨긴 시험 모두 통과 | 100% (5/5) |
+| 레포 시험 통과 | 100% (5/5) |
+| 커밋까지 됨 | 100% (5/5) |
+| 사람이 끝냄(done) | 100% (5/5) |
+| 걸린 시간(분) | 18.0 ± 3.2 |
+| 사람 역할 응답 시간(분) | 2.6 ± 0.4 |
+| 걸린 시간 − 사람 역할 응답(분) | 15.5 ± 2.9 |
+| 사람 차례 수 | 30.4 ± 3.4 |
+| 기다리기만 한 차례 | 1.0 ± 0.7 |
+| 스크린샷을 붙인 차례 | 24.4 ± 1.1 |
+| 사람 행동 수(기다림 제외) | 35.6 ± 3.0 |
+| 입력한 글자 수 | 1179.6 ± 144.4 |
+| 코드 직접 확인(inspect_diff) | 1.6 ± 1.1 |
+| 헛동작(없는 요소, 실패) | 0.0 ± 0.0 |
+| friction 평균 (0~3) | 0.2 ± 0.1 |
+| friction 2 이상 차례 | 0.4 ± 0.9 |
+| 설문 수고 (1~7, 낮을수록 좋음) | 3.0 ± 0.0 |
+| 설문 명확함 | 5.8 ± 0.4 |
+| 설문 통제감 | 5.8 ± 0.4 |
+| 설문 결과 확신 | 6.0 ± 0.0 |
+| 설문 신뢰 | 6.0 ± 0.0 |
+| 설문 복구 | 3.0 ± 0.0 |
+| 설문 다시 쓰고 싶음 | 6.0 ± 0.0 |
+| 바뀐 줄 수 | 285.0 ± 52.8 |
+| 기대 밖 파일 수 | 2.0 ± 0.7 |
+| 에이전트 출력 토큰(천) | 58.9 ± 7.7 |
+| 에이전트 입력 토큰(천, 캐시 포함) | 3461.1 ± 418.8 |
+| 에이전트 세션 수 | 9.0 ± 0.0 |
+| 사람 역할 비용($) | 4.5 ± 0.8 |
+
+### Work 3 (재는 Work)
+
+| 지표 | k10 |
+|---|---|
+| 실행 수 | 5 |
+| 숨긴 시험 모두 통과 | 100% (5/5) |
+| 숨긴 시험별 통과 | 적립률 2% 5/5, 저장된 포인트 그대로 5/5 |
+| 사람이 끝냄(done) | 100% (5/5) |
+| 새 일 전에 끝내려다 거절됨(도구, E11) | 0.0 ± 0.0 |
+| 사람 차례 수 | 10.4 ± 2.1 |
+| 사람 행동 수(기다림 제외) | 12.2 ± 1.8 |
+| 입력한 글자 수 | 320.0 ± 96.2 |
+| 앞 Work의 사실을 다시 알려 줌(carry 항목 수, 감사) | 0.0 ± 0.0 |
+| 앞 Work의 사실을 다시 알려 줌(사람 역할 자기 보고) | 0.0 ± 0.0 |
+| 에이전트 질문 수(AskUserQuestion) | 2.6 ± 0.5 |
+| 에이전트 입력 토큰(천, 캐시 포함) | 1269.3 ± 221.3 |
+| 에이전트 출력 토큰(천) | 21.9 ± 2.7 |
+| context.md 글자(Work의 task 합) | 21805.4 ± 1527.4 |
+| 넣은 지식 글자(Work의 task 합) | 3685.2 ± 827.1 |
+| 걸린 시간(분) | 6.8 ± 1.7 |
+| friction 평균 (0~3) | 0.3 ± 0.1 |
+
+### Work 2 (재는 Work)
+
+| 지표 | k10 |
+|---|---|
+| 실행 수 | 5 |
+| 숨긴 시험 모두 통과 | 100% (5/5) |
+| 숨긴 시험별 통과 | 회수 포인트 5/5, 환불 그대로 5/5 |
+| 사람이 끝냄(done) | 100% (5/5) |
+| 새 일 전에 끝내려다 거절됨(도구, E11) | 0.0 ± 0.0 |
+| 사람 차례 수 | 9.4 ± 1.3 |
+| 사람 행동 수(기다림 제외) | 11.2 ± 1.6 |
+| 입력한 글자 수 | 557.2 ± 108.4 |
+| 앞 Work의 사실을 다시 알려 줌(carry 항목 수, 감사) | 1.6 ± 0.9 |
+| 앞 Work의 사실을 다시 알려 줌(사람 역할 자기 보고) | 1.6 ± 0.9 |
+| 에이전트 질문 수(AskUserQuestion) | 1.8 ± 0.4 |
+| 에이전트 입력 토큰(천, 캐시 포함) | 1000.2 ± 282.8 |
+| 에이전트 출력 토큰(천) | 17.7 ± 4.2 |
+| context.md 글자(Work의 task 합) | 20255.4 ± 1125.0 |
+| 넣은 지식 글자(Work의 task 합) | 2561.4 ± 574.3 |
+| 걸린 시간(분) | 5.6 ± 1.6 |
+| friction 평균 (0~3) | 0.2 ± 0.2 |
+
+### Work 1
+
+| 지표 | k10 |
+|---|---|
+| 실행 수 | 5 |
+| 숨긴 시험 모두 통과 | 100% (5/5) |
+| 숨긴 시험별 통과 | 적립 기준 금액 5/5, 적립 버림 5/5, 주문·영수증 그대로 5/5 |
+| 사람이 끝냄(done) | 100% (5/5) |
+| 새 일 전에 끝내려다 거절됨(도구, E11) | 0.0 ± 0.0 |
+| 사람 차례 수 | 10.6 ± 0.9 |
+| 사람 행동 수(기다림 제외) | 12.2 ± 1.1 |
+| 입력한 글자 수 | 302.4 ± 116.0 |
+| 앞 Work의 사실을 다시 알려 줌(carry 항목 수, 감사) | - |
+| 앞 Work의 사실을 다시 알려 줌(사람 역할 자기 보고) | - |
+| 에이전트 질문 수(AskUserQuestion) | 1.8 ± 0.4 |
+| 에이전트 입력 토큰(천, 캐시 포함) | 1191.6 ± 214.3 |
+| 에이전트 출력 토큰(천) | 19.3 ± 3.1 |
+| context.md 글자(Work의 task 합) | 16276.8 ± 790.3 |
+| 넣은 지식 글자(Work의 task 합) | 0.0 ± 0.0 |
+| 걸린 시간(분) | 5.3 ± 0.7 |
+| friction 평균 (0~3) | 0.1 ± 0.1 |
+
+### k10 단계별 에이전트
+
+단계 task 하나의 평균이다. 입력은 캐시 읽기와 쓰기를 더한 값이고, 대화 기록을 찾지 못한 세션은 빼고 센다.
+
+| 단계 | task 수 | 입력 토큰(천) | 캐시 쓰기(천) | 출력 토큰(천) | context.md 글자 | 넣은 지식 글자 |
+|---|---|---|---|---|---|---|
+| intake | 15 | 284.7 ± 102.3 | 22.0 ± 3.0 | 4.6 ± 1.7 | 3803.7 ± 686.2 | 694.1 ± 561.5 |
+| fix | 15 | 362.8 ± 108.8 | 28.1 ± 4.2 | 6.4 ± 1.7 | 6356.0 ± 939.0 | 694.1 ± 561.5 |
+| verify | 15 | 506.2 ± 216.9 | 36.5 ± 6.7 | 8.7 ± 3.4 | 9286.2 ± 1106.9 | 694.1 ± 561.5 |
+
+### 회차별
+
+| 쪽#회차 | 끝 | 시험 | 분 | 차례 | friction | 에이전트 세션 | 비고 |
+|---|---|---|---|---|---|---|---|
+| k10#1 | done | OOOOOOO | 16.0 | 30 | 0.13 | 9 | 적립률을 2%로 올렸다. O-1107은 486P로 나온다. 저장된 points.earned와 영수증 글자(src/format/)는 그대로다. 환
+…(69자 생략) |
+| k10#2 | done | OOOOOOO | 15.9 | 27 | 0.15 | 9 | 적립률 상수를 2%로 올렸고 O-1107은 486P로 확인했다. 저장된 적립과 영수증(src/format)은 그대로이고, 28개 테스트가 통과했
+…(37자 생략) |
+| k10#3 | done | OOOOOOO | 22.1 | 30 | 0.23 | 9 | 적립률을 2%로 올리고, 적립 기준을 배송비 제외·버림으로 맞췄다. 예시 주문 O-1107은 486P로 나온다. 환불 회수는 1%로 그대로 두었
+…(89자 생략) |
+| k10#4 | done | OOOOOOO | 15.3 | 29 | 0.07 | 9 | 적립률을 2%로 올렸다(EARN_RATE_PERCENT=2). 적립 대상 금액은 상품 금액에서 쿠폰과 사용 포인트를 뺀 값이고 배송비는 제외하며
+…(160자 생략) |
+| k10#5 | done | OOOOOOO | 20.9 | 36 | 0.31 | 9 | 기본 적립률을 2%로 올렸다. 적립 기준은 배송비를 뺀 금액에서 버림으로 고쳐 O-1107이 486P가 되는 것을 확인했다. 환불 회수는 1%를
+…(88자 생략) |
+
+### 사람 역할의 말
+
+- [k10#1 좋음] 에이전트가 환불 회수 규칙처럼 범위가 애매한 부분을 선택지로 먼저 물어봤다. 판정표에 완료조건마다 근거가 붙어 있어서 결과를 믿고 승인하기 쉬웠다.
+- [k10#1 불편] 정책 변경인데 버그 수정 유형으로 시작했더니 유형이 맞느냐는 확인 질문이 나왔다. 변경 보기에 앞 Work 변경이 섞여 있어서 이번 Work에서 바뀐 것만 가려 보기 번거로웠다.
+- [k10#2 좋음] 판정표에 완료조건마다 근거가 붙어 있었다. 전체 변경 탭에서 코드 diff와 테스트 변경을 한 번에 볼 수 있어서 승인하기 쉬웠다.
+- [k10#2 불편] 시작할 때 새 Work를 누르면 앞 일의 완료 화면이 그대로 떠 있어서 잠깐 헷갈렸다. 선물하기 적립률처럼 내가 모르는 질문이 나오면 "모름"으로 넘기는 것 말고는 할 수 있는 게 없었다.
+- [k10#3 좋음] 에이전트가 환불 회수 포인트를 새 비율로 계산할지 물었을 때 범위 밖이라고 답했더니, 그 결정이 산출물과 diff에 그대로 반영됐다. 판정표에 O-1107이 486P라는 근거도 있었다.
+- [k10#3 불편] 정책 변경인데 버그 유형이 맞는지 되묻는 질문이 처음에 나와서 잠깐 멈칫했다. 환불 회수 질문은 "범위 밖" 선택지가 없어 직접 글로 답해야 했다.
+- [k10#4 좋음] 의도 초안에서 환불 회수가 범위에 들어간 것을 승인 전에 보고 바로잡을 수 있었다. 판정표와 전체 변경 화면에서 O-1107의 486P와 환불 131P 유지를 확인할 수 있었다.
+- [k10#4 불편] 요청이 적립률 변경인데 유형을 '버그 수정'으로 골라서, 의도 정리에서 유형 확인 질문이 한 번 더 나왔다. 터미널의 stop hook 오류 메시지는 무슨 뜻인지 바로 이해하기 어려웠다.
+- [k10#5 좋음] 판정표와 전체 변경 화면에서 O-1107이 486P가 되는지, 환불 회수와 영수증이 그대로인지 바로 확인할 수 있었다. 에이전트가 범위를 넘는 부분(환불 회수, 선물 적립)을 먼저 짚어 물어봐서 내가 방향을 정할 수 있었다.
+- [k10#5 불편] 의도 정리 단계에서 에이전트가 handoff 파일을 엉뚱한 위치에 써서 승인 버튼이 안 보였다. 패널에 '아직 없음'만 뜨는 이유를 몰라 에이전트에게 물어보고서야 풀렸다.
+
+#### friction이 높았던 차례
+
+- k10#5 차례 27 (friction 2): 승인 대기라는데 오른쪽 패널에 의도 내용과 [의도 승인] 버튼이 안 보인다.
+- k10#5 차례 28 (friction 2): 패널에 handoff가 '아직 없음'이고 승인 버튼이 없어 어떻게 할지 막막하다.
+
+## 27-points-gift-teammate: 사람이 '아직 고치지 않은 곳'을 말한 적립 규칙이 팀원의 선물하기 Work에 필요함 (개발용, 지식 후속 평가)
+
+목적: 개발용(규약 3.1, 판정에 쓰지 않음). 지식 후속 1·2단계(followup.md) 평가: 문제 2(규칙과 현재 상태가 섞임)를 본다. Work 1은 26의 Work 1과 같은 적립 버그이고, 사람이 선물하기 적립은 지금 다른 방식(결제 금액 전체에 반올림)이고 이번에는 손대지 말라고 말한다. 이것은 규칙이 아니라 아직 규칙을 따르지 않는 곳이다. Work 2는 팀원이 선물하기 적립 버그를 맡는다(도구가 Work 1을 main에 머지하고 새로 clone). 팀원은 규칙을 모른다. 지식 파일이 선물하기의 지금 방식을 규칙처럼 적었는지, 팀원의 Work가 선물하기를 고친 뒤 지식의 '아직 따르지 않는 곳'을 고치는지, 팀원의 에이전트가 같은 적립 규정으로 고치는지 본다.
+
+| 지표 | k10 |
+|---|---|
+| 숨긴 시험 모두 통과 | 100% (5/5) |
+| 레포 시험 통과 | 100% (5/5) |
+| 커밋까지 됨 | 100% (5/5) |
+| 사람이 끝냄(done) | 100% (5/5) |
+| 걸린 시간(분) | 7.5 ± 0.4 |
+| 사람 역할 응답 시간(분) | 1.0 ± 0.2 |
+| 걸린 시간 − 사람 역할 응답(분) | 6.5 ± 0.2 |
+| 사람 차례 수 | 14.6 ± 2.1 |
+| 기다리기만 한 차례 | 0.0 ± 0.0 |
+| 스크린샷을 붙인 차례 | 13.0 ± 1.0 |
+| 사람 행동 수(기다림 제외) | 17.2 ± 2.3 |
+| 입력한 글자 수 | 558.2 ± 58.8 |
+| 코드 직접 확인(inspect_diff) | 0.8 ± 0.4 |
+| 헛동작(없는 요소, 실패) | 0.0 ± 0.0 |
+| friction 평균 (0~3) | 0.0 ± 0.0 |
+| friction 2 이상 차례 | 0.0 ± 0.0 |
+| 설문 수고 (1~7, 낮을수록 좋음) | 2.0 ± 0.0 |
+| 설문 명확함 | 6.0 ± 0.0 |
+| 설문 통제감 | 5.0 ± 0.0 |
+| 설문 결과 확신 | 6.0 ± 0.0 |
+| 설문 신뢰 | 6.0 ± 0.0 |
+| 설문 복구 | - |
+| 설문 다시 쓰고 싶음 | 6.0 ± 0.0 |
+| 바뀐 줄 수 | 121.0 ± 24.6 |
+| 기대 밖 파일 수 | 1.4 ± 0.9 |
+| 에이전트 출력 토큰(천) | 22.4 ± 0.8 |
+| 에이전트 입력 토큰(천, 캐시 포함) | 1542.4 ± 87.6 |
+| 에이전트 세션 수 | 6.0 ± 0.0 |
+| 사람 역할 비용($) | 1.4 ± 0.3 |
+
+### Work 2 (재는 Work, 팀원 교대)
+
+| 지표 | k10 |
+|---|---|
+| 실행 수 | 5 |
+| 숨긴 시험 모두 통과 | 100% (5/5) |
+| 숨긴 시험별 통과 | 선물 적립 5/5, 선물 주문 그대로 5/5 |
+| 사람이 끝냄(done) | 100% (5/5) |
+| 새 일 전에 끝내려다 거절됨(도구, E11) | 0.0 ± 0.0 |
+| 사람 차례 수 | 7.0 ± 1.2 |
+| 사람 행동 수(기다림 제외) | 8.4 ± 1.7 |
+| 입력한 글자 수 | 265.2 ± 61.7 |
+| 앞 Work의 사실을 다시 알려 줌(carry 항목 수, 감사) | - |
+| 앞 Work의 사실을 다시 알려 줌(사람 역할 자기 보고) | - |
+| 에이전트 질문 수(AskUserQuestion) | 0.6 ± 0.5 |
+| 에이전트 입력 토큰(천, 캐시 포함) | 693.6 ± 66.7 |
+| 에이전트 출력 토큰(천) | 10.1 ± 1.0 |
+| context.md 글자(Work의 task 합) | 18199.8 ± 745.6 |
+| 넣은 지식 글자(Work의 task 합) | 2164.8 ± 753.9 |
+| 걸린 시간(분) | 3.4 ± 0.4 |
+| friction 평균 (0~3) | 0.0 ± 0.0 |
+
+### Work 1
+
+| 지표 | k10 |
+|---|---|
+| 실행 수 | 5 |
+| 숨긴 시험 모두 통과 | 100% (5/5) |
+| 숨긴 시험별 통과 | 적립 기준 금액 5/5, 적립 버림 5/5, 주문·영수증 그대로 5/5 |
+| 사람이 끝냄(done) | 100% (5/5) |
+| 새 일 전에 끝내려다 거절됨(도구, E11) | 0.0 ± 0.0 |
+| 사람 차례 수 | 7.6 ± 0.9 |
+| 사람 행동 수(기다림 제외) | 8.8 ± 0.8 |
+| 입력한 글자 수 | 293.0 ± 30.8 |
+| 앞 Work의 사실을 다시 알려 줌(carry 항목 수, 감사) | - |
+| 앞 Work의 사실을 다시 알려 줌(사람 역할 자기 보고) | - |
+| 에이전트 질문 수(AskUserQuestion) | 1.2 ± 0.4 |
+| 에이전트 입력 토큰(천, 캐시 포함) | 848.8 ± 130.5 |
+| 에이전트 출력 토큰(천) | 12.3 ± 1.0 |
+| context.md 글자(Work의 task 합) | 15813.8 ± 224.0 |
+| 넣은 지식 글자(Work의 task 합) | 0.0 ± 0.0 |
+| 걸린 시간(분) | 3.8 ± 0.2 |
+| friction 평균 (0~3) | 0.0 ± 0.0 |
+
+### k10 단계별 에이전트
+
+단계 task 하나의 평균이다. 입력은 캐시 읽기와 쓰기를 더한 값이고, 대화 기록을 찾지 못한 세션은 빼고 센다.
+
+| 단계 | task 수 | 입력 토큰(천) | 캐시 쓰기(천) | 출력 토큰(천) | context.md 글자 | 넣은 지식 글자 |
+|---|---|---|---|---|---|---|
+| intake | 10 | 196.1 ± 48.6 | 17.0 ± 1.9 | 2.7 ± 0.6 | 3378.1 ± 408.3 | 360.8 ± 415.6 |
+| fix | 10 | 296.2 ± 47.2 | 22.4 ± 1.7 | 3.9 ± 0.8 | 5342.3 ± 617.3 | 360.8 ± 415.6 |
+| verify | 10 | 279.0 ± 94.3 | 26.7 ± 2.3 | 4.7 ± 1.1 | 8286.4 ± 367.4 | 360.8 ± 415.6 |
+
+### 회차별
+
+| 쪽#회차 | 끝 | 시험 | 분 | 차례 | friction | 에이전트 세션 | 비고 |
+|---|---|---|---|---|---|---|---|
+| k10#1 | done | OOOOO | 7.5 | 15 | 0.00 | 6 | giftPoints가 일반 주문과 같은 earnPoints 규칙을 쓰도록 고쳤다. G-0213은 218P로 나오고 npm test 24개가 통과
+…(74자 생략) |
+| k10#2 | done | OOOOO | 7.0 | 13 | 0.00 | 6 | giftPoints가 일반 주문 earnPoints(배송비 제외, 1%, 버림)를 쓰도록 고쳐 G-0213이 218P로 나온다. 테스트 추가, 
+…(60자 생략) |
+| k10#3 | done | OOOOO | 7.5 | 14 | 0.00 | 6 | giftPoints가 일반 주문과 같은 earnPoints(배송비 제외, 1P 미만 버림)를 쓰도록 고쳐 G-0213이 249P에서 218P로 
+…(117자 생략) |
+| k10#4 | done | OOOOO | 8.1 | 18 | 0.00 | 6 | giftPoints가 일반 주문 earnPoints를 쓰도록 수정, G-0213이 218P로 확인됨, npm test 통과, 로컬 브랜치 rel
+…(30자 생략) |
+| k10#5 | done | OOOOO | 7.4 | 13 | 0.00 | 6 | giftPoints가 일반 적립(earnPoints)을 쓰도록 고쳐 G-0213이 249P에서 218P가 됐다. 테스트 22개가 통과했고 src
+…(57자 생략) |
+
+### 사람 역할의 말
+
+- [k10#1 좋음] 리뷰와 검증 단계의 판정표가 완료조건마다 근거를 붙여 줬고, 전체 변경 탭에서 diff를 바로 볼 수 있었다. 그래서 믿고 완료할 수 있었다.
+- [k10#1 불편] 원인 분석과 수정 단계가 자동 승인으로 지나가서, 그 단계의 설명을 내가 따로 열어 보지 않으면 놓치기 쉬웠다. 의도 정리에서 에이전트가 팀 지식 문서를 근거로 질문 없이 진행한 것도 내가 판단할 여지가 적었다.
+- [k10#2 좋음] 판정표에 완료조건별 근거(실행 결과, 테스트, diff 범위)가 정리되어 있어서 G-0213이 218P가 됐다는 것과 건드리면 안 되는 부분이 그대로인 것을 바로 확인할 수 있었다.
+- [k10#2 불편] 원인 분석과 수정 단계가 자동 승인으로 지나가서 그 단계에서 끼어들 틈이 거의 없었다. 의도 정리에서 '다른 팀이 함께 보는 중'이라는 위험이 나왔는데, 그 부분은 내가 더 확인하지 못하고 넘어갔다.
+- [k10#3 좋음] 단계마다 요약이 나오고, 완료조건별 판정표에 근거가 붙어 있어서 결과를 믿고 확인하기 쉬웠다. 전체 변경 탭에서 diff를 바로 볼 수 있는 점도 좋았다.
+- [k10#3 불편] 원인 분석과 수정 단계는 자동 승인으로 지나가서 그 단계에서 무슨 일이 있었는지는 직접 탭을 눌러 봐야 했다. 선택지 질문이 갑자기 떠서 처음엔 키 입력 방식이 조금 헷갈렸다.
+- [k10#4 좋음] 완료조건별 판정표에 근거가 붙어 있고 전체 변경 diff를 바로 볼 수 있어서, 218P가 나오는지와 건드리면 안 되는 부분이 그대로인지 쉽게 확인했다.
+- [k10#4 불편] 의도 정리 단계에서 규칙을 잘 모르는데도 질문을 받았다. 터미널 선택지 입력과 형식 검사 오류 로그가 잠깐 보여서 조금 헷갈렸다.
+- [k10#5 좋음] 완료조건별 판정표에 근거가 붙어 있었고 전체 변경 diff를 바로 볼 수 있었다. 그래서 승인 전에 확인하기 쉬웠다.
+- [k10#5 불편] 의도 정리 단계에서 에이전트가 가정을 확인하지 않았다고 적어 둔 부분이 있었다. 자동 승인 단계는 빨리 지나가서 중간 과정을 따라가기 어려웠다.
+
+#### friction이 높았던 차례
+
+
+
+보고서: /home/user/relay-v2/app/eval/results/e12-points/report.md

@@ -1,0 +1,926 @@
+{
+  "scenario": "26-points-rate-change",
+  "kind": "k10",
+  "index": 4,
+  "ending": "done",
+  "summary": "적립률을 2%로 올렸다(EARN_RATE_PERCENT=2). 적립 대상 금액은 상품 금액에서 쿠폰과 사용 포인트를 뺀 값이고 배송비는 제외하며 1P 미만은 버린다. O-1107은 486P가 나온다. 환불 회수는 REFUND_RATE_PERCENT=1로 분리해 그대로 두었고, 저장된 값과 src/format/은 건드리지 않았다. npm test는 23개 통과했고, 변경은 relay/w-20261004-003 브랜치에 커밋됐다.",
+  "error": null,
+  "wallMs": 915438,
+  "firstChangeMs": 138085,
+  "outcome": {
+    "success": true,
+    "checks": [
+      {
+        "name": "적립 기준 금액",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "적립 버림",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "주문·영수증 그대로",
+        "guard": true,
+        "pass": true
+      },
+      {
+        "name": "회수 포인트",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "환불 그대로",
+        "guard": true,
+        "pass": true
+      },
+      {
+        "name": "적립률 2%",
+        "guard": false,
+        "pass": true
+      },
+      {
+        "name": "저장된 포인트 그대로",
+        "guard": true,
+        "pass": true
+      }
+    ],
+    "repoTestsPass": true,
+    "filesChanged": [
+      "docs/knowledge/points/earn-rule.md",
+      "src/gift/gift-points.js",
+      "src/money.js",
+      "src/orders/refund.js",
+      "src/points/earn.js",
+      "test/points-earn.test.js",
+      "test/refund.test.js",
+      "README.md",
+      "src/config.js",
+      "test/gift.test.js",
+      "test/order.test.js"
+    ],
+    "linesChanged": 250,
+    "unrelated": [
+      "docs/knowledge/points/earn-rule.md",
+      "src/gift/gift-points.js"
+    ],
+    "committed": true,
+    "trees": [
+      {
+        "label": "w-20261004-001",
+        "removed": false,
+        "git": {
+          "branch": "relay/w-20261004-001",
+          "commits": 3,
+          "log": [
+            "docs: 적립 규정 지식 추가",
+            "test: 버림 테스트 제목을 실제 값에 맞춤",
+            "fix: 적립 포인트를 배송비 제외, 1P 미만 버림 기준으로 계산"
+          ],
+          "uncommitted": []
+        },
+        "files": [
+          {
+            "file": "docs/knowledge/points/earn-rule.md",
+            "add": 18,
+            "del": 0
+          },
+          {
+            "file": "src/gift/gift-points.js",
+            "add": 3,
+            "del": 4
+          },
+          {
+            "file": "src/money.js",
+            "add": 5,
+            "del": 0
+          },
+          {
+            "file": "src/orders/refund.js",
+            "add": 2,
+            "del": 2
+          },
+          {
+            "file": "src/points/earn.js",
+            "add": 8,
+            "del": 3
+          },
+          {
+            "file": "test/points-earn.test.js",
+            "add": 60,
+            "del": 0
+          }
+        ],
+        "linesAdded": 96,
+        "linesRemoved": 9,
+        "unrelated": [
+          "docs/knowledge/points/earn-rule.md",
+          "src/gift/gift-points.js"
+        ],
+        "repoTests": {
+          "pass": true,
+          "output": "인\nok 1 - 금액 할인\n  ---\n  duration_ms: 0.85658\n  type: 'test'\n  ...\n# Subtest: 비율 할인은 10원 단위 버림, 최대 할인\nok 2 - 비율 할인은 10원 단위 버림, 최대 할인\n  ---\n  duration_ms: 0.197404\n  type: 'test'\n  ...\n# Subtest: 최소 주문 금액\nok 3 - 최소 주문 금액\n  ---\n  duration_ms: 1.211906\n  type: 'test'\n  ...\n# Subtest: 할인은 상품 금액을 넘지 않는다\nok 4 - 할인은 상품 금액을 넘지 않는다\n  ---\n  duration_ms: 0.13651\n  type: 'test'\n  ...\n# Subtest: 선물하기 주문의 금액은 일반 주문과 같다\nok 5 - 선물하기 주문의 금액은 일반 주문과 같다\n  ---\n  duration_ms: 2.590046\n  type: 'test'\n  ...\n# Subtest: 메시지 카드는 60자까지\nok 6 - 메시지 카드는 60자까지\n  ---\n  duration_ms: 0.50277\n  type: 'test'\n  ...\n# Subtest: 받는 사람 전화번호 형식\nok 7 - 받는 사람 전화번호 형식\n  ---\n  duration_ms: 0.176261\n  type: 'test'\n  ...\n# Subtest: 적립일부터 365일 뒤에 사라진다\nok 8 - 적립일부터 365일 뒤에 사라진다\n  ---\n  duration_ms: 1.168065\n  type: 'test'\n  ...\n# Subtest: 쓴 포인트는 먼저 적립한 것부터 깎는다\nok 9 - 쓴 포인트는 먼저 적립한 것부터 깎는다\n  ---\n  duration_ms: 0.312339\n  type: 'test'\n  ...\n# Subtest: 쿠폰을 뺀 상품 금액이 30,000원 이상이면 배송비 무료\nok 10 - 쿠폰을 뺀 상품 금액이 30,000원 이상이면 배송비 무료\n  ---\n  duration_ms: 2.389582\n  type: 'test'\n  ...\n# Subtest: 30,000원 미만이면 배송비 3,000원\nok 11 - 30,000원 미만이면 배송비 3,000원\n  ---\n  duration_ms: 0.206434\n  type: 'test'\n  ...\n# Subtest: 사용한 포인트는 결제 금액에서 뺀다\nok 12 - 사용한 포인트는 결제 금액에서 뺀다\n  ---\n  duration_ms: 0.404957\n  type: 'test'\n  ...\n# Subtest: 적립 포인트를 주문에 저장한다\nok 13 - 적립 포인트를 주문에 저장한다\n  ---\n  duration_ms: 0.214173\n  type: 'test'\n  ...\n# Subtest: 주문 번호 형식\nok 14 - 주문 번호 형식\n  ---\n  duration_ms: 0.464291\n  type: 'test'\n  ...\n# Subtest: 배송비가 붙는 주문: 배송비는 적립 금액에 들어가지 않고 1P 미만은 버린다 (O-1042 → 237P)\nok 15 - 배송비가 붙는 주문: 배송비는 적립 금액에 들어가지 않고 1P 미만은 버린다 (O-1042 → 237P)\n  ---\n  duration_ms: 1.316568\n  type: 'test'\n  ...\n# Subtest: 무료 배송 주문: 상품 − 쿠폰 − 사용 포인트의 1%\nok 16 - 무료 배송 주문: 상품 − 쿠폰 − 사용 포인트의 1%\n  ---\n  duration_ms: 0.225562\n  type: 'test'\n  ...\n# Subtest: 1P 미만은 반올림이 아니라 버림 (23,790원 → 237P, 반올림이면 238P)\nok 17 - 1P 미만은 반올림이 아니라 버림 (23,790원 → 237P, 반올림이면 238P)\n  ---\n  duration_ms: 0.146349\n  type: 'test'\n  ...\n# Subtest: 선물하기 적립도 같은 기준 (G-0213 → 218P)\nok 18 - 선물하기 적립도 같은 기준 (G-0213 → 218P)\n  ---\n  duration_ms: 0.327541\n  type: 'test'\n  ...\n# Subtest: 환불 회수 포인트는 1P 미만 버림 (R-0311 환불 13,130원 → 131P)\nok 19 - 환불 회수 포인트는 1P 미만 버림 (R-0311 환불 13,130원 → 131P)\n  ---\n  duration_ms: 0.380351\n  type: 'test'\n  ...\n# Subtest: 1,000P부터 10P 단위\nok 20 - 1,000P부터 10P 단위\n  ---\n  duration_ms: 1.363176\n  type: 'test'\n  ...\n# Subtest: 가진 포인트와 상품 금액을 넘지 않는다\nok 21 - 가진 포인트와 상품 금액을 넘지 않는다\n  ---\n  duration_ms: 0.234179\n  type: 'test'\n  ...\n# Subtest: 영수증 줄\nok 22 - 영수증 줄\n  ---\n  duration_ms: 2.092793\n  type: 'test'\n  ...\n# Subtest: 부분 환불: 돌려받는 상품 금액을 환불한다\nok 23 - 부분 환불: 돌려받는 상품 금액을 환불한다\n  ---\n  duration_ms: 2.705349\n  type: 'test'\n  ...\n# Subtest: 남은 수량보다 많이 환불할 수 없다\nok 24 - 남은 수량보다 많이 환불할 수 없다\n  ---\n  duration_ms: 0.723587\n  type: 'test'\n  ...\n# Subtest: 전체 취소는 저장된 금액과 포인트를 모두 돌려놓는다\nok 25 - 전체 취소는 저장된 금액과 포인트를 모두 돌려놓는다\n  ---\n  duration_ms: 1.573717\n  type: 'test'\n  ...\n1..25\n# tests 25\n# suites 0\n# pass 25\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 318.930033\n"
+        },
+        "checks": [
+          {
+            "name": "적립 기준 금액",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 배송비는 적립 기준에 넣지 않는다\nok 1 - 배송비는 적립 기준에 넣지 않는다\n  ---\n  duration_ms: 1.199405\n  type: 'test'\n  ...\n# Subtest: 쿠폰 할인 뒤 금액에 적립한다\nok 2 - 쿠폰 할인 뒤 금액에 적립한다\n  ---\n  duration_ms: 0.258727\n  type: 'test'\n  ...\n# Subtest: 사용한 포인트에는 적립하지 않는다\nok 3 - 사용한 포인트에는 적립하지 않는다\n  ---\n  duration_ms: 0.153057\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 103.482146\n"
+          },
+          {
+            "name": "적립 버림",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 1P 미만 버림\nok 1 - 1P 미만 버림\n  ---\n  duration_ms: 2.032067\n  type: 'test'\n  ...\n# Subtest: O-1042: 리포트의 주문이 고객센터 안내와 같다\nok 2 - O-1042: 리포트의 주문이 고객센터 안내와 같다\n  ---\n  duration_ms: 0.87111\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 131.581503\n"
+          },
+          {
+            "name": "주문·영수증 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 저장된 주문의 영수증은 저장된 적립 포인트를 그대로 보인다\nok 1 - 저장된 주문의 영수증은 저장된 적립 포인트를 그대로 보인다\n  ---\n  duration_ms: 2.258224\n  type: 'test'\n  ...\n# Subtest: 전체 취소는 저장된 적립 포인트를 회수한다\nok 2 - 전체 취소는 저장된 적립 포인트를 회수한다\n  ---\n  duration_ms: 0.226676\n  type: 'test'\n  ...\n# Subtest: 주문 금액 계산은 그대로\nok 3 - 주문 금액 계산은 그대로\n  ---\n  duration_ms: 0.812803\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 126.918303\n"
+          },
+          {
+            "name": "회수 포인트",
+            "bug": null,
+            "pass": false,
+            "output": "TAP version 13\n# Subtest: R-0311: 리포트의 부분 환불이 정산팀 계산과 같다\nnot ok 1 - R-0311: 리포트의 부분 환불이 정산팀 계산과 같다\n  ---\n  duration_ms: 3.123657\n  type: 'test'\n  location: '/tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-001/tree/eval-hidden/refund-recover.test.js:11:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    131 !== 132\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 132\n  actual: 131\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-001/tree/eval-hidden/refund-recover.test.js:14:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.start (node:internal/test_runner/test:944:17)\n    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)\n  ...\n# Subtest: 쿠폰과 사용 포인트가 없는 주문의 부분 환불\nnot ok 2 - 쿠폰과 사용 포인트가 없는 주문의 부분 환불\n  ---\n  duration_ms: 0.368237\n  type: 'test'\n  location: '/tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-001/tree/eval-hidden/refund-recover.test.js:17:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    73 !== 74\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 74\n  actual: 73\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-001/tree/eval-hidden/refund-recover.test.js:30:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 0\n# fail 2\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 107.557667\n"
+          },
+          {
+            "name": "환불 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 부분 환불 금액은 돌려받는 상품 금액\nok 1 - 부분 환불 금액은 돌려받는 상품 금액\n  ---\n  duration_ms: 1.317969\n  type: 'test'\n  ...\n# Subtest: 환불 검사\nok 2 - 환불 검사\n  ---\n  duration_ms: 1.822372\n  type: 'test'\n  ...\n# Subtest: 전체 취소\nok 3 - 전체 취소\n  ---\n  duration_ms: 1.604323\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 108.723262\n"
+          },
+          {
+            "name": "적립률 2%",
+            "bug": null,
+            "pass": false,
+            "output": "TAP version 13\n# Subtest: 적립률 2%\nnot ok 1 - 적립률 2%\n  ---\n  duration_ms: 3.713036\n  type: 'test'\n  location: '/tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-001/tree/eval-hidden/earn-rate.test.js:10:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    500 !== 1000\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1000\n  actual: 500\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-001/tree/eval-hidden/earn-rate.test.js:12:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.start (node:internal/test_runner/test:944:17)\n    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)\n  ...\n# Subtest: 2%에도 기준 금액과 버림은 그대로\nnot ok 2 - 2%에도 기준 금액과 버림은 그대로\n  ---\n  duration_ms: 0.8061\n  type: 'test'\n  location: '/tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-001/tree/eval-hidden/earn-rate.test.js:15:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    496 !== 992\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 992\n  actual: 496\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-001/tree/eval-hidden/earn-rate.test.js:17:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n# Subtest: O-1107: 리포트의 주문이 고객센터 안내와 같다\nnot ok 3 - O-1107: 리포트의 주문이 고객센터 안내와 같다\n  ---\n  duration_ms: 1.19521\n  type: 'test'\n  location: '/tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-001/tree/eval-hidden/earn-rate.test.js:20:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    243 !== 486\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 486\n  actual: 243\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-001/tree/eval-hidden/earn-rate.test.js:22:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 0\n# fail 3\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 153.883276\n"
+          },
+          {
+            "name": "저장된 포인트 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 포인트 내역의 잔액은 저장된 값 그대로\nok 1 - 포인트 내역의 잔액은 저장된 값 그대로\n  ---\n  duration_ms: 1.385844\n  type: 'test'\n  ...\n# Subtest: 저장된 주문의 영수증은 저장된 적립 포인트를 그대로 보인다\nok 2 - 저장된 주문의 영수증은 저장된 적립 포인트를 그대로 보인다\n  ---\n  duration_ms: 0.449645\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 96.766401\n"
+          }
+        ]
+      },
+      {
+        "label": "w-20261004-002",
+        "removed": false,
+        "git": {
+          "branch": "relay/w-20261004-002",
+          "commits": 2,
+          "log": [
+            "docs: 부분 환불 회수 포인트 규정을 팀 지식에 남김",
+            "fix: 부분 환불 회수 포인트를 원래 적립 − 남은 상품 재계산 적립(버림)으로 계산"
+          ],
+          "uncommitted": []
+        },
+        "files": [
+          {
+            "file": "docs/knowledge/points/earn-rule.md",
+            "add": 20,
+            "del": 0
+          },
+          {
+            "file": "src/orders/refund.js",
+            "add": 8,
+            "del": 2
+          },
+          {
+            "file": "test/refund.test.js",
+            "add": 17,
+            "del": 0
+          }
+        ],
+        "linesAdded": 45,
+        "linesRemoved": 2,
+        "unrelated": [
+          "docs/knowledge/points/earn-rule.md"
+        ],
+        "repoTests": {
+          "pass": true,
+          "output": "TAP version 13\n# Subtest: 금액 할인\nok 1 - 금액 할인\n  ---\n  duration_ms: 0.989492\n  type: 'test'\n  ...\n# Subtest: 비율 할인은 10원 단위 버림, 최대 할인\nok 2 - 비율 할인은 10원 단위 버림, 최대 할인\n  ---\n  duration_ms: 0.197455\n  type: 'test'\n  ...\n# Subtest: 최소 주문 금액\nok 3 - 최소 주문 금액\n  ---\n  duration_ms: 0.667072\n  type: 'test'\n  ...\n# Subtest: 할인은 상품 금액을 넘지 않는다\nok 4 - 할인은 상품 금액을 넘지 않는다\n  ---\n  duration_ms: 0.144993\n  type: 'test'\n  ...\n# Subtest: 선물하기 주문의 금액은 일반 주문과 같다\nok 5 - 선물하기 주문의 금액은 일반 주문과 같다\n  ---\n  duration_ms: 2.546512\n  type: 'test'\n  ...\n# Subtest: 메시지 카드는 60자까지\nok 6 - 메시지 카드는 60자까지\n  ---\n  duration_ms: 0.491214\n  type: 'test'\n  ...\n# Subtest: 받는 사람 전화번호 형식\nok 7 - 받는 사람 전화번호 형식\n  ---\n  duration_ms: 0.21693\n  type: 'test'\n  ...\n# Subtest: 적립일부터 365일 뒤에 사라진다\nok 8 - 적립일부터 365일 뒤에 사라진다\n  ---\n  duration_ms: 1.196419\n  type: 'test'\n  ...\n# Subtest: 쓴 포인트는 먼저 적립한 것부터 깎는다\nok 9 - 쓴 포인트는 먼저 적립한 것부터 깎는다\n  ---\n  duration_ms: 0.36535\n  type: 'test'\n  ...\n# Subtest: 쿠폰을 뺀 상품 금액이 30,000원 이상이면 배송비 무료\nok 10 - 쿠폰을 뺀 상품 금액이 30,000원 이상이면 배송비 무료\n  ---\n  duration_ms: 5.046107\n  type: 'test'\n  ...\n# Subtest: 30,000원 미만이면 배송비 3,000원\nok 11 - 30,000원 미만이면 배송비 3,000원\n  ---\n  duration_ms: 0.231336\n  type: 'test'\n  ...\n# Subtest: 사용한 포인트는 결제 금액에서 뺀다\nok 12 - 사용한 포인트는 결제 금액에서 뺀다\n  ---\n  duration_ms: 1.19815\n  type: 'test'\n  ...\n# Subtest: 적립 포인트를 주문에 저장한다\nok 13 - 적립 포인트를 주문에 저장한다\n  ---\n  duration_ms: 0.240545\n  type: 'test'\n  ...\n# Subtest: 주문 번호 형식\nok 14 - 주문 번호 형식\n  ---\n  duration_ms: 0.683473\n  type: 'test'\n  ...\n# Subtest: 1,000P부터 10P 단위\nok 15 - 1,000P부터 10P 단위\n  ---\n  duration_ms: 2.010805\n  type: 'test'\n  ...\n# Subtest: 가진 포인트와 상품 금액을 넘지 않는다\nok 16 - 가진 포인트와 상품 금액을 넘지 않는다\n  ---\n  duration_ms: 0.357532\n  type: 'test'\n  ...\n# Subtest: 영수증 줄\nok 17 - 영수증 줄\n  ---\n  duration_ms: 2.676684\n  type: 'test'\n  ...\n# Subtest: 부분 환불: 돌려받는 상품 금액을 환불한다\nok 18 - 부분 환불: 돌려받는 상품 금액을 환불한다\n  ---\n  duration_ms: 1.153812\n  type: 'test'\n  ...\n# Subtest: 남은 수량보다 많이 환불할 수 없다\nok 19 - 남은 수량보다 많이 환불할 수 없다\n  ---\n  duration_ms: 1.966723\n  type: 'test'\n  ...\n# Subtest: 전체 취소는 저장된 금액과 포인트를 모두 돌려놓는다\nok 20 - 전체 취소는 저장된 금액과 포인트를 모두 돌려놓는다\n  ---\n  duration_ms: 1.850888\n  type: 'test'\n  ...\n# Subtest: 부분 환불 회수 포인트 = 저장된 적립 − 남은 상품으로 다시 계산한 적립(버림)\nok 21 - 부분 환불 회수 포인트 = 저장된 적립 − 남은 상품으로 다시 계산한 적립(버림)\n  ---\n  duration_ms: 0.280029\n  type: 'test'\n  ...\n1..21\n# tests 21\n# suites 0\n# pass 21\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 319.985913\n"
+        },
+        "checks": [
+          {
+            "name": "적립 기준 금액",
+            "bug": null,
+            "pass": false,
+            "output": "TAP version 13\n# Subtest: 배송비는 적립 기준에 넣지 않는다\nnot ok 1 - 배송비는 적립 기준에 넣지 않는다\n  ---\n  duration_ms: 2.029228\n  type: 'test'\n  location: '/tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-002/tree/eval-hidden/earn-basis.test.js:10:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    258 !== 228\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 228\n  actual: 258\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-002/tree/eval-hidden/earn-basis.test.js:21:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.start (node:internal/test_runner/test:944:17)\n    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)\n  ...\n# Subtest: 쿠폰 할인 뒤 금액에 적립한다\nok 2 - 쿠폰 할인 뒤 금액에 적립한다\n  ---\n  duration_ms: 0.344058\n  type: 'test'\n  ...\n# Subtest: 사용한 포인트에는 적립하지 않는다\nok 3 - 사용한 포인트에는 적립하지 않는다\n  ---\n  duration_ms: 0.166448\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 2\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 108.141952\n"
+          },
+          {
+            "name": "적립 버림",
+            "bug": null,
+            "pass": false,
+            "output": "TAP version 13\n# Subtest: 1P 미만 버림\nnot ok 1 - 1P 미만 버림\n  ---\n  duration_ms: 1.877449\n  type: 'test'\n  location: '/tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-002/tree/eval-hidden/earn-floor.test.js:10:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    334 !== 333\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 333\n  actual: 334\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-002/tree/eval-hidden/earn-floor.test.js:12:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.start (node:internal/test_runner/test:944:17)\n    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)\n  ...\n# Subtest: O-1042: 리포트의 주문이 고객센터 안내와 같다\nnot ok 2 - O-1042: 리포트의 주문이 고객센터 안내와 같다\n  ---\n  duration_ms: 0.883605\n  type: 'test'\n  location: '/tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-002/tree/eval-hidden/earn-floor.test.js:17:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    268 !== 237\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 237\n  actual: 268\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-002/tree/eval-hidden/earn-floor.test.js:21:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 0\n# fail 2\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 105.582479\n"
+          },
+          {
+            "name": "주문·영수증 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 저장된 주문의 영수증은 저장된 적립 포인트를 그대로 보인다\nok 1 - 저장된 주문의 영수증은 저장된 적립 포인트를 그대로 보인다\n  ---\n  duration_ms: 3.803021\n  type: 'test'\n  ...\n# Subtest: 전체 취소는 저장된 적립 포인트를 회수한다\nok 2 - 전체 취소는 저장된 적립 포인트를 회수한다\n  ---\n  duration_ms: 0.297635\n  type: 'test'\n  ...\n# Subtest: 주문 금액 계산은 그대로\nok 3 - 주문 금액 계산은 그대로\n  ---\n  duration_ms: 1.262059\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 133.842043\n"
+          },
+          {
+            "name": "회수 포인트",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: R-0311: 리포트의 부분 환불이 정산팀 계산과 같다\nok 1 - R-0311: 리포트의 부분 환불이 정산팀 계산과 같다\n  ---\n  duration_ms: 2.682305\n  type: 'test'\n  ...\n# Subtest: 쿠폰과 사용 포인트가 없는 주문의 부분 환불\nok 2 - 쿠폰과 사용 포인트가 없는 주문의 부분 환불\n  ---\n  duration_ms: 0.431305\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 102.377191\n"
+          },
+          {
+            "name": "환불 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 부분 환불 금액은 돌려받는 상품 금액\nok 1 - 부분 환불 금액은 돌려받는 상품 금액\n  ---\n  duration_ms: 1.145249\n  type: 'test'\n  ...\n# Subtest: 환불 검사\nok 2 - 환불 검사\n  ---\n  duration_ms: 3.120982\n  type: 'test'\n  ...\n# Subtest: 전체 취소\nok 3 - 전체 취소\n  ---\n  duration_ms: 1.493974\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 131.302731\n"
+          },
+          {
+            "name": "적립률 2%",
+            "bug": null,
+            "pass": false,
+            "output": "TAP version 13\n# Subtest: 적립률 2%\nnot ok 1 - 적립률 2%\n  ---\n  duration_ms: 2.634072\n  type: 'test'\n  location: '/tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-002/tree/eval-hidden/earn-rate.test.js:10:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    500 !== 1000\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1000\n  actual: 500\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-002/tree/eval-hidden/earn-rate.test.js:12:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.start (node:internal/test_runner/test:944:17)\n    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)\n  ...\n# Subtest: 2%에도 기준 금액과 버림은 그대로\nnot ok 2 - 2%에도 기준 금액과 버림은 그대로\n  ---\n  duration_ms: 0.389899\n  type: 'test'\n  location: '/tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-002/tree/eval-hidden/earn-rate.test.js:15:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    496 !== 992\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 992\n  actual: 496\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-002/tree/eval-hidden/earn-rate.test.js:17:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n# Subtest: O-1107: 리포트의 주문이 고객센터 안내와 같다\nnot ok 3 - O-1107: 리포트의 주문이 고객센터 안내와 같다\n  ---\n  duration_ms: 0.746369\n  type: 'test'\n  location: '/tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-002/tree/eval-hidden/earn-rate.test.js:20:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    273 !== 486\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 486\n  actual: 273\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-002/tree/eval-hidden/earn-rate.test.js:22:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 0\n# fail 3\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 122.68956\n"
+          },
+          {
+            "name": "저장된 포인트 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 포인트 내역의 잔액은 저장된 값 그대로\nok 1 - 포인트 내역의 잔액은 저장된 값 그대로\n  ---\n  duration_ms: 1.279346\n  type: 'test'\n  ...\n# Subtest: 저장된 주문의 영수증은 저장된 적립 포인트를 그대로 보인다\nok 2 - 저장된 주문의 영수증은 저장된 적립 포인트를 그대로 보인다\n  ---\n  duration_ms: 0.444955\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 108.724377\n"
+          }
+        ]
+      },
+      {
+        "label": "w-20261004-003",
+        "removed": false,
+        "git": {
+          "branch": "relay/w-20261004-003",
+          "commits": 3,
+          "log": [
+            "적립 규정 지식의 환불 회수 비율 표현을 분명히 한다",
+            "README의 적립률 상수 이름을 고치고 적립 규정 지식을 갱신한다",
+            "적립률을 2%로 올리고 적립 대상 금액에서 배송비를 뺀다"
+          ],
+          "uncommitted": []
+        },
+        "files": [
+          {
+            "file": "README.md",
+            "add": 1,
+            "del": 1
+          },
+          {
+            "file": "docs/knowledge/points/earn-rule.md",
+            "add": 26,
+            "del": 0
+          },
+          {
+            "file": "src/config.js",
+            "add": 4,
+            "del": 1
+          },
+          {
+            "file": "src/gift/gift-points.js",
+            "add": 3,
+            "del": 4
+          },
+          {
+            "file": "src/orders/refund.js",
+            "add": 2,
+            "del": 2
+          },
+          {
+            "file": "src/points/earn.js",
+            "add": 5,
+            "del": 4
+          },
+          {
+            "file": "test/gift.test.js",
+            "add": 18,
+            "del": 1
+          },
+          {
+            "file": "test/order.test.js",
+            "add": 17,
+            "del": 1
+          },
+          {
+            "file": "test/refund.test.js",
+            "add": 8,
+            "del": 0
+          }
+        ],
+        "linesAdded": 84,
+        "linesRemoved": 14,
+        "unrelated": [
+          "docs/knowledge/points/earn-rule.md",
+          "src/gift/gift-points.js"
+        ],
+        "repoTests": {
+          "pass": true,
+          "output": "TAP version 13\n# Subtest: 금액 할인\nok 1 - 금액 할인\n  ---\n  duration_ms: 1.165628\n  type: 'test'\n  ...\n# Subtest: 비율 할인은 10원 단위 버림, 최대 할인\nok 2 - 비율 할인은 10원 단위 버림, 최대 할인\n  ---\n  duration_ms: 0.188773\n  type: 'test'\n  ...\n# Subtest: 최소 주문 금액\nok 3 - 최소 주문 금액\n  ---\n  duration_ms: 0.423467\n  type: 'test'\n  ...\n# Subtest: 할인은 상품 금액을 넘지 않는다\nok 4 - 할인은 상품 금액을 넘지 않는다\n  ---\n  duration_ms: 0.128244\n  type: 'test'\n  ...\n# Subtest: 선물하기 주문의 금액은 일반 주문과 같다\nok 5 - 선물하기 주문의 금액은 일반 주문과 같다\n  ---\n  duration_ms: 2.653888\n  type: 'test'\n  ...\n# Subtest: 메시지 카드는 60자까지\nok 6 - 메시지 카드는 60자까지\n  ---\n  duration_ms: 0.568633\n  type: 'test'\n  ...\n# Subtest: 받는 사람 전화번호 형식\nok 7 - 받는 사람 전화번호 형식\n  ---\n  duration_ms: 0.192841\n  type: 'test'\n  ...\n# Subtest: 선물하기 적립도 (상품 금액 − 쿠폰 − 사용 포인트)의 2%, 배송비 제외, 버림 (G-0213)\nok 8 - 선물하기 적립도 (상품 금액 − 쿠폰 − 사용 포인트)의 2%, 배송비 제외, 버림 (G-0213)\n  ---\n  duration_ms: 0.191609\n  type: 'test'\n  ...\n# Subtest: 적립일부터 365일 뒤에 사라진다\nok 9 - 적립일부터 365일 뒤에 사라진다\n  ---\n  duration_ms: 1.095851\n  type: 'test'\n  ...\n# Subtest: 쓴 포인트는 먼저 적립한 것부터 깎는다\nok 10 - 쓴 포인트는 먼저 적립한 것부터 깎는다\n  ---\n  duration_ms: 0.344892\n  type: 'test'\n  ...\n# Subtest: 쿠폰을 뺀 상품 금액이 30,000원 이상이면 배송비 무료\nok 11 - 쿠폰을 뺀 상품 금액이 30,000원 이상이면 배송비 무료\n  ---\n  duration_ms: 2.247185\n  type: 'test'\n  ...\n# Subtest: 30,000원 미만이면 배송비 3,000원\nok 12 - 30,000원 미만이면 배송비 3,000원\n  ---\n  duration_ms: 0.199855\n  type: 'test'\n  ...\n# Subtest: 사용한 포인트는 결제 금액에서 뺀다\nok 13 - 사용한 포인트는 결제 금액에서 뺀다\n  ---\n  duration_ms: 0.42708\n  type: 'test'\n  ...\n# Subtest: 적립 포인트를 주문에 저장한다\nok 14 - 적립 포인트를 주문에 저장한다\n  ---\n  duration_ms: 0.242992\n  type: 'test'\n  ...\n# Subtest: 주문 번호 형식\nok 15 - 주문 번호 형식\n  ---\n  duration_ms: 0.452514\n  type: 'test'\n  ...\n# Subtest: 적립 포인트는 (상품 금액 − 쿠폰 − 사용 포인트)의 2%, 배송비 제외, 1P 미만 버림 (O-1107)\nok 16 - 적립 포인트는 (상품 금액 − 쿠폰 − 사용 포인트)의 2%, 배송비 제외, 1P 미만 버림 (O-1107)\n  ---\n  duration_ms: 0.257805\n  type: 'test'\n  ...\n# Subtest: 1,000P부터 10P 단위\nok 17 - 1,000P부터 10P 단위\n  ---\n  duration_ms: 1.354186\n  type: 'test'\n  ...\n# Subtest: 가진 포인트와 상품 금액을 넘지 않는다\nok 18 - 가진 포인트와 상품 금액을 넘지 않는다\n  ---\n  duration_ms: 0.226366\n  type: 'test'\n  ...\n# Subtest: 영수증 줄\nok 19 - 영수증 줄\n  ---\n  duration_ms: 2.154493\n  type: 'test'\n  ...\n# Subtest: 부분 환불: 돌려받는 상품 금액을 환불한다\nok 20 - 부분 환불: 돌려받는 상품 금액을 환불한다\n  ---\n  duration_ms: 2.728741\n  type: 'test'\n  ...\n# Subtest: 남은 수량보다 많이 환불할 수 없다\nok 21 - 남은 수량보다 많이 환불할 수 없다\n  ---\n  duration_ms: 0.614665\n  type: 'test'\n  ...\n# Subtest: 전체 취소는 저장된 금액과 포인트를 모두 돌려놓는다\nok 22 - 전체 취소는 저장된 금액과 포인트를 모두 돌려놓는다\n  ---\n  duration_ms: 1.698712\n  type: 'test'\n  ...\n# Subtest: 부분 환불 회수 포인트는 적립률 변경 뒤에도 옛 비율(1%) 그대로 (R-0311)\nok 23 - 부분 환불 회수 포인트는 적립률 변경 뒤에도 옛 비율(1%) 그대로 (R-0311)\n  ---\n  duration_ms: 0.581252\n  type: 'test'\n  ...\n1..23\n# tests 23\n# suites 0\n# pass 23\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 321.757548\n"
+        },
+        "checks": [
+          {
+            "name": "적립 기준 금액",
+            "bug": null,
+            "pass": false,
+            "output": "TAP version 13\n# Subtest: 배송비는 적립 기준에 넣지 않는다\nnot ok 1 - 배송비는 적립 기준에 넣지 않는다\n  ---\n  duration_ms: 1.862155\n  type: 'test'\n  location: '/tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-003/tree/eval-hidden/earn-basis.test.js:10:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    456 !== 228\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 228\n  actual: 456\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-003/tree/eval-hidden/earn-basis.test.js:21:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.start (node:internal/test_runner/test:944:17)\n    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)\n  ...\n# Subtest: 쿠폰 할인 뒤 금액에 적립한다\nnot ok 2 - 쿠폰 할인 뒤 금액에 적립한다\n  ---\n  duration_ms: 0.393353\n  type: 'test'\n  location: '/tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-003/tree/eval-hidden/earn-basis.test.js:24:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    754 !== 377\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 377\n  actual: 754\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-003/tree/eval-hidden/earn-basis.test.js:32:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n# Subtest: 사용한 포인트에는 적립하지 않는다\nnot ok 3 - 사용한 포인트에는 적립하지 않는다\n  ---\n  duration_ms: 0.334887\n  type: 'test'\n  location: '/tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-003/tree/eval-hidden/earn-basis.test.js:35:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    764 !== 382\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 382\n  actual: 764\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-003/tree/eval-hidden/earn-basis.test.js:42:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 0\n# fail 3\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 101.529492\n"
+          },
+          {
+            "name": "적립 버림",
+            "bug": null,
+            "pass": false,
+            "output": "TAP version 13\n# Subtest: 1P 미만 버림\nnot ok 1 - 1P 미만 버림\n  ---\n  duration_ms: 1.935132\n  type: 'test'\n  location: '/tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-003/tree/eval-hidden/earn-floor.test.js:10:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    667 !== 333\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 333\n  actual: 667\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-003/tree/eval-hidden/earn-floor.test.js:12:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.start (node:internal/test_runner/test:944:17)\n    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)\n  ...\n# Subtest: O-1042: 리포트의 주문이 고객센터 안내와 같다\nnot ok 2 - O-1042: 리포트의 주문이 고객센터 안내와 같다\n  ---\n  duration_ms: 0.921249\n  type: 'test'\n  location: '/tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-003/tree/eval-hidden/earn-floor.test.js:17:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    475 !== 237\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 237\n  actual: 475\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-003/tree/eval-hidden/earn-floor.test.js:21:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 0\n# fail 2\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 107.798219\n"
+          },
+          {
+            "name": "주문·영수증 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 저장된 주문의 영수증은 저장된 적립 포인트를 그대로 보인다\nok 1 - 저장된 주문의 영수증은 저장된 적립 포인트를 그대로 보인다\n  ---\n  duration_ms: 2.400879\n  type: 'test'\n  ...\n# Subtest: 전체 취소는 저장된 적립 포인트를 회수한다\nok 2 - 전체 취소는 저장된 적립 포인트를 회수한다\n  ---\n  duration_ms: 0.220508\n  type: 'test'\n  ...\n# Subtest: 주문 금액 계산은 그대로\nok 3 - 주문 금액 계산은 그대로\n  ---\n  duration_ms: 0.961428\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 127.195857\n"
+          },
+          {
+            "name": "회수 포인트",
+            "bug": null,
+            "pass": false,
+            "output": "TAP version 13\n# Subtest: R-0311: 리포트의 부분 환불이 정산팀 계산과 같다\nnot ok 1 - R-0311: 리포트의 부분 환불이 정산팀 계산과 같다\n  ---\n  duration_ms: 3.610686\n  type: 'test'\n  location: '/tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-003/tree/eval-hidden/refund-recover.test.js:11:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    131 !== 132\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 132\n  actual: 131\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-003/tree/eval-hidden/refund-recover.test.js:14:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.start (node:internal/test_runner/test:944:17)\n    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)\n  ...\n# Subtest: 쿠폰과 사용 포인트가 없는 주문의 부분 환불\nnot ok 2 - 쿠폰과 사용 포인트가 없는 주문의 부분 환불\n  ---\n  duration_ms: 0.446023\n  type: 'test'\n  location: '/tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-003/tree/eval-hidden/refund-recover.test.js:17:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    73 !== 74\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 74\n  actual: 73\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///tmp/relay-eval/e12-points/26-points-rate-change-k10-4/judge/w-20261004-003/tree/eval-hidden/refund-recover.test.js:30:10)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 0\n# fail 2\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 103.854295\n"
+          },
+          {
+            "name": "환불 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 부분 환불 금액은 돌려받는 상품 금액\nok 1 - 부분 환불 금액은 돌려받는 상품 금액\n  ---\n  duration_ms: 2.088918\n  type: 'test'\n  ...\n# Subtest: 환불 검사\nok 2 - 환불 검사\n  ---\n  duration_ms: 2.43827\n  type: 'test'\n  ...\n# Subtest: 전체 취소\nok 3 - 전체 취소\n  ---\n  duration_ms: 2.378015\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 137.642829\n"
+          },
+          {
+            "name": "적립률 2%",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 적립률 2%\nok 1 - 적립률 2%\n  ---\n  duration_ms: 1.304593\n  type: 'test'\n  ...\n# Subtest: 2%에도 기준 금액과 버림은 그대로\nok 2 - 2%에도 기준 금액과 버림은 그대로\n  ---\n  duration_ms: 0.259151\n  type: 'test'\n  ...\n# Subtest: O-1107: 리포트의 주문이 고객센터 안내와 같다\nok 3 - O-1107: 리포트의 주문이 고객센터 안내와 같다\n  ---\n  duration_ms: 0.681707\n  type: 'test'\n  ...\n1..3\n# tests 3\n# suites 0\n# pass 3\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 113.242505\n"
+          },
+          {
+            "name": "저장된 포인트 그대로",
+            "bug": null,
+            "pass": true,
+            "output": "TAP version 13\n# Subtest: 포인트 내역의 잔액은 저장된 값 그대로\nok 1 - 포인트 내역의 잔액은 저장된 값 그대로\n  ---\n  duration_ms: 1.537498\n  type: 'test'\n  ...\n# Subtest: 저장된 주문의 영수증은 저장된 적립 포인트를 그대로 보인다\nok 2 - 저장된 주문의 영수증은 저장된 적립 포인트를 그대로 보인다\n  ---\n  duration_ms: 0.486257\n  type: 'test'\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 2\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 129.858031\n"
+          }
+        ]
+      }
+    ]
+  },
+  "human": {
+    "turns": 29,
+    "actions": {
+      "click": 17,
+      "fill": 3,
+      "key": 12,
+      "type": 3,
+      "wait": 9,
+      "inspect_diff": 1,
+      "done": 3
+    },
+    "actionsTotal": 36,
+    "charsTyped": 1173,
+    "invalidActions": 0,
+    "refusedDone": 0,
+    "frictionMean": 0.06896551724137931,
+    "frictionHigh": 0,
+    "costUsd": 3.8055339999999998,
+    "calls": 32,
+    "ms": 145558,
+    "waitOnlyTurns": 1,
+    "images": 24
+  },
+  "setupDialogs": [
+    {
+      "t": 25562,
+      "name": "folder_trust"
+    },
+    {
+      "t": 28216,
+      "name": "bypass_permissions_warning"
+    }
+  ],
+  "agent": {
+    "input": 138,
+    "output": 50541,
+    "cacheRead": 2748266,
+    "cacheWrite": 244043,
+    "messages": 69,
+    "sessions": 9
+  },
+  "agentSteps": [
+    {
+      "work": "w-20261004-001",
+      "seq": 1,
+      "node": "intake",
+      "contextChars": 2894,
+      "knowledgeChars": 0,
+      "tokens": {
+        "input": 14,
+        "output": 3860,
+        "cacheRead": 262231,
+        "cacheWrite": 20429,
+        "messages": 7
+      }
+    },
+    {
+      "work": "w-20261004-001",
+      "seq": 2,
+      "node": "fix",
+      "contextChars": 5415,
+      "knowledgeChars": 0,
+      "tokens": {
+        "input": 14,
+        "output": 6238,
+        "cacheRead": 271199,
+        "cacheWrite": 28258,
+        "messages": 7
+      }
+    },
+    {
+      "work": "w-20261004-001",
+      "seq": 3,
+      "node": "verify",
+      "contextChars": 8531,
+      "knowledgeChars": 0,
+      "tokens": {
+        "input": 16,
+        "output": 6812,
+        "cacheRead": 336737,
+        "cacheWrite": 32887,
+        "messages": 8
+      }
+    },
+    {
+      "work": "w-20261004-002",
+      "seq": 1,
+      "node": "intake",
+      "contextChars": 3881,
+      "knowledgeChars": 629,
+      "tokens": {
+        "input": 12,
+        "output": 3925,
+        "cacheRead": 206129,
+        "cacheWrite": 21265,
+        "messages": 6
+      }
+    },
+    {
+      "work": "w-20261004-002",
+      "seq": 2,
+      "node": "fix",
+      "contextChars": 6384,
+      "knowledgeChars": 629,
+      "tokens": {
+        "input": 12,
+        "output": 3682,
+        "cacheRead": 216749,
+        "cacheWrite": 21931,
+        "messages": 6
+      }
+    },
+    {
+      "work": "w-20261004-002",
+      "seq": 3,
+      "node": "verify",
+      "contextChars": 8847,
+      "knowledgeChars": 629,
+      "tokens": {
+        "input": 12,
+        "output": 5706,
+        "cacheRead": 232712,
+        "cacheWrite": 29063,
+        "messages": 6
+      }
+    },
+    {
+      "work": "w-20261004-003",
+      "seq": 1,
+      "node": "intake",
+      "contextChars": 4083,
+      "knowledgeChars": 928,
+      "tokens": {
+        "input": 16,
+        "output": 5924,
+        "cacheRead": 291325,
+        "cacheWrite": 24100,
+        "messages": 8
+      }
+    },
+    {
+      "work": "w-20261004-003",
+      "seq": 2,
+      "node": "fix",
+      "contextChars": 6855,
+      "knowledgeChars": 928,
+      "tokens": {
+        "input": 22,
+        "output": 6943,
+        "cacheRead": 475974,
+        "cacheWrite": 30963,
+        "messages": 11
+      }
+    },
+    {
+      "work": "w-20261004-003",
+      "seq": 3,
+      "node": "verify",
+      "contextChars": 9602,
+      "knowledgeChars": 928,
+      "tokens": {
+        "input": 20,
+        "output": 7451,
+        "cacheRead": 455210,
+        "cacheWrite": 35147,
+        "messages": 10
+      }
+    }
+  ],
+  "works": [
+    {
+      "id": "w-20261004-001",
+      "dir": "/tmp/relay-eval/e12-points/26-points-rate-change-k10-4/relay-home/projects/shop-e50e06/works/w-20261004-001",
+      "status": "completed",
+      "branch": null,
+      "tasks": [
+        {
+          "seq": 1,
+          "node": "intake",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "00d4b491-8d6a-43c7-8443-fb6b3d8b3fe4",
+          "contextChars": 2894,
+          "knowledgeChars": 0
+        },
+        {
+          "seq": 2,
+          "node": "fix",
+          "status": "approved",
+          "approved_by": "auto",
+          "session": "73ba6ebe-eb11-4ef6-9e78-c23704a174f5",
+          "contextChars": 5415,
+          "knowledgeChars": 0
+        },
+        {
+          "seq": 3,
+          "node": "verify",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "f98194d4-75fb-435e-aa79-78d4d22a3e6e",
+          "contextChars": 8531,
+          "knowledgeChars": 0
+        }
+      ]
+    },
+    {
+      "id": "w-20261004-002",
+      "dir": "/tmp/relay-eval/e12-points/26-points-rate-change-k10-4/relay-home/projects/shop-e50e06/works/w-20261004-002",
+      "status": "completed",
+      "branch": null,
+      "tasks": [
+        {
+          "seq": 1,
+          "node": "intake",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "a13010c6-e3a0-4155-b385-8957ea75977a",
+          "contextChars": 3881,
+          "knowledgeChars": 629
+        },
+        {
+          "seq": 2,
+          "node": "fix",
+          "status": "approved",
+          "approved_by": "auto",
+          "session": "6c0aaf21-d556-4f97-8673-08a8a685bf7c",
+          "contextChars": 6384,
+          "knowledgeChars": 629
+        },
+        {
+          "seq": 3,
+          "node": "verify",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "506e5532-c700-459e-aeb6-4ce1de35ff64",
+          "contextChars": 8847,
+          "knowledgeChars": 629
+        }
+      ]
+    },
+    {
+      "id": "w-20261004-003",
+      "dir": "/tmp/relay-eval/e12-points/26-points-rate-change-k10-4/relay-home/projects/shop-e50e06/works/w-20261004-003",
+      "status": "completed",
+      "branch": null,
+      "tasks": [
+        {
+          "seq": 1,
+          "node": "intake",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "bb47b9fb-5ceb-4db8-8ba3-4cc432fe7283",
+          "contextChars": 4083,
+          "knowledgeChars": 928
+        },
+        {
+          "seq": 2,
+          "node": "fix",
+          "status": "approved",
+          "approved_by": "auto",
+          "session": "6af0a795-f971-4d85-81f2-c98328066a55",
+          "contextChars": 6855,
+          "knowledgeChars": 928
+        },
+        {
+          "seq": 3,
+          "node": "verify",
+          "status": "approved",
+          "approved_by": "human",
+          "session": "893648d8-3681-46b8-9015-79ad67d289bc",
+          "contextChars": 9602,
+          "knowledgeChars": 928
+        }
+      ]
+    }
+  ],
+  "workResults": [
+    {
+      "work": 1,
+      "ending": "done",
+      "summary": "적립 계산을 (상품−쿠폰−사용포인트)의 1% 내림으로 수정해 O-1042가 237P가 됨. 선물·환불 회수도 같은 버림 규칙 적용, 테스트 25개 통과, format 미변경, 브랜치에 커밋 완료(완료만).",
+      "wallMs": 289298,
+      "survey": {
+        "effort": 2,
+        "clarity": 6,
+        "control": 6,
+        "confidence": 6,
+        "trust": 6,
+        "recovery": null,
+        "reuse": 6,
+        "best": "의도 정리 단계에서 에이전트가 적립 기준과 범위를 선택지로 물어봐서 내가 아는 규정을 정확히 전달할 수 있었다. 판정표에 완료 조건별 근거가 정리되어 있어 확인하기 쉬웠다.",
+        "worst": "환불 회수 포인트에서 쿠폰·사용 포인트를 안분하는 방식은 규정이 없어 기존 방식 그대로 두었는데, 이게 맞는지 끝까지 확신하기 어려웠다. 선택지 화면에서 숫자 키로 고르는 방식은 처음엔 조금 헷갈렸다.",
+        "comment": "전체 흐름이 매끄러웠다. 선물하기 기대값 218P는 에이전트가 규정으로 계산한 값이라, 고객센터 쪽에서 한 번 더 확인하면 좋겠다."
+      },
+      "human": {
+        "turns": 10,
+        "actionsTotal": 12,
+        "charsTyped": 289,
+        "inspectDiff": 1,
+        "invalidActions": 0,
+        "refusedDone": 0,
+        "frictionMean": 0,
+        "frictionHigh": 0,
+        "ms": 44448,
+        "told": [
+          1,
+          2,
+          3
+        ],
+        "carriedTold": 0,
+        "carriedTotal": 0,
+        "toldAudit": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "carriedToldAudit": 0,
+        "auditCostUsd": 0.0073128
+      },
+      "outcome": {
+        "success": true,
+        "checks": [
+          {
+            "name": "적립 기준 금액",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "적립 버림",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "주문·영수증 그대로",
+            "guard": true,
+            "pass": true
+          }
+        ],
+        "trees": [
+          {
+            "label": "w-20261004-001",
+            "files": [
+              "docs/knowledge/points/earn-rule.md",
+              "src/gift/gift-points.js",
+              "src/money.js",
+              "src/orders/refund.js",
+              "src/points/earn.js",
+              "test/points-earn.test.js"
+            ],
+            "repoTestsPass": true
+          }
+        ]
+      },
+      "agent": {
+        "input": 44,
+        "output": 16910,
+        "cacheRead": 870167,
+        "cacheWrite": 81574,
+        "messages": 22,
+        "sessions": 3,
+        "questions": 2
+      },
+      "contextChars": 16840,
+      "knowledgeChars": 0
+    },
+    {
+      "work": 2,
+      "ending": "done",
+      "summary": "부분 환불 회수 포인트를 '저장된 원래 적립 − 남은 상품으로 재계산한 적립(버림)'으로 고쳤다. R-0311은 132P로 정산팀 계산과 맞는다. npm test는 통과했다. refundAmount와 src/format/은 그대로다. 변경은 relay/w-20261004-002 브랜치에 커밋됐다.",
+      "wallMs": 289832,
+      "survey": {
+        "effort": 2,
+        "clarity": 6,
+        "control": 6,
+        "confidence": 6,
+        "trust": 6,
+        "recovery": null,
+        "reuse": 6,
+        "best": "에이전트가 회수 규정과 범위를 먼저 물어봐서 내가 아는 규정을 그대로 알려 줄 수 있었다. 의도 요약과 판정표, 전체 변경 diff로 R-0311이 132P가 되는 걸 코드와 테스트로 확인할 수 있었다.",
+        "worst": "첫 질문의 추천안이 '올림'이어서 규정을 모르면 잘못 고르기 쉬웠다. 터미널 선택지와 오른쪽 패널을 오가며 봐야 하는 점도 조금 번거로웠다.",
+        "comment": "이전 부분 환불의 회수분을 차감할지는 규정이 없어서 지식 문서에 '아직 정하지 않은 것'으로 남았다. 이 점이 위험으로 분명히 드러나 있어서 좋았다. 다만 이번 환불 예시는 변경 전에는 131P였고 변경 후에는 132P가 되는 걸 테스트로 확인했다."
+      },
+      "human": {
+        "turns": 10,
+        "actionsTotal": 12,
+        "charsTyped": 542,
+        "inspectDiff": 0,
+        "invalidActions": 0,
+        "refusedDone": 0,
+        "frictionMean": 0,
+        "frictionHigh": 0,
+        "ms": 61705,
+        "told": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "carriedTold": 2,
+        "carriedTotal": 2,
+        "toldAudit": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "carriedToldAudit": 2,
+        "auditCostUsd": 0.0090928
+      },
+      "outcome": {
+        "success": true,
+        "checks": [
+          {
+            "name": "회수 포인트",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "환불 그대로",
+            "guard": true,
+            "pass": true
+          }
+        ],
+        "trees": [
+          {
+            "label": "w-20261004-002",
+            "files": [
+              "docs/knowledge/points/earn-rule.md",
+              "src/orders/refund.js",
+              "test/refund.test.js"
+            ],
+            "repoTestsPass": true
+          }
+        ]
+      },
+      "agent": {
+        "input": 36,
+        "output": 13313,
+        "cacheRead": 655590,
+        "cacheWrite": 72259,
+        "messages": 18,
+        "sessions": 3,
+        "questions": 2
+      },
+      "contextChars": 19112,
+      "knowledgeChars": 1887
+    },
+    {
+      "work": 3,
+      "ending": "done",
+      "summary": "적립률을 2%로 올렸다(EARN_RATE_PERCENT=2). 적립 대상 금액은 상품 금액에서 쿠폰과 사용 포인트를 뺀 값이고 배송비는 제외하며 1P 미만은 버린다. O-1107은 486P가 나온다. 환불 회수는 REFUND_RATE_PERCENT=1로 분리해 그대로 두었고, 저장된 값과 src/format/은 건드리지 않았다. npm test는 23개 통과했고, 변경은 relay/w-20261004-003 브랜치에 커밋됐다.",
+      "wallMs": 319636,
+      "survey": {
+        "effort": 3,
+        "clarity": 6,
+        "control": 6,
+        "confidence": 6,
+        "trust": 6,
+        "recovery": null,
+        "reuse": 6,
+        "best": "의도 초안에서 환불 회수가 범위에 들어간 것을 승인 전에 보고 바로잡을 수 있었다. 판정표와 전체 변경 화면에서 O-1107의 486P와 환불 131P 유지를 확인할 수 있었다.",
+        "worst": "요청이 적립률 변경인데 유형을 '버그 수정'으로 골라서, 의도 정리에서 유형 확인 질문이 한 번 더 나왔다. 터미널의 stop hook 오류 메시지는 무슨 뜻인지 바로 이해하기 어려웠다.",
+        "comment": "에이전트가 환불 회수를 옛 비율로 분리하고 지식 문서까지 갱신해서 맡길 만했다. 다만 의도 정리 단계에서 범위를 짚어 주지 않았으면 놓쳤을 수도 있다."
+      },
+      "human": {
+        "turns": 9,
+        "actionsTotal": 12,
+        "charsTyped": 342,
+        "inspectDiff": 0,
+        "invalidActions": 0,
+        "refusedDone": 0,
+        "frictionMean": 0.2222222222222222,
+        "frictionHigh": 0,
+        "ms": 39405,
+        "told": [
+          1,
+          4
+        ],
+        "carriedTold": 0,
+        "carriedTotal": 2,
+        "toldAudit": [
+          1,
+          4
+        ],
+        "carriedToldAudit": 0,
+        "auditCostUsd": 0.0067288
+      },
+      "outcome": {
+        "success": true,
+        "checks": [
+          {
+            "name": "적립률 2%",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "저장된 포인트 그대로",
+            "guard": true,
+            "pass": true
+          }
+        ],
+        "trees": [
+          {
+            "label": "w-20261004-003",
+            "files": [
+              "README.md",
+              "docs/knowledge/points/earn-rule.md",
+              "src/config.js",
+              "src/gift/gift-points.js",
+              "src/orders/refund.js",
+              "src/points/earn.js",
+              "test/gift.test.js",
+              "test/order.test.js",
+              "test/refund.test.js"
+            ],
+            "repoTestsPass": true
+          }
+        ]
+      },
+      "agent": {
+        "input": 58,
+        "output": 20318,
+        "cacheRead": 1222509,
+        "cacheWrite": 90210,
+        "messages": 29,
+        "sessions": 3,
+        "questions": 2
+      },
+      "contextChars": 20540,
+      "knowledgeChars": 2784
+    }
+  ],
+  "handoffs": [],
+  "survey": {
+    "effort": 3,
+    "clarity": 6,
+    "control": 6,
+    "confidence": 6,
+    "trust": 6,
+    "recovery": null,
+    "reuse": 6,
+    "best": "의도 초안에서 환불 회수가 범위에 들어간 것을 승인 전에 보고 바로잡을 수 있었다. 판정표와 전체 변경 화면에서 O-1107의 486P와 환불 131P 유지를 확인할 수 있었다.",
+    "worst": "요청이 적립률 변경인데 유형을 '버그 수정'으로 골라서, 의도 정리에서 유형 확인 질문이 한 번 더 나왔다. 터미널의 stop hook 오류 메시지는 무슨 뜻인지 바로 이해하기 어려웠다.",
+    "comment": "에이전트가 환불 회수를 옛 비율로 분리하고 지식 문서까지 갱신해서 맡길 만했다. 다만 의도 정리 단계에서 범위를 짚어 주지 않았으면 놓쳤을 수도 있다."
+  },
+  "options": {
+    "agentModel": "sonnet",
+    "effort": "medium",
+    "humanModel": "sonnet",
+    "cliArgs": [
+      "--dangerously-skip-permissions"
+    ]
+  }
+}

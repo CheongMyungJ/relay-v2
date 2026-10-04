@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "work_id": "w-20261004-002",
+  "type": "bugfix",
+  "status": "completed",
+  "created_at": "2026-10-04T13:12:25+00:00",
+  "base_branch": "main",
+  "base_commit": "403bb0f0968e7c29f178e3c5be556209ce49e155",
+  "intent": {
+    "version": 1
+  },
+  "settings": {},
+  "file_hashes": {
+    "request.md": "sha256:ee07604430418636c137369e34248d0f0196edb572bf311773d82b22b2614a5d",
+    "intent.md": "sha256:8a8879df88d26c291f0940996dd25d16b49617f0d32b4cd15980de3ebc7dc21b",
+    "decisions.md": "sha256:c85eb690a36d05d59ab4e544a164db593a7b9399cb5b13903239bea7d1f4fc21"
+  },
+  "tasks": [
+    {
+      "id": "t-01",
+      "seq": 1,
+      "node": "intake",
+      "status": "approved",
+      "reason": "default",
+      "format_version": 1,
+      "created_at": "2026-10-04T13:12:25+00:00",
+      "session": {
+        "id": "ba75d6a9-a8cf-488e-aff6-ebf1a2ffa360",
+        "pid": 28509,
+        "process_started_at": "2026-10-04T13:12:25.020Z",
+        "started_at": "2026-10-04T13:12:25+00:00",
+        "alive": false,
+        "ended_at": "2026-10-04T13:14:39+00:00"
+      },
+      "bounce_count": 0,
+      "check": {
+        "handoff_present": true,
+        "status": "awaiting_approval",
+        "errors": [],
+        "warnings": []
+      },
+      "engine": "claude",
+      "start_commit": "403bb0f0968e7c29f178e3c5be556209ce49e155",
+      "skill_hash": "sha256:8d88de1bf541d7ff08dbc3ad8a9215197d2886d38908b02071fdf48a65cc4223",
+      "engine_version": "2.1.289 (Claude Code)",
+      "claude_version": "2.1.289 (Claude Code)",
+      "last_prompt_at": "2026-10-04T13:12:26+00:00",
+      "permission_mode": "bypassPermissions",
+      "approved_at": "2026-10-04T13:14:39+00:00",
+      "approved_by": "human"
+    },
+    {
+      "id": "t-02",
+      "seq": 2,
+      "node": "fix",
+      "status": "approved",
+      "reason": "default",
+      "format_version": 1,
+      "created_at": "2026-10-04T13:14:39+00:00",
+      "session": {
+        "id": "36e98a85-a0fc-440a-a8a7-be932e9bd735",
+        "pid": 30978,
+        "process_started_at": "2026-10-04T13:14:39.430Z",
+        "started_at": "2026-10-04T13:14:39+00:00",
+        "alive": false,
+        "ended_at": "2026-10-04T13:15:31+00:00"
+      },
+      "bounce_count": 0,
+      "check": {
+        "handoff_present": true,
+        "status": "awaiting_approval",
+        "errors": [],
+        "warnings": []
+      },
+      "engine": "claude",
+      "start_commit": "403bb0f0968e7c29f178e3c5be556209ce49e155",
+      "skill_hash": "sha256:0eca34eedf0cd9b3428cb33b41030d6ee5e2d5e882ac6bf80b61da3dcd2db22f",
+      "engine_version": "2.1.289 (Claude Code)",
+      "claude_version": "2.1.289 (Claude Code)",
+      "last_prompt_at": "2026-10-04T13:14:41+00:00",
+      "permission_mode": "bypassPermissions",
+      "approved_at": "2026-10-04T13:15:31+00:00",
+      "approved_by": "auto"
+    },
+    {
+      "id": "t-03",
+      "seq": 3,
+      "node": "verify",
+      "status": "approved",
+      "reason": "default",
+      "format_version": 1,
+      "created_at": "2026-10-04T13:15:31+00:00",
+      "session": {
+        "id": "14c1645d-f5b5-4331-ad8c-85e3437722b5",
+        "pid": 32296,
+        "process_started_at": "2026-10-04T13:15:31.510Z",
+        "started_at": "2026-10-04T13:15:32+00:00",
+        "alive": false,
+        "ended_at": "2026-10-04T13:17:42+00:00"
+      },
+      "bounce_count": 0,
+      "check": {
+        "handoff_present": true,
+        "status": "awaiting_approval",
+        "errors": [],
+        "warnings": [
+          {
+            "file": "docs/knowledge/invoice/vat-rule.md",
+            "part": "body",
+            "message": "[지식 검토: 다른 항목과 어긋남] \"청구서(`computeTotals`), 견적서(`quoteTotals`), 반품 전표(`creditTotals`)가 모두 `src/invoice/total.js`의 `lineVat`을 같이 쓴다.\" → 규칙은 '모든 문서의 부가세는 lineVat을 써야 한다'로 고쳐 쓰고, computeTotals·quoteTotals가 아직 lineVat을 쓰지 않는다는 사실은 '아직 규칙을 따르지 않는 곳'에만 남겨 서로 어긋나지 않게 한다."
+          }
+        ]
+      },
+      "engine": "claude",
+      "start_commit": "288af669d254249c938021b0564ed23d376364d2",
+      "skill_hash": "sha256:0633efe3eeb07e8e25ef375a074a38f3793b61f5deef36b58f10f0b5d20e5d4d",
+      "engine_version": "2.1.289 (Claude Code)",
+      "claude_version": "2.1.289 (Claude Code)",
+      "last_prompt_at": "2026-10-04T13:15:33+00:00",
+      "permission_mode": "bypassPermissions",
+      "approved_at": "2026-10-04T13:17:42+00:00",
+      "approved_by": "human"
+    }
+  ],
+  "completed_at": "2026-10-04T13:17:42+00:00"
+}

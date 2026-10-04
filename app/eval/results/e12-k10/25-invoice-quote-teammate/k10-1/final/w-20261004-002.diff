@@ -1,0 +1,94 @@
+diff --git a/base/src/invoice/credit-note.js b/tree/src/invoice/credit-note.js
+index 6e6fe7d..eed0a02 100644
+--- a/base/src/invoice/credit-note.js
++++ b/tree/src/invoice/credit-note.js
+@@ -1,6 +1,6 @@
+ import { CREDIT_NOTE_PREFIX, VAT_RATE_PERCENT } from '../config.js'
+ import { assertDate } from '../format/date.js'
+-import { percentOf, sumWon } from '../money.js'
++import { percentOf, sumWon, vatOfLines } from '../money.js'
+ import { isTaxableLine } from './tax-type.js'
+ 
+ // 반품 전표. 발행된 청구서의 품목 일부(또는 전부)를 거래처가 돌려보낼 때 만든다.
+@@ -87,7 +87,8 @@ export function creditTotals(note) {
+   const taxable = sumWon(rows.filter((r) => r.taxable).map((r) => r.net))
+   const exempt = sumWon(rows.filter((r) => !r.taxable).map((r) => r.net))
+   const supply = taxable + exempt
+-  const vat = note.zeroRated ? 0 : Math.round((taxable * VAT_RATE_PERCENT) / 100)
++  // 부가세는 줄마다 버림해 합산한다(합계에서 반올림하지 않음)
++  const vat = vatOfLines(rows, VAT_RATE_PERCENT, note.zeroRated)
+   return { supply, taxable, exempt, vat, total: supply + vat }
+ }
+ 
+diff --git a/base/src/money.js b/tree/src/money.js
+index 0bdef2d..3bd87f7 100644
+--- a/base/src/money.js
++++ b/tree/src/money.js
+@@ -42,3 +42,14 @@ export function splitWon(amount, parts) {
+   const rest = amount - base * parts
+   return Array.from({ length: parts }, (_, i) => base + (i < rest ? 1 : 0))
+ }
++
++// 부가세. 과세 줄마다 할인 후 금액(net)에 percent%를 곱해 원 단위로 버림하고 합산한다 (회계팀 규정).
++// rows: [{ net, taxable }]. 영세율(zeroRated)이면 0, 면세 줄은 제외
++export function vatOfLines(rows, percent, zeroRated = false) {
++  if (zeroRated) return 0
++  let vat = 0
++  for (const r of rows) {
++    if (r.taxable) vat += Math.floor((assertWon(r.net) * percent) / 100)
++  }
++  return vat
++}
+diff --git a/base/test/credit-note.test.js b/tree/test/credit-note.test.js
+index 5c7f920..eeccbc3 100644
+--- a/base/test/credit-note.test.js
++++ b/tree/test/credit-note.test.js
+@@ -81,3 +81,24 @@ test('반품 전표 분개', () => {
+     ['INV-0100', 'INV-0100', 'INV-0100', 'CN-0001', 'CN-0001', 'CN-0001'],
+   )
+ })
++
++test('부가세는 줄마다 원 단위 버림해 합산한다 (CN-0112 / INV-2047)', async () => {
++  const { readFileSync } = await import('node:fs')
++  const invoice = JSON.parse(readFileSync(new URL('../examples/INV-2047.json', import.meta.url)))
++  const data = JSON.parse(readFileSync(new URL('../examples/CN-0112.json', import.meta.url)))
++  const cn = createCreditNote(invoice, data)
++  // 순금액 9236 / 6127 / 2075 → 부가세 923 + 612 + 207
++  assert.deepStrictEqual(cn.totals, { supply: 17438, taxable: 17438, exempt: 0, vat: 1742, total: 19180 })
++})
++
++test('영세율 반품 전표는 부가세 0, 면세 줄은 부가세에서 제외', () => {
++  const zero = createCreditNote({ ...inv, zeroRated: true }, {
++    number: 'CN-0002', issueDate: '2026-09-10', reason: '파손',
++    returns: [{ sku: 'OF-1450', qty: 3 }, { sku: 'BK-1800', qty: 1 }],
++  })
++  assert.strictEqual(zero.totals.vat, 0)
++  assert.strictEqual(zero.totals.total, zero.totals.supply)
++  const mixed = note([{ sku: 'BK-1800', qty: 2 }, { sku: 'OF-1990', qty: 1 }])
++  // 면세 36000 제외, 과세 1990-100=1890 → 189
++  assert.strictEqual(mixed.totals.vat, 189)
++})
+diff --git a/base/test/money.test.js b/tree/test/money.test.js
+index 391e790..224277e 100644
+--- a/base/test/money.test.js
++++ b/tree/test/money.test.js
+@@ -1,6 +1,6 @@
+ import { test } from 'node:test'
+ import assert from 'node:assert'
+-import { assertWon, parseWon, percentOf, splitWon, sumWon } from '../src/money.js'
++import { assertWon, parseWon, percentOf, splitWon, sumWon, vatOfLines } from '../src/money.js'
+ 
+ test('금액 글 읽기', () => {
+   assert.strictEqual(parseWon('29,082원'), 29082)
+@@ -28,3 +28,11 @@ test('금액 나누기', () => {
+   assert.deepStrictEqual(splitWon(9, 3), [3, 3, 3])
+   assert.strictEqual(sumWon(splitWon(12345, 7)), 12345)
+ })
++
++test('부가세는 과세 줄마다 원 단위 버림해 합산한다', () => {
++  const rows = [{ net: 9236, taxable: true }, { net: 6127, taxable: true }, { net: 2075, taxable: true }]
++  assert.strictEqual(vatOfLines(rows, 10), 923 + 612 + 207)
++  assert.strictEqual(vatOfLines([{ net: 36000, taxable: false }, { net: 1890, taxable: true }], 10), 189)
++  assert.strictEqual(vatOfLines(rows, 10, true), 0)
++  assert.strictEqual(vatOfLines([], 10), 0)
++})

@@ -1,0 +1,52 @@
+{
+  "calls": [
+    {
+      "at": "2026-10-04T14:01:09+00:00",
+      "hash": "cf2beff882d0c97507a62809620d4f1a9bfc11e14a35cb2cb1f7c70823b8c5bc",
+      "model": "sonnet",
+      "ms": 9960,
+      "costUsd": 0.0254358,
+      "usage": {
+        "input": 2,
+        "output": 951,
+        "cacheRead": 729,
+        "cacheCreation": 3944
+      },
+      "related": 0,
+      "promptChars": 4054,
+      "issues": [
+        {
+          "file": "docs/knowledge/delivery/digest-key-includes-run-id.md",
+          "part": "body",
+          "message": "[지식 검토: 사람의 이번 말과 어긋남] \"주입하지 않으면 인스턴스마다 메모리 원장이라 서버마다 한 통씩 나간다.\" → 사람 결정(서버 두 대가 원장을 따로 쓰는 경로는 실패이고 createNotifier가 인스턴스별 원장을 만들어 줄 수 없음)에 맞춰, 원장 비공유를 허용되는 기본 동작처럼 쓴 문장과 '인스턴스별 원장 한계 해소' 이력을 고쳐 공용 원장 주입이 필수라는 규칙으로 쓴다."
+        }
+      ],
+      "bounced": true,
+      "error": null
+    },
+    {
+      "at": "2026-10-04T14:01:23+00:00",
+      "hash": "66235a0413d97f686a93d7d961680e11f70ac2a8b116003adad5e61617e79e02",
+      "model": "sonnet",
+      "ms": 8596,
+      "costUsd": 0.0249738,
+      "usage": {
+        "input": 2,
+        "output": 882,
+        "cacheRead": 729,
+        "cacheCreation": 4001
+      },
+      "related": 0,
+      "promptChars": 4119,
+      "issues": [
+        {
+          "file": "docs/knowledge/delivery/digest-key-includes-run-id.md",
+          "part": "body",
+          "message": "[지식 검토: 규칙 절에 지금 상태] \"요약 작업은 운영에서 서버 두 대가 모두 돌리고, 배포한 날 아침에는 한 번 더 돈다(사람이 알려 줌).\" → 운영 현황과 \"test/digest.test.js로 확인했다\"는 검증 기록은 `## 규칙`에서 빼고, 규칙은 \"원장은 서버 수와 상관없이 하나를 공유한다\"만 남긴다."
+        }
+      ],
+      "bounced": false,
+      "error": null
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "calls": [
+    {
+      "at": "2026-10-04T12:07:51+00:00",
+      "hash": "0cf570cc72d2ed8ae53aa3d9fe6a9562a482f94b3efd546cf217c82d4503cc3d",
+      "model": "sonnet",
+      "ms": 6446,
+      "costUsd": 0.022667800000000002,
+      "usage": {
+        "input": 2,
+        "output": 675,
+        "cacheRead": 729,
+        "cacheCreation": 3942
+      },
+      "related": 0,
+      "promptChars": 3895,
+      "issues": [
+        {
+          "file": "docs/knowledge/points/earn-rule.md",
+          "part": "body",
+          "message": "[지식 검토: 규칙 절에 지금 상태] \"이미 저장된 주문의 `points.earned`와 이미 처리한 환불은 다시 계산하지 않고 저장된 값을 쓴다. 영수증 글자(`src/format/`)는 바뀌면 안 된다.\" → 이 줄은 이번 Work의 비목표(범위)를 적은 것이므로 `## 규칙`에서 빼고, 필요하면 저장된 `points.earned`를 쓴다는 일반 규칙만 남긴다."
+        }
+      ],
+      "bounced": true,
+      "error": null
+    },
+    {
+      "at": "2026-10-04T12:08:00+00:00",
+      "hash": "1b472edb499b91dfe31216036364079c8ec049095693c490f73c8f3147be8c03",
+      "model": "sonnet",
+      "ms": 4599,
+      "costUsd": 0.0190218,
+      "usage": {
+        "input": 2,
+        "output": 326,
+        "cacheRead": 729,
+        "cacheCreation": 3903
+      },
+      "related": 0,
+      "promptChars": 3851,
+      "issues": [],
+      "bounced": false,
+      "error": null
+    }
+  ]
+}

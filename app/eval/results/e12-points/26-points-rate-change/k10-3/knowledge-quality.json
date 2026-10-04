@@ -1,0 +1,56 @@
+{
+  "paths": [
+    "docs/knowledge/points/earn-base.md",
+    "docs/knowledge/points/partial-refund-recovery.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/points/earn-base.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/points/partial-refund-recovery.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "earn-base.md: 기준 금액은 상품 금액 − 쿠폰 − 사용 포인트이고 배송비는 넣지 않는다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "earn-base.md: 원 단위 버림(반올림 아님)."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "earn-base.md: 2026-10-04 배포부터 2%, 1%는 이력으로만 적혀 있다."
+      },
+      {
+        "id": "R4",
+        "status": "correct",
+        "why": "partial-refund-recovery.md: 회수 = 저장된 earned − 남은 상품 재계산 적립."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "두 파일 모두 이미 적립된 포인트는 다시 계산하지 않고 저장된 earned를 쓴다고 적었다."
+      }
+    ]
+  }
+}

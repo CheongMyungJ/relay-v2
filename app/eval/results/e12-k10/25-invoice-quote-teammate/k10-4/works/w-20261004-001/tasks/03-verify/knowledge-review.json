@@ -1,0 +1,22 @@
+{
+  "calls": [
+    {
+      "at": "2026-10-04T13:32:41+00:00",
+      "hash": "6ade1977f1cbe53665fca68650eb19a723d8822863af92211492257d6276a6c5",
+      "model": "sonnet",
+      "ms": 5218,
+      "costUsd": 0.0174618,
+      "usage": {
+        "input": 2,
+        "output": 336,
+        "cacheRead": 729,
+        "cacheCreation": 3488
+      },
+      "related": 0,
+      "promptChars": 3392,
+      "issues": [],
+      "bounced": false,
+      "error": null
+    }
+  ]
+}

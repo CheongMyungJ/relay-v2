@@ -1,0 +1,20 @@
+{"ts":"2026-10-04T12:45:23+00:00","work_id":"w-20261004-001","type":"work.created","payload":{"type":"bugfix","base_branch":"main","base_commit":"f34a037258c8435c2b9f6e5c848eb2477b297736"}}
+{"ts":"2026-10-04T12:45:24+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.started","payload":{"reason":"default","session_id":"3d5bb889-50c0-4076-a8c6-c514a13575ff"}}
+{"ts":"2026-10-04T12:45:24+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.first_output","payload":{"pid":27187,"ms":469}}
+{"ts":"2026-10-04T12:45:29+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.first_hook","payload":{"pid":27187,"ms":5174,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:46:39+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:46:50+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T12:46:51+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.started","payload":{"reason":"default","session_id":"c1d955fa-1a19-4f49-9718-c2b503e9f519"}}
+{"ts":"2026-10-04T12:46:52+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.first_output","payload":{"pid":30286,"ms":924}}
+{"ts":"2026-10-04T12:46:52+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.first_hook","payload":{"pid":30286,"ms":1242,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:47:27+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:47:42+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.approved","payload":{"by":"auto"}}
+{"ts":"2026-10-04T12:47:43+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.started","payload":{"reason":"default","session_id":"fa4eaaa5-36fd-4a63-bcd0-c8c7bd755427"}}
+{"ts":"2026-10-04T12:47:44+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.first_output","payload":{"pid":31710,"ms":989}}
+{"ts":"2026-10-04T12:47:44+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.first_hook","payload":{"pid":31710,"ms":1273,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:48:12+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:49:00+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:50:12+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.bounced","payload":{"attempt":1,"max":2,"errors":[{"file":"docs/knowledge/points/earn-basis.md","message":"[지식 검토: 규칙 절에 지금 상태] \"이미 저장된 주문의 `points.earned`와 영수증 글자(`src/format/`)는 바꾸지 않는다.\" → 이 줄은 이번 Work의 수정 범위를 적은 것이므로 `## 규칙`에서 빼고, 필요하면 저장값을 그대로 쓰는 흐름이 이래야 한다는 규칙으로 고쳐 쓴다."},{"file":"docs/knowledge/points/earn-basis.md","message":"[지식 검토: 근거 없이 넓힌 규칙] \"부분 환불로 회수하는 포인트도 같은 기준이다. 쿠폰 할인과 사용 포인트를 환불 상품 금액 비율로 나눠 뺀 금액의 적립률%를 버림한다.\" → 요청, intent, 사람 결정에 부분 환불 계산 근거가 없으므로 코드와 테스트로 확인된 것만 남기고, 확인되지 않았다면 이 규칙을 삭제하거나 근거를 붙인다."}]}}
+{"ts":"2026-10-04T12:50:34+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:50:58+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T12:50:58+00:00","work_id":"w-20261004-001","type":"work.completed","payload":{"delivery":"none"}}

@@ -1,0 +1,1305 @@
+결과 폴더: /home/user/relay-v2/app/eval/results/e12-k10
+작업 폴더: /tmp/relay-eval/e12-k10
+11:58:28 [21-invoice-credit k10#1] 준비 (/tmp/relay-eval/e12-k10/21-invoice-credit-k10-1/billing)
+11:58:29 [22-flaky-retry k10#1] 준비 (/tmp/relay-eval/e12-k10/22-flaky-retry-k10-1/jobs)
+11:58:32 [22-flaky-retry k10#1] Work 1/2 시작
+11:58:32 [21-invoice-credit k10#1] Work 1/2 시작
+11:58:42 [22-flaky-retry k10#1] 차례 1 (0분 12초, 화면이 멈춤) friction=0 click button "새 Work"
+11:58:42 [21-invoice-credit k10#1] 차례 1 (0분 13초, 화면이 멈춤) friction=0 click button "새 Work"
+11:58:55 [21-invoice-credit k10#1] 차례 2 (0분 24초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "회계팀 대조에서 청구서 합계가 몇 원씩 안 맞는다는 연락이 왔다. 우리 
+…(214자 생략)", click button "시작"
+11:58:55 [22-flaky-retry k10#1] 차례 2 (0분 24초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "CI의 `npm run test:ci` 작업이 가끔 실패해. 실패하는 건
+…(215자 생략)", click button "시작"
+11:58:56 [21-invoice-credit k10#1] 첫 실행 창 수락: folder_trust
+11:58:57 [22-flaky-retry k10#1] 첫 실행 창 수락: folder_trust
+11:58:59 [21-invoice-credit k10#1] 첫 실행 창 수락: bypass_permissions_warning
+11:58:59 [22-flaky-retry k10#1] 첫 실행 창 수락: bypass_permissions_warning
+11:59:27 [22-flaky-retry k10#1] 차례 3 (0분 57초, 화면이 멈춤) friction=0 type "병렬 실행(동시 4개)은 유지해야 해. 순차로 되돌리면 밤 배치가 제시간
+…(59자 생략)"
+11:59:33 [21-invoice-credit k10#1] 차례 3 (1분 3초, 화면이 멈춤) friction=0 key, type "회계팀 계산은 INV-2031 합계 29,079원이다. 규정: 부가세는 
+…(99자 생략)"
+11:59:44 [21-invoice-credit k10#1] 차례 4 (1분 15초, 화면이 멈춤) friction=0 key
+11:59:46 [22-flaky-retry k10#1] 차례 4 (1분 17초, 화면이 멈춤) friction=0 click button "의도 승인"
+11:59:55 [21-invoice-credit k10#1] 차례 5 (1분 25초, 화면이 멈춤) friction=0 key, wait
+12:00:10 [22-flaky-retry k10#1] 첫 코드 변경 (1분 42초)
+12:00:21 [21-invoice-credit k10#1] 차례 6 (1분 52초, 화면이 멈춤) friction=0 click button "의도 승인", wait
+12:00:40 [21-invoice-credit k10#1] 첫 코드 변경 (2분 11초)
+12:03:52 [22-flaky-retry k10#1] 차례 5 (5분 22초, 오래 걸려 들여다봄) friction=0 key, wait
+12:04:06 [21-invoice-credit k10#1] 차례 7 (5분 37초, 화면이 멈춤) friction=0 key, inspect_diff
+12:04:10 [21-invoice-credit k10#1] 차례 8 (5분 42초, 직전 행동의 결과) friction=0 wait
+12:04:26 [22-flaky-retry k10#1] 차례 6 (5분 57초, 화면이 멈춤) friction=0 click tab "전체 변경"
+12:04:37 [22-flaky-retry k10#1] 차례 7 (6분 8초, 화면이 멈춤) friction=0 click button "완료만"
+12:04:42 [21-invoice-credit k10#1] 차례 9 (6분 13초, 화면이 멈춤) friction=0 click button "완료만", wait
+12:04:47 [22-flaky-retry k10#1] 차례 8 (6분 19초, 화면이 멈춤) friction=0 done
+12:04:52 [21-invoice-credit k10#1] 차례 10 (6분 24초, 화면이 멈춤) friction=0 done
+12:04:58 [22-flaky-retry k10#1] Work 1 끝: done (완료 순서와 무관 O, 병렬 유지 O), 차례 8, 질문 1
+12:04:58 [22-flaky-retry k10#1] Work 2/2 시작
+12:05:04 [21-invoice-credit k10#1] Work 1 끝: done (줄별 버림 O, 할인 순서 O, 서식 그대로 O), 차례 10, 질문 2
+12:05:04 [21-invoice-credit k10#1] Work 2/2 시작
+12:05:09 [22-flaky-retry k10#1] 차례 9 (6분 40초, 화면이 멈춤) friction=0 click button "새 Work"
+12:05:15 [21-invoice-credit k10#1] 차례 11 (6분 46초, 화면이 멈춤) friction=0 click button "새 Work"
+12:05:22 [22-flaky-retry k10#1] 차례 10 (6분 51초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "CI의 `npm run test:ci`가 요즘 또 가끔 실패해. 이번에 
+…(286자 생략)", click button "시작"
+12:05:28 [21-invoice-credit k10#1] 차례 12 (6분 58초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "회계팀이 10월 반품 전표를 대조하다가 우리 전표의 환불 금액이 회계팀 
+…(253자 생략)", click button "시작"
+12:05:57 [22-flaky-retry k10#1] 차례 11 (7분 27초, 화면이 멈춤) friction=0 click button "의도 승인"
+12:06:12 [21-invoice-credit k10#1] 차례 13 (7분 43초, 화면이 멈춤) friction=0 click button "의도 승인"
+12:07:54 [21-invoice-credit k10#1] 차례 14 (9분 26초, 화면이 멈춤) friction=0 inspect_diff
+12:08:00 [21-invoice-credit k10#1] 차례 15 (9분 31초, 직전 행동의 결과) friction=0 key
+12:08:07 [22-flaky-retry k10#1] 차례 12 (9분 37초, 화면이 멈춤) friction=0 key, wait
+12:08:40 [21-invoice-credit k10#1] 차례 16 (10분 11초, 화면이 멈춤) friction=0 click button "완료만"
+12:08:58 [21-invoice-credit k10#1] 차례 17 (10분 29초, 화면이 멈춤) friction=0 done
+12:09:11 [21-invoice-credit k10#1] Work 2 끝: done (반품 줄별 버림 O, 반품 할인 순서 O, 반품 전표 그대로 O), 차례 7, 질문 1
+12:09:11 [21-invoice-credit k10#1] 끝: done (10분 42초)
+12:09:15 [21-invoice-credit k10#1] 결과: 성공 (줄별 버림 O, 할인 순서 O, 서식 그대로 O, 반품 줄별 버림 O, 반품 할인 순서 O, 반품 전표 그대로 O), 차례 17, 사람 비용 $2.29
+== 진행 1/20
+12:09:15 [23-double-notify-digest k10#1] 준비 (/tmp/relay-eval/e12-k10/23-double-notify-digest-k10-1/notify)
+12:09:18 [23-double-notify-digest k10#1] Work 1/2 시작
+12:09:19 [22-flaky-retry k10#1] 차례 13 (10분 50초, 화면이 멈춤) friction=0 inspect_diff
+12:09:25 [22-flaky-retry k10#1] 차례 14 (10분 55초, 직전 행동의 결과) friction=0 click button "완료만", wait
+12:09:28 [23-double-notify-digest k10#1] 차례 1 (0분 12초, 화면이 멈춤) friction=0 click button "새 Work"
+12:09:36 [22-flaky-retry k10#1] 차례 15 (11분 7초, 화면이 멈춤) friction=0 done
+12:09:41 [23-double-notify-digest k10#1] 차례 2 (0분 23초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "일부 고객이 같은 알림을 두 번, 가끔 세 번 받는다. 메일이 더 자주 
+…(58자 생략)", click button "시작"
+12:09:42 [23-double-notify-digest k10#1] 첫 실행 창 수락: folder_trust
+12:09:45 [23-double-notify-digest k10#1] 첫 실행 창 수락: bypass_permissions_warning
+12:09:49 [22-flaky-retry k10#1] Work 2 끝: done (동시 저장 O, 보관 중 반쪽 파일 없음 O, 보관 배치도 병렬 O), 차례 7, 질문 1
+12:09:49 [22-flaky-retry k10#1] 끝: done (11분 20초)
+12:09:54 [22-flaky-retry k10#1] 결과: 성공 (완료 순서와 무관 O, 병렬 유지 O, 동시 저장 O, 보관 중 반쪽 파일 없음 O, 보관 배치도 병렬 O), 차례 15, 사람 비용 $1.93
+== 진행 2/20
+12:09:55 [25-invoice-quote-teammate k10#1] 준비 (/tmp/relay-eval/e12-k10/25-invoice-quote-teammate-k10-1/billing)
+12:09:57 [25-invoice-quote-teammate k10#1] Work 1/3 시작
+12:10:07 [25-invoice-quote-teammate k10#1] 차례 1 (0분 12초, 화면이 멈춤) friction=0 click button "새 Work"
+12:10:09 [23-double-notify-digest k10#1] 차례 3 (0분 53초, 화면이 멈춤) friction=0 click button "의도 승인"
+12:10:20 [25-invoice-quote-teammate k10#1] 차례 2 (0분 23초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "회계팀 대조에서 청구서 합계가 몇 원씩 안 맞는다는 연락이 왔어요. 우리
+…(215자 생략)", click button "시작"
+12:10:22 [25-invoice-quote-teammate k10#1] 첫 실행 창 수락: folder_trust
+12:10:24 [25-invoice-quote-teammate k10#1] 첫 실행 창 수락: bypass_permissions_warning
+12:10:37 [23-double-notify-digest k10#1] 첫 코드 변경 (1분 21초)
+12:10:55 [25-invoice-quote-teammate k10#1] 차례 3 (0분 58초, 화면이 멈춤) friction=0 key, type "회계팀 INV-2031 합계는 29,079원입니다(우리보다 3원 적음).
+…(106자 생략)"
+12:11:06 [25-invoice-quote-teammate k10#1] 차례 4 (1분 10초, 화면이 멈춤) friction=0 key
+12:11:16 [25-invoice-quote-teammate k10#1] 차례 5 (1분 20초, 화면이 멈춤) friction=0 key, wait
+12:11:46 [25-invoice-quote-teammate k10#1] 차례 6 (1분 51초, 화면이 멈춤) friction=0 click button "의도 승인", wait
+12:11:59 [23-double-notify-digest k10#1] 차례 4 (2분 43초, 화면이 멈춤) friction=1 click tab "02 원인 분석과 수정"
+12:12:05 [25-invoice-quote-teammate k10#1] 첫 코드 변경 (2분 10초)
+12:12:12 [23-double-notify-digest k10#1] 차례 5 (2분 55초, 화면이 멈춤) friction=0 click tab "03 리뷰와 검증", key
+12:13:01 [23-double-notify-digest k10#1] 차례 6 (3분 45초, 화면이 멈춤) friction=0 click button "완료만"
+12:13:12 [23-double-notify-digest k10#1] 차례 7 (3분 56초, 화면이 멈춤) friction=0 done
+12:13:24 [23-double-notify-digest k10#1] Work 1 끝: done (같은 이벤트 재수신 X, 성공 뒤 재시도 없음 O, 실패는 재시도 O), 차례 7, 질문 1
+12:13:24 [23-double-notify-digest k10#1] Work 2/2 시작
+12:13:25 [25-invoice-quote-teammate k10#1] 차례 7 (3분 29초, 화면이 멈춤) friction=0 key, inspect_diff
+12:13:30 [25-invoice-quote-teammate k10#1] 차례 8 (3분 35초, 직전 행동의 결과) friction=0 wait
+12:13:37 [23-double-notify-digest k10#1] 차례 8 (4분 21초, 화면이 멈춤) friction=0 click tab "전체 변경"
+12:13:50 [23-double-notify-digest k10#1] 차례 9 (4분 35초, 화면이 멈춤) friction=0 done
+12:13:55 [23-double-notify-digest k10#1] 차례 10 (4분 39초, 직전 행동의 결과) friction=0 click button "새 Work"
+12:14:08 [23-double-notify-digest k10#1] 차례 11 (4분 51초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "아침 요약 메일(전날 알림 모음)을 같은 날 두 통, 가끔 세 통 받았다
+…(146자 생략)", click button "시작"
+12:14:20 [25-invoice-quote-teammate k10#1] 차례 9 (4분 24초, 화면이 멈춤) friction=0 type "완료 전에 examples/CN-0112.json(반품 전표), Q-04
+…(83자 생략)", wait
+12:14:39 [23-double-notify-digest k10#1] 차례 12 (5분 23초, 화면이 멈춤) friction=0 click button "의도 승인"
+12:14:49 [25-invoice-quote-teammate k10#1] 차례 10 (4분 53초, 화면이 멈춤) friction=0 click button "완료만", wait
+12:15:01 [25-invoice-quote-teammate k10#1] 차례 11 (5분 6초, 화면이 멈춤) friction=0 done
+12:15:13 [25-invoice-quote-teammate k10#1] Work 1 끝: done (줄별 버림 O, 할인 순서 O, 서식 그대로 O), 차례 11, 질문 2
+12:15:13 [25-invoice-quote-teammate k10#1] Work 2/3 시작
+12:15:24 [25-invoice-quote-teammate k10#1] 차례 12 (5분 28초, 화면이 멈춤) friction=0 click button "새 Work"
+12:15:36 [25-invoice-quote-teammate k10#1] 차례 13 (5분 39초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "회계팀이 10월 반품 전표를 대조하다가 우리 전표의 환불 금액이 회계팀 
+…(271자 생략)"
+12:16:40 [25-invoice-quote-teammate k10#1] 차례 14 (6분 45초, 기다림이 끝남) friction=0 click button "시작", wait
+12:17:00 [23-double-notify-digest k10#1] 차례 13 (7분 44초, 화면이 멈춤) friction=1 click tab "02 원인 분석과 수정"
+12:17:15 [23-double-notify-digest k10#1] 차례 14 (7분 59초, 화면이 멈춤) friction=1 click tab "03 리뷰와 검증"
+12:17:18 [25-invoice-quote-teammate k10#1] 차례 15 (7분 22초, 화면이 멈춤) friction=0 click button "의도 승인", wait
+12:17:26 [23-double-notify-digest k10#1] 차례 15 (8분 10초, 화면이 멈춤) friction=0 key, wait
+12:17:58 [23-double-notify-digest k10#1] 차례 16 (8분 41초, 화면이 멈춤) friction=1 key, type "선택 전에 한 가지 확인해 줘. 요약 일정 작업은 서버 두 대에서 같이 
+…(132자 생략)"
+12:18:51 [25-invoice-quote-teammate k10#1] 차례 16 (8분 55초, 화면이 멈춤) friction=0 click tab "02 원인 분석과 수정"
+12:19:02 [25-invoice-quote-teammate k10#1] 차례 17 (9분 6초, 화면이 멈춤) friction=0 click tab "03 리뷰와 검증", key
+12:19:45 [25-invoice-quote-teammate k10#1] 차례 18 (9분 49초, 화면이 멈춤) friction=0 click tab "전체 변경"
+12:19:55 [25-invoice-quote-teammate k10#1] 차례 19 (10분 0초, 화면이 멈춤) friction=0 click button "완료만", wait
+12:20:06 [25-invoice-quote-teammate k10#1] 차례 20 (10분 11초, 화면이 멈춤) friction=0 done
+12:20:08 [23-double-notify-digest k10#1] 차례 17 (10분 52초, 화면이 멈춤) friction=0 key, wait
+12:20:18 [25-invoice-quote-teammate k10#1] Work 2 끝: done (반품 줄별 버림 O, 반품 할인 순서 O, 반품 전표 그대로 O), 차례 9, 질문 1
+12:20:19 [25-invoice-quote-teammate k10#1] 팀원 교대: 머지 2개, 충돌 1개(뒤 쪽으로 머지)
+12:20:21 [25-invoice-quote-teammate k10#1] 팀원 교대: 새 앱 저장소에서 새로 clone한 레포를 등록했습니다.
+12:20:21 [25-invoice-quote-teammate k10#1] Work 3/3 시작
+12:20:31 [25-invoice-quote-teammate k10#1] 차례 21 (10분 35초, 화면이 멈춤) friction=0 click button "새 Work"
+12:20:43 [25-invoice-quote-teammate k10#1] 차례 22 (10분 46초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "거래처 C-0388이 견적서 Q-0457 합계가 경리 계산과 몇 원 다르
+…(155자 생략)", click button "시작"
+12:20:45 [25-invoice-quote-teammate k10#1] 첫 실행 창 수락: folder_trust
+12:21:22 [25-invoice-quote-teammate k10#1] 차례 23 (11분 26초, 화면이 멈춤) friction=1 type "결정에 쓴 팀 지식 vat-per-line-floor는 어디서 나온 거야
+…(55자 생략)"
+12:21:46 [25-invoice-quote-teammate k10#1] 차례 24 (11분 50초, 화면이 멈춤) friction=1 type "경리가 계산한 Q-0457 합계는 56,278원이야(우리 쪽보다 2원 적
+…(86자 생략)"
+12:21:59 [23-double-notify-digest k10#1] 차례 18 (12분 43초, 화면이 멈춤) friction=0 click tab "전체 변경"
+12:22:11 [23-double-notify-digest k10#1] 차례 19 (12분 55초, 화면이 멈춤) friction=0 click button "완료만"
+12:22:20 [25-invoice-quote-teammate k10#1] 차례 25 (12분 24초, 화면이 멈춤) friction=1 click button "의도 승인"
+12:22:23 [23-double-notify-digest k10#1] 차례 20 (13분 8초, 화면이 멈춤) friction=0 done
+12:22:36 [23-double-notify-digest k10#1] Work 2 끝: done (요약 재실행 O, 느린 요약 성공 O, 요약 실패는 재시도 O), 차례 13, 질문 3
+12:22:36 [23-double-notify-digest k10#1] 끝: done (13분 21초)
+12:22:40 [23-double-notify-digest k10#1] 결과: 실패 (같은 이벤트 재수신 X, 성공 뒤 재시도 없음 O, 실패는 재시도 O, 요약 재실행 O, 느린 요약 성공 O, 요약 실패는 재시도 O), 차례 20, 사람 비용 $3.95
+== 진행 3/20
+12:22:40 [21-invoice-credit k10#2] 준비 (/tmp/relay-eval/e12-k10/21-invoice-credit-k10-2/billing)
+12:22:43 [21-invoice-credit k10#2] Work 1/2 시작
+12:22:52 [21-invoice-credit k10#2] 차례 1 (0분 11초, 화면이 멈춤) friction=0 click button "새 Work"
+12:23:04 [21-invoice-credit k10#2] 차례 2 (0분 22초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "회계팀 대조에서 청구서 합계가 몇 원씩 안 맞는다는 연락이 왔어요. 우리
+…(130자 생략)", click button "시작"
+12:23:06 [21-invoice-credit k10#2] 첫 실행 창 수락: folder_trust
+12:23:09 [21-invoice-credit k10#2] 첫 실행 창 수락: bypass_permissions_warning
+12:23:16 [25-invoice-quote-teammate k10#1] 차례 26 (13분 20초, 화면이 멈춤) friction=1 click tab "변경"
+12:23:26 [25-invoice-quote-teammate k10#1] 차례 27 (13분 30초, 화면이 멈춤) friction=1 click button "승인"
+12:23:40 [21-invoice-credit k10#2] 차례 3 (0분 58초, 화면이 멈춤) friction=0 key, type "품목 줄마다 원 단위 버림으로 부가세 계산해서 그 합을 청구서 부가세로 
+…(84자 생략)"
+12:23:51 [21-invoice-credit k10#2] 차례 4 (1분 10초, 화면이 멈춤) friction=0 key
+12:24:01 [21-invoice-credit k10#2] 차례 5 (1분 19초, 화면이 멈춤) friction=0 key, wait
+12:24:04 [25-invoice-quote-teammate k10#1] 차례 28 (14분 8초, 화면이 멈춤) friction=0 key, wait
+12:24:26 [21-invoice-credit k10#2] 차례 6 (1분 45초, 화면이 멈춤) friction=0 click button "의도 승인", wait
+12:24:44 [21-invoice-credit k10#2] 첫 코드 변경 (2분 4초)
+12:24:58 [25-invoice-quote-teammate k10#1] 차례 29 (15분 2초, 화면이 멈춤) friction=1 click tab "지식 2"
+12:25:09 [25-invoice-quote-teammate k10#1] 차례 30 (15분 13초, 화면이 멈춤) friction=1 click button "완료만"
+12:25:19 [25-invoice-quote-teammate k10#1] 차례 31 (15분 24초, 화면이 멈춤) friction=1 done
+12:25:32 [25-invoice-quote-teammate k10#1] Work 3 끝: done (견적 줄별 버림 O, 견적 할인 순서 O, 견적 그대로 O), 차례 11, 질문 1
+12:25:32 [25-invoice-quote-teammate k10#1] 끝: done (15분 37초)
+12:25:40 [25-invoice-quote-teammate k10#1] 결과: 성공 (줄별 버림 O, 할인 순서 O, 서식 그대로 O, 반품 줄별 버림 O, 반품 할인 순서 O, 반품 전표 그대로 O, 견적 줄별 버림 O, 견적 할인 순서 O, 견적 그대로 O), 차례 31, 사람 비용 $4.77
+== 진행 4/20
+12:25:40 [22-flaky-retry k10#2] 준비 (/tmp/relay-eval/e12-k10/22-flaky-retry-k10-2/jobs)
+12:25:43 [22-flaky-retry k10#2] Work 1/2 시작
+12:25:53 [22-flaky-retry k10#2] 차례 1 (0분 12초, 화면이 멈춤) friction=0 click button "새 Work"
+12:26:05 [22-flaky-retry k10#2] 차례 2 (0분 23초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "CI의 `npm run test:ci` 작업이 가끔 실패합니다. 실패하는
+…(223자 생략)", click button "시작"
+12:26:07 [22-flaky-retry k10#2] 첫 실행 창 수락: folder_trust
+12:26:10 [22-flaky-retry k10#2] 첫 실행 창 수락: bypass_permissions_warning
+12:26:37 [22-flaky-retry k10#2] 차례 3 (0분 56초, 화면이 멈춤) friction=0 click button "의도 승인"
+12:26:55 [22-flaky-retry k10#2] 첫 코드 변경 (1분 15초)
+12:28:13 [21-invoice-credit k10#2] 차례 7 (5분 31초, 화면이 멈춤) friction=0 click tab "전체 변경"
+12:28:23 [21-invoice-credit k10#2] 차례 8 (5분 42초, 화면이 멈춤) friction=0 click button "완료만", wait
+12:28:33 [21-invoice-credit k10#2] 차례 9 (5분 53초, 화면이 멈춤) friction=0 done
+12:28:44 [21-invoice-credit k10#2] Work 1 끝: done (줄별 버림 O, 할인 순서 O, 서식 그대로 O), 차례 9, 질문 1
+12:28:44 [21-invoice-credit k10#2] Work 2/2 시작
+12:28:55 [21-invoice-credit k10#2] 차례 10 (6분 14초, 화면이 멈춤) friction=0 click button "새 Work"
+12:29:08 [21-invoice-credit k10#2] 차례 11 (6분 25초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "회계팀이 10월 반품 전표를 대조하다가 우리 전표의 환불 금액이 회계팀 
+…(259자 생략)", click button "시작"
+12:29:32 [22-flaky-retry k10#2] 차례 4 (3분 51초, 화면이 멈춤) friction=0 click tab "02 원인 분석과 수정"
+12:29:42 [22-flaky-retry k10#2] 차례 5 (4분 2초, 화면이 멈춤) friction=0 inspect_diff
+12:29:45 [21-invoice-credit k10#2] 차례 12 (7분 4초, 화면이 멈춤) friction=0 click button "의도 승인"
+12:29:48 [22-flaky-retry k10#2] 차례 6 (4분 7초, 직전 행동의 결과) friction=0 click tab "03 리뷰와 검증", key
+12:30:25 [22-flaky-retry k10#2] 차례 7 (4분 44초, 화면이 멈춤) friction=0 click button "완료만"
+12:30:36 [22-flaky-retry k10#2] 차례 8 (4분 56초, 화면이 멈춤) friction=0 done
+12:30:47 [22-flaky-retry k10#2] Work 1 끝: done (완료 순서와 무관 O, 병렬 유지 O), 차례 8, 질문 1
+12:30:47 [22-flaky-retry k10#2] Work 2/2 시작
+12:30:59 [22-flaky-retry k10#2] 차례 9 (5분 18초, 화면이 멈춤) friction=0 click button "새 Work"
+12:31:12 [22-flaky-retry k10#2] 차례 10 (5분 30초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "CI의 `npm run test:ci`가 요즘 가끔 실패합니다. 이번에는
+…(289자 생략)", click button "시작"
+12:31:17 [21-invoice-credit k10#2] 차례 13 (8분 36초, 화면이 멈춤) friction=0 key, inspect_diff
+12:31:20 [21-invoice-credit k10#2] 차례 14 (8분 40초, 직전 행동의 결과) friction=0 wait
+12:31:44 [22-flaky-retry k10#2] 차례 11 (6분 3초, 화면이 멈춤) friction=0 click button "의도 승인"
+12:32:10 [21-invoice-credit k10#2] 차례 15 (9분 29초, 화면이 멈춤) friction=0 click button "완료만"
+12:32:21 [21-invoice-credit k10#2] 차례 16 (9분 40초, 화면이 멈춤) friction=0 done
+12:32:32 [21-invoice-credit k10#2] Work 2 끝: done (반품 줄별 버림 O, 반품 할인 순서 O, 반품 전표 그대로 O), 차례 7, 질문 1
+12:32:32 [21-invoice-credit k10#2] 끝: done (9분 51초)
+12:32:36 [21-invoice-credit k10#2] 결과: 성공 (줄별 버림 O, 할인 순서 O, 서식 그대로 O, 반품 줄별 버림 O, 반품 할인 순서 O, 반품 전표 그대로 O), 차례 16, 사람 비용 $1.74
+== 진행 5/20
+12:32:36 [23-double-notify-digest k10#2] 준비 (/tmp/relay-eval/e12-k10/23-double-notify-digest-k10-2/notify)
+12:32:39 [23-double-notify-digest k10#2] Work 1/2 시작
+12:32:49 [23-double-notify-digest k10#2] 차례 1 (0분 12초, 화면이 멈춤) friction=0 click button "새 Work"
+12:33:01 [23-double-notify-digest k10#2] 차례 2 (0분 23초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "일부 고객이 같은 알림을 두 번, 가끔 세 번 받는다. 메일이 더 자주 
+…(56자 생략)", click button "시작"
+12:33:03 [23-double-notify-digest k10#2] 첫 실행 창 수락: folder_trust
+12:33:06 [23-double-notify-digest k10#2] 첫 실행 창 수락: bypass_permissions_warning
+12:33:41 [22-flaky-retry k10#2] 차례 12 (8분 0초, 화면이 멈춤) friction=0 click tab "전체 변경"
+12:33:47 [23-double-notify-digest k10#2] 차례 3 (1분 10초, 화면이 멈춤) friction=0 click button "의도 승인"
+12:33:54 [22-flaky-retry k10#2] 차례 13 (8분 13초, 화면이 멈춤) friction=0 click button "완료만"
+12:34:05 [22-flaky-retry k10#2] 차례 14 (8분 25초, 화면이 멈춤) friction=0 done
+12:34:18 [22-flaky-retry k10#2] Work 2 끝: done (동시 저장 O, 보관 중 반쪽 파일 없음 O, 보관 배치도 병렬 O), 차례 6, 질문 0
+12:34:18 [22-flaky-retry k10#2] 끝: done (8분 38초)
+12:34:23 [22-flaky-retry k10#2] 결과: 성공 (완료 순서와 무관 O, 병렬 유지 O, 동시 저장 O, 보관 중 반쪽 파일 없음 O, 보관 배치도 병렬 O), 차례 14, 사람 비용 $1.36
+== 진행 6/20
+12:34:23 [25-invoice-quote-teammate k10#2] 준비 (/tmp/relay-eval/e12-k10/25-invoice-quote-teammate-k10-2/billing)
+12:34:26 [25-invoice-quote-teammate k10#2] Work 1/3 시작
+12:34:28 [23-double-notify-digest k10#2] 차례 4 (1분 51초, 화면이 멈춤) friction=0 key
+12:34:34 [23-double-notify-digest k10#2] 첫 코드 변경 (1분 58초)
+12:34:37 [25-invoice-quote-teammate k10#2] 차례 1 (0분 13초, 화면이 멈춤) friction=0 click button "새 Work"
+12:34:50 [25-invoice-quote-teammate k10#2] 차례 2 (0분 24초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "회계팀 대조에서 청구서 합계가 몇 원씩 안 맞는다는 연락이 왔습니다. 우
+…(204자 생략)", click button "시작"
+12:34:51 [25-invoice-quote-teammate k10#2] 첫 실행 창 수락: folder_trust
+12:34:54 [25-invoice-quote-teammate k10#2] 첫 실행 창 수락: bypass_permissions_warning
+12:35:25 [25-invoice-quote-teammate k10#2] 차례 3 (1분 1초, 화면이 멈춤) friction=0 key
+12:35:37 [25-invoice-quote-teammate k10#2] 차례 4 (1분 13초, 화면이 멈춤) friction=0 key
+12:35:48 [25-invoice-quote-teammate k10#2] 차례 5 (1분 24초, 화면이 멈춤) friction=0 key, wait
+12:36:03 [23-double-notify-digest k10#2] 차례 5 (3분 25초, 화면이 멈춤) friction=1 key, key, key
+12:36:14 [25-invoice-quote-teammate k10#2] 차례 6 (1분 50초, 화면이 멈춤) friction=0 click button "의도 승인", wait
+12:36:36 [25-invoice-quote-teammate k10#2] 첫 코드 변경 (2분 12초)
+12:36:50 [23-double-notify-digest k10#2] 차례 6 (4분 13초, 화면이 멈춤) friction=0 click tab "전체 변경"
+12:37:07 [23-double-notify-digest k10#2] 차례 7 (4분 30초, 화면이 멈춤) friction=0 click button "완료만"
+12:37:18 [23-double-notify-digest k10#2] 차례 8 (4분 41초, 화면이 멈춤) friction=0 done
+12:37:30 [23-double-notify-digest k10#2] Work 1 끝: done (같은 이벤트 재수신 X, 성공 뒤 재시도 없음 O, 실패는 재시도 O), 차례 8, 질문 2
+12:37:30 [23-double-notify-digest k10#2] Work 2/2 시작
+12:37:44 [23-double-notify-digest k10#2] 차례 9 (5분 7초, 화면이 멈춤) friction=0 click tab "전체 변경"
+12:37:55 [23-double-notify-digest k10#2] 차례 10 (5분 18초, 화면이 멈춤) friction=0 click button "새 Work"
+12:38:08 [23-double-notify-digest k10#2] 차례 11 (5분 29초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "아침 요약 메일(전날 알림 모음)을 같은 날 두 통, 가끔 세 통 받았다
+…(113자 생략)", click button "시작"
+12:38:40 [23-double-notify-digest k10#2] 차례 12 (6분 3초, 화면이 멈춤) friction=0 click button "의도 승인"
+12:40:21 [25-invoice-quote-teammate k10#2] 차례 7 (5분 57초, 오래 걸려 들여다봄) friction=1 key, wait
+12:40:33 [25-invoice-quote-teammate k10#2] 차례 8 (6분 8초, 화면이 멈춤) friction=1 type "방금 거부한 건 rm 경고였어요. rm 없이 지식 문서 작성하고 커밋, 
+…(17자 생략)", wait
+12:40:53 [23-double-notify-digest k10#2] 차례 13 (8분 15초, 화면이 멈춤) friction=1 key
+12:41:07 [25-invoice-quote-teammate k10#2] 차례 9 (6분 43초, 화면이 멈춤) friction=0 type "examples의 Q-0457(견적서), CN-0112(반품 전표)도 지
+…(48자 생략)", wait
+12:41:49 [25-invoice-quote-teammate k10#2] 차례 10 (7분 25초, 화면이 멈춤) friction=1 type "회계 규정은 문서 종류 구분 없이 부가세는 품목 줄마다 원 단위 버림으로
+…(197자 생략)", wait
+12:42:04 [23-double-notify-digest k10#2] 차례 14 (9분 27초, 화면이 멈춤) friction=0 click tab "전체 변경"
+12:42:19 [23-double-notify-digest k10#2] 차례 15 (9분 41초, 화면이 멈춤) friction=1 type "잠깐, 요약 작업은 서버 두 대에서 같이 돌거든. 그럼 ledger.re
+…(107자 생략)"
+12:42:53 [23-double-notify-digest k10#2] 차례 16 (10분 16초, 화면이 멈춤) friction=1 type "판정 불가로 넘기긴 물럿이야. 서버 두 대가 실제라 고치자. 운영 저장소
+…(156자 생략)"
+12:43:13 [25-invoice-quote-teammate k10#2] 차례 11 (8분 50초, 화면이 멈춤) friction=0 wait
+12:43:51 [25-invoice-quote-teammate k10#2] 차례 12 (9분 28초, 화면이 멈춤) friction=0 inspect_diff
+12:43:57 [25-invoice-quote-teammate k10#2] 차례 13 (9분 33초, 직전 행동의 결과) friction=1 click button "완료만", wait
+12:44:08 [25-invoice-quote-teammate k10#2] 차례 14 (9분 45초, 화면이 멈춤) friction=0 done
+12:44:25 [25-invoice-quote-teammate k10#2] Work 1 끝: done (줄별 버림 O, 할인 순서 O, 서식 그대로 O), 차례 14, 질문 1
+12:44:25 [25-invoice-quote-teammate k10#2] Work 2/3 시작
+12:44:36 [25-invoice-quote-teammate k10#2] 차례 15 (10분 12초, 화면이 멈춤) friction=0 click button "새 Work"
+12:44:44 [23-double-notify-digest k10#2] 차례 17 (12분 6초, 화면이 멈춤) friction=1 click button "완료만"
+12:44:49 [25-invoice-quote-teammate k10#2] 차례 16 (10분 23초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "회계팀이 10월 반품 전표를 대조하다가 우리 전표의 환불 금액이 회계팀 
+…(177자 생략)", click button "시작"
+12:44:55 [23-double-notify-digest k10#2] 차례 18 (12분 19초, 화면이 멈춤) friction=1 done
+12:45:06 [23-double-notify-digest k10#2] Work 2 끝: done (요약 재실행 O, 느린 요약 성공 O, 요약 실패는 재시도 O), 차례 10, 질문 1
+12:45:06 [23-double-notify-digest k10#2] 끝: done (12분 30초)
+12:45:11 [23-double-notify-digest k10#2] 결과: 실패 (같은 이벤트 재수신 X, 성공 뒤 재시도 없음 O, 실패는 재시도 O, 요약 재실행 O, 느린 요약 성공 O, 요약 실패는 재시도 O), 차례 18, 사람 비용 $2.79
+== 진행 7/20
+12:45:11 [21-invoice-credit k10#3] 준비 (/tmp/relay-eval/e12-k10/21-invoice-credit-k10-3/billing)
+12:45:13 [21-invoice-credit k10#3] Work 1/2 시작
+12:45:22 [25-invoice-quote-teammate k10#2] 차례 17 (10분 58초, 화면이 멈춤) friction=0 click button "의도 승인"
+12:45:23 [21-invoice-credit k10#3] 차례 1 (0분 12초, 화면이 멈춤) friction=0 click button "새 Work"
+12:45:36 [21-invoice-credit k10#3] 차례 2 (0분 23초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "회계팀 대조에서 청구서 합계가 몇 원씩 안 맞는다는 연락이 왔어요. 우리
+…(191자 생략)", click button "시작"
+12:45:38 [21-invoice-credit k10#3] 첫 실행 창 수락: folder_trust
+12:45:41 [21-invoice-credit k10#3] 첫 실행 창 수락: bypass_permissions_warning
+12:46:11 [21-invoice-credit k10#3] 차례 3 (0분 58초, 화면이 멈춤) friction=0 key, type "회계팀 합계는 29,079원입니다. 부가세는 품목 줄마다 원 단위 버림으
+…(81자 생략)"
+12:46:37 [21-invoice-credit k10#3] 차례 4 (1분 25초, 화면이 멈춤) friction=0 click button "의도 승인"
+12:47:11 [21-invoice-credit k10#3] 차례 5 (2분 0초, 화면이 멈춤) friction=0 key
+12:47:18 [21-invoice-credit k10#3] 첫 코드 변경 (2분 7초)
+12:48:24 [25-invoice-quote-teammate k10#2] 차례 18 (14분 0초, 화면이 멈춤) friction=1 click tab "변경"
+12:48:35 [25-invoice-quote-teammate k10#2] 차례 19 (14분 11초, 화면이 멈춤) friction=0 click button "승인"
+12:48:39 [21-invoice-credit k10#3] 차례 6 (3분 29초, 화면이 멈춤) friction=0 inspect_diff
+12:48:44 [21-invoice-credit k10#3] 차례 7 (3분 32초, 직전 행동의 결과) friction=0 click button "완료만"
+12:48:55 [21-invoice-credit k10#3] 차례 8 (3분 44초, 화면이 멈춤) friction=0 done
+12:49:08 [21-invoice-credit k10#3] Work 1 끝: done (줄별 버림 O, 할인 순서 O, 서식 그대로 O), 차례 8, 질문 2
+12:49:08 [21-invoice-credit k10#3] Work 2/2 시작
+12:49:08 [25-invoice-quote-teammate k10#2] 차례 20 (14분 43초, 화면이 멈춤) friction=0 key
+12:49:23 [21-invoice-credit k10#3] 차례 9 (4분 11초, 화면이 멈춤) friction=0 click button "새 Work"
+12:49:39 [21-invoice-credit k10#3] 차례 10 (4분 26초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "회계팀이 10월 반품 전표를 대조하다가 우리 전표의 환불 금액이 회계팀 
+…(275자 생략)", click button "시작"
+12:49:44 [25-invoice-quote-teammate k10#2] 차례 21 (15분 20초, 화면이 멈춤) friction=0 click button "완료만"
+12:49:54 [25-invoice-quote-teammate k10#2] 차례 22 (15분 31초, 화면이 멈춤) friction=0 done
+12:50:07 [25-invoice-quote-teammate k10#2] Work 2 끝: done (반품 줄별 버림 O, 반품 할인 순서 O, 반품 전표 그대로 O), 차례 8, 질문 1
+12:50:08 [25-invoice-quote-teammate k10#2] 팀원 교대: 머지 2개, 충돌 1개(뒤 쪽으로 머지)
+12:50:10 [25-invoice-quote-teammate k10#2] 팀원 교대: 새 앱 저장소에서 새로 clone한 레포를 등록했습니다.
+12:50:10 [25-invoice-quote-teammate k10#2] Work 3/3 시작
+12:50:18 [21-invoice-credit k10#3] 차례 11 (5분 5초, 화면이 멈춤) friction=0 key, type "회계팀 규칙: 부가세는 품목 줄마다 원 단위 버림으로 계산하고 그 합을 
+…(133자 생략)"
+12:50:21 [25-invoice-quote-teammate k10#2] 차례 23 (15분 57초, 화면이 멈춤) friction=0 click button "새 Work"
+12:50:31 [21-invoice-credit k10#3] 차례 12 (5분 18초, 화면이 멈춤) friction=1 key, type "CN-0112 회계팀 계산 환불 합계 19,180원. 부가세 금액은 모름
+…(1자 생략)"
+12:50:35 [25-invoice-quote-teammate k10#2] 차례 24 (16분 9초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "거래처 C-0388이 견적서 Q-0457 합계가 경리 계산과 몇 원 다르
+…(141자 생략)", click button "시작"
+12:50:37 [25-invoice-quote-teammate k10#2] 첫 실행 창 수락: folder_trust
+12:50:41 [21-invoice-credit k10#3] 차례 13 (5분 30초, 화면이 멈춤) friction=0 key, wait
+12:51:10 [25-invoice-quote-teammate k10#2] 차례 25 (16분 46초, 화면이 멈춤) friction=0 click button "의도 승인"
+12:51:11 [21-invoice-credit k10#3] 차례 14 (6분 0초, 화면이 멈춤) friction=0 click button "의도 승인", wait
+12:52:39 [25-invoice-quote-teammate k10#2] 차례 26 (18분 15초, 화면이 멈춤) friction=0 inspect_diff
+12:52:45 [25-invoice-quote-teammate k10#2] 차례 27 (18분 21초, 직전 행동의 결과) friction=1 key
+12:53:03 [21-invoice-credit k10#3] 차례 15 (7분 52초, 화면이 멈춤) friction=0 key, wait
+12:53:37 [25-invoice-quote-teammate k10#2] 차례 28 (19분 13초, 화면이 멈춤) friction=0 type "완료 전에 확인 하나만: 지금 코드에서 청구서(INV-2031 부가세),
+…(101자 생략)"
+12:53:44 [21-invoice-credit k10#3] 차례 16 (8분 32초, 화면이 멈춤) friction=0 click tab "전체 변경"
+12:53:55 [21-invoice-credit k10#3] 차례 17 (8분 44초, 화면이 멈춤) friction=0 click button "완료만", wait
+12:54:06 [21-invoice-credit k10#3] 차례 18 (8분 55초, 화면이 멈춤) friction=0 done
+12:54:07 [25-invoice-quote-teammate k10#2] 차례 29 (19분 43초, 화면이 멈춤) friction=1 click button "완료만"
+12:54:17 [25-invoice-quote-teammate k10#2] 차례 30 (19분 53초, 화면이 멈춤) friction=0 done
+12:54:20 [21-invoice-credit k10#3] Work 2 끝: done (반품 줄별 버림 O, 반품 할인 순서 O, 반품 전표 그대로 O), 차례 10, 질문 2
+12:54:20 [21-invoice-credit k10#3] 끝: done (9분 9초)
+12:54:24 [21-invoice-credit k10#3] 결과: 성공 (줄별 버림 O, 할인 순서 O, 서식 그대로 O, 반품 줄별 버림 O, 반품 할인 순서 O, 반품 전표 그대로 O), 차례 18, 사람 비용 $2.17
+== 진행 8/20
+12:54:24 [22-flaky-retry k10#3] 준비 (/tmp/relay-eval/e12-k10/22-flaky-retry-k10-3/jobs)
+12:54:27 [22-flaky-retry k10#3] Work 1/2 시작
+12:54:29 [25-invoice-quote-teammate k10#2] Work 3 끝: done (견적 줄별 버림 O, 견적 할인 순서 O, 견적 그대로 O), 차례 8, 질문 1
+12:54:29 [25-invoice-quote-teammate k10#2] 끝: done (20분 5초)
+12:54:36 [25-invoice-quote-teammate k10#2] 결과: 성공 (줄별 버림 O, 할인 순서 O, 서식 그대로 O, 반품 줄별 버림 O, 반품 할인 순서 O, 반품 전표 그대로 O, 견적 줄별 버림 O, 견적 할인 순서 O, 견적 그대로 O), 차례 30, 사람 비용 $4.20
+== 진행 9/20
+12:54:36 [23-double-notify-digest k10#3] 준비 (/tmp/relay-eval/e12-k10/23-double-notify-digest-k10-3/notify)
+12:54:39 [23-double-notify-digest k10#3] Work 1/2 시작
+12:54:41 [22-flaky-retry k10#3] 차례 1 (0분 15초, 화면이 멈춤) friction=0 click button "새 Work"
+12:54:49 [23-double-notify-digest k10#3] 차례 1 (0분 12초, 화면이 멈춤) friction=0 click button "새 Work"
+12:54:54 [22-flaky-retry k10#3] 차례 2 (0분 27초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "CI의 npm run test:ci 작업이 가끔 실패한다. ci/batc
+…(209자 생략)", click button "시작"
+12:54:55 [22-flaky-retry k10#3] 첫 실행 창 수락: folder_trust
+12:54:58 [22-flaky-retry k10#3] 첫 실행 창 수락: bypass_permissions_warning
+12:55:01 [23-double-notify-digest k10#3] 차례 2 (0분 22초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "일부 고객이 같은 알림을 두 번, 가끔 세 번 받는다. 메일이 더 자주 
+…(66자 생략)", click button "시작"
+12:55:02 [23-double-notify-digest k10#3] 첫 실행 창 수락: folder_trust
+12:55:05 [23-double-notify-digest k10#3] 첫 실행 창 수락: bypass_permissions_warning
+12:55:26 [22-flaky-retry k10#3] 차례 3 (1분 1초, 화면이 멈춤) friction=0 click button "의도 승인"
+12:55:31 [23-double-notify-digest k10#3] 차례 3 (0분 54초, 화면이 멈춤) friction=0 click button "의도 승인"
+12:55:44 [22-flaky-retry k10#3] 첫 코드 변경 (1분 20초)
+12:56:20 [23-double-notify-digest k10#3] 차례 4 (1분 43초, 화면이 멈춤) friction=0 key
+12:56:32 [23-double-notify-digest k10#3] 첫 코드 변경 (1분 56초)
+12:58:12 [23-double-notify-digest k10#3] 차례 5 (3분 35초, 화면이 멈춤) friction=0 click tab "전체 변경"
+12:58:17 [22-flaky-retry k10#3] 차례 4 (3분 52초, 화면이 멈춤) friction=0 click tab "02 원인 분석과 수정"
+12:58:23 [23-double-notify-digest k10#3] 차례 6 (3분 46초, 화면이 멈춤) friction=0 click button "완료만"
+12:58:27 [22-flaky-retry k10#3] 차례 5 (4분 2초, 화면이 멈춤) friction=0 click tab "변경"
+12:58:33 [23-double-notify-digest k10#3] 차례 7 (3분 57초, 화면이 멈춤) friction=0 done
+12:58:39 [22-flaky-retry k10#3] 차례 6 (4분 14초, 화면이 멈춤) friction=0 click tab "03 리뷰와 검증", key
+12:58:44 [23-double-notify-digest k10#3] Work 1 끝: done (같은 이벤트 재수신 X, 성공 뒤 재시도 없음 O, 실패는 재시도 O), 차례 7, 질문 1
+12:58:44 [23-double-notify-digest k10#3] Work 2/2 시작
+12:58:55 [23-double-notify-digest k10#3] 차례 8 (4분 19초, 화면이 멈춤) friction=0 inspect_diff
+12:59:01 [23-double-notify-digest k10#3] 차례 9 (4분 25초, 직전 행동의 결과) friction=0 done
+12:59:05 [23-double-notify-digest k10#3] 차례 10 (4분 28초, 직전 행동의 결과) friction=0 click button "새 Work"
+12:59:18 [23-double-notify-digest k10#3] 차례 11 (4분 40초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "아침 요약 메일(전날 알림 모음)을 같은 날 두 통, 가끔 세 통 받았다
+…(130자 생략)", click button "시작"
+12:59:19 [22-flaky-retry k10#3] 차례 7 (4분 54초, 화면이 멈춤) friction=0 click button "완료만"
+12:59:30 [22-flaky-retry k10#3] 차례 8 (5분 6초, 화면이 멈춤) friction=0 done
+12:59:42 [22-flaky-retry k10#3] Work 1 끝: done (완료 순서와 무관 O, 병렬 유지 O), 차례 8, 질문 1
+12:59:42 [22-flaky-retry k10#3] Work 2/2 시작
+12:59:54 [23-double-notify-digest k10#3] 차례 12 (5분 17초, 화면이 멈춤) friction=0 click button "의도 승인"
+12:59:54 [22-flaky-retry k10#3] 차례 9 (5분 29초, 화면이 멈춤) friction=0 click button "새 Work"
+13:00:07 [22-flaky-retry k10#3] 차례 10 (5분 41초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "CI의 npm run test:ci가 요즘 또 가끔 실패한다. 이번에는 
+…(282자 생략)", click button "시작"
+13:00:36 [22-flaky-retry k10#3] 차례 11 (6분 11초, 화면이 멈춤) friction=0 type "완료조건에 두 가지 추가해 주세요. 배치 병렬 실행(동시 4개)은 유지해
+…(56자 생략)"
+13:00:53 [22-flaky-retry k10#3] 차례 12 (6분 28초, 화면이 멈춤) friction=0 click button "의도 승인", wait
+13:02:09 [23-double-notify-digest k10#3] 차례 13 (7분 32초, 화면이 멈춤) friction=0 key
+13:03:05 [22-flaky-retry k10#3] 차례 13 (8분 41초, 화면이 멈춤) friction=0 inspect_diff
+13:03:11 [22-flaky-retry k10#3] 차례 14 (8분 46초, 직전 행동의 결과) friction=0 key, wait
+13:03:15 [23-double-notify-digest k10#3] 차례 14 (8분 39초, 화면이 멈춤) friction=0 inspect_diff
+13:03:22 [23-double-notify-digest k10#3] 차례 15 (8분 45초, 직전 행동의 결과) friction=0 click button "완료만"
+13:03:35 [23-double-notify-digest k10#3] 차례 16 (8분 59초, 화면이 멈춤) friction=0 done
+13:03:47 [23-double-notify-digest k10#3] Work 2 끝: done (요약 재실행 O, 느린 요약 성공 O, 요약 실패는 재시도 O), 차례 9, 질문 1
+13:03:47 [23-double-notify-digest k10#3] 끝: done (9분 11초)
+13:03:52 [23-double-notify-digest k10#3] 결과: 실패 (같은 이벤트 재수신 X, 성공 뒤 재시도 없음 O, 실패는 재시도 O, 요약 재실행 O, 느린 요약 성공 O, 요약 실패는 재시도 O), 차례 16, 사람 비용 $1.97
+== 진행 10/20
+13:03:52 [25-invoice-quote-teammate k10#3] 준비 (/tmp/relay-eval/e12-k10/25-invoice-quote-teammate-k10-3/billing)
+13:03:54 [25-invoice-quote-teammate k10#3] Work 1/3 시작
+13:04:02 [22-flaky-retry k10#3] 차례 15 (9분 37초, 화면이 멈춤) friction=0 key, wait
+13:04:04 [25-invoice-quote-teammate k10#3] 차례 1 (0분 11초, 화면이 멈춤) friction=0 click button "새 Work"
+13:04:16 [25-invoice-quote-teammate k10#3] 차례 2 (0분 22초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "회계팀 대조에서 청구서 합계가 몇 원씩 안 맞는다는 연락이 왔어요. 우리
+…(223자 생략)", click button "시작"
+13:04:18 [25-invoice-quote-teammate k10#3] 첫 실행 창 수락: folder_trust
+13:04:21 [25-invoice-quote-teammate k10#3] 첫 실행 창 수락: bypass_permissions_warning
+13:04:40 [22-flaky-retry k10#3] 차례 16 (10분 15초, 화면이 멈춤) friction=0 click button "완료만", wait
+13:04:51 [22-flaky-retry k10#3] 차례 17 (10분 27초, 화면이 멈춤) friction=0 done
+13:04:56 [25-invoice-quote-teammate k10#3] 차례 3 (1분 2초, 화면이 멈춤) friction=0 key, type "부가세는 품목 줄마다 원 단위 버림으로 계산하고 그 합을 청구서 부가세로
+…(98자 생략)"
+13:05:06 [22-flaky-retry k10#3] Work 2 끝: done (동시 저장 O, 보관 중 반쪽 파일 없음 O, 보관 배치도 병렬 O), 차례 9, 질문 2
+13:05:06 [22-flaky-retry k10#3] 끝: done (10분 42초)
+13:05:11 [22-flaky-retry k10#3] 결과: 성공 (완료 순서와 무관 O, 병렬 유지 O, 동시 저장 O, 보관 중 반쪽 파일 없음 O, 보관 배치도 병렬 O), 차례 17, 사람 비용 $1.92
+== 진행 11/20
+13:05:11 [21-invoice-credit k10#4] 준비 (/tmp/relay-eval/e12-k10/21-invoice-credit-k10-4/billing)
+13:05:14 [21-invoice-credit k10#4] Work 1/2 시작
+13:05:23 [25-invoice-quote-teammate k10#3] 차례 4 (1분 30초, 화면이 멈춤) friction=0 click button "의도 승인"
+13:05:24 [21-invoice-credit k10#4] 차례 1 (0분 11초, 화면이 멈춤) friction=0 click button "새 Work"
+13:05:36 [21-invoice-credit k10#4] 차례 2 (0분 22초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "회계팀 대조에서 청구서 합계가 몇 원씩 안 맞는다고 연락이 왔어요. 우리
+…(191자 생략)", click button "시작"
+13:05:38 [21-invoice-credit k10#4] 첫 실행 창 수락: folder_trust
+13:05:40 [21-invoice-credit k10#4] 첫 실행 창 수락: bypass_permissions_warning
+13:05:47 [25-invoice-quote-teammate k10#3] 첫 코드 변경 (1분 55초)
+13:06:16 [21-invoice-credit k10#4] 차례 3 (1분 3초, 화면이 멈춤) friction=0 key, type "품목 줄마다 원 단위 버림으로 부가세 계산하고 그 합을 부가세로 씁니다.
+…(88자 생략)"
+13:06:28 [21-invoice-credit k10#4] 차례 4 (1분 16초, 화면이 멈춤) friction=0 key
+13:06:38 [21-invoice-credit k10#4] 차례 5 (1분 26초, 화면이 멈춤) friction=0 key, wait
+13:07:07 [21-invoice-credit k10#4] 차례 6 (1분 55초, 화면이 멈춤) friction=0 click button "의도 승인", wait
+13:07:20 [25-invoice-quote-teammate k10#3] 차례 5 (3분 27초, 화면이 멈춤) friction=1 type "승인 전에 확인할게요. 반품 전표(examples/CN-0112.json
+…(61자 생략)"
+13:07:28 [21-invoice-credit k10#4] 첫 코드 변경 (2분 17초)
+13:07:55 [25-invoice-quote-teammate k10#3] 차례 6 (4분 2초, 화면이 멈춤) friction=1 click button "단계 선택"
+13:08:08 [25-invoice-quote-teammate k10#3] 차례 7 (4분 14초, 화면이 멈춤) friction=1 click radio "의도 정리(intake)", fill textarea "추가 지시" "범위를 넓혀 주세요. 견적서(quote.js)와 반품 전표(credit-
+…(148자 생략)", click button "확인"
+13:08:47 [25-invoice-quote-teammate k10#3] 차례 8 (4분 54초, 화면이 멈춤) friction=0 click button "의도 승인"
+13:08:47 [21-invoice-credit k10#4] 차례 7 (3분 35초, 화면이 멈춤) friction=0 key, wait
+13:09:38 [21-invoice-credit k10#4] 차례 8 (4분 26초, 화면이 멈춤) friction=0 click tab "전체 변경"
+13:09:49 [21-invoice-credit k10#4] 차례 9 (4분 37초, 화면이 멈춤) friction=0 click button "완료만", wait
+13:09:59 [21-invoice-credit k10#4] 차례 10 (4분 47초, 화면이 멈춤) friction=0 done
+13:10:09 [21-invoice-credit k10#4] Work 1 끝: done (줄별 버림 O, 할인 순서 O, 서식 그대로 O), 차례 10, 질문 2
+13:10:09 [21-invoice-credit k10#4] Work 2/2 시작
+13:10:19 [21-invoice-credit k10#4] 차례 11 (5분 7초, 화면이 멈춤) friction=0 click button "새 Work"
+13:10:31 [21-invoice-credit k10#4] 차례 12 (5분 18초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "회계팀이 10월 반품 전표를 대조하다가 우리 전표의 환불 금액이 회계팀 
+…(187자 생략)", click button "시작"
+13:10:54 [25-invoice-quote-teammate k10#3] 차례 9 (7분 2초, 화면이 멈춤) friction=0 key, wait
+13:11:03 [21-invoice-credit k10#4] 차례 13 (5분 51초, 화면이 멈춤) friction=0 type "비목표에 하나 더 넣어 주세요. src/format/ 서식 모듈의 출력 
+…(59자 생략)"
+13:11:20 [21-invoice-credit k10#4] 차례 14 (6분 8초, 화면이 멈춤) friction=0 click button "의도 승인"
+13:11:40 [25-invoice-quote-teammate k10#3] 차례 10 (7분 47초, 화면이 멈춤) friction=0 click button "완료만"
+13:11:50 [25-invoice-quote-teammate k10#3] 차례 11 (7분 58초, 화면이 멈춤) friction=0 done
+13:12:00 [25-invoice-quote-teammate k10#3] Work 1 끝: done (줄별 버림 O, 할인 순서 O, 서식 그대로 O), 차례 11, 질문 2
+13:12:00 [25-invoice-quote-teammate k10#3] Work 2/3 시작
+13:12:12 [25-invoice-quote-teammate k10#3] 차례 12 (8분 19초, 화면이 멈춤) friction=0 click button "새 Work"
+13:12:26 [25-invoice-quote-teammate k10#3] 차례 13 (8분 31초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "회계팀이 10월 반품 전표를 대조하다가 우리 전표의 환불 금액이 회계팀 
+…(266자 생략)", click button "시작"
+13:12:57 [25-invoice-quote-teammate k10#3] 차례 14 (9분 4초, 화면이 멈춤) friction=0 key
+13:13:09 [25-invoice-quote-teammate k10#3] 차례 15 (9분 16초, 화면이 멈춤) friction=0 key, key
+13:13:22 [21-invoice-credit k10#4] 차례 15 (8분 10초, 화면이 멈춤) friction=0 click tab "전체 변경"
+13:13:25 [25-invoice-quote-teammate k10#3] 차례 16 (9분 30초, 화면이 멈춤) friction=1 key, key, key, key, key
+13:13:33 [21-invoice-credit k10#4] 차례 16 (8분 20초, 화면이 멈춤) friction=0 click button "완료만"
+13:13:37 [25-invoice-quote-teammate k10#3] 차례 17 (9분 44초, 화면이 멈춤) friction=0 key, key
+13:13:43 [21-invoice-credit k10#4] 차례 17 (8분 31초, 화면이 멈춤) friction=0 done
+13:13:49 [25-invoice-quote-teammate k10#3] 차례 18 (9분 56초, 화면이 멈춤) friction=2 key, wait
+13:13:54 [21-invoice-credit k10#4] Work 2 끝: done (반품 줄별 버림 O, 반품 할인 순서 O, 반품 전표 그대로 O), 차례 7, 질문 0
+13:13:54 [21-invoice-credit k10#4] 끝: done (8분 43초)
+13:13:58 [21-invoice-credit k10#4] 결과: 성공 (줄별 버림 O, 할인 순서 O, 서식 그대로 O, 반품 줄별 버림 O, 반품 할인 순서 O, 반품 전표 그대로 O), 차례 17, 사람 비용 $1.97
+== 진행 12/20
+13:13:58 [22-flaky-retry k10#4] 준비 (/tmp/relay-eval/e12-k10/22-flaky-retry-k10-4/jobs)
+13:14:00 [22-flaky-retry k10#4] Work 1/2 시작
+13:14:10 [22-flaky-retry k10#4] 차례 1 (0분 11초, 화면이 멈춤) friction=0 click button "새 Work"
+13:14:10 [25-invoice-quote-teammate k10#3] 차례 19 (10분 16초, 화면이 멈춤) friction=1 key, key, type "19180"
+13:14:22 [22-flaky-retry k10#4] 차례 2 (0분 22초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "CI의 `npm run test:ci` 작업이 가끔 실패한다. 실패하는 
+…(201자 생략)", click button "시작"
+13:14:24 [22-flaky-retry k10#4] 첫 실행 창 수락: folder_trust
+13:14:27 [22-flaky-retry k10#4] 첫 실행 창 수락: bypass_permissions_warning
+13:14:40 [25-invoice-quote-teammate k10#3] 차례 20 (10분 47초, 화면이 멈춤) friction=0 click button "의도 승인"
+13:14:59 [22-flaky-retry k10#4] 차례 3 (1분 1초, 화면이 멈춤) friction=0 type "의도 괜찮은데 두 가지만 추가해줘. 배치 병렬 실행(동시 4개)은 유지해
+…(65자 생략)"
+13:15:17 [22-flaky-retry k10#4] 차례 4 (1분 19초, 화면이 멈춤) friction=0 click button "의도 승인"
+13:15:36 [22-flaky-retry k10#4] 첫 코드 변경 (1분 38초)
+13:16:08 [25-invoice-quote-teammate k10#3] 차례 21 (12분 14초, 화면이 멈춤) friction=0 key, click tab "02 원인 분석과 수정"
+13:16:19 [25-invoice-quote-teammate k10#3] 차례 22 (12분 26초, 화면이 멈춤) friction=0 click tab "변경"
+13:16:30 [25-invoice-quote-teammate k10#3] 차례 23 (12분 37초, 화면이 멈춤) friction=0 click tab "03 리뷰와 검증", wait
+13:17:10 [22-flaky-retry k10#4] 차례 5 (3분 13초, 화면이 멈춤) friction=0 inspect_diff
+13:17:14 [22-flaky-retry k10#4] 차례 6 (3분 16초, 직전 행동의 결과) friction=0 click button "완료만"
+13:17:24 [22-flaky-retry k10#4] 차례 7 (3분 27초, 화면이 멈춤) friction=0 done
+13:17:36 [22-flaky-retry k10#4] Work 1 끝: done (완료 순서와 무관 O, 병렬 유지 O), 차례 7, 질문 0
+13:17:36 [22-flaky-retry k10#4] Work 2/2 시작
+13:17:42 [25-invoice-quote-teammate k10#3] 차례 24 (13분 49초, 화면이 멈춤) friction=0 click button "완료만"
+13:17:47 [22-flaky-retry k10#4] 차례 8 (3분 48초, 화면이 멈춤) friction=0 click button "새 Work"
+13:17:53 [25-invoice-quote-teammate k10#3] 차례 25 (14분 1초, 화면이 멈춤) friction=0 done
+13:18:00 [22-flaky-retry k10#4] 차례 9 (4분 1초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "CI의 `npm run test:ci`가 요즘 또 가끔 실패해요. 이번엔
+…(284자 생략)", click button "시작"
+13:18:05 [25-invoice-quote-teammate k10#3] Work 2 끝: done (반품 줄별 버림 O, 반품 할인 순서 O, 반품 전표 그대로 O), 차례 14, 질문 3
+13:18:05 [25-invoice-quote-teammate k10#3] 팀원 교대: 머지 3개, 충돌 2개(뒤 쪽으로 머지)
+13:18:08 [25-invoice-quote-teammate k10#3] 팀원 교대: 새 앱 저장소에서 새로 clone한 레포를 등록했습니다.
+13:18:08 [25-invoice-quote-teammate k10#3] Work 3/3 시작
+13:18:18 [25-invoice-quote-teammate k10#3] 차례 26 (14분 26초, 화면이 멈춤) friction=0 click button "새 Work"
+13:18:32 [25-invoice-quote-teammate k10#3] 차례 27 (14분 37초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "거래처 C-0388이 견적서 Q-0457 합계가 경리 계산 금액과 몇 원
+…(157자 생략)", click button "시작"
+13:18:33 [25-invoice-quote-teammate k10#3] 첫 실행 창 수락: folder_trust
+13:18:34 [22-flaky-retry k10#4] 차례 10 (4분 35초, 화면이 멈춤) friction=0 type "완료조건에 두 가지 추가해 주세요. 1) 배치의 병렬 실행(동시 4개)은
+…(130자 생략)"
+13:18:52 [22-flaky-retry k10#4] 차례 11 (4분 53초, 화면이 멈춤) friction=0 click button "의도 승인"
+13:19:13 [25-invoice-quote-teammate k10#3] 차례 28 (15분 19초, 화면이 멈춤) friction=1 key, type "부가세 규칙은 저도 몰라요. 청구서는 동료가 회계팀과 맞췄다고만 들었고 
+…(68자 생략)"
+13:19:24 [25-invoice-quote-teammate k10#3] 차례 29 (15분 31초, 화면이 멈춤) friction=1 key, type "경리 담당이 계산한 합계는 56,278원입니다. 이걸 기대값으로 해 주세
+…(2자 생략)"
+13:19:35 [25-invoice-quote-teammate k10#3] 차례 30 (15분 42초, 화면이 멈춤) friction=0 key, wait
+13:20:03 [25-invoice-quote-teammate k10#3] 차례 31 (16분 10초, 화면이 멈춤) friction=0 click button "의도 승인", wait
+13:20:14 [25-invoice-quote-teammate k10#3] 차례 32 (16분 21초, 화면이 멈춤) friction=1 click button "의도 승인", wait
+13:20:37 [22-flaky-retry k10#4] 차례 12 (6분 38초, 화면이 멈춤) friction=0 click tab "02 원인 분석과 수정"
+13:20:50 [22-flaky-retry k10#4] 차례 13 (6분 51초, 화면이 멈춤) friction=0 click tab "03 리뷰와 검증", key
+13:21:51 [22-flaky-retry k10#4] 차례 14 (7분 52초, 화면이 멈춤) friction=0 click tab "전체 변경"
+13:22:02 [22-flaky-retry k10#4] 차례 15 (8분 3초, 화면이 멈춤) friction=0 click button "완료만"
+13:22:13 [22-flaky-retry k10#4] 차례 16 (8분 15초, 화면이 멈춤) friction=0 done
+13:22:29 [22-flaky-retry k10#4] Work 2 끝: done (동시 저장 O, 보관 중 반쪽 파일 없음 O, 보관 배치도 병렬 O), 차례 9, 질문 1
+13:22:29 [22-flaky-retry k10#4] 끝: done (8분 31초)
+13:22:34 [22-flaky-retry k10#4] 결과: 성공 (완료 순서와 무관 O, 병렬 유지 O, 동시 저장 O, 보관 중 반쪽 파일 없음 O, 보관 배치도 병렬 O), 차례 16, 사람 비용 $1.88
+== 진행 13/20
+13:22:34 [23-double-notify-digest k10#4] 준비 (/tmp/relay-eval/e12-k10/23-double-notify-digest-k10-4/notify)
+13:22:36 [23-double-notify-digest k10#4] Work 1/2 시작
+13:22:46 [23-double-notify-digest k10#4] 차례 1 (0분 11초, 화면이 멈춤) friction=0 click button "새 Work"
+13:22:58 [23-double-notify-digest k10#4] 차례 2 (0분 22초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "일부 고객이 같은 알림을 두 번, 가끔 세 번 받는다. 메일이 더 자주 
+…(59자 생략)", click button "시작"
+13:22:59 [23-double-notify-digest k10#4] 첫 실행 창 수락: folder_trust
+13:23:02 [23-double-notify-digest k10#4] 첫 실행 창 수락: bypass_permissions_warning
+13:23:35 [23-double-notify-digest k10#4] 차례 3 (1분 0초, 화면이 멈춤) friction=0 click button "의도 승인", wait
+13:23:59 [23-double-notify-digest k10#4] 첫 코드 변경 (1분 25초)
+13:24:06 [25-invoice-quote-teammate k10#3] 차례 33 (20분 14초, 화면이 멈춤) friction=0 key, wait
+13:24:50 [25-invoice-quote-teammate k10#3] 차례 34 (20분 56초, 화면이 멈춤) friction=1 key, type "진행 전에 물어볼게요. computeTotals 버그가 정확히 뭐고 실패
+…(55자 생략)", wait
+13:25:15 [23-double-notify-digest k10#4] 차례 4 (2분 40초, 화면이 멈춤) friction=1 click tab "02 원인 분석과 수정"
+13:25:22 [25-invoice-quote-teammate k10#3] 차례 35 (21분 29초, 화면이 멈춤) friction=0 key, wait
+13:25:27 [23-double-notify-digest k10#4] 차례 5 (2분 52초, 화면이 멈춤) friction=0 click tab "03 리뷰와 검증", key, wait
+13:26:13 [23-double-notify-digest k10#4] 차례 6 (3분 38초, 화면이 멈춤) friction=0 click button "완료만", wait
+13:26:23 [25-invoice-quote-teammate k10#3] 차례 36 (22분 30초, 화면이 멈춤) friction=0 click tab "전체 변경"
+13:26:23 [23-double-notify-digest k10#4] 차례 7 (3분 49초, 화면이 멈춤) friction=0 done
+13:26:35 [25-invoice-quote-teammate k10#3] 차례 37 (22분 42초, 화면이 멈춤) friction=1 click button "완료만", wait
+13:26:39 [23-double-notify-digest k10#4] Work 1 끝: done (같은 이벤트 재수신 X, 성공 뒤 재시도 없음 O, 실패는 재시도 O), 차례 7, 질문 1
+13:26:39 [23-double-notify-digest k10#4] Work 2/2 시작
+13:26:47 [25-invoice-quote-teammate k10#3] 차례 38 (22분 55초, 화면이 멈춤) friction=1 done
+13:26:51 [23-double-notify-digest k10#4] 차례 8 (4분 16초, 화면이 멈춤) friction=0 click button "새 Work"
+13:27:00 [25-invoice-quote-teammate k10#3] Work 3 끝: done (견적 줄별 버림 O, 견적 할인 순서 O, 견적 그대로 O), 차례 13, 질문 4
+13:27:00 [25-invoice-quote-teammate k10#3] 끝: done (23분 8초)
+13:27:07 [25-invoice-quote-teammate k10#3] 결과: 성공 (줄별 버림 O, 할인 순서 O, 서식 그대로 O, 반품 줄별 버림 O, 반품 할인 순서 O, 반품 전표 그대로 O, 견적 줄별 버림 O, 견적 할인 순서 O, 견적 그대로 O), 차례 38, 사람 비용 $5.76
+== 진행 14/20
+13:27:07 [25-invoice-quote-teammate k10#4] 준비 (/tmp/relay-eval/e12-k10/25-invoice-quote-teammate-k10-4/billing)
+13:27:09 [23-double-notify-digest k10#4] 차례 9 (4분 33초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "아침 요약 메일(전날 알림 모음)을 같은 날 두 통, 가끔 세 통 받았다
+…(79자 생략)", click button "시작"
+13:27:09 [25-invoice-quote-teammate k10#4] Work 1/3 시작
+13:27:20 [25-invoice-quote-teammate k10#4] 차례 1 (0분 12초, 화면이 멈춤) friction=0 click button "새 Work"
+13:27:34 [25-invoice-quote-teammate k10#4] 차례 2 (0분 24초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "회계팀 대조에서 청구서 합계가 몇 원씩 안 맞는다는 연락이 왔어요. 우리
+…(210자 생략)", click button "시작"
+13:27:36 [25-invoice-quote-teammate k10#4] 첫 실행 창 수락: folder_trust
+13:27:36 [23-double-notify-digest k10#4] 차례 10 (5분 2초, 화면이 멈춤) friction=0 click button "의도 승인"
+13:27:38 [25-invoice-quote-teammate k10#4] 첫 실행 창 수락: bypass_permissions_warning
+13:28:10 [25-invoice-quote-teammate k10#4] 차례 3 (1분 1초, 화면이 멈춤) friction=1 key, type "회계팀 합계는 29,079원이에요. 우리보다 3원 적습니다."
+13:28:30 [25-invoice-quote-teammate k10#4] 차례 4 (1분 21초, 화면이 멈춤) friction=1 key, type "발행된 청구서는 다시 계산하면 안 돼요(저장 합계 그대로). src/fo
+…(76자 생략)"
+13:28:41 [25-invoice-quote-teammate k10#4] 차례 5 (1분 33초, 화면이 멈춤) friction=0 key, wait
+13:29:07 [25-invoice-quote-teammate k10#4] 차례 6 (1분 59초, 화면이 멈춤) friction=0 click button "의도 승인", wait
+13:29:18 [25-invoice-quote-teammate k10#4] 차례 7 (2분 10초, 화면이 멈춤) friction=1 click button "의도 승인", wait
+13:29:45 [25-invoice-quote-teammate k10#4] 첫 코드 변경 (2분 38초)
+13:29:57 [23-double-notify-digest k10#4] 차례 11 (7분 22초, 화면이 멈춤) friction=0 click tab "02 원인 분석과 수정"
+13:30:09 [23-double-notify-digest k10#4] 차례 12 (7분 34초, 화면이 멈춤) friction=0 click tab "03 리뷰와 검증"
+13:30:19 [23-double-notify-digest k10#4] 차례 13 (7분 44초, 화면이 멈춤) friction=0 key, wait
+13:30:31 [25-invoice-quote-teammate k10#4] 차례 8 (3분 23초, 화면이 멈춤) friction=1 type "열린 질문 답: 회계 규정은 부가세를 품목 줄마다 원 단위 버림으로 계산
+…(163자 생략)", wait
+13:32:02 [23-double-notify-digest k10#4] 차례 14 (9분 27초, 화면이 멈춤) friction=0 click tab "전체 변경"
+13:32:09 [25-invoice-quote-teammate k10#4] 차례 9 (5분 1초, 화면이 멈춤) friction=0 key, wait
+13:32:17 [23-double-notify-digest k10#4] 차례 15 (9분 42초, 화면이 멈춤) friction=1 type "요약 일정 작업이 서버 두 대에서 같이 돌고, 배포한 날 아침엔 한 번 
+…(120자 생략)"
+13:32:55 [25-invoice-quote-teammate k10#4] 차례 10 (5분 47초, 화면이 멈춤) friction=0 click button "완료만", wait
+13:32:57 [23-double-notify-digest k10#4] 차례 16 (10분 22초, 화면이 멈춤) friction=1 type "서버 두 대·배포 날 중복이 남는다면 수십 분 차이로 오는 문의는 여전히
+…(175자 생략)"
+13:33:06 [25-invoice-quote-teammate k10#4] 차례 11 (5분 59초, 화면이 멈춤) friction=0 done
+13:33:20 [25-invoice-quote-teammate k10#4] Work 1 끝: done (줄별 버림 O, 할인 순서 O, 서식 그대로 O), 차례 11, 질문 2
+13:33:20 [25-invoice-quote-teammate k10#4] Work 2/3 시작
+13:33:30 [25-invoice-quote-teammate k10#4] 차례 12 (6분 23초, 화면이 멈춤) friction=0 click button "새 Work"
+13:33:43 [25-invoice-quote-teammate k10#4] 차례 13 (6분 34초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "회계팀이 10월 반품 전표를 대조했는데 우리 전표의 환불 금액이 회계팀 
+…(270자 생략)", click button "시작"
+13:34:20 [25-invoice-quote-teammate k10#4] 차례 14 (7분 12초, 화면이 멈춤) friction=0 click button "의도 승인"
+13:34:48 [23-double-notify-digest k10#4] 차례 17 (12분 13초, 화면이 멈춤) friction=1 click button "완료만"
+13:35:00 [23-double-notify-digest k10#4] 차례 18 (12분 26초, 화면이 멈춤) friction=1 done
+13:35:14 [23-double-notify-digest k10#4] Work 2 끝: done (요약 재실행 O, 느린 요약 성공 O, 요약 실패는 재시도 O), 차례 11, 질문 1
+13:35:14 [23-double-notify-digest k10#4] 끝: done (12분 40초)
+13:35:19 [23-double-notify-digest k10#4] 결과: 실패 (같은 이벤트 재수신 X, 성공 뒤 재시도 없음 O, 실패는 재시도 O, 요약 재실행 O, 느린 요약 성공 O, 요약 실패는 재시도 O), 차례 18, 사람 비용 $2.48
+== 진행 15/20
+13:35:19 [21-invoice-credit k10#5] 준비 (/tmp/relay-eval/e12-k10/21-invoice-credit-k10-5/billing)
+13:35:21 [21-invoice-credit k10#5] Work 1/2 시작
+13:35:31 [21-invoice-credit k10#5] 차례 1 (0분 12초, 화면이 멈춤) friction=0 click button "새 Work"
+13:35:44 [21-invoice-credit k10#5] 차례 2 (0분 22초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "회계팀 대조에서 청구서 합계가 몇 원씩 안 맞는다는 연락이 왔다. 우리 
+…(203자 생략)", click button "시작"
+13:35:45 [21-invoice-credit k10#5] 첫 실행 창 수락: folder_trust
+13:35:48 [21-invoice-credit k10#5] 첫 실행 창 수락: bypass_permissions_warning
+13:36:19 [21-invoice-credit k10#5] 차례 3 (0분 58초, 화면이 멈춤) friction=0 key, type "회계팀 합계는 29,079원. 규정: 부가세는 품목 줄마다 원 단위 버림
+…(72자 생략)"
+13:36:32 [21-invoice-credit k10#5] 차례 4 (1분 11초, 화면이 멈춤) friction=1 key, key, key, wait
+13:36:44 [21-invoice-credit k10#5] 차례 5 (1분 23초, 화면이 멈춤) friction=0 key, key, key, key, wait
+13:36:54 [21-invoice-credit k10#5] 차례 6 (1분 35초, 화면이 멈춤) friction=0 key, wait
+13:37:18 [21-invoice-credit k10#5] 차례 7 (1분 58초, 화면이 멈춤) friction=0 click button "의도 승인", wait
+13:37:48 [21-invoice-credit k10#5] 차례 8 (2분 29초, 화면이 멈춤) friction=0 key, wait
+13:37:50 [25-invoice-quote-teammate k10#4] 차례 15 (10분 42초, 화면이 멈춤) friction=0 key, wait
+13:37:55 [21-invoice-credit k10#5] 첫 코드 변경 (2분 36초)
+13:38:22 [25-invoice-quote-teammate k10#4] 차례 16 (11분 14초, 화면이 멈춤) friction=0 click tab "전체 변경"
+13:38:34 [25-invoice-quote-teammate k10#4] 차례 17 (11분 26초, 화면이 멈춤) friction=0 click button "완료만"
+13:38:45 [25-invoice-quote-teammate k10#4] 차례 18 (11분 38초, 화면이 멈춤) friction=0 done
+13:38:56 [25-invoice-quote-teammate k10#4] Work 2 끝: done (반품 줄별 버림 O, 반품 할인 순서 O, 반품 전표 그대로 O), 차례 7, 질문 1
+13:38:56 [25-invoice-quote-teammate k10#4] 팀원 교대: 머지 2개, 충돌 1개(뒤 쪽으로 머지)
+13:38:59 [25-invoice-quote-teammate k10#4] 팀원 교대: 새 앱 저장소에서 새로 clone한 레포를 등록했습니다.
+13:38:59 [25-invoice-quote-teammate k10#4] Work 3/3 시작
+13:39:09 [25-invoice-quote-teammate k10#4] 차례 19 (12분 1초, 화면이 멈춤) friction=0 click button "새 Work"
+13:39:21 [25-invoice-quote-teammate k10#4] 차례 20 (12분 12초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "거래처 C-0388이 견적서 Q-0457 합계가 경리 계산과 몇 원 다르
+…(154자 생략)", click button "시작"
+13:39:23 [25-invoice-quote-teammate k10#4] 첫 실행 창 수락: folder_trust
+13:39:24 [21-invoice-credit k10#5] 차례 9 (4분 4초, 화면이 멈춤) friction=0 key, wait
+13:39:58 [25-invoice-quote-teammate k10#4] 차례 21 (12분 49초, 화면이 멈춤) friction=0 key, type "경리 담당이 계산한 합계는 56,278원입니다. 우리보다 2원 적습니다."
+13:40:12 [21-invoice-credit k10#5] 차례 10 (4분 53초, 화면이 멈춤) friction=0 inspect_diff
+13:40:16 [21-invoice-credit k10#5] 차례 11 (4분 56초, 직전 행동의 결과) friction=0 click button "완료만", wait
+13:40:26 [21-invoice-credit k10#5] 차례 12 (5분 7초, 화면이 멈춤) friction=0 done
+13:40:30 [25-invoice-quote-teammate k10#4] 차례 22 (13분 22초, 화면이 멈춤) friction=0 click button "의도 승인"
+13:40:36 [21-invoice-credit k10#5] Work 1 끝: done (줄별 버림 O, 할인 순서 O, 서식 그대로 O), 차례 12, 질문 3
+13:40:36 [21-invoice-credit k10#5] Work 2/2 시작
+13:40:48 [21-invoice-credit k10#5] 차례 13 (5분 29초, 화면이 멈춤) friction=0 click button "새 Work"
+13:41:02 [21-invoice-credit k10#5] 차례 14 (5분 41초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "회계팀이 10월 반품 전표를 대조하다가 우리 전표의 환불 금액이 회계팀 
+…(168자 생략)", click button "시작"
+13:41:19 [25-invoice-quote-teammate k10#4] 차례 23 (14분 10초, 화면이 멈춤) friction=1 key, type "잠깐요, 우리 견적서는 지금 코드에서도 56,280원으로 나온다고 들었습
+…(100자 생략)"
+13:41:44 [21-invoice-credit k10#5] 차례 15 (6분 24초, 화면이 멈춤) friction=0 type "의도 초안에서 빠진 부분 알려드릴게요. 회계팀이 계산한 CN-0112 환
+…(241자 생략)"
+13:41:53 [25-invoice-quote-teammate k10#4] 차례 24 (14분 45초, 화면이 멈춤) friction=1 click button "승인"
+13:42:13 [21-invoice-credit k10#5] 차례 16 (6분 53초, 화면이 멈춤) friction=0 click button "의도 승인"
+13:42:25 [25-invoice-quote-teammate k10#4] 차례 25 (15분 17초, 화면이 멈춤) friction=1 key
+13:42:53 [25-invoice-quote-teammate k10#4] 차례 26 (15분 45초, 화면이 멈춤) friction=1 click button "완료만"
+13:43:04 [25-invoice-quote-teammate k10#4] 차례 27 (15분 57초, 화면이 멈춤) friction=1 done
+13:43:17 [25-invoice-quote-teammate k10#4] Work 3 끝: done (견적 줄별 버림 O, 견적 할인 순서 O, 견적 그대로 O), 차례 9, 질문 3
+13:43:17 [25-invoice-quote-teammate k10#4] 끝: done (16분 9초)
+13:43:24 [25-invoice-quote-teammate k10#4] 결과: 성공 (줄별 버림 O, 할인 순서 O, 서식 그대로 O, 반품 줄별 버림 O, 반품 할인 순서 O, 반품 전표 그대로 O, 견적 줄별 버림 O, 견적 할인 순서 O, 견적 그대로 O), 차례 27, 사람 비용 $3.35
+== 진행 16/20
+13:43:24 [22-flaky-retry k10#5] 준비 (/tmp/relay-eval/e12-k10/22-flaky-retry-k10-5/jobs)
+13:43:27 [22-flaky-retry k10#5] Work 1/2 시작
+13:43:37 [22-flaky-retry k10#5] 차례 1 (0분 12초, 화면이 멈춤) friction=0 click button "새 Work"
+13:43:50 [22-flaky-retry k10#5] 차례 2 (0분 23초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "CI의 `npm run test:ci` 작업이 가끔 실패한다. 실패하는 
+…(224자 생략)", click button "시작"
+13:43:52 [22-flaky-retry k10#5] 첫 실행 창 수락: folder_trust
+13:43:54 [22-flaky-retry k10#5] 첫 실행 창 수락: bypass_permissions_warning
+13:44:24 [21-invoice-credit k10#5] 차례 17 (9분 5초, 화면이 멈춤) friction=0 inspect_diff
+13:44:31 [22-flaky-retry k10#5] 차례 3 (1분 6초, 화면이 멈춤) friction=0 click button "의도 승인"
+13:44:33 [21-invoice-credit k10#5] 차례 18 (9분 14초, 직전 행동의 결과) friction=0 click button "완료만", wait
+13:44:44 [21-invoice-credit k10#5] 차례 19 (9분 25초, 화면이 멈춤) friction=0 done
+13:44:53 [22-flaky-retry k10#5] 첫 코드 변경 (1분 28초)
+13:44:59 [21-invoice-credit k10#5] Work 2 끝: done (반품 줄별 버림 O, 반품 할인 순서 O, 반품 전표 그대로 O), 차례 7, 질문 0
+13:44:59 [21-invoice-credit k10#5] 끝: done (9분 40초)
+13:45:03 [21-invoice-credit k10#5] 결과: 성공 (줄별 버림 O, 할인 순서 O, 서식 그대로 O, 반품 줄별 버림 O, 반품 할인 순서 O, 반품 전표 그대로 O), 차례 19, 사람 비용 $2.47
+== 진행 17/20
+13:45:04 [23-double-notify-digest k10#5] 준비 (/tmp/relay-eval/e12-k10/23-double-notify-digest-k10-5/notify)
+13:45:06 [23-double-notify-digest k10#5] Work 1/2 시작
+13:45:17 [23-double-notify-digest k10#5] 차례 1 (0분 12초, 화면이 멈춤) friction=0 click button "새 Work"
+13:45:29 [23-double-notify-digest k10#5] 차례 2 (0분 23초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "일부 고객이 같은 알림을 두 번, 가끔 세 번 받는다. 메일이 더 자주 
+…(57자 생략)", click button "시작"
+13:45:31 [23-double-notify-digest k10#5] 첫 실행 창 수락: folder_trust
+13:45:33 [23-double-notify-digest k10#5] 첫 실행 창 수락: bypass_permissions_warning
+13:45:58 [23-double-notify-digest k10#5] 차례 3 (0분 54초, 화면이 멈춤) friction=0 click button "의도 승인"
+13:46:32 [23-double-notify-digest k10#5] 첫 코드 변경 (1분 28초)
+13:47:19 [22-flaky-retry k10#5] 차례 4 (3분 54초, 화면이 멈춤) friction=0 click tab "02 원인 분석과 수정"
+13:47:31 [22-flaky-retry k10#5] 차례 5 (4분 5초, 화면이 멈춤) friction=0 click tab "03 리뷰와 검증", key
+13:47:46 [23-double-notify-digest k10#5] 차례 4 (2분 42초, 화면이 멈춤) friction=1 click tab "02 원인 분석과 수정"
+13:47:59 [23-double-notify-digest k10#5] 차례 5 (2분 54초, 화면이 멈춤) friction=1 click tab "03 리뷰와 검증", key
+13:48:47 [22-flaky-retry k10#5] 차례 6 (5분 23초, 화면이 멈춤) friction=0 inspect_diff
+13:48:51 [22-flaky-retry k10#5] 차례 7 (5분 26초, 직전 행동의 결과) friction=0 click button "완료만"
+13:48:54 [23-double-notify-digest k10#5] 차례 6 (3분 49초, 화면이 멈춤) friction=1 type "완료 누르기 전에 확인할게. 고객이 한 번만 받는지 경로별로(메일, pu
+…(53자 생략)"
+13:49:02 [22-flaky-retry k10#5] 차례 8 (5분 38초, 화면이 멈춤) friction=0 done
+13:49:15 [22-flaky-retry k10#5] Work 1 끝: done (완료 순서와 무관 O, 병렬 유지 O), 차례 8, 질문 1
+13:49:15 [22-flaky-retry k10#5] Work 2/2 시작
+13:49:16 [23-double-notify-digest k10#5] 차례 7 (4분 12초, 화면이 멈춤) friction=1 type "push 테스트 추가해줘. 경로마다 직접 근거가 있어야 해. verifi
+…(30자 생략)", wait
+13:49:27 [22-flaky-retry k10#5] 차례 9 (6분 2초, 화면이 멈춤) friction=0 click button "새 Work"
+13:49:40 [22-flaky-retry k10#5] 차례 10 (6분 14초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "CI의 `npm run test:ci`가 요즘 또 가끔 실패한다. 이번에
+…(284자 생략)", click button "시작"
+13:49:52 [23-double-notify-digest k10#5] 차례 8 (4분 48초, 화면이 멈춤) friction=1 click button "완료만"
+13:50:02 [23-double-notify-digest k10#5] 차례 9 (4분 58초, 화면이 멈춤) friction=0 done
+13:50:09 [22-flaky-retry k10#5] 차례 11 (6분 43초, 화면이 멈춤) friction=0 click button "의도 승인"
+13:50:12 [23-double-notify-digest k10#5] Work 1 끝: done (같은 이벤트 재수신 X, 성공 뒤 재시도 없음 O, 실패는 재시도 O), 차례 9, 질문 1
+13:50:12 [23-double-notify-digest k10#5] Work 2/2 시작
+13:50:25 [23-double-notify-digest k10#5] 차례 10 (5분 20초, 화면이 멈춤) friction=0 click button "새 Work"
+13:50:38 [23-double-notify-digest k10#5] 차례 11 (5분 32초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "아침 요약 메일(전날 알림 모음)을 같은 날 두 통, 가끔 세 통 받았다
+…(73자 생략)", click button "시작"
+13:51:06 [23-double-notify-digest k10#5] 차례 12 (6분 2초, 화면이 멈춤) friction=0 click button "의도 승인"
+13:52:53 [23-double-notify-digest k10#5] 차례 13 (7분 48초, 화면이 멈춤) friction=0 type "3", key
+13:54:08 [23-double-notify-digest k10#5] 차례 14 (9분 3초, 화면이 멈춤) friction=0 click tab "전체 변경"
+13:54:14 [22-flaky-retry k10#5] 차례 12 (10분 50초, 오래 걸려 들여다봄) friction=1 wait
+13:54:22 [23-double-notify-digest k10#5] 차례 15 (9분 17초, 화면이 멈춤) friction=1 type "claim이 한 프로세스 안에서만 듣는다고 적혀 있는데, 요약 작업은 서
+…(73자 생략)"
+13:54:35 [22-flaky-retry k10#5] 차례 13 (11분 10초, 화면이 멈춤) friction=0 click tab "전체 변경"
+13:54:50 [22-flaky-retry k10#5] 차례 14 (11분 25초, 화면이 멈춤) friction=0 click button "완료만"
+13:55:01 [22-flaky-retry k10#5] 차례 15 (11분 37초, 화면이 멈춤) friction=0 done
+13:55:04 [23-double-notify-digest k10#5] 차례 16 (9분 59초, 화면이 멈춤) friction=1 type "요약 작업은 서버 두 대에서 둘 다 도는 게 맞고, 배포한 날 아침에는 
+…(200자 생략)"
+13:55:17 [22-flaky-retry k10#5] Work 2 끝: done (동시 저장 O, 보관 중 반쪽 파일 없음 O, 보관 배치도 병렬 O), 차례 7, 질문 0
+13:55:17 [22-flaky-retry k10#5] 끝: done (11분 53초)
+13:55:22 [22-flaky-retry k10#5] 결과: 성공 (완료 순서와 무관 O, 병렬 유지 O, 동시 저장 O, 보관 중 반쪽 파일 없음 O, 보관 배치도 병렬 O), 차례 15, 사람 비용 $1.56
+== 진행 18/20
+13:55:22 [25-invoice-quote-teammate k10#5] 준비 (/tmp/relay-eval/e12-k10/25-invoice-quote-teammate-k10-5/billing)
+13:55:24 [25-invoice-quote-teammate k10#5] Work 1/3 시작
+13:55:36 [25-invoice-quote-teammate k10#5] 차례 1 (0분 13초, 화면이 멈춤) friction=0 click button "새 Work"
+13:55:48 [25-invoice-quote-teammate k10#5] 차례 2 (0분 24초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "회계팀 대조에서 청구서 합계가 몇 원씩 안 맞는다는 연락이 왔어요. 우리
+…(187자 생략)", click button "시작"
+13:55:50 [25-invoice-quote-teammate k10#5] 첫 실행 창 수락: folder_trust
+13:55:53 [25-invoice-quote-teammate k10#5] 첫 실행 창 수락: bypass_permissions_warning
+13:56:29 [25-invoice-quote-teammate k10#5] 차례 3 (1분 5초, 화면이 멈춤) friction=0 key, type "회계팀 계산은 29,079원이에요(우리보다 3원 적음). 규정은 부가세를
+…(49자 생략)"
+13:56:40 [25-invoice-quote-teammate k10#5] 차례 4 (1분 17초, 화면이 멈춤) friction=0 key
+13:56:48 [23-double-notify-digest k10#5] 차례 17 (11분 43초, 화면이 멈춤) friction=1 key
+13:56:51 [25-invoice-quote-teammate k10#5] 차례 5 (1분 28초, 화면이 멈춤) friction=0 key, wait
+13:57:38 [23-double-notify-digest k10#5] 차례 18 (12분 34초, 화면이 멈춤) friction=1 click button "승인하고 멈춤"
+13:57:50 [25-invoice-quote-teammate k10#5] 차례 6 (2분 27초, 화면이 멈춤) friction=0 click button "의도 승인", wait
+13:57:51 [23-double-notify-digest k10#5] 차례 19 (12분 46초, 화면이 멈춤) friction=1 click button "단계 선택"
+13:58:08 [25-invoice-quote-teammate k10#5] 첫 코드 변경 (2분 46초)
+13:58:11 [23-double-notify-digest k10#5] 차례 20 (13분 5초, 화면이 멈춤) friction=1 click checkbox "현재 코드 위에서 이어서", fill textarea "추가 지시" "서버 두 대가 원장을 따로 쓰는 경우도 한 통만 나가게 고쳐줘. 공용 원
+…(102자 생략)", click button "확인"
+13:59:22 [25-invoice-quote-teammate k10#5] 차례 7 (3분 59초, 화면이 멈춤) friction=0 key, wait
+14:00:08 [25-invoice-quote-teammate k10#5] 차례 8 (4분 45초, 화면이 멈춤) friction=0 click tab "전체 변경"
+14:00:19 [25-invoice-quote-teammate k10#5] 차례 9 (4분 56초, 화면이 멈춤) friction=0 click button "완료만", wait
+14:00:20 [23-double-notify-digest k10#5] 차례 21 (15분 16초, 화면이 멈춤) friction=0 key
+14:00:30 [25-invoice-quote-teammate k10#5] 차례 10 (5분 8초, 화면이 멈춤) friction=0 done
+14:00:42 [25-invoice-quote-teammate k10#5] Work 1 끝: done (줄별 버림 O, 할인 순서 O, 서식 그대로 O), 차례 10, 질문 2
+14:00:42 [25-invoice-quote-teammate k10#5] Work 2/3 시작
+14:00:52 [25-invoice-quote-teammate k10#5] 차례 11 (5분 30초, 화면이 멈춤) friction=0 click button "새 Work"
+14:01:05 [25-invoice-quote-teammate k10#5] 차례 12 (5분 41초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "회계팀이 10월 반품 전표를 대조하다가 우리 전표의 환불 금액이 회계팀 
+…(269자 생략)", click button "시작"
+14:01:37 [23-double-notify-digest k10#5] 차례 22 (16분 33초, 화면이 멈춤) friction=0 click tab "전체 변경"
+14:01:42 [25-invoice-quote-teammate k10#5] 차례 13 (6분 19초, 화면이 멈춤) friction=0 click button "의도 승인"
+14:01:50 [23-double-notify-digest k10#5] 차례 23 (16분 45초, 화면이 멈춤) friction=1 click button "완료만"
+14:02:03 [23-double-notify-digest k10#5] 차례 24 (16분 59초, 화면이 멈춤) friction=0 done
+14:02:18 [23-double-notify-digest k10#5] Work 2 끝: done (요약 재실행 O, 느린 요약 성공 O, 요약 실패는 재시도 O), 차례 15, 질문 3
+14:02:18 [23-double-notify-digest k10#5] 끝: done (17분 14초)
+14:02:23 [23-double-notify-digest k10#5] 결과: 실패 (같은 이벤트 재수신 X, 성공 뒤 재시도 없음 O, 실패는 재시도 O, 요약 재실행 O, 느린 요약 성공 O, 요약 실패는 재시도 O), 차례 24, 사람 비용 $4.72
+== 진행 19/20
+14:05:25 [25-invoice-quote-teammate k10#5] 차례 14 (10분 1초, 화면이 멈춤) friction=0 key, key
+14:06:26 [25-invoice-quote-teammate k10#5] 차례 15 (11분 3초, 화면이 멈춤) friction=0 click tab "전체 변경"
+14:06:37 [25-invoice-quote-teammate k10#5] 차례 16 (11분 14초, 화면이 멈춤) friction=0 click button "완료만"
+14:06:47 [25-invoice-quote-teammate k10#5] 차례 17 (11분 25초, 화면이 멈춤) friction=0 done
+14:06:59 [25-invoice-quote-teammate k10#5] Work 2 끝: done (반품 줄별 버림 O, 반품 할인 순서 O, 반품 전표 그대로 O), 차례 7, 질문 1
+14:06:59 [25-invoice-quote-teammate k10#5] 팀원 교대: 머지 2개, 충돌 1개(뒤 쪽으로 머지)
+14:07:02 [25-invoice-quote-teammate k10#5] 팀원 교대: 새 앱 저장소에서 새로 clone한 레포를 등록했습니다.
+14:07:02 [25-invoice-quote-teammate k10#5] Work 3/3 시작
+14:07:13 [25-invoice-quote-teammate k10#5] 차례 18 (11분 50초, 화면이 멈춤) friction=0 click button "새 Work"
+14:07:26 [25-invoice-quote-teammate k10#5] 차례 19 (12분 2초, 화면이 멈춤) friction=0 click radio "버그 수정", fill textarea "요청" "거래처 C-0388이 견적서 Q-0457 합계가 경리 계산과 몇 원 다르
+…(165자 생략)", click button "시작"
+14:07:28 [25-invoice-quote-teammate k10#5] 첫 실행 창 수락: folder_trust
+14:07:57 [25-invoice-quote-teammate k10#5] 차례 20 (12분 34초, 화면이 멈춤) friction=0 key
+14:08:09 [25-invoice-quote-teammate k10#5] 차례 21 (12분 45초, 화면이 멈춤) friction=0 key, type "56278"
+14:08:19 [25-invoice-quote-teammate k10#5] 차례 22 (12분 56초, 화면이 멈춤) friction=0 key
+14:08:43 [25-invoice-quote-teammate k10#5] 차례 23 (13분 20초, 화면이 멈춤) friction=0 click button "의도 승인"
+14:08:54 [25-invoice-quote-teammate k10#5] 차례 24 (13분 31초, 화면이 멈춤) friction=1 click button "의도 승인"
+14:09:30 [25-invoice-quote-teammate k10#5] 차례 25 (14분 6초, 화면이 멈춤) friction=1 key, type "고정값 테스트만 넣고 끝내긴 이르다. 영업팀은 우리 견적서에 56,280
+…(92자 생략)"
+14:10:18 [25-invoice-quote-teammate k10#5] 차례 26 (14분 55초, 화면이 멈춤) friction=1 click tab "변경"
+14:10:30 [25-invoice-quote-teammate k10#5] 차례 27 (15분 7초, 화면이 멈춤) friction=0 click button "승인"
+14:11:04 [25-invoice-quote-teammate k10#5] 차례 28 (15분 41초, 화면이 멈춤) friction=1 key
+14:11:47 [25-invoice-quote-teammate k10#5] 차례 29 (16분 24초, 화면이 멈춤) friction=1 click button "완료만"
+14:11:58 [25-invoice-quote-teammate k10#5] 차례 30 (16분 35초, 화면이 멈춤) friction=1 done
+14:12:11 [25-invoice-quote-teammate k10#5] Work 3 끝: done (견적 줄별 버림 O, 견적 할인 순서 O, 견적 그대로 O), 차례 13, 질문 3
+14:12:11 [25-invoice-quote-teammate k10#5] 끝: done (16분 49초)
+14:12:18 [25-invoice-quote-teammate k10#5] 결과: 성공 (줄별 버림 O, 할인 순서 O, 서식 그대로 O, 반품 줄별 버림 O, 반품 할인 순서 O, 반품 전표 그대로 O, 견적 줄별 버림 O, 견적 할인 순서 O, 견적 그대로 O), 차례 30, 사람 비용 $3.84
+== 진행 20/20
+
+# relay 대 맨 CLI 사용성 평가
+
+- 결과 폴더: `/home/user/relay-v2/app/eval/results/e12-k10`
+- 시작: 2026-10-04T11:58:25.601Z, 앱 커밋: ce0a330, Claude Code: 2.1.289 (Claude Code)
+- 에이전트: sonnet (effort medium), 사람 역할: sonnet, 판정: sonnet
+- 맨 CLI 인자: `claude --dangerously-skip-permissions`, 스크린샷 보기: 켬
+- 실행 20개, 짝 판정 0개
+
+읽는 법: 수치는 평균 ± 표준편차다. 사람 역할과 판정은 AI이므로 경향을 보는 자료로 쓴다. 회차가 적으면 편차가 크다.
+걸린 시간에는 사람 역할(AI)이 답을 만드는 동안 기다린 시간이 들어 있다. 두 쪽의 대기를 견줄 때는 그 시간을 뺀 줄을 본다.
+
+## 전체
+
+| 지표 | k10 |
+|---|---|
+| 숨긴 시험 모두 통과 | 75% (15/20) |
+| 레포 시험 통과 | 95% (19/20) |
+| 커밋까지 됨 | 100% (20/20) |
+| 사람이 끝냄(done) | 100% (20/20) |
+| 걸린 시간(분) | 12.8 ± 4.1 |
+| 사람 역할 응답 시간(분) | 1.6 ± 0.6 |
+| 걸린 시간 − 사람 역할 응답(분) | 11.2 ± 3.6 |
+| 사람 차례 수 | 20.8 ± 6.8 |
+| 기다리기만 한 차례 | 0.3 ± 0.4 |
+| 스크린샷을 붙인 차례 | 17.6 ± 5.3 |
+| 사람 행동 수(기다림 제외) | 25.3 ± 9.7 |
+| 입력한 글자 수 | 797.7 ± 298.9 |
+| 코드 직접 확인(inspect_diff) | 0.8 ± 0.8 |
+| 헛동작(없는 요소, 실패) | 0.0 ± 0.0 |
+| friction 평균 (0~3) | 0.1 ± 0.2 |
+| friction 2 이상 차례 | 0.1 ± 0.2 |
+| 설문 수고 (1~7, 낮을수록 좋음) | 2.3 ± 0.5 |
+| 설문 명확함 | 5.8 ± 0.4 |
+| 설문 통제감 | 5.3 ± 0.6 |
+| 설문 결과 확신 | 5.5 ± 0.7 |
+| 설문 신뢰 | 5.8 ± 0.5 |
+| 설문 복구 | 5.0 ± 0.0 |
+| 설문 다시 쓰고 싶음 | 5.8 ± 0.4 |
+| 바뀐 줄 수 | 217.1 ± 116.0 |
+| 기대 밖 파일 수 | 2.3 ± 0.9 |
+| 에이전트 출력 토큰(천) | 39.4 ± 14.9 |
+| 에이전트 입력 토큰(천, 캐시 포함) | 2662.3 ± 1012.5 |
+| 에이전트 세션 수 | 7.0 ± 1.7 |
+| 사람 역할 비용($) | 2.9 ± 1.3 |
+
+## 21-invoice-credit: 앞 Work에서 들은 회계 규칙이 다시 필요한 반품 전표 버그
+
+목적: Work 1은 10-invoice-rounding의 버그 그대로다. 사람이 회계 규칙(부가세는 품목 줄마다 원 단위 버림, 할인은 부가세 전에 줄마다)을 알려 준다. Work 2는 같은 레포의 다른 코드(반품 전표의 부가세)에서 몇 원씩 어긋나는 버그이고, 정답이 같은 규칙에 달려 있으며 흔한 해법(줄마다 반올림, 합계 버림, 할인 전 금액에 부가세)은 틀린다. 지식을 켠 relay가 Work 2에서 규칙을 다시 묻지 않고(사람 차례와 AskUserQuestion 수가 줄고) 같은 실수 없이 고치는지, 끈 relay(relay-off)는 같은 질문과 같은 실패를 되풀이하는지 본다.
+
+| 지표 | k10 |
+|---|---|
+| 숨긴 시험 모두 통과 | 100% (5/5) |
+| 레포 시험 통과 | 100% (5/5) |
+| 커밋까지 됨 | 100% (5/5) |
+| 사람이 끝냄(done) | 100% (5/5) |
+| 걸린 시간(분) | 9.6 ± 0.8 |
+| 사람 역할 응답 시간(분) | 1.2 ± 0.2 |
+| 걸린 시간 − 사람 역할 응답(분) | 8.4 ± 0.8 |
+| 사람 차례 수 | 17.4 ± 1.1 |
+| 기다리기만 한 차례 | 0.4 ± 0.5 |
+| 스크린샷을 붙인 차례 | 14.0 ± 0.7 |
+| 사람 행동 수(기다림 제외) | 21.8 ± 3.3 |
+| 입력한 글자 수 | 737.8 ± 120.6 |
+| 코드 직접 확인(inspect_diff) | 1.2 ± 0.8 |
+| 헛동작(없는 요소, 실패) | 0.0 ± 0.0 |
+| friction 평균 (0~3) | 0.0 ± 0.0 |
+| friction 2 이상 차례 | 0.0 ± 0.0 |
+| 설문 수고 (1~7, 낮을수록 좋음) | 2.0 ± 0.0 |
+| 설문 명확함 | 6.0 ± 0.0 |
+| 설문 통제감 | 5.4 ± 0.9 |
+| 설문 결과 확신 | 6.0 ± 0.0 |
+| 설문 신뢰 | 6.0 ± 0.0 |
+| 설문 복구 | - |
+| 설문 다시 쓰고 싶음 | 6.0 ± 0.0 |
+| 바뀐 줄 수 | 136.2 ± 53.4 |
+| 기대 밖 파일 수 | 1.4 ± 0.9 |
+| 에이전트 출력 토큰(천) | 28.2 ± 2.4 |
+| 에이전트 입력 토큰(천, 캐시 포함) | 1754.2 ± 134.7 |
+| 에이전트 세션 수 | 6.0 ± 0.0 |
+| 사람 역할 비용($) | 2.1 ± 0.3 |
+
+### Work 2 (재는 Work)
+
+| 지표 | k10 |
+|---|---|
+| 실행 수 | 5 |
+| 숨긴 시험 모두 통과 | 100% (5/5) |
+| 숨긴 시험별 통과 | 반품 줄별 버림 5/5, 반품 할인 순서 5/5, 반품 전표 그대로 5/5 |
+| 사람이 끝냄(done) | 100% (5/5) |
+| 새 일 전에 끝내려다 거절됨(도구, E11) | 0.0 ± 0.0 |
+| 사람 차례 수 | 7.6 ± 1.3 |
+| 사람 행동 수(기다림 제외) | 9.0 ± 2.2 |
+| 입력한 글자 수 | 387.2 ± 112.8 |
+| 앞 Work의 사실을 다시 알려 줌(carry 항목 수, 감사) | 0.8 ± 1.1 |
+| 앞 Work의 사실을 다시 알려 줌(사람 역할 자기 보고) | 0.8 ± 1.1 |
+| 에이전트 질문 수(AskUserQuestion) | 0.8 ± 0.8 |
+| 에이전트 입력 토큰(천, 캐시 포함) | 838.5 ± 75.8 |
+| 에이전트 출력 토큰(천) | 14.5 ± 1.8 |
+| context.md 글자(Work의 task 합) | 19407.0 ± 809.9 |
+| 넣은 지식 글자(Work의 task 합) | 2152.2 ± 352.8 |
+| 걸린 시간(분) | 4.1 ± 0.6 |
+| friction 평균 (0~3) | 0.0 ± 0.0 |
+
+### Work 1
+
+| 지표 | k10 |
+|---|---|
+| 실행 수 | 5 |
+| 숨긴 시험 모두 통과 | 100% (5/5) |
+| 숨긴 시험별 통과 | 줄별 버림 5/5, 할인 순서 5/5, 서식 그대로 5/5 |
+| 사람이 끝냄(done) | 100% (5/5) |
+| 새 일 전에 끝내려다 거절됨(도구, E11) | 0.0 ± 0.0 |
+| 사람 차례 수 | 9.8 ± 1.5 |
+| 사람 행동 수(기다림 제외) | 12.8 ± 3.6 |
+| 입력한 글자 수 | 350.6 ± 35.7 |
+| 앞 Work의 사실을 다시 알려 줌(carry 항목 수, 감사) | - |
+| 앞 Work의 사실을 다시 알려 줌(사람 역할 자기 보고) | - |
+| 에이전트 질문 수(AskUserQuestion) | 2.0 ± 0.7 |
+| 에이전트 입력 토큰(천, 캐시 포함) | 915.7 ± 128.4 |
+| 에이전트 출력 토큰(천) | 13.7 ± 1.6 |
+| context.md 글자(Work의 task 합) | 15924.2 ± 290.3 |
+| 넣은 지식 글자(Work의 task 합) | 0.0 ± 0.0 |
+| 걸린 시간(분) | 5.2 ± 1.0 |
+| friction 평균 (0~3) | 0.0 ± 0.0 |
+
+### k10 단계별 에이전트
+
+단계 task 하나의 평균이다. 입력은 캐시 읽기와 쓰기를 더한 값이고, 대화 기록을 찾지 못한 세션은 빼고 센다.
+
+| 단계 | task 수 | 입력 토큰(천) | 캐시 쓰기(천) | 출력 토큰(천) | context.md 글자 | 넣은 지식 글자 |
+|---|---|---|---|---|---|---|
+| intake | 10 | 229.9 ± 43.2 | 20.6 ± 1.9 | 3.5 ± 0.7 | 3450.1 ± 522.0 | 358.7 ± 386.1 |
+| fix | 10 | 317.1 ± 58.8 | 27.1 ± 2.6 | 5.3 ± 1.0 | 5734.9 ± 711.4 | 358.7 ± 386.1 |
+| verify | 10 | 330.1 ± 79.5 | 28.9 ± 1.6 | 5.3 ± 0.7 | 8480.6 ± 717.3 | 358.7 ± 386.1 |
+
+### 회차별
+
+| 쪽#회차 | 끝 | 시험 | 분 | 차례 | friction | 에이전트 세션 | 비고 |
+|---|---|---|---|---|---|---|---|
+| k10#1 | done | OOOOOO | 10.7 | 17 | 0.00 | 6 | 반품 전표 부가세를 과세 줄마다 원 단위 버림해 합산하도록 creditTotals를 고쳤다. CN-0112는 공급가액 17,438원, 부가세 1
+…(115자 생략) |
+| k10#2 | done | OOOOOO | 9.9 | 16 | 0.00 | 6 | credit-note.js의 부가세를 합계 기준 반올림에서 과세 줄별 할인 후 금액 버림 합산으로 고쳤다. CN-0112 환불 합계는 19,18
+…(117자 생략) |
+| k10#3 | done | OOOOOO | 9.2 | 18 | 0.06 | 6 | creditTotals의 부가세를 합계 기준 반올림에서 과세 줄마다 원 단위 버림 후 합산으로 고쳤다. CN-0112 환불 합계는 19,182원
+…(118자 생략) |
+| k10#4 | done | OOOOOO | 8.7 | 17 | 0.00 | 6 | creditTotals가 줄별 버림 부가세(sumLineVat)를 쓰도록 고쳤다. CN-0112 환불 합계는 19,182원에서 19,180원으로
+…(114자 생략) |
+| k10#5 | done | OOOOOO | 9.7 | 19 | 0.05 | 6 | 반품 전표 부가세를 과세 줄마다 원 단위 버림해서 합산하도록 고쳤다. CN-0112 환불 합계는 19,182원에서 19,180원이 돼 회계팀 계
+…(127자 생략) |
+
+### 사람 역할의 말
+
+- [k10#1 좋음] 의도 정리에서 목표, 비목표, 완료조건이 정리되어 나왔고, 마지막 판정표에 CN-0112가 19,180원이라는 근거가 바로 붙어 있어서 확인하기 쉬웠다.
+- [k10#1 불편] 02 단계가 자동 승인으로 지나가서 코드를 보려면 inspect_diff나 탭을 따로 열어야 했다. 터미널에 나온 형식 검사 오류 메시지는 무슨 뜻인지 바로 알기 어려웠다.
+- [k10#2 좋음] 단계별로 판정표가 나오고 CN-0112가 19,180원이 된다는 근거와 테스트 결과를 화면에서 바로 볼 수 있었다.
+- [k10#2 불편] 원인 분석과 수정 단계가 자동 승인으로 지나가서, 코드 변경은 inspect_diff를 따로 써야 볼 수 있었다. 화면이 앞 일의 완료 상태로 남아 있어서 처음에 잠깐 헷갈렸다.
+- [k10#3 좋음] 의도 정리 단계에서 회계 규칙과 기대 금액을 먼저 물어 줬다. 마지막 판정표에 완료조건별로 CN-0112가 19,180원이 나왔다는 근거가 있었고, 전체 변경 탭에서 diff도 바로 볼 수 있었다.
+- [k10#3 불편] 앞 Work가 완료 상태로 화면에 남아 있어서, 처음에는 새 Work를 시작해야 한다는 것을 한 번 더 생각해야 했다. 터미널 선택지에서 직접 입력하는 방식(4번 또는 3번을 누른 뒤 타이핑)도 처음에는 조금 낯설었다.
+- [k10#4 좋음] 완료조건별 판정표에 근거가 붙어 있었다. 전체 변경 탭에서 diff도 바로 볼 수 있어서, CN-0112가 19,180원이 됐는지와 format 모듈이 그대로인지 직접 확인할 수 있었다.
+- [k10#4 불편] 앞 Work의 완료 화면이 남아 있어서 새 Work로 가는 길이 약간 헷갈렸다. 에이전트가 의도 정리 단계에서 회계팀 기대값이나 규칙을 묻지 않고 지식 파일에서 가져왔고, 그 값이 맞는지는 내가 따로 확인해야 했다.
+- [k10#5 좋음] 의도 정리 단계에서 에이전트가 모르는 값(회계팀 기대 합계, 할인 분할 유지)을 비워 두고 위험으로 적어 줬다. 내가 아는 사실을 말하면 바로 반영됐다. 판정표에 CN-0112가 19,180원으로 나온 실행 결과가 있어서 확인하기 쉬웠다.
+- [k10#5 불편] 앞 Work와 새 Work가 같은 화면에 섞여 보였다. 앞 Work의 완료 화면이 남아 있어서 처음엔 어디가 이번 일인지 잠깐 봐야 했다. 앞 Work의 sumLineVat가 기준 브랜치에 없어서 로직이 중복됐고, 나중에 합쳐야 한다.
+
+#### friction이 높았던 차례
+
+
+## 22-flaky-retry: 앞 Work에서 들은 '재시도로 덮지 않기'가 다시 필요한 두 번째 가끔 실패
+
+목적: Work 1은 12-flaky-job의 버그 그대로다. 사람이 처음에 팀 규칙(가끔 실패하는 시험을 재시도나 skip, 시간 제한 늘리기로 덮지 않는다)을 알려 주고, 병렬 실행은 유지해야 한다. Work 2는 같은 레포의 다른 코드(보고서 보관)에서 CI 전용 시험이 가끔 ENOENT로 실패하는 버그다. 원인은 저장할 때 임시 파일 이름을 시각(ms)으로 지어 같은 순간에 저장한 보고서끼리 임시 파일이 겹치는 것이고, 흔한 수정(ENOENT를 재시도, 보고서 작업을 하나씩 돌리기, 임시 파일 없이 제 이름에 바로 쓰기)은 틀린다. Work 2에서 사람은 규칙을 물어야만 알려 준다. 지식을 켠 relay가 Work 2에서 규칙을 다시 묻지 않고(사람 차례와 AskUserQuestion 수가 줄고) 재시도로 덮지 않고 원인을 고치는지, 끈 relay(relay-off)는 같은 질문이나 같은 덮기를 되풀이하는지 본다.
+
+| 지표 | k10 |
+|---|---|
+| 숨긴 시험 모두 통과 | 100% (5/5) |
+| 레포 시험 통과 | 100% (5/5) |
+| 커밋까지 됨 | 100% (5/5) |
+| 사람이 끝냄(done) | 100% (5/5) |
+| 걸린 시간(분) | 10.2 ± 1.6 |
+| 사람 역할 응답 시간(분) | 1.1 ± 0.1 |
+| 걸린 시간 − 사람 역할 응답(분) | 9.1 ± 1.5 |
+| 사람 차례 수 | 15.4 ± 1.1 |
+| 기다리기만 한 차례 | 0.2 ± 0.4 |
+| 스크린샷을 붙인 차례 | 13.4 ± 0.5 |
+| 사람 행동 수(기다림 제외) | 18.0 ± 1.4 |
+| 입력한 글자 수 | 673.4 ± 102.2 |
+| 코드 직접 확인(inspect_diff) | 1.0 ± 0.0 |
+| 헛동작(없는 요소, 실패) | 0.0 ± 0.0 |
+| friction 평균 (0~3) | 0.0 ± 0.0 |
+| friction 2 이상 차례 | 0.0 ± 0.0 |
+| 설문 수고 (1~7, 낮을수록 좋음) | 2.0 ± 0.0 |
+| 설문 명확함 | 6.0 ± 0.0 |
+| 설문 통제감 | 5.2 ± 0.4 |
+| 설문 결과 확신 | 5.4 ± 0.5 |
+| 설문 신뢰 | 6.0 ± 0.0 |
+| 설문 복구 | - |
+| 설문 다시 쓰고 싶음 | 6.0 ± 0.0 |
+| 바뀐 줄 수 | 96.0 ± 7.1 |
+| 기대 밖 파일 수 | 2.4 ± 0.5 |
+| 에이전트 출력 토큰(천) | 26.1 ± 3.3 |
+| 에이전트 입력 토큰(천, 캐시 포함) | 2025.8 ± 211.2 |
+| 에이전트 세션 수 | 6.0 ± 0.0 |
+| 사람 역할 비용($) | 1.7 ± 0.3 |
+
+### Work 2 (재는 Work)
+
+| 지표 | k10 |
+|---|---|
+| 실행 수 | 5 |
+| 숨긴 시험 모두 통과 | 100% (5/5) |
+| 숨긴 시험별 통과 | 동시 저장 5/5, 보관 중 반쪽 파일 없음 5/5, 보관 배치도 병렬 5/5 |
+| 사람이 끝냄(done) | 100% (5/5) |
+| 새 일 전에 끝내려다 거절됨(도구, E11) | 0.0 ± 0.0 |
+| 사람 차례 수 | 7.6 ± 1.3 |
+| 사람 행동 수(기다림 제외) | 8.6 ± 1.8 |
+| 입력한 글자 수 | 378.2 ± 76.0 |
+| 앞 Work의 사실을 다시 알려 줌(carry 항목 수, 감사) | 0.4 ± 0.5 |
+| 앞 Work의 사실을 다시 알려 줌(사람 역할 자기 보고) | 0.0 ± 0.0 |
+| 에이전트 질문 수(AskUserQuestion) | 0.8 ± 0.8 |
+| 에이전트 입력 토큰(천, 캐시 포함) | 1007.0 ± 203.6 |
+| 에이전트 출력 토큰(천) | 13.7 ± 2.4 |
+| context.md 글자(Work의 task 합) | 19827.8 ± 683.9 |
+| 넣은 지식 글자(Work의 task 합) | 3072.6 ± 511.3 |
+| 걸린 시간(분) | 4.8 ± 0.9 |
+| friction 평균 (0~3) | 0.0 ± 0.1 |
+
+### Work 1
+
+| 지표 | k10 |
+|---|---|
+| 실행 수 | 5 |
+| 숨긴 시험 모두 통과 | 100% (5/5) |
+| 숨긴 시험별 통과 | 완료 순서와 무관 5/5, 병렬 유지 5/5 |
+| 사람이 끝냄(done) | 100% (5/5) |
+| 새 일 전에 끝내려다 거절됨(도구, E11) | 0.0 ± 0.0 |
+| 사람 차례 수 | 7.8 ± 0.4 |
+| 사람 행동 수(기다림 제외) | 9.4 ± 0.9 |
+| 입력한 글자 수 | 295.2 ± 50.5 |
+| 앞 Work의 사실을 다시 알려 줌(carry 항목 수, 감사) | - |
+| 앞 Work의 사실을 다시 알려 줌(사람 역할 자기 보고) | - |
+| 에이전트 질문 수(AskUserQuestion) | 0.8 ± 0.4 |
+| 에이전트 입력 토큰(천, 캐시 포함) | 1018.8 ± 170.6 |
+| 에이전트 출력 토큰(천) | 12.5 ± 1.6 |
+| context.md 글자(Work의 task 합) | 15122.6 ± 601.8 |
+| 넣은 지식 글자(Work의 task 합) | 0.0 ± 0.0 |
+| 걸린 시간(분) | 5.2 ± 1.1 |
+| friction 평균 (0~3) | 0.0 ± 0.0 |
+
+### k10 단계별 에이전트
+
+단계 task 하나의 평균이다. 입력은 캐시 읽기와 쓰기를 더한 값이고, 대화 기록을 찾지 못한 세션은 빼고 센다.
+
+| 단계 | task 수 | 입력 토큰(천) | 캐시 쓰기(천) | 출력 토큰(천) | context.md 글자 | 넣은 지식 글자 |
+|---|---|---|---|---|---|---|
+| intake | 10 | 191.1 ± 41.4 | 16.1 ± 1.7 | 2.3 ± 0.5 | 3643.1 ± 712.0 | 512.1 ± 551.6 |
+| fix | 10 | 482.1 ± 149.5 | 31.1 ± 4.2 | 5.3 ± 1.4 | 5511.2 ± 975.6 | 512.1 ± 551.6 |
+| verify | 10 | 339.8 ± 125.4 | 27.9 ± 3.4 | 5.5 ± 1.2 | 8320.9 ± 927.0 | 512.1 ± 551.6 |
+
+### 회차별
+
+| 쪽#회차 | 끝 | 시험 | 분 | 차례 | friction | 에이전트 세션 | 비고 |
+|---|---|---|---|---|---|---|---|
+| k10#1 | done | OOOOO | 11.3 | 15 | 0.00 | 6 | archive 간헐 실패의 원인 두 가지를 고쳤다. runPool 결과가 완료 순서로 쌓여 보고서가 다른 고객사에 붙던 문제는 items 순서로
+…(202자 생략) |
+| k10#2 | done | OOOOO | 8.6 | 14 | 0.00 | 6 | 보고서 임시 파일 이름이 같은 밀리초에 겹쳐 병렬 저장끼리 덮어쓰던 문제를 고쳤다. 임시 파일 이름에 reportId를 넣었다. 이것으로 ENO
+…(153자 생략) |
+| k10#3 | done | OOOOO | 10.7 | 17 | 0.00 | 6 | archive 시험 간헐 실패의 원인은 보고서 임시 파일 이름 충돌이었다. 동시에 저장하면 이름이 겹쳐서 ENOENT가 나거나 다른 고객사 보고
+…(269자 생략) |
+| k10#4 | done | OOOOO | 8.5 | 16 | 0.00 | 6 | saveReport의 임시 파일 이름이 ms 시각만 써서 동시 4개 저장이 겹치던 것이 원인이었다. 이름에 reportId와 호출 번호를 넣어 
+…(198자 생략) |
+| k10#5 | done | OOOOO | 11.9 | 15 | 0.07 | 6 | saveReport 임시 파일 이름이 같은 ms에 겹치던 원인을 src/store/report-archive.js에서 고쳤다. 이름에 repor
+…(135자 생략) |
+
+### 사람 역할의 말
+
+- [k10#1 좋음] 의도 초안에 비목표와 제약(병렬 유지, 재시도 금지)이 그대로 들어갔다. 리뷰 단계에서 새 시험이 수정 전에도 통과한다는 지적을 잡아냈다. 판정표에 반복 실행 횟수와 결과가 근거로 붙어 있었다.
+- [k10#1 불편] 앞 Work의 수정이 기준 브랜치에 없어서 이번 Work가 같은 수정을 다시 하는 모양이 됐다. 이번에는 내가 직접 챙길 일은 없었지만, 머지 순서가 헷갈릴 수 있다. 터미널에서 질문이 올 때 오른쪽 패널에 보이는 게 거의 없다는 점도 아쉬웠다.
+- [k10#2 좋음] 판정표에 완료조건마다 근거와 반복 실행 횟수가 나와서 승인하기 쉬웠다. 전체 변경 탭에서 diff를 바로 볼 수 있는 점도 좋았다.
+- [k10#2 불편] 원인 분석 단계가 자동 승인으로 지나가서 에이전트가 무엇을 물었는지 직접 보지 못했다. 앞 일의 완료 Work가 화면에 같이 남아 있어 잠깐 헷갈렸다.
+- [k10#3 좋음] 완료조건별 판정표와 근거(20회 반복 결과)가 한 화면에 나왔다. 그래서 고쳤다는 걸 믿기 쉬웠다. 의도 단계에서 병렬 유지와 반복 실행 보고를 완료조건에 넣을 수 있었던 것도 좋았다.
+- [k10#3 불편] 원인 분석과 수정 단계가 자동 승인으로 지나가서, 코드를 보려면 inspect_diff나 지난 단계 탭을 따로 열어야 했다. 완료 화면에 '실패' 판정이 남은 채로 완료만을 누르는 것도 찜찜했다.
+- [k10#4 좋음] 의도 단계에서 내 선호(병렬 유지, 20회 반복 통과, 시험 회피 금지)를 완료조건으로 넣을 수 있었다. 판정표에 조건별 근거와 전체 diff가 있어서 승인 전에 검증하기 쉬웠다.
+- [k10#4 불편] 자동 승인으로 지나간 02 단계는 내가 직접 탭을 눌러야 볼 수 있었다. 리뷰 단계에서 stop hook 형식 오류가 터미널에 나왔는데 내용이 낯설었다. 앞 Work 화면이 남아 있어서 처음엔 어느 Work인지 조금 헷갈렸다.
+- [k10#5 좋음] 완료조건별 판정표와 근거, 전체 변경 diff를 한 화면에서 볼 수 있었다. 그래서 병렬 실행을 유지한 채 원인(임시 파일 이름 겹침)을 고쳤고 재시도 같은 우회가 없다는 걸 바로 확인했다.
+- [k10#5 불편] 형식 확인 훅 오류로 리뷰 단계가 한 번 되돌려져서 1분쯤 영문도 모르고 기다렸다. 판정표에 batch.test.js 실패가 남아 있다고 적혀 있어서, test:ci 전체가 통과한다는 확신은 약했다.
+
+#### friction이 높았던 차례
+
+
+## 23-double-notify-digest: 원인이 둘인 중복 발송, 같은 영역의 두 번째 버그
+
+목적: Work 1(14와 같은 알림 중복: 중복 제거 키, 늦은 성공을 시간 초과로 보고 재시도)에서 배운 실패 유형이 Work 2(요약 메일 중복: 발송 기록 키에 실행 id가 들어가 같은 날 요약이 다시 돌면 또 보냄, 제한 시간을 넘긴 성공을 시간 초과로 보고 다시 보냄)에 그대로 들어맞는다. 지식을 켠 relay가 Work 2에서 사람이 밀어주지 않아도 두 원인을 다 찾는지, 끈 쪽보다 사람 차례와 질문이 줄어드는지 본다. 첫 원인만 고치면 Work 2의 숨긴 시험 하나가 그대로 실패한다.
+
+| 지표 | k10 |
+|---|---|
+| 숨긴 시험 모두 통과 | 0% (0/5) |
+| 레포 시험 통과 | 100% (5/5) |
+| 커밋까지 됨 | 100% (5/5) |
+| 사람이 끝냄(done) | 100% (5/5) |
+| 걸린 시간(분) | 13.0 ± 2.9 |
+| 사람 역할 응답 시간(분) | 1.7 ± 0.4 |
+| 걸린 시간 − 사람 역할 응답(분) | 11.3 ± 2.5 |
+| 사람 차례 수 | 19.2 ± 3.0 |
+| 기다리기만 한 차례 | 0.0 ± 0.0 |
+| 스크린샷을 붙인 차례 | 17.2 ± 3.2 |
+| 사람 행동 수(기다림 제외) | 22.6 ± 4.7 |
+| 입력한 글자 수 | 557.2 ± 217.4 |
+| 코드 직접 확인(inspect_diff) | 0.4 ± 0.9 |
+| 헛동작(없는 요소, 실패) | 0.0 ± 0.0 |
+| friction 평균 (0~3) | 0.3 ± 0.2 |
+| friction 2 이상 차례 | 0.0 ± 0.0 |
+| 설문 수고 (1~7, 낮을수록 좋음) | 2.8 ± 0.4 |
+| 설문 명확함 | 5.4 ± 0.5 |
+| 설문 통제감 | 5.4 ± 0.5 |
+| 설문 결과 확신 | 5.6 ± 0.5 |
+| 설문 신뢰 | 5.6 ± 0.9 |
+| 설문 복구 | 5.0 ± 0.0 |
+| 설문 다시 쓰고 싶음 | 5.8 ± 0.4 |
+| 바뀐 줄 수 | 339.8 ± 74.8 |
+| 기대 밖 파일 수 | 3.2 ± 0.4 |
+| 에이전트 출력 토큰(천) | 49.9 ± 11.8 |
+| 에이전트 입력 토큰(천, 캐시 포함) | 3181.4 ± 1062.0 |
+| 에이전트 세션 수 | 6.4 ± 0.9 |
+| 사람 역할 비용($) | 3.2 ± 1.1 |
+
+### Work 2 (재는 Work)
+
+| 지표 | k10 |
+|---|---|
+| 실행 수 | 5 |
+| 숨긴 시험 모두 통과 | 100% (5/5) |
+| 숨긴 시험별 통과 | 요약 재실행 5/5, 느린 요약 성공 5/5, 요약 실패는 재시도 5/5 |
+| 사람이 끝냄(done) | 100% (5/5) |
+| 새 일 전에 끝내려다 거절됨(도구, E11) | 0.4 ± 0.5 |
+| 사람 차례 수 | 11.6 ± 2.4 |
+| 사람 행동 수(기다림 제외) | 13.0 ± 3.8 |
+| 입력한 글자 수 | 425.4 ± 168.2 |
+| 앞 Work의 사실을 다시 알려 줌(carry 항목 수, 감사) | - |
+| 앞 Work의 사실을 다시 알려 줌(사람 역할 자기 보고) | - |
+| 에이전트 질문 수(AskUserQuestion) | 1.8 ± 1.1 |
+| 에이전트 입력 토큰(천, 캐시 포함) | 2013.1 ± 914.5 |
+| 에이전트 출력 토큰(천) | 34.3 ± 10.2 |
+| context.md 글자(Work의 task 합) | 21426.0 ± 7534.4 |
+| 넣은 지식 글자(Work의 task 합) | 2448.4 ± 2113.8 |
+| 걸린 시간(분) | 8.4 ± 2.5 |
+| friction 평균 (0~3) | 0.3 ± 0.2 |
+
+### Work 1
+
+| 지표 | k10 |
+|---|---|
+| 실행 수 | 5 |
+| 숨긴 시험 모두 통과 | 0% (0/5) |
+| 숨긴 시험별 통과 | 같은 이벤트 재수신 0/5, 성공 뒤 재시도 없음 5/5, 실패는 재시도 5/5 |
+| 사람이 끝냄(done) | 100% (5/5) |
+| 새 일 전에 끝내려다 거절됨(도구, E11) | 0.0 ± 0.0 |
+| 사람 차례 수 | 7.6 ± 0.9 |
+| 사람 행동 수(기다림 제외) | 9.6 ± 1.3 |
+| 입력한 글자 수 | 131.8 ± 71.8 |
+| 앞 Work의 사실을 다시 알려 줌(carry 항목 수, 감사) | - |
+| 앞 Work의 사실을 다시 알려 줌(사람 역할 자기 보고) | - |
+| 에이전트 질문 수(AskUserQuestion) | 1.2 ± 0.4 |
+| 에이전트 입력 토큰(천, 캐시 포함) | 1168.3 ± 169.5 |
+| 에이전트 출력 토큰(천) | 15.6 ± 2.2 |
+| context.md 글자(Work의 task 합) | 14456.6 ± 464.9 |
+| 넣은 지식 글자(Work의 task 합) | 0.0 ± 0.0 |
+| 걸린 시간(분) | 4.3 ± 0.5 |
+| friction 평균 (0~3) | 0.2 ± 0.2 |
+
+### k10 단계별 에이전트
+
+단계 task 하나의 평균이다. 입력은 캐시 읽기와 쓰기를 더한 값이고, 대화 기록을 찾지 못한 세션은 빼고 센다.
+
+| 단계 | task 수 | 입력 토큰(천) | 캐시 쓰기(천) | 출력 토큰(천) | context.md 글자 | 넣은 지식 글자 |
+|---|---|---|---|---|---|---|
+| intake | 10 | 149.3 ± 31.0 | 14.6 ± 0.7 | 1.8 ± 0.4 | 3289.1 ± 575.7 | 330.8 ± 451.4 |
+| fix | 11 | 527.3 ± 91.0 | 40.7 ± 3.3 | 8.5 ± 1.6 | 4987.2 ± 1018.4 | 406.1 ± 495.7 |
+| verify | 11 | 783.1 ± 451.6 | 42.4 ± 12.9 | 12.5 ± 8.2 | 8333.0 ± 941.1 | 406.1 ± 495.7 |
+
+### 회차별
+
+| 쪽#회차 | 끝 | 시험 | 분 | 차례 | friction | 에이전트 세션 | 비고 |
+|---|---|---|---|---|---|---|---|
+| k10#1 | done | XOOOOO | 13.3 | 20 | 0.20 | 6 | 원인은 두 가지였다. (1) 느리게 성공한 요약 발송을 시간 초과로 보고 재시도해서, 이미 나간 메일이 최대 3번까지 다시 나갔다. (2) 중복
+…(325자 생략) |
+| k10#2 | done | XOOOOO | 12.5 | 18 | 0.33 | 6 | 요약 메일 중복 원인 3가지를 고쳤다. (1) 성공했지만 느린 발송을 시간 초과로 보고 재발송하던 것, (2) 요약 키에 runId가 들어가 재
+…(203자 생략) |
+| k10#3 | done | XOOOOO | 9.2 | 16 | 0.00 | 6 | 요약 중복 발송의 원인 두 가지를 고쳤다. 하나는 요약 키에 runId가 들어가 재실행이나 다른 서버 실행마다 키가 달라진 것이다. 다른 하나는
+…(221자 생략) |
+| k10#4 | done | XOOOOO | 12.7 | 18 | 0.28 | 6 | 요약 메일 중복의 원인 세 가지를 고쳤다. 느린 성공을 시간 초과 실패로 보고 재발송하던 것, 발송 키에 runId가 들어가 있던 것, 서버가 
+…(174자 생략) |
+| k10#5 | done | XOOOOO | 17.2 | 24 | 0.50 | 8 | 요약 메일 중복의 원인 세 가지를 고쳤다. 느리게 성공한 발송을 시간 초과로 보고 재시도한 것, 키에 runId가 들어 있어 재실행을 막지 못한
+…(268자 생략) |
+
+### 사람 역할의 말
+
+- [k10#1 좋음] 서버 두 대 동시 실행과 배포일 경로를 물었더니 에이전트가 직접 재현해서 막히지 않는다는 걸 인정하고 claim 선점과 옛 키 호환을 추가했다. 경로별 테스트 이름과 판정표도 근거로 쓰기 좋았다.
+- [k10#1 불편] 원인 분석과 수정 단계가 자동 승인으로 지나가서 그 내용을 못 본 채 리뷰 질문을 받았다. 서버 두 대 동시 발송이라는 큰 위험이 리뷰 선택지에는 드러나지 않았고, 내가 직접 묻고 나서야 나왔다. 질문을 보내는 과정에서 'Chat about this'가 질문을 취소 처리해 한 번 헷갈렸다.
+- [k10#2 좋음] 판정표와 전체 변경 탭으로 경로별 근거와 diff를 바로 볼 수 있었다. 서버 두 대 문제를 물었더니 에이전트가 자기 검증이 과했다고 인정하고 고쳐 줬다.
+- [k10#2 불편] 서버 두 대 경로가 근거 없이 '통과'로 처리됐다. 내가 묻기 전에는 드러나지 않았다. 또 리뷰 지적 선택지에서 위험한 동시 실행 문제를 '반영하지 않음(추천)'으로 권해서 그대로 믿기 어려웠다.
+- [k10#3 좋음] 완료조건 판정표가 근거와 함께 나와서, 경로마다 고객이 한 번만 받는지 확인하기 쉬웠다. 수정 전 코드에서 테스트가 실패한다는 것도 보여 줬다.
+- [k10#3 불편] 앞 일의 완료 화면이 그대로 남아 있어서 처음엔 새 일을 시작해야 하는지 헷갈렸다. 또 진짜 원인이 의도 정리에서는 안 보이고 뒤 단계에서야 드러났다.
+- [k10#4 좋음] 02 단계 요약에 원인과 근거가 나와 있었다. 03 판정표와 전체 변경 탭으로 승인 전에 코드와 테스트를 직접 볼 수 있었다. 서버 두 대 경로가 안 막힌다는 걸 물어서 알아냈고, 그 뒤 에이전트가 경로별 근거를 정리해 줬다.
+- [k10#4 불편] 경로별로 막히는지는 내가 따로 물어야 나왔다. 판정표는 처음에 서버 두 대와 배포 날 중복을 다루지 않고 모두 통과로 나왔다. 02가 자동 승인으로 지나가서 내가 직접 탭을 눌러 봐야 했다. 운영에서는 공유 저장소를 따로 구현해 넣어야 한다는 점도 남았다.
+- [k10#5 좋음] 완료조건별 판정표에 근거가 붙어 있었다. 서버 두 대가 원장을 따로 쓰는 경우는 에이전트가 먼저 '실패'로 적어 줬다. 덕분에 질문 한 번으로 통과로 넘어가지 않고 고치는 쪽으로 갔다.
+- [k10#5 불편] fix로 되돌아가려면 '승인하고 멈춤'을 누르고 [단계 선택]을 다시 눌러야 했다. 이 순서가 바로 와닿지 않았다. 형식 검사 오류가 터미널에 여러 번 보여서 결과와 상관없는 소음처럼 느껴졌다.
+
+#### friction이 높았던 차례
+
+
+## 25-invoice-quote-teammate: 같은 사람이 Work 둘에서 들은 회계 규칙이 팀원의 세 번째 Work(견적서)에 필요함 (개발용, hold-out 모양)
+
+목적: 개발용(규약 3.1, 판정에 쓰지 않음). Work 1·2는 21과 같다(같은 사람). Work 3은 팀의 다른 사람이 견적서 부가세 버그를 맡는다: 도구가 Work 1·2의 브랜치를 main에 머지하고 새로 clone해 새 앱 저장소에서 시작한다. Work 3의 사람은 회계 규칙을 모른다. 두 브랜치가 남긴 지식이 머지(같은 지식 파일을 둘 다 고친 경우 포함)를 지나 팀원에게 닿는지, 팀원의 에이전트가 줄마다 버림과 할인 순서를 지켜 고치는지 본다. 흔한 해법(합계 반올림, 줄마다 반올림, 할인 전 금액에 매김)은 틀린다.
+
+| 지표 | k10 |
+|---|---|
+| 숨긴 시험 모두 통과 | 100% (5/5) |
+| 레포 시험 통과 | 80% (4/5) |
+| 커밋까지 됨 | 100% (5/5) |
+| 사람이 끝냄(done) | 100% (5/5) |
+| 걸린 시간(분) | 18.4 ± 3.2 |
+| 사람 역할 응답 시간(분) | 2.4 ± 0.3 |
+| 걸린 시간 − 사람 역할 응답(분) | 16.0 ± 2.9 |
+| 사람 차례 수 | 31.2 ± 4.1 |
+| 기다리기만 한 차례 | 0.4 ± 0.5 |
+| 스크린샷을 붙인 차례 | 25.6 ± 1.8 |
+| 사람 행동 수(기다림 제외) | 38.8 ± 9.8 |
+| 입력한 글자 수 | 1222.4 ± 174.7 |
+| 코드 직접 확인(inspect_diff) | 0.6 ± 0.9 |
+| 헛동작(없는 요소, 실패) | 0.0 ± 0.0 |
+| friction 평균 (0~3) | 0.3 ± 0.1 |
+| friction 2 이상 차례 | 0.2 ± 0.4 |
+| 설문 수고 (1~7, 낮을수록 좋음) | 2.4 ± 0.5 |
+| 설문 명확함 | 5.8 ± 0.4 |
+| 설문 통제감 | 5.2 ± 0.4 |
+| 설문 결과 확신 | 4.8 ± 0.8 |
+| 설문 신뢰 | 5.6 ± 0.5 |
+| 설문 복구 | - |
+| 설문 다시 쓰고 싶음 | 5.6 ± 0.5 |
+| 바뀐 줄 수 | 296.2 ± 47.5 |
+| 기대 밖 파일 수 | 2.0 ± 0.7 |
+| 에이전트 출력 토큰(천) | 53.5 ± 11.4 |
+| 에이전트 입력 토큰(천, 캐시 포함) | 3687.7 ± 700.3 |
+| 에이전트 세션 수 | 9.6 ± 1.3 |
+| 사람 역할 비용($) | 4.4 ± 0.9 |
+
+### Work 3 (재는 Work, 팀원 교대)
+
+| 지표 | k10 |
+|---|---|
+| 실행 수 | 5 |
+| 숨긴 시험 모두 통과 | 100% (5/5) |
+| 숨긴 시험별 통과 | 견적 줄별 버림 5/5, 견적 할인 순서 5/5, 견적 그대로 5/5 |
+| 사람이 끝냄(done) | 100% (5/5) |
+| 새 일 전에 끝내려다 거절됨(도구, E11) | 0.0 ± 0.0 |
+| 사람 차례 수 | 10.8 ± 2.3 |
+| 사람 행동 수(기다림 제외) | 13.2 ± 3.3 |
+| 입력한 글자 수 | 379.2 ± 50.0 |
+| 앞 Work의 사실을 다시 알려 줌(carry 항목 수, 감사) | - |
+| 앞 Work의 사실을 다시 알려 줌(사람 역할 자기 보고) | - |
+| 에이전트 질문 수(AskUserQuestion) | 2.4 ± 1.3 |
+| 에이전트 입력 토큰(천, 캐시 포함) | 1098.6 ± 108.3 |
+| 에이전트 출력 토큰(천) | 15.1 ± 2.6 |
+| context.md 글자(Work의 task 합) | 19664.4 ± 1978.6 |
+| 넣은 지식 글자(Work의 task 합) | 3208.2 ± 1428.3 |
+| 걸린 시간(분) | 5.5 ± 1.9 |
+| friction 평균 (0~3) | 0.5 ± 0.2 |
+
+### Work 2 (재는 Work)
+
+| 지표 | k10 |
+|---|---|
+| 실행 수 | 5 |
+| 숨긴 시험 모두 통과 | 100% (5/5) |
+| 숨긴 시험별 통과 | 반품 줄별 버림 5/5, 반품 할인 순서 5/5, 반품 전표 그대로 5/5 |
+| 사람이 끝냄(done) | 100% (5/5) |
+| 새 일 전에 끝내려다 거절됨(도구, E11) | 0.0 ± 0.0 |
+| 사람 차례 수 | 9.0 ± 2.9 |
+| 사람 행동 수(기다림 제외) | 12.0 ± 6.7 |
+| 입력한 글자 수 | 291.6 ± 41.7 |
+| 앞 Work의 사실을 다시 알려 줌(carry 항목 수, 감사) | 0.0 ± 0.0 |
+| 앞 Work의 사실을 다시 알려 줌(사람 역할 자기 보고) | 0.0 ± 0.0 |
+| 에이전트 질문 수(AskUserQuestion) | 1.4 ± 0.9 |
+| 에이전트 입력 토큰(천, 캐시 포함) | 999.5 ± 168.5 |
+| 에이전트 출력 토큰(천) | 14.0 ± 2.9 |
+| context.md 글자(Work의 task 합) | 19320.8 ± 604.9 |
+| 넣은 지식 글자(Work의 task 합) | 2417.4 ± 379.9 |
+| 걸린 시간(분) | 5.7 ± 0.5 |
+| friction 평균 (0~3) | 0.1 ± 0.1 |
+
+### Work 1
+
+| 지표 | k10 |
+|---|---|
+| 실행 수 | 5 |
+| 숨긴 시험 모두 통과 | 100% (5/5) |
+| 숨긴 시험별 통과 | 줄별 버림 5/5, 할인 순서 5/5, 서식 그대로 5/5 |
+| 사람이 끝냄(done) | 100% (5/5) |
+| 새 일 전에 끝내려다 거절됨(도구, E11) | 0.0 ± 0.0 |
+| 사람 차례 수 | 11.4 ± 1.5 |
+| 사람 행동 수(기다림 제외) | 13.6 ± 1.1 |
+| 입력한 글자 수 | 551.6 ± 144.5 |
+| 앞 Work의 사실을 다시 알려 줌(carry 항목 수, 감사) | - |
+| 앞 Work의 사실을 다시 알려 줌(사람 역할 자기 보고) | - |
+| 에이전트 질문 수(AskUserQuestion) | 1.8 ± 0.4 |
+| 에이전트 입력 토큰(천, 캐시 포함) | 1589.5 ± 479.2 |
+| 에이전트 출력 토큰(천) | 24.4 ± 8.5 |
+| context.md 글자(Work의 task 합) | 20053.4 ± 9143.4 |
+| 넣은 지식 글자(Work의 task 합) | 0.0 ± 0.0 |
+| 걸린 시간(분) | 6.9 ± 2.0 |
+| friction 평균 (0~3) | 0.2 ± 0.2 |
+
+### k10 단계별 에이전트
+
+단계 task 하나의 평균이다. 입력은 캐시 읽기와 쓰기를 더한 값이고, 대화 기록을 찾지 못한 세션은 빼고 센다.
+
+| 단계 | task 수 | 입력 토큰(천) | 캐시 쓰기(천) | 출력 토큰(천) | context.md 글자 | 넣은 지식 글자 |
+|---|---|---|---|---|---|---|
+| intake | 16 | 220.5 ± 52.4 | 19.8 ± 1.6 | 3.5 ± 1.0 | 3788.3 ± 649.7 | 586.0 ± 544.1 |
+| fix | 16 | 409.8 ± 118.1 | 29.8 ± 4.7 | 5.6 ± 2.0 | 5909.1 ± 760.1 | 586.0 ± 544.1 |
+| verify | 16 | 522.1 ± 283.6 | 33.6 ± 8.4 | 7.6 ± 4.9 | 8752.2 ± 727.5 | 586.0 ± 544.1 |
+
+### 회차별
+
+| 쪽#회차 | 끝 | 시험 | 분 | 차례 | friction | 에이전트 세션 | 비고 |
+|---|---|---|---|---|---|---|---|
+| k10#1 | done | OOOOOOOOO | 15.6 | 31 | 0.26 | 9 | 머지로 중복 선언된 vatOfLines를 하나로 합쳐 Q-0457 합계가 경리 값 56,278원이 되게 했고 테스트 추가, npm test 55
+…(66자 생략) |
+| k10#2 | done | OOOOOOOOO | 20.1 | 30 | 0.23 | 9 | Q-0457 합계 56,280→56,278원으로 수정(견적 부가세를 할인 후 과세 줄별 원 미만 절사 합으로 변경). 청구서 INV-2031 2
+…(109자 생략) |
+| k10#3 | done | OOOOOOOOO | 23.1 | 38 | 0.34 | 12 | quoteTotals가 lineVat에 객체 대신 불리언을 넘기도록 한 줄을 고쳤다. Q-0457 합계가 경리 금액 56,278원과 맞는다. 지
+…(185자 생략) |
+| k10#4 | done | OOOOOOOOO | 16.2 | 27 | 0.33 | 9 | Q-0457 견적 합계는 기준 커밋에서 이미 56,278원(경리 계산과 일치)이었다. 56,280원은 이전 커밋 ba89ca0 이전 코드(부가세
+…(191자 생략) |
+| k10#5 | done | OOOOOOOOO | 16.8 | 30 | 0.20 | 9 | Q-0457 견적 합계는 기준 커밋에서 이미 56,278원(경리 계산과 일치)이었다. 56,280원은 수정 전 옛 코드(581c76d)의 값이었
+…(118자 생략) |
+
+### 사람 역할의 말
+
+- [k10#1 좋음] 승인 전에 에이전트가 팀 지식의 근거와 불확실한 점을 솔직히 밝혔다. 경리 금액을 알려 주자 intent를 다시 잡았고, 판정표에 완료조건별 근거가 정리돼 있었다.
+- [k10#1 불편] 첫 intent가 확정되지 않은 팀 지식을 규정처럼 가정해서 내가 물어봐야 했다. 기준 커밋이 실제로는 모듈 로드 실패였다는 점도 늦게 드러났다. 지식 문서 수정과 Stop hook 오류 같은 내부 동작은 낯설었다.
+- [k10#2 좋음] 단계마다 승인 화면과 판정표가 있어서, 무엇이 왜 바뀌었는지와 완료조건 통과 여부를 한눈에 확인할 수 있었다. 청구서와 반품 전표 값도 에이전트에게 바로 돌려 보게 해서 확인했다.
+- [k10#2 불편] 원인 분석과 수정 단계가 자동 승인으로 지나가서 코드 변경을 inspect_diff로 따로 확인해야 했다. 에이전트는 청구서와 반품 전표까지 고쳤는데, 내가 먼저 물어보기 전에는 알려 주지 않았다.
+- [k10#3 좋음] 단계마다 산출물과 판정표가 나오고, 완료조건별 통과/실패와 근거가 보여서 결과를 믿기 쉬웠다. 전체 변경 diff도 앱 안에서 바로 확인할 수 있었다.
+- [k10#3 불편] 의도 정리 단계에서 선택지 질문에 "기타"로 직접 입력해야 내가 아는 정보를 줄 수 있었다. 또 승인 때 "답하지 않은 열린 질문" 경고가 떠도 내가 답할 방법이 없어 그냥 진행했다. 완료 화면에서는 npm test 9건 실패가 경고로만 남았다.
+- [k10#4 좋음] 단계마다 오른쪽 패널에 원인, 근거, 판정표가 정리돼서 에이전트가 무엇을 했는지 믿고 확인하기 쉬웠다. 기준 커밋에서 이미 56,278원이라는 결론을 실험 근거로 보여 줬다.
+- [k10#4 불편] 버그가 재현되지 않는 경우에 어떻게 할지 선택지가 애매했다. 결과적으로 코드 수정 없이 테스트만 커밋됐고, 영업팀이 본 56,280원이 어디서 나왔는지는 풀리지 않았다. 청구서나 반품 전표 예시까지 확인하는 단계는 없었다.
+- [k10#5 좋음] 에이전트가 재현이 안 된다는 사실을 숨기지 않고 근거(옛 커밋 56,280 대 현재 56,278)와 함께 물었다. 판정표와 변경 탭으로 무엇이 바뀌었는지 바로 확인할 수 있었다.
+- [k10#5 불편] 모른다고 답한 규칙 질문이 승인 때 열린 질문으로 다시 떴다. 청구서·반품 전표 예시가 회계 계산과 맞는지는 확인하지 못했다. 에이전트도 그 확인을 따로 제안하지 않았다.
+
+#### friction이 높았던 차례
+
+- k10#3 차례 18 (friction 2): '금액을 알려드림'을 고르면 입력칸 없이 다음 질문으로 넘어가 금액을 적을 곳이 없었다.
+
+
+보고서: /home/user/relay-v2/app/eval/results/e12-k10/report.md

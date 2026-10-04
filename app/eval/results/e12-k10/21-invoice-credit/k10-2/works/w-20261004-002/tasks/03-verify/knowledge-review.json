@@ -1,0 +1,46 @@
+{
+  "calls": [
+    {
+      "at": "2026-10-04T12:31:46+00:00",
+      "hash": "4bfdfd0d81d2c974446e902c1aa83a50c36fa944b5f839596825ac197164d4d7",
+      "model": "sonnet",
+      "ms": 5701,
+      "costUsd": 0.017723799999999998,
+      "usage": {
+        "input": 2,
+        "output": 439,
+        "cacheRead": 729,
+        "cacheCreation": 3296
+      },
+      "related": 0,
+      "promptChars": 3206,
+      "issues": [
+        {
+          "file": "docs/knowledge/invoice/vat-per-line-floor.md",
+          "part": "body",
+          "message": "[지식 검토: 사람의 이번 말과 어긋남] \"`src/invoice/credit-note.js`의 `creditTotals`\" → intent와 완료조건은 함수 이름을 `creditNoteTotals`로 적었으므로, 실제 코드의 export 이름을 확인해 규칙의 함수 이름을 그에 맞게 고친다."
+        }
+      ],
+      "bounced": true,
+      "error": null
+    },
+    {
+      "at": "2026-10-04T12:31:59+00:00",
+      "hash": "7337cf1d371bb545296e84574ee271db2676110a6439a625bd4347f0d15ace15",
+      "model": "sonnet",
+      "ms": 4640,
+      "costUsd": 0.0161178,
+      "usage": {
+        "input": 2,
+        "output": 262,
+        "cacheRead": 729,
+        "cacheCreation": 3337
+      },
+      "related": 0,
+      "promptChars": 3255,
+      "issues": [],
+      "bounced": false,
+      "error": null
+    }
+  ]
+}

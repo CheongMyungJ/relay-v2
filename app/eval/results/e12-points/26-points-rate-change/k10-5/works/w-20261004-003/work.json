@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "work_id": "w-20261004-003",
+  "type": "bugfix",
+  "status": "completed",
+  "created_at": "2026-10-04T12:57:30+00:00",
+  "base_branch": "main",
+  "base_commit": "f34a037258c8435c2b9f6e5c848eb2477b297736",
+  "intent": {
+    "version": 1
+  },
+  "settings": {},
+  "file_hashes": {
+    "request.md": "sha256:486b6657bdd249c97612acac9171822320136fd4fb5ccba6bdc8ff2ab522c37a",
+    "intent.md": "sha256:009029a06d0dbccfd4c829ec32708a14a6e040b8748c56f4713654c9fea83d07",
+    "decisions.md": "sha256:80a1fd43f195ed36777c2b74c9e1fae980284e59d67f44dd54f07a760f1b605c"
+  },
+  "tasks": [
+    {
+      "id": "t-01",
+      "seq": 1,
+      "node": "intake",
+      "status": "approved",
+      "reason": "default",
+      "format_version": 1,
+      "created_at": "2026-10-04T12:57:30+00:00",
+      "session": {
+        "id": "9968a89e-b26d-4d11-8993-df7ec8b791dd",
+        "pid": 28840,
+        "process_started_at": "2026-10-04T12:57:30.590Z",
+        "started_at": "2026-10-04T12:57:31+00:00",
+        "alive": false,
+        "ended_at": "2026-10-04T13:01:31+00:00"
+      },
+      "bounce_count": 0,
+      "check": {
+        "handoff_present": true,
+        "status": "awaiting_approval",
+        "errors": [],
+        "warnings": [
+          {
+            "file": "intent.draft.md",
+            "part": "body",
+            "message": "intent 초안 본문이 분량 기준을 넘음 (기준: 1500자, 지금: 1529자)"
+          }
+        ]
+      },
+      "engine": "claude",
+      "start_commit": "f34a037258c8435c2b9f6e5c848eb2477b297736",
+      "skill_hash": "sha256:8d88de1bf541d7ff08dbc3ad8a9215197d2886d38908b02071fdf48a65cc4223",
+      "engine_version": "2.1.289 (Claude Code)",
+      "claude_version": "2.1.289 (Claude Code)",
+      "last_prompt_at": "2026-10-04T13:01:06+00:00",
+      "permission_mode": "bypassPermissions",
+      "approved_at": "2026-10-04T13:01:31+00:00",
+      "approved_by": "human"
+    },
+    {
+      "id": "t-02",
+      "seq": 2,
+      "node": "fix",
+      "status": "approved",
+      "reason": "default",
+      "format_version": 1,
+      "created_at": "2026-10-04T13:01:31+00:00",
+      "session": {
+        "id": "38b25fd1-32d1-4e2a-89cc-686fac857cc7",
+        "pid": 6088,
+        "process_started_at": "2026-10-04T13:01:31.600Z",
+        "started_at": "2026-10-04T13:01:32+00:00",
+        "alive": false,
+        "ended_at": "2026-10-04T13:03:13+00:00"
+      },
+      "bounce_count": 0,
+      "check": {
+        "handoff_present": true,
+        "status": "awaiting_approval",
+        "errors": [],
+        "warnings": []
+      },
+      "engine": "claude",
+      "start_commit": "f34a037258c8435c2b9f6e5c848eb2477b297736",
+      "skill_hash": "sha256:0eca34eedf0cd9b3428cb33b41030d6ee5e2d5e882ac6bf80b61da3dcd2db22f",
+      "engine_version": "2.1.289 (Claude Code)",
+      "claude_version": "2.1.289 (Claude Code)",
+      "last_prompt_at": "2026-10-04T13:01:33+00:00",
+      "permission_mode": "bypassPermissions",
+      "approved_at": "2026-10-04T13:03:13+00:00",
+      "approved_by": "auto"
+    },
+    {
+      "id": "t-03",
+      "seq": 3,
+      "node": "verify",
+      "status": "approved",
+      "reason": "default",
+      "format_version": 1,
+      "created_at": "2026-10-04T13:03:13+00:00",
+      "session": {
+        "id": "9a493722-7d8f-43e8-82a1-0d11c17a4c0a",
+        "pid": 12251,
+        "process_started_at": "2026-10-04T13:03:13.630Z",
+        "started_at": "2026-10-04T13:03:14+00:00",
+        "alive": false,
+        "ended_at": "2026-10-04T13:05:26+00:00"
+      },
+      "bounce_count": 0,
+      "check": {
+        "handoff_present": true,
+        "status": "awaiting_approval",
+        "errors": [],
+        "warnings": [
+          {
+            "file": "docs/knowledge/points/earn-basis.md",
+            "part": "body",
+            "message": "[지식 검토: 규칙 절에 정하지 않은 것] \"다시 계산하는 적립은 `(남은 상품 금액 − 쿠폰 할인 − 사용 포인트)`의 `REFUND_RECOVER_RATE_PERCENT`(1%)를 버림한 값이다.\" → 부분 환불 회수에 1% 비율(REFUND_RECOVER_RATE_PERCENT)을 쓴다는 점과 '정산팀 대조 기준도 132P(1% 기준 계산)'를 정해진 규칙처럼 두지 말고, 새 적립률 적용 여부는 사람이 정하지 않았으므로 현재 동작 설명을 '아직 정하지 않은 것'으로 옮기고 규칙에는 확정된 계산 구조만 남긴다."
+          }
+        ]
+      },
+      "engine": "claude",
+      "start_commit": "8b02c068139bc59e9aa5b0a524dc267db73f0ea5",
+      "skill_hash": "sha256:0633efe3eeb07e8e25ef375a074a38f3793b61f5deef36b58f10f0b5d20e5d4d",
+      "engine_version": "2.1.289 (Claude Code)",
+      "claude_version": "2.1.289 (Claude Code)",
+      "last_prompt_at": "2026-10-04T13:03:15+00:00",
+      "permission_mode": "bypassPermissions",
+      "approved_at": "2026-10-04T13:05:26+00:00",
+      "approved_by": "human"
+    }
+  ],
+  "completed_at": "2026-10-04T13:05:26+00:00"
+}

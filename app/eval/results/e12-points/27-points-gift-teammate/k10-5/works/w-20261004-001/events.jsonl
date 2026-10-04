@@ -1,0 +1,18 @@
+{"ts":"2026-10-04T12:52:25+00:00","work_id":"w-20261004-001","type":"work.created","payload":{"type":"bugfix","base_branch":"main","base_commit":"a3cc42a07a717a778d155bbdae8ef4e9fc1bb8e4"}}
+{"ts":"2026-10-04T12:52:25+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.started","payload":{"reason":"default","session_id":"89a7b218-2eb6-40a3-91dd-ff4e801fd62b"}}
+{"ts":"2026-10-04T12:52:25+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.first_output","payload":{"pid":10864,"ms":440}}
+{"ts":"2026-10-04T12:52:30+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.first_hook","payload":{"pid":10864,"ms":5265,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:52:49+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:53:00+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T12:53:00+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.started","payload":{"reason":"default","session_id":"5014fe56-acc9-4b85-948e-2fd89d6f3bd3"}}
+{"ts":"2026-10-04T12:53:01+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.first_output","payload":{"pid":12323,"ms":810}}
+{"ts":"2026-10-04T12:53:01+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.first_hook","payload":{"pid":12323,"ms":995,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:53:44+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:53:59+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.approved","payload":{"by":"auto"}}
+{"ts":"2026-10-04T12:53:59+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.started","payload":{"reason":"default","session_id":"db8ffd3d-c128-4621-8e93-9f4d273b1c55"}}
+{"ts":"2026-10-04T12:54:00+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.first_output","payload":{"pid":14339,"ms":895}}
+{"ts":"2026-10-04T12:54:01+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.first_hook","payload":{"pid":14339,"ms":1317,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:55:19+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.bounced","payload":{"attempt":1,"max":2,"errors":[{"file":"docs/knowledge/points/earn-points-basis.md","message":"[지식 검토: 모른다는 메모] \"다른 주문의 고객센터 값으로는 확인하지 않았다.\" → `## 규칙`에서 이 '확인하지 않았다' 문장을 빼고, 필요하면 근거 한 건(O-1042)만 사실로 남기거나 바뀐 이력으로 옮긴다."}]}}
+{"ts":"2026-10-04T12:55:31+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:55:48+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T12:55:48+00:00","work_id":"w-20261004-001","type":"work.completed","payload":{"delivery":"none"}}

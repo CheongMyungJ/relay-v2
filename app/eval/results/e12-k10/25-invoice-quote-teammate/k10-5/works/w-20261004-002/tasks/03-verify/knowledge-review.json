@@ -1,0 +1,46 @@
+{
+  "calls": [
+    {
+      "at": "2026-10-04T14:05:58+00:00",
+      "hash": "88472c6347ebeef3ce555060db41d97acf089dd27cf89181fb3c08e140ba4d33",
+      "model": "sonnet",
+      "ms": 5684,
+      "costUsd": 0.0200558,
+      "usage": {
+        "input": 2,
+        "output": 527,
+        "cacheRead": 729,
+        "cacheCreation": 3659
+      },
+      "related": 0,
+      "promptChars": 3679,
+      "issues": [
+        {
+          "file": "docs/knowledge/billing/vat-rounding.md",
+          "part": "body",
+          "message": "[지식 검토: 근거 없이 넓힌 규칙] \"청구서(`computeTotals`), 반품 전표(`creditTotals`), 견적서(`quoteTotals`) 모두 같은 규칙이다.\" → 이번 Work는 반품 전표만 확인했고 견적서(`quoteTotals`)는 범위 밖이므로, 견적서를 규칙에서 빼거나 `## 아직 규칙을 따르지 않는 곳`/`## 아직 정하지 않은 것`으로 옮긴다."
+        }
+      ],
+      "bounced": true,
+      "error": null
+    },
+    {
+      "at": "2026-10-04T14:06:14+00:00",
+      "hash": "4621cf106a9142393edbd5b666de162053c67a9c63236a42c9289658722ee6b4",
+      "model": "sonnet",
+      "ms": 4776,
+      "costUsd": 0.019333799999999998,
+      "usage": {
+        "input": 2,
+        "output": 406,
+        "cacheRead": 729,
+        "cacheCreation": 3781
+      },
+      "related": 0,
+      "promptChars": 3821,
+      "issues": [],
+      "bounced": false,
+      "error": null
+    }
+  ]
+}

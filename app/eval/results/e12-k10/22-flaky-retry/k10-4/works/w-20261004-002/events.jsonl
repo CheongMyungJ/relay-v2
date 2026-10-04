@@ -1,0 +1,19 @@
+{"ts":"2026-10-04T13:18:00+00:00","work_id":"w-20261004-002","type":"work.created","payload":{"type":"bugfix","base_branch":"main","base_commit":"b1aee9b8c917f89bb02b29b42388709d6be5ad2a"}}
+{"ts":"2026-10-04T13:18:00+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.started","payload":{"reason":"default","session_id":"66be7d05-fe45-42a9-85a2-8e7be0660637"}}
+{"ts":"2026-10-04T13:18:01+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.first_output","payload":{"pid":4055,"ms":939}}
+{"ts":"2026-10-04T13:18:01+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.first_hook","payload":{"pid":4055,"ms":1274,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T13:18:21+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T13:18:40+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T13:18:51+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T13:18:51+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.started","payload":{"reason":"default","session_id":"f566bb29-286a-4bf1-8616-2695c67f6aa1"}}
+{"ts":"2026-10-04T13:18:52+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.first_output","payload":{"pid":5359,"ms":810}}
+{"ts":"2026-10-04T13:18:52+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.first_hook","payload":{"pid":5359,"ms":1018,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T13:19:39+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T13:19:54+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.approved","payload":{"by":"auto"}}
+{"ts":"2026-10-04T13:19:55+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.started","payload":{"reason":"default","session_id":"b3045f3e-07a3-45fd-ac07-3ace0b7a1714"}}
+{"ts":"2026-10-04T13:19:55+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.first_output","payload":{"pid":7137,"ms":820}}
+{"ts":"2026-10-04T13:19:56+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.first_hook","payload":{"pid":7137,"ms":1077,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T13:21:27+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.bounced","payload":{"attempt":1,"max":2,"errors":[{"file":"handoff.md","message":"\"확인한 지식\"의 `docs/knowledge/testing/flaky-test-policy.md,`는 없는 지식 항목이다"}]}}
+{"ts":"2026-10-04T13:21:33+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T13:22:01+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T13:22:01+00:00","work_id":"w-20261004-002","type":"work.completed","payload":{"delivery":"none"}}

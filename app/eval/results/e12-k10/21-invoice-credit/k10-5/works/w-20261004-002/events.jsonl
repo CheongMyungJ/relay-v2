@@ -1,0 +1,19 @@
+{"ts":"2026-10-04T13:41:02+00:00","work_id":"w-20261004-002","type":"work.created","payload":{"type":"bugfix","base_branch":"main","base_commit":"3ad07f9f02b6dc6284e0dc0238f0fd17fc6fa65e"}}
+{"ts":"2026-10-04T13:41:02+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.started","payload":{"reason":"default","session_id":"0bb2f76e-7980-4bd7-bd3e-285742911aa2"}}
+{"ts":"2026-10-04T13:41:03+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.first_output","payload":{"pid":1847,"ms":819}}
+{"ts":"2026-10-04T13:41:03+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.first_hook","payload":{"pid":1847,"ms":989,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T13:41:28+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T13:41:59+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T13:42:12+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T13:42:13+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.started","payload":{"reason":"default","session_id":"fe8319f5-09b3-446e-9680-1879cd5a0007"}}
+{"ts":"2026-10-04T13:42:13+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.first_output","payload":{"pid":3085,"ms":885}}
+{"ts":"2026-10-04T13:42:14+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.first_hook","payload":{"pid":3085,"ms":1169,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T13:42:59+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T13:43:14+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.approved","payload":{"by":"auto"}}
+{"ts":"2026-10-04T13:43:14+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.started","payload":{"reason":"default","session_id":"0af06b22-2c6b-45a5-b283-5ad4e9cdec6d"}}
+{"ts":"2026-10-04T13:43:15+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.first_output","payload":{"pid":4348,"ms":945}}
+{"ts":"2026-10-04T13:43:16+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.first_hook","payload":{"pid":4348,"ms":1307,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T13:43:54+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.bounced","payload":{"attempt":1,"max":2,"errors":[{"file":"docs/knowledge/invoice/vat-per-line-floor.md","message":"[지식 검토: 다른 항목과 어긋남] \"계산은 `src/invoice/total.js`의 `sumLineVat` 한 곳에 둔다.\" → 규칙 줄에서 `sumLineVat` 한 곳이라는 위치 지정을 빼고, 반품 전표는 지금 `credit-note.js`의 `sumCreditLineVat`를 쓴다는 내용은 '아직 규칙을 따르지 않는 곳'에만 두도록 고친다."}]}}
+{"ts":"2026-10-04T13:44:07+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T13:44:33+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T13:44:33+00:00","work_id":"w-20261004-002","type":"work.completed","payload":{"delivery":"none"}}

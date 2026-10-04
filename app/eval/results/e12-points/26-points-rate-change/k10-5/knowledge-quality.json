@@ -1,0 +1,46 @@
+{
+  "paths": [
+    "docs/knowledge/points/earn-basis.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/points/earn-basis.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": true,
+        "stateWhy": "규칙 절에서 회수용 재계산 적립률을 `REFUND_RECOVER_RATE_PERCENT`(1%)로 단정하고 \"정산팀 대조 기준도 132P(1% 기준 계산)\"라고 적어, 정하지 않은 사항(N1)을 정해진 규칙처럼 적었다. 아래 '아직 정하지 않은 것' 절에서 미정이라 밝히긴 했지만 규칙 절 본문은 미정 표시 없이 확정처럼 읽힌다.",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "기준 금액이 상품 금액 − 쿠폰 할인 − 사용 포인트이고 배송비는 제외라고 적혀 있다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "소수점을 버린다(floorPercentOf)고 적혀 있다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "기본 적립률 2%이며 1%는 과거 이력으로만 적혀 있다."
+      },
+      {
+        "id": "R4",
+        "status": "correct",
+        "why": "회수 = 저장된 points.earned − 남은 상품으로 다시 계산한 적립이라고 적혀 있다."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "저장된 points.earned는 적립률이 바뀌어도 다시 계산하지 않고 그대로 쓴다고 적혀 있다."
+      }
+    ]
+  }
+}

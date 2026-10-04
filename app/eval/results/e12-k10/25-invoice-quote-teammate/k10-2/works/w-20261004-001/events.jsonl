@@ -1,0 +1,20 @@
+{"ts":"2026-10-04T12:34:49+00:00","work_id":"w-20261004-001","type":"work.created","payload":{"type":"bugfix","base_branch":"main","base_commit":"df88ab4d4d7f8e1249ee6e877b25fc01e0d65e60"}}
+{"ts":"2026-10-04T12:34:49+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.started","payload":{"reason":"default","session_id":"85f7b4a7-8432-43c7-aae4-1d954047aae4"}}
+{"ts":"2026-10-04T12:34:49+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.first_output","payload":{"pid":1393,"ms":451}}
+{"ts":"2026-10-04T12:34:54+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.first_hook","payload":{"pid":1393,"ms":5234,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:36:02+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:36:13+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T12:36:14+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.started","payload":{"reason":"default","session_id":"7147070b-9556-42c8-b904-7f88b27e0ed4"}}
+{"ts":"2026-10-04T12:36:15+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.first_output","payload":{"pid":4420,"ms":857}}
+{"ts":"2026-10-04T12:36:15+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.first_hook","payload":{"pid":4420,"ms":1097,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:36:58+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:37:13+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.approved","payload":{"by":"auto"}}
+{"ts":"2026-10-04T12:37:13+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.started","payload":{"reason":"default","session_id":"87f79ff1-fa89-4cf7-89ad-c76b60814d5e"}}
+{"ts":"2026-10-04T12:37:14+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.first_output","payload":{"pid":6612,"ms":985}}
+{"ts":"2026-10-04T12:37:15+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.first_hook","payload":{"pid":6612,"ms":1262,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:40:47+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:41:25+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:43:10+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.bounced","payload":{"attempt":1,"max":2,"errors":[{"file":"docs/knowledge/invoice/vat-per-line-floor.md","message":"[지식 검토: 규칙 절에 정하지 않은 것] \"청구서·견적서·반품 전표 모두, 부가세는 과세 품목 줄마다\" → 견적서·반품 전표 적용은 사람 결정에 없고 앞 단계 후보도 '정하지 않음'이므로, 규칙·제목·예시(Q-0457, CN-0112)·`lineVat`을 세 문서가 함께 쓴다는 줄·바뀐 이력의 '적용으로 확정'을 청구서 범위로 되돌리고 견적서·반품 전표는 '아직 정하지 않은 것'으로 옮긴다."}]}}
+{"ts":"2026-10-04T12:43:37+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:43:56+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T12:43:56+00:00","work_id":"w-20261004-001","type":"work.completed","payload":{"delivery":"none"}}

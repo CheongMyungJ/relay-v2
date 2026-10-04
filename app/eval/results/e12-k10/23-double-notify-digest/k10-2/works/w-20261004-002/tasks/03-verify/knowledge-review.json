@@ -1,0 +1,40 @@
+{
+  "calls": [
+    {
+      "at": "2026-10-04T12:41:50+00:00",
+      "hash": "8e0d99328b3bfc4b7607f907adbfbe62275c4835eb18e930b3ea9a155c65bf7e",
+      "model": "sonnet",
+      "ms": 4904,
+      "costUsd": 0.0184378,
+      "usage": {
+        "input": 2,
+        "output": 346,
+        "cacheRead": 729,
+        "cacheCreation": 3707
+      },
+      "related": 0,
+      "promptChars": 3709,
+      "issues": [],
+      "bounced": false,
+      "error": null
+    },
+    {
+      "at": "2026-10-04T12:44:31+00:00",
+      "hash": "14e588146b81834f382c014d8e74b768729659359f4d61f17dc501a2b4e8f871",
+      "model": "sonnet",
+      "ms": 6116,
+      "costUsd": 0.021793800000000002,
+      "usage": {
+        "input": 2,
+        "output": 530,
+        "cacheRead": 729,
+        "cacheCreation": 4086
+      },
+      "related": 0,
+      "promptChars": 4166,
+      "issues": [],
+      "bounced": false,
+      "error": null
+    }
+  ]
+}

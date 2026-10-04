@@ -1,0 +1,46 @@
+{
+  "calls": [
+    {
+      "at": "2026-10-04T12:14:00+00:00",
+      "hash": "f8abe5bd17ec9279a7b8d052b5956971bbcd091b051fff8633e62384e9180e78",
+      "model": "sonnet",
+      "ms": 6587,
+      "costUsd": 0.0207758,
+      "usage": {
+        "input": 2,
+        "output": 605,
+        "cacheRead": 729,
+        "cacheCreation": 3644
+      },
+      "related": 0,
+      "promptChars": 3619,
+      "issues": [
+        {
+          "file": "docs/knowledge/billing/issued-invoice-stored-totals.md",
+          "part": "body",
+          "message": "[지식 검토: 근거 없이 넓힌 규칙] \"발행된 청구서·대변전표는 발행 때 저장된 `totals`를 그대로 쓴다(`invoiceTotals`, `creditNoteTotals`).\" → 사람 결정은 발행된 청구서만 다루고 대변전표는 신규 계산 대상이므로, 대변전표와 `creditNoteTotals`, 내보내기(`src/export/*`) 문장은 코드로 확인되지 않으면 빼고 발행된 청구서로 좁혀 쓴다."
+        }
+      ],
+      "bounced": true,
+      "error": null
+    },
+    {
+      "at": "2026-10-04T12:14:07+00:00",
+      "hash": "9b3c90e0db33e0f02258f6eb92dcf3a660d84fed8aba424e80849afad5ac3e33",
+      "model": "sonnet",
+      "ms": 3614,
+      "costUsd": 0.0161478,
+      "usage": {
+        "input": 2,
+        "output": 161,
+        "cacheRead": 729,
+        "cacheCreation": 3597
+      },
+      "related": 0,
+      "promptChars": 3557,
+      "issues": [],
+      "bounced": false,
+      "error": null
+    }
+  ]
+}

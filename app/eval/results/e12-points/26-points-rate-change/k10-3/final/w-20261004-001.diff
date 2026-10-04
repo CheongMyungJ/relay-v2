@@ -1,0 +1,197 @@
+diff --git a/tree/docs/knowledge/points/earn-base.md b/tree/docs/knowledge/points/earn-base.md
+new file mode 100644
+index 0000000..fffa53e
+--- /dev/null
++++ b/tree/docs/knowledge/points/earn-base.md
+@@ -0,0 +1,14 @@
++---
++kind: rule
++source: human
++anchor: earnPoints
++---
++# 적립 포인트는 배송비를 뺀 금액의 1%를 원 단위로 버림한다
++
++## 규칙
++- 적립 기준 금액은 상품 금액 − 쿠폰 − 사용 포인트이고 배송비는 넣지 않는다.
++- 적립 포인트는 기준 금액의 `POINT_RATE_PERCENT`%를 원 단위로 버림한다(반올림 아님). 예: 주문 O-1042는 기준 23,770원 → 237P.
++- 주문 적립, 선물 적립, 환불 회수가 모두 `src/points/earn.js`의 기준(`earnBase`, `pointsForBase`, `earnPoints`)을 쓴다. 따로 계산하지 않는다.
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-001, 사람이 알려 줌). 옛 기준은 배송비를 포함한 결제액을 반올림했다
+diff --git a/tree/docs/knowledge/points/partial-refund-recovery.md b/tree/docs/knowledge/points/partial-refund-recovery.md
+new file mode 100644
+index 0000000..18e7e81
+--- /dev/null
++++ b/tree/docs/knowledge/points/partial-refund-recovery.md
+@@ -0,0 +1,11 @@
++---
++kind: fact
++source: investigation
++---
++# 부분 환불 회수 포인트는 환불 전후 적립 포인트의 차이다
++
++## 내용
++- `src/orders/refund.js`의 `createRefund`는 회수 포인트를 (환불 전 기준 금액의 적립) − (환불 후 기준 금액의 적립)으로 계산한다. 기준 금액과 버림은 `docs/knowledge/points/earn-base.md` 참고.
++- 각 환불에 따로 1% 버림을 하면 나눠 환불한 합이 전체 적립과 어긋나서 차이 방식으로 했다. 쿠폰과 사용 포인트는 남은 주문에 남는다.
++- 전체 취소(`cancelOrder`)는 저장된 `points.earned`를 그대로 회수한다.
++- 주의: 옛 기준으로 저장된 과거 주문을 부분 환불하면 새 기준 회수 값이 저장 적립과 어긋날 수 있다(소급 수정은 하지 않기로 함).
+diff --git a/base/src/gift/gift-points.js b/tree/src/gift/gift-points.js
+index 31d9ca8..775b7f3 100644
+--- a/base/src/gift/gift-points.js
++++ b/tree/src/gift/gift-points.js
+@@ -1,7 +1,6 @@
+-import { POINT_RATE_PERCENT } from '../config.js'
+-import { percentOf } from '../money.js'
++import { earnPoints } from '../points/earn.js'
+ 
+-/** 선물하기 주문의 적립 포인트(보내는 사람에게 쌓인다) */
++/** 선물하기 주문의 적립 포인트(보내는 사람에게 쌓인다). 일반 주문과 같은 기준 */
+ export function giftPoints(order) {
+-  return percentOf(order.amounts.total, POINT_RATE_PERCENT)
++  return earnPoints(order)
+ }
+diff --git a/base/src/money.js b/tree/src/money.js
+index 4ce3f7b..9dfd84b 100644
+--- a/base/src/money.js
++++ b/tree/src/money.js
+@@ -14,6 +14,11 @@ export function percentOf(amount, percent) {
+   return Math.round((amount * percent) / 100)
+ }
+ 
++/** 금액의 percent%. 원 단위로 버림한다 */
++export function floorPercentOf(amount, percent) {
++  return Math.floor((amount * percent) / 100)
++}
++
+ /** 10원 단위 버림 */
+ export function floorTen(amount) {
+   return Math.floor(amount / 10) * 10
+diff --git a/base/src/orders/refund.js b/tree/src/orders/refund.js
+index 7d4f479..edd79c5 100644
+--- a/base/src/orders/refund.js
++++ b/tree/src/orders/refund.js
+@@ -1,9 +1,11 @@
+-import { POINT_RATE_PERCENT, REFUND_NUMBER } from '../config.js'
++import { REFUND_NUMBER } from '../config.js'
+ import { lineAmount } from '../cart/line.js'
+-import { percentOf, sumWon } from '../money.js'
++import { sumWon } from '../money.js'
++import { earnBase, pointsForBase } from '../points/earn.js'
+ 
+ // 환불. order는 저장된 주문(createOrder의 결과를 저장한 것)이다. 저장된 금액과 적립 포인트를 쓴다.
+ // - 부분 환불(createRefund): 돌려받는 줄의 상품 금액을 돌려주고, 적립했던 포인트 일부를 회수한다.
++//   회수 포인트는 환불 전과 후의 적립 기준 금액으로 계산한 적립 포인트의 차이다(나눠 환불해도 합이 전체 적립과 같다).
+ //   쿠폰 할인과 사용한 포인트는 남은 주문에 그대로 둔다. 남은 상품 금액이 그보다 적어지면 전체 취소로 한다.
+ // - 전체 취소(cancelOrder): 결제 금액을 모두 돌려주고, 적립 포인트를 모두 회수하고, 사용한 포인트를 돌려준다.
+ 
+@@ -31,7 +33,9 @@ export function createRefund(order, input) {
+     orderNumber: order.number,
+     items,
+     refundAmount: refundGoods,
+-    pointsRecovered: percentOf(refundGoods, POINT_RATE_PERCENT),
++    pointsRecovered:
++      pointsForBase(earnBase(remainingGoods + refundGoods, order.amounts.coupon, order.amounts.pointsUsed)) -
++      pointsForBase(earnBase(remainingGoods, order.amounts.coupon, order.amounts.pointsUsed)),
+   }
+ }
+ 
+diff --git a/base/src/points/earn.js b/tree/src/points/earn.js
+index 1ad53ff..2ed5ae1 100644
+--- a/base/src/points/earn.js
++++ b/tree/src/points/earn.js
+@@ -1,7 +1,18 @@
+ import { POINT_RATE_PERCENT } from '../config.js'
+-import { percentOf } from '../money.js'
++import { floorPercentOf } from '../money.js'
+ 
+-/** 주문의 적립 포인트. 결제 금액의 POINT_RATE_PERCENT% */
++/** 적립 기준 금액: 상품 금액 − 쿠폰 − 사용 포인트. 배송비는 넣지 않는다 */
++export function earnBase(goods, coupon, pointsUsed) {
++  return goods - coupon - pointsUsed
++}
++
++/** 적립 기준 금액의 POINT_RATE_PERCENT%를 원 단위로 버림한 포인트 */
++export function pointsForBase(base) {
++  return floorPercentOf(base, POINT_RATE_PERCENT)
++}
++
++/** 주문의 적립 포인트. 주문 적립, 선물 적립, 환불 회수가 모두 이 기준을 쓴다 */
+ export function earnPoints(order) {
+-  return percentOf(order.amounts.total, POINT_RATE_PERCENT)
++  const a = order.amounts
++  return pointsForBase(earnBase(a.goods, a.coupon, a.pointsUsed))
+ }
+diff --git a/tree/test/earn.test.js b/tree/test/earn.test.js
+new file mode 100644
+index 0000000..0b04245
+--- /dev/null
++++ b/tree/test/earn.test.js
+@@ -0,0 +1,68 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import fs from 'node:fs'
++import { createOrder } from '../src/orders/order.js'
++import { createGiftOrder } from '../src/gift/gift-order.js'
++import { createRefund, cancelOrder } from '../src/orders/refund.js'
++
++const base = { customerId: 'U-1', orderedAt: '2026-10-01T10:00:00+09:00' }
++const gift = { ...base, recipient: { name: '김하늘', phone: '010-1234-5678' } }
++
++test('O-1042: 배송비를 빼고 버림하면 237P', () => {
++  const input = JSON.parse(fs.readFileSync(new URL('../examples/O-1042.json', import.meta.url), 'utf8'))
++  const o = createOrder(input)
++  assert.strictEqual(o.amounts.shipping, 3000)
++  assert.strictEqual(o.points.earned, 237)
++})
++
++test('배송비가 있는 주문과 없는 주문 모두 적립 기준에 배송비가 들어가지 않는다', () => {
++  const withShip = createOrder({ ...base, number: 'O-0010', lines: [{ sku: 'A', unitPrice: 10000, qty: 1 }] })
++  assert.strictEqual(withShip.amounts.shipping, 3000)
++  assert.strictEqual(withShip.points.earned, 100)
++  const free = createOrder({ ...base, number: 'O-0011', lines: [{ sku: 'A', unitPrice: 30000, qty: 1 }] })
++  assert.strictEqual(free.amounts.shipping, 0)
++  assert.strictEqual(free.points.earned, 300)
++})
++
++test('쿠폰과 사용 포인트는 적립 기준에서 뺀다', () => {
++  const o = createOrder({
++    ...base, number: 'O-0012', lines: [{ sku: 'A', unitPrice: 20000, qty: 2 }],
++    coupon: { code: 'C', amount: 3000 }, pointsUsed: 1000,
++  })
++  assert.strictEqual(o.points.earned, 360)
++})
++
++test('1% 계산에 소수점이 생기면 버림한다', () => {
++  const o = createOrder({ ...base, number: 'O-0013', lines: [{ sku: 'A', unitPrice: 39999, qty: 1 }] })
++  assert.strictEqual(o.points.earned, 399)
++  const g = createGiftOrder({ ...gift, number: 'G-0010', lines: [{ sku: 'A', unitPrice: 39990, qty: 1 }] })
++  assert.strictEqual(g.points.earned, 399)
++})
++
++test('선물 적립도 배송비를 빼고 버림한다', () => {
++  const g = createGiftOrder({ ...gift, number: 'G-0011', lines: [{ sku: 'A', unitPrice: 15950, qty: 1 }], pointsUsed: 1000 })
++  assert.strictEqual(g.amounts.shipping, 3000)
++  assert.strictEqual(g.points.earned, 149)
++})
++
++test('부분 환불 회수 포인트는 같은 기준이고, 나눠 환불한 합이 전체 적립과 같다', () => {
++  const o = createOrder({
++    ...base, number: 'O-0014',
++    lines: [{ sku: 'A', unitPrice: 12345, qty: 1 }, { sku: 'B', unitPrice: 9999, qty: 1 }, { sku: 'C', unitPrice: 7777, qty: 1 }],
++    coupon: { code: 'C', amount: 1000 }, pointsUsed: 1000,
++  })
++  assert.strictEqual(o.points.earned, 281) // (30121 - 1000 - 1000) * 1%
++  const r1 = createRefund(o, { number: 'R-0001', items: [{ sku: 'A', qty: 1 }] })
++  const r2 = createRefund(o, { number: 'R-0002', items: [{ sku: 'B', qty: 1 }], alreadyRefunded: [{ sku: 'A', qty: 1 }] })
++  assert.strictEqual(r1.pointsRecovered, 124) // 281 - 157
++  assert.strictEqual(r2.pointsRecovered, 100) // 157 - 57
++  assert.strictEqual(r1.pointsRecovered + r2.pointsRecovered, o.points.earned - 57) // 남은 C 몫(57P)은 전체 취소 때 회수
++})
++
++test('배송비가 있는 주문의 환불 회수 포인트에도 배송비가 들어가지 않는다', () => {
++  const o = createOrder({ ...base, number: 'O-0015', lines: [{ sku: 'A', unitPrice: 10000, qty: 1 }, { sku: 'B', unitPrice: 10000, qty: 1 }] })
++  assert.strictEqual(o.amounts.shipping, 3000)
++  const r = createRefund(o, { number: 'R-0003', items: [{ sku: 'B', qty: 1 }] })
++  assert.strictEqual(r.pointsRecovered, 100)
++  assert.strictEqual(cancelOrder(o).pointsRecovered, o.points.earned)
++})

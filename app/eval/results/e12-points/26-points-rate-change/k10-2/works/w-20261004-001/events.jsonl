@@ -1,0 +1,20 @@
+{"ts":"2026-10-04T12:06:26+00:00","work_id":"w-20261004-001","type":"work.created","payload":{"type":"bugfix","base_branch":"main","base_commit":"b7eefd5af0263b0304ff2b96543210af81f9865d"}}
+{"ts":"2026-10-04T12:06:26+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.started","payload":{"reason":"default","session_id":"2bbfa20f-28ae-4b2e-a1e6-75f120ac7300"}}
+{"ts":"2026-10-04T12:06:27+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.first_output","payload":{"pid":11321,"ms":468}}
+{"ts":"2026-10-04T12:06:32+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.first_hook","payload":{"pid":11321,"ms":5465,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:07:44+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.bounced","payload":{"attempt":1,"max":2,"errors":[{"file":"handoff.md","message":"`rejected` 없음: 필수 필드"}]}}
+{"ts":"2026-10-04T12:07:50+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:08:28+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:08:38+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T12:08:38+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.started","payload":{"reason":"default","session_id":"8af6241c-2f1c-4db8-b910-4c205dcc8a16"}}
+{"ts":"2026-10-04T12:08:39+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.first_output","payload":{"pid":23660,"ms":919}}
+{"ts":"2026-10-04T12:08:39+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.first_hook","payload":{"pid":23660,"ms":1258,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:09:27+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:09:42+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.approved","payload":{"by":"auto"}}
+{"ts":"2026-10-04T12:09:43+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.started","payload":{"reason":"default","session_id":"5b66306e-008e-481d-9786-ec1c94a4692e"}}
+{"ts":"2026-10-04T12:09:44+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.first_output","payload":{"pid":26190,"ms":1019}}
+{"ts":"2026-10-04T12:09:44+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.first_hook","payload":{"pid":26190,"ms":1276,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:10:56+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.bounced","payload":{"attempt":1,"max":2,"errors":[{"file":"docs/knowledge/points/earn-basis.md","message":"[지식 검토: 사람의 이번 말과 어긋남] \"부분 환불 회수 = 환불 상품 금액의 적립률% 버림(`src/orders/refund.js`). 쿠폰·사용 포인트는 남은 주문에 두므로 안분하지 않고, 회수 합이 저장된 `points.earned`를 넘지 않아야 한다.\" → 쿠폰·포인트를 안분하지 않고 환불 상품 금액의 1%만 회수하면, 쿠폰·포인트를 쓴 주문(O-1042는 상품 전부 환불 시 282P 회수, 적립 237P)에서 회수 합이 적립을 넘는다. 그러면 환불해도 적립보다 많이 회수하지 않는다는 사람의 요청과 어긋난다. 회수 계산식을 적립 기준에 맞게 다시 정하고(예: 남은 적립 한도로 제한), 규칙 문장과 refund.js 후보를 함께 고쳐라."}]}}
+{"ts":"2026-10-04T12:11:20+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:11:37+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T12:11:37+00:00","work_id":"w-20261004-001","type":"work.completed","payload":{"delivery":"none"}}

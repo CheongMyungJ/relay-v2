@@ -1,0 +1,41 @@
+{
+  "paths": [
+    "docs/knowledge/points/earn-basis.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/points/earn-basis.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "기준 금액이 상품 금액에서 쿠폰 할인과 사용 포인트를 뺀 값이고 배송비는 넣지 않는다고 적혀 있다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "원 단위 미만 버림(floorPercentOf)으로 적혀 있다. 예시 237.7이 237P가 되는 것도 맞다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "POINT_RATE_PERCENT%라고만 적었지만 예시에서 1%로 계산해 적립률 1%가 드러난다."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "적립된 주문은 저장된 points.earned를 쓰고 다시 계산하지 않는다고 적혀 있다."
+      }
+    ]
+  }
+}

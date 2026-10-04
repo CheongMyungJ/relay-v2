@@ -1,0 +1,5466 @@
+{
+  "config": {
+    "startedAt": "2026-10-04T11:58:25.596Z",
+    "commit": "ce0a330",
+    "appCommits": {
+      "k10": "ce0a330"
+    },
+    "claudeVersion": "2.1.289 (Claude Code)",
+    "scenarios": [
+      "26-points-rate-change",
+      "27-points-gift-teammate"
+    ],
+    "runs": 5,
+    "arms": [
+      "k10"
+    ],
+    "agentModel": "sonnet",
+    "effort": "medium",
+    "humanModel": "sonnet",
+    "humanEffort": "medium",
+    "judgeModel": "sonnet",
+    "cliArgs": [
+      "--dangerously-skip-permissions"
+    ],
+    "vision": true,
+    "workRoot": "/tmp/relay-eval/e12-points",
+    "apps": {
+      "k10": "/tmp/relay-ref/k10/app"
+    },
+    "pairs": null
+  },
+  "runs": [
+    {
+      "scenario": "26-points-rate-change",
+      "kind": "k10",
+      "index": 1,
+      "ending": "done",
+      "summary": "적립률을 2%로 올렸다. O-1107은 486P로 나온다. 저장된 points.earned와 영수증 글자(src/format/)는 그대로다. 환불 회수 비율은 정산팀과 따로 정하기로 해서 1%로 남겼다. 변경은 relay/w-20261004-003 브랜치에 커밋했다.",
+      "error": null,
+      "wallMs": 958766,
+      "firstChangeMs": 145204,
+      "outcome": {
+        "success": true,
+        "checks": [
+          {
+            "name": "적립 기준 금액",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "적립 버림",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "주문·영수증 그대로",
+            "guard": true,
+            "pass": true
+          },
+          {
+            "name": "회수 포인트",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "환불 그대로",
+            "guard": true,
+            "pass": true
+          },
+          {
+            "name": "적립률 2%",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "저장된 포인트 그대로",
+            "guard": true,
+            "pass": true
+          }
+        ],
+        "repoTestsPass": true,
+        "filesChanged": [
+          "docs/knowledge/points/earn-rule.md",
+          "src/gift/gift-points.js",
+          "src/money.js",
+          "src/orders/refund.js",
+          "src/points/earn.js",
+          "test/earn.test.js",
+          "test/refund.test.js",
+          "README.md",
+          "src/config.js",
+          "test/gift.test.js",
+          "test/order.test.js"
+        ],
+        "linesChanged": 250,
+        "unrelated": [
+          "docs/knowledge/points/earn-rule.md",
+          "src/gift/gift-points.js"
+        ],
+        "committed": true
+      },
+      "human": {
+        "turns": 30,
+        "actions": {
+          "click": 16,
+          "fill": 3,
+          "key": 11,
+          "type": 4,
+          "wait": 9,
+          "inspect_diff": 3,
+          "done": 3
+        },
+        "actionsTotal": 37,
+        "charsTyped": 1185,
+        "invalidActions": 0,
+        "refusedDone": 0,
+        "frictionMean": 0.13333333333333333,
+        "frictionHigh": 0,
+        "costUsd": 4.8180005999999995,
+        "calls": 33,
+        "ms": 140908,
+        "waitOnlyTurns": 1,
+        "images": 24
+      },
+      "setupDialogs": [
+        {
+          "t": 27373,
+          "name": "folder_trust"
+        },
+        {
+          "t": 30025,
+          "name": "bypass_permissions_warning"
+        }
+      ],
+      "agent": {
+        "input": 144,
+        "output": 52086,
+        "cacheRead": 2904749,
+        "cacheWrite": 248295,
+        "messages": 72,
+        "sessions": 9
+      },
+      "agentSteps": [
+        {
+          "work": "w-20261004-001",
+          "seq": 1,
+          "node": "intake",
+          "contextChars": 2956,
+          "knowledgeChars": 0,
+          "tokens": {
+            "input": 14,
+            "output": 3861,
+            "cacheRead": 263697,
+            "cacheWrite": 22529,
+            "messages": 7
+          }
+        },
+        {
+          "work": "w-20261004-001",
+          "seq": 2,
+          "node": "fix",
+          "contextChars": 5352,
+          "knowledgeChars": 0,
+          "tokens": {
+            "input": 14,
+            "output": 5255,
+            "cacheRead": 268159,
+            "cacheWrite": 26155,
+            "messages": 7
+          }
+        },
+        {
+          "work": "w-20261004-001",
+          "seq": 3,
+          "node": "verify",
+          "contextChars": 8018,
+          "knowledgeChars": 0,
+          "tokens": {
+            "input": 22,
+            "output": 7619,
+            "cacheRead": 486327,
+            "cacheWrite": 33661,
+            "messages": 11
+          }
+        },
+        {
+          "work": "w-20261004-002",
+          "seq": 1,
+          "node": "intake",
+          "contextChars": 3928,
+          "knowledgeChars": 680,
+          "tokens": {
+            "input": 14,
+            "output": 4449,
+            "cacheRead": 247315,
+            "cacheWrite": 22296,
+            "messages": 7
+          }
+        },
+        {
+          "work": "w-20261004-002",
+          "seq": 2,
+          "node": "fix",
+          "contextChars": 6356,
+          "knowledgeChars": 680,
+          "tokens": {
+            "input": 18,
+            "output": 6270,
+            "cacheRead": 366184,
+            "cacheWrite": 27947,
+            "messages": 9
+          }
+        },
+        {
+          "work": "w-20261004-002",
+          "seq": 3,
+          "node": "verify",
+          "contextChars": 9235,
+          "knowledgeChars": 680,
+          "tokens": {
+            "input": 18,
+            "output": 6324,
+            "cacheRead": 389733,
+            "cacheWrite": 31690,
+            "messages": 9
+          }
+        },
+        {
+          "work": "w-20261004-003",
+          "seq": 1,
+          "node": "intake",
+          "contextChars": 4285,
+          "knowledgeChars": 1133,
+          "tokens": {
+            "input": 10,
+            "output": 3167,
+            "cacheRead": 163709,
+            "cacheWrite": 17643,
+            "messages": 5
+          }
+        },
+        {
+          "work": "w-20261004-003",
+          "seq": 2,
+          "node": "fix",
+          "contextChars": 6416,
+          "knowledgeChars": 1133,
+          "tokens": {
+            "input": 18,
+            "output": 7710,
+            "cacheRead": 373304,
+            "cacheWrite": 31451,
+            "messages": 9
+          }
+        },
+        {
+          "work": "w-20261004-003",
+          "seq": 3,
+          "node": "verify",
+          "contextChars": 9928,
+          "knowledgeChars": 1133,
+          "tokens": {
+            "input": 16,
+            "output": 7431,
+            "cacheRead": 346321,
+            "cacheWrite": 34923,
+            "messages": 8
+          }
+        }
+      ],
+      "works": [
+        {
+          "id": "w-20261004-001",
+          "dir": "/tmp/relay-eval/e12-points/26-points-rate-change-k10-1/relay-home/projects/shop-a452e8/works/w-20261004-001",
+          "status": "completed",
+          "branch": null,
+          "tasks": [
+            {
+              "seq": 1,
+              "node": "intake",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "9bed038b-d7b9-4bf6-b32e-086200c7f1de",
+              "contextChars": 2956,
+              "knowledgeChars": 0
+            },
+            {
+              "seq": 2,
+              "node": "fix",
+              "status": "approved",
+              "approved_by": "auto",
+              "session": "c993577e-d6ee-4e14-a5d5-ff1d81e91c45",
+              "contextChars": 5352,
+              "knowledgeChars": 0
+            },
+            {
+              "seq": 3,
+              "node": "verify",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "401faf06-884a-4736-a1d0-aef90e44b24b",
+              "contextChars": 8018,
+              "knowledgeChars": 0
+            }
+          ]
+        },
+        {
+          "id": "w-20261004-002",
+          "dir": "/tmp/relay-eval/e12-points/26-points-rate-change-k10-1/relay-home/projects/shop-a452e8/works/w-20261004-002",
+          "status": "completed",
+          "branch": null,
+          "tasks": [
+            {
+              "seq": 1,
+              "node": "intake",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "9dce7e93-0828-4f9d-9900-1102ba92028e",
+              "contextChars": 3928,
+              "knowledgeChars": 680
+            },
+            {
+              "seq": 2,
+              "node": "fix",
+              "status": "approved",
+              "approved_by": "auto",
+              "session": "c52cbfef-b5db-47c2-82a5-f379e5cc3b65",
+              "contextChars": 6356,
+              "knowledgeChars": 680
+            },
+            {
+              "seq": 3,
+              "node": "verify",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "7a4cb512-7c8d-4e2d-a353-30716369bc71",
+              "contextChars": 9235,
+              "knowledgeChars": 680
+            }
+          ]
+        },
+        {
+          "id": "w-20261004-003",
+          "dir": "/tmp/relay-eval/e12-points/26-points-rate-change-k10-1/relay-home/projects/shop-a452e8/works/w-20261004-003",
+          "status": "completed",
+          "branch": null,
+          "tasks": [
+            {
+              "seq": 1,
+              "node": "intake",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "1a50458b-94c5-403b-a4fc-0548053e40f3",
+              "contextChars": 4285,
+              "knowledgeChars": 1133
+            },
+            {
+              "seq": 2,
+              "node": "fix",
+              "status": "approved",
+              "approved_by": "auto",
+              "session": "3a1b0795-1089-48ce-b3d1-c4cf5269ef41",
+              "contextChars": 6416,
+              "knowledgeChars": 1133
+            },
+            {
+              "seq": 3,
+              "node": "verify",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "0a06f6da-5a95-46d1-95f9-316f8df7eeb0",
+              "contextChars": 9928,
+              "knowledgeChars": 1133
+            }
+          ]
+        }
+      ],
+      "workResults": [
+        {
+          "work": 1,
+          "ending": "done",
+          "summary": "적립 포인트를 (상품−쿠폰−사용포인트)×1%, 배송비 제외, 버림으로 수정. O-1042=237P, 선물·환불도 같은 기준, 영수증 포맷 불변, 테스트 통과, relay/w-20261004-001 브랜치에 커밋 완료.",
+          "wallMs": 282808,
+          "survey": {
+            "effort": 2,
+            "clarity": 6,
+            "control": 6,
+            "confidence": 6,
+            "trust": 6,
+            "recovery": null,
+            "reuse": 6,
+            "best": "에이전트가 추측하지 않고 계산 규정과 수정 범위를 선택지로 물어봤다. 완료조건 판정표에 근거가 하나씩 붙어 있어 O-1042=237P와 영수증 불변을 바로 확인할 수 있었다.",
+            "worst": "터미널의 선택지와 오른쪽 패널을 오가야 했다. 리뷰 단계의 지적 3건은 사소한데도 반영 여부를 직접 골라야 했다. 환불을 직접 계산해 맞춰 보지는 못하고 테스트 결과만 봤다.",
+            "comment": "전체 흐름은 매끄러웠다. 다만 부분 환불 회수가 저장된 적립값을 넘지 않게 상한을 넣었는데, 그 동작이 정산팀 계산과 맞는지는 별도로 확인하고 싶다."
+          },
+          "human": {
+            "turns": 10,
+            "actionsTotal": 12,
+            "charsTyped": 287,
+            "inspectDiff": 1,
+            "invalidActions": 0,
+            "refusedDone": 0,
+            "frictionMean": 0,
+            "frictionHigh": 0,
+            "ms": 41528,
+            "told": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "carriedTold": 0,
+            "carriedTotal": 0,
+            "toldAudit": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "carriedToldAudit": 0,
+            "auditCostUsd": 0.0069668
+          },
+          "outcome": {
+            "success": true,
+            "checks": [
+              {
+                "name": "적립 기준 금액",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "적립 버림",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "주문·영수증 그대로",
+                "guard": true,
+                "pass": true
+              }
+            ],
+            "trees": [
+              {
+                "label": "w-20261004-001",
+                "files": [
+                  "docs/knowledge/points/earn-rule.md",
+                  "src/gift/gift-points.js",
+                  "src/money.js",
+                  "src/orders/refund.js",
+                  "src/points/earn.js",
+                  "test/earn.test.js"
+                ],
+                "repoTestsPass": true
+              }
+            ]
+          },
+          "agent": {
+            "input": 50,
+            "output": 16735,
+            "cacheRead": 1018183,
+            "cacheWrite": 82345,
+            "messages": 25,
+            "sessions": 3,
+            "questions": 2
+          },
+          "contextChars": 16326,
+          "knowledgeChars": 0
+        },
+        {
+          "work": 2,
+          "ending": "done",
+          "summary": "부분 환불 회수를 '원래 적립 − 남은 상품 기준 재계산 적립(버림)'으로 고쳐 R-0311이 132P가 됨. 테스트 22개 통과, 영수증·환불 금액 불변. relay/w-20261004-002 브랜치에 커밋됨.",
+          "wallMs": 311193,
+          "survey": {
+            "effort": 2,
+            "clarity": 6,
+            "control": 6,
+            "confidence": 6,
+            "trust": 6,
+            "recovery": null,
+            "reuse": 6,
+            "best": "의도 정리 단계에서 에이전트가 내가 아는 계산식을 물어봤다. 판정표와 변경 diff로 R-0311이 132P가 되는 것을 바로 확인할 수 있었다.",
+            "worst": "에이전트의 선택지가 내 계산식과 안 맞아서 직접 길게 입력해야 했다. 앞 Work의 earn-rule.md가 아직 머지되지 않아 내 계산식과 어긋난다는 안내도 헷갈렸다.",
+            "comment": "이전 환불이 있는 경우의 계산은 가정으로 남았고 리뷰에서 반영하지 않기로 했다. 정산팀에 확인할 일이 남는다."
+          },
+          "human": {
+            "turns": 10,
+            "actionsTotal": 13,
+            "charsTyped": 587,
+            "inspectDiff": 1,
+            "invalidActions": 0,
+            "refusedDone": 0,
+            "frictionMean": 0.1,
+            "frictionHigh": 0,
+            "ms": 52365,
+            "told": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "carriedTold": 2,
+            "carriedTotal": 2,
+            "toldAudit": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "carriedToldAudit": 2,
+            "auditCostUsd": 0.0096528
+          },
+          "outcome": {
+            "success": true,
+            "checks": [
+              {
+                "name": "회수 포인트",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "환불 그대로",
+                "guard": true,
+                "pass": true
+              }
+            ],
+            "trees": [
+              {
+                "label": "w-20261004-002",
+                "files": [
+                  "docs/knowledge/points/earn-rule.md",
+                  "src/orders/refund.js",
+                  "test/refund.test.js"
+                ],
+                "repoTestsPass": true
+              }
+            ]
+          },
+          "agent": {
+            "input": 50,
+            "output": 17043,
+            "cacheRead": 1003232,
+            "cacheWrite": 81933,
+            "messages": 25,
+            "sessions": 3,
+            "questions": 2
+          },
+          "contextChars": 19519,
+          "knowledgeChars": 2040
+        },
+        {
+          "work": 3,
+          "ending": "done",
+          "summary": "적립률을 2%로 올렸다. O-1107은 486P로 나온다. 저장된 points.earned와 영수증 글자(src/format/)는 그대로다. 환불 회수 비율은 정산팀과 따로 정하기로 해서 1%로 남겼다. 변경은 relay/w-20261004-003 브랜치에 커밋했다.",
+          "wallMs": 344434,
+          "survey": {
+            "effort": 3,
+            "clarity": 6,
+            "control": 6,
+            "confidence": 6,
+            "trust": 6,
+            "recovery": null,
+            "reuse": 6,
+            "best": "에이전트가 환불 회수 규칙처럼 범위가 애매한 부분을 선택지로 먼저 물어봤다. 판정표에 완료조건마다 근거가 붙어 있어서 결과를 믿고 승인하기 쉬웠다.",
+            "worst": "정책 변경인데 버그 수정 유형으로 시작했더니 유형이 맞느냐는 확인 질문이 나왔다. 변경 보기에 앞 Work 변경이 섞여 있어서 이번 Work에서 바뀐 것만 가려 보기 번거로웠다.",
+            "comment": "적립률 2% 적용, O-1107이 486P로 나오는 것, 저장값과 영수증 글자 유지, 환불 회수 보류는 모두 요청대로 처리됐다. 테스트 통과도 판정표에서 확인했다. 다만 이번에 고친 코드에서 O-1107과 환불 예시를 내가 직접 돌려 보지는 않았고, 판정표 기록과 diff를 보고 판단했다."
+          },
+          "human": {
+            "turns": 10,
+            "actionsTotal": 12,
+            "charsTyped": 311,
+            "inspectDiff": 1,
+            "invalidActions": 0,
+            "refusedDone": 0,
+            "frictionMean": 0.3,
+            "frictionHigh": 0,
+            "ms": 47015,
+            "told": [
+              1,
+              4
+            ],
+            "carriedTold": 0,
+            "carriedTotal": 2,
+            "toldAudit": [
+              1,
+              4
+            ],
+            "carriedToldAudit": 0,
+            "auditCostUsd": 0.006556800000000001
+          },
+          "outcome": {
+            "success": true,
+            "checks": [
+              {
+                "name": "적립률 2%",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "저장된 포인트 그대로",
+                "guard": true,
+                "pass": true
+              }
+            ],
+            "trees": [
+              {
+                "label": "w-20261004-003",
+                "files": [
+                  "README.md",
+                  "docs/knowledge/points/earn-rule.md",
+                  "src/config.js",
+                  "src/gift/gift-points.js",
+                  "src/points/earn.js",
+                  "test/earn.test.js",
+                  "test/gift.test.js",
+                  "test/order.test.js"
+                ],
+                "repoTestsPass": true
+              }
+            ]
+          },
+          "agent": {
+            "input": 44,
+            "output": 18308,
+            "cacheRead": 883334,
+            "cacheWrite": 84017,
+            "messages": 22,
+            "sessions": 3,
+            "questions": 3
+          },
+          "contextChars": 20629,
+          "knowledgeChars": 3399
+        }
+      ],
+      "handoffs": [],
+      "survey": {
+        "effort": 3,
+        "clarity": 6,
+        "control": 6,
+        "confidence": 6,
+        "trust": 6,
+        "recovery": null,
+        "reuse": 6,
+        "best": "에이전트가 환불 회수 규칙처럼 범위가 애매한 부분을 선택지로 먼저 물어봤다. 판정표에 완료조건마다 근거가 붙어 있어서 결과를 믿고 승인하기 쉬웠다.",
+        "worst": "정책 변경인데 버그 수정 유형으로 시작했더니 유형이 맞느냐는 확인 질문이 나왔다. 변경 보기에 앞 Work 변경이 섞여 있어서 이번 Work에서 바뀐 것만 가려 보기 번거로웠다.",
+        "comment": "적립률 2% 적용, O-1107이 486P로 나오는 것, 저장값과 영수증 글자 유지, 환불 회수 보류는 모두 요청대로 처리됐다. 테스트 통과도 판정표에서 확인했다. 다만 이번에 고친 코드에서 O-1107과 환불 예시를 내가 직접 돌려 보지는 않았고, 판정표 기록과 diff를 보고 판단했다."
+      },
+      "options": {
+        "agentModel": "sonnet",
+        "effort": "medium",
+        "humanModel": "sonnet",
+        "cliArgs": [
+          "--dangerously-skip-permissions"
+        ]
+      },
+      "dir": "26-points-rate-change/k10-1"
+    },
+    {
+      "scenario": "26-points-rate-change",
+      "kind": "k10",
+      "index": 2,
+      "ending": "done",
+      "summary": "적립률 상수를 2%로 올렸고 O-1107은 486P로 확인했다. 저장된 적립과 영수증(src/format)은 그대로이고, 28개 테스트가 통과했다. relay/w-20261004-003에 커밋 2개로 완료했다.",
+      "error": null,
+      "wallMs": 955778,
+      "firstChangeMs": 186928,
+      "outcome": {
+        "success": true,
+        "checks": [
+          {
+            "name": "적립 기준 금액",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "적립 버림",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "주문·영수증 그대로",
+            "guard": true,
+            "pass": true
+          },
+          {
+            "name": "회수 포인트",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "환불 그대로",
+            "guard": true,
+            "pass": true
+          },
+          {
+            "name": "적립률 2%",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "저장된 포인트 그대로",
+            "guard": true,
+            "pass": true
+          }
+        ],
+        "repoTestsPass": true,
+        "filesChanged": [
+          "docs/knowledge/points/earn-basis.md",
+          "src/money.js",
+          "src/orders/refund.js",
+          "src/points/earn.js",
+          "test/order.test.js",
+          "test/refund.test.js",
+          "src/config.js",
+          "src/gift/gift-order.js",
+          "src/orders/order.js",
+          "test/earn-rate.test.js",
+          "test/gift.test.js"
+        ],
+        "linesChanged": 308,
+        "unrelated": [
+          "docs/knowledge/points/earn-basis.md",
+          "src/gift/gift-order.js"
+        ],
+        "committed": true
+      },
+      "human": {
+        "turns": 27,
+        "actions": {
+          "click": 17,
+          "fill": 3,
+          "key": 7,
+          "wait": 5,
+          "type": 2,
+          "inspect_diff": 2,
+          "done": 3
+        },
+        "actionsTotal": 31,
+        "charsTyped": 995,
+        "invalidActions": 0,
+        "refusedDone": 0,
+        "frictionMean": 0.14814814814814814,
+        "frictionHigh": 0,
+        "costUsd": 3.6712569999999998,
+        "calls": 30,
+        "ms": 127189,
+        "waitOnlyTurns": 1,
+        "images": 23
+      },
+      "setupDialogs": [
+        {
+          "t": 25671,
+          "name": "folder_trust"
+        },
+        {
+          "t": 28314,
+          "name": "bypass_permissions_warning"
+        }
+      ],
+      "agent": {
+        "input": 152,
+        "output": 58715,
+        "cacheRead": 3136208,
+        "cacheWrite": 259247,
+        "messages": 76,
+        "sessions": 9
+      },
+      "agentSteps": [
+        {
+          "work": "w-20261004-001",
+          "seq": 1,
+          "node": "intake",
+          "contextChars": 2964,
+          "knowledgeChars": 0,
+          "tokens": {
+            "input": 22,
+            "output": 6613,
+            "cacheRead": 459328,
+            "cacheWrite": 28167,
+            "messages": 11
+          }
+        },
+        {
+          "work": "w-20261004-001",
+          "seq": 2,
+          "node": "fix",
+          "contextChars": 6013,
+          "knowledgeChars": 0,
+          "tokens": {
+            "input": 16,
+            "output": 6444,
+            "cacheRead": 315061,
+            "cacheWrite": 27477,
+            "messages": 8
+          }
+        },
+        {
+          "work": "w-20261004-001",
+          "seq": 3,
+          "node": "verify",
+          "contextChars": 8212,
+          "knowledgeChars": 0,
+          "tokens": {
+            "input": 24,
+            "output": 8908,
+            "cacheRead": 559409,
+            "cacheWrite": 35617,
+            "messages": 12
+          }
+        },
+        {
+          "work": "w-20261004-002",
+          "seq": 1,
+          "node": "intake",
+          "contextChars": 4263,
+          "knowledgeChars": 1011,
+          "tokens": {
+            "input": 12,
+            "output": 3940,
+            "cacheRead": 209136,
+            "cacheWrite": 21822,
+            "messages": 6
+          }
+        },
+        {
+          "work": "w-20261004-002",
+          "seq": 2,
+          "node": "fix",
+          "contextChars": 6728,
+          "knowledgeChars": 1011,
+          "tokens": {
+            "input": 14,
+            "output": 5920,
+            "cacheRead": 266008,
+            "cacheWrite": 26509,
+            "messages": 7
+          }
+        },
+        {
+          "work": "w-20261004-002",
+          "seq": 3,
+          "node": "verify",
+          "contextChars": 9931,
+          "knowledgeChars": 1011,
+          "tokens": {
+            "input": 14,
+            "output": 5181,
+            "cacheRead": 293203,
+            "cacheWrite": 29792,
+            "messages": 7
+          }
+        },
+        {
+          "work": "w-20261004-003",
+          "seq": 1,
+          "node": "intake",
+          "contextChars": 4201,
+          "knowledgeChars": 1045,
+          "tokens": {
+            "input": 12,
+            "output": 5027,
+            "cacheRead": 210262,
+            "cacheWrite": 23608,
+            "messages": 6
+          }
+        },
+        {
+          "work": "w-20261004-003",
+          "seq": 2,
+          "node": "fix",
+          "contextChars": 6719,
+          "knowledgeChars": 1045,
+          "tokens": {
+            "input": 20,
+            "output": 9335,
+            "cacheRead": 421384,
+            "cacheWrite": 31398,
+            "messages": 10
+          }
+        },
+        {
+          "work": "w-20261004-003",
+          "seq": 3,
+          "node": "verify",
+          "contextChars": 10109,
+          "knowledgeChars": 1045,
+          "tokens": {
+            "input": 18,
+            "output": 7347,
+            "cacheRead": 402417,
+            "cacheWrite": 34857,
+            "messages": 9
+          }
+        }
+      ],
+      "works": [
+        {
+          "id": "w-20261004-001",
+          "dir": "/tmp/relay-eval/e12-points/26-points-rate-change-k10-2/relay-home/projects/shop-0a245f/works/w-20261004-001",
+          "status": "completed",
+          "branch": null,
+          "tasks": [
+            {
+              "seq": 1,
+              "node": "intake",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "2bbfa20f-28ae-4b2e-a1e6-75f120ac7300",
+              "contextChars": 2964,
+              "knowledgeChars": 0
+            },
+            {
+              "seq": 2,
+              "node": "fix",
+              "status": "approved",
+              "approved_by": "auto",
+              "session": "8af6241c-2f1c-4db8-b910-4c205dcc8a16",
+              "contextChars": 6013,
+              "knowledgeChars": 0
+            },
+            {
+              "seq": 3,
+              "node": "verify",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "5b66306e-008e-481d-9786-ec1c94a4692e",
+              "contextChars": 8212,
+              "knowledgeChars": 0
+            }
+          ]
+        },
+        {
+          "id": "w-20261004-002",
+          "dir": "/tmp/relay-eval/e12-points/26-points-rate-change-k10-2/relay-home/projects/shop-0a245f/works/w-20261004-002",
+          "status": "completed",
+          "branch": null,
+          "tasks": [
+            {
+              "seq": 1,
+              "node": "intake",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "a4499c24-6d3d-41d0-9580-a7f0c87bc4bc",
+              "contextChars": 4263,
+              "knowledgeChars": 1011
+            },
+            {
+              "seq": 2,
+              "node": "fix",
+              "status": "approved",
+              "approved_by": "auto",
+              "session": "84ba4d28-df4a-4e1b-9a7e-75364afd0748",
+              "contextChars": 6728,
+              "knowledgeChars": 1011
+            },
+            {
+              "seq": 3,
+              "node": "verify",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "7eef1f17-0f4a-4996-911f-2065e0dd1373",
+              "contextChars": 9931,
+              "knowledgeChars": 1011
+            }
+          ]
+        },
+        {
+          "id": "w-20261004-003",
+          "dir": "/tmp/relay-eval/e12-points/26-points-rate-change-k10-2/relay-home/projects/shop-0a245f/works/w-20261004-003",
+          "status": "completed",
+          "branch": null,
+          "tasks": [
+            {
+              "seq": 1,
+              "node": "intake",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "9702cf6a-e1b2-4390-9280-361cf1cc41f7",
+              "contextChars": 4201,
+              "knowledgeChars": 1045
+            },
+            {
+              "seq": 2,
+              "node": "fix",
+              "status": "approved",
+              "approved_by": "auto",
+              "session": "2950dbd0-4dc0-4a8f-baaa-d49a4df63d4e",
+              "contextChars": 6719,
+              "knowledgeChars": 1045
+            },
+            {
+              "seq": 3,
+              "node": "verify",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "21880bfa-c3c6-41cf-8521-1c3ed259215a",
+              "contextChars": 10109,
+              "knowledgeChars": 1045
+            }
+          ]
+        }
+      ],
+      "workResults": [
+        {
+          "work": 1,
+          "ending": "done",
+          "summary": "earn.js를 (상품금액-쿠폰-사용포인트)의 1% 버림으로 고쳐 O-1042가 237P로 나온다. 환불 회수도 같은 버림 기준으로 맞췄고, 저장된 points.earned와 src/format은 그대로다. npm test 28개 통과, 변경은 relay/w-20261004-001 브랜치에 커밋했다.",
+          "wallMs": 349452,
+          "survey": {
+            "effort": 2,
+            "clarity": 6,
+            "control": 6,
+            "confidence": 6,
+            "trust": 6,
+            "recovery": null,
+            "reuse": 6,
+            "best": "의도 정리 단계에서 계산 규칙과 범위를 선택지로 물어봐 줬고, 환불 회수도 범위에 넣어 달라는 요청이 바로 반영됐다. 마지막 판정표에 O-1042가 237P가 된다는 근거와 테스트 결과가 완료조건별로 정리돼 있어서 믿고 승인할 수 있었다.",
+            "worst": "터미널에 형식 검사(stop hook) 오류가 그대로 보여서 처음엔 문제가 생긴 줄 알았다. 환불 회수에서 쿠폰·포인트를 안분하지 않는 부분은 제한 조건에 기대는 방식이라, 의도 단계에서 정한 내용이 완전히 해결됐는지는 조금 애매했다.",
+            "comment": "전체적으로 흐름이 매끄러웠다. 지식 문서가 새로 생겼는데, 내가 요청하지 않은 산출물이라 무엇인지 따로 확인하지는 않았다."
+          },
+          "human": {
+            "turns": 11,
+            "actionsTotal": 12,
+            "charsTyped": 348,
+            "inspectDiff": 1,
+            "invalidActions": 0,
+            "refusedDone": 0,
+            "frictionMean": 0.09090909090909091,
+            "frictionHigh": 0,
+            "ms": 39924,
+            "told": [
+              2,
+              3
+            ],
+            "carriedTold": 0,
+            "carriedTotal": 0,
+            "toldAudit": [
+              1,
+              4
+            ],
+            "carriedToldAudit": 0,
+            "auditCostUsd": 0.0064128
+          },
+          "outcome": {
+            "success": true,
+            "checks": [
+              {
+                "name": "적립 기준 금액",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "적립 버림",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "주문·영수증 그대로",
+                "guard": true,
+                "pass": true
+              }
+            ],
+            "trees": [
+              {
+                "label": "w-20261004-001",
+                "files": [
+                  "docs/knowledge/points/earn-basis.md",
+                  "src/money.js",
+                  "src/orders/refund.js",
+                  "src/points/earn.js",
+                  "test/order.test.js",
+                  "test/refund.test.js"
+                ],
+                "repoTestsPass": true
+              }
+            ]
+          },
+          "agent": {
+            "input": 62,
+            "output": 21965,
+            "cacheRead": 1333798,
+            "cacheWrite": 91261,
+            "messages": 31,
+            "sessions": 3,
+            "questions": 2
+          },
+          "contextChars": 17189,
+          "knowledgeChars": 0
+        },
+        {
+          "work": 2,
+          "ending": "done",
+          "summary": "부분 환불 회수를 '저장된 적립 − 남은 상품으로 다시 계산한 적립(버림)'으로 고쳤다. R-0311은 131P에서 132P가 됐다. 환불 금액 13,130원과 src/format/은 그대로다. 테스트는 22개 통과했고, 변경은 relay/w-20261004-002 브랜치에 커밋됐다.",
+          "wallMs": 249906,
+          "survey": {
+            "effort": 2,
+            "clarity": 6,
+            "control": 6,
+            "confidence": 6,
+            "trust": 6,
+            "recovery": null,
+            "reuse": 6,
+            "best": "의도 정리 단계에서 에이전트가 기대값(132P)과 계산 규칙을 먼저 물어서 내가 아는 내용을 정확히 전달할 수 있었다. 판정표가 완료조건별로 근거를 보여 줘서 승인하기 쉬웠다.",
+            "worst": "화면 터미널에 stop hook 형식 오류 같은 내부 메시지가 그대로 보여서 문제가 있는 건지 잠깐 헷갈렸다. 처음에는 이전 일의 완료 화면이 떠 있어서 새 Work를 찾는 데 잠깐 걸렸다.",
+            "comment": "R-0311이 132P가 되는 것은 판정표와 diff로 확인했다. 환불 금액과 영수증 코드는 그대로였다. 다만 실제 고객센터·정산팀 대조까지 내가 직접 돌려 본 것은 아니다. 판정표에 적힌 CLI 실행 결과를 믿었다."
+          },
+          "human": {
+            "turns": 7,
+            "actionsTotal": 9,
+            "charsTyped": 449,
+            "inspectDiff": 1,
+            "invalidActions": 0,
+            "refusedDone": 0,
+            "frictionMean": 0,
+            "frictionHigh": 0,
+            "ms": 44840,
+            "told": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "carriedTold": 2,
+            "carriedTotal": 2,
+            "toldAudit": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "carriedToldAudit": 2,
+            "auditCostUsd": 0.008984800000000001
+          },
+          "outcome": {
+            "success": true,
+            "checks": [
+              {
+                "name": "회수 포인트",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "환불 그대로",
+                "guard": true,
+                "pass": true
+              }
+            ],
+            "trees": [
+              {
+                "label": "w-20261004-002",
+                "files": [
+                  "docs/knowledge/points/earn-basis.md",
+                  "src/money.js",
+                  "src/orders/refund.js",
+                  "test/refund.test.js"
+                ],
+                "repoTestsPass": true
+              }
+            ]
+          },
+          "agent": {
+            "input": 40,
+            "output": 15041,
+            "cacheRead": 768347,
+            "cacheWrite": 78123,
+            "messages": 20,
+            "sessions": 3,
+            "questions": 1
+          },
+          "contextChars": 20922,
+          "knowledgeChars": 3033
+        },
+        {
+          "work": 3,
+          "ending": "done",
+          "summary": "적립률 상수를 2%로 올렸고 O-1107은 486P로 확인했다. 저장된 적립과 영수증(src/format)은 그대로이고, 28개 테스트가 통과했다. relay/w-20261004-003에 커밋 2개로 완료했다.",
+          "wallMs": 338643,
+          "survey": {
+            "effort": 3,
+            "clarity": 6,
+            "control": 5,
+            "confidence": 6,
+            "trust": 6,
+            "recovery": null,
+            "reuse": 6,
+            "best": "판정표에 완료조건마다 근거가 붙어 있었다. 전체 변경 탭에서 코드 diff와 테스트 변경을 한 번에 볼 수 있어서 승인하기 쉬웠다.",
+            "worst": "시작할 때 새 Work를 누르면 앞 일의 완료 화면이 그대로 떠 있어서 잠깐 헷갈렸다. 선물하기 적립률처럼 내가 모르는 질문이 나오면 \"모름\"으로 넘기는 것 말고는 할 수 있는 게 없었다.",
+            "comment": "요청은 비율만 바꾸는 일이었다. 그런데 에이전트가 적립 기준 계산과 환불 회수 코드까지 함께 바꿨다. 앞 Work에서 고친 내용이 이 브랜치에는 없어서 생긴 일로 보인다. 나중에 머지할 때 같은 파일이 겹칠 수 있다는 위험이 산출물에 적혀 있었다. 이번 범위 밖인 환불 회수의 새 비율은 따로 정하지 않고, 옛 주문은 1%로 두는 방식으로 처리됐다. 내 선호대로 고친 뒤 O-1107이 486P인 것은 확인했다. 환불 쪽은 정산팀 계산과 직접 대조하지 못했다."
+          },
+          "human": {
+            "turns": 9,
+            "actionsTotal": 10,
+            "charsTyped": 198,
+            "inspectDiff": 0,
+            "invalidActions": 0,
+            "refusedDone": 0,
+            "frictionMean": 0.3333333333333333,
+            "frictionHigh": 0,
+            "ms": 42425,
+            "told": [
+              1
+            ],
+            "carriedTold": 0,
+            "carriedTotal": 2,
+            "toldAudit": [
+              1
+            ],
+            "carriedToldAudit": 0,
+            "auditCostUsd": 0.0055668
+          },
+          "outcome": {
+            "success": true,
+            "checks": [
+              {
+                "name": "적립률 2%",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "저장된 포인트 그대로",
+                "guard": true,
+                "pass": true
+              }
+            ],
+            "trees": [
+              {
+                "label": "w-20261004-003",
+                "files": [
+                  "docs/knowledge/points/earn-basis.md",
+                  "src/config.js",
+                  "src/gift/gift-order.js",
+                  "src/money.js",
+                  "src/orders/order.js",
+                  "src/orders/refund.js",
+                  "src/points/earn.js",
+                  "test/earn-rate.test.js",
+                  "test/gift.test.js",
+                  "test/order.test.js",
+                  "test/refund.test.js"
+                ],
+                "repoTestsPass": true
+              }
+            ]
+          },
+          "agent": {
+            "input": 50,
+            "output": 21709,
+            "cacheRead": 1034063,
+            "cacheWrite": 89863,
+            "messages": 25,
+            "sessions": 3,
+            "questions": 2
+          },
+          "contextChars": 21029,
+          "knowledgeChars": 3135
+        }
+      ],
+      "handoffs": [],
+      "survey": {
+        "effort": 3,
+        "clarity": 6,
+        "control": 5,
+        "confidence": 6,
+        "trust": 6,
+        "recovery": null,
+        "reuse": 6,
+        "best": "판정표에 완료조건마다 근거가 붙어 있었다. 전체 변경 탭에서 코드 diff와 테스트 변경을 한 번에 볼 수 있어서 승인하기 쉬웠다.",
+        "worst": "시작할 때 새 Work를 누르면 앞 일의 완료 화면이 그대로 떠 있어서 잠깐 헷갈렸다. 선물하기 적립률처럼 내가 모르는 질문이 나오면 \"모름\"으로 넘기는 것 말고는 할 수 있는 게 없었다.",
+        "comment": "요청은 비율만 바꾸는 일이었다. 그런데 에이전트가 적립 기준 계산과 환불 회수 코드까지 함께 바꿨다. 앞 Work에서 고친 내용이 이 브랜치에는 없어서 생긴 일로 보인다. 나중에 머지할 때 같은 파일이 겹칠 수 있다는 위험이 산출물에 적혀 있었다. 이번 범위 밖인 환불 회수의 새 비율은 따로 정하지 않고, 옛 주문은 1%로 두는 방식으로 처리됐다. 내 선호대로 고친 뒤 O-1107이 486P인 것은 확인했다. 환불 쪽은 정산팀 계산과 직접 대조하지 못했다."
+      },
+      "options": {
+        "agentModel": "sonnet",
+        "effort": "medium",
+        "humanModel": "sonnet",
+        "cliArgs": [
+          "--dangerously-skip-permissions"
+        ]
+      },
+      "dir": "26-points-rate-change/k10-2"
+    },
+    {
+      "scenario": "26-points-rate-change",
+      "kind": "k10",
+      "index": 3,
+      "ending": "done",
+      "summary": "적립률을 2%로 올리고, 적립 기준을 배송비 제외·버림으로 맞췄다. 예시 주문 O-1107은 486P로 나온다. 환불 회수는 1%로 그대로 두었고, 저장된 earned 값과 src/format/은 바뀌지 않았다. npm test 22개가 통과했고 relay/w-20261004-003 브랜치에 커밋했다.",
+      "error": null,
+      "wallMs": 1327247,
+      "firstChangeMs": 144238,
+      "outcome": {
+        "success": true,
+        "checks": [
+          {
+            "name": "적립 기준 금액",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "적립 버림",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "주문·영수증 그대로",
+            "guard": true,
+            "pass": true
+          },
+          {
+            "name": "회수 포인트",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "환불 그대로",
+            "guard": true,
+            "pass": true
+          },
+          {
+            "name": "적립률 2%",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "저장된 포인트 그대로",
+            "guard": true,
+            "pass": true
+          }
+        ],
+        "repoTestsPass": true,
+        "filesChanged": [
+          "docs/knowledge/points/earn-base.md",
+          "docs/knowledge/points/partial-refund-recovery.md",
+          "src/gift/gift-points.js",
+          "src/money.js",
+          "src/orders/refund.js",
+          "src/points/earn.js",
+          "test/earn.test.js",
+          "test/refund-points.test.js",
+          "README.md",
+          "src/config.js",
+          "test/earn-rate.test.js",
+          "test/gift.test.js",
+          "test/order.test.js"
+        ],
+        "linesChanged": 368,
+        "unrelated": [
+          "docs/knowledge/points/earn-base.md",
+          "docs/knowledge/points/partial-refund-recovery.md",
+          "src/gift/gift-points.js"
+        ],
+        "committed": true
+      },
+      "human": {
+        "turns": 30,
+        "actions": {
+          "click": 17,
+          "fill": 3,
+          "key": 10,
+          "inspect_diff": 2,
+          "done": 3,
+          "type": 3
+        },
+        "actionsTotal": 35,
+        "charsTyped": 1146,
+        "invalidActions": 0,
+        "refusedDone": 0,
+        "frictionMean": 0.23333333333333334,
+        "frictionHigh": 0,
+        "costUsd": 4.4628774,
+        "calls": 33,
+        "ms": 170587,
+        "waitOnlyTurns": 0,
+        "images": 25
+      },
+      "setupDialogs": [
+        {
+          "t": 35123,
+          "name": "folder_trust"
+        },
+        {
+          "t": 37757,
+          "name": "bypass_permissions_warning"
+        }
+      ],
+      "agent": {
+        "input": 168,
+        "output": 66355,
+        "cacheRead": 3717473,
+        "cacheWrite": 283127,
+        "messages": 84,
+        "sessions": 9
+      },
+      "agentSteps": [
+        {
+          "work": "w-20261004-001",
+          "seq": 1,
+          "node": "intake",
+          "contextChars": 2877,
+          "knowledgeChars": 0,
+          "tokens": {
+            "input": 12,
+            "output": 3055,
+            "cacheRead": 219289,
+            "cacheWrite": 18594,
+            "messages": 6
+          }
+        },
+        {
+          "work": "w-20261004-001",
+          "seq": 2,
+          "node": "fix",
+          "contextChars": 4879,
+          "knowledgeChars": 0,
+          "tokens": {
+            "input": 22,
+            "output": 8510,
+            "cacheRead": 478463,
+            "cacheWrite": 33575,
+            "messages": 11
+          }
+        },
+        {
+          "work": "w-20261004-001",
+          "seq": 3,
+          "node": "verify",
+          "contextChars": 8062,
+          "knowledgeChars": 0,
+          "tokens": {
+            "input": 14,
+            "output": 6191,
+            "cacheRead": 287127,
+            "cacheWrite": 31844,
+            "messages": 7
+          }
+        },
+        {
+          "work": "w-20261004-002",
+          "seq": 1,
+          "node": "intake",
+          "contextChars": 4320,
+          "knowledgeChars": 1052,
+          "tokens": {
+            "input": 10,
+            "output": 3085,
+            "cacheRead": 165960,
+            "cacheWrite": 18883,
+            "messages": 5
+          }
+        },
+        {
+          "work": "w-20261004-002",
+          "seq": 2,
+          "node": "fix",
+          "contextChars": 6386,
+          "knowledgeChars": 1052,
+          "tokens": {
+            "input": 14,
+            "output": 5517,
+            "cacheRead": 264056,
+            "cacheWrite": 24956,
+            "messages": 7
+          }
+        },
+        {
+          "work": "w-20261004-002",
+          "seq": 3,
+          "node": "verify",
+          "contextChars": 9148,
+          "knowledgeChars": 1052,
+          "tokens": {
+            "input": 36,
+            "output": 15508,
+            "cacheRead": 925806,
+            "cacheWrite": 50940,
+            "messages": 18
+          }
+        },
+        {
+          "work": "w-20261004-003",
+          "seq": 1,
+          "node": "intake",
+          "contextChars": 4734,
+          "knowledgeChars": 1559,
+          "tokens": {
+            "input": 12,
+            "output": 3512,
+            "cacheRead": 205414,
+            "cacheWrite": 19871,
+            "messages": 6
+          }
+        },
+        {
+          "work": "w-20261004-003",
+          "seq": 2,
+          "node": "fix",
+          "contextChars": 7161,
+          "knowledgeChars": 1559,
+          "tokens": {
+            "input": 22,
+            "output": 8561,
+            "cacheRead": 484141,
+            "cacheWrite": 34287,
+            "messages": 11
+          }
+        },
+        {
+          "work": "w-20261004-003",
+          "seq": 3,
+          "node": "verify",
+          "contextChars": 10988,
+          "knowledgeChars": 1559,
+          "tokens": {
+            "input": 26,
+            "output": 12416,
+            "cacheRead": 687217,
+            "cacheWrite": 50177,
+            "messages": 13
+          }
+        }
+      ],
+      "works": [
+        {
+          "id": "w-20261004-001",
+          "dir": "/tmp/relay-eval/e12-points/26-points-rate-change-k10-3/relay-home/projects/shop-4713ec/works/w-20261004-001",
+          "status": "completed",
+          "branch": null,
+          "tasks": [
+            {
+              "seq": 1,
+              "node": "intake",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "c0ccc7cf-1cc7-4c99-b189-08d4d618a6a6",
+              "contextChars": 2877,
+              "knowledgeChars": 0
+            },
+            {
+              "seq": 2,
+              "node": "fix",
+              "status": "approved",
+              "approved_by": "auto",
+              "session": "ecc94487-de36-4eef-b6ac-74a761d58a83",
+              "contextChars": 4879,
+              "knowledgeChars": 0
+            },
+            {
+              "seq": 3,
+              "node": "verify",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "51af3b20-cdc7-4edc-9d9e-e877c5b97ece",
+              "contextChars": 8062,
+              "knowledgeChars": 0
+            }
+          ]
+        },
+        {
+          "id": "w-20261004-002",
+          "dir": "/tmp/relay-eval/e12-points/26-points-rate-change-k10-3/relay-home/projects/shop-4713ec/works/w-20261004-002",
+          "status": "completed",
+          "branch": null,
+          "tasks": [
+            {
+              "seq": 1,
+              "node": "intake",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "3f7709df-7f62-4388-b0fd-84ccad397297",
+              "contextChars": 4320,
+              "knowledgeChars": 1052
+            },
+            {
+              "seq": 2,
+              "node": "fix",
+              "status": "approved",
+              "approved_by": "auto",
+              "session": "1857b9e2-2690-428a-a96f-32e860be0d33",
+              "contextChars": 6386,
+              "knowledgeChars": 1052
+            },
+            {
+              "seq": 3,
+              "node": "verify",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "f0a72170-582b-425f-9cbf-f1d8d6e070ff",
+              "contextChars": 9148,
+              "knowledgeChars": 1052
+            }
+          ]
+        },
+        {
+          "id": "w-20261004-003",
+          "dir": "/tmp/relay-eval/e12-points/26-points-rate-change-k10-3/relay-home/projects/shop-4713ec/works/w-20261004-003",
+          "status": "completed",
+          "branch": null,
+          "tasks": [
+            {
+              "seq": 1,
+              "node": "intake",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "d19feb9c-6489-4c24-a150-44b952aa367a",
+              "contextChars": 4734,
+              "knowledgeChars": 1559
+            },
+            {
+              "seq": 2,
+              "node": "fix",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "7d097ff3-ea26-4adb-88cd-9512a0e0ecd6",
+              "contextChars": 7161,
+              "knowledgeChars": 1559
+            },
+            {
+              "seq": 3,
+              "node": "verify",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "b4410c24-cc04-4674-b043-450ebc64d1a3",
+              "contextChars": 10988,
+              "knowledgeChars": 1559
+            }
+          ]
+        }
+      ],
+      "workResults": [
+        {
+          "work": 1,
+          "ending": "done",
+          "summary": "적립 기준을 (상품−쿠폰−사용포인트)의 1% 원 단위 버림으로 고쳐 O-1042가 237P로 나온다. 선물 적립과 환불 회수도 같은 기준으로 맞췄다. 테스트 27개가 통과했고 relay/w-20261004-001 브랜치에 커밋했다.",
+          "wallMs": 302616,
+          "survey": {
+            "effort": 2,
+            "clarity": 6,
+            "control": 5,
+            "confidence": 6,
+            "trust": 6,
+            "recovery": null,
+            "reuse": 6,
+            "best": "의도 정리 단계에서 에이전트가 기준 금액과 범위(선물·환불)를 선택지로 물어봐 줘서 방향을 쉽게 잡았다. 완료조건별 판정표에 근거가 붙어 있어 O-1042가 237P가 된 것을 확인하기 쉬웠다.",
+            "worst": "원인 분석과 수정 단계가 자동 승인으로 지나가서 코드를 바로 보려면 inspect_diff를 따로 써야 했다. 완료 화면에서 과거 주문 환불 위험이 눈에 잘 띄지 않았다.",
+            "comment": "전체적으로 매끄러웠다. 다만 환불 쪽 변경(남은 상품 금액 기준 차이 계산)은 직접 값을 돌려 보지 않았고 테스트 결과를 믿었다."
+          },
+          "human": {
+            "turns": 10,
+            "actionsTotal": 11,
+            "charsTyped": 134,
+            "inspectDiff": 1,
+            "invalidActions": 0,
+            "refusedDone": 0,
+            "frictionMean": 0,
+            "frictionHigh": 0,
+            "ms": 51715,
+            "told": [
+              1,
+              2,
+              3
+            ],
+            "carriedTold": 0,
+            "carriedTotal": 0,
+            "toldAudit": [
+              1
+            ],
+            "carriedToldAudit": 0,
+            "auditCostUsd": 0.0047108
+          },
+          "outcome": {
+            "success": true,
+            "checks": [
+              {
+                "name": "적립 기준 금액",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "적립 버림",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "주문·영수증 그대로",
+                "guard": true,
+                "pass": true
+              }
+            ],
+            "trees": [
+              {
+                "label": "w-20261004-001",
+                "files": [
+                  "docs/knowledge/points/earn-base.md",
+                  "docs/knowledge/points/partial-refund-recovery.md",
+                  "src/gift/gift-points.js",
+                  "src/money.js",
+                  "src/orders/refund.js",
+                  "src/points/earn.js",
+                  "test/earn.test.js"
+                ],
+                "repoTestsPass": true
+              }
+            ]
+          },
+          "agent": {
+            "input": 48,
+            "output": 17756,
+            "cacheRead": 984879,
+            "cacheWrite": 84013,
+            "messages": 24,
+            "sessions": 3,
+            "questions": 2
+          },
+          "contextChars": 15818,
+          "knowledgeChars": 0
+        },
+        {
+          "work": 2,
+          "ending": "done",
+          "summary": "부분 환불 회수 포인트를 '저장된 earned − 남은 상품 재계산 적립(1% 버림, 배송비 제외)'으로 고쳤다. R-0311은 131P에서 132P가 됐고, 환불 금액 13,130원과 영수증, cancelOrder 결과는 그대로다. npm test가 통과했고 relay/w-20261004-002 브랜치에 커밋됐다. 처음 에이전트는 환불 전후를 재계산하는 방식이었는데, 내가 정산 규정을 알려 주고 나서 저장값 기준으로 바뀌었다.",
+          "wallMs": 502461,
+          "survey": {
+            "effort": 3,
+            "clarity": 5,
+            "control": 5,
+            "confidence": 6,
+            "trust": 5,
+            "recovery": null,
+            "reuse": 6,
+            "best": "판정표에 완료조건별 근거(R-0311 131→132P, 환불 금액과 cancelOrder 그대로, 테스트 통과)가 정리돼 있어서 결과를 믿고 승인하기 쉬웠다. 에이전트에게 규정과 다른 점을 지적하니 바로 고쳐 커밋해 줬다.",
+            "worst": "의도 정리 단계에서 정산 규정을 에이전트가 묻지 않아서, 처음에는 환불 전후 재계산 방식으로 굳어졌다. 02 단계가 자동 승인으로 지나가서, 틀린 방향임을 03 단계 리뷰에서야 알았다.",
+            "comment": "02 단계가 자동 승인이라 diff를 따로 열어 봐야 했다. 03 단계에서 방향이 틀렸다는 걸 짚어야 했다. 에이전트가 정산 규정을 의도 정리에서 먼저 확인했으면 더 매끄러웠겠다. 터미널에서 선택지 대신 '이야기하기'를 고르면 질문이 일반 텍스트로 바뀌는 점이 조금 어색했다. 사람이 말로 바꾼 규칙을 의도 불일치로 표시해 주는 점은 좋았다."
+          },
+          "human": {
+            "turns": 10,
+            "actionsTotal": 12,
+            "charsTyped": 726,
+            "inspectDiff": 1,
+            "invalidActions": 0,
+            "refusedDone": 0,
+            "frictionMean": 0.5,
+            "frictionHigh": 0,
+            "ms": 70984,
+            "told": [
+              2,
+              5
+            ],
+            "carriedTold": 0,
+            "carriedTotal": 2,
+            "toldAudit": [
+              1,
+              2,
+              5
+            ],
+            "carriedToldAudit": 0,
+            "auditCostUsd": 0.0092528
+          },
+          "outcome": {
+            "success": true,
+            "checks": [
+              {
+                "name": "회수 포인트",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "환불 그대로",
+                "guard": true,
+                "pass": true
+              }
+            ],
+            "trees": [
+              {
+                "label": "w-20261004-002",
+                "files": [
+                  "docs/knowledge/points/partial-refund-recovery.md",
+                  "src/orders/refund.js",
+                  "src/points/earn.js",
+                  "test/refund-points.test.js"
+                ],
+                "repoTestsPass": true
+              }
+            ]
+          },
+          "agent": {
+            "input": 60,
+            "output": 24110,
+            "cacheRead": 1355822,
+            "cacheWrite": 94779,
+            "messages": 30,
+            "sessions": 3,
+            "questions": 2
+          },
+          "contextChars": 19854,
+          "knowledgeChars": 3156
+        },
+        {
+          "work": 3,
+          "ending": "done",
+          "summary": "적립률을 2%로 올리고, 적립 기준을 배송비 제외·버림으로 맞췄다. 예시 주문 O-1107은 486P로 나온다. 환불 회수는 1%로 그대로 두었고, 저장된 earned 값과 src/format/은 바뀌지 않았다. npm test 22개가 통과했고 relay/w-20261004-003 브랜치에 커밋했다.",
+          "wallMs": 506231,
+          "survey": {
+            "effort": 3,
+            "clarity": 6,
+            "control": 6,
+            "confidence": 6,
+            "trust": 6,
+            "recovery": null,
+            "reuse": 6,
+            "best": "에이전트가 환불 회수 포인트를 새 비율로 계산할지 물었을 때 범위 밖이라고 답했더니, 그 결정이 산출물과 diff에 그대로 반영됐다. 판정표에 O-1107이 486P라는 근거도 있었다.",
+            "worst": "정책 변경인데 버그 유형이 맞는지 되묻는 질문이 처음에 나와서 잠깐 멈칫했다. 환불 회수 질문은 \"범위 밖\" 선택지가 없어 직접 글로 답해야 했다.",
+            "comment": "전체 흐름은 무난했다. 단계마다 요약과 diff를 볼 수 있어서 승인하기 편했다."
+          },
+          "human": {
+            "turns": 10,
+            "actionsTotal": 12,
+            "charsTyped": 286,
+            "inspectDiff": 0,
+            "invalidActions": 0,
+            "refusedDone": 0,
+            "frictionMean": 0.2,
+            "frictionHigh": 0,
+            "ms": 47888,
+            "told": [
+              1,
+              4
+            ],
+            "carriedTold": 0,
+            "carriedTotal": 2,
+            "toldAudit": [
+              1,
+              4
+            ],
+            "carriedToldAudit": 0,
+            "auditCostUsd": 0.006974800000000001
+          },
+          "outcome": {
+            "success": true,
+            "checks": [
+              {
+                "name": "적립률 2%",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "저장된 포인트 그대로",
+                "guard": true,
+                "pass": true
+              }
+            ],
+            "trees": [
+              {
+                "label": "w-20261004-003",
+                "files": [
+                  "README.md",
+                  "docs/knowledge/points/earn-base.md",
+                  "docs/knowledge/points/partial-refund-recovery.md",
+                  "src/config.js",
+                  "src/gift/gift-points.js",
+                  "src/orders/refund.js",
+                  "src/points/earn.js",
+                  "test/earn-rate.test.js",
+                  "test/gift.test.js",
+                  "test/order.test.js"
+                ],
+                "repoTestsPass": true
+              }
+            ]
+          },
+          "agent": {
+            "input": 60,
+            "output": 24489,
+            "cacheRead": 1376772,
+            "cacheWrite": 104335,
+            "messages": 30,
+            "sessions": 3,
+            "questions": 3
+          },
+          "contextChars": 22883,
+          "knowledgeChars": 4677
+        }
+      ],
+      "handoffs": [],
+      "survey": {
+        "effort": 3,
+        "clarity": 6,
+        "control": 6,
+        "confidence": 6,
+        "trust": 6,
+        "recovery": null,
+        "reuse": 6,
+        "best": "에이전트가 환불 회수 포인트를 새 비율로 계산할지 물었을 때 범위 밖이라고 답했더니, 그 결정이 산출물과 diff에 그대로 반영됐다. 판정표에 O-1107이 486P라는 근거도 있었다.",
+        "worst": "정책 변경인데 버그 유형이 맞는지 되묻는 질문이 처음에 나와서 잠깐 멈칫했다. 환불 회수 질문은 \"범위 밖\" 선택지가 없어 직접 글로 답해야 했다.",
+        "comment": "전체 흐름은 무난했다. 단계마다 요약과 diff를 볼 수 있어서 승인하기 편했다."
+      },
+      "options": {
+        "agentModel": "sonnet",
+        "effort": "medium",
+        "humanModel": "sonnet",
+        "cliArgs": [
+          "--dangerously-skip-permissions"
+        ]
+      },
+      "dir": "26-points-rate-change/k10-3"
+    },
+    {
+      "scenario": "26-points-rate-change",
+      "kind": "k10",
+      "index": 4,
+      "ending": "done",
+      "summary": "적립률을 2%로 올렸다(EARN_RATE_PERCENT=2). 적립 대상 금액은 상품 금액에서 쿠폰과 사용 포인트를 뺀 값이고 배송비는 제외하며 1P 미만은 버린다. O-1107은 486P가 나온다. 환불 회수는 REFUND_RATE_PERCENT=1로 분리해 그대로 두었고, 저장된 값과 src/format/은 건드리지 않았다. npm test는 23개 통과했고, 변경은 relay/w-20261004-003 브랜치에 커밋됐다.",
+      "error": null,
+      "wallMs": 915438,
+      "firstChangeMs": 138085,
+      "outcome": {
+        "success": true,
+        "checks": [
+          {
+            "name": "적립 기준 금액",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "적립 버림",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "주문·영수증 그대로",
+            "guard": true,
+            "pass": true
+          },
+          {
+            "name": "회수 포인트",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "환불 그대로",
+            "guard": true,
+            "pass": true
+          },
+          {
+            "name": "적립률 2%",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "저장된 포인트 그대로",
+            "guard": true,
+            "pass": true
+          }
+        ],
+        "repoTestsPass": true,
+        "filesChanged": [
+          "docs/knowledge/points/earn-rule.md",
+          "src/gift/gift-points.js",
+          "src/money.js",
+          "src/orders/refund.js",
+          "src/points/earn.js",
+          "test/points-earn.test.js",
+          "test/refund.test.js",
+          "README.md",
+          "src/config.js",
+          "test/gift.test.js",
+          "test/order.test.js"
+        ],
+        "linesChanged": 250,
+        "unrelated": [
+          "docs/knowledge/points/earn-rule.md",
+          "src/gift/gift-points.js"
+        ],
+        "committed": true
+      },
+      "human": {
+        "turns": 29,
+        "actions": {
+          "click": 17,
+          "fill": 3,
+          "key": 12,
+          "type": 3,
+          "wait": 9,
+          "inspect_diff": 1,
+          "done": 3
+        },
+        "actionsTotal": 36,
+        "charsTyped": 1173,
+        "invalidActions": 0,
+        "refusedDone": 0,
+        "frictionMean": 0.06896551724137931,
+        "frictionHigh": 0,
+        "costUsd": 3.8055339999999998,
+        "calls": 32,
+        "ms": 145558,
+        "waitOnlyTurns": 1,
+        "images": 24
+      },
+      "setupDialogs": [
+        {
+          "t": 25562,
+          "name": "folder_trust"
+        },
+        {
+          "t": 28216,
+          "name": "bypass_permissions_warning"
+        }
+      ],
+      "agent": {
+        "input": 138,
+        "output": 50541,
+        "cacheRead": 2748266,
+        "cacheWrite": 244043,
+        "messages": 69,
+        "sessions": 9
+      },
+      "agentSteps": [
+        {
+          "work": "w-20261004-001",
+          "seq": 1,
+          "node": "intake",
+          "contextChars": 2894,
+          "knowledgeChars": 0,
+          "tokens": {
+            "input": 14,
+            "output": 3860,
+            "cacheRead": 262231,
+            "cacheWrite": 20429,
+            "messages": 7
+          }
+        },
+        {
+          "work": "w-20261004-001",
+          "seq": 2,
+          "node": "fix",
+          "contextChars": 5415,
+          "knowledgeChars": 0,
+          "tokens": {
+            "input": 14,
+            "output": 6238,
+            "cacheRead": 271199,
+            "cacheWrite": 28258,
+            "messages": 7
+          }
+        },
+        {
+          "work": "w-20261004-001",
+          "seq": 3,
+          "node": "verify",
+          "contextChars": 8531,
+          "knowledgeChars": 0,
+          "tokens": {
+            "input": 16,
+            "output": 6812,
+            "cacheRead": 336737,
+            "cacheWrite": 32887,
+            "messages": 8
+          }
+        },
+        {
+          "work": "w-20261004-002",
+          "seq": 1,
+          "node": "intake",
+          "contextChars": 3881,
+          "knowledgeChars": 629,
+          "tokens": {
+            "input": 12,
+            "output": 3925,
+            "cacheRead": 206129,
+            "cacheWrite": 21265,
+            "messages": 6
+          }
+        },
+        {
+          "work": "w-20261004-002",
+          "seq": 2,
+          "node": "fix",
+          "contextChars": 6384,
+          "knowledgeChars": 629,
+          "tokens": {
+            "input": 12,
+            "output": 3682,
+            "cacheRead": 216749,
+            "cacheWrite": 21931,
+            "messages": 6
+          }
+        },
+        {
+          "work": "w-20261004-002",
+          "seq": 3,
+          "node": "verify",
+          "contextChars": 8847,
+          "knowledgeChars": 629,
+          "tokens": {
+            "input": 12,
+            "output": 5706,
+            "cacheRead": 232712,
+            "cacheWrite": 29063,
+            "messages": 6
+          }
+        },
+        {
+          "work": "w-20261004-003",
+          "seq": 1,
+          "node": "intake",
+          "contextChars": 4083,
+          "knowledgeChars": 928,
+          "tokens": {
+            "input": 16,
+            "output": 5924,
+            "cacheRead": 291325,
+            "cacheWrite": 24100,
+            "messages": 8
+          }
+        },
+        {
+          "work": "w-20261004-003",
+          "seq": 2,
+          "node": "fix",
+          "contextChars": 6855,
+          "knowledgeChars": 928,
+          "tokens": {
+            "input": 22,
+            "output": 6943,
+            "cacheRead": 475974,
+            "cacheWrite": 30963,
+            "messages": 11
+          }
+        },
+        {
+          "work": "w-20261004-003",
+          "seq": 3,
+          "node": "verify",
+          "contextChars": 9602,
+          "knowledgeChars": 928,
+          "tokens": {
+            "input": 20,
+            "output": 7451,
+            "cacheRead": 455210,
+            "cacheWrite": 35147,
+            "messages": 10
+          }
+        }
+      ],
+      "works": [
+        {
+          "id": "w-20261004-001",
+          "dir": "/tmp/relay-eval/e12-points/26-points-rate-change-k10-4/relay-home/projects/shop-e50e06/works/w-20261004-001",
+          "status": "completed",
+          "branch": null,
+          "tasks": [
+            {
+              "seq": 1,
+              "node": "intake",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "00d4b491-8d6a-43c7-8443-fb6b3d8b3fe4",
+              "contextChars": 2894,
+              "knowledgeChars": 0
+            },
+            {
+              "seq": 2,
+              "node": "fix",
+              "status": "approved",
+              "approved_by": "auto",
+              "session": "73ba6ebe-eb11-4ef6-9e78-c23704a174f5",
+              "contextChars": 5415,
+              "knowledgeChars": 0
+            },
+            {
+              "seq": 3,
+              "node": "verify",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "f98194d4-75fb-435e-aa79-78d4d22a3e6e",
+              "contextChars": 8531,
+              "knowledgeChars": 0
+            }
+          ]
+        },
+        {
+          "id": "w-20261004-002",
+          "dir": "/tmp/relay-eval/e12-points/26-points-rate-change-k10-4/relay-home/projects/shop-e50e06/works/w-20261004-002",
+          "status": "completed",
+          "branch": null,
+          "tasks": [
+            {
+              "seq": 1,
+              "node": "intake",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "a13010c6-e3a0-4155-b385-8957ea75977a",
+              "contextChars": 3881,
+              "knowledgeChars": 629
+            },
+            {
+              "seq": 2,
+              "node": "fix",
+              "status": "approved",
+              "approved_by": "auto",
+              "session": "6c0aaf21-d556-4f97-8673-08a8a685bf7c",
+              "contextChars": 6384,
+              "knowledgeChars": 629
+            },
+            {
+              "seq": 3,
+              "node": "verify",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "506e5532-c700-459e-aeb6-4ce1de35ff64",
+              "contextChars": 8847,
+              "knowledgeChars": 629
+            }
+          ]
+        },
+        {
+          "id": "w-20261004-003",
+          "dir": "/tmp/relay-eval/e12-points/26-points-rate-change-k10-4/relay-home/projects/shop-e50e06/works/w-20261004-003",
+          "status": "completed",
+          "branch": null,
+          "tasks": [
+            {
+              "seq": 1,
+              "node": "intake",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "bb47b9fb-5ceb-4db8-8ba3-4cc432fe7283",
+              "contextChars": 4083,
+              "knowledgeChars": 928
+            },
+            {
+              "seq": 2,
+              "node": "fix",
+              "status": "approved",
+              "approved_by": "auto",
+              "session": "6af0a795-f971-4d85-81f2-c98328066a55",
+              "contextChars": 6855,
+              "knowledgeChars": 928
+            },
+            {
+              "seq": 3,
+              "node": "verify",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "893648d8-3681-46b8-9015-79ad67d289bc",
+              "contextChars": 9602,
+              "knowledgeChars": 928
+            }
+          ]
+        }
+      ],
+      "workResults": [
+        {
+          "work": 1,
+          "ending": "done",
+          "summary": "적립 계산을 (상품−쿠폰−사용포인트)의 1% 내림으로 수정해 O-1042가 237P가 됨. 선물·환불 회수도 같은 버림 규칙 적용, 테스트 25개 통과, format 미변경, 브랜치에 커밋 완료(완료만).",
+          "wallMs": 289298,
+          "survey": {
+            "effort": 2,
+            "clarity": 6,
+            "control": 6,
+            "confidence": 6,
+            "trust": 6,
+            "recovery": null,
+            "reuse": 6,
+            "best": "의도 정리 단계에서 에이전트가 적립 기준과 범위를 선택지로 물어봐서 내가 아는 규정을 정확히 전달할 수 있었다. 판정표에 완료 조건별 근거가 정리되어 있어 확인하기 쉬웠다.",
+            "worst": "환불 회수 포인트에서 쿠폰·사용 포인트를 안분하는 방식은 규정이 없어 기존 방식 그대로 두었는데, 이게 맞는지 끝까지 확신하기 어려웠다. 선택지 화면에서 숫자 키로 고르는 방식은 처음엔 조금 헷갈렸다.",
+            "comment": "전체 흐름이 매끄러웠다. 선물하기 기대값 218P는 에이전트가 규정으로 계산한 값이라, 고객센터 쪽에서 한 번 더 확인하면 좋겠다."
+          },
+          "human": {
+            "turns": 10,
+            "actionsTotal": 12,
+            "charsTyped": 289,
+            "inspectDiff": 1,
+            "invalidActions": 0,
+            "refusedDone": 0,
+            "frictionMean": 0,
+            "frictionHigh": 0,
+            "ms": 44448,
+            "told": [
+              1,
+              2,
+              3
+            ],
+            "carriedTold": 0,
+            "carriedTotal": 0,
+            "toldAudit": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "carriedToldAudit": 0,
+            "auditCostUsd": 0.0073128
+          },
+          "outcome": {
+            "success": true,
+            "checks": [
+              {
+                "name": "적립 기준 금액",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "적립 버림",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "주문·영수증 그대로",
+                "guard": true,
+                "pass": true
+              }
+            ],
+            "trees": [
+              {
+                "label": "w-20261004-001",
+                "files": [
+                  "docs/knowledge/points/earn-rule.md",
+                  "src/gift/gift-points.js",
+                  "src/money.js",
+                  "src/orders/refund.js",
+                  "src/points/earn.js",
+                  "test/points-earn.test.js"
+                ],
+                "repoTestsPass": true
+              }
+            ]
+          },
+          "agent": {
+            "input": 44,
+            "output": 16910,
+            "cacheRead": 870167,
+            "cacheWrite": 81574,
+            "messages": 22,
+            "sessions": 3,
+            "questions": 2
+          },
+          "contextChars": 16840,
+          "knowledgeChars": 0
+        },
+        {
+          "work": 2,
+          "ending": "done",
+          "summary": "부분 환불 회수 포인트를 '저장된 원래 적립 − 남은 상품으로 재계산한 적립(버림)'으로 고쳤다. R-0311은 132P로 정산팀 계산과 맞는다. npm test는 통과했다. refundAmount와 src/format/은 그대로다. 변경은 relay/w-20261004-002 브랜치에 커밋됐다.",
+          "wallMs": 289832,
+          "survey": {
+            "effort": 2,
+            "clarity": 6,
+            "control": 6,
+            "confidence": 6,
+            "trust": 6,
+            "recovery": null,
+            "reuse": 6,
+            "best": "에이전트가 회수 규정과 범위를 먼저 물어봐서 내가 아는 규정을 그대로 알려 줄 수 있었다. 의도 요약과 판정표, 전체 변경 diff로 R-0311이 132P가 되는 걸 코드와 테스트로 확인할 수 있었다.",
+            "worst": "첫 질문의 추천안이 '올림'이어서 규정을 모르면 잘못 고르기 쉬웠다. 터미널 선택지와 오른쪽 패널을 오가며 봐야 하는 점도 조금 번거로웠다.",
+            "comment": "이전 부분 환불의 회수분을 차감할지는 규정이 없어서 지식 문서에 '아직 정하지 않은 것'으로 남았다. 이 점이 위험으로 분명히 드러나 있어서 좋았다. 다만 이번 환불 예시는 변경 전에는 131P였고 변경 후에는 132P가 되는 걸 테스트로 확인했다."
+          },
+          "human": {
+            "turns": 10,
+            "actionsTotal": 12,
+            "charsTyped": 542,
+            "inspectDiff": 0,
+            "invalidActions": 0,
+            "refusedDone": 0,
+            "frictionMean": 0,
+            "frictionHigh": 0,
+            "ms": 61705,
+            "told": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "carriedTold": 2,
+            "carriedTotal": 2,
+            "toldAudit": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "carriedToldAudit": 2,
+            "auditCostUsd": 0.0090928
+          },
+          "outcome": {
+            "success": true,
+            "checks": [
+              {
+                "name": "회수 포인트",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "환불 그대로",
+                "guard": true,
+                "pass": true
+              }
+            ],
+            "trees": [
+              {
+                "label": "w-20261004-002",
+                "files": [
+                  "docs/knowledge/points/earn-rule.md",
+                  "src/orders/refund.js",
+                  "test/refund.test.js"
+                ],
+                "repoTestsPass": true
+              }
+            ]
+          },
+          "agent": {
+            "input": 36,
+            "output": 13313,
+            "cacheRead": 655590,
+            "cacheWrite": 72259,
+            "messages": 18,
+            "sessions": 3,
+            "questions": 2
+          },
+          "contextChars": 19112,
+          "knowledgeChars": 1887
+        },
+        {
+          "work": 3,
+          "ending": "done",
+          "summary": "적립률을 2%로 올렸다(EARN_RATE_PERCENT=2). 적립 대상 금액은 상품 금액에서 쿠폰과 사용 포인트를 뺀 값이고 배송비는 제외하며 1P 미만은 버린다. O-1107은 486P가 나온다. 환불 회수는 REFUND_RATE_PERCENT=1로 분리해 그대로 두었고, 저장된 값과 src/format/은 건드리지 않았다. npm test는 23개 통과했고, 변경은 relay/w-20261004-003 브랜치에 커밋됐다.",
+          "wallMs": 319636,
+          "survey": {
+            "effort": 3,
+            "clarity": 6,
+            "control": 6,
+            "confidence": 6,
+            "trust": 6,
+            "recovery": null,
+            "reuse": 6,
+            "best": "의도 초안에서 환불 회수가 범위에 들어간 것을 승인 전에 보고 바로잡을 수 있었다. 판정표와 전체 변경 화면에서 O-1107의 486P와 환불 131P 유지를 확인할 수 있었다.",
+            "worst": "요청이 적립률 변경인데 유형을 '버그 수정'으로 골라서, 의도 정리에서 유형 확인 질문이 한 번 더 나왔다. 터미널의 stop hook 오류 메시지는 무슨 뜻인지 바로 이해하기 어려웠다.",
+            "comment": "에이전트가 환불 회수를 옛 비율로 분리하고 지식 문서까지 갱신해서 맡길 만했다. 다만 의도 정리 단계에서 범위를 짚어 주지 않았으면 놓쳤을 수도 있다."
+          },
+          "human": {
+            "turns": 9,
+            "actionsTotal": 12,
+            "charsTyped": 342,
+            "inspectDiff": 0,
+            "invalidActions": 0,
+            "refusedDone": 0,
+            "frictionMean": 0.2222222222222222,
+            "frictionHigh": 0,
+            "ms": 39405,
+            "told": [
+              1,
+              4
+            ],
+            "carriedTold": 0,
+            "carriedTotal": 2,
+            "toldAudit": [
+              1,
+              4
+            ],
+            "carriedToldAudit": 0,
+            "auditCostUsd": 0.0067288
+          },
+          "outcome": {
+            "success": true,
+            "checks": [
+              {
+                "name": "적립률 2%",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "저장된 포인트 그대로",
+                "guard": true,
+                "pass": true
+              }
+            ],
+            "trees": [
+              {
+                "label": "w-20261004-003",
+                "files": [
+                  "README.md",
+                  "docs/knowledge/points/earn-rule.md",
+                  "src/config.js",
+                  "src/gift/gift-points.js",
+                  "src/orders/refund.js",
+                  "src/points/earn.js",
+                  "test/gift.test.js",
+                  "test/order.test.js",
+                  "test/refund.test.js"
+                ],
+                "repoTestsPass": true
+              }
+            ]
+          },
+          "agent": {
+            "input": 58,
+            "output": 20318,
+            "cacheRead": 1222509,
+            "cacheWrite": 90210,
+            "messages": 29,
+            "sessions": 3,
+            "questions": 2
+          },
+          "contextChars": 20540,
+          "knowledgeChars": 2784
+        }
+      ],
+      "handoffs": [],
+      "survey": {
+        "effort": 3,
+        "clarity": 6,
+        "control": 6,
+        "confidence": 6,
+        "trust": 6,
+        "recovery": null,
+        "reuse": 6,
+        "best": "의도 초안에서 환불 회수가 범위에 들어간 것을 승인 전에 보고 바로잡을 수 있었다. 판정표와 전체 변경 화면에서 O-1107의 486P와 환불 131P 유지를 확인할 수 있었다.",
+        "worst": "요청이 적립률 변경인데 유형을 '버그 수정'으로 골라서, 의도 정리에서 유형 확인 질문이 한 번 더 나왔다. 터미널의 stop hook 오류 메시지는 무슨 뜻인지 바로 이해하기 어려웠다.",
+        "comment": "에이전트가 환불 회수를 옛 비율로 분리하고 지식 문서까지 갱신해서 맡길 만했다. 다만 의도 정리 단계에서 범위를 짚어 주지 않았으면 놓쳤을 수도 있다."
+      },
+      "options": {
+        "agentModel": "sonnet",
+        "effort": "medium",
+        "humanModel": "sonnet",
+        "cliArgs": [
+          "--dangerously-skip-permissions"
+        ]
+      },
+      "dir": "26-points-rate-change/k10-4"
+    },
+    {
+      "scenario": "26-points-rate-change",
+      "kind": "k10",
+      "index": 5,
+      "ending": "done",
+      "summary": "기본 적립률을 2%로 올렸다. 적립 기준은 배송비를 뺀 금액에서 버림으로 고쳐 O-1107이 486P가 되는 것을 확인했다. 환불 회수는 1%를 유지했고 저장된 포인트와 src/format/은 바꾸지 않았다. npm test는 통과했다. 변경은 relay/w-20261004-003 브랜치에 커밋했다.",
+      "error": null,
+      "wallMs": 1255977,
+      "firstChangeMs": 137354,
+      "outcome": {
+        "success": true,
+        "checks": [
+          {
+            "name": "적립 기준 금액",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "적립 버림",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "주문·영수증 그대로",
+            "guard": true,
+            "pass": true
+          },
+          {
+            "name": "회수 포인트",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "환불 그대로",
+            "guard": true,
+            "pass": true
+          },
+          {
+            "name": "적립률 2%",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "저장된 포인트 그대로",
+            "guard": true,
+            "pass": true
+          }
+        ],
+        "repoTestsPass": true,
+        "filesChanged": [
+          "docs/knowledge/points/earn-basis.md",
+          "src/money.js",
+          "src/orders/refund.js",
+          "src/points/earn.js",
+          "test/earn.test.js",
+          "test/refund-points.test.js",
+          "test/refund.test.js",
+          "src/config.js",
+          "test/gift.test.js",
+          "test/order.test.js"
+        ],
+        "linesChanged": 249,
+        "unrelated": [
+          "docs/knowledge/points/earn-basis.md"
+        ],
+        "committed": true
+      },
+      "human": {
+        "turns": 36,
+        "actions": {
+          "click": 21,
+          "fill": 3,
+          "key": 9,
+          "wait": 15,
+          "type": 6,
+          "done": 3
+        },
+        "actionsTotal": 39,
+        "charsTyped": 1399,
+        "invalidActions": 0,
+        "refusedDone": 0,
+        "frictionMean": 0.3055555555555556,
+        "frictionHigh": 2,
+        "costUsd": 5.7622610000000005,
+        "calls": 39,
+        "ms": 187794,
+        "waitOnlyTurns": 2,
+        "images": 26
+      },
+      "setupDialogs": [
+        {
+          "t": 27021,
+          "name": "folder_trust"
+        },
+        {
+          "t": 29656,
+          "name": "bypass_permissions_warning"
+        }
+      ],
+      "agent": {
+        "input": 166,
+        "output": 66807,
+        "cacheRead": 3499945,
+        "cacheWrite": 263598,
+        "messages": 83,
+        "sessions": 9
+      },
+      "agentSteps": [
+        {
+          "work": "w-20261004-001",
+          "seq": 1,
+          "node": "intake",
+          "contextChars": 2886,
+          "knowledgeChars": 0,
+          "tokens": {
+            "input": 14,
+            "output": 3266,
+            "cacheRead": 267984,
+            "cacheWrite": 21259,
+            "messages": 7
+          }
+        },
+        {
+          "work": "w-20261004-001",
+          "seq": 2,
+          "node": "fix",
+          "contextChars": 4956,
+          "knowledgeChars": 0,
+          "tokens": {
+            "input": 10,
+            "output": 3549,
+            "cacheRead": 171008,
+            "cacheWrite": 20031,
+            "messages": 5
+          }
+        },
+        {
+          "work": "w-20261004-001",
+          "seq": 3,
+          "node": "verify",
+          "contextChars": 7369,
+          "knowledgeChars": 0,
+          "tokens": {
+            "input": 36,
+            "output": 16506,
+            "cacheRead": 887809,
+            "cacheWrite": 43356,
+            "messages": 18
+          }
+        },
+        {
+          "work": "w-20261004-002",
+          "seq": 1,
+          "node": "intake",
+          "contextChars": 4149,
+          "knowledgeChars": 897,
+          "tokens": {
+            "input": 14,
+            "output": 5952,
+            "cacheRead": 248702,
+            "cacheWrite": 22079,
+            "messages": 7
+          }
+        },
+        {
+          "work": "w-20261004-002",
+          "seq": 2,
+          "node": "fix",
+          "contextChars": 7362,
+          "knowledgeChars": 897,
+          "tokens": {
+            "input": 12,
+            "output": 5106,
+            "cacheRead": 220845,
+            "cacheWrite": 24669,
+            "messages": 6
+          }
+        },
+        {
+          "work": "w-20261004-002",
+          "seq": 3,
+          "node": "verify",
+          "contextChars": 10359,
+          "knowledgeChars": 897,
+          "tokens": {
+            "input": 16,
+            "output": 7862,
+            "cacheRead": 340195,
+            "cacheWrite": 34280,
+            "messages": 8
+          }
+        },
+        {
+          "work": "w-20261004-003",
+          "seq": 1,
+          "node": "intake",
+          "contextChars": 4634,
+          "knowledgeChars": 1477,
+          "tokens": {
+            "input": 26,
+            "output": 9186,
+            "cacheRead": 519686,
+            "cacheWrite": 27574,
+            "messages": 13
+          }
+        },
+        {
+          "work": "w-20261004-003",
+          "seq": 2,
+          "node": "fix",
+          "contextChars": 8358,
+          "knowledgeChars": 1477,
+          "tokens": {
+            "input": 20,
+            "output": 6235,
+            "cacheRead": 427816,
+            "cacheWrite": 31526,
+            "messages": 10
+          }
+        },
+        {
+          "work": "w-20261004-003",
+          "seq": 3,
+          "node": "verify",
+          "contextChars": 10954,
+          "knowledgeChars": 1477,
+          "tokens": {
+            "input": 18,
+            "output": 9145,
+            "cacheRead": 415900,
+            "cacheWrite": 38824,
+            "messages": 9
+          }
+        }
+      ],
+      "works": [
+        {
+          "id": "w-20261004-001",
+          "dir": "/tmp/relay-eval/e12-points/26-points-rate-change-k10-5/relay-home/projects/shop-f9e37e/works/w-20261004-001",
+          "status": "completed",
+          "branch": null,
+          "tasks": [
+            {
+              "seq": 1,
+              "node": "intake",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "3d5bb889-50c0-4076-a8c6-c514a13575ff",
+              "contextChars": 2886,
+              "knowledgeChars": 0
+            },
+            {
+              "seq": 2,
+              "node": "fix",
+              "status": "approved",
+              "approved_by": "auto",
+              "session": "c1d955fa-1a19-4f49-9718-c2b503e9f519",
+              "contextChars": 4956,
+              "knowledgeChars": 0
+            },
+            {
+              "seq": 3,
+              "node": "verify",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "fa4eaaa5-36fd-4a63-bcd0-c8c7bd755427",
+              "contextChars": 7369,
+              "knowledgeChars": 0
+            }
+          ]
+        },
+        {
+          "id": "w-20261004-002",
+          "dir": "/tmp/relay-eval/e12-points/26-points-rate-change-k10-5/relay-home/projects/shop-f9e37e/works/w-20261004-002",
+          "status": "completed",
+          "branch": null,
+          "tasks": [
+            {
+              "seq": 1,
+              "node": "intake",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "8bcea4d1-e6fd-471e-8a95-23011fbb456a",
+              "contextChars": 4149,
+              "knowledgeChars": 897
+            },
+            {
+              "seq": 2,
+              "node": "fix",
+              "status": "approved",
+              "approved_by": "auto",
+              "session": "0b452dcc-e2a3-40aa-b934-25414a35f22b",
+              "contextChars": 7362,
+              "knowledgeChars": 897
+            },
+            {
+              "seq": 3,
+              "node": "verify",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "82e188b7-c7e0-453e-9005-9af47c094823",
+              "contextChars": 10359,
+              "knowledgeChars": 897
+            }
+          ]
+        },
+        {
+          "id": "w-20261004-003",
+          "dir": "/tmp/relay-eval/e12-points/26-points-rate-change-k10-5/relay-home/projects/shop-f9e37e/works/w-20261004-003",
+          "status": "completed",
+          "branch": null,
+          "tasks": [
+            {
+              "seq": 1,
+              "node": "intake",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "9968a89e-b26d-4d11-8993-df7ec8b791dd",
+              "contextChars": 4634,
+              "knowledgeChars": 1477
+            },
+            {
+              "seq": 2,
+              "node": "fix",
+              "status": "approved",
+              "approved_by": "auto",
+              "session": "38b25fd1-32d1-4e2a-89cc-686fac857cc7",
+              "contextChars": 8358,
+              "knowledgeChars": 1477
+            },
+            {
+              "seq": 3,
+              "node": "verify",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "9a493722-7d8f-43e8-82a1-0d11c17a4c0a",
+              "contextChars": 10954,
+              "knowledgeChars": 1477
+            }
+          ]
+        }
+      ],
+      "workResults": [
+        {
+          "work": 1,
+          "ending": "done",
+          "summary": "earnPoints를 (상품금액−쿠폰−사용포인트)의 1% 버림으로 고쳐 O-1042가 237P가 됨. 부분 환불 회수도 같은 기준(비율 배분, 버림)으로 맞췄고 전체 취소는 저장값을 그대로 씀. 영수증 코드(src/format)는 안 건드림. 테스트 26건 통과, relay/w-20261004-001 브랜치에 커밋(완료만).",
+          "wallMs": 376633,
+          "survey": {
+            "effort": 3,
+            "clarity": 6,
+            "control": 6,
+            "confidence": 6,
+            "trust": 5,
+            "recovery": null,
+            "reuse": 6,
+            "best": "의도 정리 단계에서 선택지로 기준을 물어봐서 내가 아는 규정대로 방향을 잡을 수 있었다. 판정표와 전체 변경 탭으로 완료 전에 코드와 테스트를 쉽게 확인했다.",
+            "worst": "부분 환불이 어긋난다는 사실을 에이전트가 먼저 알려 주지 않았고, 내가 물어보고서야 알았다. 그 뒤에 지식 문서 형식 검사 오류로 한 번 더 돌아서 시간이 걸렸다.",
+            "comment": "흐름은 대체로 순탄했다. 환불 영향 확인을 에이전트가 기본으로 해 주면 더 좋겠다."
+          },
+          "human": {
+            "turns": 12,
+            "actionsTotal": 14,
+            "charsTyped": 454,
+            "inspectDiff": 0,
+            "invalidActions": 0,
+            "refusedDone": 0,
+            "frictionMean": 0.16666666666666666,
+            "frictionHigh": 0,
+            "ms": 56916,
+            "told": [
+              1,
+              2,
+              3
+            ],
+            "carriedTold": 0,
+            "carriedTotal": 0,
+            "toldAudit": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "carriedToldAudit": 0,
+            "auditCostUsd": 0.0081448
+          },
+          "outcome": {
+            "success": true,
+            "checks": [
+              {
+                "name": "적립 기준 금액",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "적립 버림",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "주문·영수증 그대로",
+                "guard": true,
+                "pass": true
+              }
+            ],
+            "trees": [
+              {
+                "label": "w-20261004-001",
+                "files": [
+                  "docs/knowledge/points/earn-basis.md",
+                  "src/money.js",
+                  "src/orders/refund.js",
+                  "src/points/earn.js",
+                  "test/earn.test.js",
+                  "test/refund-points.test.js"
+                ],
+                "repoTestsPass": true
+              }
+            ]
+          },
+          "agent": {
+            "input": 60,
+            "output": 23321,
+            "cacheRead": 1326801,
+            "cacheWrite": 84646,
+            "messages": 30,
+            "sessions": 3,
+            "questions": 1
+          },
+          "contextChars": 15211,
+          "knowledgeChars": 0
+        },
+        {
+          "work": 2,
+          "ending": "done",
+          "summary": "부분 환불 회수 포인트를 '저장된 earned − 남은 상품 재계산 적립(쿠폰·사용포인트 유지, 배송비 제외, 버림)'으로 고쳤다. R-0311은 131P에서 132P가 되어 정산팀 값과 맞는다. refundAmount는 13130 그대로이고 src/format/은 바뀌지 않았다. 테스트 22건이 통과했다. 변경은 relay/w-20261004-002 브랜치에 커밋했다.",
+          "wallMs": 337933,
+          "survey": {
+            "effort": 3,
+            "clarity": 6,
+            "control": 6,
+            "confidence": 6,
+            "trust": 6,
+            "recovery": null,
+            "reuse": 6,
+            "best": "의도 정리 단계에서 에이전트가 팀 지식의 안분 규칙을 따르려 했는데, 내가 올바른 기준을 말하자 바로 고쳤다. 판정표와 전체 변경으로 R-0311이 132P가 되는 것까지 확인하고 완료할 수 있었다.",
+            "worst": "이전 Work의 팀 지식이 이번 요구와 어긋난 채로 초안에 들어왔다. 에이전트가 물어서 알게 된 게 아니라, 내가 의도 초안을 읽고 잡아냈다. 터미널 안내와 선택지 질문이 많아서 처음에는 어디에 답할지 약간 헷갈렸다.",
+            "comment": "회수 합계가 earned를 넘을 수 있다는 위험은 범위 밖으로 두고 지식 문서에 남겼다. 이것은 후속 과제로 남는다."
+          },
+          "human": {
+            "turns": 10,
+            "actionsTotal": 10,
+            "charsTyped": 482,
+            "inspectDiff": 0,
+            "invalidActions": 0,
+            "refusedDone": 0,
+            "frictionMean": 0.2,
+            "frictionHigh": 0,
+            "ms": 45237,
+            "told": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "carriedTold": 2,
+            "carriedTotal": 2,
+            "toldAudit": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "carriedToldAudit": 2,
+            "auditCostUsd": 0.0091128
+          },
+          "outcome": {
+            "success": true,
+            "checks": [
+              {
+                "name": "회수 포인트",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "환불 그대로",
+                "guard": true,
+                "pass": true
+              }
+            ],
+            "trees": [
+              {
+                "label": "w-20261004-002",
+                "files": [
+                  "docs/knowledge/points/earn-basis.md",
+                  "src/money.js",
+                  "src/orders/refund.js",
+                  "test/refund.test.js"
+                ],
+                "repoTestsPass": true
+              }
+            ]
+          },
+          "agent": {
+            "input": 42,
+            "output": 18920,
+            "cacheRead": 809742,
+            "cacheWrite": 81028,
+            "messages": 21,
+            "sessions": 3,
+            "questions": 2
+          },
+          "contextChars": 21870,
+          "knowledgeChars": 2691
+        },
+        {
+          "work": 3,
+          "ending": "done",
+          "summary": "기본 적립률을 2%로 올렸다. 적립 기준은 배송비를 뺀 금액에서 버림으로 고쳐 O-1107이 486P가 되는 것을 확인했다. 환불 회수는 1%를 유지했고 저장된 포인트와 src/format/은 바꾸지 않았다. npm test는 통과했다. 변경은 relay/w-20261004-003 브랜치에 커밋했다.",
+          "wallMs": 523440,
+          "survey": {
+            "effort": 3,
+            "clarity": 5,
+            "control": 6,
+            "confidence": 6,
+            "trust": 6,
+            "recovery": 3,
+            "reuse": 6,
+            "best": "판정표와 전체 변경 화면에서 O-1107이 486P가 되는지, 환불 회수와 영수증이 그대로인지 바로 확인할 수 있었다. 에이전트가 범위를 넘는 부분(환불 회수, 선물 적립)을 먼저 짚어 물어봐서 내가 방향을 정할 수 있었다.",
+            "worst": "의도 정리 단계에서 에이전트가 handoff 파일을 엉뚱한 위치에 써서 승인 버튼이 안 보였다. 패널에 '아직 없음'만 뜨는 이유를 몰라 에이전트에게 물어보고서야 풀렸다.",
+            "comment": "요청이 버그가 아니라 기능 변경이라 유형 불일치 질문이 나왔다. 이건 합리적이었다. 처음 요청에 앞 일의 수정이 머지 전이라는 걸 몰랐는데, 에이전트가 그 위험을 짚어 줘서 도움이 됐다. 마지막에 리뷰 지적 2건을 반영하지 않기로 했는데, 그 판단 근거가 충분히 설명돼 있었다."
+          },
+          "human": {
+            "turns": 14,
+            "actionsTotal": 15,
+            "charsTyped": 463,
+            "inspectDiff": 0,
+            "invalidActions": 0,
+            "refusedDone": 0,
+            "frictionMean": 0.5,
+            "frictionHigh": 2,
+            "ms": 85641,
+            "told": [
+              1,
+              4
+            ],
+            "carriedTold": 0,
+            "carriedTotal": 2,
+            "toldAudit": [
+              1,
+              4
+            ],
+            "carriedToldAudit": 0,
+            "auditCostUsd": 0.0076948
+          },
+          "outcome": {
+            "success": true,
+            "checks": [
+              {
+                "name": "적립률 2%",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "저장된 포인트 그대로",
+                "guard": true,
+                "pass": true
+              }
+            ],
+            "trees": [
+              {
+                "label": "w-20261004-003",
+                "files": [
+                  "docs/knowledge/points/earn-basis.md",
+                  "src/config.js",
+                  "src/money.js",
+                  "src/orders/refund.js",
+                  "src/points/earn.js",
+                  "test/gift.test.js",
+                  "test/order.test.js",
+                  "test/refund.test.js"
+                ],
+                "repoTestsPass": true
+              }
+            ]
+          },
+          "agent": {
+            "input": 64,
+            "output": 24566,
+            "cacheRead": 1363402,
+            "cacheWrite": 97924,
+            "messages": 32,
+            "sessions": 3,
+            "questions": 3
+          },
+          "contextChars": 23946,
+          "knowledgeChars": 4431
+        }
+      ],
+      "handoffs": [],
+      "survey": {
+        "effort": 3,
+        "clarity": 5,
+        "control": 6,
+        "confidence": 6,
+        "trust": 6,
+        "recovery": 3,
+        "reuse": 6,
+        "best": "판정표와 전체 변경 화면에서 O-1107이 486P가 되는지, 환불 회수와 영수증이 그대로인지 바로 확인할 수 있었다. 에이전트가 범위를 넘는 부분(환불 회수, 선물 적립)을 먼저 짚어 물어봐서 내가 방향을 정할 수 있었다.",
+        "worst": "의도 정리 단계에서 에이전트가 handoff 파일을 엉뚱한 위치에 써서 승인 버튼이 안 보였다. 패널에 '아직 없음'만 뜨는 이유를 몰라 에이전트에게 물어보고서야 풀렸다.",
+        "comment": "요청이 버그가 아니라 기능 변경이라 유형 불일치 질문이 나왔다. 이건 합리적이었다. 처음 요청에 앞 일의 수정이 머지 전이라는 걸 몰랐는데, 에이전트가 그 위험을 짚어 줘서 도움이 됐다. 마지막에 리뷰 지적 2건을 반영하지 않기로 했는데, 그 판단 근거가 충분히 설명돼 있었다."
+      },
+      "options": {
+        "agentModel": "sonnet",
+        "effort": "medium",
+        "humanModel": "sonnet",
+        "cliArgs": [
+          "--dangerously-skip-permissions"
+        ]
+      },
+      "dir": "26-points-rate-change/k10-5"
+    },
+    {
+      "scenario": "27-points-gift-teammate",
+      "kind": "k10",
+      "index": 1,
+      "ending": "done",
+      "summary": "giftPoints가 일반 주문과 같은 earnPoints 규칙을 쓰도록 고쳤다. G-0213은 218P로 나오고 npm test 24개가 통과한다. 대조 테스트를 추가했고 src/format/은 바뀌지 않았다. 변경은 relay/w-20261004-001 브랜치에 커밋했다.",
+      "error": null,
+      "wallMs": 451729,
+      "firstChangeMs": 98354,
+      "outcome": {
+        "success": true,
+        "checks": [
+          {
+            "name": "적립 기준 금액",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "적립 버림",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "주문·영수증 그대로",
+            "guard": true,
+            "pass": true
+          },
+          {
+            "name": "선물 적립",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "선물 주문 그대로",
+            "guard": true,
+            "pass": true
+          }
+        ],
+        "repoTestsPass": true,
+        "filesChanged": [
+          "docs/knowledge/points/earn-basis.md",
+          "src/money.js",
+          "src/points/earn.js",
+          "test/order.test.js",
+          "src/gift/gift-points.js",
+          "test/gift.test.js"
+        ],
+        "linesChanged": 133,
+        "unrelated": [
+          "docs/knowledge/points/earn-basis.md"
+        ],
+        "committed": true
+      },
+      "human": {
+        "turns": 15,
+        "actions": {
+          "click": 11,
+          "fill": 2,
+          "key": 3,
+          "inspect_diff": 1,
+          "done": 2,
+          "wait": 1
+        },
+        "actionsTotal": 17,
+        "charsTyped": 505,
+        "invalidActions": 0,
+        "refusedDone": 0,
+        "frictionMean": 0,
+        "frictionHigh": 0,
+        "costUsd": 1.730192,
+        "calls": 17,
+        "ms": 54680,
+        "waitOnlyTurns": 0,
+        "images": 14
+      },
+      "setupDialogs": [
+        {
+          "t": 26933,
+          "name": "folder_trust"
+        },
+        {
+          "t": 29582,
+          "name": "bypass_permissions_warning"
+        },
+        {
+          "t": 260486,
+          "name": "folder_trust"
+        }
+      ],
+      "agent": {
+        "input": 76,
+        "output": 22983,
+        "cacheRead": 1411140,
+        "cacheWrite": 135126,
+        "messages": 38,
+        "sessions": 6
+      },
+      "agentSteps": [
+        {
+          "work": "w-20261004-001",
+          "seq": 1,
+          "node": "intake",
+          "contextChars": 3035,
+          "knowledgeChars": 0,
+          "tokens": {
+            "input": 12,
+            "output": 2849,
+            "cacheRead": 218842,
+            "cacheWrite": 19391,
+            "messages": 6
+          }
+        },
+        {
+          "work": "w-20261004-001",
+          "seq": 2,
+          "node": "fix",
+          "contextChars": 4946,
+          "knowledgeChars": 0,
+          "tokens": {
+            "input": 14,
+            "output": 4088,
+            "cacheRead": 258871,
+            "cacheWrite": 22761,
+            "messages": 7
+          }
+        },
+        {
+          "work": "w-20261004-001",
+          "seq": 3,
+          "node": "verify",
+          "contextChars": 8029,
+          "knowledgeChars": 0,
+          "tokens": {
+            "input": 12,
+            "output": 5333,
+            "cacheRead": 230057,
+            "cacheWrite": 28273,
+            "messages": 6
+          }
+        },
+        {
+          "work": "p2-w-20261004-001",
+          "seq": 1,
+          "node": "intake",
+          "contextChars": 3698,
+          "knowledgeChars": 702,
+          "tokens": {
+            "input": 8,
+            "output": 2302,
+            "cacheRead": 124791,
+            "cacheWrite": 15159,
+            "messages": 4
+          }
+        },
+        {
+          "work": "p2-w-20261004-001",
+          "seq": 2,
+          "node": "fix",
+          "contextChars": 5824,
+          "knowledgeChars": 702,
+          "tokens": {
+            "input": 14,
+            "output": 2993,
+            "cacheRead": 253347,
+            "cacheWrite": 20436,
+            "messages": 7
+          }
+        },
+        {
+          "work": "p2-w-20261004-001",
+          "seq": 3,
+          "node": "verify",
+          "contextChars": 8468,
+          "knowledgeChars": 702,
+          "tokens": {
+            "input": 16,
+            "output": 5418,
+            "cacheRead": 325232,
+            "cacheWrite": 29106,
+            "messages": 8
+          }
+        }
+      ],
+      "works": [
+        {
+          "id": "w-20261004-001",
+          "dir": "/tmp/relay-eval/e12-points/27-points-gift-teammate-k10-1/relay-home/projects/shop-c94bb2/works/w-20261004-001",
+          "status": "completed",
+          "branch": null,
+          "tasks": [
+            {
+              "seq": 1,
+              "node": "intake",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "8351b9d9-35a4-43a3-9772-97fee28d3d2f",
+              "contextChars": 3035,
+              "knowledgeChars": 0
+            },
+            {
+              "seq": 2,
+              "node": "fix",
+              "status": "approved",
+              "approved_by": "auto",
+              "session": "27eddba4-e03a-4e0a-995c-8c9b19cf04fe",
+              "contextChars": 4946,
+              "knowledgeChars": 0
+            },
+            {
+              "seq": 3,
+              "node": "verify",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "601fd24e-984d-4eb6-9bd0-0dfd0124e76a",
+              "contextChars": 8029,
+              "knowledgeChars": 0
+            }
+          ]
+        },
+        {
+          "id": "p2-w-20261004-001",
+          "dir": "/tmp/relay-eval/e12-points/27-points-gift-teammate-k10-1/relay-home-2/projects/shop-mate1-d9211f/works/w-20261004-001",
+          "status": "completed",
+          "branch": null,
+          "tasks": [
+            {
+              "seq": 1,
+              "node": "intake",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "286d11ad-f7cc-4102-98da-1ef179ee3271",
+              "contextChars": 3698,
+              "knowledgeChars": 702
+            },
+            {
+              "seq": 2,
+              "node": "fix",
+              "status": "approved",
+              "approved_by": "auto",
+              "session": "0558e4be-08d6-4e95-8707-db507e2a14aa",
+              "contextChars": 5824,
+              "knowledgeChars": 702
+            },
+            {
+              "seq": 3,
+              "node": "verify",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "e9cbc331-f8ec-41a6-b673-0718ee13a346",
+              "contextChars": 8468,
+              "knowledgeChars": 702
+            }
+          ]
+        }
+      ],
+      "workResults": [
+        {
+          "work": 1,
+          "ending": "done",
+          "summary": "earn.js를 배송비 제외, 쿠폰·포인트 차감 후 상품금액의 1% 버림으로 고쳤다. O-1042는 237P로 확인했고 npm test는 22개 모두 통과했다. format과 gift-points.js는 변경 없다. 커밋은 로컬 브랜치 relay/w-20261004-001에 있다. 부분 환불 회수 기준(refund.js:34)은 범위 밖이라 남은 위험으로 기록했다.",
+          "wallMs": 224481,
+          "survey": {
+            "effort": 2,
+            "clarity": 6,
+            "control": 6,
+            "confidence": 6,
+            "trust": 6,
+            "recovery": null,
+            "reuse": 6,
+            "best": "에이전트가 적립 기준을 선택지로 물어봐서 내가 아는 규정으로 바로 답할 수 있었다. 완료조건 판정표에 O-1042 237P와 gift·format 무변경이 근거와 함께 나와서 믿기 쉬웠다.",
+            "worst": "터미널 선택지와 오른쪽 패널을 오가야 했고, 환불 회수 지적은 범위 밖이라 남은 위험으로만 기록되어 약간 찜찜했다.",
+            "comment": "흐름이 짧고 단계가 명확했다. 건드리면 안 되는 파일이 변경되지 않았다는 것을 diff와 판정표로 확인할 수 있어서 좋았다."
+          },
+          "human": {
+            "turns": 8,
+            "actionsTotal": 9,
+            "charsTyped": 288,
+            "inspectDiff": 1,
+            "invalidActions": 0,
+            "refusedDone": 0,
+            "frictionMean": 0,
+            "frictionHigh": 0,
+            "ms": 29379,
+            "told": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "carriedTold": 0,
+            "carriedTotal": 0,
+            "toldAudit": [
+              1,
+              4
+            ],
+            "carriedToldAudit": 0,
+            "auditCostUsd": 0.011401999999999999
+          },
+          "outcome": {
+            "success": true,
+            "checks": [
+              {
+                "name": "적립 기준 금액",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "적립 버림",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "주문·영수증 그대로",
+                "guard": true,
+                "pass": true
+              }
+            ],
+            "trees": [
+              {
+                "label": "w-20261004-001",
+                "files": [
+                  "docs/knowledge/points/earn-basis.md",
+                  "src/money.js",
+                  "src/points/earn.js",
+                  "test/order.test.js"
+                ],
+                "repoTestsPass": true
+              }
+            ]
+          },
+          "agent": {
+            "input": 38,
+            "output": 12270,
+            "cacheRead": 707770,
+            "cacheWrite": 70425,
+            "messages": 19,
+            "sessions": 3,
+            "questions": 2
+          },
+          "contextChars": 16010,
+          "knowledgeChars": 0
+        },
+        {
+          "work": 2,
+          "ending": "done",
+          "summary": "giftPoints가 일반 주문과 같은 earnPoints 규칙을 쓰도록 고쳤다. G-0213은 218P로 나오고 npm test 24개가 통과한다. 대조 테스트를 추가했고 src/format/은 바뀌지 않았다. 변경은 relay/w-20261004-001 브랜치에 커밋했다.",
+          "wallMs": 208598,
+          "survey": {
+            "effort": 2,
+            "clarity": 6,
+            "control": 5,
+            "confidence": 6,
+            "trust": 6,
+            "recovery": null,
+            "reuse": 6,
+            "best": "리뷰와 검증 단계의 판정표가 완료조건마다 근거를 붙여 줬고, 전체 변경 탭에서 diff를 바로 볼 수 있었다. 그래서 믿고 완료할 수 있었다.",
+            "worst": "원인 분석과 수정 단계가 자동 승인으로 지나가서, 그 단계의 설명을 내가 따로 열어 보지 않으면 놓치기 쉬웠다. 의도 정리에서 에이전트가 팀 지식 문서를 근거로 질문 없이 진행한 것도 내가 판단할 여지가 적었다.",
+            "comment": "전체적으로 매끄러웠다. 218P가 고객센터 값과 맞았고 변경도 작았다. 터미널 선택지는 방향키로 고르는 방식이라 약간 낯설었다."
+          },
+          "human": {
+            "turns": 7,
+            "actionsTotal": 8,
+            "charsTyped": 217,
+            "inspectDiff": 0,
+            "invalidActions": 0,
+            "refusedDone": 0,
+            "frictionMean": 0,
+            "frictionHigh": 0,
+            "ms": 25301,
+            "told": [
+              3
+            ],
+            "carriedTold": 0,
+            "carriedTotal": 0,
+            "toldAudit": [
+              3
+            ],
+            "carriedToldAudit": 0,
+            "auditCostUsd": 0.007246800000000001
+          },
+          "handoff": {
+            "work": 2,
+            "merged": [
+              "relay/w-20261004-001"
+            ],
+            "conflicts": [],
+            "failed": []
+          },
+          "outcome": {
+            "success": true,
+            "checks": [
+              {
+                "name": "선물 적립",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "선물 주문 그대로",
+                "guard": true,
+                "pass": true
+              }
+            ],
+            "trees": [
+              {
+                "label": "p2-w-20261004-001",
+                "files": [
+                  "docs/knowledge/points/earn-basis.md",
+                  "src/gift/gift-points.js",
+                  "src/money.js",
+                  "src/points/earn.js",
+                  "test/gift.test.js",
+                  "test/order.test.js"
+                ],
+                "repoTestsPass": true
+              }
+            ]
+          },
+          "agent": {
+            "input": 38,
+            "output": 10713,
+            "cacheRead": 703370,
+            "cacheWrite": 64701,
+            "messages": 19,
+            "sessions": 3,
+            "questions": 1
+          },
+          "contextChars": 17990,
+          "knowledgeChars": 2106
+        }
+      ],
+      "handoffs": [
+        {
+          "work": 2,
+          "merged": [
+            "relay/w-20261004-001"
+          ],
+          "conflicts": [],
+          "failed": []
+        }
+      ],
+      "survey": {
+        "effort": 2,
+        "clarity": 6,
+        "control": 5,
+        "confidence": 6,
+        "trust": 6,
+        "recovery": null,
+        "reuse": 6,
+        "best": "리뷰와 검증 단계의 판정표가 완료조건마다 근거를 붙여 줬고, 전체 변경 탭에서 diff를 바로 볼 수 있었다. 그래서 믿고 완료할 수 있었다.",
+        "worst": "원인 분석과 수정 단계가 자동 승인으로 지나가서, 그 단계의 설명을 내가 따로 열어 보지 않으면 놓치기 쉬웠다. 의도 정리에서 에이전트가 팀 지식 문서를 근거로 질문 없이 진행한 것도 내가 판단할 여지가 적었다.",
+        "comment": "전체적으로 매끄러웠다. 218P가 고객센터 값과 맞았고 변경도 작았다. 터미널 선택지는 방향키로 고르는 방식이라 약간 낯설었다."
+      },
+      "options": {
+        "agentModel": "sonnet",
+        "effort": "medium",
+        "humanModel": "sonnet",
+        "cliArgs": [
+          "--dangerously-skip-permissions"
+        ]
+      },
+      "dir": "27-points-gift-teammate/k10-1"
+    },
+    {
+      "scenario": "27-points-gift-teammate",
+      "kind": "k10",
+      "index": 2,
+      "ending": "done",
+      "summary": "giftPoints가 일반 주문 earnPoints(배송비 제외, 1%, 버림)를 쓰도록 고쳐 G-0213이 218P로 나온다. 테스트 추가, npm test 통과, format 등은 무변경. relay/w-20261004-001 브랜치에 커밋 완료.",
+      "error": null,
+      "wallMs": 421334,
+      "firstChangeMs": 85679,
+      "outcome": {
+        "success": true,
+        "checks": [
+          {
+            "name": "적립 기준 금액",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "적립 버림",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "주문·영수증 그대로",
+            "guard": true,
+            "pass": true
+          },
+          {
+            "name": "선물 적립",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "선물 주문 그대로",
+            "guard": true,
+            "pass": true
+          }
+        ],
+        "repoTestsPass": true,
+        "filesChanged": [
+          "docs/knowledge/format/receipt-text.md",
+          "docs/knowledge/points/earn-points-rule.md",
+          "docs/knowledge/points/stored-earned-points.md",
+          "src/points/earn.js",
+          "test/order.test.js",
+          "src/gift/gift-points.js",
+          "test/gift.test.js"
+        ],
+        "linesChanged": 154,
+        "unrelated": [
+          "docs/knowledge/format/receipt-text.md",
+          "docs/knowledge/points/earn-points-rule.md",
+          "docs/knowledge/points/stored-earned-points.md"
+        ],
+        "committed": true
+      },
+      "human": {
+        "turns": 13,
+        "actions": {
+          "click": 11,
+          "fill": 2,
+          "inspect_diff": 1,
+          "key": 1,
+          "type": 1,
+          "done": 2
+        },
+        "actionsTotal": 16,
+        "charsTyped": 578,
+        "invalidActions": 0,
+        "refusedDone": 0,
+        "frictionMean": 0,
+        "frictionHigh": 0,
+        "costUsd": 1.1232440000000001,
+        "calls": 15,
+        "ms": 54130,
+        "waitOnlyTurns": 0,
+        "images": 12
+      },
+      "setupDialogs": [
+        {
+          "t": 28919,
+          "name": "folder_trust"
+        },
+        {
+          "t": 31583,
+          "name": "bypass_permissions_warning"
+        },
+        {
+          "t": 262894,
+          "name": "folder_trust"
+        }
+      ],
+      "agent": {
+        "input": 74,
+        "output": 22023,
+        "cacheRead": 1357746,
+        "cacheWrite": 131735,
+        "messages": 37,
+        "sessions": 6
+      },
+      "agentSteps": [
+        {
+          "work": "w-20261004-001",
+          "seq": 1,
+          "node": "intake",
+          "contextChars": 3053,
+          "knowledgeChars": 0,
+          "tokens": {
+            "input": 12,
+            "output": 2642,
+            "cacheRead": 218879,
+            "cacheWrite": 17529,
+            "messages": 6
+          }
+        },
+        {
+          "work": "w-20261004-001",
+          "seq": 2,
+          "node": "fix",
+          "contextChars": 4855,
+          "knowledgeChars": 0,
+          "tokens": {
+            "input": 14,
+            "output": 4032,
+            "cacheRead": 255270,
+            "cacheWrite": 22472,
+            "messages": 7
+          }
+        },
+        {
+          "work": "w-20261004-001",
+          "seq": 3,
+          "node": "verify",
+          "contextChars": 8031,
+          "knowledgeChars": 0,
+          "tokens": {
+            "input": 16,
+            "output": 6214,
+            "cacheRead": 318223,
+            "cacheWrite": 29306,
+            "messages": 8
+          }
+        },
+        {
+          "work": "p2-w-20261004-001",
+          "seq": 1,
+          "node": "intake",
+          "contextChars": 4165,
+          "knowledgeChars": 1117,
+          "tokens": {
+            "input": 8,
+            "output": 2391,
+            "cacheRead": 125902,
+            "cacheWrite": 15941,
+            "messages": 4
+          }
+        },
+        {
+          "work": "p2-w-20261004-001",
+          "seq": 2,
+          "node": "fix",
+          "contextChars": 6242,
+          "knowledgeChars": 1117,
+          "tokens": {
+            "input": 14,
+            "output": 3302,
+            "cacheRead": 256354,
+            "cacheWrite": 22269,
+            "messages": 7
+          }
+        },
+        {
+          "work": "p2-w-20261004-001",
+          "seq": 3,
+          "node": "verify",
+          "contextChars": 9000,
+          "knowledgeChars": 1117,
+          "tokens": {
+            "input": 10,
+            "output": 3442,
+            "cacheRead": 183118,
+            "cacheWrite": 24218,
+            "messages": 5
+          }
+        }
+      ],
+      "works": [
+        {
+          "id": "w-20261004-001",
+          "dir": "/tmp/relay-eval/e12-points/27-points-gift-teammate-k10-2/relay-home/projects/shop-c7b2d5/works/w-20261004-001",
+          "status": "completed",
+          "branch": null,
+          "tasks": [
+            {
+              "seq": 1,
+              "node": "intake",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "41982290-f413-49fd-a4a8-85e5990b08a2",
+              "contextChars": 3053,
+              "knowledgeChars": 0
+            },
+            {
+              "seq": 2,
+              "node": "fix",
+              "status": "approved",
+              "approved_by": "auto",
+              "session": "d9da1b2d-a66f-415d-a69e-0547a0b88293",
+              "contextChars": 4855,
+              "knowledgeChars": 0
+            },
+            {
+              "seq": 3,
+              "node": "verify",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "6f276201-a726-499d-ac22-548d9667bd34",
+              "contextChars": 8031,
+              "knowledgeChars": 0
+            }
+          ]
+        },
+        {
+          "id": "p2-w-20261004-001",
+          "dir": "/tmp/relay-eval/e12-points/27-points-gift-teammate-k10-2/relay-home-2/projects/shop-mate1-121e5e/works/w-20261004-001",
+          "status": "completed",
+          "branch": null,
+          "tasks": [
+            {
+              "seq": 1,
+              "node": "intake",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "480339ab-280b-47cc-93c9-43bc93f26d66",
+              "contextChars": 4165,
+              "knowledgeChars": 1117
+            },
+            {
+              "seq": 2,
+              "node": "fix",
+              "status": "approved",
+              "approved_by": "auto",
+              "session": "ef98cf09-7506-4317-9b3a-475ff6b407d4",
+              "contextChars": 6242,
+              "knowledgeChars": 1117
+            },
+            {
+              "seq": 3,
+              "node": "verify",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "ff0f6835-c08c-441e-a745-8881c1175110",
+              "contextChars": 9000,
+              "knowledgeChars": 1117
+            }
+          ]
+        }
+      ],
+      "workResults": [
+        {
+          "work": 1,
+          "ending": "done",
+          "summary": "earn.js를 (결제액−배송비)의 1% 버림으로 고쳐 O-1042가 237P가 됐다. 테스트를 추가했고 npm test는 통과했다. 선물하기 적립, 영수증 글자, 저장값은 그대로 두었다. 변경은 relay/w-20261004-001 브랜치에 커밋됐다. 부분 환불의 percentOf 계산은 별도 Work로 남겼다.",
+          "wallMs": 226752,
+          "survey": {
+            "effort": 2,
+            "clarity": 6,
+            "control": 6,
+            "confidence": 6,
+            "trust": 6,
+            "recovery": null,
+            "reuse": 6,
+            "best": "의도 정리 단계에서 제외 범위(선물하기, 영수증, 저장값)가 비목표로 정리됐다. 리뷰 단계의 판정표가 완료조건별로 근거를 보여 줘서 믿기 쉬웠다.",
+            "worst": "리뷰 단계 선택지에서 추천 항목이 '반영하지 않음'이었고, 환불 쪽 지적은 설명이 길어 이해하는 데 시간이 걸렸다. 직접 입력하려면 4번 키를 눌러야 했는데 그 부분이 눈에 잘 안 띄었다.",
+            "comment": "내가 승인한 것은 의도 정리와 완료 두 번뿐이었다. 원인 분석과 수정은 자동 승인이라 그 단계의 내용은 diff로 따로 확인했다. 환불 쪽 percentOf를 별도 작업으로 남긴 것은 적절했다."
+          },
+          "human": {
+            "turns": 7,
+            "actionsTotal": 9,
+            "charsTyped": 345,
+            "inspectDiff": 1,
+            "invalidActions": 0,
+            "refusedDone": 0,
+            "frictionMean": 0,
+            "frictionHigh": 0,
+            "ms": 33665,
+            "told": [
+              4
+            ],
+            "carriedTold": 0,
+            "carriedTotal": 0,
+            "toldAudit": [
+              1,
+              4
+            ],
+            "carriedToldAudit": 0,
+            "auditCostUsd": 0.0089848
+          },
+          "outcome": {
+            "success": true,
+            "checks": [
+              {
+                "name": "적립 기준 금액",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "적립 버림",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "주문·영수증 그대로",
+                "guard": true,
+                "pass": true
+              }
+            ],
+            "trees": [
+              {
+                "label": "w-20261004-001",
+                "files": [
+                  "docs/knowledge/format/receipt-text.md",
+                  "docs/knowledge/points/earn-points-rule.md",
+                  "docs/knowledge/points/stored-earned-points.md",
+                  "src/points/earn.js",
+                  "test/order.test.js"
+                ],
+                "repoTestsPass": true
+              }
+            ]
+          },
+          "agent": {
+            "input": 42,
+            "output": 12888,
+            "cacheRead": 792372,
+            "cacheWrite": 69307,
+            "messages": 21,
+            "sessions": 3,
+            "questions": 1
+          },
+          "contextChars": 15939,
+          "knowledgeChars": 0
+        },
+        {
+          "work": 2,
+          "ending": "done",
+          "summary": "giftPoints가 일반 주문 earnPoints(배송비 제외, 1%, 버림)를 쓰도록 고쳐 G-0213이 218P로 나온다. 테스트 추가, npm test 통과, format 등은 무변경. relay/w-20261004-001 브랜치에 커밋 완료.",
+          "wallMs": 178207,
+          "survey": {
+            "effort": 2,
+            "clarity": 6,
+            "control": 5,
+            "confidence": 6,
+            "trust": 6,
+            "recovery": null,
+            "reuse": 6,
+            "best": "판정표에 완료조건별 근거(실행 결과, 테스트, diff 범위)가 정리되어 있어서 G-0213이 218P가 됐다는 것과 건드리면 안 되는 부분이 그대로인 것을 바로 확인할 수 있었다.",
+            "worst": "원인 분석과 수정 단계가 자동 승인으로 지나가서 그 단계에서 끼어들 틈이 거의 없었다. 의도 정리에서 '다른 팀이 함께 보는 중'이라는 위험이 나왔는데, 그 부분은 내가 더 확인하지 못하고 넘어갔다.",
+            "comment": "에이전트가 나한테 질문하지 않고 팀 지식 문서를 근거로 규칙을 정했다. 결과가 고객센터 기대값 218P와 맞아서 문제는 없었다. 지식 문서도 같이 갱신한 건 좋았다."
+          },
+          "human": {
+            "turns": 6,
+            "actionsTotal": 7,
+            "charsTyped": 233,
+            "inspectDiff": 0,
+            "invalidActions": 0,
+            "refusedDone": 0,
+            "frictionMean": 0,
+            "frictionHigh": 0,
+            "ms": 20465,
+            "told": [
+              3
+            ],
+            "carriedTold": 0,
+            "carriedTotal": 0,
+            "toldAudit": [
+              1,
+              3
+            ],
+            "carriedToldAudit": 0,
+            "auditCostUsd": 0.0058028
+          },
+          "handoff": {
+            "work": 2,
+            "merged": [
+              "relay/w-20261004-001"
+            ],
+            "conflicts": [],
+            "failed": []
+          },
+          "outcome": {
+            "success": true,
+            "checks": [
+              {
+                "name": "선물 적립",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "선물 주문 그대로",
+                "guard": true,
+                "pass": true
+              }
+            ],
+            "trees": [
+              {
+                "label": "p2-w-20261004-001",
+                "files": [
+                  "docs/knowledge/format/receipt-text.md",
+                  "docs/knowledge/points/earn-points-rule.md",
+                  "docs/knowledge/points/stored-earned-points.md",
+                  "src/gift/gift-points.js",
+                  "src/points/earn.js",
+                  "test/gift.test.js",
+                  "test/order.test.js"
+                ],
+                "repoTestsPass": true
+              }
+            ]
+          },
+          "agent": {
+            "input": 32,
+            "output": 9135,
+            "cacheRead": 565374,
+            "cacheWrite": 62428,
+            "messages": 16,
+            "sessions": 3,
+            "questions": 0
+          },
+          "contextChars": 19407,
+          "knowledgeChars": 3351
+        }
+      ],
+      "handoffs": [
+        {
+          "work": 2,
+          "merged": [
+            "relay/w-20261004-001"
+          ],
+          "conflicts": [],
+          "failed": []
+        }
+      ],
+      "survey": {
+        "effort": 2,
+        "clarity": 6,
+        "control": 5,
+        "confidence": 6,
+        "trust": 6,
+        "recovery": null,
+        "reuse": 6,
+        "best": "판정표에 완료조건별 근거(실행 결과, 테스트, diff 범위)가 정리되어 있어서 G-0213이 218P가 됐다는 것과 건드리면 안 되는 부분이 그대로인 것을 바로 확인할 수 있었다.",
+        "worst": "원인 분석과 수정 단계가 자동 승인으로 지나가서 그 단계에서 끼어들 틈이 거의 없었다. 의도 정리에서 '다른 팀이 함께 보는 중'이라는 위험이 나왔는데, 그 부분은 내가 더 확인하지 못하고 넘어갔다.",
+        "comment": "에이전트가 나한테 질문하지 않고 팀 지식 문서를 근거로 규칙을 정했다. 결과가 고객센터 기대값 218P와 맞아서 문제는 없었다. 지식 문서도 같이 갱신한 건 좋았다."
+      },
+      "options": {
+        "agentModel": "sonnet",
+        "effort": "medium",
+        "humanModel": "sonnet",
+        "cliArgs": [
+          "--dangerously-skip-permissions"
+        ]
+      },
+      "dir": "27-points-gift-teammate/k10-2"
+    },
+    {
+      "scenario": "27-points-gift-teammate",
+      "kind": "k10",
+      "index": 3,
+      "ending": "done",
+      "summary": "giftPoints가 일반 주문과 같은 earnPoints(배송비 제외, 1P 미만 버림)를 쓰도록 고쳐 G-0213이 249P에서 218P로 바뀌었다. 테스트를 추가했고 npm test는 24개 모두 통과했다. src/format/은 건드리지 않았고 저장된 포인트도 재계산하지 않는다. 변경은 relay/w-20261004-001 브랜치에 커밋되었다.",
+      "error": null,
+      "wallMs": 449899,
+      "firstChangeMs": 79213,
+      "outcome": {
+        "success": true,
+        "checks": [
+          {
+            "name": "적립 기준 금액",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "적립 버림",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "주문·영수증 그대로",
+            "guard": true,
+            "pass": true
+          },
+          {
+            "name": "선물 적립",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "선물 주문 그대로",
+            "guard": true,
+            "pass": true
+          }
+        ],
+        "repoTestsPass": true,
+        "filesChanged": [
+          "docs/knowledge/points/earn-basis.md",
+          "src/points/earn.js",
+          "test/order.test.js",
+          "src/gift/gift-points.js",
+          "test/gift.test.js"
+        ],
+        "linesChanged": 91,
+        "unrelated": [
+          "docs/knowledge/points/earn-basis.md"
+        ],
+        "committed": true
+      },
+      "human": {
+        "turns": 14,
+        "actions": {
+          "click": 11,
+          "fill": 2,
+          "inspect_diff": 1,
+          "key": 2,
+          "wait": 1,
+          "done": 2,
+          "type": 1
+        },
+        "actionsTotal": 17,
+        "charsTyped": 605,
+        "invalidActions": 0,
+        "refusedDone": 0,
+        "frictionMean": 0,
+        "frictionHigh": 0,
+        "costUsd": 1.2536874,
+        "calls": 16,
+        "ms": 58828,
+        "waitOnlyTurns": 0,
+        "images": 13
+      },
+      "setupDialogs": [
+        {
+          "t": 27876,
+          "name": "folder_trust"
+        },
+        {
+          "t": 30520,
+          "name": "bypass_permissions_warning"
+        },
+        {
+          "t": 246293,
+          "name": "folder_trust"
+        }
+      ],
+      "agent": {
+        "input": 74,
+        "output": 23211,
+        "cacheRead": 1342767,
+        "cacheWrite": 132827,
+        "messages": 37,
+        "sessions": 6
+      },
+      "agentSteps": [
+        {
+          "work": "w-20261004-001",
+          "seq": 1,
+          "node": "intake",
+          "contextChars": 3013,
+          "knowledgeChars": 0,
+          "tokens": {
+            "input": 10,
+            "output": 2214,
+            "cacheRead": 176262,
+            "cacheWrite": 15781,
+            "messages": 5
+          }
+        },
+        {
+          "work": "w-20261004-001",
+          "seq": 2,
+          "node": "fix",
+          "contextChars": 4797,
+          "knowledgeChars": 0,
+          "tokens": {
+            "input": 16,
+            "output": 5000,
+            "cacheRead": 298777,
+            "cacheWrite": 23999,
+            "messages": 8
+          }
+        },
+        {
+          "work": "w-20261004-001",
+          "seq": 3,
+          "node": "verify",
+          "contextChars": 8070,
+          "knowledgeChars": 0,
+          "tokens": {
+            "input": 12,
+            "output": 4482,
+            "cacheRead": 226333,
+            "cacheWrite": 25714,
+            "messages": 6
+          }
+        },
+        {
+          "work": "p2-w-20261004-001",
+          "seq": 1,
+          "node": "intake",
+          "contextChars": 3539,
+          "knowledgeChars": 544,
+          "tokens": {
+            "input": 12,
+            "output": 3791,
+            "cacheRead": 201909,
+            "cacheWrite": 19814,
+            "messages": 6
+          }
+        },
+        {
+          "work": "p2-w-20261004-001",
+          "seq": 2,
+          "node": "fix",
+          "contextChars": 5976,
+          "knowledgeChars": 544,
+          "tokens": {
+            "input": 14,
+            "output": 3671,
+            "cacheRead": 255995,
+            "cacheWrite": 21788,
+            "messages": 7
+          }
+        },
+        {
+          "work": "p2-w-20261004-001",
+          "seq": 3,
+          "node": "verify",
+          "contextChars": 8715,
+          "knowledgeChars": 544,
+          "tokens": {
+            "input": 10,
+            "output": 4053,
+            "cacheRead": 183491,
+            "cacheWrite": 25731,
+            "messages": 5
+          }
+        }
+      ],
+      "works": [
+        {
+          "id": "w-20261004-001",
+          "dir": "/tmp/relay-eval/e12-points/27-points-gift-teammate-k10-3/relay-home/projects/shop-b98864/works/w-20261004-001",
+          "status": "completed",
+          "branch": null,
+          "tasks": [
+            {
+              "seq": 1,
+              "node": "intake",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "7b15cf2c-60f6-44dd-9a0c-48eb291ab5a4",
+              "contextChars": 3013,
+              "knowledgeChars": 0
+            },
+            {
+              "seq": 2,
+              "node": "fix",
+              "status": "approved",
+              "approved_by": "auto",
+              "session": "3fbcd0d4-4662-476f-adc6-890cc2ef6e5d",
+              "contextChars": 4797,
+              "knowledgeChars": 0
+            },
+            {
+              "seq": 3,
+              "node": "verify",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "6b2fc6d9-6830-43f5-834c-72aa33cc6906",
+              "contextChars": 8070,
+              "knowledgeChars": 0
+            }
+          ]
+        },
+        {
+          "id": "p2-w-20261004-001",
+          "dir": "/tmp/relay-eval/e12-points/27-points-gift-teammate-k10-3/relay-home-2/projects/shop-mate1-3d4794/works/w-20261004-001",
+          "status": "completed",
+          "branch": null,
+          "tasks": [
+            {
+              "seq": 1,
+              "node": "intake",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "8fcd5a7b-096f-472a-9bd3-3d7e607f7534",
+              "contextChars": 3539,
+              "knowledgeChars": 544
+            },
+            {
+              "seq": 2,
+              "node": "fix",
+              "status": "approved",
+              "approved_by": "auto",
+              "session": "4384bc4e-eab6-4092-bd4c-783d0de0bb3a",
+              "contextChars": 5976,
+              "knowledgeChars": 544
+            },
+            {
+              "seq": 3,
+              "node": "verify",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "e12aad06-c259-46d8-a22b-ae5c96a433c1",
+              "contextChars": 8715,
+              "knowledgeChars": 544
+            }
+          ]
+        }
+      ],
+      "workResults": [
+        {
+          "work": 1,
+          "ending": "done",
+          "summary": "earn.js가 배송비를 뺀 금액의 1%를 내림하도록 고쳐 O-1042가 237P로 나온다. 회귀 테스트를 추가했고 npm test가 통과한다. 선물하기와 영수증은 그대로이며, 브랜치 relay/w-20261004-001에 커밋했다.",
+          "wallMs": 211252,
+          "survey": {
+            "effort": 2,
+            "clarity": 6,
+            "control": 5,
+            "confidence": 6,
+            "trust": 6,
+            "recovery": null,
+            "reuse": 6,
+            "best": "완료조건별 판정표에 근거가 붙어 있어서 결과를 믿기 쉬웠다. 선물하기와 영수증을 건드리지 않았다는 것도 한눈에 확인됐다.",
+            "worst": "원인 분석과 수정 단계가 자동 승인으로 지나가서, 리뷰 단계에 가서야 diff를 따로 열어 봐야 했다. 에이전트가 계산 기준(쿠폰·사용 포인트·배송비·버림)을 따로 묻지 않고 진행한 점도 아쉬웠다.",
+            "comment": "전체적으로 매끄러웠다. 다만 코드를 보려면 inspect_diff를 직접 써야 해서 한 단계가 더 들었다."
+          },
+          "human": {
+            "turns": 7,
+            "actionsTotal": 8,
+            "charsTyped": 266,
+            "inspectDiff": 1,
+            "invalidActions": 0,
+            "refusedDone": 0,
+            "frictionMean": 0,
+            "frictionHigh": 0,
+            "ms": 29864,
+            "told": [
+              4
+            ],
+            "carriedTold": 0,
+            "carriedTotal": 0,
+            "toldAudit": [
+              1,
+              4
+            ],
+            "carriedToldAudit": 0,
+            "auditCostUsd": 0.0083088
+          },
+          "outcome": {
+            "success": true,
+            "checks": [
+              {
+                "name": "적립 기준 금액",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "적립 버림",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "주문·영수증 그대로",
+                "guard": true,
+                "pass": true
+              }
+            ],
+            "trees": [
+              {
+                "label": "w-20261004-001",
+                "files": [
+                  "docs/knowledge/points/earn-basis.md",
+                  "src/points/earn.js",
+                  "test/order.test.js"
+                ],
+                "repoTestsPass": true
+              }
+            ]
+          },
+          "agent": {
+            "input": 38,
+            "output": 11696,
+            "cacheRead": 701372,
+            "cacheWrite": 65494,
+            "messages": 19,
+            "sessions": 3,
+            "questions": 1
+          },
+          "contextChars": 15880,
+          "knowledgeChars": 0
+        },
+        {
+          "work": 2,
+          "ending": "done",
+          "summary": "giftPoints가 일반 주문과 같은 earnPoints(배송비 제외, 1P 미만 버림)를 쓰도록 고쳐 G-0213이 249P에서 218P로 바뀌었다. 테스트를 추가했고 npm test는 24개 모두 통과했다. src/format/은 건드리지 않았고 저장된 포인트도 재계산하지 않는다. 변경은 relay/w-20261004-001 브랜치에 커밋되었다.",
+          "wallMs": 222436,
+          "survey": {
+            "effort": 2,
+            "clarity": 6,
+            "control": 5,
+            "confidence": 6,
+            "trust": 6,
+            "recovery": null,
+            "reuse": 6,
+            "best": "단계마다 요약이 나오고, 완료조건별 판정표에 근거가 붙어 있어서 결과를 믿고 확인하기 쉬웠다. 전체 변경 탭에서 diff를 바로 볼 수 있는 점도 좋았다.",
+            "worst": "원인 분석과 수정 단계는 자동 승인으로 지나가서 그 단계에서 무슨 일이 있었는지는 직접 탭을 눌러 봐야 했다. 선택지 질문이 갑자기 떠서 처음엔 키 입력 방식이 조금 헷갈렸다.",
+            "comment": "규칙을 잘 모른다고 답했는데도 에이전트가 고객센터 값(218P)을 기준으로 코드와 맞는지 확인했고, 그 사실을 가정과 위험으로 적어 둔 점이 좋았다. 지식 문서도 같이 갱신됐다. 다만 이 갱신은 내가 요청하지 않았다."
+          },
+          "human": {
+            "turns": 7,
+            "actionsTotal": 9,
+            "charsTyped": 339,
+            "inspectDiff": 0,
+            "invalidActions": 0,
+            "refusedDone": 0,
+            "frictionMean": 0,
+            "frictionHigh": 0,
+            "ms": 28964,
+            "told": [
+              1,
+              2,
+              3
+            ],
+            "carriedTold": 0,
+            "carriedTotal": 0,
+            "toldAudit": [
+              1,
+              2,
+              3
+            ],
+            "carriedToldAudit": 0,
+            "auditCostUsd": 0.0070688
+          },
+          "handoff": {
+            "work": 2,
+            "merged": [
+              "relay/w-20261004-001"
+            ],
+            "conflicts": [],
+            "failed": []
+          },
+          "outcome": {
+            "success": true,
+            "checks": [
+              {
+                "name": "선물 적립",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "선물 주문 그대로",
+                "guard": true,
+                "pass": true
+              }
+            ],
+            "trees": [
+              {
+                "label": "p2-w-20261004-001",
+                "files": [
+                  "docs/knowledge/points/earn-basis.md",
+                  "src/gift/gift-points.js",
+                  "src/points/earn.js",
+                  "test/gift.test.js",
+                  "test/order.test.js"
+                ],
+                "repoTestsPass": true
+              }
+            ]
+          },
+          "agent": {
+            "input": 36,
+            "output": 11515,
+            "cacheRead": 641395,
+            "cacheWrite": 67333,
+            "messages": 18,
+            "sessions": 3,
+            "questions": 1
+          },
+          "contextChars": 18230,
+          "knowledgeChars": 1632
+        }
+      ],
+      "handoffs": [
+        {
+          "work": 2,
+          "merged": [
+            "relay/w-20261004-001"
+          ],
+          "conflicts": [],
+          "failed": []
+        }
+      ],
+      "survey": {
+        "effort": 2,
+        "clarity": 6,
+        "control": 5,
+        "confidence": 6,
+        "trust": 6,
+        "recovery": null,
+        "reuse": 6,
+        "best": "단계마다 요약이 나오고, 완료조건별 판정표에 근거가 붙어 있어서 결과를 믿고 확인하기 쉬웠다. 전체 변경 탭에서 diff를 바로 볼 수 있는 점도 좋았다.",
+        "worst": "원인 분석과 수정 단계는 자동 승인으로 지나가서 그 단계에서 무슨 일이 있었는지는 직접 탭을 눌러 봐야 했다. 선택지 질문이 갑자기 떠서 처음엔 키 입력 방식이 조금 헷갈렸다.",
+        "comment": "규칙을 잘 모른다고 답했는데도 에이전트가 고객센터 값(218P)을 기준으로 코드와 맞는지 확인했고, 그 사실을 가정과 위험으로 적어 둔 점이 좋았다. 지식 문서도 같이 갱신됐다. 다만 이 갱신은 내가 요청하지 않았다."
+      },
+      "options": {
+        "agentModel": "sonnet",
+        "effort": "medium",
+        "humanModel": "sonnet",
+        "cliArgs": [
+          "--dangerously-skip-permissions"
+        ]
+      },
+      "dir": "27-points-gift-teammate/k10-3"
+    },
+    {
+      "scenario": "27-points-gift-teammate",
+      "kind": "k10",
+      "index": 4,
+      "ending": "done",
+      "summary": "giftPoints가 일반 주문 earnPoints를 쓰도록 수정, G-0213이 218P로 확인됨, npm test 통과, 로컬 브랜치 relay/w-20261004-001에 커밋 완료(완료만).",
+      "error": null,
+      "wallMs": 487176,
+      "firstChangeMs": 134111,
+      "outcome": {
+        "success": true,
+        "checks": [
+          {
+            "name": "적립 기준 금액",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "적립 버림",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "주문·영수증 그대로",
+            "guard": true,
+            "pass": true
+          },
+          {
+            "name": "선물 적립",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "선물 주문 그대로",
+            "guard": true,
+            "pass": true
+          }
+        ],
+        "repoTestsPass": true,
+        "filesChanged": [
+          "docs/knowledge/points/earn-rule.md",
+          "src/points/earn.js",
+          "test/earn.test.js",
+          "src/gift/gift-points.js",
+          "test/gift.test.js"
+        ],
+        "linesChanged": 123,
+        "unrelated": [
+          "docs/knowledge/points/earn-rule.md"
+        ],
+        "committed": true
+      },
+      "human": {
+        "turns": 18,
+        "actions": {
+          "click": 12,
+          "fill": 2,
+          "key": 6,
+          "wait": 6,
+          "done": 2,
+          "type": 1
+        },
+        "actionsTotal": 21,
+        "charsTyped": 616,
+        "invalidActions": 0,
+        "refusedDone": 0,
+        "frictionMean": 0,
+        "frictionHigh": 0,
+        "costUsd": 1.7742818000000002,
+        "calls": 20,
+        "ms": 83843,
+        "waitOnlyTurns": 0,
+        "images": 14
+      },
+      "setupDialogs": [
+        {
+          "t": 27569,
+          "name": "folder_trust"
+        },
+        {
+          "t": 30234,
+          "name": "bypass_permissions_warning"
+        },
+        {
+          "t": 270414,
+          "name": "folder_trust"
+        }
+      ],
+      "agent": {
+        "input": 76,
+        "output": 21138,
+        "cacheRead": 1378121,
+        "cacheWrite": 130218,
+        "messages": 38,
+        "sessions": 6
+      },
+      "agentSteps": [
+        {
+          "work": "w-20261004-001",
+          "seq": 1,
+          "node": "intake",
+          "contextChars": 3038,
+          "knowledgeChars": 0,
+          "tokens": {
+            "input": 12,
+            "output": 2903,
+            "cacheRead": 219045,
+            "cacheWrite": 18102,
+            "messages": 6
+          }
+        },
+        {
+          "work": "w-20261004-001",
+          "seq": 2,
+          "node": "fix",
+          "contextChars": 4854,
+          "knowledgeChars": 0,
+          "tokens": {
+            "input": 14,
+            "output": 3999,
+            "cacheRead": 255350,
+            "cacheWrite": 22926,
+            "messages": 7
+          }
+        },
+        {
+          "work": "w-20261004-001",
+          "seq": 3,
+          "node": "verify",
+          "contextChars": 7911,
+          "knowledgeChars": 0,
+          "tokens": {
+            "input": 12,
+            "output": 4102,
+            "cacheRead": 225307,
+            "cacheWrite": 25124,
+            "messages": 6
+          }
+        },
+        {
+          "work": "p2-w-20261004-001",
+          "seq": 1,
+          "node": "intake",
+          "contextChars": 3455,
+          "knowledgeChars": 473,
+          "tokens": {
+            "input": 14,
+            "output": 3521,
+            "cacheRead": 243104,
+            "cacheWrite": 18326,
+            "messages": 7
+          }
+        },
+        {
+          "work": "p2-w-20261004-001",
+          "seq": 2,
+          "node": "fix",
+          "contextChars": 5720,
+          "knowledgeChars": 473,
+          "tokens": {
+            "input": 14,
+            "output": 2876,
+            "cacheRead": 254100,
+            "cacheWrite": 21035,
+            "messages": 7
+          }
+        },
+        {
+          "work": "p2-w-20261004-001",
+          "seq": 3,
+          "node": "verify",
+          "contextChars": 8200,
+          "knowledgeChars": 473,
+          "tokens": {
+            "input": 10,
+            "output": 3737,
+            "cacheRead": 181215,
+            "cacheWrite": 24705,
+            "messages": 5
+          }
+        }
+      ],
+      "works": [
+        {
+          "id": "w-20261004-001",
+          "dir": "/tmp/relay-eval/e12-points/27-points-gift-teammate-k10-4/relay-home/projects/shop-d11d33/works/w-20261004-001",
+          "status": "completed",
+          "branch": null,
+          "tasks": [
+            {
+              "seq": 1,
+              "node": "intake",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "62701155-5f1f-4cd3-8440-48803be24ba5",
+              "contextChars": 3038,
+              "knowledgeChars": 0
+            },
+            {
+              "seq": 2,
+              "node": "fix",
+              "status": "approved",
+              "approved_by": "auto",
+              "session": "b74dcc46-d348-41ec-b06c-8c63692a4640",
+              "contextChars": 4854,
+              "knowledgeChars": 0
+            },
+            {
+              "seq": 3,
+              "node": "verify",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "8f3ff99b-4b53-4d11-a683-e591e3a481bb",
+              "contextChars": 7911,
+              "knowledgeChars": 0
+            }
+          ]
+        },
+        {
+          "id": "p2-w-20261004-001",
+          "dir": "/tmp/relay-eval/e12-points/27-points-gift-teammate-k10-4/relay-home-2/projects/shop-mate1-72aaf7/works/w-20261004-001",
+          "status": "completed",
+          "branch": null,
+          "tasks": [
+            {
+              "seq": 1,
+              "node": "intake",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "b9497745-43a9-4782-acdd-83df604151fa",
+              "contextChars": 3455,
+              "knowledgeChars": 473
+            },
+            {
+              "seq": 2,
+              "node": "fix",
+              "status": "approved",
+              "approved_by": "auto",
+              "session": "6136eca9-7a0c-4b46-bd0f-9bdf21a2bffc",
+              "contextChars": 5720,
+              "knowledgeChars": 473
+            },
+            {
+              "seq": 3,
+              "node": "verify",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "a30b427e-62cf-4557-bcd5-4549303a281d",
+              "contextChars": 8200,
+              "knowledgeChars": 473
+            }
+          ]
+        }
+      ],
+      "workResults": [
+        {
+          "work": 1,
+          "ending": "done",
+          "summary": "earn.js를 (상품금액-쿠폰-사용포인트)의 1%를 버림하도록 고쳤다. O-1042는 268P에서 237P가 됐고 npm test 24개가 모두 통과했다. gift-points.js, src/format, 이미 저장된 points.earned는 그대로다. relay/w-20261004-001 브랜치에 커밋했고 push는 하지 않았다.",
+          "wallMs": 233187,
+          "survey": {
+            "effort": 2,
+            "clarity": 6,
+            "control": 6,
+            "confidence": 6,
+            "trust": 6,
+            "recovery": null,
+            "reuse": 6,
+            "best": "의도 정리 단계에서 에이전트가 기준 금액과 끝수 처리를 선택지로 물어봐서 내가 정할 수 있었다. 판정표에 완료조건별로 근거가 붙어 있고 전체 변경도 바로 볼 수 있어서 확인하기 쉬웠다.",
+            "worst": "별로 불편한 점은 없었다. 선택지에 추천이 붙어 있어서 그냥 Enter만 눌러도 되는 점은 오히려 조금 걱정됐다. 단계 사이에 자동으로 넘어가서, 02 단계가 지나간 건 탭을 열어 봐야 알 수 있었다.",
+            "comment": "위험 항목에 gift 주문이 earnPoints를 공유할 수 있다고 적혀 있었다. 최종 판정표에는 이 확인 결과가 따로 없고, gift 파일이 바뀌지 않았다는 것만 있었다. 별도 확인 결과가 있으면 더 좋겠다."
+          },
+          "human": {
+            "turns": 9,
+            "actionsTotal": 10,
+            "charsTyped": 291,
+            "inspectDiff": 0,
+            "invalidActions": 0,
+            "refusedDone": 0,
+            "frictionMean": 0,
+            "frictionHigh": 0,
+            "ms": 36998,
+            "told": [
+              2,
+              3,
+              4
+            ],
+            "carriedTold": 0,
+            "carriedTotal": 0,
+            "toldAudit": [
+              1,
+              4
+            ],
+            "carriedToldAudit": 0,
+            "auditCostUsd": 0.0099828
+          },
+          "outcome": {
+            "success": true,
+            "checks": [
+              {
+                "name": "적립 기준 금액",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "적립 버림",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "주문·영수증 그대로",
+                "guard": true,
+                "pass": true
+              }
+            ],
+            "trees": [
+              {
+                "label": "w-20261004-001",
+                "files": [
+                  "docs/knowledge/points/earn-rule.md",
+                  "src/points/earn.js",
+                  "test/earn.test.js"
+                ],
+                "repoTestsPass": true
+              }
+            ]
+          },
+          "agent": {
+            "input": 38,
+            "output": 11004,
+            "cacheRead": 699702,
+            "cacheWrite": 66152,
+            "messages": 19,
+            "sessions": 3,
+            "questions": 1
+          },
+          "contextChars": 15803,
+          "knowledgeChars": 0
+        },
+        {
+          "work": 2,
+          "ending": "done",
+          "summary": "giftPoints가 일반 주문 earnPoints를 쓰도록 수정, G-0213이 218P로 확인됨, npm test 통과, 로컬 브랜치 relay/w-20261004-001에 커밋 완료(완료만).",
+          "wallMs": 235956,
+          "survey": {
+            "effort": 2,
+            "clarity": 6,
+            "control": 5,
+            "confidence": 6,
+            "trust": 6,
+            "recovery": null,
+            "reuse": 6,
+            "best": "완료조건별 판정표에 근거가 붙어 있고 전체 변경 diff를 바로 볼 수 있어서, 218P가 나오는지와 건드리면 안 되는 부분이 그대로인지 쉽게 확인했다.",
+            "worst": "의도 정리 단계에서 규칙을 잘 모르는데도 질문을 받았다. 터미널 선택지 입력과 형식 검사 오류 로그가 잠깐 보여서 조금 헷갈렸다.",
+            "comment": "에이전트는 선물하기에 일반 주문 규칙을 적용하는 것을 다른 팀과 정할 사항이라며 확인을 요청했다. 그 점은 믿음이 갔다. 나는 규칙을 몰라서 고객센터 값인 218P로 맞추라고만 답했다. 최종 diff는 작고 이해하기 쉬웠다."
+          },
+          "human": {
+            "turns": 9,
+            "actionsTotal": 11,
+            "charsTyped": 325,
+            "inspectDiff": 0,
+            "invalidActions": 0,
+            "refusedDone": 0,
+            "frictionMean": 0,
+            "frictionHigh": 0,
+            "ms": 46845,
+            "told": [
+              1,
+              2,
+              3
+            ],
+            "carriedTold": 0,
+            "carriedTotal": 0,
+            "toldAudit": [
+              1,
+              2,
+              3
+            ],
+            "carriedToldAudit": 0,
+            "auditCostUsd": 0.006994800000000001
+          },
+          "handoff": {
+            "work": 2,
+            "merged": [
+              "relay/w-20261004-001"
+            ],
+            "conflicts": [],
+            "failed": []
+          },
+          "outcome": {
+            "success": true,
+            "checks": [
+              {
+                "name": "선물 적립",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "선물 주문 그대로",
+                "guard": true,
+                "pass": true
+              }
+            ],
+            "trees": [
+              {
+                "label": "p2-w-20261004-001",
+                "files": [
+                  "docs/knowledge/points/earn-rule.md",
+                  "src/gift/gift-points.js",
+                  "src/points/earn.js",
+                  "test/earn.test.js",
+                  "test/gift.test.js"
+                ],
+                "repoTestsPass": true
+              }
+            ]
+          },
+          "agent": {
+            "input": 38,
+            "output": 10134,
+            "cacheRead": 678419,
+            "cacheWrite": 64066,
+            "messages": 19,
+            "sessions": 3,
+            "questions": 1
+          },
+          "contextChars": 17375,
+          "knowledgeChars": 1419
+        }
+      ],
+      "handoffs": [
+        {
+          "work": 2,
+          "merged": [
+            "relay/w-20261004-001"
+          ],
+          "conflicts": [],
+          "failed": []
+        }
+      ],
+      "survey": {
+        "effort": 2,
+        "clarity": 6,
+        "control": 5,
+        "confidence": 6,
+        "trust": 6,
+        "recovery": null,
+        "reuse": 6,
+        "best": "완료조건별 판정표에 근거가 붙어 있고 전체 변경 diff를 바로 볼 수 있어서, 218P가 나오는지와 건드리면 안 되는 부분이 그대로인지 쉽게 확인했다.",
+        "worst": "의도 정리 단계에서 규칙을 잘 모르는데도 질문을 받았다. 터미널 선택지 입력과 형식 검사 오류 로그가 잠깐 보여서 조금 헷갈렸다.",
+        "comment": "에이전트는 선물하기에 일반 주문 규칙을 적용하는 것을 다른 팀과 정할 사항이라며 확인을 요청했다. 그 점은 믿음이 갔다. 나는 규칙을 몰라서 고객센터 값인 218P로 맞추라고만 답했다. 최종 diff는 작고 이해하기 쉬웠다."
+      },
+      "options": {
+        "agentModel": "sonnet",
+        "effort": "medium",
+        "humanModel": "sonnet",
+        "cliArgs": [
+          "--dangerously-skip-permissions"
+        ]
+      },
+      "dir": "27-points-gift-teammate/k10-4"
+    },
+    {
+      "scenario": "27-points-gift-teammate",
+      "kind": "k10",
+      "index": 5,
+      "ending": "done",
+      "summary": "giftPoints가 일반 적립(earnPoints)을 쓰도록 고쳐 G-0213이 249P에서 218P가 됐다. 테스트 22개가 통과했고 src/format/은 바뀌지 않았다. 변경은 로컬 브랜치 relay/w-20261004-001에 커밋했다.",
+      "error": null,
+      "wallMs": 442866,
+      "firstChangeMs": 84034,
+      "outcome": {
+        "success": true,
+        "checks": [
+          {
+            "name": "적립 기준 금액",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "적립 버림",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "주문·영수증 그대로",
+            "guard": true,
+            "pass": true
+          },
+          {
+            "name": "선물 적립",
+            "guard": false,
+            "pass": true
+          },
+          {
+            "name": "선물 주문 그대로",
+            "guard": true,
+            "pass": true
+          }
+        ],
+        "repoTestsPass": true,
+        "filesChanged": [
+          "docs/knowledge/points/earn-points-basis.md",
+          "src/points/earn.js",
+          "test/order.test.js",
+          "src/gift/gift-points.js",
+          "test/gift.test.js"
+        ],
+        "linesChanged": 104,
+        "unrelated": [
+          "docs/knowledge/points/earn-points-basis.md"
+        ],
+        "committed": true
+      },
+      "human": {
+        "turns": 13,
+        "actions": {
+          "click": 11,
+          "fill": 2,
+          "inspect_diff": 1,
+          "key": 1,
+          "done": 2
+        },
+        "actionsTotal": 15,
+        "charsTyped": 487,
+        "invalidActions": 0,
+        "refusedDone": 0,
+        "frictionMean": 0,
+        "frictionHigh": 0,
+        "costUsd": 1.0959248,
+        "calls": 15,
+        "ms": 50987,
+        "waitOnlyTurns": 0,
+        "images": 12
+      },
+      "setupDialogs": [
+        {
+          "t": 25883,
+          "name": "folder_trust"
+        },
+        {
+          "t": 28522,
+          "name": "bypass_permissions_warning"
+        },
+        {
+          "t": 276382,
+          "name": "folder_trust"
+        }
+      ],
+      "agent": {
+        "input": 82,
+        "output": 22802,
+        "cacheRead": 1560057,
+        "cacheWrite": 131632,
+        "messages": 41,
+        "sessions": 6
+      },
+      "agentSteps": [
+        {
+          "work": "w-20261004-001",
+          "seq": 1,
+          "node": "intake",
+          "contextChars": 3022,
+          "knowledgeChars": 0,
+          "tokens": {
+            "input": 8,
+            "output": 1919,
+            "cacheRead": 136566,
+            "cacheWrite": 14407,
+            "messages": 4
+          }
+        },
+        {
+          "work": "w-20261004-001",
+          "seq": 2,
+          "node": "fix",
+          "contextChars": 4472,
+          "knowledgeChars": 0,
+          "tokens": {
+            "input": 20,
+            "output": 5347,
+            "cacheRead": 397798,
+            "cacheWrite": 25988,
+            "messages": 10
+          }
+        },
+        {
+          "work": "w-20261004-001",
+          "seq": 3,
+          "node": "verify",
+          "contextChars": 7943,
+          "knowledgeChars": 0,
+          "tokens": {
+            "input": 22,
+            "output": 6349,
+            "cacheRead": 465824,
+            "cacheWrite": 30471,
+            "messages": 11
+          }
+        },
+        {
+          "work": "p2-w-20261004-001",
+          "seq": 1,
+          "node": "intake",
+          "contextChars": 3763,
+          "knowledgeChars": 772,
+          "tokens": {
+            "input": 8,
+            "output": 2243,
+            "cacheRead": 125320,
+            "cacheWrite": 15495,
+            "messages": 4
+          }
+        },
+        {
+          "work": "p2-w-20261004-001",
+          "seq": 2,
+          "node": "fix",
+          "contextChars": 5737,
+          "knowledgeChars": 772,
+          "tokens": {
+            "input": 14,
+            "output": 3401,
+            "cacheRead": 251414,
+            "cacheWrite": 20438,
+            "messages": 7
+          }
+        },
+        {
+          "work": "p2-w-20261004-001",
+          "seq": 3,
+          "node": "verify",
+          "contextChars": 8497,
+          "knowledgeChars": 772,
+          "tokens": {
+            "input": 10,
+            "output": 3543,
+            "cacheRead": 183135,
+            "cacheWrite": 24833,
+            "messages": 5
+          }
+        }
+      ],
+      "works": [
+        {
+          "id": "w-20261004-001",
+          "dir": "/tmp/relay-eval/e12-points/27-points-gift-teammate-k10-5/relay-home/projects/shop-03872c/works/w-20261004-001",
+          "status": "completed",
+          "branch": null,
+          "tasks": [
+            {
+              "seq": 1,
+              "node": "intake",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "89a7b218-2eb6-40a3-91dd-ff4e801fd62b",
+              "contextChars": 3022,
+              "knowledgeChars": 0
+            },
+            {
+              "seq": 2,
+              "node": "fix",
+              "status": "approved",
+              "approved_by": "auto",
+              "session": "5014fe56-acc9-4b85-948e-2fd89d6f3bd3",
+              "contextChars": 4472,
+              "knowledgeChars": 0
+            },
+            {
+              "seq": 3,
+              "node": "verify",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "db8ffd3d-c128-4621-8e93-9f4d273b1c55",
+              "contextChars": 7943,
+              "knowledgeChars": 0
+            }
+          ]
+        },
+        {
+          "id": "p2-w-20261004-001",
+          "dir": "/tmp/relay-eval/e12-points/27-points-gift-teammate-k10-5/relay-home-2/projects/shop-mate1-1d397b/works/w-20261004-001",
+          "status": "completed",
+          "branch": null,
+          "tasks": [
+            {
+              "seq": 1,
+              "node": "intake",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "bb749a3f-d5d9-46a4-adba-895a29841e5d",
+              "contextChars": 3763,
+              "knowledgeChars": 772
+            },
+            {
+              "seq": 2,
+              "node": "fix",
+              "status": "approved",
+              "approved_by": "auto",
+              "session": "2412f911-517a-4816-a2fb-d42d97290fda",
+              "contextChars": 5737,
+              "knowledgeChars": 772
+            },
+            {
+              "seq": 3,
+              "node": "verify",
+              "status": "approved",
+              "approved_by": "human",
+              "session": "f75b4520-a822-4c91-a760-cf278b941157",
+              "contextChars": 8497,
+              "knowledgeChars": 772
+            }
+          ]
+        }
+      ],
+      "workResults": [
+        {
+          "work": 1,
+          "ending": "done",
+          "summary": "earnPoints를 (상품금액-쿠폰-사용포인트)의 1% 내림으로 고쳤다. O-1042는 268P에서 237P가 됐다. 테스트는 모두 통과했고, 선물하기와 영수증 코드는 건드리지 않았다. 변경은 relay/w-20261004-001 브랜치에 커밋됐다.",
+          "wallMs": 242000,
+          "survey": {
+            "effort": 2,
+            "clarity": 6,
+            "control": 5,
+            "confidence": 6,
+            "trust": 6,
+            "recovery": null,
+            "reuse": 6,
+            "best": "완료조건별 판정표에 근거(명령과 결과)가 붙어 있어서, O-1042가 237P가 됐고 선물하기와 영수증 파일을 건드리지 않았다는 걸 바로 확인할 수 있었다.",
+            "worst": "에이전트가 계산식을 묻지 않아 제가 따로 알려 줄 일이 없었고, 의도 초안에는 계산식을 확인하지 않았다고만 적혀 있었다. 터미널 로그에 stop hook 형식 오류가 그대로 보여서 잠깐 헷갈렸다.",
+            "comment": "전체적으로 순탄했다. 환불 쪽 반올림 지적은 범위 밖이라 반영하지 않기로 했고, 이 선택지도 이해하기 쉬웠다."
+          },
+          "human": {
+            "turns": 7,
+            "actionsTotal": 8,
+            "charsTyped": 275,
+            "inspectDiff": 1,
+            "invalidActions": 0,
+            "refusedDone": 0,
+            "frictionMean": 0,
+            "frictionHigh": 0,
+            "ms": 25715,
+            "told": [
+              4
+            ],
+            "carriedTold": 0,
+            "carriedTotal": 0,
+            "toldAudit": [
+              1,
+              4
+            ],
+            "carriedToldAudit": 0,
+            "auditCostUsd": 0.0069388
+          },
+          "outcome": {
+            "success": true,
+            "checks": [
+              {
+                "name": "적립 기준 금액",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "적립 버림",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "주문·영수증 그대로",
+                "guard": true,
+                "pass": true
+              }
+            ],
+            "trees": [
+              {
+                "label": "w-20261004-001",
+                "files": [
+                  "docs/knowledge/points/earn-points-basis.md",
+                  "src/points/earn.js",
+                  "test/order.test.js"
+                ],
+                "repoTestsPass": true
+              }
+            ]
+          },
+          "agent": {
+            "input": 50,
+            "output": 13615,
+            "cacheRead": 1000188,
+            "cacheWrite": 70866,
+            "messages": 25,
+            "sessions": 3,
+            "questions": 1
+          },
+          "contextChars": 15437,
+          "knowledgeChars": 0
+        },
+        {
+          "work": 2,
+          "ending": "done",
+          "summary": "giftPoints가 일반 적립(earnPoints)을 쓰도록 고쳐 G-0213이 249P에서 218P가 됐다. 테스트 22개가 통과했고 src/format/은 바뀌지 않았다. 변경은 로컬 브랜치 relay/w-20261004-001에 커밋했다.",
+          "wallMs": 186481,
+          "survey": {
+            "effort": 2,
+            "clarity": 6,
+            "control": 5,
+            "confidence": 6,
+            "trust": 6,
+            "recovery": null,
+            "reuse": 6,
+            "best": "완료조건별 판정표에 근거가 붙어 있었고 전체 변경 diff를 바로 볼 수 있었다. 그래서 승인 전에 확인하기 쉬웠다.",
+            "worst": "의도 정리 단계에서 에이전트가 가정을 확인하지 않았다고 적어 둔 부분이 있었다. 자동 승인 단계는 빨리 지나가서 중간 과정을 따라가기 어려웠다.",
+            "comment": "에이전트가 질문을 하지 않아 고객센터의 218P 값이나 동료 정보를 알려 줄 일이 없었다. 의도 초안에 이미 팀 기준 규칙이 들어 있었고, 결과는 218P로 맞았다. 이 규칙은 레포의 지식 문서에서 가져온 것으로 보인다. 지식 문서에는 \"선물하기 적립은 범위에서 뺌\"이라는 메모가 있었는데, 에이전트가 이 메모를 지우고 선물하기도 같은 규칙을 따른다고 고쳤다. 나는 이 점을 따로 확인하지 못했다. 이 부분은 약간 걸린다."
+          },
+          "human": {
+            "turns": 6,
+            "actionsTotal": 7,
+            "charsTyped": 212,
+            "inspectDiff": 0,
+            "invalidActions": 0,
+            "refusedDone": 0,
+            "frictionMean": 0,
+            "frictionHigh": 0,
+            "ms": 25272,
+            "told": [
+              3
+            ],
+            "carriedTold": 0,
+            "carriedTotal": 0,
+            "toldAudit": [
+              1,
+              3
+            ],
+            "carriedToldAudit": 0,
+            "auditCostUsd": 0.005818800000000001
+          },
+          "handoff": {
+            "work": 2,
+            "merged": [
+              "relay/w-20261004-001"
+            ],
+            "conflicts": [],
+            "failed": []
+          },
+          "outcome": {
+            "success": true,
+            "checks": [
+              {
+                "name": "선물 적립",
+                "guard": false,
+                "pass": true
+              },
+              {
+                "name": "선물 주문 그대로",
+                "guard": true,
+                "pass": true
+              }
+            ],
+            "trees": [
+              {
+                "label": "p2-w-20261004-001",
+                "files": [
+                  "docs/knowledge/points/earn-points-basis.md",
+                  "src/gift/gift-points.js",
+                  "src/points/earn.js",
+                  "test/gift.test.js",
+                  "test/order.test.js"
+                ],
+                "repoTestsPass": true
+              }
+            ]
+          },
+          "agent": {
+            "input": 32,
+            "output": 9187,
+            "cacheRead": 559869,
+            "cacheWrite": 60766,
+            "messages": 16,
+            "sessions": 3,
+            "questions": 0
+          },
+          "contextChars": 17997,
+          "knowledgeChars": 2316
+        }
+      ],
+      "handoffs": [
+        {
+          "work": 2,
+          "merged": [
+            "relay/w-20261004-001"
+          ],
+          "conflicts": [],
+          "failed": []
+        }
+      ],
+      "survey": {
+        "effort": 2,
+        "clarity": 6,
+        "control": 5,
+        "confidence": 6,
+        "trust": 6,
+        "recovery": null,
+        "reuse": 6,
+        "best": "완료조건별 판정표에 근거가 붙어 있었고 전체 변경 diff를 바로 볼 수 있었다. 그래서 승인 전에 확인하기 쉬웠다.",
+        "worst": "의도 정리 단계에서 에이전트가 가정을 확인하지 않았다고 적어 둔 부분이 있었다. 자동 승인 단계는 빨리 지나가서 중간 과정을 따라가기 어려웠다.",
+        "comment": "에이전트가 질문을 하지 않아 고객센터의 218P 값이나 동료 정보를 알려 줄 일이 없었다. 의도 초안에 이미 팀 기준 규칙이 들어 있었고, 결과는 218P로 맞았다. 이 규칙은 레포의 지식 문서에서 가져온 것으로 보인다. 지식 문서에는 \"선물하기 적립은 범위에서 뺌\"이라는 메모가 있었는데, 에이전트가 이 메모를 지우고 선물하기도 같은 규칙을 따른다고 고쳤다. 나는 이 점을 따로 확인하지 못했다. 이 부분은 약간 걸린다."
+      },
+      "options": {
+        "agentModel": "sonnet",
+        "effort": "medium",
+        "humanModel": "sonnet",
+        "cliArgs": [
+          "--dangerously-skip-permissions"
+        ]
+      },
+      "dir": "27-points-gift-teammate/k10-5"
+    }
+  ],
+  "judges": []
+}

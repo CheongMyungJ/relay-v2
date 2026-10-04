@@ -1,0 +1,46 @@
+{
+  "calls": [
+    {
+      "at": "2026-10-04T12:40:52+00:00",
+      "hash": "a551cada56a32498f8f387fd43f7b6c03d8c628091127822739c49381679ab16",
+      "model": "sonnet",
+      "ms": 4514,
+      "costUsd": 0.0148698,
+      "usage": {
+        "input": 2,
+        "output": 252,
+        "cacheRead": 729,
+        "cacheCreation": 3050
+      },
+      "related": 0,
+      "promptChars": 2850,
+      "issues": [],
+      "bounced": false,
+      "error": null
+    },
+    {
+      "at": "2026-10-04T12:43:17+00:00",
+      "hash": "5ffbcebab27b0494f2520a3d86019382bd264e246ac14369e260e861cc3e53f5",
+      "model": "sonnet",
+      "ms": 7019,
+      "costUsd": 0.0177838,
+      "usage": {
+        "input": 2,
+        "output": 525,
+        "cacheRead": 729,
+        "cacheCreation": 3096
+      },
+      "related": 0,
+      "promptChars": 2899,
+      "issues": [
+        {
+          "file": "docs/knowledge/invoice/vat-per-line-floor.md",
+          "part": "body",
+          "message": "[지식 검토: 규칙 절에 정하지 않은 것] \"청구서·견적서·반품 전표 모두, 부가세는 과세 품목 줄마다\" → 견적서·반품 전표 적용은 사람 결정에 없고 앞 단계 후보도 '정하지 않음'이므로, 규칙·제목·예시(Q-0457, CN-0112)·`lineVat`을 세 문서가 함께 쓴다는 줄·바뀐 이력의 '적용으로 확정'을 청구서 범위로 되돌리고 견적서·반품 전표는 '아직 정하지 않은 것'으로 옮긴다."
+        }
+      ],
+      "bounced": true,
+      "error": null
+    }
+  ]
+}

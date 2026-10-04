@@ -1,0 +1,18 @@
+{"ts":"2026-10-04T12:35:36+00:00","work_id":"w-20261004-003","type":"work.created","payload":{"type":"bugfix","base_branch":"main","base_commit":"e2d0faa56a7cbdc1e7abb31596a9a92c68925ad0"}}
+{"ts":"2026-10-04T12:35:36+00:00","work_id":"w-20261004-003","task_id":"t-01","type":"task.started","payload":{"reason":"default","session_id":"d19feb9c-6489-4c24-a150-44b952aa367a"}}
+{"ts":"2026-10-04T12:35:37+00:00","work_id":"w-20261004-003","task_id":"t-01","type":"task.first_output","payload":{"pid":3342,"ms":1053}}
+{"ts":"2026-10-04T12:35:37+00:00","work_id":"w-20261004-003","task_id":"t-01","type":"task.first_hook","payload":{"pid":3342,"ms":1285,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:36:22+00:00","work_id":"w-20261004-003","task_id":"t-01","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:36:36+00:00","work_id":"w-20261004-003","task_id":"t-01","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T12:36:36+00:00","work_id":"w-20261004-003","task_id":"t-02","type":"task.started","payload":{"reason":"default","session_id":"7d097ff3-ea26-4adb-88cd-9512a0e0ecd6"}}
+{"ts":"2026-10-04T12:36:37+00:00","work_id":"w-20261004-003","task_id":"t-02","type":"task.first_output","payload":{"pid":5248,"ms":1000}}
+{"ts":"2026-10-04T12:36:38+00:00","work_id":"w-20261004-003","task_id":"t-02","type":"task.first_hook","payload":{"pid":5248,"ms":1379,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:38:17+00:00","work_id":"w-20261004-003","task_id":"t-02","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:38:39+00:00","work_id":"w-20261004-003","task_id":"t-02","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T12:38:40+00:00","work_id":"w-20261004-003","task_id":"t-03","type":"task.started","payload":{"reason":"default","session_id":"b4410c24-cc04-4674-b043-450ebc64d1a3"}}
+{"ts":"2026-10-04T12:38:41+00:00","work_id":"w-20261004-003","task_id":"t-03","type":"task.first_output","payload":{"pid":9761,"ms":1193}}
+{"ts":"2026-10-04T12:38:42+00:00","work_id":"w-20261004-003","task_id":"t-03","type":"task.first_hook","payload":{"pid":9761,"ms":1771,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:42:34+00:00","work_id":"w-20261004-003","task_id":"t-03","type":"task.bounced","payload":{"attempt":1,"max":2,"errors":[{"file":"docs/knowledge/points/partial-refund-recovery.md","message":"[지식 검토: 규칙 절에 정하지 않은 것] \"남은 상품의 적립은 `docs/knowledge/points/earn-base.md`의 기준(`earnBase`, `pointsForBase`)으로 계산한다.\" → 환불 회수에 새 적립률(2%)을 쓸지는 정산팀과 따로 정하기로 했고 코드는 1%(REFUND_RECOVERY_RATE_PERCENT)를 쓰므로, 남은 상품 적립에 어떤 율을 쓰는지 단정하는 이 줄을 `## 규칙`에서 빼 `## 아직 정하지 않은 것`으로 옮기거나 율을 특정하지 않게 고친다."},{"file":"docs/knowledge/points/partial-refund-recovery.md","message":"[지식 검토: 다른 항목과 어긋남] \"예: O-1077/R-0311은 403 − 271 = 132P.\" → 같은 파일의 `## 아직 정하지 않은 것`은 같은 주문을 403 − 543(음수)로 말하므로, 옛 1% 기준인 271 예시를 `## 규칙`에서 빼거나 율을 명시해 같은 값으로 맞춘다."}]}}
+{"ts":"2026-10-04T12:42:54+00:00","work_id":"w-20261004-003","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:43:20+00:00","work_id":"w-20261004-003","task_id":"t-03","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T12:43:20+00:00","work_id":"w-20261004-003","type":"work.completed","payload":{"delivery":"none"}}

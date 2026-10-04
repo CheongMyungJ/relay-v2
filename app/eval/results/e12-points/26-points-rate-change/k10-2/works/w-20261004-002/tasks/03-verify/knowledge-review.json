@@ -1,0 +1,46 @@
+{
+  "calls": [
+    {
+      "at": "2026-10-04T12:15:13+00:00",
+      "hash": "e793ec0f9fe8086e793c84ca3f6e6625ad2914cc7ac5f7c6d4153ec7b7e23a79",
+      "model": "sonnet",
+      "ms": 6778,
+      "costUsd": 0.0232958,
+      "usage": {
+        "input": 2,
+        "output": 683,
+        "cacheRead": 729,
+        "cacheCreation": 4079
+      },
+      "related": 0,
+      "promptChars": 4077,
+      "issues": [
+        {
+          "file": "docs/knowledge/points/earn-basis.md",
+          "part": "body",
+          "message": "[지식 검토: 규칙 절에 지금 상태] \"`createRefund`는 남은 상품 금액이 쿠폰+사용 포인트보다 적어지는 환불을 막고 전체 취소로 보낸다. 이 제한을 풀면 회수식을 다시 정해야 한다.\" → 이 줄은 사람의 결정이나 요청에서 나오지 않은 현재 코드 동작 설명이므로 `## 규칙`에서 빼거나, 코드로 확인한 뒤 현재 상태 항목으로 옮긴다. 사람이 정한 규칙으로 남기려면 그 근거를 먼저 확인한다."
+        }
+      ],
+      "bounced": true,
+      "error": null
+    },
+    {
+      "at": "2026-10-04T12:15:23+00:00",
+      "hash": "858ab822200f81899a69d17ae8b5cc1026aec54f77fb459b7fc04654ec44f39e",
+      "model": "sonnet",
+      "ms": 5508,
+      "costUsd": 0.019795800000000002,
+      "usage": {
+        "input": 2,
+        "output": 367,
+        "cacheRead": 729,
+        "cacheCreation": 3994
+      },
+      "related": 0,
+      "promptChars": 3988,
+      "issues": [],
+      "bounced": false,
+      "error": null
+    }
+  ]
+}

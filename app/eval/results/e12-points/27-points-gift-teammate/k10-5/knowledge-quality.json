@@ -1,0 +1,41 @@
+{
+  "paths": [
+    "docs/knowledge/points/earn-points-basis.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/points/earn-points-basis.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "적립 기준은 goods − coupon − pointsUsed이고 배송비는 뺀다고 적혀 있다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "원 단위 내림, 반올림하지 않는다고 적혀 있다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "적립률 POINT_RATE_PERCENT 1%가 적혀 있다."
+      },
+      {
+        "id": "R5",
+        "status": "missing",
+        "why": "이미 적립된 포인트를 다시 계산하지 않고 저장된 값을 쓴다는 내용이 어디에도 없다."
+      }
+    ]
+  }
+}

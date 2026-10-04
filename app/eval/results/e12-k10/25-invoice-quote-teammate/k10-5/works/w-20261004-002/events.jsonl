@@ -1,0 +1,18 @@
+{"ts":"2026-10-04T14:01:05+00:00","work_id":"w-20261004-002","type":"work.created","payload":{"type":"bugfix","base_branch":"main","base_commit":"581c76ddfc65d3278b6df6cca13a9c7b1289d8b4"}}
+{"ts":"2026-10-04T14:01:05+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.started","payload":{"reason":"default","session_id":"f1917525-9552-468b-ad19-03be752bf6e8"}}
+{"ts":"2026-10-04T14:01:06+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.first_output","payload":{"pid":18071,"ms":907}}
+{"ts":"2026-10-04T14:01:06+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.first_hook","payload":{"pid":18071,"ms":1104,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T14:01:30+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T14:01:42+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T14:01:42+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.started","payload":{"reason":"default","session_id":"051d49ac-969c-4c40-aaca-f4aa86b0d16e"}}
+{"ts":"2026-10-04T14:01:43+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.first_output","payload":{"pid":18862,"ms":843}}
+{"ts":"2026-10-04T14:01:43+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.first_hook","payload":{"pid":18862,"ms":1078,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T14:04:35+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T14:04:50+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.approved","payload":{"by":"auto"}}
+{"ts":"2026-10-04T14:04:51+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.started","payload":{"reason":"default","session_id":"2ec5cd40-a901-4979-84ce-563685483ec7"}}
+{"ts":"2026-10-04T14:04:52+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.first_output","payload":{"pid":21706,"ms":928}}
+{"ts":"2026-10-04T14:04:52+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.first_hook","payload":{"pid":21706,"ms":1132,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T14:05:53+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.bounced","payload":{"attempt":1,"max":2,"errors":[{"file":"docs/knowledge/billing/vat-rounding.md","message":"[지식 검토: 근거 없이 넓힌 규칙] \"청구서(`computeTotals`), 반품 전표(`creditTotals`), 견적서(`quoteTotals`) 모두 같은 규칙이다.\" → 이번 Work는 반품 전표만 확인했고 견적서(`quoteTotals`)는 범위 밖이므로, 견적서를 규칙에서 빼거나 `## 아직 규칙을 따르지 않는 곳`/`## 아직 정하지 않은 것`으로 옮긴다."}]}}
+{"ts":"2026-10-04T14:06:09+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T14:06:36+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T14:06:36+00:00","work_id":"w-20261004-002","type":"work.completed","payload":{"delivery":"none"}}

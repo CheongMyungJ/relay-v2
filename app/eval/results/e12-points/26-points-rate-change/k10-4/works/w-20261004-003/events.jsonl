@@ -1,0 +1,19 @@
+{"ts":"2026-10-04T12:39:52+00:00","work_id":"w-20261004-003","type":"work.created","payload":{"type":"bugfix","base_branch":"main","base_commit":"0497e53f9a5739a0a54f6a40e56dd80bfb3edc72"}}
+{"ts":"2026-10-04T12:39:52+00:00","work_id":"w-20261004-003","task_id":"t-01","type":"task.started","payload":{"reason":"default","session_id":"bb47b9fb-5ceb-4db8-8ba3-4cc432fe7283"}}
+{"ts":"2026-10-04T12:39:53+00:00","work_id":"w-20261004-003","task_id":"t-01","type":"task.first_output","payload":{"pid":12389,"ms":952}}
+{"ts":"2026-10-04T12:39:53+00:00","work_id":"w-20261004-003","task_id":"t-01","type":"task.first_hook","payload":{"pid":12389,"ms":1201,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:40:39+00:00","work_id":"w-20261004-003","task_id":"t-01","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:41:05+00:00","work_id":"w-20261004-003","task_id":"t-01","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:41:17+00:00","work_id":"w-20261004-003","task_id":"t-01","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T12:41:17+00:00","work_id":"w-20261004-003","task_id":"t-02","type":"task.started","payload":{"reason":"default","session_id":"6af0a795-f971-4d85-81f2-c98328066a55"}}
+{"ts":"2026-10-04T12:41:18+00:00","work_id":"w-20261004-003","task_id":"t-02","type":"task.first_output","payload":{"pid":15035,"ms":902}}
+{"ts":"2026-10-04T12:41:18+00:00","work_id":"w-20261004-003","task_id":"t-02","type":"task.first_hook","payload":{"pid":15035,"ms":1207,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:42:11+00:00","work_id":"w-20261004-003","task_id":"t-02","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:42:26+00:00","work_id":"w-20261004-003","task_id":"t-02","type":"task.approved","payload":{"by":"auto"}}
+{"ts":"2026-10-04T12:42:27+00:00","work_id":"w-20261004-003","task_id":"t-03","type":"task.started","payload":{"reason":"default","session_id":"893648d8-3681-46b8-9015-79ad67d289bc"}}
+{"ts":"2026-10-04T12:42:28+00:00","work_id":"w-20261004-003","task_id":"t-03","type":"task.first_output","payload":{"pid":17420,"ms":1006}}
+{"ts":"2026-10-04T12:42:29+00:00","work_id":"w-20261004-003","task_id":"t-03","type":"task.first_hook","payload":{"pid":17420,"ms":1352,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:43:38+00:00","work_id":"w-20261004-003","task_id":"t-03","type":"task.bounced","payload":{"attempt":1,"max":2,"errors":[{"file":"docs/knowledge/points/earn-rule.md","message":"[지식 검토: 다른 항목과 어긋남] \"남은 상품으로 다시 계산한 적립 포인트(위 규정 그대로, 버림)\" → \"위 규정 그대로\"는 2% 적립률로 읽히지만 같은 줄 예시는 1%로 계산하므로, 환불 회수 비율은 아직 정하지 않았고 지금은 1%(`REFUND_RATE_PERCENT`)라고 분명히 적거나 예시의 비율을 정해진 값과 맞춘다."}]}}
+{"ts":"2026-10-04T12:43:54+00:00","work_id":"w-20261004-003","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:44:29+00:00","work_id":"w-20261004-003","task_id":"t-03","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T12:44:29+00:00","work_id":"w-20261004-003","type":"work.completed","payload":{"delivery":"none"}}

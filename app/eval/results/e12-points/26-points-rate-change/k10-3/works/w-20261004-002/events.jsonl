@@ -1,0 +1,18 @@
+{"ts":"2026-10-04T12:27:09+00:00","work_id":"w-20261004-002","type":"work.created","payload":{"type":"bugfix","base_branch":"main","base_commit":"e2d0faa56a7cbdc1e7abb31596a9a92c68925ad0"}}
+{"ts":"2026-10-04T12:27:09+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.started","payload":{"reason":"default","session_id":"3f7709df-7f62-4388-b0fd-84ccad397297"}}
+{"ts":"2026-10-04T12:27:10+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.first_output","payload":{"pid":7101,"ms":755}}
+{"ts":"2026-10-04T12:27:10+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.first_hook","payload":{"pid":7101,"ms":952,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:27:34+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:27:46+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T12:27:47+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.started","payload":{"reason":"default","session_id":"1857b9e2-2690-428a-a96f-32e860be0d33"}}
+{"ts":"2026-10-04T12:27:48+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.first_output","payload":{"pid":11756,"ms":844}}
+{"ts":"2026-10-04T12:27:48+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.first_hook","payload":{"pid":11756,"ms":1207,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:28:33+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:28:48+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.approved","payload":{"by":"auto"}}
+{"ts":"2026-10-04T12:28:49+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.started","payload":{"reason":"default","session_id":"f0a72170-582b-425f-9cbf-f1d8d6e070ff"}}
+{"ts":"2026-10-04T12:28:50+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.first_output","payload":{"pid":16280,"ms":1091}}
+{"ts":"2026-10-04T12:28:51+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.first_hook","payload":{"pid":16280,"ms":1757,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:34:08+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.bounced","payload":{"attempt":1,"max":2,"errors":[{"file":"docs/knowledge/points/partial-refund-recovery.md","message":"[지식 검토: 사람의 이번 말과 어긋남] \"회수 포인트 = 주문에 저장된 원래 적립(`points.earned`) − 남은 상품으로 다시 계산한 적립.\" → 승인된 intent의 '(환불 전 기준 금액의 적립) − (환불 후 기준 금액의 적립)' 및 앞 단계 후보와 맞는지 확인하고, 사람이 저장된 earned 방식을 정했다는 근거가 없으면 규칙과 제목을 환불 전후 재계산 적립의 차이로 되돌리거나 사람에게 확인한다."}]}}
+{"ts":"2026-10-04T12:34:26+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:34:48+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T12:34:48+00:00","work_id":"w-20261004-002","type":"work.completed","payload":{"delivery":"none"}}

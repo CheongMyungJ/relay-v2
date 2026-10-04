@@ -1,0 +1,18 @@
+{"ts":"2026-10-04T12:29:07+00:00","work_id":"w-20261004-002","type":"work.created","payload":{"type":"bugfix","base_branch":"main","base_commit":"a38d8df81453c86099fe5f01d8255a84bd0021f8"}}
+{"ts":"2026-10-04T12:29:07+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.started","payload":{"reason":"default","session_id":"febb2db2-7e4e-40d3-bd4a-64982e06ab4a"}}
+{"ts":"2026-10-04T12:29:08+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.first_output","payload":{"pid":17680,"ms":912}}
+{"ts":"2026-10-04T12:29:08+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.first_hook","payload":{"pid":17680,"ms":1136,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:29:34+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:29:45+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T12:29:45+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.started","payload":{"reason":"default","session_id":"de7313af-0480-47c9-9caa-c4d7e4869b44"}}
+{"ts":"2026-10-04T12:29:46+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.first_output","payload":{"pid":19201,"ms":1047}}
+{"ts":"2026-10-04T12:29:47+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.first_hook","payload":{"pid":19201,"ms":1443,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:30:25+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:30:40+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.approved","payload":{"by":"auto"}}
+{"ts":"2026-10-04T12:30:41+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.started","payload":{"reason":"default","session_id":"5be4708a-98cc-44ed-80b9-bf1359ab537b"}}
+{"ts":"2026-10-04T12:30:42+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.first_output","payload":{"pid":21143,"ms":993}}
+{"ts":"2026-10-04T12:30:42+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.first_hook","payload":{"pid":21143,"ms":1442,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:31:40+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.bounced","payload":{"attempt":1,"max":2,"errors":[{"file":"docs/knowledge/invoice/vat-per-line-floor.md","message":"[지식 검토: 사람의 이번 말과 어긋남] \"`src/invoice/credit-note.js`의 `creditTotals`\" → intent와 완료조건은 함수 이름을 `creditNoteTotals`로 적었으므로, 실제 코드의 export 이름을 확인해 규칙의 함수 이름을 그에 맞게 고친다."}]}}
+{"ts":"2026-10-04T12:31:54+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:32:10+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T12:32:10+00:00","work_id":"w-20261004-002","type":"work.completed","payload":{"delivery":"none"}}

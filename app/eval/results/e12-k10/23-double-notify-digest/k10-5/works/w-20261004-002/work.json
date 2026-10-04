@@ -1,0 +1,207 @@
+{
+  "schema_version": 1,
+  "work_id": "w-20261004-002",
+  "type": "bugfix",
+  "status": "completed",
+  "created_at": "2026-10-04T13:50:37+00:00",
+  "base_branch": "main",
+  "base_commit": "4fe181ba62336abd7bb4b009572845b07bb3040e",
+  "intent": {
+    "version": 1
+  },
+  "settings": {},
+  "file_hashes": {
+    "request.md": "sha256:248abde5dc70038baa8f3021258b76984a7dcb487fcf1556e59b9505bade5d49",
+    "intent.md": "sha256:497f93236cfedfc4a690143d3e47e471a3b7880941788df48273b98333d9d382",
+    "decisions.md": "sha256:09327f49381eee8d5ca0ab035ecd16c8c9026f086a7c55d30ebf8249419e6f03"
+  },
+  "tasks": [
+    {
+      "id": "t-01",
+      "seq": 1,
+      "node": "intake",
+      "status": "approved",
+      "reason": "default",
+      "format_version": 1,
+      "created_at": "2026-10-04T13:50:37+00:00",
+      "session": {
+        "id": "33d13d29-aace-4676-9cab-6514707964ef",
+        "pid": 26020,
+        "process_started_at": "2026-10-04T13:50:37.580Z",
+        "started_at": "2026-10-04T13:50:38+00:00",
+        "alive": false,
+        "ended_at": "2026-10-04T13:51:06+00:00"
+      },
+      "bounce_count": 0,
+      "check": {
+        "handoff_present": true,
+        "status": "awaiting_approval",
+        "errors": [],
+        "warnings": []
+      },
+      "engine": "claude",
+      "start_commit": "4fe181ba62336abd7bb4b009572845b07bb3040e",
+      "skill_hash": "sha256:8d88de1bf541d7ff08dbc3ad8a9215197d2886d38908b02071fdf48a65cc4223",
+      "engine_version": "2.1.289 (Claude Code)",
+      "claude_version": "2.1.289 (Claude Code)",
+      "last_prompt_at": "2026-10-04T13:50:39+00:00",
+      "permission_mode": "bypassPermissions",
+      "approved_at": "2026-10-04T13:51:06+00:00",
+      "approved_by": "human"
+    },
+    {
+      "id": "t-02",
+      "seq": 2,
+      "node": "fix",
+      "status": "discarded",
+      "reason": "default",
+      "format_version": 1,
+      "created_at": "2026-10-04T13:51:06+00:00",
+      "session": {
+        "id": "04c1804b-c0ae-4b72-bf8a-be2b60fe6cb9",
+        "pid": 29262,
+        "process_started_at": "2026-10-04T13:51:06.020Z",
+        "started_at": "2026-10-04T13:51:06+00:00",
+        "alive": false,
+        "ended_at": "2026-10-04T13:52:11+00:00"
+      },
+      "bounce_count": 0,
+      "check": {
+        "handoff_present": true,
+        "status": "awaiting_approval",
+        "errors": [],
+        "warnings": []
+      },
+      "engine": "claude",
+      "start_commit": "4fe181ba62336abd7bb4b009572845b07bb3040e",
+      "skill_hash": "sha256:0eca34eedf0cd9b3428cb33b41030d6ee5e2d5e882ac6bf80b61da3dcd2db22f",
+      "engine_version": "2.1.289 (Claude Code)",
+      "claude_version": "2.1.289 (Claude Code)",
+      "last_prompt_at": "2026-10-04T13:51:07+00:00",
+      "permission_mode": "bypassPermissions",
+      "approved_at": "2026-10-04T13:52:11+00:00",
+      "approved_by": "auto",
+      "discarded_at": "2026-10-04T13:58:11+00:00",
+      "discarded_by": "t-04"
+    },
+    {
+      "id": "t-03",
+      "seq": 3,
+      "node": "verify",
+      "status": "discarded",
+      "reason": "default",
+      "format_version": 1,
+      "created_at": "2026-10-04T13:52:11+00:00",
+      "session": {
+        "id": "97aea931-068b-4063-b539-6366b614191f",
+        "pid": 1569,
+        "process_started_at": "2026-10-04T13:52:11.370Z",
+        "started_at": "2026-10-04T13:52:11+00:00",
+        "alive": false,
+        "ended_at": "2026-10-04T13:57:38+00:00"
+      },
+      "bounce_count": 0,
+      "check": {
+        "handoff_present": true,
+        "status": "awaiting_approval",
+        "errors": [],
+        "warnings": []
+      },
+      "engine": "claude",
+      "start_commit": "ebe6908cbf08d23a5e2f12d8055ada61c8c9cc8d",
+      "skill_hash": "sha256:0633efe3eeb07e8e25ef375a074a38f3793b61f5deef36b58f10f0b5d20e5d4d",
+      "engine_version": "2.1.289 (Claude Code)",
+      "claude_version": "2.1.289 (Claude Code)",
+      "last_prompt_at": "2026-10-04T13:55:03+00:00",
+      "permission_mode": "bypassPermissions",
+      "approved_at": "2026-10-04T13:57:38+00:00",
+      "approved_by": "human",
+      "discarded_at": "2026-10-04T13:58:11+00:00",
+      "discarded_by": "t-04"
+    },
+    {
+      "id": "t-04",
+      "seq": 4,
+      "node": "fix",
+      "status": "approved",
+      "reason": "rewind",
+      "format_version": 1,
+      "created_at": "2026-10-04T13:58:11+00:00",
+      "session": {
+        "id": "6b38e0ff-927f-48ca-a738-dbe90b249f36",
+        "pid": 13748,
+        "process_started_at": "2026-10-04T13:58:10.780Z",
+        "started_at": "2026-10-04T13:58:11+00:00",
+        "alive": false,
+        "ended_at": "2026-10-04T13:59:40+00:00"
+      },
+      "bounce_count": 0,
+      "check": {
+        "handoff_present": true,
+        "status": "awaiting_approval",
+        "errors": [],
+        "warnings": []
+      },
+      "selection": {
+        "from_task": "t-03",
+        "instruction": "서버 두 대가 원장을 따로 쓰는 경우도 한 통만 나가게 고쳐줘. 공용 원장을 주입할 수 있게 하고, 선점(claim)이 서버 간에도 원자적이어야 해. 두 인스턴스 동시 실행과 간격을 둔 실행 둘 다 테스트로 보여줘. 실패한 요약은 여전히 다시 보내야 해.",
+        "discarded": [
+          "t-02",
+          "t-03"
+        ],
+        "skipped": [],
+        "keep_code": true,
+        "reset": null
+      },
+      "engine": "claude",
+      "start_commit": "63e18b514e19355d023d636322ea20cb08c313c1",
+      "skill_hash": "sha256:0eca34eedf0cd9b3428cb33b41030d6ee5e2d5e882ac6bf80b61da3dcd2db22f",
+      "engine_version": "2.1.289 (Claude Code)",
+      "claude_version": "2.1.289 (Claude Code)",
+      "last_prompt_at": "2026-10-04T13:58:12+00:00",
+      "permission_mode": "bypassPermissions",
+      "approved_at": "2026-10-04T13:59:40+00:00",
+      "approved_by": "auto"
+    },
+    {
+      "id": "t-05",
+      "seq": 5,
+      "node": "verify",
+      "status": "approved",
+      "reason": "default",
+      "format_version": 1,
+      "created_at": "2026-10-04T13:59:40+00:00",
+      "session": {
+        "id": "68e6eb01-504d-4184-a2c8-d3f6aa7c8fa9",
+        "pid": 15999,
+        "process_started_at": "2026-10-04T13:59:40.390Z",
+        "started_at": "2026-10-04T13:59:40+00:00",
+        "alive": false,
+        "ended_at": "2026-10-04T14:01:49+00:00"
+      },
+      "bounce_count": 0,
+      "check": {
+        "handoff_present": true,
+        "status": "awaiting_approval",
+        "errors": [],
+        "warnings": [
+          {
+            "file": "docs/knowledge/delivery/digest-key-includes-run-id.md",
+            "part": "body",
+            "message": "[지식 검토: 규칙 절에 지금 상태] \"요약 작업은 운영에서 서버 두 대가 모두 돌리고, 배포한 날 아침에는 한 번 더 돈다(사람이 알려 줌).\" → 운영 현황과 \"test/digest.test.js로 확인했다\"는 검증 기록은 `## 규칙`에서 빼고, 규칙은 \"원장은 서버 수와 상관없이 하나를 공유한다\"만 남긴다."
+          }
+        ]
+      },
+      "engine": "claude",
+      "start_commit": "fe6bc83d16416e706c58c0f91efaa6801b85edc7",
+      "skill_hash": "sha256:0633efe3eeb07e8e25ef375a074a38f3793b61f5deef36b58f10f0b5d20e5d4d",
+      "engine_version": "2.1.289 (Claude Code)",
+      "claude_version": "2.1.289 (Claude Code)",
+      "last_prompt_at": "2026-10-04T13:59:42+00:00",
+      "permission_mode": "bypassPermissions",
+      "approved_at": "2026-10-04T14:01:49+00:00",
+      "approved_by": "human"
+    }
+  ],
+  "completed_at": "2026-10-04T14:01:49+00:00"
+}

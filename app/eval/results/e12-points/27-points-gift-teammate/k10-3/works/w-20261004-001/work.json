@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "work_id": "w-20261004-001",
+  "type": "bugfix",
+  "status": "completed",
+  "created_at": "2026-10-04T12:22:30+00:00",
+  "base_branch": "main",
+  "base_commit": "1b7edd9de83ce47bb475e6e71839d52db3d9d618",
+  "intent": {
+    "version": 1
+  },
+  "settings": {},
+  "file_hashes": {
+    "request.md": "sha256:d48851800ed8bb1317b47550b2a793688b1df7bd41a665840f2ff9474ca5c590",
+    "intent.md": "sha256:733f2cfea8f18616f314462ab45f5a58b71b366e693b4ada8be7ab72d7c71cf5",
+    "decisions.md": "sha256:9467afa50c424ebbb8a3795839cc2f564dbe6cfc160f5fccffcd5d50ce08812f"
+  },
+  "tasks": [
+    {
+      "id": "t-01",
+      "seq": 1,
+      "node": "intake",
+      "status": "approved",
+      "reason": "default",
+      "format_version": 1,
+      "created_at": "2026-10-04T12:22:30+00:00",
+      "session": {
+        "id": "7b15cf2c-60f6-44dd-9a0c-48eb291ab5a4",
+        "pid": 26157,
+        "process_started_at": "2026-10-04T12:22:29.750Z",
+        "started_at": "2026-10-04T12:22:30+00:00",
+        "alive": false,
+        "ended_at": "2026-10-04T12:23:07+00:00"
+      },
+      "bounce_count": 0,
+      "check": {
+        "handoff_present": true,
+        "status": "awaiting_approval",
+        "errors": [],
+        "warnings": []
+      },
+      "engine": "claude",
+      "start_commit": "1b7edd9de83ce47bb475e6e71839d52db3d9d618",
+      "skill_hash": "sha256:8d88de1bf541d7ff08dbc3ad8a9215197d2886d38908b02071fdf48a65cc4223",
+      "engine_version": "2.1.289 (Claude Code)",
+      "claude_version": "2.1.289 (Claude Code)",
+      "last_prompt_at": "2026-10-04T12:22:35+00:00",
+      "permission_mode": "bypassPermissions",
+      "approved_at": "2026-10-04T12:23:07+00:00",
+      "approved_by": "human"
+    },
+    {
+      "id": "t-02",
+      "seq": 2,
+      "node": "fix",
+      "status": "approved",
+      "reason": "default",
+      "format_version": 1,
+      "created_at": "2026-10-04T12:23:07+00:00",
+      "session": {
+        "id": "3fbcd0d4-4662-476f-adc6-890cc2ef6e5d",
+        "pid": 27855,
+        "process_started_at": "2026-10-04T12:23:07.170Z",
+        "started_at": "2026-10-04T12:23:07+00:00",
+        "alive": false,
+        "ended_at": "2026-10-04T12:24:02+00:00"
+      },
+      "bounce_count": 0,
+      "check": {
+        "handoff_present": true,
+        "status": "awaiting_approval",
+        "errors": [],
+        "warnings": []
+      },
+      "engine": "claude",
+      "start_commit": "1b7edd9de83ce47bb475e6e71839d52db3d9d618",
+      "skill_hash": "sha256:0eca34eedf0cd9b3428cb33b41030d6ee5e2d5e882ac6bf80b61da3dcd2db22f",
+      "engine_version": "2.1.289 (Claude Code)",
+      "claude_version": "2.1.289 (Claude Code)",
+      "last_prompt_at": "2026-10-04T12:23:08+00:00",
+      "permission_mode": "bypassPermissions",
+      "approved_at": "2026-10-04T12:24:02+00:00",
+      "approved_by": "auto"
+    },
+    {
+      "id": "t-03",
+      "seq": 3,
+      "node": "verify",
+      "status": "approved",
+      "reason": "default",
+      "format_version": 1,
+      "created_at": "2026-10-04T12:24:02+00:00",
+      "session": {
+        "id": "6b2fc6d9-6830-43f5-834c-72aa33cc6906",
+        "pid": 30465,
+        "process_started_at": "2026-10-04T12:24:02.970Z",
+        "started_at": "2026-10-04T12:24:03+00:00",
+        "alive": false,
+        "ended_at": "2026-10-04T12:25:20+00:00"
+      },
+      "bounce_count": 0,
+      "check": {
+        "handoff_present": true,
+        "status": "awaiting_approval",
+        "errors": [],
+        "warnings": []
+      },
+      "engine": "claude",
+      "start_commit": "1e3f68af1761ca797c2b5fc3f996ee36d7017c0b",
+      "skill_hash": "sha256:0633efe3eeb07e8e25ef375a074a38f3793b61f5deef36b58f10f0b5d20e5d4d",
+      "engine_version": "2.1.289 (Claude Code)",
+      "claude_version": "2.1.289 (Claude Code)",
+      "last_prompt_at": "2026-10-04T12:24:04+00:00",
+      "permission_mode": "bypassPermissions",
+      "approved_at": "2026-10-04T12:25:20+00:00",
+      "approved_by": "human"
+    }
+  ],
+  "completed_at": "2026-10-04T12:25:20+00:00"
+}

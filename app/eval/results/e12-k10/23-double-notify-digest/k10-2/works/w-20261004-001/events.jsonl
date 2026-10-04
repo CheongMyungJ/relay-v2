@@ -1,0 +1,18 @@
+{"ts":"2026-10-04T12:33:01+00:00","work_id":"w-20261004-001","type":"work.created","payload":{"type":"bugfix","base_branch":"main","base_commit":"7363b5473cb3d18e0a9a1cb37f52b7de9def973c"}}
+{"ts":"2026-10-04T12:33:01+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.started","payload":{"reason":"default","session_id":"174d9c2f-c573-40d3-beed-9a7fd4734b11"}}
+{"ts":"2026-10-04T12:33:01+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.first_output","payload":{"pid":28629,"ms":505}}
+{"ts":"2026-10-04T12:33:06+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.first_hook","payload":{"pid":28629,"ms":5243,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:33:23+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.bounced","payload":{"attempt":1,"max":2,"errors":[{"file":"handoff.md","message":"`rejected` 없음: 필수 필드"}]}}
+{"ts":"2026-10-04T12:33:27+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:33:46+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T12:33:47+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.started","payload":{"reason":"default","session_id":"dad3adb2-d31b-4c68-876b-61251b9b8398"}}
+{"ts":"2026-10-04T12:33:48+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.first_output","payload":{"pid":30514,"ms":1063}}
+{"ts":"2026-10-04T12:33:48+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.first_hook","payload":{"pid":30514,"ms":1462,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:35:10+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:35:25+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.approved","payload":{"by":"auto"}}
+{"ts":"2026-10-04T12:35:25+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.started","payload":{"reason":"default","session_id":"2ea1efdc-4feb-426a-94a4-83ff9df60c4b"}}
+{"ts":"2026-10-04T12:35:26+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.first_output","payload":{"pid":2738,"ms":790}}
+{"ts":"2026-10-04T12:35:27+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.first_hook","payload":{"pid":2738,"ms":1162,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:36:35+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:37:06+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T12:37:06+00:00","work_id":"w-20261004-001","type":"work.completed","payload":{"delivery":"none"}}

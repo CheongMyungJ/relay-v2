@@ -1,0 +1,51 @@
+{
+  "calls": [
+    {
+      "at": "2026-10-04T12:48:15+00:00",
+      "hash": "e1a2df1b534764c1b3e70f5a2338218431c830610bc53247bab0c522026bd02e",
+      "model": "sonnet",
+      "ms": 3129,
+      "costUsd": 0.0134258,
+      "usage": {
+        "input": 2,
+        "output": 162,
+        "cacheRead": 729,
+        "cacheCreation": 2914
+      },
+      "related": 0,
+      "promptChars": 2739,
+      "issues": [],
+      "bounced": false,
+      "error": null
+    },
+    {
+      "at": "2026-10-04T12:50:19+00:00",
+      "hash": "1e6e051ce3fcbd859685ddf0c46e93ec41b0e3476fdea2302cdf5a73251fd11e",
+      "model": "sonnet",
+      "ms": 7679,
+      "costUsd": 0.0202498,
+      "usage": {
+        "input": 2,
+        "output": 768,
+        "cacheRead": 729,
+        "cacheCreation": 3105
+      },
+      "related": 0,
+      "promptChars": 2945,
+      "issues": [
+        {
+          "file": "docs/knowledge/points/earn-basis.md",
+          "part": "body",
+          "message": "[지식 검토: 규칙 절에 지금 상태] \"이미 저장된 주문의 `points.earned`와 영수증 글자(`src/format/`)는 바꾸지 않는다.\" → 이 줄은 이번 Work의 수정 범위를 적은 것이므로 `## 규칙`에서 빼고, 필요하면 저장값을 그대로 쓰는 흐름이 이래야 한다는 규칙으로 고쳐 쓴다."
+        },
+        {
+          "file": "docs/knowledge/points/earn-basis.md",
+          "part": "body",
+          "message": "[지식 검토: 근거 없이 넓힌 규칙] \"부분 환불로 회수하는 포인트도 같은 기준이다. 쿠폰 할인과 사용 포인트를 환불 상품 금액 비율로 나눠 뺀 금액의 적립률%를 버림한다.\" → 요청, intent, 사람 결정에 부분 환불 계산 근거가 없으므로 코드와 테스트로 확인된 것만 남기고, 확인되지 않았다면 이 규칙을 삭제하거나 근거를 붙인다."
+        }
+      ],
+      "bounced": true,
+      "error": null
+    }
+  ]
+}

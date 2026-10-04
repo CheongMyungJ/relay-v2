@@ -1,0 +1,103 @@
+diff --git a/tree/docs/knowledge/points/earn-points-basis.md b/tree/docs/knowledge/points/earn-points-basis.md
+new file mode 100644
+index 0000000..58d03b3
+--- /dev/null
++++ b/tree/docs/knowledge/points/earn-points-basis.md
+@@ -0,0 +1,20 @@
++---
++kind: rule
++source: investigation
++anchor: earnPoints
++---
++# 적립 예정 포인트는 (상품 금액 − 쿠폰 − 사용 포인트)의 1%를 원 단위로 내림한다
++
++## 규칙
++- 적립 기준 금액은 `goods − coupon − pointsUsed`이고 배송비는 뺀다.
++- 적립률(`POINT_RATE_PERCENT`, 1%)을 곱한 값은 원 단위로 내림한다. 반올림하지 않는다.
++- 근거는 고객센터 계산 O-1042 = 237P 한 건이다 (상품 28,270 − 쿠폰 3,000 − 포인트 1,500 = 23,770, 1% = 237.7 → 237).
++- 공용 `percentOf`(src/money.js)는 반올림이며 환불 회수도 쓰므로 고치지 않고, 계산은 `src/points/earn.js` 안에서 한다.
++- 선물하기 적립(`giftPoints`, src/gift/gift-points.js)도 `earnPoints`를 그대로 쓴다. 적립 기준과 내림을 한 곳에 둔다. 근거는 고객센터 기준 G-0213 = 218P (상품 24,860 − 쿠폰 2,000 − 포인트 1,000 = 21,860, 1% = 218.6 → 218).
++
++## 아직 규칙을 따르지 않는 곳
++- src/orders/refund.js:34: 부분 환불 회수가 `percentOf(refundGoods)` 반올림이라 새 적립 규칙과 1P 어긋날 수 있다. (Work w-20261004-001)
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-001)
++- 2026-10-04 src/gift/gift-points.js를 규칙대로 고침 (Work w-20261004-001)
+diff --git a/base/src/gift/gift-points.js b/tree/src/gift/gift-points.js
+index 31d9ca8..95a1c3e 100644
+--- a/base/src/gift/gift-points.js
++++ b/tree/src/gift/gift-points.js
+@@ -1,7 +1,6 @@
+-import { POINT_RATE_PERCENT } from '../config.js'
+-import { percentOf } from '../money.js'
++import { earnPoints } from '../points/earn.js'
+ 
+-/** 선물하기 주문의 적립 포인트(보내는 사람에게 쌓인다) */
++/** 선물하기 주문의 적립 포인트(보내는 사람에게 쌓인다). 일반 주문과 같은 적립 기준을 쓴다 */
+ export function giftPoints(order) {
+-  return percentOf(order.amounts.total, POINT_RATE_PERCENT)
++  return earnPoints(order)
+ }
+diff --git a/base/src/points/earn.js b/tree/src/points/earn.js
+index 1ad53ff..2562186 100644
+--- a/base/src/points/earn.js
++++ b/tree/src/points/earn.js
+@@ -1,7 +1,7 @@
+ import { POINT_RATE_PERCENT } from '../config.js'
+-import { percentOf } from '../money.js'
+ 
+-/** 주문의 적립 포인트. 결제 금액의 POINT_RATE_PERCENT% */
++/** 주문의 적립 포인트. (상품 금액 - 쿠폰 - 사용 포인트)의 POINT_RATE_PERCENT%를 원 단위로 내림한다. 배송비는 뺀다 */
+ export function earnPoints(order) {
+-  return percentOf(order.amounts.total, POINT_RATE_PERCENT)
++  const { goods, coupon, pointsUsed } = order.amounts
++  return Math.floor(((goods - coupon - pointsUsed) * POINT_RATE_PERCENT) / 100)
+ }
+diff --git a/base/test/gift.test.js b/tree/test/gift.test.js
+index 898969e..adacfce 100644
+--- a/base/test/gift.test.js
++++ b/tree/test/gift.test.js
+@@ -21,3 +21,19 @@ test('메시지 카드는 60자까지', () => {
+ test('받는 사람 전화번호 형식', () => {
+   assert.throws(() => createGiftOrder({ ...base, number: 'G-0003', recipient: { name: '김하늘', phone: '01012345678' } }), /010-0000-0000/)
+ })
++
++test('선물 적립 포인트는 (상품 - 쿠폰 - 사용 포인트)의 1%를 내림한다 (G-0213 = 218P, 배송비 제외)', () => {
++  const g = createGiftOrder({
++    number: 'G-0213',
++    customerId: 'U-08871',
++    recipient: { name: '한서윤', phone: '010-4821-3307' },
++    lines: [
++      { sku: 'HN-0120', name: '아카시아 꿀 500g', unitPrice: 15900, qty: 1 },
++      { sku: 'JM-0332', name: '수제 딸기잼', unitPrice: 4480, qty: 2 },
++    ],
++    coupon: { code: 'GIFT2000', amount: 2000 },
++    pointsUsed: 1000,
++    pointBalance: 6210,
++  })
++  assert.strictEqual(g.points.earned, 218)
++})
+diff --git a/base/test/order.test.js b/tree/test/order.test.js
+index 48f4762..a0992bd 100644
+--- a/base/test/order.test.js
++++ b/tree/test/order.test.js
+@@ -29,3 +29,18 @@ test('적립 포인트를 주문에 저장한다', () => {
+ test('주문 번호 형식', () => {
+   assert.throws(() => createOrder({ ...base, number: 'O-12', lines: [{ sku: 'A', unitPrice: 1000 }] }), /O-0000/)
+ })
++
++test('적립 포인트는 배송비를 뺀 금액에서 쿠폰과 사용 포인트를 빼고 1%를 내림한다 (O-1042)', () => {
++  const o = createOrder({
++    ...base,
++    number: 'O-1042',
++    lines: [
++      { sku: 'TE-0410', unitPrice: 8900, qty: 2 },
++      { sku: 'SN-1135', unitPrice: 3490, qty: 3 },
++    ],
++    coupon: { code: 'AUTUMN3000', amount: 3000, minGoods: 20000 },
++    pointsUsed: 1500,
++  })
++  assert.strictEqual(o.amounts.shipping, 3000)
++  assert.strictEqual(o.points.earned, 237)
++})

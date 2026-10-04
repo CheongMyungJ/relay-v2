@@ -1,0 +1,52 @@
+{
+  "calls": [
+    {
+      "at": "2026-10-04T13:17:14+00:00",
+      "hash": "3bb9beb5d340aee405f2996464ad52e9619cb2eeac554d60203c5a660e453483",
+      "model": "sonnet",
+      "ms": 9270,
+      "costUsd": 0.0250858,
+      "usage": {
+        "input": 2,
+        "output": 916,
+        "cacheRead": 729,
+        "cacheCreation": 3944
+      },
+      "related": 0,
+      "promptChars": 4016,
+      "issues": [
+        {
+          "file": "docs/knowledge/invoice/vat-rule.md",
+          "part": "body",
+          "message": "[지식 검토: 근거 없이 넓힌 규칙] \"발행된 청구서의 저장된 `totals`와 `src/format/`의 출력은 바뀌면 안 된다. 이미 저장된 문서는 다시 계산하지 않는다.\" → 이 문장은 이번 Work의 비목표(저장된 반품 전표 재계산 금지, format 출력 불변)에서 온 것이므로, 영구 규칙은 사람이 확인한 범위(저장된 totals는 재계산하지 않음)로 좁히고 src/format/ 불변은 규칙에서 빼거나 이번 Work 범위로 옮긴다."
+        }
+      ],
+      "bounced": true,
+      "error": null
+    },
+    {
+      "at": "2026-10-04T13:17:30+00:00",
+      "hash": "6c848d54e12f6b87ac48cd258f2b3a580b015cf97496bcb6ef1d95d265d1cd3c",
+      "model": "sonnet",
+      "ms": 6382,
+      "costUsd": 0.0222778,
+      "usage": {
+        "input": 2,
+        "output": 652,
+        "cacheRead": 729,
+        "cacheCreation": 3902
+      },
+      "related": 0,
+      "promptChars": 3955,
+      "issues": [
+        {
+          "file": "docs/knowledge/invoice/vat-rule.md",
+          "part": "body",
+          "message": "[지식 검토: 다른 항목과 어긋남] \"청구서(`computeTotals`), 견적서(`quoteTotals`), 반품 전표(`creditTotals`)가 모두 `src/invoice/total.js`의 `lineVat`을 같이 쓴다.\" → 규칙은 '모든 문서의 부가세는 lineVat을 써야 한다'로 고쳐 쓰고, computeTotals·quoteTotals가 아직 lineVat을 쓰지 않는다는 사실은 '아직 규칙을 따르지 않는 곳'에만 남겨 서로 어긋나지 않게 한다."
+        }
+      ],
+      "bounced": false,
+      "error": null
+    }
+  ]
+}

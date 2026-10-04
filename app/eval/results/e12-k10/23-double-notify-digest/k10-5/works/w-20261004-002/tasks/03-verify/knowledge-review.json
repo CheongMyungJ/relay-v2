@@ -1,0 +1,46 @@
+{
+  "calls": [
+    {
+      "at": "2026-10-04T13:53:54+00:00",
+      "hash": "9f8f82b22695a6933f2ad9111e806e3f5dd341283a017f6b8b96a68a3a0920be",
+      "model": "sonnet",
+      "ms": 7489,
+      "costUsd": 0.0201758,
+      "usage": {
+        "input": 2,
+        "output": 727,
+        "cacheRead": 729,
+        "cacheCreation": 3189
+      },
+      "related": 0,
+      "promptChars": 3173,
+      "issues": [],
+      "bounced": false,
+      "error": null
+    },
+    {
+      "at": "2026-10-04T13:57:18+00:00",
+      "hash": "301860fe8ca0ecc7f392099f975b214ec0a9f27924ce898e36ffc168227e0408",
+      "model": "sonnet",
+      "ms": 10835,
+      "costUsd": 0.0256638,
+      "usage": {
+        "input": 2,
+        "output": 1135,
+        "cacheRead": 729,
+        "cacheCreation": 3541
+      },
+      "related": 0,
+      "promptChars": 3564,
+      "issues": [
+        {
+          "file": "docs/knowledge/delivery/digest-key-includes-run-id.md",
+          "part": "body",
+          "message": "[지식 검토: 모른다는 메모] \"운영이 따로 공용 원장을 꽂는지는 확인하지 못했다.\" → '확인하지 못했다'만 담은 이 문장을 지우거나, 확인한 사실(코드 위치와 현재 동작)만 남긴다."
+        }
+      ],
+      "bounced": true,
+      "error": null
+    }
+  ]
+}

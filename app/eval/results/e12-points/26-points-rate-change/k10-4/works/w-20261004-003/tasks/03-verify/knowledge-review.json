@@ -1,0 +1,57 @@
+{
+  "calls": [
+    {
+      "at": "2026-10-04T12:43:48+00:00",
+      "hash": "98ed989b47a3a27e1912a282e31059f23b32d48dd6a858780182f9903f600540",
+      "model": "sonnet",
+      "ms": 9731,
+      "costUsd": 0.026575799999999997,
+      "usage": {
+        "input": 2,
+        "output": 939,
+        "cacheRead": 729,
+        "cacheCreation": 4259
+      },
+      "related": 0,
+      "promptChars": 4196,
+      "issues": [
+        {
+          "file": "docs/knowledge/points/earn-rule.md",
+          "part": "body",
+          "message": "[지식 검토: 다른 항목과 어긋남] \"남은 상품으로 다시 계산한 적립 포인트(위 규정 그대로, 버림)\" → \"위 규정 그대로\"는 2% 적립률로 읽히지만 같은 줄 예시는 1%로 계산하므로, 환불 회수 비율은 아직 정하지 않았고 지금은 1%(`REFUND_RATE_PERCENT`)라고 분명히 적거나 예시의 비율을 정해진 값과 맞춘다."
+        }
+      ],
+      "bounced": true,
+      "error": null
+    },
+    {
+      "at": "2026-10-04T12:44:03+00:00",
+      "hash": "001fa998b00d48860ca3e4b992661921f26cc87e4dfcc1be34708b736bee8f1d",
+      "model": "sonnet",
+      "ms": 8545,
+      "costUsd": 0.0271418,
+      "usage": {
+        "input": 2,
+        "output": 972,
+        "cacheRead": 729,
+        "cacheCreation": 4318
+      },
+      "related": 0,
+      "promptChars": 4261,
+      "issues": [
+        {
+          "file": "docs/knowledge/points/earn-rule.md",
+          "part": "body",
+          "message": "[지식 검토: 규칙 절에 정하지 않은 것] \"비율은 환불 회수 비율이며 아직 2%로 정하지 않았고 지금은 1%, `REFUND_RATE_PERCENT`\" → `## 규칙`의 부분 환불 줄에서 '아직 2%로 정하지 않았고 지금은 1%' 같은 미정·현재 상태 설명을 빼고, 비율은 '아직 정하지 않은 것'을 가리키게만 한다."
+        },
+        {
+          "file": "docs/knowledge/points/earn-rule.md",
+          "part": "body",
+          "message": "[지식 검토: 규칙 절에 지금 상태] \"단 환불 회수 비율은 아래 \"아직 정하지 않은 것\" 참고.\" → `## 규칙`에서 환불 회수 비율이 미정이라는 안내를 빼고, 그 내용은 `## 아직 정하지 않은 것`에만 둔다."
+        }
+      ],
+      "bounced": false,
+      "error": null
+    }
+  ]
+}

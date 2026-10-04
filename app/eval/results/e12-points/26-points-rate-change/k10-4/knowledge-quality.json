@@ -1,0 +1,46 @@
+{
+  "paths": [
+    "docs/knowledge/points/earn-rule.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/points/earn-rule.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "적립 대상 금액 = 상품 금액 − 쿠폰 − 사용 포인트, 배송비 제외라고 적혀 있다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "1P 미만은 반올림이 아니라 버림이라고 적혀 있다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "2026-10-04부터 2%, 이전 1%로 과거를 밝혀 적었다."
+      },
+      {
+        "id": "R4",
+        "status": "correct",
+        "why": "회수 포인트 = 저장된 원래 적립 포인트 − 남은 상품으로 다시 계산한 적립 포인트로 적혀 있다."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "이미 적립된 저장값은 규정이 바뀌어도 다시 계산하지 않는다고 적혀 있다."
+      }
+    ]
+  }
+}

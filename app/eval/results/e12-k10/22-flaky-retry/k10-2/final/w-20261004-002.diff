@@ -1,0 +1,36 @@
+diff --git a/base/src/store/report-archive.js b/tree/src/store/report-archive.js
+index 0c62d2f..eabb132 100644
+--- a/base/src/store/report-archive.js
++++ b/tree/src/store/report-archive.js
+@@ -20,7 +20,7 @@ export function reportPath(period, reportId) {
+  */
+ export async function saveReport(files, report) {
+   const path = reportPath(report.period, report.reportId)
+-  const tmp = `${reportDir(report.period)}/.${stamp(now())}.tmp`
++  const tmp = `${reportDir(report.period)}/.${report.reportId}-${stamp(now())}.tmp`
+   await files.writeFile(tmp, JSON.stringify(report))
+   await files.rename(tmp, path)
+   return path
+diff --git a/tree/test/archive-concurrent.test.js b/tree/test/archive-concurrent.test.js
+new file mode 100644
+index 0000000..57e89b1
+--- /dev/null
++++ b/tree/test/archive-concurrent.test.js
+@@ -0,0 +1,17 @@
++import { afterEach, beforeEach, test } from 'node:test'
++import assert from 'node:assert'
++import { resetNow, setNow } from '../src/clock.js'
++import { createFileStore } from '../src/store/file-store.js'
++import { listReports, loadReport, saveReport, strayTemps } from '../src/store/report-archive.js'
++
++beforeEach(() => setNow(() => Date.UTC(2026, 9, 1, 2, 0)))
++afterEach(() => resetNow())
++
++test('보관소: 같은 밀리초에 서로 다른 보고서를 동시에 저장해도 임시 파일이 겹치지 않는다', async () => {
++  const files = createFileStore({ latency: { baseMs: 2, perKbMs: 1 } })
++  const reports = [1, 2, 3, 4].map((n) => ({ reportId: `report-${n}`, tenant: `t-${n}`, period: '2026-09', total: n }))
++  await Promise.all(reports.map((r) => saveReport(files, r)))
++  assert.strictEqual(listReports(files, '2026-09').length, reports.length)
++  assert.deepStrictEqual(strayTemps(files, '2026-09'), [])
++  for (const r of reports) assert.strictEqual((await loadReport(files, '2026-09', r.reportId)).tenant, r.tenant)
++})

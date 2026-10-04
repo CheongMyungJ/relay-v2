@@ -1,0 +1,57 @@
+{
+  "calls": [
+    {
+      "at": "2026-10-04T13:04:44+00:00",
+      "hash": "5f5ac68dd87394dee00f75abadd900ad77cdf0ba35bc1027834608f974f4f761",
+      "model": "sonnet",
+      "ms": 9088,
+      "costUsd": 0.0326298,
+      "usage": {
+        "input": 2,
+        "output": 1114,
+        "cacheRead": 729,
+        "cacheCreation": 5335
+      },
+      "related": 0,
+      "promptChars": 5463,
+      "issues": [
+        {
+          "file": "docs/knowledge/points/earn-basis.md",
+          "part": "body",
+          "message": "[지식 검토: 다른 항목과 어긋남] \"다시 계산하는 적립은 `(남은 상품 금액 − 쿠폰 할인 − 사용 포인트)`의 적립률%를 버림한 값이다.\" → 이 줄의 '적립률%'를 회수용 상수 `REFUND_RECOVER_RATE_PERCENT`(1%)로 고쳐 적는다. 같은 파일에서 기본 적립률 `POINT_RATE_PERCENT`는 2%라고 하고, 부분 환불 예시 132P도 1%로 계산하기 때문이다."
+        },
+        {
+          "file": "docs/knowledge/points/earn-basis.md",
+          "part": "body",
+          "message": "[지식 검토: 규칙 절에 지금 상태] \"이미 적립되어 주문에 저장된 `points.earned`는 다시 계산하지 않고, 영수증 글자(`src/format/`)는 바꾸지 않는다.\" → '영수증 글자는 바꾸지 않는다'처럼 한 Work의 범위를 적은 문장은 규칙에서 빼고, 저장된 `points.earned`를 그대로 쓴다는 규칙만 남긴다. 변경 경위는 `## 바뀐 이력`에 적는다."
+        }
+      ],
+      "bounced": true,
+      "error": null
+    },
+    {
+      "at": "2026-10-04T13:04:59+00:00",
+      "hash": "71e758b7999c4537df97e0141a22eaa9e51db345516d01fef5891fc0919a13c4",
+      "model": "sonnet",
+      "ms": 7680,
+      "costUsd": 0.0304458,
+      "usage": {
+        "input": 2,
+        "output": 882,
+        "cacheRead": 729,
+        "cacheCreation": 5369
+      },
+      "related": 0,
+      "promptChars": 5505,
+      "issues": [
+        {
+          "file": "docs/knowledge/points/earn-basis.md",
+          "part": "body",
+          "message": "[지식 검토: 규칙 절에 정하지 않은 것] \"다시 계산하는 적립은 `(남은 상품 금액 − 쿠폰 할인 − 사용 포인트)`의 `REFUND_RECOVER_RATE_PERCENT`(1%)를 버림한 값이다.\" → 부분 환불 회수에 1% 비율(REFUND_RECOVER_RATE_PERCENT)을 쓴다는 점과 '정산팀 대조 기준도 132P(1% 기준 계산)'를 정해진 규칙처럼 두지 말고, 새 적립률 적용 여부는 사람이 정하지 않았으므로 현재 동작 설명을 '아직 정하지 않은 것'으로 옮기고 규칙에는 확정된 계산 구조만 남긴다."
+        }
+      ],
+      "bounced": false,
+      "error": null
+    }
+  ]
+}

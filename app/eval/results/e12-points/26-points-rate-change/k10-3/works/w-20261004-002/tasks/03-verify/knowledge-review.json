@@ -1,0 +1,46 @@
+{
+  "calls": [
+    {
+      "at": "2026-10-04T12:34:16+00:00",
+      "hash": "373b89155c74ec99109323b267bb825f9057395aa640fe5ee18c1f2aa184ea8c",
+      "model": "sonnet",
+      "ms": 8214,
+      "costUsd": 0.0234058,
+      "usage": {
+        "input": 2,
+        "output": 860,
+        "cacheRead": 729,
+        "cacheCreation": 3664
+      },
+      "related": 1,
+      "promptChars": 3732,
+      "issues": [
+        {
+          "file": "docs/knowledge/points/partial-refund-recovery.md",
+          "part": "body",
+          "message": "[지식 검토: 사람의 이번 말과 어긋남] \"회수 포인트 = 주문에 저장된 원래 적립(`points.earned`) − 남은 상품으로 다시 계산한 적립.\" → 승인된 intent의 '(환불 전 기준 금액의 적립) − (환불 후 기준 금액의 적립)' 및 앞 단계 후보와 맞는지 확인하고, 사람이 저장된 earned 방식을 정했다는 근거가 없으면 규칙과 제목을 환불 전후 재계산 적립의 차이로 되돌리거나 사람에게 확인한다."
+        }
+      ],
+      "bounced": true,
+      "error": null
+    },
+    {
+      "at": "2026-10-04T12:34:34+00:00",
+      "hash": "b46a950b5c846bf87f8141f895b2971f2942c2abff5b061739112006ea9e8214",
+      "model": "sonnet",
+      "ms": 7197,
+      "costUsd": 0.0220358,
+      "usage": {
+        "input": 2,
+        "output": 663,
+        "cacheRead": 729,
+        "cacheCreation": 3814
+      },
+      "related": 1,
+      "promptChars": 3890,
+      "issues": [],
+      "bounced": false,
+      "error": null
+    }
+  ]
+}

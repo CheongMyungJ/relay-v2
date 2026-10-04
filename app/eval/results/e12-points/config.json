@@ -1,0 +1,30 @@
+{
+  "startedAt": "2026-10-04T11:58:25.596Z",
+  "commit": "ce0a330",
+  "appCommits": {
+    "k10": "ce0a330"
+  },
+  "claudeVersion": "2.1.289 (Claude Code)",
+  "scenarios": [
+    "26-points-rate-change",
+    "27-points-gift-teammate"
+  ],
+  "runs": 5,
+  "arms": [
+    "k10"
+  ],
+  "agentModel": "sonnet",
+  "effort": "medium",
+  "humanModel": "sonnet",
+  "humanEffort": "medium",
+  "judgeModel": "sonnet",
+  "cliArgs": [
+    "--dangerously-skip-permissions"
+  ],
+  "vision": true,
+  "workRoot": "/tmp/relay-eval/e12-points",
+  "apps": {
+    "k10": "/tmp/relay-ref/k10/app"
+  },
+  "pairs": null
+}

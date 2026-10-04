@@ -1,0 +1,20 @@
+{"ts":"2026-10-04T12:20:43+00:00","work_id":"w-20261004-001","type":"work.created","payload":{"type":"bugfix","base_branch":"main","base_commit":"bc0ffd4065a726ee9d981e49b17903f82b95101e"}}
+{"ts":"2026-10-04T12:20:43+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.started","payload":{"reason":"default","session_id":"64562bdd-b980-4c67-91a7-4e79b047556a"}}
+{"ts":"2026-10-04T12:20:43+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.first_output","payload":{"pid":21108,"ms":441}}
+{"ts":"2026-10-04T12:20:46+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.first_hook","payload":{"pid":21108,"ms":3016,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:21:07+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:21:33+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:22:09+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:22:20+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T12:22:20+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.started","payload":{"reason":"default","session_id":"b36ae809-3a0a-416d-82d9-9ad49fea701d"}}
+{"ts":"2026-10-04T12:22:21+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.first_output","payload":{"pid":25783,"ms":843}}
+{"ts":"2026-10-04T12:22:21+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.first_hook","payload":{"pid":25783,"ms":1055,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:23:04+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:23:25+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T12:23:26+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.started","payload":{"reason":"default","session_id":"b244ff66-3c37-4323-bf32-1f52ecb25b59"}}
+{"ts":"2026-10-04T12:23:27+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.first_output","payload":{"pid":28954,"ms":771}}
+{"ts":"2026-10-04T12:23:27+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.first_hook","payload":{"pid":28954,"ms":988,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T12:24:27+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.bounced","payload":{"attempt":1,"max":2,"errors":[{"file":"docs/knowledge/billing/vat-per-line-floor.md","message":"[지식 검토: 규칙 절에 정하지 않은 것] \"새 계산 경로도 이 함수를 쓴다.\" → 견적 규정은 사람이 정하지 않았으므로, 새 계산 경로(견적 포함)에 vatOfLines를 쓰라는 문장을 규칙에서 빼고 청구서·대변전표에만 적용된다고 한정하거나 '아직 정하지 않은 것'으로 옮긴다."}]}}
+{"ts":"2026-10-04T12:24:39+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T12:25:08+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T12:25:08+00:00","work_id":"w-20261004-001","type":"work.completed","payload":{"delivery":"none"}}

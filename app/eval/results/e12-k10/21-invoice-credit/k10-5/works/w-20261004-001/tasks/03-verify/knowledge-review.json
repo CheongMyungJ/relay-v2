@@ -1,0 +1,46 @@
+{
+  "calls": [
+    {
+      "at": "2026-10-04T13:39:51+00:00",
+      "hash": "3a6866b967224cdfaff707149463a42551c79aa2a7249bb29e72aa2e8a84bfd8",
+      "model": "sonnet",
+      "ms": 6920,
+      "costUsd": 0.0199698,
+      "usage": {
+        "input": 2,
+        "output": 572,
+        "cacheRead": 729,
+        "cacheCreation": 3525
+      },
+      "related": 0,
+      "promptChars": 3396,
+      "issues": [
+        {
+          "file": "docs/knowledge/invoice/issued-invoice-stored-totals.md",
+          "part": "body",
+          "message": "[지식 검토: 근거 없이 넓힌 규칙] \"이미 발행되어 저장된 청구서(와 반품 전표)는 금액을 다시 계산하지 않고\" → 사람이 말한 근거는 발행된 청구서뿐이므로 '(와 반품 전표)'를 지우거나, 반품 전표도 저장 합계를 쓴다는 사람의 확인을 근거로 남긴다."
+        }
+      ],
+      "bounced": true,
+      "error": null
+    },
+    {
+      "at": "2026-10-04T13:40:01+00:00",
+      "hash": "e512582d05cfc5031048573e671cc678184f333662d70f180edd178c7e7e55c8",
+      "model": "sonnet",
+      "ms": 4322,
+      "costUsd": 0.0170838,
+      "usage": {
+        "input": 2,
+        "output": 287,
+        "cacheRead": 729,
+        "cacheCreation": 3516
+      },
+      "related": 0,
+      "promptChars": 3387,
+      "issues": [],
+      "bounced": false,
+      "error": null
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "calls": [
+    {
+      "at": "2026-10-04T12:55:26+00:00",
+      "hash": "c9718034c51af4965d9137402b25f6e58d4aee8a03a3f8519faacdba3f8c24ad",
+      "model": "sonnet",
+      "ms": 6362,
+      "costUsd": 0.0185438,
+      "usage": {
+        "input": 2,
+        "output": 581,
+        "cacheRead": 729,
+        "cacheCreation": 3146
+      },
+      "related": 0,
+      "promptChars": 3059,
+      "issues": [
+        {
+          "file": "docs/knowledge/points/earn-points-basis.md",
+          "part": "body",
+          "message": "[지식 검토: 모른다는 메모] \"다른 주문의 고객센터 값으로는 확인하지 않았다.\" → `## 규칙`에서 이 '확인하지 않았다' 문장을 빼고, 필요하면 근거 한 건(O-1042)만 사실로 남기거나 바뀐 이력으로 옮긴다."
+        }
+      ],
+      "bounced": true,
+      "error": null
+    },
+    {
+      "at": "2026-10-04T12:55:38+00:00",
+      "hash": "3c1ccb574553d8f3b7e8f90ada6cb313bc425f7b3d460bff5c437c657a82f92a",
+      "model": "sonnet",
+      "ms": 6666,
+      "costUsd": 0.017705799999999997,
+      "usage": {
+        "input": 2,
+        "output": 512,
+        "cacheRead": 729,
+        "cacheCreation": 3109
+      },
+      "related": 0,
+      "promptChars": 3023,
+      "issues": [],
+      "bounced": false,
+      "error": null
+    }
+  ]
+}

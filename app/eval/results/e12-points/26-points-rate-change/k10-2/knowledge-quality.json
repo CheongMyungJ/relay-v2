@@ -1,0 +1,46 @@
+{
+  "paths": [
+    "docs/knowledge/points/earn-basis.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/points/earn-basis.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": true,
+        "stateWhy": "환불 재계산 적립률을 주문에 저장된 `points.ratePercent`(없으면 옛 1%)로 쓴다고 확정된 규칙처럼 적었고, 이력에도 같은 내용이 있다. 실제로는 환불 회수에 새 적립률을 쓸지 옛 적립률을 쓸지 정하지 않았고 정산팀과 따로 정한다. '아직 정하지 않은 것' 절에도 이 항목이 없다.",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "(상품 − 쿠폰 − 사용 포인트) 기준이고 배송비는 제외한다고 적혀 있다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "소수점 버림으로 적혀 있다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "2026-10-04 배포부터 2%이고 이전 1%는 이력으로 밝혔다."
+      },
+      {
+        "id": "R4",
+        "status": "correct",
+        "why": "회수는 저장된 원래 적립 − 남은 상품 재계산 적립으로 적혀 있다."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "저장된 points.earned는 다시 계산하지 않는다고 적혀 있다."
+      }
+    ]
+  }
+}

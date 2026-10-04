@@ -1,0 +1,51 @@
+{
+  "calls": [
+    {
+      "at": "2026-10-04T12:42:46+00:00",
+      "hash": "e04dcae6511fe6ebae53a85ae7943b052812b68e99ee510fe0b0b99b346299ab",
+      "model": "sonnet",
+      "ms": 11701,
+      "costUsd": 0.0332698,
+      "usage": {
+        "input": 2,
+        "output": 1338,
+        "cacheRead": 729,
+        "cacheCreation": 4935
+      },
+      "related": 0,
+      "promptChars": 5176,
+      "issues": [
+        {
+          "file": "docs/knowledge/points/partial-refund-recovery.md",
+          "part": "body",
+          "message": "[지식 검토: 규칙 절에 정하지 않은 것] \"남은 상품의 적립은 `docs/knowledge/points/earn-base.md`의 기준(`earnBase`, `pointsForBase`)으로 계산한다.\" → 환불 회수에 새 적립률(2%)을 쓸지는 정산팀과 따로 정하기로 했고 코드는 1%(REFUND_RECOVERY_RATE_PERCENT)를 쓰므로, 남은 상품 적립에 어떤 율을 쓰는지 단정하는 이 줄을 `## 규칙`에서 빼 `## 아직 정하지 않은 것`으로 옮기거나 율을 특정하지 않게 고친다."
+        },
+        {
+          "file": "docs/knowledge/points/partial-refund-recovery.md",
+          "part": "body",
+          "message": "[지식 검토: 다른 항목과 어긋남] \"예: O-1077/R-0311은 403 − 271 = 132P.\" → 같은 파일의 `## 아직 정하지 않은 것`은 같은 주문을 403 − 543(음수)로 말하므로, 옛 1% 기준인 271 예시를 `## 규칙`에서 빼거나 율을 명시해 같은 값으로 맞춘다."
+        }
+      ],
+      "bounced": true,
+      "error": null
+    },
+    {
+      "at": "2026-10-04T12:43:08+00:00",
+      "hash": "74dbb9f27fd3944ced676be6063f2f3a1942a0ac6904902b7fd8ed73b72390fe",
+      "model": "sonnet",
+      "ms": 13497,
+      "costUsd": 0.0306898,
+      "usage": {
+        "input": 2,
+        "output": 1026,
+        "cacheRead": 729,
+        "cacheCreation": 5070
+      },
+      "related": 0,
+      "promptChars": 5302,
+      "issues": [],
+      "bounced": false,
+      "error": null
+    }
+  ]
+}

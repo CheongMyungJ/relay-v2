@@ -1,0 +1,18 @@
+{"ts":"2026-10-04T13:12:25+00:00","work_id":"w-20261004-002","type":"work.created","payload":{"type":"bugfix","base_branch":"main","base_commit":"403bb0f0968e7c29f178e3c5be556209ce49e155"}}
+{"ts":"2026-10-04T13:12:25+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.started","payload":{"reason":"default","session_id":"ba75d6a9-a8cf-488e-aff6-ebf1a2ffa360"}}
+{"ts":"2026-10-04T13:12:26+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.first_output","payload":{"pid":28509,"ms":906}}
+{"ts":"2026-10-04T13:12:26+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.first_hook","payload":{"pid":28509,"ms":1113,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T13:14:27+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T13:14:39+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T13:14:39+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.started","payload":{"reason":"default","session_id":"36e98a85-a0fc-440a-a8a7-be932e9bd735"}}
+{"ts":"2026-10-04T13:14:41+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.first_output","payload":{"pid":30978,"ms":1115}}
+{"ts":"2026-10-04T13:14:41+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.first_hook","payload":{"pid":30978,"ms":1357,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T13:15:16+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T13:15:31+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.approved","payload":{"by":"auto"}}
+{"ts":"2026-10-04T13:15:32+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.started","payload":{"reason":"default","session_id":"14c1645d-f5b5-4331-ad8c-85e3437722b5"}}
+{"ts":"2026-10-04T13:15:32+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.first_output","payload":{"pid":32296,"ms":990}}
+{"ts":"2026-10-04T13:15:33+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.first_hook","payload":{"pid":32296,"ms":1326,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T13:17:05+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.bounced","payload":{"attempt":1,"max":2,"errors":[{"file":"docs/knowledge/invoice/vat-rule.md","message":"[지식 검토: 근거 없이 넓힌 규칙] \"발행된 청구서의 저장된 `totals`와 `src/format/`의 출력은 바뀌면 안 된다. 이미 저장된 문서는 다시 계산하지 않는다.\" → 이 문장은 이번 Work의 비목표(저장된 반품 전표 재계산 금지, format 출력 불변)에서 온 것이므로, 영구 규칙은 사람이 확인한 범위(저장된 totals는 재계산하지 않음)로 좁히고 src/format/ 불변은 규칙에서 빼거나 이번 Work 범위로 옮긴다."}]}}
+{"ts":"2026-10-04T13:17:23+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T13:17:42+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T13:17:42+00:00","work_id":"w-20261004-002","type":"work.completed","payload":{"delivery":"none"}}
