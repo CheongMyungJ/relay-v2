@@ -5,6 +5,8 @@
 //   - 낡은 항목: 지금은 틀린 값이나 상태를 지금 것처럼 적은 항목 (문제 1: 옛 지식과 새 지식이 함께 남음)
 //   - 상태를 규칙처럼 적은 항목: 아직 고치지 않은 곳이나 정하지 않은 것을 규칙으로 적은 항목 (문제 2)
 //   - 서로 어긋나는 항목 짝, 기준 규칙마다 맞게 적었는지(맞음/틀림/없음)
+//   - 머리글의 kind가 내용과 맞지 않는 항목
+// kind 분포(머리글 kind마다 파일 수, 머리글이 없는 옛 형식은 "없음")는 기준이 없는 시나리오에서도 센다.
 // 레포에 남는 지식: Work의 diff(final/<id>.diff)는 시나리오 repo/에서 그 Work 끝까지의 차이다. 팀원 Work는 앞 Work를
 // 머지한 main에서 시작하므로 그 diff의 지식이 레포 전체다. 같은 사람의 Work는 main에서 따로 시작하므로 앞 Work의 지식
 // 위에 덮는다(같은 경로는 뒤 Work가 이긴다, 머지에서 뒤 브랜치를 고르는 것과 같음).
@@ -64,6 +66,17 @@ export function finalKnowledge(run, scenario) {
   return [...state].sort(([a], [b]) => (a < b ? -1 : 1)).map(([p, text]) => ({ path: p, text }))
 }
 
+export const KINDS = ['rule', 'fact', 'history', 'pitfall', '없음', '기타']
+
+/** 지식 파일 머리글의 kind. 머리글이 없으면 '없음', 정한 값이 아니면 '기타' */
+export function kindOf(text) {
+  const fm = text.match(/^---\r?\n([\s\S]*?)\r?\n---/)
+  if (!fm) return '없음'
+  const k = fm[1].match(/^kind:\s*([^\s#]+)/m)?.[1]
+  if (!k) return '없음'
+  return KINDS.includes(k) ? k : '기타'
+}
+
 /** verify에서 지식 확인으로 되돌려진 수 (task.bounced 가운데 지식을 말한 것) */
 function knowledgeBounces(run) {
   let n = 0
@@ -91,8 +104,10 @@ const SCHEMA = {
           staleWhy: { type: 'string' },
           stateAsRule: { type: 'boolean' },
           stateWhy: { type: 'string' },
+          kindFits: { type: 'boolean' },
+          kindWhy: { type: 'string' },
         },
-        required: ['path', 'stale', 'staleWhy', 'stateAsRule', 'stateWhy'],
+        required: ['path', 'stale', 'staleWhy', 'stateAsRule', 'stateWhy', 'kindFits', 'kindWhy'],
       },
     },
     contradictions: {
@@ -137,7 +152,8 @@ async function judge(entries, truth, opts, workDir) {
     '- items: 파일마다',
     '  - stale: 지금은 틀린 값이나 상태를 지금 것처럼 적었나(위 "낡은 서술" 기준). 바뀐 이력 절이나 "전에는", "~까지는"처럼 과거로 밝힌 서술은 낡은 것이 아니다. 기준에 없는 사소한 것은 보지 않는다',
     '  - stateAsRule: 위 "규칙이 아닌 것"을 규칙·사실·예외 규칙처럼 적었나. "아직 규칙을 따르지 않는 곳" 같은 절에 적었거나 본문에서 "아직 고치지 않음", "다음에 고칠 예정", "정하지 않음"처럼 현재 상태임을 밝혔으면 false다',
-    '  - staleWhy, stateWhy: true면 그 문장을 짧게 인용하고, false면 빈 문자열',
+    '  - kindFits: 머리글의 `kind`가 내용과 맞나. rule은 이래야 하는 것(규칙, 관례), fact는 업무 사실이나 코드만 보고는 알기 어려운 사실, history는 언제 무엇을 왜 바꿨나, pitfall은 다시 겪을 만한 실패 유형과 그 위치다. 머리글에 kind가 없으면 true',
+    '  - staleWhy, stateWhy, kindWhy: 문제가 있으면(stale, stateAsRule이 true거나 kindFits가 false면) 그 문장이나 까닭을 짧게 적고, 없으면 빈 문자열',
     '- contradictions: 지금 시점에 서로 어긋나는 내용을 말하는 파일 짝(같은 대상에 다른 값이나 다른 규칙). 없으면 빈 배열',
     '- rules: 기준 규칙마다 지식 어딘가에 지금 맞게 적혀 있으면 correct, 틀리게(옛 값 포함) 적혀 있고 맞게 적힌 곳이 없으면 wrong, 어디에도 없으면 missing',
     '',
@@ -157,10 +173,21 @@ async function judge(entries, truth, opts, workDir) {
   return res.data
 }
 
+function kindCounts(entries) {
+  const out = Object.fromEntries(KINDS.map((k) => [k, 0]))
+  for (const e of entries) out[kindOf(e.text)]++
+  return out
+}
+
 function score(entries, j, truth, bounces) {
+  const kinds = kindCounts(entries)
+  if (!j || !truth) return { files: entries.length, kinds, bounces }
   const items = j.items ?? []
+  const judgedKind = items.length > 0 && items.every((i) => typeof i.kindFits === 'boolean')
   return {
     files: entries.length,
+    kinds,
+    kindMismatch: judgedKind ? items.filter((i) => !i.kindFits).length : null,
     stale: items.filter((i) => i.stale).length,
     stateAsRule: items.filter((i) => i.stateAsRule).length,
     contradictions: (j.contradictions ?? []).length,
@@ -169,6 +196,29 @@ function score(entries, j, truth, bounces) {
     rulesTotal: truth.rules.length,
     bounces,
   }
+}
+
+const kindText = (k) =>
+  KINDS.filter((x) => k[x])
+    .map((x) => `${x} ${k[x]}`)
+    .join(' · ') || '없음'
+
+/** 쪽마다 kind별 파일 수의 합(비율)과 실행당 평균 */
+function kindTable(rows, arms) {
+  const out = [
+    `| 쪽 | 실행 | 파일 | ${KINDS.join(' | ')} |`,
+    `|---|---|---|${KINDS.map(() => '---').join('|')}|`,
+  ]
+  for (const arm of arms) {
+    const rs = rows.filter((r) => r.kind === arm)
+    const files = rs.reduce((a, r) => a + r.files, 0)
+    const cell = (k) => {
+      const n = rs.reduce((a, r) => a + r.kinds[k], 0)
+      return files ? `${n} (${Math.round((100 * n) / files)}%)` : '0'
+    }
+    out.push(`| ${arm} | ${rs.length} | ${files} | ${KINDS.map(cell).join(' | ')} |`)
+  }
+  return out
 }
 
 const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : NaN)
@@ -186,15 +236,15 @@ async function main() {
   const rows = []
   for (const dir of positionals) {
     for (const run of loadRuns(path.resolve(dir))) {
+      if (!run.works?.length) continue
       const truthFile = path.join(TRUTH, `${run.scenario}.json`)
-      if (!fs.existsSync(truthFile) || !run.works?.length) continue
-      const truth = JSON.parse(fs.readFileSync(truthFile, 'utf8'))
+      const truth = fs.existsSync(truthFile) ? JSON.parse(fs.readFileSync(truthFile, 'utf8')) : null
       const scenario = loadScenario(run.scenario)
       const entries = finalKnowledge(run, scenario)
       const file = path.join(run.dir, 'knowledge-quality.json')
       let saved =
         !values.redo && fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : null
-      if (!saved) {
+      if (!saved && truth) {
         const j = entries.length
           ? await judge(entries, truth, values, path.join(run.dir, '.kq'))
           : {
@@ -206,7 +256,7 @@ async function main() {
         saved = { paths: entries.map((e) => e.path), judgment: j }
         fs.writeFileSync(file, JSON.stringify(saved, null, 2) + '\n')
       }
-      const s = score(entries, saved.judgment, truth, knowledgeBounces(run))
+      const s = score(entries, saved?.judgment, truth, knowledgeBounces(run))
       rows.push({ scenario: run.scenario, kind: run.kind, index: run.index, ...s })
       console.error(`${run.scenario} ${run.kind}-${run.index}: ${JSON.stringify(s)}`)
     }
@@ -218,29 +268,40 @@ async function main() {
     ['contradictions', '어긋난 짝'],
     ['rulesCorrect', '맞게 적은 규칙'],
     ['rulesWrong', '틀리게 적은 규칙'],
+    ['kindMismatch', 'kind 안 맞음'],
     ['bounces', '지식 되돌림'],
   ]
   const out = ['# 남은 지식의 질 (eval/knowledge-quality.mjs)', '']
   for (const sc of [...new Set(rows.map((r) => r.scenario))].sort()) {
-    const total = rows.find((r) => r.scenario === sc).rulesTotal
-    out.push(`## ${sc} (기준 규칙 ${total}개)`, '')
-    out.push(`| 쪽 | 실행 | ${keys.map(([, n]) => n).join(' | ')} |`)
-    out.push(`|---|---|${keys.map(() => '---').join('|')}|`)
-    for (const kind of [
-      ...new Set(rows.filter((r) => r.scenario === sc).map((r) => r.kind)),
-    ].sort()) {
-      const rs = rows.filter((r) => r.scenario === sc && r.kind === kind)
-      out.push(
-        `| ${kind} | ${rs.length} | ${keys.map(([k]) => f2(mean(rs.map((r) => r[k])))).join(' | ')} |`,
-      )
+    const scRows = rows.filter((r) => r.scenario === sc)
+    const arms = [...new Set(scRows.map((r) => r.kind))].sort()
+    const total = scRows[0].rulesTotal
+    out.push(`## ${sc}${total ? ` (기준 규칙 ${total}개)` : ' (기준 없음: kind 분포만)'}`, '')
+    if (total) {
+      out.push(`| 쪽 | 실행 | ${keys.map(([, n]) => n).join(' | ')} |`)
+      out.push(`|---|---|${keys.map(() => '---').join('|')}|`)
+      for (const arm of arms) {
+        const rs = scRows.filter((r) => r.kind === arm)
+        out.push(
+          `| ${arm} | ${rs.length} | ${keys.map(([k]) => f2(mean(rs.map((r) => r[k]).filter((x) => x != null)))).join(' | ')} |`,
+        )
+      }
+      out.push('')
     }
-    out.push('', '실행마다:', '')
-    for (const r of rows
-      .filter((r) => r.scenario === sc)
-      .sort((a, b) => (a.kind === b.kind ? a.index - b.index : a.kind < b.kind ? -1 : 1)))
-      out.push(`- ${r.kind}-${r.index}: ${keys.map(([k, n]) => `${n} ${r[k]}`).join(', ')}`)
-    out.push('')
+    out.push(...kindTable(scRows, arms), '')
+    if (total) {
+      out.push('실행마다:', '')
+      for (const r of scRows.sort((a, b) =>
+        a.kind === b.kind ? a.index - b.index : a.kind < b.kind ? -1 : 1,
+      ))
+        out.push(
+          `- ${r.kind}-${r.index}: ${keys.map(([k, n]) => `${n} ${r[k] ?? '-'}`).join(', ')}, kind ${kindText(r.kinds)}`,
+        )
+      out.push('')
+    }
   }
+  const all = [...new Set(rows.map((r) => r.kind))].sort()
+  out.push('## 모든 시나리오의 kind 분포', '', ...kindTable(rows, all), '')
   const text = out.join('\n')
   if (values.out) fs.writeFileSync(values.out, text)
   console.log(text)
