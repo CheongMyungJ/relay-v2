@@ -1,0 +1,30 @@
+{
+  "startedAt": "2026-10-04T15:46:38.905Z",
+  "commit": "6b5dc23",
+  "appCommits": {
+    "k11": "6b5dc23"
+  },
+  "claudeVersion": "2.1.289 (Claude Code)",
+  "scenarios": [
+    "21-invoice-credit",
+    "26-points-rate-change"
+  ],
+  "runs": 3,
+  "arms": [
+    "k11"
+  ],
+  "agentModel": "sonnet",
+  "effort": "medium",
+  "humanModel": "sonnet",
+  "humanEffort": "medium",
+  "judgeModel": "sonnet",
+  "cliArgs": [
+    "--dangerously-skip-permissions"
+  ],
+  "vision": true,
+  "workRoot": "/tmp/relay-eval/e13-k11",
+  "apps": {
+    "k11": "/tmp/relay-ref/k11/app"
+  },
+  "pairs": null
+}

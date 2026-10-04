@@ -1,0 +1,46 @@
+{
+  "calls": [
+    {
+      "at": "2026-10-04T15:51:10+00:00",
+      "hash": "332a242c037e2d497bbb4629b828e10f2f7c2ff15be83bc77de011dd2088ec42",
+      "model": "sonnet",
+      "ms": 6540,
+      "costUsd": 0.0199748,
+      "usage": {
+        "input": 2,
+        "output": 611,
+        "cacheRead": 744,
+        "cacheCreation": 3428
+      },
+      "related": 0,
+      "promptChars": 3274,
+      "issues": [
+        {
+          "file": "docs/knowledge/points/earn-points-rule.md",
+          "part": "body",
+          "message": "[지식 검토: 근거 없이 넓힌 규칙] \"부분 환불 회수 포인트(`src/orders/refund.js`)도 버림(`percentOfFloor`)으로 계산해 적립보다 많이 회수하지 않는다.\" → 사람이 정하지 않은 환불 회수 계산 방식을 `## 규칙`에서 빼라. 환불 회수가 아직 반올림이라는 현재 상태는 `## 아직 규칙을 따르지 않는 곳`에, 사람이 미정이라고 한 경우에만 `## 아직 정하지 않은 것`에 옮겨라."
+        }
+      ],
+      "bounced": true,
+      "error": null
+    },
+    {
+      "at": "2026-10-04T15:51:19+00:00",
+      "hash": "741039a81ebabf0b068cbb4600a7fe5a285be9f7946db13fec016047e8f2108d",
+      "model": "sonnet",
+      "ms": 3738,
+      "costUsd": 0.0155068,
+      "usage": {
+        "input": 2,
+        "output": 191,
+        "cacheRead": 744,
+        "cacheCreation": 3361
+      },
+      "related": 0,
+      "promptChars": 3189,
+      "issues": [],
+      "bounced": false,
+      "error": null
+    }
+  ]
+}

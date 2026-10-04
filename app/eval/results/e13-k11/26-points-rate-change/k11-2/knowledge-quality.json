@@ -1,0 +1,46 @@
+{
+  "paths": [
+    "docs/knowledge/points/earn-rule.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/points/earn-rule.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "기준 금액 = 상품 금액 - 쿠폰 - 사용 포인트, 배송비 제외라고 적혀 있다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "1P 미만 내림이고 반올림이 아니라고 적혀 있다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "2026-10부터 2%이고 옛 1%는 과거로 밝혀 적혀 있다."
+      },
+      {
+        "id": "R4",
+        "status": "missing",
+        "why": "전후 적립의 차이로 회수를 계산한다는 서술은 이력과 미정 절의 지난 Work 설명에만 있다. 미정 절은 이를 규칙으로 확정하지 않는다고 밝히고, 현재 코드는 환불 금액의 1%라고 적었다. 규칙 절에는 R4가 없다."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "이미 적립된 order.points.earned는 다시 계산하지 않는다고 적혀 있다."
+      }
+    ]
+  }
+}

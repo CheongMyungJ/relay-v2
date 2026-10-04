@@ -1,0 +1,46 @@
+{
+  "calls": [
+    {
+      "at": "2026-10-04T16:11:15+00:00",
+      "hash": "413396fce96a66b80db5136fc64eb0a3a453665ccaf8392bdaf839c264a52b42",
+      "model": "sonnet",
+      "ms": 6660,
+      "costUsd": 0.0220168,
+      "usage": {
+        "input": 2,
+        "output": 708,
+        "cacheRead": 744,
+        "cacheCreation": 3696
+      },
+      "related": 0,
+      "promptChars": 3628,
+      "issues": [
+        {
+          "file": "docs/knowledge/points/earn-rule.md",
+          "part": "body",
+          "message": "[지식 검토: 규칙 절에 정하지 않은 것] \"선물하기와 부분 환불 회수도 같은 적립 계산(`earnPoints`)을 따라야 한다.\" → 선물하기(`src/gift/`)가 같은 적립 계산을 따른다는 부분은 사람이 이번 범위가 아니라고 했으므로 `## 규칙`에서 빼서 `## 아직 정하지 않은 것`으로 옮기고, 부분 환불 회수 규칙만 `## 규칙`에 남긴다."
+        }
+      ],
+      "bounced": true,
+      "error": null
+    },
+    {
+      "at": "2026-10-04T16:11:29+00:00",
+      "hash": "0f1af81f153d5d29785cef5662fdcdfb36c5928b1e18f75164455e0d92e0e5d5",
+      "model": "sonnet",
+      "ms": 6309,
+      "costUsd": 0.021210800000000002,
+      "usage": {
+        "input": 2,
+        "output": 575,
+        "cacheRead": 744,
+        "cacheCreation": 3827
+      },
+      "related": 0,
+      "promptChars": 3790,
+      "issues": [],
+      "bounced": false,
+      "error": null
+    }
+  ]
+}

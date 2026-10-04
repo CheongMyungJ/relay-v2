@@ -1,0 +1,18 @@
+{"ts":"2026-10-04T16:03:45+00:00","work_id":"w-20261004-001","type":"work.created","payload":{"type":"bugfix","base_branch":"main","base_commit":"99180b47fa9b02e5f214b5671f338a8b077172de"}}
+{"ts":"2026-10-04T16:03:45+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.started","payload":{"reason":"default","session_id":"80aabd85-4299-48d8-82df-1c1325ab70ca"}}
+{"ts":"2026-10-04T16:03:46+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.first_output","payload":{"pid":27893,"ms":453}}
+{"ts":"2026-10-04T16:03:51+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.first_hook","payload":{"pid":27893,"ms":5316,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T16:04:13+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T16:04:25+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T16:04:26+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.started","payload":{"reason":"default","session_id":"ae962491-ed8a-44a7-a5ba-f60fd9fb0f4d"}}
+{"ts":"2026-10-04T16:04:27+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.first_output","payload":{"pid":29123,"ms":875}}
+{"ts":"2026-10-04T16:04:27+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.first_hook","payload":{"pid":29123,"ms":1054,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T16:05:13+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T16:05:28+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.approved","payload":{"by":"auto"}}
+{"ts":"2026-10-04T16:05:28+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.started","payload":{"reason":"default","session_id":"ca5160f3-e84e-4ab8-afcf-7d11d1d0075f"}}
+{"ts":"2026-10-04T16:05:29+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.first_output","payload":{"pid":30581,"ms":788}}
+{"ts":"2026-10-04T16:05:29+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.first_hook","payload":{"pid":30581,"ms":999,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T16:06:51+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.bounced","payload":{"attempt":1,"max":2,"errors":[{"file":"docs/knowledge/points/earn-rule.md","message":"[지식 검토: 규칙 절에 지금 상태] \"적립 안내 원문은 레포에 없다. 고객센터 계산값(O-1042 = 237P)에서 역산한 규칙이다.\" → 이 줄은 한 Work의 근거 상태 설명이므로 `## 규칙`에서 빼고, 필요하면 바뀐 이력이나 출처 설명으로 옮기라."},{"file":"docs/knowledge/points/earn-rule.md","message":"[지식 검토: 규칙 절에 지금 상태] \"선물하기(`src/gift/gift-points.js`)와 부분 환불 회수(`src/orders/refund.js`)도 같은 `earnPoints`를 쓴다.\" → 앞 단계 후보에 따르면 refund.js는 현재 회수를 따로 계산해 규칙과 어긋나므로, 이 현재 상태를 `## 아직 규칙을 따르지 않는 곳`으로 옮기고 규칙에는 '같은 적립 계산을 따라야 한다'만 남기라."}]}}
+{"ts":"2026-10-04T16:07:13+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T16:07:45+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T16:07:45+00:00","work_id":"w-20261004-001","type":"work.completed","payload":{"delivery":"none"}}

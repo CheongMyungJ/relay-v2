@@ -1,0 +1,131 @@
+{
+  "schema_version": 1,
+  "work_id": "w-20261004-003",
+  "type": "bugfix",
+  "status": "completed",
+  "created_at": "2026-10-04T15:57:04+00:00",
+  "base_branch": "main",
+  "base_commit": "d4eb9eff64628abfa1465290e0fbd98e9e2548d7",
+  "intent": {
+    "version": 1
+  },
+  "settings": {},
+  "file_hashes": {
+    "request.md": "sha256:dbb475a318e023ea3625ef497758431b808a54fe0b6717660836a69c6686a18a",
+    "intent.md": "sha256:394476d35448f2814c4eedb2e16cc9076ed97474b9e782f273e2d87ea1bb142e",
+    "decisions.md": "sha256:6c7e080e09844011f5798d0e93d32d787b416d5e2ee2fc4b4c24984d3eb69b16"
+  },
+  "tasks": [
+    {
+      "id": "t-01",
+      "seq": 1,
+      "node": "intake",
+      "status": "approved",
+      "reason": "default",
+      "format_version": 1,
+      "created_at": "2026-10-04T15:57:04+00:00",
+      "session": {
+        "id": "f2ec8dc9-dc1b-40cf-be89-3ad13d75dbc8",
+        "pid": 18646,
+        "process_started_at": "2026-10-04T15:57:04.480Z",
+        "started_at": "2026-10-04T15:57:04+00:00",
+        "alive": false,
+        "ended_at": "2026-10-04T15:58:08+00:00"
+      },
+      "bounce_count": 0,
+      "check": {
+        "handoff_present": true,
+        "status": "awaiting_approval",
+        "errors": [],
+        "warnings": []
+      },
+      "engine": "claude",
+      "start_commit": "d4eb9eff64628abfa1465290e0fbd98e9e2548d7",
+      "skill_hash": "sha256:8d88de1bf541d7ff08dbc3ad8a9215197d2886d38908b02071fdf48a65cc4223",
+      "engine_version": "2.1.289 (Claude Code)",
+      "claude_version": "2.1.289 (Claude Code)",
+      "last_prompt_at": "2026-10-04T15:57:05+00:00",
+      "permission_mode": "bypassPermissions",
+      "approved_at": "2026-10-04T15:58:08+00:00",
+      "approved_by": "human"
+    },
+    {
+      "id": "t-02",
+      "seq": 2,
+      "node": "fix",
+      "status": "approved",
+      "reason": "default",
+      "format_version": 1,
+      "created_at": "2026-10-04T15:58:08+00:00",
+      "session": {
+        "id": "08dd7973-de69-4daf-be7e-36cf9b501bb6",
+        "pid": 19924,
+        "process_started_at": "2026-10-04T15:58:08.420Z",
+        "started_at": "2026-10-04T15:58:08+00:00",
+        "alive": false,
+        "ended_at": "2026-10-04T15:59:26+00:00"
+      },
+      "bounce_count": 0,
+      "check": {
+        "handoff_present": true,
+        "status": "awaiting_approval",
+        "errors": [],
+        "warnings": []
+      },
+      "engine": "claude",
+      "start_commit": "d4eb9eff64628abfa1465290e0fbd98e9e2548d7",
+      "skill_hash": "sha256:0eca34eedf0cd9b3428cb33b41030d6ee5e2d5e882ac6bf80b61da3dcd2db22f",
+      "engine_version": "2.1.289 (Claude Code)",
+      "claude_version": "2.1.289 (Claude Code)",
+      "last_prompt_at": "2026-10-04T15:58:09+00:00",
+      "permission_mode": "bypassPermissions",
+      "approved_at": "2026-10-04T15:59:26+00:00",
+      "approved_by": "auto"
+    },
+    {
+      "id": "t-03",
+      "seq": 3,
+      "node": "verify",
+      "status": "approved",
+      "reason": "default",
+      "format_version": 1,
+      "created_at": "2026-10-04T15:59:26+00:00",
+      "session": {
+        "id": "110cfc6c-29ee-4ca3-8218-f36880325d52",
+        "pid": 21426,
+        "process_started_at": "2026-10-04T15:59:27.480Z",
+        "started_at": "2026-10-04T15:59:27+00:00",
+        "alive": false,
+        "ended_at": "2026-10-04T16:02:46+00:00"
+      },
+      "bounce_count": 0,
+      "check": {
+        "handoff_present": true,
+        "status": "awaiting_approval",
+        "errors": [],
+        "warnings": [
+          {
+            "file": "docs/knowledge/points/refund-points-recovery.md",
+            "part": "body",
+            "message": "[지식 검토: 모른다는 메모] \"환불 때 회수 포인트를 새 비율(2%)로 계산할지: 사람이 \"환불 때 회수 포인트를 새 비율로 계산할지는 이번 범위가 아니고 정산팀과 따로 정한다\"\" → 이번 Work 입력에는 사람이 환불 회수율을 미정이라고 한 말이 없으니, 입력에서 근거를 확인할 수 없으면 이 미정 줄을 지우거나 근거 있는 말로만 남기라."
+          },
+          {
+            "file": "docs/knowledge/points/refund-points-recovery.md",
+            "part": "body",
+            "message": "[지식 검토: 사람의 이번 말과 어긋남] \"어떤 적립률을 쓸지는 아래 \"아직 정하지 않은 것\"\" (사람: \"일반 주문, 선물하기, 부분 환불 회수에 쓰는 적립률이 같은 값(2%)을 따른다.\") → 승인된 intent는 환불 회수도 일반 적립과 같은 적립률을 따른다고 했으니, 규칙 문장과 미정 항목이 이 말과 어긋나지 않게 맞추라."
+          }
+        ]
+      },
+      "engine": "claude",
+      "start_commit": "9375b9e041b1faa2426a88871c7c8d89c9283fd2",
+      "skill_hash": "sha256:0633efe3eeb07e8e25ef375a074a38f3793b61f5deef36b58f10f0b5d20e5d4d",
+      "engine_version": "2.1.289 (Claude Code)",
+      "claude_version": "2.1.289 (Claude Code)",
+      "last_prompt_at": "2026-10-04T15:59:28+00:00",
+      "permission_mode": "bypassPermissions",
+      "approved_at": "2026-10-04T16:02:46+00:00",
+      "approved_by": "human"
+    }
+  ],
+  "completed_at": "2026-10-04T16:02:46+00:00"
+}

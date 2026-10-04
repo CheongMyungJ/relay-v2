@@ -1,0 +1,46 @@
+{
+  "paths": [
+    "docs/knowledge/points/earn-basis.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/points/earn-basis.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "(상품 − 쿠폰 − 사용 포인트) 기준, 배송비 제외라고 적혀 있다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "소수점 버림, 예시 486.6 → 486P."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "적립률 2%이며 1% → 2% 변경 이력이 과거로 밝혀져 있다."
+      },
+      {
+        "id": "R4",
+        "status": "missing",
+        "why": "부분 환불 회수 계산은 '아직 정하지 않은 것'으로만 있고, 원래 적립값에서 재계산 적립을 뺀다는 규칙은 확정되어 적혀 있지 않다."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "저장된 points.earned와 ledger는 다시 계산하지 않는다고 적혀 있다."
+      }
+    ]
+  }
+}

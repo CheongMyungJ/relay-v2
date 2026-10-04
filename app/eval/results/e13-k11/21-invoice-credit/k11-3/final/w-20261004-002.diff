@@ -1,0 +1,52 @@
+diff --git a/base/src/invoice/credit-note.js b/tree/src/invoice/credit-note.js
+index 6e6fe7d..378bde1 100644
+--- a/base/src/invoice/credit-note.js
++++ b/tree/src/invoice/credit-note.js
+@@ -87,7 +87,8 @@ export function creditTotals(note) {
+   const taxable = sumWon(rows.filter((r) => r.taxable).map((r) => r.net))
+   const exempt = sumWon(rows.filter((r) => !r.taxable).map((r) => r.net))
+   const supply = taxable + exempt
+-  const vat = note.zeroRated ? 0 : Math.round((taxable * VAT_RATE_PERCENT) / 100)
++  // 부가세는 할인 후 줄 금액마다 원 단위 버림한 합이다. 합계에서 다시 반올림하지 않는다
++  const vat = note.zeroRated ? 0 : sumWon(rows.filter((r) => r.taxable).map((r) => Math.floor((r.net * VAT_RATE_PERCENT) / 100)))
+   return { supply, taxable, exempt, vat, total: supply + vat }
+ }
+ 
+diff --git a/base/test/credit-note.test.js b/tree/test/credit-note.test.js
+index 5c7f920..10d967d 100644
+--- a/base/test/credit-note.test.js
++++ b/tree/test/credit-note.test.js
+@@ -1,3 +1,4 @@
++import { readFileSync } from 'node:fs'
+ import { test } from 'node:test'
+ import assert from 'node:assert'
+ import { creditNoteEntries, ledger } from '../src/export/ledger.js'
+@@ -81,3 +82,28 @@ test('반품 전표 분개', () => {
+     ['INV-0100', 'INV-0100', 'INV-0100', 'CN-0001', 'CN-0001', 'CN-0001'],
+   )
+ })
++
++test('부가세는 줄별 원 단위 버림 합이다 (CN-0112)', () => {
++  const invoice = JSON.parse(readFileSync(new URL('../examples/INV-2047.json', import.meta.url), 'utf8'))
++  const data = JSON.parse(readFileSync(new URL('../examples/CN-0112.json', import.meta.url), 'utf8'))
++  const cn = createCreditNote(invoice, data)
++  // 공급가액 줄별 9236, 6127, 2075 -> 부가세 923 + 612 + 207 = 1742 (합 17438에 한 번 반올림하면 1744로 틀림)
++  assert.deepStrictEqual(cn.totals, { supply: 17438, taxable: 17438, exempt: 0, vat: 1742, total: 19180 })
++})
++
++test('영세율 반품 전표의 부가세는 0, 면세 줄은 부가세에서 제외', () => {
++  const zero = issueInvoice(
++    createInvoice({ customerId: 'C-1', zeroRated: true, lines: [{ sku: 'A-1', name: '볼펜', unitPrice: 1234, qty: 3 }] }),
++    { number: 'INV-0101', issueDate: '2026-09-01' },
++  )
++  const cn = createCreditNote(zero, { number: 'CN-0002', issueDate: '2026-09-10', reason: '파손', returns: [{ sku: 'A-1', qty: 3 }] })
++  assert.strictEqual(cn.totals.vat, 0)
++  assert.strictEqual(cn.totals.total, 3702)
++  const mixed = note([{ sku: 'BK-1800', qty: 2 }])
++  assert.strictEqual(mixed.totals.vat, 0)
++})
++
++test('저장된 totals가 있으면 creditNoteTotals는 그대로 돌려준다', () => {
++  const stored = { ...note([{ sku: 'OF-1450', qty: 3 }]), totals: { supply: 1, taxable: 1, exempt: 0, vat: 9, total: 10 } }
++  assert.deepStrictEqual(creditNoteTotals(stored), stored.totals)
++})

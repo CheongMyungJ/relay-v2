@@ -1,0 +1,18 @@
+{"ts":"2026-10-04T16:08:32+00:00","work_id":"w-20261004-002","type":"work.created","payload":{"type":"bugfix","base_branch":"main","base_commit":"99180b47fa9b02e5f214b5671f338a8b077172de"}}
+{"ts":"2026-10-04T16:08:32+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.started","payload":{"reason":"default","session_id":"a79b71d1-e7b3-49de-bb6b-07503743f40d"}}
+{"ts":"2026-10-04T16:08:33+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.first_output","payload":{"pid":1894,"ms":856}}
+{"ts":"2026-10-04T16:08:33+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.first_hook","payload":{"pid":1894,"ms":1100,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T16:08:55+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T16:09:06+00:00","work_id":"w-20261004-002","task_id":"t-01","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T16:09:07+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.started","payload":{"reason":"default","session_id":"abf85bda-7f9e-4848-8366-bbee796242be"}}
+{"ts":"2026-10-04T16:09:08+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.first_output","payload":{"pid":2543,"ms":822}}
+{"ts":"2026-10-04T16:09:08+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.first_hook","payload":{"pid":2543,"ms":1040,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T16:09:49+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T16:10:04+00:00","work_id":"w-20261004-002","task_id":"t-02","type":"task.approved","payload":{"by":"auto"}}
+{"ts":"2026-10-04T16:10:04+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.started","payload":{"reason":"default","session_id":"348c7c35-6576-4750-b852-747199eb76e6"}}
+{"ts":"2026-10-04T16:10:05+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.first_output","payload":{"pid":3637,"ms":926}}
+{"ts":"2026-10-04T16:10:06+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.first_hook","payload":{"pid":3637,"ms":1139,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T16:11:08+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.bounced","payload":{"attempt":1,"max":2,"errors":[{"file":"docs/knowledge/points/earn-rule.md","message":"[지식 검토: 규칙 절에 정하지 않은 것] \"선물하기와 부분 환불 회수도 같은 적립 계산(`earnPoints`)을 따라야 한다.\" → 선물하기(`src/gift/`)가 같은 적립 계산을 따른다는 부분은 사람이 이번 범위가 아니라고 했으므로 `## 규칙`에서 빼서 `## 아직 정하지 않은 것`으로 옮기고, 부분 환불 회수 규칙만 `## 규칙`에 남긴다."}]}}
+{"ts":"2026-10-04T16:11:23+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T16:11:41+00:00","work_id":"w-20261004-002","task_id":"t-03","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T16:11:41+00:00","work_id":"w-20261004-002","type":"work.completed","payload":{"delivery":"none"}}

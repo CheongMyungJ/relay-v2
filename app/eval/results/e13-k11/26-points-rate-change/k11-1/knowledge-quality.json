@@ -1,0 +1,56 @@
+{
+  "paths": [
+    "docs/knowledge/points/earn-points-rule.md",
+    "docs/knowledge/points/refund-points-recovery.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/points/earn-points-rule.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/points/refund-points-recovery.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "earn-points-rule에 기준 금액 = 상품 금액 − 쿠폰 할인 − 사용 포인트, 배송비 제외로 적혀 있다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "두 파일 모두 원 단위 또는 1P 미만 버림으로, 반올림이 아니라고 적혀 있다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "적립률 2%인 지금과 1에서 2로 바뀐 이력이 적혀 있고, 1%는 '때'로 과거임을 밝혔다."
+      },
+      {
+        "id": "R4",
+        "status": "correct",
+        "why": "회수 포인트 = 저장된 원 적립 − 남은 상품 재계산 적립으로 적혀 있다."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "이미 저장된 points.earned는 다시 계산하지 않고 저장된 값을 쓴다고 적혀 있다."
+      }
+    ]
+  }
+}

@@ -1,0 +1,104 @@
+diff --git a/tree/docs/knowledge/points/refund-points-recovery.md b/tree/docs/knowledge/points/refund-points-recovery.md
+new file mode 100644
+index 0000000..366f6fa
+--- /dev/null
++++ b/tree/docs/knowledge/points/refund-points-recovery.md
+@@ -0,0 +1,15 @@
++---
++kind: rule
++source: human
++anchor: createRefund
++---
++# 부분 환불 회수 포인트는 원 적립 − 남은 상품 재계산 적립(1P 미만 버림)
++
++## 규칙
++- 부분 환불(`createRefund`, `src/orders/refund.js`)의 회수 포인트 = 주문에 저장된 원 적립 포인트 − 남은 상품으로 다시 계산한 적립 포인트. 정산팀 기준이다.
++- 재계산 적립 = (남은 상품 금액 − 쿠폰 할인 − 사용 포인트) × `POINT_RATE_PERCENT`%, 배송비 제외, 1P 미만 버림(반올림 아님). 적립 기준 금액은 `docs/knowledge/points/earn-points-rule.md` 참고.
++- 쿠폰 할인과 사용 포인트는 환불해도 남은 주문에 그대로 둔다.
++- 예: O-1077의 R-0311은 403 − floor(27,180 × 1%) = 403 − 271 = 132P 회수. 환불 금액(`refundAmount`)은 13,130원 그대로.
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-002)
+diff --git a/base/src/money.js b/tree/src/money.js
+index 4ce3f7b..cc55d48 100644
+--- a/base/src/money.js
++++ b/tree/src/money.js
+@@ -14,6 +14,11 @@ export function percentOf(amount, percent) {
+   return Math.round((amount * percent) / 100)
+ }
+ 
++/** 금액의 percent%. 원 단위로 버린다 */
++export function floorPercentOf(amount, percent) {
++  return Math.floor((amount * percent) / 100)
++}
++
+ /** 10원 단위 버림 */
+ export function floorTen(amount) {
+   return Math.floor(amount / 10) * 10
+diff --git a/base/src/orders/refund.js b/tree/src/orders/refund.js
+index 7d4f479..e31a8db 100644
+--- a/base/src/orders/refund.js
++++ b/tree/src/orders/refund.js
+@@ -1,6 +1,6 @@
+ import { POINT_RATE_PERCENT, REFUND_NUMBER } from '../config.js'
+ import { lineAmount } from '../cart/line.js'
+-import { percentOf, sumWon } from '../money.js'
++import { floorPercentOf, sumWon } from '../money.js'
+ 
+ // 환불. order는 저장된 주문(createOrder의 결과를 저장한 것)이다. 저장된 금액과 적립 포인트를 쓴다.
+ // - 부분 환불(createRefund): 돌려받는 줄의 상품 금액을 돌려주고, 적립했던 포인트 일부를 회수한다.
+@@ -26,12 +26,16 @@ export function createRefund(order, input) {
+   const remainingGoods = order.amounts.goods - refundedBefore - refundGoods
+   if (remainingGoods < order.amounts.coupon + order.amounts.pointsUsed)
+     throw new Error('남은 상품 금액이 쿠폰 할인과 사용 포인트보다 적다. 전체 취소로 처리한다')
++  // 회수 = (이전 환불까지 반영한 적립 포인트) − (남은 상품으로 다시 계산한 적립 포인트). 배송비 제외, 1P 미만 버림.
++  // 쿠폰 할인과 사용 포인트는 남은 주문에 그대로 둔다. 첫 환불의 이전 적립은 주문에 저장된 값이다.
++  const earnedFor = (goods) => floorPercentOf(goods - order.amounts.coupon - order.amounts.pointsUsed, POINT_RATE_PERCENT)
++  const pointsBefore = refundedBefore > 0 ? earnedFor(order.amounts.goods - refundedBefore) : order.points.earned
+   return {
+     number: input.number,
+     orderNumber: order.number,
+     items,
+     refundAmount: refundGoods,
+-    pointsRecovered: percentOf(refundGoods, POINT_RATE_PERCENT),
++    pointsRecovered: pointsBefore - earnedFor(remainingGoods),
+   }
+ }
+ 
+diff --git a/base/test/refund.test.js b/tree/test/refund.test.js
+index de6f8a4..c3be2e5 100644
+--- a/base/test/refund.test.js
++++ b/tree/test/refund.test.js
+@@ -1,5 +1,6 @@
+ import { test } from 'node:test'
+ import assert from 'node:assert'
++import { readFileSync } from 'node:fs'
+ import { cancelOrder, createRefund } from '../src/orders/refund.js'
+ 
+ const order = {
+@@ -30,3 +31,25 @@ test('남은 수량보다 많이 환불할 수 없다', () => {
+ test('전체 취소는 저장된 금액과 포인트를 모두 돌려놓는다', () => {
+   assert.deepStrictEqual(cancelOrder(order), { orderNumber: 'O-0100', refundAmount: 50000, pointsRecovered: 500, pointsReturned: 0 })
+ })
++
++const o1077 = JSON.parse(readFileSync(new URL('../examples/O-1077.json', import.meta.url)))
++const r0311 = JSON.parse(readFileSync(new URL('../examples/R-0311.json', import.meta.url)))
++
++test('부분 환불 회수 포인트 = 원 적립 − 남은 상품 재계산 적립(버림): R-0311은 132P', () => {
++  const r = createRefund(o1077, r0311)
++  assert.strictEqual(r.pointsRecovered, 132)
++  assert.strictEqual(r.refundAmount, 13130)
++})
++
++test('나눠 한 부분 환불은 이전 환불에서 회수한 만큼을 뺀 나머지만 회수한다', () => {
++  const first = createRefund(o1077, r0311)
++  const second = createRefund(o1077, {
++    number: 'R-0312',
++    items: [{ sku: 'TW-0838', qty: 1 }],
++    alreadyRefunded: [{ sku: 'SP-0656', qty: 2 }],
++  })
++  // 남은 상품 12900×2 = 25800 − 5000 − 2000 = 18800 → 188P
++  assert.strictEqual(first.pointsRecovered, 132)
++  assert.strictEqual(second.pointsRecovered, 271 - 188)
++  assert.strictEqual(first.pointsRecovered + second.pointsRecovered, 403 - 188)
++})

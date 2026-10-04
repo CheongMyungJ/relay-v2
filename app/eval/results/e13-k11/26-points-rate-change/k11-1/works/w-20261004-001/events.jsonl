@@ -1,0 +1,18 @@
+{"ts":"2026-10-04T15:47:06+00:00","work_id":"w-20261004-001","type":"work.created","payload":{"type":"bugfix","base_branch":"main","base_commit":"d4eb9eff64628abfa1465290e0fbd98e9e2548d7"}}
+{"ts":"2026-10-04T15:47:06+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.started","payload":{"reason":"default","session_id":"5a4e2766-7010-43ae-95d5-801a71acdb12"}}
+{"ts":"2026-10-04T15:47:07+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.first_output","payload":{"pid":6424,"ms":547}}
+{"ts":"2026-10-04T15:47:12+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.first_hook","payload":{"pid":6424,"ms":5401,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T15:48:16+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T15:48:28+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T15:48:28+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.started","payload":{"reason":"default","session_id":"f8574fb4-791c-4409-bfcc-db34c1d3579f"}}
+{"ts":"2026-10-04T15:48:29+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.first_output","payload":{"pid":8146,"ms":808}}
+{"ts":"2026-10-04T15:48:29+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.first_hook","payload":{"pid":8146,"ms":1062,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T15:49:13+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T15:49:28+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.approved","payload":{"by":"auto"}}
+{"ts":"2026-10-04T15:49:28+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.started","payload":{"reason":"default","session_id":"0b49f76e-4d3c-4e38-a0f8-168f1e14e03f"}}
+{"ts":"2026-10-04T15:49:29+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.first_output","payload":{"pid":9205,"ms":833}}
+{"ts":"2026-10-04T15:49:29+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.first_hook","payload":{"pid":9205,"ms":1056,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T15:51:03+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.bounced","payload":{"attempt":1,"max":2,"errors":[{"file":"docs/knowledge/points/earn-points-rule.md","message":"[지식 검토: 근거 없이 넓힌 규칙] \"부분 환불 회수 포인트(`src/orders/refund.js`)도 버림(`percentOfFloor`)으로 계산해 적립보다 많이 회수하지 않는다.\" → 사람이 정하지 않은 환불 회수 계산 방식을 `## 규칙`에서 빼라. 환불 회수가 아직 반올림이라는 현재 상태는 `## 아직 규칙을 따르지 않는 곳`에, 사람이 미정이라고 한 경우에만 `## 아직 정하지 않은 것`에 옮겨라."}]}}
+{"ts":"2026-10-04T15:51:15+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T15:51:35+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T15:51:35+00:00","work_id":"w-20261004-001","type":"work.completed","payload":{"delivery":"none"}}

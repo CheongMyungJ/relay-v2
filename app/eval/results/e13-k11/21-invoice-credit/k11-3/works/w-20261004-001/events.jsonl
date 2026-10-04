@@ -1,0 +1,19 @@
+{"ts":"2026-10-04T16:04:22+00:00","work_id":"w-20261004-001","type":"work.created","payload":{"type":"bugfix","base_branch":"main","base_commit":"0c895314a4b45690730a9fdf436bf0397a26e333"}}
+{"ts":"2026-10-04T16:04:23+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.started","payload":{"reason":"default","session_id":"7ef8958c-b037-49b8-9914-ca76442f0b62"}}
+{"ts":"2026-10-04T16:04:23+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.first_output","payload":{"pid":29086,"ms":493}}
+{"ts":"2026-10-04T16:04:28+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.first_hook","payload":{"pid":29086,"ms":5186,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T16:05:34+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T16:05:45+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T16:05:45+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.started","payload":{"reason":"default","session_id":"49a9d9f5-3e92-4fda-8822-00b3dbfedd8b"}}
+{"ts":"2026-10-04T16:05:46+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.first_output","payload":{"pid":31220,"ms":829}}
+{"ts":"2026-10-04T16:05:46+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.first_hook","payload":{"pid":31220,"ms":1052,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T16:06:19+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T16:06:34+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.approved","payload":{"by":"auto"}}
+{"ts":"2026-10-04T16:06:35+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.started","payload":{"reason":"default","session_id":"8ddb8892-cc29-45a8-9008-5d3ba122946c"}}
+{"ts":"2026-10-04T16:06:36+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.first_output","payload":{"pid":32294,"ms":972}}
+{"ts":"2026-10-04T16:06:36+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.first_hook","payload":{"pid":32294,"ms":1237,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T16:07:15+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T16:08:42+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.bounced","payload":{"attempt":1,"max":2,"errors":[{"file":"docs/knowledge/invoice/vat-per-line-floor.md","message":"[지식 검토: 근거 없이 넓힌 규칙] \"반품 전표(`creditTotals`)에도 같은 규칙을 쓴다. 예: CN-0112는 부가세 1,742원, 돌려주는 합계 19,180원이다.\" → 청구서에 대한 사람 규정만 규칙으로 남기고, 반품 전표에 같은 규칙을 쓴다는 문장과 CN-0112 예, 제목의 '반품 전표'를 규칙에서 빼며, creditTotals의 Math.round는 `## 아직 규칙을 따르지 않는 곳`에 둔다."},{"file":"docs/knowledge/invoice/vat-per-line-floor.md","message":"[지식 검토: 근거 없이 넓힌 규칙] \"사람이 반품에도 같은 규정이라고 알려 줌\" → 입력에 사람이 반품 전표에 적용하라고 한 말이 없으므로 이 이력 줄과 구현 줄의 creditTotals 언급을 제거하거나 사실에 맞게 고친다."},{"file":"docs/knowledge/invoice/issued-invoice-no-recalc.md","message":"[지식 검토: 근거 없이 넓힌 규칙] \"반품 전표도 같다. `creditNoteTotals`는 저장된 `totals`가 있으면 그대로 쓴다.\" → 사람이 말한 발행된 청구서 재계산 금지만 규칙으로 남기고, 반품 전표 줄은 사람 근거가 없으면 삭제한다."}]}}
+{"ts":"2026-10-04T16:09:10+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T16:09:21+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T16:09:21+00:00","work_id":"w-20261004-001","type":"work.completed","payload":{"delivery":"none"}}

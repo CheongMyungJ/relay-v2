@@ -1,0 +1,56 @@
+{
+  "calls": [
+    {
+      "at": "2026-10-04T16:07:20+00:00",
+      "hash": "e487ae958a8d417c7a0ee19dc8710086c98ef1d096a5958d4ce08ff2cb3ec79e",
+      "model": "sonnet",
+      "ms": 4841,
+      "costUsd": 0.0200548,
+      "usage": {
+        "input": 2,
+        "output": 397,
+        "cacheRead": 744,
+        "cacheCreation": 3983
+      },
+      "related": 0,
+      "promptChars": 3943,
+      "issues": [],
+      "bounced": false,
+      "error": null
+    },
+    {
+      "at": "2026-10-04T16:08:51+00:00",
+      "hash": "b5108a29ba8cf5b815c17504a59a4e6d1446cc22a69e41011fd40697044e4b57",
+      "model": "sonnet",
+      "ms": 8688,
+      "costUsd": 0.0259728,
+      "usage": {
+        "input": 2,
+        "output": 932,
+        "cacheRead": 744,
+        "cacheCreation": 4125
+      },
+      "related": 0,
+      "promptChars": 4143,
+      "issues": [
+        {
+          "file": "docs/knowledge/invoice/vat-per-line-floor.md",
+          "part": "body",
+          "message": "[지식 검토: 근거 없이 넓힌 규칙] \"반품 전표(`creditTotals`)에도 같은 규칙을 쓴다. 예: CN-0112는 부가세 1,742원, 돌려주는 합계 19,180원이다.\" → 청구서에 대한 사람 규정만 규칙으로 남기고, 반품 전표에 같은 규칙을 쓴다는 문장과 CN-0112 예, 제목의 '반품 전표'를 규칙에서 빼며, creditTotals의 Math.round는 `## 아직 규칙을 따르지 않는 곳`에 둔다."
+        },
+        {
+          "file": "docs/knowledge/invoice/vat-per-line-floor.md",
+          "part": "body",
+          "message": "[지식 검토: 근거 없이 넓힌 규칙] \"사람이 반품에도 같은 규정이라고 알려 줌\" → 입력에 사람이 반품 전표에 적용하라고 한 말이 없으므로 이 이력 줄과 구현 줄의 creditTotals 언급을 제거하거나 사실에 맞게 고친다."
+        },
+        {
+          "file": "docs/knowledge/invoice/issued-invoice-no-recalc.md",
+          "part": "body",
+          "message": "[지식 검토: 근거 없이 넓힌 규칙] \"반품 전표도 같다. `creditNoteTotals`는 저장된 `totals`가 있으면 그대로 쓴다.\" → 사람이 말한 발행된 청구서 재계산 금지만 규칙으로 남기고, 반품 전표 줄은 사람 근거가 없으면 삭제한다."
+        }
+      ],
+      "bounced": true,
+      "error": null
+    }
+  ]
+}
