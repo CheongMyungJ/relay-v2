@@ -1,0 +1,52 @@
+diff --git a/src/cart.js b/src/cart.js
+index 27f74fe..31b30fa 100644
+--- a/src/cart.js
++++ b/src/cart.js
+@@ -1,9 +1,6 @@
+ // 장바구니 화면의 미리보기 금액
++import { discounted, subtotalOf } from './discount.js'
+ 
+-export function previewTotal(items, { member = false, coupon = 0 } = {}) {
+-  let total = 0
+-  for (const item of items) total += item.price * item.qty
+-  if (member) total = Math.round(total * 0.95)
+-  total -= coupon
+-  return Math.max(total, 0)
++export function previewTotal(items, options = {}) {
++  return discounted(subtotalOf(items), options)
+ }
+diff --git a/src/checkout.js b/src/checkout.js
+index 4f7d2dc..ca7a3a9 100644
+--- a/src/checkout.js
++++ b/src/checkout.js
+@@ -1,8 +1,6 @@
+ // 결제할 금액
++import { discounted, subtotalOf } from './discount.js'
+ 
+-export function chargeAmount(items, { member = false, coupon = 0 } = {}) {
+-  const subtotal = items.reduce((sum, item) => sum + item.price * item.qty, 0)
+-  let amount = Math.max(subtotal - coupon, 0)
+-  if (member) amount = Math.round(amount * 0.95)
+-  return amount
++export function chargeAmount(items, options = {}) {
++  return discounted(subtotalOf(items), options)
+ }
+diff --git a/src/discount.js b/src/discount.js
+new file mode 100644
+index 0000000..7dd2e77
+--- /dev/null
++++ b/src/discount.js
+@@ -0,0 +1,13 @@
++// 할인 계산: 미리보기와 결제가 함께 쓴다
++
++export const MEMBER_RATE = 0.07
++
++export function subtotalOf(items) {
++  return items.reduce((sum, item) => sum + item.price * item.qty, 0)
++}
++
++export function discounted(subtotal, { member = false, coupon = 0 } = {}) {
++  let amount = Math.max(subtotal - coupon, 0)
++  if (member) amount = Math.round(amount * (1 - MEMBER_RATE))
++  return amount
++}

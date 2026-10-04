@@ -12,7 +12,7 @@ import path from 'node:path'
 import { parseArgs } from 'node:util'
 import { runEpisode } from './lib/episode.mjs'
 import { cleanEnv, findClaude } from './lib/env.mjs'
-import { words } from './lib/kind.mjs'
+import { armBase, armType, words } from './lib/kind.mjs'
 import { sleep, writeJson } from './lib/util.mjs'
 import { pairOf } from './lib/works.mjs'
 import { buildReport, judgeAll } from './report.mjs'
@@ -31,7 +31,8 @@ const HELP = `쓰는 법: node eval/run.mjs [옵션]
   --runs <n>               시나리오와 쪽마다 돌릴 횟수 (기본 1)
   --arms <목록>            relay, relay-off(지식을 끈 relay), cli, --app으로 준 빌드 이름(뒤에 -off를 붙이면
                            그 빌드에서 지식을 끔) 가운데 (기본: 시나리오의 짝. works가 있는 시나리오는
-                           relay,relay-off, 나머지는 relay,cli)
+                           relay,relay-off, 나머지는 relay,cli). relay 쪽 뒤에 @<유형>을 붙이면(예: relay@general)
+                           시나리오의 유형 대신 그 유형으로 새 Work를 만든다(교차 비교, I93)
   --app <이름=폴더>        다른 relay 빌드를 쪽으로 쓴다. 폴더는 빌드한 app/ (eval/ref-app.sh). 여럿이면 쉼표.
                            예: --app base=/tmp/relay-ref/base/app,m17=/tmp/relay-ref/m17/app
   --pairs <목록>           짝 판정할 짝. 예: relay:base,relay:m17 (기본: 시나리오의 짝)
@@ -96,7 +97,7 @@ const ARMS = ['relay', 'relay-off', 'cli']
 /** 쪽 이름이 쓸 앱 폴더. cli는 null */
 const appOf = (arm, apps) => {
   if (arm === 'cli') return null
-  const build = arm.replace(/-off$/, '')
+  const build = armBase(arm).replace(/-off$/, '')
   return build === 'relay' ? APP : (apps[build] ?? null)
 }
 
@@ -166,9 +167,13 @@ async function main() {
         return [name, path.resolve(dir)]
       }),
   )
-  const known = (a) => ARMS.includes(a) || !!apps[a.replace(/-off$/, '')]
+  const knownBase = (a) => ARMS.includes(a) || !!apps[a.replace(/-off$/, '')]
+  // relay@<유형>: @ 앞은 relay 앱의 쪽이고 뒤는 아는 유형이다 (I93)
+  const known = (a) =>
+    a === armBase(a) ? knownBase(a) : !!armType(a) && armBase(a) !== 'cli' && knownBase(armBase(a))
   for (const a of given ?? [])
-    if (!known(a)) throw new Error(`모르는 쪽: ${a} (--app으로 빌드를 주세요)`)
+    if (!known(a))
+      throw new Error(`모르는 쪽: ${a} (--app으로 빌드를 주거나 @ 뒤에 유형을 바르게 쓰세요)`)
   const armsOf = (s) => given ?? pairOf(s)
   const arms = [...new Set(scenarios.flatMap((s) => armsOf(s)))]
   const pairs = v.pairs

@@ -6,6 +6,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { DIMENSIONS, judgePair } from './lib/judge.mjs'
+import { armBase, armType, typeLabel } from './lib/kind.mjs'
 import { clip, readJson, readJsonl, stats, writeJson } from './lib/util.mjs'
 import { measuredWorks, multiWork, pairOf, workParts } from './lib/works.mjs'
 
@@ -16,7 +17,12 @@ const SCENARIOS = process.env.RELAY_EVAL_SCENARIOS
 /** 쪽의 차례와 보고서의 이름. relay-off는 지식 관리를 끈 relay다. 그 밖의 이름(--app으로 준 빌드)은 이름 차례로 뒤에 둔다 */
 const ARMS = ['relay', 'relay-off', 'cli']
 const LABEL = { relay: 'relay', 'relay-off': 'relay (지식 끔)', cli: '맨 CLI' }
-const label = (k) => LABEL[k] ?? (k.endsWith('-off') ? `${k.slice(0, -4)} (지식 끔)` : k)
+const label = (k) => {
+  // relay@<유형>은 그 유형으로 만든 Work다 (교차 비교, I93)
+  const type = armType(k)
+  if (type) return `${label(armBase(k))} (${typeLabel(type)} 유형)`
+  return LABEL[k] ?? (k.endsWith('-off') ? `${k.slice(0, -4)} (지식 끔)` : k)
+}
 
 /** 판정의 두 쪽. pair가 없는 예전 판정은 relay 대 맨 CLI다 */
 const pairOfJudge = (j) => j.pair ?? ['relay', 'cli']

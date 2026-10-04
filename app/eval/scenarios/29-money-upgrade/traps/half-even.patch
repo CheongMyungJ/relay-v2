@@ -1,0 +1,59 @@
+diff --git a/package.json b/package.json
+index 594d496..d130b9b 100644
+--- a/package.json
++++ b/package.json
+@@ -3,7 +3,7 @@
+   "private": true,
+   "type": "module",
+   "imports": {
+-    "#money": "./vendor/money@1.4.0/index.js"
++    "#money": "./vendor/money@2.0.0/index.js"
+   },
+   "scripts": {
+     "test": "node --test"
+diff --git a/src/invoice.js b/src/invoice.js
+index ee69602..011c674 100644
+--- a/src/invoice.js
++++ b/src/invoice.js
+@@ -1,4 +1,4 @@
+-import { formatWon, roundWon } from '#money'
++import { roundWon, won } from '#money'
+ 
+ const VAT_RATE = 0.1
+ 
+@@ -11,8 +11,8 @@ export function vat(supply) {
+ export function invoiceLines(supply) {
+   const tax = vat(supply)
+   return [
+-    `공급가액 ${formatWon(supply)}`,
+-    `부가세 ${formatWon(tax)}`,
+-    `합계 ${formatWon(supply + tax)}`,
++    `공급가액 ${won(supply)}`,
++    `부가세 ${won(tax)}`,
++    `합계 ${won(supply + tax)}`,
+   ]
+ }
+diff --git a/vendor/money@1.4.0/index.js b/vendor/money@1.4.0/index.js
+deleted file mode 100644
+index e3e042d..0000000
+--- a/vendor/money@1.4.0/index.js
++++ /dev/null
+@@ -1,11 +0,0 @@
+-// money 1.4.0 — 원 단위 금액 도우미 (vendored)
+-
+-/** 원 단위로 반올림한다. 0.5는 올린다 */
+-export function roundWon(n) {
+-  return Math.floor(n + 0.5)
+-}
+-
+-/** 12345 → "12,345원" */
+-export function formatWon(n) {
+-  return `${String(Math.trunc(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}원`
+-}
+diff --git a/vendor/money@1.4.0/package.json b/vendor/money@1.4.0/package.json
+deleted file mode 100644
+index bceca5d..0000000
+--- a/vendor/money@1.4.0/package.json
++++ /dev/null
+@@ -1 +0,0 @@
+-{ "name": "money", "version": "1.4.0", "type": "module", "main": "index.js" }

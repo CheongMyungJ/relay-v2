@@ -4,16 +4,16 @@ import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { ask } from './ai.mjs'
-import { words } from './kind.mjs'
+import { armBase, armType, typeLabel, words } from './kind.mjs'
 
 const GUIDES = path.resolve(import.meta.dirname, '../guides')
 
-/** 쪽의 화면 종류. cli 말고는 모두 relay 앱이다(relay-off, --app으로 준 다른 빌드) */
+/** 쪽의 화면 종류. cli 말고는 모두 relay 앱이다(relay-off, relay@<유형>, --app으로 준 다른 빌드) */
 export const screenKind = (kind) => (kind === 'cli' ? 'cli' : 'relay')
 
 /** 사람 역할의 설명서 이름. 다른 빌드(base, m17 등)는 그 빌드의 화면 설명서가 있으면 그것을 쓴다 */
 export function guideName(arm, kind) {
-  const own = String(arm ?? '').replace(/-off$/, '')
+  const own = armBase(arm).replace(/-off$/, '')
   if (own && own !== kind && fs.existsSync(path.join(GUIDES, `${own}.md`))) return own
   return kind
 }
@@ -113,7 +113,7 @@ const ACTION_HELP = {
   ],
 }
 
-function systemPrompt(kind, scenario, guide) {
+function systemPrompt(kind, scenario, guide, arm) {
   const known = scenario.knowledge ?? []
   const w = words(scenario)
   const lines = [
@@ -147,6 +147,7 @@ function systemPrompt(kind, scenario, guide) {
     '## 네 상황',
     ...nextWorkLines(kind, scenario),
     `### 일의 종류: ${w.label}`,
+    ...pickTypeLines(arm),
     '',
     `### ${w.subject}`,
     ...(Array.isArray(scenario.report) ? scenario.report : [scenario.report]),
@@ -163,6 +164,18 @@ function systemPrompt(kind, scenario, guide) {
     ...(scenario.preferences?.length ? scenario.preferences.map((p) => `- ${p}`) : ['- 없음']),
   ]
   return lines.join('\n')
+}
+
+/**
+ * 교차 비교(relay I93)의 relay@<유형> 쪽: 일의 종류와 관계없이 새 Work의 유형을 정해 둔 것으로 고르게 한다. 같은 일을
+ * 다른 유형으로 해 보는 평가 조건이다
+ */
+function pickTypeLines(arm) {
+  const type = armType(arm)
+  if (!type) return []
+  return [
+    `이번 평가 조건: [새 Work]의 유형은 '${typeLabel(type)}'을(를) 고른다. 일의 종류와 달라 보여도 그대로 고르고, 도구가 다른 유형을 권해도 '${typeLabel(type)}'으로 계속한다.`,
+  ]
 }
 
 /**
@@ -209,7 +222,7 @@ export class Human {
     this.sessionId = crypto.randomUUID()
     this.started = false
     const guide = fs.readFileSync(path.join(GUIDES, `${guideName(o.arm, o.kind)}.md`), 'utf8')
-    this.system = systemPrompt(o.kind, o.scenario, guide)
+    this.system = systemPrompt(o.kind, o.scenario, guide, o.arm)
     this.costUsd = 0
     this.calls = 0
     /** 스크린샷을 붙인 차례 수와 마지막으로 붙인 화면 배치 (eval-findings E10) */

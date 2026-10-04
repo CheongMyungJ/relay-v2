@@ -6,6 +6,7 @@ import path from 'node:path'
 import { CliArm } from './cli-arm.mjs'
 import { agentEnv, makeClaudeConfig } from './env.mjs'
 import { Human, screenKind } from './human.mjs'
+import { armBase } from './kind.mjs'
 import { RelayArm } from './relay-arm.mjs'
 import { auditTold } from './told.mjs'
 import { diffTree, handoffRepo, judgeTree, makeRepo } from './repo.mjs'
@@ -91,6 +92,7 @@ const mmss = (ms) => {
  * @param {string} o.scenarioDir
  * @param {string} o.kind 쪽: relay, cli, 또는 relay 앱의 다른 빌드(run.mjs의 --app). 이름이 -off로 끝나면 그 빌드에
  *   RELAY_KNOWLEDGE=off를 준다(relay-off는 이 체크아웃의 앱에서 지식 관리를 끈 것)
+ *   뒤에 @<유형>이 붙으면(relay@general) 사람 역할이 새 Work에서 그 유형을 고른다(교차 비교, I93)
  * @param {number} o.index 회차 (1부터)
  * @param {object} o.opts 실행 옵션 (run.mjs)
  * @param {string} o.outDir 결과 폴더
@@ -126,14 +128,14 @@ export async function runEpisode(o) {
   fs.mkdirSync(shots, { recursive: true })
   const armOpts = { dir: o.workDir, repo, base, agentEnv: agentEnv(opts), agentConfigDir }
   const screenType = screenKind(kind)
-  // 쪽의 앱 빌드: -off를 뗀 이름이 --app에 있으면 그 폴더, 없으면 이 체크아웃의 앱
-  const build = kind.replace(/-off$/, '')
+  // 쪽의 앱 빌드: @<유형>(I93)과 -off를 뗀 이름이 --app에 있으면 그 폴더, 없으면 이 체크아웃의 앱
+  const build = armBase(kind).replace(/-off$/, '')
   const arm =
     screenType === 'relay'
       ? new RelayArm({
           ...armOpts,
           appDir: opts.apps?.[build],
-          knowledge: !kind.endsWith('-off'),
+          knowledge: !armBase(kind).endsWith('-off'),
         })
       : new CliArm({ ...armOpts, claudeArgs: opts.cliArgs })
   const handoffs = []

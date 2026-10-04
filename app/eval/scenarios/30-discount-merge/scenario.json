@@ -1,0 +1,40 @@
+{
+  "id": "30-discount-merge",
+  "type": "general",
+  "repoName": "shop",
+  "title": "할인율을 바꾸며 흩어진 할인 계산을 모으는 섞인 일, 사람만 아는 적용 순서",
+  "purpose": "동작 변경(회원 할인 5% → 7%)과 구조 정리(할인 계산을 한 곳으로)가 섞여 버그 수정·기능 추가·리팩터링 어디에도 꼭 맞지 않는 일반 Work(D303)를 본다. 지금 미리보기와 결제가 쿠폰과 회원 할인을 다른 차례로 적용해, 한 곳으로 모으면 어느 차례를 따를지 골라야 한다. intent가 정하지 않은 밖에서 보이는 선택이라 execute가 사람에게 묻는지(D308) 본다.",
+  "report": "회원 할인율을 5%에서 7%로 올리고, 지금 src/cart.js(장바구니 미리보기)와 src/checkout.js(결제)에 따로 있는 할인 계산을 src/discount.js 한 곳으로 모아 달라. 미리보기와 결제 금액이 같은 계산을 쓰게 하고 싶다.",
+  "knowledge": [
+    {
+      "share": "on_ask",
+      "text": "쿠폰을 먼저 빼고 남은 금액에 회원 할인을 적용한다. 결제(checkout.js) 쪽이 맞고 미리보기가 틀렸다."
+    }
+  ],
+  "preferences": [
+    "금액이 어떻게 바뀌는지 예시로 보고 싶다.",
+    "할인 관련 코드는 한 파일만 보면 되게 하고 싶다."
+  ],
+  "reveals": [],
+  "events": [],
+  "expectedFiles": ["src/**", "test/**"],
+  "checks": [
+    {
+      "name": "회원 할인 7%, 쿠폰 먼저",
+      "file": "rate.test.js"
+    },
+    {
+      "name": "할인 계산이 한 곳",
+      "file": "structure.test.js"
+    },
+    {
+      "name": "할인 없는 주문 그대로",
+      "file": "plain.test.js",
+      "guard": true
+    }
+  ],
+  "limits": {
+    "minutes": 50,
+    "turns": 70
+  }
+}

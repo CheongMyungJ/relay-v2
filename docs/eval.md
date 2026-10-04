@@ -6,7 +6,7 @@
 
 ## 1. 목적
 
-버그 수정, 기능 추가(relay D232), 리팩터링(relay D258)에서 relay가 Claude Code CLI를 그냥 쓰는 것보다 얼마나 쓰기 좋은지 본다. 지식 관리는 같은 레포에서 Work 여럿을 잇는 시나리오(21~24)로, 지식을 켠 relay와 끈 relay(또는 다른 빌드)를 견준다. 지식 관리 실험의 규약과 주지표는 `docs/knowledge-experiment/protocol.md`에 있다. 여러 상황(시나리오)을 두 쪽으로 똑같이 돌리고, 사람의 판단은 AI가 대신한다. 결과는 경향을 보는 자료다. 사람 역할과 판정이 AI이므로 실제 사용자 시험을 대신하지 않는다.
+버그 수정, 기능 추가(relay D232), 리팩터링(relay D258), 일반(relay D302)에서 relay가 Claude Code CLI를 그냥 쓰는 것보다 얼마나 쓰기 좋은지 본다. 지식 관리는 같은 레포에서 Work 여럿을 잇는 시나리오(21~24)로, 지식을 켠 relay와 끈 relay(또는 다른 빌드)를 견준다. 지식 관리 실험의 규약과 주지표는 `docs/knowledge-experiment/protocol.md`에 있다. 여러 상황(시나리오)을 두 쪽으로 똑같이 돌리고, 사람의 판단은 AI가 대신한다. 결과는 경향을 보는 자료다. 사람 역할과 판정이 AI이므로 실제 사용자 시험을 대신하지 않는다.
 
 ## 2. 구성
 
@@ -90,13 +90,16 @@
 | 22-flaky-retry | (지식, Work 둘) Work 1은 12 그대로(병렬 결과 짝짓기, 재시도·skip·시간 제한 금지를 처음에 들음). Work 2는 보고서 보관의 CI 전용 시험이 가끔 ENOENT로 실패(임시 파일 이름을 시각으로 지어 동시 저장끼리 겹침). 규칙은 물어야만 앎 | 지식을 켠 쪽이 Work 2에서 규칙을 다시 묻지 않는지(사람 차례, AskUserQuestion 수), ENOENT 재시도나 순차 실행으로 덮지 않고 원인을 고치는지 |
 | 23-double-notify-digest | (지식, Work 둘) Work 1은 14의 알림 중복. Work 2는 요약 메일 중복으로, 원인이 같은 모양으로 둘이다(발송 기록 키에 실행 id가 들어가 요약이 다시 돌면 또 보냄, 제한 시간을 넘긴 성공을 시간 초과로 보고 다시 보냄) | 지식을 켜면 Work 2에서 사람이 밀어주지 않아도 두 원인을 다 찾는지, 끈 쪽(relay-off)보다 사람 차례와 질문이 줄어드는지 |
 | 24-invoice-credit-teammate | (지식, Work 둘, 팀원 교대) 21과 같은 두 일인데 Work 2를 팀원이 한다. 도구가 Work 1의 브랜치를 main에 머지하고 새 clone, 새 앱 저장소에서 시작한다. 팀원은 회계 규칙을 모른다 | 레포로 건너간 팀 지식만으로 Work 2가 규칙대로 고쳐지는지(숨긴 시험), 끈 쪽과 견줌 |
+| 28-ci-matrix | (일반, 설정) CI를 Node 20·22 행렬로 바꾸고 lint 단계를 더함. 아직 Node 18을 지원해야 한다는 것은 사람만 앎 | 확인 방법을 갖춘 완료조건(relay D305)과 verify의 판정, 지금 CI의 18을 빼도 되는지 묻는지(D308) |
+| 29-money-upgrade | (일반, 의존성) vendored 금액 라이브러리를 1.4.0에서 2.0.0으로 올림. 새 판의 기본 반올림이 half-even으로 바뀌었고 기존 테스트가 덮지 않음. 부가세 사사오입 규정은 사람만 앎 | 확인 방법이 `npm test`뿐일 때 verify가 보완해 판정하는지(D312), 회계 규정을 묻는지 |
+| 30-discount-merge | (일반, 섞인 일) 회원 할인 5%→7%와 흩어진 할인 계산 모으기. 미리보기와 결제의 쿠폰·할인 차례가 다르고, 쿠폰 먼저가 맞다는 것은 사람만 앎 | 동작 변경과 구조 정리가 섞인 일에서 밖에서 보이는 선택을 묻는지(D308) |
 
 `scenario.json`의 필드:
 
 | 필드 | 뜻 |
 |---|---|
 | `id`, `title`, `purpose` | 이름과 평가 목적 |
-| `type` | 업무 유형: `bugfix`(버그 수정) / `feature`(기능 추가) / `refactor`(리팩터링). 없으면 `bugfix`다(relay I62, I67). 사람 역할에게 일의 종류로 알리고, relay 쪽 사람 역할은 새 Work 대화상자에서 그 유형을 고른다. 판정과 설문의 낱말도 이것을 따른다(`eval/lib/kind.mjs`) |
+| `type` | 업무 유형: `bugfix`(버그 수정) / `feature`(기능 추가) / `refactor`(리팩터링) / `general`(일반). 없으면 `bugfix`다(relay I62, I67, I92). 사람 역할에게 일의 종류로 알리고, relay 쪽 사람 역할은 새 Work 대화상자에서 그 유형을 고른다. 판정과 설문의 낱말도 이것을 따른다(`eval/lib/kind.mjs`) |
 | `repoName` | 레포 폴더 이름 (relay 프로젝트 이름이 된다) |
 | `report` | 사람이 받은 리포트나 본 것, 기능 추가와 리팩터링이면 요청 (문자열 또는 문자열 배열) |
 | `knowledge` | `{ share: "upfront" \| "on_ask", text }` |
@@ -147,10 +150,12 @@ node eval/run.mjs --scenarios 21,22,23,24 --runs 3 --parallel 2   # 지식 관�
 bash eval/ref-app.sh base 0247049                                 # 견줄 빌드 → /tmp/relay-ref/base/app
 node eval/run.mjs --scenarios 21,24 --runs 3 --arms relay,base --app base=/tmp/relay-ref/base/app --pairs relay:base
 node eval/primary.mjs eval/results/<폴더> --pair relay:relay-off # 주지표와 구간
+node eval/run.mjs --scenarios 1,10,15,16,18,19 --runs 3 --arms relay,relay@general --pairs relay:relay@general --parallel 2  # 교차 비교(relay I93)
 node eval/report.mjs eval/results/<폴더>                # 보고서 다시 만들기
 ```
 
 - 기본값: 에이전트 `sonnet`·effort `medium`, 사람 역할 `sonnet`·effort `medium`, 판정 `sonnet`.
+- **교차 비교(relay I93):** `--arms`의 relay 쪽 뒤에 `@<유형>`을 붙이면(`relay@general`) 사람 역할이 시나리오의 유형 대신 그 유형으로 새 Work를 만든다(설명서에 "이번 평가 조건"으로 알린다). 같은 빌드에서 `relay`와 `relay@general`을 함께 돌리고 짝 `relay:relay@general`을 판정해, 전용 유형과 일반 유형의 수고와 결과 확신을 견준다. 맨 CLI는 유형이 없어 다시 돌리지 않는다. 결과 폴더는 `<시나리오>/relay@general-<회차>/`이고 보고서의 쪽 이름은 "relay (일반 유형)"이다.
 - 결과: `app/eval/results/<시각>/`(git에 넣지 않음). `report.md`, `report.json`, `config.json`, `<시나리오>/<쪽>-<회차>/`에 `run.json`(relay의 단계별 토큰 `agentSteps` 포함), `turns.jsonl`(차례 기록), `shots/`(relay 스크린샷), `final/*.diff`, `works/`(relay 산출물과 `pty.log`), `<시나리오>/judge-<회차>.json`.
 - 작업 폴더: `/tmp/relay-eval/<결과 폴더 이름>/`(레포, relay 저장소, 설정 폴더). 컨테이너가 끝나면 없어진다. 같은 `--out`으로 다시 돌리면 같은 회차의 작업 폴더와 결과 폴더를 비우고 새로 한다.
 - 시간: 실행 하나에 3~20분쯤이다. `--parallel 2`까지 권한다(Electron과 claude 둘이 함께 돈다).
