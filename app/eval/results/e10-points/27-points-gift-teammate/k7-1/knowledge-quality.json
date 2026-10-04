@@ -1,0 +1,57 @@
+{
+  "paths": [
+    "docs/knowledge/earn-points-base-and-rounding.md",
+    "docs/knowledge/earn-points-rounding-mismatch-in-copies.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/earn-points-base-and-rounding.md",
+        "stale": true,
+        "staleWhy": "\"선물하기(src/gift/gift-points.js)... 같은 차이가 남아 있을 수 있다\"고 지금 상태처럼 적었지만 선물하기는 규정대로 고쳐졌다.",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/earn-points-rounding-mismatch-in-copies.md",
+        "stale": true,
+        "staleWhy": "적용과 본문 첫머리에서 gift-points.js를 여전히 percentOf 반올림 복제처럼 적었다. 아래 이력 줄에서 고쳤다고 했지만 앞부분은 현재형이라 낡았다.",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [
+      {
+        "a": "docs/knowledge/earn-points-base-and-rounding.md",
+        "b": "docs/knowledge/earn-points-rounding-mismatch-in-copies.md",
+        "why": "앞 파일은 선물하기가 아직 같은 차이가 남아 있을 수 있다고 하고, 뒤 파일은 선물하기를 earnPoints 재사용으로 고쳤다고 한다. 지금은 고쳐진 것이 맞다."
+      }
+    ],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "기준 금액 = 상품 금액 − 쿠폰 할인 − 사용 포인트, 배송비 제외로 맞게 적혀 있다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "원 단위로 버림(반올림 아님)이라고 적혀 있다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "예시에서 기준 금액 × 1%로 적혀 있다."
+      },
+      {
+        "id": "R5",
+        "status": "missing",
+        "why": "이미 적립된 포인트를 다시 계산하지 않고 저장된 값을 쓴다는 내용이 어디에도 없다."
+      }
+    ]
+  }
+}

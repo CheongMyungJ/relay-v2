@@ -1,0 +1,17 @@
+## docs/knowledge/points/earn-rule.md (Work w-20261004-001에서 남김. 기준 브랜치에는 아직 없다)
+
+---
+kind: rule
+source: investigation
+anchor: earnPoints
+---
+# 적립 포인트는 배송비를 뺀 결제 금액의 1%를 소수점 버림한다
+
+## 규칙
+- 적립 대상 금액은 `amounts.total - amounts.shipping`(상품 - 쿠폰 - 사용 포인트)이고, `POINT_RATE_PERCENT`%를 원 단위 미만 버림한다. 예: O-1042는 23,770원 → 237P (고객센터 기준).
+- 선물하기 적립(`giftPoints`)과 부분 환불의 회수(`pointsRecovered`)도 같은 버림 기준을 쓴다 (사람이 정함).
+- 이미 적립된 포인트는 다시 계산하지 않고 주문에 저장된 `points.earned`를 쓴다 (사람).
+- 영수증 글자(`src/format/`)는 앱과 메일이 그대로 보여 주므로 바꾸지 않는다 (사람).
+
+## 바뀐 이력
+- 2026-10-04 처음 남김 (Work w-20261004-001). 이전에는 배송비 포함 금액의 반올림이었다

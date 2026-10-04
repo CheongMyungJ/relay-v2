@@ -1,0 +1,107 @@
+diff --git a/tree/docs/knowledge/credit-note-totals-reference-cn-0112.md b/tree/docs/knowledge/credit-note-totals-reference-cn-0112.md
+new file mode 100644
+index 0000000..5702f6c
+--- /dev/null
++++ b/tree/docs/knowledge/credit-note-totals-reference-cn-0112.md
+@@ -0,0 +1,9 @@
++# CN-0112 반품 전표의 기대 금액은 부가세 1,742원, 합계 19,180원이다
++
++- 종류: 사실
++- 적용: src/invoice/credit-note.js (creditTotals), examples/CN-0112.json, examples/INV-2047.json
++- 출처: 조사로 알아냄, relay Work w-20261003-002, 2026-10-03
++
++회계팀이 10월 반품 전표를 대조하다 환불 금액이 몇 원씩 어긋난다고 알려 왔다. 원인은 반품 부가세를 과세 공급가액 합계(17,438)에 한 번 곱해 반올림(1,744원)한 것이다.
++줄별 원 단위 버림 후 합산하면 923+612+207 = 1,742원, 합계 19,180원이다. 이미 저장된 totals는 재계산하지 않는다.
++회귀 테스트는 test/credit-note.test.js의 CN-0112 항목이다. 재현 절차는 두 예시 파일로 `createCreditNote`를 호출해 `totals`를 보는 것이다.
+diff --git a/base/src/invoice/credit-note.js b/tree/src/invoice/credit-note.js
+index 6e6fe7d..edafd4c 100644
+--- a/base/src/invoice/credit-note.js
++++ b/tree/src/invoice/credit-note.js
+@@ -80,6 +80,11 @@ export function creditLineAmounts(note) {
+   })
+ }
+ 
++// 줄별 부가세. 할인된 줄 금액의 10%를 원 단위로 버린다(청구서와 같은 규칙, 합계에서 다시 반올림하지 않는다)
++function lineVat(row) {
++  return Math.floor((row.net * VAT_RATE_PERCENT) / 100)
++}
++
+ // 반품 전표의 돌려주는 금액
+ //   supply: 공급가액, taxable / exempt: 과세분 / 면세분, vat: 부가세, total: 돌려주는 합계
+ export function creditTotals(note) {
+@@ -87,7 +92,7 @@ export function creditTotals(note) {
+   const taxable = sumWon(rows.filter((r) => r.taxable).map((r) => r.net))
+   const exempt = sumWon(rows.filter((r) => !r.taxable).map((r) => r.net))
+   const supply = taxable + exempt
+-  const vat = note.zeroRated ? 0 : Math.round((taxable * VAT_RATE_PERCENT) / 100)
++  const vat = note.zeroRated ? 0 : sumWon(rows.filter((r) => r.taxable).map(lineVat))
+   return { supply, taxable, exempt, vat, total: supply + vat }
+ }
+ 
+diff --git a/base/test/credit-note.test.js b/tree/test/credit-note.test.js
+index 5c7f920..6274d8c 100644
+--- a/base/test/credit-note.test.js
++++ b/tree/test/credit-note.test.js
+@@ -81,3 +81,62 @@ test('반품 전표 분개', () => {
+     ['INV-0100', 'INV-0100', 'INV-0100', 'CN-0001', 'CN-0001', 'CN-0001'],
+   )
+ })
++
++test('부가세는 줄별 원 단위 버림 후 합산한다 (CN-0112)', () => {
++  const invoice = issueInvoice(
++    createInvoice({
++      customerId: 'C-0388',
++      lines: [
++        { sku: 'OF-0415', name: '지우개', unitPrice: 415, qty: 9 },
++        { sku: 'OF-1342', name: '박스테이프', unitPrice: 1342, qty: 8, discount: { amount: 1500 } },
++        { sku: 'OF-2150', name: '형광펜 5색', unitPrice: 2150, qty: 6, discount: { percent: 5 } },
++      ],
++    }),
++    { number: 'INV-2047', issueDate: '2026-09-24' },
++  )
++  const cn = createCreditNote(invoice, {
++    number: 'CN-0112',
++    issueDate: '2026-10-06',
++    reason: '파손',
++    returns: [
++      { sku: 'OF-1342', qty: 8 },
++      { sku: 'OF-2150', qty: 3 },
++      { sku: 'OF-0415', qty: 5 },
++    ],
++  })
++  // 줄별 부가세 923 + 612 + 207 (합계에 곱해 반올림하면 1,744)
++  assert.strictEqual(cn.totals.vat, 1742)
++  assert.strictEqual(cn.totals.total, 19180)
++})
++
++test('두 줄 전부 반품: 1,343원 + 1,342원 부가세는 268원', () => {
++  const invoice = issueInvoice(
++    createInvoice({
++      customerId: 'C-1',
++      lines: [
++        { sku: 'A', name: 'A', unitPrice: 1343, qty: 1 },
++        { sku: 'B', name: 'B', unitPrice: 1342, qty: 1 },
++      ],
++    }),
++    { number: 'INV-0200', issueDate: '2026-09-01' },
++  )
++  const cn = createCreditNote(invoice, {
++    number: 'CN-0200', issueDate: '2026-09-02', reason: '파손',
++    returns: [{ sku: 'A', qty: 1 }, { sku: 'B', qty: 1 }],
++  })
++  assert.strictEqual(cn.totals.vat, 268)
++  assert.strictEqual(cn.totals.total, 2685 + 268)
++})
++
++test('면세 줄과 영세율 반품 전표의 부가세는 0, 일부 수량 반품은 줄별 버림', () => {
++  const exemptOnly = note([{ sku: 'BK-1800', qty: 2 }])
++  assert.strictEqual(exemptOnly.totals.vat, 0)
++  const zero = issueInvoice(
++    createInvoice({ customerId: 'C-1', zeroRated: true, lines: [{ sku: 'A', name: 'A', unitPrice: 1343, qty: 3 }] }),
++    { number: 'INV-0201', issueDate: '2026-09-01' },
++  )
++  const cn = createCreditNote(zero, { number: 'CN-0201', issueDate: '2026-09-02', reason: '파손', returns: [{ sku: 'A', qty: 1 }] })
++  assert.strictEqual(cn.totals.vat, 0)
++  assert.strictEqual(cn.totals.total, 1343)
++  assert.strictEqual(note([{ sku: 'OF-1450', qty: 3 }]).totals.vat, 435)
++})

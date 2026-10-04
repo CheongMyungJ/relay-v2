@@ -1,0 +1,77 @@
+{
+  "paths": [
+    "docs/knowledge/legacy-point-rate-gift-refund.md",
+    "docs/knowledge/points-earn-basis.md",
+    "docs/knowledge/refund-recovery-vs-earn-basis.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/legacy-point-rate-gift-refund.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/points-earn-basis.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/refund-recovery-vs-earn-basis.md",
+        "stale": true,
+        "staleWhy": "제목과 본문 \"다시 계산한 적립 = (...) × 1%\"가 적립률 1%를 지금 값으로 적음(지금은 2%). 예시 계산도 1% 기준.",
+        "stateAsRule": true,
+        "stateWhy": "환불 회수 재계산에 쓸 율이 미정(정산팀과 따로 정함)인데 1%를 확정된 규칙처럼 적음.",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [
+      {
+        "a": "docs/knowledge/points-earn-basis.md",
+        "b": "docs/knowledge/refund-recovery-vs-earn-basis.md",
+        "why": "앞은 새 주문 적립률을 2%로 적고, 뒤는 환불 회수용 재계산 적립을 1%로 확정해 적어 같은 적립률에 다른 값을 말한다."
+      },
+      {
+        "a": "docs/knowledge/legacy-point-rate-gift-refund.md",
+        "b": "docs/knowledge/refund-recovery-vs-earn-basis.md",
+        "why": "앞은 환불 회수 재계산 율(2% 여부)이 아직 정해지지 않았다고 하고, 뒤는 1%로 정해진 것처럼 적는다."
+      }
+    ],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "points-earn-basis에 결제 금액에서 배송비를 빼고, 쿠폰·사용 포인트는 이미 total에서 빠져 있다고 적혀 있다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "points-earn-basis에 반올림하지 않고 버린다고 적혀 있다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "points-earn-basis에 2026-10-04 배포부터 새 주문 적립률이 2%라고 적혀 있다."
+      },
+      {
+        "id": "R4",
+        "status": "correct",
+        "why": "refund-recovery와 legacy 파일에 회수 = 저장 적립 - 남은 상품 기준 재계산 적립이라고 적혀 있다. 재계산 율은 미정이다."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "points-earn-basis와 refund-recovery에 저장된 적립값은 다시 계산하지 않는다고 적혀 있다."
+      }
+    ]
+  }
+}

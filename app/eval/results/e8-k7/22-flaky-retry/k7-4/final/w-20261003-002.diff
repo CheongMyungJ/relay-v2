@@ -1,0 +1,34 @@
+diff --git a/base/src/store/report-archive.js b/tree/src/store/report-archive.js
+index 0c62d2f..6fd168d 100644
+--- a/base/src/store/report-archive.js
++++ b/tree/src/store/report-archive.js
+@@ -20,7 +20,8 @@ export function reportPath(period, reportId) {
+  */
+ export async function saveReport(files, report) {
+   const path = reportPath(report.period, report.reportId)
+-  const tmp = `${reportDir(report.period)}/.${stamp(now())}.tmp`
++  // 같은 시각에 시작한 저장끼리 겹치지 않게 reportId를 넣는다
++  const tmp = `${reportDir(report.period)}/.${report.reportId}.${stamp(now())}.tmp`
+   await files.writeFile(tmp, JSON.stringify(report))
+   await files.rename(tmp, path)
+   return path
+diff --git a/base/test/archive.test.js b/tree/test/archive.test.js
+index 44aa323..82df610 100644
+--- a/base/test/archive.test.js
++++ b/tree/test/archive.test.js
+@@ -74,6 +74,15 @@ test('보고서 보관: 여러 개를 차례로', async () => {
+   assert.strictEqual(files.stats.renames, 3)
+ })
+ 
++test('보고서 보관: 같은 시각에 동시에 저장해도 서로 덮어쓰지 않는다', async () => {
++  setSleep(async () => {}) // 시계가 멈춰 모든 저장이 같은 시각에 시작한다
++  const files = createFileStore({ latency: { baseMs: 2 } })
++  const reports = [1, 2, 3, 4].map((n) => report(n))
++  await Promise.all(reports.map((r) => saveReport(files, r)))
++  for (const r of reports) assert.deepStrictEqual(await loadReport(files, '2026-09', r.reportId), r)
++  assert.deepStrictEqual(strayTemps(files, '2026-09'), [])
++})
++
+ test('기간이 없으면 no-period 폴더', () => {
+   assert.strictEqual(reportPath(null, 'r-1'), 'reports/no-period/r-1.json')
+   assert.throws(() => reportPath('2026-09'), /reportId/)

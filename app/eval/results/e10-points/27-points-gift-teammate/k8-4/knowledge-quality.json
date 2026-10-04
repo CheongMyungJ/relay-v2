@@ -1,0 +1,51 @@
+{
+  "paths": [
+    "docs/knowledge/points/order-earn-points.md",
+    "docs/knowledge/points/percent-of-rounding.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/points/order-earn-points.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/points/percent-of-rounding.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "order-earn-points.md: 기준 금액은 상품−쿠폰−사용 포인트이고 배송비는 제외한다. 선물 적립도 같은 식으로 고쳤다고 이력에 적혀 있다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "원 단위 미만을 버린다고 적혀 있고, 반올림이면 238P지만 237P라는 예가 있다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "1%(POINT_RATE_PERCENT)로 적혀 있다."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "적립 값을 points.earned에 저장하고 영수증·환불·내역은 저장된 값을 쓴다고 적혀 있다."
+      }
+    ]
+  }
+}

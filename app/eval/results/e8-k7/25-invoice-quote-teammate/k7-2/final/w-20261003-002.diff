@@ -1,0 +1,45 @@
+diff --git a/base/src/invoice/credit-note.js b/tree/src/invoice/credit-note.js
+index 6e6fe7d..bfbf66f 100644
+--- a/base/src/invoice/credit-note.js
++++ b/tree/src/invoice/credit-note.js
+@@ -87,7 +87,10 @@ export function creditTotals(note) {
+   const taxable = sumWon(rows.filter((r) => r.taxable).map((r) => r.net))
+   const exempt = sumWon(rows.filter((r) => !r.taxable).map((r) => r.net))
+   const supply = taxable + exempt
+-  const vat = note.zeroRated ? 0 : Math.round((taxable * VAT_RATE_PERCENT) / 100)
++  // 부가세는 과세 줄마다 공급가액에 원 단위 버림으로 계산해 합한다(합계에서 다시 반올림하지 않는다)
++  const vat = note.zeroRated
++    ? 0
++    : sumWon(rows.filter((r) => r.taxable).map((r) => Math.floor((r.net * VAT_RATE_PERCENT) / 100)))
+   return { supply, taxable, exempt, vat, total: supply + vat }
+ }
+ 
+diff --git a/base/test/credit-note.test.js b/tree/test/credit-note.test.js
+index 5c7f920..7064a88 100644
+--- a/base/test/credit-note.test.js
++++ b/tree/test/credit-note.test.js
+@@ -1,4 +1,5 @@
+ import { test } from 'node:test'
++import { readFileSync } from 'node:fs'
+ import assert from 'node:assert'
+ import { creditNoteEntries, ledger } from '../src/export/ledger.js'
+ import { createCreditNote, creditNoteTotals, returnedDiscount } from '../src/invoice/credit-note.js'
+@@ -81,3 +82,18 @@ test('반품 전표 분개', () => {
+     ['INV-0100', 'INV-0100', 'INV-0100', 'CN-0001', 'CN-0001', 'CN-0001'],
+   )
+ })
++
++test('부가세는 줄마다 버림으로 계산해 합산한다 (CN-0112)', () => {
++  const invoice = JSON.parse(readFileSync(new URL('../examples/INV-2047.json', import.meta.url), 'utf8'))
++  const data = JSON.parse(readFileSync(new URL('../examples/CN-0112.json', import.meta.url), 'utf8'))
++  const cn = createCreditNote(invoice, data)
++  assert.deepStrictEqual(cn.totals, { supply: 17438, taxable: 17438, exempt: 0, vat: 1742, total: 19180 })
++})
++
++test('영세율 반품 전표의 부가세는 0원이고, 저장된 합계는 다시 계산하지 않는다', () => {
++  const zr = { ...inv, zeroRated: true }
++  const cn = createCreditNote(zr, { number: 'CN-0002', issueDate: '2026-09-10', reason: '파손', returns: [{ sku: 'OF-1450', qty: 3 }] })
++  assert.strictEqual(cn.totals.vat, 0)
++  const stored = { ...cn, totals: { supply: 1, taxable: 1, exempt: 0, vat: 9, total: 10 } }
++  assert.deepStrictEqual(creditNoteTotals(stored), stored.totals)
++})

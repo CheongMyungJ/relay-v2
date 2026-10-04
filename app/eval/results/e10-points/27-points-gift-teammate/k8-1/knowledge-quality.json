@@ -1,0 +1,57 @@
+{
+  "paths": [
+    "docs/knowledge/points/earn-points-basis.md",
+    "docs/knowledge/points/gift-points-ownership.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/points/earn-points-basis.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/points/gift-points-ownership.md",
+        "stale": true,
+        "staleWhy": "\"이 팀의 일에서 단독으로 수정하지 않는다\" / \"일반 주문 적립 기준과 맞추는 일은 다른 팀과 함께 정한다\"를 지금 규칙처럼 적었지만, 선물하기는 이미 earnPoints 위임으로 고쳐져 규정을 따른다.",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [
+      {
+        "a": "docs/knowledge/points/earn-points-basis.md",
+        "b": "docs/knowledge/points/gift-points-ownership.md",
+        "why": "앞의 파일은 선물하기 적립이 이미 earnPoints에 위임해 일반 주문과 같은 기준을 따른다고 하고, 뒤의 파일은 그 기준에 맞추는 일을 아직 다른 팀과 정할 일이며 단독으로 고치지 말라고 적었다."
+      }
+    ],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "기준 금액이 상품 - 쿠폰 - 사용 포인트이고 배송비는 뺀다고 적혀 있다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "1P 미만 버림이 적혀 있고, 반올림은 맞지 않는다고 밝혔다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "제목에 1%라고 적혀 있고 O-1042 예시(23,770원 → 237P)도 1%에 맞는다."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "저장된 points.earned는 다시 계산하지 않고 그대로 쓴다고 적혀 있다."
+      }
+    ]
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "paths": [
+    "docs/knowledge/format/receipt-text-frozen.md",
+    "docs/knowledge/gift/gift-points-hands-off.md",
+    "docs/knowledge/points/earn-base-and-rounding.md",
+    "docs/knowledge/points/stored-points-not-recalculated.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/format/receipt-text-frozen.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/gift/gift-points-hands-off.md",
+        "stale": true,
+        "staleWhy": "'`src/gift/gift-points.js`는 수정하지 않는다'와 '아직 규칙을 따르지 않는 곳'(배송비 포함 반올림, 다른 팀과 정해야 한다)을 지금 상태로 적었다. 마지막 Work에서 선물하기도 규정대로 고쳤다.",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/points/earn-base-and-rounding.md",
+        "stale": true,
+        "staleWhy": "'src/gift/gift-points.js: 수정 금지'를 지금 상태로 적었다. 선물하기도 이미 규정대로 고쳐졌다.",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/points/stored-points-not-recalculated.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "earn-base-and-rounding.md: amounts.total - amounts.shipping을 기준으로 하고 배송비는 뺀다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "Math.floor로 1P 미만을 버리고 반올림이 아니라고 적혀 있다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "제목이 결제 금액의 1%라고 적고, 본문은 POINT_RATE_PERCENT%를 곱한다고 적었다."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "stored-points-not-recalculated.md: 저장된 points.earned를 쓰고 다시 계산하지 않는다."
+      }
+    ]
+  }
+}

@@ -1,0 +1,165 @@
+diff --git a/tree/docs/knowledge/slow-success-is-success.md b/tree/docs/knowledge/slow-success-is-success.md
+new file mode 100644
+index 0000000..e9e3bdd
+--- /dev/null
++++ b/tree/docs/knowledge/slow-success-is-success.md
+@@ -0,0 +1,11 @@
++# 응답이 제한 시간보다 늦어도 성공한 발송은 성공이다
++
++- 종류: 규칙
++- 적용: src/retry/policy.js(decide), src/digest/deadline.js(withDeadline), src/digest/runner.js
++- 출처: 조사로 알아냄, relay Work w-20261003-001, 2026-10-03
++
++발송 결과는 성공 여부(`outcome.ok`)를 먼저 보고, 걸린 시간은 실패한 발송의 분류에만 쓴다.
++- 맞음: 2500ms 걸려 성공한 발송(제한 2000ms) → 성공 처리, 재시도 없음. 느림은 `digest.send.slow` 같은 지표로만 본다.
++- 틀림: 성공했는데 제한 시간을 넘겼다고 `timeout`으로 보고 재시도하거나 예외를 던진다 → 이미 전달된 알림이 두 번, 세 번 나간다.
++- 실제 실패(transient, timeout 오류)는 기존 정책대로 재시도한다. 재시도 자체를 끄는 것은 해법이 아니다.
++- 일반 발송(메일·푸시)과 요약 메일 모두 해당한다.
+diff --git a/base/src/digest/deadline.js b/tree/src/digest/deadline.js
+index afc5a84..42c1a65 100644
+--- a/base/src/digest/deadline.js
++++ b/tree/src/digest/deadline.js
+@@ -1,21 +1,18 @@
+ // 요약 발송 한 건의 제한 시간.
+ // 요약은 아침에 한꺼번에 수천 통을 보내므로, 한 사람에게 오래 걸리면 뒤 사람들의 요약이 모두 밀린다.
+-import { SendTimeoutError } from '../adapters/errors.js'
+ 
+ /**
+- * fn을 부르고 걸린 시간을 잰다. 제한 시간을 넘기면 시간 초과로 본다.
++ * fn을 부르고 걸린 시간을 잰다. 제한 시간을 넘겨도 fn이 성공했으면 보낸 것이므로 그대로 돌려준다
++ * (시간 초과로 보고 다시 보내면 같은 요약이 두 번 나간다). 넘긴 시간은 slow로 알린다.
+  * @template T
+  * @param {{ now(): number }} clock
+  * @param {number} timeoutMs
+  * @param {() => Promise<T>} fn
+- * @returns {Promise<{ value: T, elapsedMs: number }>}
++ * @returns {Promise<{ value: T, elapsedMs: number, slow: boolean }>}
+  */
+ export async function withDeadline(clock, timeoutMs, fn) {
+   const started = clock.now()
+   const value = await fn()
+   const elapsedMs = clock.now() - started
+-  if (elapsedMs > timeoutMs) {
+-    throw new SendTimeoutError(`요약 발송이 제한 시간 ${timeoutMs}ms를 넘김 (${elapsedMs}ms)`)
+-  }
+-  return { value, elapsedMs }
++  return { value, elapsedMs, slow: elapsedMs > timeoutMs }
+ }
+diff --git a/base/src/digest/runner.js b/tree/src/digest/runner.js
+index 25b7c36..325831d 100644
+--- a/base/src/digest/runner.js
++++ b/tree/src/digest/runner.js
+@@ -47,10 +47,11 @@ export function createDigestRunner({ clock, config, adapter, inbox, ledger, pref
+         const base = { runId, period, userId: job.userId, attempt: job.attempt, items: items.length }
+ 
+         try {
+-          const { value, elapsedMs } = await withDeadline(clock, opts().sendTimeoutMs, () => adapter.send(message))
++          const { value, elapsedMs, slow } = await withDeadline(clock, opts().sendTimeoutMs, () => adapter.send(message))
+           metrics.observe('digest.send.ms', elapsedMs)
+           ledger.markSent(key, { ...base, providerId: value?.id })
+           metrics.increment('digest.sent')
++          if (slow) metrics.increment('digest.send.slow')
+           summary.sent++
+         } catch (error) {
+           const reason = errorCode(error)
+diff --git a/base/src/retry/policy.js b/tree/src/retry/policy.js
+index 2ab08e2..f151f79 100644
+--- a/base/src/retry/policy.js
++++ b/tree/src/retry/policy.js
+@@ -11,11 +11,12 @@ import { backoffDelay } from './backoff.js'
+  * @param {{ timeoutMs: number, maxAttempts: number, baseDelayMs: number, factor: number, maxDelayMs: number }} options
+  */
+ export function decide(outcome, { attempt, elapsedMs }, options) {
++  // 응답이 늦어도 전달에 성공했으면 끝이다. 다시 보내면 같은 알림이 중복된다
++  if (outcome.ok) return { action: 'done' }
++
+   let reason
+   if (elapsedMs > options.timeoutMs) {
+     reason = 'timeout'
+-  } else if (outcome.ok) {
+-    return { action: 'done' }
+   } else if (isTransient(outcome.error)) {
+     reason = errorCode(outcome.error)
+   } else {
+diff --git a/tree/test/duplicate-send.test.js b/tree/test/duplicate-send.test.js
+new file mode 100644
+index 0000000..c2e3389
+--- /dev/null
++++ b/tree/test/duplicate-send.test.js
+@@ -0,0 +1,76 @@
++import assert from 'node:assert/strict'
++import { test } from 'node:test'
++import { shippedEvent, setup } from './helpers.js'
++
++// 전달은 됐지만 응답이 제한 시간(send 2000ms, 요약 3000ms)보다 늦게 온 경우: 다시 보내면 안 된다
++const SLOW = { latencyMs: 2500 }
++const DIGEST_USERS = { 'u-1': { email: 'mina@example.com', pushTokens: ['tok-a'], locale: 'ko', digest: true } }
++const NEXT_MORNING = Date.parse('2026-09-21T23:05:00Z')
++
++async function drain(notifier, clock) {
++  for (let i = 0; i < 5; i++) {
++    clock.advance(60_000)
++    await notifier.retryWorker.runDue()
++  }
++}
++
++test('메일: 느리게 성공한 발송은 재시도로 다시 보내지 않는다', async () => {
++  const { notifier, clock, mail } = setup({ mail: { outcomes: [SLOW] } })
++  const res = await notifier.handle(shippedEvent())
++  assert.equal(res.results.find((r) => r.channel === 'mail').status, 'sent')
++  await drain(notifier, clock)
++  assert.equal(mail.sent.length, 1)
++  assert.equal(mail.calls.length, 1)
++})
++
++test('푸시: 느리게 성공한 발송은 재시도로 다시 보내지 않는다', async () => {
++  const { notifier, clock, push } = setup({ push: { outcomes: [SLOW] } })
++  const res = await notifier.handle(shippedEvent())
++  assert.equal(res.results.find((r) => r.channel === 'push').status, 'sent')
++  await drain(notifier, clock)
++  assert.equal(push.sent.length, 1)
++  assert.equal(push.calls.length, 1)
++})
++
++test('요약 메일: 느리게 성공한 발송은 다시 보내지 않는다', async () => {
++  const { notifier, clock, mail } = setup({ users: DIGEST_USERS, mail: { outcomes: [{ latencyMs: 3500 }] } })
++  await notifier.handle({
++    id: 'ord-1-delivered', source: 'orders', type: 'order.delivered', userId: 'u-1',
++    occurredAt: '2026-09-21T00:59:00Z', data: { orderNo: 'A-1' },
++  })
++  clock.set(NEXT_MORNING)
++  const summary = await notifier.digest.tick()
++  assert.equal(summary.sent, 1)
++  assert.equal(mail.calls.length, 1)
++})
++
++test('실제로 실패한 메일 발송은 여전히 재시도된다', async () => {
++  const { notifier, clock, mail } = setup({ mail: { outcomes: [{ fail: 'transient' }] } })
++  const res = await notifier.handle(shippedEvent())
++  assert.equal(res.results.find((r) => r.channel === 'mail').status, 'retry-scheduled')
++  await drain(notifier, clock)
++  assert.equal(mail.calls.length, 2)
++  assert.equal(mail.sent.length, 1)
++})
++
++test('실제로 시간 초과로 실패한 푸시 발송은 여전히 재시도된다', async () => {
++  const { notifier, clock, push } = setup({ push: { outcomes: [{ fail: 'timeout' }] } })
++  const res = await notifier.handle(shippedEvent())
++  assert.equal(res.results.find((r) => r.channel === 'push').status, 'retry-scheduled')
++  await drain(notifier, clock)
++  assert.equal(push.calls.length, 2)
++  assert.equal(push.sent.length, 1)
++})
++
++test('실제로 실패한 요약 메일은 여전히 다시 보낸다', async () => {
++  const { notifier, clock, mail } = setup({ users: DIGEST_USERS, mail: { outcomes: [{ fail: 'timeout' }] } })
++  await notifier.handle({
++    id: 'ord-2-delivered', source: 'orders', type: 'order.delivered', userId: 'u-1',
++    occurredAt: '2026-09-21T00:59:00Z', data: { orderNo: 'A-2' },
++  })
++  clock.set(NEXT_MORNING)
++  const summary = await notifier.digest.tick()
++  assert.equal(summary.sent, 1)
++  assert.equal(mail.calls.length, 2)
++  assert.equal(mail.sent.length, 1)
++})

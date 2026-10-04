@@ -1,0 +1,115 @@
+diff --git a/tree/docs/knowledge/keep-parallel-concurrency.md b/tree/docs/knowledge/keep-parallel-concurrency.md
+new file mode 100644
+index 0000000..41fa31d
+--- /dev/null
++++ b/tree/docs/knowledge/keep-parallel-concurrency.md
+@@ -0,0 +1,7 @@
++# 병렬 실행(동시 4개)을 줄이거나 순차로 되돌리는 것은 간헐 실패의 해결이 아니다
++
++- 종류: 규칙
++- 적용: src/runner/pool.js, src/nightly.js
++- 출처: 사람이 알려 줌, relay Work w-20261003-001, 2026-10-03
++
++간헐 실패가 동시성에서 드러나도 동시성(4개)을 낮추거나 순차로 되돌려 가리지 않는다. 동시 실행에서도 맞게 동작하도록 코드를 고친다.
+diff --git a/tree/docs/knowledge/no-retry-skip-for-flaky-tests.md b/tree/docs/knowledge/no-retry-skip-for-flaky-tests.md
+new file mode 100644
+index 0000000..640734b
+--- /dev/null
++++ b/tree/docs/knowledge/no-retry-skip-for-flaky-tests.md
+@@ -0,0 +1,8 @@
++# 간헐적으로 실패하는 시험은 재시도·skip·시간 제한 증가로 풀지 않고 코드에서 원인을 고친다
++
++- 종류: 규칙
++- 적용: ci/, test/ 전체
++- 출처: 사람이 알려 줌, relay Work w-20261003-001, 2026-10-03
++
++시험이 가끔 실패하면 재시도를 붙이거나, skip하거나, 시간 제한을 늘리는 것은 해결이 아니다. 지연(타이밍)에 따라 드러나는 원인을 src/에서 찾아 고친다.
++예: `ci/batch.test.js`의 `expected report-6 to belong to job-6, got job-5`는 runPool이 완료 순서로 결과를 모아서 생긴 버그였다.
+diff --git a/tree/docs/knowledge/pool-results-keep-input-order.md b/tree/docs/knowledge/pool-results-keep-input-order.md
+new file mode 100644
+index 0000000..34e5ad1
+--- /dev/null
++++ b/tree/docs/knowledge/pool-results-keep-input-order.md
+@@ -0,0 +1,8 @@
++# runPool 결과는 입력 순서와 같아야 하고, 보고서 임시 파일 이름은 reportId를 포함해야 한다
++
++- 종류: 실패 유형
++- 적용: 관련 위치 src/runner/pool.js, src/collect/collector.js, src/store/report-archive.js
++- 출처: 조사로 알아냄, relay Work w-20261003-001, 2026-10-03
++
++- collectResults는 index로 job과 결과를 짝짓는다. runPool이 완료 순서로 결과를 모으면 지연이 다를 때 report-6이 job-5에 붙는다. 로컬 `npm test`는 지연이 없어 통과하므로 `ci/`에서만 가끔 실패한다.
++- saveReport 임시 파일 이름이 ms 시각뿐이면 같은 ms에 시작한 동시 저장이 같은 임시 파일을 써서 ENOENT나 내용 뒤바뀜이 난다. reportId를 이름에 넣는다.
+diff --git a/base/src/runner/pool.js b/tree/src/runner/pool.js
+index efefaae..5e8dd51 100644
+--- a/base/src/runner/pool.js
++++ b/tree/src/runner/pool.js
+@@ -9,16 +9,17 @@
+  */
+ export async function runPool(items, worker, o = {}) {
+   const size = Math.max(1, o.concurrency ?? 1)
+-  const results = []
++  const results = new Array(items.length)
++  let done = 0
+   for (let start = 0; start < items.length; start += size) {
+     const chunk = items.slice(start, start + size)
+     await Promise.all(
+-      chunk.map(async (item) => {
+-        const result = await worker(item)
+-        results.push(result)
++      chunk.map(async (item, i) => {
++        results[start + i] = await worker(item)
++        done++
+       }),
+     )
+-    o.onChunk?.({ start, size: chunk.length, done: results.length, total: items.length })
++    o.onChunk?.({ start, size: chunk.length, done, total: items.length })
+   }
+   return results
+ }
+diff --git a/base/src/store/report-archive.js b/tree/src/store/report-archive.js
+index 0c62d2f..f6e9d94 100644
+--- a/base/src/store/report-archive.js
++++ b/tree/src/store/report-archive.js
+@@ -20,7 +20,7 @@ export function reportPath(period, reportId) {
+  */
+ export async function saveReport(files, report) {
+   const path = reportPath(report.period, report.reportId)
+-  const tmp = `${reportDir(report.period)}/.${stamp(now())}.tmp`
++  const tmp = `${reportDir(report.period)}/.${report.reportId}.${stamp(now())}.tmp`
+   await files.writeFile(tmp, JSON.stringify(report))
+   await files.rename(tmp, path)
+   return path
+diff --git a/base/test/archive.test.js b/tree/test/archive.test.js
+index 44aa323..60479f5 100644
+--- a/base/test/archive.test.js
++++ b/tree/test/archive.test.js
+@@ -93,3 +93,12 @@ test('짧은 꼬리표', () => {
+   assert.strictEqual(stamp(1759197304120), 'mg5wnj94')
+   assert.strictEqual(stamp(35.9), 'z')
+ })
++
++test('같은 순간에 동시에 저장해도 임시 파일 이름이 겹치지 않는다', async () => {
++  setSleep(() => new Promise((r) => setImmediate(r))) // 시각은 그대로, 저장만 겹쳐 돈다
++  const files = createFileStore({ latency: { baseMs: 3 } })
++  const reports = [1, 2, 3, 4].map((n) => report(n))
++  await Promise.all(reports.map((r) => saveReport(files, r)))
++  for (const r of reports) assert.strictEqual((await loadReport(files, '2026-09', r.reportId)).tenant, r.tenant)
++  assert.deepStrictEqual(strayTemps(files, '2026-09'), [])
++})
+diff --git a/base/test/pool.test.js b/tree/test/pool.test.js
+index c22d51a..3bab4b2 100644
+--- a/base/test/pool.test.js
++++ b/tree/test/pool.test.js
+@@ -34,3 +34,12 @@ test('묶음마다 진행 알림', async () => {
+ test('빈 목록', async () => {
+   assert.deepStrictEqual(await runPool([], async () => 1, { concurrency: 4 }), [])
+ })
++
++test('결과는 끝난 순서가 아니라 입력 순서대로 돌려준다', async () => {
++  const delays = [20, 1, 10, 5]
++  const results = await runPool(delays, async (ms) => {
++    await new Promise((r) => setTimeout(r, ms))
++    return ms
++  }, { concurrency: 4 })
++  assert.deepStrictEqual(results, delays)
++})

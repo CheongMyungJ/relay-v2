@@ -1,0 +1,92 @@
+diff --git a/base/src/invoice/credit-note.js b/tree/src/invoice/credit-note.js
+index 6e6fe7d..c00442c 100644
+--- a/base/src/invoice/credit-note.js
++++ b/tree/src/invoice/credit-note.js
+@@ -1,6 +1,6 @@
+ import { CREDIT_NOTE_PREFIX, VAT_RATE_PERCENT } from '../config.js'
+ import { assertDate } from '../format/date.js'
+-import { percentOf, sumWon } from '../money.js'
++import { floorPercentOf, percentOf, sumWon } from '../money.js'
+ import { isTaxableLine } from './tax-type.js'
+ 
+ // 반품 전표. 발행된 청구서의 품목 일부(또는 전부)를 거래처가 돌려보낼 때 만든다.
+@@ -80,14 +80,14 @@ export function creditLineAmounts(note) {
+   })
+ }
+ 
+-// 반품 전표의 돌려주는 금액
++// 반품 전표의 돌려주는 금액. 부가세는 과세 줄마다 공급가액의 10%를 원 단위로 버림해 더한다(회계팀 규칙)
+ //   supply: 공급가액, taxable / exempt: 과세분 / 면세분, vat: 부가세, total: 돌려주는 합계
+ export function creditTotals(note) {
+   const rows = creditLineAmounts(note)
+   const taxable = sumWon(rows.filter((r) => r.taxable).map((r) => r.net))
+   const exempt = sumWon(rows.filter((r) => !r.taxable).map((r) => r.net))
+   const supply = taxable + exempt
+-  const vat = note.zeroRated ? 0 : Math.round((taxable * VAT_RATE_PERCENT) / 100)
++  const vat = note.zeroRated ? 0 : sumWon(rows.filter((r) => r.taxable).map((r) => floorPercentOf(r.net, VAT_RATE_PERCENT)))
+   return { supply, taxable, exempt, vat, total: supply + vat }
+ }
+ 
+diff --git a/base/src/money.js b/tree/src/money.js
+index 0bdef2d..a3de965 100644
+--- a/base/src/money.js
++++ b/tree/src/money.js
+@@ -34,6 +34,15 @@ export function percentOf(amount, percent) {
+   return Math.round((amount * percent) / 100)
+ }
+ 
++// amount의 percent%를 원 단위로 버림 (부가세 줄별 계산용)
++export function floorPercentOf(amount, percent) {
++  assertWon(amount)
++  if (typeof percent !== 'number' || percent < 0 || percent > 100) {
++    throw new RangeError(`비율은 0~100이어야 한다: ${percent}`)
++  }
++  return Math.floor((amount * percent) / 100)
++}
++
+ // 금액을 비율대로 나눈다. 나머지 원은 앞에서부터 1원씩 더한다 (분할 납부용)
+ export function splitWon(amount, parts) {
+   assertWon(amount)
+diff --git a/base/test/credit-note.test.js b/tree/test/credit-note.test.js
+index 5c7f920..7ef5f59 100644
+--- a/base/test/credit-note.test.js
++++ b/tree/test/credit-note.test.js
+@@ -1,7 +1,8 @@
++import { readFileSync } from 'node:fs'
+ import { test } from 'node:test'
+ import assert from 'node:assert'
+ import { creditNoteEntries, ledger } from '../src/export/ledger.js'
+-import { createCreditNote, creditNoteTotals, returnedDiscount } from '../src/invoice/credit-note.js'
++import { createCreditNote, creditNoteTotals, creditTotals, returnedDiscount } from '../src/invoice/credit-note.js'
+ import { createInvoice, issueInvoice } from '../src/invoice/invoice.js'
+ 
+ const inv = issueInvoice(
+@@ -81,3 +82,28 @@ test('반품 전표 분개', () => {
+     ['INV-0100', 'INV-0100', 'INV-0100', 'CN-0001', 'CN-0001', 'CN-0001'],
+   )
+ })
++
++test('반품 부가세는 과세 줄마다 할인 후 금액을 원 단위로 버림해 합산한다 (CN-0112)', () => {
++  const invoice = JSON.parse(readFileSync(new URL('../examples/INV-2047.json', import.meta.url)))
++  const { number, issueDate, reason, returns } = JSON.parse(readFileSync(new URL('../examples/CN-0112.json', import.meta.url)))
++  const cn = createCreditNote(invoice, { number, issueDate, reason, returns })
++  // 줄별 공급가액 9236, 6127, 2075 -> 부가세 923 + 612 + 207
++  assert.deepStrictEqual(cn.totals, { supply: 17438, taxable: 17438, exempt: 0, vat: 1742, total: 19180 })
++})
++
++test('반품 부가세: 면세 줄은 제외하고 영세율 전표는 0', () => {
++  const cn = note([
++    { sku: 'OF-1450', qty: 3 },
++    { sku: 'OF-1990', qty: 2 },
++    { sku: 'BK-1800', qty: 1 },
++  ])
++  // 4350 -> 435, (3980-200)=3780 -> 378, 면세 18000 제외
++  assert.deepStrictEqual(cn.totals, { supply: 26130, taxable: 8130, exempt: 18000, vat: 813, total: 26943 })
++  assert.deepStrictEqual(creditTotals({ lines: cn.lines, zeroRated: true }).vat, 0)
++})
++
++test('반품 부가세: 줄마다 버림하므로 합계에 한 번 계산한 값과 다를 수 있다', () => {
++  const one = (sku, unitPrice) => ({ sku, name: sku, unitPrice, qty: 1, origQty: 1, taxType: 'taxable' })
++  // 합계 1이 아니라 줄별: 5 -> 0, 5 -> 0 (합계 10 기준이면 1)
++  assert.strictEqual(creditTotals({ lines: [one('A', 5), one('B', 5)], zeroRated: false }).vat, 0)
++})

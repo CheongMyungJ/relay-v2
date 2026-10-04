@@ -1,0 +1,71 @@
+{
+  "paths": [
+    "docs/knowledge/gift-points-hands-off.md",
+    "docs/knowledge/no-recalc-saved-points.md",
+    "docs/knowledge/receipt-text-unchanged.md",
+    "docs/knowledge/regular-order-points-rule.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/gift-points-hands-off.md",
+        "stale": true,
+        "staleWhy": "제목과 첫 문단이 '선물하기 적립은 손대지 않는다/일반 주문 수정에서 바꾸지 않는다'를 지금 규칙처럼 적었다. 마지막 Work에서 선물하기도 규정대로 고쳤다. 괄호 안의 변경 이력만 과거로 밝혀져 있다.",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/no-recalc-saved-points.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/receipt-text-unchanged.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/regular-order-points-rule.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "regular-order-points-rule.md가 (상품 - 쿠폰 - 사용 포인트) 기준이고 배송비는 뺀다고 적었다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "regular-order-points-rule.md가 floor, 원 단위 버림이라고 적었다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "regular-order-points-rule.md가 예시에서 적립률 1%를 쓰고 POINT_RATE_PERCENT를 가리킨다."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "no-recalc-saved-points.md가 저장된 points.earned를 재계산하지 않는다고 적었다."
+      }
+    ]
+  }
+}

@@ -1,0 +1,61 @@
+diff --git a/tree/docs/knowledge/store/report-archive-tmp-name.md b/tree/docs/knowledge/store/report-archive-tmp-name.md
+new file mode 100644
+index 0000000..2fc1636
+--- /dev/null
++++ b/tree/docs/knowledge/store/report-archive-tmp-name.md
+@@ -0,0 +1,14 @@
++---
++kind: pitfall
++source: investigation
++anchor: saveReport
++---
++# saveReport 임시 파일 이름은 저장마다 유일해야 한다
++
++## 내용
++- `saveReport`는 같은 폴더의 임시 파일에 쓴 뒤 `rename`한다. 임시 이름이 시각(ms)만으로 정해지면 같은 밀리초에 시작한 동시 저장이 같은 파일을 써서, 먼저 끝난 쪽이 옮겨 가고 다른 쪽은 `ENOENT`가 난다. 남은 내용이 다른 고객사 것이면 고객사가 뒤바뀐 보관본이 생긴다(`report-6 보관본의 고객사가 다르다`).
++- 지연이 없는 로컬 `npm test`는 저장이 겹치지 않아 못 잡는다. 지연과 jitter가 있는 `ci/archive.test.js`에서만 간헐로 실패한다. 시각이 멈춘 상태에서 동시 저장하는 `test/archive.test.js`가 결정적으로 막는다.
++- 지금 이름은 `.<시각>-<번호>.tmp`이고 번호(`tmpSeq`)는 프로세스 안에서만 유일하다. 여러 프로세스가 같은 폴더에 저장하면 겹칠 수 있다.
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-002)
+diff --git a/base/src/store/report-archive.js b/tree/src/store/report-archive.js
+index 0c62d2f..67f874c 100644
+--- a/base/src/store/report-archive.js
++++ b/tree/src/store/report-archive.js
+@@ -12,6 +12,8 @@ export function reportPath(period, reportId) {
+   return `${reportDir(period)}/${reportId}.json`
+ }
+ 
++let tmpSeq = 0
++
+ /**
+  * 보고서를 보관소에 저장하고 경로를 돌려준다.
+  * 쓰다 만 파일을 정산팀이 읽어 가지 않게, 같은 폴더의 임시 파일에 다 쓴 뒤 제 이름으로 옮긴다.
+@@ -20,7 +22,8 @@ export function reportPath(period, reportId) {
+  */
+ export async function saveReport(files, report) {
+   const path = reportPath(report.period, report.reportId)
+-  const tmp = `${reportDir(report.period)}/.${stamp(now())}.tmp`
++  // 같은 밀리초에 시작한 저장끼리 임시 파일이 겹치지 않게, 시각 꼬리표 뒤에 호출마다 늘어나는 번호를 붙인다
++  const tmp = `${reportDir(report.period)}/.${stamp(now())}-${(tmpSeq++).toString(36)}.tmp`
+   await files.writeFile(tmp, JSON.stringify(report))
+   await files.rename(tmp, path)
+   return path
+diff --git a/base/test/archive.test.js b/tree/test/archive.test.js
+index 44aa323..e3cff13 100644
+--- a/base/test/archive.test.js
++++ b/tree/test/archive.test.js
+@@ -93,3 +93,13 @@ test('짧은 꼬리표', () => {
+   assert.strictEqual(stamp(1759197304120), 'mg5wnj94')
+   assert.strictEqual(stamp(35.9), 'z')
+ })
++
++test('보고서 보관: 같은 시각에 동시에 저장해도 임시 파일이 겹치지 않는다', async () => {
++  setNow(() => t) // 시각이 멈춰 있어도(같은 밀리초) 겹치면 안 된다
++  setSleep(async () => {}) // 모든 저장이 서로 끼어들도록 기다림 없이 넘긴다
++  const files = createFileStore({ latency: { baseMs: 2 } })
++  const reports = [1, 2, 3, 4].map((n) => report(n, `tenant-${n}`))
++  await Promise.all(reports.map((r) => saveReport(files, r)))
++  assert.deepStrictEqual(strayTemps(files, '2026-09'), [])
++  for (const r of reports) assert.deepStrictEqual(await loadReport(files, '2026-09', r.reportId), r)
++})

@@ -1,0 +1,87 @@
+{
+  "paths": [
+    "docs/knowledge/orders/already-refunded-format.md",
+    "docs/knowledge/points/earn-rule.md",
+    "docs/knowledge/points/partial-refund-recovery.md",
+    "docs/knowledge/points/refund-recover-rate.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/orders/already-refunded-format.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/points/earn-rule.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/points/partial-refund-recovery.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/points/refund-recover-rate.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": true,
+        "stateWhy": "회수에 새 적립률을 쓸지는 정하지 않았는데, 제목과 본문이 회수율 1%를 적립률과 분리된 것으로 단정하고 '결정 전까지 회수가 따라 바뀌지 않아야 한다'고 규칙처럼 적었다.",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [
+      {
+        "a": "docs/knowledge/points/earn-rule.md",
+        "b": "docs/knowledge/points/refund-recover-rate.md",
+        "why": "earn-rule은 환불 회수도 earnPoints(2%)를 쓴다고 하고, refund-recover-rate는 회수가 별도 1%(REFUND_RECOVER_PERCENT)라고 한다."
+      },
+      {
+        "a": "docs/knowledge/points/partial-refund-recovery.md",
+        "b": "docs/knowledge/points/refund-recover-rate.md",
+        "why": "partial-refund-recovery는 회수가 적립 규정(남은 주문의 적립액 차이)과 맞는다고 하고, refund-recover-rate는 적립률과 분리된 1%로 회수한다고 한다."
+      }
+    ],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "earn-rule.md에 상품−쿠폰−사용 포인트, 배송비 제외로 맞게 적혀 있다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "earn-rule.md에 1P 미만 버림(반올림 안 함)으로 적혀 있다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "earn-rule.md가 2%로 적고 1%는 바뀐 이력으로만 적었다."
+      },
+      {
+        "id": "R4",
+        "status": "correct",
+        "why": "partial-refund-recovery.md가 회수 = 환불 전 적립액 − 환불 후 남은 주문 적립액(저장값 이하로 제한)으로 적었다."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "earn-rule.md에 저장된 points.earned는 다시 계산하지 않는다고 적혀 있다."
+      }
+    ]
+  }
+}

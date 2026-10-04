@@ -1,0 +1,42 @@
+diff --git a/base/src/invoice/credit-note.js b/tree/src/invoice/credit-note.js
+index 6e6fe7d..3589da4 100644
+--- a/base/src/invoice/credit-note.js
++++ b/tree/src/invoice/credit-note.js
+@@ -87,7 +87,10 @@ export function creditTotals(note) {
+   const taxable = sumWon(rows.filter((r) => r.taxable).map((r) => r.net))
+   const exempt = sumWon(rows.filter((r) => !r.taxable).map((r) => r.net))
+   const supply = taxable + exempt
+-  const vat = note.zeroRated ? 0 : Math.round((taxable * VAT_RATE_PERCENT) / 100)
++  // 부가세는 과세 줄마다 할인 후 금액에 원 단위 버림으로 구해 더한다. 합계에서 다시 반올림하지 않는다
++  const vat = note.zeroRated
++    ? 0
++    : sumWon(rows.filter((r) => r.taxable).map((r) => Math.floor((r.net * VAT_RATE_PERCENT) / 100)))
+   return { supply, taxable, exempt, vat, total: supply + vat }
+ }
+ 
+diff --git a/base/test/credit-note.test.js b/tree/test/credit-note.test.js
+index 5c7f920..9db3c32 100644
+--- a/base/test/credit-note.test.js
++++ b/tree/test/credit-note.test.js
+@@ -1,4 +1,5 @@
+ import { test } from 'node:test'
++import { readFileSync } from 'node:fs'
+ import assert from 'node:assert'
+ import { creditNoteEntries, ledger } from '../src/export/ledger.js'
+ import { createCreditNote, creditNoteTotals, returnedDiscount } from '../src/invoice/credit-note.js'
+@@ -81,3 +82,15 @@ test('반품 전표 분개', () => {
+     ['INV-0100', 'INV-0100', 'INV-0100', 'CN-0001', 'CN-0001', 'CN-0001'],
+   )
+ })
++
++test('CN-0112 환불 금액: 부가세는 줄마다 버림으로 구해 더한다', () => {
++  const invoice = JSON.parse(readFileSync(new URL('../examples/INV-2047.json', import.meta.url)))
++  const data = JSON.parse(readFileSync(new URL('../examples/CN-0112.json', import.meta.url)))
++  const cn = createCreditNote(invoice, data)
++  assert.deepStrictEqual(cn.totals, { supply: 17438, taxable: 17438, exempt: 0, vat: 1742, total: 19180 })
++})
++
++test('저장된 totals가 있으면 다시 계산하지 않는다(발행된 전표 보호)', () => {
++  const stored = { totals: { supply: 1, taxable: 1, exempt: 0, vat: 0, total: 1 }, lines: [], zeroRated: false }
++  assert.strictEqual(creditNoteTotals(stored), stored.totals)
++})

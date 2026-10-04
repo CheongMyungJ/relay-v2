@@ -1,0 +1,119 @@
+diff --git a/tree/docs/knowledge/invoice/issued-invoice-totals-frozen.md b/tree/docs/knowledge/invoice/issued-invoice-totals-frozen.md
+new file mode 100644
+index 0000000..8b2f793
+--- /dev/null
++++ b/tree/docs/knowledge/invoice/issued-invoice-totals-frozen.md
+@@ -0,0 +1,12 @@
++---
++kind: rule
++source: human
++---
++# 발행된 청구서는 재계산하지 않고 저장된 totals를 쓴다
++
++## 규칙
++- 발행된 청구서의 금액은 발행 시 저장된 `totals`를 그대로 쓴다. 계산 방식(예: 부가세 절사)이 바뀌어도 다시 계산하지 않는다.
++- 계산 방식을 바꾸면 새로 계산하는 청구서부터 값이 바뀐다. CSV, 분개, 월별 요약도 `invoiceTotals`를 거치므로 같다.
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-001, 사람이 알려 줌)
+diff --git a/tree/docs/knowledge/invoice/vat-per-line-floor.md b/tree/docs/knowledge/invoice/vat-per-line-floor.md
+new file mode 100644
+index 0000000..1a3a807
+--- /dev/null
++++ b/tree/docs/knowledge/invoice/vat-per-line-floor.md
+@@ -0,0 +1,17 @@
++---
++kind: rule
++source: human
++anchor: lineVatSum
++---
++# 부가세는 과세 줄마다 원 미만 절사해 합산한다
++
++## 규칙
++- 회계팀 방식: 과세 줄마다 할인 후 공급가액(net)의 10%를 원 미만 절사하고, 그 값을 합산한다. 합계에 한 번 반올림하지 않는다.
++- 예: `examples/INV-2031.json`은 536+633+325+837+310 = 부가세 2,641원, 합계 29,079원이다.
++- 면세 줄은 부가세가 없고, 영세율(`zeroRated`)이면 부가세 0이다.
++
++## 아직 규칙을 따르지 않는 곳
++- src/invoice/credit-note.js `creditTotals`: 부가세를 합계에 한 번 `Math.round`한다. 청구서와 1~3원 어긋날 수 있다. 사람이 이번 Work에서는 청구서만 고치기로 했다.
++
++## 바뀐 이력
++- 2026-10-04 처음 남김. 청구서 `computeTotals`(src/invoice/total.js)를 줄별 절사로 바꿈 (Work w-20261004-001, 사람이 알려 줌)
+diff --git a/base/src/invoice/total.js b/tree/src/invoice/total.js
+index 6c97af3..b5275c8 100644
+--- a/base/src/invoice/total.js
++++ b/tree/src/invoice/total.js
+@@ -13,6 +13,11 @@ export function lineAmounts(invoice) {
+   })
+ }
+ 
++// 부가세. 회계팀 방식대로 과세 줄마다 공급가액(할인 후)의 세율만큼을 원 미만 절사해 합한다
++function lineVatSum(rows) {
++  return sumWon(rows.filter((r) => r.taxable).map((r) => Math.floor((r.net * VAT_RATE_PERCENT) / 100)))
++}
++
+ // 청구서 합계
+ //   subtotal: 할인 전 금액 합, discount: 할인 합, supply: 공급가액 합
+ //   taxable / exempt: 공급가액 중 과세분 / 면세분, vat: 부가세, total: 청구 합계
+@@ -23,6 +28,6 @@ export function computeTotals(invoice) {
+   const taxable = sumWon(rows.filter((r) => r.taxable).map((r) => r.net))
+   const exempt = sumWon(rows.filter((r) => !r.taxable).map((r) => r.net))
+   const supply = taxable + exempt
+-  const vat = invoice.zeroRated ? 0 : Math.round((taxable * VAT_RATE_PERCENT) / 100)
++  const vat = invoice.zeroRated ? 0 : lineVatSum(rows)
+   return { subtotal, discount, supply, taxable, exempt, vat, total: supply + vat }
+ }
+diff --git a/base/test/total.test.js b/tree/test/total.test.js
+index 5b9aafd..409df54 100644
+--- a/base/test/total.test.js
++++ b/tree/test/total.test.js
+@@ -60,3 +60,49 @@ test('단가 0원 품목(증정품)', () => {
+   ])
+   assert.strictEqual(computeTotals(inv).total, 15290)
+ })
++
++test('부가세는 과세 줄마다 공급가액의 10%를 원 미만 절사해 합한다', () => {
++  const inv = draft([
++    { name: '박스테이프', unitPrice: 1342, qty: 4 },
++    { name: '네임펜 흑', unitPrice: 905, qty: 7 },
++    { name: '스테이플러 심', unitPrice: 1085, qty: 3 },
++    { name: '수정테이프', unitPrice: 1675, qty: 5 },
++    { name: '볼펜 0.5 흑', unitPrice: 345, qty: 9 },
++  ])
++  const t = computeTotals(inv)
++  assert.strictEqual(t.supply, 26438)
++  assert.strictEqual(t.vat, 536 + 633 + 325 + 837 + 310)
++  assert.strictEqual(t.vat, 2641)
++  assert.strictEqual(t.total, 29079)
++})
++
++test('줄별 절사는 할인 적용 후 공급가액 기준이다', () => {
++  const inv = draft([
++    { name: 'A', unitPrice: 1999, qty: 1, discount: { amount: 9 } },
++    { name: 'B', unitPrice: 1555, qty: 1 },
++  ])
++  // 1990 -> 199, 1555 -> 155
++  assert.strictEqual(computeTotals(inv).vat, 354)
++})
++
++test('면세 줄이 섞여도 면세 줄에는 부가세가 없고 과세 줄만 줄별 절사한다', () => {
++  const inv = draft([
++    { name: 'A', unitPrice: 1239, qty: 1 },
++    { name: 'B', unitPrice: 1239, qty: 1 },
++    { name: '책', unitPrice: 9999, qty: 1, taxType: 'exempt' },
++  ])
++  const t = computeTotals(inv)
++  assert.strictEqual(t.exempt, 9999)
++  assert.strictEqual(t.vat, 123 + 123)
++})
++
++test('영세율 청구서는 줄이 여럿이어도 부가세 0', () => {
++  const inv = draft(
++    [
++      { name: 'A', unitPrice: 1239, qty: 1 },
++      { name: 'B', unitPrice: 1239, qty: 1 },
++    ],
++    { zeroRated: true },
++  )
++  assert.strictEqual(computeTotals(inv).vat, 0)
++})

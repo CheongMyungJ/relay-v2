@@ -1,0 +1,31 @@
+diff --git a/base/src/store/report-archive.js b/tree/src/store/report-archive.js
+index 0c62d2f..f6e9d94 100644
+--- a/base/src/store/report-archive.js
++++ b/tree/src/store/report-archive.js
+@@ -20,7 +20,7 @@ export function reportPath(period, reportId) {
+  */
+ export async function saveReport(files, report) {
+   const path = reportPath(report.period, report.reportId)
+-  const tmp = `${reportDir(report.period)}/.${stamp(now())}.tmp`
++  const tmp = `${reportDir(report.period)}/.${report.reportId}.${stamp(now())}.tmp`
+   await files.writeFile(tmp, JSON.stringify(report))
+   await files.rename(tmp, path)
+   return path
+diff --git a/base/test/archive.test.js b/tree/test/archive.test.js
+index 44aa323..5d10d89 100644
+--- a/base/test/archive.test.js
++++ b/tree/test/archive.test.js
+@@ -93,3 +93,13 @@ test('짧은 꼬리표', () => {
+   assert.strictEqual(stamp(1759197304120), 'mg5wnj94')
+   assert.strictEqual(stamp(35.9), 'z')
+ })
++
++test('보관소: 같은 시각에 동시에 저장해도 임시 파일이 겹치지 않는다', async () => {
++  const files = createFileStore({ latency: { baseMs: 3 } })
++  setNow(() => Date.UTC(2026, 9, 1, 2, 0)) // 시각이 같아도
++  const reports = [1, 2, 3, 4].map((n) => report(n))
++  await Promise.all(reports.map((r) => saveReport(files, r)))
++  assert.deepStrictEqual(listReports(files, '2026-09'), reports.map((r) => reportPath('2026-09', r.reportId)))
++  assert.deepStrictEqual(strayTemps(files, '2026-09'), [])
++  for (const r of reports) assert.deepStrictEqual(await loadReport(files, '2026-09', r.reportId), r)
++})

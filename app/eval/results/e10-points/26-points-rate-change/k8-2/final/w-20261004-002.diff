@@ -1,0 +1,101 @@
+diff --git a/tree/docs/knowledge/points/earn-basis.md b/tree/docs/knowledge/points/earn-basis.md
+new file mode 100644
+index 0000000..4b1db71
+--- /dev/null
++++ b/tree/docs/knowledge/points/earn-basis.md
+@@ -0,0 +1,18 @@
++---
++kind: fact
++source: investigation
++anchor: pointsFor
++---
++# 적립 포인트는 배송비를 뺀 상품 금액의 1%를 원 단위 버림한 값이다
++
++## 내용
++- 기준 금액은 상품 − 쿠폰 − 사용 포인트(배송비 제외)이고, 적립률 `POINT_RATE_PERCENT`를 곱해 원 단위로 버린다. 예: O-1042는 23,770원 → 237P (반올림이면 238P).
++- 일반 주문(`earnPoints`), 선물하기(`giftPoints`)가 `src/points/earn.js`의 `pointsFor`를 함께 쓴다. 적립 계산을 바꿀 때는 이 둘과 부분 환불 회수(`createRefund`)의 재계산이 같이 움직여야 한다.
++- 이 기준은 고객센터 안내 문구가 아니라 예시 한 건(O-1042 = 237P)에서 역산한 것이다. 안내 문구가 다르게 확인되면 다시 맞춘다.
++- 부분 환불 회수 포인트 = 주문에 저장된 원래 적립(`order.points.earned`) − 남은 상품으로 다시 계산한 적립(위 기준, 버림). 쿠폰·사용 포인트는 남은 주문에 그대로 둔다. 예: O-1077 / R-0311은 남은 27,180원 → 271P, 403 − 271 = 132P. 정산팀 기준이며 사람이 알려 줌.
++- `createRefund`(`src/orders/refund.js`)는 이 재계산을 `Math.floor`로 직접 한다(`pointsFor`가 이 브랜치에 없어서). `pointsFor`가 머지되면 합칠 수 있다.
++- 미확인: `alreadyRefunded`가 있는 여러 번 부분 환불은 식이 이전 환불 회수분까지 포함한 누적 회수량을 내므로 중복 회수일 수 있다. 정산팀 기준을 확인하기 전에는 고치지 않는다.
++
++## 바뀐 이력
++- 2026-10-04 처음 남김: 결제 금액(배송비 포함, 반올림) → 배송비 제외 상품 금액(버림) (Work w-20261004-001)
++- 2026-10-04 부분 환불 회수: 환불 상품 금액의 1%(반올림) → 원래 적립 − 남은 상품 재계산 적립(버림) (Work w-20261004-002, 사람이 알려 줌)
+diff --git a/base/src/orders/refund.js b/tree/src/orders/refund.js
+index 7d4f479..ab7e4aa 100644
+--- a/base/src/orders/refund.js
++++ b/tree/src/orders/refund.js
+@@ -1,6 +1,6 @@
+ import { POINT_RATE_PERCENT, REFUND_NUMBER } from '../config.js'
+ import { lineAmount } from '../cart/line.js'
+-import { percentOf, sumWon } from '../money.js'
++import { sumWon } from '../money.js'
+ 
+ // 환불. order는 저장된 주문(createOrder의 결과를 저장한 것)이다. 저장된 금액과 적립 포인트를 쓴다.
+ // - 부분 환불(createRefund): 돌려받는 줄의 상품 금액을 돌려주고, 적립했던 포인트 일부를 회수한다.
+@@ -31,7 +31,10 @@ export function createRefund(order, input) {
+     orderNumber: order.number,
+     items,
+     refundAmount: refundGoods,
+-    pointsRecovered: percentOf(refundGoods, POINT_RATE_PERCENT),
++    // 회수 = 저장된 원래 적립 − 남은 상품으로 다시 계산한 적립. 쿠폰·사용 포인트는 남은 주문에 그대로 두고 1P 미만은 버린다
++    pointsRecovered:
++      order.points.earned -
++      Math.floor(((remainingGoods - order.amounts.coupon - order.amounts.pointsUsed) * POINT_RATE_PERCENT) / 100),
+   }
+ }
+ 
+diff --git a/base/test/refund.test.js b/tree/test/refund.test.js
+index de6f8a4..ac9c23f 100644
+--- a/base/test/refund.test.js
++++ b/tree/test/refund.test.js
+@@ -30,3 +30,48 @@ test('남은 수량보다 많이 환불할 수 없다', () => {
+ test('전체 취소는 저장된 금액과 포인트를 모두 돌려놓는다', () => {
+   assert.deepStrictEqual(cancelOrder(order), { orderNumber: 'O-0100', refundAmount: 50000, pointsRecovered: 500, pointsReturned: 0 })
+ })
++
++const order1077 = {
++  number: 'O-1077',
++  customerId: 'U-11853',
++  lines: [
++    { sku: 'KT-2290', name: '스테인리스 밀폐용기 3종', unitPrice: 12900, qty: 2 },
++    { sku: 'TW-0838', name: '순면 행주 5장', unitPrice: 8380, qty: 1 },
++    { sku: 'SP-0656', name: '실리콘 주걱 세트', unitPrice: 6565, qty: 2 },
++  ],
++  coupon: { code: 'WELCOME5000', amount: 5000, minGoods: 30000 },
++  amounts: { goods: 47310, coupon: 5000, shipping: 0, pointsUsed: 2000, total: 40310 },
++  points: { used: 2000, earned: 403 },
++}
++
++test('부분 환불 회수 포인트: 원래 적립 − 남은 상품 재계산 적립(버림) (O-1077 / R-0311)', () => {
++  const r = createRefund(order1077, { number: 'R-0311', items: [{ sku: 'SP-0656', qty: 2 }] })
++  // 남은 상품 34,180 − 5,000 − 2,000 = 27,180원 → 271P, 403 − 271 = 132P
++  assert.strictEqual(r.pointsRecovered, 132)
++  assert.strictEqual(r.refundAmount, 13130)
++})
++
++const boundaryOrder = (coupon, earned) => ({
++  number: 'O-2001',
++  lines: [
++    { sku: 'A-1', name: 'A', unitPrice: 5000, qty: 1 },
++    { sku: 'B-1', name: 'B', unitPrice: 5000, qty: 1 },
++  ],
++  amounts: { goods: 10000, coupon, shipping: 0, pointsUsed: 0, total: 10000 - coupon },
++  points: { used: 0, earned },
++})
++
++test('부분 환불 회수 포인트: 남은 상품 금액이 쿠폰과 같으면 재계산 적립은 0이라 원래 적립을 모두 회수한다', () => {
++  const r = createRefund(boundaryOrder(5000, 50), { number: 'R-0001', items: [{ sku: 'A-1', qty: 1 }] })
++  assert.strictEqual(r.pointsRecovered, 50)
++})
++
++test('부분 환불 회수 포인트: 재계산 적립은 1P 미만을 버린다', () => {
++  // 남은 5,000 − 1,050 = 3,950원 → 39.5P 버림 39P, 90 − 39 = 51
++  const r = createRefund(boundaryOrder(1050, 90), { number: 'R-0001', items: [{ sku: 'A-1', qty: 1 }] })
++  assert.strictEqual(r.pointsRecovered, 51)
++})
++
++test('부분 환불: 남은 상품 금액이 쿠폰보다 적으면 오류', () => {
++  assert.throws(() => createRefund(boundaryOrder(6000, 40), { number: 'R-0001', items: [{ sku: 'A-1', qty: 1 }] }), /전체 취소/)
++})

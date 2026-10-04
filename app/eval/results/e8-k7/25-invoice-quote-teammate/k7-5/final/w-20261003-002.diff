@@ -1,0 +1,45 @@
+diff --git a/base/src/invoice/credit-note.js b/tree/src/invoice/credit-note.js
+index 6e6fe7d..6ed9ae0 100644
+--- a/base/src/invoice/credit-note.js
++++ b/tree/src/invoice/credit-note.js
+@@ -87,7 +87,10 @@ export function creditTotals(note) {
+   const taxable = sumWon(rows.filter((r) => r.taxable).map((r) => r.net))
+   const exempt = sumWon(rows.filter((r) => !r.taxable).map((r) => r.net))
+   const supply = taxable + exempt
+-  const vat = note.zeroRated ? 0 : Math.round((taxable * VAT_RATE_PERCENT) / 100)
++  // 회사 규칙: 과세 줄마다 할인 후 금액에 세율을 곱해 원 단위 버림하고 줄별 부가세를 합산한다
++  const vat = note.zeroRated
++    ? 0
++    : sumWon(rows.filter((r) => r.taxable).map((r) => Math.floor((r.net * VAT_RATE_PERCENT) / 100)))
+   return { supply, taxable, exempt, vat, total: supply + vat }
+ }
+ 
+diff --git a/base/test/credit-note.test.js b/tree/test/credit-note.test.js
+index 5c7f920..9de4867 100644
+--- a/base/test/credit-note.test.js
++++ b/tree/test/credit-note.test.js
+@@ -1,5 +1,6 @@
+ import { test } from 'node:test'
+ import assert from 'node:assert'
++import { readFileSync } from 'node:fs'
+ import { creditNoteEntries, ledger } from '../src/export/ledger.js'
+ import { createCreditNote, creditNoteTotals, returnedDiscount } from '../src/invoice/credit-note.js'
+ import { createInvoice, issueInvoice } from '../src/invoice/invoice.js'
+@@ -81,3 +82,17 @@ test('반품 전표 분개', () => {
+     ['INV-0100', 'INV-0100', 'INV-0100', 'CN-0001', 'CN-0001', 'CN-0001'],
+   )
+ })
++
++test('부가세는 과세 줄마다 버림해 합산한다 (CN-0112)', () => {
++  const invoice = JSON.parse(readFileSync('examples/INV-2047.json', 'utf8'))
++  const data = JSON.parse(readFileSync('examples/CN-0112.json', 'utf8'))
++  const cn = createCreditNote(invoice, data)
++  assert.strictEqual(cn.totals.vat, 1742)
++  assert.strictEqual(cn.totals.total, 19180)
++  assert.strictEqual(createCreditNote({ ...invoice, zeroRated: true }, data).totals.vat, 0)
++})
++
++test('면세 줄은 부가세에서 제외한다', () => {
++  const cn = note([{ sku: 'BK-1800', qty: 2 }])
++  assert.strictEqual(cn.totals.vat, 0)
++})

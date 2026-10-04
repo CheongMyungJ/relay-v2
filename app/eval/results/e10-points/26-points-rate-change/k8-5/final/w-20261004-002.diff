@@ -1,0 +1,97 @@
+diff --git a/tree/docs/knowledge/points/earn-rule.md b/tree/docs/knowledge/points/earn-rule.md
+new file mode 100644
+index 0000000..ec402d2
+--- /dev/null
++++ b/tree/docs/knowledge/points/earn-rule.md
+@@ -0,0 +1,17 @@
++---
++kind: rule
++source: investigation
++anchor: earnPoints
++---
++# 적립 포인트는 배송비를 뺀 결제 금액의 1%를 소수점 버림한다
++
++## 규칙
++- 적립 대상 금액은 `amounts.total - amounts.shipping`(상품 - 쿠폰 - 사용 포인트)이고, `POINT_RATE_PERCENT`%를 원 단위 미만 버림한다. 예: O-1042는 23,770원 → 237P (고객센터 기준).
++- 선물하기 적립(`giftPoints`)과 부분 환불의 회수(`pointsRecovered`)도 같은 버림 기준을 쓴다 (사람이 정함).
++- 부분 환불의 회수 = 주문에 저장된 `points.earned` − 남은 상품으로 다시 계산한 적립이다. 남은 적립 = (남은 상품 − 쿠폰 − 사용 포인트)의 `POINT_RATE_PERCENT`% 버림, 배송비 제외, 쿠폰·사용 포인트는 남은 주문에 그대로 둔다. 환불분 금액만 따로 1% 하지 않는다. 예: O-1077/R-0311은 403 − 271 = 132P (사람, 정산팀 기준).
++- 이미 적립된 포인트는 다시 계산하지 않고 주문에 저장된 `points.earned`를 쓴다 (사람).
++- 영수증 글자(`src/format/`)는 앱과 메일이 그대로 보여 주므로 바꾸지 않는다 (사람).
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-001). 이전에는 배송비 포함 금액의 반올림이었다
++- 2026-10-04 부분 환불 회수: 환불분 금액의 1% 반올림 → 저장된 적립 − 남은 상품 기준 적립(버림) (Work w-20261004-002, 사람이 알려 줌)
+diff --git a/base/src/money.js b/tree/src/money.js
+index 4ce3f7b..cea0b8f 100644
+--- a/base/src/money.js
++++ b/tree/src/money.js
+@@ -14,6 +14,11 @@ export function percentOf(amount, percent) {
+   return Math.round((amount * percent) / 100)
+ }
+ 
++/** 금액의 percent%. 원 단위 미만을 버린다 */
++export function floorPercentOf(amount, percent) {
++  return Math.floor((amount * percent) / 100)
++}
++
+ /** 10원 단위 버림 */
+ export function floorTen(amount) {
+   return Math.floor(amount / 10) * 10
+diff --git a/base/src/orders/refund.js b/tree/src/orders/refund.js
+index 7d4f479..00d6aa6 100644
+--- a/base/src/orders/refund.js
++++ b/tree/src/orders/refund.js
+@@ -1,9 +1,10 @@
+ import { POINT_RATE_PERCENT, REFUND_NUMBER } from '../config.js'
+ import { lineAmount } from '../cart/line.js'
+-import { percentOf, sumWon } from '../money.js'
++import { floorPercentOf, sumWon } from '../money.js'
+ 
+ // 환불. order는 저장된 주문(createOrder의 결과를 저장한 것)이다. 저장된 금액과 적립 포인트를 쓴다.
+-// - 부분 환불(createRefund): 돌려받는 줄의 상품 금액을 돌려주고, 적립했던 포인트 일부를 회수한다.
++// - 부분 환불(createRefund): 돌려받는 줄의 상품 금액을 돌려주고, 적립했던 포인트 일부를 회수한다
++//   (저장된 적립 - 남은 상품으로 다시 계산한 적립).
+ //   쿠폰 할인과 사용한 포인트는 남은 주문에 그대로 둔다. 남은 상품 금액이 그보다 적어지면 전체 취소로 한다.
+ // - 전체 취소(cancelOrder): 결제 금액을 모두 돌려주고, 적립 포인트를 모두 회수하고, 사용한 포인트를 돌려준다.
+ 
+@@ -26,12 +27,15 @@ export function createRefund(order, input) {
+   const remainingGoods = order.amounts.goods - refundedBefore - refundGoods
+   if (remainingGoods < order.amounts.coupon + order.amounts.pointsUsed)
+     throw new Error('남은 상품 금액이 쿠폰 할인과 사용 포인트보다 적다. 전체 취소로 처리한다')
++  // 회수 = 저장된 적립 - 남은 상품으로 다시 계산한 적립 (쿠폰·사용 포인트 차감, 배송비 제외, 버림)
++  const remainingEarn = floorPercentOf(remainingGoods - order.amounts.coupon - order.amounts.pointsUsed, POINT_RATE_PERCENT)
++  const pointsRecovered = Math.max(0, order.points.earned - remainingEarn)
+   return {
+     number: input.number,
+     orderNumber: order.number,
+     items,
+     refundAmount: refundGoods,
+-    pointsRecovered: percentOf(refundGoods, POINT_RATE_PERCENT),
++    pointsRecovered,
+   }
+ }
+ 
+diff --git a/base/test/refund.test.js b/tree/test/refund.test.js
+index de6f8a4..e39f060 100644
+--- a/base/test/refund.test.js
++++ b/tree/test/refund.test.js
+@@ -30,3 +30,19 @@ test('남은 수량보다 많이 환불할 수 없다', () => {
+ test('전체 취소는 저장된 금액과 포인트를 모두 돌려놓는다', () => {
+   assert.deepStrictEqual(cancelOrder(order), { orderNumber: 'O-0100', refundAmount: 50000, pointsRecovered: 500, pointsReturned: 0 })
+ })
++
++test('부분 환불: 회수 포인트는 저장된 적립에서 남은 상품 기준 적립(버림)을 뺀 값이다', () => {
++  const o = {
++    number: 'O-1077',
++    lines: [
++      { sku: 'KT-2290', name: 'a', unitPrice: 12900, qty: 2 },
++      { sku: 'TW-0838', name: 'b', unitPrice: 8380, qty: 1 },
++      { sku: 'SP-0656', name: 'c', unitPrice: 6565, qty: 2 },
++    ],
++    amounts: { goods: 47310, coupon: 5000, shipping: 0, pointsUsed: 2000, total: 40310 },
++    points: { used: 2000, earned: 403 },
++  }
++  const r = createRefund(o, { number: 'R-0311', items: [{ sku: 'SP-0656', qty: 2 }] })
++  assert.strictEqual(r.refundAmount, 13130)
++  assert.strictEqual(r.pointsRecovered, 132)
++})

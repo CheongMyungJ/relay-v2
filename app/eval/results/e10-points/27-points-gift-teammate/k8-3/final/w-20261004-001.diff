@@ -1,0 +1,120 @@
+diff --git a/tree/docs/knowledge/format/receipt-text-frozen.md b/tree/docs/knowledge/format/receipt-text-frozen.md
+new file mode 100644
+index 0000000..2821984
+--- /dev/null
++++ b/tree/docs/knowledge/format/receipt-text-frozen.md
+@@ -0,0 +1,11 @@
++---
++kind: rule
++source: human
++---
++# 영수증 글자(src/format/)는 바꾸지 않는다
++
++## 규칙
++- 금액이나 포인트 계산을 고치는 일에서도 `src/format/`의 영수증 글자는 바뀌면 안 된다. 값만 바뀌고 글자 모양은 그대로여야 한다.
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-001)
+diff --git a/tree/docs/knowledge/gift/gift-points-hands-off.md b/tree/docs/knowledge/gift/gift-points-hands-off.md
+new file mode 100644
+index 0000000..580ee06
+--- /dev/null
++++ b/tree/docs/knowledge/gift/gift-points-hands-off.md
+@@ -0,0 +1,15 @@
++---
++kind: rule
++source: human
++anchor: giftPoints
++---
++# 선물하기 적립(src/gift/gift-points.js)은 다른 팀과 같이 보는 중이라 건드리지 않는다
++
++## 규칙
++- `src/gift/gift-points.js`는 수정하지 않는다. 그래서 공용 `percentOf`(`src/money.js`)도 바꾸지 않고, 일반 주문 적립은 `src/points/earn.js`에서만 계산한다.
++
++## 아직 규칙을 따르지 않는 곳
++- `src/gift/gift-points.js`: 일반 주문 적립과 달리 배송비 포함 반올림이다. 같은 규칙으로 맞출지는 다른 팀과 정해야 한다.
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-001)
+diff --git a/tree/docs/knowledge/points/earn-base-and-rounding.md b/tree/docs/knowledge/points/earn-base-and-rounding.md
+new file mode 100644
+index 0000000..e34f178
+--- /dev/null
++++ b/tree/docs/knowledge/points/earn-base-and-rounding.md
+@@ -0,0 +1,17 @@
++---
++kind: rule
++source: investigation
++anchor: earnPoints
++---
++# 적립 예정 포인트는 배송비를 뺀 결제 금액의 1%이고 1P 미만은 버린다
++
++## 규칙
++- `earnPoints`(`src/points/earn.js`)는 `amounts.total - amounts.shipping`에 `POINT_RATE_PERCENT`%를 곱하고 `Math.floor`로 버린다.
++- O-1042: 결제 26,770원 − 배송비 3,000원 = 23,770원 → 237P (반올림이면 238P). 기대값 237P는 고객센터 계산으로 요청에 적혀 있었고, 규칙은 이 한 건에서 역산했다. 다른 주문의 고객센터 값으로는 확인하지 못했다.
++
++## 아직 규칙을 따르지 않는 곳
++- `src/orders/refund.js`: 환불 회수 포인트는 `percentOf` 반올림이라 적립(버림)과 1P 어긋날 수 있다.
++- `src/gift/gift-points.js`: 배송비 포함 반올림이다. 다른 팀과 같이 보는 중이라 수정 금지.
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-001)
+diff --git a/tree/docs/knowledge/points/stored-points-not-recalculated.md b/tree/docs/knowledge/points/stored-points-not-recalculated.md
+new file mode 100644
+index 0000000..998d551
+--- /dev/null
++++ b/tree/docs/knowledge/points/stored-points-not-recalculated.md
+@@ -0,0 +1,12 @@
++---
++kind: rule
++source: human
++---
++# 이미 적립된 포인트는 주문에 저장된 값을 쓰고 다시 계산하지 않는다
++
++## 규칙
++- 영수증, 환불, 포인트 내역은 주문에 저장된 `points.earned`를 그대로 쓴다. 적립 규칙이 바뀌어도 이미 적립된 값을 다시 계산하지 않는다.
++- 적립 계산(`earnPoints`)은 주문을 만들 때(`createOrder`) 한 번만 한다.
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-001)
+diff --git a/base/src/points/earn.js b/tree/src/points/earn.js
+index 1ad53ff..29d6204 100644
+--- a/base/src/points/earn.js
++++ b/tree/src/points/earn.js
+@@ -1,7 +1,7 @@
+ import { POINT_RATE_PERCENT } from '../config.js'
+-import { percentOf } from '../money.js'
+ 
+-/** 주문의 적립 포인트. 결제 금액의 POINT_RATE_PERCENT% */
++/** 주문의 적립 포인트. 배송비를 뺀 결제 금액의 POINT_RATE_PERCENT%, 1P 미만은 버린다 */
+ export function earnPoints(order) {
+-  return percentOf(order.amounts.total, POINT_RATE_PERCENT)
++  const base = order.amounts.total - order.amounts.shipping
++  return Math.floor((base * POINT_RATE_PERCENT) / 100)
+ }
+diff --git a/tree/test/earn.test.js b/tree/test/earn.test.js
+new file mode 100644
+index 0000000..5930a7b
+--- /dev/null
++++ b/tree/test/earn.test.js
+@@ -0,0 +1,20 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import fs from 'node:fs'
++import { createOrder } from '../src/orders/order.js'
++import { earnPoints } from '../src/points/earn.js'
++
++test('O-1042의 적립 예정 포인트는 237P (배송비를 빼고 원 단위 버림)', () => {
++  const input = JSON.parse(fs.readFileSync(new URL('../examples/O-1042.json', import.meta.url), 'utf8'))
++  assert.strictEqual(createOrder(input).points.earned, 237)
++})
++
++test('적립 기준은 배송비를 뺀 결제 금액이다', () => {
++  const order = { amounts: { goods: 10000, coupon: 0, shipping: 3000, pointsUsed: 0, total: 13000 } }
++  assert.strictEqual(earnPoints(order), 100)
++})
++
++test('1P 미만은 버린다', () => {
++  const order = { amounts: { goods: 12999, coupon: 0, shipping: 0, pointsUsed: 0, total: 12999 } }
++  assert.strictEqual(earnPoints(order), 129)
++})

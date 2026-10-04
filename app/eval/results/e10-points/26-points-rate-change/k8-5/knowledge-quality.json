@@ -1,0 +1,56 @@
+{
+  "paths": [
+    "docs/knowledge/points/earn-rule.md",
+    "docs/knowledge/points/refund-recover-rate.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/points/earn-rule.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/points/refund-recover-rate.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "earn-rule.md: 적립 대상은 상품-쿠폰-사용 포인트이고 배송비는 제외한다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "earn-rule.md: 원 단위 미만 버림으로 적혀 있다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "earn-rule.md: 현재 2%이고, 이전 1%는 이력으로만 적혀 있다."
+      },
+      {
+        "id": "R4",
+        "status": "correct",
+        "why": "earn-rule.md: 회수는 저장된 points.earned에서 남은 상품으로 다시 계산한 적립을 뺀 값이다."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "earn-rule.md: 이미 적립된 포인트는 다시 계산하지 않고 저장된 points.earned를 쓴다."
+      }
+    ]
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "paths": [
+    "docs/knowledge/points/earn-rule.md",
+    "docs/knowledge/points/partial-refund-recovery.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/points/earn-rule.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/points/partial-refund-recovery.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "earn-rule.md: 기준 금액 = 상품 금액 − 쿠폰 − 사용 포인트, 배송비 제외."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "earn-rule.md: 소수점은 버린다 (예: 237P)."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "earn-rule.md: 적립률 1%→2% 이력과 2% 예시(O-1107)가 있고, 1%는 조건부 예시나 과거 이력으로만 쓰였다."
+      },
+      {
+        "id": "R4",
+        "status": "correct",
+        "why": "partial-refund-recovery.md: 회수 = 환불 전 적립분(저장된 값) − 남은 주문의 재계산 적립분."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "earn-rule.md와 partial-refund-recovery.md: 이미 적립된 포인트는 다시 계산하지 않고 저장된 값을 쓴다."
+      }
+    ]
+  }
+}

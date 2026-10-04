@@ -1,0 +1,51 @@
+{
+  "paths": [
+    "docs/knowledge/points/earn-points-single-source.md",
+    "docs/knowledge/points/no-recalculation-of-earned-points.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/points/earn-points-single-source.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/points/no-recalculation-of-earned-points.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "earnPoints는 배송비를 뺀 결제 금액을 기준으로 한다고 적었다. 이는 상품 금액에서 쿠폰과 포인트를 뺀 금액과 같고, 배송비는 제외한다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "'원 단위 내림'이라고 명시했다."
+      },
+      {
+        "id": "R3",
+        "status": "missing",
+        "why": "POINT_RATE_PERCENT라는 상수 이름만 있고 1%라는 값은 적혀 있지 않다. 예시 계산에서 짐작할 수는 있다."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "이미 적립된 포인트는 다시 계산하거나 보정하지 않는다고 적었다."
+      }
+    ]
+  }
+}

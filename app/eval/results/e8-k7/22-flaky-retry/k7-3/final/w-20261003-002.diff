@@ -1,0 +1,53 @@
+diff --git a/tree/docs/knowledge/repro-timing-collisions-with-fixed-clock.md b/tree/docs/knowledge/repro-timing-collisions-with-fixed-clock.md
+new file mode 100644
+index 0000000..e92a52d
+--- /dev/null
++++ b/tree/docs/knowledge/repro-timing-collisions-with-fixed-clock.md
+@@ -0,0 +1,9 @@
++# 같은 ms에 겹쳐서 나는 간헐 실패는 setNow로 시각을 고정해 로컬 npm test에서 재현한다
++
++- 종류: 사실
++- 적용: test/archive.test.js, src/clock.js, src/store/report-archive.js
++- 출처: 조사로 알아냄, relay Work w-20261003-002, 2026-10-03
++
++- `ci/`에서만 가끔 나는 보관소 실패(`ENOENT ... .tmp`, 보관본 고객사 뒤바뀜)는 동시 저장이 같은 ms에 시작해 시각 기반 임시 파일 이름이 겹쳐서 생긴다.
++- 시험에서 `setNow(() => 고정값)`으로 시각을 고정하고 `createFileStore({ latency: { baseMs: 3 } })`로 4개를 `Promise.all` 저장하면 CI 지연 없이 로컬 `npm test`에서 바로 재현된다.
++- 이런 시험은 "반복 실행해 운 좋게 잡기"보다 시각·지연을 고정해 결정적으로 만든다. 재시도나 skip으로 가리지 않는다.
+diff --git a/base/src/store/report-archive.js b/tree/src/store/report-archive.js
+index 0c62d2f..9be62f4 100644
+--- a/base/src/store/report-archive.js
++++ b/tree/src/store/report-archive.js
+@@ -14,13 +14,13 @@ export function reportPath(period, reportId) {
+ 
+ /**
+  * 보고서를 보관소에 저장하고 경로를 돌려준다.
+- * 쓰다 만 파일을 정산팀이 읽어 가지 않게, 같은 폴더의 임시 파일에 다 쓴 뒤 제 이름으로 옮긴다.
++ * 쓰다 만 파일을 정산팀이 읽어 가지 않게, 같은 폴더의 임시 파일(이름에 reportId를 넣어 동시 저장끼리 겹치지 않게 한다)에 다 쓴 뒤 제 이름으로 옮긴다.
+  * @param {ReturnType<import('./file-store.js').createFileStore>} files
+  * @param {{ reportId: string, period?: string | null }} report
+  */
+ export async function saveReport(files, report) {
+   const path = reportPath(report.period, report.reportId)
+-  const tmp = `${reportDir(report.period)}/.${stamp(now())}.tmp`
++  const tmp = `${reportDir(report.period)}/.${report.reportId}.${stamp(now())}.tmp`
+   await files.writeFile(tmp, JSON.stringify(report))
+   await files.rename(tmp, path)
+   return path
+diff --git a/base/test/archive.test.js b/tree/test/archive.test.js
+index 44aa323..2fe34cb 100644
+--- a/base/test/archive.test.js
++++ b/tree/test/archive.test.js
+@@ -93,3 +93,13 @@ test('짧은 꼬리표', () => {
+   assert.strictEqual(stamp(1759197304120), 'mg5wnj94')
+   assert.strictEqual(stamp(35.9), 'z')
+ })
++
++test('보관소: 같은 시각에 동시에 저장해도 보고서마다 제 내용이 남는다', async () => {
++  setNow(() => Date.UTC(2026, 9, 1, 2, 0)) // 시각이 같아도 임시 파일 이름이 겹치지 않아야 한다
++  const files = createFileStore({ latency: { baseMs: 3 } })
++  const reports = [1, 2, 3, 4].map((n) => report(n))
++  const paths = await Promise.all(reports.map((r) => saveReport(files, r)))
++  assert.deepStrictEqual(paths, reports.map((r) => reportPath('2026-09', r.reportId)))
++  for (const r of reports) assert.strictEqual((await loadReport(files, '2026-09', r.reportId)).tenant, r.tenant)
++  assert.deepStrictEqual(strayTemps(files, '2026-09'), [])
++})

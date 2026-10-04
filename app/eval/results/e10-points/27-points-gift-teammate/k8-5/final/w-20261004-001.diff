@@ -1,0 +1,107 @@
+diff --git a/tree/docs/knowledge/points/earn-points-formula.md b/tree/docs/knowledge/points/earn-points-formula.md
+new file mode 100644
+index 0000000..7a36427
+--- /dev/null
++++ b/tree/docs/knowledge/points/earn-points-formula.md
+@@ -0,0 +1,17 @@
++---
++kind: rule
++source: investigation
++anchor: earnPoints
++---
++# 적립 포인트는 배송비를 뺀 결제 금액의 1%를 1P 미만 버림한 값이다
++
++## 규칙
++- 적립 포인트 = floor((결제 금액 `amounts.total` − 배송비 `amounts.shipping`) × `POINT_RATE_PERCENT` / 100). 고객센터 기준 O-1042는 237P (23770 × 1% = 237.7 → 237).
++- 정책 문서는 없다. 237P를 고객센터 값에서 거꾸로 맞춘 식이므로, 다른 주문의 정답으로는 검증되지 않았다.
++- 공유 도우미 `percentOf`(`src/money.js`)는 반올림이라 적립에 쓰지 않는다. 선물하기와 공유하므로 바꾸지 않는다.
++
++## 아직 규칙을 따르지 않는 곳
++- src/orders/refund.js: 부분 환불의 `pointsRecovered`가 `percentOf(refundGoods, POINT_RATE_PERCENT)`(상품 금액 기준, 반올림)라 적립 식과 다르다. 적립보다 1P 더 회수할 수 있다. 환불 정책 확인 후 고친다.
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-001)
+diff --git a/tree/docs/knowledge/points/gift-points-hands-off.md b/tree/docs/knowledge/points/gift-points-hands-off.md
+new file mode 100644
+index 0000000..7eafe10
+--- /dev/null
++++ b/tree/docs/knowledge/points/gift-points-hands-off.md
+@@ -0,0 +1,15 @@
++---
++kind: rule
++source: human
++anchor: giftPoints
++---
++# 선물하기 적립(`giftPoints`)은 다른 팀과 협의 전에는 포인트 관련 일에서도 바꾸지 않는다
++
++## 규칙
++- `src/gift/gift-points.js`는 다른 팀과 함께 보고 있어 포인트 적립 수정 일에서도 손대지 않는다.
++
++## 아직 규칙을 따르지 않는 곳
++- src/gift/gift-points.js: `earnPoints`의 옛 식(배송비 포함, 반올림)을 그대로 써서 같은 과다 적립이 있을 수 있다. 협의 후 `docs/knowledge/points/earn-points-formula.md`의 식에 맞출지 정한다.
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-001, 사람이 알려 줌)
+diff --git a/tree/docs/knowledge/points/stored-points-not-recalculated.md b/tree/docs/knowledge/points/stored-points-not-recalculated.md
+new file mode 100644
+index 0000000..123b169
+--- /dev/null
++++ b/tree/docs/knowledge/points/stored-points-not-recalculated.md
+@@ -0,0 +1,12 @@
++---
++kind: rule
++source: human
++---
++# 이미 적립된 포인트는 다시 계산하지 않고 주문에 저장된 값을 쓴다
++
++## 규칙
++- 주문의 `points.earned`는 주문을 만들 때 한 번만 계산해 저장한다. 계산식이 바뀌어도 이미 적립된 주문은 다시 계산하지 않는다.
++- 영수증, 환불(전체 취소), 포인트 내역은 저장된 값을 그대로 쓴다.
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-001, 사람이 알려 줌)
+diff --git a/base/src/points/earn.js b/tree/src/points/earn.js
+index 1ad53ff..dcaf831 100644
+--- a/base/src/points/earn.js
++++ b/tree/src/points/earn.js
+@@ -1,7 +1,7 @@
+ import { POINT_RATE_PERCENT } from '../config.js'
+-import { percentOf } from '../money.js'
+ 
+-/** 주문의 적립 포인트. 결제 금액의 POINT_RATE_PERCENT% */
++/** 주문의 적립 포인트. 배송비를 뺀 결제 금액의 POINT_RATE_PERCENT%, 1P 미만은 버린다 */
+ export function earnPoints(order) {
+-  return percentOf(order.amounts.total, POINT_RATE_PERCENT)
++  const { total, shipping } = order.amounts
++  return Math.floor(((total - shipping) * POINT_RATE_PERCENT) / 100)
+ }
+diff --git a/tree/test/earn.test.js b/tree/test/earn.test.js
+new file mode 100644
+index 0000000..d56fd4f
+--- /dev/null
++++ b/tree/test/earn.test.js
+@@ -0,0 +1,24 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import fs from 'node:fs'
++import { createOrder } from '../src/orders/order.js'
++import { earnPoints } from '../src/points/earn.js'
++
++const example = (n) => createOrder(JSON.parse(fs.readFileSync(new URL(`../examples/${n}.json`, import.meta.url), 'utf8')))
++
++test('O-1042의 적립 예정 포인트는 237P', () => {
++  assert.strictEqual(example('O-1042').points.earned, 237)
++})
++
++test('다른 문의 주문도 배송비를 뺀 금액의 1%를 버림한다', () => {
++  assert.strictEqual(example('O-1077').points.earned, 423)
++  assert.strictEqual(example('O-1107').points.earned, 243)
++})
++
++test('배송비는 적립 대상이 아니다', () => {
++  assert.strictEqual(earnPoints({ amounts: { total: 13000, shipping: 3000 } }), 100)
++})
++
++test('원 미만 적립은 버린다', () => {
++  assert.strictEqual(earnPoints({ amounts: { total: 23770, shipping: 0 } }), 237)
++})

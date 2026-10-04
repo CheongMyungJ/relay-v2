@@ -1,0 +1,197 @@
+diff --git a/tree/docs/knowledge/delivery/digest-key-without-runid.md b/tree/docs/knowledge/delivery/digest-key-without-runid.md
+new file mode 100644
+index 0000000..01af18a
+--- /dev/null
++++ b/tree/docs/knowledge/delivery/digest-key-without-runid.md
+@@ -0,0 +1,17 @@
++---
++kind: rule
++source: investigation
++anchor: digestKey
++---
++# 요약 중복 방지 키는 기간+사용자만 쓴다
++
++## 규칙
++- `digestKey`(`src/digest/key.js`)는 `digest:{period}:{userId}`다. runId를 넣지 않는다. runId가 들어가면 같은 기간을 다시 돌릴 때(재시작, 수동 실행) 보낸 기록을 못 찾아 요약이 중복된다.
++- 실행별 집계는 키가 아니라 발송 기록(ledger)의 runId로 본다(`runSummary`).
++- 실제로 실패해 포기한 요약은 키가 남지 않으므로 다음 실행에서 다시 보내진다.
++
++## 아직 규칙을 따르지 않는 곳
++- `src/digest/ledger.js`: 보낸 키가 메모리(TTL `ledgerTtlMs` 3일)라 프로세스 재시작이나 TTL 만료 뒤 같은 기간 재실행은 막지 못한다. 운영의 공유 DB 전제.
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-002)
+diff --git a/tree/docs/knowledge/delivery/digest-sendtimeout-unused.md b/tree/docs/knowledge/delivery/digest-sendtimeout-unused.md
+new file mode 100644
+index 0000000..6c4ffcd
+--- /dev/null
++++ b/tree/docs/knowledge/delivery/digest-sendtimeout-unused.md
+@@ -0,0 +1,14 @@
++---
++kind: pitfall
++source: investigation
++---
++# digest.sendTimeoutMs는 지금 요약 발송에 효과가 없다
++
++## 내용
++- `withDeadline`(`src/digest/deadline.js`)이 늦은 성공을 더 이상 실패로 보지 않아 `digest.sendTimeoutMs`와 `timeoutMs` 인자는 사용되지 않는다. 설정을 바꿔도 동작이 달라지지 않는다.
++- 소요 시간은 `digest.send.ms` 지표로만 남는다. 제한 시간을 다시 쓰려면 실제로 발송을 중단하는 방식이어야 하고, 규칙은 `docs/knowledge/delivery/late-success-is-success.md` 참고.
++- 요약 키의 runId 중복 문제는 Work w-20261004-002에서 고쳤다. 키 규칙은 `docs/knowledge/delivery/digest-key-without-runid.md` 참고.
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-001)
++- 2026-10-04 "요약 키에 runId가 있어 중복될 수 있다(미수정)" → 수정됨, 내용은 digest-key-without-runid.md로 옮김 (Work w-20261004-002)
+diff --git a/base/src/digest/deadline.js b/tree/src/digest/deadline.js
+index afc5a84..6f33e7d 100644
+--- a/base/src/digest/deadline.js
++++ b/tree/src/digest/deadline.js
+@@ -1,9 +1,10 @@
+ // 요약 발송 한 건의 제한 시간.
+ // 요약은 아침에 한꺼번에 수천 통을 보내므로, 한 사람에게 오래 걸리면 뒤 사람들의 요약이 모두 밀린다.
+-import { SendTimeoutError } from '../adapters/errors.js'
+ 
+ /**
+- * fn을 부르고 걸린 시간을 잰다. 제한 시간을 넘기면 시간 초과로 본다.
++ * fn을 부르고 걸린 시간을 잰다. fn이 값을 돌려줬으면 제한 시간을 넘겼어도 성공이다.
++ * 이미 나간 메일을 시간 초과로 보고 다시 보내면 같은 요약이 여러 통 전달된다.
++ * timeoutMs는 지금 쓰이지 않는다(실제로 발송을 중단하는 방식이 아니면 제한 시간으로 실패 처리하지 않는다).
+  * @template T
+  * @param {{ now(): number }} clock
+  * @param {number} timeoutMs
+@@ -14,8 +15,5 @@ export async function withDeadline(clock, timeoutMs, fn) {
+   const started = clock.now()
+   const value = await fn()
+   const elapsedMs = clock.now() - started
+-  if (elapsedMs > timeoutMs) {
+-    throw new SendTimeoutError(`요약 발송이 제한 시간 ${timeoutMs}ms를 넘김 (${elapsedMs}ms)`)
+-  }
+   return { value, elapsedMs }
+ }
+diff --git a/base/src/digest/key.js b/tree/src/digest/key.js
+index d6827bd..8eaae33 100644
+--- a/base/src/digest/key.js
++++ b/tree/src/digest/key.js
+@@ -1,9 +1,9 @@
+ // 요약 한 통을 가리는 키. 발송 기록에 이 키로 남기고, 같은 키로 이미 보냈으면 다시 보내지 않는다.
++// 같은 기간·사용자면 어떤 실행(runId)이든 같은 키여야 재실행해도 중복되지 않는다. 실행별 집계는 기록의 runId로 본다.
+ 
+ /**
+- * @param {{ userId: string, period: string, runId: string }} job
++ * @param {{ userId: string, period: string }} job
+  */
+-export function digestKey({ userId, period, runId }) {
+-  // 실행마다 따로 남겨야 운영 화면에서 실행별로 몇 통 보냈는지 셀 수 있다
+-  return `digest:${period}:${runId}:${userId}`
++export function digestKey({ userId, period }) {
++  return `digest:${period}:${userId}`
+ }
+diff --git a/base/src/digest/runner.js b/tree/src/digest/runner.js
+index 25b7c36..a988cd1 100644
+--- a/base/src/digest/runner.js
++++ b/tree/src/digest/runner.js
+@@ -11,6 +11,8 @@ import { buildDigestMessage } from './message.js'
+ 
+ export function createDigestRunner({ clock, config, adapter, inbox, ledger, preferences, templates, metrics, logger }) {
+   const opts = () => config.digest
++  // 보내는 중인 요약 키. 같은 기간의 실행이 겹쳐도(수동 실행 등) 보내는 중인 요약은 다시 보내지 않는다
++  const inFlight = new Set()
+ 
+   /**
+    * @param {{ period: string, runId?: string }} args period는 요약할 날짜('YYYY-MM-DD')
+@@ -36,11 +38,12 @@ export function createDigestRunner({ clock, config, adapter, inbox, ledger, pref
+     while (pending.length) {
+       const again = []
+       for (const job of pending) {
+-        const key = digestKey({ userId: job.userId, period, runId })
+-        if (ledger.has(key)) {
++        const key = digestKey({ userId: job.userId, period })
++        if (ledger.has(key) || inFlight.has(key)) {
+           summary.already++
+           continue
+         }
++        inFlight.add(key)
+ 
+         const items = inbox.itemsFor(period, job.userId)
+         const message = buildDigestMessage({ ...job, period, items }, { templates, config })
+@@ -65,6 +68,8 @@ export function createDigestRunner({ clock, config, adapter, inbox, ledger, pref
+             logger.error('요약 발송 포기', { ...base, reason, error })
+             summary.failed++
+           }
++        } finally {
++          inFlight.delete(key)
+         }
+       }
+       if (again.length) await clock.sleep(opts().retryDelayMs)
+diff --git a/base/test/digest.test.js b/tree/test/digest.test.js
+index 1917fdb..3e03b39 100644
+--- a/base/test/digest.test.js
++++ b/tree/test/digest.test.js
+@@ -118,3 +118,68 @@ test('영구 오류는 다시 보내지 않는다', async () => {
+   assert.equal(mail.calls.length, 1)
+   assert.equal(notifier.digest.ledger.runSummary(summary.runId).failed, 1)
+ })
++
++// --- 같은 기간의 요약은 어떤 경로로든 고객에게 한 번만 전달된다 ---
++
++test('[최초 발송] 제한 시간을 넘겨 늦게 성공한 요약은 성공이고 다시 보내지 않는다', async () => {
++  const { notifier, clock, mail } = digestSetup({ mail: { outcomes: [{ latencyMs: 3500 }] } })
++  await notifier.handle(delivered('ord-1001-delivered', 'u-1', 'A-1001'))
++  clock.set(NEXT_MORNING)
++  const summary = await notifier.digest.tick()
++  assert.equal(summary.sent, 1)
++  assert.equal(summary.failed, 0)
++  assert.equal(mail.calls.length, 1)
++  assert.equal(mail.sent.length, 1)
++  assert.deepEqual(notifier.digest.ledger.forUser('u-1').map((e) => e.status), ['sent'])
++})
++
++test('[재시도] 실제 실패 뒤 재시도가 늦게 성공해도 한 번만 전달된다', async () => {
++  const { notifier, clock, mail } = digestSetup({
++    mail: { outcomes: [{ fail: 'timeout', latencyMs: 3500 }, { latencyMs: 3500 }] },
++  })
++  await notifier.handle(delivered('ord-1001-delivered', 'u-1', 'A-1001'))
++  clock.set(NEXT_MORNING)
++  const summary = await notifier.digest.tick()
++  assert.equal(summary.sent, 1)
++  assert.equal(mail.calls.length, 2)
++  assert.equal(mail.sent.length, 1)
++  assert.deepEqual(notifier.digest.ledger.forUser('u-1').map((e) => e.status), ['retry', 'sent'])
++})
++
++test('[재실행] 같은 기간을 다른 runId로 다시 돌려도 이미 보낸 요약은 다시 보내지 않는다', async () => {
++  const { notifier, clock, mail } = digestSetup()
++  await notifier.handle(delivered('ord-1001-delivered', 'u-1', 'A-1001'))
++  clock.set(NEXT_MORNING)
++  const first = await notifier.digest.run({ period: '2026-09-21', runId: 'run-a' })
++  const second = await notifier.digest.run({ period: '2026-09-21', runId: 'run-b' })
++  assert.equal(first.sent, 1)
++  assert.equal(second.sent, 0)
++  assert.equal(second.already, 1)
++  assert.equal(mail.sent.length, 1)
++})
++
++test('[재실행] 실제로 실패해 포기한 요약은 다음 실행에서 다시 보내고 결국 한 번 전달된다', async () => {
++  const { notifier, clock, mail } = digestSetup({ mail: { outcomes: [{ fail: 'permanent' }] } })
++  await notifier.handle(delivered('ord-1001-delivered', 'u-1', 'A-1001'))
++  clock.set(NEXT_MORNING)
++  const first = await notifier.digest.run({ period: '2026-09-21', runId: 'run-a' })
++  assert.equal(first.failed, 1)
++  assert.equal(mail.sent.length, 0)
++  const second = await notifier.digest.run({ period: '2026-09-21', runId: 'run-b' })
++  assert.equal(second.sent, 1)
++  const third = await notifier.digest.run({ period: '2026-09-21', runId: 'run-c' })
++  assert.equal(third.sent, 0)
++  assert.equal(mail.sent.length, 1)
++})
++
++test('[재실행] 같은 기간의 실행이 겹쳐도 보내는 중인 요약은 한 번만 전달된다', async () => {
++  const { notifier, clock, mail } = digestSetup({ mail: { outcomes: [{ latencyMs: 500 }] } })
++  await notifier.handle(delivered('ord-1001-delivered', 'u-1', 'A-1001'))
++  clock.set(NEXT_MORNING)
++  const [a, b] = await Promise.all([
++    notifier.digest.run({ period: '2026-09-21', runId: 'run-a' }),
++    notifier.digest.run({ period: '2026-09-21', runId: 'run-b' }),
++  ])
++  assert.equal(a.sent + b.sent, 1)
++  assert.equal(mail.sent.length, 1)
++})

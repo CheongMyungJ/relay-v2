@@ -16,7 +16,8 @@
 | E6 k5 (21~25 × 5) | 25 | 149 |
 | E7 k6 (21~25 × 5) | 25 | 174 |
 | E8 k7 (21·22·23·25 × 5) | 20 | 194 (개발 끝) |
-| E9 마지막 비교 (h1, h2 × relay, base, m17 × 5) | 30 | 224 / 500 (끝) |
+| E9 마지막 비교 (h1, h2 × relay, base, m17 × 5) | 30 | 224 / 500 (실험 끝) |
+| E10 후속 1·2단계 평가 (26·27 × k8, k7 × 5, 21·22·23·25 × k8 × 5) | 40 | 264 / 500 |
 
 ## 준비 (실험 전, 준비한 세션이 적음)
 
@@ -250,3 +251,15 @@ E2에서 본 넷을 고친다. 모두 context.md의 지식 절 문구다(앱의 
 - 2026-10-04 1단계 구현(설계 D293, D294): 지식 파일 형식(`kind`, `source`, `anchor`, `## 규칙`과 `## 아직 규칙을 따르지 않는 곳`, 영역 폴더)과 verify handoff의 새·고친 지식 줄을 앱이 확인한다. 평가는 아직 하지 않았다(새 지표와 시나리오가 필요, `followup.md` 5절).
 - 2026-10-04 2단계 구현(설계 D295): 지식이 8,000자를 넘으면 요청, intent, diff, 바꾼 지식을 단서로 관련 항목만 고른다(15개 본문, 20개 제목). 1·2단계를 한 번에 평가하기로 했다.
 - 2026-10-04 E10 준비: 새 지표 도구 `eval/knowledge-quality.mjs`와 기준 파일(`eval/knowledge-truth/`), 개발용 시나리오 26·27(포인트 도메인, `check-scenario` 통과). 도구를 h1 결과(E9)에 돌려 손으로 본 낡은 항목(실행 3·5)과 같음을 확인했다. 계획은 `followup.md` 9절. 예산: 40회 더함(224 → 264).
+
+### E10 — 후속 1·2단계 평가 (2026-10-04)
+
+- 명령: `bash app/eval/ref-app.sh k8 77fd717` 뒤 `node eval/run.mjs --scenarios 26,27 --runs 5 --parallel 2 --arms k8,k7 --app k8=/tmp/relay-ref/k8/app,k7=/tmp/relay-ref/k7/app --no-judge --out eval/results/e10-points`, `node eval/run.mjs --scenarios 21,22,23,25 --runs 5 --parallel 2 --arms k8 --app k8=/tmp/relay-ref/k8/app --no-judge --out eval/results/e10-k8`. 지표는 `node eval/primary.mjs eval/results/e10-points --pair k8:k7`, `node eval/primary.mjs eval/results/e8-k7 eval/results/e10-k8 --pair k8:k7`, `node eval/knowledge-quality.mjs eval/results/e10-points eval/results/e10-k8 eval/results/e8-k7`.
+- 실행 40개, 도구 문제 0, 누적 264. 모든 재는 Work가 숨긴 시험을 통과했다(PM2 양쪽 1.00).
+- 남은 지식의 질(실행당 평균, k7 → k8): 26 낡은 항목 1.60 → 0.00, 어긋난 짝 1.60 → 0.40, 상태를 규칙으로 1.00 → 0.40, 파일 3.8 → 2.0. 26의 Work 3은 k8에서 5회 모두 1% 항목을 "고친 지식"으로 같은 경로에서 고쳤다. 27 낡은 항목 1.00 → 0.80, 어긋난 짝 0.40 → 0.20, 상태를 규칙으로 0 → 0.
+- 27에서 본 것: Work 1의 사람 말 "선물하기 적립은 이번에 손대지 말라, 다음에 따로 고친다"(한 Work의 범위)를 k8은 5회 가운데 3회 `kind: rule`의 "gift-points.js는 수정하지 않는다"로 남겼다. 팀원 Work는 그 중 2회(실행 3·5) gift-points.js를 고치지 않고 gift-order.js가 earnPoints를 쓰게 돌려 옛 계산이 호출처 없이 남았다(숨긴 시험은 통과). k7 팀원은 5회 모두 gift-points.js를 고쳤다. 고친 뒤 "아직 규칙을 따르지 않는 곳"이나 "수정하지 않는다"를 지우지 않은 것이 27의 낡은 항목이다.
+- 주지표: 26 PM1 k7 2.00, k8 2.40(차이 0.40 [−1.20, 2.00]). 다시 알려 준 것은 거의 Work 2에서다. Work 2의 회수 규칙을 묻는 답이 적립 규정과 붙어 있어 시나리오가 PM1을 가르기 어렵다.
+- 퇴보 확인(21·22·23·25, E8의 k7 대 k8): PM1 −0.07 [−0.20, 0.00], PM2 0. 참고 지표는 k8 쪽(질문 −0.55, 사람 차례 −1.1, 재는 Work 토큰 −166천)이지만 실행한 날이 달라 잡음일 수 있다.
+- kind 분포(k8 30회, 남은 파일 74개): rule 73%, pitfall 23%, fact 4%, history 0%. 판정이 kind가 내용과 맞지 않다고 본 것 0개. 지식 확인으로 verify가 되돌려진 것 1회(rule이 아닌 항목에 "아직 규칙을 따르지 않는 곳").
+- 2단계(좁히기)는 이번에 쓰이지 않았다: 넣은 지식이 가장 많을 때 5,448자로 상한 8,000자 아래.
+- 도구 고침: 팀원 Work의 events.jsonl을 찾는 경로와 지식 되돌림을 가르는 방법(오류의 파일이 `docs/knowledge/`이거나 말에 "지식")을 고쳤다.

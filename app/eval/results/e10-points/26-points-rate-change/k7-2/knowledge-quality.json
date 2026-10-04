@@ -1,0 +1,92 @@
+{
+  "paths": [
+    "docs/knowledge/partial-refund-points-recovery.md",
+    "docs/knowledge/points-earn-rule.md",
+    "docs/knowledge/points-earned-no-recalc.md",
+    "docs/knowledge/points-rate-by-order-type.md",
+    "docs/knowledge/receipt-format-frozen.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/partial-refund-points-recovery.md",
+        "stale": true,
+        "staleWhy": "회수 공식과 예시에서 적립률 '× 1%'를 지금 값처럼 적었다. 지금 적립률은 2%다.",
+        "stateAsRule": true,
+        "stateWhy": "환불 회수에 1%를 쓴다고 정해진 규칙처럼 적었다. 새 적립률(2%)을 쓸지 옛 적립률(1%)을 쓸지는 아직 정하지 않았다.",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/points-earn-rule.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/points-earned-no-recalc.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/points-rate-by-order-type.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": true,
+        "stateWhy": "'부분 환불 회수는 1% 그대로'라고 확정된 사실처럼 적었고 '후자를 2로 올리면 틀리다'고 단정했다. 환불 회수에 어느 적립률을 쓸지는 정하지 않았다.",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/receipt-format-frozen.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [
+      {
+        "a": "docs/knowledge/partial-refund-points-recovery.md",
+        "b": "docs/knowledge/points-earn-rule.md",
+        "why": "적립 포인트 계산에 쓰는 적립률이 서로 다르다. 환불 파일은 1%, 적립 파일은 2%다. 지금 적립률은 2%다."
+      }
+    ],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "points-earn-rule.md에 (상품 − 쿠폰 − 사용 포인트) 기준이고 배송비는 제외한다고 적혀 있다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "points-earn-rule.md에 1P 미만을 버리고 올리지 않는다고 적혀 있다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "points-earn-rule.md와 points-rate-by-order-type.md에 일반 주문 적립률 2%가 적혀 있다. 1%는 변경 전 예시나 이력으로만 나온다."
+      },
+      {
+        "id": "R4",
+        "status": "correct",
+        "why": "partial-refund-points-recovery.md에 저장된 points.earned에서 남은 상품으로 다시 계산한 적립을 빼는 구조가 맞게 적혀 있다."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "points-earned-no-recalc.md에 이미 적립된 포인트는 재계산하지 않고 저장된 값을 쓴다고 적혀 있다."
+      }
+    ]
+  }
+}

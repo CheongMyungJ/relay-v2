@@ -1,0 +1,61 @@
+{
+  "paths": [
+    "docs/knowledge/earn-points-basis-excludes-shipping.md",
+    "docs/knowledge/gift-points-shared-with-other-team.md",
+    "docs/knowledge/saved-earned-points-never-recalculated.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/earn-points-basis-excludes-shipping.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": false,
+        "kindWhy": "머리글은 '사실'인데 내용은 적립 기준 금액·1%·1P 버림이라는 따라야 할 계산 규칙이라 rule이 맞다."
+      },
+      {
+        "path": "docs/knowledge/gift-points-shared-with-other-team.md",
+        "stale": true,
+        "staleWhy": "'선물하기 적립 코드는 바꾸지 않는다', '함부로 바꾸지 않는다'를 지금 규칙처럼 적었으나 선물하기도 규정대로 이미 고쳤다.",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/saved-earned-points-never-recalculated.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "earn-points-basis-excludes-shipping.md에 상품 금액-쿠폰-사용 포인트이고 배송비 제외로 적혀 있다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "같은 파일에 1P 단위로 버린다고 적혀 있다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "같은 파일 제목에 1%로 적혀 있다."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "saved-earned-points-never-recalculated.md에 저장된 값을 쓰고 재계산하지 않는다고 적혀 있다."
+      }
+    ]
+  }
+}

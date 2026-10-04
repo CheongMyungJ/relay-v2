@@ -1,0 +1,29 @@
+---
+schema_version: 1
+version: 1
+type: bugfix
+---
+## 목표
+`npm run test:ci`의 `ci/archive.test.js`가 가끔 실패하는 문제를 고친다. 밤 배치 뒤 보고서가 보관소에 제대로 남아야 한다.
+
+## 비목표
+- `ci/batch.test.js`의 간헐 실패는 따로 고쳐 리뷰 중이므로 다루지 않는다.
+- 배치의 병렬 실행(동시 4개)을 순차로 되돌리지 않는다.
+
+## 원하는 결과
+밤 배치를 몇 번을 돌려도 보고서가 모두 보관소에 저장되고, 보관본마다 제 고객사와 합계가 남는다. 임시 파일이 남지 않는다. 실패 때 보이던 `ENOENT: 파일이 없습니다: reports/2026-09/.<꼬리표>.tmp`와 `report-6 보관본의 고객사가 다르다: wayne (stark여야 함)`이 나오지 않는다.
+
+## 완료조건
+- [ ] 재현 절차(`npm run test:ci`를 반복 실행)가 더 이상 실패하지 않는다
+- [ ] `npm test`가 통과한다
+- [ ] 기존 테스트를 약화하거나 삭제하지 않는다
+- [ ] `npm run test:ci`를 여러 번 반복 실행한 결과(실행 횟수와 통과 횟수)가 모두 통과로 제시된다
+- [ ] `ci/archive.test.js`에 재시도 추가, skip, 시간 제한 늘리기를 하지 않는다
+- [ ] 배치의 병렬 실행(동시 4개)이 그대로 유지된다
+
+## 제약
+- (팀 지식 `docs/knowledge/testing/flaky-test-fix-policy.md`) 시험에 재시도 추가, skip, 시간 제한 늘리기는 간헐 실패의 해결이 아니다. 근본 원인을 고치고, 근거는 `npm run test:ci` 반복 실행 결과(실행 횟수와 통과 횟수)로 보인다.
+- (팀 지식 `docs/knowledge/batch/parallel-concurrency-must-stay.md`) 순서나 충돌 문제는 병렬을 끄지 않고 원인을 고쳐 해결한다.
+
+## 추가 의견
+- 로컬 `npm test`는 지연이 없어 늘 통과하므로 `ci/` 시험으로만 확인할 수 있다.

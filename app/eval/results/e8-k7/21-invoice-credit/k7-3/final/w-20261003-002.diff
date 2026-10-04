@@ -1,0 +1,118 @@
+diff --git a/tree/docs/knowledge/cn-0112-refund-total.md b/tree/docs/knowledge/cn-0112-refund-total.md
+new file mode 100644
+index 0000000..b287dae
+--- /dev/null
++++ b/tree/docs/knowledge/cn-0112-refund-total.md
+@@ -0,0 +1,9 @@
++# CN-0112(INV-2047 반품)의 환불 합계는 부가세 1,742원, 합계 19,180원이다
++
++- 종류: 사실
++- 적용: `examples/CN-0112.json`, `examples/INV-2047.json`, 반품 전표 부가세 검증
++- 출처: 조사로 알아냄, relay Work w-20261003-002, 2026-10-03
++
++공급가액 17,438원 + 부가세 1,742원(줄별 버림 923+612+207) = 19,180원. 예전 계산은 1,744원/19,182원이었다.
++회계팀 규칙을 현재 할인 반올림(5% 할인 줄 322.5 → 323원)에 적용해 계산한 값이며 회계팀 확인은 아직 못 받았다. 회계팀 값이 다르면 이 항목을 고친다.
++`test/credit-note.test.js`가 예제 파일을 읽어 이 값을 확인한다.
+diff --git a/tree/docs/knowledge/credit-note-vat-separate-copy.md b/tree/docs/knowledge/credit-note-vat-separate-copy.md
+new file mode 100644
+index 0000000..d2243d7
+--- /dev/null
++++ b/tree/docs/knowledge/credit-note-vat-separate-copy.md
+@@ -0,0 +1,9 @@
++# 반품 전표 부가세는 청구서와 별도 복사본이라 청구서 규칙이 따라가지 않는다
++
++- 종류: 실패 유형
++- 적용: `src/invoice/credit-note.js` `creditTotals`
++- 출처: 사람이 알려 줌, relay Work w-20261003-001, 2026-10-03 (w-20261003-002에서 갱신)
++
++`creditTotals`는 청구서의 `computeTotals`와 별도로 부가세를 계산하며 합계에 반올림하는 방식이 남아 있었다. 청구서 부가세 규칙(줄별 버림)을 바꿀 때 반품 전표는 자동으로 바뀌지 않는다.
++w-20261003-001에서는 사람이 청구서만 고치기로 했고, 이어서 w-20261003-002에서 반품 전표도 같은 규칙(과세 줄별 버림 후 합산, 면세 줄 제외, 영세율 0원)으로 맞췄다.
++부가세 규칙을 다시 바꿀 때는 `computeTotals`와 `creditTotals` 두 곳을 함께 본다. 저장된 기존 반품 전표의 `totals`는 재계산하지 않는다(그 Work의 비목표).
+diff --git a/base/src/invoice/credit-note.js b/tree/src/invoice/credit-note.js
+index 6e6fe7d..96f715d 100644
+--- a/base/src/invoice/credit-note.js
++++ b/tree/src/invoice/credit-note.js
+@@ -87,7 +87,10 @@ export function creditTotals(note) {
+   const taxable = sumWon(rows.filter((r) => r.taxable).map((r) => r.net))
+   const exempt = sumWon(rows.filter((r) => !r.taxable).map((r) => r.net))
+   const supply = taxable + exempt
+-  const vat = note.zeroRated ? 0 : Math.round((taxable * VAT_RATE_PERCENT) / 100)
++  // 부가세는 과세 줄마다 원 단위로 버린 뒤 합산한다(회계팀 규칙). 합계에 곱해 반올림하지 않는다
++  const vat = note.zeroRated
++    ? 0
++    : sumWon(rows.filter((r) => r.taxable).map((r) => Math.floor((r.net * VAT_RATE_PERCENT) / 100)))
+   return { supply, taxable, exempt, vat, total: supply + vat }
+ }
+ 
+diff --git a/base/test/credit-note.test.js b/tree/test/credit-note.test.js
+index 5c7f920..3f14809 100644
+--- a/base/test/credit-note.test.js
++++ b/tree/test/credit-note.test.js
+@@ -1,3 +1,4 @@
++import { readFileSync } from 'node:fs'
+ import { test } from 'node:test'
+ import assert from 'node:assert'
+ import { creditNoteEntries, ledger } from '../src/export/ledger.js'
+@@ -81,3 +82,62 @@ test('반품 전표 분개', () => {
+     ['INV-0100', 'INV-0100', 'INV-0100', 'CN-0001', 'CN-0001', 'CN-0001'],
+   )
+ })
++
++test('부가세는 과세 줄마다 버림 후 합산한다', () => {
++  // 줄별: floor(923.6)=923, floor(612.7)=612, floor(207.5)=207 → 1742. 합계 17438 × 10% 반올림이면 1744
++  const invoice = issueInvoice(
++    createInvoice({
++      customerId: 'C-0388',
++      lines: [
++        { sku: 'A', name: '박스테이프', unitPrice: 1342, qty: 8, discount: { amount: 1500 } },
++        { sku: 'B', name: '형광펜', unitPrice: 2150, qty: 6, discount: { percent: 5 } },
++        { sku: 'C', name: '지우개', unitPrice: 415, qty: 9 },
++      ],
++    }),
++    { number: 'INV-2047', issueDate: '2026-09-24' },
++  )
++  const cn = createCreditNote(invoice, {
++    number: 'CN-0112',
++    issueDate: '2026-10-06',
++    reason: '파손',
++    returns: [
++      { sku: 'A', qty: 8 },
++      { sku: 'B', qty: 3 },
++      { sku: 'C', qty: 5 },
++    ],
++  })
++  assert.deepStrictEqual(cn.totals, { supply: 17438, taxable: 17438, exempt: 0, vat: 1742, total: 19180 })
++})
++
++test('반품 전표 부가세: 면세 줄 제외', () => {
++  // 과세 1,009 → 100(버림), 면세 줄은 부가세 없음
++  const cn = note([
++    { sku: 'OF-1450', qty: 1 },
++    { sku: 'BK-1800', qty: 1 },
++  ])
++  assert.strictEqual(cn.totals.vat, 145)
++  assert.strictEqual(cn.totals.exempt, 18000)
++  const odd = createCreditNote(
++    issueInvoice(createInvoice({ customerId: 'C-1', lines: [{ sku: 'X', name: 'x', unitPrice: 1009, qty: 1 }, { sku: 'Y', name: 'y', unitPrice: 1009, qty: 1 }] }), { number: 'INV-0101', issueDate: '2026-09-01' }),
++    { number: 'CN-0002', issueDate: '2026-09-10', reason: '파손', returns: [{ sku: 'X', qty: 1 }, { sku: 'Y', qty: 1 }] },
++  )
++  assert.strictEqual(odd.totals.vat, 200) // 줄마다 100.9 → 100, 합계 2018 × 10% = 201.8 → 202가 아니다
++})
++
++test('반품 전표 부가세: 영세율은 0원', () => {
++  const zr = issueInvoice(
++    createInvoice({ customerId: 'C-1', zeroRated: true, lines: [{ sku: 'X', name: 'x', unitPrice: 1009, qty: 3 }] }),
++    { number: 'INV-0102', issueDate: '2026-09-01' },
++  )
++  const cn = createCreditNote(zr, { number: 'CN-0003', issueDate: '2026-09-10', reason: '파손', returns: [{ sku: 'X', qty: 2 }] })
++  assert.strictEqual(cn.totals.vat, 0)
++  assert.strictEqual(cn.totals.total, 2018)
++})
++
++test('examples/CN-0112.json의 환불 합계는 부가세 1,742원, 합계 19,180원이다', () => {
++  const read = (name) => JSON.parse(readFileSync(new URL(`../examples/${name}`, import.meta.url), 'utf8'))
++  const invoice = issueInvoice(createInvoice(read('INV-2047.json')), { number: 'INV-2047', issueDate: '2026-09-24' })
++  const cn = createCreditNote(invoice, read('CN-0112.json'))
++  assert.strictEqual(cn.totals.vat, 1742)
++  assert.strictEqual(cn.totals.total, 19180)
++})

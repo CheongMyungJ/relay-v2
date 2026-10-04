@@ -1,0 +1,108 @@
+diff --git a/tree/docs/knowledge/invoice/issued-invoice-totals-and-format.md b/tree/docs/knowledge/invoice/issued-invoice-totals-and-format.md
+new file mode 100644
+index 0000000..c70cae6
+--- /dev/null
++++ b/tree/docs/knowledge/invoice/issued-invoice-totals-and-format.md
+@@ -0,0 +1,12 @@
++---
++kind: rule
++source: human
++---
++# 발행된 청구서는 재계산하지 않고, src/format/ 출력 형식은 바꾸지 않는다
++
++## 규칙
++- 발행된 청구서는 합계를 다시 계산하지 않고 저장된 `totals`를 쓴다 (`invoiceTotals`). 계산 규칙이 바뀌어도 발행분에는 소급하지 않는다.
++- `src/format/` 출력 형식은 PDF 생성기가 쓰므로 바꾸지 않는다.
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-001, 사람이 알려 줌)
+diff --git a/tree/docs/knowledge/invoice/vat-per-line-floor.md b/tree/docs/knowledge/invoice/vat-per-line-floor.md
+new file mode 100644
+index 0000000..e162b43
+--- /dev/null
++++ b/tree/docs/knowledge/invoice/vat-per-line-floor.md
+@@ -0,0 +1,17 @@
++---
++kind: rule
++source: human
++anchor: computeTotals
++---
++# 청구서 부가세는 줄마다 원 단위 버림 후 합산한다
++
++## 규칙
++- 부가세는 품목 줄마다 (할인 적용 후 과세 공급가액 × 세율)을 원 단위로 버림(`Math.floor`)해 구하고, 그 합을 청구서 부가세로 쓴다. 합계에서 다시 반올림하지 않는다 (회계팀 방식).
++- 할인은 부가세 전에 줄마다 적용한다. 면세 줄은 합산에서 제외하고, 영세율 청구서는 0이다.
++- 예: INV-2031은 줄별 536+633+325+837+310 = 2,641원, 합계 29,079원 (합계 기준 반올림이면 2,644원).
++
++## 아직 규칙을 따르지 않는 곳
++- src/invoice/credit-note.js: `creditTotals`는 아직 합계 기준 `Math.round`라 청구서와 계산 방식이 다르다 (이번 Work에서는 범위 밖으로 둠).
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-001, 사람이 알려 줌)
+diff --git a/base/src/invoice/total.js b/tree/src/invoice/total.js
+index 6c97af3..df77d1d 100644
+--- a/base/src/invoice/total.js
++++ b/tree/src/invoice/total.js
+@@ -13,9 +13,14 @@ export function lineAmounts(invoice) {
+   })
+ }
+ 
++// 줄의 부가세. 할인된 공급가액에 세율을 곱해 원 단위로 버린다 (회계팀 방식)
++function lineVat(row) {
++  return Math.floor((row.net * VAT_RATE_PERCENT) / 100)
++}
++
+ // 청구서 합계
+ //   subtotal: 할인 전 금액 합, discount: 할인 합, supply: 공급가액 합
+-//   taxable / exempt: 공급가액 중 과세분 / 면세분, vat: 부가세, total: 청구 합계
++//   taxable / exempt: 공급가액 중 과세분 / 면세분, vat: 줄별 부가세의 합, total: 청구 합계
+ export function computeTotals(invoice) {
+   const rows = lineAmounts(invoice)
+   const subtotal = sumWon(rows.map((r) => r.gross))
+@@ -23,6 +28,6 @@ export function computeTotals(invoice) {
+   const taxable = sumWon(rows.filter((r) => r.taxable).map((r) => r.net))
+   const exempt = sumWon(rows.filter((r) => !r.taxable).map((r) => r.net))
+   const supply = taxable + exempt
+-  const vat = invoice.zeroRated ? 0 : Math.round((taxable * VAT_RATE_PERCENT) / 100)
++  const vat = invoice.zeroRated ? 0 : sumWon(rows.filter((r) => r.taxable).map(lineVat))
+   return { subtotal, discount, supply, taxable, exempt, vat, total: supply + vat }
+ }
+diff --git a/base/test/total.test.js b/tree/test/total.test.js
+index 5b9aafd..3cb3205 100644
+--- a/base/test/total.test.js
++++ b/tree/test/total.test.js
+@@ -60,3 +60,34 @@ test('단가 0원 품목(증정품)', () => {
+   ])
+   assert.strictEqual(computeTotals(inv).total, 15290)
+ })
++
++test('부가세는 줄마다 원 단위 버림 후 합산한다 (INV-2031)', () => {
++  const inv = draft([
++    { name: '박스테이프', unitPrice: 1342, qty: 4 },
++    { name: '네임펜 흑', unitPrice: 905, qty: 7 },
++    { name: '스테이플러 심', unitPrice: 1085, qty: 3 },
++    { name: '수정테이프', unitPrice: 1675, qty: 5 },
++    { name: '볼펜 0.5 흑', unitPrice: 345, qty: 9 },
++  ])
++  const t = computeTotals(inv)
++  assert.strictEqual(t.supply, 26438)
++  // 합계 과세분 기준이면 2644 (26438 × 10% 반올림). 줄별 536+633+325+837+310
++  assert.strictEqual(t.vat, 2641)
++  assert.strictEqual(t.total, 29079)
++})
++
++test('할인된 줄 금액에 줄별로 부가세를 매기고, 면세 줄은 제외한다', () => {
++  const inv = draft([
++    { name: 'A', unitPrice: 1234, qty: 1, discount: { percent: 10 } }, // 할인 123 → 1111 → 111
++    { name: 'B', unitPrice: 999, qty: 1 }, // 99
++    { name: 'C', unitPrice: 5555, qty: 1, taxType: 'exempt' },
++  ])
++  const t = computeTotals(inv)
++  assert.strictEqual(t.vat, 210)
++  assert.strictEqual(t.total, t.supply + 210)
++})
++
++test('영세율 청구서는 줄별 계산에서도 부가세 0', () => {
++  const inv = draft([{ name: 'A', unitPrice: 1239, qty: 3 }], { zeroRated: true })
++  assert.strictEqual(computeTotals(inv).vat, 0)
++})

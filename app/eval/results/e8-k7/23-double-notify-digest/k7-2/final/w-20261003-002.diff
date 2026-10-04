@@ -1,0 +1,297 @@
+diff --git a/tree/docs/knowledge/digest-runs-on-two-servers.md b/tree/docs/knowledge/digest-runs-on-two-servers.md
+new file mode 100644
+index 0000000..36ae699
+--- /dev/null
++++ b/tree/docs/knowledge/digest-runs-on-two-servers.md
+@@ -0,0 +1,10 @@
++# 요약 작업은 서버 두 대에서 같이 돌고 배포일 아침에는 한 번 더 돈다
++
++- 종류: 사실
++- 적용: src/digest/ (runner.js, ledger.js, key.js, scheduler.js)
++- 출처: 사람이 알려 줌, relay Work w-20261003-002, 2026-10-03
++
++운영에서 아침 요약 작업은 서버 두 대에서 함께 돌고, 배포일 아침에는 재시작으로 한 번 더 돈다. scheduler의 lastPeriod는 서버별 메모리라 서로를 모른다.
++- 맞다: 중복 확인을 서버가 같이 쓰는 발송 기록(공용 DB)의 키로 하고, 확인과 선점을 한 번에 한다(보내기 전에 키 삽입, 이미 있으면 건너뜀). 못 보냈으면 키를 풀어 재시도와 재실행이 보낼 수 있게 한다.
++- 틀리다: `has`로 확인하고 보낸 뒤 `markSent`하기(두 서버가 동시에 통과함), 키에 runId·서버 이름 넣기, 실패해도 키를 남겨 재시도를 막기.
++- 새 요약 경로를 추가하면 "서버 두 대 동시 실행"과 "배포일 재실행"을 경로로 보고 테스트한다(test/digest.test.js의 twoServers).
+diff --git a/base/src/digest/deadline.js b/tree/src/digest/deadline.js
+index afc5a84..3e2e328 100644
+--- a/base/src/digest/deadline.js
++++ b/tree/src/digest/deadline.js
+@@ -1,21 +1,18 @@
+ // 요약 발송 한 건의 제한 시간.
+ // 요약은 아침에 한꺼번에 수천 통을 보내므로, 한 사람에게 오래 걸리면 뒤 사람들의 요약이 모두 밀린다.
+-import { SendTimeoutError } from '../adapters/errors.js'
++// 보내기는 성공했는데 느렸을 뿐이면 실패로 보지 않는다(다시 보내면 같은 요약이 두 통 간다). slow로만 알린다.
+ 
+ /**
+- * fn을 부르고 걸린 시간을 잰다. 제한 시간을 넘기면 시간 초과로 본다.
++ * fn을 부르고 걸린 시간을 잰다. 제한 시간을 넘기면 slow로 표시한다. 던진 오류는 그대로 올라간다.
+  * @template T
+  * @param {{ now(): number }} clock
+  * @param {number} timeoutMs
+  * @param {() => Promise<T>} fn
+- * @returns {Promise<{ value: T, elapsedMs: number }>}
++ * @returns {Promise<{ value: T, elapsedMs: number, slow: boolean }>}
+  */
+ export async function withDeadline(clock, timeoutMs, fn) {
+   const started = clock.now()
+   const value = await fn()
+   const elapsedMs = clock.now() - started
+-  if (elapsedMs > timeoutMs) {
+-    throw new SendTimeoutError(`요약 발송이 제한 시간 ${timeoutMs}ms를 넘김 (${elapsedMs}ms)`)
+-  }
+-  return { value, elapsedMs }
++  return { value, elapsedMs, slow: elapsedMs > timeoutMs }
+ }
+diff --git a/base/src/digest/key.js b/tree/src/digest/key.js
+index d6827bd..a4cd28d 100644
+--- a/base/src/digest/key.js
++++ b/tree/src/digest/key.js
+@@ -1,9 +1,10 @@
+ // 요약 한 통을 가리는 키. 발송 기록에 이 키로 남기고, 같은 키로 이미 보냈으면 다시 보내지 않는다.
+ 
+ /**
+- * @param {{ userId: string, period: string, runId: string }} job
++ * runId는 키에 넣지 않는다. 넣으면 재실행 때 이미 보낸 요약을 못 알아본다.
++ * 실행별 건수는 발송 기록(ledger)의 항목에 남는 runId로 센다.
++ * @param {{ userId: string, period: string }} job
+  */
+-export function digestKey({ userId, period, runId }) {
+-  // 실행마다 따로 남겨야 운영 화면에서 실행별로 몇 통 보냈는지 셀 수 있다
+-  return `digest:${period}:${runId}:${userId}`
++export function digestKey({ userId, period }) {
++  return `digest:${period}:${userId}`
+ }
+diff --git a/base/src/digest/ledger.js b/tree/src/digest/ledger.js
+index df32de4..e577f17 100644
+--- a/base/src/digest/ledger.js
++++ b/tree/src/digest/ledger.js
+@@ -14,6 +14,17 @@ export function createDigestLedger({ clock, ttlMs, limit = 10_000 }) {
+ 
+   return {
+     has: (key) => sentKeys.has(key),
++    /**
++     * 보내기 전에 키를 선점한다. 이미 보냈거나 다른 쪽이 보내는 중이면 false.
++     * 확인과 선점이 한 번에 일어나야 서버 두 대가 동시에 돌아도 한 쪽만 보낸다(공용 DB에서는 키 삽입 충돌로 구현한다).
++     */
++    claim(key) {
++      if (sentKeys.has(key)) return false
++      sentKeys.add(key)
++      return true
++    },
++    /** 보내지 못했으면 선점을 풀어 다시 보낼 수 있게 한다 */
++    release: (key) => sentKeys.delete(key),
+     markSent(key, entry) {
+       sentKeys.add(key)
+       record({ ...entry, status: 'sent' })
+diff --git a/base/src/digest/runner.js b/tree/src/digest/runner.js
+index 25b7c36..00975a9 100644
+--- a/base/src/digest/runner.js
++++ b/tree/src/digest/runner.js
+@@ -2,7 +2,7 @@
+ //
+ // 한 번의 실행:
+ //   1. 기간에 알림이 모인 사용자마다 받을 주소를 정한다(주소가 없거나 메일을 거부했으면 건너뛴다)
+-//   2. 이미 보낸 요약(발송 기록의 키)이면 건너뛰고, 아니면 보낸다
++//   2. 이미 보냈거나 다른 쪽이 보내는 중인 요약(발송 기록의 키)이면 건너뛰고, 아니면 키를 선점하고 보낸다
+ //   3. 일시적 오류로 못 보낸 사람은 retryDelayMs 뒤에 다시 보낸다(첫 발송 포함 maxAttempts번까지)
+ import { errorCode, isTransient } from '../adapters/errors.js'
+ import { withDeadline } from './deadline.js'
+@@ -36,8 +36,8 @@ export function createDigestRunner({ clock, config, adapter, inbox, ledger, pref
+     while (pending.length) {
+       const again = []
+       for (const job of pending) {
+-        const key = digestKey({ userId: job.userId, period, runId })
+-        if (ledger.has(key)) {
++        const key = digestKey({ userId: job.userId, period })
++        if (!ledger.claim(key)) {
+           summary.already++
+           continue
+         }
+@@ -47,12 +47,18 @@ export function createDigestRunner({ clock, config, adapter, inbox, ledger, pref
+         const base = { runId, period, userId: job.userId, attempt: job.attempt, items: items.length }
+ 
+         try {
+-          const { value, elapsedMs } = await withDeadline(clock, opts().sendTimeoutMs, () => adapter.send(message))
++          const { value, elapsedMs, slow } = await withDeadline(clock, opts().sendTimeoutMs, () => adapter.send(message))
+           metrics.observe('digest.send.ms', elapsedMs)
++          if (slow) {
++            metrics.increment('digest.slow')
++            logger.warn('요약 발송이 느렸지만 성공함', { ...base, elapsedMs, timeoutMs: opts().sendTimeoutMs })
++          }
+           ledger.markSent(key, { ...base, providerId: value?.id })
+           metrics.increment('digest.sent')
+           summary.sent++
+         } catch (error) {
++          // 못 보냈으니 선점을 풀어야 재시도와 재실행이 보낼 수 있다
++          ledger.release(key)
+           const reason = errorCode(error)
+           if (isTransient(error) && job.attempt < opts().maxAttempts) {
+             ledger.record({ ...base, status: 'retry', reason })
+diff --git a/base/src/notifier.js b/tree/src/notifier.js
+index bb41aab..c3e8e46 100644
+--- a/base/src/notifier.js
++++ b/tree/src/notifier.js
+@@ -27,6 +27,7 @@ import { createTemplateRegistry } from './templates/registry.js'
+  * @param {{ mail?: object, push?: object }} [o.transports] 없으면 가짜 전송(보내지 않고 기록만)
+  * @param {object} [o.config] 기본 설정을 덮어쓸 값
+  * @param {object} [o.env] 환경 변수(보통 process.env)
++ * @param {object} [o.digestLedger] 서버끼리 같이 쓰는 요약 발송 기록(없으면 메모리)
+  * @param {object} [o.preferences] 사용자별 설정 초기값 또는 만들어 둔 store
+  */
+ export function createNotifier(o = {}) {
+@@ -67,7 +68,7 @@ export function createNotifier(o = {}) {
+   const retryWorker = createRetryWorker({ clock, queue: retryQueue, dispatcher, logger })
+ 
+   const digestInbox = createDigestInbox({ tzOffsetMinutes: config.digest.tzOffsetMinutes })
+-  const digestLedger = createDigestLedger({ clock, ttlMs: config.digest.ledgerTtlMs })
++  const digestLedger = o.digestLedger ?? createDigestLedger({ clock, ttlMs: config.digest.ledgerTtlMs })
+   const digestRunner = createDigestRunner({
+     clock,
+     config,
+diff --git a/base/test/digest.test.js b/tree/test/digest.test.js
+index 1917fdb..2d09386 100644
+--- a/base/test/digest.test.js
++++ b/tree/test/digest.test.js
+@@ -1,7 +1,11 @@
+ import assert from 'node:assert/strict'
+ import { test } from 'node:test'
++import { createFakeMailTransport, createFakePushTransport } from '../src/adapters/fake-transports.js'
++import { createVirtualClock } from '../src/clock.js'
++import { createDigestLedger } from '../src/digest/ledger.js'
++import { createNotifier } from '../src/notifier.js'
+ import { createDigestInbox, periodOf, previousPeriod } from '../src/digest/inbox.js'
+-import { setup } from './helpers.js'
++import { setup, START } from './helpers.js'
+ 
+ // 서울 9월 21일 오전 10시에 받은 알림은 9월 21일 요약에 들어가고, 22일 오전 8시가 지나면 나간다
+ const DIGEST_USERS = {
+@@ -118,3 +122,127 @@ test('영구 오류는 다시 보내지 않는다', async () => {
+   assert.equal(mail.calls.length, 1)
+   assert.equal(notifier.digest.ledger.runSummary(summary.runId).failed, 1)
+ })
++
++// ---- 요약 중복 발송: 경로마다 고객은 한 번만 받는다 ----
++
++test('경로 1: 제한 시간(3초)보다 느리게 성공한 요약은 다시 보내지 않는다', async () => {
++  const { notifier, clock, mail } = digestSetup({ mail: { latencyMs: 300, outcomes: [{ latencyMs: 3500 }] } })
++  await notifier.handle(delivered('ord-1001-delivered', 'u-1', 'A-1001'))
++  clock.set(NEXT_MORNING)
++  const summary = await notifier.digest.tick()
++  assert.equal(summary.sent, 1)
++  assert.equal(summary.failed, 0)
++  assert.equal(mail.sent.length, 1)
++  assert.equal(mail.calls.length, 1)
++  assert.deepEqual(notifier.digest.ledger.forUser('u-1').map((e) => e.status), ['sent'])
++})
++
++test('경로 2: 같은 기간 요약을 다른 실행(runId)으로 다시 돌려도 이미 보낸 고객에게는 보내지 않는다', async () => {
++  const { notifier, clock, mail } = digestSetup()
++  await notifier.handle(delivered('ord-1001-delivered', 'u-1', 'A-1001'))
++  await notifier.handle(delivered('ord-2001-delivered', 'u-2', 'B-2001'))
++  clock.set(NEXT_MORNING)
++  const first = await notifier.digest.run({ period: '2026-09-21' })
++  clock.advance(5000)
++  const second = await notifier.digest.run({ period: '2026-09-21' })
++  assert.notEqual(first.runId, second.runId)
++  assert.equal(first.sent, 2)
++  assert.equal(second.sent, 0)
++  assert.equal(second.already, 2)
++  assert.equal(mail.sent.length, 2)
++})
++
++test('경로 3: 느린 성공 뒤 재실행해도 한 통만 간다', async () => {
++  const { notifier, clock, mail } = digestSetup({ mail: { latencyMs: 300, outcomes: [{ latencyMs: 4000 }] } })
++  await notifier.handle(delivered('ord-1001-delivered', 'u-1', 'A-1001'))
++  clock.set(NEXT_MORNING)
++  await notifier.digest.run({ period: '2026-09-21' })
++  clock.advance(5000)
++  await notifier.digest.run({ period: '2026-09-21' })
++  assert.equal(mail.sent.length, 1)
++})
++
++test('실제로 실패한 요약(소켓 시간 초과)은 다시 보내 결국 한 번 전달된다', async () => {
++  const { notifier, clock, mail } = digestSetup({ mail: { latencyMs: 300, outcomes: [{ fail: 'timeout' }, { fail: 'timeout' }] } })
++  await notifier.handle(delivered('ord-1001-delivered', 'u-1', 'A-1001'))
++  clock.set(NEXT_MORNING)
++  const summary = await notifier.digest.tick()
++  assert.equal(summary.sent, 1)
++  assert.equal(mail.calls.length, 3)
++  assert.equal(mail.sent.length, 1)
++  assert.deepEqual(notifier.digest.ledger.forUser('u-1').map((e) => e.status), ['retry', 'retry', 'sent'])
++})
++
++test('실패 뒤 재실행하면 못 받은 고객에게만 한 번 보낸다', async () => {
++  const { notifier, clock, mail } = digestSetup({ mail: { latencyMs: 300, outcomes: [{}, { fail: 'permanent' }] } })
++  await notifier.handle(delivered('ord-1001-delivered', 'u-1', 'A-1001'))
++  await notifier.handle(delivered('ord-2001-delivered', 'u-2', 'B-2001'))
++  clock.set(NEXT_MORNING)
++  const first = await notifier.digest.run({ period: '2026-09-21' })
++  assert.deepEqual([first.sent, first.failed], [1, 1])
++  clock.advance(5000)
++  const second = await notifier.digest.run({ period: '2026-09-21' })
++  assert.deepEqual([second.sent, second.already], [1, 1])
++  assert.deepEqual(mail.sent.map((m) => m.to).sort(), ['mina@example.com', 'sam@example.com'])
++})
++
++// ---- 서버 두 대가 같은 발송 기록(공용 DB 대용)을 쓰는 경우 ----
++
++function twoServers(mailOpts = {}) {
++  const clock = createVirtualClock(START)
++  const digestLedger = createDigestLedger({ clock, ttlMs: 7 * 24 * 3600_000 })
++  const make = () => {
++    const mail = createFakeMailTransport({ clock, latencyMs: 300, ...mailOpts })
++    const push = createFakePushTransport({ clock })
++    return { mail, notifier: createNotifier({ clock, transports: { mail, push }, preferences: DIGEST_USERS, digestLedger }) }
++  }
++  return { clock, digestLedger, a: make(), b: make() }
++}
++
++test('서버 두 대가 동시에 같은 요약을 돌려도 고객은 한 통만 받는다', async () => {
++  const { clock, a, b } = twoServers()
++  for (const s of [a, b]) {
++    await s.notifier.handle(delivered('ord-1001-delivered', 'u-1', 'A-1001'))
++    await s.notifier.handle(delivered('ord-2001-delivered', 'u-2', 'B-2001'))
++  }
++  clock.set(NEXT_MORNING)
++  const [ra, rb] = await Promise.all([a.notifier.digest.run({ period: '2026-09-21' }), b.notifier.digest.run({ period: '2026-09-21' })])
++  assert.equal(a.mail.sent.length + b.mail.sent.length, 2)
++  assert.equal(ra.sent + rb.sent, 2)
++  assert.equal(ra.already + rb.already, 2)
++  assert.deepEqual([...a.mail.sent, ...b.mail.sent].map((m) => m.to).sort(), ['mina@example.com', 'sam@example.com'])
++})
++
++test('한 서버가 보낸 뒤 다른 서버가 시작해도 보내지 않는다', async () => {
++  const { clock, a, b } = twoServers()
++  for (const s of [a, b]) await s.notifier.handle(delivered('ord-1001-delivered', 'u-1', 'A-1001'))
++  clock.set(NEXT_MORNING)
++  await a.notifier.digest.tick()
++  const second = await b.notifier.digest.tick()
++  assert.equal(second.already, 1)
++  assert.equal(a.mail.sent.length + b.mail.sent.length, 1)
++})
++
++test('선점한 서버가 보내지 못하면 풀려서 재시도로 한 번 전달된다', async () => {
++  const { clock, digestLedger, a, b } = twoServers({ outcomes: [{ fail: 'timeout' }] })
++  for (const s of [a, b]) await s.notifier.handle(delivered('ord-1001-delivered', 'u-1', 'A-1001'))
++  clock.set(NEXT_MORNING)
++  // a가 보내다 실패하면 선점이 풀리고, 60초 뒤 재시도(또는 다른 서버)가 보낸다. 어느 쪽이든 합쳐서 한 통
++  const [ra, rb] = await Promise.all([a.notifier.digest.run({ period: '2026-09-21' }), b.notifier.digest.run({ period: '2026-09-21' })])
++  assert.equal(a.mail.sent.length + b.mail.sent.length, 1)
++  assert.equal(ra.failed + rb.failed, 0)
++  assert.equal(ra.sent + rb.sent, 1)
++  assert.equal(digestLedger.has('digest:2026-09-21:u-1'), true)
++})
++
++test('보내지 못하고 포기하면 선점이 풀려 재실행이 보낼 수 있다', async () => {
++  const { clock, digestLedger, a } = twoServers({ outcomes: [{ fail: 'permanent' }] })
++  await a.notifier.handle(delivered('ord-1001-delivered', 'u-1', 'A-1001'))
++  clock.set(NEXT_MORNING)
++  const first = await a.notifier.digest.run({ period: '2026-09-21' })
++  assert.equal(first.failed, 1)
++  assert.equal(digestLedger.has('digest:2026-09-21:u-1'), false)
++  const second = await a.notifier.digest.run({ period: '2026-09-21' })
++  assert.equal(second.sent, 1)
++  assert.equal(a.mail.sent.length, 1)
++})

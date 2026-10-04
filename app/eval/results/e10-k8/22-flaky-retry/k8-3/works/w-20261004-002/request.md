@@ -1,0 +1,1 @@
+CI의 `npm run test:ci`가 요즘 가끔 실패한다. 이번에는 ci/archive.test.js(밤 배치 뒤 보고서가 보관소에 제대로 남는지 보는 CI 전용 시험)다. 로컬에서 `npm test`는 늘 통과한다. 실패 로그는 그때그때 조금씩 다른데, 보통 `ENOENT: 파일이 없습니다: reports/2026-09/.mups96qp.tmp`이고 `report-6 보관본의 고객사가 다르다: wayne (stark여야 함)`이 함께 나올 때도 있다. 재실행하면 통과한다. ci/batch.test.js가 가끔 실패하는 것은 따로 고쳐서 리뷰 중이라 이번 범위가 아니다.

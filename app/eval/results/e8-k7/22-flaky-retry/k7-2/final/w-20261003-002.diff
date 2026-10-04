@@ -1,0 +1,51 @@
+diff --git a/tree/docs/knowledge/archive-test-clock-must-be-frozen-for-tmp-collision.md b/tree/docs/knowledge/archive-test-clock-must-be-frozen-for-tmp-collision.md
+new file mode 100644
+index 0000000..a225715
+--- /dev/null
++++ b/tree/docs/knowledge/archive-test-clock-must-be-frozen-for-tmp-collision.md
+@@ -0,0 +1,10 @@
++# 보관 임시 파일 충돌을 재현하려면 시험의 시계를 고정해야 한다
++
++- 종류: 실패 유형
++- 적용: test/archive.test.js, src/store/report-archive.js (saveReport)
++- 출처: 조사로 알아냄, relay Work w-20261003-002, 2026-10-03
++
++test/archive.test.js의 가짜 시계는 sleep마다 시각이 흘러, 임시 파일 이름이 ms 시각뿐이어도 서로 겹치지 않아 충돌이 가려진다.
++같은 ms에 동시 저장하는 상황을 만들려면 `setNow(() => t)`로 시각을 고정하고 sleep을 없앤다.
++ci/archive.test.js의 `ENOENT ... .tmp`와 `report-N 보관본의 고객사가 다르다: wonka (wayne여야 함)`는 같은 임시 파일 충돌의 두 증상이다.
++기준 커밋에서 40회 중 ENOENT 8회, 고객사 불일치 2회. runPool 결과 순서(ci/batch.test.js의 원인)와는 무관하다.
+diff --git a/base/src/store/report-archive.js b/tree/src/store/report-archive.js
+index 0c62d2f..c65e7ac 100644
+--- a/base/src/store/report-archive.js
++++ b/tree/src/store/report-archive.js
+@@ -20,7 +20,8 @@ export function reportPath(period, reportId) {
+  */
+ export async function saveReport(files, report) {
+   const path = reportPath(report.period, report.reportId)
+-  const tmp = `${reportDir(report.period)}/.${stamp(now())}.tmp`
++  // 같은 ms에 동시에 저장하는 다른 보고서와 임시 파일이 겹치지 않게 reportId를 넣는다
++  const tmp = `${reportDir(report.period)}/.${report.reportId}.${stamp(now())}.tmp`
+   await files.writeFile(tmp, JSON.stringify(report))
+   await files.rename(tmp, path)
+   return path
+diff --git a/base/test/archive.test.js b/tree/test/archive.test.js
+index 44aa323..69a890d 100644
+--- a/base/test/archive.test.js
++++ b/tree/test/archive.test.js
+@@ -74,6 +74,16 @@ test('보고서 보관: 여러 개를 차례로', async () => {
+   assert.strictEqual(files.stats.renames, 3)
+ })
+ 
++test('보고서 보관: 같은 시각에 동시에 저장해도 서로 섞이지 않는다', async () => {
++  setNow(() => t) // 시각이 흐르지 않아 모든 저장이 같은 ms에 일어난다
++  setSleep(async () => {})
++  const files = createFileStore({ latency: { baseMs: 2, jitterMs: 2 } })
++  const reports = [1, 2, 3, 4].map((n) => report(n))
++  await Promise.all(reports.map((r) => saveReport(files, r)))
++  for (const r of reports) assert.deepStrictEqual(await loadReport(files, '2026-09', r.reportId), r)
++  assert.deepStrictEqual(strayTemps(files, '2026-09'), [])
++})
++
+ test('기간이 없으면 no-period 폴더', () => {
+   assert.strictEqual(reportPath(null, 'r-1'), 'reports/no-period/r-1.json')
+   assert.throws(() => reportPath('2026-09'), /reportId/)

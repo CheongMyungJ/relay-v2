@@ -1,0 +1,144 @@
+diff --git a/tree/docs/knowledge/delivery/digest-sendtimeout-unused.md b/tree/docs/knowledge/delivery/digest-sendtimeout-unused.md
+new file mode 100644
+index 0000000..62fe298
+--- /dev/null
++++ b/tree/docs/knowledge/delivery/digest-sendtimeout-unused.md
+@@ -0,0 +1,13 @@
++---
++kind: pitfall
++source: investigation
++---
++# digest.sendTimeoutMs는 지금 요약 발송에 효과가 없다
++
++## 내용
++- `withDeadline`(`src/digest/deadline.js`)이 늦은 성공을 더 이상 실패로 보지 않아 `digest.sendTimeoutMs`와 `timeoutMs` 인자는 사용되지 않는다. 설정을 바꿔도 동작이 달라지지 않는다.
++- 소요 시간은 `digest.send.ms` 지표로만 남는다. 제한 시간을 다시 쓰려면 실제로 발송을 중단하는 방식이어야 하고, 규칙은 `docs/knowledge/delivery/late-success-is-success.md` 참고.
++- 요약 키(`src/digest/key.js`)에 runId가 들어 있어 같은 기간을 다른 runId로 다시 돌리면 요약이 중복될 수 있다(미수정).
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-001)
+diff --git a/tree/docs/knowledge/delivery/late-success-is-success.md b/tree/docs/knowledge/delivery/late-success-is-success.md
+new file mode 100644
+index 0000000..a1bd009
+--- /dev/null
++++ b/tree/docs/knowledge/delivery/late-success-is-success.md
+@@ -0,0 +1,13 @@
++---
++kind: rule
++source: investigation
++---
++# 발송이 성공했으면 제한 시간을 넘겨도 성공으로 본다
++
++## 규칙
++- 어댑터가 값을 돌려줬으면(`outcome.ok`) 걸린 시간과 무관하게 성공이다. 늦은 성공을 시간 초과 실패로 보고 재시도하면 같은 알림이 2~3번 전달된다.
++- 시간 초과 재시도는 실제로 실패한 발송(어댑터 오류, 예: ETIMEDOUT)에만 적용한다. 재시도 횟수·간격 정책은 약화하지 않는다.
++- 일반 발송(`src/retry/policy.js`의 `decide`)과 요약 발송(`src/digest/deadline.js`의 `withDeadline`) 모두 해당한다. 메일이 푸시보다 느려 더 자주 드러난다.
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-001)
+diff --git a/base/src/digest/deadline.js b/tree/src/digest/deadline.js
+index afc5a84..f759fb8 100644
+--- a/base/src/digest/deadline.js
++++ b/tree/src/digest/deadline.js
+@@ -1,9 +1,8 @@
+ // 요약 발송 한 건의 제한 시간.
+ // 요약은 아침에 한꺼번에 수천 통을 보내므로, 한 사람에게 오래 걸리면 뒤 사람들의 요약이 모두 밀린다.
+-import { SendTimeoutError } from '../adapters/errors.js'
+ 
+ /**
+- * fn을 부르고 걸린 시간을 잰다. 제한 시간을 넘기면 시간 초과로 본다.
++ * fn을 부르고 걸린 시간을 잰다.
+  * @template T
+  * @param {{ now(): number }} clock
+  * @param {number} timeoutMs
+@@ -14,8 +13,7 @@ export async function withDeadline(clock, timeoutMs, fn) {
+   const started = clock.now()
+   const value = await fn()
+   const elapsedMs = clock.now() - started
+-  if (elapsedMs > timeoutMs) {
+-    throw new SendTimeoutError(`요약 발송이 제한 시간 ${timeoutMs}ms를 넘김 (${elapsedMs}ms)`)
+-  }
++  // fn이 값을 돌려줬다면 이미 전달된 것이다. 늦었다고 실패로 보면 같은 요약이 다시 나간다.
++  // 오래 걸린 것은 지연 지표(digest.send.ms)로만 남긴다. 실제 시간 초과는 어댑터가 오류로 던진다.
+   return { value, elapsedMs }
+ }
+diff --git a/base/src/retry/policy.js b/tree/src/retry/policy.js
+index 2ab08e2..bb91320 100644
+--- a/base/src/retry/policy.js
++++ b/tree/src/retry/policy.js
+@@ -11,11 +11,12 @@ import { backoffDelay } from './backoff.js'
+  * @param {{ timeoutMs: number, maxAttempts: number, baseDelayMs: number, factor: number, maxDelayMs: number }} options
+  */
+ export function decide(outcome, { attempt, elapsedMs }, options) {
++  // 이미 전달된 발송은 오래 걸렸어도 성공이다. 시간 초과로 보고 다시 보내면 같은 알림이 또 나간다
++  if (outcome.ok) return { action: 'done' }
++
+   let reason
+   if (elapsedMs > options.timeoutMs) {
+     reason = 'timeout'
+-  } else if (outcome.ok) {
+-    return { action: 'done' }
+   } else if (isTransient(outcome.error)) {
+     reason = errorCode(outcome.error)
+   } else {
+diff --git a/base/test/digest.test.js b/tree/test/digest.test.js
+index 1917fdb..a099474 100644
+--- a/base/test/digest.test.js
++++ b/tree/test/digest.test.js
+@@ -118,3 +118,13 @@ test('영구 오류는 다시 보내지 않는다', async () => {
+   assert.equal(mail.calls.length, 1)
+   assert.equal(notifier.digest.ledger.runSummary(summary.runId).failed, 1)
+ })
++
++test('제한 시간을 넘겨 성공한 요약은 다시 보내지 않는다', async () => {
++  const { notifier, clock, mail } = digestSetup({ mail: { latencyMs: 300, outcomes: [{ latencyMs: 4000 }] } })
++  await notifier.handle(delivered('ord-1001-delivered', 'u-1', 'A-1001'))
++  clock.set(NEXT_MORNING)
++  const summary = await notifier.digest.tick()
++  assert.equal(summary.sent, 1)
++  assert.equal(mail.sent.length, 1)
++  assert.equal(mail.calls.length, 1)
++})
+diff --git a/base/test/notifier.test.js b/tree/test/notifier.test.js
+index 5e1f54a..58950cc 100644
+--- a/base/test/notifier.test.js
++++ b/tree/test/notifier.test.js
+@@ -118,3 +118,26 @@ test('탈퇴한 사용자의 재시도는 버린다', async () => {
+   assert.equal(notifier.health().retryQueue.size, 0)
+   assert.equal(notifier.preferences.get('u-1').email, null)
+ })
++
++test('느리게 성공한 메일·푸시는 재시도 없이 한 번만 전달된다', async () => {
++  const { notifier, clock, mail, push } = setup({
++    mail: { outcomes: [{ latencyMs: 3000 }] },
++    push: { outcomes: [{ latencyMs: 3000 }] },
++  })
++  const res = await notifier.handle(shippedEvent())
++  assert.deepEqual(res.results.map((r) => r.status).sort(), ['sent', 'sent'])
++  assert.equal(notifier.retryQueue.size(), 0)
++  clock.advance(60_000)
++  await notifier.retryWorker.runDue()
++  assert.equal(mail.sent.length, 1)
++  assert.equal(push.sent.length, 1)
++})
++
++test('실제로 실패한 메일은 계속 재시도로 다시 보낸다', async () => {
++  const { notifier, clock, mail } = setup({ mail: { outcomes: [{ fail: 'transient' }] } })
++  await notifier.handle(shippedEvent())
++  assert.equal(notifier.retryQueue.size() >= 1, true)
++  clock.advance(notifier.config.retry.baseDelayMs)
++  await notifier.retryWorker.runDue()
++  assert.equal(mail.sent.length, 1)
++})
+diff --git a/base/test/retry.test.js b/tree/test/retry.test.js
+index a217ab7..d43ea3f 100644
+--- a/base/test/retry.test.js
++++ b/tree/test/retry.test.js
+@@ -55,3 +55,7 @@ test('대기열이 가득 차면 거절', () => {
+   assert.throws(() => q.enqueue({ notBefore: 2 }), QueueFullError)
+   assert.equal(q.removeWhere(() => true), 1)
+ })
++
++test('제한 시간보다 오래 걸렸어도 성공했으면 다시 보내지 않는다', () => {
++  assert.deepEqual(decide({ ok: true }, { attempt: 1, elapsedMs: options.timeoutMs + 1 }, options), { action: 'done' })
++})

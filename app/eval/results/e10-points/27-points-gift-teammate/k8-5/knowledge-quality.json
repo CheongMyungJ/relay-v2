@@ -1,0 +1,61 @@
+{
+  "paths": [
+    "docs/knowledge/points/earn-points-formula.md",
+    "docs/knowledge/points/gift-points-hands-off.md",
+    "docs/knowledge/points/stored-points-not-recalculated.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/points/earn-points-formula.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/points/gift-points-hands-off.md",
+        "stale": true,
+        "staleWhy": "'src/gift/gift-points.js: earnPoints의 옛 식(배송비 포함, 반올림)을 그대로 쓴다'와 '협의 전에는 바꾸지 않는다'를 지금 상태처럼 적었다. 마지막 Work에서 선물하기도 규정대로 고쳤다.",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/points/stored-points-not-recalculated.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "earn-points-formula.md는 결제 금액에서 배송비를 뺀 값을 기준으로 적는다. 결제 금액은 쿠폰과 포인트를 이미 뺀 값이라 R1과 맞는다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "floor로 1P 미만을 버리고, 반올림인 percentOf는 쓰지 않는다고 적혀 있다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "POINT_RATE_PERCENT 1%로 적혀 있다(23770 × 1%)."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "stored-points-not-recalculated.md가 저장된 값을 쓰고 다시 계산하지 않는다고 적는다."
+      }
+    ]
+  }
+}

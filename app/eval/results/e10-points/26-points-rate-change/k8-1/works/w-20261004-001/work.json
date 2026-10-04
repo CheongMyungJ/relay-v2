@@ -1,0 +1,242 @@
+{
+  "schema_version": 1,
+  "work_id": "w-20261004-001",
+  "type": "bugfix",
+  "status": "completed",
+  "created_at": "2026-10-04T04:43:11+00:00",
+  "base_branch": "main",
+  "base_commit": "b454f0f2fe51a835597898f2aaca56b793f1875d",
+  "intent": {
+    "version": 2
+  },
+  "settings": {},
+  "file_hashes": {
+    "request.md": "sha256:d5fa04054211a613cdb336f6420212cf3f5f4e437a65eb2701abec00ed445052",
+    "intent.md": "sha256:c13196936553cebeaf895aa7f3f608d86dca4e7dd799fe308ffba99b441237c6",
+    "decisions.md": "sha256:5f018ed30ccb3fdeb8f587ae08da32e2e36fe459ebcbdbd0a103864e408f9e81"
+  },
+  "tasks": [
+    {
+      "id": "t-01",
+      "seq": 1,
+      "node": "intake",
+      "status": "discarded",
+      "reason": "default",
+      "format_version": 1,
+      "created_at": "2026-10-04T04:43:11+00:00",
+      "session": {
+        "id": "bfc48e03-3e3c-4117-af00-dd95c80d6391",
+        "pid": 22669,
+        "process_started_at": "2026-10-04T04:43:10.630Z",
+        "started_at": "2026-10-04T04:43:11+00:00",
+        "alive": false,
+        "ended_at": "2026-10-04T04:44:13+00:00"
+      },
+      "bounce_count": 0,
+      "check": {
+        "handoff_present": true,
+        "status": "awaiting_approval",
+        "errors": [],
+        "warnings": []
+      },
+      "engine": "claude",
+      "start_commit": "b454f0f2fe51a835597898f2aaca56b793f1875d",
+      "skill_hash": "sha256:8d88de1bf541d7ff08dbc3ad8a9215197d2886d38908b02071fdf48a65cc4223",
+      "engine_version": "2.1.289 (Claude Code)",
+      "claude_version": "2.1.289 (Claude Code)",
+      "last_prompt_at": "2026-10-04T04:43:16+00:00",
+      "permission_mode": "bypassPermissions",
+      "approved_at": "2026-10-04T04:44:13+00:00",
+      "approved_by": "human",
+      "discarded_at": "2026-10-04T04:47:37+00:00",
+      "discarded_by": "t-04"
+    },
+    {
+      "id": "t-02",
+      "seq": 2,
+      "node": "fix",
+      "status": "discarded",
+      "reason": "default",
+      "format_version": 1,
+      "created_at": "2026-10-04T04:44:13+00:00",
+      "session": {
+        "id": "13f8c03a-ca99-4e71-96f7-ca98c9e5afab",
+        "pid": 24534,
+        "process_started_at": "2026-10-04T04:44:13.480Z",
+        "started_at": "2026-10-04T04:44:14+00:00",
+        "alive": false,
+        "ended_at": "2026-10-04T04:45:10+00:00"
+      },
+      "bounce_count": 0,
+      "check": {
+        "handoff_present": true,
+        "status": "awaiting_approval",
+        "errors": [],
+        "warnings": []
+      },
+      "engine": "claude",
+      "start_commit": "b454f0f2fe51a835597898f2aaca56b793f1875d",
+      "skill_hash": "sha256:0eca34eedf0cd9b3428cb33b41030d6ee5e2d5e882ac6bf80b61da3dcd2db22f",
+      "engine_version": "2.1.289 (Claude Code)",
+      "claude_version": "2.1.289 (Claude Code)",
+      "last_prompt_at": "2026-10-04T04:44:16+00:00",
+      "permission_mode": "bypassPermissions",
+      "approved_at": "2026-10-04T04:45:10+00:00",
+      "approved_by": "auto",
+      "discarded_at": "2026-10-04T04:47:37+00:00",
+      "discarded_by": "t-04"
+    },
+    {
+      "id": "t-03",
+      "seq": 3,
+      "node": "verify",
+      "status": "discarded",
+      "reason": "default",
+      "format_version": 1,
+      "created_at": "2026-10-04T04:45:10+00:00",
+      "session": {
+        "id": "75d514a2-e288-4181-bd26-8d0d4ad9070d",
+        "pid": 27838,
+        "process_started_at": "2026-10-04T04:45:10.630Z",
+        "started_at": "2026-10-04T04:45:11+00:00",
+        "alive": false,
+        "ended_at": "2026-10-04T04:47:11+00:00"
+      },
+      "bounce_count": 0,
+      "check": {
+        "handoff_present": true,
+        "status": "awaiting_approval",
+        "errors": [],
+        "warnings": []
+      },
+      "engine": "claude",
+      "start_commit": "1ee2539fc5168e0f29602d20e236d21f03482841",
+      "skill_hash": "sha256:0633efe3eeb07e8e25ef375a074a38f3793b61f5deef36b58f10f0b5d20e5d4d",
+      "engine_version": "2.1.289 (Claude Code)",
+      "claude_version": "2.1.289 (Claude Code)",
+      "last_prompt_at": "2026-10-04T04:45:12+00:00",
+      "permission_mode": "bypassPermissions",
+      "approved_at": "2026-10-04T04:47:11+00:00",
+      "approved_by": "human",
+      "discarded_at": "2026-10-04T04:47:37+00:00",
+      "discarded_by": "t-04"
+    },
+    {
+      "id": "t-04",
+      "seq": 4,
+      "node": "intake",
+      "status": "approved",
+      "reason": "rewind",
+      "format_version": 1,
+      "created_at": "2026-10-04T04:47:37+00:00",
+      "session": {
+        "id": "c3461e83-e290-4a96-90ed-3019f9f918cc",
+        "pid": 32581,
+        "process_started_at": "2026-10-04T04:47:36.500Z",
+        "started_at": "2026-10-04T04:47:37+00:00",
+        "alive": false,
+        "ended_at": "2026-10-04T04:48:16+00:00"
+      },
+      "bounce_count": 0,
+      "check": {
+        "handoff_present": true,
+        "status": "awaiting_approval",
+        "errors": [],
+        "warnings": []
+      },
+      "selection": {
+        "from_task": "t-03",
+        "instruction": "적립 계산 수정(상품-쿠폰-사용포인트의 1% 버림, 배송비 제외)에 더해, 부분 환불 회수도 포함해 주세요. 회수 합계가 저장된 적립액을 넘지 않고 새 규정과 맞게. 이미 적립된 값은 재계산 금지, src/format 영수증 글자는 그대로.",
+        "discarded": [
+          "t-01",
+          "t-02",
+          "t-03"
+        ],
+        "skipped": [],
+        "keep_code": false,
+        "reset": {
+          "from": "cd09c4a9dd60fa6668f3de86d14057d5b65bcf43",
+          "to": "b454f0f2fe51a835597898f2aaca56b793f1875d",
+          "backup_branch": "relay/w-20261004-001-discarded-1",
+          "backup_commit": "cd09c4a9dd60fa6668f3de86d14057d5b65bcf43"
+        }
+      },
+      "engine": "claude",
+      "start_commit": "b454f0f2fe51a835597898f2aaca56b793f1875d",
+      "skill_hash": "sha256:8d88de1bf541d7ff08dbc3ad8a9215197d2886d38908b02071fdf48a65cc4223",
+      "engine_version": "2.1.289 (Claude Code)",
+      "claude_version": "2.1.289 (Claude Code)",
+      "last_prompt_at": "2026-10-04T04:47:38+00:00",
+      "permission_mode": "bypassPermissions",
+      "approved_at": "2026-10-04T04:48:16+00:00",
+      "approved_by": "human"
+    },
+    {
+      "id": "t-05",
+      "seq": 5,
+      "node": "fix",
+      "status": "approved",
+      "reason": "default",
+      "format_version": 1,
+      "created_at": "2026-10-04T04:48:16+00:00",
+      "session": {
+        "id": "ce0ccbe8-4eaf-449a-a037-ef2157af5f5d",
+        "pid": 2281,
+        "process_started_at": "2026-10-04T04:48:15.990Z",
+        "started_at": "2026-10-04T04:48:16+00:00",
+        "alive": false,
+        "ended_at": "2026-10-04T04:49:33+00:00"
+      },
+      "bounce_count": 0,
+      "check": {
+        "handoff_present": true,
+        "status": "awaiting_approval",
+        "errors": [],
+        "warnings": []
+      },
+      "engine": "claude",
+      "start_commit": "b454f0f2fe51a835597898f2aaca56b793f1875d",
+      "skill_hash": "sha256:0eca34eedf0cd9b3428cb33b41030d6ee5e2d5e882ac6bf80b61da3dcd2db22f",
+      "engine_version": "2.1.289 (Claude Code)",
+      "claude_version": "2.1.289 (Claude Code)",
+      "last_prompt_at": "2026-10-04T04:48:18+00:00",
+      "permission_mode": "bypassPermissions",
+      "approved_at": "2026-10-04T04:49:33+00:00",
+      "approved_by": "auto"
+    },
+    {
+      "id": "t-06",
+      "seq": 6,
+      "node": "verify",
+      "status": "approved",
+      "reason": "default",
+      "format_version": 1,
+      "created_at": "2026-10-04T04:49:33+00:00",
+      "session": {
+        "id": "67c07ef4-8fb9-4331-8a55-7bab706de270",
+        "pid": 7983,
+        "process_started_at": "2026-10-04T04:49:33.470Z",
+        "started_at": "2026-10-04T04:49:34+00:00",
+        "alive": false,
+        "ended_at": "2026-10-04T04:50:50+00:00"
+      },
+      "bounce_count": 0,
+      "check": {
+        "handoff_present": true,
+        "status": "awaiting_approval",
+        "errors": [],
+        "warnings": []
+      },
+      "engine": "claude",
+      "start_commit": "868bcefe13755be9b1c4073a12dccb0e8adffa08",
+      "skill_hash": "sha256:0633efe3eeb07e8e25ef375a074a38f3793b61f5deef36b58f10f0b5d20e5d4d",
+      "engine_version": "2.1.289 (Claude Code)",
+      "claude_version": "2.1.289 (Claude Code)",
+      "last_prompt_at": "2026-10-04T04:49:35+00:00",
+      "permission_mode": "bypassPermissions",
+      "approved_at": "2026-10-04T04:50:50+00:00",
+      "approved_by": "human"
+    }
+  ],
+  "completed_at": "2026-10-04T04:50:50+00:00"
+}

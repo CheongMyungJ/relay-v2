@@ -1,0 +1,124 @@
+diff --git a/tree/docs/knowledge/points/earn-points-basis.md b/tree/docs/knowledge/points/earn-points-basis.md
+new file mode 100644
+index 0000000..1d1c692
+--- /dev/null
++++ b/tree/docs/knowledge/points/earn-points-basis.md
+@@ -0,0 +1,19 @@
++---
++kind: rule
++source: investigation
++anchor: earnPoints
++---
++# 일반 주문 적립은 배송비를 뺀 금액의 1%를 1P 미만 버림으로 계산한다
++
++## 규칙
++- 기준 금액은 상품 - 쿠폰 - 사용 포인트(= `amounts.total - amounts.shipping`)이고, 여기에 `POINT_RATE_PERCENT`%를 곱해 1P 미만은 버린다 (`src/points/earn.js`). 예: O-1042는 23,770원 → 237P.
++- 선물하기 적립(`giftPoints`)도 `earnPoints`에 위임해 같은 기준을 따른다. G-0213은 218P (`src/gift/gift-points.js`).
++- 이미 저장된 `points.earned`는 다시 계산하지 않고 그대로 쓴다.
++- 이 기준은 적립 안내 문서가 아니라 O-1042 한 건(237P)에서 역산해 정했다. 반올림이면 238P, 배송비 포함이면 268P라 맞지 않는다.
++
++## 아직 규칙을 따르지 않는 곳
++- `src/orders/refund.js`: 부분 환불의 `pointsRecovered`는 `percentOf(상품 환불액)` 반올림이라 위 기준과 다르다. 고칠지는 환불 기준 확인 후 정한다.
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-001)
++- 2026-10-04 선물하기 적립(`giftPoints`)이 배송비 포함·반올림 → `earnPoints` 위임으로 바뀌어 '따르지 않는 곳'에서 뺌 (Work w-20261004-001)
+diff --git a/tree/docs/knowledge/points/gift-points-ownership.md b/tree/docs/knowledge/points/gift-points-ownership.md
+new file mode 100644
+index 0000000..54d43f3
+--- /dev/null
++++ b/tree/docs/knowledge/points/gift-points-ownership.md
+@@ -0,0 +1,14 @@
++---
++kind: rule
++source: human
++anchor: giftPoints
++---
++# 선물하기 적립(`giftPoints`)은 다른 팀과 같이 보고 있어 이 팀이 단독으로 고치지 않는다
++
++## 규칙
++- `src/gift/gift-points.js`는 다른 팀과 함께 보는 파일이다. 이 팀의 일에서 단독으로 수정하지 않는다.
++- 일반 주문 적립 기준과 맞추는 일은 다른 팀과 함께 정한다 (일반 주문 기준은 `points/earn-points-basis.md` 참고).
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-001, 사람이 알려 줌)
++- 2026-10-04 G-0213 건은 리포트가 이 파일을 지목한 이 팀의 일이라 사람이 한 번 수정을 허용해 `giftPoints`를 `earnPoints` 위임으로 고침. 규칙은 그대로이며 다른 팀과의 합의는 확인되지 않음 (Work w-20261004-001, 사람이 알려 줌)
+diff --git a/base/src/gift/gift-points.js b/tree/src/gift/gift-points.js
+index 31d9ca8..b6e5c4f 100644
+--- a/base/src/gift/gift-points.js
++++ b/tree/src/gift/gift-points.js
+@@ -1,7 +1,6 @@
+-import { POINT_RATE_PERCENT } from '../config.js'
+-import { percentOf } from '../money.js'
++import { earnPoints } from '../points/earn.js'
+ 
+-/** 선물하기 주문의 적립 포인트(보내는 사람에게 쌓인다) */
++/** 선물하기 주문의 적립 포인트(보내는 사람에게 쌓인다). 일반 주문과 같은 기준을 쓴다 */
+ export function giftPoints(order) {
+-  return percentOf(order.amounts.total, POINT_RATE_PERCENT)
++  return earnPoints(order)
+ }
+diff --git a/base/src/points/earn.js b/tree/src/points/earn.js
+index 1ad53ff..54a8824 100644
+--- a/base/src/points/earn.js
++++ b/tree/src/points/earn.js
+@@ -1,7 +1,7 @@
+ import { POINT_RATE_PERCENT } from '../config.js'
+-import { percentOf } from '../money.js'
+ 
+-/** 주문의 적립 포인트. 결제 금액의 POINT_RATE_PERCENT% */
++/** 주문의 적립 포인트. 배송비를 뺀 금액(상품 - 쿠폰 - 사용 포인트)의 POINT_RATE_PERCENT%, 1P 미만은 버린다 */
+ export function earnPoints(order) {
+-  return percentOf(order.amounts.total, POINT_RATE_PERCENT)
++  const { total, shipping } = order.amounts
++  return Math.floor(((total - shipping) * POINT_RATE_PERCENT) / 100)
+ }
+diff --git a/tree/test/earn.test.js b/tree/test/earn.test.js
+new file mode 100644
+index 0000000..8080038
+--- /dev/null
++++ b/tree/test/earn.test.js
+@@ -0,0 +1,17 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import { readFileSync } from 'node:fs'
++import { createOrder } from '../src/orders/order.js'
++
++test('적립 포인트는 배송비를 뺀 금액(상품-쿠폰-사용 포인트)의 1%, 소수는 버린다 (O-1042 = 237P)', () => {
++  const input = JSON.parse(readFileSync(new URL('../examples/O-1042.json', import.meta.url)))
++  const o = createOrder(input)
++  assert.strictEqual(o.amounts.total, 26770)
++  assert.strictEqual(o.points.earned, 237)
++})
++
++test('배송비는 적립 기준에 들어가지 않는다', () => {
++  const o = createOrder({ customerId: 'U-1', orderedAt: '2026-10-01T10:00:00+09:00', number: 'O-0003', lines: [{ sku: 'A', unitPrice: 10000, qty: 1 }] })
++  assert.strictEqual(o.amounts.shipping, 3000)
++  assert.strictEqual(o.points.earned, 100)
++})
+diff --git a/base/test/gift.test.js b/tree/test/gift.test.js
+index 898969e..98ed310 100644
+--- a/base/test/gift.test.js
++++ b/tree/test/gift.test.js
+@@ -1,6 +1,9 @@
+ import { test } from 'node:test'
+ import assert from 'node:assert'
++import fs from 'node:fs'
+ import { createGiftOrder } from '../src/gift/gift-order.js'
++import { giftPoints } from '../src/gift/gift-points.js'
++import { earnPoints } from '../src/points/earn.js'
+ 
+ const base = {
+   customerId: 'U-1',
+@@ -21,3 +24,11 @@ test('메시지 카드는 60자까지', () => {
+ test('받는 사람 전화번호 형식', () => {
+   assert.throws(() => createGiftOrder({ ...base, number: 'G-0003', recipient: { name: '김하늘', phone: '01012345678' } }), /010-0000-0000/)
+ })
++
++test('선물하기 적립은 일반 주문과 같은 기준: 배송비 제외, 1P 미만 버림 (G-0213 → 218P)', () => {
++  const input = JSON.parse(fs.readFileSync(new URL('../examples/G-0213.json', import.meta.url), 'utf8'))
++  const g = createGiftOrder(input)
++  assert.strictEqual(g.amounts.shipping, 3000)
++  assert.strictEqual(g.points.earned, 218)
++  assert.strictEqual(giftPoints(g), earnPoints(g))
++})

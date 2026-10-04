@@ -1,0 +1,244 @@
+diff --git a/tree/docs/knowledge/credit-note-vat-per-line-floor.md b/tree/docs/knowledge/credit-note-vat-per-line-floor.md
+new file mode 100644
+index 0000000..7049611
+--- /dev/null
++++ b/tree/docs/knowledge/credit-note-vat-per-line-floor.md
+@@ -0,0 +1,11 @@
++# 반품 전표 부가세도 청구서와 같은 줄별 원 단위 버림으로 계산한다
++
++- 종류: 규칙
++- 적용: 반품 전표 금액 계산 (관련 위치: src/invoice/credit-note.js의 creditTotals)
++- 출처: 사람이 알려 줌, relay Work w-20261003-002, 2026-10-03
++
++반품 전표의 환불 부가세는 청구서와 같은 회계팀 규칙을 쓴다. 과세 줄마다 할인 후 금액에 세율을 곱해 원 단위 미만을 버리고 합산한다. 면세 줄과 영세율(`zeroRated`) 전표는 0원이다.
++- 맞음: CN-0112(INV-2047의 반품) 줄별 923+612+207 = 1,742원, 환불 합계 19,180원.
++- 틀림: 과세 공급가액 합 17,438 × 10%를 반올림한 1,744원 (합계 19,182원).
++- 이미 만든 반품 전표는 저장된 `totals`를 그대로 쓰고 다시 계산하지 않는다(creditNoteTotals).
++- 줄 할인(returnedDiscount)은 원 단위 반올림이다. 이번 규칙의 대상이 아니다.
+diff --git a/tree/docs/knowledge/issued-invoice-keeps-stored-totals.md b/tree/docs/knowledge/issued-invoice-keeps-stored-totals.md
+new file mode 100644
+index 0000000..9d954ae
+--- /dev/null
++++ b/tree/docs/knowledge/issued-invoice-keeps-stored-totals.md
+@@ -0,0 +1,8 @@
++# 이미 발행된 청구서는 재계산하지 않고 저장된 합계를 그대로 쓴다
++
++- 종류: 규칙
++- 적용: 발행된 청구서 (관련 위치: src/invoice/invoice.js의 invoiceTotals)
++- 출처: 사람이 알려 줌, relay Work w-20261003-001, 2026-10-03
++
++계산 규칙(예: 부가세 계산 방식)을 바꿔도 발행 이후 상태의 청구서는 발행 때 저장한 합계를 쓴다. 초안(draft)만 새 규칙으로 계산한다.
++- 이유: 이미 고객에게 나간 금액이 바뀌면 입금 확인(입금액 = 합계)이 어긋난다.
+diff --git a/tree/docs/knowledge/vat-also-computed-in-quote-and-credit-note.md b/tree/docs/knowledge/vat-also-computed-in-quote-and-credit-note.md
+new file mode 100644
+index 0000000..20ab8ba
+--- /dev/null
++++ b/tree/docs/knowledge/vat-also-computed-in-quote-and-credit-note.md
+@@ -0,0 +1,10 @@
++# 견적서·반품 전표도 부가세를 따로 계산한다 (세 문서 모두 줄별 버림)
++
++- 종류: 사실
++- 적용: src/invoice/total.js, src/invoice/quote.js, src/invoice/credit-note.js
++- 출처: 조사로 알아냄, relay Work w-20261003-001 / w-20261003-002, 2026-10-03
++
++청구서(total.js)·견적서(quote.js)·반품 전표(credit-note.js)가 부가세를 각자 계산한다. 세 문서 모두 과세 줄별 할인 후 금액 × 세율의 원 단위 버림 합산이다(청구서·견적서는 w-20261003-001, 반품 전표는 w-20261003-002에서 바꿈).
++- 부가세 규칙을 또 바꾸는 일이면 세 곳을 함께 바꾼다. 하나만 바꾸면 문서끼리 몇 원 차이가 난다.
++- 견적서 Q-0457: 줄별 995+841+886+865 = 3,587원, 합계 56,278원. 옛 반올림 방식은 3,589원(합계 56,280원)이었다.
++- 견적서는 createQuote에서 한 번만 계산해 totals에 저장한다. 규칙 변경 전에 만든 견적서는 옛 값이 남을 수 있다.
+diff --git a/tree/docs/knowledge/vat-per-line-floor-after-discount.md b/tree/docs/knowledge/vat-per-line-floor-after-discount.md
+new file mode 100644
+index 0000000..14220f1
+--- /dev/null
++++ b/tree/docs/knowledge/vat-per-line-floor-after-discount.md
+@@ -0,0 +1,10 @@
++# 부가세는 과세 줄마다 할인 후 금액 기준 원 단위 버림으로 계산해 합산한다
++
++- 종류: 규칙
++- 적용: 청구서 합계 계산 (관련 위치: src/invoice/total.js)
++- 출처: 사람이 알려 줌, relay Work w-20261003-001, 2026-10-03
++
++회계팀 규칙이다. 할인을 줄마다 먼저 적용하고, 과세 줄의 할인 후 금액에 세율을 곱해 원 단위 미만을 버린 뒤 줄별 부가세를 합산한다. 합계(공급가액 합)에서 다시 반올림하지 않는다.
++- 맞음: INV-2031 줄별 버림 합 536+633+325+837+310 = 2,641원, 합계 29,079원.
++- 틀림: 과세 공급가액 합 26,438 × 10%를 반올림한 2,644원 (합계 29,082원).
++- 면세 줄은 부가세 0원, 영세율(`zeroRated`) 청구서는 부가세 0원.
+diff --git a/base/src/invoice/credit-note.js b/tree/src/invoice/credit-note.js
+index 6e6fe7d..bf8c5a7 100644
+--- a/base/src/invoice/credit-note.js
++++ b/tree/src/invoice/credit-note.js
+@@ -87,7 +87,10 @@ export function creditTotals(note) {
+   const taxable = sumWon(rows.filter((r) => r.taxable).map((r) => r.net))
+   const exempt = sumWon(rows.filter((r) => !r.taxable).map((r) => r.net))
+   const supply = taxable + exempt
+-  const vat = note.zeroRated ? 0 : Math.round((taxable * VAT_RATE_PERCENT) / 100)
++  // 부가세: 과세 줄마다 공급가액(할인 후)에 세율을 곱해 원 단위 미만을 버리고 줄별 부가세를 합산한다
++  const vat = note.zeroRated
++    ? 0
++    : sumWon(rows.filter((r) => r.taxable).map((r) => Math.floor((r.net * VAT_RATE_PERCENT) / 100)))
+   return { supply, taxable, exempt, vat, total: supply + vat }
+ }
+ 
+diff --git a/base/src/invoice/quote.js b/tree/src/invoice/quote.js
+index 2d07fa1..cd270d3 100644
+--- a/base/src/invoice/quote.js
++++ b/tree/src/invoice/quote.js
+@@ -1,6 +1,6 @@
+ import { VAT_RATE_PERCENT } from '../config.js'
+ import { addDays, assertDate } from '../format/date.js'
+-import { percentOf, sumWon } from '../money.js'
++import { sumWon } from '../money.js'
+ import { lineDiscount } from './discount.js'
+ import { lineGross, normalizeLine } from './line.js'
+ import { isTaxableLine } from './tax-type.js'
+@@ -27,20 +27,19 @@ export function createQuote(input) {
+   return quote
+ }
+ 
+-// 견적 합계. 과세 품목의 부가세는 할인 전 금액에 매기고, 할인한 만큼의 부가세를 뺀다
++// 견적 합계. 부가세는 과세 줄마다 할인 후 금액에 세율을 곱해 원 단위 미만을 버리고 줄별 부가세를 합산한다(청구서와 같다)
+ export function quoteTotals(quote) {
+   const rows = quote.lines.map((line) => {
+     const gross = lineGross(line)
+     const discount = lineDiscount(line)
+-    return { gross, discount, net: gross - discount, taxable: isTaxableLine(line) }
++    return { net: gross - discount, taxable: isTaxableLine(line) }
+   })
+   const taxableRows = rows.filter((r) => r.taxable)
+   const supply = sumWon(rows.map((r) => r.net))
+   const taxable = sumWon(taxableRows.map((r) => r.net))
+   const vat = quote.zeroRated
+     ? 0
+-    : percentOf(sumWon(taxableRows.map((r) => r.gross)), VAT_RATE_PERCENT) -
+-      percentOf(sumWon(taxableRows.map((r) => r.discount)), VAT_RATE_PERCENT)
++    : sumWon(taxableRows.map((r) => Math.floor((r.net * VAT_RATE_PERCENT) / 100)))
+   return { supply, taxable, exempt: supply - taxable, vat, total: supply + vat }
+ }
+ 
+diff --git a/base/src/invoice/total.js b/tree/src/invoice/total.js
+index 6c97af3..ba664f2 100644
+--- a/base/src/invoice/total.js
++++ b/tree/src/invoice/total.js
+@@ -23,6 +23,9 @@ export function computeTotals(invoice) {
+   const taxable = sumWon(rows.filter((r) => r.taxable).map((r) => r.net))
+   const exempt = sumWon(rows.filter((r) => !r.taxable).map((r) => r.net))
+   const supply = taxable + exempt
+-  const vat = invoice.zeroRated ? 0 : Math.round((taxable * VAT_RATE_PERCENT) / 100)
++  // 부가세는 과세 줄마다 할인 후 금액에 원 단위 버림으로 계산해 합산한다(합계에서 다시 반올림하지 않는다)
++  const vat = invoice.zeroRated
++    ? 0
++    : sumWon(rows.filter((r) => r.taxable).map((r) => Math.floor((r.net * VAT_RATE_PERCENT) / 100)))
+   return { subtotal, discount, supply, taxable, exempt, vat, total: supply + vat }
+ }
+diff --git a/base/test/credit-note.test.js b/tree/test/credit-note.test.js
+index 5c7f920..8cb52f2 100644
+--- a/base/test/credit-note.test.js
++++ b/tree/test/credit-note.test.js
+@@ -81,3 +81,46 @@ test('반품 전표 분개', () => {
+     ['INV-0100', 'INV-0100', 'INV-0100', 'CN-0001', 'CN-0001', 'CN-0001'],
+   )
+ })
++
++test('반품 전표 부가세는 과세 줄별 원 단위 버림 합산이다', () => {
++  const invoice = {
++    ...inv,
++    lines: [
++      { sku: 'A-1', name: 'A', unitPrice: 9236, qty: 1, taxType: 'taxable' },
++      { sku: 'B-1', name: 'B', unitPrice: 6127, qty: 1, taxType: 'taxable' },
++      { sku: 'C-1', name: 'C', unitPrice: 2075, qty: 1, taxType: 'taxable' },
++      { sku: 'E-1', name: 'E', unitPrice: 5005, qty: 1, taxType: 'exempt' },
++    ],
++  }
++  const returns = ['A-1', 'B-1', 'C-1', 'E-1'].map((sku) => ({ sku, qty: 1 }))
++  const base = { number: 'CN-0002', issueDate: '2026-09-10', reason: '파손', returns }
++  // 줄별 923 + 612 + 207 = 1,742 (합계 반올림이면 1,744)
++  assert.deepStrictEqual(createCreditNote(invoice, base).totals, {
++    supply: 22443,
++    taxable: 17438,
++    exempt: 5005,
++    vat: 1742,
++    total: 24185,
++  })
++  assert.strictEqual(createCreditNote({ ...invoice, zeroRated: true }, base).totals.vat, 0)
++})
++
++test('저장된 totals가 있는 반품 전표는 다시 계산하지 않는다', () => {
++  const cn = note([{ sku: 'OF-1450', qty: 2 }])
++  const stored = { ...cn, totals: { supply: 2900, taxable: 2900, exempt: 0, vat: 291, total: 3191 } }
++  assert.strictEqual(creditNoteTotals(stored).vat, 291)
++})
++
++test('반품 전표 부가세는 줄별 할인 후 금액 기준으로 버림한다', () => {
++  const invoice = {
++    ...inv,
++    lines: [
++      { sku: 'A-1', name: 'A', unitPrice: 1999, qty: 1, taxType: 'taxable', discount: { amount: 100 } },
++      { sku: 'B-1', name: 'B', unitPrice: 1234, qty: 1, taxType: 'taxable', discount: { percent: 5 } },
++    ],
++  }
++  const returns = [{ sku: 'A-1', qty: 1 }, { sku: 'B-1', qty: 1 }]
++  // 할인 후 1,899 → 189, 1,172 → 117. 합계 3,071 × 10%를 반올림하면 307
++  const t = createCreditNote(invoice, { number: 'CN-0003', issueDate: '2026-09-10', reason: '파손', returns }).totals
++  assert.deepStrictEqual(t, { supply: 3071, taxable: 3071, exempt: 0, vat: 306, total: 3377 })
++})
+diff --git a/base/test/quote.test.js b/tree/test/quote.test.js
+index 7c0118b..a3eed96 100644
+--- a/base/test/quote.test.js
++++ b/tree/test/quote.test.js
+@@ -17,3 +17,25 @@ test('견적 합계', () => {
+   const q = createQuote({ number: 'Q-0401', customerId: 'C-0412', issueDate: '2026-10-01', lines })
+   assert.deepStrictEqual(q.totals, { supply: 96000, taxable: 96000, exempt: 0, vat: 9600, total: 105600 })
+ })
++
++test('견적 부가세는 과세 줄별 할인 후 금액의 원 단위 버림 합이다 (Q-0457)', () => {
++  const q = createQuote({
++    number: 'Q-0457',
++    customerId: 'C-0388',
++    issueDate: '2026-10-06',
++    lines: [
++      { sku: 'OF-0905', name: '네임펜 흑', unitPrice: 905, qty: 11 },
++      { sku: 'EL-1237', name: '전선 몰드 1m', unitPrice: 1237, qty: 8, discount: { percent: 15 } },
++      { sku: 'OF-3215', name: '클리어파일 20매', unitPrice: 3215, qty: 3, discount: { amount: 777 } },
++      { sku: 'PC-2164', name: '마우스패드', unitPrice: 2164, qty: 4 },
++      { sku: 'BK-1680', name: '세무 실무 가이드', unitPrice: 16800, qty: 1, taxType: 'exempt' },
++    ],
++  })
++  // 줄별 995+841+886+865 = 3,587 (옛 방식: 할인 전/할인 합을 각각 반올림해 3,589)
++  assert.deepStrictEqual(q.totals, { supply: 52691, taxable: 35891, exempt: 16800, vat: 3587, total: 56278 })
++})
++
++test('영세율 견적은 부가세 0원', () => {
++  const q = createQuote({ number: 'Q-0458', customerId: 'C-0412', issueDate: '2026-10-01', zeroRated: true, lines })
++  assert.strictEqual(q.totals.vat, 0)
++})
+diff --git a/base/test/total.test.js b/tree/test/total.test.js
+index 5b9aafd..7bf4a31 100644
+--- a/base/test/total.test.js
++++ b/tree/test/total.test.js
+@@ -60,3 +60,28 @@ test('단가 0원 품목(증정품)', () => {
+   ])
+   assert.strictEqual(computeTotals(inv).total, 15290)
+ })
++
++test('부가세는 과세 줄마다 할인 후 금액에 원 단위 버림으로 계산해 합산한다', () => {
++  const inv = draft([
++    { name: '박스테이프', unitPrice: 1342, qty: 4 },
++    { name: '네임펜 흑', unitPrice: 905, qty: 7 },
++    { name: '스테이플러 심', unitPrice: 1085, qty: 3 },
++    { name: '수정테이프', unitPrice: 1675, qty: 5 },
++    { name: '볼펜 0.5 흑', unitPrice: 345, qty: 9 },
++  ])
++  const t = computeTotals(inv)
++  assert.strictEqual(t.supply, 26438)
++  assert.strictEqual(t.vat, 536 + 633 + 325 + 837 + 310)
++  assert.strictEqual(t.total, 29079)
++})
++
++test('할인 후 줄 금액 기준으로 줄마다 버림하고 면세 줄은 제외한다', () => {
++  const inv = draft([
++    { name: 'A', unitPrice: 1999, qty: 1, discount: { percent: 10 } }, // 1799 -> 179
++    { name: 'B', unitPrice: 1005, qty: 1 }, // 100
++    { name: '도서', unitPrice: 9999, qty: 1, taxType: 'exempt' },
++  ])
++  const t = computeTotals(inv)
++  assert.strictEqual(t.vat, 179 + 100)
++  assert.strictEqual(t.total, t.supply + 279)
++})

@@ -1,0 +1,105 @@
+diff --git a/base/src/invoice/credit-note.js b/tree/src/invoice/credit-note.js
+index 6e6fe7d..6786768 100644
+--- a/base/src/invoice/credit-note.js
++++ b/tree/src/invoice/credit-note.js
+@@ -1,7 +1,8 @@
+-import { CREDIT_NOTE_PREFIX, VAT_RATE_PERCENT } from '../config.js'
++import { CREDIT_NOTE_PREFIX } from '../config.js'
+ import { assertDate } from '../format/date.js'
+ import { percentOf, sumWon } from '../money.js'
+ import { isTaxableLine } from './tax-type.js'
++import { computeVat } from './vat.js'
+ 
+ // 반품 전표. 발행된 청구서의 품목 일부(또는 전부)를 거래처가 돌려보낼 때 만든다.
+ // 돌려주는 금액은 양수로 적는다. 분개에서 청구서와 반대 방향으로 쓴다(src/export/ledger.js).
+@@ -87,7 +88,7 @@ export function creditTotals(note) {
+   const taxable = sumWon(rows.filter((r) => r.taxable).map((r) => r.net))
+   const exempt = sumWon(rows.filter((r) => !r.taxable).map((r) => r.net))
+   const supply = taxable + exempt
+-  const vat = note.zeroRated ? 0 : Math.round((taxable * VAT_RATE_PERCENT) / 100)
++  const vat = computeVat(rows, note.zeroRated)
+   return { supply, taxable, exempt, vat, total: supply + vat }
+ }
+ 
+diff --git a/tree/src/invoice/vat.js b/tree/src/invoice/vat.js
+new file mode 100644
+index 0000000..d9080d6
+--- /dev/null
++++ b/tree/src/invoice/vat.js
+@@ -0,0 +1,11 @@
++import { VAT_RATE_PERCENT } from '../config.js'
++import { assertWon, sumWon } from '../money.js'
++
++// 부가세. 과세 품목 줄마다 공급가액(할인 적용 후)에 세율을 매겨 원 단위로 버리고, 그 합을 쓴다.
++// 합계에서 다시 반올림하지 않는다(회계팀 방식). 영세율이면 0
++export function computeVat(rows, zeroRated) {
++  if (zeroRated) return 0
++  return sumWon(
++    rows.filter((r) => r.taxable).map((r) => Math.floor((assertWon(r.net) * VAT_RATE_PERCENT) / 100)),
++  )
++}
+diff --git a/base/test/credit-note.test.js b/tree/test/credit-note.test.js
+index 5c7f920..9306216 100644
+--- a/base/test/credit-note.test.js
++++ b/tree/test/credit-note.test.js
+@@ -1,3 +1,4 @@
++import { readFileSync } from 'node:fs'
+ import { test } from 'node:test'
+ import assert from 'node:assert'
+ import { creditNoteEntries, ledger } from '../src/export/ledger.js'
+@@ -81,3 +82,55 @@ test('반품 전표 분개', () => {
+     ['INV-0100', 'INV-0100', 'INV-0100', 'CN-0001', 'CN-0001', 'CN-0001'],
+   )
+ })
++
++// 줄 금액이 10원 단위가 아니고 할인이 있는 청구서: 합계 반올림과 줄별 버림이 달라진다
++const oddInv = (zeroRated = false) =>
++  issueInvoice(
++    createInvoice({
++      customerId: 'C-0388',
++      zeroRated,
++      lines: [
++        { sku: 'A-1', name: 'A', unitPrice: 905, qty: 7 },
++        { sku: 'A-2', name: 'B', unitPrice: 1085, qty: 3, discount: { amount: 500 } },
++        { sku: 'A-3', name: 'C', unitPrice: 345, qty: 9 },
++        { sku: 'A-4', name: '면세', unitPrice: 777, qty: 3, taxType: 'exempt' },
++      ],
++    }),
++    { number: 'INV-0200', issueDate: '2026-09-01' },
++  )
++const oddNote = (invoice) =>
++  createCreditNote(invoice, {
++    number: 'CN-0002',
++    issueDate: '2026-09-10',
++    reason: '착오',
++    returns: [
++      { sku: 'A-1', qty: 7 },
++      { sku: 'A-2', qty: 3 },
++      { sku: 'A-3', qty: 9 },
++      { sku: 'A-4', qty: 1 },
++    ],
++  })
++
++test('반품 전표 부가세는 과세 줄마다 버림한 값의 합이다', () => {
++  // 줄별: floor(633.5)=633, floor(275.5)=275, floor(310.5)=310 → 1218 (합계 반올림이면 1219)
++  const cn = oddNote(oddInv())
++  assert.deepStrictEqual(cn.totals, { supply: 12972, taxable: 12195, exempt: 777, vat: 1218, total: 14190 })
++})
++
++test('영세율 청구서의 반품 전표 부가세는 0이다', () => {
++  const cn = oddNote(oddInv(true))
++  assert.strictEqual(cn.totals.vat, 0)
++  assert.strictEqual(cn.totals.total, cn.totals.supply)
++})
++
++test('저장된 totals가 있으면 그대로 돌려준다', () => {
++  const cn = oddNote(oddInv())
++  const stored = { ...cn, totals: { supply: 1, taxable: 1, exempt: 0, vat: 0, total: 1 } }
++  assert.deepStrictEqual(creditNoteTotals(stored), stored.totals)
++})
++
++test('CN-0112 예시: 부가세는 줄별 버림 합 1742원, 합계 19180원이다', () => {
++  const read = (name) => JSON.parse(readFileSync(new URL(`../examples/${name}.json`, import.meta.url), 'utf8'))
++  const cn = createCreditNote(read('INV-2047'), read('CN-0112'))
++  assert.deepStrictEqual(cn.totals, { supply: 17438, taxable: 17438, exempt: 0, vat: 1742, total: 19180 })
++})

@@ -1,0 +1,19 @@
+{"ts":"2026-10-04T06:37:37+00:00","work_id":"w-20261004-001","type":"work.created","payload":{"type":"bugfix","base_branch":"main","base_commit":"41982d61757f21d6fa6fb8c6552cbc7770810b32"}}
+{"ts":"2026-10-04T06:37:37+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.started","payload":{"reason":"default","session_id":"db4d3626-779a-4a37-84e2-5c07110f79ea"}}
+{"ts":"2026-10-04T06:37:37+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.first_output","payload":{"pid":15626,"ms":353}}
+{"ts":"2026-10-04T06:37:40+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.first_hook","payload":{"pid":15626,"ms":2584,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T06:37:58+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T06:38:10+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T06:38:10+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.started","payload":{"reason":"default","session_id":"d732f996-0292-4f9f-8e88-b023e1f4b858"}}
+{"ts":"2026-10-04T06:38:11+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.first_output","payload":{"pid":16776,"ms":854}}
+{"ts":"2026-10-04T06:38:11+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.first_hook","payload":{"pid":16776,"ms":1052,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T06:39:01+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T06:39:27+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T06:39:37+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T06:39:38+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.started","payload":{"reason":"default","session_id":"cb3f14ff-54c4-40ac-82fb-3cbe4c106e65"}}
+{"ts":"2026-10-04T06:39:39+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.first_output","payload":{"pid":19029,"ms":855}}
+{"ts":"2026-10-04T06:39:39+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.first_hook","payload":{"pid":19029,"ms":1083,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T06:40:58+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.bounced","payload":{"attempt":1,"max":2,"errors":[{"file":"pr.md","message":"`pr.md` 없음: `status: awaiting_approval`일 때 필수 산출물"}]}}
+{"ts":"2026-10-04T06:41:03+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T06:41:16+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T06:41:16+00:00","work_id":"w-20261004-001","type":"work.completed","payload":{"delivery":"none"}}

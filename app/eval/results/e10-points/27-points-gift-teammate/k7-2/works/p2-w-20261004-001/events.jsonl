@@ -1,0 +1,17 @@
+{"ts":"2026-10-04T05:26:24+00:00","work_id":"w-20261004-001","type":"work.created","payload":{"type":"bugfix","base_branch":"main","base_commit":"f6cebd9e0d525694a5011682bba581b93472d403"}}
+{"ts":"2026-10-04T05:26:24+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.started","payload":{"reason":"default","session_id":"470ca969-f3ec-4097-a83e-7ec9957e246d"}}
+{"ts":"2026-10-04T05:26:24+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.first_output","payload":{"pid":17843,"ms":351}}
+{"ts":"2026-10-04T05:26:27+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.first_hook","payload":{"pid":17843,"ms":2608,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T05:27:22+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T05:27:44+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T05:27:45+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.started","payload":{"reason":"default","session_id":"76579894-cdd2-4bf4-91af-f870a23db326"}}
+{"ts":"2026-10-04T05:27:46+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.first_output","payload":{"pid":20097,"ms":761}}
+{"ts":"2026-10-04T05:27:46+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.first_hook","payload":{"pid":20097,"ms":1032,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T05:28:41+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T05:28:56+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.approved","payload":{"by":"auto"}}
+{"ts":"2026-10-04T05:28:56+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.started","payload":{"reason":"default","session_id":"ca2ef8f3-02bb-48bd-af8a-0b5a24983715"}}
+{"ts":"2026-10-04T05:28:57+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.first_output","payload":{"pid":22479,"ms":769}}
+{"ts":"2026-10-04T05:28:57+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.first_hook","payload":{"pid":22479,"ms":1003,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T05:29:51+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T05:30:02+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T05:30:02+00:00","work_id":"w-20261004-001","type":"work.completed","payload":{"delivery":"none"}}

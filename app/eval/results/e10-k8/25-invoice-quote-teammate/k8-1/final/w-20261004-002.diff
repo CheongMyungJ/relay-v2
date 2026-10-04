@@ -1,0 +1,49 @@
+diff --git a/base/src/invoice/credit-note.js b/tree/src/invoice/credit-note.js
+index 6e6fe7d..82c005a 100644
+--- a/base/src/invoice/credit-note.js
++++ b/tree/src/invoice/credit-note.js
+@@ -87,7 +87,8 @@ export function creditTotals(note) {
+   const taxable = sumWon(rows.filter((r) => r.taxable).map((r) => r.net))
+   const exempt = sumWon(rows.filter((r) => !r.taxable).map((r) => r.net))
+   const supply = taxable + exempt
+-  const vat = note.zeroRated ? 0 : Math.round((taxable * VAT_RATE_PERCENT) / 100)
++  // 부가세는 할인 후 과세 줄마다 원 단위 버림으로 계산해 합산한다(합계에서 다시 반올림하지 않는다)
++  const vat = note.zeroRated ? 0 : sumWon(rows.filter((r) => r.taxable).map((r) => Math.floor((r.net * VAT_RATE_PERCENT) / 100)))
+   return { supply, taxable, exempt, vat, total: supply + vat }
+ }
+ 
+diff --git a/base/test/credit-note.test.js b/tree/test/credit-note.test.js
+index 5c7f920..3729ad6 100644
+--- a/base/test/credit-note.test.js
++++ b/tree/test/credit-note.test.js
+@@ -81,3 +81,30 @@ test('반품 전표 분개', () => {
+     ['INV-0100', 'INV-0100', 'INV-0100', 'CN-0001', 'CN-0001', 'CN-0001'],
+   )
+ })
++
++test('부가세는 할인 후 과세 줄마다 버림으로 계산해 합산한다 (CN-0112)', () => {
++  const invoice = {
++    number: 'INV-2047',
++    status: 'issued',
++    customerId: 'C-0388',
++    issueDate: '2026-09-24',
++    zeroRated: false,
++    lines: [
++      { sku: 'OF-0415', name: '지우개', unitPrice: 415, qty: 9, taxType: 'taxable' },
++      { sku: 'OF-1342', name: '박스테이프', unitPrice: 1342, qty: 8, taxType: 'taxable', discount: { amount: 1500 } },
++      { sku: 'OF-2150', name: '형광펜 5색', unitPrice: 2150, qty: 6, taxType: 'taxable', discount: { percent: 5 } },
++    ],
++  }
++  const cn = createCreditNote(invoice, {
++    number: 'CN-0112',
++    issueDate: '2026-10-06',
++    reason: '파손 및 주문 착오',
++    returns: [
++      { sku: 'OF-1342', qty: 8 },
++      { sku: 'OF-2150', qty: 3 },
++      { sku: 'OF-0415', qty: 5 },
++    ],
++  })
++  // 줄별 부가세 923 + 612 + 207 = 1742 (합계 반올림이면 1744)
++  assert.deepStrictEqual(cn.totals, { supply: 17438, taxable: 17438, exempt: 0, vat: 1742, total: 19180 })
++})

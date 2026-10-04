@@ -1,0 +1,229 @@
+diff --git a/tree/docs/knowledge/points/earn-rule.md b/tree/docs/knowledge/points/earn-rule.md
+new file mode 100644
+index 0000000..5a57c90
+--- /dev/null
++++ b/tree/docs/knowledge/points/earn-rule.md
+@@ -0,0 +1,15 @@
++---
++kind: rule
++source: human
++anchor: earnPoints
++---
++# 적립 규정: 상품−쿠폰−사용 포인트의 1%, 배송비 제외, 1P 미만 버림
++
++## 규칙
++- 적립 기준 금액은 상품 금액에서 쿠폰 할인과 사용한 포인트를 뺀 금액이다. 배송비에는 적립하지 않는다.
++- 기준 금액의 1%에서 1P 미만은 버린다(반올림하지 않는다). 예: 상품 28,270 − 쿠폰 3,000 − 포인트 1,500 = 23,770원 → 237P.
++- 적립 계산은 `src/points/earn.js`의 `earnBase`/`earnOn`/`earnPoints` 한 곳에서 한다. 일반 주문, 선물하기, 환불 회수가 모두 이것을 쓴다.
++- 이미 저장된 주문의 `points.earned`는 규정이 바뀌어도 다시 계산하지 않는다.
++
++## 바뀐 이력
++- 2026-10-04 처음 남김. 옛 방식은 배송비 포함 결제 금액의 1% 반올림이었다 (Work w-20261004-001, 사람이 알려 줌)
+diff --git a/tree/docs/knowledge/points/partial-refund-recovery.md b/tree/docs/knowledge/points/partial-refund-recovery.md
+new file mode 100644
+index 0000000..ce3d8cd
+--- /dev/null
++++ b/tree/docs/knowledge/points/partial-refund-recovery.md
+@@ -0,0 +1,14 @@
++---
++kind: rule
++source: human
++anchor: createRefund
++---
++# 부분 환불 포인트 회수 합계는 저장된 적립액을 넘지 않고 적립 규정과 맞는다
++
++## 규칙
++- 한 주문에서 여러 번 부분 환불해도 회수 포인트 합계는 그 주문의 저장된 적립액(`points.earned`)을 넘지 않는다.
++- 회수 방식은 적립 규정과 맞는다. 적립 규정은 docs/knowledge/points/earn-rule.md 참고.
++- 구현: 회수 = (환불 전 남은 주문의 적립액) − (환불 후 남은 주문의 적립액). 쿠폰·사용 포인트는 남은 주문에 그대로 두고, 남은 적립액은 저장된 적립액 이하로 제한한다 (`src/orders/refund.js`).
++
++## 바뀐 이력
++- 2026-10-04 처음 남김. 옛 방식은 환불 상품 금액의 1%를 건마다 반올림해 합이 저장된 적립액보다 1P 많아질 수 있었다 (Work w-20261004-001, 사람이 알려 줌)
+diff --git a/base/src/gift/gift-points.js b/tree/src/gift/gift-points.js
+index 31d9ca8..b31f529 100644
+--- a/base/src/gift/gift-points.js
++++ b/tree/src/gift/gift-points.js
+@@ -1,7 +1,6 @@
+-import { POINT_RATE_PERCENT } from '../config.js'
+-import { percentOf } from '../money.js'
++import { earnPoints } from '../points/earn.js'
+ 
+-/** 선물하기 주문의 적립 포인트(보내는 사람에게 쌓인다) */
++/** 선물하기 주문의 적립 포인트(보내는 사람에게 쌓인다). 일반 주문과 같은 규정이다 */
+ export function giftPoints(order) {
+-  return percentOf(order.amounts.total, POINT_RATE_PERCENT)
++  return earnPoints(order)
+ }
+diff --git a/base/src/orders/refund.js b/tree/src/orders/refund.js
+index 7d4f479..34ffaa4 100644
+--- a/base/src/orders/refund.js
++++ b/tree/src/orders/refund.js
+@@ -1,9 +1,11 @@
+-import { POINT_RATE_PERCENT, REFUND_NUMBER } from '../config.js'
++import { REFUND_NUMBER } from '../config.js'
+ import { lineAmount } from '../cart/line.js'
+-import { percentOf, sumWon } from '../money.js'
++import { sumWon } from '../money.js'
++import { earnOn } from '../points/earn.js'
+ 
+ // 환불. order는 저장된 주문(createOrder의 결과를 저장한 것)이다. 저장된 금액과 적립 포인트를 쓴다.
+ // - 부분 환불(createRefund): 돌려받는 줄의 상품 금액을 돌려주고, 적립했던 포인트 일부를 회수한다.
++//   회수는 환불 전후로 남은 주문이 받아야 할 적립액(적립 규정, 저장된 적립액 이하)의 차이다. 이전 환불까지 합쳐도 저장된 적립액을 넘지 않는다.
+ //   쿠폰 할인과 사용한 포인트는 남은 주문에 그대로 둔다. 남은 상품 금액이 그보다 적어지면 전체 취소로 한다.
+ // - 전체 취소(cancelOrder): 결제 금액을 모두 돌려주고, 적립 포인트를 모두 회수하고, 사용한 포인트를 돌려준다.
+ 
+@@ -26,12 +28,14 @@ export function createRefund(order, input) {
+   const remainingGoods = order.amounts.goods - refundedBefore - refundGoods
+   if (remainingGoods < order.amounts.coupon + order.amounts.pointsUsed)
+     throw new Error('남은 상품 금액이 쿠폰 할인과 사용 포인트보다 적다. 전체 취소로 처리한다')
++  // 남은 주문에 남겨 둘 적립액. 누적 회수 = 저장된 적립액 - 남겨 둘 적립액
++  const keep = (goods) => Math.min(order.points.earned, earnOn(goods - order.amounts.coupon - order.amounts.pointsUsed))
+   return {
+     number: input.number,
+     orderNumber: order.number,
+     items,
+     refundAmount: refundGoods,
+-    pointsRecovered: percentOf(refundGoods, POINT_RATE_PERCENT),
++    pointsRecovered: keep(order.amounts.goods - refundedBefore) - keep(remainingGoods),
+   }
+ }
+ 
+diff --git a/base/src/points/earn.js b/tree/src/points/earn.js
+index 1ad53ff..631220d 100644
+--- a/base/src/points/earn.js
++++ b/tree/src/points/earn.js
+@@ -1,7 +1,16 @@
+ import { POINT_RATE_PERCENT } from '../config.js'
+-import { percentOf } from '../money.js'
+ 
+-/** 주문의 적립 포인트. 결제 금액의 POINT_RATE_PERCENT% */
++/** 적립 기준 금액: 상품 금액 - 쿠폰 할인 - 사용한 포인트. 배송비는 넣지 않는다 */
++export function earnBase({ goods, coupon, pointsUsed }) {
++  return goods - coupon - pointsUsed
++}
++
++/** 기준 금액의 POINT_RATE_PERCENT%. 1P 미만은 버린다 */
++export function earnOn(base) {
++  return Math.floor((base * POINT_RATE_PERCENT) / 100)
++}
++
++/** 주문의 적립 포인트 */
+ export function earnPoints(order) {
+-  return percentOf(order.amounts.total, POINT_RATE_PERCENT)
++  return earnOn(earnBase(order.amounts))
+ }
+diff --git a/tree/test/earn.test.js b/tree/test/earn.test.js
+new file mode 100644
+index 0000000..7c93172
+--- /dev/null
++++ b/tree/test/earn.test.js
+@@ -0,0 +1,109 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import { createOrder } from '../src/orders/order.js'
++import { createGiftOrder } from '../src/gift/gift-order.js'
++import { createRefund } from '../src/orders/refund.js'
++
++const base = { customerId: 'U-1', orderedAt: '2026-10-01T10:00:00+09:00' }
++const gift = { ...base, recipient: { name: '김하늘', phone: '010-1234-5678' } }
++
++test('적립: O-1042는 쿠폰과 사용 포인트를 뺀 23,770원의 1%, 배송비 제외 237P', () => {
++  const o = createOrder({
++    ...base,
++    number: 'O-1042',
++    lines: [
++      { sku: 'TE-0410', unitPrice: 8900, qty: 2 },
++      { sku: 'SN-1135', unitPrice: 3490, qty: 3 },
++    ],
++    coupon: { code: 'AUTUMN3000', amount: 3000, minGoods: 20000 },
++    pointsUsed: 1500,
++  })
++  assert.strictEqual(o.amounts.shipping, 3000)
++  assert.strictEqual(o.points.earned, 237)
++})
++
++test('적립: 배송비가 있어도 없어도 같은 기준 금액이다', () => {
++  const withShip = createOrder({ ...base, number: 'O-0010', lines: [{ sku: 'A', unitPrice: 10000, qty: 1 }] })
++  const noShip = createOrder({ ...base, number: 'O-0011', lines: [{ sku: 'A', unitPrice: 30000, qty: 1 }] })
++  assert.strictEqual(withShip.amounts.shipping, 3000)
++  assert.strictEqual(withShip.points.earned, 100)
++  assert.strictEqual(noShip.points.earned, 300)
++})
++
++test('적립: 1P 미만은 반올림하지 않고 버린다', () => {
++  const o = createOrder({ ...base, number: 'O-0012', lines: [{ sku: 'A', unitPrice: 12990, qty: 1 }] })
++  assert.strictEqual(o.points.earned, 129)
++})
++
++test('적립: 선물하기 주문도 같은 규정', () => {
++  const g = createGiftOrder({
++    ...gift,
++    number: 'G-0213',
++    lines: [
++      { sku: 'HN-0120', unitPrice: 15900, qty: 1 },
++      { sku: 'JM-0332', unitPrice: 4480, qty: 2 },
++    ],
++    coupon: { code: 'GIFT2000', amount: 2000 },
++    pointsUsed: 1000,
++  })
++  // 24,860 - 2,000 - 1,000 = 21,860 → 218P (배송비 3,000 제외)
++  assert.strictEqual(g.points.earned, 218)
++})
++
++const stored = createOrder({
++  ...base,
++  number: 'O-0200',
++  lines: [
++    { sku: 'A', unitPrice: 5990, qty: 3 },
++    { sku: 'B', unitPrice: 4010, qty: 3 },
++  ],
++  coupon: { code: 'C', amount: 3000 },
++  pointsUsed: 1500,
++})
++
++test('회수: 한 건 환불은 남은 주문의 적립 규정과 맞는다', () => {
++  const goods = stored.amounts.goods
++  const r = createRefund(stored, { number: 'R-0001', items: [{ sku: 'B', qty: 1 }] })
++  const after = Math.floor((goods - 4010 - 3000 - 1500) / 100)
++  assert.strictEqual(r.pointsRecovered, stored.points.earned - after)
++})
++
++test('회수: 여러 번 부분 환불해도 합계가 저장된 적립액을 넘지 않는다', () => {
++  const steps = [
++    [{ sku: 'B', qty: 1 }],
++    [{ sku: 'B', qty: 1 }],
++    [{ sku: 'B', qty: 1 }],
++    [{ sku: 'A', qty: 1 }],
++  ]
++  const already = []
++  let total = 0
++  steps.forEach((items, i) => {
++    let r
++    try {
++      r = createRefund(stored, { number: `R-000${i + 1}`, items, alreadyRefunded: already })
++    } catch (e) {
++      assert.match(e.message, /전체 취소/)
++      return
++    }
++    total += r.pointsRecovered
++    assert.ok(total <= stored.points.earned, `${i + 1}번째 환불 뒤 회수 합계 ${total} > ${stored.points.earned}`)
++    for (const it of items) {
++      const f = already.find((a) => a.sku === it.sku)
++      if (f) f.qty += it.qty
++      else already.push({ ...it })
++    }
++  })
++  assert.ok(total > 0)
++})
++
++test('회수: 1원 단위 환불을 쪼개도 합계가 저장된 적립액 이하', () => {
++  const o = createOrder({ ...base, number: 'O-0201', lines: [{ sku: 'A', unitPrice: 1050, qty: 40 }] })
++  const already = []
++  let total = 0
++  for (let i = 0; i < 39; i++) {
++    const r = createRefund(o, { number: 'R-0100', items: [{ sku: 'A', qty: 1 }], alreadyRefunded: already.length ? [{ sku: 'A', qty: already.length }] : [] })
++    total += r.pointsRecovered
++    already.push(1)
++    assert.ok(total <= o.points.earned)
++  }
++})

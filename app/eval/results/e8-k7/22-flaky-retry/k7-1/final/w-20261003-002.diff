@@ -1,0 +1,46 @@
+diff --git a/tree/docs/knowledge/unique-temp-name-per-report-save.md b/tree/docs/knowledge/unique-temp-name-per-report-save.md
+new file mode 100644
+index 0000000..f73012e
+--- /dev/null
++++ b/tree/docs/knowledge/unique-temp-name-per-report-save.md
+@@ -0,0 +1,9 @@
++# 보고서 저장의 임시 파일 이름에는 작업 고유 값(reportId)을 넣는다
++
++- 종류: 실패 유형
++- 적용: src/store/report-archive.js saveReport, ci/archive.test.js
++- 출처: 조사로 알아냄 (사람이 정산팀 문의와 배치 실패 작업을 알려 줌), relay Work w-20261003-002, 2026-10-03
++- 임시 이름을 시각(ms)만으로 만들면 동시에(동시성 4) 저장하는 작업이 같은 임시 파일을 쓴다. 한쪽이 rename하면 다른 쪽은 `ENOENT: ...tmp`로 실패한다.
++- 같은 때 남은 보관본은 다른 고객사 내용이다. 예: report-6.json(stark)에 wayne 내용이 들어가고, 그 날 배치에서 wayne 작업이 ENOENT로 실패한다. 정산팀이 파일 이름과 다른 고객사 보고서라고 문의한 증상이 이것이다.
++- 두 증상(ENOENT, 고객사 불일치)은 원인이 하나다. 한쪽만 따로 찾지 않는다.
++- 로컬 `npm test`는 시계를 고정하고 sleep을 대체해 가려진다. 재현은 CI 시험 반복 실행이나 시계 고정 + 동시 저장 시험으로 한다.
+diff --git a/base/src/store/report-archive.js b/tree/src/store/report-archive.js
+index 0c62d2f..bf246b0 100644
+--- a/base/src/store/report-archive.js
++++ b/tree/src/store/report-archive.js
+@@ -20,7 +20,8 @@ export function reportPath(period, reportId) {
+  */
+ export async function saveReport(files, report) {
+   const path = reportPath(report.period, report.reportId)
+-  const tmp = `${reportDir(report.period)}/.${stamp(now())}.tmp`
++  // 시각(ms)만으로는 같은 순간에 시작한 다른 저장과 겹치므로 reportId를 넣는다
++  const tmp = `${reportDir(report.period)}/.${report.reportId}.${stamp(now())}.tmp`
+   await files.writeFile(tmp, JSON.stringify(report))
+   await files.rename(tmp, path)
+   return path
+diff --git a/base/test/archive.test.js b/tree/test/archive.test.js
+index 44aa323..4dff66e 100644
+--- a/base/test/archive.test.js
++++ b/tree/test/archive.test.js
+@@ -93,3 +93,12 @@ test('짧은 꼬리표', () => {
+   assert.strictEqual(stamp(1759197304120), 'mg5wnj94')
+   assert.strictEqual(stamp(35.9), 'z')
+ })
++
++test('보관: 같은 시각에 동시에 저장해도 서로의 임시 파일을 건드리지 않는다', async () => {
++  setSleep(async () => {}) // 시각이 멈춘 채 모든 저장이 겹친다
++  const files = createFileStore()
++  const reports = [1, 2, 3, 4].map((n) => report(n))
++  await Promise.all(reports.map((r) => saveReport(files, r)))
++  assert.deepStrictEqual(strayTemps(files, '2026-09'), [])
++  for (const r of reports) assert.strictEqual((await loadReport(files, '2026-09', r.reportId)).tenant, r.tenant)
++})

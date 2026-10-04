@@ -81,11 +81,19 @@ export function kindOf(text) {
 function knowledgeBounces(run) {
   let n = 0
   for (const w of run.works) {
-    const file = path.join(run.dir, 'works', path.basename(w.dir), 'events.jsonl')
+    const file = path.join(run.dir, 'works', w.id, 'events.jsonl')
     if (!fs.existsSync(file)) continue
     for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
       if (!line.includes('"task.bounced"')) continue
-      if (/지식/.test(line)) n++
+      let errors
+      try {
+        errors = JSON.parse(line).payload?.errors ?? []
+      } catch {
+        continue
+      }
+      // 지식 확인의 오류는 지식 파일을 가리키거나 handoff의 지식 줄을 말한다
+      if (errors.some((e) => e.file?.startsWith('docs/knowledge/') || /지식/.test(e.message ?? '')))
+        n++
     }
   }
   return n

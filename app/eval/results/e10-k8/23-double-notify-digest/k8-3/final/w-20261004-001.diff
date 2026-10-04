@@ -1,0 +1,192 @@
+diff --git a/tree/docs/knowledge/retry/keep-retry-for-real-failures.md b/tree/docs/knowledge/retry/keep-retry-for-real-failures.md
+new file mode 100644
+index 0000000..e9cc4b9
+--- /dev/null
++++ b/tree/docs/knowledge/retry/keep-retry-for-real-failures.md
+@@ -0,0 +1,12 @@
++---
++kind: rule
++source: human
++---
++# 중복 발송은 재시도를 끄거나 줄여서 해결하지 않는다
++
++## 규칙
++- 재시도 기능을 끄거나 재시도 횟수를 줄이는 것은 중복 발송의 해결이 아니다.
++- 실제로 발송에 실패한 건은 계속 재시도로 다시 발송되어야 한다.
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-001)
+diff --git a/tree/docs/knowledge/retry/slow-success-is-not-failure.md b/tree/docs/knowledge/retry/slow-success-is-not-failure.md
+new file mode 100644
+index 0000000..7b312be
+--- /dev/null
++++ b/tree/docs/knowledge/retry/slow-success-is-not-failure.md
+@@ -0,0 +1,14 @@
++---
++kind: pitfall
++source: investigation
++---
++# 느리게 성공한 발송을 시간 초과 실패로 보면 같은 알림이 중복 발송된다
++
++## 내용
++- 발송이 성공했으면 걸린 시간이 제한 시간(`send.timeoutMs` 2초, 요약 3초)을 넘어도 실패로 보지 않고 재시도하지 않는다. 시간 초과는 실제 실패일 때만 재시도 사유다.
++- 위치: `src/retry/policy.js`의 `decide`(성공 검사가 시간 검사보다 먼저), `src/digest/deadline.js`(느리면 `slow` 표시만 한다).
++- 메일은 응답이 느려 푸시보다 자주 생긴다.
++- 남은 위험: 실제 시간 초과 실패인데 서버가 사실은 보낸 경우의 중복은 어댑터 단에서 막을 수 없다. 요약 키에 runId가 있어 프로세스 재시작이나 수동 재실행 시 같은 기간 요약이 다시 갈 수 있다.
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-001)
+diff --git a/base/src/digest/deadline.js b/tree/src/digest/deadline.js
+index afc5a84..e389ba4 100644
+--- a/base/src/digest/deadline.js
++++ b/tree/src/digest/deadline.js
+@@ -1,21 +1,19 @@
+-// 요약 발송 한 건의 제한 시간.
++// 요약 발송 한 건의 걸린 시간 재기.
+ // 요약은 아침에 한꺼번에 수천 통을 보내므로, 한 사람에게 오래 걸리면 뒤 사람들의 요약이 모두 밀린다.
+-import { SendTimeoutError } from '../adapters/errors.js'
++// 다만 오래 걸려도 성공한 발송은 성공이다. 실패로 보고 다시 보내면 같은 요약이 두 번 간다.
++// 실제 시간 초과는 어댑터가 던지는 오류(SendTimeoutError)로 알린다.
+ 
+ /**
+- * fn을 부르고 걸린 시간을 잰다. 제한 시간을 넘기면 시간 초과로 본다.
++ * fn을 부르고 걸린 시간을 잰다. 제한 시간을 넘겼는지(slow)만 알려 주고 결과는 그대로 돌려준다.
+  * @template T
+  * @param {{ now(): number }} clock
+  * @param {number} timeoutMs
+  * @param {() => Promise<T>} fn
+- * @returns {Promise<{ value: T, elapsedMs: number }>}
++ * @returns {Promise<{ value: T, elapsedMs: number, slow: boolean }>}
+  */
+ export async function withDeadline(clock, timeoutMs, fn) {
+   const started = clock.now()
+   const value = await fn()
+   const elapsedMs = clock.now() - started
+-  if (elapsedMs > timeoutMs) {
+-    throw new SendTimeoutError(`요약 발송이 제한 시간 ${timeoutMs}ms를 넘김 (${elapsedMs}ms)`)
+-  }
+-  return { value, elapsedMs }
++  return { value, elapsedMs, slow: elapsedMs > timeoutMs }
+ }
+diff --git a/base/src/digest/runner.js b/tree/src/digest/runner.js
+index 25b7c36..9bb3336 100644
+--- a/base/src/digest/runner.js
++++ b/tree/src/digest/runner.js
+@@ -47,8 +47,9 @@ export function createDigestRunner({ clock, config, adapter, inbox, ledger, pref
+         const base = { runId, period, userId: job.userId, attempt: job.attempt, items: items.length }
+ 
+         try {
+-          const { value, elapsedMs } = await withDeadline(clock, opts().sendTimeoutMs, () => adapter.send(message))
++          const { value, elapsedMs, slow } = await withDeadline(clock, opts().sendTimeoutMs, () => adapter.send(message))
+           metrics.observe('digest.send.ms', elapsedMs)
++          if (slow) logger.warn('요약 발송이 제한 시간을 넘겼지만 성공함', { ...base, elapsedMs })
+           ledger.markSent(key, { ...base, providerId: value?.id })
+           metrics.increment('digest.sent')
+           summary.sent++
+diff --git a/base/src/retry/policy.js b/tree/src/retry/policy.js
+index 2ab08e2..d457593 100644
+--- a/base/src/retry/policy.js
++++ b/tree/src/retry/policy.js
+@@ -11,11 +11,12 @@ import { backoffDelay } from './backoff.js'
+  * @param {{ timeoutMs: number, maxAttempts: number, baseDelayMs: number, factor: number, maxDelayMs: number }} options
+  */
+ export function decide(outcome, { attempt, elapsedMs }, options) {
++  // 이미 성공한 발송은 느렸어도 끝이다. 다시 보내면 고객에게 같은 알림이 또 간다
++  if (outcome.ok) return { action: 'done' }
++
+   let reason
+   if (elapsedMs > options.timeoutMs) {
+     reason = 'timeout'
+-  } else if (outcome.ok) {
+-    return { action: 'done' }
+   } else if (isTransient(outcome.error)) {
+     reason = errorCode(outcome.error)
+   } else {
+diff --git a/base/test/digest.test.js b/tree/test/digest.test.js
+index 1917fdb..2607753 100644
+--- a/base/test/digest.test.js
++++ b/tree/test/digest.test.js
+@@ -118,3 +118,24 @@ test('영구 오류는 다시 보내지 않는다', async () => {
+   assert.equal(mail.calls.length, 1)
+   assert.equal(notifier.digest.ledger.runSummary(summary.runId).failed, 1)
+ })
++
++test('제한 시간을 넘겨 성공한 요약은 다시 보내지 않는다', async () => {
++  const { notifier, clock, mail } = digestSetup({ mail: { latencyMs: 300, outcomes: [{ latencyMs: 3500 }] } })
++  await notifier.handle(delivered('ord-1001-delivered', 'u-1', 'A-1001'))
++  clock.set(NEXT_MORNING)
++  const summary = await notifier.digest.tick()
++  assert.equal(summary.sent, 1)
++  assert.equal(mail.calls.length, 1)
++  assert.equal(mail.sent.length, 1)
++  assert.deepEqual(notifier.digest.ledger.forUser('u-1').map((e) => e.status), ['sent'])
++})
++
++test('요약 발송이 시간 초과로 실제 실패하면 다시 보낸다', async () => {
++  const { notifier, clock, mail } = digestSetup({ mail: { latencyMs: 300, outcomes: [{ fail: 'timeout', latencyMs: 3500 }] } })
++  await notifier.handle(delivered('ord-1001-delivered', 'u-1', 'A-1001'))
++  clock.set(NEXT_MORNING)
++  const summary = await notifier.digest.tick()
++  assert.equal(summary.sent, 1)
++  assert.equal(mail.calls.length, 2)
++  assert.equal(mail.sent.length, 1)
++})
+diff --git a/base/test/notifier.test.js b/tree/test/notifier.test.js
+index 5e1f54a..d4bfeae 100644
+--- a/base/test/notifier.test.js
++++ b/tree/test/notifier.test.js
+@@ -118,3 +118,35 @@ test('탈퇴한 사용자의 재시도는 버린다', async () => {
+   assert.equal(notifier.health().retryQueue.size, 0)
+   assert.equal(notifier.preferences.get('u-1').email, null)
+ })
++
++test('느리게 성공한 메일은 다시 보내지 않는다', async () => {
++  const { notifier, clock, mail } = setup({ mail: { outcomes: [{ latencyMs: 2500 }] } })
++  const res = await notifier.handle(shippedEvent())
++  assert.equal(res.results.find((r) => r.channel === 'mail').status, 'sent')
++  assert.equal(notifier.retryQueue.size(), 0)
++  clock.advance(notifier.config.retry.maxDelayMs)
++  await notifier.retryWorker.runDue()
++  assert.equal(mail.calls.length, 1)
++  assert.equal(mail.sent.length, 1)
++})
++
++test('시간 초과로 실제 실패한 메일은 다시 보낸다', async () => {
++  const { notifier, clock, mail } = setup({ mail: { outcomes: [{ fail: 'timeout', latencyMs: 2500 }] } })
++  const res = await notifier.handle(shippedEvent())
++  assert.equal(res.results.find((r) => r.channel === 'mail').status, 'retry-scheduled')
++  clock.advance(notifier.config.retry.baseDelayMs)
++  await notifier.retryWorker.runDue()
++  assert.equal(mail.calls.length, 2)
++  assert.equal(mail.sent.length, 1)
++})
++
++test('느리게 성공한 푸시는 다시 보내지 않는다', async () => {
++  const { notifier, clock, push } = setup({ push: { outcomes: [{ latencyMs: 2500 }] } })
++  const res = await notifier.handle(shippedEvent())
++  assert.equal(res.results.find((r) => r.channel === 'push').status, 'sent')
++  assert.equal(notifier.retryQueue.size(), 0)
++  clock.advance(notifier.config.retry.maxDelayMs)
++  await notifier.retryWorker.runDue()
++  assert.equal(push.calls.length, 1)
++  assert.equal(push.sent.length, 1)
++})
+diff --git a/base/test/retry.test.js b/tree/test/retry.test.js
+index a217ab7..b9afbd7 100644
+--- a/base/test/retry.test.js
++++ b/tree/test/retry.test.js
+@@ -55,3 +55,14 @@ test('대기열이 가득 차면 거절', () => {
+   assert.throws(() => q.enqueue({ notBefore: 2 }), QueueFullError)
+   assert.equal(q.removeWhere(() => true), 1)
+ })
++
++test('제한 시간을 넘겨도 성공한 발송은 끝으로 본다(다시 보내면 중복)', () => {
++  assert.deepEqual(decide({ ok: true }, { attempt: 1, elapsedMs: options.timeoutMs + 1 }, options), { action: 'done' })
++})
++
++test('제한 시간을 넘겨 실패한 발송은 시간 초과로 다시 보낸다', () => {
++  const error = new SendError('busy', { code: 'smtp-421', transient: true })
++  const d = decide({ ok: false, error }, { attempt: 1, elapsedMs: options.timeoutMs + 1 }, options)
++  assert.equal(d.action, 'retry')
++  assert.equal(d.reason, 'timeout')
++})

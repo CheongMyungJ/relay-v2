@@ -1,0 +1,18 @@
+{"ts":"2026-10-04T05:50:39+00:00","work_id":"w-20261004-001","type":"work.created","payload":{"type":"bugfix","base_branch":"main","base_commit":"daeeb91d5747c24c9cfa2ddb1b69efd20432f04c"}}
+{"ts":"2026-10-04T05:50:39+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.started","payload":{"reason":"default","session_id":"f16cf149-3bb6-4159-ba62-135116a7282b"}}
+{"ts":"2026-10-04T05:50:39+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.first_output","payload":{"pid":13655,"ms":454}}
+{"ts":"2026-10-04T05:50:44+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.first_hook","payload":{"pid":13655,"ms":5134,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T05:51:59+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T05:52:10+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T05:52:10+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.started","payload":{"reason":"default","session_id":"b2251115-8505-4e77-a2f4-3dca42ed4494"}}
+{"ts":"2026-10-04T05:52:11+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.first_output","payload":{"pid":16557,"ms":802}}
+{"ts":"2026-10-04T05:52:11+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.first_hook","payload":{"pid":16557,"ms":1012,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T05:53:04+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T05:53:19+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.approved","payload":{"by":"auto"}}
+{"ts":"2026-10-04T05:53:20+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.started","payload":{"reason":"default","session_id":"00cd8e43-6462-4fc5-bcac-2013e07eb1dd"}}
+{"ts":"2026-10-04T05:53:21+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.first_output","payload":{"pid":19194,"ms":829}}
+{"ts":"2026-10-04T05:53:21+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.first_hook","payload":{"pid":19194,"ms":1273,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T05:54:16+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.bounced","payload":{"attempt":1,"max":2,"errors":[{"file":"pr.md","message":"`pr.md` 없음: `status: awaiting_approval`일 때 필수 산출물"}]}}
+{"ts":"2026-10-04T05:54:21+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T05:54:47+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T05:54:47+00:00","work_id":"w-20261004-001","type":"work.completed","payload":{"delivery":"none"}}

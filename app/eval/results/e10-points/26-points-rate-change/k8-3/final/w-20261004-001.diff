@@ -1,0 +1,158 @@
+diff --git a/tree/docs/knowledge/points/earn-base-and-rounding.md b/tree/docs/knowledge/points/earn-base-and-rounding.md
+new file mode 100644
+index 0000000..eb198eb
+--- /dev/null
++++ b/tree/docs/knowledge/points/earn-base-and-rounding.md
+@@ -0,0 +1,19 @@
++---
++kind: rule
++source: human
++anchor: earnPoints
++---
++# 적립 포인트는 배송비를 뺀 금액의 적립률%를 원 단위 버림한다
++
++## 규칙
++- 적립 기준 금액은 상품 − 쿠폰 − 사용 포인트이고 배송비는 제외한다 (고객센터 적립 안내 기준).
++- 적립 포인트는 기준 금액 × 적립률(`POINT_RATE_PERCENT`)%를 원 단위로 버림한다. 예: O-1042는 23,770원 × 1% = 237P.
++- 계산은 `src/points/earn.js`의 `earnPoints` 한 곳이고, 선물하기(`giftPoints`)도 이를 호출한다. 반올림은 쓰지 않는다 (O-1042가 238P가 되어 안내 기준과 맞지 않음).
++- 부분 환불 회수 포인트(`src/orders/refund.js`)도 같은 버림(`percentOfFloor`)을 쓴다.
++
++## 아직 규칙을 따르지 않는 곳
++- `src/orders/refund.js`: 회수 포인트의 기준이 상품 금액뿐이라 쿠폰·사용 포인트를 뺀 적립 기준 금액과 다르다. 쿠폰·포인트를 쓴 주문은 적립보다 많이 회수될 수 있다.
++- 이미 저장된 주문의 `points.earned`는 옛 계산(배송비 포함, 반올림)이라 보정되지 않았다.
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-001, 사람이 알려 줌)
+diff --git a/base/src/gift/gift-points.js b/tree/src/gift/gift-points.js
+index 31d9ca8..775b7f3 100644
+--- a/base/src/gift/gift-points.js
++++ b/tree/src/gift/gift-points.js
+@@ -1,7 +1,6 @@
+-import { POINT_RATE_PERCENT } from '../config.js'
+-import { percentOf } from '../money.js'
++import { earnPoints } from '../points/earn.js'
+ 
+-/** 선물하기 주문의 적립 포인트(보내는 사람에게 쌓인다) */
++/** 선물하기 주문의 적립 포인트(보내는 사람에게 쌓인다). 일반 주문과 같은 기준 */
+ export function giftPoints(order) {
+-  return percentOf(order.amounts.total, POINT_RATE_PERCENT)
++  return earnPoints(order)
+ }
+diff --git a/base/src/money.js b/tree/src/money.js
+index 4ce3f7b..359f4d9 100644
+--- a/base/src/money.js
++++ b/tree/src/money.js
+@@ -14,6 +14,11 @@ export function percentOf(amount, percent) {
+   return Math.round((amount * percent) / 100)
+ }
+ 
++/** 금액의 percent%. 원 단위로 버림한다 */
++export function percentOfFloor(amount, percent) {
++  return Math.floor((amount * percent) / 100)
++}
++
+ /** 10원 단위 버림 */
+ export function floorTen(amount) {
+   return Math.floor(amount / 10) * 10
+diff --git a/base/src/orders/refund.js b/tree/src/orders/refund.js
+index 7d4f479..c0160d3 100644
+--- a/base/src/orders/refund.js
++++ b/tree/src/orders/refund.js
+@@ -1,6 +1,6 @@
+ import { POINT_RATE_PERCENT, REFUND_NUMBER } from '../config.js'
+ import { lineAmount } from '../cart/line.js'
+-import { percentOf, sumWon } from '../money.js'
++import { percentOfFloor, sumWon } from '../money.js'
+ 
+ // 환불. order는 저장된 주문(createOrder의 결과를 저장한 것)이다. 저장된 금액과 적립 포인트를 쓴다.
+ // - 부분 환불(createRefund): 돌려받는 줄의 상품 금액을 돌려주고, 적립했던 포인트 일부를 회수한다.
+@@ -31,7 +31,7 @@ export function createRefund(order, input) {
+     orderNumber: order.number,
+     items,
+     refundAmount: refundGoods,
+-    pointsRecovered: percentOf(refundGoods, POINT_RATE_PERCENT),
++    pointsRecovered: percentOfFloor(refundGoods, POINT_RATE_PERCENT),
+   }
+ }
+ 
+diff --git a/base/src/points/earn.js b/tree/src/points/earn.js
+index 1ad53ff..fbc5eba 100644
+--- a/base/src/points/earn.js
++++ b/tree/src/points/earn.js
+@@ -1,7 +1,12 @@
+ import { POINT_RATE_PERCENT } from '../config.js'
+-import { percentOf } from '../money.js'
++import { percentOfFloor } from '../money.js'
+ 
+-/** 주문의 적립 포인트. 결제 금액의 POINT_RATE_PERCENT% */
++/** 적립 기준 금액. 상품 금액 − 쿠폰 할인 − 사용 포인트 (배송비 제외) */
++export function earnBase(amounts) {
++  return amounts.goods - amounts.coupon - amounts.pointsUsed
++}
++
++/** 주문의 적립 포인트. 적립 기준 금액의 POINT_RATE_PERCENT%, 원 단위 버림 */
+ export function earnPoints(order) {
+-  return percentOf(order.amounts.total, POINT_RATE_PERCENT)
++  return percentOfFloor(earnBase(order.amounts), POINT_RATE_PERCENT)
+ }
+diff --git a/tree/test/earn.test.js b/tree/test/earn.test.js
+new file mode 100644
+index 0000000..d160439
+--- /dev/null
++++ b/tree/test/earn.test.js
+@@ -0,0 +1,55 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import { createOrder } from '../src/orders/order.js'
++import { createGiftOrder } from '../src/gift/gift-order.js'
++import { earnPoints } from '../src/points/earn.js'
++import { giftPoints } from '../src/gift/gift-points.js'
++import { percentOfFloor } from '../src/money.js'
++
++const base = { customerId: 'U-1', orderedAt: '2026-10-01T10:00:00+09:00' }
++
++test('적립 기준에서 배송비를 제외하고 버림한다 (O-1042)', () => {
++  const o = createOrder({
++    ...base,
++    number: 'O-1042',
++    lines: [{ sku: 'A', unitPrice: 28270, qty: 1 }],
++    coupon: { code: 'C', amount: 3000 },
++    pointsUsed: 1500,
++  })
++  assert.strictEqual(o.amounts.shipping, 3000)
++  assert.strictEqual(o.amounts.total, 26770)
++  assert.strictEqual(o.points.earned, 237)
++})
++
++test('적립 포인트는 소수점 이하를 버린다', () => {
++  const o = createOrder({ ...base, number: 'O-0001', lines: [{ sku: 'A', unitPrice: 29990, qty: 1 }] })
++  assert.strictEqual(o.points.earned, 299)
++})
++
++test('배송비가 있어도 적립에 포함되지 않는다', () => {
++  const o = createOrder({ ...base, number: 'O-0002', lines: [{ sku: 'A', unitPrice: 10000, qty: 1 }] })
++  assert.strictEqual(o.amounts.shipping, 3000)
++  assert.strictEqual(earnPoints(o), 100)
++})
++
++test('선물하기 주문도 같은 기준으로 적립한다 (G-0213)', () => {
++  const g = createGiftOrder({
++    ...base,
++    number: 'G-0213',
++    recipient: { name: '한서윤', phone: '010-4821-3307' },
++    lines: [
++      { sku: 'HN-0120', unitPrice: 15900, qty: 1 },
++      { sku: 'JM-0332', unitPrice: 4480, qty: 2 },
++    ],
++    coupon: { code: 'GIFT2000', amount: 2000 },
++    pointsUsed: 1000,
++  })
++  assert.strictEqual(g.amounts.shipping, 3000)
++  assert.strictEqual(g.points.earned, 218)
++  assert.strictEqual(giftPoints(g), 218)
++})
++
++test('percentOfFloor는 원 단위로 버림한다', () => {
++  assert.strictEqual(percentOfFloor(29990, 1), 299)
++  assert.strictEqual(percentOfFloor(99, 1), 0)
++})

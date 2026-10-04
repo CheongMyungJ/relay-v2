@@ -1,0 +1,46 @@
+diff --git a/base/src/points/earn.js b/tree/src/points/earn.js
+index 1ad53ff..40213b3 100644
+--- a/base/src/points/earn.js
++++ b/tree/src/points/earn.js
+@@ -1,7 +1,7 @@
+ import { POINT_RATE_PERCENT } from '../config.js'
+-import { percentOf } from '../money.js'
+ 
+-/** 주문의 적립 포인트. 결제 금액의 POINT_RATE_PERCENT% */
++/** 주문의 적립 포인트. 배송비를 뺀 결제 금액의 POINT_RATE_PERCENT%, 원 단위 내림 */
+ export function earnPoints(order) {
+-  return percentOf(order.amounts.total, POINT_RATE_PERCENT)
++  const base = order.amounts.total - order.amounts.shipping
++  return Math.floor((base * POINT_RATE_PERCENT) / 100)
+ }
+diff --git a/tree/test/earn.test.js b/tree/test/earn.test.js
+new file mode 100644
+index 0000000..ace02cf
+--- /dev/null
++++ b/tree/test/earn.test.js
+@@ -0,0 +1,25 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import { createOrder } from '../src/orders/order.js'
++
++const base = { customerId: 'U-1', orderedAt: '2026-10-01T10:00:00+09:00' }
++
++test('적립은 배송비를 뺀 결제 금액의 1%를 원 단위로 내린다 (O-1042: 237P)', () => {
++  const o = createOrder({
++    ...base,
++    number: 'O-1042',
++    lines: [{ sku: 'A', unitPrice: 8900, qty: 2 }, { sku: 'B', unitPrice: 3490, qty: 3 }],
++    coupon: { code: 'AUTUMN3000', amount: 3000, minGoods: 20000 },
++    pointsUsed: 1500,
++    pointBalance: 4820,
++  })
++  assert.strictEqual(o.amounts.shipping, 3000)
++  assert.strictEqual(o.amounts.total, 26770)
++  assert.strictEqual(o.points.earned, 237)
++})
++
++test('배송비가 없으면 결제 금액의 1%를 내린다 (403.7 → 403, 반올림이면 404)', () => {
++  const o = createOrder({ ...base, number: 'O-0003', lines: [{ sku: 'A', unitPrice: 40370, qty: 1 }] })
++  assert.strictEqual(o.amounts.shipping, 0)
++  assert.strictEqual(o.points.earned, 403)
++})

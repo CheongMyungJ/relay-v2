@@ -1,0 +1,18 @@
+{"ts":"2026-10-04T05:42:43+00:00","work_id":"w-20261004-001","type":"work.created","payload":{"type":"bugfix","base_branch":"main","base_commit":"34219969f23b7209b28f027e116f989285879bd7"}}
+{"ts":"2026-10-04T05:42:43+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.started","payload":{"reason":"default","session_id":"2b6c703d-7c73-473b-9c33-4c4fa86f6c5f"}}
+{"ts":"2026-10-04T05:42:43+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.first_output","payload":{"pid":29372,"ms":416}}
+{"ts":"2026-10-04T05:42:48+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.first_hook","payload":{"pid":29372,"ms":5106,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T05:43:04+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T05:43:15+00:00","work_id":"w-20261004-001","task_id":"t-01","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T05:43:15+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.started","payload":{"reason":"default","session_id":"42a32908-d5ae-4c46-b4a2-f0368b14cea0"}}
+{"ts":"2026-10-04T05:43:16+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.first_output","payload":{"pid":30389,"ms":793}}
+{"ts":"2026-10-04T05:43:16+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.first_hook","payload":{"pid":30389,"ms":982,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T05:44:13+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T05:44:28+00:00","work_id":"w-20261004-001","task_id":"t-02","type":"task.approved","payload":{"by":"auto"}}
+{"ts":"2026-10-04T05:44:28+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.started","payload":{"reason":"default","session_id":"21b7ac71-a2c1-4685-a390-8151ec7616c3"}}
+{"ts":"2026-10-04T05:44:29+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.first_output","payload":{"pid":1298,"ms":820}}
+{"ts":"2026-10-04T05:44:29+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.first_hook","payload":{"pid":1298,"ms":1023,"event":"UserPromptSubmit"}}
+{"ts":"2026-10-04T05:45:42+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.bounced","payload":{"attempt":1,"max":2,"errors":[{"file":"docs/knowledge/points/earn-base-and-rounding.md","message":"`## 아직 규칙을 따르지 않는 곳`은 kind: rule에만 둔다"}]}}
+{"ts":"2026-10-04T05:45:48+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.awaiting_approval","payload":{}}
+{"ts":"2026-10-04T05:46:00+00:00","work_id":"w-20261004-001","task_id":"t-03","type":"task.approved","payload":{"by":"human"}}
+{"ts":"2026-10-04T05:46:00+00:00","work_id":"w-20261004-001","type":"work.completed","payload":{"delivery":"none"}}

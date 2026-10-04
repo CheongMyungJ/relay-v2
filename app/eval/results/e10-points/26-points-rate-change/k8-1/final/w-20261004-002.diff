@@ -1,0 +1,98 @@
+diff --git a/tree/docs/knowledge/orders/already-refunded-format.md b/tree/docs/knowledge/orders/already-refunded-format.md
+new file mode 100644
+index 0000000..49ec254
+--- /dev/null
++++ b/tree/docs/knowledge/orders/already-refunded-format.md
+@@ -0,0 +1,13 @@
++---
++kind: pitfall
++source: investigation
++---
++# createRefund의 alreadyRefunded는 sku마다 누적 수량 한 줄이어야 한다
++
++## 내용
++- `createRefund(order, input)`의 `input.alreadyRefunded`는 `{sku, qty}` 목록이고 sku마다 한 줄, qty는 지금까지 환불한 누적 수량이다 (`src/orders/refund.js`).
++- 같은 sku를 여러 줄로 넘기면 `Map`으로 만드는 과정에서 마지막 줄만 남아 이미 환불한 수량이 줄어든다. 남은 상품 금액과 회수 포인트가 틀어지는데 오류는 나지 않는다.
++- 다회 환불을 시험하는 테스트를 쓸 때(예: `test/refund.test.js`의 다회 환불 테스트) 매 단계의 환불 항목을 그대로 쌓지 말고 sku별로 수량을 더해 넘긴다. 같은 sku를 두 번 환불한 O-1077에서 합계가 344P여야 하는데 345P가 나온 적이 있다.
++
++## 바뀐 이력
++- 2026-10-04 처음 남김 (Work w-20261004-002)
+diff --git a/base/src/orders/refund.js b/tree/src/orders/refund.js
+index 7d4f479..e9c1352 100644
+--- a/base/src/orders/refund.js
++++ b/tree/src/orders/refund.js
+@@ -1,12 +1,19 @@
+ import { POINT_RATE_PERCENT, REFUND_NUMBER } from '../config.js'
+ import { lineAmount } from '../cart/line.js'
+-import { percentOf, sumWon } from '../money.js'
++import { sumWon } from '../money.js'
+ 
+ // 환불. order는 저장된 주문(createOrder의 결과를 저장한 것)이다. 저장된 금액과 적립 포인트를 쓴다.
+ // - 부분 환불(createRefund): 돌려받는 줄의 상품 금액을 돌려주고, 적립했던 포인트 일부를 회수한다.
++//   회수 = (환불 전 남은 주문의 적립액) − (환불 후 남은 주문의 적립액).
+ //   쿠폰 할인과 사용한 포인트는 남은 주문에 그대로 둔다. 남은 상품 금액이 그보다 적어지면 전체 취소로 한다.
+ // - 전체 취소(cancelOrder): 결제 금액을 모두 돌려주고, 적립 포인트를 모두 회수하고, 사용한 포인트를 돌려준다.
+ 
++// 남은 주문의 적립액: (남은 상품 − 쿠폰 − 사용 포인트)의 1%, 1P 미만 버림. 배송비 제외, 저장된 적립액 이하
++function remainingEarn(order, remainingGoods) {
++  const base = Math.max(0, remainingGoods - order.amounts.coupon - order.amounts.pointsUsed)
++  return Math.min(order.points.earned, Math.floor((base * POINT_RATE_PERCENT) / 100))
++}
++
+ export function createRefund(order, input) {
+   if (!REFUND_NUMBER.test(input.number ?? '')) throw new Error(`환불 번호 형식은 R-0000: ${input.number}`)
+   const already = new Map((input.alreadyRefunded ?? []).map((r) => [r.sku, r.qty]))
+@@ -31,7 +38,8 @@ export function createRefund(order, input) {
+     orderNumber: order.number,
+     items,
+     refundAmount: refundGoods,
+-    pointsRecovered: percentOf(refundGoods, POINT_RATE_PERCENT),
++    pointsRecovered: remainingEarn(order, order.amounts.goods - refundedBefore) -
++      remainingEarn(order, remainingGoods),
+   }
+ }
+ 
+diff --git a/base/test/refund.test.js b/tree/test/refund.test.js
+index de6f8a4..2426889 100644
+--- a/base/test/refund.test.js
++++ b/tree/test/refund.test.js
+@@ -1,5 +1,6 @@
+ import { test } from 'node:test'
+ import assert from 'node:assert'
++import { readFileSync } from 'node:fs'
+ import { cancelOrder, createRefund } from '../src/orders/refund.js'
+ 
+ const order = {
+@@ -30,3 +31,32 @@ test('남은 수량보다 많이 환불할 수 없다', () => {
+ test('전체 취소는 저장된 금액과 포인트를 모두 돌려놓는다', () => {
+   assert.deepStrictEqual(cancelOrder(order), { orderNumber: 'O-0100', refundAmount: 50000, pointsRecovered: 500, pointsReturned: 0 })
+ })
++
++const o1077 = JSON.parse(readFileSync(new URL('../examples/O-1077.json', import.meta.url)))
++const r0311 = JSON.parse(readFileSync(new URL('../examples/R-0311.json', import.meta.url)))
++
++test('부분 환불 회수 포인트는 남은 주문의 적립액과의 차이다 (O-1077/R-0311 = 132P)', () => {
++  const r = createRefund(o1077, r0311)
++  assert.strictEqual(r.pointsRecovered, 132)
++  assert.strictEqual(r.refundAmount, 13130)
++})
++
++test('여러 번 나눠 부분 환불해도 회수 합계가 저장된 적립액을 넘지 않는다', () => {
++  const steps = [
++    { number: 'R-0001', items: [{ sku: 'KT-2290', qty: 1 }] },
++    { number: 'R-0002', items: [{ sku: 'SP-0656', qty: 1 }] },
++    { number: 'R-0003', items: [{ sku: 'SP-0656', qty: 1 }] },
++    { number: 'R-0004', items: [{ sku: 'TW-0838', qty: 1 }] },
++  ]
++  const already = new Map() // alreadyRefunded는 sku마다 누적 수량 한 줄이다
++  let total = 0
++  for (const s of steps) {
++    const alreadyRefunded = [...already].map(([sku, qty]) => ({ sku, qty }))
++    const r = createRefund(o1077, { ...s, alreadyRefunded })
++    total += r.pointsRecovered
++    for (const it of s.items) already.set(it.sku, (already.get(it.sku) ?? 0) + it.qty)
++  }
++  assert.ok(total <= o1077.points.earned, `회수 합계 ${total} > 적립 ${o1077.points.earned}`)
++  // 남은 상품 12,900 − 쿠폰 5,000 − 사용 2,000 = 5,900의 1% 버림 = 59P가 남으므로 403 − 59 = 344P
++  assert.strictEqual(total, 344)
++})

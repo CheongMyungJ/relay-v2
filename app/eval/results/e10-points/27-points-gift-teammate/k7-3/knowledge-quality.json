@@ -1,0 +1,77 @@
+{
+  "paths": [
+    "docs/knowledge/earn-points-rule.md",
+    "docs/knowledge/gift-points-do-not-touch.md",
+    "docs/knowledge/keep-earned-points-stored.md",
+    "docs/knowledge/receipt-text-unchanged.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/earn-points-rule.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/gift-points-do-not-touch.md",
+        "stale": true,
+        "staleWhy": "제목과 본문이 선물하기 적립을 '손대지 않는다'고 하고 '여전히 percentOf(total)(배송비 포함, 반올림)'이라고 지금 상태처럼 적었다. 마지막 Work에서 이미 규정대로 고쳤다. 이력 줄이 있어도 제목과 첫 줄이 낡았다.",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/keep-earned-points-stored.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/receipt-text-unchanged.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [
+      {
+        "a": "docs/knowledge/earn-points-rule.md",
+        "b": "docs/knowledge/gift-points-do-not-touch.md",
+        "why": "선물하기 적립에 대해 earn-points-rule은 earnPoints를 호출해 같은 기준이고 G-0213이 218P라고 한다. gift-points-do-not-touch는 여전히 percentOf(total)로 배송비를 포함해 반올림하고 G-0213이 249P라고 하며 손대지 말라고 한다."
+      }
+    ],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "earn-points-rule에 배송비 제외, 쿠폰과 사용 포인트 차감이 맞게 적혀 있다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "earn-points-rule에 반올림이 아니라 원 미만 버림이라고 적혀 있다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "earn-points-rule 제목과 본문에 1%로 적혀 있다."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "keep-earned-points-stored에 저장값을 그대로 쓴다고 적혀 있다."
+      }
+    ]
+  }
+}

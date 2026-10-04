@@ -1,0 +1,46 @@
+{
+  "paths": [
+    "docs/knowledge/points/earn-base-and-rounding.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/points/earn-base-and-rounding.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": true,
+        "stateWhy": "규칙 절에 \"환불 회수 비율은 적립률과 분리해 POINT_RECOVER_RATE_PERCENT(1%)를 쓴다... 적립률을 바꿀 때 회수를 같이 바꾸지 않는다\"고 적었다. 회수에 새 적립률을 쓸지는 정하지 않았는데(정산팀과 따로 정함) 1%를 쓰고 같이 바꾸지 말라는 지시형 규칙처럼 적었다. '따로 정한다'는 말은 있지만 현재 상태 절이 아니라 규칙 절에 있다.",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "기준 금액은 상품 − 쿠폰 − 사용 포인트이고 배송비는 제외한다고 적혀 있다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "원 단위 버림이며 반올림은 쓰지 않는다고 명시했다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "적립률은 2%이고 2026-10-04 배포부터라고 적혀 있다. 1%는 과거 예시로만 쓰였다."
+      },
+      {
+        "id": "R4",
+        "status": "correct",
+        "why": "회수 포인트 = 저장된 원래 적립 − 남은 상품으로 재계산한 적립이라고 적혀 있다(예: 403−271=132P)."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "이미 저장된 주문의 points.earned와 포인트 내역은 다시 계산하지 않는다고 적혀 있다."
+      }
+    ]
+  }
+}

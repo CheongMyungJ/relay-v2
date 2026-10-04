@@ -1,0 +1,137 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:35129/hook/t-02/UserPromptSubmit",
+            "headers": {
+              "Authorization": "Bearer $RELAY_HOOK_TOKEN"
+            },
+            "allowedEnvVars": [
+              "RELAY_HOOK_TOKEN"
+            ],
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:35129/hook/t-02/Stop",
+            "headers": {
+              "Authorization": "Bearer $RELAY_HOOK_TOKEN"
+            },
+            "allowedEnvVars": [
+              "RELAY_HOOK_TOKEN"
+            ],
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:35129/hook/t-02/Notification",
+            "headers": {
+              "Authorization": "Bearer $RELAY_HOOK_TOKEN"
+            },
+            "allowedEnvVars": [
+              "RELAY_HOOK_TOKEN"
+            ],
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:35129/hook/t-02/SessionEnd",
+            "headers": {
+              "Authorization": "Bearer $RELAY_HOOK_TOKEN"
+            },
+            "allowedEnvVars": [
+              "RELAY_HOOK_TOKEN"
+            ],
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:35129/hook/t-02/PreToolUse",
+            "headers": {
+              "Authorization": "Bearer $RELAY_HOOK_TOKEN"
+            },
+            "allowedEnvVars": [
+              "RELAY_HOOK_TOKEN"
+            ],
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:35129/hook/t-02/PostToolUse",
+            "headers": {
+              "Authorization": "Bearer $RELAY_HOOK_TOKEN"
+            },
+            "allowedEnvVars": [
+              "RELAY_HOOK_TOKEN"
+            ],
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:35129/hook/t-02/PostToolUseFailure",
+            "headers": {
+              "Authorization": "Bearer $RELAY_HOOK_TOKEN"
+            },
+            "allowedEnvVars": [
+              "RELAY_HOOK_TOKEN"
+            ],
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "deny": [
+      "Bash(git push*)",
+      "Bash(gh pr*)",
+      "Edit(//tmp/relay-eval/e10-points/26-points-rate-change-k7-5/relay-home/projects/shop-f774e3/works/w-20261004-003/work.json)",
+      "Edit(//tmp/relay-eval/e10-points/26-points-rate-change-k7-5/relay-home/projects/shop-f774e3/works/w-20261004-003/request.md)",
+      "Edit(//tmp/relay-eval/e10-points/26-points-rate-change-k7-5/relay-home/projects/shop-f774e3/works/w-20261004-003/intent.md)",
+      "Edit(//tmp/relay-eval/e10-points/26-points-rate-change-k7-5/relay-home/projects/shop-f774e3/works/w-20261004-003/decisions.md)",
+      "Edit(//tmp/relay-eval/e10-points/26-points-rate-change-k7-5/relay-home/projects/shop-f774e3/works/w-20261004-003/pr-items.json)",
+      "Edit(//tmp/relay-eval/e10-points/26-points-rate-change-k7-5/relay-home/projects/shop-f774e3/works/w-20261004-003/tasks/01-intake/**)",
+      "Edit(//tmp/relay-eval/e10-points/26-points-rate-change-k7-5/relay-home/projects/shop-f774e3/works/w-20261004-003/.claude/**)"
+    ]
+  },
+  "autoMemoryEnabled": false
+}

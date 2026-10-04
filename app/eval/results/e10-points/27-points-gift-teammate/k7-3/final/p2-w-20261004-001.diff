@@ -1,0 +1,149 @@
+diff --git a/tree/docs/knowledge/earn-points-rule.md b/tree/docs/knowledge/earn-points-rule.md
+new file mode 100644
+index 0000000..be84ce5
+--- /dev/null
++++ b/tree/docs/knowledge/earn-points-rule.md
+@@ -0,0 +1,11 @@
++# 적립 포인트는 (상품 금액 - 쿠폰 - 사용 포인트)의 1%를 원 미만 버림한다
++
++- 종류: 규칙
++- 적용: src/points/earn.js
++- 출처: 사람이 알려 줌(고객센터 기준 237P), 조사로 알아냄, relay Work w-20261004-001, 2026-10-04
++
++- 배송비는 적립 대상이 아니다. 쿠폰 할인과 사용 포인트는 뺀다. 1%의 원 미만은 반올림이 아니라 버린다.
++- 예: O-1042는 28,270 - 3,000 - 1,500 = 23,770 → 237.7 → 237P. 배송비 포함(268P)이나 반올림(238P)은 틀리다.
++- 이 기준은 O-1042 한 건에서 역산했다. 일반 주문 적립(`earnPoints`)에 적용했다.
++- 선물하기 적립(`src/gift/gift-points.js`)도 `earnPoints`를 호출해 같은 기준이다. 고객센터 G-0213 = 218P(24,860 - 2,000 - 1,000 → 218.6 → 218)와 맞는다. 배송비가 있는 주문에서만 차이가 드러나므로 테스트는 배송비 있는 주문으로 쓴다.
++- 부분 환불 회수(`src/orders/refund.js`)는 아직 반올림(`percentOf`)이라 기준이 다르다.
+diff --git a/tree/docs/knowledge/gift-points-do-not-touch.md b/tree/docs/knowledge/gift-points-do-not-touch.md
+new file mode 100644
+index 0000000..035b590
+--- /dev/null
++++ b/tree/docs/knowledge/gift-points-do-not-touch.md
+@@ -0,0 +1,9 @@
++# 선물하기 적립(src/gift/gift-points.js)은 다른 팀과 함께 보고 있어 손대지 않는다
++
++- 종류: 규칙
++- 적용: src/gift/gift-points.js
++- 출처: 사람이 알려 줌, relay Work w-20261004-001, 2026-10-04
++
++- 일반 주문 적립 버그를 고칠 때 선물하기 적립 코드는 수정하지 않는다. 다른 팀과 협의가 필요하다.
++- 선물하기 적립은 여전히 `percentOf(total)`(배송비 포함, 반올림)이라 같은 기준 문제가 남아 있을 수 있다 (예: G-0213 249P).
++- 이력: w-20261004-001에서 사람이 수정을 허용해 `earnPoints`를 호출하도록 바꿨다(G-0213 249P → 218P). 다른 팀과 협의가 끝났는지는 확인되지 않았다. 이 파일의 규칙(수정 전 협의)은 그대로이고, 위 "예: G-0213 249P"는 수정 전 값이다.
+diff --git a/tree/docs/knowledge/keep-earned-points-stored.md b/tree/docs/knowledge/keep-earned-points-stored.md
+new file mode 100644
+index 0000000..43bb546
+--- /dev/null
++++ b/tree/docs/knowledge/keep-earned-points-stored.md
+@@ -0,0 +1,9 @@
++# 이미 적립된 포인트는 다시 계산하지 않고 주문에 저장된 값을 쓴다
++
++- 종류: 규칙
++- 적용: src/orders/order.js, src/orders/refund.js, src/points/
++- 출처: 사람이 알려 줌, relay Work w-20261004-001, 2026-10-04
++
++- 주문을 만들 때 계산한 `order.points.earned`는 저장값이다. 이미 적립된 주문은 계산 기준이 바뀌어도 다시 계산하지 않고 저장값을 그대로 쓴다.
++- 예: 전체 취소의 회수 포인트는 `order.points.earned`를 쓴다.
++- 계산 기준을 고치면 앞으로 만드는 주문에만 적용된다.
+diff --git a/tree/docs/knowledge/receipt-text-unchanged.md b/tree/docs/knowledge/receipt-text-unchanged.md
+new file mode 100644
+index 0000000..345d992
+--- /dev/null
++++ b/tree/docs/knowledge/receipt-text-unchanged.md
+@@ -0,0 +1,8 @@
++# 영수증 글자(src/format/)는 바뀌면 안 된다
++
++- 종류: 규칙
++- 적용: src/format/
++- 출처: 사람이 알려 줌, relay Work w-20261004-001, 2026-10-04
++
++- 영수증 출력 글자 형식은 계산 버그를 고칠 때도 그대로 둔다. 금액 계산을 고쳐 숫자가 달라지는 것은 괜찮지만 줄 이름, 간격, 단위 표기는 바꾸지 않는다.
++- 확인: 수정 전후 `node src/cli.js examples/O-1042.json` 출력을 비교해 값이 바뀐 줄만 다른지 본다.
+diff --git a/base/src/gift/gift-points.js b/tree/src/gift/gift-points.js
+index 31d9ca8..ccb44c2 100644
+--- a/base/src/gift/gift-points.js
++++ b/tree/src/gift/gift-points.js
+@@ -1,7 +1,6 @@
+-import { POINT_RATE_PERCENT } from '../config.js'
+-import { percentOf } from '../money.js'
++import { earnPoints } from '../points/earn.js'
+ 
+-/** 선물하기 주문의 적립 포인트(보내는 사람에게 쌓인다) */
++/** 선물하기 주문의 적립 포인트(보내는 사람에게 쌓인다). 일반 주문과 같은 기준이다 */
+ export function giftPoints(order) {
+-  return percentOf(order.amounts.total, POINT_RATE_PERCENT)
++  return earnPoints(order)
+ }
+diff --git a/base/src/points/earn.js b/tree/src/points/earn.js
+index 1ad53ff..ad0e73a 100644
+--- a/base/src/points/earn.js
++++ b/tree/src/points/earn.js
+@@ -1,7 +1,7 @@
+ import { POINT_RATE_PERCENT } from '../config.js'
+-import { percentOf } from '../money.js'
+ 
+-/** 주문의 적립 포인트. 결제 금액의 POINT_RATE_PERCENT% */
++/** 주문의 적립 포인트. (상품 금액 - 쿠폰 - 사용 포인트)의 POINT_RATE_PERCENT%, 원 미만 버림. 배송비는 뺀다 */
+ export function earnPoints(order) {
+-  return percentOf(order.amounts.total, POINT_RATE_PERCENT)
++  const { goods, coupon, pointsUsed } = order.amounts
++  return Math.floor(((goods - coupon - pointsUsed) * POINT_RATE_PERCENT) / 100)
+ }
+diff --git a/tree/test/earn.test.js b/tree/test/earn.test.js
+new file mode 100644
+index 0000000..e22dab1
+--- /dev/null
++++ b/tree/test/earn.test.js
+@@ -0,0 +1,27 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import fs from 'node:fs'
++import { createOrder } from '../src/orders/order.js'
++
++const base = { customerId: 'U-1', orderedAt: '2026-10-01T10:00:00+09:00' }
++
++test('O-1042: 적립 예정은 배송비와 사용 포인트를 뺀 상품 금액의 1%(원 미만 버림)로 237P', () => {
++  const input = JSON.parse(fs.readFileSync(new URL('../examples/O-1042.json', import.meta.url), 'utf8'))
++  assert.strictEqual(createOrder(input).points.earned, 237)
++})
++
++test('배송비는 적립 대상이 아니다', () => {
++  const o = createOrder({ ...base, number: 'O-0003', lines: [{ sku: 'A', unitPrice: 10000, qty: 1 }] })
++  assert.strictEqual(o.amounts.total, 13000)
++  assert.strictEqual(o.points.earned, 100)
++})
++
++test('사용한 포인트는 적립 대상이 아니다', () => {
++  const o = createOrder({ ...base, number: 'O-0004', lines: [{ sku: 'A', unitPrice: 40000, qty: 1 }], pointsUsed: 1000 })
++  assert.strictEqual(o.points.earned, 390)
++})
++
++test('원 미만은 버린다', () => {
++  const o = createOrder({ ...base, number: 'O-0005', lines: [{ sku: 'A', unitPrice: 39990, qty: 1 }] })
++  assert.strictEqual(o.points.earned, 399)
++})
+diff --git a/base/test/gift.test.js b/tree/test/gift.test.js
+index 898969e..cc4ec50 100644
+--- a/base/test/gift.test.js
++++ b/tree/test/gift.test.js
+@@ -21,3 +21,20 @@ test('메시지 카드는 60자까지', () => {
+ test('받는 사람 전화번호 형식', () => {
+   assert.throws(() => createGiftOrder({ ...base, number: 'G-0003', recipient: { name: '김하늘', phone: '01012345678' } }), /010-0000-0000/)
+ })
++
++test('선물하기 적립은 일반 주문과 같은 기준이다: G-0213 = 218P', () => {
++  const g = createGiftOrder({
++    number: 'G-0213',
++    customerId: 'U-08871',
++    recipient: { name: '한서윤', phone: '010-4821-3307' },
++    lines: [
++      { sku: 'HN-0120', unitPrice: 15900, qty: 1 },
++      { sku: 'JM-0332', unitPrice: 4480, qty: 2 },
++    ],
++    coupon: { code: 'GIFT2000', amount: 2000 },
++    pointsUsed: 1000,
++    pointBalance: 6210,
++  })
++  assert.strictEqual(g.amounts.shipping, 3000)
++  assert.strictEqual(g.points.earned, 218)
++})

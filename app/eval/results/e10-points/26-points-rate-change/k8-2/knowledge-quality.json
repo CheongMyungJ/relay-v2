@@ -1,0 +1,46 @@
+{
+  "paths": [
+    "docs/knowledge/points/earn-basis.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/points/earn-basis.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "기준 금액이 상품 − 쿠폰 − 사용 포인트이고 배송비는 제외라고 적혀 있다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "원 단위 버림이고 반올림이면 487P라는 예시와 함께 적혀 있다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "적립률 2%(2026-10-04 배포부터)이고, 1%에서 바뀐 이력이 따로 적혀 있다."
+      },
+      {
+        "id": "R4",
+        "status": "correct",
+        "why": "회수 포인트는 저장된 원래 적립에서 남은 상품으로 다시 계산한 적립을 뺀 값이라고 적혀 있다(O-1077 예시 포함)."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "이미 적립된 주문의 points.earned는 적립률을 바꿔도 다시 계산하지 않고 저장값을 유지한다고 적혀 있다."
+      }
+    ]
+  }
+}

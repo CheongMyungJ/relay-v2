@@ -1,0 +1,77 @@
+{
+  "paths": [
+    "docs/knowledge/partial-refund-points-recovery.md",
+    "docs/knowledge/point-earn-base-excludes-shipping.md",
+    "docs/knowledge/refund-recovery-rate-separate-from-earn-rate.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/partial-refund-points-recovery.md",
+        "stale": true,
+        "staleWhy": "제목과 본문 공식, 예시(271P)에서 '× 1%'를 지금 값처럼 적었다. 지금 적립률은 2%다.",
+        "stateAsRule": true,
+        "stateWhy": "환불 회수에 1%를 쓰는 것을 정해진 규칙처럼 적었다. 새 적립률을 쓸지 옛 적립률을 쓸지는 정산팀과 따로 정하기로 해서 아직 정해지지 않았다.",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/point-earn-base-excludes-shipping.md",
+        "stale": true,
+        "staleWhy": "제목과 본문에서 '기준 × 1% 소수점 내림'이라고 적었고 예시도 1% 기준(237P)이다. 지금 적립률은 2%다.",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/refund-recovery-rate-separate-from-earn-rate.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [
+      {
+        "a": "docs/knowledge/point-earn-base-excludes-shipping.md",
+        "b": "docs/knowledge/refund-recovery-rate-separate-from-earn-rate.md",
+        "why": "적립률을 1%라고 적은 파일과 2026-10-04에 2%로 올렸다고 적은 파일이 서로 다르다."
+      },
+      {
+        "a": "docs/knowledge/partial-refund-points-recovery.md",
+        "b": "docs/knowledge/refund-recovery-rate-separate-from-earn-rate.md",
+        "why": "앞 파일은 회수 계산의 재계산 적립률을 1%로 확정해 적었고, 뒤 파일은 새 비율을 쓸지 정산팀과 따로 정하기 전이라고 적었다."
+      }
+    ],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "point-earn-base-excludes-shipping.md에 상품−쿠폰−사용 포인트 기준이고 배송비는 제외라고 맞게 적혀 있다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "적립을 소수점 내림(반올림 아님)으로 적었다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "refund-recovery-rate-separate-from-earn-rate.md에 1%에서 2%로 올렸다고 맞게 적혀 있다. 다른 파일은 1%로 적었지만 맞게 적힌 곳이 있다."
+      },
+      {
+        "id": "R4",
+        "status": "correct",
+        "why": "partial-refund-points-recovery.md에 저장된 적립에서 남은 상품 기준 재계산 적립을 뺀다고 적혀 있다."
+      },
+      {
+        "id": "R5",
+        "status": "correct",
+        "why": "두 파일 모두 저장된 points.earned를 다시 계산하지 않는다고 적었다."
+      }
+    ]
+  }
+}

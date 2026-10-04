@@ -1,0 +1,51 @@
+{
+  "paths": [
+    "docs/knowledge/earn-points-rule.md",
+    "docs/knowledge/earn-rule-duplicated-copies.md"
+  ],
+  "judgment": {
+    "items": [
+      {
+        "path": "docs/knowledge/earn-points-rule.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      },
+      {
+        "path": "docs/knowledge/earn-rule-duplicated-copies.md",
+        "stale": false,
+        "staleWhy": "",
+        "stateAsRule": false,
+        "stateWhy": "",
+        "kindFits": true,
+        "kindWhy": ""
+      }
+    ],
+    "contradictions": [],
+    "rules": [
+      {
+        "id": "R1",
+        "status": "correct",
+        "why": "earn-points-rule.md에 (상품 금액 - 쿠폰 - 사용 포인트) 기준, 배송비 제외로 적혀 있다."
+      },
+      {
+        "id": "R2",
+        "status": "correct",
+        "why": "1P 미만은 반올림이 아니라 버린다고 적혀 있다."
+      },
+      {
+        "id": "R3",
+        "status": "correct",
+        "why": "적립률 1%로 적혀 있다."
+      },
+      {
+        "id": "R5",
+        "status": "missing",
+        "why": "이미 적립된 포인트를 다시 계산하지 않고 저장된 값을 쓴다는 내용이 어느 파일에도 없다."
+      }
+    ]
+  }
+}

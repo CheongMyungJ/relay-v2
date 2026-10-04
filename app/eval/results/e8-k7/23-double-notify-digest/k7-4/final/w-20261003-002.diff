@@ -1,0 +1,280 @@
+diff --git a/tree/docs/knowledge/digest-key-is-period-and-user-only.md b/tree/docs/knowledge/digest-key-is-period-and-user-only.md
+new file mode 100644
+index 0000000..caa7fdd
+--- /dev/null
++++ b/tree/docs/knowledge/digest-key-is-period-and-user-only.md
+@@ -0,0 +1,10 @@
++# 요약 발송 키는 기간과 사용자로만 정한다
++
++- 종류: 규칙
++- 적용: src/digest/key.js, src/digest/runner.js, src/digest/ledger.js
++- 출처: 조사로 알아냄, relay Work w-20261003-002, 2026-10-03
++
++요약 발송 기록(ledger)의 중복 확인 키에 runId나 서버 같은 실행 단위를 넣지 않는다.
++- 맞음: `digest:2026-09-21:u-1` 처럼 기간+사용자만. 같은 기간을 runId만 바꿔 다시 실행해도 `already`로 건너뛴다.
++- 틀림: `digest:기간:runId:사용자`. 실행마다 키가 달라 이미 보낸 요약이 다시 나간다(이번 중복 발송의 원인 중 하나).
++- 실행별 집계는 키가 아니라 기록 항목의 runId 필드로 한다(`ledger.runSummary`).
+diff --git a/tree/docs/knowledge/mail-fixed-message-id-and-keep-retry.md b/tree/docs/knowledge/mail-fixed-message-id-and-keep-retry.md
+new file mode 100644
+index 0000000..c06e210
+--- /dev/null
++++ b/tree/docs/knowledge/mail-fixed-message-id-and-keep-retry.md
+@@ -0,0 +1,11 @@
++# 메일은 응답이 늦어도 나갈 수 있다: 재시도는 유지하고 고정 Message-ID로 중복을 막는다
++
++- 종류: 규칙
++- 적용: src/digest/message.js, src/digest/key.js(digestMessageId), src/adapters/mail.js
++- 출처: 사람이 알려 줌, relay Work w-20261003-002, 2026-10-03
++
++메일 서버는 응답(ETIMEDOUT)이 늦어도 받은 메일은 보낸다. 그래서 timeout 뒤 재시도가 같은 메일을 한 번 더 내보낼 수 있다.
++- 맞음: 재시도는 그대로 둔다. 요약 메일에 기간+사용자로 고정한 `Message-ID`(`<digest.2026-09-21.u-1@도메인>`)를 붙여 재시도가 같은 메일임을 알린다.
++- 틀림: 중복을 막으려고 재시도를 끄거나 timeout을 영구 오류로 취급한다. 실제로 실패한 발송이 사라진다.
++- 사용자 ID는 Message-ID에 넣을 때 서로 다른 ID가 같은 값이 되지 않게 인코딩한다(`%`는 `=`로).
++- 중복 제거는 메일 중계 서버가 같은 Message-ID를 한 번만 내보내는 데 기대며, 테스트는 가짜 transport로만 확인했다.
+diff --git a/base/src/adapters/fake-transports.js b/tree/src/adapters/fake-transports.js
+index f5a920b..320e3a6 100644
+--- a/base/src/adapters/fake-transports.js
++++ b/tree/src/adapters/fake-transports.js
+@@ -5,6 +5,8 @@
+ //   {}                                 성공
+ //   { latencyMs: 3000 }                3초 걸려 성공
+ //   { fail: 'transient' | 'permanent' | 'timeout', latencyMs? }
++//   { fail: 'timeout', delivered: true }  메일은 나갔는데 응답이 늦어 호출한 쪽은 ETIMEDOUT을 받는다
++// headers['Message-ID']가 있으면 같은 값은 한 번만 낸다(중계 서버의 Message-ID 중복 제거를 흉내 낸다).
+ //   푸시만: { fail: 'invalid-token' }
+ 
+ export function createFakeMailTransport({ clock, latencyMs = 400, outcomes = [] } = {}) {
+@@ -12,8 +14,18 @@ export function createFakeMailTransport({ clock, latencyMs = 400, outcomes = []
+   const script = [...outcomes]
+   const calls = []
+   const sent = []
++  const seen = new Set()
+   let seq = 0
+ 
++  function accept(mail) {
++    const given = mail.headers?.['Message-ID']
++    if (given && seen.has(given)) return { messageId: given, accepted: [mail.to] }
++    const messageId = given ?? `<fake-${++seq}@mail.notify.test>`
++    if (given) seen.add(given)
++    sent.push({ ...mail, messageId, at: clock.now() })
++    return { messageId, accepted: [mail.to] }
++  }
++
+   return {
+     calls,
+     sent,
+@@ -22,14 +34,15 @@ export function createFakeMailTransport({ clock, latencyMs = 400, outcomes = []
+       const outcome = script.shift() ?? {}
+       calls.push({ to: mail.to, subject: mail.subject, at: clock.now() })
+       await clock.sleep(outcome.latencyMs ?? latencyMs)
+-      if (outcome.fail === 'timeout') throw Object.assign(new Error('connect ETIMEDOUT'), { code: 'ETIMEDOUT' })
++      if (outcome.fail === 'timeout') {
++        if (outcome.delivered) accept(mail)
++        throw Object.assign(new Error('connect ETIMEDOUT'), { code: 'ETIMEDOUT' })
++      }
+       if (outcome.fail === 'transient')
+         throw Object.assign(new Error('421 4.3.2 Service not available'), { responseCode: 421 })
+       if (outcome.fail === 'permanent')
+         throw Object.assign(new Error('550 5.1.1 Mailbox unavailable'), { responseCode: 550 })
+-      const messageId = `<fake-${++seq}@mail.notify.test>`
+-      sent.push({ ...mail, messageId, at: clock.now() })
+-      return { messageId, accepted: [mail.to] }
++      return accept(mail)
+     },
+   }
+ }
+diff --git a/base/src/digest/deadline.js b/tree/src/digest/deadline.js
+index afc5a84..8e9c7a7 100644
+--- a/base/src/digest/deadline.js
++++ b/tree/src/digest/deadline.js
+@@ -1,21 +1,19 @@
+ // 요약 발송 한 건의 제한 시간.
+ // 요약은 아침에 한꺼번에 수천 통을 보내므로, 한 사람에게 오래 걸리면 뒤 사람들의 요약이 모두 밀린다.
+-import { SendTimeoutError } from '../adapters/errors.js'
+ 
+ /**
+- * fn을 부르고 걸린 시간을 잰다. 제한 시간을 넘기면 시간 초과로 본다.
++ * fn을 부르고 걸린 시간을 잰다. fn이 성공했으면 오래 걸렸어도 성공이다(slow로만 알린다).
++ * 성공한 발송을 시간 초과로 던지면 재시도로 같은 요약이 다시 나간다.
++ * 시간 초과 오류는 어댑터가 실제로 실패했을 때만 어댑터에서 올라온다.
+  * @template T
+  * @param {{ now(): number }} clock
+  * @param {number} timeoutMs
+  * @param {() => Promise<T>} fn
+- * @returns {Promise<{ value: T, elapsedMs: number }>}
++ * @returns {Promise<{ value: T, elapsedMs: number, slow: boolean }>}
+  */
+ export async function withDeadline(clock, timeoutMs, fn) {
+   const started = clock.now()
+   const value = await fn()
+   const elapsedMs = clock.now() - started
+-  if (elapsedMs > timeoutMs) {
+-    throw new SendTimeoutError(`요약 발송이 제한 시간 ${timeoutMs}ms를 넘김 (${elapsedMs}ms)`)
+-  }
+-  return { value, elapsedMs }
++  return { value, elapsedMs, slow: elapsedMs > timeoutMs }
+ }
+diff --git a/base/src/digest/key.js b/tree/src/digest/key.js
+index d6827bd..93a80e9 100644
+--- a/base/src/digest/key.js
++++ b/tree/src/digest/key.js
+@@ -1,9 +1,20 @@
+ // 요약 한 통을 가리는 키. 발송 기록에 이 키로 남기고, 같은 키로 이미 보냈으면 다시 보내지 않는다.
++// 기간과 사용자만으로 정한다. 실행(runId)이나 서버가 달라도 같은 요약은 같은 키여야 다시 실행해도 두 번 나가지 않는다.
++// 실행별 집계는 발송 기록의 runId 필드로 한다(ledger.runSummary).
+ 
+ /**
+- * @param {{ userId: string, period: string, runId: string }} job
++ * @param {{ userId: string, period: string }} job
+  */
+-export function digestKey({ userId, period, runId }) {
+-  // 실행마다 따로 남겨야 운영 화면에서 실행별로 몇 통 보냈는지 셀 수 있다
+-  return `digest:${period}:${runId}:${userId}`
++export function digestKey({ userId, period }) {
++  return `digest:${period}:${userId}`
++}
++
++/**
++ * 같은 요약은 몇 번을, 어느 서버에서 보내도 같은 Message-ID를 쓴다. 메일 서버가 응답은 늦어도 받은 메일은 보내므로,
++ * timeout 뒤 재시도가 이미 나간 메일과 같은 메일임을 이 값으로 알린다.
++ */
++export function digestMessageId({ userId, period }, from) {
++  const domain = String(from).split('@').pop() || 'notify.invalid'
++  const local = `digest.${period}.${encodeURIComponent(userId).replace(/%/g, '=')}`
++  return `<${local}@${domain}>`
+ }
+diff --git a/base/src/digest/message.js b/tree/src/digest/message.js
+index be8a790..fc71138 100644
+--- a/base/src/digest/message.js
++++ b/tree/src/digest/message.js
+@@ -1,4 +1,5 @@
+ // 요약 메일 만들기. 모인 알림마다 한 줄씩 적는다.
++import { digestMessageId } from './key.js'
+ 
+ const SUBJECT = {
+   ko: (period, n) => `${period} 알림 요약 (${n}건)`,
+@@ -21,7 +22,10 @@ export function buildDigestMessage({ userId, to, locale, period, items }, { temp
+     to,
+     subject: SUBJECT[lang](period, items.length),
+     body: [...lines, '', FOOTER[lang]].join('\n'),
+-    headers: { 'X-Notify-Digest': `${period}/${userId}` },
++    headers: {
++      'X-Notify-Digest': `${period}/${userId}`,
++      'Message-ID': digestMessageId({ userId, period }, config.channels.mail.from),
++    },
+   }
+ }
+ 
+diff --git a/base/src/digest/runner.js b/tree/src/digest/runner.js
+index 25b7c36..5a50ccf 100644
+--- a/base/src/digest/runner.js
++++ b/tree/src/digest/runner.js
+@@ -36,7 +36,7 @@ export function createDigestRunner({ clock, config, adapter, inbox, ledger, pref
+     while (pending.length) {
+       const again = []
+       for (const job of pending) {
+-        const key = digestKey({ userId: job.userId, period, runId })
++        const key = digestKey({ userId: job.userId, period })
+         if (ledger.has(key)) {
+           summary.already++
+           continue
+@@ -47,9 +47,10 @@ export function createDigestRunner({ clock, config, adapter, inbox, ledger, pref
+         const base = { runId, period, userId: job.userId, attempt: job.attempt, items: items.length }
+ 
+         try {
+-          const { value, elapsedMs } = await withDeadline(clock, opts().sendTimeoutMs, () => adapter.send(message))
++          const { value, elapsedMs, slow } = await withDeadline(clock, opts().sendTimeoutMs, () => adapter.send(message))
+           metrics.observe('digest.send.ms', elapsedMs)
+           ledger.markSent(key, { ...base, providerId: value?.id })
++          if (slow) metrics.increment('digest.send.slow')
+           metrics.increment('digest.sent')
+           summary.sent++
+         } catch (error) {
+diff --git a/tree/test/digest-duplicate.test.js b/tree/test/digest-duplicate.test.js
+new file mode 100644
+index 0000000..6706abc
+--- /dev/null
++++ b/tree/test/digest-duplicate.test.js
+@@ -0,0 +1,82 @@
++import assert from 'node:assert/strict'
++import { test } from 'node:test'
++import { createFakeMailTransport } from '../src/adapters/fake-transports.js'
++import { createVirtualClock } from '../src/clock.js'
++import { createNotifier } from '../src/notifier.js'
++import { digestKey, digestMessageId } from '../src/digest/key.js'
++import { setup } from './helpers.js'
++
++const USERS = { 'u-1': { email: 'mina@example.com', pushTokens: ['tok-a'], locale: 'ko', digest: true } }
++const NEXT_MORNING = Date.parse('2026-09-21T23:05:00Z')
++
++function delivered(id, orderNo) {
++  return { id, source: 'orders', type: 'order.delivered', userId: 'u-1', occurredAt: '2026-09-21T00:59:00Z', data: { orderNo } }
++}
++
++async function collected(opts) {
++  const s = setup({ users: USERS, push: { latencyMs: 60 }, ...opts })
++  await s.notifier.handle(delivered('ord-1001-delivered', 'A-1001'))
++  s.clock.set(NEXT_MORNING)
++  return s
++}
++
++test('키는 기간과 사용자로만 정한다(runId가 달라도 같다)', () => {
++  assert.equal(digestKey({ userId: 'u-1', period: '2026-09-21', runId: 'a' }), digestKey({ userId: 'u-1', period: '2026-09-21', runId: 'b' }))
++})
++
++test('느려도 성공한 발송은 한 통이고 sent가 남는다', async () => {
++  const { notifier, mail } = await collected({ mail: { latencyMs: 300, outcomes: [{ latencyMs: 5000 }] } })
++  const summary = await notifier.digest.tick()
++  assert.equal(summary.sent, 1)
++  assert.equal(mail.calls.length, 1)
++  assert.equal(mail.sent.length, 1)
++  assert.deepEqual(notifier.digest.ledger.forUser('u-1').map((e) => e.status), ['sent'])
++})
++
++test('timeout 뒤 재시도: 메일이 이미 나갔어도 같은 Message-ID라 한 통만 나간다', async () => {
++  const { notifier, mail } = await collected({ mail: { latencyMs: 300, outcomes: [{ fail: 'timeout', delivered: true, latencyMs: 5000 }] } })
++  const summary = await notifier.digest.tick()
++  assert.equal(summary.sent, 1)
++  assert.equal(mail.calls.length, 2) // 재시도는 유지된다
++  assert.equal(mail.sent.length, 1)
++  assert.match(mail.sent[0].headers['Message-ID'], /^<digest\.2026-09-21\.u-1@notify\.example>$/)
++  assert.deepEqual(notifier.digest.ledger.forUser('u-1').map((e) => e.status), ['retry', 'sent'])
++})
++
++test('timeout로 실제 실패하면 재시도해서 결국 한 통이 나간다', async () => {
++  const { notifier, mail } = await collected({ mail: { latencyMs: 300, outcomes: [{ fail: 'timeout' }, { fail: 'timeout' }] } })
++  const summary = await notifier.digest.tick()
++  assert.equal(summary.sent, 1)
++  assert.equal(mail.calls.length, 3)
++  assert.equal(mail.sent.length, 1)
++})
++
++test('같은 기간을 다시 실행해도(runId가 달라도) 다시 보내지 않는다', async () => {
++  const { notifier, mail } = await collected({ mail: { latencyMs: 300 } })
++  await notifier.digest.run({ period: '2026-09-21', runId: 'run-1' })
++  const again = await notifier.digest.run({ period: '2026-09-21', runId: 'run-2' })
++  assert.equal(again.already, 1)
++  assert.equal(again.sent, 0)
++  assert.equal(mail.calls.length, 1)
++})
++
++test('서버 두 대가 같은 요약을 보내도 같은 메일 서버에는 한 통만 나간다', async () => {
++  const clock = createVirtualClock('2026-09-21T01:00:00Z')
++  const mail = createFakeMailTransport({ clock, latencyMs: 300 })
++  const make = () => createNotifier({ clock, transports: { mail, push: undefined }, preferences: USERS })
++  const a = make()
++  const b = make()
++  for (const n of [a, b]) await n.handle(delivered('ord-1001-delivered', 'A-1001'))
++  clock.set(NEXT_MORNING)
++  await a.digest.run({ period: '2026-09-21', runId: 'server-a' })
++  await b.digest.run({ period: '2026-09-21', runId: 'server-b' }) // 발송 기록은 서버마다 따로라 막지 못한다
++  assert.equal(mail.calls.length, 2)
++  assert.equal(mail.sent.length, 1)
++})
++
++test('Message-ID는 사용자 ID가 달라지면 달라진다(인코딩이 겹치지 않는다)', () => {
++  const id = (userId) => digestMessageId({ userId, period: '2026-09-21' }, 'a@notify.example')
++  assert.notEqual(id('a%20b'), id('a_20b'))
++  assert.notEqual(id('a%20b'), id('a b'))
++  assert.notEqual(id('a=20b'), id('a b'))
++})
