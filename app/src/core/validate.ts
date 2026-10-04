@@ -685,6 +685,13 @@ export interface TaskCheckInput {
   formatVersion?: number
   /** PR 대응 task: 이번 라운드의 코멘트 항목 id. replies.md를 검사한다 (D190) */
   replyItems?: readonly string[]
+  /**
+   * 지식 관리가 켜진 verify의 지식 확인 결과 (core/knowledge knowledgeIssues, D291, D293, D294). 앱이 worktree를 읽어 만든다.
+   * 끄면 없다
+   */
+  knowledgeIssues?: readonly FormatIssue[]
+  /** 지식 검토 호출(D300)이 찾았지만 되돌리지 않는 것. verify의 경고로 보인다 */
+  knowledgeWarnings?: readonly FormatIssue[]
 }
 
 export interface TaskCheck extends CheckSummary {
@@ -743,6 +750,9 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
   errors.push(...(draft?.errors ?? []))
   const prText = node === 'verify' ? files[PR_FILE] : undefined
   if (prText !== undefined) errors.push(...checkPr(prText))
+  if (input.knowledgeIssues && node === 'verify' && handoff?.status === 'awaiting_approval') {
+    errors.push(...input.knowledgeIssues)
+  }
   if (node === 'respond') {
     // 파일이 있으면 늘 검사하고, 없으면 마무리할 때(awaiting_approval) 필수다 (D30, D190)
     const replies = files[REPLIES_FILE]
@@ -755,7 +765,11 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
     handoff_present: handoffText !== undefined,
     status: handoff?.status ?? null,
     errors,
-    warnings: [...(handoff?.warnings ?? []), ...(draft?.warnings ?? [])],
+    warnings: [
+      ...(handoff?.warnings ?? []),
+      ...(draft?.warnings ?? []),
+      ...(input.knowledgeWarnings && node === 'verify' ? input.knowledgeWarnings : []),
+    ],
     handoff: handoff?.value ?? null,
     handoffHeader: handoff?.header ?? null,
   }

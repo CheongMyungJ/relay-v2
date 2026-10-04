@@ -24,6 +24,9 @@ export const HOOK_TOKEN_ENV = 'RELAY_HOOK_TOKEN'
 /** 훅 요청의 제한 시간(초). 출처: spikes/lib/hooks.mjs HookServer.settings */
 const HOOK_TIMEOUT_SEC = 30
 
+/** Stop 훅의 제한 시간(초). verify의 지식 검토 호출(D300, 2분까지)을 기다린다 */
+export const STOP_HOOK_TIMEOUT_SEC = 180
+
 export interface HttpHook {
   type: 'http'
   url: string
@@ -66,7 +69,7 @@ export function hookSettings(port: number, taskId: string): Record<HookEvent, Ho
       url: hookUrl(port, taskId, event),
       headers: { Authorization: `Bearer $${HOOK_TOKEN_ENV}` },
       allowedEnvVars: [HOOK_TOKEN_ENV],
-      timeout: HOOK_TIMEOUT_SEC,
+      timeout: event === 'Stop' ? STOP_HOOK_TIMEOUT_SEC : HOOK_TIMEOUT_SEC,
     }
     return [{ hooks: [hook] }]
   }

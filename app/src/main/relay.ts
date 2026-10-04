@@ -190,6 +190,25 @@ export class Relay {
       checks: (projectId) => this.projects.get(projectId)?.checks,
       project: (projectId) => this.projects.get(projectId),
       recheck: (projectId) => this.recheck(projectId),
+      knowledgeSources: (projectId, except) =>
+        [...this.works.values()]
+          .filter(
+            (w) =>
+              w.project.project_id === projectId &&
+              w.work.work_id !== except &&
+              (w.work.status === 'pr' ||
+                (w.work.completed_at !== undefined && w.work.abandoned_at === undefined)),
+          )
+          .sort((a, b) =>
+            (a.work.completed_at ?? a.work.created_at).localeCompare(
+              b.work.completed_at ?? b.work.created_at,
+            ),
+          )
+          .map((w) => ({
+            workId: w.work.work_id,
+            branch: `${RELAY_BRANCH}${w.work.work_id}`,
+            baseCommit: w.work.base_commit,
+          })),
     }
   }
 

@@ -103,6 +103,8 @@ export async function harness(o: HarnessOptions = {}): Promise<Harness> {
     CODEX_BIN: o.codexBin ?? FAKE_CODEX,
     FAKE_GH_RECORD: record,
     ...(claude ? { CLAUDE_BIN: claude } : {}),
+    // 지식 관리(D283~)는 지식 시험(knowledge.test.ts)이 켜서 본다. 다른 흐름 시험은 끈 앱(지식 관리 전과 같음)으로 본다
+    RELAY_KNOWLEDGE: 'off',
     ...o.env,
   }
   const ui = o.ui ?? new FakeUi()

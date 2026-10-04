@@ -15,6 +15,7 @@ import type {
   CommandResult,
   CountdownView,
   DeliverResult,
+  KnowledgeChange,
   PrView,
   ReviewView,
   TaskView,
@@ -28,7 +29,7 @@ import { Diff, Markdown } from './Markdown'
 import { PrPanel } from './PrPanel'
 import { focusTerm } from './terminals'
 
-type Tab = 'summary' | 'artifacts' | 'changes' | 'verdicts' | 'work'
+type Tab = 'summary' | 'artifacts' | 'changes' | 'verdicts' | 'work' | 'knowledge'
 
 interface Props {
   work: WorkView
@@ -462,6 +463,10 @@ function Review({
     ['artifacts', '산출물'],
     ['changes', '변경'],
     ...(verify ? ([['work', '전체 변경']] as [Tab, string][]) : []),
+    // 이 Work가 바꾼 지식 (D298). 지식 관리를 끄면 없다
+    ...(review.completion?.knowledge
+      ? ([['knowledge', `지식 ${review.completion.knowledge.length}`]] as [Tab, string][])
+      : []),
   ]
 
   return (
@@ -519,6 +524,9 @@ function Review({
           )
         ) : null}
         {tab === 'changes' ? <Diff text={review.diff} /> : null}
+        {tab === 'verdicts' && review.completion?.knowledge ? (
+          <KnowledgeLine changes={review.completion.knowledge} onOpen={() => setTab('knowledge')} />
+        ) : null}
         {tab === 'verdicts' && review.completion ? (
           <table className="verdicts">
             <thead>
@@ -540,6 +548,9 @@ function Review({
           </table>
         ) : null}
         {tab === 'work' && review.completion ? <Diff text={review.completion.diff} /> : null}
+        {tab === 'knowledge' && review.completion?.knowledge ? (
+          <KnowledgeList changes={review.completion.knowledge} />
+        ) : null}
       </div>
 
       {/* 카운트다운, 까닭, 버튼 줄은 패널 아래에 붙여 둔다: 긴 diff가 밀어내지 않는다 (D224) */}
@@ -1256,5 +1267,61 @@ function OpenQuestionsDialog({
           : '답하려면 [취소]하고 [세션 재개]를 누른 뒤 가운데 터미널에 쓰세요.'}
       </p>
     </ConfirmDialog>
+  )
+}
+
+const CHANGE_LABEL: Record<KnowledgeChange['change'], string> = {
+  added: '새로 만듦',
+  updated: '고침',
+  removed: '지움',
+}
+
+/** Work 완료 화면 [판정표] 위의 한 줄: 이 Work가 바꾼 지식의 수 (D298) */
+function KnowledgeLine({ changes, onOpen }: { changes: KnowledgeChange[]; onOpen: () => void }) {
+  const count = (c: KnowledgeChange['change']) => changes.filter((k) => k.change === c).length
+  return (
+    <div className="knowledge-line">
+      이 Work의 지식:{' '}
+      {changes.length
+        ? (['added', 'updated', 'removed'] as const)
+            .filter((c) => count(c))
+            .map((c) => `${CHANGE_LABEL[c]} ${count(c)}`)
+            .join(' · ')
+        : '바꾼 것 없음'}{' '}
+      {changes.length ? (
+        <button className="link" onClick={onOpen}>
+          보기
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
+/** [지식] 탭: 이 Work가 새로 만들거나 고치거나 지운 지식 파일. 누르면 그 파일의 diff (D298) */
+function KnowledgeList({ changes }: { changes: KnowledgeChange[] }) {
+  const [open, setOpen] = useState<string | null>(null)
+  if (!changes.length) return <div className="empty-note">이 Work가 바꾼 지식 없음</div>
+  return (
+    <ul className="knowledge-list">
+      {changes.map((k) => (
+        <li key={k.path} className={`k-${k.change}`}>
+          <button
+            className="k-row"
+            aria-expanded={open === k.path}
+            onClick={() => setOpen(open === k.path ? null : k.path)}
+          >
+            <span className="k-change">{CHANGE_LABEL[k.change]}</span>
+            <span className="k-title">{k.title ?? k.path}</span>
+            {k.kind ? <span className="k-kind">{k.kind}</span> : null}
+          </button>
+          <div className="k-path">
+            {k.path}
+            {k.pendingFrom ? ` (머지 전 Work ${k.pendingFrom}의 항목을 고침)` : ''}
+          </div>
+          {k.note ? <div className="k-note">{k.note}</div> : null}
+          {open === k.path ? <Diff text={k.diff} /> : null}
+        </li>
+      ))}
+    </ul>
   )
 }

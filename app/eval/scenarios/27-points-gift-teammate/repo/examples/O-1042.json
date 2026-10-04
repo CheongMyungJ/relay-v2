@@ -1,0 +1,12 @@
+{
+  "number": "O-1042",
+  "customerId": "U-20417",
+  "orderedAt": "2026-10-02T14:31:00+09:00",
+  "lines": [
+    { "sku": "TE-0410", "name": "유기농 녹차 티백 40입", "unitPrice": 8900, "qty": 2 },
+    { "sku": "SN-1135", "name": "현미 누룽지 칩", "unitPrice": 3490, "qty": 3 }
+  ],
+  "coupon": { "code": "AUTUMN3000", "amount": 3000, "minGoods": 20000 },
+  "pointsUsed": 1500,
+  "pointBalance": 4820
+}

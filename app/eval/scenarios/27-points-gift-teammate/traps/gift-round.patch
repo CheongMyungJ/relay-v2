@@ -1,0 +1,15 @@
+diff --git a/src/gift/gift-points.js b/src/gift/gift-points.js
+index 31d9ca8..1b9b11f 100644
+--- a/src/gift/gift-points.js
++++ b/src/gift/gift-points.js
+@@ -1,7 +1,8 @@
+ import { POINT_RATE_PERCENT } from '../config.js'
+ import { percentOf } from '../money.js'
+ 
+-/** 선물하기 주문의 적립 포인트(보내는 사람에게 쌓인다) */
++/** 선물하기 주문의 적립 포인트(보내는 사람에게 쌓인다). 배송비를 뺀 금액에 적립한다 */
+ export function giftPoints(order) {
+-  return percentOf(order.amounts.total, POINT_RATE_PERCENT)
++  const a = order.amounts
++  return percentOf(Math.max(0, a.goods - a.coupon - a.pointsUsed), POINT_RATE_PERCENT)
+ }

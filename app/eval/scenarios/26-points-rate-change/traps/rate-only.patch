@@ -1,0 +1,52 @@
+diff --git a/src/config.js b/src/config.js
+index 4fd2bf2..8d1442e 100644
+--- a/src/config.js
++++ b/src/config.js
+@@ -6,7 +6,7 @@ export const SHIPPING_FEE = 3000
+ export const FREE_SHIPPING_MIN = 30000
+ 
+ // 포인트
+-export const POINT_RATE_PERCENT = 1
++export const POINT_RATE_PERCENT = 2
+ export const POINT_EXPIRY_DAYS = 365
+ export const MIN_POINT_USE = 1000
+ export const POINT_USE_UNIT = 10
+diff --git a/test/gift.test.js b/test/gift.test.js
+index 898969e..7d8baa9 100644
+--- a/test/gift.test.js
++++ b/test/gift.test.js
+@@ -11,7 +11,7 @@ const base = {
+ test('선물하기 주문의 금액은 일반 주문과 같다', () => {
+   const g = createGiftOrder({ ...base, number: 'G-0001', message: '생일 축하해' })
+   assert.deepStrictEqual(g.amounts, { goods: 30000, coupon: 0, shipping: 0, pointsUsed: 0, total: 30000 })
+-  assert.strictEqual(g.points.earned, 300)
++  assert.strictEqual(g.points.earned, 600)
+ })
+ 
+ test('메시지 카드는 60자까지', () => {
+diff --git a/test/order.test.js b/test/order.test.js
+index 48f4762..c93e942 100644
+--- a/test/order.test.js
++++ b/test/order.test.js
+@@ -23,7 +23,7 @@ test('사용한 포인트는 결제 금액에서 뺀다', () => {
+ 
+ test('적립 포인트를 주문에 저장한다', () => {
+   const o = createOrder({ ...base, number: 'O-0002', lines: [{ sku: 'A', unitPrice: 25000, qty: 2 }] })
+-  assert.strictEqual(o.points.earned, 500)
++  assert.strictEqual(o.points.earned, 1000)
+ })
+ 
+ test('주문 번호 형식', () => {
+diff --git a/test/refund.test.js b/test/refund.test.js
+index de6f8a4..46dfab9 100644
+--- a/test/refund.test.js
++++ b/test/refund.test.js
+@@ -17,7 +17,7 @@ const order = {
+ test('부분 환불: 돌려받는 상품 금액을 환불한다', () => {
+   const r = createRefund(order, { number: 'R-0001', items: [{ sku: 'B', qty: 1 }] })
+   assert.strictEqual(r.refundAmount, 10000)
+-  assert.strictEqual(r.pointsRecovered, 100)
++  assert.strictEqual(r.pointsRecovered, 200)
+ })
+ 
+ test('남은 수량보다 많이 환불할 수 없다', () => {

@@ -178,12 +178,17 @@ export class RelayArm {
    * @param {string} o.base 평가 레포의 첫 커밋
    * @param {object} o.agentEnv 모델과 effort
    * @param {string} o.agentConfigDir 에이전트의 CLAUDE_CONFIG_DIR
+   * @param {boolean} [o.knowledge] false면 앱에 RELAY_KNOWLEDGE=off를 준다(지식 관리를 끈 앱). 평가의 -off 쪽
+   * @param {string} [o.appDir] 띄울 앱 폴더(out/와 node_modules가 있는 app/). 없으면 이 체크아웃의 앱이다
    * @param {(e: object) => void} o.log
    */
   constructor(o) {
     this.o = o
+    this.appDir = o.appDir ? path.resolve(o.appDir) : APP_DIR
     this.home = path.join(o.dir, 'relay-home')
     this.userData = path.join(o.dir, 'electron-user-data')
+    /** 팀원 교대마다 새 앱 저장소를 쓴다. 앞 사람의 저장소도 결과(worktree, Work 기록)를 읽으려고 남겨 둔다 */
+    this.homes = [this.home]
     this.notices = []
     this.noticeSeen = 0
     this.launches = 0
@@ -199,13 +204,17 @@ export class RelayArm {
       CLAUDE_CONFIG_DIR: this.o.agentConfigDir,
       CLAUDE_BIN: findClaude(),
       RELAY_HOME: this.home,
+      ...(this.o.knowledge === false ? { RELAY_KNOWLEDGE: 'off' } : {}),
     })
   }
 
   async launch() {
     fs.mkdirSync(this.home, { recursive: true })
+    // 다른 빌드는 그 폴더의 Electron으로 띄운다(네이티브 모듈이 그 Electron에 맞춰 빌드돼 있다)
+    const exe = path.join(this.appDir, 'node_modules/electron/dist/electron')
     this.app = await electron.launch({
-      args: [APP_DIR, `--user-data-dir=${this.userData}`],
+      ...(this.appDir !== APP_DIR && fs.existsSync(exe) ? { executablePath: exe } : {}),
+      args: [this.appDir, `--user-data-dir=${this.userData}`],
       env: this.env(),
       timeout: 60_000,
     })
@@ -404,17 +413,20 @@ export class RelayArm {
     return '앱이 갑자기 꺼졌습니다. 다시 실행했습니다.'
   }
 
-  /** Work의 worktree들 */
+  /** Work의 worktree들 (팀원 교대 전의 앱 저장소 것도) */
   worktrees() {
     const trees = []
-    const projects = path.join(this.home, 'projects')
-    if (!fs.existsSync(projects)) return trees
-    for (const p of fs.readdirSync(projects)) {
-      const wt = path.join(projects, p, 'worktrees')
-      if (!fs.existsSync(wt)) continue
-      for (const w of fs.readdirSync(wt)) {
-        const dir = path.join(wt, w)
-        if (fs.existsSync(path.join(dir, '.git'))) trees.push({ path: dir, label: w })
+    for (const [k, home] of this.homes.entries()) {
+      const projects = path.join(home, 'projects')
+      if (!fs.existsSync(projects)) continue
+      for (const p of fs.readdirSync(projects)) {
+        const wt = path.join(projects, p, 'worktrees')
+        if (!fs.existsSync(wt)) continue
+        for (const w of fs.readdirSync(wt)) {
+          const dir = path.join(wt, w)
+          if (fs.existsSync(path.join(dir, '.git')))
+            trees.push({ path: dir, label: homeLabel(k, w) })
+        }
       }
     }
     return trees
@@ -449,37 +461,62 @@ export class RelayArm {
     return trees
   }
 
-  /** 끝난 Work의 상태 (work.json 요약) */
+  /** 다음 Work로 넘어갈 때(works 시나리오). 사람이 같은 앱과 프로젝트에서 [새 Work]를 누르므로 할 일이 없다 */
+  async nextWork() {
+    return null
+  }
+
+  /**
+   * 팀원 교대(teammate Work): 다른 사람의 컴퓨터다. 앱을 닫고 새 앱 저장소와 새 Electron 사용자 폴더로 띄워, 새로 clone한
+   * 레포를 프로젝트로 등록해 둔다. 에이전트 설정 폴더는 그대로지만(토큰을 세려고) 레포 경로가 달라 Claude Code의
+   * 프로젝트 메모리는 이어지지 않는다
+   */
+  async handoff(repo) {
+    await this.close()
+    const k = this.homes.length + 1
+    this.home = path.join(this.o.dir, `relay-home-${k}`)
+    this.userData = path.join(this.o.dir, `electron-user-data-${k}`)
+    this.homes.push(this.home)
+    this.o.repo = repo
+    this.app = null
+    await this.prepare()
+    return '팀원 교대: 새 앱 저장소에서 새로 clone한 레포를 등록했습니다.'
+  }
+
+  /** 끝난 Work의 상태 (work.json 요약, 팀원 교대 전의 앱 저장소 것도) */
   works() {
     const out = []
-    const projects = path.join(this.home, 'projects')
-    if (!fs.existsSync(projects)) return out
-    for (const p of fs.readdirSync(projects)) {
-      const ws = path.join(projects, p, 'works')
-      if (!fs.existsSync(ws)) continue
-      for (const w of fs.readdirSync(ws)) {
-        const file = path.join(ws, w, 'work.json')
-        if (!fs.existsSync(file)) continue
-        const j = JSON.parse(fs.readFileSync(file, 'utf8'))
-        // 단계별 토큰(eval-findings R9)을 세려고 세션 id와 context.md 크기를 남긴다
-        const context = (t) =>
-          path.join(ws, w, 'tasks', `${String(t.seq).padStart(2, '0')}-${t.node}`, 'context.md')
-        out.push({
-          id: w,
-          dir: path.join(ws, w),
-          status: j.status,
-          branch: j.branch ?? null,
-          tasks: (j.tasks ?? []).map((t) => ({
-            seq: t.seq,
-            node: t.node,
-            status: t.status,
-            approved_by: t.approved_by ?? null,
-            session: t.session?.id ?? null,
-            contextChars: fs.existsSync(context(t))
-              ? fs.readFileSync(context(t), 'utf8').length
-              : null,
-          })),
-        })
+    for (const [k, home] of this.homes.entries()) {
+      const projects = path.join(home, 'projects')
+      if (!fs.existsSync(projects)) continue
+      for (const p of fs.readdirSync(projects)) {
+        const ws = path.join(projects, p, 'works')
+        if (!fs.existsSync(ws)) continue
+        for (const w of fs.readdirSync(ws)) {
+          const file = path.join(ws, w, 'work.json')
+          if (!fs.existsSync(file)) continue
+          const j = JSON.parse(fs.readFileSync(file, 'utf8'))
+          // 단계별 토큰(eval-findings R9)을 세려고 세션 id와 context.md 크기를 남긴다
+          const context = (t) =>
+            path.join(ws, w, 'tasks', `${String(t.seq).padStart(2, '0')}-${t.node}`, 'context.md')
+          const read = (t) =>
+            fs.existsSync(context(t)) ? fs.readFileSync(context(t), 'utf8') : null
+          out.push({
+            id: homeLabel(k, w),
+            dir: path.join(ws, w),
+            status: j.status,
+            branch: j.branch ?? null,
+            tasks: (j.tasks ?? []).map((t) => ({
+              seq: t.seq,
+              node: t.node,
+              status: t.status,
+              approved_by: t.approved_by ?? null,
+              session: t.session?.id ?? null,
+              contextChars: read(t)?.length ?? null,
+              knowledgeChars: knowledgeChars(path.dirname(context(t)), read(t)),
+            })),
+          })
+        }
       }
     }
     return out
@@ -497,6 +534,24 @@ export class RelayArm {
     }
   }
 }
+
+/**
+ * task에 넣은 지식의 글자 수 (참고 지표, docs/knowledge-experiment.md 4절). 앱이 task 폴더에 `knowledge-injected.md`를
+ * 남기면 그 글자 수다. 없으면 context.md의 `## 참고 지식` 절(M17 빌드의 형식), 그것도 없으면 null
+ */
+function knowledgeChars(taskDir, context) {
+  const file = path.join(taskDir, 'knowledge-injected.md')
+  if (fs.existsSync(file)) return fs.readFileSync(file, 'utf8').trim().length
+  if (context === null) return null
+  const m = /^## 참고 지식\n([\s\S]*?)(?=^## |(?![\s\S]))/m.exec(context)
+  return m ? m[1].trim().length : null
+}
+
+/**
+ * 팀원 교대 뒤의 앱 저장소는 Work id가 앞 사람 것과 겹칠 수 있다(둘 다 w-<날짜>-001). 두 번째 저장소부터 앞에 사람
+ * 번호를 붙여 결과 폴더와 스냅숏을 가른다
+ */
+const homeLabel = (k, w) => (k === 0 ? w : `p${k + 1}-${w}`)
 
 const KEYS = {
   enter: 'Enter',

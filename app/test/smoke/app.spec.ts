@@ -55,6 +55,22 @@ import {
 } from '../flow/scenarios'
 
 const isWin = process.platform === 'win32'
+const KNOWLEDGE_PATH = 'docs/knowledge/avg-empty.md'
+const KNOWLEDGE_TEXT = [
+  '---',
+  'kind: rule',
+  'source: human',
+  'anchor: avg',
+  '---',
+  '# 빈 배열의 평균은 0',
+  '',
+  '## 규칙',
+  '- 빈 배열의 평균은 0이다.',
+  '',
+  '## 바뀐 이력',
+  '- 2026-10-04 처음 남김',
+  '',
+].join('\n')
 const APP_DIR = path.resolve(__dirname, '../..')
 const FAKE = path.resolve(
   __dirname,
@@ -113,10 +129,13 @@ test.beforeAll(async () => {
             ? { ...st, text: REVIEW + VERDICTS }
             : st,
         ),
+      // 지식 하나를 남긴다: Work 완료 화면의 [지식] 탭에 보인다 (D298)
+      { do: 'commit', files: { [KNOWLEDGE_PATH]: KNOWLEDGE_TEXT }, message: 'knowledge' },
       {
         do: 'write',
         file: 'handoff.md',
         text: handoff({
+          summary: `할 일을 마쳤다.\n새 지식: ${KNOWLEDGE_PATH} — 맞는 기존 항목 없음`,
           decisions: [
             { what: '완료조건을 모두 통과', why: '완료조건을 모두 통과한 이유', by: 'ai' },
           ],
@@ -443,7 +462,16 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await expect(countdown).toBeHidden()
   await expect(win.getByRole('button', { name: '완료만', exact: true })).toBeEnabled()
   await expect(win.locator('table.verdicts')).toContainText('재현 절차가 더 이상 실패하지 않는다')
+  // 이 Work의 지식 (D298): [판정표] 위의 한 줄과 [지식] 탭, 누르면 그 파일의 차이
+  await expect(win.locator('.knowledge-line')).toContainText('이 Work의 지식: 새로 만듦 1')
   await win.screenshot({ path: 'test-results/completion.png' })
+  await win.getByRole('tab', { name: '지식 1', exact: true }).click()
+  const knowledge = win.locator('.knowledge-list')
+  await expect(knowledge).toContainText('빈 배열의 평균은 0')
+  await expect(knowledge).toContainText('맞는 기존 항목 없음')
+  await knowledge.getByRole('button', { name: /빈 배열의 평균은 0/ }).click()
+  await expect(knowledge.locator('.diff')).toContainText('+- 빈 배열의 평균은 0이다.')
+  await win.screenshot({ path: 'test-results/knowledge.png' })
   // 리뷰와 검증 (M8, D229): [요약] 맨 위에 리뷰 지적과 반영이 있다 (D223). 산출물은 둘이다
   await win.getByRole('tab', { name: '요약', exact: true }).click()
   const lead = win.locator('.review-body .lead')

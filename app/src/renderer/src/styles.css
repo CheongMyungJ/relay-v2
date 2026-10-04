@@ -1047,3 +1047,66 @@ button.link {
   border: 1px solid var(--border);
   border-radius: 3px;
 }
+
+/* Work 완료 화면의 이 Work의 지식 (D298) */
+.knowledge-line {
+  margin-bottom: 8px;
+  color: var(--text-dim);
+}
+
+.knowledge-line .link {
+  margin-left: 4px;
+}
+
+.knowledge-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.knowledge-list li {
+  border-bottom: 1px solid var(--border);
+  padding: 6px 0;
+}
+
+.knowledge-list .k-row {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text);
+}
+
+.knowledge-list .k-change {
+  flex: none;
+  font-size: 11px;
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+}
+
+.knowledge-list .k-added .k-change {
+  color: var(--good);
+}
+
+.knowledge-list .k-updated .k-change {
+  color: var(--hot);
+}
+
+.knowledge-list .k-removed .k-change {
+  color: var(--bad);
+}
+
+.knowledge-list .k-kind,
+.knowledge-list .k-path {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.knowledge-list .k-note {
+  margin-top: 2px;
+  font-size: 12px;
+}

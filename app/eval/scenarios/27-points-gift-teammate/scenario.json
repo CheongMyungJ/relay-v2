@@ -1,0 +1,90 @@
+{
+  "id": "27-points-gift-teammate",
+  "repoName": "shop",
+  "title": "사람이 '아직 고치지 않은 곳'을 말한 적립 규칙이 팀원의 선물하기 Work에 필요함 (개발용, 지식 후속 평가)",
+  "purpose": "개발용(규약 3.1, 판정에 쓰지 않음). 지식 후속 1·2단계(followup.md) 평가: 문제 2(규칙과 현재 상태가 섞임)를 본다. Work 1은 26의 Work 1과 같은 적립 버그이고, 사람이 선물하기 적립은 지금 다른 방식(결제 금액 전체에 반올림)이고 이번에는 손대지 말라고 말한다. 이것은 규칙이 아니라 아직 규칙을 따르지 않는 곳이다. Work 2는 팀원이 선물하기 적립 버그를 맡는다(도구가 Work 1을 main에 머지하고 새로 clone). 팀원은 규칙을 모른다. 지식 파일이 선물하기의 지금 방식을 규칙처럼 적었는지, 팀원의 Work가 선물하기를 고친 뒤 지식의 '아직 따르지 않는 곳'을 고치는지, 팀원의 에이전트가 같은 적립 규정으로 고치는지 본다.",
+  "measure": [2],
+  "works": [
+    {
+      "report": "고객센터에 포인트 문의가 들어왔다. 주문 O-1042의 적립 예정 포인트가 268P로 나오는데, 고객센터가 적립 안내대로 계산하면 237P라고 한다. 다른 주문도 적립이 조금씩 많게 나오는 것 같다. 주문 데이터는 examples/O-1042.json에 있다. (src/points/earn.js)",
+      "knowledge": [
+        {
+          "share": "on_ask",
+          "text": "고객센터가 계산한 O-1042의 적립 포인트는 237P다."
+        },
+        {
+          "share": "on_ask",
+          "text": "적립 규정: 적립 포인트는 상품 금액에서 쿠폰 할인과 사용한 포인트를 뺀 금액의 1%다. 배송비에는 적립하지 않는다."
+        },
+        {
+          "share": "on_ask",
+          "text": "적립 포인트는 1P 미만을 버린다. 반올림하지 않는다."
+        },
+        {
+          "share": "upfront",
+          "text": "이미 적립된 포인트는 다시 계산하지 않는다(주문에 저장된 값을 그대로 쓴다). 영수증 글자(src/format/)도 바뀌면 안 된다. 그리고 선물하기 주문의 적립(src/gift/gift-points.js)은 이번에 손대지 말아 달라. 거기는 지금 결제 금액 전체에 반올림으로 적립하고 있는데, 선물하기는 다른 팀과 같이 보고 있어서 다음에 따로 고친다."
+        }
+      ],
+      "checks": [
+        {
+          "name": "적립 기준 금액",
+          "file": "earn-basis.test.js"
+        },
+        {
+          "name": "적립 버림",
+          "file": "earn-floor.test.js"
+        },
+        {
+          "name": "주문·영수증 그대로",
+          "file": "earn-guard.test.js",
+          "guard": true
+        }
+      ]
+    },
+    {
+      "report": "고객센터에 선물하기 포인트 문의가 들어왔다. 선물하기 주문 G-0213을 보낸 고객이 적립 예정 포인트가 249P로 나오는데, 같은 상품을 일반 주문으로 샀을 때와 왜 다르냐고 한다. 고객센터 계산으로는 218P여야 한다고 한다. 주문 데이터는 examples/G-0213.json에 있다. (src/gift/gift-points.js)",
+      "teammate": true,
+      "knowledge": [
+        {
+          "share": "on_ask",
+          "text": "고객센터가 계산한 G-0213의 적립 포인트는 218P다."
+        },
+        {
+          "share": "on_ask",
+          "text": "포인트 적립 규칙은 자세히 모른다. 일반 주문 쪽은 동료가 지난번에 고객센터와 맞췄다고만 들었다. 그 동료는 지금 휴가 중이라 물을 수 없다."
+        },
+        {
+          "share": "upfront",
+          "text": "선물 메시지 카드와 받는 사람 정보, 영수증 글자(src/format/)는 바뀌면 안 된다. 이미 적립된 포인트는 다시 계산하지 않는다."
+        }
+      ],
+      "checks": [
+        {
+          "name": "선물 적립",
+          "file": "gift-points.test.js"
+        },
+        {
+          "name": "선물 주문 그대로",
+          "file": "gift-guard.test.js",
+          "guard": true
+        }
+      ]
+    }
+  ],
+  "preferences": ["고친 뒤 리포트의 예시 주문이 고객센터 계산과 맞는지 확인하고 싶다."],
+  "reveals": [],
+  "events": [],
+  "expectedFiles": [
+    "src/points/**",
+    "src/gift/**",
+    "src/orders/**",
+    "src/config.js",
+    "src/money.js",
+    "test/**",
+    "README.md"
+  ],
+  "limits": {
+    "minutes": 120,
+    "turns": 140
+  }
+}

@@ -801,6 +801,26 @@ export interface Completion {
   delivery: DeliveryView | null
   /** 작업 브랜치의 커밋 (D225). 브랜치가 없으면(정리로 지움) null */
   branch: BranchInfo | null
+  /** 이 Work가 바꾼 지식 (D298). 지식 관리를 끄면 null */
+  knowledge: KnowledgeChange[] | null
+}
+
+/** Work 완료 화면의 "이 Work의 지식" 한 줄 (D298) */
+export interface KnowledgeChange {
+  /** 레포 안의 경로 (`docs/knowledge/...`) */
+  path: string
+  /** added 새로 만듦, updated 고침(기준 브랜치나 머지 전 앞 Work에 있던 것), removed 지움 */
+  change: 'added' | 'updated' | 'removed'
+  /** 첫 `# ` 제목. 지웠으면 null */
+  title: string | null
+  /** 머리글의 kind. 없거나 지웠으면 null */
+  kind: 'rule' | 'fact' | 'history' | 'pitfall' | null
+  /** verify handoff의 줄에 적은 까닭이나 바뀐 내용 */
+  note: string | null
+  /** 머지 전 앞 Work의 항목을 다시 썼으면 그 Work id. diff는 그 Work의 글에서 본 것이다 */
+  pendingFrom: string | null
+  /** 이 파일의 diff */
+  diff: string
 }
 
 // ---------- 명령 ----------

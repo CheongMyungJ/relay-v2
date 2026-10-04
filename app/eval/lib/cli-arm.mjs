@@ -202,6 +202,42 @@ export class CliArm {
     return '터미널 창이 갑자기 닫혔습니다(작업하던 claude도 끝남). 같은 폴더에서 새 터미널을 열었습니다.'
   }
 
+  /**
+   * 다음 Work로 넘어갈 때(works 시나리오): 앞 일의 터미널을 닫고 같은 레포 폴더에서 새 claude 세션을 연다.
+   * 사람이 다음 요청을 새 세션으로 주는 것과 같다. 맨 CLI의 자동 메모리는 끄지 않는다
+   */
+  async nextWork() {
+    for (const t of this.terms) {
+      try {
+        process.kill(-t.p.pid, 'SIGKILL')
+      } catch {
+        try {
+          t.p.kill('SIGKILL')
+        } catch {
+          // 이미 끝났다
+        }
+      }
+    }
+    await sleep(1000)
+    this.terms = []
+    await this.open(true)
+    return '앞 일의 터미널을 닫고 같은 레포 폴더에서 claude를 새로 띄웠습니다.'
+  }
+
+  /**
+   * 팀원 교대(teammate Work): 다른 사람의 컴퓨터다. 앞 터미널을 닫고 새로 clone한 레포 폴더에서 claude를 띄운다.
+   * 레포 경로가 달라 Claude Code의 프로젝트 메모리는 이어지지 않는다(레포에 커밋된 CLAUDE.md 같은 파일은 이어진다)
+   */
+  async handoff(repo) {
+    await this.close()
+    await sleep(1000)
+    this.terms = []
+    this.exported = new Map()
+    this.o.repo = repo
+    await this.open(true)
+    return '팀원 교대: 새로 clone한 레포 폴더에서 claude를 새로 띄웠습니다.'
+  }
+
   snapshot() {}
 
   /**

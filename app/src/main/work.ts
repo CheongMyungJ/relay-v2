@@ -68,6 +68,7 @@ import { processStartTime, startPty, type PtySession } from '../adapters/pty'
 import {
   pathKey,
   readText,
+  sha256,
   writeFileAtomic,
   writeJson,
   type OwnedWrite,
@@ -258,6 +259,7 @@ import type {
   Completion,
   DeliverInput,
   DeliverResult,
+  KnowledgeChange,
   MergeInfoResult,
   MergeInput,
   NoticeView,
@@ -276,6 +278,7 @@ import type {
 import type {
   DeliverOperation,
   DeliveryChoice,
+  FormatIssue,
   MergeMethod,
   OwnedFile,
   RespondOperation,
@@ -289,6 +292,50 @@ import type { SessionPool } from './pool'
 import type { UiPort } from './ports'
 import { listPrComments, readPr, receivedCommits, fetchTip, type PrFetched } from './pr'
 import { TerminalBuffer } from './terminals'
+import {
+  changedKnowledge,
+  knowledgePathsAt,
+  readPendingKnowledge,
+  readRepoKnowledge,
+  removedKnowledge,
+  changedCodePaths,
+  knowledgeFileChanges,
+  type KnowledgeSource,
+} from '../adapters/knowledge'
+import {
+  REVIEW_CALL_LIMIT,
+  REVIEW_FILE,
+  REVIEW_SCHEMA,
+  REVIEW_SYSTEM,
+  humanDecisionLines,
+  relatedEntries,
+  reviewEnabled,
+  reviewIssues,
+  reviewPrompt,
+  type ReviewInput,
+  type ReviewRecord,
+} from '../core/knowledge-review'
+import { claudeJson, findClaude } from '../adapters/claude'
+import {
+  INJECTED_FILE,
+  INJECT_LIMIT,
+  candidatesOf,
+  identifiersIn,
+  pathsIn,
+  knowledgeIssues,
+  injectedText,
+  knowledgeEnabled,
+  mergeEntries,
+  knowledgeChanges,
+  type KnowledgeInput,
+  type KnowledgeQuery,
+} from '../core/knowledge'
+
+/** verify의 지식 확인 결과: 되돌리는 것(errors)과 보이기만 하는 것(warnings, 되돌린 뒤의 지식 검토) */
+interface KnowledgeCheck {
+  errors: FormatIssue[]
+  warnings: FormatIssue[]
+}
 
 /** 여러 Work가 함께 쓰는 것 */
 export interface RunnerContext {
@@ -309,6 +356,11 @@ export interface RunnerContext {
   project(projectId: string): ProjectState | undefined
   /** origin·gh를 다시 점검해 project.json을 고친다. verify를 시작할 때와 [다시 점검]에서 부른다 (D118) */
   recheck(projectId: string): Promise<void>
+  /**
+   * 지식을 읽을 앞 Work (core/knowledge): 같은 프로젝트에서 완료했거나 PR 진행인 다른 Work의 브랜치와 기준 커밋.
+   * 오래된 차례다
+   */
+  knowledgeSources(projectId: string, exceptWorkId: string): KnowledgeSource[]
   /** 지금 시각. 현지 시각과 오프셋을 담은 ISO 8601 */
   at(): string
   /** 새 PTY의 크기. 탭이 크기를 알리면 그 크기를 쓴다 */
@@ -684,7 +736,11 @@ export class WorkRunner {
     return this.work.tasks.find((t) => t.id === taskId)
   }
 
-  private check(task: TaskRecord, files: Readonly<Record<string, string>>): TaskCheck {
+  private check(
+    task: TaskRecord,
+    files: Readonly<Record<string, string>>,
+    knowledge?: KnowledgeCheck,
+  ): TaskCheck {
     return checkTask({
       node: task.node,
       type: workType(this.work),
@@ -693,7 +749,155 @@ export class WorkRunner {
       formatVersion: task.format_version,
       // PR 대응 task는 이번 라운드의 코멘트 항목마다 replies.md의 절을 본다 (D190)
       ...(task.respond ? { replyItems: replyItemIds(task.respond.items) } : {}),
+      ...(knowledge ? { knowledgeIssues: knowledge.errors } : {}),
+      ...(knowledge?.warnings.length ? { knowledgeWarnings: knowledge.warnings } : {}),
     })
+  }
+
+  /**
+   * 형식 검사 (5.2.1)에 verify의 지식 확인(D291, D293, D294, D296, D297)과 지식 검토(D300)를 더한 것. files가 없으면 task
+   * 파일을 읽는다. 검토 호출은 Stop에서만 하고(stop), 다른 곳(승인 화면 등)은 같은 입력의 기록이 있으면 그 결과만 쓴다
+   */
+  private async checkOf(
+    task: TaskRecord,
+    files?: Readonly<Record<string, string>>,
+    opts: { stop?: boolean } = {},
+  ): Promise<TaskCheck> {
+    const f = files ?? (await this.files.taskFiles(task))
+    return this.check(task, f, await this.knowledgeCheck(task, f, opts))
+  }
+
+  /**
+   * verify의 지식 확인 (D291, D293, D294): 이 Work가 더하거나 고친 지식 파일의 형식, handoff의 새·고친 지식 줄, 같은 anchor.
+   * 지식 관리를 끄거나 verify가 아니면 undefined. worktree나 git을 읽지 못하면 handoff의 줄만 본다
+   */
+  private async knowledgeCheck(
+    task: TaskRecord,
+    files: Readonly<Record<string, string>>,
+    opts: { stop?: boolean } = {},
+  ): Promise<KnowledgeCheck | undefined> {
+    const { env } = this.ctx
+    if (!knowledgeEnabled(env) || task.node !== 'verify') return undefined
+    const handoff = files[HANDOFF_FILE] ?? ''
+    const base = this.work.base_commit
+    let input: Parameters<typeof knowledgeIssues>[0]
+    try {
+      const changed = await changedKnowledge(this.worktree, base, { env })
+      const removed = await removedKnowledge(this.worktree, base, { env })
+      const codeChanged = await changedCodePaths(this.worktree, base, { env })
+      const sources = this.ctx.knowledgeSources(this.project.project_id, this.work.work_id)
+      const pending = await readPendingKnowledge(this.project.repo_path, base, sources, { env })
+      const existing = new Set([
+        ...(await knowledgePathsAt(this.worktree, base, { env })),
+        ...pending.filter((e) => !e.removed).map((e) => e.path),
+      ])
+      // 앞 Work가 지운 항목은 이 Work가 다시 쓰지 않았으면 없는 것으로 본다 (D297)
+      const current = new Map<string, string>()
+      for (const e of await readRepoKnowledge(this.worktree)) current.set(e.path, e.text)
+      const mine = new Set(changed.map((c) => c.path))
+      for (const e of pending) {
+        if (mine.has(e.path)) continue
+        if (e.removed) current.delete(e.path)
+        else current.set(e.path, e.text)
+      }
+      input = { handoff, changed, existing, current, removed, codeChanged }
+    } catch (e) {
+      console.error(`[${this.key}] 지식을 확인하지 못함: ${message(e)}`)
+      const errors = knowledgeIssues({
+        handoff,
+        changed: [],
+        existing: new Set(),
+        current: new Map(),
+      })
+      return { errors, warnings: [] }
+    }
+    const errors = knowledgeIssues(input)
+    // 기계적 확인을 지나고 지식을 바꿨을 때만 뜻을 검토한다 (D300)
+    if (errors.length || (!input.changed.length && !input.removed?.length) || !reviewEnabled(env))
+      return { errors, warnings: [] }
+    const review = await this.knowledgeReview(task, input, opts.stop === true)
+    return review.bounce
+      ? { errors: review.issues, warnings: [] }
+      : { errors, warnings: review.issues }
+  }
+
+  /**
+   * 지식 검토 호출 (D300): 바꾼 지식, 관련 항목, 이번 Work의 사람 말을 넣고 모델에 한 번 묻는다. 같은 입력이면 기록(REVIEW_FILE)의
+   * 결과를 쓴다. 호출은 Stop에서만, task마다 REVIEW_CALL_LIMIT번까지 한다. 되돌림은 task마다 한 번이다: 처음 찾은 문제는
+   * 되돌리고(bounce), 그 뒤에 찾은 것은 경고로만 보인다. 부르지 못하면 문제 없음으로 본다
+   */
+  private async knowledgeReview(
+    task: TaskRecord,
+    check: Parameters<typeof knowledgeIssues>[0],
+    stop: boolean,
+  ): Promise<{ issues: FormatIssue[]; bounce: boolean }> {
+    const { env } = this.ctx
+    const file = path.join(this.files.taskDir(task), REVIEW_FILE)
+    const record: ReviewRecord = JSON.parse(
+      (await readText(file)) ?? '{"calls":[]}',
+    ) as ReviewRecord
+    const request = (await this.files.readOwned('request.md'))?.text ?? ''
+    const intent = (await this.files.readOwned('intent.md'))?.text ?? null
+    const decisions = (await this.files.readOwned('decisions.md'))?.text ?? ''
+    const candidates: string[] = []
+    for (const t of this.work.tasks) {
+      if (t.id === task.id || t.status === 'discarded') continue
+      candidates.push(...candidatesOf((await this.handoffOf(t)) ?? ''))
+    }
+    const reviewInput: ReviewInput = {
+      changed: check.changed,
+      removed: check.removed ?? [],
+      related: relatedEntries(check.current, check.changed, request),
+      request,
+      intent,
+      humanDecisions: humanDecisionLines(decisions),
+      candidates,
+    }
+    const prompt = reviewPrompt(reviewInput)
+    const hash = sha256(prompt)
+    const known = new Set([
+      ...check.changed.map((c) => c.path),
+      ...reviewInput.related.map((r) => r.path),
+    ])
+    const done = record.calls.find((c) => c.hash === hash)
+    if (done) return { issues: done.issues, bounce: done.bounced }
+    if (!stop || record.calls.length >= REVIEW_CALL_LIMIT) return { issues: [], bounce: false }
+    const bin = findClaude({ env })
+    const model = env['RELAY_KNOWLEDGE_REVIEW_MODEL']?.trim() || 'sonnet'
+    const result = bin
+      ? await claudeJson({
+          bin,
+          env,
+          cwd: this.worktree,
+          model,
+          effort: 'low',
+          system: REVIEW_SYSTEM,
+          prompt,
+          schema: REVIEW_SCHEMA,
+          timeoutMs: 120_000,
+        })
+      : { data: null, ms: 0, costUsd: null, usage: null, error: 'claude를 찾지 못함' }
+    const issues = reviewIssues(result.data, known)
+    const bounce = issues.length > 0 && !record.calls.some((c) => c.bounced)
+    record.calls.push({
+      at: this.ctx.at(),
+      hash,
+      model,
+      ms: result.ms,
+      costUsd: result.costUsd,
+      usage: result.usage,
+      related: reviewInput.related.length,
+      promptChars: prompt.length,
+      issues,
+      bounced: bounce,
+      error: result.error,
+    })
+    try {
+      await writeFileAtomic(file, `${JSON.stringify(record, null, 2)}\n`)
+    } catch (e) {
+      console.error(`[${this.key}] 지식 검토 기록을 쓰지 못함: ${message(e)}`)
+    }
+    return { issues, bounce }
   }
 
   private notify(body: string): void {
@@ -772,7 +976,7 @@ export class WorkRunner {
     const task = this.task(taskId)
     if (!task) return undefined
     try {
-      return this.check(task, await this.files.taskFiles(task))
+      return await this.checkOf(task)
     } catch {
       return undefined
     }
@@ -879,7 +1083,7 @@ export class WorkRunner {
         pid: session.pty.pid,
         ...(processStartedAt ? { processStartedAt } : {}),
         engineVersion: version,
-        check: this.check(task, files),
+        check: await this.checkOf(task, files),
       })
       return true
     } catch (err) {
@@ -951,7 +1155,17 @@ export class WorkRunner {
       'intent.md': intent?.hash ?? null,
       'decisions.md': decisions?.hash ?? null,
     })
+    const knowledge = await this.knowledgeInput(task, earlier, {
+      request: request?.text ?? '',
+      intent: intent?.text ?? null,
+    })
+    if (knowledge)
+      await writeFileAtomic(
+        path.join(dir, INJECTED_FILE),
+        injectedText(knowledge.entries, knowledge.query),
+      )
     return buildContext({
+      knowledge,
       work: this.work,
       task,
       config: this.ctx.config(),
@@ -965,6 +1179,86 @@ export class WorkRunner {
       ...(task.node === 'verify' ? { delivery: closingButtons(this.checks()) } : {}),
       respond: await this.respondInput(task),
     })
+  }
+
+  /**
+   * context.md의 지식 (core/knowledge): 이 worktree의 `docs/knowledge/`와, 같은 프로젝트에서 완료했지만 기준 브랜치에 아직
+   * 없는 앞 Work의 지식, 앞 task들의 지식 후보. 지식 관리를 끄면(RELAY_KNOWLEDGE=off) null이다. 읽지 못하면 빈 지식으로 간다
+   */
+  private async knowledgeInput(
+    task: TaskRecord,
+    earlier: readonly PreviousTask[],
+    hint: { request: string; intent: string | null },
+  ): Promise<KnowledgeInput | null> {
+    const { env } = this.ctx
+    if (!knowledgeEnabled(env)) return null
+    let entries: KnowledgeInput['entries'] = []
+    let removed: { path: string; from: string }[] = []
+    try {
+      const repo = await readRepoKnowledge(this.worktree)
+      const head = await headCommit(this.worktree, { env })
+      const sources = this.ctx.knowledgeSources(this.project.project_id, this.work.work_id)
+      const pending = await readPendingKnowledge(this.project.repo_path, head, sources, { env })
+      entries = mergeEntries(repo, pending)
+      const present = new Set(entries.map((e) => e.path))
+      removed = pending
+        .filter((e) => e.removed && !present.has(e.path) && repo.some((r) => r.path === e.path))
+        .map((e) => ({ path: e.path, from: e.pendingFrom ?? '' }))
+    } catch (e) {
+      console.error(`[${this.key}] 지식을 읽지 못함: ${message(e)}`)
+    }
+    const candidates = earlier
+      .map((p) => ({ taskId: p.taskId, node: p.node, items: candidatesOf(p.handoff ?? '') }))
+      .filter((c) => c.items.length > 0)
+    const size = entries.reduce((n, e) => n + e.text.length, 0)
+    return {
+      entries,
+      candidates,
+      work_id: this.work.work_id,
+      date: this.ctx.at().slice(0, 10),
+      ...(removed.length ? { removed } : {}),
+      // 지식이 상한을 넘을 때만 관련 항목을 고를 단서를 만든다 (D295)
+      ...(size > INJECT_LIMIT ? { query: await this.knowledgeQuery(task, hint, candidates) } : {}),
+    }
+  }
+
+  /**
+   * 관련 지식을 고르는 단서 (D295): 요청과 intent, 지식 후보, 이 Work의 diff(바꾼 파일과 코드 이름), verify는 이 Work가 쓰거나
+   * 고친 지식. diff를 읽지 못하면 글만 쓴다
+   */
+  private async knowledgeQuery(
+    task: TaskRecord,
+    hint: { request: string; intent: string | null },
+    candidates: readonly { items: readonly string[] }[],
+  ): Promise<KnowledgeQuery> {
+    const { env } = this.ctx
+    const parts = [hint.request, hint.intent ?? '', ...candidates.flatMap((c) => c.items)]
+    const paths = new Set<string>()
+    const identifiers = new Set<string>()
+    if (task.node !== 'intake') {
+      try {
+        const diff = (await diffFrom(this.worktree, this.work.base_commit, null, { env })).slice(
+          0,
+          200_000,
+        )
+        for (const m of diff.matchAll(/^\+\+\+ b\/(.+)$/gm)) if (m[1]) paths.add(m[1])
+        const changedLines = diff
+          .split('\n')
+          .filter((l) => /^[+-][^+-]/.test(l))
+          .join('\n')
+        for (const id of identifiersIn(changedLines)) identifiers.add(id)
+        if (task.node === 'verify') {
+          for (const c of await changedKnowledge(this.worktree, this.work.base_commit, { env }))
+            parts.push(c.text)
+        }
+      } catch (e) {
+        console.error(`[${this.key}] diff를 읽지 못함: ${message(e)}`)
+      }
+    }
+    const text = parts.join('\n')
+    for (const p of pathsIn(text)) paths.add(p)
+    for (const id of identifiersIn(text)) identifiers.add(id)
+    return { text, paths: [...paths], identifiers }
   }
 
   /**
@@ -1445,7 +1739,7 @@ export class WorkRunner {
           await this.feed({
             type: 'turn.interrupted',
             ...base,
-            check: this.check(task, await this.files.taskFiles(task)),
+            check: await this.checkOf(task),
           })
         ).reply
       }
@@ -1506,7 +1800,7 @@ export class WorkRunner {
             ...base,
             stopHookActive: b['stop_hook_active'] === true,
             handoffChanged: changed,
-            check: this.check(task, files),
+            check: await this.checkOf(task, files, { stop: true }),
             // 백그라운드 작업이나 예약된 깨우기를 기다리며 쉬는 중이면 자동 승인하지 않는다 (D129)
             pending: engine === 'codex' ? 'unknown' : pendingBackground(b) ? 'pending' : 'none',
           })
@@ -1534,7 +1828,7 @@ export class WorkRunner {
   private async onWatch(taskId: string): Promise<void> {
     const task = this.task(taskId)
     if (!task || !this.live.has(taskId)) return
-    const check = this.check(task, await this.files.taskFiles(task))
+    const check = await this.checkOf(task)
     await this.feed({ type: 'check.updated', taskId, at: this.ctx.at(), check })
   }
 
@@ -1609,7 +1903,7 @@ export class WorkRunner {
       if (this.cleanupOpen()) return { ok: false, error: CLEANUP_BLOCKS }
       const task = this.task(taskId)
       if (!task) return { ok: false, error: `${taskId} 없음` }
-      const check = this.check(task, await this.files.taskFiles(task))
+      const check = await this.checkOf(task)
       // PR 대응 task는 승인하면 push하고 답글을 게시한다. 실패하면 그 오류를 돌려준다 (시나리오 10-6)
       this.opError = null
       const r = await this.command({
@@ -2003,7 +2297,7 @@ export class WorkRunner {
   private async verifyCheck(): Promise<TaskCheck | null> {
     const task = currentTask(this.work)
     if (task?.node !== 'verify') return null
-    return this.check(task, await this.files.taskFiles(task))
+    return await this.checkOf(task)
   }
 
   /**
@@ -2148,7 +2442,7 @@ export class WorkRunner {
       await this.feed({ type: 'delivery.failed', at: this.ctx.at(), error: message(err) })
       return
     }
-    const check = task ? this.check(task, await this.files.taskFiles(task)) : null
+    const check = task ? await this.checkOf(task) : null
     await this.feed({
       type: 'delivery.succeeded',
       at: this.ctx.at(),
@@ -2654,7 +2948,7 @@ export class WorkRunner {
   reconcile(killed: readonly RecordedProcess[] = []): Promise<void> {
     return this.enqueue(async () => {
       const task = currentTask(this.work)
-      const check = task ? this.check(task, await this.files.taskFiles(task)) : null
+      const check = task ? await this.checkOf(task) : null
       const tasks = killed.flatMap((p) => (p.taskId ? [{ taskId: p.taskId, pid: p.pid }] : []))
       // 앱이 끝내지 못한 세션: pty.log 끝에 앱이 꺼져 끝났다는 표시 줄을 남긴다 (D219)
       for (const t of this.work.tasks) {
@@ -2854,13 +3148,59 @@ export class WorkRunner {
     }
   }
 
+  /**
+   * Work 완료 화면의 "이 Work의 지식" (D298): 기준 커밋에서 to(null이면 작업 트리)까지 더하거나 고치거나 지운 지식.
+   * 머지 전 앞 Work에 있던 경로를 다시 쓴 것은 그 Work의 글에서 본 diff다. 지식 관리를 끄면 null, 읽지 못하면 빈 목록
+   */
+  private async knowledgeView(
+    cwd: string,
+    to: string | null,
+    handoff: string,
+  ): Promise<KnowledgeChange[] | null> {
+    const { env } = this.ctx
+    if (!knowledgeEnabled(env)) return null
+    try {
+      const sources = this.ctx.knowledgeSources(this.project.project_id, this.work.work_id)
+      const branchOf = new Map(sources.map((s) => [s.workId, s.branch]))
+      const pending = await readPendingKnowledge(
+        this.project.repo_path,
+        this.work.base_commit,
+        sources,
+        { env },
+      )
+      const pendingFrom = new Map<string, string>()
+      const pendingBranch = new Map<string, string>()
+      for (const e of pending) {
+        if (!e.pendingFrom) continue
+        if (e.removed) {
+          pendingFrom.delete(e.path)
+          pendingBranch.delete(e.path)
+          continue
+        }
+        pendingFrom.set(e.path, e.pendingFrom)
+        const b = branchOf.get(e.pendingFrom)
+        if (b) pendingBranch.set(e.path, b)
+      }
+      const files = await knowledgeFileChanges(cwd, this.work.base_commit, to, pendingBranch, {
+        env,
+      })
+      return knowledgeChanges(files, pendingFrom, handoff).map((k) => ({
+        ...k,
+        diff: clip(k.diff),
+      }))
+    } catch (e) {
+      console.error(`[${this.key}] 지식 변경을 읽지 못함: ${message(e)}`)
+      return []
+    }
+  }
+
   /** 승인 화면(D83)과 Work 완료 화면(시나리오 7-3)에 보일 것. 파일을 다시 읽어 만든다 */
   async review(taskId: string): Promise<ReviewView | null> {
     const task = this.task(taskId)
     if (!task) return null
     const { env } = this.ctx
     const files = await this.files.taskFiles(task)
-    const check = this.check(task, files)
+    const check = await this.checkOf(task, files)
     // 끝난 task는 그 task가 끝났을 때의 코드까지 본다. 작업 트리는 지금 코드의 마지막 task만 본다.
     // 정리한 Work는 worktree가 없어 메인 체크아웃에서 커밋끼리 비교한다 (시나리오 8)
     const range = changeRange(this.work, task.id)
@@ -2898,6 +3238,7 @@ export class WorkRunner {
         buttons: deliveryButtons(this.checks()),
         delivery: deliveryView(this.work.delivery),
         branch: await this.branchInfo(),
+        knowledge: await this.knowledgeView(cwd, range?.to ?? null, handoffText ?? ''),
       }
     }
     return {
@@ -2932,7 +3273,9 @@ export class WorkRunner {
       }),
       lead: stageLead(task.node, files),
       artifacts: Object.entries(files)
-        .filter(([name]) => name !== CONTEXT_FILE && name !== HANDOFF_FILE)
+        .filter(
+          ([name]) => name !== CONTEXT_FILE && name !== HANDOFF_FILE && name !== INJECTED_FILE,
+        )
         .map(([name, text]) => ({ name, text })),
       diff: clip(diff),
       gate: approvalGate(task, check),

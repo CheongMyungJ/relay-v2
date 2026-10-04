@@ -1,0 +1,91 @@
+{
+  "id": "24-invoice-credit-teammate",
+  "repoName": "billing",
+  "title": "동료가 들은 회계 규칙이 필요한 반품 전표 버그 (팀원 교대)",
+  "purpose": "Work 1은 21과 같다(사람이 회계 규칙을 알려 준다). Work 2는 21의 Work 2와 같은 반품 전표 버그를 팀의 다른 사람이 맡는다: 도구가 Work 1의 브랜치를 main에 머지하고(PR 머지와 같음) 레포를 새로 clone해 새 앱 저장소에서 시작한다. Work 2의 사람은 회계 규칙을 모른다(물어도 모른다고 답함). 팀 공유 지식이 레포를 타고 건너가면 Work 2의 에이전트가 규칙대로 고치고, 아니면 흔한 해법(줄마다 반올림, 합계 버림, 할인 전 금액에 부가세)으로 틀리기 쉽다. 지식을 켠 쪽과 끈 쪽의 Work 2 숨긴 시험과 사람 부담을 견준다.",
+  "works": [
+    {
+      "report": "회계팀 대조에서 청구서 합계가 몇 원씩 안 맞는다는 연락이 왔다. 우리 청구서가 회계팀 계산보다 조금 크게 나온다고 한다. 예: 청구서 INV-2031 합계 29,082원. 반올림 문제 같다. 청구서 데이터는 examples/INV-2031.json에 있다. (src/invoice/total.js)",
+      "knowledge": [
+        {
+          "share": "on_ask",
+          "text": "회계팀이 계산한 INV-2031 합계는 29,079원이다(우리 청구서보다 3원 적다)."
+        },
+        {
+          "share": "on_ask",
+          "text": "회계 규정: 부가세는 품목 줄마다 원 단위 버림으로 계산하고, 그 합을 청구서의 부가세로 쓴다. 합계에서 다시 반올림하지 않는다."
+        },
+        {
+          "share": "on_ask",
+          "text": "할인은 부가세 전에 줄마다 적용한다. 부가세는 할인된 줄 금액에 매긴다."
+        },
+        {
+          "share": "upfront",
+          "text": "이미 발행된 청구서는 다시 계산하지 않는다(저장된 합계를 그대로 쓴다). 서식 모듈(src/format/)의 출력 형식도 바뀌면 안 된다. PDF 생성기가 그대로 찍는다."
+        }
+      ],
+      "checks": [
+        {
+          "name": "줄별 버림",
+          "file": "rounding.test.js"
+        },
+        {
+          "name": "할인 순서",
+          "file": "discount.test.js"
+        },
+        {
+          "name": "서식 그대로",
+          "file": "format.test.js",
+          "guard": true
+        }
+      ]
+    },
+    {
+      "report": "회계팀이 10월 반품 전표를 대조하다가 우리 전표의 환불 금액이 회계팀 계산과 몇 원씩 안 맞는다고 연락해 왔다. 예: 반품 전표 CN-0112(청구서 INV-2047의 반품) 환불 합계 19,182원. 반품 요청과 원래 청구서는 examples/CN-0112.json, examples/INV-2047.json에 있다. (src/invoice/credit-note.js)",
+      "knowledge": [
+        {
+          "share": "on_ask",
+          "text": "회계팀이 계산한 CN-0112 환불 합계는 19,180원이다(우리 전표보다 2원 적다)."
+        },
+        {
+          "share": "on_ask",
+          "text": "회계 규정은 모른다. 동료가 지난번 청구서 건에서 회계팀과 맞췄다고만 들었다. 그 동료는 지금 휴가 중이라 물을 수 없다."
+        },
+        {
+          "share": "on_ask",
+          "text": "금액 할인이 붙은 줄을 일부만 돌려받을 때 할인을 수량 비율로 나누는 지금 방식은 회계팀과 맞춘 것이라 그대로 둔다."
+        },
+        {
+          "share": "upfront",
+          "text": "이미 발행된 청구서와 이미 만든 반품 전표는 다시 계산하지 않는다(저장된 금액을 그대로 쓴다). 서식 모듈(src/format/)의 출력 형식도 바뀌면 안 된다."
+        }
+      ],
+      "checks": [
+        {
+          "name": "반품 줄별 버림",
+          "file": "credit-rounding.test.js"
+        },
+        {
+          "name": "반품 할인 순서",
+          "file": "credit-discount.test.js"
+        },
+        {
+          "name": "반품 전표 그대로",
+          "file": "credit-guard.test.js",
+          "guard": true
+        }
+      ],
+      "teammate": true
+    }
+  ],
+  "preferences": [
+    "고친 뒤 리포트의 예시(청구서나 반품 전표)가 회계팀 계산과 맞는지 확인하고 싶다."
+  ],
+  "reveals": [],
+  "events": [],
+  "expectedFiles": ["src/invoice/**", "src/money.js", "test/**"],
+  "limits": {
+    "minutes": 90,
+    "turns": 100
+  }
+}
