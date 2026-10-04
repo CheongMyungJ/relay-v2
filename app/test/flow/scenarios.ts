@@ -55,6 +55,8 @@ export interface Scenario {
   resume?: Partial<Record<SkillName | string, Step[]>>
   /** 정리 세션([AI 세션 열기], 7-5)의 단계. 첫 프롬프트 없이 연 세션이다. 없으면 입력을 기다리기만 한다 */
   cleanup?: Step[]
+  /** 지식 검토 호출(claude -p, D300)의 n번째 결과. 없으면 문제 없음 */
+  review?: { issues: { file: string; kind: string; quote: string; fix: string }[] }[]
 }
 
 // ---------- 시험 레포 ----------

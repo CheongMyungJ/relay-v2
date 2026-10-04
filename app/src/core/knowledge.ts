@@ -107,8 +107,16 @@ const RULE_SECTION = '규칙'
 const BODY_SECTION = '내용'
 /** 규칙을 아직 따르지 않는 코드(고칠 곳). 규칙 항목에만 둔다 */
 const NOT_YET_SECTION = '아직 규칙을 따르지 않는 곳'
+/** 사람이 아직 정하지 않은 것 (D299). 규칙이 아니다. 규칙 항목에만 둔다 */
+const UNDECIDED_SECTION = '아직 정하지 않은 것'
 const HISTORY_SECTION = '바뀐 이력'
-const KNOWN_SECTIONS = [RULE_SECTION, BODY_SECTION, NOT_YET_SECTION, HISTORY_SECTION]
+const KNOWN_SECTIONS = [
+  RULE_SECTION,
+  BODY_SECTION,
+  NOT_YET_SECTION,
+  UNDECIDED_SECTION,
+  HISTORY_SECTION,
+]
 
 /** `anchor`: 규칙이 붙은 코드 이름. 식별자나 점으로 이은 식별자 */
 const ANCHOR = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/
@@ -187,10 +195,9 @@ export function checkEntryFormat(path: string, text: string): FormatIssue[] {
     else if (h !== main && (h === RULE_SECTION || h === BODY_SECTION))
       out.push(issue(path, 'body', `kind: ${String(kind)}의 본문 절은 \`## ${main}\`이다`, h))
   }
-  if (kind !== 'rule' && sectionText(body, NOT_YET_SECTION) !== null)
-    out.push(
-      issue(path, 'body', `\`## ${NOT_YET_SECTION}\`은 kind: rule에만 둔다`, NOT_YET_SECTION),
-    )
+  for (const only of [NOT_YET_SECTION, UNDECIDED_SECTION])
+    if (kind !== 'rule' && sectionText(body, only) !== null)
+      out.push(issue(path, 'body', `\`## ${only}\`은 kind: rule에만 둔다`, only))
   return out
 }
 
@@ -542,6 +549,13 @@ const USE_RULES: Record<'intake' | 'work' | 'verify', string> = {
 const SCOPE_NOTE =
   '사람이 이번 Work의 범위로 한 말("이번엔 손대지 마라", "다음에 따로 고친다", "이번 범위가 아니다")은 규칙이 아니다. "~는 수정하지 않는다" 같은 규칙으로 남기지 않는다. 사람이 "앞으로도 늘"처럼 오래 지킬 것으로 말했을 때만 규칙이다.'
 
+/**
+ * 사람이 정하지 않은 것은 규칙이 아니다 (D299). E11에서 "환불 회수율에 새 비율을 쓸지는 따로 정한다"를 에이전트가 코드에서
+ * 옛 비율로 떼어 두고 "회수율은 1%" 규칙으로 적었다
+ */
+const UNDECIDED_NOTE =
+  '사람이 "따로 정한다", "아직 모른다", "이번 범위가 아니다"라고 한 미정 사항(예: 새 값을 어디까지 적용할지)은 규칙이 아니다. 코드에서 그 사항을 한쪽으로 임시로 정해 두었어도(예: 옛 값을 상수로 남김) 규칙으로 적지 않는다.'
+
 const CANDIDATE_RULES = [
   '### 지식 후보 남기기',
   '',
@@ -552,6 +566,7 @@ const CANDIDATE_RULES = [
   '- 남기지 않을 것: 이번 일에만 해당하는 것, 코드와 커밋에 이미 드러난 것, 비밀(토큰, 비밀번호, 내부 주소)과 개인정보. "이 규칙이 저기에도 통하는지 모른다"처럼 모른다는 것만 담은 메모도 후보가 아니다.',
   '- 사람의 지금 말이 위 항목과 어긋나면(값이나 규칙이 바뀌었으면) "고칠 지식: <경로> — <새 내용> (사람)"으로 후보에 적는다. verify가 그 항목을 고친다.',
   `- ${SCOPE_NOTE} 후보에는 "아직 규칙을 따르지 않음: <경로> — <지금 상태>, 사람이 이번 범위에서 뺌 (사람)"으로 적는다.`,
+  `- ${UNDECIDED_NOTE} 후보에는 "정하지 않음: <무엇> — <누가 언제 정하나>, 지금 코드는 <상태> (사람)"으로 적는다.`,
 ].join('\n')
 
 function writeRules(input: KnowledgeInput): string {
@@ -570,6 +585,7 @@ function writeRules(input: KnowledgeInput): string {
     '- 지식 후보 가운데 "(사람)"이 붙은 것은 이번 일에만 해당하지 않는 한 모두 남긴다. 사람이 알려 준 규칙은 하나도 빠뜨리지 않는다.',
     '- 남기지 않을 것: 이번 일에만 해당하는 것, 코드와 커밋에 이미 드러난 것, 비밀(토큰, 비밀번호, 내부 주소)과 개인정보. "이 규칙이 저기에도 통하는지 모른다"처럼 모른다는 것만 담은 항목은 만들지 않는다.',
     `- ${SCOPE_NOTE} 그 코드가 어떤 규칙을 아직 따르지 않으면, 그 규칙 항목의 \`## 아직 규칙을 따르지 않는 곳\`에 "<경로>: <지금 상태>. 사람이 Work ${input.work_id}의 범위에서 뺌(${input.date})"으로 적는다.`,
+    `- ${UNDECIDED_NOTE} 관련 규칙 항목의 \`## 아직 정하지 않은 것\`에 "<무엇>: <누가 언제 정하나>. 지금 코드는 <상태>(Work ${input.work_id})"로 적는다. 사람이 정하면 그 줄을 지우고 \`## 규칙\`에 옮긴다.`,
     '',
     '기존 항목을 고칠지 새로 만들지 지울지 (먼저 위 "항목"을 본다):',
     '',
@@ -601,6 +617,9 @@ function writeRules(input: KnowledgeInput): string {
         '',
         '## 아직 규칙을 따르지 않는 곳',
         '- <경로>: <지금 어떻게 되어 있어 고쳐야 하나. 사람이 범위에서 뺐으면 그렇다고> (없으면 이 절을 뺀다)',
+        '',
+        '## 아직 정하지 않은 것',
+        '- <무엇>: <누가 언제 정하나>. 지금 코드는 <상태> (없으면 이 절을 뺀다)',
         '',
         '## 바뀐 이력',
         `- ${input.date} 처음 남김 (Work ${input.work_id})`,
@@ -648,7 +667,7 @@ export function knowledgeSection(node: TaskNode, input: KnowledgeInput): [string
     '',
     USE_RULES[kind],
     ...(input.entries.some((e) => e.pendingFrom) ? [PENDING_RULE] : []),
-    '- 항목의 `## 규칙`(또는 `## 내용`)만 규칙과 사실이다. `## 아직 규칙을 따르지 않는 곳`은 아직 고치지 않은 코드, 곧 고칠 대상이다. "범위에서 뺌"이라고 적혀 있어도 금지가 아니라 그때 Work의 범위였다. 이번 요청이 그 코드를 고치는 일이면 규칙대로 고친다. 그 절이 없는 옛 형식의 항목은 글 전체를 읽는다.',
+    '- 항목의 `## 규칙`(또는 `## 내용`)만 규칙과 사실이다. `## 아직 규칙을 따르지 않는 곳`은 아직 고치지 않은 코드, 곧 고칠 대상이다. "범위에서 뺌"이라고 적혀 있어도 금지가 아니라 그때 Work의 범위였다. 이번 요청이 그 코드를 고치는 일이면 규칙대로 고친다. `## 아직 정하지 않은 것`은 규칙이 아니다. 이번 일이 그 사항에 걸리면 지금 코드의 상태를 근거로 삼지 말고 사람에게 묻는다. 그 절들이 없는 옛 형식의 항목은 글 전체를 읽는다.',
     ...(input.removed?.length
       ? [
           `- 머지를 기다리는 앞 Work가 지운 항목: ${input.removed.map((r) => `\`${r.path}\`(Work ${r.from})`).join(', ')}. 이 worktree에 파일이 보여도 지운 것으로 보고 쓰지 않는다.`,

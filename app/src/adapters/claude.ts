@@ -160,3 +160,94 @@ export async function deploySkill(o: {
   await writeFileAtomic(file, merged)
   return { file, hash: `sha256:${sha256(merged)}` }
 }
+
+// ---------- 짧은 모델 호출 (D300) ----------
+
+export interface ClaudeJsonInput {
+  bin: string
+  env: NodeJS.ProcessEnv
+  cwd: string
+  model: string
+  effort?: string
+  system: string
+  prompt: string
+  schema: object
+  timeoutMs: number
+}
+
+export interface ClaudeJsonResult {
+  /** 구조화된 출력. 실패면 null */
+  data: unknown
+  ms: number
+  costUsd: number | null
+  usage: { input: number; output: number; cacheRead: number; cacheCreation: number } | null
+  error: string | null
+}
+
+/**
+ * claude -p를 한 번 부른다: 도구 없음, 세션을 남기지 않음(--no-session-persistence, 사용량이 에이전트 세션과 섞이지 않게),
+ * 구조화된 출력(--json-schema). 프롬프트는 표준 입력으로 넘긴다. 실패해도 던지지 않고 error에 적는다
+ */
+export async function claudeJson(input: ClaudeJsonInput): Promise<ClaudeJsonResult> {
+  const args = [
+    '-p',
+    '--model',
+    input.model,
+    ...(input.effort ? ['--effort', input.effort] : []),
+    '--output-format',
+    'json',
+    '--system-prompt',
+    input.system,
+    '--json-schema',
+    JSON.stringify(input.schema),
+    '--tools',
+    '',
+    '--no-session-persistence',
+  ]
+  const started = Date.now()
+  const r = await run(input.bin, args, {
+    cwd: input.cwd,
+    env: input.env,
+    timeoutMs: input.timeoutMs,
+    input: input.prompt,
+  })
+  const ms = Date.now() - started
+  const fail = (error: string): ClaudeJsonResult => ({
+    data: null,
+    ms,
+    costUsd: null,
+    usage: null,
+    error,
+  })
+  if (r.code !== 0) return fail(describeFailure(r))
+  let j: Record<string, unknown>
+  try {
+    j = JSON.parse(r.stdout) as Record<string, unknown>
+  } catch {
+    return fail(`출력을 읽지 못함: ${r.stdout.slice(0, 200)}`)
+  }
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
+  const u = j['usage'] as Record<string, unknown> | undefined
+  const usage = u
+    ? {
+        input: num(u['input_tokens']),
+        output: num(u['output_tokens']),
+        cacheRead: num(u['cache_read_input_tokens']),
+        cacheCreation: num(u['cache_creation_input_tokens']),
+      }
+    : null
+  const costUsd = typeof j['total_cost_usd'] === 'number' ? j['total_cost_usd'] : null
+  const data = j['structured_output'] ?? null
+  return {
+    data,
+    ms,
+    costUsd,
+    usage,
+    error:
+      j['is_error'] === true
+        ? String(j['result'] ?? '오류')
+        : data === null
+          ? '구조화된 출력 없음'
+          : null,
+  }
+}

@@ -225,6 +225,113 @@ describe('[흐름] 아직 따르지 않는 곳, 지운 지식, 이 Work의 지�
   })
 })
 
+describe('[흐름] 지식 검토 호출 (D300)', () => {
+  it('기계적 확인을 지난 지식을 모델이 한 번 보고, 찾은 것은 한 번 되돌리며, 시간과 비용을 기록한다', async () => {
+    const RATE = 'docs/knowledge/points/rate.md'
+    const text = (undecided: boolean) =>
+      [
+        '---',
+        'kind: rule',
+        'source: human',
+        '---',
+        '# 적립률은 2%',
+        '',
+        '## 규칙',
+        '- 적립률은 2%다.',
+        ...(undecided
+          ? ['', '## 아직 정하지 않은 것', '- 환불 회수율: 정산팀이 정함. 지금 코드는 1%']
+          : ['- 환불 회수율은 1%다.']),
+      ].join('\n') + '\n'
+    const verify: Scenario['tasks'][string] = [
+      { do: 'prompt' },
+      { do: 'commit', files: { [RATE]: text(false) }, message: 'knowledge' },
+      { do: 'write', file: 'verification.md', text: VERIFICATION },
+      { do: 'write', file: 'pr.md', text: PR },
+      {
+        do: 'write',
+        file: 'handoff.md',
+        text: handoff({ summary: `고쳤다.\n새 지식: ${RATE} — 없음` }),
+      },
+      {
+        do: 'stop',
+        onBlock: [
+          { do: 'commit', files: { [RATE]: text(true) }, message: 'knowledge: 정하지 않은 것' },
+          { do: 'stop' },
+        ],
+      },
+    ]
+    const hh = await harness({
+      scenario: {
+        ...scenario({ verify }),
+        review: [
+          {
+            issues: [
+              {
+                file: RATE,
+                kind: 'undecided_in_rule',
+                quote: '환불 회수율은 1%다.',
+                fix: '`## 아직 정하지 않은 것`으로 옮긴다',
+              },
+            ],
+          },
+          { issues: [] },
+        ],
+      },
+      env: { RELAY_KNOWLEDGE: 'on' },
+    })
+    h = hh
+    const { repo } = makeRepo(hh.root, 'knowledge-review', REPO_FILES)
+    const projectId = await register(hh, repo)
+    const r = await hh.relay.createWork(projectId, {
+      request: REQUEST,
+      baseBranch: 'main',
+      type: 'bugfix',
+      baseLocation: 'local',
+    })
+    if (!r.ok) throw new Error(r.error)
+    const result = await drive(hh.relay, hh.ui, r.workKey)
+    await settle(hh, r.workKey)
+    expect(result, hh.ui.dump()).toMatchObject({ status: 'completed', reason: null })
+    expect(result.tasks.map((t) => t.bounces)).toEqual([0, 0, 1])
+    const workDir = path.join(
+      hh.home,
+      'projects',
+      projectId,
+      'works',
+      r.workKey.split('/')[1] ?? '',
+    )
+    const bounced = fs
+      .readFileSync(path.join(workDir, 'events.jsonl'), 'utf8')
+      .split('\n')
+      .filter((l) => l.includes('task.bounced'))
+      .join('\n')
+    expect(bounced).toContain('[지식 검토: 규칙 절에 정하지 않은 것]')
+    // 프롬프트에 바꾼 지식이 들어갔다
+    expect(
+      fs.readFileSync(`${path.join(hh.root, 'scenario.json')}.review-1.txt`, 'utf8'),
+    ).toContain('환불 회수율은 1%다.')
+    const record = JSON.parse(
+      fs.readFileSync(path.join(workDir, 'tasks', '03-verify', 'knowledge-review.json'), 'utf8'),
+    ) as {
+      calls: { bounced: boolean; costUsd: number; ms: number; issues: unknown[]; usage: unknown }[]
+    }
+    expect(record.calls.map((c) => [c.bounced, c.issues.length, c.costUsd])).toEqual([
+      [true, 1, 0.0123],
+      [false, 0, 0.0123],
+    ])
+    expect(record.calls[0]?.ms).toBeGreaterThanOrEqual(0)
+    expect(record.calls[0]?.usage).toEqual({
+      input: 1000,
+      output: 50,
+      cacheRead: 0,
+      cacheCreation: 0,
+    })
+    // 승인 화면은 기록을 쓰고 모델을 다시 부르지 않는다
+    await hh.relay.review(r.workKey, 't-03')
+    expect(fs.readFileSync(`${path.join(hh.root, 'scenario.json')}.review-count`, 'utf8')).toBe('2')
+  })
+})
+
 describe('[흐름] 지식이 많으면 관련 항목만 넣는다 (D295)', () => {
   it('요청과 관련 있는 항목은 본문으로, 나머지는 제목만이거나 빼고, 그렇다고 context.md에 적는다', async () => {
     const many: Record<string, string> = {}

@@ -690,6 +690,8 @@ export interface TaskCheckInput {
    * 끄면 없다
    */
   knowledgeIssues?: readonly FormatIssue[]
+  /** 지식 검토 호출(D300)이 찾았지만 되돌리지 않는 것. verify의 경고로 보인다 */
+  knowledgeWarnings?: readonly FormatIssue[]
 }
 
 export interface TaskCheck extends CheckSummary {
@@ -763,7 +765,11 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
     handoff_present: handoffText !== undefined,
     status: handoff?.status ?? null,
     errors,
-    warnings: [...(handoff?.warnings ?? []), ...(draft?.warnings ?? [])],
+    warnings: [
+      ...(handoff?.warnings ?? []),
+      ...(draft?.warnings ?? []),
+      ...(input.knowledgeWarnings && node === 'verify' ? input.knowledgeWarnings : []),
+    ],
     handoff: handoff?.value ?? null,
     handoffHeader: handoff?.header ?? null,
   }

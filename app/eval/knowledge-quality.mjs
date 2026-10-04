@@ -6,6 +6,7 @@
 //   - 상태를 규칙처럼 적은 항목: 아직 고치지 않은 곳이나 정하지 않은 것을 규칙으로 적은 항목 (문제 2)
 //   - 서로 어긋나는 항목 짝, 기준 규칙마다 맞게 적었는지(맞음/틀림/없음)
 //   - 머리글의 kind가 내용과 맞지 않는 항목
+// 지식 검토 호출(D300)의 기록(verify task의 knowledge-review.json)이 있으면 쪽마다 호출 수, 시간, 비용, 토큰, 되돌림을 센다.
 // kind 분포(머리글 kind마다 파일 수, 머리글이 없는 옛 형식은 "없음")는 기준이 없는 시나리오에서도 센다.
 // 레포에 남는 지식: Work의 diff(final/<id>.diff)는 시나리오 repo/에서 그 Work 끝까지의 차이다. 팀원 Work는 앞 Work를
 // 머지한 main에서 시작하므로 그 diff의 지식이 레포 전체다. 같은 사람의 Work는 main에서 따로 시작하므로 앞 Work의 지식
@@ -232,6 +233,66 @@ function kindTable(rows, arms) {
 const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : NaN)
 const f2 = (x) => (Number.isFinite(x) ? x.toFixed(2) : '-')
 
+/** 실행의 지식 검토 호출 기록 (D300): verify task마다 knowledge-review.json */
+function reviewCalls(run) {
+  const out = []
+  for (const w of run.works) {
+    const tasks = path.join(run.dir, 'works', w.id, 'tasks')
+    if (!fs.existsSync(tasks)) continue
+    for (const t of fs.readdirSync(tasks)) {
+      const file = path.join(tasks, t, 'knowledge-review.json')
+      if (!fs.existsSync(file)) continue
+      for (const c of JSON.parse(fs.readFileSync(file, 'utf8')).calls ?? [])
+        out.push({ work: w.id, ...c })
+    }
+  }
+  return out
+}
+
+const pct = (xs, p) => {
+  if (!xs.length) return NaN
+  const s = [...xs].sort((a, b) => a - b)
+  return s[Math.min(s.length - 1, Math.floor(p * s.length))]
+}
+
+/** 쪽마다 검토 호출의 수, 시간, 비용, 토큰, 되돌림, 찾은 것의 종류 */
+function reviewTable(rows) {
+  const out = [
+    '| 쪽 | 실행 | 호출 | 호출한 Work | 시간 평균(초) | 시간 p90(초) | 비용 평균($) | 비용 합($) | 실행당 비용($) | 입력 토큰 평균 | 출력 토큰 평균 | 되돌림 | 실패 |',
+    '|---|---|---|---|---|---|---|---|---|---|---|---|---|',
+  ]
+  const kinds = new Map()
+  for (const arm of [...new Set(rows.map((r) => r.kind))].sort()) {
+    const rs = rows.filter((r) => r.kind === arm)
+    const calls = rs.flatMap((r) => r.reviews)
+    if (!calls.length) continue
+    const ms = calls.map((c) => c.ms / 1000)
+    const cost = calls.map((c) => c.costUsd ?? 0)
+    const inTok = calls.map((c) =>
+      c.usage ? c.usage.input + c.usage.cacheRead + c.usage.cacheCreation : 0,
+    )
+    const outTok = calls.map((c) => c.usage?.output ?? 0)
+    const works = new Set(
+      rs.flatMap((r) => r.reviews.map((c) => `${r.scenario}/${r.index}/${c.work}`)),
+    )
+    const sum = cost.reduce((a, b) => a + b, 0)
+    out.push(
+      `| ${arm} | ${rs.length} | ${calls.length} | ${works.size} | ${f2(mean(ms))} | ${f2(pct(ms, 0.9))} | ${mean(cost).toFixed(4)} | ${sum.toFixed(3)} | ${(sum / rs.length).toFixed(4)} | ${Math.round(mean(inTok))} | ${Math.round(mean(outTok))} | ${calls.filter((c) => c.bounced).length} | ${calls.filter((c) => c.error).length} |`,
+    )
+    for (const c of calls)
+      for (const i of c.issues ?? []) {
+        const k = /\[지식 검토: ([^\]]+)\]/.exec(i.message)?.[1] ?? '?'
+        kinds.set(`${arm}: ${k}`, (kinds.get(`${arm}: ${k}`) ?? 0) + 1)
+      }
+  }
+  if (out.length === 2) return []
+  return [
+    ...out,
+    '',
+    `찾은 것의 종류: ${[...kinds].map(([k, n]) => `${k} ${n}`).join(', ') || '없음'}`,
+  ]
+}
+
 async function main() {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
@@ -265,7 +326,13 @@ async function main() {
         fs.writeFileSync(file, JSON.stringify(saved, null, 2) + '\n')
       }
       const s = score(entries, saved?.judgment, truth, knowledgeBounces(run))
-      rows.push({ scenario: run.scenario, kind: run.kind, index: run.index, ...s })
+      rows.push({
+        scenario: run.scenario,
+        kind: run.kind,
+        index: run.index,
+        ...s,
+        reviews: reviewCalls(run),
+      })
       console.error(`${run.scenario} ${run.kind}-${run.index}: ${JSON.stringify(s)}`)
     }
   }
@@ -310,6 +377,8 @@ async function main() {
   }
   const all = [...new Set(rows.map((r) => r.kind))].sort()
   out.push('## 모든 시나리오의 kind 분포', '', ...kindTable(rows, all), '')
+  const reviews = reviewTable(rows)
+  if (reviews.length) out.push('## 지식 검토 호출 (D300)', '', ...reviews, '')
   const text = out.join('\n')
   if (values.out) fs.writeFileSync(values.out, text)
   console.log(text)

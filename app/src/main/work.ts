@@ -68,6 +68,7 @@ import { processStartTime, startPty, type PtySession } from '../adapters/pty'
 import {
   pathKey,
   readText,
+  sha256,
   writeFileAtomic,
   writeJson,
   type OwnedWrite,
@@ -302,6 +303,20 @@ import {
   type KnowledgeSource,
 } from '../adapters/knowledge'
 import {
+  REVIEW_CALL_LIMIT,
+  REVIEW_FILE,
+  REVIEW_SCHEMA,
+  REVIEW_SYSTEM,
+  humanDecisionLines,
+  relatedEntries,
+  reviewEnabled,
+  reviewIssues,
+  reviewPrompt,
+  type ReviewInput,
+  type ReviewRecord,
+} from '../core/knowledge-review'
+import { claudeJson, findClaude } from '../adapters/claude'
+import {
   INJECTED_FILE,
   INJECT_LIMIT,
   candidatesOf,
@@ -315,6 +330,12 @@ import {
   type KnowledgeInput,
   type KnowledgeQuery,
 } from '../core/knowledge'
+
+/** verify의 지식 확인 결과: 되돌리는 것(errors)과 보이기만 하는 것(warnings, 되돌린 뒤의 지식 검토) */
+interface KnowledgeCheck {
+  errors: FormatIssue[]
+  warnings: FormatIssue[]
+}
 
 /** 여러 Work가 함께 쓰는 것 */
 export interface RunnerContext {
@@ -718,7 +739,7 @@ export class WorkRunner {
   private check(
     task: TaskRecord,
     files: Readonly<Record<string, string>>,
-    knowledge?: readonly FormatIssue[],
+    knowledge?: KnowledgeCheck,
   ): TaskCheck {
     return checkTask({
       node: task.node,
@@ -728,17 +749,22 @@ export class WorkRunner {
       formatVersion: task.format_version,
       // PR 대응 task는 이번 라운드의 코멘트 항목마다 replies.md의 절을 본다 (D190)
       ...(task.respond ? { replyItems: replyItemIds(task.respond.items) } : {}),
-      ...(knowledge ? { knowledgeIssues: knowledge } : {}),
+      ...(knowledge ? { knowledgeIssues: knowledge.errors } : {}),
+      ...(knowledge?.warnings.length ? { knowledgeWarnings: knowledge.warnings } : {}),
     })
   }
 
-  /** 형식 검사 (5.2.1)에 verify의 지식 확인(D291, D293, D294)을 더한 것. files가 없으면 task 파일을 읽는다 */
+  /**
+   * 형식 검사 (5.2.1)에 verify의 지식 확인(D291, D293, D294, D296, D297)과 지식 검토(D300)를 더한 것. files가 없으면 task
+   * 파일을 읽는다. 검토 호출은 Stop에서만 하고(stop), 다른 곳(승인 화면 등)은 같은 입력의 기록이 있으면 그 결과만 쓴다
+   */
   private async checkOf(
     task: TaskRecord,
     files?: Readonly<Record<string, string>>,
+    opts: { stop?: boolean } = {},
   ): Promise<TaskCheck> {
     const f = files ?? (await this.files.taskFiles(task))
-    return this.check(task, f, await this.knowledgeCheck(task, f))
+    return this.check(task, f, await this.knowledgeCheck(task, f, opts))
   }
 
   /**
@@ -748,11 +774,13 @@ export class WorkRunner {
   private async knowledgeCheck(
     task: TaskRecord,
     files: Readonly<Record<string, string>>,
-  ): Promise<FormatIssue[] | undefined> {
+    opts: { stop?: boolean } = {},
+  ): Promise<KnowledgeCheck | undefined> {
     const { env } = this.ctx
     if (!knowledgeEnabled(env) || task.node !== 'verify') return undefined
     const handoff = files[HANDOFF_FILE] ?? ''
     const base = this.work.base_commit
+    let input: Parameters<typeof knowledgeIssues>[0]
     try {
       const changed = await changedKnowledge(this.worktree, base, { env })
       const removed = await removedKnowledge(this.worktree, base, { env })
@@ -772,11 +800,104 @@ export class WorkRunner {
         if (e.removed) current.delete(e.path)
         else current.set(e.path, e.text)
       }
-      return knowledgeIssues({ handoff, changed, existing, current, removed, codeChanged })
+      input = { handoff, changed, existing, current, removed, codeChanged }
     } catch (e) {
       console.error(`[${this.key}] 지식을 확인하지 못함: ${message(e)}`)
-      return knowledgeIssues({ handoff, changed: [], existing: new Set(), current: new Map() })
+      const errors = knowledgeIssues({
+        handoff,
+        changed: [],
+        existing: new Set(),
+        current: new Map(),
+      })
+      return { errors, warnings: [] }
     }
+    const errors = knowledgeIssues(input)
+    // 기계적 확인을 지나고 지식을 바꿨을 때만 뜻을 검토한다 (D300)
+    if (errors.length || (!input.changed.length && !input.removed?.length) || !reviewEnabled(env))
+      return { errors, warnings: [] }
+    const review = await this.knowledgeReview(task, input, opts.stop === true)
+    return review.bounce
+      ? { errors: review.issues, warnings: [] }
+      : { errors, warnings: review.issues }
+  }
+
+  /**
+   * 지식 검토 호출 (D300): 바꾼 지식, 관련 항목, 이번 Work의 사람 말을 넣고 모델에 한 번 묻는다. 같은 입력이면 기록(REVIEW_FILE)의
+   * 결과를 쓴다. 호출은 Stop에서만, task마다 REVIEW_CALL_LIMIT번까지 한다. 되돌림은 task마다 한 번이다: 처음 찾은 문제는
+   * 되돌리고(bounce), 그 뒤에 찾은 것은 경고로만 보인다. 부르지 못하면 문제 없음으로 본다
+   */
+  private async knowledgeReview(
+    task: TaskRecord,
+    check: Parameters<typeof knowledgeIssues>[0],
+    stop: boolean,
+  ): Promise<{ issues: FormatIssue[]; bounce: boolean }> {
+    const { env } = this.ctx
+    const file = path.join(this.files.taskDir(task), REVIEW_FILE)
+    const record: ReviewRecord = JSON.parse(
+      (await readText(file)) ?? '{"calls":[]}',
+    ) as ReviewRecord
+    const request = (await this.files.readOwned('request.md'))?.text ?? ''
+    const intent = (await this.files.readOwned('intent.md'))?.text ?? null
+    const decisions = (await this.files.readOwned('decisions.md'))?.text ?? ''
+    const candidates: string[] = []
+    for (const t of this.work.tasks) {
+      if (t.id === task.id || t.status === 'discarded') continue
+      candidates.push(...candidatesOf((await this.handoffOf(t)) ?? ''))
+    }
+    const reviewInput: ReviewInput = {
+      changed: check.changed,
+      removed: check.removed ?? [],
+      related: relatedEntries(check.current, check.changed, request),
+      request,
+      intent,
+      humanDecisions: humanDecisionLines(decisions),
+      candidates,
+    }
+    const prompt = reviewPrompt(reviewInput)
+    const hash = sha256(prompt)
+    const known = new Set([
+      ...check.changed.map((c) => c.path),
+      ...reviewInput.related.map((r) => r.path),
+    ])
+    const done = record.calls.find((c) => c.hash === hash)
+    if (done) return { issues: done.issues, bounce: done.bounced }
+    if (!stop || record.calls.length >= REVIEW_CALL_LIMIT) return { issues: [], bounce: false }
+    const bin = findClaude({ env })
+    const model = env['RELAY_KNOWLEDGE_REVIEW_MODEL']?.trim() || 'sonnet'
+    const result = bin
+      ? await claudeJson({
+          bin,
+          env,
+          cwd: this.worktree,
+          model,
+          effort: 'low',
+          system: REVIEW_SYSTEM,
+          prompt,
+          schema: REVIEW_SCHEMA,
+          timeoutMs: 120_000,
+        })
+      : { data: null, ms: 0, costUsd: null, usage: null, error: 'claude를 찾지 못함' }
+    const issues = reviewIssues(result.data, known)
+    const bounce = issues.length > 0 && !record.calls.some((c) => c.bounced)
+    record.calls.push({
+      at: this.ctx.at(),
+      hash,
+      model,
+      ms: result.ms,
+      costUsd: result.costUsd,
+      usage: result.usage,
+      related: reviewInput.related.length,
+      promptChars: prompt.length,
+      issues,
+      bounced: bounce,
+      error: result.error,
+    })
+    try {
+      await writeFileAtomic(file, `${JSON.stringify(record, null, 2)}\n`)
+    } catch (e) {
+      console.error(`[${this.key}] 지식 검토 기록을 쓰지 못함: ${message(e)}`)
+    }
+    return { issues, bounce }
   }
 
   private notify(body: string): void {
@@ -1679,7 +1800,7 @@ export class WorkRunner {
             ...base,
             stopHookActive: b['stop_hook_active'] === true,
             handoffChanged: changed,
-            check: await this.checkOf(task, files),
+            check: await this.checkOf(task, files, { stop: true }),
             // 백그라운드 작업이나 예약된 깨우기를 기다리며 쉬는 중이면 자동 승인하지 않는다 (D129)
             pending: engine === 'codex' ? 'unknown' : pendingBackground(b) ? 'pending' : 'none',
           })

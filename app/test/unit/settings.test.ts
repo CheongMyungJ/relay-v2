@@ -44,7 +44,8 @@ describe('훅 (I13, 시나리오 2-3)', () => {
           url: `http://127.0.0.1:51234/hook/t-03/${event}`,
           headers: { Authorization: 'Bearer $RELAY_HOOK_TOKEN' },
           allowedEnvVars: ['RELAY_HOOK_TOKEN'],
-          timeout: 30,
+          // Stop은 verify의 지식 검토 호출을 기다린다 (D300)
+          timeout: event === 'Stop' ? 180 : 30,
         },
       ])
     },
