@@ -37,7 +37,7 @@ describe('[단위] 지식 검토 호출과 정하지 않은 것 (D299, D300)', (
     ).toContain('`## 아직 정하지 않은 것`은 kind: rule에만')
   })
 
-  it('안내: 정하지 않은 것은 규칙이 아니고, 걸리면 묻는다 (D299)', () => {
+  it('안내: 사람이 말한 미정 사항만 정하지 않은 것이고, 규칙이 덮으면 따르며 그 사항을 정해야 할 때만 묻는다 (D299)', () => {
     const input: KnowledgeInput = {
       entries: [],
       candidates: [],
@@ -45,11 +45,14 @@ describe('[단위] 지식 검토 호출과 정하지 않은 것 (D299, D300)', (
       date: '2026-10-04',
     }
     const [, fix] = knowledgeSection('fix', input)
-    expect(fix).toContain('정하지 않음: <무엇> — <누가 언제 정하나>')
+    expect(fix).toContain('정하지 않음: <무엇> — 사람이 "<한 말>"이라고 함')
+    expect(fix).toContain('에이전트가 스스로 떠올린 열린 질문')
     expect(fix).toContain('`## 아직 정하지 않은 것`은 규칙이 아니다')
+    expect(fix).toContain('이번 일은 `## 규칙`이 덮는 대로 하고')
+    expect(fix).toContain('정해야 이번 일을 할 수 있을 때만 사람에게 묻는다')
     const [, verify] = knowledgeSection('verify', input)
     expect(verify).toContain(
-      '`## 아직 정하지 않은 것`에 "<무엇>: <누가 언제 정하나>. 지금 코드는 <상태>(Work w-3)"',
+      '"<무엇>: 사람이 "<한 말>"(Work w-3). <누가 언제 정하나>. 지금 코드는 <상태>"',
     )
     expect(verify).toContain('## 아직 정하지 않은 것\n- <무엇>')
   })
@@ -103,6 +106,10 @@ describe('[단위] 지식 검토 호출과 정하지 않은 것 (D299, D300)', (
       '[사람] 회수율은 따로 정한다',
       '정하지 않음: 회수율 (사람)',
       'undecided_in_rule',
+      '인용할 말이 없으면 이 kind로 적지 않는다',
+      '어느 값을 규칙으로 쓰라고 하지 않는다',
+      '"이미 저장된 값은 다시 계산하지 않는다"',
+      '에이전트가 떠올린 열린 질문',
     ])
       expect(p).toContain(s)
   })
@@ -118,6 +125,20 @@ describe('[단위] 지식 검토 호출과 정하지 않은 것 (D299, D300)', (
             quote: '회수율은 1%',
             fix: '정하지 않은 것 절로 옮긴다',
           },
+          {
+            file: 'docs/knowledge/a.md',
+            kind: 'contradicts_human',
+            quote: '할인은 뒤에',
+            human: '',
+            fix: '고친다',
+          },
+          {
+            file: 'docs/knowledge/a.md',
+            kind: 'contradicts_human',
+            quote: '할인은 뒤에',
+            human: '할인은 부가세 전에',
+            fix: '고친다',
+          },
           { file: 'docs/knowledge/zzz.md', kind: 'conflict', quote: '', fix: '하나로 합친다' },
           { file: 'docs/knowledge/a.md', kind: 'style', quote: 'x', fix: 'y' },
           { file: 'docs/knowledge/a.md', kind: 'conflict', quote: 'x', fix: '' },
@@ -129,6 +150,11 @@ describe('[단위] 지식 검토 호출과 정하지 않은 것 (D299, D300)', (
       [
         'docs/knowledge/a.md',
         '[지식 검토: 규칙 절에 정하지 않은 것] "회수율은 1%" → 정하지 않은 것 절로 옮긴다',
+      ],
+      // 사람 말과 어긋난다는 지적은 사람의 말을 인용해야 남는다
+      [
+        'docs/knowledge/a.md',
+        '[지식 검토: 사람의 이번 말과 어긋남] "할인은 뒤에" (사람: "할인은 부가세 전에") → 고친다',
       ],
       ['handoff.md', '[지식 검토: 다른 항목과 어긋남] → 하나로 합친다'],
     ])

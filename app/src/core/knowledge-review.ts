@@ -89,9 +89,10 @@ export const REVIEW_SCHEMA = {
           file: { type: 'string' },
           kind: { type: 'string', enum: [...REVIEW_KINDS] },
           quote: { type: 'string' },
+          human: { type: 'string' },
           fix: { type: 'string' },
         },
-        required: ['file', 'kind', 'quote', 'fix'],
+        required: ['file', 'kind', 'quote', 'human', 'fix'],
       },
     },
   },
@@ -116,14 +117,15 @@ export function reviewPrompt(input: ReviewInput): string {
     '',
     '찾을 것 (kind):',
     '- conflict: 바꾼 항목이 관련 항목과 같은 대상(같은 규칙, 같은 값, 같은 코드 이름)을 다른 값이나 다른 규칙으로 말한다. 한쪽이 옛 값이면 그쪽을 file로 적는다',
-    '- contradicts_human: 사람의 이번 말(요청, intent, 사람 결정, "(사람)" 후보)과 어긋나는데 고치지 않은 항목',
-    '- state_in_rule: `## 규칙`에 이래야 하는 것이 아니라 지금 코드의 상태("~가 남아 있다", "지금은 ~를 쓴다", "~는 수정하지 않는다" 같은 한 Work의 범위)를 적었다. 그런 것은 `## 아직 규칙을 따르지 않는 곳`에 가야 한다',
+    '- contradicts_human: 사람의 이번 말(요청, intent, 사람 결정, "(사람)" 후보)과 어긋나는데 고치지 않은 항목. human에 어긋나는 사람의 말을 위 입력에서 그대로 인용한다. 인용할 말이 없으면 이 kind로 적지 않는다',
+    '- state_in_rule: `## 규칙`에 이래야 하는 것이 아니라 지금 코드의 상태("~가 남아 있다", "지금은 ~를 쓴다", "~는 이번에 수정하지 않는다" 같은 한 Work의 범위)를 적었다. 그런 것은 `## 아직 규칙을 따르지 않는 곳`에 가야 한다. 사람이 오래 지킬 제약으로 말한 것(예: "이미 저장된 값은 다시 계산하지 않는다", "출력 형식은 바뀌면 안 된다")은 규칙이라 문제가 아니다',
     '- undecided_in_rule: 사람이 정하지 않은 것("따로 정한다", "이번 범위가 아니다")을 `## 규칙`에 정해진 것처럼 적었다. `## 아직 정하지 않은 것`에 가야 한다',
-    '- unknown_note: "모른다", "확인하지 못했다"만 담은 항목이나 줄',
+    '- unknown_note: "모른다", "확인하지 못했다"만 담은 항목이나 줄. `## 아직 정하지 않은 것`의 줄 가운데 사람이 미정이라고 한 말이 입력에 없는 것(에이전트가 떠올린 열린 질문)도 여기다',
     '- overgeneral: 이번 일의 근거로는 좁은 사실을 넓은 규칙으로 일반화했다(예: 한 모듈의 사정을 모든 모듈의 규칙으로)',
     '',
-    '각 문제: file(바꿀 지식 파일 경로), kind, quote(문제 문장을 짧게 그대로), fix(verify가 할 일 한 문장).',
-    '`## 아직 규칙을 따르지 않는 곳`, `## 아직 정하지 않은 것`, `## 바뀐 이력`에 적은 상태와 옛 값은 문제가 아니다. 관련 항목끼리만의 문제(바꾼 항목이 끼지 않은 것)는 적지 않는다.',
+    '각 문제: file(바꿀 지식 파일 경로), kind, quote(문제 문장을 짧게 그대로), human(contradicts_human이면 사람의 말 인용, 아니면 빈 문자열), fix(verify가 할 일 한 문장).',
+    'fix는 사람이 정하지 않은 것을 정하게 만들면 안 된다. 정하지 않은 사항이 끼면 `## 아직 정하지 않은 것`으로 옮기라고 하고, 어느 값을 규칙으로 쓰라고 하지 않는다.',
+    '`## 아직 규칙을 따르지 않는 곳`, `## 바뀐 이력`에 적은 상태와 옛 값, `## 아직 정하지 않은 것`에 사람의 말을 근거로 적은 줄은 문제가 아니다. 관련 항목끼리만의 문제(바꾼 항목이 끼지 않은 것)는 적지 않는다.',
     '',
     '## 이번 Work의 요청',
     '',
@@ -157,17 +159,26 @@ export function reviewIssues(output: unknown, known: ReadonlySet<string>): Forma
   if (!Array.isArray(issues)) return []
   const out: FormatIssue[] = []
   for (const raw of issues) {
-    const i = raw as { file?: unknown; kind?: unknown; quote?: unknown; fix?: unknown }
+    const i = raw as {
+      file?: unknown
+      kind?: unknown
+      quote?: unknown
+      human?: unknown
+      fix?: unknown
+    }
     const kind = REVIEW_KINDS.find((k) => k === i.kind)
     const fix = typeof i.fix === 'string' ? i.fix.trim() : ''
+    const human = typeof i.human === 'string' ? i.human.trim() : ''
     if (!kind || !fix) continue
+    // 사람 말과 어긋난다는 지적은 그 말을 인용해야 한다 (E12: 근거 없이 맞는 규칙을 틀렸다고 함)
+    if (kind === 'contradicts_human' && !human) continue
     const file =
       typeof i.file === 'string' && known.has(i.file.trim()) ? i.file.trim() : HANDOFF_FILE
     const quote = typeof i.quote === 'string' && i.quote.trim() ? ` "${i.quote.trim()}"` : ''
     out.push({
       file,
       part: 'body',
-      message: `[지식 검토: ${KIND_LABEL[kind]}]${quote} → ${fix}`,
+      message: `[지식 검토: ${KIND_LABEL[kind]}]${quote}${kind === 'contradicts_human' ? ` (사람: "${human}")` : ''} → ${fix}`,
     })
   }
   return out
