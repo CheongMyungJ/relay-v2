@@ -7,6 +7,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { DIMENSIONS, judgePair } from './lib/judge.mjs'
 import { armBase, armType, typeLabel } from './lib/kind.mjs'
+import { codeOutcome } from './lib/repo.mjs'
 import { clip, readJson, readJsonl, stats, writeJson } from './lib/util.mjs'
 import { measuredWorks, multiWork, pairOf, workParts } from './lib/works.mjs'
 
@@ -139,8 +140,10 @@ function metricRows(rs) {
     ['설문 신뢰', ms(sv('trust'))],
     ['설문 복구', ms(sv('recovery'))],
     ['설문 다시 쓰고 싶음', ms(sv('reuse'))],
-    ['바뀐 줄 수', ms(get((r) => r.outcome.linesChanged))],
-    ['기대 밖 파일 수', ms(get((r) => r.outcome.unrelated.length))],
+    // relay의 지식 파일은 코드 결과에서 빼고 따로 센다 (lib/repo.mjs, docs/eval.md 6절)
+    ['바뀐 줄 수', ms(get((r) => codeOutcome(r.outcome).linesChanged))],
+    ['기대 밖 파일 수', ms(get((r) => codeOutcome(r.outcome).unrelated.length))],
+    ['지식 파일 수(판정에서 뺌)', ms(get((r) => codeOutcome(r.outcome).knowledgeFiles.length))],
     ['에이전트 출력 토큰(천)', ms(get((r) => r.agent.output / 1000))],
     [
       '에이전트 입력 토큰(천, 캐시 포함)',

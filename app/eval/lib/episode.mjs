@@ -649,6 +649,8 @@ export async function runEpisode(o) {
       filesChanged: [...new Set(changedTrees.flatMap((f) => f.files.map((x) => x.file)))],
       linesChanged: changedTrees.reduce((a, f) => a + f.linesAdded + f.linesRemoved, 0),
       unrelated: [...new Set(changedTrees.flatMap((f) => f.unrelated))],
+      // relay의 지식 파일: 위 코드 결과에서 빼고 따로 센다 (lib/repo.mjs KNOWLEDGE_FILE)
+      knowledgeFiles: [...new Set(final.flatMap((f) => f.knowledgeFiles ?? []))],
       committed:
         changedTrees.length > 0 &&
         changedTrees.every(

@@ -6,6 +6,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { ask } from './ai.mjs'
 import { makeClaudeConfig } from './env.mjs'
+import { codeOutcome, withoutKnowledge } from './repo.mjs'
 import { clip, readJsonl } from './util.mjs'
 import { words } from './kind.mjs'
 import { multiWork, workParts } from './works.mjs'
@@ -79,17 +80,19 @@ function scenarioBrief(s) {
 
 function outcomeBlock(run, runDir) {
   const o = run.outcome
+  // relay의 지식 파일은 코드 결과가 아니라 판정에서 뺀다. 맨 CLI에는 없어 두면 가림도 깨진다 (lib/repo.mjs)
+  const code = codeOutcome(o)
   const diffs = fs.existsSync(path.join(runDir, 'final'))
     ? fs
         .readdirSync(path.join(runDir, 'final'))
-        .map((f) => fs.readFileSync(path.join(runDir, 'final', f), 'utf8'))
+        .map((f) => withoutKnowledge(fs.readFileSync(path.join(runDir, 'final', f), 'utf8')))
         .join('\n')
     : ''
   return [
     `숨긴 시험: ${o.checks.map((c) => `${c.name} ${c.pass ? '통과' : '실패'}`).join(', ') || '없음'}`,
     `레포 시험: ${o.repoTestsPass ? '통과' : '실패 또는 변경 없음'}`,
-    `바뀐 파일: ${o.filesChanged.join(', ') || '없음'} (${o.linesChanged}줄)`,
-    `기대 밖 파일: ${o.unrelated.join(', ') || '없음'}`,
+    `바뀐 파일: ${code.filesChanged.join(', ') || '없음'} (${code.linesChanged}줄)`,
+    `기대 밖 파일: ${code.unrelated.join(', ') || '없음'}`,
     '코드 차이:',
     '```diff',
     // 커밋 메시지와 도구 흔적 없이 코드만 보인다

@@ -60,6 +60,46 @@ const globToRe = (g) =>
   )
 
 /**
+ * relay의 지식 파일(relay D283, D293). 앱이 verify에서 남기는 팀 지식이라 코드 결과로 보지 않는다: 판정 diff, 바뀐 파일과
+ * 줄 수, 기대 밖 파일에서 빼고 따로 센다(docs/eval.md 6절). 맨 CLI에는 없는 파일이라 판정 diff에 두면 relay가 드러나
+ * 가림도 깨진다. 지식 자체의 질은 knowledge-quality.mjs가 저장한 diff(final/*.diff)에서 따로 본다
+ */
+export const KNOWLEDGE_FILE = /^docs\/knowledge\/.+\.md$/
+export const isKnowledge = (file) => KNOWLEDGE_FILE.test(file)
+
+/** diffTree의 diff(git diff --no-index base tree)에서 지식 파일의 부분을 뺀다 */
+export function withoutKnowledge(diff) {
+  return diff
+    .split(/^(?=diff --git )/m)
+    .filter((part) => {
+      const head = /^diff --git a\/\S+? b\/(?:tree|base)\/(\S+)/.exec(part)
+      return !head || !isKnowledge(head[1])
+    })
+    .join('')
+}
+
+/**
+ * run.json의 결과에서 지식 파일을 뺀 코드 결과. 지식 파일을 따로 두기 전의 결과(바뀐 파일과 기대 밖 파일에 지식이
+ * 섞임)도 같은 값으로 읽는다
+ */
+export function codeOutcome(outcome) {
+  const files = (outcome.trees ?? []).flatMap((t) => [
+    ...(t.files ?? []),
+    ...(t.knowledgeFiles ?? []).map((file) => ({ file, add: 0, del: 0, knowledge: true })),
+  ])
+  const knowledge = [...new Set(files.filter((f) => f.knowledge || isKnowledge(f.file)).map((f) => f.file))]
+  const code = files.filter((f) => !f.knowledge && !isKnowledge(f.file))
+  return {
+    filesChanged: (outcome.filesChanged ?? []).filter((f) => !isKnowledge(f)),
+    linesChanged: (outcome.trees ?? []).length
+      ? code.reduce((a, f) => a + f.add + f.del, 0)
+      : outcome.linesChanged,
+    unrelated: (outcome.unrelated ?? []).filter((f) => !isKnowledge(f)),
+    knowledgeFiles: knowledge,
+  }
+}
+
+/**
  * 결과 폴더 하나를 판정한다.
  * @param {object} o
  * @param {string} o.tree 결과 폴더 (.git이 있어도 없어도 된다)
@@ -69,7 +109,10 @@ const globToRe = (g) =>
  * @param {string} o.work 판정용 임시 폴더
  */
 export function judgeTree(o) {
-  const { copy, files, diff } = diffTree(o.tree, o.baseDir, o.work)
+  const { copy, files: all, diff } = diffTree(o.tree, o.baseDir, o.work)
+  // 지식 파일은 코드 결과에서 뺀다. diff는 그대로 돌려줘 저장한다(지식의 질은 따로 본다)
+  const files = all.filter((f) => !isKnowledge(f.file))
+  const knowledgeFiles = all.filter((f) => isKnowledge(f.file)).map((f) => f.file)
   const allowed = (o.scenario.expectedFiles ?? []).map(globToRe)
   const unrelated = files.filter((f) => !allowed.some((re) => re.test(f.file))).map((f) => f.file)
 
@@ -92,6 +135,7 @@ export function judgeTree(o) {
     linesAdded: files.reduce((a, f) => a + f.add, 0),
     linesRemoved: files.reduce((a, f) => a + f.del, 0),
     unrelated,
+    knowledgeFiles,
     repoTests: { pass: repoTest.code === 0, output: repoTest.out.slice(-3000) },
     checks,
     diff,
