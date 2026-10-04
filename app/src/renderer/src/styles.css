@@ -710,6 +710,12 @@ fieldset.field {
   gap: 6px;
 }
 
+/* 고른 유형의 설명: 일반은 다른 유형에 맞지 않는 일 (D303, I88) */
+.work-type-hint {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
 /* 사이드바와 머리 띠의 업무 유형 (D256) */
 .type-tag {
   font-size: 11px;
