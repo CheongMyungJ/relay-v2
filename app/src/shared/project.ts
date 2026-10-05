@@ -32,10 +32,19 @@ export interface ProjectState {
   allowed_bots?: string[]
   /** 머지 창의 기본 선택 (5.1.2, D177). 없거나 null이면 레포가 허용하는 첫 방식이다 */
   merge_method?: MergeMethod | null
+  /** 이슈 기록 (설계 3.7, D337, D345). 없으면 켜짐이다. 바꾸면 다음에 만드는 Work부터 따른다 (I96) */
+  issue_log?: boolean
 }
 
 /** 프로젝트 설정 화면에서 바꾸는 값 (5.1.2, D185) */
 export interface ProjectSettings {
   allowed_bots: string[]
   merge_method: MergeMethod | null
+  /** 이슈 기록 (D337). 없으면 바꾸지 않는다 */
+  issue_log?: boolean
+}
+
+/** 이슈 기록이 켜져 있는가 (D337): 없으면 켜짐이다 */
+export function issueLogOn(project: Pick<ProjectState, 'issue_log'>): boolean {
+  return project.issue_log !== false
 }

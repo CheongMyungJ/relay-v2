@@ -29,7 +29,7 @@ import { localIso, nextWorkId, workBranch } from '../core/records'
 import { recordedProcesses, type RecordedProcess } from '../core/recovery'
 import { DEFAULT_CONFIG, type AppConfig, type WorkSettingsPatch } from '../shared/config'
 import type { NodeName } from '../shared/contracts'
-import type { ProjectChecks, ProjectState } from '../shared/project'
+import { issueLogOn, type ProjectChecks, type ProjectState } from '../shared/project'
 import type {
   AppSnapshot,
   ApproveOptions,
@@ -144,6 +144,8 @@ export class Relay {
         }),
       ),
     )
+    // 이슈 기록에 남은 게시를 앞부터 잇는다 (I98, D344). 기다리지 않는다
+    for (const r of loaded) if (!failed.has(r)) r.publishIssueSoon()
     // PR 진행인 Work는 항목을 읽어 두고 PR을 한 번 읽는다 (D159). 읽은 결과로 알리지 않는다
     await Promise.all(
       loaded
@@ -193,7 +195,7 @@ export class Relay {
 
   /** 하던 PR 읽기가 모두 끝나기를 기다린다 (WorkRunner.prIdle). 시험 도구가 close 뒤에 부른다 */
   async settled(): Promise<void> {
-    await Promise.all([...this.works.values()].map((w) => w.prIdle()))
+    await Promise.all([...this.works.values()].map((w) => Promise.all([w.prIdle(), w.issueIdle()])))
   }
 
   /** 이 앱에서 살아 있는 세션이 있다. 앱을 끝낼 때 확인 창을 띄운다 (시나리오 3-6) */
@@ -321,6 +323,7 @@ export class Relay {
       ghVersion: p.checks.gh_version ?? null,
       allowedBots: p.allowed_bots ?? [],
       mergeMethod: p.merge_method ?? null,
+      issueLog: issueLogOn(p),
     }))
   }
 
@@ -383,7 +386,7 @@ export class Relay {
   }
 
   /**
-   * 프로젝트 설정 화면의 [저장] (5.1.2, D185): 받을 봇과 기본 머지 방식. 받을 봇이 바뀌면 PR 진행인 Work의 항목에
+   * 프로젝트 설정 화면의 [저장] (5.1.2, D185): 받을 봇과 기본 머지 방식, 이슈 기록(D337. 다음에 만드는 Work부터, I96). 받을 봇이 바뀌면 PR 진행인 Work의 항목에
    * 거르기 규칙을 다시 적용한다 (D161)
    */
   updateProjectSettings(projectId: string, settings: unknown): Promise<CommandResult> {
@@ -396,6 +399,7 @@ export class Relay {
         ...p,
         allowed_bots: r.value.allowed_bots,
         merge_method: r.value.merge_method,
+        ...(r.value.issue_log === undefined ? {} : { issue_log: r.value.issue_log }),
       }))
       await Promise.all(
         [...this.works.values()]
@@ -433,6 +437,10 @@ export class Relay {
     if (this.creating) return { ok: false, error: '다른 Work를 만드는 중입니다' }
     if (!input.request.trim()) return { ok: false, error: '요청을 입력하세요' }
     if (!WORK_TYPES.includes(input.type)) return { ok: false, error: '업무 유형을 고르세요' }
+    const issue = input.issueNumber ?? null
+    if (issue !== null && (!Number.isInteger(issue) || issue <= 0)) {
+      return { ok: false, error: '이슈 번호는 1 이상의 정수여야 합니다' }
+    }
     const branch = input.baseBranch.trim()
     if (!branch) return { ok: false, error: '기준 브랜치를 고르세요' }
     const settings = checkWorkSettings(input.settings ?? {})
@@ -497,6 +505,8 @@ export class Relay {
       baseCommit,
       settings,
       requestHash,
+      // 이슈 기록은 Work를 만들 때 프로젝트 설정으로 정한다 (I96)
+      ...(issueLogOn(project) ? { issue: { linked: input.issueNumber ?? null } } : {}),
       at,
     })
     const runner = this.runner(project, files, created.work, workTitle(input.request))
@@ -675,6 +685,11 @@ export class Relay {
   /** PR 패널의 [실패한 체크 다시 실행] (D175, D203) */
   prRerun(workKey: string): Promise<CommandResult> {
     return this.withWork(workKey, (w) => w.rerunChecks())
+  }
+
+  /** 이슈 기록의 [다시 시도] (D344): 남은 게시를 앞부터 다시 한다 */
+  issueRetry(workKey: string): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.retryIssue())
   }
 
   // ---------- 재시작과 복구 (시나리오 9) ----------

@@ -524,6 +524,57 @@ export interface PullRequestRecord {
   auto_rounds?: number
 }
 
+/** 이슈를 닫는 까닭 (D346): Work를 끝냈다(completed), 하지 않고 끝냈다(not_planned) */
+export type IssueCloseReason = 'completed' | 'not_planned'
+
+/**
+ * 이슈 기록의 게시 하나 (설계 3.7, D339, D341, D346, D347, D349). 대기열의 앞부터 차례로 게시한다 (D344).
+ * - issue: 새 이슈를 만든다. 본문은 그때 확정한 intent다 (D336). 기존 이슈(D338)에는 없다
+ * - task: 승인된 task의 코멘트 (D339). intake면 그때 확정한 intent 버전을 적는다
+ * - step: 단계 선택(되감기·건너뛰기)으로 만든 task. 폐기한 task 목록은 그 task의 selection이다 (D341)
+ * - end: Work가 어떻게 끝났는지 한 줄 (D347)
+ * - close: 이슈를 닫는다 (D346). 기존 이슈에는 없다
+ */
+export type IssueEntry =
+  | { kind: 'issue'; intent_version: number }
+  | { kind: 'task'; task_id: string; intent_version?: number }
+  | { kind: 'step'; task_id: string }
+  | { kind: 'end'; text: string }
+  | { kind: 'close'; reason: IssueCloseReason }
+
+/** 게시한 항목 (D349). 키는 core/issue issueKey다 */
+export interface IssuePosted {
+  key: string
+  at: string
+  /** 코멘트의 id와 주소. 이슈 만들기와 닫기에는 없다 */
+  comment_id?: number
+  url?: string
+}
+
+/**
+ * 이슈 기록 (설계 3.7, D336~D349, I96). 이슈 기록이 켜진 프로젝트에서 만든 Work에만 있다. 이슈는 로컬 기록을 내보내는
+ * 사본이고 앱은 이슈를 읽지 않는다 (D349)
+ */
+export interface IssueRecord {
+  /** 새 Work 대화상자에 적은 기존 이슈 (D338). 새 이슈를 만들지 않고 앱이 닫지 않는다 */
+  linked: boolean
+  /** 이슈 번호와 주소. 새 이슈는 만들기 전에 null이고, 기존 이슈의 주소는 첫 코멘트를 올린 뒤에 안다 */
+  number: number | null
+  url: string | null
+  /** 게시할 항목. 앞부터 하나씩 게시한다 (D344) */
+  pending: IssueEntry[]
+  posted: IssuePosted[]
+  /**
+   * 대기열 맨 앞을 게시하려고 시도한 때. 결과를 모를 수 있어 다음 시도는 원격에서 표시를 먼저 찾는다 (D349). 게시하면
+   * 지운다
+   */
+  attempted_at?: string
+  /** 마지막으로 실패한 게시 (D344). 패널에 [다시 시도]와 보인다. 게시하면 지운다 */
+  failure?: { at: string; key: string; error: string }
+  /** 앱이 닫은 때와 까닭 (D346) */
+  closed?: { at: string; reason: IssueCloseReason }
+}
+
 export interface WorkState {
   schema_version: 1
   /** w-YYYYMMDD-NNN */
@@ -563,6 +614,8 @@ export interface WorkState {
   cleanup_process?: CleanupProcess
   /** PR 진행의 기록 (D191). [PR 생성]이 성공한 Work에 있다 */
   pr?: PullRequestRecord
+  /** 이슈 기록 (설계 3.7, I96). 이슈 기록이 켜진 프로젝트에서 만든 Work에 있다 */
+  issue?: IssueRecord
   tasks: TaskRecord[]
 }
 
@@ -595,6 +648,10 @@ export type LifecycleEventType =
   | 'pr.closed'
   | 'pr.reopened'
   | 'pr.auto_paused'
+  | 'issue.created'
+  | 'issue.posted'
+  | 'issue.post_failed'
+  | 'issue.closed'
 
 /** events.jsonl의 한 줄 (5.5). task_id는 task 이벤트에만 있다 */
 export interface LifecycleEvent {

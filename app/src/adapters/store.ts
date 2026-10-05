@@ -383,6 +383,17 @@ export class WorkFiles {
     return { before: previous?.hash ?? null, hash: fileHash(text) }
   }
 
+  /**
+   * 승인한 intent의 한 버전 (이슈 기록, D339). 지난 버전은 intent.history/v<N>.md에 있고, 없으면 지금 intent.md가 그
+   * 버전이다(가장 새 버전). 없으면 null
+   */
+  async readIntentVersion(version: number): Promise<string | null> {
+    return (
+      (await readText(path.join(this.intentHistory, `v${version}.md`))) ??
+      (await readText(this.intent))
+    )
+  }
+
   async readDecisions(): Promise<string> {
     return (await readText(this.decisions)) ?? ''
   }
@@ -486,7 +497,13 @@ export class WorkFiles {
 }
 
 /** 앱이 쓰는 입력 파일: context.md, 지식을 넣은 기록(core/knowledge INJECTED_FILE) */
-const NOT_ARTIFACTS = new Set(['context.md', 'handoff.md', 'knowledge-injected.md'])
+/** task 디렉터리의 .md 가운데 산출물이 아닌 것 (D89) */
+export const NOT_ARTIFACT_FILES: readonly string[] = [
+  'context.md',
+  'handoff.md',
+  'knowledge-injected.md',
+]
+const NOT_ARTIFACTS = new Set(NOT_ARTIFACT_FILES)
 
 /** 끝에 덜 쓴 UTF-8 문자가 있으면 그 바이트 수, 없으면 0 */
 export function partialUtf8(buf: Buffer): number {

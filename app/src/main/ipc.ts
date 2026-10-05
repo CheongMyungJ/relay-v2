@@ -274,6 +274,9 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
     (await ready).prRespond(text(workKey), respondInput(input)),
   )
   ipcMain.handle(IPC.prRerun, async (_e, workKey: unknown) => (await ready).prRerun(text(workKey)))
+  ipcMain.handle(IPC.issueRetry, async (_e, workKey: unknown) =>
+    (await ready).issueRetry(text(workKey)),
+  )
   ipcMain.handle(IPC.projectSettings, async (_e, projectId: unknown, settings: unknown) =>
     (await ready).updateProjectSettings(text(projectId), settings),
   )

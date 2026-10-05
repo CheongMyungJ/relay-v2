@@ -391,8 +391,9 @@ export function mergeWorkSettings(current: WorkSettings, patch: WorkSettingsPatc
 const MERGE_METHOD_VALUES: readonly MergeMethod[] = ['merge', 'squash', 'rebase']
 
 /**
- * 프로젝트 설정 화면의 값 (5.1.2, D185): 받을 봇(D161, D197)과 기본 머지 방식(D177). 봇 이름은 앞뒤 공백을 떼고
- * 빈 이름과 같은 이름은 뺀다. 머지 방식은 merge, squash, rebase나 null(레포가 허용하는 첫 방식)이다
+ * 프로젝트 설정 화면의 값 (5.1.2, D185): 받을 봇(D161, D197)과 기본 머지 방식(D177), 이슈 기록(D337). 봇 이름은 앞뒤
+ * 공백을 떼고 빈 이름과 같은 이름은 뺀다. 머지 방식은 merge, squash, rebase나 null(레포가 허용하는 첫 방식)이다. 이슈 기록이
+ * 없으면 바꾸지 않는다
  */
 export function checkProjectSettings(input: unknown): Checked<ProjectSettings> {
   if (!isRecord(input)) return { ok: false, error: '프로젝트 설정이 객체가 아님' }
@@ -407,6 +408,17 @@ export function checkProjectSettings(input: unknown): Checked<ProjectSettings> {
       error: `기본 머지 방식: ${MERGE_METHOD_VALUES.join(' | ')}나 null이어야 함`,
     }
   }
+  const issueLog = input['issue_log']
+  if (issueLog !== undefined && typeof issueLog !== 'boolean') {
+    return { ok: false, error: '이슈 기록: true/false여야 함' }
+  }
   const names = [...new Set(bots.map((b: string) => b.trim()).filter(Boolean))]
-  return { ok: true, value: { allowed_bots: names, merge_method: method as MergeMethod | null } }
+  return {
+    ok: true,
+    value: {
+      allowed_bots: names,
+      merge_method: method as MergeMethod | null,
+      ...(issueLog === undefined ? {} : { issue_log: issueLog }),
+    },
+  }
 }

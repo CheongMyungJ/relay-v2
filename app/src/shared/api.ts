@@ -133,7 +133,9 @@ export interface RelayApi {
   prRespond(workKey: string, input: RespondStartInput): Promise<CommandResult>
   /** PR 패널의 [실패한 체크 다시 실행] (D175, D203) */
   prRerun(workKey: string): Promise<CommandResult>
-  /** 프로젝트 설정 (5.1.2, D185): 받을 봇과 기본 머지 방식 */
+  /** 이슈 기록의 [다시 시도] (설계 3.7, D344) */
+  issueRetry(workKey: string): Promise<CommandResult>
+  /** 프로젝트 설정 (5.1.2, D185): 받을 봇과 기본 머지 방식, 이슈 기록(D337) */
   updateProjectSettings(projectId: string, settings: ProjectSettings): Promise<CommandResult>
   /** Work별 자동 승인과 질문 방식 (D72). 준 키만 바꾸고, 빈 값이면 앱 설정을 따른다 */
   updateWorkSettings(workKey: string, settings: WorkSettingsPatch): Promise<CommandResult>
@@ -193,6 +195,7 @@ export const IPC = {
   prCleanOffered: 'pr:clean-offered',
   prRespond: 'pr:respond',
   prRerun: 'pr:rerun',
+  issueRetry: 'issue:retry',
   projectSettings: 'project:settings',
   workSettings: 'work:settings',
   config: 'config:get',
