@@ -197,6 +197,14 @@ export function App() {
   return (
     <div className={`layout${wide ? ' wide' : ''}`}>
       <aside className="sidebar">
+        <header className="brand">
+          <span className="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 16 16" width="12" height="12">
+              <path d="M3 4l4 4-4 4M9 4l4 4-4 4" />
+            </svg>
+          </span>
+          <span className="brand-name">relay</span>
+        </header>
         {warnings.map((w, i) => (
           <div key={i} className="notice warn">
             {w}
@@ -290,7 +298,7 @@ export function App() {
         <div className="band">
           {cleanupTab && work?.cleanup ? (
             <>
-              <span>
+              <span className="band-text">
                 정리 세션 · {work.cleanup.engineLabel ?? 'Claude Code'} · 기록하지 않음 · push와
                 PR은 앱에서 수행
               </span>
@@ -308,7 +316,11 @@ export function App() {
               <span className="type-tag" title={WORK_TYPE_LABEL[work.type]}>
                 {WORK_TYPE_SHORT[work.type]}
               </span>
-              <span>
+              {/* 상태는 앞에 둔다: 패널이 넓어져 머리 띠가 좁아도 잘리지 않고 설명이 줄어든다 */}
+              <span className={`status s-${task.status}`}>{task.statusLabel}</span>
+              {/* 끝난 task의 탭은 읽기 전용이다 (시나리오 5-1) */}
+              {task.live ? null : <span className="readonly">읽기 전용</span>}
+              <span className="band-text">
                 {task.band}
                 {task.engineLabel ? (
                   <span className="dim">
@@ -318,10 +330,7 @@ export function App() {
                   </span>
                 ) : null}
               </span>
-              <span className={`status s-${task.status}`}>{task.statusLabel}</span>
               {task.activity ? <Activity activity={task.activity} /> : null}
-              {/* 끝난 task의 탭은 읽기 전용이다 (시나리오 5-1) */}
-              {task.live ? null : <span className="readonly">읽기 전용</span>}
               {task.notice ? <span className="band-warn">{task.notice}</span> : null}
             </>
           ) : null}
@@ -356,7 +365,7 @@ export function App() {
           {!work ? (
             <div className="empty">
               {projects.length === 0 ? (
-                <button onClick={() => setDialog({ kind: 'project' })}>프로젝트 추가</button>
+                <Welcome onAddProject={() => setDialog({ kind: 'project' })} />
               ) : (
                 <span className="dim">왼쪽에서 Work를 고르거나 새 Work를 만드세요</span>
               )}
@@ -389,7 +398,7 @@ export function App() {
             onShowCleanup={() => setPicked((m) => ({ ...m, [work.key]: CLEANUP_TAB }))}
           />
         ) : (
-          <div className="panel-body dim">handoff 상태와 산출물</div>
+          <div className="panel-body panel-empty dim">handoff 상태와 산출물</div>
         )}
       </aside>
 
@@ -441,6 +450,35 @@ export function App() {
         />
       ) : null}
     </div>
+  )
+}
+
+/** 프로젝트가 없을 때 가운데에 보이는 첫 사용 안내 (README 첫 사용) */
+function Welcome({ onAddProject }: { onAddProject: () => void }) {
+  return (
+    <section className="welcome" aria-label="첫 사용">
+      <h1>relay</h1>
+      <p className="dim">
+        AI 에이전트가 단계별로 일하고, 사람은 단계마다 산출물을 보고 승인합니다.
+      </p>
+      <ol className="welcome-steps">
+        <li>
+          <strong>프로젝트 등록</strong>
+          <span className="dim">작업할 git 레포의 루트 폴더를 고릅니다</span>
+        </li>
+        <li>
+          <strong>새 Work</strong>
+          <span className="dim">업무 유형을 고르고 할 일을 적습니다</span>
+        </li>
+        <li>
+          <strong>단계 승인</strong>
+          <span className="dim">단계가 끝나면 산출물과 handoff를 확인하고 승인합니다</span>
+        </li>
+      </ol>
+      <button className="primary" onClick={onAddProject}>
+        프로젝트 추가
+      </button>
+    </section>
   )
 }
 
