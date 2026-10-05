@@ -271,32 +271,33 @@ export interface KnowledgeCheckInput {
   codeChanged?: readonly string[]
 }
 
-/**
- * verify의 지식 확인 (D293, D294, D296, D297): 바꾼 지식 파일의 형식, handoff `## 요약`의 새·고친·지운 지식 줄, 같은
- * `anchor`를 가진 항목, 이 Work가 바꾼 코드가 어느 항목의 `## 아직 규칙을 따르지 않는 곳`에 남아 있는지.
- * 형식 검사의 되돌림(D21)으로 에이전트에게 돌아간다
- */
 function hasKnowledgeLine(l: KnowledgeLines): boolean {
   return (
     l.added.size > 0 || l.updated.size > 0 || l.removed.size > 0 || l.checked.size > 0 || l.none
   )
 }
 
-const NO_LINE = issue(
-  HANDOFF_FILE,
-  'body',
-  '`## 요약`에 지식 줄 없음: 바꾼 지식이 없으면 "남긴 지식: 없음 (까닭)"을 적는다',
-  '요약',
-)
+const noLine = (): FormatIssue =>
+  issue(
+    HANDOFF_FILE,
+    'body',
+    '`## 요약`에 지식 줄 없음: 바꾼 지식이 없으면 "남긴 지식: 없음 (까닭)"을 적는다',
+    '요약',
+  )
 
 /**
  * 바꾼 지식 파일을 읽지 못했을 때(git 실패)의 확인: 지식 줄이 있는지만 본다. 파일과 줄의 대조는 하지 않는다. 읽지 못한 것을
  * "바꾸지 않음"으로 보면 맞게 한 verify를 되돌리기 때문이다
  */
 export function knowledgeLineIssues(handoff: string): FormatIssue[] {
-  return hasKnowledgeLine(knowledgeLines(handoff)) ? [] : [NO_LINE]
+  return hasKnowledgeLine(knowledgeLines(handoff)) ? [] : [noLine()]
 }
 
+/**
+ * verify의 지식 확인 (D293, D294, D296, D297): 바꾼 지식 파일의 형식, handoff `## 요약`의 새·고친·지운 지식 줄, 같은
+ * `anchor`를 가진 항목, 이 Work가 바꾼 코드가 어느 항목의 `## 아직 규칙을 따르지 않는 곳`에 남아 있는지.
+ * 형식 검사의 되돌림(D21)으로 에이전트에게 돌아간다
+ */
 export function knowledgeIssues(input: KnowledgeCheckInput): FormatIssue[] {
   const out: FormatIssue[] = []
   for (const c of input.changed) out.push(...checkEntryFormat(c.path, c.text))
@@ -305,7 +306,7 @@ export function knowledgeIssues(input: KnowledgeCheckInput): FormatIssue[] {
   const changed = new Set(input.changed.map((c) => c.path))
   const removed = new Set(input.removed ?? [])
   const fix = (message: string) => out.push(issue(HANDOFF_FILE, 'body', message, '요약'))
-  if (changed.size === 0 && removed.size === 0 && !hasKnowledgeLine(lines)) out.push(NO_LINE)
+  if (changed.size === 0 && removed.size === 0 && !hasKnowledgeLine(lines)) out.push(noLine())
   for (const p of changed) {
     const isOld = input.existing.has(p)
     if (lines.added.has(p) && isOld)
