@@ -23,12 +23,18 @@ jobs:
     defaults:
       run:
         shell: pwsh
+    env:
+      # 태그 이름은 스크립트에 직접 넣지 않고 환경 변수로만 읽는다 (스크립트 인젝션 방지)
+      TAG: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # npm ci의 설치 스크립트가 쓰기 토큰을 읽지 못하게 한다. Release는 GH_TOKEN으로 따로 만든다
+          persist-credentials: false
 
       - name: 태그에서 버전 읽기
         run: |
-          $tag = '${{ github.ref_name }}'
+          $tag = $env:TAG
           if ($tag -notmatch '^v(\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?)$') {
             Write-Error "태그는 v1.2.3 또는 v1.2.3-beta.1 꼴이어야 합니다: $tag"; exit 1
           }
@@ -92,7 +98,7 @@ jobs:
         run: |
           $setup = "dist/relay-setup-$env:RELAY_VERSION.exe"
           # v1.2.3-beta.1 같은 시험판은 prerelease로 올려 설치된 앱이 받지 않게 한다
-          $ghArgs = @('release', 'create', '${{ github.ref_name }}', $setup, "$setup.blockmap", 'dist/latest.yml',
+          $ghArgs = @('release', 'create', $env:TAG, $setup, "$setup.blockmap", 'dist/latest.yml',
             '--title', "relay $env:RELAY_VERSION", '--generate-notes', '--verify-tag')
           if ($env:RELAY_VERSION -match '-') { $ghArgs += '--prerelease' }
           gh @ghArgs

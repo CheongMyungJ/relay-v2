@@ -60,7 +60,7 @@ function notifyUpdate(version: string): void {
   const notice = keepNotice(
     notices,
     new Notification({
-      title: `relay ${version}을 받았습니다`,
+      title: `새 버전 받음: relay ${version}`,
       body: '앱을 끝내면 설치되고 다음 실행부터 새 버전입니다.',
     }),
   )
@@ -173,7 +173,13 @@ function createWindow(): void {
 void app.whenReady().then(() => {
   if (!primary) return
   createWindow()
-  if (updatesEnabled(process.env, app.isPackaged, process.platform)) startUpdates(notifyUpdate)
+  const target = {
+    env: process.env,
+    packaged: app.isPackaged,
+    platform: process.platform,
+    version: app.getVersion(),
+  }
+  if (updatesEnabled(target)) startUpdates(notifyUpdate)
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })

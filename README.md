@@ -38,7 +38,7 @@ npm ci
 npm run dev
 ```
 
-Windows에서는 [Releases](https://github.com/CheongMyungJ/relay-v2/releases/latest)에서 `relay-setup-<버전>.exe`를 받아 실행해도 됩니다. 관리자 권한 없이 `%LOCALAPPDATA%\Programs\relay`에 설치됩니다. 코드 서명이 없어 처음 실행할 때 SmartScreen 경고가 뜨면 [추가 정보] → [실행]을 누릅니다. 설치한 앱은 새 Release를 스스로 확인해 뒤에서 받고, 앱을 끝낼 때 설치합니다(다음 실행부터 새 버전).
+Windows에서는 [Releases](https://github.com/CheongMyungJ/relay-v2/releases/latest)에서 `relay-setup-<버전>.exe`를 받아 실행해도 됩니다. 관리자 권한 없이 `%LOCALAPPDATA%\Programs\relay`에 설치됩니다. 코드 서명이 없어 처음 실행할 때 SmartScreen 경고가 뜨면 [추가 정보] → [실행]을 누릅니다. 설치한 앱은 새 Release를 스스로 확인해 뒤에서 받고, 앱을 끝낼 때 설치합니다(다음 실행부터 새 버전). `app-build` 결과물(버전 0.0.0)은 자동 업데이트하지 않습니다.
 
 검증된 환경은 Windows(설치본)와 Linux(개발 앱)입니다.
 
