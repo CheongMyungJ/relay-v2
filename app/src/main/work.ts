@@ -42,6 +42,7 @@ import {
   changedPaths,
   commitAll,
   commitInfo,
+  commitsOnlyIn,
   commitsWithParents,
   countCommits,
   createBackup,
@@ -2887,6 +2888,25 @@ export class WorkRunner {
   // ---------- 정리 (시나리오 8) ----------
 
   /** 정리 요약의 사실: git과 이 앱의 세션에서 읽는다 (8-1) */
+  /**
+   * PR을 머지한 Work의 작업 브랜치에만 있는 커밋 (D329): 머지한 PR head에 없는 것. squash·rebase 머지면 기준 브랜치가
+   * 이 커밋을 갖지 않으므로 머지한 head와 견준다. 머지한 Work가 아니거나 셀 수 없으면 null
+   */
+  private async lostCommits(
+    repo: string,
+    name: string,
+    head: string | null,
+  ): Promise<{ sha: string; subject: string }[] | null> {
+    const merged = this.work.pr?.merged
+    if (!merged || !head) return null
+    try {
+      return await commitsOnlyIn(repo, `refs/heads/${name}`, merged.head, { env: this.ctx.env })
+    } catch (e) {
+      this.problem(`머지한 PR에 없는 커밋을 세지 못함: ${message(e)}`)
+      return null
+    }
+  }
+
   private async cleanFacts(): Promise<CleanFacts> {
     const opts = { env: this.ctx.env }
     const repo = this.project.repo_path
@@ -2923,6 +2943,7 @@ export class WorkRunner {
         pushed: await contains(`refs/remotes/origin/${name}`),
         merged:
           (await contains(`refs/heads/${base}`)) || (await contains(`refs/remotes/origin/${base}`)),
+        lost: await this.lostCommits(repo, name, head),
       },
       backups: await refNames(repo, backupPattern(this.work.work_id), opts),
       merged,

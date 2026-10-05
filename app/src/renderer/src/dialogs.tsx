@@ -1262,6 +1262,7 @@ export function CleanDialog({ work, onClose }: { work: WorkView; onClose: () => 
   const [deleteBranch, setDeleteBranch] = useState(false)
   const [deleteRemote, setDeleteRemote] = useState(false)
   const [deleteBackups, setDeleteBackups] = useState(true)
+  const [confirmLost, setConfirmLost] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -1272,7 +1273,8 @@ export function CleanDialog({ work, onClose }: { work: WorkView; onClose: () => 
       if (stale) return
       if (r.ok) {
         setPreview(r.preview)
-        setDeleteBranch(r.preview.merged)
+        // 머지로 완료한 Work는 기본 체크다(D178). 작업 브랜치에만 있는 커밋이 있으면 기본은 두고 까닭을 보인다 (D329)
+        setDeleteBranch(r.preview.merged && r.preview.branch.lost.length === 0)
       } else setError(r.error)
     })
     return () => {
@@ -1290,6 +1292,7 @@ export function CleanDialog({ work, onClose }: { work: WorkView; onClose: () => 
         deleteRemote: deleteRemote && preview.remote?.exists === true,
         deleteBackups,
         confirmed,
+        confirmLost,
         expect: preview.expect,
       }),
     )
@@ -1336,8 +1339,25 @@ export function CleanDialog({ work, onClose }: { work: WorkView; onClose: () => 
                       ? 'origin에 push됐습니다'
                       : b.merged
                         ? '기준 브랜치에 머지됐습니다'
-                        : '원격에도 기준 브랜치에도 없습니다. 이 브랜치에만 있는 커밋이 있습니다'}
+                        : preview.merged && b.deletable && b.lost.length === 0
+                          ? '머지한 PR에 모든 커밋이 들어 있습니다 (squash·rebase 머지)'
+                          : '원격에도 기준 브랜치에도 없습니다. 이 브랜치에만 있는 커밋이 있습니다'}
               </div>
+              {b.lost.length ? (
+                <>
+                  <p>
+                    머지한 PR에 없는 커밋 {b.lost.length}개가 이 브랜치에만 있습니다. 지우면 이
+                    커밋을 잃습니다.
+                  </p>
+                  <ul className="files" aria-label="작업 브랜치에만 있는 커밋">
+                    {b.lost.map((c) => (
+                      <li key={c.sha}>
+                        {c.sha.slice(0, 7)} {c.subject}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
               <label className="toggle" title="push됐거나 머지됐을 때만 삭제를 제안합니다">
                 <input
                   type="checkbox"
@@ -1348,6 +1368,17 @@ export function CleanDialog({ work, onClose }: { work: WorkView; onClose: () => 
                 />
                 작업 브랜치 삭제 {b.deletable ? '' : '(push됐거나 머지됐을 때만)'}
               </label>
+              {deleteBranch && b.deletable && b.lost.length ? (
+                <label className="toggle">
+                  <input
+                    type="checkbox"
+                    aria-label="커밋을 잃는 것을 확인"
+                    checked={confirmLost}
+                    onChange={(e) => setConfirmLost(e.target.checked)}
+                  />
+                  이 커밋 {b.lost.length}개를 잃는 것을 확인했습니다
+                </label>
+              ) : null}
               {preview.remote ? (
                 <label className="toggle" title="PR을 머지한 Work만 고를 수 있습니다 (D178)">
                   <input
@@ -1416,7 +1447,15 @@ export function CleanDialog({ work, onClose }: { work: WorkView; onClose: () => 
         <button onClick={onClose}>취소</button>
         <button
           className="danger"
-          disabled={busy || !preview || (preview.confirm.length > 0 && !confirmed)}
+          disabled={
+            busy ||
+            !preview ||
+            (preview.confirm.length > 0 && !confirmed) ||
+            (deleteBranch &&
+              preview.branch.deletable &&
+              preview.branch.lost.length > 0 &&
+              !confirmLost)
+          }
           onClick={() => void clean()}
         >
           {busy ? '정리하는 중…' : '정리'}

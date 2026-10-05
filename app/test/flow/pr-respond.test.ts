@@ -348,10 +348,18 @@ describe('[흐름] PR 대응 (M10, 가짜 gh)', () => {
         '승인했지만 push·게시하지 못한 대응 라운드 1개는 머지에 들어가지 않음',
       ),
     )
-    // 승인한 커밋은 작업 브랜치에만 있어 정리 창이 지우지 않는다 (push됐거나 머지됐을 때만 지움)
+    // 승인한 커밋은 작업 브랜치에만 있다(머지한 PR에 없음). 정리 창은 그 커밋을 보이고, 잃는 것을 확인해야 지운다 (D329)
     const preview = await s.ctx.h.relay.cleanPreview(w.key)
     if (!preview.ok) throw new Error(preview.error)
-    expect(preview.preview.branch).toMatchObject({ pushed: false, merged: false, deletable: false })
+    expect(preview.preview.branch).toMatchObject({ pushed: false, merged: false, deletable: true })
+    expect(preview.preview.branch.lost.map((c) => c.sha)).toContain(local)
+    const refused = await s.ctx.h.relay.clean(w.key, {
+      deleteBranch: true,
+      deleteBackups: true,
+      confirmed: true,
+      expect: preview.preview.expect,
+    })
+    expect(refused).toMatchObject({ ok: false, error: expect.stringContaining('잃습니다') })
     expect(git(w.tree, 'rev-parse', 'HEAD')).toBe(local)
   })
 

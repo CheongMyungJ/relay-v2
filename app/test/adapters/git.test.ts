@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   GitError,
   addWorktree,
+  commitsOnlyIn,
   countCommits,
   createBackup,
   diffFrom,
@@ -148,5 +149,25 @@ describe('[어댑터] 되감기의 git 작업 (6.2, D115~D117)', () => {
     expect(git(repo, 'rev-parse', `${BRANCH}-discarded-1`)).toBe(base)
     expect(await headCommit(tree)).toBe(fixed)
     expect((await statusLines(tree)).sort()).toEqual(before.sort())
+  })
+})
+
+describe('[어댑터] 머지한 PR에 없는 커밋 (D329)', () => {
+  it('작업 브랜치에만 있는 커밋을 오래된 차례로 돌려준다. 머지한 head를 찾지 못하면 null', async () => {
+    writeFiles(tree, { 'a.txt': '1\n' })
+    git(tree, 'add', '.')
+    git(tree, 'commit', '-q', '-m', '머지한 커밋')
+    const merged = git(tree, 'rev-parse', 'HEAD')
+    expect(await commitsOnlyIn(repo, `refs/heads/${BRANCH}`, merged)).toEqual([])
+    writeFiles(tree, { 'b.txt': '2\n' })
+    git(tree, 'add', '.')
+    git(tree, 'commit', '-q', '-m', '미룬 push 하나')
+    writeFiles(tree, { 'c.txt': '3\n' })
+    git(tree, 'add', '.')
+    git(tree, 'commit', '-q', '-m', '미룬 push 둘')
+    const only = await commitsOnlyIn(repo, `refs/heads/${BRANCH}`, merged)
+    expect(only?.map((c) => c.subject)).toEqual(['미룬 push 하나', '미룬 push 둘'])
+    expect(only?.[1]?.sha).toBe(git(tree, 'rev-parse', 'HEAD'))
+    expect(await commitsOnlyIn(repo, `refs/heads/${BRANCH}`, 'f'.repeat(40))).toBeNull()
   })
 })

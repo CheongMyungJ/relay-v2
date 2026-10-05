@@ -28,8 +28,18 @@ export interface CleanFacts {
   locks: readonly string[]
   /** 이 앱에서 살아 있는 세션 */
   live: number
-  /** 작업 브랜치(relay/<work-id>)와, 그 커밋이 origin의 같은 이름 브랜치나 기준 브랜치에 있는지 */
-  branch: { name: string; exists: boolean; pushed: boolean; merged: boolean }
+  /**
+   * 작업 브랜치(relay/<work-id>)와, 그 커밋이 origin의 같은 이름 브랜치나 기준 브랜치에 있는지. lost는 PR을 머지한
+   * Work에서 머지한 PR head에 없는 이 브랜치의 커밋이다(D329). 머지한 Work가 아니거나 그 head를 로컬에서 찾지
+   * 못하면 null
+   */
+  branch: {
+    name: string
+    exists: boolean
+    pushed: boolean
+    merged: boolean
+    lost: readonly { sha: string; subject: string }[] | null
+  }
   /** 이 Work의 되감기 백업 브랜치 (D115) */
   backups: readonly string[]
   /** 머지로 완료한 Work다 (D178) */
@@ -53,12 +63,20 @@ export function cleanPreview(facts: CleanFacts): CleanPreview {
     confirm.push(`git 잠금 파일 ${facts.locks.length}개가 남아 있습니다. worktree와 함께 지웁니다`)
   }
   const b = facts.branch
+  const lost = b.pushed || b.merged ? [] : [...(b.lost ?? [])]
   return {
     worktree: facts.worktree,
     uncommitted: [...facts.uncommitted],
     locks: [...facts.locks],
     live: facts.live,
-    branch: { ...b, deletable: b.exists && (b.pushed || b.merged) },
+    branch: {
+      name: b.name,
+      exists: b.exists,
+      pushed: b.pushed,
+      merged: b.merged,
+      deletable: b.exists && (b.pushed || b.merged || (facts.merged && b.lost !== null)),
+      lost,
+    },
     backups: [...facts.backups],
     merged: facts.merged,
     remote: facts.remote ? { ...facts.remote } : null,
@@ -69,6 +87,7 @@ export function cleanPreview(facts: CleanFacts): CleanPreview {
       live: facts.live,
       backups: [...facts.backups],
       remote: facts.remote?.exists === true,
+      lost: lost.map((c) => c.sha),
     },
   }
 }
@@ -79,7 +98,8 @@ function sameExpect(a: CleanExpect, b: CleanExpect): boolean {
     a.remote === b.remote &&
     sameChanges(a.uncommitted, b.uncommitted) &&
     sameChanges(a.locks, b.locks) &&
-    sameChanges(a.backups, b.backups)
+    sameChanges(a.backups, b.backups) &&
+    sameChanges(a.lost ?? [], b.lost ?? [])
   )
 }
 
@@ -101,6 +121,10 @@ export function planClean(preview: CleanPreview, input: CleanInput): CleanPlan {
   }
   if (input.deleteBranch && !preview.branch.deletable) {
     return { ok: false, error: '작업 브랜치는 push됐거나 머지됐을 때만 지움' }
+  }
+  const lost = preview.branch.lost.length
+  if (input.deleteBranch && lost > 0 && !input.confirmLost) {
+    return { ok: false, error: `작업 브랜치에만 있는 커밋 ${lost}개를 잃습니다. 확인이 필요함` }
   }
   if (input.deleteRemote && !preview.remote?.exists) {
     return { ok: false, error: 'origin의 브랜치는 머지로 완료한 Work에서 원격에 있을 때만 지움' }

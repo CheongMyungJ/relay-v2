@@ -13,7 +13,7 @@ function facts(patch: Partial<CleanFacts> = {}): CleanFacts {
     uncommitted: [],
     locks: [],
     live: 0,
-    branch: { name: BRANCH, exists: true, pushed: false, merged: false },
+    branch: { name: BRANCH, exists: true, pushed: false, merged: false, lost: null },
     backups: [],
     merged: false,
     remote: null,
@@ -72,6 +72,7 @@ describe('정리 전 확인 요약 (8-1)', () => {
       pushed: false,
       merged: false,
       deletable: false,
+      lost: [],
     })
     expect(planClean(p, input(p))).toEqual({
       ok: true,
@@ -112,7 +113,9 @@ describe('정리 전 확인 요약 (8-1)', () => {
       [true, true, true],
       [false, false, false],
     ] as const) {
-      const p = cleanPreview(facts({ branch: { name: BRANCH, exists: true, pushed, merged } }))
+      const p = cleanPreview(
+        facts({ branch: { name: BRANCH, exists: true, pushed, merged, lost: null } }),
+      )
       expect(p.branch.deletable).toBe(deletable)
       const r = planClean(p, input(p, { deleteBranch: true }))
       expect(r).toEqual(
@@ -122,16 +125,52 @@ describe('정리 전 확인 요약 (8-1)', () => {
       )
     }
     const gone = cleanPreview(
-      facts({ branch: { name: BRANCH, exists: false, pushed: false, merged: false } }),
+      facts({ branch: { name: BRANCH, exists: false, pushed: false, merged: false, lost: null } }),
     )
     expect(gone.branch.deletable).toBe(false)
+  })
+
+  it('PR을 머지한 Work의 작업 브랜치는 머지한 PR에 없는 커밋이 없으면 지울 수 있다 (squash 머지 뒤, D329)', () => {
+    const branch = { name: BRANCH, exists: true, pushed: false, merged: false }
+    const p = cleanPreview(facts({ merged: true, branch: { ...branch, lost: [] } }))
+    expect(p.branch).toMatchObject({ deletable: true, lost: [] })
+    expect(planClean(p, input(p, { deleteBranch: true }))).toMatchObject({
+      ok: true,
+      deleteBranches: [BRANCH],
+    })
+    // 머지한 PR의 커밋을 로컬에서 찾지 못하면 잃을 것을 셀 수 없어 지우지 않는다
+    expect(
+      cleanPreview(facts({ merged: true, branch: { ...branch, lost: null } })).branch.deletable,
+    ).toBe(false)
+  })
+
+  it('머지한 PR에 없는 커밋이 있으면 그 커밋을 보이고, 잃는 것을 확인해야 지운다 (D329)', () => {
+    const lost = [{ sha: 'c'.repeat(40), subject: 'PR 대응: 미룬 push' }]
+    const p = cleanPreview(
+      facts({
+        merged: true,
+        branch: { name: BRANCH, exists: true, pushed: false, merged: false, lost },
+      }),
+    )
+    expect(p.branch).toMatchObject({ deletable: true, lost })
+    expect(p.expect.lost).toEqual([lost[0]?.sha])
+    expect(planClean(p, input(p, { deleteBranch: true }))).toEqual({
+      ok: false,
+      error: '작업 브랜치에만 있는 커밋 1개를 잃습니다. 확인이 필요함',
+    })
+    expect(planClean(p, input(p, { deleteBranch: true, confirmLost: true }))).toMatchObject({
+      ok: true,
+      deleteBranches: [BRANCH],
+    })
+    // 지우지 않으면 확인하지 않아도 된다
+    expect(planClean(p, input(p))).toMatchObject({ ok: true, deleteBranches: [] })
   })
 
   it('되감기 백업 브랜치는 "함께 삭제"를 고르면 지운다 (8-2)', () => {
     const p = cleanPreview(
       facts({
         backups: [BACKUP],
-        branch: { name: BRANCH, exists: true, pushed: true, merged: false },
+        branch: { name: BRANCH, exists: true, pushed: true, merged: false, lost: null },
       }),
     )
     expect(planClean(p, input(p))).toEqual({
@@ -168,7 +207,7 @@ describe('정리 전 확인 요약 (8-1)', () => {
 
 describe('머지로 완료한 Work의 정리 (D178)', () => {
   const merged = facts({
-    branch: { name: BRANCH, exists: true, pushed: true, merged: false },
+    branch: { name: BRANCH, exists: true, pushed: true, merged: false, lost: null },
     merged: true,
     remote: { name: BRANCH, exists: true },
   })
@@ -196,7 +235,7 @@ describe('머지로 완료한 Work의 정리 (D178)', () => {
 
   it('머지하지 않은 Work는 원격 브랜치를 지우지 않는다', () => {
     const preview = cleanPreview(
-      facts({ branch: { name: BRANCH, exists: true, pushed: true, merged: false } }),
+      facts({ branch: { name: BRANCH, exists: true, pushed: true, merged: false, lost: null } }),
     )
     expect(preview).toMatchObject({ merged: false, remote: null })
     expect(planClean(preview, input(preview, { deleteRemote: true }))).toMatchObject({ ok: false })
