@@ -1,9 +1,10 @@
 // Electron 진입점. 창과 OS 알림으로 UiPort를 만들어 Relay를 조립한다 (I2, I26).
 import { join } from 'node:path'
-import { app, BrowserWindow, dialog, Notification } from 'electron'
+import { app, BrowserWindow, dialog, nativeTheme, Notification } from 'electron'
 import { skillsDir } from '../adapters/claude'
 import { relayHome } from '../adapters/store'
 import { IPC } from '../shared/api'
+import type { AppConfig } from '../shared/config'
 import { holdSingleInstance } from './instance'
 import { registerIpc } from './ipc'
 import { APP_USER_MODEL_ID, keepNotice } from './notices'
@@ -96,10 +97,17 @@ const ready: Promise<Relay> = primary
         Relay.open({ home: relayHome(), skills: skillsDir(process.env, bundledSkills()), ui }),
       )
   : new Promise<Relay>(() => {})
+/** 화면 테마 (D335). 렌더러의 CSS는 prefers-color-scheme만 보므로 main이 정한다 */
+function applyTheme(config: AppConfig): void {
+  nativeTheme.themeSource = config.theme
+}
+
+void ready.then((relay) => applyTheme(relay.currentConfig())).catch(() => undefined)
 registerIpc(ready, {
   onSelectWork: (workKey) => {
     selectedWork = workKey
   },
+  onConfig: applyTheme,
 })
 ready.catch((e: unknown) => {
   dialog.showErrorBox('relay를 시작할 수 없습니다', e instanceof Error ? e.message : String(e))

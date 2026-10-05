@@ -69,7 +69,11 @@ export function PrPanel({ work, pr }: { work: WorkView; pr: PrView }) {
       <section className="pr-summary" aria-label="PR 요약">
         <div className="pr-title">
           <strong>PR #{pr.number}</strong>
-          {pr.labels.state ? <span className="pr-state">{pr.labels.state}</span> : null}
+          {pr.labels.state ? (
+            <span className={`pr-state${pr.state ? ` ps-${pr.state.toLowerCase()}` : ''}`}>
+              {pr.labels.state}
+            </span>
+          ) : null}
           <button onClick={() => void call(() => window.relay.openExternal(pr.url))}>
             브라우저에서 열기
           </button>

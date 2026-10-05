@@ -14,12 +14,14 @@ import {
   QUESTION_MODE_LABEL,
   SETTING_GROUP_LABEL,
   SKILL_TITLES,
+  THEME_CHOICES,
   groupShown,
   type AppConfig,
   type AutoApproveNode,
   type QuestionMode,
   type SettingGroup,
   type SkillName,
+  type ThemeChoice,
   type WorkSettings,
 } from '../../shared/config'
 import type { NodeName } from '../../shared/contracts'
@@ -705,6 +707,12 @@ const NUMBERS: [NumberKey, string, string][] = [
  * 앱 설정 (D70). 바꾸면 바로 적용하고, 질문 방식만 다음에 시작하는 task부터 쓴다 (D73).
  * 자동 승인은 턴이 끝날 때의 설정으로 판정하고, 카운트다운 중에 끄면 멈춘다. 카운트다운 초는 다음 카운트다운부터 쓴다 (D128)
  */
+const THEME_LABEL: Readonly<Record<ThemeChoice, string>> = {
+  system: '시스템 설정 따름',
+  dark: '다크',
+  light: '라이트',
+}
+
 export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const config = useConfig()
   const [draft, setDraft] = useState<AppConfig | null>(null)
@@ -733,6 +741,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         reply_signature: value.reply_signature,
         knowledge_review_engine: value.knowledge_review_engine,
         knowledge_review_model: value.knowledge_review_model,
+        theme: value.theme,
       }),
     )
     setBusy(false)
@@ -749,6 +758,20 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             사용합니다. 질문 방식은 다음에 시작하는 task부터 씁니다.
           </div>
           <div className="form-grid">
+            <label className="form-row" title="터미널은 테마와 관계없이 어둡습니다 (D335)">
+              <span>테마</span>
+              <select
+                aria-label="테마"
+                value={value.theme}
+                onChange={(e) => setDraft({ ...value, theme: e.target.value as ThemeChoice })}
+              >
+                {THEME_CHOICES.map((t) => (
+                  <option key={t} value={t}>
+                    {THEME_LABEL[t]}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className="form-row">
               <span>기본 엔진</span>
               <select
