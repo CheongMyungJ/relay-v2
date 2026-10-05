@@ -5,8 +5,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { sha256, pathKey } from '../../src/adapters/store'
 import type { CheckId, ProjectInspection } from '../../src/shared/views'
 import type { WorkState } from '../../src/shared/work'
-import { git, harness, makeRepo, register, settle, type Harness } from '../flow/harness'
-import { REPO_FILES } from '../flow/scenarios'
+import { git, harness, makeRepo, register, settle, type Harness } from '../support/harness'
+import { REPO_FILES } from '../support/scenarios'
 
 let h: Harness | undefined
 

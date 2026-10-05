@@ -8,9 +8,16 @@ import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { DeliverInput, WorkView } from '../../src/shared/views'
 import type { LifecycleEvent, WorkState } from '../../src/shared/work'
-import { drive } from './driver'
-import { git, harness, makeRepo, register, settle, type Harness } from './harness'
-import { REPO_FILES, REQUEST, scenario, steps, type Scenario, type Step } from './scenarios'
+import { drive } from '../support/driver'
+import { git, harness, makeRepo, register, settle, type Harness } from '../support/harness'
+import {
+  REPO_FILES,
+  REQUEST,
+  scenario,
+  steps,
+  type Scenario,
+  type Step,
+} from '../support/scenarios'
 
 let h: Harness | undefined
 

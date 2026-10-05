@@ -33,12 +33,12 @@ import { createWork } from '../../src/core/machine'
 import { lostStashes } from '../../src/core/recovery'
 import { stashMessage } from '../../src/core/delivery'
 import { backupMessage } from '../../src/core/rewind'
-import { git, makeRepo, writeFiles } from '../flow/repo'
+import { git, makeRepo, writeFiles } from '../support/repo'
 
 const isWin = process.platform === 'win32'
 /** 프로세스 목록과 시작 시각을 읽는 OS (I20, I33) */
 const listing = isWin || process.platform === 'linux'
-const APP_ROLE = path.resolve(__dirname, '../fixtures/app-role.mjs')
+const APP_ROLE = path.resolve(__dirname, '../support/fixtures/app-role.mjs')
 const WORK_ID = 'w-20260927-001'
 const BRANCH = `relay/${WORK_ID}`
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))

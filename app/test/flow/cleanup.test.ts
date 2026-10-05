@@ -9,8 +9,8 @@ import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { CleanPreview } from '../../src/shared/views'
 import type { LifecycleEvent, WorkState } from '../../src/shared/work'
-import { drive } from './driver'
-import { git, harness, makeRepo, register, settle, type Harness } from './harness'
+import { drive } from '../support/driver'
+import { git, harness, makeRepo, register, settle, type Harness } from '../support/harness'
 import {
   FIXED_FILES,
   REPO_FILES,
@@ -19,7 +19,7 @@ import {
   scenario,
   steps,
   type Scenario,
-} from './scenarios'
+} from '../support/scenarios'
 
 let h: Harness | undefined
 

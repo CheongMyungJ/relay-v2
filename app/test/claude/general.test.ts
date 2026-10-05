@@ -15,9 +15,9 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { taskDirName } from '../../src/core/machine'
 import { CHECK_METHOD, intentDraftBody, sectionNames, sectionText } from '../../src/core/validate'
 import type { WorkState } from '../../src/shared/work'
-import { drive, type DriveResult } from '../flow/driver'
-import { APP, FAKE_CLAUDE, git, harness, makeRepo, register, settle } from '../flow/harness'
-import { generalScenario } from '../flow/scenarios'
+import { drive, type DriveResult } from '../support/driver'
+import { APP, FAKE_CLAUDE, git, harness, makeRepo, register, settle } from '../support/harness'
+import { generalScenario, steps } from '../support/scenarios'
 import { S_CASE } from './repos'
 import { ScreenUi } from './screen'
 
@@ -53,11 +53,31 @@ interface Result {
 
 let result: Result | null = null
 
+/** 가짜 claude의 실행 (dry): 요청대로 README와 lint 스크립트를 커밋한다 */
+function dryExecute() {
+  const pkg = JSON.parse(S_CASE.files['package.json'] ?? '{}') as {
+    scripts?: Record<string, string>
+  }
+  pkg.scripts = { ...pkg.scripts, lint: 'node --check src/slug.js' }
+  const files = {
+    'README.md': "# slug\n\n```js\nslugify('Hello') // 'hello'\n```\n\n테스트: `npm test`\n",
+    'package.json': JSON.stringify(pkg, null, 2) + '\n',
+  }
+  return steps('execute').map((st) =>
+    st.do === 'commit' ? { ...st, files, message: 'docs: README와 lint 스크립트' } : st,
+  )
+}
+
 async function run(): Promise<Result> {
   const ui = new ScreenUi()
   const h = await harness(
     dry
-      ? { ui, claudeBin: FAKE_CLAUDE, scenario: generalScenario(), productDefaults: true }
+      ? {
+          ui,
+          claudeBin: FAKE_CLAUDE,
+          scenario: generalScenario({ execute: dryExecute() }),
+          productDefaults: true,
+        }
       : { ui, claudeBin: process.env['CLAUDE_BIN'] ?? null, productDefaults: true },
   )
   const dir = path.join(OUT, 'general')

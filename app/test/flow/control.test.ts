@@ -8,8 +8,15 @@ import { HookServer, type HookHandler } from '../../src/adapters/hooks'
 import { continuePrompt } from '../../src/core/settings'
 import type { ActivityView, WorkView } from '../../src/shared/views'
 import type { LifecycleEvent, WorkState } from '../../src/shared/work'
-import { drive } from './driver'
-import { TIMING_EVENTS, harness, makeRepo, register, settle, type Harness } from './harness'
+import { drive } from '../support/driver'
+import {
+  TIMING_EVENTS,
+  harness,
+  makeRepo,
+  register,
+  settle,
+  type Harness,
+} from '../support/harness'
 import {
   REPO_FILES,
   REQUEST,
@@ -18,7 +25,7 @@ import {
   scenario,
   steps,
   type Scenario,
-} from './scenarios'
+} from '../support/scenarios'
 
 let h: Harness | undefined
 

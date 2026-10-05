@@ -15,9 +15,9 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { taskDirName } from '../../src/core/machine'
 import { intentDraftBody, sectionNames, sectionText } from '../../src/core/validate'
 import type { WorkState } from '../../src/shared/work'
-import { drive, type DriveResult } from '../flow/driver'
-import { APP, FAKE_CLAUDE, git, harness, makeRepo, register, settle } from '../flow/harness'
-import { refactorScenario } from '../flow/scenarios'
+import { drive, type DriveResult } from '../support/driver'
+import { APP, FAKE_CLAUDE, git, harness, makeRepo, register, settle } from '../support/harness'
+import { refactorScenario, steps, type Step } from '../support/scenarios'
 import { S_CASE } from './repos'
 import { ScreenUi } from './screen'
 
@@ -54,11 +54,67 @@ interface Result {
 
 let result: Result | null = null
 
+/**
+ * 가짜 claude의 리팩터링 (dry): slug 레포에서 안전망을 먼저 커밋하고, 그 커밋 id를 refactor.md에 적은 뒤 구조를
+ * 바꿔 커밋한다. 동작(첫 공백만 바꿈)은 그대로다 (D259, D260, I64)
+ */
+function dryRefactor(): Step[] {
+  const base = steps('refactor')
+  const doc = base.find((st) => st.do === 'write' && st.file === 'refactor.md')
+  const [prompt, ...tail] = base.filter((st) => st.do !== 'commit' && st !== doc)
+  if (!prompt || !doc || doc.do !== 'write') throw new Error('refactor 단계의 모양이 바뀜')
+  return [
+    prompt,
+    {
+      do: 'commit',
+      files: {
+        'test/slug-safety.test.js': [
+          "import { test } from 'node:test'",
+          "import assert from 'node:assert'",
+          "import { slugify } from '../src/slug.js'",
+          '',
+          "test('첫 공백만 바뀐다 (안전망)', () => assert.strictEqual(slugify(' Hello Big World '), 'hello-big world'))",
+          '',
+        ].join('\n'),
+      },
+      message: 'test: slugify 안전망',
+    },
+    { ...doc, text: doc.text.replace('(안전망 커밋)', '`{head}`') },
+    {
+      do: 'commit',
+      files: {
+        'src/text.js': [
+          'export const trim = (s) => s.trim()',
+          'export const lower = (s) => s.toLowerCase()',
+          "export const dash = (s) => s.replace(' ', '-')",
+          '',
+        ].join('\n'),
+        'src/slug.js': [
+          "import { dash, lower, trim } from './text.js'",
+          '',
+          '// 제목을 URL 조각으로',
+          'export function slugify(title) {',
+          '  return dash(lower(trim(title)))',
+          '}',
+          '',
+        ].join('\n'),
+      },
+      message: 'refactor: slugify를 text.js의 함수로 나눔',
+    },
+    ...tail,
+  ]
+}
+
 async function run(): Promise<Result> {
   const ui = new ScreenUi()
   const h = await harness(
     dry
-      ? { ui, claudeBin: FAKE_CLAUDE, scenario: refactorScenario(), productDefaults: true }
+      ? {
+          ui,
+          claudeBin: FAKE_CLAUDE,
+          scenario: refactorScenario({ refactor: dryRefactor() }),
+          productDefaults: true,
+        }
       : { ui, claudeBin: process.env['CLAUDE_BIN'] ?? null, productDefaults: true },
   )
   const dir = path.join(OUT, 'refactor')

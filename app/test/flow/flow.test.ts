@@ -8,8 +8,8 @@ import { OPEN_QUESTIONS_HINT } from '../../src/core/review'
 import { sha256 } from '../../src/adapters/store'
 import { BOUNCE_HEAD, parseFrontMatter } from '../../src/core/validate'
 import type { LifecycleEvent, WorkState } from '../../src/shared/work'
-import { drive } from './driver'
-import { git, harness, makeRepo, register, settle, sleep, type Harness } from './harness'
+import { drive } from '../support/driver'
+import { git, harness, makeRepo, register, settle, sleep, type Harness } from '../support/harness'
 import {
   FIXED_FILES,
   FIX_CAUSE,
@@ -29,7 +29,7 @@ import {
   steps,
   verifyApplied,
   type Scenario,
-} from './scenarios'
+} from '../support/scenarios'
 
 let h: Harness | undefined
 

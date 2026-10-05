@@ -245,7 +245,14 @@ function roundOf(ctx) {
 }
 
 function fill(text, vars) {
-  return String(text).replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m))
+  // {head}는 지금 HEAD의 짧은 커밋 id다. 앞 단계에서 만든 커밋을 산출물에 적는다(리팩터링의 안전망 커밋, I64)
+  return String(text).replace(/\{(\w+)\}/g, (m, k) =>
+    k in vars
+      ? String(vars[k])
+      : k === 'head'
+        ? execFileSync('git', ['rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).trim()
+        : m,
+  )
 }
 
 /** 세션 기록 (실제 claude의 transcript 대신). --resume이 이것으로 task를 찾는다 */

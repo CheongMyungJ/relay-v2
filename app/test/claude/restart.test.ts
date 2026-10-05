@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest'
 import { isAlive, listProcesses } from '../../src/adapters/pty'
 import type { NoticeView, TaskView } from '../../src/shared/views'
 import type { LifecycleEvent, WorkState } from '../../src/shared/work'
-import { drive, type DriveResult } from '../flow/driver'
+import { drive, type DriveResult } from '../support/driver'
 import {
   APP,
   FAKE_CLAUDE,
@@ -22,8 +22,8 @@ import {
   register,
   settle,
   sleep,
-} from '../flow/harness'
-import { scenario, steps, type Scenario } from '../flow/scenarios'
+} from '../support/harness'
+import { scenario, steps, type Scenario } from '../support/scenarios'
 import { S_CASE } from './repos'
 import { ScreenUi } from './screen'
 

@@ -14,7 +14,7 @@
 //   `run view --job <작업> --repo R --log-failed`, `pr merge <n> --repo R --<방식> --match-head-commit <head>`,
 //   `repo view R --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed`.
 //   PR의 상태(열림, 닫힘, 머지됨)는 prs.json에, 체크와 코멘트, mergeable, 실패 로그, 허용 머지 방식은 같은 폴더의
-//   github.json에 둔다. 시험이 test/flow/github.ts로 바꾼다. head 커밋은 PR 브랜치에서 매번 읽는다.
+//   github.json에 둔다. 시험이 test/support/github.ts로 바꾼다. head 커밋은 PR 브랜치에서 매번 읽는다.
 //   S7에서 본 모양: 체크가 없는 head는 빈 statusCheckRollup, 머지 성공은 TTY가 아니라 출력이 없음, head가 다르면
 //   "Head branch was modified", 실행이 끝나기 전의 로그 요청은 "still in progress", baseRefOid는 PR 브랜치에 push해야 바뀜.
 // - PR 대응(M10): `api --hostname H -X POST repos/O/R/pulls/<n>/comments/<id>/replies --input -`(스레드 첫 코멘트에 답글.
@@ -91,7 +91,7 @@ function saveGithub(g) {
   if (recordDir) writeJson(path.join(recordDir, 'github.json'), g)
 }
 
-/** 코멘트와 리뷰의 id. 시험 도구(test/flow/github.ts)와 같은 수를 쓴다 */
+/** 코멘트와 리뷰의 id. 시험 도구(test/support/github.ts)와 같은 수를 쓴다 */
 function nextId(g) {
   const id = g.next_id ?? 1001
   g.next_id = id + 1

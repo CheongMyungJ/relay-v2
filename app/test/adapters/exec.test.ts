@@ -5,7 +5,7 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { run } from '../../src/adapters/exec'
 
-const TREE = path.resolve(__dirname, '../fixtures/tree.mjs')
+const TREE = path.resolve(__dirname, '../support/fixtures/tree.mjs')
 
 function alive(pid: number): boolean {
   try {

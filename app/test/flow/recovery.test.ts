@@ -29,7 +29,7 @@ import { checkTask, type TaskCheck } from '../../src/core/validate'
 import { DEFAULT_CONFIG } from '../../src/shared/config'
 import type { CleanInput, WorkView } from '../../src/shared/views'
 import type { LifecycleEvent, RewindOperation, WorkState } from '../../src/shared/work'
-import { drive } from './driver'
+import { drive } from '../support/driver'
 import {
   git,
   harness,
@@ -39,8 +39,8 @@ import {
   sleep,
   writeFiles,
   type Harness,
-} from './harness'
-import { REPO_FILES, REQUEST, handoff, scenario, steps, type Scenario } from './scenarios'
+} from '../support/harness'
+import { REPO_FILES, REQUEST, handoff, scenario, steps, type Scenario } from '../support/scenarios'
 
 let h: Harness | undefined
 /** 시험이 띄운 자식 프로세스와, 그 트리의 ID와 시작 시각. 시험이 실패해도 남기지 않는다 */
@@ -61,7 +61,7 @@ const read = (file: string) => fs.readFileSync(file, 'utf8')
 /** 테스트 레포의 origin을 GitHub 주소로 두고 push는 로컬 bare 원격으로 간다 (pushurl). PR을 만드는 시험이 쓴다 */
 const GITHUB = 'https://github.com/relay-test/sample.git'
 /** 앱이 충돌한 뒤 살아남은 claude의 자리: 자식 하나를 띄우고 살아 있는다 */
-const TREE = path.resolve(__dirname, '../fixtures/tree.mjs')
+const TREE = path.resolve(__dirname, '../support/fixtures/tree.mjs')
 /** 프로세스 목록과 시작 시각을 읽는 OS (I20, I33) */
 const listing = process.platform === 'win32' || process.platform === 'linux'
 

@@ -5,6 +5,7 @@ import { defineConfig } from 'vitest/config'
 // adapters: 실제 node-pty, 파일, git, 프로세스를 쓰는 [어댑터]. Windows 러너에서 돈다.
 // flow: main 조립 + adapters + 가짜 claude의 [흐름]. Windows 러너에서 돈다 (I25, I26).
 // claude: 실제 claude의 [실제]. RELAY_REAL_CLAUDE가 있을 때만 수동으로 돈다(app-claude 워크플로나 Linux 세션, I29, 8.4).
+// eval: 평가 도구(eval/)의 측정 로직. 모델을 부르지 않는다(docs/eval.md 6절). Linux 러너에서 돈다.
 export default defineConfig({
   test: {
     projects: [
@@ -25,6 +26,9 @@ export default defineConfig({
           testTimeout: 180_000,
           fileParallelism: false,
         },
+      },
+      {
+        test: { name: 'eval', include: ['eval/test/**/*.test.mjs'], testTimeout: 60_000 },
       },
       {
         test: {

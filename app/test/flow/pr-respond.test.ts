@@ -10,8 +10,8 @@ import { jsonText } from '../../src/adapters/store'
 import { GONE_SKIP } from '../../src/core/respond'
 import type { TaskView } from '../../src/shared/views'
 import type { WorkState } from '../../src/shared/work'
-import { CART_FILES, FakeGitHub, FakeWorld } from './github'
-import { git, harness, makeRepo, register, settle, type Harness } from './harness'
+import { CART_FILES, FakeGitHub, FakeWorld } from '../support/github'
+import { git, harness, makeRepo, register, settle, type Harness } from '../support/harness'
 import {
   HEAD_CODE,
   currentUntil,
@@ -25,8 +25,8 @@ import {
   workState,
   type PrContext,
   type PrWork,
-} from './pr-scenario'
-import { handoff, type Step } from './scenarios'
+} from '../support/pr-scenario'
+import { handoff, type Step } from '../support/scenarios'
 
 let h: Harness | undefined
 

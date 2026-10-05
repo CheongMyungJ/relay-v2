@@ -17,7 +17,7 @@ import {
   statusLines,
 } from '../../src/adapters/git'
 import { backupMessage, backupPattern, nextBackupBranch } from '../../src/core/rewind'
-import { git, makeRepo, writeFiles } from '../flow/repo'
+import { git, makeRepo, writeFiles } from '../support/repo'
 
 const WORK_ID = 'w-20260927-001'
 const BRANCH = `relay/${WORK_ID}`

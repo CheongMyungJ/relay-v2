@@ -13,8 +13,17 @@ import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AppConfig } from '../../src/shared/config'
 import type { RoundView, TaskView } from '../../src/shared/views'
-import { CART_FILES, FakeGitHub, FakeWorld } from './github'
-import { MANUAL, git, harness, makeRepo, register, settle, sleep, type Harness } from './harness'
+import { CART_FILES, FakeGitHub, FakeWorld } from '../support/github'
+import {
+  MANUAL,
+  git,
+  harness,
+  makeRepo,
+  register,
+  settle,
+  sleep,
+  type Harness,
+} from '../support/harness'
 import {
   HEAD_CODE,
   currentUntil,
@@ -26,8 +35,8 @@ import {
   workState,
   type PrContext,
   type PrWork,
-} from './pr-scenario'
-import { handoff, type Step } from './scenarios'
+} from '../support/pr-scenario'
+import { handoff, type Step } from '../support/scenarios'
 
 let h: Harness | undefined
 

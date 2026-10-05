@@ -3,8 +3,8 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test'
-import { makeRepo } from '../flow/repo'
-import { handoff, intentDraft, REPO_FILES, REQUEST } from '../flow/scenarios'
+import { makeRepo } from '../support/repo'
+import { handoff, intentDraft, REPO_FILES, REQUEST } from '../support/scenarios'
 
 const appDir = path.resolve(__dirname, '../..')
 const win32 = process.platform === 'win32'
@@ -69,10 +69,14 @@ test('엔진 설정에서 Codex를 골라 앱 질문창으로 답하고 다음 t
     RELAY_UPDATE: 'off',
     CLAUDE_BIN: path.join(
       appDir,
-      'test/fake-claude',
+      'test/support/fake-claude',
       win32 ? 'fake-claude.cmd' : 'fake-claude.mjs',
     ),
-    CODEX_BIN: path.join(appDir, 'test/fake-codex', win32 ? 'fake-codex.cmd' : 'fake-codex.mjs'),
+    CODEX_BIN: path.join(
+      appDir,
+      'test/support/fake-codex',
+      win32 ? 'fake-codex.cmd' : 'fake-codex.mjs',
+    ),
     FAKE_CLAUDE_SCENARIO: scenario,
     FAKE_CODEX_SCENARIO: scenario,
     FAKE_CLAUDE_RECORD: path.join(root, 'record'),

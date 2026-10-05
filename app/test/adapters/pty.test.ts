@@ -10,10 +10,10 @@ import {
 
 const FAKE = path.resolve(
   __dirname,
-  '../fake-claude',
+  '../support/fake-claude',
   process.platform === 'win32' ? 'fake-claude.cmd' : 'fake-claude.mjs',
 )
-const TREE = path.resolve(__dirname, '../fixtures/tree.mjs')
+const TREE = path.resolve(__dirname, '../support/fixtures/tree.mjs')
 const isWin = process.platform === 'win32'
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 

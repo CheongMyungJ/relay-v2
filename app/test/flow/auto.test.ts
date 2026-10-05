@@ -11,8 +11,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { AppConfig } from '../../src/shared/config'
 import type { TaskView, WorkView } from '../../src/shared/views'
 import type { LifecycleEvent, WorkState } from '../../src/shared/work'
-import { drive } from './driver'
-import { git, harness, makeRepo, register, settle, sleep, type Harness } from './harness'
+import { drive } from '../support/driver'
+import { git, harness, makeRepo, register, settle, sleep, type Harness } from '../support/harness'
 import {
   FIXED_FILES,
   FIX_DOC,
@@ -22,7 +22,7 @@ import {
   scenario,
   type Scenario,
   type Step,
-} from './scenarios'
+} from '../support/scenarios'
 
 let h: Harness | undefined
 

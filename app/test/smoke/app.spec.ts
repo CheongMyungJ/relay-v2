@@ -40,7 +40,7 @@ import {
   type ElectronApplication,
   type Locator,
 } from '@playwright/test'
-import { git, makeRepo } from '../flow/repo'
+import { git, makeRepo } from '../support/repo'
 import {
   REPO_FILES,
   REQUEST,
@@ -52,7 +52,7 @@ import {
   steps,
   type Scenario,
   type Step,
-} from '../flow/scenarios'
+} from '../support/scenarios'
 
 const isWin = process.platform === 'win32'
 const KNOWLEDGE_PATH = 'docs/knowledge/avg-empty.md'
@@ -74,7 +74,7 @@ const KNOWLEDGE_TEXT = [
 const APP_DIR = path.resolve(__dirname, '../..')
 const FAKE = path.resolve(
   __dirname,
-  '../fake-claude',
+  '../support/fake-claude',
   isWin ? 'fake-claude.cmd' : 'fake-claude.mjs',
 )
 

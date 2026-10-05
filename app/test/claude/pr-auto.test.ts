@@ -27,8 +27,8 @@ import { taskDirName } from '../../src/core/machine'
 import { HOOK_TOKEN_ENV } from '../../src/core/settings'
 import { DEFAULT_CONFIG, type AppConfig } from '../../src/shared/config'
 import type { TaskView } from '../../src/shared/views'
-import { CART_FILES, FakeGitHub, FakeWorld } from '../flow/github'
-import { APP, FAKE_CLAUDE, MANUAL, harness, makeRepo, register, settle } from '../flow/harness'
+import { CART_FILES, FakeGitHub, FakeWorld } from '../support/github'
+import { APP, FAKE_CLAUDE, MANUAL, harness, makeRepo, register, settle } from '../support/harness'
 import {
   currentUntil,
   describePr,
@@ -41,9 +41,9 @@ import {
   type PrContext,
   type PrWork,
   type PrWorld,
-} from '../flow/pr-scenario'
-import { handoff, type Step } from '../flow/scenarios'
-import { sleep } from '../flow/ui'
+} from '../support/pr-scenario'
+import { handoff, type Step } from '../support/scenarios'
+import { sleep } from '../support/ui'
 import {
   GIT_ENV,
   cleanup,
