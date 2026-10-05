@@ -177,6 +177,8 @@ test.beforeAll(async () => {
     ...process.env,
     CLAUDE_BIN: FAKE,
     RELAY_HOME: home,
+    // 설치본이 시험 중에 릴리스를 받아 설치하지 않게 한다 (I95)
+    RELAY_UPDATE: 'off',
     FAKE_CLAUDE_SCENARIO: scenarioFile,
     // 가짜 claude가 세션을 적어 두어야 --resume으로 다시 연다
     FAKE_CLAUDE_RECORD: path.join(root, 'record'),

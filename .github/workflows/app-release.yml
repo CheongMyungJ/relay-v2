@@ -1,0 +1,113 @@
+# 릴리스 (I95). v<버전> 태그를 push하면 설치 파일을 빌드하고, 조용히 설치해 [스모크]를 돌린 뒤,
+# 통과하면 GitHub Release를 만들어 설치 파일과 자동 업데이트 파일(latest.yml, .blockmap)을 올린다.
+# 설치된 앱은 이 Release의 latest.yml을 보고 새 버전을 받는다.
+#   git tag v0.1.0 && git push origin v0.1.0
+name: app-release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: app-release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      # 태그 이름은 스크립트에 직접 넣지 않고 환경 변수로만 읽는다 (스크립트 인젝션 방지)
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # npm ci의 설치 스크립트가 쓰기 토큰을 읽지 못하게 한다. Release는 GH_TOKEN으로 따로 만든다
+          persist-credentials: false
+
+      - name: 태그에서 버전 읽기
+        run: |
+          $tag = $env:TAG
+          if ($tag -notmatch '^v(\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?)$') {
+            Write-Error "태그는 v1.2.3 또는 v1.2.3-beta.1 꼴이어야 합니다: $tag"; exit 1
+          }
+          "RELAY_VERSION=$($Matches[1])" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: 앱 의존성 설치
+        working-directory: app
+        run: npm ci --no-audit --no-fund
+
+      - name: 앱 버전을 태그에 맞추기
+        working-directory: app
+        # 레포의 package.json은 0.0.0으로 두고 빌드할 때만 바꾼다. 업데이트 비교는 이 버전으로 한다.
+        run: npm version $env:RELAY_VERSION --no-git-tag-version --allow-same-version
+
+      - name: 설치 파일 빌드
+        working-directory: app
+        run: npm run dist:win
+
+      - name: 업데이트 파일 확인
+        working-directory: app
+        run: |
+          $setup = "dist/relay-setup-$env:RELAY_VERSION.exe"
+          $missing = @($setup, "$setup.blockmap", 'dist/latest.yml') | Where-Object { -not (Test-Path $_) }
+          if ($missing) { Write-Error "없는 파일: $($missing -join ', ')"; exit 1 }
+          $latest = Get-Content dist/latest.yml -Raw
+          $latest
+          if ($latest -notmatch "(?m)^version: $([regex]::Escape($env:RELAY_VERSION))$") {
+            Write-Error 'latest.yml의 버전이 태그와 다릅니다'; exit 1
+          }
+
+      - name: 조용한 설치
+        working-directory: app
+        run: |
+          Start-Process -FilePath "dist/relay-setup-$env:RELAY_VERSION.exe" -ArgumentList '/S' -Wait
+          $exe = Join-Path $env:LOCALAPPDATA 'Programs\relay\relay.exe'
+          if (-not (Test-Path $exe)) { Write-Error "설치된 실행 파일이 없습니다: $exe"; exit 1 }
+          $update = Join-Path $env:LOCALAPPDATA 'Programs\relay\resources\app-update.yml'
+          if (-not (Test-Path $update)) { Write-Error "자동 업데이트 설정이 없습니다: $update"; exit 1 }
+          "RELAY_APP_EXE=$exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: 설치된 node-pty 파일 확인 (asar 밖)
+        run: |
+          $pty = Join-Path (Split-Path $env:RELAY_APP_EXE) 'resources\app.asar.unpacked\node_modules\node-pty\prebuilds\win32-x64'
+          $missing = @('conpty.node', 'conpty\conpty.dll', 'conpty\OpenConsole.exe') | Where-Object { -not (Test-Path (Join-Path $pty $_)) }
+          if ($missing) { Write-Error "없는 파일: $($missing -join ', ')"; exit 1 }
+
+      - name: "[스모크]"
+        working-directory: app
+        run: npm run test:smoke
+
+      - name: Release 만들기
+        working-directory: app
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $setup = "dist/relay-setup-$env:RELAY_VERSION.exe"
+          # v1.2.3-beta.1 같은 시험판은 prerelease로 올려 설치된 앱이 받지 않게 한다
+          $ghArgs = @('release', 'create', $env:TAG, $setup, "$setup.blockmap", 'dist/latest.yml',
+            '--title', "relay $env:RELAY_VERSION", '--generate-notes', '--verify-tag')
+          if ($env:RELAY_VERSION -match '-') { $ghArgs += '--prerelease' }
+          gh @ghArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: 스모크 결과 올리기
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-results-${{ github.ref_name }}
+          path: app/test-results/
+          if-no-files-found: ignore

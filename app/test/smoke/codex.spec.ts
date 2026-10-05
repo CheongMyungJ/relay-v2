@@ -65,6 +65,8 @@ test('엔진 설정에서 Codex를 골라 앱 질문창으로 답하고 다음 t
   const env = {
     ...process.env,
     RELAY_HOME: home,
+    // 설치본이 시험 중에 릴리스를 받아 설치하지 않게 한다 (I95)
+    RELAY_UPDATE: 'off',
     CLAUDE_BIN: path.join(
       appDir,
       'test/fake-claude',

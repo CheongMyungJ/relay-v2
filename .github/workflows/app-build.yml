@@ -32,6 +32,12 @@ jobs:
         working-directory: app
         run: npm run dist:win
 
+      - name: 업데이트 파일 확인 (I95)
+        working-directory: app
+        run: |
+          if (-not (Test-Path dist/latest.yml)) { Write-Error 'dist/latest.yml이 없습니다'; exit 1 }
+          Get-Content dist/latest.yml
+
       - name: 조용한 설치
         working-directory: app
         run: |
