@@ -18,6 +18,8 @@
 # 정기 실행(schedule): 매주 [실제] 전부(Windows)와 [계약]. 매일 Claude Code의 새 버전을 확인해 처음 보는 버전이면 [계약]과
 # [실제] S를 돌리고, 통과하면 그 버전을 확인한 것으로 남긴다(actions 캐시 claude-code-tested-<버전>). 정기 실행이 실패하면
 # 이슈를 연다(같은 제목의 열린 이슈가 있으면 코멘트를 단다). PR을 막지 않는다 (docs/implementation.md 8.1, 8.3).
+# 정기 실행 끄기: 레포 변수(Settings → Secrets and variables → Actions → Variables) RELAY_SCHEDULE을 off로 두면 둘 다 끈다.
+# weekly면 매주 것만, daily면 매일 것만 돈다. 없거나 비면 둘 다 돈다. 수동 실행(workflow_dispatch)은 이 변수와 상관없다.
 name: app-claude
 
 on:
@@ -84,10 +86,15 @@ jobs:
           CASES: ${{ inputs.cases }}
           HIT: ${{ steps.tested.outputs.cache-hit }}
           VERSION: ${{ steps.latest.outputs.version }}
+          SWITCH: ${{ vars.RELAY_SCHEDULE }}
         run: |
           claude=false; contract=false; cases=""
-          if [ "$EVENT" = schedule ]; then
-            if [ "$SCHEDULE" = "52 18 * * 0" ]; then
+          kind=""
+          if [ "$SCHEDULE" = "52 18 * * 0" ]; then kind=weekly; elif [ -n "$SCHEDULE" ]; then kind=daily; fi
+          if [ "$EVENT" = schedule ] && { [ "$SWITCH" = off ] || { [ -n "$SWITCH" ] && [ "$SWITCH" != "$kind" ]; }; }; then
+            echo "레포 변수 RELAY_SCHEDULE=$SWITCH: 정기 실행($kind)을 건너뛴다"
+          elif [ "$EVENT" = schedule ]; then
+            if [ "$kind" = weekly ]; then
               claude=true; contract=true
             elif [ "$HIT" != true ]; then
               # 처음 보는 Claude Code 버전: [계약]과 짧은 [실제] 하나
