@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // relay 대 맨 CLI 사용성 평가 (docs/eval.md). 시나리오마다 두 쪽을 n번 돌리고, 짝지어 판정하고, report.md를 만든다.
-// Work 둘을 잇는 시나리오(works, 21~23)의 두 쪽은 relay 대 지식을 끈 relay(relay-off)다.
+// Work 여럿을 잇는 시나리오(works, 21~27)의 두 쪽은 relay 대 지식을 끈 relay(relay-off)다.
 //   node eval/run.mjs --list
 //   node eval/run.mjs --scenarios 3 --runs 5
 //   node eval/run.mjs --scenarios 1,2,5 --runs 2 --arms relay,cli --parallel 2

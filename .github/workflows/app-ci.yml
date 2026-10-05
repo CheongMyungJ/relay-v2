@@ -1,6 +1,6 @@
 # 앱 CI (docs/implementation.md I28, 8.3).
-# Linux: 타입 검사, ESLint, Prettier, [단위], skills/check.mjs. Windows: 빌드(I39), [어댑터], [흐름].
-# Windows의 [흐름]은 PR 진행·대응(test/flow/pr*.test.ts)과 나머지를 두 작업으로 나눠 함께 돈다. 작업마다 20분 제한이다 (I54).
+# Linux: 타입 검사, ESLint, Prettier, [단위], skills/check.mjs. Windows: 빌드(I39), [어댑터], Codex [흐름]과 Codex GUI [스모크](개발 빌드),
+# [흐름]. Windows의 [흐름]은 PR 진행·대응(test/flow/pr*.test.ts)과 나머지를 두 작업으로 나눠 함께 돈다. 작업마다 20분 제한이다 (I54).
 name: app-ci
 
 on:

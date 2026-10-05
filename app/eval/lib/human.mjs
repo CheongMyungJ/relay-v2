@@ -180,7 +180,7 @@ function pickTypeLines(arm) {
 
 /**
  * Work 여럿을 잇는 시나리오의 두 번째 일부터: 같은 레포에서 앞 일을 끝낸 뒤라는 것을 알린다. teammate Work는 팀의 다른
- * 사람이 동료의 일이 main에 머지된 레포를 새로 받아 시작한다 (docs/knowledge-experiment.md)
+ * 사람이 동료의 일이 main에 머지된 레포를 새로 받아 시작한다 (docs/knowledge-experiment/protocol.md)
  */
 function nextWorkLines(kind, scenario) {
   const n = scenario.work?.index ?? 0

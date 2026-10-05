@@ -4,7 +4,7 @@
 // 자동 메모리는 끈다 (D113).
 import type { SkillName } from '../shared/config'
 
-/** 앱이 받는 훅 여섯 가지 (시나리오 2-3) */
+/** 앱이 받는 훅 일곱 가지 (시나리오 2-3) */
 export const HOOK_EVENTS = [
   'UserPromptSubmit',
   'Stop',
@@ -24,7 +24,7 @@ export const HOOK_TOKEN_ENV = 'RELAY_HOOK_TOKEN'
 /** 훅 요청의 제한 시간(초). 출처: spikes/lib/hooks.mjs HookServer.settings */
 const HOOK_TIMEOUT_SEC = 30
 
-/** Stop 훅의 제한 시간(초). verify의 지식 검토 호출(D300, 2분까지)을 기다린다 */
+/** Stop 훅의 제한 시간(초). verify의 지식 검토 호출(D300, 90초까지)을 기다린다 */
 export const STOP_HOOK_TIMEOUT_SEC = 180
 
 export interface HttpHook {

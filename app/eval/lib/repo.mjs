@@ -163,7 +163,7 @@ export function diffTree(tree, baseDir, work) {
 }
 
 /**
- * 팀원 교대(works의 teammate Work, docs/knowledge-experiment.md). 앞 사람의 레포에서 main 밖의 로컬 브랜치 가운데
+ * 팀원 교대(works의 teammate Work, docs/knowledge-experiment/protocol.md). 앞 사람의 레포에서 main 밖의 로컬 브랜치 가운데
  * main에 아직 없는 커밋이 있는 것을 오래된 차례로 main에 머지하고(PR 머지와 같음), 팀 원격(bare)에 올린 뒤 새로 clone한다.
  * 커밋하지 않은 변경은 건너가지 않는다. 충돌하면 그 머지를 되돌리고 뒤 브랜치 쪽(-X theirs)으로 다시 머지하고 적는다.
  * @param {string} prevRepo 앞 사람의 레포

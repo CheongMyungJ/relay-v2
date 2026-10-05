@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 견줄 relay 빌드를 따로 만든다 (docs/knowledge-experiment.md 6절). 커밋을 git worktree로 꺼내 의존성을 깔고 빌드한다.
+# 견줄 relay 빌드를 따로 만든다 (docs/knowledge-experiment/protocol.md 6절). 커밋을 git worktree로 꺼내 의존성을 깔고 빌드한다.
 #   bash eval/ref-app.sh <이름> <커밋> [뿌리 폴더]
 #   예: bash eval/ref-app.sh base 0247049      → /tmp/relay-ref/base/app
 #       bash eval/ref-app.sh m17 aa39d16       → /tmp/relay-ref/m17/app

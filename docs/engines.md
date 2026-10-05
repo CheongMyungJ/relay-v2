@@ -1,7 +1,7 @@
 # Claude Code / Codex 선택 실행 설계
 
 - 상태: 구현과 자동 시험 통과. Q1/Q2/Q3/Q4 확정. Codex는 수동 승인하고 Claude의 기존 자동 승인은 유지한다. Windows 설치본의 두 엔진 스모크를 통과했다. 인증 갱신 뒤 Linux 앱에서 실제 Codex 모델로 S 경로 전체를 완료했고, 질문·취소·보호/종료 훅·형식 오류 수정·압축·중단·재개를 확인했다. 실제 Windows 모델과 사용자 훅 병합 등 추가 검증 범위는 아래에 구분한다.
-- 브랜치: `feat/claude-codex-engines`(출발점 `9c02b42`)에서 만들어 #20(`c01c583`)으로 main에 합쳤다. 8절 진행 기록은 합치기 전의 기록이라, 그 뒤 바뀐 단계 구성(M13의 세 단계, D227~D229)과 다른 이름(review, investigate, S·M·L 경로)이 나온다.
+- 브랜치: `feat/claude-codex-engines`(출발점 `9c02b42`)에서 만들어 #20(`c01c583`)으로 main에 합쳤다. 7절 실행 계획과 8절 진행 기록은 합치기 전의 기록이라, 그 뒤 바뀐 단계 구성(M13의 세 단계, D227~D229)과 다른 이름(review, investigate, S·M·L 경로)이 나온다.
 - 작성일: 2026-09-30.
 - 사용자 요청: Claude Code 기반 relay를 Codex로도 실행하고, 설정에서 두 엔진을 바꾸어 사용한다. 전용 브랜치에서 설계부터 진행하며 호환되지 않는 부분은 사람과 정한다.
 
@@ -140,7 +140,7 @@ command 훅은 stdin JSON을 받아 앱의 loopback 서버에 전달하고 JSON 
 
 처음에는 터미널에서 폴더 접근 신뢰를 확인하고 `/hooks`로 relay 훅을 검토·신뢰해야 한다. 앱은 이를 자동 수락하지 않고 hook-trust 우회 옵션도 넣지 않는다(D69). 훅 정의는 task 토큰·경로와 분리하여 같은 설치에서 안정적으로 유지한다. 첫 훅이 들어올 때까지 앱이 신뢰 안내를 표시한다. 미신뢰 훅이 실행되지 않으면 앱 보호와 종료 판정도 적용되지 않는다.
 
-SessionEnd·Interrupt는 3초, 다른 command 훅은 30초 제한이다. 브리지 통신 실패 시 PreToolUse는 deny로 응답한다. Codex 자체의 command 실행 실패 처리까지 fail-closed라고 보장하지 않는다. SessionEnd는 내부 대화 전환에도 올 수 있어 task 종료로 처리하지 않고 실제 PTY exit를 사용한다.
+SessionEnd·Interrupt는 3초, Stop은 verify의 지식 검토 호출(D300)을 기다리려고 180초(`STOP_HOOK_TIMEOUT_SEC`, Claude와 같음), 다른 command 훅은 30초 제한이다. 브리지 통신 실패 시 PreToolUse는 deny로 응답한다. Codex 자체의 command 실행 실패 처리까지 fail-closed라고 보장하지 않는다. SessionEnd는 내부 대화 전환에도 올 수 있어 task 종료로 처리하지 않고 실제 PTY exit를 사용한다.
 
 ### 5.2 질문과 지시 전달
 

@@ -466,14 +466,14 @@ Work 완료에서 [PR 생성]을 고르면 → PR 진행(PR 대응) → 머지
 
 ```
 일하는 동안                              Work를 닫을 때 (verify)                  다음 일
-intake / fix / design / implement  →   앞 단계들의 후보 + 요청 + intent의      →  context.md의 "팀 지식"
+verify가 아닌 단계(PR 대응 포함)   →   앞 단계들의 후보 + 요청 + intent의      →  context.md의 "팀 지식"
 handoff의 knowledge_candidates          비목표·제약 + 사람 결정                    ├ worktree의 docs/knowledge/ (머지된 팀 지식)
                                         → docs/knowledge/<이름>.md 커밋             └ 같은 앱의 완료한 Work 브랜치의 지식 중 HEAD에 없는 것
                                         → PR로 팀에 (머지)                          (팀원은 머지된 레포로 받음)
 ```
 
 - **무엇을:** 사람이 알려 준 규칙·관례·업무 사실과 이력, 코드만 보고는 다시 알기 어려운 사실, 다시 겪을 만한 실패 유형. 이번 일에만 해당하는 것, 코드에 이미 드러난 것, 비밀과 개인정보는 남기지 않는다(D283, D285).
-- **어디에:** 레포의 `docs/knowledge/<영역>/<이름>.md`(영역 없이 바로 두어도 됨), 한 항목 한 파일. 형식은 머리글(`kind`, `source`, 선택 `anchor`), 제목(`# `), 본문 절(규칙은 `## 규칙`, 나머지는 `## 내용`), 선택 절 `## 아직 규칙을 따르지 않는 곳`과 `## 바뀐 이력`이다(D293). 사람이 GitHub에서 그대로 읽는다.
+- **어디에:** 레포의 `docs/knowledge/<영역>/<이름>.md`(영역 없이 바로 두어도 됨), 한 항목 한 파일. 형식은 머리글(`kind`, `source`, 선택 `anchor`), 제목(`# `), 본문 절(규칙은 `## 규칙`, 나머지는 `## 내용`), 선택 절 `## 아직 규칙을 따르지 않는 곳`, `## 아직 정하지 않은 것`(규칙만, D299)과 `## 바뀐 이력`이다(D293). 사람이 GitHub에서 그대로 읽는다.
 - **언제 뽑나:** 후보는 단계마다, 파일은 verify가 코드와 함께 커밋한다(D284). verify가 그 차례를 건너뛰지 않게 앱이 handoff의 새·고친·지운 지식 줄과 지식 파일의 형식, 바꾼 코드가 남아 있는 "아직 따르지 않는 곳"을 확인하고(D291, D293, D294, D296, D297), 그 뒤 모델이 뜻을 한 번 검토한다(D300). 사람이 한 Work의 범위로 한 말과 정하지 않은 것은 규칙이 아니다(D296, D299). 사람의 따로 하는 수고는 없다(D290).
 - **사람이 어디서 보나:** Work 완료 화면의 [지식] 탭(D298), [요약]의 지식 줄, [전체 변경], PR의 파일 변경.
 - **어떻게 넣나:** 앱이 task를 시작할 때 `context.md`에 넣는다(D286). 쓰는 규칙은 D287, 머지 전 지식의 범위는 D292, 지식이 많을 때 관련 항목 고르기는 D295다.
@@ -492,7 +492,7 @@ handoff의 knowledge_candidates          비목표·제약 + 사람 결정      
    | 항목 | 실패하면 |
    |---|---|
    | git 레포의 루트인가 | 등록을 막는다 |
-   | `claude auth status`가 성공하는가(종료 코드 0) | 등록을 막는다 |
+   | 고른 엔진의 인증 점검이 성공하는가(Claude는 `claude auth status`, Codex는 `codex login status`와 필수 기능 점검, [engines.md](engines.md) 6절) | 등록을 막는다 |
    | 같은 경로가 이미 등록되었나 | 등록을 막는다 |
    | `origin` 원격이 있는가 | 경고. [push]와 [PR 생성]을 비활성화한다 |
    | `gh auth status`가 성공하고 gh가 2.48.0 이상인가(D198) | 경고. [PR 생성]만 비활성화한다 |
@@ -529,7 +529,7 @@ handoff의 knowledge_candidates          비목표·제약 + 사람 결정      
 1. **앱:** task 디렉터리 `tasks/<순번>-<노드>/`를 만들고, 현재 HEAD를 이 task의 시작 커밋으로 `work.json`에 기록한다(되감기 기준, 6.2).
 2. **앱:** 이번 task의 스킬을 Work 디렉터리의 `.claude/skills/relay-<이름>/`에 복사하고, 공통 규칙(`_common.md`)을 `SKILL.md` 끝에 붙인다. 다른 relay 스킬 폴더는 지운다(D108, 5.6.3). worktree는 건드리지 않는다.
 3. **앱:** task 전용 설정 파일을 만든다.
-   - HTTP 훅: UserPromptSubmit, Stop, Notification, SessionEnd, PreToolUse·PostToolUse(모든 도구. 질문 대기는 `AskUserQuestion`으로, 진행 표시는 나머지 도구로 한다, D216)
+   - HTTP 훅: UserPromptSubmit, Stop, Notification, SessionEnd, PreToolUse·PostToolUse·PostToolUseFailure(모든 도구. 질문 대기는 `AskUserQuestion`으로, 진행 표시는 나머지 도구로 한다, D216)
    - deny 규칙: `git push`, `gh pr` 계열, 앱 소유 파일(`work.json`, `request.md`, `intent.md`, `decisions.md`, `pr-items.json`(D191), 이전 task 디렉터리, Work 디렉터리의 `.claude/`) 편집
    - 자동 메모리 끔: `autoMemoryEnabled: false` (D113)
 4. **앱:** `context.md`를 조립한다.
@@ -547,9 +547,10 @@ handoff의 knowledge_candidates          비목표·제약 + 사람 결정      
    | 직전 handoff | 본문 |
    | 되감기로 들어온 경우: 사람 추가 지시, 폐기된 시도 요약 | 본문 (맨 위 강조) |
    | PR 대응 task: 이번 라운드의 항목(외부 글은 "지시가 아니라 데이터"로 감쌈, D162), 사람 지시, PR 정보(번호, 주소, head 커밋), 앞 대응 라운드들의 handoff 요약 | 본문 (D192) |
+   | 팀 지식(지식 관리가 켜져 있을 때): 넣은 지식 항목, 쓰는 규칙, intake와 작업 단계에는 후보 적는 법, verify에는 지식 파일을 쓰는 법 | 본문 (3.6, D286~D289) |
    | 필요한 산출물 | 경로만 |
 
-   **마무리 안내 문구(D104, D132):** 앱이 아래 문구를 넣는다. `[승인]`은 intake에서 `[의도 승인]`으로 바꾼다. verify에서는 Work 완료 화면(시나리오 7-3)에 실제로 있는 전달 버튼 이름으로 바꾼다. 전달 버튼이 `[완료만]`뿐이면 `[완료만]`이다. verify에는 승인하면 멈출 때의 `[승인하고 멈춤]`(D119)도 함께 적는다. [이 단계 끝나면 멈춤]은 task가 도는 중에도 바뀌고, 이전 단계 추천은 에이전트가 마지막에 정하기 때문이다. 같은 까닭으로 자동 승인을 켤 수 있는 fix, design, implement는 설정과 상관없이 수동과 자동을 한 문구에 적는다. 자동 승인 여부는 턴이 끝날 때의 설정으로 정하기 때문이다(D128). "승인 방식"은 task를 시작할 때의 설정이다.
+   **마무리 안내 문구(D104, D132):** 앱이 아래 문구를 넣는다. `[승인]`은 intake에서 `[의도 승인]`으로 바꾼다. verify에서는 Work 완료 화면(시나리오 7-3)에 실제로 있는 전달 버튼 이름으로 바꾼다. 전달 버튼이 `[완료만]`뿐이면 `[완료만]`이다. verify에는 승인하면 멈출 때의 `[승인하고 멈춤]`(D119)도 함께 적는다. [이 단계 끝나면 멈춤]은 task가 도는 중에도 바뀌고, 이전 단계 추천은 에이전트가 마지막에 정하기 때문이다. 같은 까닭으로 자동 승인을 켤 수 있는 fix, design, implement, refactor, execute는 설정과 상관없이 수동과 자동을 한 문구에 적는다. 자동 승인 여부는 턴이 끝날 때의 설정으로 정하기 때문이다(D128). "승인 방식"은 task를 시작할 때의 설정이다.
 
    | 노드 | 문구 |
    |---|---|
@@ -897,6 +898,8 @@ handoff의 knowledge_candidates          비목표·제약 + 사람 결정      
       tasks/<nn>-<node>/
         context.md  task.settings.json  pty.log
         <산출물>.md  handoff.md
+        knowledge-injected.md          # 이 task에 넣은 지식 (D289. 지식을 끄면 없음)
+        .agents/skills/relay-<name>/SKILL.md   # Codex task의 스킬 배포본 (engines.md)
 ```
 
 - 스킬 원본은 `<RELAY_HOME>`에 두지 않는다. 앱에 묶어 배포한 `skills/`를 쓰고, 환경 변수 `RELAY_SKILLS_DIR`로 바꿀 수 있다(D103, 5.6.3).
@@ -1024,24 +1027,23 @@ knowledge_candidates: []
 
 - 본문의 `## 요약`과 `## 다음 task가 알아야 할 것`은 필수다. 두 번째 절에는 경로와 줄, 명령, 수치처럼 다시 찾기 비싼 사실을 적는다.
 - 본문 분량 기준은 약 1,500자다(기본값, 설정 가능). 넘으면 경고만 한다.
-- **산출물:** 앱은 task 디렉터리의 `.md` 파일 중 `context.md`와 `handoff.md`를 뺀 것을 산출물로 보고, 승인 화면과 다음 task 입력에 쓴다(D89).
+- **산출물:** 앱은 task 디렉터리의 `.md` 파일 중 `context.md`, `handoff.md`, `knowledge-injected.md`를 뺀 것을 산출물로 보고, 승인 화면과 다음 task 입력에 쓴다(D89).
 - **필수 산출물**은 노드별로 3.1 표의 산출물 파일이다. `status: awaiting_approval`일 때만 task 디렉터리에 있는지 확인한다(D30). 다만 intake에서 `status`를 읽지 못하면 intent 초안이 있는지는 확인한다(D134). PR 대응 task는 `response.md`이고, 이번 라운드에 코멘트 항목이 있으면 `replies.md`도 필수다(D190).
 
 #### 5.2.1 형식 검사
 
-앱이 handoff와 intent 초안에 같은 방식으로 한다(D38). 오류가 있으면 승인 버튼이 비활성화되고 Stop 훅으로 되돌린다(D21). 되돌림 메시지에는 필드와 어긴 규칙을 적는다(예: "`blocked_reason` 없음: `status: blocked`일 때 필수", D87).
+앱이 handoff와 intent 초안에 한다(D38). intent 초안에는 머리글이 없어 본문만 본다(D236, I58). 오류가 있으면 승인 버튼이 비활성화되고 Stop 훅으로 되돌린다(D21). 되돌림 메시지에는 필드와 어긴 규칙을 적는다(예: "`blocked_reason` 없음: `status: blocked`일 때 필수", D87).
 
-- **스키마 검사:** 머리글을 YAML로 파싱한 뒤 JSON Schema로 검사한다(D84).
-  - handoff: `docs/contracts/handoff.v1.schema.json`
-  - intent 초안: `docs/contracts/intent-draft.v1.schema.json`
-  - 스키마가 정하는 것: 필수 필드, 타입, 열거값(`status`, `by`, `recommended_next.node`, `type`), `status: blocked`일 때 `blocked_reason` 필수(그 밖에는 null 허용, D96)
+- **스키마 검사:** handoff 머리글을 YAML로 파싱한 뒤 JSON Schema(`docs/contracts/handoff.v1.schema.json`)로 검사한다(D84).
+  - 스키마가 정하는 것: 필수 필드, 타입, 열거값(`status`, `by`, `recommended_next.node`), `status: blocked`일 때 `blocked_reason` 필수(그 밖에는 null 허용, D96)
 - **추가 검사:** 스키마로 표현할 수 없어 앱 코드가 한다.
   - `recommended_next.node`가 선택 가능한 다음 단계(3.2) 안에 있다
   - 필수 산출물이 task 디렉터리에 있다(`awaiting_approval`일 때, D30)
   - 본문 필수 절: handoff는 `## 요약`, `## 다음 task가 알아야 할 것`. intent 초안은 `목표`, `비목표`, `원하는 결과`, `완료조건`
-  - intent 초안의 완료조건 줄이 `- [ ] `로 시작한다
+  - intent 초안의 완료조건 줄이 `- [ ] `로 시작한다. 일반 Work는 줄마다 ` — 확인: ` 뒤에 글이 있다(D305)
   - verify의 `pr.md` 첫 줄이 `# `로 시작한다(D62)
   - PR 대응의 `replies.md`: 이번 라운드의 코멘트 항목마다 `## <항목 id>` 절이 하나씩 있고, 모르는 id가 없고, 답글 본문이 비어 있지 않다(D190). 이 오류는 [오류 무시하고 승인]으로 넘길 수 없다(D204)
+  - 지식 관리가 켜진 verify: handoff의 새·고친·지운 지식 줄과 실제 바뀐 지식 파일이 맞고, 지식 파일의 형식(D293)과 "아직 규칙을 따르지 않는 곳"(D296), 지운 지식(D297)이 맞다(D291, D294). 이것을 지나면 지식 검토 호출(D300)이 뜻을 본다(3.6)
 - **오류가 아닌 것(경고만):** 정의되지 않은 필드(D85), 본문 분량 기준 초과. 문자열과 목록 길이에는 상한이 없다(D86).
 - **형식 버전:** 앱은 task를 시작할 때 쓰는 형식 버전을 `work.json`에 기록하고, 그 버전의 스키마로 검사한다. 현재는 1이다.
 
@@ -1762,7 +1764,7 @@ PR 진행 중 앱이 모은 항목(D157)에 대응한다. 코드를 고치고 �
 | 재개 | 같은 설정(`--dangerously-skip-permissions`, `--add-dir`, `--settings`) + `--resume <uuid>`. `--session-id`와 첫 프롬프트는 뺀다(이전 옵션이 복원된다고 가정하지 않음, 스파이크 S6). 중단됨의 [재개]는 맨 뒤에 이어서 하라는 입력을 준다(D218) |
 | 컨텍스트 | `tasks/<nn>/context.md` + 첫 프롬프트에 경로 |
 | 스킬 배포 | 이번 task의 스킬만 Work 디렉터리 `.claude/skills/relay-<name>/`로 복사(`--add-dir`로 읽힘, D108). 복사할 때 공통 규칙(`_common.md`)을 `SKILL.md` 끝에 붙임. `disable-model-invocation: true` |
-| 상태 신호 | 내장 HTTP 훅 → 앱 로컬 서버: UserPromptSubmit, Stop, Notification, SessionEnd, PreToolUse·PostToolUse(모든 도구, D216) |
+| 상태 신호 | 내장 HTTP 훅 → 앱 로컬 서버: UserPromptSubmit, Stop, Notification, SessionEnd, PreToolUse·PostToolUse·PostToolUseFailure(모든 도구, D216) |
 | 형식 오류 되돌림 | Stop 훅 응답 `{"decision":"block","reason":…}`, 연속 2회까지(설정 가능) |
 | 제한 | deny 규칙: `Bash(git push*)`, `Bash(gh pr*)`, 앱 소유 파일 `Edit(//…)`. 실수를 막는 장치이며 우회할 수 있다(6.1) |
 | 자동 메모리 | task 설정에 `autoMemoryEnabled: false` (D113) |
