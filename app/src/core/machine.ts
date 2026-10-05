@@ -27,6 +27,8 @@ import type {
   DeliveryRecord,
   DeliveryStage,
   FormatIssue,
+  IssueCloseReason,
+  IssueRecord,
   LifecycleEvent,
   MergeMethod,
   MergeOperation,
@@ -75,6 +77,7 @@ import {
   respondBlocked,
 } from './respond'
 import { backupMessage, canSelectStep, planStep, type StepKind } from './rewind'
+import { issueEntries, issueKey, issueUrlOf, newIssueRecord } from './issue'
 import { FORMAT_VERSION, bounceMessage, isValid, summarize, type TaskCheck } from './validate'
 
 // ---------- 이벤트와 할 일 ----------
@@ -603,6 +606,45 @@ export interface PrChecksRerun extends WorkEvent {
   checks: readonly string[]
 }
 
+// ---------- 이슈 기록 (설계 3.7, I97, I98) ----------
+
+/** 대기열 맨 앞(key)을 게시하려 한다 (D349). 결과를 모를 수 있어 다음 시도는 원격에서 표시를 먼저 찾는다 */
+export interface IssueAttempted extends WorkEvent {
+  type: 'issue.attempted'
+  key: string
+}
+
+/** 새 이슈를 만들었다 (D336). 원격에서 표시로 찾았으면 found다 */
+export interface IssueCreated extends WorkEvent {
+  type: 'issue.created'
+  number: number
+  url: string
+  /** 라벨을 붙였다 (D348) */
+  labeled: boolean
+  found?: boolean
+}
+
+/** 대기열 맨 앞(key)의 코멘트를 게시했다 (D339, D341, D347). 원격에서 표시로 찾았으면 found다 */
+export interface IssuePosted extends WorkEvent {
+  type: 'issue.posted'
+  key: string
+  commentId: number | null
+  url: string
+  found?: boolean
+}
+
+/** 이슈를 닫았다 (D346). 까닭은 대기열 항목에 적힌 것이다 */
+export interface IssueClosed extends WorkEvent {
+  type: 'issue.closed'
+}
+
+/** 대기열 맨 앞(key)의 게시가 실패했다 (D344). 흐름은 막지 않고 다음 게시 때 앞부터 다시 한다 */
+export interface IssueFailed extends WorkEvent {
+  type: 'issue.failed'
+  key: string
+  error: string
+}
+
 export type MachineEvent =
   | RuntimeSignal
   | SessionStarted
@@ -659,6 +701,11 @@ export type MachineEvent =
   | RespondDeferred
   | RespondFailed
   | PrChecksRerun
+  | IssueAttempted
+  | IssueCreated
+  | IssuePosted
+  | IssueClosed
+  | IssueFailed
 
 export type Effect =
   /**
@@ -749,6 +796,11 @@ export type Effect =
    * respond.pushed, respond.published, respond.deferred, respond.failed로 알린다
    */
   | { type: 'respond'; taskId: string; rounds: string[]; resume?: boolean }
+  /**
+   * 이슈 기록의 대기열을 앞부터 게시한다 (I98, D344). main은 처리 줄 밖에서 하나씩 게시하고 결과를 issue.attempted,
+   * issue.created, issue.posted, issue.closed, issue.failed로 알린다. 이미 게시하는 중이면 그 줄이 이어서 한다
+   */
+  | { type: 'publishIssue' }
 
 export interface Transition {
   work: WorkState
@@ -1101,6 +1153,11 @@ export interface NewWork {
   settings?: WorkSettingsPatch
   /** 앱이 쓴 request.md의 해시 (D124) */
   requestHash?: string
+  /**
+   * 이슈 기록 (I96). 이슈 기록이 켜진 프로젝트면 있고, linked는 새 Work 대화상자에 적은 기존 이슈 번호(D338), mark는 보이지
+   * 않는 표시의 id(D349)다. 없으면 이슈 기록이 없다
+   */
+  issue?: { linked: number | null; mark: string }
   at: string
 }
 
@@ -1119,6 +1176,7 @@ export function createWork(input: NewWork): Transition {
     // 빈 값은 앱 설정을 따른다는 뜻이라 두지 않는다 (D72)
     settings: mergeWorkSettings({}, input.settings ?? {}),
     file_hashes: hashes,
+    ...(input.issue ? { issue: newIssueRecord(input.issue.linked, input.issue.mark) } : {}),
     tasks: [],
   }
   const intake = { ...newTask(empty, 'intake', input.at), engine: input.engine ?? 'claude' }
@@ -1173,7 +1231,13 @@ const BLOCKED_BY_OPERATION: readonly MachineEvent['type'][] = [
 ]
 
 export function transition(work: WorkState, event: MachineEvent, config: AppConfig): Transition {
-  const result = countdownEffects(work, dispatch(work, event, config))
+  return queueIssue(
+    withEngines(work, countdownEffects(work, dispatch(work, event, config)), config),
+  )
+}
+
+/** 이번 전이로 새로 만든 task에 지금 설정의 엔진을 적는다 */
+function withEngines(work: WorkState, result: Transition, config: AppConfig): Transition {
   if (result.work.tasks === work.tasks) return result
   const previousIds = new Set(work.tasks.map((t) => t.id))
   let created = false
@@ -1264,6 +1328,12 @@ function dispatch(work: WorkState, event: MachineEvent, config: AppConfig): Tran
       return respondFailed(work, event)
     case 'pr.checksRerun':
       return prChecksRerun(work, event)
+    case 'issue.attempted':
+    case 'issue.created':
+    case 'issue.posted':
+    case 'issue.closed':
+    case 'issue.failed':
+      return issueEvent(work, event)
     default:
       return taskTransition(work, event, config)
   }
@@ -1308,6 +1378,11 @@ type TaskMachineEvent = Exclude<
   | RespondDeferred
   | RespondFailed
   | PrChecksRerun
+  | IssueAttempted
+  | IssueCreated
+  | IssuePosted
+  | IssueClosed
+  | IssueFailed
 >
 
 function taskTransition(work: WorkState, event: TaskMachineEvent, config: AppConfig): Transition {
@@ -3093,5 +3168,112 @@ function prChecksRerun(work: WorkState, e: PrChecksRerun): Transition {
   return {
     work,
     effects: [log(work, e.at, 'pr.checks_rerun', { runs: [...e.runs], checks: [...e.checks] })],
+  }
+}
+
+// ---------- 이슈 기록 (설계 3.7, D336~D349, I97) ----------
+
+/**
+ * 전이가 남긴 이벤트로 이슈 기록의 대기열에 항목을 더하고 게시를 맡긴다 (I97). 더할 것이 없으면 그대로다. 항목은
+ * core/issue issueEntries가 정한다
+ */
+function queueIssue(result: Transition): Transition {
+  const issue = result.work.issue
+  if (!issue) return result
+  const events = result.effects.flatMap((e) => (e.type === 'log' ? [e.event] : []))
+  const added = issueEntries(result.work, events)
+  if (added.length === 0) return result
+  return {
+    ...result,
+    work: { ...result.work, issue: { ...issue, pending: [...issue.pending, ...added] } },
+    effects: [...result.effects, { type: 'publishIssue' }],
+  }
+}
+
+type IssueMachineEvent = IssueAttempted | IssueCreated | IssuePosted | IssueClosed | IssueFailed
+
+/**
+ * 게시의 결과 (I98, D344, D349). 대기열 맨 앞의 키와 맞지 않는 늦은 결과는 무시한다. 게시하면 맨 앞을 빼서 게시한 것에
+ * 적고 시도와 실패 기록을 지운다
+ */
+function issueEvent(work: WorkState, e: IssueMachineEvent): Transition {
+  const issue = work.issue
+  const head = issue?.pending[0]
+  if (!issue || !head) return unchanged(work)
+  const key = issueKey(head)
+  const done = (
+    patch: Partial<IssueRecord>,
+    posted: IssueRecord['posted'][number],
+  ): IssueRecord => ({
+    ...omit(issue, 'attempted_at', 'failure'),
+    ...patch,
+    pending: issue.pending.slice(1),
+    posted: [...issue.posted, posted],
+  })
+  switch (e.type) {
+    case 'issue.attempted':
+      if (e.key !== key) return unchanged(work)
+      return { work: { ...work, issue: { ...issue, attempted_at: e.at } }, effects: [] }
+    case 'issue.created': {
+      if (head.kind !== 'issue') return unchanged(work)
+      const next = { ...work, issue: done({ number: e.number, url: e.url }, { key, at: e.at }) }
+      return {
+        work: next,
+        effects: [
+          log(next, e.at, 'issue.created', {
+            number: e.number,
+            url: e.url,
+            labeled: e.labeled,
+            ...(e.found ? { found: true } : {}),
+          }),
+        ],
+      }
+    }
+    case 'issue.posted': {
+      if (e.key !== key || head.kind === 'issue' || head.kind === 'close') return unchanged(work)
+      const url = issue.url ?? issueUrlOf(e.url)
+      const next = {
+        ...work,
+        issue: done(
+          { url },
+          {
+            key,
+            at: e.at,
+            ...(e.commentId !== null ? { comment_id: e.commentId } : {}),
+            url: e.url,
+          },
+        ),
+      }
+      return {
+        work: next,
+        effects: [
+          log(next, e.at, 'issue.posted', {
+            key,
+            comment_id: e.commentId,
+            ...(e.found ? { found: true } : {}),
+          }),
+        ],
+      }
+    }
+    case 'issue.closed': {
+      if (head.kind !== 'close') return unchanged(work)
+      const reason: IssueCloseReason = head.reason
+      const next = { ...work, issue: done({ closed: { at: e.at, reason } }, { key, at: e.at }) }
+      return { work: next, effects: [log(next, e.at, 'issue.closed', { reason })] }
+    }
+    case 'issue.failed': {
+      if (e.key !== key) return unchanged(work)
+      const next = { ...work, issue: { ...issue, failure: { at: e.at, key, error: e.error } } }
+      return {
+        work: next,
+        effects: [
+          log(next, e.at, 'issue.post_failed', {
+            key,
+            error: e.error,
+            pending: issue.pending.length,
+          }),
+        ],
+      }
+    }
   }
 }

@@ -446,6 +446,8 @@ export interface ProjectView {
   /** 프로젝트 설정 (5.1.2, D185) */
   allowedBots: string[]
   mergeMethod: MergeMethod | null
+  /** 이슈 기록이 켜져 있다 (D337) */
+  issueLog: boolean
 }
 
 export interface TaskView {
@@ -567,6 +569,8 @@ export interface WorkView {
   cleanup: CleanupView | null
   /** 끊긴 작업 (시나리오 9-4, D121~D123). 있으면 [다시 시도]·[무시]만 받는다 */
   operation: OperationView | null
+  /** 이슈 기록 (설계 3.7). 이슈 기록이 켜진 프로젝트에서 만든 Work에 있다 */
+  issue: IssueView | null
   /** 재시작 때와 실행 중의 알림: 끝낸 고아 프로세스, 앱 밖에서 바뀐 파일 (D76, D121, D124) */
   notices: NoticeView[]
   tasks: TaskView[]
@@ -576,6 +580,23 @@ export interface WorkView {
   problems: string[]
   /** 바뀔 때마다 오른다. 렌더러는 이 값이 바뀌면 승인 화면을 다시 불러온다 */
   revision: number
+}
+
+/** 이슈 기록 (설계 3.7, D344): 패널의 이슈 줄 */
+export interface IssueView {
+  /** 이슈 번호와 주소. 새 이슈를 아직 만들지 못했으면 null이다 */
+  number: number | null
+  url: string | null
+  /** 새 Work 대화상자에 적은 기존 이슈 (D338) */
+  linked: boolean
+  /** 아직 게시하지 못한 항목 수 */
+  pending: number
+  /** 게시하는 중 */
+  publishing: boolean
+  /** 마지막으로 실패한 게시. 있으면 [다시 시도]를 보인다 */
+  failure: { at: string; error: string } | null
+  /** 앱이 닫았다 (D346) */
+  closed: boolean
 }
 
 /** 끊긴 작업의 알림 (시나리오 9-4, D121~D123): 무엇이 어디서 끊겼는지와 [다시 시도]·[무시]가 할 일 */
@@ -873,6 +894,8 @@ export interface NewWorkInput {
   baseLocation: 'local' | 'remote'
   /** Work별 설정 (D72): 단계별 자동 승인과 스킬별 질문 방식. 없는 것은 앱 설정을 따른다 */
   settings?: WorkSettings
+  /** 요청이 온 기존 이슈의 번호 (D338). 이슈 기록이 켜진 프로젝트에서만 쓴다. 없으면 새 이슈를 만든다 */
+  issueNumber?: number | null
 }
 
 export interface ApproveOptions {

@@ -149,10 +149,26 @@ export async function settle(h: Harness, workKey: string): Promise<void> {
   await h.relay.work(workKey)?.enqueue(async () => undefined)
 }
 
-/** 프로젝트를 등록하고 id를 돌려준다 */
-export async function register(h: Harness, repo: string, branch = 'main'): Promise<string> {
+/**
+ * 프로젝트를 등록하고 id를 돌려준다. 이슈 기록(D337)은 끈다: 이슈 기록 시험(issue.test.ts)이 issueLog로 켜서 보고, 다른
+ * 흐름 시험은 이슈 기록 전과 같은 gh 호출로 본다 (I101)
+ */
+export async function register(
+  h: Harness,
+  repo: string,
+  branch = 'main',
+  opts: { issueLog?: boolean } = {},
+): Promise<string> {
   const r = await h.relay.registerProject(repo, branch)
   if (!r.ok) throw new Error(`등록 실패: ${r.error}`)
   if (!r.projectId) throw new Error('project id 없음')
+  if (!opts.issueLog) {
+    const off = await h.relay.updateProjectSettings(r.projectId, {
+      allowed_bots: [],
+      merge_method: null,
+      issue_log: false,
+    })
+    if (!off.ok) throw new Error(`이슈 기록을 끄지 못함: ${off.error}`)
+  }
   return r.projectId
 }

@@ -31,6 +31,13 @@ import {
   GhApiError,
   ghApiPost,
   ghCreatePr,
+  ghIssueClose,
+  ghIssueComment,
+  ghIssueComments,
+  ghIssueCreate,
+  ghIssueList,
+  ghLabelCreate,
+  ghLabelExists,
   ghMerge,
   ghMergeSettings,
   ghOpenPr,
@@ -38,6 +45,7 @@ import {
   ghRerunFailed,
   ghVersion,
   type GhPrOptions,
+  type GhRepoOptions,
 } from '../adapters/gh'
 import {
   changedPaths,
@@ -137,6 +145,24 @@ import {
   stoppedVerify,
 } from '../core/delivery'
 import { NODE_INFO, RESPOND, workType } from '../core/pipeline'
+import {
+  ISSUE_LABEL,
+  ISSUE_LABEL_COLOR,
+  ISSUE_LABEL_DESCRIPTION,
+  commentIdOf,
+  commentShowsIntent,
+  endComment,
+  findMarked,
+  issueBody,
+  issueKey,
+  issueMarker,
+  issueNumberOf,
+  issueTitle,
+  stepComment,
+  taskComment,
+  withCloses,
+  type IssueArtifact,
+} from '../core/issue'
 import {
   CHECK_WAIT_MS,
   allowedMethods,
@@ -270,6 +296,7 @@ import type {
   Completion,
   DeliverInput,
   DeliverResult,
+  IssueView,
   KnowledgeChange,
   MergeInfoResult,
   MergeInput,
@@ -290,6 +317,7 @@ import type {
   DeliverOperation,
   DeliveryChoice,
   FormatIssue,
+  IssueEntry,
   MergeMethod,
   OwnedFile,
   RespondOperation,
@@ -582,6 +610,10 @@ export class WorkRunner {
    * 시작하지 않는다
    */
   private prStartRead = false
+  /** 이슈 기록의 게시 줄 (I98). 한 번에 하나이고 Work의 처리 줄 밖에서 돈다 */
+  private issueRunning: Promise<void> | null = null
+  /** 게시 줄이 도는 동안 다시 게시하라는 요청이 왔다. 줄이 끝나면 한 번 더 돈다 */
+  private issueAgain = false
 
   /**
    * workText는 앱이 마지막으로 쓰거나 읽은 work.json의 내용이다. 다음에 쓰기 전에 이것과 비교한다 (D124).
@@ -760,6 +792,9 @@ export class WorkRunner {
         return
       case 'respond':
         await this.respondCode(e)
+        return
+      case 'publishIssue':
+        this.publishIssueSoon()
         return
     }
   }
@@ -2589,12 +2624,14 @@ export class WorkRunner {
           facts.prExisting = true
         } else {
           facts.draft = this.ctx.config().pr_draft
+          // 이슈 기록이 있으면 본문 끝에 Closes를 붙인다 (D346). 이어받은 PR의 본문은 고치지 않는다 (D349)
+          const issue = this.work.issue?.number ?? null
           facts.prUrl = await ghCreatePr(this.ctx.ghBin, {
             ...gh,
             base: e.base,
             head: e.branch,
             title: pr.title,
-            body: pr.body,
+            body: issue === null ? pr.body : withCloses(pr.body, issue),
             draft: facts.draft,
           })
         }
@@ -4704,6 +4741,213 @@ export class WorkRunner {
     this.ptyOf(taskId)?.resize(cols, rows)
   }
 
+  // ---------- 이슈 기록 (설계 3.7, D336~D349, I98~I100) ----------
+
+  /**
+   * 대기열을 앞부터 게시한다 (I98). 이미 도는 줄이 있으면 그 줄이 끝난 뒤 한 번 더 돈다. 기다리지 않는다: 게시는 Work의
+   * 처리 줄 밖에서 하고 결과만 줄로 넣는다(D344)
+   */
+  publishIssueSoon(): void {
+    if (this.closing || !this.work.issue?.pending.length) return
+    if (this.issueRunning) {
+      this.issueAgain = true
+      return
+    }
+    this.issueRunning = this.publishIssue()
+      .catch((e: unknown) => this.problem(`이슈 게시 실패: ${message(e)}`))
+      .finally(() => {
+        this.issueRunning = null
+        this.changed()
+        if (this.issueAgain) {
+          this.issueAgain = false
+          this.publishIssueSoon()
+        }
+      })
+    this.changed()
+  }
+
+  /** 패널의 [다시 시도] (D344): 대기열의 앞부터 다시 게시한다 */
+  retryIssue(): Promise<CommandResult> {
+    if (!this.work.issue?.pending.length)
+      return Promise.resolve({ ok: false, error: '게시할 것이 없음' })
+    this.publishIssueSoon()
+    return Promise.resolve({ ok: true })
+  }
+
+  /** 하던 게시가 끝나기를 기다린다. 시험 도구가 임시 폴더를 지우기 전에 부른다 (prIdle과 같음) */
+  async issueIdle(): Promise<void> {
+    while (this.issueRunning) await this.issueRunning
+  }
+
+  /**
+   * 앞부터 하나씩 게시한다. 실패하면 issue.failed를 넣고 멈춘다: 다음 할 일이나 [다시 시도]가 앞부터 다시 한다 (D344). gh에
+   * 줄 레포(origin)는 한 번 도는 동안 한 번만 읽는다
+   */
+  private async publishIssue(): Promise<void> {
+    let gh: GhRepoOptions | null = null
+    for (;;) {
+      const entry = this.work.issue?.pending[0]
+      if (this.closing || !entry) return
+      const key = issueKey(entry)
+      try {
+        gh ??= await this.issueRepo()
+        await this.publishEntry(entry, key, gh)
+      } catch (err) {
+        const error = message(err)
+        console.error(`[${this.key}] 이슈 게시 실패 (${key}): ${error}`)
+        await this.enqueue(() => this.feed({ type: 'issue.failed', at: this.ctx.at(), key, error }))
+        return
+      }
+      // 결과가 대기열 맨 앞을 빼지 않았으면(늦은 결과 등) 같은 것을 다시 게시하지 않게 멈춘다
+      if (this.work.issue?.pending[0] === entry) return
+    }
+  }
+
+  /** 이슈를 둘 레포: PR 만들기와 같은 origin의 --repo (I99) */
+  private async issueRepo(): Promise<GhRepoOptions> {
+    const repo = this.project.repo_path
+    const origin = await remoteUrl(repo, 'origin', { env: this.ctx.env })
+    if (!origin) throw new Error('origin 원격이 없음')
+    return { repo: ghRepo(origin), cwd: repo, env: this.ctx.env }
+  }
+
+  /**
+   * 항목 하나를 게시한다 (I99). 시도한 적이 있으면 결과를 모를 수 있어 먼저 원격에서 표시를 찾는다 (D349). 시도한 때를
+   * 적은 뒤 게시하고, 결과를 줄로 넣는다
+   */
+  private async publishEntry(entry: IssueEntry, key: string, gh: GhRepoOptions): Promise<void> {
+    const issue = this.work.issue
+    if (!issue) return
+    const bin = this.ctx.ghBin
+    const marker = issueMarker(issue.mark, key)
+    const tried = issue.attempted_at !== undefined
+    const feed = (event: MachineEvent) => this.enqueue(() => this.feed(event))
+    const attempt = () => feed({ type: 'issue.attempted', at: this.ctx.at(), key })
+    if (entry.kind === 'issue') {
+      if (tried) {
+        const found = findMarked(await ghIssueList(bin, gh), marker)
+        const number = found ? issueNumberOf(found.url) : null
+        if (found && number !== null) {
+          await feed({
+            type: 'issue.created',
+            at: this.ctx.at(),
+            number,
+            url: found.url,
+            labeled: found.labels.includes(ISSUE_LABEL),
+            found: true,
+          })
+          return
+        }
+      }
+      const intent = await this.intentText(entry.intent_version)
+      const title = issueTitle(intent, this.work.work_id)
+      const body = issueBody({
+        workId: this.work.work_id,
+        mark: issue.mark,
+        type: workType(this.work),
+        intent,
+      })
+      // 라벨이 없으면 만든다 (D348). 만들지 못하면(권한) 라벨 없이 만든다 (D349)
+      const labeled =
+        (await ghLabelExists(bin, { ...gh, name: ISSUE_LABEL })) ||
+        (await ghLabelCreate(bin, {
+          ...gh,
+          name: ISSUE_LABEL,
+          color: ISSUE_LABEL_COLOR,
+          description: ISSUE_LABEL_DESCRIPTION,
+        }))
+      await attempt()
+      const url = await ghIssueCreate(bin, {
+        ...gh,
+        title,
+        body,
+        label: labeled ? ISSUE_LABEL : null,
+      })
+      const number = issueNumberOf(url)
+      if (number === null) throw new Error(`이슈 주소에서 번호를 읽지 못함: ${url}`)
+      await feed({ type: 'issue.created', at: this.ctx.at(), number, url, labeled })
+      return
+    }
+    if (issue.number === null) throw new Error('이슈를 아직 만들지 못함')
+    const target = { ...gh, number: issue.number }
+    if (entry.kind === 'close') {
+      await attempt()
+      await ghIssueClose(bin, { ...target, reason: entry.reason })
+      await feed({ type: 'issue.closed', at: this.ctx.at() })
+      return
+    }
+    if (tried) {
+      const found = findMarked(await ghIssueComments(bin, target), marker)
+      if (found) {
+        await feed({
+          type: 'issue.posted',
+          at: this.ctx.at(),
+          key,
+          commentId: commentIdOf(found.url),
+          url: found.url,
+          found: true,
+        })
+        return
+      }
+    }
+    const body = await this.issueComment(entry, issue.mark)
+    await attempt()
+    const url = await ghIssueComment(bin, { ...target, body })
+    await feed({ type: 'issue.posted', at: this.ctx.at(), key, commentId: commentIdOf(url), url })
+  }
+
+  /** 승인한 intent의 한 버전 (D339). 읽지 못하면 다른 버전으로 대신하지 않고 실패한다 */
+  private async intentText(version: number): Promise<string> {
+    const text = await this.files.readIntentVersion(version, this.work.intent?.version ?? null)
+    if (text === null) throw new Error(`intent v${version}을 읽지 못함`)
+    return text
+  }
+
+  /** 코멘트의 글 (D339, D341, D347). task의 파일은 게시할 때 읽는다 (D349) */
+  private async issueComment(
+    entry: Extract<IssueEntry, { kind: 'task' | 'step' | 'end' }>,
+    mark: string,
+  ): Promise<string> {
+    if (entry.kind === 'end') return endComment(mark, entry.text)
+    const task = this.task(entry.task_id)
+    if (!task) throw new Error(`${entry.task_id} 없음`)
+    if (entry.kind === 'step') {
+      const discarded = (task.selection?.discarded ?? []).map((id) => {
+        const t = this.task(id)
+        return t ? `${t.id} ${NODE_INFO[t.node].title}` : id
+      })
+      return stepComment({ mark, task, discarded })
+    }
+    const order: readonly string[] = NODE_INFO[task.node].artifacts
+    const rank = (n: string) => (order.includes(n) ? order.indexOf(n) : order.length)
+    const artifacts: IssueArtifact[] = (await this.files.artifactTexts(task)).sort(
+      (a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name),
+    )
+    const handoff = await readText(path.join(this.files.taskDir(task), 'handoff.md'))
+    const version = entry.intent_version
+    const issue = this.work.issue
+    const intent =
+      task.node === 'intake' && version !== undefined && issue && commentShowsIntent(issue, version)
+        ? { version, text: await this.intentText(version) }
+        : null
+    return taskComment({ mark, task, handoff, artifacts, intent })
+  }
+
+  /** 패널의 이슈 줄 (설계 3.7, D344) */
+  private issueView(): IssueView | null {
+    const issue = this.work.issue
+    if (!issue) return null
+    return {
+      number: issue.number,
+      url: issue.url,
+      linked: issue.linked,
+      pending: issue.pending.length,
+      publishing: this.issueRunning !== null,
+      failure: issue.failure ? { at: issue.failure.at, error: issue.failure.error } : null,
+      closed: issue.closed !== undefined,
+    }
+  }
+
   // ---------- 스냅샷 (I14) ----------
 
   private changed(): void {
@@ -4744,6 +4988,7 @@ export class WorkRunner {
       pr: this.prPanel(),
       cleanup: this.cleanupView(),
       operation: operationView(w),
+      issue: this.issueView(),
       notices: this.noticeViews(),
       tasks: w.tasks.map((t) => this.taskView(t)),
       current: currentTask(w)?.id ?? null,

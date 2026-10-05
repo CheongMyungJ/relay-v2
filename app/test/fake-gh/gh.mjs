@@ -26,6 +26,12 @@
 // - FAKE_GH_FAIL=list|create|view|api|event|log|merge|post|rerun(쉼표로 여럿)면 그 명령이 종료 코드 1로 실패한다. api는
 //   REST 요청 모두, event는 실행 읽기만, post는 POST만이다. merge는 새 커밋이 생긴 직후 GitHub가 준 "Pull Request is not
 //   mergeable"이다(M9 [실제]). rerun은 gh가 403에 쓰는 "run <id> cannot be rerun; …"이다(3절).
+// - 이슈 기록(M19): `label list --repo R --search S --json name`, `label create <이름> --repo R`(이미 있으면 실패), `issue create --repo R --title T --body-file F [--label L]`
+//   (라벨이 없으면 "could not add label"), `issue comment <n> --repo R --body-file F`(코멘트 주소 #issuecomment-<id>를 찍음),
+//   `issue close <n> --repo R --reason …`(이미 닫혔으면 알리고 성공), `issue list --repo R --author @me --state all --json url,body,labels`(이슈는 모두 앱의 사람이 만든 것),
+//   `issue view <n> --repo R --json comments`. 라벨과 이슈는 FAKE_GH_RECORD/issues.json에 둔다. 그 faults는 이슈 만들기와
+//   코멘트마다 앞에서 하나씩 꺼낸다: error는 하지 않고 실패, posted는 한 뒤 실패. FAKE_GH_FAIL의 issue는 issue 명령 모두,
+//   label은 라벨 만들기(권한 없음)다.
 // - FAKE_GH_RECORD 폴더가 있으면 명령마다 인자, cwd, --body-file의 내용을 fake-gh.jsonl에 한 줄씩 남긴다.
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -488,6 +494,162 @@ if (cmd === 'pr' && sub === 'merge') {
   pr.merge_commit = pr.head_oid
   savePrs(prs)
   // TTY가 아니면 성공해도 아무것도 찍지 않는다 (S7 관찰 6)
+  process.exit(0)
+}
+
+// ---------- 이슈 기록 (M19, I99, I101) ----------
+
+/** issues.json: 레포마다의 라벨과 이슈(코멘트 포함). faults는 이슈 만들기·코멘트마다 앞에서 하나씩 꺼내 쓴다 */
+function issuesFile() {
+  return recordDir ? path.join(recordDir, 'issues.json') : null
+}
+
+function loadIssues() {
+  const file = issuesFile()
+  const v = file && fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {}
+  return { labels: {}, issues: [], faults: [], next_comment: 5001, ...v }
+}
+
+function saveIssues(v) {
+  const file = issuesFile()
+  if (file) writeJson(file, v)
+}
+
+/** --repo가 GitHub 주소면 그 레포의 이슈 주소, 로컬 경로면 github.test/local/<레포 이름>의 주소 (prUrl과 같은 꼴) */
+function issueUrl(repo, number) {
+  return prUrl(repo, number).replace(/\/pull\/\d+$/, `/issues/${number}`)
+}
+
+function findIssue(v, repo, number) {
+  const issue = v.issues.find((i) => i.repo === repo && i.number === number)
+  if (!issue)
+    fail(
+      `GraphQL: Could not resolve to an issue or pull request with the number of ${number}. (repository.issue)`,
+    )
+  return issue
+}
+
+/** 다음 결함: error는 하지 않고 실패, posted는 한 뒤 실패(결과를 모르는 요청, D349) */
+function nextFault(v) {
+  const f = v.faults.shift() ?? 'ok'
+  saveIssues(v)
+  return f
+}
+
+if (cmd === 'label' && sub === 'list') {
+  record({ type: 'label list' })
+  if (failing('issue')) fail('HTTP 502: Bad Gateway (가짜 gh)')
+  const search = opt('--search') ?? ''
+  const names = (loadIssues().labels[opt('--repo')] ?? []).filter((n) => n.includes(search))
+  process.stdout.write(`${JSON.stringify(names.map((name) => ({ name })))}\n`)
+  process.exit(0)
+}
+
+if (cmd === 'label' && sub === 'create') {
+  record({ type: 'label create' })
+  const repo = opt('--repo')
+  const name = argv[2]
+  if (failing('label')) fail('HTTP 403: Must have admin rights to Repository. (가짜 gh)')
+  const v = loadIssues()
+  const labels = v.labels[repo] ?? []
+  if (labels.includes(name)) {
+    fail(
+      `label with name "${name}" already exists; use \`--force\` to update its color and description`,
+    )
+  }
+  v.labels[repo] = [...labels, name]
+  saveIssues(v)
+  process.exit(0)
+}
+
+if (cmd === 'issue' && sub === 'create') {
+  const bodyFile = opt('--body-file')
+  const body = bodyFile ? fs.readFileSync(bodyFile, 'utf8') : undefined
+  record({ type: 'issue create', body })
+  if (failing('issue')) fail('HTTP 502: Bad Gateway (가짜 gh)')
+  const repo = opt('--repo')
+  const title = opt('--title')
+  const label = opt('--label')
+  if (!repo || !title || body === undefined) fail('must provide `--title` and `--body` (가짜 gh)')
+  const v = loadIssues()
+  if (label && !(v.labels[repo] ?? []).includes(label))
+    fail(`could not add label: '${label}' not found`)
+  const fault = nextFault(v)
+  if (fault === 'error') fail('HTTP 502: Bad Gateway (가짜 gh)')
+  const number = v.issues.filter((i) => i.repo === repo).length + 1
+  const issue = {
+    number,
+    url: issueUrl(repo, number),
+    repo,
+    title,
+    body,
+    labels: label ? [label] : [],
+    state: 'open',
+    comments: [],
+  }
+  v.issues.push(issue)
+  saveIssues(v)
+  if (fault === 'posted') fail('HTTP 502: Bad Gateway (가짜 gh)')
+  process.stdout.write(`${issue.url}\n`)
+  process.exit(0)
+}
+
+if (cmd === 'issue' && sub === 'comment') {
+  const bodyFile = opt('--body-file')
+  const body = bodyFile ? fs.readFileSync(bodyFile, 'utf8') : undefined
+  record({ type: 'issue comment', body })
+  if (failing('issue')) fail('HTTP 502: Bad Gateway (가짜 gh)')
+  const repo = opt('--repo')
+  if (body === undefined) fail('가짜 gh: 본문이 없음')
+  const v = loadIssues()
+  const issue = findIssue(v, repo, Number(argv[2]))
+  const fault = nextFault(v)
+  if (fault === 'error') fail('HTTP 502: Bad Gateway (가짜 gh)')
+  const id = v.next_comment
+  v.next_comment = id + 1
+  const url = `${issue.url}#issuecomment-${id}`
+  issue.comments.push({ id, url, body })
+  saveIssues(v)
+  if (fault === 'posted') fail('HTTP 502: Bad Gateway (가짜 gh)')
+  process.stdout.write(`${url}\n`)
+  process.exit(0)
+}
+
+if (cmd === 'issue' && sub === 'close') {
+  record({ type: 'issue close' })
+  if (failing('issue')) fail('HTTP 502: Bad Gateway (가짜 gh)')
+  const v = loadIssues()
+  const issue = findIssue(v, opt('--repo'), Number(argv[2]))
+  if (issue.state === 'closed') {
+    process.stderr.write(`! Issue #${issue.number} (${issue.title}) is already closed\n`)
+    process.exit(0)
+  }
+  issue.state = 'closed'
+  issue.state_reason = opt('--reason')
+  saveIssues(v)
+  process.exit(0)
+}
+
+if (cmd === 'issue' && sub === 'list') {
+  record({ type: 'issue list' })
+  if (failing('issue')) fail('HTTP 502: Bad Gateway (가짜 gh)')
+  const repo = opt('--repo')
+  const limit = Number(opt('--limit') ?? 30)
+  const list = loadIssues()
+    .issues.filter((i) => i.repo === repo)
+    .sort((a, b) => b.number - a.number)
+    .slice(0, limit)
+    .map((i) => ({ url: i.url, body: i.body, labels: i.labels.map((name) => ({ name })) }))
+  process.stdout.write(`${JSON.stringify(list)}\n`)
+  process.exit(0)
+}
+
+if (cmd === 'issue' && sub === 'view') {
+  record({ type: 'issue view' })
+  if (failing('issue')) fail('HTTP 502: Bad Gateway (가짜 gh)')
+  const issue = findIssue(loadIssues(), opt('--repo'), Number(argv[2]))
+  const comments = issue.comments.map((c) => ({ url: c.url, body: c.body }))
+  process.stdout.write(`${JSON.stringify({ comments })}\n`)
   process.exit(0)
 }
 

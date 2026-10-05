@@ -102,10 +102,7 @@ export interface CreatePrOptions extends GhRepoOptions {
  * 돌려준다 (gh 소스 pkg/cmd/pr/create).
  */
 export async function ghCreatePr(bin: string, o: CreatePrOptions): Promise<string> {
-  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'relay-pr-'))
-  const bodyFile = path.join(dir, 'body.md')
-  try {
-    await fsp.writeFile(bodyFile, o.body, 'utf8')
+  return withBodyFile(o.body, async (bodyFile) => {
     const r = await run(
       bin,
       [
@@ -126,16 +123,33 @@ export async function ghCreatePr(bin: string, o: CreatePrOptions): Promise<strin
       { cwd: o.cwd, env: ghEnv(o.env), timeoutMs: 120_000 },
     )
     if (r.code !== 0) throw new GhError(`gh pr create 실패: ${describeFailure(r)}`)
-    const url = r.stdout
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter((l) => /^https?:\/\//.test(l))
-      .pop()
+    const url = lastUrl(r.stdout)
     if (!url) throw new GhError(`gh pr create가 PR 주소를 찍지 않음: ${r.stdout.slice(0, 200)}`)
     return url
+  })
+}
+
+/** 본문을 임시 파일로 넘긴다(--body-file): 명령줄 길이와 인용을 피한다 */
+async function withBodyFile<T>(body: string, fn: (file: string) => Promise<T>): Promise<T> {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'relay-body-'))
+  const file = path.join(dir, 'body.md')
+  try {
+    await fsp.writeFile(file, body, 'utf8')
+    return await fn(file)
   } finally {
     await fsp.rm(dir, { recursive: true, force: true })
   }
+}
+
+/** gh가 찍은 출력에서 마지막 주소 줄 */
+function lastUrl(stdout: string): string | null {
+  return (
+    stdout
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => /^https?:\/\//.test(l))
+      .pop() ?? null
+  )
 }
 
 // ---------- PR 진행 (시나리오 10). 명령은 S7에서 확인한 것이다 (docs/spikes.md S7, PR #14) ----------
@@ -375,4 +389,214 @@ export async function ghRerunFailed(
     timeoutMs: 60_000,
   })
   return r.code === 0 ? { ok: true } : { ok: false, error: describeFailure(r) }
+}
+
+// ---------- 이슈 기록 (설계 3.7, I99). 레포는 PR 만들기와 같은 origin의 --repo다 ----------
+
+/**
+ * 레포에 라벨이 있는가 (D348): gh label list --repo --search <이름> --json name. 찾기는 비슷한 이름도 주므로 이름이 같은
+ * 것만 본다
+ */
+export async function ghLabelExists(
+  bin: string,
+  o: GhRepoOptions & { name: string },
+): Promise<boolean> {
+  const r = await run(
+    bin,
+    ['label', 'list', '--repo', o.repo, '--search', o.name, '--json', 'name', '--limit', '100'],
+    { cwd: o.cwd, env: ghEnv(o.env), timeoutMs: 60_000 },
+  )
+  if (r.code !== 0) throw new GhError(`gh label list 실패: ${describeFailure(r)}`)
+  const list = parseJson('gh label list', r.stdout || '[]')
+  return (
+    Array.isArray(list) &&
+    list.some(
+      (x: unknown) =>
+        !!x && typeof x === 'object' && (x as Record<string, unknown>)['name'] === o.name,
+    )
+  )
+}
+
+/**
+ * 라벨을 만든다 (D348): gh label create <이름> --repo --color --description. 이미 있거나 권한이 없으면 실패하고, 부른 쪽은
+ * 실패를 넘긴다(D349). 만들었으면 true
+ */
+export async function ghLabelCreate(
+  bin: string,
+  o: GhRepoOptions & { name: string; color: string; description: string },
+): Promise<boolean> {
+  const r = await run(
+    bin,
+    [
+      'label',
+      'create',
+      o.name,
+      '--repo',
+      o.repo,
+      '--color',
+      o.color,
+      '--description',
+      o.description,
+    ],
+    { cwd: o.cwd, env: ghEnv(o.env), timeoutMs: 60_000 },
+  )
+  return r.code === 0
+}
+
+/**
+ * 이슈를 만든다 (D336): gh issue create --repo --title --body-file [--label]. 성공하면 gh가 찍는 이슈 주소를 돌려준다
+ * (gh 소스 pkg/cmd/issue/create)
+ */
+export async function ghIssueCreate(
+  bin: string,
+  o: GhRepoOptions & { title: string; body: string; label: string | null },
+): Promise<string> {
+  return withBodyFile(o.body, async (file) => {
+    const r = await run(
+      bin,
+      [
+        'issue',
+        'create',
+        '--repo',
+        o.repo,
+        '--title',
+        o.title,
+        '--body-file',
+        file,
+        ...(o.label ? ['--label', o.label] : []),
+      ],
+      { cwd: o.cwd, env: ghEnv(o.env), timeoutMs: 120_000 },
+    )
+    if (r.code !== 0) throw new GhError(`gh issue create 실패: ${describeFailure(r)}`)
+    const url = lastUrl(r.stdout)
+    if (!url)
+      throw new GhError(`gh issue create가 이슈 주소를 찍지 않음: ${r.stdout.slice(0, 200)}`)
+    return url
+  })
+}
+
+/**
+ * 이슈에 코멘트를 단다 (D339, D341, D347): gh issue comment <n> --repo --body-file. 성공하면 gh가 찍는 코멘트 주소
+ * (…#issuecomment-<id>)를 돌려준다 (gh 소스 pkg/cmd/issue/comment)
+ */
+export async function ghIssueComment(
+  bin: string,
+  o: GhRepoOptions & { number: number; body: string },
+): Promise<string> {
+  return withBodyFile(o.body, async (file) => {
+    const r = await run(
+      bin,
+      ['issue', 'comment', String(o.number), '--repo', o.repo, '--body-file', file],
+      { cwd: o.cwd, env: ghEnv(o.env), timeoutMs: 120_000 },
+    )
+    if (r.code !== 0) throw new GhError(`gh issue comment 실패: ${describeFailure(r)}`)
+    const url = lastUrl(r.stdout)
+    if (!url)
+      throw new GhError(`gh issue comment가 코멘트 주소를 찍지 않음: ${r.stdout.slice(0, 200)}`)
+    return url
+  })
+}
+
+/**
+ * 이슈를 닫는다 (D346): gh issue close <n> --repo --reason "completed"|"not planned". 이미 닫혔으면 gh는 알리기만 하고
+ * 성공한다 (gh 소스 pkg/cmd/issue/close, I100)
+ */
+export async function ghIssueClose(
+  bin: string,
+  o: GhRepoOptions & { number: number; reason: 'completed' | 'not_planned' },
+): Promise<void> {
+  const r = await run(
+    bin,
+    [
+      'issue',
+      'close',
+      String(o.number),
+      '--repo',
+      o.repo,
+      '--reason',
+      o.reason === 'completed' ? 'completed' : 'not planned',
+    ],
+    { cwd: o.cwd, env: ghEnv(o.env), timeoutMs: 60_000 },
+  )
+  if (r.code !== 0) throw new GhError(`gh issue close 실패: ${describeFailure(r)}`)
+}
+
+/** 원격의 이슈나 코멘트 하나: 주소와 본문 */
+export interface GhIssueText {
+  url: string
+  body: string
+}
+
+/** 원격의 이슈 하나: 주소, 본문, 라벨 */
+export interface GhIssue extends GhIssueText {
+  labels: string[]
+}
+
+/**
+ * 내가 만든 이슈의 주소, 본문, 라벨 (D349): gh issue list --repo --author @me --state all --json url,body,labels --limit 1000.
+ * 게시 결과를 모르는 이슈 만들기를 표시로 찾는다. 작성자로 좁혀 레포가 바빠도 그사이 내가 만든 이슈만 본다
+ */
+export async function ghIssueList(bin: string, o: GhRepoOptions): Promise<GhIssue[]> {
+  const r = await run(
+    bin,
+    [
+      'issue',
+      'list',
+      '--repo',
+      o.repo,
+      '--author',
+      '@me',
+      '--state',
+      'all',
+      '--json',
+      'url,body,labels',
+      '--limit',
+      '1000',
+    ],
+    { cwd: o.cwd, env: ghEnv(o.env), timeoutMs: 120_000 },
+  )
+  if (r.code !== 0) throw new GhError(`gh issue list 실패: ${describeFailure(r)}`)
+  const list = parseJson('gh issue list', r.stdout || '[]')
+  if (!Array.isArray(list)) return []
+  return list.flatMap((x: unknown): GhIssue[] => {
+    const [t] = texts([x])
+    if (!t) return []
+    const raw = (x as Record<string, unknown>)['labels']
+    const labels = Array.isArray(raw)
+      ? raw.flatMap((l: unknown) => {
+          const name = l && typeof l === 'object' ? (l as Record<string, unknown>)['name'] : null
+          return typeof name === 'string' ? [name] : []
+        })
+      : []
+    return [{ ...t, labels }]
+  })
+}
+
+/**
+ * 이슈의 코멘트 (D349): gh issue view <n> --repo --json comments(gh가 모든 쪽을 읽는다). 게시 결과를 모르는 코멘트를 표시로 찾는다
+ */
+export async function ghIssueComments(
+  bin: string,
+  o: GhRepoOptions & { number: number },
+): Promise<GhIssueText[]> {
+  const r = await run(
+    bin,
+    ['issue', 'view', String(o.number), '--repo', o.repo, '--json', 'comments'],
+    { cwd: o.cwd, env: ghEnv(o.env), timeoutMs: 60_000 },
+  )
+  if (r.code !== 0) throw new GhError(`gh issue view 실패: ${describeFailure(r)}`)
+  const v = parseJson('gh issue view', r.stdout)
+  const comments = v && typeof v === 'object' ? (v as Record<string, unknown>)['comments'] : null
+  return texts(comments)
+}
+
+function texts(list: unknown): GhIssueText[] {
+  if (!Array.isArray(list)) return []
+  return list.flatMap((x: unknown) => {
+    if (!x || typeof x !== 'object') return []
+    const r = x as Record<string, unknown>
+    return typeof r['url'] === 'string' && typeof r['body'] === 'string'
+      ? [{ url: r['url'], body: r['body'] }]
+      : []
+  })
 }

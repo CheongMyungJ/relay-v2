@@ -1409,6 +1409,11 @@ button.ready {
   font-family: var(--mono);
 }
 
+/* 이슈 기록 (설계 3.7): 패널 맨 위의 한 줄. 실패하면 .notice.fail로 보인다 */
+.issue-line {
+  margin-bottom: 8px;
+}
+
 .tab.cleanup {
   font-style: italic;
 }
