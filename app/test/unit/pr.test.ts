@@ -961,11 +961,25 @@ describe('PR 읽기의 가장자리 (2026-10 정리)', () => {
         detailsUrl: 'https://vercel.example/2',
       },
     ])
-    expect(checks.map((c) => [c.key, c.bucket]).sort()).toEqual([
-      ['Vercel', 'fail'],
-      ['Vercel', 'pass'],
+    // 이름이 겹칠 때만 커밋 상태의 키와 이름에 "(상태)"를 붙인다: 항목 id와 화면의 줄이 겹치지 않게 (PR #30 리뷰)
+    expect(checks.map((c) => [c.key, c.label, c.bucket]).sort()).toEqual([
+      ['Vercel (상태)', 'Vercel (상태)', 'fail'],
+      ['Vercel', 'Vercel', 'pass'],
     ])
     expect(ciState(checks, true)).toBe('fail')
+    expect(new Set(checks.map((c) => ciItemId(H1, c))).size).toBe(2)
+    // 겹치지 않으면 커밋 상태의 키는 그대로다
+    expect(
+      checksOf([
+        {
+          __typename: 'StatusContext',
+          context: 'deploy/preview',
+          state: 'ERROR',
+          targetUrl: null,
+          startedAt: '2026-09-29T00:00:00Z',
+        },
+      ]).map((c) => c.key),
+    ).toEqual(['deploy/preview'])
   })
 
   it('같은 체크가 다른 작업으로 다시 실패하면 옛 작업의 로그를 버린다', () => {

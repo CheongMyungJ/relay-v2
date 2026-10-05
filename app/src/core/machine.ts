@@ -1868,7 +1868,8 @@ function retry(work: WorkState, task: TaskRecord, e: Retry): Transition {
   const fresh = newTask(work, task.node, e.at, 'resume')
   // 단계 선택으로 들어온 task면 그 선택(추가 지시, 이어서 하기, 폐기한 task)을 이어받는다 (D327)
   const created: TaskRecord = task.selection
-    ? { ...fresh, selection: { ...task.selection, kind: selectionKind(task) } }
+    ? // 코드를 되돌린 것(reset)은 앞 task를 시작할 때 한 일이라 이어받지 않는다: [변경]의 범위가 흐트러진다
+      { ...fresh, selection: { ...task.selection, reset: null, kind: selectionKind(task) } }
     : fresh
   return {
     work: { ...work, tasks: [...work.tasks, created] },

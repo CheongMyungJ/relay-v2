@@ -104,6 +104,7 @@ export const REVIEW_SCHEMA = {
     },
   },
   required: ['issues'],
+  additionalProperties: false,
 } as const
 
 export const REVIEW_SYSTEM =
@@ -223,18 +224,17 @@ export interface ReviewRecord {
 }
 
 /**
- * 지식 검토를 부를 엔진과 모델 (D334): 설정의 엔진, 모델은 RELAY_KNOWLEDGE_REVIEW_MODEL(평가 도구가 씀) → 설정 → 엔진의
- * 기본(claude는 sonnet, codex는 비워 CLI 설정을 따름)
+ * 지식 검토를 부를 엔진과 모델 (D334): 설정의 엔진, 모델은 RELAY_KNOWLEDGE_REVIEW_MODEL(평가 도구가 씀, claude일 때만) →
+ * 설정 → 엔진의 기본(claude는 sonnet, codex는 비워 CLI 설정을 따름)
  */
 export function reviewTarget(
   config: Pick<AppConfig, 'knowledge_review_engine' | 'knowledge_review_model'>,
   env: NodeJS.ProcessEnv,
 ): { engine: AgentEngine; model: string } {
   const engine = config.knowledge_review_engine
-  const model =
-    env['RELAY_KNOWLEDGE_REVIEW_MODEL']?.trim() ||
-    config.knowledge_review_model ||
-    (engine === 'claude' ? 'sonnet' : '')
+  // 환경 변수는 claude의 모델 이름(평가 도구)이라 codex에는 쓰지 않는다
+  const fromEnv = engine === 'claude' ? env['RELAY_KNOWLEDGE_REVIEW_MODEL']?.trim() : undefined
+  const model = fromEnv || config.knowledge_review_model || (engine === 'claude' ? 'sonnet' : '')
   return { engine, model }
 }
 

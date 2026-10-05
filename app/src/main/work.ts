@@ -500,7 +500,7 @@ export function workTitle(request: string): string {
   return t.length > 80 ? `${t.slice(0, 80)}…` : t
 }
 
-/** 결과를 모르는 머지를 다시 확인하는 간격과 횟수 (D330) */
+/** 결과를 모르는 머지를 다시 확인하는 간격과 횟수 (D330). 간격은 환경 변수 RELAY_MERGE_CONFIRM_MS(시험)로 바꾼다 */
 const MERGE_CONFIRM_MS = 30_000
 const MERGE_CONFIRM_TRIES = 5
 
@@ -1041,7 +1041,8 @@ export class WorkRunner {
     if (task.node !== 'verify' || !knowledgeEnabled(this.ctx.env)) return turnSnapshot(task, files)
     try {
       const entries = await readRepoKnowledge(this.worktree)
-      return turnSnapshot(task, files, JSON.stringify(entries.map((e) => [e.path, e.text])))
+      // 바뀌었는지만 보면 되므로 경로와 해시만 든다
+      return turnSnapshot(task, files, JSON.stringify(entries.map((e) => [e.path, sha256(e.text)])))
     } catch {
       return turnSnapshot(task, files)
     }
@@ -2906,7 +2907,6 @@ export class WorkRunner {
 
   // ---------- 정리 (시나리오 8) ----------
 
-  /** 정리 요약의 사실: git과 이 앱의 세션에서 읽는다 (8-1) */
   /**
    * PR을 머지한 Work의 작업 브랜치에만 있는 커밋 (D329): 머지한 PR head에 없는 것. squash·rebase 머지면 기준 브랜치가
    * 이 커밋을 갖지 않으므로 머지한 head와 견준다. 머지한 Work가 아니거나 셀 수 없으면 null
@@ -2926,6 +2926,7 @@ export class WorkRunner {
     }
   }
 
+  /** 정리 요약의 사실: git과 이 앱의 세션에서 읽는다 (8-1) */
   private async cleanFacts(): Promise<CleanFacts> {
     const opts = { env: this.ctx.env }
     const repo = this.project.repo_path
@@ -3156,6 +3157,12 @@ export class WorkRunner {
         },
         { quiet: true },
       )
+      // 결과를 모르는 머지는 다시 켠 뒤에도 앱이 다시 확인한다 (D330)
+      const op = cutOperation(this.work)
+      if (op?.kind === 'merge' && op.unconfirmed) {
+        this.mergeConfirms = 0
+        this.scheduleMergeConfirm()
+      }
       if (killed.length) {
         this.orphans = [...killed]
         this.changed()
@@ -3944,6 +3951,8 @@ export class WorkRunner {
   prMerge(input: MergeInput): Promise<CommandResult> {
     return this.enqueue(async () => {
       this.opError = null
+      // 새 머지는 결과 다시 확인(D330)의 횟수를 처음부터 센다
+      this.mergeConfirms = 0
       const r = await this.command({
         type: 'pr.merge',
         at: this.ctx.at(),
@@ -4051,11 +4060,14 @@ export class WorkRunner {
   private scheduleMergeConfirm(): void {
     if (this.mergeConfirms >= MERGE_CONFIRM_TRIES) return
     this.mergeConfirms++
-    setTimeout(() => {
-      const op = cutOperation(this.work)
-      if (this.closing || op?.kind !== 'merge' || !op.unconfirmed) return
-      void this.retryOperation()
-    }, MERGE_CONFIRM_MS)
+    setTimeout(
+      () => {
+        const op = cutOperation(this.work)
+        if (this.closing || op?.kind !== 'merge' || !op.unconfirmed) return
+        void this.retryOperation()
+      },
+      Number(this.ctx.env['RELAY_MERGE_CONFIRM_MS']) || MERGE_CONFIRM_MS,
+    )
   }
 
   /** PR의 지금 head가 머지하려던 head와 다른가. 읽지 못하면 모른다(false) */

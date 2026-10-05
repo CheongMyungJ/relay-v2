@@ -283,6 +283,25 @@ describe('[흐름] PR 진행 (M9, 시나리오 10)', () => {
     expect(ghCalls(s, 'pr merge')).toHaveLength(merges)
   })
 
+  it('결과를 모르는 머지는 앱을 다시 켠 뒤에도 앱이 다시 확인한다 (D330, PR #30 리뷰)', async () => {
+    const s = await setup()
+    const w = await openWork(s)
+    await toMergeable(s, w)
+    const head = workState(w).pr?.head ?? ''
+    s.ctx.h.env['FAKE_GH_FAIL'] = 'view'
+    expect(await s.ctx.h.relay.prMerge(w.key, { method: 'squash', head })).toEqual({ ok: true })
+    await settle(s.ctx.h, w.key)
+    await s.ctx.h.relay.close()
+    delete s.ctx.h.env['FAKE_GH_FAIL']
+    s.ctx.h.env['RELAY_MERGE_CONFIRM_MS'] = '200'
+    await s.ctx.h.reopen()
+    for (let i = 0; i < 100 && workState(w).status !== 'completed'; i++) {
+      await new Promise((r) => setTimeout(r, 100))
+    }
+    await settle(s.ctx.h, w.key)
+    expect(workState(w).pr?.merged).toMatchObject({ head, method: 'squash', outside: false })
+  })
+
   it('실패한 스텝의 로그가 비면 "비어 있음"으로 한 번 남기고 읽을 때마다 다시 받지 않는다', async () => {
     const s = await setup()
     const w = await openWork(s)

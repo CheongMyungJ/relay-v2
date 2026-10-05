@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { keptCodeDesign, selectionKind } from '../../src/core/context'
 import { createWork, currentTask, transition, type MachineEvent } from '../../src/core/machine'
+import { changeRange } from '../../src/core/review'
 import type { TaskCheck } from '../../src/core/validate'
 import { DEFAULT_CONFIG, type AppConfig } from '../../src/shared/config'
 import type { Handoff } from '../../src/shared/contracts'
@@ -171,5 +172,50 @@ describe('[단위] [이 단계 새 세션으로 다시]는 단계 선택을 이�
       discarded: impl.selection?.discarded,
     })
     expect(selectionKind(again)).toBe('rewind')
+  })
+
+  it('코드를 되돌린 되감기는 이어받지 않는다: 다시 한 task는 코드를 되돌리지 않았다 (PR #30 리뷰)', () => {
+    let w = createWork({
+      type: 'bugfix',
+      workId: 'w-20260926-003',
+      baseBranch: 'main',
+      baseCommit: 'base0001',
+      at: at(),
+    }).work
+    w = launch(step(step(w)))
+    const v = current(w)
+    w = apply(w, {
+      type: 'selectStep',
+      at: at(),
+      node: 'fix',
+      keepCode: false,
+      instruction: '',
+      expect: { taskId: v.id, done: false },
+      backups: [],
+    } as MachineEvent).work
+    w = apply(w, {
+      type: 'rewind.backedUp',
+      at: at(),
+      branch: 'b',
+      commit: 'c0ffee',
+    } as MachineEvent).work
+    w = launch(
+      apply(w, { type: 'rewind.applied', at: at(), head: 'head0001' } as MachineEvent).work,
+    )
+    const fix = current(w)
+    expect(fix.selection?.reset).not.toBeNull()
+    w = apply(w, {
+      type: 'SessionEnd',
+      taskId: fix.id,
+      at: at(),
+      sessionId: `s-${fix.id}`,
+    } as MachineEvent).work
+    const r = apply(w, { type: 'retry', taskId: fix.id, at: at() } as MachineEvent)
+    expect(r.rejected).toBeUndefined()
+    const again = current(r.work)
+    expect(again.selection?.reset).toBeNull()
+    expect(selectionKind(again)).toBe('rewind')
+    // 앞 task의 [변경]은 그 task의 시작 커밋부터이고, 버린 시도의 백업으로 거꾸로 가지 않는다
+    expect(changeRange(r.work, fix.id)?.to).not.toBe('c0ffee')
   })
 })

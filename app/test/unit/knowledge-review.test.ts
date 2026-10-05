@@ -7,6 +7,7 @@ import {
   relatedEntries,
   reviewEnabled,
   reviewIssues,
+  REVIEW_SCHEMA,
   reviewPrompt,
   reviewFailedIssue,
   reviewTarget,
@@ -202,6 +203,26 @@ describe('[단위] 지식 검토의 엔진과 모델 (D334)', () => {
         { RELAY_KNOWLEDGE_REVIEW_MODEL: 'haiku' },
       ),
     ).toEqual({ engine: 'claude', model: 'haiku' })
+    // 환경 변수는 claude의 모델 이름이라 codex에는 쓰지 않는다 (PR #30 리뷰)
+    expect(
+      reviewTarget(
+        { ...base, knowledge_review_engine: 'codex' },
+        { RELAY_KNOWLEDGE_REVIEW_MODEL: 'sonnet' },
+      ),
+    ).toEqual({ engine: 'codex', model: '' })
+  })
+
+  it('검토 스키마는 모든 객체가 정의하지 않은 필드를 막는다 (codex exec의 strict 출력, PR #30 리뷰)', () => {
+    const objects: Record<string, unknown>[] = []
+    const walk = (v: unknown) => {
+      if (!v || typeof v !== 'object') return
+      const o = v as Record<string, unknown>
+      if (o['type'] === 'object') objects.push(o)
+      Object.values(o).forEach(walk)
+    }
+    walk(REVIEW_SCHEMA)
+    expect(objects.length).toBeGreaterThanOrEqual(2)
+    for (const o of objects) expect(o['additionalProperties']).toBe(false)
   })
 
   it('부르지 못하면 되돌리지 않는 경고로 까닭을 보인다', () => {

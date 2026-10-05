@@ -30,7 +30,9 @@ export const CODEX_INSTALL_GUIDE =
 export function findCodex(opts: FindClaudeOptions = {}): string | null {
   const env = opts.env ?? process.env
   const exists = opts.exists ?? fs.existsSync
-  if (env['CODEX_BIN']) return exists(env['CODEX_BIN']) ? env['CODEX_BIN'] : null
+  // 경로가 아닌 명령 이름이면 그대로 쓴다: 실행할 때 PATH에서 찾는다 (findClaude와 같음)
+  const bin = env['CODEX_BIN']
+  if (bin) return !/[\\/]/.test(bin) || exists(bin) ? bin : null
   const platform = opts.platform ?? process.platform
   const p = platform === 'win32' ? path.win32 : path.posix
   const candidates: string[] = []

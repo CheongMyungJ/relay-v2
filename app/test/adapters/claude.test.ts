@@ -22,6 +22,13 @@ describe('findClaude (D106)', () => {
     expect(r).toBe('D:\\x\\claude.exe')
   })
 
+  it('CLAUDE_BIN이 경로가 아닌 명령 이름이면 그대로 쓴다: 실행할 때 PATH에서 찾는다 (PR #30 리뷰)', () => {
+    for (const name of ['claude', 'claude.cmd'])
+      expect(
+        findClaude({ env: { ...env, CLAUDE_BIN: name }, platform: 'win32', exists: () => false }),
+      ).toBe(name)
+  })
+
   it('CLAUDE_BIN의 파일이 없으면 못 찾은 것이다: 로그인 실패 대신 설치 안내를 보인다 (D106, findCodex와 같음)', () => {
     const r = findClaude({
       env: { ...env, CLAUDE_BIN: 'D:\\x\\claude.exe' },

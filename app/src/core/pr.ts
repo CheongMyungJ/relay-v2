@@ -262,6 +262,13 @@ export function checksOf(
     const prior = latest.get(k)
     if (!prior || (c.startedAt ?? '') > (prior.startedAt ?? '')) latest.set(k, c)
   }
+  // 이름이 같은 체크 실행이 있으면 커밋 상태의 키와 이름에 "(상태)"를 붙인다: 항목 id(ciItemId)와 화면의 줄이 겹치지
+  // 않게. 겹치지 않으면 그대로라 지금까지의 항목 id가 바뀌지 않는다
+  for (const [k, c] of latest) {
+    if (k.startsWith('status:') && latest.has(`check:${c.key}`)) {
+      latest.set(k, { ...c, key: `${c.key} (상태)`, label: `${c.label} (상태)` })
+    }
+  }
   return [...latest.values()].sort((a, b) => a.key.localeCompare(b.key))
 }
 

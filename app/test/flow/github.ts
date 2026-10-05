@@ -59,6 +59,13 @@ const USERS: Record<Who, { login: string; type: string; association: string }> =
   bot: { login: 'github-actions[bot]', type: 'Bot', association: 'NONE' },
 }
 
+/** 가짜 gh가 반쯤 쓴 파일을 읽지 않게 임시 파일에 쓰고 이름을 바꾼다 (가짜 gh의 writeJson과 같다) */
+function writeJson(file: string, value: unknown): void {
+  const tmp = `${file}.${process.pid}.tmp`
+  fs.writeFileSync(tmp, JSON.stringify(value, null, 2))
+  fs.renameSync(tmp, file)
+}
+
 const stamp = (d = new Date()) => d.toISOString().replace(/\.\d+Z$/, 'Z')
 
 /** 시험용 레포의 CI가 ci-fail 스위치로 실패할 때 찍는 말 (시험용 레포 .github/workflows/ci.yml) */
@@ -111,7 +118,7 @@ export class FakeGitHub {
 
   private savePrs(prs: FakePr[]): void {
     fs.mkdirSync(this.dir, { recursive: true })
-    fs.writeFileSync(path.join(this.dir, 'prs.json'), JSON.stringify(prs, null, 2))
+    writeJson(path.join(this.dir, 'prs.json'), prs)
   }
 
   private updatePr(n: number, fn: (pr: FakePr) => void): void {
@@ -134,7 +141,7 @@ export class FakeGitHub {
     const g = this.read()
     fn(g)
     fs.mkdirSync(this.dir, { recursive: true })
-    fs.writeFileSync(path.join(this.dir, 'github.json'), JSON.stringify(g, null, 2))
+    writeJson(path.join(this.dir, 'github.json'), g)
   }
 
   private state(g: GithubFile, n: number): PrState {

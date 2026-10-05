@@ -62,9 +62,16 @@ function loadPrs() {
   return file && fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : []
 }
 
+/** 다른 gh 호출이나 시험이 반쯤 쓴 파일을 읽지 않게 임시 파일에 쓰고 이름을 바꾼다 */
+function writeJson(file, value) {
+  const tmp = `${file}.${process.pid}.tmp`
+  fs.writeFileSync(tmp, JSON.stringify(value, null, 2))
+  fs.renameSync(tmp, file)
+}
+
 function savePrs(prs) {
   const file = prsFile()
-  if (file) fs.writeFileSync(file, JSON.stringify(prs, null, 2))
+  if (file) writeJson(file, prs)
 }
 
 /** github.json: PR마다 체크, 코멘트, mergeable 따위. 시험이 쓴다 */
@@ -75,7 +82,7 @@ function loadGithub() {
 }
 
 function saveGithub(g) {
-  if (recordDir) fs.writeFileSync(path.join(recordDir, 'github.json'), JSON.stringify(g, null, 2))
+  if (recordDir) writeJson(path.join(recordDir, 'github.json'), g)
 }
 
 /** 코멘트와 리뷰의 id. 시험 도구(test/flow/github.ts)와 같은 수를 쓴다 */

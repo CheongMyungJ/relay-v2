@@ -152,16 +152,16 @@ export function Panel({ work, task, review, onApproved, onSelectStep, onShowClea
   )
 }
 
-/**
- * 패널 맨 위의 알림 (시나리오 9, D121). 끊긴 작업은 무엇이 어디서 끊겼는지와 [다시 시도]·[무시]가 할 일을 보인다
- * (D123). 끊긴 전달의 [다시 시도]가 커밋 안 된 변경을 돌려주면 선택지를 보인다(7-5). 끝낸 고아 프로세스(D76)와
- * 앱 밖에서 바뀐 파일(D124)은 [확인]으로 닫는다
- */
 /** 정리 세션을 띄울 엔진: 지금 task의 엔진이다 (main/work.ts startCleanup) */
 function cleanupEngine(work: WorkView): string {
   return work.tasks.find((t) => t.id === work.current)?.engineLabel ?? 'Claude Code'
 }
 
+/**
+ * 패널 맨 위의 알림 (시나리오 9, D121). 끊긴 작업은 무엇이 어디서 끊겼는지와 [다시 시도]·[무시]가 할 일을 보인다
+ * (D123). 끊긴 전달의 [다시 시도]가 커밋 안 된 변경을 돌려주면 선택지를 보인다(7-5). 끝낸 고아 프로세스(D76)와
+ * 앱 밖에서 바뀐 파일(D124)은 [확인]으로 닫는다
+ */
 function Recovery({
   work,
   onDone,
