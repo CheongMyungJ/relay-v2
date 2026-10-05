@@ -13,6 +13,7 @@
 import type { AppConfig, WorkSettingsPatch } from '../shared/config'
 import type { AgentEngine } from '../shared/agent'
 import { agentLabel, knownTaskEngine, sessionUnknown, taskEngine } from './agent'
+import { selectionKind } from './context'
 import type { Decision, NodeName, TaskNode } from '../shared/contracts'
 import type { StepExpect, WorkActions } from '../shared/views'
 import type {
@@ -1854,14 +1855,19 @@ function resume(work: WorkState, task: TaskRecord): Transition {
 
 /**
  * [이 단계 새 세션으로 다시] (시나리오 3-5, D114). 같은 노드의 새 task를 만들어 새 세션으로 시작한다.
- * 앞 task는 세션 종료로 남고 입력에 들어가지 않는다. 코드는 되돌리지 않는다.
+ * 앞 task는 세션 종료로 남고 입력에 들어가지 않는다. 코드는 되돌리지 않는다. 앞 task가 단계 선택으로 들어왔으면
+ * 그 선택을 이어받는다 (D327)
  */
 function retry(work: WorkState, task: TaskRecord, e: Retry): Transition {
   if (work.status !== 'active') return unchanged(work, '진행 중인 Work가 아님')
   if (task.status !== 'session_ended' && !unidentifiedCodex(task)) {
     return unchanged(work, `${task.id}는 handoff 없이 끝난 세션이 아님`)
   }
-  const created = newTask(work, task.node, e.at, 'resume')
+  const fresh = newTask(work, task.node, e.at, 'resume')
+  // 단계 선택으로 들어온 task면 그 선택(추가 지시, 이어서 하기, 폐기한 task)을 이어받는다 (D327)
+  const created: TaskRecord = task.selection
+    ? { ...fresh, selection: { ...task.selection, kind: selectionKind(task) } }
+    : fresh
   return {
     work: { ...work, tasks: [...work.tasks, created] },
     effects: [

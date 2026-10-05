@@ -101,6 +101,7 @@ import {
   discardedAttempts,
   keptCodeDesign,
   previousInputs,
+  selectionKind,
   type CarriedCode,
   type PreviousRound,
   type PreviousTask,
@@ -472,10 +473,17 @@ function clip(text: string): string {
     : text
 }
 
-/** handoffChanged를 정할 때 비교하는 파일 (D21): handoff.md, intake는 intent 초안도 */
-function turnSnapshot(task: TaskRecord, files: Readonly<Record<string, string>>): string {
+/**
+ * handoffChanged를 정할 때 비교하는 파일 (D21): handoff.md, intake는 intent 초안도. verify는 레포의 지식 파일도
+ * 넣는다(knowledge): 지식 파일만 고치고 멈춘 것도 다시 마무리를 시도한 것이다 (D328)
+ */
+function turnSnapshot(
+  task: TaskRecord,
+  files: Readonly<Record<string, string>>,
+  knowledge = '',
+): string {
   const draft = task.node === 'intake' ? (files[INTENT_DRAFT_FILE] ?? null) : null
-  return JSON.stringify([files[HANDOFF_FILE] ?? null, draft])
+  return JSON.stringify([files[HANDOFF_FILE] ?? null, draft, knowledge])
 }
 
 /** 한 번의 답글 게시에서 받아 둔 코멘트 목록 (인라인 코멘트, 대화 코멘트) */
@@ -494,6 +502,8 @@ export class WorkRunner {
   private readonly live = new Map<string, LiveSession>()
   /** Stop 훅이 줄에 들어가기 전에 새로 부른 지식 검토의 입력 해시 (task id → 해시, D300). 그 Stop의 확인이 한 번 쓴다 */
   private readonly freshReview = new Map<string, string>()
+  /** 이 Stop에서 검토가 되돌리려는 입력 (D328). core가 실제로 되돌리면 기록에 "되돌림"을 남긴다 */
+  private readonly reviewBounce = new Map<string, string>()
   private readonly terminals = new Map<string, TerminalBuffer>()
   /**
    * 다시 열 세션에 이어서 하라는 첫 입력을 줄지 (D218). [재개]·[세션 재개]마다 core가 정한 것을 두고, 세션을 다시 열
@@ -978,13 +988,43 @@ export class WorkRunner {
     const done = record.calls.find((c) => c.hash === req.hash)
     if (!done) return { issues: [], bounce: false }
     const fresh = stop && this.freshReview.get(task.id) === req.hash
-    if (fresh) this.freshReview.delete(task.id)
     if (fresh && done.issues.length > 0 && !record.calls.some((c) => c.bounced)) {
-      done.bounced = true
-      await this.writeReviewRecord(task, record)
+      // 되돌릴지는 core가 정한다(바뀐 것이 없거나 되돌림 상한이면 되돌리지 않음). 실제로 되돌렸을 때만 기록한다 (D328)
+      this.reviewBounce.set(task.id, req.hash)
       return { issues: done.issues, bounce: true }
     }
+    if (fresh) this.freshReview.delete(task.id)
     return { issues: done.issues, bounce: false }
+  }
+
+  /**
+   * 검토의 되돌림을 마무리한다 (D328): core가 이 Stop을 되돌렸으면 그 호출을 "되돌림"으로 기록하고, 아니면 다음에 다시
+   * 마무리를 시도하는 Stop에서 되돌릴 수 있게 그대로 둔다
+   */
+  private async settleReviewBounce(task: TaskRecord, blocked: boolean): Promise<void> {
+    const hash = this.reviewBounce.get(task.id)
+    this.reviewBounce.delete(task.id)
+    if (hash === undefined || !blocked) return
+    this.freshReview.delete(task.id)
+    const record = await this.readReviewRecord(task)
+    const call = record.calls.find((c) => c.hash === hash)
+    if (!call) return
+    call.bounced = true
+    await this.writeReviewRecord(task, record)
+  }
+
+  /** handoffChanged를 정할 때의 이번 턴 상태 (D21, D328). verify는 레포의 지식 파일도 본다 */
+  private async turnState(
+    task: TaskRecord,
+    files: Readonly<Record<string, string>>,
+  ): Promise<string> {
+    if (task.node !== 'verify' || !knowledgeEnabled(this.ctx.env)) return turnSnapshot(task, files)
+    try {
+      const entries = await readRepoKnowledge(this.worktree)
+      return turnSnapshot(task, files, JSON.stringify(entries.map((e) => [e.path, e.text])))
+    } catch {
+      return turnSnapshot(task, files)
+    }
   }
 
   private notify(body: string): void {
@@ -1161,7 +1201,14 @@ export class WorkRunner {
         settingsPath,
         ...(prompt ? { prompt } : {}),
       })
-      const session = this.launch(task, bin, token, args, turnSnapshot(task, files), RESUME_MARK)
+      const session = this.launch(
+        task,
+        bin,
+        token,
+        args,
+        await this.turnState(task, files),
+        RESUME_MARK,
+      )
       const processStartedAt = await processStartTime(session.pty.pid)
       await this.feed({
         type: 'session.resumed',
@@ -1456,7 +1503,7 @@ export class WorkRunner {
   private async selectionInput(task: TaskRecord): Promise<SelectionInput | null> {
     const sel = task.selection
     if (!sel) return null
-    const reason = task.reason === 'rewind' || task.reason === 'skip' ? task.reason : 'default'
+    const reason = selectionKind(task)
     const tasks = sel.discarded
       .map((id) => this.task(id))
       .filter((t): t is TaskRecord => t !== undefined)
@@ -1848,7 +1895,8 @@ export class WorkRunner {
             cancelled: true,
             reason: '새 요청을 보냈습니다.',
           })
-        if (session) session.turnFiles = turnSnapshot(task, await this.files.taskFiles(task))
+        if (session)
+          session.turnFiles = await this.turnState(task, await this.files.taskFiles(task))
         const mode = str(b['permission_mode'])
         return (
           await this.feed({
@@ -1890,10 +1938,11 @@ export class WorkRunner {
             reason: '앱 질문창의 답변을 기다리세요. 취소를 답변이나 동의로 해석하지 마세요.',
           }
         const files = await this.files.taskFiles(task)
-        const snapshot = turnSnapshot(task, files)
+        const snapshot = await this.turnState(task, files)
         const changed = session !== undefined && snapshot !== session.turnFiles
         if (session) session.turnFiles = snapshot
-        return (
+        this.reviewBounce.delete(taskId)
+        const reply = (
           await this.feed({
             type: 'turn.completed',
             ...base,
@@ -1904,6 +1953,8 @@ export class WorkRunner {
             pending: engine === 'codex' ? 'unknown' : pendingBackground(b) ? 'pending' : 'none',
           })
         ).reply
+        await this.settleReviewBounce(task, reply?.decision === 'block')
+        return reply
       }
       case 'SessionEnd': {
         // Codex의 내부 대화 전환도 SessionEnd(other)를 보낸다. 프로세스 종료는 PTY로 확인한다.

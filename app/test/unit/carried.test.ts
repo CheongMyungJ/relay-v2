@@ -1,6 +1,6 @@
 // [현재 코드 위에서 이어서]로 되감은 design 뒤의 implement가 이어서 하는지 (D254, core/context keptCodeDesign)
 import { describe, expect, it } from 'vitest'
-import { keptCodeDesign } from '../../src/core/context'
+import { keptCodeDesign, selectionKind } from '../../src/core/context'
 import { createWork, currentTask, transition, type MachineEvent } from '../../src/core/machine'
 import type { TaskCheck } from '../../src/core/validate'
 import { DEFAULT_CONFIG, type AppConfig } from '../../src/shared/config'
@@ -128,5 +128,48 @@ describe('[단위] 이어서 고친 design 뒤의 implement (D254)', () => {
     const r = apply(w, { type: 'retry', taskId: impl.id, at: at() } as MachineEvent)
     expect(r.rejected).toBeUndefined()
     expect(keptCodeDesign(r.work, current(r.work))?.id).toBe(design.id)
+  })
+})
+
+describe('[단위] [이 단계 새 세션으로 다시]는 단계 선택을 이어받는다 (D327)', () => {
+  it('되감기의 추가 지시, 이어서 하기, 폐기한 task가 새 task에 남고 되감기로 보인다', () => {
+    let w = createWork({
+      type: 'feature',
+      workId: 'w-20260926-002',
+      baseBranch: 'main',
+      baseCommit: 'base0001',
+      at: at(),
+    }).work
+    w = launch(step(step(step(w))))
+    const v = current(w)
+    w = apply(w, {
+      type: 'selectStep',
+      at: at(),
+      node: 'implement',
+      keepCode: true,
+      instruction: '테스트 이름은 keeps_total',
+      expect: { taskId: v.id, done: false },
+      backups: [],
+    } as MachineEvent).work
+    w = launch(w)
+    const impl = current(w)
+    expect(selectionKind(impl)).toBe('rewind')
+    w = apply(w, {
+      type: 'SessionEnd',
+      taskId: impl.id,
+      at: at(),
+      sessionId: `s-${impl.id}`,
+    } as MachineEvent).work
+    const r = apply(w, { type: 'retry', taskId: impl.id, at: at() } as MachineEvent)
+    expect(r.rejected).toBeUndefined()
+    const again = current(r.work)
+    expect(again.id).not.toBe(impl.id)
+    expect(again.reason).toBe('resume')
+    expect(again.selection).toMatchObject({
+      instruction: '테스트 이름은 keeps_total',
+      keep_code: true,
+      discarded: impl.selection?.discarded,
+    })
+    expect(selectionKind(again)).toBe('rewind')
   })
 })
