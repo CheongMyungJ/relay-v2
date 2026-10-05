@@ -75,6 +75,36 @@ describe('[단위] 지식', () => {
     expect(injectedText([entry('s.md', 'api_key=abcdef123456')])).toBe('')
   })
 
+  it('"낱말: 값" 꼴은 값이 비밀처럼 생겼을 때만 비밀로 본다 (D331)', () => {
+    for (const rule of [
+      '- 비밀번호: bcrypt(cost 12)로 해시한다',
+      '- 토큰: 만료 시간은 30분',
+      '- password: hashed with bcrypt, never stored',
+      '- token: rotate every 30 days',
+      '- secret: 환경 변수 APP_SECRET에서 읽는다',
+    ])
+      expect(looksSecret(rule), rule).toBe(false)
+    for (const secret of [
+      'password: Passw0rd!xyz',
+      '비밀번호: hunter2hunter2',
+      'token=abc123def456ghi',
+      "api_key: 'sk_live_51abcXYZ'",
+    ])
+      expect(looksSecret(secret), secret).toBe(true)
+  })
+
+  it('비밀로 보여 넣지 않은 항목은 지식 절에 경로만 알린다 (D331)', () => {
+    const input: KnowledgeInput = {
+      entries: [entry('a.md', '# A'), entry('s.md', '# 접속\n\napi_key=abcdef123456')],
+      candidates: [],
+      work_id: 'w-1',
+      date: '2026-10-05',
+    }
+    const [, body] = knowledgeSection('fix', input)
+    expect(body).toContain('비밀로 보여 넣지 않은 항목: `docs/knowledge/s.md`')
+    expect(body).not.toContain('abcdef123456')
+  })
+
   it('상한을 넘는 항목은 제목만 넣는다', () => {
     const big = 'x'.repeat(INJECT_LIMIT - 3)
     const s = selectEntries([entry('a.md', big), entry('b.md', '# 두 번째\n본문')])

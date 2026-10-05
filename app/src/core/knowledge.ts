@@ -80,6 +80,10 @@ export function mergeEntries(
   return [...byPath.values()].sort((a, b) => a.path.localeCompare(b.path))
 }
 
+/** 비밀처럼 생긴 값: 따옴표 안팎의 한 낱말, 8자 이상, 한글 없음, 영문자와 숫자가 섞임 (D331) */
+const SECRET_VALUE =
+  '["\'`]?(?=[^\\s"\'`]*[A-Za-z])(?=[^\\s"\'`]*\\d)[^\\s"\'`가-힣]{8,}["\'`]?(?=$|[\\s.,;)])'
+
 /** 비밀로 보이는 글 (규약 2.1-3). 걸리면 그 항목은 넣지 않는다 */
 const SECRET_PATTERNS: readonly RegExp[] = [
   /\b(?:ghp|gho|ghu|ghs|ghr|github_pat)_[A-Za-z0-9_]{20,}/,
@@ -87,8 +91,10 @@ const SECRET_PATTERNS: readonly RegExp[] = [
   /\bxox[abpors]-[A-Za-z0-9-]{10,}/,
   /\bAKIA[0-9A-Z]{16}\b/,
   /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
-  /\b(?:password|passwd|pwd|secret|token|api[_-]?key)\s*[:=]\s*\S{6,}/i,
-  /(?:비밀번호|암호|토큰)\s*[:=]\s*\S{4,}/,
+  // "낱말: 값" 꼴은 값이 비밀처럼 생겼을 때만: 따옴표를 뺀 한 낱말이 8자 이상이고 한글이 없으며 영문자와 숫자가 섞임 (D331).
+  // "비밀번호: bcrypt(cost 12)로 해시한다" 같은 규칙은 걸리지 않는다
+  new RegExp(`\\b(?:password|passwd|pwd|secret|token|api[_-]?key)\\s*[:=]\\s*${SECRET_VALUE}`, 'i'),
+  new RegExp(`(?:비밀번호|암호|토큰)\\s*[:=]\\s*${SECRET_VALUE}`),
   /\b[a-z][a-z0-9+.-]*:\/\/[^\s/:@]+:[^\s/@]+@/i,
 ]
 
@@ -677,7 +683,7 @@ const PENDING_RULE =
 
 /** context.md의 지식 절 (제목, 본문). 지식 관리를 끄면 부르지 않는다 */
 export function knowledgeSection(node: TaskNode, input: KnowledgeInput): [string, string] {
-  const { full, titles, narrowed, rest, total } = selectEntries(input.entries, input.query)
+  const { full, titles, secret, narrowed, rest, total } = selectEntries(input.entries, input.query)
   const kind = node === 'intake' ? 'intake' : node === 'verify' ? 'verify' : 'work'
   const items = [
     ...full.map((e) => `#### ${where(e)}\n\n${fence(e.text)}`),
@@ -714,6 +720,13 @@ export function knowledgeSection(node: TaskNode, input: KnowledgeInput): [string
         ]
       : []),
     items.length ? items.join('\n\n') : '없음',
+    // 비밀로 보여 뺀 항목은 내용 없이 경로만 알린다: 빠진 것을 모르고 지나치지 않게 (D331)
+    ...(secret.length
+      ? [
+          '',
+          `비밀로 보여 넣지 않은 항목: ${secret.map((e) => `\`${e.path}\``).join(', ')}. 내용을 읽거나 옮기지 않는다. 이 일에 필요해 보이면 사람에게 알린다.`,
+        ]
+      : []),
     '',
     node === 'verify' ? writeRules(input) : CANDIDATE_RULES,
   ]
