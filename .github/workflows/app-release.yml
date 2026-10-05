@@ -71,25 +71,10 @@ jobs:
             Write-Error 'latest.yml의 버전이 태그와 다릅니다'; exit 1
           }
 
-      - name: 조용한 설치
-        working-directory: app
-        run: |
-          Start-Process -FilePath "dist/relay-setup-$env:RELAY_VERSION.exe" -ArgumentList '/S' -Wait
-          $exe = Join-Path $env:LOCALAPPDATA 'Programs\relay\relay.exe'
-          if (-not (Test-Path $exe)) { Write-Error "설치된 실행 파일이 없습니다: $exe"; exit 1 }
-          $update = Join-Path $env:LOCALAPPDATA 'Programs\relay\resources\app-update.yml'
-          if (-not (Test-Path $update)) { Write-Error "자동 업데이트 설정이 없습니다: $update"; exit 1 }
-          "RELAY_APP_EXE=$exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-
-      - name: 설치된 node-pty 파일 확인 (asar 밖)
-        run: |
-          $pty = Join-Path (Split-Path $env:RELAY_APP_EXE) 'resources\app.asar.unpacked\node_modules\node-pty\prebuilds\win32-x64'
-          $missing = @('conpty.node', 'conpty\conpty.dll', 'conpty\OpenConsole.exe') | Where-Object { -not (Test-Path (Join-Path $pty $_)) }
-          if ($missing) { Write-Error "없는 파일: $($missing -join ', ')"; exit 1 }
-
-      - name: "[스모크]"
-        working-directory: app
-        run: npm run test:smoke
+      - name: 조용한 설치와 [스모크]
+        uses: ./.github/actions/install-smoke
+        with:
+          setup: dist/relay-setup-${{ env.RELAY_VERSION }}.exe
 
       - name: Release 만들기
         working-directory: app

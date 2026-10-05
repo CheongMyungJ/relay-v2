@@ -38,27 +38,18 @@ jobs:
           if (-not (Test-Path dist/latest.yml)) { Write-Error 'dist/latest.yml이 없습니다'; exit 1 }
           Get-Content dist/latest.yml
 
-      - name: 조용한 설치
+      - name: 설치 파일 찾기
+        id: setup
         working-directory: app
         run: |
           $setup = Get-ChildItem dist -Filter 'relay-setup-*.exe' | Select-Object -First 1
           if (-not $setup) { Write-Error '설치 파일이 없습니다'; exit 1 }
-          Start-Process -FilePath $setup.FullName -ArgumentList '/S' -Wait
-          $exe = Join-Path $env:LOCALAPPDATA 'Programs\relay\relay.exe'
-          if (-not (Test-Path $exe)) { Write-Error "설치된 실행 파일이 없습니다: $exe"; exit 1 }
-          "RELAY_APP_EXE=$exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          "설치 위치: $exe"
+          "path=dist/$($setup.Name)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
-      - name: 설치된 node-pty 파일 확인 (asar 밖)
-        run: |
-          $pty = Join-Path (Split-Path $env:RELAY_APP_EXE) 'resources\app.asar.unpacked\node_modules\node-pty\prebuilds\win32-x64'
-          $missing = @('conpty.node', 'conpty\conpty.dll', 'conpty\OpenConsole.exe') | Where-Object { -not (Test-Path (Join-Path $pty $_)) }
-          Get-ChildItem -Recurse $pty | Select-Object FullName, Length | Format-Table -AutoSize
-          if ($missing) { Write-Error "없는 파일: $($missing -join ', ')"; exit 1 }
-
-      - name: "[스모크]"
-        working-directory: app
-        run: npm run test:smoke
+      - name: 조용한 설치와 [스모크]
+        uses: ./.github/actions/install-smoke
+        with:
+          setup: ${{ steps.setup.outputs.path }}
 
       - name: 결과 요약
         if: always()
