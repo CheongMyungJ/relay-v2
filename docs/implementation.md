@@ -1,6 +1,6 @@
 # relay-v2 구현 계획
 
-- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94)
+- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I101)
 - 상태: 정함. 주제마다 사람과 문답으로 정했다(설계 부록 A의 진행 규칙). 바꾸려면 사용자와 다시 정한다.
 
 Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서는 [engines.md](engines.md)에서 관리한다. 이 문서의 기존 Claude 동작은 확장 중 회귀 시험의 기준이다.
@@ -109,6 +109,12 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I93 | 교차 비교(D317)는 기존 시나리오 01, 10, 15, 16, 18, 19를 일반 유형으로도 돌린다. `eval/run.mjs`의 `--arms`에 `relay@<유형>`을 받게 하고, 그 쪽은 시나리오의 유형 대신 그 유형으로 새 Work를 만든다(`relay-arm.mjs`와 `guides/relay.md`가 유형을 인자로 받음). 같은 빌드에서 `--arms relay,relay@general`로 각 3번 돌리고 짝 `relay:relay@general`을 판정한다. 맨 CLI는 유형이 없어 다시 돌리지 않고, 지난 보고서(빌드가 다름)는 참고로만 본다 **(기본값)**. 보고서는 수고(승인 수, 사람 차례, 시간)와 결과 확신(숨긴 시험, 함정)을 유형별로 나눠 보인다 | 사람이 고름: 작은 것 셋(01, 15, 18)과 함정 있는 중간 것 셋(10, 16, 19)을 모두 돌려 수고와 결과 확신을 함께 본다. 같은 빌드에서 두 유형을 견주어야 빌드 차이가 섞이지 않음 | ✅ |
 | I94 | M18은 PR 하나로 하고, core·계약·스킬 → 화면 → 시험 → 평가 도구 차례로 나눠 커밋한다. core와 스킬은 한 커밋이다: `NODE_INFO`가 가리키는 스킬 파일이 있어야 하고(`templates.test.ts`), `skills/assemble.mjs`의 유형 목록이 `WORK_TYPES`와 같아야 하며(`store.test.ts`), 그 목록에 일반이 들면 `check.mjs`가 일반 구간을 요구하므로 나누면 중간 커밋이 깨진다(M18 구현 중에 찾음). 평가 실행 결과(시나리오 28~30, 교차 비교)의 보고서는 따로 커밋한다. 번호는 앞서 쓴 M17(지식 관리, `docs/knowledge-experiment/`)과 I69~I84를 피해 M18, I85부터 쓴다 | M14, M15와 같은 차례. 지식 실험 문서가 M17과 I69~I84를 그 뜻으로 가리키므로 번호를 다시 쓰면 헷갈림 | |
 | I95 | 배포는 GitHub Releases로 하고 설치본은 자동 업데이트한다. `v<버전>` 태그를 push하면 `app-release.yml`이 태그의 버전으로 설치 파일을 빌드하고, 조용히 설치해 [스모크]를 돌린 뒤, Release를 만들어 설치 파일, `.blockmap`, `latest.yml`을 올린다. 레포의 `package.json` 버전은 0.0.0으로 두고 빌드 때만 바꾼다. `-`가 든 버전(시험판)은 prerelease로 올려 설치본이 받지 않는다. 앱은 `electron-updater`(`main/update`, 켜질 때만 불러옴)로 Windows 설치본에서만 30초 뒤와 4시간마다 확인하고 뒤에서 받는다. 받으면 OS 알림을 한 번 보내고 확인을 멈추며, 앱을 끝낼 때(종료 확인과 세션 정리 뒤) 설치한다. 그 사이 나온 더 새 릴리스는 다음 실행에서 받는다. 앱이 스스로 다시 시작하지 않는다. 개발 앱, Windows가 아닌 곳, 버전이 0.0.0인 빌드(`app-build` 결과물), `RELAY_UPDATE=off`(대소문자·앞뒤 공백 무시, 두 [스모크]가 씀)에서는 끈다. 릴리스 워크플로는 태그 이름을 환경 변수로만 읽고, checkout이 토큰을 남기지 않는다(`persist-credentials: false`). 서명은 여전히 없어 첫 설치에 SmartScreen 경고가 뜨고, 업데이트 파일의 서명 확인도 하지 않는다(`publisherName` 없음) | 공개 레포라 토큰 없이 Release에서 받을 수 있음. 지금 설치하면 실행 중인 세션이 끊기므로(시나리오 3-6) 종료 때로 미룸. 릴리스 전에 설치본 [스모크]를 통과해야 올라가 깨진 버전이 퍼지지 않음 | |
+| I96 | 이슈 기록을 켤지는 Work를 만들 때 정한다. 프로젝트의 `issue_log`가 켜져 있으면(없으면 켜짐, D337) `work.json`에 `issue`를 두고, 새 Work 대화상자의 이슈 번호(D338)도 그때 적는다. Work 도중에 설정을 바꿔도 이미 만든 Work는 그대로다 | 도중에 꺼지거나 켜지면 이슈의 앞뒤가 끊기고, 켠 뒤의 Work는 이슈 없이 시작한 앞 단계를 올릴 곳이 없음 | |
+| I97 | 게시 대기열(`issue.pending`)은 `core/machine`이 바꾼다. `transition`의 끝에서 이번 전이가 남긴 이벤트를 보고 항목을 더하고 `publishIssue` 할 일을 낸다: `task.approved`(PR 대응 빼고, 의도 승인이면 새 이슈 만들기를 먼저), `task.rewound`·`task.skipped_to`(올렸거나 올릴 task를 폐기했을 때만), `work.completed`·`work.abandoned`(끝 코멘트와, 새 이슈면 닫기). 끝 코멘트의 문구와 닫는 까닭은 이때 정해 항목에 적는다. 글은 게시할 때 `core/issue`가 task의 파일로 만든다(D349) | `work.json`은 machine만 바꾼다(I10, I11). 기존 전이마다 손대지 않고 이벤트 하나로 모은다 | |
+| I98 | 게시는 `main/work`가 Work의 처리 줄 밖에서 대기열의 앞부터 하나씩 한다. 시도 전(`issue.attempted`)과 결과(`issue.created`, `issue.posted`, `issue.closed`, `issue.failed`)만 처리 줄로 넣는다. 실패하면 멈추고, 다음 할 일(다음 승인 등)이나 패널의 [다시 시도], 앱을 다시 켤 때 앞부터 다시 한다 | 네트워크가 느려도 훅과 승인을 막지 않는다(D344). 순서는 대기열 하나로 지킨다 | |
+| I99 | gh 명령: 라벨 `gh label create relay --repo`(실패는 이미 있음이나 권한으로 보고 넘긴다), 이슈 `gh issue create --repo --title --body-file --label relay`(라벨 때문에 실패하면 라벨 없이 다시, 번호는 찍힌 주소에서), 코멘트 `gh issue comment <n> --repo --body-file`(id는 주소의 `#issuecomment-<id>`), 닫기 `gh issue close <n> --repo --reason`. 레포는 PR 만들기와 같은 origin의 `ghRepo`다. 시도한 적이 있는 항목은 실패 종류와 관계없이 먼저 원격에서 표시(D349)를 찾는다: 이슈는 `gh issue list --state all --json number,url,body`, 코멘트는 `gh issue view <n> --comments --json comments` | PR 만들기(7-4)와 같은 `--repo` 길이라 가짜 gh의 로컬 원격에서도 돈다. gh 하위 명령은 성공·실패만 알려 주므로 결과를 모르는 요청을 따로 가리지 않고 늘 찾는다 | |
+| I100 | 머지를 읽으면(D178, D179) 기준 브랜치와 관계없이 새 이슈를 닫는다. 이미 `Closes`로 닫혔으면 gh가 그대로 성공한다 | 기본 브랜치인지 읽지 않아도 D349(5)를 지킨다 | |
+| I101 | [흐름] 시험의 `register`는 이슈 기록을 끈다(지식 관리처럼, 기존 시험의 gh 기록이 그대로). `test/flow/issue.test.ts`가 켜서 본다. 가짜 gh에 `label create`, `issue create/comment/close/list/view`를 더하고 이슈는 `FAKE_GH_RECORD`의 `issues.json`에 둔다. 실패는 `FAKE_GH_FAIL=issue` | 기존 시험이 새 gh 호출로 흔들리지 않게 | |
 
 ## 3. 확인한 사실
 
@@ -273,6 +279,7 @@ app/src/
 - 사용성 평가(`docs/eval-findings.md`)에서 나온 개선은 M12에 모은다. 개선점마다 사람이 반영할지와 방법을 정한다(설계 v0.6).
 - 설계 v0.8의 기능 추가 유형은 M14다. M14 안은 core → 화면 → 스킬 → 시험과 평가 차례로 나눠 커밋한다.
 - 설계 v0.9의 리팩터링 유형은 M15다. M14와 같은 차례로 나눠 커밋한다.
+- 설계 v0.16의 이슈 기록은 M19다. core → main·어댑터 → 화면 → 시험 차례로 나눠 커밋한다.
 - 설계 v0.13의 일반 유형은 M18이다. M15와 같은 차례로 나눠 커밋하되 core와 스킬은 한 커밋이다(I94). M17과 I69~I84는 지식 관리에 쓴 번호라 건너뛴다.
 - 완료 기준 앞의 꼬리표는 확인 방법이다: [단위], [어댑터], [흐름], [스모크], [실제], [실기]. 뜻은 8.1을 따른다. [실제]와 [실기]의 결과는 `docs/checks.md`에 기록한다(I30).
 
@@ -296,6 +303,7 @@ app/src/
 | M15 | 리팩터링 유형 | 새 Work에서 리팩터링을 고르면 `intake → refactor → verify`(D258~D278) | M14 |
 | M16 | 공용 스킬 조립 | work-start, verify, pr-respond를 Work 유형에 맞게 조립해 배포(D279~D280) | M15 |
 | M18 | 일반 유형 | 새 Work에서 일반을 고르면 `intake → execute → verify`, 완료조건마다 확인 방법(D302~D318) | M16 |
+| M19 | 이슈 기록 | 의도 승인 때 GitHub 이슈를 만들고 승인된 task마다 코멘트를 덧붙이며, PR은 `Closes`로 잇는다(D336~D349) | M18 |
 
 ### M0. 골격과 배포
 
@@ -950,6 +958,41 @@ app/src/
 - [스모크] 유형 버튼 넷과 일반의 설명.
 - [실제] 작은 일반 Work 하나가 끝까지 간다(가능할 때).
 - 평가: 시나리오 28~30이 `check-scenario.mjs`를 통과한다. 28~30 각 3번과 교차 비교 여섯 시나리오 각 3번의 보고서.
+
+### M19. 이슈 기록
+
+설계 v0.16(D336~D349). 팀원이 PR을 리뷰할 때 맥락을 볼 수 있게, 앱이 Work의 기록을 GitHub 이슈 하나에 덧붙인다(설계 3.7). 에이전트와 스킬은 바뀌지 않는다. 아래 넷을 차례로 하고 단계마다 커밋한다. 단계가 끝날 때마다 `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`를 돌린다.
+
+**1. core와 계약**
+
+- **기록(I96, D349):** `shared/work`의 `IssueRecord`(이슈 번호·주소, `linked`, `pending`, `posted`, `attempted_at`, `failure`, `closed_at`)와 `IssueEntry`(이슈 만들기, task, 단계 선택, 끝, 닫기), 이벤트 유형 `issue.*`. `shared/project`의 `issue_log`, `NewWorkInput`의 `issueNumber`. `createWork`가 `issue`를 받는다.
+- **`core/issue`(새로):** 항목의 키와 보이지 않는 표시, 이슈 제목(D348)과 본문, task 코멘트(D339: 머리 줄, 요약, 결정, 접은 산출물, intake는 intent), 단계 선택 코멘트(D341), 끝 문구와 닫는 까닭(D346, D347), 65,536자 자르기, 게시한 글에서 표시 찾기, `Closes` 줄.
+- **`core/machine`(I97):** `transition` 끝의 대기열 더하기와 `publishIssue` 할 일, `issue.*` 이벤트의 전이와 기록(5.5).
+- **`core/config`:** `checkProjectSettings`가 `issue_log`를 받는다(없으면 바꾸지 않음).
+
+**2. main과 어댑터**
+
+- **`adapters/gh`(I99):** 라벨, 이슈 만들기·코멘트·닫기·목록·코멘트 읽기.
+- **`main/work`(I98, I100):** 게시 줄, [다시 시도], 앱을 켤 때 남은 대기열 잇기, [PR 생성]의 본문 끝 `Closes #<이슈>`(이어받은 PR은 고치지 않음).
+- **`main/relay`:** 프로젝트 설정의 `issue_log`, 새 Work의 이슈 번호와 `issue`.
+
+**3. 화면**
+
+- **새 Work 대화상자(D338):** 이슈 기록이 켜진 프로젝트만 이슈 번호 칸(선택).
+- **프로젝트 설정:** 이슈 기록 켜기(D337, D345).
+- **Work 패널:** 이슈 링크, 남은 게시 수, 실패와 [다시 시도](D344).
+
+**4. 시험**
+
+- **가짜 gh(I101):** `label create`, `issue create/comment/close/list/view`, `issues.json`, `FAKE_GH_FAIL=issue`.
+- **[흐름] `test/flow/issue.test.ts`:** 의도 승인에서 이슈가 생기고 라벨이 붙음, task 승인마다 코멘트(자동 승인 표시, 요약과 결정, 접은 산출물), PR 대응은 올리지 않음, 되감기 코멘트, [PR 생성] 본문의 `Closes`, [완료만]·[Work 포기]의 끝 코멘트와 닫기, 기존 이슈 번호면 새 이슈 없이 intent 코멘트이고 닫지 않음, gh 실패에서 흐름이 막히지 않고 [다시 시도]로 순서대로 올라감, 결과를 모르는 게시는 표시로 찾아 두 번 올리지 않음, 앱을 다시 켜면 남은 대기열을 이음.
+- **[스모크]:** 새 Work 대화상자의 이슈 번호 칸.
+
+**완료 기준**
+
+- [단위] `core/issue`의 글 모양과 자르기, 대기열 더하기(의도 승인, 승인 방식, PR 대응 뺌, 폐기 코멘트의 조건, 끝과 닫기의 까닭, 기존 이슈), `issue.*` 전이, `checkProjectSettings`의 `issue_log`.
+- [흐름] 위 `issue.test.ts`. 기존 흐름 시험이 그대로 통과한다.
+- [실제] 실제 gh로 시험용 레포에 이슈를 만들고 닫는다(가능할 때. 결과는 `docs/checks.md`).
 
 ## 8. 테스트 전략
 
