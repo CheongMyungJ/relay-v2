@@ -61,13 +61,10 @@ export function nextRound(work: Pick<WorkState, 'tasks'>): number {
 
 // ---------- 항목 ----------
 
-/** 답글을 다는 항목의 종류: 리뷰 본문, 인라인 코멘트, 대화 코멘트 (D190). CI 실패, 충돌, 원격과 갈라짐은 답글이 없다 */
-export const REPLY_KINDS: readonly PrItemKind[] = ['review', 'inline', 'convo']
-
 const COMMENT_ID = /^(review|inline|convo):(\d+)$/
 
 /** 코멘트 항목의 id인가. 항목 id는 종류를 앞에 붙인다 (review:, inline:, convo:, docs/implementation.md M9) */
-export function isCommentId(id: string): boolean {
+function isCommentId(id: string): boolean {
   return COMMENT_ID.test(id)
 }
 
@@ -192,7 +189,7 @@ export function markerOf(body: string): { workId: string; itemId: string; round:
 }
 
 /** 게시한 답글의 코멘트를 읽은 코멘트의 id 모양으로: 스레드에 단 답글은 inline:<id>, 아니면 convo:<id> (D207) */
-export function postedCommentId(reply: Pick<PrReply, 'thread' | 'comment_id'>): string | null {
+function postedCommentId(reply: Pick<PrReply, 'thread' | 'comment_id'>): string | null {
   if (reply.comment_id === undefined) return null
   return `${reply.thread === null ? 'convo' : 'inline'}:${reply.comment_id}`
 }

@@ -16,7 +16,7 @@ const ACCEPT_LINE = /^\s*[│|]?\s*(?:[❯>]\s*)?(?:\d+\.\s*)?(yes|i accept|acce
 const PRESS_ENTER = /press enter|enter to continue/i
 
 /** 화면이 이름을 아는 첫 실행 창이면 누를 키(Up, Down, Enter)를 돌려준다 */
-export function decideDialog(screen) {
+function decideDialog(screen) {
   const isSelect = NUMBERED_CURSOR.test(screen) || CONFIRM_HINT.test(screen)
   const isEnter = PRESS_ENTER.test(screen)
   if (!isSelect && !isEnter) return null

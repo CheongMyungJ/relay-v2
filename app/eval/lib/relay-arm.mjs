@@ -568,7 +568,7 @@ const KEYS = {
   'ctrl+c': 'Control+c',
 }
 
-export function keyName(k) {
+function keyName(k) {
   const s = String(k ?? '').trim()
   return KEYS[s.toLowerCase()] ?? KEYS[s.toLowerCase().replace(/^arrow/, '')] ?? s
 }

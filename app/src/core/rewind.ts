@@ -80,7 +80,7 @@ export function canSelectStep(work: WorkState): boolean {
 }
 
 /** 되감기인지 건너뛰기인지: 그 유형의 파이프라인에서 지금 단계 k 이하면 되감기다 (6.2) */
-export function stepKind(type: WorkType, from: NodeName, to: NodeName): StepKind {
+function stepKind(type: WorkType, from: NodeName, to: NodeName): StepKind {
   return order(type, to) <= order(type, from) ? 'rewind' : 'skip'
 }
 
@@ -260,7 +260,7 @@ export function stepChoices(work: WorkState): StepChoice[] {
 }
 
 /** 미리 본 때의 지금 task. [확인]에 함께 보낸다 */
-export function stepExpect(plan: StepPlan): StepExpect {
+function stepExpect(plan: StepPlan): StepExpect {
   return { taskId: plan.from.id, done: plan.done }
 }
 

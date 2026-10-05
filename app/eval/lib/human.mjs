@@ -12,7 +12,7 @@ const GUIDES = path.resolve(import.meta.dirname, '../guides')
 export const screenKind = (kind) => (kind === 'cli' ? 'cli' : 'relay')
 
 /** 사람 역할의 설명서 이름. 다른 빌드(base, m17 등)는 그 빌드의 화면 설명서가 있으면 그것을 쓴다 */
-export function guideName(arm, kind) {
+function guideName(arm, kind) {
   const own = armBase(arm).replace(/-off$/, '')
   if (own && own !== kind && fs.existsSync(path.join(GUIDES, `${own}.md`))) return own
   return kind

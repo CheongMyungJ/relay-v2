@@ -65,8 +65,6 @@ export function readJsonl(file) {
     .map((l) => JSON.parse(l))
 }
 
-export const seconds = (ms) => Math.round(ms / 1000)
-
 export function clip(s, n) {
   const t = String(s ?? '')
   return t.length > n ? `${t.slice(0, n)}\n…(${t.length - n}자 생략)` : t

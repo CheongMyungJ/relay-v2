@@ -33,8 +33,8 @@ export const EXECUTION_FILE = 'execution.md'
 export const VERIFICATION_FILE = 'verification.md'
 
 /** 본문 필수 절 (5.2.1) */
-export const HANDOFF_SECTIONS = ['요약', '다음 task가 알아야 할 것'] as const
-export const INTENT_SECTIONS = ['목표', '비목표', '원하는 결과', '완료조건'] as const
+const HANDOFF_SECTIONS = ['요약', '다음 task가 알아야 할 것'] as const
+const INTENT_SECTIONS = ['목표', '비목표', '원하는 결과', '완료조건'] as const
 const CRITERIA_SECTION = '완료조건'
 const CRITERIA_PREFIX = '- [ ] '
 /**

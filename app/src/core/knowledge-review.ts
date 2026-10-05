@@ -63,7 +63,7 @@ export function relatedEntries(
     .map((r) => ({ path: r.entry.path, text: r.entry.text }))
 }
 
-export const REVIEW_KINDS = [
+const REVIEW_KINDS = [
   'conflict',
   'contradicts_human',
   'state_in_rule',

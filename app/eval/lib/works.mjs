@@ -48,7 +48,7 @@ export function workScenario(scenario, n) {
 }
 
 /** n번째 Work를 하는 사람이 몇 번째 사람인지(0부터). teammate Work마다 사람이 바뀐다 */
-export function mateIndex(parts, n) {
+function mateIndex(parts, n) {
   return parts.slice(1, n + 1).filter((w) => w.teammate).length
 }
 

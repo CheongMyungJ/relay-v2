@@ -818,7 +818,7 @@ export function permissionWarning(task: TaskRecord): boolean {
  * [재개]·[세션 재개]를 받는 상태다. main은 띄운 결과를 session.started, session.resumed, session.failed,
  * task.queued로 알린다. 명령과 그 할 일은 Work의 처리 줄 한 번에 끝나므로 그 사이에 다른 명령은 오지 않는다.
  */
-export function launchable(task: TaskRecord): boolean {
+function launchable(task: TaskRecord): boolean {
   if (task.session?.alive) return false
   return task.status === 'working' || task.status === 'queued' || RESUMABLE.includes(task.status)
 }

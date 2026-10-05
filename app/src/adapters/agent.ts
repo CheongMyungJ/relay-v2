@@ -28,7 +28,7 @@ import {
   type CodexSettings,
 } from './codex'
 
-export const CLAUDE_INSTALL_GUIDE =
+const CLAUDE_INSTALL_GUIDE =
   'claude 실행 파일을 찾지 못했습니다. Claude Code를 설치하세요' +
   ' (PowerShell: irm https://claude.ai/install.ps1 | iex, 안내: https://code.claude.com/docs/en/setup).' +
   ' 다른 위치에 설치했다면 CLAUDE_BIN 환경 변수로 경로를 알려 주세요.'

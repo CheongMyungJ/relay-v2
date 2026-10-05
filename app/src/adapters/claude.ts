@@ -63,8 +63,8 @@ export async function claudeAuthStatus(bin: string, env?: NodeJS.ProcessEnv): Pr
 
 // ---------- 스킬 배포 (5.6.3, D103, D108) ----------
 
-export const SKILL_FILE = 'SKILL.md'
-export const COMMON_FILE = '_common.md'
+const SKILL_FILE = 'SKILL.md'
+const COMMON_FILE = '_common.md'
 
 /**
  * 스킬 원본 위치 (D103). RELAY_SKILLS_DIR가 있으면 그 폴더, 없으면 앱에 묶어 배포한 skills/다.

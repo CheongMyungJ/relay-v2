@@ -18,9 +18,9 @@ import type { MergeMethod } from '../shared/work'
 import { ALL_NODES } from './pipeline'
 import { isAgentEngine, type AgentEngine } from '../shared/agent'
 
-export const SKILLS: readonly SkillName[] = SKILL_TITLES.map(([skill]) => skill)
+const SKILLS: readonly SkillName[] = SKILL_TITLES.map(([skill]) => skill)
 
-export const QUESTION_MODES: readonly QuestionMode[] = ['draft_first', 'confirm_each']
+const QUESTION_MODES: readonly QuestionMode[] = ['draft_first', 'confirm_each']
 
 /**
  * 자동 승인을 켤 수 있는 노드 (4.2). intake(의도 승인)와 verify(리뷰와 검증 = Work 완료)는 늘 수동이다.
@@ -37,7 +37,7 @@ const MANUAL_NODES: readonly NodeName[] = ALL_NODES.filter(
 )
 
 /** 설정 화면에서 바꾸는 값 (D70) */
-export const EDITABLE_KEYS = [
+const EDITABLE_KEYS = [
   'agent_engine',
   'session_limit',
   'auto_approve',
@@ -54,8 +54,6 @@ export const EDITABLE_KEYS = [
 ] as const
 
 export type EditableKey = (typeof EDITABLE_KEYS)[number]
-
-export type ConfigPatch = Partial<Pick<AppConfig, EditableKey>>
 
 export type Checked<T> = { ok: true; value: T } | { ok: false; error: string }
 

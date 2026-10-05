@@ -159,7 +159,7 @@ export interface GhPrOptions {
 }
 
 /** 한 번 읽기에서 PR 상태와 체크를 읽는 필드 (PR #14, S7 관찰 2). 모두 gh 2.48.0에 있다 (3절) */
-export const PR_VIEW_FIELDS = [
+const PR_VIEW_FIELDS = [
   'number',
   'url',
   'state',

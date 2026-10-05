@@ -64,8 +64,8 @@ const globToRe = (g) =>
  * 줄 수, 기대 밖 파일에서 빼고 따로 센다(docs/eval.md 6절). 맨 CLI에는 없는 파일이라 판정 diff에 두면 relay가 드러나
  * 가림도 깨진다. 지식 자체의 질은 knowledge-quality.mjs가 저장한 diff(final/*.diff)에서 따로 본다
  */
-export const KNOWLEDGE_FILE = /^docs\/knowledge\/.+\.md$/
-export const isKnowledge = (file) => KNOWLEDGE_FILE.test(file)
+const KNOWLEDGE_FILE = /^docs\/knowledge\/.+\.md$/
+const isKnowledge = (file) => KNOWLEDGE_FILE.test(file)
 
 /** diffTree의 diff(git diff --no-index base tree)에서 지식 파일의 부분을 뺀다 */
 export function withoutKnowledge(diff) {

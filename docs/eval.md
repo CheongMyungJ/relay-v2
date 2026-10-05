@@ -31,7 +31,6 @@
 | `eval/lib/works.mjs` | Work 여럿을 잇는 시나리오(`works`)의 Work 나누기, 팀원 교대, 재는 Work, 시나리오의 짝(relay 대 맨 CLI, relay 대 relay-off) |
 | `eval/primary.mjs` | 지식 실험의 주지표와 두 쪽 차이의 bootstrap 구간 (`docs/knowledge-experiment/protocol.md` 4절) |
 | `eval/ref-app.sh` | 견줄 다른 커밋의 앱을 git worktree로 꺼내 빌드한다 |
-| `eval/frozen.mjs` | 지식 실험에서 고정한 파일의 해시 확인 |
 | `eval/unseal.sh` | 봉인한 hold-out을 연다(열쇠는 사람이 줌) |
 | `eval/lib/relay-arm.mjs` | 앱 띄우기와 프로젝트 등록, 화면 읽기(스크린샷, 보이는 글자, 누를 수 있는 요소), 행동, 비정상 종료 |
 | `eval/lib/cli-arm.mjs` | bash와 claude를 PTY로 띄우기, 터미널 화면(xterm headless), 입력, 새 터미널, 비정상 종료 |

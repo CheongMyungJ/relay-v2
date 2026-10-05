@@ -404,7 +404,7 @@ function Item({
  * 대응 라운드가 커밋을 push했거나 앱이 원격 커밋을 받았으면 "판정표는 대응 전 코드 기준"을 경고하고 verify의 판정표를
  * 함께 보인다 (D180, D206)
  */
-export function MergeDialog({ work, onClose }: { work: WorkView; onClose: () => void }) {
+function MergeDialog({ work, onClose }: { work: WorkView; onClose: () => void }) {
   const [info, setInfo] = useState<MergeInfo | null>(null)
   const [method, setMethod] = useState<MergeMethod | null>(null)
   const [busy, setBusy] = useState(false)

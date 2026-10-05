@@ -307,7 +307,7 @@ export class CliArm {
   }
 }
 
-export function cliKey(k) {
+function cliKey(k) {
   const s = String(k ?? '').trim()
   const map = {
     enter: 'Enter',

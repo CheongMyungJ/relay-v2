@@ -153,7 +153,7 @@ export async function saveConfig(home: string, config: AppConfig): Promise<void>
 
 // ---------- 프로젝트 (5.1) ----------
 
-export function projectDir(home: string, projectId: string): string {
+function projectDir(home: string, projectId: string): string {
   return path.join(home, 'projects', projectId)
 }
 

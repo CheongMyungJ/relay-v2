@@ -77,7 +77,7 @@ const STATES = ['OPEN', 'CLOSED', 'MERGED'] as const
 const text = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null)
 
 /** gh pr view --json의 결과를 읽는다. 모르는 state면 오류다 */
-export function viewFacts(v: Record<string, unknown>): PrViewFacts {
+function viewFacts(v: Record<string, unknown>): PrViewFacts {
   const state = STATES.find((s) => s === v['state'])
   const head = text(v['headRefOid'])
   if (!state || !head) {

@@ -272,11 +272,6 @@ export function ciState(checks: readonly Pick<CheckFact, 'bucket'>[], waited: bo
   return 'pass'
 }
 
-/** 머지 조건의 "CI 통과": 모두 통과하거나 건너뜀, 또는 기다린 뒤에도 체크가 없음 (D176, D196) */
-export function ciPasses(state: CiState): boolean {
-  return state === 'pass' || state === 'none'
-}
-
 // ---------- 코멘트 (D157, D160, D161, D197) ----------
 
 /** 읽은 코멘트 하나. 리뷰 본문, 인라인 코멘트, 대화 코멘트다 */
@@ -295,7 +290,7 @@ export interface CommentFact {
 }
 
 /** 사람의 코멘트 가운데 받는 작성자 관계: 소유자, 조직 구성원, 협업자 (D160. 값의 뜻은 S7 관찰 3) */
-export const ACCEPTED_ASSOCIATIONS: readonly string[] = ['OWNER', 'MEMBER', 'COLLABORATOR']
+const ACCEPTED_ASSOCIATIONS: readonly string[] = ['OWNER', 'MEMBER', 'COLLABORATOR']
 
 /** 봇의 이름: login이나 설정에 적은 이름의 끝 `[bot]`을 뗀다 (D197) */
 export function botName(login: string): string {
@@ -664,7 +659,7 @@ export function reapplyRules(
 }
 
 /** 머지와 배지가 세는 할 일: 제외하지 않고 받은 새 항목 (D176) */
-export function openItems(items: readonly PrItem[]): PrItem[] {
+function openItems(items: readonly PrItem[]): PrItem[] {
   return items.filter((i) => i.status === 'new' && !i.gone)
 }
 
@@ -833,7 +828,7 @@ export function prBadgeKind(
 // ---------- 실패 로그 (S7 관찰 2) ----------
 
 /** 항목에 남기는 실패 로그의 줄 수 (기본값) */
-export const LOG_TAIL_LINES = 40
+const LOG_TAIL_LINES = 40
 
 /** 색 제어 문자: gh는 제어 문자를 `^[` 글자로 바꿔 쓴다(asciisanitizer, 3절). 날것의 ESC도 뗀다 */
 const ESC = String.fromCharCode(0x1b)
@@ -866,13 +861,7 @@ export function failedLogTail(output: string, lines = LOG_TAIL_LINES): string {
 // ---------- 머지 방식 (D177) ----------
 
 /** 머지 창의 차례이자 기본 선택의 차례 (D177, 화면 구성의 머지 창) */
-export const MERGE_METHODS: readonly MergeMethod[] = ['merge', 'squash', 'rebase']
-
-export const MERGE_METHOD_LABEL: Readonly<Record<MergeMethod, string>> = {
-  merge: '머지 커밋 (merge)',
-  squash: '하나로 합침 (squash)',
-  rebase: '다시 쌓음 (rebase)',
-}
+const MERGE_METHODS: readonly MergeMethod[] = ['merge', 'squash', 'rebase']
 
 /** gh repo view --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed에서 허용하는 방식 (S7 관찰 6) */
 export function allowedMethods(view: unknown): MergeMethod[] {
@@ -896,7 +885,7 @@ export function preferredMethod(
 
 // ---------- 화면 (D183, PR 패널) ----------
 
-export const ITEM_KIND_LABEL: Readonly<Record<PrItemKind, string>> = {
+const ITEM_KIND_LABEL: Readonly<Record<PrItemKind, string>> = {
   review: '리뷰',
   inline: '인라인 코멘트',
   convo: '대화 코멘트',
@@ -905,7 +894,7 @@ export const ITEM_KIND_LABEL: Readonly<Record<PrItemKind, string>> = {
   diverged: '원격과 갈라짐',
 }
 
-export const ITEM_STATUS_LABEL: Readonly<Record<PrItemStatus, string>> = {
+const ITEM_STATUS_LABEL: Readonly<Record<PrItemStatus, string>> = {
   new: '새 항목',
   not_accepted: '받지 않음',
   excluded: '제외',

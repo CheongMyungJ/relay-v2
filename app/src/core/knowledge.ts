@@ -46,7 +46,7 @@ export function isKnowledgePath(p: string): boolean {
 }
 
 /** 항목의 제목: 첫 `# ` 줄. 없으면 파일 이름 */
-export function entryTitle(e: Pick<KnowledgeEntry, 'path' | 'text'>): string {
+function entryTitle(e: Pick<KnowledgeEntry, 'path' | 'text'>): string {
   const m = /^#\s+(.+)$/m.exec(e.text)
   return (m?.[1] ?? e.path.split('/').pop() ?? e.path).trim()
 }
@@ -100,7 +100,7 @@ export function candidatesOf(handoff: string): string[] {
 
 /** 지식 항목의 종류와 출처 (D293). 머리글의 `kind`, `source` */
 export const KNOWLEDGE_KINDS = ['rule', 'fact', 'history', 'pitfall'] as const
-export const KNOWLEDGE_SOURCES = ['human', 'investigation'] as const
+const KNOWLEDGE_SOURCES = ['human', 'investigation'] as const
 
 /** 규칙의 본문 절과, 규칙이 아닌 항목의 본문 절 */
 const RULE_SECTION = '규칙'
@@ -379,7 +379,7 @@ function fence(text: string): string {
 
 /** 지식이 많을 때 본문째 넣는 항목 수와 제목만 넣는 항목 수 (D295) */
 export const PICK_LIMIT = 15
-export const TITLE_LIMIT = 20
+const TITLE_LIMIT = 20
 
 /**
  * 관련 지식을 고르는 데 쓰는 이 task의 단서 (D295). 앱이 요청, intent, 이 Work의 diff, (verify는) 바꾼 지식과 후보에서 만든다
@@ -703,7 +703,7 @@ export interface KnowledgeFileChange {
 }
 
 /** 두 글의 줄 차이 (diff 화면이 줄 머리로 색을 칠한다). 지식 파일은 작아 줄 LCS로 충분하다. 너무 크면 앞을 모두 빼고 뒤를 넣는다 */
-export function lineDiff(file: string, before: string | null, after: string | null): string {
+function lineDiff(file: string, before: string | null, after: string | null): string {
   const a = before === null ? [] : before.replace(/\n$/, '').split('\n')
   const b = after === null ? [] : after.replace(/\n$/, '').split('\n')
   const head = [
