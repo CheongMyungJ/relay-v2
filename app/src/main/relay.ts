@@ -106,7 +106,7 @@ export class Relay {
     if (warning) this.warnings.push(warning)
     await this.hooks.listen()
     const loaded: WorkRunner[] = []
-    for (const project of await loadProjects(this.o.home)) {
+    for (const project of await loadProjects(this.o.home, this.warnings)) {
       this.projects.set(project.project_id, project)
       for (const id of await workIds(this.o.home, project.project_id)) {
         const files = new WorkFiles(workDir(this.o.home, project.project_id, id))
@@ -125,10 +125,30 @@ export class Relay {
     }
     // 1. 고아 프로세스 (시나리오 9-1): 모든 Work의 기록을 모아 한 번에 확인하고 끝낸다
     const killed = await this.killOrphans(loaded)
-    // 2~6. 재시작 조정. Work마다 따로라 함께 한다
-    await Promise.all(loaded.map((r) => r.reconcile(killed.get(r) ?? [])))
+    // 2~6. 재시작 조정. Work마다 따로라 함께 한다. 조정하지 못한 Work만 빼고 앱을 연다 (D332)
+    const failed = new Set<WorkRunner>()
+    await Promise.all(
+      loaded.map((r) =>
+        r.reconcile(killed.get(r) ?? []).catch(async (e: unknown) => {
+          failed.add(r)
+          this.works.delete(r.key)
+          this.warnings.push(
+            `${r.key}: 재시작 조정에서 기록을 쓰지 못해 이 Work를 열지 않음. 원인을 치운 뒤 앱을 다시 켜세요 (${String(e)})`,
+          )
+          await r.shutdown().catch(() => undefined)
+        }),
+      ),
+    )
     // PR 진행인 Work는 항목을 읽어 두고 PR을 한 번 읽는다 (D159). 읽은 결과로 알리지 않는다
-    await Promise.all(loaded.map((r) => r.startPr({ quiet: true })))
+    await Promise.all(
+      loaded
+        .filter((r) => !failed.has(r))
+        .map((r) =>
+          r.startPr({ quiet: true }).catch((e: unknown) => {
+            this.warnings.push(`${r.key}: PR 진행을 시작하지 못함 (${String(e)})`)
+          }),
+        ),
+    )
   }
 
   /**

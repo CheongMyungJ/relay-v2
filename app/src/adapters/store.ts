@@ -170,11 +170,22 @@ export function worktreeDir(home: string, projectId: string, workId: string): st
   return path.join(projectDir(home, projectId), 'worktrees', workId)
 }
 
-export async function loadProjects(home: string): Promise<ProjectState[]> {
+/**
+ * 등록한 프로젝트를 읽는다. 읽을 수 없는 project.json은 그 프로젝트만 빼고 problems에 파일과 까닭을 남긴다. 파일은
+ * 건드리지 않는다 (D332)
+ */
+export async function loadProjects(home: string, problems: string[] = []): Promise<ProjectState[]> {
   const out: ProjectState[] = []
   for (const id of await subdirs(path.join(home, 'projects'))) {
-    const p = await readJson<ProjectState>(path.join(projectDir(home, id), 'project.json'))
-    if (p) out.push(p)
+    const file = path.join(projectDir(home, id), 'project.json')
+    try {
+      const p = await readJson<ProjectState>(file)
+      if (p) out.push(p)
+    } catch (e) {
+      problems.push(
+        `${file}: 읽을 수 없어 이 프로젝트를 열지 않음. 파일을 고친 뒤 앱을 다시 켜세요 (${e instanceof Error ? e.message : String(e)})`,
+      )
+    }
   }
   return out
 }
