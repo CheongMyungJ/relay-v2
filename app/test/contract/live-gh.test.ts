@@ -17,9 +17,11 @@ const LIVE = process.env['RELAY_CONTRACT_LIVE_GH'] === '1' && REPO !== ''
 const UPDATE = process.env['RELAY_CONTRACT_UPDATE'] === '1'
 const OUT = path.resolve(__dirname, '../../test-results/contract')
 const lines: string[] = []
-const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'relay-contract-gh-live-'))
+// 건너뛸 때는 임시 폴더도 결과 파일도 만들지 않는다
+const cwd = LIVE ? fs.mkdtempSync(path.join(os.tmpdir(), 'relay-contract-gh-live-')) : ''
 
 afterAll(() => {
+  if (!LIVE) return
   fs.mkdirSync(OUT, { recursive: true })
   fs.writeFileSync(path.join(OUT, 'live-gh.md'), ['# [계약] 실제 gh', '', ...lines, ''].join('\n'))
   fs.rmSync(cwd, { recursive: true, force: true })

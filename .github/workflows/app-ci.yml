@@ -110,7 +110,8 @@ jobs:
 
   windows:
     runs-on: windows-latest
-    timeout-minutes: 20
+    # [스모크] 셋(app, codex, theme)과 [흐름]을 함께 돌아 최근 18분쯤 걸린다. 들쑥날쑥한 러너에서 끊기지 않게 여유를 둔다
+    timeout-minutes: 30
     defaults:
       run:
         shell: pwsh

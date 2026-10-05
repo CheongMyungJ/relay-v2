@@ -1,6 +1,8 @@
 // 계약: relay가 실제 claude(Claude Code)에 기대는 것 (docs/implementation.md 8.1의 [계약]).
 // 가짜 claude(test/support/fake-claude)는 이 계약을 지켜야 [흐름]의 통과가 실제에서도 뜻이 있다. 실제 claude가 이
 // 계약을 지키는지는 녹화본(fixtures/claude.json)과 live.test.ts로 본다.
+// 한계: 녹화는 claude -p(비대화형)로 한다. 앱은 PTY에서 대화형으로 띄우므로, 대화형에서만 오는 이벤트(Notification)나
+// 대화형에서만 달라지는 필드는 녹화본에 없다. 그런 차이는 [실제](실제 claude를 앱으로 띄움)가 잡는다.
 //
 // - 훅 본문: 앱이 읽는 필드와 그 타입(src/main/work.ts, src/core/approval.ts). 앱이 읽지 않는 필드는 계약에 넣지 않는다.
 // - 실행 인자: 앱이 claude에 넘기는 옵션(src/core/settings.ts의 launchArgs·resumeArgs·cleanupArgs,

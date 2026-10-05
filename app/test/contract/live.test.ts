@@ -12,6 +12,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
+import { cleanEnv, makeClaudeConfig } from '../../eval/lib/env.mjs'
 import { claudeJson } from '../../src/adapters/claude'
 import { HOOK_TOKEN_ENV, hookSettings, type HookEvent } from '../../src/core/settings'
 import {
@@ -34,43 +35,21 @@ const MODEL = process.env['RELAY_CONTRACT_MODEL'] ?? 'haiku'
 const OUT = path.resolve(__dirname, '../../test-results/contract')
 const TOKEN = 'contract-token'
 
-/** 고른 환경만 넘긴다 (8.4, eval/lib/env.mjs와 같음). 설정 폴더는 따로 두고 대화형 온보딩을 건너뛴다 */
-function cleanEnv(configDir: string): NodeJS.ProcessEnv {
-  const pass = [
-    'HOME',
-    'PATH',
-    'USER',
-    'LANG',
-    'HTTP_PROXY',
-    'HTTPS_PROXY',
-    'NO_PROXY',
-    'http_proxy',
-    'https_proxy',
-    'no_proxy',
-    'NODE_EXTRA_CA_CERTS',
-    'SSL_CERT_FILE',
-    'CLAUDE_CODE_OAUTH_TOKEN',
-    'ANTHROPIC_API_KEY',
-  ]
-  const env: NodeJS.ProcessEnv = {}
-  for (const k of pass) if (process.env[k]) env[k] = process.env[k]
-  if (process.getuid?.() === 0) env['IS_SANDBOX'] = '1'
-  env['DISABLE_AUTOUPDATER'] = '1'
-  env['CLAUDE_CONFIG_DIR'] = configDir
-  fs.mkdirSync(configDir, { recursive: true })
-  fs.writeFileSync(
-    path.join(configDir, '.claude.json'),
-    JSON.stringify({ hasCompletedOnboarding: true }),
-  )
-  return env
-}
-
 const BIN = process.env['CLAUDE_BIN'] ?? 'claude'
-const root = fs.mkdtempSync(path.join(os.tmpdir(), 'relay-contract-'))
-const env = cleanEnv(path.join(root, 'config'))
+// 건너뛸 때는 임시 폴더도 결과 파일도 만들지 않는다
+const root = LIVE ? fs.mkdtempSync(path.join(os.tmpdir(), 'relay-contract-')) : ''
+/** 고른 환경만 넘긴다 (8.4, 평가와 같은 eval/lib/env.mjs). 설정 폴더는 따로 두고 대화형 온보딩을 건너뛴다 */
+const env: NodeJS.ProcessEnv = LIVE
+  ? cleanEnv({
+      CLAUDE_CODE_OAUTH_TOKEN: process.env['CLAUDE_CODE_OAUTH_TOKEN'],
+      ANTHROPIC_API_KEY: process.env['ANTHROPIC_API_KEY'],
+      CLAUDE_CONFIG_DIR: makeClaudeConfig(path.join(root, 'config')),
+    })
+  : {}
 const lines: string[] = []
 
 afterAll(() => {
+  if (!LIVE) return
   fs.mkdirSync(OUT, { recursive: true })
   fs.writeFileSync(path.join(OUT, 'live.md'), ['# [계약] 실제 claude', '', ...lines, ''].join('\n'))
   fs.rmSync(root, { recursive: true, force: true })
