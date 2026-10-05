@@ -257,6 +257,21 @@ export class RelayArm {
     }
     await register.click()
     await win.locator('.project-name').first().waitFor({ timeout: 30_000 })
+    await this.issueLogOff()
+  }
+
+  /**
+   * 이슈 기록(relay D337)을 끈다. 평가 환경의 gh는 로그인하지 않아 게시가 늘 실패하고, 그 실패 알림이 사람 역할의
+   * friction으로 잡혔다(2026-10-05 평가 31). 원격 저장소도 평가용이라 이슈를 만들 곳이 없다
+   */
+  async issueLogOff() {
+    const win = this.win
+    await win.locator('.project-name').first().click()
+    const box = win.getByRole('checkbox', { name: '이슈 기록' })
+    await box.waitFor({ timeout: 30_000 })
+    if (await box.isChecked()) await box.uncheck()
+    await win.getByRole('button', { name: '저장' }).click()
+    await box.waitFor({ state: 'detached', timeout: 30_000 })
   }
 
   async notifications() {
