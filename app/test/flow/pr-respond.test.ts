@@ -184,6 +184,28 @@ describe('[흐름] PR 대응 (M10, 가짜 gh)', () => {
     expect(prItems(w).items.filter((i) => i.status === 'done')).toHaveLength(3)
   })
 
+  it('인라인 답글 게시가 실패한 뒤 코멘트 목록도 읽지 못하면 원래 오류를 보이고 목록 오류를 덧붙인다', async () => {
+    const s = await setup()
+    const w = await openWork(s)
+    threeComments(s, w)
+    const t = await startRound(s, w, 3)
+    // 답글은 대응 task의 항목 차례로 게시한다 (core/respond replyItemIds)
+    const order = (workState(w).tasks.find((x) => x.id === t.id)?.respond?.items ?? []).filter(
+      (id) => /^(review|inline|convo):/.test(id),
+    )
+    const inline = order.findIndex((id) => id.startsWith('inline:'))
+    expect(inline).toBeGreaterThanOrEqual(0)
+    // 인라인 답글의 POST가 HTTP 502로 실패하고, 코멘트가 없어졌는지 보려는 목록 읽기(REST GET)도 실패한다
+    s.gh.postFaults([...order.slice(0, inline).map(() => 'ok' as const), 'error'])
+    s.ctx.h.env['FAKE_GH_FAIL'] = 'api'
+    const r = await s.ctx.h.relay.approve(w.key, t.id, {})
+    delete s.ctx.h.env['FAKE_GH_FAIL']
+    expect(r.ok).toBe(false)
+    const error = r.ok ? '' : r.error
+    expect(error).toContain('Bad Gateway (HTTP 502)')
+    expect(error).toContain('코멘트 목록도 읽지 못함')
+  })
+
   it('push·게시가 끊기면 끊긴 작업이다. [다시 시도]는 이미 원격에 있는 커밋을 다시 보내지 않고 끊긴 곳부터 게시한다. [무시]는 실패로 남긴다 (시나리오 9-7, D123, D194)', async () => {
     for (const mode of ['push', 'reply', 'ignore'] as const) {
       const s = await setup()

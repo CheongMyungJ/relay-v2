@@ -283,6 +283,45 @@ describe('[흐름] PR 진행 (M9, 시나리오 10)', () => {
     expect(ghCalls(s, 'pr merge')).toHaveLength(merges)
   })
 
+  it('실패한 스텝의 로그가 비면 "비어 있음"으로 한 번 남기고 읽을 때마다 다시 받지 않는다', async () => {
+    const s = await setup()
+    const w = await openWork(s)
+    const head = workState(w).pr?.head ?? ''
+    s.gh.setChecks(w.pr, head, [s.gh.checkRun(w.pr, { conclusion: 'FAILURE', log: '' })])
+    const failed = await refreshUntil(s.ctx, w, (x) => x.ci === 'fail', 'CI 실패')
+    expect(failed.items.find((i) => i.kind === 'ci')?.note).toBe('실패한 스텝의 로그가 비어 있음')
+    const reads = ghCalls(s, 'run view').length
+    expect(await s.ctx.h.relay.prRefresh(w.key)).toEqual({ ok: true })
+    await settle(s.ctx.h, w.key)
+    expect(ghCalls(s, 'run view')).toHaveLength(reads)
+  })
+
+  it('다시 점검과 프로젝트 설정 저장이 겹쳐도 둘 다 남는다 (project.json 고치기의 차례)', async () => {
+    const s = await setup()
+    const w = await openWork(s)
+    const projectFile = path.join(s.ctx.h.home, 'projects', s.ctx.projectId, 'project.json')
+    const checkedBefore = (
+      JSON.parse(fs.readFileSync(projectFile, 'utf8')) as { checks: { checked_at: string } }
+    ).checks.checked_at
+    await new Promise((r) => setTimeout(r, 1100))
+    const [rechecked, saved] = await Promise.all([
+      s.ctx.h.relay.recheckWork(w.key),
+      s.ctx.h.relay.updateProjectSettings(s.ctx.projectId, {
+        allowed_bots: ['github-actions'],
+        merge_method: 'rebase',
+      }),
+    ])
+    expect(rechecked).toMatchObject({ ok: true })
+    expect(saved).toEqual({ ok: true })
+    const file = JSON.parse(fs.readFileSync(projectFile, 'utf8')) as {
+      allowed_bots: string[]
+      merge_method: string
+      checks: { checked_at: string }
+    }
+    expect(file).toMatchObject({ allowed_bots: ['github-actions'], merge_method: 'rebase' })
+    expect(file.checks.checked_at).not.toBe(checkedBefore)
+  })
+
   it('끊긴 머지의 [무시]는 기록만 지우고 PR 진행으로 남는다 (D123)', async () => {
     const s = await setup()
     const w = await openWork(s)

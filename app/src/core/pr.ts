@@ -445,9 +445,17 @@ export function ciItemId(head: string, check: Pick<CheckFact, 'key'>): string {
   return `ci:${head}:${check.key}`
 }
 
+/** 실패한 스텝의 로그를 읽었는데 비었다 (실패한 스텝 표시 없이 실패한 작업 등). 다시 받아도 같으므로 읽은 것으로 본다 */
+export const EMPTY_LOG_NOTE = '실패한 스텝의 로그가 비어 있음'
+
 /** CI 실패 항목의 로그를 이 작업(job)에서 이미 읽었는가. 같은 체크가 다른 작업으로 다시 실패하면 새로 읽는다 */
 export function ciLogRead(items: readonly PrItem[], id: string, job: number | null): boolean {
-  return items.some((i) => i.id === id && i.log !== undefined && (i.check?.job ?? null) === job)
+  return items.some(
+    (i) =>
+      i.id === id &&
+      (i.log !== undefined || i.log_note === EMPTY_LOG_NOTE) &&
+      (i.check?.job ?? null) === job,
+  )
 }
 
 function checkRef(c: CheckFact): PrCheckRef {

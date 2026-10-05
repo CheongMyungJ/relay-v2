@@ -85,6 +85,8 @@ export class Relay {
   private creating = false
   /** 설정 바꾸기를 차례로 한다. 겹친 두 바꾸기가 서로의 값을 지우지 않게 */
   private configQueue: Promise<unknown> = Promise.resolve()
+  /** project.json 고치기의 차례 (updateProject) */
+  private projectWrites: Promise<unknown> = Promise.resolve()
 
   private constructor(private readonly o: RelayOptions) {
     this.env = o.env ?? process.env
@@ -253,7 +255,23 @@ export class Relay {
       gh_version: gh.version,
       checked_at: this.at(),
     }
-    await this.saveProjectState({ ...(this.projects.get(projectId) ?? project), checks })
+    await this.updateProject(projectId, (p) => ({ ...p, checks }))
+  }
+
+  /**
+   * 등록한 프로젝트의 project.json을 고친다. 고치기는 차례로 하고 그때의 최신 상태에서 바꾼다: 다시 점검과 설정 저장이
+   * 겹쳐도 한쪽이 다른 쪽을 덮지 않는다. 설정 줄(configQueue)과 따로라 Work의 처리 줄과 서로 기다리지 않는다
+   */
+  private updateProject(
+    projectId: string,
+    change: (p: ProjectState) => ProjectState,
+  ): Promise<void> {
+    const run = this.projectWrites.then(async () => {
+      const current = this.projects.get(projectId)
+      if (current) await this.saveProjectState(change(current))
+    })
+    this.projectWrites = run.catch(() => undefined)
+    return run
   }
 
   /** project.json을 쓰고 화면과 그 프로젝트의 Work에 알린다 */
@@ -370,11 +388,11 @@ export class Relay {
       if (!project) return { ok: false, error: '프로젝트가 없습니다' }
       const r = checkProjectSettings(settings)
       if (!r.ok) return { ok: false, error: r.error }
-      await this.saveProjectState({
-        ...project,
+      await this.updateProject(projectId, (p) => ({
+        ...p,
         allowed_bots: r.value.allowed_bots,
         merge_method: r.value.merge_method,
-      })
+      }))
       await Promise.all(
         [...this.works.values()]
           .filter((w) => w.project.project_id === projectId)

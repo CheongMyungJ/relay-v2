@@ -17,6 +17,7 @@ import {
   checksOf,
   ciItemId,
   commentFacts,
+  EMPTY_LOG_NOTE,
   failedLogTail,
   repoArg,
   restRepo,
@@ -237,8 +238,10 @@ export async function readPr(
       continue
     }
     const r = await ghFailedLog(ctx.ghBin, { repo, job: c.job, cwd: ctx.repo, env: ctx.env })
-    if (r.ok) logs.set(id, { log: failedLogTail(r.text) })
-    else logs.set(id, { note: r.pending ? RUN_PENDING : `로그를 읽지 못함: ${r.error}` })
+    if (r.ok) {
+      const tail = failedLogTail(r.text)
+      logs.set(id, tail ? { log: tail } : { note: EMPTY_LOG_NOTE })
+    } else logs.set(id, { note: r.pending ? RUN_PENDING : `로그를 읽지 못함: ${r.error}` })
   }
   return {
     view,

@@ -4499,10 +4499,21 @@ export class WorkRunner {
       })
     } catch (err) {
       const answered = err instanceof GhApiError && err.status !== null
-      if (reply.thread !== null && answered && (await this.inlineGone(reply, location, lists))) {
-        await this.markGone(reply.item)
-        await this.updateReply(taskId, reply.item, { skipped: GONE_SKIP })
-        return
+      if (reply.thread !== null && answered) {
+        let gone: boolean
+        try {
+          gone = await this.inlineGone(reply, location, lists)
+        } catch (listErr) {
+          // 목록을 읽지 못해도 사람이 볼 것은 게시가 실패한 원래 까닭이다
+          throw new Error(`${message(err)} (코멘트 목록도 읽지 못함: ${message(listErr)})`, {
+            cause: listErr,
+          })
+        }
+        if (gone) {
+          await this.markGone(reply.item)
+          await this.updateReply(taskId, reply.item, { skipped: GONE_SKIP })
+          return
+        }
       }
       throw err
     }
