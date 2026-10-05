@@ -56,7 +56,7 @@ cd app && node eval/run.mjs --scenarios <목록> --runs <n> --parallel 2 > eval/
 
 ## 시나리오를 더하거나 고칠 때
 
-`docs/eval.md` 5절의 형식을 따른다(09~14의 설계는 `docs/eval-hard-scenarios.md`). Work 둘을 잇는 시나리오는 `report`, `knowledge`, `checks` 대신 `works`에 Work마다 두고, Work마다의 정답을 `reference-<n>.patch`로 둔다(그 Work의 시험만 통과하고 다른 Work의 시험은 실패해야 한다). 기능 추가 시나리오는 `scenario.json`에 `"type": "feature"`를 두고, 인수 조건을 숨긴 시험으로 둔다. 리팩터링 시나리오는 `"type": "refactor"`를 두고, 동작 보존 시험은 guard(기준에서도 통과), 구조 조건 시험은 guard가 아닌 것(기준에서 실패)으로 둔다. 일반 시나리오는 `"type": "general"`을 두고, 사람만 아는 사실로 갈리는 함정을 하나씩 둔다(28~30). 정답 수정은 `reference.patch`, 그럴듯한 틀린 수정은 `traps/*.patch`로 두고 확인한다:
+`docs/eval.md` 5절의 형식을 따른다(09~14의 설계는 `docs/archive/eval-hard-scenarios.md`). Work 둘을 잇는 시나리오는 `report`, `knowledge`, `checks` 대신 `works`에 Work마다 두고, Work마다의 정답을 `reference-<n>.patch`로 둔다(그 Work의 시험만 통과하고 다른 Work의 시험은 실패해야 한다). 기능 추가 시나리오는 `scenario.json`에 `"type": "feature"`를 두고, 인수 조건을 숨긴 시험으로 둔다. 리팩터링 시나리오는 `"type": "refactor"`를 두고, 동작 보존 시험은 guard(기준에서도 통과), 구조 조건 시험은 guard가 아닌 것(기준에서 실패)으로 둔다. 일반 시나리오는 `"type": "general"`을 두고, 사람만 아는 사실로 갈리는 함정을 하나씩 둔다(28~30). 정답 수정은 `reference.patch`, 그럴듯한 틀린 수정은 `traps/*.patch`로 두고 확인한다:
 
 ```bash
 cd app && node eval/check-scenario.mjs <id>   # 기준: npm test와 guard 통과, 나머지 숨긴 시험 실패 / 정답 패치: 모두 통과 / 함정 패치: 하나 이상 실패

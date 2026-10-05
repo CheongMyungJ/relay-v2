@@ -1,6 +1,6 @@
 # relay 대 맨 CLI 사용성 평가
 
-- 상태: 도구 준비 (평가 결과는 아직 없음)
+- 상태: 사용 중. 평가 보고서는 `app/eval/reports/`에 있다(지난 것은 `reports/archive/`)
 - 코드: `app/eval/`
 - 새 세션에서 돌리기: `.claude/skills/relay-eval/SKILL.md` (예: "시나리오 3번으로 5번 돌려서 평가해줘")
 
