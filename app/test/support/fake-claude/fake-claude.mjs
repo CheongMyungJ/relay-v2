@@ -168,7 +168,8 @@ async function hook(event, fields = {}, toolName) {
     ...(promptId ? { prompt_id: promptId } : {}),
     transcript_path: path.join(os.tmpdir(), 'fake-claude', `${opts.sessionId}.jsonl`),
     cwd: process.cwd(),
-    permission_mode: permissionMode(),
+    // 실제 SessionEnd에는 permission_mode가 없다 (test/contract/fixtures/claude.json)
+    ...(event === 'SessionEnd' ? {} : { permission_mode: permissionMode() }),
     hook_event_name: event,
     ...fields,
   }
@@ -362,8 +363,17 @@ async function steps(list, ctx, vars) {
       await waitEnter()
       // fail이면 도구가 실패한 것이다: PostToolUse 대신 PostToolUseFailure를 보낸다
       if (step.fail)
-        await hook('PostToolUseFailure', { ...fields, error: '거절함' }, 'AskUserQuestion')
-      else await hook('PostToolUse', { ...fields, tool_response: '답함' }, 'AskUserQuestion')
+        await hook(
+          'PostToolUseFailure',
+          { ...fields, error: '거절함', is_interrupt: false, duration_ms: 0 },
+          'AskUserQuestion',
+        )
+      else
+        await hook(
+          'PostToolUse',
+          { ...fields, tool_response: { answers: {} }, duration_ms: 0 },
+          'AskUserQuestion',
+        )
     } else if (s === 'tool') {
       // 도구 호출 (D216): PreToolUse, ms만큼 실행, PostToolUse. 두 훅은 같은 tool_use_id를 가진다.
       // fail이면 PostToolUse 대신 PostToolUseFailure를 보낸다. agent가 있으면 서브에이전트 안의 도구라 훅에
@@ -382,11 +392,20 @@ async function steps(list, ctx, vars) {
       if (step.fail) {
         await hook(
           'PostToolUseFailure',
-          { ...fields, error: 'Exit code 1', is_interrupt: false },
+          { ...fields, error: 'Exit code 1', is_interrupt: false, duration_ms: step.ms ?? 0 },
           step.name,
         )
       } else {
-        await hook('PostToolUse', { ...fields, tool_response: '' }, step.name)
+        // 실제처럼 tool_response는 객체이고 duration_ms가 있다 (test/contract/fixtures/claude.json)
+        await hook(
+          'PostToolUse',
+          {
+            ...fields,
+            tool_response: { stdout: '', stderr: '', interrupted: false },
+            duration_ms: step.ms ?? 0,
+          },
+          step.name,
+        )
       }
     } else if (s === 'notify') {
       await hook('Notification', { message: '알림', notification_type: step.type })
