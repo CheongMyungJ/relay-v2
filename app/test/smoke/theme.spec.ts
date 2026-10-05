@@ -15,6 +15,10 @@ import {
 const APP_DIR = path.resolve(__dirname, '../..')
 /** 사이드바 바탕 (styles.css의 --bg-side) */
 const SIDEBAR = { 다크: 'rgb(22, 24, 29)', 라이트: 'rgb(246, 247, 249)' } as const
+/** 고른 Work가 없을 때 가운데(첫 사용 안내)의 바탕: 테마의 --bg다 */
+const CENTER = { 다크: 'rgb(17, 19, 23)', 라이트: 'rgb(255, 255, 255)' } as const
+/** 터미널 바탕 토큰. 테마와 관계없이 같아야 한다 */
+const TERM_BG = "getComputedStyle(document.documentElement).getPropertyValue('--term-bg').trim()"
 
 let root: string
 let env: Record<string, string>
@@ -48,14 +52,19 @@ test.afterAll(() => {
 test('설정 화면에서 테마를 고르면 바로 바뀌고 다시 켜도 남는다 (D335)', async () => {
   const app = await launch()
   const win = await open(app)
+  const termBg: string[] = []
   for (const label of ['다크', '라이트'] as const) {
     await win.locator('.sidebar').getByRole('button', { name: '설정', exact: true }).click()
     await win.getByLabel('테마').selectOption({ label })
     await win.getByRole('button', { name: '저장', exact: true }).click()
     await expect(win.locator('.sidebar')).toHaveCSS('background-color', SIDEBAR[label])
+    // 첫 사용 안내는 테마 바탕에 그린다: 테마 글자가 어두운 터미널 바탕 위에 오지 않는다
+    await expect(win.locator('.terminal')).toHaveCSS('background-color', CENTER[label])
+    termBg.push(String(await win.evaluate(TERM_BG)))
   }
   // 터미널은 테마와 관계없이 어둡다
-  await expect(win.locator('.terminal')).toHaveCSS('background-color', 'rgb(17, 19, 23)')
+  expect(termBg[0]).toBeTruthy()
+  expect(termBg[1]).toBe(termBg[0])
   await app.close()
 
   const config = JSON.parse(fs.readFileSync(path.join(root, 'home', 'config.json'), 'utf8')) as {

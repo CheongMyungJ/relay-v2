@@ -25,6 +25,12 @@ export type ThemeChoice = 'system' | 'dark' | 'light'
 
 export const THEME_CHOICES: readonly ThemeChoice[] = ['system', 'dark', 'light']
 
+export const THEME_LABEL: Readonly<Record<ThemeChoice, string>> = {
+  system: '시스템 설정 따름',
+  dark: '다크',
+  light: '라이트',
+}
+
 export interface AppConfig {
   schema_version: 1
   /** 새 task를 만들 때 고정하는 기본 엔진. 기존 task의 재개에는 적용하지 않는다 (E5). */

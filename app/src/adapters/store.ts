@@ -8,7 +8,7 @@ import path from 'node:path'
 import { normalizeConfig } from '../core/config'
 import { taskDirName } from '../core/machine'
 import { appendBlock } from '../core/records'
-import { DEFAULT_CONFIG, type AppConfig } from '../shared/config'
+import { DEFAULT_CONFIG, type AppConfig, type ThemeChoice } from '../shared/config'
 import { EMPTY_PR_ITEMS, type PrItemsFile } from '../shared/pr'
 import type { ProjectState } from '../shared/project'
 import type { LifecycleEvent, OwnedFile, TaskRecord, WorkState } from '../shared/work'
@@ -127,6 +127,19 @@ export interface LoadedConfig {
   config: AppConfig
   /** config.json을 읽지 못해 기본값을 쓴 이유 */
   warning?: string
+}
+
+/**
+ * 테마만 동기로 읽는다 (D335). 창을 그리기 전에 정해야 실행할 때 다른 테마가 잠깐 보이지 않는다. 읽지 못하면 기본값이다.
+ * 경고와 기본값 파일 만들기는 loadConfig가 한다
+ */
+export function readThemeSync(home: string): ThemeChoice {
+  try {
+    const text = fs.readFileSync(path.join(home, 'config.json'), 'utf8')
+    return normalizeConfig(parseJson(text)).config.theme
+  } catch {
+    return DEFAULT_CONFIG.theme
+  }
 }
 
 /**

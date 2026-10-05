@@ -4,7 +4,6 @@ import os from 'node:os'
 import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { ALL_NODES } from '../core/pipeline'
 import { IPC, type AppInfo } from '../shared/api'
-import type { AppConfig } from '../shared/config'
 import type { NodeName } from '../shared/contracts'
 import type {
   ApproveOptions,
@@ -149,8 +148,6 @@ function respondInput(v: unknown): RespondStartInput {
 export interface IpcHooks {
   /** 사람이 보고 있는 Work가 바뀌었다 (D81) */
   onSelectWork(workKey: string | null): void
-  /** 설정 화면에서 앱 설정을 바꿨다. 테마(D335)처럼 main이 적용할 것을 적용한다 */
-  onConfig(config: AppConfig): void
 }
 
 export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
@@ -289,9 +286,7 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   )
   ipcMain.handle(IPC.config, async () => (await ready).currentConfig())
   ipcMain.handle(IPC.updateConfig, async (_e, patch: unknown) => {
-    const relay = await ready
-    const r = await relay.updateConfig(patch)
-    if (r.ok) hooks.onConfig(relay.currentConfig())
+    const r = await (await ready).updateConfig(patch)
     return r.ok ? { ok: true } : r
   })
   ipcMain.on(IPC.selectWork, (_e, workKey: unknown) => {

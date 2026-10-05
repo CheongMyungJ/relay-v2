@@ -2,9 +2,9 @@
 import { join } from 'node:path'
 import { app, BrowserWindow, dialog, nativeTheme, Notification } from 'electron'
 import { skillsDir } from '../adapters/claude'
-import { relayHome } from '../adapters/store'
+import { readThemeSync, relayHome } from '../adapters/store'
 import { IPC } from '../shared/api'
-import type { AppConfig } from '../shared/config'
+import type { ThemeChoice } from '../shared/config'
 import { holdSingleInstance } from './instance'
 import { registerIpc } from './ipc'
 import { APP_USER_MODEL_ID, keepNotice } from './notices'
@@ -90,24 +90,28 @@ if (process.platform === 'win32' && app.isPackaged) app.setAppUserModelId(APP_US
 // 앱은 하나만 켠다 (D133). 두 번째로 켠 앱은 relay를 열지 않고 끝나고, 첫 앱이 창을 앞으로 가져온다
 const primary = holdSingleInstance(app, () => void showWindow())
 
-const ready: Promise<Relay> = primary
-  ? app
-      .whenReady()
-      .then(() =>
-        Relay.open({ home: relayHome(), skills: skillsDir(process.env, bundledSkills()), ui }),
-      )
-  : new Promise<Relay>(() => {})
-/** 화면 테마 (D335). 렌더러의 CSS는 prefers-color-scheme만 보므로 main이 정한다 */
-function applyTheme(config: AppConfig): void {
-  nativeTheme.themeSource = config.theme
+/**
+ * 화면 테마 (D335). 렌더러의 CSS는 prefers-color-scheme만 보므로 main이 정한다. 창을 만들기 전에 config.json의
+ * 테마만 먼저 읽어 적용하고(실행할 때 다른 테마가 잠깐 보이지 않게), 그 뒤에는 Relay가 설정을 읽거나 바꿀 때마다 알린다
+ */
+function applyTheme(theme: ThemeChoice): void {
+  nativeTheme.themeSource = theme
 }
 
-void ready.then((relay) => applyTheme(relay.currentConfig())).catch(() => undefined)
+const ready: Promise<Relay> = primary
+  ? app.whenReady().then(() =>
+      Relay.open({
+        home: relayHome(),
+        skills: skillsDir(process.env, bundledSkills()),
+        ui,
+        onConfig: (config) => applyTheme(config.theme),
+      }),
+    )
+  : new Promise<Relay>(() => {})
 registerIpc(ready, {
   onSelectWork: (workKey) => {
     selectedWork = workKey
   },
-  onConfig: applyTheme,
 })
 ready.catch((e: unknown) => {
   dialog.showErrorBox('relay를 시작할 수 없습니다', e instanceof Error ? e.message : String(e))
@@ -180,6 +184,7 @@ function createWindow(): void {
 
 void app.whenReady().then(() => {
   if (!primary) return
+  applyTheme(readThemeSync(relayHome()))
   createWindow()
   const target = {
     env: process.env,

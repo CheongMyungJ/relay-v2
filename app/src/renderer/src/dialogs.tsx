@@ -15,6 +15,7 @@ import {
   SETTING_GROUP_LABEL,
   SKILL_TITLES,
   THEME_CHOICES,
+  THEME_LABEL,
   groupShown,
   type AppConfig,
   type AutoApproveNode,
@@ -707,12 +708,6 @@ const NUMBERS: [NumberKey, string, string][] = [
  * 앱 설정 (D70). 바꾸면 바로 적용하고, 질문 방식만 다음에 시작하는 task부터 쓴다 (D73).
  * 자동 승인은 턴이 끝날 때의 설정으로 판정하고, 카운트다운 중에 끄면 멈춘다. 카운트다운 초는 다음 카운트다운부터 쓴다 (D128)
  */
-const THEME_LABEL: Readonly<Record<ThemeChoice, string>> = {
-  system: '시스템 설정 따름',
-  dark: '다크',
-  light: '라이트',
-}
-
 export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const config = useConfig()
   const [draft, setDraft] = useState<AppConfig | null>(null)

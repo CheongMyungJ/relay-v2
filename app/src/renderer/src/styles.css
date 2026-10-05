@@ -27,8 +27,10 @@
   --backdrop: rgb(5 6 8 / 60%);
   --shadow-color: rgb(0 0 0 / 70%);
   --shadow-lg: 0 24px 60px rgb(0 0 0 / 55%), 0 0 0 1px rgb(255 255 255 / 2%) inset;
-  /* 터미널 바탕. terminals.ts의 xterm theme과 같다 */
+  /* 터미널 색. 테마와 관계없이 어둡고(D335), terminals.ts가 읽어 xterm theme에 쓴다 */
   --term-bg: #111317;
+  --term-fg: #d6d9df;
+  --term-selection: #3b82f659;
   /* 대화상자와 그 안의 묶음 */
   --bg-modal: var(--bg-side);
   --bg-group: var(--bg-raise);
@@ -314,7 +316,7 @@ textarea {
   border-color: transparent;
 }
 
-.work-item:hover:not(:disabled) {
+.work-item:hover:not(:disabled, .selected) {
   background: var(--bg-raise);
   border-color: transparent;
 }
@@ -350,7 +352,8 @@ textarea {
 
 /* 배지와 상태는 --tone 하나로 색을 정한다: 옅은 바탕에 같은 색 글자 */
 .badge,
-.status {
+.status,
+.pr-state {
   --tone: var(--text-dim);
   font-size: 11px;
   line-height: 18px;
@@ -387,10 +390,6 @@ textarea {
 
 .badge.b-working {
   --tone: var(--accent-text);
-}
-
-.badge.b-done {
-  --tone: var(--good);
 }
 
 .new-work {
@@ -479,6 +478,7 @@ textarea {
 
 .dot {
   --tone: var(--text-faint);
+  position: relative;
   flex: none;
   width: 7px;
   height: 7px;
@@ -486,14 +486,28 @@ textarea {
   background: var(--tone);
 }
 
-.dot.s-working {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone) 25%, transparent);
+/* 작업 중인 점의 깜박임. transform과 opacity만 바꿔 다시 그리기를 줄인다 */
+.dot.s-working::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  background: var(--tone);
+  opacity: 0.3;
   animation: pulse 1.6s ease-in-out infinite;
 }
 
 @keyframes pulse {
   50% {
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--tone) 10%, transparent);
+    opacity: 0.08;
+    transform: scale(0.7);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot.s-working::after,
+  .modal-dialog[open] {
+    animation: none;
   }
 }
 
@@ -624,6 +638,11 @@ textarea {
 
 .terminal-host[hidden] {
   display: none;
+}
+
+/* 고른 Work가 없으면 가운데는 터미널이 아니라 안내다. 테마 바탕에 테마 글자로 그린다 */
+.terminal:has(> .empty) {
+  background: var(--bg);
 }
 
 .empty {
@@ -981,7 +1000,7 @@ textarea {
 
 .verdicts td.verdict {
   font-weight: 600;
-  white-space: nowrap;
+  min-width: 3em;
 }
 
 .verdicts td.v-ok {
@@ -1081,7 +1100,6 @@ textarea {
 
 .modal-dialog::backdrop {
   background: var(--backdrop);
-  backdrop-filter: blur(2px);
 }
 
 .modal {
@@ -1483,17 +1501,6 @@ button.ready {
 
 .pr-title button {
   margin-left: auto;
-}
-
-.pr-state {
-  --tone: var(--text-dim);
-  font-size: 11px;
-  line-height: 18px;
-  font-weight: 500;
-  padding: 0 8px;
-  border-radius: 999px;
-  color: var(--tone);
-  background: color-mix(in srgb, var(--tone) 16%, transparent);
 }
 
 .pr-state.ps-open {
