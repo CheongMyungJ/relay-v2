@@ -19,6 +19,7 @@ import {
   divergedFact,
   failedLogTail,
   gatherItems,
+  ciLogRead,
   ghTooOld,
   ghVersionOf,
   ghVersionReason,
@@ -936,5 +937,55 @@ describe('PR 패널: 엔진별 자동 승인', () => {
       prView({ ...input, work: prWork({ tasks: [{ ...active, status: 'approved' }] }) })?.auto
         .approve,
     ).toBe(false)
+  })
+})
+
+describe('PR 읽기의 가장자리 (2026-10 정리)', () => {
+  it('이름이 같은 커밋 상태와 체크 실행은 서로 덮지 않는다', () => {
+    const checks = checksOf([
+      {
+        __typename: 'StatusContext',
+        context: 'Vercel',
+        state: 'FAILURE',
+        targetUrl: 'https://vercel.example/1',
+        startedAt: '2026-09-29T00:00:00Z',
+      },
+      {
+        __typename: 'CheckRun',
+        name: 'Vercel',
+        workflowName: '',
+        status: 'COMPLETED',
+        conclusion: 'SUCCESS',
+        startedAt: '2026-09-29T00:05:00Z',
+        completedAt: '',
+        detailsUrl: 'https://vercel.example/2',
+      },
+    ])
+    expect(checks.map((c) => [c.key, c.bucket]).sort()).toEqual([
+      ['Vercel', 'fail'],
+      ['Vercel', 'pass'],
+    ])
+    expect(ciState(checks, true)).toBe('fail')
+  })
+
+  it('같은 체크가 다른 작업으로 다시 실패하면 옛 작업의 로그를 버린다', () => {
+    const id = `ci:${H1}:ci/test (pull_request)`
+    const first = gatherItems(
+      [],
+      read({ failing: [check('test')], logs: new Map([[id, { log: '처음 실패' }]]) }),
+      rules,
+    )
+    const again = { ...check('test'), job: 3, url: 'https://github.com/o/r/actions/runs/1/job/3' }
+    const second = gatherItems(
+      first.items,
+      read({ at: 'T2', failing: [again], logs: new Map([[id, { note: '로그를 읽지 못함' }]]) }),
+      rules,
+    )
+    const item = second.items.find((i) => i.id === id)
+    expect(item?.check?.job).toBe(3)
+    expect(item?.log).toBeUndefined()
+    expect(item?.log_note).toBe('로그를 읽지 못함')
+    expect(ciLogRead(first.items, id, 2)).toBe(true)
+    expect(ciLogRead(first.items, id, 3)).toBe(false)
   })
 })

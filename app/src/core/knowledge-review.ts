@@ -4,7 +4,7 @@
 // 이 파일은 순수 함수만 둔다(입력 고르기, 프롬프트, 결과 읽기). 호출과 기록은 main/work.ts다.
 import type { FormatIssue } from '../shared/work'
 import { HANDOFF_FILE } from './validate'
-import { identifiersIn, pathsIn, rankEntries, type KnowledgeEntry } from './knowledge'
+import { fence, identifiersIn, pathsIn, rankEntries, type KnowledgeEntry } from './knowledge'
 
 /** 검토에 함께 넣는 관련 항목 수의 상한. 비용은 이 수에 묶인다 */
 export const REVIEW_RELATED_LIMIT = 8
@@ -107,10 +107,7 @@ export const REVIEW_SYSTEM =
 
 const block = (title: string, files: readonly { path: string; text: string }[]) =>
   files.length
-    ? [
-        `## ${title}`,
-        ...files.map((f) => `\n### ${f.path}\n\n\`\`\`\`markdown\n${f.text.trim()}\n\`\`\`\``),
-      ]
+    ? [`## ${title}`, ...files.map((f) => `\n### ${f.path}\n\n${fence(f.text.trim())}`)]
     : [`## ${title}`, '', '없음']
 
 /** 검토 프롬프트 */

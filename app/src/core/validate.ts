@@ -372,12 +372,17 @@ function headingText(line: string, level: number): string | null {
   return m?.[1] ?? null
 }
 
+/** 본문의 level 단계 제목 (코드 펜스 안은 빼고) */
+export function headings(body: string, level: number): string[] {
+  return markFences(normalizeText(body).split('\n'))
+    .filter((l) => !l.fenced)
+    .map((l) => headingText(l.line, level))
+    .filter((h): h is string => h !== null)
+}
+
 /** 본문의 ## 절 이름 (코드 펜스 안은 빼고) */
 export function sectionNames(body: string): string[] {
-  return markFences(body.split('\n'))
-    .filter((l) => !l.fenced)
-    .map((l) => headingText(l.line, 2))
-    .filter((h): h is string => h !== null)
+  return headings(body, 2)
 }
 
 /** ## name 절의 줄 (다음 # 또는 ## 제목 앞까지) */

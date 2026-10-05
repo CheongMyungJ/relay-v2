@@ -98,9 +98,14 @@ export async function readText(file: string): Promise<string | null> {
   }
 }
 
+/** JSON을 읽는다. 손으로 고친 파일의 UTF-8 BOM(Windows 메모장, PowerShell 5)은 뗀다 */
+function parseJson(text: string): unknown {
+  return JSON.parse(text.replace(/^\uFEFF/, ''))
+}
+
 async function readJson<T>(file: string): Promise<T | null> {
   const text = await readText(file)
-  return text === null ? null : (JSON.parse(text) as T)
+  return text === null ? null : (parseJson(text) as T)
 }
 
 async function subdirs(dir: string): Promise<string[]> {
@@ -136,7 +141,7 @@ export async function loadConfig(home: string): Promise<LoadedConfig> {
     return { config: DEFAULT_CONFIG }
   }
   try {
-    const { config, warnings } = normalizeConfig(JSON.parse(text))
+    const { config, warnings } = normalizeConfig(parseJson(text))
     return warnings.length ? { config, warning: warnings.join(' / ') } : { config }
   } catch (e) {
     return {

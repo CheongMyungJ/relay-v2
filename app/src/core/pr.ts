@@ -207,7 +207,8 @@ export function checksOf(
   rollup: unknown,
   events: ReadonlyMap<number, string> = new Map(),
 ): CheckFact[] {
-  const all: CheckFact[] = []
+  // 커밋 상태와 체크 실행은 이름이 같아도 다른 체크다(gh도 가른다). 같은 종류 안에서만 다시 실행을 합친다
+  const all: { fact: CheckFact; status: boolean }[] = []
   for (const raw of Array.isArray(rollup) ? rollup : []) {
     const c = obj(raw)
     if (isStatusContext(c)) {
@@ -215,16 +216,19 @@ export function checksOf(
       const state = text(c['state']) ?? 'PENDING'
       const url = text(c['targetUrl'])
       all.push({
-        key: name,
-        name,
-        workflow: null,
-        event: null,
-        label: name,
-        state,
-        bucket: bucketOf(state),
-        url,
-        ...actionsIds(url),
-        startedAt: text(c['startedAt']),
+        status: true,
+        fact: {
+          key: name,
+          name,
+          workflow: null,
+          event: null,
+          label: name,
+          state,
+          bucket: bucketOf(state),
+          url,
+          ...actionsIds(url),
+          startedAt: text(c['startedAt']),
+        },
       })
       continue
     }
@@ -237,22 +241,26 @@ export function checksOf(
     const event = ids.run !== null ? (events.get(ids.run) ?? null) : null
     const base = workflow ? `${workflow}/${name}` : name
     all.push({
-      key: event ? `${base} (${event})` : ids.run !== null ? `${base} #${ids.run}` : base,
-      name,
-      workflow,
-      event,
-      label: checkLabel({ name, workflow, event, run: ids.run }),
-      state,
-      bucket: bucketOf(state),
-      url,
-      ...ids,
-      startedAt: text(c['startedAt']),
+      status: false,
+      fact: {
+        key: event ? `${base} (${event})` : ids.run !== null ? `${base} #${ids.run}` : base,
+        name,
+        workflow,
+        event,
+        label: checkLabel({ name, workflow, event, run: ids.run }),
+        state,
+        bucket: bucketOf(state),
+        url,
+        ...ids,
+        startedAt: text(c['startedAt']),
+      },
     })
   }
   const latest = new Map<string, CheckFact>()
-  for (const c of all) {
-    const prior = latest.get(c.key)
-    if (!prior || (c.startedAt ?? '') > (prior.startedAt ?? '')) latest.set(c.key, c)
+  for (const { fact: c, status } of all) {
+    const k = `${status ? 'status' : 'check'}:${c.key}`
+    const prior = latest.get(k)
+    if (!prior || (c.startedAt ?? '') > (prior.startedAt ?? '')) latest.set(k, c)
   }
   return [...latest.values()].sort((a, b) => a.key.localeCompare(b.key))
 }
@@ -437,6 +445,11 @@ export function ciItemId(head: string, check: Pick<CheckFact, 'key'>): string {
   return `ci:${head}:${check.key}`
 }
 
+/** CI 실패 항목의 로그를 이 작업(job)에서 이미 읽었는가. 같은 체크가 다른 작업으로 다시 실패하면 새로 읽는다 */
+export function ciLogRead(items: readonly PrItem[], id: string, job: number | null): boolean {
+  return items.some((i) => i.id === id && i.log !== undefined && (i.check?.job ?? null) === job)
+}
+
 function checkRef(c: CheckFact): PrCheckRef {
   return {
     name: c.name,
@@ -554,6 +567,11 @@ export function gatherItems(prior: readonly PrItem[], read: ReadFacts, rules: It
       continue
     }
     revive(item)
+    // 같은 체크가 다른 작업으로 다시 실패했으면 옛 작업의 로그는 이번 실패가 아니다
+    if (item.check?.job !== c.job) {
+      delete item.log
+      delete item.log_note
+    }
     item.check = checkRef(c)
     if (log?.log) {
       item.log = log.log

@@ -7,6 +7,7 @@ import {
   checkEntryFormat,
   injectedText,
   knowledgeIssues,
+  knowledgeLineIssues,
   knowledgeLines,
   isKnowledgePath,
   knowledgeChanges,
@@ -15,6 +16,7 @@ import {
   kindOf,
   notYetPaths,
   looksSecret,
+  rankEntries,
   mergeEntries,
   selectEntries,
   type KnowledgeInput,
@@ -436,5 +438,94 @@ describe('[단위] 지식 지우기, 범위 지시, 이 Work의 지식 (D296, D2
     expect(list[1]?.diff).toContain(' ## 내용')
     expect(list[3]?.diff).toBe('--- a/docs/knowledge/gone.md\n+++ /dev/null\n-# 옛것')
     expect(kindOf('# 옛 형식')).toBeNull()
+  })
+})
+
+describe('[단위] 지식 파일 읽기의 가장자리 (2026-10 정리)', () => {
+  const fenced = [
+    '---',
+    'kind: pitfall',
+    'source: investigation',
+    '---',
+    '# 설정을 두 번 읽으면 캐시가 깨진다',
+    '',
+    '## 내용',
+    '- 예:',
+    '',
+    '```sh',
+    '## 설정 읽기',
+    '# 주석',
+    '```',
+  ].join('\n')
+
+  it('코드 펜스 안의 # 줄은 절이나 제목으로 보지 않는다', () => {
+    expect(checkEntryFormat('docs/knowledge/a.md', fenced)).toEqual([])
+    const noTitle = fenced.replace('# 설정을 두 번 읽으면 캐시가 깨진다\n', '')
+    expect(checkEntryFormat('docs/knowledge/a.md', noTitle).map((i) => i.message)).toEqual([
+      '첫 `# ` 제목 줄 없음',
+    ])
+  })
+
+  it('제목은 머리글의 YAML 주석이나 펜스 안이 아닌 본문의 첫 `# ` 줄이다', () => {
+    const text = FACT.replace('kind: fact', 'kind: fact\n# 메모').replace(
+      '# 사실',
+      '```\n# 아님\n```\n# 사실',
+    )
+    const [c] = knowledgeChanges(
+      [{ path: 'docs/knowledge/a.md', status: 'A', text, before: null }],
+      new Map(),
+      handoff('새 지식: docs/knowledge/a.md — 새것'),
+    )
+    expect(c?.title).toBe('사실')
+  })
+
+  it('작업 트리가 CRLF여도 바뀐 줄만 차이로 보인다', () => {
+    const before = FACT
+    const after = `${FACT.replace('사실이다', '바뀐 사실')}\n`.replace(/\n/g, '\r\n')
+    const [c] = knowledgeChanges(
+      [{ path: 'docs/knowledge/a.md', status: 'M', text: after, before }],
+      new Map(),
+      handoff('고친 지식: docs/knowledge/a.md — 고침'),
+    )
+    const changed = (c?.diff ?? '')
+      .split('\n')
+      .filter((l) => /^[+-]/.test(l) && !/^(---|\+\+\+) [ab/]/.test(l))
+    expect(changed.sort()).toEqual(['+- 바뀐 사실.', '-- 사실이다.'])
+  })
+
+  it('handoff의 지식 줄은 역슬래시 경로도 읽는다', () => {
+    const l = knowledgeLines(handoff('새 지식: docs\\knowledge\\a.md — 새것'))
+    expect([...l.added.keys()]).toEqual(['docs/knowledge/a.md'])
+  })
+
+  it('항목의 ./ 경로도 질의의 파일과 맞춘다 (D295)', () => {
+    const e = entry('a.md', FACT.replace('- 사실이다.', '- `./src/a.ts`의 사실이다.'))
+    const [r] = rankEntries([e], { text: '', paths: ['src/a.ts'], identifiers: new Set() })
+    expect(r?.score).toBeGreaterThanOrEqual(4)
+  })
+
+  it('아직 따르지 않는 곳의 레포 맨 위 파일도 읽는다 (D296)', () => {
+    const text = RULE.replace('`src/returns/return-fee.js`', '`pricing.py`')
+    expect(notYetPaths(text)).toEqual(['pricing.py'])
+  })
+
+  it('형식에 맞지 않는 경로의 지식 줄은 경로 규칙으로 되돌린다 (D293)', () => {
+    const messages = knowledgeIssues({
+      handoff: handoff('새 지식: docs/knowledge/Shipping/rate.md — 새것'),
+      changed: [],
+      existing: new Set(),
+      current: new Map(),
+    }).map((i) => i.message)
+    expect(messages).toHaveLength(1)
+    expect(messages[0]).toContain('경로')
+    expect(messages[0]).not.toContain('고치지 않았다')
+  })
+
+  it('바꾼 지식 파일을 읽지 못하면 지식 줄이 있는지만 본다', () => {
+    expect(knowledgeLineIssues(handoff('새 지식: docs/knowledge/a.md — 새것'))).toEqual([])
+    expect(knowledgeLineIssues(handoff('남긴 지식: 없음 (규칙 없음)'))).toEqual([])
+    expect(knowledgeLineIssues(handoff('요약만')).map((i) => i.message)).toEqual([
+      '`## 요약`에 지식 줄 없음: 바꾼 지식이 없으면 "남긴 지식: 없음 (까닭)"을 적는다',
+    ])
   })
 })

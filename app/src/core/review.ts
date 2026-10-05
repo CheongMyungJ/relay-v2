@@ -453,7 +453,7 @@ export function verdicts(verification: string): Verdict[] {
     .map(cells)
   return rows
     .slice(1)
-    .filter((r) => !r.every((c) => /^:?-{3,}:?$/.test(c)))
+    .filter((r) => !r.every((c) => /^:?-+:?$/.test(c)))
     .map(([criterion = '', verdict = '', ...rest]) => ({
       criterion,
       verdict,

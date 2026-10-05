@@ -167,4 +167,17 @@ describe('[단위] 지식 검토 호출과 정하지 않은 것 (D299, D300)', (
       '- [사람] a — b\n  - [사람] e',
     )
   })
+
+  it('프롬프트: 지식 글에 백틱 넷이 있어도 펜스가 닫히지 않는다', () => {
+    const p = reviewPrompt({
+      changed: [{ path: 'docs/knowledge/a.md', text: '# A\n\n````\n코드\n````' }],
+      removed: [],
+      related: [],
+      request: '',
+      intent: null,
+      humanDecisions: '',
+      candidates: [],
+    })
+    expect(p).toContain('`````markdown\n# A')
+  })
 })

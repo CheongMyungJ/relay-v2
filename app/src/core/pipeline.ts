@@ -167,11 +167,11 @@ export function isPrevious(type: WorkType, from: TaskNode, to: NodeName): boolea
 }
 
 /**
- * 에이전트의 추천 때문에 승인 뒤 멈추는가 (D23): 그 유형의 이전 단계이거나, 이 유형의 파이프라인에 없는 노드다.
- * 파이프라인 밖 노드는 형식 오류지만 [오류 무시하고 승인]으로 넘어올 수 있다. 되돌아가자는 추천을 Work 완료로
- * 넘기지 않게 멈추고 사람이 단계를 고른다. PR 대응 task는 추천이 없다 (D188)
+ * 에이전트의 추천 때문에 승인 뒤 멈추는가 (D23): 그 유형의 이전 단계나 같은 단계이거나, 이 유형의 파이프라인에 없는
+ * 노드다. 같은 단계와 파이프라인 밖 노드는 형식 오류지만 [오류 무시하고 승인]으로 넘어올 수 있다. 되돌아가거나 다시
+ * 하자는 추천을 Work 완료로 넘기지 않게 멈추고 사람이 단계를 고른다. PR 대응 task는 추천이 없다 (D188)
  */
 export function stopsForRecommendation(type: WorkType, from: TaskNode, to: NodeName): boolean {
   if (!inPipeline(type, from)) return false
-  return isPrevious(type, from, to) || !inPipeline(type, to)
+  return isPrevious(type, from, to) || to === from || !inPipeline(type, to)
 }

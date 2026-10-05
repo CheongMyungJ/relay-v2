@@ -132,6 +132,7 @@ import {
   CHECK_WAIT_MS,
   allowedMethods,
   applyItemAction,
+  ciLogRead,
   ciState,
   divergedFact,
   gatherItems,
@@ -325,6 +326,7 @@ import {
   identifiersIn,
   pathsIn,
   knowledgeIssues,
+  knowledgeLineIssues,
   injectedText,
   knowledgeEnabled,
   mergeEntries,
@@ -822,16 +824,8 @@ export class WorkRunner {
   ): Promise<KnowledgeCheck | undefined> {
     const input = await this.knowledgeCheckInput(task, files)
     if (input === null) return undefined
-    if (input === undefined) {
-      const handoff = files[HANDOFF_FILE] ?? ''
-      const errors = knowledgeIssues({
-        handoff,
-        changed: [],
-        existing: new Set(),
-        current: new Map(),
-      })
-      return { errors, warnings: [] }
-    }
+    if (input === undefined)
+      return { errors: knowledgeLineIssues(files[HANDOFF_FILE] ?? ''), warnings: [] }
     const errors = knowledgeIssues(input)
     if (!this.wantsReview(input, errors)) return { errors, warnings: [] }
     const review = await this.knowledgeReviewResult(task, input, opts.stop === true)
@@ -3594,7 +3588,7 @@ export class WorkRunner {
           location,
           runEvents: this.runEvents,
         },
-        (id) => file.items.some((i) => i.id === id && i.log !== undefined),
+        (id, job) => ciLogRead(file.items, id, job),
       )
     } catch (e) {
       return this.prFailed(`PR을 읽지 못함: ${message(e)}`)

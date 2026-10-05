@@ -198,7 +198,7 @@ export function listPrComments(
  */
 export async function readPr(
   ctx: PrReadContext,
-  hasLog: (itemId: string) => boolean,
+  hasLog: (itemId: string, job: number | null) => boolean,
 ): Promise<PrFetched> {
   const repo = repoArg(ctx.location)
   const gh = { repo, number: ctx.location.number, cwd: ctx.repo, env: ctx.env }
@@ -231,7 +231,7 @@ export async function readPr(
   const logs = new Map<string, { log?: string; note?: string }>()
   for (const c of checks.filter((x) => x.bucket === 'fail')) {
     const id = ciItemId(view.head, c)
-    if (hasLog(id)) continue
+    if (hasLog(id, c.job)) continue
     if (c.job === null) {
       logs.set(id, { note: NOT_ACTIONS })
       continue
