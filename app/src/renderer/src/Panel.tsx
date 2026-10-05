@@ -15,6 +15,7 @@ import type {
   CommandResult,
   CountdownView,
   DeliverResult,
+  IssueView,
   KnowledgeChange,
   PrView,
   ReviewView,
@@ -75,6 +76,7 @@ export function Panel({ work, task, review, onApproved, onSelectStep, onShowClea
   return (
     <div className="panel-body">
       {recovery}
+      {work.issue ? <IssueLine workKey={work.key} issue={work.issue} /> : null}
       <header className="panel-head">
         <span className="panel-title">{task.label}</span>
         <span className={`status s-${task.status}`}>{task.statusLabel}</span>
@@ -966,6 +968,52 @@ function BranchLine({ work, branch }: { work: WorkView; branch: BranchInfo }) {
           worktree: <code>{branch.worktree}</code>
         </div>
       ) : null}
+    </div>
+  )
+}
+
+/**
+ * 이슈 기록 (설계 3.7, D344): 이슈 링크, 남은 게시, 마지막 실패와 [다시 시도]. 게시가 실패해도 흐름은 막지 않으므로 알림만
+ * 보인다
+ */
+function IssueLine({ workKey, issue }: { workKey: string; issue: IssueView }) {
+  const [error, setError] = useState<string | null>(null)
+  const retry = async () => {
+    setError(null)
+    const r = await call(() => window.relay.issueRetry(workKey))
+    if (!r.ok) setError(r.error)
+  }
+  const name =
+    issue.number === null
+      ? '이슈: 의도를 승인하면 만듭니다'
+      : `이슈 #${issue.number}${issue.linked ? ' (기존 이슈)' : ''}${issue.closed ? ' · 닫힘' : ''}`
+  return (
+    <div className={issue.failure ? 'notice fail' : 'issue-line dim'} aria-label="이슈 기록">
+      <span>{name}</span>
+      {issue.pending ? (
+        <span>
+          {' '}
+          · 남은 게시 {issue.pending}
+          {issue.publishing ? ' (게시하는 중…)' : ''}
+        </span>
+      ) : null}{' '}
+      {issue.url ? (
+        <button onClick={() => void call(() => window.relay.openExternal(issue.url ?? ''))}>
+          브라우저에서 열기
+        </button>
+      ) : null}
+      {issue.failure ? (
+        <>
+          <div>게시 실패: {issue.failure.error}</div>
+          <div className="dim">작업은 그대로 진행됩니다. 다음 승인 때도 앞부터 다시 올립니다.</div>
+          <div className="notice-actions">
+            <button className="primary" disabled={issue.publishing} onClick={() => void retry()}>
+              다시 시도
+            </button>
+          </div>
+        </>
+      ) : null}
+      {error ? <div className="error">{error}</div> : null}
     </div>
   )
 }

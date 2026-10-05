@@ -156,8 +156,8 @@ const METHOD_LABEL: Readonly<Record<MergeMethod, string>> = {
 }
 
 /**
- * 프로젝트 설정 (5.1.2, D185): 받을 봇(D161, 이름 모양은 D197)과 머지 창의 기본 방식(D177). 사이드바의 프로젝트
- * 이름으로 연다. 받을 봇을 바꾸면 PR 진행인 Work의 항목에 바로 다시 적용한다
+ * 프로젝트 설정 (5.1.2, D185): 받을 봇(D161, 이름 모양은 D197)과 머지 창의 기본 방식(D177), 이슈 기록(D337). 사이드바의
+ * 프로젝트 이름으로 연다. 받을 봇을 바꾸면 PR 진행인 Work의 항목에 바로 다시 적용한다
  */
 export function ProjectSettingsDialog({
   project,
@@ -168,6 +168,7 @@ export function ProjectSettingsDialog({
 }) {
   const [bots, setBots] = useState(project.allowedBots.join('\n'))
   const [method, setMethod] = useState<MergeMethod | null>(project.mergeMethod)
+  const [issueLog, setIssueLog] = useState(project.issueLog)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -181,6 +182,7 @@ export function ProjectSettingsDialog({
           .map((b) => b.trim())
           .filter(Boolean),
         merge_method: method,
+        issue_log: issueLog,
       }),
     )
     setBusy(false)
@@ -224,6 +226,20 @@ export function ProjectSettingsDialog({
       <div className="dim">
         머지 창의 기본 선택입니다. 레포가 허용하지 않는 방식이면 허용하는 첫 방식을 고릅니다 (D177).
       </div>
+      <label className="form-row">
+        <span>이슈 기록</span>
+        <input
+          type="checkbox"
+          aria-label="이슈 기록"
+          checked={issueLog}
+          onChange={(e) => setIssueLog(e.target.checked)}
+        />
+      </label>
+      <div className="dim">
+        의도를 승인하면 GitHub 이슈를 만들고 승인된 단계마다 코멘트를 덧붙입니다. 팀원이 PR을 리뷰할
+        때 맥락을 봅니다. 공개 레포에서는 산출물이 그대로 공개됩니다. 바꾸면 다음에 만드는 Work부터
+        따릅니다 (D336, D337).
+      </div>
       <div className="dim">
         gh {project.ghVersion ?? '버전 모름'} · origin {project.origin ? '있음' : '없음'} · gh
         로그인 {project.gh ? '됨' : '안 됨'}
@@ -237,6 +253,14 @@ export function ProjectSettingsDialog({
       </div>
     </Modal>
   )
+}
+
+/** 이슈 번호 칸 (D338): 비었으면 null(새 이슈), 앞의 #은 뗀다. 1 이상의 정수가 아니면 undefined */
+function issueNumberInput(text: string): number | null | undefined {
+  const t = text.trim().replace(/^#/, '')
+  if (!t) return null
+  const n = Number(t)
+  return /^\d+$/.test(t) && Number.isInteger(n) && n > 0 ? n : undefined
 }
 
 /** 유형 버튼의 설명. 일반은 다른 유형에 맞지 않는 일에 쓴다 (D303, I88) */
@@ -301,6 +325,7 @@ export function NewWorkDialog({
   const [branches, setBranches] = useState<string[]>([project.defaultBranch])
   const [branch, setBranch] = useState(project.defaultBranch)
   const [location, setLocation] = useState<'local' | 'remote'>('local')
+  const [issue, setIssue] = useState('')
   const [modes, setModes] = useState<Overrides>({})
   const [auto, setAuto] = useState<AutoOverrides>({})
   const [busy, setBusy] = useState(false)
@@ -324,6 +349,12 @@ export function NewWorkDialog({
       ...(Object.keys(auto_approve).length ? { auto_approve } : {}),
       ...(Object.keys(question_mode).length ? { question_mode } : {}),
     }
+    const issueNumber = issueNumberInput(issue)
+    if (issueNumber === undefined) {
+      setBusy(false)
+      setError('이슈 번호는 1 이상의 정수로 적으세요')
+      return
+    }
     const r = await call(() =>
       window.relay.createWork(project.id, {
         request,
@@ -331,6 +362,7 @@ export function NewWorkDialog({
         baseBranch: branch,
         baseLocation: location,
         ...(Object.keys(settings).length ? { settings } : {}),
+        ...(issueNumber !== null ? { issueNumber } : {}),
       }),
     )
     setBusy(false)
@@ -392,6 +424,18 @@ export function NewWorkDialog({
           </label>
         </fieldset>
       </div>
+      {project.issueLog ? (
+        <label className="field">
+          이슈 번호 (선택)
+          <input
+            aria-label="이슈 번호"
+            inputMode="numeric"
+            value={issue}
+            placeholder="요청이 온 이슈의 번호. 비우면 의도를 승인할 때 새 이슈를 만듭니다"
+            onChange={(e) => setIssue(e.target.value)}
+          />
+        </label>
+      ) : null}
       {/* 처음 쓰는 사람을 헷갈리게 하지 않게 하나로 접는다. PR 자동 대응은 PR 진행이 된 뒤 [Work 설정]에서 고른다 (D226) */}
       <details>
         <summary>고급 설정 (나중에 [Work 설정]에서도 바꿀 수 있음)</summary>

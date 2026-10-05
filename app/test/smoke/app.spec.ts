@@ -440,6 +440,8 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await expect(newWork.getByText('이 Work의 자동 승인')).toBeVisible()
   await expect(newWork.getByText('이 Work의 질문 방식')).toBeVisible()
   await expect(newWork.getByText('자동 대응')).toHaveCount(0)
+  // 이슈 기록이 켜진 프로젝트(기본, D337)는 기존 이슈 번호를 적는 칸이 있다 (D338)
+  await expect(newWork.getByLabel('이슈 번호')).toBeVisible()
   await win.screenshot({ path: 'test-results/new-work.png' })
   const fixAuto = win.getByLabel('원인 분석과 수정 자동 승인', { exact: true })
   await expect(fixAuto).toHaveValue('')
