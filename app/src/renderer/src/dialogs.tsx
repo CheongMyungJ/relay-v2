@@ -731,6 +731,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         respond_auto_start: value.respond_auto_start,
         respond_auto_round_max: value.respond_auto_round_max,
         reply_signature: value.reply_signature,
+        knowledge_review_engine: value.knowledge_review_engine,
+        knowledge_review_model: value.knowledge_review_model,
       }),
     )
     setBusy(false)
@@ -784,6 +786,38 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 aria-label="draft PR로 만들기"
                 checked={value.pr_draft}
                 onChange={(e) => setDraft({ ...value, pr_draft: e.target.checked })}
+              />
+            </label>
+            <label
+              className="form-row"
+              title="verify가 지식을 바꾸면 앱이 따로 부르는 짧은 검토 호출의 CLI. Work의 엔진과 따로 고른다 (D300, D334)"
+            >
+              <span>지식 검토 엔진</span>
+              <select
+                aria-label="지식 검토 엔진"
+                value={value.knowledge_review_engine}
+                onChange={(e) =>
+                  setDraft({ ...value, knowledge_review_engine: e.target.value as AgentEngine })
+                }
+              >
+                {AGENT_ENGINES.map((engine) => (
+                  <option key={engine} value={engine}>
+                    {AGENT_LABELS[engine]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label
+              className="form-row"
+              title="비우면 엔진의 기본(Claude Code는 sonnet, Codex는 CLI 설정)을 쓴다 (D334)"
+            >
+              <span>지식 검토 모델</span>
+              <input
+                type="text"
+                aria-label="지식 검토 모델"
+                placeholder={value.knowledge_review_engine === 'claude' ? 'sonnet' : 'CLI 기본'}
+                value={value.knowledge_review_model}
+                onChange={(e) => setDraft({ ...value, knowledge_review_model: e.target.value })}
               />
             </label>
             <label

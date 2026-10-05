@@ -48,6 +48,10 @@ export interface AppConfig {
   respond_auto_round_max: number
   /** 앱이 게시하는 답글 끝에 붙이는 표시 (D173) */
   reply_signature: string
+  /** 지식 검토 호출(D300)을 부를 CLI (D334). Work의 엔진과 따로 정한다 */
+  knowledge_review_engine: AgentEngine
+  /** 지식 검토의 모델. 비우면 엔진의 기본(claude는 sonnet, codex는 CLI 설정)이다 (D334) */
+  knowledge_review_model: string
 }
 
 /** work.json의 settings. 앱 설정과 같은 키를 쓰고, 없는 키는 앱 설정을 따른다 (D72) */
@@ -160,4 +164,6 @@ export const DEFAULT_CONFIG: AppConfig = {
   respond_auto_start: false,
   respond_auto_round_max: 3,
   reply_signature: '— relay(AI)가 작성함',
+  knowledge_review_engine: 'claude',
+  knowledge_review_model: '',
 }

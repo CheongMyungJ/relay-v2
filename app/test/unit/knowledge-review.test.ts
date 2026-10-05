@@ -8,6 +8,8 @@ import {
   reviewEnabled,
   reviewIssues,
   reviewPrompt,
+  reviewFailedIssue,
+  reviewTarget,
 } from '../../src/core/knowledge-review'
 
 const rule = (title: string, body: string, extra = '') =>
@@ -179,5 +181,32 @@ describe('[단위] 지식 검토 호출과 정하지 않은 것 (D299, D300)', (
       candidates: [],
     })
     expect(p).toContain('`````markdown\n# A')
+  })
+})
+
+describe('[단위] 지식 검토의 엔진과 모델 (D334)', () => {
+  it('설정의 엔진을 쓰고, 모델은 환경 변수 → 설정 → 엔진의 기본이다', () => {
+    const base = { knowledge_review_engine: 'claude' as const, knowledge_review_model: '' }
+    expect(reviewTarget(base, {})).toEqual({ engine: 'claude', model: 'sonnet' })
+    expect(reviewTarget({ ...base, knowledge_review_engine: 'codex' }, {})).toEqual({
+      engine: 'codex',
+      model: '',
+    })
+    expect(reviewTarget({ ...base, knowledge_review_model: 'opus' }, {})).toEqual({
+      engine: 'claude',
+      model: 'opus',
+    })
+    expect(
+      reviewTarget(
+        { ...base, knowledge_review_model: 'opus' },
+        { RELAY_KNOWLEDGE_REVIEW_MODEL: 'haiku' },
+      ),
+    ).toEqual({ engine: 'claude', model: 'haiku' })
+  })
+
+  it('부르지 못하면 되돌리지 않는 경고로 까닭을 보인다', () => {
+    expect(reviewFailedIssue('codex를 찾지 못함').message).toContain(
+      '[지식 검토를 하지 못함] codex를 찾지 못함',
+    )
   })
 })

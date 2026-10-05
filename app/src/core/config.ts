@@ -51,6 +51,8 @@ const EDITABLE_KEYS = [
   'respond_auto_start',
   'respond_auto_round_max',
   'reply_signature',
+  'knowledge_review_engine',
+  'knowledge_review_model',
 ] as const
 
 export type EditableKey = (typeof EDITABLE_KEYS)[number]
@@ -109,6 +111,21 @@ function agentEngine(v: unknown): Checked<AgentEngine> {
   return isAgentEngine(v)
     ? { ok: true, value: v }
     : { ok: false, error: '기본 엔진: claude | codex 중 하나여야 함' }
+}
+
+/** 지식 검토의 모델 이름 (D334): 비우면 엔진의 기본. 한 낱말(띄어쓰기 없음), 100자 이하 */
+function reviewModel(v: unknown): Checked<string> {
+  const t = typeof v === 'string' ? v.trim() : null
+  if (t === null || /\s/.test(t) || t.length > 100) {
+    return { ok: false, error: '지식 검토 모델: 띄어쓰기 없는 모델 이름이거나 비워야 함' }
+  }
+  return { ok: true, value: t }
+}
+
+function reviewEngine(v: unknown): Checked<AgentEngine> {
+  return isAgentEngine(v)
+    ? { ok: true, value: v }
+    : { ok: false, error: '지식 검토 엔진: claude | codex 중 하나여야 함' }
 }
 
 function integer(key: IntegerKey, v: unknown): Checked<number> {
@@ -219,6 +236,16 @@ export function normalizeConfig(data: unknown): { config: AppConfig; warnings: s
     if (r.ok) config.reply_signature = r.value
     else warnings.push(`config.json ${r.error}. 기본값을 씀`)
   }
+  if (data['knowledge_review_engine'] !== undefined) {
+    const r = reviewEngine(data['knowledge_review_engine'])
+    if (r.ok) config.knowledge_review_engine = r.value
+    else warnings.push(`config.json ${r.error}. 기본값 claude를 씀`)
+  }
+  if (data['knowledge_review_model'] !== undefined) {
+    const r = reviewModel(data['knowledge_review_model'])
+    if (r.ok) config.knowledge_review_model = r.value
+    else warnings.push(`config.json ${r.error}. 엔진의 기본을 씀`)
+  }
   if (data['question_mode'] !== undefined) {
     const r = questionModes(data['question_mode'])
     if (r.ok) config.question_mode = { ...config.question_mode, ...r.value }
@@ -251,6 +278,14 @@ export function applyConfigPatch(current: AppConfig, patch: unknown): Checked<Ap
       const r = agentEngine(v)
       if (!r.ok) return r
       next.agent_engine = r.value
+    } else if (key === 'knowledge_review_engine') {
+      const r = reviewEngine(v)
+      if (!r.ok) return r
+      next.knowledge_review_engine = r.value
+    } else if (key === 'knowledge_review_model') {
+      const r = reviewModel(v)
+      if (!r.ok) return r
+      next.knowledge_review_model = r.value
     } else if ((BOOLEAN_KEYS as readonly string[]).includes(key)) {
       const k = key as BooleanKey
       if (typeof v !== 'boolean') return { ok: false, error: `${NAMES[k]}: true/false여야 함` }

@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
+import os from 'node:os'
 import path from 'node:path'
 import { CODEX_HOOK_EVENTS, codexFirstPrompt, tomlValue } from '../core/codex'
 import {
@@ -12,7 +13,14 @@ import {
 import type { SkillName } from '../shared/config'
 import type { WorkType } from '../shared/work'
 import type { AgentSettingsInput } from './agent'
-import { skillText, type AuthStatus, type DeployedSkill, type FindClaudeOptions } from './claude'
+import {
+  skillText,
+  type AuthStatus,
+  type ClaudeJsonInput,
+  type ClaudeJsonResult,
+  type DeployedSkill,
+  type FindClaudeOptions,
+} from './claude'
 import { describeFailure, run } from './exec'
 import { sha256, writeFileAtomic } from './store'
 
@@ -225,5 +233,82 @@ export function codexLaunchEnv(
     RELAY_CODEX_EXE: process.execPath,
     RELAY_CODEX_BRIDGE: codexBridgePath(),
     RELAY_CODEX_HOOK_PS: codexResourcePath('codex-hook.ps1'),
+  }
+}
+
+// ---------- 짧은 모델 호출 (D300, D334) ----------
+
+/**
+ * codex exec를 한 번 부른다: 세션을 남기지 않음(--ephemeral), 읽기 전용 샌드박스, 구조화된 출력(--output-schema, 마지막
+ * 메시지를 -o 파일로). 시스템 지시는 따로 넘길 곳이 없어 프롬프트 앞에 붙인다. 모델을 비우면 CLI 설정을 따른다. 비용은
+ * 알려 주지 않아 null이다. 실패해도 던지지 않고 error에 적는다
+ */
+export async function codexJson(input: Omit<ClaudeJsonInput, 'effort'>): Promise<ClaudeJsonResult> {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'relay-review-'))
+  const schemaFile = path.join(dir, 'schema.json')
+  const outFile = path.join(dir, 'out.json')
+  const started = Date.now()
+  const fail = (error: string): ClaudeJsonResult => ({
+    data: null,
+    ms: Date.now() - started,
+    costUsd: null,
+    usage: null,
+    error,
+  })
+  try {
+    await fsp.writeFile(schemaFile, JSON.stringify(input.schema))
+    const args = [
+      'exec',
+      '--ephemeral',
+      '--skip-git-repo-check',
+      '--sandbox',
+      'read-only',
+      '--color',
+      'never',
+      '--json',
+      '--cd',
+      input.cwd,
+      '--output-schema',
+      schemaFile,
+      '-o',
+      outFile,
+      ...(input.model ? ['-m', input.model] : []),
+      '-',
+    ]
+    const r = await run(input.bin, args, {
+      cwd: input.cwd,
+      env: input.env,
+      timeoutMs: input.timeoutMs,
+      input: input.system ? `${input.system}\n\n${input.prompt}` : input.prompt,
+    })
+    if (r.code !== 0) return fail(describeFailure(r))
+    let data: unknown
+    try {
+      data = JSON.parse(await fsp.readFile(outFile, 'utf8'))
+    } catch {
+      return fail('구조화된 출력 없음')
+    }
+    const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
+    let usage: ClaudeJsonResult['usage'] = null
+    for (const line of r.stdout.split('\n')) {
+      let e: Record<string, unknown>
+      try {
+        e = JSON.parse(line) as Record<string, unknown>
+      } catch {
+        continue
+      }
+      const u = e['usage'] as Record<string, unknown> | undefined
+      if (e['type'] === 'turn.completed' && u) {
+        usage = {
+          input: num(u['input_tokens']),
+          output: num(u['output_tokens']),
+          cacheRead: num(u['cached_input_tokens']),
+          cacheCreation: 0,
+        }
+      }
+    }
+    return { data, ms: Date.now() - started, costUsd: null, usage, error: null }
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true })
   }
 }

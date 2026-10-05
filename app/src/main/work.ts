@@ -15,7 +15,8 @@ import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { agentRuntime } from '../adapters/agent'
-import { codexSkillPath } from '../adapters/codex'
+import { codexJson, codexSkillPath, findCodex } from '../adapters/codex'
+import { AGENT_LABELS } from '../shared/agent'
 import { codexToolDenial } from '../core/codex'
 import { humanAnswers, humanQuestions } from '../core/questions'
 import type { HumanAnswerReply, PendingQuestionView } from '../shared/questions'
@@ -321,8 +322,10 @@ import {
   humanDecisionLines,
   relatedEntries,
   reviewEnabled,
+  reviewFailedIssue,
   reviewIssues,
   reviewPrompt,
+  reviewTarget,
   type ReviewInput,
   type ReviewRecord,
 } from '../core/knowledge-review'
@@ -946,28 +949,37 @@ export class WorkRunner {
     if (before.calls.some((c) => c.hash === req.hash)) return
     if (before.calls.length >= REVIEW_CALL_LIMIT) return
     const { env } = this.ctx
-    const bin = findClaude({ env })
-    const model = env['RELAY_KNOWLEDGE_REVIEW_MODEL']?.trim() || 'sonnet'
-    const result = bin
-      ? await claudeJson({
-          bin,
-          env,
-          cwd: this.worktree,
-          model,
-          effort: 'low',
-          system: REVIEW_SYSTEM,
-          prompt: req.prompt,
-          schema: REVIEW_SCHEMA,
-          timeoutMs: REVIEW_TIMEOUT_MS,
-        })
-      : { data: null, ms: 0, costUsd: null, usage: null, error: 'claude를 찾지 못함' }
+    // 설정에서 고른 CLI와 모델로 부른다 (D334). 찾지 못하면 부르지 않고 그 까닭을 기록해 경고로 보인다
+    const { engine, model } = reviewTarget(this.ctx.config(), env)
+    const bin = engine === 'codex' ? findCodex({ env }) : findClaude({ env })
+    const call = {
+      env,
+      cwd: this.worktree,
+      model,
+      system: REVIEW_SYSTEM,
+      prompt: req.prompt,
+      schema: REVIEW_SCHEMA,
+      timeoutMs: REVIEW_TIMEOUT_MS,
+    }
+    const result = !bin
+      ? {
+          data: null,
+          ms: 0,
+          costUsd: null,
+          usage: null,
+          error: `${AGENT_LABELS[engine]}를 찾지 못함`,
+        }
+      : engine === 'codex'
+        ? await codexJson({ ...call, bin })
+        : await claudeJson({ ...call, bin, effort: 'low' })
     // 기다리는 동안 다른 호출이 기록을 썼을 수 있으니 다시 읽고 더한다
     const record = await this.readReviewRecord(task)
     if (record.calls.some((c) => c.hash === req.hash)) return
     record.calls.push({
       at: this.ctx.at(),
       hash: req.hash,
-      model,
+      engine,
+      model: model || `${engine} 기본`,
       ms: result.ms,
       costUsd: result.costUsd,
       usage: result.usage,
@@ -1001,7 +1013,8 @@ export class WorkRunner {
       return { issues: done.issues, bounce: true }
     }
     if (fresh) this.freshReview.delete(task.id)
-    return { issues: done.issues, bounce: false }
+    // 부르지 못했으면 문제 없음으로 보되(D300) 경고로 알린다 (D334)
+    return { issues: done.error ? [reviewFailedIssue(done.error)] : done.issues, bounce: false }
   }
 
   /**

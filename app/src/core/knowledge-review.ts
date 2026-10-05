@@ -2,6 +2,8 @@
 // 호출을 한 번 해서 뜻을 본다: 같은 대상을 다르게 말하는 항목, 사람의 이번 말과 어긋나는데 고치지 않은 항목, 규칙 절에 적은
 // 지금 상태나 정하지 않은 것, "모른다" 메모, 근거 없이 넓힌 규칙. 찾은 것은 형식 되돌림(D21)으로 verify에 돌려보낸다.
 // 이 파일은 순수 함수만 둔다(입력 고르기, 프롬프트, 결과 읽기). 호출과 기록은 main/work.ts다.
+import type { AgentEngine } from '../shared/agent'
+import type { AppConfig } from '../shared/config'
 import type { FormatIssue } from '../shared/work'
 import { HANDOFF_FILE } from './validate'
 import { fence, identifiersIn, pathsIn, rankEntries, type KnowledgeEntry } from './knowledge'
@@ -96,6 +98,8 @@ export const REVIEW_SCHEMA = {
           fix: { type: 'string' },
         },
         required: ['file', 'kind', 'quote', 'human', 'fix'],
+        // codex exec의 구조화된 출력은 정의하지 않은 필드를 막은 스키마만 받는다 (D334)
+        additionalProperties: false,
       },
     },
   },
@@ -189,6 +193,8 @@ export interface ReviewCall {
   at: string
   /** 입력의 해시. 같은 입력이면 다시 부르지 않는다 */
   hash: string
+  /** 부른 CLI (D334). 없으면 claude(D334 전의 기록) */
+  engine?: AgentEngine
   model: string
   /** 걸린 시간(ms, 앱이 잰 벽시계) */
   ms: number
@@ -214,6 +220,31 @@ export interface ReviewCall {
 
 export interface ReviewRecord {
   calls: ReviewCall[]
+}
+
+/**
+ * 지식 검토를 부를 엔진과 모델 (D334): 설정의 엔진, 모델은 RELAY_KNOWLEDGE_REVIEW_MODEL(평가 도구가 씀) → 설정 → 엔진의
+ * 기본(claude는 sonnet, codex는 비워 CLI 설정을 따름)
+ */
+export function reviewTarget(
+  config: Pick<AppConfig, 'knowledge_review_engine' | 'knowledge_review_model'>,
+  env: NodeJS.ProcessEnv,
+): { engine: AgentEngine; model: string } {
+  const engine = config.knowledge_review_engine
+  const model =
+    env['RELAY_KNOWLEDGE_REVIEW_MODEL']?.trim() ||
+    config.knowledge_review_model ||
+    (engine === 'claude' ? 'sonnet' : '')
+  return { engine, model }
+}
+
+/** 검토를 부르지 못했을 때의 경고 (D334). 되돌리지 않고 승인 화면에 보인다: 지식은 기계적 확인만 지났다 */
+export function reviewFailedIssue(error: string): FormatIssue {
+  return {
+    file: HANDOFF_FILE,
+    part: 'body',
+    message: `[지식 검토를 하지 못함] ${error}. 지식은 기계적 확인만 지났다. 설정의 지식 검토 엔진을 확인하세요`,
+  }
 }
 
 /** decisions.md에서 사람 결정 줄만 (`- [사람] ...`) */

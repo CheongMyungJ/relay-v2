@@ -9,6 +9,7 @@ import {
   bridgeCommands,
   codexAuthStatus,
   codexBridgePath,
+  codexJson,
   codexLaunchArgs,
   codexLaunchEnv,
   codexSettings,
@@ -285,4 +286,69 @@ describe('실제 브리지와 MCP', () => {
       ).toMatchObject({ serverInfo: { name: 'relay' } })
     },
   )
+})
+
+describe('[어댑터] codex exec로 부르는 지식 검토 (D334)', () => {
+  it('구조화된 출력 파일을 읽고 사용량을 돌려준다. 모델을 비우면 -m을 넘기지 않는다', async () => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'relay-codex-json-'))
+    const scenario = path.join(root, 'scenario.json')
+    fs.writeFileSync(
+      scenario,
+      JSON.stringify({
+        review: [{ issues: [{ file: 'a.md', kind: 'conflict', quote: 'q', human: '', fix: 'f' }] }],
+      }),
+    )
+    const env = { ...process.env, FAKE_CODEX_SCENARIO: scenario }
+    const schema = {
+      type: 'object',
+      properties: { issues: { type: 'array' } },
+      required: ['issues'],
+    }
+    const r = await codexJson({
+      bin: FAKE_CODEX,
+      env,
+      cwd: root,
+      model: '',
+      system: '시스템',
+      prompt: '프롬프트',
+      schema,
+      timeoutMs: 20_000,
+    })
+    expect(r.error).toBeNull()
+    expect(r.data).toEqual({
+      issues: [{ file: 'a.md', kind: 'conflict', quote: 'q', human: '', fix: 'f' }],
+    })
+    expect(r.usage).toEqual({ input: 900, output: 40, cacheRead: 100, cacheCreation: 0 })
+    expect(r.costUsd).toBeNull()
+    expect(fs.readFileSync(`${scenario}.review-1.txt`, 'utf8')).toContain('시스템')
+    const args = JSON.parse(fs.readFileSync(`${scenario}.review-args.json`, 'utf8')) as string[]
+    expect(args.slice(0, 2)).toEqual(['exec', '--ephemeral'])
+    expect(args).toContain('read-only')
+    expect(args).not.toContain('-m')
+    const withModel = await codexJson({
+      bin: FAKE_CODEX,
+      env,
+      cwd: root,
+      model: 'gpt-5-codex',
+      system: '',
+      prompt: '',
+      schema,
+      timeoutMs: 20_000,
+    })
+    expect(withModel.error).toBeNull()
+    const again = JSON.parse(fs.readFileSync(`${scenario}.review-args.json`, 'utf8')) as string[]
+    expect(again[again.indexOf('-m') + 1]).toBe('gpt-5-codex')
+    const failed = await codexJson({
+      bin: FAKE_CODEX,
+      env: { ...env, FAKE_CODEX_REVIEW_FAIL: '1' },
+      cwd: root,
+      model: '',
+      system: '',
+      prompt: '',
+      schema,
+      timeoutMs: 20_000,
+    })
+    expect(failed.data).toBeNull()
+    expect(failed.error).toContain('가짜 실패')
+  })
 })
