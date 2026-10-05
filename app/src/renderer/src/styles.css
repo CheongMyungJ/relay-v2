@@ -1409,9 +1409,17 @@ button.ready {
   font-family: var(--mono);
 }
 
-/* 이슈 기록 (설계 3.7): 패널 맨 위의 한 줄. 실패하면 .notice.fail로 보인다 */
+/* 이슈 기록 (설계 3.7): 패널 맨 위의 한 줄. task 알림(.notice)과 다른 클래스다. 실패하면 알림처럼 테를 두른다 (D344) */
 .issue-line {
   margin-bottom: 8px;
+}
+
+.issue-line.failed {
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--bg-raise);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--bad);
 }
 
 .tab.cleanup {
