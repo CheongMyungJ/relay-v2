@@ -497,6 +497,10 @@ export function workTitle(request: string): string {
   return t.length > 80 ? `${t.slice(0, 80)}…` : t
 }
 
+/** 결과를 모르는 머지를 다시 확인하는 간격과 횟수 (D330) */
+const MERGE_CONFIRM_MS = 30_000
+const MERGE_CONFIRM_TRIES = 5
+
 export class WorkRunner {
   readonly key: string
   private queue: Promise<unknown> = Promise.resolve()
@@ -519,6 +523,8 @@ export class WorkRunner {
   private rewindError: string | null = null
   /** 이번 명령의 전달이나 정리가 실패한 이유. 명령의 결과로 돌려준다 */
   private opError: string | null = null
+  /** 결과를 모르는 머지를 앱이 다시 확인한 횟수 (D330) */
+  private mergeConfirms = 0
   /** 정리 세션 ([AI 세션 열기], 7-5) */
   private cleanup: CleanupSession | null = null
   private cleanupSeq = 0
@@ -3962,10 +3968,35 @@ export class WorkRunner {
       env: this.ctx.env,
     }
     const state = async () => (await ghPrView(this.ctx.ghBin, gh, ['state']))['state']
+    // 머지 요청은 보냈는데 결과를 못 읽었다 (D330): 실패로 알리지 않고 끊긴 작업으로 남겨 다시 확인한다
+    const unconfirmed = async (err: unknown) => {
+      console.error(`[${this.key}] 머지 결과를 읽지 못함: ${message(err)}`)
+      await this.feed({
+        type: 'pr.mergeFailed',
+        at: this.ctx.at(),
+        error: message(err),
+        unconfirmed: true,
+      })
+      this.scheduleMergeConfirm()
+    }
     try {
-      if (e.resume && (await state()) === 'MERGED') {
-        await this.feed({ type: 'pr.merged', at: this.ctx.at() })
-        return
+      if (e.resume) {
+        let before: unknown
+        try {
+          before = await state()
+        } catch (err) {
+          // 결과를 모르는 머지를 확인하다 또 못 읽었으면 그대로 기다린다. 끊긴 머지는 지금처럼 실패다
+          if (this.work.operation?.kind === 'merge' && this.work.operation.unconfirmed) {
+            await unconfirmed(err)
+            return
+          }
+          throw err
+        }
+        if (before === 'MERGED') {
+          this.mergeConfirms = 0
+          await this.feed({ type: 'pr.merged', at: this.ctx.at() })
+          return
+        }
       }
       const r = await ghMerge(this.ctx.ghBin, { ...gh, method: e.method, head: e.head })
       if (!r.ok) {
@@ -3982,7 +4013,14 @@ export class WorkRunner {
         return
       }
       // 성공 문구는 TTY일 때만 찍으므로 다시 읽어 머지됐는지 본다 (S7 관찰 6, 3절)
-      const now = await state()
+      let now: unknown
+      try {
+        now = await state()
+      } catch (err) {
+        await unconfirmed(err)
+        return
+      }
+      this.mergeConfirms = 0
       if (now !== 'MERGED') {
         await fail(`gh pr merge는 성공했지만 PR이 머지되지 않음 (state: ${String(now)})`)
         return
@@ -3991,6 +4029,20 @@ export class WorkRunner {
     } catch (err) {
       await fail(`머지 실패: ${message(err)}`)
     }
+  }
+
+  /**
+   * 결과를 모르는 머지를 잠시 뒤 다시 확인한다 (D330): 끊긴 작업의 [다시 시도]와 같다. 몇 번 해도 못 읽으면 사람의
+   * [다시 시도]를 기다린다
+   */
+  private scheduleMergeConfirm(): void {
+    if (this.mergeConfirms >= MERGE_CONFIRM_TRIES) return
+    this.mergeConfirms++
+    setTimeout(() => {
+      const op = cutOperation(this.work)
+      if (this.closing || op?.kind !== 'merge' || !op.unconfirmed) return
+      void this.retryOperation()
+    }, MERGE_CONFIRM_MS)
   }
 
   /** PR의 지금 head가 머지하려던 head와 다른가. 읽지 못하면 모른다(false) */

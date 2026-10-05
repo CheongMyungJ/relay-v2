@@ -255,6 +255,34 @@ describe('[흐름] PR 진행 (M9, 시나리오 10)', () => {
     }
   })
 
+  it('머지 요청은 성공했는데 결과를 읽지 못하면 실패로 알리지 않고 확인을 기다린다. 확인하면 앱이 한 머지다 (D330)', async () => {
+    const s = await setup()
+    const w = await openWork(s)
+    await toMergeable(s, w)
+    const head = workState(w).pr?.head ?? ''
+    // gh pr merge는 되고 다시 읽기(gh pr view)만 실패한다
+    s.ctx.h.env['FAKE_GH_FAIL'] = 'view'
+    expect(await s.ctx.h.relay.prMerge(w.key, { method: 'squash', head })).toEqual({ ok: true })
+    await settle(s.ctx.h, w.key)
+    expect(s.gh.pr(w.pr).state).toBe('merged')
+    expect(workState(w).status).toBe('pr')
+    expect(view(s.ctx, w).operation).toMatchObject({
+      kind: 'merge',
+      title: '머지 요청은 보냈지만 결과를 확인하지 못했습니다',
+    })
+    expect(workEvents(w).some((e) => e.type === 'pr.merged')).toBe(false)
+    delete s.ctx.h.env['FAKE_GH_FAIL']
+    const merges = ghCalls(s, 'pr merge').length
+    expect(await s.ctx.h.relay.retryOperation(w.key)).toEqual({ ok: true })
+    await settle(s.ctx.h, w.key)
+    const done = workState(w)
+    expect(done.status).toBe('completed')
+    expect(done.operation).toBeUndefined()
+    expect(done.pr?.merged).toMatchObject({ head, method: 'squash', outside: false })
+    // 이미 머지됐으므로 다시 머지하지 않는다
+    expect(ghCalls(s, 'pr merge')).toHaveLength(merges)
+  })
+
   it('끊긴 머지의 [무시]는 기록만 지우고 PR 진행으로 남는다 (D123)', async () => {
     const s = await setup()
     const w = await openWork(s)

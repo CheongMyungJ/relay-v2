@@ -392,6 +392,8 @@ export interface MergeOperation extends OperationBase {
   method: MergeMethod
   /** 머지할 head: 머지 창에 보인 커밋이다. 이 커밋이 아니면 GitHub가 머지하지 않는다 (D176) */
   head: string
+  /** gh pr merge는 성공했지만 머지됐는지 읽지 못했다 (D330). 끊긴 작업으로 남고 [다시 시도]가 확인한다 */
+  unconfirmed?: true
 }
 
 /**
@@ -589,6 +591,7 @@ export type LifecycleEventType =
   | 'pr.replied'
   | 'pr.checks_rerun'
   | 'pr.merged'
+  | 'pr.merge_unconfirmed'
   | 'pr.closed'
   | 'pr.reopened'
   | 'pr.auto_paused'

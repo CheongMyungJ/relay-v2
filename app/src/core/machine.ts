@@ -527,6 +527,8 @@ export interface PrMergeSucceeded extends WorkEvent {
 export interface PrMergeFailed extends WorkEvent {
   type: 'pr.mergeFailed'
   error: string
+  /** 머지 요청은 성공했지만 결과를 읽지 못했다 (D330): 기록을 지우지 않고 끊긴 작업으로 남긴다 */
+  unconfirmed?: boolean
 }
 
 /** [머지 없이 끝내기] (D179). GitHub의 PR은 건드리지 않는다 */
@@ -1243,7 +1245,7 @@ function dispatch(work: WorkState, event: MachineEvent, config: AppConfig): Tran
     case 'pr.merged':
       return prMerged(work, event)
     case 'pr.mergeFailed':
-      return prMergeFailed(work)
+      return prMergeFailed(work, event)
     case 'pr.end':
       return prEnd(work, event)
     case 'pr.cleanOffered':
@@ -2754,11 +2756,20 @@ function prMerged(work: WorkState, e: PrMergeSucceeded): Transition {
   }
 }
 
-/** 머지가 실패했다. 기록만 지우고 PR 진행에 남는다 */
-function prMergeFailed(work: WorkState): Transition {
-  return work.operation?.kind === 'merge'
-    ? { work: omit(work, 'operation'), effects: [] }
-    : unchanged(work)
+/**
+ * 머지가 실패했다. 기록만 지우고 PR 진행에 남는다. 머지 요청은 성공했지만 결과를 읽지 못했으면 실패가 아니다(D330):
+ * 기록을 끊긴 작업으로 남겨 [다시 시도]가 다시 읽어 확인하게 한다
+ */
+function prMergeFailed(work: WorkState, e: PrMergeFailed): Transition {
+  const op = work.operation
+  if (op?.kind !== 'merge') return unchanged(work)
+  if (e.unconfirmed) {
+    return {
+      work: { ...work, operation: { ...op, unconfirmed: true, interrupted_at: e.at } },
+      effects: [log(work, e.at, 'pr.merge_unconfirmed', { method: op.method, head: op.head })],
+    }
+  }
+  return { work: omit(work, 'operation'), effects: [] }
 }
 
 /** [머지 없이 끝내기] (D179): 완료(머지 없이)로 바꾼다. GitHub의 PR은 건드리지 않는다 */
