@@ -349,6 +349,12 @@ jobs:
             if [ -f "$file" ]; then cat "$file" >> "$GITHUB_STEP_SUMMARY"; fi
           done
 
+      - name: 녹화본 보이기 (update_contract)
+        # 결과물을 받지 못하는 곳(Claude Code 웹 세션의 프록시 등)에서도 작업 로그로 옮길 수 있게 찍는다
+        if: ${{ always() && inputs.update_contract }}
+        run: |
+          for f in app/test/contract/fixtures/*.json; do echo "=== $f"; cat "$f"; done
+
       - name: 녹화본 올리기 (update_contract)
         if: ${{ always() && inputs.update_contract }}
         uses: actions/upload-artifact@v4
