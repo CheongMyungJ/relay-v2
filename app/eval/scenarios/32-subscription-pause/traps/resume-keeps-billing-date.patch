@@ -1,0 +1,152 @@
+diff --git a/src/billing/billing.js b/src/billing/billing.js
+index 5c1d9a8..7183355 100644
+--- a/src/billing/billing.js
++++ b/src/billing/billing.js
+@@ -16,7 +16,7 @@ function advance(date, period) {
+ export function runBilling(today) {
+   const out = []
+   for (const s of listSubscriptions()) {
+-    if (s.cancelledOn) continue
++    if (s.cancelledOn || s.status === 'paused') continue
+     if (parseDate(s.nextBillingOn) > parseDate(today)) continue
+     const plan = getPlan(s.planId)
+     const ok = charge(s.memberId, plan.price, `${plan.name} ${s.nextBillingOn}`)
+diff --git a/src/deliveries/deliveries.js b/src/deliveries/deliveries.js
+index dbc7b22..a2f280c 100644
+--- a/src/deliveries/deliveries.js
++++ b/src/deliveries/deliveries.js
+@@ -5,13 +5,13 @@ import { parseDate, weekday } from '../util/dates.js'
+ import { menuFor } from './menu.js'
+ 
+ /**
+- * 오늘 보낼 배송. 배송 요일이 오늘인 구독마다 하나. 시작일 전이거나 해지된 구독은 보내지 않는다.
++ * 오늘 보낼 배송. 배송 요일이 오늘인 구독마다 하나. 시작일 전이거나 해지·정지된 구독은 보내지 않는다.
+  * @returns {{ subscriptionId: string, memberId: string, address: string, dishes: string[] }[]}
+  */
+ export function scheduleDeliveries(today) {
+   const out = []
+   for (const s of listSubscriptions()) {
+-    if (s.status === 'cancelled') continue
++    if (s.status === 'cancelled' || s.status === 'paused') continue
+     if (parseDate(s.startedOn) > parseDate(today)) continue
+     if (s.deliveryWeekday !== weekday(today)) continue
+     const plan = getPlan(s.planId)
+diff --git a/src/index.js b/src/index.js
+index c17763c..1d1ff36 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -1,4 +1,11 @@
+-export { cancelSubscription, changeDeliveryDay, changePlan, subscribe } from './subscriptions/service.js'
++export {
++  cancelSubscription,
++  changeDeliveryDay,
++  changePlan,
++  pauseSubscription,
++  resumeSubscription,
++  subscribe,
++} from './subscriptions/service.js'
+ export { getSubscription, listSubscriptions } from './subscriptions/store.js'
+ export { runBilling } from './billing/billing.js'
+ export { scheduleDeliveries } from './deliveries/deliveries.js'
+diff --git a/src/jobs/daily.js b/src/jobs/daily.js
+index 2edc77d..368be58 100644
+--- a/src/jobs/daily.js
++++ b/src/jobs/daily.js
+@@ -2,9 +2,11 @@ import { runBilling } from '../billing/billing.js'
+ import { scheduleDeliveries } from '../deliveries/deliveries.js'
+ import { log } from '../log.js'
+ import { sendBillingReminders } from '../notify/reminders.js'
++import { resumeExpiredPauses } from '../subscriptions/service.js'
+ 
+-/** 매일 새벽에 도는 작업: 결제 → 배송 → 결제 안내 */
++/** 매일 새벽에 도는 작업: 기한이 지난 일시정지 재개 → 결제 → 배송 → 결제 안내 */
+ export function runDaily(today) {
++  resumeExpiredPauses(today)
+   const charges = runBilling(today)
+   const deliveries = scheduleDeliveries(today)
+   const reminders = sendBillingReminders(today)
+diff --git a/src/notify/reminders.js b/src/notify/reminders.js
+index c5f9e2a..952b600 100644
+--- a/src/notify/reminders.js
++++ b/src/notify/reminders.js
+@@ -13,7 +13,7 @@ import { render } from './templates.js'
+ export function sendBillingReminders(today) {
+   const sent = []
+   for (const s of listSubscriptions()) {
+-    if (s.cancelledOn) continue
++    if (s.cancelledOn || s.status === 'paused') continue
+     if (daysBetween(today, s.nextBillingOn) !== config.reminderDaysBefore) continue
+     const m = getMember(s.memberId)
+     const plan = getPlan(s.planId)
+diff --git a/src/subscriptions/service.js b/src/subscriptions/service.js
+index 87631ca..1bb556c 100644
+--- a/src/subscriptions/service.js
++++ b/src/subscriptions/service.js
+@@ -1,6 +1,7 @@
+ import { log } from '../log.js'
+ import { getMember } from '../members/members.js'
+ import { getPlan } from '../plans/plans.js'
++import { addDays, daysBetween } from '../util/dates.js'
+ import { RuleError } from '../util/errors.js'
+ import { getSubscription, listSubscriptions, nextSubscriptionId, saveSubscription } from './store.js'
+ 
+@@ -61,3 +62,41 @@ export function cancelSubscription(id, today, reason = '') {
+   log.info('cancelled', { id, reason })
+   return sub
+ }
++
++/** 일시정지는 한 번에 이 날 수까지다. 지나면 해지가 아니라 자동으로 재개된다 */
++export const MAX_PAUSE_DAYS = 28
++
++/** 일시정지. 정지 중에는 결제, 배송, 결제 안내가 모두 멈춘다. 연간 플랜은 정지할 수 없다(연간 할인가) */
++export function pauseSubscription(id, today) {
++  const sub = getSubscription(id)
++  if (sub.status !== 'active') throw new RuleError('활성 구독만 정지할 수 있음')
++  if (getPlan(sub.planId).period === 'annual') throw new RuleError('연간 플랜은 일시정지할 수 없음')
++  sub.status = 'paused'
++  sub.pausedOn = today
++  saveSubscription(sub)
++  log.info('paused', { id, on: today })
++  return sub
++}
++
++/** 재개. 결제일은 그대로 둔다 */
++export function resumeSubscription(id, today) {
++  const sub = getSubscription(id)
++  if (sub.status !== 'paused') throw new RuleError('정지된 구독이 아님')
++  const days = daysBetween(sub.pausedOn, today)
++  sub.status = 'active'
++  sub.pausedOn = null
++  saveSubscription(sub)
++  log.info('resumed', { id, on: today, days })
++  return sub
++}
++
++/** 정지한 지 MAX_PAUSE_DAYS가 지난 구독을 재개한다. 하루 작업이 맨 먼저 부른다 */
++export function resumeExpiredPauses(today) {
++  const resumed = []
++  for (const s of listSubscriptions()) {
++    if (s.status !== 'paused' || daysBetween(s.pausedOn, today) < MAX_PAUSE_DAYS) continue
++    resumeSubscription(s.id, addDays(s.pausedOn, MAX_PAUSE_DAYS))
++    resumed.push(s.id)
++  }
++  return resumed
++}
+diff --git a/test/subscriptions.test.js b/test/subscriptions.test.js
+index 44239ee..68822b8 100644
+--- a/test/subscriptions.test.js
++++ b/test/subscriptions.test.js
+@@ -33,3 +33,13 @@ test('해지', () => {
+   assert.equal(s.cancelledOn, '2026-10-05')
+   assert.throws(() => cancelSubscription('S-1', '2026-10-06'), /이미 해지/)
+ })
++
++test('일시정지와 재개', async () => {
++  const { pauseSubscription, resumeSubscription } = await import('../src/subscriptions/service.js')
++  resetStore([sub(), sub({ id: 'S-2', memberId: 'M-2', planId: 'basic-y' })])
++  pauseSubscription('S-1', '2026-10-02')
++  assert.equal(getSubscription('S-1').status, 'paused')
++  assert.throws(() => pauseSubscription('S-2', '2026-10-02'), /연간/)
++  resumeSubscription('S-1', '2026-10-12')
++  assert.equal(getSubscription('S-1').nextBillingOn, '2026-10-10')
++})

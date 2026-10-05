@@ -1,0 +1,177 @@
+diff --git a/src/admin/cli.js b/src/admin/cli.js
+index 4dd2226..b25223b 100644
+--- a/src/admin/cli.js
++++ b/src/admin/cli.js
+@@ -1,8 +1,8 @@
+ // 매장 직원용 명령: node src/admin/cli.js <명령> [인자...]
+ import { listTools } from '../catalog/tools.js'
++import { lateFee, overdueDays } from '../rentals/late-fee.js'
+ import { getRental, listRentals, resetStore } from '../rentals/store.js'
+ import { seedRentals } from '../seed.js'
+-import { daysBetween } from '../util/dates.js'
+ import { formatWon } from '../util/money.js'
+ 
+ const HELP = '명령: tools | rentals | fee <대여id> <날짜>'
+@@ -24,8 +24,8 @@ export function runCommand(args, out = console.log) {
+         return 1
+       }
+       const r = getRental(id)
+-      const d = daysBetween(r.dueDate, date)
+-      const fee = d > 1 ? Math.min(Math.round((r.dailyRate * d) / 2), r.deposit) : 0
++      const d = overdueDays(r, date)
++      const fee = lateFee(r, d)
+       out(`${r.id} ${r.toolName}: ${d > 0 ? `${d}일 늦음` : '늦지 않음'}, 연체료 ${formatWon(fee)}`)
+       return 0
+     }
+diff --git a/src/billing/invoice.js b/src/billing/invoice.js
+index 565ffff..603ca6e 100644
+--- a/src/billing/invoice.js
++++ b/src/billing/invoice.js
+@@ -1,13 +1,14 @@
++import { lateFee, overdueDays } from '../rentals/late-fee.js'
+ import { listRentals } from '../rentals/store.js'
+-import { daysBetween, monthOf } from '../util/dates.js'
++import { monthOf } from '../util/dates.js'
+ import { sum } from '../util/money.js'
+ import { vatOf } from './tax.js'
+ 
+ /** 반납된 대여의 연체료 줄. 연체료가 없으면 null */
+ export function lateFeeLine(rental, returnedOn) {
+-  const days = daysBetween(rental.dueDate, returnedOn)
+-  if (days <= 1) return null
+-  const amount = Math.min(Math.round(rental.dailyRate * days * 0.5), rental.deposit)
++  const days = overdueDays(rental, returnedOn)
++  const amount = lateFee(rental, days)
++  if (!amount) return null
+   return { label: `연체료 (${days}일)`, amount }
+ }
+ 
+diff --git a/src/notify/reminder.js b/src/notify/reminder.js
+index 524d296..7883650 100644
+--- a/src/notify/reminder.js
++++ b/src/notify/reminder.js
+@@ -1,15 +1,17 @@
+ import { getMember } from '../members/members.js'
++import { lateFee, overdueDays } from '../rentals/late-fee.js'
+ import { listRentals } from '../rentals/store.js'
+-import { addDays, daysBetween } from '../util/dates.js'
++import { addDays } from '../util/dates.js'
+ import { formatWon } from '../util/money.js'
+ import { sendSms } from './sms.js'
+ import { render } from './templates.js'
+ 
+ /** 연체 안내 문자 글. 아직 늦지 않았으면 null */
+ export function reminderText(rental, today) {
+-  const days = daysBetween(rental.dueDate, today)
++  const days = overdueDays(rental, today)
+   if (days < 1) return null
+-  const fee = Math.min(Math.round(rental.dailyRate * days * 0.5), rental.deposit)
++  // 안내 문자는 유예 없이 계산한 금액을 보여 준다(빨리 반납하게)
++  const fee = lateFee(rental, days, { grace: false })
+   const member = getMember(rental.memberId)
+   return render('overdue', { name: member.name, tool: rental.toolName, days, fee: formatWon(fee) })
+ }
+diff --git a/src/rentals/extend.js b/src/rentals/extend.js
+index 41dbcc5..d9be0b0 100644
+--- a/src/rentals/extend.js
++++ b/src/rentals/extend.js
+@@ -3,6 +3,7 @@ import { getMember } from '../members/members.js'
+ import { addDays, daysBetween } from '../util/dates.js'
+ import { RuleError } from '../util/errors.js'
+ import { rentalFee } from './pricing.js'
++import { lateFee } from './late-fee.js'
+ import { getRental, saveRental } from './store.js'
+ 
+ /**
+@@ -15,7 +16,7 @@ export function extendRental(rentalId, today, extraDays) {
+   if (!Number.isInteger(extraDays) || extraDays < 1) throw new RuleError('연장 기간은 1일 이상')
+ 
+   const late = daysBetween(r.dueDate, today)
+-  const fee = late > 1 ? Math.min(Math.round(r.dailyRate * late * 0.5), r.deposit) : 0
++  const fee = lateFee(r, late)
+   if (fee > 0) r.charges.push({ kind: 'late', amount: fee, on: today })
+ 
+   const member = getMember(r.memberId)
+diff --git a/src/rentals/late-fee.js b/src/rentals/late-fee.js
+new file mode 100644
+index 0000000..e0478dc
+--- /dev/null
++++ b/src/rentals/late-fee.js
+@@ -0,0 +1,26 @@
++import { daysBetween } from '../util/dates.js'
++
++// 연체료 규칙. 규칙이 바뀌면 여기만 고친다
++export const LATE_FEE_RULE = {
++  rate: 0.5, // 일 대여료에 곱하는 비율
++  graceDays: 1, // 이만큼 늦은 것은 받지 않는다
++}
++
++/** 반납 예정일에서 on까지 늦은 날 수. 늦지 않았으면 0 이하 */
++export function overdueDays(rental, on) {
++  return daysBetween(rental.dueDate, on)
++}
++
++/**
++ * days일 늦은 대여의 연체료(원).
++ * - grace: false면 유예 없이 계산한다(연체 안내 문자는 일부러 유예 없는 금액을 보여 준다)
++ * - round: 원 단위 처리. 고객에게 받는 돈은 반올림, 파트너 정산은 내림(파트너 계약)
++ * - uncappedWithoutDeposit: 보증금이 없는 옛 계약(deposit null)은 상한 없이 받는다(반납)
++ */
++export function lateFee(rental, days, { grace = true, round = Math.round, uncappedWithoutDeposit = false } = {}) {
++  if (days < 1) return 0
++  if (grace && days <= LATE_FEE_RULE.graceDays) return 0
++  const fee = round(rental.dailyRate * days * LATE_FEE_RULE.rate)
++  const cap = rental.deposit == null && uncappedWithoutDeposit ? Infinity : rental.deposit
++  return Math.min(fee, cap)
++}
+diff --git a/src/rentals/return.js b/src/rentals/return.js
+index eee7051..c7f25b7 100644
+--- a/src/rentals/return.js
++++ b/src/rentals/return.js
+@@ -1,6 +1,7 @@
+ import { log } from '../log.js'
+ import { daysBetween } from '../util/dates.js'
+ import { RuleError } from '../util/errors.js'
++import { lateFee as lateFeeOf, overdueDays } from './late-fee.js'
+ import { getRental, saveRental } from './store.js'
+ 
+ /**
+@@ -12,12 +13,8 @@ export function processReturn(rentalId, returnedOn) {
+   if (rental.returnedOn) throw new RuleError(`이미 반납됨: ${rentalId}`)
+   if (daysBetween(rental.startDate, returnedOn) < 0) throw new RuleError('반납일이 대여 시작일보다 앞섬')
+ 
+-  const overdue = daysBetween(rental.dueDate, returnedOn)
+-  let lateFee = 0
+-  if (overdue > 1) {
+-    lateFee = Math.round(rental.dailyRate * overdue * 0.5)
+-    lateFee = Math.min(lateFee, rental.deposit ?? Infinity)
+-  }
++  const overdue = overdueDays(rental, returnedOn)
++  const lateFee = lateFeeOf(rental, overdue, { uncappedWithoutDeposit: true })
+ 
+   rental.returnedOn = returnedOn
+   if (lateFee > 0) rental.charges.push({ kind: 'late', amount: lateFee, on: returnedOn })
+diff --git a/src/reports/overdue.js b/src/reports/overdue.js
+index cfab381..5e2a7e1 100644
+--- a/src/reports/overdue.js
++++ b/src/reports/overdue.js
+@@ -1,4 +1,4 @@
+-import { daysBetween } from '../util/dates.js'
++import { lateFee, overdueDays } from '../rentals/late-fee.js'
+ import { sum } from '../util/money.js'
+ 
+ /**
+@@ -10,11 +10,9 @@ export function overdueReport(rentals, asOf) {
+   const rows = []
+   for (const r of rentals) {
+     if (r.returnedOn) continue
+-    const days = daysBetween(r.dueDate, asOf)
++    const days = overdueDays(r, asOf)
+     if (days < 1) continue
+-    let fee = 0
+-    if (days > 1) fee = Math.round(r.dailyRate * days * .5)
+-    if (fee > r.deposit) fee = r.deposit
++    const fee = lateFee(r, days)
+     rows.push({ id: r.id, memberId: r.memberId, tool: r.toolName, days, fee })
+   }
+   rows.sort((a, b) => b.days - a.days || a.id.localeCompare(b.id))
