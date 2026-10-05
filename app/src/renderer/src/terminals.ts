@@ -33,6 +33,13 @@ export function ensureTerm(key: string, info: AppInfo): TermEntry {
     fontSize: 14,
     scrollback: 10000,
     cursorBlink: true,
+    // 바탕은 styles.css의 --bg와 맞춘다
+    theme: {
+      background: '#111317',
+      foreground: '#d6d9df',
+      cursor: '#d6d9df',
+      selectionBackground: '#3b82f659',
+    },
     // ConPTY에 맞춘 동작을 켠다 (xterm.d.ts windowsPty)
     windowsPty: info.windowsBuild
       ? { backend: 'conpty', buildNumber: info.windowsBuild }
