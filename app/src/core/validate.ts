@@ -27,6 +27,8 @@ export const DESIGN_FILE = 'design.md'
 export const IMPLEMENT_FILE = 'implement.md'
 /** 계획과 리팩터링의 산출물 (5.6.10, D272) */
 export const REFACTOR_FILE = 'refactor.md'
+/** 실행의 산출물 (5.6.11, D310) */
+export const EXECUTION_FILE = 'execution.md'
 /** 리뷰와 검증의 산출물: 리뷰 지적과 완료조건 판정 (5.6.6, D229) */
 export const VERIFICATION_FILE = 'verification.md'
 
@@ -35,6 +37,13 @@ export const HANDOFF_SECTIONS = ['요약', '다음 task가 알아야 할 것'] a
 export const INTENT_SECTIONS = ['목표', '비목표', '원하는 결과', '완료조건'] as const
 const CRITERIA_SECTION = '완료조건'
 const CRITERIA_PREFIX = '- [ ] '
+/**
+ * 일반 Work의 완료조건 줄 끝의 확인 방법 (D305, I86). 대시 하나(—, –, -, --) 뒤의 `확인:`이고 그 뒤에 글이 있어야 한다.
+ * 앱은 방법을 해석하지 않으므로 대시 모양은 너그럽게 본다. 긴 대시는 앞 글자에 붙여 써도 되고, 하이픈은 낱말 안에도
+ * 나오므로 앞에 공백이 있어야 한다(PR #29 리뷰). skills/check-method.mjs와 같아야 한다(시험이 비교한다)
+ */
+export const CHECK_METHOD = /(?:\s*[—–]|\s--?)\s*확인\s*:\s*\S/
+const CHECK_METHOD_FORM = ' — 확인: <명령 / 읽을 곳 / 사람>'
 
 // 스키마를 걷는 데 쓰는 부분만 적은 모양
 interface SchemaNode {
@@ -544,8 +553,14 @@ function isYamlLine(line: string): boolean {
   )
 }
 
-/** intent.draft.md 검사 (5.3, D38). 본문 절만 본다. 머리글이 있으면 경고만 한다 (I58) */
-export function checkIntentDraft(text: string, opts: { warnChars: number }): IssueCheck {
+/**
+ * intent.draft.md 검사 (5.3, D38). 본문 절만 본다. 머리글이 있으면 경고만 한다 (I58). 일반(general) Work면 완료조건
+ * 줄마다 확인 방법이 있는지도 본다 (D305, I86). 유형을 주지 않으면 확인 방법은 보지 않는다
+ */
+export function checkIntentDraft(
+  text: string,
+  opts: { warnChars: number; type?: WorkType },
+): IssueCheck {
   const file = INTENT_DRAFT_FILE
   const { body, header } = intentDraftBody(text)
   const errors = missingSections(file, body, INTENT_SECTIONS, 'intent 초안 본문')
@@ -557,6 +572,13 @@ export function checkIntentDraft(text: string, opts: { warnChars: number }): Iss
         part: 'body',
         field: CRITERIA_SECTION,
         message: `\`## ${CRITERIA_SECTION}\`의 줄이 \`${CRITERIA_PREFIX}\`로 시작하지 않음 (지금: ${clip(line)})`,
+      })
+    } else if (opts.type === 'general' && !CHECK_METHOD.test(line)) {
+      errors.push({
+        file,
+        part: 'body',
+        field: CRITERIA_SECTION,
+        message: `\`## ${CRITERIA_SECTION}\`의 줄 끝에 확인 방법(\`${CHECK_METHOD_FORM}\`)이 없음 (지금: ${clip(line)})`,
       })
     }
   }
@@ -716,7 +738,7 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
   const draft =
     draftText === undefined
       ? null
-      : checkIntentDraft(draftText, { warnChars: config.intent_warn_chars })
+      : checkIntentDraft(draftText, { warnChars: config.intent_warn_chars, type: input.type })
   const handoffText = files[HANDOFF_FILE]
   const handoff =
     handoffText === undefined

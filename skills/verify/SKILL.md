@@ -19,6 +19,9 @@ Review the whole change of this Work, apply only the findings the human picks, t
 <!-- type: refactor -->
 - `refactor.md` at the path in `context.md`: the plan (target structure), the safety net and its commit hash, the change, the bugs found and the accepted differences.
 <!-- /type -->
+<!-- type: general -->
+- `execution.md` at the path in `context.md`: the plan, the change, and the self-check of each 완료조건.
+<!-- /type -->
 - The change to review is from the base commit (from `context.md`) to now: `git diff <base commit>`.
 
 ## Order
@@ -41,6 +44,10 @@ Review the whole change of this Work, apply only the findings the human picks, t
 <!-- type: refactor -->
 - Did any logic change in the diff (outside the differences the human accepted)? A behavior change the human did not accept is a 차단 finding. Are the structural goals met? Did the scope grow beyond the plan?
 <!-- /type -->
+<!-- type: general -->
+- Does the change fit the plan in `execution.md`? Did the scope grow beyond it?
+- Does each 완료조건's check method (`— 확인: …`) really check it?
+<!-- /type -->
 - Missing cases and edge conditions.
 <!-- type: bugfix -->
 - Do the tests really catch the fix?
@@ -50,6 +57,9 @@ Review the whole change of this Work, apply only the findings the human picks, t
 <!-- /type -->
 <!-- type: refactor -->
 - Do the safety-net tests really catch the behavior of every changed place?
+<!-- /type -->
+<!-- type: general -->
+- Does every change in code behavior have a test that catches it? If not, is the reason in `execution.md` sound?
 <!-- /type -->
 - The repo's conventions and readability.
 - Changes that are not needed.
@@ -79,6 +89,11 @@ Review the whole change of this Work, apply only the findings the human picks, t
   Run them on the final code too, at their current paths (a moved test shows its new path in `refactor.md`). 통과 only if both pass. Check that every changed place has a safety net that really catches its behavior. Accepted differences are exceptions. If a place had no safety net (reason in `refactor.md`), it is 판정 불가. Before you close, confirm `git branch --show-current` is the work branch.
 - **"레포 밖 공개 인터페이스가 바뀌지 않는다":** judge from the diff against the base commit whether anything used outside the repo changed (exports, HTTP API, CLI arguments, stored formats and schemas). Leave out what the intent says to change.
 <!-- /type -->
+<!-- type: general -->
+- **Re-run everything yourself** when you verify: each 완료조건's check method and the test commands. Use the results in `execution.md` only for comparison.
+- **Check methods:** first run the method at the end of each 완료조건 line yourself. If it does not really check that 완료조건 (e.g. the command never runs that behavior), add your own check (read the code, run more), judge with both, write both in the evidence, and write in `남은 위험` that the check method fell short. Do not change the intent.
+- **`확인: 사람` items:** judge them by asking the human (see Human decisions). Before you ask, check what you can yourself and show it.
+<!-- /type -->
 - **Verdicts:** 통과 / 실패 / 판정 불가. For 판정 불가, give the reason, and add useful facts if any.
 <!-- type: bugfix -->
   For example, the reproduction test passes in a Work that never reproduced the bug. If the Work proceeded without reproduction, "재현 절차가 더 이상 실패하지 않는다" is 판정 불가. If there are neither reproduction steps nor a reproduction test, it is 판정 불가 too.
@@ -96,6 +111,9 @@ Review the whole change of this Work, apply only the findings the human picks, t
 <!-- type: refactor -->
 - **Going back:** if the change is wrong (e.g. it changes behavior), write it as a 차단 finding. If the human does not pick it to apply here, set `recommended_next` with the reason: `refactor` if the change is wrong, `intake` if the intent is wrong. The app stops and the human picks the step.
 <!-- /type -->
+<!-- type: general -->
+- **Going back:** if the change is wrong, write it as a 차단 finding. If the human does not pick it to apply here, set `recommended_next` with the reason: `execute` if the change is wrong, `intake` if the intent is wrong. The app stops and the human picks the step.
+<!-- /type -->
 
 ## Decision points
 
@@ -106,6 +124,9 @@ Review the whole change of this Work, apply only the findings the human picks, t
 Ask on the spot:
 
 - **Which findings to apply** (only when there are findings). In one question, list each finding in one line (number, severity, what). Offer: 차단·권장만 반영 / 모두 반영 / 반영하지 않음, and put the one you recommend first. The human can also type the numbers. Record what they picked and what they did not in `decisions` with `by: human`.
+<!-- type: general -->
+- **`확인: 사람` items:** gather them all into one question. For each, show what to look at (file, diff location, run result). The human's answer decides 통과 or 실패. Write "사람 확인" and the answer in the evidence, and record the answer in `decisions` with `by: human`.
+<!-- /type -->
 - **A test change looks like weakening:** show which test changed and how. If the human says it is not weakening, "기존 테스트를 약화하거나 삭제하지 않는다" is 통과. If they say it is, it is 실패.
 - **Any 실패 or 판정 불가:** let the human choose:
 <!-- type: bugfix -->
@@ -117,6 +138,9 @@ Ask on the spot:
 <!-- type: refactor -->
   - Go back: set `recommended_next` to the earlier step to return to (usually `refactor`). The app stops and the human picks the step.
 <!-- /type -->
+<!-- type: general -->
+  - Go back: set `recommended_next` to the earlier step to return to (usually `execute`). The app stops and the human picks the step.
+<!-- /type -->
   - Go to the completion screen as is: `recommended_next: null`. The screen shows a warning.
 
 ## Done when
@@ -127,6 +151,9 @@ Ask on the spot:
 - Every changed test file is judged.
 - `pr.md` is written.
 - Any weakening suspicion, 실패 or 판정 불가 was asked about, and the answer recorded in `decisions`.
+<!-- type: general -->
+- Every `확인: 사람` item was asked about, and the answer recorded in `decisions`.
+<!-- /type -->
 
 ## Artifact template: `verification.md`
 
@@ -139,7 +166,7 @@ Ask on the spot:
 <!-- type: bugfix -->
 - 지적 번호 — 한 일, 커밋, 테스트 명령과 결과 (재현 절차를 바꿨으면 달라진 절차)
 <!-- /type -->
-<!-- type: feature refactor -->
+<!-- type: feature refactor general -->
 - 지적 번호 — 한 일, 커밋, 테스트 명령과 결과
 <!-- /type -->
 (사람이 고른 것이 없으면 "없음")
@@ -201,6 +228,18 @@ Ask on the spot:
 ## 동작 보존
 ## 변경
 ## 찾은 버그
+## 테스트
+```
+<!-- /type -->
+<!-- type: general -->
+- `주요 결정`: the chosen way, rejected alternatives and what the human decided, briefly.
+
+```markdown
+# PR 제목
+
+## 요약
+## 주요 결정
+## 변경
 ## 테스트
 ```
 <!-- /type -->

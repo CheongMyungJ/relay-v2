@@ -397,6 +397,7 @@ describe('마무리 안내 문구 (D104, D132)', () => {
         design: false,
         implement: false,
         refactor: false,
+        execute: false,
         respond: false,
       },
     }
@@ -421,7 +422,14 @@ describe('마무리 안내 문구 (D104, D132)', () => {
 describe('Work별 덮어쓰기 (D72)', () => {
   const config: AppConfig = {
     ...DEFAULT_CONFIG,
-    auto_approve: { fix: true, design: false, implement: true, refactor: true, respond: true },
+    auto_approve: {
+      fix: true,
+      design: false,
+      implement: true,
+      refactor: true,
+      execute: true,
+      respond: true,
+    },
     question_mode: { ...DEFAULT_CONFIG.question_mode, fix: 'confirm_each' },
   }
 
@@ -866,5 +874,65 @@ describe('context.md: 리팩터링 (D258, D278)', () => {
       '안전망 커밋은 다시 만들지 않는다. 아래 폐기된 `refactor.md`의 `안전망 커밋` 해시',
     )
     expect(entry).toContain(`- t-02 refactor (계획과 리팩터링): ${kept}`)
+  })
+})
+
+describe('context.md: 일반 (D302, D316, D318)', () => {
+  function generalInput(node: NodeName, overrides: Partial<ContextInput> = {}): ContextInput {
+    const { work, task } = workAt(node, { type: 'general' })
+    return input('intake', {
+      work,
+      task,
+      taskDir: `${WORK_DIR}\\tasks\\${taskDirName(task)}`,
+      intent: node === 'intake' ? null : INTENT,
+      ...overrides,
+    })
+  }
+
+  it('task 정보에 업무 유형과 execute 스킬을 넣는다 (D303)', () => {
+    const md = buildContext(generalInput('execute'))
+    expect(section(md, 'task 정보')).toContain('- 업무 유형: 일반 (`general`)')
+    expect(section(md, 'task 정보')).toContain('- node: execute (실행)\n- skill: execute')
+  })
+
+  it('선택 가능한 다음 단계는 일반의 파이프라인이다 (3.2)', () => {
+    const steps = (node: NodeName) =>
+      section(buildContext(generalInput(node)), '선택 가능한 다음 단계')
+    expect(steps('intake')).toBe('- 기본 다음 단계: execute (실행)\n- 이전 단계: 없음')
+    expect(steps('execute')).toBe(
+      '- 기본 다음 단계: verify (리뷰와 검증)\n- 이전 단계: intake (의도 정리)',
+    )
+    expect(steps('verify')).toBe(
+      '- 기본 다음 단계: Work 완료\n- 이전 단계: intake (의도 정리), execute (실행)',
+    )
+  })
+
+  it('execute의 마무리 안내 문구는 fix와 같고 기본은 자동 승인이다 (D132, D315)', () => {
+    expect(closingMessage('execute')).toBe(closingMessage('fix'))
+    expect(section(buildContext(generalInput('execute')), '승인 방식')).toMatch(
+      /^자동 승인 \(task를/,
+    )
+  })
+
+  it('[현재 코드 위에서 이어서]로 execute에 들어오면 폐기된 execution.md를 참고하라고 적는다 (D316)', () => {
+    const kept = 'C:\\w\\tasks\\02-execute\\execution.md'
+    const md = buildContext(
+      generalInput('execute', {
+        selection: {
+          reason: 'rewind',
+          from: { taskId: 't-03', node: 'verify' },
+          instruction: null,
+          discarded: [],
+          dropped: [],
+          skipped: [],
+          keepCode: true,
+          reset: false,
+          keptArtifacts: [{ taskId: 't-02', node: 'execute', path: kept }],
+        },
+      }),
+    )
+    const entry = section(md, '되감기로 들어옴 (먼저 읽을 것)')
+    expect(entry).toContain('아래 폐기된 `execution.md`를 참고해 새 `execution.md`를 쓴다.')
+    expect(entry).toContain(`- t-02 execute (실행): ${kept}`)
   })
 })

@@ -5,16 +5,18 @@ import type { AgentEngine } from './agent'
 import type { HandoffStatus, NodeName, TaskNode } from './contracts'
 
 /**
- * 업무 유형 (D232, D236, D258): 버그 수정(bugfix), 기능 추가(feature), 리팩터링(refactor). 사람이 새 Work 대화상자에서
- * 고르고, 의도 승인 전까지만 바꿀 수 있다 (D237). 유형마다 파이프라인이 다르다 (core/pipeline PIPELINES)
+ * 업무 유형 (D232, D236, D258, D302): 버그 수정(bugfix), 기능 추가(feature), 리팩터링(refactor), 일반(general).
+ * 사람이 새 Work 대화상자에서 고르고, 의도 승인 전까지만 바꿀 수 있다 (D237). 유형마다 파이프라인이 다르다
+ * (core/pipeline PIPELINES). 일반은 다른 유형에 맞지 않는 일에 쓴다 (D303)
  */
-export type WorkType = 'bugfix' | 'feature' | 'refactor'
+export type WorkType = 'bugfix' | 'feature' | 'refactor' | 'general'
 
 /** 업무 유형의 화면 이름 (D236) */
 export const WORK_TYPE_LABEL: Readonly<Record<WorkType, string>> = {
   bugfix: '버그 수정',
   feature: '기능 추가',
   refactor: '리팩터링',
+  general: '일반',
 }
 
 /** 사이드바와 머리 띠에 보이는 짧은 유형 이름 (D256) */
@@ -22,10 +24,11 @@ export const WORK_TYPE_SHORT: Readonly<Record<WorkType, string>> = {
   bugfix: '버그',
   feature: '기능',
   refactor: '리팩터',
+  general: '일반',
 }
 
 /** 고를 수 있는 업무 유형. 새 Work 대화상자의 버튼 차례다 (D236) */
-export const WORK_TYPES: readonly WorkType[] = ['bugfix', 'feature', 'refactor']
+export const WORK_TYPES: readonly WorkType[] = ['bugfix', 'feature', 'refactor', 'general']
 
 /**
  * Work 상태 (3.3): 진행 중(active), 멈춤(stopped), PR 진행(pr: [PR 생성] 뒤 머지나 [머지 없이 끝내기]까지, D152),

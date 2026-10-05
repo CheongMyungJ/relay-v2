@@ -3,7 +3,7 @@
 // PR 대응 task(노드 respond)는 파이프라인 밖이다 (D187, D188): 순서, 단계 선택에 없고 선택 가능한 다음 단계가 없다.
 import type { SkillName } from '../shared/config'
 import type { NodeName, TaskNode } from '../shared/contracts'
-import type { WorkState, WorkType } from '../shared/work'
+import { WORK_TYPES, type WorkState, type WorkType } from '../shared/work'
 
 export interface NodeInfo {
   node: TaskNode
@@ -17,12 +17,14 @@ export interface NodeInfo {
 /**
  * 유형별 파이프라인 순서 (3.1, D227, D232). Work는 그 유형의 순서를 모두 지난다. 되감기와 건너뛰기, 이전 단계는 이
  * 순서로 가른다(6.2). fix는 재현과 원인 분석을 함께 하고(D228), design은 설계와 구현 계획을 함께 하고(D232),
- * refactor는 계획, 안전망, 구조 변경을 함께 하고(D258), verify는 리뷰와 최종 검증을 함께 한다 (D229)
+ * refactor는 계획, 안전망, 구조 변경을 함께 하고(D258), execute는 진행 방식을 정하지 않고 계획과 작업을 함께 하고(D302),
+ * verify는 리뷰와 최종 검증을 함께 한다 (D229)
  */
 export const PIPELINES: Readonly<Record<WorkType, readonly NodeName[]>> = {
   bugfix: ['intake', 'fix', 'verify'],
   feature: ['intake', 'design', 'implement', 'verify'],
   refactor: ['intake', 'refactor', 'verify'],
+  general: ['intake', 'execute', 'verify'],
 }
 
 /** Work의 업무 유형. work.json에 type이 없으면 버그 수정이다 (D256, I58) */
@@ -41,7 +43,8 @@ const CONTINUE =
 /**
  * [현재 코드 위에서 이어서](6.2)를 주는 단계와 그 단계의 context.md 안내 (6.2, D254, D278, PR #24 리뷰). 단계를 이 표에
  * 더하면 안내도 함께 써야 하므로 빠뜨릴 수 없다. design은 코드를 바꾸지 않고 design.md만 고치며, 이어지는 implement가
- * 그 코드 위에서 고친다. refactor는 안전망 커밋을 다시 만들지 않고 폐기된 refactor.md의 해시를 이어 적는다
+ * 그 코드 위에서 고친다. refactor는 안전망 커밋을 다시 만들지 않고 폐기된 refactor.md의 해시를 이어 적는다. execute는
+ * 폐기된 execution.md를 참고해 새 execution.md를 쓴다 (D316, I85)
  */
 export const KEEP_CODE_NOTES: Readonly<
   Record<WorkType, Readonly<Partial<Record<NodeName, string>>>>
@@ -55,14 +58,18 @@ export const KEEP_CODE_NOTES: Readonly<
   refactor: {
     refactor: `${CONTINUE} 안전망 커밋은 다시 만들지 않는다. 아래 폐기된 \`refactor.md\`의 \`안전망 커밋\` 해시를 새 \`refactor.md\`에 그대로 적는다. 더 필요한 안전망 테스트는 구조를 더 바꾸기 전에 따로 커밋하고 표에 (추가)로 적으며, 기준 코드 결과는 안전망 커밋에 그 테스트 파일만 얹어 돌려 얻는다(스킬의 절차).`,
   },
+  general: {
+    execute: `${CONTINUE} 아래 폐기된 \`execution.md\`를 참고해 새 \`execution.md\`를 쓴다.`,
+  },
 }
 
-/** [현재 코드 위에서 이어서]를 주는 단계 (6.2). KEEP_CODE_NOTES에서 나온다 */
-export const KEEP_CODE_NODES: Readonly<Record<WorkType, readonly NodeName[]>> = {
-  bugfix: Object.keys(KEEP_CODE_NOTES.bugfix) as NodeName[],
-  feature: Object.keys(KEEP_CODE_NOTES.feature) as NodeName[],
-  refactor: Object.keys(KEEP_CODE_NOTES.refactor) as NodeName[],
-}
+/**
+ * [현재 코드 위에서 이어서]를 주는 단계 (6.2). KEEP_CODE_NOTES에서 나오므로 유형을 더해도 여기는 고치지 않는다
+ * (PR #29 리뷰)
+ */
+export const KEEP_CODE_NODES: Readonly<Record<WorkType, readonly NodeName[]>> = Object.fromEntries(
+  WORK_TYPES.map((t) => [t, Object.keys(KEEP_CODE_NOTES[t]) as NodeName[]]),
+) as Record<WorkType, NodeName[]>
 
 /** PR 대응 task의 노드 (D187). 파이프라인 밖이다 (D188) */
 export const RESPOND = 'respond' as const
@@ -88,6 +95,7 @@ export const NODE_INFO: Readonly<Record<TaskNode, NodeInfo>> = {
     title: '계획과 리팩터링',
     artifacts: ['refactor.md'],
   },
+  execute: { node: 'execute', skill: 'execute', title: '실행', artifacts: ['execution.md'] },
   verify: {
     node: 'verify',
     skill: 'verify',

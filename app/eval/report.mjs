@@ -6,6 +6,8 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { DIMENSIONS, judgePair } from './lib/judge.mjs'
+import { armBase, armType, typeLabel } from './lib/kind.mjs'
+import { codeOutcome } from './lib/repo.mjs'
 import { clip, readJson, readJsonl, stats, writeJson } from './lib/util.mjs'
 import { measuredWorks, multiWork, pairOf, workParts } from './lib/works.mjs'
 
@@ -16,7 +18,12 @@ const SCENARIOS = process.env.RELAY_EVAL_SCENARIOS
 /** 쪽의 차례와 보고서의 이름. relay-off는 지식 관리를 끈 relay다. 그 밖의 이름(--app으로 준 빌드)은 이름 차례로 뒤에 둔다 */
 const ARMS = ['relay', 'relay-off', 'cli']
 const LABEL = { relay: 'relay', 'relay-off': 'relay (지식 끔)', cli: '맨 CLI' }
-const label = (k) => LABEL[k] ?? (k.endsWith('-off') ? `${k.slice(0, -4)} (지식 끔)` : k)
+const label = (k) => {
+  // relay@<유형>은 그 유형으로 만든 Work다 (교차 비교, I93)
+  const type = armType(k)
+  if (type) return `${label(armBase(k))} (${typeLabel(type)} 유형)`
+  return LABEL[k] ?? (k.endsWith('-off') ? `${k.slice(0, -4)} (지식 끔)` : k)
+}
 
 /** 판정의 두 쪽. pair가 없는 예전 판정은 relay 대 맨 CLI다 */
 const pairOfJudge = (j) => j.pair ?? ['relay', 'cli']
@@ -109,6 +116,8 @@ function metricRows(rs) {
   const n = rs.length
   const sv = (k) => get((r) => r.survey?.[k] ?? null)
   const time = new Map(rs.map((r) => [r, humanTime(r)]))
+  // 지식 파일을 뺀 코드 결과는 실행마다 한 번만 만든다 (PR #29 리뷰)
+  const code = new Map(rs.map((r) => [r, codeOutcome(r.outcome)]))
   return [
     ['숨긴 시험 모두 통과', pct(rs.filter((r) => r.outcome.success).length, n)],
     ['레포 시험 통과', pct(rs.filter((r) => r.outcome.repoTestsPass).length, n)],
@@ -133,8 +142,10 @@ function metricRows(rs) {
     ['설문 신뢰', ms(sv('trust'))],
     ['설문 복구', ms(sv('recovery'))],
     ['설문 다시 쓰고 싶음', ms(sv('reuse'))],
-    ['바뀐 줄 수', ms(get((r) => r.outcome.linesChanged))],
-    ['기대 밖 파일 수', ms(get((r) => r.outcome.unrelated.length))],
+    // relay의 지식 파일은 코드 결과에서 빼고 따로 센다 (lib/repo.mjs, docs/eval.md 6절)
+    ['바뀐 줄 수', ms(get((r) => code.get(r).linesChanged))],
+    ['기대 밖 파일 수', ms(get((r) => code.get(r).unrelated.length))],
+    ['지식 파일 수(판정에서 뺌)', ms(get((r) => code.get(r).knowledgeFiles.length))],
     ['에이전트 출력 토큰(천)', ms(get((r) => r.agent.output / 1000))],
     [
       '에이전트 입력 토큰(천, 캐시 포함)',

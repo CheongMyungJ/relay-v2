@@ -1,4 +1,4 @@
-// [스모크] 설치한 앱이 뜨고, 새 Work에서 유형(버그 수정)을 고른 뒤에야 [시작]이 켜지고(M14, D236, 유형 셋은 M15), 가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화면(자동 승인 포함), [단계 선택],
+// [스모크] 설치한 앱이 뜨고, 새 Work에서 유형(버그 수정)을 고른 뒤에야 [시작]이 켜지고(M14, D236, 유형 넷은 M15·M18), 가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화면(자동 승인 포함), [단계 선택],
 // 자동 승인 카운트다운의 [취소], [push]와 [Work 정리], 다시 켠 뒤 끊긴 작업의 [다시 시도]를 누른다 (I27).
 // M2: 프로젝트 등록 → 새 Work → intake 탭에 PTY 출력 → 창 크기 변경이 PTY에 전달 → [의도 승인]
 // → intent.md 확정, intake 세션 트리 종료, 다음 task 시작. M12: 다음 task의 터미널은 표시 줄로 시작하고, 머리 띠와
@@ -210,12 +210,17 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   const types = win.getByRole('radiogroup', { name: '업무 유형' })
   await expect(types.getByRole('radio', { name: '버그 수정' })).not.toBeChecked()
   await expect(types.getByRole('radio', { name: '기능 추가' })).not.toBeChecked()
-  // 유형은 셋이다: 버그 수정 / 기능 추가 / 리팩터링 (D261)
-  await expect(types.getByRole('radio')).toHaveCount(3)
+  // 유형은 넷이다: 버그 수정 / 기능 추가 / 리팩터링 / 일반 (D261, D303)
+  await expect(types.getByRole('radio')).toHaveCount(4)
   await expect(types.getByRole('radio', { name: '리팩터링' })).not.toBeChecked()
+  await expect(types.getByRole('radio', { name: '일반' })).not.toBeChecked()
   await expect(win.getByRole('button', { name: '시작' })).toBeDisabled()
+  // 일반을 고르면 다른 유형에 맞지 않는 일이라는 설명이 보이고, 다른 유형으로 바꾸면 사라진다 (D303, I88)
+  await types.getByRole('radio', { name: '일반' }).click()
+  await expect(win.locator('.work-type-hint')).toHaveText('다른 유형에 맞지 않는 일')
   await types.getByRole('radio', { name: '버그 수정' }).click()
   await expect(types.getByRole('radio', { name: '버그 수정' })).toBeChecked()
+  await expect(win.locator('.work-type-hint')).toHaveCount(0)
   await win.getByRole('button', { name: '시작' }).click()
 
   // intake 탭: PTY 출력과 머리 띠 (시나리오 2-5, D109)
@@ -327,6 +332,10 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await expect(
     win.getByRole('group', { name: '리팩터링' }).nth(1).getByLabel('계획과 리팩터링 자동 승인'),
   ).toBeChecked()
+  // 일반의 실행은 켬이 기본이다 (D315, D318)
+  await expect(
+    win.getByRole('group', { name: '일반' }).nth(1).getByLabel('실행 자동 승인'),
+  ).toBeChecked()
   await expect(win.getByRole('group', { name: '버그 수정' }).nth(1)).toContainText(
     '원인 분석과 수정',
   )
@@ -353,6 +362,7 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
     design: false,
     implement: true,
     refactor: true,
+    execute: true,
     respond: false,
   })
   expect(config().auto_approve_countdown_sec).toBe(600)

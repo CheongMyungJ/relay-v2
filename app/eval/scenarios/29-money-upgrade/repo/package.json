@@ -1,0 +1,11 @@
+{
+  "name": "invoice",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#money": "./vendor/money@1.4.0/index.js"
+  },
+  "scripts": {
+    "test": "node --test"
+  }
+}

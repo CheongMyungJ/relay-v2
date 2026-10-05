@@ -78,6 +78,7 @@ export const MANUAL: Pick<AppConfig, 'auto_approve'> = {
     design: false,
     implement: false,
     refactor: false,
+    execute: false,
     respond: false,
   },
 }

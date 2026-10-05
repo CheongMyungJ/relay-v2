@@ -42,8 +42,8 @@ export interface StepPlan {
   reason: StartReason
   code: StepCode
   /**
-   * [현재 코드 위에서 이어서]를 고를 수 있다: 버그 수정의 fix, 기능 추가의 design과 implement, 리팩터링의 refactor로
-   * 되감을 때 (6.2, D254, D278)
+   * [현재 코드 위에서 이어서]를 고를 수 있다: 버그 수정의 fix, 기능 추가의 design과 implement, 리팩터링의 refactor,
+   * 일반의 execute로 되감을 때 (6.2, D254, D278, D316)
    */
   keepCodeOffered: boolean
   /** 의도 승인 전 [intake 다시]에서 바꿀 유형 (D237). 바꾸지 않으면 null */

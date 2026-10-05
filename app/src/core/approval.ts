@@ -63,7 +63,8 @@ export type ApprovalMode = 'manual' | 'auto'
 
 /**
  * 자동 승인을 켤 수 있는 노드인가. intake(의도 승인)와 verify(리뷰와 검증 = Work 완료)는 늘 수동이다 (4.2).
- * 기능 추가의 design과 implement(D234, D249), 리팩터링의 refactor(D276), PR 대응은 fix처럼 켤 수 있다 (D169)
+ * 기능 추가의 design과 implement(D234, D249), 리팩터링의 refactor(D276), 일반의 execute(D315), PR 대응은 fix처럼 켤 수
+ * 있다 (D169)
  */
 export function autoApprovable(node: TaskNode): node is AutoApproveNode {
   return (AUTO_APPROVE_NODES as readonly TaskNode[]).includes(node)

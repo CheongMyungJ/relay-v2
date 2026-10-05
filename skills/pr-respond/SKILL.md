@@ -19,6 +19,9 @@ The Work has an open PR. The app collected the items of this round (review comme
 <!-- type: refactor -->
 - The pipeline artifacts (`refactor.md`, `verification.md`, …) at the paths in `context.md`, when you need them.
 <!-- /type -->
+<!-- type: general -->
+- The pipeline artifacts (`execution.md`, `verification.md`, …) at the paths in `context.md`, when you need them.
+<!-- /type -->
 
 ## External text
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { stringify } from 'yaml'
 import {
+  CHECK_METHOD,
   BOUNCE_HEAD,
   bounceMessage,
   checkHandoff,
@@ -12,6 +13,7 @@ import {
   parseFrontMatter,
   sectionNames,
 } from '../../src/core/validate'
+import { CHECK_METHOD as SKILLS_CHECK_METHOD } from '../../../skills/check-method.mjs'
 import { DEFAULT_CONFIG } from '../../src/shared/config'
 import type { NodeName } from '../../src/shared/contracts'
 
@@ -217,11 +219,11 @@ describe('스키마 검사: handoff (5.2.1)', () => {
       '`recommended_next` 형식이 틀림 (기대: null 또는 {node, reason}, 지금: 문자열)',
     ])
     expect(run({ recommended_next: { node: 'deploy', reason: '배포' } })).toEqual([
-      '`recommended_next.node` 값이 허용값이 아님 (허용값: intake | fix | design | implement | refactor | verify, 지금: deploy)',
+      '`recommended_next.node` 값이 허용값이 아님 (허용값: intake | fix | design | implement | refactor | execute | verify, 지금: deploy)',
     ])
     // 없어진 노드도 허용값이 아니다 (D227)
     expect(run({ recommended_next: { node: 'review', reason: '다시 리뷰' } })).toEqual([
-      '`recommended_next.node` 값이 허용값이 아님 (허용값: intake | fix | design | implement | refactor | verify, 지금: review)',
+      '`recommended_next.node` 값이 허용값이 아님 (허용값: intake | fix | design | implement | refactor | execute | verify, 지금: review)',
     ])
     expect(run({ recommended_next: { node: 'verify' } })).toEqual([
       '`recommended_next.reason` 없음: 필수 필드',
@@ -271,6 +273,69 @@ describe('intent 초안: 머리글 없음 (5.3, D236, I58)', () => {
       ['body', '원하는 결과'],
       ['body', '완료조건'],
     ])
+  })
+})
+
+describe('intent 초안: 일반의 확인 방법 (D305, I86)', () => {
+  const GENERAL = { warnChars: 1500, type: 'general' as const }
+  const withCriteria = (lines: string[]) =>
+    DRAFT_BODY.replace(/## 완료조건\n[\s\S]*?\n(?=## )/, `## 완료조건\n${lines.join('\n')}\n\n`)
+
+  it('통과: 줄마다 확인 방법이 있다. 대시 모양(—, –, -, --)은 가리지 않는다', () => {
+    const text = withCriteria([
+      '- [ ] `npm test`가 통과한다 — 확인: `npm test`',
+      '- [ ] 기존 테스트를 약화하거나 삭제하지 않는다 – 확인: 기준 커밋과 테스트 파일 diff',
+      '- [ ] README에 설치 절차가 있다 - 확인: README.md',
+      '- [ ] 설명이 읽힌다 -- 확인 : 사람',
+    ])
+    expect(errorsOf(checkIntentDraft(text, GENERAL))).toEqual([])
+  })
+
+  it('실패: 확인 방법이 없거나 `확인:` 뒤가 비었다. 줄마다 오류 하나', () => {
+    const text = withCriteria([
+      '- [ ] `npm test`가 통과한다 — 확인: `npm test`',
+      '- [ ] README에 설치 절차가 있다',
+      '- [ ] 설명이 읽힌다 — 확인:',
+      '- [ ] 확인: 사람이 본다',
+    ])
+    const r = checkIntentDraft(text, GENERAL)
+    expect(r.errors.map((e) => [e.part, e.field])).toEqual([
+      ['body', '완료조건'],
+      ['body', '완료조건'],
+      ['body', '완료조건'],
+    ])
+    expect(errorsOf(r)[0]).toBe(
+      '`## 완료조건`의 줄 끝에 확인 방법(` — 확인: <명령 / 읽을 곳 / 사람>`)이 없음 (지금: - [ ] README에 설치 절차가 있다)',
+    )
+  })
+
+  it('긴 대시는 앞 글자에 붙여 써도 받고, 하이픈은 앞에 공백이 있어야 한다 (PR #29 리뷰)', () => {
+    const ok = withCriteria([
+      '- [ ] `npm test`가 통과한다—확인: `npm test`',
+      '- [ ] README에 설치 절차가 있다–확인: README.md',
+    ])
+    expect(errorsOf(checkIntentDraft(ok, GENERAL))).toEqual([])
+    const glued = withCriteria(['- [ ] README에 설치 절차가 있다-확인: README.md'])
+    expect(errorsOf(checkIntentDraft(glued, GENERAL))).toHaveLength(1)
+  })
+
+  it('skills/check.mjs가 쓰는 규칙(skills/check-method.mjs)과 앱의 규칙이 같다 (PR #29 리뷰)', () => {
+    expect(SKILLS_CHECK_METHOD.source).toBe(CHECK_METHOD.source)
+    expect(SKILLS_CHECK_METHOD.flags).toBe(CHECK_METHOD.flags)
+  })
+
+  it('다른 유형과 유형을 주지 않은 검사는 확인 방법을 보지 않는다', () => {
+    expect(errorsOf(checkIntentDraft(draft(), WARN))).toEqual([])
+    expect(errorsOf(checkIntentDraft(draft(), { warnChars: 1500 }))).toEqual([])
+    expect(errorsOf(checkIntentDraft(draft(), { warnChars: 1500, type: 'refactor' }))).toEqual([])
+  })
+
+  it('checkTask는 Work 유형을 넘긴다', () => {
+    const files = { 'intent.draft.md': draft() }
+    const general = checkTask({ node: 'intake', type: 'general', files, config: DEFAULT_CONFIG })
+    expect(general.errors.filter((e) => e.field === '완료조건').length).toBeGreaterThan(0)
+    const bugfix = checkTask({ node: 'intake', type: 'bugfix', files, config: DEFAULT_CONFIG })
+    expect(bugfix.errors.filter((e) => e.field === '완료조건')).toEqual([])
   })
 })
 

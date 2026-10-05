@@ -1,0 +1,32 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 0c20686..b54f7c8 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -8,9 +8,13 @@ on:
+ jobs:
+   test:
+     runs-on: ubuntu-latest
++    strategy:
++      matrix:
++        node-version: [18, 20, 22]
+     steps:
+       - uses: actions/checkout@v4
+       - uses: actions/setup-node@v4
+         with:
+-          node-version: 18
++          node-version: ${{ matrix.node-version }}
++      - run: npm run lint
+       - run: npm test
+diff --git a/package.json b/package.json
+index efbea2b..e7d2780 100644
+--- a/package.json
++++ b/package.json
+@@ -6,6 +6,7 @@
+     "node": ">=18"
+   },
+   "scripts": {
+-    "test": "node --test"
++    "test": "node --test",
++    "lint": "node --check src/fee.js"
+   }
+ }

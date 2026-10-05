@@ -1,0 +1,36 @@
+{
+  "id": "29-money-upgrade",
+  "type": "general",
+  "repoName": "invoice",
+  "title": "vendored 의존성의 메이저 판 올리기, 테스트가 덮지 않는 기본 동작 변화",
+  "purpose": "의존성을 올리는 일반 Work(D303)에서, 새 판의 깨지는 변경 가운데 기존 테스트가 덮지 않는 것(기본 반올림이 half-even으로 바뀜)을 놓치지 않는지 본다. 완료조건의 확인 방법이 npm test뿐이면 놓치기 쉽다. verify가 확인 방법이 조건을 제대로 확인하지 못하는 것을 보고 보완하는지(D312), 사람에게 회계 규정을 묻는지 본다.",
+  "report": "vendor에 money 2.0.0을 넣어 두었다. 1.4.0에 보안 공지가 있어서 2.0.0으로 올려 달라(package.json의 imports가 vendor 폴더를 가리킨다). 청구서 금액은 지금과 똑같이 나와야 한다. 1.4.0 폴더는 지워도 된다.",
+  "knowledge": [
+    {
+      "share": "on_ask",
+      "text": "부가세는 원 단위 사사오입(0.5원은 올림)이 회계 규정이다. 은행가 반올림은 안 된다."
+    }
+  ],
+  "preferences": [
+    "금액이 바뀌지 않았다는 근거를 보고 싶다.",
+    "관계없는 수정은 섞지 않았으면 좋겠다."
+  ],
+  "reveals": [],
+  "events": [],
+  "expectedFiles": ["package.json", "src/**", "test/**", "vendor/**"],
+  "checks": [
+    {
+      "name": "money 2.0.0으로 올림",
+      "file": "upgrade.test.js"
+    },
+    {
+      "name": "부가세 사사오입 유지",
+      "file": "rounding.test.js",
+      "guard": true
+    }
+  ],
+  "limits": {
+    "minutes": 40,
+    "turns": 60
+  }
+}

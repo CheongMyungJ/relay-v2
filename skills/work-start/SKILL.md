@@ -32,7 +32,14 @@ Read the request, talk with the human, and write the intent draft `intent.draft.
 - **Interfaces used outside the repo** (what a library exports, HTTP API, CLI arguments, stored formats): if the request wants to change one, write what changes in the intent.
 - **Vague goals:** if the structural goal is vague ("읽기 쉽게"), ask for a structure that can be checked.
 <!-- /type -->
-- **Type mismatch:** the human picked the type: `bugfix` (버그 수정: current behavior is wrong), `feature` (기능 추가: new behavior) or `refactor` (리팩터링: change structure, keep behavior). If it does not fit the request (e.g. `feature`, but the request says current behavior is wrong), ask before you write the draft. If the human wants to change the type, close as `blocked` and tell them to pick the type with [단계 선택] → intake. If they keep it, draft with the picked type. Never change the type yourself.
+<!-- type: general -->
+- **This skill does not change code.** Skim the code only enough to write concrete goals and completion criteria. Do not plan how to do the work. That is the job of execute.
+- Do not write how to do the work in the intent. The only exception is the human's suggestions below.
+- **Human suggestions:** if the request says how to do it, copy it to `제약` when it is a must, otherwise to `추가 의견` with the prefix "(사람 제안)". execute decides whether to take it.
+- **A better-fitting type:** `general` is for work that fits none of the other types. If the request fits `bugfix`, `feature` or `refactor` better, say which and why before you write the draft, and ask: keep `general` / change the type (`blocked`). If they keep it, draft with `general`.
+- **Vague goals:** if the goal is vague ("정리해 줘"), ask for a result that can be checked.
+<!-- /type -->
+- **Type mismatch:** the human picked the type: `bugfix` (버그 수정: current behavior is wrong), `feature` (기능 추가: new behavior), `refactor` (리팩터링: change structure, keep behavior) or `general` (일반: work that fits none of these, e.g. config, CI, docs, dependency upgrades, mixed work). If it does not fit the request (e.g. `feature`, but the request says current behavior is wrong), ask before you write the draft. If the human wants to change the type, close as `blocked` and tell them to pick the type with [단계 선택] → intake. If they keep it, draft with the picked type. Never change the type yourself.
 - **Your own hypotheses** do not go in the intent. Put them only in the handoff section `## 다음 task가 알아야 할 것`, as reference.
 - Keep the intent around 1,500 characters. It goes into every task.
 
@@ -59,6 +66,11 @@ Scope (`비목표`) and completion criteria (`완료조건`). This skill has no 
   `- [ ] <test command>가 통과한다` / `- [ ] 기존 테스트를 약화하거나 삭제하지 않는다` / `- [ ] 바꾼 곳의 지금 동작을 잡는 안전망 테스트가 있고 기준 코드에서도 통과한다` / `- [ ] 레포 밖 공개 인터페이스가 바뀌지 않는다` (leave out the interfaces the intent says to change)
 - Then add the structural conditions that can be checked by reading code or running a command, one per line (e.g. "가격 계산은 `pricing` 모듈 한 곳에만 있다", "`routes/`는 `db/`를 직접 import하지 않는다"). Not the order or method of the change.
 <!-- /type -->
+<!-- type: general -->
+  `- [ ] <test command>가 통과한다 — 확인: <test command>` / `- [ ] 기존 테스트를 약화하거나 삭제하지 않는다 — 확인: 기준 커밋과 테스트 파일 diff`
+- Then add the items that fit the request, one per line. Not how to do the work.
+- **Check method:** end every line, the default items included, with ` — 확인: <방법>`: a command to run, a place to read (a file or a code location), or `사람`. Use `사람` only when no command and no place to read can check it. The app rejects a line without a check method.
+<!-- /type -->
 - One verifiable sentence per line. Never include push or PR. They happen after verify, so verify cannot judge them.
 
 ## Done when
@@ -66,6 +78,9 @@ Scope (`비목표`) and completion criteria (`완료조건`). This skill has no 
 - `intent.draft.md` has all required sections: `목표`, `비목표`, `원하는 결과`, `완료조건`.
 - Every 완료조건 line is a verifiable sentence.
 - Items you could not draft without were asked, or left in `open_questions`.
+<!-- type: general -->
+- Every 완료조건 line ends with a check method.
+<!-- /type -->
 
 ## Artifact template: `intent.draft.md`
 
@@ -95,6 +110,11 @@ No front matter: the app adds the type and version when the human approves.
 - [ ] …
 - [ ] (구조 조건: 코드를 읽거나 명령으로 확인할 수 있는 문장)
 <!-- /type -->
+<!-- type: general -->
+- [ ] (기본 항목 두 개) — 확인: (명령)
+- [ ] … — 확인: …
+- [ ] (요청에 맞는 항목) — 확인: (명령 / 읽을 곳 / 사람)
+<!-- /type -->
 
 ## 제약
 - (선택)
@@ -103,7 +123,7 @@ No front matter: the app adds the type and version when the human approves.
 <!-- type: bugfix -->
 - (선택) (사람 추정, 확인 안 됨) …
 <!-- /type -->
-<!-- type: feature refactor -->
+<!-- type: feature refactor general -->
 - (선택) (사람 제안) …
 <!-- /type -->
 ```

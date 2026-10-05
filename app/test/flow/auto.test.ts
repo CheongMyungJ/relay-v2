@@ -136,7 +136,14 @@ const noticesOf = (s: Setup, workKey: string) =>
   s.h.ui.notices.filter((n) => n.workKey === workKey).map((n) => n.body)
 
 /** 자동 승인을 켤 수 있는 파이프라인 단계는 원인 분석과 수정뿐이다 (4.2, D229) */
-const ALL_AUTO = { fix: true, design: true, implement: true, refactor: true, respond: false }
+const ALL_AUTO = {
+  fix: true,
+  design: true,
+  implement: true,
+  refactor: true,
+  execute: true,
+  respond: false,
+}
 
 /** 카운트다운이 끝나기 전에 [취소]할 수 있게 넉넉히 둔 카운트다운 */
 const LONG = 600
@@ -232,7 +239,14 @@ describe('[흐름] 자동 승인 (M7)', () => {
       { do: 'wait' },
     ]
     const s = await setup(scenario({ fix }), {
-      auto_approve: { fix: true, design: false, implement: true, refactor: true, respond: false },
+      auto_approve: {
+        fix: true,
+        design: false,
+        implement: true,
+        refactor: true,
+        execute: true,
+        respond: false,
+      },
       auto_approve_countdown_sec: 4,
     })
     const key = await s.create()
@@ -323,7 +337,14 @@ describe('[흐름] 자동 승인 (M7)', () => {
       { do: 'stop' },
     ]
     const s = await setup(scenario({ fix }), {
-      auto_approve: { fix: true, design: false, implement: true, refactor: true, respond: false },
+      auto_approve: {
+        fix: true,
+        design: false,
+        implement: true,
+        refactor: true,
+        execute: true,
+        respond: false,
+      },
       auto_approve_countdown_sec: 60,
     })
     const key = await s.create()
@@ -423,6 +444,7 @@ describe('[흐름] 자동 승인 (M7)', () => {
         design: false,
         implement: false,
         refactor: false,
+        execute: false,
         respond: false,
       },
       auto_approve_countdown_sec: 1,
@@ -473,6 +495,7 @@ describe('[흐름] 자동 승인 (M7)', () => {
         design: false,
         implement: false,
         refactor: false,
+        execute: false,
         respond: false,
       },
       auto_approve_countdown_sec: LONG,
@@ -534,6 +557,7 @@ describe('[흐름] 자동 승인 (M7)', () => {
         design: false,
         implement: false,
         refactor: false,
+        execute: false,
         respond: false,
       },
       auto_approve_countdown_sec: LONG,
@@ -605,7 +629,14 @@ describe('[흐름] 자동 승인 (M7)', () => {
         },
       },
       {
-        auto_approve: { fix: true, design: false, implement: true, refactor: true, respond: false },
+        auto_approve: {
+          fix: true,
+          design: false,
+          implement: true,
+          refactor: true,
+          execute: true,
+          respond: false,
+        },
         auto_approve_countdown_sec: LONG,
       },
     )
@@ -667,7 +698,14 @@ describe('[흐름] 자동 승인 (M7)', () => {
         },
       },
       {
-        auto_approve: { fix: true, design: false, implement: true, refactor: true, respond: false },
+        auto_approve: {
+          fix: true,
+          design: false,
+          implement: true,
+          refactor: true,
+          execute: true,
+          respond: false,
+        },
         auto_approve_countdown_sec: 5,
       },
     )
@@ -746,7 +784,14 @@ describe('[흐름] 자동 승인 (M7)', () => {
         },
       },
       {
-        auto_approve: { fix: true, design: false, implement: true, refactor: true, respond: false },
+        auto_approve: {
+          fix: true,
+          design: false,
+          implement: true,
+          refactor: true,
+          execute: true,
+          respond: false,
+        },
         auto_approve_countdown_sec: LONG,
       },
     )

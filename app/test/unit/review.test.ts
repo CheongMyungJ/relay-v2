@@ -641,6 +641,15 @@ describe('강조 영역 (D83, 시나리오 4-2)', () => {
         { title: '찾은 버그와 받아들인 차이', text: '없음' },
       ],
     })
+    const execution =
+      '## 계획\n- 할 일: README를 쓴다\n\n## 변경 요약\n- x\n\n## 완료조건별 자체 확인\n| a | b | c |\n\n## 테스트 실행\n- 명령: npm test\n'
+    expect(stageLead('execute', { 'execution.md': execution })).toEqual({
+      title: '실행',
+      sections: [
+        { title: '계획', text: '- 할 일: README를 쓴다' },
+        { title: '완료조건별 자체 확인', text: '| a | b | c |' },
+      ],
+    })
     expect(stageLead('design', {})).toBeNull()
     expect(stageLead('implement', { 'design.md': design })).toBeNull()
   })

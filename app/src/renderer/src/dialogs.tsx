@@ -236,8 +236,14 @@ export function ProjectSettingsDialog({
   )
 }
 
+/** 유형 버튼의 설명. 일반은 다른 유형에 맞지 않는 일에 쓴다 (D303, I88) */
+const WORK_TYPE_HINT: Readonly<Partial<Record<WorkType, string>>> = {
+  general: '다른 유형에 맞지 않는 일',
+}
+
 /**
- * 업무 유형 고르기 (D236, D237, D261): 버그 수정 / 기능 추가 / 리팩터링 버튼. 새 Work에는 기본 선택이 없다(value가 null)
+ * 업무 유형 고르기 (D236, D237, D261, D303): 버그 수정 / 기능 추가 / 리팩터링 / 일반 버튼. 새 Work에는 기본 선택이
+ * 없다(value가 null). 설명이 있는 유형은 버튼의 title로 두고, 그 유형을 골랐을 때 버튼 줄 아래에 보인다 (I88)
  */
 function WorkTypePicker({
   value,
@@ -246,29 +252,35 @@ function WorkTypePicker({
   value: WorkType | null
   onChange: (type: WorkType) => void
 }) {
+  const hint = value ? WORK_TYPE_HINT[value] : undefined
   return (
-    <div className="work-type" role="radiogroup" aria-label="업무 유형">
-      {WORK_TYPES.map((type) => (
-        <button
-          key={type}
-          type="button"
-          role="radio"
-          aria-checked={value === type}
-          className={value === type ? 'primary' : ''}
-          onClick={() => onChange(type)}
-        >
-          {WORK_TYPE_LABEL[type]}
-        </button>
-      ))}
-    </div>
+    <>
+      <div className="work-type" role="radiogroup" aria-label="업무 유형">
+        {WORK_TYPES.map((type) => (
+          <button
+            key={type}
+            type="button"
+            role="radio"
+            aria-checked={value === type}
+            className={value === type ? 'primary' : ''}
+            title={WORK_TYPE_HINT[type]}
+            onClick={() => onChange(type)}
+          >
+            {WORK_TYPE_LABEL[type]}
+          </button>
+        ))}
+      </div>
+      {hint && <div className="work-type-hint">{hint}</div>}
+    </>
   )
 }
 
-/** 요청 입력의 예시 문구. 유형을 고르기 전에는 버그 수정의 것이다 (D261) */
+/** 요청 입력의 예시 문구. 유형을 고르기 전에는 버그 수정의 것이다 (D261, I88) */
 const REQUEST_PLACEHOLDER: Readonly<Record<WorkType, string>> = {
   bugfix: '버그 설명, 로그, 이슈 내용을 붙여 넣으세요',
   feature: '만들 기능, 쓰는 흐름, 참고할 이슈 내용을 붙여 넣으세요',
   refactor: '바꿀 구조(예: 어느 계산을 한 모듈로 모을지), 바꿀 곳, 지켜야 할 동작을 적어 주세요',
+  general: '할 일과 끝났다고 볼 조건을 적어 주세요(무엇을 바꾸고 어떻게 확인할지)',
 }
 
 /** 새 Work: 유형, 요청, 기준 브랜치, 기준 위치 (시나리오 1). 유형을 고르기 전에는 [시작]이 꺼져 있다 (D236) */
@@ -404,10 +416,10 @@ export function NewWorkDialog({
 
 // ---------- 설정 목록의 묶음 (D256) ----------
 
-const GROUPS: readonly SettingGroup[] = ['common', 'bugfix', 'feature', 'refactor', 'pr']
+const GROUPS: readonly SettingGroup[] = ['common', 'bugfix', 'feature', 'refactor', 'general', 'pr']
 
 /**
- * 설정 목록을 묶음(공통 / 버그 수정 / 기능 추가 / 리팩터링 / PR 대응)마다 모은다 (D256, D278). type을 주면 그 유형에서 보이는 묶음만
+ * 설정 목록을 묶음(공통 / 버그 수정 / 기능 추가 / 리팩터링 / 일반 / PR 대응)마다 모은다 (D256, D278, D318). type을 주면 그 유형에서 보이는 묶음만
  * 둔다. Work 설정은 그 Work 유형의 단계만 보인다 (I57)
  */
 function grouped<K extends string>(

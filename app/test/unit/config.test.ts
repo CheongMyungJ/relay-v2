@@ -50,12 +50,13 @@ describe('config.json 읽기 (5.1.1)', () => {
     )
   })
 
-  it('자동 승인의 기본값은 원인 분석과 수정, 구현, 계획과 리팩터링이 켬이고 설계와 계획이 끔이다. 질문 방식 기본은 모두 초안 우선이다 (5.1.1, D214, D234, D249, D276)', () => {
+  it('자동 승인의 기본값은 원인 분석과 수정, 구현, 계획과 리팩터링, 실행이 켬이고 설계와 계획이 끔이다. 질문 방식 기본은 모두 초안 우선이다 (5.1.1, D214, D234, D249, D276, D315)', () => {
     expect(DEFAULT_CONFIG.auto_approve).toEqual({
       fix: true,
       design: false,
       implement: true,
       refactor: true,
+      execute: true,
       respond: false,
     })
     expect(DEFAULT_CONFIG.question_mode).toEqual({
@@ -64,6 +65,7 @@ describe('config.json 읽기 (5.1.1)', () => {
       design: 'draft_first',
       implement: 'draft_first',
       refactor: 'draft_first',
+      execute: 'draft_first',
       verify: 'draft_first',
       'pr-respond': 'draft_first',
     })
@@ -134,14 +136,28 @@ describe('설정 화면 (D70)', () => {
   it('단계별 자동 승인과 카운트다운을 바꾼다. 자동 승인은 단계마다 덮어쓴다 (4.2, 4.3)', () => {
     const on = {
       ...DEFAULT_CONFIG,
-      auto_approve: { fix: false, design: false, implement: true, refactor: true, respond: true },
+      auto_approve: {
+        fix: false,
+        design: false,
+        implement: true,
+        refactor: true,
+        execute: true,
+        respond: true,
+      },
     }
     const r = applyConfigPatch(on, { auto_approve: { fix: true }, auto_approve_countdown_sec: 30 })
     expect(r).toEqual({
       ok: true,
       value: {
         ...on,
-        auto_approve: { fix: true, design: false, implement: true, refactor: true, respond: true },
+        auto_approve: {
+          fix: true,
+          design: false,
+          implement: true,
+          refactor: true,
+          execute: true,
+          respond: true,
+        },
         auto_approve_countdown_sec: 30,
       },
     })
@@ -256,12 +272,13 @@ describe('화면의 스킬 이름', () => {
       ['design', '설계와 계획', 'feature'],
       ['implement', '구현', 'feature'],
       ['refactor', '계획과 리팩터링', 'refactor'],
+      ['execute', '실행', 'general'],
       ['verify', '리뷰와 검증', 'common'],
       ['pr-respond', 'PR 대응', 'pr'],
     ])
   })
 
-  it('묶음은 그 단계가 있는 파이프라인이다: 여러 유형에 있으면 공통, 한 유형에만 있으면 그 유형 (D256, D278)', () => {
+  it('묶음은 그 단계가 있는 파이프라인이다: 여러 유형에 있으면 공통, 한 유형에만 있으면 그 유형 (D256, D278, D318)', () => {
     for (const n of ALL_NODES) {
       const types = WORK_TYPES.filter((t) => PIPELINES[t].includes(n))
       const group = types.length > 1 ? 'common' : types[0]
@@ -271,14 +288,21 @@ describe('화면의 스킬 이름', () => {
     }
   })
 
-  it('자동 승인을 켤 수 있는 단계는 fix, design, implement, refactor와 PR 대응이고 이름은 노드의 화면 이름이다 (4.2, D109, D169, D234, D249, D276)', () => {
-    expect(AUTO_APPROVE_NODES).toEqual(['fix', 'design', 'implement', 'refactor', 'respond'])
+  it('자동 승인을 켤 수 있는 단계는 fix, design, implement, refactor, execute와 PR 대응이고 이름은 노드의 화면 이름이다 (4.2, D109, D169, D234, D249, D276, D315)', () => {
+    expect(AUTO_APPROVE_NODES).toEqual([
+      'fix',
+      'design',
+      'implement',
+      'refactor',
+      'execute',
+      'respond',
+    ])
     expect(AUTO_APPROVE_TITLES.map(([n, title]) => [n, title])).toEqual(
       AUTO_APPROVE_NODES.map((n) => [n, NODE_INFO[n].title]),
     )
   })
 
-  it('저장된 config.json에 design, implement, refactor 키가 없으면 기본값을 쓴다 (D256, D278)', () => {
+  it('저장된 config.json에 design, implement, refactor, execute 키가 없으면 기본값을 쓴다 (D256, D278, D318)', () => {
     const { config, warnings } = normalizeConfig({
       auto_approve: { fix: false, respond: true },
       question_mode: { fix: 'confirm_each' },
@@ -289,11 +313,13 @@ describe('화면의 스킬 이름', () => {
       design: false,
       implement: true,
       refactor: true,
+      execute: true,
       respond: true,
     })
     expect(config.question_mode.design).toBe('draft_first')
     expect(config.question_mode.implement).toBe('draft_first')
     expect(config.question_mode.refactor).toBe('draft_first')
+    expect(config.question_mode.execute).toBe('draft_first')
   })
 })
 

@@ -1,6 +1,6 @@
 # relay-v2 구현 계획
 
-- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68)
+- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94)
 - 상태: 정함. 주제마다 사람과 문답으로 정했다(설계 부록 A의 진행 규칙). 바꾸려면 사용자와 다시 정한다.
 
 Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서는 [engines.md](engines.md)에서 관리한다. 이 문서의 기존 Claude 동작은 확장 중 회귀 시험의 기준이다.
@@ -98,6 +98,16 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I66 | 가짜 `claude`의 시나리오에 refactor 흐름(안전망 커밋 뒤 단계 커밋, `refactor.md`)을 더한다. [흐름]은 `test/flow/refactor.test.ts` 한 파일에 둔다 **(기본값)** | I61과 같은 까닭 | |
 | I67 | 평가 시나리오는 `app/eval/scenarios/18-*`, `19-*`, `20-*`로 작은·중간·큰 리팩터링을 둔다(D277). `scenario.json`의 `"type": "refactor"`, `eval/lib/kind.mjs`에 리팩터링 낱말을 더한다. `hidden`은 동작 보존 시험(기준 코드에서도 통과)과 구조 조건 시험(새 모듈이 있음, 금지한 import가 없음 등)이다. 함정 패치(`traps/`)는 19에서 숨은 버그를 고친 것, 20에서 사람에게 묻지 않고 동작 차이를 낸 것이다 | I62와 같은 모양. 함정이 숨긴 시험에서 실패해야 함정을 밟았는지 가를 수 있음(`check-scenario.mjs`) | |
 | I68 | 조립(D279)은 `adapters/claude`의 `selectType(text, type)`이 하고, `skillText(source, skill, type)`가 부른다. Claude와 Codex 배포(`deploySkill`, `deployCodexSkill`)가 모두 `skillText`를 거치므로 조립하는 곳은 하나다. `main/work`가 task를 시작할 때 Work 유형을 넘긴다. `skills/check.mjs`는 같은 규칙의 `skills/assemble.mjs`를 쓴다(앱 코드를 부르지 않는 정적 검사라서). PR #24 리뷰로, 두 구현이 어긋나지 않게 [어댑터] 시험이 모든 스킬 원본과 틀린 표시 예시를 두 구현에 넣어 결과와 오류가 같은지 비교한다. 이어서 되감기의 안내는 `core/pipeline`의 `KEEP_CODE_NOTES` 표에 두어 [현재 코드 위에서 이어서]를 주는 단계를 더하면 안내도 함께 쓰게 한다 | 배포 경로가 이미 하나로 모여 있어 고칠 곳이 적음. check.mjs는 모델도 앱도 부르지 않는 독립 검사(5.6.3)라 앱을 import하지 않음 | |
+| I85 | 일반 유형(D302)은 `WorkType`에 `'general'`을 더하고 `WORK_TYPES`의 맨 뒤에 둔다(D303). `WORK_TYPE_LABEL`과 `WORK_TYPE_SHORT`는 둘 다 "일반"이다. `PIPELINES.general = ['intake', 'execute', 'verify']`. `KEEP_CODE_NOTES.general`에 execute를 두고(D316), 안내는 fix의 문구에 "폐기된 `execution.md`를 참고해 새 `execution.md`를 쓴다"를 더한다. `NODE_INFO`에 execute(스킬 `execute`, 화면 "실행", 산출물 `execution.md`)를 더하고, handoff 스키마의 `recommended_next.node` 허용값에 `execute`를 더해 생성본을 다시 만든다(`npm run contracts`). `skills/assemble.mjs`의 `TYPES`에도 `general`을 더한다 | M15(I63)와 같은 자리. 순서에 기대는 함수는 M14에서 모두 유형을 받게 했으므로(I57) 표만 넓히면 됨 | |
+| I86 | 확인 방법 검사(D305)는 `checkIntentDraft(text, { warnChars, type })`가 한다. `type`이 `general`일 때만 `## 완료조건`의 `- [ ] ` 줄마다 `확인:` 표시가 있는지 본다. 표시는 대시 하나(`—`, `–`, `-`, `--`) 뒤의 `확인:`이고, 그 뒤에 빈칸이 아닌 글이 있어야 한다. 긴 대시는 앞 글자에 붙여 써도 되고, 하이픈은 낱말 안에도 나오므로 앞에 공백이 있어야 한다(정규식 `/(?:\s*[—–]\|\s--?)\s*확인\s*:\s*\S/`, PR #29 리뷰). 같은 규칙을 `skills/check-method.mjs`에 두고 `check.mjs`가 쓰며, 둘이 같은지 [단위]가 비교한다. 오류는 `## 완료조건` 필드에 줄마다 하나씩 내고, 메시지에 ` — 확인: <명령 / 읽을 곳 / 사람>` 꼴을 보인다. `checkTask`는 이미 받는 `input.type`을 넘긴다. `type`을 주지 않은 호출(템플릿 시험 등)은 지금처럼 확인 방법을 보지 않는다 | 사람이 고름: 대시 모양을 너그럽게 본다. 앱은 확인 방법을 해석하지 않으므로 대시 모양을 엄격하게 봐도 얻는 것이 없고, 모양만 달라 Stop에서 되돌려지는 턴(D21)을 아낀다 | ✅ |
+| I87 | 설정(D315, D318): `AutoApproveNode`와 `SkillName`에 `execute`(자동 승인 기본 켬, 질문 방식 기본 초안 우선). `SETTING_GROUP_LABEL`에 `general: '일반'`, `SKILL_TITLES`와 `AUTO_APPROVE_TITLES`에 execute("실행", 묶음 `general`). 저장된 `config.json`에 키가 없으면 기본값을 쓴다(지금 규칙). 화면의 설정 묶음(`dialogs.tsx`의 `GROUPS`)은 `general`을 `refactor`와 `pr` 사이에 둔다 | M15와 같음 | |
+| I88 | 새 Work 대화상자(D303): 유형 버튼은 넷이고, 일반 버튼에는 `title`과 버튼 줄 아래의 작은 설명 "다른 유형에 맞지 않는 일"을 둔다. 설명은 일반을 골랐을 때만 보인다 **(기본값)**. `REQUEST_PLACEHOLDER.general`은 "할 일과 끝났다고 볼 조건을 적어 주세요(무엇을 바꾸고 어떻게 확인할지)"다 **(기본값)**. [요약] 탭의 핵심(`review.ts`의 `LEAD`)에 execute: `execution.md`의 `## 계획`과 `## 완료조건별 자체 확인`(D318) | 일반은 다른 유형에 맞지 않는 일에 쓴다는 것(D303)을 고르는 자리에서 보임. 버튼 넷이 늘 설명을 달면 대화상자가 길어짐 | |
+| I89 | 스킬. execute(새로)는 설계 5.6.11을 옮긴다. work-start는 `<!-- type: general -->` 구간에 일반 요청 규칙(D303, D305, D306), 기본 완료조건 둘(D304)과 확인 방법을 붙인 예시를 둔다. 공통의 유형 불일치 줄(D280)에 `general` 한 줄을 더한다. verify는 일반 구간(입력, 리뷰에서 보는 것, 확인 방법과 사람 확인 판정(D311, D312), 되돌아가기, `pr.md` 템플릿 D313), pr-respond는 입력에 `execution.md`가 있을 수 있다는 것을 더한다. `skills/check.mjs`는 `SKILLS`에 execute, `OWN_TYPE.execute = 'general'`, `PR_MARK.general = '## 주요 결정'`, 다른 유형의 산출물 목록에 `execution.md`를 더하고, 명세 항목에 5.6.11과 일반 구간을 더한다. 크기 규칙은 I60과 같다 | I65, I68과 같은 까닭. verify는 네 유형을 한 원본에 담지만 유형마다 조립한 글로 크기를 잼(D279) | |
+| I90 | 가짜 `claude`의 시나리오에 general 흐름을 더한다: intake가 확인 방법이 빠진 초안을 쓰면 형식 오류로 되돌려지고 고친 초안을 씀, execute가 커밋하고 `execution.md`를 씀. [흐름]은 `test/flow/general.test.ts` 한 파일에 둔다 **(기본값)**. `test/unit/templates.test.ts`의 유형 고르기(`PIPELINES.bugfix.includes(node) ? 'bugfix' : 'feature'`)는 노드가 들어 있는 첫 유형을 `PIPELINES`에서 찾게 고친다 | I61, I66과 같은 까닭. 템플릿 시험의 유형 고르기는 두 유형만 생각해 쓴 것이라 execute에서 틀린 유형을 고름 | |
+| I91 | [실제]는 `test/claude/general.test.ts`(경우 `general`)로 작은 일반 Work 하나(설정 파일과 문서를 고치고, 완료조건에 `확인: 사람` 하나와 명령 하나)를 끝까지 돌린다. `app-claude.yml`의 경우 목록과 결과 파일 목록에 `general`을 더한다. 이 환경에서 실제 claude를 부를 수 없으면 남은 검증으로 적는다 | M15의 [실제]와 같은 자리. 사람 확인 질문(D311)이 실제로 한 질문으로 묶여 나오는지 봄 | |
+| I92 | 평가 시나리오는 `app/eval/scenarios/28-*`, `29-*`, `30-*`로 둔다(D317). `scenario.json`의 `"type": "general"`, `eval/lib/kind.mjs`에 일반 낱말을 더한다. 시나리오와 함정 **(기본값)**: 28 설정·CI 수정(CI 워크플로에 lint 단계와 Node 버전 행렬을 더함. 함정: 사람만 아는 아직 지원하는 Node 버전 하한), 29 의존성 올리기(레포 안 로컬 패키지(`file:`)의 두 판 사이를 올려 네트워크 없이 돎. 함정: 새 판에서 바뀐 기본 동작이 기존 테스트가 덮지 않는 곳에 있음, D312의 보완 확인을 봄), 30 동작 변경과 구조 정리가 섞인 일(할인 규칙 하나를 바꾸며 흩어진 할인 계산을 한 곳으로 모음. 함정: 사람만 아는 지켜야 할 적용 순서). `hidden`은 버그 수정처럼 판정 시험으로 두고, 함정 패치(`traps/`)를 둔다. `check-scenario.mjs`를 통과해야 한다 | D277, I67과 같은 모양. 셋은 D317이 정한 일의 종류이고, 함정마다 일반 유형의 장치(사람에게 묻기 D308, 보완 확인 D312, 사람 확인 D311)가 하나씩 걸리게 함 | |
+| I93 | 교차 비교(D317)는 기존 시나리오 01, 10, 15, 16, 18, 19를 일반 유형으로도 돌린다. `eval/run.mjs`의 `--arms`에 `relay@<유형>`을 받게 하고, 그 쪽은 시나리오의 유형 대신 그 유형으로 새 Work를 만든다(`relay-arm.mjs`와 `guides/relay.md`가 유형을 인자로 받음). 같은 빌드에서 `--arms relay,relay@general`로 각 3번 돌리고 짝 `relay:relay@general`을 판정한다. 맨 CLI는 유형이 없어 다시 돌리지 않고, 지난 보고서(빌드가 다름)는 참고로만 본다 **(기본값)**. 보고서는 수고(승인 수, 사람 차례, 시간)와 결과 확신(숨긴 시험, 함정)을 유형별로 나눠 보인다 | 사람이 고름: 작은 것 셋(01, 15, 18)과 함정 있는 중간 것 셋(10, 16, 19)을 모두 돌려 수고와 결과 확신을 함께 본다. 같은 빌드에서 두 유형을 견주어야 빌드 차이가 섞이지 않음 | ✅ |
+| I94 | M18은 PR 하나로 하고, core·계약·스킬 → 화면 → 시험 → 평가 도구 차례로 나눠 커밋한다. core와 스킬은 한 커밋이다: `NODE_INFO`가 가리키는 스킬 파일이 있어야 하고(`templates.test.ts`), `skills/assemble.mjs`의 유형 목록이 `WORK_TYPES`와 같아야 하며(`store.test.ts`), 그 목록에 일반이 들면 `check.mjs`가 일반 구간을 요구하므로 나누면 중간 커밋이 깨진다(M18 구현 중에 찾음). 평가 실행 결과(시나리오 28~30, 교차 비교)의 보고서는 따로 커밋한다. 번호는 앞서 쓴 M17(지식 관리, `docs/knowledge-experiment/`)과 I69~I84를 피해 M18, I85부터 쓴다 | M14, M15와 같은 차례. 지식 실험 문서가 M17과 I69~I84를 그 뜻으로 가리키므로 번호를 다시 쓰면 헷갈림 | |
 
 ## 3. 확인한 사실
 
@@ -269,6 +279,7 @@ app/src/
 - 사용성 평가(`docs/eval-findings.md`)에서 나온 개선은 M12에 모은다. 개선점마다 사람이 반영할지와 방법을 정한다(설계 v0.6).
 - 설계 v0.8의 기능 추가 유형은 M14다. M14 안은 core → 화면 → 스킬 → 시험과 평가 차례로 나눠 커밋한다.
 - 설계 v0.9의 리팩터링 유형은 M15다. M14와 같은 차례로 나눠 커밋한다.
+- 설계 v0.13의 일반 유형은 M18이다. M15와 같은 차례로 나눠 커밋하되 core와 스킬은 한 커밋이다(I94). M17과 I69~I84는 지식 관리에 쓴 번호라 건너뛴다.
 - 완료 기준 앞의 꼬리표는 확인 방법이다: [단위], [어댑터], [흐름], [스모크], [실제], [실기]. 뜻은 8.1을 따른다. [실제]와 [실기]의 결과는 `docs/checks.md`에 기록한다(I30).
 
 | # | 이름 | 한 줄 요약 | 선행 |
@@ -290,6 +301,7 @@ app/src/
 | M14 | 기능 추가 유형 | 새 Work에서 유형(버그 수정 / 기능 추가)을 고르고, 기능 추가는 `intake → design → implement → verify`(D232~D256) | M13 |
 | M15 | 리팩터링 유형 | 새 Work에서 리팩터링을 고르면 `intake → refactor → verify`(D258~D278) | M14 |
 | M16 | 공용 스킬 조립 | work-start, verify, pr-respond를 Work 유형에 맞게 조립해 배포(D279~D280) | M15 |
+| M18 | 일반 유형 | 새 Work에서 일반을 고르면 `intake → execute → verify`, 완료조건마다 확인 방법(D302~D318) | M16 |
 
 ### M0. 골격과 배포
 
@@ -896,6 +908,54 @@ app/src/
 - [흐름] 리팩터링 Work가 리팩터링 구간만 배포하고, task마다 조립한 글의 해시를 적는다. 기존 흐름 시험이 그대로 통과한다.
 - [정적] `skills/check.mjs` 모두 통과.
 - [실제] 버그 수정 M·S, 기능 추가, 리팩터링을 다시 돌려 통과.
+
+### M18. 일반 유형
+
+설계 v0.13(D302~D318). 새 Work 대화상자에 일반을 더하고, 일반(`general`)은 `intake → execute(실행) → verify(리뷰와 검증)`를 지난다. 진행 방식은 execute에 맡기고, 판정의 근거는 intent 완료조건마다 붙인 확인 방법이다(D305). 다른 유형의 흐름은 그대로다. 아래 넷을 하고 단계마다 커밋하되, 1과 3은 한 커밋이다(I94). 단계가 끝날 때마다 `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`, `node skills/check.mjs`를 돌린다.
+
+**1. core와 계약**
+
+- **유형과 파이프라인(I85):** `WorkType`, `WORK_TYPES`(맨 뒤), `WORK_TYPE_LABEL`·`WORK_TYPE_SHORT`("일반"), `PIPELINES`, `KEEP_CODE_NOTES`·`KEEP_CODE_NODES`(execute), `NODE_INFO`(execute, "실행", `execution.md`), `validate`의 `EXECUTION_FILE`. handoff 스키마와 생성본의 `recommended_next.node`에 `execute`. `skills/assemble.mjs`의 `TYPES`.
+- **확인 방법 검사(I86, D305):** `checkIntentDraft`가 `type`을 받아 general이면 완료조건 줄마다 확인 표시를 본다. `checkTask`가 Work 유형을 넘긴다.
+- **설정(I87, D315):** `AutoApproveNode`와 `SkillName`에 `execute`(자동 승인 기본 켬, 질문 방식 기본 초안 우선), `SETTING_GROUP_LABEL`의 일반 묶음, `SKILL_TITLES`, `AUTO_APPROVE_TITLES`.
+- **`context.md`:** 일반의 이전 단계와 기본 다음 단계는 표에서 나온다. PR 대응 task는 일반이면 `execution.md` 경로를 넣는다(D318). [현재 코드 위에서 이어서]로 execute에 들어오면 I85의 안내와 폐기된 `execution.md` 경로를 넣는다(D316).
+- **승인 화면 핵심(`stageLead`, I88):** execute는 `execution.md`의 `## 계획`과 `## 완료조건별 자체 확인`.
+- **마무리 안내 문구:** execute는 fix와 같은 문구(자동 승인 포함)다.
+
+**2. 화면**
+
+- **새 Work 대화상자(I88, D303):** 유형 버튼을 넷으로(버그 수정 / 기능 추가 / 리팩터링 / 일반). 일반을 고르면 "다른 유형에 맞지 않는 일" 설명과 일반의 요청 예시 문구를 보인다.
+- **설정 화면과 [Work 설정]:** 일반 묶음을 더한다(D318). 그 Work의 [Work 설정]은 그 유형의 단계만 보인다(M14와 같음).
+- **사이드바와 머리 띠, 단계 선택, [intake 다시]의 유형 고르기:** 표에서 나오므로 유형 목록이 넷이 되는지만 본다.
+- **의도 승인 화면:** 확인 방법이 빠진 줄은 지금의 형식 오류 표시로 보인다(새 화면 없음).
+
+**3. 스킬(I89)**
+
+- **execute(새로):** 설계 5.6.11을 옮긴다. 순서(계획 → 물음 → 작업과 커밋 → 자체 확인 → 테스트 명령), 테스트를 더하는 기본(D307), 사람이 정할 결정 셋(D308), 커밋 단위 자유(D309), 네 절 템플릿(D310).
+- **work-start:** 일반 구간(다른 유형이 더 맞을 때 알리고 묻기 D303, 기본 완료조건 둘 D304, 확인 방법 D305·D306, 막연한 목표의 구체화). 공통의 유형 불일치 줄에 일반(D280, D318).
+- **verify:** 일반 구간(D311~D314)과 일반 `pr.md` 템플릿(D313). 다른 유형의 구간은 바꾸지 않는다.
+- **pr-respond:** 입력에 `execution.md`가 있을 수 있다는 것만 더한다.
+- **`skills/check.mjs`:** execute 대조, work-start·verify의 일반 구간 대조, `PR_MARK`와 다른 유형의 산출물 목록. 크기를 본다(I60).
+- Codex 엔진은 같은 스킬을 배포하므로 따로 할 일이 없다.
+
+**4. 시험과 평가**
+
+- **가짜 claude(I90):** general 시나리오(확인 방법이 빠진 초안 → 되돌림 → 고친 초안, execute 커밋과 `execution.md`).
+- **[흐름] `test/flow/general.test.ts`:** 일반으로 만든 Work가 intake → execute → verify → Work 완료로 간다. 확인 방법이 빠진 초안은 [의도 승인]이 꺼지고 Stop에서 되돌려짐, execute의 기본 자동 승인, execute가 intake를 추천하면 멈춤, execute로 [현재 코드 위에서 이어서] 되감기(코드와 커밋이 남고 폐기된 `execution.md` 경로가 `context.md`에 있음), 의도 승인 전 [intake 다시]로 유형을 일반으로 바꾸면 다음 단계가 execute.
+- **[스모크]:** 새 Work 대화상자에 유형 버튼이 넷이고, 일반을 고르면 설명이 보인다.
+- **[실제](I91):** 작은 일반 Work 하나를 실제 claude로 끝까지(`docs/checks.md`에 기록). 이 환경에서 실제 claude를 부를 수 없으면 남은 검증으로 적는다.
+- **평가 도구(I92, I93):** 시나리오 28~30과 `check-scenario.mjs` 통과, `kind.mjs`의 일반 낱말, `run.mjs`의 `relay@<유형>` 쪽, `relay-arm.mjs`와 `guides/relay.md`의 유형 인자, `relay-eval` 스킬의 설명과 시나리오 목록.
+- **평가 실행:** 시나리오 28~30을 relay와 맨 CLI로 각 3번, 교차 비교로 01, 10, 15, 16, 18, 19를 `relay`와 `relay@general`로 각 3번. 보고서는 따로 커밋한다(I94).
+
+**완료 기준**
+
+- [단위] 일반의 기본 다음 단계·이전 단계·`recommended_next` 검사, 단계 선택 목록과 [현재 코드 위에서 이어서](execute), 자동 승인 대상과 기본값(execute 켬), `config.json`에 execute 키가 없을 때의 기본값, 마무리 안내 문구, `stageLead`(execute), 필수 산출물(`execution.md`), 확정본의 `type: general`, 확인 방법 검사(general에서만, 대시 네 모양을 받음, `확인:` 뒤가 비면 오류, 다른 유형은 보지 않음).
+- [흐름] 위 `general.test.ts`. 기존 버그 수정·기능 추가·리팩터링 흐름 시험이 그대로 통과한다.
+- [어댑터] 공용 스킬 셋을 general로 조립하면 표시와 다른 유형의 산출물이 없다.
+- [정적] `skills/check.mjs` 모두 통과(execute, work-start·verify의 일반 구간).
+- [스모크] 유형 버튼 넷과 일반의 설명.
+- [실제] 작은 일반 Work 하나가 끝까지 간다(가능할 때).
+- 평가: 시나리오 28~30이 `check-scenario.mjs`를 통과한다. 28~30 각 3번과 교차 비교 여섯 시나리오 각 3번의 보고서.
 
 ## 8. 테스트 전략
 
