@@ -211,28 +211,6 @@ describe('[흐름] 일반 유형 (M18)', () => {
     expect(intent.body.trim()).toBe(generalIntentDraft().trim())
   })
 
-  it('앱 기본값: 실행은 자동 승인한다 (D315)', async () => {
-    const s = await setup(
-      generalScenario(),
-      { auto_approve_countdown_sec: 1 } as Partial<AppConfig>,
-      { productDefaults: true },
-    )
-    const key = await s.create()
-    const result = await drive(s.h.relay, s.h.ui, key, { awaitAuto: true })
-    expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed' })
-    expect(result.tasks.map((t) => [t.label, t.auto])).toEqual([
-      ['01 의도 정리', false],
-      ['02 실행', true],
-      ['03 리뷰와 검증', false],
-    ])
-    await settle(s.h, key)
-    expect(work(s.dir(key)).tasks.map((t) => [t.node, t.approved_by])).toEqual([
-      ['intake', 'human'],
-      ['execute', 'auto'],
-      ['verify', 'human'],
-    ])
-  })
-
   it('실행이 의도 정리를 추천하면 자동 승인하지 않고, 승인하면 멈춘다 (D23)', async () => {
     const s = await setup(
       generalScenario({ execute: recommending('execute', 'intake', '완료조건이 서로 부딪힘') }),

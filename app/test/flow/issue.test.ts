@@ -174,6 +174,9 @@ describe('[흐름] 이슈 기록 (M19, 설계 3.7)', () => {
     await published(s)
     // PR 본문 끝에 Closes를 붙인다 (D346)
     expect(gh(s, 'pr create')[0]?.body?.endsWith('\n\nCloses #1\n')).toBe(true)
+    // draft 설정(기본 꺼짐)이면 일반 PR로 만든다 (D71)
+    expect(gh(s, 'pr create')[0]?.args).not.toContain('--draft')
+    expect(work(s).delivery).toMatchObject({ draft: false })
     all = issues(s)
     const verify = all.issues[0]?.comments[2]
     expect(verify?.body).toContain('### t-03 리뷰와 검증 · 승인(사람)')
