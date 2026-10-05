@@ -5,10 +5,12 @@ import {
   AUTO_APPROVE_TITLES,
   DEFAULT_CONFIG,
   SKILL_TITLES,
+  THEME_CHOICES,
   type AppConfig,
   type AutoApproveNode,
   type QuestionMode,
   type SkillName,
+  type ThemeChoice,
   type WorkSettings,
   type WorkSettingsPatch,
 } from '../shared/config'
@@ -53,6 +55,7 @@ const EDITABLE_KEYS = [
   'reply_signature',
   'knowledge_review_engine',
   'knowledge_review_model',
+  'theme',
 ] as const
 
 export type EditableKey = (typeof EDITABLE_KEYS)[number]
@@ -126,6 +129,14 @@ function reviewEngine(v: unknown): Checked<AgentEngine> {
   return isAgentEngine(v)
     ? { ok: true, value: v }
     : { ok: false, error: '지식 검토 엔진: claude | codex 중 하나여야 함' }
+}
+
+/** 화면 테마 (D335) */
+function theme(v: unknown): Checked<ThemeChoice> {
+  const found = THEME_CHOICES.find((t) => t === v)
+  return found
+    ? { ok: true, value: found }
+    : { ok: false, error: '테마: system | dark | light 중 하나여야 함' }
 }
 
 function integer(key: IntegerKey, v: unknown): Checked<number> {
@@ -246,6 +257,11 @@ export function normalizeConfig(data: unknown): { config: AppConfig; warnings: s
     if (r.ok) config.knowledge_review_model = r.value
     else warnings.push(`config.json ${r.error}. 엔진의 기본을 씀`)
   }
+  if (data['theme'] !== undefined) {
+    const r = theme(data['theme'])
+    if (r.ok) config.theme = r.value
+    else warnings.push(`config.json ${r.error}. 기본값 system을 씀`)
+  }
   if (data['question_mode'] !== undefined) {
     const r = questionModes(data['question_mode'])
     if (r.ok) config.question_mode = { ...config.question_mode, ...r.value }
@@ -286,6 +302,10 @@ export function applyConfigPatch(current: AppConfig, patch: unknown): Checked<Ap
       const r = reviewModel(v)
       if (!r.ok) return r
       next.knowledge_review_model = r.value
+    } else if (key === 'theme') {
+      const r = theme(v)
+      if (!r.ok) return r
+      next.theme = r.value
     } else if ((BOOLEAN_KEYS as readonly string[]).includes(key)) {
       const k = key as BooleanKey
       if (typeof v !== 'boolean') return { ok: false, error: `${NAMES[k]}: true/false여야 함` }

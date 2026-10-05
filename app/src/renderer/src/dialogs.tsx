@@ -14,12 +14,15 @@ import {
   QUESTION_MODE_LABEL,
   SETTING_GROUP_LABEL,
   SKILL_TITLES,
+  THEME_CHOICES,
+  THEME_LABEL,
   groupShown,
   type AppConfig,
   type AutoApproveNode,
   type QuestionMode,
   type SettingGroup,
   type SkillName,
+  type ThemeChoice,
   type WorkSettings,
 } from '../../shared/config'
 import type { NodeName } from '../../shared/contracts'
@@ -733,6 +736,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         reply_signature: value.reply_signature,
         knowledge_review_engine: value.knowledge_review_engine,
         knowledge_review_model: value.knowledge_review_model,
+        theme: value.theme,
       }),
     )
     setBusy(false)
@@ -749,6 +753,20 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             사용합니다. 질문 방식은 다음에 시작하는 task부터 씁니다.
           </div>
           <div className="form-grid">
+            <label className="form-row" title="터미널은 테마와 관계없이 어둡습니다 (D335)">
+              <span>테마</span>
+              <select
+                aria-label="테마"
+                value={value.theme}
+                onChange={(e) => setDraft({ ...value, theme: e.target.value as ThemeChoice })}
+              >
+                {THEME_CHOICES.map((t) => (
+                  <option key={t} value={t}>
+                    {THEME_LABEL[t]}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className="form-row">
               <span>기본 엔진</span>
               <select

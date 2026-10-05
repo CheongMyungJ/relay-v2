@@ -20,6 +20,17 @@ export type QuestionMode = 'draft_first' | 'confirm_each'
  */
 export type AutoApproveNode = 'fix' | 'design' | 'implement' | 'refactor' | 'execute' | 'respond'
 
+/** 화면 테마 (D335). system은 OS 설정을 따른다 */
+export type ThemeChoice = 'system' | 'dark' | 'light'
+
+export const THEME_CHOICES: readonly ThemeChoice[] = ['system', 'dark', 'light']
+
+export const THEME_LABEL: Readonly<Record<ThemeChoice, string>> = {
+  system: '시스템 설정 따름',
+  dark: '다크',
+  light: '라이트',
+}
+
 export interface AppConfig {
   schema_version: 1
   /** 새 task를 만들 때 고정하는 기본 엔진. 기존 task의 재개에는 적용하지 않는다 (E5). */
@@ -52,6 +63,8 @@ export interface AppConfig {
   knowledge_review_engine: AgentEngine
   /** 지식 검토의 모델. 비우면 엔진의 기본(claude는 sonnet, codex는 CLI 설정)이다 (D334) */
   knowledge_review_model: string
+  /** 화면 테마 (D335). 터미널은 테마와 관계없이 어둡다 */
+  theme: ThemeChoice
 }
 
 /** work.json의 settings. 앱 설정과 같은 키를 쓰고, 없는 키는 앱 설정을 따른다 (D72) */
@@ -166,4 +179,5 @@ export const DEFAULT_CONFIG: AppConfig = {
   reply_signature: '— relay(AI)가 작성함',
   knowledge_review_engine: 'claude',
   knowledge_review_model: '',
+  theme: 'system',
 }

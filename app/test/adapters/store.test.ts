@@ -16,6 +16,7 @@ import { TYPES, assemble } from '../../../skills/assemble.mjs'
 import {
   WorkFiles,
   loadConfig,
+  readThemeSync,
   partialUtf8,
   relayHome,
   writeFileAtomic,
@@ -47,6 +48,17 @@ describe('[어댑터] 저장소 (5.1)', () => {
     await writeFileAtomic(file, '{"v":2}\n')
     expect(read(file)).toBe('{"v":2}\n')
     expect(fs.readdirSync(path.dirname(file))).toEqual(['work.json'])
+  })
+
+  it('창을 그리기 전에 테마만 동기로 읽는다. 없거나 깨졌거나 틀린 값이면 system이다 (D335)', () => {
+    const file = path.join(root, 'config.json')
+    expect(readThemeSync(root)).toBe('system')
+    fs.writeFileSync(file, '\uFEFF' + JSON.stringify({ theme: 'light' }))
+    expect(readThemeSync(root)).toBe('light')
+    fs.writeFileSync(file, JSON.stringify({ theme: 'blue' }))
+    expect(readThemeSync(root)).toBe('system')
+    fs.writeFileSync(file, '{')
+    expect(readThemeSync(root)).toBe('system')
   })
 
   it('config.json이 없으면 기본값으로 만들고, 없는 키는 기본값을 쓴다 (5.1.1)', async () => {

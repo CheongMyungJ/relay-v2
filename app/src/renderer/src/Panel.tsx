@@ -555,7 +555,7 @@ function Review({
               {review.completion.verdicts.map((v, i) => (
                 <tr key={i} className={v.warn ? 'warn' : ''}>
                   <td>{v.criterion}</td>
-                  <td>{v.verdict}</td>
+                  <td className={`verdict ${v.warn ? 'v-warn' : 'v-ok'}`}>{v.verdict}</td>
                   <td>{v.basis}</td>
                 </tr>
               ))}

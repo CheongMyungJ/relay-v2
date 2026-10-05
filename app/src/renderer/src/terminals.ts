@@ -15,6 +15,27 @@ export interface TermEntry {
 
 const entries = new Map<string, TermEntry>()
 
+/**
+ * xterm의 색. styles.css의 --term-bg, --term-fg, --term-selection을 읽는다: 둘레의 .terminal과 같은 바탕이어야
+ * 테두리 띠가 보이지 않는다. 터미널은 테마와 관계없이 어둡다 (D335)
+ */
+function terminalTheme(): {
+  background: string
+  foreground: string
+  cursor: string
+  selectionBackground: string
+} {
+  const css = getComputedStyle(document.documentElement)
+  const token = (name: string) => css.getPropertyValue(name).trim()
+  const foreground = token('--term-fg')
+  return {
+    background: token('--term-bg'),
+    foreground,
+    cursor: foreground,
+    selectionBackground: token('--term-selection'),
+  }
+}
+
 /** 터미널에 포커스를 준다. 글을 넣지는 않는다 (D222). 아직 만들지 않은 터미널이면 false */
 export function focusTerm(key: string): boolean {
   const entry = entries.get(key)
@@ -33,6 +54,7 @@ export function ensureTerm(key: string, info: AppInfo): TermEntry {
     fontSize: 14,
     scrollback: 10000,
     cursorBlink: true,
+    theme: terminalTheme(),
     // ConPTY에 맞춘 동작을 켠다 (xterm.d.ts windowsPty)
     windowsPty: info.windowsBuild
       ? { backend: 'conpty', buildNumber: info.windowsBuild }

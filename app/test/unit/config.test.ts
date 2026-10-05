@@ -396,3 +396,23 @@ describe('[단위] 지식 검토의 엔진과 모델 (D334)', () => {
     expect(bad.warnings).toHaveLength(2)
   })
 })
+
+describe('[단위] 화면 테마 (D335)', () => {
+  it('기본은 시스템 설정 따름이다', () => {
+    expect(DEFAULT_CONFIG.theme).toBe('system')
+    expect(normalizeConfig({}).config.theme).toBe('system')
+  })
+
+  it('설정 화면에서 system, dark, light 중 하나로 바꾼다. 모르는 값은 받지 않고, 파일의 틀린 값은 기본값으로 읽는다', () => {
+    for (const theme of ['system', 'dark', 'light'] as const) {
+      expect(applyConfigPatch(DEFAULT_CONFIG, { theme })).toMatchObject({
+        ok: true,
+        value: { theme },
+      })
+    }
+    expect(applyConfigPatch(DEFAULT_CONFIG, { theme: 'blue' }).ok).toBe(false)
+    const bad = normalizeConfig({ theme: 'blue' })
+    expect(bad.config.theme).toBe('system')
+    expect(bad.warnings).toHaveLength(1)
+  })
+})

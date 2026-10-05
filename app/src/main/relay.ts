@@ -68,6 +68,8 @@ export interface RelayOptions {
   /** gh 실행 파일. 기본은 PATH의 gh */
   ghBin?: string
   now?: () => Date
+  /** 앱 설정을 읽었거나 바꿨다. 테마(D335)처럼 Electron이 적용할 것을 main이 적용한다 */
+  onConfig?: (config: AppConfig) => void
 }
 
 const RELAY_BRANCH = 'relay/'
@@ -105,6 +107,7 @@ export class Relay {
   private async load(): Promise<void> {
     const { config, warning } = await loadConfig(this.o.home)
     this.config = config
+    this.o.onConfig?.(config)
     if (warning) this.warnings.push(warning)
     await this.hooks.listen()
     const loaded: WorkRunner[] = []
@@ -343,6 +346,7 @@ export class Relay {
       if (!r.ok) return { ok: false, error: r.error }
       await saveConfig(this.o.home, r.value)
       this.config = r.value
+      this.o.onConfig?.(r.value)
       this.pool.fill()
       for (const w of this.works.values()) void w.configChanged()
       return { ok: true, config: r.value }
