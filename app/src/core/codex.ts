@@ -30,6 +30,37 @@ export function codexFirstPrompt(skill: SkillName, skillPath: string, contextPat
   return `relay-${skill} task를 시작합니다. 먼저 스킬 ${JSON.stringify(skillPath)}와 컨텍스트 ${JSON.stringify(contextPath)}를 읽고 그 절차만 따르세요. 질문은 relay MCP의 ask_human 도구로 묻고 답을 기다리세요.`
 }
 
+/** git과 gh의 전역 옵션 가운데 값을 다음 낱말로 받는 것 */
+const VALUE_OPTIONS: Readonly<Record<'git' | 'gh', readonly string[]>> = {
+  git: ['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--config-env', '--super-prefix'],
+  gh: ['-R', '--repo', '--hostname'],
+}
+
+/**
+ * 명령 줄에 `git push`나 `gh pr`이 있는가 (D17). 하위 명령만 본다: 전역 옵션(`git -C <폴더> push`, `gh --repo <레포> pr`)은
+ * 건너뛰고, 커밋 메시지나 다른 하위 명령의 인자(`git stash push`, `git log --grep=push`)는 막지 않는다
+ */
+function pushesOrPr(execution: string): boolean {
+  for (const part of execution.split(/[\n;&|]+/)) {
+    const words = part.trim().split(/\s+/).filter(Boolean)
+    for (let k = 0; k < words.length; k++) {
+      const name = (words[k] ?? '')
+        .replace(/^.*[\\/]/, '')
+        .replace(/\.exe$/i, '')
+        .toLowerCase()
+      if (name !== 'git' && name !== 'gh') continue
+      let n = k + 1
+      while (n < words.length && (words[n] ?? '').startsWith('-')) {
+        const opt = words[n] ?? ''
+        n += VALUE_OPTIONS[name].includes(opt) ? 2 : 1
+      }
+      const sub = (words[n] ?? '').toLowerCase()
+      if ((name === 'git' && sub === 'push') || (name === 'gh' && sub === 'pr')) return true
+    }
+  }
+  return false
+}
+
 /** 훅 입력에 명시된 파일·패치·직접 명령을 검사한다. 별도 스크립트/별칭/동적 경로는 완전 통제하지 못한다. */
 export function codexToolDenial(
   input: DenyInput & { worktree: string; taskDir?: string; cwd?: string },
@@ -91,9 +122,8 @@ export function codexToolDenial(
         .filter((x): x is string => typeof x === 'string')
         .join('\n')
     : ''
-  if (/\bgit(?:\.exe)?\b[^\n;&|]*\bpush\b|\bgh(?:\.exe)?\b[^\n;&|]*\bpr\b/i.test(execution)) {
-    return 'push와 PR 조작은 사람이 승인한 뒤 relay 앱이 수행합니다.'
-  }
+  if (pushesOrPr(execution)) return 'push와 PR 조작은 사람이 승인한 뒤 relay 앱이 수행합니다.'
+
   const paths: string[] = []
   if (/write|edit|patch/i.test(tool)) {
     for (const key of ['file_path', 'path', 'file'])

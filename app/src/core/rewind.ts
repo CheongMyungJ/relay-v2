@@ -80,7 +80,7 @@ export function canSelectStep(work: WorkState): boolean {
 }
 
 /** 되감기인지 건너뛰기인지: 그 유형의 파이프라인에서 지금 단계 k 이하면 되감기다 (6.2) */
-export function stepKind(type: WorkType, from: NodeName, to: NodeName): StepKind {
+function stepKind(type: WorkType, from: NodeName, to: NodeName): StepKind {
   return order(type, to) <= order(type, from) ? 'rewind' : 'skip'
 }
 
@@ -135,7 +135,7 @@ export function backupMessage(workId: string): string {
  * 단계 선택의 결과 (6.2의 표). 순서는 그 Work 유형의 파이프라인이다(I57). 지금 단계를 k, 고른 단계를 j라고 하면:
  * - 되감기(j ≤ k): 진행 중인 k를 끝내고, j 이후 노드의 task(폐기되지 않은 것)를 모두 폐기하고, j를 새로 실행한다.
  *   코드는 폐기하는 task 가운데 가장 앞 task의 시작 커밋으로 되돌린다(D117). 버그 수정의 fix, 기능 추가의 design과
- *   implement로 되감으면 [현재 코드 위에서 이어서]를 고를 수 있다(D254). 의도 승인 전 intake로 되감으면 유형을
+ *   implement, 리팩터링의 refactor, 일반의 execute로 되감으면 [현재 코드 위에서 이어서]를 고를 수 있다(D254, D278, D316). 의도 승인 전 intake로 되감으면 유형을
  *   바꿀 수 있다(D237).
  * - 건너뛰기(j > k): k가 진행 중이면 끝내고 k를 폐기한다. k가 끝났으면 k는 입력에 남는다.
  *   코드는 되돌리지 않는다(D117). 건너뛴 단계도 폐기한 task도 없으면(k가 끝났고 j가 기본 다음 단계)
@@ -260,7 +260,7 @@ export function stepChoices(work: WorkState): StepChoice[] {
 }
 
 /** 미리 본 때의 지금 task. [확인]에 함께 보낸다 */
-export function stepExpect(plan: StepPlan): StepExpect {
+function stepExpect(plan: StepPlan): StepExpect {
   return { taskId: plan.from.id, done: plan.done }
 }
 

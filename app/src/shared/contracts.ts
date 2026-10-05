@@ -7,7 +7,6 @@ export type { Handoff }
 
 export type HandoffStatus = Handoff['status']
 export type Decision = Handoff['decisions'][number]
-export type IntentDeviation = NonNullable<Handoff['intent_deviation']>
 export type RecommendedNext = NonNullable<Handoff['recommended_next']>
 
 /** 파이프라인 노드 (3.1) */

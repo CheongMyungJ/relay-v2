@@ -536,7 +536,7 @@ export class RelayArm {
 }
 
 /**
- * task에 넣은 지식의 글자 수 (참고 지표, docs/knowledge-experiment.md 4절). 앱이 task 폴더에 `knowledge-injected.md`를
+ * task에 넣은 지식의 글자 수 (참고 지표, docs/knowledge-experiment/protocol.md 4절). 앱이 task 폴더에 `knowledge-injected.md`를
  * 남기면 그 글자 수다. 없으면 context.md의 `## 참고 지식` 절(M17 빌드의 형식), 그것도 없으면 null
  */
 function knowledgeChars(taskDir, context) {
@@ -568,7 +568,7 @@ const KEYS = {
   'ctrl+c': 'Control+c',
 }
 
-export function keyName(k) {
+function keyName(k) {
   const s = String(k ?? '').trim()
   return KEYS[s.toLowerCase()] ?? KEYS[s.toLowerCase().replace(/^arrow/, '')] ?? s
 }

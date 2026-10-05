@@ -12,7 +12,7 @@ const GUIDES = path.resolve(import.meta.dirname, '../guides')
 export const screenKind = (kind) => (kind === 'cli' ? 'cli' : 'relay')
 
 /** 사람 역할의 설명서 이름. 다른 빌드(base, m17 등)는 그 빌드의 화면 설명서가 있으면 그것을 쓴다 */
-export function guideName(arm, kind) {
+function guideName(arm, kind) {
   const own = armBase(arm).replace(/-off$/, '')
   if (own && own !== kind && fs.existsSync(path.join(GUIDES, `${own}.md`))) return own
   return kind
@@ -180,7 +180,7 @@ function pickTypeLines(arm) {
 
 /**
  * Work 여럿을 잇는 시나리오의 두 번째 일부터: 같은 레포에서 앞 일을 끝낸 뒤라는 것을 알린다. teammate Work는 팀의 다른
- * 사람이 동료의 일이 main에 머지된 레포를 새로 받아 시작한다 (docs/knowledge-experiment.md)
+ * 사람이 동료의 일이 main에 머지된 레포를 새로 받아 시작한다 (docs/knowledge-experiment/protocol.md)
  */
 function nextWorkLines(kind, scenario) {
   const n = scenario.work?.index ?? 0

@@ -207,7 +207,8 @@ export function checksOf(
   rollup: unknown,
   events: ReadonlyMap<number, string> = new Map(),
 ): CheckFact[] {
-  const all: CheckFact[] = []
+  // 커밋 상태와 체크 실행은 이름이 같아도 다른 체크다(gh도 가른다). 같은 종류 안에서만 다시 실행을 합친다
+  const all: { fact: CheckFact; status: boolean }[] = []
   for (const raw of Array.isArray(rollup) ? rollup : []) {
     const c = obj(raw)
     if (isStatusContext(c)) {
@@ -215,16 +216,19 @@ export function checksOf(
       const state = text(c['state']) ?? 'PENDING'
       const url = text(c['targetUrl'])
       all.push({
-        key: name,
-        name,
-        workflow: null,
-        event: null,
-        label: name,
-        state,
-        bucket: bucketOf(state),
-        url,
-        ...actionsIds(url),
-        startedAt: text(c['startedAt']),
+        status: true,
+        fact: {
+          key: name,
+          name,
+          workflow: null,
+          event: null,
+          label: name,
+          state,
+          bucket: bucketOf(state),
+          url,
+          ...actionsIds(url),
+          startedAt: text(c['startedAt']),
+        },
       })
       continue
     }
@@ -237,22 +241,33 @@ export function checksOf(
     const event = ids.run !== null ? (events.get(ids.run) ?? null) : null
     const base = workflow ? `${workflow}/${name}` : name
     all.push({
-      key: event ? `${base} (${event})` : ids.run !== null ? `${base} #${ids.run}` : base,
-      name,
-      workflow,
-      event,
-      label: checkLabel({ name, workflow, event, run: ids.run }),
-      state,
-      bucket: bucketOf(state),
-      url,
-      ...ids,
-      startedAt: text(c['startedAt']),
+      status: false,
+      fact: {
+        key: event ? `${base} (${event})` : ids.run !== null ? `${base} #${ids.run}` : base,
+        name,
+        workflow,
+        event,
+        label: checkLabel({ name, workflow, event, run: ids.run }),
+        state,
+        bucket: bucketOf(state),
+        url,
+        ...ids,
+        startedAt: text(c['startedAt']),
+      },
     })
   }
   const latest = new Map<string, CheckFact>()
-  for (const c of all) {
-    const prior = latest.get(c.key)
-    if (!prior || (c.startedAt ?? '') > (prior.startedAt ?? '')) latest.set(c.key, c)
+  for (const { fact: c, status } of all) {
+    const k = `${status ? 'status' : 'check'}:${c.key}`
+    const prior = latest.get(k)
+    if (!prior || (c.startedAt ?? '') > (prior.startedAt ?? '')) latest.set(k, c)
+  }
+  // 이름이 같은 체크 실행이 있으면 커밋 상태의 키와 이름에 "(상태)"를 붙인다: 항목 id(ciItemId)와 화면의 줄이 겹치지
+  // 않게. 겹치지 않으면 그대로라 지금까지의 항목 id가 바뀌지 않는다
+  for (const [k, c] of latest) {
+    if (k.startsWith('status:') && latest.has(`check:${c.key}`)) {
+      latest.set(k, { ...c, key: `${c.key} (상태)`, label: `${c.label} (상태)` })
+    }
   }
   return [...latest.values()].sort((a, b) => a.key.localeCompare(b.key))
 }
@@ -270,11 +285,6 @@ export function ciState(checks: readonly Pick<CheckFact, 'bucket'>[], waited: bo
   if (checks.some((c) => c.bucket === 'cancel')) return 'cancel'
   if (checks.some((c) => c.bucket === 'pending')) return 'pending'
   return 'pass'
-}
-
-/** 머지 조건의 "CI 통과": 모두 통과하거나 건너뜀, 또는 기다린 뒤에도 체크가 없음 (D176, D196) */
-export function ciPasses(state: CiState): boolean {
-  return state === 'pass' || state === 'none'
 }
 
 // ---------- 코멘트 (D157, D160, D161, D197) ----------
@@ -295,7 +305,7 @@ export interface CommentFact {
 }
 
 /** 사람의 코멘트 가운데 받는 작성자 관계: 소유자, 조직 구성원, 협업자 (D160. 값의 뜻은 S7 관찰 3) */
-export const ACCEPTED_ASSOCIATIONS: readonly string[] = ['OWNER', 'MEMBER', 'COLLABORATOR']
+const ACCEPTED_ASSOCIATIONS: readonly string[] = ['OWNER', 'MEMBER', 'COLLABORATOR']
 
 /** 봇의 이름: login이나 설정에 적은 이름의 끝 `[bot]`을 뗀다 (D197) */
 export function botName(login: string): string {
@@ -442,6 +452,19 @@ export function ciItemId(head: string, check: Pick<CheckFact, 'key'>): string {
   return `ci:${head}:${check.key}`
 }
 
+/** 실패한 스텝의 로그를 읽었는데 비었다 (실패한 스텝 표시 없이 실패한 작업 등). 다시 받아도 같으므로 읽은 것으로 본다 */
+export const EMPTY_LOG_NOTE = '실패한 스텝의 로그가 비어 있음'
+
+/** CI 실패 항목의 로그를 이 작업(job)에서 이미 읽었는가. 같은 체크가 다른 작업으로 다시 실패하면 새로 읽는다 */
+export function ciLogRead(items: readonly PrItem[], id: string, job: number | null): boolean {
+  return items.some(
+    (i) =>
+      i.id === id &&
+      (i.log !== undefined || i.log_note === EMPTY_LOG_NOTE) &&
+      (i.check?.job ?? null) === job,
+  )
+}
+
 function checkRef(c: CheckFact): PrCheckRef {
   return {
     name: c.name,
@@ -559,6 +582,11 @@ export function gatherItems(prior: readonly PrItem[], read: ReadFacts, rules: It
       continue
     }
     revive(item)
+    // 같은 체크가 다른 작업으로 다시 실패했으면 옛 작업의 로그는 이번 실패가 아니다
+    if (item.check?.job !== c.job) {
+      delete item.log
+      delete item.log_note
+    }
     item.check = checkRef(c)
     if (log?.log) {
       item.log = log.log
@@ -664,7 +692,7 @@ export function reapplyRules(
 }
 
 /** 머지와 배지가 세는 할 일: 제외하지 않고 받은 새 항목 (D176) */
-export function openItems(items: readonly PrItem[]): PrItem[] {
+function openItems(items: readonly PrItem[]): PrItem[] {
   return items.filter((i) => i.status === 'new' && !i.gone)
 }
 
@@ -833,7 +861,7 @@ export function prBadgeKind(
 // ---------- 실패 로그 (S7 관찰 2) ----------
 
 /** 항목에 남기는 실패 로그의 줄 수 (기본값) */
-export const LOG_TAIL_LINES = 40
+const LOG_TAIL_LINES = 40
 
 /** 색 제어 문자: gh는 제어 문자를 `^[` 글자로 바꿔 쓴다(asciisanitizer, 3절). 날것의 ESC도 뗀다 */
 const ESC = String.fromCharCode(0x1b)
@@ -866,13 +894,7 @@ export function failedLogTail(output: string, lines = LOG_TAIL_LINES): string {
 // ---------- 머지 방식 (D177) ----------
 
 /** 머지 창의 차례이자 기본 선택의 차례 (D177, 화면 구성의 머지 창) */
-export const MERGE_METHODS: readonly MergeMethod[] = ['merge', 'squash', 'rebase']
-
-export const MERGE_METHOD_LABEL: Readonly<Record<MergeMethod, string>> = {
-  merge: '머지 커밋 (merge)',
-  squash: '하나로 합침 (squash)',
-  rebase: '다시 쌓음 (rebase)',
-}
+const MERGE_METHODS: readonly MergeMethod[] = ['merge', 'squash', 'rebase']
 
 /** gh repo view --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed에서 허용하는 방식 (S7 관찰 6) */
 export function allowedMethods(view: unknown): MergeMethod[] {
@@ -896,7 +918,7 @@ export function preferredMethod(
 
 // ---------- 화면 (D183, PR 패널) ----------
 
-export const ITEM_KIND_LABEL: Readonly<Record<PrItemKind, string>> = {
+const ITEM_KIND_LABEL: Readonly<Record<PrItemKind, string>> = {
   review: '리뷰',
   inline: '인라인 코멘트',
   convo: '대화 코멘트',
@@ -905,7 +927,7 @@ export const ITEM_KIND_LABEL: Readonly<Record<PrItemKind, string>> = {
   diverged: '원격과 갈라짐',
 }
 
-export const ITEM_STATUS_LABEL: Readonly<Record<PrItemStatus, string>> = {
+const ITEM_STATUS_LABEL: Readonly<Record<PrItemStatus, string>> = {
   new: '새 항목',
   not_accepted: '받지 않음',
   excluded: '제외',

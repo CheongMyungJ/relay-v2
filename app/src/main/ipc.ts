@@ -109,12 +109,14 @@ function cleanInput(v: unknown): CleanInput {
     live: count(x['live']),
     backups: texts(x['backups']),
     remote: flag(x['remote']),
+    lost: x['lost'] === undefined ? [] : texts(x['lost']),
   }
   return {
     deleteBranch: flag(o['deleteBranch']),
     deleteBackups: flag(o['deleteBackups']),
     ...(o['deleteRemote'] === undefined ? {} : { deleteRemote: flag(o['deleteRemote']) }),
     confirmed: flag(o['confirmed']),
+    ...(o['confirmLost'] === undefined ? {} : { confirmLost: flag(o['confirmLost']) }),
     expect,
   }
 }

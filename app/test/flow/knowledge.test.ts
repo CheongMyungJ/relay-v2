@@ -1,6 +1,7 @@
 // 지식 관리의 켜고 끔 (K1, 규약 2.2): 켜면 intake의 context.md에 레포의 지식이 들어가고 넣은 기록이 남는다. RELAY_KNOWLEDGE=off면
 // 지식 절도 기록도 없다
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { drive } from './driver'
@@ -527,5 +528,207 @@ describe('[흐름] 지식이 많으면 관련 항목만 넣는다 (D295)', () =>
     const injected = fs.readFileSync(path.join(dir, 'knowledge-injected.md'), 'utf8')
     expect(injected.indexOf('docs/knowledge/math/empty-average.md')).toBe(3)
     expect(injected).toContain('(제목만)')
+  })
+})
+
+describe('[흐름] 지식 파일만 고친 턴도 검토 되돌림을 받는다 (D328)', () => {
+  it('형식 되돌림 뒤 지식 파일만 고쳐 멈춰도 검토가 찾은 것을 되돌리고, 실제로 되돌렸을 때만 썼다고 적는다', async () => {
+    const RATE = 'docs/knowledge/points/rate.md'
+    const text = (undecided: boolean) =>
+      [
+        '---',
+        'kind: rule',
+        'source: human',
+        '---',
+        '# 적립률은 2%',
+        '',
+        '## 규칙',
+        '- 적립률은 2%다.',
+        ...(undecided
+          ? ['', '## 아직 정하지 않은 것', '- 환불 회수율: 정산팀이 정함. 지금 코드는 1%']
+          : ['- 환불 회수율은 1%다.']),
+      ].join('\n') + '\n'
+    const verify: Scenario['tasks'][string] = [
+      { do: 'prompt' },
+      // 머리글이 없는 지식 파일: 기계적 확인(형식)이 먼저 되돌린다
+      { do: 'commit', files: { [RATE]: '# 적립률\n환불 회수율은 1%다.\n' }, message: 'knowledge' },
+      { do: 'write', file: 'verification.md', text: VERIFICATION },
+      { do: 'write', file: 'pr.md', text: PR },
+      {
+        do: 'write',
+        file: 'handoff.md',
+        text: handoff({ summary: `고쳤다.\n새 지식: ${RATE} — 없음` }),
+      },
+      {
+        do: 'stop',
+        onBlock: [
+          // handoff는 그대로 두고 지식 파일의 형식만 고친다. 이번에는 검토가 찾는다
+          { do: 'commit', files: { [RATE]: text(false) }, message: 'knowledge: 형식' },
+          {
+            do: 'stop',
+            onBlock: [
+              { do: 'commit', files: { [RATE]: text(true) }, message: 'knowledge: 정하지 않은 것' },
+              { do: 'stop' },
+            ],
+          },
+        ],
+      },
+    ]
+    const hh = await harness({
+      scenario: {
+        ...scenario({ verify }),
+        review: [
+          {
+            issues: [
+              {
+                file: RATE,
+                kind: 'undecided_in_rule',
+                quote: '환불 회수율은 1%다.',
+                fix: '`## 아직 정하지 않은 것`으로 옮긴다',
+              },
+            ],
+          },
+          { issues: [] },
+        ],
+      },
+      env: { RELAY_KNOWLEDGE: 'on' },
+    })
+    h = hh
+    const { repo } = makeRepo(hh.root, 'knowledge-only-turn', REPO_FILES)
+    const projectId = await register(hh, repo)
+    const r = await hh.relay.createWork(projectId, {
+      request: REQUEST,
+      baseBranch: 'main',
+      type: 'bugfix',
+      baseLocation: 'local',
+    })
+    if (!r.ok) throw new Error(r.error)
+    const result = await drive(hh.relay, hh.ui, r.workKey)
+    await settle(hh, r.workKey)
+    expect(result, hh.ui.dump()).toMatchObject({ status: 'completed', reason: null })
+    const workDir = path.join(
+      hh.home,
+      'projects',
+      projectId,
+      'works',
+      r.workKey.split('/')[1] ?? '',
+    )
+    const bounced = fs
+      .readFileSync(path.join(workDir, 'events.jsonl'), 'utf8')
+      .split('\n')
+      .filter((l) => l.includes('task.bounced'))
+    expect(bounced).toHaveLength(2)
+    expect(bounced[1]).toContain('[지식 검토: 규칙 절에 정하지 않은 것]')
+    const record = JSON.parse(
+      fs.readFileSync(path.join(workDir, 'tasks', '03-verify', 'knowledge-review.json'), 'utf8'),
+    ) as { calls: { bounced: boolean; issues: unknown[] }[] }
+    expect(record.calls.map((c) => [c.bounced, c.issues.length])).toEqual([
+      [true, 1],
+      [false, 0],
+    ])
+  })
+})
+
+describe('[흐름] 지식 검토의 엔진은 설정에서 고른다 (D334)', () => {
+  const RATE = 'docs/knowledge/points/rate.md'
+  const RULE_TEXT =
+    [
+      '---',
+      'kind: rule',
+      'source: human',
+      '---',
+      '# 적립률은 2%',
+      '',
+      '## 규칙',
+      '- 적립률은 2%다.',
+    ].join('\n') + '\n'
+  const verify: Scenario['tasks'][string] = [
+    { do: 'prompt' },
+    { do: 'commit', files: { [RATE]: RULE_TEXT }, message: 'knowledge' },
+    { do: 'write', file: 'verification.md', text: VERIFICATION },
+    { do: 'write', file: 'pr.md', text: PR },
+    {
+      do: 'write',
+      file: 'handoff.md',
+      text: handoff({ summary: `고쳤다.\n새 지식: ${RATE} — 없음` }),
+    },
+    {
+      do: 'stop',
+      onBlock: [
+        {
+          do: 'write',
+          file: 'handoff.md',
+          text: handoff({ summary: `고쳤다.\n새 지식: ${RATE} — 고침` }),
+        },
+        { do: 'stop' },
+      ],
+    },
+  ]
+  const run = async (o: { codexBin?: string }) => {
+    const hh = await harness({
+      scenario: {
+        ...scenario({ verify }),
+        review: [
+          {
+            issues: [
+              {
+                file: RATE,
+                kind: 'overgeneral',
+                quote: '적립률은 2%다.',
+                human: '',
+                fix: '근거를 적는다',
+              },
+            ],
+          },
+        ],
+      },
+      config: { knowledge_review_engine: 'codex', knowledge_review_model: 'gpt-5-codex' },
+      env: { RELAY_KNOWLEDGE: 'on' },
+      ...(o.codexBin ? { codexBin: o.codexBin } : {}),
+    })
+    h = hh
+    const { repo } = makeRepo(hh.root, 'knowledge-codex-review', REPO_FILES)
+    const projectId = await register(hh, repo)
+    const r = await hh.relay.createWork(projectId, {
+      request: REQUEST,
+      baseBranch: 'main',
+      type: 'bugfix',
+      baseLocation: 'local',
+    })
+    if (!r.ok) throw new Error(r.error)
+    const result = await drive(hh.relay, hh.ui, r.workKey)
+    await settle(hh, r.workKey)
+    const workDir = path.join(
+      hh.home,
+      'projects',
+      projectId,
+      'works',
+      r.workKey.split('/')[1] ?? '',
+    )
+    return { hh, r, result, workDir }
+  }
+
+  it('codex를 고르면 codex exec로 고른 모델을 넘겨 부르고, 찾은 것은 되돌린다', async () => {
+    const { hh, result, workDir } = await run({})
+    expect(result, hh.ui.dump()).toMatchObject({ status: 'completed', reason: null })
+    const args = JSON.parse(
+      fs.readFileSync(`${path.join(hh.root, 'scenario.json')}.review-args.json`, 'utf8'),
+    ) as string[]
+    expect(args[0]).toBe('exec')
+    expect(args[args.indexOf('-m') + 1]).toBe('gpt-5-codex')
+    const record = JSON.parse(
+      fs.readFileSync(path.join(workDir, 'tasks', '03-verify', 'knowledge-review.json'), 'utf8'),
+    ) as { calls: { engine: string; model: string; bounced: boolean }[] }
+    expect(record.calls[0]).toMatchObject({ engine: 'codex', model: 'gpt-5-codex', bounced: true })
+  })
+
+  it('고른 엔진을 찾지 못하면 되돌리지 않고 승인 화면에 경고한다', async () => {
+    const { hh, r, result } = await run({ codexBin: path.join(os.tmpdir(), 'relay-없는-codex') })
+    expect(result, hh.ui.dump()).toMatchObject({ status: 'completed', reason: null })
+    const review = await hh.relay.review(r.workKey, 't-03')
+    expect(review?.errors.map((e) => e.message).join()).not.toContain('[지식 검토')
+    expect(review?.warnings.map((e) => e.message).join()).toContain(
+      '[지식 검토를 하지 못함] Codex를 찾지 못함',
+    )
   })
 })

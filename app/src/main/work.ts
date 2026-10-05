@@ -15,11 +15,18 @@ import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { agentRuntime } from '../adapters/agent'
-import { codexSkillPath } from '../adapters/codex'
+import { codexJson, codexSkillPath, findCodex } from '../adapters/codex'
+import { AGENT_LABELS } from '../shared/agent'
 import { codexToolDenial } from '../core/codex'
 import { humanAnswers, humanQuestions } from '../core/questions'
 import type { HumanAnswerReply, PendingQuestionView } from '../shared/questions'
-import { agentLabel, knownTaskEngine, taskEngine, taskEngineVersion } from '../core/agent'
+import {
+  agentLabel,
+  knownTaskEngine,
+  sessionUnknown,
+  taskEngine,
+  taskEngineVersion,
+} from '../core/agent'
 import {
   GhApiError,
   ghApiPost,
@@ -36,6 +43,7 @@ import {
   changedPaths,
   commitAll,
   commitInfo,
+  commitsOnlyIn,
   commitsWithParents,
   countCommits,
   createBackup,
@@ -95,6 +103,7 @@ import {
   discardedAttempts,
   keptCodeDesign,
   previousInputs,
+  selectionKind,
   type CarriedCode,
   type PreviousRound,
   type PreviousTask,
@@ -132,6 +141,7 @@ import {
   CHECK_WAIT_MS,
   allowedMethods,
   applyItemAction,
+  ciLogRead,
   ciState,
   divergedFact,
   gatherItems,
@@ -312,8 +322,10 @@ import {
   humanDecisionLines,
   relatedEntries,
   reviewEnabled,
+  reviewFailedIssue,
   reviewIssues,
   reviewPrompt,
+  reviewTarget,
   type ReviewInput,
   type ReviewRecord,
 } from '../core/knowledge-review'
@@ -325,6 +337,7 @@ import {
   identifiersIn,
   pathsIn,
   knowledgeIssues,
+  knowledgeLineIssues,
   injectedText,
   knowledgeEnabled,
   mergeEntries,
@@ -464,10 +477,17 @@ function clip(text: string): string {
     : text
 }
 
-/** handoffChanged를 정할 때 비교하는 파일 (D21): handoff.md, intake는 intent 초안도 */
-function turnSnapshot(task: TaskRecord, files: Readonly<Record<string, string>>): string {
+/**
+ * handoffChanged를 정할 때 비교하는 파일 (D21): handoff.md, intake는 intent 초안도. verify는 레포의 지식 파일도
+ * 넣는다(knowledge): 지식 파일만 고치고 멈춘 것도 다시 마무리를 시도한 것이다 (D328)
+ */
+function turnSnapshot(
+  task: TaskRecord,
+  files: Readonly<Record<string, string>>,
+  knowledge = '',
+): string {
   const draft = task.node === 'intake' ? (files[INTENT_DRAFT_FILE] ?? null) : null
-  return JSON.stringify([files[HANDOFF_FILE] ?? null, draft])
+  return JSON.stringify([files[HANDOFF_FILE] ?? null, draft, knowledge])
 }
 
 /** 한 번의 답글 게시에서 받아 둔 코멘트 목록 (인라인 코멘트, 대화 코멘트) */
@@ -480,12 +500,18 @@ export function workTitle(request: string): string {
   return t.length > 80 ? `${t.slice(0, 80)}…` : t
 }
 
+/** 결과를 모르는 머지를 다시 확인하는 간격과 횟수 (D330). 간격은 환경 변수 RELAY_MERGE_CONFIRM_MS(시험)로 바꾼다 */
+const MERGE_CONFIRM_MS = 30_000
+const MERGE_CONFIRM_TRIES = 5
+
 export class WorkRunner {
   readonly key: string
   private queue: Promise<unknown> = Promise.resolve()
   private readonly live = new Map<string, LiveSession>()
   /** Stop 훅이 줄에 들어가기 전에 새로 부른 지식 검토의 입력 해시 (task id → 해시, D300). 그 Stop의 확인이 한 번 쓴다 */
   private readonly freshReview = new Map<string, string>()
+  /** 이 Stop에서 검토가 되돌리려는 입력 (D328). core가 실제로 되돌리면 기록에 "되돌림"을 남긴다 */
+  private readonly reviewBounce = new Map<string, string>()
   private readonly terminals = new Map<string, TerminalBuffer>()
   /**
    * 다시 열 세션에 이어서 하라는 첫 입력을 줄지 (D218). [재개]·[세션 재개]마다 core가 정한 것을 두고, 세션을 다시 열
@@ -500,6 +526,8 @@ export class WorkRunner {
   private rewindError: string | null = null
   /** 이번 명령의 전달이나 정리가 실패한 이유. 명령의 결과로 돌려준다 */
   private opError: string | null = null
+  /** 결과를 모르는 머지를 앱이 다시 확인한 횟수 (D330) */
+  private mergeConfirms = 0
   /** 정리 세션 ([AI 세션 열기], 7-5) */
   private cleanup: CleanupSession | null = null
   private cleanupSeq = 0
@@ -822,16 +850,8 @@ export class WorkRunner {
   ): Promise<KnowledgeCheck | undefined> {
     const input = await this.knowledgeCheckInput(task, files)
     if (input === null) return undefined
-    if (input === undefined) {
-      const handoff = files[HANDOFF_FILE] ?? ''
-      const errors = knowledgeIssues({
-        handoff,
-        changed: [],
-        existing: new Set(),
-        current: new Map(),
-      })
-      return { errors, warnings: [] }
-    }
+    if (input === undefined)
+      return { errors: knowledgeLineIssues(files[HANDOFF_FILE] ?? ''), warnings: [] }
     const errors = knowledgeIssues(input)
     if (!this.wantsReview(input, errors)) return { errors, warnings: [] }
     const review = await this.knowledgeReviewResult(task, input, opts.stop === true)
@@ -929,28 +949,37 @@ export class WorkRunner {
     if (before.calls.some((c) => c.hash === req.hash)) return
     if (before.calls.length >= REVIEW_CALL_LIMIT) return
     const { env } = this.ctx
-    const bin = findClaude({ env })
-    const model = env['RELAY_KNOWLEDGE_REVIEW_MODEL']?.trim() || 'sonnet'
-    const result = bin
-      ? await claudeJson({
-          bin,
-          env,
-          cwd: this.worktree,
-          model,
-          effort: 'low',
-          system: REVIEW_SYSTEM,
-          prompt: req.prompt,
-          schema: REVIEW_SCHEMA,
-          timeoutMs: REVIEW_TIMEOUT_MS,
-        })
-      : { data: null, ms: 0, costUsd: null, usage: null, error: 'claude를 찾지 못함' }
+    // 설정에서 고른 CLI와 모델로 부른다 (D334). 찾지 못하면 부르지 않고 그 까닭을 기록해 경고로 보인다
+    const { engine, model } = reviewTarget(this.ctx.config(), env)
+    const bin = engine === 'codex' ? findCodex({ env }) : findClaude({ env })
+    const call = {
+      env,
+      cwd: this.worktree,
+      model,
+      system: REVIEW_SYSTEM,
+      prompt: req.prompt,
+      schema: REVIEW_SCHEMA,
+      timeoutMs: REVIEW_TIMEOUT_MS,
+    }
+    const result = !bin
+      ? {
+          data: null,
+          ms: 0,
+          costUsd: null,
+          usage: null,
+          error: `${AGENT_LABELS[engine]}를 찾지 못함`,
+        }
+      : engine === 'codex'
+        ? await codexJson({ ...call, bin })
+        : await claudeJson({ ...call, bin, effort: 'low' })
     // 기다리는 동안 다른 호출이 기록을 썼을 수 있으니 다시 읽고 더한다
     const record = await this.readReviewRecord(task)
     if (record.calls.some((c) => c.hash === req.hash)) return
     record.calls.push({
       at: this.ctx.at(),
       hash: req.hash,
-      model,
+      engine,
+      model: model || `${engine} 기본`,
       ms: result.ms,
       costUsd: result.costUsd,
       usage: result.usage,
@@ -978,13 +1007,45 @@ export class WorkRunner {
     const done = record.calls.find((c) => c.hash === req.hash)
     if (!done) return { issues: [], bounce: false }
     const fresh = stop && this.freshReview.get(task.id) === req.hash
-    if (fresh) this.freshReview.delete(task.id)
     if (fresh && done.issues.length > 0 && !record.calls.some((c) => c.bounced)) {
-      done.bounced = true
-      await this.writeReviewRecord(task, record)
+      // 되돌릴지는 core가 정한다(바뀐 것이 없거나 되돌림 상한이면 되돌리지 않음). 실제로 되돌렸을 때만 기록한다 (D328)
+      this.reviewBounce.set(task.id, req.hash)
       return { issues: done.issues, bounce: true }
     }
-    return { issues: done.issues, bounce: false }
+    if (fresh) this.freshReview.delete(task.id)
+    // 부르지 못했으면 문제 없음으로 보되(D300) 경고로 알린다 (D334)
+    return { issues: done.error ? [reviewFailedIssue(done.error)] : done.issues, bounce: false }
+  }
+
+  /**
+   * 검토의 되돌림을 마무리한다 (D328): core가 이 Stop을 되돌렸으면 그 호출을 "되돌림"으로 기록하고, 아니면 다음에 다시
+   * 마무리를 시도하는 Stop에서 되돌릴 수 있게 그대로 둔다
+   */
+  private async settleReviewBounce(task: TaskRecord, blocked: boolean): Promise<void> {
+    const hash = this.reviewBounce.get(task.id)
+    this.reviewBounce.delete(task.id)
+    if (hash === undefined || !blocked) return
+    this.freshReview.delete(task.id)
+    const record = await this.readReviewRecord(task)
+    const call = record.calls.find((c) => c.hash === hash)
+    if (!call) return
+    call.bounced = true
+    await this.writeReviewRecord(task, record)
+  }
+
+  /** handoffChanged를 정할 때의 이번 턴 상태 (D21, D328). verify는 레포의 지식 파일도 본다 */
+  private async turnState(
+    task: TaskRecord,
+    files: Readonly<Record<string, string>>,
+  ): Promise<string> {
+    if (task.node !== 'verify' || !knowledgeEnabled(this.ctx.env)) return turnSnapshot(task, files)
+    try {
+      const entries = await readRepoKnowledge(this.worktree)
+      // 바뀌었는지만 보면 되므로 경로와 해시만 든다
+      return turnSnapshot(task, files, JSON.stringify(entries.map((e) => [e.path, sha256(e.text)])))
+    } catch {
+      return turnSnapshot(task, files)
+    }
   }
 
   private notify(body: string): void {
@@ -1161,7 +1222,14 @@ export class WorkRunner {
         settingsPath,
         ...(prompt ? { prompt } : {}),
       })
-      const session = this.launch(task, bin, token, args, turnSnapshot(task, files), RESUME_MARK)
+      const session = this.launch(
+        task,
+        bin,
+        token,
+        args,
+        await this.turnState(task, files),
+        RESUME_MARK,
+      )
       const processStartedAt = await processStartTime(session.pty.pid)
       await this.feed({
         type: 'session.resumed',
@@ -1456,7 +1524,7 @@ export class WorkRunner {
   private async selectionInput(task: TaskRecord): Promise<SelectionInput | null> {
     const sel = task.selection
     if (!sel) return null
-    const reason = task.reason === 'rewind' || task.reason === 'skip' ? task.reason : 'default'
+    const reason = selectionKind(task)
     const tasks = sel.discarded
       .map((id) => this.task(id))
       .filter((t): t is TaskRecord => t !== undefined)
@@ -1848,7 +1916,8 @@ export class WorkRunner {
             cancelled: true,
             reason: '새 요청을 보냈습니다.',
           })
-        if (session) session.turnFiles = turnSnapshot(task, await this.files.taskFiles(task))
+        if (session)
+          session.turnFiles = await this.turnState(task, await this.files.taskFiles(task))
         const mode = str(b['permission_mode'])
         return (
           await this.feed({
@@ -1890,10 +1959,11 @@ export class WorkRunner {
             reason: '앱 질문창의 답변을 기다리세요. 취소를 답변이나 동의로 해석하지 마세요.',
           }
         const files = await this.files.taskFiles(task)
-        const snapshot = turnSnapshot(task, files)
+        const snapshot = await this.turnState(task, files)
         const changed = session !== undefined && snapshot !== session.turnFiles
         if (session) session.turnFiles = snapshot
-        return (
+        this.reviewBounce.delete(taskId)
+        const reply = (
           await this.feed({
             type: 'turn.completed',
             ...base,
@@ -1904,6 +1974,8 @@ export class WorkRunner {
             pending: engine === 'codex' ? 'unknown' : pendingBackground(b) ? 'pending' : 'none',
           })
         ).reply
+        await this.settleReviewBounce(task, reply?.decision === 'block')
+        return reply
       }
       case 'SessionEnd': {
         // Codex의 내부 대화 전환도 SessionEnd(other)를 보낸다. 프로세스 종료는 PTY로 확인한다.
@@ -2835,6 +2907,25 @@ export class WorkRunner {
 
   // ---------- 정리 (시나리오 8) ----------
 
+  /**
+   * PR을 머지한 Work의 작업 브랜치에만 있는 커밋 (D329): 머지한 PR head에 없는 것. squash·rebase 머지면 기준 브랜치가
+   * 이 커밋을 갖지 않으므로 머지한 head와 견준다. 머지한 Work가 아니거나 셀 수 없으면 null
+   */
+  private async lostCommits(
+    repo: string,
+    name: string,
+    head: string | null,
+  ): Promise<{ sha: string; subject: string }[] | null> {
+    const merged = this.work.pr?.merged
+    if (!merged || !head) return null
+    try {
+      return await commitsOnlyIn(repo, `refs/heads/${name}`, merged.head, { env: this.ctx.env })
+    } catch (e) {
+      this.problem(`머지한 PR에 없는 커밋을 세지 못함: ${message(e)}`)
+      return null
+    }
+  }
+
   /** 정리 요약의 사실: git과 이 앱의 세션에서 읽는다 (8-1) */
   private async cleanFacts(): Promise<CleanFacts> {
     const opts = { env: this.ctx.env }
@@ -2872,6 +2963,7 @@ export class WorkRunner {
         pushed: await contains(`refs/remotes/origin/${name}`),
         merged:
           (await contains(`refs/heads/${base}`)) || (await contains(`refs/remotes/origin/${base}`)),
+        lost: await this.lostCommits(repo, name, head),
       },
       backups: await refNames(repo, backupPattern(this.work.work_id), opts),
       merged,
@@ -3065,6 +3157,12 @@ export class WorkRunner {
         },
         { quiet: true },
       )
+      // 결과를 모르는 머지는 다시 켠 뒤에도 앱이 다시 확인한다 (D330)
+      const op = cutOperation(this.work)
+      if (op?.kind === 'merge' && op.unconfirmed) {
+        this.mergeConfirms = 0
+        this.scheduleMergeConfirm()
+      }
       if (killed.length) {
         this.orphans = [...killed]
         this.changed()
@@ -3594,7 +3692,7 @@ export class WorkRunner {
           location,
           runEvents: this.runEvents,
         },
-        (id) => file.items.some((i) => i.id === id && i.log !== undefined),
+        (id, job) => ciLogRead(file.items, id, job),
       )
     } catch (e) {
       return this.prFailed(`PR을 읽지 못함: ${message(e)}`)
@@ -3853,6 +3951,8 @@ export class WorkRunner {
   prMerge(input: MergeInput): Promise<CommandResult> {
     return this.enqueue(async () => {
       this.opError = null
+      // 새 머지는 결과 다시 확인(D330)의 횟수를 처음부터 센다
+      this.mergeConfirms = 0
       const r = await this.command({
         type: 'pr.merge',
         at: this.ctx.at(),
@@ -3890,10 +3990,35 @@ export class WorkRunner {
       env: this.ctx.env,
     }
     const state = async () => (await ghPrView(this.ctx.ghBin, gh, ['state']))['state']
+    // 머지 요청은 보냈는데 결과를 못 읽었다 (D330): 실패로 알리지 않고 끊긴 작업으로 남겨 다시 확인한다
+    const unconfirmed = async (err: unknown) => {
+      console.error(`[${this.key}] 머지 결과를 읽지 못함: ${message(err)}`)
+      await this.feed({
+        type: 'pr.mergeFailed',
+        at: this.ctx.at(),
+        error: message(err),
+        unconfirmed: true,
+      })
+      this.scheduleMergeConfirm()
+    }
     try {
-      if (e.resume && (await state()) === 'MERGED') {
-        await this.feed({ type: 'pr.merged', at: this.ctx.at() })
-        return
+      if (e.resume) {
+        let before: unknown
+        try {
+          before = await state()
+        } catch (err) {
+          // 결과를 모르는 머지를 확인하다 또 못 읽었으면 그대로 기다린다. 끊긴 머지는 지금처럼 실패다
+          if (this.work.operation?.kind === 'merge' && this.work.operation.unconfirmed) {
+            await unconfirmed(err)
+            return
+          }
+          throw err
+        }
+        if (before === 'MERGED') {
+          this.mergeConfirms = 0
+          await this.feed({ type: 'pr.merged', at: this.ctx.at() })
+          return
+        }
       }
       const r = await ghMerge(this.ctx.ghBin, { ...gh, method: e.method, head: e.head })
       if (!r.ok) {
@@ -3910,7 +4035,14 @@ export class WorkRunner {
         return
       }
       // 성공 문구는 TTY일 때만 찍으므로 다시 읽어 머지됐는지 본다 (S7 관찰 6, 3절)
-      const now = await state()
+      let now: unknown
+      try {
+        now = await state()
+      } catch (err) {
+        await unconfirmed(err)
+        return
+      }
+      this.mergeConfirms = 0
       if (now !== 'MERGED') {
         await fail(`gh pr merge는 성공했지만 PR이 머지되지 않음 (state: ${String(now)})`)
         return
@@ -3919,6 +4051,23 @@ export class WorkRunner {
     } catch (err) {
       await fail(`머지 실패: ${message(err)}`)
     }
+  }
+
+  /**
+   * 결과를 모르는 머지를 잠시 뒤 다시 확인한다 (D330): 끊긴 작업의 [다시 시도]와 같다. 몇 번 해도 못 읽으면 사람의
+   * [다시 시도]를 기다린다
+   */
+  private scheduleMergeConfirm(): void {
+    if (this.mergeConfirms >= MERGE_CONFIRM_TRIES) return
+    this.mergeConfirms++
+    setTimeout(
+      () => {
+        const op = cutOperation(this.work)
+        if (this.closing || op?.kind !== 'merge' || !op.unconfirmed) return
+        void this.retryOperation()
+      },
+      Number(this.ctx.env['RELAY_MERGE_CONFIRM_MS']) || MERGE_CONFIRM_MS,
+    )
   }
 
   /** PR의 지금 head가 머지하려던 head와 다른가. 읽지 못하면 모른다(false) */
@@ -4375,10 +4524,21 @@ export class WorkRunner {
       })
     } catch (err) {
       const answered = err instanceof GhApiError && err.status !== null
-      if (reply.thread !== null && answered && (await this.inlineGone(reply, location, lists))) {
-        await this.markGone(reply.item)
-        await this.updateReply(taskId, reply.item, { skipped: GONE_SKIP })
-        return
+      if (reply.thread !== null && answered) {
+        let gone: boolean
+        try {
+          gone = await this.inlineGone(reply, location, lists)
+        } catch (listErr) {
+          // 목록을 읽지 못해도 사람이 볼 것은 게시가 실패한 원래 까닭이다
+          throw new Error(`${message(err)} (코멘트 목록도 읽지 못함: ${message(listErr)})`, {
+            cause: listErr,
+          })
+        }
+        if (gone) {
+          await this.markGone(reply.item)
+          await this.updateReply(taskId, reply.item, { skipped: GONE_SKIP })
+          return
+        }
       }
       throw err
     }
@@ -4645,6 +4805,7 @@ export class WorkRunner {
       resumed: t.session?.resumed_at !== undefined,
       appEnded: t.session?.app_ended !== undefined,
       hasSession: !!t.session,
+      sessionUnknown: sessionUnknown(t),
       error: t.error ?? null,
       errorCount: t.check?.errors.length ?? 0,
       bounces: t.bounce_count,

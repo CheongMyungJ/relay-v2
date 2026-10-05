@@ -145,7 +145,7 @@ export function decisionsWithout(text: string, taskIds: readonly string[]): stri
 // ---------- intent.md (5.3) ----------
 
 /** intent.md의 형식 버전 (5.3) */
-export const INTENT_SCHEMA_VERSION = 1
+const INTENT_SCHEMA_VERSION = 1
 
 /**
  * [의도 승인] 때 intent 초안으로 intent.md 확정본을 만든다 (5.3, D88, D236).

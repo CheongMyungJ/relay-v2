@@ -178,6 +178,9 @@ describe('선택 가능한 다음 단계 (3.2)', () => {
     expect(stopsForRecommendation('general', 'verify', 'execute')).toBe(true)
     expect(stopsForRecommendation('general', 'verify', 'fix')).toBe(true)
     expect(stopsForRecommendation('general', 'execute', 'verify')).toBe(false)
+    // 같은 단계를 다시 하자는 추천(형식 오류)도 [오류 무시하고 승인]으로 넘기지 않고 멈춘다
+    expect(stopsForRecommendation('general', 'execute', 'execute')).toBe(true)
+    expect(stopsForRecommendation('bugfix', 'verify', 'verify')).toBe(true)
     // 기본 다음 단계와 뒤 단계는 멈추지 않는다
     expect(stopsForRecommendation('feature', 'design', 'implement')).toBe(false)
     expect(stopsForRecommendation('feature', 'design', 'verify')).toBe(false)

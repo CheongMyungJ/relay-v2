@@ -85,6 +85,8 @@ export class Relay {
   private creating = false
   /** 설정 바꾸기를 차례로 한다. 겹친 두 바꾸기가 서로의 값을 지우지 않게 */
   private configQueue: Promise<unknown> = Promise.resolve()
+  /** project.json 고치기의 차례 (updateProject) */
+  private projectWrites: Promise<unknown> = Promise.resolve()
 
   private constructor(private readonly o: RelayOptions) {
     this.env = o.env ?? process.env
@@ -106,7 +108,7 @@ export class Relay {
     if (warning) this.warnings.push(warning)
     await this.hooks.listen()
     const loaded: WorkRunner[] = []
-    for (const project of await loadProjects(this.o.home)) {
+    for (const project of await loadProjects(this.o.home, this.warnings)) {
       this.projects.set(project.project_id, project)
       for (const id of await workIds(this.o.home, project.project_id)) {
         const files = new WorkFiles(workDir(this.o.home, project.project_id, id))
@@ -125,10 +127,30 @@ export class Relay {
     }
     // 1. 고아 프로세스 (시나리오 9-1): 모든 Work의 기록을 모아 한 번에 확인하고 끝낸다
     const killed = await this.killOrphans(loaded)
-    // 2~6. 재시작 조정. Work마다 따로라 함께 한다
-    await Promise.all(loaded.map((r) => r.reconcile(killed.get(r) ?? [])))
+    // 2~6. 재시작 조정. Work마다 따로라 함께 한다. 조정하지 못한 Work만 빼고 앱을 연다 (D332)
+    const failed = new Set<WorkRunner>()
+    await Promise.all(
+      loaded.map((r) =>
+        r.reconcile(killed.get(r) ?? []).catch(async (e: unknown) => {
+          failed.add(r)
+          this.works.delete(r.key)
+          this.warnings.push(
+            `${r.key}: 재시작 조정에서 기록을 쓰지 못해 이 Work를 열지 않음. 원인을 치운 뒤 앱을 다시 켜세요 (${String(e)})`,
+          )
+          await r.shutdown().catch(() => undefined)
+        }),
+      ),
+    )
     // PR 진행인 Work는 항목을 읽어 두고 PR을 한 번 읽는다 (D159). 읽은 결과로 알리지 않는다
-    await Promise.all(loaded.map((r) => r.startPr({ quiet: true })))
+    await Promise.all(
+      loaded
+        .filter((r) => !failed.has(r))
+        .map((r) =>
+          r.startPr({ quiet: true }).catch((e: unknown) => {
+            this.warnings.push(`${r.key}: PR 진행을 시작하지 못함 (${String(e)})`)
+          }),
+        ),
+    )
   }
 
   /**
@@ -233,7 +255,23 @@ export class Relay {
       gh_version: gh.version,
       checked_at: this.at(),
     }
-    await this.saveProjectState({ ...(this.projects.get(projectId) ?? project), checks })
+    await this.updateProject(projectId, (p) => ({ ...p, checks }))
+  }
+
+  /**
+   * 등록한 프로젝트의 project.json을 고친다. 고치기는 차례로 하고 그때의 최신 상태에서 바꾼다: 다시 점검과 설정 저장이
+   * 겹쳐도 한쪽이 다른 쪽을 덮지 않는다. 설정 줄(configQueue)과 따로라 Work의 처리 줄과 서로 기다리지 않는다
+   */
+  private updateProject(
+    projectId: string,
+    change: (p: ProjectState) => ProjectState,
+  ): Promise<void> {
+    const run = this.projectWrites.then(async () => {
+      const current = this.projects.get(projectId)
+      if (current) await this.saveProjectState(change(current))
+    })
+    this.projectWrites = run.catch(() => undefined)
+    return run
   }
 
   /** project.json을 쓰고 화면과 그 프로젝트의 Work에 알린다 */
@@ -350,11 +388,11 @@ export class Relay {
       if (!project) return { ok: false, error: '프로젝트가 없습니다' }
       const r = checkProjectSettings(settings)
       if (!r.ok) return { ok: false, error: r.error }
-      await this.saveProjectState({
-        ...project,
+      await this.updateProject(projectId, (p) => ({
+        ...p,
         allowed_bots: r.value.allowed_bots,
         merge_method: r.value.merge_method,
-      })
+      }))
       await Promise.all(
         [...this.works.values()]
           .filter((w) => w.project.project_id === projectId)

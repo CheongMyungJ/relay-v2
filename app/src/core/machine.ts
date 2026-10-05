@@ -12,7 +12,8 @@
 // core/cleanup, 끊긴 작업의 알림과 재개 판정은 core/recovery, 자동 승인의 조건은 core/approval이 한다.
 import type { AppConfig, WorkSettingsPatch } from '../shared/config'
 import type { AgentEngine } from '../shared/agent'
-import { agentLabel, knownTaskEngine, taskEngine } from './agent'
+import { agentLabel, knownTaskEngine, sessionUnknown, taskEngine } from './agent'
+import { selectionKind } from './context'
 import type { Decision, NodeName, TaskNode } from '../shared/contracts'
 import type { StepExpect, WorkActions } from '../shared/views'
 import type {
@@ -526,6 +527,8 @@ export interface PrMergeSucceeded extends WorkEvent {
 export interface PrMergeFailed extends WorkEvent {
   type: 'pr.mergeFailed'
   error: string
+  /** 머지 요청은 성공했지만 결과를 읽지 못했다 (D330): 기록을 지우지 않고 끊긴 작업으로 남긴다 */
+  unconfirmed?: boolean
 }
 
 /** [머지 없이 끝내기] (D179). GitHub의 PR은 건드리지 않는다 */
@@ -818,7 +821,7 @@ export function permissionWarning(task: TaskRecord): boolean {
  * [재개]·[세션 재개]를 받는 상태다. main은 띄운 결과를 session.started, session.resumed, session.failed,
  * task.queued로 알린다. 명령과 그 할 일은 Work의 처리 줄 한 번에 끝나므로 그 사이에 다른 명령은 오지 않는다.
  */
-export function launchable(task: TaskRecord): boolean {
+function launchable(task: TaskRecord): boolean {
   if (task.session?.alive) return false
   return task.status === 'working' || task.status === 'queued' || RESUMABLE.includes(task.status)
 }
@@ -1242,7 +1245,7 @@ function dispatch(work: WorkState, event: MachineEvent, config: AppConfig): Tran
     case 'pr.merged':
       return prMerged(work, event)
     case 'pr.mergeFailed':
-      return prMergeFailed(work)
+      return prMergeFailed(work, event)
     case 'pr.end':
       return prEnd(work, event)
     case 'pr.cleanOffered':
@@ -1854,14 +1857,20 @@ function resume(work: WorkState, task: TaskRecord): Transition {
 
 /**
  * [이 단계 새 세션으로 다시] (시나리오 3-5, D114). 같은 노드의 새 task를 만들어 새 세션으로 시작한다.
- * 앞 task는 세션 종료로 남고 입력에 들어가지 않는다. 코드는 되돌리지 않는다.
+ * 앞 task는 세션 종료로 남고 입력에 들어가지 않는다. 코드는 되돌리지 않는다. 앞 task가 단계 선택으로 들어왔으면
+ * 그 선택을 이어받는다 (D327)
  */
 function retry(work: WorkState, task: TaskRecord, e: Retry): Transition {
   if (work.status !== 'active') return unchanged(work, '진행 중인 Work가 아님')
   if (task.status !== 'session_ended' && !unidentifiedCodex(task)) {
     return unchanged(work, `${task.id}는 handoff 없이 끝난 세션이 아님`)
   }
-  const created = newTask(work, task.node, e.at, 'resume')
+  const fresh = newTask(work, task.node, e.at, 'resume')
+  // 단계 선택으로 들어온 task면 그 선택(추가 지시, 이어서 하기, 폐기한 task)을 이어받는다 (D327)
+  const created: TaskRecord = task.selection
+    ? // 코드를 되돌린 것(reset)은 앞 task를 시작할 때 한 일이라 이어받지 않는다: [변경]의 범위가 흐트러진다
+      { ...fresh, selection: { ...task.selection, reset: null, kind: selectionKind(task) } }
+    : fresh
   return {
     work: { ...work, tasks: [...work.tasks, created] },
     effects: [
@@ -1872,12 +1881,7 @@ function retry(work: WorkState, task: TaskRecord, e: Retry): Transition {
 
 /** 훅 신뢰 전에 끝나 실제 대화 ID를 받지 못한 Codex는 임의의 ID로 재개하지 않는다. */
 function unidentifiedCodex(task: TaskRecord): boolean {
-  return (
-    task.engine === 'codex' &&
-    task.status === 'interrupted' &&
-    task.session?.id === '' &&
-    !task.session.alive
-  )
+  return sessionUnknown(task) && task.status === 'interrupted' && task.session?.alive !== true
 }
 
 // ---------- Work 조작 ----------
@@ -2753,11 +2757,20 @@ function prMerged(work: WorkState, e: PrMergeSucceeded): Transition {
   }
 }
 
-/** 머지가 실패했다. 기록만 지우고 PR 진행에 남는다 */
-function prMergeFailed(work: WorkState): Transition {
-  return work.operation?.kind === 'merge'
-    ? { work: omit(work, 'operation'), effects: [] }
-    : unchanged(work)
+/**
+ * 머지가 실패했다. 기록만 지우고 PR 진행에 남는다. 머지 요청은 성공했지만 결과를 읽지 못했으면 실패가 아니다(D330):
+ * 기록을 끊긴 작업으로 남겨 [다시 시도]가 다시 읽어 확인하게 한다
+ */
+function prMergeFailed(work: WorkState, e: PrMergeFailed): Transition {
+  const op = work.operation
+  if (op?.kind !== 'merge') return unchanged(work)
+  if (e.unconfirmed) {
+    return {
+      work: { ...work, operation: { ...op, unconfirmed: true, interrupted_at: e.at } },
+      effects: [log(work, e.at, 'pr.merge_unconfirmed', { method: op.method, head: op.head })],
+    }
+  }
+  return { work: omit(work, 'operation'), effects: [] }
 }
 
 /** [머지 없이 끝내기] (D179): 완료(머지 없이)로 바꾼다. GitHub의 PR은 건드리지 않는다 */

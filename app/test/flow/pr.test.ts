@@ -255,6 +255,92 @@ describe('[흐름] PR 진행 (M9, 시나리오 10)', () => {
     }
   })
 
+  it('머지 요청은 성공했는데 결과를 읽지 못하면 실패로 알리지 않고 확인을 기다린다. 확인하면 앱이 한 머지다 (D330)', async () => {
+    const s = await setup()
+    const w = await openWork(s)
+    await toMergeable(s, w)
+    const head = workState(w).pr?.head ?? ''
+    // gh pr merge는 되고 다시 읽기(gh pr view)만 실패한다
+    s.ctx.h.env['FAKE_GH_FAIL'] = 'view'
+    expect(await s.ctx.h.relay.prMerge(w.key, { method: 'squash', head })).toEqual({ ok: true })
+    await settle(s.ctx.h, w.key)
+    expect(s.gh.pr(w.pr).state).toBe('merged')
+    expect(workState(w).status).toBe('pr')
+    expect(view(s.ctx, w).operation).toMatchObject({
+      kind: 'merge',
+      title: '머지 요청은 보냈지만 결과를 확인하지 못했습니다',
+    })
+    expect(workEvents(w).some((e) => e.type === 'pr.merged')).toBe(false)
+    delete s.ctx.h.env['FAKE_GH_FAIL']
+    const merges = ghCalls(s, 'pr merge').length
+    expect(await s.ctx.h.relay.retryOperation(w.key)).toEqual({ ok: true })
+    await settle(s.ctx.h, w.key)
+    const done = workState(w)
+    expect(done.status).toBe('completed')
+    expect(done.operation).toBeUndefined()
+    expect(done.pr?.merged).toMatchObject({ head, method: 'squash', outside: false })
+    // 이미 머지됐으므로 다시 머지하지 않는다
+    expect(ghCalls(s, 'pr merge')).toHaveLength(merges)
+  })
+
+  it('결과를 모르는 머지는 앱을 다시 켠 뒤에도 앱이 다시 확인한다 (D330, PR #30 리뷰)', async () => {
+    const s = await setup()
+    const w = await openWork(s)
+    await toMergeable(s, w)
+    const head = workState(w).pr?.head ?? ''
+    s.ctx.h.env['FAKE_GH_FAIL'] = 'view'
+    expect(await s.ctx.h.relay.prMerge(w.key, { method: 'squash', head })).toEqual({ ok: true })
+    await settle(s.ctx.h, w.key)
+    await s.ctx.h.relay.close()
+    delete s.ctx.h.env['FAKE_GH_FAIL']
+    s.ctx.h.env['RELAY_MERGE_CONFIRM_MS'] = '200'
+    await s.ctx.h.reopen()
+    for (let i = 0; i < 100 && workState(w).status !== 'completed'; i++) {
+      await new Promise((r) => setTimeout(r, 100))
+    }
+    await settle(s.ctx.h, w.key)
+    expect(workState(w).pr?.merged).toMatchObject({ head, method: 'squash', outside: false })
+  })
+
+  it('실패한 스텝의 로그가 비면 "비어 있음"으로 한 번 남기고 읽을 때마다 다시 받지 않는다', async () => {
+    const s = await setup()
+    const w = await openWork(s)
+    const head = workState(w).pr?.head ?? ''
+    s.gh.setChecks(w.pr, head, [s.gh.checkRun(w.pr, { conclusion: 'FAILURE', log: '' })])
+    const failed = await refreshUntil(s.ctx, w, (x) => x.ci === 'fail', 'CI 실패')
+    expect(failed.items.find((i) => i.kind === 'ci')?.note).toBe('실패한 스텝의 로그가 비어 있음')
+    const reads = ghCalls(s, 'run view').length
+    expect(await s.ctx.h.relay.prRefresh(w.key)).toEqual({ ok: true })
+    await settle(s.ctx.h, w.key)
+    expect(ghCalls(s, 'run view')).toHaveLength(reads)
+  })
+
+  it('다시 점검과 프로젝트 설정 저장이 겹쳐도 둘 다 남는다 (project.json 고치기의 차례)', async () => {
+    const s = await setup()
+    const w = await openWork(s)
+    const projectFile = path.join(s.ctx.h.home, 'projects', s.ctx.projectId, 'project.json')
+    const checkedBefore = (
+      JSON.parse(fs.readFileSync(projectFile, 'utf8')) as { checks: { checked_at: string } }
+    ).checks.checked_at
+    await new Promise((r) => setTimeout(r, 1100))
+    const [rechecked, saved] = await Promise.all([
+      s.ctx.h.relay.recheckWork(w.key),
+      s.ctx.h.relay.updateProjectSettings(s.ctx.projectId, {
+        allowed_bots: ['github-actions'],
+        merge_method: 'rebase',
+      }),
+    ])
+    expect(rechecked).toMatchObject({ ok: true })
+    expect(saved).toEqual({ ok: true })
+    const file = JSON.parse(fs.readFileSync(projectFile, 'utf8')) as {
+      allowed_bots: string[]
+      merge_method: string
+      checks: { checked_at: string }
+    }
+    expect(file).toMatchObject({ allowed_bots: ['github-actions'], merge_method: 'rebase' })
+    expect(file.checks.checked_at).not.toBe(checkedBefore)
+  })
+
   it('끊긴 머지의 [무시]는 기록만 지우고 PR 진행으로 남는다 (D123)', async () => {
     const s = await setup()
     const w = await openWork(s)

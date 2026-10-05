@@ -98,9 +98,14 @@ export async function readText(file: string): Promise<string | null> {
   }
 }
 
+/** JSON을 읽는다. 손으로 고친 파일의 UTF-8 BOM(Windows 메모장, PowerShell 5)은 뗀다 */
+function parseJson(text: string): unknown {
+  return JSON.parse(text.replace(/^\uFEFF/, ''))
+}
+
 async function readJson<T>(file: string): Promise<T | null> {
   const text = await readText(file)
-  return text === null ? null : (JSON.parse(text) as T)
+  return text === null ? null : (parseJson(text) as T)
 }
 
 async function subdirs(dir: string): Promise<string[]> {
@@ -136,7 +141,7 @@ export async function loadConfig(home: string): Promise<LoadedConfig> {
     return { config: DEFAULT_CONFIG }
   }
   try {
-    const { config, warnings } = normalizeConfig(JSON.parse(text))
+    const { config, warnings } = normalizeConfig(parseJson(text))
     return warnings.length ? { config, warning: warnings.join(' / ') } : { config }
   } catch (e) {
     return {
@@ -153,7 +158,7 @@ export async function saveConfig(home: string, config: AppConfig): Promise<void>
 
 // ---------- 프로젝트 (5.1) ----------
 
-export function projectDir(home: string, projectId: string): string {
+function projectDir(home: string, projectId: string): string {
   return path.join(home, 'projects', projectId)
 }
 
@@ -165,11 +170,22 @@ export function worktreeDir(home: string, projectId: string, workId: string): st
   return path.join(projectDir(home, projectId), 'worktrees', workId)
 }
 
-export async function loadProjects(home: string): Promise<ProjectState[]> {
+/**
+ * 등록한 프로젝트를 읽는다. 읽을 수 없는 project.json은 그 프로젝트만 빼고 problems에 파일과 까닭을 남긴다. 파일은
+ * 건드리지 않는다 (D332)
+ */
+export async function loadProjects(home: string, problems: string[] = []): Promise<ProjectState[]> {
   const out: ProjectState[] = []
   for (const id of await subdirs(path.join(home, 'projects'))) {
-    const p = await readJson<ProjectState>(path.join(projectDir(home, id), 'project.json'))
-    if (p) out.push(p)
+    const file = path.join(projectDir(home, id), 'project.json')
+    try {
+      const p = await readJson<ProjectState>(file)
+      if (p) out.push(p)
+    } catch (e) {
+      problems.push(
+        `${file}: 읽을 수 없어 이 프로젝트를 열지 않음. 파일을 고친 뒤 앱을 다시 켜세요 (${e instanceof Error ? e.message : String(e)})`,
+      )
+    }
   }
   return out
 }

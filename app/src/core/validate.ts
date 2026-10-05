@@ -33,8 +33,8 @@ export const EXECUTION_FILE = 'execution.md'
 export const VERIFICATION_FILE = 'verification.md'
 
 /** 본문 필수 절 (5.2.1) */
-export const HANDOFF_SECTIONS = ['요약', '다음 task가 알아야 할 것'] as const
-export const INTENT_SECTIONS = ['목표', '비목표', '원하는 결과', '완료조건'] as const
+const HANDOFF_SECTIONS = ['요약', '다음 task가 알아야 할 것'] as const
+const INTENT_SECTIONS = ['목표', '비목표', '원하는 결과', '완료조건'] as const
 const CRITERIA_SECTION = '완료조건'
 const CRITERIA_PREFIX = '- [ ] '
 /**
@@ -372,12 +372,17 @@ function headingText(line: string, level: number): string | null {
   return m?.[1] ?? null
 }
 
+/** 본문의 level 단계 제목 (코드 펜스 안은 빼고) */
+export function headings(body: string, level: number): string[] {
+  return markFences(normalizeText(body).split('\n'))
+    .filter((l) => !l.fenced)
+    .map((l) => headingText(l.line, level))
+    .filter((h): h is string => h !== null)
+}
+
 /** 본문의 ## 절 이름 (코드 펜스 안은 빼고) */
 export function sectionNames(body: string): string[] {
-  return markFences(body.split('\n'))
-    .filter((l) => !l.fenced)
-    .map((l) => headingText(l.line, 2))
-    .filter((h): h is string => h !== null)
+  return headings(body, 2)
 }
 
 /** ## name 절의 줄 (다음 # 또는 ## 제목 앞까지) */

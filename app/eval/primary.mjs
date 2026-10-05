@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 지식 실험의 주지표 (docs/knowledge-experiment.md 4절). 실험 전에 정했고 실험 중에 바꾸지 않는다.
+// 지식 실험의 주지표 (docs/knowledge-experiment/protocol.md 4절). 실험 전에 정했고 실험 중에 바꾸지 않는다.
 // 결과 폴더(여럿 가능)의 run.json에서 재는 Work(시나리오의 measure, 기본은 첫 Work를 뺀 모두)를 실행마다 모아 쪽마다
 // 평균을 내고, 두 쪽의 차이를 시나리오마다 층을 나눈 bootstrap 95% 구간으로 보인다.
 //   node eval/primary.mjs <결과 폴더>... [--pair relay:relay-off] [--out 파일.md]

@@ -82,6 +82,11 @@ export interface StepSelection {
   /** [현재 코드 위에서 이어서]를 골랐다 (6.2, D254) */
   keep_code: boolean
   /**
+   * 단계 선택의 종류. [이 단계 새 세션으로 다시]로 이어받은 task만 둔다(그 task의 이유는 "재개"라 종류를 따로 적는다,
+   * D327). 없으면 task의 이유(rewind, skip, 그 밖은 기본 진행)로 읽는다
+   */
+  kind?: 'rewind' | 'skip' | 'default'
+  /**
    * 되돌린 코드 (D116, D117). from은 되돌리기 전 HEAD, to는 되돌린 커밋이다. backup_commit은 백업 브랜치를
    * 만들 때 가리킨 커밋이다(커밋 안 된 변경이 있었으면 from 위의 커밋 하나, 없었으면 from).
    * 백업할 것이 없었으면 backup_branch와 backup_commit은 null이다. 코드를 되돌리지 않았으면 reset이 null이다
@@ -387,6 +392,8 @@ export interface MergeOperation extends OperationBase {
   method: MergeMethod
   /** 머지할 head: 머지 창에 보인 커밋이다. 이 커밋이 아니면 GitHub가 머지하지 않는다 (D176) */
   head: string
+  /** gh pr merge는 성공했지만 머지됐는지 읽지 못했다 (D330). 끊긴 작업으로 남고 [다시 시도]가 확인한다 */
+  unconfirmed?: true
 }
 
 /**
@@ -584,6 +591,7 @@ export type LifecycleEventType =
   | 'pr.replied'
   | 'pr.checks_rerun'
   | 'pr.merged'
+  | 'pr.merge_unconfirmed'
   | 'pr.closed'
   | 'pr.reopened'
   | 'pr.auto_paused'

@@ -152,6 +152,8 @@ export interface CleanExpect {
   backups: string[]
   /** origin에 작업 브랜치가 있었다 (머지로 완료한 Work만, D178) */
   remote: boolean
+  /** 작업 브랜치에만 있는 커밋(머지한 PR에 없는 것, D329) */
+  lost: string[]
 }
 
 /** [Work 정리]의 확인 요약 (시나리오 8-1) */
@@ -171,8 +173,13 @@ export interface CleanPreview {
     pushed: boolean
     /** 기준 브랜치(로컬이나 origin)에 머지됐다 */
     merged: boolean
-    /** 삭제를 제안한다: push됐거나 머지됐다. 기본은 유지다 */
+    /**
+     * 지울 수 있다: push됐거나 머지됐거나, PR을 머지한 Work에서 머지한 PR의 커밋을 로컬에서 찾았다(D329). 기본은
+     * 유지다(머지로 완료한 Work는 잃을 커밋이 없으면 기본 체크, D178)
+     */
     deletable: boolean
+    /** 작업 브랜치에만 있는 커밋: PR을 머지한 Work에서 머지한 PR head에 없는 것. 지우려면 잃는 것을 확인한다 (D329) */
+    lost: { sha: string; subject: string }[]
   }
   /** 되감기 백업 브랜치 (D115). "함께 삭제"의 기본은 체크다 */
   backups: string[]
@@ -199,6 +206,8 @@ export interface CleanInput {
   deleteRemote?: boolean
   /** 확인이 필요한 것(커밋 안 된 변경, 살아 있는 세션, 잠금 파일)을 확인했다 */
   confirmed: boolean
+  /** 작업 브랜치를 지울 때 그 브랜치에만 있는 커밋을 잃는 것을 확인했다 (D329) */
+  confirmLost?: boolean
   expect: CleanExpect
 }
 
@@ -464,6 +473,8 @@ export interface TaskView {
   appEnded: boolean
   /** 세션 기록이 있다. 없으면(띄우다 실패함 등) [재개]는 이 단계를 새 세션으로 시작한다 (D218) */
   hasSession: boolean
+  /** 세션은 있지만 대화 ID를 받지 못했다(Codex). 같은 대화를 다시 열 수 없다 (engines.md 4.3) */
+  sessionUnknown: boolean
   /** task를 띄우지 못한 이유 */
   error: string | null
   /** 마지막 형식 검사의 오류 수 */

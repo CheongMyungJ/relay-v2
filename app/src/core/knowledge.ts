@@ -4,7 +4,14 @@
 import type { TaskNode } from '../shared/contracts'
 import type { KnowledgeChange } from '../shared/views'
 import type { FormatIssue } from '../shared/work'
-import { HANDOFF_FILE, parseFrontMatter, sectionText } from './validate'
+import {
+  HANDOFF_FILE,
+  headings,
+  normalizeText,
+  parseFrontMatter,
+  sectionNames,
+  sectionText,
+} from './validate'
 
 /** 레포 안의 지식 폴더 */
 export const KNOWLEDGE_DIR = 'docs/knowledge'
@@ -45,10 +52,10 @@ export function isKnowledgePath(p: string): boolean {
   return (m[2] ?? '').toLowerCase() !== 'readme.md'
 }
 
-/** 항목의 제목: 첫 `# ` 줄. 없으면 파일 이름 */
-export function entryTitle(e: Pick<KnowledgeEntry, 'path' | 'text'>): string {
-  const m = /^#\s+(.+)$/m.exec(e.text)
-  return (m?.[1] ?? e.path.split('/').pop() ?? e.path).trim()
+/** 항목의 제목: 본문(머리글 뒤)의 코드 펜스 밖 첫 `# ` 줄. 없으면 파일 이름 */
+function entryTitle(e: Pick<KnowledgeEntry, 'path' | 'text'>): string {
+  const title = headings(parseFrontMatter(e.text).body, 1).find((h) => h.trim())
+  return (title ?? e.path.split('/').pop() ?? e.path).trim()
 }
 
 /**
@@ -73,6 +80,10 @@ export function mergeEntries(
   return [...byPath.values()].sort((a, b) => a.path.localeCompare(b.path))
 }
 
+/** 비밀처럼 생긴 값: 따옴표 안팎의 한 낱말, 8자 이상, 한글 없음, 영문자와 숫자가 섞임 (D331) */
+const SECRET_VALUE =
+  '["\'`]?(?=[^\\s"\'`]*[A-Za-z])(?=[^\\s"\'`]*\\d)[^\\s"\'`가-힣]{8,}["\'`]?(?=$|[\\s.,;)])'
+
 /** 비밀로 보이는 글 (규약 2.1-3). 걸리면 그 항목은 넣지 않는다 */
 const SECRET_PATTERNS: readonly RegExp[] = [
   /\b(?:ghp|gho|ghu|ghs|ghr|github_pat)_[A-Za-z0-9_]{20,}/,
@@ -80,8 +91,10 @@ const SECRET_PATTERNS: readonly RegExp[] = [
   /\bxox[abpors]-[A-Za-z0-9-]{10,}/,
   /\bAKIA[0-9A-Z]{16}\b/,
   /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
-  /\b(?:password|passwd|pwd|secret|token|api[_-]?key)\s*[:=]\s*\S{6,}/i,
-  /(?:비밀번호|암호|토큰)\s*[:=]\s*\S{4,}/,
+  // "낱말: 값" 꼴은 값이 비밀처럼 생겼을 때만: 따옴표를 뺀 한 낱말이 8자 이상이고 한글이 없으며 영문자와 숫자가 섞임 (D331).
+  // "비밀번호: bcrypt(cost 12)로 해시한다" 같은 규칙은 걸리지 않는다
+  new RegExp(`\\b(?:password|passwd|pwd|secret|token|api[_-]?key)\\s*[:=]\\s*${SECRET_VALUE}`, 'i'),
+  new RegExp(`(?:비밀번호|암호|토큰)\\s*[:=]\\s*${SECRET_VALUE}`),
   /\b[a-z][a-z0-9+.-]*:\/\/[^\s/:@]+:[^\s/@]+@/i,
 ]
 
@@ -100,7 +113,7 @@ export function candidatesOf(handoff: string): string[] {
 
 /** 지식 항목의 종류와 출처 (D293). 머리글의 `kind`, `source` */
 export const KNOWLEDGE_KINDS = ['rule', 'fact', 'history', 'pitfall'] as const
-export const KNOWLEDGE_SOURCES = ['human', 'investigation'] as const
+const KNOWLEDGE_SOURCES = ['human', 'investigation'] as const
 
 /** 규칙의 본문 절과, 규칙이 아닌 항목의 본문 절 */
 const RULE_SECTION = '규칙'
@@ -135,10 +148,14 @@ export function kindOf(text: string): (typeof KNOWLEDGE_KINDS)[number] | null {
   return KNOWLEDGE_KINDS.includes(k as never) ? (k as (typeof KNOWLEDGE_KINDS)[number]) : null
 }
 
-/** 항목의 `## 아직 규칙을 따르지 않는 곳`에 적힌 파일 경로 (D296). 절이 없으면 빈 목록 */
+/** 항목의 `## 아직 규칙을 따르지 않는 곳`에 적힌 파일 경로 (D296). 목록 줄 맨 앞의 레포 맨 위 파일(`pricing.py`)도 읽는다. 절이 없으면 빈 목록 */
 export function notYetPaths(text: string): string[] {
   const section = sectionText(parseFrontMatter(text).body, NOT_YET_SECTION)
-  return section ? pathsIn(section).map((p) => p.replace(/^\.\//, '')) : []
+  if (!section) return []
+  const rootFiles = [...section.matchAll(/^\s*[-*]\s*`?([\w.-]+\.[A-Za-z0-9]+)`?/gm)].map(
+    (m) => m[1] ?? '',
+  )
+  return [...new Set([...pathsIn(section), ...rootFiles].map((p) => p.replace(/^\.\//, '')))]
 }
 
 /** 항목의 `anchor`. 형식에 맞지 않거나 없으면 null */
@@ -177,12 +194,13 @@ export function checkEntryFormat(path: string, text: string): FormatIssue[] {
       issue(path, 'header', '`anchor`는 코드 이름(식별자) 하나. 없으면 필드를 뺀다', 'anchor'),
     )
   const body = fm.body
-  if (!/^#\s+\S/m.test(body)) out.push(issue(path, 'body', '첫 `# ` 제목 줄 없음'))
+  if (!headings(body, 1).some((h) => h.trim()))
+    out.push(issue(path, 'body', '첫 `# ` 제목 줄 없음'))
   const main = kind === 'rule' ? RULE_SECTION : BODY_SECTION
   const mainText = sectionText(body, main)
   if (!mainText)
     out.push(issue(path, 'body', `\`## ${main}\` 절이 없거나 비었음 (kind: ${String(kind)})`, main))
-  for (const h of [...body.matchAll(/^##\s+(.+?)\s*$/gm)].map((m) => m[1] ?? '')) {
+  for (const h of sectionNames(body)) {
     if (!KNOWN_SECTIONS.includes(h))
       out.push(
         issue(
@@ -237,7 +255,7 @@ export function knowledgeLines(handoff: string): KnowledgeLines {
   for (const line of summary.split('\n')) {
     const m = LINE.exec(line)
     if (!m) continue
-    const path = (m[2] ?? '').replace(/^\.\//, '')
+    const path = (m[2] ?? '').replace(/\\/g, '/').replace(/^\.\//, '')
     out[LINE_WORDS[m[1] as keyof typeof LINE_WORDS]].set(path, (m[3] ?? '').trim())
   }
   return out
@@ -259,6 +277,28 @@ export interface KnowledgeCheckInput {
   codeChanged?: readonly string[]
 }
 
+function hasKnowledgeLine(l: KnowledgeLines): boolean {
+  return (
+    l.added.size > 0 || l.updated.size > 0 || l.removed.size > 0 || l.checked.size > 0 || l.none
+  )
+}
+
+const noLine = (): FormatIssue =>
+  issue(
+    HANDOFF_FILE,
+    'body',
+    '`## 요약`에 지식 줄 없음: 바꾼 지식이 없으면 "남긴 지식: 없음 (까닭)"을 적는다',
+    '요약',
+  )
+
+/**
+ * 바꾼 지식 파일을 읽지 못했을 때(git 실패)의 확인: 지식 줄이 있는지만 본다. 파일과 줄의 대조는 하지 않는다. 읽지 못한 것을
+ * "바꾸지 않음"으로 보면 맞게 한 verify를 되돌리기 때문이다
+ */
+export function knowledgeLineIssues(handoff: string): FormatIssue[] {
+  return hasKnowledgeLine(knowledgeLines(handoff)) ? [] : [noLine()]
+}
+
 /**
  * verify의 지식 확인 (D293, D294, D296, D297): 바꾼 지식 파일의 형식, handoff `## 요약`의 새·고친·지운 지식 줄, 같은
  * `anchor`를 가진 항목, 이 Work가 바꾼 코드가 어느 항목의 `## 아직 규칙을 따르지 않는 곳`에 남아 있는지.
@@ -272,17 +312,7 @@ export function knowledgeIssues(input: KnowledgeCheckInput): FormatIssue[] {
   const changed = new Set(input.changed.map((c) => c.path))
   const removed = new Set(input.removed ?? [])
   const fix = (message: string) => out.push(issue(HANDOFF_FILE, 'body', message, '요약'))
-  if (
-    changed.size === 0 &&
-    removed.size === 0 &&
-    lines.added.size === 0 &&
-    lines.updated.size === 0 &&
-    lines.removed.size === 0 &&
-    lines.checked.size === 0 &&
-    !lines.none
-  ) {
-    fix('`## 요약`에 지식 줄 없음: 바꾼 지식이 없으면 "남긴 지식: 없음 (까닭)"을 적는다')
-  }
+  if (changed.size === 0 && removed.size === 0 && !hasKnowledgeLine(lines)) out.push(noLine())
   for (const p of changed) {
     const isOld = input.existing.has(p)
     if (lines.added.has(p) && isOld)
@@ -303,7 +333,11 @@ export function knowledgeIssues(input: KnowledgeCheckInput): FormatIssue[] {
       fix(`\`${p}\`의 줄에 까닭이나 바뀐 내용이 비었음`)
   }
   for (const p of [...lines.added.keys(), ...lines.updated.keys()]) {
-    if (!changed.has(p))
+    if (!isKnowledgePath(p))
+      fix(
+        `\`${p}\`는 지식 파일 경로가 아니다: \`${KNOWLEDGE_DIR}/<이름>.md\`나 \`${KNOWLEDGE_DIR}/<영역>/<이름>.md\`에 둔다(영역은 영어 소문자, 숫자, \`-\`)`,
+      )
+    else if (!changed.has(p))
       fix(`\`${p}\`를 적었지만 이 Work에서 그 지식 파일을 더하거나 고치지 않았다`)
   }
   for (const p of removed) {
@@ -370,7 +404,8 @@ export interface KnowledgeInput {
   removed?: readonly { path: string; from: string }[]
 }
 
-function fence(text: string): string {
+/** 글을 담는 markdown 펜스. 글 안의 가장 긴 백틱 줄보다 길게 한다 */
+export function fence(text: string): string {
   const body = text.replace(/\r\n?/g, '\n').replace(/\n+$/, '')
   const longest = Math.max(0, ...[...body.matchAll(/`+/g)].map((m) => m[0].length))
   const f = '`'.repeat(Math.max(3, longest + 1))
@@ -379,7 +414,7 @@ function fence(text: string): string {
 
 /** 지식이 많을 때 본문째 넣는 항목 수와 제목만 넣는 항목 수 (D295) */
 export const PICK_LIMIT = 15
-export const TITLE_LIMIT = 20
+const TITLE_LIMIT = 20
 
 /**
  * 관련 지식을 고르는 데 쓰는 이 task의 단서 (D295). 앱이 요청, intent, 이 Work의 diff, (verify는) 바꾼 지식과 후보에서 만든다
@@ -451,7 +486,7 @@ export function rankEntries(
       let score = 0
       const anchor = anchorOf(entry.text)
       if (anchor && (q.identifiers.has(anchor) || q.identifiers.has(lastOf(anchor)))) score += 5
-      const ePaths = pathsIn(entry.text)
+      const ePaths = pathsIn(entry.text).map((p) => p.replace(/^\.\//, ''))
       if (ePaths.some((p) => qPaths.includes(p))) score += 4
       else if (ePaths.some((p) => qDirs.has(p.split('/').slice(0, -1).join('/')))) score += 2
       const area = areaOf(entry.path)
@@ -536,7 +571,7 @@ export function injectedText(entries: readonly KnowledgeEntry[], query?: Knowled
 
 const USE_RULES: Record<'intake' | 'work' | 'verify', string> = {
   intake:
-    '- 이 일에 해당하는 항목은 팀이 이미 아는 사실이다. 같은 내용을 사람에게 다시 묻지 않는다. 사람이 정한 규칙과 관례(종류가 규칙)는 intent에 따르고 `제약`에 "(팀 지식 `<경로>`) <내용>"으로 옮겨 사람이 의도 승인에서 보게 한다. 조사로 알아낸 사실과 실패 유형은 이번 버그의 원인이라는 근거가 아니므로 intent에 쓰지 않고, handoff의 `## 다음 task가 알아야 할 것`에 참고할 항목의 경로만 적는다.',
+    '- 이 일에 해당하는 항목은 팀이 이미 아는 사실이다. 같은 내용을 사람에게 다시 묻지 않는다. 사람이 정한 규칙과 관례(종류가 규칙)는 intent에 따르고 `제약`에 "(팀 지식 `<경로>`) <내용>"으로 옮겨 사람이 의도 승인에서 보게 한다. 조사로 알아낸 사실과 실패 유형은 이번 일에서 확인한 근거가 아니므로 intent에 쓰지 않고, handoff의 `## 다음 task가 알아야 할 것`에 참고할 항목의 경로만 적는다.',
   work: '- 이 일에 해당하는 항목은 팀이 이미 아는 사실이다. 같은 내용을 사람에게 다시 묻지 않는다. 사람이 정한 규칙과 관례는 수정 방향을 정할 때 따르고 `decisions`에 남긴다(`by: ai`, `why`에 항목 경로). 실패 유형은 먼저 확인해 볼 가설로 쓰고, 이 코드에서 확인한 뒤에만 원인으로 삼는다.',
   verify:
     '- 이 일에 해당하는 항목은 팀이 이미 아는 사실이다. 같은 내용을 사람에게 다시 묻지 않는다. 리뷰할 때 변경이 그 항목을 어기는지도 본다.',
@@ -648,7 +683,7 @@ const PENDING_RULE =
 
 /** context.md의 지식 절 (제목, 본문). 지식 관리를 끄면 부르지 않는다 */
 export function knowledgeSection(node: TaskNode, input: KnowledgeInput): [string, string] {
-  const { full, titles, narrowed, rest, total } = selectEntries(input.entries, input.query)
+  const { full, titles, secret, narrowed, rest, total } = selectEntries(input.entries, input.query)
   const kind = node === 'intake' ? 'intake' : node === 'verify' ? 'verify' : 'work'
   const items = [
     ...full.map((e) => `#### ${where(e)}\n\n${fence(e.text)}`),
@@ -685,6 +720,13 @@ export function knowledgeSection(node: TaskNode, input: KnowledgeInput): [string
         ]
       : []),
     items.length ? items.join('\n\n') : '없음',
+    // 비밀로 보여 뺀 항목은 내용 없이 경로만 알린다: 빠진 것을 모르고 지나치지 않게 (D331)
+    ...(secret.length
+      ? [
+          '',
+          `비밀로 보여 넣지 않은 항목: ${secret.map((e) => `\`${e.path}\``).join(', ')}. 내용을 읽거나 옮기지 않는다. 이 일에 필요해 보이면 사람에게 알린다.`,
+        ]
+      : []),
     '',
     node === 'verify' ? writeRules(input) : CANDIDATE_RULES,
   ]
@@ -703,9 +745,9 @@ export interface KnowledgeFileChange {
 }
 
 /** 두 글의 줄 차이 (diff 화면이 줄 머리로 색을 칠한다). 지식 파일은 작아 줄 LCS로 충분하다. 너무 크면 앞을 모두 빼고 뒤를 넣는다 */
-export function lineDiff(file: string, before: string | null, after: string | null): string {
-  const a = before === null ? [] : before.replace(/\n$/, '').split('\n')
-  const b = after === null ? [] : after.replace(/\n$/, '').split('\n')
+function lineDiff(file: string, before: string | null, after: string | null): string {
+  const a = before === null ? [] : normalizeText(before).replace(/\n+$/, '').split('\n')
+  const b = after === null ? [] : normalizeText(after).replace(/\n+$/, '').split('\n')
   const head = [
     `--- ${before === null ? '/dev/null' : `a/${file}`}`,
     `+++ ${after === null ? '/dev/null' : `b/${file}`}`,

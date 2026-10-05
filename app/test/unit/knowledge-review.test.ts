@@ -7,7 +7,10 @@ import {
   relatedEntries,
   reviewEnabled,
   reviewIssues,
+  REVIEW_SCHEMA,
   reviewPrompt,
+  reviewFailedIssue,
+  reviewTarget,
 } from '../../src/core/knowledge-review'
 
 const rule = (title: string, body: string, extra = '') =>
@@ -165,6 +168,66 @@ describe('[단위] 지식 검토 호출과 정하지 않은 것 (D299, D300)', (
   it('사람 결정 줄만 고른다', () => {
     expect(humanDecisionLines('## t-01\n- [사람] a — b\n- [AI] c — d\n  - [사람] e')).toBe(
       '- [사람] a — b\n  - [사람] e',
+    )
+  })
+
+  it('프롬프트: 지식 글에 백틱 넷이 있어도 펜스가 닫히지 않는다', () => {
+    const p = reviewPrompt({
+      changed: [{ path: 'docs/knowledge/a.md', text: '# A\n\n````\n코드\n````' }],
+      removed: [],
+      related: [],
+      request: '',
+      intent: null,
+      humanDecisions: '',
+      candidates: [],
+    })
+    expect(p).toContain('`````markdown\n# A')
+  })
+})
+
+describe('[단위] 지식 검토의 엔진과 모델 (D334)', () => {
+  it('설정의 엔진을 쓰고, 모델은 환경 변수 → 설정 → 엔진의 기본이다', () => {
+    const base = { knowledge_review_engine: 'claude' as const, knowledge_review_model: '' }
+    expect(reviewTarget(base, {})).toEqual({ engine: 'claude', model: 'sonnet' })
+    expect(reviewTarget({ ...base, knowledge_review_engine: 'codex' }, {})).toEqual({
+      engine: 'codex',
+      model: '',
+    })
+    expect(reviewTarget({ ...base, knowledge_review_model: 'opus' }, {})).toEqual({
+      engine: 'claude',
+      model: 'opus',
+    })
+    expect(
+      reviewTarget(
+        { ...base, knowledge_review_model: 'opus' },
+        { RELAY_KNOWLEDGE_REVIEW_MODEL: 'haiku' },
+      ),
+    ).toEqual({ engine: 'claude', model: 'haiku' })
+    // 환경 변수는 claude의 모델 이름이라 codex에는 쓰지 않는다 (PR #30 리뷰)
+    expect(
+      reviewTarget(
+        { ...base, knowledge_review_engine: 'codex' },
+        { RELAY_KNOWLEDGE_REVIEW_MODEL: 'sonnet' },
+      ),
+    ).toEqual({ engine: 'codex', model: '' })
+  })
+
+  it('검토 스키마는 모든 객체가 정의하지 않은 필드를 막는다 (codex exec의 strict 출력, PR #30 리뷰)', () => {
+    const objects: Record<string, unknown>[] = []
+    const walk = (v: unknown) => {
+      if (!v || typeof v !== 'object') return
+      const o = v as Record<string, unknown>
+      if (o['type'] === 'object') objects.push(o)
+      Object.values(o).forEach(walk)
+    }
+    walk(REVIEW_SCHEMA)
+    expect(objects.length).toBeGreaterThanOrEqual(2)
+    for (const o of objects) expect(o['additionalProperties']).toBe(false)
+  })
+
+  it('부르지 못하면 되돌리지 않는 경고로 까닭을 보인다', () => {
+    expect(reviewFailedIssue('codex를 찾지 못함').message).toContain(
+      '[지식 검토를 하지 못함] codex를 찾지 못함',
     )
   })
 })

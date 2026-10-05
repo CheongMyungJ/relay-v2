@@ -22,7 +22,9 @@ export function findClaude(opts: FindClaudeOptions = {}): string | null {
   const exists = opts.exists ?? ((f: string) => fs.existsSync(f))
   const p = platform === 'win32' ? path.win32 : path.posix
 
-  if (env['CLAUDE_BIN']) return env['CLAUDE_BIN']
+  // 경로면 있는지 보고(없으면 설치 안내, D106), 경로가 아닌 명령 이름이면 그대로 쓴다: 실행할 때 PATH에서 찾는다
+  const bin = env['CLAUDE_BIN']
+  if (bin) return !/[\\/]/.test(bin) || exists(bin) ? bin : null
 
   const candidates: string[] = []
   if (platform === 'win32') {
@@ -63,8 +65,8 @@ export async function claudeAuthStatus(bin: string, env?: NodeJS.ProcessEnv): Pr
 
 // ---------- 스킬 배포 (5.6.3, D103, D108) ----------
 
-export const SKILL_FILE = 'SKILL.md'
-export const COMMON_FILE = '_common.md'
+const SKILL_FILE = 'SKILL.md'
+const COMMON_FILE = '_common.md'
 
 /**
  * 스킬 원본 위치 (D103). RELAY_SKILLS_DIR가 있으면 그 폴더, 없으면 앱에 묶어 배포한 skills/다.

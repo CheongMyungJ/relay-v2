@@ -42,20 +42,28 @@ export function run(
 ): Promise<RunResult> {
   const spec = spawnSpec(bin, [...args])
   const timeout = opts.timeoutMs ?? 60_000
+  // Windows에서는 시간 초과 때 트리째 끝낸다(taskkill /T): execFile의 timeout은 cmd.exe만 끝내 .cmd로 감싼 claude가
+  // 남는다 (D333). 그 밖의 OS는 execFile의 timeout을 쓴다
+  const tree = process.platform === 'win32'
   return new Promise((resolve) => {
+    let timedOut = false
+    let timer: ReturnType<typeof setTimeout> | undefined
     const child = execFile(
       spec.file,
       spec.args,
       {
         cwd: opts.cwd,
         env: opts.env,
-        timeout,
+        timeout: tree ? 0 : timeout,
         maxBuffer: MAX_BUFFER,
         windowsHide: true,
         encoding: 'utf8',
       },
       (err: ExecFileException | null, stdout: string, stderr: string) => {
-        if (!err) {
+        if (timer) clearTimeout(timer)
+        if (timedOut) {
+          resolve({ code: null, stdout, stderr, error: `시간 초과 (${timeout / 1000}초)` })
+        } else if (!err) {
           resolve({ code: 0, stdout, stderr })
         } else if (typeof err.code === 'number') {
           resolve({ code: err.code, stdout, stderr })
@@ -65,6 +73,15 @@ export function run(
         }
       },
     )
+    if (tree && timeout > 0 && child.pid !== undefined) {
+      const pid = child.pid
+      timer = setTimeout(() => {
+        timedOut = true
+        execFile('taskkill', ['/PID', String(pid), '/T', '/F'], { windowsHide: true }, () => {
+          // 이미 끝났으면 실패한다
+        })
+      }, timeout)
+    }
     if (opts.input !== undefined) {
       // 받는 쪽이 먼저 끝나 파이프가 닫히면(EPIPE) 오류를 내지 않는다: 결과는 종료 코드로 본다
       child.stdin?.on('error', () => {})

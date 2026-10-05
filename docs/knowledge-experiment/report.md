@@ -105,7 +105,7 @@ Work마다 나누면(다시 알려 줌 / 숨긴 시험 통과율):
 | 모든 Work 사람 행동 | −5.4 | [−11.1, −0.1] | relay가 나음 |
 | 모든 Work 숨긴 시험 | −0.10 | [−0.30, 0.00] | base 쪽, 불확실 |
 
-판정: **효과 있음**(규칙 1). 자세한 표는 `app/eval/results/final/primary-relay-base.md`.
+판정: **효과 있음**(규칙 1). 자세한 표는 `results/final/primary-relay-base.md`.
 
 ### 4.3 relay 대 m17 (표만)
 
@@ -122,7 +122,7 @@ Work마다 나누면(다시 알려 줌 / 숨긴 시험 통과율):
 | 모든 Work 입력 토큰(천) | −520 | [−954, −123] | relay가 나음 |
 
 - 규약 5절대로 읽는다: M17은 팀 지식을 [PR 생성]에서만 커밋해서, [완료만]으로 끝내는 이 평가의 팀원 교대 Work(h2 Work 3)에는 M17의 팀 지식이 건너가지 않았다(그 Work에 넣은 지식 6자). h2 Work 3의 견줌은 이 한계와 함께 읽는다. 다만 PM1의 차이는 같은 사람의 Work(h1 Work 2·3, h2 Work 2)에서 났고, 거기서는 두 빌드 모두 지식이 닿는다(M17 넣은 지식 1~3천 자, relay 4~10천 자).
-- 자세한 표는 `app/eval/results/final/primary-relay-m17.md`. 짝 판정(참고)은 `app/eval/results/final/report.md`.
+- 자세한 표는 `results/final/primary-relay-m17.md`. 짝 판정(참고)은 `results/final/report.md`.
 
 ### 4.4 hold-out에서 본 것
 
@@ -132,7 +132,7 @@ Work마다 나누면(다시 알려 줌 / 숨긴 시험 통과율):
 
 ### 4.5 짝 판정 (참고, 규약 4절)
 
-`app/eval/results/final/report.md`의 전체 표(두 시나리오, 짝 10개씩):
+`results/final/report.md`의 전체 표(두 시나리오, 짝 10개씩):
 
 | 짝 판정 | relay 우세 | 상대 우세 | 비김 |
 |---|---|---|---|

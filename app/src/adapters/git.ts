@@ -434,6 +434,31 @@ export async function hasCommit(dir: string, commit: string, opts?: GitOptions):
 }
 
 /**
+ * branch에만 있고 base 커밋에 없는 커밋을 오래된 차례로 (D329: 머지한 PR의 head에 없는 작업 브랜치의 커밋).
+ * base 커밋이 이 레포에 없으면 셀 수 없어 null이다
+ */
+export async function commitsOnlyIn(
+  dir: string,
+  branch: string,
+  base: string,
+  opts?: GitOptions,
+): Promise<{ sha: string; subject: string }[] | null> {
+  if (!(await hasCommit(dir, base, opts))) return null
+  const out = await git(
+    dir,
+    ['log', '--reverse', '--format=%H%x00%s', `${base}..${branch}`, '--'],
+    opts,
+  )
+  return out
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const [sha = '', subject = ''] = line.split('\0')
+      return { sha, subject }
+    })
+}
+
+/**
  * 원격만 앞선 브랜치를 받는다 (D193): worktree에서 git merge --ff-only <커밋>. fast-forward가 아니면 git이 거부하고
  * 아무것도 바꾸지 않는다(git 문서 git-merge). S7 관찰 8에서 fetch 뒤 이렇게 받았다
  */

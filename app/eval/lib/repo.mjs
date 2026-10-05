@@ -64,8 +64,8 @@ const globToRe = (g) =>
  * 줄 수, 기대 밖 파일에서 빼고 따로 센다(docs/eval.md 6절). 맨 CLI에는 없는 파일이라 판정 diff에 두면 relay가 드러나
  * 가림도 깨진다. 지식 자체의 질은 knowledge-quality.mjs가 저장한 diff(final/*.diff)에서 따로 본다
  */
-export const KNOWLEDGE_FILE = /^docs\/knowledge\/.+\.md$/
-export const isKnowledge = (file) => KNOWLEDGE_FILE.test(file)
+const KNOWLEDGE_FILE = /^docs\/knowledge\/.+\.md$/
+const isKnowledge = (file) => KNOWLEDGE_FILE.test(file)
 
 /** diffTree의 diff(git diff --no-index base tree)에서 지식 파일의 부분을 뺀다 */
 export function withoutKnowledge(diff) {
@@ -163,7 +163,7 @@ export function diffTree(tree, baseDir, work) {
 }
 
 /**
- * 팀원 교대(works의 teammate Work, docs/knowledge-experiment.md). 앞 사람의 레포에서 main 밖의 로컬 브랜치 가운데
+ * 팀원 교대(works의 teammate Work, docs/knowledge-experiment/protocol.md). 앞 사람의 레포에서 main 밖의 로컬 브랜치 가운데
  * main에 아직 없는 커밋이 있는 것을 오래된 차례로 main에 머지하고(PR 머지와 같음), 팀 원격(bare)에 올린 뒤 새로 clone한다.
  * 커밋하지 않은 변경은 건너가지 않는다. 충돌하면 그 머지를 되돌리고 뒤 브랜치 쪽(-X theirs)으로 다시 머지하고 적는다.
  * @param {string} prevRepo 앞 사람의 레포

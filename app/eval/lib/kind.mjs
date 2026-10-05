@@ -65,7 +65,7 @@ export const armBase = (arm) => String(arm ?? '').replace(/@[a-z]+$/, '')
 /** 유형의 화면 이름 (relay 새 Work 대화상자의 버튼) */
 export const typeLabel = (type) => WORDS[type]?.label ?? type
 
-export function scenarioType(scenario) {
+function scenarioType(scenario) {
   return Object.hasOwn(WORDS, scenario.type ?? '') ? scenario.type : 'bugfix'
 }
 

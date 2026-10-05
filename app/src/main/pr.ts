@@ -17,6 +17,7 @@ import {
   checksOf,
   ciItemId,
   commentFacts,
+  EMPTY_LOG_NOTE,
   failedLogTail,
   repoArg,
   restRepo,
@@ -77,7 +78,7 @@ const STATES = ['OPEN', 'CLOSED', 'MERGED'] as const
 const text = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null)
 
 /** gh pr view --json의 결과를 읽는다. 모르는 state면 오류다 */
-export function viewFacts(v: Record<string, unknown>): PrViewFacts {
+function viewFacts(v: Record<string, unknown>): PrViewFacts {
   const state = STATES.find((s) => s === v['state'])
   const head = text(v['headRefOid'])
   if (!state || !head) {
@@ -198,7 +199,7 @@ export function listPrComments(
  */
 export async function readPr(
   ctx: PrReadContext,
-  hasLog: (itemId: string) => boolean,
+  hasLog: (itemId: string, job: number | null) => boolean,
 ): Promise<PrFetched> {
   const repo = repoArg(ctx.location)
   const gh = { repo, number: ctx.location.number, cwd: ctx.repo, env: ctx.env }
@@ -231,14 +232,16 @@ export async function readPr(
   const logs = new Map<string, { log?: string; note?: string }>()
   for (const c of checks.filter((x) => x.bucket === 'fail')) {
     const id = ciItemId(view.head, c)
-    if (hasLog(id)) continue
+    if (hasLog(id, c.job)) continue
     if (c.job === null) {
       logs.set(id, { note: NOT_ACTIONS })
       continue
     }
     const r = await ghFailedLog(ctx.ghBin, { repo, job: c.job, cwd: ctx.repo, env: ctx.env })
-    if (r.ok) logs.set(id, { log: failedLogTail(r.text) })
-    else logs.set(id, { note: r.pending ? RUN_PENDING : `로그를 읽지 못함: ${r.error}` })
+    if (r.ok) {
+      const tail = failedLogTail(r.text)
+      logs.set(id, tail ? { log: tail } : { note: EMPTY_LOG_NOTE })
+    } else logs.set(id, { note: r.pending ? RUN_PENDING : `로그를 읽지 못함: ${r.error}` })
   }
   return {
     view,

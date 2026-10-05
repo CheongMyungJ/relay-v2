@@ -1,6 +1,6 @@
 // Work 여럿을 잇는 시나리오. scenario.json의 works에 Work마다 report, knowledge, checks를 둔다.
 // 레포, 선호, 기대 파일, 제한(Work마다)은 시나리오 하나가 같이 쓴다. works가 없는 시나리오는 Work 하나다.
-// 지식 실험(docs/knowledge-experiment.md)에서 더한 것:
+// 지식 실험(docs/knowledge-experiment/protocol.md)에서 더한 것:
 // - Work의 `teammate: true`: 그 Work는 팀의 다른 사람이 한다. 도구가 앞 Work들의 브랜치를 main에 머지하고(PR 머지와 같음),
 //   레포를 새로 clone해 새 앱 저장소(relay)나 새 터미널(맨 CLI)에서 시작한다. 레포로 건너가지 않은 지식은 닿지 않는다.
 // - knowledge 항목의 `carry: true`: 앞 Work에서 사람이 이미 알려 줬거나 알려 줄 수 있었던 사실이다. 사람 역할이 이것을
@@ -48,7 +48,7 @@ export function workScenario(scenario, n) {
 }
 
 /** n번째 Work를 하는 사람이 몇 번째 사람인지(0부터). teammate Work마다 사람이 바뀐다 */
-export function mateIndex(parts, n) {
+function mateIndex(parts, n) {
   return parts.slice(1, n + 1).filter((w) => w.teammate).length
 }
 

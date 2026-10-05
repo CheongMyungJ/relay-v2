@@ -361,3 +361,38 @@ describe('PR 진행의 설정 (D158, D185, 5.1.2)', () => {
     }
   })
 })
+
+describe('[단위] 지식 검토의 엔진과 모델 (D334)', () => {
+  it('기본은 claude이고 모델은 비워 엔진의 기본(claude는 sonnet)을 쓴다', () => {
+    expect(DEFAULT_CONFIG.knowledge_review_engine).toBe('claude')
+    expect(DEFAULT_CONFIG.knowledge_review_model).toBe('')
+    expect(normalizeConfig({}).config).toMatchObject({
+      knowledge_review_engine: 'claude',
+      knowledge_review_model: '',
+    })
+  })
+
+  it('설정 화면에서 엔진과 모델을 바꾼다. 모르는 엔진과 띄어쓰기가 든 모델은 받지 않는다', () => {
+    expect(
+      applyConfigPatch(DEFAULT_CONFIG, {
+        knowledge_review_engine: 'codex',
+        knowledge_review_model: ' gpt-5-codex ',
+      }),
+    ).toMatchObject({
+      ok: true,
+      value: { knowledge_review_engine: 'codex', knowledge_review_model: 'gpt-5-codex' },
+    })
+    expect(applyConfigPatch(DEFAULT_CONFIG, { knowledge_review_engine: 'gpt' }).ok).toBe(false)
+    expect(applyConfigPatch(DEFAULT_CONFIG, { knowledge_review_model: 'a b' }).ok).toBe(false)
+    expect(applyConfigPatch(DEFAULT_CONFIG, { knowledge_review_model: '' })).toMatchObject({
+      ok: true,
+      value: { knowledge_review_model: '' },
+    })
+    const bad = normalizeConfig({ knowledge_review_engine: 1, knowledge_review_model: 'x\ny' })
+    expect(bad.config).toMatchObject({
+      knowledge_review_engine: 'claude',
+      knowledge_review_model: '',
+    })
+    expect(bad.warnings).toHaveLength(2)
+  })
+})

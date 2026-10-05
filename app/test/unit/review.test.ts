@@ -756,6 +756,16 @@ describe('판정표 (시나리오 7-3, D59)', () => {
     ])
   })
 
+  it('구분 줄은 하이픈 하나여도 행이 아니다 (GFM)', () => {
+    const t = [
+      '## 완료조건 판정',
+      '| 조건 | 판정 | 근거 |',
+      '|-|:-:|--|',
+      '| A | 통과 | 됨 |',
+    ].join('\n')
+    expect(verdicts(t).map((v) => v.criterion)).toEqual(['A'])
+  })
+
   it('절이나 표가 없으면 빈 목록이다', () => {
     expect(verdicts('## 남은 위험\n- 없음\n')).toEqual([])
     expect(verdicts('## 완료조건 판정\n표 대신 글\n')).toEqual([])

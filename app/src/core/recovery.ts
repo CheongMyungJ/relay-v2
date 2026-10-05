@@ -95,8 +95,12 @@ function respondView(work: WorkState, op: RespondOperation): OperationView {
 function mergeView(op: MergeOperation): OperationView {
   return {
     kind: 'merge',
-    title: '머지가 끊겼습니다',
-    lines: [`방식: ${op.method}`, `머지할 head: ${short(op.head)}`],
+    title: op.unconfirmed ? '머지 요청은 보냈지만 결과를 확인하지 못했습니다' : '머지가 끊겼습니다',
+    lines: [
+      `방식: ${op.method}`,
+      `머지할 head: ${short(op.head)}`,
+      ...(op.unconfirmed ? ['PR을 읽지 못했습니다. 앱이 잠시 뒤 다시 확인합니다'] : []),
+    ],
     retry:
       '[다시 시도]: PR을 다시 읽어 이미 머지됐으면 완료(머지됨)합니다. 아니면 같은 head로 다시 머지합니다. ' +
       '그사이 새 커밋이 생겼으면 GitHub가 머지하지 않습니다.',

@@ -8,7 +8,7 @@ import { spawnSpec } from './exec'
 const execFileP = promisify(execFile)
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-export { spawnSpec, type SpawnSpec } from './exec'
+export { spawnSpec } from './exec'
 
 export interface PtyOptions {
   bin: string
@@ -89,7 +89,7 @@ export function startPty(opts: PtyOptions): PtySession {
 
 // Windows에서는 node-pty의 kill() 대신 taskkill로 트리째 끝낸다. kill()은 이미 끝난 콘솔에
 // 붙으려다 보조 프로세스가 죽는 일이 있었다. 출처: spikes/lib/session.mjs kill, util.mjs killTree
-export async function killTree(pid: number, fallback: () => void): Promise<void> {
+async function killTree(pid: number, fallback: () => void): Promise<void> {
   if (process.platform === 'win32') {
     try {
       await execFileP('taskkill', ['/PID', String(pid), '/T', '/F'], { windowsHide: true })

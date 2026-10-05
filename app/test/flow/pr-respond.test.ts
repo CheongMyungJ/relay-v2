@@ -184,6 +184,28 @@ describe('[흐름] PR 대응 (M10, 가짜 gh)', () => {
     expect(prItems(w).items.filter((i) => i.status === 'done')).toHaveLength(3)
   })
 
+  it('인라인 답글 게시가 실패한 뒤 코멘트 목록도 읽지 못하면 원래 오류를 보이고 목록 오류를 덧붙인다', async () => {
+    const s = await setup()
+    const w = await openWork(s)
+    threeComments(s, w)
+    const t = await startRound(s, w, 3)
+    // 답글은 대응 task의 항목 차례로 게시한다 (core/respond replyItemIds)
+    const order = (workState(w).tasks.find((x) => x.id === t.id)?.respond?.items ?? []).filter(
+      (id) => /^(review|inline|convo):/.test(id),
+    )
+    const inline = order.findIndex((id) => id.startsWith('inline:'))
+    expect(inline).toBeGreaterThanOrEqual(0)
+    // 인라인 답글의 POST가 HTTP 502로 실패하고, 코멘트가 없어졌는지 보려는 목록 읽기(REST GET)도 실패한다
+    s.gh.postFaults([...order.slice(0, inline).map(() => 'ok' as const), 'error'])
+    s.ctx.h.env['FAKE_GH_FAIL'] = 'api'
+    const r = await s.ctx.h.relay.approve(w.key, t.id, {})
+    delete s.ctx.h.env['FAKE_GH_FAIL']
+    expect(r.ok).toBe(false)
+    const error = r.ok ? '' : r.error
+    expect(error).toContain('Bad Gateway (HTTP 502)')
+    expect(error).toContain('코멘트 목록도 읽지 못함')
+  })
+
   it('push·게시가 끊기면 끊긴 작업이다. [다시 시도]는 이미 원격에 있는 커밋을 다시 보내지 않고 끊긴 곳부터 게시한다. [무시]는 실패로 남긴다 (시나리오 9-7, D123, D194)', async () => {
     for (const mode of ['push', 'reply', 'ignore'] as const) {
       const s = await setup()
@@ -348,10 +370,18 @@ describe('[흐름] PR 대응 (M10, 가짜 gh)', () => {
         '승인했지만 push·게시하지 못한 대응 라운드 1개는 머지에 들어가지 않음',
       ),
     )
-    // 승인한 커밋은 작업 브랜치에만 있어 정리 창이 지우지 않는다 (push됐거나 머지됐을 때만 지움)
+    // 승인한 커밋은 작업 브랜치에만 있다(머지한 PR에 없음). 정리 창은 그 커밋을 보이고, 잃는 것을 확인해야 지운다 (D329)
     const preview = await s.ctx.h.relay.cleanPreview(w.key)
     if (!preview.ok) throw new Error(preview.error)
-    expect(preview.preview.branch).toMatchObject({ pushed: false, merged: false, deletable: false })
+    expect(preview.preview.branch).toMatchObject({ pushed: false, merged: false, deletable: true })
+    expect(preview.preview.branch.lost.map((c) => c.sha)).toContain(local)
+    const refused = await s.ctx.h.relay.clean(w.key, {
+      deleteBranch: true,
+      deleteBackups: true,
+      confirmed: true,
+      expect: preview.preview.expect,
+    })
+    expect(refused).toMatchObject({ ok: false, error: expect.stringContaining('잃습니다') })
     expect(git(w.tree, 'rev-parse', 'HEAD')).toBe(local)
   })
 

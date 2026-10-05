@@ -348,6 +348,9 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await expect(win.getByLabel('PR 대응 자동 승인')).not.toBeChecked()
   await expect(win.getByLabel('대응 자동 시작')).not.toBeChecked()
   await expect(win.getByLabel('자동 대응 라운드 상한')).toHaveValue('3')
+  // 지식 검토의 엔진과 모델 (D334): 기본은 Claude Code와 엔진의 기본 모델(비움)이다
+  await expect(win.getByLabel('지식 검토 엔진')).toHaveValue('claude')
+  await expect(win.getByLabel('지식 검토 모델')).toHaveValue('')
   await win.screenshot({ path: 'test-results/settings.png' })
   await win.getByRole('button', { name: '저장', exact: true }).click()
   const config = () =>

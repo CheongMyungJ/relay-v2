@@ -233,15 +233,27 @@ export interface CarriedCode {
   discarded: readonly (TaskRef & { path: string })[]
 }
 
+/** 단계 선택으로 들어온 task의 선택 종류: 되감기, 건너뛰기, 기본 진행. 이어받은 선택(D327)은 적힌 종류다 */
+export function selectionKind(
+  task: Pick<TaskRecord, 'reason' | 'selection'>,
+): 'rewind' | 'skip' | 'default' {
+  return (
+    task.selection?.kind ??
+    (task.reason === 'rewind' || task.reason === 'skip' ? task.reason : 'default')
+  )
+}
+
 /**
- * [현재 코드 위에서 이어서]가 이어지는 implement인가 (D254): 기본 진행으로 시작한 implement이고, 바로 앞의 폐기되지
- * 않은 파이프라인 task가 [현재 코드 위에서 이어서]로 되감은 design이다. 그 design을 돌려준다. design은 코드를 바꾸지
- * 않으므로(D243) 폐기된 구현의 커밋이 implement까지 남아 있다
+ * [현재 코드 위에서 이어서]가 이어지는 implement인가 (D254): 기본 진행으로 시작한 implement(새 세션으로 다시 한 것과,
+ * [단계 선택]으로 기본 다음 단계를 고른 것 포함)이고, 바로 앞의 승인된 파이프라인 task가 [현재 코드 위에서 이어서]로
+ * 되감은 design이다. 그 design을 돌려준다. design은 코드를 바꾸지 않으므로(D243) 폐기된 구현의 커밋이 implement까지
+ * 남아 있다
  */
 export function keptCodeDesign(work: WorkState, task: TaskRecord): TaskRecord | null {
-  if (task.node !== 'implement' || task.selection) return null
+  if (task.node !== 'implement') return null
+  if (task.selection && (selectionKind(task) !== 'default' || task.selection.keep_code)) return null
   const before = work.tasks.filter(
-    (t) => t.seq < task.seq && t.status !== 'discarded' && isPipelineNode(t.node),
+    (t) => t.seq < task.seq && t.status === 'approved' && isPipelineNode(t.node),
   )
   const prev = before[before.length - 1]
   return prev?.node === 'design' && prev.selection?.keep_code === true ? prev : null

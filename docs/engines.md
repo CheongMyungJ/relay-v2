@@ -1,8 +1,7 @@
 # Claude Code / Codex 선택 실행 설계
 
 - 상태: 구현과 자동 시험 통과. Q1/Q2/Q3/Q4 확정. Codex는 수동 승인하고 Claude의 기존 자동 승인은 유지한다. Windows 설치본의 두 엔진 스모크를 통과했다. 인증 갱신 뒤 Linux 앱에서 실제 Codex 모델로 S 경로 전체를 완료했고, 질문·취소·보호/종료 훅·형식 오류 수정·압축·중단·재개를 확인했다. 실제 Windows 모델과 사용자 훅 병합 등 추가 검증 범위는 아래에 구분한다.
-- 작업 브랜치: `feat/claude-codex-engines`
-- 출발점: `main`의 `9c02b42` (평가 도구 추가, #18).
+- 브랜치: `feat/claude-codex-engines`(출발점 `9c02b42`)에서 만들어 #20(`c01c583`)으로 main에 합쳤다. 7절 실행 계획과 8절 진행 기록은 합치기 전의 기록이라, 그 뒤 바뀐 단계 구성(M13의 세 단계, D227~D229)과 다른 이름(review, investigate, S·M·L 경로)이 나온다.
 - 작성일: 2026-09-30.
 - 사용자 요청: Claude Code 기반 relay를 Codex로도 실행하고, 설정에서 두 엔진을 바꾸어 사용한다. 전용 브랜치에서 설계부터 진행하며 호환되지 않는 부분은 사람과 정한다.
 
@@ -141,7 +140,7 @@ command 훅은 stdin JSON을 받아 앱의 loopback 서버에 전달하고 JSON 
 
 처음에는 터미널에서 폴더 접근 신뢰를 확인하고 `/hooks`로 relay 훅을 검토·신뢰해야 한다. 앱은 이를 자동 수락하지 않고 hook-trust 우회 옵션도 넣지 않는다(D69). 훅 정의는 task 토큰·경로와 분리하여 같은 설치에서 안정적으로 유지한다. 첫 훅이 들어올 때까지 앱이 신뢰 안내를 표시한다. 미신뢰 훅이 실행되지 않으면 앱 보호와 종료 판정도 적용되지 않는다.
 
-SessionEnd·Interrupt는 3초, 다른 command 훅은 30초 제한이다. 브리지 통신 실패 시 PreToolUse는 deny로 응답한다. Codex 자체의 command 실행 실패 처리까지 fail-closed라고 보장하지 않는다. SessionEnd는 내부 대화 전환에도 올 수 있어 task 종료로 처리하지 않고 실제 PTY exit를 사용한다.
+SessionEnd·Interrupt는 3초, Stop은 verify의 지식 검토 호출(D300)을 기다리려고 180초(`STOP_HOOK_TIMEOUT_SEC`, Claude와 같음), 다른 command 훅은 30초 제한이다. 브리지 통신 실패 시 PreToolUse는 deny로 응답한다. Codex 자체의 command 실행 실패 처리까지 fail-closed라고 보장하지 않는다. SessionEnd는 내부 대화 전환에도 올 수 있어 task 종료로 처리하지 않고 실제 PTY exit를 사용한다.
 
 ### 5.2 질문과 지시 전달
 
@@ -168,6 +167,7 @@ Q4에 따라 Codex는 pending 상태를 주장하는 이벤트를 받아도 자�
 - task: 사용 엔진과 버전을 확인할 수 있다. 앱 기본값이 바뀌어도 기존 task 표시와 재개 대상은 그대로다.
 - 실패: 선택한 엔진의 설치·인증·버전 문제인지 task 시작 실패인지 구분한다. 다른 엔진으로 자동 대체하지 않는다.
 - 정리: 같은 선택 규칙, 훅, 보호, 프로세스 종료를 사용한다. 정리 동안의 기존 조작 제한을 유지한다.
+- 지식 검토 호출(D300): Work의 엔진과 따로 설정의 지식 검토 엔진(claude | codex)과 모델로 부른다(D334, 기본 claude). codex는 `codex exec --ephemeral --sandbox read-only --output-schema`로 부르고, 찾지 못하면 승인 화면에 경고한다.
 
 최신 main의 [평가 도구](eval.md)는 agent, AI 사람 역할, 판정자를 모두 Claude로 실행한다. 이번 기능의 검증을 위해 평가 모델까지 모두 Codex로 바꾸지는 않는다. 필요하면 평가 대상 agent만 고를 수 있게 하고, 사람 역할과 판정자 설정은 분리한다. Claude 기존 평가 경로는 유지한다. 기능 시험과 사용자 경험 평가는 서로 대체하지 않는다.
 

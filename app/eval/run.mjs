@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // relay 대 맨 CLI 사용성 평가 (docs/eval.md). 시나리오마다 두 쪽을 n번 돌리고, 짝지어 판정하고, report.md를 만든다.
-// Work 둘을 잇는 시나리오(works, 21~23)의 두 쪽은 relay 대 지식을 끈 relay(relay-off)다.
+// Work 여럿을 잇는 시나리오(works, 21~27)의 두 쪽은 relay 대 지식을 끈 relay(relay-off)다.
 //   node eval/run.mjs --list
 //   node eval/run.mjs --scenarios 3 --runs 5
 //   node eval/run.mjs --scenarios 1,2,5 --runs 2 --arms relay,cli --parallel 2
@@ -27,7 +27,8 @@ const SCENARIOS = process.env.RELAY_EVAL_SCENARIOS
 const HELP = `쓰는 법: node eval/run.mjs [옵션]
 
   --list                   시나리오 목록
-  --scenarios <목록>       1,3 또는 01-slug,03-cart 또는 all (기본 all)
+  --scenarios <목록>       1,3 또는 01-slug,03-cart 또는 all (기본 all). all은 개발용(scenario.json의
+                           dev, 25~27)을 빼고, 개발용은 번호나 이름으로만 고른다
   --runs <n>               시나리오와 쪽마다 돌릴 횟수 (기본 1)
   --arms <목록>            relay, relay-off(지식을 끈 relay), cli, --app으로 준 빌드 이름(뒤에 -off를 붙이면
                            그 빌드에서 지식을 끔) 가운데 (기본: 시나리오의 짝. works가 있는 시나리오는
@@ -62,7 +63,7 @@ export function listScenarios() {
 }
 
 function pickScenarios(spec, all) {
-  if (!spec || spec === 'all') return all
+  if (!spec || spec === 'all') return all.filter((s) => !s.dev)
   return spec
     .split(/[\s,]+/)
     .filter(Boolean)
@@ -147,7 +148,10 @@ async function main() {
   if (v.help) return console.log(HELP)
   const all = listScenarios()
   if (v.list) {
-    for (const s of all) console.log(`${s.id}  [${words(s).label}] ${s.title}\n    ${s.purpose}`)
+    for (const s of all)
+      console.log(
+        `${s.id}  [${words(s).label}${s.dev ? ', 개발용' : ''}] ${s.title}\n    ${s.purpose}`,
+      )
     return
   }
   const scenarios = pickScenarios(v.scenarios, all)

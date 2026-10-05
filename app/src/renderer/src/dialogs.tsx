@@ -731,6 +731,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         respond_auto_start: value.respond_auto_start,
         respond_auto_round_max: value.respond_auto_round_max,
         reply_signature: value.reply_signature,
+        knowledge_review_engine: value.knowledge_review_engine,
+        knowledge_review_model: value.knowledge_review_model,
       }),
     )
     setBusy(false)
@@ -784,6 +786,38 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 aria-label="draft PR로 만들기"
                 checked={value.pr_draft}
                 onChange={(e) => setDraft({ ...value, pr_draft: e.target.checked })}
+              />
+            </label>
+            <label
+              className="form-row"
+              title="verify가 지식을 바꾸면 앱이 따로 부르는 짧은 검토 호출의 CLI. Work의 엔진과 따로 고른다 (D300, D334)"
+            >
+              <span>지식 검토 엔진</span>
+              <select
+                aria-label="지식 검토 엔진"
+                value={value.knowledge_review_engine}
+                onChange={(e) =>
+                  setDraft({ ...value, knowledge_review_engine: e.target.value as AgentEngine })
+                }
+              >
+                {AGENT_ENGINES.map((engine) => (
+                  <option key={engine} value={engine}>
+                    {AGENT_LABELS[engine]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label
+              className="form-row"
+              title="비우면 엔진의 기본(Claude Code는 sonnet, Codex는 CLI 설정)을 쓴다 (D334)"
+            >
+              <span>지식 검토 모델</span>
+              <input
+                type="text"
+                aria-label="지식 검토 모델"
+                placeholder={value.knowledge_review_engine === 'claude' ? 'sonnet' : 'CLI 기본'}
+                value={value.knowledge_review_model}
+                onChange={(e) => setDraft({ ...value, knowledge_review_model: e.target.value })}
               />
             </label>
             <label
@@ -1192,6 +1226,7 @@ export function ConfirmDialog({
 export function UncommittedDialog({
   workId,
   label,
+  engine,
   files,
   busy,
   onDiscard,
@@ -1202,6 +1237,8 @@ export function UncommittedDialog({
   workId: string
   /** 원래 고른 전달: "push", "PR 생성" */
   label: string
+  /** 정리 세션을 띄울 엔진(지금 task의 엔진): "Claude Code", "Codex" */
+  engine: string
   files: string[]
   busy: boolean
   onDiscard: () => void
@@ -1235,7 +1272,7 @@ export function UncommittedDialog({
           AI 세션 열기
         </button>
         <span className="dim">
-          기록하지 않는 Claude Code 세션을 열어 정리합니다. push와 PR은 계속 막혀 있습니다.
+          기록하지 않는 {engine} 세션을 열어 정리합니다. push와 PR은 계속 막혀 있습니다.
         </span>
       </div>
       <div className="buttons">
@@ -1259,6 +1296,7 @@ export function CleanDialog({ work, onClose }: { work: WorkView; onClose: () => 
   const [deleteBranch, setDeleteBranch] = useState(false)
   const [deleteRemote, setDeleteRemote] = useState(false)
   const [deleteBackups, setDeleteBackups] = useState(true)
+  const [confirmLost, setConfirmLost] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -1269,7 +1307,8 @@ export function CleanDialog({ work, onClose }: { work: WorkView; onClose: () => 
       if (stale) return
       if (r.ok) {
         setPreview(r.preview)
-        setDeleteBranch(r.preview.merged)
+        // 머지로 완료한 Work는 기본 체크다(D178). 작업 브랜치에만 있는 커밋이 있으면 기본은 두고 까닭을 보인다 (D329)
+        setDeleteBranch(r.preview.merged && r.preview.branch.lost.length === 0)
       } else setError(r.error)
     })
     return () => {
@@ -1287,6 +1326,7 @@ export function CleanDialog({ work, onClose }: { work: WorkView; onClose: () => 
         deleteRemote: deleteRemote && preview.remote?.exists === true,
         deleteBackups,
         confirmed,
+        confirmLost,
         expect: preview.expect,
       }),
     )
@@ -1333,8 +1373,25 @@ export function CleanDialog({ work, onClose }: { work: WorkView; onClose: () => 
                       ? 'origin에 push됐습니다'
                       : b.merged
                         ? '기준 브랜치에 머지됐습니다'
-                        : '원격에도 기준 브랜치에도 없습니다. 이 브랜치에만 있는 커밋이 있습니다'}
+                        : preview.merged && b.deletable && b.lost.length === 0
+                          ? '머지한 PR에 모든 커밋이 들어 있습니다 (squash·rebase 머지)'
+                          : '원격에도 기준 브랜치에도 없습니다. 이 브랜치에만 있는 커밋이 있습니다'}
               </div>
+              {b.lost.length ? (
+                <>
+                  <p>
+                    머지한 PR에 없는 커밋 {b.lost.length}개가 이 브랜치에만 있습니다. 지우면 이
+                    커밋을 잃습니다.
+                  </p>
+                  <ul className="files" aria-label="작업 브랜치에만 있는 커밋">
+                    {b.lost.map((c) => (
+                      <li key={c.sha}>
+                        {c.sha.slice(0, 7)} {c.subject}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
               <label className="toggle" title="push됐거나 머지됐을 때만 삭제를 제안합니다">
                 <input
                   type="checkbox"
@@ -1345,6 +1402,17 @@ export function CleanDialog({ work, onClose }: { work: WorkView; onClose: () => 
                 />
                 작업 브랜치 삭제 {b.deletable ? '' : '(push됐거나 머지됐을 때만)'}
               </label>
+              {deleteBranch && b.deletable && b.lost.length ? (
+                <label className="toggle">
+                  <input
+                    type="checkbox"
+                    aria-label="커밋을 잃는 것을 확인"
+                    checked={confirmLost}
+                    onChange={(e) => setConfirmLost(e.target.checked)}
+                  />
+                  이 커밋 {b.lost.length}개를 잃는 것을 확인했습니다
+                </label>
+              ) : null}
               {preview.remote ? (
                 <label className="toggle" title="PR을 머지한 Work만 고를 수 있습니다 (D178)">
                   <input
@@ -1413,7 +1481,15 @@ export function CleanDialog({ work, onClose }: { work: WorkView; onClose: () => 
         <button onClick={onClose}>취소</button>
         <button
           className="danger"
-          disabled={busy || !preview || (preview.confirm.length > 0 && !confirmed)}
+          disabled={
+            busy ||
+            !preview ||
+            (preview.confirm.length > 0 && !confirmed) ||
+            (deleteBranch &&
+              preview.branch.deletable &&
+              preview.branch.lost.length > 0 &&
+              !confirmLost)
+          }
           onClick={() => void clean()}
         >
           {busy ? '정리하는 중…' : '정리'}
