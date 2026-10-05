@@ -4,7 +4,8 @@
 //
 // 1. claude --help에 앱이 넘기는 옵션이 모두 있다
 // 2. claude -p를 앱과 같은 훅 설정(--settings, hookSettings)으로 돌려 오는 훅 본문이 계약을 지킨다. 훅 머리글의
-//    $RELAY_HOOK_TOKEN이 풀려 온다(I13). 도구 성공과 실패(PostToolUseFailure)를 하나씩 부르게 한다
+//    $RELAY_HOOK_TOKEN이 풀려 온다(I13). 도구 성공과 실패(PostToolUseFailure)를 하나씩 부르게 한다. 첫 Stop을 되돌리면
+//    일을 잇고 다음 Stop에 stop_hook_active: true를 보낸다(S2, D21)
 // 3. 지식 검토 호출(claudeJson, D300)이 구조화된 출력과 사용량을 읽는다
 import { execFileSync, spawn } from 'node:child_process'
 import fs from 'node:fs'
@@ -111,7 +112,12 @@ describe.runIf(LIVE)('[계약] 실제 claude', () => {
     const cwd = path.join(root, 'repo')
     fs.mkdirSync(cwd, { recursive: true })
     execFileSync('git', ['init', '-q'], { cwd })
-    const server = await hookCollector()
+    // 첫 Stop은 되돌린다: 실제 claude가 이유를 받아 일을 잇고, 다음 Stop에 stop_hook_active: true를 보내야 한다 (S2, D21)
+    const server = await hookCollector((event, _body, nth) =>
+      event === 'Stop' && nth === 0
+        ? { decision: 'block', reason: 'Before stopping, reply with the single word: again' }
+        : null,
+    )
     try {
       const settings = path.join(root, 'settings.json')
       fs.writeFileSync(
@@ -155,6 +161,9 @@ describe.runIf(LIVE)('[계약] 실제 claude', () => {
       'SessionEnd',
     ]
     expect(expected.filter((e) => !seen.includes(e))).toEqual([])
+    const stops = got.filter((g) => g.event === 'Stop').map((g) => g.body['stop_hook_active'])
+    lines.push(`- Stop 되돌림: Stop ${stops.length}번, stop_hook_active ${JSON.stringify(stops)}`)
+    expect(stops.slice(0, 2)).toEqual([false, true])
     expect(got.filter((g) => g.authorization !== `Bearer ${TOKEN}`).map((g) => g.event)).toEqual([])
     const broken = got.flatMap((g) => violations(g.event, g.body).map((v) => `${g.event}: ${v}`))
     lines.push(`- 계약 위반: ${broken.length ? broken.join('; ') : '없음'}`)

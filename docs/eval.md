@@ -46,6 +46,9 @@
 | `eval/lib/dialogs.mjs` | Claude Code 첫 실행 창(폴더 신뢰, 권한 우회 경고) 수락. 두 쪽 같고 사람의 부담에 넣지 않는다 |
 | `eval/guides/*.md` | 사람 역할이 미리 읽어 둔 도구 설명서 |
 | `eval/scenarios/<id>/` | 시나리오 |
+| `eval/test/` | 평가 도구의 측정 로직 시험(맨 CLI의 흩어진 브랜치, 결과 판정과 지식 파일 빼기, 대화 기록 집계, Work 여럿, bootstrap). 모델을 부르지 않는다. `npm run test:eval`이 이 시험과 `check-scenario.mjs all`을 돌고, `app-ci`가 push마다 돈다(relay `implementation.md` 8.1) |
+
+평가 도구는 앱의 의존성(Playwright, node-pty, xterm headless)과 빌드한 앱(`out/`)을 함께 쓰므로 `app/` 안에 둔다. 앱의 시험과는 층이 다르다: 평가는 통과·실패를 가르는 시험이 아니라 relay가 더 나은지 재는 실험이고, 결과는 보고서로 남긴다. 측정이 틀리면 결론이 뒤집히므로(eval-findings E1) 측정 로직만 시험으로 지킨다.
 
 ## 3. 공정하게 두는 것
 

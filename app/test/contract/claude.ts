@@ -115,8 +115,14 @@ export interface Recorded {
   body: Record<string, unknown>
 }
 
-/** 훅을 받아 모으는 서버. URL은 앱과 같이 /hook/<task-id>/<Event>다 (I13) */
-export async function hookCollector(): Promise<{
+/**
+ * 훅을 받아 모으는 서버. URL은 앱과 같이 /hook/<task-id>/<Event>다 (I13). reply가 주는 객체를 응답 본문으로 돌려준다
+ * (Stop 되돌림 {"decision":"block","reason":…}, S2, D21). 없으면 빈 객체(결정 없음)다
+ */
+export async function hookCollector(
+  reply: (event: HookEvent, body: Record<string, unknown>, nth: number) => object | null = () =>
+    null,
+): Promise<{
   port: number
   got: Recorded[]
   close: () => Promise<void>
@@ -127,20 +133,21 @@ export async function hookCollector(): Promise<{
     req.on('data', (c: Buffer) => (text += c.toString('utf8')))
     req.on('end', () => {
       const event = /^\/hook\/[^/]+\/([A-Za-z]+)$/.exec(req.url ?? '')?.[1] as HookEvent | undefined
+      let answer: object | null = null
       if (event && (HOOK_EVENTS as readonly string[]).includes(event)) {
+        let body: Record<string, unknown>
         try {
-          got.push({
-            event,
-            authorization: req.headers.authorization,
-            body: JSON.parse(text) as Record<string, unknown>,
-          })
+          body = JSON.parse(text) as Record<string, unknown>
         } catch {
           // 본문이 JSON이 아니면 계약 위반으로 남긴다
-          got.push({ event, authorization: req.headers.authorization, body: { invalid: text } })
+          body = { invalid: text }
         }
+        const nth = got.filter((g) => g.event === event).length
+        got.push({ event, authorization: req.headers.authorization, body })
+        answer = reply(event, body, nth)
       }
       res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end('{}')
+      res.end(JSON.stringify(answer ?? {}))
     })
   })
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
