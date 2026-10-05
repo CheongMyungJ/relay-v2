@@ -1,6 +1,6 @@
 # 앱 CI (docs/implementation.md I28, 8.1, 8.3). 결정적이고 사용량이 들지 않는 시험만 둔다. 실제 claude는 app-claude다.
 # Linux(linux): 타입 검사, ESLint, Prettier, [단위], skills/check.mjs.
-# Linux(linux-tools): Linux의 [어댑터], 평가 도구(측정 로직 시험과 시나리오 확인), [실제] 시험 도구의 dry(가짜 claude).
+# Linux(linux-tools): Linux의 [어댑터], [계약] 가짜 쪽, 평가 도구(측정 로직 시험과 시나리오 확인), [실제] 시험 도구의 dry(가짜 claude).
 # Windows: 빌드(I39), [어댑터], Codex [흐름], [스모크] 전부(개발 빌드), [흐름]. Windows의 [흐름]은 PR 진행·대응
 # (test/flow/pr*.test.ts)과 나머지를 두 작업으로 나눠 함께 돈다. 작업마다 20분 제한이다 (I54).
 name: app-ci
@@ -90,6 +90,10 @@ jobs:
       - name: "[어댑터] Linux"
         working-directory: app
         run: npm run test:adapters
+
+      - name: "[계약] 가짜 쪽 (가짜 claude·gh가 계약과 실제 녹화본을 따르는지)"
+        working-directory: app
+        run: npm run test:contract
 
       - name: 평가 도구 (측정 로직, 시나리오 확인)
         working-directory: app
