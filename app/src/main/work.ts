@@ -37,6 +37,7 @@ import {
   ghIssueCreate,
   ghIssueList,
   ghLabelCreate,
+  ghLabelExists,
   ghMerge,
   ghMergeSettings,
   ghOpenPr,
@@ -44,6 +45,7 @@ import {
   ghRerunFailed,
   ghVersion,
   type GhPrOptions,
+  type GhRepoOptions,
 } from '../adapters/gh'
 import {
   changedPaths,
@@ -80,7 +82,6 @@ import {
 import type { HookReply, HookRequest, HookServer } from '../adapters/hooks'
 import { processStartTime, startPty, type PtySession } from '../adapters/pty'
 import {
-  NOT_ARTIFACT_FILES,
   pathKey,
   readText,
   sha256,
@@ -4778,14 +4779,19 @@ export class WorkRunner {
     while (this.issueRunning) await this.issueRunning
   }
 
-  /** 앞부터 하나씩 게시한다. 실패하면 issue.failed를 넣고 멈춘다: 다음 할 일이나 [다시 시도]가 앞부터 다시 한다 (D344) */
+  /**
+   * 앞부터 하나씩 게시한다. 실패하면 issue.failed를 넣고 멈춘다: 다음 할 일이나 [다시 시도]가 앞부터 다시 한다 (D344). gh에
+   * 줄 레포(origin)는 한 번 도는 동안 한 번만 읽는다
+   */
   private async publishIssue(): Promise<void> {
+    let gh: GhRepoOptions | null = null
     for (;;) {
       const entry = this.work.issue?.pending[0]
       if (this.closing || !entry) return
       const key = issueKey(entry)
       try {
-        await this.publishEntry(entry, key)
+        gh ??= await this.issueRepo()
+        await this.publishEntry(entry, key, gh)
       } catch (err) {
         const error = message(err)
         console.error(`[${this.key}] 이슈 게시 실패 (${key}): ${error}`)
@@ -4797,19 +4803,23 @@ export class WorkRunner {
     }
   }
 
+  /** 이슈를 둘 레포: PR 만들기와 같은 origin의 --repo (I99) */
+  private async issueRepo(): Promise<GhRepoOptions> {
+    const repo = this.project.repo_path
+    const origin = await remoteUrl(repo, 'origin', { env: this.ctx.env })
+    if (!origin) throw new Error('origin 원격이 없음')
+    return { repo: ghRepo(origin), cwd: repo, env: this.ctx.env }
+  }
+
   /**
    * 항목 하나를 게시한다 (I99). 시도한 적이 있으면 결과를 모를 수 있어 먼저 원격에서 표시를 찾는다 (D349). 시도한 때를
    * 적은 뒤 게시하고, 결과를 줄로 넣는다
    */
-  private async publishEntry(entry: IssueEntry, key: string): Promise<void> {
+  private async publishEntry(entry: IssueEntry, key: string, gh: GhRepoOptions): Promise<void> {
     const issue = this.work.issue
     if (!issue) return
-    const repo = this.project.repo_path
-    const origin = await remoteUrl(repo, 'origin', { env: this.ctx.env })
-    if (!origin) throw new Error('origin 원격이 없음')
-    const gh = { repo: ghRepo(origin), cwd: repo, env: this.ctx.env }
     const bin = this.ctx.ghBin
-    const marker = issueMarker(this.work.work_id, key)
+    const marker = issueMarker(issue.mark, key)
     const tried = issue.attempted_at !== undefined
     const feed = (event: MachineEvent) => this.enqueue(() => this.feed(event))
     const attempt = () => feed({ type: 'issue.attempted', at: this.ctx.at(), key })
@@ -4823,34 +4833,36 @@ export class WorkRunner {
             at: this.ctx.at(),
             number,
             url: found.url,
-            labeled: false,
+            labeled: found.labels.includes(ISSUE_LABEL),
             found: true,
           })
           return
         }
       }
-      const intent = await this.files.readIntentVersion(entry.intent_version)
-      if (intent === null) throw new Error(`intent v${entry.intent_version}을 읽지 못함`)
+      const intent = await this.intentText(entry.intent_version)
       const title = issueTitle(intent, this.work.work_id)
-      const body = issueBody({ workId: this.work.work_id, type: workType(this.work), intent })
-      await attempt()
-      // 라벨이 없으면 만든다 (D348). 이미 있거나 권한이 없으면 실패하고 넘긴다 (D349)
-      await ghLabelCreate(bin, {
-        ...gh,
-        name: ISSUE_LABEL,
-        color: ISSUE_LABEL_COLOR,
-        description: ISSUE_LABEL_DESCRIPTION,
+      const body = issueBody({
+        workId: this.work.work_id,
+        mark: issue.mark,
+        type: workType(this.work),
+        intent,
       })
-      let labeled = true
-      let url: string
-      try {
-        url = await ghIssueCreate(bin, { ...gh, title, body, label: ISSUE_LABEL })
-      } catch (err) {
-        // 라벨을 붙이지 못해 실패했으면 라벨 없이 만든다 (D349)
-        if (!/label/i.test(message(err))) throw err
-        labeled = false
-        url = await ghIssueCreate(bin, { ...gh, title, body, label: null })
-      }
+      // 라벨이 없으면 만든다 (D348). 만들지 못하면(권한) 라벨 없이 만든다 (D349)
+      const labeled =
+        (await ghLabelExists(bin, { ...gh, name: ISSUE_LABEL })) ||
+        (await ghLabelCreate(bin, {
+          ...gh,
+          name: ISSUE_LABEL,
+          color: ISSUE_LABEL_COLOR,
+          description: ISSUE_LABEL_DESCRIPTION,
+        }))
+      await attempt()
+      const url = await ghIssueCreate(bin, {
+        ...gh,
+        title,
+        body,
+        label: labeled ? ISSUE_LABEL : null,
+      })
       const number = issueNumberOf(url)
       if (number === null) throw new Error(`이슈 주소에서 번호를 읽지 못함: ${url}`)
       await feed({ type: 'issue.created', at: this.ctx.at(), number, url, labeled })
@@ -4878,18 +4890,25 @@ export class WorkRunner {
         return
       }
     }
-    const body = await this.issueComment(entry)
+    const body = await this.issueComment(entry, issue.mark)
     await attempt()
     const url = await ghIssueComment(bin, { ...target, body })
     await feed({ type: 'issue.posted', at: this.ctx.at(), key, commentId: commentIdOf(url), url })
   }
 
+  /** 승인한 intent의 한 버전 (D339). 읽지 못하면 다른 버전으로 대신하지 않고 실패한다 */
+  private async intentText(version: number): Promise<string> {
+    const text = await this.files.readIntentVersion(version, this.work.intent?.version ?? null)
+    if (text === null) throw new Error(`intent v${version}을 읽지 못함`)
+    return text
+  }
+
   /** 코멘트의 글 (D339, D341, D347). task의 파일은 게시할 때 읽는다 (D349) */
   private async issueComment(
     entry: Extract<IssueEntry, { kind: 'task' | 'step' | 'end' }>,
+    mark: string,
   ): Promise<string> {
-    const workId = this.work.work_id
-    if (entry.kind === 'end') return endComment(workId, entry.text)
+    if (entry.kind === 'end') return endComment(mark, entry.text)
     const task = this.task(entry.task_id)
     if (!task) throw new Error(`${entry.task_id} 없음`)
     if (entry.kind === 'step') {
@@ -4897,28 +4916,21 @@ export class WorkRunner {
         const t = this.task(id)
         return t ? `${t.id} ${NODE_INFO[t.node].title}` : id
       })
-      return stepComment({ workId, task, discarded })
+      return stepComment({ mark, task, discarded })
     }
-    const files = await this.files.taskFiles(task)
     const order: readonly string[] = NODE_INFO[task.node].artifacts
     const rank = (n: string) => (order.includes(n) ? order.indexOf(n) : order.length)
-    const artifacts: IssueArtifact[] = Object.entries(files)
-      .filter(([name]) => !NOT_ARTIFACT_FILES.includes(name))
-      .sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b))
-      .map(([name, text]) => ({ name, text }))
+    const artifacts: IssueArtifact[] = (await this.files.artifactTexts(task)).sort(
+      (a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name),
+    )
+    const handoff = await readText(path.join(this.files.taskDir(task), 'handoff.md'))
     const version = entry.intent_version
     const issue = this.work.issue
-    let intent: { version: number; text: string } | null = null
-    if (
-      task.node === 'intake' &&
-      version !== undefined &&
-      issue &&
-      commentShowsIntent(issue, version)
-    ) {
-      const text = await this.files.readIntentVersion(version)
-      if (text !== null) intent = { version, text }
-    }
-    return taskComment({ workId, task, handoff: files['handoff.md'] ?? null, artifacts, intent })
+    const intent =
+      task.node === 'intake' && version !== undefined && issue && commentShowsIntent(issue, version)
+        ? { version, text: await this.intentText(version) }
+        : null
+    return taskComment({ mark, task, handoff, artifacts, intent })
   }
 
   /** 패널의 이슈 줄 (설계 3.7, D344) */

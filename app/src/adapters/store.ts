@@ -384,14 +384,12 @@ export class WorkFiles {
   }
 
   /**
-   * 승인한 intent의 한 버전 (이슈 기록, D339). 지난 버전은 intent.history/v<N>.md에 있고, 없으면 지금 intent.md가 그
-   * 버전이다(가장 새 버전). 없으면 null
+   * 승인한 intent의 한 버전 (이슈 기록, D339). 지금 버전(current, work.json의 intent.version)이면 intent.md이고, 지난 버전은
+   * intent.history/v<N>.md다. 없으면 null: 다른 버전의 글을 그 버전으로 보이지 않는다
    */
-  async readIntentVersion(version: number): Promise<string | null> {
-    return (
-      (await readText(path.join(this.intentHistory, `v${version}.md`))) ??
-      (await readText(this.intent))
-    )
+  async readIntentVersion(version: number, current: number | null): Promise<string | null> {
+    if (version === current) return readText(this.intent)
+    return readText(path.join(this.intentHistory, `v${version}.md`))
   }
 
   async readDecisions(): Promise<string> {
@@ -427,6 +425,18 @@ export class WorkFiles {
     for (const name of await mdFiles(dir)) {
       const text = await readText(path.join(dir, name))
       if (text !== null) out[name] = text
+    }
+    return out
+  }
+
+  /** 산출물의 이름과 내용 (D89): artifacts와 같은 파일이다. 이슈 기록의 코멘트에 접어 넣는다 (D339) */
+  async artifactTexts(
+    task: Pick<TaskRecord, 'seq' | 'node'>,
+  ): Promise<{ name: string; text: string }[]> {
+    const out: { name: string; text: string }[] = []
+    for (const file of await this.artifacts(task)) {
+      const text = await readText(file)
+      if (text !== null) out.push({ name: path.basename(file), text })
     }
     return out
   }
@@ -497,13 +507,7 @@ export class WorkFiles {
 }
 
 /** 앱이 쓰는 입력 파일: context.md, 지식을 넣은 기록(core/knowledge INJECTED_FILE) */
-/** task 디렉터리의 .md 가운데 산출물이 아닌 것 (D89) */
-export const NOT_ARTIFACT_FILES: readonly string[] = [
-  'context.md',
-  'handoff.md',
-  'knowledge-injected.md',
-]
-const NOT_ARTIFACTS = new Set(NOT_ARTIFACT_FILES)
+const NOT_ARTIFACTS = new Set(['context.md', 'handoff.md', 'knowledge-injected.md'])
 
 /** 끝에 덜 쓴 UTF-8 문자가 있으면 그 바이트 수, 없으면 0 */
 export function partialUtf8(buf: Buffer): number {

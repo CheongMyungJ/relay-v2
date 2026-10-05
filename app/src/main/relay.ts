@@ -3,6 +3,7 @@
 // Work 하나의 흐름은 WorkRunner가 맡는다.
 // Electron을 import하지 않으므로 흐름 시험이 Vitest(Node)에서 이 코드를 그대로 불러 쓴다.
 // 창과 알림, 렌더러로 보내기는 UiPort로 받는다.
+import { randomBytes } from 'node:crypto'
 import path from 'node:path'
 import {
   addWorktree,
@@ -25,6 +26,7 @@ import {
 } from '../adapters/store'
 import { applyConfigPatch, checkProjectSettings, checkWorkSettings } from '../core/config'
 import { createWork } from '../core/machine'
+import { issueMarkId } from '../core/issue'
 import { localIso, nextWorkId, workBranch } from '../core/records'
 import { recordedProcesses, type RecordedProcess } from '../core/recovery'
 import { DEFAULT_CONFIG, type AppConfig, type WorkSettingsPatch } from '../shared/config'
@@ -506,7 +508,14 @@ export class Relay {
       settings,
       requestHash,
       // 이슈 기록은 Work를 만들 때 프로젝트 설정으로 정한다 (I96)
-      ...(issueLogOn(project) ? { issue: { linked: input.issueNumber ?? null } } : {}),
+      ...(issueLogOn(project)
+        ? {
+            issue: {
+              linked: input.issueNumber ?? null,
+              mark: issueMarkId(workId, randomBytes(4).toString('hex')),
+            },
+          }
+        : {}),
       at,
     })
     const runner = this.runner(project, files, created.work, workTitle(input.request))

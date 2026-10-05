@@ -561,6 +561,11 @@ export interface IssueRecord {
   /** 이슈 번호와 주소. 새 이슈는 만들기 전에 null이고, 기존 이슈의 주소는 첫 코멘트를 올린 뒤에 안다 */
   number: number | null
   url: string | null
+  /**
+   * 보이지 않는 표시의 id (D349, core/issue issueMarkId): <work-id>-<임의의 16진수>. work-id는 앱 하나 안에서만 겹치지 않아
+   * 팀원의 Work가 같은 레포에 남긴 글과 가린다
+   */
+  mark: string
   /** 게시할 항목. 앞부터 하나씩 게시한다 (D344) */
   pending: IssueEntry[]
   posted: IssuePosted[]

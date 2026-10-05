@@ -44,9 +44,17 @@ export function issueKey(entry: IssueEntry): string {
   }
 }
 
-/** 본문과 코멘트 끝에 붙이는 보이지 않는 표시 (D349). 게시 결과를 모를 때 원격에서 이것으로 찾는다 */
-export function issueMarker(workId: string, key: string): string {
-  return `<!-- relay:${workId}/issue/${key} -->`
+/**
+ * 본문과 코멘트 끝에 붙이는 보이지 않는 표시 (D349). 게시 결과를 모를 때 원격에서 이것으로 찾는다. mark는 Work를 만들 때
+ * 정한 표시 id(issueMarkId)다: work-id는 앱 하나 안에서만 겹치지 않으므로 팀원의 Work와 가리려고 임의의 글자를 붙인다
+ */
+export function issueMarker(mark: string, key: string): string {
+  return `<!-- relay:${mark}/issue/${key} -->`
+}
+
+/** 표시 id (D349): <work-id>-<임의의 16진수>. nonce는 main이 만든다 */
+export function issueMarkId(workId: string, nonce: string): string {
+  return `${workId}-${nonce}`
 }
 
 /** 원격의 글(이슈나 코멘트) 가운데 표시가 있는 것. 없으면 null */
@@ -82,9 +90,11 @@ export function withCloses(body: string, issue: number): string {
 
 // ---------- 대기열 (I97) ----------
 
-/** 새 Work의 이슈 기록 (I96). linked는 새 Work 대화상자에 적은 기존 이슈 번호다 (D338) */
-export function newIssueRecord(linked: number | null): IssueRecord {
-  return { linked: linked !== null, number: linked, url: null, pending: [], posted: [] }
+/**
+ * 새 Work의 이슈 기록 (I96). linked는 새 Work 대화상자에 적은 기존 이슈 번호(D338), mark는 표시 id(issueMarkId)다
+ */
+export function newIssueRecord(linked: number | null, mark: string): IssueRecord {
+  return { linked: linked !== null, number: linked, url: null, mark, pending: [], posted: [] }
 }
 
 /**
@@ -189,14 +199,19 @@ export function issueTitle(intent: string, workId: string): string {
 }
 
 /** 이슈 본문 (D336): 안내 한 줄, intent(머리글 뺌), 표시 */
-export function issueBody(o: { workId: string; type: WorkType; intent: string }): string {
+export function issueBody(o: {
+  workId: string
+  mark: string
+  type: WorkType
+  intent: string
+}): string {
   return limited(
     [
       `> relay Work \`${o.workId}\`(${WORK_TYPE_LABEL[o.type]})의 기록이다. 단계가 승인될 때마다 코멘트를 덧붙인다.`,
       intentBody(o.intent),
     ],
     [],
-    issueMarker(o.workId, 'body'),
+    issueMarker(o.mark, 'body'),
   )
 }
 
@@ -226,7 +241,8 @@ export interface IssueArtifact {
  * decisions, 접은 산출물, 표시. intake는 산출물(intent 초안) 대신 intent를 펼친다. 새 이슈의 v1은 본문과 같아 뺀다
  */
 export function taskComment(o: {
-  workId: string
+  /** 표시 id (issueMarkId) */
+  mark: string
   task: Pick<TaskRecord, 'id' | 'node' | 'approved_by'>
   /** handoff.md. 없으면 null */
   handoff: string | null
@@ -243,12 +259,13 @@ export function taskComment(o: {
   const decisions = fm?.ok ? decisionLines(fm.data['decisions']) : []
   if (decisions.length) head.push(`**결정**\n\n${decisions.join('\n')}`)
   const artifacts = o.task.node === 'intake' ? [] : o.artifacts
-  return limited(head, artifacts, issueMarker(o.workId, o.task.id))
+  return limited(head, artifacts, issueMarker(o.mark, o.task.id))
 }
 
 /** 단계 선택 코멘트 (D341): 폐기한 task, 고른 단계, 사람 추가 지시 */
 export function stepComment(o: {
-  workId: string
+  /** 표시 id (issueMarkId) */
+  mark: string
   task: Pick<TaskRecord, 'id' | 'node' | 'reason' | 'selection'>
   /** 폐기한 task의 이름 ("t-02 원인 분석과 수정") */
   discarded: readonly string[]
@@ -260,12 +277,32 @@ export function stepComment(o: {
   ]
   const instruction = o.task.selection?.instruction?.trim()
   if (instruction) lines.push(`**추가 지시**\n\n${instruction}`)
-  return limited(lines, [], issueMarker(o.workId, `rewind-${o.task.id}`))
+  return limited(lines, [], issueMarker(o.mark, `rewind-${o.task.id}`))
 }
 
 /** 끝 코멘트 (D347): 한 줄과 표시 */
-export function endComment(workId: string, text: string): string {
-  return `${text}\n\n${issueMarker(workId, 'end')}\n`
+export function endComment(mark: string, text: string): string {
+  return `${text}\n\n${issueMarker(mark, 'end')}\n`
+}
+
+/** 코드 펜스(``` 또는 ~~~)를 여는 줄의 표시. 닫히지 않았으면 그 표시, 모두 닫혔으면 null */
+export function openFence(text: string): string | null {
+  let open: string | null = null
+  for (const line of normalizeText(text).split('\n')) {
+    const m = /^ {0,3}(`{3,}|~{3,})/.exec(line)
+    if (!m?.[1]) continue
+    const fence = m[1]
+    if (open === null) open = fence
+    else if (fence[0] === open[0] && fence.length >= open.length && line.trim() === fence)
+      open = null
+  }
+  return open
+}
+
+/** 잘린 글: 닫히지 않은 코드 펜스를 닫고 잘린 말을 붙인다. 잘린 말과 그 뒤가 코드로 보이지 않게 한다 (D349) */
+function cut(text: string): string {
+  const fence = openFence(text)
+  return `${text}${fence ? `\n${fence}` : ''}\n\n${CUT_NOTE}`
 }
 
 /**
@@ -280,9 +317,9 @@ function limited(
   const tail = `\n\n${marker}\n`
   const room = ISSUE_TEXT_LIMIT - tail.length
   let text = parts.filter(Boolean).join('\n\n')
-  if (text.length > room) {
-    return `${text.slice(0, room - CUT_NOTE.length - 2)}\n\n${CUT_NOTE}${tail}`
-  }
+  // 잘린 말과 닫는 펜스가 들어갈 자리
+  const spare = CUT_NOTE.length + 20
+  if (text.length > room) return `${cut(text.slice(0, room - spare))}${tail}`
   for (const a of artifacts) {
     const open = `\n\n<details><summary>${a.name}</summary>\n\n`
     const close = '\n\n</details>'
@@ -292,8 +329,8 @@ function limited(
       text += `${open}${body}${close}`
       continue
     }
-    const keep = left - CUT_NOTE.length - 2
-    if (keep > 0) text += `${open}${body.slice(0, keep)}\n\n${CUT_NOTE}${close}`
+    const keep = left - spare
+    if (keep > 0) text += `${open}${cut(body.slice(0, keep))}${close}`
     else if (room - text.length > CUT_NOTE.length + 2) text += `\n\n${CUT_NOTE}`
     break
   }

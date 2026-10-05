@@ -1,6 +1,6 @@
 # relay-v2 구현 계획
 
-- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I101)
+- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102)
 - 상태: 정함. 주제마다 사람과 문답으로 정했다(설계 부록 A의 진행 규칙). 바꾸려면 사용자와 다시 정한다.
 
 Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서는 [engines.md](engines.md)에서 관리한다. 이 문서의 기존 Claude 동작은 확장 중 회귀 시험의 기준이다.
@@ -112,9 +112,10 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I96 | 이슈 기록을 켤지는 Work를 만들 때 정한다. 프로젝트의 `issue_log`가 켜져 있으면(없으면 켜짐, D337) `work.json`에 `issue`를 두고, 새 Work 대화상자의 이슈 번호(D338)도 그때 적는다. Work 도중에 설정을 바꿔도 이미 만든 Work는 그대로다 | 도중에 꺼지거나 켜지면 이슈의 앞뒤가 끊기고, 켠 뒤의 Work는 이슈 없이 시작한 앞 단계를 올릴 곳이 없음 | |
 | I97 | 게시 대기열(`issue.pending`)은 `core/machine`이 바꾼다. `transition`의 끝에서 이번 전이가 남긴 이벤트를 보고 항목을 더하고 `publishIssue` 할 일을 낸다: `task.approved`(PR 대응 빼고, 의도 승인이면 새 이슈 만들기를 먼저), `task.rewound`·`task.skipped_to`(올렸거나 올릴 task를 폐기했을 때만), `work.completed`·`work.abandoned`(끝 코멘트와, 새 이슈면 닫기). 끝 코멘트의 문구와 닫는 까닭은 이때 정해 항목에 적는다. 글은 게시할 때 `core/issue`가 task의 파일로 만든다(D349) | `work.json`은 machine만 바꾼다(I10, I11). 기존 전이마다 손대지 않고 이벤트 하나로 모은다 | |
 | I98 | 게시는 `main/work`가 Work의 처리 줄 밖에서 대기열의 앞부터 하나씩 한다. 시도 전(`issue.attempted`)과 결과(`issue.created`, `issue.posted`, `issue.closed`, `issue.failed`)만 처리 줄로 넣는다. 실패하면 멈추고, 다음 할 일(다음 승인 등)이나 패널의 [다시 시도], 앱을 다시 켤 때 앞부터 다시 한다 | 네트워크가 느려도 훅과 승인을 막지 않는다(D344). 순서는 대기열 하나로 지킨다 | |
-| I99 | gh 명령: 라벨 `gh label create relay --repo`(실패는 이미 있음이나 권한으로 보고 넘긴다), 이슈 `gh issue create --repo --title --body-file --label relay`(라벨 때문에 실패하면 라벨 없이 다시, 번호는 찍힌 주소에서), 코멘트 `gh issue comment <n> --repo --body-file`(id는 주소의 `#issuecomment-<id>`), 닫기 `gh issue close <n> --repo --reason`. 레포는 PR 만들기와 같은 origin의 `ghRepo`다. 시도한 적이 있는 항목은 실패 종류와 관계없이 먼저 원격에서 표시(D349)를 찾는다: 이슈는 `gh issue list --state all --json number,url,body`, 코멘트는 `gh issue view <n> --comments --json comments` | PR 만들기(7-4)와 같은 `--repo` 길이라 가짜 gh의 로컬 원격에서도 돈다. gh 하위 명령은 성공·실패만 알려 주므로 결과를 모르는 요청을 따로 가리지 않고 늘 찾는다 | |
+| I99 | gh 명령: 라벨은 `gh label list --repo --search relay`로 있는지 보고 없으면 `gh label create relay --repo`(만들지 못하면 권한이 없는 것으로 보고 라벨 없이 만든다), 이슈 `gh issue create --repo --title --body-file [--label relay]`(번호는 찍힌 주소에서), 코멘트 `gh issue comment <n> --repo --body-file`(id는 주소의 `#issuecomment-<id>`), 닫기 `gh issue close <n> --repo --reason`. 레포는 PR 만들기와 같은 origin의 `ghRepo`다. 시도한 적이 있는 항목은 실패 종류와 관계없이 먼저 원격에서 표시(D349)를 찾는다: 이슈는 `gh issue list --author @me --state all --json url,body,labels --limit 1000`(내가 만든 이슈로 좁혀 레포가 바빠도 찾는다. 찾은 이슈의 라벨을 적는다), 코멘트는 `gh issue view <n> --comments --json comments` | PR 만들기(7-4)와 같은 `--repo` 길이라 가짜 gh의 로컬 원격에서도 돈다. gh 하위 명령은 성공·실패만 알려 주므로 결과를 모르는 요청을 따로 가리지 않고 늘 찾는다 | |
 | I100 | 머지를 읽으면(D178, D179) 기준 브랜치와 관계없이 새 이슈를 닫는다. 이미 `Closes`로 닫혔으면 gh가 그대로 성공한다 | 기본 브랜치인지 읽지 않아도 D349(5)를 지킨다 | |
 | I101 | [흐름] 시험의 `register`는 이슈 기록을 끈다(지식 관리처럼, 기존 시험의 gh 기록이 그대로). `test/flow/issue.test.ts`가 켜서 본다. 가짜 gh에 `label create`, `issue create/comment/close/list/view`를 더하고 이슈는 `FAKE_GH_RECORD`의 `issues.json`에 둔다. 실패는 `FAKE_GH_FAIL=issue` | 기존 시험이 새 gh 호출로 흔들리지 않게 | |
+| I102 | PR #33 리뷰 반영: IPC의 새 Work 입력이 이슈 번호를 넘긴다. intent의 한 버전은 지금 버전이면 `intent.md`, 아니면 `intent.history/`에서만 읽고 없으면 실패한다(다른 버전으로 대신하지 않음). 잘린 산출물이 코드 펜스 안이면 펜스를 닫고 잘린 말을 붙인다. 산출물 목록은 `WorkFiles.artifactTexts`(D89와 같은 파일)에서, gh에 줄 레포는 게시 줄이 한 번 도는 동안 한 번만 읽는다 | 리뷰가 찾은 버그와 중복 | |
 
 ## 3. 확인한 사실
 

@@ -102,10 +102,7 @@ export interface CreatePrOptions extends GhRepoOptions {
  * 돌려준다 (gh 소스 pkg/cmd/pr/create).
  */
 export async function ghCreatePr(bin: string, o: CreatePrOptions): Promise<string> {
-  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'relay-pr-'))
-  const bodyFile = path.join(dir, 'body.md')
-  try {
-    await fsp.writeFile(bodyFile, o.body, 'utf8')
+  return withBodyFile(o.body, async (bodyFile) => {
     const r = await run(
       bin,
       [
@@ -126,16 +123,33 @@ export async function ghCreatePr(bin: string, o: CreatePrOptions): Promise<strin
       { cwd: o.cwd, env: ghEnv(o.env), timeoutMs: 120_000 },
     )
     if (r.code !== 0) throw new GhError(`gh pr create 실패: ${describeFailure(r)}`)
-    const url = r.stdout
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter((l) => /^https?:\/\//.test(l))
-      .pop()
+    const url = lastUrl(r.stdout)
     if (!url) throw new GhError(`gh pr create가 PR 주소를 찍지 않음: ${r.stdout.slice(0, 200)}`)
     return url
+  })
+}
+
+/** 본문을 임시 파일로 넘긴다(--body-file): 명령줄 길이와 인용을 피한다 */
+async function withBodyFile<T>(body: string, fn: (file: string) => Promise<T>): Promise<T> {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'relay-body-'))
+  const file = path.join(dir, 'body.md')
+  try {
+    await fsp.writeFile(file, body, 'utf8')
+    return await fn(file)
   } finally {
     await fsp.rm(dir, { recursive: true, force: true })
   }
+}
+
+/** gh가 찍은 출력에서 마지막 주소 줄 */
+function lastUrl(stdout: string): string | null {
+  return (
+    stdout
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => /^https?:\/\//.test(l))
+      .pop() ?? null
+  )
 }
 
 // ---------- PR 진행 (시나리오 10). 명령은 S7에서 확인한 것이다 (docs/spikes.md S7, PR #14) ----------
@@ -379,26 +393,27 @@ export async function ghRerunFailed(
 
 // ---------- 이슈 기록 (설계 3.7, I99). 레포는 PR 만들기와 같은 origin의 --repo다 ----------
 
-/** 본문을 임시 파일로 넘긴다(--body-file): 명령줄 길이와 인용을 피한다 */
-async function withBodyFile<T>(body: string, fn: (file: string) => Promise<T>): Promise<T> {
-  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'relay-issue-'))
-  const file = path.join(dir, 'body.md')
-  try {
-    await fsp.writeFile(file, body, 'utf8')
-    return await fn(file)
-  } finally {
-    await fsp.rm(dir, { recursive: true, force: true })
-  }
-}
-
-/** 찍힌 출력에서 마지막 주소 줄 */
-function lastUrl(stdout: string): string | null {
+/**
+ * 레포에 라벨이 있는가 (D348): gh label list --repo --search <이름> --json name. 찾기는 비슷한 이름도 주므로 이름이 같은
+ * 것만 본다
+ */
+export async function ghLabelExists(
+  bin: string,
+  o: GhRepoOptions & { name: string },
+): Promise<boolean> {
+  const r = await run(
+    bin,
+    ['label', 'list', '--repo', o.repo, '--search', o.name, '--json', 'name', '--limit', '100'],
+    { cwd: o.cwd, env: ghEnv(o.env), timeoutMs: 60_000 },
+  )
+  if (r.code !== 0) throw new GhError(`gh label list 실패: ${describeFailure(r)}`)
+  const list = parseJson('gh label list', r.stdout || '[]')
   return (
-    stdout
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter((l) => /^https?:\/\//.test(l))
-      .pop() ?? null
+    Array.isArray(list) &&
+    list.some(
+      (x: unknown) =>
+        !!x && typeof x === 'object' && (x as Record<string, unknown>)['name'] === o.name,
+    )
   )
 }
 
@@ -512,14 +527,16 @@ export interface GhIssueText {
   body: string
 }
 
+/** 원격의 이슈 하나: 주소, 본문, 라벨 */
+export interface GhIssue extends GhIssueText {
+  labels: string[]
+}
+
 /**
- * 최근 이슈의 주소와 본문 (D349): gh issue list --repo --state all --json url,body --limit <n>. 게시 결과를 모르는 이슈
- * 만들기를 표시로 찾는다
+ * 내가 만든 이슈의 주소, 본문, 라벨 (D349): gh issue list --repo --author @me --state all --json url,body,labels --limit 1000.
+ * 게시 결과를 모르는 이슈 만들기를 표시로 찾는다. 작성자로 좁혀 레포가 바빠도 그사이 내가 만든 이슈만 본다
  */
-export async function ghIssueList(
-  bin: string,
-  o: GhRepoOptions & { limit?: number },
-): Promise<GhIssueText[]> {
+export async function ghIssueList(bin: string, o: GhRepoOptions): Promise<GhIssue[]> {
   const r = await run(
     bin,
     [
@@ -527,17 +544,32 @@ export async function ghIssueList(
       'list',
       '--repo',
       o.repo,
+      '--author',
+      '@me',
       '--state',
       'all',
       '--json',
-      'url,body',
+      'url,body,labels',
       '--limit',
-      String(o.limit ?? 100),
+      '1000',
     ],
-    { cwd: o.cwd, env: ghEnv(o.env), timeoutMs: 60_000 },
+    { cwd: o.cwd, env: ghEnv(o.env), timeoutMs: 120_000 },
   )
   if (r.code !== 0) throw new GhError(`gh issue list 실패: ${describeFailure(r)}`)
-  return texts(parseJson('gh issue list', r.stdout || '[]'))
+  const list = parseJson('gh issue list', r.stdout || '[]')
+  if (!Array.isArray(list)) return []
+  return list.flatMap((x: unknown): GhIssue[] => {
+    const [t] = texts([x])
+    if (!t) return []
+    const raw = (x as Record<string, unknown>)['labels']
+    const labels = Array.isArray(raw)
+      ? raw.flatMap((l: unknown) => {
+          const name = l && typeof l === 'object' ? (l as Record<string, unknown>)['name'] : null
+          return typeof name === 'string' ? [name] : []
+        })
+      : []
+    return [{ ...t, labels }]
+  })
 }
 
 /**

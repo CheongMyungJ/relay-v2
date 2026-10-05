@@ -181,6 +181,8 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
       baseBranch: text(input.baseBranch),
       baseLocation: input.baseLocation === 'remote' ? 'remote' : 'local',
       ...(input.settings === undefined ? {} : { settings: input.settings }),
+      // 기존 이슈 번호 (D338). 정수인지는 Relay.createWork가 본다
+      ...(typeof input.issueNumber === 'number' ? { issueNumber: input.issueNumber } : {}),
     }),
   )
   ipcMain.handle(IPC.review, async (_e, workKey: unknown, taskId: unknown) =>

@@ -14,6 +14,7 @@ import {
   issueNumberOf,
   issueTitle,
   issueUrlOf,
+  openFence,
   stepComment,
   taskComment,
   withCloses,
@@ -68,7 +69,9 @@ const VALID: TaskCheck = {
 
 const apply = (work: WorkState, event: MachineEvent): Transition => transition(work, event, MANUAL)
 
-function newWork(issue: { linked: number | null } | null = { linked: null }): WorkState {
+function newWork(
+  issue: { linked: number | null; mark: string } | null = { linked: null, mark: 'w-1-abcd' },
+): WorkState {
   return createWork({
     type: 'bugfix',
     workId: 'w-20261005-001',
@@ -118,7 +121,15 @@ const ev = (
 
 const withIssue = (work: WorkState, patch: Partial<IssueRecord>): WorkState => ({
   ...work,
-  issue: { linked: false, number: 1, url: null, pending: [], posted: [], ...patch },
+  issue: {
+    linked: false,
+    number: 1,
+    url: null,
+    mark: 'w-1-abcd',
+    pending: [],
+    posted: [],
+    ...patch,
+  },
 })
 
 describe('이슈 기록의 대기열 (I97)', () => {
@@ -138,7 +149,7 @@ describe('이슈 기록의 대기열 (I97)', () => {
   })
 
   it('기존 이슈는 만들지 않고 intake 코멘트부터 단다 (D338)', () => {
-    const r = approveCurrent(newWork({ linked: 7 }))
+    const r = approveCurrent(newWork({ linked: 7, mark: 'w-1-abcd' }))
     expect(r.work.issue).toMatchObject({ linked: true, number: 7 })
     expect(r.work.issue?.pending).toEqual([{ kind: 'task', task_id: 't-01', intent_version: 1 }])
   })
@@ -193,7 +204,8 @@ describe('이슈 기록의 대기열 (I97)', () => {
     ])
     expect(apply(newWork(), { type: 'abandon', at: at() }).work.issue?.pending).toEqual([])
     expect(
-      apply(newWork({ linked: 7 }), { type: 'abandon', at: at() }).work.issue?.pending,
+      apply(newWork({ linked: 7, mark: 'w-1-abcd' }), { type: 'abandon', at: at() }).work.issue
+        ?.pending,
     ).toEqual([])
   })
 
@@ -294,7 +306,7 @@ describe('게시의 결과 (I98, D344, D349)', () => {
   })
 
   it('기존 이슈의 주소는 첫 코멘트의 주소에서 읽고, 닫기는 항목의 까닭을 적는다', () => {
-    const linked = approveCurrent(newWork({ linked: 7 })).work
+    const linked = approveCurrent(newWork({ linked: 7, mark: 'w-1-abcd' })).work
     const posted = apply(linked, {
       type: 'issue.posted',
       at: at(),
@@ -334,7 +346,7 @@ describe('이슈의 글 (D336, D339, D341, D347, D348, D349)', () => {
   })
 
   it('본문은 안내 한 줄, 머리글을 뺀 intent, 표시다 (D336)', () => {
-    const body = issueBody({ workId: 'w-1', type: 'bugfix', intent: INTENT })
+    const body = issueBody({ workId: 'w-1', mark: 'w-1', type: 'bugfix', intent: INTENT })
     expect(body).toBe(
       [
         '> relay Work `w-1`(버그 수정)의 기록이다. 단계가 승인될 때마다 코멘트를 덧붙인다.',
@@ -372,7 +384,7 @@ describe('이슈의 글 (D336, D339, D341, D347, D348, D349)', () => {
 
   it('task 코멘트는 머리 줄, 요약, 결정, 접은 산출물, 표시다 (D339, D342)', () => {
     const text = taskComment({
-      workId: 'w-1',
+      mark: 'w-1',
       task: { id: 't-02', node: 'fix', approved_by: 'auto' },
       handoff: HANDOFF_MD,
       artifacts: [{ name: 'fix.md', text: '## 재현\n로그\n' }],
@@ -408,7 +420,7 @@ describe('이슈의 글 (D336, D339, D341, D347, D348, D349)', () => {
     expect(commentShowsIntent({ linked: false }, 2)).toBe(true)
     expect(commentShowsIntent({ linked: true }, 1)).toBe(true)
     const text = taskComment({
-      workId: 'w-1',
+      mark: 'w-1',
       task: { id: 't-04', node: 'intake', approved_by: 'human' },
       handoff: HANDOFF_MD,
       artifacts: [{ name: 'intent.draft.md', text: '초안' }],
@@ -421,7 +433,7 @@ describe('이슈의 글 (D336, D339, D341, D347, D348, D349)', () => {
 
   it('handoff를 읽지 못하면 요약 자리에 그렇게 적는다', () => {
     const text = taskComment({
-      workId: 'w-1',
+      mark: 'w-1',
       task: { id: 't-02', node: 'fix', approved_by: 'human' },
       handoff: null,
       artifacts: [],
@@ -432,7 +444,7 @@ describe('이슈의 글 (D336, D339, D341, D347, D348, D349)', () => {
 
   it('상한을 넘으면 접은 산출물을 잘라 잘린 말을 붙이고, 표시는 늘 끝에 둔다 (D349)', () => {
     const text = taskComment({
-      workId: 'w-1',
+      mark: 'w-1',
       task: { id: 't-02', node: 'fix', approved_by: 'human' },
       handoff: HANDOFF_MD,
       artifacts: [
@@ -446,6 +458,7 @@ describe('이슈의 글 (D336, D339, D341, D347, D348, D349)', () => {
     expect(text.endsWith('<!-- relay:w-1/issue/t-02 -->\n')).toBe(true)
     const huge = issueBody({
       workId: 'w-1',
+      mark: 'w-1',
       type: 'bugfix',
       intent: `## 목표\n${'x'.repeat(70_000)}`,
     })
@@ -454,9 +467,26 @@ describe('이슈의 글 (D336, D339, D341, D347, D348, D349)', () => {
     expect(huge.endsWith('<!-- relay:w-1/issue/body -->\n')).toBe(true)
   })
 
+  it('잘린 산출물이 코드 펜스 안이면 펜스를 닫고 잘린 말을 붙인다 (D349)', () => {
+    expect(openFence('a\n```js\nx\n```\nb')).toBeNull()
+    expect(openFence('a\n```js\nx\n')).toBe('```')
+    expect(openFence('~~~~\n```\n')).toBe('~~~~')
+    const text = taskComment({
+      mark: 'w-1',
+      task: { id: 't-02', node: 'fix', approved_by: 'human' },
+      handoff: null,
+      artifacts: [
+        { name: 'fix.md', text: `## 로그\n\n\`\`\`\n${'로그 줄\n'.repeat(20_000)}\`\`\`\n` },
+      ],
+    })
+    expect(text.length).toBeLessThanOrEqual(ISSUE_TEXT_LIMIT)
+    expect(text).toContain(`\n\`\`\`\n\n${CUT_NOTE}\n\n</details>`)
+    expect(openFence(text)).toBeNull()
+  })
+
   it('단계 선택 코멘트는 폐기한 task, 다시 하는 task, 추가 지시다 (D341)', () => {
     const text = stepComment({
-      workId: 'w-1',
+      mark: 'w-1',
       task: {
         id: 't-04',
         node: 'fix',
@@ -488,7 +518,7 @@ describe('이슈의 글 (D336, D339, D341, D347, D348, D349)', () => {
     )
     expect(
       stepComment({
-        workId: 'w-1',
+        mark: 'w-1',
         task: { id: 't-04', node: 'verify', reason: 'skip' },
         discarded: ['t-03 리뷰와 검증'],
       }),

@@ -123,7 +123,12 @@ async function toVerify(s: Setup, awaitAuto = false): Promise<void> {
   await published(s)
 }
 
-const marker = (s: Setup, key: string) => `<!-- relay:${s.workId}/issue/${key} -->`
+/** 보이지 않는 표시 (D349). 표시 id는 work-id에 임의의 글자를 붙인 것이다 */
+function marker(s: Setup, key: string): string {
+  const mark = work(s).issue?.mark ?? ''
+  expect(mark).toMatch(new RegExp(`^${s.workId}-[0-9a-f]{8}$`))
+  return `<!-- relay:${mark}/issue/${key} -->`
+}
 
 describe('[흐름] 이슈 기록 (M19, 설계 3.7)', () => {
   it('의도 승인에서 라벨을 붙인 이슈를 만들고, 승인된 task마다 코멘트를 달고, [PR 생성]에 Closes를 붙인다 (D336, D339, D342, D346, D348)', async () => {
@@ -231,8 +236,8 @@ describe('[흐름] 이슈 기록 (M19, 설계 3.7)', () => {
     ])
   })
 
-  it('[Work 포기]는 끝 코멘트를 달고 not planned로 닫는다. 의도 승인 전에 포기하면 아무것도 올리지 않는다 (D346)', async () => {
-    const s = await setup(scenario())
+  it('[Work 포기]는 끝 코멘트를 달고 not planned로 닫는다. 라벨을 만들 권한이 없으면 라벨 없이 만든다. 의도 승인 전에 포기하면 아무것도 올리지 않는다 (D346, D349)', async () => {
+    const s = await setup(scenario(), { env: { FAKE_GH_FAIL: 'label' } })
     const r = await drive(s.h.relay, s.h.ui, s.key, {
       pauseAt: (t) => t.node === 'fix' && t.status === 'awaiting_approval',
     })
@@ -244,7 +249,8 @@ describe('[흐름] 이슈 기록 (M19, 설계 3.7)', () => {
       '### t-01 의도 정리 · 승인(사람)',
       'Work 포기',
     ])
-    expect(issue).toMatchObject({ state: 'closed', state_reason: 'not planned' })
+    expect(issue).toMatchObject({ state: 'closed', state_reason: 'not planned', labels: [] })
+    expect(events(s).find((e) => e.type === 'issue.created')?.payload['labeled']).toBe(false)
     await h?.close()
 
     const t = await setup(scenario())
@@ -259,6 +265,7 @@ describe('[흐름] 이슈 기록 (M19, 설계 3.7)', () => {
       linked: false,
       number: null,
       url: null,
+      mark: expect.stringMatching(new RegExp(`^${t.workId}-[0-9a-f]{8}$`)) as unknown,
       pending: [],
       posted: [],
     })
@@ -330,9 +337,10 @@ describe('[흐름] 이슈 기록 (M19, 설계 3.7)', () => {
     let w = work(s)
     expect(w.issue?.pending.map((e) => e.kind)).toEqual(['issue', 'task', 'task'])
     expect(w.issue?.failure).toMatchObject({ key: 'body' })
-    // 처음은 만들기가, 그 뒤로는 시도한 적이 있어 먼저 찾는 목록 읽기가 실패한다 (D349)
-    expect(w.issue?.failure?.error).toContain('gh issue list 실패')
-    expect(gh(s, 'issue create')).toHaveLength(1)
+    // 만들기 전에 라벨을 읽다가 실패해 만들기를 시도하지 않았다
+    expect(w.issue?.failure?.error).toContain('gh label list 실패')
+    expect(w.issue?.attempted_at).toBeUndefined()
+    expect(gh(s, 'issue create')).toEqual([])
     expect(s.h.ui.works.get(s.key)?.issue).toMatchObject({ number: null, pending: 3 })
     // 실패하는 동안의 [다시 시도]는 다시 실패한다
     expect(await s.h.relay.issueRetry(s.key)).toEqual({ ok: true })
@@ -388,11 +396,15 @@ describe('[흐름] 이슈 기록 (M19, 설계 3.7)', () => {
       ['body', null],
       ['t-01', all.issues[0]?.comments[0]?.id],
     ])
+    // 찾은 이슈의 라벨을 읽어 적는다
     expect(
       events(s)
         .filter((e) => e.type === 'issue.created' || e.type === 'issue.posted')
-        .map((e) => e.payload['found'] ?? false),
-    ).toEqual([true, true])
+        .map((e) => [e.payload['found'] ?? false, e.payload['labeled'] ?? null]),
+    ).toEqual([
+      [true, true],
+      [true, null],
+    ])
   })
 
   it('이슈 기록을 끈 프로젝트는 이슈를 올리지 않는다 (D337, I96)', async () => {

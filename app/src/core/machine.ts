@@ -1154,10 +1154,10 @@ export interface NewWork {
   /** 앱이 쓴 request.md의 해시 (D124) */
   requestHash?: string
   /**
-   * 이슈 기록 (I96). 이슈 기록이 켜진 프로젝트면 있고, linked는 새 Work 대화상자에 적은 기존 이슈 번호다(D338). 없으면 이슈
-   * 기록이 없다
+   * 이슈 기록 (I96). 이슈 기록이 켜진 프로젝트면 있고, linked는 새 Work 대화상자에 적은 기존 이슈 번호(D338), mark는 보이지
+   * 않는 표시의 id(D349)다. 없으면 이슈 기록이 없다
    */
-  issue?: { linked: number | null }
+  issue?: { linked: number | null; mark: string }
   at: string
 }
 
@@ -1176,7 +1176,7 @@ export function createWork(input: NewWork): Transition {
     // 빈 값은 앱 설정을 따른다는 뜻이라 두지 않는다 (D72)
     settings: mergeWorkSettings({}, input.settings ?? {}),
     file_hashes: hashes,
-    ...(input.issue ? { issue: newIssueRecord(input.issue.linked) } : {}),
+    ...(input.issue ? { issue: newIssueRecord(input.issue.linked, input.issue.mark) } : {}),
     tasks: [],
   }
   const intake = { ...newTask(empty, 'intake', input.at), engine: input.engine ?? 'claude' }

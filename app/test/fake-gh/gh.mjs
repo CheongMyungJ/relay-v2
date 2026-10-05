@@ -26,9 +26,9 @@
 // - FAKE_GH_FAIL=list|create|view|api|event|log|merge|post|rerun(쉼표로 여럿)면 그 명령이 종료 코드 1로 실패한다. api는
 //   REST 요청 모두, event는 실행 읽기만, post는 POST만이다. merge는 새 커밋이 생긴 직후 GitHub가 준 "Pull Request is not
 //   mergeable"이다(M9 [실제]). rerun은 gh가 403에 쓰는 "run <id> cannot be rerun; …"이다(3절).
-// - 이슈 기록(M19): `label create <이름> --repo R`(이미 있으면 실패), `issue create --repo R --title T --body-file F [--label L]`
+// - 이슈 기록(M19): `label list --repo R --search S --json name`, `label create <이름> --repo R`(이미 있으면 실패), `issue create --repo R --title T --body-file F [--label L]`
 //   (라벨이 없으면 "could not add label"), `issue comment <n> --repo R --body-file F`(코멘트 주소 #issuecomment-<id>를 찍음),
-//   `issue close <n> --repo R --reason …`(이미 닫혔으면 알리고 성공), `issue list --repo R --state all --json url,body`,
+//   `issue close <n> --repo R --reason …`(이미 닫혔으면 알리고 성공), `issue list --repo R --author @me --state all --json url,body,labels`(이슈는 모두 앱의 사람이 만든 것),
 //   `issue view <n> --repo R --json comments`. 라벨과 이슈는 FAKE_GH_RECORD/issues.json에 둔다. 그 faults는 이슈 만들기와
 //   코멘트마다 앞에서 하나씩 꺼낸다: error는 하지 않고 실패, posted는 한 뒤 실패. FAKE_GH_FAIL의 issue는 issue 명령 모두,
 //   label은 라벨 만들기(권한 없음)다.
@@ -536,6 +536,15 @@ function nextFault(v) {
   return f
 }
 
+if (cmd === 'label' && sub === 'list') {
+  record({ type: 'label list' })
+  if (failing('issue')) fail('HTTP 502: Bad Gateway (가짜 gh)')
+  const search = opt('--search') ?? ''
+  const names = (loadIssues().labels[opt('--repo')] ?? []).filter((n) => n.includes(search))
+  process.stdout.write(`${JSON.stringify(names.map((name) => ({ name })))}\n`)
+  process.exit(0)
+}
+
 if (cmd === 'label' && sub === 'create') {
   record({ type: 'label create' })
   const repo = opt('--repo')
@@ -630,7 +639,7 @@ if (cmd === 'issue' && sub === 'list') {
     .issues.filter((i) => i.repo === repo)
     .sort((a, b) => b.number - a.number)
     .slice(0, limit)
-    .map((i) => ({ url: i.url, body: i.body }))
+    .map((i) => ({ url: i.url, body: i.body, labels: i.labels.map((name) => ({ name })) }))
   process.stdout.write(`${JSON.stringify(list)}\n`)
   process.exit(0)
 }
