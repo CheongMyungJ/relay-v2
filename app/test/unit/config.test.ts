@@ -389,7 +389,10 @@ describe('[단위] 지식 검토의 엔진과 모델 (D334)', () => {
       value: { knowledge_review_model: '' },
     })
     const bad = normalizeConfig({ knowledge_review_engine: 1, knowledge_review_model: 'x\ny' })
-    expect(bad.config).toMatchObject({ knowledge_review_engine: 'claude', knowledge_review_model: '' })
+    expect(bad.config).toMatchObject({
+      knowledge_review_engine: 'claude',
+      knowledge_review_model: '',
+    })
     expect(bad.warnings).toHaveLength(2)
   })
 })
