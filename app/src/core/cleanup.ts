@@ -58,8 +58,7 @@ export function cleanPreview(facts: CleanFacts): CleanPreview {
     uncommitted: [...facts.uncommitted],
     locks: [...facts.locks],
     live: facts.live,
-    // PR을 머지했으면(D178) squash·rebase 머지로 조상이 아니어도 지울 수 있다
-    branch: { ...b, deletable: b.exists && (b.pushed || b.merged || facts.merged) },
+    branch: { ...b, deletable: b.exists && (b.pushed || b.merged) },
     backups: [...facts.backups],
     merged: facts.merged,
     remote: facts.remote ? { ...facts.remote } : null,

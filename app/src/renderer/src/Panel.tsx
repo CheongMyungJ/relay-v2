@@ -157,6 +157,11 @@ export function Panel({ work, task, review, onApproved, onSelectStep, onShowClea
  * (D123). 끊긴 전달의 [다시 시도]가 커밋 안 된 변경을 돌려주면 선택지를 보인다(7-5). 끝낸 고아 프로세스(D76)와
  * 앱 밖에서 바뀐 파일(D124)은 [확인]으로 닫는다
  */
+/** 정리 세션을 띄울 엔진: 지금 task의 엔진이다 (main/work.ts startCleanup) */
+function cleanupEngine(work: WorkView): string {
+  return work.tasks.find((t) => t.id === work.current)?.engineLabel ?? 'Claude Code'
+}
+
 function Recovery({
   work,
   onDone,
@@ -262,6 +267,7 @@ function Recovery({
         <UncommittedDialog
           workId={work.workId}
           label={DELIVERY_BUTTON[pending.choice]}
+          engine={cleanupEngine(work)}
           files={pending.files}
           busy={!!busy}
           onDiscard={() => void deliver(pending.choice, 'discard', pending.files)}
@@ -284,6 +290,15 @@ function TaskNotice({ task, pr }: { task: TaskView; pr: boolean }) {
     return (
       <div className="notice">
         대기열: 살아 있는 세션이 세션 상한만큼 있어 기다립니다. 자리가 나면 자동으로 시작합니다.
+      </div>
+    )
+  }
+  if ((task.status === 'interrupted' || task.status === 'session_ended') && task.sessionUnknown) {
+    return (
+      <div className="notice">
+        {task.status === 'interrupted' ? '중단됨. ' : 'handoff 없이 세션이 끝났습니다. '}
+        대화 ID를 받지 못해 같은 대화를 다시 열 수 없습니다. [이 단계 새 세션으로 다시]로 이 단계를
+        새로 시작하세요.
       </div>
     )
   }
@@ -1217,6 +1232,7 @@ function CompletionActions({
         <UncommittedDialog
           workId={work.workId}
           label={DELIVERY_BUTTON[pending.choice]}
+          engine={cleanupEngine(work)}
           files={pending.files}
           busy={!!busy}
           onDiscard={() =>

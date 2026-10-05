@@ -22,6 +22,15 @@ describe('findClaude (D106)', () => {
     expect(r).toBe('D:\\x\\claude.exe')
   })
 
+  it('CLAUDE_BIN의 파일이 없으면 못 찾은 것이다: 로그인 실패 대신 설치 안내를 보인다 (D106, findCodex와 같음)', () => {
+    const r = findClaude({
+      env: { ...env, CLAUDE_BIN: 'D:\\x\\claude.exe' },
+      platform: 'win32',
+      exists: (f) => f !== 'D:\\x\\claude.exe',
+    })
+    expect(r).toBeNull()
+  })
+
   it('네이티브 설치 → npm 전역 → PATH 순서다', () => {
     const native = 'C:\\Users\\u\\.local\\bin\\claude.exe'
     const npm = 'C:\\Users\\u\\AppData\\Roaming\\npm\\claude.cmd'

@@ -17,8 +17,20 @@ describe('Codex 보호 범위', () => {
       'git -C /repo push',
       'echo hi; gh pr create',
       'gh --repo owner/repo pr view',
+      'git -c core.x=1 --git-dir=/repo/.git push',
+      'cd /repo && /usr/bin/git push',
+      'GIT_TRACE=1 git push',
     ])
       expect(codexToolDenial(input, 'exec_command', { cmd: command })).toBeTruthy()
+    // push·pr이 하위 명령이 아니면 막지 않는다 (Claude의 deny 규칙 `Bash(git push*)`와 같은 범위, D17)
+    for (const command of [
+      'git commit -m "feat: add push notification settings"',
+      'git stash push -m wip',
+      'git log --grep=push',
+      'git config --get push.default',
+      'gh issue create --title "fix pr template"',
+    ])
+      expect(codexToolDenial(input, 'exec_command', { cmd: command }), command).toBeNull()
     for (const p of [
       '/home/relay/work/work.json',
       '/home/relay/work/tasks/01-intake/handoff.md',

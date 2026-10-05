@@ -19,7 +19,13 @@ import { codexSkillPath } from '../adapters/codex'
 import { codexToolDenial } from '../core/codex'
 import { humanAnswers, humanQuestions } from '../core/questions'
 import type { HumanAnswerReply, PendingQuestionView } from '../shared/questions'
-import { agentLabel, knownTaskEngine, taskEngine, taskEngineVersion } from '../core/agent'
+import {
+  agentLabel,
+  knownTaskEngine,
+  sessionUnknown,
+  taskEngine,
+  taskEngineVersion,
+} from '../core/agent'
 import {
   GhApiError,
   ghApiPost,
@@ -4639,6 +4645,7 @@ export class WorkRunner {
       resumed: t.session?.resumed_at !== undefined,
       appEnded: t.session?.app_ended !== undefined,
       hasSession: !!t.session,
+      sessionUnknown: sessionUnknown(t),
       error: t.error ?? null,
       errorCount: t.check?.errors.length ?? 0,
       bounces: t.bounce_count,

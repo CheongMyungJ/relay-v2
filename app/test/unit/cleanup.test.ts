@@ -127,17 +127,6 @@ describe('정리 전 확인 요약 (8-1)', () => {
     expect(gone.branch.deletable).toBe(false)
   })
 
-  it('PR을 머지한 Work의 작업 브랜치는 squash로 조상이 아니고 원격 브랜치가 지워졌어도 지울 수 있다 (D178)', () => {
-    const p = cleanPreview(
-      facts({ merged: true, branch: { name: BRANCH, exists: true, pushed: false, merged: false } }),
-    )
-    expect(p.branch.deletable).toBe(true)
-    expect(planClean(p, input(p, { deleteBranch: true }))).toMatchObject({
-      ok: true,
-      deleteBranches: [BRANCH],
-    })
-  })
-
   it('되감기 백업 브랜치는 "함께 삭제"를 고르면 지운다 (8-2)', () => {
     const p = cleanPreview(
       facts({

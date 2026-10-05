@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { agentLabel, taskEngine, taskEngineVersion } from '../../src/core/agent'
+import { agentLabel, sessionUnknown, taskEngine, taskEngineVersion } from '../../src/core/agent'
 import { applyConfigPatch, normalizeConfig } from '../../src/core/config'
 import { actions, createWork, currentTask, transition } from '../../src/core/machine'
 import { autoApproveNote } from '../../src/core/approval'
@@ -196,5 +196,17 @@ describe('엔진 선택과 이전 기록 (E3, E5)', () => {
       claude_version: 'v2',
       session: { id: 'claude-session', pid: 11, alive: true },
     })
+  })
+})
+
+describe('[단위] 대화 ID를 받지 못한 세션', () => {
+  it('Codex가 SessionStart 전에 끝나 대화 ID가 비었을 때만이다 (engines.md 4.3)', () => {
+    const session = { id: '', alive: false } as const
+    expect(sessionUnknown({ engine: 'codex', session } as never)).toBe(true)
+    expect(sessionUnknown({ engine: 'codex', session: { ...session, id: 's-1' } } as never)).toBe(
+      false,
+    )
+    expect(sessionUnknown({ engine: 'codex' } as never)).toBe(false)
+    expect(sessionUnknown({ engine: 'claude', session } as never)).toBe(false)
   })
 })

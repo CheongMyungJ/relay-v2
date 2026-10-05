@@ -1192,6 +1192,7 @@ export function ConfirmDialog({
 export function UncommittedDialog({
   workId,
   label,
+  engine,
   files,
   busy,
   onDiscard,
@@ -1202,6 +1203,8 @@ export function UncommittedDialog({
   workId: string
   /** 원래 고른 전달: "push", "PR 생성" */
   label: string
+  /** 정리 세션을 띄울 엔진(지금 task의 엔진): "Claude Code", "Codex" */
+  engine: string
   files: string[]
   busy: boolean
   onDiscard: () => void
@@ -1235,7 +1238,7 @@ export function UncommittedDialog({
           AI 세션 열기
         </button>
         <span className="dim">
-          기록하지 않는 Claude Code 세션을 열어 정리합니다. push와 PR은 계속 막혀 있습니다.
+          기록하지 않는 {engine} 세션을 열어 정리합니다. push와 PR은 계속 막혀 있습니다.
         </span>
       </div>
       <div className="buttons">

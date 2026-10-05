@@ -22,7 +22,7 @@ export function findClaude(opts: FindClaudeOptions = {}): string | null {
   const exists = opts.exists ?? ((f: string) => fs.existsSync(f))
   const p = platform === 'win32' ? path.win32 : path.posix
 
-  if (env['CLAUDE_BIN']) return env['CLAUDE_BIN']
+  if (env['CLAUDE_BIN']) return exists(env['CLAUDE_BIN']) ? env['CLAUDE_BIN'] : null
 
   const candidates: string[] = []
   if (platform === 'win32') {

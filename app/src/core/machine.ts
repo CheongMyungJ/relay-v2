@@ -12,7 +12,7 @@
 // core/cleanup, 끊긴 작업의 알림과 재개 판정은 core/recovery, 자동 승인의 조건은 core/approval이 한다.
 import type { AppConfig, WorkSettingsPatch } from '../shared/config'
 import type { AgentEngine } from '../shared/agent'
-import { agentLabel, knownTaskEngine, taskEngine } from './agent'
+import { agentLabel, knownTaskEngine, sessionUnknown, taskEngine } from './agent'
 import type { Decision, NodeName, TaskNode } from '../shared/contracts'
 import type { StepExpect, WorkActions } from '../shared/views'
 import type {
@@ -1872,12 +1872,7 @@ function retry(work: WorkState, task: TaskRecord, e: Retry): Transition {
 
 /** 훅 신뢰 전에 끝나 실제 대화 ID를 받지 못한 Codex는 임의의 ID로 재개하지 않는다. */
 function unidentifiedCodex(task: TaskRecord): boolean {
-  return (
-    task.engine === 'codex' &&
-    task.status === 'interrupted' &&
-    task.session?.id === '' &&
-    !task.session.alive
-  )
+  return sessionUnknown(task) && task.status === 'interrupted' && task.session?.alive !== true
 }
 
 // ---------- Work 조작 ----------
