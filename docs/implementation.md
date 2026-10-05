@@ -37,7 +37,7 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I5 | 단위 테스트는 Vitest로 한다 | electron-vite와 같은 Vite 설정으로 TypeScript를 바로 돌림 | ✅ |
 | I6 | 패키지 관리는 npm으로 하고 lockfile을 커밋한다 | `spikes/`, `skills/`와 같음. pnpm의 심볼릭 링크 배치는 electron-builder와 네이티브 모듈 조합에서 추가 설정이 필요할 수 있음 | ✅ |
 | I7 | 앱은 레포의 `app/` 디렉터리에 독립 패키지로 둔다. 스킬 원본 `skills/`는 빌드 때 앱에 함께 넣는다 | 폴더마다 독립 패키지인 지금 구조와 같고, 스파이크 의존성이 앱에 섞이지 않음 | ✅ |
-| I8 | 배포는 electron-builder NSIS, x64, 사용자별 설치(관리자 권한 불필요)로 한다. 서명과 자동 업데이트는 없다. 설치 파일은 GitHub Actions Windows 러너의 수동 워크플로로 만들어 결과물로 올린다 | MVP 사용자는 한 명이라 릴리스 절차가 필요 없음. 러너 빌드로 설치 파일 안의 node-pty 동작도 시험함 | ✅ |
+| I8 | 배포는 electron-builder NSIS, x64, 사용자별 설치(관리자 권한 불필요)로 한다. 서명과 자동 업데이트는 없다. 설치 파일은 GitHub Actions Windows 러너의 수동 워크플로로 만들어 결과물로 올린다. 자동 업데이트와 릴리스는 I95로 바뀜 | MVP 사용자는 한 명이라 릴리스 절차가 필요 없음. 러너 빌드로 설치 파일 안의 node-pty 동작도 시험함 | ✅ |
 | I9 | 코드는 층으로 나눈다: `core`(순수 로직), `adapters`(바깥 세계), `main`(조립), `preload`, `renderer`, `shared`(타입). `core`는 Node와 Electron API를 import하지 않는다 | 규칙이 가장 많은 곳(상태, 형식 검사, 되감기 계산)을 Electron과 `claude` 없이 Vitest로 싸게 시험함 | ✅ |
 | I10 | 상태 기계는 순수 함수 `(상태, 이벤트) → (새 상태, 할 일 목록)`이다. 할 일은 `main`이 실행한다. 라이브러리는 쓰지 않는다 | 훅 신호, 사람 버튼, 재시작 조정이 같은 함수를 지나 설계의 표를 그대로 테스트로 옮김. 상태 수가 적음 | ✅ |
 | I11 | 상태의 기준은 `work.json`이다. 전이마다 원자적으로 쓰고 메모리 상태는 캐시로 본다 | 설계(5.1, D75, D77)가 `work.json` 기준으로 재시작을 정의함. 전이는 사람 속도라 매번 써도 부담이 없음 | ✅ |
@@ -108,6 +108,7 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I92 | 평가 시나리오는 `app/eval/scenarios/28-*`, `29-*`, `30-*`로 둔다(D317). `scenario.json`의 `"type": "general"`, `eval/lib/kind.mjs`에 일반 낱말을 더한다. 시나리오와 함정 **(기본값)**: 28 설정·CI 수정(CI 워크플로에 lint 단계와 Node 버전 행렬을 더함. 함정: 사람만 아는 아직 지원하는 Node 버전 하한), 29 의존성 올리기(레포 안 로컬 패키지(`file:`)의 두 판 사이를 올려 네트워크 없이 돎. 함정: 새 판에서 바뀐 기본 동작이 기존 테스트가 덮지 않는 곳에 있음, D312의 보완 확인을 봄), 30 동작 변경과 구조 정리가 섞인 일(할인 규칙 하나를 바꾸며 흩어진 할인 계산을 한 곳으로 모음. 함정: 사람만 아는 지켜야 할 적용 순서). `hidden`은 버그 수정처럼 판정 시험으로 두고, 함정 패치(`traps/`)를 둔다. `check-scenario.mjs`를 통과해야 한다 | D277, I67과 같은 모양. 셋은 D317이 정한 일의 종류이고, 함정마다 일반 유형의 장치(사람에게 묻기 D308, 보완 확인 D312, 사람 확인 D311)가 하나씩 걸리게 함 | |
 | I93 | 교차 비교(D317)는 기존 시나리오 01, 10, 15, 16, 18, 19를 일반 유형으로도 돌린다. `eval/run.mjs`의 `--arms`에 `relay@<유형>`을 받게 하고, 그 쪽은 시나리오의 유형 대신 그 유형으로 새 Work를 만든다(`relay-arm.mjs`와 `guides/relay.md`가 유형을 인자로 받음). 같은 빌드에서 `--arms relay,relay@general`로 각 3번 돌리고 짝 `relay:relay@general`을 판정한다. 맨 CLI는 유형이 없어 다시 돌리지 않고, 지난 보고서(빌드가 다름)는 참고로만 본다 **(기본값)**. 보고서는 수고(승인 수, 사람 차례, 시간)와 결과 확신(숨긴 시험, 함정)을 유형별로 나눠 보인다 | 사람이 고름: 작은 것 셋(01, 15, 18)과 함정 있는 중간 것 셋(10, 16, 19)을 모두 돌려 수고와 결과 확신을 함께 본다. 같은 빌드에서 두 유형을 견주어야 빌드 차이가 섞이지 않음 | ✅ |
 | I94 | M18은 PR 하나로 하고, core·계약·스킬 → 화면 → 시험 → 평가 도구 차례로 나눠 커밋한다. core와 스킬은 한 커밋이다: `NODE_INFO`가 가리키는 스킬 파일이 있어야 하고(`templates.test.ts`), `skills/assemble.mjs`의 유형 목록이 `WORK_TYPES`와 같아야 하며(`store.test.ts`), 그 목록에 일반이 들면 `check.mjs`가 일반 구간을 요구하므로 나누면 중간 커밋이 깨진다(M18 구현 중에 찾음). 평가 실행 결과(시나리오 28~30, 교차 비교)의 보고서는 따로 커밋한다. 번호는 앞서 쓴 M17(지식 관리, `docs/knowledge-experiment/`)과 I69~I84를 피해 M18, I85부터 쓴다 | M14, M15와 같은 차례. 지식 실험 문서가 M17과 I69~I84를 그 뜻으로 가리키므로 번호를 다시 쓰면 헷갈림 | |
+| I95 | 배포는 GitHub Releases로 하고 설치본은 자동 업데이트한다. `v<버전>` 태그를 push하면 `app-release.yml`이 태그의 버전으로 설치 파일을 빌드하고, 조용히 설치해 [스모크]를 돌린 뒤, Release를 만들어 설치 파일, `.blockmap`, `latest.yml`을 올린다. 레포의 `package.json` 버전은 0.0.0으로 두고 빌드 때만 바꾼다. `-`가 든 버전(시험판)은 prerelease로 올려 설치본이 받지 않는다. 앱은 `electron-updater`(`main/update`)로 Windows 설치본에서만 30초 뒤와 4시간마다 확인하고 뒤에서 받는다. 받으면 OS 알림을 한 번 보내고, 앱을 끝낼 때(종료 확인과 세션 정리 뒤) 설치한다. 앱이 스스로 다시 시작하지 않는다. 개발 앱, Windows가 아닌 곳, `RELAY_UPDATE=off`(두 [스모크]가 씀)에서는 끈다. 서명은 여전히 없어 첫 설치에 SmartScreen 경고가 뜨고, 업데이트 파일의 서명 확인도 하지 않는다(`publisherName` 없음) | 공개 레포라 토큰 없이 Release에서 받을 수 있음. 지금 설치하면 실행 중인 세션이 끊기므로(시나리오 3-6) 종료 때로 미룸. 릴리스 전에 설치본 [스모크]를 통과해야 올라가 깨진 버전이 퍼지지 않음 | |
 
 ## 3. 확인한 사실
 
@@ -200,7 +201,7 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | 단위 테스트 | Vitest | I5 |
 | 패키지 관리 | npm, lockfile 커밋 | I6 |
 | 레포 배치 | `app/` 독립 패키지. `skills/` 원본은 빌드 때 앱 리소스로 넣음 | I7 |
-| 배포 | electron-builder NSIS, x64, 사용자별 설치, 서명·자동 업데이트 없음. 수동 워크플로로 러너에서 빌드 | I8 |
+| 배포 | electron-builder NSIS, x64, 사용자별 설치, 서명 없음. `v<버전>` 태그로 GitHub Release, 설치본은 `electron-updater`로 자동 업데이트 | I8, I95 |
 
 - **버전:** 시작할 때의 안정 버전을 정확한 버전으로 고정한다 **(기본값)**. Electron을 올리면 node-pty 로드와 설치 파일 시험(3절의 확인 필요 항목)을 다시 한다.
 - **YAML과 스키마 검사:** `skills/check.mjs`와 같은 `yaml`, `ajv`(draft 2020-12)를 쓴다. 검사 코드는 앱에서 따로 쓴다(I18).
@@ -991,6 +992,7 @@ app/src/
 |---|---|---|
 | `.github/workflows/app-ci.yml` | push, PR (`app/`, `skills/`, `docs/contracts/`가 바뀔 때) | Linux: 타입 검사, ESLint, Prettier 확인, [단위], `skills/check.mjs` **(기본값)**. Windows: 빌드(I39), [어댑터], Codex [흐름](`test/flow/codex.test.ts`), Codex GUI [스모크](개발 빌드, `test/smoke/codex.spec.ts`), [흐름](PR 진행·대응·Codex 밖). Windows(`windows-pr`): [흐름] PR 진행·대응(`test/flow/pr*.test.ts`, I54) |
 | `.github/workflows/app-build.yml` | 수동 | 설치 파일 빌드, 조용한 설치, [스모크], 설치 파일을 결과물로 올리기(I8) |
+| `.github/workflows/app-release.yml` | `v*` 태그 push | 태그 버전으로 설치 파일 빌드, 업데이트 파일 확인, 조용한 설치, [스모크], GitHub Release에 설치 파일·`.blockmap`·`latest.yml` 올리기(I95) |
 | `.github/workflows/app-claude.yml` | 수동 | [실제]. 입력: 모델, effort. 인증은 스파이크 워크플로와 같은 레포 secret. 레포에 secret이 없으면 첫 단계에서 멈춘다. Windows 작업은 2026-09-29까지 한 번도 돌지 않았다(8.4). `cases`에 `pr`이나 `pr-cleanup`만 적으면 Linux 작업(`pr`)이 가짜 `claude`와 실제 gh로 PR 진행(M9)과 PR 대응의 push·답글 게시·다시 실행(M10)을 돈다. Claude 인증 없이 시험용 레포 secret(`RELAY_TEST_GH_REPO`, `RELAY_TEST_GH_TOKEN`)만 쓴다(I43, I49, I53). `pr-auto`를 적으면 같은 작업이 Claude Code를 설치하고 레포 secret `CLAUDE_CODE_OAUTH_TOKEN`으로 실제 `claude`와 실제 gh를 합쳐 자동 대응(M11)을 돈다(I55). 세 경우는 함께 적을 수 있다 |
 
 ### 8.4 실제 claude 시험 (I29)

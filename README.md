@@ -38,7 +38,7 @@ npm ci
 npm run dev
 ```
 
-Windows 설치 파일은 공개 배포본이 없습니다. GitHub Actions에서 `app-build` 워크플로를 수동 실행하면 실행 결과의 Artifacts에 `relay-setup-<커밋>`이 올라옵니다. 내려받은 `relay-setup-*.exe`는 관리자 권한 없이 `%LOCALAPPDATA%\Programs\relay`에 설치됩니다. 코드 서명이 없어 Windows SmartScreen 경고가 뜰 수 있고 자동 업데이트도 없습니다. 로컬 Windows에서는 `app/`에서 `npm run dist:win`으로 같은 파일을 `app/dist/`에 만들 수 있습니다.
+Windows에서는 [Releases](https://github.com/CheongMyungJ/relay-v2/releases/latest)에서 `relay-setup-<버전>.exe`를 받아 실행해도 됩니다. 관리자 권한 없이 `%LOCALAPPDATA%\Programs\relay`에 설치됩니다. 코드 서명이 없어 처음 실행할 때 SmartScreen 경고가 뜨면 [추가 정보] → [실행]을 누릅니다. 설치한 앱은 새 Release를 스스로 확인해 뒤에서 받고, 앱을 끝낼 때 설치합니다(다음 실행부터 새 버전).
 
 검증된 환경은 Windows(설치본)와 Linux(개발 앱)입니다.
 
@@ -56,6 +56,7 @@ Windows 설치 파일은 공개 배포본이 없습니다. GitHub Actions에서 
 | `CLAUDE_BIN`          | `claude`가 PATH에 없을 때 실행 파일 경로      |
 | `CODEX_BIN`           | `codex`가 PATH에 없을 때 실행 파일 경로       |
 | `RELAY_KNOWLEDGE=off` | 지식 기능(`docs/knowledge/`)을 끕니다         |
+| `RELAY_UPDATE=off`    | 설치본의 자동 업데이트를 끕니다               |
 
 ## 엔진 선택
 
@@ -69,6 +70,17 @@ Codex 첫 실행에서는 터미널의 폴더 접근 및 훅 신뢰 안내를 �
 
 ## 개발 및 검증
 
-`app/`에서 `npm ci`, `npm run dev`로 개발 앱을 실행합니다. `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`, `npm run build`로 검증합니다. GUI 스모크는 빌드 후 `npm run test:smoke`로 실행하며 Linux에서는 DISPLAY가 필요합니다. Windows 설치 파일은 기존 수동 `app-build` 워크플로로 빌드합니다.
+`app/`에서 `npm ci`, `npm run dev`로 개발 앱을 실행합니다. `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`, `npm run build`로 검증합니다. GUI 스모크는 빌드 후 `npm run test:smoke`로 실행하며 Linux에서는 DISPLAY가 필요합니다. Windows 설치 파일은 수동 `app-build` 워크플로로 빌드해 확인합니다.
 
 설계, 엔진 간 차이와 검증 결과는 [엔진 확장 문서](docs/engines.md)에 기록합니다. Windows 설치본의 두 엔진 스모크를 통과했고, Linux 앱에서는 실제 Codex 모델로 의도 정리 → 수정 → 리뷰 → 최종 검증 → Work 완료를 진행했습니다(단계를 셋으로 줄인 v0.7 이전 흐름, [설계 D227~D229](docs/design.md)). 실제 질문·답변·취소, 보호 훅, handoff 형식 오류 되돌림, 압축, 중단·앱 재시작 후 동일 세션 재개도 확인했습니다. Windows 실제 모델과 사용자 훅 병합 등 남은 검증 범위는 문서에 구분합니다.
+
+## 릴리스
+
+`v<버전>` 태그를 push하면 `app-release` 워크플로가 설치 파일을 빌드하고, 러너에 설치해 스모크를 통과한 뒤 GitHub Release를 만들어 설치 파일과 자동 업데이트 파일(`latest.yml`, `.blockmap`)을 올립니다. 버전은 태그에서 읽으므로 `package.json`은 고치지 않습니다([I95](docs/implementation.md)).
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+`v0.2.0-beta.1`처럼 `-`가 든 태그는 시험판(prerelease)으로 올라가 설치된 앱이 자동으로 받지 않습니다. 버전은 이전 릴리스보다 커야 설치된 앱이 업데이트로 받습니다.

@@ -10,6 +10,7 @@ import { APP_USER_MODEL_ID, keepNotice } from './notices'
 import type { Notice, UiPort } from './ports'
 import { Relay } from './relay'
 import { WEB_PREFERENCES } from './security'
+import { startUpdates, updatesEnabled } from './update'
 
 let win: BrowserWindow | null = null
 /** 사람이 창에서 고른 Work (D81의 "그 Work를 보고 있는가") */
@@ -50,6 +51,20 @@ function notify(n: Notice): void {
   notice.on('click', () => {
     if (showWindow()) send(IPC.focusWork, n.workKey)
   })
+  notice.show()
+}
+
+/** 새 버전을 받았다는 알림 (I95). 보고 있어도 보낸다. 누르면 창만 띄운다 */
+function notifyUpdate(version: string): void {
+  if (!Notification.isSupported()) return
+  const notice = keepNotice(
+    notices,
+    new Notification({
+      title: `relay ${version}을 받았습니다`,
+      body: '앱을 끝내면 설치되고 다음 실행부터 새 버전입니다.',
+    }),
+  )
+  notice.on('click', () => void showWindow())
   notice.show()
 }
 
@@ -158,6 +173,7 @@ function createWindow(): void {
 void app.whenReady().then(() => {
   if (!primary) return
   createWindow()
+  if (updatesEnabled(process.env, app.isPackaged, process.platform)) startUpdates(notifyUpdate)
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
