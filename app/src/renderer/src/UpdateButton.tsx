@@ -34,10 +34,11 @@ export function UpdateButton() {
     }
   }
 
+  const tone = view.tone ? ` u-${view.tone}` : ''
   return (
     <>
       <button
-        className={`update-button${view.tone ? ` u-${view.tone}` : ''}`}
+        className={`update-button${tone}`}
         title={view.title}
         aria-label={`업데이트: ${view.title}`}
         disabled={view.action === 'none'}
@@ -46,8 +47,13 @@ export function UpdateButton() {
         <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
           <path d="M8 2.5v7.5M4.5 6.5 8 10l3.5-3.5M3 13h10" />
         </svg>
-        {view.text ? <span className="update-text">{view.text}</span> : null}
       </button>
+      {/* 상태 글은 버튼 줄 아래 한 줄에 둔다. 버튼 옆에 두면 사이드바 폭에서 잘린다 */}
+      {view.text ? (
+        <div className={`update-status${tone}`} title={view.title}>
+          {view.text}
+        </div>
+      ) : null}
       {confirming && state.kind === 'ready' ? (
         <ConfirmDialog
           title="업데이트 설치"

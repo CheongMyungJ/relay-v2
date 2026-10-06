@@ -8,6 +8,7 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 import type { AppUpdater } from 'electron-updater'
 import type { UpdateState } from '../shared/api'
+import type { CommandResult } from '../shared/views'
 
 /** 처음 확인은 창이 뜨고 조금 뒤에, 그다음은 받을 때까지 이 간격으로 한다 */
 const FIRST_CHECK_MS = 30_000
@@ -236,22 +237,23 @@ export class Updates {
 
   /**
    * 받아 둔 버전을 지금 설치한다. 조용히 설치하고 앱을 끝낸 뒤 새 버전으로 다시 켠다. 세션 정리는 부르는 쪽이 먼저 한다.
-   * 설치를 시작하지 못하면(electron-updater가 그 자리에서 error를 보냄) false다. 그때 앱은 끝나지 않는다
+   * 설치를 시작하지 못하면(electron-updater가 그 자리에서 error를 보냄. .deb의 비밀번호 창 취소 등) 그 까닭을 돌려주고
+   * electron-updater는 앱을 끝내지 않는다
    */
-  install(): boolean {
-    if (this.state.kind !== 'ready') return false
-    let failed = false
-    const onError = () => {
-      failed = true
+  install(): CommandResult {
+    if (this.state.kind !== 'ready') return { ok: false, error: '받아 둔 새 버전이 없습니다' }
+    const errors: string[] = []
+    const onError = (e: Error) => {
+      errors.push(e.message)
     }
     this.updater.on('error', onError)
     try {
       this.updater.quitAndInstall(true, true)
-    } catch {
-      failed = true
+    } catch (e) {
+      errors.push(e instanceof Error ? e.message : String(e))
     }
     this.updater.removeListener('error', onError)
-    return !failed
+    return errors.length === 0 ? { ok: true } : { ok: false, error: errors.join('\n') }
   }
 
   private downloaded(): boolean {

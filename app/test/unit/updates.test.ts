@@ -103,23 +103,23 @@ describe('업데이트 버튼의 확인과 설치 (I121)', () => {
     const { fake, updates } = setup(false)
     download(fake)
     expect(updates.current()).toEqual({ kind: 'manual', version: '0.3.0' })
-    expect(updates.install()).toBe(false)
+    expect(updates.install().ok).toBe(false)
     expect(fake.installs).toEqual([])
   })
 
   it('받기 전에는 설치하지 않고, 받은 뒤 설치는 조용히 설치하고 다시 켠다', () => {
     const { fake, updates } = setup()
-    expect(updates.install()).toBe(false)
+    expect(updates.install().ok).toBe(false)
     download(fake)
-    expect(updates.install()).toBe(true)
+    expect(updates.install()).toEqual({ ok: true })
     expect(fake.installs).toEqual([[true, true]])
   })
 
-  it('설치를 시작하지 못하면 false이고 받아 둔 상태는 그대로다', () => {
+  it('설치를 시작하지 못하면 그 까닭을 돌려주고 받아 둔 상태는 그대로다', () => {
     const { fake, updates } = setup()
     download(fake)
     fake.failInstall = true
-    expect(updates.install()).toBe(false)
+    expect(updates.install()).toEqual({ ok: false, error: 'No update filepath provided' })
     expect(updates.current().kind).toBe('ready')
     expect(fake.listenerCount('error')).toBe(1)
   })

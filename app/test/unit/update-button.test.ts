@@ -19,15 +19,15 @@ describe('업데이트 버튼의 표시 (I121)', () => {
       (kind) => updateView(states.find((s) => s.kind === kind) as UpdateState).text,
     )
     expect(shown).toEqual([
-      '확인 중',
-      '최신',
-      '받는 중 42%',
-      '설치 준비됨',
-      '직접 설치',
-      '확인 실패',
+      '새 버전 확인 중',
+      '최신 버전',
+      'relay 0.3.0 받는 중 42%',
+      'relay 0.3.0 설치 준비됨',
+      'relay 0.3.0 직접 설치 필요',
+      '업데이트 확인 실패',
     ])
     expect(updateView({ kind: 'downloading', version: '0.3.0', percent: null }).text).toBe(
-      '받는 중',
+      'relay 0.3.0 받는 중',
     )
     expect(updateView({ kind: 'error', message: 'boom' }).title).toContain('boom')
   })

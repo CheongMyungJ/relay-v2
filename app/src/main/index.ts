@@ -291,10 +291,26 @@ async function installUpdate(): Promise<void> {
   if (!(await confirmQuit()) || quitting) return
   quitting = true
   await ready.then((relay) => relay.close()).catch(() => {})
-  if (updates.install()) return
-  // 설치를 시작하지 못했다. 세션은 이미 "중단됨"으로 끝났고 앱은 계속 쓴다. 상태는 받아 둔 그대로다
-  quitting = false
-  quitConfirmed = false
+  const r = updates.install()
+  if (r.ok) return
+  // 설치를 시작하지 못했다(.deb의 비밀번호 창 취소 등). Relay를 이미 닫아(대기열, Work, 훅 서버) 앱을 이어 쓸 수
+  // 없으므로 까닭을 알리고 끝낸다. 끝낼 때 electron-updater가 받아 둔 버전의 설치를 한 번 더 시도한다(I95)
+  await showInstallFailed(r.error)
+  app.quit()
+}
+
+/** 업데이트 버튼의 설치를 시작하지 못했다는 대화상자 (I121) */
+async function showInstallFailed(error: string): Promise<void> {
+  const opts = {
+    type: 'error' as const,
+    title: 'relay 업데이트',
+    message: '업데이트를 설치하지 못했습니다',
+    detail: `${error}\n\n세션을 이미 정리해서 앱을 끝냅니다. 끝낼 때 설치를 한 번 더 시도하고, 다시 켜면 세션을 [재개]할 수 있습니다.`,
+    buttons: ['확인'],
+  }
+  const shown =
+    win && !win.isDestroyed() ? dialog.showMessageBox(win, opts) : dialog.showMessageBox(opts)
+  await shown.catch(() => null)
 }
 
 void app.whenReady().then(() => {
