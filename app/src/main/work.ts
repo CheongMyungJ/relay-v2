@@ -500,6 +500,14 @@ const exists = (p: string) =>
     () => false,
   )
 
+/** task에 고정한 모델·추론 수준. 시작과 재개가 같은 값을 준다. 없는 옛 기록은 엔진의 기본이다 */
+function pinnedAgent(task: TaskRecord): { model?: string; effort?: string } {
+  return {
+    ...(task.model ? { model: task.model } : {}),
+    ...(task.effort ? { effort: task.effort } : {}),
+  }
+}
+
 function clip(text: string): string {
   return text.length > MAX_DIFF_CHARS
     ? `${text.slice(0, MAX_DIFF_CHARS)}\n… (잘림: 전체 ${text.length}자)`
@@ -1206,6 +1214,7 @@ export class WorkRunner {
         settingsPath,
         skill,
         contextPath,
+        ...pinnedAgent(task),
       })
       const session = this.launch(task, bin, token, args, turnSnapshot(task, {}), startMark(task))
       const processStartedAt = await processStartTime(session.pty.pid)
@@ -1256,6 +1265,7 @@ export class WorkRunner {
         sessionId,
         workDir: this.files.dir,
         settingsPath,
+        ...pinnedAgent(task),
         ...(prompt ? { prompt } : {}),
       })
       const session = this.launch(
@@ -1306,6 +1316,7 @@ export class WorkRunner {
         skill: NODE_INFO[task.node].skill,
         workDir: this.files.dir,
         previousTaskDirs: earlier.map((t) => this.files.taskDir(t)),
+        ...pinnedAgent(task),
       }),
     )
     return settingsPath

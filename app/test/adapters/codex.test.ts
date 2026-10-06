@@ -12,6 +12,7 @@ import {
   codexJson,
   codexLaunchArgs,
   codexLaunchEnv,
+  codexResumeArgs,
   codexSettings,
   deployCodexSkill,
   findCodex,
@@ -122,6 +123,28 @@ describe('Codex CLI 점검과 스킬·설정', () => {
     expect(codexLaunchEnv('a-secret-token', 12345, 't-01')).toMatchObject({
       RELAY_HOOK_TOKEN: 'a-secret-token',
     })
+    // 모델·추론 수준을 주지 않으면 덮어쓰지 않는다 (F8)
+    expect(settings.overrides).not.toHaveProperty('model')
+    expect(settings.overrides).not.toHaveProperty('model_reasoning_effort')
+    const chosen = codexSettings({
+      workDir: dir,
+      taskDir: path.join(dir, 'task'),
+      taskId: 't-01',
+      port: 12345,
+      previousTaskDirs: [],
+      skill: 'verify',
+      model: 'gpt-6.1-sol',
+      effort: 'ultra',
+    })
+    expect(chosen.overrides).toMatchObject({
+      model: 'gpt-6.1-sol',
+      model_reasoning_effort: 'ultra',
+    })
+    const chosenFile = path.join(dir, 'chosen.json')
+    await writeJson(chosenFile, chosen)
+    const resumed = await codexResumeArgs({ workDir: dir, settingsPath: chosenFile, sessionId: 'x' })
+    expect(resumed).toContain('model="gpt-6.1-sol"')
+    expect(resumed).toContain('model_reasoning_effort="ultra"')
     // 모든 훅 설정을 합쳐도 npm .cmd의 제한에 여유를 남긴다.
     expect(args.join(' ').length).toBeLessThan(6500)
     const encoded = bridgeCommands().commandWindows.split(' ').at(-1) ?? ''

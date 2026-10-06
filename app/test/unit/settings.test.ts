@@ -217,3 +217,35 @@ describe('Codex 훅의 제한 시간 (D300)', () => {
     expect(bridge).toContain('170_000')
   })
 })
+
+describe('[단위] 모델·추론 수준 인자 (F7, F8, F10)', () => {
+  const launch = {
+    sessionId: 'id-1',
+    workDir: WORK_DIR,
+    settingsPath: 'task.settings.json',
+    skill: 'implement' as const,
+    contextPath: 'context.md',
+  }
+  const resume = { sessionId: 'id-1', workDir: WORK_DIR, settingsPath: 'task.settings.json' }
+
+  it('값이 있으면 시작과 재개 모두 --model, --effort를 첫 프롬프트 앞에 준다', () => {
+    const args = launchArgs({ ...launch, model: 'opus', effort: 'high' })
+    expect(args.slice(-5)).toEqual([
+      '--model',
+      'opus',
+      '--effort',
+      'high',
+      '/relay-implement 이 task의 컨텍스트: context.md',
+    ])
+    const resumed = resumeArgs({ ...resume, model: 'opus', effort: 'high', prompt: '이어서' })
+    expect(resumed.slice(-5)).toEqual(['--model', 'opus', '--effort', 'high', '이어서'])
+    expect(launchArgs({ ...launch, model: 'haiku' })).not.toContain('--effort')
+    expect(resumeArgs({ ...resume, effort: 'low' })).not.toContain('--model')
+  })
+
+  it('값이 없으면 지금과 같은 인자다', () => {
+    expect(launchArgs(launch)).not.toContain('--model')
+    expect(launchArgs(launch)).not.toContain('--effort')
+    expect(resumeArgs(resume)).toHaveLength(7)
+  })
+})

@@ -4,6 +4,7 @@ import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { harness, makeRepo, register, type Harness } from '../support/harness'
 import { REPO_FILES, REQUEST, type Scenario } from '../support/scenarios'
+import type { AppConfig } from '../../src/shared/config'
 import type { WorkState } from '../../src/shared/work'
 
 let h: Harness | undefined
@@ -13,8 +14,8 @@ afterEach(async () => {
 })
 const wait: Scenario = { tasks: { 'work-start': [{ do: 'prompt' }, { do: 'wait' }] } }
 
-async function setup() {
-  const hh = await harness({ scenario: wait, config: { session_limit: 1 } })
+async function setup(config: Partial<AppConfig> = {}) {
+  const hh = await harness({ scenario: wait, config: { session_limit: 1, ...config } })
   h = hh
   const { repo } = makeRepo(hh.root, 'agent-selection', REPO_FILES)
   const projectId = await register(hh, repo)
@@ -138,5 +139,58 @@ describe('[흐름] 엔진 설정과 재개', () => {
       error: expect.stringContaining('Codex'),
     })
     expect(s.hh.records().filter((r) => r['type'] === 'start')).toEqual([])
+  })
+})
+
+describe('[흐름] 단계별 모델·추론 수준 (F6, F7, F10)', () => {
+  const starts = (hh: Harness) => hh.records().filter((r) => r['type'] === 'start')
+  const lastArgs = (hh: Harness) => (starts(hh).at(-1)?.['args'] ?? []) as string[]
+
+  it('단계 지정값으로 시작하고, 설정을 바꾼 뒤 [재개]해도 처음 값으로 다시 연다', async () => {
+    const s = await setup({
+      agent_model: 'sonnet',
+      agent_effort: 'medium',
+      agent_steps: { 'work-start': { model: 'opus', effort: 'high' } },
+    })
+    const key = await s.create()
+    await s.hh.ui.until(() => s.prompts() >= 1, '의도 정리 시작')
+    expect(s.read(key).tasks[0]).toMatchObject({ engine: 'claude', model: 'opus', effort: 'high' })
+    expect(lastArgs(s.hh).join(' ')).toContain('--model opus --effort high')
+    expect(
+      await s.hh.relay.updateConfig({
+        agent_model: 'haiku',
+        agent_effort: '',
+        agent_steps: { 'work-start': {} },
+      }),
+    ).toMatchObject({ ok: true })
+    expect(await s.hh.relay.interrupt(key, 't-01')).toMatchObject({ ok: true })
+    expect(await s.hh.relay.resume(key, 't-01')).toMatchObject({ ok: true })
+    await s.hh.ui.until(() => starts(s.hh).length >= 2, '재개')
+    const resumed = lastArgs(s.hh)
+    expect(resumed).toContain('--resume')
+    expect(resumed.join(' ')).toContain('--model opus --effort high')
+  })
+
+  it('단계 설정이 없으면 기본 모델·추론 수준으로 시작한다', async () => {
+    const s = await setup({ agent_model: 'sonnet', agent_effort: 'low' })
+    await s.create()
+    await s.hh.ui.until(() => s.prompts() >= 1, '의도 정리 시작')
+    expect(lastArgs(s.hh).join(' ')).toContain('--model sonnet --effort low')
+  })
+
+  it('지정하지 않으면 옵션 없이 시작하고, model이 없는 기록은 설정을 바꾼 뒤에도 옵션 없이 재개한다', async () => {
+    const s = await setup()
+    const key = await s.create()
+    await s.hh.ui.until(() => s.prompts() >= 1, '의도 정리 시작')
+    expect(lastArgs(s.hh)).not.toContain('--model')
+    expect(lastArgs(s.hh)).not.toContain('--effort')
+    expect(s.read(key).tasks[0]).not.toHaveProperty('model')
+    await s.hh.relay.updateConfig({ agent_model: 'opus', agent_effort: 'max' })
+    expect(await s.hh.relay.interrupt(key, 't-01')).toMatchObject({ ok: true })
+    expect(await s.hh.relay.resume(key, 't-01')).toMatchObject({ ok: true })
+    await s.hh.ui.until(() => starts(s.hh).length >= 2, '재개')
+    expect(lastArgs(s.hh)).toContain('--resume')
+    expect(lastArgs(s.hh)).not.toContain('--model')
+    expect(lastArgs(s.hh)).not.toContain('--effort')
   })
 })

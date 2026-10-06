@@ -168,6 +168,9 @@ export function codexSettings(input: AgentSettingsInput): CodexSettings {
       'features.memories': false,
       'memories.use_memories': false,
       'memories.generate_memories': false,
+      // task에 고정한 모델·추론 수준. 없으면 CLI 설정을 따른다. 재개도 같은 설정 파일로 같은 값을 준다
+      ...(input.model ? { model: input.model } : {}),
+      ...(input.effort ? { model_reasoning_effort: input.effort } : {}),
       ...Object.fromEntries(
         Object.entries(codexHooks()).map(([event, groups]) => [`hooks.${event}`, groups]),
       ),

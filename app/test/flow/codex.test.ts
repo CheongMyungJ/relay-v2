@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { harness, makeRepo, register, type Harness } from '../support/harness'
 import { handoff, intentDraft, REPO_FILES, REQUEST, scenario } from '../support/scenarios'
 import { continuePrompt } from '../../src/core/settings'
+import type { AppConfig } from '../../src/shared/config'
 import type { WorkState } from '../../src/shared/work'
 
 let h: Harness | undefined
@@ -17,8 +18,8 @@ const finish = [
   { do: 'stop' },
   { do: 'wait' },
 ]
-async function setup(scenario: object) {
-  const hh = await harness({ scenario, config: { agent_engine: 'codex' } })
+async function setup(scenario: object, config: Partial<AppConfig> = { agent_engine: 'codex' }) {
+  const hh = await harness({ scenario, config })
   h = hh
   const { repo } = makeRepo(hh.root, 'codex-repo', REPO_FILES)
   const projectId = await register(hh, repo)
@@ -44,6 +45,44 @@ async function setup(scenario: object) {
 }
 
 describe('[흐름] Codex CLI와 실제 훅·MCP 브리지', () => {
+  it('단계에서 고른 Codex 모델·추론 수준을 -c로 넘기고 설정을 바꾼 뒤 재개에도 그대로 준다 (F7, F10)', async () => {
+    const s = await setup(
+      {
+        tasks: { 'work-start': [{ do: 'prompt' }, { do: 'wait' }] },
+        resume: { 'work-start': [{ do: 'prompt' }, { do: 'wait' }] },
+      },
+      {
+        agent_engine: 'claude',
+        agent_model: 'opus',
+        agent_steps: {
+          'work-start': { engine: 'codex', model: 'gpt-6.1-sol', effort: 'ultra' },
+        },
+      },
+    )
+    const starts = () => s.hh.codexRecords().filter((r) => r['type'] === 'start')
+    await s.hh.ui.until(() => starts().length >= 1, 'Codex 시작')
+    await s.hh.ui.until(() => s.read().tasks[0]?.session?.id, 'Codex 대화 ID')
+    expect(s.read().tasks[0]).toMatchObject({
+      engine: 'codex',
+      model: 'gpt-6.1-sol',
+      effort: 'ultra',
+    })
+    const first = starts()[0]?.['args'] as string[]
+    expect(first).toContain('model="gpt-6.1-sol"')
+    expect(first).toContain('model_reasoning_effort="ultra"')
+    expect(
+      await s.hh.relay.updateConfig({ agent_steps: { 'work-start': { engine: 'claude' } } }),
+    ).toMatchObject({ ok: true })
+    expect(await s.hh.relay.interrupt(s.key, 't-01')).toEqual({ ok: true })
+    expect(await s.hh.relay.resume(s.key, 't-01')).toEqual({ ok: true })
+    await s.hh.ui.until(() => starts().length >= 2, 'Codex 재개')
+    const resumed = starts().at(-1)?.['args'] as string[]
+    expect(resumed).toContain('resume')
+    expect(resumed).toContain('model="gpt-6.1-sol"')
+    expect(resumed).toContain('model_reasoning_effort="ultra"')
+    expect(s.hh.records().filter((r) => r['type'] === 'start')).toHaveLength(0)
+  })
+
   it('네 질문의 실제 답까지 기다리고 다른 기본 엔진의 다음 task로 넘긴다', async () => {
     const qs = Array.from({ length: 4 }, (_, i) => ({
       id: `q${i}`,

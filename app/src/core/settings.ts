@@ -159,6 +159,18 @@ export interface LaunchInput {
   settingsPath: string
   skill: SkillName
   contextPath: string
+  /** task에 고정한 모델. 없으면 엔진의 기본 */
+  model?: string
+  /** task에 고정한 추론 수준. 없으면 엔진의 기본 */
+  effort?: string
+}
+
+/** 모델·추론 수준 옵션. 값이 없으면 넣지 않아 지금과 같은 인자다 */
+function modelArgs(input: { model?: string; effort?: string }): string[] {
+  return [
+    ...(input.model ? ['--model', input.model] : []),
+    ...(input.effort ? ['--effort', input.effort] : []),
+  ]
 }
 
 /** claude 실행 인자 (시나리오 2-5, 6절) */
@@ -171,6 +183,7 @@ export function launchArgs(input: LaunchInput): string[] {
     input.workDir,
     '--settings',
     input.settingsPath,
+    ...modelArgs(input),
     firstPrompt(input.skill, input.contextPath),
   ]
 }
@@ -184,7 +197,7 @@ export type ResumeInput = Omit<LaunchInput, 'skill' | 'contextPath'> & {
  * 끝난 세션을 다시 여는 인자 (시나리오 3-4, 6절): 같은 옵션 + --resume <세션 id>.
  * --settings, --add-dir, 권한 확인 끈 모드는 --resume이 복원하지 않아 다시 준다(Claude Code 문서 sessions).
  * --session-id는 새 세션에 쓰는 것이라 빼고, 첫 프롬프트는 스킬을 다시 시작하므로 뺀다. 확인: 스파이크 S6.
- * 중단됨의 [재개]는 대신 이어서 하라는 첫 입력을 맨 뒤에 준다 (D218)
+ * 중단됨의 [재개]는 대신 이어서 하라는 첫 입력을 맨 뒤에 준다 (D218). 모델·추론 수준도 task에 고정한 값을 다시 준다
  */
 export function resumeArgs(input: ResumeInput): string[] {
   return [
@@ -195,6 +208,7 @@ export function resumeArgs(input: ResumeInput): string[] {
     input.workDir,
     '--settings',
     input.settingsPath,
+    ...modelArgs(input),
     ...(input.prompt ? [input.prompt] : []),
   ]
 }
