@@ -988,7 +988,8 @@ function IssueLine({ workKey, issue }: { workKey: string; issue: IssueView }) {
       ? '이슈: 의도를 승인하면 만듭니다'
       : `이슈 #${issue.number}${issue.linked ? ' (기존 이슈)' : ''}${issue.closed ? ' · 닫힘' : ''}`
   return (
-    <div className={issue.failure ? 'notice fail' : 'issue-line dim'} aria-label="이슈 기록">
+    // task 알림(.notice)과 섞이지 않게 자체 클래스를 쓴다. 게시 실패는 흐름을 막지 않는 알림이다 (D344)
+    <div className={issue.failure ? 'issue-line failed' : 'issue-line dim'} aria-label="이슈 기록">
       <span>{name}</span>
       {issue.pending ? (
         <span>

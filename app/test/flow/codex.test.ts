@@ -1,8 +1,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { harness, makeRepo, register, type Harness } from './harness'
-import { handoff, intentDraft, REPO_FILES, REQUEST, scenario } from './scenarios'
+import { harness, makeRepo, register, type Harness } from '../support/harness'
+import { handoff, intentDraft, REPO_FILES, REQUEST, scenario } from '../support/scenarios'
 import { continuePrompt } from '../../src/core/settings'
 import type { WorkState } from '../../src/shared/work'
 

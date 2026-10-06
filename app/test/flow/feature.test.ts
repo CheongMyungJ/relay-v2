@@ -9,8 +9,8 @@ import { parseFrontMatter } from '../../src/core/validate'
 import type { AppConfig } from '../../src/shared/config'
 import type { WorkView } from '../../src/shared/views'
 import type { LifecycleEvent, WorkState, WorkType } from '../../src/shared/work'
-import { drive } from './driver'
-import { git, harness, makeRepo, register, settle, type Harness } from './harness'
+import { drive } from '../support/driver'
+import { git, harness, makeRepo, register, settle, type Harness } from '../support/harness'
 import {
   FEATURE_FILES,
   FEATURE_REQUEST,
@@ -23,7 +23,7 @@ import {
   steps,
   type Scenario,
   type Step,
-} from './scenarios'
+} from '../support/scenarios'
 
 let h: Harness | undefined
 

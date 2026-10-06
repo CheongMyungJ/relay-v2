@@ -4,8 +4,8 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { drive } from './driver'
-import { harness, makeRepo, register, settle, type Harness } from './harness'
+import { drive } from '../support/driver'
+import { harness, makeRepo, register, settle, type Harness } from '../support/harness'
 import {
   PR,
   REPO_FILES,
@@ -16,7 +16,7 @@ import {
   steps,
   type Scenario,
   type Step,
-} from './scenarios'
+} from '../support/scenarios'
 
 let h: Harness | undefined
 afterEach(async () => {

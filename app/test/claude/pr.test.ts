@@ -1,6 +1,6 @@
 // [실제] PR 진행과 대응 (docs/implementation.md M9, M10, 8.4의 "PR 진행", I43, I48, I49, I53).
 // 가짜 claude와 실제 gh로 돈다. 시험용 레포(RELAY_TEST_GH_REPO)를 clone해 main에서 임시 기준 브랜치 m9/<run>/base를
-// 만들고(I48), [흐름]과 같은 공통 시나리오(test/flow/pr-scenario.ts의 runPrScenario, 이어서 PR 대응의
+// 만들고(I48), [흐름]과 같은 공통 시나리오(test/support/pr-scenario.ts의 runPrScenario, 이어서 PR 대응의
 // runRespondScenario)를 돈다. 앱은 같고 GitHub 쪽만 실제다: 대응은 push, 답글 게시와 보이지 않는 표시, 다시 실행을 실제
 // GitHub에서 본다(I53. 실제 claude의 대응과 답글 초안은 test/claude/respond.test.ts). Claude 인증은 필요 없고 시험용
 // 레포의 토큰(GH_TOKEN)만 쓴다. 레포의 main은 건드리지 않는다.
@@ -11,8 +11,13 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { APP, FAKE_CLAUDE, harness, register } from '../flow/harness'
-import { describePr, runPrScenario, runRespondScenario, type PrContext } from '../flow/pr-scenario'
+import { APP, FAKE_CLAUDE, harness, register } from '../support/harness'
+import {
+  describePr,
+  runPrScenario,
+  runRespondScenario,
+  type PrContext,
+} from '../support/pr-scenario'
 import {
   GIT_ENV,
   cleanup,

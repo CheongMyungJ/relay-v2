@@ -9,9 +9,17 @@ import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { jsonText } from '../../src/adapters/store'
 import type { WorkState } from '../../src/shared/work'
-import { drive } from './driver'
-import { CART_FILES, FakeGitHub, FakeWorld } from './github'
-import { git, harness, makeRepo, register, settle, writeFiles, type Harness } from './harness'
+import { drive } from '../support/driver'
+import { CART_FILES, FakeGitHub, FakeWorld } from '../support/github'
+import {
+  git,
+  harness,
+  makeRepo,
+  register,
+  settle,
+  writeFiles,
+  type Harness,
+} from '../support/harness'
 import {
   HEAD_CODE,
   openPrWork,
@@ -23,7 +31,7 @@ import {
   workState,
   type PrContext,
   type PrWork,
-} from './pr-scenario'
+} from '../support/pr-scenario'
 
 let h: Harness | undefined
 

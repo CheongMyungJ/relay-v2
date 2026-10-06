@@ -18,6 +18,8 @@
     "test:adapters": "npm run contracts && vitest run --project adapters",
     "test:flow": "npm run contracts && vitest run --project flow",
     "test:claude": "npm run contracts && vitest run --project claude",
+    "test:contract": "npm run contracts && vitest run --project contract",
+    "test:eval": "vitest run --project eval && node eval/check-scenario.mjs all",
     "dist:win": "npm run build && electron-builder --win --x64 --publish never"
   },
   "devDependencies": {

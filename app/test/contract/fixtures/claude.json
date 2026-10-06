@@ -1,0 +1,176 @@
+{
+  "claudeVersion": "2.1.289 (Claude Code)",
+  "recordedAt": "2026-10-05",
+  "flags": [
+    "--add-dir",
+    "--dangerously-skip-permissions",
+    "--effort",
+    "--json-schema",
+    "--model",
+    "--no-session-persistence",
+    "--output-format",
+    "--resume",
+    "--session-id",
+    "--settings",
+    "--system-prompt",
+    "--tools",
+    "-p"
+  ],
+  "events": {
+    "UserPromptSubmit": {
+      "shape": {
+        "cwd": "string",
+        "hook_event_name": "string",
+        "permission_mode": "string",
+        "prompt": "string",
+        "prompt_id": "string",
+        "session_id": "string",
+        "transcript_path": "string"
+      },
+      "sample": {
+        "session_id": "<session_id>",
+        "transcript_path": "<transcript_path>",
+        "cwd": "<cwd>",
+        "prompt_id": "<prompt_id>",
+        "permission_mode": "bypassPermissions",
+        "hook_event_name": "UserPromptSubmit",
+        "prompt": "Use the Bash tool to run exactly this command: echo contract-ok\nThen use the Bash tool to run exactly this command: exit 3\nThen reply with the single word: done"
+      }
+    },
+    "PreToolUse": {
+      "shape": {
+        "cwd": "string",
+        "hook_event_name": "string",
+        "permission_mode": "string",
+        "prompt_id": "string",
+        "session_id": "string",
+        "tool_input": "object",
+        "tool_name": "string",
+        "tool_use_id": "string",
+        "transcript_path": "string"
+      },
+      "sample": {
+        "session_id": "<session_id>",
+        "transcript_path": "<transcript_path>",
+        "cwd": "<cwd>",
+        "prompt_id": "<prompt_id>",
+        "permission_mode": "bypassPermissions",
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "echo contract-ok",
+          "description": "Echo contract-ok"
+        },
+        "tool_use_id": "<tool_use_id>"
+      }
+    },
+    "PostToolUse": {
+      "shape": {
+        "cwd": "string",
+        "duration_ms": "number",
+        "hook_event_name": "string",
+        "permission_mode": "string",
+        "prompt_id": "string",
+        "session_id": "string",
+        "tool_input": "object",
+        "tool_name": "string",
+        "tool_response": "object",
+        "tool_use_id": "string",
+        "transcript_path": "string"
+      },
+      "sample": {
+        "session_id": "<session_id>",
+        "transcript_path": "<transcript_path>",
+        "cwd": "<cwd>",
+        "prompt_id": "<prompt_id>",
+        "permission_mode": "bypassPermissions",
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "echo contract-ok",
+          "description": "Echo contract-ok"
+        },
+        "tool_response": "<object>",
+        "tool_use_id": "<tool_use_id>",
+        "duration_ms": 385
+      }
+    },
+    "PostToolUseFailure": {
+      "shape": {
+        "cwd": "string",
+        "duration_ms": "number",
+        "error": "string",
+        "hook_event_name": "string",
+        "is_interrupt": "boolean",
+        "permission_mode": "string",
+        "prompt_id": "string",
+        "session_id": "string",
+        "tool_input": "object",
+        "tool_name": "string",
+        "tool_use_id": "string",
+        "transcript_path": "string"
+      },
+      "sample": {
+        "session_id": "<session_id>",
+        "transcript_path": "<transcript_path>",
+        "cwd": "<cwd>",
+        "prompt_id": "<prompt_id>",
+        "permission_mode": "bypassPermissions",
+        "hook_event_name": "PostToolUseFailure",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "exit 3",
+          "description": "Exit with status code 3"
+        },
+        "tool_use_id": "<tool_use_id>",
+        "error": "Exit code 3",
+        "is_interrupt": false,
+        "duration_ms": 41
+      }
+    },
+    "Stop": {
+      "shape": {
+        "background_tasks": "array",
+        "cwd": "string",
+        "hook_event_name": "string",
+        "last_assistant_message": "string",
+        "permission_mode": "string",
+        "prompt_id": "string",
+        "session_crons": "array",
+        "session_id": "string",
+        "stop_hook_active": "boolean",
+        "transcript_path": "string"
+      },
+      "sample": {
+        "session_id": "<session_id>",
+        "transcript_path": "<transcript_path>",
+        "cwd": "<cwd>",
+        "prompt_id": "<prompt_id>",
+        "permission_mode": "bypassPermissions",
+        "hook_event_name": "Stop",
+        "stop_hook_active": false,
+        "last_assistant_message": "<string>",
+        "background_tasks": [],
+        "session_crons": []
+      }
+    },
+    "SessionEnd": {
+      "shape": {
+        "cwd": "string",
+        "hook_event_name": "string",
+        "prompt_id": "string",
+        "reason": "string",
+        "session_id": "string",
+        "transcript_path": "string"
+      },
+      "sample": {
+        "session_id": "<session_id>",
+        "transcript_path": "<transcript_path>",
+        "cwd": "<cwd>",
+        "prompt_id": "<prompt_id>",
+        "hook_event_name": "SessionEnd",
+        "reason": "other"
+      }
+    }
+  }
+}

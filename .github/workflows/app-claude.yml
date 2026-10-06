@@ -13,6 +13,15 @@
 # cases의 pr-auto는 같은 Linux 작업이 실제 claude와 실제 gh를 합쳐 자동 대응(M11)을 돈다. 이때만 Claude 인증 secret을
 # 작업에 넣고 Claude Code를 설치한다 (I55). pr, pr-cleanup과 함께 적을 수 있다.
 # 결과는 실행 요약과 claude-results 결과물에 올라가고, 사람이 docs/checks.md에 옮긴다 (I30).
+# [계약] 실제 쪽(경우 contract, Linux 작업 contract): 실제 claude(haiku)와 실제 gh가 계약과 녹화본(app/test/contract)대로인지
+# 본다. claude는 사용량이 조금 들고 gh는 시험용 레포를 읽기만 한다. update_contract를 켜면 녹화본을 새로 써서 결과물에 올린다.
+# 정기 실행(schedule): 매주 [실제] 전부(Windows)와 [계약]. 매일 Claude Code의 새 버전을 확인해 처음 보는 버전이면 [계약]과
+# [실제] S를 돌리고, 통과하면 그 버전을 확인한 것으로 남긴다(actions 캐시 claude-code-tested-<버전>). 정기 실행이 실패하면
+# 이슈를 연다(같은 제목의 열린 이슈가 있으면 코멘트를 단다). PR을 막지 않는다 (docs/implementation.md 8.1, 8.3).
+# 정기 실행 고르기: 레포 변수(Settings → Secrets and variables → Actions → Variables) RELAY_SCHEDULE. 없거나 비면 weekly다.
+# weekly: 매주 것만, daily: 매일 것만, all: 둘 다, off: 둘 다 끔. 수동 실행(workflow_dispatch)은 이 변수와 상관없다.
+# 정기 실행의 claude와 contract 작업은 plan이 읽은 버전(npm latest)으로 Claude Code를 고정해 설치하고, 깔린 버전이 그 버전인지
+# 확인한다(.github/actions/install-claude). 그래서 "확인한 버전"으로 남기는 버전이 실제로 시험한 버전이다.
 name: app-claude
 
 on:
@@ -27,17 +36,107 @@ on:
         required: false
         default: "low"
       cases:
-        description: "돌릴 경우 (예: S resume rewind-fix restart feature refactor general). rewind는 rewind-intake와 rewind-fix. 비우면 전부. pr, pr-cleanup, pr-auto는 따로(PR 진행과 대응, Linux)"
+        description: "돌릴 경우 (예: S resume rewind-fix restart feature refactor general). rewind는 rewind-intake와 rewind-fix. 비우면 전부. pr, pr-cleanup, pr-auto는 따로(PR 진행과 대응, Linux). contract는 [계약] 실제 쪽(Linux)"
         required: false
         default: ""
+      update_contract:
+        description: "[계약]의 녹화본을 새로 써서 결과물(contract-fixtures)에 올린다"
+        type: boolean
+        required: false
+        default: false
+  schedule:
+    # GitHub Actions의 cron은 UTC다
+    - cron: "52 18 * * 0" # 매주 월요일 03:52 KST: [실제] 전부(Windows)와 [계약]
+    - cron: "37 19 * * *" # 매일 04:37 KST: Claude Code 새 버전 확인
 
 permissions:
   contents: read
 
+# 실제 claude 시험이 겹쳐 돌지 않게 한다. 그룹마다 대기 자리는 하나뿐이라 새로 기다리는 실행이 먼저 기다리던 실행을 취소한다.
+# 정기 실행과 수동 실행이 서로를 취소하지 않게 이벤트별로 나눈다
+concurrency:
+  group: app-claude-${{ github.event_name }}
+  cancel-in-progress: false
+
 jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      claude: ${{ steps.plan.outputs.claude }}
+      cases: ${{ steps.plan.outputs.cases }}
+      contract: ${{ steps.plan.outputs.contract }}
+      pr: ${{ steps.plan.outputs.pr }}
+      pr_auto: ${{ steps.plan.outputs.pr_auto }}
+      version: ${{ steps.plan.outputs.version }}
+    steps:
+      - name: Claude Code 최신 버전
+        id: latest
+        # 조회가 실패해 빈 버전이 캐시 키(claude-code-tested-)로 남지 않게 여기서 멈춘다
+        run: |
+          v=$(npm view @anthropic-ai/claude-code version)
+          [ -n "$v" ] || { echo "::error::Claude Code 버전 조회 실패"; exit 1; }
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: 확인한 버전인지 (매일)
+        id: tested
+        if: ${{ github.event.schedule == '37 19 * * *' }}
+        uses: actions/cache/restore@v4
+        with:
+          path: .claude-code-tested
+          key: claude-code-tested-${{ steps.latest.outputs.version }}
+          lookup-only: true
+
+      - name: 무엇을 돌릴지
+        id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
+          CASES: ${{ inputs.cases }}
+          HIT: ${{ steps.tested.outputs.cache-hit }}
+          VERSION: ${{ steps.latest.outputs.version }}
+          SWITCH: ${{ vars.RELAY_SCHEDULE }}
+        run: |
+          claude=false; contract=false; pr=false; pr_auto=false; cases=""
+          # [실제] 시험처럼 쉼표도 구분자로 받는다(RELAY_REAL_CASES는 공백과 쉼표로 나눈다)
+          CASES=$(echo "$CASES" | tr ',' ' ' | xargs || true)
+          kind=""
+          if [ "$SCHEDULE" = "52 18 * * 0" ]; then kind=weekly; elif [ -n "$SCHEDULE" ]; then kind=daily; fi
+          mode="${SWITCH:-weekly}"
+          if [ "$EVENT" = schedule ] && [ "$mode" != all ] && [ "$mode" != "$kind" ]; then
+            echo "RELAY_SCHEDULE=$mode: 정기 실행($kind)을 건너뛴다"
+          elif [ "$EVENT" = schedule ]; then
+            if [ "$kind" = weekly ]; then
+              claude=true; contract=true
+            elif [ "$HIT" != true ]; then
+              # 처음 보는 Claude Code 버전: [계약]과 짧은 [실제] 하나
+              claude=true; contract=true; cases="S"
+            fi
+          else
+            words=" $CASES "
+            case "$words" in *" contract "*) contract=true ;; esac
+            rest=$(echo "$CASES" | tr ' ' '\n' | grep -vx contract | tr '\n' ' ' | xargs || true)
+            # pr, pr-cleanup, pr-auto가 들어 있으면 Linux 작업(pr)이 맡는다. contract만 적었으면 Windows 작업은 돌지 않는다
+            case " $rest " in
+              *" pr "*|*" pr-cleanup "*|*" pr-auto "*) pr=true ;;
+              *) if [ "$contract" != true ] || [ -n "$rest" ]; then claude=true; fi ;;
+            esac
+            case " $rest " in *" pr-auto "*) pr_auto=true ;; esac
+            cases="$rest"
+          fi
+          echo "버전 $VERSION, 확인함 ${HIT:-모름} → claude=$claude cases='$cases' contract=$contract pr=$pr pr_auto=$pr_auto"
+          {
+            echo "claude=$claude"
+            echo "cases=$cases"
+            echo "contract=$contract"
+            echo "pr=$pr"
+            echo "pr_auto=$pr_auto"
+            echo "version=$VERSION"
+          } >> "$GITHUB_OUTPUT"
+
   claude:
-    # pr, pr-cleanup, pr-auto가 들어 있으면 Linux 작업(pr)이 맡는다. 낱말로 찾으려고 앞뒤에 공백을 붙인다
-    if: ${{ !contains(format(' {0} ', inputs.cases), ' pr ') && !contains(format(' {0} ', inputs.cases), ' pr-cleanup ') && !contains(format(' {0} ', inputs.cases), ' pr-auto ') }}
+    needs: plan
+    if: ${{ needs.plan.outputs.claude == 'true' }}
     runs-on: windows-latest
     timeout-minutes: 120
     defaults:
@@ -47,11 +146,12 @@ jobs:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
       # 둘 다 있으면 구독 토큰만 쓴다. API 키가 함께 있으면 Claude Code가 키 승인 창을 띄울 수 있다.
       ANTHROPIC_API_KEY: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN == '' && secrets.ANTHROPIC_API_KEY || '' }}
-      # 앱이 PTY에 넘기는 환경 변수로 모델과 effort를 정한다 (Claude Code 문서 model-config, env-vars)
-      ANTHROPIC_MODEL: ${{ inputs.model }}
-      CLAUDE_CODE_EFFORT_LEVEL: ${{ inputs.effort }}
+      # 앱이 PTY에 넘기는 환경 변수로 모델과 effort를 정한다 (Claude Code 문서 model-config, env-vars).
+      # 정기 실행에는 입력이 없어 기본값을 쓴다
+      ANTHROPIC_MODEL: ${{ inputs.model || 'sonnet' }}
+      CLAUDE_CODE_EFFORT_LEVEL: ${{ inputs.effort || 'low' }}
       RELAY_REAL_CLAUDE: "1"
-      RELAY_REAL_CASES: ${{ inputs.cases }}
+      RELAY_REAL_CASES: ${{ needs.plan.outputs.cases }}
     steps:
       - uses: actions/checkout@v4
 
@@ -68,13 +168,10 @@ jobs:
           cache: npm
           cache-dependency-path: app/package-lock.json
 
-      - name: Claude Code 설치 (네이티브 설치 스크립트)
-        run: |
-          irm https://claude.ai/install.ps1 | iex
-          "$env:USERPROFILE\.local\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
-
-      - name: Claude Code 버전
-        run: claude --version
+      - name: Claude Code 설치 (plan이 읽은 버전으로 고정)
+        uses: ./.github/actions/install-claude
+        with:
+          version: ${{ needs.plan.outputs.version }}
 
       - name: 인증 상태 (등록 점검 D67과 같은 명령)
         # 실패해도 다음 단계에서 등록 점검이 막으며 이유를 남긴다
@@ -115,7 +212,8 @@ jobs:
     # PR 진행(M9, I49)과 PR 대응(M10, I53): 가짜 claude와 실제 gh로 돈다. gh와 GitHub의 동작은 OS와 상관없어 Linux에서 한다
     # (S7과 같음). 시험용 레포의 main에서 임시 기준 브랜치 m9/<run>/base를 만들어 거기에 PR을 연다(I48).
     # 자동 대응(M11, pr-auto)은 대응 task만 실제 claude다 (I55).
-    if: ${{ contains(format(' {0} ', inputs.cases), ' pr ') || contains(format(' {0} ', inputs.cases), ' pr-cleanup ') || contains(format(' {0} ', inputs.cases), ' pr-auto ') }}
+    needs: plan
+    if: ${{ needs.plan.outputs.pr == 'true' }}
     runs-on: ubuntu-latest
     # 시험의 기한(test/claude/pr.test.ts, 50분)보다 길게 둔다. 작업이 제한에 걸려 끊기면 시험 PR과 브랜치 정리가 돌지 못한다
     timeout-minutes: 60
@@ -123,14 +221,14 @@ jobs:
       RELAY_TEST_GH_REPO: ${{ secrets.RELAY_TEST_GH_REPO }}
       GH_TOKEN: ${{ secrets.RELAY_TEST_GH_TOKEN }}
       RELAY_REAL_GH: "1"
-      RELAY_REAL_CASES: ${{ inputs.cases }}
+      RELAY_REAL_CASES: ${{ needs.plan.outputs.cases }}
       # pr-auto만 실제 claude를 쓴다. 다른 경우에는 Claude 인증을 작업에 넣지 않는다 (I55)
-      RELAY_REAL_CLAUDE: ${{ contains(format(' {0} ', inputs.cases), ' pr-auto ') && '1' || '' }}
-      CLAUDE_CODE_OAUTH_TOKEN: ${{ contains(format(' {0} ', inputs.cases), ' pr-auto ') && secrets.CLAUDE_CODE_OAUTH_TOKEN || '' }}
+      RELAY_REAL_CLAUDE: ${{ needs.plan.outputs.pr_auto == 'true' && '1' || '' }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ needs.plan.outputs.pr_auto == 'true' && secrets.CLAUDE_CODE_OAUTH_TOKEN || '' }}
       # 둘 다 있으면 구독 토큰만 쓴다 (claude 작업과 같음)
-      ANTHROPIC_API_KEY: ${{ contains(format(' {0} ', inputs.cases), ' pr-auto ') && secrets.CLAUDE_CODE_OAUTH_TOKEN == '' && secrets.ANTHROPIC_API_KEY || '' }}
-      ANTHROPIC_MODEL: ${{ inputs.model }}
-      CLAUDE_CODE_EFFORT_LEVEL: ${{ inputs.effort }}
+      ANTHROPIC_API_KEY: ${{ needs.plan.outputs.pr_auto == 'true' && secrets.CLAUDE_CODE_OAUTH_TOKEN == '' && secrets.ANTHROPIC_API_KEY || '' }}
+      ANTHROPIC_MODEL: ${{ inputs.model || 'sonnet' }}
+      CLAUDE_CODE_EFFORT_LEVEL: ${{ inputs.effort || 'low' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -153,29 +251,19 @@ jobs:
         run: gh --version
 
       - name: Claude 인증 secret 확인 (pr-auto)
-        if: ${{ contains(format(' {0} ', inputs.cases), ' pr-auto ') }}
+        if: ${{ needs.plan.outputs.pr_auto == 'true' }}
         run: |
           if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ] && [ -z "$ANTHROPIC_API_KEY" ]; then
             echo "::error::pr-auto에는 CLAUDE_CODE_OAUTH_TOKEN 또는 ANTHROPIC_API_KEY secret이 필요합니다 (docs/implementation.md I55)."
             exit 1
           fi
 
-      - name: Claude Code 설치 (pr-auto, 네이티브 설치 스크립트)
-        if: ${{ contains(format(' {0} ', inputs.cases), ' pr-auto ') }}
-        # 설치 스크립트에는 토큰을 넘기지 않는다
-        run: |
-          curl -fsSL https://claude.ai/install.sh | env -u GH_TOKEN -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY bash
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-
-      - name: Claude Code 설정 폴더 (pr-auto, 대화형 온보딩을 건너뜀)
-        # 따로 만든 설정 폴더의 .claude.json에 hasCompletedOnboarding만 더한다 (docs/implementation.md 8.4, spikes/README.md)
-        if: ${{ contains(format(' {0} ', inputs.cases), ' pr-auto ') }}
-        run: |
-          dir="$RUNNER_TEMP/claude-config"
-          mkdir -p "$dir"
-          CLAUDE_CONFIG_DIR="$dir" env -u GH_TOKEN claude --version
-          node -e 'const fs = require("fs"); const f = process.argv[1]; const j = fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, "utf8")) : {}; j.hasCompletedOnboarding = true; fs.writeFileSync(f, JSON.stringify(j, null, 2));' "$dir/.claude.json"
-          echo "CLAUDE_CONFIG_DIR=$dir" >> "$GITHUB_ENV"
+      - name: Claude Code 설치와 설정 폴더 (pr-auto)
+        # 시험 harness가 이 작업의 CLAUDE_CONFIG_DIR을 쓴다. [계약](contract)은 시험이 설정 폴더를 따로 만든다
+        if: ${{ needs.plan.outputs.pr_auto == 'true' }}
+        uses: ./.github/actions/install-claude
+        with:
+          onboarding: "true"
 
       - name: 앱 의존성 설치
         working-directory: app
@@ -204,3 +292,118 @@ jobs:
           name: claude-pr-results-${{ github.sha }}
           path: app/test-results/claude/
           if-no-files-found: warn
+
+  contract:
+    # [계약] 실제 쪽 (8.1). claude는 haiku로 짧게 돌고, gh는 시험용 레포를 읽기만 한다(I43)
+    needs: plan
+    if: ${{ needs.plan.outputs.contract == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      ANTHROPIC_API_KEY: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN == '' && secrets.ANTHROPIC_API_KEY || '' }}
+      RELAY_TEST_GH_REPO: ${{ secrets.RELAY_TEST_GH_REPO }}
+      GH_TOKEN: ${{ secrets.RELAY_TEST_GH_TOKEN }}
+      RELAY_CONTRACT_LIVE: "1"
+      RELAY_CONTRACT_LIVE_GH: "1"
+      RELAY_CONTRACT_UPDATE: ${{ inputs.update_contract && '1' || '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: secret 확인
+        run: |
+          if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ] && [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::error::CLAUDE_CODE_OAUTH_TOKEN 또는 ANTHROPIC_API_KEY secret이 필요합니다."
+            exit 1
+          fi
+          if [ -z "$RELAY_TEST_GH_REPO" ] || [ -z "$GH_TOKEN" ]; then
+            echo "::error::RELAY_TEST_GH_REPO와 RELAY_TEST_GH_TOKEN secret이 필요합니다 (docs/implementation.md I43)."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Claude Code 설치 (plan이 읽은 버전으로 고정)
+        # 설정 폴더는 시험(test/contract/live.test.ts)이 따로 만든다
+        uses: ./.github/actions/install-claude
+        with:
+          version: ${{ needs.plan.outputs.version }}
+
+      - name: gh 버전
+        run: gh --version
+
+      - name: 앱 의존성 설치
+        working-directory: app
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+        run: npm ci --no-audit --no-fund
+
+      - name: "[계약] 실제 claude와 실제 gh"
+        working-directory: app
+        run: npm run test:contract
+
+      - name: 결과 요약
+        if: always()
+        working-directory: app
+        run: |
+          for name in live.md live-gh.md; do
+            file="test-results/contract/$name"
+            if [ -f "$file" ]; then cat "$file" >> "$GITHUB_STEP_SUMMARY"; fi
+          done
+
+      - name: 녹화본 보이기 (update_contract)
+        # 결과물을 받지 못하는 곳(Claude Code 웹 세션의 프록시 등)에서도 작업 로그로 옮길 수 있게 찍는다
+        if: ${{ always() && inputs.update_contract }}
+        run: |
+          for f in app/test/contract/fixtures/*.json; do echo "=== $f"; cat "$f"; done
+
+      - name: 녹화본 올리기 (update_contract)
+        if: ${{ always() && inputs.update_contract }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-fixtures
+          path: app/test/contract/fixtures/
+          if-no-files-found: error
+
+  remember:
+    # 매일 확인에서 처음 본 버전이 [계약]과 [실제] S를 통과하면 확인한 것으로 남긴다. 두 작업은 이 버전으로 고정해 설치하고
+    # 깔린 버전을 확인했으므로, 통과는 이 버전의 통과다
+    needs: [plan, claude, contract]
+    if: ${{ github.event.schedule == '37 19 * * *' && needs.claude.result == 'success' && needs.contract.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: echo "${{ needs.plan.outputs.version }}" > .claude-code-tested
+      - uses: actions/cache/save@v4
+        with:
+          path: .claude-code-tested
+          key: claude-code-tested-${{ needs.plan.outputs.version }}
+
+  report:
+    # 정기 실행이 실패하면 이슈를 연다. PR을 막지 않으므로 여기서 알린다.
+    # plan이 실패하면 뒤 작업이 skipped가 되고, 제한 시간에 걸리면 cancelled가 된다. 둘 다 정기 감시가 멈춘 것이라 함께 알린다
+    needs: [plan, claude, contract]
+    if: ${{ always() && github.event_name == 'schedule' && (needs.plan.result != 'success' || contains(fromJSON('["failure","cancelled"]'), needs.claude.result) || contains(fromJSON('["failure","cancelled"]'), needs.contract.result)) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TITLE: "정기 [실제]·[계약] 실패"
+      BODY: |
+        정기 실행이 실패했습니다: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        - 일정: `${{ github.event.schedule }}`, Claude Code ${{ needs.plan.outputs.version }}
+        - plan: ${{ needs.plan.result }}, [실제](claude): ${{ needs.claude.result }}, [계약](contract): ${{ needs.contract.result }}
+    steps:
+      - name: 이슈 열기 또는 코멘트
+        run: |
+          n=$(gh issue list --state open --search "in:title \"$TITLE\"" --json number,title --jq ".[] | select(.title == \"$TITLE\") | .number" | head -1)
+          if [ -n "$n" ]; then gh issue comment "$n" --body "$BODY"; else gh issue create --title "$TITLE" --body "$BODY"; fi

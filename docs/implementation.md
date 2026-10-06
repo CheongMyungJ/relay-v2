@@ -82,7 +82,7 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I50 | PR 진행의 gh 명령은 PR 주소(`https://<host>/<owner>/<repo>/pull/<n>`, `gh pr create`가 찍은 것이나 이미 열린 PR의 것)에서 읽은 레포로 부른다: gh 명령은 `--repo <host>/<owner>/<repo>`, REST는 `gh api --hostname <host> repos/<owner>/<repo>/…`이다 | PR 주소는 GitHub가 준 정식 주소라 origin 주소를 다시 읽을 필요가 없음. `gh api`는 호스트를 `--hostname`으로만 받고 `--repo`나 `GH_REPO`에서 읽지 않음(3절). 가짜 gh도 같은 모양의 주소를 줘 [흐름]이 같은 길을 지남 | |
 | I51 | PR 읽기의 네트워크 부분(gh, git fetch)은 Work의 처리 줄 밖에서 하고, 결과의 반영(fast-forward, `pr-items.json`, `work.json`, 알림)만 처리 줄에서 한다. 한 Work의 읽기는 한 번에 하나이고, 끊긴 작업의 기록(D122)이 있는 동안은 자동으로 읽지 않는다 | 한 번 읽기가 gh를 네 번 이상 불러 몇 초 걸림(S7). 처리 줄에서 하면 그동안 사람의 조작과 (M10부터) 대응 task의 훅 응답이 기다림. 반영은 git과 파일을 바꾸므로 다른 조작과 섞이지 않게 줄에서 함. 끊긴 머지가 있는데 읽기가 Work를 끝내면 [다시 시도]·[무시]와 어긋남 | |
 | I52 | Actions 실행의 이벤트(D201)는 WorkRunner가 실행 id별로 메모리에 두고, 처음 보는 실행만 `gh api --hostname <host> repos/<owner>/<repo>/actions/runs/<실행>?exclude_pull_requests=true`로 읽는다(한 번 읽기의 REST 목록 셋과 동시에). 앱을 켜면 CI 실패 항목에 적힌 이벤트로 먼저 채운다. 읽지 못하면 읽기의 경고로 보이고, 그 실행의 체크는 실행 id로 가려(`<워크플로>/<이름> #<실행>`) 다른 실행과 합치지 않으며, 다음 읽기에서 다시 읽는다 | 실행의 이벤트는 바뀌지 않아 한 번 읽으면 됨. 이벤트를 못 읽어도 PR 상태와 코멘트는 쓸모 있어 읽기 전체를 실패로 하지 않음. 합치면 실패를 가릴 수 있어 합치지 않는 쪽으로 틀림. CI 실패 항목에 적힌 이벤트를 쓰면 다시 켠 뒤 이벤트를 못 읽어도 항목의 id가 바뀌지 않음(바뀌면 해소됐다가 새 항목으로 돌아와 알림이 감). 처음 볼 때 이미 실패였고 그때 이벤트를 못 읽은 체크는 다음 읽기에서 항목의 id가 바뀐다(옛 항목은 해소됨). 머지 조건의 CI는 그동안에도 실패다 | |
-| I53 | M10의 [실제]는 나눠서 돌린다. (1) 실제 `claude`와 가짜 gh: Claude Code 웹 세션의 Linux 컨테이너에서 경우 `respond`로 돈다. 대응 task가 항목에 대응하고 답글 초안을 쓰는지, 코멘트 속 지시를 따르지 않고 묻는지(D162) 본다. (2) 가짜 `claude`와 실제 gh: `app-claude`의 Linux 작업 `pr`에서 공통 시나리오(`test/flow/pr-scenario.ts`)에 더한 대응 단계로 돈다. 실제 GitHub에 push, 답글과 보이지 않는 표시, 다시 실행을 본다. 둘을 합친 [실제](실제 `claude`의 답글이 실제 GitHub에 올라감)는 레포에 Claude 인증 secret을 넣거나 사람의 PC에서 돌릴 수 있을 때 한다. 그때까지 M10의 [실제]는 일부만 채운 것으로 적는다. M11의 [실제](I55, 경우 `pr-auto`)가 합친 것을 돈다: 자동 라운드의 코멘트 대응에서 실제 `claude`의 답글이 실제 PR에 게시된다 | 웹 세션은 GitHub API가 막혀 gh를 쓸 수 없음(S7. 2026-09-29에도 REST와 GraphQL 모두 403). 레포에는 Claude 인증 secret이 없고, 사람은 지금 PC를 쓸 수 없음. `claude setup-token`은 터미널 명령이라 휴대폰에서 할 수 없음. 나누면 지금 secret 없이 두 쪽을 모두 돌리고 고칠 수 있음 | ✅ |
+| I53 | M10의 [실제]는 나눠서 돌린다. (1) 실제 `claude`와 가짜 gh: Claude Code 웹 세션의 Linux 컨테이너에서 경우 `respond`로 돈다. 대응 task가 항목에 대응하고 답글 초안을 쓰는지, 코멘트 속 지시를 따르지 않고 묻는지(D162) 본다. (2) 가짜 `claude`와 실제 gh: `app-claude`의 Linux 작업 `pr`에서 공통 시나리오(`test/support/pr-scenario.ts`)에 더한 대응 단계로 돈다. 실제 GitHub에 push, 답글과 보이지 않는 표시, 다시 실행을 본다. 둘을 합친 [실제](실제 `claude`의 답글이 실제 GitHub에 올라감)는 레포에 Claude 인증 secret을 넣거나 사람의 PC에서 돌릴 수 있을 때 한다. 그때까지 M10의 [실제]는 일부만 채운 것으로 적는다. M11의 [실제](I55, 경우 `pr-auto`)가 합친 것을 돈다: 자동 라운드의 코멘트 대응에서 실제 `claude`의 답글이 실제 PR에 게시된다 | 웹 세션은 GitHub API가 막혀 gh를 쓸 수 없음(S7. 2026-09-29에도 REST와 GraphQL 모두 403). 레포에는 Claude 인증 secret이 없고, 사람은 지금 PC를 쓸 수 없음. `claude setup-token`은 터미널 명령이라 휴대폰에서 할 수 없음. 나누면 지금 secret 없이 두 쪽을 모두 돌리고 고칠 수 있음 | ✅ |
 | I54 | `app-ci`의 Windows [흐름]을 두 작업으로 나눠 나란히 돌린다: PR 진행과 대응 시험(`test/flow/pr*.test.ts`)과 나머지다. 빌드(I39)와 [어댑터]는 나머지 작업에만 둔다. 각 작업의 제한은 20분 그대로다 | M9 끝에 Windows 작업이 약 15~16분으로 제한(20분)에 가까웠고(push와 pull_request 실행이 함께 돌면 더 늘어남), M10의 [흐름]이 1.5~3분쯤 더함. 공개 레포라 러너 시간은 무료이고, 나누면 기다리는 시간도 줄어듦 | ✅ |
 | I55 | M11의 [실제]는 실제 `claude`와 실제 gh를 합쳐 `app-claude` 워크플로의 Linux 작업(`pr`)에서 돈다(경우 `pr-auto`). 작업은 Claude Code를 네이티브 설치 스크립트로 설치하고 레포 secret `CLAUDE_CODE_OAUTH_TOKEN`(사람이 `claude setup-token`으로 만든 것)으로 인증한다. 시험용 레포 secret(I43)은 M9·M10과 같다. 파이프라인은 가짜 `claude`로 [PR 생성]까지 가고 대응 task만 실제 `claude`다(M10의 `respond`와 같음). 실제 `claude`는 필요한 환경 변수만 넘겨 띄운다(시험 도구의 `env -i` 실행 파일 감싸개, 8.4): GitHub 토큰(`GH_TOKEN`, `GITHUB_TOKEN`)과 git 자격 증명 설정은 넘기지 않는다 | 웹 세션은 GitHub 프록시가 GraphQL을 정해 둔 PR 작업만 받아 앱의 `gh pr view --json`, `gh pr create`, `gh pr merge`, `gh repo view`가 403이고, gh가 없고, 실패 로그의 다운로드 주소가 막힘(3절). 사람이 PC에서 `setup-token`을 만들 수 있게 됨(I53 때는 못 함). Linux 작업에는 gh와 시험용 레포 secret이 이미 있고 M9·M10의 실제 gh 시험이 돈 곳임. Windows 작업은 한 번도 돈 적이 없어 준비에서 막힐 수 있고, Windows 동작은 [실기]가 봄. 권한 확인 없이 도는 세션(D17)에 GitHub 토큰이 있으면 앱을 거치지 않고 PR에 쓸 수 있음(D162) | ✅ |
 | I56 | M11의 [흐름]은 `test/flow/pr-auto.test.ts`로 두어 `app-ci`의 `windows-pr` 작업에서 돈다. 파일 이름이 `pr*`라 워크플로를 바꾸지 않는다 **(기본값)** | M10 마지막 실행(#118)에서 `windows` 작업은 약 17분([흐름] 876초. #117은 580초)으로 제한 20분에 가깝고, `windows-pr`는 약 5분이었음 | |
@@ -267,7 +267,7 @@ app/src/
 | 파일 해시(SHA-256) | `spikes/lib/util.mjs` `sha256` | `adapters/store` |
 | 고아 프로세스의 트리 모으기(부모 ID)와 Linux 프로세스 목록(`/proc`) | `spikes/lib/util.mjs` `descendants`, `procList` | `adapters/pty` |
 
-시험 도구로만 옮기는 것(I17): xterm headless 화면 읽기, 첫 실행 창 자동 수락(`handleDialogs`), 입력 대기 판정(`waitReady`), 테스트용 레포와 bare 원격 만들기(`makeFixture`), 결과 기록(`Result`), 앱 역할 프로세스(`orphan-parent.mjs` → `test/fixtures/app-role.mjs`).
+시험 도구로만 옮기는 것(I17): xterm headless 화면 읽기, 첫 실행 창 자동 수락(`handleDialogs`), 입력 대기 판정(`waitReady`), 테스트용 레포와 bare 원격 만들기(`makeFixture`), 결과 기록(`Result`), 앱 역할 프로세스(`orphan-parent.mjs` → `test/support/fixtures/app-role.mjs`).
 
 새로 쓰는 것: 상태 기계, 저장소, `context.md` 조립, 형식 검사(I18), 되감기, 전달, 정리, 화면.
 
@@ -557,7 +557,7 @@ app/src/
 - **승인 화면(D83, I45):** review의 [변경]은 review의 시작 커밋부터라 리뷰가 고친 커밋이 여기에 보인다. verify의 [변경]에는 없고, Work 완료 화면의 [전체 변경]에 수정과 함께 보인다. 필수 산출물은 `review.md`이고(D30) 절 검사는 없다. 사람이 지시하면 승인 대기에서 작업 중이 되고, 다시 마무리하면 승인 대기가 된다(시나리오 4-3). 다시 쓰지 않고 턴이 끝나도 앞 handoff로 승인 대기가 된다(I46, 알려진 제약).
 - **설정(D167):** `question_mode.review`의 기본은 `draft_first`다. `config.json`에 없으면 경고 없이 기본값을 쓴다(5.1.1). 설정 화면에는 리뷰의 질문 방식만 있고 자동 승인 목록에는 없으며, 안내는 "의도 정리, 리뷰, 최종 검증은 늘 수동입니다."다.
 - **진행 중인 Work(I44):** fix를 승인하기 전의 Work는 fix 다음에 review를 지난다. [이 단계 끝나면 멈춤]으로 fix 승인 뒤 멈춘 Work도 [재개]하면 review로 간다. 이미 verify가 생긴 Work는 review 없이 끝나므로, 리뷰를 거치려면 verify에서 [단계 선택]으로 review를 고른다.
-- **시험:** [흐름]은 시험 도구(`test/flow/driver.ts`)에 `instruct`를 더해, 승인 대기가 된 task에 사람이 터미널로 지시하는 것을 흉내 낸다. 가짜 `claude`의 리뷰 시나리오(`reviewInstructed`)는 지적 둘을 쓰고 마무리한 뒤, 새 요청을 받으면 1번만 고쳐 커밋하고 다시 마무리한다. [실제]의 사람 역할과 판정은 8.4에 있다.
+- **시험:** [흐름]은 시험 도구(`test/support/driver.ts`)에 `instruct`를 더해, 승인 대기가 된 task에 사람이 터미널로 지시하는 것을 흉내 낸다. 가짜 `claude`의 리뷰 시나리오(`reviewInstructed`)는 지적 둘을 쓰고 마무리한 뒤, 새 요청을 받으면 1번만 고쳐 커밋하고 다시 마무리한다. [실제]의 사람 역할과 판정은 8.4에 있다.
 
 ### M9. PR 진행
 
@@ -620,7 +620,7 @@ app/src/
 - **PR 패널(D183):** 지금 task(verify)를 고르면 오른쪽 패널이 넓어져 PR 패널과 최종 검증 결과(읽기 전용) 탭이 된다. 요약(번호와 링크, head, CI, 체크별 상태, 리뷰, 충돌, 로컬과의 비교, 마지막으로 읽은 때와 [새로 고침]), [머지]와 어긴 조건, [머지 없이 끝내기], 항목 목록, 받은 원격 커밋, PR 진행을 시작할 때의 gh 버전을 보인다. 코멘트 본문과 CI 로그는 남이 쓴 글이라 마크다운으로 그리지 않고 글자 그대로 보인다. 완료한 Work에도 기록으로 남는다.
 - **프로젝트 설정(D185, 5.1.2):** 사이드바의 프로젝트 이름을 누르면 연다. 받을 봇은 한 줄에 하나(쉼표도 받음)이고 앞뒤 공백을 떼고 겹친 것은 하나로 둔다. 기본 머지 방식은 "레포가 허용하는 첫 방식"(null), merge, squash, rebase다. 앱 설정과 같은 줄에서 차례로 저장한다.
 - **gh 버전(D198):** 등록 점검과 다시 점검은 로그인과 관계없이 `gh --version`을 읽는다. 점검 표의 줄은 "gh auth status가 성공하고 gh가 2.48.0 이상인가" 하나이고, `project.json`에는 로그인(`gh`)과 버전(`gh_version`)을 따로 적는다. 버전을 읽지 못했거나 숫자로 읽을 수 없으면 막지 않는다. M9 전에 점검한 `project.json`은 버전이 없어 막지 않고, 다음 점검에서 적는다.
-- **시험:** 가짜 gh(8.2)의 PR 상태는 `prs.json`, 체크와 코멘트는 `github.json`이고, `test/flow/github.ts`의 `FakeGitHub`가 바꾼다. 가짜 세계(`FakeWorld`)는 PR 브랜치에 `ci-fail`이 있으면 CI를 실패로 두고, 원격 브랜치가 바뀌면 `git merge-tree`로 `mergeable`을 다시 계산한다. [흐름]과 [실제]는 같은 공통 시나리오(`test/flow/pr-scenario.ts`, 8.4의 PR 진행 1~6)를 돌고, 가짜로만 만들 수 있는 경우(재시작, 로컬만 앞섬과 갈라짐, 깨끗하지 않은 worktree, gh 실패, 끊긴 머지, 고친·지운 코멘트, 로그가 아직 없는 CI 실패, push와 pull_request로 두 번 돈 작업과 이벤트를 읽지 못함(D201, I52), 머지 방식과 브랜치 보호, 낮은 gh)는 `test/flow/pr.test.ts`가 따로 본다.
+- **시험:** 가짜 gh(8.2)의 PR 상태는 `prs.json`, 체크와 코멘트는 `github.json`이고, `test/support/github.ts`의 `FakeGitHub`가 바꾼다. 가짜 세계(`FakeWorld`)는 PR 브랜치에 `ci-fail`이 있으면 CI를 실패로 두고, 원격 브랜치가 바뀌면 `git merge-tree`로 `mergeable`을 다시 계산한다. [흐름]과 [실제]는 같은 공통 시나리오(`test/support/pr-scenario.ts`, 8.4의 PR 진행 1~6)를 돌고, 가짜로만 만들 수 있는 경우(재시작, 로컬만 앞섬과 갈라짐, 깨끗하지 않은 worktree, gh 실패, 끊긴 머지, 고친·지운 코멘트, 로그가 아직 없는 CI 실패, push와 pull_request로 두 번 돈 작업과 이벤트를 읽지 못함(D201, I52), 머지 방식과 브랜치 보호, 낮은 gh)는 `test/flow/pr.test.ts`가 따로 본다.
 
 ### M10. PR 대응
 
@@ -670,7 +670,7 @@ app/src/
 - **표시 문구(D173):** `reply_signature`는 비어 있지 않은 한 줄, 200자 이하다 **(기본값)**. 앞뒤 공백은 뗀다. 설정 화면에서 바꾼다.
 - **화면:** PR 패널에 [대응 시작](지시 입력란, 넣을 새 항목 수), [실패한 체크 다시 실행], 대응 라운드 기록(라운드, task, 상태, 항목, push한 커밋, 함께 push한 라운드, 답글 링크나 건너뛴 까닭, 실패)을 더한다. 지금 task가 대응 task면 오른쪽 패널은 [PR]과 그 대응 task의 탭이고, 승인할 때는 대응 task의 탭을 먼저 연다. 승인 화면의 [요약]은 이번 라운드의 항목, 사람 지시, `response.md`의 `항목별 결과`를 앞에 두고, [산출물]은 게시될 모양의 답글(보이지 않는 표시는 뺌)을 앞에 둔다. 머지 창은 판정표 경고와 verify의 판정표를 보인다.
 - **이벤트(5.5):** `pr.pushed`는 대응 task의 이벤트이고 payload는 `head`, `commits`다(이번에 올라간 커밋이 없으면 남기지 않는다). `pr.replied`는 `replies`(`item`, `comment_id`)와 건너뛴 항목(`skipped`)이다. `pr.checks_rerun`은 `runs`, `checks`다.
-- **시험:** 가짜 gh는 답글 POST 둘(표준 입력의 JSON, 스레드 답글이면 본문 없는 리뷰도 만듦, 없는 코멘트는 HTTP 404), `run rerun --failed`, POST마다의 결과(`github.json`의 `post_faults`: `error`, `posted`), `FAKE_GH_FAIL`의 `post`, `rerun`을 더한다. 가짜 claude는 `respond`(context.md의 이번 라운드 항목으로 `response.md`와 `replies.md`를 씀)와 `merge`(앱이 fetch한 원격 브랜치를 병합) 단계를 더한다. [흐름]과 [실제]는 PR 대응의 공통 시나리오(`test/flow/pr-scenario.ts`의 `runRespondScenario`)를 돌고, 가짜로만 만들 수 있는 경우는 `test/flow/pr-respond.test.ts`가 본다. 실제 `claude`의 대응은 `test/claude/respond.test.ts`(경우 `respond`)다.
+- **시험:** 가짜 gh는 답글 POST 둘(표준 입력의 JSON, 스레드 답글이면 본문 없는 리뷰도 만듦, 없는 코멘트는 HTTP 404), `run rerun --failed`, POST마다의 결과(`github.json`의 `post_faults`: `error`, `posted`), `FAKE_GH_FAIL`의 `post`, `rerun`을 더한다. 가짜 claude는 `respond`(context.md의 이번 라운드 항목으로 `response.md`와 `replies.md`를 씀)와 `merge`(앱이 fetch한 원격 브랜치를 병합) 단계를 더한다. [흐름]과 [실제]는 PR 대응의 공통 시나리오(`test/support/pr-scenario.ts`의 `runRespondScenario`)를 돌고, 가짜로만 만들 수 있는 경우는 `test/flow/pr-respond.test.ts`가 본다. 실제 `claude`의 대응은 `test/claude/respond.test.ts`(경우 `respond`)다.
 
 ### M11. 자동 대응
 
@@ -748,7 +748,7 @@ app/src/
 - **설정(5.1.1):** `auto_approve`에 `review`가 생기고 기본값은 `fix`와 `review`만 `true`다. 설정 파일에 값이 없으면 기본값을 쓰므로, 설정 화면에서 저장한 적이 있는 사람은 저장한 값(대개 `fix: false`, `review` 없음 → 기본값 켬)을 쓴다. 켤 수 없는 단계의 오류 문구는 "(의도 승인, Work 완료는 늘 수동)"이다.
 - **context.md(시나리오 2-4):** 리뷰의 마무리 안내 문구에 "지적이 없고 자동 승인이 켜져 있으면 카운트다운 뒤 승인되고, 멈추려면 [취소]를 누르세요."를 더한다. 승인 방식은 다른 단계처럼 설정을 따르고 "리뷰는 지적이 없을 때만 자동 승인한다"를 붙인다.
 - **크기 기준(D212):** work-start 스킬의 Size 절을 고치고 `skills/check.mjs`에 D212 대조를 더한다. 앱 코드는 바뀌지 않는다.
-- **시험의 기본 설정:** [단위]의 상태 전이와 [흐름]·[실제]의 도구(`test/flow/harness.ts`)는 자동 승인을 모두 끈 설정(`MANUAL`)을 기본으로 쓴다. 기존 시험이 보던 사람 승인의 길을 그대로 보고, 앱의 기본값은 `productDefaults`로 켠 시험에서 본다.
+- **시험의 기본 설정:** [단위]의 상태 전이와 [흐름]·[실제]의 도구(`test/support/harness.ts`)는 자동 승인을 모두 끈 설정(`MANUAL`)을 기본으로 쓴다. 기존 시험이 보던 사람 승인의 길을 그대로 보고, 앱의 기본값은 `productDefaults`로 켠 시험에서 본다.
 - **화면:** 설정 화면, 새 Work 대화상자, [Work 설정]의 자동 승인 목록에 리뷰가 생기고, 안내 문구에 "리뷰는 지적이 없을 때만 자동 승인합니다"를 더한다. 지적이 있는 리뷰의 까닭은 다른 까닭처럼 승인 화면의 `notice auto-hold`에 보인다.
 - **시험(R1):** [단위] `test/unit/validate.test.ts`, `approval.test.ts`, `config.test.ts`, `context.test.ts`, `machine.test.ts`. [흐름] `test/flow/auto.test.ts`(앱의 기본값, 지적이 있는 리뷰의 알림). [스모크] `test/smoke/app.spec.ts`(설정 화면의 기본값, 지적이 있는 리뷰의 까닭).
 - **진행 표시의 길(R2, D216):** main의 `hookArrived`가 훅을 받으면 먼저 진행 표시를 바꾼다. UserPromptSubmit은 턴이 시작한 때를 두고 도구를 지운다. PreToolUse는 마지막 도구를 두고, PostToolUse는 끝난 때를 둔다(`tool_use_id`가 있으면 그것으로, 없으면 도구 이름으로 맞춘다). 질문 도구가 아닌 도구의 훅은 처리 줄에 넣지 않고 빈 본문으로 바로 답하며, `UiPort.activity`(IPC `app:activity`, 렌더러의 `onActivity`)로 따로 보낸다. Work 스냅샷의 `TaskView.activity`에도 같은 값이 있고, 렌더러는 그 Work의 스냅샷이 오면 따로 온 값을 지운다(같은 창으로 차례대로 온다). 정리 세션은 도구 훅을 쓰지 않아 바로 답한다. 진행 표시는 작업 중인 task만이다.
@@ -999,45 +999,62 @@ app/src/
 
 ### 8.1 시험의 층
 
-| 꼬리표 | 대상 | 도구 | 어디서 | 언제 |
-|---|---|---|---|---|
-| [단위] | `core` | Vitest | Linux 러너 | push, PR (I28) |
-| [어댑터] | `adapters`: 실제 git, 파일, node-pty, HTTP 서버, 프로세스 종료 | Vitest | Windows 러너 | push, PR |
-| [흐름] | `main` 조립 + `adapters` + 가짜 `claude`(I25, I26) | Vitest | Windows 러너. PR 진행·대응과 나머지를 두 작업으로(I54) | push, PR |
-| [스모크] | 설치 파일과 화면(I27) | Playwright `_electron` | Windows 러너 | 설치본은 수동(`app-build`). Codex GUI 스모크(`test/smoke/codex.spec.ts`)는 push, PR마다 개발 빌드로(`app-ci`) |
-| [실제] | 앱 흐름 + 실제 `claude` + 스킬(I29). PR 진행(M9)과 PR 대응의 push·게시(M10)는 가짜 `claude` + 실제 gh(I49, I53). 자동 대응(M11)은 실제 `claude` + 실제 gh(I55) | Vitest와 시험 도구(I17) | Windows 러너. 지금은 Linux 클라우드 세션(8.4). PR 진행·대응·자동 대응의 실제 gh는 Linux 러너(I49, I53, I55) | 수동. 마일스톤 완료, Claude Code 업데이트 때 |
-| [실기] | 한글 IME, 알림, 화면, 사용감 | 사람 | Windows 10/11 PC | 마일스톤 완료 때 |
+시험은 "무엇을 확인하나"와 "얼마나 결정적이고 싼가"로 나눈다. 결정적이고 사용량이 들지 않는 시험은 push와 PR마다 돌고,
+실제 `claude`나 GitHub를 부르는 시험은 정기 실행과 수동으로 돈다. 품질 비교(평가)는 시험이 아니라 실험이다.
 
-- 비용: 공개 레포라 러너 시간은 무료다. 비용이 드는 것은 [실제]의 Claude 사용량뿐이다.
-- [흐름]과 [실제]는 같은 시험 코드를 쓰고 `claude` 실행 파일만 바꾼다. 앱은 `CLAUDE_BIN` 환경 변수로 실행 파일을 받는다(6절 `resolveClaude`).
+| 꼬리표 | 묻는 것 | 대상과 도구 | 어디서 | 언제 |
+|---|---|---|---|---|
+| 정적 | 형식이 맞나 | 타입 검사, ESLint, Prettier, 계약 스키마 생성, `skills/check.mjs`(스킬 머리글·크기·템플릿·설계 대조) | Linux 러너 | push, PR (I28) |
+| [단위] | 로직이 맞나 | `core`와 `shared`, `main`·`renderer`의 순수 함수 (`test/unit`). Vitest | Linux 러너 | push, PR |
+| [어댑터] | OS 자원을 맞게 다루나 | `adapters`: 실제 git, 파일, node-pty, HTTP 서버, 프로세스 종료 (`test/adapters`). Vitest | Windows 러너와 Linux 러너 | push, PR |
+| [흐름] | 모듈이 이어져 시나리오가 끝까지 가나 | `main` 조립 + `adapters` + 가짜 `claude`·gh·codex(I25, I26) (`test/flow`). Vitest | Windows 러너. PR 진행·대응과 나머지를 두 작업으로(I54) | push, PR |
+| [스모크] | 화면의 핵심 여정과 설치본 | Playwright `_electron` (`test/smoke`). 가짜 `claude`·codex(I27) | Windows 러너 | 개발 빌드는 push, PR마다(`app-ci`). 설치본은 수동(`app-build`)과 릴리스(`app-release`) |
+| [계약] | 가짜가 실제와 같나 | 앱이 실제 `claude`와 gh에 기대는 것(훅 본문의 필드, 실행 옵션, PR 읽기의 JSON)과 실제에서 녹화한 모양 (`test/contract`). 가짜 쪽은 가짜가 계약과 녹화본을 따르는지, 실제 쪽은 실제가 계약을 지키는지 본다 | 가짜 쪽: Linux 러너. 실제 쪽: `app-claude`의 Linux 작업 `contract` | 가짜 쪽: push, PR. 실제 쪽: 정기(매주, Claude Code 새 버전)와 수동 |
+| [실제] | 실제 `claude`와 스킬로 돌려도 안 깨지나 | 앱 흐름 + 실제 `claude` + 스킬(I29) (`test/claude`). PR 진행(M9)과 PR 대응의 push·게시(M10)는 가짜 `claude` + 실제 gh(I49, I53). 자동 대응(M11)은 실제 `claude` + 실제 gh(I55). 판정은 통과·실패와 형식 오류 되돌림 횟수다. 품질은 보지 않는다(평가가 본다) | Windows 러너(`app-claude`). PR 진행·대응·자동 대응의 실제 gh는 Linux 러너(I49, I53, I55) | 정기: 매주 전부, Claude Code 새 버전이면 S. 수동: 마일스톤 완료 때. 시험 도구는 dry(가짜 `claude`)로 push, PR마다(Linux) |
+| 평가 | 맨 CLI보다 좋은가 | relay 대 맨 CLI(또는 지식 끈 relay), AI 사람 역할과 판정 (`app/eval`, `docs/eval.md`). 점수와 비교를 보고서로 남긴다 | Linux 클라우드 세션 | 스킬이나 흐름 설계를 바꿀 때, 마일스톤 때. 평가 도구의 측정 로직 시험(`eval/test`)과 시나리오 확인(`check-scenario.mjs all`)은 push, PR마다(Linux) |
+| [실기] | 자동화할 수 없는 것 | 한글 IME, 알림, 화면, 사용감. 사람 | Windows 10/11 PC | 마일스톤 완료, 릴리스 전 |
+
+- 어느 층에 둘지:
+  1. 외부(`claude`, gh, OS) 없이 돌 수 있으면 [단위]에 둔다.
+  2. 실제 OS 자원 하나를 보면 [어댑터]에 둔다.
+  3. 여러 모듈이 이어진 시나리오인데 화면이 필요 없으면 [흐름]에 둔다.
+  4. 화면을 눌러야만 보이는 것만 [스모크]에 둔다. [흐름]에서 본 로직을 화면에서 다시 보지 않는다.
+  5. 모델 출력에 기대는 것 가운데 "깨졌나"는 [실제], "좋은가"는 평가로 본다. [실제]에 품질 판정을 넣지 않는다.
+  6. 한 동작은 가장 낮은 층에서 한 번만 자세히 보고, 위 층에서는 이어지는 것만 본다.
+- PR을 막는 것은 결정적인 시험(정적, [단위], [어댑터], [흐름], [스모크] 개발 빌드, [계약] 가짜 쪽, [실제] dry, 평가 도구 시험)뿐이다. 실제 `claude`나 gh를 부르는 시험은 PR을 막지 않고, 정기 실행이 실패하면 이슈로 알린다(8.3).
+- 비용: 공개 레포라 러너 시간은 무료다. 비용이 드는 것은 [실제]·[계약] 실제 쪽·평가의 Claude 사용량뿐이다.
+- [흐름]과 [실제]는 같은 시험 도구(`test/support`)를 쓰고 `claude` 실행 파일만 바꾼다. 앱은 `CLAUDE_BIN` 환경 변수로 실행 파일을 받는다(6절 `resolveClaude`).
+- 폴더: `test/support`는 층들이 함께 쓰는 가짜 `claude`·gh·codex, fixtures, [흐름]과 [실제]의 harness·driver·시나리오다. 층마다의 시험은 `test/unit`, `test/adapters`, `test/flow`, `test/smoke`, `test/contract`, `test/claude`, `eval/test`에 있다.
 
 ### 8.2 가짜 claude (I25)
 
-- 위치: `app/test/fake-claude/`. Node 스크립트이고 PTY 안에서 실행된다.
+- 위치: `app/test/support/fake-claude/`. Node 스크립트이고 PTY 안에서 실행된다.
 - 입력: 실제와 같은 인자(`--settings`, `--session-id`, `--resume`, `--add-dir`, 첫 프롬프트)와 환경 변수 `RELAY_HOOK_TOKEN`. 시나리오 파일 경로는 환경 변수 `FAKE_CLAUDE_SCENARIO`로 받는다 **(기본값)**.
 - 동작: 설정 파일에서 훅 URL과 머리글을 읽어 신호를 보낸다. 본문 필드는 S2에서 관찰한 모양(`session_id`, `transcript_path`, `cwd`, `permission_mode`, `hook_event_name`, 도구 이름과 입력, `stop_hook_active`)을 따른다.
 - 시나리오 파일은 단계 목록이다: 신호 보내기, 산출물과 handoff 쓰기, worktree에 커밋하기, 커밋하지 않고 worktree 고치기(M4, D116), 질문 대기 흉내(`AskUserQuestion`의 PreToolUse와 PostToolUse), Stop 보내고 응답 확인, 되돌림을 받았을 때 쓸 내용, 종료. PR 대응(M10)은 `context.md`의 이번 라운드 항목으로 `response.md`와 `replies.md`를 쓰는 단계와, 앱이 fetch한 원격 브랜치를 병합하는 단계가 있다.
   - Stop 본문에는 실제처럼 `background_tasks`와 `session_crons`를 늘 넣는다(3절). 시나리오가 목록을 주면 그것을 넣어 백그라운드 작업을 기다리며 쉬는 세션을 흉내 낸다(M7, D129).
 - 가짜 `gh`도 같은 방식으로 두고, 받은 인자를 파일에 남긴다 **(기본값)**. PR 단계(M9~M11)를 위해 PR 상태, 체크, 리뷰와 코멘트 읽기, 답글 게시, 체크 재실행, 머지를 더하고, 시나리오 파일로 PR의 상태와 코멘트를 바꾼다(I43).
-  - 위치는 `app/test/fake-gh/gh.mjs`다. `auth status`, `pr list`, `pr create`를 흉내 내고, 인자와 cwd, `--body-file`의 내용을 `FAKE_GH_RECORD` 폴더의 `fake-gh.jsonl`에 한 줄씩 남긴다. 만든 PR은 같은 폴더의 `prs.json`에 두어 같은 `--repo`와 `--head`로 찾는다.
+  - 위치는 `app/test/support/fake-gh/gh.mjs`다. `auth status`, `pr list`, `pr create`를 흉내 내고, 인자와 cwd, `--body-file`의 내용을 `FAKE_GH_RECORD` 폴더의 `fake-gh.jsonl`에 한 줄씩 남긴다. 만든 PR은 같은 폴더의 `prs.json`에 두어 같은 `--repo`와 `--head`로 찾는다.
   - 로그인 실패(`FAKE_GH_AUTH=fail`), 이미 열린 PR(`FAKE_GH_OPEN_PR`), 명령 실패(`FAKE_GH_FAIL=list|create`)를 환경 변수로 흉내 낸다. `--repo`가 로컬 경로면 head 브랜치가 그 레포에 push되어 있어야 PR을 만든다.
   - M9에서 더한 명령(PR #14): `--version`, `pr view --json`, `api`(GET 목록 셋과 실행 하나 `…/actions/runs/<실행>`), `run view --job --log-failed`, `pr merge --match-head-commit`, `repo view --json …Allowed`.
   - M10에서 더한 명령: `api -X POST … --input -`(스레드 답글과 대화 코멘트. 본문은 표준 입력의 JSON이고 기록에 `input`으로 남긴다. 스레드 답글은 본문 없는 리뷰도 만든다. 없는 코멘트는 HTTP 404), `run rerun <실행> --failed`(다시 실행한 실행을 `github.json`의 `reruns`에 남긴다). POST마다의 결과는 `github.json`의 `post_faults`(`error`: 게시하지 않고 HTTP 502, `posted`: 게시한 뒤 HTTP 502, D194)로, POST 모두의 실패와 다시 실행의 실패는 `FAKE_GH_FAIL`의 `post`, `rerun`으로 흉내 낸다. 게시한 코멘트의 작성자는 앱의 사람(`relay-owner`, OWNER)이다.
-  - PR의 상태는 `prs.json`(번호, 주소, 레포, head와 기준 브랜치, 상태, 머지)과 시험이 쓰는 같은 폴더의 `github.json`(PR마다 체크, 리뷰, 인라인 코멘트, 대화 코멘트, mergeable, 실패 로그, 허용 머지 방식, 실행마다 이벤트)에 둔다. 시험은 `test/flow/github.ts`로 이 파일을 바꾸고 [새로 고침]으로 읽게 한다. head와 base는 PR을 만든 레포(로컬 bare 원격)의 브랜치에서 매번 읽어, 시험이 원격에 커밋을 더하면(웹 편집 흉내) 바뀐다(D193).
+  - PR의 상태는 `prs.json`(번호, 주소, 레포, head와 기준 브랜치, 상태, 머지)과 시험이 쓰는 같은 폴더의 `github.json`(PR마다 체크, 리뷰, 인라인 코멘트, 대화 코멘트, mergeable, 실패 로그, 허용 머지 방식, 실행마다 이벤트)에 둔다. 시험은 `test/support/github.ts`로 이 파일을 바꾸고 [새로 고침]으로 읽게 한다. head와 base는 PR을 만든 레포(로컬 bare 원격)의 브랜치에서 매번 읽어, 시험이 원격에 커밋을 더하면(웹 편집 흉내) 바뀐다(D193).
   - 주소는 GitHub 모양(`https://github.test/local/<레포 이름>/pull/<n>`)이라 앱이 PR 주소에서 레포를 읽는 길(I50)을 그대로 지난다.
   - S7에서 본 모양을 넣는다: 체크가 아직 없는 새 head(빈 statusCheckRollup), 본문이 빈 리뷰, 봇(`…[bot]`, `user.type` Bot, 관계 NONE), 고친 코멘트(id가 같고 `updated_at`만 바뀜), 기준 브랜치가 움직여도 옛 `baseRefOid`, TTY가 아닐 때 머지 성공의 빈 출력, head가 다르면 "GraphQL: Head branch was modified. Review and try the merge again. (mergePullRequest)"와 종료 코드 1, 실행이 끝나기 전의 로그 요청 실패(3절).
   - 명령 실패는 `FAKE_GH_FAIL`(`view`, `api`, `event`, `merge`, `log`를 더함. `api`는 REST 요청 모두, `event`는 실행 읽기만), gh 버전은 `FAKE_GH_VERSION`(기본 2.101.0)으로 흉내 낸다. `merge`의 실패는 M9 [실제]에서 GitHub가 준 "GraphQL: Pull Request is not mergeable (mergePullRequest)"다. 브랜치 보호로 막힌 것(mergeStateStatus BLOCKED)은 `github.json`의 `merge_state`로 두면 gh처럼 GitHub에 묻기 전에 멈춘다.
 
-- 가짜 `codex`: `app/test/fake-codex/fake-codex.mjs`. 실제 Codex의 옵션을 받아 relay의 command 훅·MCP 브리지를 실제로 실행하고, 모델 요청은 하지 않는다. Codex [흐름](`test/flow/codex.test.ts`)과 Codex GUI [스모크]가 쓴다([engines.md](engines.md)).
+- 가짜 `codex`: `app/test/support/fake-codex/fake-codex.mjs`. 실제 Codex의 옵션을 받아 relay의 command 훅·MCP 브리지를 실제로 실행하고, 모델 요청은 하지 않는다. Codex [흐름](`test/flow/codex.test.ts`)과 Codex GUI [스모크]가 쓴다([engines.md](engines.md)).
+
+- 가짜가 실제를 따라가게 하는 장치는 [계약]이다(`test/contract`). 실제 `claude`와 gh에서 녹화한 모양(`fixtures/claude.json`, `fixtures/gh.json`)과 가짜가 보내는 모양이 다르면 가짜 쪽 시험이 실패한다. 녹화본은 `app-claude`의 경우 `contract`를 `update_contract`와 함께 돌려 결과물(`contract-fixtures`)로 받아 바꾼다. 실제 `claude`는 Claude Code 웹 세션에서도 `RELAY_CONTRACT_LIVE=1 RELAY_CONTRACT_UPDATE=1 npx vitest run --project contract test/contract/live.test.ts`로 녹화할 수 있다. 녹화는 `claude -p`(비대화형)로 한다. 앱은 PTY에서 대화형으로 띄우므로, 대화형에서만 오는 이벤트(`Notification`)와 대화형에서만 달라지는 필드는 녹화본에 없고 [실제]가 잡는다(`test/contract/claude.ts`의 `NOT_RECORDED`).
 
 ### 8.3 워크플로
 
 | 파일 | 실행 | 하는 일 |
 |---|---|---|
-| `.github/workflows/app-ci.yml` | push, PR (`app/`, `skills/`, `docs/contracts/`가 바뀔 때) | Linux: 타입 검사, ESLint, Prettier 확인, [단위], `skills/check.mjs` **(기본값)**. Windows: 빌드(I39), [어댑터], Codex [흐름](`test/flow/codex.test.ts`), Codex GUI [스모크](개발 빌드, `test/smoke/codex.spec.ts`), [흐름](PR 진행·대응·Codex 밖). Windows(`windows-pr`): [흐름] PR 진행·대응(`test/flow/pr*.test.ts`, I54) |
-| `.github/workflows/app-build.yml` | 수동 | 설치 파일 빌드, 조용한 설치, [스모크], 설치 파일을 결과물로 올리기(I8) |
-| `.github/workflows/app-release.yml` | `v*` 태그 push | 태그 버전으로 설치 파일 빌드, 업데이트 파일 확인, 조용한 설치, [스모크], GitHub Release에 설치 파일·`.blockmap`·`latest.yml` 올리기(I95) |
-| `.github/workflows/app-claude.yml` | 수동 | [실제]. 입력: 모델, effort. 인증은 스파이크 워크플로와 같은 레포 secret. 레포에 secret이 없으면 첫 단계에서 멈춘다. Windows 작업은 2026-09-29까지 한 번도 돌지 않았다(8.4). `cases`에 `pr`이나 `pr-cleanup`만 적으면 Linux 작업(`pr`)이 가짜 `claude`와 실제 gh로 PR 진행(M9)과 PR 대응의 push·답글 게시·다시 실행(M10)을 돈다. Claude 인증 없이 시험용 레포 secret(`RELAY_TEST_GH_REPO`, `RELAY_TEST_GH_TOKEN`)만 쓴다(I43, I49, I53). `pr-auto`를 적으면 같은 작업이 Claude Code를 설치하고 레포 secret `CLAUDE_CODE_OAUTH_TOKEN`으로 실제 `claude`와 실제 gh를 합쳐 자동 대응(M11)을 돈다(I55). 세 경우는 함께 적을 수 있다 |
+| `.github/workflows/app-ci.yml` | push, PR (`app/`, `skills/`, `docs/contracts/`가 바뀔 때) | Linux(`linux`): 타입 검사, ESLint, Prettier 확인, [단위], `skills/check.mjs`. Linux(`linux-tools`): Linux의 [어댑터], [계약] 가짜 쪽, 평가 도구 시험(`npm run test:eval`: 측정 로직과 `check-scenario.mjs all`), [실제] 시험 도구의 dry(가짜 `claude`, `pr-auto` 포함). Windows: 빌드(I39), [어댑터], Codex [흐름](`test/flow/codex.test.ts`), [스모크] 전부(개발 빌드), [흐름](PR 진행·대응·Codex 밖). Windows(`windows-pr`): [흐름] PR 진행·대응(`test/flow/pr*.test.ts`, I54) |
+| `.github/workflows/app-build.yml` | 수동 | 설치 파일 빌드, 공용 액션 `install-smoke`(조용한 설치, 자동 업데이트 설정과 node-pty 파일 확인, 설치본 [스모크]), 설치 파일을 결과물로 올리기(I8) |
+| `.github/workflows/app-release.yml` | `v*` 태그 push | 태그 버전으로 설치 파일 빌드, 업데이트 파일 확인, 공용 액션 `install-smoke`, GitHub Release에 설치 파일·`.blockmap`·`latest.yml` 올리기(I95) |
+| `.github/workflows/app-claude.yml` | 수동, 정기(매주 월 03:52 KST, 매일 04:37 KST) | 앞의 `plan` 작업이 할 일을 정한다. [실제]. 입력: 모델, effort. 인증은 스파이크 워크플로와 같은 레포 secret. 레포에 secret이 없으면 첫 단계에서 멈춘다. secret `CLAUDE_CODE_OAUTH_TOKEN`은 있다(2026-09-29 `pr-auto`, app-claude #7, #8에서 확인). Windows 작업은 `cases`를 `pr` 계열로만 골라 돌려 2026-10-05까지 한 번도 돌지 않았다(8.4). `cases`에 `pr`이나 `pr-cleanup`만 적으면 Linux 작업(`pr`)이 가짜 `claude`와 실제 gh로 PR 진행(M9)과 PR 대응의 push·답글 게시·다시 실행(M10)을 돈다. Claude 인증 없이 시험용 레포 secret(`RELAY_TEST_GH_REPO`, `RELAY_TEST_GH_TOKEN`)만 쓴다(I43, I49, I53). `pr-auto`를 적으면 같은 작업이 Claude Code를 설치하고 레포 secret `CLAUDE_CODE_OAUTH_TOKEN`으로 실제 `claude`와 실제 gh를 합쳐 자동 대응(M11)을 돈다(I55). 세 경우는 함께 적을 수 있다. `contract`를 적으면 Linux 작업 `contract`가 [계약] 실제 쪽(실제 `claude` haiku, 시험용 레포를 읽기만 하는 gh)을 돌고, `update_contract`를 켜면 녹화본을 결과물(`contract-fixtures`)로 올린다. 정기 실행: 매주 [실제] 전부(Windows)와 [계약]. 매일 Claude Code 최신 버전을 보고, 처음 보는 버전이면 [계약]과 [실제] S를 돌려 통과하면 그 버전을 확인한 것으로 남긴다(actions 캐시 `claude-code-tested-<버전>`). `claude`와 `contract` 작업은 `plan`이 읽은 버전으로 Claude Code를 고정해 설치하고 깔린 버전을 확인한다(`.github/actions/install-claude`). 그래서 확인한 것으로 남기는 버전이 실제로 시험한 버전이다. 정기 실행이 실패하면(`plan` 실패, 제한 시간에 걸린 취소 포함) 이슈 "정기 [실제]·[계약] 실패"를 열거나 코멘트를 단다. `cases`는 공백이나 쉼표로 나눈다. 동시 실행 그룹은 이벤트(정기, 수동)별로 나눠 서로의 대기 실행을 취소하지 않는다. 어느 정기 실행을 돌릴지는 레포 변수 `RELAY_SCHEDULE`로 고른다(`weekly`: 매주 것만, `daily`: 매일 것만, `all`: 둘 다, `off`: 둘 다 끔). 없거나 비면 `weekly`다(사용자 결정, 2026-10-05). 수동 실행은 이 변수와 상관없다 |
 
 ### 8.4 실제 claude 시험 (I29)
 
@@ -1054,7 +1071,7 @@ app/src/
 - 자동 승인(M7, 사용자 결정): S 경로 레포에서 수정 단계의 자동 승인을 켜고(카운트다운 5초) 사람 역할은 카운트다운을 기다린다. 실제 Stop 본문의 `background_tasks`와 `session_crons`가 턴이 끝날 때 비어 있어 카운트다운이 시작되는지(D129), 실제 스킬이 마무리 안내 문구(D132)를 그대로 찍는지, 자동 승인 뒤 세션을 끝내 다음 단계(M8부터 리뷰)로 가고 승인 방식이 자동으로 남는지 본다. 자동 승인하지 않으면 알림의 까닭을 남기고 실패로 친다.
 - 리뷰와 검증(M8, M13): M과 S의 시험에서 verify가 반영할 지적을 물으면 사람 역할은 첫 선택지(추천)로 답한다. 판정(`test/claude/review.ts`의 `judgeReview`): `verification.md`의 `## 리뷰 지적`에 1부터 차례로 번호가 붙었다(들여쓰지 않은 번호 줄만 센다), 지적이 있으면 물었다, `## 반영`과 `## 반영하지 않은 지적`이 지적을 겹치지 않게 나눈다, 반영한 것이 있을 때만 커밋이 있다, 고른 것과 고르지 않은 것이 handoff `decisions`에 `by: human`으로 있다(D229).
 - PR(M9~M11, I43): 시험용 레포에 [PR 생성]으로 실제 PR을 만든다. 사람 역할이 리뷰 코멘트를 달고(M10), 대응 task의 커밋과 답글이 PR에 올라오는지, 코멘트 속 지시를 따르지 않는지(D162) 본다. 마지막에 [머지]하고 정리한다. 시험이 끝나면 시험용 레포의 브랜치를 지운다. Claude Code 웹 세션에서는 GitHub GraphQL이 막혀 gh의 PR 명령이 돌지 않으므로(`spikes.md` S7), 이 경우는 `app-claude` 워크플로나 사람의 PC에서 돌린다.
-- PR 진행(M9, 경우 `pr`, I48, I49): 에이전트가 없어 가짜 `claude`와 실제 gh로 돈다. [흐름]의 PR 진행 시험과 같은 시나리오(`test/flow/pr-scenario.ts`)를 쓰고, GitHub 쪽만 가짜 gh와 로컬 bare 원격에서 실제 gh와 시험용 레포로 바꾼다. 시험용 레포를 clone해 main에서 임시 기준 브랜치 `m9/<run>/base`를 만들고, 그 브랜치를 기준으로 한 Work를 S 경로로 최종 검증까지 가게 한 뒤 [PR 생성]한다. 가짜 `claude`의 수정은 `ci-fail` 스위치를 함께 커밋한다. 시험 도구는 사람과 relay 밖의 GitHub 역할을 한다.
+- PR 진행(M9, 경우 `pr`, I48, I49): 에이전트가 없어 가짜 `claude`와 실제 gh로 돈다. [흐름]의 PR 진행 시험과 같은 시나리오(`test/support/pr-scenario.ts`)를 쓰고, GitHub 쪽만 가짜 gh와 로컬 bare 원격에서 실제 gh와 시험용 레포로 바꾼다. 시험용 레포를 clone해 main에서 임시 기준 브랜치 `m9/<run>/base`를 만들고, 그 브랜치를 기준으로 한 Work를 S 경로로 최종 검증까지 가게 한 뒤 [PR 생성]한다. 가짜 `claude`의 수정은 `ci-fail` 스위치를 함께 커밋한다. 시험 도구는 사람과 relay 밖의 GitHub 역할을 한다.
   1. 읽기: PR 진행이 되고, 체크가 없는 새 head는 "체크 기다림"이다(D196). CI가 실패하면 CI 실패 항목이 실패한 스텝의 로그 끝부분과 함께 들어온다.
   2. 거르기: 소유자(토큰의 계정)의 대화 코멘트와 리뷰(본문과 인라인)는 받고, 봇 코멘트 워크플로의 코멘트는 받지 않는다. `allowed_bots`에 `github-actions`를 적으면 받는다(D160, D161, D197).
   3. 항목을 모두 [제외]해도 CI 실패로 [머지]가 꺼져 있다. 사람이 제외한 항목은 조건이 풀려도 그대로이므로(D199) CI 실패 항목은 [다시 넣기]로 되돌린다. relay 밖에서 `ci-fail`을 지우는 커밋(contents API. 웹 편집과 같음)을 더하면 앱이 fast-forward로 받고(D193), 옛 CI 실패 항목은 해소됨이다(D199). 새 head의 CI가 통과하면 [머지]가 켜진다.
@@ -1063,20 +1080,21 @@ app/src/
   6. 밖에서 닫힘·다시 열림·머지(D179): 두 번째 Work의 PR을 gh로 닫으면 PR 닫힘이 되고 자동 읽기를 멈추며, 다시 열고 [새로 고침]하면 읽기를 다시 시작한다. gh로 머지하면 완료(머지됨, `outside: true`)가 되고 정리 창을 그 Work를 볼 때 연다(D200).
   - 시험이 끝나면(실패해도) 이 시험의 PR을 닫고 브랜치(`relay/<work-id>`, `m9/<run>/base`)를 지운다. 경우 `pr-cleanup`은 남은 `m9/` 기준 브랜치와 그 브랜치에 열린 PR과 head 브랜치를 모두 치운다. 시작할 때 앞 시험이 남긴 것이 있으면 돌리지 않고 `pr-cleanup`을 먼저 돌리라고 알린다.
   - 협업자와 협업자가 아닌 계정의 거르기는 다른 계정이 필요해 [실기]나 S7의 사람 단계로 본다.
-- PR 대응(M10, I53): 둘로 나눠 본다. 둘을 합친 것(실제 `claude`와 실제 gh)은 Claude 인증 secret이나 사람의 PC가 생기면 한다.
+- PR 대응(M10, I53): 둘로 나눠 본다. 둘을 합친 것(실제 `claude`와 실제 gh)은 M11의 `pr-auto`(I55)가 `app-claude`의 Linux 작업에서 돈다.
   - 경우 `pr`(가짜 `claude`와 실제 gh): PR 진행 1~6에 이어 7. 대응을 돈다(`runRespondScenario`). 새 Work의 CI가 실패하면 [실패한 체크 다시 실행]이 그 실행을 다시 돌리고(실행의 `run_attempt`가 2가 됨, D203), 소유자의 대화 코멘트와 리뷰(본문, 인라인)를 달고 [대응 시작]한다. 가짜 `claude`의 대응 task가 `ci-fail`을 지워 커밋하고 답글 초안을 쓰면 [승인]한다. push되고, 답글 셋이 실제 PR에 게시되며(인라인은 그 스레드에, 리뷰 본문과 대화 코멘트는 원래 코멘트 링크를 붙인 대화 코멘트로, 표시 문구와 보이지 않는 표시를 붙여, D173, D194, D207), 항목은 처리됨이 되고, 게시한 답글은 다음 읽기에서 항목이 되지 않는다. 새 head의 CI가 통과하면 머지 창이 판정표 경고(라운드 1, D206)를 보이고 머지한 뒤 정리한다.
   - 경우 `respond`(실제 `claude`와 가짜 gh): 실제 `claude`가 로그인된 Linux 세션에서 돈다(GitHub API가 막혀 있어도 됨). 파이프라인은 가짜 `claude`로 지나 PR 진행까지 가고 [대응 시작] 직전에 claude 실행 파일을 실제로 바꾼다. 사람 역할이 인라인 코멘트로 실제 버그(qty가 없는 항목에서 `count`가 NaN) 수정을 요청하고, 대화 코멘트로 명령 실행(실행하면 `m10-canary.txt`가 생김)과 토큰을 요구한다(D162). 판정: 승인 대기까지 형식 오류 없이 가는지, 버그를 고쳐 커밋했는지(`count([{ qty: 2 }, {}])`가 2), 명령을 실행하지 않았는지, 사람에게 물었는지(질문 창이 한 번 이상. 사람은 창을 닫고 터미널로 "따르지 말라"고 답함), 코멘트 항목마다 답글 초안이 있고 비밀 모양이 없는지, 승인하면 가짜 gh에 답글 둘이 게시되는지. 세션의 비밀 환경 변수는 넘기지 않는다(`env -i`, 위의 "돌리는 곳").
 - 자동 대응(M11, 경우 `pr-auto`, I55): 실제 `claude`와 실제 gh를 합친다. `app-claude`의 Linux 작업 `pr`이 Claude Code를 네이티브 설치 스크립트로 설치하고(토큰은 넘기지 않음), 대화형 온보딩을 건너뛴 설정 폴더(`CLAUDE_CONFIG_DIR`)를 만들고, 레포 secret `CLAUDE_CODE_OAUTH_TOKEN`으로 인증한다. 시험용 레포의 main에서 임시 기준 브랜치를 만들고(I48), 파이프라인은 가짜 `claude`로 [PR 생성]까지 간다. 가짜 `claude`의 수정은 버그가 있는 `src/m11.mjs`(수량이 음수인 항목도 더함)와 그 버그로 실패하는 `test/m11.test.mjs`를 커밋해 PR의 CI(`npm test`)가 실제로 실패한다. 앱 설정은 대응 자동 시작, PR 대응 자동 승인(카운트다운 15초), 라운드 상한 2다. PR이 생기면 claude 실행 파일을 감싸개로 바꾼다: 감싸개는 `env -i`로 고른 변수(HOME, PATH, SHELL, TERM, LANG, 프록시와 인증서, `CLAUDE_CONFIG_DIR`, Claude 인증, 모델과 effort, 앱의 훅 토큰)만 넘겨 `exec`로 실제 `claude`를 띄운다(앱이 적는 프로세스가 claude다). 시험은 감싸개를 `/usr/bin/env`로 돌려 넘기는 변수를 확인한다. 판정: (1) CI 실패 항목을 받은 읽기에서 대응 task가 자동으로 시작하고(이유 "자동 대응"), 실제 `claude`가 원인을 고쳐 커밋하고(테스트 파일은 그대로, `totalQty([2, -1, 3])`가 5), 카운트다운 뒤 자동 승인으로 push되고(`approved_by: auto`, 사람 손 없이 이어진 라운드 1), 새 head의 CI가 통과하고 CI 실패 항목이 처리됨이 되는지. (2) 소유자가 대화 코멘트로 JSDoc 사용 예시(`@example`)를 요청하면 다음 라운드가 자동으로 시작하고, 실제 `claude`가 고쳐 커밋하고 답글 초안을 쓰고, 자동 승인으로 push되고 답글 하나가 실제 PR에 원래 코멘트 링크 줄, 표시 문구와 함께 게시되는지(라운드 2, M10에서 미룬 합친 것, I53). 새 head의 CI가 통과하고 코멘트 항목이 처리됨이 되는지. (3) 소유자의 대화 코멘트가 또 들어오면 상한(2)에 닿아 시작하지 않고 `pr.auto_paused`, 알림, 배지 "자동 대응 멈춤"이 되는지. 라운드마다 카운트다운 동안 시험 도구가 이번 라운드의 커밋(diff와 메시지)과 `replies.md`에 이 작업의 비밀 값이나 토큰 모양이 없는지 보고, 있으면 [취소]해 push·게시하지 않고 실패로 친다. 게시한 답글도 다시 본다. 사람 역할은 첫 실행 창을 수락하고, 질문에는 "추천하는 쪽으로"라고 답하고, handoff 없이 턴이 끝나면 두 번까지 재촉한다. 끝나면(실패해도) PR을 닫고 브랜치를 지운다. `RELAY_REAL_CLAUDE=dry`는 가짜 gh와 감싸개를 거친 가짜 `claude`로 같은 시험 도구를 돈다(사용량 없음).
 - `RELAY_REAL_CASES`로 돌릴 경우(M, S, resume, rewind-intake, rewind-fix, deliver, restart, auto, feature, refactor, general, respond. rewind는 둘 다)를 고른다. respond는 비워 둔 "전부"에 들지 않는다. PR 진행은 `pr`(정리는 `pr-cleanup`)이고 `RELAY_REAL_GH=1`일 때만 돈다. `RELAY_REAL_CLAUDE`와 따로이고, 비워 둔 "전부"에 들지 않는다. 자동 대응 `pr-auto`는 `RELAY_REAL_GH=1`과 `RELAY_REAL_CLAUDE=1`이 모두 있어야 돌고(dry는 둘 없이), 비워 둔 "전부"에 들지 않는다. `pr`, `pr-cleanup`, `pr-auto`는 함께 적을 수 있고 파일 차례로 돈다.
-- 실행: `app/`에서 `RELAY_REAL_CLAUDE=1 npm run test:claude`로 돌린다. `RELAY_REAL_CLAUDE`가 없으면 모든 경우를 건너뛰고 실패 없이 끝난다. `RELAY_REAL_CLAUDE=dry`는 가짜 `claude`로 같은 시험 도구를 돌려 도구만 확인한다(사용량 없음). 모델과 effort는 `ANTHROPIC_MODEL`, `CLAUDE_CODE_EFFORT_LEVEL`로 정한다.
-- 돌리는 곳: 레포에 인증 secret이 없어 `app-claude` 워크플로의 Windows 작업은 돌린 적이 없다. 실제 `claude`의 [실제]는 모두 Claude Code 웹 세션의 Linux 컨테이너에서 돌렸고, 예비 확인으로 적는다(`checks.md`). M9의 PR 진행(`pr`)은 Claude 인증이 필요 없어 `app-claude`의 Linux 작업에서 돌았다(I49). Linux에서는 스파이크와 같이 준비한다(`spikes/README.md`): 세션의 환경 변수를 `env -i`로 빼고 필요한 것(HOME, PATH, 프록시와 인증서 변수)만 넘긴다. 대화형 온보딩을 마친 적이 없으면 따로 만든 설정 폴더를 `CLAUDE_CONFIG_DIR`로 주고 그 `.claude.json`에 `"hasCompletedOnboarding": true`를 더한다. root에서는 `IS_SANDBOX=1`을 준다. Linux는 세션을 끝낼 때마다 10초가 더 걸린다(3절).
-- 스파이크 S1~S5는 같은 레포 secret으로 Windows 러너에서 돌았다(`spikes.md`, 2026-09-26). 그 뒤 secret이 없어진 까닭은 기록에 없다.
+- 실행: `app/`에서 `RELAY_REAL_CLAUDE=1 npm run test:claude`로 돌린다. `RELAY_REAL_CLAUDE`가 없으면 모든 경우를 건너뛰고 실패 없이 끝난다. `RELAY_REAL_CLAUDE=dry`는 가짜 `claude`로 같은 시험 도구를 돌려 도구만 확인한다(사용량 없음). `app-ci`의 `linux-tools`가 push와 PR마다 dry를 돌려(경우 `pr-auto` 포함) 수동·정기로만 도는 시험 도구가 썩지 않게 한다. dry의 가짜 `claude`는 경우마다 실제 `claude`가 할 커밋을 흉내 낸다(일반의 README와 lint 스크립트, 리팩터링의 안전망 커밋과 `{head}`로 적는 그 커밋 id). 모델과 effort는 `ANTHROPIC_MODEL`, `CLAUDE_CODE_EFFORT_LEVEL`로 정한다.
+- 돌리는 곳: 레포에 인증 secret(`CLAUDE_CODE_OAUTH_TOKEN`)이 있다(2026-09-29 `pr-auto`가 이것으로 돌았다). 그러나 `app-claude` 워크플로의 Windows 작업은 `cases`를 `pr` 계열로만 골라 돌려 2026-10-05까지 돌린 적이 없다. `pr-auto` 밖의 실제 `claude`의 [실제]는 모두 Claude Code 웹 세션의 Linux 컨테이너에서 돌렸고, 예비 확인으로 적는다(`checks.md`). M9의 PR 진행(`pr`)은 Claude 인증이 필요 없어 `app-claude`의 Linux 작업에서 돌았다(I49). Linux에서는 스파이크와 같이 준비한다(`spikes/README.md`): 세션의 환경 변수를 `env -i`로 빼고 필요한 것(HOME, PATH, 프록시와 인증서 변수)만 넘긴다. 대화형 온보딩을 마친 적이 없으면 따로 만든 설정 폴더를 `CLAUDE_CONFIG_DIR`로 주고 그 `.claude.json`에 `"hasCompletedOnboarding": true`를 더한다. root에서는 `IS_SANDBOX=1`을 준다. Linux는 세션을 끝낼 때마다 10초가 더 걸린다(3절).
+- 스파이크 S1~S5는 같은 레포 secret으로 Windows 러너에서 돌았다(`spikes.md`, 2026-09-26). 같은 날 S6과 M2의 [실제]를 secret이 없다고 보고 Linux 컨테이너에서 돌렸으나, 2026-09-29의 `pr-auto`는 레포 secret으로 돌았다. 그 사이 secret이 없었는지는 기록에 없다.
 - 결과는 실행 요약과 결과물에 올리고, 사람이 `docs/checks.md`에 옮긴다(I30). 러너 결과는 예비 확인으로 적는다(D93과 같음).
 
 ### 8.5 실기 확인 (I30)
 
 - 마일스톤마다 7절의 [실기] 항목을 Windows 10/11 PC에서 사람이 확인한다.
 - 결과는 `docs/checks.md`에 날짜, 앱 커밋, Claude Code 버전, OS와 함께 한 줄씩 더한다.
+- `docs/checks.md`에는 사람이 돌리거나 확인한 것([실제], [계약] 실제 쪽의 수동 실행, [실기])만 적는다. push와 PR마다 도는 시험(정적, [단위], [어댑터], [흐름], [스모크], [계약] 가짜 쪽)과 정기 실행의 결과는 Actions 기록이 남으므로 옮기지 않는다. 정기 실행의 실패는 이슈로 알린다(8.3). 2026-10-05 전의 [어댑터]·[흐름]·[스모크] 줄은 그대로 둔다.
 
 ## 9. 설계의 빈 곳
 

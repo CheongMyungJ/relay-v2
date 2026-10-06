@@ -12,8 +12,8 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { findClaude } from '../../src/adapters/claude'
 import type { TaskView } from '../../src/shared/views'
-import { CART_FILES, FakeGitHub, FakeWorld } from '../flow/github'
-import { APP, git, harness, makeRepo, register, settle } from '../flow/harness'
+import { CART_FILES, FakeGitHub, FakeWorld } from '../support/github'
+import { APP, git, harness, makeRepo, register, settle } from '../support/harness'
 import {
   HEAD_CODE,
   openPrWork,
@@ -23,8 +23,8 @@ import {
   view,
   workState,
   type PrContext,
-} from '../flow/pr-scenario'
-import { sleep } from '../flow/ui'
+} from '../support/pr-scenario'
+import { sleep } from '../support/ui'
 import { ScreenUi, redact } from './screen'
 
 const mode = process.env['RELAY_REAL_CLAUDE']

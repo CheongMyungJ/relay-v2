@@ -21,8 +21,8 @@ import {
   stashAll,
   statusLines,
 } from '../../src/adapters/git'
-import { FAKE_GH } from '../flow/harness'
-import { git, makeRepo, writeFiles } from '../flow/repo'
+import { FAKE_GH } from '../support/harness'
+import { git, makeRepo, writeFiles } from '../support/repo'
 
 const WORK_ID = 'w-20260927-001'
 const BRANCH = `relay/${WORK_ID}`

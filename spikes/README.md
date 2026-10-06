@@ -1,5 +1,7 @@
 # relay-v2 스파이크 코드
 
+- 상태: 보관 (2026-10-05). 스파이크는 설계의 전제를 확인하는 탐색이고 시험이 아니다. 계속 확인할 것은 [계약](`app/test/contract`, `docs/implementation.md` 8.1)으로 옮겼다: S2의 훅 본문과 Stop 응답은 `live.test.ts`(실제 `claude`의 훅 본문, 정기 실행), S7의 gh·GitHub 모양은 `live-gh.test.ts`(시험용 레포의 PR을 앱의 어댑터로 읽음)가 본다. 새 전제를 확인할 때만 스파이크를 더하거나 다시 돌린다.
+
 `docs/spikes.md`의 S1~S7을 자동으로 확인하는 코드다. S1~S6은 Claude Code를 node-pty(Windows는 ConPTY)로 띄우고, 화면은 xterm headless로 읽고, 상태는 로컬 HTTP 훅 서버로 받는다. S7은 Claude Code 없이 gh와 git으로 시험용 레포(`CheongMyungJ/relay-v2-test`)에 PR을 만들어 GitHub 동작을 본다.
 
 ## 파일

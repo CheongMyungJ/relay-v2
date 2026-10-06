@@ -1,11 +1,11 @@
 // [실제] PR 진행(M9)의 GitHub 쪽 (docs/implementation.md 8.4의 "PR 진행", I48, I49). 시험용 레포(RELAY_TEST_GH_REPO)에
-// gh와 git으로 relay 밖의 사람, 봇, CI를 한다. 공통 시나리오(test/flow/pr-scenario.ts)의 PrWorld를 RealWorld가 맡는다.
+// gh와 git으로 relay 밖의 사람, 봇, CI를 한다. 공통 시나리오(test/support/pr-scenario.ts)의 PrWorld를 RealWorld가 맡는다.
 // 인증은 GH_TOKEN(러너에서는 RELAY_TEST_GH_TOKEN secret)이고, git은 gh의 자격 증명을 쓴다(시험 도구와 앱의 git에만
 // 환경 변수로 준다). 명령의 모양은 S7과 같다(spikes/s7-github.mjs). 토큰은 어디에도 찍지 않는다.
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import type { PrComment, PrWorld } from '../flow/pr-scenario'
+import type { PrComment, PrWorld } from '../support/pr-scenario'
 
 /** gh는 묻지 않고 새 버전 안내를 끈다 (3절 "gh 환경 변수") */
 const GH_ENV = { GH_PROMPT_DISABLED: '1', GH_NO_UPDATE_NOTIFIER: '1', NO_COLOR: '1' }

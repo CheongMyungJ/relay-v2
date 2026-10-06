@@ -19,7 +19,7 @@ import {
 import { HookServer } from '../../src/adapters/hooks'
 import { run } from '../../src/adapters/exec'
 import { writeJson } from '../../src/adapters/store'
-import { FAKE_CODEX, SKILLS } from '../flow/harness'
+import { FAKE_CODEX, SKILLS } from '../support/harness'
 import { codexToolDenial } from '../../src/core/codex'
 
 let server: HookServer | undefined

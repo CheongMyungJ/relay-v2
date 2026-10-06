@@ -17,9 +17,18 @@ import { taskDirName } from '../../src/core/machine'
 import type { Relay } from '../../src/main/relay'
 import type { WorkView } from '../../src/shared/views'
 import type { WorkState } from '../../src/shared/work'
-import { drive, type TaskOutcome } from '../flow/driver'
-import { APP, FAKE_CLAUDE, git, harness, makeRepo, register, settle, sleep } from '../flow/harness'
-import { scenario, type Scenario } from '../flow/scenarios'
+import { drive, type TaskOutcome } from '../support/driver'
+import {
+  APP,
+  FAKE_CLAUDE,
+  git,
+  harness,
+  makeRepo,
+  register,
+  settle,
+  sleep,
+} from '../support/harness'
+import { scenario, type Scenario } from '../support/scenarios'
 import { S_CASE } from './repos'
 import { redact, ScreenUi } from './screen'
 

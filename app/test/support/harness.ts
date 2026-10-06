@@ -14,13 +14,13 @@ export const SKILLS = path.resolve(APP, '../skills')
 const isWin = process.platform === 'win32'
 export const FAKE_CLAUDE = path.join(
   APP,
-  'test/fake-claude',
+  'test/support/fake-claude',
   isWin ? 'fake-claude.cmd' : 'fake-claude.mjs',
 )
-export const FAKE_GH = path.join(APP, 'test/fake-gh', isWin ? 'gh.cmd' : 'gh.mjs')
+export const FAKE_GH = path.join(APP, 'test/support/fake-gh', isWin ? 'gh.cmd' : 'gh.mjs')
 export const FAKE_CODEX = path.join(
   APP,
-  'test/fake-codex',
+  'test/support/fake-codex',
   isWin ? 'fake-codex.cmd' : 'fake-codex.mjs',
 )
 

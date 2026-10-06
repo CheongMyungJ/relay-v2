@@ -10,8 +10,16 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { NodeName } from '../../src/shared/contracts'
 import type { SelectStepInput, StepPreview, WorkView } from '../../src/shared/views'
 import type { LifecycleEvent, TaskRecord, WorkState } from '../../src/shared/work'
-import { drive } from './driver'
-import { TIMING_EVENTS, git, harness, makeRepo, register, settle, type Harness } from './harness'
+import { drive } from '../support/driver'
+import {
+  TIMING_EVENTS,
+  git,
+  harness,
+  makeRepo,
+  register,
+  settle,
+  type Harness,
+} from '../support/harness'
 import {
   FIXED_FILES,
   REPO_FILES,
@@ -22,7 +30,7 @@ import {
   steps,
   type Scenario,
   type Step,
-} from './scenarios'
+} from '../support/scenarios'
 
 let h: Harness | undefined
 

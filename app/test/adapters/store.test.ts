@@ -22,7 +22,7 @@ import {
   writeFileAtomic,
 } from '../../src/adapters/store'
 import { DEFAULT_CONFIG } from '../../src/shared/config'
-import { FAKE_CLAUDE, SKILLS } from '../flow/harness'
+import { FAKE_CLAUDE, SKILLS } from '../support/harness'
 
 let root: string
 

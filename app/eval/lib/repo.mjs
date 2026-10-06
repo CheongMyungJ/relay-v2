@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { copyTree, git, run } from './util.mjs'
 
-/** 시나리오의 repo/를 git 레포로 만든다. origin은 로컬 bare 레포다(test/flow/repo.ts의 makeRepo와 같음) */
+/** 시나리오의 repo/를 git 레포로 만든다. origin은 로컬 bare 레포다(test/support/repo.ts의 makeRepo와 같음) */
 export function makeRepo(root, name, srcDir) {
   const repo = path.join(root, name)
   const remote = path.join(root, `${name}.git`)

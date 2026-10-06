@@ -4,7 +4,7 @@
 import headless from '@xterm/headless'
 import type { Relay } from '../../src/main/relay'
 import type { TerminalChunk } from '../../src/shared/views'
-import { FakeUi, sleep } from '../flow/ui'
+import { FakeUi, sleep } from '../support/ui'
 
 const { Terminal } = headless
 type HeadlessTerminal = InstanceType<typeof Terminal>

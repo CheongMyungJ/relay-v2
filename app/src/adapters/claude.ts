@@ -186,12 +186,11 @@ export interface ClaudeJsonResult {
   error: string | null
 }
 
-/**
- * claude -p를 한 번 부른다: 도구 없음, 세션을 남기지 않음(--no-session-persistence, 사용량이 에이전트 세션과 섞이지 않게),
- * 구조화된 출력(--json-schema). 프롬프트는 표준 입력으로 넘긴다. 실패해도 던지지 않고 error에 적는다
- */
-export async function claudeJson(input: ClaudeJsonInput): Promise<ClaudeJsonResult> {
-  const args = [
+/** claudeJson의 실행 인자. 계약 시험이 실제 claude의 --help와 맞춰 본다 (test/contract) */
+export function claudeJsonArgs(
+  input: Pick<ClaudeJsonInput, 'model' | 'effort' | 'system' | 'schema'>,
+): string[] {
+  return [
     '-p',
     '--model',
     input.model,
@@ -206,6 +205,14 @@ export async function claudeJson(input: ClaudeJsonInput): Promise<ClaudeJsonResu
     '',
     '--no-session-persistence',
   ]
+}
+
+/**
+ * claude -p를 한 번 부른다: 도구 없음, 세션을 남기지 않음(--no-session-persistence, 사용량이 에이전트 세션과 섞이지 않게),
+ * 구조화된 출력(--json-schema). 프롬프트는 표준 입력으로 넘긴다. 실패해도 던지지 않고 error에 적는다
+ */
+export async function claudeJson(input: ClaudeJsonInput): Promise<ClaudeJsonResult> {
+  const args = claudeJsonArgs(input)
   const started = Date.now()
   const r = await run(input.bin, args, {
     cwd: input.cwd,

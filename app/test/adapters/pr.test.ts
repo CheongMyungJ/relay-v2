@@ -36,9 +36,9 @@ import {
   pushBranch,
   remoteBranchExists,
 } from '../../src/adapters/git'
-import { FakeGitHub } from '../flow/github'
-import { FAKE_GH } from '../flow/harness'
-import { git, makeRepo, writeFiles } from '../flow/repo'
+import { FakeGitHub } from '../support/github'
+import { FAKE_GH } from '../support/harness'
+import { git, makeRepo, writeFiles } from '../support/repo'
 
 const BRANCH = 'relay/w-20260929-001'
 const REPO = 'github.test/local/sample'

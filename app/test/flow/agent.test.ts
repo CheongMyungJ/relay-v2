@@ -2,8 +2,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { harness, makeRepo, register, type Harness } from './harness'
-import { REPO_FILES, REQUEST, type Scenario } from './scenarios'
+import { harness, makeRepo, register, type Harness } from '../support/harness'
+import { REPO_FILES, REQUEST, type Scenario } from '../support/scenarios'
 import type { WorkState } from '../../src/shared/work'
 
 let h: Harness | undefined

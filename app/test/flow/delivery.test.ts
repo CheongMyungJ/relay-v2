@@ -8,9 +8,16 @@ import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { DeliverInput, WorkView } from '../../src/shared/views'
 import type { LifecycleEvent, WorkState } from '../../src/shared/work'
-import { drive } from './driver'
-import { git, harness, makeRepo, register, settle, type Harness } from './harness'
-import { REPO_FILES, REQUEST, scenario, steps, type Scenario, type Step } from './scenarios'
+import { drive } from '../support/driver'
+import { git, harness, makeRepo, register, settle, type Harness } from '../support/harness'
+import {
+  REPO_FILES,
+  REQUEST,
+  scenario,
+  steps,
+  type Scenario,
+  type Step,
+} from '../support/scenarios'
 
 let h: Harness | undefined
 
@@ -279,7 +286,7 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
     })
   })
 
-  it('같은 브랜치의 PR이 이미 열려 있으면 새로 만들지 않고 링크만 기록한다. draft 설정이 꺼져 있으면 일반 PR이다 (7-4, D71)', async () => {
+  it('같은 브랜치의 PR이 이미 열려 있으면 새로 만들지 않고 링크만 기록한다. 이미 있는 PR에는 draft를 적지 않는다 (7-4, D71)', async () => {
     const open = 'https://github.com/relay-test/sample/pull/7'
     const s = await setup(scenario(), { github: true, env: { FAKE_GH_OPEN_PR: open } })
     await toVerify(s)
@@ -297,15 +304,6 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
       pr_url: open,
       pr_existing: true,
     })
-  })
-
-  it('draft 설정이 꺼져 있으면 일반 PR로 만든다 (D71)', async () => {
-    const s = await setup(scenario(), { github: true })
-    await toVerify(s)
-    expect(await deliver(s, 'pr')).toEqual({ ok: true })
-    const [create] = gh(s, 'pr create')
-    expect(create?.args).not.toContain('--draft')
-    expect(work(s).delivery).toMatchObject({ draft: false })
   })
 
   it('커밋 안 된 변경이 있으면 push를 막고 목록을 보인다. [변경 버리고 진행]은 git stash -u로 백업한 뒤 전달한다 (7-5)', async () => {

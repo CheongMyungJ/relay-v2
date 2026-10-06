@@ -12,7 +12,7 @@ import {
   readRepoKnowledge,
   removedKnowledge,
 } from '../../src/adapters/knowledge'
-import { git, makeRepo, writeFiles } from '../flow/repo'
+import { git, makeRepo, writeFiles } from '../support/repo'
 
 let root: string | undefined
 afterEach(() => {

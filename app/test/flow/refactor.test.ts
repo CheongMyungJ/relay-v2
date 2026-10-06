@@ -11,8 +11,8 @@ import { parseFrontMatter } from '../../src/core/validate'
 import type { AppConfig } from '../../src/shared/config'
 import type { WorkView } from '../../src/shared/views'
 import type { LifecycleEvent, WorkState, WorkType } from '../../src/shared/work'
-import { drive } from './driver'
-import { git, harness, makeRepo, register, settle, type Harness } from './harness'
+import { drive } from '../support/driver'
+import { git, harness, makeRepo, register, settle, type Harness } from '../support/harness'
 import {
   REFACTOR_FILES,
   REFACTOR_REQUEST,
@@ -25,7 +25,7 @@ import {
   steps,
   type Scenario,
   type Step,
-} from './scenarios'
+} from '../support/scenarios'
 
 let h: Harness | undefined
 
@@ -184,28 +184,6 @@ describe('[흐름] 리팩터링 유형 (M15)', () => {
         ),
       ),
     )
-  })
-
-  it('앱 기본값: 계획과 리팩터링은 자동 승인한다 (D276)', async () => {
-    const s = await setup(
-      refactorScenario(),
-      { auto_approve_countdown_sec: 1 } as Partial<AppConfig>,
-      { productDefaults: true },
-    )
-    const key = await s.create()
-    const result = await drive(s.h.relay, s.h.ui, key, { awaitAuto: true })
-    expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed' })
-    expect(result.tasks.map((t) => [t.label, t.auto])).toEqual([
-      ['01 의도 정리', false],
-      ['02 계획과 리팩터링', true],
-      ['03 리뷰와 검증', false],
-    ])
-    await settle(s.h, key)
-    expect(work(s.dir(key)).tasks.map((t) => [t.node, t.approved_by])).toEqual([
-      ['intake', 'human'],
-      ['refactor', 'auto'],
-      ['verify', 'human'],
-    ])
   })
 
   it('계획과 리팩터링이 의도 정리를 추천하면 자동 승인하지 않고, 승인하면 멈춘다 (D23)', async () => {
