@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   actions,
+  canShelve,
   createWork,
   currentTask,
   permissionWarning,
@@ -2343,6 +2344,25 @@ describe('정리 (시나리오 8, D77)', () => {
     })
     expect(r.effects).toEqual([{ type: 'clean', force: true, deleteBranches: [BACKUP] }])
     expect(actions(r.work).clean).toBe(false)
+  })
+
+  it('보관된 Work만 아카이브로 옮긴다. 다시 옮기면 그대로 두고, 보관 전 Work는 받지 않는다', () => {
+    const shelve = (work: WorkState) => apply(work, { type: 'shelve', at: at() })
+    expect(shelve(completed()).rejected).toMatch(/보관된 Work가 아님/)
+    expect(shelve(running()).rejected).toMatch(/보관된 Work가 아님/)
+    const removed = apply(clean(completed()).work, { type: 'clean.removed', at: at() })
+    const archived = apply(removed.work, { type: 'clean.done', at: at() }).work
+    expect(canShelve(archived)).toBe(true)
+    expect(canShelve(completed())).toBe(false)
+    const r = shelve(archived)
+    expect(r.rejected).toBeUndefined()
+    expect(r.effects).toEqual([])
+    expect(r.work).toMatchObject({ status: 'archived', shelved_at: expect.any(String) })
+    expect(r.work.tasks).toEqual(archived.tasks)
+    expect(canShelve(r.work)).toBe(false)
+    const again = shelve(r.work)
+    expect(again.rejected).toBeUndefined()
+    expect(again.work).toBe(r.work)
   })
 
   it('worktree를 지우면 브랜치 단계로 옮기고, 끝나면 보관됨으로 바꾸고 work.cleaned를 남긴다 (8-2)', () => {

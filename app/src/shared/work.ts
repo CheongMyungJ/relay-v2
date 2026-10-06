@@ -617,6 +617,8 @@ export interface WorkState {
   delivery?: DeliveryRecord
   /** [Work 정리]의 결과 (시나리오 8). 보관됨이면 있다 */
   cleaned?: CleanedRecord
+  /** 보관된 Work를 사이드바의 공통 아카이브로 옮긴 때. 옮기지 않았으면 없다 */
+  shelved_at?: string
   /**
    * 앱 소유 파일의 해시 (D91, D124). 앱이 쓸 때마다 적고, 앱을 켤 때와 읽을 때 비교한다.
    * M6 전에 만든 Work는 처음 읽을 때 적기 전까지 없다
