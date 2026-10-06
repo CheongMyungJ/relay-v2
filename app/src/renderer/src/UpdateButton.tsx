@@ -12,8 +12,15 @@ export function UpdateButton() {
   const waiting = useRef(false)
 
   useEffect(() => {
-    const off = window.relay.onUpdate(setState)
-    void window.relay.updateState().then(setState)
+    // 처음 상태를 읽는 사이에 바뀜 알림이 오면 알림이 더 새것이다. 늦게 온 처음 상태로 덮지 않는다
+    let pushed = false
+    const off = window.relay.onUpdate((s) => {
+      pushed = true
+      setState(s)
+    })
+    void window.relay.updateState().then((s) => {
+      if (!pushed) setState(s)
+    })
     return off
   }, [])
 

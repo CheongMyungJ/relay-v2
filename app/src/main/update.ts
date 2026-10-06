@@ -163,8 +163,13 @@ export function loadUpdater(): Updater {
 export interface UpdateOptions {
   /** 앱을 끌 때 받은 버전을 설치한다. 사람이 설치해야 하는 곳(D379)에서는 끈다 */
   installOnQuit: boolean
-  /** 새 버전을 다 받았을 때. 알림이나 설치 명령 대화상자를 보인다 */
-  onDownloaded: (version: string, file: string) => void
+  /**
+   * 받은 뒤 업데이트 버튼은 설치 명령을 보인다(manual). 사람이 설치해야 하는 곳(D379)과 지난번 .deb 설치가 실패한 곳.
+   * 실패한 곳은 끌 때 설치(installOnQuit)는 그대로 다시 시도하되, 버튼으로 세션을 정리하고 같은 설치를 되풀이하지 않는다
+   */
+  manual: boolean
+  /** 새 버전을 다 받았을 때. 알림이나 설치 명령 대화상자를 보인다. byButton: 업데이트 버튼으로 시작한 확인이었다 */
+  onDownloaded: (version: string, file: string, byButton: boolean) => void
   /** 상태가 바뀔 때. 화면에 보낸다 (I121) */
   onChange: (state: UpdateState) => void
 }
@@ -177,6 +182,10 @@ export interface UpdateOptions {
 export class Updates {
   private state: UpdateState = { kind: 'idle' }
   private timer: NodeJS.Timeout | undefined
+  /** 지금 확인을 사람이 업데이트 버튼으로 시작했는가. 자동 확인의 실패는 빨간 줄로 남기지 않는다 */
+  private byButton = false
+  /** 확인을 시작하기 전 상태. 자동 확인이 실패하면 이 상태로 돌아간다 */
+  private before: UpdateState = { kind: 'idle' }
 
   constructor(
     private readonly updater: Updater,
@@ -197,16 +206,18 @@ export class Updates {
       if (this.downloaded()) return
       clearTimeout(this.timer)
       this.set(
-        opts.installOnQuit
-          ? { kind: 'ready', version: info.version }
-          : { kind: 'manual', version: info.version },
+        opts.manual
+          ? { kind: 'manual', version: info.version }
+          : { kind: 'ready', version: info.version },
       )
-      opts.onDownloaded(info.version, info.downloadedFile)
+      opts.onDownloaded(info.version, info.downloadedFile, this.byButton)
     })
-    // 오프라인이거나 릴리스가 없을 때도 앱 사용은 막지 않는다. 받아 둔 버전은 그대로 둔다
+    // 오프라인이거나 릴리스가 없을 때도 앱 사용은 막지 않는다. 받아 둔 버전은 그대로 둔다. 사람이 누르지 않은 자동
+    // 확인의 실패는 화면에 남기지 않고 확인 전 상태로 돌아간다
     updater.on('error', (e) => {
       console.warn(`업데이트 확인 실패: ${e.message}`)
-      if (!this.downloaded()) this.set({ kind: 'error', message: e.message })
+      if (this.downloaded()) return
+      this.set(this.byButton ? { kind: 'error', message: e.message } : this.before)
     })
   }
 
@@ -217,18 +228,26 @@ export class Updates {
   /** 정해진 간격의 확인을 시작한다 */
   start(firstMs = FIRST_CHECK_MS, everyMs = CHECK_EVERY_MS): void {
     const loop = () => {
-      this.check()
+      this.check(false)
       if (!this.downloaded()) this.timer = setTimeout(loop, everyMs)
     }
     this.timer = setTimeout(loop, firstMs)
   }
 
-  /** 지금 확인하고 새 버전이 있으면 받는다. 확인·받는 중이거나 이미 받았으면 하지 않는다 */
-  check(): void {
+  /**
+   * 지금 확인하고 새 버전이 있으면 받는다. 확인·받는 중이거나 이미 받았으면 하지 않는다. 자동 확인이 도는 중에
+   * 버튼을 누르면 그 확인을 버튼으로 시작한 것으로 친다
+   */
+  check(byButton = true): void {
     const k = this.state.kind
-    if (k === 'checking' || k === 'downloading' || this.downloaded()) return
-    this.set({ kind: 'checking' })
-    // 확인과 뒤에서 하는 다운로드는 실패를 따로 돌려주므로 둘 다 받아 둔다. 실패는 error 이벤트로 남는다
+    if (k === 'checking' || k === 'downloading') {
+      if (byButton) this.byButton = true
+      return
+    }
+    if (this.downloaded()) return
+    this.byButton = byButton
+    this.before = k === 'latest' || k === 'error' ? this.state : { kind: 'idle' }
+    // checking 상태는 electron-updater가 checkForUpdates 안에서 곧바로 보내는 checking-for-update로 바뀐다. 확인과 뒤에서 하는 다운로드는 실패를 따로 돌려주므로 둘 다 받아 둔다. 실패는 error 이벤트로 남는다
     void this.updater
       .checkForUpdates()
       .then((r) => r?.downloadPromise?.catch(() => {}))
@@ -238,7 +257,9 @@ export class Updates {
   /**
    * 받아 둔 버전을 지금 설치한다. 조용히 설치하고 앱을 끝낸 뒤 새 버전으로 다시 켠다. 세션 정리는 부르는 쪽이 먼저 한다.
    * 설치를 시작하지 못하면(electron-updater가 그 자리에서 error를 보냄. .deb의 비밀번호 창 취소 등) 그 까닭을 돌려주고
-   * electron-updater는 앱을 끝내지 않는다
+   * electron-updater는 앱을 끝내지 않는다.
+   * Windows(NsisUpdater)는 설치 파일을 띄우기만 하고 곧바로 성공으로 돌아오므로, 띄우지 못한 실패(백신 차단, elevate
+   * 실패 등)는 앱이 끝나는 길에 비동기로 error가 되어 여기서 알 수 없다. 받은 파일이 없는 것 같은 그 자리의 실패만 잡는다
    */
   install(): CommandResult {
     if (this.state.kind !== 'ready') return { ok: false, error: '받아 둔 새 버전이 없습니다' }
@@ -254,6 +275,11 @@ export class Updates {
     }
     this.updater.removeListener('error', onError)
     return errors.length === 0 ? { ok: true } : { ok: false, error: errors.join('\n') }
+  }
+
+  /** 끌 때 설치를 하지 않는다. 버튼의 설치가 실패해 앱을 끝낼 때 같은 설치(.deb 비밀번호 창)를 곧바로 되풀이하지 않게 */
+  stopInstallOnQuit(): void {
+    this.updater.autoInstallOnAppQuit = false
   }
 
   private downloaded(): boolean {

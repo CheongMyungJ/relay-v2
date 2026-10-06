@@ -68,17 +68,26 @@ test('상태 글은 버튼 줄 아래 한 줄에 잘리지 않고 보이고 버�
     await expect(update).toBeVisible()
     // 화면만 보므로 main의 상태 대신 상태 알림(IPC.update)을 바로 보낸다. 글이 긴 상태들이다
     const states = [
-      { kind: 'checking' },
-      { kind: 'downloading', version: '10.10.10', percent: 100 },
-      { kind: 'ready', version: '10.10.10' },
-      { kind: 'manual', version: '10.10.10' },
-      { kind: 'error', message: 'net::ERR_INTERNET_DISCONNECTED' },
+      { state: { kind: 'checking' }, text: '새 버전 확인 중' },
+      {
+        state: { kind: 'downloading', version: '10.10.10', percent: 100 },
+        text: 'relay 10.10.10 받는 중 100%',
+      },
+      { state: { kind: 'ready', version: '10.10.10' }, text: 'relay 10.10.10 설치 준비됨' },
+      { state: { kind: 'manual', version: '10.10.10' }, text: 'relay 10.10.10 직접 설치 필요' },
+      {
+        state: { kind: 'error', message: 'net::ERR_INTERNET_DISCONNECTED' },
+        text: '업데이트 확인 실패',
+      },
     ]
-    for (const state of states) {
-      await app.evaluate(({ BrowserWindow }, s) => {
-        BrowserWindow.getAllWindows()[0]?.webContents.send('update:changed', s)
-      }, state)
-      await expect(status).toBeVisible()
+    for (const { state, text } of states) {
+      // 버튼이 보여도 렌더러가 알림을 듣기 전일 수 있다. 그 글이 보일 때까지 다시 보낸다
+      await expect(async () => {
+        await app.evaluate(({ BrowserWindow }, s) => {
+          BrowserWindow.getAllWindows()[0]?.webContents.send('update:changed', s)
+        }, state)
+        await expect(status).toHaveText(text, { timeout: 1_000 })
+      }).toPass()
       expect(await status.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
       const a = await add.boundingBox()
       const s = await settings.boundingBox()

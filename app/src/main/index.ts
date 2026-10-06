@@ -83,6 +83,11 @@ function notifyUpdate(version: string): void {
   notice.show()
 }
 
+/** 창이 있으면 창에 붙여, 없으면 따로 대화상자를 띄운다 */
+function messageBox(opts: Electron.MessageBoxOptions): Promise<Electron.MessageBoxReturnValue> {
+  return win && !win.isDestroyed() ? dialog.showMessageBox(win, opts) : dialog.showMessageBox(opts)
+}
+
 /**
  * 사람이 설치해야 하는 곳(WSL 등)이거나 지난번 끌 때의 설치가 실패했을 때 새 버전을 받으면 (D379). WSLg는 OS 알림을
  * Windows로 넘기지 않을 수 있어 창 안의 대화상자로 설치 명령을 보이고 [명령 복사]를 준다. 창이 닫혔으면 보이지 않는다
@@ -90,16 +95,15 @@ function notifyUpdate(version: string): void {
 function showManualInstall(reason: ManualInstallReason, version: string, file: string): void {
   if (!win || win.isDestroyed()) return
   const command = manualInstallCommand(file)
-  void dialog
-    .showMessageBox(win, {
-      type: 'info',
-      title: 'relay 업데이트',
-      message: `새 버전 받음: relay ${version}`,
-      detail: manualInstallDetail(reason, command),
-      buttons: ['명령 복사', '닫기'],
-      defaultId: 0,
-      cancelId: 1,
-    })
+  void messageBox({
+    type: 'info',
+    title: 'relay 업데이트',
+    message: `새 버전 받음: relay ${version}`,
+    detail: manualInstallDetail(reason, command),
+    buttons: ['명령 복사', '닫기'],
+    defaultId: 0,
+    cancelId: 1,
+  })
     .then((r) => {
       if (r.response === 0) clipboard.writeText(command)
     })
@@ -150,7 +154,7 @@ registerIpc(ready, {
     selectedWork = workKey
   },
   updateState: () => updateState,
-  checkUpdate: () => updates?.check(),
+  checkUpdate: () => updates?.check(true),
   installUpdate,
 })
 ready.catch((e: unknown) => {
@@ -185,10 +189,7 @@ async function ask(): Promise<boolean> {
       message: '실행 중인 세션이 있습니다',
       detail: '종료하면 세션을 끝내고 "중단됨"으로 남깁니다. 다음 실행 때 [재개]할 수 있습니다.',
     }
-    const r =
-      win && !win.isDestroyed()
-        ? await dialog.showMessageBox(win, opts)
-        : await dialog.showMessageBox(opts)
+    const r = await messageBox(opts)
     if (r.response !== 0) return false
   }
   quitConfirmed = true
@@ -208,7 +209,12 @@ function createWindow(): void {
   win.webContents.on('will-navigate', (event) => event.preventDefault())
   // 실행 중인 세션이 있으면 창을 닫기 전에 확인한다 (시나리오 3-6)
   // macOS는 창을 닫아도 앱이 남으므로 앱을 끝낼 때(before-quit)만 묻는다
+  // 업데이트 설치를 위해 세션을 정리하는 동안에는 닫지 않는다. 닫히면 설치하고 다시 켜기 전에 앱이 끝난다 (I121)
   win.on('close', (event) => {
+    if (installing) {
+      event.preventDefault()
+      return
+    }
     if (quitConfirmed || process.platform === 'darwin') return
     event.preventDefault()
     void confirmQuit().then((ok) => {
@@ -235,20 +241,30 @@ function setUpdateState(state: UpdateState): void {
 
 function beginUpdates(
   installOnQuit: boolean,
-  onDownloaded: (v: string, file: string) => void,
+  manual: boolean,
+  onDownloaded: (v: string, file: string, byButton: boolean) => void,
 ): void {
-  updates = new Updates(loadUpdater(), { installOnQuit, onDownloaded, onChange: setUpdateState })
+  updates = new Updates(loadUpdater(), {
+    installOnQuit,
+    manual,
+    onDownloaded,
+    onChange: setUpdateState,
+  })
   setUpdateState(updates.current())
   updates.start()
 }
 
 /**
  * 자동 업데이트를 시작한다 (I95, D377, D379). Linux .deb는 설치할 수 없는 곳이면 설치 명령만 보이고, 끌 때 설치를
- * 시도하면 기록해 두었다가 다음 실행의 버전이 그대로면(취소, 인증 도구 실패) 받은 뒤 설치 명령을 함께 보인다
+ * 시도하면 기록해 두었다가 다음 실행의 버전이 그대로면(취소, 인증 도구 실패) 받은 뒤 설치 명령을 함께 보인다.
+ * 그때 업데이트 버튼도 설치 명령을 보이고(manual), 끌 때 설치는 한 번 더 시도한다.
+ * 업데이트 버튼으로 받은 것은 화면의 설치 확인 창이 알리므로 OS 알림을 보내지 않는다 (I121)
  */
 function startUpdatesFor(platform: NodeJS.Platform): void {
   if (platform !== 'linux') {
-    beginUpdates(true, notifyUpdate)
+    beginUpdates(true, false, (version, _file, byButton) => {
+      if (!byButton) notifyUpdate(version)
+    })
     return
   }
   const manual = needsManualInstall({
@@ -258,7 +274,7 @@ function startUpdatesFor(platform: NodeJS.Platform): void {
     hasCommand: (name) => hasCommand(name),
   })
   if (manual) {
-    beginUpdates(false, (v, f) => {
+    beginUpdates(false, true, (v, f) => {
       showManual = () => showManualInstall('unsupported', v, f)
       showManual()
     })
@@ -267,10 +283,12 @@ function startUpdatesFor(platform: NodeJS.Platform): void {
   const dir = app.getPath('userData')
   const failed = lastInstallFailed(dir, app.getVersion())
   let pending: string | null = null
-  beginUpdates(true, (version, file) => {
+  beginUpdates(true, failed, (version, file, byButton) => {
     pending = version
-    if (failed) showManualInstall('failed', version, file)
-    else notifyUpdate(version)
+    if (failed) {
+      showManual = () => showManualInstall('failed', version, file)
+      showManual()
+    } else if (!byButton) notifyUpdate(version)
   })
   // electron-updater는 quit에서 설치한다. 그 앞(will-quit)에 시도를 기록한다
   app.on('will-quit', () => {
@@ -290,14 +308,24 @@ async function installUpdate(): Promise<void> {
   if (!updates || updateState.kind !== 'ready' || quitting) return
   if (!(await confirmQuit()) || quitting) return
   quitting = true
-  await ready.then((relay) => relay.close()).catch(() => {})
+  installing = true
+  try {
+    await ready.then((relay) => relay.close()).catch(() => {})
+  } finally {
+    installing = false
+  }
   const r = updates.install()
   if (r.ok) return
   // 설치를 시작하지 못했다(.deb의 비밀번호 창 취소 등). Relay를 이미 닫아(대기열, Work, 훅 서버) 앱을 이어 쓸 수
-  // 없으므로 까닭을 알리고 끝낸다. 끝낼 때 electron-updater가 받아 둔 버전의 설치를 한 번 더 시도한다(I95)
+  // 없으므로 까닭을 알리고 끝낸다. 사람이 방금 취소했을 수 있으니 끝낼 때 같은 설치를 되풀이하지 않는다. .deb는
+  // 다음 실행에서 지난 설치 실패로 보고 설치 명령을 보인다(D379)
+  updates.stopInstallOnQuit()
   await showInstallFailed(r.error)
   app.quit()
 }
+
+/** 업데이트 설치를 위해 세션을 정리하는 중이다. 그동안 창을 닫지 않는다 */
+let installing = false
 
 /** 업데이트 버튼의 설치를 시작하지 못했다는 대화상자 (I121) */
 async function showInstallFailed(error: string): Promise<void> {
@@ -305,12 +333,10 @@ async function showInstallFailed(error: string): Promise<void> {
     type: 'error' as const,
     title: 'relay 업데이트',
     message: '업데이트를 설치하지 못했습니다',
-    detail: `${error}\n\n세션을 이미 정리해서 앱을 끝냅니다. 끝낼 때 설치를 한 번 더 시도하고, 다시 켜면 세션을 [재개]할 수 있습니다.`,
+    detail: `${error}\n\n세션을 이미 정리해서 앱을 끝냅니다. 다시 켜면 세션을 [재개]할 수 있고, 업데이트는 다시 켠 뒤 다시 안내합니다.`,
     buttons: ['확인'],
   }
-  const shown =
-    win && !win.isDestroyed() ? dialog.showMessageBox(win, opts) : dialog.showMessageBox(opts)
-  await shown.catch(() => null)
+  await messageBox(opts).catch(() => null)
 }
 
 void app.whenReady().then(() => {
