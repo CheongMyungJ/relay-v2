@@ -21,15 +21,6 @@ export const AGENT_APPROVAL_NOTICE =
 export const AGENT_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'] as const
 export type AgentEffort = (typeof AGENT_EFFORTS)[number]
 
-export const EFFORT_LABEL: Readonly<Record<AgentEffort, string>> = {
-  low: 'low',
-  medium: 'medium',
-  high: 'high',
-  xhigh: 'xhigh',
-  max: 'max',
-  ultra: 'ultra',
-}
-
 export interface AgentModel {
   id: string
   label: string
@@ -102,6 +93,15 @@ export interface AgentConfig {
 }
 
 /**
+ * 단계가 쓸 모델: 단계 ?? (단계 엔진이 기본 엔진과 같으면 기본 모델, 다르면 엔진 기본). 설정 화면은 이 모델로 단계의 추론
+ * 수준 선택지를 보인다
+ */
+export function stepModel(config: AgentConfig, step: AgentStep): string {
+  const inherit = (step.engine ?? config.agent_engine) === config.agent_engine
+  return step.model || (inherit ? (config.agent_model ?? '') : '')
+}
+
+/**
  * 한 단계의 실행 설정을 정한다. 엔진 = 단계 ?? 기본. 모델·추론 수준 = 단계 ?? (엔진이 기본 엔진과 같으면 기본, 다르면
  * 엔진 기본). 기본 모델은 기본 엔진의 모델이라 다른 엔진에 물려주지 않는다. 그 엔진에 없는 모델과 고른 모델이 받지 않는
  * 추론 수준은 버린다
@@ -110,7 +110,7 @@ export function resolveAgent(config: AgentConfig, skill: string): ResolvedAgent 
   const step = config.agent_steps?.[skill] ?? {}
   const engine = step.engine ?? config.agent_engine
   const inherit = engine === config.agent_engine
-  const wantModel = step.model ?? (inherit ? (config.agent_model ?? '') : '')
+  const wantModel = stepModel(config, step)
   const model = modelKnown(engine, wantModel) ? wantModel : ''
   const wantEffort = step.effort ?? (inherit ? (config.agent_effort ?? '') : '')
   const effort = (effortsFor(engine, model) as readonly string[]).includes(wantEffort)

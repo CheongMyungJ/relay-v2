@@ -8,11 +8,11 @@ import {
   AGENT_ENGINES,
   AGENT_LABELS,
   AGENT_MODELS,
-  EFFORT_LABEL,
   changeDefaultEngine,
   effortsFor,
   fitAgent,
   setAgentStep,
+  stepModel,
   type AgentEngine,
   type AgentStep,
 } from '../../shared/agent'
@@ -812,7 +812,7 @@ function EffortSelect(props: {
         <option value="">{props.empty}</option>
         {efforts.map((effort) => (
           <option key={effort} value={effort}>
-            {EFFORT_LABEL[effort]}
+            {effort}
           </option>
         ))}
       </select>
@@ -1049,7 +1049,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                       <EffortSelect
                         label={`${title} 추론 수준`}
                         engine={engine}
-                        model={step.model ?? ''}
+                        model={stepModel(value, step)}
                         value={step.effort ?? ''}
                         empty="기본 따름"
                         onChange={(effort) => set({ ...step, effort })}

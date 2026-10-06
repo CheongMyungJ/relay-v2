@@ -11,6 +11,7 @@ import {
   fitAgent,
   resolveAgent,
   setAgentStep,
+  stepModel,
   type AgentEngine,
 } from '../../src/shared/agent'
 import type { WorkState } from '../../src/shared/work'
@@ -342,6 +343,15 @@ describe('[단위] 설정 화면의 엔진·모델·추론 수준 바꾸기 (F4,
     expect(next.design).toEqual(base.agent_steps.design)
   })
 
+  it('모델을 정하지 않은 단계의 추론 수준은 물려받는 모델로 보인다: 기본 모델이 haiku면 고를 수 없다 (F9)', () => {
+    const haiku = { ...base, agent_model: 'haiku', agent_effort: '' }
+    expect(stepModel(haiku, {})).toBe('haiku')
+    expect(effortsFor('claude', stepModel(haiku, { engine: 'claude' }))).toEqual([])
+    expect(stepModel(haiku, { model: 'opus' })).toBe('opus')
+    // 단계 엔진이 기본 엔진과 다르면 기본 모델을 물려받지 않는다
+    expect(stepModel(haiku, { engine: 'codex' })).toBe('')
+    expect(effortsFor('codex', stepModel(haiku, { engine: 'codex' }))).toContain('ultra')
+  })
   it('기본 엔진을 바꾸면 기본 줄과 엔진을 정하지 않은 단계를 새 엔진에 맞추고 저장할 수 있다', () => {
     const next = changeDefaultEngine(base, 'codex')
     expect(next).toMatchObject({ agent_engine: 'codex', agent_model: '', agent_effort: 'max' })
