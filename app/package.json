@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "description": "relay-v2 데스크톱 앱 (docs/implementation.md)",
+  "homepage": "https://github.com/CheongMyungJ/relay-v2",
+  "license": "MIT",
+  "desktopName": "relay.desktop",
   "main": "out/main/index.js",
   "scripts": {
     "contracts": "node scripts/contracts.mjs",
@@ -20,7 +23,8 @@
     "test:claude": "npm run contracts && vitest run --project claude",
     "test:contract": "npm run contracts && vitest run --project contract",
     "test:eval": "vitest run --project eval && node eval/check-scenario.mjs all",
-    "dist:win": "npm run build && electron-builder --win --x64 --publish never"
+    "dist:win": "npm run build && electron-builder --win --x64 --publish never",
+    "dist:linux": "npm run build && electron-builder --linux deb --x64 --publish never"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

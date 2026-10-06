@@ -1,6 +1,9 @@
-// 자동 업데이트 (I95). Windows 설치본만 GitHub Releases의 latest.yml을 보고 새 버전을 뒤에서 받는다.
-// 받은 업데이트는 앱을 끝낼 때 설치한다. 실행 중인 세션을 끊지 않으려고 앱이 스스로 다시 시작하지는 않는다.
+// 자동 업데이트 (I95, I105). Windows 설치본과 Linux .deb 설치본만 GitHub Releases의 latest.yml(Linux는
+// latest-linux.yml)을 보고 새 버전을 뒤에서 받는다. 받은 업데이트는 앱을 끝낼 때 설치한다(.deb는 관리자 비밀번호를
+// 묻는다, D351). 실행 중인 세션을 끊지 않으려고 앱이 스스로 다시 시작하지는 않는다.
+import fs from 'node:fs'
 import { createRequire } from 'node:module'
+import path from 'node:path'
 import type { AppUpdater } from 'electron-updater'
 
 /** 처음 확인은 창이 뜨고 조금 뒤에, 그다음은 받을 때까지 이 간격으로 한다 */
@@ -15,19 +18,37 @@ export interface UpdateTarget {
   packaged: boolean
   platform: NodeJS.Platform
   version: string
+  /** Linux 설치 형식. electron-builder가 resources/package-type에 적는다(.deb면 deb). 없으면 null */
+  packageType: string | null
+}
+
+/** resources/package-type을 읽는다. electron-updater도 이 파일로 설치 형식을 고른다 */
+export function readPackageType(resourcesPath: string): string | null {
+  try {
+    return fs.readFileSync(path.join(resourcesPath, 'package-type'), 'utf8').trim() || null
+  } catch {
+    return null
+  }
 }
 
 /**
- * 자동 업데이트를 켜는가. Windows 설치본이면서 태그로 릴리스한 버전일 때만 켠다.
- * 개발 앱, Windows가 아닌 곳, app-build 결과물(0.0.0)은 끄고, RELAY_UPDATE=off로도 끈다([스모크] 등)
+ * 자동 업데이트를 켜는가. Windows 설치본이나 Linux .deb 설치본이면서 태그로 릴리스한 버전일 때만 켠다.
+ * 개발 앱, 그 밖의 OS와 설치 형식, app-build 결과물(0.0.0)은 끄고, RELAY_UPDATE=off로도 끈다([스모크] 등)
  */
 export function updatesEnabled(t: UpdateTarget): boolean {
   return (
     t.packaged &&
-    t.platform === 'win32' &&
+    (t.platform === 'win32' || (t.platform === 'linux' && t.packageType === 'deb')) &&
     t.version !== UNRELEASED_VERSION &&
     (t.env['RELAY_UPDATE'] ?? '').trim().toLowerCase() !== 'off'
   )
+}
+
+/** 새 버전을 받았다는 알림의 본문. .deb는 끌 때 관리자 비밀번호를 묻는다 (D351) */
+export function updateNoticeBody(platform: NodeJS.Platform): string {
+  return platform === 'linux'
+    ? '앱을 끝낼 때 관리자 비밀번호를 물은 뒤 설치하고, 다음 실행부터 새 버전입니다.'
+    : '앱을 끝내면 설치되고 다음 실행부터 새 버전입니다.'
 }
 
 /**

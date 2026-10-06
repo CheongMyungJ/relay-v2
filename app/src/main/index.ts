@@ -11,7 +11,7 @@ import { APP_USER_MODEL_ID, keepNotice } from './notices'
 import type { Notice, UiPort } from './ports'
 import { Relay } from './relay'
 import { WEB_PREFERENCES } from './security'
-import { startUpdates, updatesEnabled } from './update'
+import { readPackageType, startUpdates, updateNoticeBody, updatesEnabled } from './update'
 
 let win: BrowserWindow | null = null
 /** 사람이 창에서 고른 Work (D81의 "그 Work를 보고 있는가") */
@@ -55,14 +55,14 @@ function notify(n: Notice): void {
   notice.show()
 }
 
-/** 새 버전을 받았다는 알림 (I95). 보고 있어도 보낸다. 누르면 창만 띄운다 */
+/** 새 버전을 받았다는 알림 (I95, D351). 보고 있어도 보낸다. 누르면 창만 띄운다 */
 function notifyUpdate(version: string): void {
   if (!Notification.isSupported()) return
   const notice = keepNotice(
     notices,
     new Notification({
       title: `새 버전 받음: relay ${version}`,
-      body: '앱을 끝내면 설치되고 다음 실행부터 새 버전입니다.',
+      body: updateNoticeBody(process.platform),
     }),
   )
   notice.on('click', () => void showWindow())
@@ -191,6 +191,7 @@ void app.whenReady().then(() => {
     packaged: app.isPackaged,
     platform: process.platform,
     version: app.getVersion(),
+    packageType: app.isPackaged ? readPackageType(process.resourcesPath) : null,
   }
   if (updatesEnabled(target)) startUpdates(notifyUpdate)
   app.on('activate', () => {

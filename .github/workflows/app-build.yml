@@ -1,5 +1,7 @@
-# 설치 파일 빌드와 [스모크] (docs/implementation.md I8, I27, 8.3). 수동으로만 실행한다.
+# 설치 파일 빌드와 [스모크] (docs/implementation.md I8, I27, I104, 8.3). 수동으로만 실행한다.
 # 설치 파일을 만들고, 러너에 조용히 설치하고, 설치한 앱을 Playwright로 띄워 가짜 claude의 출력을 확인한다.
+# Windows(NSIS)와 Linux(.deb)를 따로 돈다. Linux는 오래된 glibc에서도 돌게 ubuntu-22.04에서 빌드하고,
+# 22.04와 AppArmor가 user namespace를 막는 24.04에 각각 설치해 본다.
 name: app-build
 
 on:
@@ -9,7 +11,7 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  windows:
     runs-on: windows-latest
     timeout-minutes: 30
     defaults:
@@ -78,5 +80,105 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: smoke-results-${{ github.sha }}
+          path: app/test-results/
+          if-no-files-found: ignore
+
+  linux:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: 앱 의존성 설치
+        working-directory: app
+        # node-pty는 Linux 사전 빌드가 없어 여기서 소스로 빌드한다 (I103)
+        run: npm ci --no-audit --no-fund
+
+      - name: 설치 파일 빌드
+        working-directory: app
+        run: npm run dist:linux
+
+      - name: 업데이트 파일 확인 (I105)
+        working-directory: app
+        run: |
+          set -euo pipefail
+          test -f dist/latest-linux.yml || { echo "::error::dist/latest-linux.yml이 없습니다"; exit 1; }
+          cat dist/latest-linux.yml
+          ls -l dist/relay_*_amd64.deb
+
+      - name: 설치 파일 올리기
+        uses: actions/upload-artifact@v4
+        with:
+          name: relay-deb-${{ github.sha }}
+          path: app/dist/relay_*_amd64.deb
+          if-no-files-found: error
+
+  linux-smoke:
+    needs: linux
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: 시험 의존성 설치
+        working-directory: app
+        env:
+          # 설치한 앱을 띄우므로 개발용 Electron은 받지 않는다
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+        run: npm ci --no-audit --no-fund
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: relay-deb-${{ github.sha }}
+          path: app/dist
+
+      - name: 설치 파일 찾기
+        id: deb
+        working-directory: app
+        run: |
+          deb=$(ls dist/relay_*_amd64.deb | head -n 1)
+          test -n "$deb" || { echo "::error::설치 파일이 없습니다"; exit 1; }
+          echo "path=$deb" >> "$GITHUB_OUTPUT"
+
+      - name: 설치와 [스모크]
+        uses: ./.github/actions/install-smoke-deb
+        with:
+          deb: ${{ steps.deb.outputs.path }}
+
+      - name: 결과 요약
+        if: always()
+        working-directory: app
+        run: |
+          deb=$(ls dist/relay_*_amd64.deb 2>/dev/null | head -n 1)
+          {
+            echo "# relay .deb ($ImageOS)"
+            echo
+            echo "- 커밋: ${{ github.sha }}"
+            echo "- 러너: $ImageOS $ImageVersion"
+            echo "- 설치 파일: $(basename "$deb") ($(du -m "$deb" | cut -f1) MB)"
+            echo "- 스모크: ${{ job.status }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 스모크 결과 올리기
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-results-${{ matrix.os }}-${{ github.sha }}
           path: app/test-results/
           if-no-files-found: ignore

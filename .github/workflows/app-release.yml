@@ -1,6 +1,7 @@
-# 릴리스 (I95). v<버전> 태그를 push하면 설치 파일을 빌드하고, 조용히 설치해 [스모크]를 돌린 뒤,
-# 통과하면 GitHub Release를 만들어 설치 파일과 자동 업데이트 파일(latest.yml, .blockmap)을 올린다.
-# 설치된 앱은 이 Release의 latest.yml을 보고 새 버전을 받는다.
+# 릴리스 (I95, I104). v<버전> 태그를 push하면 Windows와 Linux 설치 파일을 빌드하고, 설치해 [스모크]를 돌린 뒤,
+# 모두 통과하면 GitHub Release를 한 번 만들어 설치 파일과 자동 업데이트 파일을 올린다.
+# Windows: relay-setup-<버전>.exe, .blockmap, latest.yml. Linux: relay_<버전>_amd64.deb, latest-linux.yml.
+# 한쪽이라도 실패하면 Release를 만들지 않는다(D350). 설치된 앱은 이 Release의 latest*.yml을 보고 새 버전을 받는다.
 #   git tag v0.1.0 && git push origin v0.1.0
 name: app-release
 
@@ -9,15 +10,16 @@ on:
     tags:
       - "v*"
 
+# 빌드와 [스모크]는 읽기만 한다. Release를 만드는 release 작업만 쓰기 권한을 받는다
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: app-release-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
-  release:
+  windows:
     runs-on: windows-latest
     timeout-minutes: 40
     defaults:
@@ -29,7 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # npm ci의 설치 스크립트가 쓰기 토큰을 읽지 못하게 한다. Release는 GH_TOKEN으로 따로 만든다
+          # npm ci의 설치 스크립트가 토큰을 읽지 못하게 한다. Release는 release 작업이 GH_TOKEN으로 따로 만든다
           persist-credentials: false
 
       - name: 태그에서 버전 읽기
@@ -76,23 +78,163 @@ jobs:
         with:
           setup: dist/relay-setup-${{ env.RELAY_VERSION }}.exe
 
-      - name: Release 만들기
-        working-directory: app
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $setup = "dist/relay-setup-$env:RELAY_VERSION.exe"
-          # v1.2.3-beta.1 같은 시험판은 prerelease로 올려 설치된 앱이 받지 않게 한다
-          $ghArgs = @('release', 'create', $env:TAG, $setup, "$setup.blockmap", 'dist/latest.yml',
-            '--title', "relay $env:RELAY_VERSION", '--generate-notes', '--verify-tag')
-          if ($env:RELAY_VERSION -match '-') { $ghArgs += '--prerelease' }
-          gh @ghArgs
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: 설치 파일 올리기
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: |
+            app/dist/relay-setup-${{ env.RELAY_VERSION }}.exe
+            app/dist/relay-setup-${{ env.RELAY_VERSION }}.exe.blockmap
+            app/dist/latest.yml
+          if-no-files-found: error
 
       - name: 스모크 결과 올리기
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: smoke-results-${{ github.ref_name }}
+          name: smoke-results-windows-${{ github.ref_name }}
           path: app/test-results/
           if-no-files-found: ignore
+
+  linux:
+    # 오래된 glibc에서도 돌게 22.04에서 빌드한다 (I103)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: 태그에서 버전 읽기
+        run: |
+          if [[ ! "$TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?)$ ]]; then
+            echo "::error::태그는 v1.2.3 또는 v1.2.3-beta.1 꼴이어야 합니다: $TAG"; exit 1
+          fi
+          echo "RELAY_VERSION=${BASH_REMATCH[1]}" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: 앱 의존성 설치
+        working-directory: app
+        run: npm ci --no-audit --no-fund
+
+      - name: 앱 버전을 태그에 맞추기
+        working-directory: app
+        run: npm version "$RELAY_VERSION" --no-git-tag-version --allow-same-version
+
+      - name: 설치 파일 빌드
+        working-directory: app
+        run: npm run dist:linux
+
+      - name: 업데이트 파일 확인
+        working-directory: app
+        run: |
+          set -euo pipefail
+          deb="dist/relay_${RELAY_VERSION}_amd64.deb"
+          for f in "$deb" dist/latest-linux.yml; do
+            test -f "$f" || { echo "::error::없는 파일: $f"; exit 1; }
+          done
+          cat dist/latest-linux.yml
+          grep -qxF "version: $RELAY_VERSION" dist/latest-linux.yml || { echo "::error::latest-linux.yml의 버전이 태그와 다릅니다"; exit 1; }
+
+      - name: 설치 파일 올리기
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-linux
+          path: |
+            app/dist/relay_${{ env.RELAY_VERSION }}_amd64.deb
+            app/dist/latest-linux.yml
+          if-no-files-found: error
+
+  linux-smoke:
+    needs: linux
+    strategy:
+      fail-fast: false
+      matrix:
+        # 24.04는 AppArmor가 user namespace를 막는다. .deb가 넣는 프로필로 앱이 뜨는지 본다
+        os: [ubuntu-22.04, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: 시험 의존성 설치
+        working-directory: app
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+        run: npm ci --no-audit --no-fund
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-linux
+          path: app/dist
+
+      - name: 설치 파일 찾기
+        id: deb
+        working-directory: app
+        run: |
+          deb=$(ls dist/relay_*_amd64.deb | head -n 1)
+          test -n "$deb" || { echo "::error::설치 파일이 없습니다"; exit 1; }
+          echo "path=$deb" >> "$GITHUB_OUTPUT"
+
+      - name: 설치와 [스모크]
+        uses: ./.github/actions/install-smoke-deb
+        with:
+          deb: ${{ steps.deb.outputs.path }}
+
+      - name: 스모크 결과 올리기
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-results-${{ matrix.os }}-${{ github.ref_name }}
+          path: app/test-results/
+          if-no-files-found: ignore
+
+  release:
+    # 두 OS의 빌드와 [스모크]가 모두 통과해야 Release를 만든다 (D350)
+    needs: [windows, linux-smoke]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: files
+          merge-multiple: true
+
+      - name: Release 만들기
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # 태그 형식은 빌드 작업들이 이미 확인했다
+          version="${TAG#v}"
+          setup="files/relay-setup-$version.exe"
+          deb="files/relay_${version}_amd64.deb"
+          files=("$setup" "$setup.blockmap" files/latest.yml "$deb" files/latest-linux.yml)
+          for f in "${files[@]}"; do
+            test -f "$f" || { echo "::error::없는 파일: $f"; exit 1; }
+          done
+          args=(release create "$TAG" "${files[@]}" --repo "$GITHUB_REPOSITORY"
+            --title "relay $version" --generate-notes --verify-tag)
+          # v1.2.3-beta.1 같은 시험판은 prerelease로 올려 설치된 앱이 받지 않게 한다
+          if [[ "$version" == *-* ]]; then args+=(--prerelease); fi
+          gh "${args[@]}"

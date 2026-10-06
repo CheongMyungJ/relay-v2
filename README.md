@@ -59,6 +59,19 @@ gh --version && gh auth status   # 선택
 - 코드 서명이 없어 처음 실행할 때 SmartScreen 경고가 뜰 수 있습니다. [추가 정보] → [실행]을 누릅니다.
 - 앱이 새 버전을 스스로 받아 두고, 앱을 끝낼 때 설치합니다. 다음 실행부터 새 버전입니다.
 
+### Linux (.deb)
+
+Ubuntu, Debian 같은 Debian 계열(x64)에서 씁니다. [Releases](https://github.com/CheongMyungJ/relay-v2/releases/latest)에서 `relay_<버전>_amd64.deb`를 받아 설치합니다.
+
+```bash
+sudo apt install ./relay_<버전>_amd64.deb
+```
+
+- `/opt/relay`에 설치되고 앱 메뉴에 relay가 생깁니다. 터미널에서는 `relay`로 켭니다. git이 없으면 함께 설치됩니다.
+- Claude Code는 `curl -fsSL https://claude.ai/install.sh | bash`로 설치합니다.
+- 앱이 새 버전을 스스로 받아 두고, 앱을 끝낼 때 관리자 비밀번호를 물은 뒤 설치합니다. 취소하면 다음에 끌 때 다시 묻습니다.
+- 지우려면 `sudo apt remove relay`입니다. 앱 데이터(`~/.relay`)는 남습니다.
+
 ### 소스에서 실행 (Windows, Linux)
 
 Node.js 22가 필요합니다.
