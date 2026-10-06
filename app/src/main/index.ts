@@ -12,14 +12,18 @@ import { APP_USER_MODEL_ID, keepNotice } from './notices'
 import type { Notice, UiPort } from './ports'
 import { Relay } from './relay'
 import { WEB_PREFERENCES } from './security'
+import { hasCommand } from '../adapters/which'
 import {
-  hasCommand,
+  lastInstallFailed,
   manualInstallCommand,
+  manualInstallDetail,
+  markInstallAttempt,
   needsManualInstall,
   readPackageType,
   startUpdates,
   updateNoticeBody,
   updatesEnabled,
+  type ManualInstallReason,
 } from './update'
 
 let win: BrowserWindow | null = null
@@ -79,25 +83,26 @@ function notifyUpdate(version: string): void {
 }
 
 /**
- * 사람이 설치해야 하는 곳(WSL 등, D353)에서 새 버전을 받았을 때. WSLg는 OS 알림을 Windows로 넘기지 않을 수 있어
- * 창 안의 대화상자로 설치 명령을 보이고 [명령 복사]를 준다
+ * 사람이 설치해야 하는 곳(WSL 등)이거나 지난번 끌 때의 설치가 실패했을 때 새 버전을 받으면 (D353). WSLg는 OS 알림을
+ * Windows로 넘기지 않을 수 있어 창 안의 대화상자로 설치 명령을 보이고 [명령 복사]를 준다. 창이 닫혔으면 보이지 않는다
  */
-function showManualInstall(version: string, file: string): void {
+function showManualInstall(reason: ManualInstallReason, version: string, file: string): void {
+  if (!win || win.isDestroyed()) return
   const command = manualInstallCommand(file)
-  const opts = {
-    type: 'info' as const,
-    title: 'relay 업데이트',
-    message: `새 버전 받음: relay ${version}`,
-    detail:
-      '이 환경(WSL 등)에서는 앱이 끝날 때 설치할 수 없습니다. 터미널에서 아래 명령으로 설치한 뒤 relay를 다시 켜세요.\n\n' +
-      command,
-    buttons: ['명령 복사', '닫기'],
-    defaultId: 0,
-    cancelId: 1,
-  }
-  void (win ? dialog.showMessageBox(win, opts) : dialog.showMessageBox(opts)).then((r) => {
-    if (r.response === 0) clipboard.writeText(command)
-  })
+  void dialog
+    .showMessageBox(win, {
+      type: 'info',
+      title: 'relay 업데이트',
+      message: `새 버전 받음: relay ${version}`,
+      detail: manualInstallDetail(reason, command),
+      buttons: ['명령 복사', '닫기'],
+      defaultId: 0,
+      cancelId: 1,
+    })
+    .then((r) => {
+      if (r.response === 0) clipboard.writeText(command)
+    })
+    .catch(() => {})
 }
 
 const ui: UiPort = {
@@ -213,6 +218,42 @@ function createWindow(): void {
   else void win.loadFile(join(__dirname, '../renderer/index.html'))
 }
 
+/**
+ * 자동 업데이트를 시작한다 (I95, D351, D353). Linux .deb는 설치할 수 없는 곳이면 설치 명령만 보이고, 끌 때 설치를
+ * 시도하면 기록해 두었다가 다음 실행의 버전이 그대로면(취소, 인증 도구 실패) 받은 뒤 설치 명령을 함께 보인다
+ */
+function startUpdatesFor(platform: NodeJS.Platform): void {
+  if (platform !== 'linux') {
+    startUpdates(notifyUpdate, { installOnQuit: true })
+    return
+  }
+  const manual = needsManualInstall({
+    platform,
+    env: process.env,
+    osRelease: release(),
+    hasCommand: (name) => hasCommand(name),
+  })
+  if (manual) {
+    startUpdates((v, f) => showManualInstall('unsupported', v, f), { installOnQuit: false })
+    return
+  }
+  const dir = app.getPath('userData')
+  const failed = lastInstallFailed(dir, app.getVersion())
+  let pending: string | null = null
+  startUpdates(
+    (version, file) => {
+      pending = version
+      if (failed) showManualInstall('failed', version, file)
+      else notifyUpdate(version)
+    },
+    { installOnQuit: true },
+  )
+  // electron-updater는 quit에서 설치한다. 그 앞(will-quit)에 시도를 기록한다
+  app.on('will-quit', () => {
+    if (pending) markInstallAttempt(dir, app.getVersion(), pending)
+  })
+}
+
 void app.whenReady().then(() => {
   if (!primary) return
   applyTheme(readThemeSync(relayHome()))
@@ -224,15 +265,7 @@ void app.whenReady().then(() => {
     version: app.getVersion(),
     packageType: app.isPackaged ? readPackageType(process.resourcesPath) : null,
   }
-  if (updatesEnabled(target)) {
-    const manual = needsManualInstall({
-      platform: process.platform,
-      env: process.env,
-      osRelease: release(),
-      hasCommand: (name) => hasCommand(name),
-    })
-    startUpdates(manual ? showManualInstall : notifyUpdate, { installOnQuit: !manual })
-  }
+  if (updatesEnabled(target)) startUpdatesFor(process.platform)
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })

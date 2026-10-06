@@ -58,7 +58,9 @@ linux:
   description: 단계마다 결과를 보고 승인하며 Claude Code에게 일을 맡기는 데스크톱 앱
   maintainer: CheongMyungJ <101340453+CheongMyungJ@users.noreply.github.com>
 deb:
-  # electron-builder 기본 의존성에 git을 더한다. relay는 worktree 때문에 git이 필수다(7절)
+  # electron-builder 기본 의존성에 Electron 실행 파일이 직접 링크하는 libasound.so.2, libgbm.so.1과 git을 더한다.
+  # 기본값만으로는 최소 이미지(WSL Ubuntu 등)에서 설치는 되고 실행이 libasound.so.2로 죽었다(PR #37 리뷰).
+  # Ubuntu 24.04부터 libasound2의 실제 패키지 이름은 libasound2t64다. relay는 worktree 때문에 git이 필수다(7절)
   depends:
     - libgtk-3-0
     - libnotify4
@@ -69,4 +71,6 @@ deb:
     - libatspi2.0-0
     - libuuid1
     - libsecret-1-0
+    - libasound2 | libasound2t64
+    - libgbm1
     - git

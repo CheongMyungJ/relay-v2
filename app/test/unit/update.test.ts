@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   isWsl,
   manualInstallCommand,
+  manualInstallDetail,
   needsManualInstall,
   UNRELEASED_VERSION,
   updateNoticeBody,
@@ -81,5 +82,13 @@ describe('자동 업데이트 (I95)', () => {
     expect(manualInstallCommand("/home/o'neil/relay.deb")).toBe(
       "sudo apt install '/home/o'\\''neil/relay.deb'",
     )
+  })
+
+  it('설치 명령 대화상자는 까닭에 맞는 안내를 보인다 (D353)', () => {
+    const cmd = "sudo apt install '/tmp/relay.deb'"
+    expect(manualInstallDetail('unsupported', cmd)).toContain('WSL')
+    expect(manualInstallDetail('failed', cmd)).toContain('다시 묻습니다')
+    for (const r of ['unsupported', 'failed'] as const)
+      expect(manualInstallDetail(r, cmd).endsWith(cmd)).toBe(true)
   })
 })

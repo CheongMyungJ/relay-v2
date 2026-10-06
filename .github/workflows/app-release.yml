@@ -152,6 +152,29 @@ jobs:
             app/dist/latest-linux.yml
           if-no-files-found: error
 
+  linux-deps:
+    # 깨끗한 이미지에 설치해 depends에서 빠진 공유 라이브러리를 찾는다(WSL Ubuntu, 최소 Debian 같은 환경)
+    needs: linux
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ["ubuntu:22.04", "ubuntu:24.04", "debian:12"]
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-linux
+          path: app/dist
+
+      - name: 설치와 공유 라이브러리 확인
+        run: bash .github/actions/install-smoke-deb/check-deps.sh app/dist/relay_*_amd64.deb
+
   linux-smoke:
     needs: linux
     strategy:
@@ -174,9 +197,8 @@ jobs:
 
       - name: 시험 의존성 설치
         working-directory: app
-        env:
-          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
-        run: npm ci --no-audit --no-fund
+        # 설치한 앱(/opt/relay)을 띄우므로 설치 스크립트(node-pty 빌드, 개발용 Electron 받기)는 돌리지 않는다
+        run: npm ci --no-audit --no-fund --ignore-scripts
 
       - uses: actions/download-artifact@v4
         with:
@@ -195,6 +217,7 @@ jobs:
         uses: ./.github/actions/install-smoke-deb
         with:
           deb: ${{ steps.deb.outputs.path }}
+          apparmor: ${{ matrix.os == 'ubuntu-24.04' }}
 
       - name: 스모크 결과 올리기
         if: failure()
@@ -205,8 +228,8 @@ jobs:
           if-no-files-found: ignore
 
   release:
-    # 두 OS의 빌드와 [스모크]가 모두 통과해야 Release를 만든다 (D350)
-    needs: [windows, linux-smoke]
+    # 두 OS의 빌드와 [스모크], .deb 의존성 확인이 모두 통과해야 Release를 만든다 (D350)
+    needs: [windows, linux-smoke, linux-deps]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

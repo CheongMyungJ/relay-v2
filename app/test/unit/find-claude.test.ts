@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { claudeInstallGuide } from '../../src/adapters/agent'
 import { findClaude } from '../../src/adapters/claude'
+import { pathDirs } from '../../src/adapters/which'
 
 const has =
   (...files: string[]) =>
@@ -76,5 +77,13 @@ describe('claude 설치 안내 (I106)', () => {
     expect(claudeInstallGuide('win32')).toContain('irm https://claude.ai/install.ps1 | iex')
     expect(claudeInstallGuide('linux')).toContain('curl -fsSL https://claude.ai/install.sh | bash')
     expect(claudeInstallGuide('linux')).not.toContain('PowerShell')
+  })
+})
+
+describe('PATH 폴더 (PR #37 리뷰)', () => {
+  it('Windows는 Path도 읽고 ;로, 그 밖은 :로 나누며 빈 항목은 뺀다', () => {
+    expect(pathDirs({ Path: 'C:\\a;;C:\\b' }, 'win32')).toEqual(['C:\\a', 'C:\\b'])
+    expect(pathDirs({ PATH: '/usr/bin::/bin' }, 'linux')).toEqual(['/usr/bin', '/bin'])
+    expect(pathDirs({}, 'linux')).toEqual([])
   })
 })
