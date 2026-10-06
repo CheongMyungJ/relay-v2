@@ -1,0 +1,58 @@
+# 설치본 [스모크]의 Linux판 (docs/implementation.md I116, I117). app-build와 app-release가 함께 쓴다.
+# .deb를 apt로 설치하고(의존성도 받는다), 자동 업데이트 설정과 asar 밖의 node-pty 파일을 확인한 뒤, 설치한 앱으로 [스모크]를 돈다.
+# Windows판은 install-smoke다. 같은 [스모크]를 개발 빌드로는 app-ci가 Windows에서 돈다.
+name: install-smoke-deb
+description: .deb를 설치하고 설치본으로 [스모크]를 돈다 (Linux)
+inputs:
+  deb:
+    description: app/ 기준 .deb 경로
+    required: true
+  apparmor:
+    description: "true면 AppArmor의 user namespace 제한을 켜고 .deb가 넣은 프로필로 앱이 뜨는지 단언한다(Ubuntu 24.04+)"
+    required: false
+    default: "false"
+runs:
+  using: composite
+  steps:
+    - name: 설치
+      shell: bash
+      working-directory: app
+      env:
+        DEB: ${{ inputs.deb }}
+        APPARMOR: ${{ inputs.apparmor }}
+      run: |
+        set -euo pipefail
+        if [ ! -f "$DEB" ]; then echo "::error::설치 파일이 없습니다: $DEB"; exit 1; fi
+        sudo apt-get update -q
+        sudo apt-get install -y -q "$(realpath "$DEB")"
+        exe=/opt/relay/relay
+        if [ ! -x "$exe" ]; then echo "::error::설치된 실행 파일이 없습니다: $exe"; exit 1; fi
+        if [ ! -f /opt/relay/resources/app-update.yml ]; then echo "::error::자동 업데이트 설정이 없습니다"; exit 1; fi
+        # 업데이터는 이 파일로 .deb 설치본임을 안다 (I118)
+        if [ "$(cat /opt/relay/resources/package-type)" != deb ]; then echo "::error::package-type이 deb가 아닙니다"; exit 1; fi
+        if [ "$APPARMOR" = true ]; then
+          # 러너 이미지 설정과 상관없이 데스크톱 Ubuntu 24.04처럼 제한을 켠다. 이 상태에서는 프로필 없이 Electron이 뜨지 않는다
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=1
+          test "$(sysctl -n kernel.apparmor_restrict_unprivileged_userns)" = 1 || { echo "::error::user namespace 제한을 켜지 못했습니다"; exit 1; }
+          test -f /etc/apparmor.d/relay || { echo "::error::.deb가 AppArmor 프로필을 넣지 않았습니다"; exit 1; }
+          echo "AppArmor 프로필: /etc/apparmor.d/relay (제한 켬)"
+        elif [ -f /etc/apparmor.d/relay ]; then
+          echo "AppArmor 프로필: /etc/apparmor.d/relay"
+        else
+          echo "AppArmor 프로필 없음(이 AppArmor는 필요 없음)"
+        fi
+        echo "RELAY_APP_EXE=$exe" >> "$GITHUB_ENV"
+        echo "설치 위치: $exe"
+
+    - name: 설치된 node-pty 파일 확인 (asar 밖)
+      shell: bash
+      run: |
+        set -euo pipefail
+        # Linux는 사전 빌드가 없어 npm ci가 소스에서 빌드한 build/Release/pty.node를 쓴다
+        pty=/opt/relay/resources/app.asar.unpacked/node_modules/node-pty/build/Release/pty.node
+        ls -l "$pty" || { echo "::error::없는 파일: $pty"; exit 1; }
+
+    - name: "[스모크] 설치본"
+      shell: bash
+      working-directory: app
+      run: xvfb-run -a npm run test:smoke

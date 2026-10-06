@@ -23,6 +23,7 @@ import {
 } from './claude'
 import { describeFailure, run } from './exec'
 import { sha256, writeFileAtomic } from './store'
+import { pathDirs } from './which'
 
 export const CODEX_INSTALL_GUIDE =
   'codex 실행 파일을 찾지 못했습니다. Codex CLI를 설치하세요 (npm install -g @openai/codex, 안내: https://developers.openai.com/codex/cli). 다른 위치라면 CODEX_BIN 환경 변수로 경로를 알려 주세요.'
@@ -42,8 +43,8 @@ export function findCodex(opts: FindClaudeOptions = {}): string | null {
       candidates.push(p.join(env['USERPROFILE'], '.local', 'bin', 'codex.exe'))
   }
   const names = platform === 'win32' ? ['codex.exe', 'codex.cmd'] : ['codex']
-  for (const dir of (env['PATH'] ?? env['Path'] ?? '').split(platform === 'win32' ? ';' : ':')) {
-    if (dir) for (const name of names) candidates.push(p.join(dir, name))
+  for (const dir of pathDirs(env, platform)) {
+    for (const name of names) candidates.push(p.join(dir, name))
   }
   return candidates.find(exists) ?? null
 }

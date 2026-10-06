@@ -9,6 +9,7 @@ import type { SkillName } from '../shared/config'
 import { WORK_TYPES, type WorkType } from '../shared/work'
 import { describeFailure, run } from './exec'
 import { sha256, writeFileAtomic } from './store'
+import { pathDirs } from './which'
 
 export interface FindClaudeOptions {
   env?: NodeJS.ProcessEnv
@@ -31,12 +32,12 @@ export function findClaude(opts: FindClaudeOptions = {}): string | null {
     if (env['USERPROFILE'])
       candidates.push(p.join(env['USERPROFILE'], '.local', 'bin', 'claude.exe'))
     if (env['APPDATA']) candidates.push(p.join(env['APPDATA'], 'npm', 'claude.cmd'))
+  } else if (env['HOME']) {
+    // 네이티브 설치 위치. 메뉴로 켠 앱은 로그인 뒤에 생긴 ~/.local/bin이 PATH에 없을 수 있다 (I119)
+    candidates.push(p.join(env['HOME'], '.local', 'bin', 'claude'))
   }
   const names = platform === 'win32' ? ['claude.exe', 'claude.cmd'] : ['claude']
-  // Windows는 환경 변수 이름의 대소문자를 가리지 않는다.
-  const pathVar = env['PATH'] ?? env['Path'] ?? ''
-  for (const dir of pathVar.split(platform === 'win32' ? ';' : ':')) {
-    if (!dir) continue
+  for (const dir of pathDirs(env, platform)) {
     for (const n of names) candidates.push(p.join(dir, n))
   }
   return candidates.find(exists) ?? null

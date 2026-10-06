@@ -1,6 +1,7 @@
 // Electron 진입점. 창과 OS 알림으로 UiPort를 만들어 Relay를 조립한다 (I2, I26).
+import { release } from 'node:os'
 import { join } from 'node:path'
-import { app, BrowserWindow, dialog, nativeTheme, Notification } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, nativeTheme, Notification } from 'electron'
 import { skillsDir } from '../adapters/claude'
 import { readThemeSync, relayHome } from '../adapters/store'
 import { IPC } from '../shared/api'
@@ -11,7 +12,19 @@ import { APP_USER_MODEL_ID, keepNotice } from './notices'
 import type { Notice, UiPort } from './ports'
 import { Relay } from './relay'
 import { WEB_PREFERENCES } from './security'
-import { startUpdates, updatesEnabled } from './update'
+import { hasCommand } from '../adapters/which'
+import {
+  lastInstallFailed,
+  manualInstallCommand,
+  manualInstallDetail,
+  markInstallAttempt,
+  needsManualInstall,
+  readPackageType,
+  startUpdates,
+  updateNoticeBody,
+  updatesEnabled,
+  type ManualInstallReason,
+} from './update'
 
 let win: BrowserWindow | null = null
 /** 사람이 창에서 고른 Work (D81의 "그 Work를 보고 있는가") */
@@ -55,18 +68,41 @@ function notify(n: Notice): void {
   notice.show()
 }
 
-/** 새 버전을 받았다는 알림 (I95). 보고 있어도 보낸다. 누르면 창만 띄운다 */
+/** 새 버전을 받았다는 알림 (I95, D377). 보고 있어도 보낸다. 누르면 창만 띄운다 */
 function notifyUpdate(version: string): void {
   if (!Notification.isSupported()) return
   const notice = keepNotice(
     notices,
     new Notification({
       title: `새 버전 받음: relay ${version}`,
-      body: '앱을 끝내면 설치되고 다음 실행부터 새 버전입니다.',
+      body: updateNoticeBody(process.platform),
     }),
   )
   notice.on('click', () => void showWindow())
   notice.show()
+}
+
+/**
+ * 사람이 설치해야 하는 곳(WSL 등)이거나 지난번 끌 때의 설치가 실패했을 때 새 버전을 받으면 (D379). WSLg는 OS 알림을
+ * Windows로 넘기지 않을 수 있어 창 안의 대화상자로 설치 명령을 보이고 [명령 복사]를 준다. 창이 닫혔으면 보이지 않는다
+ */
+function showManualInstall(reason: ManualInstallReason, version: string, file: string): void {
+  if (!win || win.isDestroyed()) return
+  const command = manualInstallCommand(file)
+  void dialog
+    .showMessageBox(win, {
+      type: 'info',
+      title: 'relay 업데이트',
+      message: `새 버전 받음: relay ${version}`,
+      detail: manualInstallDetail(reason, command),
+      buttons: ['명령 복사', '닫기'],
+      defaultId: 0,
+      cancelId: 1,
+    })
+    .then((r) => {
+      if (r.response === 0) clipboard.writeText(command)
+    })
+    .catch(() => {})
 }
 
 const ui: UiPort = {
@@ -182,6 +218,42 @@ function createWindow(): void {
   else void win.loadFile(join(__dirname, '../renderer/index.html'))
 }
 
+/**
+ * 자동 업데이트를 시작한다 (I95, D377, D379). Linux .deb는 설치할 수 없는 곳이면 설치 명령만 보이고, 끌 때 설치를
+ * 시도하면 기록해 두었다가 다음 실행의 버전이 그대로면(취소, 인증 도구 실패) 받은 뒤 설치 명령을 함께 보인다
+ */
+function startUpdatesFor(platform: NodeJS.Platform): void {
+  if (platform !== 'linux') {
+    startUpdates(notifyUpdate, { installOnQuit: true })
+    return
+  }
+  const manual = needsManualInstall({
+    platform,
+    env: process.env,
+    osRelease: release(),
+    hasCommand: (name) => hasCommand(name),
+  })
+  if (manual) {
+    startUpdates((v, f) => showManualInstall('unsupported', v, f), { installOnQuit: false })
+    return
+  }
+  const dir = app.getPath('userData')
+  const failed = lastInstallFailed(dir, app.getVersion())
+  let pending: string | null = null
+  startUpdates(
+    (version, file) => {
+      pending = version
+      if (failed) showManualInstall('failed', version, file)
+      else notifyUpdate(version)
+    },
+    { installOnQuit: true },
+  )
+  // electron-updater는 quit에서 설치한다. 그 앞(will-quit)에 시도를 기록한다
+  app.on('will-quit', () => {
+    if (pending) markInstallAttempt(dir, app.getVersion(), pending)
+  })
+}
+
 void app.whenReady().then(() => {
   if (!primary) return
   applyTheme(readThemeSync(relayHome()))
@@ -191,8 +263,9 @@ void app.whenReady().then(() => {
     packaged: app.isPackaged,
     platform: process.platform,
     version: app.getVersion(),
+    packageType: app.isPackaged ? readPackageType(process.resourcesPath) : null,
   }
-  if (updatesEnabled(target)) startUpdates(notifyUpdate)
+  if (updatesEnabled(target)) startUpdatesFor(process.platform)
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })

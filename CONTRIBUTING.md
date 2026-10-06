@@ -48,9 +48,9 @@ cd ../skills && node check.mjs               # 스킬 정적 검사 (스킬을 �
 
 `v<버전>` 태그를 push하면 `app-release` 워크플로가 다음을 차례로 합니다:
 
-1. 설치 파일을 빌드합니다.
-2. 러너에 설치해 [스모크]를 통과하는지 봅니다.
-3. GitHub Release를 만들어 설치 파일과 자동 업데이트 파일(`latest.yml`, `.blockmap`)을 올립니다.
+1. Windows(NSIS `.exe`)와 Linux(`.deb`) 설치 파일을 빌드합니다. Linux는 ubuntu-22.04에서 빌드합니다.
+2. 러너에 설치해 [스모크]를 통과하는지 봅니다. Linux는 ubuntu-22.04와 24.04에 각각 설치해 봅니다.
+3. 모두 통과하면 GitHub Release를 만들어 설치 파일과 자동 업데이트 파일(`latest.yml`, `.blockmap`, `latest-linux.yml`)을 올립니다. 한쪽이라도 실패하면 Release를 만들지 않습니다.
 
 버전은 태그에서 읽으므로 `package.json`은 고치지 않습니다([I95](docs/implementation.md)).
 
@@ -61,4 +61,5 @@ git push origin v0.1.0
 
 - `v0.2.0-beta.1`처럼 `-`가 든 태그는 시험판(prerelease)으로 올라갑니다. 설치된 앱은 시험판을 자동으로 받지 않습니다.
 - 버전은 이전 릴리스보다 커야 설치된 앱이 업데이트로 받습니다.
-- 설치 파일만 확인하려면 수동 `app-build` 워크플로를 돌립니다. 그 결과물(버전 0.0.0)은 자동 업데이트하지 않습니다.
+- 설치 파일만 확인하려면 수동 `app-build` 워크플로를 돌립니다(두 OS 모두). 그 결과물(버전 0.0.0)은 자동 업데이트하지 않습니다.
+- 로컬에서 만들려면 Windows는 `npm run dist:win`, Linux는 `npm run dist:linux`입니다(결과물은 `app/dist/`).

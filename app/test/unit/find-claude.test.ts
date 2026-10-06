@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { claudeInstallGuide } from '../../src/adapters/agent'
 import { findClaude } from '../../src/adapters/claude'
+import { pathDirs } from '../../src/adapters/which'
 
 const has =
   (...files: string[]) =>
@@ -56,5 +58,32 @@ describe('findClaude (D106)', () => {
 
   it('못 찾으면 null이다', () => {
     expect(findClaude({ env, platform: 'win32', exists: () => false })).toBeNull()
+  })
+
+  it('Linux는 네이티브 설치 → PATH 순서다: PATH에 ~/.local/bin이 없어도 찾는다 (I119)', () => {
+    const linux = { HOME: '/home/u', PATH: '/usr/bin:/usr/local/bin' }
+    const native = '/home/u/.local/bin/claude'
+    const onPath = '/usr/local/bin/claude'
+    expect(findClaude({ env: linux, platform: 'linux', exists: has(native, onPath) })).toBe(native)
+    expect(findClaude({ env: linux, platform: 'linux', exists: has(onPath) })).toBe(onPath)
+    expect(
+      findClaude({ env: { PATH: '/usr/bin' }, platform: 'linux', exists: has(native) }),
+    ).toBeNull()
+  })
+})
+
+describe('claude 설치 안내 (I119)', () => {
+  it('OS에 맞는 설치 명령을 보인다', () => {
+    expect(claudeInstallGuide('win32')).toContain('irm https://claude.ai/install.ps1 | iex')
+    expect(claudeInstallGuide('linux')).toContain('curl -fsSL https://claude.ai/install.sh | bash')
+    expect(claudeInstallGuide('linux')).not.toContain('PowerShell')
+  })
+})
+
+describe('PATH 폴더 (PR #37 리뷰)', () => {
+  it('Windows는 Path도 읽고 ;로, 그 밖은 :로 나누며 빈 항목은 뺀다', () => {
+    expect(pathDirs({ Path: 'C:\\a;;C:\\b' }, 'win32')).toEqual(['C:\\a', 'C:\\b'])
+    expect(pathDirs({ PATH: '/usr/bin::/bin' }, 'linux')).toEqual(['/usr/bin', '/bin'])
+    expect(pathDirs({}, 'linux')).toEqual([])
   })
 })

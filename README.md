@@ -59,6 +59,27 @@ gh --version && gh auth status   # 선택
 - 코드 서명이 없어 처음 실행할 때 SmartScreen 경고가 뜰 수 있습니다. [추가 정보] → [실행]을 누릅니다.
 - 앱이 새 버전을 스스로 받아 두고, 앱을 끝낼 때 설치합니다. 다음 실행부터 새 버전입니다.
 
+### Linux (.deb)
+
+Ubuntu, Debian 같은 Debian 계열(x64)에서 씁니다. [Releases](https://github.com/CheongMyungJ/relay-v2/releases/latest)에서 `relay_<버전>_amd64.deb`를 받아 설치합니다.
+
+```bash
+sudo apt install ./relay_<버전>_amd64.deb
+```
+
+- `/opt/relay`에 설치되고 앱 메뉴에 relay가 생깁니다. 터미널에서는 `relay`로 켭니다. git이 없으면 함께 설치됩니다.
+- Claude Code는 `curl -fsSL https://claude.ai/install.sh | bash`로 설치합니다.
+- 앱이 새 버전을 스스로 받아 두고, 앱을 끝낼 때 관리자 비밀번호를 물은 뒤 설치합니다. 취소하거나 비밀번호 창이 뜨지 않았으면, 다음 실행에서 직접 설치할 명령을 함께 보여 주고 끌 때 다시 묻습니다.
+- 지우려면 `sudo apt remove relay`입니다. 앱 데이터(`~/.relay`)는 남습니다.
+
+### WSL (Windows의 Linux)
+
+창을 띄울 수 있는 WSL2(WSLg, Windows 11 등)라면 WSL 안의 Ubuntu에 위의 .deb를 그대로 설치합니다. relay는 Windows 시작 메뉴에도 나타납니다.
+
+- 레포, Claude Code, gh는 WSL 안에 둡니다. `/mnt/c/...`의 레포는 느리고, Windows 쪽에서 바꾼 파일을 relay가 알아채지 못할 수 있습니다. Windows에서 한 로그인은 이어지지 않으니 WSL 안에서 다시 로그인합니다.
+- WSL에서는 앱이 업데이트를 설치하지 못합니다. 새 버전을 받으면 설치 명령이 담긴 창이 뜹니다. [명령 복사]를 눌러 WSL 터미널에 붙여 넣고 relay를 다시 켭니다.
+- 화면이 깨지면 `relay --disable-gpu`로 켜 봅니다.
+
 ### 소스에서 실행 (Windows, Linux)
 
 Node.js 22가 필요합니다.

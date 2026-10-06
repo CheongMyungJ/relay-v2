@@ -1,5 +1,6 @@
 # 설치 파일 (I8): NSIS, x64, 사용자별 설치(관리자 권한 불필요), 서명 없음. 자동 업데이트는 GitHub Releases (I95).
 # 설치 위치는 %LOCALAPPDATA%\Programs\relay, 실행 파일은 relay.exe다.
+# Linux는 .deb, x64 (D376, I116). 설치 위치는 /opt/relay, 실행 파일은 /opt/relay/relay(/usr/bin/relay로 링크)다.
 appId: io.github.cheongmyungj.relay
 productName: relay
 directories:
@@ -43,3 +44,33 @@ nsis:
   oneClick: true
   perMachine: false
   artifactName: relay-setup-${version}.${ext}
+# Linux (D376, I116). .deb 설치 스크립트가 chrome-sandbox 권한과 Ubuntu 24.04+의 AppArmor 프로필을 맞춘다.
+# 설치 파일 이름은 기본값 relay_<버전>_amd64.deb이고, resources/package-type(deb)으로 업데이터가 형식을 안다(I118).
+linux:
+  target:
+    - target: deb
+      arch: [x64]
+  executableName: relay
+  # package.json의 desktopName(relay.desktop)과 .desktop 파일 이름, Electron의 app_id를 맞춰 창이 메뉴 항목과 묶이게 한다
+  syncDesktopName: true
+  category: Development
+  synopsis: 단계마다 결과를 보고 승인하며 Claude Code에게 일을 맡기는 데스크톱 앱
+  description: 단계마다 결과를 보고 승인하며 Claude Code에게 일을 맡기는 데스크톱 앱
+  maintainer: CheongMyungJ <101340453+CheongMyungJ@users.noreply.github.com>
+deb:
+  # electron-builder 기본 의존성에 Electron 실행 파일이 직접 링크하는 libasound.so.2, libgbm.so.1과 git을 더한다.
+  # 기본값만으로는 최소 이미지(WSL Ubuntu 등)에서 설치는 되고 실행이 libasound.so.2로 죽었다(PR #37 리뷰).
+  # Ubuntu 24.04부터 libasound2의 실제 패키지 이름은 libasound2t64다. relay는 worktree 때문에 git이 필수다(7절)
+  depends:
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils
+    - libatspi2.0-0
+    - libuuid1
+    - libsecret-1-0
+    - libasound2 | libasound2t64
+    - libgbm1
+    - git
