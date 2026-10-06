@@ -11,7 +11,7 @@ import { WORK_TYPE_LABEL, type TaskRecord, type WorkState, type WorkType } from 
 import { approvalMode, autoApprovable, type ApprovalMode } from './approval'
 import {
   ALL_NODES,
-  KEEP_CODE_NOTES,
+  KEEP_CODE,
   NODE_INFO,
   RESPOND,
   WORK_COMPLETE,
@@ -422,12 +422,12 @@ function attempts(items: readonly DiscardedAttempt[]): string {
 }
 
 /**
- * 되감기의 코드 (6.2, D116, D117). [현재 코드 위에서 이어서]의 안내는 단계마다 pipeline의 KEEP_CODE_NOTES에 있고, 남은
+ * 되감기의 코드 (6.2, D116, D117). [현재 코드 위에서 이어서]의 안내는 단계마다 pipeline의 KEEP_CODE에 있고, 남은
  * 코드와 함께 이어받을 폐기된 산출물 경로를 붙인다 (D254, D278)
  */
 function codeNote(type: WorkType, sel: SelectionInput, node: TaskNode): string {
   if (sel.keepCode) {
-    const note = isPipelineNode(node) ? KEEP_CODE_NOTES[type][node] : undefined
+    const note = isPipelineNode(node) ? KEEP_CODE[type][node]?.note : undefined
     const kept = sel.keptArtifacts ?? []
     const paths = kept.length ? kept.map((a) => `- ${taskRef(a)}: ${a.path}`).join('\n') : '없음'
     return [

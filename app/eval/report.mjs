@@ -8,7 +8,7 @@ import path from 'node:path'
 import { DIMENSIONS, judgePair } from './lib/judge.mjs'
 import { armBase, armType, typeLabel } from './lib/kind.mjs'
 import { codeOutcome } from './lib/repo.mjs'
-import { clip, readJson, readJsonl, stats, writeJson } from './lib/util.mjs'
+import { clip, isMain, readJson, readJsonl, stats, writeJson } from './lib/util.mjs'
 import { measuredWorks, multiWork, pairOf, workParts } from './lib/works.mjs'
 
 const SCENARIOS = process.env.RELAY_EVAL_SCENARIOS
@@ -96,6 +96,20 @@ export async function judgeAll(dir, opts, { redo = false } = {}) {
 const f1 = (x) => (x === null || x === undefined ? '-' : Number(x).toFixed(1))
 const f2 = (x) => (x === null || x === undefined ? '-' : Number(x).toFixed(2))
 const pct = (a, n) => (n ? `${Math.round((100 * a) / n)}% (${a}/${n})` : '-')
+
+/**
+ * 숨긴 시험 모두 통과의 칸. 숨긴 쟁점을 판정하지 못한 실행(success: null, 도구 오류)은 분모에서 빼고 따로 적는다
+ * (PR #36 리뷰)
+ */
+export function successCell(outcomes) {
+  const judged = outcomes.filter((o) => o && o.success !== null)
+  const unjudged = outcomes.length - judged.length
+  const cell = pct(judged.filter((o) => o.success).length, judged.length)
+  return unjudged ? `${cell}, 판정 불가 ${unjudged}` : cell
+}
+
+/** 실행 표의 시험 칸: 통과 O, 실패 X, 판정 불가 ? */
+export const checkMark = (c) => (c.pass === null ? '?' : c.pass ? 'O' : 'X')
 const ms = (s) => (s.mean === null ? '-' : `${f1(s.mean)} ± ${f1(s.sd)}`)
 
 /**
@@ -119,7 +133,7 @@ function metricRows(rs) {
   // 지식 파일을 뺀 코드 결과는 실행마다 한 번만 만든다 (PR #29 리뷰)
   const code = new Map(rs.map((r) => [r, codeOutcome(r.outcome)]))
   return [
-    ['숨긴 시험 모두 통과', pct(rs.filter((r) => r.outcome.success).length, n)],
+    ['숨긴 시험 모두 통과', successCell(rs.map((r) => r.outcome))],
     ['레포 시험 통과', pct(rs.filter((r) => r.outcome.repoTestsPass).length, n)],
     ['커밋까지 됨', pct(rs.filter((r) => r.outcome.committed).length, n)],
     ['사람이 끝냄(done)', pct(rs.filter((r) => r.ending === 'done').length, n)],
@@ -392,7 +406,7 @@ export function buildReport(dir) {
           .map((r) => [
             `${r.kind}#${r.index}`,
             r.ending,
-            r.outcome.checks.map((c) => (c.pass ? 'O' : 'X')).join(''),
+            r.outcome.checks.map(checkMark).join(''),
             f1(r.wallMs / 60000),
             r.human.turns,
             f2(r.human.frictionMean),
@@ -454,7 +468,7 @@ function zipRows(sets) {
   return sets[0].map((row, i) => [row[0], ...sets.map((s) => s[i][1])])
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMain(import.meta.url)) {
   const dir = process.argv[2]
   if (!dir) {
     console.error('쓰는 법: node eval/report.mjs <결과 폴더> [--rejudge]')

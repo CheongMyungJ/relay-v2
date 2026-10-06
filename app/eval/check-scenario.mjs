@@ -17,9 +17,8 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { pathToFileURL } from 'node:url'
 import { judgeTree } from './lib/repo.mjs'
-import { copyTree, run } from './lib/util.mjs'
+import { copyTree, isMain, run } from './lib/util.mjs'
 import { isIssue } from './lib/issue-judge.mjs'
 import { allChecks, multiWork, workParts } from './lib/works.mjs'
 
@@ -202,7 +201,7 @@ function checkOne(id) {
 }
 
 // 시험(app/eval/test)이 shapeProblems만 가져다 쓸 때는 돌리지 않는다
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isMain(import.meta.url)) {
   const ids = pick(process.argv[2])
   const ok = ids.map(checkOne).every(Boolean)
   process.exit(ok ? 0 : 1)

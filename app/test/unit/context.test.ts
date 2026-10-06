@@ -1010,10 +1010,15 @@ describe('context.md: 설계 (D350, D358, D365, D374)', () => {
       }),
     )
     const entry = section(md, '되감기로 들어옴 (먼저 읽을 것)')
-    expect(entry).toContain('[현재 문서 위에서 이어서]: 폐기된 시도의 설계 문서 커밋이 남아 있다.')
     expect(entry).toContain(
-      '문서의 결정을 그대로 두고, 사람의 추가 지시와 아래 폐기된 `verification.md`의 `다시 볼 결정`에서 시작한다.',
+      '[현재 문서 위에서 이어서]: 폐기된 시도가 설계 문서에 적은 것이 그대로 남아 있다(커밋했든 안 했든).',
     )
+    // verify를 거치지 않은 되감기도 있으므로 verification.md는 있을 때만 본다 (PR #36 리뷰)
+    expect(entry).toContain(
+      '아래 폐기된 산출물에 `verification.md`가 있으면 그 `다시 볼 결정`도 본다.',
+    )
+    // 폐기된 시도의 사람 결정을 새 handoff에 옮겨 적어 다음 verify의 대조가 맞는다 (I115)
+    expect(entry).toContain('새 handoff의 `decisions`에 `by: human`으로 옮겨 적는다.')
     expect(entry).toContain(`- t-02 spec (설계 문답): ${spec}`)
     expect(entry).toContain(`- t-03 verify (리뷰와 검증): ${verification}`)
   })

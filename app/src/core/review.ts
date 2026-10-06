@@ -466,15 +466,19 @@ export function verdicts(verification: string): Verdict[] {
 }
 
 const REVISIT_SECTION = '다시 볼 결정'
-/** "없음" 한 줄: 목록 표시, 따옴표, 괄호, 마침표는 가리지 않는다 */
-const NONE = /^[-*\s]*[("“]?없음[)"”]?\.?$/
+/** "없음"으로 시작하는 줄: 목록 표시, 따옴표, 괄호는 가리지 않고 뒤의 설명("없음 — …")은 받는다 (PR #36 리뷰) */
+const NONE = /^[-*\s]*[("“]?없음(?![가-힣])/
+/** 템플릿의 안내 줄: `(없으면 "없음")` 꼴. 에이전트가 지우지 않고 남겨도 결정으로 보지 않는다 */
+const HINT = /^\(.*없으면.*\)$/
 
 /**
- * Work 완료 화면의 다시 볼 결정 (시나리오 7-3, D362, I106): 설계 Work의 verification.md `## 다시 볼 결정` 본문. 다른
- * 유형이거나, 절이 없거나 비었거나 "없음"이면 null이다
+ * Work 완료 화면의 다시 볼 결정 (시나리오 7-3, D362, I106): 설계 Work의 verification.md `## 다시 볼 결정` 본문.
+ * 템플릿 안내 줄은 빼고 본다. 다른 유형이거나, 절이 없거나, 남은 줄이 없거나 모두 "없음"이면 null이다
  */
 export function revisitDecisions(type: WorkType, verification: string): string | null {
   if (type !== 'spec') return null
-  const text = sectionText(normalizeText(verification), REVISIT_SECTION)
-  return text && !NONE.test(text) ? text : null
+  const lines = (sectionText(verification, REVISIT_SECTION) ?? '')
+    .split('\n')
+    .filter((l) => l.trim() && !HINT.test(l.trim()))
+  return lines.length && !lines.every((l) => NONE.test(l.trim())) ? lines.join('\n') : null
 }

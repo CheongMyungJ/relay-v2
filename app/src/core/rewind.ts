@@ -159,7 +159,9 @@ export function planStep(work: WorkState, node: NodeName, opts: StepOptions = {}
   const keepCodeOffered = kind === 'rewind' && KEEP_CODE_NODES[type].includes(node)
   if (opts.keepCode && !keepCodeOffered) {
     const nodes = KEEP_CODE_NODES[type].join(', ')
-    return { ok: false, error: `[현재 코드 위에서 이어서]는 ${nodes}로 되감을 때만 고를 수 있음` }
+    // 이름은 그 유형이 주는 단계의 것이다. 설계면 [현재 문서 위에서 이어서]다 (PR #36 리뷰)
+    const label = keepLabel(type, KEEP_CODE_NODES[type][0] ?? node)
+    return { ok: false, error: `[${label}]는 ${nodes}로 되감을 때만 고를 수 있음` }
   }
   const changed = opts.type && opts.type !== type ? opts.type : null
   if (changed && !typeChangeAllowed(work, node)) {

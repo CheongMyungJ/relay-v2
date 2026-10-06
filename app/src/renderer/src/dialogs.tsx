@@ -21,7 +21,7 @@ import {
   type AutoApproveNode,
   type QuestionMode,
   type SettingGroup,
-  type SkillName,
+  type QuestionSkill,
   type ThemeChoice,
   type WorkSettings,
 } from '../../shared/config'
@@ -532,7 +532,7 @@ function Groups<K extends string>({
 
 // ---------- 질문 방식 (5.6.1, D26, D72) ----------
 
-type Overrides = Partial<Record<SkillName, QuestionMode>>
+type Overrides = Partial<Record<QuestionSkill, QuestionMode>>
 
 /** 앱 설정. 대화상자를 열 때 읽는다 */
 function useConfig(): AppConfig | null {
@@ -557,7 +557,7 @@ function QuestionModes({
   value: Overrides
   onChange: (v: Overrides) => void
 }) {
-  const set = (skill: SkillName, mode: string) => {
+  const set = (skill: QuestionSkill, mode: string) => {
     const rest = Object.fromEntries(Object.entries(value).filter(([k]) => k !== skill))
     onChange(mode ? { ...rest, [skill]: mode as QuestionMode } : rest)
   }
@@ -1141,6 +1141,8 @@ export function StepDialog({
   const choice = work.steps.find((c) => c.node === node)
   // [현재 코드 위에서 이어서]는 되감기로 KEEP_CODE_NODES의 단계를 고를 때만 있다 (6.2, D254)
   const keepOffered = choice?.keepCode === true
+  // 보내는 값은 줄 수 있는 단계일 때만 참이다. 체크 상태가 남아 있어도 다른 단계로 보내지 않는다 (PR #36 리뷰)
+  const keep = keepOffered && keepCode
   // 유형은 의도 승인 전 [intake 다시]에서만 고른다 (D237)
   const typeOffered = choice?.typeChange === true
   const chosenType = typeOffered ? type : work.type
@@ -1151,18 +1153,16 @@ export function StepDialog({
   useEffect(() => {
     if (!node) return
     let stale = false
-    void call(() => window.relay.stepPreview(work.key, node, keepCode, chosenType)).then(
-      (result) => {
-        if (!stale) setPreview({ node, keepCode, type: chosenType, result })
-      },
-    )
+    void call(() => window.relay.stepPreview(work.key, node, keep, chosenType)).then((result) => {
+      if (!stale) setPreview({ node, keepCode: keep, type: chosenType, result })
+    })
     return () => {
       stale = true
     }
-  }, [work.key, work.revision, node, keepCode, chosenType])
+  }, [work.key, work.revision, node, keep, chosenType])
 
   const current =
-    preview && preview.node === node && preview.keepCode === keepCode && preview.type === chosenType
+    preview && preview.node === node && preview.keepCode === keep && preview.type === chosenType
       ? preview
       : null
   const shown = current?.result.ok ? current.result.preview : null
@@ -1181,7 +1181,7 @@ export function StepDialog({
     const r = await call(() =>
       window.relay.selectStep(work.key, {
         node: shown.node,
-        keepCode,
+        keepCode: keep,
         instruction,
         expect: shown.expect,
         ...(chosenType !== work.type ? { type: chosenType } : {}),

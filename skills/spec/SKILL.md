@@ -10,7 +10,7 @@ For a spec Work, settle with the human, one by one, what the intent says to deci
 ## Inputs
 
 - The argument gives the path of `context.md`. Read it first. It has the intent and the Work's base commit. The target document's path is in the intent's `제약` ("설계 문서: `<path>` (새 문서 / 기존 문서)"). If you need the request text, read `request.md` at the path in `context.md`.
-- **Continuing on the current document** (chosen when rewinding to spec): keep the decisions in the document as they are. Start from the human's extra instructions and `다시 볼 결정` in the discarded `verification.md` (path in `context.md`). Read the discarded `spec.md` and write a new `spec.md`.
+- **Continuing on the current document** (chosen when rewinding to spec): keep the decisions in the document as they are. Start from the human's extra instructions, and from `다시 볼 결정` in the discarded `verification.md` if there is one (paths in `context.md`). Read the discarded `spec.md` and write a new `spec.md`. Copy the decisions the human made in the discarded attempt (its `handoff.md` next to the discarded `spec.md`, or its `문답 기록`) into `decisions` with `by: human`, so the human-decision marks in the document still match your handoff.
 
 ## Order
 
@@ -39,7 +39,7 @@ For a spec Work, settle with the human, one by one, what the intent says to deci
 - **Writing the document:** write each decision as soon as you get it, so the document keeps it even if this conversation is compacted. Every decision has a reason. Mark the decisions the human made. Put what is left undecided in a separate section, with the reason. Otherwise follow the target document's conventions: for an existing document, use its decision table and numbering; for a new one, use the template below. The app does not check the format.
 - **Experiments:** do not guess how a tool or the current code behaves. Read its docs or run it. Revert the experimental code and temporary files when you close. Write what you checked and how in the reason of that decision and in `확인한 것` of `spec.md`.
 - **Knowledge:** design decisions are not knowledge candidates: they live only in the design document. Put in `knowledge_candidates` only what the human told you that holds beyond this design (a rule, a convention, a business fact, e.g. "스키마 변경은 마이그레이션 PR을 따로 낸다").
-- **Commit:** this step changes the target document. Commit it before you close. Do not change any other file.
+- **Commit:** this step changes the target document. Commit it before you close. Do not change any other file. Knowledge files are not yours to write: verify writes them from your `knowledge_candidates`.
 - **Intent conflict:** if "<무엇>을 정한다" items conflict or cannot be decided (e.g. it depends on an outside condition not known yet), ask the human. If they leave it undecided, write it in the undecided section. If the intent must change, write it in `intent_deviation` and set `recommended_next` to `intake`.
 
 ## Decision points

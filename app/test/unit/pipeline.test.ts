@@ -108,6 +108,22 @@ describe('노드 (3.1)', () => {
     }
     // 같은 노드라도 설계 Work가 아니면 아니다
     expect(keepDefault('bugfix', 'spec')).toBe(false)
+    // 처음 체크되는 단계는 늘 [현재 코드 위에서 이어서]를 주는 단계다: 한 표(KEEP_CODE)에서 나온다 (PR #36 리뷰)
+    for (const type of Object.keys(KEEP_CODE_NODES) as WorkType[]) {
+      for (const node of [
+        'intake',
+        'fix',
+        'design',
+        'implement',
+        'refactor',
+        'spec',
+        'execute',
+        'verify',
+      ] as const) {
+        if (keepDefault(type, node))
+          expect(KEEP_CODE_NODES[type], `${type} ${node}`).toContain(node)
+      }
+    }
   })
 })
 

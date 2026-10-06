@@ -3,9 +3,10 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import { shapeProblems } from '../check-scenario.mjs'
-import { combineChecks } from '../lib/episode.mjs'
+import { combineChecks, outcomeSuccess } from '../lib/episode.mjs'
 import {
   dialogueFromTranscript,
   isIssue,
@@ -16,6 +17,8 @@ import {
 import { outcomeCriteria } from '../lib/judge.mjs'
 import { words } from '../lib/kind.mjs'
 import { judgeTree } from '../lib/repo.mjs'
+import { isMain } from '../lib/util.mjs'
+import { checkMark, successCell } from '../report.mjs'
 
 const dirs = []
 const tmp = () => {
@@ -323,5 +326,59 @@ describe('설계의 낱말과 결과 판정 기준 (I111, I112)', () => {
     expect(outcomeCriteria({ type: 'spec' })).toContain('숨긴 쟁점의 판정을 참고')
     expect(outcomeCriteria({ type: 'spec' })).toContain('설계 문서만 바꾸고 코드는 바꾸지 않았나')
     expect(outcomeCriteria({})).toContain('숨긴 시험을 참고하되 코드도 보라')
+  })
+})
+
+describe('판정 불가 (PR #36 리뷰)', () => {
+  it('쟁점을 판정하지 못한 폴더(pass: null)만 있으면 그 쟁점은 판정 불가다. 통과한 폴더가 있으면 통과다', () => {
+    const defs = [
+      { name: '쟁점', issue: '…' },
+      { name: '범위', guard: true, scope: true },
+    ]
+    const tree = (pass) => ({
+      files: [{ file: 'docs/a.md' }],
+      checks: [
+        { name: '쟁점', pass },
+        { name: '범위', pass: true },
+      ],
+    })
+    expect(combineChecks(defs, [tree(null)]).map((c) => c.pass)).toEqual([null, true])
+    expect(combineChecks(defs, [tree(null), tree(true)]).map((c) => c.pass)).toEqual([true, true])
+    expect(combineChecks(defs, [tree(false)]).map((c) => c.pass)).toEqual([false, true])
+  })
+
+  it('실행의 성공: 실패가 있으면 false, 실패 없이 판정 불가가 있으면 null, 모두 통과면 true', () => {
+    expect(outcomeSuccess([{ pass: true }, { pass: true }])).toBe(true)
+    expect(outcomeSuccess([{ pass: true }, { pass: null }])).toBeNull()
+    expect(outcomeSuccess([{ pass: false }, { pass: null }])).toBe(false)
+    expect(outcomeSuccess([])).toBe(false)
+    expect(outcomeSuccess([{ pass: true }], false)).toBe(false)
+  })
+
+  it('보고서는 판정 불가를 분모에서 빼고 따로 적으며, 실행 표에 ?로 보인다', () => {
+    expect(successCell([{ success: true }, { success: false }, { success: null }])).toBe(
+      '50% (1/2), 판정 불가 1',
+    )
+    expect(successCell([{ success: true }, { success: true }])).toBe('100% (2/2)')
+    expect([{ pass: true }, { pass: false }, { pass: null }].map(checkMark).join('')).toBe('OX?')
+  })
+})
+
+describe('진입점 (PR #36 리뷰)', () => {
+  it('symlink로 부른 스크립트도 바로 돌린 것으로 본다. 다른 파일이면 아니다', () => {
+    const dir = tmp()
+    const real = path.join(dir, 'real.mjs')
+    fs.writeFileSync(real, '')
+    const link = path.join(dir, 'link.mjs')
+    fs.symlinkSync(real, link)
+    const argv = process.argv[1]
+    try {
+      process.argv[1] = link
+      expect(isMain(pathToFileURL(real).href)).toBe(true)
+      process.argv[1] = path.join(dir, 'other.mjs')
+      expect(isMain(pathToFileURL(real).href)).toBe(false)
+    } finally {
+      process.argv[1] = argv
+    }
   })
 })

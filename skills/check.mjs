@@ -386,7 +386,7 @@ const spec = {
   ],
   spec: [
     ['5.6.12', '입력: context.md, 대상 문서는 intent 제약, request.md 경로', /`context\.md`[\s\S]*target document's path is in the intent's `제약`[\s\S]*`request\.md`/],
-    ['D365', '현재 문서 위에서 이어서: 결정은 그대로, 추가 지시와 폐기된 verification.md의 다시 볼 결정에서 시작, 폐기된 spec.md를 읽고 새로', /Continuing on the current document[\s\S]*keep the decisions[\s\S]*extra instructions and `다시 볼 결정` in the discarded `verification\.md`[\s\S]*discarded `spec\.md`[\s\S]*new `spec\.md`/],
+    ['D365', '현재 문서 위에서 이어서: 결정은 그대로, 추가 지시와 (있으면) 폐기된 verification.md의 다시 볼 결정에서 시작, 폐기된 spec.md를 읽고 새로, 사람 결정을 옮겨 적음(I115)', /Continuing on the current document[\s\S]*keep the decisions[\s\S]*extra instructions, and from `다시 볼 결정` in the discarded `verification\.md` if there is one[\s\S]*discarded `spec\.md`[\s\S]*new `spec\.md`[\s\S]*Copy the decisions the human made in the discarded attempt[\s\S]*`by: human`/],
     ['D357', '순서: 읽기 → 주제 목록 확인 → 주제마다 설명과 질문 묶음 → 받을 때마다 문서 → 다시 읽기 → 커밋', /\*\*Read\*\* the code and the target document[\s\S]*\*\*Topic list:\*\*[\s\S]*confirmed[\s\S]*\*\*Each topic:\*\*[\s\S]*question batch[\s\S]*\*\*Write\*\* each decision[\s\S]*as soon as[\s\S]*\*\*Re-read\*\* the whole document[\s\S]*\*\*Commit\*\* the target document/],
     ['D354', '주제 목록: "정한다" 항목에 코드에서 찾은 쟁점을 더함', /"<무엇>을 정한다" items and add the issues you found reading the code/],
     ['D366', '주제 목록 끝에 구현 나눔(Work 단위의 조각, 순서, 조각마다 목표)', /End the list with "구현 나눔"[\s\S]*split into Works[\s\S]*order[\s\S]*goal/],
@@ -400,6 +400,7 @@ const spec = {
     ['D359', '형식 셋: 결정마다 이유, 사람 결정 표시, 정하지 않은 것의 절. 나머지는 관례, 기존 문서는 그 표와 번호, 새 문서는 템플릿, 앱은 검사 안 함', /Every decision has a reason[\s\S]*Mark the decisions the human made[\s\S]*undecided in a separate section[\s\S]*conventions[\s\S]*existing document, use its decision table and numbering[\s\S]*new one, use the template[\s\S]*app does not check the format/],
     ['D360', '실험: 추측하지 않고 확인, 되돌림, 결정의 이유와 확인한 것에', /do not guess how a tool or the current code behaves[\s\S]*Revert the experimental code and temporary files[\s\S]*reason of that decision and in `확인한 것`/],
     ['D361', '지식: 설계 결정은 후보 아님, 설계 밖에서도 통하는 것만', /design decisions are not knowledge candidates[\s\S]*`knowledge_candidates` only what the human told you that holds beyond this design/],
+    ['D361', '지식 파일은 verify가 씀(spec은 대상 문서만)', /Knowledge files are not yours to write: verify writes them from your `knowledge_candidates`/],
     ['D374', '커밋: 대상 문서를 커밋, 그 밖의 파일은 바꾸지 않음', /changes the target document\. Commit it before you close\. Do not change any other file/],
     ['5.6.12', 'intent와 어긋날 때: 물음, 정하지 않은 것, intent_deviation과 intake', /conflict or cannot be decided[\s\S]*ask the human[\s\S]*undecided section[\s\S]*`intent_deviation`[\s\S]*`recommended_next` to `intake`/],
     ['5.6.12', '결정 지점: 주제 목록과 순서, 주제마다의 결정. 모두 물음', /The topic list and its order, and every decision of each topic\. Ask the human about all of them/],

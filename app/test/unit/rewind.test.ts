@@ -612,5 +612,10 @@ describe('설계 (D350, D365, I105)', () => {
     expect(stepPreview(w, keep, facts).code).toMatchObject({ kind: 'keep', commits: 0 })
     expect(stepPreview(w, reset, facts).code).toMatchObject({ kind: 'reset', commits: 2 })
     expect(planStep(w, 'design')).toEqual({ ok: false, error: '설계 Work의 단계가 아님' })
+    // 줄 수 없는 단계에 체크를 보내면 거부하고, 이름은 설계의 것이다 (PR #36 리뷰)
+    expect(planStep(w, 'intake', { keepCode: true })).toEqual({
+      ok: false,
+      error: '[현재 문서 위에서 이어서]는 spec로 되감을 때만 고를 수 있음',
+    })
   })
 })

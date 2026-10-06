@@ -30,19 +30,35 @@ const DEFAULT_WAIT_S = 60
 /**
  * 숨긴 시험을 결과 폴더들에 모은다. 고친 것을 보는 시험은 결과 폴더 하나라도 통과하면 통과다(relay는 버그마다 Work를
  * 따로 만들 수 있다). guard 시험(멀쩡한 동작을 지키는지)은 바뀐 결과 폴더 모두에서 통과해야 한다. 바뀐 폴더가 없으면
- * 모든 폴더를 본다
+ * 모든 폴더를 본다. 숨긴 쟁점을 판정하지 못한 폴더(pass: null, 판정 모델 오류)가 있으면 통과한 폴더가 없을 때 판정
+ * 불가(null)다 (PR #36 리뷰)
  */
 export function combineChecks(defs, final) {
   const changedTrees = final.filter((f) => f.files.length > 0)
   const guardTrees = changedTrees.length ? changedTrees : final
-  const passIn = (f, name) => !!f.checks.find((c) => c.name === name)?.pass
+  const entry = (f, name) => f.checks.find((c) => c.name === name)
+  const passIn = (f, name) => !!entry(f, name)?.pass
   return defs.map((c) => ({
     name: c.name,
     guard: !!c.guard,
     pass: c.guard
       ? guardTrees.length > 0 && guardTrees.every((f) => passIn(f, c.name))
-      : final.some((f) => passIn(f, c.name)),
+      : final.some((f) => passIn(f, c.name))
+        ? true
+        : final.some((f) => entry(f, c.name)?.pass === null)
+          ? null
+          : false,
   }))
+}
+
+/**
+ * 실행의 성공: 숨긴 시험(과 쟁점)이 모두 통과다. 실패가 하나라도 있으면 false, 실패는 없는데 판정 불가(null)가 있으면
+ * null이다(도구 오류라 성공도 실패도 아니다, PR #36 리뷰)
+ */
+export function outcomeSuccess(checks, complete = true) {
+  if (!checks.length || checks.some((c) => c.pass === false)) return false
+  if (checks.some((c) => c.pass === null)) return null
+  return complete
 }
 
 /**
@@ -268,7 +284,7 @@ export async function runEpisode(o) {
         }))
         const checks = combineChecks(ws.checks, judged)
         r.outcome = {
-          success: checks.length > 0 && checks.every((c) => c.pass),
+          success: outcomeSuccess(checks),
           checks,
           trees: judged.map((j) => ({
             label: j.label,
@@ -637,6 +653,12 @@ export async function runEpisode(o) {
     } catch (e) {
       say(`숨긴 쟁점 판정 실패: ${String(e).slice(0, 300)}`)
       error = `${error ?? ''}\n숨긴 쟁점 판정 실패: ${e}`
+      // 판정하지 못한 쟁점은 실패가 아니라 판정 불가다. 성공과 통과율에서 빼고 보고서에 따로 센다 (PR #36 리뷰)
+      for (const f of final)
+        if (f.files.length > 0)
+          f.checks = f.checks.map((c) =>
+            c.issue && c.pending ? { ...c, pass: null, output: '판정 모델 오류' } : c,
+          )
     }
   }
 
@@ -670,10 +692,10 @@ export async function runEpisode(o) {
     firstChangeMs: firstChangeAt ? firstChangeAt - t0 : null,
     outcome: {
       // Work 둘을 잇는 시나리오는 모든 Work를 돌려 판정했을 때만 성공이다. 앞 Work에서 멈추면 재는 Work의 시험이 없다
-      success:
-        checks.length > 0 &&
-        checks.every((c) => c.pass) &&
-        (!multi || (workResults.length === parts.length && workResults.every((r) => r.outcome))),
+      success: outcomeSuccess(
+        checks,
+        !multi || (workResults.length === parts.length && workResults.every((r) => !!r.outcome)),
+      ),
       checks,
       repoTestsPass: changedTrees.length > 0 && changedTrees.every((f) => f.repoTests.pass),
       filesChanged: [...new Set(changedTrees.flatMap((f) => f.files.map((x) => x.file)))],

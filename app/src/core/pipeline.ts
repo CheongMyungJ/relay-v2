@@ -42,55 +42,61 @@ const CONTINUE =
   '[현재 코드 위에서 이어서]: 폐기된 시도의 커밋이 남아 있다. 그 위에서 이어서 고친다.'
 
 /**
- * [현재 코드 위에서 이어서](6.2)를 주는 단계와 그 단계의 context.md 안내 (6.2, D254, D278, PR #24 리뷰). 단계를 이 표에
- * 더하면 안내도 함께 써야 하므로 빠뜨릴 수 없다. design은 코드를 바꾸지 않고 design.md만 고치며, 이어지는 implement가
- * 그 코드 위에서 고친다. refactor는 안전망 커밋을 다시 만들지 않고 폐기된 refactor.md의 해시를 이어 적는다. execute는
- * 폐기된 execution.md를 참고해 새 execution.md를 쓴다 (D316, I85). spec은 [현재 문서 위에서 이어서]이고, 문서의 결정을
- * 그대로 두고 사람의 추가 지시와 폐기된 verification.md의 다시 볼 결정에서 시작한다 (D365, I105)
+ * [현재 코드 위에서 이어서](6.2)를 주는 단계 하나: context.md 안내와, 이름이 "현재 문서 위에서 이어서"이고 처음부터
+ * 체크되어 있는지(doc). 코드 처리(백업 브랜치, 커밋 유지)는 doc이어도 같다 (D365, I105)
  */
-export const KEEP_CODE_NOTES: Readonly<
-  Record<WorkType, Readonly<Partial<Record<NodeName, string>>>>
-> = {
-  bugfix: { fix: CONTINUE },
-  feature: {
-    design:
-      '[현재 코드 위에서 이어서]: 폐기된 시도의 커밋이 남아 있다. 지금 코드를 읽고 `design.md`를 고친다. 코드는 바꾸지 않는다. 이어지는 구현이 그 코드 위에서 고친다.',
-    implement: CONTINUE,
-  },
-  refactor: {
-    refactor: `${CONTINUE} 안전망 커밋은 다시 만들지 않는다. 아래 폐기된 \`refactor.md\`의 \`안전망 커밋\` 해시를 새 \`refactor.md\`에 그대로 적는다. 더 필요한 안전망 테스트는 구조를 더 바꾸기 전에 따로 커밋하고 표에 (추가)로 적으며, 기준 코드 결과는 안전망 커밋에 그 테스트 파일만 얹어 돌려 얻는다(스킬의 절차).`,
-  },
-  spec: {
-    spec: '[현재 문서 위에서 이어서]: 폐기된 시도의 설계 문서 커밋이 남아 있다. 문서의 결정을 그대로 두고, 사람의 추가 지시와 아래 폐기된 `verification.md`의 `다시 볼 결정`에서 시작한다. 아래 폐기된 `spec.md`를 참고해 새 `spec.md`를 쓴다.',
-  },
-  general: {
-    execute: `${CONTINUE} 아래 폐기된 \`execution.md\`를 참고해 새 \`execution.md\`를 쓴다.`,
-  },
+export interface KeepCode {
+  note: string
+  doc?: true
 }
 
 /**
- * [현재 코드 위에서 이어서]를 주는 단계 (6.2). KEEP_CODE_NOTES에서 나오므로 유형을 더해도 여기는 고치지 않는다
+ * [현재 코드 위에서 이어서](6.2)를 주는 단계와 그 단계의 context.md 안내 (6.2, D254, D278, PR #24 리뷰). 제공 여부, 안내,
+ * 이름과 처음 체크가 한 표에서 나오므로 단계를 더할 때 어긋나지 않는다 (PR #36 리뷰). design은 코드를 바꾸지 않고
+ * design.md만 고치며, 이어지는 implement가 그 코드 위에서 고친다. refactor는 안전망 커밋을 다시 만들지 않고 폐기된
+ * refactor.md의 해시를 이어 적는다. execute는 폐기된 execution.md를 참고해 새 execution.md를 쓴다 (D316, I85). spec은
+ * [현재 문서 위에서 이어서]이고 처음부터 체크되어 있다. 문서의 결정을 그대로 두고 사람의 추가 지시에서 시작하며, verify에서
+ * 되감아 폐기된 verification.md가 있으면 그 다시 볼 결정도 본다. 폐기된 시도의 사람 결정은 새 handoff에 옮겨 적는다
+ * (D365, I105, I115)
+ */
+export const KEEP_CODE: Readonly<Record<WorkType, Readonly<Partial<Record<NodeName, KeepCode>>>>> =
+  {
+    bugfix: { fix: { note: CONTINUE } },
+    feature: {
+      design: {
+        note: '[현재 코드 위에서 이어서]: 폐기된 시도의 커밋이 남아 있다. 지금 코드를 읽고 `design.md`를 고친다. 코드는 바꾸지 않는다. 이어지는 구현이 그 코드 위에서 고친다.',
+      },
+      implement: { note: CONTINUE },
+    },
+    refactor: {
+      refactor: {
+        note: `${CONTINUE} 안전망 커밋은 다시 만들지 않는다. 아래 폐기된 \`refactor.md\`의 \`안전망 커밋\` 해시를 새 \`refactor.md\`에 그대로 적는다. 더 필요한 안전망 테스트는 구조를 더 바꾸기 전에 따로 커밋하고 표에 (추가)로 적으며, 기준 코드 결과는 안전망 커밋에 그 테스트 파일만 얹어 돌려 얻는다(스킬의 절차).`,
+      },
+    },
+    spec: {
+      spec: {
+        note: '[현재 문서 위에서 이어서]: 폐기된 시도가 설계 문서에 적은 것이 그대로 남아 있다(커밋했든 안 했든). 문서의 결정을 그대로 두고 사람의 추가 지시에서 시작한다. 아래 폐기된 산출물에 `verification.md`가 있으면 그 `다시 볼 결정`도 본다. 폐기된 `spec.md`를 참고해 새 `spec.md`를 쓰고, 폐기된 시도에서 사람이 정한 결정(폐기된 `spec.md` 옆의 `handoff.md`나 `문답 기록`)을 새 handoff의 `decisions`에 `by: human`으로 옮겨 적는다.',
+        doc: true,
+      },
+    },
+    general: {
+      execute: {
+        note: `${CONTINUE} 아래 폐기된 \`execution.md\`를 참고해 새 \`execution.md\`를 쓴다.`,
+      },
+    },
+  }
+
+/**
+ * [현재 코드 위에서 이어서]를 주는 단계 (6.2). KEEP_CODE에서 나오므로 유형을 더해도 여기는 고치지 않는다
  * (PR #29 리뷰)
  */
 export const KEEP_CODE_NODES: Readonly<Record<WorkType, readonly NodeName[]>> = Object.fromEntries(
-  WORK_TYPES.map((t) => [t, Object.keys(KEEP_CODE_NOTES[t]) as NodeName[]]),
+  WORK_TYPES.map((t) => [t, Object.keys(KEEP_CODE[t]) as NodeName[]]),
 ) as Record<WorkType, NodeName[]>
-
-/**
- * [현재 코드 위에서 이어서] 대신 [현재 문서 위에서 이어서]를 주는 단계 (D365, I105). 코드 처리(백업 브랜치, 커밋 유지)는
- * 같고 이름과 처음 체크만 다르다. 유형마다 키가 있어 유형을 더할 때 빠뜨리지 않는다
- */
-const KEEP_DOC_NODES: Readonly<Record<WorkType, readonly NodeName[]>> = {
-  bugfix: [],
-  feature: [],
-  refactor: [],
-  spec: ['spec'],
-  general: [],
-}
 
 /** 단계 선택 대화상자의 [현재 코드 위에서 이어서] 이름. 설계의 spec은 [현재 문서 위에서 이어서]다 (D365, I105) */
 export function keepLabel(type: WorkType, node: NodeName): string {
-  return KEEP_DOC_NODES[type].includes(node) ? '현재 문서 위에서 이어서' : '현재 코드 위에서 이어서'
+  return KEEP_CODE[type][node]?.doc ? '현재 문서 위에서 이어서' : '현재 코드 위에서 이어서'
 }
 
 /**
@@ -98,7 +104,7 @@ export function keepLabel(type: WorkType, node: NodeName): string {
  * 대부분 결정 한두 개를 다시 보는 것이다 (D365, I105)
  */
 export function keepDefault(type: WorkType, node: NodeName): boolean {
-  return KEEP_DOC_NODES[type].includes(node)
+  return KEEP_CODE[type][node]?.doc === true
 }
 
 /** PR 대응 task의 노드 (D187). 파이프라인 밖이다 (D188) */
