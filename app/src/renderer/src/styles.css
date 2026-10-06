@@ -1282,7 +1282,8 @@ fieldset.field {
   align-items: start;
 }
 
-.effort-select {
+.effort-select,
+.model-select {
   display: grid;
   gap: 4px;
 }

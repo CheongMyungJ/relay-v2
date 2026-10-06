@@ -10,6 +10,8 @@ import {
   AGENT_MODELS,
   changeDefaultEngine,
   changeDefaultModel,
+  changeStepEngine,
+  customModel,
   effortsFor,
   setAgentStep,
   stepModel,
@@ -766,7 +768,13 @@ const NUMBERS: [NumberKey, string, string][] = [
   ],
 ]
 
-/** 엔진의 모델 고르기. 첫 선택지(빈 값)는 엔진 기본이나 기본 따름이다 */
+/** 모델 고르기에서 직접 입력을 뜻하는 값. 모델 이름에 쓸 수 없는 띄어쓰기로 시작한다 */
+const CUSTOM_OPTION = ' custom'
+
+/**
+ * 엔진의 모델 고르기. 첫 선택지(빈 값)는 엔진 기본이나 기본 따름이다. 목록에 없는 모델은 [직접 입력]으로 쓸 수 있고, 앱이
+ * 확인하지 않는다고 알린다
+ */
 function ModelSelect(props: {
   label: string
   engine: AgentEngine
@@ -774,19 +782,42 @@ function ModelSelect(props: {
   empty: string
   onChange: (model: string) => void
 }) {
+  const [typing, setTyping] = useState(false)
+  const custom = typing || customModel(props.engine, props.value)
   return (
-    <select
-      aria-label={props.label}
-      value={props.value}
-      onChange={(e) => props.onChange(e.target.value)}
-    >
-      <option value="">{props.empty}</option>
-      {AGENT_MODELS[props.engine].map((m) => (
-        <option key={m.id} value={m.id}>
-          {m.label}
-        </option>
-      ))}
-    </select>
+    <span className="model-select">
+      <select
+        aria-label={props.label}
+        value={custom ? CUSTOM_OPTION : props.value}
+        onChange={(e) => {
+          const picked = e.target.value
+          setTyping(picked === CUSTOM_OPTION)
+          props.onChange(picked === CUSTOM_OPTION ? '' : picked)
+        }}
+      >
+        <option value="">{props.empty}</option>
+        {AGENT_MODELS[props.engine].map((m) => (
+          <option key={m.id} value={m.id}>
+            {m.label}
+          </option>
+        ))}
+        <option value={CUSTOM_OPTION}>직접 입력…</option>
+      </select>
+      {custom ? (
+        <>
+          <input
+            aria-label={`${props.label} 직접 입력`}
+            placeholder="모델 이름"
+            value={props.value}
+            onChange={(e) => props.onChange(e.target.value.trim())}
+          />
+          <span className="dim">
+            직접 입력한 모델은 앱이 확인하지 않습니다. 이름이 틀리거나 고른 추론 수준을 받지 않으면
+            CLI가 실패할 수 있습니다.
+          </span>
+        </>
+      ) : null}
+    </span>
   )
 }
 
@@ -817,9 +848,12 @@ function EffortSelect(props: {
         ))}
       </select>
       {none ? <span className="dim">이 모델은 추론 수준을 지원하지 않음</span> : null}
-      {!none && props.model === '' && props.value !== '' ? (
+      {!none &&
+      props.value !== '' &&
+      (props.model === '' || customModel(props.engine, props.model)) ? (
         <span className="dim">
-          엔진 기본 모델이 이 수준을 받지 않으면 CLI가 거절하거나 무시할 수 있음
+          {props.model === '' ? '엔진 기본 모델' : '직접 입력한 모델'}이 이 수준을 받지 않으면 CLI가
+          거절하거나 무시할 수 있음
         </span>
       ) : null}
     </span>
@@ -1028,10 +1062,13 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                         aria-label={`${title} 엔진`}
                         value={step.engine ?? ''}
                         onChange={(e) =>
-                          set({
-                            ...step,
-                            engine: (e.target.value || undefined) as AgentEngine | undefined,
-                          })
+                          set(
+                            changeStepEngine(
+                              value,
+                              step,
+                              (e.target.value || undefined) as AgentEngine | undefined,
+                            ),
+                          )
                         }
                       >
                         <option value="">앱 기본 따름</option>

@@ -8,6 +8,7 @@ import {
   AGENT_MODELS,
   changeDefaultEngine,
   changeDefaultModel,
+  changeStepEngine,
   effortsFor,
   fitAgent,
   resolveAgent,
@@ -406,5 +407,64 @@ describe('[단위] 설정 화면의 엔진·모델·추론 수준 바꾸기 (F4,
       agent_steps: next.agent_steps,
     }
     expect(applyConfigPatch(base, patch).ok).toBe(true)
+  })
+})
+
+describe('[단위] 직접 입력한 모델', () => {
+  it('목록에 없는 모델 이름도 쓸 수 있고, 받는 추론 수준을 몰라 엔진의 전체 수준을 고를 수 있다', () => {
+    const r = applyConfigPatch(DEFAULT_CONFIG, {
+      agent_model: 'claude-opus-5-5[1m]',
+      agent_effort: 'max',
+      agent_steps: { implement: { engine: 'codex', model: 'gpt-7-preview', effort: 'ultra' } },
+    })
+    expect(r).toMatchObject({ ok: true })
+    if (!r.ok) return
+    expect(effortsFor('codex', 'gpt-7-preview')).toContain('ultra')
+    expect(resolveAgent(r.value, 'design')).toEqual({
+      engine: 'claude',
+      model: 'claude-opus-5-5[1m]',
+      effort: 'max',
+    })
+    expect(resolveAgent(r.value, 'implement')).toEqual({
+      engine: 'codex',
+      model: 'gpt-7-preview',
+      effort: 'ultra',
+    })
+  })
+
+  it('CLI 인자로 넘어가므로 띄어쓰기, 셸 글자, -로 시작하는 이름은 거절한다. 다른 엔진의 모델도 거절한다', () => {
+    for (const model of ['my model', 'a&b', 'x"y', '-p', 'a|b', '%PATH%', 'x'.repeat(101)]) {
+      const r = applyConfigPatch(DEFAULT_CONFIG, { agent_model: model })
+      expect(r.ok, model).toBe(false)
+      if (!r.ok) expect(r.error).toContain('직접 입력한 모델')
+    }
+    expect(applyConfigPatch(DEFAULT_CONFIG, { agent_model: 'gpt-6-sol' }).ok).toBe(false)
+    expect(applyConfigPatch(DEFAULT_CONFIG, { agent_steps: { design: { model: 'a;b' } } }).ok).toBe(
+      false,
+    )
+  })
+
+  it('엔진이 바뀌는 줄의 직접 입력한 모델은 비우고, 엔진이 그대로인 단계는 둔다', () => {
+    const c = {
+      ...DEFAULT_CONFIG,
+      agent_model: 'my-claude',
+      agent_steps: {
+        design: { model: 'my-claude', effort: 'high' },
+        verify: { engine: 'claude' as const, model: 'my-claude' },
+      },
+    }
+    const next = changeDefaultEngine(c, 'codex')
+    expect(next.agent_model).toBe('')
+    expect(next.agent_steps).toEqual({
+      design: { effort: 'high' },
+      verify: { engine: 'claude', model: 'my-claude' },
+    })
+    expect(changeStepEngine(c, c.agent_steps.design, 'codex')).toMatchObject({
+      engine: 'codex',
+      model: '',
+    })
+    expect(changeStepEngine(c, c.agent_steps.design, 'claude')).toMatchObject({
+      model: 'my-claude',
+    })
   })
 })

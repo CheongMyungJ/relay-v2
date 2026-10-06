@@ -62,15 +62,36 @@ export const ENGINE_DEFAULT_EFFORTS: Readonly<Record<AgentEngine, readonly Agent
   codex: AGENT_EFFORTS,
 }
 
-/** 그 엔진에 있는 모델인가. 빈 값은 엔진 기본이라 늘 있다 */
-export function modelKnown(engine: AgentEngine, model: string): boolean {
+/** 그 엔진의 고정 목록에 있는 모델인가. 빈 값은 엔진 기본이라 늘 있다 */
+export function modelListed(engine: AgentEngine, model: string): boolean {
   return model === '' || AGENT_MODELS[engine].some((m) => m.id === model)
 }
 
-/** 엔진·모델이 받는 추론 수준. 빈 목록이면 추론 수준을 지원하지 않는다 */
+/** 그 엔진에는 없고 다른 엔진의 목록에 있는 모델인가. 엔진을 바꾼 뒤 남은 모델이라 늘 틀리다 */
+function foreignModel(engine: AgentEngine, model: string): boolean {
+  return !modelListed(engine, model) && AGENT_ENGINES.some((e) => modelListed(e, model))
+}
+
+/**
+ * 직접 입력한 모델 이름의 모양. 앱은 그 모델이 있는지, 어떤 추론 수준을 받는지 확인하지 않는다(사람이 정함: 허용하되 앱이
+ * 보장하지 않는다고 알린다). 이름은 CLI 인자로 넘어가고 Windows에서는 cmd.exe를 거치므로(adapters/exec.ts) 영문·숫자로
+ * 시작하고 영문·숫자와 . _ - : / @ [ ]만 쓴다
+ */
+const CUSTOM_MODEL = /^[A-Za-z0-9][A-Za-z0-9._:/@[\]-]{0,99}$/
+
+/** 직접 입력한 모델인가: 비어 있지 않고 그 엔진의 목록에 없다 */
+export function customModel(engine: AgentEngine, model: string): boolean {
+  return !modelListed(engine, model)
+}
+
+/**
+ * 엔진·모델이 받는 추론 수준. 빈 목록이면 추론 수준을 지원하지 않는다. 엔진 기본과 직접 입력한 모델은 받는 수준을 몰라
+ * 엔진의 전체 수준이고, 다른 엔진의 모델은 쓸 수 없어 없다
+ */
 export function effortsFor(engine: AgentEngine, model: string): readonly AgentEffort[] {
-  if (model === '') return ENGINE_DEFAULT_EFFORTS[engine]
-  return AGENT_MODELS[engine].find((m) => m.id === model)?.efforts ?? []
+  const listed = AGENT_MODELS[engine].find((m) => m.id === model)
+  if (listed) return listed.efforts
+  return foreignModel(engine, model) ? [] : ENGINE_DEFAULT_EFFORTS[engine]
 }
 
 /** 한 단계(스킬)의 실행 설정. 없는 키는 앱의 기본을 따른다 */
@@ -133,9 +154,16 @@ export function resolveAgent(config: AgentConfig, skill: string): ResolvedAgent 
 
 // ---------- 맞는지 보기 (저장 검사와 설정 화면이 같이 쓴다) ----------
 
-/** 모델이 엔진에 있는가. 빈 값(엔진 기본)은 늘 있다. 틀리면 이유 */
+/**
+ * 모델을 그 엔진에 쓸 수 있는가: 목록에 있거나, 직접 입력한 이름이 CUSTOM_MODEL 모양이다. 다른 엔진의 목록에 있는 모델은
+ * 거절한다. 틀리면 이유
+ */
 export function modelError(engine: AgentEngine, model: string): string | null {
-  return modelKnown(engine, model) ? null : `${AGENT_LABELS[engine]}에 없는 모델 ${model}`
+  if (modelListed(engine, model)) return null
+  if (foreignModel(engine, model)) return `${AGENT_LABELS[engine]}에 없는 모델 ${model}`
+  return CUSTOM_MODEL.test(model)
+    ? null
+    : `직접 입력한 모델 ${model}: 영문·숫자로 시작하고 영문·숫자와 . _ - : / @ [ ]만 쓸 수 있음(100자까지)`
 }
 
 /** 엔진·모델이 추론 수준을 받는가. 빈 값(엔진 기본)은 늘 받는다. 틀리면 이유 */
@@ -157,15 +185,15 @@ export function stepError(config: AgentConfig, step: AgentStep): string | null {
 // ---------- 설정 화면에서 바꾸기 ----------
 
 /**
- * 엔진이나 모델을 바꾼 뒤 그 줄의 모델·추론 수준을 맞춘다: 엔진에 없는 모델은 엔진 기본으로, 모델이 받지 않는 추론 수준은
- * 엔진 기본으로 되돌린다. 빈 값은 그대로 둔다
+ * 엔진이나 모델을 바꾼 뒤 그 줄의 모델·추론 수준을 맞춘다: 다른 엔진의 모델은 엔진 기본으로, 모델이 받지 않는 추론 수준은
+ * 엔진 기본으로 되돌린다. 빈 값과 직접 입력한 모델은 그대로 둔다(틀린 모양은 저장할 때 거절한다)
  */
 export function fitAgent(
   engine: AgentEngine,
   model: string,
   effort: string,
 ): { model: string; effort: string } {
-  const m = modelError(engine, model) ? '' : model
+  const m = foreignModel(engine, model) ? '' : model
   const e = effortError(engine, m, effort) ? '' : effort
   return { model: m, effort: e }
 }
@@ -185,7 +213,7 @@ function compactStep(step: AgentStep): AgentStep {
  */
 function fitStep(config: AgentConfig, step: AgentStep): AgentStep {
   const engine = step.engine ?? config.agent_engine
-  const model = modelError(engine, step.model ?? '') ? '' : (step.model ?? '')
+  const model = foreignModel(engine, step.model ?? '') ? '' : (step.model ?? '')
   const effort = step.effort ?? ''
   const fitted = effortError(engine, stepModel(config, { ...step, model }), effort) ? '' : effort
   return compactStep({ ...step, model, effort: fitted })
@@ -217,13 +245,31 @@ function fitSteps<T extends AgentDefaults<K>, K extends string>(c: T): T {
   return { ...c, agent_steps: steps }
 }
 
-/** 기본 엔진을 바꾼다: 기본 모델·추론 수준과 단계들을 새 엔진에 맞춘다 */
+/** 엔진이 바뀐 줄의 모델: 새 엔진의 목록에 없으면(직접 입력한 이름 포함) 엔진 기본으로 되돌린다 */
+function keepListed(engine: AgentEngine, model: string): string {
+  return modelListed(engine, model) ? model : ''
+}
+
+/**
+ * 기본 엔진을 바꾼다: 기본 모델·추론 수준과 단계들을 새 엔진에 맞춘다. 엔진이 함께 바뀌는 줄(기본 줄과 엔진을 정하지 않은
+ * 단계)의 직접 입력한 모델은 앞 엔진의 이름이라 비운다
+ */
 export function changeDefaultEngine<T extends AgentDefaults<K>, K extends string>(
   c: T,
   engine: AgentEngine,
 ): T {
-  const fit = fitAgent(engine, c.agent_model, c.agent_effort)
-  return fitSteps({ ...c, agent_engine: engine, agent_model: fit.model, agent_effort: fit.effort })
+  const fit = fitAgent(engine, keepListed(engine, c.agent_model), c.agent_effort)
+  const steps: Partial<Record<K, AgentStep>> = {}
+  for (const [skill, step] of Object.entries(c.agent_steps) as [K, AgentStep][]) {
+    steps[skill] = step.engine ? step : { ...step, model: keepListed(engine, step.model ?? '') }
+  }
+  return fitSteps({
+    ...c,
+    agent_engine: engine,
+    agent_model: fit.model,
+    agent_effort: fit.effort,
+    agent_steps: steps,
+  })
 }
 
 /** 기본 모델을 바꾼다: 기본 추론 수준과, 기본 모델을 물려받는 단계의 추론 수준을 새 모델에 맞춘다 */
@@ -233,4 +279,15 @@ export function changeDefaultModel<T extends AgentDefaults<K>, K extends string>
 ): T {
   const fit = fitAgent(c.agent_engine, model, c.agent_effort)
   return fitSteps({ ...c, agent_model: fit.model, agent_effort: fit.effort })
+}
+
+/** 단계의 엔진을 바꾼다(빈 값은 기본 따름). 쓸 엔진이 바뀌면 새 엔진의 목록에 없는 모델(직접 입력 포함)을 비운다 */
+export function changeStepEngine(
+  config: AgentConfig,
+  step: AgentStep,
+  engine: AgentEngine | undefined,
+): AgentStep {
+  const after = engine ?? config.agent_engine
+  const same = (step.engine ?? config.agent_engine) === after
+  return { ...step, engine, model: same ? step.model : keepListed(after, step.model ?? '') }
 }
