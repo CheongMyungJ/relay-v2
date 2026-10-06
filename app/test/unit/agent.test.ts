@@ -4,7 +4,7 @@ import { applyConfigPatch, normalizeConfig } from '../../src/core/config'
 import { actions, createWork, currentTask, transition } from '../../src/core/machine'
 import { autoApproveNote } from '../../src/core/approval'
 import { DEFAULT_CONFIG } from '../../src/shared/config'
-import type { AgentEngine } from '../../src/shared/agent'
+import { AGENT_MODELS, effortsFor, resolveAgent, type AgentEngine } from '../../src/shared/agent'
 import type { WorkState } from '../../src/shared/work'
 import type { Handoff } from '../../src/shared/contracts'
 
@@ -208,5 +208,80 @@ describe('[단위] 대화 ID를 받지 못한 세션', () => {
     )
     expect(sessionUnknown({ engine: 'codex' } as never)).toBe(false)
     expect(sessionUnknown({ engine: 'claude', session } as never)).toBe(false)
+  })
+})
+
+describe('[단위] 모델 카탈로그와 단계별 실행 설정 해석', () => {
+  const base = { ...DEFAULT_CONFIG, agent_model: '', agent_effort: '', agent_steps: {} }
+
+  it('엔진별 모델 목록은 고정이고 모델마다 지원하는 추론 수준이 있다 (F2, F9)', () => {
+    expect(AGENT_MODELS.claude.map((m) => m.id)).toEqual(['fable', 'opus', 'sonnet', 'haiku'])
+    expect(AGENT_MODELS.codex.map((m) => m.id)).toEqual([
+      'gpt-6.1-sol',
+      'gpt-6-astra',
+      'gpt-6-sol',
+      'gpt-6-luna',
+      'gpt-5.6-sol',
+      'gpt-5.6-terra',
+      'gpt-5.6-luna',
+    ])
+    expect(effortsFor('claude', 'haiku')).toEqual([])
+    expect(effortsFor('claude', 'opus')).toEqual(['low', 'medium', 'high', 'xhigh', 'max'])
+    expect(effortsFor('codex', 'gpt-6.1-sol')).toContain('ultra')
+    expect(effortsFor('codex', 'gpt-6-luna')).not.toContain('ultra')
+    // 엔진 기본 모델이면 엔진의 전체 수준, 그 엔진에 없는 모델이면 없음
+    expect(effortsFor('codex', '')).toContain('ultra')
+    expect(effortsFor('claude', '')).not.toContain('ultra')
+    expect(effortsFor('claude', 'gpt-6-sol')).toEqual([])
+  })
+
+  it('아무것도 지정하지 않으면 기본 엔진만 있고 모델·추론 수준 키가 없다 (F8)', () => {
+    expect(resolveAgent(base, 'implement')).toEqual({ engine: 'claude' })
+    expect(resolveAgent({ ...base, agent_engine: 'codex' }, 'fix')).toEqual({ engine: 'codex' })
+    // 새 키가 없는 옛 설정도 읽는다
+    expect(resolveAgent({ agent_engine: 'claude' }, 'design')).toEqual({ engine: 'claude' })
+  })
+
+  it('미지정 단계는 기본 엔진·모델·추론 수준을, 지정한 단계는 그 값을 쓴다 (F6)', () => {
+    const config = {
+      ...base,
+      agent_model: 'sonnet',
+      agent_effort: 'medium',
+      agent_steps: {
+        design: { model: 'opus', effort: 'high' },
+        implement: { engine: 'codex' as const, model: 'gpt-6.1-sol', effort: 'ultra' },
+      },
+    }
+    expect(resolveAgent(config, 'verify')).toEqual({
+      engine: 'claude',
+      model: 'sonnet',
+      effort: 'medium',
+    })
+    expect(resolveAgent(config, 'design')).toEqual({ engine: 'claude', model: 'opus', effort: 'high' })
+    expect(resolveAgent(config, 'implement')).toEqual({
+      engine: 'codex',
+      model: 'gpt-6.1-sol',
+      effort: 'ultra',
+    })
+  })
+
+  it('단계 엔진이 기본 엔진과 다르면 기본 모델·추론 수준을 물려받지 않는다 (F6)', () => {
+    const config = {
+      ...base,
+      agent_model: 'opus',
+      agent_effort: 'max',
+      agent_steps: { fix: { engine: 'codex' as const } },
+    }
+    expect(resolveAgent(config, 'fix')).toEqual({ engine: 'codex' })
+  })
+
+  it('고른 모델이 지원하지 않는 추론 수준은 버린다 (F6)', () => {
+    const config = {
+      ...base,
+      agent_model: 'opus',
+      agent_effort: 'high',
+      agent_steps: { verify: { model: 'haiku' } },
+    }
+    expect(resolveAgent(config, 'verify')).toEqual({ engine: 'claude', model: 'haiku' })
   })
 })
