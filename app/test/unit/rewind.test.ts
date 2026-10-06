@@ -326,6 +326,8 @@ describe('고를 수 있는 단계 (6.3)', () => {
         current: false,
         recommended: false,
         keepCode: false,
+        keepLabel: '현재 코드 위에서 이어서',
+        keepDefault: false,
         typeChange: false,
       },
       {
@@ -337,6 +339,8 @@ describe('고를 수 있는 단계 (6.3)', () => {
         current: false,
         recommended: true,
         keepCode: true,
+        keepLabel: '현재 코드 위에서 이어서',
+        keepDefault: false,
         typeChange: false,
       },
       {
@@ -348,6 +352,8 @@ describe('고를 수 있는 단계 (6.3)', () => {
         current: true,
         recommended: false,
         keepCode: false,
+        keepLabel: '현재 코드 위에서 이어서',
+        keepDefault: false,
         typeChange: false,
       },
     ])
@@ -570,6 +576,46 @@ describe('기능 추가 (D232, D237, D254)', () => {
     expect(planStep(after, 'intake', { type: 'bugfix' })).toEqual({
       ok: false,
       error: '유형은 의도 승인 전 [intake 다시]에서만 바꿀 수 있음 (D237)',
+    })
+  })
+})
+
+describe('설계 (D350, D365, I105)', () => {
+  /** 설계 Work: t-01 intake, t-02 spec, t-03 verify */
+  function specAt(node: NodeName, status: TaskStatus = 'working'): WorkState {
+    const nodes: NodeName[] = ['intake', 'spec', 'verify']
+    const upto = nodes.slice(0, nodes.indexOf(node) + 1)
+    return {
+      ...work(upto.map((n, i) => task(i + 1, n, n === node ? status : 'approved'))),
+      type: 'spec',
+    }
+  }
+
+  it('대화상자는 설계의 단계를 보이고, spec으로 되감을 때 [현재 문서 위에서 이어서]가 처음부터 체크되어 있다', () => {
+    expect(
+      stepChoices(specAt('verify')).map((c) => [c.node, c.keepCode, c.keepLabel, c.keepDefault]),
+    ).toEqual([
+      ['intake', false, '현재 코드 위에서 이어서', false],
+      ['spec', true, '현재 문서 위에서 이어서', true],
+      ['verify', false, '현재 코드 위에서 이어서', false],
+    ])
+  })
+
+  it('체크하면 문서 커밋을 그대로 두고, 끄면 다른 유형처럼 spec을 시작할 때의 커밋으로 되돌린다 (D365)', () => {
+    const w = specAt('verify')
+    const keep = plan(w, 'spec', { keepCode: true })
+    expect(keep).toMatchObject({ kind: 'rewind', code: { kind: 'keep' }, keepCodeOffered: true })
+    expect(ids(keep.discard)).toEqual(['t-02', 't-03'])
+    const reset = plan(w, 'spec')
+    expect(reset.code).toMatchObject({ kind: 'reset', to: 'start-2' })
+    const facts = { commits: 2, uncommitted: [], artifacts: {} }
+    expect(stepPreview(w, keep, facts).code).toMatchObject({ kind: 'keep', commits: 0 })
+    expect(stepPreview(w, reset, facts).code).toMatchObject({ kind: 'reset', commits: 2 })
+    expect(planStep(w, 'design')).toEqual({ ok: false, error: '설계 Work의 단계가 아님' })
+    // 줄 수 없는 단계에 체크를 보내면 거부하고, 이름은 설계의 것이다 (PR #36 리뷰)
+    expect(planStep(w, 'intake', { keepCode: true })).toEqual({
+      ok: false,
+      error: '[현재 문서 위에서 이어서]는 spec로 되감을 때만 고를 수 있음',
     })
   })
 })

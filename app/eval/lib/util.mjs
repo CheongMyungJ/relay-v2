@@ -3,6 +3,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -191,4 +192,18 @@ export function questionsBySession(configDir) {
     walk(root)
   }
   return out
+}
+
+/**
+ * 이 모듈을 node로 바로 돌렸는가(가져다 쓴 것이 아니라). import.meta.url은 실제 경로이고 argv[1]은 넘긴 경로 그대로라
+ * symlink, junction, 드라이브 문자 대소문자에서 어긋나므로 둘 다 실제 경로로 맞춰 견준다 (PR #36 리뷰)
+ */
+export function isMain(metaUrl) {
+  const arg = process.argv[1]
+  if (!arg) return false
+  try {
+    return fs.realpathSync(fileURLToPath(metaUrl)) === fs.realpathSync(arg)
+  } catch {
+    return false
+  }
 }

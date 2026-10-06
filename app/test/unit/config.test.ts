@@ -50,12 +50,13 @@ describe('config.json 읽기 (5.1.1)', () => {
     )
   })
 
-  it('자동 승인의 기본값은 원인 분석과 수정, 구현, 계획과 리팩터링, 실행이 켬이고 설계와 계획이 끔이다. 질문 방식 기본은 모두 초안 우선이다 (5.1.1, D214, D234, D249, D276, D315)', () => {
+  it('자동 승인의 기본값은 원인 분석과 수정, 구현, 계획과 리팩터링, 설계 문답, 실행이 켬이고 설계와 계획이 끔이다. 질문 방식 기본은 모두 초안 우선이고 설계 문답은 없다 (5.1.1, D214, D234, D249, D276, D315, D358, D367)', () => {
     expect(DEFAULT_CONFIG.auto_approve).toEqual({
       fix: true,
       design: false,
       implement: true,
       refactor: true,
+      spec: true,
       execute: true,
       respond: false,
     })
@@ -141,6 +142,7 @@ describe('설정 화면 (D70)', () => {
         design: false,
         implement: true,
         refactor: true,
+        spec: true,
         execute: true,
         respond: true,
       },
@@ -155,6 +157,7 @@ describe('설정 화면 (D70)', () => {
           design: false,
           implement: true,
           refactor: true,
+          spec: true,
           execute: true,
           respond: true,
         },
@@ -262,9 +265,11 @@ describe('Work별 설정 (D72)', () => {
 })
 
 describe('화면의 스킬 이름', () => {
-  it('노드의 화면 이름(D109)과 같은 순서, 같은 이름이다. PR 대응은 파이프라인 뒤에 둔다 (D187, D188)', () => {
+  it('노드의 화면 이름(D109)과 같은 순서, 같은 이름이다. PR 대응은 파이프라인 뒤에 둔다. 설계 문답은 질문 방식이 없어 빠진다 (D187, D188, D358, I104)', () => {
     expect(SKILL_TITLES.map(([skill, title]) => [skill, title])).toEqual(
-      [...ALL_NODES, RESPOND].map((n) => [NODE_INFO[n].skill, NODE_INFO[n].title]),
+      [...ALL_NODES, RESPOND]
+        .filter((n) => n !== 'spec')
+        .map((n) => [NODE_INFO[n].skill, NODE_INFO[n].title]),
     )
     expect(SKILL_TITLES).toEqual([
       ['work-start', '의도 정리', 'common'],
@@ -278,22 +283,25 @@ describe('화면의 스킬 이름', () => {
     ])
   })
 
-  it('묶음은 그 단계가 있는 파이프라인이다: 여러 유형에 있으면 공통, 한 유형에만 있으면 그 유형 (D256, D278, D318)', () => {
+  it('묶음은 그 단계가 있는 파이프라인이다: 여러 유형에 있으면 공통, 한 유형에만 있으면 그 유형 (D256, D278, D318, D374)', () => {
     for (const n of ALL_NODES) {
       const types = WORK_TYPES.filter((t) => PIPELINES[t].includes(n))
       const group = types.length > 1 ? 'common' : types[0]
-      expect(SKILL_TITLES.find(([s]) => s === NODE_INFO[n].skill)?.[2], n).toBe(group)
+      const skill = SKILL_TITLES.find(([s]) => s === NODE_INFO[n].skill)
+      if (n === 'spec') expect(skill, n).toBeUndefined()
+      else expect(skill?.[2], n).toBe(group)
       const auto = AUTO_APPROVE_TITLES.find(([a]) => a === n)
       if (auto) expect(auto[2], n).toBe(group)
     }
   })
 
-  it('자동 승인을 켤 수 있는 단계는 fix, design, implement, refactor, execute와 PR 대응이고 이름은 노드의 화면 이름이다 (4.2, D109, D169, D234, D249, D276, D315)', () => {
+  it('자동 승인을 켤 수 있는 단계는 fix, design, implement, refactor, spec, execute와 PR 대응이고 이름은 노드의 화면 이름이다 (4.2, D109, D169, D234, D249, D276, D315, D367)', () => {
     expect(AUTO_APPROVE_NODES).toEqual([
       'fix',
       'design',
       'implement',
       'refactor',
+      'spec',
       'execute',
       'respond',
     ])
@@ -302,7 +310,7 @@ describe('화면의 스킬 이름', () => {
     )
   })
 
-  it('저장된 config.json에 design, implement, refactor, execute 키가 없으면 기본값을 쓴다 (D256, D278, D318)', () => {
+  it('저장된 config.json에 design, implement, refactor, spec, execute 키가 없으면 기본값을 쓴다 (D256, D278, D318, D367)', () => {
     const { config, warnings } = normalizeConfig({
       auto_approve: { fix: false, respond: true },
       question_mode: { fix: 'confirm_each' },
@@ -313,6 +321,7 @@ describe('화면의 스킬 이름', () => {
       design: false,
       implement: true,
       refactor: true,
+      spec: true,
       execute: true,
       respond: true,
     })
@@ -320,6 +329,23 @@ describe('화면의 스킬 이름', () => {
     expect(config.question_mode.implement).toBe('draft_first')
     expect(config.question_mode.refactor).toBe('draft_first')
     expect(config.question_mode.execute).toBe('draft_first')
+    expect(config.question_mode).not.toHaveProperty('spec')
+  })
+
+  it('질문 방식에 spec(설계 문답)은 없다: config.json의 question_mode.spec은 모르는 스킬로 거르고, 설정 화면과 Work 설정에서도 받지 않는다 (D358, I104)', () => {
+    const { config, warnings } = normalizeConfig({ question_mode: { spec: 'draft_first' } })
+    expect(warnings).toEqual(['config.json 질문 방식: 모르는 스킬 spec. 기본값을 씀'])
+    expect(config.question_mode).toEqual(DEFAULT_CONFIG.question_mode)
+    expect(applyConfigPatch(DEFAULT_CONFIG, { question_mode: { spec: 'confirm_each' } })).toEqual({
+      ok: false,
+      error: '질문 방식: 모르는 스킬 spec',
+    })
+    expect(checkWorkSettings({ question_mode: { spec: 'confirm_each' } }).ok).toBe(false)
+    // 자동 승인은 켤 수 있다 (D367)
+    expect(checkWorkSettings({ auto_approve: { spec: false } })).toEqual({
+      ok: true,
+      value: { auto_approve: { spec: false } },
+    })
   })
 })
 

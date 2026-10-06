@@ -278,9 +278,17 @@ describe('[어댑터] 스킬 배포와 claude 실행 (5.6.3, D103, D105, D108)',
   it('앱의 selectType과 check.mjs의 assemble은 같은 결과와 같은 오류를 낸다 (I68, PR #24 리뷰)', async () => {
     const samples = [
       ...(await Promise.all(
-        ['work-start', 'verify', 'pr-respond', 'fix', 'design', 'implement', 'refactor'].map((s) =>
-          fsp.readFile(path.join(SKILLS, s, 'SKILL.md'), 'utf8'),
-        ),
+        [
+          'work-start',
+          'verify',
+          'pr-respond',
+          'fix',
+          'design',
+          'implement',
+          'refactor',
+          'spec',
+          'execute',
+        ].map((s) => fsp.readFile(path.join(SKILLS, s, 'SKILL.md'), 'utf8')),
       )),
       await fsp.readFile(path.join(SKILLS, '_common.md'), 'utf8'),
       'a\r\n<!-- type: feature refactor -->\r\nb\r\n<!-- /type -->\r\nc',
@@ -308,7 +316,13 @@ describe('[어댑터] 스킬 배포와 claude 실행 (5.6.3, D103, D105, D108)',
   })
 
   it('공용 스킬 셋을 유형마다 조립하면 다른 유형의 산출물과 표시가 남지 않는다 (D279)', async () => {
-    const own = { bugfix: 'fix.md', feature: 'design.md', refactor: 'refactor.md' } as const
+    const own = {
+      bugfix: 'fix.md',
+      feature: 'design.md',
+      refactor: 'refactor.md',
+      spec: 'spec.md',
+      general: 'execution.md',
+    } as const
     for (const skill of ['work-start', 'verify', 'pr-respond'] as const) {
       for (const type of WORK_TYPES) {
         const text = await skillText(SKILLS, skill, type)
@@ -320,6 +334,18 @@ describe('[어댑터] 스킬 배포와 claude 실행 (5.6.3, D103, D105, D108)',
           else expect(text, `${skill} ${type}`).not.toContain(`\`${file}\``)
         }
       }
+    }
+  })
+
+  it('설계 문서를 따르는 요청의 줄(D369, D370)은 모든 유형의 intake에, 그 Work의 규칙(D371)은 모든 스킬에 있다 (I107)', async () => {
+    for (const type of WORK_TYPES) {
+      const intake = await skillText(SKILLS, 'work-start', type)
+      expect(intake, type).toContain('write "`<path>`의 결정을 따른다" in `제약`')
+      expect(intake, type).toContain('wait for the merge (`blocked`)')
+    }
+    for (const skill of ['fix', 'design', 'implement', 'refactor', 'execute', 'verify'] as const) {
+      const text = await skillText(SKILLS, skill, 'bugfix')
+      expect(text, skill).toContain('## Works that follow a design document')
     }
   })
 
