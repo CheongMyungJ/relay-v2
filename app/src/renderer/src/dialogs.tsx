@@ -263,13 +263,14 @@ function issueNumberInput(text: string): number | null | undefined {
   return /^\d+$/.test(t) && Number.isInteger(n) && n > 0 ? n : undefined
 }
 
-/** 유형 버튼의 설명. 일반은 다른 유형에 맞지 않는 일에 쓴다 (D303, I88) */
+/** 유형 버튼의 설명. 설계는 구현 전에 설계만 정하는 큰 일(D353), 일반은 다른 유형에 맞지 않는 일에 쓴다 (D303, I88) */
 const WORK_TYPE_HINT: Readonly<Partial<Record<WorkType, string>>> = {
+  spec: '구현 전에 설계만 정하는 큰 일',
   general: '다른 유형에 맞지 않는 일',
 }
 
 /**
- * 업무 유형 고르기 (D236, D237, D261, D303): 버그 수정 / 기능 추가 / 리팩터링 / 일반 버튼. 새 Work에는 기본 선택이
+ * 업무 유형 고르기 (D236, D237, D261, D303, D353): 버그 수정 / 기능 추가 / 리팩터링 / 설계 / 일반 버튼. 새 Work에는 기본 선택이
  * 없다(value가 null). 설명이 있는 유형은 버튼의 title로 두고, 그 유형을 골랐을 때 버튼 줄 아래에 보인다 (I88)
  */
 function WorkTypePicker({
@@ -464,10 +465,18 @@ export function NewWorkDialog({
 
 // ---------- 설정 목록의 묶음 (D256) ----------
 
-const GROUPS: readonly SettingGroup[] = ['common', 'bugfix', 'feature', 'refactor', 'general', 'pr']
+const GROUPS: readonly SettingGroup[] = [
+  'common',
+  'bugfix',
+  'feature',
+  'refactor',
+  'spec',
+  'general',
+  'pr',
+]
 
 /**
- * 설정 목록을 묶음(공통 / 버그 수정 / 기능 추가 / 리팩터링 / 일반 / PR 대응)마다 모은다 (D256, D278, D318). type을 주면 그 유형에서 보이는 묶음만
+ * 설정 목록을 묶음(공통 / 버그 수정 / 기능 추가 / 리팩터링 / 설계 / 일반 / PR 대응)마다 모은다 (D256, D278, D318, D374). type을 주면 그 유형에서 보이는 묶음만
  * 둔다. Work 설정은 그 Work 유형의 단계만 보인다 (I57)
  */
 function grouped<K extends string>(
@@ -1025,8 +1034,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
 
 const short = (commit: string | null) => (commit ? commit.slice(0, 8) : '')
 
-/** 미리 보기의 코드 줄 (D116, D117) */
-function codeLines(code: StepPreview['code']): string[] {
+/** 미리 보기의 코드 줄 (D116, D117). keepLabel은 [현재 코드 위에서 이어서]의 이름이다 (I105) */
+function codeLines(code: StepPreview['code'], keepLabel: string): string[] {
   const n = code.uncommitted.length
   if (code.kind === 'reset') {
     const where = `고른 단계를 시작할 때의 커밋(${short(code.to)})`
@@ -1042,14 +1051,14 @@ function codeLines(code: StepPreview['code']): string[] {
   }
   return [
     code.kind === 'keep'
-      ? '[현재 코드 위에서 이어서]: 커밋을 되돌리지 않고 그 위에서 이어서 고칩니다'
+      ? `[${keepLabel}]: 커밋을 되돌리지 않고 그 위에서 이어서 고칩니다`
       : '코드를 되돌리지 않습니다',
     ...(n ? [`커밋 안 된 변경 ${n}개는 그대로 둡니다`] : []),
   ]
 }
 
 /** 고른 단계의 결과 (D82): 중단할 task, 폐기될 산출물, 코드, 건너뛸 단계, intent */
-function PreviewView({ p }: { p: StepPreview }) {
+function PreviewView({ p, keepLabel }: { p: StepPreview; keepLabel: string }) {
   return (
     <div className="step-preview" aria-label="미리 보기">
       <div>
@@ -1074,7 +1083,7 @@ function PreviewView({ p }: { p: StepPreview }) {
       <section>
         <h3>코드</h3>
         <ul>
-          {codeLines(p.code).map((l) => (
+          {codeLines(p.code, keepLabel).map((l) => (
             <li key={l}>{l}</li>
           ))}
         </ul>
@@ -1098,8 +1107,8 @@ function PreviewView({ p }: { p: StepPreview }) {
 
 /**
  * 단계 선택 대화상자 (D82): 그 Work 유형의 파이프라인 단계를 차례로 보이고(6.3의 제약을 따른다), 고른 단계의 결과를
- * 미리 보인다. 추가 지시는 선택이고, 버그 수정의 fix, 기능 추가의 design과 implement로 되감으면 [현재 코드 위에서
- * 이어서]를 고를 수 있다(D254). 의도 승인 전 [intake 다시]에서는 유형을 다시 고를 수 있고 지금 유형이 골라져 있다 (D237).
+ * 미리 보인다. 추가 지시는 선택이고, 버그 수정의 fix, 기능 추가의 design과 implement 등으로 되감으면 [현재 코드 위에서
+ * 이어서]를 고를 수 있다(D254). 설계의 spec은 [현재 문서 위에서 이어서]이고 처음부터 체크되어 있다 (D365, I105). 의도 승인 전 [intake 다시]에서는 유형을 다시 고를 수 있고 지금 유형이 골라져 있다 (D237).
  * [확인]을 눌러야 실행한다. 미리 본 뒤 Work가 바뀌었으면 main이 받지 않는다.
  */
 export function StepDialog({
@@ -1116,7 +1125,10 @@ export function StepDialog({
 }) {
   const recommended = work.steps.find((c) => c.recommended && c.allowed)?.node
   const [node, setNode] = useState<NodeName | null>(initial ?? recommended ?? null)
-  const [keepCode, setKeepCode] = useState(false)
+  // 설계의 spec은 [현재 문서 위에서 이어서]가 처음부터 체크되어 있다 (D365, I105)
+  const [keepCode, setKeepCode] = useState(
+    work.steps.find((c) => c.node === (initial ?? recommended))?.keepDefault === true,
+  )
   const [type, setType] = useState<WorkType>(work.type)
   const [instruction, setInstruction] = useState('')
   // 미리 본 단계와 선택지. 고른 것과 다르면 보이지 않고 [확인]할 수 없다
@@ -1127,7 +1139,7 @@ export function StepDialog({
     result: StepPreviewResult
   } | null>(null)
   const choice = work.steps.find((c) => c.node === node)
-  // [현재 코드 위에서 이어서]는 되감기로 fix, design, implement를 고를 때만 있다 (6.2, D254)
+  // [현재 코드 위에서 이어서]는 되감기로 KEEP_CODE_NODES의 단계를 고를 때만 있다 (6.2, D254)
   const keepOffered = choice?.keepCode === true
   // 유형은 의도 승인 전 [intake 다시]에서만 고른다 (D237)
   const typeOffered = choice?.typeChange === true
@@ -1158,7 +1170,7 @@ export function StepDialog({
 
   const pick = (next: NodeName) => {
     setNode(next)
-    setKeepCode(false)
+    setKeepCode(work.steps.find((c) => c.node === next)?.keepDefault === true)
     setType(work.type)
   }
 
@@ -1206,14 +1218,18 @@ export function StepDialog({
       {keepOffered ? (
         <label
           className="toggle"
-          title="verify가 작은 문제를 찾았을 때 수정을 처음부터 다시 하지 않는다"
+          title={
+            choice?.keepDefault
+              ? '문답으로 정한 결정을 문서에 둔 채 다시 볼 결정만 다시 묻는다'
+              : 'verify가 작은 문제를 찾았을 때 수정을 처음부터 다시 하지 않는다'
+          }
         >
           <input
             type="checkbox"
             checked={keepCode}
             onChange={(e) => setKeepCode(e.target.checked)}
           />
-          현재 코드 위에서 이어서
+          {choice?.keepLabel}
         </label>
       ) : null}
       {typeOffered ? (
@@ -1227,7 +1243,7 @@ export function StepDialog({
       ) : failed ? (
         <div className="error">{failed}</div>
       ) : shown ? (
-        <PreviewView p={shown} />
+        <PreviewView p={shown} keepLabel={choice?.keepLabel ?? '현재 코드 위에서 이어서'} />
       ) : (
         <div className="dim">미리 보는 중…</div>
       )}

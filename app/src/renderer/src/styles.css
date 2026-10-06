@@ -1015,6 +1015,18 @@ textarea {
   background: color-mix(in srgb, var(--bad) 8%, transparent);
 }
 
+/* 설계 Work의 다시 볼 결정: 판정표 아래 (시나리오 7-3, D362, I106) */
+.revisit {
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--accent-text);
+  background: var(--bg-raise);
+}
+
+.revisit h3 {
+  margin: 0 0 4px;
+}
+
 .markdown pre,
 .markdown code {
   font-family: var(--mono);

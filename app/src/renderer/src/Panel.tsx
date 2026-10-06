@@ -564,6 +564,13 @@ function Review({
             </tbody>
           </table>
         ) : null}
+        {tab === 'verdicts' && review.completion?.revisit ? (
+          <section className="revisit" aria-label="다시 볼 결정">
+            <h3>다시 볼 결정</h3>
+            <Markdown text={review.completion.revisit} />
+            <div className="dim">바꾸려면 [단계 선택]에서 설계 문답으로 되감기</div>
+          </section>
+        ) : null}
         {tab === 'work' && review.completion ? <Diff text={review.completion.diff} /> : null}
         {tab === 'knowledge' && review.completion?.knowledge ? (
           <KnowledgeList changes={review.completion.knowledge} />
