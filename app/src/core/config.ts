@@ -9,7 +9,7 @@ import {
   type AppConfig,
   type AutoApproveNode,
   type QuestionMode,
-  type SkillName,
+  type QuestionSkill,
   type ThemeChoice,
   type WorkSettings,
   type WorkSettingsPatch,
@@ -20,7 +20,8 @@ import type { MergeMethod } from '../shared/work'
 import { ALL_NODES } from './pipeline'
 import { isAgentEngine, type AgentEngine } from '../shared/agent'
 
-const SKILLS: readonly SkillName[] = SKILL_TITLES.map(([skill]) => skill)
+/** 질문 방식을 고르는 스킬. spec은 없어 config.json에 있으면 모르는 스킬이다 (I104) */
+const SKILLS: readonly QuestionSkill[] = SKILL_TITLES.map(([skill]) => skill)
 
 const QUESTION_MODES: readonly QuestionMode[] = ['draft_first', 'confirm_each']
 
@@ -168,9 +169,9 @@ function signature(v: unknown): Checked<string> {
 }
 
 /** 스킬별 질문 방식. 없는 스킬은 빼고, 모르는 스킬이나 값은 오류다 */
-function questionModes(v: unknown): Checked<Partial<Record<SkillName, QuestionMode>>> {
+function questionModes(v: unknown): Checked<Partial<Record<QuestionSkill, QuestionMode>>> {
   if (!isRecord(v)) return { ok: false, error: `${NAMES.question_mode}: 객체여야 함` }
-  const out: Partial<Record<SkillName, QuestionMode>> = {}
+  const out: Partial<Record<QuestionSkill, QuestionMode>> = {}
   for (const [skill, mode] of Object.entries(v)) {
     if (!(SKILLS as readonly string[]).includes(skill)) {
       return { ok: false, error: `${NAMES.question_mode}: 모르는 스킬 ${skill}` }
@@ -181,7 +182,7 @@ function questionModes(v: unknown): Checked<Partial<Record<SkillName, QuestionMo
         error: `${NAMES.question_mode}(${skill}): ${QUESTION_MODES.join(' | ')} 중 하나여야 함`,
       }
     }
-    out[skill as SkillName] = mode as QuestionMode
+    out[skill as QuestionSkill] = mode as QuestionMode
   }
   return { ok: true, value: out }
 }

@@ -665,6 +665,10 @@ export interface StepChoice {
   recommended: boolean
   /** 되감기로 고르면 [현재 코드 위에서 이어서]를 줄 수 있다 (6.2, D254) */
   keepCode: boolean
+  /** [현재 코드 위에서 이어서]의 이름. 설계의 spec은 "현재 문서 위에서 이어서"다 (D365, I105) */
+  keepLabel: string
+  /** 고르면 [현재 코드 위에서 이어서]가 처음부터 체크되어 있다. 설계의 spec만 참이다 (D365, I105) */
+  keepDefault: boolean
   /** 고르며 유형을 바꿀 수 있다: 의도 승인 전 [intake 다시] (D237) */
   typeChange: boolean
 }
@@ -819,6 +823,11 @@ export interface RespondReview {
 /** Work 완료 화면: 판정표, 전체 Work의 변경(기준 커밋 → 작업 트리), 전달 선택 (시나리오 7-3) */
 export interface Completion {
   verdicts: Verdict[]
+  /**
+   * 설계 Work의 다시 볼 결정: verification.md `## 다시 볼 결정`의 본문. 판정표 아래에 보이고, 바꾸려면 [단계 선택]에서
+   * 설계 문답으로 되감는다 (시나리오 7-3, D362, D365, I106). 다른 유형이거나 "없음"이면 null이다
+   */
+  revisit: string | null
   diff: string
   /**
    * 누를 버튼. deliver는 전달 버튼([완료만], [push], [PR 생성])이고, stop은 승인하면 Work가 멈추므로

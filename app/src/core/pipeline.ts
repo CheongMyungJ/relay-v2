@@ -17,13 +17,14 @@ export interface NodeInfo {
 /**
  * 유형별 파이프라인 순서 (3.1, D227, D232). Work는 그 유형의 순서를 모두 지난다. 되감기와 건너뛰기, 이전 단계는 이
  * 순서로 가른다(6.2). fix는 재현과 원인 분석을 함께 하고(D228), design은 설계와 구현 계획을 함께 하고(D232),
- * refactor는 계획, 안전망, 구조 변경을 함께 하고(D258), execute는 진행 방식을 정하지 않고 계획과 작업을 함께 하고(D302),
- * verify는 리뷰와 최종 검증을 함께 한다 (D229)
+ * refactor는 계획, 안전망, 구조 변경을 함께 하고(D258), spec은 주제 목록과 문답과 설계 문서 쓰기를 함께 하고(D350, D352),
+ * execute는 진행 방식을 정하지 않고 계획과 작업을 함께 하고(D302), verify는 리뷰와 최종 검증을 함께 한다 (D229)
  */
 export const PIPELINES: Readonly<Record<WorkType, readonly NodeName[]>> = {
   bugfix: ['intake', 'fix', 'verify'],
   feature: ['intake', 'design', 'implement', 'verify'],
   refactor: ['intake', 'refactor', 'verify'],
+  spec: ['intake', 'spec', 'verify'],
   general: ['intake', 'execute', 'verify'],
 }
 
@@ -44,7 +45,8 @@ const CONTINUE =
  * [현재 코드 위에서 이어서](6.2)를 주는 단계와 그 단계의 context.md 안내 (6.2, D254, D278, PR #24 리뷰). 단계를 이 표에
  * 더하면 안내도 함께 써야 하므로 빠뜨릴 수 없다. design은 코드를 바꾸지 않고 design.md만 고치며, 이어지는 implement가
  * 그 코드 위에서 고친다. refactor는 안전망 커밋을 다시 만들지 않고 폐기된 refactor.md의 해시를 이어 적는다. execute는
- * 폐기된 execution.md를 참고해 새 execution.md를 쓴다 (D316, I85)
+ * 폐기된 execution.md를 참고해 새 execution.md를 쓴다 (D316, I85). spec은 [현재 문서 위에서 이어서]이고, 문서의 결정을
+ * 그대로 두고 사람의 추가 지시와 폐기된 verification.md의 다시 볼 결정에서 시작한다 (D365, I105)
  */
 export const KEEP_CODE_NOTES: Readonly<
   Record<WorkType, Readonly<Partial<Record<NodeName, string>>>>
@@ -58,6 +60,9 @@ export const KEEP_CODE_NOTES: Readonly<
   refactor: {
     refactor: `${CONTINUE} 안전망 커밋은 다시 만들지 않는다. 아래 폐기된 \`refactor.md\`의 \`안전망 커밋\` 해시를 새 \`refactor.md\`에 그대로 적는다. 더 필요한 안전망 테스트는 구조를 더 바꾸기 전에 따로 커밋하고 표에 (추가)로 적으며, 기준 코드 결과는 안전망 커밋에 그 테스트 파일만 얹어 돌려 얻는다(스킬의 절차).`,
   },
+  spec: {
+    spec: '[현재 문서 위에서 이어서]: 폐기된 시도의 설계 문서 커밋이 남아 있다. 문서의 결정을 그대로 두고, 사람의 추가 지시와 아래 폐기된 `verification.md`의 `다시 볼 결정`에서 시작한다. 아래 폐기된 `spec.md`를 참고해 새 `spec.md`를 쓴다.',
+  },
   general: {
     execute: `${CONTINUE} 아래 폐기된 \`execution.md\`를 참고해 새 \`execution.md\`를 쓴다.`,
   },
@@ -70,6 +75,31 @@ export const KEEP_CODE_NOTES: Readonly<
 export const KEEP_CODE_NODES: Readonly<Record<WorkType, readonly NodeName[]>> = Object.fromEntries(
   WORK_TYPES.map((t) => [t, Object.keys(KEEP_CODE_NOTES[t]) as NodeName[]]),
 ) as Record<WorkType, NodeName[]>
+
+/**
+ * [현재 코드 위에서 이어서] 대신 [현재 문서 위에서 이어서]를 주는 단계 (D365, I105). 코드 처리(백업 브랜치, 커밋 유지)는
+ * 같고 이름과 처음 체크만 다르다. 유형마다 키가 있어 유형을 더할 때 빠뜨리지 않는다
+ */
+const KEEP_DOC_NODES: Readonly<Record<WorkType, readonly NodeName[]>> = {
+  bugfix: [],
+  feature: [],
+  refactor: [],
+  spec: ['spec'],
+  general: [],
+}
+
+/** 단계 선택 대화상자의 [현재 코드 위에서 이어서] 이름. 설계의 spec은 [현재 문서 위에서 이어서]다 (D365, I105) */
+export function keepLabel(type: WorkType, node: NodeName): string {
+  return KEEP_DOC_NODES[type].includes(node) ? '현재 문서 위에서 이어서' : '현재 코드 위에서 이어서'
+}
+
+/**
+ * 되감기로 고르면 [현재 코드 위에서 이어서]가 처음부터 체크되어 있는가. 설계의 spec만 참이다: 이 유형에서 되감는 까닭은
+ * 대부분 결정 한두 개를 다시 보는 것이다 (D365, I105)
+ */
+export function keepDefault(type: WorkType, node: NodeName): boolean {
+  return KEEP_DOC_NODES[type].includes(node)
+}
 
 /** PR 대응 task의 노드 (D187). 파이프라인 밖이다 (D188) */
 export const RESPOND = 'respond' as const
@@ -95,6 +125,7 @@ export const NODE_INFO: Readonly<Record<TaskNode, NodeInfo>> = {
     title: '계획과 리팩터링',
     artifacts: ['refactor.md'],
   },
+  spec: { node: 'spec', skill: 'spec', title: '설계 문답', artifacts: ['spec.md'] },
   execute: { node: 'execute', skill: 'execute', title: '실행', artifacts: ['execution.md'] },
   verify: {
     node: 'verify',

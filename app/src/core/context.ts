@@ -26,13 +26,17 @@ import { workBranch } from './records'
 import { REPLIES_FILE, RESPONSE_FILE, parseFrontMatter, sectionText } from './validate'
 import { knowledgeSection, type KnowledgeInput } from './knowledge'
 
-/** 이 노드 스킬의 질문 방식. Work 설정, 앱 설정 순서로 본다 (D26, D72) */
+/**
+ * 이 노드 스킬의 질문 방식. Work 설정, 앱 설정 순서로 본다 (D26, D72). 설계 문답(spec)은 질문 방식 설정이 없어 null이다
+ * (D358, I104)
+ */
 export function questionMode(
   config: AppConfig,
   settings: WorkSettings,
   node: TaskNode,
-): QuestionMode {
+): QuestionMode | null {
   const skill = NODE_INFO[node].skill
+  if (skill === 'spec') return null
   return settings.question_mode?.[skill] ?? config.question_mode[skill]
 }
 
@@ -43,7 +47,7 @@ const CLOSING =
 const PRESS = '[승인]을 누르세요.'
 
 /**
- * 자동 승인을 켤 수 있는 단계(fix, design, implement, refactor, execute)의 문장 (D132). 자동 승인 여부는 턴이 끝날 때의 설정으로 정하고
+ * 자동 승인을 켤 수 있는 단계(fix, design, implement, refactor, spec, execute)의 문장 (D132). 자동 승인 여부는 턴이 끝날 때의 설정으로 정하고
  * (D128) 설정은 task가 도는 중에도 바뀌며, 스킬은 이 문구를 그대로 찍으므로 두 경우를 함께 적는다
  */
 const AUTO_SENTENCE =
@@ -121,6 +125,15 @@ function approvalSection(
 const QUESTION_LABEL: Record<QuestionMode, string> = {
   draft_first: '초안 우선 (`draft_first`)',
   confirm_each: '결정마다 확인 (`confirm_each`)',
+}
+
+/** 설계 문답의 질문 방식 줄. 설정과 관계없이 고정이다 (D358, I104) */
+export const SPEC_QUESTION_LINE = `${QUESTION_LABEL.confirm_each}. 설계 문답은 결정을 모두 묻는다 (D358)`
+
+/** context.md의 질문 방식 줄 (5.6.1). 설계 문답은 고정 문구다 (I104) */
+function questionLine(config: AppConfig, settings: WorkSettings, node: TaskNode): string {
+  const mode = questionMode(config, settings, node)
+  return mode ? QUESTION_LABEL[mode] : SPEC_QUESTION_LINE
 }
 
 /** 이전 task의 파일이나 값. 폐기된 task는 넣지 않는다 (5.4, 6.2) */
@@ -661,7 +674,7 @@ export function buildContext(input: ContextInput): string {
     ],
     ['승인 방식', approvalSection(config, work.settings, task.node, taskEngine(task))],
     ['마무리 안내 문구', closingMessage(task.node, input.delivery, taskEngine(task))],
-    ['질문 방식', QUESTION_LABEL[questionMode(config, work.settings, task.node)]],
+    ['질문 방식', questionLine(config, work.settings, task.node)],
     ...(input.knowledge ? [knowledgeSection(task.node, input.knowledge)] : []),
     ['선택 가능한 다음 단계', list(nextSteps(type, task.node))],
     [

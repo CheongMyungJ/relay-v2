@@ -17,6 +17,8 @@ import {
   defaultNext,
   inPipeline,
   isPipelineNode,
+  keepDefault,
+  keepLabel,
   order,
   workType,
 } from './pipeline'
@@ -43,7 +45,7 @@ export interface StepPlan {
   code: StepCode
   /**
    * [현재 코드 위에서 이어서]를 고를 수 있다: 버그 수정의 fix, 기능 추가의 design과 implement, 리팩터링의 refactor,
-   * 일반의 execute로 되감을 때 (6.2, D254, D278, D316)
+   * 설계의 spec([현재 문서 위에서 이어서]), 일반의 execute로 되감을 때 (6.2, D254, D278, D316, D365)
    */
   keepCodeOffered: boolean
   /** 의도 승인 전 [intake 다시]에서 바꿀 유형 (D237). 바꾸지 않으면 null */
@@ -254,6 +256,8 @@ export function stepChoices(work: WorkState): StepChoice[] {
       current: from?.node === node,
       recommended: node === recommended,
       keepCode: kind === 'rewind' && KEEP_CODE_NODES[type].includes(node),
+      keepLabel: keepLabel(type, node),
+      keepDefault: kind === 'rewind' && keepDefault(type, node),
       typeChange: why === null && typeChangeAllowed(work, node),
     }
   })

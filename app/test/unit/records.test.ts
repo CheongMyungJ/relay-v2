@@ -147,6 +147,8 @@ describe('intent.md 확정본 (5.3)', () => {
     })
     const general = parseFrontMatter(confirmedIntent(body, { version: 1, type: 'general' }))
     expect(general.ok && general.data).toEqual({ schema_version: 1, version: 1, type: 'general' })
+    const spec = parseFrontMatter(confirmedIntent(body, { version: 1, type: 'spec' }))
+    expect(spec.ok && spec.data).toEqual({ schema_version: 1, version: 1, type: 'spec' })
   })
 
   it('초안에 습관처럼 쓴 머리글은 읽지 않고 뗀다. type은 Work의 유형이다 (I58)', () => {

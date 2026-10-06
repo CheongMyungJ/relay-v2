@@ -307,6 +307,7 @@ const REQUEST_PLACEHOLDER: Readonly<Record<WorkType, string>> = {
   bugfix: '버그 설명, 로그, 이슈 내용을 붙여 넣으세요',
   feature: '만들 기능, 쓰는 흐름, 참고할 이슈 내용을 붙여 넣으세요',
   refactor: '바꿀 구조(예: 어느 계산을 한 모듈로 모을지), 바꿀 곳, 지켜야 할 동작을 적어 주세요',
+  spec: '무엇을 설계할지, 정해야 할 것, 설계 문서를 둘 곳이나 고칠 문서를 적어 주세요',
   general: '할 일과 끝났다고 볼 조건을 적어 주세요(무엇을 바꾸고 어떻게 확인할지)',
 }
 

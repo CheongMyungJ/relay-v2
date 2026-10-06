@@ -367,6 +367,7 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
     design: false,
     implement: true,
     refactor: true,
+    spec: true,
     execute: true,
     respond: false,
   })

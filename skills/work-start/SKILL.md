@@ -39,7 +39,14 @@ Read the request, talk with the human, and write the intent draft `intent.draft.
 - **A better-fitting type:** `general` is for work that fits none of the other types. If the request fits `bugfix`, `feature` or `refactor` better, say which and why before you write the draft, and ask: keep `general` / change the type (`blocked`). If they keep it, draft with `general`.
 - **Vague goals:** if the goal is vague ("정리해 줘"), ask for a result that can be checked.
 <!-- /type -->
-- **Type mismatch:** the human picked the type: `bugfix` (버그 수정: current behavior is wrong), `feature` (기능 추가: new behavior), `refactor` (리팩터링: change structure, keep behavior) or `general` (일반: work that fits none of these, e.g. config, CI, docs, dependency upgrades, mixed work). If it does not fit the request (e.g. `feature`, but the request says current behavior is wrong), ask before you write the draft. If the human wants to change the type, close as `blocked` and tell them to pick the type with [단계 선택] → intake. If they keep it, draft with the picked type. Never change the type yourself.
+<!-- type: spec -->
+- **This skill does not change code.** Skim the code and documents only enough to write concrete goals and completion criteria. Do not settle the design decisions. That is the job of spec.
+- Do not write how to decide in the intent.
+- **A small request:** `spec` is for big work whose design is settled before it is built. If the request is small enough that `feature` fits better, say why before you write the draft, and ask: keep `spec` / change the type (`blocked`). If they keep it, draft with `spec`.
+- **Target document:** settle with the human which design document this goes into, a new one or an existing one, and write it in `제약` as "설계 문서: `<path>` (새 문서 / 기존 문서)". For a new document, if the repo has no convention for design documents, propose `docs/design/<english-name>.md`. The target document is not a document to follow: do not also write "의 결정을 따른다" for it.
+<!-- /type -->
+- **Type mismatch:** the human picked the type: `bugfix` (버그 수정: current behavior is wrong), `feature` (기능 추가: new behavior), `refactor` (리팩터링: change structure, keep behavior), `spec` (설계: settle only the design of big work before building it) or `general` (일반: work that fits none of these, e.g. config, CI, docs, dependency upgrades, mixed work). If it does not fit the request (e.g. `feature`, but the request says current behavior is wrong), ask before you write the draft. If the human wants to change the type, close as `blocked` and tell them to pick the type with [단계 선택] → intake. If they keep it, draft with the picked type. Never change the type yourself.
+- **A design document to follow:** if the request points to a design document in the repo, write "`<path>`의 결정을 따른다" in `제약`, and write the part this Work takes on as goals and completion criteria. If that document is not in the worktree (its design PR is not merged yet), tell the human before you write the draft and ask: wait for the merge (`blocked`) / go on from the request alone, without the document.
 - **Your own hypotheses** do not go in the intent. Put them only in the handoff section `## 다음 task가 알아야 할 것`, as reference.
 - Keep the intent around 1,500 characters. It goes into every task.
 
@@ -53,7 +60,9 @@ Scope (`비목표`) and completion criteria (`완료조건`). This skill has no 
 
 ## 완료조건 section
 
+<!-- type: bugfix feature refactor general -->
 - Always start with these default items. Find the concrete test command in the repo (e.g. `npm test`). If the repo has no tests, leave out the test command item.
+<!-- /type -->
 <!-- type: bugfix -->
   `- [ ] 재현 절차가 더 이상 실패하지 않는다` / `- [ ] <test command>가 통과한다` / `- [ ] 기존 테스트를 약화하거나 삭제하지 않는다`
 - Then add items that fit the request.
@@ -71,6 +80,12 @@ Scope (`비목표`) and completion criteria (`완료조건`). This skill has no 
 - Then add the items that fit the request, one per line. Not how to do the work.
 - **Check method:** end every line, the default items included, with ` — 확인: <방법>`: a command to run, a place to read (a file or a code location), or `사람`. Use `사람` only when no command and no place to read can check it. The app rejects a line without a check method.
 <!-- /type -->
+<!-- type: spec -->
+- Always start with these default items. No test command item: only the document changes.
+  `- [ ] 대상 문서와 지식 파일 밖의 파일을 바꾸지 않는다` / `- [ ] 문서의 서술이 서로, 그리고 지금 코드와 어긋나지 않는다` / `- [ ] 정하지 않고 남긴 것은 문서의 따로 둔 절에 이유와 함께 있다`
+- Then add what the design must decide, as "<무엇>을 정한다", one per line (e.g. "PR 머지 조건을 정한다"). Not how to decide it. Agree on this list with the human: it is the scope of this Work.
+- No check method (` — 확인: …`) on any line: verify judges them by reading the document and the diff.
+<!-- /type -->
 - One verifiable sentence per line. Never include push or PR. They happen after verify, so verify cannot judge them.
 
 ## Done when
@@ -80,6 +95,9 @@ Scope (`비목표`) and completion criteria (`완료조건`). This skill has no 
 - Items you could not draft without were asked, or left in `open_questions`.
 <!-- type: general -->
 - Every 완료조건 line ends with a check method.
+<!-- /type -->
+<!-- type: spec -->
+- The target document's path is in `제약`.
 <!-- /type -->
 
 ## Artifact template: `intent.draft.md`
@@ -110,6 +128,11 @@ No front matter: the app adds the type and version when the human approves.
 - [ ] …
 - [ ] (구조 조건: 코드를 읽거나 명령으로 확인할 수 있는 문장)
 <!-- /type -->
+<!-- type: spec -->
+- [ ] (기본 항목 세 개)
+- [ ] …
+- [ ] (<무엇>을 정한다)
+<!-- /type -->
 <!-- type: general -->
 - [ ] (기본 항목 두 개) — 확인: (명령)
 - [ ] … — 확인: …
@@ -117,6 +140,9 @@ No front matter: the app adds the type and version when the human approves.
 <!-- /type -->
 
 ## 제약
+<!-- type: spec -->
+- 설계 문서: `<경로>` (새 문서 / 기존 문서)
+<!-- /type -->
 - (선택)
 
 ## 추가 의견
@@ -125,5 +151,8 @@ No front matter: the app adds the type and version when the human approves.
 <!-- /type -->
 <!-- type: feature refactor general -->
 - (선택) (사람 제안) …
+<!-- /type -->
+<!-- type: spec -->
+- (선택) …
 <!-- /type -->
 ```

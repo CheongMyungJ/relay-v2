@@ -37,6 +37,13 @@ Recording answers:
 
 `open_questions` holds only questions you asked the human that are still unanswered. Never put there something you decided yourself, something the intent already settles (e.g. a non-goal), or a note for later: those go in `decisions`, `assumptions` or `risks`. An open question stops auto-approval.
 
+## Works that follow a design document
+
+If the intent's `제약` says "`<path>`의 결정을 따른다", that design document has settled those decisions.
+
+- Going a different way from the document touches a constraint: it is a human decision of this skill. Ask on the spot. If the change overturns a major direction, offer "멈추고 설계 Work를 먼저 함" (`blocked`).
+- If the human decides to change the design, change the design document too in this task: in its decision table, record what changed, the history and that the human decided it. Commit it with the code.
+
 ## Closing procedure
 
 Run it when:

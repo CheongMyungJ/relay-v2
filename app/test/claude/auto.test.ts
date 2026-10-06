@@ -35,6 +35,7 @@ const CONFIG: Partial<AppConfig> = {
     design: false,
     implement: true,
     refactor: true,
+    spec: true,
     execute: true,
     respond: false,
   },

@@ -579,6 +579,128 @@ export const GENERAL_FILES = {
 export const GENERAL_PR =
   '# README에 테스트 명령과 avg 예시\n\n## 요약\n## 주요 결정\n## 변경\n## 테스트\n'
 
+// ---------- 설계 (D350) ----------
+
+export const SPEC_REQUEST = [
+  'avg에 가중 평균을 더하려고 한다. 구현 전에 설계만 정해서 docs/design/weighted-avg.md에 남겨 주세요.',
+  '정할 것: 가중치를 받는 모양, 가중치 합이 0일 때.',
+  '',
+].join('\n')
+
+/** 설계 대상 문서 (D351). intake가 `제약`에 적는다 */
+export const SPEC_DOC_PATH = 'docs/design/weighted-avg.md'
+
+/** 설계 intent 초안 (5.3, D354, D355, D356): "정한다" 항목, 기본 항목 셋, 확인 방법 없음, 대상 문서는 `제약` */
+export function specIntentDraft() {
+  const sections: [string, string][] = [
+    ['목표', 'avg의 가중 평균 설계를 정해 설계 문서로 남긴다.'],
+    ['비목표', '- 구현'],
+    ['원하는 결과', '구현 Work가 문서만 읽고 가중 평균을 만든다.'],
+    [
+      '완료조건',
+      [
+        '- [ ] 대상 문서와 지식 파일 밖의 파일을 바꾸지 않는다',
+        '- [ ] 문서의 서술이 서로, 그리고 지금 코드와 어긋나지 않는다',
+        '- [ ] 정하지 않고 남긴 것은 문서의 따로 둔 절에 이유와 함께 있다',
+        '- [ ] 가중치를 받는 모양을 정한다',
+        '- [ ] 가중치 합이 0일 때를 정한다',
+      ].join('\n'),
+    ],
+    ['제약', `- 설계 문서: \`${SPEC_DOC_PATH}\` (새 문서)`],
+  ]
+  return sections.map(([name, text]) => `## ${name}\n${text}\n`).join('\n')
+}
+
+/** spec이 커밋하는 설계 문서 (D359의 새 문서 템플릿). 코드 파일은 바꾸지 않는다 (D350) */
+export const SPEC_DOC_FILES = {
+  [SPEC_DOC_PATH]: [
+    '# 가중 평균',
+    '',
+    '## 개요',
+    'avg에 가중 평균 weightedAvg를 더한다. 구현은 이 문서를 따르는 Work가 한다.',
+    '',
+    '## 결정',
+    '| # | 결정 | 이유 | 사람 결정 |',
+    '|---|---|---|---|',
+    '| 1 | 값과 가중치를 따로 받는다: `weightedAvg(xs, ws)` | avg와 같은 모양 | 사람 |',
+    '| 2 | 가중치 합이 0이면 0을 돌려준다 | avg([])와 맞춤 | 사람 |',
+    '| 3 | 파일은 `src/weighted-avg.js` | 레포 관례 | 사람이 정하지 않음 |',
+    '',
+    '## 정하지 않은 것',
+    '- 없음',
+    '',
+    '## 변경 이력',
+    '- 처음 씀',
+    '',
+  ].join('\n'),
+}
+
+/** spec.md의 `## 주제 목록` 본문 (5.6.12, D357, D366). 설계 문답의 [요약] 맨 위에 보인다 (D374) */
+export const SPEC_TOPICS = [
+  '1. 가중치를 받는 모양 — 정함',
+  '2. 가중치 합이 0일 때 — 정함',
+  '3. 구현 나눔 — 사람이 뺌',
+].join('\n')
+
+/** spec.md (5.6.12): 네 절 */
+export const SPEC_DOC = [
+  '## 주제 목록',
+  SPEC_TOPICS,
+  '',
+  '## 문답 기록',
+  '### 주제 1. 가중치를 받는 모양',
+  `- 값과 가중치를 따로 받나 — 추천과 같음 — ${SPEC_DOC_PATH} 결정 1`,
+  '### 주제 2. 가중치 합이 0일 때',
+  `- 0을 돌려주나 — 추천과 같음 — ${SPEC_DOC_PATH} 결정 2`,
+  '',
+  '## 확인한 것',
+  '- avg([])의 값 — src/avg.js를 읽음 — 빈 배열은 NaN(이번 설계 밖)',
+  '',
+  '## 문서 변경',
+  `- ${SPEC_DOC_PATH} — 새 문서, 결정 1~3, 커밋 "docs: 가중 평균 설계"`,
+  '',
+].join('\n')
+
+/** spec handoff의 결정: 주제마다 사람이 고른 것과 문서로 옮기며 정한 세부 (D358) */
+export const SPEC_DECISIONS = [
+  { what: '값과 가중치를 따로 받는다', why: '주제 1에서 사람이 고름', by: 'human' as const },
+  { what: '가중치 합이 0이면 0', why: '주제 2에서 사람이 고름', by: 'human' as const },
+  { what: '파일은 src/weighted-avg.js', why: '레포 관례', by: 'ai' as const },
+]
+
+/** 설계 verification.md의 `## 다시 볼 결정` 본문 (D362). Work 완료 화면에 보인다 (I106) */
+export const SPEC_REVISIT =
+  '- 결정 2: 가중치 합이 0이면 오류를 내는 대안도 있다 — 조용히 0이 되면 입력 실수를 놓친다'
+
+/** 설계 verification.md (5.6.6, D362~D364, D374): 일곱 절. 테스트 파일 변경 대신 문서 밖 파일 변경 */
+export function specVerification(revisit = SPEC_REVISIT) {
+  return [
+    REVIEW_NONE,
+    '## 완료조건 판정',
+    '| 완료조건 | 판정 | 근거 |',
+    '|---|---|---|',
+    '| 대상 문서와 지식 파일 밖의 파일을 바꾸지 않는다 | 통과 | 기준 커밋과의 diff에 대상 문서만 |',
+    '| 문서의 서술이 서로, 그리고 지금 코드와 어긋나지 않는다 | 통과 | src/avg.js와 맞음 |',
+    '| 정하지 않고 남긴 것은 문서의 따로 둔 절에 이유와 함께 있다 | 통과 | 정하지 않은 것: 없음 |',
+    '| 가중치를 받는 모양을 정한다 | 통과 | 결정 1 |',
+    '| 가중치 합이 0일 때를 정한다 | 통과 | 결정 2 |',
+    '',
+    '## 문서 밖 파일 변경',
+    '- 없음',
+    '',
+    '## 다시 볼 결정',
+    revisit,
+    '',
+    '## 남은 위험',
+    '- 없음',
+    '',
+  ].join('\n')
+}
+
+/** 설계 pr.md (D364) */
+export const SPEC_PR =
+  '# 가중 평균 설계\n\n## 요약\n## 주요 결정\n## 다시 볼 결정\n## 정하지 않은 것\n## 변경\n'
+
 // ---------- 노드마다의 기본 단계 ----------
 
 const decision = (what: string, by: 'ai' | 'human' = 'ai') => ({ what, why: `${what}인 이유`, by })
@@ -662,6 +784,19 @@ export function steps(node: NodeName): Step[] {
             decisions: [decision('합계는 sum 하나에서 계산')],
             summary: '안전망을 커밋하고 sum을 추출해 커밋했다.',
           }),
+        },
+        { do: 'stop' },
+      ]
+    case 'spec':
+      // 기본 단계는 묻지 않고 설계 문서를 커밋한다. 주제 목록과 질문 묶음을 묻는 것은 specAsking()이다 (5.6.12)
+      return [
+        { do: 'prompt' },
+        { do: 'commit', files: SPEC_DOC_FILES, message: 'docs: 가중 평균 설계' },
+        { do: 'write', file: 'spec.md', text: SPEC_DOC },
+        {
+          do: 'write',
+          file: 'handoff.md',
+          text: handoff({ decisions: SPEC_DECISIONS, summary: '설계 문서를 쓰고 커밋했다.' }),
         },
         { do: 'stop' },
       ]

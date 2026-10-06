@@ -219,11 +219,11 @@ describe('스키마 검사: handoff (5.2.1)', () => {
       '`recommended_next` 형식이 틀림 (기대: null 또는 {node, reason}, 지금: 문자열)',
     ])
     expect(run({ recommended_next: { node: 'deploy', reason: '배포' } })).toEqual([
-      '`recommended_next.node` 값이 허용값이 아님 (허용값: intake | fix | design | implement | refactor | execute | verify, 지금: deploy)',
+      '`recommended_next.node` 값이 허용값이 아님 (허용값: intake | fix | design | implement | refactor | spec | execute | verify, 지금: deploy)',
     ])
     // 없어진 노드도 허용값이 아니다 (D227)
     expect(run({ recommended_next: { node: 'review', reason: '다시 리뷰' } })).toEqual([
-      '`recommended_next.node` 값이 허용값이 아님 (허용값: intake | fix | design | implement | refactor | execute | verify, 지금: review)',
+      '`recommended_next.node` 값이 허용값이 아님 (허용값: intake | fix | design | implement | refactor | spec | execute | verify, 지금: review)',
     ])
     expect(run({ recommended_next: { node: 'verify' } })).toEqual([
       '`recommended_next.reason` 없음: 필수 필드',
@@ -596,6 +596,25 @@ describe('task 검사 (5.2.1)', () => {
       '`implement.md` 없음: `status: awaiting_approval`일 때 필수 산출물',
     ])
     expect(feature('design', { 'handoff.md': handoff(), 'design.md': '' })).toEqual([])
+  })
+
+  it('필수 산출물: 설계 문답은 spec.md다. 설계 문서는 레포에 커밋하므로 보지 않는다 (3.1, D351, D372)', () => {
+    const spec = (files: Record<string, string>) =>
+      errorsOf(checkTask({ node: 'spec', type: 'spec', files, config: DEFAULT_CONFIG }))
+    expect(spec({ 'handoff.md': handoff() })).toEqual([
+      '`spec.md` 없음: `status: awaiting_approval`일 때 필수 산출물',
+    ])
+    expect(spec({ 'handoff.md': handoff(), 'spec.md': '' })).toEqual([])
+  })
+
+  it('설계의 intent 초안은 완료조건에 확인 방법이 없어도 된다 (D356)', () => {
+    const r = checkTask({
+      node: 'intake',
+      type: 'spec',
+      files: { 'intent.draft.md': draft() },
+      config: DEFAULT_CONFIG,
+    })
+    expect(errorsOf(r)).toEqual([])
   })
 
   it('유효한 handoff면 머리글 값을 돌려준다', () => {

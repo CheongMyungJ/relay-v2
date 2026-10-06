@@ -217,6 +217,7 @@ describe('[흐름] 기능 추가 유형 (M14)', () => {
         design: true,
         implement: false,
         refactor: false,
+        spec: false,
         execute: false,
         respond: false,
       },

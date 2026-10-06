@@ -26,6 +26,7 @@ import {
   FIX_FILE,
   IMPLEMENT_FILE,
   REFACTOR_FILE,
+  SPEC_FILE,
   EXECUTION_FILE,
   INTENT_DRAFT_FILE,
   VERIFICATION_FILE,
@@ -395,6 +396,7 @@ const LEAD: Partial<
     title: '리팩터링',
     sections: ['계획', '찾은 버그와 받아들인 차이'],
   },
+  spec: { file: SPEC_FILE, title: '설계 문답', sections: ['주제 목록'] },
   execute: { file: EXECUTION_FILE, title: '실행', sections: ['계획', '완료조건별 자체 확인'] },
   verify: { file: VERIFICATION_FILE, title: '리뷰 지적', sections: ['리뷰 지적', '반영'] },
 }
@@ -403,7 +405,8 @@ const LEAD: Partial<
  * [요약] 탭 맨 위에 둘 이 단계의 핵심 (D223). 의도 정리는 intent 초안의 목표·비목표·완료조건을, 원인 분석과 수정은
  * fix.md의 `## 원인`을, 설계와 계획은 design.md의 `## 유저 시나리오`와 `## 요구사항`을, 구현은 implement.md의
  * `## 계획과 달라진 점`을, 계획과 리팩터링은 refactor.md의 `## 계획`과 `## 찾은 버그와 받아들인 차이`를(D278),
- * 실행은 execution.md의 `## 계획`과 `## 완료조건별 자체 확인`을(D318), 리뷰와 검증은 verification.md의 `## 리뷰 지적`과 `## 반영`을 보인다(D229, D256). 없는
+ * 설계 문답은 spec.md의 `## 주제 목록`을(D374), 실행은 execution.md의 `## 계획`과 `## 완료조건별 자체 확인`을(D318), 리뷰와
+ * 검증은 verification.md의 `## 리뷰 지적`과 `## 반영`을 보인다(D229, D256). 없는
  * 절은 빼고, 파일이 없거나 보일 절이 하나도 없으면 null이다. 다른 단계도 null이다
  */
 export function stageLead(
@@ -460,4 +463,18 @@ export function verdicts(verification: string): Verdict[] {
       basis: rest.join(' | '),
       warn: !verdict.replace(/[*_`]/g, '').trim().startsWith(PASS),
     }))
+}
+
+const REVISIT_SECTION = '다시 볼 결정'
+/** "없음" 한 줄: 목록 표시, 따옴표, 괄호, 마침표는 가리지 않는다 */
+const NONE = /^[-*\s]*[("“]?없음[)"”]?\.?$/
+
+/**
+ * Work 완료 화면의 다시 볼 결정 (시나리오 7-3, D362, I106): 설계 Work의 verification.md `## 다시 볼 결정` 본문. 다른
+ * 유형이거나, 절이 없거나 비었거나 "없음"이면 null이다
+ */
+export function revisitDecisions(type: WorkType, verification: string): string | null {
+  if (type !== 'spec') return null
+  const text = sectionText(normalizeText(verification), REVISIT_SECTION)
+  return text && !NONE.test(text) ? text : null
 }

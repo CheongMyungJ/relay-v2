@@ -4,21 +4,36 @@ import type { AgentEngine } from './agent'
 import type { WorkType } from './work'
 
 /**
- * relay 스킬 (5.6). 질문 방식을 스킬마다 고른다 (D26). fix는 버그 수정, design과 implement는 기능 추가, refactor는
- * 리팩터링, execute는 일반에만 쓴다 (D232, D256, D278, D318). pr-respond는 파이프라인 밖의 PR 대응 task다 (D168, D187)
+ * relay 스킬 (5.6). fix는 버그 수정, design과 implement는 기능 추가, refactor는 리팩터링, spec은 설계, execute는 일반에만
+ * 쓴다 (D232, D256, D278, D318, D372). pr-respond는 파이프라인 밖의 PR 대응 task다 (D168, D187)
  */
 export type SkillName =
-  'work-start' | 'fix' | 'design' | 'implement' | 'refactor' | 'execute' | 'verify' | 'pr-respond'
+  | 'work-start'
+  | 'fix'
+  | 'design'
+  | 'implement'
+  | 'refactor'
+  | 'spec'
+  | 'execute'
+  | 'verify'
+  | 'pr-respond'
+
+/**
+ * 질문 방식을 고르는 스킬 (D26, I104). spec(설계 문답)은 결정을 모두 묻으므로 질문 방식 설정이 없다 (D358). 설정 키에서만
+ * 빼고, 노드의 스킬과 배포는 SkillName을 쓴다
+ */
+export type QuestionSkill = Exclude<SkillName, 'spec'>
 
 /** 질문 방식 (5.6.1). 초안 우선 / 결정마다 확인 */
 export type QuestionMode = 'draft_first' | 'confirm_each'
 
 /**
  * 자동 승인을 켤 수 있는 노드. intake(의도 승인)와 verify(리뷰와 검증 = Work 완료)는 항상 수동이다 (4.2).
- * design과 implement는 기능 추가, refactor는 리팩터링, execute는 일반의 단계다 (D234, D249, D276, D315). respond는 PR
- * 대응 task다 (D169)
+ * design과 implement는 기능 추가, refactor는 리팩터링, spec은 설계, execute는 일반의 단계다 (D234, D249, D276, D367,
+ * D315). respond는 PR 대응 task다 (D169)
  */
-export type AutoApproveNode = 'fix' | 'design' | 'implement' | 'refactor' | 'execute' | 'respond'
+export type AutoApproveNode =
+  'fix' | 'design' | 'implement' | 'refactor' | 'spec' | 'execute' | 'respond'
 
 /** 화면 테마 (D335). system은 OS 설정을 따른다 */
 export type ThemeChoice = 'system' | 'dark' | 'light'
@@ -41,8 +56,8 @@ export interface AppConfig {
   auto_approve: Record<AutoApproveNode, boolean>
   /** 자동 승인 전 카운트다운 (4.3) */
   auto_approve_countdown_sec: number
-  /** 스킬별 질문 방식 (5.6.1) */
-  question_mode: Record<SkillName, QuestionMode>
+  /** 스킬별 질문 방식 (5.6.1). spec은 없다 (D358, I104) */
+  question_mode: Record<QuestionSkill, QuestionMode>
   /** true면 draft PR로 만든다 (D71) */
   pr_draft: boolean
   /** handoff 본문 분량 경고 기준 (5.2) */
@@ -70,7 +85,7 @@ export interface AppConfig {
 /** work.json의 settings. 앱 설정과 같은 키를 쓰고, 없는 키는 앱 설정을 따른다 (D72) */
 export interface WorkSettings {
   auto_approve?: Partial<Record<AutoApproveNode, boolean>>
-  question_mode?: Partial<Record<SkillName, QuestionMode>>
+  question_mode?: Partial<Record<QuestionSkill, QuestionMode>>
   /** 대응 자동 시작 (D154, 5.1.1) */
   respond_auto_start?: boolean
 }
@@ -81,13 +96,13 @@ export interface WorkSettings {
  */
 export interface WorkSettingsPatch {
   auto_approve?: Partial<Record<AutoApproveNode, boolean>>
-  question_mode?: Partial<Record<SkillName, QuestionMode>>
+  question_mode?: Partial<Record<QuestionSkill, QuestionMode>>
   respond_auto_start?: boolean | null
 }
 
 /**
- * 설정 목록의 묶음 (D256, D278, D318): 모든 유형에 같이 쓰는 단계(common), 그 유형에만 있는 단계(bugfix, feature,
- * refactor, general), PR 대응(pr).
+ * 설정 목록의 묶음 (D256, D278, D318, D374): 모든 유형에 같이 쓰는 단계(common), 그 유형에만 있는 단계(bugfix, feature,
+ * refactor, spec, general), PR 대응(pr).
  * 설정 화면은 묶음마다 모아 보이고, Work 설정은 그 Work 유형의 단계와 공통, PR 대응만 보인다 (I57)
  */
 export type SettingGroup = 'common' | WorkType | 'pr'
@@ -98,6 +113,7 @@ export const SETTING_GROUP_LABEL: Readonly<Record<SettingGroup, string>> = {
   bugfix: '버그 수정',
   feature: '기능 추가',
   refactor: '리팩터링',
+  spec: '설계',
   general: '일반',
   pr: 'PR 대응',
 }
@@ -108,10 +124,10 @@ export function groupShown(group: SettingGroup, type: WorkType): boolean {
 }
 
 /**
- * 스킬과 그 노드의 화면 이름과 묶음 (D109, D256). 설정 화면과 Work 설정의 질문 방식 목록에 쓴다.
- * core/pipeline의 NODE_INFO와 PIPELINES에 맞는지 [단위]가 확인한다.
+ * 스킬과 그 노드의 화면 이름과 묶음 (D109, D256). 설정 화면과 Work 설정의 질문 방식 목록에 쓴다. spec은 질문 방식이
+ * 없어 여기 없다 (D358, I104). core/pipeline의 NODE_INFO와 PIPELINES에 맞는지 [단위]가 확인한다.
  */
-export const SKILL_TITLES: readonly (readonly [SkillName, string, SettingGroup])[] = [
+export const SKILL_TITLES: readonly (readonly [QuestionSkill, string, SettingGroup])[] = [
   ['work-start', '의도 정리', 'common'],
   ['fix', '원인 분석과 수정', 'bugfix'],
   ['design', '설계와 계획', 'feature'],
@@ -131,6 +147,7 @@ export const AUTO_APPROVE_TITLES: readonly (readonly [AutoApproveNode, string, S
   ['design', '설계와 계획', 'feature'],
   ['implement', '구현', 'feature'],
   ['refactor', '계획과 리팩터링', 'refactor'],
+  ['spec', '설계 문답', 'spec'],
   ['execute', '실행', 'general'],
   ['respond', 'PR 대응', 'pr'],
 ]
@@ -142,9 +159,9 @@ export const QUESTION_MODE_LABEL: Readonly<Record<QuestionMode, string>> = {
 }
 
 /**
- * 앱 설정의 기본값 (5.1.1). 자동 승인은 원인 분석과 수정(D214), 구현(D249), 계획과 리팩터링(D276), 실행(D315)을 켠다. 변경은 리뷰와 검증의 Work 완료
- * 화면에서 사람이 본다 (D7). 원인이 불확실하면 fix가 고치기 전에 묻는다 (D228). 설계와 계획은 방향을 사람이 보는
- * 단계라 끈다 (D234)
+ * 앱 설정의 기본값 (5.1.1). 자동 승인은 원인 분석과 수정(D214), 구현(D249), 계획과 리팩터링(D276), 설계 문답(D367),
+ * 실행(D315)을 켠다. 변경은 리뷰와 검증의 Work 완료 화면에서 사람이 본다 (D7). 원인이 불확실하면 fix가 고치기 전에
+ * 묻는다 (D228). 설계와 계획은 방향을 사람이 보는 단계라 끈다 (D234)
  */
 export const DEFAULT_CONFIG: AppConfig = {
   schema_version: 1,
@@ -155,6 +172,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     design: false,
     implement: true,
     refactor: true,
+    spec: true,
     execute: true,
     respond: false,
   },
