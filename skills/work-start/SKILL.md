@@ -41,7 +41,8 @@ Read the request, talk with the human, and write the intent draft `intent.draft.
 <!-- /type -->
 <!-- type: spec -->
 - **This skill does not change code.** Skim the code and documents only enough to write concrete goals and completion criteria. Do not settle the design decisions. That is the job of spec.
-- Do not write how to decide in the intent.
+- Do not write how to decide in the intent. The only exception is the human's suggestions below.
+- **Human suggestions:** if the request says how something should be decided, copy it to `제약` when it is a must, otherwise to `추가 의견` with the prefix "(사람 제안)". spec still asks about it.
 - **A small request:** `spec` is for big work whose design is settled before it is built. If the request is small enough that `feature` fits better, say why before you write the draft, and ask: keep `spec` / change the type (`blocked`). If they keep it, draft with `spec`.
 - **Target document:** settle with the human which design document this goes into, a new one or an existing one, and write it in `제약` as "설계 문서: `<path>` (새 문서 / 기존 문서)". For a new document, if the repo has no convention for design documents, propose `docs/design/<english-name>.md`. The target document is not a document to follow: do not also write "의 결정을 따른다" for it.
 <!-- /type -->
@@ -149,10 +150,7 @@ No front matter: the app adds the type and version when the human approves.
 <!-- type: bugfix -->
 - (선택) (사람 추정, 확인 안 됨) …
 <!-- /type -->
-<!-- type: feature refactor general -->
+<!-- type: feature refactor spec general -->
 - (선택) (사람 제안) …
-<!-- /type -->
-<!-- type: spec -->
-- (선택) …
 <!-- /type -->
 ```

@@ -31,6 +31,7 @@ For a spec Work, settle with the human, one by one, what the intent says to deci
 - One topic at a time. First explain the issue or a scenario briefly in terminal text (option descriptions are short). Then ask one `AskUserQuestion` batch (up to 4 questions) for the topic.
 - Every question has options. Put the recommended option first with "(추천)", and give the reason in its description.
 - Issues that come up from the answers go in the next batch.
+- **Human suggestions:** a "(사람 제안)" in the intent's `추가 의견` is not decided yet. When you ask its topic, show it as an option marked "(사람 제안)", and still ask. What the intent's `제약` says is a must: do not ask it, write it in the document as the human's decision.
 - **Ask every decision of the topic.** The details you fill in while writing the document (names, section layout, small rules that come from writing a decision down) are yours: mark them "사람이 정하지 않음" in the decision table and record them in `decisions` with `by: ai`.
 
 ## Rules
