@@ -24,6 +24,7 @@ import type {
 import type { AppConfig } from '../shared/config'
 import type { MergeMethod, WorkState } from '../shared/work'
 import { knownTaskEngine } from './agent'
+import { resolveAgent } from '../shared/agent'
 import { approvalMode } from './approval'
 import { RESPOND } from './pipeline'
 import {
@@ -1040,7 +1041,7 @@ export interface PrViewInput {
   work: Pick<WorkState, 'status' | 'operation' | 'pr' | 'tasks' | 'settings'>
   /** 앱 설정: 자동 대응의 상태 (D154, D169, D171) */
   config: Pick<AppConfig, 'respond_auto_start' | 'respond_auto_round_max' | 'auto_approve'> &
-    Partial<Pick<AppConfig, 'agent_engine'>>
+    Partial<Pick<AppConfig, 'agent_engine' | 'agent_steps'>>
   read: PrReadState | null
   file: PrItemsFile
   rules: ItemRules
@@ -1057,7 +1058,11 @@ export function prView(input: PrViewInput): PrView | null {
   const activeResponse = pendingRespond(input.work)
   const responseEngine = activeResponse
     ? knownTaskEngine(activeResponse)
-    : (input.config.agent_engine ?? 'claude')
+    : // 다음 대응 task의 엔진: 상세 설정의 PR 대응 엔진 ?? 기본 엔진
+      resolveAgent(
+        { ...input.config, agent_engine: input.config.agent_engine ?? 'claude' },
+        'pr-respond',
+      ).engine
   const gate = mergeGate({
     work: input.work,
     read,
