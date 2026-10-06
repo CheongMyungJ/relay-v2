@@ -60,7 +60,7 @@ describe('findClaude (D106)', () => {
     expect(findClaude({ env, platform: 'win32', exists: () => false })).toBeNull()
   })
 
-  it('Linux는 네이티브 설치 → PATH 순서다: PATH에 ~/.local/bin이 없어도 찾는다 (I106)', () => {
+  it('Linux는 네이티브 설치 → PATH 순서다: PATH에 ~/.local/bin이 없어도 찾는다 (I119)', () => {
     const linux = { HOME: '/home/u', PATH: '/usr/bin:/usr/local/bin' }
     const native = '/home/u/.local/bin/claude'
     const onPath = '/usr/local/bin/claude'
@@ -72,7 +72,7 @@ describe('findClaude (D106)', () => {
   })
 })
 
-describe('claude 설치 안내 (I106)', () => {
+describe('claude 설치 안내 (I119)', () => {
   it('OS에 맞는 설치 명령을 보인다', () => {
     expect(claudeInstallGuide('win32')).toContain('irm https://claude.ai/install.ps1 | iex')
     expect(claudeInstallGuide('linux')).toContain('curl -fsSL https://claude.ai/install.sh | bash')

@@ -68,7 +68,7 @@ function notify(n: Notice): void {
   notice.show()
 }
 
-/** 새 버전을 받았다는 알림 (I95, D351). 보고 있어도 보낸다. 누르면 창만 띄운다 */
+/** 새 버전을 받았다는 알림 (I95, D377). 보고 있어도 보낸다. 누르면 창만 띄운다 */
 function notifyUpdate(version: string): void {
   if (!Notification.isSupported()) return
   const notice = keepNotice(
@@ -83,7 +83,7 @@ function notifyUpdate(version: string): void {
 }
 
 /**
- * 사람이 설치해야 하는 곳(WSL 등)이거나 지난번 끌 때의 설치가 실패했을 때 새 버전을 받으면 (D353). WSLg는 OS 알림을
+ * 사람이 설치해야 하는 곳(WSL 등)이거나 지난번 끌 때의 설치가 실패했을 때 새 버전을 받으면 (D379). WSLg는 OS 알림을
  * Windows로 넘기지 않을 수 있어 창 안의 대화상자로 설치 명령을 보이고 [명령 복사]를 준다. 창이 닫혔으면 보이지 않는다
  */
 function showManualInstall(reason: ManualInstallReason, version: string, file: string): void {
@@ -219,7 +219,7 @@ function createWindow(): void {
 }
 
 /**
- * 자동 업데이트를 시작한다 (I95, D351, D353). Linux .deb는 설치할 수 없는 곳이면 설치 명령만 보이고, 끌 때 설치를
+ * 자동 업데이트를 시작한다 (I95, D377, D379). Linux .deb는 설치할 수 없는 곳이면 설치 명령만 보이고, 끌 때 설치를
  * 시도하면 기록해 두었다가 다음 실행의 버전이 그대로면(취소, 인증 도구 실패) 받은 뒤 설치 명령을 함께 보인다
  */
 function startUpdatesFor(platform: NodeJS.Platform): void {

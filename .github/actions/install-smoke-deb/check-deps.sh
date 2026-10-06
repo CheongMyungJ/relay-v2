@@ -1,5 +1,5 @@
 #!/bin/bash
-# .deb의 의존성 확인 (I104, PR #37 리뷰). 깨끗한 컨테이너에 .deb를 설치하고, /opt/relay의 ELF가 못 찾는 공유 라이브러리가
+# .deb의 의존성 확인 (I117, PR #37 리뷰). 깨끗한 컨테이너에 .deb를 설치하고, /opt/relay의 ELF가 못 찾는 공유 라이브러리가
 # 없는지 본다. 데스크톱 라이브러리가 다 깔린 러너의 [스모크]는 depends에서 빠진 라이브러리를 잡지 못한다.
 #   bash check-deps.sh <.deb 경로>   (root로, apt가 있는 이미지에서)
 set -euo pipefail

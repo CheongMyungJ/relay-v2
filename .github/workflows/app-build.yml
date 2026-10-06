@@ -1,4 +1,4 @@
-# 설치 파일 빌드와 [스모크] (docs/implementation.md I8, I27, I104, 8.3). 수동으로만 실행한다.
+# 설치 파일 빌드와 [스모크] (docs/implementation.md I8, I27, I117, 8.3). 수동으로만 실행한다.
 # 설치 파일을 만들고, 러너에 조용히 설치하고, 설치한 앱을 Playwright로 띄워 가짜 claude의 출력을 확인한다.
 # Windows(NSIS)와 Linux(.deb)를 따로 돈다. Linux는 오래된 glibc에서도 돌게 ubuntu-22.04에서 빌드하고,
 # 22.04와 AppArmor가 user namespace를 막는 24.04에 각각 설치해 본다.
@@ -97,14 +97,14 @@ jobs:
 
       - name: 앱 의존성 설치
         working-directory: app
-        # node-pty는 Linux 사전 빌드가 없어 여기서 소스로 빌드한다 (I103)
+        # node-pty는 Linux 사전 빌드가 없어 여기서 소스로 빌드한다 (I116)
         run: npm ci --no-audit --no-fund
 
       - name: 설치 파일 빌드
         working-directory: app
         run: npm run dist:linux
 
-      - name: 업데이트 파일 확인 (I105)
+      - name: 업데이트 파일 확인 (I118)
         working-directory: app
         run: |
           set -euo pipefail

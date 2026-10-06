@@ -1,6 +1,6 @@
 # 설치 파일 (I8): NSIS, x64, 사용자별 설치(관리자 권한 불필요), 서명 없음. 자동 업데이트는 GitHub Releases (I95).
 # 설치 위치는 %LOCALAPPDATA%\Programs\relay, 실행 파일은 relay.exe다.
-# Linux는 .deb, x64 (D350, I103). 설치 위치는 /opt/relay, 실행 파일은 /opt/relay/relay(/usr/bin/relay로 링크)다.
+# Linux는 .deb, x64 (D376, I116). 설치 위치는 /opt/relay, 실행 파일은 /opt/relay/relay(/usr/bin/relay로 링크)다.
 appId: io.github.cheongmyungj.relay
 productName: relay
 directories:
@@ -44,8 +44,8 @@ nsis:
   oneClick: true
   perMachine: false
   artifactName: relay-setup-${version}.${ext}
-# Linux (D350, I103). .deb 설치 스크립트가 chrome-sandbox 권한과 Ubuntu 24.04+의 AppArmor 프로필을 맞춘다.
-# 설치 파일 이름은 기본값 relay_<버전>_amd64.deb이고, resources/package-type(deb)으로 업데이터가 형식을 안다(I105).
+# Linux (D376, I116). .deb 설치 스크립트가 chrome-sandbox 권한과 Ubuntu 24.04+의 AppArmor 프로필을 맞춘다.
+# 설치 파일 이름은 기본값 relay_<버전>_amd64.deb이고, resources/package-type(deb)으로 업데이터가 형식을 안다(I118).
 linux:
   target:
     - target: deb

@@ -33,7 +33,7 @@ export function findClaude(opts: FindClaudeOptions = {}): string | null {
       candidates.push(p.join(env['USERPROFILE'], '.local', 'bin', 'claude.exe'))
     if (env['APPDATA']) candidates.push(p.join(env['APPDATA'], 'npm', 'claude.cmd'))
   } else if (env['HOME']) {
-    // 네이티브 설치 위치. 메뉴로 켠 앱은 로그인 뒤에 생긴 ~/.local/bin이 PATH에 없을 수 있다 (I106)
+    // 네이티브 설치 위치. 메뉴로 켠 앱은 로그인 뒤에 생긴 ~/.local/bin이 PATH에 없을 수 있다 (I119)
     candidates.push(p.join(env['HOME'], '.local', 'bin', 'claude'))
   }
   const names = platform === 'win32' ? ['claude.exe', 'claude.cmd'] : ['claude']

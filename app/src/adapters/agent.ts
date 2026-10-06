@@ -28,7 +28,7 @@ import {
   type CodexSettings,
 } from './codex'
 
-/** claude가 없을 때의 안내. 설치 명령은 OS마다 다르다 (D106, I106) */
+/** claude가 없을 때의 안내. 설치 명령은 OS마다 다르다 (D106, I119) */
 export function claudeInstallGuide(platform: NodeJS.Platform): string {
   const install =
     platform === 'win32'

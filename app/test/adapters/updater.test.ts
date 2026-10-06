@@ -16,7 +16,7 @@ afterEach(() => {
   for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true })
 })
 
-describe('끌 때 설치의 실패 기록 (D353)', () => {
+describe('끌 때 설치의 실패 기록 (D379)', () => {
   it('다음 실행의 버전이 그대로면 실패이고 기록을 남긴다', () => {
     const dir = temp()
     expect(lastInstallFailed(dir, '0.1.0')).toBe(false)

@@ -28,7 +28,7 @@ describe('자동 업데이트 (I95)', () => {
     expect(updatesEnabled({ ...installed, version: UNRELEASED_VERSION })).toBe(false)
   })
 
-  it('Linux는 릴리스한 .deb 설치본에서만 켠다 (I105)', () => {
+  it('Linux는 릴리스한 .deb 설치본에서만 켠다 (I118)', () => {
     expect(updatesEnabled(deb)).toBe(true)
     expect(updatesEnabled({ ...deb, packaged: false })).toBe(false)
     expect(updatesEnabled({ ...deb, version: UNRELEASED_VERSION })).toBe(false)
@@ -37,7 +37,7 @@ describe('자동 업데이트 (I95)', () => {
       expect(updatesEnabled({ ...deb, packageType })).toBe(false)
   })
 
-  it('.deb는 끌 때 관리자 비밀번호를 묻는다고 알린다 (D351)', () => {
+  it('.deb는 끌 때 관리자 비밀번호를 묻는다고 알린다 (D377)', () => {
     expect(updateNoticeBody('linux')).toContain('관리자 비밀번호')
     expect(updateNoticeBody('win32')).not.toContain('비밀번호')
   })
@@ -51,13 +51,13 @@ describe('자동 업데이트 (I95)', () => {
     }
   })
 
-  it('WSL을 환경 변수나 커널 릴리스로 알아본다 (D352)', () => {
+  it('WSL을 환경 변수나 커널 릴리스로 알아본다 (D378)', () => {
     expect(isWsl({ WSL_DISTRO_NAME: 'Ubuntu' }, '6.8.0-45-generic')).toBe(true)
     expect(isWsl({}, '5.15.167.4-microsoft-standard-WSL2')).toBe(true)
     expect(isWsl({}, '6.8.0-45-generic')).toBe(false)
   })
 
-  it('WSL이나 그래픽 비밀번호 도구가 없는 곳에서는 사람이 설치한다 (D353)', () => {
+  it('WSL이나 그래픽 비밀번호 도구가 없는 곳에서는 사람이 설치한다 (D379)', () => {
     const desktop = {
       platform: 'linux' as const,
       env: {},
@@ -75,7 +75,7 @@ describe('자동 업데이트 (I95)', () => {
     )
   })
 
-  it('설치 명령은 경로를 작은따옴표로 감싼다 (D353)', () => {
+  it('설치 명령은 경로를 작은따옴표로 감싼다 (D379)', () => {
     expect(manualInstallCommand('/home/u/.cache/relay-updater/pending/relay_0.2.0_amd64.deb')).toBe(
       "sudo apt install '/home/u/.cache/relay-updater/pending/relay_0.2.0_amd64.deb'",
     )
@@ -84,7 +84,7 @@ describe('자동 업데이트 (I95)', () => {
     )
   })
 
-  it('설치 명령 대화상자는 까닭에 맞는 안내를 보인다 (D353)', () => {
+  it('설치 명령 대화상자는 까닭에 맞는 안내를 보인다 (D379)', () => {
     const cmd = "sudo apt install '/tmp/relay.deb'"
     expect(manualInstallDetail('unsupported', cmd)).toContain('WSL')
     expect(manualInstallDetail('failed', cmd)).toContain('다시 묻습니다')

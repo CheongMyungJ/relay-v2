@@ -1,6 +1,6 @@
-// 자동 업데이트 (I95, I105). Windows 설치본과 Linux .deb 설치본만 GitHub Releases의 latest.yml(Linux는
+// 자동 업데이트 (I95, I118). Windows 설치본과 Linux .deb 설치본만 GitHub Releases의 latest.yml(Linux는
 // latest-linux.yml)을 보고 새 버전을 뒤에서 받는다. 받은 업데이트는 앱을 끝낼 때 설치한다(.deb는 관리자 비밀번호를
-// 묻는다, D351). WSL처럼 비밀번호 창을 띄울 수 없는 곳은 설치 명령을 보여 주고 사람이 설치한다(D353).
+// 묻는다, D377). WSL처럼 비밀번호 창을 띄울 수 없는 곳은 설치 명령을 보여 주고 사람이 설치한다(D379).
 // 실행 중인 세션을 끊지 않으려고 앱이 스스로 다시 시작하지는 않는다.
 import fs from 'node:fs'
 import { createRequire } from 'node:module'
@@ -45,7 +45,7 @@ export function updatesEnabled(t: UpdateTarget): boolean {
   )
 }
 
-/** 새 버전을 받았다는 알림의 본문. .deb는 끌 때 관리자 비밀번호를 묻는다 (D351) */
+/** 새 버전을 받았다는 알림의 본문. .deb는 끌 때 관리자 비밀번호를 묻는다 (D377) */
 export function updateNoticeBody(platform: NodeJS.Platform): string {
   return platform === 'linux'
     ? '앱을 끝낼 때 관리자 비밀번호를 물은 뒤 설치하고, 다음 실행부터 새 버전입니다.'
@@ -72,7 +72,7 @@ export interface InstallTarget {
 }
 
 /**
- * 받은 .deb를 앱이 끌 때 설치하지 못하고 사람이 설치해야 하는가 (D353). WSL에는 비밀번호 창을 띄울 인증 도구가 없고,
+ * 받은 .deb를 앱이 끌 때 설치하지 못하고 사람이 설치해야 하는가 (D379). WSL에는 비밀번호 창을 띄울 인증 도구가 없고,
  * 그래픽 비밀번호 도구가 없는 데스크톱에서는 electron-updater가 터미널 없이 sudo를 불러 실패한다.
  * 도구가 있어도 실패할 수 있다(polkit 에이전트 없음, 취소). 그것은 lastInstallFailed가 다음 실행에서 잡는다
  */
@@ -91,7 +91,7 @@ export function manualInstallCommand(file: string): string {
 /** 설치 명령을 보이는 까닭: 이 환경에서는 앱이 설치할 수 없음 / 지난번 끌 때 설치하지 못함 */
 export type ManualInstallReason = 'unsupported' | 'failed'
 
-/** 설치 명령 대화상자의 본문 (D353) */
+/** 설치 명령 대화상자의 본문 (D379) */
 export function manualInstallDetail(reason: ManualInstallReason, command: string): string {
   const why =
     reason === 'unsupported'
@@ -101,7 +101,7 @@ export function manualInstallDetail(reason: ManualInstallReason, command: string
   return `${why}\n\n${command}`
 }
 
-/** 끌 때 설치를 시도한다는 기록. 다음 실행의 버전이 그대로면 설치가 실패한 것이다 (D353) */
+/** 끌 때 설치를 시도한다는 기록. 다음 실행의 버전이 그대로면 설치가 실패한 것이다 (D379) */
 const INSTALL_MARK = 'update-install.json'
 
 /** 끌 때 설치를 시도하기 직전에 적는다 (will-quit) */
@@ -131,7 +131,7 @@ export function lastInstallFailed(dir: string, current: string): boolean {
 }
 
 export interface UpdateOptions {
-  /** 앱을 끌 때 받은 버전을 설치한다. 사람이 설치해야 하는 곳(D353)에서는 끈다 */
+  /** 앱을 끌 때 받은 버전을 설치한다. 사람이 설치해야 하는 곳(D379)에서는 끈다 */
   installOnQuit: boolean
 }
 
