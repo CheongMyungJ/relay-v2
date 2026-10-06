@@ -544,6 +544,8 @@ export interface WorkView {
   statusLabel: string
   /** Work를 완료한 때. 보관된 Work가 완료였는지도 이것으로 안다 */
   completedAt: string | null
+  /** 보관된 Work를 사이드바의 공통 아카이브로 옮겼다 */
+  shelved: boolean
   /** 사이드바 배지 (D80) */
   badge: Badge
   /** 액션 바에서 누를 수 있는 조작 (core/machine actions) */

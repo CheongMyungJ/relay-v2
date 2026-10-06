@@ -289,6 +289,11 @@ export interface StopAfterStep extends WorkEvent {
   on: boolean
 }
 
+/** 보관된 Work를 사이드바의 공통 아카이브로 옮긴다. 기록과 산출물은 그대로 둔다 */
+export interface ShelveWork extends WorkEvent {
+  type: 'shelve'
+}
+
 /** 멈춘 Work의 [재개]: 기본 다음 단계를 시작한다 (3.3, 시나리오 3-4) */
 export interface ResumeWork extends WorkEvent {
   type: 'resumeWork'
@@ -666,6 +671,7 @@ export type MachineEvent =
   | Resume
   | Retry
   | StopAfterStep
+  | ShelveWork
   | ResumeWork
   | Abandon
   | UpdateSettings
@@ -1265,6 +1271,8 @@ function dispatch(work: WorkState, event: MachineEvent, config: AppConfig): Tran
   switch (event.type) {
     case 'stopAfter':
       return stopAfter(work, event)
+    case 'shelve':
+      return shelve(work, event)
     case 'resumeWork':
       return resumeWork(work, event)
     case 'abandon':
@@ -1351,6 +1359,7 @@ function dispatch(work: WorkState, event: MachineEvent, config: AppConfig): Tran
 type TaskMachineEvent = Exclude<
   MachineEvent,
   | StopAfterStep
+  | ShelveWork
   | ResumeWork
   | Abandon
   | UpdateSettings
@@ -1975,6 +1984,13 @@ function stopAfter(work: WorkState, e: StopAfterStep): Transition {
   if (work.status !== 'active') return unchanged(work, '진행 중인 Work가 아님')
   if ((work.stop_after_step === true) === e.on) return unchanged(work)
   return { work: e.on ? { ...work, stop_after_step: true } : withoutStopAfter(work), effects: [] }
+}
+
+/** [아카이브로 옮기기]: 보관된 Work만 옮긴다. 이미 옮겼으면 그대로 둔다 */
+function shelve(work: WorkState, e: ShelveWork): Transition {
+  if (work.status !== 'archived') return unchanged(work, '보관된 Work가 아님')
+  if (work.shelved_at) return unchanged(work)
+  return { work: { ...work, shelved_at: e.at }, effects: [] }
 }
 
 /**

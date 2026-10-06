@@ -29,6 +29,7 @@ const api: RelayApi = {
   resume: (workKey, taskId) => ipcRenderer.invoke(IPC.resume, workKey, taskId),
   retry: (workKey, taskId) => ipcRenderer.invoke(IPC.retry, workKey, taskId),
   stopAfter: (workKey, on) => ipcRenderer.invoke(IPC.stopAfter, workKey, on),
+  shelve: (workKey) => ipcRenderer.invoke(IPC.shelve, workKey),
   resumeWork: (workKey) => ipcRenderer.invoke(IPC.resumeWork, workKey),
   abandon: (workKey) => ipcRenderer.invoke(IPC.abandon, workKey),
   stepPreview: (workKey, node, keepCode, type) =>

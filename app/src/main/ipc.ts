@@ -214,6 +214,7 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   ipcMain.handle(IPC.stopAfter, async (_e, workKey: unknown, on: unknown) =>
     (await ready).stopAfter(text(workKey), flag(on)),
   )
+  ipcMain.handle(IPC.shelve, async (_e, workKey: unknown) => (await ready).shelve(text(workKey)))
   ipcMain.handle(IPC.resumeWork, async (_e, workKey: unknown) =>
     (await ready).resumeWork(text(workKey)),
   )

@@ -2246,6 +2246,11 @@ export class WorkRunner {
     return this.enqueue(() => this.command({ type: 'stopAfter', at: this.ctx.at(), on }))
   }
 
+  /** [아카이브로 옮기기]: 보관된 Work를 사이드바의 공통 아카이브로 옮긴다 */
+  shelve(): Promise<CommandResult> {
+    return this.enqueue(() => this.command({ type: 'shelve', at: this.ctx.at() }))
+  }
+
   /** 멈춘 Work의 [재개]: 기본 다음 단계를 시작한다 */
   resumeWork(): Promise<CommandResult> {
     return this.enqueue(() => this.unlessCleanup({ type: 'resumeWork', at: this.ctx.at() }))
@@ -4987,6 +4992,7 @@ export class WorkRunner {
       status: w.status,
       statusLabel: WORK_STATUS_LABEL[w.status],
       completedAt: w.completed_at ?? null,
+      shelved: w.shelved_at !== undefined,
       badge: badge(w, this.prBadge()),
       actions: this.cleanupOpen() ? cleanupActions(actions(w)) : actions(w),
       stopAfterStep: w.stop_after_step === true,

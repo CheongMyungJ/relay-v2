@@ -304,6 +304,80 @@ textarea {
   border-color: transparent;
 }
 
+/* 프로젝트와 아카이브의 머리: 접고 펴는 단추와 이름 */
+.group-head {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 4px;
+}
+
+.group-head .project-name {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.group-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  color: var(--text-dim);
+  background: transparent;
+  border-color: transparent;
+}
+
+.group-toggle:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--bg-raise);
+  border-color: transparent;
+}
+
+.group-toggle svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.12s;
+}
+
+.group-toggle.open svg {
+  transform: rotate(90deg);
+}
+
+.archive {
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+/* 보관된 Work의 우클릭 메뉴 */
+.context-menu {
+  position: fixed;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  min-width: 160px;
+  padding: 4px;
+  background: var(--bg-modal);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.25);
+}
+
+.context-menu button {
+  text-align: left;
+  background: transparent;
+  border-color: transparent;
+}
+
+.context-menu button:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: transparent;
+}
+
 .work-item {
   position: relative;
   display: grid;

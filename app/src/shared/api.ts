@@ -82,6 +82,8 @@ export interface RelayApi {
   retry(workKey: string, taskId: string): Promise<CommandResult>
   /** [이 단계 끝나면 멈춤]을 켜거나 끈다 (시나리오 3-4) */
   stopAfter(workKey: string, on: boolean): Promise<CommandResult>
+  /** [아카이브로 옮기기]: 보관된 Work를 사이드바의 공통 아카이브로 옮긴다 */
+  shelve(workKey: string): Promise<CommandResult>
   /** 멈춘 Work의 [재개] (3.3) */
   resumeWork(workKey: string): Promise<CommandResult>
   /** [Work 포기] (3.3) */
@@ -172,6 +174,7 @@ export const IPC = {
   resume: 'work:resume',
   retry: 'work:retry',
   stopAfter: 'work:stop-after',
+  shelve: 'work:shelve',
   resumeWork: 'work:resume-work',
   abandon: 'work:abandon',
   stepPreview: 'work:step-preview',

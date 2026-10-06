@@ -28,6 +28,14 @@ import { withOpened } from './opened'
 import { Panel, showsPr, wantsApproval } from './Panel'
 import { TerminalView } from './TerminalView'
 import { QuestionDialog } from './QuestionDialog'
+import {
+  ARCHIVE_GROUP,
+  canShelve,
+  loadCollapsed,
+  saveCollapsed,
+  sidebarGroups,
+  toggled,
+} from './sidebar'
 
 type Dialog =
   | { kind: 'project' }
@@ -78,6 +86,10 @@ export function App() {
   const [dialog, setDialog] = useState<Dialog>(null)
   const [review, setReview] = useState<ReviewView | null>(null)
   const [hiddenQuestionId, setHiddenQuestionId] = useState<string | null>(null)
+  // 접은 프로젝트와 아카이브. 이 컴퓨터의 화면 설정이라 브라우저 저장소에 둔다
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(loadCollapsed)
+  // 보관된 Work의 우클릭 메뉴
+  const [menu, setMenu] = useState<{ workKey: string; x: number; y: number } | null>(null)
 
   useEffect(() => {
     void window.relay.appInfo().then(setInfo)
@@ -160,16 +172,68 @@ export function App() {
     setPicked((m) => (id === w.current ? without(m, w.key) : { ...m, [w.key]: id }))
   }, [])
 
-  const worksByProject = useMemo(() => {
-    const out = new Map<string, WorkView[]>()
-    for (const w of Object.values(works)) {
-      const list = out.get(w.projectId) ?? []
-      list.push(w)
-      out.set(w.projectId, list)
+  const groups = useMemo(() => sidebarGroups(Object.values(works)), [works])
+  const toggleGroup = (group: string) =>
+    setCollapsed((c) => {
+      const next = toggled(c, group)
+      saveCollapsed(next)
+      return next
+    })
+
+  // 메뉴 밖을 누르거나 Esc를 누르면 닫는다
+  useEffect(() => {
+    if (!menu) return
+    const close = () => setMenu(null)
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close()
     }
-    for (const list of out.values()) list.sort((a, b) => b.workId.localeCompare(a.workId))
-    return out
-  }, [works])
+    window.addEventListener('click', close)
+    window.addEventListener('blur', close)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('click', close)
+      window.removeEventListener('blur', close)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [menu])
+
+  const workItem = (w: WorkView, inArchive: boolean) => {
+    const t = currentTask(w)
+    const done = w.badge.kind === 'done'
+    return (
+      <button
+        key={w.key}
+        className={`work-item${w.key === selected ? ' selected' : ''}`}
+        onClick={() => setSelected(w.key)}
+        onContextMenu={
+          canShelve(w)
+            ? (e) => {
+                e.preventDefault()
+                setMenu({ workKey: w.key, x: e.clientX, y: e.clientY })
+              }
+            : undefined
+        }
+        title={w.title}
+      >
+        {/* 배지 하나와 유형, 현재 단계 (D80, D256). 사람이 필요한 상태는 색으로 강조한다 */}
+        <span className={`badge b-${w.badge.kind}${w.badge.hot ? ' hot' : ''}`}>
+          {w.badge.label}
+        </span>
+        <span className="work-title">
+          <span className="type-tag" title={WORK_TYPE_LABEL[w.type]}>
+            {WORK_TYPE_SHORT[w.type]}
+          </span>{' '}
+          {w.title || w.workId}
+        </span>
+        {/* 아카이브는 여러 프로젝트의 Work를 모으므로 프로젝트 이름을 보인다 */}
+        {inArchive ? (
+          <span className="work-step">{w.projectName}</span>
+        ) : !done && t ? (
+          <span className="work-step">{t.label}</span>
+        ) : null}
+      </button>
+    )
+  }
 
   // 머지 뒤 정리 창 (D178, D200): 머지로 완료한 Work를 보고 있으면 한 번 연다. 앱에서 머지했거나 밖에서 머지된 것을
   // 읽었을 때, 다른 Work를 보고 있었으면 그 Work를 고를 때다. 연 것을 main에 알려 다시 열지 않는다
@@ -210,44 +274,70 @@ export function App() {
             {w}
           </div>
         ))}
-        {projects.map((p) => (
-          <div key={p.id} className="project">
-            <button
-              className="project-name"
-              title={`${p.repoPath} · 프로젝트 설정 (D185)`}
-              onClick={() => setDialog({ kind: 'project-settings', project: p })}
-            >
-              {p.name}
-            </button>
-            {(worksByProject.get(p.id) ?? []).map((w) => {
-              const t = currentTask(w)
-              const done = w.badge.kind === 'done'
-              return (
+        {projects.map((p) => {
+          const open = !collapsed.has(p.id)
+          return (
+            <div key={p.id} className="project">
+              <div className="group-head">
+                <GroupToggle open={open} label={p.name} onToggle={() => toggleGroup(p.id)} />
                 <button
-                  key={w.key}
-                  className={`work-item${w.key === selected ? ' selected' : ''}`}
-                  onClick={() => setSelected(w.key)}
-                  title={w.title}
+                  className="project-name"
+                  title={`${p.repoPath} · 프로젝트 설정 (D185)`}
+                  onClick={() => setDialog({ kind: 'project-settings', project: p })}
                 >
-                  {/* 배지 하나와 유형, 현재 단계 (D80, D256). 사람이 필요한 상태는 색으로 강조한다 */}
-                  <span className={`badge b-${w.badge.kind}${w.badge.hot ? ' hot' : ''}`}>
-                    {w.badge.label}
-                  </span>
-                  <span className="work-title">
-                    <span className="type-tag" title={WORK_TYPE_LABEL[w.type]}>
-                      {WORK_TYPE_SHORT[w.type]}
-                    </span>{' '}
-                    {w.title || w.workId}
-                  </span>
-                  {!done && t ? <span className="work-step">{t.label}</span> : null}
+                  {p.name}
                 </button>
-              )
-            })}
-            <button className="new-work" onClick={() => setDialog({ kind: 'work', project: p })}>
-              새 Work
+              </div>
+              {open ? (
+                <>
+                  {(groups.byProject.get(p.id) ?? []).map((w) => workItem(w, false))}
+                  <button
+                    className="new-work"
+                    onClick={() => setDialog({ kind: 'work', project: p })}
+                  >
+                    새 Work
+                  </button>
+                </>
+              ) : null}
+            </div>
+          )
+        })}
+        {groups.archive.length > 0 ? (
+          <div className="project archive">
+            <div className="group-head">
+              <GroupToggle
+                open={!collapsed.has(ARCHIVE_GROUP)}
+                label="아카이브"
+                onToggle={() => toggleGroup(ARCHIVE_GROUP)}
+              />
+              <button className="project-name" onClick={() => toggleGroup(ARCHIVE_GROUP)}>
+                아카이브 <span className="dim">{groups.archive.length}</span>
+              </button>
+            </div>
+            {collapsed.has(ARCHIVE_GROUP) ? null : groups.archive.map((w) => workItem(w, true))}
+          </div>
+        ) : null}
+        {menu ? (
+          <div
+            className="context-menu"
+            role="menu"
+            style={{ left: menu.x, top: menu.y }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              role="menuitem"
+              onClick={() => {
+                const key = menu.workKey
+                setMenu(null)
+                void call(() => window.relay.shelve(key)).then((r) => {
+                  if (!r.ok) setWarnings((ws) => [...ws, `아카이브로 옮기지 못함: ${r.error}`])
+                })
+              }}
+            >
+              아카이브로 옮기기
             </button>
           </div>
-        ))}
+        ) : null}
         <div className="sidebar-foot">
           <button className="add-project" onClick={() => setDialog({ kind: 'project' })}>
             프로젝트 추가
@@ -454,6 +544,31 @@ export function App() {
 }
 
 /** 프로젝트가 없을 때 가운데에 보이는 첫 사용 안내 (README 첫 사용) */
+/** 프로젝트와 아카이브를 접고 펴는 단추 */
+function GroupToggle({
+  open,
+  label,
+  onToggle,
+}: {
+  open: boolean
+  label: string
+  onToggle: () => void
+}) {
+  return (
+    <button
+      className={`group-toggle${open ? ' open' : ''}`}
+      aria-expanded={open}
+      aria-label={`${label} ${open ? '접기' : '펼치기'}`}
+      title={open ? '접기' : '펼치기'}
+      onClick={onToggle}
+    >
+      <svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true">
+        <path d="M6 4l4 4-4 4" />
+      </svg>
+    </button>
+  )
+}
+
 function Welcome({ onAddProject }: { onAddProject: () => void }) {
   return (
     <section className="welcome" aria-label="첫 사용">
