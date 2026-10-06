@@ -9,14 +9,19 @@
 //      npm test가 통과하고, 다른 Work의 guard가 아닌 숨긴 시험은 실패한다(Work마다 고칠 것이 갈린다)
 //   5. teammate Work가 있으면(팀원 교대에서 도구가 앞 Work를 main에 머지한다) reference-1..n을 차례로 모두 적용해도
 //      npm test와 모든 숨긴 시험이 통과한다(머지된 앞 Work가 뒤 Work의 시험을 깨지 않는다)
+//   6. 숨긴 쟁점(설계 시나리오, relay I111): `{ name, issue }`는 시험 파일이 없고 판정 모델이 가르므로 여기서는 돌리지
+//      않는다(위 1~3의 숨긴 시험에서 뺀다). 모양만 본다: issue 글이 있고 file이 없다, Work 하나짜리다. 범위 guard
+//      `{ name, guard: true, scope: true }`는 기대 밖 파일이 없으면 통과다(위 1~3에서 guard로 돈다)
 // 시나리오 폴더는 RELAY_EVAL_SCENARIOS가 있으면 그곳이다(봉인한 hold-out을 만들 때)
 // 패치는 repo/를 뿌리로 한 git diff(a/src/..., b/src/...)다. 평가 도구는 repo/만 복사하므로 에이전트에게 보이지 않는다.
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { judgeTree } from './lib/repo.mjs'
 import { copyTree, run } from './lib/util.mjs'
-import { allChecks, workParts } from './lib/works.mjs'
+import { isIssue } from './lib/issue-judge.mjs'
+import { allChecks, multiWork, workParts } from './lib/works.mjs'
 
 const SCENARIOS = process.env.RELAY_EVAL_SCENARIOS
   ? path.resolve(process.env.RELAY_EVAL_SCENARIOS)
@@ -65,6 +70,28 @@ function judge(dir, scenario, work, patch) {
 
 const mark = (ok) => (ok ? 'O' : 'X')
 
+/** 숨긴 쟁점과 범위 guard의 모양 (relay I111). 문제 목록을 돌려준다 */
+export function shapeProblems(scenario) {
+  const problems = []
+  for (const c of allChecks(scenario)) {
+    if (isIssue(c)) {
+      if (!c.issue.trim()) problems.push(`숨긴 쟁점의 issue가 비었음: ${c.name}`)
+      if (c.file) problems.push(`숨긴 쟁점에 file이 있음(둘 중 하나만): ${c.name}`)
+      if (c.guard || c.scope) problems.push(`숨긴 쟁점은 guard나 scope가 아님: ${c.name}`)
+      if (c.ask !== undefined && typeof c.ask !== 'boolean')
+        problems.push(`숨긴 쟁점의 ask는 true/false: ${c.name}`)
+      if (multiWork(scenario))
+        problems.push(`숨긴 쟁점은 Work 하나짜리 시나리오에만 둔다: ${c.name}`)
+    } else if (c.scope) {
+      if (!c.guard) problems.push(`범위 검사는 guard여야 함: ${c.name}`)
+      if (c.file) problems.push(`범위 검사에 file이 있음: ${c.name}`)
+    } else if (!c.file) {
+      problems.push(`숨긴 시험에 file이 없음: ${c.name}`)
+    }
+  }
+  return problems
+}
+
 function checkOne(id) {
   const dir = path.join(SCENARIOS, id)
   const scenario = JSON.parse(fs.readFileSync(path.join(dir, 'scenario.json'), 'utf8'))
@@ -72,14 +99,18 @@ function checkOne(id) {
   const problems = []
   const guard = new Map(allChecks(scenario).map((c) => [c.name, !!c.guard]))
   const names = allChecks(scenario).map((c) => c.name)
+  // 숨긴 쟁점은 판정 모델이 가르므로 돌린 결과에서 뺀다 (relay I111)
+  const ran = (j) => ({ ...j, checks: j.checks.filter((c) => !c.issue) })
+  const issues = allChecks(scenario).filter(isIssue)
   const line = (label, j) =>
-    `  ${label.padEnd(28)} npm test ${mark(j.repoTests.pass)}  ${j.checks.map((c) => `${c.name}${guard.get(c.name) ? '(guard)' : ''} ${mark(c.pass)}`).join(', ')}`
+    `  ${label.padEnd(28)} npm test ${mark(j.repoTests.pass)}  ${j.checks.map((c) => `${c.name}${guard.get(c.name) ? '(guard)' : ''} ${mark(c.pass)}`).join(', ')}${issues.length ? `  (숨긴 쟁점 ${issues.length}개: 판정 모델)` : ''}`
 
   console.log(`== ${id}`)
   if (new Set(names).size !== names.length)
     problems.push(`숨긴 시험 이름이 겹침: ${names.join(', ')}`)
+  problems.push(...shapeProblems(scenario))
   try {
-    const base = judge(dir, scenario, path.join(work, 'base'))
+    const base = ran(judge(dir, scenario, path.join(work, 'base')))
     console.log(line('기준', base))
     if (!base.repoTests.pass) problems.push(`기준에서 npm test 실패\n${base.repoTests.output}`)
     for (const c of base.checks) {
@@ -91,7 +122,7 @@ function checkOne(id) {
 
     const ref = path.join(dir, 'reference.patch')
     if (fs.existsSync(ref)) {
-      const j = judge(dir, scenario, path.join(work, 'reference'), ref)
+      const j = ran(judge(dir, scenario, path.join(work, 'reference'), ref))
       console.log(line('reference.patch', j))
       if (!j.files.length) problems.push('정답 패치를 적용했는데 바뀐 파일이 없음')
       if (!j.repoTests.pass) problems.push(`정답 패치에서 npm test 실패\n${j.repoTests.output}`)
@@ -155,7 +186,7 @@ function checkOne(id) {
           .sort()
       : []
     for (const t of traps) {
-      const j = judge(dir, scenario, path.join(work, `trap-${t}`), path.join(trapsDir, t))
+      const j = ran(judge(dir, scenario, path.join(work, `trap-${t}`), path.join(trapsDir, t)))
       console.log(line(`traps/${t}`, j))
       if (!j.files.length) problems.push(`함정 패치를 적용했는데 바뀐 파일이 없음: ${t}`)
       if (j.checks.every((c) => c.pass)) problems.push(`함정 패치가 숨긴 시험을 모두 통과함: ${t}`)
@@ -170,6 +201,9 @@ function checkOne(id) {
   return problems.length === 0
 }
 
-const ids = pick(process.argv[2])
-const ok = ids.map(checkOne).every(Boolean)
-process.exit(ok ? 0 : 1)
+// 시험(app/eval/test)이 shapeProblems만 가져다 쓸 때는 돌리지 않는다
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const ids = pick(process.argv[2])
+  const ok = ids.map(checkOne).every(Boolean)
+  process.exit(ok ? 0 : 1)
+}

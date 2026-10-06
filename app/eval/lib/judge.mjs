@@ -89,7 +89,7 @@ function outcomeBlock(run, runDir) {
         .join('\n')
     : ''
   return [
-    `숨긴 시험: ${o.checks.map((c) => `${c.name} ${c.pass ? '통과' : '실패'}`).join(', ') || '없음'}`,
+    `숨긴 시험${o.issueJudge ? '과 쟁점' : ''}: ${o.checks.map((c) => `${c.name} ${c.pass ? '통과' : '실패'}`).join(', ') || '없음'}`,
     `레포 시험: ${o.repoTestsPass ? '통과' : '실패 또는 변경 없음'}`,
     `바뀐 파일: ${code.filesChanged.join(', ') || '없음'} (${code.linesChanged}줄)`,
     `기대 밖 파일: ${code.unrelated.join(', ') || '없음'}`,
@@ -133,6 +133,17 @@ function timeline(run, runDir) {
 }
 
 /**
+ * 결과 판정의 기준 글. 설계 시나리오(type spec)는 코드 대신 설계 문서를 본다: 숨긴 쟁점의 판정을 참고하고, 문서만
+ * 바꾸는 일이라 시험을 더하지 않은 것은 깎지 않는다 (relay I111)
+ */
+export function outcomeCriteria(scenario) {
+  const w = words(scenario)
+  if (scenario.type === 'spec')
+    return `각각을 1~5로 매겨라: correctness(요구대로 ${w.made}. 숨긴 쟁점의 판정을 참고하되 문서도 보라. 문서의 서술이 지금 코드와 맞는지도 본다), scope(설계 문서만 바꾸고 코드는 바꾸지 않았나), quality(문서가 읽기 쉽고 결정마다 이유가 있으며 서로 어긋나지 않나), tests(문서만 바꾸는 일이다. 시험을 더하지 않았어도 깎지 않고, 코드를 바꿨으면 그 시험을 본다).`
+  return `각각을 1~5로 매겨라: correctness(요구대로 ${w.made}. 숨긴 시험을 참고하되 코드도 보라), scope(필요한 만큼만 바꿨나), quality(읽기 쉽고 올바른 코드인가), tests(회귀를 막는 시험을 더했나).`
+}
+
+/**
  * 한 짝을 판정한다. first와 second는 두 쪽의 run.json이고 kind가 이름이 된다(relay, cli, relay-off)
  * @returns {Promise<object>} 쪽 이름으로 되돌린 결과. pair가 [first, second]의 이름이다
  */
@@ -155,7 +166,7 @@ export async function judgePair({ scenario, first, second, firstDir, secondDir, 
     schema: OUTCOME_SCHEMA,
     prompt: [
       `${words(scenario).same} 두 번 따로 ${words(scenario).did} 결과 A와 B를 비교하라. 어떻게 만들었는지는 알려 주지 않는다.`,
-      `각각을 1~5로 매겨라: correctness(요구대로 ${words(scenario).made}. 숨긴 시험을 참고하되 코드도 보라), scope(필요한 만큼만 바꿨나), quality(읽기 쉽고 올바른 코드인가), tests(회귀를 막는 시험을 더했나).`,
+      outcomeCriteria(scenario),
       '',
       scenarioBrief(scenario),
       '',

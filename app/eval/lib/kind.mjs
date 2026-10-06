@@ -1,4 +1,4 @@
-// 시나리오의 업무 유형(relay D236, D261, D303)에 따른 낱말. scenario.json의 type이 없으면 버그 수정이다 (relay I62, I67, I92)
+// 시나리오의 업무 유형(relay D236, D261, D303, D353)에 따른 낱말. scenario.json의 type이 없으면 버그 수정이다 (relay I62, I67, I92, I112)
 const WORDS = {
   bugfix: {
     label: '버그 수정',
@@ -35,6 +35,19 @@ const WORDS = {
     same: '같은 리팩터링을',
     did: '바꾼',
     made: '구조가 바뀌고 동작이 그대로인가',
+  },
+  // 맨 CLI에는 유형이 없어 요청으로 같은 일을 시킨다: 코드는 아직 바꾸지 않는다 (relay I112)
+  spec: {
+    label: '설계',
+    task: '설계를 정해 문서로 남긴다(코드는 아직 바꾸지 않는다)',
+    goal: '설계가 요구대로 정해져 문서에 남았다고',
+    subject: '정할 설계 (네가 받은 요청)',
+    done: '이 설계를 정한',
+    again: '비슷한 설계에',
+    report: '설계 요청',
+    same: '같은 설계를',
+    did: '정한',
+    made: '정해져 문서에 남았나',
   },
   general: {
     label: '일반',
