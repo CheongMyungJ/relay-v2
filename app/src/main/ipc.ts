@@ -1,9 +1,9 @@
 // 렌더러 명령을 Relay로 잇는다 (I14). 명령은 invoke로 받고, 상태는 UiPort가 스냅샷으로 보낸다.
 // 값은 여기서 모양만 확인하고, 뜻(상태에 맞는 명령인지, 설정 값의 범위)은 Relay와 core가 판정한다.
 import os from 'node:os'
-import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { ALL_NODES } from '../core/pipeline'
-import { IPC, type AppInfo } from '../shared/api'
+import { IPC, type AppInfo, type UpdateState } from '../shared/api'
 import type { NodeName } from '../shared/contracts'
 import type {
   ApproveOptions,
@@ -148,13 +148,21 @@ function respondInput(v: unknown): RespondStartInput {
 export interface IpcHooks {
   /** 사람이 보고 있는 Work가 바뀌었다 (D81) */
   onSelectWork(workKey: string | null): void
+  /** 앱 업데이트 (I121). 업데이트는 Relay가 아니라 main/index가 맡는다 */
+  updateState(): UpdateState
+  checkUpdate(): void
+  installUpdate(): Promise<void>
 }
 
 export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   ipcMain.handle(IPC.appInfo, (): AppInfo => ({
     platform: process.platform,
     windowsBuild: windowsBuild(),
+    version: app.getVersion(),
   }))
+  ipcMain.handle(IPC.updateState, () => hooks.updateState())
+  ipcMain.handle(IPC.checkUpdate, () => hooks.checkUpdate())
+  ipcMain.handle(IPC.installUpdate, () => hooks.installUpdate())
   ipcMain.handle(IPC.snapshot, async () => (await ready).snapshot())
 
   ipcMain.handle(IPC.pickFolder, async (event) => {

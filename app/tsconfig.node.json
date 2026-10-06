@@ -21,6 +21,7 @@
     "src/adapters",
     "src/renderer/src/renderMarkdown.ts",
     "src/renderer/src/opened.ts",
+    "src/renderer/src/update.ts",
     "src/renderer/src/sidebar.ts",
     "test"
   ]

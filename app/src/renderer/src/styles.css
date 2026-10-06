@@ -279,6 +279,12 @@ textarea {
   letter-spacing: -0.01em;
 }
 
+.brand-version {
+  font-size: 11px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
 .project {
   display: flex;
   flex-direction: column;
@@ -487,6 +493,7 @@ textarea {
 .sidebar-foot {
   margin-top: auto;
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   padding-top: 10px;
   border-top: 1px solid var(--border);
@@ -496,12 +503,65 @@ textarea {
   color: var(--text-dim);
   background: transparent;
   border-color: transparent;
+  white-space: nowrap;
 }
 
 .sidebar-foot button:hover:not(:disabled) {
   color: var(--text);
   background: var(--bg-raise);
   border-color: transparent;
+}
+
+/* 업데이트 버튼 (I121): [설정] 오른쪽의 아이콘과 버튼 줄 아래 한 줄의 상태 글. 상태마다 색이 다르다 */
+.sidebar-foot .update-button {
+  display: inline-flex;
+  align-items: center;
+}
+
+.update-button svg {
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.update-status {
+  flex-basis: 100%;
+  min-width: 0;
+  padding: 0 12px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.sidebar-foot .u-good {
+  color: var(--good);
+}
+
+.sidebar-foot .u-hot {
+  color: var(--hot);
+}
+
+.sidebar-foot .u-bad {
+  color: var(--bad);
+}
+
+.sidebar-foot .u-busy {
+  color: var(--accent-text);
+}
+
+.update-button.u-busy svg {
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .update-button.u-busy svg {
+    animation: none;
+  }
 }
 
 /* ---------- 가운데 ---------- */

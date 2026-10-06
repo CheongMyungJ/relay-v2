@@ -1,11 +1,14 @@
 // 자동 업데이트 (I95, I118). Windows 설치본과 Linux .deb 설치본만 GitHub Releases의 latest.yml(Linux는
 // latest-linux.yml)을 보고 새 버전을 뒤에서 받는다. 받은 업데이트는 앱을 끝낼 때 설치한다(.deb는 관리자 비밀번호를
 // 묻는다, D377). WSL처럼 비밀번호 창을 띄울 수 없는 곳은 설치 명령을 보여 주고 사람이 설치한다(D379).
-// 실행 중인 세션을 끊지 않으려고 앱이 스스로 다시 시작하지는 않는다.
+// 실행 중인 세션을 끊지 않으려고 앱이 스스로 끝나지는 않는다. 사람이 업데이트 버튼으로 설치를 확인했을 때만
+// 세션을 정리하고 끝낸 뒤 설치하고 다시 켠다(I121).
 import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import type { AppUpdater } from 'electron-updater'
+import type { UpdateState } from '../shared/api'
+import type { CommandResult } from '../shared/views'
 
 /** 처음 확인은 창이 뜨고 조금 뒤에, 그다음은 받을 때까지 이 간격으로 한다 */
 const FIRST_CHECK_MS = 30_000
@@ -130,41 +133,161 @@ export function lastInstallFailed(dir: string, current: string): boolean {
   return false
 }
 
-export interface UpdateOptions {
-  /** 앱을 끌 때 받은 버전을 설치한다. 사람이 설치해야 하는 곳(D379)에서는 끈다 */
-  installOnQuit: boolean
+/** Updates가 쓰는 electron-updater(AppUpdater)의 부분. 시험은 가짜를 넣는다 */
+export interface Updater {
+  autoDownload: boolean
+  autoInstallOnAppQuit: boolean
+  on(event: 'checking-for-update' | 'update-not-available', listener: () => void): unknown
+  on(event: 'update-available', listener: (info: { version: string }) => void): unknown
+  on(event: 'download-progress', listener: (p: { percent: number }) => void): unknown
+  on(
+    event: 'update-downloaded',
+    listener: (info: { version: string; downloadedFile: string }) => void,
+  ): unknown
+  on(event: 'error', listener: (e: Error) => void): unknown
+  removeListener(event: 'error', listener: (e: Error) => void): unknown
+  checkForUpdates(): Promise<{ downloadPromise?: Promise<unknown> | null } | null>
+  quitAndInstall(isSilent?: boolean, isForceRunAfter?: boolean): void
 }
 
 /**
- * 업데이트 확인을 시작한다. 새 버전을 다 받으면 한 번 알리고 확인을 멈춘다.
- * 받아 둔 버전은 종료 때 설치되고(installOnQuit), 그 뒤 더 새 릴리스는 다음 실행에서 받는다.
- * electron-updater는 켜질 때만 불러온다. CJS 패키지라 import()로는 autoUpdater가 이름으로 나오지 않아
- * node-pty처럼 require로 읽는다
+ * electron-updater의 autoUpdater를 읽는다. 켜질 때만 불러온다. CJS 패키지라 import()로는 autoUpdater가 이름으로
+ * 나오지 않아 node-pty처럼 require로 읽는다
  */
-export function startUpdates(
-  onDownloaded: (version: string, file: string) => void,
-  opts: UpdateOptions,
-): void {
+export function loadUpdater(): Updater {
   const load = createRequire(__filename)
   const { autoUpdater } = load('electron-updater') as { autoUpdater: AppUpdater }
-  autoUpdater.autoDownload = true
-  autoUpdater.autoInstallOnAppQuit = opts.installOnQuit
-  let timer: NodeJS.Timeout | undefined
-  // 오프라인이거나 릴리스가 없을 때도 앱 사용은 막지 않는다
-  autoUpdater.on('error', (e) => console.warn(`업데이트 확인 실패: ${e.message}`))
-  // 확인과 뒤에서 하는 다운로드는 실패를 따로 돌려주므로 둘 다 받아 둔다. 실패는 error 이벤트로 남는다
-  const check = () =>
-    void autoUpdater
+  return autoUpdater as unknown as Updater
+}
+
+export interface UpdateOptions {
+  /** 앱을 끌 때 받은 버전을 설치한다. 사람이 설치해야 하는 곳(D379)에서는 끈다 */
+  installOnQuit: boolean
+  /**
+   * 받은 뒤 업데이트 버튼은 설치 명령을 보인다(manual). 사람이 설치해야 하는 곳(D379)과 지난번 .deb 설치가 실패한 곳.
+   * 실패한 곳은 끌 때 설치(installOnQuit)는 그대로 다시 시도하되, 버튼으로 세션을 정리하고 같은 설치를 되풀이하지 않는다
+   */
+  manual: boolean
+  /** 새 버전을 다 받았을 때. 알림이나 설치 명령 대화상자를 보인다. byButton: 업데이트 버튼으로 시작한 확인이었다 */
+  onDownloaded: (version: string, file: string, byButton: boolean) => void
+  /** 상태가 바뀔 때. 화면에 보낸다 (I121) */
+  onChange: (state: UpdateState) => void
+}
+
+/**
+ * 업데이트 확인과 상태 (I95, I121). 30초 뒤와 4시간마다 확인하고, 업데이트 버튼(check)으로 바로 확인한다.
+ * 새 버전은 뒤에서 받고, 다 받으면 한 번 알리고 확인을 멈춘다. 받아 둔 버전은 종료 때 설치되고(installOnQuit),
+ * 사람이 설치를 확인하면(install) 바로 끝내고 설치한다. 그 뒤 더 새 릴리스는 다음 실행에서 받는다
+ */
+export class Updates {
+  private state: UpdateState = { kind: 'idle' }
+  private timer: NodeJS.Timeout | undefined
+  /** 지금 확인을 사람이 업데이트 버튼으로 시작했는가. 자동 확인의 실패는 빨간 줄로 남기지 않는다 */
+  private byButton = false
+  /** 확인을 시작하기 전 상태. 자동 확인이 실패하면 이 상태로 돌아간다 */
+  private before: UpdateState = { kind: 'idle' }
+
+  constructor(
+    private readonly updater: Updater,
+    private readonly opts: UpdateOptions,
+  ) {
+    updater.autoDownload = true
+    updater.autoInstallOnAppQuit = opts.installOnQuit
+    updater.on('checking-for-update', () => this.set({ kind: 'checking' }))
+    updater.on('update-not-available', () => this.set({ kind: 'latest' }))
+    updater.on('update-available', (info) =>
+      this.set({ kind: 'downloading', version: info.version, percent: null }),
+    )
+    updater.on('download-progress', (p) => {
+      if (this.state.kind === 'downloading')
+        this.set({ ...this.state, percent: Math.floor(p.percent) })
+    })
+    updater.on('update-downloaded', (info) => {
+      if (this.downloaded()) return
+      clearTimeout(this.timer)
+      this.set(
+        opts.manual
+          ? { kind: 'manual', version: info.version }
+          : { kind: 'ready', version: info.version },
+      )
+      opts.onDownloaded(info.version, info.downloadedFile, this.byButton)
+    })
+    // 오프라인이거나 릴리스가 없을 때도 앱 사용은 막지 않는다. 받아 둔 버전은 그대로 둔다. 사람이 누르지 않은 자동
+    // 확인의 실패는 화면에 남기지 않고 확인 전 상태로 돌아간다
+    updater.on('error', (e) => {
+      console.warn(`업데이트 확인 실패: ${e.message}`)
+      if (this.downloaded()) return
+      this.set(this.byButton ? { kind: 'error', message: e.message } : this.before)
+    })
+  }
+
+  current(): UpdateState {
+    return this.state
+  }
+
+  /** 정해진 간격의 확인을 시작한다 */
+  start(firstMs = FIRST_CHECK_MS, everyMs = CHECK_EVERY_MS): void {
+    const loop = () => {
+      this.check(false)
+      if (!this.downloaded()) this.timer = setTimeout(loop, everyMs)
+    }
+    this.timer = setTimeout(loop, firstMs)
+  }
+
+  /**
+   * 지금 확인하고 새 버전이 있으면 받는다. 확인·받는 중이거나 이미 받았으면 하지 않는다. 자동 확인이 도는 중에
+   * 버튼을 누르면 그 확인을 버튼으로 시작한 것으로 친다
+   */
+  check(byButton = true): void {
+    const k = this.state.kind
+    if (k === 'checking' || k === 'downloading') {
+      if (byButton) this.byButton = true
+      return
+    }
+    if (this.downloaded()) return
+    this.byButton = byButton
+    this.before = k === 'latest' || k === 'error' ? this.state : { kind: 'idle' }
+    // checking 상태는 electron-updater가 checkForUpdates 안에서 곧바로 보내는 checking-for-update로 바뀐다. 확인과 뒤에서 하는 다운로드는 실패를 따로 돌려주므로 둘 다 받아 둔다. 실패는 error 이벤트로 남는다
+    void this.updater
       .checkForUpdates()
       .then((r) => r?.downloadPromise?.catch(() => {}))
       .catch(() => {})
-  autoUpdater.once('update-downloaded', (info) => {
-    clearTimeout(timer)
-    onDownloaded(info.version, info.downloadedFile)
-  })
-  const loop = () => {
-    check()
-    timer = setTimeout(loop, CHECK_EVERY_MS)
   }
-  timer = setTimeout(loop, FIRST_CHECK_MS)
+
+  /**
+   * 받아 둔 버전을 지금 설치한다. 조용히 설치하고 앱을 끝낸 뒤 새 버전으로 다시 켠다. 세션 정리는 부르는 쪽이 먼저 한다.
+   * 설치를 시작하지 못하면(electron-updater가 그 자리에서 error를 보냄. .deb의 비밀번호 창 취소 등) 그 까닭을 돌려주고
+   * electron-updater는 앱을 끝내지 않는다.
+   * Windows(NsisUpdater)는 설치 파일을 띄우기만 하고 곧바로 성공으로 돌아오므로, 띄우지 못한 실패(백신 차단, elevate
+   * 실패 등)는 앱이 끝나는 길에 비동기로 error가 되어 여기서 알 수 없다. 받은 파일이 없는 것 같은 그 자리의 실패만 잡는다
+   */
+  install(): CommandResult {
+    if (this.state.kind !== 'ready') return { ok: false, error: '받아 둔 새 버전이 없습니다' }
+    const errors: string[] = []
+    const onError = (e: Error) => {
+      errors.push(e.message)
+    }
+    this.updater.on('error', onError)
+    try {
+      this.updater.quitAndInstall(true, true)
+    } catch (e) {
+      errors.push(e instanceof Error ? e.message : String(e))
+    }
+    this.updater.removeListener('error', onError)
+    return errors.length === 0 ? { ok: true } : { ok: false, error: errors.join('\n') }
+  }
+
+  /** 끌 때 설치를 하지 않는다. 버튼의 설치가 실패해 앱을 끝낼 때 같은 설치(.deb 비밀번호 창)를 곧바로 되풀이하지 않게 */
+  stopInstallOnQuit(): void {
+    this.updater.autoInstallOnAppQuit = false
+  }
+
+  private downloaded(): boolean {
+    return this.state.kind === 'ready' || this.state.kind === 'manual'
+  }
+
+  private set(state: UpdateState): void {
+    this.state = state
+    this.opts.onChange(state)
+  }
 }
