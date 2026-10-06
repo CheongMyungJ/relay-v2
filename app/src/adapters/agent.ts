@@ -60,6 +60,9 @@ export interface AgentRuntime {
 export interface AgentSettingsInput extends TaskSettingsInput {
   taskDir?: string
   skill?: SkillName
+  /** task에 고정한 모델·추론 수준. Codex는 설정 덮어쓰기로 넘긴다 */
+  model?: string
+  effort?: string
 }
 
 const claude: AgentRuntime = {

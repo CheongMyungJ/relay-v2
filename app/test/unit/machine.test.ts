@@ -3619,3 +3619,76 @@ describe('기능 추가 (D232~D237, D249)', () => {
     expect(r.rejected).toBe('유형은 의도 승인 전 [intake 다시]에서만 바꿀 수 있음 (D237)')
   })
 })
+
+describe('[단위] 새 task에 엔진·모델·추론 수준을 고정 (F6, F8, F10)', () => {
+  const steps: AppConfig = {
+    ...MANUAL,
+    agent_model: 'sonnet',
+    agent_effort: 'medium',
+    agent_steps: { verify: { engine: 'codex', model: 'gpt-6-sol', effort: 'low' } },
+  }
+  /** fix를 승인해 verify task를 만든다 */
+  function approveFix(config: AppConfig): WorkState {
+    const initial = newWork()
+    const intake = currentTask(initial)
+    if (!intake) throw new Error('task 없음')
+    const ready: WorkState = {
+      ...initial,
+      intent: { version: 1 },
+      tasks: [{ ...intake, node: 'fix', status: 'awaiting_approval' }],
+    }
+    return apply(ready, { type: 'approve', taskId: intake.id, at: at(), check: valid() }, config)
+      .work
+  }
+
+  it('Work를 만들 때 intake task에 해석한 값을 적고, 없으면 model·effort 키가 없다', () => {
+    const made = createWork({
+      type: 'bugfix',
+      agent: { engine: 'claude', model: 'opus', effort: 'high' },
+      workId: 'w-20260926-002',
+      baseBranch: 'main',
+      baseCommit: 'base0001',
+      at: at(),
+    }).work
+    expect(currentTask(made)).toMatchObject({ engine: 'claude', model: 'opus', effort: 'high' })
+    const plain = currentTask(newWork())
+    expect(plain).not.toHaveProperty('model')
+    expect(plain).not.toHaveProperty('effort')
+  })
+
+  it('새 task는 그 단계의 지정값을, 지정이 없으면 기본값을 쓴다', () => {
+    expect(currentTask(approveFix(steps))).toMatchObject({
+      node: 'verify',
+      engine: 'codex',
+      model: 'gpt-6-sol',
+      effort: 'low',
+    })
+    const noStep = { ...steps, agent_steps: {} }
+    expect(currentTask(approveFix(noStep))).toMatchObject({
+      node: 'verify',
+      engine: 'claude',
+      model: 'sonnet',
+      effort: 'medium',
+    })
+  })
+
+  it('아무것도 지정하지 않으면 새 task에 model·effort 키가 없다', () => {
+    const task = currentTask(approveFix(MANUAL))
+    expect(task?.engine).toBe('claude')
+    expect(task).not.toHaveProperty('model')
+    expect(task).not.toHaveProperty('effort')
+  })
+
+  it('만든 뒤 설정을 바꿔도 대기와 설정 변경에서 task의 값은 그대로다', () => {
+    const work = approveFix(steps)
+    const verify = currentTask(work)
+    if (!verify) throw new Error('task 없음')
+    const queued = apply(work, { type: 'task.queued', taskId: verify.id, at: at() }, MANUAL).work
+    const changed = apply(queued, { type: 'config.updated', at: at() }, MANUAL).work
+    expect(currentTask(changed)).toMatchObject({
+      engine: 'codex',
+      model: 'gpt-6-sol',
+      effort: 'low',
+    })
+  })
+})

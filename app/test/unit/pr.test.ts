@@ -903,6 +903,9 @@ describe('PR 패널: 엔진별 자동 승인', () => {
       error: null,
     }
     expect(prView(input)?.auto.approve).toBe(false)
+    // 상세 설정의 PR 대응 엔진이 있으면 다음 대응은 그 엔진이다 (F6)
+    const stepClaude = { ...config, agent_steps: { 'pr-respond': { engine: 'claude' as const } } }
+    expect(prView({ ...input, config: stepClaude })?.auto.approve).toBe(true)
     const base = createWork({
       type: 'bugfix',
       workId: 'w',

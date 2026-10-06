@@ -26,9 +26,11 @@ import {
 } from '../adapters/store'
 import { applyConfigPatch, checkProjectSettings, checkWorkSettings } from '../core/config'
 import { createWork } from '../core/machine'
+import { NODE_INFO } from '../core/pipeline'
 import { issueMarkId } from '../core/issue'
 import { localIso, nextWorkId, workBranch } from '../core/records'
 import { recordedProcesses, type RecordedProcess } from '../core/recovery'
+import { resolveAgent } from '../shared/agent'
 import { DEFAULT_CONFIG, type AppConfig, type WorkSettingsPatch } from '../shared/config'
 import type { NodeName } from '../shared/contracts'
 import { issueLogOn, type ProjectChecks, type ProjectState } from '../shared/project'
@@ -500,7 +502,7 @@ export class Relay {
     const files = new WorkFiles(workDir(this.o.home, project.project_id, workId))
     const requestHash = await files.writeRequest(input.request)
     const created = createWork({
-      engine: this.config.agent_engine,
+      agent: resolveAgent(this.config, NODE_INFO.intake.skill),
       workId,
       type: input.type,
       baseBranch: branch,

@@ -215,6 +215,10 @@ export interface TaskSession {
 export interface TaskRecord {
   /** 생성 시 고정한 엔진. 없는 기존 기록은 Claude다 (E3, E5). */
   engine?: AgentEngine
+  /** 생성 시 고정한 모델. 없으면 엔진의 기본이다 (설정의 기본 모델, 상세 설정) */
+  model?: string
+  /** 생성 시 고정한 추론 수준. 없으면 엔진의 기본이다 */
+  effort?: string
   /** 실행/재개할 때 점검한 CLI 버전. 기존 claude_version도 읽는다. */
   engine_version?: string
   /** t-01. 순번은 Work 안에서 1부터 오른다 */

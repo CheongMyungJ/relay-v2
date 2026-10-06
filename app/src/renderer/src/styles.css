@@ -1265,6 +1265,29 @@ fieldset.field {
   border-bottom: 1px solid var(--border);
 }
 
+/* 상세 설정: 단계마다 엔진·모델·추론 수준 */
+.agent-steps {
+  display: grid;
+  gap: 8px;
+}
+
+.form-row.agent-step {
+  grid-template-columns: 1fr auto;
+}
+
+.agent-step-selects {
+  display: grid;
+  grid-template-columns: repeat(3, 140px);
+  gap: 6px;
+  align-items: start;
+}
+
+.effort-select,
+.model-select {
+  display: grid;
+  gap: 4px;
+}
+
 /* 업무 유형 고르기 (D236, D237): 붙은 버튼 묶음 */
 .work-type {
   display: inline-flex;

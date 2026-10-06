@@ -98,8 +98,17 @@ export function appFlags(): string[] {
       settingsPath: p,
       skill: 'work-start',
       contextPath: p,
+      model: 'm',
+      effort: 'low',
     }),
-    ...resumeArgs({ sessionId: 'id', workDir: p, settingsPath: p, prompt: '이어서' }),
+    ...resumeArgs({
+      sessionId: 'id',
+      workDir: p,
+      settingsPath: p,
+      prompt: '이어서',
+      model: 'm',
+      effort: 'low',
+    }),
     ...cleanupArgs(p),
     ...claudeJsonArgs({ model: 'm', effort: 'low', system: 's', schema: {} }),
   ]
