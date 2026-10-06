@@ -72,6 +72,14 @@ sudo apt install ./relay_<버전>_amd64.deb
 - 앱이 새 버전을 스스로 받아 두고, 앱을 끝낼 때 관리자 비밀번호를 물은 뒤 설치합니다. 취소하면 다음에 끌 때 다시 묻습니다.
 - 지우려면 `sudo apt remove relay`입니다. 앱 데이터(`~/.relay`)는 남습니다.
 
+### WSL (Windows의 Linux)
+
+창을 띄울 수 있는 WSL2(WSLg, Windows 11 등)라면 WSL 안의 Ubuntu에 위의 .deb를 그대로 설치합니다. relay는 Windows 시작 메뉴에도 나타납니다.
+
+- 레포, Claude Code, gh는 WSL 안에 둡니다. `/mnt/c/...`의 레포는 느리고, Windows 쪽에서 바꾼 파일을 relay가 알아채지 못할 수 있습니다. Windows에서 한 로그인은 이어지지 않으니 WSL 안에서 다시 로그인합니다.
+- WSL에서는 앱이 업데이트를 설치하지 못합니다. 새 버전을 받으면 설치 명령이 담긴 창이 뜹니다. [명령 복사]를 눌러 WSL 터미널에 붙여 넣고 relay를 다시 켭니다.
+- 화면이 깨지면 `relay --disable-gpu`로 켜 봅니다.
+
 ### 소스에서 실행 (Windows, Linux)
 
 Node.js 22가 필요합니다.

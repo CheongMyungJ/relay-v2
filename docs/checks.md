@@ -19,6 +19,7 @@
 | 2026-09-26 | 8dbf88c | 해당 없음(가짜 `claude`) | GitHub Actions windows-latest (win25-vs2026 20260922), 예비 확인 | [스모크] | 통과 | app-build #1. 러너에서 만든 설치 파일을 `/S`로 설치(`%LOCALAPPDATA%\Programs\relay`)하고 띄운 앱에서 가짜 `claude` 출력이 보이고, 창 크기 변경이 PTY에 전달되고, 탭을 닫으면 프로세스가 끝난다. `npmRebuild: false`로 넣은 node-pty N-API 사전 빌드가 Electron 44에서 로드되고, asar 밖의 `conpty.dll`, `OpenConsole.exe`로 동작한다 |
 | 2026-09-26 | - | - | - | [실기] | 생략 | 사용자 결정으로 M0에서는 실기(실제 `claude` 동작, 한글 IME, DLL 모드의 S1 항목)를 하지 않았다. 다음에 실기를 할 때 함께 확인한다 |
 | 2026-10-06 | 76d0695 | 해당 없음(가짜 `claude`) | Linux 클라우드 컨테이너(Claude Code 웹 세션, Ubuntu 24.04, AppArmor 꺼짐), 예비 확인 | [스모크] | 통과 | Linux .deb(D350, I103). `npm run dist:linux`로 만든 `relay_0.0.0_amd64.deb`(약 96 MB)를 `apt-get install`로 설치: `/opt/relay/relay`, `/usr/bin/relay` 링크, `resources/package-type`(deb), `app-update.yml`, `app.asar.unpacked/.../node-pty/build/Release/pty.node`, `relay.desktop`(StartupWMClass=relay) 확인. AppArmor가 꺼진 환경이라 프로필은 설치 스크립트가 넣지 않았다(의도대로). 일반 사용자로 `RELAY_APP_EXE=/opt/relay/relay xvfb-run -a npx playwright test`: app, codex, theme 3개 통과(29.7초). 24.04의 AppArmor 프로필과 실제 데스크톱(메뉴, pkexec 업데이트)은 `app-build` 러너와 [실기]로 본다 |
+| 2026-10-06 | 72fb546 | 해당 없음(가짜 `claude`) | GitHub Actions ubuntu-22.04(빌드, 설치), ubuntu-24.04(설치), windows-latest, 예비 확인 | [스모크] | 통과 | app-build #20(I104). ubuntu-22.04에서 .deb 빌드. 22.04와 24.04에 apt로 설치해 설치본 [스모크] 3개 통과(24.04: 24.5초). 24.04에서는 .deb 설치 스크립트가 AppArmor 프로필 `/etc/apparmor.d/relay`를 넣었고 그 상태로 앱이 떴다(D350의 전제). Windows 설치본 [스모크]도 그대로 통과 |
 
 ## M1. core
 

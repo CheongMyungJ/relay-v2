@@ -1,6 +1,7 @@
 // Electron 진입점. 창과 OS 알림으로 UiPort를 만들어 Relay를 조립한다 (I2, I26).
+import { release } from 'node:os'
 import { join } from 'node:path'
-import { app, BrowserWindow, dialog, nativeTheme, Notification } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, nativeTheme, Notification } from 'electron'
 import { skillsDir } from '../adapters/claude'
 import { readThemeSync, relayHome } from '../adapters/store'
 import { IPC } from '../shared/api'
@@ -11,7 +12,15 @@ import { APP_USER_MODEL_ID, keepNotice } from './notices'
 import type { Notice, UiPort } from './ports'
 import { Relay } from './relay'
 import { WEB_PREFERENCES } from './security'
-import { readPackageType, startUpdates, updateNoticeBody, updatesEnabled } from './update'
+import {
+  hasCommand,
+  manualInstallCommand,
+  needsManualInstall,
+  readPackageType,
+  startUpdates,
+  updateNoticeBody,
+  updatesEnabled,
+} from './update'
 
 let win: BrowserWindow | null = null
 /** 사람이 창에서 고른 Work (D81의 "그 Work를 보고 있는가") */
@@ -67,6 +76,28 @@ function notifyUpdate(version: string): void {
   )
   notice.on('click', () => void showWindow())
   notice.show()
+}
+
+/**
+ * 사람이 설치해야 하는 곳(WSL 등, D353)에서 새 버전을 받았을 때. WSLg는 OS 알림을 Windows로 넘기지 않을 수 있어
+ * 창 안의 대화상자로 설치 명령을 보이고 [명령 복사]를 준다
+ */
+function showManualInstall(version: string, file: string): void {
+  const command = manualInstallCommand(file)
+  const opts = {
+    type: 'info' as const,
+    title: 'relay 업데이트',
+    message: `새 버전 받음: relay ${version}`,
+    detail:
+      '이 환경(WSL 등)에서는 앱이 끝날 때 설치할 수 없습니다. 터미널에서 아래 명령으로 설치한 뒤 relay를 다시 켜세요.\n\n' +
+      command,
+    buttons: ['명령 복사', '닫기'],
+    defaultId: 0,
+    cancelId: 1,
+  }
+  void (win ? dialog.showMessageBox(win, opts) : dialog.showMessageBox(opts)).then((r) => {
+    if (r.response === 0) clipboard.writeText(command)
+  })
 }
 
 const ui: UiPort = {
@@ -193,7 +224,15 @@ void app.whenReady().then(() => {
     version: app.getVersion(),
     packageType: app.isPackaged ? readPackageType(process.resourcesPath) : null,
   }
-  if (updatesEnabled(target)) startUpdates(notifyUpdate)
+  if (updatesEnabled(target)) {
+    const manual = needsManualInstall({
+      platform: process.platform,
+      env: process.env,
+      osRelease: release(),
+      hasCommand: (name) => hasCommand(name),
+    })
+    startUpdates(manual ? showManualInstall : notifyUpdate, { installOnQuit: !manual })
+  }
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })

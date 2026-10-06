@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  isWsl,
+  manualInstallCommand,
+  needsManualInstall,
   UNRELEASED_VERSION,
   updateNoticeBody,
   updatesEnabled,
@@ -45,5 +48,38 @@ describe('자동 업데이트 (I95)', () => {
     for (const v of ['', 'on', 'offline']) {
       expect(updatesEnabled({ ...installed, env: { RELAY_UPDATE: v } })).toBe(true)
     }
+  })
+
+  it('WSL을 환경 변수나 커널 릴리스로 알아본다 (D352)', () => {
+    expect(isWsl({ WSL_DISTRO_NAME: 'Ubuntu' }, '6.8.0-45-generic')).toBe(true)
+    expect(isWsl({}, '5.15.167.4-microsoft-standard-WSL2')).toBe(true)
+    expect(isWsl({}, '6.8.0-45-generic')).toBe(false)
+  })
+
+  it('WSL이나 그래픽 비밀번호 도구가 없는 곳에서는 사람이 설치한다 (D353)', () => {
+    const desktop = {
+      platform: 'linux' as const,
+      env: {},
+      osRelease: '6.8.0-45-generic',
+      hasCommand: (n: string) => n === 'pkexec',
+    }
+    expect(needsManualInstall(desktop)).toBe(false)
+    expect(needsManualInstall({ ...desktop, env: { WSL_DISTRO_NAME: 'Ubuntu' } })).toBe(true)
+    expect(needsManualInstall({ ...desktop, osRelease: '5.15.1-microsoft-standard-WSL2' })).toBe(
+      true,
+    )
+    expect(needsManualInstall({ ...desktop, hasCommand: () => false })).toBe(true)
+    expect(needsManualInstall({ ...desktop, platform: 'win32', hasCommand: () => false })).toBe(
+      false,
+    )
+  })
+
+  it('설치 명령은 경로를 작은따옴표로 감싼다 (D353)', () => {
+    expect(manualInstallCommand('/home/u/.cache/relay-updater/pending/relay_0.2.0_amd64.deb')).toBe(
+      "sudo apt install '/home/u/.cache/relay-updater/pending/relay_0.2.0_amd64.deb'",
+    )
+    expect(manualInstallCommand("/home/o'neil/relay.deb")).toBe(
+      "sudo apt install '/home/o'\\''neil/relay.deb'",
+    )
   })
 })
