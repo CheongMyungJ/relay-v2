@@ -180,7 +180,8 @@ export function App() {
       return next
     })
 
-  // 메뉴 밖을 누르거나 Esc를 누르면 닫는다
+  // 메뉴 밖을 누르거나 다른 곳을 우클릭하거나 창 크기가 바뀌거나 Esc를 누르면 닫는다. 사이드바를 스크롤해도 닫는다
+  // (aside의 onScroll). 우클릭은 먼저(capture) 받아 닫으므로, 다른 보관된 Work를 우클릭하면 그 Work의 메뉴가 열린다
   useEffect(() => {
     if (!menu) return
     const close = () => setMenu(null)
@@ -188,10 +189,14 @@ export function App() {
       if (e.key === 'Escape') close()
     }
     window.addEventListener('click', close)
+    window.addEventListener('contextmenu', close, true)
+    window.addEventListener('resize', close)
     window.addEventListener('blur', close)
     window.addEventListener('keydown', onKey)
     return () => {
       window.removeEventListener('click', close)
+      window.removeEventListener('contextmenu', close, true)
+      window.removeEventListener('resize', close)
       window.removeEventListener('blur', close)
       window.removeEventListener('keydown', onKey)
     }
@@ -260,7 +265,7 @@ export function App() {
 
   return (
     <div className={`layout${wide ? ' wide' : ''}`}>
-      <aside className="sidebar">
+      <aside className="sidebar" onScroll={menu ? () => setMenu(null) : undefined}>
         <header className="brand">
           <span className="brand-mark" aria-hidden="true">
             <svg viewBox="0 0 16 16" width="12" height="12">
@@ -543,7 +548,6 @@ export function App() {
   )
 }
 
-/** 프로젝트가 없을 때 가운데에 보이는 첫 사용 안내 (README 첫 사용) */
 /** 프로젝트와 아카이브를 접고 펴는 단추 */
 function GroupToggle({
   open,
@@ -569,6 +573,7 @@ function GroupToggle({
   )
 }
 
+/** 프로젝트가 없을 때 가운데에 보이는 첫 사용 안내 (README 첫 사용) */
 function Welcome({ onAddProject }: { onAddProject: () => void }) {
   return (
     <section className="welcome" aria-label="첫 사용">

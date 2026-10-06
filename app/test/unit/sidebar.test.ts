@@ -1,5 +1,12 @@
-import { describe, expect, it } from 'vitest'
-import { ARCHIVE_GROUP, canShelve, sidebarGroups, toggled } from '../../src/renderer/src/sidebar'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  ARCHIVE_GROUP,
+  canShelve,
+  loadCollapsed,
+  saveCollapsed,
+  sidebarGroups,
+  toggled,
+} from '../../src/renderer/src/sidebar'
 import type { WorkView } from '../../src/shared/views'
 
 function view(projectId: string, workId: string, more: Partial<WorkView> = {}): WorkView {
@@ -43,5 +50,52 @@ describe('사이드바 목록 구성', () => {
     expect([...both].sort()).toEqual([ARCHIVE_GROUP, 'a'].sort())
     expect([...toggled(both, 'a')]).toEqual([ARCHIVE_GROUP])
     expect([...none]).toEqual([])
+  })
+})
+
+/** 브라우저 저장소 대신 Map을 쓴다. [단위] 시험은 node에서 돌아 localStorage가 없다 */
+function fakeStorage(): Map<string, string> {
+  const data = new Map<string, string>()
+  vi.stubGlobal('localStorage', {
+    getItem: (k: string) => data.get(k) ?? null,
+    setItem: (k: string, v: string) => {
+      data.set(k, v)
+    },
+  })
+  return data
+}
+
+describe('접은 상태 저장', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('저장한 접은 프로젝트와 아카이브를 다시 켜도 읽는다', () => {
+    fakeStorage()
+    expect([...loadCollapsed()]).toEqual([])
+    saveCollapsed(new Set(['a', ARCHIVE_GROUP]))
+    expect([...loadCollapsed()].sort()).toEqual([ARCHIVE_GROUP, 'a'].sort())
+  })
+
+  it('깨진 값이면 모두 펴고, 문자열 아닌 항목은 버린다', () => {
+    const data = fakeStorage()
+    saveCollapsed(new Set(['a']))
+    expect(data.size).toBe(1)
+    const key = [...data.keys()][0] ?? ''
+    for (const broken of ['{', '{"a":1}', '"a"']) {
+      data.set(key, broken)
+      expect([...loadCollapsed()]).toEqual([])
+    }
+    data.set(key, '["a",1,null,"b"]')
+    expect([...loadCollapsed()]).toEqual(['a', 'b'])
+  })
+
+  it('저장소를 쓸 수 없으면 모두 펴고, 저장은 조용히 넘어간다', () => {
+    const denied = () => {
+      throw new Error('denied')
+    }
+    vi.stubGlobal('localStorage', { getItem: denied, setItem: denied })
+    expect([...loadCollapsed()]).toEqual([])
+    expect(() => saveCollapsed(new Set(['a']))).not.toThrow()
   })
 })
