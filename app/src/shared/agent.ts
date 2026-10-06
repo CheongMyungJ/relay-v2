@@ -118,3 +118,77 @@ export function resolveAgent(config: AgentConfig, skill: string): ResolvedAgent 
     : ''
   return { engine, ...(model ? { model } : {}), ...(effort ? { effort } : {}) }
 }
+
+// ---------- 설정 화면에서 바꾸기 ----------
+
+/**
+ * 엔진이나 모델을 바꾼 뒤 그 줄의 모델·추론 수준을 맞춘다: 엔진에 없는 모델은 엔진 기본으로, 모델이 받지 않는 추론 수준은
+ * 엔진 기본으로 되돌린다. 빈 값은 그대로 둔다
+ */
+export function fitAgent(
+  engine: AgentEngine,
+  model: string,
+  effort: string,
+): { model: string; effort: string } {
+  const m = modelKnown(engine, model) ? model : ''
+  const e = (effortsFor(engine, m) as readonly string[]).includes(effort) ? effort : ''
+  return { model: m, effort: e }
+}
+
+/** 단계의 빈 값(기본 따름)을 뺀다 */
+function compactStep(step: AgentStep): AgentStep {
+  return {
+    ...(step.engine ? { engine: step.engine } : {}),
+    ...(step.model ? { model: step.model } : {}),
+    ...(step.effort ? { effort: step.effort } : {}),
+  }
+}
+
+/** 단계의 모델·추론 수준을 그 단계 엔진(단계 ?? 기본)에 맞춘다 */
+function fitStep(engine: AgentEngine, step: AgentStep): AgentStep {
+  const fit = fitAgent(step.engine ?? engine, step.model ?? '', step.effort ?? '')
+  return compactStep({ ...step, ...fit })
+}
+
+/**
+ * 상세 설정의 한 단계만 바꾼다. 다른 단계는 그대로다. 단계 엔진이 바뀌면 그 단계의 모델·추론 수준을 새 엔진에 맞추고(단계
+ * 엔진을 비우면 기본 엔진에 맞추도록 defaultEngine을 준다), 모두 비면 단계를 지운다
+ */
+export function setAgentStep<S extends Partial<Record<string, AgentStep>>>(
+  steps: S,
+  skill: string,
+  step: AgentStep,
+  defaultEngine?: AgentEngine,
+): S {
+  const engine = step.engine ?? defaultEngine
+  const next = engine ? fitStep(engine, step) : compactStep(step)
+  const rest = Object.entries(steps).filter(([k]) => k !== skill)
+  return Object.fromEntries(Object.keys(next).length ? [...rest, [skill, next]] : rest) as S
+}
+
+export interface AgentDefaults<K extends string = string> {
+  agent_engine: AgentEngine
+  agent_model: string
+  agent_effort: string
+  agent_steps: Partial<Record<K, AgentStep>>
+}
+
+/** 기본 엔진을 바꾼다: 기본 모델·추론 수준과, 엔진을 정하지 않은 단계를 새 엔진에 맞춘다 */
+export function changeDefaultEngine<T extends AgentDefaults<K>, K extends string>(
+  c: T,
+  engine: AgentEngine,
+): T {
+  const fit = fitAgent(engine, c.agent_model, c.agent_effort)
+  const steps: Partial<Record<K, AgentStep>> = {}
+  for (const [skill, step] of Object.entries(c.agent_steps) as [K, AgentStep][]) {
+    const next = step.engine ? step : fitStep(engine, step)
+    if (Object.keys(next).length) steps[skill] = next
+  }
+  return {
+    ...c,
+    agent_engine: engine,
+    agent_model: fit.model,
+    agent_effort: fit.effort,
+    agent_steps: steps,
+  }
+}

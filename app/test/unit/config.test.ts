@@ -515,9 +515,9 @@ describe('[단위] 기본 모델·추론 수준과 단계별 실행 설정', () 
       applyConfigPatch(DEFAULT_CONFIG, { agent_model: 'sonnet', agent_effort: 'xhigh' }),
     ).toMatchObject({ ok: true, value: { agent_model: 'sonnet', agent_effort: 'xhigh' } })
     expect(applyConfigPatch(DEFAULT_CONFIG, { agent_model: 'gpt-6-sol' }).ok).toBe(false)
-    expect(
-      applyConfigPatch(DEFAULT_CONFIG, { agent_model: 'haiku', agent_effort: 'low' }).ok,
-    ).toBe(false)
+    expect(applyConfigPatch(DEFAULT_CONFIG, { agent_model: 'haiku', agent_effort: 'low' }).ok).toBe(
+      false,
+    )
     expect(applyConfigPatch(DEFAULT_CONFIG, { agent_effort: 'ultra' }).ok).toBe(false)
     expect(
       applyConfigPatch(DEFAULT_CONFIG, {
@@ -573,8 +573,8 @@ describe('[단위] 기본 모델·추론 수준과 단계별 실행 설정', () 
       const r = applyConfigPatch(DEFAULT_CONFIG, patch)
       expect(r.ok, JSON.stringify(patch)).toBe(false)
     }
-    expect(applyConfigPatch(DEFAULT_CONFIG, { agent_steps: { design: { model: 'opus' } } }).ok).toBe(
-      true,
-    )
+    expect(
+      applyConfigPatch(DEFAULT_CONFIG, { agent_steps: { design: { model: 'opus' } } }).ok,
+    ).toBe(true)
   })
 })

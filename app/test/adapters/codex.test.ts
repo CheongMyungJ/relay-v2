@@ -142,7 +142,11 @@ describe('Codex CLI 점검과 스킬·설정', () => {
     })
     const chosenFile = path.join(dir, 'chosen.json')
     await writeJson(chosenFile, chosen)
-    const resumed = await codexResumeArgs({ workDir: dir, settingsPath: chosenFile, sessionId: 'x' })
+    const resumed = await codexResumeArgs({
+      workDir: dir,
+      settingsPath: chosenFile,
+      sessionId: 'x',
+    })
     expect(resumed).toContain('model="gpt-6.1-sol"')
     expect(resumed).toContain('model_reasoning_effort="ultra"')
     // 모든 훅 설정을 합쳐도 npm .cmd의 제한에 여유를 남긴다.

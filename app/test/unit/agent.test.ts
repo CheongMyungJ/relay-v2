@@ -4,7 +4,15 @@ import { applyConfigPatch, normalizeConfig } from '../../src/core/config'
 import { actions, createWork, currentTask, transition } from '../../src/core/machine'
 import { autoApproveNote } from '../../src/core/approval'
 import { DEFAULT_CONFIG } from '../../src/shared/config'
-import { AGENT_MODELS, effortsFor, resolveAgent, type AgentEngine } from '../../src/shared/agent'
+import {
+  AGENT_MODELS,
+  changeDefaultEngine,
+  effortsFor,
+  fitAgent,
+  resolveAgent,
+  setAgentStep,
+  type AgentEngine,
+} from '../../src/shared/agent'
 import type { WorkState } from '../../src/shared/work'
 import type { Handoff } from '../../src/shared/contracts'
 
@@ -257,7 +265,11 @@ describe('[단위] 모델 카탈로그와 단계별 실행 설정 해석', () =>
       model: 'sonnet',
       effort: 'medium',
     })
-    expect(resolveAgent(config, 'design')).toEqual({ engine: 'claude', model: 'opus', effort: 'high' })
+    expect(resolveAgent(config, 'design')).toEqual({
+      engine: 'claude',
+      model: 'opus',
+      effort: 'high',
+    })
     expect(resolveAgent(config, 'implement')).toEqual({
       engine: 'codex',
       model: 'gpt-6.1-sol',
@@ -283,5 +295,66 @@ describe('[단위] 모델 카탈로그와 단계별 실행 설정 해석', () =>
       agent_steps: { verify: { model: 'haiku' } },
     }
     expect(resolveAgent(config, 'verify')).toEqual({ engine: 'claude', model: 'haiku' })
+  })
+})
+
+describe('[단위] 설정 화면의 엔진·모델·추론 수준 바꾸기 (F4, F9, F11)', () => {
+  const base = {
+    ...DEFAULT_CONFIG,
+    agent_model: 'opus',
+    agent_effort: 'max',
+    agent_steps: {
+      design: { model: 'sonnet', effort: 'high' },
+      verify: { engine: 'codex' as const, model: 'gpt-6-sol', effort: 'ultra' },
+    },
+  }
+
+  it('모델을 바꾸면 새 모델이 받지 않는 추론 수준을 비우고, 엔진에 없는 모델은 비운다', () => {
+    expect(fitAgent('claude', 'haiku', 'high')).toEqual({ model: 'haiku', effort: '' })
+    expect(fitAgent('claude', 'opus', 'high')).toEqual({ model: 'opus', effort: 'high' })
+    expect(fitAgent('codex', 'opus', 'max')).toEqual({ model: '', effort: 'max' })
+    expect(fitAgent('claude', 'gpt-6-sol', 'ultra')).toEqual({ model: '', effort: '' })
+  })
+
+  it('한 단계를 바꾸면 그 단계만 바뀌고 다른 단계는 그대로다. 빈 값은 기본 따름이라 뺀다', () => {
+    const next = setAgentStep(base.agent_steps, 'implement', {
+      engine: 'codex',
+      model: 'gpt-6.1-sol',
+      effort: '',
+    })
+    expect(next).toEqual({
+      ...base.agent_steps,
+      implement: { engine: 'codex', model: 'gpt-6.1-sol' },
+    })
+    expect(base.agent_steps).not.toHaveProperty('implement')
+    expect(setAgentStep(next, 'design', { model: '' })).toEqual({
+      verify: base.agent_steps.verify,
+      implement: { engine: 'codex', model: 'gpt-6.1-sol' },
+    })
+  })
+
+  it('단계의 엔진을 바꾸면 그 단계의 모델·추론 수준이 새 엔진에 없으면 되돌린다', () => {
+    const next = setAgentStep(base.agent_steps, 'verify', {
+      ...base.agent_steps.verify,
+      engine: 'claude',
+    })
+    expect(next.verify).toEqual({ engine: 'claude' })
+    expect(next.design).toEqual(base.agent_steps.design)
+  })
+
+  it('기본 엔진을 바꾸면 기본 줄과 엔진을 정하지 않은 단계를 새 엔진에 맞추고 저장할 수 있다', () => {
+    const next = changeDefaultEngine(base, 'codex')
+    expect(next).toMatchObject({ agent_engine: 'codex', agent_model: '', agent_effort: 'max' })
+    expect(next.agent_steps).toEqual({
+      design: { effort: 'high' },
+      verify: base.agent_steps.verify,
+    })
+    const patch = {
+      agent_engine: next.agent_engine,
+      agent_model: next.agent_model,
+      agent_effort: next.agent_effort,
+      agent_steps: next.agent_steps,
+    }
+    expect(applyConfigPatch(base, patch).ok).toBe(true)
   })
 })

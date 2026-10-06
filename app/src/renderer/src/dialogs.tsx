@@ -7,9 +7,17 @@ import {
   AGENT_APPROVAL_NOTICE,
   AGENT_ENGINES,
   AGENT_LABELS,
+  AGENT_MODELS,
+  EFFORT_LABEL,
+  changeDefaultEngine,
+  effortsFor,
+  fitAgent,
+  setAgentStep,
   type AgentEngine,
+  type AgentStep,
 } from '../../shared/agent'
 import {
+  AGENT_STEP_TITLES,
   AUTO_APPROVE_TITLES,
   QUESTION_MODE_LABEL,
   SETTING_GROUP_LABEL,
@@ -758,6 +766,61 @@ const NUMBERS: [NumberKey, string, string][] = [
   ],
 ]
 
+/** 엔진의 모델 고르기. 첫 선택지(빈 값)는 엔진 기본이나 기본 따름이다 */
+function ModelSelect(props: {
+  label: string
+  engine: AgentEngine
+  value: string
+  empty: string
+  onChange: (model: string) => void
+}) {
+  return (
+    <select
+      aria-label={props.label}
+      value={props.value}
+      onChange={(e) => props.onChange(e.target.value)}
+    >
+      <option value="">{props.empty}</option>
+      {AGENT_MODELS[props.engine].map((m) => (
+        <option key={m.id} value={m.id}>
+          {m.label}
+        </option>
+      ))}
+    </select>
+  )
+}
+
+/** 추론 수준 고르기. 엔진·모델이 추론 수준을 지원하지 않으면 끄고 그렇다고 보인다 */
+function EffortSelect(props: {
+  label: string
+  engine: AgentEngine
+  model: string
+  value: string
+  empty: string
+  onChange: (effort: string) => void
+}) {
+  const efforts = effortsFor(props.engine, props.model)
+  const none = efforts.length === 0
+  return (
+    <span className="effort-select">
+      <select
+        aria-label={props.label}
+        value={none ? '' : props.value}
+        disabled={none}
+        onChange={(e) => props.onChange(e.target.value)}
+      >
+        <option value="">{props.empty}</option>
+        {efforts.map((effort) => (
+          <option key={effort} value={effort}>
+            {EFFORT_LABEL[effort]}
+          </option>
+        ))}
+      </select>
+      {none ? <span className="dim">이 모델은 추론 수준을 지원하지 않음</span> : null}
+    </span>
+  )
+}
+
 /**
  * 앱 설정 (D70). 바꾸면 바로 적용하고, 질문 방식만 다음에 시작하는 task부터 쓴다 (D73).
  * 자동 승인은 턴이 끝날 때의 설정으로 판정하고, 카운트다운 중에 끄면 멈춘다. 카운트다운 초는 다음 카운트다운부터 쓴다 (D128)
@@ -776,6 +839,12 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     const r = await call(() =>
       window.relay.updateConfig({
         agent_engine: value.agent_engine,
+        agent_model: value.agent_model,
+        agent_effort: value.agent_effort,
+        // 상세 설정은 단계마다 덮어쓴다. 기본을 따르는 단계는 빈 객체로 지운다
+        agent_steps: Object.fromEntries(
+          AGENT_STEP_TITLES.map(([skill]) => [skill, value.agent_steps[skill] ?? {}]),
+        ),
         session_limit: value.session_limit,
         auto_approve: value.auto_approve,
         auto_approve_countdown_sec: value.auto_approve_countdown_sec,
@@ -803,8 +872,9 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
       {value ? (
         <>
           <div className="dim">
-            기본 엔진은 새로 만드는 task부터 적용합니다. 기존 task를 재개하면 원래 엔진을
-            사용합니다. 질문 방식은 다음에 시작하는 task부터 씁니다.
+            기본 엔진·모델·추론 수준과 상세 설정은 새로 만드는 task부터 적용합니다. 기존 task를
+            재개하면 원래 엔진·모델·추론 수준을 사용합니다. 질문 방식은 다음에 시작하는 task부터
+            씁니다.
           </div>
           <div className="form-grid">
             <label className="form-row" title="터미널은 테마와 관계없이 어둡습니다 (D335)">
@@ -827,7 +897,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 aria-label="기본 엔진"
                 value={value.agent_engine}
                 onChange={(e) =>
-                  setDraft({ ...value, agent_engine: e.target.value as AgentEngine })
+                  setDraft(changeDefaultEngine(value, e.target.value as AgentEngine))
                 }
               >
                 {AGENT_ENGINES.map((engine) => (
@@ -837,6 +907,30 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 ))}
               </select>
             </label>
+            <label className="form-row" title="비우면 엔진의 기본 모델을 씁니다">
+              <span>기본 모델</span>
+              <ModelSelect
+                label="기본 모델"
+                engine={value.agent_engine}
+                value={value.agent_model}
+                empty="엔진 기본"
+                onChange={(model) => {
+                  const fit = fitAgent(value.agent_engine, model, value.agent_effort)
+                  setDraft({ ...value, agent_model: fit.model, agent_effort: fit.effort })
+                }}
+              />
+            </label>
+            <div className="form-row">
+              <span>기본 추론 수준</span>
+              <EffortSelect
+                label="기본 추론 수준"
+                engine={value.agent_engine}
+                model={value.agent_model}
+                value={value.agent_effort}
+                empty="엔진 기본"
+                onChange={(effort) => setDraft({ ...value, agent_effort: effort })}
+              />
+            </div>
             {NUMBERS.map(([key, label, hint]) => (
               <label key={key} className="form-row" title={hint}>
                 <span>{label}</span>
@@ -905,6 +999,67 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               />
             </label>
           </div>
+          <details className="agent-steps">
+            <summary>상세 설정 (단계별 엔진·모델·추론 수준)</summary>
+            <div className="dim">
+              단계마다 엔진·모델·추론 수준을 고릅니다. 고르지 않은 값은 위의 기본을 따릅니다. 단계의
+              엔진이 기본 엔진과 다르면 그 엔진의 기본 모델·추론 수준을 씁니다.
+            </div>
+            <Groups
+              items={AGENT_STEP_TITLES}
+              type={null}
+              row={(skill, title) => {
+                const step = value.agent_steps[skill] ?? {}
+                const engine = step.engine ?? value.agent_engine
+                const set = (next: AgentStep) =>
+                  setDraft({
+                    ...value,
+                    agent_steps: setAgentStep(value.agent_steps, skill, next, value.agent_engine),
+                  })
+                return (
+                  <div key={skill} className="form-row agent-step">
+                    <span>
+                      {title} <span className="dim">({skill})</span>
+                    </span>
+                    <div className="agent-step-selects">
+                      <select
+                        aria-label={`${title} 엔진`}
+                        value={step.engine ?? ''}
+                        onChange={(e) =>
+                          set({
+                            ...step,
+                            engine: (e.target.value || undefined) as AgentEngine | undefined,
+                          })
+                        }
+                      >
+                        <option value="">앱 기본 따름</option>
+                        {AGENT_ENGINES.map((e) => (
+                          <option key={e} value={e}>
+                            {AGENT_LABELS[e]}
+                          </option>
+                        ))}
+                      </select>
+                      <ModelSelect
+                        label={`${title} 모델`}
+                        engine={engine}
+                        value={step.model ?? ''}
+                        empty="기본 따름"
+                        onChange={(model) => set({ ...step, model })}
+                      />
+                      <EffortSelect
+                        label={`${title} 추론 수준`}
+                        engine={engine}
+                        model={step.model ?? ''}
+                        value={step.effort ?? ''}
+                        empty="기본 따름"
+                        onChange={(effort) => set({ ...step, effort })}
+                      />
+                    </div>
+                  </div>
+                )
+              }}
+            />
+          </details>
           <h3>질문 방식</h3>
           <Groups
             items={SKILL_TITLES}

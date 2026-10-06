@@ -425,12 +425,16 @@ export function applyConfigPatch(current: AppConfig, patch: unknown): Checked<Ap
       next[key] = r.value
     } else if (key === 'agent_steps') {
       if (!isRecord(v)) return { ok: false, error: '상세 설정: 객체여야 함' }
+      const steps: AppConfig['agent_steps'] = { ...next.agent_steps }
       for (const [skill, step] of Object.entries(v)) {
         const r = agentStep(skill, step)
         if (!r.ok) return r
-        if (Object.keys(r.value).length) next.agent_steps[skill as SkillName] = r.value
-        else delete next.agent_steps[skill as SkillName]
+        steps[skill as SkillName] = r.value
       }
+      // 빈 객체는 그 단계를 지워 기본을 따른다
+      next.agent_steps = Object.fromEntries(
+        Object.entries(steps).filter(([, s]) => s && Object.keys(s).length),
+      )
     } else if (key === 'knowledge_review_engine') {
       const r = reviewEngine(v)
       if (!r.ok) return r
