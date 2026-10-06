@@ -194,7 +194,7 @@ function inspectSpec(
     need(criteria.includes('지금 코드와 어긋나지 않는다'), '기본 항목 2 없음 (D355)')
     need(criteria.includes('정하지 않고 남긴 것은'), '기본 항목 3 없음 (D355)')
     need(
-      lines.some((l) => /을 정한다|를 정한다/.test(l)),
+      lines.some((l) => /정한다\.?\s*$/.test(l)),
       '"정한다" 항목 없음 (D354)',
     )
     need(!lines.some((l) => CHECK_METHOD.test(l)), '확인 방법이 붙은 줄이 있음 (D356)')
