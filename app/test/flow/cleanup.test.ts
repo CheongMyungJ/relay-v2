@@ -434,8 +434,6 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
     const s = await setup(scenario())
     const done = await drive(s.h.relay, s.h.ui, s.key)
     expect(done.status).toBe('completed')
-    // 보관 전에는 옮기지 않는다
-    expect(await s.h.relay.shelve(s.key)).toMatchObject({ ok: false })
     const summary = await preview(s)
     expect(
       await s.h.relay.clean(s.key, {
@@ -446,9 +444,9 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
       }),
     ).toEqual({ ok: true })
     await settle(s.h, s.key)
-    expect(s.h.ui.works.get(s.key)?.shelved).toBe(false)
+    expect(s.h.ui.works.get(s.key)).toMatchObject({ shelved: false, canShelve: true })
     expect(await s.h.relay.shelve(s.key)).toEqual({ ok: true })
-    expect(s.h.ui.works.get(s.key)?.shelved).toBe(true)
+    expect(s.h.ui.works.get(s.key)).toMatchObject({ shelved: true, canShelve: false })
     expect(work(s)).toMatchObject({ status: 'archived', shelved_at: expect.any(String) })
     await s.h.relay.close()
     await s.h.reopen()

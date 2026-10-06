@@ -378,6 +378,12 @@ textarea {
   border-color: transparent;
 }
 
+.context-menu .error {
+  max-width: 280px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
 .work-item {
   position: relative;
   display: grid;

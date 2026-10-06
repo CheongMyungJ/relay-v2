@@ -122,6 +122,7 @@ import {
 import {
   ASK_TOOL,
   actions,
+  canShelve,
   currentTask,
   transition,
   type DeliveryFound,
@@ -4993,6 +4994,7 @@ export class WorkRunner {
       statusLabel: WORK_STATUS_LABEL[w.status],
       completedAt: w.completed_at ?? null,
       shelved: w.shelved_at !== undefined,
+      canShelve: canShelve(w),
       badge: badge(w, this.prBadge()),
       actions: this.cleanupOpen() ? cleanupActions(actions(w)) : actions(w),
       stopAfterStep: w.stop_after_step === true,

@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   ARCHIVE_GROUP,
-  canShelve,
   loadCollapsed,
+  pruned,
   saveCollapsed,
   sidebarGroups,
   toggled,
@@ -34,14 +34,6 @@ describe('사이드바 목록 구성', () => {
     expect(g.archive.map((w) => w.key)).toEqual(['a/w-3', 'b/w-2'])
   })
 
-  it('보관됐고 아직 옮기지 않은 Work만 아카이브로 옮길 수 있다', () => {
-    expect(canShelve(view('a', 'w-1', { status: 'archived' }))).toBe(true)
-    expect(canShelve(view('a', 'w-1', { status: 'archived', shelved: true }))).toBe(false)
-    for (const status of ['active', 'stopped', 'pr', 'completed', 'abandoned'] as const) {
-      expect(canShelve(view('a', 'w-1', { status }))).toBe(false)
-    }
-  })
-
   it('프로젝트와 아카이브를 따로 접고 편다', () => {
     const none: ReadonlySet<string> = new Set()
     const a = toggled(none, 'a')
@@ -50,6 +42,12 @@ describe('사이드바 목록 구성', () => {
     expect([...both].sort()).toEqual([ARCHIVE_GROUP, 'a'].sort())
     expect([...toggled(both, 'a')]).toEqual([ARCHIVE_GROUP])
     expect([...none]).toEqual([])
+  })
+
+  it('접은 상태에서 등록되지 않은 프로젝트를 지우고 아카이브는 둔다', () => {
+    const c: ReadonlySet<string> = new Set(['a', 'gone', ARCHIVE_GROUP])
+    expect([...pruned(c, ['a', 'b'])].sort()).toEqual([ARCHIVE_GROUP, 'a'].sort())
+    expect(pruned(c, ['a', 'gone'])).toBe(c)
   })
 })
 

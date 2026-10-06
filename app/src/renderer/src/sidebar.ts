@@ -29,16 +29,24 @@ export function sidebarGroups(works: readonly WorkView[]): SidebarGroups {
   return { byProject, archive }
 }
 
-/** 우클릭 메뉴에 [아카이브로 옮기기]를 보이는 Work: 보관됐고 아직 옮기지 않았다 */
-export function canShelve(w: WorkView): boolean {
-  return w.status === 'archived' && !w.shelved
-}
-
 /** 그룹 하나를 접거나 편 집합 */
 export function toggled(collapsed: ReadonlySet<string>, group: string): ReadonlySet<string> {
   const next = new Set(collapsed)
   if (!next.delete(group)) next.add(group)
   return next
+}
+
+/**
+ * 등록된 프로젝트와 아카이브만 남긴다. 지운 프로젝트를 같은 경로로 다시 등록하면 id가 같아(폴더 이름과 경로의
+ * 해시) 접힌 채로 나오지 않게 한다. 바뀐 것이 없으면 같은 집합을 돌려준다
+ */
+export function pruned(
+  collapsed: ReadonlySet<string>,
+  projectIds: readonly string[],
+): ReadonlySet<string> {
+  const keep = new Set([...projectIds, ARCHIVE_GROUP])
+  const next = new Set([...collapsed].filter((k) => keep.has(k)))
+  return next.size === collapsed.size ? collapsed : next
 }
 
 const STORAGE_KEY = 'relay.sidebar.collapsed'

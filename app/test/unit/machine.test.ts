@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   actions,
+  canShelve,
   createWork,
   currentTask,
   permissionWarning,
@@ -2351,11 +2352,14 @@ describe('정리 (시나리오 8, D77)', () => {
     expect(shelve(running()).rejected).toMatch(/보관된 Work가 아님/)
     const removed = apply(clean(completed()).work, { type: 'clean.removed', at: at() })
     const archived = apply(removed.work, { type: 'clean.done', at: at() }).work
+    expect(canShelve(archived)).toBe(true)
+    expect(canShelve(completed())).toBe(false)
     const r = shelve(archived)
     expect(r.rejected).toBeUndefined()
     expect(r.effects).toEqual([])
     expect(r.work).toMatchObject({ status: 'archived', shelved_at: expect.any(String) })
     expect(r.work.tasks).toEqual(archived.tasks)
+    expect(canShelve(r.work)).toBe(false)
     const again = shelve(r.work)
     expect(again.rejected).toBeUndefined()
     expect(again.work).toBe(r.work)

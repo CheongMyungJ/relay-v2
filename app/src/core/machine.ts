@@ -1986,10 +1986,18 @@ function stopAfter(work: WorkState, e: StopAfterStep): Transition {
   return { work: e.on ? { ...work, stop_after_step: true } : withoutStopAfter(work), effects: [] }
 }
 
-/** [아카이브로 옮기기]: 보관된 Work만 옮긴다. 이미 옮겼으면 그대로 둔다 */
+/** [아카이브로 옮기기]를 받는 Work: 보관됐고 아직 옮기지 않았다. 사이드바의 우클릭 메뉴도 이것으로 정한다 */
+export function canShelve(work: WorkState): boolean {
+  return work.status === 'archived' && work.shelved_at === undefined
+}
+
+/**
+ * [아카이브로 옮기기]: 보관된 Work만 옮긴다. 이미 옮겼으면 그대로 둔다.
+ * 사이드바의 정리라 Work의 수명 이벤트(5.5)는 남기지 않는다 (D381)
+ */
 function shelve(work: WorkState, e: ShelveWork): Transition {
   if (work.status !== 'archived') return unchanged(work, '보관된 Work가 아님')
-  if (work.shelved_at) return unchanged(work)
+  if (!canShelve(work)) return unchanged(work)
   return { work: { ...work, shelved_at: e.at }, effects: [] }
 }
 
