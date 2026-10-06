@@ -962,6 +962,32 @@ export function generalScenario(override: Partial<Record<SkillName, Step[]>> = {
   }
 }
 
+/**
+ * 설계 시나리오 (3.1, D350): intake → spec → verify. spec은 주제 목록을 묻고 주제마다 질문 묶음 하나씩(둘) 물은 뒤 설계
+ * 문서를 커밋하고 spec.md를 쓴다(D357). 사람의 결정은 by: human이다(D358). verify는 다시 볼 결정을 적은 verification.md와
+ * 설계 pr.md를 쓴다 (D362, D364). 사람 역할(driver)은 질문에 첫 선택지(추천)로 답한다
+ */
+export function specScenario(override: Partial<Record<SkillName, Step[]>> = {}): Scenario {
+  const intake = steps('intake').map((st) =>
+    st.do === 'write' && st.file === 'intent.draft.md' ? { ...st, text: specIntentDraft() } : st,
+  )
+  const spec: Step[] = [
+    { do: 'prompt' },
+    { do: 'ask', question: '주제 목록' },
+    { do: 'ask', question: '주제 1. 가중치를 받는 모양' },
+    { do: 'ask', question: '주제 2. 가중치 합이 0일 때' },
+    ...steps('spec').slice(1),
+  ]
+  const verify = steps('verify').map((st) =>
+    st.do === 'write' && st.file === 'verification.md'
+      ? { ...st, text: specVerification() }
+      : st.do === 'write' && st.file === 'pr.md'
+        ? { ...st, text: SPEC_PR }
+        : st,
+  )
+  return { tasks: { 'work-start': intake, spec, verify, ...override } }
+}
+
 /** 버그 수정 시나리오 (3.1): intake → fix → verify (D227) */
 export function scenario(override: Partial<Record<SkillName, Step[]>> = {}): Scenario {
   return {

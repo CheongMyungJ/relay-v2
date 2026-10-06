@@ -29,7 +29,7 @@ import { expect } from 'vitest'
 import { DEFAULT_CONFIG } from '../../src/shared/config'
 import type { PrItemsFile } from '../../src/shared/pr'
 import type { CleanPreview, PrView, TaskView, WorkView } from '../../src/shared/views'
-import type { LifecycleEvent, WorkState } from '../../src/shared/work'
+import type { LifecycleEvent, WorkState, WorkType } from '../../src/shared/work'
 import { drive } from './driver'
 import { git, settle, sleep, type Harness } from './harness'
 import { handoff, scenario, steps, type Scenario, type Step } from './scenarios'
@@ -204,13 +204,14 @@ export async function openPrWork(
   ctx: PrContext,
   claude: Scenario,
   request: string,
+  type: WorkType = 'bugfix',
 ): Promise<PrWork> {
   const { h } = ctx
   fs.writeFileSync(path.join(h.root, 'scenario.json'), JSON.stringify(claude))
   const created = await h.relay.createWork(ctx.projectId, {
     request,
     baseBranch: ctx.world.base,
-    type: 'bugfix',
+    type,
     baseLocation: 'remote',
   })
   if (!created.ok) throw new Error(`Work 생성 실패: ${created.error}`)
