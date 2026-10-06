@@ -583,6 +583,11 @@ export class Relay {
     return this.withWork(workKey, (w) => w.stopAfter(on))
   }
 
+  /** [아카이브로 옮기기] */
+  shelve(workKey: string): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.shelve())
+  }
+
   /** 멈춘 Work의 [재개] */
   resumeWork(workKey: string): Promise<CommandResult> {
     return this.withWork(workKey, (w) => w.resumeWork())

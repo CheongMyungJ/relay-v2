@@ -429,4 +429,30 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
     expect(verify?.completion?.diff).toContain('+  if (xs.length === 0) return 0')
     expect(work(s).status).toBe('archived')
   })
+
+  it('보관된 Work를 아카이브로 옮기면 다시 켜도 아카이브에 있고 기록을 읽을 수 있다', async () => {
+    const s = await setup(scenario())
+    const done = await drive(s.h.relay, s.h.ui, s.key)
+    expect(done.status).toBe('completed')
+    const summary = await preview(s)
+    expect(
+      await s.h.relay.clean(s.key, {
+        deleteBranch: false,
+        deleteBackups: true,
+        confirmed: false,
+        expect: summary.expect,
+      }),
+    ).toEqual({ ok: true })
+    await settle(s.h, s.key)
+    expect(s.h.ui.works.get(s.key)).toMatchObject({ shelved: false, canShelve: true })
+    expect(await s.h.relay.shelve(s.key)).toEqual({ ok: true })
+    expect(s.h.ui.works.get(s.key)).toMatchObject({ shelved: true, canShelve: false })
+    expect(work(s)).toMatchObject({ status: 'archived', shelved_at: expect.any(String) })
+    await s.h.relay.close()
+    await s.h.reopen()
+    const view = s.h.ui.works.get(s.key) ?? s.h.relay.snapshot().works.find((w) => w.key === s.key)
+    expect(view).toMatchObject({ status: 'archived', shelved: true })
+    const verify = await s.h.relay.review(s.key, 't-03')
+    expect(verify?.completion?.diff).toContain('+  if (xs.length === 0) return 0')
+  })
 })

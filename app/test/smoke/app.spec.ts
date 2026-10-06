@@ -1,5 +1,5 @@
 // [스모크] 설치한 앱이 뜨고, 새 Work에서 유형(버그 수정)을 고른 뒤에야 [시작]이 켜지고(M14, D236, 유형 다섯은 M15·M18·M20), 가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화면(자동 승인 포함), [단계 선택],
-// 자동 승인 카운트다운의 [취소], [push]와 [Work 정리], 다시 켠 뒤 끊긴 작업의 [다시 시도]를 누른다 (I27).
+// 자동 승인 카운트다운의 [취소], [push]와 [Work 정리], 다시 켠 뒤 끊긴 작업의 [다시 시도], 보관된 Work의 [아카이브로 옮기기]를 누른다 (I27).
 // M2: 프로젝트 등록 → 새 Work → intake 탭에 PTY 출력 → 창 크기 변경이 PTY에 전달 → [의도 승인]
 // → intent.md 확정, intake 세션 트리 종료, 다음 task 시작. M12: 다음 task의 터미널은 표시 줄로 시작하고, 머리 띠와
 // 패널에 진행 표시(마지막 동작 Bash(npm test))가 보인다. 첫 intake의 [요약] 맨 위에 의도 초안이, 열린 질문에 답할 곳과
@@ -29,7 +29,10 @@
 // M6: 앱 종료 확인을 거쳐 앱을 끄고, 첫 Work의 work.json에 끊긴 되감기 기록을 넣고 decisions.md를 고친 뒤 다시
 // 켠다 → 첫 Work의 배지가 "끊긴 작업"이고, 패널 맨 위에 끊긴 곳과 [다시 시도]·[무시], 바뀐 파일과 [확인]이
 // 보인다. 끊긴 동안 [단계 선택]은 없다 → [확인]하면 파일 알림이 닫히고, [다시 시도]하면 앞 task를 폐기하고
-// intake를 되감기로 다시 시작한다 → 앱 종료 확인을 거쳐 끝낸다.
+// intake를 되감기로 다시 시작한다.
+// 아카이브(D380): 보관된 두 번째 Work를 우클릭해 [아카이브로 옮기기]하면 프로젝트 목록에서 빠지고, 프로젝트들 아래 같은
+// 계층의 공통 아카이브에 프로젝트 이름과 함께 보인다. 메뉴는 Esc나 다른 곳 우클릭으로 닫히고, 보관 전 Work와 옮긴 Work에는
+// 없다 → 프로젝트와 아카이브를 따로 접고 편다 → 아카이브의 Work를 고르면 판정표가 보인다 → 앱 종료 확인을 거쳐 끝낸다.
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -191,7 +194,7 @@ test.afterAll(async () => {
   fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
 })
 
-test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화면, [단계 선택], 자동 승인 카운트다운의 [취소], [push]와 [Work 정리], 다시 켠 뒤 끊긴 작업의 [다시 시도]를 누른다', async () => {
+test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화면, [단계 선택], 자동 승인 카운트다운의 [취소], [push]와 [Work 정리], 다시 켠 뒤 끊긴 작업의 [다시 시도], 보관된 Work의 [아카이브로 옮기기]를 누른다', async () => {
   const win = await app.firstWindow()
   await expect(win.locator('.layout')).toBeVisible()
   await expect(win.locator('.sidebar')).toBeVisible()
@@ -636,6 +639,64 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await expect(win2.locator('.tab.discarded')).toHaveCount(4)
   await expect(win2.getByRole('button', { name: '의도 승인' })).toBeEnabled({ timeout: 60_000 })
   await win2.screenshot({ path: 'test-results/recovered.png' })
+
+  // 아카이브 (D380): 보관된 두 번째 Work의 우클릭 메뉴로 옮긴다. 보관 전 Work에는 메뉴가 없고, 메뉴는 Esc나 다른 곳
+  // 우클릭으로 닫힌다
+  const project = win2.locator('.project:not(.archive)')
+  const archive = win2.locator('.project.archive')
+  const work1 = project.locator('.work-item').filter({ hasNotText: '보관됨' })
+  const work2 = project.locator('.work-item').filter({ hasText: '보관됨' })
+  const menu = win2.getByRole('menu')
+  await expect(archive).toHaveCount(0)
+  await work1.click({ button: 'right' })
+  await expect(menu).toHaveCount(0)
+  await work2.click({ button: 'right' })
+  await expect(menu).toBeVisible()
+  await win2.keyboard.press('Escape')
+  await expect(menu).toHaveCount(0)
+  await work2.click({ button: 'right' })
+  await expect(menu).toBeVisible()
+  await work1.click({ button: 'right' })
+  await expect(menu).toHaveCount(0)
+  await work2.click({ button: 'right' })
+  await menu.getByRole('menuitem', { name: '아카이브로 옮기기', exact: true }).click()
+  // 프로젝트 목록에서 빠지고, 프로젝트들 아래 같은 계층의 공통 아카이브에 프로젝트 이름과 함께 보인다
+  await expect(archive).toHaveCount(1, { timeout: 30_000 })
+  await expect(project.locator('.work-item')).toHaveCount(1)
+  // 접은 상태는 이 컴퓨터의 브라우저 저장소에 남는다. 앞선 실행이 아카이브를 접어 두었으면 먼저 편다
+  const archiveToggle = archive.locator('.group-toggle')
+  if ((await archiveToggle.getAttribute('aria-expanded')) === 'false') await archiveToggle.click()
+  const shelved = archive.locator('.work-item')
+  await expect(shelved).toHaveCount(1)
+  await expect(shelved.locator('.badge')).toHaveText('보관됨')
+  await expect(shelved.locator('.work-step')).toHaveText('sample')
+  await shelved.click({ button: 'right' })
+  await expect(menu).toHaveCount(0)
+
+  // 프로젝트와 아카이브는 따로 접고 편다. 프로젝트를 접으면 [새 Work]도 숨는다
+  const projectToggle = project.locator('.group-toggle')
+  await expect(projectToggle).toHaveAttribute('aria-expanded', 'true')
+  await projectToggle.click()
+  await expect(projectToggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(project.locator('.work-item')).toHaveCount(0)
+  await expect(project.getByRole('button', { name: '새 Work', exact: true })).toHaveCount(0)
+  await expect(shelved).toHaveCount(1)
+  await archiveToggle.click()
+  await expect(archiveToggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(shelved).toHaveCount(0)
+  await win2.screenshot({ path: 'test-results/archive-collapsed.png' })
+  await projectToggle.click()
+  await expect(project.locator('.work-item')).toHaveCount(1)
+  await expect(shelved).toHaveCount(0)
+  await archiveToggle.click()
+  await expect(shelved).toHaveCount(1)
+
+  // 아카이브의 Work를 고르면 기록과 산출물을 그대로 본다
+  await shelved.click()
+  await expect(shelved).toHaveClass(/selected/)
+  const verdicts = win2.locator('table.verdicts')
+  await expect(verdicts).toContainText('재현 절차가 더 이상 실패하지 않는다', { timeout: 30_000 })
+  await win2.screenshot({ path: 'test-results/archive.png' })
 })
 
 // 대화상자가 top layer에 떠 있고(showModal) 포커스가 그 안에 있다
