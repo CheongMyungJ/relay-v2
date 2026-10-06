@@ -1,6 +1,6 @@
 # relay-v2 구현 계획
 
-- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102)
+- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102), v0.17의 설계 유형(M20, I103~I113)
 - 상태: 정함. 주제마다 사람과 문답으로 정했다(설계 부록 A의 진행 규칙). 바꾸려면 사용자와 다시 정한다.
 
 Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서는 [engines.md](engines.md)에서 관리한다. 이 문서의 기존 Claude 동작은 확장 중 회귀 시험의 기준이다.
@@ -116,6 +116,17 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I100 | 머지를 읽으면(D178, D179) 기준 브랜치와 관계없이 새 이슈를 닫는다. 이미 `Closes`로 닫혔으면 gh가 그대로 성공한다 | 기본 브랜치인지 읽지 않아도 D349(5)를 지킨다 | |
 | I101 | [흐름] 시험의 `register`는 이슈 기록을 끈다(지식 관리처럼, 기존 시험의 gh 기록이 그대로). `test/flow/issue.test.ts`가 켜서 본다. 가짜 gh에 `label create`, `issue create/comment/close/list/view`를 더하고 이슈는 `FAKE_GH_RECORD`의 `issues.json`에 둔다. 실패는 `FAKE_GH_FAIL=issue` | 기존 시험이 새 gh 호출로 흔들리지 않게 | |
 | I102 | PR #33 리뷰 반영: IPC의 새 Work 입력이 이슈 번호를 넘긴다. intent의 한 버전은 지금 버전이면 `intent.md`, 아니면 `intent.history/`에서만 읽고 없으면 실패한다(다른 버전으로 대신하지 않음). 잘린 산출물이 코드 펜스 안이면 펜스를 닫고 잘린 말을 붙인다. 산출물 목록은 `WorkFiles.artifactTexts`(D89와 같은 파일)에서, gh에 줄 레포는 게시 줄이 한 번 도는 동안 한 번만 읽는다 | 리뷰가 찾은 버그와 중복 | |
+| I103 | 설계 유형의 core: `WorkType`에 `spec`, `WORK_TYPES`는 `['bugfix', 'feature', 'refactor', 'spec', 'general']`(대화상자 차례, D353), `WORK_TYPE_LABEL` "설계"·`WORK_TYPE_SHORT` "설계", `PIPELINES.spec = ['intake', 'spec', 'verify']`, `NODE_INFO.spec`(스킬 `spec`, 화면 "설계 문답", 산출물 `spec.md`), `validate`의 `SPEC_FILE`. handoff 스키마와 생성본의 `recommended_next.node`에 `spec`. `skills/assemble.mjs`의 `TYPES`. 앱은 대상 문서의 경로를 intent에서 꺼내지 않는다: intent가 `context.md`에 본문으로 들어가므로 verify와 PR 대응은 `제약`에서 읽고, `spec.md`는 지금의 산출물 경로로 들어간다(D374) | 유형을 더하는 자리는 M18(I85)과 같다. 경로를 꺼내는 파서를 두면 `제약`의 줄 모양을 앱이 검사해야 하고, 그 검사는 설계가 정하지 않았다(D356처럼 앱 검사 없음) | |
+| I104 | 질문 방식(D358): `SkillName`에는 `spec`을 넣고, 질문 방식의 키는 `QuestionSkill = Exclude<SkillName, 'spec'>`로 둔다(`AppConfig.question_mode`, `WorkSettings`, `SKILL_TITLES`). `config.json`의 `question_mode.spec`은 지금처럼 모르는 스킬로 거른다. spec task의 `context.md` 질문 방식 줄은 "결정마다 확인(설계 문답은 결정을 모두 묻는다, D358)"으로 고정한다 | `NODE_INFO.skill`과 배포는 `SkillName`을 쓰므로 spec이 거기에 있어야 한다. 설정 키에서만 빼야 설정 화면에 고를 수 없는 항목이 생기지 않는다 | |
+| I105 | [현재 문서 위에서 이어서](D365): `KEEP_CODE_NOTES.spec.spec`에 안내("문서의 결정을 그대로 두고 사람의 추가 지시와 폐기된 `verification.md`의 `다시 볼 결정`에서 시작한다")를 두고, `core/pipeline`에 `keepLabel(type, node)`("현재 코드 위에서 이어서" / spec은 "현재 문서 위에서 이어서")와 `keepDefault(type, node)`(spec만 참)를 더한다. 단계 선택 대화상자는 이 둘로 이름과 처음 체크를 정한다. 폐기된 `spec.md`와 `verification.md`의 경로는 지금의 `keptArtifacts`(폐기한 task의 산출물 모두)로 이미 들어간다 | 되감기의 코드 처리(백업 브랜치, 커밋 유지)는 유형과 관계없이 같아 이름과 기본값만 다르다. 표 하나에서 나오게 해 유형을 더할 때 빠뜨리지 않는다(KEEP_CODE_NODES와 같은 까닭) | |
+| I106 | 설계 Work의 화면: `stageLead`의 spec은 `spec.md`의 `## 주제 목록`(D374). Work 완료 화면의 `Completion`에 `revisit`(verification.md `## 다시 볼 결정`의 본문, 설계 Work만, "없음"이면 null)을 더하고 판정표 아래에 보인다(시나리오 7-3, D362). 자동 승인 설정 목록과 [Work 설정]에 설계 묶음(설계 문답, 기본 켬, D367) | 설계는 화면을 새로 만들지 않고 표에서 나오게 한다(M18과 같음). 다시 볼 결정은 사람이 되감을지 정하는 근거라 완료 화면에서 보여야 한다 | |
+| I107 | 설계 문서를 따르는 Work의 규칙(D369, D371)은 `skills/_common.md`에 짧은 절 하나로 둔다. 모든 스킬 끝에 붙으므로 fix, design, implement, refactor, execute, verify에 한 번에 닿는다. intake의 옮기기와 머지 전 물음(D369, D370)은 work-start의 유형 표시 밖(모든 유형)에 둔다 | 작업 단계 다섯에 같은 글을 따로 넣으면 갈라진다. 지금 스킬 크기는 목표(5,000)의 절반 남짓이라 여유가 있다(`check.mjs` [2]) | |
+| I108 | 앱은 설계 Work가 대상 문서와 지식 파일 밖의 파일을 바꿨는지 검사하지 않는다. verify가 diff로 판정하고(D355, D374), Work 완료 화면의 [전체 변경]에서 사람이 본다 | 설계가 앱 검사를 정하지 않았다. 대상 경로를 앱이 알려면 I103의 파서가 필요하다. 어기는 일이 실제로 생기면 그때 더한다 | |
+| I109 | 가짜 `claude`의 spec 시나리오: intake가 `제약`에 대상 문서를 적은 초안, spec이 주제 목록과 질문 묶음 둘(`AskUserQuestion`)을 지나 `docs/design/<이름>.md`를 커밋하고 `spec.md`를 씀(사람 결정 `by: human`), verify가 `다시 볼 결정`을 적은 `verification.md`와 설계 `pr.md`를 씀. 녹화본에 없는 필드는 만들지 않는다. [흐름]은 `test/flow/spec.test.ts` 한 파일에 둔다 **(기본값)** | M18(I90)과 같은 모양. 질문 도구는 이미 녹화본과 계약에 있다 | |
+| I110 | [실제]는 `test/claude/spec.test.ts`에 경우 둘을 둔다: `spec`(작은 설계 Work 하나를 끝까지. 사람 역할 답은 추천을 고른다. 대상 문서가 커밋되고 코드 파일이 바뀌지 않으며 `spec.md`의 주제 목록이 있는지 본다), `spec-follow`(설계 문서가 있는 레포에서 요청에 그 경로를 적은 기능 추가 Work의 intake만 돌려 intent `제약`에 경로가 옮겨졌는지 본다, D373). `app-claude.yml`의 경우 목록과 결과 파일 목록에 둘을 더한다. `RELAY_REAL_CLAUDE=dry`도 통과하게 한다 | 연결(D369)은 평가하지 않고 [실제]로 깨졌는지만 본다(D373). intake만 돌리면 비용이 작다 | |
+| I111 | 평가 시나리오는 `app/eval/scenarios/33-*`(중간), `34-*`(큼)로 둔다(D373). `scenario.json`의 `"type": "spec"`, `eval/lib/kind.mjs`에 설계 낱말. 숨긴 쟁점은 `checks`의 새 모양 `{ "name", "issue": "<쟁점과 사람이 원하는 답>" }`로 두고, 숨긴 시험 파일 대신 판정 모델이 최종 문서(기준 커밋과의 diff)와 대화 기록을 읽어 "사람에게 물었고 문서에 반영됨"이면 통과로 본다(`eval/lib/issue-judge.mjs`). 지금 코드와 맞는 서술은 함정 하나를 같은 모양의 쟁점으로 둔다. 문서 밖 파일을 바꾸지 않았는지는 `expectedFiles`로 보고 guard로 센다. `check-scenario.mjs`가 새 모양을 받고, `app/eval/test/`에 쟁점 판정의 입력 조립과 결과 읽기, guard 계산 시험을 더한다. 시나리오와 함정 **(기본값)**: 33 알림 설정 기능의 새 설계 문서(사람만 앎: 방해 금지 시간은 사용자 시간대 기준, 수신 거부 링크는 법적 요구라 끌 수 없음), 34 주문 취소·환불을 기존 `docs/design.md`에 더함(사람만 앎: 부분 환불은 관리자만, 환불은 결제 취소가 아니라 별도 환불 기록. 함정: 기존 문서는 결제를 동기 호출로 적었지만 코드는 큐로 처리한다) | 숨긴 시험 파일로는 문서의 결정이 맞는지 볼 수 없다. 판정을 모델에 맡기는 부분은 시험으로 입력과 결과 읽기를 고정한다(CLAUDE.md: 판정·집계를 고치면 `app/eval/test/`에 시험) | |
+| I112 | 평가 실행은 33, 34를 relay와 맨 CLI로 각 3번 돌린다. 맨 CLI 쪽 사람 역할은 `kind.mjs`의 설계 낱말(할 일: "설계를 정해 문서로 남긴다(코드는 아직 바꾸지 않는다)")로 같은 일을 시킨다. 보고서는 따로 커밋한다 | 맨 CLI에는 유형이 없어 요청으로 같은 일을 시킨다. M18(I94)처럼 보고서는 구현과 나눈다 | |
+| I113 | M20은 PR 하나로 하고, core·계약·스킬 → 화면 → 시험 → 평가 도구 차례로 나눠 커밋한다. core와 스킬은 한 커밋이다(I94와 같은 까닭: `NODE_INFO`가 가리키는 스킬 파일, `assemble.mjs`의 유형 목록) | M18과 같은 차례 | |
 
 ## 3. 확인한 사실
 
@@ -281,6 +292,7 @@ app/src/
 - 설계 v0.8의 기능 추가 유형은 M14다. M14 안은 core → 화면 → 스킬 → 시험과 평가 차례로 나눠 커밋한다.
 - 설계 v0.9의 리팩터링 유형은 M15다. M14와 같은 차례로 나눠 커밋한다.
 - 설계 v0.16의 이슈 기록은 M19다. core → main·어댑터 → 화면 → 시험 차례로 나눠 커밋한다.
+- 설계 v0.17의 설계 유형은 M20이다. M18과 같은 차례로 나눠 커밋하고 core와 스킬은 한 커밋이다(I113).
 - 설계 v0.13의 일반 유형은 M18이다. M15와 같은 차례로 나눠 커밋하되 core와 스킬은 한 커밋이다(I94). M17과 I69~I84는 지식 관리에 쓴 번호라 건너뛴다.
 - 완료 기준 앞의 꼬리표는 확인 방법이다: [단위], [어댑터], [흐름], [스모크], [실제], [실기]. 뜻은 8.1을 따른다. [실제]와 [실기]의 결과는 `docs/checks.md`에 기록한다(I30).
 
@@ -305,6 +317,7 @@ app/src/
 | M16 | 공용 스킬 조립 | work-start, verify, pr-respond를 Work 유형에 맞게 조립해 배포(D279~D280) | M15 |
 | M18 | 일반 유형 | 새 Work에서 일반을 고르면 `intake → execute → verify`, 완료조건마다 확인 방법(D302~D318) | M16 |
 | M19 | 이슈 기록 | 의도 승인 때 GitHub 이슈를 만들고 승인된 task마다 코멘트를 덧붙이며, PR은 `Closes`로 잇는다(D336~D349) | M18 |
+| M20 | 설계 유형 | 새 Work에서 설계를 고르면 `intake → spec(설계 문답) → verify`, 레포의 설계 문서를 문답으로 정해 PR로 리뷰(D350~D374) | M19 |
 
 ### M0. 골격과 배포
 
@@ -994,6 +1007,56 @@ app/src/
 - [단위] `core/issue`의 글 모양과 자르기, 대기열 더하기(의도 승인, 승인 방식, PR 대응 뺌, 폐기 코멘트의 조건, 끝과 닫기의 까닭, 기존 이슈), `issue.*` 전이, `checkProjectSettings`의 `issue_log`.
 - [흐름] 위 `issue.test.ts`. 기존 흐름 시험이 그대로 통과한다.
 - [실제] 실제 gh로 시험용 레포에 이슈를 만들고 닫는다(가능할 때. 결과는 `docs/checks.md`).
+
+### M20. 설계 유형
+
+설계 v0.17(D350~D374). 새 Work 대화상자에 설계를 더하고, 설계(`spec`)는 `intake → spec(설계 문답) → verify(리뷰와 검증)`를 지난다. spec은 주제 목록을 사람과 맞춘 뒤 주제마다 질문 묶음으로 결정을 모두 묻고, 레포의 설계 문서에 적어 커밋한다(D357, D358). verify는 문서의 일관성과 근거를 리뷰한다(D362). 다른 유형의 흐름은 그대로이고, 설계 문서를 따르는 Work의 규칙(D369~D371)만 모든 유형에 더해진다. 아래 넷을 하고 단계마다 커밋하되, 1과 3은 한 커밋이다(I113). 단계가 끝날 때마다 `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`, `npm run test:contract`, `node skills/check.mjs`를 돌린다.
+
+**1. core와 계약**
+
+- **유형과 파이프라인(I103):** `WorkType`, `WORK_TYPES`(일반 앞), `WORK_TYPE_LABEL`·`WORK_TYPE_SHORT`("설계"), `PIPELINES`, `NODE_INFO`(spec, "설계 문답", `spec.md`), `validate`의 `SPEC_FILE`. handoff 스키마와 생성본의 `recommended_next.node`에 `spec`. `skills/assemble.mjs`의 `TYPES`.
+- **설정(I104, D358, D367):** `AutoApproveNode`에 `spec`(기본 켬), `SETTING_GROUP_LABEL`의 설계 묶음, `AUTO_APPROVE_TITLES`. `SkillName`에 `spec`을 넣고 질문 방식 키는 `QuestionSkill`로 좁힌다. `SKILL_TITLES`에는 spec이 없다.
+- **`context.md`:** 설계의 이전 단계와 기본 다음 단계는 표에서 나온다. spec의 질문 방식 줄은 고정 문구(I104). PR 대응 task는 설계면 `spec.md` 경로를 넣는다(D374). [현재 문서 위에서 이어서]로 spec에 들어오면 I105의 안내와 폐기된 `spec.md`·`verification.md` 경로를 넣는다(D365).
+- **되감기(I105):** `keepLabel`, `keepDefault`. 단계 선택의 미리 보기와 실행은 지금의 `keepCode`를 그대로 쓴다.
+- **승인 화면 핵심과 완료 화면(I106):** `stageLead`의 spec, `Completion.revisit`.
+- **마무리 안내 문구:** spec은 fix와 같은 문구(자동 승인 포함)다.
+
+**2. 화면**
+
+- **새 Work 대화상자(D353):** 유형 버튼을 다섯으로(버그 수정 / 기능 추가 / 리팩터링 / 설계 / 일반). 설계를 고르면 "구현 전에 설계만 정하는 큰 일" 설명과 설계의 요청 예시 문구("무엇을 설계할지, 정해야 할 것, 설계 문서를 둘 곳이나 고칠 문서")를 보인다.
+- **설정 화면과 [Work 설정]:** 설계 묶음(자동 승인의 설계 문답). 질문 방식 목록에는 없다.
+- **단계 선택 대화상자(D365):** spec을 고르면 "현재 문서 위에서 이어서"가 체크된 채로 나온다. 미리 보기의 되돌릴 커밋 수는 체크에 따라 지금처럼 바뀐다.
+- **Work 완료 화면(D362):** 판정표 아래 "다시 볼 결정"(있을 때만)과 "바꾸려면 [단계 선택]에서 설계 문답으로 되감기" 안내.
+- **사이드바와 머리 띠, [intake 다시]의 유형 고르기:** 표에서 나오므로 유형 목록이 다섯이 되는지만 본다.
+
+**3. 스킬(I107)**
+
+- **spec(새로):** 설계 5.6.12를 옮긴다. 순서(읽기 → 주제 목록 확인 → 주제마다 설명과 질문 묶음 → 받을 때마다 문서에 적기 → 다시 읽기 → 커밋), 주제 목록 끝의 구현 나눔(D366), 모두 묻기와 세부의 표시(D358), 문서 형식 셋과 새 문서 템플릿(D359), 실험 되돌림(D360), 지식 후보의 범위(D361), 네 절 `spec.md` 템플릿.
+- **work-start:** 설계 구간(기능 추가가 더 맞을 때 알리고 묻기 D353, 대상 문서 경로를 `제약`에 D351, "정한다" 완료조건 D354, 기본 완료조건 셋 D355, 확인 방법 없음 D356). 유형 표시 밖에 설계 문서를 따르는 요청(D369, D370). 공통의 유형 불일치 줄에 설계(D280).
+- **verify:** 설계 구간(D362~D364: 리뷰 대상, 다시 볼 결정, 새 결정이 필요한 지적, 판정, `문서 밖 파일 변경` 절, 설계 `pr.md`). 유형 표시 밖의 리뷰에 설계 문서를 따르는 변경(D371). 다른 유형의 구간은 바꾸지 않는다.
+- **pr-respond:** 설계 구간(결정을 바꾸라는 코멘트는 묻는다, 테스트 실행 건너뜀, D368, D374).
+- **`_common.md`:** 설계 문서를 따르는 Work의 절(D369, D371, I107).
+- **`skills/check.mjs`:** spec 대조(5.6.12), work-start·verify·pr-respond의 설계 구간 대조, `PR_MARK`와 다른 유형의 산출물 목록에 설계, `_common.md`의 새 절. 크기를 본다.
+- Codex 엔진은 같은 스킬을 배포하고 질문은 `mcp__relay__ask_human`으로 바뀌므로 따로 할 일이 없다(engines.md 5.2). Codex task는 자동 승인하지 않는다.
+
+**4. 시험과 평가**
+
+- **가짜 claude(I109):** spec 시나리오.
+- **[흐름] `test/flow/spec.test.ts`:** 설계로 만든 Work가 intake → spec → verify → Work 완료로 간다(설계 문서가 커밋되고 `pr.md`가 설계 템플릿). spec의 기본 자동 승인, spec에서 열린 질문이 남으면 멈춤, verify가 spec을 추천하면 멈춤, Work 완료 화면의 `revisit`, spec으로 되감기의 기본(문서 커밋이 남고 폐기된 `spec.md`·`verification.md` 경로가 `context.md`에 있음)과 체크를 끈 되감기(되돌림), 의도 승인 전 [intake 다시]로 유형을 설계로 바꾸면 다음 단계가 spec, PR 대응 `context.md`의 `spec.md` 경로.
+- **[스모크]:** 새 Work 대화상자에 유형 버튼이 다섯이고 설계를 고르면 설명이 보인다. 단계 선택에서 spec을 고르면 "현재 문서 위에서 이어서"가 체크되어 있다.
+- **[실제](I110):** `spec`, `spec-follow`(가능할 때. 결과는 `docs/checks.md`). 이 환경에서 실제 claude를 부를 수 없으면 남은 검증으로 적는다.
+- **평가 도구(I111, I112):** 시나리오 33, 34와 `check-scenario.mjs` 통과, `kind.mjs`의 설계 낱말, 쟁점 판정(`issue-judge.mjs`)과 `app/eval/test/`의 시험, `relay-arm.mjs`와 `guides/relay.md`의 설계 유형, `relay-eval` 스킬의 설명과 시나리오 목록.
+- **평가 실행:** 33, 34를 relay와 맨 CLI로 각 3번. 보고서는 따로 커밋한다(I112).
+
+**완료 기준**
+
+- [단위] 설계의 기본 다음 단계·이전 단계·`recommended_next` 검사, 단계 선택 목록, `keepLabel`·`keepDefault`(spec만), 자동 승인 대상과 기본값(spec 켬), `config.json`에 spec 키가 없을 때의 기본값과 `question_mode.spec`을 거름, spec의 질문 방식 줄, 마무리 안내 문구, `stageLead`(spec), `Completion.revisit`(설계 Work만, "없음"이면 null), 필수 산출물(`spec.md`), 확정본의 `type: spec`.
+- [흐름] 위 `spec.test.ts`. 기존 버그 수정·기능 추가·리팩터링·일반 흐름 시험이 그대로 통과한다.
+- [어댑터] 공용 스킬 셋을 spec으로 조립하면 표시와 다른 유형의 산출물이 없다. 다른 유형으로 조립한 글에 설계 문서를 따르는 요청의 줄이 있다.
+- [정적] `skills/check.mjs` 모두 통과(spec, 공용 스킬의 설계 구간, `_common.md`의 새 절).
+- [스모크] 유형 버튼 다섯과 설계의 설명, 단계 선택의 기본 체크.
+- [실제] `spec`, `spec-follow`(가능할 때).
+- 평가: 33, 34가 `check-scenario.mjs`를 통과하고, `npm run test:eval`이 통과한다. 33, 34 각 3번의 보고서.
 
 ## 8. 테스트 전략
 
