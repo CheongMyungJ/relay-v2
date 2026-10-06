@@ -11,7 +11,7 @@
 // 돌고, 끝나면 autoApprove를 넣는다. 단계 선택의 계산은 core/rewind, 전달의 판정은 core/delivery, 정리의 판정은
 // core/cleanup, 끊긴 작업의 알림과 재개 판정은 core/recovery, 자동 승인의 조건은 core/approval이 한다.
 import type { AppConfig, WorkSettingsPatch } from '../shared/config'
-import type { AgentEngine } from '../shared/agent'
+import { resolveAgent, type AgentEngine, type ResolvedAgent } from '../shared/agent'
 import { agentLabel, knownTaskEngine, sessionUnknown, taskEngine } from './agent'
 import { selectionKind } from './context'
 import type { Decision, NodeName, TaskNode } from '../shared/contracts'
@@ -57,6 +57,7 @@ import { canClean } from './cleanup'
 import { mergeWorkSettings } from './config'
 import { commitMessage, deliveryStart, stashMessage, stoppedVerify } from './delivery'
 import {
+  NODE_INFO,
   RESPOND,
   WORK_COMPLETE,
   defaultNext,
@@ -1144,6 +1145,8 @@ function endTask(
 export interface NewWork {
   /** 첫 task 생성 시 고정한다. 기존 호출자는 Claude를 사용한다. */
   engine?: AgentEngine
+  /** 첫 task에 고정할 엔진·모델·추론 수준(resolveAgent). 있으면 engine보다 우선한다 */
+  agent?: ResolvedAgent
   workId: string
   /** 업무 유형 (D236). 사람이 새 Work 대화상자에서 고른 값이다 */
   type: WorkType
@@ -1179,7 +1182,10 @@ export function createWork(input: NewWork): Transition {
     ...(input.issue ? { issue: newIssueRecord(input.issue.linked, input.issue.mark) } : {}),
     tasks: [],
   }
-  const intake = { ...newTask(empty, 'intake', input.at), engine: input.engine ?? 'claude' }
+  const intake = {
+    ...newTask(empty, 'intake', input.at),
+    ...(input.agent ?? { engine: input.engine ?? 'claude' }),
+  }
   const work = { ...empty, tasks: [intake] }
   return {
     work,
@@ -1236,7 +1242,10 @@ export function transition(work: WorkState, event: MachineEvent, config: AppConf
   )
 }
 
-/** 이번 전이로 새로 만든 task에 지금 설정의 엔진을 적는다 */
+/**
+ * 이번 전이로 새로 만든 task에 지금 설정의 그 단계 엔진·모델·추론 수준을 적는다. 시작과 재개가 이 값을 쓰므로 뒤에 설정을
+ * 바꿔도 기존 task는 그대로다
+ */
 function withEngines(work: WorkState, result: Transition, config: AppConfig): Transition {
   if (result.work.tasks === work.tasks) return result
   const previousIds = new Set(work.tasks.map((t) => t.id))
@@ -1244,7 +1253,7 @@ function withEngines(work: WorkState, result: Transition, config: AppConfig): Tr
   const tasks = result.work.tasks.map((t) => {
     if (previousIds.has(t.id)) return t
     created = true
-    return { ...t, engine: config.agent_engine }
+    return { ...t, ...resolveAgent(config, NODE_INFO[t.node].skill) }
   })
   return created ? { ...result, work: { ...result.work, tasks } } : result
 }
