@@ -1,6 +1,6 @@
 // 앱 설정 config.json (5.1.1)과 Work별 덮어쓰기 (D72).
 // 파일에 쓰는 모양이라 키는 snake_case다.
-import type { AgentEngine } from './agent'
+import type { AgentEngine, AgentStep } from './agent'
 import type { WorkType } from './work'
 
 /**
@@ -50,6 +50,15 @@ export interface AppConfig {
   schema_version: 1
   /** 새 task를 만들 때 고정하는 기본 엔진. 기존 task의 재개에는 적용하지 않는다 (E5). */
   agent_engine: AgentEngine
+  /** 기본 엔진의 기본 모델. 비우면 엔진의 기본이다. 기본 엔진을 쓰는 단계에만 적용한다 */
+  agent_model: string
+  /** 기본 추론 수준. 비우면 엔진의 기본이다. 기본 엔진을 쓰는 단계에만 적용한다 */
+  agent_effort: string
+  /**
+   * 단계(스킬)별 엔진·모델·추론 수준 (상세 설정). 없는 단계와 키는 기본을 따른다. 새 task를 만들 때 해석해 task에
+   * 고정한다(shared/agent resolveAgent)
+   */
+  agent_steps: Partial<Record<SkillName, AgentStep>>
   /** 살아 있는 세션 합계 상한 (D18) */
   session_limit: number
   /** 단계별 자동 승인 (4.2) */
@@ -152,6 +161,22 @@ export const AUTO_APPROVE_TITLES: readonly (readonly [AutoApproveNode, string, S
   ['respond', 'PR 대응', 'pr'],
 ]
 
+/**
+ * 상세 설정(단계별 엔진·모델·추론 수준)의 단계와 화면 이름과 묶음. 모든 스킬이고 순서는 노드의 화면 순서다. core/pipeline의
+ * NODE_INFO에 맞는지 [단위]가 확인한다
+ */
+export const AGENT_STEP_TITLES: readonly (readonly [SkillName, string, SettingGroup])[] = [
+  ['work-start', '의도 정리', 'common'],
+  ['fix', '원인 분석과 수정', 'bugfix'],
+  ['design', '설계와 계획', 'feature'],
+  ['implement', '구현', 'feature'],
+  ['refactor', '계획과 리팩터링', 'refactor'],
+  ['spec', '설계 문답', 'spec'],
+  ['execute', '실행', 'general'],
+  ['verify', '리뷰와 검증', 'common'],
+  ['pr-respond', 'PR 대응', 'pr'],
+]
+
 /** 질문 방식의 화면 이름 (5.6.1) */
 export const QUESTION_MODE_LABEL: Readonly<Record<QuestionMode, string>> = {
   draft_first: '초안 우선',
@@ -166,6 +191,9 @@ export const QUESTION_MODE_LABEL: Readonly<Record<QuestionMode, string>> = {
 export const DEFAULT_CONFIG: AppConfig = {
   schema_version: 1,
   agent_engine: 'claude',
+  agent_model: '',
+  agent_effort: '',
+  agent_steps: {},
   session_limit: 3,
   auto_approve: {
     fix: true,

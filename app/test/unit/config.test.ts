@@ -8,7 +8,12 @@ import {
   normalizeConfig,
 } from '../../src/core/config'
 import { ALL_NODES, NODE_INFO, PIPELINES, RESPOND } from '../../src/core/pipeline'
-import { AUTO_APPROVE_TITLES, DEFAULT_CONFIG, SKILL_TITLES } from '../../src/shared/config'
+import {
+  AGENT_STEP_TITLES,
+  AUTO_APPROVE_TITLES,
+  DEFAULT_CONFIG,
+  SKILL_TITLES,
+} from '../../src/shared/config'
 import { WORK_TYPES } from '../../src/shared/work'
 
 describe('config.json 읽기 (5.1.1)', () => {
@@ -440,5 +445,136 @@ describe('[단위] 화면 테마 (D335)', () => {
     const bad = normalizeConfig({ theme: 'blue' })
     expect(bad.config.theme).toBe('system')
     expect(bad.warnings).toHaveLength(1)
+  })
+})
+
+describe('[단위] 기본 모델·추론 수준과 단계별 실행 설정', () => {
+  it('새 키가 없는 config.json은 모델·추론 수준이 비고(엔진 기본) 단계 설정이 없다 (F1, N1)', () => {
+    expect(DEFAULT_CONFIG).toMatchObject({ agent_model: '', agent_effort: '', agent_steps: {} })
+    expect(normalizeConfig({ agent_engine: 'codex' }).config).toMatchObject({
+      agent_engine: 'codex',
+      agent_model: '',
+      agent_effort: '',
+      agent_steps: {},
+    })
+  })
+
+  it('단계 목록은 의도 정리부터 PR 대응까지 아홉 단계이고 이름은 노드의 화면 이름이다 (F3)', () => {
+    expect(AGENT_STEP_TITLES.map(([skill, title]) => [skill, title])).toEqual(
+      [...ALL_NODES, RESPOND].map((n) => [NODE_INFO[n].skill, NODE_INFO[n].title]),
+    )
+    expect(AGENT_STEP_TITLES.map(([, title]) => title)).toEqual([
+      '의도 정리',
+      '원인 분석과 수정',
+      '설계와 계획',
+      '구현',
+      '계획과 리팩터링',
+      '설계 문답',
+      '실행',
+      '리뷰와 검증',
+      'PR 대응',
+    ])
+  })
+
+  it('저장한 값을 다시 읽으면 같은 값이다 (F5)', () => {
+    const saved = {
+      agent_engine: 'claude',
+      agent_model: 'opus',
+      agent_effort: 'high',
+      agent_steps: {
+        spec: { model: 'fable', effort: 'max' },
+        implement: { engine: 'codex', model: 'gpt-6.1-sol', effort: 'ultra' },
+        'pr-respond': { engine: 'codex' },
+      },
+    }
+    const { config, warnings } = normalizeConfig(JSON.parse(JSON.stringify(saved)))
+    expect(warnings).toEqual([])
+    expect(config).toMatchObject(saved)
+    expect(normalizeConfig(JSON.parse(JSON.stringify(config))).config).toEqual(config)
+  })
+
+  it('파일의 틀린 값은 그 값만 기본으로 되돌리고 경고한다 (F5)', () => {
+    const { config, warnings } = normalizeConfig({
+      agent_engine: 'claude',
+      agent_model: 'gpt-6-sol',
+      agent_effort: 'ultra',
+      agent_steps: {
+        design: { model: 'opus' },
+        implement: { engine: 'codex', model: 'opus' },
+        nope: { model: 'opus' },
+      },
+    })
+    expect(config.agent_model).toBe('')
+    expect(config.agent_effort).toBe('')
+    expect(config.agent_steps).toEqual({ design: { model: 'opus' } })
+    expect(warnings).toHaveLength(4)
+  })
+
+  it('설정 화면에서 기본 모델·추론 수준을 바꾼다. 엔진에 없는 모델, 모델이 받지 않는 수준은 거절한다 (F1, N2)', () => {
+    expect(
+      applyConfigPatch(DEFAULT_CONFIG, { agent_model: 'sonnet', agent_effort: 'xhigh' }),
+    ).toMatchObject({ ok: true, value: { agent_model: 'sonnet', agent_effort: 'xhigh' } })
+    expect(applyConfigPatch(DEFAULT_CONFIG, { agent_model: 'gpt-6-sol' }).ok).toBe(false)
+    expect(
+      applyConfigPatch(DEFAULT_CONFIG, { agent_model: 'haiku', agent_effort: 'low' }).ok,
+    ).toBe(false)
+    expect(applyConfigPatch(DEFAULT_CONFIG, { agent_effort: 'ultra' }).ok).toBe(false)
+    expect(
+      applyConfigPatch(DEFAULT_CONFIG, {
+        agent_engine: 'codex',
+        agent_model: 'gpt-6-luna',
+        agent_effort: 'max',
+      }),
+    ).toMatchObject({ ok: true, value: { agent_engine: 'codex', agent_model: 'gpt-6-luna' } })
+    // 엔진만 바꿔 저장값의 모델이 새 엔진에 없으면 거절한다. 화면은 모델을 함께 되돌린다 (F11)
+    const opus = { ...DEFAULT_CONFIG, agent_model: 'opus' }
+    const r = applyConfigPatch(opus, { agent_engine: 'codex' })
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error).toContain('opus')
+  })
+
+  it('한 단계를 바꾸면 다른 단계는 그대로이고, 빈 객체는 그 단계를 지운다 (F4)', () => {
+    const current = {
+      ...DEFAULT_CONFIG,
+      agent_steps: {
+        design: { model: 'opus', effort: 'high' },
+        verify: { engine: 'codex' as const },
+      },
+    }
+    const r = applyConfigPatch(current, {
+      agent_steps: { implement: { engine: 'codex', model: 'gpt-6-sol', effort: 'low' } },
+    })
+    expect(r).toMatchObject({ ok: true })
+    if (!r.ok) return
+    expect(r.value.agent_steps).toEqual({
+      design: { model: 'opus', effort: 'high' },
+      verify: { engine: 'codex' },
+      implement: { engine: 'codex', model: 'gpt-6-sol', effort: 'low' },
+    })
+    expect(current.agent_steps).not.toHaveProperty('implement')
+    const removed = applyConfigPatch(r.value, { agent_steps: { verify: {} } })
+    expect(removed.ok && removed.value.agent_steps).toEqual({
+      design: { model: 'opus', effort: 'high' },
+      implement: { engine: 'codex', model: 'gpt-6-sol', effort: 'low' },
+    })
+  })
+
+  it('모르는 단계, 단계 엔진에 없는 모델, 받지 않는 수준은 거절하고 아무것도 바꾸지 않는다 (N2)', () => {
+    const bad = [
+      { agent_steps: { nope: { model: 'opus' } } },
+      { agent_steps: { design: { engine: 'gpt' } } },
+      { agent_steps: { design: { engine: 'codex', model: 'opus' } } },
+      { agent_steps: { design: { model: 'haiku', effort: 'high' } } },
+      { agent_steps: { design: { color: 'red' } } },
+      { agent_steps: [] },
+      { session_limit: 4, agent_steps: { design: { effort: 'ultra' } } },
+    ]
+    for (const patch of bad) {
+      const r = applyConfigPatch(DEFAULT_CONFIG, patch)
+      expect(r.ok, JSON.stringify(patch)).toBe(false)
+    }
+    expect(applyConfigPatch(DEFAULT_CONFIG, { agent_steps: { design: { model: 'opus' } } }).ok).toBe(
+      true,
+    )
   })
 })

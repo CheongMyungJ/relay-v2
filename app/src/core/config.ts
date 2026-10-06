@@ -2,6 +2,7 @@
 // 같은 규칙을 쓴다. 바꾼 값은 바로 적용되고, 질문 방식만 다음에 시작하는 task부터 쓴다(D73). 자동 승인은 턴이 끝날 때의
 // 설정으로 판정하고, 카운트다운 중에 끄면 바로 멈춘다(D128). 적용은 main이 한다.
 import {
+  AGENT_STEP_TITLES,
   AUTO_APPROVE_TITLES,
   DEFAULT_CONFIG,
   SKILL_TITLES,
@@ -10,6 +11,7 @@ import {
   type AutoApproveNode,
   type QuestionMode,
   type QuestionSkill,
+  type SkillName,
   type ThemeChoice,
   type WorkSettings,
   type WorkSettingsPatch,
@@ -18,7 +20,14 @@ import type { NodeName } from '../shared/contracts'
 import type { ProjectSettings } from '../shared/project'
 import type { MergeMethod } from '../shared/work'
 import { ALL_NODES } from './pipeline'
-import { isAgentEngine, type AgentEngine } from '../shared/agent'
+import {
+  AGENT_LABELS,
+  effortsFor,
+  isAgentEngine,
+  modelKnown,
+  type AgentEngine,
+  type AgentStep,
+} from '../shared/agent'
 
 /** 질문 방식을 고르는 스킬. spec은 없어 config.json에 있으면 모르는 스킬이다 (I104) */
 const SKILLS: readonly QuestionSkill[] = SKILL_TITLES.map(([skill]) => skill)
@@ -42,6 +51,9 @@ const MANUAL_NODES: readonly NodeName[] = ALL_NODES.filter(
 /** 설정 화면에서 바꾸는 값 (D70) */
 const EDITABLE_KEYS = [
   'agent_engine',
+  'agent_model',
+  'agent_effort',
+  'agent_steps',
   'session_limit',
   'auto_approve',
   'auto_approve_countdown_sec',
@@ -130,6 +142,114 @@ function reviewEngine(v: unknown): Checked<AgentEngine> {
   return isAgentEngine(v)
     ? { ok: true, value: v }
     : { ok: false, error: '지식 검토 엔진: claude | codex 중 하나여야 함' }
+}
+
+/** 상세 설정의 단계와 화면 이름 */
+const STEP_TITLE: ReadonlyMap<string, string> = new Map(
+  AGENT_STEP_TITLES.map(([skill, title]) => [skill, title]),
+)
+
+const STEP_KEYS: readonly (keyof AgentStep)[] = ['engine', 'model', 'effort']
+
+/** 기본 모델·추론 수준의 모양: 문자열. 엔진과 맞는지는 defaultFits가 본다 */
+function agentText(name: string, v: unknown): Checked<string> {
+  return typeof v === 'string'
+    ? { ok: true, value: v.trim() }
+    : { ok: false, error: `${name}: 문자열이어야 함` }
+}
+
+/** 상세 설정 한 단계의 모양. 빈 값은 기본을 따른다는 뜻이라 뺀다. 엔진과 맞는지는 stepFits가 본다 */
+function agentStep(skill: string, v: unknown): Checked<AgentStep> {
+  const title = STEP_TITLE.get(skill)
+  if (!title) return { ok: false, error: `상세 설정: 모르는 단계 ${skill}` }
+  if (!isRecord(v)) return { ok: false, error: `상세 설정(${title}): 객체여야 함` }
+  const out: AgentStep = {}
+  for (const [key, x] of Object.entries(v)) {
+    if (!(STEP_KEYS as readonly string[]).includes(key)) {
+      return { ok: false, error: `상세 설정(${title}): 모르는 값 ${key}` }
+    }
+    if (x === undefined || x === '') continue
+    if (key === 'engine') {
+      if (!isAgentEngine(x)) {
+        return { ok: false, error: `상세 설정(${title}): 엔진은 claude | codex 중 하나여야 함` }
+      }
+      out.engine = x
+    } else if (typeof x !== 'string') {
+      return { ok: false, error: `상세 설정(${title}): ${key}는 문자열이어야 함` }
+    } else {
+      out[key as 'model' | 'effort'] = x.trim()
+    }
+  }
+  return { ok: true, value: out }
+}
+
+/** 기본 모델이 기본 엔진에 있는가. 틀리면 이유 */
+function defaultModelFits(c: Pick<AppConfig, 'agent_engine' | 'agent_model'>): string | null {
+  return modelKnown(c.agent_engine, c.agent_model)
+    ? null
+    : `기본 모델: ${AGENT_LABELS[c.agent_engine]}에 없는 모델 ${c.agent_model}`
+}
+
+/** 기본 추론 수준을 기본 엔진·모델이 받는가. 틀리면 이유 */
+function defaultEffortFits(
+  c: Pick<AppConfig, 'agent_engine' | 'agent_model' | 'agent_effort'>,
+): string | null {
+  const efforts: readonly string[] = effortsFor(c.agent_engine, c.agent_model)
+  if (c.agent_effort === '' || efforts.includes(c.agent_effort)) return null
+  const model = c.agent_model || `${AGENT_LABELS[c.agent_engine]} 기본 모델`
+  return `기본 추론 수준: ${model}이 받지 않는 수준 ${c.agent_effort}`
+}
+
+/**
+ * 한 단계의 모델이 그 단계의 엔진(단계 ?? 기본)에 있고, 추론 수준을 그 모델이 받는가. 모델을 정하지 않은 단계는 엔진의
+ * 전체 수준을 받는다(물려받은 모델이 받지 않으면 실행 때 버린다, resolveAgent). 틀리면 이유
+ */
+function stepFits(engine: AgentEngine, skill: string, step: AgentStep): string | null {
+  const title = STEP_TITLE.get(skill) ?? skill
+  const e = step.engine ?? engine
+  const model = step.model ?? ''
+  if (!modelKnown(e, model)) return `상세 설정(${title}): ${AGENT_LABELS[e]}에 없는 모델 ${model}`
+  const efforts: readonly string[] = effortsFor(e, model)
+  if (step.effort !== undefined && !efforts.includes(step.effort)) {
+    const name = model || `${AGENT_LABELS[e]} 기본 모델`
+    return `상세 설정(${title}): ${name}이 받지 않는 추론 수준 ${step.effort}`
+  }
+  return null
+}
+
+/** 기본 모델·추론 수준과 상세 설정을 읽는다. 틀린 값은 그 값만 비워(엔진 기본, 기본 따름) 경고한다 */
+function normalizeAgent(data: Record<string, unknown>, config: AppConfig, warnings: string[]) {
+  for (const [key, name] of [
+    ['agent_model', '기본 모델'],
+    ['agent_effort', '기본 추론 수준'],
+  ] as const) {
+    if (data[key] === undefined) continue
+    const r = agentText(name, data[key])
+    if (r.ok) config[key] = r.value
+    else warnings.push(`config.json ${r.error}. 엔진의 기본을 씀`)
+  }
+  const model = defaultModelFits(config)
+  if (model) {
+    warnings.push(`config.json ${model}. 엔진의 기본을 씀`)
+    config.agent_model = ''
+  }
+  const effort = defaultEffortFits(config)
+  if (effort) {
+    warnings.push(`config.json ${effort}. 엔진의 기본을 씀`)
+    config.agent_effort = ''
+  }
+  const steps = data['agent_steps']
+  if (steps === undefined) return
+  if (!isRecord(steps)) {
+    warnings.push('config.json 상세 설정: 객체여야 함. 모든 단계가 기본을 따름')
+    return
+  }
+  for (const [skill, v] of Object.entries(steps)) {
+    const r = agentStep(skill, v)
+    const why = r.ok ? stepFits(config.agent_engine, skill, r.value) : r.error
+    if (why) warnings.push(`config.json ${why}. 이 단계는 기본을 따름`)
+    else if (r.ok && Object.keys(r.value).length) config.agent_steps[skill as SkillName] = r.value
+  }
 }
 
 /** 화면 테마 (D335) */
@@ -225,12 +345,14 @@ export function normalizeConfig(data: unknown): { config: AppConfig; warnings: s
     ...DEFAULT_CONFIG,
     auto_approve: { ...DEFAULT_CONFIG.auto_approve },
     question_mode: { ...DEFAULT_CONFIG.question_mode },
+    agent_steps: {},
   }
   if (data['agent_engine'] !== undefined) {
     const r = agentEngine(data['agent_engine'])
     if (r.ok) config.agent_engine = r.value
     else warnings.push(`config.json ${r.error}. 기본값 claude를 씀`)
   }
+  normalizeAgent(data, config, warnings)
   for (const key of Object.keys(RANGES) as IntegerKey[]) {
     if (data[key] === undefined) continue
     const r = integer(key, data[key])
@@ -278,7 +400,8 @@ export function normalizeConfig(data: unknown): { config: AppConfig; warnings: s
 
 /**
  * 설정 화면에서 바꾼 값을 적용한다 (D70). 바꿀 수 있는 키만 받고, 값이 틀리면 아무것도 바꾸지 않는다.
- * 질문 방식은 스킬마다, 자동 승인은 단계마다 덮어쓴다.
+ * 질문 방식은 스킬마다, 자동 승인과 상세 설정은 단계마다 덮어쓴다. 상세 설정의 빈 객체는 그 단계를 지운다. 엔진·모델·
+ * 추론 수준은 바꾼 뒤의 값끼리 맞아야 한다.
  */
 export function applyConfigPatch(current: AppConfig, patch: unknown): Checked<AppConfig> {
   if (!isRecord(patch)) return { ok: false, error: '설정 값이 객체가 아님' }
@@ -286,6 +409,7 @@ export function applyConfigPatch(current: AppConfig, patch: unknown): Checked<Ap
     ...current,
     auto_approve: { ...current.auto_approve },
     question_mode: { ...current.question_mode },
+    agent_steps: { ...current.agent_steps },
   }
   for (const [key, v] of Object.entries(patch)) {
     if (!(EDITABLE_KEYS as readonly string[]).includes(key)) {
@@ -295,6 +419,18 @@ export function applyConfigPatch(current: AppConfig, patch: unknown): Checked<Ap
       const r = agentEngine(v)
       if (!r.ok) return r
       next.agent_engine = r.value
+    } else if (key === 'agent_model' || key === 'agent_effort') {
+      const r = agentText(key === 'agent_model' ? '기본 모델' : '기본 추론 수준', v)
+      if (!r.ok) return r
+      next[key] = r.value
+    } else if (key === 'agent_steps') {
+      if (!isRecord(v)) return { ok: false, error: '상세 설정: 객체여야 함' }
+      for (const [skill, step] of Object.entries(v)) {
+        const r = agentStep(skill, step)
+        if (!r.ok) return r
+        if (Object.keys(r.value).length) next.agent_steps[skill as SkillName] = r.value
+        else delete next.agent_steps[skill as SkillName]
+      }
     } else if (key === 'knowledge_review_engine') {
       const r = reviewEngine(v)
       if (!r.ok) return r
@@ -330,6 +466,13 @@ export function applyConfigPatch(current: AppConfig, patch: unknown): Checked<Ap
       next[k] = r.value
     }
   }
+  const why =
+    defaultModelFits(next) ??
+    defaultEffortFits(next) ??
+    Object.entries(next.agent_steps)
+      .map(([skill, step]) => stepFits(next.agent_engine, skill, step))
+      .find((w) => w !== null)
+  if (why) return { ok: false, error: why }
   return { ok: true, value: next }
 }
 
