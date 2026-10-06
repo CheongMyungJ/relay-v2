@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { app, BrowserWindow, clipboard, dialog, nativeTheme, Notification } from 'electron'
 import { skillsDir } from '../adapters/claude'
 import { readThemeSync, relayHome } from '../adapters/store'
-import { IPC } from '../shared/api'
+import { IPC, type UpdateState } from '../shared/api'
 import type { ThemeChoice } from '../shared/config'
 import { holdSingleInstance } from './instance'
 import { registerIpc } from './ipc'
@@ -15,13 +15,14 @@ import { WEB_PREFERENCES } from './security'
 import { hasCommand } from '../adapters/which'
 import {
   lastInstallFailed,
+  loadUpdater,
   manualInstallCommand,
   manualInstallDetail,
   markInstallAttempt,
   needsManualInstall,
   readPackageType,
-  startUpdates,
   updateNoticeBody,
+  Updates,
   updatesEnabled,
   type ManualInstallReason,
 } from './update'
@@ -148,6 +149,9 @@ registerIpc(ready, {
   onSelectWork: (workKey) => {
     selectedWork = workKey
   },
+  updateState: () => updateState,
+  checkUpdate: () => updates?.check(),
+  installUpdate,
 })
 ready.catch((e: unknown) => {
   dialog.showErrorBox('relay를 시작할 수 없습니다', e instanceof Error ? e.message : String(e))
@@ -218,13 +222,33 @@ function createWindow(): void {
   else void win.loadFile(join(__dirname, '../renderer/index.html'))
 }
 
+/** 자동 업데이트 (I95, I121). 켜지지 않으면 null이고 화면에는 off로 보인다 */
+let updates: Updates | null = null
+let updateState: UpdateState = { kind: 'off' }
+/** 사람이 설치해야 하는 곳에서 받은 뒤 업데이트 버튼이 다시 보일 설치 명령 대화상자 (D379) */
+let showManual: (() => void) | null = null
+
+function setUpdateState(state: UpdateState): void {
+  updateState = state
+  send(IPC.update, state)
+}
+
+function beginUpdates(
+  installOnQuit: boolean,
+  onDownloaded: (v: string, file: string) => void,
+): void {
+  updates = new Updates(loadUpdater(), { installOnQuit, onDownloaded, onChange: setUpdateState })
+  setUpdateState(updates.current())
+  updates.start()
+}
+
 /**
  * 자동 업데이트를 시작한다 (I95, D377, D379). Linux .deb는 설치할 수 없는 곳이면 설치 명령만 보이고, 끌 때 설치를
  * 시도하면 기록해 두었다가 다음 실행의 버전이 그대로면(취소, 인증 도구 실패) 받은 뒤 설치 명령을 함께 보인다
  */
 function startUpdatesFor(platform: NodeJS.Platform): void {
   if (platform !== 'linux') {
-    startUpdates(notifyUpdate, { installOnQuit: true })
+    beginUpdates(true, notifyUpdate)
     return
   }
   const manual = needsManualInstall({
@@ -234,24 +258,43 @@ function startUpdatesFor(platform: NodeJS.Platform): void {
     hasCommand: (name) => hasCommand(name),
   })
   if (manual) {
-    startUpdates((v, f) => showManualInstall('unsupported', v, f), { installOnQuit: false })
+    beginUpdates(false, (v, f) => {
+      showManual = () => showManualInstall('unsupported', v, f)
+      showManual()
+    })
     return
   }
   const dir = app.getPath('userData')
   const failed = lastInstallFailed(dir, app.getVersion())
   let pending: string | null = null
-  startUpdates(
-    (version, file) => {
-      pending = version
-      if (failed) showManualInstall('failed', version, file)
-      else notifyUpdate(version)
-    },
-    { installOnQuit: true },
-  )
+  beginUpdates(true, (version, file) => {
+    pending = version
+    if (failed) showManualInstall('failed', version, file)
+    else notifyUpdate(version)
+  })
   // electron-updater는 quit에서 설치한다. 그 앞(will-quit)에 시도를 기록한다
   app.on('will-quit', () => {
     if (pending) markInstallAttempt(dir, app.getVersion(), pending)
   })
+}
+
+/**
+ * 업데이트 버튼에서 사람이 설치를 확인했을 때 (I121). 종료와 같이 실행 중인 세션을 묻고(취소하면 그대로 쓴다)
+ * 세션을 정리한 뒤 설치하며 앱을 끝낸다. 사람이 설치해야 하는 곳은 설치 명령 대화상자를 다시 보인다 (D379)
+ */
+async function installUpdate(): Promise<void> {
+  if (updateState.kind === 'manual') {
+    showManual?.()
+    return
+  }
+  if (!updates || updateState.kind !== 'ready' || quitting) return
+  if (!(await confirmQuit()) || quitting) return
+  quitting = true
+  await ready.then((relay) => relay.close()).catch(() => {})
+  if (updates.install()) return
+  // 설치를 시작하지 못했다. 세션은 이미 "중단됨"으로 끝났고 앱은 계속 쓴다. 상태는 받아 둔 그대로다
+  quitting = false
+  quitConfirmed = false
 }
 
 void app.whenReady().then(() => {

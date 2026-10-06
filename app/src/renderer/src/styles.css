@@ -279,6 +279,12 @@ textarea {
   letter-spacing: -0.01em;
 }
 
+.brand-version {
+  font-size: 11px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
 .project {
   display: flex;
   flex-direction: column;
@@ -422,6 +428,56 @@ textarea {
   color: var(--text);
   background: var(--bg-raise);
   border-color: transparent;
+}
+
+/* 업데이트 버튼 (I121): 아이콘과 짧은 상태. 상태마다 색이 다르다 */
+.sidebar-foot .update-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.update-button svg {
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.update-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
+}
+
+.sidebar-foot .update-button.u-good {
+  color: var(--good);
+}
+
+.sidebar-foot .update-button.u-hot {
+  color: var(--hot);
+}
+
+.sidebar-foot .update-button.u-bad {
+  color: var(--bad);
+}
+
+.sidebar-foot .update-button.u-busy {
+  color: var(--accent-text);
+}
+
+.update-button.u-busy svg {
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .update-button.u-busy svg {
+    animation: none;
+  }
 }
 
 /* ---------- 가운데 ---------- */

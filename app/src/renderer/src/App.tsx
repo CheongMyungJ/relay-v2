@@ -28,6 +28,7 @@ import { withOpened } from './opened'
 import { Panel, showsPr, wantsApproval } from './Panel'
 import { TerminalView } from './TerminalView'
 import { QuestionDialog } from './QuestionDialog'
+import { UpdateButton } from './UpdateButton'
 
 type Dialog =
   | { kind: 'project' }
@@ -204,6 +205,8 @@ export function App() {
             </svg>
           </span>
           <span className="brand-name">relay</span>
+          {/* 실행 중인 앱의 버전 (I121) */}
+          {info ? <span className="brand-version">v{info.version}</span> : null}
         </header>
         {warnings.map((w, i) => (
           <div key={i} className="notice warn">
@@ -253,6 +256,7 @@ export function App() {
             프로젝트 추가
           </button>
           <button onClick={() => setDialog({ kind: 'settings' })}>설정</button>
+          <UpdateButton />
         </div>
       </aside>
 

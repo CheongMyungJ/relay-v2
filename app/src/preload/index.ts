@@ -62,6 +62,10 @@ const api: RelayApi = {
   updateConfig: (patch) => ipcRenderer.invoke(IPC.updateConfig, patch),
   selectWork: (workKey) => ipcRenderer.send(IPC.selectWork, workKey),
   onFocusWork: (cb) => subscribe(IPC.focusWork, cb),
+  updateState: () => ipcRenderer.invoke(IPC.updateState),
+  onUpdate: (cb) => subscribe(IPC.update, cb),
+  checkUpdate: () => ipcRenderer.invoke(IPC.checkUpdate),
+  installUpdate: () => ipcRenderer.invoke(IPC.installUpdate),
   terminal: {
     attach: (key) => ipcRenderer.invoke(IPC.terminalAttach, key),
     write: (key, data) => ipcRenderer.invoke(IPC.terminalWrite, key, data),

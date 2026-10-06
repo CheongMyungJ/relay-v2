@@ -35,7 +35,23 @@ export interface AppInfo {
   platform: string
   /** Windows 빌드 번호. xterm의 windowsPty에 넘긴다. Windows가 아니면 null */
   windowsBuild: number | null
+  /** 실행 중인 앱의 버전 (app.getVersion). 사이드바의 relay 옆에 보인다 */
+  version: string
 }
+
+/**
+ * 앱 업데이트의 지금 상태 (I121). 사이드바의 업데이트 버튼이 보인다.
+ * off: 이 설치본은 앱이 업데이트하지 않음(개발 앱, macOS, 0.0.0 빌드 등, I95). manual: 받았지만 사람이 설치해야 함(D379)
+ */
+export type UpdateState =
+  | { kind: 'off' }
+  | { kind: 'idle' }
+  | { kind: 'checking' }
+  | { kind: 'latest' }
+  | { kind: 'downloading'; version: string; percent: number | null }
+  | { kind: 'ready'; version: string }
+  | { kind: 'manual'; version: string }
+  | { kind: 'error'; message: string }
 
 export interface TerminalApi {
   /**
@@ -147,6 +163,17 @@ export interface RelayApi {
   selectWork(workKey: string | null): void
   /** 알림을 누르면 그 Work를 고르게 한다 */
   onFocusWork(cb: (workKey: string) => void): () => void
+  /** 앱 업데이트의 지금 상태 (I121) */
+  updateState(): Promise<UpdateState>
+  /** 앱 업데이트 상태가 바뀌면 */
+  onUpdate(cb: (state: UpdateState) => void): () => void
+  /** 업데이트 버튼: 새 버전을 지금 확인하고 있으면 받는다. 확인·받는 중이거나 받아 두었으면 하지 않는다 */
+  checkUpdate(): Promise<void>
+  /**
+   * 받아 둔 버전을 설치한다. 사람이 확인한 뒤에만 부른다. 앱을 끝내고(세션 종료 확인과 정리 뒤) 설치하고 다시 켠다.
+   * 사람이 설치해야 하는 곳(manual)에서는 설치 명령 대화상자를 보인다(D379)
+   */
+  installUpdate(): Promise<void>
   terminal: TerminalApi
 }
 
@@ -202,6 +229,10 @@ export const IPC = {
   updateConfig: 'config:update',
   selectWork: 'app:select-work',
   focusWork: 'app:focus-work',
+  updateState: 'update:state',
+  update: 'update:changed',
+  checkUpdate: 'update:check',
+  installUpdate: 'update:install',
   terminalAttach: 'terminal:attach',
   terminalWrite: 'terminal:write',
   terminalResize: 'terminal:resize',
