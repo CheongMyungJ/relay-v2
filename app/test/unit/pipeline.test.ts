@@ -8,6 +8,8 @@ import {
   RESPOND,
   defaultNext,
   isPipelineNode,
+  keepDefault,
+  keepLabel,
   isPrevious,
   previousSteps,
   recommendableNodes,
@@ -19,22 +21,24 @@ import type { NodeName } from '../../src/shared/contracts'
 import type { WorkType } from '../../src/shared/work'
 
 describe('노드 (3.1)', () => {
-  it('버그 수정은 intake → fix → verify, 기능 추가는 intake → design → implement → verify, 리팩터링은 intake → refactor → verify, 일반은 intake → execute → verify다 (D227, D232, D258, D302)', () => {
+  it('버그 수정은 intake → fix → verify, 기능 추가는 intake → design → implement → verify, 리팩터링은 intake → refactor → verify, 설계는 intake → spec → verify, 일반은 intake → execute → verify다 (D227, D232, D258, D302, D350)', () => {
     expect(PIPELINES).toEqual({
       bugfix: ['intake', 'fix', 'verify'],
       feature: ['intake', 'design', 'implement', 'verify'],
       refactor: ['intake', 'refactor', 'verify'],
+      spec: ['intake', 'spec', 'verify'],
       general: ['intake', 'execute', 'verify'],
     })
   })
 
-  it('모든 노드는 모든 파이프라인의 노드를 모은 것이고 스키마의 노드 열거값과 같다 (I57, I63, I85)', () => {
+  it('모든 노드는 모든 파이프라인의 노드를 모은 것이고 스키마의 노드 열거값과 같다 (I57, I63, I85, I103)', () => {
     expect(ALL_NODES).toEqual([
       'intake',
       'fix',
       'design',
       'implement',
       'refactor',
+      'spec',
       'execute',
       'verify',
     ])
@@ -53,6 +57,7 @@ describe('노드 (3.1)', () => {
       ['design', 'design', '설계와 계획', ['design.md']],
       ['implement', 'implement', '구현', ['implement.md']],
       ['refactor', 'refactor', '계획과 리팩터링', ['refactor.md']],
+      ['spec', 'spec', '설계 문답', ['spec.md']],
       ['execute', 'execute', '실행', ['execution.md']],
       ['verify', 'verify', '리뷰와 검증', ['verification.md', 'pr.md']],
     ])
@@ -79,15 +84,46 @@ describe('노드 (3.1)', () => {
     expect(workType({})).toBe('bugfix')
     expect(workType({ type: 'feature' })).toBe('feature')
     expect(workType({ type: 'general' })).toBe('general')
+    expect(workType({ type: 'spec' })).toBe('spec')
   })
 
-  it('[현재 코드 위에서 이어서]는 버그 수정의 fix, 기능 추가의 design과 implement, 리팩터링의 refactor, 일반의 execute에서 준다 (6.2, D254, D278, D316)', () => {
+  it('[현재 코드 위에서 이어서]는 버그 수정의 fix, 기능 추가의 design과 implement, 리팩터링의 refactor, 설계의 spec, 일반의 execute에서 준다 (6.2, D254, D278, D316, D365)', () => {
     expect(KEEP_CODE_NODES).toEqual({
       bugfix: ['fix'],
       feature: ['design', 'implement'],
       refactor: ['refactor'],
+      spec: ['spec'],
       general: ['execute'],
     })
+  })
+
+  it('설계의 spec만 "현재 문서 위에서 이어서"이고 처음부터 체크되어 있다 (D365, I105)', () => {
+    expect(keepLabel('spec', 'spec')).toBe('현재 문서 위에서 이어서')
+    expect(keepDefault('spec', 'spec')).toBe(true)
+    for (const [type, nodes] of Object.entries(KEEP_CODE_NODES) as [WorkType, NodeName[]][]) {
+      for (const node of nodes.filter((n) => n !== 'spec')) {
+        expect(keepLabel(type, node), `${type} ${node}`).toBe('현재 코드 위에서 이어서')
+        expect(keepDefault(type, node), `${type} ${node}`).toBe(false)
+      }
+    }
+    // 같은 노드라도 설계 Work가 아니면 아니다
+    expect(keepDefault('bugfix', 'spec')).toBe(false)
+    // 처음 체크되는 단계는 늘 [현재 코드 위에서 이어서]를 주는 단계다: 한 표(KEEP_CODE)에서 나온다 (PR #36 리뷰)
+    for (const type of Object.keys(KEEP_CODE_NODES) as WorkType[]) {
+      for (const node of [
+        'intake',
+        'fix',
+        'design',
+        'implement',
+        'refactor',
+        'spec',
+        'execute',
+        'verify',
+      ] as const) {
+        if (keepDefault(type, node))
+          expect(KEEP_CODE_NODES[type], `${type} ${node}`).toContain(node)
+      }
+    }
   })
 })
 
@@ -104,13 +140,16 @@ describe('선택 가능한 다음 단계 (3.2)', () => {
     ['refactor', 'intake', 'refactor', []],
     ['refactor', 'refactor', 'verify', ['intake']],
     ['refactor', 'verify', 'complete', ['intake', 'refactor']],
+    ['spec', 'intake', 'spec', []],
+    ['spec', 'spec', 'verify', ['intake']],
+    ['spec', 'verify', 'complete', ['intake', 'spec']],
     ['general', 'intake', 'execute', []],
     ['general', 'execute', 'verify', ['intake']],
     ['general', 'verify', 'complete', ['intake', 'execute']],
   ]
 
   it('파이프라인의 노드가 모두 표에 있다', () => {
-    for (const type of ['bugfix', 'feature', 'refactor', 'general'] as const) {
+    for (const type of ['bugfix', 'feature', 'refactor', 'spec', 'general'] as const) {
       expect(table.filter(([t]) => t === type).map(([, n]) => n)).toEqual(PIPELINES[type])
     }
   })
@@ -132,6 +171,9 @@ describe('선택 가능한 다음 단계 (3.2)', () => {
     expect(recommendableNodes('refactor', 'intake')).toEqual(['refactor'])
     expect(recommendableNodes('refactor', 'refactor')).toEqual(['intake', 'verify'])
     expect(recommendableNodes('refactor', 'verify')).toEqual(['intake', 'refactor'])
+    expect(recommendableNodes('spec', 'intake')).toEqual(['spec'])
+    expect(recommendableNodes('spec', 'spec')).toEqual(['intake', 'verify'])
+    expect(recommendableNodes('spec', 'verify')).toEqual(['intake', 'spec'])
     expect(recommendableNodes('general', 'intake')).toEqual(['execute'])
     expect(recommendableNodes('general', 'execute')).toEqual(['intake', 'verify'])
     expect(recommendableNodes('general', 'verify')).toEqual(['intake', 'execute'])
@@ -165,6 +207,9 @@ describe('선택 가능한 다음 단계 (3.2)', () => {
     expect(isPrevious('general', 'verify', 'execute')).toBe(true)
     expect(isPrevious('general', 'execute', 'intake')).toBe(true)
     expect(isPrevious('general', 'verify', 'refactor')).toBe(false)
+    expect(isPrevious('spec', 'verify', 'spec')).toBe(true)
+    expect(isPrevious('spec', 'spec', 'intake')).toBe(true)
+    expect(isPrevious('spec', 'verify', 'design')).toBe(false)
   })
 
   it('추천 때문에 멈추는지: 이전 단계이거나 이 유형의 파이프라인에 없는 노드다 (D23, PR #23 리뷰)', () => {
@@ -178,6 +223,10 @@ describe('선택 가능한 다음 단계 (3.2)', () => {
     expect(stopsForRecommendation('general', 'verify', 'execute')).toBe(true)
     expect(stopsForRecommendation('general', 'verify', 'fix')).toBe(true)
     expect(stopsForRecommendation('general', 'execute', 'verify')).toBe(false)
+    // 설계의 verify가 spec을 추천하면 멈춘다 (D363, D374)
+    expect(stopsForRecommendation('spec', 'verify', 'spec')).toBe(true)
+    expect(stopsForRecommendation('spec', 'verify', 'design')).toBe(true)
+    expect(stopsForRecommendation('spec', 'spec', 'verify')).toBe(false)
     // 같은 단계를 다시 하자는 추천(형식 오류)도 [오류 무시하고 승인]으로 넘기지 않고 멈춘다
     expect(stopsForRecommendation('general', 'execute', 'execute')).toBe(true)
     expect(stopsForRecommendation('bugfix', 'verify', 'verify')).toBe(true)

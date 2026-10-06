@@ -146,6 +146,7 @@ describe('자동 승인의 방식 (4.2, D72)', () => {
       design: false,
       implement: false,
       refactor: false,
+      spec: false,
       execute: false,
       respond: true,
     },
@@ -174,6 +175,7 @@ describe('자동 승인의 방식 (4.2, D72)', () => {
       design: false,
       implement: true,
       refactor: true,
+      spec: true,
       execute: true,
       respond: false,
     })
@@ -193,6 +195,9 @@ describe('자동 승인의 방식 (4.2, D72)', () => {
     // 일반의 실행도 켤 수 있고 기본은 켬이다 (D315)
     expect(autoApprovable('execute')).toBe(true)
     expect(approvalMode(DEFAULT_CONFIG, {}, 'execute')).toBe('auto')
+    // 설계의 설계 문답도 켤 수 있고 기본은 켬이다 (D367)
+    expect(autoApprovable('spec')).toBe(true)
+    expect(approvalMode(DEFAULT_CONFIG, {}, 'spec')).toBe('auto')
   })
 })
 
@@ -302,6 +307,7 @@ describe('자동 승인하지 않은 까닭 (D128~D131)', () => {
       design: false,
       implement: true,
       refactor: true,
+      spec: true,
       execute: true,
       respond: false,
     },

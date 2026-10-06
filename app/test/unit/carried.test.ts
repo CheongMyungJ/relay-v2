@@ -36,6 +36,7 @@ const MANUAL: AppConfig = {
     design: false,
     implement: false,
     refactor: false,
+    spec: false,
     execute: false,
     respond: false,
   },

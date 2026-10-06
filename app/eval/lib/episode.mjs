@@ -9,7 +9,8 @@ import { Human, screenKind } from './human.mjs'
 import { armBase } from './kind.mjs'
 import { RelayArm } from './relay-arm.mjs'
 import { auditTold } from './told.mjs'
-import { diffTree, handoffRepo, judgeTree, makeRepo } from './repo.mjs'
+import { judgeIssues, isIssue, readDialogue } from './issue-judge.mjs'
+import { diffTree, handoffRepo, judgeTree, makeRepo, withoutKnowledge } from './repo.mjs'
 import {
   agentUsage,
   agentUsageBySession,
@@ -29,19 +30,35 @@ const DEFAULT_WAIT_S = 60
 /**
  * 숨긴 시험을 결과 폴더들에 모은다. 고친 것을 보는 시험은 결과 폴더 하나라도 통과하면 통과다(relay는 버그마다 Work를
  * 따로 만들 수 있다). guard 시험(멀쩡한 동작을 지키는지)은 바뀐 결과 폴더 모두에서 통과해야 한다. 바뀐 폴더가 없으면
- * 모든 폴더를 본다
+ * 모든 폴더를 본다. 숨긴 쟁점을 판정하지 못한 폴더(pass: null, 판정 모델 오류)가 있으면 통과한 폴더가 없을 때 판정
+ * 불가(null)다 (PR #36 리뷰)
  */
-function combineChecks(defs, final) {
+export function combineChecks(defs, final) {
   const changedTrees = final.filter((f) => f.files.length > 0)
   const guardTrees = changedTrees.length ? changedTrees : final
-  const passIn = (f, name) => !!f.checks.find((c) => c.name === name)?.pass
+  const entry = (f, name) => f.checks.find((c) => c.name === name)
+  const passIn = (f, name) => !!entry(f, name)?.pass
   return defs.map((c) => ({
     name: c.name,
     guard: !!c.guard,
     pass: c.guard
       ? guardTrees.length > 0 && guardTrees.every((f) => passIn(f, c.name))
-      : final.some((f) => passIn(f, c.name)),
+      : final.some((f) => passIn(f, c.name))
+        ? true
+        : final.some((f) => entry(f, c.name)?.pass === null)
+          ? null
+          : false,
   }))
+}
+
+/**
+ * 실행의 성공: 숨긴 시험(과 쟁점)이 모두 통과다. 실패가 하나라도 있으면 false, 실패는 없는데 판정 불가(null)가 있으면
+ * null이다(도구 오류라 성공도 실패도 아니다, PR #36 리뷰)
+ */
+export function outcomeSuccess(checks, complete = true) {
+  if (!checks.length || checks.some((c) => c.pass === false)) return false
+  if (checks.some((c) => c.pass === null)) return null
+  return complete
 }
 
 /**
@@ -267,7 +284,7 @@ export async function runEpisode(o) {
         }))
         const checks = combineChecks(ws.checks, judged)
         r.outcome = {
-          success: checks.length > 0 && checks.every((c) => c.pass),
+          success: outcomeSuccess(checks),
           checks,
           trees: judged.map((j) => ({
             label: j.label,
@@ -589,6 +606,9 @@ export async function runEpisode(o) {
   // 판정
   let final = []
   let works = []
+  /** 결과 폴더마다의 diff. 숨긴 쟁점의 판정 모델에 준다 */
+  const diffs = new Map()
+  let issueJudge = null
   try {
     arm.snapshot()
     works = arm.works()
@@ -602,6 +622,7 @@ export async function runEpisode(o) {
       })
       fs.mkdirSync(path.join(o.outDir, 'final'), { recursive: true })
       fs.writeFileSync(path.join(o.outDir, 'final', `${t.label}.diff`), j.diff)
+      diffs.set(t.label, j.diff)
       return { label: t.label, removed: !!t.removed, git: t.git ?? null, ...j, diff: undefined }
     })
   } catch (e) {
@@ -609,6 +630,37 @@ export async function runEpisode(o) {
     error = `${error ?? ''}\n판정 실패: ${e}`
   }
   await arm.close()
+
+  // 숨긴 쟁점 (relay I111): 바뀐 결과 폴더마다 판정 모델이 문서와 대화 기록으로 가른다. Work 하나짜리만이다
+  const issues = allChecks(scenario).filter(isIssue)
+  if (issues.length && !multi) {
+    try {
+      const dialogue = readDialogue(agentConfigDir)
+      issueJudge = { costUsd: 0, trees: [] }
+      for (const f of final.filter((x) => x.files.length > 0)) {
+        const r = await judgeIssues({
+          issues,
+          diff: withoutKnowledge(diffs.get(f.label) ?? ''),
+          dialogue,
+          model: opts.judgeModel ?? 'sonnet',
+          workDir: path.join(o.workDir, 'issues', f.label),
+        })
+        issueJudge.costUsd += r.costUsd
+        issueJudge.trees.push({ label: f.label, checks: r.checks })
+        f.checks = f.checks.map((c) => r.checks.find((x) => x.name === c.name) ?? c)
+      }
+      say(`숨긴 쟁점 판정: ${issueJudge.trees.length}개 폴더, $${issueJudge.costUsd.toFixed(2)}`)
+    } catch (e) {
+      say(`숨긴 쟁점 판정 실패: ${String(e).slice(0, 300)}`)
+      error = `${error ?? ''}\n숨긴 쟁점 판정 실패: ${e}`
+      // 판정하지 못한 쟁점은 실패가 아니라 판정 불가다. 성공과 통과율에서 빼고 보고서에 따로 센다 (PR #36 리뷰)
+      for (const f of final)
+        if (f.files.length > 0)
+          f.checks = f.checks.map((c) =>
+            c.issue && c.pending ? { ...c, pass: null, output: '판정 모델 오류' } : c,
+          )
+    }
+  }
 
   const changedTrees = final.filter((f) => f.files.length > 0)
   // Work 둘을 잇는 시나리오는 Work마다 판정한 것을 모은다. 나머지는 마지막 결과 폴더들로 판정한다
@@ -640,10 +692,10 @@ export async function runEpisode(o) {
     firstChangeMs: firstChangeAt ? firstChangeAt - t0 : null,
     outcome: {
       // Work 둘을 잇는 시나리오는 모든 Work를 돌려 판정했을 때만 성공이다. 앞 Work에서 멈추면 재는 Work의 시험이 없다
-      success:
-        checks.length > 0 &&
-        checks.every((c) => c.pass) &&
-        (!multi || (workResults.length === parts.length && workResults.every((r) => r.outcome))),
+      success: outcomeSuccess(
+        checks,
+        !multi || (workResults.length === parts.length && workResults.every((r) => !!r.outcome)),
+      ),
       checks,
       repoTestsPass: changedTrees.length > 0 && changedTrees.every((f) => f.repoTests.pass),
       filesChanged: [...new Set(changedTrees.flatMap((f) => f.files.map((x) => x.file)))],
@@ -651,6 +703,8 @@ export async function runEpisode(o) {
       unrelated: [...new Set(changedTrees.flatMap((f) => f.unrelated))],
       // relay의 지식 파일: 위 코드 결과에서 빼고 따로 센다 (lib/repo.mjs KNOWLEDGE_FILE)
       knowledgeFiles: [...new Set(final.flatMap((f) => f.knowledgeFiles ?? []))],
+      // 숨긴 쟁점의 판정(결과 폴더마다 asked, reflected, 근거)과 비용 (relay I111)
+      ...(issueJudge ? { issueJudge } : {}),
       committed:
         changedTrees.length > 0 &&
         changedTrees.every(

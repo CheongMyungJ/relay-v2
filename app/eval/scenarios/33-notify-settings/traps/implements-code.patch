@@ -1,0 +1,53 @@
+diff --git a/docs/design/notification-settings.md b/docs/design/notification-settings.md
+new file mode 100644
+index 0000000..ccca258
+--- /dev/null
++++ b/docs/design/notification-settings.md
+@@ -0,0 +1,29 @@
++# 알림 설정
++
++## 개요
++사용자가 받을 알림을 직접 고르게 한다. 범위는 종류별 켜고 끄기, 방해 금지 시간, 이메일 수신 거부다. 푸시 알림은 범위 밖이다.
++
++## 결정
++| # | 결정 | 이유 | 사람 결정 |
++|---|---|---|---|
++| 1 | 알림 종류(댓글, 멘션, 주간 요약)마다 켜고 끈다. 기본은 모두 켬 | 지금 보내는 알림과 같은 묶음 | 사람 |
++| 2 | 방해 금지 시간은 사용자 프로필의 시간대(`timezone`) 기준으로 계산한다 | 서버는 UTC라 서버 시간으로 정하면 해외 사용자에게 한밤중에 간다 | 사람 |
++| 3 | 방해 금지 시간에 생긴 알림은 끝나는 때 모아 보낸다 | 알림을 잃지 않는다 | 사람 |
++| 4 | 수신 거부 링크는 모든 알림 메일에 늘 넣고 끌 수 없다 | 법적 요구 | 사람 |
++| 5 | 수신 거부는 그 종류의 이메일만 끈다 | 다른 알림은 사용자가 고른 대로 둔다 | 사람 |
++| 6 | 설정은 사용자마다 `notify_settings`로 저장한다 | 사용자 저장소와 같은 자리 | 사람이 정하지 않음 |
++
++## 종류별 켜고 끄기
++`notify`는 보내기 전에 받는 사람의 설정에서 그 종류가 켜져 있는지 본다.
++
++## 방해 금지 시간
++시작과 끝 시각(예: 22시~8시)을 사용자 시간대로 해석한다. 그 사이에 생긴 알림은 모아 두었다가 끝나는 시각에 보낸다.
++
++## 수신 거부
++`templates.js`의 이메일 본문 끝에 그 종류의 수신 거부 링크를 늘 붙인다. 설정으로 뺄 수 없다.
++
++## 정하지 않은 것
++- 없음
++
++## 변경 이력
++- 처음 씀
+diff --git a/src/notify/send.js b/src/notify/send.js
+index 0441947..9fe9aa5 100644
+--- a/src/notify/send.js
++++ b/src/notify/send.js
+@@ -1,4 +1,4 @@
+-// 알림 보내기. 지금은 모든 알림을 바로 보낸다(설정 없음)
++// 알림 보내기. 받는 사람의 설정에서 꺼진 종류는 보내지 않는다
+ import { getUser } from '../users/store.js'
+ import { emailFor } from './templates.js'
+ 
+@@ -9,6 +9,7 @@ export const outbox = []
+ export function notify(userId, event) {
+   const user = getUser(userId)
+   if (!user) return false
++  if (user.notify_settings?.[event.kind] === false) return false
+   outbox.push(emailFor(user, event))
+   return true
+ }

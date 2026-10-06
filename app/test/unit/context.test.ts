@@ -397,6 +397,7 @@ describe('마무리 안내 문구 (D104, D132)', () => {
         design: false,
         implement: false,
         refactor: false,
+        spec: false,
         execute: false,
         respond: false,
       },
@@ -427,6 +428,7 @@ describe('Work별 덮어쓰기 (D72)', () => {
       design: false,
       implement: true,
       refactor: true,
+      spec: true,
       execute: true,
       respond: true,
     },
@@ -934,5 +936,90 @@ describe('context.md: 일반 (D302, D316, D318)', () => {
     const entry = section(md, '되감기로 들어옴 (먼저 읽을 것)')
     expect(entry).toContain('아래 폐기된 `execution.md`를 참고해 새 `execution.md`를 쓴다.')
     expect(entry).toContain(`- t-02 execute (실행): ${kept}`)
+  })
+})
+
+describe('context.md: 설계 (D350, D358, D365, D374)', () => {
+  function specInput(node: NodeName, overrides: Partial<ContextInput> = {}): ContextInput {
+    const { work, task } = workAt(node, { type: 'spec' })
+    return input('intake', {
+      work,
+      task,
+      taskDir: `${WORK_DIR}\\tasks\\${taskDirName(task)}`,
+      intent: node === 'intake' ? null : INTENT,
+      ...overrides,
+    })
+  }
+
+  it('task 정보에 업무 유형과 spec 스킬을 넣는다 (D353, D372)', () => {
+    const md = buildContext(specInput('spec'))
+    expect(section(md, 'task 정보')).toContain('- 업무 유형: 설계 (`spec`)')
+    expect(section(md, 'task 정보')).toContain('- node: spec (설계 문답)\n- skill: spec')
+  })
+
+  it('선택 가능한 다음 단계는 설계의 파이프라인이다 (3.2)', () => {
+    const steps = (node: NodeName) =>
+      section(buildContext(specInput(node)), '선택 가능한 다음 단계')
+    expect(steps('intake')).toBe('- 기본 다음 단계: spec (설계 문답)\n- 이전 단계: 없음')
+    expect(steps('spec')).toBe(
+      '- 기본 다음 단계: verify (리뷰와 검증)\n- 이전 단계: intake (의도 정리)',
+    )
+    expect(steps('verify')).toBe(
+      '- 기본 다음 단계: Work 완료\n- 이전 단계: intake (의도 정리), spec (설계 문답)',
+    )
+  })
+
+  it('spec의 마무리 안내 문구는 fix와 같고 기본은 자동 승인이다 (D132, D367)', () => {
+    expect(closingMessage('spec')).toBe(closingMessage('fix'))
+    expect(section(buildContext(specInput('spec')), '승인 방식')).toMatch(/^자동 승인 \(task를/)
+  })
+
+  it('spec의 질문 방식 줄은 설정과 관계없이 결정마다 확인이다. 다른 단계는 설정을 따른다 (D358, I104)', () => {
+    const config: AppConfig = {
+      ...DEFAULT_CONFIG,
+      question_mode: { ...DEFAULT_CONFIG.question_mode, verify: 'confirm_each' },
+    }
+    const line = '결정마다 확인 (`confirm_each`). 설계 문답은 결정을 모두 묻는다 (D358)'
+    expect(questionMode(DEFAULT_CONFIG, {}, 'spec')).toBeNull()
+    expect(section(buildContext(specInput('spec')), '질문 방식')).toBe(line)
+    expect(section(buildContext(specInput('spec', { config })), '질문 방식')).toBe(line)
+    expect(section(buildContext(specInput('verify')), '질문 방식')).toBe(
+      '초안 우선 (`draft_first`)',
+    )
+  })
+
+  it('[현재 문서 위에서 이어서]로 spec에 들어오면 다시 볼 결정에서 시작하라고 적고 폐기된 spec.md와 verification.md 경로를 넣는다 (D365, I105)', () => {
+    const spec = 'C:\\w\\tasks\\02-spec\\spec.md'
+    const verification = 'C:\\w\\tasks\\03-verify\\verification.md'
+    const md = buildContext(
+      specInput('spec', {
+        selection: {
+          reason: 'rewind',
+          from: { taskId: 't-03', node: 'verify' },
+          instruction: '결정 2를 다시 본다',
+          discarded: [],
+          dropped: [],
+          skipped: [],
+          keepCode: true,
+          reset: false,
+          keptArtifacts: [
+            { taskId: 't-02', node: 'spec', path: spec },
+            { taskId: 't-03', node: 'verify', path: verification },
+          ],
+        },
+      }),
+    )
+    const entry = section(md, '되감기로 들어옴 (먼저 읽을 것)')
+    expect(entry).toContain(
+      '[현재 문서 위에서 이어서]: 폐기된 시도가 설계 문서에 적은 것이 그대로 남아 있다(커밋했든 안 했든).',
+    )
+    // verify를 거치지 않은 되감기도 있으므로 verification.md는 있을 때만 본다 (PR #36 리뷰)
+    expect(entry).toContain(
+      '아래 폐기된 산출물에 `verification.md`가 있으면 그 `다시 볼 결정`도 본다.',
+    )
+    // 폐기된 시도의 사람 결정을 새 handoff에 옮겨 적어 다음 verify의 대조가 맞는다 (I115)
+    expect(entry).toContain('새 handoff의 `decisions`에 `by: human`으로 옮겨 적는다.')
+    expect(entry).toContain(`- t-02 spec (설계 문답): ${spec}`)
+    expect(entry).toContain(`- t-03 verify (리뷰와 검증): ${verification}`)
   })
 })

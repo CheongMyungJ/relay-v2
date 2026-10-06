@@ -12,6 +12,7 @@ import {
   humanNotice,
   permissionNotice,
   resumeHint,
+  revisitDecisions,
   stageLead,
   stopNotice,
   taskLabel,
@@ -650,6 +651,13 @@ describe('강조 영역 (D83, 시나리오 4-2)', () => {
         { title: '완료조건별 자체 확인', text: '| a | b | c |' },
       ],
     })
+    // 설계 문답은 spec.md의 주제 목록이다 (D374)
+    const spec =
+      '## 주제 목록\n1. 가중치 모양 — 정함\n2. 구현 나눔 — 사람이 뺌\n\n## 문답 기록\n### 주제 1. 가중치 모양\n- x\n\n## 확인한 것\n- 없음\n\n## 문서 변경\n- y\n'
+    expect(stageLead('spec', { 'spec.md': spec })).toEqual({
+      title: '설계 문답',
+      sections: [{ title: '주제 목록', text: '1. 가중치 모양 — 정함\n2. 구현 나눔 — 사람이 뺌' }],
+    })
     expect(stageLead('design', {})).toBeNull()
     expect(stageLead('implement', { 'design.md': design })).toBeNull()
   })
@@ -769,5 +777,60 @@ describe('판정표 (시나리오 7-3, D59)', () => {
   it('절이나 표가 없으면 빈 목록이다', () => {
     expect(verdicts('## 남은 위험\n- 없음\n')).toEqual([])
     expect(verdicts('## 완료조건 판정\n표 대신 글\n')).toEqual([])
+  })
+})
+
+describe('Work 완료 화면의 다시 볼 결정 (시나리오 7-3, D362, I106)', () => {
+  const verification = (revisit: string) =>
+    [
+      '## 완료조건 판정',
+      '| 완료조건 | 판정 | 근거 |',
+      '|---|---|---|',
+      '| 가중치 모양을 정한다 | 통과 | 결정 1 |',
+      '',
+      '## 문서 밖 파일 변경',
+      '- 없음',
+      '',
+      '## 다시 볼 결정',
+      revisit,
+      '',
+      '## 남은 위험',
+      '- 없음',
+      '',
+    ].join('\n')
+
+  it('설계 Work면 verification.md의 다시 볼 결정 본문이다', () => {
+    const text = '- 결정 2: 오류를 내는 대안 — 입력 실수를 놓친다\n- 결정 3: 이름'
+    expect(revisitDecisions('spec', verification(text))).toBe(text)
+    // 남은 템플릿 안내 줄은 빼고 보인다
+    expect(revisitDecisions('spec', verification(`${text}\n(없으면 "없음")`))).toBe(text)
+    // "없음"으로 시작하는 낱말이 아닌 줄은 결정이다
+    expect(revisitDecisions('spec', verification('- 없음표시 규칙: 다시 볼 만함'))).toBe(
+      '- 없음표시 규칙: 다시 볼 만함',
+    )
+  })
+
+  it('"없음"이거나 절이 없거나 비었으면 null이다. "없음" 뒤의 설명과 남은 템플릿 안내 줄은 가리지 않는다 (PR #36 리뷰)', () => {
+    for (const none of [
+      '없음',
+      '- 없음',
+      '"없음"',
+      '(없음)',
+      '없음.',
+      '- 없음 (모든 결정에 근거 있음)',
+      '없음 — 대안을 찾지 못함',
+      '- 없음\n(없으면 "없음")',
+      '(없으면 "없음")',
+    ]) {
+      expect(revisitDecisions('spec', verification(none)), none).toBeNull()
+    }
+    expect(revisitDecisions('spec', verification(''))).toBeNull()
+    expect(revisitDecisions('spec', '## 남은 위험\n- 없음\n')).toBeNull()
+  })
+
+  it('설계 Work가 아니면 절이 있어도 null이다', () => {
+    for (const type of ['bugfix', 'feature', 'refactor', 'general'] as const) {
+      expect(revisitDecisions(type, verification('- 결정 2'))).toBeNull()
+    }
   })
 })

@@ -19,6 +19,9 @@ Review the whole change of this Work, apply only the findings the human picks, t
 <!-- type: refactor -->
 - `refactor.md` at the path in `context.md`: the plan (target structure), the safety net and its commit hash, the change, the bugs found and the accepted differences.
 <!-- /type -->
+<!-- type: spec -->
+- `spec.md` at the path in `context.md`: the topic list, the Q&A record, what was checked, and the document changes. The target document: its path is in the intent's `제약`. The spec handoff is `직전 handoff` in `context.md`.
+<!-- /type -->
 <!-- type: general -->
 - `execution.md` at the path in `context.md`: the plan, the change, and the self-check of each 완료조건.
 <!-- /type -->
@@ -28,13 +31,30 @@ Review the whole change of this Work, apply only the findings the human picks, t
 
 1. **Review.** Write each finding under `## 리뷰 지적` of `verification.md` as a numbered item: severity (차단 / 권장 / 사소), file and line, what is wrong and what you suggest. If there is nothing, write "없음".
 2. **Pick findings** (human decision below). Skip this if there are no findings.
+<!-- type: bugfix feature refactor general -->
 3. **Apply** only the picked findings, commit, and run the intent's test command. Fill in `## 반영` and `## 반영하지 않은 지적`. Do not review again afterwards, and do not add new findings.
+<!-- /type -->
+<!-- type: spec -->
+3. **Apply** only the picked findings to the document and commit. There is no test command to run. Fill in `## 반영` and `## 반영하지 않은 지적`. Do not review again afterwards, and do not add new findings.
+<!-- /type -->
 4. **Verify** each 완료조건 on the final code and fill in the rest of `verification.md`.
 5. **Write `pr.md`**, then close.
 
 ## What to review
 
+- If the intent's `제약` says to follow a design document ("`<path>`의 결정을 따른다"): does the change match its decisions? Is every decision the change departs from also changed in that document, with its history and the human's decision?
+<!-- type: bugfix feature refactor general -->
 - Does the change fit the intent's `목표` and `비목표`?
+<!-- /type -->
+<!-- type: spec -->
+- Review the target document, not code: its consistency and grounds. Do not judge whether a decision is good.
+- Contradictions inside the document, and mismatches between the decision table and the body.
+- Every statement about the current code: read the code and check them one by one.
+- Decisions with no reason, or resting on a guess nobody checked.
+- "<무엇>을 정한다" items of the intent that the document misses.
+- Places so vague that whoever builds it would have to decide again.
+- Do the human-decision marks match the spec handoff's `decisions` with `by: human`?
+<!-- /type -->
 <!-- type: bugfix -->
 - Does the change match the cause in `fix.md`? Does it fix the cause, or only hide the symptom?
 <!-- /type -->
@@ -48,7 +68,9 @@ Review the whole change of this Work, apply only the findings the human picks, t
 - Does the change fit the plan in `execution.md`? Did the scope grow beyond it?
 - Does each 완료조건's check method (`— 확인: …`) really check it?
 <!-- /type -->
+<!-- type: bugfix feature refactor general -->
 - Missing cases and edge conditions.
+<!-- /type -->
 <!-- type: bugfix -->
 - Do the tests really catch the fix?
 <!-- /type -->
@@ -61,15 +83,26 @@ Review the whole change of this Work, apply only the findings the human picks, t
 <!-- type: general -->
 - Does every change in code behavior have a test that catches it? If not, is the reason in `execution.md` sound?
 <!-- /type -->
+<!-- type: bugfix feature refactor general -->
 - The repo's conventions and readability.
 - Changes that are not needed.
+<!-- /type -->
 <!-- type: bugfix -->
 - Code that the reproduction steps use is not unused code.
 <!-- /type -->
 
 ## Rules
 
+<!-- type: bugfix feature refactor general -->
 - **Code:** change code only for the findings the human picked. Commit those changes. Revert any other experimental change when you close.
+<!-- /type -->
+<!-- type: spec -->
+- **Document:** change the target document only for the findings the human picked, and commit. Do not change code. Revert any experimental change when you close.
+- **`다시 볼 결정`:** a decision with a better alternative or a missed risk goes in `다시 볼 결정`, not in `리뷰 지적`. It is not a finding to pick: the Work completion screen and `pr.md` only show it. To change it, the human rewinds to spec.
+- **A finding that needs a new decision:** do not decide it here. Keep it in `반영하지 않은 지적`, and set `recommended_next` to `spec` with the reason.
+- **Verdicts on the document:** judge each 완료조건 by reading the document and the diff. Judge "대상 문서와 지식 파일 밖의 파일을 바꾸지 않는다" from the diff against the base commit, and list every other changed file in `문서 밖 파일 변경`.
+- **No test command:** the intent has none. Skip running tests.
+<!-- /type -->
 <!-- type: bugfix -->
 - **Reproduction steps:** do not change code that they use. If a picked finding needs it, write in `반영` how the steps change, and reproduce with the changed steps.
 - **Re-run everything yourself** when you verify: the reproduction steps, the reproduction test and the test commands. Use the results in `fix.md` only for comparison.
@@ -98,7 +131,9 @@ Review the whole change of this Work, apply only the findings the human picks, t
 <!-- type: bugfix -->
   For example, the reproduction test passes in a Work that never reproduced the bug. If the Work proceeded without reproduction, "재현 절차가 더 이상 실패하지 않는다" is 판정 불가. If there are neither reproduction steps nor a reproduction test, it is 판정 불가 too.
 <!-- /type -->
+<!-- type: bugfix feature refactor general -->
 - **Changed test files:** list every test file changed since the base commit (`git diff <base commit>`), including ones the step's artifact does not mention. Mark each 약화 아님 or 약화 의심, with the reason.
+<!-- /type -->
 <!-- type: refactor -->
   An existing test that only followed an internal interface change (call names, import paths, file location, setup code) is 약화 아님. If its expected values or inputs changed, or a test disappeared, it looks like weakening: ask.
 <!-- /type -->
@@ -110,6 +145,9 @@ Review the whole change of this Work, apply only the findings the human picks, t
 <!-- /type -->
 <!-- type: refactor -->
 - **Going back:** if the change is wrong (e.g. it changes behavior), write it as a 차단 finding. If the human does not pick it to apply here, set `recommended_next` with the reason: `refactor` if the change is wrong, `intake` if the intent is wrong. The app stops and the human picks the step.
+<!-- /type -->
+<!-- type: spec -->
+- **Going back:** if the document is wrong, write it as a 차단 finding. If the human does not pick it to apply here, or applying it needs a new decision, set `recommended_next` with the reason: `spec` if the document is wrong or needs a new decision, `intake` if the intent is wrong. The app stops and the human picks the step.
 <!-- /type -->
 <!-- type: general -->
 - **Going back:** if the change is wrong, write it as a 차단 finding. If the human does not pick it to apply here, set `recommended_next` with the reason: `execute` if the change is wrong, `intake` if the intent is wrong. The app stops and the human picks the step.
@@ -127,7 +165,9 @@ Ask on the spot:
 <!-- type: general -->
 - **`확인: 사람` items:** gather them all into one question. For each, show what to look at (file, diff location, run result). The human's answer decides 통과 or 실패. Write "사람 확인" and the answer in the evidence, and record the answer in `decisions` with `by: human`.
 <!-- /type -->
+<!-- type: bugfix feature refactor general -->
 - **A test change looks like weakening:** show which test changed and how. If the human says it is not weakening, "기존 테스트를 약화하거나 삭제하지 않는다" is 통과. If they say it is, it is 실패.
+<!-- /type -->
 - **Any 실패 or 판정 불가:** let the human choose:
 <!-- type: bugfix -->
   - Go back: set `recommended_next` to the earlier step to return to (usually `fix`). The app stops and the human picks the step.
@@ -138,6 +178,9 @@ Ask on the spot:
 <!-- type: refactor -->
   - Go back: set `recommended_next` to the earlier step to return to (usually `refactor`). The app stops and the human picks the step.
 <!-- /type -->
+<!-- type: spec -->
+  - Go back: set `recommended_next` to the earlier step to return to (usually `spec`). The app stops and the human picks the step.
+<!-- /type -->
 <!-- type: general -->
   - Go back: set `recommended_next` to the earlier step to return to (usually `execute`). The app stops and the human picks the step.
 <!-- /type -->
@@ -145,10 +188,18 @@ Ask on the spot:
 
 ## Done when
 
+<!-- type: bugfix feature refactor general -->
 - `verification.md` has all six template sections.
 - If there were findings, the human picked; the picked ones are fixed and committed, and the test result is in `반영`.
 - Every 완료조건 of the intent has a verdict and evidence, judged on the final code.
 - Every changed test file is judged.
+<!-- /type -->
+<!-- type: spec -->
+- `verification.md` has all seven template sections.
+- If there were findings, the human picked; the picked ones are applied to the document and committed.
+- Every 완료조건 of the intent has a verdict and evidence, judged on the final document and the diff.
+- `문서 밖 파일 변경` lists every changed file outside the target document and the knowledge files, and `다시 볼 결정` is written.
+<!-- /type -->
 - `pr.md` is written.
 - Any weakening suspicion, 실패 or 판정 불가 was asked about, and the answer recorded in `decisions`.
 <!-- type: general -->
@@ -169,6 +220,9 @@ Ask on the spot:
 <!-- type: feature refactor general -->
 - 지적 번호 — 한 일, 커밋, 테스트 명령과 결과
 <!-- /type -->
+<!-- type: spec -->
+- 지적 번호 — 문서에서 고친 곳, 커밋
+<!-- /type -->
 (사람이 고른 것이 없으면 "없음")
 
 ## 반영하지 않은 지적
@@ -178,11 +232,27 @@ Ask on the spot:
 ## 완료조건 판정
 | 완료조건 | 판정 | 근거 |
 |---|---|---|
+<!-- type: bugfix feature refactor general -->
 | (완료조건 그대로) | 통과 | 실행한 명령과 결과 |
+<!-- /type -->
+<!-- type: spec -->
+| (완료조건 그대로) | 통과 | 읽은 곳(문서의 절, diff) |
+<!-- /type -->
 
+<!-- type: bugfix feature refactor general -->
 ## 테스트 파일 변경
 - 파일 — 약화 아님 / 약화 의심(사람 판단: …) — 이유
 (바뀐 테스트 파일이 없으면 "없음")
+<!-- /type -->
+<!-- type: spec -->
+## 문서 밖 파일 변경
+- 파일 — 무엇이 바뀌었는지
+(대상 문서와 지식 파일 밖의 변경이 없으면 "없음")
+
+## 다시 볼 결정
+- 결정 — 더 나은 대안이나 놓친 위험
+(없으면 "없음")
+<!-- /type -->
 
 ## 남은 위험
 - 
@@ -241,5 +311,19 @@ Ask on the spot:
 ## 주요 결정
 ## 변경
 ## 테스트
+```
+<!-- /type -->
+<!-- type: spec -->
+- `주요 결정`: what the human decided, with rejected alternatives, briefly. `다시 볼 결정`: copy from `verification.md`, or "없음". `정하지 않은 것`: or "없음". `구현 나눔`: only when it was decided; the pieces and their order. `변경`: which sections of the document were added or changed.
+
+```markdown
+# PR 제목
+
+## 요약
+## 주요 결정
+## 다시 볼 결정
+## 정하지 않은 것
+## 구현 나눔
+## 변경
 ```
 <!-- /type -->

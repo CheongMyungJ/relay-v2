@@ -3,6 +3,7 @@
 // relay의 worktree, 맨 CLI의 레포, 지워진 worktree의 스냅숏을 똑같이 다룬다.
 import fs from 'node:fs'
 import path from 'node:path'
+import { isIssue } from './issue-judge.mjs'
 import { copyTree, git, run } from './util.mjs'
 
 /** 시나리오의 repo/를 git 레포로 만든다. origin은 로컬 bare 레포다(test/support/repo.ts의 makeRepo와 같음) */
@@ -125,6 +126,24 @@ export function judgeTree(o) {
   if (fs.existsSync(o.hiddenDir))
     fs.cpSync(o.hiddenDir, path.join(copy, 'eval-hidden'), { recursive: true })
   const checks = (o.scenario.checks ?? []).map((c) => {
+    // 범위 guard (relay I111): 기대 밖 파일(지식 파일 제외)을 바꾸지 않았으면 통과다
+    if (c.scope)
+      return {
+        name: c.name,
+        bug: c.bug ?? null,
+        pass: unrelated.length === 0,
+        output: unrelated.length ? `기대 밖 파일: ${unrelated.join(', ')}` : '',
+      }
+    // 숨긴 쟁점 (relay I111): 판정 모델이 가른다(lib/issue-judge.mjs). 여기서는 자리만 둔다
+    if (isIssue(c))
+      return {
+        name: c.name,
+        bug: c.bug ?? null,
+        issue: true,
+        pending: true,
+        pass: false,
+        output: '',
+      }
     const r = run('node', ['--test', path.join('eval-hidden', c.file)], {
       cwd: copy,
       env: { ...process.env, ...(c.env ?? {}) },

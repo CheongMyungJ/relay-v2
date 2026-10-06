@@ -228,6 +228,7 @@ import {
   humanNotice,
   permissionNotice,
   resumeHint,
+  revisitDecisions,
   stageLead,
   stopNotice,
   taskLabel,
@@ -3461,6 +3462,7 @@ export class WorkRunner {
         REVIEWABLE.includes(task.status)
       completion = {
         verdicts: verdicts(files[VERIFICATION_FILE] ?? ''),
+        revisit: revisitDecisions(workType(this.work), files[VERIFICATION_FILE] ?? ''),
         diff: clip(workDiff),
         mode:
           stopped || (current && !approvalStops(this.work, task.node, header))
