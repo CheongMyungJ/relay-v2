@@ -185,7 +185,11 @@ describe('[흐름] 단계별 모델·추론 수준 (F6, F7, F10)', () => {
     expect(lastArgs(s.hh)).not.toContain('--model')
     expect(lastArgs(s.hh)).not.toContain('--effort')
     expect(s.read(key).tasks[0]).not.toHaveProperty('model')
-    await s.hh.relay.updateConfig({ agent_model: 'opus', agent_effort: 'max' })
+    expect(
+      await s.hh.relay.updateConfig({ agent_model: 'opus', agent_effort: 'max' }),
+    ).toMatchObject({
+      ok: true,
+    })
     expect(await s.hh.relay.interrupt(key, 't-01')).toMatchObject({ ok: true })
     expect(await s.hh.relay.resume(key, 't-01')).toMatchObject({ ok: true })
     await s.hh.ui.until(() => starts(s.hh).length >= 2, '재개')

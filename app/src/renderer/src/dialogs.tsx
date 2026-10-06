@@ -9,8 +9,8 @@ import {
   AGENT_LABELS,
   AGENT_MODELS,
   changeDefaultEngine,
+  changeDefaultModel,
   effortsFor,
-  fitAgent,
   setAgentStep,
   stepModel,
   type AgentEngine,
@@ -817,6 +817,11 @@ function EffortSelect(props: {
         ))}
       </select>
       {none ? <span className="dim">이 모델은 추론 수준을 지원하지 않음</span> : null}
+      {!none && props.model === '' && props.value !== '' ? (
+        <span className="dim">
+          엔진 기본 모델이 이 수준을 받지 않으면 CLI가 거절하거나 무시할 수 있음
+        </span>
+      ) : null}
     </span>
   )
 }
@@ -914,10 +919,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 engine={value.agent_engine}
                 value={value.agent_model}
                 empty="엔진 기본"
-                onChange={(model) => {
-                  const fit = fitAgent(value.agent_engine, model, value.agent_effort)
-                  setDraft({ ...value, agent_model: fit.model, agent_effort: fit.effort })
-                }}
+                onChange={(model) => setDraft(changeDefaultModel(value, model))}
               />
             </label>
             <div className="form-row">
@@ -1014,7 +1016,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 const set = (next: AgentStep) =>
                   setDraft({
                     ...value,
-                    agent_steps: setAgentStep(value.agent_steps, skill, next, value.agent_engine),
+                    agent_steps: setAgentStep(value.agent_steps, skill, next, value),
                   })
                 return (
                   <div key={skill} className="form-row agent-step">

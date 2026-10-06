@@ -21,10 +21,11 @@ import type { ProjectSettings } from '../shared/project'
 import type { MergeMethod } from '../shared/work'
 import { ALL_NODES } from './pipeline'
 import {
-  AGENT_LABELS,
-  effortsFor,
+  effortError,
   isAgentEngine,
-  modelKnown,
+  modelError,
+  stepError,
+  type AgentConfig,
   type AgentEngine,
   type AgentStep,
 } from '../shared/agent'
@@ -183,38 +184,27 @@ function agentStep(skill: string, v: unknown): Checked<AgentStep> {
   return { ok: true, value: out }
 }
 
-/** 기본 모델이 기본 엔진에 있는가. 틀리면 이유 */
+/** 기본 모델이 기본 엔진에 있는가. 틀리면 이유 (규칙은 shared/agent.ts) */
 function defaultModelFits(c: Pick<AppConfig, 'agent_engine' | 'agent_model'>): string | null {
-  return modelKnown(c.agent_engine, c.agent_model)
-    ? null
-    : `기본 모델: ${AGENT_LABELS[c.agent_engine]}에 없는 모델 ${c.agent_model}`
+  const why = modelError(c.agent_engine, c.agent_model)
+  return why && `기본 모델: ${why}`
 }
 
 /** 기본 추론 수준을 기본 엔진·모델이 받는가. 틀리면 이유 */
 function defaultEffortFits(
   c: Pick<AppConfig, 'agent_engine' | 'agent_model' | 'agent_effort'>,
 ): string | null {
-  const efforts: readonly string[] = effortsFor(c.agent_engine, c.agent_model)
-  if (c.agent_effort === '' || efforts.includes(c.agent_effort)) return null
-  const model = c.agent_model || `${AGENT_LABELS[c.agent_engine]} 기본 모델`
-  return `기본 추론 수준: ${model}이 받지 않는 수준 ${c.agent_effort}`
+  const why = effortError(c.agent_engine, c.agent_model, c.agent_effort)
+  return why && `기본 추론 수준: ${why}`
 }
 
 /**
- * 한 단계의 모델이 그 단계의 엔진(단계 ?? 기본)에 있고, 추론 수준을 그 모델이 받는가. 모델을 정하지 않은 단계는 엔진의
- * 전체 수준을 받는다(물려받은 모델이 받지 않으면 실행 때 버린다, resolveAgent). 틀리면 이유
+ * 한 단계의 모델이 그 단계의 엔진(단계 ?? 기본)에 있고, 추론 수준을 단계가 쓸 모델(단계 ?? 물려받는 기본 모델)이 받는가.
+ * 설정 화면도 같은 규칙(stepError)으로 맞춘다. 틀리면 이유
  */
-function stepFits(engine: AgentEngine, skill: string, step: AgentStep): string | null {
-  const title = STEP_TITLE.get(skill) ?? skill
-  const e = step.engine ?? engine
-  const model = step.model ?? ''
-  if (!modelKnown(e, model)) return `상세 설정(${title}): ${AGENT_LABELS[e]}에 없는 모델 ${model}`
-  const efforts: readonly string[] = effortsFor(e, model)
-  if (step.effort !== undefined && !efforts.includes(step.effort)) {
-    const name = model || `${AGENT_LABELS[e]} 기본 모델`
-    return `상세 설정(${title}): ${name}이 받지 않는 추론 수준 ${step.effort}`
-  }
-  return null
+function stepFits(config: AgentConfig, skill: string, step: AgentStep): string | null {
+  const why = stepError(config, step)
+  return why && `상세 설정(${STEP_TITLE.get(skill) ?? skill}): ${why}`
 }
 
 /** 기본 모델·추론 수준과 상세 설정을 읽는다. 틀린 값은 그 값만 비워(엔진 기본, 기본 따름) 경고한다 */
@@ -246,7 +236,7 @@ function normalizeAgent(data: Record<string, unknown>, config: AppConfig, warnin
   }
   for (const [skill, v] of Object.entries(steps)) {
     const r = agentStep(skill, v)
-    const why = r.ok ? stepFits(config.agent_engine, skill, r.value) : r.error
+    const why = r.ok ? stepFits(config, skill, r.value) : r.error
     if (why) warnings.push(`config.json ${why}. 이 단계는 기본을 따름`)
     else if (r.ok && Object.keys(r.value).length) config.agent_steps[skill as SkillName] = r.value
   }
@@ -474,7 +464,7 @@ export function applyConfigPatch(current: AppConfig, patch: unknown): Checked<Ap
     defaultModelFits(next) ??
     defaultEffortFits(next) ??
     Object.entries(next.agent_steps)
-      .map(([skill, step]) => stepFits(next.agent_engine, skill, step))
+      .map(([skill, step]) => stepFits(next, skill, step))
       .find((w) => w !== null)
   if (why) return { ok: false, error: why }
   return { ok: true, value: next }

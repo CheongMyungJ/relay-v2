@@ -24,9 +24,9 @@ import type {
 import type { AppConfig } from '../shared/config'
 import type { MergeMethod, WorkState } from '../shared/work'
 import { knownTaskEngine } from './agent'
-import { resolveAgent } from '../shared/agent'
+import { stepEngine } from '../shared/agent'
 import { approvalMode } from './approval'
-import { RESPOND } from './pipeline'
+import { NODE_INFO, RESPOND } from './pipeline'
 import {
   autoRespondView,
   isRespondPending,
@@ -1059,10 +1059,10 @@ export function prView(input: PrViewInput): PrView | null {
   const responseEngine = activeResponse
     ? knownTaskEngine(activeResponse)
     : // 다음 대응 task의 엔진: 상세 설정의 PR 대응 엔진 ?? 기본 엔진
-      resolveAgent(
+      stepEngine(
         { ...input.config, agent_engine: input.config.agent_engine ?? 'claude' },
-        'pr-respond',
-      ).engine
+        NODE_INFO[RESPOND].skill,
+      )
   const gate = mergeGate({
     work: input.work,
     read,

@@ -7,6 +7,7 @@ import { DEFAULT_CONFIG } from '../../src/shared/config'
 import {
   AGENT_MODELS,
   changeDefaultEngine,
+  changeDefaultModel,
   effortsFor,
   fitAgent,
   resolveAgent,
@@ -352,6 +353,45 @@ describe('[단위] 설정 화면의 엔진·모델·추론 수준 바꾸기 (F4,
     expect(stepModel(haiku, { engine: 'codex' })).toBe('')
     expect(effortsFor('codex', stepModel(haiku, { engine: 'codex' }))).toContain('ultra')
   })
+  it('모델을 정하지 않은 단계의 추론 수준은 물려받는 모델에 맞춰 저장값이 화면과 같다', () => {
+    const luna = {
+      ...DEFAULT_CONFIG,
+      agent_engine: 'codex' as const,
+      agent_model: 'gpt-6-luna',
+      agent_effort: 'high',
+    }
+    const sol = setAgentStep(
+      luna.agent_steps,
+      'implement',
+      { model: 'gpt-6-sol', effort: 'ultra' },
+      luna,
+    )
+    expect(sol.implement).toEqual({ model: 'gpt-6-sol', effort: 'ultra' })
+    // 모델을 기본 따름으로 되돌리면 luna가 받지 않는 ultra도 비워 기본(high)을 따른다
+    const back = setAgentStep(sol, 'implement', { ...sol.implement, model: '' }, luna)
+    expect(back).toEqual({})
+    expect(resolveAgent({ ...luna, agent_steps: back }, 'implement')).toEqual({
+      engine: 'codex',
+      model: 'gpt-6-luna',
+      effort: 'high',
+    })
+    const config = { ...luna, agent_steps: back }
+    expect(applyConfigPatch(luna, { agent_steps: config.agent_steps }).ok).toBe(true)
+  })
+
+  it('기본 모델을 바꾸면 기본 추론 수준과 물려받는 단계의 추론 수준을 새 모델에 맞추고 저장할 수 있다', () => {
+    const steps = { design: { effort: 'high' }, verify: { model: 'opus', effort: 'max' } }
+    const next = changeDefaultModel({ ...base, agent_steps: steps }, 'haiku')
+    expect(next).toMatchObject({ agent_model: 'haiku', agent_effort: '' })
+    expect(next.agent_steps).toEqual({ verify: { model: 'opus', effort: 'max' } })
+    const patch = {
+      agent_model: next.agent_model,
+      agent_effort: next.agent_effort,
+      agent_steps: { design: {}, verify: next.agent_steps.verify },
+    }
+    expect(applyConfigPatch({ ...base, agent_steps: steps }, patch).ok).toBe(true)
+  })
+
   it('기본 엔진을 바꾸면 기본 줄과 엔진을 정하지 않은 단계를 새 엔진에 맞추고 저장할 수 있다', () => {
     const next = changeDefaultEngine(base, 'codex')
     expect(next).toMatchObject({ agent_engine: 'codex', agent_model: '', agent_effort: 'max' })

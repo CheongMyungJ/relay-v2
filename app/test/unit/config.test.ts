@@ -568,6 +568,8 @@ describe('[단위] 기본 모델·추론 수준과 단계별 실행 설정', () 
       { agent_steps: { design: { color: 'red' } } },
       { agent_steps: [] },
       { session_limit: 4, agent_steps: { design: { effort: 'ultra' } } },
+      // 모델을 정하지 않은 단계는 물려받는 기본 모델(haiku)로 본다
+      { agent_model: 'haiku', agent_steps: { design: { effort: 'high' } } },
     ]
     for (const patch of bad) {
       const r = applyConfigPatch(DEFAULT_CONFIG, patch)

@@ -28,9 +28,8 @@ export interface AgentModel {
   efforts: readonly AgentEffort[]
 }
 
-const CLAUDE_EFFORTS: readonly AgentEffort[] = ['low', 'medium', 'high', 'xhigh', 'max']
-const CODEX_EFFORTS: readonly AgentEffort[] = AGENT_EFFORTS
-const CODEX_NO_ULTRA: readonly AgentEffort[] = ['low', 'medium', 'high', 'xhigh', 'max']
+/** ultra를 뺀 수준. Claude 모델과 ultra가 없는 Codex 모델이 받는다 */
+const UP_TO_MAX: readonly AgentEffort[] = ['low', 'medium', 'high', 'xhigh', 'max']
 
 /**
  * 엔진별 모델의 고정 목록 (사람이 정함). Claude는 CLI의 별칭이다(claude --help의 --model). Codex의 수준은
@@ -38,26 +37,29 @@ const CODEX_NO_ULTRA: readonly AgentEffort[] = ['low', 'medium', 'high', 'xhigh'
  */
 export const AGENT_MODELS: Readonly<Record<AgentEngine, readonly AgentModel[]>> = {
   claude: [
-    { id: 'fable', label: 'fable', efforts: CLAUDE_EFFORTS },
-    { id: 'opus', label: 'opus', efforts: CLAUDE_EFFORTS },
-    { id: 'sonnet', label: 'sonnet', efforts: CLAUDE_EFFORTS },
+    { id: 'fable', label: 'fable', efforts: UP_TO_MAX },
+    { id: 'opus', label: 'opus', efforts: UP_TO_MAX },
+    { id: 'sonnet', label: 'sonnet', efforts: UP_TO_MAX },
     { id: 'haiku', label: 'haiku', efforts: [] },
   ],
   codex: [
-    { id: 'gpt-6.1-sol', label: 'gpt-6.1-sol', efforts: CODEX_EFFORTS },
-    { id: 'gpt-6-astra', label: 'gpt-6-astra', efforts: CODEX_EFFORTS },
-    { id: 'gpt-6-sol', label: 'gpt-6-sol', efforts: CODEX_EFFORTS },
-    { id: 'gpt-6-luna', label: 'gpt-6-luna', efforts: CODEX_NO_ULTRA },
-    { id: 'gpt-5.6-sol', label: 'gpt-5.6-sol', efforts: CODEX_EFFORTS },
-    { id: 'gpt-5.6-terra', label: 'gpt-5.6-terra', efforts: CODEX_EFFORTS },
-    { id: 'gpt-5.6-luna', label: 'gpt-5.6-luna', efforts: CODEX_NO_ULTRA },
+    { id: 'gpt-6.1-sol', label: 'gpt-6.1-sol', efforts: AGENT_EFFORTS },
+    { id: 'gpt-6-astra', label: 'gpt-6-astra', efforts: AGENT_EFFORTS },
+    { id: 'gpt-6-sol', label: 'gpt-6-sol', efforts: AGENT_EFFORTS },
+    { id: 'gpt-6-luna', label: 'gpt-6-luna', efforts: UP_TO_MAX },
+    { id: 'gpt-5.6-sol', label: 'gpt-5.6-sol', efforts: AGENT_EFFORTS },
+    { id: 'gpt-5.6-terra', label: 'gpt-5.6-terra', efforts: AGENT_EFFORTS },
+    { id: 'gpt-5.6-luna', label: 'gpt-5.6-luna', efforts: UP_TO_MAX },
   ],
 }
 
-/** 모델이 "엔진 기본"(빈 값)일 때 고를 수 있는 추론 수준. 어떤 모델이 쓰일지 몰라 엔진의 전체 수준이다 */
+/**
+ * 모델이 "엔진 기본"(빈 값)일 때 고를 수 있는 추론 수준. 어떤 모델이 쓰일지 몰라 엔진의 전체 수준이다. CLI의 기본 모델이
+ * 받지 않는 수준이면 CLI가 거절하거나 무시할 수 있어 설정 화면이 그렇게 알린다
+ */
 export const ENGINE_DEFAULT_EFFORTS: Readonly<Record<AgentEngine, readonly AgentEffort[]>> = {
-  claude: CLAUDE_EFFORTS,
-  codex: CODEX_EFFORTS,
+  claude: UP_TO_MAX,
+  codex: AGENT_EFFORTS,
 }
 
 /** 그 엔진에 있는 모델인가. 빈 값은 엔진 기본이라 늘 있다 */
@@ -85,38 +87,71 @@ export interface ResolvedAgent {
   effort?: string
 }
 
-export interface AgentConfig {
+/** 앱 설정의 기본 엔진·모델·추론 수준과 상세 설정. 빈 값은 엔진 기본(기본 줄)이나 기본 따름(단계)이다 */
+export interface AgentDefaults<K extends string = string> {
   agent_engine: AgentEngine
-  agent_model?: string
-  agent_effort?: string
-  agent_steps?: Partial<Record<string, AgentStep>>
+  agent_model: string
+  agent_effort: string
+  agent_steps: Partial<Record<K, AgentStep>>
+}
+
+/** 해석에 넘기는 설정. 기본 엔진 말고는 없어도 된다 */
+export type AgentConfig = Pick<AgentDefaults, 'agent_engine'> &
+  Partial<Omit<AgentDefaults, 'agent_engine'>>
+
+/** 단계가 기본 모델·추론 수준을 물려받는가. 기본 모델은 기본 엔진의 모델이라 단계 엔진이 같을 때만 물려받는다 */
+function inherits(config: AgentConfig, step: AgentStep): boolean {
+  return (step.engine ?? config.agent_engine) === config.agent_engine
+}
+
+/** 단계가 쓸 엔진: 단계 ?? 기본 */
+export function stepEngine(config: AgentConfig, skill: string): AgentEngine {
+  return config.agent_steps?.[skill]?.engine ?? config.agent_engine
 }
 
 /**
- * 단계가 쓸 모델: 단계 ?? (단계 엔진이 기본 엔진과 같으면 기본 모델, 다르면 엔진 기본). 설정 화면은 이 모델로 단계의 추론
- * 수준 선택지를 보인다
+ * 단계가 쓸 모델: 단계 ?? (단계 엔진이 기본 엔진과 같으면 기본 모델, 다르면 엔진 기본). 단계의 추론 수준은 이 모델이 받는
+ * 것만 고를 수 있다. 설정 화면, 저장 검사(stepError), 해석(resolveAgent)이 같이 쓴다
  */
 export function stepModel(config: AgentConfig, step: AgentStep): string {
-  const inherit = (step.engine ?? config.agent_engine) === config.agent_engine
-  return step.model || (inherit ? (config.agent_model ?? '') : '')
+  return step.model || (inherits(config, step) ? (config.agent_model ?? '') : '')
 }
 
 /**
  * 한 단계의 실행 설정을 정한다. 엔진 = 단계 ?? 기본. 모델·추론 수준 = 단계 ?? (엔진이 기본 엔진과 같으면 기본, 다르면
- * 엔진 기본). 기본 모델은 기본 엔진의 모델이라 다른 엔진에 물려주지 않는다. 그 엔진에 없는 모델과 고른 모델이 받지 않는
- * 추론 수준은 버린다
+ * 엔진 기본). 저장 검사를 지난 설정이면 버릴 것이 없지만, 그 엔진에 없는 모델과 고른 모델이 받지 않는 추론 수준은 버린다
  */
 export function resolveAgent(config: AgentConfig, skill: string): ResolvedAgent {
   const step = config.agent_steps?.[skill] ?? {}
-  const engine = step.engine ?? config.agent_engine
-  const inherit = engine === config.agent_engine
+  const engine = stepEngine(config, skill)
   const wantModel = stepModel(config, step)
-  const model = modelKnown(engine, wantModel) ? wantModel : ''
-  const wantEffort = step.effort ?? (inherit ? (config.agent_effort ?? '') : '')
-  const effort = (effortsFor(engine, model) as readonly string[]).includes(wantEffort)
-    ? wantEffort
-    : ''
+  const model = modelError(engine, wantModel) ? '' : wantModel
+  const wantEffort = step.effort ?? (inherits(config, step) ? (config.agent_effort ?? '') : '')
+  const effort = effortError(engine, model, wantEffort) ? '' : wantEffort
   return { engine, ...(model ? { model } : {}), ...(effort ? { effort } : {}) }
+}
+
+// ---------- 맞는지 보기 (저장 검사와 설정 화면이 같이 쓴다) ----------
+
+/** 모델이 엔진에 있는가. 빈 값(엔진 기본)은 늘 있다. 틀리면 이유 */
+export function modelError(engine: AgentEngine, model: string): string | null {
+  return modelKnown(engine, model) ? null : `${AGENT_LABELS[engine]}에 없는 모델 ${model}`
+}
+
+/** 엔진·모델이 추론 수준을 받는가. 빈 값(엔진 기본)은 늘 받는다. 틀리면 이유 */
+export function effortError(engine: AgentEngine, model: string, effort: string): string | null {
+  if (effort === '' || (effortsFor(engine, model) as readonly string[]).includes(effort))
+    return null
+  return `${model || `${AGENT_LABELS[engine]} 기본 모델`}이 받지 않는 추론 수준 ${effort}`
+}
+
+/** 한 단계가 맞는가: 모델이 단계 엔진에 있고, 추론 수준을 단계가 쓸 모델(stepModel)이 받는가. 틀리면 이유 */
+export function stepError(config: AgentConfig, step: AgentStep): string | null {
+  const engine = step.engine ?? config.agent_engine
+  return (
+    modelError(engine, step.model ?? '') ??
+    effortError(engine, stepModel(config, step), step.effort ?? '')
+  )
 }
 
 // ---------- 설정 화면에서 바꾸기 ----------
@@ -130,8 +165,8 @@ export function fitAgent(
   model: string,
   effort: string,
 ): { model: string; effort: string } {
-  const m = modelKnown(engine, model) ? model : ''
-  const e = (effortsFor(engine, m) as readonly string[]).includes(effort) ? effort : ''
+  const m = modelError(engine, model) ? '' : model
+  const e = effortError(engine, m, effort) ? '' : effort
   return { model: m, effort: e }
 }
 
@@ -144,51 +179,58 @@ function compactStep(step: AgentStep): AgentStep {
   }
 }
 
-/** 단계의 모델·추론 수준을 그 단계 엔진(단계 ?? 기본)에 맞춘다 */
-function fitStep(engine: AgentEngine, step: AgentStep): AgentStep {
-  const fit = fitAgent(step.engine ?? engine, step.model ?? '', step.effort ?? '')
-  return compactStep({ ...step, ...fit })
+/**
+ * 단계의 모델을 단계 엔진(단계 ?? 기본)에 맞추고, 추론 수준을 단계가 쓸 모델(stepModel)에 맞춘다. 모델을 정하지 않은
+ * 단계는 물려받는 기본 모델이 받지 않는 수준을 비운다. 그래서 저장값이 화면(기본 따름)과 같다
+ */
+function fitStep(config: AgentConfig, step: AgentStep): AgentStep {
+  const engine = step.engine ?? config.agent_engine
+  const model = modelError(engine, step.model ?? '') ? '' : (step.model ?? '')
+  const effort = step.effort ?? ''
+  const fitted = effortError(engine, stepModel(config, { ...step, model }), effort) ? '' : effort
+  return compactStep({ ...step, model, effort: fitted })
 }
 
 /**
- * 상세 설정의 한 단계만 바꾼다. 다른 단계는 그대로다. 단계 엔진이 바뀌면 그 단계의 모델·추론 수준을 새 엔진에 맞추고(단계
- * 엔진을 비우면 기본 엔진에 맞추도록 defaultEngine을 준다), 모두 비면 단계를 지운다
+ * 상세 설정의 한 단계만 바꾼다. 다른 단계는 그대로다. 그 단계의 모델·추론 수준을 단계 엔진과 단계가 쓸 모델에 맞추고(기본
+ * 모델을 물려받도록 화면의 설정을 준다. 없으면 단계 엔진만으로 맞춘다), 모두 비면 단계를 지운다
  */
 export function setAgentStep<S extends Partial<Record<string, AgentStep>>>(
   steps: S,
   skill: string,
   step: AgentStep,
-  defaultEngine?: AgentEngine,
+  config?: AgentConfig,
 ): S {
-  const engine = step.engine ?? defaultEngine
-  const next = engine ? fitStep(engine, step) : compactStep(step)
+  const base = config ?? (step.engine ? { agent_engine: step.engine } : undefined)
+  const next = base ? fitStep(base, step) : compactStep(step)
   const rest = Object.entries(steps).filter(([k]) => k !== skill)
   return Object.fromEntries(Object.keys(next).length ? [...rest, [skill, next]] : rest) as S
 }
 
-export interface AgentDefaults<K extends string = string> {
-  agent_engine: AgentEngine
-  agent_model: string
-  agent_effort: string
-  agent_steps: Partial<Record<K, AgentStep>>
+/** 기본 줄을 바꾼 뒤 모든 단계를 다시 맞춘다. 모두 빈 단계는 지운다 */
+function fitSteps<T extends AgentDefaults<K>, K extends string>(c: T): T {
+  const steps: Partial<Record<K, AgentStep>> = {}
+  for (const [skill, step] of Object.entries(c.agent_steps) as [K, AgentStep][]) {
+    const next = fitStep(c, step)
+    if (Object.keys(next).length) steps[skill] = next
+  }
+  return { ...c, agent_steps: steps }
 }
 
-/** 기본 엔진을 바꾼다: 기본 모델·추론 수준과, 엔진을 정하지 않은 단계를 새 엔진에 맞춘다 */
+/** 기본 엔진을 바꾼다: 기본 모델·추론 수준과 단계들을 새 엔진에 맞춘다 */
 export function changeDefaultEngine<T extends AgentDefaults<K>, K extends string>(
   c: T,
   engine: AgentEngine,
 ): T {
   const fit = fitAgent(engine, c.agent_model, c.agent_effort)
-  const steps: Partial<Record<K, AgentStep>> = {}
-  for (const [skill, step] of Object.entries(c.agent_steps) as [K, AgentStep][]) {
-    const next = step.engine ? step : fitStep(engine, step)
-    if (Object.keys(next).length) steps[skill] = next
-  }
-  return {
-    ...c,
-    agent_engine: engine,
-    agent_model: fit.model,
-    agent_effort: fit.effort,
-    agent_steps: steps,
-  }
+  return fitSteps({ ...c, agent_engine: engine, agent_model: fit.model, agent_effort: fit.effort })
+}
+
+/** 기본 모델을 바꾼다: 기본 추론 수준과, 기본 모델을 물려받는 단계의 추론 수준을 새 모델에 맞춘다 */
+export function changeDefaultModel<T extends AgentDefaults<K>, K extends string>(
+  c: T,
+  model: string,
+): T {
+  const fit = fitAgent(c.agent_engine, model, c.agent_effort)
+  return fitSteps({ ...c, agent_model: fit.model, agent_effort: fit.effort })
 }
