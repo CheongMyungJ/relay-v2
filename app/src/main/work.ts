@@ -78,6 +78,7 @@ import {
   stashAll,
   stashEntries,
   statusLines,
+  submodulePaths,
   treeOf,
   worktreeTree,
 } from '../adapters/git'
@@ -1383,6 +1384,8 @@ export class WorkRunner {
       carried: await this.carriedInput(task),
       ...(task.node === 'verify' ? { delivery: closingButtons(this.checks()) } : {}),
       respond: await this.respondInput(task),
+      // 서브모듈을 읽지 못하면 안내 없이 간다 (D383)
+      submodules: await submodulePaths(this.worktree, { env: this.ctx.env }).catch(() => []),
     })
   }
 

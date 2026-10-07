@@ -197,11 +197,8 @@ export async function onlySubmoduleChanges(dir: string, opts?: GitOptions): Prom
   return true
 }
 
-/**
- * 체크아웃된 서브모듈의 경로 (D382): index에서 모드가 160000(gitlink)인 항목 가운데 폴더에 .git이 있는 것. git은
- * 이런 서브모듈이 있는 worktree를 --force 없이 지우지 않는다(git 문서 git-worktree BUGS, 실행)
- */
-export async function checkedOutSubmodules(dir: string, opts?: GitOptions): Promise<string[]> {
+/** 서브모듈의 경로: index에서 모드가 160000(gitlink)인 항목 (D383). 체크아웃했는지는 보지 않는다 */
+export async function submodulePaths(dir: string, opts?: GitOptions): Promise<string[]> {
   const out = await git(dir, ['ls-files', '--stage', '-z'], opts)
   const paths = new Set<string>()
   for (const entry of out.split('\0')) {
@@ -209,8 +206,16 @@ export async function checkedOutSubmodules(dir: string, opts?: GitOptions): Prom
     if (tab < 0 || !entry.startsWith('160000 ')) continue
     paths.add(entry.slice(tab + 1))
   }
+  return [...paths].sort()
+}
+
+/**
+ * 체크아웃된 서브모듈의 경로 (D382): 서브모듈 가운데 폴더에 .git이 있는 것. git은 이런 서브모듈이 있는 worktree를
+ * --force 없이 지우지 않는다(git 문서 git-worktree BUGS, 실행)
+ */
+export async function checkedOutSubmodules(dir: string, opts?: GitOptions): Promise<string[]> {
   const found: string[] = []
-  for (const p of paths) {
+  for (const p of await submodulePaths(dir, opts)) {
     try {
       await fsp.lstat(path.join(dir, p, '.git'))
       found.push(p)
@@ -218,7 +223,7 @@ export async function checkedOutSubmodules(dir: string, opts?: GitOptions): Prom
       // 체크아웃하지 않은 서브모듈은 빈 폴더다
     }
   }
-  return found.sort()
+  return found
 }
 
 /** from에서 닿지 않고 to에서 닿는 커밋 수 (git rev-list --count from..to). 되감기의 미리 보기 (D82) */

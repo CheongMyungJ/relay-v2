@@ -2,6 +2,7 @@
 // 첫 프롬프트에는 이 파일의 경로만 넣는다. 스킬은 이 파일부터 읽는다 (5.6.3).
 // 단계 선택(6.2)으로 들어온 task는 사람 추가 지시와, 되감기면 폐기된 시도 요약을 맨 위에 강조해 넣는다.
 // PR 대응 task는 이번 라운드의 항목(외부 글은 데이터로 감쌈), 사람 지시, PR 정보, 앞 라운드의 요약을 맨 위에 넣는다 (D192).
+// 서브모듈이 있는 레포는 서브모듈을 받는 법과 다루지 않을 것을 고정 문구로 넣는다 (D383).
 import type { AgentEngine } from '../shared/agent'
 import { taskEngine } from './agent'
 import type { AppConfig, QuestionMode, WorkSettings } from '../shared/config'
@@ -237,6 +238,8 @@ export interface ContextInput {
   carried?: CarriedCode | null
   /** 지식 (core/knowledge). 지식 관리를 끄면(RELAY_KNOWLEDGE=off) 없다 */
   knowledge?: KnowledgeInput | null
+  /** worktree의 서브모듈 경로 (D383). 없으면 서브모듈 절이 없다 */
+  submodules?: readonly string[]
 }
 
 export interface CarriedCode {
@@ -382,6 +385,28 @@ function fenced(text: string, lang = 'markdown'): string {
 /** 목록. 항목 안의 줄바꿈은 한 줄로 편다 */
 function list(items: readonly string[]): string {
   return items.length ? items.map((i) => `- ${i.replace(/\s*\n\s*/g, ' ')}`).join('\n') : '없음'
+}
+
+/**
+ * 서브모듈 절 (D383). 앱은 worktree에 서브모듈을 받지 않고 그 안의 변경을 다루지 않는다(D382). 빌드와 테스트에 필요하면
+ * 에이전트가 받게 하고, 받지 못했을 때 우회하거나 건너뛴 테스트를 통과로 보지 않게 하며, 병합 뒤 맞추지 않은 서브모듈을
+ * 커밋해 옛 커밋으로 되돌리지 않게 한다
+ */
+function submoduleSection(paths: readonly string[]): [string, string] {
+  return [
+    '서브모듈',
+    [
+      `이 레포에는 서브모듈이 있다: ${paths.map((p) => `\`${p}\``).join(', ')}. 앱은 worktree에 서브모듈을 받지 않는다.`,
+      '',
+      list([
+        '빌드나 테스트에 서브모듈 코드가 필요하면 worktree에서 `git submodule update --init --recursive`로 받는다.',
+        '받지 못하면 빠진 코드를 흉내 내거나, 빌드 설정에서 빼거나, 다른 패키지로 바꾸는 식으로 우회하지 않는다. 받지 못한 까닭을 사람에게 알린다.',
+        '서브모듈이 없어 건너뛴 테스트를 통과로 보지 않는다.',
+        '서브모듈 안의 파일은 고치지 않는다. 앱은 서브모듈 안의 변경을 커밋하거나 전달하지 않는다. 서브모듈을 고쳐야 하면 사람에게 알린다. 요청이 서브모듈이 가리키는 커밋을 바꾸라고 하면 서브모듈에서 그 커밋을 체크아웃하고 이 레포에서 커밋한다.',
+        '기준 브랜치를 병합하거나 커밋을 받아 서브모듈이 가리키는 커밋이 바뀌면 `git submodule update --recursive`로 맞춘다. 맞추지 않은 채 커밋하면 서브모듈이 옛 커밋으로 되돌아간다.',
+      ]),
+    ].join('\n'),
+  ]
 }
 
 function nextSteps(type: WorkType, node: TaskNode): string[] {
@@ -676,6 +701,7 @@ export function buildContext(input: ContextInput): string {
     ['마무리 안내 문구', closingMessage(task.node, input.delivery, taskEngine(task))],
     ['질문 방식', questionLine(config, work.settings, task.node)],
     ...(input.knowledge ? [knowledgeSection(task.node, input.knowledge)] : []),
+    ...(input.submodules?.length ? [submoduleSection(input.submodules)] : []),
     ['선택 가능한 다음 단계', list(nextSteps(type, task.node))],
     [
       work.intent ? `intent (버전 ${work.intent.version})` : 'intent',

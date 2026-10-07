@@ -15,6 +15,7 @@ import {
   removeWorktree,
   stashAll,
   statusLines,
+  submodulePaths,
 } from '../../src/adapters/git'
 import { addSubmodule, checkoutSubmodules, git, makeRepo, writeFiles } from '../support/repo'
 
@@ -39,8 +40,9 @@ afterEach(() => {
 })
 
 describe('[어댑터] 서브모듈이 있는 레포 (D382)', () => {
-  it('새 worktree의 서브모듈은 빈 폴더다. 체크아웃한 서브모듈만 찾는다', async () => {
+  it('새 worktree의 서브모듈은 빈 폴더다. 서브모듈은 index에서 찾고, 체크아웃한 것은 폴더의 .git으로 가린다', async () => {
     expect(fs.readdirSync(lib)).toEqual([])
+    expect(await submodulePaths(tree)).toEqual(['lib'])
     expect(await checkedOutSubmodules(tree)).toEqual([])
     checkoutSubmodules(tree)
     expect(await checkedOutSubmodules(tree)).toEqual(['lib'])

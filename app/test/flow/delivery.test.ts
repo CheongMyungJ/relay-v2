@@ -6,6 +6,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { taskDirName } from '../../src/core/machine'
 import type { DeliverInput, WorkView } from '../../src/shared/views'
 import type { LifecycleEvent, WorkState } from '../../src/shared/work'
 import { drive } from '../support/driver'
@@ -359,6 +360,12 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
     const s = await setup(scenario(), { submodule: true })
     await toVerify(s)
     const fixed = git(s.tree, 'rev-parse', 'HEAD')
+    // task마다 context.md에 서브모듈 안내가 들어간다 (D383)
+    for (const t of work(s).tasks) {
+      const context = read(path.join(s.dir, 'tasks', taskDirName(t), 'context.md'))
+      expect(context, t.id).toContain('## 서브모듈')
+      expect(context, t.id).toContain('이 레포에는 서브모듈이 있다: `lib`, `ui`.')
+    }
     // 사람이나 에이전트가 서브모듈을 받아 lib 안에서 커밋하고, ui 안에는 커밋하지 않은 변경을 남긴다
     checkoutSubmodules(s.tree)
     const lib = path.join(s.tree, 'lib')
