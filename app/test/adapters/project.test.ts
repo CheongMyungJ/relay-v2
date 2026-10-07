@@ -99,6 +99,23 @@ describe('[어댑터] 프로젝트 등록 점검 (시나리오 0, D67)', () => {
     ])
   })
 
+  it('gh 로그인은 origin의 호스트에서만 본다: 다른 호스트의 로그인 실패는 상관없다 (D67)', async () => {
+    const t = await harness({ scenario: WAIT, env: { FAKE_GH_AUTH_BROKEN: 'github.com' } })
+    h = t
+    const { repo } = makeRepo(t.root, 'sample', REPO_FILES)
+    const gh = async () => (await t.relay.inspectProject(repo)).checks.find((c) => c.id === 'gh')
+    // origin이 GitHub 레포 주소가 아니면(로컬 경로) 모든 호스트를 보므로 github.com 때문에 실패한다
+    expect((await gh())?.ok).toBe(false)
+    // 사내 GitHub Enterprise 레포
+    git(repo, 'remote', 'set-url', 'origin', 'https://ghe.corp.test/team/sample.git')
+    expect(await gh()).toMatchObject({ ok: true, detail: expect.stringContaining('ghe.corp.test') })
+    t.env['FAKE_GH_AUTH_BROKEN'] = 'ghe.corp.test'
+    expect(await gh()).toMatchObject({
+      ok: false,
+      detail: expect.stringContaining('ghe.corp.test: '),
+    })
+  })
+
   it('기본 브랜치는 origin/HEAD, 없으면 현재 브랜치다 (시나리오 0-3)', async () => {
     h = await harness({ scenario: WAIT })
     const { repo } = makeRepo(h.root, 'sample', REPO_FILES)

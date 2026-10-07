@@ -255,7 +255,7 @@ export class Relay {
     const project = this.projects.get(projectId)
     if (!project) return
     const env = this.env
-    const gh = (await checkGh(this.ghBin(), env)).check
+    const gh = (await checkGh(this.ghBin(), env, project.repo_path)).check
     const checks: ProjectChecks = {
       origin: await hasRemote(project.repo_path, 'origin', { env }),
       gh: gh.auth,

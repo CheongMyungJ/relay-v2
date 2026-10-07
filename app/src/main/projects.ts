@@ -4,8 +4,9 @@ import path from 'node:path'
 import { agentRuntime } from '../adapters/agent'
 import type { AgentEngine } from '../shared/agent'
 import { ghAuthStatus, ghVersion } from '../adapters/gh'
-import { branches, defaultBranch, hasRemote, repoRoot } from '../adapters/git'
+import { branches, defaultBranch, hasRemote, remoteUrl, repoRoot } from '../adapters/git'
 import { canonicalPath, pathKey, sha256 } from '../adapters/store'
+import { remoteRepo } from '../core/delivery'
 import { MIN_GH_VERSION, ghTooOld, ghVersionReason } from '../core/pr'
 import { projectId } from '../core/records'
 import type { ProjectState } from '../shared/project'
@@ -34,24 +35,31 @@ export interface GhCheck {
   version: string | null
 }
 
-/** gh 점검 표의 줄 (시나리오 0-2, D198). 로그인되어 있고 최소 버전 이상이어야 통과다 */
+/**
+ * gh 점검 표의 줄 (시나리오 0-2, D198). 로그인되어 있고 최소 버전 이상이어야 통과다. 로그인은 PR을 만들 레포의
+ * 호스트(origin, D67)에서만 본다. origin이 없거나 GitHub 레포 주소로 읽을 수 없으면 모든 호스트를 본다
+ */
 export async function checkGh(
   bin: string,
   env: NodeJS.ProcessEnv,
+  repo: string | null,
 ): Promise<{ check: GhCheck; item: CheckItem }> {
-  const auth = await ghAuthStatus(bin, env)
+  const origin = repo ? await remoteUrl(repo, 'origin', { env }) : null
+  const host = origin ? (remoteRepo(origin)?.host ?? null) : null
+  const auth = await ghAuthStatus(bin, env, host)
   const version = await ghVersion(bin, env)
   const old = ghTooOld(version)
+  const where = host ? `${host}, ` : ''
   const item: CheckItem = {
     id: 'gh',
     label: `gh auth status가 성공하고 gh가 ${MIN_GH_VERSION} 이상인가`,
     ok: auth.ok && !old,
     blocking: false,
     detail: !auth.ok
-      ? `${auth.detail}. [PR 생성]을 쓸 수 없습니다`
+      ? `${host ? `${host}: ` : ''}${auth.detail}. [PR 생성]을 쓸 수 없습니다`
       : old && version
         ? `${ghVersionReason(version)}. gh를 올리기 전에는 [PR 생성]을 쓸 수 없습니다`
-        : `로그인됨 (gh ${version ?? '버전 모름'})`,
+        : `로그인됨 (${where}gh ${version ?? '버전 모름'})`,
   }
   return { check: { auth: auth.ok, version }, item }
 }
@@ -126,7 +134,7 @@ async function inspect(
     detail: origin ? '있음' : '없음. [push]와 [PR 생성]을 쓸 수 없습니다',
   })
 
-  const gh = await checkGh(o.ghBin, env)
+  const gh = await checkGh(o.ghBin, env, root)
   checks.push(gh.item)
 
   return {

@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // 가짜 gh (docs/implementation.md 8.2). 가짜 claude처럼 두고, 받은 인자를 파일에 남긴다.
 // - `gh --version`: FAKE_GH_VERSION(기본 2.101.0)을 `gh version <버전> (<날짜>)` 꼴로 찍는다 (D198).
-// - `gh auth status`: 등록 점검(D67)과 다시 점검(D118). FAKE_GH_AUTH가 fail이면 종료 코드 1이다.
+// - `gh auth status [--hostname H]`: 등록 점검(D67)과 다시 점검(D118). FAKE_GH_AUTH가 fail이면 종료 코드 1이다.
+//   FAKE_GH_AUTH_BROKEN=<호스트,…>는 그 호스트의 로그인만 실패한 것이다. 실제 gh처럼 --hostname이 없으면 그중 하나라도
+//   있으면 실패하고, 있으면 그 호스트만 본다(gh 2.100.0에서 확인).
 // - `gh pr list --repo R --head H --state open --json … --limit 1`: 열린 PR을 JSON 배열로 찍는다(7-4).
 //   이 가짜가 만든 PR은 FAKE_GH_RECORD/prs.json에 남아 같은 --repo와 --head면 찾는다.
 //   FAKE_GH_OPEN_PR=<주소>면 어떤 head든 그 주소의 열린 PR이 있는 것으로 답한다.
@@ -198,12 +200,17 @@ if (cmd === '--version') {
 }
 
 if (cmd === 'auth' && sub === 'status') {
-  const ok = env.FAKE_GH_AUTH !== 'fail'
-  record({ type: 'auth' })
-  process.stdout.write(
-    ok ? 'Logged in to github.com (fake)\n' : 'You are not logged into any GitHub hosts.\n',
-  )
-  process.exit(ok ? 0 : 1)
+  const host = opt('--hostname')
+  const broken = (env.FAKE_GH_AUTH_BROKEN ?? '').split(',').filter(Boolean)
+  const failed = host ? broken.filter((b) => b === host) : broken
+  record({ type: 'auth', host: host ?? null })
+  if (env.FAKE_GH_AUTH === 'fail') {
+    process.stdout.write('You are not logged into any GitHub hosts.\n')
+    process.exit(1)
+  }
+  for (const b of failed) process.stdout.write(`${b}\n  X Failed to log in to ${b} (fake)\n`)
+  if (!failed.length) process.stdout.write(`Logged in to ${host ?? 'github.com'} (fake)\n`)
+  process.exit(failed.length ? 1 : 0)
 }
 
 if (cmd === 'pr' && sub === 'list') {
