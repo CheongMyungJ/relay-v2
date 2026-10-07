@@ -68,20 +68,34 @@ function parts(version: string): [number, number, number] | null {
   return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null
 }
 
+/** 버전 a가 b보다 낮은가. 둘 중 하나라도 숫자로 읽을 수 없으면 null */
+function older(a: string, b: string): boolean | null {
+  const v = parts(a)
+  const w = parts(b)
+  if (!v || !w) return null
+  for (let i = 0; i < 3; i++) {
+    if (v[i] !== w[i]) return (v[i] ?? 0) < (w[i] ?? 0)
+  }
+  return false
+}
+
 /**
  * gh가 최소 버전보다 낮은가 (D198). 버전을 모르거나 숫자로 읽을 수 없으면(개발 빌드 등) 낮다고 보지 않는다:
  * 그때는 읽기가 실패하면 gh의 오류를 보인다
  */
 export function ghTooOld(version: string | null | undefined): boolean {
-  const v = version ? parts(version) : null
-  const min = parts(MIN_GH_VERSION)
-  if (!v || !min) return false
-  for (let i = 0; i < 3; i++) {
-    const a = v[i] ?? 0
-    const b = min[i] ?? 0
-    if (a !== b) return a < b
-  }
-  return false
+  return version ? older(version, MIN_GH_VERSION) === true : false
+}
+
+/** `gh auth status --active`가 생긴 버전 (cli/cli v2.57.0 pkg/cmd/auth/status) */
+export const GH_AUTH_ACTIVE_VERSION = '2.57.0'
+
+/**
+ * gh auth status에 --active를 줄 수 있는가 (D67). 버전을 숫자로 읽을 수 없으면 주지 않는다: 모르는 옵션이면 gh가
+ * 실패하므로, 비활성 계정까지 보는 쪽이 낫다
+ */
+export function ghAuthActive(version: string | null | undefined): boolean {
+  return version ? older(version, GH_AUTH_ACTIVE_VERSION) === false : false
 }
 
 /** [PR 생성]을 끄는 이유 (D198) */

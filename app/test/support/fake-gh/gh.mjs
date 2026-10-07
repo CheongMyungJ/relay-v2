@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 // 가짜 gh (docs/implementation.md 8.2). 가짜 claude처럼 두고, 받은 인자를 파일에 남긴다.
 // - `gh --version`: FAKE_GH_VERSION(기본 2.101.0)을 `gh version <버전> (<날짜>)` 꼴로 찍는다 (D198).
-// - `gh auth status`: 등록 점검(D67)과 다시 점검(D118). FAKE_GH_AUTH가 fail이면 종료 코드 1이다.
+// - `gh auth status [--hostname H] [--active]`: 등록 점검(D67)과 다시 점검(D118). FAKE_GH_AUTH가 fail이면 로그인한 호스트가
+//   없다. 로그인한 호스트는 FAKE_GH_AUTH_HOSTS(기본 github.com)와 아래 둘에 든 호스트다. FAKE_GH_AUTH_BROKEN=<호스트,…>는
+//   그 호스트의 활성 계정이, FAKE_GH_AUTH_INACTIVE_BROKEN=<호스트,…>는 쓰지 않는 계정이 로그인에 실패한 것이다. 실제 gh처럼
+//   본 호스트(--hostname이 없으면 모두)의 계정 중 하나라도 실패하면 실패하고, --active면 활성 계정만 본다. 로그인하지 않은
+//   호스트를 --hostname으로 주면 실패하고, --active는 gh 2.57.0 아래면 모르는 옵션이다(gh 2.100.0과 cli/cli 소스에서 확인).
 // - `gh pr list --repo R --head H --state open --json … --limit 1`: 열린 PR을 JSON 배열로 찍는다(7-4).
 //   이 가짜가 만든 PR은 FAKE_GH_RECORD/prs.json에 남아 같은 --repo와 --head면 찾는다.
 //   FAKE_GH_OPEN_PR=<주소>면 어떤 head든 그 주소의 열린 PR이 있는 것으로 답한다.
@@ -45,6 +49,13 @@ const [cmd, sub] = argv
 function opt(name) {
   const i = argv.indexOf(name)
   return i >= 0 ? argv[i + 1] : undefined
+}
+
+/** 버전 a가 b보다 낮은가 (x.y.z) */
+function older(a, b) {
+  const [x, y] = [a, b].map((v) => v.split('.').map(Number))
+  for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] < y[i]
+  return false
 }
 
 const failing = (name) => (env.FAKE_GH_FAIL ?? '').split(',').includes(name)
@@ -198,12 +209,35 @@ if (cmd === '--version') {
 }
 
 if (cmd === 'auth' && sub === 'status') {
-  const ok = env.FAKE_GH_AUTH !== 'fail'
-  record({ type: 'auth' })
-  process.stdout.write(
-    ok ? 'Logged in to github.com (fake)\n' : 'You are not logged into any GitHub hosts.\n',
-  )
-  process.exit(ok ? 0 : 1)
+  const list = (name) => (env[name] ?? '').split(',').filter(Boolean)
+  const host = opt('--hostname')
+  const active = argv.includes('--active')
+  const broken = list('FAKE_GH_AUTH_BROKEN')
+  const inactive = list('FAKE_GH_AUTH_INACTIVE_BROKEN')
+  const inactiveBroken = active ? [] : inactive
+  const hosts = [
+    ...new Set([...(env.FAKE_GH_AUTH_HOSTS ?? 'github.com').split(','), ...broken, ...inactive]),
+  ].filter(Boolean)
+  record({ type: 'auth', host: host ?? null, active })
+  if (active && older(env.FAKE_GH_VERSION ?? '2.101.0', '2.57.0')) {
+    process.stderr.write('unknown flag: --active\n')
+    process.exit(1)
+  }
+  if (env.FAKE_GH_AUTH === 'fail') {
+    process.stdout.write('You are not logged into any GitHub hosts.\n')
+    process.exit(1)
+  }
+  if (host && !hosts.includes(host)) {
+    process.stderr.write(`You are not logged into any accounts on ${host}\n`)
+    process.exit(1)
+  }
+  const seen = host ? [host] : hosts
+  const failed = seen.filter((h) => broken.includes(h) || inactiveBroken.includes(h))
+  for (const b of failed) process.stderr.write(`${b}\n  X Failed to log in to ${b} (fake)\n`)
+  for (const h of seen.filter((h) => !failed.includes(h))) {
+    process.stdout.write(`Logged in to ${h} (fake)\n`)
+  }
+  process.exit(failed.length ? 1 : 0)
 }
 
 if (cmd === 'pr' && sub === 'list') {

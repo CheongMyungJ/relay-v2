@@ -11,6 +11,7 @@ import {
   commitOf,
   fetchBranch,
   hasRemote,
+  remoteUrl,
 } from '../adapters/git'
 import { HookServer } from '../adapters/hooks'
 import { killOrphans } from '../adapters/pty'
@@ -257,9 +258,10 @@ export class Relay {
     const project = this.projects.get(projectId)
     if (!project) return
     const env = this.env
-    const gh = (await checkGh(this.ghBin(), env)).check
+    const origin = await remoteUrl(project.repo_path, 'origin', { env })
+    const gh = (await checkGh(this.ghBin(), env, origin)).check
     const checks: ProjectChecks = {
-      origin: await hasRemote(project.repo_path, 'origin', { env }),
+      origin: origin !== null,
       gh: gh.auth,
       gh_version: gh.version,
       checked_at: this.at(),

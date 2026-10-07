@@ -176,8 +176,23 @@ const URL_SCHEME = /^(?:ssh|git\+ssh|git|http|https|git\+https):\/\//i
 const SCP_LIKE = /^(?:[^@/\\:]+@)?([^/\\:]+):(?!\/\/)(.+)$/
 
 /**
- * origin 주소를 GitHub 레포로 읽는다: 호스트와, 경로의 소유자와 레포 둘. 호스트는 소문자로 바꾸고 www.를
- * 떼고, 레포 이름의 .git을 뗀다. 출처: cli/go-gh internal/git/url.go ParseURL, RepoInfoFromURL
+ * gh가 레포의 호스트를 읽는 규칙: 소문자로 바꾸고 www.를 떼고, *.github.com(ssh.github.com 등)은 github.com,
+ * *.localhost는 localhost, *.<테넌트>.ghe.com은 <테넌트>.ghe.com이다. gh는 --repo의 호스트도 이렇게 바꾸고
+ * 로그인도 이 이름으로 둔다. 포트는 gh도 버린다(URL.Hostname).
+ * 출처: cli/go-gh internal/git/url.go normalizeHostname, cli/cli internal/ghinstance NormalizeHostname
+ */
+function ghHostname(host: string): string {
+  const h = host.toLowerCase().replace(/^www\./, '')
+  if (h.endsWith('.github.com')) return 'github.com'
+  if (h.endsWith('.localhost')) return 'localhost'
+  const tenancy = /(?:^|\.)([^.]+)\.ghe\.com$/.exec(h)
+  if (tenancy) return `${tenancy[1]}.ghe.com`
+  return h
+}
+
+/**
+ * origin 주소를 GitHub 레포로 읽는다: 호스트와, 경로의 소유자와 레포 둘. 호스트는 gh의 규칙(ghHostname)으로
+ * 바꾸고, 레포 이름의 .git을 뗀다. 출처: cli/go-gh internal/git/url.go ParseURL, RepoInfoFromURL
  */
 export function remoteRepo(url: string): RemoteRepo | null {
   const u = url.trim()
@@ -203,7 +218,7 @@ export function remoteRepo(url: string): RemoteRepo | null {
   if (!host || parts.length !== 2 || !parts[0] || !parts[1]) return null
   const repo = parts[1].replace(/\.git$/, '')
   if (!repo) return null
-  return { host: host.toLowerCase().replace(/^www\./, ''), owner: parts[0], repo }
+  return { host: ghHostname(host), owner: parts[0], repo }
 }
 
 /**

@@ -99,6 +99,46 @@ describe('[어댑터] 프로젝트 등록 점검 (시나리오 0, D67)', () => {
     ])
   })
 
+  it('gh 로그인은 origin의 호스트에서만 본다: 다른 호스트의 로그인 실패는 상관없다 (D67)', async () => {
+    const t = await harness({
+      scenario: WAIT,
+      env: { FAKE_GH_AUTH_HOSTS: 'github.com,ghe.corp.test', FAKE_GH_AUTH_BROKEN: 'github.com' },
+    })
+    h = t
+    const { repo } = makeRepo(t.root, 'sample', REPO_FILES)
+    const gh = async () => (await t.relay.inspectProject(repo)).checks.find((c) => c.id === 'gh')
+    // origin이 GitHub 레포 주소가 아니면(로컬 경로) 모든 호스트를 보므로 github.com 때문에 실패한다
+    expect((await gh())?.ok).toBe(false)
+    // 사내 GitHub Enterprise 레포
+    git(repo, 'remote', 'set-url', 'origin', 'https://ghe.corp.test/team/sample.git')
+    expect(await gh()).toMatchObject({ ok: true, detail: expect.stringContaining('ghe.corp.test') })
+    t.env['FAKE_GH_AUTH_BROKEN'] = 'ghe.corp.test'
+    expect(await gh()).toMatchObject({
+      ok: false,
+      detail: expect.stringContaining('ghe.corp.test: '),
+    })
+    // 로그인하지 않은 호스트의 레포: 다른 호스트에 로그인했어도 PR을 만들 수 없다
+    t.env['FAKE_GH_AUTH_BROKEN'] = ''
+    git(repo, 'remote', 'set-url', 'origin', 'https://ghe.other.test/team/sample.git')
+    expect(await gh()).toMatchObject({
+      ok: false,
+      detail: expect.stringContaining('ghe.other.test: '),
+    })
+  })
+
+  it('gh 로그인은 gh가 쓰는 호스트 이름(ssh.github.com은 github.com)과 활성 계정으로 본다 (D67)', async () => {
+    const t = await harness({ scenario: WAIT, env: { FAKE_GH_AUTH_INACTIVE_BROKEN: 'github.com' } })
+    h = t
+    const { repo } = makeRepo(t.root, 'sample', REPO_FILES)
+    const gh = async () => (await t.relay.inspectProject(repo)).checks.find((c) => c.id === 'gh')
+    // 방화벽 뒤에서 443으로 쓰는 SSH 주소. 같은 호스트의 쓰지 않는 계정이 만료되어도 PR은 활성 계정으로 만든다
+    git(repo, 'remote', 'set-url', 'origin', 'ssh://git@ssh.github.com:443/o/sample.git')
+    expect(await gh()).toMatchObject({ ok: true, detail: expect.stringContaining('github.com, ') })
+    // --active가 없는 gh(2.57.0 아래)는 모든 계정을 본다
+    t.env['FAKE_GH_VERSION'] = '2.56.0'
+    expect((await gh())?.ok).toBe(false)
+  })
+
   it('기본 브랜치는 origin/HEAD, 없으면 현재 브랜치다 (시나리오 0-3)', async () => {
     h = await harness({ scenario: WAIT })
     const { repo } = makeRepo(h.root, 'sample', REPO_FILES)

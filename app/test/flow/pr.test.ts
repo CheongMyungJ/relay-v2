@@ -631,7 +631,7 @@ describe('[흐름] PR 진행 (M9, 시나리오 10)', () => {
     expect(inspection.checks.find((c) => c.id === 'gh')).toMatchObject({
       ok: false,
       blocking: false,
-      label: 'gh auth status가 성공하고 gh가 2.48.0 이상인가',
+      label: 'origin 호스트에서 gh auth status가 성공하고 gh가 2.48.0 이상인가',
     })
     const projectId = await register(h, repo)
     const project = JSON.parse(

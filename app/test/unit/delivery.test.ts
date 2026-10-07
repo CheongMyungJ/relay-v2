@@ -226,6 +226,8 @@ describe('비교 URL (7-4)', () => {
       'ssh://git@github.com:22/o/r.git',
       'git+ssh://git@github.com/o/r.git',
       'git://github.com/o/r.git',
+      // gh는 *.github.com을 github.com으로 본다: 방화벽 뒤에서 443으로 쓰는 ssh.github.com (D67)
+      'ssh://git@ssh.github.com:443/o/r.git',
     ]) {
       expect(remoteRepo(url), url).toEqual(repo)
     }
@@ -234,6 +236,11 @@ describe('비교 URL (7-4)', () => {
       owner: 'team',
       repo: 'app',
     })
+    // GHE.com 테넌트의 하위 호스트는 테넌트 호스트다 (cli/cli ghinstance NormalizeHostname)
+    expect(remoteRepo('https://api.acme.ghe.com/team/app.git')?.host).toBe('acme.ghe.com')
+    expect(remoteRepo('git@acme.ghe.com:team/app.git')?.host).toBe('acme.ghe.com')
+    // 이름에 github가 든 사내 서버는 그대로다
+    expect(remoteRepo('git@github.corp.net:team/app.git')?.host).toBe('github.corp.net')
   })
 
   it('로컬 경로와 소유자/레포 꼴이 아닌 주소는 읽지 않는다', () => {
