@@ -176,6 +176,13 @@ origin이 GitHub이고 gh에 로그인돼 있으면, 의도를 승인할 때 `re
 - Codex 질문은 앱 질문창에 뜨고, 답을 보낼 때까지 기다립니다.
 - 자세한 차이는 [docs/engines.md](docs/engines.md)에 있습니다.
 
+### 서브모듈이 있는 레포
+
+relay는 Work의 worktree에 서브모듈을 받지 않고, 서브모듈 안의 변경을 커밋하거나 전달하지 않습니다. 빌드나 테스트에 필요하면 에이전트가 받습니다.
+
+- **서브모듈도 고쳐야 하면:** 서브모듈 레포를 별도 프로젝트로 등록해 먼저 고치고 PR을 만듭니다. 그다음 메인 레포의 Work에서 서브모듈이 가리키는 커밋을 바꿉니다. 서브모듈 PR을 먼저 머지합니다.
+- 순서와 주의할 점은 [docs/submodules.md](docs/submodules.md)에 있습니다.
+
 ## 안전 장치
 
 relay는 에이전트를 권한 확인 없이 실행합니다(Claude Code의 `--dangerously-skip-permissions`). 단계 중간에 확인 창이 흐름을 끊지 않게 하려는 것입니다. 대신 다음으로 지킵니다.
@@ -244,6 +251,7 @@ gh가 없거나, 2.48.0보다 낮거나, 로그인돼 있지 않거나, origin �
 
 - [설계 문서](docs/design.md): 왜 이렇게 만들었는지, 결정(D 번호)과 그 이유
 - [엔진 문서](docs/engines.md): Claude Code와 Codex의 차이
+- [서브모듈이 있는 레포](docs/submodules.md): 서브모듈도 함께 고치는 순서
 - [사용성 평가](docs/eval.md): 맨 Claude Code CLI와 견준 평가의 방법과 결과
 - 개발에 참여하려면 [CONTRIBUTING.md](CONTRIBUTING.md)를 보세요.
 
