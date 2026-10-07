@@ -1,6 +1,7 @@
 // Work 정리 (시나리오 8, D16): [Work 정리]를 누르기 전의 확인 요약과 기본 선택, 정리할 수 있는 Work,
 // 사람이 고른 것으로 지울 브랜치와 --force를 정한다. git에서 읽는 사실(커밋 안 된 변경, 잠금 파일,
-// 작업 브랜치가 원격이나 기준 브랜치에 있는지, 되감기 백업 브랜치)과 살아 있는 세션은 main이 넘긴다.
+// 체크아웃된 서브모듈, 작업 브랜치가 원격이나 기준 브랜치에 있는지, 되감기 백업 브랜치)과 살아 있는 세션은
+// main이 넘긴다.
 import type { CleanExpect, CleanInput, CleanPreview } from '../shared/views'
 import type { WorkState } from '../shared/work'
 import { sameChanges } from './delivery'
@@ -26,6 +27,8 @@ export interface CleanFacts {
   uncommitted: readonly string[]
   /** worktree의 git 폴더에 남은 잠금 파일 */
   locks: readonly string[]
+  /** worktree에 체크아웃된 서브모듈의 경로 (D382) */
+  submodules: readonly string[]
   /** 이 앱에서 살아 있는 세션 */
   live: number
   /**
@@ -50,9 +53,10 @@ export interface CleanFacts {
 
 /**
  * 확인 요약 (시나리오 8-1). 커밋 안 된 변경은 백업 없이 지워짐을, 살아 있는 세션은 강제 종료함을,
- * git 잠금 파일은 worktree와 함께 지움을 사람이 명시적으로 확인해야 한다. 작업 브랜치는 기본으로 두고
- * push됐거나 머지됐을 때만 삭제를 제안한다. 머지로 완료한 Work는 작업 브랜치 삭제가 기본으로 체크되고 origin의
- * 브랜치 삭제도 고를 수 있다(D178, 기본은 끔). 되감기 백업 브랜치의 "함께 삭제"는 기본으로 체크한다(화면).
+ * git 잠금 파일은 worktree와 함께 지움을, 체크아웃된 서브모듈은 그 안의 작업도 함께 지움을(D382) 사람이 명시적으로
+ * 확인해야 한다. 작업 브랜치는 기본으로 두고 push됐거나 머지됐을 때만 삭제를 제안한다. 머지로 완료한 Work는
+ * 작업 브랜치 삭제가 기본으로 체크되고 origin의 브랜치 삭제도 고를 수 있다(D178, 기본은 끔). 되감기 백업 브랜치의
+ * "함께 삭제"는 기본으로 체크한다(화면).
  */
 export function cleanPreview(facts: CleanFacts): CleanPreview {
   const confirm: string[] = []
@@ -62,12 +66,18 @@ export function cleanPreview(facts: CleanFacts): CleanPreview {
   if (facts.locks.length > 0) {
     confirm.push(`git 잠금 파일 ${facts.locks.length}개가 남아 있습니다. worktree와 함께 지웁니다`)
   }
+  if (facts.submodules.length > 0) {
+    confirm.push(
+      `체크아웃된 서브모듈 ${facts.submodules.length}개(${facts.submodules.join(', ')}) 안의 커밋 안 된 변경과 push 안 한 커밋도 함께 지웁니다`,
+    )
+  }
   const b = facts.branch
   const lost = b.pushed || b.merged ? [] : [...(b.lost ?? [])]
   return {
     worktree: facts.worktree,
     uncommitted: [...facts.uncommitted],
     locks: [...facts.locks],
+    submodules: [...facts.submodules],
     live: facts.live,
     branch: {
       name: b.name,
@@ -88,6 +98,7 @@ export function cleanPreview(facts: CleanFacts): CleanPreview {
       backups: [...facts.backups],
       remote: facts.remote?.exists === true,
       lost: lost.map((c) => c.sha),
+      submodules: [...facts.submodules],
     },
   }
 }
@@ -99,7 +110,8 @@ function sameExpect(a: CleanExpect, b: CleanExpect): boolean {
     sameChanges(a.uncommitted, b.uncommitted) &&
     sameChanges(a.locks, b.locks) &&
     sameChanges(a.backups, b.backups) &&
-    sameChanges(a.lost ?? [], b.lost ?? [])
+    sameChanges(a.lost ?? [], b.lost ?? []) &&
+    sameChanges(a.submodules ?? [], b.submodules ?? [])
   )
 }
 
@@ -109,7 +121,8 @@ export type CleanPlan =
 
 /**
  * [정리]를 누른 때 (시나리오 8-2). 확인한 뒤 사실이 바뀌었으면 받지 않는다. 확인이 필요한 것을 확인하지
- * 않았으면 받지 않는다. 커밋 안 된 변경이나 잠금 파일이 있으면 git worktree remove --force로 지운다.
+ * 않았으면 받지 않는다. 커밋 안 된 변경이나 잠금 파일, 체크아웃된 서브모듈(D382)이 있으면 git worktree remove
+ * --force로 지운다. git은 체크아웃된 서브모듈이 있으면 --force 없이 지우지 않는다.
  * 작업 브랜치는 삭제를 제안한 때(push됐거나 머지됨)만 지운다.
  */
 export function planClean(preview: CleanPreview, input: CleanInput): CleanPlan {
@@ -131,7 +144,8 @@ export function planClean(preview: CleanPreview, input: CleanInput): CleanPlan {
   }
   return {
     ok: true,
-    force: preview.uncommitted.length > 0 || preview.locks.length > 0,
+    force:
+      preview.uncommitted.length > 0 || preview.locks.length > 0 || preview.submodules.length > 0,
     deleteBranches: [
       ...(input.deleteBranch ? [preview.branch.name] : []),
       ...(input.deleteBackups ? preview.backups : []),

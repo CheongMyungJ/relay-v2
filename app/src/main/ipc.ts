@@ -110,6 +110,7 @@ function cleanInput(v: unknown): CleanInput {
     backups: texts(x['backups']),
     remote: flag(x['remote']),
     lost: x['lost'] === undefined ? [] : texts(x['lost']),
+    submodules: x['submodules'] === undefined ? [] : texts(x['submodules']),
   }
   return {
     deleteBranch: flag(o['deleteBranch']),

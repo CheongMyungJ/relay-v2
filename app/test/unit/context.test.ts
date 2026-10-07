@@ -1023,3 +1023,26 @@ describe('context.md: 설계 (D350, D358, D365, D374)', () => {
     expect(entry).toContain(`- t-03 verify (리뷰와 검증): ${verification}`)
   })
 })
+
+describe('context.md: 서브모듈 (D383)', () => {
+  it('서브모듈이 없으면 절이 없다', () => {
+    expect(sections(buildContext(input('fix'))).has('서브모듈')).toBe(false)
+    expect(sections(buildContext(input('fix', { submodules: [] }))).has('서브모듈')).toBe(false)
+  })
+
+  it('서브모듈이 있으면 받는 법과 하지 않을 것을 모든 단계에 넣는다', () => {
+    for (const node of ['intake', 'fix', 'verify'] as const) {
+      const md = buildContext(input(node, { submodules: ['lib', 'vendor/ui'] }))
+      const text = section(md, '서브모듈')
+      expect(text).toContain('이 레포에는 서브모듈이 있다: `lib`, `vendor/ui`.')
+      expect(text).toContain('`git submodule update --init --recursive`로 받는다')
+      expect(text).toContain('우회하지 않는다')
+      expect(text).toContain('건너뛴 테스트를 통과로 보지 않는다')
+      expect(text).toContain('서브모듈 안의 파일은 고치지 않는다')
+      expect(text).toContain('`git submodule update --recursive`로 맞춘다')
+      // 앱이 정하는 절 다음, 선택 가능한 다음 단계 앞이다
+      const titles = [...sections(md).keys()]
+      expect(titles.indexOf('서브모듈')).toBe(titles.indexOf('선택 가능한 다음 단계') - 1)
+    }
+  })
+})

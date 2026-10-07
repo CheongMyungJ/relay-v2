@@ -10,7 +10,15 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { CleanPreview } from '../../src/shared/views'
 import type { LifecycleEvent, WorkState } from '../../src/shared/work'
 import { drive } from '../support/driver'
-import { git, harness, makeRepo, register, settle, type Harness } from '../support/harness'
+import {
+  addSubmodule,
+  git,
+  harness,
+  makeRepo,
+  register,
+  settle,
+  type Harness,
+} from '../support/harness'
 import {
   FIXED_FILES,
   REPO_FILES,
@@ -150,6 +158,7 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
       worktree: true,
       uncommitted: [],
       locks: [],
+      submodules: [],
       live: 0,
       branch: {
         name: s.branch,
@@ -163,7 +172,15 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
       merged: false,
       remote: null,
       confirm: [],
-      expect: { uncommitted: [], locks: [], live: 0, backups: [backup], remote: false, lost: [] },
+      expect: {
+        uncommitted: [],
+        locks: [],
+        live: 0,
+        backups: [backup],
+        remote: false,
+        lost: [],
+        submodules: [],
+      },
     })
     expect(s.h.ui.works.get(s.key)?.actions.clean).toBe(true)
     expect(
@@ -261,6 +278,38 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
     // 원격의 브랜치는 그대로다
     expect(git(s.remote, 'branch', '--list', s.branch)).toContain(s.branch)
     expect(work(s).cleaned?.deleted_branches).toEqual([s.branch])
+  })
+
+  it('체크아웃된 서브모듈이 있으면 그 안의 작업도 지움을 확인해야 지운다(--force) (8-1, D382)', async () => {
+    const s = await setup(scenario())
+    await drive(s.h.relay, s.h.ui, s.key, {
+      pauseAt: (t) => t.node === 'verify' && t.status === 'awaiting_approval',
+    })
+    expect(await s.h.relay.deliver(s.key, { choice: 'push', uncommitted: null })).toEqual({
+      ok: true,
+    })
+    await settle(s.h, s.key)
+    // 완료한 뒤 worktree에서 서브모듈을 더했다 (체크아웃된 채다)
+    addSubmodule(s.tree, path.join(s.h.root, 'lib-src'), 'lib', { 'lib.txt': 'lib\n' })
+
+    const summary = await preview(s)
+    const confirm =
+      '체크아웃된 서브모듈 1개(lib) 안의 커밋 안 된 변경과 push 안 한 커밋도 함께 지웁니다'
+    expect(summary).toMatchObject({ uncommitted: [], submodules: ['lib'], confirm: [confirm] })
+    const input = {
+      deleteBranch: false,
+      deleteBackups: true,
+      confirmed: false,
+      expect: summary.expect,
+    }
+    expect(await s.h.relay.clean(s.key, input)).toEqual({
+      ok: false,
+      error: `확인이 필요함: ${confirm}`,
+    })
+    expect(await s.h.relay.clean(s.key, { ...input, confirmed: true })).toEqual({ ok: true })
+    await settle(s.h, s.key)
+    expect(fs.existsSync(s.tree)).toBe(false)
+    expect(work(s)).toMatchObject({ status: 'archived', cleaned: { forced: true } })
   })
 
   it('포기한 Work의 커밋 안 된 변경은 확인해야 지운다(--force). push나 머지 전의 작업 브랜치는 지우지 않는다 (8-1)', async () => {

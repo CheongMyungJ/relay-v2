@@ -5,7 +5,15 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { sha256, pathKey } from '../../src/adapters/store'
 import type { CheckId, ProjectInspection } from '../../src/shared/views'
 import type { WorkState } from '../../src/shared/work'
-import { git, harness, makeRepo, register, settle, type Harness } from '../support/harness'
+import {
+  addSubmodule,
+  git,
+  harness,
+  makeRepo,
+  register,
+  settle,
+  type Harness,
+} from '../support/harness'
 import { REPO_FILES } from '../support/scenarios'
 
 let h: Harness | undefined
@@ -84,6 +92,16 @@ describe('[어댑터] 프로젝트 등록 점검 (시나리오 0, D67)', () => {
     const { repo } = makeRepo(h.root, 'sample', REPO_FILES)
     const i = await h.relay.inspectProject(repo)
     expect(checks(i).claude).toEqual([false, true])
+  })
+
+  it('서브모듈이 있으면 relay가 다루지 않는 것을 경고만 하고 등록한다 (D382)', async () => {
+    h = await harness({ scenario: WAIT })
+    const { repo } = makeRepo(h.root, 'sample', REPO_FILES)
+    addSubmodule(repo, path.join(h.root, 'lib-src'), 'lib', { 'lib.txt': 'lib\n' })
+    const i = await h.relay.inspectProject(repo)
+    expect(checks(i).submodules).toEqual([false, false])
+    expect(i.checks.find((c) => c.id === 'submodules')?.detail).toContain('서브모듈 안의 변경')
+    expect(i.canRegister).toBe(true)
   })
 
   it('origin이 없거나 gh가 로그인되지 않았으면 경고만 하고 등록한다', async () => {

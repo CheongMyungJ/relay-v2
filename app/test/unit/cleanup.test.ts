@@ -12,6 +12,7 @@ function facts(patch: Partial<CleanFacts> = {}): CleanFacts {
     worktree: true,
     uncommitted: [],
     locks: [],
+    submodules: [],
     live: 0,
     branch: { name: BRANCH, exists: true, pushed: false, merged: false, lost: null },
     backups: [],
@@ -104,6 +105,19 @@ describe('정리 전 확인 요약 (8-1)', () => {
     })
     const live = cleanPreview(facts({ live: 2 }))
     expect(planClean(live, input(live, { confirmed: true }))).toMatchObject({ force: false })
+  })
+
+  it('체크아웃된 서브모듈은 그 안의 작업도 지움을 확인해야 하고, 변경이 없어도 --force로 지운다 (D382)', () => {
+    const p = cleanPreview(facts({ submodules: ['lib', 'vendor/ui'] }))
+    expect(p.submodules).toEqual(['lib', 'vendor/ui'])
+    expect(p.confirm).toEqual([
+      '체크아웃된 서브모듈 2개(lib, vendor/ui) 안의 커밋 안 된 변경과 push 안 한 커밋도 함께 지웁니다',
+    ])
+    expect(planClean(p, input(p)).ok).toBe(false)
+    expect(planClean(p, input(p, { confirmed: true }))).toMatchObject({ ok: true, force: true })
+    // 확인한 뒤 서브모듈을 체크아웃했으면 받지 않는다
+    const none = cleanPreview(facts())
+    expect(planClean(p, input(none, { confirmed: true }))).toMatchObject({ ok: false })
   })
 
   it('작업 브랜치는 push됐거나 머지됐을 때만 삭제를 제안한다 (8-2)', () => {

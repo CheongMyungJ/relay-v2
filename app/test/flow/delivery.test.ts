@@ -6,10 +6,21 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { taskDirName } from '../../src/core/machine'
 import type { DeliverInput, WorkView } from '../../src/shared/views'
 import type { LifecycleEvent, WorkState } from '../../src/shared/work'
 import { drive } from '../support/driver'
-import { git, harness, makeRepo, register, settle, type Harness } from '../support/harness'
+import {
+  addSubmodule,
+  checkoutSubmodules,
+  git,
+  harness,
+  makeRepo,
+  register,
+  settle,
+  writeFiles,
+  type Harness,
+} from '../support/harness'
 import {
   REPO_FILES,
   REQUEST,
@@ -51,12 +62,19 @@ interface Options {
   env?: Record<string, string>
   /** origin 주소를 GitHub 주소로 둔다 */
   github?: boolean
+  /** 레포에 서브모듈 lib와 ui를 더한다 (D382) */
+  submodule?: boolean
 }
 
 async function setup(s: Scenario, o: Options = {}): Promise<Setup> {
   h = await harness({ scenario: s, config: o.config ?? {}, env: o.env ?? {} })
   const hh = h
   const { repo, remote } = makeRepo(hh.root, 'sample', REPO_FILES)
+  if (o.submodule) {
+    addSubmodule(repo, path.join(hh.root, 'lib-src'), 'lib', { 'lib.txt': 'lib\n' })
+    addSubmodule(repo, path.join(hh.root, 'ui-src'), 'ui', { 'ui.txt': 'ui\n' })
+    git(repo, 'push', '-q', 'origin', 'main')
+  }
   if (o.github) {
     git(repo, 'remote', 'set-url', 'origin', GITHUB)
     git(repo, 'remote', 'set-url', '--push', 'origin', remote)
@@ -336,6 +354,43 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
       status: 'completed',
       delivery: { choice: 'push', status: 'succeeded', stashes: [stash] },
     })
+  })
+
+  it('서브모듈 안의 변경은 막지 않고 Work 완료 화면에 알린다. [변경 버리고 진행]은 가리키는 커밋을 되돌리고 전달한다 (7-5, D382, D384)', async () => {
+    const s = await setup(scenario(), { submodule: true })
+    await toVerify(s)
+    const fixed = git(s.tree, 'rev-parse', 'HEAD')
+    // task마다 context.md에 서브모듈 안내가 들어간다 (D383)
+    for (const t of work(s).tasks) {
+      const context = read(path.join(s.dir, 'tasks', taskDirName(t), 'context.md'))
+      expect(context, t.id).toContain('## 서브모듈')
+      expect(context, t.id).toContain('이 레포에는 서브모듈이 있다: `lib`, `ui`.')
+    }
+    // 사람이나 에이전트가 서브모듈을 받아 lib 안에서 커밋하고, ui 안에는 커밋하지 않은 변경을 남긴다
+    checkoutSubmodules(s.tree)
+    const lib = path.join(s.tree, 'lib')
+    const original = git(lib, 'rev-parse', 'HEAD')
+    writeFiles(lib, { 'lib.txt': '바뀜\n' })
+    git(lib, 'commit', '-q', '-am', '서브모듈 커밋')
+    writeFiles(path.join(s.tree, 'ui'), { 'ui.txt': '바뀜\n', 'scratch.txt': '메모\n' })
+    const verify = work(s).tasks.at(-1)?.id ?? ''
+    const shown = (await s.h.relay.review(s.key, verify))?.emphasis ?? []
+    expect(shown.find((e) => e.kind === 'submodule_changes')?.lines).toEqual(['ui'])
+    expect(shown.find((e) => e.kind === 'uncommitted')?.lines).toEqual([' M lib'])
+
+    const blocked = await deliver(s, 'push')
+    expect(!blocked.ok && blocked.uncommitted).toEqual([' M lib'])
+    expect(await deliver(s, 'push', { action: 'discard', expect: [' M lib'] })).toEqual({
+      ok: true,
+    })
+    await settle(s.h, s.key)
+    expect(git(s.remote, 'rev-parse', `refs/heads/${s.branch}`)).toBe(fixed)
+    expect(git(s.repo, 'stash', 'list')).toBe('')
+    // lib는 원래 커밋으로 돌아가고 ui 안의 변경만 남는다
+    expect(git(lib, 'rev-parse', 'HEAD')).toBe(original)
+    expect(git(s.tree, 'status', '--porcelain')).toBe('M ui')
+    expect(work(s)).toMatchObject({ status: 'completed', delivery: { status: 'succeeded' } })
+    expect(work(s).delivery?.stashes ?? []).toEqual([])
   })
 
   it('[커밋하고 진행]은 확인한 파일을 앱이 커밋한 뒤 전달한다 (7-5)', async () => {

@@ -49,6 +49,7 @@ import {
 } from '../adapters/gh'
 import {
   changedPaths,
+  checkedOutSubmodules,
   commitAll,
   commitInfo,
   commitsOnlyIn,
@@ -57,6 +58,8 @@ import {
   createBackup,
   currentBranch,
   deleteBranches,
+  dirtySubmodules,
+  discardChanges,
   deleteRemoteBranch,
   diffFrom,
   hasCommit,
@@ -73,9 +76,9 @@ import {
   removeWorktree,
   repoRoot,
   resetHard,
-  stashAll,
   stashEntries,
   statusLines,
+  submodulePaths,
   treeOf,
   worktreeTree,
 } from '../adapters/git'
@@ -1381,6 +1384,8 @@ export class WorkRunner {
       carried: await this.carriedInput(task),
       ...(task.node === 'verify' ? { delivery: closingButtons(this.checks()) } : {}),
       respond: await this.respondInput(task),
+      // 서브모듈을 읽지 못하면 안내 없이 간다 (D383)
+      submodules: await submodulePaths(this.worktree, { env: this.ctx.env }).catch(() => []),
     })
   }
 
@@ -2620,8 +2625,14 @@ export class WorkRunner {
     try {
       // 만든 stash나 커밋은 push로 넘어가며 진행 중 작업 기록에 적는다. 뒤 단계가 실패해도 결과에 남는다 (7-5)
       if (e.uncommitted === 'discard') {
-        const stash = await stashAll(this.worktree, e.message ?? '', { env })
-        await this.feed({ type: 'delivery.stage', at: this.ctx.at(), stage: 'push', stash })
+        // 서브모듈이 가리키는 커밋이 바뀐 것은 HEAD로 되돌리고 나머지는 stash한다 (D384)
+        const stash = await discardChanges(this.worktree, e.message ?? '', { env })
+        await this.feed({
+          type: 'delivery.stage',
+          at: this.ctx.at(),
+          stage: 'push',
+          ...(stash ? { stash } : {}),
+        })
       }
       if (e.uncommitted === 'commit') {
         const commit = await commitAll(this.worktree, e.message ?? '', { env })
@@ -3011,6 +3022,7 @@ export class WorkRunner {
       worktree,
       uncommitted: worktree ? await statusLines(this.worktree, opts) : [],
       locks: worktree ? await lockFiles(this.worktree, opts) : [],
+      submodules: worktree ? await checkedOutSubmodules(this.worktree, opts) : [],
       live: this.live.size + (this.cleanup?.status === 'live' ? 1 : 0),
       branch: {
         name,
@@ -3459,6 +3471,8 @@ export class WorkRunner {
     const latest = range?.to === null
     const cwd = this.work.status === 'archived' ? this.project.repo_path : this.worktree
     const uncommitted = latest ? await statusLines(this.worktree, { env }).catch(() => []) : []
+    // 서브모듈 안의 변경은 커밋 안 된 변경에 들지 않고 전달되지 않아 따로 알린다 (D384)
+    const submodules = latest ? await dirtySubmodules(this.worktree, { env }).catch(() => []) : []
     const diffTo = (from: string) =>
       diffFrom(cwd, from, range?.to ?? null, { env }).catch(
         (e: unknown) => `변경을 읽지 못함: ${message(e)}`,
@@ -3521,6 +3535,7 @@ export class WorkRunner {
         handoff: header,
         errors: check.errors,
         uncommitted,
+        submodules,
         live: this.live.has(task.id),
         ...(respond ? { tests: respond.tests, failure: respond.view.failure } : {}),
       }),

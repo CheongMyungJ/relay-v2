@@ -163,9 +163,156 @@ export async function changedPaths(
   return changes
 }
 
-/** 커밋 안 된 변경 (git status --porcelain). 추적하지 않는 파일도 넣는다 */
+/**
+ * 커밋 안 된 변경 (git status --porcelain). 추적하지 않는 파일도 넣는다. 서브모듈 안의 수정과 추적하지 않는 파일은
+ * 넣지 않고(--ignore-submodules=dirty), 서브모듈이 가리키는 커밋이 바뀐 것만 넣는다(git 문서 git-status) (D382)
+ */
 export async function statusLines(dir: string, opts?: GitOptions): Promise<string[]> {
-  return lines(await git(dir, ['status', '--porcelain=v1', '--untracked-files=all'], opts))
+  return lines(
+    await git(
+      dir,
+      ['status', '--porcelain=v1', '--untracked-files=all', '--ignore-submodules=dirty'],
+      opts,
+    ),
+  )
+}
+
+interface SubmoduleStatus {
+  path: string
+  /** porcelain v2의 서브모듈 칸: S<c><m><u>. c는 가리키는 커밋, m은 안의 수정, u는 안의 새 파일 (git 문서 git-status) */
+  sub: string
+}
+
+/**
+ * 커밋 안 된 변경 가운데 서브모듈 항목 (git status --porcelain=v2 -z). 셋째 칸이 S로 시작하는 항목이다. 이름을 바꾼
+ * 항목(2)은 칸이 하나 더 있고 원래 이름이 다음 NUL 뒤에 붙는다 (git 문서 git-status)
+ */
+async function submoduleStatus(
+  dir: string,
+  ignore: 'dirty' | 'none',
+  opts?: GitOptions,
+): Promise<SubmoduleStatus[]> {
+  const out = await git(
+    dir,
+    ['status', '--porcelain=v2', '-z', '--untracked-files=normal', `--ignore-submodules=${ignore}`],
+    opts,
+  )
+  const parts = out.split('\0')
+  const found: SubmoduleStatus[] = []
+  for (let i = 0; i < parts.length; i++) {
+    const fields = (parts[i] ?? '').split(' ')
+    const kind = fields[0]
+    if (kind !== '1' && kind !== '2') continue
+    const sub = fields[2] ?? ''
+    const file = fields.slice(kind === '1' ? 8 : 9).join(' ')
+    if (kind === '2') i++
+    if (sub.startsWith('S')) found.push({ path: file, sub })
+  }
+  return found
+}
+
+/**
+ * 안에 커밋 안 된 수정이나 새 파일이 있는 서브모듈의 경로 (D384). relay는 이 변경을 커밋하거나 전달하지 않아 승인 화면에
+ * 알린다. `.gitmodules`가 없으면 git을 부르지 않는다
+ */
+export async function dirtySubmodules(dir: string, opts?: GitOptions): Promise<string[]> {
+  if (!(await exists(path.join(dir, '.gitmodules')))) return []
+  return (await submoduleStatus(dir, 'none', opts))
+    .filter((s) => s.sub[2] === 'M' || s.sub[3] === 'U')
+    .map((s) => s.path)
+}
+
+/**
+ * [변경 버리고 진행] (7-5, D384): 서브모듈이 가리키는 커밋이 바뀐 것은 git stash가 넣지 못하므로 HEAD로 되돌리고
+ * (git reset -- <경로> 뒤 git submodule update --checkout, 체크아웃 안 된 서브모듈은 index만), 나머지는 stash에 넣는다.
+ * 서브모듈 안의 커밋은 서브모듈 저장소에 남는다. 넣을 것이 없으면 stash 없이 null이다
+ */
+export async function discardChanges(
+  dir: string,
+  message: string,
+  opts?: GitOptions,
+): Promise<string | null> {
+  const pointers = (await submoduleStatus(dir, 'dirty', opts)).map((s) => s.path)
+  if (pointers.length > 0) {
+    await git(dir, ['reset', '-q', '--', ...pointers], opts)
+    // .gitmodules에 없는 경로(중첩한 레포)는 되돌리지 못한다. 남으면 아래 stash가 실패해 알린다
+    await tryGit(dir, ['submodule', 'update', '--checkout', '-q', '--', ...pointers], {
+      ...opts,
+      timeoutMs: opts?.timeoutMs ?? 120_000,
+    })
+  }
+  if ((await statusLines(dir, opts)).length === 0) return null
+  return stashAll(dir, message, opts)
+}
+
+async function exists(file: string): Promise<boolean> {
+  try {
+    await fsp.lstat(file)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 서브모듈의 이름과 경로 (D383, D384). `.gitmodules`의 경로 가운데 index에서 gitlink(모드 160000)인 것이다.
+ * `.gitmodules`가 없으면 git을 부르지 않는다. `.gitmodules` 없이 더한 중첩 레포는 서브모듈로 보지 않는다
+ */
+async function submoduleEntries(
+  dir: string,
+  opts?: GitOptions,
+): Promise<{ name: string; path: string }[]> {
+  const file = path.join(dir, '.gitmodules')
+  if (!(await exists(file))) return []
+  const out = await tryGit(
+    dir,
+    ['config', '-z', '-f', file, '--get-regexp', '^submodule\\..*\\.path$'],
+    opts,
+  )
+  if (!out) return []
+  const listed = new Map<string, string>()
+  for (const record of out.split('\0')) {
+    const nl = record.indexOf('\n')
+    const name = /^submodule\.(.+)\.path$/.exec(record.slice(0, nl))?.[1]
+    const value = record.slice(nl + 1)
+    if (nl > 0 && name && value) listed.set(value, name)
+  }
+  if (listed.size === 0) return []
+  const staged = await git(dir, ['ls-files', '--stage', '-z', '--', ...listed.keys()], opts)
+  const found = new Map<string, string>()
+  for (const entry of staged.split('\0')) {
+    const tab = entry.indexOf('\t')
+    const p = entry.slice(tab + 1)
+    const name = listed.get(p)
+    if (tab >= 0 && entry.startsWith('160000 ') && name) found.set(p, name)
+  }
+  return [...found].sort(([a], [b]) => (a < b ? -1 : 1)).map(([p, name]) => ({ name, path: p }))
+}
+
+/** 서브모듈의 경로 (D383). 체크아웃했는지는 보지 않는다 */
+export async function submodulePaths(dir: string, opts?: GitOptions): Promise<string[]> {
+  return (await submoduleEntries(dir, opts)).map((e) => e.path)
+}
+
+/**
+ * 받아 둔 서브모듈 (D382, D384): 폴더에 .git이 있거나, 이 worktree의 git 폴더 아래 modules/<이름>에 서브모듈 저장소가
+ * 있는 것. git은 worktree의 git 폴더에 modules가 있으면(deinit한 뒤에도) --force 없이 worktree를 지우지 않는다
+ * (git builtin/worktree.c validate_no_submodules, 실행). 이름이 맞지 않아도 modules가 있으면 그 경로를 넣는다
+ */
+export async function checkedOutSubmodules(dir: string, opts?: GitOptions): Promise<string[]> {
+  const gitDir = await tryGit(dir, ['rev-parse', '--absolute-git-dir'], opts)
+  const modules = gitDir ? path.join(gitDir, 'modules') : null
+  const found: string[] = []
+  for (const e of await submoduleEntries(dir, opts)) {
+    if (
+      (await exists(path.join(dir, e.path, '.git'))) ||
+      (modules !== null && (await exists(path.join(modules, e.name))))
+    ) {
+      found.push(e.path)
+    }
+  }
+  if (found.length === 0 && modules !== null && (await exists(modules))) found.push(modules)
+  return found
 }
 
 /** from에서 닿지 않고 to에서 닿는 커밋 수 (git rev-list --count from..to). 되감기의 미리 보기 (D82) */
@@ -319,6 +466,7 @@ export async function refCommit(
  * 커밋 안 된 변경을 stash에 넣는다 (7-5의 [변경 버리고 진행], git stash push -u). 추적하지 않는 파일도 넣고
  * 작업 트리에서 지운다. 무시하는 파일은 남는다. refs/stash는 레포의 모든 worktree가 함께 써서 메인 체크아웃의
  * git stash list에 보인다(git 문서 git-stash, git-worktree REFS). 만든 stash 커밋을 돌려준다.
+ * 서브모듈이 가리키는 커밋이 바뀐 것은 넣지 않고 그대로 둔다(실행). 그것만 있으면 넣을 것이 없어 실패한다 (D382)
  */
 export async function stashAll(dir: string, message: string, opts?: GitOptions): Promise<string> {
   const before = await refCommit(dir, 'refs/stash', opts)
@@ -393,9 +541,9 @@ export async function lockFiles(dir: string, opts?: GitOptions): Promise<string[
 }
 
 /**
- * worktree를 지운다 (시나리오 8, git worktree remove). 수정하거나 추적하지 않는 파일이 있으면 git이 거부하므로
- * 사람이 확인한 뒤 force(--force)로 지운다. 무시하는 파일은 함께 지워지고, worktree의 git 폴더(잠금 파일 포함)도
- * 지워진다(git 문서 git-worktree, 실행). 메인 체크아웃(repo)에서 부른다.
+ * worktree를 지운다 (시나리오 8, git worktree remove). 수정하거나 추적하지 않는 파일, 체크아웃된 서브모듈(D382)이
+ * 있으면 git이 거부하므로 사람이 확인한 뒤 force(--force)로 지운다. 무시하는 파일은 함께 지워지고, worktree의
+ * git 폴더(잠금 파일 포함)도 지워진다(git 문서 git-worktree, 실행). 메인 체크아웃(repo)에서 부른다.
  */
 export async function removeWorktree(
   repo: string,
