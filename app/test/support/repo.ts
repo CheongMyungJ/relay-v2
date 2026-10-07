@@ -45,3 +45,40 @@ export function makeRepo(root: string, name: string, files: Record<string, strin
   git(repo, 'push', '-q', '-u', 'origin', 'main')
   return { repo, remote }
 }
+
+/** 로컬 경로의 서브모듈을 받게 한다. git 2.38.1부터 file 전송은 기본으로 막혀 있다 */
+const FILE_PROTOCOL = ['-c', 'protocol.file.allow=always']
+
+/**
+ * 서브모듈로 쓸 레포를 source에 만들고 repo의 dir에 서브모듈로 더해 커밋한다 (D382). repo는 메인 체크아웃이나
+ * worktree다. 더한 서브모듈은 체크아웃된 채다
+ */
+export function addSubmodule(
+  repo: string,
+  source: string,
+  dir: string,
+  files: Record<string, string>,
+): void {
+  fs.mkdirSync(source, { recursive: true })
+  git(source, 'init', '-b', 'main')
+  git(source, 'config', 'user.email', 'relay-test@example.com')
+  git(source, 'config', 'user.name', 'relay test')
+  git(source, 'config', 'commit.gpgsign', 'false')
+  writeFiles(source, files)
+  git(source, 'add', '-A')
+  git(source, 'commit', '-q', '-m', 'init')
+  git(repo, ...FILE_PROTOCOL, 'submodule', 'add', '-q', source, dir)
+  git(repo, 'commit', '-q', '-m', `서브모듈 ${dir}`)
+}
+
+/** worktree의 서브모듈을 체크아웃하고, 그 안에서 커밋할 수 있게 사용자 설정을 둔다 (D382) */
+export function checkoutSubmodules(tree: string): void {
+  git(tree, ...FILE_PROTOCOL, 'submodule', 'update', '--init', '-q')
+  git(
+    tree,
+    'submodule',
+    'foreach',
+    '-q',
+    'git config user.email relay-test@example.com && git config user.name "relay test" && git config commit.gpgsign false',
+  )
+}

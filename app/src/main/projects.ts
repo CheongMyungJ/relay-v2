@@ -1,5 +1,7 @@
 // 프로젝트 등록 (시나리오 0). 레포를 점검하고(D67) project.json을 만든다.
 // git 레포 루트, claude 로그인, 중복 등록은 실패하면 막고, origin과 gh(로그인과 버전, D198)는 경고만 한다.
+// 서브모듈이 있으면 relay가 다루지 않는 것을 경고한다(D382).
+import fs from 'node:fs'
 import path from 'node:path'
 import { agentRuntime } from '../adapters/agent'
 import type { AgentEngine } from '../shared/agent'
@@ -137,6 +139,18 @@ async function inspect(
 
   const gh = await checkGh(o.ghBin, env, originUrl)
   checks.push(gh.item)
+
+  // 서브모듈은 막지 않고 relay가 다루지 않는 것을 알린다. 서브모듈이 없으면 줄도 없다 (D382)
+  if (root && fs.existsSync(path.join(root, '.gitmodules'))) {
+    checks.push({
+      id: 'submodules',
+      label: '서브모듈이 없는가',
+      ok: false,
+      blocking: false,
+      detail:
+        '서브모듈이 있습니다. relay는 Work의 worktree에 서브모듈을 받지 않고, 서브모듈 안의 변경을 커밋·전달·되감기하지 않습니다. [Work 정리]는 서브모듈 안의 작업도 함께 지웁니다',
+    })
+  }
 
   return {
     view: {

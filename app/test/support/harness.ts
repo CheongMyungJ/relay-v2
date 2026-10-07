@@ -7,7 +7,7 @@ import { Relay } from '../../src/main/relay'
 import type { AppConfig } from '../../src/shared/config'
 import { FakeUi } from './ui'
 
-export { git, makeRepo, writeFiles, type Repo } from './repo'
+export { addSubmodule, checkoutSubmodules, git, makeRepo, writeFiles, type Repo } from './repo'
 
 export const APP = path.resolve(__dirname, '../..')
 export const SKILLS = path.resolve(APP, '../skills')

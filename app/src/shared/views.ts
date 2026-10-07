@@ -154,6 +154,8 @@ export interface CleanExpect {
   remote: boolean
   /** 작업 브랜치에만 있는 커밋(머지한 PR에 없는 것, D329) */
   lost: string[]
+  /** 체크아웃된 서브모듈 (D382) */
+  submodules: string[]
 }
 
 /** [Work 정리]의 확인 요약 (시나리오 8-1) */
@@ -164,6 +166,8 @@ export interface CleanPreview {
   uncommitted: string[]
   /** worktree의 git 폴더에 남은 잠금 파일(index.lock 등) */
   locks: string[]
+  /** 체크아웃된 서브모듈. 그 안의 작업도 함께 지우고, git이 요구해 --force로 지운다 (D382) */
+  submodules: string[]
   /** 이 앱에서 살아 있는 세션. 정리하면 트리째 끝낸다 */
   live: number
   branch: {
@@ -875,7 +879,7 @@ export type CommandResult = { ok: true } | { ok: false; error: string }
 /** Work 생성 결과. 만든 Work의 키를 돌려준다 */
 export type CreateWorkResult = { ok: true; workKey: string } | { ok: false; error: string }
 
-export type CheckId = 'git_root' | 'claude' | 'codex' | 'duplicate' | 'origin' | 'gh'
+export type CheckId = 'git_root' | 'claude' | 'codex' | 'duplicate' | 'origin' | 'gh' | 'submodules'
 
 /** 프로젝트 등록 점검 표의 한 행 (시나리오 0, D67) */
 export interface CheckItem {

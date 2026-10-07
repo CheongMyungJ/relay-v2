@@ -49,6 +49,7 @@ import {
 } from '../adapters/gh'
 import {
   changedPaths,
+  checkedOutSubmodules,
   commitAll,
   commitInfo,
   commitsOnlyIn,
@@ -64,6 +65,7 @@ import {
   isAncestor,
   lockFiles,
   mergeFastForward,
+  onlySubmoduleChanges,
   pruneWorktrees,
   pushBranch,
   refCommit,
@@ -2620,8 +2622,16 @@ export class WorkRunner {
     try {
       // 만든 stash나 커밋은 push로 넘어가며 진행 중 작업 기록에 적는다. 뒤 단계가 실패해도 결과에 남는다 (7-5)
       if (e.uncommitted === 'discard') {
-        const stash = await stashAll(this.worktree, e.message ?? '', { env })
-        await this.feed({ type: 'delivery.stage', at: this.ctx.at(), stage: 'push', stash })
+        // git stash는 서브모듈이 가리키는 커밋이 바뀐 것을 넣지 않는다. 그것만 있으면 worktree에 두고 넘어간다 (D382)
+        const stash = (await onlySubmoduleChanges(this.worktree, { env }))
+          ? null
+          : await stashAll(this.worktree, e.message ?? '', { env })
+        await this.feed({
+          type: 'delivery.stage',
+          at: this.ctx.at(),
+          stage: 'push',
+          ...(stash ? { stash } : {}),
+        })
       }
       if (e.uncommitted === 'commit') {
         const commit = await commitAll(this.worktree, e.message ?? '', { env })
@@ -3011,6 +3021,7 @@ export class WorkRunner {
       worktree,
       uncommitted: worktree ? await statusLines(this.worktree, opts) : [],
       locks: worktree ? await lockFiles(this.worktree, opts) : [],
+      submodules: worktree ? await checkedOutSubmodules(this.worktree, opts) : [],
       live: this.live.size + (this.cleanup?.status === 'live' ? 1 : 0),
       branch: {
         name,
