@@ -20,6 +20,7 @@ import {
   failedLogTail,
   gatherItems,
   ciLogRead,
+  ghAuthActive,
   ghTooOld,
   ghVersionOf,
   ghVersionReason,
@@ -71,6 +72,15 @@ describe('gh 버전 (D198)', () => {
     expect(ghTooOld(undefined)).toBe(false)
     expect(ghTooOld('DEV')).toBe(false)
     expect(ghVersionReason('2.40.1')).toBe('gh 2.48.0 이상이 필요함 (지금 2.40.1)')
+  })
+
+  it('gh auth status --active는 2.57.0부터 준다. 버전을 모르면 주지 않는다 (D67)', () => {
+    expect(ghAuthActive('2.57.0')).toBe(true)
+    expect(ghAuthActive('v2.100.0')).toBe(true)
+    expect(ghAuthActive('2.56.9')).toBe(false)
+    expect(ghAuthActive('2.48.0')).toBe(false)
+    expect(ghAuthActive(null)).toBe(false)
+    expect(ghAuthActive('DEV')).toBe(false)
   })
 })
 

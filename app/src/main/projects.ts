@@ -4,10 +4,10 @@ import path from 'node:path'
 import { agentRuntime } from '../adapters/agent'
 import type { AgentEngine } from '../shared/agent'
 import { ghAuthStatus, ghVersion } from '../adapters/gh'
-import { branches, defaultBranch, hasRemote, remoteUrl, repoRoot } from '../adapters/git'
+import { branches, defaultBranch, remoteUrl, repoRoot } from '../adapters/git'
 import { canonicalPath, pathKey, sha256 } from '../adapters/store'
 import { remoteRepo } from '../core/delivery'
-import { MIN_GH_VERSION, ghTooOld, ghVersionReason } from '../core/pr'
+import { MIN_GH_VERSION, ghAuthActive, ghTooOld, ghVersionReason } from '../core/pr'
 import { projectId } from '../core/records'
 import type { ProjectState } from '../shared/project'
 import type { CheckItem, ProjectInspection } from '../shared/views'
@@ -37,22 +37,22 @@ export interface GhCheck {
 
 /**
  * gh 점검 표의 줄 (시나리오 0-2, D198). 로그인되어 있고 최소 버전 이상이어야 통과다. 로그인은 PR을 만들 레포의
- * 호스트(origin, D67)에서만 본다. origin이 없거나 GitHub 레포 주소로 읽을 수 없으면 모든 호스트를 본다
+ * 호스트(origin 주소, D67)의 활성 계정만 본다. origin이 없거나 GitHub 레포 주소로 읽을 수 없으면 모든 호스트를 본다
  */
 export async function checkGh(
   bin: string,
   env: NodeJS.ProcessEnv,
-  repo: string | null,
+  origin: string | null,
 ): Promise<{ check: GhCheck; item: CheckItem }> {
-  const origin = repo ? await remoteUrl(repo, 'origin', { env }) : null
+  // PR 생성(ghRepo)과 같은 규칙으로 읽은 호스트다
   const host = origin ? (remoteRepo(origin)?.host ?? null) : null
-  const auth = await ghAuthStatus(bin, env, host)
   const version = await ghVersion(bin, env)
+  const auth = await ghAuthStatus(bin, env, { host, active: ghAuthActive(version) })
   const old = ghTooOld(version)
   const where = host ? `${host}, ` : ''
   const item: CheckItem = {
     id: 'gh',
-    label: `gh auth status가 성공하고 gh가 ${MIN_GH_VERSION} 이상인가`,
+    label: `origin 호스트에서 gh auth status가 성공하고 gh가 ${MIN_GH_VERSION} 이상인가`,
     ok: auth.ok && !old,
     blocking: false,
     detail: !auth.ok
@@ -125,7 +125,8 @@ async function inspect(
     detail: dup ? `이미 등록됨 (${dup.project_id})` : '처음 등록',
   })
 
-  const origin = root ? await hasRemote(root, 'origin', { env }) : false
+  const originUrl = root ? await remoteUrl(root, 'origin', { env }) : null
+  const origin = originUrl !== null
   checks.push({
     id: 'origin',
     label: 'origin 원격이 있는가',
@@ -134,7 +135,7 @@ async function inspect(
     detail: origin ? '있음' : '없음. [push]와 [PR 생성]을 쓸 수 없습니다',
   })
 
-  const gh = await checkGh(o.ghBin, env, root)
+  const gh = await checkGh(o.ghBin, env, originUrl)
   checks.push(gh.item)
 
   return {

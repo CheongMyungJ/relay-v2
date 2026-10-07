@@ -12,17 +12,26 @@ export interface GhStatus {
   detail: string
 }
 
+export interface GhAuthOptions {
+  /** 이 호스트만 본다(--hostname). 없으면 로그인한 호스트 모두다 */
+  host?: string | null
+  /** 활성 계정만 본다(--active, gh 2.57.0부터) */
+  active?: boolean
+}
+
 /**
- * gh auth status가 성공하는가 (D67). host를 주면 그 호스트만 본다(--hostname). 주지 않으면 gh는 로그인한 호스트 중
- * 하나라도 실패하면 실패하므로, 사내 GitHub Enterprise와 github.com에 함께 로그인했을 때 PR과 상관없는 쪽 때문에
- * 실패한다(gh 2.100.0에서 확인). gh가 없으면 실패다
+ * gh auth status가 성공하는가 (D67). gh는 본 호스트의 계정 중 하나라도 실패하면 실패한다: 호스트를 주지 않으면
+ * 사내 GitHub Enterprise와 github.com에 함께 로그인했을 때 PR과 상관없는 쪽 때문에, --active가 없으면 같은 호스트의
+ * 쓰지 않는 계정 때문에 실패한다(gh 2.100.0과 cli/cli pkg/cmd/auth/status에서 확인). gh가 없으면 실패다
  */
 export async function ghAuthStatus(
   bin = 'gh',
   env?: NodeJS.ProcessEnv,
-  host?: string | null,
+  o: GhAuthOptions = {},
 ): Promise<GhStatus> {
-  const args = host ? ['auth', 'status', '--hostname', host] : ['auth', 'status']
+  const args = ['auth', 'status']
+  if (o.host) args.push('--hostname', o.host)
+  if (o.active) args.push('--active')
   const r = await run(bin, args, { env, timeoutMs: 30_000 })
   if (r.code === 0) return { ok: true, detail: '로그인됨' }
   if (r.code === null && r.error?.includes('ENOENT')) {
