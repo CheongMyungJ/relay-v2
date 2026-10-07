@@ -35,6 +35,7 @@ export type EmphasisKind =
   | 'recommended_back'
   | 'existing_tests'
   | 'uncommitted'
+  | 'submodule_changes'
   | 'format_errors'
 
 /** 승인 화면 강조 영역의 한 항목. 사람이 봐야 할 것만 모은다 (D83) */

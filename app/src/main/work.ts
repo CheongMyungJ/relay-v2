@@ -58,6 +58,8 @@ import {
   createBackup,
   currentBranch,
   deleteBranches,
+  dirtySubmodules,
+  discardChanges,
   deleteRemoteBranch,
   diffFrom,
   hasCommit,
@@ -65,7 +67,6 @@ import {
   isAncestor,
   lockFiles,
   mergeFastForward,
-  onlySubmoduleChanges,
   pruneWorktrees,
   pushBranch,
   refCommit,
@@ -75,7 +76,6 @@ import {
   removeWorktree,
   repoRoot,
   resetHard,
-  stashAll,
   stashEntries,
   statusLines,
   submodulePaths,
@@ -2625,10 +2625,8 @@ export class WorkRunner {
     try {
       // 만든 stash나 커밋은 push로 넘어가며 진행 중 작업 기록에 적는다. 뒤 단계가 실패해도 결과에 남는다 (7-5)
       if (e.uncommitted === 'discard') {
-        // git stash는 서브모듈이 가리키는 커밋이 바뀐 것을 넣지 않는다. 그것만 있으면 worktree에 두고 넘어간다 (D382)
-        const stash = (await onlySubmoduleChanges(this.worktree, { env }))
-          ? null
-          : await stashAll(this.worktree, e.message ?? '', { env })
+        // 서브모듈이 가리키는 커밋이 바뀐 것은 HEAD로 되돌리고 나머지는 stash한다 (D384)
+        const stash = await discardChanges(this.worktree, e.message ?? '', { env })
         await this.feed({
           type: 'delivery.stage',
           at: this.ctx.at(),
@@ -3473,6 +3471,8 @@ export class WorkRunner {
     const latest = range?.to === null
     const cwd = this.work.status === 'archived' ? this.project.repo_path : this.worktree
     const uncommitted = latest ? await statusLines(this.worktree, { env }).catch(() => []) : []
+    // 서브모듈 안의 변경은 커밋 안 된 변경에 들지 않고 전달되지 않아 따로 알린다 (D384)
+    const submodules = latest ? await dirtySubmodules(this.worktree, { env }).catch(() => []) : []
     const diffTo = (from: string) =>
       diffFrom(cwd, from, range?.to ?? null, { env }).catch(
         (e: unknown) => `변경을 읽지 못함: ${message(e)}`,
@@ -3535,6 +3535,7 @@ export class WorkRunner {
         handoff: header,
         errors: check.errors,
         uncommitted,
+        submodules,
         live: this.live.has(task.id),
         ...(respond ? { tests: respond.tests, failure: respond.view.failure } : {}),
       }),

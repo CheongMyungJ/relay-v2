@@ -266,6 +266,8 @@ export interface EmphasisInput {
   errors: readonly FormatIssue[]
   /** worktree의 커밋 안 된 변경 (git status) */
   uncommitted: readonly string[]
+  /** 안에 커밋 안 된 변경이 있는 서브모듈 (D384). 없으면 없다 */
+  submodules?: readonly string[]
   /** PR 대응 task: 이번 라운드에 바뀌거나 지워진 기존 테스트 파일 (D180, D202) */
   tests?: readonly string[]
   /** PR 대응 task: 승인 뒤 실패한 push나 답글 게시 (시나리오 10-6) */
@@ -275,7 +277,8 @@ export interface EmphasisInput {
 }
 
 /**
- * 강조 영역 (시나리오 4-2, D83): intent_deviation, 열린 질문, 이전 단계 추천, 커밋 안 된 변경 경고, 형식 오류.
+ * 강조 영역 (시나리오 4-2, D83): intent_deviation, 열린 질문, 이전 단계 추천, 커밋 안 된 변경 경고, 서브모듈 안의
+ * 변경(D384), 형식 오류.
  * PR 대응 task는 승인 뒤 실패한 push나 게시를 맨 앞에, 기존 테스트 변경(D180, D202)을 함께 둔다.
  * 막힘이면 blocked_reason을 맨 앞에 둔다 (4.4). 없으면 빈 목록이다.
  */
@@ -336,6 +339,14 @@ export function emphasis(input: EmphasisInput): Emphasis[] {
   }
   if (input.uncommitted.length > 0) {
     out.push({ kind: 'uncommitted', title: '커밋 안 된 변경', lines: [...input.uncommitted] })
+  }
+  if (input.submodules?.length) {
+    out.push({
+      kind: 'submodule_changes',
+      title: '서브모듈 안의 변경',
+      lines: [...input.submodules],
+      hint: '서브모듈 안에서 커밋하지 않은 변경입니다. relay는 이 변경을 커밋하거나 전달하지 않고, [Work 정리] 때 지웁니다. 필요하면 서브모듈 레포에서 따로 다룹니다.',
+    })
   }
   if (input.errors.length > 0) {
     out.push({

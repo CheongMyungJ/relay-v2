@@ -356,7 +356,7 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
     })
   })
 
-  it('서브모듈 안의 변경은 막지 않는다. 가리키는 커밋만 바뀌었으면 [변경 버리고 진행]은 그것을 두고 전달한다 (7-5, D382)', async () => {
+  it('서브모듈 안의 변경은 막지 않고 Work 완료 화면에 알린다. [변경 버리고 진행]은 가리키는 커밋을 되돌리고 전달한다 (7-5, D382, D384)', async () => {
     const s = await setup(scenario(), { submodule: true })
     await toVerify(s)
     const fixed = git(s.tree, 'rev-parse', 'HEAD')
@@ -369,9 +369,14 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
     // 사람이나 에이전트가 서브모듈을 받아 lib 안에서 커밋하고, ui 안에는 커밋하지 않은 변경을 남긴다
     checkoutSubmodules(s.tree)
     const lib = path.join(s.tree, 'lib')
+    const original = git(lib, 'rev-parse', 'HEAD')
     writeFiles(lib, { 'lib.txt': '바뀜\n' })
     git(lib, 'commit', '-q', '-am', '서브모듈 커밋')
     writeFiles(path.join(s.tree, 'ui'), { 'ui.txt': '바뀜\n', 'scratch.txt': '메모\n' })
+    const verify = work(s).tasks.at(-1)?.id ?? ''
+    const shown = (await s.h.relay.review(s.key, verify))?.emphasis ?? []
+    expect(shown.find((e) => e.kind === 'submodule_changes')?.lines).toEqual(['ui'])
+    expect(shown.find((e) => e.kind === 'uncommitted')?.lines).toEqual([' M lib'])
 
     const blocked = await deliver(s, 'push')
     expect(!blocked.ok && blocked.uncommitted).toEqual([' M lib'])
@@ -381,7 +386,9 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
     await settle(s.h, s.key)
     expect(git(s.remote, 'rev-parse', `refs/heads/${s.branch}`)).toBe(fixed)
     expect(git(s.repo, 'stash', 'list')).toBe('')
-    expect(git(s.tree, 'status', '--porcelain').split('\n')).toEqual(['M lib', ' M ui'])
+    // lib는 원래 커밋으로 돌아가고 ui 안의 변경만 남는다
+    expect(git(lib, 'rev-parse', 'HEAD')).toBe(original)
+    expect(git(s.tree, 'status', '--porcelain')).toBe('M ui')
     expect(work(s)).toMatchObject({ status: 'completed', delivery: { status: 'succeeded' } })
     expect(work(s).delivery?.stashes ?? []).toEqual([])
   })

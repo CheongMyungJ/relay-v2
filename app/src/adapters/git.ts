@@ -177,52 +177,141 @@ export async function statusLines(dir: string, opts?: GitOptions): Promise<strin
   )
 }
 
+interface SubmoduleStatus {
+  path: string
+  /** porcelain v2의 서브모듈 칸: S<c><m><u>. c는 가리키는 커밋, m은 안의 수정, u는 안의 새 파일 (git 문서 git-status) */
+  sub: string
+}
+
 /**
- * 커밋 안 된 변경이 있고 모두 서브모듈이 가리키는 커밋이 바뀐 것인가 (D382). porcelain v2의 셋째 칸은 서브모듈이면
- * S로 시작한다(git 문서 git-status). 이름을 바꾼 항목(2)은 원래 이름이 한 칸 더 붙는다
+ * 커밋 안 된 변경 가운데 서브모듈 항목 (git status --porcelain=v2 -z). 셋째 칸이 S로 시작하는 항목이다. 이름을 바꾼
+ * 항목(2)은 칸이 하나 더 있고 원래 이름이 다음 NUL 뒤에 붙는다 (git 문서 git-status)
  */
-export async function onlySubmoduleChanges(dir: string, opts?: GitOptions): Promise<boolean> {
+async function submoduleStatus(
+  dir: string,
+  ignore: 'dirty' | 'none',
+  opts?: GitOptions,
+): Promise<SubmoduleStatus[]> {
   const out = await git(
     dir,
-    ['status', '--porcelain=v2', '-z', '--untracked-files=all', '--ignore-submodules=dirty'],
+    ['status', '--porcelain=v2', '-z', '--untracked-files=normal', `--ignore-submodules=${ignore}`],
     opts,
   )
-  const parts = out.split('\0').filter((p) => p !== '')
-  if (parts.length === 0) return false
+  const parts = out.split('\0')
+  const found: SubmoduleStatus[] = []
   for (let i = 0; i < parts.length; i++) {
-    const [kind, , sub] = (parts[i] ?? '').split(' ')
-    if ((kind !== '1' && kind !== '2') || !sub?.startsWith('S')) return false
+    const fields = (parts[i] ?? '').split(' ')
+    const kind = fields[0]
+    if (kind !== '1' && kind !== '2') continue
+    const sub = fields[2] ?? ''
+    const file = fields.slice(kind === '1' ? 8 : 9).join(' ')
     if (kind === '2') i++
+    if (sub.startsWith('S')) found.push({ path: file, sub })
   }
-  return true
-}
-
-/** 서브모듈의 경로: index에서 모드가 160000(gitlink)인 항목 (D383). 체크아웃했는지는 보지 않는다 */
-export async function submodulePaths(dir: string, opts?: GitOptions): Promise<string[]> {
-  const out = await git(dir, ['ls-files', '--stage', '-z'], opts)
-  const paths = new Set<string>()
-  for (const entry of out.split('\0')) {
-    const tab = entry.indexOf('\t')
-    if (tab < 0 || !entry.startsWith('160000 ')) continue
-    paths.add(entry.slice(tab + 1))
-  }
-  return [...paths].sort()
+  return found
 }
 
 /**
- * 체크아웃된 서브모듈의 경로 (D382): 서브모듈 가운데 폴더에 .git이 있는 것. git은 이런 서브모듈이 있는 worktree를
- * --force 없이 지우지 않는다(git 문서 git-worktree BUGS, 실행)
+ * 안에 커밋 안 된 수정이나 새 파일이 있는 서브모듈의 경로 (D384). relay는 이 변경을 커밋하거나 전달하지 않아 승인 화면에
+ * 알린다. `.gitmodules`가 없으면 git을 부르지 않는다
+ */
+export async function dirtySubmodules(dir: string, opts?: GitOptions): Promise<string[]> {
+  if (!(await exists(path.join(dir, '.gitmodules')))) return []
+  return (await submoduleStatus(dir, 'none', opts))
+    .filter((s) => s.sub[2] === 'M' || s.sub[3] === 'U')
+    .map((s) => s.path)
+}
+
+/**
+ * [변경 버리고 진행] (7-5, D384): 서브모듈이 가리키는 커밋이 바뀐 것은 git stash가 넣지 못하므로 HEAD로 되돌리고
+ * (git reset -- <경로> 뒤 git submodule update --checkout, 체크아웃 안 된 서브모듈은 index만), 나머지는 stash에 넣는다.
+ * 서브모듈 안의 커밋은 서브모듈 저장소에 남는다. 넣을 것이 없으면 stash 없이 null이다
+ */
+export async function discardChanges(
+  dir: string,
+  message: string,
+  opts?: GitOptions,
+): Promise<string | null> {
+  const pointers = (await submoduleStatus(dir, 'dirty', opts)).map((s) => s.path)
+  if (pointers.length > 0) {
+    await git(dir, ['reset', '-q', '--', ...pointers], opts)
+    // .gitmodules에 없는 경로(중첩한 레포)는 되돌리지 못한다. 남으면 아래 stash가 실패해 알린다
+    await tryGit(dir, ['submodule', 'update', '--checkout', '-q', '--', ...pointers], {
+      ...opts,
+      timeoutMs: opts?.timeoutMs ?? 120_000,
+    })
+  }
+  if ((await statusLines(dir, opts)).length === 0) return null
+  return stashAll(dir, message, opts)
+}
+
+async function exists(file: string): Promise<boolean> {
+  try {
+    await fsp.lstat(file)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 서브모듈의 이름과 경로 (D383, D384). `.gitmodules`의 경로 가운데 index에서 gitlink(모드 160000)인 것이다.
+ * `.gitmodules`가 없으면 git을 부르지 않는다. `.gitmodules` 없이 더한 중첩 레포는 서브모듈로 보지 않는다
+ */
+async function submoduleEntries(
+  dir: string,
+  opts?: GitOptions,
+): Promise<{ name: string; path: string }[]> {
+  const file = path.join(dir, '.gitmodules')
+  if (!(await exists(file))) return []
+  const out = await tryGit(
+    dir,
+    ['config', '-z', '-f', file, '--get-regexp', '^submodule\\..*\\.path$'],
+    opts,
+  )
+  if (!out) return []
+  const listed = new Map<string, string>()
+  for (const record of out.split('\0')) {
+    const nl = record.indexOf('\n')
+    const name = /^submodule\.(.+)\.path$/.exec(record.slice(0, nl))?.[1]
+    const value = record.slice(nl + 1)
+    if (nl > 0 && name && value) listed.set(value, name)
+  }
+  if (listed.size === 0) return []
+  const staged = await git(dir, ['ls-files', '--stage', '-z', '--', ...listed.keys()], opts)
+  const found = new Map<string, string>()
+  for (const entry of staged.split('\0')) {
+    const tab = entry.indexOf('\t')
+    const p = entry.slice(tab + 1)
+    const name = listed.get(p)
+    if (tab >= 0 && entry.startsWith('160000 ') && name) found.set(p, name)
+  }
+  return [...found].sort(([a], [b]) => (a < b ? -1 : 1)).map(([p, name]) => ({ name, path: p }))
+}
+
+/** 서브모듈의 경로 (D383). 체크아웃했는지는 보지 않는다 */
+export async function submodulePaths(dir: string, opts?: GitOptions): Promise<string[]> {
+  return (await submoduleEntries(dir, opts)).map((e) => e.path)
+}
+
+/**
+ * 받아 둔 서브모듈 (D382, D384): 폴더에 .git이 있거나, 이 worktree의 git 폴더 아래 modules/<이름>에 서브모듈 저장소가
+ * 있는 것. git은 worktree의 git 폴더에 modules가 있으면(deinit한 뒤에도) --force 없이 worktree를 지우지 않는다
+ * (git builtin/worktree.c validate_no_submodules, 실행). 이름이 맞지 않아도 modules가 있으면 그 경로를 넣는다
  */
 export async function checkedOutSubmodules(dir: string, opts?: GitOptions): Promise<string[]> {
+  const gitDir = await tryGit(dir, ['rev-parse', '--absolute-git-dir'], opts)
+  const modules = gitDir ? path.join(gitDir, 'modules') : null
   const found: string[] = []
-  for (const p of await submodulePaths(dir, opts)) {
-    try {
-      await fsp.lstat(path.join(dir, p, '.git'))
-      found.push(p)
-    } catch {
-      // 체크아웃하지 않은 서브모듈은 빈 폴더다
+  for (const e of await submoduleEntries(dir, opts)) {
+    if (
+      (await exists(path.join(dir, e.path, '.git'))) ||
+      (modules !== null && (await exists(path.join(modules, e.name))))
+    ) {
+      found.push(e.path)
     }
   }
+  if (found.length === 0 && modules !== null && (await exists(modules))) found.push(modules)
   return found
 }
 

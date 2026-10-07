@@ -1,12 +1,11 @@
 // 프로젝트 등록 (시나리오 0). 레포를 점검하고(D67) project.json을 만든다.
 // git 레포 루트, claude 로그인, 중복 등록은 실패하면 막고, origin과 gh(로그인과 버전, D198)는 경고만 한다.
 // 서브모듈이 있으면 relay가 다루지 않는 것을 경고한다(D382).
-import fs from 'node:fs'
 import path from 'node:path'
 import { agentRuntime } from '../adapters/agent'
 import type { AgentEngine } from '../shared/agent'
 import { ghAuthStatus, ghVersion } from '../adapters/gh'
-import { branches, defaultBranch, remoteUrl, repoRoot } from '../adapters/git'
+import { branches, defaultBranch, remoteUrl, repoRoot, submodulePaths } from '../adapters/git'
 import { canonicalPath, pathKey, sha256 } from '../adapters/store'
 import { remoteRepo } from '../core/delivery'
 import { MIN_GH_VERSION, ghAuthActive, ghTooOld, ghVersionReason } from '../core/pr'
@@ -140,8 +139,10 @@ async function inspect(
   const gh = await checkGh(o.ghBin, env, originUrl)
   checks.push(gh.item)
 
-  // 서브모듈은 막지 않고 relay가 다루지 않는 것을 알린다. 서브모듈이 없으면 줄도 없다 (D382)
-  if (root && fs.existsSync(path.join(root, '.gitmodules'))) {
+  // 서브모듈은 막지 않고 relay가 다루지 않는 것을 알린다. 서브모듈이 없으면 줄도 없다 (D382). context.md와 정리와
+  // 같은 기준(.gitmodules에 있고 index에서 gitlink인 것)으로 본다 (D384)
+  const submodules = root ? await submodulePaths(root, { env }).catch(() => []) : []
+  if (submodules.length > 0) {
     checks.push({
       id: 'submodules',
       label: '서브모듈이 없는가',

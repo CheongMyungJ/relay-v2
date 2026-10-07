@@ -504,6 +504,30 @@ describe('강조 영역 (D83, 시나리오 4-2)', () => {
     ).toEqual([])
   })
 
+  it('서브모듈 안의 변경은 전달되지 않는다고 알린다 (D384)', () => {
+    const items = emphasis({
+      node: 'verify',
+      type: 'bugfix',
+      handoff: HANDOFF,
+      errors: [],
+      uncommitted: [' M src/a.ts'],
+      submodules: ['lib', 'vendor/ui'],
+    })
+    expect(items.map((i) => i.kind)).toEqual(['uncommitted', 'submodule_changes'])
+    expect(items[1]).toMatchObject({ title: '서브모듈 안의 변경', lines: ['lib', 'vendor/ui'] })
+    expect(items[1]?.hint).toContain('커밋하거나 전달하지 않고, [Work 정리] 때 지웁니다')
+    expect(
+      emphasis({
+        node: 'verify',
+        type: 'bugfix',
+        handoff: HANDOFF,
+        errors: [],
+        uncommitted: [],
+        submodules: [],
+      }),
+    ).toEqual([])
+  })
+
   it('intent_deviation, 열린 질문, 이전 단계 추천, 커밋 안 된 변경, 형식 오류를 순서대로 모은다', () => {
     const items = emphasis({
       node: 'verify',
