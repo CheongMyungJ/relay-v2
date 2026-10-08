@@ -1,9 +1,17 @@
 {
   "id": "e2-gateway",
   "title": "중간 크기 RTOS 게이트웨이: ISR·DMA·Modbus, 세 구성(약 5천 줄)",
-  "configs": ["basic", "pro", "devkit"],
+  "configs": [
+    "basic",
+    "pro",
+    "devkit"
+  ],
   "tasks": [
-    { "id": "survey", "kind": "survey", "packet": "packets/survey.md" },
+    {
+      "id": "survey",
+      "kind": "survey",
+      "packet": "packets/survey.md"
+    },
     {
       "id": "trace-command",
       "kind": "trace",
@@ -22,6 +30,143 @@
       "lens": "variant",
       "packet": "packets/trace-variant.md"
     },
-    { "id": "trace-shared", "kind": "trace", "lens": "shared", "packet": "packets/trace-shared.md" }
-  ]
+    {
+      "id": "trace-shared",
+      "kind": "trace",
+      "lens": "shared",
+      "packet": "packets/trace-shared.md"
+    }
+  ],
+  "build": {
+    "cpu": "cortex-m4",
+    "includes": [
+      "include",
+      "third_party/picortos/include",
+      "vendor/nimbus/include"
+    ],
+    "headers": [
+      "picortos.h",
+      "modbus.h",
+      "sensor.h",
+      "misc.h"
+    ],
+    "configs": {
+      "basic": {
+        "forceInclude": "cfg/variant_basic.h",
+        "defines": [
+          "VARIANT_BASIC"
+        ],
+        "sources": [
+          "src/main.c",
+          "src/app_init.c",
+          "src/board.c",
+          "src/timebase.c",
+          "src/rs485.c",
+          "src/modbus.c",
+          "src/mb_handlers.c",
+          "src/regs.c",
+          "src/sensor.c",
+          "src/stats.c",
+          "src/wdog.c",
+          "src/config_store.c",
+          "src/alarm.c",
+          "src/selftest.c",
+          "third_party/picortos/src/tasks.c",
+          "third_party/picortos/src/queue.c",
+          "third_party/picortos/port/cm4/port.c",
+          "vendor/nimbus/src/startup_n4.c",
+          "vendor/nimbus/src/system_n4.c",
+          "vendor/nimbus/src/nimbus_hal.c"
+        ],
+        "asserts": [
+          "configTICK_RATE_HZ == 1000",
+          "pdMS_TO_TICKS(SENSOR_PERIOD_MS) == 25",
+          "pdMS_TO_TICKS(MB_RESP_DELAY_MS) == 2",
+          "pdMS_TO_TICKS(MB_TX_TIMEOUT_MS) == 50",
+          "CFG_FEATURE_FC16 == 0",
+          "CFG_MB_BAUD == 19200",
+          "CFG_SENSOR_CHANNELS == 2"
+        ]
+      },
+      "pro": {
+        "forceInclude": "cfg/variant_pro.h",
+        "defines": [
+          "VARIANT_PRO"
+        ],
+        "sources": [
+          "src/main.c",
+          "src/app_init.c",
+          "src/board.c",
+          "src/timebase.c",
+          "src/rs485.c",
+          "src/modbus.c",
+          "src/mb_handlers.c",
+          "src/regs.c",
+          "src/sensor.c",
+          "src/stats.c",
+          "src/wdog.c",
+          "src/config_store.c",
+          "src/alarm.c",
+          "src/selftest.c",
+          "third_party/picortos/src/tasks.c",
+          "third_party/picortos/src/queue.c",
+          "third_party/picortos/port/cm4/port.c",
+          "vendor/nimbus/src/startup_n4.c",
+          "vendor/nimbus/src/system_n4.c",
+          "vendor/nimbus/src/nimbus_hal.c",
+          "src/logger.c",
+          "src/spi_flash.c",
+          "src/power.c"
+        ],
+        "asserts": [
+          "configTICK_RATE_HZ == 500",
+          "pdMS_TO_TICKS(SENSOR_PERIOD_MS) == 12",
+          "pdMS_TO_TICKS(MB_RESP_DELAY_MS) == 1",
+          "pdMS_TO_TICKS(MB_TX_TIMEOUT_MS) == 25",
+          "CFG_FEATURE_FC16 == 1",
+          "CFG_MB_BAUD == 115200",
+          "CFG_SENSOR_CHANNELS == 4",
+          "CFG_LOW_POWER == 1"
+        ]
+      },
+      "devkit": {
+        "forceInclude": "cfg/variant_devkit.h",
+        "defines": [
+          "VARIANT_DEVKIT",
+          "MB_DIAG_ENABLE"
+        ],
+        "sources": [
+          "src/main.c",
+          "src/app_init.c",
+          "src/board.c",
+          "src/timebase.c",
+          "src/rs485.c",
+          "src/modbus.c",
+          "src/mb_handlers.c",
+          "src/regs.c",
+          "src/sensor.c",
+          "src/stats.c",
+          "src/wdog.c",
+          "src/config_store.c",
+          "src/alarm.c",
+          "src/selftest.c",
+          "third_party/picortos/src/tasks.c",
+          "third_party/picortos/src/queue.c",
+          "third_party/picortos/port/cm4/port.c",
+          "vendor/nimbus/src/startup_n4.c",
+          "vendor/nimbus/src/system_n4.c",
+          "vendor/nimbus/src/nimbus_hal.c",
+          "src/logger.c",
+          "src/spi_flash.c",
+          "src/console.c"
+        ],
+        "asserts": [
+          "configTICK_RATE_HZ == 1000",
+          "pdMS_TO_TICKS(SENSOR_PERIOD_MS) == 25",
+          "CFG_FEATURE_FC16 == 1",
+          "configASSERT_ENABLED == 1"
+        ]
+      }
+    }
+  }
 }

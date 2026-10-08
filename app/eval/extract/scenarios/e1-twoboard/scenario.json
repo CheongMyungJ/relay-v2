@@ -1,9 +1,16 @@
 {
   "id": "e1-twoboard",
   "title": "작은 두 보드 bare-metal 온도 조절기(약 1.6천 줄)",
-  "configs": ["alpha", "beta"],
+  "configs": [
+    "alpha",
+    "beta"
+  ],
   "tasks": [
-    { "id": "survey", "kind": "survey", "packet": "packets/survey.md" },
+    {
+      "id": "survey",
+      "kind": "survey",
+      "packet": "packets/survey.md"
+    },
     {
       "id": "trace-command",
       "kind": "trace",
@@ -22,6 +29,89 @@
       "lens": "variant",
       "packet": "packets/trace-variant.md"
     },
-    { "id": "trace-shared", "kind": "trace", "lens": "shared", "packet": "packets/trace-shared.md" }
-  ]
+    {
+      "id": "trace-shared",
+      "kind": "trace",
+      "lens": "shared",
+      "packet": "packets/trace-shared.md"
+    }
+  ],
+  "build": {
+    "cpu": "cortex-m3",
+    "includes": [
+      "include",
+      "config",
+      "vendor/acme"
+    ],
+    "headers": [
+      "board.h",
+      "proto.h",
+      "control.h",
+      "timer.h"
+    ],
+    "configs": {
+      "alpha": {
+        "defines": [
+          "BOARD_ALPHA"
+        ],
+        "sources": [
+          "src/main.c",
+          "src/timer.c",
+          "src/uart.c",
+          "src/ring.c",
+          "src/proto.c",
+          "src/cmd.c",
+          "src/control.c",
+          "src/adc.c",
+          "src/fault.c",
+          "src/eeprom.c",
+          "src/wdt.c",
+          "src/hwrev.c",
+          "vendor/acme/startup_acme.c",
+          "vendor/acme/system_acme.c"
+        ],
+        "asserts": [
+          "CFG_TICK_HZ == 1000",
+          "PROTO_FRAME_TIMEOUT_TICKS == 20",
+          "CTRL_PERIOD_TICKS == 100",
+          "CFG_EE_RETRY_MAX == 3",
+          "CFG_FEATURE_MODE == 1",
+          "CFG_FEATURE_FAN == 0",
+          "CFG_CPU_HZ == 72000000"
+        ]
+      },
+      "beta": {
+        "defines": [
+          "BOARD_BETA",
+          "PROTO_FRAME_TIMEOUT_TICKS=5U"
+        ],
+        "sources": [
+          "src/main.c",
+          "src/timer.c",
+          "src/uart.c",
+          "src/ring.c",
+          "src/proto.c",
+          "src/cmd.c",
+          "src/control.c",
+          "src/adc.c",
+          "src/fault.c",
+          "src/eeprom.c",
+          "src/wdt.c",
+          "src/hwrev.c",
+          "vendor/acme/startup_acme.c",
+          "vendor/acme/system_acme.c",
+          "src/fan.c"
+        ],
+        "asserts": [
+          "CFG_TICK_HZ == 100",
+          "PROTO_FRAME_TIMEOUT_TICKS == 5",
+          "CTRL_PERIOD_TICKS == 10",
+          "CFG_EE_RETRY_MAX == 5",
+          "CFG_FEATURE_MODE == 0",
+          "CFG_FEATURE_FAN == 1",
+          "CFG_CPU_HZ == 48000000"
+        ]
+      }
+    }
+  }
 }
