@@ -1,0 +1,21 @@
+{
+  "task": "survey",
+  "describe": "없는 DMA 채널을 인벤토리에 넣는다",
+  "ops": [
+    {
+      "op": "push",
+      "path": "inventory",
+      "value": {
+        "key": "i99",
+        "kind": "dma_channel",
+        "name": "DMA1 channel 5 (USART1 RX)",
+        "configs": ["all"],
+        "anchors": [],
+        "notes": ""
+      }
+    }
+  ],
+  "expect": {
+    "violated": ["m.dma"]
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "id": "e1-twoboard",
+  "title": "작은 두 보드 bare-metal 온도 조절기(약 1.6천 줄)",
+  "configs": ["alpha", "beta"],
+  "tasks": [
+    { "id": "survey", "kind": "survey", "packet": "packets/survey.md" },
+    {
+      "id": "trace-command",
+      "kind": "trace",
+      "lens": "command",
+      "packet": "packets/trace-command.md"
+    },
+    {
+      "id": "trace-timing",
+      "kind": "trace",
+      "lens": "timing",
+      "packet": "packets/trace-timing.md"
+    },
+    {
+      "id": "trace-variant",
+      "kind": "trace",
+      "lens": "variant",
+      "packet": "packets/trace-variant.md"
+    },
+    { "id": "trace-shared", "kind": "trace", "lens": "shared", "packet": "packets/trace-shared.md" }
+  ]
+}

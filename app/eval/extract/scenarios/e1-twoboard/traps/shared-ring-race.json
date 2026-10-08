@@ -1,0 +1,29 @@
+{
+  "task": "trace-shared",
+  "describe": "g_rx_ring을 보호 없는 경쟁이라 잠금이 필요하다고 한다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "observations.2.text",
+      "value": "g_rx_ring의 head와 tail은 ISR와 main이 보호 없이 고쳐 경쟁이 있고 잠금이 필요하다"
+    }
+  ],
+  "judge": {
+    "recall": {
+      "r.sh.ring": {
+        "found": false,
+        "keys": []
+      }
+    },
+    "must_not": {
+      "m.ring_race": {
+        "violated": true,
+        "keys": ["o3"]
+      }
+    }
+  },
+  "expect": {
+    "violated": ["m.ring_race"],
+    "missed": ["r.sh.ring"]
+  }
+}

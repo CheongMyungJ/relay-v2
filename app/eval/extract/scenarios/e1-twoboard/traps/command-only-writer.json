@@ -1,0 +1,45 @@
+{
+  "task": "trace-command",
+  "describe": "SET_SETPOINT가 g_setpoint_dc의 유일한 쓰기라고 한다(숨은 두 번째 쓰기)",
+  "ops": [
+    {
+      "op": "remove",
+      "path": "observations.9"
+    },
+    {
+      "op": "push",
+      "path": "absences",
+      "value": {
+        "key": "a9",
+        "claim": "g_setpoint_dc는 cmd_set_setpoint 말고는 쓰지 않는다",
+        "configs": ["all"],
+        "searches": [
+          {
+            "tool": "Grep",
+            "pattern": "g_setpoint_dc =",
+            "scope": "src/cmd.c",
+            "hits": 1
+          }
+        ]
+      }
+    }
+  ],
+  "judge": {
+    "recall": {
+      "r.cmd.second_writer": {
+        "found": false,
+        "keys": []
+      }
+    },
+    "must_not": {
+      "m.only_writer": {
+        "violated": true,
+        "keys": ["a9"]
+      }
+    }
+  },
+  "expect": {
+    "violated": ["m.only_writer"],
+    "missed": ["r.cmd.second_writer"]
+  }
+}

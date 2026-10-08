@@ -9,3 +9,7 @@ eval/scenarios/*/hidden/
 eval/results/
 # 평가 보고서는 eval/report.mjs가 만든 것을 그대로 옮긴다
 eval/reports/
+# 요구사항 추출 run 평가: 픽스처 레포는 손으로 쓴 펌웨어, 결과·보고서는 도구가 만든다 (docs/extract-eval.md)
+eval/extract/scenarios/*/repo/
+eval/extract/results/
+eval/extract/reports/

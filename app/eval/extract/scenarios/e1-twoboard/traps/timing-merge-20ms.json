@@ -1,0 +1,20 @@
+{
+  "task": "trace-timing",
+  "describe": "바이트 간 시간 초과를 구성 구분 없이 20 ms로 합친다(구성 병합)",
+  "ops": [
+    {
+      "op": "set",
+      "path": "quantities.1.values",
+      "value": [
+        {
+          "configs": ["alpha", "beta"],
+          "value": "20"
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "violated": ["m.frame_20ms_all"],
+    "missed": ["r.tim.frame_ms"]
+  }
+}

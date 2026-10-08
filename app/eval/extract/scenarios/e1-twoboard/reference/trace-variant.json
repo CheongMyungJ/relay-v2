@@ -1,0 +1,289 @@
+{
+  "observations": [
+    {
+      "key": "o1",
+      "text": "Makefile의 alpha/beta 타깃이 -DBOARD_ALPHA/-DBOARD_BETA를 주고 board.h가 build_cfg_<board>.h를 고른다",
+      "configs": ["alpha", "beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "Makefile",
+          "start": 23,
+          "end": 23,
+          "quote": "alpha: CFLAGS += -DBOARD_ALPHA",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "include/board.h",
+          "start": 11,
+          "end": 11,
+          "quote": "#include \"build_cfg_alpha.h\"",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o2",
+      "text": "CPU 클럭은 alpha 72 MHz, beta 48 MHz",
+      "configs": ["alpha", "beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "config/build_cfg_alpha.h",
+          "start": 9,
+          "end": 9,
+          "quote": "#define CFG_CPU_HZ          72000000UL",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "config/build_cfg_beta.h",
+          "start": 9,
+          "end": 9,
+          "quote": "#define CFG_CPU_HZ          48000000UL",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o3",
+      "text": "틱은 alpha 1000 Hz, beta 100 Hz",
+      "configs": ["alpha", "beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "config/build_cfg_alpha.h",
+          "start": 10,
+          "end": 10,
+          "quote": "#define CFG_TICK_HZ         1000U",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "config/build_cfg_beta.h",
+          "start": 10,
+          "end": 10,
+          "quote": "#define CFG_TICK_HZ         100U",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o4",
+      "text": "SET_MODE는 alpha에만 있다(CFG_FEATURE_MODE)",
+      "configs": ["alpha"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/cmd.c",
+          "start": 131,
+          "end": 131,
+          "quote": "{ CMD_SET_MODE,     1U, 1U, cmd_set_mode },",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o5",
+      "text": "팬 제어(fan.c, SET_FAN, TIM3 ISR)는 beta에만 있다",
+      "configs": ["beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "Makefile",
+          "start": 17,
+          "end": 17,
+          "quote": "SRCS_beta := src/fan.c",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "config/build_cfg_beta.h",
+          "start": 12,
+          "end": 12,
+          "quote": "#define CFG_FEATURE_FAN     1",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o6",
+      "text": "EEPROM 재시도는 alpha 3, beta 5",
+      "configs": ["alpha", "beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "config/build_cfg_alpha.h",
+          "start": 13,
+          "end": 13,
+          "quote": "#define CFG_EE_RETRY_MAX    3U",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "config/build_cfg_beta.h",
+          "start": 13,
+          "end": 13,
+          "quote": "#define CFG_EE_RETRY_MAX    5U",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o7",
+      "text": "hwrev.c가 실행 중 스트랩으로 리비전을 읽어 rev C 이상이면 g_cal_offset을 -12로 둔다",
+      "configs": ["alpha", "beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/hwrev.c",
+          "start": 21,
+          "end": 21,
+          "quote": "g_cal_offset = (g_hw_rev >= 2U) ? -12 : 0;",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o8",
+      "text": "legacy_pid.c는 어느 SRCS에도 없고, BOARD_GAMMA 분기는 없는 헤더를 가리키며, control.c의 #if 0 블록도 쓰이지 않는다",
+      "configs": ["alpha", "beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "include/board.h",
+          "start": 14,
+          "end": 15,
+          "quote": "#elif defined(BOARD_GAMMA) #include \"build_cfg_gamma.h\"",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/control.c",
+          "start": 64,
+          "end": 64,
+          "quote": "#if 0",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o9",
+      "text": "README는 BETA가 2018년부터 양산 보드라고 한다(문서 주장, 코드로 확인 못 함)",
+      "configs": ["beta"],
+      "anchors": [
+        {
+          "kind": "doc_claim",
+          "path": "README.md",
+          "start": 8,
+          "end": 8,
+          "quote": "- BETA: production board since 2018",
+          "command": null
+        }
+      ],
+      "inference": false
+    }
+  ],
+  "quantities": [],
+  "requirements": [],
+  "constraints": [],
+  "impl_choices": [],
+  "unknowns": [
+    {
+      "key": "k1",
+      "question": "어느 구성이 출하되는지 코드로는 알 수 없다",
+      "needs": "other",
+      "refs": ["o9"]
+    }
+  ],
+  "conflicts": [
+    {
+      "key": "x1",
+      "text": "proto.h 주석 20 ms는 beta(틱 10 ms)에서 200 ms와 어긋난다",
+      "sides": [
+        {
+          "claim": "주석 20 ms",
+          "anchors": [
+            {
+              "kind": "doc_claim",
+              "path": "include/proto.h",
+              "start": 13,
+              "end": 13,
+              "quote": "/* 20 ms inter-byte timeout */",
+              "command": null
+            }
+          ]
+        },
+        {
+          "claim": "beta 틱 100 Hz",
+          "anchors": [
+            {
+              "kind": "code",
+              "path": "config/build_cfg_beta.h",
+              "start": 10,
+              "end": 10,
+              "quote": "#define CFG_TICK_HZ         100U",
+              "command": null
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "absences": [
+    {
+      "key": "a1",
+      "claim": "legacy_pid.c를 컴파일하는 구성이 없다",
+      "configs": ["alpha", "beta"],
+      "searches": [
+        {
+          "tool": "Grep",
+          "pattern": "legacy_pid",
+          "scope": "Makefile",
+          "hits": 0
+        }
+      ]
+    }
+  ],
+  "followups": [],
+  "human_decisions": [],
+  "checkpoint": null,
+  "outcome": "done",
+  "outcome_reason": "빌드 파일과 두 설정 헤더를 견줬다.",
+  "checklist": {
+    "build_selection": {
+      "status": "covered",
+      "refs": ["o1"],
+      "searches": []
+    },
+    "runtime_selection": {
+      "status": "covered",
+      "refs": ["o7"],
+      "searches": []
+    },
+    "per_config_diff": {
+      "status": "covered",
+      "refs": ["o2", "o3", "o4", "o5", "o6"],
+      "searches": []
+    },
+    "shipping_config": {
+      "status": "unknown",
+      "refs": ["k1"],
+      "searches": []
+    },
+    "dead_code": {
+      "status": "covered",
+      "refs": ["o8", "a1"],
+      "searches": []
+    }
+  }
+}

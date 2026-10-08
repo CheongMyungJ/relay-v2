@@ -1,0 +1,14 @@
+{
+  "task": "trace-timing",
+  "describe": "파일에 없는 인용을 단다(지어낸 앵커)",
+  "ops": [
+    {
+      "op": "set",
+      "path": "observations.0.anchors.0.quote",
+      "value": "SysTick->LOAD = SYSTICK_RELOAD_VALUE;"
+    }
+  ],
+  "expect": {
+    "fabricated": 1
+  }
+}

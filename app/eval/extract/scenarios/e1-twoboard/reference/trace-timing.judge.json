@@ -1,0 +1,58 @@
+{
+  "recall": [
+    {
+      "id": "r.tim.wdt_unknown",
+      "found": true,
+      "keys": ["k1", "q5"]
+    },
+    {
+      "id": "r.tim.conflict",
+      "found": true,
+      "keys": ["x1"]
+    },
+    {
+      "id": "r.tim.offbyone",
+      "found": true,
+      "keys": ["o2"]
+    }
+  ],
+  "must_not": [
+    {
+      "id": "m.latency_req",
+      "violated": false,
+      "keys": []
+    },
+    {
+      "id": "m.frame_20ms_all",
+      "violated": false,
+      "keys": []
+    },
+    {
+      "id": "m.wdt_exact",
+      "violated": false,
+      "keys": []
+    },
+    {
+      "id": "m.polling_constraint",
+      "violated": false,
+      "keys": []
+    }
+  ],
+  "resolvable": [
+    {
+      "id": "v.tick_period",
+      "left_unknown": false,
+      "keys": []
+    },
+    {
+      "id": "v.frame_ms",
+      "left_unknown": false,
+      "keys": []
+    },
+    {
+      "id": "v.heater_s",
+      "left_unknown": false,
+      "keys": []
+    }
+  ]
+}

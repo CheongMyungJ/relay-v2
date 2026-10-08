@@ -1,0 +1,78 @@
+{
+  "recall": [
+    {
+      "id": "r.tim.conflict",
+      "found": true,
+      "keys": ["x1"]
+    },
+    {
+      "id": "r.var.select",
+      "found": true,
+      "keys": ["o1"]
+    },
+    {
+      "id": "r.var.cpu",
+      "found": true,
+      "keys": ["o2"]
+    },
+    {
+      "id": "r.var.tick",
+      "found": true,
+      "keys": ["o3"]
+    },
+    {
+      "id": "r.var.mode",
+      "found": true,
+      "keys": ["o4"]
+    },
+    {
+      "id": "r.var.fan",
+      "found": true,
+      "keys": ["o5"]
+    },
+    {
+      "id": "r.var.retry",
+      "found": true,
+      "keys": ["o6"]
+    },
+    {
+      "id": "r.var.runtime",
+      "found": true,
+      "keys": ["o7"]
+    },
+    {
+      "id": "r.var.dead",
+      "found": true,
+      "keys": ["o8"]
+    },
+    {
+      "id": "r.var.shipping",
+      "found": true,
+      "keys": ["k1", "o9"]
+    }
+  ],
+  "must_not": [
+    {
+      "id": "m.frame_20ms_all",
+      "violated": false,
+      "keys": []
+    },
+    {
+      "id": "m.shipping",
+      "violated": false,
+      "keys": []
+    }
+  ],
+  "resolvable": [
+    {
+      "id": "v.tick_period",
+      "left_unknown": false,
+      "keys": []
+    },
+    {
+      "id": "v.fan_beta",
+      "left_unknown": false,
+      "keys": []
+    }
+  ]
+}

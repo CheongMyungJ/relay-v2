@@ -13,6 +13,8 @@ export default tseslint.config(
       'src/shared/generated/',
       'eval/scenarios/',
       'eval/results/',
+      'eval/extract/scenarios/',
+      'eval/extract/results/',
     ],
   },
   js.configs.recommended,

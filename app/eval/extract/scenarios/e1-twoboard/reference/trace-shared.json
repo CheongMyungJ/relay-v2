@@ -1,0 +1,246 @@
+{
+  "observations": [
+    {
+      "key": "o1",
+      "text": "g_fault_flags: ADC1 ISR(우선순위 0)가 |=로 쓰고 main의 fault_clear가 인터럽트를 막지 않고 &=~로 쓴다. 그 사이 ISR가 올린 비트를 잃을 수 있다",
+      "configs": ["alpha", "beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/adc.c",
+          "start": 46,
+          "end": 46,
+          "quote": "g_fault_flags |= FAULT_OVERTEMP;",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/fault.c",
+          "start": 19,
+          "end": 19,
+          "quote": "g_fault_flags &= (uint8_t)~mask;",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o2",
+      "text": "fault_raise는 __disable_irq/__enable_irq로 감싼다",
+      "configs": ["alpha", "beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/fault.c",
+          "start": 12,
+          "end": 13,
+          "quote": "__disable_irq(); g_fault_flags |= flags;",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o3",
+      "text": "g_rx_ring은 USART1 ISR만 head를, main만 tail을 쓰는 단일 생산자·단일 소비자 링이고 바이트 인덱스라 잠금이 필요 없다. 가득 차면 바이트를 버리고 g_rx_overruns를 올린다",
+      "configs": ["alpha", "beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/ring.c",
+          "start": 16,
+          "end": 16,
+          "quote": "r->head = next;",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/ring.c",
+          "start": 26,
+          "end": 26,
+          "quote": "r->tail = (uint8_t)((r->tail + 1U) & (RING_SIZE - 1U));",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/uart.c",
+          "start": 47,
+          "end": 47,
+          "quote": "if (!ring_put(&g_rx_ring, b)) {",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o4",
+      "text": "g_adc_raw는 ADC1 ISR가 쓰고 main의 control_temp_dc가 읽는다",
+      "configs": ["alpha", "beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/adc.c",
+          "start": 39,
+          "end": 39,
+          "quote": "g_adc_raw = raw;",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o5",
+      "text": "g_ticks는 SysTick ISR가 늘리고 main이 timer_now로 읽는다(32비트)",
+      "configs": ["alpha", "beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/timer.c",
+          "start": 22,
+          "end": 22,
+          "quote": "g_ticks++;",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/timer.c",
+          "start": 17,
+          "end": 17,
+          "quote": "return g_ticks;",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o6",
+      "text": "우선순위: ADC1 0, USART1 1, TIM3 2",
+      "configs": ["alpha", "beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/adc.c",
+          "start": 24,
+          "end": 24,
+          "quote": "NVIC_SetPriority(ADC1_IRQn, 0U);",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/uart.c",
+          "start": 21,
+          "end": 21,
+          "quote": "NVIC_SetPriority(USART1_IRQn, 1U);",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/fan.c",
+          "start": 22,
+          "end": 22,
+          "quote": "NVIC_SetPriority(TIM3_IRQn, 2U);",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o7",
+      "text": "beta의 s_tach_pulses는 TIM3 ISR가 ++하고 fan_poll이 보호 없이 0으로 지워 펄스를 잃을 수 있다",
+      "configs": ["beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/fan.c",
+          "start": 46,
+          "end": 46,
+          "quote": "s_tach_pulses++;",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/fan.c",
+          "start": 39,
+          "end": 39,
+          "quote": "s_tach_pulses = 0U;",
+          "command": null
+        }
+      ],
+      "inference": false
+    }
+  ],
+  "quantities": [],
+  "requirements": [],
+  "constraints": [
+    {
+      "key": "ct1",
+      "text": "g_fault_flags를 main 문맥에서 고칠 때는 ADC1 인터럽트를 막아야 고장 비트를 잃지 않는다",
+      "area": "concurrency",
+      "configs": ["alpha", "beta"],
+      "refs": ["o1"],
+      "reason": "ISR와 main이 같은 바이트를 읽기-수정-쓰기한다"
+    }
+  ],
+  "impl_choices": [],
+  "unknowns": [],
+  "conflicts": [],
+  "absences": [
+    {
+      "key": "a1",
+      "claim": "DMA를 쓰지 않는다",
+      "configs": ["alpha", "beta"],
+      "searches": [
+        {
+          "tool": "Grep",
+          "pattern": "DMA",
+          "scope": "src include vendor",
+          "hits": 0
+        }
+      ]
+    }
+  ],
+  "followups": [],
+  "human_decisions": [],
+  "checkpoint": null,
+  "outcome": "done",
+  "outcome_reason": "ISR가 쓰는 상태를 모두 봤다.",
+  "checklist": {
+    "access_list": {
+      "status": "covered",
+      "refs": ["o1", "o3", "o4", "o5", "o7"],
+      "searches": []
+    },
+    "context_priority": {
+      "status": "covered",
+      "refs": ["o6"],
+      "searches": []
+    },
+    "protection": {
+      "status": "covered",
+      "refs": ["o2", "o3"],
+      "searches": []
+    },
+    "read_modify_write": {
+      "status": "covered",
+      "refs": ["o1", "o7"],
+      "searches": []
+    },
+    "dma_ownership": {
+      "status": "not_applicable",
+      "refs": [],
+      "searches": [
+        {
+          "tool": "Grep",
+          "pattern": "DMA",
+          "scope": "src include vendor",
+          "hits": 0
+        }
+      ]
+    },
+    "unprotected_pairs": {
+      "status": "covered",
+      "refs": ["o1", "o7"],
+      "searches": []
+    }
+  }
+}

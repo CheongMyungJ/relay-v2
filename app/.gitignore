@@ -6,3 +6,5 @@ test-results/
 src/shared/generated/
 # 평가 결과 (docs/eval.md)
 eval/results/
+# 요구사항 추출 run 평가의 결과 (docs/extract-eval.md)
+eval/extract/results/

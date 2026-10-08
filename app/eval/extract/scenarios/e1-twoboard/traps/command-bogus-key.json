@@ -1,0 +1,23 @@
+{
+  "task": "trace-command",
+  "describe": "판정 모델이 결과에 없는 key를 대면 그 판정은 인정하지 않는다(통과 규칙은 코드)",
+  "ops": [],
+  "judge": {
+    "recall": {
+      "r.cmd.busy": {
+        "found": true,
+        "keys": ["o404"]
+      }
+    },
+    "must_not": {
+      "m.crc_doc": {
+        "violated": true,
+        "keys": ["zz"]
+      }
+    }
+  },
+  "expect": {
+    "missed": ["r.cmd.busy"],
+    "violated": []
+  }
+}

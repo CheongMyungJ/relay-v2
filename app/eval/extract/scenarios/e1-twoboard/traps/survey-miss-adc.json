@@ -1,0 +1,13 @@
+{
+  "task": "survey",
+  "describe": "ADC1 ISR를 놓친다",
+  "ops": [
+    {
+      "op": "remove",
+      "path": "inventory.3"
+    }
+  ],
+  "expect": {
+    "missed": ["r.inv.adc"]
+  }
+}
