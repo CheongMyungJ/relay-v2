@@ -1,6 +1,6 @@
 # relay-v2 구현 계획
 
-- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102), v0.17의 설계 유형(M20, I103~I113), v0.18의 곁 세션(M21, I125~I127)
+- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102), v0.17의 설계 유형(M20, I103~I113), v0.18의 곁 세션(M21, I125~I128)
 - 상태: 정함. 주제마다 사람과 문답으로 정했다(설계 부록 A의 진행 규칙). 바꾸려면 사용자와 다시 정한다.
 
 Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서는 [engines.md](engines.md)에서 관리한다. 이 문서의 기존 Claude 동작은 확장 중 회귀 시험의 기준이다.
@@ -141,6 +141,7 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I125 | 곁 세션(D385~D390)의 배치: 안내 글(`sideGuide`)과 열 수 있는지(`sideBlock`)는 `core/side`, 실행 인자(`sideArgs`)와 설정(`sideSettings`: deny 규칙과 UserPromptSubmit 훅, 자동 메모리 끔)은 `core/settings`, 기록은 상태 기계의 `side.started`·`side.ended`·`side.conversation`이 `work.json`의 `side`에 남긴다(I11과 같이 main이 직접 쓰지 않음). 세션 자체는 `main/work`의 `SideSession`(메모리, 정리 세션과 같은 모양)이고 훅 id는 `side`, 터미널 id는 `side-<n>`(열 때마다 새 터미널)이다. 세션 상한(`pool`)은 거치지 않는다 | 정리 세션(7-5)의 구조를 따르면 훅, 터미널, 고아 프로세스 처리(D126)를 그대로 쓴다. 곁 세션은 task가 아니라 `tasks`에 넣지 않는다 | |
 | I126 | 곁 세션의 안내와 설정 파일은 열 때마다 임시 폴더(`relay-side-*`)에 만들고 세션이 끝나면 지운다. 안내에 넣는 상태는 열 때의 `work.json`이다. 프로세스의 시작 시각을 읽지 못하면 정리 세션처럼 시작 시각 없이 적고 재시작 때 확인하지 않는다(D76) | 안내는 대화 기록에 남지 않으니(D386) 남겨 둘 까닭이 없다. 열 때마다 새로 만들어야 지금 상태가 들어간다 | |
 | I127 | 가짜 claude는 `--append-system-prompt-file`을 받으면 곁 세션으로 보고 시나리오의 `side` 단계(다시 열면 `sideResume`)를 하며, 기록에 `side: true`와 안내 파일의 내용을 남긴다. 곁 세션의 새 대화는 실제처럼 첫 요청(prompt 단계) 뒤에야 저장해, 묻지 않고 닫은 대화를 `--resume`하면 "No conversation found"로 끝난다(D389) | 실제 claude는 대화가 생기기 전의 세션을 저장하지 않는다(스파이크 S6의 "대화가 생겨야 --resume") | |
+| I128 | 계약의 `helpFlags`는 `--help`의 `--x[-file]` 표기를 `--x`와 `--x-file` 두 옵션으로 읽는다. `--append-system-prompt-file`은 2.1.289와 2.1.294의 `--help`에 `--append-system-prompt[-file]`(`--bare` 설명 안)로만 나온다. 녹화본은 그 버전(2.1.289)의 `--help`로 앱 옵션을 다시 골라 `flags`만 고쳤다(훅 본문은 바뀌지 않음, `docs/checks.md` M21) | 옵션 목록에 따로 줄이 없어도 `--help`가 이 표기로 알리는 옵션이다(실제로 동작함, D386). 그대로 두면 실제 쪽 계약이 없는 옵션으로 실패한다 | |
 
 ## 3. 확인한 사실
 
@@ -1083,7 +1084,7 @@ app/src/
 - **기록(I125, D389):** `shared/work`의 `SideRecord`(`session_id`, `process`)와 `WorkState.side`. 상태 기계의 `side.started`(프로세스를 적음), `side.ended`(프로세스를 지우고 대화는 남김), `side.conversation`(`session_id`를 적음). 재시작(`restarted`)은 `side.process`를 지운다. `recovery`의 `recordedProcesses`에 곁 세션(이름 "곁 세션").
 - **실행 인자와 설정(D386, D388):** `sideArgs`(새 대화 `--session-id`, 이어 가기 `--resume`, 둘 다 `--add-dir`, `--settings`, `--append-system-prompt-file`, 첫 프롬프트 없음), `sideSettings`(deny: 앱 소유 파일, `tasks/**`, `.claude/**`. push와 gh는 없음. 훅은 UserPromptSubmit만, 자동 메모리 끔).
 - **안내(D387, `core/side`):** `sideGuide`가 지도(Work, 파일 위치, task마다 단계·상태·디렉터리와 폐기·승인 전 표시)와 읽는 규칙, 바꾸는 규칙, 답글 표시 문구를 쓴다. `sideBlock`은 열 수 없는 까닭(보관됨)이다.
-- **계약:** `test/contract/claude.ts`의 `appFlags`에 `sideArgs`. 녹화본을 다시 만들어 `--append-system-prompt-file`이 있게 한다(8.2). 훅 본문은 이미 계약에 있는 UserPromptSubmit의 `session_id`만 읽는다.
+- **계약:** `test/contract/claude.ts`의 `appFlags`에 `sideArgs`. `helpFlags`가 `--x[-file]` 표기를 읽고, 녹화본의 `flags`에 `--append-system-prompt-file`이 있게 한다(I128, 8.2). 훅 본문은 이미 계약에 있는 UserPromptSubmit의 `session_id`만 읽는다.
 
 **2. main**
 
