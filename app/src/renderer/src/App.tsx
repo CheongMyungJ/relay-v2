@@ -51,6 +51,8 @@ type Dialog =
 
 /** 정리 세션 탭을 고른 표시 (7-5). task id와 겹치지 않는다 */
 const CLEANUP_TAB = '@cleanup'
+/** 곁 세션 탭 (시나리오 11) */
+const SIDE_TAB = '@side'
 
 function currentTask(w: WorkView) {
   return w.tasks.find((t) => t.id === w.current)
@@ -158,7 +160,12 @@ export function App() {
   const pickedId = work ? (picked[work.key] ?? work.current) : null
   // 정리 세션 탭(7-5)을 고르면 터미널은 정리 세션이고, 패널은 지금 task(Work 완료 화면)다
   const cleanupTab = !!work?.cleanup && pickedId === CLEANUP_TAB
-  const taskId = cleanupTab || pickedId === CLEANUP_TAB ? (work?.current ?? null) : pickedId
+  // 곁 세션 탭(시나리오 11)도 패널은 지금 task다
+  const sideTab = !!work?.side.terminal && pickedId === SIDE_TAB
+  const taskId =
+    cleanupTab || sideTab || pickedId === CLEANUP_TAB || pickedId === SIDE_TAB
+      ? (work?.current ?? null)
+      : pickedId
   const found = work?.tasks.find((t) => t.id === taskId)
   // 도구 훅으로 따로 온 진행 표시가 있으면 그것을 보인다 (D216)
   const task = found && work ? withActivity(found, activities[`${work.key}|${found.id}`]) : found
@@ -416,6 +423,22 @@ export function App() {
               정리 세션
             </div>
           ) : null}
+          {work?.side.terminal ? (
+            <div
+              role="tab"
+              aria-selected={sideTab}
+              className={`tab side${sideTab ? ' active' : ''}${
+                work.side.status === 'live' ? ' live' : ''
+              }`}
+              title="곁 세션: 질문, 논의, 별도 리뷰, 앱 문제 대응 (시나리오 11)"
+              onClick={() => setPicked((m) => ({ ...m, [work.key]: SIDE_TAB }))}
+            >
+              <span
+                className={`dot s-${work.side.status === 'live' ? 'working' : 'interrupted'}`}
+              />
+              곁 세션
+            </div>
+          ) : null}
           {question ? (
             <button className="question-reopen" onClick={() => setHiddenQuestionId(null)}>
               Codex 질문 답변
@@ -423,7 +446,9 @@ export function App() {
           ) : null}
         </div>
         <div className="band">
-          {cleanupTab && work?.cleanup ? (
+          {sideTab && work ? (
+            <SideBand work={work} />
+          ) : cleanupTab && work?.cleanup ? (
             <>
               <span className="band-text">
                 정리 세션 · {work.cleanup.engineLabel ?? 'Claude Code'} · 기록하지 않음 · push와
@@ -473,7 +498,7 @@ export function App() {
                       terminalKey={t.terminal}
                       info={info}
                       live={t.live}
-                      active={w.key === selected && !cleanupTab && t.id === taskId}
+                      active={w.key === selected && !cleanupTab && !sideTab && t.id === taskId}
                     />
                   )),
                   ...(w.cleanup
@@ -484,6 +509,17 @@ export function App() {
                           info={info}
                           live={w.cleanup.status === 'live'}
                           active={w.key === selected && cleanupTab}
+                        />,
+                      ]
+                    : []),
+                  ...(w.side.terminal
+                    ? [
+                        <TerminalView
+                          key={w.side.terminal}
+                          terminalKey={w.side.terminal}
+                          info={info}
+                          live={w.side.status === 'live'}
+                          active={w.key === selected && sideTab}
                         />,
                       ]
                     : []),
@@ -508,6 +544,7 @@ export function App() {
             onClean={() => setDialog({ kind: 'clean', workKey: work.key })}
             onSelectStep={() => openStep(work.key)}
             onResumed={() => setPicked((m) => without(m, work.key))}
+            onSideOpened={() => setPicked((m) => ({ ...m, [work.key]: SIDE_TAB }))}
           />
         ) : (
           <div className="action-bar" />
@@ -639,6 +676,34 @@ function Welcome({ onAddProject }: { onAddProject: () => void }) {
  * [이 단계 끝나면 멈춤], [단계 선택], [Work 설정], [Work 포기], [Work 정리]. 누를 수 있는지는 main이 core로
  * 판정해 보낸다. 조작은 지금 task에 한다.
  */
+/** 곁 세션 탭의 머리 띠 (시나리오 11). 끝났으면 [새 대화로 열기]를 둔다 */
+function SideBand({ work }: { work: WorkView }) {
+  const [error, setError] = useState<string | null>(null)
+  const fresh = async () => {
+    setError(null)
+    const r = await call(() => window.relay.openSide(work.key, true))
+    if (!r.ok) setError(r.error)
+  }
+  return (
+    <>
+      <span className="band-text">
+        곁 세션 · Claude Code · 기록하지 않음 · 바꾸기 전에 묻습니다
+      </span>
+      {work.side.status === 'live' ? null : (
+        <>
+          <span className="readonly">끝남 · 읽기 전용</span>
+          {work.side.blocked ? null : (
+            <button className="link" onClick={() => void fresh()}>
+              새 대화로 열기
+            </button>
+          )}
+        </>
+      )}
+      {error ? <span className="band-warn">{error}</span> : null}
+    </>
+  )
+}
+
 function ActionBar({
   work,
   onSettings,
@@ -646,6 +711,7 @@ function ActionBar({
   onClean,
   onSelectStep,
   onResumed,
+  onSideOpened,
 }: {
   work: WorkView
   onSettings: () => void
@@ -653,6 +719,7 @@ function ActionBar({
   onClean: () => void
   onSelectStep: () => void
   onResumed: () => void
+  onSideOpened: () => void
 }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -736,6 +803,24 @@ function ActionBar({
           Work 정리
         </button>
       ) : null}
+      {/* 곁 세션 (시나리오 11): 다른 버튼과 관계없이 언제든 열고 닫는다. 보관된 Work만 없다 (D385) */}
+      {work.side.blocked ? null : work.side.status === 'live' ? (
+        <button disabled={busy} onClick={() => void run(() => window.relay.closeSide(work.key))}>
+          곁 세션 닫기
+        </button>
+      ) : (
+        <button
+          disabled={busy}
+          title={
+            work.side.resumable
+              ? '앞 대화를 이어서 엽니다. 질문, 논의, 별도 리뷰, 앱 문제 대응에 씁니다'
+              : '질문, 논의, 별도 리뷰, 앱 문제 대응에 쓰는 Claude Code 세션을 엽니다'
+          }
+          onClick={() => void run(() => window.relay.openSide(work.key, false), onSideOpened)}
+        >
+          곁 세션 열기
+        </button>
+      )}
       {error ? <span className="error">{error}</span> : null}
       <span className="dim info">
         {work.workId} · 기준 {work.baseBranch} {work.baseCommit.slice(0, 8)}

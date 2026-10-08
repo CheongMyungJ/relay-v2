@@ -1597,7 +1597,8 @@ button.ready {
   border-left: 3px solid var(--bad);
 }
 
-.tab.cleanup {
+.tab.cleanup,
+.tab.side {
   font-style: italic;
 }
 
