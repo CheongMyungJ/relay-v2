@@ -491,6 +491,26 @@ export interface CleanupEnded extends WorkEvent {
   type: 'cleanup.ended'
 }
 
+/** 곁 세션을 띄웠다 (D389). 살아 있는 동안 프로세스를 적어 재시작 때 확인한다 */
+export interface SideStarted extends WorkEvent {
+  type: 'side.started'
+  pid: number
+  processStartedAt?: string
+}
+
+/** 곁 세션이 끝났다 (D389). 프로세스는 지우고 대화는 남긴다 */
+export interface SideEnded extends WorkEvent {
+  type: 'side.ended'
+}
+
+/** 곁 세션에 대화가 생겼다 (D388, D389): 첫 요청의 session_id. [곁 세션 열기]가 이 대화를 잇는다 */
+export interface SideConversation extends WorkEvent {
+  type: 'side.conversation'
+  sessionId: string
+  /** 대화의 엔진 (D391) */
+  engine: AgentEngine
+}
+
 /**
  * 앱 소유 파일의 해시를 적는다 (D124): 앱이 파일을 쓴 뒤, M6 전에 만든 Work를 처음 읽을 때, 사람이 바뀐 파일을
  * [확인]했을 때. null은 파일이 없다는 것이다
@@ -694,6 +714,9 @@ export type MachineEvent =
   | OperationIgnore
   | CleanupStarted
   | CleanupEnded
+  | SideStarted
+  | SideEnded
+  | SideConversation
   | FilesRecorded
   | PrRead
   | PrMerge
@@ -1317,6 +1340,12 @@ function dispatch(work: WorkState, event: MachineEvent, config: AppConfig): Tran
       return cleanupStarted(work, event)
     case 'cleanup.ended':
       return cleanupEnded(work)
+    case 'side.started':
+      return sideStarted(work, event)
+    case 'side.ended':
+      return sideEnded(work)
+    case 'side.conversation':
+      return sideConversation(work, event)
     case 'files.recorded':
       return filesRecorded(work, event)
     case 'pr.read':
@@ -1382,6 +1411,9 @@ type TaskMachineEvent = Exclude<
   | OperationIgnore
   | CleanupStarted
   | CleanupEnded
+  | SideStarted
+  | SideEnded
+  | SideConversation
   | FilesRecorded
   | PrRead
   | PrMerge
@@ -2606,9 +2638,10 @@ function restarted(work: WorkState, e: AppRestarted, config: AppConfig): Transit
   const changed =
     cut ||
     work.cleanup_process !== undefined ||
+    work.side?.process !== undefined ||
     tasks.some((t, i) => JSON.stringify(t) !== JSON.stringify(work.tasks[i]))
   if (!changed) return unchanged(work)
-  let next: WorkState = omit({ ...work, tasks }, 'cleanup_process')
+  let next: WorkState = withoutSideProcess(omit({ ...work, tasks }, 'cleanup_process'))
   if (op && cut) next = { ...next, operation: { ...op, interrupted_at: e.at } }
   return { work: next, effects }
 }
@@ -2726,6 +2759,39 @@ function cleanupEnded(work: WorkState): Transition {
   return work.cleanup_process
     ? { work: omit(work, 'cleanup_process'), effects: [] }
     : unchanged(work)
+}
+
+// ---------- 곁 세션 (시나리오 11, D389) ----------
+
+/** 곁 세션을 띄웠다. 살아 있는 동안 프로세스를 적어 재시작 때 확인한다 */
+function sideStarted(work: WorkState, e: SideStarted): Transition {
+  const process = {
+    pid: e.pid,
+    ...(e.processStartedAt === undefined ? {} : { process_started_at: e.processStartedAt }),
+    started_at: e.at,
+  }
+  return { work: { ...work, side: { ...work.side, process } }, effects: [] }
+}
+
+/** 곁 세션이 끝났다. 적어 둔 프로세스를 지우고 대화는 남긴다 */
+function sideEnded(work: WorkState): Transition {
+  return work.side?.process ? { work: withoutSideProcess(work), effects: [] } : unchanged(work)
+}
+
+/** 곁 세션의 대화를 적는다. 같은 대화면 그대로 둔다 */
+function sideConversation(work: WorkState, e: SideConversation): Transition {
+  if (work.side?.session_id === e.sessionId && (work.side.engine ?? 'claude') === e.engine)
+    return unchanged(work)
+  return {
+    work: { ...work, side: { ...work.side, session_id: e.sessionId, engine: e.engine } },
+    effects: [],
+  }
+}
+
+/** 곁 세션의 프로세스 기록을 지운다. 대화가 없으면 side도 지운다 */
+function withoutSideProcess(work: WorkState): WorkState {
+  const side = work.side ? omit(work.side, 'process') : undefined
+  return side && side.session_id !== undefined ? { ...work, side } : omit(work, 'side')
 }
 
 /** 앱 소유 파일의 해시를 적는다 (D124). null이면 파일이 없어 지운다. 키는 OWNED_FILES의 차례다 */

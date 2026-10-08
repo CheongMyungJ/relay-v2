@@ -23,6 +23,8 @@ const STEPS = [
   '실행',
   '리뷰와 검증',
   'PR 대응',
+  // 노드가 아닌 곁 세션도 같은 줄로 고른다 (D391)
+  '곁 세션',
 ]
 
 let root: string
@@ -66,7 +68,7 @@ test('기본 모델·추론 수준과 단계별 설정을 고르고 저장하면
   await field(win, '기본 모델').selectOption('opus')
   await field(win, '기본 추론 수준').selectOption('high')
 
-  // 상세 설정은 접혀 있고, 펼치면 아홉 단계마다 엔진·모델·추론 수준이 있다
+  // 상세 설정은 접혀 있고, 펼치면 아홉 단계와 곁 세션마다 엔진·모델·추론 수준이 있다
   await expect(field(win, '구현 모델')).toBeHidden()
   await win.getByText('상세 설정 (단계별 엔진·모델·추론 수준)').click()
   for (const step of STEPS) {

@@ -474,6 +474,19 @@ export interface CleanupProcess {
   started_at: string
 }
 
+/**
+ * 곁 세션의 기록 (시나리오 11, D389). 대화는 남겨 [곁 세션 열기]가 잇고, 프로세스는 살아 있는 동안만 두어 재시작 때
+ * task의 세션과 같이 확인해 끝낸다 (D76, D126)
+ */
+export interface SideRecord {
+  /** 다시 열 대화. 첫 요청(UserPromptSubmit)이 와 대화가 생긴 뒤에 있다 */
+  session_id?: string
+  /** 그 대화의 엔진 (D391). 없는 옛 기록은 Claude다. 지금 설정과 다르면 이어 가지 않고 새 대화로 연다 */
+  engine?: AgentEngine
+  /** 살아 있는 곁 세션의 claude 프로세스 */
+  process?: CleanupProcess
+}
+
 /** 정리 결과 (시나리오 8) */
 export interface CleanedRecord {
   at: string
@@ -626,6 +639,8 @@ export interface WorkState {
   file_hashes?: OwnedFileHashes
   /** 살아 있는 정리 세션의 프로세스 (D126) */
   cleanup_process?: CleanupProcess
+  /** 곁 세션의 대화와 프로세스 (D389). 연 적이 없으면 없다 */
+  side?: SideRecord
   /** PR 진행의 기록 (D191). [PR 생성]이 성공한 Work에 있다 */
   pr?: PullRequestRecord
   /** 이슈 기록 (설계 3.7, I96). 이슈 기록이 켜진 프로젝트에서 만든 Work에 있다 */

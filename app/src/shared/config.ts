@@ -24,6 +24,9 @@ export type SkillName =
  */
 export type QuestionSkill = Exclude<SkillName, 'spec'>
 
+/** 상세 설정(단계별 엔진·모델·추론 수준)의 키: 스킬과 곁 세션 (D391, I129). 곁 세션은 노드가 아니다 */
+export type AgentStepName = SkillName | 'side'
+
 /** 질문 방식 (5.6.1). 초안 우선 / 결정마다 확인 */
 export type QuestionMode = 'draft_first' | 'confirm_each'
 
@@ -58,7 +61,7 @@ export interface AppConfig {
    * 단계(스킬)별 엔진·모델·추론 수준 (상세 설정). 없는 단계와 키는 기본을 따른다. 새 task를 만들 때 해석해 task에
    * 고정한다(shared/agent resolveAgent)
    */
-  agent_steps: Partial<Record<SkillName, AgentStep>>
+  agent_steps: Partial<Record<AgentStepName, AgentStep>>
   /** 살아 있는 세션 합계 상한 (D18) */
   session_limit: number
   /** 단계별 자동 승인 (4.2) */
@@ -69,6 +72,8 @@ export interface AppConfig {
   question_mode: Record<QuestionSkill, QuestionMode>
   /** true면 draft PR로 만든다 (D71) */
   pr_draft: boolean
+  /** 곁 세션을 열 때 안내 창을 띄운다 (D392). 안내 창의 "다시 보지 않기"가 끈다 */
+  side_notice: boolean
   /** handoff 본문 분량 경고 기준 (5.2) */
   handoff_body_warn_chars: number
   /** intent 분량 경고 기준 (5.3) */
@@ -163,9 +168,9 @@ export const AUTO_APPROVE_TITLES: readonly (readonly [AutoApproveNode, string, S
 
 /**
  * 상세 설정(단계별 엔진·모델·추론 수준)의 단계와 화면 이름과 묶음. 모든 스킬이고 순서는 노드의 화면 순서다. core/pipeline의
- * NODE_INFO에 맞는지 [단위]가 확인한다
+ * NODE_INFO에 맞는지 [단위]가 확인한다. 끝의 곁 세션은 노드가 아니다 (D391)
  */
-export const AGENT_STEP_TITLES: readonly (readonly [SkillName, string, SettingGroup])[] = [
+export const AGENT_STEP_TITLES: readonly (readonly [AgentStepName, string, SettingGroup])[] = [
   ['work-start', '의도 정리', 'common'],
   ['fix', '원인 분석과 수정', 'bugfix'],
   ['design', '설계와 계획', 'feature'],
@@ -175,6 +180,7 @@ export const AGENT_STEP_TITLES: readonly (readonly [SkillName, string, SettingGr
   ['execute', '실행', 'general'],
   ['verify', '리뷰와 검증', 'common'],
   ['pr-respond', 'PR 대응', 'pr'],
+  ['side', '곁 세션', 'common'],
 ]
 
 /** 질문 방식의 화면 이름 (5.6.1) */
@@ -216,6 +222,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     'pr-respond': 'draft_first',
   },
   pr_draft: false,
+  side_notice: true,
   handoff_body_warn_chars: 1500,
   intent_warn_chars: 1500,
   format_error_bounce_max: 2,

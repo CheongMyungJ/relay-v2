@@ -119,6 +119,10 @@ export interface RelayApi {
   openCleanup(workKey: string, choice: DeliveryChoice): Promise<CommandResult>
   /** [정리 세션 닫기] (D137): 정리 세션을 끝내고 전달하지 않는다 */
   closeCleanup(workKey: string): Promise<CommandResult>
+  /** [곁 세션 열기] (시나리오 11). fresh면 앞 대화를 잇지 않고 새 대화로 연다 */
+  openSide(workKey: string, fresh: boolean): Promise<CommandResult>
+  /** [곁 세션 닫기] */
+  closeSide(workKey: string): Promise<CommandResult>
   /** [정리 끝 → push/PR 진행] (7-5) */
   finishCleanup(workKey: string): Promise<DeliverResult>
   /** Work 완료 화면의 [다시 점검]: origin과 gh를 다시 점검한다 (D118) */
@@ -209,6 +213,8 @@ export const IPC = {
   deliver: 'work:deliver',
   openCleanup: 'work:open-cleanup',
   closeCleanup: 'work:close-cleanup',
+  openSide: 'work:open-side',
+  closeSide: 'work:close-side',
   finishCleanup: 'work:finish-cleanup',
   recheck: 'work:recheck',
   cleanPreview: 'work:clean-preview',

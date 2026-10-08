@@ -16,6 +16,7 @@ import { call } from './commands'
 import {
   CleanDialog,
   ConfirmDialog,
+  Modal,
   NewWorkDialog,
   ProjectDialog,
   ProjectSettingsDialog,
@@ -47,10 +48,13 @@ type Dialog =
   | { kind: 'abandon'; workKey: string }
   | { kind: 'step'; workKey: string; node?: NodeName }
   | { kind: 'clean'; workKey: string }
+  | { kind: 'side'; workKey: string; fresh: boolean }
   | null
 
 /** 정리 세션 탭을 고른 표시 (7-5). task id와 겹치지 않는다 */
 const CLEANUP_TAB = '@cleanup'
+/** 곁 세션 탭 (시나리오 11) */
+const SIDE_TAB = '@side'
 
 function currentTask(w: WorkView) {
   return w.tasks.find((t) => t.id === w.current)
@@ -158,7 +162,12 @@ export function App() {
   const pickedId = work ? (picked[work.key] ?? work.current) : null
   // 정리 세션 탭(7-5)을 고르면 터미널은 정리 세션이고, 패널은 지금 task(Work 완료 화면)다
   const cleanupTab = !!work?.cleanup && pickedId === CLEANUP_TAB
-  const taskId = cleanupTab || pickedId === CLEANUP_TAB ? (work?.current ?? null) : pickedId
+  // 곁 세션 탭(시나리오 11)도 패널은 지금 task다
+  const sideTab = !!work?.side.terminal && pickedId === SIDE_TAB
+  const taskId =
+    cleanupTab || sideTab || pickedId === CLEANUP_TAB || pickedId === SIDE_TAB
+      ? (work?.current ?? null)
+      : pickedId
   const found = work?.tasks.find((t) => t.id === taskId)
   // 도구 훅으로 따로 온 진행 표시가 있으면 그것을 보인다 (D216)
   const task = found && work ? withActivity(found, activities[`${work.key}|${found.id}`]) : found
@@ -188,6 +197,24 @@ export function App() {
     // 지금 task를 고르면 다시 지금 task를 따라간다
     setPicked((m) => (id === w.current ? without(m, w.key) : { ...m, [w.key]: id }))
   }, [])
+
+  /**
+   * [곁 세션 열기]·[새 대화로 열기] (시나리오 11). 설정이 켜져 있으면 안내 창을 먼저 띄운다 (D392). 열면 곁 세션 탭으로
+   * 옮긴다
+   */
+  const requestSide = useCallback(
+    async (workKey: string, fresh: boolean): Promise<CommandResult> => {
+      const config = await window.relay.config().catch(() => null)
+      if (!config || config.side_notice) {
+        setDialog({ kind: 'side', workKey, fresh })
+        return { ok: true }
+      }
+      const r = await call(() => window.relay.openSide(workKey, fresh))
+      if (r.ok) setPicked((m) => ({ ...m, [workKey]: SIDE_TAB }))
+      return r
+    },
+    [],
+  )
 
   const groups = useMemo(() => sidebarGroups(Object.values(works)), [works])
   const toggleGroup = (group: string) => setCollapsed((c) => toggled(c, group))
@@ -279,7 +306,8 @@ export function App() {
     dialog?.kind === 'work-settings' ||
     dialog?.kind === 'abandon' ||
     dialog?.kind === 'step' ||
-    dialog?.kind === 'clean'
+    dialog?.kind === 'clean' ||
+    dialog?.kind === 'side'
       ? works[dialog.workKey]
       : null
   // 단계 선택 대화상자 (6.2). node는 처음 고를 단계다(이전 단계 추천, D23)
@@ -416,6 +444,22 @@ export function App() {
               정리 세션
             </div>
           ) : null}
+          {work?.side.terminal ? (
+            <div
+              role="tab"
+              aria-selected={sideTab}
+              className={`tab side${sideTab ? ' active' : ''}${
+                work.side.status === 'live' ? ' live' : ''
+              }`}
+              title="곁 세션: 질문, 논의, 별도 리뷰, 앱 문제 대응 (시나리오 11)"
+              onClick={() => setPicked((m) => ({ ...m, [work.key]: SIDE_TAB }))}
+            >
+              <span
+                className={`dot s-${work.side.status === 'live' ? 'working' : 'interrupted'}`}
+              />
+              곁 세션
+            </div>
+          ) : null}
           {question ? (
             <button className="question-reopen" onClick={() => setHiddenQuestionId(null)}>
               Codex 질문 답변
@@ -423,7 +467,9 @@ export function App() {
           ) : null}
         </div>
         <div className="band">
-          {cleanupTab && work?.cleanup ? (
+          {sideTab && work ? (
+            <SideBand work={work} onFresh={() => requestSide(work.key, true)} />
+          ) : cleanupTab && work?.cleanup ? (
             <>
               <span className="band-text">
                 정리 세션 · {work.cleanup.engineLabel ?? 'Claude Code'} · 기록하지 않음 · push와
@@ -473,7 +519,7 @@ export function App() {
                       terminalKey={t.terminal}
                       info={info}
                       live={t.live}
-                      active={w.key === selected && !cleanupTab && t.id === taskId}
+                      active={w.key === selected && !cleanupTab && !sideTab && t.id === taskId}
                     />
                   )),
                   ...(w.cleanup
@@ -484,6 +530,17 @@ export function App() {
                           info={info}
                           live={w.cleanup.status === 'live'}
                           active={w.key === selected && cleanupTab}
+                        />,
+                      ]
+                    : []),
+                  ...(w.side.terminal
+                    ? [
+                        <TerminalView
+                          key={w.side.terminal}
+                          terminalKey={w.side.terminal}
+                          info={info}
+                          live={w.side.status === 'live'}
+                          active={w.key === selected && sideTab}
                         />,
                       ]
                     : []),
@@ -508,6 +565,7 @@ export function App() {
             onClean={() => setDialog({ kind: 'clean', workKey: work.key })}
             onSelectStep={() => openStep(work.key)}
             onResumed={() => setPicked((m) => without(m, work.key))}
+            onOpenSide={() => requestSide(work.key, false)}
           />
         ) : (
           <div className="action-bar" />
@@ -564,6 +622,17 @@ export function App() {
       ) : null}
       {dialog?.kind === 'clean' && dialogWork ? (
         <CleanDialog work={dialogWork} onClose={() => setDialog(null)} />
+      ) : null}
+      {dialog?.kind === 'side' && dialogWork ? (
+        <SideNoticeDialog
+          work={dialogWork}
+          fresh={dialog.fresh}
+          onClose={() => setDialog(null)}
+          onOpened={() => {
+            setDialog(null)
+            setPicked((m) => ({ ...m, [dialogWork.key]: SIDE_TAB }))
+          }}
+        />
       ) : null}
       {dialog?.kind === 'step' && dialogWork ? (
         <StepDialog
@@ -639,6 +708,107 @@ function Welcome({ onAddProject }: { onAddProject: () => void }) {
  * [이 단계 끝나면 멈춤], [단계 선택], [Work 설정], [Work 포기], [Work 정리]. 누를 수 있는지는 main이 core로
  * 판정해 보낸다. 조작은 지금 task에 한다.
  */
+/** 곁 세션 탭의 머리 띠 (시나리오 11). 끝났으면 [새 대화로 열기]를 둔다 */
+function SideBand({ work, onFresh }: { work: WorkView; onFresh: () => Promise<CommandResult> }) {
+  const [error, setError] = useState<string | null>(null)
+  const fresh = async () => {
+    setError(null)
+    const r = await onFresh()
+    if (!r.ok) setError(r.error)
+  }
+  return (
+    <>
+      <span className="band-text">
+        곁 세션 · {work.side.engineLabel} · 기록하지 않음 · 바꾸기 전에 묻습니다
+      </span>
+      {work.side.notice ? <span className="band-warn">{work.side.notice}</span> : null}
+      {work.side.status === 'live' ? null : (
+        <>
+          <span className="readonly">끝남 · 읽기 전용</span>
+          {work.side.blocked ? null : (
+            <button className="link" onClick={() => void fresh()}>
+              새 대화로 열기
+            </button>
+          )}
+        </>
+      )}
+      {error ? <span className="band-warn">{error}</span> : null}
+    </>
+  )
+}
+
+/**
+ * 곁 세션을 열 때의 안내 창 (D392). 곁 세션은 묻고 안내받는 곳이고 단계 흐름을 대신하지 않는다고 권한다. "다시 보지
+ * 않기"는 앱 설정(side_notice)에 남고 설정 화면에서 다시 켠다
+ */
+function SideNoticeDialog({
+  work,
+  fresh,
+  onClose,
+  onOpened,
+}: {
+  work: WorkView
+  fresh: boolean
+  onClose: () => void
+  onOpened: () => void
+}) {
+  const [hide, setHide] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const open = async () => {
+    setBusy(true)
+    setError(null)
+    const r = await call(() => window.relay.openSide(work.key, fresh))
+    if (!r.ok) {
+      setBusy(false)
+      setError(r.error)
+      return
+    }
+    // 연 뒤에 저장한다: 열지 못했으면 다음에도 안내가 뜬다. 곁 세션은 이미 열렸으니 저장 실패는 창을 닫지 않고 알린다
+    if (hide) {
+      const saved = await call(() => window.relay.updateConfig({ side_notice: false }))
+      if (!saved.ok) {
+        setBusy(false)
+        setError(`곁 세션은 열었지만 "다시 보지 않기"를 저장하지 못함: ${saved.error}`)
+        return
+      }
+    }
+    setBusy(false)
+    onOpened()
+  }
+  return (
+    <Modal title="곁 세션" onClose={onClose}>
+      <p>
+        곁 세션은 이 Work에 대해 <strong>묻고 안내받는 곳</strong>입니다. {work.side.engineLabel}로
+        엽니다.
+      </p>
+      <ul className="side-notice">
+        <li>
+          <strong>이럴 때 쓰세요:</strong> 왜 이렇게 고쳤는지 묻기, 다른 방법 논의, 따로 리뷰 받기,
+          앱이 꼬였을 때 원인과 다음 조작 묻기.
+        </li>
+        <li>
+          <strong>단계 흐름을 대신하지는 마세요:</strong> 코드를 바꾸는 일은 [단계 선택]의 추가
+          지시나 새 Work로 맡기기를 권합니다. 단계 흐름은 재현 테스트, 리뷰, 판정표, 승인을
+          거치지만, 곁 세션에서 바꾼 것은 그 기록에 따로 남지 않습니다.
+        </li>
+        <li>에이전트는 코드 수정, push, GitHub 글쓰기를 하기 전에 묻습니다.</li>
+      </ul>
+      <label className="toggle">
+        <input type="checkbox" checked={hide} onChange={(e) => setHide(e.target.checked)} />
+        다시 보지 않기 (설정에서 다시 켤 수 있음)
+      </label>
+      {error ? <div className="error">{error}</div> : null}
+      <div className="buttons">
+        <button onClick={onClose}>취소</button>
+        <button className="primary" disabled={busy} onClick={() => void open()}>
+          {fresh ? '새 대화로 열기' : '열기'}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
 function ActionBar({
   work,
   onSettings,
@@ -646,6 +816,7 @@ function ActionBar({
   onClean,
   onSelectStep,
   onResumed,
+  onOpenSide,
 }: {
   work: WorkView
   onSettings: () => void
@@ -653,6 +824,7 @@ function ActionBar({
   onClean: () => void
   onSelectStep: () => void
   onResumed: () => void
+  onOpenSide: () => Promise<CommandResult>
 }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -736,6 +908,24 @@ function ActionBar({
           Work 정리
         </button>
       ) : null}
+      {/* 곁 세션 (시나리오 11): 다른 버튼과 관계없이 언제든 열고 닫는다. 보관된 Work만 없다 (D385) */}
+      {work.side.blocked ? null : work.side.status === 'live' ? (
+        <button disabled={busy} onClick={() => void run(() => window.relay.closeSide(work.key))}>
+          곁 세션 닫기
+        </button>
+      ) : (
+        <button
+          disabled={busy}
+          title={
+            work.side.resumable
+              ? `앞 대화를 이어서 엽니다(${work.side.engineLabel}). 질문, 논의, 별도 리뷰, 앱 문제 대응에 씁니다`
+              : `질문, 논의, 별도 리뷰, 앱 문제 대응에 쓰는 ${work.side.engineLabel} 세션을 엽니다`
+          }
+          onClick={() => void run(onOpenSide)}
+        >
+          곁 세션 열기
+        </button>
+      )}
       {error ? <span className="error">{error}</span> : null}
       <span className="dim info">
         {work.workId} · 기준 {work.baseBranch} {work.baseCommit.slice(0, 8)}

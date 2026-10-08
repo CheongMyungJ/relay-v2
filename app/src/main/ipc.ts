@@ -248,6 +248,12 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   ipcMain.handle(IPC.finishCleanup, async (_e, workKey: unknown) =>
     (await ready).finishCleanup(text(workKey)),
   )
+  ipcMain.handle(IPC.openSide, async (_e, workKey: unknown, fresh: unknown) =>
+    (await ready).openSide(text(workKey), flag(fresh)),
+  )
+  ipcMain.handle(IPC.closeSide, async (_e, workKey: unknown) =>
+    (await ready).closeSide(text(workKey)),
+  )
   ipcMain.handle(IPC.recheck, async (_e, workKey: unknown) =>
     (await ready).recheckWork(text(workKey)),
   )

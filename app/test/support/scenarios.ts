@@ -55,6 +55,13 @@ export interface Scenario {
   resume?: Partial<Record<SkillName | string, Step[]>>
   /** 정리 세션([AI 세션 열기], 7-5)의 단계. 첫 프롬프트 없이 연 세션이다. 없으면 입력을 기다리기만 한다 */
   cleanup?: Step[]
+  /** 곁 세션(시나리오 11, I127)의 단계. --append-system-prompt-file로 연 세션이다. 없으면 입력을 기다리기만 한다 */
+  side?: Step[]
+  /** --resume으로 다시 연 곁 세션의 단계 */
+  sideResume?: Step[]
+  /** 가짜 codex의 곁 세션만의 단계 (있으면 side·sideResume 대신). 가짜 codex의 단계는 Step 밖의 것도 있다 */
+  sideCodex?: object[]
+  sideResumeCodex?: object[]
   /** 지식 검토 호출(claude -p, D300)의 n번째 결과. 없으면 문제 없음 */
   review?: { issues: { file: string; kind: string; quote: string; fix: string }[] }[]
 }

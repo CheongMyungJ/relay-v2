@@ -16,7 +16,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { agentRuntime } from '../adapters/agent'
 import { codexJson, codexSkillPath, findCodex } from '../adapters/codex'
-import { AGENT_LABELS } from '../shared/agent'
+import { AGENT_LABELS, resolveAgent, type AgentEngine } from '../shared/agent'
 import { codexToolDenial } from '../core/codex'
 import { humanAnswers, humanQuestions } from '../core/questions'
 import type { HumanAnswerReply, PendingQuestionView } from '../shared/questions'
@@ -266,6 +266,7 @@ import {
 } from '../core/respond'
 import { backupPattern, nextBackupBranch, planStep, stepChoices, stepPreview } from '../core/rewind'
 import { continuePrompt } from '../core/settings'
+import { sideBlock, sideGuide } from '../core/side'
 import {
   HANDOFF_FILE,
   INTENT_DRAFT_FILE,
@@ -297,6 +298,7 @@ import type {
   CleanInput,
   CleanPreviewResult,
   CleanupView,
+  SideView,
   CommandResult,
   Completion,
   DeliverInput,
@@ -445,25 +447,14 @@ interface PendingHumanQuestion {
 }
 
 /**
- * 정리 세션: [AI 세션 열기]로 연, 기록하지 않는 일반 터미널의 선택된 에이전트 (시나리오 7-5).
- * task가 아니라 events.jsonl, pty.log에 남기지 않는다. 앱을 다시 켜면 없다. 살아 있는 동안만 프로세스 ID와
- * 시작 시각을 work.json에 두어 앱이 충돌한 뒤 살아남으면 재시작 때 끝낸다 (D126).
+ * task가 아닌 보조 세션(정리 세션 7-5, 곁 세션 시나리오 11)의 공통 부분. events.jsonl, pty.log에 남기지 않고 앱을 다시
+ * 켜면 없다. 끝내는 순서(트리 종료 → 기다림 → 훅 토큰·임시 폴더 풀기)는 killAux와 dropAux가 같이 한다
  */
-interface CleanupSession {
-  hooksReady: boolean
-  question?: PendingHumanQuestion
-  /** Codex 내부 대화 전환에서 앞 질문을 취소한다. task 기록에는 저장하지 않는다. */
-  sessionId?: string
-  /** 대기열에서도 정리를 요청한 verify task의 엔진을 유지한다. */
-  engine: TaskRecord['engine']
-  /** 터미널 id: cleanup-<n>. 다시 열면 새 터미널이다 */
+interface AuxSession {
+  /** 터미널 id: cleanup-<n>, side-<n>. 다시 열면 새 터미널이다 */
   id: string
-  choice: DeliveryChoice
-  status: CleanupView['status']
-  /** 마지막 Stop 때 git status가 깨끗했다 */
-  clean: boolean
-  /** 세션이 끝난 뒤 남은 커밋 안 된 변경 */
-  uncommitted: string[]
+  /** Codex 훅을 한 번이라도 받았다. 받기 전에는 훅 신뢰 안내를 보인다 */
+  hooksReady: boolean
   pty: PtySession | null
   exited: Promise<void> | null
   unregister: () => void
@@ -475,8 +466,46 @@ interface CleanupSession {
   ending: boolean
 }
 
+/**
+ * 정리 세션: [AI 세션 열기]로 연, 기록하지 않는 일반 터미널의 선택된 에이전트 (시나리오 7-5).
+ * 살아 있는 동안만 프로세스 ID와 시작 시각을 work.json에 두어 앱이 충돌한 뒤 살아남으면 재시작 때 끝낸다 (D126).
+ */
+interface CleanupSession extends AuxSession {
+  question?: PendingHumanQuestion
+  /** Codex 내부 대화 전환에서 앞 질문을 취소한다. task 기록에는 저장하지 않는다. */
+  sessionId?: string
+  /** 대기열에서도 정리를 요청한 verify task의 엔진을 유지한다. */
+  engine: TaskRecord['engine']
+  choice: DeliveryChoice
+  status: CleanupView['status']
+  /** 마지막 Stop 때 git status가 깨끗했다 */
+  clean: boolean
+  /** 세션이 끝난 뒤 남은 커밋 안 된 변경 */
+  uncommitted: string[]
+}
+
 /** 정리 세션의 훅 URL(/hook/cleanup/<Event>)의 id. 터미널 id는 cleanup-<n>이다 */
 const CLEANUP_ID = 'cleanup'
+
+/**
+ * 곁 세션 (시나리오 11, D385~D392): 사람이 언제든 여는 에이전트 세션. 세션 상한(D18)을 거치지 않는다. 대화와 살아 있는
+ * 동안의 프로세스는 work.json의 side에 둔다 (D389). 사람이 그 터미널에서 대화하므로 앱 질문창은 없다 (I130)
+ */
+interface SideSession extends AuxSession {
+  /** 열 때 설정에서 정한 엔진 (D391) */
+  engine: AgentEngine
+  /** 안내 (D387). Claude는 시스템 프롬프트 파일로, Codex는 SessionStart 훅으로 준다 (D391) */
+  guide: string
+  /**
+   * 안내가 대화에 들어갔다. Claude는 실행 인자로 늘 들어간다. Codex는 SessionStart 훅에 안내를 돌려준 뒤다: 훅을 신뢰하기
+   * 전에 지나간 SessionStart는 오지 않으므로, 그 대화는 닫고 다시 열어야 안내가 들어간다. 그때까지 push와 PR 조작은 막는다
+   */
+  guided: boolean
+  status: 'live' | 'ended'
+}
+
+/** 곁 세션의 훅 URL(/hook/side/<Event>)의 id. 터미널 id는 side-<n>이다 */
+const SIDE_ID = 'side'
 const CONTEXT_FILE = 'context.md'
 const SETTINGS_FILE = 'task.settings.json'
 const MAX_DIFF_CHARS = 2_000_000
@@ -484,6 +513,23 @@ const KILL_WAIT_MS = 10_000
 
 /** 다시 연 세션의 출력 앞에 넣는 줄. 이전 화면 뒤에 이어 보인다 (시나리오 3-4) */
 const RESUME_MARK = '\r\n\x1b[0m\x1b[2m── relay: 세션 재개 (--resume) ──\x1b[0m\r\n'
+
+/** 곁 세션의 출력 앞에 넣는 줄 (시나리오 11). 이어 가면 CLI가 앞 대화를 다시 그린다 */
+const sideMark = (resume: boolean) =>
+  `\x1b[0m\x1b[2m── relay: 곁 세션 · ${resume ? '앞 대화를 이어 갑니다 (--resume)' : '새 대화'} ──\x1b[0m\r\n`
+
+/**
+ * Codex 곁 세션의 안내가 아직 대화에 들어가지 않았을 때의 머리 띠 안내 (D391). 훅을 신뢰하기 전에 지나간 SessionStart는
+ * 다시 오지 않으므로 닫고 다시 열어야 들어간다
+ */
+function sideNotice(s: SideSession): { notice?: string } {
+  if (s.status !== 'live' || s.guided) return {}
+  return {
+    notice: s.hooksReady
+      ? '이 대화에는 곁 세션 안내가 들어가지 않았습니다(훅을 신뢰하기 전에 시작됨). 곁 세션을 닫고 다시 여세요. 그때까지 push와 PR 조작은 막습니다.'
+      : 'Codex 터미널의 폴더 신뢰 확인 후 /hooks로 relay 훅을 검토·신뢰한 뒤 곁 세션을 닫고 다시 여세요. 그래야 곁 세션 안내가 들어갑니다.',
+  }
+}
 
 /** 새 세션의 출력 앞에 넣는 줄. CLI가 첫 화면을 그리기 전의 빈 화면을 채운다 (시나리오 2-5, D215) */
 const startMark = (task: TaskRecord) =>
@@ -572,6 +618,9 @@ export class WorkRunner {
   /** 정리 세션 ([AI 세션 열기], 7-5) */
   private cleanup: CleanupSession | null = null
   private cleanupSeq = 0
+  /** 곁 세션 (시나리오 11). 앱을 다시 켜면 없고, 이어 갈 대화는 work.json의 side에 있다 */
+  private side: SideSession | null = null
+  private sideSeq = 0
   /** 재시작 때 끝낸 이 Work의 고아 프로세스 (D76, D121). [확인]으로 지운다 */
   private orphans: RecordedProcess[] = []
   /** 앱 밖에서 바뀐 앱 소유 파일: 알림 줄과 그때의 해시 (D124). [확인]으로 지운다 */
@@ -644,9 +693,9 @@ export class WorkRunner {
     this.key = `${project.project_id}/${work.work_id}`
   }
 
-  /** 이 앱에서 살아 있는 세션이 있다 (앱 종료 확인, 시나리오 3-6). 정리 세션도 센다 */
+  /** 이 앱에서 살아 있는 세션이 있다 (앱 종료 확인, 시나리오 3-6). 정리 세션과 곁 세션(D390)도 센다 */
   hasLiveSession(): boolean {
-    return this.live.size > 0 || this.cleanup?.status === 'live'
+    return this.live.size > 0 || this.cleanup?.status === 'live' || this.side?.status === 'live'
   }
 
   /** Work의 이벤트를 하나씩 처리한다 */
@@ -1818,7 +1867,7 @@ export class WorkRunner {
   }
 
   /** Codex의 도구 보호는 진행 표시의 빠른 응답 경로에서도 먼저 판정한다. */
-  private codexToolReply(req: HookRequest, task?: TaskRecord): HookReply {
+  private codexToolReply(req: HookRequest, task?: TaskRecord, allowPush = false): HookReply {
     const b = req.body
     const toolName = str(b['tool_name']) ?? ''
     const args = b['tool_input']
@@ -1831,6 +1880,7 @@ export class WorkRunner {
         previousTaskDirs: this.work.tasks
           .filter((t) => !task || t.seq < task.seq)
           .map((t) => this.files.taskDir(t)),
+        ...(allowPush ? { allowPush } : {}),
       },
       toolName,
       typeof args === 'object' && args !== null ? (args as Record<string, unknown>) : {},
@@ -2900,15 +2950,28 @@ export class WorkRunner {
   /** 정리 세션에 걸어 둔 것을 푼다: 훅 토큰, 설정 파일 폴더, 적어 둔 프로세스(D126). 끝난 것으로 둔다 */
   private async releaseCleanup(c: CleanupSession): Promise<void> {
     this.cancelQuestion(c, '정리 세션을 종료했습니다.')
-    c.handled = true
     c.status = 'ended'
-    c.unregister()
-    const buffer = this.terminals.get(c.id)
-    if (buffer) buffer.live = false
-    if (c.dir) await fsp.rm(c.dir, { recursive: true, force: true }).catch(() => undefined)
-    c.dir = null
+    await this.dropAux(c)
     this.changed()
     await this.feed({ type: 'cleanup.ended', at: this.ctx.at() })
+  }
+
+  /** 보조 세션의 프로세스 트리를 끝내고 기다린다. 끝내는 중의 훅은 바로 답한다 (D231, endSession과 같음) */
+  private async killAux(s: AuxSession): Promise<void> {
+    if (!s.pty) return
+    s.ending = true
+    await s.pty.killTree()
+    await Promise.race([s.exited, sleep(KILL_WAIT_MS)])
+  }
+
+  /** 보조 세션에 걸어 둔 것을 푼다: 훅 토큰, 터미널의 살아 있음, 임시 폴더. 끝난 것으로 둔다 */
+  private async dropAux(s: AuxSession): Promise<void> {
+    s.handled = true
+    s.unregister()
+    const buffer = this.terminals.get(s.id)
+    if (buffer) buffer.live = false
+    if (s.dir) await fsp.rm(s.dir, { recursive: true, force: true }).catch(() => undefined)
+    s.dir = null
   }
 
   /** 살아 있거나 대기열에 있는 정리 세션을 끝낸다 */
@@ -2918,10 +2981,7 @@ export class WorkRunner {
     if (c.status === 'queued') {
       this.ctx.pool.remove(this.slotKey(c.id))
     } else if (c.pty) {
-      // 끝내는 중인 정리 세션의 훅은 줄에 넣지 않고 바로 답한다 (D231, endSession과 같음)
-      c.ending = true
-      await c.pty.killTree()
-      await Promise.race([c.exited, sleep(KILL_WAIT_MS)])
+      await this.killAux(c)
       this.ctx.pool.release()
     }
     await this.releaseCleanup(c)
@@ -2969,6 +3029,237 @@ export class WorkRunner {
       }
     }
     return this.deliverNow(c.choice, null)
+  }
+
+  // ---------- 곁 세션 (시나리오 11, D385~D392) ----------
+
+  /**
+   * [곁 세션 열기] (시나리오 11). 엔진·모델·추론 수준은 열 때의 설정이다 (D391). 적어 둔 대화가 있고 그 엔진이 같으면
+   * 이어 가고, fresh거나 없거나 엔진이 다르면 새 대화다 (D386, D389). 세션 상한을 거치지 않는다 (D385). 다른 동작은 막지
+   * 않는다 (D390). 안내 창(D392)은 화면이 띄운다
+   */
+  openSide(fresh: boolean): Promise<CommandResult> {
+    return this.enqueue(async () => {
+      const blocked = sideBlock(this.work)
+      if (blocked) return { ok: false, error: blocked }
+      if (this.side?.status === 'live') return { ok: false, error: '곁 세션이 이미 열려 있음' }
+      return this.launchSide(fresh)
+    })
+  }
+
+  /** 이어 갈 곁 세션 대화: 적어 둔 대화가 있고 그 엔진이 지금 설정의 엔진과 같다 (D391) */
+  private sideResumeId(engine: AgentEngine): string | null {
+    const side = this.work.side
+    return side?.session_id !== undefined && (side.engine ?? 'claude') === engine
+      ? side.session_id
+      : null
+  }
+
+  /** 곁 세션을 띄운다. 안내와 설정은 열 때마다 임시 폴더에 새로 만든다 (I126) */
+  private async launchSide(fresh: boolean): Promise<CommandResult> {
+    const { env } = this.ctx
+    const config = this.ctx.config()
+    const agent = resolveAgent(config, 'side')
+    const previous = fresh ? null : this.sideResumeId(agent.engine)
+    const resume = previous !== null
+    // Claude는 새 대화의 id를 정해 준다. Codex는 훅이 알려 주는 id를 첫 요청 때 적는다 (D391)
+    const sessionId = previous ?? randomUUID()
+    const id = `${SIDE_ID}-${++this.sideSeq}`
+    const s: SideSession = {
+      id,
+      engine: agent.engine,
+      guide: sideGuide({
+        work: this.work,
+        title: this.title,
+        worktree: this.worktree,
+        workDir: this.files.dir,
+        signature: config.reply_signature,
+      }),
+      hooksReady: false,
+      // Claude는 실행 인자(--append-system-prompt-file)로 안내가 들어간다
+      guided: agent.engine === 'claude',
+      status: 'live',
+      pty: null,
+      exited: null,
+      unregister: () => {},
+      dir: null,
+      handled: false,
+      ending: false,
+    }
+    let pid: number
+    try {
+      const driver = agentRuntime(agent.engine)
+      const bin = driver.find(env)
+      if (!bin) throw new Error(driver.installGuide)
+      s.dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'relay-side-'))
+      const settingsPath = path.join(s.dir, 'side.settings.json')
+      const guidePath = path.join(s.dir, 'side.guide.md')
+      await writeJson(
+        settingsPath,
+        driver.sideSettings({
+          port: this.ctx.hooks.port,
+          taskId: SIDE_ID,
+          workDir: this.files.dir,
+          ...(agent.model ? { model: agent.model } : {}),
+          ...(agent.effort ? { effort: agent.effort } : {}),
+        }),
+      )
+      await fsp.writeFile(guidePath, s.guide, 'utf8')
+      const args = await driver.sideArgs({
+        sessionId,
+        resume,
+        workDir: this.files.dir,
+        settingsPath,
+        guidePath,
+        ...(agent.model ? { model: agent.model } : {}),
+        ...(agent.effort ? { effort: agent.effort } : {}),
+      })
+      const token = randomBytes(32).toString('hex')
+      const { cols, rows } = this.ctx.size()
+      const buffer = new TerminalBuffer()
+      buffer.live = true
+      buffer.push(sideMark(resume))
+      this.terminals.set(id, buffer)
+      const pty = startPty({
+        bin,
+        args,
+        cwd: this.worktree,
+        env: { ...env, ...driver.launchEnv(token, this.ctx.hooks.port, SIDE_ID) },
+        cols,
+        rows,
+        answerQueries: true,
+      })
+      const key = this.terminalKey(id)
+      let exited!: () => void
+      s.exited = new Promise((r) => (exited = r))
+      s.pty = pty
+      pty.onData((data) => {
+        if (!s.handled) this.ctx.ui.terminal(key, buffer.push(data))
+      })
+      pty.onExit(() => {
+        exited()
+        void this.enqueue(() => this.onSideExit(s))
+      })
+      s.unregister = this.ctx.hooks.register(
+        token,
+        SIDE_ID,
+        (req) => this.sideHook(s, req),
+        // Codex 도구 보호 훅은 main의 오류를 빈 성공으로 번역하지 않는다. 질문창(relay MCP)은 없다 (I130)
+        agent.engine === 'codex' ? { failClosed: true } : {},
+      )
+      // 끝난 앞 곁 세션의 터미널은 새 터미널로 바꾼다
+      if (this.side) this.terminals.delete(this.side.id)
+      this.side = s
+      this.changed()
+      pid = pty.pid
+    } catch (err) {
+      // 띄우지 못했으면 만든 것을 치우고 앞 곁 세션(끝난 터미널)은 그대로 둔다
+      s.handled = true
+      s.unregister()
+      if (s.pty) await s.pty.killTree().catch(() => undefined)
+      this.terminals.delete(id)
+      if (s.dir) await fsp.rm(s.dir, { recursive: true, force: true }).catch(() => undefined)
+      return { ok: false, error: `곁 세션을 열지 못함: ${message(err)}` }
+    }
+    // 살아 있는 동안 프로세스 ID와 시작 시각을 적는다. 앱이 충돌한 뒤 살아남으면 재시작 때 끝낸다 (D389)
+    const processStartedAt = await processStartTime(pid)
+    await this.feed({
+      type: 'side.started',
+      at: this.ctx.at(),
+      pid,
+      ...(processStartedAt ? { processStartedAt } : {}),
+    })
+    return { ok: true }
+  }
+
+  /**
+   * 곁 세션의 훅 (D388, D391). 처리 줄에 넣지 않고 바로 답해 사람의 요청과 도구를 붙잡지 않는다. 대화를 적는 일만 줄에
+   * 넣는다. Claude는 UserPromptSubmit만 온다. Codex는 SessionStart에 안내를 돌려주고 도구 보호를 한다: 안내가 들어간
+   * 뒤에는 push와 PR 조작을 막지 않는다(D388). 질문은 터미널에서 평문으로 하므로 질문 처리는 없다 (I130)
+   */
+  private sideHook(s: SideSession, req: HookRequest): Promise<HookReply> {
+    if (this.side !== s || s.status !== 'live' || s.ending) return Promise.resolve(null)
+    const codex = s.engine === 'codex'
+    if (codex && !s.hooksReady) {
+      s.hooksReady = true
+      this.changed()
+    }
+    // 서브에이전트의 신호는 대화를 바꾸지 않는다. 도구 보호는 서브에이전트에도 건다
+    if (codex && str(req.body['agent_id']) !== undefined && req.event !== 'PreToolUse')
+      return Promise.resolve(null)
+    if (codex && req.event === 'PreToolUse')
+      return Promise.resolve(this.codexToolReply(req, undefined, s.guided))
+    if (codex && req.event === 'SessionStart') {
+      // startup, resume, clear, compact 모두 안내를 다시 넣는다 (Codex task와 같음)
+      if (!s.guided) {
+        s.guided = true
+        this.changed()
+      }
+      return Promise.resolve({
+        hookSpecificOutput: { hookEventName: req.event, additionalContext: s.guide },
+      })
+    }
+    const sessionId = str(req.body['session_id'])
+    if (req.event === 'UserPromptSubmit' && sessionId) {
+      void this.enqueue(async () => {
+        if (this.side === s && !s.handled) {
+          await this.feed({
+            type: 'side.conversation',
+            at: this.ctx.at(),
+            sessionId,
+            engine: s.engine,
+          })
+        }
+      })
+    }
+    return Promise.resolve(null)
+  }
+
+  /** 곁 세션이 스스로 끝났다(/exit, 이어 갈 대화를 찾지 못함) */
+  private async onSideExit(s: SideSession): Promise<void> {
+    if (this.side !== s || s.handled) return
+    await this.releaseSide(s)
+  }
+
+  /** 곁 세션에 걸어 둔 것을 푼다: 질문, 훅 토큰, 임시 폴더, 적어 둔 프로세스(D389). 끝난 것으로 둔다 */
+  private async releaseSide(s: SideSession): Promise<void> {
+    s.status = 'ended'
+    await this.dropAux(s)
+    this.changed()
+    await this.feed({ type: 'side.ended', at: this.ctx.at() })
+  }
+
+  /** 살아 있는 곁 세션을 끝낸다 */
+  private async endSide(): Promise<void> {
+    const s = this.side
+    if (!s || s.handled) return
+    await this.killAux(s)
+    await this.releaseSide(s)
+  }
+
+  /** [곁 세션 닫기] (시나리오 11-5). 탭은 끝난 터미널로 남는다 */
+  closeSide(): Promise<CommandResult> {
+    return this.enqueue(async () => {
+      if (this.side?.status !== 'live') return { ok: false, error: '곁 세션이 열려 있지 않음' }
+      await this.endSide()
+      return { ok: true }
+    })
+  }
+
+  private sideView(): SideView {
+    const s = this.side
+    // 열린 곁 세션은 그 엔진, 아니면 지금 열 때 쓸 설정의 엔진이다 (D391)
+    const next = resolveAgent(this.ctx.config(), 'side').engine
+    const engine = s?.status === 'live' ? s.engine : next
+    return {
+      terminal: s ? this.terminalKey(s.id) : null,
+      status: s?.status ?? null,
+      engineLabel: AGENT_LABELS[engine],
+      ...(s ? sideNotice(s) : {}),
+      // 이어 갈 대화는 지금 설정의 엔진과 같은 것만이다 (D391)
+      resumable: this.sideResumeId(next) !== null,
+      blocked: sideBlock(this.work),
+    }
   }
 
   // ---------- 정리 (시나리오 8) ----------
@@ -3023,7 +3314,11 @@ export class WorkRunner {
       uncommitted: worktree ? await statusLines(this.worktree, opts) : [],
       locks: worktree ? await lockFiles(this.worktree, opts) : [],
       submodules: worktree ? await checkedOutSubmodules(this.worktree, opts) : [],
-      live: this.live.size + (this.cleanup?.status === 'live' ? 1 : 0),
+      // 곁 세션도 정리가 끝낸다 (D390)
+      live:
+        this.live.size +
+        (this.cleanup?.status === 'live' ? 1 : 0) +
+        (this.side?.status === 'live' ? 1 : 0),
       branch: {
         name,
         exists: head !== null,
@@ -3101,6 +3396,8 @@ export class WorkRunner {
       for (const id of [...this.live.keys()]) await this.endSession(id)
       await this.endCleanup()
       this.cleanup = null
+      // 곁 세션도 끝낸다: worktree를 지운다 (D390)
+      await this.endSide()
       if (e.resume === undefined) {
         if (await exists(this.worktree)) {
           await removeWorktree(repo, this.worktree, { ...opts, force: e.force })
@@ -3387,8 +3684,12 @@ export class WorkRunner {
           reason: 'app_quit',
         })
       }
-      await Promise.all([...this.live.keys()].map((id) => this.endSession(id)))
-      await this.endCleanup()
+      // 보조 세션도 task 세션과 함께 끝낸다: 하나씩 끝내면 KILL_WAIT_MS를 차례로 기다린다
+      await Promise.all([
+        ...[...this.live.keys()].map((id) => this.endSession(id)),
+        this.endCleanup(),
+        this.endSide(),
+      ])
     })
   }
 
@@ -4752,7 +5053,7 @@ export class WorkRunner {
 
   /** 탭이 붙을 때 지금까지의 출력. 끝난 task는 pty.log를 읽어 읽기 전용으로 보인다 */
   async attach(taskId: string): Promise<TerminalBacklog> {
-    if (taskId.startsWith(`${CLEANUP_ID}-`)) {
+    if (this.auxOf(taskId)) {
       return this.terminals.get(taskId)?.backlog() ?? { data: '', next: 0, live: false }
     }
     const task = this.task(taskId)
@@ -4760,10 +5061,15 @@ export class WorkRunner {
     return (await this.terminalBuffer(task)).backlog()
   }
 
-  /** 입력을 받는 PTY: task의 살아 있는 세션이나 정리 세션 */
+  /** 터미널 id의 보조 세션 (정리 세션, 곁 세션). 새 종류는 여기에만 더한다 */
+  private auxOf(terminalId: string): CleanupSession | SideSession | undefined {
+    return [this.cleanup, this.side].find((s) => s?.id === terminalId) ?? undefined
+  }
+
+  /** 입력을 받는 PTY: task의 살아 있는 세션이나 보조 세션 */
   private ptyOf(taskId: string): PtySession | undefined {
-    const c = this.cleanup
-    if (c && taskId === c.id) return c.status === 'live' ? (c.pty ?? undefined) : undefined
+    const aux = this.auxOf(taskId)
+    if (aux) return aux.status === 'live' ? (aux.pty ?? undefined) : undefined
     return this.live.get(taskId)?.pty
   }
 
@@ -5023,6 +5329,7 @@ export class WorkRunner {
       delivery: deliveryView(w.delivery),
       pr: this.prPanel(),
       cleanup: this.cleanupView(),
+      side: this.sideView(),
       operation: operationView(w),
       issue: this.issueView(),
       notices: this.noticeViews(),

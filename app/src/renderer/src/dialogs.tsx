@@ -892,6 +892,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         handoff_body_warn_chars: value.handoff_body_warn_chars,
         intent_warn_chars: value.intent_warn_chars,
         pr_draft: value.pr_draft,
+        side_notice: value.side_notice,
         pr_poll_interval_sec: value.pr_poll_interval_sec,
         respond_auto_start: value.respond_auto_start,
         respond_auto_round_max: value.respond_auto_round_max,
@@ -988,6 +989,18 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 aria-label="draft PR로 만들기"
                 checked={value.pr_draft}
                 onChange={(e) => setDraft({ ...value, pr_draft: e.target.checked })}
+              />
+            </label>
+            <label
+              className="form-row"
+              title="곁 세션을 열 때 쓰임과 권하는 쓰는 법을 알리는 창을 띄운다. 창의 [다시 보지 않기]가 끈다 (D392)"
+            >
+              <span>곁 세션을 열 때 안내 보기</span>
+              <input
+                type="checkbox"
+                aria-label="곁 세션을 열 때 안내 보기"
+                checked={value.side_notice}
+                onChange={(e) => setDraft({ ...value, side_notice: e.target.checked })}
               />
             </label>
             <label

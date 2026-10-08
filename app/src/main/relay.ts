@@ -638,6 +638,16 @@ export class Relay {
     return this.withWork(workKey, (w) => w.closeCleanup())
   }
 
+  /** [곁 세션 열기] (시나리오 11) */
+  openSide(workKey: string, fresh: boolean): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.openSide(fresh))
+  }
+
+  /** [곁 세션 닫기] (시나리오 11) */
+  closeSide(workKey: string): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.closeSide())
+  }
+
   /** [정리 끝 → push/PR 진행] (7-5) */
   async finishCleanup(workKey: string): Promise<DeliverResult> {
     const runner = this.works.get(workKey)

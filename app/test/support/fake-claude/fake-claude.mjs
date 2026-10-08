@@ -16,6 +16,9 @@
 //   새 세션은 다음 요청으로 대화가 생겨야 --resume으로 열 수 있다.
 // - 첫 프롬프트 없이 연 세션은 정리 세션([AI 세션 열기], 시나리오 7-5)이라 시나리오의 cleanup 단계를 한다.
 //   git 단계는 worktree에서 git을 부른다(정리 세션이 변경을 되돌리거나 커밋하는 것을 흉내 낸다).
+// - --append-system-prompt-file을 받은 세션은 곁 세션(시나리오 11, I127)이라 시나리오의 side 단계(--resume이면
+//   sideResume)를 하고, 기록에 side: true와 안내 파일의 내용을 남긴다. 실제처럼 새 대화는 첫 요청(prompt 단계) 뒤에야
+//   저장해, 묻지 않고 닫은 대화를 --resume하면 "No conversation found"로 끝난다(D389).
 // - PR 대응 task(스킬 pr-respond)의 respond 단계는 context.md의 이번 라운드 항목(`#### \`<항목 id>\` — …`)을 읽어
 //   response.md(항목마다 한 줄)와 replies.md(코멘트 항목마다 `## <항목 id>`, D190)를 쓴다. merge 단계는 앱이 fetch한
 //   원격 브랜치(remote: PR 브랜치, base: 기준 브랜치)를 worktree에서 병합한다(D181, D193. context.md의 브랜치 이름).
@@ -108,6 +111,8 @@ const opts = {
   addDirs: [],
   settings: null,
   prompt: null,
+  guide: null,
+  effort: null,
 }
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
@@ -118,7 +123,9 @@ for (let i = 0; i < argv.length; i++) {
     opts.resume = true
   } else if (a === '--add-dir') opts.addDirs.push(argv[++i])
   else if (a === '--settings') opts.settings = argv[++i]
-  else if (a === '--model' || a === '--effort') i++
+  else if (a === '--append-system-prompt-file') opts.guide = argv[++i]
+  else if (a === '--effort') opts.effort = argv[++i]
+  else if (a === '--model') i++
   else if (!a.startsWith('--') && opts.prompt === null) opts.prompt = a
 }
 
@@ -160,6 +167,8 @@ function permissionMode() {
   return env.FAKE_CLAUDE_PERMISSION_MODE || (opts.skip ? 'bypassPermissions' : 'default')
 }
 
+const EFFORT_EVENTS = new Set(['PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'Stop'])
+
 async function hook(event, fields = {}, toolName) {
   const settings = loadSettings()
   const groups = settings.hooks?.[event] ?? []
@@ -170,6 +179,8 @@ async function hook(event, fields = {}, toolName) {
     cwd: process.cwd(),
     // 실제 SessionEnd에는 permission_mode가 없다 (test/contract/fixtures/claude.json)
     ...(event === 'SessionEnd' ? {} : { permission_mode: permissionMode() }),
+    // 도구 훅과 Stop에는 추론 수준이 온다(Claude Code 2.1.293 녹화본). --effort가 없으면 녹화 때의 기본 medium
+    ...(EFFORT_EVENTS.has(event) ? { effort: { level: opts.effort ?? 'medium' } } : {}),
     hook_event_name: event,
     ...fields,
   }
@@ -451,12 +462,16 @@ async function run() {
     out(`No conversation found with session ID: ${opts.sessionId}`)
     process.exit(1)
   }
-  if (!opts.resume) saveSession(ctx)
+  const side = opts.guide !== null
+  // 곁 세션의 새 대화는 첫 요청 뒤에 저장한다 (실제 claude, D389)
+  if (side && !opts.resume) unsaved = true
+  else if (!opts.resume) saveSession(ctx)
   record({
     type: 'start',
     args: argv,
     resume: opts.resume,
-    cleanup: !opts.resume && opts.prompt === null,
+    cleanup: !side && !opts.resume && opts.prompt === null,
+    ...(side ? { side: true, guide: fs.readFileSync(opts.guide, 'utf8') } : {}),
     cwd: process.cwd(),
     token: Boolean(env.RELAY_HOOK_TOKEN),
     skill: ctx.skill,
@@ -468,11 +483,13 @@ async function run() {
   // 첫 프롬프트가 없으면 정리 세션이다 (7-5). cleanup 시나리오가 없으면 입력을 기다리기만 한다
   const vars = { taskDir: ctx.taskDir, taskId: ctx.taskId, node: ctx.node, attempt: 0 }
   if (opts.resume && opts.prompt !== null) await steps([{ do: 'prompt' }], ctx, vars)
-  const list = opts.resume
-    ? (scenario.resume?.[ctx.taskId] ?? scenario.resume?.[ctx.skill] ?? [])
-    : opts.prompt === null
-      ? (scenario.cleanup ?? [])
-      : (scenario.tasks?.[ctx.taskId] ?? scenario.tasks?.[ctx.skill] ?? [{ do: 'prompt' }])
+  const list = side
+    ? ((opts.resume ? scenario.sideResume : scenario.side) ?? [])
+    : opts.resume
+      ? (scenario.resume?.[ctx.taskId] ?? scenario.resume?.[ctx.skill] ?? [])
+      : opts.prompt === null
+        ? (scenario.cleanup ?? [])
+        : (scenario.tasks?.[ctx.taskId] ?? scenario.tasks?.[ctx.skill] ?? [{ do: 'prompt' }])
   await steps(list, ctx, vars)
   out('[가짜 claude] 대기')
 }

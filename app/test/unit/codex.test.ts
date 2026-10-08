@@ -4,6 +4,25 @@ import { actions, createWork, currentTask, transition } from '../../src/core/mac
 import { DEFAULT_CONFIG } from '../../src/shared/config'
 import type { Handoff } from '../../src/shared/contracts'
 
+describe('Codex 곁 세션의 보호 범위 (D388, D391)', () => {
+  const input = {
+    workDir: '/home/relay/work',
+    worktree: '/repo',
+    previousTaskDirs: ['/home/relay/work/tasks/01-intake', '/home/relay/work/tasks/02-fix'],
+    allowPush: true,
+  }
+  it('push와 PR 조작은 막지 않고, 앱 소유 파일과 모든 task 기록은 막는다', () => {
+    for (const command of ['git push origin relay/w-1', 'gh pr comment 3 --body "확인"'])
+      expect(codexToolDenial(input, 'exec_command', { cmd: command }), command).toBeNull()
+    expect(
+      codexToolDenial(input, 'Write', { path: '/home/relay/work/tasks/02-fix/handoff.md' }),
+    ).toBeTruthy()
+    expect(
+      codexToolDenial(input, 'Edit', { file_path: '/home/relay/work/decisions.md' }),
+    ).toBeTruthy()
+  })
+})
+
 describe('Codex 보호 범위', () => {
   const input = {
     workDir: '/home/relay/work',

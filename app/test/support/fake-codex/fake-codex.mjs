@@ -63,8 +63,10 @@ if (argv[0] === 'exec') {
 const config = new Map()
 let resumeId = null
 let resumePrompt = null
+let addDir = null
 for (let i = 0; i < argv.length; i++) {
-  if (argv[i] === '-c') {
+  if (argv[i] === '--add-dir') addDir = argv[++i]
+  else if (argv[i] === '-c') {
     const v = argv[++i]
     const eq = v.indexOf('=')
     config.set(v.slice(0, eq), v.slice(eq + 1))
@@ -162,32 +164,48 @@ async function hook(event, extra = {}) {
   return reply
 }
 
-const mcp = spawn(executable, mcpArgs, {
-  env: { ...env, ELECTRON_RUN_AS_NODE: '1', ...(skill ? { RELAY_CODEX_SKILL: skill } : {}) },
-  stdio: ['pipe', 'pipe', 'pipe'],
-})
+// relay MCP가 없는 실행(곁 세션, I130)은 MCP 서버를 띄우지 않는다. 실제 Codex도 설정에 없는 서버는 띄우지 않는다
+const mcp = executable
+  ? spawn(executable, mcpArgs, {
+      env: { ...env, ELECTRON_RUN_AS_NODE: '1', ...(skill ? { RELAY_CODEX_SKILL: skill } : {}) },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+  : null
 let rpcId = 0
 const pending = new Map()
-readline.createInterface({ input: mcp.stdout }).on('line', (line) => {
-  const msg = JSON.parse(line)
-  pending.get(msg.id)?.(msg)
-  pending.delete(msg.id)
-})
-mcp.stderr.on('data', (s) => console.error(String(s)))
+if (mcp) {
+  readline.createInterface({ input: mcp.stdout }).on('line', (line) => {
+    const msg = JSON.parse(line)
+    pending.get(msg.id)?.(msg)
+    pending.delete(msg.id)
+  })
+  mcp.stderr.on('data', (s) => console.error(String(s)))
+}
 function rpc(method, params) {
+  if (!mcp) throw new Error('relay MCP가 설정에 없습니다')
   const id = ++rpcId
   const promise = new Promise((resolve) => pending.set(id, resolve))
   mcp.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`)
   return promise
 }
-await rpc('initialize', {
-  protocolVersion: '2024-11-05',
-  capabilities: {},
-  clientInfo: { name: 'fake-codex', version: '1' },
-})
-await hook('SessionStart', { source: resumeId ? 'resume' : 'startup' })
+if (mcp)
+  await rpc('initialize', {
+    protocolVersion: '2024-11-05',
+    capabilities: {},
+    clientInfo: { name: 'fake-codex', version: '1' },
+  })
 const scenario = JSON.parse(fs.readFileSync(env.FAKE_CODEX_SCENARIO, 'utf8'))
-const fill = (s) => String(s).replaceAll('{taskDir}', context.taskDir)
+// 곁 세션(시나리오 11, I130)은 앱이 훅 경로로 넘기는 RELAY_HOOK_TASK가 side다. 시나리오의 side·sideResume을 한다.
+// 가짜 claude와 같은 시나리오에서 Codex만 따로 하려면 sideCodex·sideResumeCodex를 쓴다
+const side = env.RELAY_HOOK_TASK === 'side'
+// sideNoStart: 훅을 신뢰하기 전에 SessionStart가 지나간 새 곁 세션을 흉내 낸다(실제 Codex는 신뢰 전 훅을 보내지 않음)
+if (!(side && !resumeId && scenario.sideNoStart))
+  await hook('SessionStart', { source: resumeId ? 'resume' : 'startup' })
+// {workDir}는 --add-dir로 받은 Work 디렉터리다 (곁 세션의 보호 시험)
+const fill = (s) =>
+  String(s)
+    .replaceAll('{taskDir}', context.taskDir)
+    .replaceAll('{workDir}', addDir ?? '')
 const filled = (value) =>
   typeof value === 'string'
     ? fill(value)
@@ -261,7 +279,7 @@ async function steps(list) {
     } else if (step.do === 'hook') await hook(step.event, filled(step.body))
     else if (step.do === 'exit') {
       await hook('SessionEnd', { reason: 'other' })
-      mcp.kill()
+      mcp?.kill()
       process.exit(0)
     } else if (step.do === 'wait') await new Promise(() => {})
     else throw new Error(`지원하지 않는 시험 단계: ${step.do}`)
@@ -269,8 +287,12 @@ async function steps(list) {
 }
 await steps(
   resumeId
-    ? (scenario.resume?.[context.skill] ?? [])
+    ? ((side
+        ? (scenario.sideResumeCodex ?? scenario.sideResume)
+        : scenario.resume?.[context.skill]) ?? [])
     : context.skill
       ? (scenario.tasks?.[context.skill] ?? [])
-      : (scenario.cleanup ?? []),
+      : side
+        ? (scenario.sideCodex ?? scenario.side ?? [])
+        : (scenario.cleanup ?? []),
 )

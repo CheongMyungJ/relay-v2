@@ -5,7 +5,7 @@
 // 대화형에서만 달라지는 필드는 녹화본에 없다. 그런 차이는 [실제](실제 claude를 앱으로 띄움)가 잡는다.
 //
 // - 훅 본문: 앱이 읽는 필드와 그 타입(src/main/work.ts, src/core/approval.ts). 앱이 읽지 않는 필드는 계약에 넣지 않는다.
-// - 실행 인자: 앱이 claude에 넘기는 옵션(src/core/settings.ts의 launchArgs·resumeArgs·cleanupArgs,
+// - 실행 인자: 앱이 claude에 넘기는 옵션(src/core/settings.ts의 launchArgs·resumeArgs·cleanupArgs·sideArgs,
 //   src/adapters/claude.ts의 claudeJsonArgs). 실제 claude의 --help에 모두 있어야 한다.
 import fs from 'node:fs'
 import http from 'node:http'
@@ -17,6 +17,7 @@ import {
   HOOK_EVENTS,
   launchArgs,
   resumeArgs,
+  sideArgs,
   type HookEvent,
 } from '../../src/core/settings'
 
@@ -110,14 +111,22 @@ export function appFlags(): string[] {
       effort: 'low',
     }),
     ...cleanupArgs(p),
+    ...sideArgs({ sessionId: 'id', resume: false, workDir: p, settingsPath: p, guidePath: p }),
+    ...sideArgs({ sessionId: 'id', resume: true, workDir: p, settingsPath: p, guidePath: p }),
     ...claudeJsonArgs({ model: 'm', effort: 'low', system: 's', schema: {} }),
   ]
   return [...new Set(args.filter((a) => /^--?[a-z]/.test(a)))].sort()
 }
 
-/** claude --help에 나온 옵션 이름 (-p처럼 짧은 이름과 --print처럼 긴 이름 모두) */
+/**
+ * claude --help에 나온 옵션 이름 (-p처럼 짧은 이름과 --print처럼 긴 이름 모두). `--system-prompt[-file]`처럼 꼬리를
+ * 괄호로 묶은 표기는 두 옵션으로 읽는다: `--append-system-prompt-file`은 이 표기로만 나온다(2.1.289, 2.1.294)
+ */
 export function helpFlags(help: string): string[] {
-  return [...new Set(help.match(/(?<![\w-])--?[a-z][\w-]*/g) ?? [])].sort()
+  const flags = [...help.matchAll(/(?<![\w-])(--?[a-z][\w-]*)(?:\[(-[\w-]+)\])?/g)].flatMap((m) =>
+    m[1] === undefined ? [] : m[2] === undefined ? [m[1]] : [m[1], m[1] + m[2]],
+  )
+  return [...new Set(flags)].sort()
 }
 
 export interface Recorded {

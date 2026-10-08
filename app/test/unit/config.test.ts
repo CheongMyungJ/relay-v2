@@ -459,10 +459,11 @@ describe('[단위] 기본 모델·추론 수준과 단계별 실행 설정', () 
     })
   })
 
-  it('단계 목록은 의도 정리부터 PR 대응까지 아홉 단계이고 이름은 노드의 화면 이름이다 (F3)', () => {
-    expect(AGENT_STEP_TITLES.map(([skill, title]) => [skill, title])).toEqual(
+  it('단계 목록은 의도 정리부터 PR 대응까지 아홉 단계이고 이름은 노드의 화면 이름이다. 끝은 곁 세션이다 (F3, D391)', () => {
+    expect(AGENT_STEP_TITLES.slice(0, -1).map(([skill, title]) => [skill, title])).toEqual(
       [...ALL_NODES, RESPOND].map((n) => [NODE_INFO[n].skill, NODE_INFO[n].title]),
     )
+    expect(AGENT_STEP_TITLES.at(-1)).toEqual(['side', '곁 세션', 'common'])
     expect(AGENT_STEP_TITLES.map(([, title]) => title)).toEqual([
       '의도 정리',
       '원인 분석과 수정',
@@ -473,7 +474,31 @@ describe('[단위] 기본 모델·추론 수준과 단계별 실행 설정', () 
       '실행',
       '리뷰와 검증',
       'PR 대응',
+      '곁 세션',
     ])
+  })
+
+  it('곁 세션 줄도 다른 단계처럼 저장하고 검사한다 (D391)', () => {
+    const r = applyConfigPatch(DEFAULT_CONFIG, {
+      agent_steps: { side: { engine: 'codex' } },
+    })
+    expect(r).toMatchObject({ ok: true, value: { agent_steps: { side: { engine: 'codex' } } } })
+    expect(applyConfigPatch(DEFAULT_CONFIG, { agent_steps: { side: { engine: 'gpt' } } })).toEqual({
+      ok: false,
+      error: '상세 설정(곁 세션): 엔진은 claude | codex 중 하나여야 함',
+    })
+  })
+
+  it('곁 세션 안내는 기본으로 켜져 있고 끌 수 있다 (D392)', () => {
+    expect(DEFAULT_CONFIG.side_notice).toBe(true)
+    expect(applyConfigPatch(DEFAULT_CONFIG, { side_notice: false })).toMatchObject({
+      ok: true,
+      value: { side_notice: false },
+    })
+    expect(applyConfigPatch(DEFAULT_CONFIG, { side_notice: 'no' })).toEqual({
+      ok: false,
+      error: '곁 세션을 열 때 안내: true/false여야 함',
+    })
   })
 
   it('저장한 값을 다시 읽으면 같은 값이다 (F5)', () => {
