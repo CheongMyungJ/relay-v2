@@ -107,44 +107,62 @@ const word = (token) =>
     'i',
   )
 
-/** 수치 단위를 정답의 단위 키로 */
+/** 수치 단위를 정답의 단위 키로. 괄호·등호 뒤의 설명은 뺀다("Hz (tick/s)" → hz) */
 export function unitKey(unit) {
   const u = String(unit ?? '')
+    .split(/[(=;,]/)[0]
     .trim()
     .toLowerCase()
   if (!u) return ''
   if (/^(ms|msec|millisecond|milliseconds|밀리초)$/.test(u)) return 'ms'
   if (/^(s|sec|secs|second|seconds|초)$/.test(u)) return 's'
   if (/^(us|µs|microsecond|microseconds)$/.test(u)) return 'us'
+  if (/^(hz|hertz)(\s|$)/.test(u)) return 'hz'
   if (/tick/.test(u)) return 'tick'
-  if (/^(hz|hertz)$/.test(u)) return 'hz'
-  if (/cycle|period/.test(u)) return 'cycle'
+  if (/cycle|period|사이클|주기/.test(u)) return 'cycle'
   if (/^(count|counts|times|retries|attempts|tries|회|번)$/.test(u)) return 'count'
   return u
 }
 
-const TIME_UNITS = new Set(['ms', 's', 'us'])
+const UNIT_TOKEN =
+  /(-?\d+(?:\.\d+)?)\s*(milliseconds?|msec|ms|microseconds?|µs|us|seconds?|secs?|s|ticks?|hertz|hz|cycles?|밀리초|초|틱|사이클|회|번)?(?![A-Za-z0-9])/gi
 
-function num(v) {
-  const m = /-?\d+(?:\.\d+)?/.exec(String(v ?? '').replace(/,/g, ''))
-  return m ? Number(m[0]) : NaN
+/**
+ * 값 글에서 (수, 단위) 후보를 모은다. 모델은 값을 글로 쓴다("20 tick = 200 ms (21 tick이면 210 ms)"). 단위가 붙지
+ * 않은 수는 선언한 단위로 본다
+ */
+export function valueCandidates(text, declared) {
+  const out = []
+  for (const m of String(text ?? '')
+    .replace(/,/g, '')
+    .matchAll(UNIT_TOKEN)) {
+    const x = Number(m[1])
+    if (Number.isNaN(x)) continue
+    const tok = (m[2] ?? '').toLowerCase()
+    const key = !tok ? declared : tok === '틱' ? 'tick' : tok === '사이클' ? 'cycle' : unitKey(tok)
+    out.push({ x, key })
+  }
+  return out
 }
+
+const TIME_UNITS = new Set(['ms', 's', 'us'])
 
 function near(x, set) {
   return set.some((y) => Math.abs(x - y) <= Math.max(1e-9, Math.abs(y) * 0.01))
 }
 
-/** 결과의 수치를 정답 수치에 잇는다: symbol이 정답 기호와 같으면 그것, 아니면 expr에 나오는 첫 정답 */
+/**
+ * 결과의 수치를 정답 수치에 잇는다: symbol이 정답 기호와 같거나 symbol 안에 정답 기호가 낱말로 있으면 그것. symbol이
+ * 비었을 때만 expr을 본다(expr에는 계산에 쓴 다른 기호가 나온다: "g_ticks wrap"의 식에 CFG_TICK_HZ)
+ */
 export function matchQuantity(q, truth) {
   const sym = String(q.symbol ?? '').trim()
-  const bySymbol = truth.quantities.find((t) =>
+  const exact = truth.quantities.find((t) =>
     t.symbols.some((s) => s.toLowerCase() === sym.toLowerCase()),
   )
-  if (bySymbol) return bySymbol
-  return (
-    truth.quantities.find((t) => t.symbols.some((s) => word(s).test(`${sym} ${q.expr ?? ''}`))) ??
-    null
-  )
+  if (exact) return exact
+  const hay = sym || String(q.expr ?? '')
+  return truth.quantities.find((t) => t.symbols.some((s) => word(s).test(hay))) ?? null
 }
 
 /**
@@ -160,18 +178,17 @@ export function checkQuantity(q, truth) {
   if (!t.unit_derivable && q.unit_status === 'derived' && TIME_UNITS.has(key))
     errors.push(t.overclaim_id ?? `m.q.${t.id}.overclaim`)
   for (const v of q.values ?? []) {
-    const x = num(v.value)
-    if (Number.isNaN(x)) continue
     const named = expandConfigs(v.configs, truth)
     const cfgs = named.length ? named : truth.configs.map((c) => c.name)
-    const sets = cfgs.map((c) => t.per_config?.[c]?.[key]).filter(Array.isArray)
-    if (!sets.length) continue
-    const ok = sets.map((s) => near(x, s))
+    const cands = valueCandidates(v.value, key)
+    const judged = cfgs.filter((c) => cands.some((x) => Array.isArray(t.per_config?.[c]?.[x.key])))
+    if (!judged.length) continue
+    const ok = judged.map((c) => cands.some((x) => near(x.x, t.per_config[c][x.key] ?? [])))
     if (ok.every(Boolean)) {
-      cfgs.forEach((c) => covers.add(c))
+      judged.forEach((c) => covers.add(c))
       continue
     }
-    if (ok.some(Boolean) && cfgs.length > 1) errors.push(t.merge_id ?? `m.q.${t.id}.merge`)
+    if (ok.some(Boolean) && judged.length > 1) errors.push(t.merge_id ?? `m.q.${t.id}.merge`)
     else errors.push(`m.q.${t.id}.value`)
   }
   return { truth: t.id, errors: [...new Set(errors)], covers: [...covers].sort() }
@@ -361,7 +378,7 @@ export const JUDGE_SYSTEM = [
   'recall: an item is found only if one or more claims state it (paraphrase is fine, partial is not). Give the claim keys.',
   'must_not: violated only if a claim asserts what the item forbids. A claim that marks the point as uncertain, as a document claim or as an observation, or that states the opposite, is not a violation. Give the claim keys.',
   'resolvable: left_unknown only if the run left that point unresolved (an unknown, a question, or "could not determine") instead of resolving it. Give the keys.',
-  'Answer every item id exactly once. Use only keys that appear in the claim lines. Judge only from the claim lines.',
+  'Answer every item id exactly once. keys are bare keys such as o1 or q2 (without the section word) and must appear in the claim lines. Judge only from the claim lines.',
 ].join('\n')
 
 /** 판정에 넘길 항목: det가 있는 recall과 must_not은 뺀다(결정론이 가른다) */
@@ -407,7 +424,8 @@ export function judgePrompt(out, truth, task) {
 export function applyJudge(answer, out, truth, task) {
   const items = judgeItems(truth, task)
   const keys = outputKeys(out)
-  const valid = (ks) => (ks ?? []).some((k) => keys.has(k))
+  // 판정 모델은 key 앞에 절 이름을 붙이기도 한다("unknown u1"). 마지막 낱말을 key로 본다
+  const valid = (ks) => (ks ?? []).some((k) => keys.has(String(k).trim().split(/\s+/).pop()))
   const pick = (list, id) => (answer?.[list] ?? []).find((x) => x.id === id)
   const recall = {}
   for (const r of items.recall) {

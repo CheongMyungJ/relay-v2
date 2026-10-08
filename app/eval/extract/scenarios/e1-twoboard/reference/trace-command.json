@@ -152,8 +152,8 @@
         {
           "kind": "code",
           "path": "src/eeprom.c",
-          "start": 116,
-          "end": 118,
+          "start": 118,
+          "end": 120,
           "quote": "if (++s_attempts >= CFG_EE_RETRY_MAX) { s_save_pending = 0U; fault_raise(FAULT_EEPROM);",
           "command": null
         }
@@ -168,8 +168,8 @@
         {
           "kind": "code",
           "path": "src/eeprom.c",
-          "start": 84,
-          "end": 84,
+          "start": 86,
+          "end": 86,
           "quote": "g_setpoint_dc = img->setpoint_dc;",
           "command": null
         },

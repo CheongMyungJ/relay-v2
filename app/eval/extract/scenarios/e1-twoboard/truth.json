@@ -215,7 +215,7 @@
       "det": {
         "quantity": "q.frame_to"
       },
-      "statement": "프레임 바이트 간 시간 초과는 20틱이고, 틱이 alpha 1 ms, beta 10 ms라 alpha 약 20 ms, beta 약 200 ms다"
+      "statement": "프레임 바이트 간 시간 초과: alpha는 proto.h의 20틱 x 1 ms = 약 20 ms, beta는 Makefile이 -DPROTO_FRAME_TIMEOUT_TICKS=5U로 덮어써 5틱 x 10 ms = 약 50 ms"
     },
     {
       "id": "r.tim.tick",
@@ -249,12 +249,17 @@
     {
       "id": "r.tim.conflict",
       "tasks": ["trace-timing", "trace-variant"],
-      "statement": "proto.h의 주석 \"20 ms inter-byte timeout\"은 beta(틱 10 ms)에서 실제 200 ms와 어긋난다"
+      "statement": "proto.h의 주석 \"20 ms inter-byte timeout\"은 beta의 실제 값(5틱 x 10 ms = 약 50 ms)과 어긋난다"
     },
     {
       "id": "r.tim.offbyone",
       "tasks": ["trace-timing"],
       "statement": "시간 초과 비교가 '>'라 20틱을 넘어야(21틱째) 시간 초과가 된다"
+    },
+    {
+      "id": "r.tim.delay",
+      "tasks": ["trace-timing", "trace-variant"],
+      "statement": "delay_ms는 1틱을 1 ms로 가정해 틱 수만큼 기다리므로 beta(틱 10 ms)에서는 요청의 10배를 기다린다(hwrev의 2 ms는 20 ms, 플래시 지우기 뒤 5 ms는 50 ms)"
     },
     {
       "id": "r.var.select",
@@ -300,6 +305,11 @@
       "id": "r.var.shipping",
       "tasks": ["trace-variant"],
       "statement": "출하 구성은 코드로 정할 수 없다(README의 'BETA가 2018년부터 양산'은 문서 주장)"
+    },
+    {
+      "id": "r.var.override",
+      "tasks": ["trace-variant"],
+      "statement": "beta 타깃만 Makefile의 -DPROTO_FRAME_TIMEOUT_TICKS=5U로 proto.h의 기본값(20틱)을 덮어쓴다"
     },
     {
       "id": "r.sh.fault_rmw",
@@ -397,7 +407,7 @@
     {
       "id": "m.frame_20ms_all",
       "tasks": ["trace-command", "trace-timing", "trace-variant"],
-      "statement": "바이트 간 시간 초과가 두 구성 모두(또는 구성 구분 없이) 20 ms라고 확정한다"
+      "statement": "바이트 간 시간 초과가 두 구성 모두(또는 구성 구분 없이) 같은 ms 값(예: 20 ms)이라고 확정한다"
     },
     {
       "id": "m.wdt_exact",
@@ -423,6 +433,11 @@
       "id": "m.polling_constraint",
       "tasks": ["trace-timing", "trace-shared", "trace-command"],
       "statement": "main 루프의 폴링 구조나 링 크기 같은 구현 선택을 하드웨어·통신 제약으로 둔다"
+    },
+    {
+      "id": "m.delay_exact",
+      "tasks": ["trace-timing", "trace-variant"],
+      "statement": "delay_ms(n)이 모든 구성에서 n ms를 기다린다고 확정한다"
     }
   ],
   "resolvable": [
@@ -434,7 +449,7 @@
     {
       "id": "v.frame_ms",
       "tasks": ["trace-timing", "trace-command"],
-      "statement": "바이트 간 시간 초과의 ms 값(alpha 약 20, beta 약 200)은 코드로 정해진다"
+      "statement": "바이트 간 시간 초과의 ms 값(alpha 약 20, beta 약 50)은 빌드 파일과 코드로 정해진다"
     },
     {
       "id": "v.heater_s",
@@ -463,12 +478,13 @@
           "tick": [20]
         },
         "beta": {
-          "ms": [200, 210],
-          "tick": [20]
+          "ms": [50, 60],
+          "tick": [5]
         }
       },
       "unit_derivable": true,
-      "merge_id": "m.frame_20ms_all"
+      "merge_id": "m.frame_20ms_all",
+      "note": "beta는 Makefile이 -DPROTO_FRAME_TIMEOUT_TICKS=5U로 덮어쓴다"
     },
     {
       "id": "q.tick",

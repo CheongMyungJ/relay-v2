@@ -20,7 +20,7 @@
 ## Unit
 
 - Lens: timing
-- Purpose: Trace the time constants of the host link and supervision: the protocol inter-byte timeout (PROTO_FRAME_TIMEOUT_TICKS), the control period (CTRL_PERIOD_TICKS), the heater on-time limit (HEATER_MAX_ON_CYCLES) and the watchdog timeout (src/wdt.c).
+- Purpose: Trace the time constants and delays of the host link (framing) and of supervision (control loop, heater limit, watchdog).
 - Scope: Value per configuration, where each is consumed, the tick or clock source and the unit.
 
 ## Limits

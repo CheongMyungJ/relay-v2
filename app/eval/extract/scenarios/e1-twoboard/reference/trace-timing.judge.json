@@ -14,6 +14,11 @@
       "id": "r.tim.offbyone",
       "found": true,
       "keys": ["o2"]
+    },
+    {
+      "id": "r.tim.delay",
+      "found": true,
+      "keys": ["o4"]
     }
   ],
   "must_not": [
@@ -34,6 +39,11 @@
     },
     {
       "id": "m.polling_constraint",
+      "violated": false,
+      "keys": []
+    },
+    {
+      "id": "m.delay_exact",
       "violated": false,
       "keys": []
     }

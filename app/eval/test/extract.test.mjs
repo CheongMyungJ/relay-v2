@@ -159,6 +159,58 @@ describe('채점 규칙', () => {
     expect(expandConfigs([], truth)).toEqual([])
   })
 
+  it('실제 run의 값 글: 단위가 섞인 글, 설명이 붙은 단위, 절 이름이 붙은 판정 key (2026-10-09 시범 run)', () => {
+    const q = (symbol, values, unit) => ({ symbol, expr: '', values, unit, unit_status: 'derived' })
+    expect(
+      checkQuantity(
+        q(
+          'PROTO_FRAME_TIMEOUT_TICKS',
+          [
+            {
+              configs: ['alpha'],
+              value:
+                '20 tick = 20 ms (실제 발동은 경과 >20, 즉 21 tick 이상: 21 ms 전후 ± 1 tick 지터)',
+            },
+            { configs: ['beta'], value: '5 tick = 50 ms (실제 발동 6 tick = 60 ms 전후)' },
+          ],
+          'tick (alpha 1 ms, beta 10 ms)',
+        ),
+        truth,
+      ),
+    ).toEqual({ truth: 'q.frame_to', errors: [], covers: ['alpha', 'beta'] })
+    expect(
+      checkQuantity(
+        q(
+          'CFG_TICK_HZ',
+          [
+            { configs: ['alpha'], value: '1000' },
+            { configs: ['beta'], value: '100' },
+          ],
+          'Hz (tick/s)',
+        ),
+        truth,
+      ).covers,
+    ).toEqual(['alpha', 'beta'])
+    expect(
+      checkQuantity(
+        q('PROTO_FRAME_TIMEOUT_TICKS', [{ configs: ['alpha', 'beta'], value: '약 20 ms' }], 'ms'),
+        truth,
+      ).errors,
+    ).toEqual(['m.frame_20ms_all'])
+    const out = { unknowns: [{ key: 'u1', question: 'x', needs: 'external_doc', refs: [] }] }
+    const r = applyJudge(
+      {
+        recall: [{ id: 'r.tim.wdt_unknown', found: true, keys: ['unknown u1'] }],
+        must_not: [],
+        resolvable: [],
+      },
+      out,
+      truth,
+      'trace-timing',
+    )
+    expect(r.recall['r.tim.wdt_unknown']).toBe(true)
+  })
+
   it('단위 키', () => {
     expect(
       [
@@ -168,11 +220,12 @@ describe('채점 규칙', () => {
         'ticks',
         'SysTick ticks',
         'Hz',
+        'Hz (tick/s)',
         'control cycles',
         '',
         'retries',
       ].map(unitKey),
-    ).toEqual(['ms', 'ms', 's', 'tick', 'tick', 'hz', 'cycle', '', 'count'])
+    ).toEqual(['ms', 'ms', 's', 'tick', 'tick', 'hz', 'hz', 'cycle', '', 'count'])
   })
 
   it('수치: 구성별 값, 병합, 틀린 값, 유도할 수 없는 단위의 확정', () => {
@@ -188,7 +241,7 @@ describe('채점 규칙', () => {
       checkQuantity(
         q([
           { configs: ['alpha'], value: '20' },
-          { configs: ['beta'], value: '200' },
+          { configs: ['beta'], value: '50' },
         ]),
         truth,
       ),
@@ -203,7 +256,13 @@ describe('채점 규칙', () => {
     expect(checkQuantity(q([{ configs: ['beta'], value: '20' }]), truth).errors).toEqual([
       'm.q.q.frame_to.value',
     ])
-    expect(checkQuantity(q([{ configs: ['all'], value: '20' }], 'ticks'), truth).errors).toEqual([])
+    // beta는 Makefile이 5틱으로 덮어쓴다: 틱 단위로도 구성마다 다르다
+    expect(checkQuantity(q([{ configs: ['all'], value: '20' }], 'ticks'), truth).errors).toEqual([
+      'm.frame_20ms_all',
+    ])
+    expect(checkQuantity(q([{ configs: ['beta'], value: '200' }]), truth).errors).toEqual([
+      'm.q.q.frame_to.value',
+    ])
     expect(checkQuantity(q([{ configs: ['beta'], value: '' }]), truth).errors).toEqual([])
     const wdt = {
       symbol: 'WDT_RELOAD',

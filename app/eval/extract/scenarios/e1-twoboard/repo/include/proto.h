@@ -10,7 +10,9 @@
  */
 #define PROTO_SOF                   0xA5U
 #define PROTO_MAX_PAYLOAD           16U
+#ifndef PROTO_FRAME_TIMEOUT_TICKS
 #define PROTO_FRAME_TIMEOUT_TICKS   20U     /* 20 ms inter-byte timeout */
+#endif
 #define PROTO_RESP_FLAG             0x80U
 
 /* status codes */

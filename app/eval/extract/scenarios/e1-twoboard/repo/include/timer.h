@@ -9,5 +9,6 @@ extern volatile uint32_t g_ticks;
 
 void timer_init(void);
 uint32_t timer_now(void);
+void delay_ms(uint32_t ms);
 
 #endif /* TIMER_H */

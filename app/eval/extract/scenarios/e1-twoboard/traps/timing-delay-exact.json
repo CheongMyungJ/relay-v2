@@ -1,0 +1,29 @@
+{
+  "task": "trace-timing",
+  "describe": "delay_ms(n)이 모든 구성에서 n ms를 기다린다고 한다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "observations.3.text",
+      "value": "delay_ms(n)은 모든 구성에서 정확히 n ms를 기다린다"
+    }
+  ],
+  "judge": {
+    "recall": {
+      "r.tim.delay": {
+        "found": false,
+        "keys": []
+      }
+    },
+    "must_not": {
+      "m.delay_exact": {
+        "violated": true,
+        "keys": ["o4"]
+      }
+    }
+  },
+  "expect": {
+    "violated": ["m.delay_exact"],
+    "missed": ["r.tim.delay"]
+  }
+}

@@ -23,7 +23,8 @@ all: alpha
 alpha: CFLAGS += -DBOARD_ALPHA
 alpha: build/alpha/thermo.bin
 
-beta: CFLAGS += -DBOARD_BETA
+# beta: the slower tick made host retries time out on the line test rig (ticket TC-412)
+beta: CFLAGS += -DBOARD_BETA -DPROTO_FRAME_TIMEOUT_TICKS=5U
 beta: build/beta/thermo.bin
 
 build/%/thermo.elf: $(SRCS)

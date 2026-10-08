@@ -49,6 +49,16 @@
       "id": "r.var.shipping",
       "found": true,
       "keys": ["k1", "o9"]
+    },
+    {
+      "id": "r.var.override",
+      "found": true,
+      "keys": ["o10"]
+    },
+    {
+      "id": "r.tim.delay",
+      "found": true,
+      "keys": ["o11"]
     }
   ],
   "must_not": [
@@ -59,6 +69,11 @@
     },
     {
       "id": "m.shipping",
+      "violated": false,
+      "keys": []
+    },
+    {
+      "id": "m.delay_exact",
       "violated": false,
       "keys": []
     }

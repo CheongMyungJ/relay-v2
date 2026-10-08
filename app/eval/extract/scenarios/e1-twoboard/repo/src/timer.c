@@ -17,6 +17,14 @@ uint32_t timer_now(void)
     return g_ticks;
 }
 
+/* busy-wait for at least ms milliseconds (one tick is one millisecond) */
+void delay_ms(uint32_t ms)
+{
+    uint32_t start = g_ticks;
+    while ((g_ticks - start) < ms) {
+    }
+}
+
 void SysTick_Handler(void)
 {
     g_ticks++;

@@ -16,8 +16,8 @@
         {
           "kind": "code",
           "path": "src/timer.c",
-          "start": 22,
-          "end": 22,
+          "start": 30,
+          "end": 30,
           "quote": "g_ticks++;",
           "command": null
         }
@@ -51,6 +51,38 @@
           "start": 10,
           "end": 10,
           "quote": "latency_max_ms     3.20",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o4",
+      "text": "delay_ms는 1틱을 1 ms로 보고 틱 수로 기다린다. beta(틱 10 ms)에서는 요청의 10배를 기다린다: hwrev의 2 ms는 20 ms, 플래시 지우기 뒤 5 ms는 50 ms",
+      "configs": ["alpha", "beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/timer.c",
+          "start": 24,
+          "end": 24,
+          "quote": "while ((g_ticks - start) < ms) {",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/hwrev.c",
+          "start": 20,
+          "end": 20,
+          "quote": "delay_ms(2U);",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/eeprom.c",
+          "start": 58,
+          "end": 58,
+          "quote": "delay_ms(5U);",
           "command": null
         }
       ],
@@ -113,15 +145,15 @@
     {
       "key": "q2",
       "symbol": "PROTO_FRAME_TIMEOUT_TICKS",
-      "expr": "20U",
+      "expr": "20U (beta: -DPROTO_FRAME_TIMEOUT_TICKS=5U)",
       "values": [
         {
           "configs": ["alpha"],
-          "value": "20"
+          "value": "20 tick = 20 ms"
         },
         {
           "configs": ["beta"],
-          "value": "200"
+          "value": "5 tick = 50 ms"
         }
       ],
       "unit": "ms",
@@ -133,9 +165,20 @@
           "anchor": {
             "kind": "code",
             "path": "include/proto.h",
-            "start": 13,
-            "end": 13,
+            "start": 14,
+            "end": 14,
             "quote": "#define PROTO_FRAME_TIMEOUT_TICKS   20U",
+            "command": null
+          }
+        },
+        {
+          "role": "value",
+          "anchor": {
+            "kind": "code",
+            "path": "Makefile",
+            "start": 27,
+            "end": 27,
+            "quote": "beta: CFLAGS += -DBOARD_BETA -DPROTO_FRAME_TIMEOUT_TICKS=5U",
             "command": null
           }
         },
@@ -155,8 +198,8 @@
           "anchor": {
             "kind": "code",
             "path": "src/timer.c",
-            "start": 22,
-            "end": 22,
+            "start": 30,
+            "end": 30,
             "quote": "g_ticks++;",
             "command": null
           }
@@ -279,9 +322,9 @@
     {
       "key": "r1",
       "type": "nonfunctional",
-      "condition": "프레임 수신 중 바이트 사이가 20틱을 넘으면",
+      "condition": "프레임 수신 중 바이트 사이가 시간 초과(alpha 20틱, beta 5틱)를 넘으면",
       "behavior": "부분 프레임을 응답 없이 버린다",
-      "result": "alpha 약 20 ms, beta 약 200 ms 뒤 다음 SOF를 기다린다",
+      "result": "alpha 약 20 ms, beta 약 50 ms 뒤 다음 SOF를 기다린다",
       "configs": ["alpha", "beta"],
       "refs": ["o2", "q2"],
       "basis": "code"
@@ -316,7 +359,7 @@
   "conflicts": [
     {
       "key": "x1",
-      "text": "proto.h 주석은 20 ms라 하나 beta는 틱이 10 ms라 200 ms다",
+      "text": "proto.h 주석은 20 ms라 하나 beta는 Makefile이 5틱으로 덮어쓰고 틱이 10 ms라 50 ms다",
       "sides": [
         {
           "claim": "주석: 20 ms",
@@ -324,16 +367,24 @@
             {
               "kind": "doc_claim",
               "path": "include/proto.h",
-              "start": 13,
-              "end": 13,
+              "start": 14,
+              "end": 14,
               "quote": "/* 20 ms inter-byte timeout */",
               "command": null
             }
           ]
         },
         {
-          "claim": "beta 틱 100 Hz",
+          "claim": "beta: 5틱 x 10 ms",
           "anchors": [
+            {
+              "kind": "code",
+              "path": "Makefile",
+              "start": 27,
+              "end": 27,
+              "quote": "-DPROTO_FRAME_TIMEOUT_TICKS=5U",
+              "command": null
+            },
             {
               "kind": "code",
               "path": "config/build_cfg_beta.h",
@@ -371,7 +422,7 @@
     },
     "unit": {
       "status": "covered",
-      "refs": ["q2", "q5"],
+      "refs": ["q2", "q5", "o4"],
       "searches": []
     },
     "comparison": {

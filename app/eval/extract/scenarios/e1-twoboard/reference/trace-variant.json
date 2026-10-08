@@ -144,8 +144,8 @@
         {
           "kind": "code",
           "path": "src/hwrev.c",
-          "start": 21,
-          "end": 21,
+          "start": 23,
+          "end": 23,
           "quote": "g_cal_offset = (g_hw_rev >= 2U) ? -12 : 0;",
           "command": null
         }
@@ -171,6 +171,46 @@
           "start": 64,
           "end": 64,
           "quote": "#if 0",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o10",
+      "text": "beta 타깃만 Makefile에서 -DPROTO_FRAME_TIMEOUT_TICKS=5U로 바이트 간 시간 초과를 덮어써 50 ms(5틱 x 10 ms)다. alpha는 proto.h의 20틱(20 ms)",
+      "configs": ["alpha", "beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "Makefile",
+          "start": 27,
+          "end": 27,
+          "quote": "beta: CFLAGS += -DBOARD_BETA -DPROTO_FRAME_TIMEOUT_TICKS=5U",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "include/proto.h",
+          "start": 13,
+          "end": 14,
+          "quote": "#ifndef PROTO_FRAME_TIMEOUT_TICKS #define PROTO_FRAME_TIMEOUT_TICKS   20U",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o11",
+      "text": "delay_ms는 1틱=1 ms를 가정해 beta에서는 10배를 기다린다",
+      "configs": ["beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/timer.c",
+          "start": 24,
+          "end": 24,
+          "quote": "while ((g_ticks - start) < ms) {",
           "command": null
         }
       ],
@@ -208,7 +248,7 @@
   "conflicts": [
     {
       "key": "x1",
-      "text": "proto.h 주석 20 ms는 beta(틱 10 ms)에서 200 ms와 어긋난다",
+      "text": "proto.h 주석 20 ms는 beta의 50 ms(5틱 x 10 ms)와 어긋난다",
       "sides": [
         {
           "claim": "주석 20 ms",
@@ -216,16 +256,24 @@
             {
               "kind": "doc_claim",
               "path": "include/proto.h",
-              "start": 13,
-              "end": 13,
+              "start": 14,
+              "end": 14,
               "quote": "/* 20 ms inter-byte timeout */",
               "command": null
             }
           ]
         },
         {
-          "claim": "beta 틱 100 Hz",
+          "claim": "beta 덮어쓰기와 틱 100 Hz",
           "anchors": [
+            {
+              "kind": "code",
+              "path": "Makefile",
+              "start": 27,
+              "end": 27,
+              "quote": "-DPROTO_FRAME_TIMEOUT_TICKS=5U",
+              "command": null
+            },
             {
               "kind": "code",
               "path": "config/build_cfg_beta.h",
@@ -272,7 +320,7 @@
     },
     "per_config_diff": {
       "status": "covered",
-      "refs": ["o2", "o3", "o4", "o5", "o6"],
+      "refs": ["o2", "o3", "o4", "o5", "o6", "o10", "o11"],
       "searches": []
     },
     "shipping_config": {

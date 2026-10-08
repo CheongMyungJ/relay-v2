@@ -8,6 +8,7 @@
 #include "board.h"
 #include "control.h"
 #include "fault.h"
+#include "timer.h"
 
 #define EE_MAGIC        0x5443U     /* "TC" */
 #define EE_PAGE_ADDR    0x0801F800UL
@@ -54,6 +55,7 @@ static int flash_write(const struct ee_image *img)
     while (FLASH->SR & FLASH_SR_BSY) {
     }
     FLASH->CR &= ~FLASH_CR_PER;
+    delay_ms(5U);   /* page erase recovery time from the Acme M3 flash note AN-112 */
 
     FLASH->CR |= FLASH_CR_PG;
     for (uint32_t i = 0; i < sizeof(*img) / 2U; i++) {

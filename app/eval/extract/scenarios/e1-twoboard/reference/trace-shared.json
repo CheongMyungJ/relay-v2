@@ -96,8 +96,8 @@
         {
           "kind": "code",
           "path": "src/timer.c",
-          "start": 22,
-          "end": 22,
+          "start": 30,
+          "end": 30,
           "quote": "g_ticks++;",
           "command": null
         },
