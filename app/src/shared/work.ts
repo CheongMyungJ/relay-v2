@@ -481,6 +481,8 @@ export interface CleanupProcess {
 export interface SideRecord {
   /** 다시 열 대화. 첫 요청(UserPromptSubmit)이 와 대화가 생긴 뒤에 있다 */
   session_id?: string
+  /** 그 대화의 엔진 (D391). 없는 옛 기록은 Claude다. 지금 설정과 다르면 이어 가지 않고 새 대화로 연다 */
+  engine?: AgentEngine
   /** 살아 있는 곁 세션의 claude 프로세스 */
   process?: CleanupProcess
 }

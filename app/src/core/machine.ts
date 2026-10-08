@@ -507,6 +507,8 @@ export interface SideEnded extends WorkEvent {
 export interface SideConversation extends WorkEvent {
   type: 'side.conversation'
   sessionId: string
+  /** 대화의 엔진 (D391) */
+  engine: AgentEngine
 }
 
 /**
@@ -2778,8 +2780,12 @@ function sideEnded(work: WorkState): Transition {
 
 /** 곁 세션의 대화를 적는다. 같은 대화면 그대로 둔다 */
 function sideConversation(work: WorkState, e: SideConversation): Transition {
-  if (work.side?.session_id === e.sessionId) return unchanged(work)
-  return { work: { ...work, side: { ...work.side, session_id: e.sessionId } }, effects: [] }
+  if (work.side?.session_id === e.sessionId && (work.side.engine ?? 'claude') === e.engine)
+    return unchanged(work)
+  return {
+    work: { ...work, side: { ...work.side, session_id: e.sessionId, engine: e.engine } },
+    effects: [],
+  }
 }
 
 /** 곁 세션의 프로세스 기록을 지운다. 대화가 없으면 side도 지운다 */

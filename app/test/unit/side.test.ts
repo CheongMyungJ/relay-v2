@@ -81,6 +81,12 @@ describe('곁 세션의 안내 (D387)', () => {
     )
   })
 
+  it('역할: 질문과 안내의 곳이고, 코드 수정은 먼저 단계 흐름을 권한다 (D392)', () => {
+    expect(text).toContain('## 이 세션의 역할')
+    expect(text).toContain('단계 흐름을 대신하지 않는다')
+    expect(text).toContain('먼저 단계 흐름을 권한다')
+  })
+
   it('task가 없으면 그렇게 적는다', () => {
     const empty = guide(work([]))
     expect(empty).toContain('- 상태(열 때): 진행 중\n')

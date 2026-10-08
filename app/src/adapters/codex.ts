@@ -9,6 +9,7 @@ import {
   relaySkillName,
   type LaunchInput,
   type ResumeInput,
+  type SideArgsInput,
 } from '../core/settings'
 import type { SkillName } from '../shared/config'
 import type { WorkType } from '../shared/work'
@@ -226,6 +227,18 @@ export async function codexResumeArgs(input: ResumeInput): Promise<string[]> {
 }
 export async function codexCleanupArgs(settingsPath: string): Promise<string[]> {
   return (await options(settingsPath)).args
+}
+/**
+ * 곁 세션의 Codex 인자 (D391, I130). 첫 프롬프트가 없어 입력을 기다린다. 시스템 프롬프트를 덧붙이는 옵션이 없어 안내는
+ * SessionStart 훅의 additionalContext로 준다(guidePath는 쓰지 않음). 모델·추론 수준은 설정 파일의 덮어쓰기에 있다
+ */
+export async function codexSideArgs(input: SideArgsInput): Promise<string[]> {
+  return [
+    ...(await options(input.settingsPath)).args,
+    '--add-dir',
+    input.workDir,
+    ...(input.resume ? ['resume', input.sessionId] : []),
+  ]
 }
 export function codexLaunchEnv(
   token: string,

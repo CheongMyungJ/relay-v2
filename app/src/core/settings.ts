@@ -286,6 +286,9 @@ export interface SideArgsInput {
   settingsPath: string
   /** 안내(시스템 프롬프트, D387) 파일 */
   guidePath: string
+  /** 설정에서 정한 모델·추론 수준 (D391). 없으면 엔진의 기본 */
+  model?: string
+  effort?: string
 }
 
 /**
@@ -303,5 +306,6 @@ export function sideArgs(input: SideArgsInput): string[] {
     input.settingsPath,
     '--append-system-prompt-file',
     input.guidePath,
+    ...modelArgs(input),
   ]
 }

@@ -270,6 +270,13 @@ describe('곁 세션 (시나리오 11, D386, D388)', () => {
     ])
     expect(sideArgs({ ...input, resume: true }).slice(1, 3)).toEqual(['--resume', 's-1'])
     expect(sideArgs({ ...input, resume: true })).toHaveLength(9)
+    // 설정의 모델·추론 수준 (D391)
+    expect(sideArgs({ ...input, resume: true, model: 'haiku', effort: 'low' }).slice(9)).toEqual([
+      '--model',
+      'haiku',
+      '--effort',
+      'low',
+    ])
   })
 
   it('앱 소유 파일, tasks/ 아래, .claude/만 막는다. push와 gh는 막지 않는다', () => {

@@ -63,7 +63,13 @@ function pushesOrPr(execution: string): boolean {
 
 /** 훅 입력에 명시된 파일·패치·직접 명령을 검사한다. 별도 스크립트/별칭/동적 경로는 완전 통제하지 못한다. */
 export function codexToolDenial(
-  input: DenyInput & { worktree: string; taskDir?: string; cwd?: string },
+  input: DenyInput & {
+    worktree: string
+    taskDir?: string
+    cwd?: string
+    /** 곁 세션: 사람이 허락하면 push와 PR 조작을 한다 (D388, D391) */
+    allowPush?: boolean
+  },
   tool: string,
   args: Readonly<Record<string, unknown>>,
 ): string | null {
@@ -122,7 +128,8 @@ export function codexToolDenial(
         .filter((x): x is string => typeof x === 'string')
         .join('\n')
     : ''
-  if (pushesOrPr(execution)) return 'push와 PR 조작은 사람이 승인한 뒤 relay 앱이 수행합니다.'
+  if (!input.allowPush && pushesOrPr(execution))
+    return 'push와 PR 조작은 사람이 승인한 뒤 relay 앱이 수행합니다.'
 
   const paths: string[] = []
   if (/write|edit|patch/i.test(tool)) {

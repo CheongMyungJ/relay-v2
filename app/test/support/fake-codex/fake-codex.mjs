@@ -63,8 +63,10 @@ if (argv[0] === 'exec') {
 const config = new Map()
 let resumeId = null
 let resumePrompt = null
+let addDir = null
 for (let i = 0; i < argv.length; i++) {
-  if (argv[i] === '-c') {
+  if (argv[i] === '--add-dir') addDir = argv[++i]
+  else if (argv[i] === '-c') {
     const v = argv[++i]
     const eq = v.indexOf('=')
     config.set(v.slice(0, eq), v.slice(eq + 1))
@@ -187,7 +189,11 @@ await rpc('initialize', {
 })
 await hook('SessionStart', { source: resumeId ? 'resume' : 'startup' })
 const scenario = JSON.parse(fs.readFileSync(env.FAKE_CODEX_SCENARIO, 'utf8'))
-const fill = (s) => String(s).replaceAll('{taskDir}', context.taskDir)
+// {workDir}는 --add-dir로 받은 Work 디렉터리다 (곁 세션의 보호 시험)
+const fill = (s) =>
+  String(s)
+    .replaceAll('{taskDir}', context.taskDir)
+    .replaceAll('{workDir}', addDir ?? '')
 const filled = (value) =>
   typeof value === 'string'
     ? fill(value)
@@ -267,10 +273,14 @@ async function steps(list) {
     else throw new Error(`지원하지 않는 시험 단계: ${step.do}`)
   }
 }
+// 곁 세션(시나리오 11, I130)은 앱이 훅 경로로 넘기는 RELAY_HOOK_TASK가 side다. 시나리오의 side·sideResume을 한다
+const side = env.RELAY_HOOK_TASK === 'side'
 await steps(
   resumeId
-    ? (scenario.resume?.[context.skill] ?? [])
+    ? ((side ? scenario.sideResume : scenario.resume?.[context.skill]) ?? [])
     : context.skill
       ? (scenario.tasks?.[context.skill] ?? [])
-      : (scenario.cleanup ?? []),
+      : side
+        ? (scenario.side ?? [])
+        : (scenario.cleanup ?? []),
 )

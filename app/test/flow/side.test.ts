@@ -28,7 +28,8 @@ interface Setup {
   tree: string
 }
 
-async function setup(s: Scenario, config: object = {}): Promise<Setup> {
+/** 시나리오는 가짜 claude와 가짜 codex가 함께 읽는다 (codex 단계는 Scenario 타입 밖) */
+async function setup(s: Scenario | object, config: object = {}): Promise<Setup> {
   h = await harness({ scenario: s, config })
   const hh = h
   const { repo } = makeRepo(hh.root, 'sample', REPO_FILES)
@@ -98,7 +99,13 @@ describe('곁 세션 (시나리오 11)', () => {
     // intake가 승인 대기로 자리를 차지한다
     await until(s, (w) => w.tasks[0]?.status === 'awaiting_approval', 'intake 승인 대기')
     await settle(s.h, s.key)
-    expect(view(s)?.side).toEqual({ terminal: null, status: null, resumable: false, blocked: null })
+    expect(view(s)?.side).toEqual({
+      terminal: null,
+      status: null,
+      engineLabel: 'Claude Code',
+      resumable: false,
+      blocked: null,
+    })
     expect(await s.h.relay.openSide(s.key, false)).toEqual({ ok: true })
     const opened = await until(s, (w) => w.side.status === 'live', '곁 세션')
     expect(view(s)?.tasks[0]?.live).toBe(true)
@@ -155,7 +162,7 @@ describe('곁 세션 (시나리오 11)', () => {
     expect(await s.h.relay.closeSide(s.key)).toEqual({ ok: true })
     await ended(s)
     await settle(s.h, s.key)
-    expect(work(s).side).toEqual({ session_id: sessionId })
+    expect(work(s).side).toEqual({ session_id: sessionId, engine: 'claude' })
     expect(fs.existsSync(first.args[6] ?? '')).toBe(false)
     expect(fs.existsSync(first.args[8] ?? '')).toBe(false)
     expect(await s.h.relay.closeSide(s.key)).toEqual({
@@ -222,7 +229,7 @@ describe('곁 세션 (시나리오 11)', () => {
     )
     await settle(s.h, s.key)
     // 대화 기록은 사람이 [새 대화로 열기]를 고를 때까지 둔다
-    expect(work(s).side).toEqual({ session_id: sessionId })
+    expect(work(s).side).toEqual({ session_id: sessionId, engine: 'claude' })
     expect(view(s)?.side.resumable).toBe(true)
   })
 
@@ -262,6 +269,94 @@ describe('곁 세션 (시나리오 11)', () => {
       ok: false,
       error: '보관된 Work는 worktree가 없어 곁 세션을 열 수 없음',
     })
+  })
+})
+
+describe('곁 세션의 엔진 (D391)', () => {
+  it('상세 설정의 곁 세션 줄이 Codex면 Codex로 연다: 안내는 SessionStart로 주고, 질문은 앱 질문창, push는 막지 않는다. 엔진을 바꾸면 새 대화다', async () => {
+    const s = await setup(
+      {
+        ...scenario(),
+        side: [
+          { do: 'prompt' },
+          {
+            do: 'hook',
+            event: 'PreToolUse',
+            body: { tool_name: 'exec_command', tool_input: { cmd: 'git push origin relay/x' } },
+          },
+          {
+            do: 'hook',
+            event: 'PreToolUse',
+            body: { tool_name: 'Edit', tool_input: { file_path: '{workDir}/decisions.md' } },
+          },
+          { do: 'ask' },
+          { do: 'wait' },
+        ],
+        sideResume: [{ do: 'wait' }],
+      },
+      { agent_steps: { side: { engine: 'codex', model: 'gpt-6.1-sol' } } },
+    )
+    await until(s, (w) => w.tasks[0]?.status === 'awaiting_approval', 'intake 승인 대기')
+    // 열기 전에도 쓸 엔진을 보인다. Work의 task는 기본 엔진(Claude)이다
+    expect(view(s)?.side.engineLabel).toBe('Codex')
+    expect(work(s).tasks[0]?.engine).toBe('claude')
+    expect(await s.h.relay.openSide(s.key, false)).toEqual({ ok: true })
+    const starts = () => s.h.codexRecords().filter((r) => r['type'] === 'start')
+    await s.h.ui.until(() => starts().length >= 1, 'Codex 곁 세션')
+    const args = starts()[0]?.['args'] as string[]
+    expect(args.slice(-2)).toEqual(['--add-dir', s.dir])
+    expect(args).toContain('model="gpt-6.1-sol"')
+    expect(args).not.toContain('resume')
+    // 안내는 SessionStart의 additionalContext다 (첫 프롬프트 없음)
+    const started = (await s.h.ui.until(
+      () => s.h.codexRecords().find((r) => r['type'] === 'hook' && r['event'] === 'SessionStart'),
+      'SessionStart',
+    )) as { response: { hookSpecificOutput: { additionalContext: string } } }
+    const guide = started.response.hookSpecificOutput.additionalContext
+    expect(guide).toContain('# relay 곁 세션')
+    expect(guide).toContain('- t-01 01 의도 정리: 승인 대기')
+    // 질문은 앱 질문창으로 온다
+    const asked = await until(s, (w) => w.side.question !== undefined, '곁 세션 질문')
+    const q = asked.side.question
+    if (!q) throw new Error('질문 없음')
+    expect(
+      await s.h.relay.answerQuestion(s.key, 'side', q.id, {
+        [q.questions[0]?.id ?? '']: ['작은 범위 (추천)'],
+      }),
+    ).toEqual({ ok: true })
+    await s.h.ui.until(() => s.h.codexRecords().find((r) => r['type'] === 'answer'), '답변')
+    // push는 막지 않고 앱 소유 파일은 막는다 (D388)
+    const tools = s.h
+      .codexRecords()
+      .filter((r) => r['type'] === 'hook' && r['event'] === 'PreToolUse')
+      .map((r) => r['response'] as { hookSpecificOutput?: { permissionDecision?: string } } | null)
+    expect(tools.map((r) => r?.hookSpecificOutput?.permissionDecision ?? 'allow')).toEqual([
+      'allow',
+      'deny',
+    ])
+    // 첫 요청으로 대화와 엔진을 적는다
+    const sessionId = starts()[0]?.['sessionId'] as string
+    await s.h.ui.until(() => work(s).side?.session_id === sessionId, 'Codex 대화를 적음')
+    expect(work(s).side?.engine).toBe('codex')
+    expect(await s.h.relay.closeSide(s.key)).toEqual({ ok: true })
+    await ended(s)
+
+    // 설정을 Claude로 바꾸면 이어 갈 대화가 없어 새 대화다
+    expect(await s.h.relay.updateConfig({ agent_steps: { side: {} } })).toMatchObject({ ok: true })
+    await until(s, (w) => !w.side.resumable && w.side.engineLabel === 'Claude Code', '엔진 바뀜')
+    expect(await s.h.relay.openSide(s.key, false)).toEqual({ ok: true })
+    const claude = await sideStart(s, 1)
+    expect(claude.args[1]).toBe('--session-id')
+    expect(await s.h.relay.closeSide(s.key)).toEqual({ ok: true })
+    await ended(s)
+    // 다시 Codex로 바꾸면 Codex 대화를 잇는다
+    expect(
+      await s.h.relay.updateConfig({ agent_steps: { side: { engine: 'codex' } } }),
+    ).toMatchObject({ ok: true })
+    await until(s, (w) => w.side.resumable, '이어 갈 Codex 대화')
+    expect(await s.h.relay.openSide(s.key, false)).toEqual({ ok: true })
+    await s.h.ui.until(() => starts().length >= 2, 'Codex 곁 세션 이어 가기')
+    expect((starts()[1]?.['args'] as string[]).slice(-2)).toEqual(['resume', sessionId])
   })
 })
 

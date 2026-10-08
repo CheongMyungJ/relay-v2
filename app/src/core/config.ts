@@ -11,7 +11,7 @@ import {
   type AutoApproveNode,
   type QuestionMode,
   type QuestionSkill,
-  type SkillName,
+  type AgentStepName,
   type ThemeChoice,
   type WorkSettings,
   type WorkSettingsPatch,
@@ -60,6 +60,7 @@ const EDITABLE_KEYS = [
   'auto_approve_countdown_sec',
   'question_mode',
   'pr_draft',
+  'side_notice',
   'handoff_body_warn_chars',
   'intent_warn_chars',
   'format_error_bounce_max',
@@ -102,7 +103,7 @@ const RANGES: Readonly<Record<IntegerKey, readonly [number, number]>> = {
   respond_auto_round_max: [1, 20],
 }
 
-type BooleanKey = 'pr_draft' | 'respond_auto_start'
+type BooleanKey = 'pr_draft' | 'respond_auto_start' | 'side_notice'
 
 const NAMES: Readonly<
   Record<IntegerKey | BooleanKey | 'question_mode' | 'auto_approve' | 'reply_signature', string>
@@ -117,6 +118,7 @@ const NAMES: Readonly<
   question_mode: '질문 방식',
   pr_draft: 'draft PR',
   respond_auto_start: '대응 자동 시작',
+  side_notice: '곁 세션을 열 때 안내',
   auto_approve: '자동 승인',
   reply_signature: '답글 표시 문구',
 }
@@ -238,7 +240,8 @@ function normalizeAgent(data: Record<string, unknown>, config: AppConfig, warnin
     const r = agentStep(skill, v)
     const why = r.ok ? stepFits(config, skill, r.value) : r.error
     if (why) warnings.push(`config.json ${why}. 이 단계는 기본을 따름`)
-    else if (r.ok && Object.keys(r.value).length) config.agent_steps[skill as SkillName] = r.value
+    else if (r.ok && Object.keys(r.value).length)
+      config.agent_steps[skill as AgentStepName] = r.value
   }
 }
 
@@ -259,7 +262,7 @@ function integer(key: IntegerKey, v: unknown): Checked<number> {
 }
 
 /** 참·거짓 값: draft PR(D71), 대응 자동 시작(D154) */
-const BOOLEAN_KEYS: readonly BooleanKey[] = ['pr_draft', 'respond_auto_start']
+const BOOLEAN_KEYS: readonly BooleanKey[] = ['pr_draft', 'respond_auto_start', 'side_notice']
 
 /** 답글 표시 문구의 길이 상한 (D173, 기본값) */
 const SIGNATURE_MAX = 200
@@ -419,7 +422,7 @@ export function applyConfigPatch(current: AppConfig, patch: unknown): Checked<Ap
       for (const [skill, step] of Object.entries(v)) {
         const r = agentStep(skill, step)
         if (!r.ok) return r
-        steps[skill as SkillName] = r.value
+        steps[skill as AgentStepName] = r.value
       }
       // 빈 객체는 그 단계를 지워 기본을 따른다
       next.agent_steps = Object.fromEntries(

@@ -1602,6 +1602,12 @@ button.ready {
   font-style: italic;
 }
 
+.modal .side-notice {
+  margin: 0 0 12px;
+  padding-left: 18px;
+  line-height: 1.6;
+}
+
 .modal .files {
   margin: 0;
   padding-left: 18px;

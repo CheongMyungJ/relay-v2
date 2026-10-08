@@ -2772,21 +2772,29 @@ describe('곁 세션의 기록 (시나리오 11, D389)', () => {
     expect(apply(work, { type: 'side.ended', at: at() }).work).toBe(work)
   })
 
-  it('대화를 적고, 끝나거나 다시 켜도 대화는 남는다. 같은 대화면 그대로다', () => {
+  it('대화와 그 엔진을 적고, 끝나거나 다시 켜도 대화는 남는다. 같은 대화면 그대로다 (D391)', () => {
     const live = started()
-    const talked = apply(live, { type: 'side.conversation', at: at(), sessionId: 's-1' }).work
-    expect(talked.side).toMatchObject({ session_id: 's-1', process: { pid: 4321 } })
-    expect(apply(talked, { type: 'side.conversation', at: at(), sessionId: 's-1' }).work).toBe(
-      talked,
-    )
-    // /clear 뒤의 새 대화 (D388)
-    expect(
-      apply(talked, { type: 'side.conversation', at: at(), sessionId: 's-2' }).work.side
-        ?.session_id,
-    ).toBe('s-2')
-    expect(apply(talked, { type: 'side.ended', at: at() }).work.side).toEqual({ session_id: 's-1' })
+    const talk = (sessionId: string, engine: 'claude' | 'codex' = 'claude') =>
+      ({ type: 'side.conversation', at: at(), sessionId, engine }) as const
+    const talked = apply(live, talk('s-1')).work
+    expect(talked.side).toMatchObject({
+      session_id: 's-1',
+      engine: 'claude',
+      process: { pid: 4321 },
+    })
+    expect(apply(talked, talk('s-1')).work).toBe(talked)
+    // /clear 뒤의 새 대화 (D388), 다른 엔진의 대화 (D391)
+    expect(apply(talked, talk('s-2')).work.side?.session_id).toBe('s-2')
+    expect(apply(talked, talk('s-1', 'codex')).work.side).toMatchObject({
+      session_id: 's-1',
+      engine: 'codex',
+    })
+    expect(apply(talked, { type: 'side.ended', at: at() }).work.side).toEqual({
+      session_id: 's-1',
+      engine: 'claude',
+    })
     const restarted = apply(talked, { type: 'app.restarted', at: at(), check: null }).work
-    expect(restarted.side).toEqual({ session_id: 's-1' })
+    expect(restarted.side).toEqual({ session_id: 's-1', engine: 'claude' })
   })
 })
 
