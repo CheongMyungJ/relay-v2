@@ -1,11 +1,7 @@
 {
   "id": "e2-gateway",
   "title": "중간 크기 RTOS 게이트웨이: ISR·DMA·Modbus, 세 구성(약 5천 줄)",
-  "configs": [
-    "basic",
-    "pro",
-    "devkit"
-  ],
+  "configs": ["basic", "pro", "devkit"],
   "tasks": [
     {
       "id": "survey",
@@ -39,23 +35,12 @@
   ],
   "build": {
     "cpu": "cortex-m4",
-    "includes": [
-      "include",
-      "third_party/picortos/include",
-      "vendor/nimbus/include"
-    ],
-    "headers": [
-      "picortos.h",
-      "modbus.h",
-      "sensor.h",
-      "misc.h"
-    ],
+    "includes": ["include", "third_party/picortos/include", "vendor/nimbus/include"],
+    "headers": ["picortos.h", "modbus.h", "sensor.h", "misc.h"],
     "configs": {
       "basic": {
         "forceInclude": "cfg/variant_basic.h",
-        "defines": [
-          "VARIANT_BASIC"
-        ],
+        "defines": ["VARIANT_BASIC"],
         "sources": [
           "src/main.c",
           "src/app_init.c",
@@ -90,9 +75,7 @@
       },
       "pro": {
         "forceInclude": "cfg/variant_pro.h",
-        "defines": [
-          "VARIANT_PRO"
-        ],
+        "defines": ["VARIANT_PRO"],
         "sources": [
           "src/main.c",
           "src/app_init.c",
@@ -131,10 +114,7 @@
       },
       "devkit": {
         "forceInclude": "cfg/variant_devkit.h",
-        "defines": [
-          "VARIANT_DEVKIT",
-          "MB_DIAG_ENABLE"
-        ],
+        "defines": ["VARIANT_DEVKIT", "MB_DIAG_ENABLE"],
         "sources": [
           "src/main.c",
           "src/app_init.c",

@@ -287,7 +287,11 @@ describe('채점 규칙', () => {
           { id: 'r.cmd.crc', found: true, keys: ['o9'] },
           { id: 'nope', found: true, keys: ['o1'] },
         ],
-        must_not: [{ id: 'm.only_writer', violated: true, keys: ['o1'] }],
+        must_not: [
+          { id: 'm.only_writer', violated: true, keys: ['o1'], quote: 'x', hedged: false },
+          // 판정 모델이 유보(가정, 문서 주장, 빠진 예외를 함께 적음)라고 본 주장은 위반이 아니다
+          { id: 'm.crc_doc', violated: true, keys: ['o1'], quote: 'x', hedged: true },
+        ],
         resolvable: [{ id: 'v.crc_params', left_unknown: true, keys: ['o1'] }],
       },
       out,

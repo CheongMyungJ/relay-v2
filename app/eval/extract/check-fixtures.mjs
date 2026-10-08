@@ -59,17 +59,31 @@ export function checkScenario(id, cc) {
     for (const [name, cfg] of Object.entries(build.configs)) {
       const args = compileArgs(build, cfg, cc)
       for (const src of cfg.sources) {
-        const r = spawnSync(cc.file, [...args, '-c', src, '-o', path.join(tmp, 'x.o')], { cwd: repo, encoding: 'utf8' })
+        const r = spawnSync(cc.file, [...args, '-c', src, '-o', path.join(tmp, 'x.o')], {
+          cwd: repo,
+          encoding: 'utf8',
+        })
         const diag = (r.stderr ?? '').trim()
-        if (r.status !== 0 || diag) problems.push(`${id}/${name}: ${src}: ${diag.split('\n')[0] || `종료 코드 ${r.status}`}`)
+        if (r.status !== 0 || diag)
+          problems.push(`${id}/${name}: ${src}: ${diag.split('\n')[0] || `종료 코드 ${r.status}`}`)
       }
       const file = path.join(tmp, `assert_${name}.c`)
       fs.writeFileSync(
         file,
-        [...build.headers.map((h) => `#include "${h}"`), ...cfg.asserts.map((a, i) => `_Static_assert(${a}, "assert ${i}");`), ''].join('\n'),
+        [
+          ...build.headers.map((h) => `#include "${h}"`),
+          ...cfg.asserts.map((a, i) => `_Static_assert(${a}, "assert ${i}");`),
+          '',
+        ].join('\n'),
       )
-      const r = spawnSync(cc.file, [...args, '-c', file, '-o', path.join(tmp, 'a.o')], { cwd: repo, encoding: 'utf8' })
-      if (r.status !== 0) problems.push(`${id}/${name}: 단정 실패: ${(r.stderr ?? '').split('\n').find((l) => /error/.test(l)) ?? r.status}`)
+      const r = spawnSync(cc.file, [...args, '-c', file, '-o', path.join(tmp, 'a.o')], {
+        cwd: repo,
+        encoding: 'utf8',
+      })
+      if (r.status !== 0)
+        problems.push(
+          `${id}/${name}: 단정 실패: ${(r.stderr ?? '').split('\n').find((l) => /error/.test(l)) ?? r.status}`,
+        )
     }
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true })
@@ -83,7 +97,9 @@ async function main() {
     console.log('C 컴파일러(clang, zig cc)가 없어 픽스처 컴파일 확인을 건너뛴다')
     return
   }
-  const version = execFileSync(cc.file, [...cc.pre, '--version'], { encoding: 'utf8' }).split('\n')[0]
+  const version = execFileSync(cc.file, [...cc.pre, '--version'], { encoding: 'utf8' }).split(
+    '\n',
+  )[0]
   console.log(`컴파일러: ${cc.file} ${cc.pre.join(' ')} (${version})`)
   const ids = process.argv.slice(2).length ? process.argv.slice(2) : listScenarios()
   let failed = 0

@@ -1,0 +1,3037 @@
+{
+ "note": "4차 작업의 기준선(A)과 A/A(A2). 쪽 base-af9c68c6, sonnet/medium, 판정 sonnet/high. 결과 폴더는 git에 넣지 않아 run마다 점수만 남긴다",
+ "runs": [
+  {
+   "id": "A.e1-twoboard.survey.1",
+   "label": "A",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "survey",
+   "rep": 1,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 30,
+    "ok": 30,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.2048612,
+   "minutes": 1.11,
+   "turns": 5,
+   "hashes": {
+    "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+    "instructions": "sha256:065742556ac0441ee9bac7d72a447a5f175537b5ee57bb6fbd3f3d11b80cbe18"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e1-twoboard.survey.2",
+   "label": "A",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "survey",
+   "rep": 2,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 32,
+    "ok": 32,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.228915,
+   "minutes": 0.99,
+   "turns": 5,
+   "hashes": {
+    "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+    "instructions": "sha256:065742556ac0441ee9bac7d72a447a5f175537b5ee57bb6fbd3f3d11b80cbe18"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e1-twoboard.survey.3",
+   "label": "A",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "survey",
+   "rep": 3,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 36,
+    "ok": 36,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.2404534,
+   "minutes": 1.26,
+   "turns": 6,
+   "hashes": {
+    "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+    "instructions": "sha256:065742556ac0441ee9bac7d72a447a5f175537b5ee57bb6fbd3f3d11b80cbe18"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e1-twoboard.survey.4",
+   "label": "A",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "survey",
+   "rep": 4,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 32,
+    "ok": 32,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.23679100000000003,
+   "minutes": 1.14,
+   "turns": 5,
+   "hashes": {
+    "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+    "instructions": "sha256:065742556ac0441ee9bac7d72a447a5f175537b5ee57bb6fbd3f3d11b80cbe18"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e1-twoboard.survey.5",
+   "label": "A",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "survey",
+   "rep": 5,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 34,
+    "ok": 34,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.22415639999999998,
+   "minutes": 1.38,
+   "turns": 5,
+   "hashes": {
+    "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+    "instructions": "sha256:065742556ac0441ee9bac7d72a447a5f175537b5ee57bb6fbd3f3d11b80cbe18"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e1-twoboard.trace-command.1",
+   "label": "A",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-command",
+   "rep": 1,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 0.9,
+   "violated": [
+    "m.polling_constraint"
+   ],
+   "missed": [
+    "r.cmd.second_writer"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 45,
+    "ok": 45,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.27628820000000004,
+   "minutes": 2.78,
+   "turns": 26,
+   "hashes": {
+    "schema": "sha256:e09b5de11c3873cfd5c0afb38f51f1bafe4149b4e403f219fbc2fc88125c47b9",
+    "instructions": "sha256:0e84c48e91494def0925f29309f4c7ebc65f1e3a41d5aef62ff854df041631b9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e1-twoboard.trace-command.2",
+   "label": "A",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-command",
+   "rep": 2,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 0.9,
+   "violated": [
+    "m.polling_constraint"
+   ],
+   "missed": [
+    "r.cmd.second_writer"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 43,
+    "ok": 43,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.2754894,
+   "minutes": 1.41,
+   "turns": 25,
+   "hashes": {
+    "schema": "sha256:e09b5de11c3873cfd5c0afb38f51f1bafe4149b4e403f219fbc2fc88125c47b9",
+    "instructions": "sha256:0e84c48e91494def0925f29309f4c7ebc65f1e3a41d5aef62ff854df041631b9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e1-twoboard.trace-command.3",
+   "label": "A",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-command",
+   "rep": 3,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 1,
+   "violated": [
+    "m.polling_constraint"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 47,
+    "ok": 46,
+    "lineMismatch": 1,
+    "fabricated": 0
+   },
+   "costUsd": 0.29248799999999997,
+   "minutes": 1.6,
+   "turns": 22,
+   "hashes": {
+    "schema": "sha256:e09b5de11c3873cfd5c0afb38f51f1bafe4149b4e403f219fbc2fc88125c47b9",
+    "instructions": "sha256:0e84c48e91494def0925f29309f4c7ebc65f1e3a41d5aef62ff854df041631b9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e1-twoboard.trace-command.4",
+   "label": "A",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-command",
+   "rep": 4,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 54,
+    "ok": 54,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.3141672,
+   "minutes": 1.7,
+   "turns": 26,
+   "hashes": {
+    "schema": "sha256:e09b5de11c3873cfd5c0afb38f51f1bafe4149b4e403f219fbc2fc88125c47b9",
+    "instructions": "sha256:0e84c48e91494def0925f29309f4c7ebc65f1e3a41d5aef62ff854df041631b9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e1-twoboard.trace-command.5",
+   "label": "A",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-command",
+   "rep": 5,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 45,
+    "ok": 45,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.2583286,
+   "minutes": 1.66,
+   "turns": 22,
+   "hashes": {
+    "schema": "sha256:e09b5de11c3873cfd5c0afb38f51f1bafe4149b4e403f219fbc2fc88125c47b9",
+    "instructions": "sha256:0e84c48e91494def0925f29309f4c7ebc65f1e3a41d5aef62ff854df041631b9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e1-twoboard.trace-shared.1",
+   "label": "A",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-shared",
+   "rep": 1,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 57,
+    "ok": 51,
+    "lineMismatch": 6,
+    "fabricated": 0
+   },
+   "costUsd": 0.2970602,
+   "minutes": 1.87,
+   "turns": 7,
+   "hashes": {
+    "schema": "sha256:2694e7ff82d2d18dc8e77284090d05c30c2b4d2536c74fdf74ccfac291f0e1b4",
+    "instructions": "sha256:29320b1cd827a9d5c0dd4785e68efef7fdeab573dd352d9dc3a609cd5dcbd8a9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e1-twoboard.trace-shared.2",
+   "label": "A",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-shared",
+   "rep": 2,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 36,
+    "ok": 30,
+    "lineMismatch": 6,
+    "fabricated": 0
+   },
+   "costUsd": 0.34621100000000005,
+   "minutes": 1.87,
+   "turns": 6,
+   "hashes": {
+    "schema": "sha256:2694e7ff82d2d18dc8e77284090d05c30c2b4d2536c74fdf74ccfac291f0e1b4",
+    "instructions": "sha256:29320b1cd827a9d5c0dd4785e68efef7fdeab573dd352d9dc3a609cd5dcbd8a9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e1-twoboard.trace-shared.3",
+   "label": "A",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-shared",
+   "rep": 3,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 48,
+    "ok": 48,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.3221862,
+   "minutes": 6.69,
+   "turns": 7,
+   "hashes": {
+    "schema": "sha256:2694e7ff82d2d18dc8e77284090d05c30c2b4d2536c74fdf74ccfac291f0e1b4",
+    "instructions": "sha256:29320b1cd827a9d5c0dd4785e68efef7fdeab573dd352d9dc3a609cd5dcbd8a9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e1-twoboard.trace-shared.4",
+   "label": "A",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-shared",
+   "rep": 4,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 38,
+    "ok": 31,
+    "lineMismatch": 7,
+    "fabricated": 0
+   },
+   "costUsd": 0.2506012,
+   "minutes": 1.68,
+   "turns": 7,
+   "hashes": {
+    "schema": "sha256:2694e7ff82d2d18dc8e77284090d05c30c2b4d2536c74fdf74ccfac291f0e1b4",
+    "instructions": "sha256:29320b1cd827a9d5c0dd4785e68efef7fdeab573dd352d9dc3a609cd5dcbd8a9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e1-twoboard.trace-shared.5",
+   "label": "A",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-shared",
+   "rep": 5,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 1,
+   "violated": [
+    "m.polling_constraint"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 41,
+    "ok": 41,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.30701480000000003,
+   "minutes": 1.39,
+   "turns": 22,
+   "hashes": {
+    "schema": "sha256:2694e7ff82d2d18dc8e77284090d05c30c2b4d2536c74fdf74ccfac291f0e1b4",
+    "instructions": "sha256:29320b1cd827a9d5c0dd4785e68efef7fdeab573dd352d9dc3a609cd5dcbd8a9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e1-twoboard.trace-timing.1",
+   "label": "A",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-timing",
+   "rep": 1,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 57,
+    "ok": 57,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.2549374,
+   "minutes": 1.5,
+   "turns": 5,
+   "hashes": {
+    "schema": "sha256:a33b91b274c21a1cb861b8f5e4a32e53f2ae162a090337519acb2678521d439c",
+    "instructions": "sha256:8d7a103081bbc5b1a4407d202cf6d6d9f186a5e3160956b7bbec5db5b4a4ca48"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e1-twoboard.trace-timing.2",
+   "label": "A",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-timing",
+   "rep": 2,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 1,
+   "violated": [
+    "m.polling_constraint"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 62,
+    "ok": 35,
+    "lineMismatch": 27,
+    "fabricated": 0
+   },
+   "costUsd": 0.2487812,
+   "minutes": 1.73,
+   "turns": 7,
+   "hashes": {
+    "schema": "sha256:a33b91b274c21a1cb861b8f5e4a32e53f2ae162a090337519acb2678521d439c",
+    "instructions": "sha256:8d7a103081bbc5b1a4407d202cf6d6d9f186a5e3160956b7bbec5db5b4a4ca48"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e1-twoboard.trace-timing.3",
+   "label": "A",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-timing",
+   "rep": 3,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 64,
+    "ok": 64,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.230161,
+   "minutes": 1.62,
+   "turns": 5,
+   "hashes": {
+    "schema": "sha256:a33b91b274c21a1cb861b8f5e4a32e53f2ae162a090337519acb2678521d439c",
+    "instructions": "sha256:8d7a103081bbc5b1a4407d202cf6d6d9f186a5e3160956b7bbec5db5b4a4ca48"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e1-twoboard.trace-timing.4",
+   "label": "A",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-timing",
+   "rep": 4,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 59,
+    "ok": 59,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.28115,
+   "minutes": 1.99,
+   "turns": 6,
+   "hashes": {
+    "schema": "sha256:a33b91b274c21a1cb861b8f5e4a32e53f2ae162a090337519acb2678521d439c",
+    "instructions": "sha256:8d7a103081bbc5b1a4407d202cf6d6d9f186a5e3160956b7bbec5db5b4a4ca48"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e1-twoboard.trace-timing.5",
+   "label": "A",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-timing",
+   "rep": 5,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 1,
+   "violated": [
+    "m.polling_constraint"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 63,
+    "ok": 63,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.2545524,
+   "minutes": 1.69,
+   "turns": 6,
+   "hashes": {
+    "schema": "sha256:a33b91b274c21a1cb861b8f5e4a32e53f2ae162a090337519acb2678521d439c",
+    "instructions": "sha256:8d7a103081bbc5b1a4407d202cf6d6d9f186a5e3160956b7bbec5db5b4a4ca48"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e1-twoboard.trace-variant.1",
+   "label": "A",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-variant",
+   "rep": 1,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 66,
+    "ok": 59,
+    "lineMismatch": 7,
+    "fabricated": 0
+   },
+   "costUsd": 0.2975086,
+   "minutes": 1.84,
+   "turns": 6,
+   "hashes": {
+    "schema": "sha256:8dbb3408bbcee908b40be5983d4e4d7f476eb472026ee7374fcc6e8c36723910",
+    "instructions": "sha256:e2af1a2aeeba92a1c0ad20979fa016c3217eb9f255c28cd727441812e5eb1d38"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e1-twoboard.trace-variant.2",
+   "label": "A",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-variant",
+   "rep": 2,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 40,
+    "ok": 32,
+    "lineMismatch": 8,
+    "fabricated": 0
+   },
+   "costUsd": 0.362999,
+   "minutes": 2.01,
+   "turns": 7,
+   "hashes": {
+    "schema": "sha256:8dbb3408bbcee908b40be5983d4e4d7f476eb472026ee7374fcc6e8c36723910",
+    "instructions": "sha256:e2af1a2aeeba92a1c0ad20979fa016c3217eb9f255c28cd727441812e5eb1d38"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e1-twoboard.trace-variant.3",
+   "label": "A",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-variant",
+   "rep": 3,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 67,
+    "ok": 61,
+    "lineMismatch": 6,
+    "fabricated": 0
+   },
+   "costUsd": 0.3081952,
+   "minutes": 2.1,
+   "turns": 6,
+   "hashes": {
+    "schema": "sha256:8dbb3408bbcee908b40be5983d4e4d7f476eb472026ee7374fcc6e8c36723910",
+    "instructions": "sha256:e2af1a2aeeba92a1c0ad20979fa016c3217eb9f255c28cd727441812e5eb1d38"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e1-twoboard.trace-variant.4",
+   "label": "A",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-variant",
+   "rep": 4,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 45,
+    "ok": 41,
+    "lineMismatch": 4,
+    "fabricated": 0
+   },
+   "costUsd": 0.2024516,
+   "minutes": 1.52,
+   "turns": 6,
+   "hashes": {
+    "schema": "sha256:8dbb3408bbcee908b40be5983d4e4d7f476eb472026ee7374fcc6e8c36723910",
+    "instructions": "sha256:e2af1a2aeeba92a1c0ad20979fa016c3217eb9f255c28cd727441812e5eb1d38"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e1-twoboard.trace-variant.5",
+   "label": "A",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-variant",
+   "rep": 5,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 32,
+    "ok": 27,
+    "lineMismatch": 5,
+    "fabricated": 0
+   },
+   "costUsd": 0.1504114,
+   "minutes": 0.98,
+   "turns": 5,
+   "hashes": {
+    "schema": "sha256:8dbb3408bbcee908b40be5983d4e4d7f476eb472026ee7374fcc6e8c36723910",
+    "instructions": "sha256:e2af1a2aeeba92a1c0ad20979fa016c3217eb9f255c28cd727441812e5eb1d38"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e2-gateway.survey.1",
+   "label": "A",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "survey",
+   "rep": 1,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 0.9166666666666666,
+   "violated": [
+    "m.fc23"
+   ],
+   "missed": [
+    "r.sv.forced_include",
+    "r.inv.dma_rx"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 36,
+    "ok": 28,
+    "lineMismatch": 8,
+    "fabricated": 0
+   },
+   "costUsd": 0.2842216,
+   "minutes": 1.19,
+   "turns": 9,
+   "hashes": {
+    "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+    "instructions": "sha256:065742556ac0441ee9bac7d72a447a5f175537b5ee57bb6fbd3f3d11b80cbe18"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e2-gateway.survey.2",
+   "label": "A",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "survey",
+   "rep": 2,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 44,
+    "ok": 32,
+    "lineMismatch": 12,
+    "fabricated": 0
+   },
+   "costUsd": 0.2360334,
+   "minutes": 1.16,
+   "turns": 7,
+   "hashes": {
+    "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+    "instructions": "sha256:065742556ac0441ee9bac7d72a447a5f175537b5ee57bb6fbd3f3d11b80cbe18"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e2-gateway.survey.3",
+   "label": "A",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "survey",
+   "rep": 3,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.875,
+   "violated": [],
+   "missed": [
+    "r.inv.sensor",
+    "r.inv.wdog",
+    "r.inv.logger"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 30,
+    "ok": 27,
+    "lineMismatch": 3,
+    "fabricated": 0
+   },
+   "costUsd": 0.23891240000000002,
+   "minutes": 1.43,
+   "turns": 8,
+   "hashes": {
+    "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+    "instructions": "sha256:065742556ac0441ee9bac7d72a447a5f175537b5ee57bb6fbd3f3d11b80cbe18"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e2-gateway.survey.4",
+   "label": "A",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "survey",
+   "rep": 4,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.7916666666666666,
+   "violated": [],
+   "missed": [
+    "r.inv.fc06",
+    "r.inv.fc16",
+    "r.inv.fc43",
+    "r.inv.fc08",
+    "r.inv.dma_rx"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 33,
+    "ok": 25,
+    "lineMismatch": 8,
+    "fabricated": 0
+   },
+   "costUsd": 0.1737148,
+   "minutes": 1.13,
+   "turns": 7,
+   "hashes": {
+    "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+    "instructions": "sha256:065742556ac0441ee9bac7d72a447a5f175537b5ee57bb6fbd3f3d11b80cbe18"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e2-gateway.survey.5",
+   "label": "A",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "survey",
+   "rep": 5,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.9583333333333334,
+   "violated": [],
+   "missed": [
+    "r.inv.dma_rx"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 48,
+    "ok": 41,
+    "lineMismatch": 7,
+    "fabricated": 0
+   },
+   "costUsd": 0.348215,
+   "minutes": 1.7,
+   "turns": 9,
+   "hashes": {
+    "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+    "instructions": "sha256:065742556ac0441ee9bac7d72a447a5f175537b5ee57bb6fbd3f3d11b80cbe18"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e2-gateway.trace-command.1",
+   "label": "A",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-command",
+   "rep": 1,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.9166666666666666,
+   "violated": [],
+   "missed": [
+    "r.cmd.de_release"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 37,
+    "ok": 34,
+    "lineMismatch": 3,
+    "fabricated": 0
+   },
+   "costUsd": 0.2969366,
+   "minutes": 1.57,
+   "turns": 15,
+   "hashes": {
+    "schema": "sha256:e09b5de11c3873cfd5c0afb38f51f1bafe4149b4e403f219fbc2fc88125c47b9",
+    "instructions": "sha256:0e84c48e91494def0925f29309f4c7ebc65f1e3a41d5aef62ff854df041631b9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e2-gateway.trace-command.2",
+   "label": "A",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-command",
+   "rep": 2,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.9166666666666666,
+   "violated": [],
+   "missed": [
+    "r.cmd.de_release"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 55,
+    "ok": 55,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.32365940000000004,
+   "minutes": 1.79,
+   "turns": 15,
+   "hashes": {
+    "schema": "sha256:e09b5de11c3873cfd5c0afb38f51f1bafe4149b4e403f219fbc2fc88125c47b9",
+    "instructions": "sha256:0e84c48e91494def0925f29309f4c7ebc65f1e3a41d5aef62ff854df041631b9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e2-gateway.trace-command.3",
+   "label": "A",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-command",
+   "rep": 3,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.9166666666666666,
+   "violated": [],
+   "missed": [
+    "r.cmd.de_release"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 47,
+    "ok": 47,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.3042184,
+   "minutes": 1.82,
+   "turns": 15,
+   "hashes": {
+    "schema": "sha256:e09b5de11c3873cfd5c0afb38f51f1bafe4149b4e403f219fbc2fc88125c47b9",
+    "instructions": "sha256:0e84c48e91494def0925f29309f4c7ebc65f1e3a41d5aef62ff854df041631b9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e2-gateway.trace-command.4",
+   "label": "A",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-command",
+   "rep": 4,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.9166666666666666,
+   "violated": [],
+   "missed": [
+    "r.cmd.de_release"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 56,
+    "ok": 44,
+    "lineMismatch": 12,
+    "fabricated": 0
+   },
+   "costUsd": 0.3708768,
+   "minutes": 2.16,
+   "turns": 15,
+   "hashes": {
+    "schema": "sha256:e09b5de11c3873cfd5c0afb38f51f1bafe4149b4e403f219fbc2fc88125c47b9",
+    "instructions": "sha256:0e84c48e91494def0925f29309f4c7ebc65f1e3a41d5aef62ff854df041631b9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e2-gateway.trace-command.5",
+   "label": "A",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-command",
+   "rep": 5,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.9166666666666666,
+   "violated": [],
+   "missed": [
+    "r.cmd.de_release"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 38,
+    "ok": 35,
+    "lineMismatch": 3,
+    "fabricated": 0
+   },
+   "costUsd": 0.27226720000000004,
+   "minutes": 1.36,
+   "turns": 14,
+   "hashes": {
+    "schema": "sha256:e09b5de11c3873cfd5c0afb38f51f1bafe4149b4e403f219fbc2fc88125c47b9",
+    "instructions": "sha256:0e84c48e91494def0925f29309f4c7ebc65f1e3a41d5aef62ff854df041631b9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e2-gateway.trace-shared.1",
+   "label": "A",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-shared",
+   "rep": 1,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 1,
+   "violated": [
+    "m.sensor_25_all"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 81,
+    "ok": 76,
+    "lineMismatch": 5,
+    "fabricated": 0
+   },
+   "costUsd": 0.5546418,
+   "minutes": 3.11,
+   "turns": 10,
+   "hashes": {
+    "schema": "sha256:2694e7ff82d2d18dc8e77284090d05c30c2b4d2536c74fdf74ccfac291f0e1b4",
+    "instructions": "sha256:29320b1cd827a9d5c0dd4785e68efef7fdeab573dd352d9dc3a609cd5dcbd8a9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e2-gateway.trace-shared.2",
+   "label": "A",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-shared",
+   "rep": 2,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 60,
+    "ok": 55,
+    "lineMismatch": 3,
+    "fabricated": 2
+   },
+   "costUsd": 0.4730852,
+   "minutes": 2.63,
+   "turns": 24,
+   "hashes": {
+    "schema": "sha256:2694e7ff82d2d18dc8e77284090d05c30c2b4d2536c74fdf74ccfac291f0e1b4",
+    "instructions": "sha256:29320b1cd827a9d5c0dd4785e68efef7fdeab573dd352d9dc3a609cd5dcbd8a9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e2-gateway.trace-shared.3",
+   "label": "A",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-shared",
+   "rep": 3,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.9,
+   "violated": [],
+   "missed": [
+    "r.cmd.de_release"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 66,
+    "ok": 58,
+    "lineMismatch": 8,
+    "fabricated": 0
+   },
+   "costUsd": 0.5374234,
+   "minutes": 8.89,
+   "turns": 11,
+   "hashes": {
+    "schema": "sha256:2694e7ff82d2d18dc8e77284090d05c30c2b4d2536c74fdf74ccfac291f0e1b4",
+    "instructions": "sha256:29320b1cd827a9d5c0dd4785e68efef7fdeab573dd352d9dc3a609cd5dcbd8a9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e2-gateway.trace-shared.4",
+   "label": "A",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-shared",
+   "rep": 4,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 0.8,
+   "violated": [
+    "m.q.q.sensor.value"
+   ],
+   "missed": [
+    "r.cmd.de_release",
+    "r.sh.prios"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 58,
+    "ok": 57,
+    "lineMismatch": 1,
+    "fabricated": 0
+   },
+   "costUsd": 0.47309080000000003,
+   "minutes": 3.25,
+   "turns": 33,
+   "hashes": {
+    "schema": "sha256:2694e7ff82d2d18dc8e77284090d05c30c2b4d2536c74fdf74ccfac291f0e1b4",
+    "instructions": "sha256:29320b1cd827a9d5c0dd4785e68efef7fdeab573dd352d9dc3a609cd5dcbd8a9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e2-gateway.trace-shared.5",
+   "label": "A",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-shared",
+   "rep": 5,
+   "failure": null,
+   "pmA": 2,
+   "pmB": 1,
+   "violated": [
+    "m.iwdg_exact",
+    "m.q.q.sensor.value"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 64,
+    "ok": 47,
+    "lineMismatch": 14,
+    "fabricated": 3
+   },
+   "costUsd": 0.775836,
+   "minutes": 3.77,
+   "turns": 10,
+   "hashes": {
+    "schema": "sha256:2694e7ff82d2d18dc8e77284090d05c30c2b4d2536c74fdf74ccfac291f0e1b4",
+    "instructions": "sha256:29320b1cd827a9d5c0dd4785e68efef7fdeab573dd352d9dc3a609cd5dcbd8a9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e2-gateway.trace-timing.1",
+   "label": "A",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-timing",
+   "rep": 1,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 124,
+    "ok": 121,
+    "lineMismatch": 3,
+    "fabricated": 0
+   },
+   "costUsd": 0.750982,
+   "minutes": 3.89,
+   "turns": 48,
+   "hashes": {
+    "schema": "sha256:a33b91b274c21a1cb861b8f5e4a32e53f2ae162a090337519acb2678521d439c",
+    "instructions": "sha256:8d7a103081bbc5b1a4407d202cf6d6d9f186a5e3160956b7bbec5db5b4a4ca48"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e2-gateway.trace-timing.2",
+   "label": "A",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-timing",
+   "rep": 2,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 1,
+   "violated": [
+    "m.timebase_exact"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 76,
+    "ok": 69,
+    "lineMismatch": 6,
+    "fabricated": 1
+   },
+   "costUsd": 0.46463999999999994,
+   "minutes": 2.63,
+   "turns": 11,
+   "hashes": {
+    "schema": "sha256:a33b91b274c21a1cb861b8f5e4a32e53f2ae162a090337519acb2678521d439c",
+    "instructions": "sha256:8d7a103081bbc5b1a4407d202cf6d6d9f186a5e3160956b7bbec5db5b4a4ca48"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e2-gateway.trace-timing.3",
+   "label": "A",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-timing",
+   "rep": 3,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 0.8888888888888888,
+   "violated": [
+    "m.timebase_exact"
+   ],
+   "missed": [
+    "r.tim.txto"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 64,
+    "ok": 62,
+    "lineMismatch": 2,
+    "fabricated": 0
+   },
+   "costUsd": 0.39025360000000003,
+   "minutes": 1.93,
+   "turns": 10,
+   "hashes": {
+    "schema": "sha256:a33b91b274c21a1cb861b8f5e4a32e53f2ae162a090337519acb2678521d439c",
+    "instructions": "sha256:8d7a103081bbc5b1a4407d202cf6d6d9f186a5e3160956b7bbec5db5b4a4ca48"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e2-gateway.trace-timing.4",
+   "label": "A",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-timing",
+   "rep": 4,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 0.8888888888888888,
+   "violated": [
+    "m.timebase_exact"
+   ],
+   "missed": [
+    "r.tim.erase"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 90,
+    "ok": 31,
+    "lineMismatch": 59,
+    "fabricated": 0
+   },
+   "costUsd": 0.43906120000000004,
+   "minutes": 2.7,
+   "turns": 10,
+   "hashes": {
+    "schema": "sha256:a33b91b274c21a1cb861b8f5e4a32e53f2ae162a090337519acb2678521d439c",
+    "instructions": "sha256:8d7a103081bbc5b1a4407d202cf6d6d9f186a5e3160956b7bbec5db5b4a4ca48"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e2-gateway.trace-timing.5",
+   "label": "A",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-timing",
+   "rep": 5,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 1,
+   "violated": [
+    "m.timebase_exact"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 108,
+    "ok": 105,
+    "lineMismatch": 2,
+    "fabricated": 1
+   },
+   "costUsd": 0.664777,
+   "minutes": 3.69,
+   "turns": 11,
+   "hashes": {
+    "schema": "sha256:a33b91b274c21a1cb861b8f5e4a32e53f2ae162a090337519acb2678521d439c",
+    "instructions": "sha256:8d7a103081bbc5b1a4407d202cf6d6d9f186a5e3160956b7bbec5db5b4a4ca48"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e2-gateway.trace-variant.1",
+   "label": "A",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-variant",
+   "rep": 1,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 40,
+    "ok": 38,
+    "lineMismatch": 2,
+    "fabricated": 0
+   },
+   "costUsd": 0.21836120000000003,
+   "minutes": 1.38,
+   "turns": 8,
+   "hashes": {
+    "schema": "sha256:8dbb3408bbcee908b40be5983d4e4d7f476eb472026ee7374fcc6e8c36723910",
+    "instructions": "sha256:e2af1a2aeeba92a1c0ad20979fa016c3217eb9f255c28cd727441812e5eb1d38"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e2-gateway.trace-variant.2",
+   "label": "A",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-variant",
+   "rep": 2,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.9285714285714286,
+   "violated": [],
+   "missed": [
+    "r.var.functions"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 51,
+    "ok": 45,
+    "lineMismatch": 6,
+    "fabricated": 0
+   },
+   "costUsd": 0.2684968,
+   "minutes": 1.53,
+   "turns": 9,
+   "hashes": {
+    "schema": "sha256:8dbb3408bbcee908b40be5983d4e4d7f476eb472026ee7374fcc6e8c36723910",
+    "instructions": "sha256:e2af1a2aeeba92a1c0ad20979fa016c3217eb9f255c28cd727441812e5eb1d38"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e2-gateway.trace-variant.3",
+   "label": "A",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-variant",
+   "rep": 3,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 56,
+    "ok": 56,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.5585472,
+   "minutes": 2.27,
+   "turns": 45,
+   "hashes": {
+    "schema": "sha256:8dbb3408bbcee908b40be5983d4e4d7f476eb472026ee7374fcc6e8c36723910",
+    "instructions": "sha256:e2af1a2aeeba92a1c0ad20979fa016c3217eb9f255c28cd727441812e5eb1d38"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e2-gateway.trace-variant.4",
+   "label": "A",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-variant",
+   "rep": 4,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 48,
+    "ok": 48,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.46156060000000004,
+   "minutes": 2.12,
+   "turns": 37,
+   "hashes": {
+    "schema": "sha256:8dbb3408bbcee908b40be5983d4e4d7f476eb472026ee7374fcc6e8c36723910",
+    "instructions": "sha256:e2af1a2aeeba92a1c0ad20979fa016c3217eb9f255c28cd727441812e5eb1d38"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A.e2-gateway.trace-variant.5",
+   "label": "A",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-variant",
+   "rep": 5,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 41,
+    "ok": 37,
+    "lineMismatch": 4,
+    "fabricated": 0
+   },
+   "costUsd": 0.2380836,
+   "minutes": 1.59,
+   "turns": 7,
+   "hashes": {
+    "schema": "sha256:8dbb3408bbcee908b40be5983d4e4d7f476eb472026ee7374fcc6e8c36723910",
+    "instructions": "sha256:e2af1a2aeeba92a1c0ad20979fa016c3217eb9f255c28cd727441812e5eb1d38"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e1-twoboard.survey.1",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "survey",
+   "rep": 1,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 34,
+    "ok": 34,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.204189,
+   "minutes": 1.05,
+   "turns": 5,
+   "hashes": {
+    "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+    "instructions": "sha256:065742556ac0441ee9bac7d72a447a5f175537b5ee57bb6fbd3f3d11b80cbe18"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e1-twoboard.survey.2",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "survey",
+   "rep": 2,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 37,
+    "ok": 37,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.2551722,
+   "minutes": 1.2,
+   "turns": 6,
+   "hashes": {
+    "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+    "instructions": "sha256:065742556ac0441ee9bac7d72a447a5f175537b5ee57bb6fbd3f3d11b80cbe18"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e1-twoboard.survey.3",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "survey",
+   "rep": 3,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 30,
+    "ok": 30,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.21142139999999998,
+   "minutes": 1.17,
+   "turns": 5,
+   "hashes": {
+    "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+    "instructions": "sha256:065742556ac0441ee9bac7d72a447a5f175537b5ee57bb6fbd3f3d11b80cbe18"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e1-twoboard.survey.4",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "survey",
+   "rep": 4,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 29,
+    "ok": 27,
+    "lineMismatch": 2,
+    "fabricated": 0
+   },
+   "costUsd": 0.3288854,
+   "minutes": 1.73,
+   "turns": 6,
+   "hashes": {
+    "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+    "instructions": "sha256:065742556ac0441ee9bac7d72a447a5f175537b5ee57bb6fbd3f3d11b80cbe18"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e1-twoboard.survey.5",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "survey",
+   "rep": 5,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 28,
+    "ok": 21,
+    "lineMismatch": 7,
+    "fabricated": 0
+   },
+   "costUsd": 0.20826,
+   "minutes": 1.54,
+   "turns": 7,
+   "hashes": {
+    "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+    "instructions": "sha256:065742556ac0441ee9bac7d72a447a5f175537b5ee57bb6fbd3f3d11b80cbe18"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e1-twoboard.trace-command.1",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-command",
+   "rep": 1,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 1,
+   "violated": [
+    "m.polling_constraint"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 40,
+    "ok": 40,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.2945414,
+   "minutes": 1.47,
+   "turns": 29,
+   "hashes": {
+    "schema": "sha256:e09b5de11c3873cfd5c0afb38f51f1bafe4149b4e403f219fbc2fc88125c47b9",
+    "instructions": "sha256:0e84c48e91494def0925f29309f4c7ebc65f1e3a41d5aef62ff854df041631b9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e1-twoboard.trace-command.2",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-command",
+   "rep": 2,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 43,
+    "ok": 43,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.25190060000000003,
+   "minutes": 1.33,
+   "turns": 21,
+   "hashes": {
+    "schema": "sha256:e09b5de11c3873cfd5c0afb38f51f1bafe4149b4e403f219fbc2fc88125c47b9",
+    "instructions": "sha256:0e84c48e91494def0925f29309f4c7ebc65f1e3a41d5aef62ff854df041631b9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e1-twoboard.trace-command.3",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-command",
+   "rep": 3,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 1,
+   "violated": [
+    "m.polling_constraint"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 55,
+    "ok": 55,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.2980562,
+   "minutes": 1.68,
+   "turns": 25,
+   "hashes": {
+    "schema": "sha256:e09b5de11c3873cfd5c0afb38f51f1bafe4149b4e403f219fbc2fc88125c47b9",
+    "instructions": "sha256:0e84c48e91494def0925f29309f4c7ebc65f1e3a41d5aef62ff854df041631b9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e1-twoboard.trace-command.4",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-command",
+   "rep": 4,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 46,
+    "ok": 46,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.312748,
+   "minutes": 1.91,
+   "turns": 25,
+   "hashes": {
+    "schema": "sha256:e09b5de11c3873cfd5c0afb38f51f1bafe4149b4e403f219fbc2fc88125c47b9",
+    "instructions": "sha256:0e84c48e91494def0925f29309f4c7ebc65f1e3a41d5aef62ff854df041631b9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e1-twoboard.trace-command.5",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-command",
+   "rep": 5,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 37,
+    "ok": 37,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.4340136,
+   "minutes": 2.75,
+   "turns": 28,
+   "hashes": {
+    "schema": "sha256:e09b5de11c3873cfd5c0afb38f51f1bafe4149b4e403f219fbc2fc88125c47b9",
+    "instructions": "sha256:0e84c48e91494def0925f29309f4c7ebc65f1e3a41d5aef62ff854df041631b9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e1-twoboard.trace-shared.1",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-shared",
+   "rep": 1,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 42,
+    "ok": 42,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.3171944,
+   "minutes": 1.56,
+   "turns": 21,
+   "hashes": {
+    "schema": "sha256:2694e7ff82d2d18dc8e77284090d05c30c2b4d2536c74fdf74ccfac291f0e1b4",
+    "instructions": "sha256:29320b1cd827a9d5c0dd4785e68efef7fdeab573dd352d9dc3a609cd5dcbd8a9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e1-twoboard.trace-shared.2",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-shared",
+   "rep": 2,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 43,
+    "ok": 43,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.3349746,
+   "minutes": 1.82,
+   "turns": 22,
+   "hashes": {
+    "schema": "sha256:2694e7ff82d2d18dc8e77284090d05c30c2b4d2536c74fdf74ccfac291f0e1b4",
+    "instructions": "sha256:29320b1cd827a9d5c0dd4785e68efef7fdeab573dd352d9dc3a609cd5dcbd8a9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e1-twoboard.trace-shared.3",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-shared",
+   "rep": 3,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 50,
+    "ok": 50,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.48310780000000003,
+   "minutes": 2.73,
+   "turns": 8,
+   "hashes": {
+    "schema": "sha256:2694e7ff82d2d18dc8e77284090d05c30c2b4d2536c74fdf74ccfac291f0e1b4",
+    "instructions": "sha256:29320b1cd827a9d5c0dd4785e68efef7fdeab573dd352d9dc3a609cd5dcbd8a9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e1-twoboard.trace-shared.4",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-shared",
+   "rep": 4,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 33,
+    "ok": 30,
+    "lineMismatch": 2,
+    "fabricated": 1
+   },
+   "costUsd": 0.19220939999999997,
+   "minutes": 1.13,
+   "turns": 5,
+   "hashes": {
+    "schema": "sha256:2694e7ff82d2d18dc8e77284090d05c30c2b4d2536c74fdf74ccfac291f0e1b4",
+    "instructions": "sha256:29320b1cd827a9d5c0dd4785e68efef7fdeab573dd352d9dc3a609cd5dcbd8a9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e1-twoboard.trace-shared.5",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-shared",
+   "rep": 5,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 36,
+    "ok": 36,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.23201480000000002,
+   "minutes": 1.17,
+   "turns": 6,
+   "hashes": {
+    "schema": "sha256:2694e7ff82d2d18dc8e77284090d05c30c2b4d2536c74fdf74ccfac291f0e1b4",
+    "instructions": "sha256:29320b1cd827a9d5c0dd4785e68efef7fdeab573dd352d9dc3a609cd5dcbd8a9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e1-twoboard.trace-timing.1",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-timing",
+   "rep": 1,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 53,
+    "ok": 52,
+    "lineMismatch": 1,
+    "fabricated": 0
+   },
+   "costUsd": 0.2670668,
+   "minutes": 2.12,
+   "turns": 6,
+   "hashes": {
+    "schema": "sha256:a33b91b274c21a1cb861b8f5e4a32e53f2ae162a090337519acb2678521d439c",
+    "instructions": "sha256:8d7a103081bbc5b1a4407d202cf6d6d9f186a5e3160956b7bbec5db5b4a4ca48"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e1-twoboard.trace-timing.2",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-timing",
+   "rep": 2,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 65,
+    "ok": 64,
+    "lineMismatch": 1,
+    "fabricated": 0
+   },
+   "costUsd": 0.31017279999999997,
+   "minutes": 2.03,
+   "turns": 6,
+   "hashes": {
+    "schema": "sha256:a33b91b274c21a1cb861b8f5e4a32e53f2ae162a090337519acb2678521d439c",
+    "instructions": "sha256:8d7a103081bbc5b1a4407d202cf6d6d9f186a5e3160956b7bbec5db5b4a4ca48"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e1-twoboard.trace-timing.3",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-timing",
+   "rep": 3,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 60,
+    "ok": 60,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.2740204,
+   "minutes": 1.54,
+   "turns": 6,
+   "hashes": {
+    "schema": "sha256:a33b91b274c21a1cb861b8f5e4a32e53f2ae162a090337519acb2678521d439c",
+    "instructions": "sha256:8d7a103081bbc5b1a4407d202cf6d6d9f186a5e3160956b7bbec5db5b4a4ca48"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e1-twoboard.trace-timing.4",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-timing",
+   "rep": 4,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 69,
+    "ok": 69,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.29980320000000005,
+   "minutes": 1.68,
+   "turns": 6,
+   "hashes": {
+    "schema": "sha256:a33b91b274c21a1cb861b8f5e4a32e53f2ae162a090337519acb2678521d439c",
+    "instructions": "sha256:8d7a103081bbc5b1a4407d202cf6d6d9f186a5e3160956b7bbec5db5b4a4ca48"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e1-twoboard.trace-timing.5",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-timing",
+   "rep": 5,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 67,
+    "ok": 66,
+    "lineMismatch": 1,
+    "fabricated": 0
+   },
+   "costUsd": 0.2630726,
+   "minutes": 1.62,
+   "turns": 5,
+   "hashes": {
+    "schema": "sha256:a33b91b274c21a1cb861b8f5e4a32e53f2ae162a090337519acb2678521d439c",
+    "instructions": "sha256:8d7a103081bbc5b1a4407d202cf6d6d9f186a5e3160956b7bbec5db5b4a4ca48"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e1-twoboard.trace-variant.1",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-variant",
+   "rep": 1,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 50,
+    "ok": 45,
+    "lineMismatch": 5,
+    "fabricated": 0
+   },
+   "costUsd": 0.2144034,
+   "minutes": 1.4,
+   "turns": 6,
+   "hashes": {
+    "schema": "sha256:8dbb3408bbcee908b40be5983d4e4d7f476eb472026ee7374fcc6e8c36723910",
+    "instructions": "sha256:e2af1a2aeeba92a1c0ad20979fa016c3217eb9f255c28cd727441812e5eb1d38"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e1-twoboard.trace-variant.2",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-variant",
+   "rep": 2,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 48,
+    "ok": 35,
+    "lineMismatch": 13,
+    "fabricated": 0
+   },
+   "costUsd": 0.2113594,
+   "minutes": 1.29,
+   "turns": 6,
+   "hashes": {
+    "schema": "sha256:8dbb3408bbcee908b40be5983d4e4d7f476eb472026ee7374fcc6e8c36723910",
+    "instructions": "sha256:e2af1a2aeeba92a1c0ad20979fa016c3217eb9f255c28cd727441812e5eb1d38"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e1-twoboard.trace-variant.3",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-variant",
+   "rep": 3,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 46,
+    "ok": 31,
+    "lineMismatch": 15,
+    "fabricated": 0
+   },
+   "costUsd": 0.1979524,
+   "minutes": 1.27,
+   "turns": 6,
+   "hashes": {
+    "schema": "sha256:8dbb3408bbcee908b40be5983d4e4d7f476eb472026ee7374fcc6e8c36723910",
+    "instructions": "sha256:e2af1a2aeeba92a1c0ad20979fa016c3217eb9f255c28cd727441812e5eb1d38"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e1-twoboard.trace-variant.4",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-variant",
+   "rep": 4,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 46,
+    "ok": 29,
+    "lineMismatch": 17,
+    "fabricated": 0
+   },
+   "costUsd": 0.2154612,
+   "minutes": 1.4,
+   "turns": 6,
+   "hashes": {
+    "schema": "sha256:8dbb3408bbcee908b40be5983d4e4d7f476eb472026ee7374fcc6e8c36723910",
+    "instructions": "sha256:e2af1a2aeeba92a1c0ad20979fa016c3217eb9f255c28cd727441812e5eb1d38"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e1-twoboard.trace-variant.5",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "trace-variant",
+   "rep": 5,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 46,
+    "ok": 46,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.2422992,
+   "minutes": 1.36,
+   "turns": 6,
+   "hashes": {
+    "schema": "sha256:8dbb3408bbcee908b40be5983d4e4d7f476eb472026ee7374fcc6e8c36723910",
+    "instructions": "sha256:e2af1a2aeeba92a1c0ad20979fa016c3217eb9f255c28cd727441812e5eb1d38"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e2-gateway.survey.1",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "survey",
+   "rep": 1,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.9583333333333334,
+   "violated": [],
+   "missed": [
+    "r.inv.dma_rx"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 38,
+    "ok": 38,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.2688596,
+   "minutes": 1.36,
+   "turns": 12,
+   "hashes": {
+    "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+    "instructions": "sha256:065742556ac0441ee9bac7d72a447a5f175537b5ee57bb6fbd3f3d11b80cbe18"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e2-gateway.survey.2",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "survey",
+   "rep": 2,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 50,
+    "ok": 35,
+    "lineMismatch": 15,
+    "fabricated": 0
+   },
+   "costUsd": 0.2398804,
+   "minutes": 1.38,
+   "turns": 8,
+   "hashes": {
+    "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+    "instructions": "sha256:065742556ac0441ee9bac7d72a447a5f175537b5ee57bb6fbd3f3d11b80cbe18"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e2-gateway.survey.3",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "survey",
+   "rep": 3,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.8333333333333334,
+   "violated": [],
+   "missed": [
+    "r.inv.fc06",
+    "r.inv.fc16",
+    "r.inv.fc43",
+    "r.inv.fc08"
+   ],
+   "softened": [
+    "v.fc16_configs"
+   ],
+   "anchors": {
+    "total": 38,
+    "ok": 32,
+    "lineMismatch": 6,
+    "fabricated": 0
+   },
+   "costUsd": 0.2190684,
+   "minutes": 2.5,
+   "turns": 7,
+   "hashes": {
+    "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+    "instructions": "sha256:065742556ac0441ee9bac7d72a447a5f175537b5ee57bb6fbd3f3d11b80cbe18"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e2-gateway.survey.4",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "survey",
+   "rep": 4,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.9166666666666666,
+   "violated": [],
+   "missed": [
+    "r.sv.forced_include",
+    "r.inv.dma_rx"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 43,
+    "ok": 37,
+    "lineMismatch": 6,
+    "fabricated": 0
+   },
+   "costUsd": 0.3272212,
+   "minutes": 1.68,
+   "turns": 9,
+   "hashes": {
+    "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+    "instructions": "sha256:065742556ac0441ee9bac7d72a447a5f175537b5ee57bb6fbd3f3d11b80cbe18"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e2-gateway.survey.5",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "survey",
+   "rep": 5,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.9583333333333334,
+   "violated": [],
+   "missed": [
+    "r.sv.forced_include"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 40,
+    "ok": 40,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.2908118,
+   "minutes": 1.33,
+   "turns": 11,
+   "hashes": {
+    "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+    "instructions": "sha256:065742556ac0441ee9bac7d72a447a5f175537b5ee57bb6fbd3f3d11b80cbe18"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e2-gateway.trace-command.1",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-command",
+   "rep": 1,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 52,
+    "ok": 50,
+    "lineMismatch": 2,
+    "fabricated": 0
+   },
+   "costUsd": 0.3730154,
+   "minutes": 2.54,
+   "turns": 17,
+   "hashes": {
+    "schema": "sha256:e09b5de11c3873cfd5c0afb38f51f1bafe4149b4e403f219fbc2fc88125c47b9",
+    "instructions": "sha256:0e84c48e91494def0925f29309f4c7ebc65f1e3a41d5aef62ff854df041631b9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e2-gateway.trace-command.2",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-command",
+   "rep": 2,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 44,
+    "ok": 38,
+    "lineMismatch": 6,
+    "fabricated": 0
+   },
+   "costUsd": 0.32779480000000005,
+   "minutes": 2.01,
+   "turns": 16,
+   "hashes": {
+    "schema": "sha256:e09b5de11c3873cfd5c0afb38f51f1bafe4149b4e403f219fbc2fc88125c47b9",
+    "instructions": "sha256:0e84c48e91494def0925f29309f4c7ebc65f1e3a41d5aef62ff854df041631b9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e2-gateway.trace-command.3",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-command",
+   "rep": 3,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.9166666666666666,
+   "violated": [],
+   "missed": [
+    "r.cmd.de_release"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 40,
+    "ok": 37,
+    "lineMismatch": 3,
+    "fabricated": 0
+   },
+   "costUsd": 0.2798442,
+   "minutes": 1.61,
+   "turns": 15,
+   "hashes": {
+    "schema": "sha256:e09b5de11c3873cfd5c0afb38f51f1bafe4149b4e403f219fbc2fc88125c47b9",
+    "instructions": "sha256:0e84c48e91494def0925f29309f4c7ebc65f1e3a41d5aef62ff854df041631b9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e2-gateway.trace-command.4",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-command",
+   "rep": 4,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.9166666666666666,
+   "violated": [],
+   "missed": [
+    "r.cmd.de_release"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 49,
+    "ok": 48,
+    "lineMismatch": 1,
+    "fabricated": 0
+   },
+   "costUsd": 0.32396620000000004,
+   "minutes": 1.58,
+   "turns": 20,
+   "hashes": {
+    "schema": "sha256:e09b5de11c3873cfd5c0afb38f51f1bafe4149b4e403f219fbc2fc88125c47b9",
+    "instructions": "sha256:0e84c48e91494def0925f29309f4c7ebc65f1e3a41d5aef62ff854df041631b9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e2-gateway.trace-command.5",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-command",
+   "rep": 5,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.9166666666666666,
+   "violated": [],
+   "missed": [
+    "r.cmd.de_release"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 50,
+    "ok": 40,
+    "lineMismatch": 10,
+    "fabricated": 0
+   },
+   "costUsd": 0.3214376,
+   "minutes": 1.89,
+   "turns": 14,
+   "hashes": {
+    "schema": "sha256:e09b5de11c3873cfd5c0afb38f51f1bafe4149b4e403f219fbc2fc88125c47b9",
+    "instructions": "sha256:0e84c48e91494def0925f29309f4c7ebc65f1e3a41d5aef62ff854df041631b9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e2-gateway.trace-shared.1",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-shared",
+   "rep": 1,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.8,
+   "violated": [],
+   "missed": [
+    "r.cmd.de_release",
+    "r.sh.adc_dma"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 71,
+    "ok": 71,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.46792520000000004,
+   "minutes": 2.27,
+   "turns": 9,
+   "hashes": {
+    "schema": "sha256:2694e7ff82d2d18dc8e77284090d05c30c2b4d2536c74fdf74ccfac291f0e1b4",
+    "instructions": "sha256:29320b1cd827a9d5c0dd4785e68efef7fdeab573dd352d9dc3a609cd5dcbd8a9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e2-gateway.trace-shared.2",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-shared",
+   "rep": 2,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.9,
+   "violated": [],
+   "missed": [
+    "r.cmd.de_release"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 64,
+    "ok": 63,
+    "lineMismatch": 1,
+    "fabricated": 0
+   },
+   "costUsd": 0.463116,
+   "minutes": 2.6,
+   "turns": 30,
+   "hashes": {
+    "schema": "sha256:2694e7ff82d2d18dc8e77284090d05c30c2b4d2536c74fdf74ccfac291f0e1b4",
+    "instructions": "sha256:29320b1cd827a9d5c0dd4785e68efef7fdeab573dd352d9dc3a609cd5dcbd8a9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e2-gateway.trace-shared.3",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-shared",
+   "rep": 3,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.8,
+   "violated": [],
+   "missed": [
+    "r.cmd.de_release",
+    "r.sh.prios"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 74,
+    "ok": 73,
+    "lineMismatch": 0,
+    "fabricated": 1
+   },
+   "costUsd": 0.8476505999999999,
+   "minutes": 4.04,
+   "turns": 37,
+   "hashes": {
+    "schema": "sha256:2694e7ff82d2d18dc8e77284090d05c30c2b4d2536c74fdf74ccfac291f0e1b4",
+    "instructions": "sha256:29320b1cd827a9d5c0dd4785e68efef7fdeab573dd352d9dc3a609cd5dcbd8a9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e2-gateway.trace-shared.4",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-shared",
+   "rep": 4,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 0.9,
+   "violated": [
+    "m.sensor_25_all"
+   ],
+   "missed": [
+    "r.cmd.de_release"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 94,
+    "ok": 93,
+    "lineMismatch": 1,
+    "fabricated": 0
+   },
+   "costUsd": 0.9199552,
+   "minutes": 4.84,
+   "turns": 37,
+   "hashes": {
+    "schema": "sha256:2694e7ff82d2d18dc8e77284090d05c30c2b4d2536c74fdf74ccfac291f0e1b4",
+    "instructions": "sha256:29320b1cd827a9d5c0dd4785e68efef7fdeab573dd352d9dc3a609cd5dcbd8a9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e2-gateway.trace-shared.5",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-shared",
+   "rep": 5,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.8,
+   "violated": [],
+   "missed": [
+    "r.sh.adc_dma",
+    "r.sh.prios"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 60,
+    "ok": 59,
+    "lineMismatch": 1,
+    "fabricated": 0
+   },
+   "costUsd": 0.5289038,
+   "minutes": 2.79,
+   "turns": 31,
+   "hashes": {
+    "schema": "sha256:2694e7ff82d2d18dc8e77284090d05c30c2b4d2536c74fdf74ccfac291f0e1b4",
+    "instructions": "sha256:29320b1cd827a9d5c0dd4785e68efef7fdeab573dd352d9dc3a609cd5dcbd8a9"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e2-gateway.trace-timing.1",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-timing",
+   "rep": 1,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 1,
+   "violated": [
+    "m.timebase_exact"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 86,
+    "ok": 85,
+    "lineMismatch": 0,
+    "fabricated": 1
+   },
+   "costUsd": 0.6733336,
+   "minutes": 3.27,
+   "turns": 40,
+   "hashes": {
+    "schema": "sha256:a33b91b274c21a1cb861b8f5e4a32e53f2ae162a090337519acb2678521d439c",
+    "instructions": "sha256:8d7a103081bbc5b1a4407d202cf6d6d9f186a5e3160956b7bbec5db5b4a4ca48"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e2-gateway.trace-timing.2",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-timing",
+   "rep": 2,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 1,
+   "violated": [
+    "m.timebase_exact"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 94,
+    "ok": 94,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "costUsd": 0.5649303999999999,
+   "minutes": 2.84,
+   "turns": 10,
+   "hashes": {
+    "schema": "sha256:a33b91b274c21a1cb861b8f5e4a32e53f2ae162a090337519acb2678521d439c",
+    "instructions": "sha256:8d7a103081bbc5b1a4407d202cf6d6d9f186a5e3160956b7bbec5db5b4a4ca48"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e2-gateway.trace-timing.3",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-timing",
+   "rep": 3,
+   "failure": null,
+   "pmA": 2,
+   "pmB": 1,
+   "violated": [
+    "m.iwdg_exact",
+    "m.timebase_exact"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 108,
+    "ok": 106,
+    "lineMismatch": 2,
+    "fabricated": 0
+   },
+   "costUsd": 0.561259,
+   "minutes": 3.3,
+   "turns": 10,
+   "hashes": {
+    "schema": "sha256:a33b91b274c21a1cb861b8f5e4a32e53f2ae162a090337519acb2678521d439c",
+    "instructions": "sha256:8d7a103081bbc5b1a4407d202cf6d6d9f186a5e3160956b7bbec5db5b4a4ca48"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e2-gateway.trace-timing.4",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-timing",
+   "rep": 4,
+   "failure": null,
+   "pmA": 2,
+   "pmB": 0.8888888888888888,
+   "violated": [
+    "m.iwdg_exact",
+    "m.timebase_exact"
+   ],
+   "missed": [
+    "r.tim.erase"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 92,
+    "ok": 90,
+    "lineMismatch": 2,
+    "fabricated": 0
+   },
+   "costUsd": 0.5639888,
+   "minutes": 3.18,
+   "turns": 13,
+   "hashes": {
+    "schema": "sha256:a33b91b274c21a1cb861b8f5e4a32e53f2ae162a090337519acb2678521d439c",
+    "instructions": "sha256:8d7a103081bbc5b1a4407d202cf6d6d9f186a5e3160956b7bbec5db5b4a4ca48"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e2-gateway.trace-timing.5",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-timing",
+   "rep": 5,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 1,
+   "violated": [
+    "m.timebase_exact"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 109,
+    "ok": 103,
+    "lineMismatch": 6,
+    "fabricated": 0
+   },
+   "costUsd": 0.5152402,
+   "minutes": 3.26,
+   "turns": 11,
+   "hashes": {
+    "schema": "sha256:a33b91b274c21a1cb861b8f5e4a32e53f2ae162a090337519acb2678521d439c",
+    "instructions": "sha256:8d7a103081bbc5b1a4407d202cf6d6d9f186a5e3160956b7bbec5db5b4a4ca48"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e2-gateway.trace-variant.1",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-variant",
+   "rep": 1,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.9285714285714286,
+   "violated": [],
+   "missed": [
+    "r.var.functions"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 50,
+    "ok": 35,
+    "lineMismatch": 15,
+    "fabricated": 0
+   },
+   "costUsd": 0.5258726,
+   "minutes": 2.44,
+   "turns": 11,
+   "hashes": {
+    "schema": "sha256:8dbb3408bbcee908b40be5983d4e4d7f476eb472026ee7374fcc6e8c36723910",
+    "instructions": "sha256:e2af1a2aeeba92a1c0ad20979fa016c3217eb9f255c28cd727441812e5eb1d38"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e2-gateway.trace-variant.2",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-variant",
+   "rep": 2,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.8571428571428571,
+   "violated": [],
+   "missed": [
+    "r.var.functions",
+    "r.var.runtime"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 39,
+    "ok": 30,
+    "lineMismatch": 9,
+    "fabricated": 0
+   },
+   "costUsd": 0.2684712,
+   "minutes": 1.45,
+   "turns": 8,
+   "hashes": {
+    "schema": "sha256:8dbb3408bbcee908b40be5983d4e4d7f476eb472026ee7374fcc6e8c36723910",
+    "instructions": "sha256:e2af1a2aeeba92a1c0ad20979fa016c3217eb9f255c28cd727441812e5eb1d38"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e2-gateway.trace-variant.3",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-variant",
+   "rep": 3,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 47,
+    "ok": 40,
+    "lineMismatch": 7,
+    "fabricated": 0
+   },
+   "costUsd": 0.2818516,
+   "minutes": 1.58,
+   "turns": 9,
+   "hashes": {
+    "schema": "sha256:8dbb3408bbcee908b40be5983d4e4d7f476eb472026ee7374fcc6e8c36723910",
+    "instructions": "sha256:e2af1a2aeeba92a1c0ad20979fa016c3217eb9f255c28cd727441812e5eb1d38"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e2-gateway.trace-variant.4",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-variant",
+   "rep": 4,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.8571428571428571,
+   "violated": [],
+   "missed": [
+    "r.var.functions",
+    "r.var.runtime"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 41,
+    "ok": 35,
+    "lineMismatch": 6,
+    "fabricated": 0
+   },
+   "costUsd": 0.2507478,
+   "minutes": 1.42,
+   "turns": 8,
+   "hashes": {
+    "schema": "sha256:8dbb3408bbcee908b40be5983d4e4d7f476eb472026ee7374fcc6e8c36723910",
+    "instructions": "sha256:e2af1a2aeeba92a1c0ad20979fa016c3217eb9f255c28cd727441812e5eb1d38"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  },
+  {
+   "id": "A2.e2-gateway.trace-variant.5",
+   "label": "A2",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "trace-variant",
+   "rep": 5,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.9285714285714286,
+   "violated": [],
+   "missed": [
+    "r.var.functions"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 39,
+    "ok": 34,
+    "lineMismatch": 5,
+    "fabricated": 0
+   },
+   "costUsd": 0.2501464,
+   "minutes": 1.58,
+   "turns": 11,
+   "hashes": {
+    "schema": "sha256:8dbb3408bbcee908b40be5983d4e4d7f476eb472026ee7374fcc6e8c36723910",
+    "instructions": "sha256:e2af1a2aeeba92a1c0ad20979fa016c3217eb9f255c28cd727441812e5eb1d38"
+   },
+   "model": "claude-sonnet-5-5",
+   "claude": "2.1.294"
+  }
+ ]
+}

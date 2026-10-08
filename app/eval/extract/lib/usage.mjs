@@ -106,9 +106,24 @@ export function logCall(file, entry) {
  * 다음 호출을 해도 되는가.
  * @returns {Promise<{ ok: boolean, why: string, usage: object }>}
  */
-export async function guard({ bin, env, callsFile, floorPct = 50, maxCalls = 150, dry = false }) {
+export async function guard({
+  bin,
+  env,
+  callsFile,
+  floorPct = 50,
+  maxCalls = 150,
+  dry = false,
+  observed = null,
+}) {
   if (dry) return { ok: true, why: 'dry', usage: null }
   const usage = await getUsage(bin, env)
+  // get_usage는 오래된 값을 줄 수 있어(2.1.293, 같은 때 rate_limit_event보다 낮았다) 최근 run에서 본 값과 큰 쪽을 쓴다
+  if (observed?.weeklyPct != null) {
+    usage.available = true
+    usage.weeklyPct = Math.max(usage.weeklyPct ?? 0, observed.weeklyPct)
+  }
+  if (observed?.fiveHourPct != null)
+    usage.fiveHourPct = Math.max(usage.fiveHourPct ?? 0, observed.fiveHourPct)
   if (usage.available) {
     if (usage.weeklyPct !== null && usage.weeklyPct >= 100 - floorPct)
       return {

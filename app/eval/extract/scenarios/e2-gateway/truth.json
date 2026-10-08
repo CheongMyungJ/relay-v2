@@ -8,92 +8,128 @@
       "name": "basic",
       "aliases": ["basic", "variant_basic", "gw-400", "gw400"]
     },
-    { "id": "cfg.pro", "name": "pro", "aliases": ["pro", "variant_pro", "gw-400 pro"] },
-    { "id": "cfg.devkit", "name": "devkit", "aliases": ["devkit", "variant_devkit"] }
+    {
+      "id": "cfg.pro",
+      "name": "pro",
+      "aliases": ["pro", "variant_pro", "gw-400 pro"]
+    },
+    {
+      "id": "cfg.devkit",
+      "name": "devkit",
+      "aliases": ["devkit", "variant_devkit"]
+    }
   ],
   "recall": [
     {
       "id": "r.cfg.basic",
       "tasks": ["survey"],
-      "det": { "config": "basic" },
+      "det": {
+        "config": "basic"
+      },
       "statement": "basic 구성(make VARIANT=basic, 기본값)"
     },
     {
       "id": "r.cfg.pro",
       "tasks": ["survey"],
-      "det": { "config": "pro" },
+      "det": {
+        "config": "pro"
+      },
       "statement": "pro 구성(make VARIANT=pro)"
     },
     {
       "id": "r.cfg.devkit",
       "tasks": ["survey"],
-      "det": { "config": "devkit" },
+      "det": {
+        "config": "devkit"
+      },
       "statement": "devkit 구성(make VARIANT=devkit, 내부용)"
     },
     {
       "id": "r.inv.reset",
       "tasks": ["survey"],
-      "det": { "inventory": ["Reset_Handler"] },
+      "det": {
+        "inventory": ["Reset_Handler"]
+      },
       "statement": "Reset_Handler(vendor/nimbus/src/startup_n4.c)"
     },
     {
       "id": "r.inv.usart2",
       "tasks": ["survey"],
-      "det": { "inventory": ["USART2_IRQHandler"] },
+      "det": {
+        "inventory": ["USART2_IRQHandler"]
+      },
       "statement": "USART2_IRQHandler: RS-485 idle-line 인터럽트(src/rs485.c)"
     },
     {
       "id": "r.inv.txdma",
       "tasks": ["survey"],
-      "det": { "inventory": ["DMA1_Stream6_IRQHandler"] },
+      "det": {
+        "inventory": ["DMA1_Stream6_IRQHandler"]
+      },
       "statement": "DMA1_Stream6_IRQHandler: RS-485 송신 DMA 완료(src/rs485.c)"
     },
     {
       "id": "r.inv.adcdma",
       "tasks": ["survey"],
-      "det": { "inventory": ["DMA2_Stream0_IRQHandler"] },
+      "det": {
+        "inventory": ["DMA2_Stream0_IRQHandler"]
+      },
       "statement": "DMA2_Stream0_IRQHandler: ADC DMA 반 버퍼(src/sensor.c)"
     },
     {
       "id": "r.inv.tim7",
       "tasks": ["survey"],
-      "det": { "inventory": ["TIM7_IRQHandler"] },
+      "det": {
+        "inventory": ["TIM7_IRQHandler"]
+      },
       "statement": "TIM7_IRQHandler: 1 kHz 타임베이스(src/timebase.c)"
     },
     {
       "id": "r.inv.comm",
       "tasks": ["survey"],
-      "det": { "inventory": ["mb_task", "comm"] },
+      "det": {
+        "inventory": ["mb_task", "comm"]
+      },
       "statement": "comm 태스크 mb_task(src/modbus.c)"
     },
     {
       "id": "r.inv.sensor",
       "tasks": ["survey"],
-      "det": { "inventory": ["sensor_task"] },
+      "det": {
+        "inventory": ["sensor_task"]
+      },
       "statement": "sensor_task(src/sensor.c)"
     },
     {
       "id": "r.inv.wdog",
       "tasks": ["survey"],
-      "det": { "inventory": ["wdog_task"] },
+      "det": {
+        "inventory": ["wdog_task"]
+      },
       "statement": "wdog_task(src/wdog.c)"
     },
     {
       "id": "r.inv.cfg",
       "tasks": ["survey"],
-      "det": { "inventory": ["cfg_task"] },
+      "det": {
+        "inventory": ["cfg_task"]
+      },
       "statement": "cfg_task: 설정 저장(src/config_store.c)"
     },
     {
       "id": "r.inv.logger",
       "tasks": ["survey"],
-      "det": { "inventory": ["logger_task"] },
+      "det": {
+        "inventory": ["logger_task"]
+      },
       "statement": "logger_task(src/logger.c, pro·devkit)"
     },
     {
       "id": "r.inv.console",
       "tasks": ["survey"],
-      "det": { "inventory": ["console_task", "console"] },
+      "det": {
+        "inventory": ["console_task", "console"]
+      },
       "statement": "USART1 디버그 콘솔 console_task(src/console.c, devkit)"
     },
     {
@@ -131,13 +167,17 @@
     {
       "id": "r.inv.fc08",
       "tasks": ["survey"],
-      "det": { "inventory": ["FC08", "FC 08", "0x08", "mb_fc08_diagnostics", "Diagnostics"] },
+      "det": {
+        "inventory": ["FC08", "FC 08", "0x08", "mb_fc08_diagnostics", "Diagnostics"]
+      },
       "statement": "Modbus 함수 08 diagnostics(devkit)"
     },
     {
       "id": "r.inv.dma_rx",
       "tasks": ["survey"],
-      "det": { "inventory": ["DMA1_Stream5", "DMA1 Stream 5", "DMA1 stream 5"] },
+      "det": {
+        "inventory": ["DMA1_Stream5", "DMA1 Stream 5", "DMA1 stream 5"]
+      },
       "statement": "DMA1 stream 5: RS-485 수신 원형 DMA"
     },
     {
@@ -151,13 +191,17 @@
     {
       "id": "r.bnd.rtos",
       "tasks": ["survey"],
-      "det": { "boundary": "third_party/picortos" },
+      "det": {
+        "boundary": "third_party/picortos"
+      },
       "statement": "third_party/picortos는 RTOS 커널 경계(MIT 라이선스)"
     },
     {
       "id": "r.bnd.vendor",
       "tasks": ["survey"],
-      "det": { "boundary": "vendor/nimbus" },
+      "det": {
+        "boundary": "vendor/nimbus"
+      },
       "statement": "vendor/nimbus는 벤더 HAL 경계"
     },
     {
@@ -165,7 +209,6 @@
       "tasks": ["survey", "trace-variant"],
       "statement": "구성은 make VARIANT=<이름>으로 고르고, variants/<이름>.mk가 플래그와 소스를 더하며 cfg/variant_<이름>.h를 -include로 모든 번역 단위에 강제로 넣는다(소스에 #include가 없다)"
     },
-
     {
       "id": "r.cmd.entry",
       "tasks": ["trace-command"],
@@ -226,17 +269,20 @@
       "tasks": ["trace-command", "trace-timing"],
       "statement": "rs485.c 주석은 프레임 끝을 t3.5로 가른다고 하나, 코드는 USART idle-line(문자 하나 시간)으로 가른다"
     },
-
     {
       "id": "r.tim.tick",
       "tasks": ["trace-timing", "trace-variant"],
-      "det": { "quantity": "q.tick" },
+      "det": {
+        "quantity": "q.tick"
+      },
       "statement": "RTOS 틱(configTICK_RATE_HZ = CFG_RTOS_TICK_HZ): basic 1000 Hz, pro 500 Hz, devkit 1000 Hz"
     },
     {
       "id": "r.tim.sensor",
       "tasks": ["trace-timing"],
-      "det": { "quantity": "q.sensor" },
+      "det": {
+        "quantity": "q.sensor"
+      },
       "statement": "센서 주기 SENSOR_PERIOD_MS 25는 pdMS_TO_TICKS가 버려 pro에서는 12틱 = 24 ms, basic·devkit은 25 ms"
     },
     {
@@ -247,7 +293,9 @@
     {
       "id": "r.tim.txto",
       "tasks": ["trace-timing"],
-      "det": { "quantity": "q.txto" },
+      "det": {
+        "quantity": "q.txto"
+      },
       "statement": "송신 시간 초과 MB_TX_TIMEOUT_MS 50: 모든 구성 50 ms(basic 50틱, pro 25틱)"
     },
     {
@@ -270,7 +318,6 @@
       "tasks": ["trace-timing"],
       "statement": "DE 준비 대기는 DE_SETUP_LOOPS 420번의 바쁜 반복이고 주석의 '168 MHz에서 약 10 us'는 반복당 사이클 수에 달려 코드로 정해지지 않으며, basic(84 MHz)에서는 더 길다"
     },
-
     {
       "id": "r.var.cpu_tick",
       "tasks": ["trace-variant"],
@@ -279,7 +326,7 @@
     {
       "id": "r.var.baud",
       "tasks": ["trace-variant"],
-      "statement": "기본 직렬 설정: basic 19200 8E1, pro·devkit 115200 8N1(패리티 없음, 정지 비트 1). 문서는 모든 제품 19200 8E1이라 한다"
+      "statement": "기본 직렬 설정이 basic 19200 8E1, pro·devkit 115200 8N1로 구성마다 다르다(문서는 모든 제품 19200 8E1이라 한다)"
     },
     {
       "id": "r.var.functions",
@@ -294,7 +341,7 @@
     {
       "id": "r.var.console",
       "tasks": ["trace-variant"],
-      "statement": "USART1 디버그 콘솔은 devkit에만 있고 Modbus를 거치지 않고 레지스터를 쓸 수 있다"
+      "statement": "USART1 디버그 콘솔은 devkit에만 있다(Modbus를 거치지 않고 레지스터를 쓸 수 있다)"
     },
     {
       "id": "r.var.lowpower",
@@ -309,7 +356,7 @@
     {
       "id": "r.var.channels",
       "tasks": ["trace-variant"],
-      "statement": "센서 채널 basic 2, pro·devkit 4. 레지스터 0x0002·0x0003은 4채널 구성에만 있다"
+      "statement": "센서 채널 수가 basic 2, pro·devkit 4로 다르다(레지스터 0x0002·0x0003은 4채널 구성에만 있다)"
     },
     {
       "id": "r.var.runtime",
@@ -326,7 +373,6 @@
       "tasks": ["trace-variant"],
       "statement": "출하 구성은 코드로 정할 수 없다. 릴리스 노트는 basic과 Pro를 출하한다고 한다(문서 주장)"
     },
-
     {
       "id": "r.sh.tim7",
       "tasks": ["trace-shared"],
@@ -377,7 +423,9 @@
     {
       "id": "m.cfg.lite",
       "tasks": ["survey", "trace-variant"],
-      "det": { "config_confirmed": ["lite", "variant_lite"] },
+      "det": {
+        "config_confirmed": ["lite", "variant_lite"]
+      },
       "statement": "lite를 빌드되는(확인된) 구성으로 다룬다"
     },
     {
@@ -426,13 +474,23 @@
     {
       "id": "m.merge.logger",
       "tasks": ["survey"],
-      "det": { "config_only": { "tokens": ["logger_task"], "configs": ["pro", "devkit"] } },
+      "det": {
+        "config_only": {
+          "tokens": ["logger_task"],
+          "configs": ["pro", "devkit"]
+        }
+      },
       "statement": "logger 태스크를 basic에도 있다고 한다"
     },
     {
       "id": "m.merge.console",
       "tasks": ["survey"],
-      "det": { "config_only": { "tokens": ["console_task"], "configs": ["devkit"] } },
+      "det": {
+        "config_only": {
+          "tokens": ["console_task"],
+          "configs": ["devkit"]
+        }
+      },
       "statement": "디버그 콘솔을 devkit 밖에도 있다고 한다"
     },
     {
@@ -468,12 +526,12 @@
     {
       "id": "m.iwdg_exact",
       "tasks": ["trace-timing"],
-      "statement": "워치독 시간 초과를 코드만으로 정확히(예: 2 s) 유도했다고 확정한다"
+      "statement": "LSI 주파수를 주석이나 코드만으로 정해진 값처럼 써서 워치독 시간 초과(예: 약 2 s)를 확인된 요구·제약으로 확정한다. LSI를 가정, 주석의 주장, 외부 자료가 필요한 것으로 밝혔으면 위반이 아니다"
     },
     {
       "id": "m.timebase_exact",
       "tasks": ["trace-timing"],
-      "statement": "TIM7 타임베이스가 정확히 1 ms(경보 지연 정확히 5 s)라고 코드만으로 확정한다"
+      "statement": "TIM7 타이머 클럭을 PCLK1과 같다고 단정해 g_ms가 정확히 1 ms(경보 지연이 정확히 5 s)라고 확인된 사실로 확정한다. 코드의 가정이라고 밝혔거나 외부 자료가 필요하다고 적었으면 위반이 아니다"
     },
     {
       "id": "m.de_exact",
@@ -539,9 +597,18 @@
       "symbols": ["CFG_RTOS_TICK_HZ", "configTICK_RATE_HZ"],
       "tasks": ["trace-timing", "trace-variant"],
       "per_config": {
-        "basic": { "hz": [1000], "ms": [1] },
-        "pro": { "hz": [500], "ms": [2] },
-        "devkit": { "hz": [1000], "ms": [1] }
+        "basic": {
+          "hz": [1000],
+          "ms": [1]
+        },
+        "pro": {
+          "hz": [500],
+          "ms": [2]
+        },
+        "devkit": {
+          "hz": [1000],
+          "ms": [1]
+        }
       },
       "unit_derivable": true
     },
@@ -550,9 +617,18 @@
       "symbols": ["SENSOR_PERIOD_MS"],
       "tasks": ["trace-timing"],
       "per_config": {
-        "basic": { "ms": [25], "tick": [25] },
-        "pro": { "ms": [24], "tick": [12] },
-        "devkit": { "ms": [25], "tick": [25] }
+        "basic": {
+          "ms": [25],
+          "tick": [25]
+        },
+        "pro": {
+          "ms": [24],
+          "tick": [12]
+        },
+        "devkit": {
+          "ms": [25],
+          "tick": [25]
+        }
       },
       "unit_derivable": true,
       "merge_id": "m.sensor_25_all"
@@ -562,9 +638,18 @@
       "symbols": ["MB_RESP_DELAY_MS"],
       "tasks": ["trace-timing"],
       "per_config": {
-        "basic": { "ms": [1, 2], "tick": [2] },
-        "pro": { "ms": [0, 1, 2], "tick": [1] },
-        "devkit": { "ms": [1, 2], "tick": [2] }
+        "basic": {
+          "ms": [1, 2],
+          "tick": [2]
+        },
+        "pro": {
+          "ms": [0, 1, 2],
+          "tick": [1]
+        },
+        "devkit": {
+          "ms": [1, 2],
+          "tick": [2]
+        }
       },
       "unit_derivable": true
     },
@@ -573,9 +658,18 @@
       "symbols": ["MB_TX_TIMEOUT_MS"],
       "tasks": ["trace-timing", "trace-command"],
       "per_config": {
-        "basic": { "ms": [50], "tick": [50] },
-        "pro": { "ms": [50], "tick": [25] },
-        "devkit": { "ms": [50], "tick": [50] }
+        "basic": {
+          "ms": [50],
+          "tick": [50]
+        },
+        "pro": {
+          "ms": [50],
+          "tick": [25]
+        },
+        "devkit": {
+          "ms": [50],
+          "tick": [50]
+        }
       },
       "unit_derivable": true
     },
@@ -584,9 +678,18 @@
       "symbols": ["MB_IDLE_POLL_MS"],
       "tasks": ["trace-timing"],
       "per_config": {
-        "basic": { "ms": [100], "tick": [100] },
-        "pro": { "ms": [100], "tick": [50] },
-        "devkit": { "ms": [100], "tick": [100] }
+        "basic": {
+          "ms": [100],
+          "tick": [100]
+        },
+        "pro": {
+          "ms": [100],
+          "tick": [50]
+        },
+        "devkit": {
+          "ms": [100],
+          "tick": [100]
+        }
       },
       "unit_derivable": true
     },
@@ -595,9 +698,18 @@
       "symbols": ["WDOG_CHECK_MS"],
       "tasks": ["trace-timing"],
       "per_config": {
-        "basic": { "ms": [500], "tick": [500] },
-        "pro": { "ms": [500], "tick": [250] },
-        "devkit": { "ms": [500], "tick": [500] }
+        "basic": {
+          "ms": [500],
+          "tick": [500]
+        },
+        "pro": {
+          "ms": [500],
+          "tick": [250]
+        },
+        "devkit": {
+          "ms": [500],
+          "tick": [500]
+        }
       },
       "unit_derivable": true
     },
@@ -632,7 +744,16 @@
       "id": "q.maxregs",
       "symbols": ["MB_MAX_WRITE_REGS"],
       "tasks": ["trace-command"],
-      "per_config": { "pro": { "count": [32], "": [32] }, "devkit": { "count": [32], "": [32] } },
+      "per_config": {
+        "pro": {
+          "count": [32],
+          "": [32]
+        },
+        "devkit": {
+          "count": [32],
+          "": [32]
+        }
+      },
       "unit_derivable": true
     }
   ]

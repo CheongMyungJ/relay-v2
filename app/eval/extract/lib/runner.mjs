@@ -253,6 +253,8 @@ export async function runOne(o) {
   const init = messages.find((m) => m.type === 'system' && m.subtype === 'init') ?? null
   const output = result?.structured_output ?? null
   const limited = usageLimit(messages)
+  const windows = [...messages].reverse().find((m) => m.type === 'rate_limit_event')
+    ?.rate_limit_info?.unifiedWindows
 
   const ajv = new Ajv2020({ allErrors: true, strict: false })
   const validate = ajv.compile(built.schema)
@@ -300,6 +302,19 @@ export async function runOne(o) {
     exitCode: code,
     failure,
     usageLimit: limited,
+    // 이 run이 받은 마지막 rate_limit_event의 창별 사용률(%, @internal 필드). get_usage는 오래된 값을 줄 수 있다(녹화)
+    observedUsage: windows
+      ? {
+          weeklyPct:
+            typeof windows.seven_day?.utilization === 'number'
+              ? Math.round(windows.seven_day.utilization * 100)
+              : null,
+          fiveHourPct:
+            typeof windows.five_hour?.utilization === 'number'
+              ? Math.round(windows.five_hour.utilization * 100)
+              : null,
+        }
+      : null,
     softDeadlineHit: softHit,
     worktreeChanged: changed,
     schemaValid,

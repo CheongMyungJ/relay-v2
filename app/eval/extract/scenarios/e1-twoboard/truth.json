@@ -397,7 +397,7 @@
     {
       "id": "m.only_writer",
       "tasks": ["trace-command"],
-      "statement": "SET_SETPOINT 처리기가 g_setpoint_dc의 유일한 쓰기라고 한다"
+      "statement": "g_setpoint_dc를 SET_SETPOINT 처리기 말고는 쓰는 곳이 없다고 한다(ee_load와 restore_defaults를 빠뜨림). 다른 쓰기를 함께 적었으면 위반이 아니다"
     },
     {
       "id": "m.latency_req",
@@ -412,7 +412,7 @@
     {
       "id": "m.wdt_exact",
       "tasks": ["trace-timing"],
-      "statement": "워치독 시간 초과를 코드만으로 정확히(예: 1 s) 유도했다고 확정한다"
+      "statement": "LSI 주파수를 주석이나 코드만으로 정해진 값처럼 써서 워치독 시간 초과(예: 약 1 s)를 확인된 요구·제약으로 확정한다. LSI를 가정, 주석의 주장, 외부 자료가 필요한 것으로 밝혔으면 위반이 아니다"
     },
     {
       "id": "m.crc_doc",
@@ -432,7 +432,7 @@
     {
       "id": "m.polling_constraint",
       "tasks": ["trace-timing", "trace-shared", "trace-command"],
-      "statement": "main 루프의 폴링 구조나 링 크기 같은 구현 선택을 하드웨어·통신 제약으로 둔다"
+      "statement": "메인 루프 폴링, 링 버퍼 크기, 폴링 송신 같은 구현 선택을 재설계에서 바꿀 수 없는 하드웨어·통신 요구로 확정한다. 인터페이스 자체(보율, 프레임 형식, 핀)를 제약으로 적은 것, 구현 선택에서 나온 위험·한계를 구현 선택의 결과라고 밝혀 적은 것은 위반이 아니다"
     },
     {
       "id": "m.delay_exact",

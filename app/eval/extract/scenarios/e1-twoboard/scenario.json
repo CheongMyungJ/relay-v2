@@ -1,10 +1,7 @@
 {
   "id": "e1-twoboard",
   "title": "작은 두 보드 bare-metal 온도 조절기(약 1.6천 줄)",
-  "configs": [
-    "alpha",
-    "beta"
-  ],
+  "configs": ["alpha", "beta"],
   "tasks": [
     {
       "id": "survey",
@@ -38,22 +35,11 @@
   ],
   "build": {
     "cpu": "cortex-m3",
-    "includes": [
-      "include",
-      "config",
-      "vendor/acme"
-    ],
-    "headers": [
-      "board.h",
-      "proto.h",
-      "control.h",
-      "timer.h"
-    ],
+    "includes": ["include", "config", "vendor/acme"],
+    "headers": ["board.h", "proto.h", "control.h", "timer.h"],
     "configs": {
       "alpha": {
-        "defines": [
-          "BOARD_ALPHA"
-        ],
+        "defines": ["BOARD_ALPHA"],
         "sources": [
           "src/main.c",
           "src/timer.c",
@@ -81,10 +67,7 @@
         ]
       },
       "beta": {
-        "defines": [
-          "BOARD_BETA",
-          "PROTO_FRAME_TIMEOUT_TICKS=5U"
-        ],
+        "defines": ["BOARD_BETA", "PROTO_FRAME_TIMEOUT_TICKS=5U"],
         "sources": [
           "src/main.c",
           "src/timer.c",

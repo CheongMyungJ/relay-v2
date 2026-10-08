@@ -4,11 +4,13 @@
 import { spawn } from 'node:child_process'
 import { cleanEnv } from '../../lib/env.mjs'
 
-export function judgeArgs({ model, system, schema }) {
+export function judgeArgs({ model, system, schema, effort = 'high' }) {
   return [
     '-p',
     '--model',
     model,
+    '--effort',
+    effort,
     '--output-format',
     'json',
     '--system-prompt',

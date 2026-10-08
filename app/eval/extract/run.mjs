@@ -110,6 +110,7 @@ async function main() {
     console.log(`이미 있는 run ${items.length - queue.length}개는 건너뛴다`)
   let stopped = null
   let waitUntil = 0
+  let observed = null
 
   async function worker() {
     while (queue.length && !stopped) {
@@ -124,6 +125,7 @@ async function main() {
         floorPct: Number(v['floor-pct']),
         maxCalls: Number(v['max-calls']),
         dry: v.dry,
+        observed,
       })
       if (!g.ok) {
         stopped = g.why
@@ -149,6 +151,7 @@ async function main() {
         softMs: Number(v['soft-min']) * 60_000,
         hardMs: Number(v['hard-min']) * 60_000,
       })
+      if (rec.observedUsage) observed = rec.observedUsage
       if (!v.dry)
         logCall(callsFile, {
           kind: 'run',

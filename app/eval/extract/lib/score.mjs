@@ -378,11 +378,13 @@ export const JUDGE_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['id', 'violated', 'keys'],
+        required: ['id', 'violated', 'keys', 'quote', 'hedged'],
         properties: {
           id: { type: 'string' },
           violated: { type: 'boolean' },
           keys: { type: 'array', items: { type: 'string' } },
+          quote: { type: 'string' },
+          hedged: { type: 'boolean' },
         },
       },
     },
@@ -404,11 +406,11 @@ export const JUDGE_SCHEMA = {
 
 export const JUDGE_SYSTEM = [
   'You grade the output of a firmware analysis run against a hidden answer key.',
-  'You get the run output as numbered claim lines ("<section> <key>: <text>") and three item lists.',
-  'recall: an item is found only if one or more claims state it (paraphrase is fine, partial is not). Give the claim keys.',
-  'must_not: violated only if a claim asserts what the item forbids. A claim that marks the point as uncertain, as a document claim or as an observation, or that states the opposite, is not a violation. Give the claim keys.',
+  'You get the run output as claim lines ("<section> <key>: <text>") and three item lists. Judge only from the claim lines.',
+  'recall: found if one or more claims state the main point of the item, in any language and wording. Text in parentheses in an item gives examples or details; they need not all appear. A claim that states something weaker, vaguer or different is not found. Give the claim keys.',
+  'must_not: violated only if a claim asserts, as settled fact, what the item forbids. Copy the shortest violating sentence into quote. Set hedged to true if that claim (or another claim it refers to) marks the point as nominal, assumed, approximate because of an unknown, a document or comment claim, an observation, needing external material, or if it lists the exceptions the item says are missing. A claim that states the opposite is not a violation. If unsure, violated is false.',
   'resolvable: left_unknown only if the run left that point unresolved (an unknown, a question, or "could not determine") instead of resolving it. Give the keys.',
-  'Answer every item id exactly once. keys are bare keys such as o1 or q2 (without the section word) and must appear in the claim lines. Judge only from the claim lines.',
+  'Answer every item id exactly once. keys are bare keys such as o1 or q2 (without the section word) and must appear in the claim lines. For items that are not violated, quote is an empty string and hedged is false.',
 ].join('\n')
 
 /** 판정에 넘길 항목: 이 과제에서 결정론 규칙이 도는 recall과 must_not은 뺀다(결정론이 가른다) */
@@ -467,7 +469,8 @@ export function applyJudge(answer, out, truth, task) {
   for (const m of items.must_not) {
     const a = pick('must_not', m.id)
     if (!a) undecided.push(m.id)
-    else if (a.violated === true && valid(a.keys)) violated.push(m.id)
+    // 판정 모델이 유보했다고 본 주장(공칭, 가정, 문서 주장, 외부 자료 필요, 빠진 예외를 함께 적음)은 위반으로 세지 않는다
+    else if (a.violated === true && a.hedged !== true && valid(a.keys)) violated.push(m.id)
   }
   const softened = []
   for (const r of items.resolvable) {

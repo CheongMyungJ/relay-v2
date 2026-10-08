@@ -56,7 +56,7 @@ async function judgeRun(run, truth, o) {
     const old = JSON.parse(fs.readFileSync(file, 'utf8'))
     if (old.hash === hash) return { answer: old.answer, cached: true }
   }
-  const g = await guard({ bin: o.bin, env: o.env, callsFile: o.callsFile })
+  const g = await guard({ bin: o.bin, env: o.env, callsFile: o.callsFile, observed: o.observed })
   if (!g.ok) throw new Error(`판정 전 멈춤: ${g.why}`)
   const cfg = fs.mkdtempSync(path.join(os.tmpdir(), 'relay-extract-judge-'))
   let r
@@ -93,11 +93,20 @@ export async function scoreDir(outDir, o) {
   const runsDir = path.join(outDir, 'runs')
   const ids = fs.existsSync(runsDir) ? fs.readdirSync(runsDir).sort() : []
   const cache = new Map()
-  let judged = 0
+  // 판정 전 사용량 확인에 쓸, run들이 본 가장 높은 사용률(get_usage는 오래된 값을 줄 수 있다)
+  const observed = { weeklyPct: null, fiveHourPct: null }
   for (const id of ids) {
+    const f = path.join(runsDir, id, 'run.json')
+    if (!fs.existsSync(f)) continue
+    const u = JSON.parse(fs.readFileSync(f, 'utf8')).observedUsage
+    for (const k of ['weeklyPct', 'fiveHourPct'])
+      if (typeof u?.[k] === 'number') observed[k] = Math.max(observed[k] ?? 0, u[k])
+  }
+  let judged = 0
+  const one = async (id) => {
     const dir = path.join(runsDir, id)
     const file = path.join(dir, 'run.json')
-    if (!fs.existsSync(file)) continue
+    if (!fs.existsSync(file)) return
     const run = JSON.parse(fs.readFileSync(file, 'utf8'))
     if (!cache.has(run.scenario)) {
       const s = loadScenario(run.scenario)
@@ -126,11 +135,11 @@ export async function scoreDir(outDir, o) {
           2,
         ),
       )
-      continue
+      return
     }
     let judge = null
     if (o.judge && !run.dry) {
-      const j = await judgeRun(run, s.truth, { ...o, dir })
+      const j = await judgeRun(run, s.truth, { ...o, dir, observed })
       judge = j.answer
       if (!j.cached) judged++
     }
@@ -157,6 +166,12 @@ export async function scoreDir(outDir, o) {
       ),
     )
   }
+  // 판정 호출만 시간이 들어 run을 몇 개씩 함께 채점한다(기본 1)
+  const queue = [...ids]
+  const workers = Array.from({ length: Math.max(1, o.concurrency ?? 1) }, async () => {
+    while (queue.length) await one(queue.shift())
+  })
+  await Promise.all(workers)
   return { runs: ids.length, judged }
 }
 
@@ -167,6 +182,7 @@ async function main() {
       'judge-model': { type: 'string', default: 'sonnet' },
       redo: { type: 'boolean', default: false },
       'no-judge': { type: 'boolean', default: false },
+      concurrency: { type: 'string', default: '1' },
       'calls-file': { type: 'string' },
     },
   })
@@ -178,6 +194,7 @@ async function main() {
       judge: !v['no-judge'],
       model: v['judge-model'],
       redo: v.redo,
+      concurrency: Number(v.concurrency),
       bin,
       env,
       callsFile: path.resolve(v['calls-file'] ?? path.join(outDir, 'calls.jsonl')),
