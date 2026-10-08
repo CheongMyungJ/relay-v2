@@ -195,7 +195,8 @@ if (mcp)
     clientInfo: { name: 'fake-codex', version: '1' },
   })
 const scenario = JSON.parse(fs.readFileSync(env.FAKE_CODEX_SCENARIO, 'utf8'))
-// 곁 세션(시나리오 11, I130)은 앱이 훅 경로로 넘기는 RELAY_HOOK_TASK가 side다. 시나리오의 side·sideResume을 한다
+// 곁 세션(시나리오 11, I130)은 앱이 훅 경로로 넘기는 RELAY_HOOK_TASK가 side다. 시나리오의 side·sideResume을 한다.
+// 가짜 claude와 같은 시나리오에서 Codex만 따로 하려면 sideCodex·sideResumeCodex를 쓴다
 const side = env.RELAY_HOOK_TASK === 'side'
 // sideNoStart: 훅을 신뢰하기 전에 SessionStart가 지나간 새 곁 세션을 흉내 낸다(실제 Codex는 신뢰 전 훅을 보내지 않음)
 if (!(side && !resumeId && scenario.sideNoStart))
@@ -286,10 +287,12 @@ async function steps(list) {
 }
 await steps(
   resumeId
-    ? ((side ? scenario.sideResume : scenario.resume?.[context.skill]) ?? [])
+    ? ((side
+        ? (scenario.sideResumeCodex ?? scenario.sideResume)
+        : scenario.resume?.[context.skill]) ?? [])
     : context.skill
       ? (scenario.tasks?.[context.skill] ?? [])
       : side
-        ? (scenario.side ?? [])
+        ? (scenario.sideCodex ?? scenario.side ?? [])
         : (scenario.cleanup ?? []),
 )

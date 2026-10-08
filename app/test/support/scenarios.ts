@@ -59,6 +59,9 @@ export interface Scenario {
   side?: Step[]
   /** --resume으로 다시 연 곁 세션의 단계 */
   sideResume?: Step[]
+  /** 가짜 codex의 곁 세션만의 단계 (있으면 side·sideResume 대신). 가짜 codex의 단계는 Step 밖의 것도 있다 */
+  sideCodex?: object[]
+  sideResumeCodex?: object[]
   /** 지식 검토 호출(claude -p, D300)의 n번째 결과. 없으면 문제 없음 */
   review?: { issues: { file: string; kind: string; quote: string; fix: string }[] }[]
 }

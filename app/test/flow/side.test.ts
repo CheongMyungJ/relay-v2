@@ -293,7 +293,9 @@ describe('곁 세션의 엔진 (D391)', () => {
     const s = await setup(
       {
         ...scenario(),
-        side: [
+        // 사이에 여는 Claude 곁 세션은 묻지 않는다: 물으면 그 대화가 Codex 대화를 대신한다 (D389)
+        side: [{ do: 'wait' }],
+        sideCodex: [
           { do: 'prompt' },
           push,
           {
