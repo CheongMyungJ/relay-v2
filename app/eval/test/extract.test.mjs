@@ -251,7 +251,7 @@ describe('채점 규칙', () => {
     expect(p).not.toContain('r.tim.frame_ms')
     expect(p).not.toContain('"quote"')
     expect(p).not.toContain(truth.canary)
-    expect(claimLines(out).every((l) => /^[a-z_]+ /.test(l))).toBe(true)
+    expect(claimLines(out).every((l) => /^[a-z_]+[ :]/.test(l))).toBe(true)
   })
 
   it('판정 호출은 도구·MCP·사용자 설정·세션 저장 없이 부른다', () => {
