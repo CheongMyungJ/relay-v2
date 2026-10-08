@@ -214,14 +214,24 @@ const forTask = (item, task) => item.tasks.includes(task)
 /** 과제의 run 종류. 과제 id는 survey 또는 trace-<렌즈>다 */
 export const taskKind = (task) => (task.startsWith('survey') ? 'survey' : 'trace')
 
-const SURVEY_DET = ['config', 'inventory', 'boundary', 'config_confirmed', 'inventory_kind', 'config_only', 'config_none']
+const SURVEY_DET = [
+  'config',
+  'inventory',
+  'boundary',
+  'config_confirmed',
+  'inventory_kind',
+  'config_only',
+  'config_none',
+]
 
 /**
  * 결정론 규칙이 이 과제에서 돌 수 있는가. 인벤토리·구성·경계는 survey 결과에만, 수치·점검표는 trace 결과에만 있다.
  * 돌 수 없으면 그 항목은 판정 모델이 가른다(judgeItems)
  */
 export const detApplies = (item, task) =>
-  !!item.det && (Object.keys(item.det).some((k) => SURVEY_DET.includes(k)) ? 'survey' : 'trace') === taskKind(task)
+  !!item.det &&
+  (Object.keys(item.det).some((k) => SURVEY_DET.includes(k)) ? 'survey' : 'trace') ===
+    taskKind(task)
 
 /**
  * 결정론 채점. recall은 det가 있는 항목만, must_not은 det가 있는 항목과 수치 오류를 낸다.
