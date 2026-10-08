@@ -1,0 +1,419 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "relay/extract-survey.v0.schema.json",
+  "title": "extract survey run 결과 (v0)",
+  "description": "요구사항 추출 extract의 survey run이 내는 결과 제안(requirements-extraction-flow.md 16.4, 17.3, 결정 35~37). 빌드 진입점에서 구성 후보, 진입점·인터페이스 인벤토리, 벤더 경계, 분석 단위 제안을 낸다. survey에는 렌즈 점검표가 없다. 공통 $defs는 trace와 같아야 한다(skills/check.mjs가 본다). 필드 설명은 지시의 필드 안내(L3)로 렌더링하므로 영어로 쓴다(16.2, D98).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "outcome",
+    "outcome_reason",
+    "configs",
+    "inventory",
+    "boundaries",
+    "units",
+    "not_found",
+    "unknowns",
+    "human_decisions",
+    "checkpoint"
+  ],
+  "properties": {
+    "outcome": {
+      "description": "done: covered the assigned scope. incomplete: deadline, limit or context ran out (checkpoint required).",
+      "enum": ["done", "incomplete"]
+    },
+    "outcome_reason": {
+      "description": "One or two sentences on why this outcome.",
+      "type": "string"
+    },
+    "configs": {
+      "description": "Build configuration candidates.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/config"
+      }
+    },
+    "inventory": {
+      "description": "Entry points (reset, vectors, ISRs, tasks, command tables and commands, DMA channels) and interfaces.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/item"
+      }
+    },
+    "boundaries": {
+      "description": "Vendor HAL, RTOS kernel, third-party or generated code whose internals are not traced (kept as a boundary).",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/boundary"
+      }
+    },
+    "units": {
+      "description": "Proposed analysis units, each with a lens.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/unit"
+      }
+    },
+    "not_found": {
+      "description": "What you looked for and did not find, with the searches.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/miss"
+      }
+    },
+    "unknowns": {
+      "description": "What code cannot settle and needs outside material, measurement or a person. Things you could still trace in code go to followups (trace) or units (survey).",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/unknown"
+      }
+    },
+    "human_decisions": {
+      "description": "Only for the closed triggers. Plain lack of material is an unknown, not a decision.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/decision"
+      }
+    },
+    "checkpoint": {
+      "description": "Required when outcome is incomplete: where to resume. Otherwise null.",
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/checkpoint"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "key": {
+      "description": "Local key, unique within this result (e.g. o1, q2). Other items point to it from refs.",
+      "type": "string"
+    },
+    "refs": {
+      "description": "Keys of other items in this result.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "configs": {
+      "description": "Configuration names this applies to, as named in the packet. Use the single name \"all\" only when a tool showed it is active in every confirmed configuration. Never merge behavior of different configurations into one item.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "anchor": {
+      "description": "Where the evidence is. quote is a short verbatim copy of lines you opened in this run.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "path", "start", "end", "quote", "command"],
+      "properties": {
+        "kind": {
+          "description": "code: source at the base commit. tool_output: output file of a tool you ran in scratch. doc_claim: a claim in a document or comment inside the repo. external_spec: material outside the repo (datasheet, standard).",
+          "enum": ["code", "tool_output", "doc_claim", "external_spec"]
+        },
+        "path": {
+          "description": "Repo-relative path. For tool_output the output file in scratch; for external_spec the document id.",
+          "type": "string"
+        },
+        "start": {
+          "description": "First line (1-based).",
+          "type": "integer"
+        },
+        "end": {
+          "description": "Last line.",
+          "type": "integer"
+        },
+        "quote": {
+          "description": "Verbatim text of those lines (short).",
+          "type": "string"
+        },
+        "command": {
+          "description": "For tool_output the command you ran, otherwise null.",
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "anchors": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/anchor"
+      }
+    },
+    "search": {
+      "description": "One search that supports an absence or a not_applicable.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool", "pattern", "scope", "hits"],
+      "properties": {
+        "tool": {
+          "description": "Tool used (Grep, Glob, a Bash command).",
+          "type": "string"
+        },
+        "pattern": {
+          "description": "What you searched for.",
+          "type": "string"
+        },
+        "scope": {
+          "description": "Where (paths, configurations).",
+          "type": "string"
+        },
+        "hits": {
+          "description": "Number of hits.",
+          "type": "integer"
+        }
+      }
+    },
+    "searches": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/search"
+      }
+    },
+    "unknown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "question", "needs", "refs"],
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "question": {
+          "description": "What could not be confirmed.",
+          "type": "string"
+        },
+        "needs": {
+          "description": "What would settle it: external_doc (datasheet, spec), measurement (on real hardware), toolchain (a build or tool you could not run), other.",
+          "enum": ["external_doc", "measurement", "toolchain", "other"]
+        },
+        "refs": {
+          "$ref": "#/$defs/refs"
+        }
+      }
+    },
+    "unit": {
+      "description": "A proposed analysis unit. Give priority, dependencies and the reason as data; the app picks the order.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "purpose",
+        "lens",
+        "scope",
+        "priority",
+        "depends_on",
+        "reason"
+      ],
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "lens": {
+          "enum": [
+            "command",
+            "state",
+            "timing",
+            "shared",
+            "variant",
+            "lifecycle",
+            "protocol"
+          ]
+        },
+        "scope": {
+          "description": "Scope (symbols, paths, configurations).",
+          "type": "string"
+        },
+        "priority": {
+          "enum": ["high", "medium", "low"]
+        },
+        "depends_on": {
+          "$ref": "#/$defs/refs"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "trigger", "question", "options", "refs"],
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "trigger": {
+          "description": "Closed triggers only: scope_budget (widen scope or budget), shipping_config (which configuration ships cannot be told from code), product_intent (interpreting product intent), toolchain_material (a toolchain or material the intent did not provide).",
+          "enum": [
+            "scope_budget",
+            "shipping_config",
+            "product_intent",
+            "toolchain_material"
+          ]
+        },
+        "question": {
+          "type": "string"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "refs": {
+          "$ref": "#/$defs/refs"
+        }
+      }
+    },
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checked", "remaining", "next"],
+      "properties": {
+        "checked": {
+          "description": "What you covered.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "remaining": {
+          "description": "Paths still open.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "next": {
+          "description": "Where to look next.",
+          "type": "string"
+        }
+      }
+    },
+    "config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "name",
+        "status",
+        "select",
+        "build_command",
+        "anchors"
+      ],
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "name": {
+          "description": "Configuration name (build target or board). Later runs refer to the configuration by this name.",
+          "type": "string"
+        },
+        "status": {
+          "description": "confirmed: build files or a tool show this configuration is built. candidate: not confirmed (shipping or buildability unknown).",
+          "enum": ["confirmed", "candidate"]
+        },
+        "select": {
+          "description": "How it is selected (make target, defining macro, ...).",
+          "type": "string"
+        },
+        "build_command": {
+          "description": "A command to reproduce the build, or null if unknown.",
+          "type": ["string", "null"]
+        },
+        "anchors": {
+          "$ref": "#/$defs/anchors"
+        }
+      }
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "kind", "name", "configs", "anchors", "notes"],
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "kind": {
+          "description": "Kind of entry point or interface.",
+          "enum": [
+            "reset",
+            "vector",
+            "isr",
+            "task",
+            "main_loop",
+            "command_table",
+            "command",
+            "dma_channel",
+            "peripheral",
+            "interface",
+            "timer",
+            "other"
+          ]
+        },
+        "name": {
+          "description": "Symbol or name.",
+          "type": "string"
+        },
+        "configs": {
+          "$ref": "#/$defs/configs"
+        },
+        "anchors": {
+          "$ref": "#/$defs/anchors"
+        },
+        "notes": {
+          "description": "Short note; empty string if none.",
+          "type": "string"
+        }
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "path", "kind", "reason", "anchors"],
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "path": {
+          "description": "Repo-relative path kept as a boundary.",
+          "type": "string"
+        },
+        "kind": {
+          "enum": ["vendor_hal", "rtos_kernel", "third_party", "generated"]
+        },
+        "reason": {
+          "description": "Why it is vendor or third-party code (path, license header, submodule, ...).",
+          "type": "string"
+        },
+        "anchors": {
+          "$ref": "#/$defs/anchors"
+        }
+      }
+    },
+    "miss": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "what", "searches"],
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "what": {
+          "description": "What you looked for and did not find.",
+          "type": "string"
+        },
+        "searches": {
+          "$ref": "#/$defs/searches"
+        }
+      }
+    }
+  }
+}

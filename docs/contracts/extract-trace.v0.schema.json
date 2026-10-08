@@ -1,0 +1,600 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "relay/extract-trace.v0.schema.json",
+  "title": "extract trace run 결과 (v0)",
+  "description": "요구사항 추출 extract의 trace run이 내는 결과 제안(requirements-extraction-flow.md 16.4, 17.3, 결정 35~37). 기본 스키마다: checklist의 키는 비어 있고, 앱과 평가 하네스(skills/extract/run.mjs)가 렌즈 카드의 점검표 ID를 필수 키로 넣어 run마다 조립한다(결정 36). 조립본(L4)에서는 title과 description을 빼고, 필드 설명은 지시의 필드 안내(L3)로 렌더링하므로 영어로 쓴다(16.2, 16.10, D98). 전역 ID, 검토 상태, 채택, run id, revision은 앱이 붙이므로 여기에 없다(16.5, D88).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "outcome",
+    "outcome_reason",
+    "observations",
+    "quantities",
+    "requirements",
+    "constraints",
+    "impl_choices",
+    "unknowns",
+    "conflicts",
+    "absences",
+    "checklist",
+    "followups",
+    "human_decisions",
+    "checkpoint"
+  ],
+  "properties": {
+    "outcome": {
+      "description": "Ending state of this unit. done: traced fully. needs_external: cannot go further without material outside the code. out_of_scope: the intent puts this unit out of scope (quote it in the reason). incomplete: deadline, limit or context ran out (checkpoint required). Hitting a limit is never done.",
+      "enum": ["done", "needs_external", "out_of_scope", "incomplete"]
+    },
+    "outcome_reason": {
+      "description": "One or two sentences on why this outcome.",
+      "type": "string"
+    },
+    "observations": {
+      "description": "Current implemented behavior confirmed from evidence, written in present tense.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/observation"
+      }
+    },
+    "quantities": {
+      "description": "Numbers such as time constants, sizes, counts. Give the source expression and the derivation chain.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/quantity"
+      }
+    },
+    "requirements": {
+      "description": "Requirement candidates distilled from observations. Do not judge adoption.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/requirement"
+      }
+    },
+    "constraints": {
+      "description": "Hardware, communication, timing, memory or concurrency constraint candidates with the configurations and reason. Implementation choices do not go here.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/constraint"
+      }
+    },
+    "impl_choices": {
+      "description": "Implementation choices a redesign may change (task split, polling, globals, module boundaries).",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/note"
+      }
+    },
+    "unknowns": {
+      "description": "What code cannot settle and needs outside material, measurement or a person. Things you could still trace in code go to followups (trace) or units (survey).",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/unknown"
+      }
+    },
+    "conflicts": {
+      "description": "Two claims that cannot both hold, each with its evidence (e.g. comment vs code).",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/conflict"
+      }
+    },
+    "absences": {
+      "description": "Absence claims such as \"never called\" or \"no other writer\". A search record is required.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/absence"
+      }
+    },
+    "checklist": {
+      "description": "Lens checklist. The app fills the keys with the checklist IDs of the lens for each run.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {}
+    },
+    "followups": {
+      "description": "Follow-up units to trace further in code.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/unit"
+      }
+    },
+    "human_decisions": {
+      "description": "Only for the closed triggers. Plain lack of material is an unknown, not a decision.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/decision"
+      }
+    },
+    "checkpoint": {
+      "description": "Required when outcome is incomplete: where to resume. Otherwise null.",
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/checkpoint"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "key": {
+      "description": "Local key, unique within this result (e.g. o1, q2). Other items point to it from refs.",
+      "type": "string"
+    },
+    "refs": {
+      "description": "Keys of other items in this result.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "configs": {
+      "description": "Configuration names this applies to, as named in the packet. Use the single name \"all\" only when a tool showed it is active in every confirmed configuration. Never merge behavior of different configurations into one item.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "anchor": {
+      "description": "Where the evidence is. quote is a short verbatim copy of lines you opened in this run.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "path", "start", "end", "quote", "command"],
+      "properties": {
+        "kind": {
+          "description": "code: source at the base commit. tool_output: output file of a tool you ran in scratch. doc_claim: a claim in a document or comment inside the repo. external_spec: material outside the repo (datasheet, standard).",
+          "enum": ["code", "tool_output", "doc_claim", "external_spec"]
+        },
+        "path": {
+          "description": "Repo-relative path. For tool_output the output file in scratch; for external_spec the document id.",
+          "type": "string"
+        },
+        "start": {
+          "description": "First line (1-based).",
+          "type": "integer"
+        },
+        "end": {
+          "description": "Last line.",
+          "type": "integer"
+        },
+        "quote": {
+          "description": "Verbatim text of those lines (short).",
+          "type": "string"
+        },
+        "command": {
+          "description": "For tool_output the command you ran, otherwise null.",
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "anchors": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/anchor"
+      }
+    },
+    "search": {
+      "description": "One search that supports an absence or a not_applicable.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool", "pattern", "scope", "hits"],
+      "properties": {
+        "tool": {
+          "description": "Tool used (Grep, Glob, a Bash command).",
+          "type": "string"
+        },
+        "pattern": {
+          "description": "What you searched for.",
+          "type": "string"
+        },
+        "scope": {
+          "description": "Where (paths, configurations).",
+          "type": "string"
+        },
+        "hits": {
+          "description": "Number of hits.",
+          "type": "integer"
+        }
+      }
+    },
+    "searches": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/search"
+      }
+    },
+    "unknown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "question", "needs", "refs"],
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "question": {
+          "description": "What could not be confirmed.",
+          "type": "string"
+        },
+        "needs": {
+          "description": "What would settle it: external_doc (datasheet, spec), measurement (on real hardware), toolchain (a build or tool you could not run), other.",
+          "enum": ["external_doc", "measurement", "toolchain", "other"]
+        },
+        "refs": {
+          "$ref": "#/$defs/refs"
+        }
+      }
+    },
+    "unit": {
+      "description": "A proposed analysis unit. Give priority, dependencies and the reason as data; the app picks the order.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "purpose",
+        "lens",
+        "scope",
+        "priority",
+        "depends_on",
+        "reason"
+      ],
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "lens": {
+          "enum": [
+            "command",
+            "state",
+            "timing",
+            "shared",
+            "variant",
+            "lifecycle",
+            "protocol"
+          ]
+        },
+        "scope": {
+          "description": "Scope (symbols, paths, configurations).",
+          "type": "string"
+        },
+        "priority": {
+          "enum": ["high", "medium", "low"]
+        },
+        "depends_on": {
+          "$ref": "#/$defs/refs"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "trigger", "question", "options", "refs"],
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "trigger": {
+          "description": "Closed triggers only: scope_budget (widen scope or budget), shipping_config (which configuration ships cannot be told from code), product_intent (interpreting product intent), toolchain_material (a toolchain or material the intent did not provide).",
+          "enum": [
+            "scope_budget",
+            "shipping_config",
+            "product_intent",
+            "toolchain_material"
+          ]
+        },
+        "question": {
+          "type": "string"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "refs": {
+          "$ref": "#/$defs/refs"
+        }
+      }
+    },
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checked", "remaining", "next"],
+      "properties": {
+        "checked": {
+          "description": "What you covered.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "remaining": {
+          "description": "Paths still open.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "next": {
+          "description": "Where to look next.",
+          "type": "string"
+        }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "text", "configs", "anchors", "inference"],
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "text": {
+          "description": "The observed behavior (Korean).",
+          "type": "string"
+        },
+        "configs": {
+          "$ref": "#/$defs/configs"
+        },
+        "anchors": {
+          "$ref": "#/$defs/anchors"
+        },
+        "inference": {
+          "description": "true if this is not read directly from the evidence but inferred.",
+          "type": "boolean"
+        }
+      }
+    },
+    "quantity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "symbol",
+        "expr",
+        "values",
+        "unit",
+        "unit_status",
+        "nature",
+        "chain",
+        "anchors"
+      ],
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "symbol": {
+          "description": "Macro or variable name; empty string if none.",
+          "type": "string"
+        },
+        "expr": {
+          "description": "Source expression verbatim.",
+          "type": "string"
+        },
+        "values": {
+          "description": "Value per configuration. Split when configurations differ.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["configs", "value"],
+            "properties": {
+              "configs": {
+                "$ref": "#/$defs/configs"
+              },
+              "value": {
+                "description": "Computed value as text; empty string if unknown.",
+                "type": "string"
+              }
+            }
+          }
+        },
+        "unit": {
+          "description": "Unit (ms, tick, byte, ...); empty string if unknown.",
+          "type": "string"
+        },
+        "unit_status": {
+          "description": "derived: unit confirmed through the whole chain. name_guess: only from a name or comment. unknown.",
+          "enum": ["derived", "name_guess", "unknown"]
+        },
+        "nature": {
+          "description": "setting: a value set in code. computed: computed from other values. observed: seen in a measurement or log. spec: required by an external specification (only with an external_spec anchor).",
+          "enum": ["setting", "computed", "observed", "spec"]
+        },
+        "chain": {
+          "description": "Derivation chain: value -> consuming point -> tick or clock source -> unit, each link with evidence.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["role", "anchor"],
+            "properties": {
+              "role": {
+                "enum": ["value", "consumer", "tick_source", "unit"]
+              },
+              "anchor": {
+                "$ref": "#/$defs/anchor"
+              }
+            }
+          }
+        },
+        "anchors": {
+          "$ref": "#/$defs/anchors"
+        }
+      }
+    },
+    "requirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "type",
+        "condition",
+        "behavior",
+        "result",
+        "configs",
+        "refs",
+        "basis"
+      ],
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "type": {
+          "enum": ["functional", "nonfunctional"]
+        },
+        "condition": {
+          "description": "Condition (when).",
+          "type": "string"
+        },
+        "behavior": {
+          "description": "Behavior (what).",
+          "type": "string"
+        },
+        "result": {
+          "description": "Result (what follows).",
+          "type": "string"
+        },
+        "configs": {
+          "$ref": "#/$defs/configs"
+        },
+        "refs": {
+          "$ref": "#/$defs/refs"
+        },
+        "basis": {
+          "description": "Nature of the basis: a description of current behavior from evidence, or inference.",
+          "enum": [
+            "code",
+            "tool_output",
+            "doc_claim",
+            "external_spec",
+            "inference"
+          ]
+        }
+      }
+    },
+    "constraint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "text", "area", "configs", "refs", "reason"],
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "text": {
+          "type": "string"
+        },
+        "area": {
+          "enum": [
+            "hardware",
+            "communication",
+            "timing",
+            "memory",
+            "concurrency",
+            "other"
+          ]
+        },
+        "configs": {
+          "$ref": "#/$defs/configs"
+        },
+        "refs": {
+          "$ref": "#/$defs/refs"
+        },
+        "reason": {
+          "description": "Why it is a constraint and not an implementation choice.",
+          "type": "string"
+        }
+      }
+    },
+    "note": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "text", "refs"],
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "text": {
+          "type": "string"
+        },
+        "refs": {
+          "$ref": "#/$defs/refs"
+        }
+      }
+    },
+    "conflict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "text", "sides"],
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "text": {
+          "type": "string"
+        },
+        "sides": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["claim", "anchors"],
+            "properties": {
+              "claim": {
+                "type": "string"
+              },
+              "anchors": {
+                "$ref": "#/$defs/anchors"
+              }
+            }
+          }
+        }
+      }
+    },
+    "absence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "claim", "configs", "searches"],
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "claim": {
+          "description": "What is absent.",
+          "type": "string"
+        },
+        "configs": {
+          "$ref": "#/$defs/configs"
+        },
+        "searches": {
+          "$ref": "#/$defs/searches"
+        }
+      }
+    },
+    "check": {
+      "description": "One checklist cell. covered: handled (refs required). not_applicable: does not apply (searches required). unknown. unreached: not reached (leave it in the checkpoint).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "refs", "searches"],
+      "properties": {
+        "status": {
+          "enum": ["covered", "not_applicable", "unknown", "unreached"]
+        },
+        "refs": {
+          "$ref": "#/$defs/refs"
+        },
+        "searches": {
+          "$ref": "#/$defs/searches"
+        }
+      }
+    }
+  }
+}

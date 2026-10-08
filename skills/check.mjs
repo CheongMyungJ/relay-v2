@@ -6,12 +6,18 @@
 // 3. 템플릿: 주석 단 템플릿에 값을 채운 예시가 docs/contracts 스키마를 통과하는지 (D87). intent 초안은 머리글이 없다 (D236)
 // 4. 설계 대조: 산출물 템플릿의 절 제목, 입력·결정 지점·사람이 정할 결정·완료조건 항목 (5.6.1~5.6.12, I60, I65, I89, I107)
 // 5. 유형별 조립: 공용 스킬의 유형 표시, 조립한 글에 다른 유형의 산출물이 없음 (D279, I68)
+// 6. 요구사항 추출 extract run 조립: 렌즈 카드의 점검표 ID = 조립한 결과 스키마의 필수 키, 스키마 크기와 cmd.exe 글자,
+//    필드 안내의 필드, survey와 trace의 공통 $defs (docs/requirements-extraction-flow.md 16.11 [정적], 결정 36)
+// 6. 요구사항 추출 extract run 조립: 렌즈 카드의 점검표 ID = 조립한 결과 스키마의 필수 키, 스키마 크기와 cmd.exe 글자,
+//    survey와 trace의 공통 $defs (docs/requirements-extraction-flow.md 16.11 [정적], 결정 36)
 
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TYPES, assemble } from './assemble.mjs';
 import { CHECK_METHOD } from './check-method.mjs';
+import { CMD_META, KINDS, LENSES, SCHEMA_ARGV_TARGET, buildRun } from './extract/run.mjs';
+import { loadBase, loadChecklist } from './extract/load.mjs';
 import YAML from 'yaml';
 import Ajv2020 from 'ajv/dist/2020.js';
 
@@ -531,6 +537,51 @@ const ARTIFACT = { bugfix: ['`fix.md`'], feature: ['`design.md`', '`implement.md
 for (const v of variants.filter((x) => SHARED.includes(x.name))) {
   const foreign = TYPES.filter((t) => t !== v.type).flatMap((t) => ARTIFACT[t]).filter((a) => v.text.includes(a));
   check(foreign.length === 0, `${v.label}: 다른 유형의 산출물이 없음${foreign.length ? ` (${foreign.join(', ')})` : ''}`);
+}
+
+console.log('\n[6] extract run 조립 (16.11 [정적], 결정 36)');
+{
+  // 지시 문구(L1 고정 계약, L2 종류 절차, 렌즈 카드의 점검표 밖 절)는 기준선을 잰 뒤에 쓴다(결정 16). 그때 예시·반례·금지
+  // 문구·검사 규칙 표의 검사를 여기에 더한다
+  const bases = Object.fromEntries(KINDS.map((k) => [k, loadBase(k)]));
+  const combos = [['survey', null], ...LENSES.map((l) => ['trace', l])];
+  const ajvRun = new Ajv2020({ allErrors: true, strict: true });
+  const sizes = [];
+  for (const [kind, lens] of combos) {
+    const label = lens ? `${kind}.${lens}` : kind;
+    let built;
+    try {
+      built = buildRun({ base: bases[kind], checklist: lens ? loadChecklist(lens) : null });
+    } catch (e) {
+      fail(`${label}: 조립 실패 (${e.message})`);
+      continue;
+    }
+    if (lens) {
+      const ids = loadChecklist(lens).map((c) => c.id);
+      const slot = built.schema.properties.checklist;
+      check(
+        sameSet(slot.required, ids) && sameSet(Object.keys(slot.properties), ids),
+        `${label}: 렌즈 카드의 점검표 ID = 결과 스키마 checklist의 필수 키 (${ids.length}개)`,
+      );
+    }
+    try {
+      ajvRun.compile(built.schema);
+      ok(`${label}: 조립한 스키마가 컴파일됨 (ajv strict)`);
+    } catch (e) {
+      fail(`${label}: 조립한 스키마가 컴파일되지 않음 (${e.message})`);
+    }
+    check(!/"(title|description|\$comment|\$id|\$schema)":/.test(built.schemaArg), `${label}: 조립한 스키마(L4)에 주석 키워드가 없음`);
+    check(!CMD_META.test(built.schemaArg), `${label}: 조립한 스키마에 cmd.exe가 다르게 읽는 글자가 없음`);
+    check(built.schemaArg.length <= SCHEMA_ARGV_TARGET, `${label}: 스키마 ${built.schemaArg.length}자 <= ${SCHEMA_ARGV_TARGET}자`);
+    const named = [...built.instructions.matchAll(/`([a-z_]+)\.([a-z_]+)`/g)];
+    const unknown = named.filter(([, def, prop]) => !bases[kind].$defs?.[def]?.properties?.[prop]).map((m) => m[0]);
+    check(unknown.length === 0, `${label}: 필드 안내의 필드가 모두 스키마에 있음${unknown.length ? ` (${unknown.join(', ')})` : ''}`);
+    sizes.push({ 조합: label, 스키마: built.schemaArg.length, 필드안내: built.instructions.length });
+  }
+  console.table(sizes);
+  const shared = Object.keys(bases.survey.$defs).filter((d) => d in bases.trace.$defs);
+  const differ = shared.filter((d) => JSON.stringify(bases.survey.$defs[d]) !== JSON.stringify(bases.trace.$defs[d]));
+  check(differ.length === 0, `survey와 trace의 공통 $defs ${shared.length}개가 같음${differ.length ? ` (다름: ${differ.join(', ')})` : ''}`);
 }
 
 console.log(failures ? `\n실패 ${failures}건` : '\n모두 통과');
