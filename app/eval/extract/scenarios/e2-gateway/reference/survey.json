@@ -1,0 +1,515 @@
+{
+  "outcome": "done",
+  "outcome_reason": "Makefile, variants/, cfg/, app_init.c와 시작 코드를 봤다.",
+  "configs": [
+    {
+      "key": "c1",
+      "name": "basic",
+      "status": "confirmed",
+      "select": "make VARIANT=basic (기본값)",
+      "build_command": "make VARIANT=basic",
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "Makefile",
+          "start": 12,
+          "end": 12,
+          "quote": "VARIANT ?= basic",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "variants/basic.mk",
+          "start": 2,
+          "end": 2,
+          "quote": "VARIANT_CFLAGS := -DVARIANT_BASIC",
+          "command": null
+        }
+      ]
+    },
+    {
+      "key": "c2",
+      "name": "pro",
+      "status": "confirmed",
+      "select": "make VARIANT=pro",
+      "build_command": "make VARIANT=pro",
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "variants/pro.mk",
+          "start": 2,
+          "end": 2,
+          "quote": "VARIANT_CFLAGS := -DVARIANT_PRO",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "cfg/variant_pro.h",
+          "start": 8,
+          "end": 8,
+          "quote": "#define CFG_VARIANT_NAME        \"pro\"",
+          "command": null
+        }
+      ]
+    },
+    {
+      "key": "c3",
+      "name": "devkit",
+      "status": "confirmed",
+      "select": "make VARIANT=devkit",
+      "build_command": "make VARIANT=devkit",
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "variants/devkit.mk",
+          "start": 2,
+          "end": 2,
+          "quote": "VARIANT_CFLAGS := -DVARIANT_DEVKIT -DMB_DIAG_ENABLE",
+          "command": null
+        }
+      ]
+    },
+    {
+      "key": "c4",
+      "name": "lite",
+      "status": "candidate",
+      "select": "variants/lite.mk만 있고 cfg/variant_lite.h가 없어 빌드되지 않는다",
+      "build_command": null,
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "variants/lite.mk",
+          "start": 2,
+          "end": 2,
+          "quote": "VARIANT_CFLAGS := -DVARIANT_LITE",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "Makefile",
+          "start": 21,
+          "end": 21,
+          "quote": "-include cfg/variant_$(VARIANT).h",
+          "command": null
+        }
+      ]
+    }
+  ],
+  "inventory": [
+    {
+      "key": "i1",
+      "kind": "reset",
+      "name": "Reset_Handler",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "vendor/nimbus/src/startup_n4.c",
+          "start": 18,
+          "end": 18,
+          "quote": "void Reset_Handler(void)",
+          "command": null
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "key": "i2",
+      "kind": "isr",
+      "name": "USART2_IRQHandler",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/rs485.c",
+          "start": 67,
+          "end": 67,
+          "quote": "void USART2_IRQHandler(void)",
+          "command": null
+        }
+      ],
+      "notes": "RS-485 idle line"
+    },
+    {
+      "key": "i3",
+      "kind": "isr",
+      "name": "DMA1_Stream6_IRQHandler",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/rs485.c",
+          "start": 103,
+          "end": 103,
+          "quote": "void DMA1_Stream6_IRQHandler(void)",
+          "command": null
+        }
+      ],
+      "notes": "RS-485 송신 완료"
+    },
+    {
+      "key": "i4",
+      "kind": "isr",
+      "name": "DMA2_Stream0_IRQHandler",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/sensor.c",
+          "start": 57,
+          "end": 57,
+          "quote": "void DMA2_Stream0_IRQHandler(void)",
+          "command": null
+        }
+      ],
+      "notes": "ADC 반 버퍼"
+    },
+    {
+      "key": "i5",
+      "kind": "isr",
+      "name": "TIM7_IRQHandler",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/timebase.c",
+          "start": 31,
+          "end": 31,
+          "quote": "void TIM7_IRQHandler(void)",
+          "command": null
+        }
+      ],
+      "notes": "1 kHz 타임베이스"
+    },
+    {
+      "key": "i6",
+      "kind": "task",
+      "name": "mb_task",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/app_init.c",
+          "start": 46,
+          "end": 46,
+          "quote": "(void)task_create(mb_task, \"comm\", STACK_COMM, 0, PRIO_COMM, 0);",
+          "command": null
+        }
+      ],
+      "notes": "comm"
+    },
+    {
+      "key": "i7",
+      "kind": "task",
+      "name": "sensor_task",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/app_init.c",
+          "start": 47,
+          "end": 47,
+          "quote": "(void)task_create(sensor_task, \"sensor\", STACK_SENSOR, 0, PRIO_SENSOR, 0);",
+          "command": null
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "key": "i8",
+      "kind": "task",
+      "name": "wdog_task",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/app_init.c",
+          "start": 45,
+          "end": 45,
+          "quote": "(void)task_create(wdog_task, \"wdog\", STACK_WDOG, 0, PRIO_WDOG, 0);",
+          "command": null
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "key": "i9",
+      "kind": "task",
+      "name": "cfg_task",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/app_init.c",
+          "start": 48,
+          "end": 48,
+          "quote": "(void)task_create(cfg_task, \"cfg\", STACK_CFG, 0, PRIO_CFG, 0);",
+          "command": null
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "key": "i10",
+      "kind": "task",
+      "name": "logger_task",
+      "configs": ["pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/app_init.c",
+          "start": 50,
+          "end": 50,
+          "quote": "(void)task_create(logger_task, \"logger\", STACK_LOGGER, 0, PRIO_LOGGER, 0);",
+          "command": null
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "key": "i11",
+      "kind": "task",
+      "name": "console_task",
+      "configs": ["devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/console.c",
+          "start": 144,
+          "end": 144,
+          "quote": "(void)task_create(console_task, \"console\", 384U, 0, PRIO_CONSOLE, 0);",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "variants/devkit.mk",
+          "start": 3,
+          "end": 3,
+          "quote": "src/console.c",
+          "command": null
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "key": "i12",
+      "kind": "command",
+      "name": "FC03 read holding registers",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/app_init.c",
+          "start": 15,
+          "end": 15,
+          "quote": "(void)mb_register(MB_FC_READ_HOLDING, mb_fc03_read_holding);",
+          "command": null
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "key": "i13",
+      "kind": "command",
+      "name": "FC06 write single register",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/app_init.c",
+          "start": 16,
+          "end": 16,
+          "quote": "(void)mb_register(MB_FC_WRITE_SINGLE, mb_fc06_write_single);",
+          "command": null
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "key": "i14",
+      "kind": "command",
+      "name": "FC16 write multiple registers",
+      "configs": ["pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/app_init.c",
+          "start": 17,
+          "end": 18,
+          "quote": "#if CFG_FEATURE_FC16 ... (void)mb_register(MB_FC_WRITE_MULTIPLE, mb_fc16_write_multiple);",
+          "command": null
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "key": "i15",
+      "kind": "command",
+      "name": "FC43 device identification",
+      "configs": ["pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/app_init.c",
+          "start": 21,
+          "end": 21,
+          "quote": "(void)mb_register(MB_FC_DEVICE_ID, mb_fc43_device_id);",
+          "command": null
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "key": "i16",
+      "kind": "command",
+      "name": "FC08 diagnostics",
+      "configs": ["devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/app_init.c",
+          "start": 23,
+          "end": 24,
+          "quote": "#ifdef MB_DIAG_ENABLE ... (void)mb_register(MB_FC_DIAGNOSTICS, mb_fc08_diagnostics);",
+          "command": null
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "key": "i17",
+      "kind": "command",
+      "name": "mb_fc23_read_write",
+      "configs": [],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/mb_handlers.c",
+          "start": 124,
+          "end": 124,
+          "quote": "uint8_t mb_fc23_read_write(",
+          "command": null
+        }
+      ],
+      "notes": "정의만 있고 어느 구성에서도 등록되지 않는다"
+    },
+    {
+      "key": "i18",
+      "kind": "dma_channel",
+      "name": "DMA1_Stream5 (USART2 RX)",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/rs485.c",
+          "start": 21,
+          "end": 21,
+          "quote": "static const hal_dma_t s_rx_dma = { DMA1, DMA1_Stream5, 5U, 4U };",
+          "command": null
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "key": "i19",
+      "kind": "dma_channel",
+      "name": "DMA1_Stream6 (USART2 TX)",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/rs485.c",
+          "start": 22,
+          "end": 22,
+          "quote": "static const hal_dma_t s_tx_dma = { DMA1, DMA1_Stream6, 6U, 4U };",
+          "command": null
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "key": "i20",
+      "kind": "dma_channel",
+      "name": "DMA2_Stream0 (ADC1)",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/sensor.c",
+          "start": 19,
+          "end": 19,
+          "quote": "static const hal_dma_t s_adc_dma = { DMA2, DMA2_Stream0, 0U, 0U };",
+          "command": null
+        }
+      ],
+      "notes": ""
+    }
+  ],
+  "boundaries": [
+    {
+      "key": "b1",
+      "path": "third_party/picortos",
+      "kind": "rtos_kernel",
+      "reason": "picoRTOS 3.2.1, MIT 라이선스",
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "third_party/picortos/LICENSE",
+          "start": 1,
+          "end": 1,
+          "quote": "picoRTOS 3.2.1",
+          "command": null
+        }
+      ]
+    },
+    {
+      "key": "b2",
+      "path": "vendor/nimbus",
+      "kind": "vendor_hal",
+      "reason": "Nimbus Device Software License 머리말",
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "vendor/nimbus/include/nimbus_n4.h",
+          "start": 5,
+          "end": 5,
+          "quote": "Distributed under the Nimbus Device Software License v2. Do not modify.",
+          "command": null
+        }
+      ]
+    }
+  ],
+  "units": [
+    {
+      "key": "u1",
+      "purpose": "FC16 경로",
+      "lens": "command",
+      "scope": "src/modbus.c, src/mb_handlers.c, src/regs.c",
+      "priority": "high",
+      "depends_on": [],
+      "reason": "쓰기와 플래시 저장"
+    },
+    {
+      "key": "u2",
+      "purpose": "ISR와 태스크 공유 상태",
+      "lens": "shared",
+      "scope": "g_stats, g_sensor, DMA 버퍼",
+      "priority": "high",
+      "depends_on": [],
+      "reason": "ISR 넷"
+    },
+    {
+      "key": "u3",
+      "purpose": "구성 헤더는 Makefile의 -include로 강제로 들어간다",
+      "lens": "variant",
+      "scope": "Makefile, variants/, cfg/",
+      "priority": "medium",
+      "depends_on": [],
+      "reason": "소스에 #include가 없다"
+    }
+  ],
+  "not_found": [],
+  "unknowns": [],
+  "human_decisions": [],
+  "checkpoint": null
+}

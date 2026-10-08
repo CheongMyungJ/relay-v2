@@ -1,0 +1,20 @@
+{
+  "task": "trace-timing",
+  "describe": "pdMS_TO_TICKS의 버림을 놓치고 센서 주기를 모든 구성 25 ms로 둔다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "quantities.1.values",
+      "value": [
+        {
+          "configs": ["basic", "pro", "devkit"],
+          "value": "25"
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "violated": ["m.sensor_25_all"],
+    "missed": ["r.tim.sensor"]
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "recall": [
+    {
+      "id": "r.sv.forced_include",
+      "found": true,
+      "keys": ["u3"]
+    }
+  ],
+  "must_not": [
+    {
+      "id": "m.shipping",
+      "violated": false,
+      "keys": []
+    }
+  ],
+  "resolvable": [
+    {
+      "id": "v.fc16_configs",
+      "left_unknown": false,
+      "keys": []
+    },
+    {
+      "id": "v.lite",
+      "left_unknown": false,
+      "keys": []
+    }
+  ]
+}

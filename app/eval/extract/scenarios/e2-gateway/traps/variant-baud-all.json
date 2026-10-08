@@ -1,0 +1,29 @@
+{
+  "task": "trace-variant",
+  "describe": "문서대로 모든 구성이 19200 8E1이라고 한다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "observations.2.text",
+      "value": "모든 구성의 기본 직렬 설정은 19200 8E1이다"
+    }
+  ],
+  "judge": {
+    "recall": {
+      "r.var.baud": {
+        "found": false,
+        "keys": []
+      }
+    },
+    "must_not": {
+      "m.baud_all": {
+        "violated": true,
+        "keys": ["o3"]
+      }
+    }
+  },
+  "expect": {
+    "violated": ["m.baud_all"],
+    "missed": ["r.var.baud"]
+  }
+}

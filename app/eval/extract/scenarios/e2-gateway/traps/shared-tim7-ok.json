@@ -1,0 +1,29 @@
+{
+  "task": "trace-shared",
+  "describe": "모든 인터럽트가 커널 호출 규칙을 지킨다고 한다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "observations.0.text",
+      "value": "TIM7을 포함한 모든 인터럽트가 queue_send_from_isr를 안전하게 부른다"
+    }
+  ],
+  "judge": {
+    "recall": {
+      "r.sh.tim7": {
+        "found": false,
+        "keys": []
+      }
+    },
+    "must_not": {
+      "m.tim7_ok": {
+        "violated": true,
+        "keys": ["o1"]
+      }
+    }
+  },
+  "expect": {
+    "violated": ["m.tim7_ok"],
+    "missed": ["r.sh.tim7"]
+  }
+}

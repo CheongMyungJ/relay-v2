@@ -211,6 +211,18 @@ export function outputKeys(out) {
 /** 정답 항목이 이 과제에 걸리는가 */
 const forTask = (item, task) => item.tasks.includes(task)
 
+/** 과제의 run 종류. 과제 id는 survey 또는 trace-<렌즈>다 */
+export const taskKind = (task) => (task.startsWith('survey') ? 'survey' : 'trace')
+
+const SURVEY_DET = ['config', 'inventory', 'boundary', 'config_confirmed', 'inventory_kind', 'config_only', 'config_none']
+
+/**
+ * 결정론 규칙이 이 과제에서 돌 수 있는가. 인벤토리·구성·경계는 survey 결과에만, 수치·점검표는 trace 결과에만 있다.
+ * 돌 수 없으면 그 항목은 판정 모델이 가른다(judgeItems)
+ */
+export const detApplies = (item, task) =>
+  !!item.det && (Object.keys(item.det).some((k) => SURVEY_DET.includes(k)) ? 'survey' : 'trace') === taskKind(task)
+
 /**
  * 결정론 채점. recall은 det가 있는 항목만, must_not은 det가 있는 항목과 수치 오류를 낸다.
  * @param {object} out 구조화 출력
@@ -223,7 +235,7 @@ export function detScore(out, truth, task) {
   const quantities = (out.quantities ?? []).map((q) => ({ key: q.key, ...checkQuantity(q, truth) }))
   for (const q of quantities) for (const e of q.errors) violated.add(e)
 
-  for (const item of truth.recall.filter((r) => forTask(r, task) && r.det)) {
+  for (const item of truth.recall.filter((r) => forTask(r, task) && detApplies(r, task))) {
     const d = item.det
     let found = false
     if (d.config)
@@ -252,7 +264,7 @@ export function detScore(out, truth, task) {
     recall[item.id] = found
   }
 
-  for (const m of truth.must_not.filter((x) => forTask(x, task) && x.det)) {
+  for (const m of truth.must_not.filter((x) => forTask(x, task) && detApplies(x, task))) {
     const d = m.det
     if (d.config_confirmed) {
       if (
@@ -270,6 +282,14 @@ export function detScore(out, truth, task) {
         const cfgs = expandConfigs(i.configs, truth)
         return cfgs.some((c) => !d.config_only.configs.includes(c))
       })
+      if (bad) violated.add(m.id)
+    } else if (d.config_none) {
+      // 어느 구성에도 없는 것(등록되지 않은 처리기 등)을 구성을 달아 인벤토리에 넣으면 위반이다
+      const bad = (out.inventory ?? []).some(
+        (i) =>
+          d.config_none.tokens.some((tok) => word(tok).test(String(i.name ?? ''))) &&
+          expandConfigs(i.configs, truth).length > 0,
+      )
       if (bad) violated.add(m.id)
     }
   }
@@ -381,14 +401,14 @@ export const JUDGE_SYSTEM = [
   'Answer every item id exactly once. keys are bare keys such as o1 or q2 (without the section word) and must appear in the claim lines. Judge only from the claim lines.',
 ].join('\n')
 
-/** 판정에 넘길 항목: det가 있는 recall과 must_not은 뺀다(결정론이 가른다) */
+/** 판정에 넘길 항목: 이 과제에서 결정론 규칙이 도는 recall과 must_not은 뺀다(결정론이 가른다) */
 export function judgeItems(truth, task) {
   return {
     recall: truth.recall
-      .filter((r) => forTask(r, task) && !r.det)
+      .filter((r) => forTask(r, task) && !detApplies(r, task))
       .map((r) => ({ id: r.id, statement: r.statement })),
     must_not: truth.must_not
-      .filter((m) => forTask(m, task) && !m.det)
+      .filter((m) => forTask(m, task) && !detApplies(m, task))
       .map((m) => ({ id: m.id, statement: m.statement })),
     resolvable: truth.resolvable
       .filter((r) => forTask(r, task))

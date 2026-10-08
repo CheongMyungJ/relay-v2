@@ -1,69 +1,94 @@
 {
   "recall": [
     {
-      "id": "r.tim.conflict",
-      "found": true,
-      "keys": ["x1"]
-    },
-    {
-      "id": "r.var.select",
+      "id": "r.sv.forced_include",
       "found": true,
       "keys": ["o1"]
     },
     {
-      "id": "r.var.cpu",
-      "found": true,
-      "keys": ["o2"]
-    },
-    {
-      "id": "r.var.tick",
-      "found": true,
-      "keys": ["o3"]
-    },
-    {
-      "id": "r.var.mode",
+      "id": "r.cmd.registration",
       "found": true,
       "keys": ["o4"]
     },
     {
-      "id": "r.var.fan",
+      "id": "r.var.cpu_tick",
+      "found": true,
+      "keys": ["o2"]
+    },
+    {
+      "id": "r.var.baud",
+      "found": true,
+      "keys": ["o3"]
+    },
+    {
+      "id": "r.var.functions",
+      "found": true,
+      "keys": ["o4", "a1"]
+    },
+    {
+      "id": "r.var.logger",
       "found": true,
       "keys": ["o5"]
     },
     {
-      "id": "r.var.retry",
+      "id": "r.var.console",
       "found": true,
       "keys": ["o6"]
     },
     {
-      "id": "r.var.runtime",
+      "id": "r.var.lowpower",
       "found": true,
       "keys": ["o7"]
     },
     {
-      "id": "r.var.dead",
+      "id": "r.var.assert",
       "found": true,
       "keys": ["o8"]
     },
     {
-      "id": "r.var.shipping",
+      "id": "r.var.channels",
       "found": true,
-      "keys": ["k1", "o9"]
+      "keys": ["o9"]
     },
     {
-      "id": "r.var.override",
+      "id": "r.var.runtime",
       "found": true,
       "keys": ["o10"]
     },
     {
-      "id": "r.tim.delay",
+      "id": "r.var.lite",
       "found": true,
       "keys": ["o11"]
+    },
+    {
+      "id": "r.var.shipping",
+      "found": true,
+      "keys": ["k1", "o12"]
     }
   ],
   "must_not": [
     {
-      "id": "m.frame_20ms_all",
+      "id": "m.cfg.lite",
+      "violated": false,
+      "keys": []
+    },
+    {
+      "id": "m.fc23",
+      "violated": false,
+      "keys": []
+    },
+    {
+      "id": "m.fc16_basic",
+      "violated": false,
+      "keys": []
+    },
+    {
+      "id": "m.sensor_25_all",
+      "violated": false,
+      "keys": []
+    },
+    {
+      "id": "m.baud_all",
       "violated": false,
       "keys": []
     },
@@ -71,26 +96,21 @@
       "id": "m.shipping",
       "violated": false,
       "keys": []
-    },
-    {
-      "id": "m.delay_exact",
-      "violated": false,
-      "keys": []
-    },
-    {
-      "id": "m.cfg.gamma",
-      "violated": false,
-      "keys": []
     }
   ],
   "resolvable": [
     {
-      "id": "v.tick_period",
+      "id": "v.tick",
       "left_unknown": false,
       "keys": []
     },
     {
-      "id": "v.fan_beta",
+      "id": "v.fc16_configs",
+      "left_unknown": false,
+      "keys": []
+    },
+    {
+      "id": "v.lite",
       "left_unknown": false,
       "keys": []
     }

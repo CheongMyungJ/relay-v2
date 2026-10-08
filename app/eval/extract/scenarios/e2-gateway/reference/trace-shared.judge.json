@@ -1,0 +1,72 @@
+{
+  "recall": [
+    {
+      "id": "r.cmd.de_release",
+      "found": true,
+      "keys": ["o10"]
+    },
+    {
+      "id": "r.sh.tim7",
+      "found": true,
+      "keys": ["o1"]
+    },
+    {
+      "id": "r.sh.stats64",
+      "found": true,
+      "keys": ["o2"]
+    },
+    {
+      "id": "r.sh.sample_count",
+      "found": true,
+      "keys": ["o3"]
+    },
+    {
+      "id": "r.sh.reset_filter",
+      "found": true,
+      "keys": ["o4"]
+    },
+    {
+      "id": "r.sh.adc_dma",
+      "found": true,
+      "keys": ["o5"]
+    },
+    {
+      "id": "r.sh.rx_tx",
+      "found": true,
+      "keys": ["o6"]
+    },
+    {
+      "id": "r.sh.mutex",
+      "found": true,
+      "keys": ["o7"]
+    },
+    {
+      "id": "r.sh.settings",
+      "found": true,
+      "keys": ["o8"]
+    },
+    {
+      "id": "r.sh.prios",
+      "found": true,
+      "keys": ["o9"]
+    }
+  ],
+  "must_not": [
+    {
+      "id": "m.tim7_ok",
+      "violated": false,
+      "keys": []
+    },
+    {
+      "id": "m.mutex_isr",
+      "violated": false,
+      "keys": []
+    },
+    {
+      "id": "m.tx_race",
+      "violated": false,
+      "keys": []
+    }
+  ],
+  "resolvable": []
+}

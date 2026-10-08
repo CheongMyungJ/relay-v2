@@ -1,0 +1,29 @@
+{
+  "task": "trace-command",
+  "describe": "FC16이 원자적이라고 한다(앞선 레지스터가 쓰인 채 남는다)",
+  "ops": [
+    {
+      "op": "set",
+      "path": "observations.4.text",
+      "value": "FC16은 원자적이다. 하나라도 실패하면 아무 레지스터도 바뀌지 않는다"
+    }
+  ],
+  "judge": {
+    "recall": {
+      "r.cmd.partial": {
+        "found": false,
+        "keys": []
+      }
+    },
+    "must_not": {
+      "m.fc16_atomic": {
+        "violated": true,
+        "keys": ["o5"]
+      }
+    }
+  },
+  "expect": {
+    "violated": ["m.fc16_atomic"],
+    "missed": ["r.cmd.partial"]
+  }
+}

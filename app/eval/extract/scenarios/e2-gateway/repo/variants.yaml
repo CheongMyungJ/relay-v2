@@ -1,0 +1,25 @@
+# Input of tools/gen_variant.py (the generator lives in the shared tools repository).
+basic:
+  cpu_hz: 84000000
+  rtos_tick_hz: 1000
+  modbus: { baud: 19200, parity: even, stop_bits: 1 }
+  features: { fc16: false, device_id: false, logger: false, low_power: false }
+  sensor_channels: 2
+pro:
+  cpu_hz: 168000000
+  rtos_tick_hz: 500
+  modbus: { baud: 115200, parity: none, stop_bits: 1 }
+  features: { fc16: true, device_id: true, logger: true, low_power: true }
+  sensor_channels: 4
+devkit:
+  cpu_hz: 168000000
+  rtos_tick_hz: 1000
+  modbus: { baud: 115200, parity: none, stop_bits: 1 }
+  features: { fc16: true, device_id: true, logger: true, low_power: false }
+  sensor_channels: 4
+lite:
+  cpu_hz: 84000000
+  rtos_tick_hz: 1000
+  modbus: { baud: 9600, parity: even, stop_bits: 1 }
+  features: { fc16: false, device_id: false, logger: false, low_power: false }
+  sensor_channels: 1
