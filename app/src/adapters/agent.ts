@@ -11,6 +11,7 @@ import {
   taskSettings,
   type SideArgsInput,
   type SideSettings,
+  type SideSettingsInput,
   type TaskSettingsInput,
   type TaskSettings,
   type LaunchInput,
@@ -27,6 +28,7 @@ import {
   codexResumeArgs,
   codexSettings,
   codexSideArgs,
+  codexSideSettings,
   codexVersion,
   deployCodexSkill,
   findCodex,
@@ -60,8 +62,8 @@ export interface AgentRuntime {
   launchArgs(input: LaunchInput): string[] | Promise<string[]>
   resumeArgs(input: ResumeInput): string[] | Promise<string[]>
   cleanupArgs(settingsPath: string): string[] | Promise<string[]>
-  /** 곁 세션의 설정과 인자 (시나리오 11, D388, D391). 보호할 task 디렉터리는 모두다 */
-  sideSettings(input: AgentSettingsInput): SideSettings | CodexSettings
+  /** 곁 세션의 설정과 인자 (시나리오 11, D388, D391) */
+  sideSettings(input: SideSettingsInput): SideSettings | CodexSettings
   sideArgs(input: SideArgsInput): string[] | Promise<string[]>
 }
 
@@ -103,7 +105,7 @@ const codex: AgentRuntime = {
   launchArgs: codexLaunchArgs,
   resumeArgs: codexResumeArgs,
   cleanupArgs: codexCleanupArgs,
-  sideSettings: codexSettings,
+  sideSettings: codexSideSettings,
   sideArgs: codexSideArgs,
 }
 

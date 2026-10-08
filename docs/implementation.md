@@ -141,9 +141,9 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I125 | 곁 세션(D385~D390)의 배치: 안내 글(`sideGuide`)과 열 수 있는지(`sideBlock`)는 `core/side`, 실행 인자(`sideArgs`)와 설정(`sideSettings`: deny 규칙과 UserPromptSubmit 훅, 자동 메모리 끔)은 `core/settings`, 기록은 상태 기계의 `side.started`·`side.ended`·`side.conversation`이 `work.json`의 `side`에 남긴다(I11과 같이 main이 직접 쓰지 않음). 세션 자체는 `main/work`의 `SideSession`(메모리, 정리 세션과 같은 모양)이고 훅 id는 `side`, 터미널 id는 `side-<n>`(열 때마다 새 터미널)이다. 세션 상한(`pool`)은 거치지 않는다 | 정리 세션(7-5)의 구조를 따르면 훅, 터미널, 고아 프로세스 처리(D126)를 그대로 쓴다. 곁 세션은 task가 아니라 `tasks`에 넣지 않는다 | |
 | I126 | 곁 세션의 안내와 설정 파일은 열 때마다 임시 폴더(`relay-side-*`)에 만들고 세션이 끝나면 지운다. 안내에 넣는 상태는 열 때의 `work.json`이다. 프로세스의 시작 시각을 읽지 못하면 정리 세션처럼 시작 시각 없이 적고 재시작 때 확인하지 않는다(D76) | 안내는 대화 기록에 남지 않으니(D386) 남겨 둘 까닭이 없다. 열 때마다 새로 만들어야 지금 상태가 들어간다 | |
 | I127 | 가짜 claude는 `--append-system-prompt-file`을 받으면 곁 세션으로 보고 시나리오의 `side` 단계(다시 열면 `sideResume`)를 하며, 기록에 `side: true`와 안내 파일의 내용을 남긴다. 곁 세션의 새 대화는 실제처럼 첫 요청(prompt 단계) 뒤에야 저장해, 묻지 않고 닫은 대화를 `--resume`하면 "No conversation found"로 끝난다(D389) | 실제 claude는 대화가 생기기 전의 세션을 저장하지 않는다(스파이크 S6의 "대화가 생겨야 --resume") | |
-| I128 | 계약의 `helpFlags`는 `--help`의 `--x[-file]` 표기를 `--x`와 `--x-file` 두 옵션으로 읽는다. `--append-system-prompt-file`은 2.1.289와 2.1.294의 `--help`에 `--append-system-prompt[-file]`(`--bare` 설명 안)로만 나온다. 녹화본은 그 버전(2.1.289)의 `--help`로 앱 옵션을 다시 골라 `flags`만 고쳤다(훅 본문은 바뀌지 않음, `docs/checks.md` M21) | 옵션 목록에 따로 줄이 없어도 `--help`가 이 표기로 알리는 옵션이다(실제로 동작함, D386). 그대로 두면 실제 쪽 계약이 없는 옵션으로 실패한다 | |
+| I128 | 계약의 `helpFlags`는 `--help`의 `--x[-file]` 표기를 `--x`와 `--x-file` 두 옵션으로 읽는다. `--append-system-prompt-file`은 2.1.289~2.1.294의 `--help`에 `--append-system-prompt[-file]`(`--bare` 설명 안)로만 나온다. 녹화본(`claude.json`)은 `app-claude` #13(update_contract, Claude Code 2.1.293)으로 다시 녹화했다. 새 녹화본의 도구 훅과 Stop에 `effort`(객체)가 있어 가짜 claude가 같이 보낸다(앱은 읽지 않음). `gh.json`은 녹화 날짜와 가린 레포 이름만 달라 그대로 둔다 | 옵션 목록에 따로 줄이 없어도 `--help`가 이 표기로 알리는 옵션이다(실제로 동작함, D386). 그대로 두면 실제 쪽 계약이 없는 옵션으로 실패한다 | |
 | I129 | D391의 설정: 상세 설정의 키를 `AgentStepName`(`SkillName`과 `side`)으로 넓히고 `AGENT_STEP_TITLES` 끝에 `side`("곁 세션", 공통 묶음)를 둔다. `side`는 노드가 아니므로 [단위]의 노드 대조는 마지막 줄을 뺀다. 열 때 `resolveAgent(config, 'side')`로 정하고 `work.json`의 `side.engine`에 대화의 엔진을 적는다(엔진이 없는 옛 기록은 Claude) | 단계 설정과 같은 화면, 검사, 해석을 그대로 쓴다 | |
-| I130 | D391의 Codex 곁 세션: 설정은 task와 같은 `codexSettings`(훅, relay MCP, 메모리 끔, 모델·추론 수준)에 스킬 없이, 보호할 task 디렉터리는 모두다. 인자는 `codexSideArgs`(새 대화: 옵션과 `--add-dir`, 이어 가기: 그 뒤에 `resume <id>`). 훅은 SessionStart에 안내 파일의 내용을 `additionalContext`로 돌려주고, PreToolUse는 `codexToolDenial`에 `allowPush`를 주어 push와 PR 조작을 막지 않으며, 질문은 앱 질문창(`side`)으로, 질문을 기다리는 동안의 Stop은 되돌린다(정리 세션과 같음). 가짜 codex는 `RELAY_HOOK_TASK`가 `side`면 시나리오의 `side`·`sideResume`을 한다 | 정리 세션의 Codex 처리를 따르면 훅 신뢰 안내, 질문창, 도구 보호를 새로 만들지 않는다 | |
+| I130 | D391의 Codex 곁 세션: 설정은 `codexSideSettings`(task와 같은 훅, 메모리 끔, 모델·추론 수준. relay MCP는 없음). 인자는 `codexSideArgs`(새 대화: 옵션과 `--add-dir`, 이어 가기: 그 뒤에 `resume <id>`). 훅은 처리 줄 밖에서 답한다: SessionStart에 안내를 `additionalContext`로 돌려주고 그 대화를 안내된 것(`guided`)으로 둔다. PreToolUse는 `codexToolDenial`의 `allowPush`를 `guided`로 준다(안내 전에는 push와 PR 조작을 막음). 안내 전이면 머리 띠가 훅 신뢰와 다시 열기를 알린다. 질문 처리는 없다. 정리 세션과 겹치는 끝내기는 `AuxSession`과 `killAux`·`dropAux`로 묶고, 터미널 id로 보조 세션을 찾는 곳은 `auxOf` 하나다. 가짜 codex는 `RELAY_HOOK_TASK`가 `side`면 시나리오의 `side`·`sideResume`을 하고, relay MCP가 설정에 없으면 띄우지 않으며, `sideNoStart`면 새 곁 세션의 SessionStart를 보내지 않는다(훅 신뢰 전) | 사람이 터미널에서 대화하는 세션에 앱 질문창을 두면 task 질문을 가리고 대화 전환 뒤 남는다(PR #48 리뷰). 정리 세션과 한쪽만 고쳐지지 않게 공통 부분을 묶는다 | |
 | I131 | D392의 안내 창은 렌더러가 띄운다(main은 열기만 함). "다시 보지 않기"는 `side_notice: false`를 설정에 저장하고(`BOOLEAN_KEYS`), 설정 화면의 "곁 세션을 열 때 안내 보기"로 다시 켠다 | 열기 명령은 그대로 두고 화면에서만 확인받는다 | |
 
 ## 3. 확인한 사실
@@ -1110,9 +1110,9 @@ app/src/
 **5. 보강: 엔진 설정과 열 때 안내 (D391, D392, I129~I131)**
 
 - 상세 설정의 곁 세션 줄과 해석, `side.engine`. 이어 갈 대화의 엔진이 다르면 새 대화.
-- Codex 곁 세션(I130): `codexSideArgs`, SessionStart의 안내, push를 막지 않는 도구 보호, 질문창.
+- Codex 곁 세션(I130): `codexSideSettings`(relay MCP 없음), `codexSideArgs`, SessionStart의 안내, 안내가 들어간 뒤 push를 막지 않는 도구 보호, 안내 전의 다시 열기 알림.
 - 안내(D387)에 "이 세션의 역할". 화면의 안내 창과 `side_notice`.
-- 시험: [단위] 해석과 설정 검사, `codexSideArgs`, `codexToolDenial`의 `allowPush`, 안내의 역할 절. [흐름] 기본 엔진을 Codex로 두면 Codex 곁 세션이 뜨고 SessionStart가 안내를 돌려준다, 상세 설정의 곁 세션 줄이 이긴다, 엔진이 바뀌면 새 대화. [스모크] 안내 창과 "다시 보지 않기".
+- 시험: [단위] 해석과 설정 검사, `codexSideArgs`, `codexToolDenial`의 `allowPush`, 안내의 역할 절. [흐름] 상세 설정의 곁 세션 줄이 Codex면 Codex 곁 세션이 relay MCP 없이 뜨고 SessionStart가 안내를 돌려준다, 엔진이 바뀌면 새 대화, 훅 신뢰 전에 시작한 대화는 push를 막고 다시 열면 안내가 들어간다. [스모크] 안내 창과 "다시 보지 않기".
 
 **완료 기준**
 

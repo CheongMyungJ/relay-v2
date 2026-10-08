@@ -112,6 +112,7 @@ const opts = {
   settings: null,
   prompt: null,
   guide: null,
+  effort: null,
 }
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
@@ -123,7 +124,8 @@ for (let i = 0; i < argv.length; i++) {
   } else if (a === '--add-dir') opts.addDirs.push(argv[++i])
   else if (a === '--settings') opts.settings = argv[++i]
   else if (a === '--append-system-prompt-file') opts.guide = argv[++i]
-  else if (a === '--model' || a === '--effort') i++
+  else if (a === '--effort') opts.effort = argv[++i]
+  else if (a === '--model') i++
   else if (!a.startsWith('--') && opts.prompt === null) opts.prompt = a
 }
 
@@ -165,6 +167,8 @@ function permissionMode() {
   return env.FAKE_CLAUDE_PERMISSION_MODE || (opts.skip ? 'bypassPermissions' : 'default')
 }
 
+const EFFORT_EVENTS = new Set(['PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'Stop'])
+
 async function hook(event, fields = {}, toolName) {
   const settings = loadSettings()
   const groups = settings.hooks?.[event] ?? []
@@ -175,6 +179,8 @@ async function hook(event, fields = {}, toolName) {
     cwd: process.cwd(),
     // 실제 SessionEnd에는 permission_mode가 없다 (test/contract/fixtures/claude.json)
     ...(event === 'SessionEnd' ? {} : { permission_mode: permissionMode() }),
+    // 도구 훅과 Stop에는 추론 수준이 온다(Claude Code 2.1.293 녹화본). --effort가 없으면 녹화 때의 기본 medium
+    ...(EFFORT_EVENTS.has(event) ? { effort: { level: opts.effort ?? 'medium' } } : {}),
     hook_event_name: event,
     ...fields,
   }

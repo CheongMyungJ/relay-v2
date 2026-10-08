@@ -172,12 +172,8 @@ export function App() {
   // 도구 훅으로 따로 온 진행 표시가 있으면 그것을 보인다 (D216)
   const task = found && work ? withActivity(found, activities[`${work.key}|${found.id}`]) : found
   const questionTask = work ? currentTask(work) : undefined
-  const question = work?.cleanup?.question ?? work?.side.question ?? questionTask?.question
-  const questionTaskId = work?.cleanup?.question
-    ? 'cleanup'
-    : work?.side.question
-      ? 'side'
-      : questionTask?.id
+  const question = work?.cleanup?.question ?? questionTask?.question
+  const questionTaskId = work?.cleanup?.question ? 'cleanup' : questionTask?.id
 
   // 승인 화면은 상태가 바뀔 때마다 파일을 다시 읽어 만든다
   const reviewKey = work && task ? `${work.key}|${task.id}|${work.revision}` : null
@@ -762,18 +758,23 @@ function SideNoticeDialog({
   const open = async () => {
     setBusy(true)
     setError(null)
+    const r = await call(() => window.relay.openSide(work.key, fresh))
+    if (!r.ok) {
+      setBusy(false)
+      setError(r.error)
+      return
+    }
+    // 연 뒤에 저장한다: 열지 못했으면 다음에도 안내가 뜬다. 곁 세션은 이미 열렸으니 저장 실패는 창을 닫지 않고 알린다
     if (hide) {
       const saved = await call(() => window.relay.updateConfig({ side_notice: false }))
       if (!saved.ok) {
         setBusy(false)
-        setError(saved.error)
+        setError(`곁 세션은 열었지만 "다시 보지 않기"를 저장하지 못함: ${saved.error}`)
         return
       }
     }
-    const r = await call(() => window.relay.openSide(work.key, fresh))
     setBusy(false)
-    if (r.ok) onOpened()
-    else setError(r.error)
+    onOpened()
   }
   return (
     <Modal title="곁 세션" onClose={onClose}>
@@ -917,8 +918,8 @@ function ActionBar({
           disabled={busy}
           title={
             work.side.resumable
-              ? '앞 대화를 이어서 엽니다. 질문, 논의, 별도 리뷰, 앱 문제 대응에 씁니다'
-              : '질문, 논의, 별도 리뷰, 앱 문제 대응에 쓰는 Claude Code 세션을 엽니다'
+              ? `앞 대화를 이어서 엽니다(${work.side.engineLabel}). 질문, 논의, 별도 리뷰, 앱 문제 대응에 씁니다`
+              : `질문, 논의, 별도 리뷰, 앱 문제 대응에 쓰는 ${work.side.engineLabel} 세션을 엽니다`
           }
           onClick={() => void run(onOpenSide)}
         >

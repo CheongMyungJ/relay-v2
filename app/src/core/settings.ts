@@ -265,11 +265,16 @@ export function sideDenyRules(workDir: string): string[] {
  * 곁 세션 설정 (D388): deny 규칙, 자동 메모리 끔(D113), UserPromptSubmit 훅. 훅의 session_id로 다시 열 대화를 적는다
  * (D389). /clear 뒤에는 id가 바뀌므로 첫 요청 때마다 받는다
  */
-export function sideSettings(input: {
+export interface SideSettingsInput {
   port: number
   taskId: string
   workDir: string
-}): SideSettings {
+  /** 설정에서 정한 모델·추론 수준 (D391). Claude는 실행 인자로 주고, Codex는 설정 덮어쓰기로 준다 */
+  model?: string
+  effort?: string
+}
+
+export function sideSettings(input: SideSettingsInput): SideSettings {
   return {
     hooks: { UserPromptSubmit: hookSettings(input.port, input.taskId).UserPromptSubmit },
     permissions: { deny: sideDenyRules(input.workDir) },

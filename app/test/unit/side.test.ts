@@ -85,6 +85,8 @@ describe('곁 세션의 안내 (D387)', () => {
     expect(text).toContain('## 이 세션의 역할')
     expect(text).toContain('단계 흐름을 대신하지 않는다')
     expect(text).toContain('먼저 단계 흐름을 권한다')
+    // 사람이 터미널에서 대화하므로 앱 질문창이 없다 (I130)
+    expect(text).toContain('물을 것은 여기서 묻고 턴을 끝내 답을 기다린다(앱 질문창은 없다)')
   })
 
   it('task가 없으면 그렇게 적는다', () => {

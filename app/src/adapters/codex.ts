@@ -10,6 +10,7 @@ import {
   type LaunchInput,
   type ResumeInput,
   type SideArgsInput,
+  type SideSettingsInput,
 } from '../core/settings'
 import type { SkillName } from '../shared/config'
 import type { WorkType } from '../shared/work'
@@ -157,25 +158,32 @@ export function codexHooks(): Record<string, unknown> {
   )
 }
 
+/** 훅 브리지를 쓰는 Codex 실행의 공통 덮어쓰기: 훅, 메모리 끔, 모델·추론 수준 */
+function baseOverrides(input: { model?: string; effort?: string }): Record<string, unknown> {
+  if (!fs.existsSync(codexBridgePath()))
+    throw new Error('Codex 브리지 파일을 찾을 수 없습니다. relay 설치를 확인하세요.')
+  return {
+    'features.hooks': true,
+    'features.memories': false,
+    'memories.use_memories': false,
+    'memories.generate_memories': false,
+    // task에 고정한 모델·추론 수준. 없으면 CLI 설정을 따른다. 재개도 같은 설정 파일로 같은 값을 준다
+    ...(input.model ? { model: input.model } : {}),
+    ...(input.effort ? { model_reasoning_effort: input.effort } : {}),
+    ...Object.fromEntries(
+      Object.entries(codexHooks()).map(([event, groups]) => [`hooks.${event}`, groups]),
+    ),
+  }
+}
+
 export function codexSettings(input: AgentSettingsInput): CodexSettings {
   const bridge = codexBridgePath()
-  if (!fs.existsSync(bridge))
-    throw new Error('Codex 브리지 파일을 찾을 수 없습니다. relay 설치를 확인하세요.')
   const skillPath =
     input.skill && input.taskDir ? codexSkillPath(input.taskDir, input.skill) : undefined
   return {
     ...(skillPath ? { skillPath } : {}),
     overrides: {
-      'features.hooks': true,
-      'features.memories': false,
-      'memories.use_memories': false,
-      'memories.generate_memories': false,
-      // task에 고정한 모델·추론 수준. 없으면 CLI 설정을 따른다. 재개도 같은 설정 파일로 같은 값을 준다
-      ...(input.model ? { model: input.model } : {}),
-      ...(input.effort ? { model_reasoning_effort: input.effort } : {}),
-      ...Object.fromEntries(
-        Object.entries(codexHooks()).map(([event, groups]) => [`hooks.${event}`, groups]),
-      ),
+      ...baseOverrides(input),
       'mcp_servers.relay': {
         command: process.execPath,
         args: [bridge, 'mcp'],
@@ -188,6 +196,14 @@ export function codexSettings(input: AgentSettingsInput): CodexSettings {
       },
     },
   }
+}
+
+/**
+ * 곁 세션의 Codex 설정 (D391, I130): 훅과 메모리 끔, 모델·추론 수준만이다. relay MCP(앱 질문창)는 넣지 않는다: 사람이
+ * 그 터미널에서 대화하므로 물을 것은 평문으로 묻는다(Claude 곁 세션과 같음). 보호할 것은 훅이 정한다
+ */
+export function codexSideSettings(input: SideSettingsInput): CodexSettings {
+  return { overrides: baseOverrides(input) }
 }
 
 async function options(settingsPath: string): Promise<{ args: string[]; settings: CodexSettings }> {

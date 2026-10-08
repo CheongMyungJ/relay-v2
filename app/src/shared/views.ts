@@ -137,10 +137,8 @@ export interface SideView {
   status: 'live' | 'ended' | null
   /** 엔진 이름. 열린 곁 세션은 그 엔진, 아니면 열 때 쓸 설정의 엔진이다 (D391) */
   engineLabel: string
-  /** Codex 훅 신뢰 안내 */
+  /** Codex 곁 세션의 안내가 아직 대화에 들어가지 않았을 때의 안내 (훅 신뢰, 다시 열기) */
   notice?: string
-  /** Codex의 앱 질문창 */
-  question?: PendingQuestionView
   /** 이어 갈 대화가 있다 (D389). [곁 세션 열기]가 --resume으로 잇는다 */
   resumable: boolean
   /** 열 수 없는 까닭 (보관된 Work). 열 수 있으면 null */

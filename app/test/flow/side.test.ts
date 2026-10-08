@@ -273,23 +273,34 @@ describe('곁 세션 (시나리오 11)', () => {
 })
 
 describe('곁 세션의 엔진 (D391)', () => {
-  it('상세 설정의 곁 세션 줄이 Codex면 Codex로 연다: 안내는 SessionStart로 주고, 질문은 앱 질문창, push는 막지 않는다. 엔진을 바꾸면 새 대화다', async () => {
+  /** 가짜 codex의 PreToolUse 훅 응답: 허용(allow)이나 거절(deny) */
+  const toolDecisions = (s: Setup) =>
+    s.h
+      .codexRecords()
+      .filter((r) => r['type'] === 'hook' && r['event'] === 'PreToolUse')
+      .map(
+        (r) =>
+          (r['response'] as { hookSpecificOutput?: { permissionDecision?: string } } | null)
+            ?.hookSpecificOutput?.permissionDecision ?? 'allow',
+      )
+  const push = {
+    do: 'hook',
+    event: 'PreToolUse',
+    body: { tool_name: 'exec_command', tool_input: { cmd: 'git push origin relay/x' } },
+  }
+
+  it('상세 설정의 곁 세션 줄이 Codex면 Codex로 연다: 안내는 SessionStart로 주고, 앱 질문창(relay MCP)은 없고, push는 막지 않는다. 엔진을 바꾸면 새 대화다', async () => {
     const s = await setup(
       {
         ...scenario(),
         side: [
           { do: 'prompt' },
-          {
-            do: 'hook',
-            event: 'PreToolUse',
-            body: { tool_name: 'exec_command', tool_input: { cmd: 'git push origin relay/x' } },
-          },
+          push,
           {
             do: 'hook',
             event: 'PreToolUse',
             body: { tool_name: 'Edit', tool_input: { file_path: '{workDir}/decisions.md' } },
           },
-          { do: 'ask' },
           { do: 'wait' },
         ],
         sideResume: [{ do: 'wait' }],
@@ -307,6 +318,8 @@ describe('곁 세션의 엔진 (D391)', () => {
     expect(args.slice(-2)).toEqual(['--add-dir', s.dir])
     expect(args).toContain('model="gpt-6.1-sol"')
     expect(args).not.toContain('resume')
+    // 사람이 터미널에서 대화하므로 relay MCP(앱 질문창)를 넣지 않는다 (I130)
+    expect(args.some((a) => a.startsWith('mcp_servers.relay='))).toBe(false)
     // 안내는 SessionStart의 additionalContext다 (첫 프롬프트 없음)
     const started = (await s.h.ui.until(
       () => s.h.codexRecords().find((r) => r['type'] === 'hook' && r['event'] === 'SessionStart'),
@@ -315,25 +328,11 @@ describe('곁 세션의 엔진 (D391)', () => {
     const guide = started.response.hookSpecificOutput.additionalContext
     expect(guide).toContain('# relay 곁 세션')
     expect(guide).toContain('- t-01 01 의도 정리: 승인 대기')
-    // 질문은 앱 질문창으로 온다
-    const asked = await until(s, (w) => w.side.question !== undefined, '곁 세션 질문')
-    const q = asked.side.question
-    if (!q) throw new Error('질문 없음')
-    expect(
-      await s.h.relay.answerQuestion(s.key, 'side', q.id, {
-        [q.questions[0]?.id ?? '']: ['작은 범위 (추천)'],
-      }),
-    ).toEqual({ ok: true })
-    await s.h.ui.until(() => s.h.codexRecords().find((r) => r['type'] === 'answer'), '답변')
-    // push는 막지 않고 앱 소유 파일은 막는다 (D388)
-    const tools = s.h
-      .codexRecords()
-      .filter((r) => r['type'] === 'hook' && r['event'] === 'PreToolUse')
-      .map((r) => r['response'] as { hookSpecificOutput?: { permissionDecision?: string } } | null)
-    expect(tools.map((r) => r?.hookSpecificOutput?.permissionDecision ?? 'allow')).toEqual([
-      'allow',
-      'deny',
-    ])
+    expect(guide).toContain('앱 질문창은 없다')
+    // 안내가 들어간 뒤에는 push를 막지 않고 앱 소유 파일은 막는다 (D388)
+    await s.h.ui.until(() => toolDecisions(s).length === 2, '도구 훅 둘')
+    expect(toolDecisions(s)).toEqual(['allow', 'deny'])
+    expect(view(s)?.side.notice).toBeUndefined()
     // 첫 요청으로 대화와 엔진을 적는다
     const sessionId = starts()[0]?.['sessionId'] as string
     await s.h.ui.until(() => work(s).side?.session_id === sessionId, 'Codex 대화를 적음')
@@ -357,6 +356,40 @@ describe('곁 세션의 엔진 (D391)', () => {
     expect(await s.h.relay.openSide(s.key, false)).toEqual({ ok: true })
     await s.h.ui.until(() => starts().length >= 2, 'Codex 곁 세션 이어 가기')
     expect((starts()[1]?.['args'] as string[]).slice(-2)).toEqual(['resume', sessionId])
+  })
+
+  it('훅을 신뢰하기 전에 SessionStart가 지나간 Codex 대화는 안내가 없으니 닫고 다시 열라고 알리고, 그때까지 push를 막는다. 다시 열면 안내가 들어간다', async () => {
+    const s = await setup(
+      {
+        ...scenario(),
+        sideNoStart: true,
+        side: [{ do: 'prompt' }, push, { do: 'wait' }],
+        sideResume: [push, { do: 'wait' }],
+      },
+      { agent_steps: { side: { engine: 'codex' } } },
+    )
+    await until(s, (w) => w.tasks[0]?.status === 'awaiting_approval', 'intake 승인 대기')
+    expect(await s.h.relay.openSide(s.key, false)).toEqual({ ok: true })
+    // 안내 없이 시작한 대화: push를 막고 닫고 다시 열라고 알린다
+    await s.h.ui.until(() => toolDecisions(s).length === 1, '첫 도구 훅')
+    expect(toolDecisions(s)).toEqual(['deny'])
+    const unguided = await until(
+      s,
+      (w) => (w.side.notice ?? '').includes('안내가 들어가지 않았습니다'),
+      '다시 열라는 안내',
+    )
+    expect(unguided.side.notice).toContain('닫고 다시 여세요')
+    expect(
+      s.h.codexRecords().some((r) => r['type'] === 'hook' && r['event'] === 'SessionStart'),
+    ).toBe(false)
+    await until(s, (w) => w.side.resumable, '대화를 적음')
+    expect(await s.h.relay.closeSide(s.key)).toEqual({ ok: true })
+    await ended(s)
+    // 다시 열면 SessionStart(resume)로 안내가 들어가고 push를 막지 않는다
+    expect(await s.h.relay.openSide(s.key, false)).toEqual({ ok: true })
+    await s.h.ui.until(() => toolDecisions(s).length === 2, '이어 간 대화의 도구 훅')
+    expect(toolDecisions(s)).toEqual(['deny', 'allow'])
+    await until(s, (w) => w.side.status === 'live' && w.side.notice === undefined, '안내 들어감')
   })
 })
 

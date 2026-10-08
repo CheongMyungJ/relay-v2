@@ -15,6 +15,7 @@ import {
   codexResumeArgs,
   codexSettings,
   codexSideArgs,
+  codexSideSettings,
   deployCodexSkill,
   findCodex,
 } from '../../src/adapters/codex'
@@ -150,6 +151,19 @@ describe('Codex CLI 점검과 스킬·설정', () => {
     })
     expect(resumed).toContain('model="gpt-6.1-sol"')
     expect(resumed).toContain('model_reasoning_effort="ultra"')
+    // 곁 세션의 설정 (I130): 훅과 모델은 같고 relay MCP(앱 질문창)는 없다
+    const sideSettings = codexSideSettings({
+      port: 12345,
+      taskId: 'side',
+      workDir: dir,
+      model: 'gpt-6.1-sol',
+    })
+    expect(sideSettings.overrides).not.toHaveProperty('mcp_servers.relay')
+    expect(sideSettings.overrides).toMatchObject({ model: 'gpt-6.1-sol', 'features.hooks': true })
+    expect(sideSettings.overrides['hooks.SessionStart']).toEqual(
+      settings.overrides['hooks.SessionStart'],
+    )
+    expect(sideSettings.skillPath).toBeUndefined()
     // 곁 세션 (D391, I130): 첫 프롬프트 없이 Work 디렉터리를 붙이고, 이어 가면 resume <id>. 안내 파일은 넘기지 않는다
     const side = { workDir: dir, settingsPath: chosenFile, sessionId: 's-1', guidePath: 'G' }
     const fresh = await codexSideArgs({ ...side, resume: false })
