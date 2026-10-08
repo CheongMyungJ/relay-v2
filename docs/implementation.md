@@ -1,6 +1,6 @@
 # relay-v2 구현 계획
 
-- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102), v0.17의 설계 유형(M20, I103~I113), v0.18의 곁 세션(M21, I125~I128)
+- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102), v0.17의 설계 유형(M20, I103~I113), v0.18의 곁 세션(M21, I125~I131)
 - 상태: 정함. 주제마다 사람과 문답으로 정했다(설계 부록 A의 진행 규칙). 바꾸려면 사용자와 다시 정한다.
 
 Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서는 [engines.md](engines.md)에서 관리한다. 이 문서의 기존 Claude 동작은 확장 중 회귀 시험의 기준이다.
@@ -142,6 +142,9 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I126 | 곁 세션의 안내와 설정 파일은 열 때마다 임시 폴더(`relay-side-*`)에 만들고 세션이 끝나면 지운다. 안내에 넣는 상태는 열 때의 `work.json`이다. 프로세스의 시작 시각을 읽지 못하면 정리 세션처럼 시작 시각 없이 적고 재시작 때 확인하지 않는다(D76) | 안내는 대화 기록에 남지 않으니(D386) 남겨 둘 까닭이 없다. 열 때마다 새로 만들어야 지금 상태가 들어간다 | |
 | I127 | 가짜 claude는 `--append-system-prompt-file`을 받으면 곁 세션으로 보고 시나리오의 `side` 단계(다시 열면 `sideResume`)를 하며, 기록에 `side: true`와 안내 파일의 내용을 남긴다. 곁 세션의 새 대화는 실제처럼 첫 요청(prompt 단계) 뒤에야 저장해, 묻지 않고 닫은 대화를 `--resume`하면 "No conversation found"로 끝난다(D389) | 실제 claude는 대화가 생기기 전의 세션을 저장하지 않는다(스파이크 S6의 "대화가 생겨야 --resume") | |
 | I128 | 계약의 `helpFlags`는 `--help`의 `--x[-file]` 표기를 `--x`와 `--x-file` 두 옵션으로 읽는다. `--append-system-prompt-file`은 2.1.289와 2.1.294의 `--help`에 `--append-system-prompt[-file]`(`--bare` 설명 안)로만 나온다. 녹화본은 그 버전(2.1.289)의 `--help`로 앱 옵션을 다시 골라 `flags`만 고쳤다(훅 본문은 바뀌지 않음, `docs/checks.md` M21) | 옵션 목록에 따로 줄이 없어도 `--help`가 이 표기로 알리는 옵션이다(실제로 동작함, D386). 그대로 두면 실제 쪽 계약이 없는 옵션으로 실패한다 | |
+| I129 | D391의 설정: 상세 설정의 키를 `AgentStepName`(`SkillName`과 `side`)으로 넓히고 `AGENT_STEP_TITLES` 끝에 `side`("곁 세션", 공통 묶음)를 둔다. `side`는 노드가 아니므로 [단위]의 노드 대조는 마지막 줄을 뺀다. 열 때 `resolveAgent(config, 'side')`로 정하고 `work.json`의 `side.engine`에 대화의 엔진을 적는다(엔진이 없는 옛 기록은 Claude) | 단계 설정과 같은 화면, 검사, 해석을 그대로 쓴다 | |
+| I130 | D391의 Codex 곁 세션: 설정은 task와 같은 `codexSettings`(훅, relay MCP, 메모리 끔, 모델·추론 수준)에 스킬 없이, 보호할 task 디렉터리는 모두다. 인자는 `codexSideArgs`(새 대화: 옵션과 `--add-dir`, 이어 가기: 그 뒤에 `resume <id>`). 훅은 SessionStart에 안내 파일의 내용을 `additionalContext`로 돌려주고, PreToolUse는 `codexToolDenial`에 `allowPush`를 주어 push와 PR 조작을 막지 않으며, 질문은 앱 질문창(`side`)으로, 질문을 기다리는 동안의 Stop은 되돌린다(정리 세션과 같음). 가짜 codex는 `RELAY_HOOK_TASK`가 `side`면 시나리오의 `side`·`sideResume`을 한다 | 정리 세션의 Codex 처리를 따르면 훅 신뢰 안내, 질문창, 도구 보호를 새로 만들지 않는다 | |
+| I131 | D392의 안내 창은 렌더러가 띄운다(main은 열기만 함). "다시 보지 않기"는 `side_notice: false`를 설정에 저장하고(`BOOLEAN_KEYS`), 설정 화면의 "곁 세션을 열 때 안내 보기"로 다시 켠다 | 열기 명령은 그대로 두고 화면에서만 확인받는다 | |
 
 ## 3. 확인한 사실
 
@@ -1103,6 +1106,13 @@ app/src/
 - **[흐름] `test/flow/side.test.ts`(가짜 claude, I127):** intake 중에 열면 첫 프롬프트 없이 worktree에서 뜨고 안내에 task 목록이 있다. 세션 상한이 1이고 task가 돌아도 바로 뜬다. 첫 요청 뒤 `side.session_id`가 적히고, 닫았다 열면 `--resume <id>`, [새 대화로 열기]는 새 `--session-id`다. 묻지 않고 닫은 대화는 적지 않는다. 열린 채 승인과 다음 단계가 진행된다. [Work 정리]가 곁 세션을 끝낸다.
 - **[스모크]:** 액션 바의 [곁 세션 열기]를 누르면 곁 세션 탭이 생긴다.
 - **[실기] 대신 확인:** 실제 claude를 `sideArgs`와 `sideSettings`로 PTY에서 띄워, 입력 전에 아무것도 하지 않고 안내의 내용을 답하는지 본다(`docs/checks.md`).
+
+**5. 보강: 엔진 설정과 열 때 안내 (D391, D392, I129~I131)**
+
+- 상세 설정의 곁 세션 줄과 해석, `side.engine`. 이어 갈 대화의 엔진이 다르면 새 대화.
+- Codex 곁 세션(I130): `codexSideArgs`, SessionStart의 안내, push를 막지 않는 도구 보호, 질문창.
+- 안내(D387)에 "이 세션의 역할". 화면의 안내 창과 `side_notice`.
+- 시험: [단위] 해석과 설정 검사, `codexSideArgs`, `codexToolDenial`의 `allowPush`, 안내의 역할 절. [흐름] 기본 엔진을 Codex로 두면 Codex 곁 세션이 뜨고 SessionStart가 안내를 돌려준다, 상세 설정의 곁 세션 줄이 이긴다, 엔진이 바뀌면 새 대화. [스모크] 안내 창과 "다시 보지 않기".
 
 **완료 기준**
 
