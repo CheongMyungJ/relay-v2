@@ -17,6 +17,7 @@ import {
 import type { Step } from '../support/scenarios'
 import {
   appFlags,
+  helpFlags,
   HOOK_CONTRACT,
   hookCollector,
   NOT_RECORDED,
@@ -115,6 +116,19 @@ describe('[계약] 녹화본', () => {
 
   it('앱이 넘기는 옵션이 모두 녹화 때의 --help에 있었다 (새 옵션을 쓰면 녹화본을 다시 만든다)', () => {
     expect(appFlags().filter((f) => !fixture.flags.includes(f))).toEqual([])
+  })
+
+  it('--help의 `--x[-file]` 표기는 두 옵션으로 읽는다 (--append-system-prompt-file, D386)', () => {
+    const help =
+      '  --tools <t>  Tools\n  via: --system-prompt[-file],\n  --append-system-prompt[-file], -p'
+    expect(helpFlags(help)).toEqual([
+      '--append-system-prompt',
+      '--append-system-prompt-file',
+      '--system-prompt',
+      '--system-prompt-file',
+      '--tools',
+      '-p',
+    ])
   })
 })
 

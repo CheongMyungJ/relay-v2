@@ -238,3 +238,70 @@ export function launchEnv(token: string): Record<string, string> {
 export function cleanupArgs(settingsPath: string): string[] {
   return ['--dangerously-skip-permissions', '--settings', settingsPath]
 }
+
+// ---------- 곁 세션 (시나리오 11, D385~D390) ----------
+
+/** 곁 세션 설정 파일의 내용 (D388). 훅은 UserPromptSubmit 하나다 */
+export interface SideSettings {
+  hooks: Pick<Record<HookEvent, HookGroup[]>, 'UserPromptSubmit'>
+  permissions: { deny: string[] }
+  autoMemoryEnabled: false
+}
+
+/**
+ * 곁 세션의 deny 규칙 (D388): 앱 소유 파일, tasks/ 아래 전부, Work 디렉터리의 .claude/ 편집. 사람이 옆에서 허락하는
+ * 세션이라 git push와 gh는 막지 않는다(task의 D17과 다름)
+ */
+export function sideDenyRules(workDir: string): string[] {
+  const work = ruleAbs(workDir)
+  return [
+    ...APP_OWNED_FILES.map((f) => `Edit(${ruleJoin(work, f)})`),
+    `Edit(${ruleJoin(work, 'tasks', '**')})`,
+    `Edit(${ruleJoin(work, '.claude', '**')})`,
+  ]
+}
+
+/**
+ * 곁 세션 설정 (D388): deny 규칙, 자동 메모리 끔(D113), UserPromptSubmit 훅. 훅의 session_id로 다시 열 대화를 적는다
+ * (D389). /clear 뒤에는 id가 바뀌므로 첫 요청 때마다 받는다
+ */
+export function sideSettings(input: {
+  port: number
+  taskId: string
+  workDir: string
+}): SideSettings {
+  return {
+    hooks: { UserPromptSubmit: hookSettings(input.port, input.taskId).UserPromptSubmit },
+    permissions: { deny: sideDenyRules(input.workDir) },
+    autoMemoryEnabled: false,
+  }
+}
+
+export interface SideArgsInput {
+  /** 새 대화면 --session-id로, 이어 가면 --resume으로 준다 */
+  sessionId: string
+  resume: boolean
+  /** Work 디렉터리. 에이전트가 산출물을 스스로 읽게 --add-dir로 더한다 (D386) */
+  workDir: string
+  settingsPath: string
+  /** 안내(시스템 프롬프트, D387) 파일 */
+  guidePath: string
+}
+
+/**
+ * 곁 세션의 실행 인자 (D386). 첫 프롬프트를 주지 않아 열어도 사람의 입력을 기다린다. 안내는 시스템 프롬프트에 덧붙인다:
+ * 대화 기록에 남지 않아 다시 열 때도 다시 준다. 이어서 하라는 입력(D218)은 주지 않는다
+ */
+export function sideArgs(input: SideArgsInput): string[] {
+  return [
+    '--dangerously-skip-permissions',
+    input.resume ? '--resume' : '--session-id',
+    input.sessionId,
+    '--add-dir',
+    input.workDir,
+    '--settings',
+    input.settingsPath,
+    '--append-system-prompt-file',
+    input.guidePath,
+  ]
+}

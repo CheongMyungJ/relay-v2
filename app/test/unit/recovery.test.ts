@@ -369,6 +369,13 @@ describe('[단위] 고아 프로세스 (D76, D126)', () => {
       lines: ['01 의도 정리의 claude (PID 101)', '정리 세션의 claude (PID 200)'],
     })
   })
+  it('살아 있던 곁 세션의 프로세스도 확인한다. 대화만 있으면 없다 (D389)', () => {
+    const side = { pid: 300, process_started_at: '2026-09-27T12:00:00+09:00', started_at: 'x' }
+    expect(recordedProcesses(work({ side: { session_id: 's-1', process: side } }))).toEqual([
+      { taskId: null, label: '곁 세션', pid: 300, startedAt: '2026-09-27T12:00:00+09:00' },
+    ])
+    expect(recordedProcesses(work({ side: { session_id: 's-1' } }))).toEqual([])
+  })
 })
 
 describe('[단위] 앱 소유 파일의 해시 (D124)', () => {

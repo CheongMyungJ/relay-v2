@@ -3,6 +3,7 @@
   "recordedAt": "2026-10-05",
   "flags": [
     "--add-dir",
+    "--append-system-prompt-file",
     "--dangerously-skip-permissions",
     "--effort",
     "--json-schema",

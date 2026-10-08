@@ -11,6 +11,8 @@ import {
   relaySkillName,
   resumeArgs,
   ruleAbs,
+  sideArgs,
+  sideSettings,
   taskSettings,
 } from '../../src/core/settings'
 
@@ -247,5 +249,49 @@ describe('[단위] 모델·추론 수준 인자 (F7, F8, F10)', () => {
     expect(launchArgs(launch)).not.toContain('--model')
     expect(launchArgs(launch)).not.toContain('--effort')
     expect(resumeArgs(resume)).toHaveLength(7)
+  })
+})
+
+describe('곁 세션 (시나리오 11, D386, D388)', () => {
+  const work = ruleAbs(WORK_DIR)
+
+  it('첫 프롬프트 없이 Work 디렉터리를 붙이고 안내를 시스템 프롬프트에 덧붙인다. 다시 열면 --resume이다', () => {
+    const input = { sessionId: 's-1', workDir: WORK_DIR, settingsPath: 'S', guidePath: 'G' }
+    expect(sideArgs({ ...input, resume: false })).toEqual([
+      '--dangerously-skip-permissions',
+      '--session-id',
+      's-1',
+      '--add-dir',
+      WORK_DIR,
+      '--settings',
+      'S',
+      '--append-system-prompt-file',
+      'G',
+    ])
+    expect(sideArgs({ ...input, resume: true }).slice(1, 3)).toEqual(['--resume', 's-1'])
+    expect(sideArgs({ ...input, resume: true })).toHaveLength(9)
+  })
+
+  it('앱 소유 파일, tasks/ 아래, .claude/만 막는다. push와 gh는 막지 않는다', () => {
+    const s = sideSettings({ port: 51234, taskId: 'side', workDir: WORK_DIR })
+    expect(s.permissions.deny).toEqual([
+      `Edit(${work}/work.json)`,
+      `Edit(${work}/request.md)`,
+      `Edit(${work}/intent.md)`,
+      `Edit(${work}/decisions.md)`,
+      `Edit(${work}/pr-items.json)`,
+      `Edit(${work}/tasks/**)`,
+      `Edit(${work}/.claude/**)`,
+    ])
+    expect(s.permissions.deny.some((r) => r.startsWith('Bash('))).toBe(false)
+    expect(s.autoMemoryEnabled).toBe(false)
+  })
+
+  it('훅은 UserPromptSubmit 하나다: 받은 session_id로 다시 열 대화를 적는다 (D389)', () => {
+    const s = sideSettings({ port: 51234, taskId: 'side', workDir: WORK_DIR })
+    expect(Object.keys(s.hooks)).toEqual(['UserPromptSubmit'])
+    expect(s.hooks.UserPromptSubmit[0]?.hooks[0]?.url).toBe(
+      hookUrl(51234, 'side', 'UserPromptSubmit'),
+    )
   })
 })

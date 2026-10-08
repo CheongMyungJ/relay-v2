@@ -2749,6 +2749,47 @@ describe('재시작 때의 고아 프로세스와 정리 세션 (시나리오 9-
   })
 })
 
+describe('곁 세션의 기록 (시나리오 11, D389)', () => {
+  const started = (work = newWork()) =>
+    apply(work, {
+      type: 'side.started',
+      at: '2026-09-26T11:00:00+09:00',
+      pid: 4321,
+      processStartedAt: '2026-09-26T11:00:00.1234567+09:00',
+    }).work
+
+  it('살아 있는 동안 프로세스를 적고, 끝나면 프로세스만 지운다. 대화가 없으면 side도 없다', () => {
+    const work = newWork()
+    const live = started(work)
+    expect(live.side).toEqual({
+      process: {
+        pid: 4321,
+        process_started_at: '2026-09-26T11:00:00.1234567+09:00',
+        started_at: '2026-09-26T11:00:00+09:00',
+      },
+    })
+    expect(apply(live, { type: 'side.ended', at: at() }).work.side).toBeUndefined()
+    expect(apply(work, { type: 'side.ended', at: at() }).work).toBe(work)
+  })
+
+  it('대화를 적고, 끝나거나 다시 켜도 대화는 남는다. 같은 대화면 그대로다', () => {
+    const live = started()
+    const talked = apply(live, { type: 'side.conversation', at: at(), sessionId: 's-1' }).work
+    expect(talked.side).toMatchObject({ session_id: 's-1', process: { pid: 4321 } })
+    expect(apply(talked, { type: 'side.conversation', at: at(), sessionId: 's-1' }).work).toBe(
+      talked,
+    )
+    // /clear 뒤의 새 대화 (D388)
+    expect(
+      apply(talked, { type: 'side.conversation', at: at(), sessionId: 's-2' }).work.side
+        ?.session_id,
+    ).toBe('s-2')
+    expect(apply(talked, { type: 'side.ended', at: at() }).work.side).toEqual({ session_id: 's-1' })
+    const restarted = apply(talked, { type: 'app.restarted', at: at(), check: null }).work
+    expect(restarted.side).toEqual({ session_id: 's-1' })
+  })
+})
+
 describe('앱 소유 파일의 해시 (D91, D124)', () => {
   it('Work를 만들면 request.md의 해시를 적는다. 없으면 빈 기록이다', () => {
     const made = createWork({
