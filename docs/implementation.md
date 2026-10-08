@@ -1,6 +1,6 @@
 # relay-v2 구현 계획
 
-- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102), v0.17의 설계 유형(M20, I103~I113)
+- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102), v0.17의 설계 유형(M20, I103~I113), v0.18의 곁 세션(M21, I125~I127)
 - 상태: 정함. 주제마다 사람과 문답으로 정했다(설계 부록 A의 진행 규칙). 바꾸려면 사용자와 다시 정한다.
 
 Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서는 [engines.md](engines.md)에서 관리한다. 이 문서의 기존 Claude 동작은 확장 중 회귀 시험의 기준이다.
@@ -138,6 +138,9 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I122 | D382의 git 판정: `statusLines`(커밋 안 된 변경)가 `git status --ignore-submodules=dirty`를 써서, 전달·정리 세션·PR 대응·되감기·정리가 같은 판정을 쓴다. [변경 버리고 진행]은 `onlySubmoduleChanges`(porcelain v2의 셋째 칸이 `S`로 시작하는 항목뿐인가)가 참이면 stash하지 않는다(I124로 바꿈: 되돌린다). git stash는 그 변경을 넣지 않고 "No local changes to save"로 끝나 `stashAll`이 실패하기 때문이다. 정리의 서브모듈은 `checkedOutSubmodules`가 `git ls-files --stage`의 모드 160000 항목 가운데 폴더에 `.git`이 있는 것으로 찾는다(git이 worktree를 지우지 않을 때 보는 기준과 같음). 이를 `CleanPreview.submodules`와 `CleanExpect.submodules`에 두어 확인한 뒤 바뀌면 받지 않는다. 시험은 [어댑터] `test/adapters/submodule.test.ts`(git 동작), [단위] `cleanup.test.ts`, [흐름] `delivery`·`cleanup`의 연결 하나씩이다. 로컬 경로의 서브모듈은 `-c protocol.file.allow=always`로 받는다(`test/support/repo.ts`의 `addSubmodule`, `checkoutSubmodules`) | 판정을 `statusLines` 한 곳에서 바꿔 호출하는 곳마다 고치지 않음. 서브모듈 경로와 status 줄을 맞춰 보지 않아 따옴표로 감싼 경로에도 틀리지 않음 | |
 | I123 | D383의 서브모듈 경로는 task를 시작할 때 worktree의 index에서 gitlink(모드 160000)로 읽는다(`submodulePaths`, `checkedOutSubmodules`도 이것을 씀). 읽지 못하면 절 없이 간다. `.gitmodules`가 아니라 index를 보는 것은 Work 브랜치에서 실제로 서브모듈인 것만 넣기 위함이다. 시험은 [단위] `context.test.ts`(문구와 자리), [어댑터] `submodule.test.ts`(경로), [흐름] `delivery`의 서브모듈 시험에서 task마다 절이 있는지다 | 등록 점검(D382)은 메인 체크아웃의 `.gitmodules`를 보지만, task 안내는 그 Work의 worktree를 따라야 함 | |
 | I124 | D384의 구현: `discardChanges`가 porcelain v2(`--ignore-submodules=dirty`)에서 셋째 칸이 `S`인 항목을 `git reset -q -- <경로>`, `git submodule update --checkout -q -- <경로>`로 되돌린 뒤, 남은 변경이 있으면 `stashAll`한다(없으면 stash 없이 null). `dirtySubmodules`는 `--ignore-submodules=none`에서 서브모듈 칸의 셋째(M)나 넷째(U) 글자가 있는 항목이다. 승인 화면의 `EmphasisKind`에 `submodule_changes`를 더해 커밋 안 된 변경 다음에 둔다. 서브모듈은 worktree의 `.gitmodules`가 없으면 git을 부르지 않고, 있으면 `git config -z -f .gitmodules --get-regexp`로 이름과 경로를 얻어 `git ls-files --stage -- <경로>`로 gitlink인 것만 둔다(`submoduleEntries`). `checkedOutSubmodules`는 경로의 `.git`이나 `git rev-parse --absolute-git-dir` 아래 `modules/<이름>`이 있는 것을 세고, 이름이 맞지 않아도 `modules`가 있으면 그 폴더를 넣는다. 등록 점검도 `submodulePaths`를 쓴다 | index 전체를 읽지 않아 큰 레포에서도 비용이 작음(PR #47 리뷰). `.gitmodules` 없이 더한 중첩 레포는 서브모듈로 보지 않음: 드물고, 그때 정리는 git의 오류로 알려짐. I122의 `onlySubmoduleChanges`는 없앰 | |
+| I125 | 곁 세션(D385~D390)의 배치: 안내 글(`sideGuide`)과 열 수 있는지(`sideBlock`)는 `core/side`, 실행 인자(`sideArgs`)와 설정(`sideSettings`: deny 규칙과 UserPromptSubmit 훅, 자동 메모리 끔)은 `core/settings`, 기록은 상태 기계의 `side.started`·`side.ended`·`side.conversation`이 `work.json`의 `side`에 남긴다(I11과 같이 main이 직접 쓰지 않음). 세션 자체는 `main/work`의 `SideSession`(메모리, 정리 세션과 같은 모양)이고 훅 id는 `side`, 터미널 id는 `side-<n>`(열 때마다 새 터미널)이다. 세션 상한(`pool`)은 거치지 않는다 | 정리 세션(7-5)의 구조를 따르면 훅, 터미널, 고아 프로세스 처리(D126)를 그대로 쓴다. 곁 세션은 task가 아니라 `tasks`에 넣지 않는다 | |
+| I126 | 곁 세션의 안내와 설정 파일은 열 때마다 임시 폴더(`relay-side-*`)에 만들고 세션이 끝나면 지운다. 안내에 넣는 상태는 열 때의 `work.json`이다. 프로세스의 시작 시각을 읽지 못하면 정리 세션처럼 시작 시각 없이 적고 재시작 때 확인하지 않는다(D76) | 안내는 대화 기록에 남지 않으니(D386) 남겨 둘 까닭이 없다. 열 때마다 새로 만들어야 지금 상태가 들어간다 | |
+| I127 | 가짜 claude는 `--append-system-prompt-file`을 받으면 곁 세션으로 보고 시나리오의 `side` 단계(다시 열면 `sideResume`)를 하며, 기록에 `side: true`와 안내 파일의 내용을 남긴다. 곁 세션의 새 대화는 실제처럼 첫 요청(prompt 단계) 뒤에야 저장해, 묻지 않고 닫은 대화를 `--resume`하면 "No conversation found"로 끝난다(D389) | 실제 claude는 대화가 생기기 전의 세션을 저장하지 않는다(스파이크 S6의 "대화가 생겨야 --resume") | |
 
 ## 3. 확인한 사실
 
@@ -304,6 +307,7 @@ app/src/
 - 설계 v0.9의 리팩터링 유형은 M15다. M14와 같은 차례로 나눠 커밋한다.
 - 설계 v0.16의 이슈 기록은 M19다. core → main·어댑터 → 화면 → 시험 차례로 나눠 커밋한다.
 - 설계 v0.17의 설계 유형은 M20이다. M18과 같은 차례로 나눠 커밋하고 core와 스킬은 한 커밋이다(I113).
+- 설계 v0.18의 곁 세션은 M21이다. core → main → 화면 → 시험 차례로 나눠 커밋한다.
 - 설계 v0.13의 일반 유형은 M18이다. M15와 같은 차례로 나눠 커밋하되 core와 스킬은 한 커밋이다(I94). M17과 I69~I84는 지식 관리에 쓴 번호라 건너뛴다.
 - 완료 기준 앞의 꼬리표는 확인 방법이다: [단위], [어댑터], [흐름], [스모크], [실제], [실기]. 뜻은 8.1을 따른다. [실제]와 [실기]의 결과는 `docs/checks.md`에 기록한다(I30).
 
@@ -329,6 +333,7 @@ app/src/
 | M18 | 일반 유형 | 새 Work에서 일반을 고르면 `intake → execute → verify`, 완료조건마다 확인 방법(D302~D318) | M16 |
 | M19 | 이슈 기록 | 의도 승인 때 GitHub 이슈를 만들고 승인된 task마다 코멘트를 덧붙이며, PR은 `Closes`로 잇는다(D336~D349) | M18 |
 | M20 | 설계 유형 | 새 Work에서 설계를 고르면 `intake → spec(설계 문답) → verify`, 레포의 설계 문서를 문답으로 정해 PR로 리뷰(D350~D374) | M19 |
+| M21 | 곁 세션 | Work마다 언제든 열고 닫는 Claude Code 세션. 첫 프롬프트 없이 안내를 시스템 프롬프트로 주고, 묻고 나서만 바꾼다(D385~D390) | M20 |
 
 ### M0. 골격과 배포
 
@@ -1068,6 +1073,42 @@ app/src/
 - [스모크] 유형 버튼 다섯과 설계의 설명, 단계 선택의 기본 체크.
 - [실제] `spec`, `spec-follow`(가능할 때).
 - 평가: 33, 34가 `check-scenario.mjs`를 통과하고, `npm run test:eval`이 통과한다. 33, 34 각 3번의 보고서.
+
+### M21. 곁 세션
+
+설계 v0.18(D385~D390), 시나리오 11. Work마다 사람이 언제든 여는 Claude Code 세션을 더한다. task가 아니므로 상태 기계의 task 전이, 스킬, 형식 검사는 그대로다. 아래 넷을 하고 단계마다 커밋한다. 단계가 끝날 때마다 `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`, `npm run test:contract`를 돌린다.
+
+**1. core와 계약**
+
+- **기록(I125, D389):** `shared/work`의 `SideRecord`(`session_id`, `process`)와 `WorkState.side`. 상태 기계의 `side.started`(프로세스를 적음), `side.ended`(프로세스를 지우고 대화는 남김), `side.conversation`(`session_id`를 적음). 재시작(`restarted`)은 `side.process`를 지운다. `recovery`의 `recordedProcesses`에 곁 세션(이름 "곁 세션").
+- **실행 인자와 설정(D386, D388):** `sideArgs`(새 대화 `--session-id`, 이어 가기 `--resume`, 둘 다 `--add-dir`, `--settings`, `--append-system-prompt-file`, 첫 프롬프트 없음), `sideSettings`(deny: 앱 소유 파일, `tasks/**`, `.claude/**`. push와 gh는 없음. 훅은 UserPromptSubmit만, 자동 메모리 끔).
+- **안내(D387, `core/side`):** `sideGuide`가 지도(Work, 파일 위치, task마다 단계·상태·디렉터리와 폐기·승인 전 표시)와 읽는 규칙, 바꾸는 규칙, 답글 표시 문구를 쓴다. `sideBlock`은 열 수 없는 까닭(보관됨)이다.
+- **계약:** `test/contract/claude.ts`의 `appFlags`에 `sideArgs`. 녹화본을 다시 만들어 `--append-system-prompt-file`이 있게 한다(8.2). 훅 본문은 이미 계약에 있는 UserPromptSubmit의 `session_id`만 읽는다.
+
+**2. main**
+
+- **`SideSession`(I125, I126):** [곁 세션 열기](`openSide`, `fresh`면 새 대화)는 안내와 설정을 임시 폴더에 쓰고 PTY로 띄운다. 이미 살아 있으면 거절한다. 보관된 Work는 거절한다. 띄우면 `side.started`, UserPromptSubmit 훅마다 받은 `session_id`가 적은 것과 다르면 `side.conversation`, 끝나면 `side.ended`. [곁 세션 닫기](`closeSide`)는 프로세스 트리를 끝낸다(D231처럼 끝내는 중의 훅은 바로 답한다).
+- **다른 동작과의 관계(D390):** 다른 명령은 막지 않는다. [Work 정리]는 시작할 때 곁 세션을 끝낸다. 앱 종료 확인의 `hasLiveSession`과 앱 종료 때의 세션 끝내기에 곁 세션을 넣는다.
+- **IPC와 스냅샷:** `openSide(workKey, fresh)`, `closeSide(workKey)`. `WorkView.side`(`SideView`: 터미널 키, 상태 live·ended, 이어 갈 대화가 있는지, 열 수 없는 까닭).
+
+**3. 화면**
+
+- 액션 바의 [곁 세션 열기]·[곁 세션 닫기](보관된 Work는 없음). 열면 곁 세션 탭으로 옮긴다.
+- task 탭(과 정리 세션 탭) 뒤의 곁 세션 탭. 머리 띠는 "곁 세션 · Claude Code · 기록하지 않음 · 바꾸기 전에 묻습니다"이고, 끝났으면 "끝남 · 읽기 전용"과 [새 대화로 열기]. 오른쪽 패널은 정리 세션 탭처럼 지금 task다.
+
+**4. 시험**
+
+- **[단위]:** `sideArgs`(새 대화와 이어 가기, 첫 프롬프트 없음), `sideSettings`(deny에 push와 gh가 없고 `tasks/**`가 있음, 훅은 UserPromptSubmit뿐, 자동 메모리 끔), `sideGuide`(폐기된 task와 승인 전 task의 표시, 지금 단계, 표시 문구, 바꾸는 규칙), 상태 기계의 `side.*`와 재시작, `recordedProcesses`.
+- **[흐름] `test/flow/side.test.ts`(가짜 claude, I127):** intake 중에 열면 첫 프롬프트 없이 worktree에서 뜨고 안내에 task 목록이 있다. 세션 상한이 1이고 task가 돌아도 바로 뜬다. 첫 요청 뒤 `side.session_id`가 적히고, 닫았다 열면 `--resume <id>`, [새 대화로 열기]는 새 `--session-id`다. 묻지 않고 닫은 대화는 적지 않는다. 열린 채 승인과 다음 단계가 진행된다. [Work 정리]가 곁 세션을 끝낸다.
+- **[스모크]:** 액션 바의 [곁 세션 열기]를 누르면 곁 세션 탭이 생긴다.
+- **[실기] 대신 확인:** 실제 claude를 `sideArgs`와 `sideSettings`로 PTY에서 띄워, 입력 전에 아무것도 하지 않고 안내의 내용을 답하는지 본다(`docs/checks.md`).
+
+**완료 기준**
+
+- [단위] 위 시험. 기존 시험이 그대로 통과한다.
+- [흐름] 위 `side.test.ts`. 기존 흐름 시험이 그대로 통과한다.
+- [계약] 가짜 쪽 통과, 녹화본의 옵션에 `--append-system-prompt-file`.
+- [스모크] 곁 세션 탭.
 
 ## 8. 테스트 전략
 
