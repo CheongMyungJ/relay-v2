@@ -129,6 +129,18 @@ export interface CleanupView {
   uncommitted: string[]
 }
 
+/** 곁 세션 (시나리오 11, D385~D390): 사람이 언제든 여는 Claude Code 세션. task가 아니다 */
+export interface SideView {
+  /** 이 세션 터미널의 키. 연 적이 없으면 null이다 */
+  terminal: string | null
+  /** 살아 있음, 끝남. 연 적이 없으면 null이다 (앱을 다시 켜도 없음) */
+  status: 'live' | 'ended' | null
+  /** 이어 갈 대화가 있다 (D389). [곁 세션 열기]가 --resume으로 잇는다 */
+  resumable: boolean
+  /** 열 수 없는 까닭 (보관된 Work). 열 수 있으면 null */
+  blocked: string | null
+}
+
 /** [push]·[PR 생성] (시나리오 7-4, 7-5) */
 export interface DeliverInput {
   choice: DeliveryChoice
@@ -576,6 +588,8 @@ export interface WorkView {
   pr: PrView | null
   /** 정리 세션 ([AI 세션 열기], 7-5) */
   cleanup: CleanupView | null
+  /** 곁 세션 (시나리오 11) */
+  side: SideView
   /** 끊긴 작업 (시나리오 9-4, D121~D123). 있으면 [다시 시도]·[무시]만 받는다 */
   operation: OperationView | null
   /** 이슈 기록 (설계 3.7). 이슈 기록이 켜진 프로젝트에서 만든 Work에 있다 */
