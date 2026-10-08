@@ -101,6 +101,7 @@ Codex 근거는 2026-09-30의 공식 문서와 환경에 설치된 `codex-cli 0.
 - 모델이 엔진 기본이면 추론 수준은 엔진의 전체 수준에서 고른다. CLI의 기본 모델이 그 수준을 받지 않을 수 있어 화면이 알린다.
 - 실행 인자: Claude는 `--model`, `--effort`(시작과 `--resume` 모두). Codex는 설정 덮어쓰기 `-c model=…`, `-c model_reasoning_effort=…`(시작과 `resume` 모두 같은 task 설정 파일에서).
 - 지식 검토 호출과 정리 세션은 이 설정을 쓰지 않는다(지식 검토는 D334의 자기 설정, 정리 세션은 엔진 기본).
+- 곁 세션(design.md 시나리오 11)은 상세 설정의 "곁 세션" 줄(`agent_steps.side`)로 같은 해석을 한다(D391). 열 때마다 그때의 설정이고, 대화의 엔진을 `work.json`의 `side.engine`에 적어 엔진이 다르면 이어 가지 않고 새 대화로 연다.
 
 ### 4.2 task 선택과 재개
 
@@ -115,6 +116,7 @@ task 생성 시 그 단계의 엔진·모델·추론 수준(4.1의 해석)을 ta
 - TaskRecord에 `engine`, `engine_version`을 기록한다. 모델·추론 수준을 정했으면 `model`, `effort`도 기록한다. 없으면 엔진 기본이고, 이 필드가 없는 기존 기록은 옵션 없이 재개한다. Claude 실행/재개에는 `claude_version`도 함께 기록하여 이전 필드의 호환을 유지한다. Codex 버전을 Claude 필드에 기록하지 않는다.
 - session ID는 벤더가 제공하는 문자열이다. PID·시작 시각은 실행 프로세스 복구용이고 ID와 구분한다.
 - engine이 없는 기존 task는 Claude다. 명시된 알 수 없는 엔진은 Claude로 조용히 바꾸지 않고, 재개 불가 사유를 표시한다.
+- 곁 세션은 Claude의 `--append-system-prompt-file` 대신 SessionStart의 additionalContext로 안내를 받는다. 첫 프롬프트가 없고, 이어 가기는 `resume <id>`다. 질문창과 보호 훅은 정리 세션과 같되 push·PR 조작은 막지 않는다(`allowPush`, D388). 가짜 Codex로 [흐름]만 확인했고 실제 Codex로는 확인하지 않았다.
 - 살아 있는 정리 세션도 엔진을 고정한다. Q2에 따라 그 정리를 요청한 verify task의 엔진을 사용한다. 앱을 다시 켜면 정리 대화는 복구하지 않고 기존 D126대로 남은 프로세스를 끝낸다.
 - 새 필드는 기존 schema_version 1에 추가한다. 기존 기록을 새 앱에서 읽는 호환을 제공한다. Codex 기록을 엔진 선택이 없는 이전 앱에서 재개하는 것은 지원하지 않는다. 이전 앱은 엔진 필드를 모르므로 실제 엔진을 보존할 수 없고, schema_version 숫자만 바꿔도 이를 막는다는 보장은 없다. 오래된 Claude 필드를 즉시 삭제하지 않는다.
 - 세션 시작 전에 종료된 Codex task에는 임의 UUID로 재개 가능한 세션이 있는 것처럼 기록하지 않는다. 실제 ID를 받기 전과 후를 구분한다.
