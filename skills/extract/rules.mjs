@@ -3,6 +3,7 @@
 // 결과 하나만으로 가를 수 있는 규칙은 check 함수를 둔다. 레포나 패킷이 있어야 가르는 규칙(인용 대조, 기준 커밋의 경로,
 // 구성 이름)은 needs만 적는다: 앱의 반영 검사가 구현하고, 여기의 check는 ctx로 준 것만 본다.
 // 렌즈 카드의 Example은 통과하고, skills/extract/counter/<규칙>.json은 그 규칙에서만 실패해야 한다(check.mjs).
+import { inventoryProblems } from './build-index.mjs';
 
 /** 결과 안의 모든 값을 경로와 함께 */
 function* walk(node, at = '') {
@@ -98,12 +99,19 @@ export const RULES = [
       return configLists(r).flatMap(([at, v]) => v.filter((c) => !known.has(c)).map((c) => `${at}: ${c}`));
     },
   },
+  {
+    // 앱이 구성별 빌드 인덱스(build-index.mjs)를 만들었을 때만 본다(AI 결정 87·88)
+    id: 'config_active',
+    text: 'Each inventory item is built in every configuration it lists',
+    needs: 'build',
+    check: (r, ctx) => (ctx?.build ? inventoryProblems(r, ctx.build) : []),
+  },
   { id: 'path_at_base', text: "Each code anchor's path exists at the base commit", needs: 'repo' },
   { id: 'quote_match', text: "Each code anchor's quote is on the cited lines", needs: 'repo' },
 ];
 
 /**
- * 결과 하나에 규칙을 돌린다. ctx.configs가 있으면 구성 이름도 본다
+ * 결과 하나에 규칙을 돌린다. ctx.configs가 있으면 구성 이름도, ctx.build(구성별 빌드 인덱스)가 있으면 구성 활성도 본다
  * @returns {{ rule: string, problem: string }[]}
  */
 export function checkResult(result, ctx = {}) {

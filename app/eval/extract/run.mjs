@@ -2,11 +2,13 @@
 // extract run 단위 평가 하네스 (docs/extract-eval.md, requirements-extraction-flow.md 결정 17~23, 28).
 //   node eval/extract/run.mjs --side base --label A --reps 5 [--scenarios e1-twoboard] [--tasks survey,trace-timing]
 //     [--model sonnet] [--effort medium] [--concurrency 2] [--out 폴더] [--calls-file 파일] [--max-calls 150]
-//     [--always-cap] [--dry]
+//     [--always-cap] [--build-index] [--dry]
 // 쪽(지침 판) 하나를 시나리오·과제마다 회차만큼 돌려 runs/<label>.<시나리오>.<과제>.<회차>/run.json에 남긴다.
 // 채점은 score.mjs, 집계와 비교는 report.mjs가 한다. A/A는 같은 쪽을 다른 --label로 두 번 돌린다.
 // 사용량: run을 띄우기 전마다 guard(usage.mjs)가 주간 사용률을 보고 남은 비율이 하한에 닿으면 멈춘다(결정 28).
 // 사용량 한도로 실패하면(결정 29) 5시간 창은 재설정 시각까지 기다렸다 같은 run부터 잇고, 주간이면 멈춘다.
+// --build-index: 시나리오마다 구성별 빌드 인덱스를 만들어(C 컴파일러 필요) 제출 때 규칙 config_active로 검사하고 걸리면
+// 2회까지 되돌린다(AI 결정 87·88). 기본은 끔(기준선과 지금까지의 측정 조건). 인덱스는 결과 폴더에 build-index.<시나리오>.json으로 남긴다.
 // --dry는 가짜 claude(test/support/fake-claude/print-run.mjs)로 하네스만 확인한다(사용량 없음).
 import fs from 'node:fs'
 import path from 'node:path'
@@ -14,6 +16,8 @@ import { parseArgs } from 'node:util'
 import { cleanEnv } from '../lib/env.mjs'
 import { isMain } from '../lib/util.mjs'
 import { runBin } from './lib/claude-bin.mjs'
+import { buildIndex } from './lib/build-index.mjs'
+import { findCompiler } from './lib/cc.mjs'
 import { runOne, WORK_ROOT } from './lib/runner.mjs'
 import { sideId } from './lib/sides.mjs'
 import { guard, logCall } from './lib/usage.mjs'
@@ -63,6 +67,7 @@ async function main() {
       'max-calls': { type: 'string', default: '150' },
       'calls-file': { type: 'string' },
       'always-cap': { type: 'boolean', default: false },
+      'build-index': { type: 'boolean', default: false },
       dry: { type: 'boolean', default: false },
       'fake-plan': { type: 'string' },
     },
@@ -93,10 +98,27 @@ async function main() {
     tasks,
     reps: Number(v.reps),
     dry: v.dry,
+    buildIndex: v['build-index'],
     bin,
   }
   fs.writeFileSync(path.join(outDir, `meta.${label}.json`), JSON.stringify(meta, null, 2))
   console.log(`쪽 ${side}, 이름표 ${label}, run ${items.length}개 → ${outDir}`)
+
+  /** @type {Record<string, object>} */
+  const indexes = {}
+  if (v['build-index']) {
+    const cc = findCompiler()
+    if (!cc) throw new Error('--build-index에는 C 컴파일러(clang, zig cc)가 있어야 한다')
+    for (const id of scenarios) {
+      const { dir, scenario } = loadScenario(id)
+      indexes[id] = buildIndex(path.join(dir, 'repo'), scenario.build, cc)
+      fs.writeFileSync(
+        path.join(outDir, `build-index.${id}.json`),
+        JSON.stringify(indexes[id]) + '\n',
+      )
+    }
+    console.log(`빌드 인덱스: ${scenarios.join(', ')}(제출 검사 config_active)`)
+  }
 
   const done = new Set(
     fs.existsSync(path.join(outDir, 'runs'))
@@ -153,6 +175,7 @@ async function main() {
         fakePlan: v['fake-plan'] ? path.resolve(v['fake-plan']) : undefined,
         softMs: Number(v['soft-min']) * 60_000,
         hardMs: Number(v['hard-min']) * 60_000,
+        buildIndex: indexes[item.scenario.id] ?? null,
       })
       if (rec.observedUsage) observed = rec.observedUsage
       if (!v.dry)
@@ -163,8 +186,9 @@ async function main() {
           cost: rec.result?.total_cost_usd ?? null,
         })
       const cost = rec.result?.total_cost_usd
+      const denials = rec.submitCheck?.denials ? ` 제출 되돌림 ${rec.submitCheck.denials}` : ''
       console.log(
-        `${rec.id}: ${rec.failure ?? 'ok'} ${(rec.ms / 60000).toFixed(1)}분 ${cost !== undefined ? `$${cost.toFixed(3)}` : ''} (${g.why}, ${Math.round((Date.now() - t0) / 1000)}s)`,
+        `${rec.id}: ${rec.failure ?? 'ok'}${denials} ${(rec.ms / 60000).toFixed(1)}분 ${cost !== undefined ? `$${cost.toFixed(3)}` : ''} (${g.why}, ${Math.round((Date.now() - t0) / 1000)}s)`,
       )
       if (rec.failure === 'usage_limit') {
         queue.unshift(item)

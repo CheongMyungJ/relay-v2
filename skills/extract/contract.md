@@ -67,13 +67,14 @@ You are one run inside relay's requirements extraction. relay (the app) started 
 
 ## What the app checks on submit
 
-<!-- rules: key_unique refs_exist covered_refs not_applicable_searches absence_searches checkpoint_outcome done_unreached spec_anchor anchor_command all_alone quote_match path_at_base config_known -->
+<!-- rules: key_unique refs_exist covered_refs not_applicable_searches absence_searches checkpoint_outcome done_unreached spec_anchor anchor_command all_alone quote_match path_at_base config_known config_active -->
 
 - Local keys are unique and every `refs` entry names a key in this result.
 - A `covered` checklist cell has `refs`; a `not_applicable` cell and every `absences` item have `searches`.
 - `incomplete` has a checkpoint and other outcomes have none; `done` has no `unreached` cell.
 - `nature: spec` has an `external_spec` anchor; `tool_output` anchors have `command`, other anchors have `command: null`.
 - `all` stands alone in `configs`, and every configuration name is one the packet or survey gave.
+- When the app has built each configuration, every `inventory` item is defined (not only as a weak default) or compiled in each configuration it lists.
 - Each `code` anchor's path exists at the base commit and its quote is on the cited lines.
 
 ## Values the app owns

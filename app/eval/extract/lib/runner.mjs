@@ -4,6 +4,8 @@
 // 백그라운드 작업 없음. worktree가 기준과 다르면 관문(0이어야 함) 위반으로 남긴다(결정 23, 39).
 // 부드러운 마감(결정 25): 마감이 지나면 훅이 탐색 도구를 PreToolUse에서 거부하며 미완료와 checkpoint를 내라고 한다.
 // 하드 상한이 지나면 프로세스 트리를 끝내고 실패로 친다.
+// 제출 검사(결정 13·45의 1번 길, AI 결정 88): o.buildIndex(구성별 빌드 인덱스)가 있으면 StructuredOutput을 PreToolUse에서
+// 규칙 config_active로 검사해 걸리면 이유와 함께 거부한다. 되돌림은 2회까지이고 그 뒤의 제출은 그대로 받아 남은 문제를 기록한다.
 import { execFileSync, spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
@@ -11,12 +13,15 @@ import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import Ajv2020 from 'ajv/dist/2020.js'
+import { checkResult } from '../../../../skills/extract/rules.mjs'
 import { runArgs } from '../../../../skills/extract/run.mjs'
 import { cleanEnv } from '../../lib/env.mjs'
 import { copyTree } from '../../lib/util.mjs'
 import { buildSide } from './sides.mjs'
 
 const TOKEN_ENV = 'RELAY_HOOK_TOKEN'
+const SUBMIT_RULES = ['config_active']
+const MAX_SUBMIT_DENIALS = 2
 const EXPLORE = new Set(['Read', 'Grep', 'Glob', 'Bash'])
 const HOOK_EVENTS = [
   'UserPromptSubmit',
@@ -28,6 +33,22 @@ const HOOK_EVENTS = [
 ]
 export const SOFT_REASON =
   'relay: the soft deadline for this run has passed. Do not explore further. Submit the structured output now: set outcome to incomplete, report what you confirmed, and fill checkpoint with what you checked, what remains and where to look next.'
+/** 제출 검사에 걸렸을 때의 이유(결정 13: 지적된 것만 고치고 다른 판단은 바꾸지 않는다) */
+export function submitReason(problems) {
+  return [
+    "relay: the app's build index for each configuration disagrees with these items:",
+    ...problems.map((p) => `- ${p}`),
+    'Fix only these items: list the configurations whose build defines or compiles them, or correct the anchor if it cites the wrong lines. Keep everything else as it is and submit again.',
+  ].join('\n')
+}
+
+/** 결과 하나의 제출 검사 문제 */
+export function submitProblems(output, buildIndex) {
+  return checkResult(output, { build: buildIndex })
+    .filter((p) => SUBMIT_RULES.includes(p.rule))
+    .map((p) => p.problem)
+}
+
 const FAKE = path.resolve(import.meta.dirname, '../../../test/support/fake-claude/print-run.mjs')
 
 /** 시나리오 레포를 기준 커밋으로. 같은 내용이면 같은 커밋 id가 나오게 작성자와 시각을 고정한다 */
@@ -111,7 +132,7 @@ export function usageLimit(messages) {
  * run 하나.
  * @param {{ scenarioDir: string, scenario: object, task: object, side: string, label: string, rep: number,
  *   model: string, effort: string, outDir: string, workRoot: string, bin: string, dry?: boolean, fakePlan?: string,
- *   softMs: number, hardMs: number }} o
+ *   softMs: number, hardMs: number, buildIndex?: object | null }} o
  */
 export async function runOne(o) {
   const id = `${o.label}.${o.scenario.id}.${o.task.id}.${o.rep}`
@@ -138,6 +159,8 @@ export async function runOne(o) {
   const started = Date.now()
   const hooks = []
   let softHit = false
+  /** @type {{ at: number, problems: string[], denied: boolean }[]} */
+  const submits = []
   const server = http.createServer((req, res) => {
     let text = ''
     req.on('data', (c) => (text += c))
@@ -151,7 +174,20 @@ export async function runOne(o) {
       }
       hooks.push({ at: Date.now() - started, event, body })
       let answer = {}
-      if (
+      if (event === 'PreToolUse' && body.tool_name === 'StructuredOutput' && o.buildIndex) {
+        const problems = submitProblems(body.tool_input ?? {}, o.buildIndex)
+        const denied =
+          problems.length > 0 && submits.filter((x) => x.denied).length < MAX_SUBMIT_DENIALS
+        submits.push({ at: Date.now() - started, problems, denied })
+        if (denied)
+          answer = {
+            hookSpecificOutput: {
+              hookEventName: 'PreToolUse',
+              permissionDecision: 'deny',
+              permissionDecisionReason: submitReason(problems),
+            },
+          }
+      } else if (
         event === 'PreToolUse' &&
         EXPLORE.has(body.tool_name) &&
         Date.now() - started > o.softMs
@@ -316,6 +352,15 @@ export async function runOne(o) {
         }
       : null,
     softDeadlineHit: softHit,
+    // 제출 검사(o.buildIndex가 있을 때만): 제출마다 걸린 문제와 거부 여부. remaining은 받아들인 제출에 남은 문제
+    submitCheck: o.buildIndex
+      ? {
+          rules: SUBMIT_RULES,
+          submits,
+          denials: submits.filter((x) => x.denied).length,
+          remaining: output ? submitProblems(output, o.buildIndex) : null,
+        }
+      : null,
     worktreeChanged: changed,
     schemaValid,
     schemaErrors: schemaValid

@@ -3,15 +3,31 @@
 // 2. 함정(traps/*.json)이 해당 지표에서 잡힌다
 // 3. 채점 규칙(앵커 대조, 구성, 수치, 판정 읽기), 사용량 읽기, 사용량 한도 가르기, 집계
 // 4. 하네스를 가짜 claude(dry)로 끝까지 돌린다: 끝 판정, worktree 변경, 스키마 검사
+// 5. 구성별 빌드 인덱스와 제출 검사 config_active(AI 결정 87·88. 컴파일이 드는 경우는 컴파일러가 없으면 건너뛴다)
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import Ajv2020 from 'ajv/dist/2020.js'
 import { describe, expect, it } from 'vitest'
+import {
+  activeLines,
+  elfSymbols,
+  inventoryProblems,
+  mergeLines,
+  mergeSymbols,
+} from '../../../skills/extract/build-index.mjs'
+import { buildIndex } from '../extract/lib/build-index.mjs'
+import { findCompiler } from '../extract/lib/cc.mjs'
 import { runBin } from '../extract/lib/claude-bin.mjs'
 import { applyOps, mergeJudge, readReference, readTraps } from '../extract/lib/fixtures.mjs'
 import { judgeArgs } from '../extract/lib/judge.mjs'
-import { renderPacket, runOne, usageLimit } from '../extract/lib/runner.mjs'
+import {
+  renderPacket,
+  runOne,
+  submitProblems,
+  submitReason,
+  usageLimit,
+} from '../extract/lib/runner.mjs'
 import {
   applyJudge,
   checkAnchors,
@@ -585,6 +601,214 @@ describe('하네스', () => {
       fs.rmSync(root, { recursive: true, force: true })
     }
   }, 120_000)
+})
+
+const cc = findCompiler()
+
+describe('구성별 빌드 인덱스와 제출 검사', () => {
+  it('전처리 출력의 줄 표시로 살아 있는 줄을 모은다: 빠진 구간, 레포 밖 파일, 지시문 줄', () => {
+    const text = [
+      '# 1 "src/a.c"',
+      '# 1 "<built-in>" 1',
+      '#define __thumb__ 1',
+      '# 1 "src/a.c" 2',
+      '# 1 "./include/b.h" 1',
+      'extern int x;',
+      '#define FEAT 0',
+      '# 2 "src/a.c" 2',
+      '',
+      'int x;',
+      '# 12 "src/a.c"',
+      'int use(void) { return x; }',
+      '# 1 "/usr/include/stdint.h" 1',
+      'typedef int int32_t;',
+    ].join('\n')
+    const lines = activeLines(text, '/repo')
+    expect(Object.keys(lines).sort()).toEqual(['include/b.h', 'src/a.c'])
+    expect([...lines['include/b.h']]).toEqual([1, 2])
+    expect([...lines['src/a.c']]).toEqual([3, 12])
+    expect(mergeLines([lines, { 'src/a.c': new Set([4, 5]) }])['src/a.c']).toEqual([
+      [3, 5],
+      [12, 12],
+    ])
+  })
+
+  it('심볼을 합친다: 강한 정의가 하나라도 있으면 strong', () => {
+    expect(
+      mergeSymbols([
+        [{ name: 'H', bind: 'weak', type: 'func' }],
+        [
+          { name: 'H', bind: 'global', type: 'func' },
+          { name: 'W', bind: 'weak', type: 'func' },
+        ],
+      ]),
+    ).toEqual({ H: 'strong', W: 'weak' })
+  })
+
+  it('config_active: 심볼은 구성마다 강한 정의, 아니면 인용한 줄이 컴파일되는지 본다', () => {
+    const code = (p, n) => ({ kind: 'code', path: p, start: n, end: n, quote: '', command: null })
+    const index = {
+      version: 1,
+      configs: {
+        lo: {
+          symbols: { Reset_Handler: 'strong', TIM4_IRQHandler: 'weak' },
+          lines: { 'src/cmd.c': [[1, 20]] },
+        },
+        hi: {
+          symbols: { Reset_Handler: 'strong', TIM4_IRQHandler: 'strong' },
+          lines: { 'src/cmd.c': [[1, 30]] },
+        },
+      },
+    }
+    const item = (key, name, configs, anchors = []) => ({ key, name, configs, anchors })
+    const problems = inventoryProblems(
+      {
+        inventory: [
+          item('i1', 'Reset_Handler', ['all']),
+          item('i2', 'TIM4_IRQHandler', ['all']),
+          item('i3', 'TIM4_IRQHandler', ['hi', 'gamma']),
+          item('i4', 'SET_SPEED', ['lo', 'hi'], [code('src/cmd.c', 25)]),
+          item('i5', 'GET_SPEED', ['all'], [code('src/cmd.c', 5), code('Makefile', 3)]),
+          item('i6', 'DMA1 channel 2', ['all'], [code('src/dma.c', 9)]),
+          item('i7', 'Missing_Handler', ['lo']),
+        ],
+      },
+      index,
+    )
+    expect(problems).toEqual([
+      'inventory i2 (TIM4_IRQHandler): configuration lo has only a weak default definition',
+      'inventory i4 (SET_SPEED): in configuration lo the cited lines are not compiled (src/cmd.c:25)',
+    ])
+    expect(
+      inventoryProblems({ inventory: [item('i2', 'TIM4_IRQHandler', ['all'])] }, null),
+    ).toEqual([])
+    expect(submitReason(problems)).toMatch(
+      /^relay: .*\n- inventory i2 .*\n- inventory i4 .*\nFix only/,
+    )
+  })
+
+  it.skipIf(!cc)('ELF 심볼 표: 강한 정의, weak, 정적 함수는 남고 정의 없는 참조는 빠진다', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'relay-extract-elf-'))
+    try {
+      fs.writeFileSync(
+        path.join(tmp, 'a.c'),
+        [
+          'extern int ext;',
+          'void Default_Handler(void) { for (;;) {} }',
+          'void TIM9_IRQHandler(void) __attribute__((weak, alias("Default_Handler")));',
+          'static int helper(int v) { return v + ext; }',
+          'int counter;',
+          'int use(void) { return helper(counter); }',
+          '',
+        ].join('\n'),
+      )
+      const index = buildIndex(
+        tmp,
+        { cpu: 'cortex-m3', includes: [], configs: { x: { defines: [], sources: ['a.c'] } } },
+        cc,
+      )
+      const sym = index.configs.x.symbols
+      expect(sym).toMatchObject({
+        Default_Handler: 'strong',
+        TIM9_IRQHandler: 'weak',
+        helper: 'strong',
+        counter: 'strong',
+        use: 'strong',
+      })
+      expect(sym.ext).toBeUndefined()
+      expect(index.configs.x.lines['a.c']).toEqual([[1, 6]])
+      expect(() => elfSymbols(Buffer.from('not an object file at all, just text'))).toThrow()
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true })
+    }
+  })
+
+  // 개발용 시나리오에서 config_active가 잡아야 하는 survey 함정(구성 병합). 다른 함정은 다른 지표의 몫이라 걸리지 않아야 한다
+  const CAUGHT = {
+    'e1-twoboard': ['survey-fan-everywhere'],
+    'e2-gateway': ['survey-fc16-everywhere'],
+  }
+  it.skipIf(!cc).each(Object.keys(CAUGHT))(
+    '%s: reference survey는 통과하고, 구성 병합 함정만 걸린다',
+    (id) => {
+      const { dir, scenario } = loadScenario(id)
+      const index = buildIndex(path.join(dir, 'repo'), scenario.build, cc)
+      const { out } = readReference(dir, 'survey')
+      expect(submitProblems(out, index)).toEqual([])
+      const caught = readTraps(dir)
+        .filter((t) => t.task === 'survey')
+        .filter((t) => submitProblems(applyOps(out, t.ops), index).length > 0)
+        .map((t) => t.name)
+      expect(caught).toEqual(CAUGHT[id])
+    },
+    60_000,
+  )
+
+  it.skipIf(!cc)(
+    '하네스: 제출 검사에 걸리면 2회까지 되돌리고, 그 뒤 제출은 받아 남은 문제를 기록한다',
+    async () => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'relay-extract-submit-'))
+      try {
+        const { dir, scenario } = loadScenario('e1-twoboard')
+        const task = scenario.tasks.find((t) => t.id === 'survey')
+        const { out } = readReference(dir, 'survey')
+        const merged = applyOps(
+          out,
+          readTraps(dir).find((t) => t.name === 'survey-fan-everywhere').ops,
+        )
+        const index = buildIndex(path.join(dir, 'repo'), scenario.build, cc)
+        const planFile = (name, p) => {
+          const f = path.join(root, `${name}.json`)
+          fs.writeFileSync(f, JSON.stringify(p))
+          return f
+        }
+        const common = {
+          scenarioDir: dir,
+          scenario,
+          task,
+          side: 'base',
+          model: 'sonnet',
+          effort: 'medium',
+          outDir: root,
+          workRoot: path.join(root, 'work'),
+          bin: 'claude',
+          dry: true,
+          softMs: 60_000,
+          hardMs: 60_000,
+          buildIndex: index,
+          rep: 1,
+        }
+        const fixed = await runOne({
+          ...common,
+          label: 'fixed',
+          fakePlan: planFile('fixed', { outputs: [merged, out] }),
+        })
+        expect(fixed.failure).toBeNull()
+        expect(fixed.submitCheck.denials).toBe(1)
+        expect(fixed.submitCheck.remaining).toEqual([])
+        expect(fixed.submitCheck.submits[0].problems[0]).toMatch(/SET_FAN.*alpha/)
+        const stuck = await runOne({
+          ...common,
+          label: 'stuck',
+          fakePlan: planFile('stuck', { outputs: [merged, merged, merged] }),
+        })
+        expect(stuck.failure).toBeNull()
+        expect(stuck.submitCheck.denials).toBe(2)
+        expect(stuck.submitCheck.submits.map((x) => x.denied)).toEqual([true, true, false])
+        expect(stuck.submitCheck.remaining).toHaveLength(1)
+        const off = await runOne({
+          ...common,
+          buildIndex: null,
+          label: 'off',
+          fakePlan: planFile('off', { outputs: [merged] }),
+        })
+        expect(off.submitCheck).toBeNull()
+      } finally {
+        fs.rmSync(root, { recursive: true, force: true })
+      }
+    },
+    120_000,
+  )
 })
 
 describe('집계', () => {
