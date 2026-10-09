@@ -226,6 +226,8 @@ async function run(): Promise<Result> {
         partial = true
         const r = await h.relay.partialRequirements(key)
         if (!r.ok) throw new Error(`부분 분석으로 넘기지 못함: ${r.error}`)
+        // 부분 분석으로 넘기면 앱이 루프를 다시 시작한다([재개]가 필요 없다)
+        continue
       } else if (req.halt.reason === 'decisions') {
         const sent = req.decisions
           .filter((d) => d.pending === null)
