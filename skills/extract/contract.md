@@ -37,6 +37,7 @@ You are one run inside relay's requirements extraction. relay (the app) started 
 - Every claim names its configurations, as named in the packet or in the survey `configs`.
 - Use `all` only after checking that the code is active in every confirmed configuration: build files, command-line defines, force-included and generated headers, `#if` guards, per-configuration source lists, run-time registration. Anchor what you checked.
 - When configurations differ, do not merge them: write one item (or one `values` entry) per configuration or per group that behaves the same.
+- A value can have the same source text in every configuration and still differ after conversion (a tick rate, clock or divisor that differs per configuration). Compute it per configuration, or give one entry per configuration with the conversion left open, instead of `all`.
 - A configuration the build files do not produce is `candidate` in the survey. Leave it out of `all` and name it separately where it matters.
 
 ## Statements

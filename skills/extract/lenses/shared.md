@@ -33,7 +33,6 @@ One piece of shared state (a variable, a buffer, a peripheral register, a DMA bu
 - "No other writer" is an absence claim: put it in `absences` with the searches.
 - A single aligned load or store can be atomic on the target while a multi-word value or a read-modify-write is not; say which, and on what basis.
 - Priorities set only in vendor initialization outside scope are `unknown`; leave the cell `unknown` and name the missing anchor in `unknowns`.
-- A period or timeout that paces an access can have the same source text in every configuration and still differ after conversion (a tick rate or clock that differs per configuration). Give one `values` entry per configuration with the converted value, or with the conversion left open, instead of `all`.
 
 ## Phrasing
 
