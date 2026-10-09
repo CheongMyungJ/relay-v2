@@ -101,7 +101,7 @@ const DEP_WITH_VALUE = new Set(['-MF', '-MT', '-MQ'])
 
 /**
  * `make -n -B` 출력에서 C 소스의 컴파일 명령을 모은다. `make[1]: Entering directory '…'`로 폴더를 따라가고, 줄의 앞
- * `cd <dir> &&`도 따른다. 컴파일러가 아니거나 -c가 없거나 C 소스가 아니면 뺀다
+ * `cd <dir> &&`도 따른다. 컴파일러가 아니거나 C 소스가 없으면(목적 파일만 링크) 뺀다
  */
 export function compileCommands(text: string, root: string): CompileCommand[] {
   const out: CompileCommand[] = []
@@ -120,8 +120,7 @@ export function compileCommands(text: string, root: string): CompileCommand[] {
     const words = shellWords(raw.replace(/^\s*[@+-]+/, ''))
     let cmd: string[] = []
     const flush = () => {
-      const c = parseCompile(cmd, cwd)
-      if (c) out.push(c)
+      out.push(...parseCompile(cmd, cwd))
       if (cmd[0] === 'cd' && cmd[1]) cwd = path.resolve(cwd, cmd[1])
       cmd = []
     }
@@ -134,23 +133,40 @@ export function compileCommands(text: string, root: string): CompileCommand[] {
   return out
 }
 
-function parseCompile(argv: readonly string[], cwd: string): CompileCommand | null {
+/** 링크에만 쓰는 플래그(값을 받는 것 포함). 컴파일하고 링크하는 한 줄에서 뺀다 */
+const LINK_WITH_VALUE = new Set(['-T', '-L', '-l', '-Xlinker'])
+const LINK_FLAG =
+  /^(-nostdlib|-nostartfiles|-nodefaultlibs|-static|-shared|-s|-Wl,.*|-L.+|-l.+|-T.+|--specs=.*|-Xlinker)$/
+
+/**
+ * 컴파일러 한 줄을 C 소스마다의 컴파일 명령으로. `-c`가 있으면 그 소스 하나, 없으면(컴파일하고 링크하는 한 줄, 작은
+ * 레거시 make에 흔하다) 줄의 C 소스마다이고 링크 플래그를 뺀다
+ */
+function parseCompile(argv: readonly string[], cwd: string): CompileCommand[] {
   const compiler = argv[0]
-  if (!compiler || !COMPILER.test(compiler) || !argv.includes('-c')) return null
+  if (!compiler || !COMPILER.test(compiler)) return []
+  const compileOnly = argv.includes('-c')
   const args: string[] = []
-  let source: string | null = null
+  const sources: string[] = []
   for (let i = 1; i < argv.length; i++) {
     const a = argv[i] ?? ''
     if (a === '-c' || DEP_FLAGS.has(a)) continue
-    if (a === '-o' || DEP_WITH_VALUE.has(a)) {
+    if (a === '-o' || DEP_WITH_VALUE.has(a) || (!compileOnly && LINK_WITH_VALUE.has(a))) {
       i++
       continue
     }
     if (/^-o./.test(a) || /^-M[FTQ]./.test(a)) continue
-    if (!a.startsWith('-') && C_SOURCE.test(a)) source = a
+    if (!compileOnly && LINK_FLAG.test(a)) continue
+    if (!a.startsWith('-') && C_SOURCE.test(a)) sources.push(a)
+    else if (!a.startsWith('-') && /\.(o|a|obj|ld|s|S)$/.test(a)) continue
     else args.push(a)
   }
-  return source ? { compiler, args, source, cwd } : null
+  return (compileOnly ? sources.slice(-1) : sources).map((source) => ({
+    compiler,
+    args,
+    source,
+    cwd,
+  }))
 }
 
 /** 대체 컴파일러(clang 계열)에 넘길 인자: 정의, 포함 경로, 강제 포함, 표준만 (벤더 플래그는 모른다) */

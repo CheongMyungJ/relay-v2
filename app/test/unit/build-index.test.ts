@@ -22,7 +22,7 @@ describe('빌드 명령 읽기 (AI 결정 118)', () => {
     ])
   })
 
-  it('컴파일 명령: 컴파일러이고 -c와 C 소스가 있는 것만, -o·의존성 플래그는 빼고 폴더 이동을 따른다', () => {
+  it('컴파일 명령: 컴파일러이고 C 소스가 있는 것만, -o·의존성·링크 플래그는 빼고 폴더 이동을 따른다', () => {
     const out = compileCommands(
       [
         'mkdir -p out',
@@ -32,8 +32,10 @@ describe('빌드 명령 읽기 (AI 결정 118)', () => {
         'cc -DLO -c uart.c -oout/uart.o',
         "make[1]: Leaving directory '/w/src/drivers'",
         'cd lib && gcc-12 -O2 -c b.c -o b.o',
-        'arm-none-eabi-gcc -o fw.elf out/a.o out/uart.o',
+        'arm-none-eabi-gcc -T fw.ld -nostdlib -o fw.elf out/a.o out/uart.o -lgcc',
         'cc -c start.S -o start.o',
+        // 컴파일하고 링크하는 한 줄: C 소스마다, 링크 플래그는 뺀다
+        'arm-none-eabi-gcc -mcpu=cortex-m3 -DB=1 -Iinc -nostdlib -T vendor/m3.ld -Wl,-Map=x.map -o build/fw.elf src/m.c vendor/s.c start.s -lc',
       ].join('\n'),
       '/w/src',
     )
@@ -46,6 +48,12 @@ describe('빌드 명령 읽기 (AI 결정 118)', () => {
       },
       { compiler: 'cc', args: ['-DLO'], source: 'uart.c', cwd: '/w/src/drivers' },
       { compiler: 'gcc-12', args: ['-O2'], source: 'b.c', cwd: '/w/src/lib' },
+      ...['src/m.c', 'vendor/s.c'].map((source) => ({
+        compiler: 'arm-none-eabi-gcc',
+        args: ['-mcpu=cortex-m3', '-DB=1', '-Iinc'],
+        source,
+        cwd: '/w/src',
+      })),
     ])
   })
 

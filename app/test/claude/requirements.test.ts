@@ -91,6 +91,7 @@ const readJson = <T>(file: string) => JSON.parse(fs.readFileSync(file, 'utf8')) 
 
 async function run(): Promise<Result> {
   const ui = new ScreenUi()
+  fs.mkdirSync(path.join(APP, 'test-results'), { recursive: true })
   const planDir = fs.mkdtempSync(path.join(APP, 'test-results', 'req-plan-'))
   const h = await harness(
     dry
