@@ -54,6 +54,8 @@ node eval/extract/report.mjs eval/extract/results/<폴더> --pair A,A2 --out 보
 node eval/extract/report.mjs eval/extract/results/<폴더> --pair B,N --adopt --out 보고서.md --runs-out 보고서.runs.json
 # 저장한 기준선(git에 있음)을 함께 읽기
 node eval/extract/report.mjs eval/extract/results/<폴더> --runs eval/extract/reports/2026-10-09-base-AA.runs.json --pair B,A --adopt
+# 지시 바이트가 같은 층의 run을 고친 판의 이름표로 묶기(시나리오.과제 단위)
+node eval/extract/report.mjs eval/extract/results/<폴더> --as C=C2@e1-twoboard.trace-timing --pair C2,N --adopt
 ```
 
 - 기본: 모델 sonnet, effort medium, 동시 2, 부드러운 마감 15분, 하드 상한 30분(결정 25, 30), 판정 sonnet.
@@ -109,7 +111,8 @@ recall·must_not·resolvable 항목마다 found/violated/left_unknown과 근거 
 - 채택한 판은 봉인 hold-out에서 같은 규칙으로 한 번 확인한다.
 
 판정은 `report.mjs --pair 새,기준 --adopt`가 코드로 한다(AI 결정 75). 2026-10-09 6차 작업에서 첫 지침 판(v1)과 한 번 고친 판은
-모두 채택하지 않았다(재현율 퇴보, requirements-extraction-flow.md 17.6절).
+모두 채택하지 않았다(재현율 퇴보, requirements-extraction-flow.md 17.6절). 7차 작업의 v2와 그 고친 판(C2)은 재현율이 기준선과 같았으나 PM-A 구간 상한이
+0.005로 0을 넘지 못해 채택하지 않았다(17.7절).
 
 근거: A/A의 차이가 PM-A 0.10 [−0.02, 0.22], PM-B 0.005 [−0.011, 0.020]였다(2026-10-09, `app/eval/extract/reports/2026-10-09-base-AA.md`). 기준선은 PM-A 0.25/run, PM-B 0.965이고 e1은 천장에 가깝다(개선은 주로 e2에서 갈린다).
 

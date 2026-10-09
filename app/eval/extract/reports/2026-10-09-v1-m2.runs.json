@@ -10,11 +10,9 @@
    "rep": 1,
    "failure": null,
    "pmA": 0,
-   "pmB": 0.9583333333333334,
+   "pmB": 1,
    "violated": [],
-   "missed": [
-    "r.inv.dma_rx"
-   ],
+   "missed": [],
    "softened": [],
    "anchors": {
     "total": 44,
@@ -47,13 +45,11 @@
    "rep": 2,
    "failure": null,
    "pmA": 1,
-   "pmB": 0.9583333333333334,
+   "pmB": 1,
    "violated": [
     "m.fc23"
    ],
-   "missed": [
-    "r.inv.dma_rx"
-   ],
+   "missed": [],
    "softened": [],
    "anchors": {
     "total": 43,
@@ -86,11 +82,9 @@
    "rep": 3,
    "failure": null,
    "pmA": 0,
-   "pmB": 0.9583333333333334,
+   "pmB": 1,
    "violated": [],
-   "missed": [
-    "r.inv.dma_rx"
-   ],
+   "missed": [],
    "softened": [
     "v.lite"
    ],
@@ -125,11 +119,10 @@
    "rep": 4,
    "failure": null,
    "pmA": 0,
-   "pmB": 0.9166666666666666,
+   "pmB": 0.9583333333333334,
    "violated": [],
    "missed": [
-    "r.sv.forced_include",
-    "r.inv.dma_rx"
+    "r.sv.forced_include"
    ],
    "softened": [
     "v.lite"
@@ -165,13 +158,12 @@
    "rep": 5,
    "failure": null,
    "pmA": 0,
-   "pmB": 0.8333333333333334,
+   "pmB": 0.875,
    "violated": [],
    "missed": [
     "r.inv.sensor",
     "r.inv.wdog",
-    "r.inv.cfg",
-    "r.inv.dma_rx"
+    "r.inv.cfg"
    ],
    "softened": [],
    "anchors": {
@@ -958,11 +950,10 @@
    "rep": 1,
    "failure": null,
    "pmA": 0,
-   "pmB": 0.9166666666666666,
+   "pmB": 0.9583333333333334,
    "violated": [],
    "missed": [
-    "r.sv.forced_include",
-    "r.inv.dma_rx"
+    "r.sv.forced_include"
    ],
    "softened": [
     "v.lite"
@@ -998,7 +989,7 @@
    "rep": 2,
    "failure": null,
    "pmA": 1,
-   "pmB": 0.75,
+   "pmB": 0.7916666666666666,
    "violated": [
     "m.fc23"
    ],
@@ -1007,8 +998,7 @@
     "r.inv.fc06",
     "r.inv.fc16",
     "r.inv.fc43",
-    "r.inv.fc08",
-    "r.inv.dma_rx"
+    "r.inv.fc08"
    ],
    "softened": [
     "v.fc16_configs"
@@ -1044,11 +1034,10 @@
    "rep": 3,
    "failure": null,
    "pmA": 0,
-   "pmB": 0.9166666666666666,
+   "pmB": 0.9583333333333334,
    "violated": [],
    "missed": [
-    "r.sv.forced_include",
-    "r.inv.dma_rx"
+    "r.sv.forced_include"
    ],
    "softened": [],
    "anchors": {
@@ -1082,7 +1071,7 @@
    "rep": 4,
    "failure": null,
    "pmA": 0,
-   "pmB": 0.7083333333333334,
+   "pmB": 0.75,
    "violated": [],
    "missed": [
     "r.sv.forced_include",
@@ -1090,8 +1079,7 @@
     "r.inv.fc06",
     "r.inv.fc16",
     "r.inv.fc43",
-    "r.inv.fc08",
-    "r.inv.dma_rx"
+    "r.inv.fc08"
    ],
    "softened": [],
    "anchors": {
@@ -1501,11 +1489,10 @@
    "rep": 3,
    "failure": null,
    "pmA": 0,
-   "pmB": 0.7777777777777778,
+   "pmB": 0.8888888888888888,
    "violated": [],
    "missed": [
-    "r.tim.erase",
-    "r.tim.tick"
+    "r.tim.erase"
    ],
    "softened": [],
    "anchors": {
@@ -1727,11 +1714,9 @@
    "rep": 1,
    "failure": null,
    "pmA": 0,
-   "pmB": 0.9583333333333334,
+   "pmB": 1,
    "violated": [],
-   "missed": [
-    "r.inv.dma_rx"
-   ],
+   "missed": [],
    "softened": [],
    "anchors": {
     "total": 38,
@@ -1808,7 +1793,7 @@
    "rep": 3,
    "failure": null,
    "pmA": 3,
-   "pmB": 0.875,
+   "pmB": 0.9166666666666666,
    "violated": [
     "m.merge.fc08",
     "m.merge.fc16",
@@ -1816,8 +1801,7 @@
    ],
    "missed": [
     "r.sv.forced_include",
-    "r.inv.fc03",
-    "r.inv.dma_rx"
+    "r.inv.fc03"
    ],
    "softened": [
     "v.lite"
@@ -1853,11 +1837,10 @@
    "rep": 4,
    "failure": null,
    "pmA": 0,
-   "pmB": 0.9166666666666666,
+   "pmB": 0.9583333333333334,
    "violated": [],
    "missed": [
-    "r.sv.forced_include",
-    "r.inv.dma_rx"
+    "r.sv.forced_include"
    ],
    "softened": [],
    "anchors": {
