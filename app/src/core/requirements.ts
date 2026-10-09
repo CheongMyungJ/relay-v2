@@ -1628,10 +1628,30 @@ const evidenceRefs = (body: unknown, ev: Map<string, Evidence>): string[] => {
 }
 
 const NEEDS_LABEL: Readonly<Record<string, string>> = {
+  external_doc: '외부 문서(데이터시트, 명세)',
+  measurement: '실제 하드웨어의 측정',
+  toolchain: '돌리지 못한 빌드나 도구',
+  other: '기타(질문이 묻는 결정이나 자료, 예: 제품 의도, 기대 동작)',
+}
+
+/** 미확정의 필요한 자료를 셀 때의 짧은 이름 */
+const NEEDS_SHORT: Readonly<Record<string, string>> = {
   external_doc: '외부 문서',
   measurement: '측정',
   toolchain: '툴체인',
   other: '기타',
+}
+
+/**
+ * 요구사항 후보의 근거 성격(run 결과의 basis). 코드·실행 출력은 지금 코드에서 확인한 동작이고, 문서·외부 명세·추론은
+ * 코드로 확인되지 않은 것이다. 어느 쪽이든 제품 의도와 채택은 사람이 정한다(결정 1)
+ */
+const BASIS_LABEL: Readonly<Record<string, string>> = {
+  code: '코드에서 확인됨(기준 커밋의 코드)',
+  tool_output: '코드에서 확인됨(실행 출력)',
+  doc_claim: '코드에서 확인되지 않음(문서의 주장)',
+  external_spec: '코드에서 확인되지 않음(외부 명세)',
+  inference: '코드에서 확인되지 않음(추론)',
 }
 
 const BOUNDARY_LABEL: Readonly<Record<string, string>> = {
@@ -1839,6 +1859,11 @@ export function renderExtraction(state: RequirementsState, base: string): string
     const conflictLinks =
       section === 'conflicts' ? state.links.filter((l) => l.kind === 'conflicts') : []
     lines.push('', `## ${title}`, '')
+    if (section === 'requirements' && cs.length)
+      lines.push(
+        '후보마다 근거의 성격을 적는다: "코드에서 확인됨"은 기준 커밋의 코드나 실행 출력으로 확인한 지금 동작이고, "코드에서 확인되지 않음"은 문서·외부 명세·추론이다. 어느 쪽이든 제품 의도와 채택은 확인되지 않은 후보다(사람이 정한다). 코드로 정하지 못한 것은 미확정 절에 있다.',
+        '',
+      )
     if (!cs.length && !conflictLinks.length) {
       lines.push('- (없음)')
       continue
@@ -1862,6 +1887,8 @@ export function renderExtraction(state: RequirementsState, base: string): string
         head += ` (까닭: ${b.reason})`
       const cfg = Array.isArray(b.configs) ? ` [${(b.configs as string[]).join(', ')}]` : ''
       const tail: string[] = []
+      if (section === 'requirements' && typeof b.basis === 'string')
+        tail.push(BASIS_LABEL[b.basis] ?? b.basis)
       const at = where(c)
       if (at.length) tail.push(`근거: ${at.join(', ')}`)
       if (section === 'unknowns' && typeof b.needs === 'string')
@@ -1969,7 +1996,7 @@ export function renderExtraction(state: RequirementsState, base: string): string
   const followed = unknowns.filter((c) => followingUnits(state, c).some((u) => u.status === 'done'))
   const answeredUnknowns = unknowns.filter((c) => resolved.has(c.id))
   const needs = unknowns.reduce<Record<string, number>>((m, c) => {
-    const k = NEEDS_LABEL[text(c.body.needs ?? 'other')] ?? text(c.body.needs)
+    const k = NEEDS_SHORT[text(c.body.needs ?? 'other')] ?? text(c.body.needs)
     return { ...m, [k]: (m[k] ?? 0) + 1 }
   }, {})
   const gaps = coverage

@@ -334,6 +334,7 @@ const spec = {
     ['D351', '완료조건: 대상 문서 경로가 제약에', /## Done when[\s\S]*target document's path is in `제약`/, ['spec']],
     ['AI 117', '요구사항 추출: 빌드 허용과 툴체인을 물어 제약에, 앱이 다시 묻는다', /ask whether the analysis may run the repository's build commands[\s\S]*"빌드: 허용 \(툴체인 …\)"[\s\S]*asks again before it builds/, ['requirements']],
     ['AI 122', '요구사항 추출: 서브모듈 안은 경계', /lists submodules, write "서브모듈 안은 경계"/, ['requirements']],
+    ['AI 130', '요구사항 추출: 완료조건은 내용으로, 앱이 그리는 절에 없는 표기·꼴을 요구하지 않음', /Criteria about content, not wording[\s\S]*"코드에서 확인됨" \/ "코드에서 확인되지 않음"[\s\S]*do not add criteria for other labels or formats/, ['requirements']],
     ['AI 117', '요구사항 추출 완료조건: 자료·빌드·경계 줄', /## Done when[\s\S]*`제약` has the 자료, 빌드 and 경계 lines/, ['requirements']],
   ],
   design: [

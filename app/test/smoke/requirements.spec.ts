@@ -123,15 +123,23 @@ test('요구사항 추출: 사람 결정 필요에 패널 양식으로 답하고
 
   // [재개]하면 답을 반영하고 trace run을 돌아 승인 대기가 된다
   await win.locator('.action-bar').getByRole('button', { name: '재개', exact: true }).click()
-  await expect(box).toContainText('run 2/100', { timeout: 60_000 })
-  await expect(box).not.toContainText('h-0001')
   await expect(win.locator('.band')).toContainText('승인 대기', { timeout: 60_000 })
+  // trace 뒤의 integrate, review, summarize까지 run 다섯 (AI 결정 111~113)
+  await expect(box).toContainText('run 5/100')
+  await expect(box).not.toContainText('h-0001')
+  // run 목록 (AI 결정 115): 펼치면 run마다 종류와 결과, 한 줄을 누르면 자세히
+  const runs = box.locator('details.requirements-runs')
+  await runs.locator('summary').click()
+  await expect(runs).toContainText('run 기록 5개')
+  await expect(runs).toContainText('integrate')
+  await expect(runs).toContainText('summarize')
+  await win.screenshot({ path: 'test-results/requirements-runs.png' })
 })
 
 test('설정 화면의 요구사항 추출 절: run 상한을 바꾸면 저장되고 진행 상자에 보인다. 마감이 상한보다 길면 받지 않는다 (결정 31, 102)', async () => {
   const win = await app.firstWindow()
   const box = win.getByLabel('요구사항 추출', { exact: true })
-  await expect(box).toContainText('run 2/100')
+  await expect(box).toContainText('run 5/100')
   await win.locator('.sidebar').getByRole('button', { name: '설정', exact: true }).click()
   const budget = win.getByRole('group', { name: '요구사항 추출 예산' })
   await expect(budget.getByLabel('Work당 run 상한', { exact: true })).toHaveValue('100')
@@ -151,5 +159,69 @@ test('설정 화면의 요구사항 추출 절: run 상한을 바꾸면 저장�
     soft_minutes: 10,
     hard_minutes: 30,
   })
-  await expect(box).toContainText('run 2/50')
+  await expect(box).toContainText('run 5/50')
+})
+
+test('run 상한에 닿으면 [범위 줄이고 계속]과 [부분 분석으로 넘기기]가 보이고, 넘기면 summarize 하나로 끝난다. verify 승인 대기에서 결과를 저장소로 내보낸다 (결정 26, AI 결정 114, 119)', async () => {
+  const win = await app.firstWindow()
+  // 상한 1: survey 하나 뒤에 멈춘다. 새 Work의 가짜 run은 survey, 그리고 부분 분석의 summarize
+  await win.locator('.sidebar').getByRole('button', { name: '설정', exact: true }).click()
+  const budget = win.getByRole('group', { name: '요구사항 추출 예산' })
+  await budget.getByLabel('Work당 run 상한', { exact: true }).fill('1')
+  await win.getByRole('button', { name: '저장', exact: true }).click()
+  await expect(budget).toBeHidden()
+  const plan = path.join(root, 'plan.json')
+  fs.writeFileSync(
+    plan,
+    JSON.stringify({ runs: [extractSurvey(), extractSummarize()].map((o) => ({ outputs: [o] })) }),
+  )
+  fs.rmSync(`${plan}.count`, { force: true })
+
+  await win.getByRole('button', { name: '새 Work' }).click()
+  await win.getByLabel('요청').fill('평균 계산을 요구사항으로 정리해 줘')
+  await win
+    .getByRole('radiogroup', { name: '업무 유형' })
+    .getByRole('radio', { name: '요구사항 추출' })
+    .click()
+  await win.getByRole('button', { name: '시작' }).click()
+  await expect(win.locator('.work-item')).toHaveCount(2, { timeout: 30_000 })
+  const approve = win.getByRole('button', { name: '의도 승인' })
+  await expect(approve).toBeEnabled({ timeout: 60_000 })
+  await approve.click()
+
+  const box = win.getByLabel('요구사항 추출', { exact: true })
+  await expect(box).toContainText('멈춤: run 상한에 닿음', { timeout: 60_000 })
+  await expect(box).toContainText('run 1/1')
+  // [범위 줄이고 계속]: 열린 단위를 골라 메모와 함께 뺀다. 여기서는 열어 보고 닫는다
+  await box.getByRole('button', { name: '범위 줄이고 계속' }).click()
+  const narrow = box.getByRole('group', { name: '범위 줄이기' })
+  await expect(narrow).toContainText('u-0002 trace(command): src/avg.js avg')
+  await expect(narrow.getByRole('button', { name: '빼고 계속' })).toBeDisabled()
+  await win.screenshot({ path: 'test-results/requirements-narrow.png' })
+  await narrow.getByRole('button', { name: '취소' }).click()
+  // [부분 분석으로 넘기기]: 확인하면 열린 단위를 보류로 닫고 summarize 하나를 상한 밖에서 돈다
+  await box.getByRole('button', { name: '부분 분석으로 넘기기' }).first().click()
+  const confirm = box.locator('.notice').filter({ hasText: '보류: 예산 상한' })
+  await expect(confirm).toContainText('열린 단위 1개')
+  await confirm.getByRole('button', { name: '부분 분석으로 넘기기' }).click()
+  await expect(win.locator('.band')).toContainText('승인 대기', { timeout: 60_000 })
+  await expect(box).toContainText('run 2/1')
+  await expect(box).toContainText('부분 분석: 보류한 단위가 있다')
+  await win.screenshot({ path: 'test-results/requirements-partial.png' })
+
+  // extract를 승인하면 verify가 돌고, 승인 대기에서 결과를 저장소로 내보낸다
+  await win.getByRole('button', { name: '승인', exact: true }).click()
+  // 부분 분석은 보류한 단위를 열린 질문으로 남겨 승인 전에 한 번 묻는다
+  const unanswered = win.getByRole('dialog', { name: '답하지 않은 열린 질문' })
+  await expect(unanswered).toContainText('부분 분석이다')
+  await unanswered.getByRole('button', { name: '승인', exact: true }).click()
+  const exportBox = win.getByLabel('결과 내보내기', { exact: true })
+  await expect(exportBox).toBeVisible({ timeout: 60_000 })
+  await expect(exportBox).toContainText('부분 분석')
+  await expect(exportBox.getByLabel('내보낼 폴더', { exact: true })).toHaveValue(
+    /^docs\/requirements\/w-/,
+  )
+  await exportBox.getByRole('button', { name: '결과를 저장소에 커밋' }).click()
+  await expect(exportBox).toContainText('내보냄: docs/requirements/w-', { timeout: 30_000 })
+  await win.screenshot({ path: 'test-results/requirements-export.png' })
 })

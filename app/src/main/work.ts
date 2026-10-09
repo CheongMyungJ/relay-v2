@@ -879,8 +879,9 @@ export class WorkRunner {
       const p = w.requirements
       const task = currentTask(w)
       if (w.type !== 'requirements' || !p) return { ok: false, error: '요구사항 추출 기록이 없음' }
+      // 완료 화면: 승인할 수 있는 verify(승인 대기, 대기, 세션 종료)나 끝난 Work (AI 결정 119)
       const atCompletion =
-        (task?.node === 'verify' && task.status === 'awaiting_approval') || w.status === 'completed'
+        (task?.node === 'verify' && REVIEWABLE.includes(task.status)) || w.status === 'completed'
       if (!atCompletion) return { ok: false, error: 'verify 승인 대기나 끝난 Work에서만 내보낸다' }
       const rel = exportDir(dir || defaultExportDir(w.work_id))
       if (!rel)

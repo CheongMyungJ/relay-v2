@@ -11,16 +11,15 @@
 
 ## Order
 
-1. Read the units and the entry points. For each entry point, handler and command the survey found, search the listing for the claims and units that cover it.
-2. Coverage: for every perspective key, judge each configuration, or each group of configurations that behave the same. `covered` lists in `ids` the claims or units that cover it; `not_applicable` gives the searches that show it does not apply; `unreached` names in `units` the units you propose for it; `unknown` is for a cell the record and a short look at the code cannot settle.
-3. Gaps: propose a unit in `units` for each entry point, handler, command or perspective cell nothing in the record reaches, with a lens, `priority`, `depends_on` and `reason`. A gap a closed unit already covers is not a gap.
-4. Links between earlier claims, by global ID:
+1. Links between earlier claims, by global ID. Go through the listing subject by subject: a symbol, function, command, value or configuration that appears in more than one line, often from different units or runs. Decide for each such pair:
    - `resolves`: an open unknown (from) that later claims (to) answer. Check that their evidence answers the question, and say in `reason` whether wholly or partly. An unknown that needs a datasheet, a measurement or a person stays open: a later claim that repeats a comment or a name is not an answer.
-   - `supersedes`: a later run (a reopened, continued or deeper unit) states the same thing again with different content for the same configurations.
+   - `supersedes`: a later run (a reopened, continued or deeper unit) states the same thing again with different content for the same configurations. The run column tells which is later.
    - `merges`: claims that say the same thing for the same configurations. Claims about different configurations stay separate, even with the same text.
    - `conflicts`: claims that cannot both hold in the same configurations. Check both against the code and say in `reason` which one the code supports, with an anchor.
-5. A link is a pointer for the person who reads the result; it confirms and closes nothing. When unsure, leave the pair unlinked and put the question in `unknowns`.
-6. Links the packet lists as already made stay as they are; add only new ones.
+2. Link each pair you checked: a link is a pointer for the person who reads the result and confirms or closes nothing. Leave a pair unlinked only when you could not check it, and put the question in `unknowns`. Links the packet lists as already made stay as they are; add only new ones.
+3. Read the units and the entry points. For each entry point, handler and command the survey found, search the listing for the claims and units that cover it.
+4. Coverage: for every perspective key, judge each configuration, or each group of configurations that behave the same. `covered` lists in `ids` the claims or units that cover it; `not_applicable` gives the searches that show it does not apply; `unreached` names in `units` the units you propose for it; `unknown` is for a cell the record and a short look at the code cannot settle.
+5. Gaps: propose a unit in `units` for each entry point, handler, command or perspective cell nothing in the record reaches, with a lens, `priority`, `depends_on` and `reason`. A gap a closed unit already covers is not a gap.
 
 ## Done when
 

@@ -33,6 +33,9 @@ import { focusTerm } from './terminals'
 
 type Tab = 'summary' | 'artifacts' | 'changes' | 'verdicts' | 'work' | 'knowledge'
 
+/** 요구사항 추출 결과를 내보낼 수 있는 verify의 상태: 완료 화면이 보이는 때 (core/approval REVIEWABLE, AI 결정 119) */
+const EXPORTABLE: readonly string[] = ['awaiting_approval', 'idle', 'session_ended']
+
 interface Props {
   work: WorkView
   task: TaskView
@@ -68,8 +71,10 @@ export function Panel({ work, task, review, onApproved, onSelectStep, onShowClea
       {work.requirements && task.node === 'extract' ? (
         <RequirementsBox workKey={work.key} req={work.requirements} />
       ) : null}
-      {/* 요구사항 추출 결과를 저장소로 내보내기: 완료 화면(verify 승인 대기)에서 (AI 결정 119) */}
-      {work.requirements && task.node === 'verify' && task.status === 'awaiting_approval' ? (
+      {/* 요구사항 추출 결과를 저장소로 내보내기: 완료 화면(승인할 수 있는 verify나 끝난 Work)에서 (AI 결정 119) */}
+      {work.requirements &&
+      task.node === 'verify' &&
+      (EXPORTABLE.includes(task.status) || work.status === 'completed') ? (
         <RequirementsExport
           workKey={work.key}
           workId={work.key.split('/')[1] ?? ''}

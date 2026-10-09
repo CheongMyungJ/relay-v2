@@ -743,9 +743,12 @@ describe('패킷과 문서 (결정 96, 99)', () => {
     const x = renderExtraction(fold([...revs, t.revision]), 'abc')
     expect(x).toContain('## 분석 범위')
     expect(x).toMatch(/- c-\d+: `Drivers\/HAL` \(벤더 HAL\): 벤더 코드/)
-    // 요구사항 후보는 refs가 가리키는 관찰의 근거 위치까지 보인다
-    expect(x).toMatch(/틱마다 → 센다 → 수가 오른다 — 근거: c-\d+\(src\/tach\.c:30-30\)/)
-    expect(x).toContain('틱 주기는? — 필요한 자료: 측정')
+    // 요구사항 후보는 근거의 성격(basis)과 refs가 가리키는 관찰의 근거 위치까지 보인다
+    expect(x).toMatch(
+      /틱마다 → 센다 → 수가 오른다 — 코드에서 확인됨\(기준 커밋의 코드\)\. 근거: c-\d+\(src\/tach\.c:30-30\)/,
+    )
+    expect(x).toContain('"코드에서 확인됨"은 기준 커밋의 코드나 실행 출력으로 확인한 지금 동작')
+    expect(x).toContain('틱 주기는? — 필요한 자료: 실제 하드웨어의 측정')
     expect(x).toContain('| u-0001 | survey | 구성·진입점·경계를 찾고 분석 단위를 나눈다 |')
     expect(x).toContain('## 누락 가능성')
     expect(x).toContain('- 경계 1곳의 내부는 보지 않았다')
