@@ -55,6 +55,8 @@ const CONTINUE =
 export interface KeepCode {
   note: string
   doc?: true
+  /** 요구사항 추출의 extract: [현재 기록 위에서 이어서]이고 처음부터 체크되어 있다 (requirements-extraction-flow.md 결정 120) */
+  record?: true
 }
 
 /**
@@ -91,7 +93,12 @@ export const KEEP_CODE: Readonly<Record<WorkType, Readonly<Partial<Record<NodeNa
         note: `${CONTINUE} 아래 폐기된 \`execution.md\`를 참고해 새 \`execution.md\`를 쓴다.`,
       },
     },
-    requirements: {},
+    requirements: {
+      extract: {
+        note: '[현재 기록 위에서 이어서]: 지금 요구사항 기록을 parent로 둔 revision에 사람의 추가 지시를 메모로 두고 integrate 단위를 연다. integrate가 지시를 단위로 바꾸고 루프가 이어서 돈다. 체크를 풀면 parent 없는 새 시작 revision에서 survey부터 다시 돈다. 어느 쪽이든 run 수는 이어서 센다.',
+        record: true,
+      },
+    },
   }
 
 /**
@@ -102,17 +109,26 @@ export const KEEP_CODE_NODES: Readonly<Record<WorkType, readonly NodeName[]>> = 
   WORK_TYPES.map((t) => [t, Object.keys(KEEP_CODE[t]) as NodeName[]]),
 ) as Record<WorkType, NodeName[]>
 
-/** 단계 선택 대화상자의 [현재 코드 위에서 이어서] 이름. 설계의 spec은 [현재 문서 위에서 이어서]다 (D365, I105) */
+/**
+ * 단계 선택 대화상자의 [현재 코드 위에서 이어서] 이름. 설계의 spec은 [현재 문서 위에서 이어서](D365, I105), 요구사항 추출의
+ * extract는 [현재 기록 위에서 이어서]다 (결정 120)
+ */
 export function keepLabel(type: WorkType, node: NodeName): string {
-  return KEEP_CODE[type][node]?.doc ? '현재 문서 위에서 이어서' : '현재 코드 위에서 이어서'
+  const keep = KEEP_CODE[type][node]
+  return keep?.doc
+    ? '현재 문서 위에서 이어서'
+    : keep?.record
+      ? '현재 기록 위에서 이어서'
+      : '현재 코드 위에서 이어서'
 }
 
 /**
- * 되감기로 고르면 [현재 코드 위에서 이어서]가 처음부터 체크되어 있는가. 설계의 spec만 참이다: 이 유형에서 되감는 까닭은
- * 대부분 결정 한두 개를 다시 보는 것이다 (D365, I105)
+ * 되감기로 고르면 [현재 코드 위에서 이어서]가 처음부터 체크되어 있는가. 설계의 spec과 요구사항 추출의 extract만 참이다: 이
+ * 유형들에서 되감는 까닭은 대부분 결정 한두 개나 verify의 지적을 다시 보는 것이다 (D365, I105, 결정 120)
  */
 export function keepDefault(type: WorkType, node: NodeName): boolean {
-  return KEEP_CODE[type][node]?.doc === true
+  const keep = KEEP_CODE[type][node]
+  return keep?.doc === true || keep?.record === true
 }
 
 /** 앱이 run을 돌리는 단계인가 (결정 92): 세션 대신 run 루프를 시작하고 멈춘다 */

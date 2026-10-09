@@ -9,19 +9,26 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 import Ajv2020 from 'ajv/dist/2020'
+import type { BuildIndex } from '../../../skills/extract/build-index.mjs'
 import { checkResult } from '../../../skills/extract/rules.mjs'
 import { buildRun, runArgs } from '../../../skills/extract/run.mjs'
-import { loadChecklist, loadLayers } from '../../../skills/extract/load.mjs'
+import { loadChecklist, loadLayers, loadPerspectives } from '../../../skills/extract/load.mjs'
 import {
   chainProblem,
   codeAnchorProblems,
+  fold,
+  isClosed,
   outputAnchorProblems,
   repoPath,
   revisionFile,
 } from '../core/requirements'
 import { hookSettings, ruleAbs, HOOK_TOKEN_ENV } from '../core/settings'
+import integrateBase from '../shared/generated/extract-integrate.v0.schema.json'
+import reviewBase from '../shared/generated/extract-review.v0.schema.json'
+import summarizeBase from '../shared/generated/extract-summarize.v0.schema.json'
 import surveyBase from '../shared/generated/extract-survey.v0.schema.json'
 import traceBase from '../shared/generated/extract-trace.v0.schema.json'
+import exportSchema from '../shared/generated/requirements-export.v0.schema.json'
 import revisionSchema from '../shared/generated/requirements-revision.v0.schema.json'
 import type {
   Answer,
@@ -30,6 +37,7 @@ import type {
   PendingAnswer,
   RequirementsPointer,
   RequirementsRevision,
+  UnitKind,
 } from '../shared/requirements'
 import { spawnSpec } from './exec'
 import { git } from './git'
@@ -39,6 +47,18 @@ import { fileHash, jsonText, readText, writeFileAtomic } from './store'
 
 const ajv = new Ajv2020({ allErrors: true, strict: false })
 const validateRevision = ajv.compile<RequirementsRevision>(revisionSchema)
+const validateExport = ajv.compile(exportSchema)
+
+/** 내보낼 record.json이 docs/contracts/requirements-export.v0를 통과하는가. 아니면 그 까닭 (AI 결정 119) */
+export function exportProblem(record: unknown): string | null {
+  return validateExport(record) ? null : ajv.errorsText(validateExport.errors)
+}
+
+/** 내보내는 폴더의 schemas/에 함께 두는 기록 스키마 사본 (AI 결정 119) */
+export const EXPORT_SCHEMAS: Readonly<Record<string, unknown>> = {
+  'requirements-export.v0.schema.json': exportSchema,
+  'requirements-revision.v0.schema.json': revisionSchema,
+}
 
 /** 실행 출력 근거의 파일 읽기 (결정 42, 101). 없으면 null */
 export interface OutputReader {
@@ -112,14 +132,40 @@ export class RequirementsFiles {
   ): Promise<{ result: unknown; missing: string[] }> {
     const missing: string[] = []
     const kept = new Map<string, string | null>()
-    const keep = async (p: string): Promise<string | null> => {
-      const text = await reader.read(p)
-      if (text === null) return null
+    const store = async (text: string): Promise<string> => {
       const hash = createHash('sha256').update(text).digest('hex')
       await fsp.mkdir(this.outputs, { recursive: true })
       const dest = path.join(this.outputs, `${hash}.txt`)
       if ((await readText(dest).catch(() => null)) === null) await writeFileAtomic(dest, text)
       return path.relative(this.workDir, dest).split(path.sep).join('/')
+    }
+    const keep = async (p: string): Promise<string | null> => {
+      const text = await reader.read(p)
+      return text === null ? null : store(text)
+    }
+    // 실행 출력의 입력 (AI 결정 121): 명령 줄에서 이 run의 scratch 안 파일을 가리키는 낱말(스크립트, 입력 파일)
+    const scratch = path.resolve(this.scratchDir(o.run))
+    const inputsOf = async (
+      command: unknown,
+      output: string,
+    ): Promise<{ path: string; copy: string }[]> => {
+      if (typeof command !== 'string') return []
+      const words = command
+        .split(/[\s;|&<>()]+/)
+        .map((w) => w.replace(/^['"]+|['"]+$/g, '').replace(/^[A-Za-z_]+=/, ''))
+        .filter((w) => w && !w.startsWith('-') && w !== output)
+      const out: { path: string; copy: string }[] = []
+      for (const w of [...new Set(words)]) {
+        const file = path.resolve(scratch, w)
+        if (file !== scratch && !file.startsWith(scratch + path.sep)) continue
+        if (path.resolve(scratch, output) === file) continue
+        const st = await fsp.stat(file).catch(() => null)
+        if (!st?.isFile() || st.size > 2_000_000) continue
+        const text = await readText(file).catch(() => null)
+        if (text === null) continue
+        out.push({ path: w, copy: await store(text) })
+      }
+      return out
     }
     const walk = async (v: unknown): Promise<unknown> => {
       if (Array.isArray(v)) return Promise.all(v.map(walk))
@@ -133,7 +179,8 @@ export class RequirementsFiles {
           missing.push(p)
           return { ...obj }
         }
-        return { ...obj, path: to }
+        const inputs = await inputsOf(obj['command'], p)
+        return { ...obj, path: to, ...(inputs.length ? { inputs } : {}) }
       }
       const out: Record<string, unknown> = {}
       for (const [k, x] of Object.entries(obj)) out[k] = await walk(x)
@@ -161,12 +208,17 @@ export class RequirementsFiles {
   }
 
   /**
-   * 포인터까지의 revision을 읽는다 (결정 38). 포인터의 파일 해시가 다르거나, 파일이 없거나, 스키마나 사슬이 틀리면
-   * IntegrityError. 포인터보다 뒤 번호의 고아 파일은 지운다(결정 33)
+   * 포인터의 계보를 읽는다 (결정 38, 120): 포인터의 revision에서 parent를 따라 거슬러 가고 오래된 차례로 돌려준다. 포인터의
+   * 파일 해시가 다르거나, 파일이 없거나, 스키마나 계보가 틀리면 IntegrityError. 다음 번호 이상의 고아 파일은 지운다(결정 33).
+   * 되감기로 버린 계보의 파일은 이력이라 그대로 둔다
    */
   async load(pointer: RequirementsPointer): Promise<RequirementsRevision[]> {
     const out: RequirementsRevision[] = []
-    for (let n = 1; n <= pointer.revision; n++) {
+    let n: number | null = pointer.revision > 0 ? pointer.revision : null
+    const seen = new Set<number>()
+    while (n !== null) {
+      if (seen.has(n)) throw new IntegrityError(`revision ${n}의 계보가 돈다`)
+      seen.add(n)
       const text = await readText(this.revisionPath(n))
       if (text === null) throw new IntegrityError(`revision ${n} 파일이 없음`)
       if (n === pointer.revision && fileHash(text) !== pointer.revision_hash)
@@ -178,15 +230,20 @@ export class RequirementsFiles {
         throw new IntegrityError(`revision ${n}을 읽지 못함`)
       }
       if (!validateRevision(rev)) throw new IntegrityError(`revision ${n}가 스키마를 통과하지 않음`)
-      out.push(rev)
+      if (rev.number !== n) throw new IntegrityError(`revision ${n} 파일의 번호가 ${rev.number}다`)
+      out.unshift(rev)
+      n = rev.parent
     }
     const problem = chainProblem(out)
     if (problem) throw new IntegrityError(problem)
-    await this.dropOrphans(pointer.revision)
+    await this.dropOrphans(Math.max(pointer.revision, pointer.next.revision - 1))
     return out
   }
 
-  /** 포인터보다 뒤 번호의 revision 파일을 지운다 (결정 33) */
+  /**
+   * 고아 revision 파일을 지운다 (결정 33, 120): 포인터가 가리키기 전에 끊긴 쓰기라 다음 번호(current + 1) 이상이다. 그보다
+   * 작은 번호는 지금 계보이거나 되감기로 버린 계보의 이력이다
+   */
   async dropOrphans(current: number): Promise<string[]> {
     let names: string[]
     try {
@@ -214,6 +271,58 @@ export class RequirementsFiles {
       throw new IntegrityError(`사람 답 ${p.file}이 없거나 해시가 다름`)
     return JSON.parse(text) as Answer[]
   }
+
+  /** 구성별 빌드 인덱스를 requirements/build-index/<sha256>.json(불변)으로 쓰고 requirements/ 상대 경로를 돌려준다 (AI 결정 118) */
+  async writeBuildIndex(index: BuildIndex): Promise<string> {
+    const text = jsonText(index)
+    const hash = createHash('sha256').update(text).digest('hex')
+    const dest = path.join(this.dir, 'build-index', `${hash}.json`)
+    if ((await readText(dest).catch(() => null)) === null) await writeFileAtomic(dest, text)
+    return `build-index/${hash}.json`
+  }
+
+  /** 빌드 인덱스 읽기. 없거나 이름의 해시와 내용이 다르면 null (검사를 건너뛴다) */
+  async readBuildIndex(rel: string): Promise<BuildIndex | null> {
+    const text = await readText(path.join(this.dir, rel)).catch(() => null)
+    if (text === null) return null
+    const hash = createHash('sha256').update(text).digest('hex')
+    if (!rel.endsWith(`${hash}.json`)) return null
+    return JSON.parse(text) as BuildIndex
+  }
+
+  /** 빌드 인덱스를 만들 기준 커밋의 별도 체크아웃 (분석 worktree가 아님, 결정 39) */
+  get buildCheckout(): string {
+    return path.join(this.workDir, 'build-index', 'src')
+  }
+}
+
+/**
+ * 승인 때의 기록 무결성 (결정 2, AI 결정 124): 포인터의 계보(파일·해시·스키마·parent), 도는 run, 끝난 상태가 없는 단위,
+ * 사본이 없는 실행 출력 근거. 문제 글을 돌려준다
+ */
+export async function recordProblems(
+  files: RequirementsFiles,
+  pointer: RequirementsPointer,
+): Promise<string[]> {
+  let state
+  try {
+    state = fold(await files.load(pointer))
+  } catch (e) {
+    return [`기록 무결성 오류: ${e instanceof Error ? e.message : String(e)}`]
+  }
+  const out: string[] = []
+  if (pointer.run) out.push(`도는 run이 있음(${pointer.run.id})`)
+  const open = state.units.filter((u) => !isClosed(u.status))
+  if (open.length) out.push(`끝난 상태가 없는 단위: ${open.map((u) => u.id).join(', ')}`)
+  const missing: string[] = []
+  for (const e of state.evidence.filter((x) => x.kind === 'tool_output')) {
+    const kept =
+      e.path.startsWith('requirements/outputs/') &&
+      (await readText(path.join(files.workDir, e.path)).catch(() => null)) !== null
+    if (!kept) missing.push(`${e.id} (${e.path})`)
+  }
+  if (missing.length) out.push(`사본이 없는 실행 출력 근거: ${missing.join(', ')}`)
+  return out
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -226,20 +335,38 @@ export interface AssembledRun {
   hashes: { schema: string; instructions: string }
 }
 
+const BASES: Readonly<Record<UnitKind, Record<string, unknown>>> = {
+  survey: surveyBase,
+  trace: traceBase,
+  integrate: integrateBase,
+  review: reviewBase,
+  summarize: summarizeBase,
+}
+
 /**
  * run 하나의 지시와 스키마를 조립한다. skillsRoot는 skills/의 부모(개발은 레포 뿌리, 설치본은 resources)다.
- * 기본 스키마는 앱에 묶은 docs/contracts의 사본이다
+ * 기본 스키마는 앱에 묶은 docs/contracts의 사본이다. integrate는 관점(perspectives.md)을, review는 패킷의 질문·서술 키를
+ * 결과 스키마의 칸에 넣는다 (결정 36, AI 결정 108·112)
  */
 export function assembleRun(
   skillsRoot: string,
-  kind: 'survey' | 'trace',
+  kind: UnitKind,
   lens: Lens | null,
+  keys: { answers: string[]; verdicts: string[] } | null = null,
 ): AssembledRun {
-  const base = (kind === 'survey' ? surveyBase : traceBase) as Record<string, unknown>
+  const more =
+    kind === 'integrate'
+      ? { coverage: loadPerspectives(skillsRoot) }
+      : kind === 'review'
+        ? { answers: keys?.answers ?? [], verdicts: keys?.verdicts ?? [] }
+        : kind === 'summarize'
+          ? {}
+          : undefined
   return buildRun({
-    base,
+    base: BASES[kind],
     checklist: lens ? loadChecklist(lens, skillsRoot) : null,
     layers: loadLayers(kind, lens, skillsRoot),
+    ...(more ? { more } : {}),
   })
 }
 
@@ -277,6 +404,13 @@ export interface CheckContext {
   configs?: string[]
   /** 실행 출력 근거의 파일. 있으면 tool_output 앵커의 인용도 대조한다 (결정 101) */
   readOutput?: (path: string) => Promise<string | null>
+  /** 결과의 run 종류. 그 종류에 걸리는 규칙만 돈다 (AI 결정 108) */
+  kind?: UnitKind
+  /** 패킷과 기록 목록이 준 전역 ID와 주장의 절 (규칙 global_refs, link_shape, AI 결정 110) */
+  ids?: string[]
+  sections?: Record<string, string>
+  /** 구성별 빌드 인덱스. 있으면 규칙 config_active도 본다 (AI 결정 118: survey의 제출 검사만) */
+  build?: BuildIndex
 }
 
 /**
@@ -285,9 +419,13 @@ export interface CheckContext {
  * 문제 글은 고칠 곳을 알린다(결정 13)
  */
 export async function resultProblems(result: unknown, ctx: CheckContext): Promise<string[]> {
-  const rules = checkResult(result, ctx.configs ? { configs: ctx.configs } : {}).map(
-    (p) => `${p.rule}: ${p.problem}`,
-  )
+  const rules = checkResult(result, {
+    ...(ctx.configs ? { configs: ctx.configs } : {}),
+    ...(ctx.kind ? { kind: ctx.kind } : {}),
+    ...(ctx.ids ? { ids: ctx.ids } : {}),
+    ...(ctx.sections ? { sections: ctx.sections } : {}),
+    ...(ctx.build ? { build: ctx.build } : {}),
+  }).map((p) => `${p.rule}: ${p.problem}`)
   const paths = new Set<string>()
   const outputPaths = new Set<string>()
   const collect = (v: unknown) => {

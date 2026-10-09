@@ -15,7 +15,9 @@ import type {
   WorkType,
 } from '../shared/work'
 import { AUTO_APPROVE_NODES } from './config'
-import { RESPOND, defaultNext, isPipelineNode } from './pipeline'
+import { RESPOND, appRun, defaultNext, isPipelineNode } from './pipeline'
+import { HALT_LABEL } from './requirements'
+import { RECORD_ISSUE_FILE, type HaltReason } from '../shared/requirements'
 import { isRespondPending } from './respond'
 import { INTENT_DRAFT_FILE, REPLIES_FILE, isValid } from './validate'
 
@@ -28,10 +30,13 @@ export type { ApprovalGate, Badge, BadgeKind }
 export const REVIEWABLE: readonly TaskStatus[] = ['awaiting_approval', 'idle', 'session_ended']
 
 /**
- * 넘길 수 없는 오류: intake에서 intent 초안의 머리글 오류와 초안 없음(D90), PR 대응에서 replies.md의 오류(D204).
- * 머리글이 틀리거나 초안이 없으면 앱이 intent.md를 만들 수 없고, 답글은 밖으로 나가 되돌릴 수 없어 추측 없이 게시한다
+ * 넘길 수 없는 오류: intake에서 intent 초안의 머리글 오류와 초안 없음(D90), PR 대응에서 replies.md의 오류(D204),
+ * 요구사항 추출의 기록 무결성(requirements-extraction-flow.md 결정 2, AI 결정 124).
+ * 머리글이 틀리거나 초안이 없으면 앱이 intent.md를 만들 수 없고, 답글은 밖으로 나가 되돌릴 수 없어 추측 없이 게시한다.
+ * 기록이 깨졌으면 결과의 근거가 없다
  */
 function unignorable(node: TaskRecord['node'], issue: FormatIssue): boolean {
+  if (issue.file === RECORD_ISSUE_FILE) return true
   if (node === RESPOND) return issue.file === REPLIES_FILE
   return node === 'intake' && issue.file === INTENT_DRAFT_FILE && issue.part !== 'body'
 }
@@ -212,8 +217,10 @@ export function autoApproveNote(
 export const BADGE_ORDER: readonly BadgeKind[] = [
   'recovery',
   'asking',
+  'decision_needed',
   'awaiting_approval',
   'blocked',
+  'extract_halted',
   'stopped',
   'auto_paused',
   'pr_items',
@@ -235,8 +242,10 @@ export const BADGE_ORDER: readonly BadgeKind[] = [
 export const HUMAN_BADGES: readonly BadgeKind[] = [
   'recovery',
   'asking',
+  'decision_needed',
   'awaiting_approval',
   'blocked',
+  'extract_halted',
   'stopped',
   'auto_paused',
   'pr_items',
@@ -262,6 +271,8 @@ const TASK_BADGE: Readonly<Record<TaskStatus, BadgeKind | null>> = {
 const BADGE_LABEL: Readonly<Record<BadgeKind, string>> = {
   recovery: '끊긴 작업',
   asking: '질문 대기',
+  decision_needed: '사람 결정 필요',
+  extract_halted: '멈춤',
   awaiting_approval: '승인 대기',
   blocked: '막힘',
   stopped: '멈춤',
@@ -277,6 +288,9 @@ const BADGE_LABEL: Readonly<Record<BadgeKind, string>> = {
   interrupted: '중단됨',
   done: '완료',
 }
+
+/** 알리지 않는 extract의 멈춤: 사람이 멈춤, 앱 재시작 (D121, D145) */
+const QUIET_HALTS: readonly HaltReason[] = ['human', 'restart']
 
 const DONE_LABEL: Readonly<Partial<Record<WorkState['status'], string>>> = {
   completed: '완료',
@@ -302,8 +316,24 @@ export function badge(work: WorkState, pr?: BadgeKind): Badge {
   if (work.status === 'pr' && !(task && isRespondPending(task))) kinds.push(pr ?? 'pr_waiting')
   const fromTask = task ? TASK_BADGE[task.status] : null
   if (fromTask) kinds.push(fromTask)
+  // 요구사항 추출의 extract (AI 결정 116): 열린 사람 결정과 사람이 필요한 멈춤. 사람이 멈춘 것과 재시작은 조용하다
+  const req = work.requirements
+  const halt = req?.halt
+  if (task && appRun(task.node) && req) {
+    if (
+      (task.status === 'working' && (req.open_decisions ?? 0) > 0) ||
+      (task.status === 'interrupted' && halt?.reason === 'decisions')
+    )
+      kinds.push('decision_needed')
+    else if (task.status === 'interrupted' && halt && !QUIET_HALTS.includes(halt.reason))
+      kinds.push('extract_halted')
+  }
   const kind = [...BADGE_ORDER].find((k) => kinds.includes(k)) ?? 'working'
   const label =
-    kind === 'asking' && task?.status === 'input_needed' ? '입력 필요' : BADGE_LABEL[kind]
+    kind === 'asking' && task?.status === 'input_needed'
+      ? '입력 필요'
+      : kind === 'extract_halted' && halt
+        ? `멈춤: ${HALT_LABEL[halt.reason]}`
+        : BADGE_LABEL[kind]
   return { kind, label, hot: HUMAN_BADGES.includes(kind) }
 }

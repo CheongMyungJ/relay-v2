@@ -1593,6 +1593,15 @@ button.ready {
 .requirements-box {
   margin-bottom: 8px;
 }
+/* 요구사항 추출의 run 목록 (AI 결정 115): 360px 패널에 맞게 작게 */
+.requirements-runs table {
+  font-size: 12px;
+  width: 100%;
+}
+.requirements-runs td,
+.requirements-runs th {
+  padding: 2px 4px;
+}
 
 .requirements-decision {
   margin: 8px 0 0;

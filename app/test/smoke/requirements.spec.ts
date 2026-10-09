@@ -8,7 +8,13 @@ import os from 'node:os'
 import path from 'node:path'
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test'
 import { makeRepo } from '../support/repo'
-import { extractSurvey, extractTrace } from '../support/requirements'
+import {
+  extractIntegrate,
+  extractReview,
+  extractSummarize,
+  extractSurvey,
+  extractTrace,
+} from '../support/requirements'
 import { REPO_FILES, scenario } from '../support/scenarios'
 
 const isWin = process.platform === 'win32'
@@ -20,15 +26,17 @@ const FAKE = path.resolve(
   isWin ? 'fake-claude.cmd' : 'fake-claude.mjs',
 )
 
-/** 렌즈 카드의 열쇠 목록. 스모크는 CommonJS로 옮겨져 skills의 ES 모듈을 바로 부르지 못하므로 node로 읽는다 */
-function checklistIds(lens: string): string[] {
+/** 렌즈 카드의 열쇠 목록과 integrate의 관점. 스모크는 CommonJS로 옮겨져 skills의 ES 모듈을 바로 부르지 못하므로 node로 읽는다 */
+function loadIds(call: string): string[] {
   const load = path.join(ROOT, 'skills', 'extract', 'load.mjs')
-  const code = `const { loadChecklist } = await import(${JSON.stringify(`file://${load}`)});
-console.log(JSON.stringify(loadChecklist(${JSON.stringify(lens)}, ${JSON.stringify(ROOT)}).map((c) => c.id)))`
+  const code = `const m = await import(${JSON.stringify(`file://${load}`)});
+console.log(JSON.stringify(m.${call}.map((c) => c.id)))`
   return JSON.parse(
     execFileSync(process.execPath, ['--input-type=module', '-e', code], { encoding: 'utf8' }),
   ) as string[]
 }
+const checklistIds = (lens: string) =>
+  loadIds(`loadChecklist(${JSON.stringify(lens)}, ${JSON.stringify(ROOT)})`)
 
 let app: ElectronApplication
 let root: string
@@ -51,8 +59,11 @@ test.beforeAll(async () => {
     ],
   })
   const trace = extractTrace(checklistIds('command'))
+  // 생산 run 뒤의 끝: 마지막 integrate, review(survey 대상 q1, trace 관찰 s1), summarize (AI 결정 111~113)
+  const integrate = extractIntegrate(loadIds(`loadPerspectives(${JSON.stringify(ROOT)})`))
+  const runs = [survey, trace, integrate, extractReview(['q1'], ['s1']), extractSummarize()]
   const plan = path.join(root, 'plan.json')
-  fs.writeFileSync(plan, JSON.stringify({ runs: [survey, trace].map((o) => ({ outputs: [o] })) }))
+  fs.writeFileSync(plan, JSON.stringify({ runs: runs.map((o) => ({ outputs: [o] })) }))
   const env = {
     ...process.env,
     CLAUDE_BIN: FAKE,

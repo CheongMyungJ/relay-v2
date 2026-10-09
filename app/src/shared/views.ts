@@ -431,6 +431,7 @@ export interface RespondStartInput {
 export type BadgeKind =
   | 'recovery'
   | 'asking'
+  | 'decision_needed'
   | 'awaiting_approval'
   | 'blocked'
   | 'stopped'
@@ -439,6 +440,7 @@ export type BadgeKind =
   | 'pr_closed'
   | 'mergeable'
   | 'session_ended'
+  | 'extract_halted'
   | 'working'
   | 'idle'
   | 'queued'
@@ -643,6 +645,29 @@ export interface RequirementsView {
   usageWait: string | null
   /** 답을 기다리는 사람 결정 필요 (결정 7, 41) */
   decisions: RequirementsDecisionView[]
+  /** 열린 단위: [범위 줄이고 계속]에서 고른다 (결정 26, AI 결정 114) */
+  openUnits: { id: string; kind: string; lens: string | null; purpose: string; scope: string }[]
+  /** 부분 분석으로 넘겼다(보류: 예산 상한 단위가 있다) */
+  partial: boolean
+  /** 끝난 run의 목록 (AI 결정 115). 앞이 먼저 돈 것이다 */
+  runs: RequirementsRunView[]
+  /** 저장소로 내보낸 결과 (AI 결정 119) */
+  exported: { path: string; commit: string; at: string } | null
+}
+
+/** run 목록의 한 줄 (AI 결정 115): run.json에서 */
+export interface RequirementsRunView {
+  id: string
+  unit: string
+  kind: string
+  lens: string | null
+  /** closed·incomplete나 실패 까닭 */
+  result: string
+  denials: number
+  ms: number | null
+  cost: number | null
+  /** 반영 검사 문제, 스키마 오류, 경고 (행 아래에 접어 보인다) */
+  details: string[]
 }
 
 export interface RequirementsDecisionView {

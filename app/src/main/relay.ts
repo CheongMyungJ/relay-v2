@@ -601,6 +601,31 @@ export class Relay {
     return this.withWork(workKey, (w) => w.extendRequirements(runs))
   }
 
+  /** 요구사항 추출의 [범위 줄이고 계속] (AI 결정 114) */
+  narrowRequirements(
+    workKey: string,
+    units: string[],
+    note: string,
+    runs: number,
+  ): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.narrowRequirements(units, note, runs))
+  }
+
+  /** 요구사항 추출의 [부분 분석으로 넘기기] (AI 결정 114) */
+  partialRequirements(workKey: string): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.partialRequirements())
+  }
+
+  /** 요구사항 추출의 run 기록 폴더 (AI 결정 115). Work가 없거나 기록이 없으면 null */
+  requirementsRunsDir(workKey: string): string | null {
+    return this.works.get(workKey)?.requirementsRunsDir() ?? null
+  }
+
+  /** 요구사항 추출 결과를 저장소로 내보낸다 (AI 결정 119) */
+  exportRequirements(workKey: string, dir: string): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.exportRequirements(dir))
+  }
+
   /** [이 단계 끝나면 멈춤] */
   stopAfter(workKey: string, on: boolean): Promise<CommandResult> {
     return this.withWork(workKey, (w) => w.stopAfter(on))

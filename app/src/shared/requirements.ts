@@ -1,6 +1,9 @@
 // 요구사항 추출 Work의 extract 기록 (requirements-extraction-flow.md 8절, 결정 32~42, 92~99).
 // 단위·주장·근거·사람 결정은 requirements/의 불변 revision 변경분에 두고(docs/contracts/requirements-revision.v0),
 // work.json에는 포인터만 둔다(RequirementsPointer). 파일에 쓰는 모양이라 키는 snake_case다.
+import type { ExtractIntegrate } from './generated/extract-integrate.v0'
+import type { ExtractReview } from './generated/extract-review.v0'
+import type { ExtractSummarize } from './generated/extract-summarize.v0'
 import type { ExtractSurvey } from './generated/extract-survey.v0'
 import type { ExtractTrace } from './generated/extract-trace.v0'
 import type {
@@ -9,7 +12,11 @@ import type {
   Decision as HumanDecision,
   Evidence,
   Lens,
+  Link,
+  Note,
+  Para,
   RequirementsRevision,
+  Review,
   Unit,
   UnitUpdate,
 } from './generated/requirements-revision.v0'
@@ -18,17 +25,34 @@ export type {
   Answer,
   Claim,
   Evidence,
+  ExtractIntegrate,
+  ExtractReview,
+  ExtractSummarize,
   ExtractSurvey,
   ExtractTrace,
   HumanDecision,
   Lens,
+  Link,
+  Note,
+  Para,
   RequirementsRevision,
+  Review,
   Unit,
   UnitUpdate,
 }
 
-/** run 하나의 결과 제안. survey나 trace (16.4) */
-export type ExtractResult = ExtractSurvey | ExtractTrace
+/** run 하나의 결과 제안 (16.4). 생산 run(survey, trace)과 기록을 받는 run(integrate, review, summarize, AI 결정 107) */
+export type ExtractResult =
+  ExtractSurvey | ExtractTrace | ExtractIntegrate | ExtractReview | ExtractSummarize
+
+/** 단위의 run 종류 */
+export type UnitKind = Unit['kind']
+
+/** revision의 빌드 인덱스 상태 (AI 결정 118) */
+export type BuildIndexState = NonNullable<RequirementsRevision['build_index']>
+
+/** summarize run의 서술 (AI 결정 113) */
+export type SummaryState = NonNullable<RequirementsRevision['summary']>
 
 /** 단위의 상태 (결정 95). open만 열린 상태이고 나머지는 끝난 상태다. merged는 다른 단위에 합쳐졌다 */
 export type UnitStatus = UnitUpdate['status']
@@ -41,6 +65,7 @@ export const CLOSED_STATUSES: readonly UnitStatus[] = [
   'failed',
   'stalled',
   'merged',
+  'held',
 ]
 
 /** 다음 전역 ID 번호 (결정 94). 재사용하지 않는다 */
@@ -51,6 +76,8 @@ export interface NextIds {
   decision: number
   revision: number
   run: number
+  /** 연결 l-NNNN (AI 결정 110). 옛 포인터에는 없어 1로 읽는다 */
+  link?: number
 }
 
 /** 단위마다 연속 횟수 (결정 6, 30, 40). 실패와 미완료는 서로를 끊지 않고 끝난 상태만 끊는다 */
@@ -127,6 +154,24 @@ export interface RequirementsPointer {
   pending_answers?: PendingAnswer[]
   /** [이 단계 끝나면 멈춤]: 지금 run이 끝나면 멈춘다 (17.12 사람 결정) */
   stop_after_run?: boolean
+  /** 답을 받지 않은 사람 결정 수. 배지와 알림이 본다 (결정 7, AI 결정 116) */
+  open_decisions?: number
+  /** 저장소로 내보낸 결과 (AI 결정 119) */
+  exported?: { path: string; commit: string; at: string }
+  /**
+   * 이 계보를 돌리는 extract task (결정 120). 다른 task(되감기나 다시 연 extract)가 시작하면 계보를 새로 열거나 이어받는다.
+   * 없으면(이 필드 전의 포인터) 처음 돌리는 task가 가진다
+   */
+  task?: string
+}
+
+/** 승인 때 기록 무결성 문제의 파일 이름 (AI 결정 124). 이 파일의 문제는 [오류 무시하고 승인]으로도 넘기지 못한다 */
+export const RECORD_ISSUE_FILE = 'requirements/'
+
+/** 빌드 인덱스를 만들 구성과 survey가 낸 그 빌드 명령 (AI 결정 118) */
+export interface BuildTarget {
+  name: string
+  command: string
 }
 
 /** 앱 설정의 "요구사항 추출" 절 (결정 30, 31) */
@@ -160,7 +205,20 @@ export interface UnitState extends Unit {
   merged_into?: string
   /** 끝난 뒤 사람 결정의 답으로 다시 열렸으면 그 결정 (결정 103) */
   reopened_by?: string
+  /** 마지막으로 이 단위를 바꾼 revision 번호 (AI 결정 111의 "마지막 integrate 뒤") */
+  revision: number
 }
+
+/** 반영한 run 하나 (AI 결정 111): 어느 단위의 무슨 종류를 어느 revision에 반영했나 */
+export interface AppliedRun {
+  id: string
+  unit: string
+  kind: UnitKind
+  revision: number
+}
+
+/** 검토 하나 (AI 결정 112) */
+export type ReviewState = Review
 
 export interface DecisionState extends HumanDecision {
   answer: Answer | null
@@ -173,4 +231,16 @@ export interface RequirementsState {
   claims: Claim[]
   evidence: Evidence[]
   decisions: DecisionState[]
+  /** integrate가 낸 연결 (AI 결정 110) */
+  links: Link[]
+  /** review의 비교와 판정 (AI 결정 112) */
+  reviews: Review[]
+  /** 사람 메모 (AI 결정 114, 120) */
+  notes: Note[]
+  /** 마지막 빌드 인덱스 상태 (AI 결정 118) */
+  build_index: BuildIndexState | null
+  /** 마지막 summarize 서술 (AI 결정 113) */
+  summary: SummaryState | null
+  /** 반영한 run의 차례 */
+  runs: AppliedRun[]
 }

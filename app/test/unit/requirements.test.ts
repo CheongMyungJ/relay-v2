@@ -3,6 +3,7 @@ import {
   afterRun,
   answerRevision,
   applyResult,
+  asciiMatch,
   chainProblem,
   closeRevision,
   currentClaims,
@@ -58,7 +59,7 @@ function survey(over: Partial<ExtractSurvey> = {}): ExtractSurvey {
         name: 'lo',
         status: 'confirmed',
         select: 'make lo',
-        build_command: 'make lo',
+        build_command: 'iarbuild fw.ewp -build lo',
         anchors: [anchor('/w/repo/Makefile', 3, 'lo: CFLAGS += -DLO')],
       },
     ],
@@ -160,12 +161,18 @@ describe('기록 접기 (결정 93)', () => {
     expect(revisionFile(12)).toBe('000012.json')
   })
 
-  it('사슬이 끊기거나 parent가 틀리면 무결성 문제다 (결정 38)', () => {
+  it('계보가 끊기거나 parent가 틀리면 무결성 문제다 (결정 38, 120)', () => {
     const { revs } = afterSurvey()
     expect(chainProblem(revs)).toBeNull()
-    expect(chainProblem([must(revs[1])])).toMatch(/자리에 2/)
+    expect(chainProblem([must(revs[1])])).toMatch(/parent 1가 계보에 없다/)
     const bad = { ...must(revs[1]), parent: 5 } as RequirementsRevision
     expect(chainProblem([must(revs[0]), bad])).toMatch(/parent/)
+    // 되감기: parent가 없는 새 시작 revision에서 번호는 건너뛰어도 된다
+    const restart = { ...must(revs[0]), number: 7, parent: null } as RequirementsRevision
+    const after = { ...must(revs[1]), number: 8, parent: 7 } as RequirementsRevision
+    expect(chainProblem([restart, after])).toBeNull()
+    const back = { ...must(revs[1]), number: 6, parent: 7 } as RequirementsRevision
+    expect(chainProblem([restart, back])).toMatch(/작다/)
   })
 })
 
@@ -569,6 +576,41 @@ describe('기준 커밋의 인용 대조 (path_at_base, quote_match, 결정 13, 
     ).toEqual([])
     expect(repoPath('C:\\w\\repo\\src\\a.c', 'C:/w/repo')).toBe('src/a.c')
   })
+  it('비 UTF-8 파일(디코드에 U+FFFD)이면 ASCII 뼈대로 대조한다. 남은 ASCII가 8자보다 짧거나 코드가 다르면 걸린다 (AI 결정 123)', () => {
+    // EUC-KR 주석을 UTF-8로 디코드하면 U+FFFD가 생기고, 모델은 다른 글자(모지바케)로 읽는다
+    const euc = [
+      'int x;',
+      'void pump_off(void) /* \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD */',
+      '{',
+    ].join('\n')
+    const at = (q: string, line = 2) =>
+      codeAnchorProblems({ a: [anchor('src/pump.c', line, q)] }, REPO, (p) =>
+        p === 'src/pump.c' ? euc : null,
+      )
+    expect(at('void pump_off(void) /* 펌프 끄기 */')).toEqual([])
+    expect(at('void pump_off(void) /* ÆßÇÁ ²ô±â */')).toEqual([])
+    // 코드 부분이 다르면 여전히 문제다
+    expect(at('void pump_on(void) /* 펌프 켜기 */')).toMatchObject([{ rule: 'quote_match' }])
+    // 줄이 틀려도 문제다
+    expect(at('void pump_off(void) /* 펌프 끄기 */', 3)).toMatchObject([{ rule: 'quote_match' }])
+    // 남은 ASCII가 짧으면(공백 빼고 8자 미만) 맞음으로 보지 않는다
+    expect(asciiMatch(euc, euc, '/* 펌프 끄기 */ {')).toBe(false)
+    // UTF-8 파일이고 인용에 U+FFFD가 없으면 뼈대 대조를 하지 않는다
+    expect(
+      asciiMatch(
+        'void pump_off(void) /* 펌프 */',
+        'void pump_off(void) /* 펌프 */',
+        'void pump_off(void) /* 끄기 */',
+      ),
+    ).toBe(false)
+    expect(
+      asciiMatch(
+        'void pump_off(void) /* 펌프 */',
+        'void pump_off(void) /* 펌프 */',
+        'void pump_off(void) /* \uFFFD */',
+      ),
+    ).toBe(true)
+  })
 })
 
 describe('실행 출력의 인용 대조 (quote_match, 결정 42, 101)', () => {
@@ -643,7 +685,7 @@ describe('패킷과 문서 (결정 96, 99)', () => {
       budget: DEFAULT_REQUIREMENTS_BUDGET,
     })
     expect(text).toContain('# Packet: trace (lens: command)')
-    expect(text).toContain('- lo (confirmed): `make lo`; selected by make lo')
+    expect(text).toContain('- lo (confirmed): `iarbuild fw.ewp -build lo`; selected by make lo')
     expect(text).toContain('Continue from its checkpoint')
     expect(text).toContain('  A: lo만')
     expect(text).toContain('Soft deadline: 15 minutes. Hard limit: 30 minutes.')
@@ -655,7 +697,7 @@ describe('패킷과 문서 (결정 96, 99)', () => {
     expect(h.errors).toEqual([])
     const x = renderExtraction(state, 'abc')
     expect(x).toContain('| u-0001 | survey |')
-    expect(x).toContain('- lo (confirmed): make lo, `make lo`')
+    expect(x).toContain('- lo (confirmed): make lo, `iarbuild fw.ewp -build lo`')
   })
 
   it('extraction.md는 intake의 기본 완료조건을 판정할 절을 둔다: 분석 범위, 후보의 원본 위치, 필요한 자료, 누락 가능성, 검증 계획', () => {
@@ -772,7 +814,9 @@ describe('뒤 단위가 다룬 미확정 (결정 104)', () => {
       /- c-\d+ \(u-0001\): SET_SPEED의 범위 검사는 어디서 하나\? — .*다룬 뒤 단위: u-0003\(완료\)/,
     )
     expect(md).toContain('미확정 2건이 남았다(그 가운데 1건은 뒤 단위가 다뤄 완료했으나')
-    expect(md).toMatch(/뒤 단위가 다룬 미확정 1건\(c-\d+\)은 그 단위의 관찰로 풀렸는지 본다/)
+    expect(md).toMatch(
+      /뒤 단위가 다루거나 답 후보가 연결된 미확정\(c-\d+\)은 그 관찰로 풀렸는지 본다/,
+    )
     expect(renderHandoff(done)).toContain(
       '미확정 2건이 extraction.md의 미확정 절에 있다(그 가운데 1건은 뒤 단위가 다뤘다)',
     )
@@ -815,6 +859,19 @@ describe('진행 상자 (15.5, 결정 98)', () => {
       halt: { reason: 'failures', label: '연속 실패', detail: '연속 실패 3' },
       usageWait: null,
       decisions: [],
+      // [범위 줄이고 계속]에서 고를 열린 단위, 부분 분석 여부, run 목록, 내보낸 결과 (AI 결정 114, 115, 119)
+      openUnits: [
+        {
+          id: 'u-0002',
+          kind: 'trace',
+          lens: 'timing',
+          purpose: '회전 감시 시간',
+          scope: 'src/tach.c  Spin timing',
+        },
+      ],
+      partial: false,
+      runs: [],
+      exported: null,
     })
   })
 

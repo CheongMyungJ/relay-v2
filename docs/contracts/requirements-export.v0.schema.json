@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "relay/requirements-export.v0.schema.json",
+  "title": "요구사항 추출 결과 내보내기 (v0)",
+  "description": "requirements Work가 저장소로 내보내는 기록 묶음의 record.json(requirements-extraction-flow.md 11절, 결정 1, AI 결정 119). 앱이 revision 계보를 접은 지금 기록을 옮긴다. code·doc_claim 근거는 기준 커밋과 blob으로, 실행 출력 근거는 같은 폴더의 outputs/ 사본으로 찾는다. 채택 칸은 모두 \"미결정\"이다(결정 1). 상태는 미검토이거나 검토로 내려간 것뿐이다(결정 12).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "work",
+    "base_commit",
+    "revision",
+    "revision_hash",
+    "exported_at",
+    "schemas",
+    "partial",
+    "configs",
+    "units",
+    "claims",
+    "evidence",
+    "decisions",
+    "links",
+    "reviews",
+    "notes",
+    "coverage",
+    "build_index",
+    "summary"
+  ],
+  "properties": {
+    "schema_version": { "const": 0 },
+    "work": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title"],
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" }
+      }
+    },
+    "base_commit": { "description": "분석 대상의 기준 커밋", "type": "string" },
+    "revision": { "type": "integer", "minimum": 1 },
+    "revision_hash": { "type": "string" },
+    "exported_at": { "type": "string" },
+    "schemas": {
+      "description": "기록이 따른 스키마 판(docs/contracts의 파일 이름)",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "partial": {
+      "description": "부분 분석으로 넘겼는가(보류: 예산 상한 단위가 있다)",
+      "type": "boolean"
+    },
+    "configs": { "type": "array", "items": { "type": "object" } },
+    "units": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "id",
+          "kind",
+          "lens",
+          "purpose",
+          "scope",
+          "status",
+          "reason"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "kind": { "type": "string" },
+          "lens": { "oneOf": [{ "type": "null" }, { "type": "string" }] },
+          "purpose": { "type": "string" },
+          "scope": { "type": "string" },
+          "status": { "type": "string" },
+          "reason": { "type": "string" }
+        }
+      }
+    },
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "unit",
+          "run",
+          "section",
+          "key",
+          "body",
+          "adoption",
+          "review",
+          "folded_into"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "unit": { "type": "string" },
+          "run": { "type": "string" },
+          "section": { "type": "string" },
+          "key": { "type": "string" },
+          "body": { "type": "object" },
+          "adoption": {
+            "description": "제품 채택(결정 1): 내보낼 때는 늘 미결정",
+            "const": "미결정"
+          },
+          "review": {
+            "description": "검토 상태(결정 12): unreviewed이거나 내려간 상태들",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["status", "history"],
+            "properties": {
+              "status": { "type": "array", "items": { "type": "string" } },
+              "history": { "type": "array", "items": { "type": "string" } }
+            }
+          },
+          "folded_into": {
+            "description": "integrate의 supersedes·merges 연결로 접혔으면 그 주장들",
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "evidence": { "type": "array", "items": { "type": "object" } },
+    "decisions": { "type": "array", "items": { "type": "object" } },
+    "links": { "type": "array", "items": { "type": "object" } },
+    "reviews": { "type": "array", "items": { "type": "object" } },
+    "notes": { "type": "array", "items": { "type": "object" } },
+    "coverage": { "oneOf": [{ "type": "null" }, { "type": "object" }] },
+    "build_index": { "oneOf": [{ "type": "null" }, { "type": "object" }] },
+    "summary": { "oneOf": [{ "type": "null" }, { "type": "object" }] }
+  }
+}

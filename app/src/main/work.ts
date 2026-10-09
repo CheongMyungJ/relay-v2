@@ -51,6 +51,8 @@ import {
   changedPaths,
   checkedOutSubmodules,
   commitAll,
+  commitPaths,
+  git,
   commitInfo,
   commitsOnlyIn,
   commitsWithParents,
@@ -116,6 +118,7 @@ import {
   previousInputs,
   selectionKind,
   type CarriedCode,
+  type ContextInput,
   type PreviousRound,
   type PreviousTask,
   type RespondInput,
@@ -281,9 +284,22 @@ import {
   summarize,
   type TaskCheck,
 } from '../core/validate'
-import { requirementsView } from '../core/requirements'
+import {
+  defaultExportDir,
+  exportDir,
+  exportRecord,
+  fold,
+  outputCopies,
+  requirementsView,
+} from '../core/requirements'
 import { ExtractRunner } from './requirements'
-import type { Answer, RequirementsBudget } from '../shared/requirements'
+import {
+  EXPORT_SCHEMAS,
+  RequirementsFiles,
+  exportProblem,
+  recordProblems,
+} from '../adapters/requirements'
+import { RECORD_ISSUE_FILE, type Answer, type RequirementsBudget } from '../shared/requirements'
 import type { AppConfig, WorkSettingsPatch } from '../shared/config'
 import type { NodeName } from '../shared/contracts'
 import {
@@ -814,6 +830,119 @@ export class WorkRunner {
     })
   }
 
+  /**
+   * run 상한에 닿아 멈춘 extract의 [범위 줄이고 계속] (결정 26, AI 결정 114): 고른 열린 단위를 범위에서 빼고 메모를 남긴 뒤
+   * [계속 +N]과 같은 수를 늘려 잇는다
+   */
+  narrowRequirements(units: string[], note: string, runs: number): Promise<CommandResult> {
+    return this.enqueue(async () => {
+      const task = currentTask(this.work)
+      const p = this.work.requirements
+      if (!task || task.node !== 'extract' || !p || p.halt?.reason !== 'run_limit')
+        return { ok: false, error: 'run 상한으로 멈춘 요구사항 추출이 아님' }
+      if (!Number.isInteger(runs) || runs < 1) return { ok: false, error: '늘릴 run 수가 아님' }
+      const r = await this.extractRunner().narrow(p, units, note, runs)
+      if (!r.units.length) return { ok: false, error: '범위에서 뺄 열린 단위를 고르세요' }
+      const at = this.ctx.at()
+      await this.feed({ type: 'requirements.updated', taskId: task.id, at, pointer: r.pointer })
+      await this.extractRunner().refresh()
+      return this.unlessCleanup({ type: 'resume', taskId: task.id, at })
+    })
+  }
+
+  /**
+   * run 상한에 닿아 멈춘 extract의 [부분 분석으로 넘기기] (결정 26, AI 결정 114): 열린 단위를 보류로 닫고 summarize 하나를
+   * 상한 밖에서 돌려 끝낸다
+   */
+  partialRequirements(): Promise<CommandResult> {
+    return this.enqueue(async () => {
+      const task = currentTask(this.work)
+      const p = this.work.requirements
+      if (!task || task.node !== 'extract' || !p || p.halt?.reason !== 'run_limit')
+        return { ok: false, error: 'run 상한으로 멈춘 요구사항 추출이 아님' }
+      const pointer = await this.extractRunner().partial(p)
+      const at = this.ctx.at()
+      await this.feed({ type: 'requirements.updated', taskId: task.id, at, pointer })
+      await this.extractRunner().refresh()
+      return this.unlessCleanup({ type: 'resume', taskId: task.id, at })
+    })
+  }
+
+  /**
+   * 요구사항 추출 결과를 저장소로 내보낸다 (11절, 결정 1, AI 결정 119): 레포 상대 폴더에 승인된 extraction.md, record.json
+   * (docs/contracts/requirements-export.v0), 실행 출력과 그 입력의 사본(outputs/), 기록 스키마 사본(schemas/)을 쓰고 그 폴더만
+   * 커밋한다. 완료 화면(verify 승인 대기)이나 끝난 Work에서 받는다. 전달(push·PR)과 따로라 [완료만]에서도 로컬 커밋으로 남는다
+   */
+  exportRequirements(dir: string): Promise<CommandResult> {
+    return this.enqueue(async () => {
+      const w = this.work
+      const p = w.requirements
+      const task = currentTask(w)
+      if (w.type !== 'requirements' || !p) return { ok: false, error: '요구사항 추출 기록이 없음' }
+      const atCompletion =
+        (task?.node === 'verify' && task.status === 'awaiting_approval') || w.status === 'completed'
+      if (!atCompletion) return { ok: false, error: 'verify 승인 대기나 끝난 Work에서만 내보낸다' }
+      const rel = exportDir(dir || defaultExportDir(w.work_id))
+      if (!rel)
+        return { ok: false, error: '레포 안의 상대 폴더를 적으세요 (.., 절대 경로, .git 안 됨)' }
+      const extract = w.tasks.findLast((t) => t.node === 'extract' && t.status === 'approved')
+      const extraction = extract
+        ? (await this.files.taskFiles(extract))['extraction.md']
+        : undefined
+      if (!extraction) return { ok: false, error: '승인된 extract의 extraction.md가 없음' }
+      const files = new RequirementsFiles(this.files.dir)
+      const state = fold(await files.load(p))
+      const target = path.join(this.worktree, ...rel.split('/'))
+      await fsp.mkdir(path.join(target, 'outputs'), { recursive: true })
+      const outputs = new Map<string, string>()
+      for (const copy of outputCopies(state)) {
+        const name = path.basename(copy)
+        await fsp.copyFile(
+          path.join(this.files.dir, ...copy.split('/')),
+          path.join(target, 'outputs', name),
+        )
+        outputs.set(copy, `outputs/${name}`)
+      }
+      const at = this.ctx.at()
+      const record = exportRecord(state, {
+        work: { id: w.work_id, title: this.title },
+        base: w.base_commit,
+        revisionHash: p.revision_hash ?? '',
+        at,
+        outputs,
+      })
+      const bad = exportProblem(record)
+      if (bad) return { ok: false, error: `record.json이 스키마를 통과하지 않음: ${bad}` }
+      await fsp.mkdir(path.join(target, 'schemas'), { recursive: true })
+      await writeFileAtomic(path.join(target, 'extraction.md'), extraction)
+      await writeFileAtomic(
+        path.join(target, 'record.json'),
+        JSON.stringify(record, null, 2) + '\n',
+      )
+      for (const [name, schema] of Object.entries(EXPORT_SCHEMAS))
+        await writeFileAtomic(
+          path.join(target, 'schemas', name),
+          JSON.stringify(schema, null, 2) + '\n',
+        )
+      const env = this.ctx.env
+      const dirty = await git(this.worktree, ['status', '--porcelain', '--', rel], { env })
+      if (!dirty.trim()) return { ok: false, error: `${rel}에 바뀐 것이 없음(이미 내보냈다)` }
+      const commit = await commitPaths(
+        this.worktree,
+        [rel],
+        `요구사항 추출 결과 내보내기: ${rel}`,
+        { env },
+      )
+      await this.feed({ type: 'requirements.exported', at, exported: { path: rel, commit, at } })
+      return { ok: true }
+    })
+  }
+
+  /** run 기록 폴더 (AI 결정 115). 렌더러는 경로를 넘기지 않고 main이 Work 디렉터리에서 계산한다 */
+  requirementsRunsDir(): string | null {
+    return this.work.requirements ? new RequirementsFiles(this.files.dir).runs : null
+  }
+
   /** Work의 이벤트를 하나씩 처리한다 */
   enqueue<T>(fn: () => Promise<T>): Promise<T> {
     const run = this.queue.then(fn)
@@ -1018,6 +1147,32 @@ export class WorkRunner {
   ): Promise<TaskCheck> {
     const f = files ?? (await this.files.taskFiles(task))
     return this.check(task, f, await this.knowledgeCheck(task, f, opts))
+  }
+
+  /**
+   * 승인과 승인 화면의 검사: 형식 검사에 요구사항 추출의 기록 무결성을 더한다 (결정 2, AI 결정 124). requirements Work의
+   * extract와 verify만 보고, 그 문제는 넘길 수 없다(core/approval의 unignorable). Stop의 되돌림에는 넣지 않는다: 세션이
+   * 고칠 수 없는 앱 소유 기록이다
+   */
+  private async approvalCheck(
+    task: TaskRecord,
+    files?: Readonly<Record<string, string>>,
+  ): Promise<TaskCheck> {
+    const check = await this.checkOf(task, files)
+    if (workType(this.work) !== 'requirements') return check
+    if (task.node !== 'extract' && task.node !== 'verify') return check
+    const p = this.work.requirements
+    const problems =
+      p && p.revision > 0
+        ? await recordProblems(new RequirementsFiles(this.files.dir), p)
+        : ['요구사항 기록이 없음']
+    if (!problems.length) return check
+    const issues = problems.map((message) => ({
+      file: RECORD_ISSUE_FILE,
+      part: 'file' as const,
+      message,
+    }))
+    return { ...check, errors: [...check.errors, ...issues] }
   }
 
   /**
@@ -1559,7 +1714,20 @@ export class WorkRunner {
       respond: await this.respondInput(task),
       // 서브모듈을 읽지 못하면 안내 없이 간다 (D383)
       submodules: await submodulePaths(this.worktree, { env: this.ctx.env }).catch(() => []),
+      requirements: this.requirementsContext(task),
     })
+  }
+
+  /** context.md의 요구사항 기록 절: 요구사항 추출 Work의 verify와 PR 대응에서 기록이 있을 때 (AI 결정 117) */
+  private requirementsContext(task: TaskRecord): ContextInput['requirements'] {
+    const p = this.work.requirements
+    if (workType(this.work) !== 'requirements' || !p?.revision_hash) return null
+    if (task.node !== 'verify' && task.node !== 'respond') return null
+    return {
+      dir: new RequirementsFiles(this.files.dir).dir,
+      revision: p.revision,
+      hash: p.revision_hash,
+    }
   }
 
   /**
@@ -2301,7 +2469,7 @@ export class WorkRunner {
       if (this.cleanupOpen()) return { ok: false, error: CLEANUP_BLOCKS }
       const task = this.task(taskId)
       if (!task) return { ok: false, error: `${taskId} 없음` }
-      const check = await this.checkOf(task)
+      const check = await this.approvalCheck(task)
       // PR 대응 task는 승인하면 push하고 답글을 게시한다. 실패하면 그 오류를 돌려준다 (시나리오 10-6)
       this.opError = null
       const r = await this.command({
@@ -2829,12 +2997,17 @@ export class WorkRunner {
           facts.draft = this.ctx.config().pr_draft
           // 이슈 기록이 있으면 본문 끝에 Closes를 붙인다 (D346). 이어받은 PR의 본문은 고치지 않는다 (D349)
           const issue = this.work.issue?.number ?? null
+          // 요구사항 추출 결과를 내보냈으면 그 경로를 본문 끝에 적는다 (AI 결정 119): verify가 pr.md를 쓴 뒤의 일이라서다
+          const exported = this.work.requirements?.exported
+          const body = exported
+            ? `${pr.body.trimEnd()}\n\n요구사항 추출 결과: \`${exported.path}\` (커밋 ${exported.commit.slice(0, 7)}, extraction.md와 record.json)\n`
+            : pr.body
           facts.prUrl = await ghCreatePr(this.ctx.ghBin, {
             ...gh,
             base: e.base,
             head: e.branch,
             title: pr.title,
-            body: issue === null ? pr.body : withCloses(pr.body, issue),
+            body: issue === null ? body : withCloses(body, issue),
             draft: facts.draft,
           })
         }
@@ -3894,7 +4067,7 @@ export class WorkRunner {
     if (!task) return null
     const { env } = this.ctx
     const files = await this.files.taskFiles(task)
-    const check = await this.checkOf(task, files)
+    const check = await this.approvalCheck(task, files)
     // 끝난 task는 그 task가 끝났을 때의 코드까지 본다. 작업 트리는 지금 코드의 마지막 task만 본다.
     // 정리한 Work는 worktree가 없어 메인 체크아웃에서 커밋끼리 비교한다 (시나리오 8)
     const range = changeRange(this.work, task.id)
@@ -5428,6 +5601,7 @@ export class WorkRunner {
       pending: runner?.pending ?? [],
       current: runner?.current ?? null,
       budget: this.requirementsBudget(),
+      runs: runner?.runs ?? [],
     })
   }
 

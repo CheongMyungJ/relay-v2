@@ -28,7 +28,7 @@ import { call } from './commands'
 import { ConfirmDialog, UncommittedDialog } from './dialogs'
 import { Diff, Markdown } from './Markdown'
 import { PrPanel } from './PrPanel'
-import { RequirementsBox } from './Requirements'
+import { RequirementsBox, RequirementsExport } from './Requirements'
 import { focusTerm } from './terminals'
 
 type Tab = 'summary' | 'artifacts' | 'changes' | 'verdicts' | 'work' | 'knowledge'
@@ -67,6 +67,14 @@ export function Panel({ work, task, review, onApproved, onSelectStep, onShowClea
       {/* 요구사항 추출의 run 진행과 사람 결정 양식. extract task를 볼 때만 (17.12) */}
       {work.requirements && task.node === 'extract' ? (
         <RequirementsBox workKey={work.key} req={work.requirements} />
+      ) : null}
+      {/* 요구사항 추출 결과를 저장소로 내보내기: 완료 화면(verify 승인 대기)에서 (AI 결정 119) */}
+      {work.requirements && task.node === 'verify' && task.status === 'awaiting_approval' ? (
+        <RequirementsExport
+          workKey={work.key}
+          workId={work.key.split('/')[1] ?? ''}
+          req={work.requirements}
+        />
       ) : null}
     </>
   )

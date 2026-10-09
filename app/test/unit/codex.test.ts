@@ -21,6 +21,17 @@ describe('Codex 곁 세션의 보호 범위 (D388, D391)', () => {
       codexToolDenial(input, 'Edit', { file_path: '/home/relay/work/decisions.md' }),
     ).toBeTruthy()
   })
+
+  it('요구사항 기록(requirements/)도 막는다 (requirements-extraction-flow.md 결정 38)', () => {
+    expect(
+      codexToolDenial(input, 'Write', {
+        path: '/home/relay/work/requirements/revisions/000003.json',
+      }),
+    ).toBeTruthy()
+    expect(
+      codexToolDenial(input, 'exec_command', { cmd: 'rm -rf /home/relay/work/requirements' }),
+    ).toBeTruthy()
+  })
 })
 
 describe('Codex 보호 범위', () => {

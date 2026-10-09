@@ -699,6 +699,7 @@ export type LifecycleEventType =
   | 'extract.run'
   | 'extract.halted'
   | 'extract.finished'
+  | 'requirements.exported'
 
 /** events.jsonl의 한 줄 (5.5). task_id는 task 이벤트에만 있다 */
 export interface LifecycleEvent {

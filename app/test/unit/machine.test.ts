@@ -3875,6 +3875,37 @@ describe('요구사항 추출의 extract (requirements-extraction-flow.md 결정
     expect(currentTask(next.work)?.node).toBe('verify')
   })
 
+  it('[Work 포기]와 단계 선택은 도는 run 루프를 멈춘다 (결정 120)', () => {
+    const gone = apply(extracting(), { type: 'abandon', at: at() })
+    expect(gone.work.status).toBe('abandoned')
+    expect(status(gone.work)).toBe('interrupted')
+    expect(types(gone.effects)).toEqual([
+      'stopExtract',
+      'log:task.interrupted',
+      'log:work.abandoned',
+    ])
+    const back = apply(extracting(), {
+      type: 'selectStep',
+      node: 'intake',
+      keepCode: false,
+      instruction: '',
+      expect: { taskId: 't-02', done: false },
+      backups: [],
+      at: at(),
+    })
+    expect(back.effects).toContainEqual({ type: 'stopExtract', taskId: 't-02' })
+    expect(back.work.tasks.find((t) => t.id === 't-02')?.status).not.toBe('working')
+    // 멈춘 extract(중단됨)에는 멈출 루프가 없다
+    const halted = apply(extracting(), {
+      type: 'interrupt',
+      taskId: 't-02',
+      at: at(),
+      reason: 'human',
+    })
+    const later = apply(halted.work, { type: 'abandon', at: at() })
+    expect(types(later.effects)).not.toContain('stopExtract')
+  })
+
   it('재시작하면 돌던 run의 결과를 버리고 [재개]를 기다린다 (결정 4)', () => {
     const work = {
       ...extracting(),

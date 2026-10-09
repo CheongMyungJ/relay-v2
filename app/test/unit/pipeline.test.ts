@@ -96,22 +96,24 @@ describe('노드 (3.1)', () => {
     expect(workType({ type: 'spec' })).toBe('spec')
   })
 
-  it('[현재 코드 위에서 이어서]는 버그 수정의 fix, 기능 추가의 design과 implement, 리팩터링의 refactor, 설계의 spec, 일반의 execute에서 준다 (6.2, D254, D278, D316, D365)', () => {
+  it('[현재 코드 위에서 이어서]는 버그 수정의 fix, 기능 추가의 design과 implement, 리팩터링의 refactor, 설계의 spec, 일반의 execute, 요구사항 추출의 extract에서 준다 (6.2, D254, D278, D316, D365, 결정 120)', () => {
     expect(KEEP_CODE_NODES).toEqual({
       bugfix: ['fix'],
       feature: ['design', 'implement'],
       refactor: ['refactor'],
       spec: ['spec'],
       general: ['execute'],
-      requirements: [],
+      requirements: ['extract'],
     })
   })
 
-  it('설계의 spec만 "현재 문서 위에서 이어서"이고 처음부터 체크되어 있다 (D365, I105)', () => {
+  it('설계의 spec은 "현재 문서 위에서 이어서", 요구사항 추출의 extract는 "현재 기록 위에서 이어서"이고 둘만 처음부터 체크되어 있다 (D365, I105, 결정 120)', () => {
     expect(keepLabel('spec', 'spec')).toBe('현재 문서 위에서 이어서')
     expect(keepDefault('spec', 'spec')).toBe(true)
+    expect(keepLabel('requirements', 'extract')).toBe('현재 기록 위에서 이어서')
+    expect(keepDefault('requirements', 'extract')).toBe(true)
     for (const [type, nodes] of Object.entries(KEEP_CODE_NODES) as [WorkType, NodeName[]][]) {
-      for (const node of nodes.filter((n) => n !== 'spec')) {
+      for (const node of nodes.filter((n) => n !== 'spec' && n !== 'extract')) {
         expect(keepLabel(type, node), `${type} ${node}`).toBe('현재 코드 위에서 이어서')
         expect(keepDefault(type, node), `${type} ${node}`).toBe(false)
       }

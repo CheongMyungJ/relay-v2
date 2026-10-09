@@ -12,7 +12,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
-import { loadChecklist } from '../../../skills/extract/load.mjs'
+import { loadChecklist, loadPerspectives } from '../../../skills/extract/load.mjs'
 import { taskDirName } from '../../src/core/machine'
 import { fold } from '../../src/core/requirements'
 import { sectionNames } from '../../src/core/validate'
@@ -20,7 +20,13 @@ import type { RequirementsRevision } from '../../src/shared/requirements'
 import type { WorkState } from '../../src/shared/work'
 import { drive, type DriveResult } from '../support/driver'
 import { APP, FAKE_CLAUDE, git, harness, makeRepo, register, settle } from '../support/harness'
-import { extractSurvey, extractTrace } from '../support/requirements'
+import {
+  extractIntegrate,
+  extractReview,
+  extractSummarize,
+  extractSurvey,
+  extractTrace,
+} from '../support/requirements'
 import { REPO_FILES, scenario } from '../support/scenarios'
 import { M_CASE } from './repos'
 import { ScreenUi } from './screen'
@@ -67,12 +73,16 @@ interface Result {
 
 let result: Result | null = null
 
-/** 가짜 claude의 run 계획 (dry): survey 하나와 trace 하나 */
+/** 가짜 claude의 run 계획 (dry): survey, trace, 그리고 끝(integrate, review, summarize, AI 결정 111~113) */
 function dryPlan(dir: string): string {
   const plan = path.join(dir, 'plan.json')
-  const runs = [extractSurvey(), extractTrace(loadChecklist('command', ROOT).map((c) => c.id))].map(
-    (o) => ({ outputs: [o] }),
-  )
+  const runs = [
+    extractSurvey(),
+    extractTrace(loadChecklist('command', ROOT).map((c) => c.id)),
+    extractIntegrate(loadPerspectives(ROOT).map((p) => p.id)),
+    extractReview(['q1'], ['s1']),
+    extractSummarize(),
+  ].map((o) => ({ outputs: [o] }))
   fs.writeFileSync(plan, JSON.stringify({ runs }))
   return plan
 }

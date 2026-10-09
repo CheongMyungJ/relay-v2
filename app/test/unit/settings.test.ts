@@ -91,7 +91,7 @@ describe('deny 규칙 (D17, 시나리오 2-3)', () => {
     expect(ruleAbs('/home/u/.relay/x')).toBe('//home/u/.relay/x')
   })
 
-  it('git push, gh pr, 앱 소유 파일, 이전 task 디렉터리, Work 디렉터리의 .claude/ 편집을 막는다', () => {
+  it('git push, gh pr, 앱 소유 파일, 요구사항 기록, 이전 task 디렉터리, Work 디렉터리의 .claude/ 편집을 막는다', () => {
     const rules = denyRules({
       workDir: WORK_DIR,
       previousTaskDirs: [`${TASKS}\\01-intake`, `${TASKS}\\02-fix`],
@@ -105,6 +105,7 @@ describe('deny 규칙 (D17, 시나리오 2-3)', () => {
       `Edit(${w}/intent.md)`,
       `Edit(${w}/decisions.md)`,
       `Edit(${w}/pr-items.json)`,
+      `Edit(${w}/requirements/**)`,
       `Edit(${w}/tasks/01-intake/**)`,
       `Edit(${w}/tasks/02-fix/**)`,
       `Edit(${w}/.claude/**)`,
@@ -279,7 +280,7 @@ describe('곁 세션 (시나리오 11, D386, D388)', () => {
     ])
   })
 
-  it('앱 소유 파일, tasks/ 아래, .claude/만 막는다. push와 gh는 막지 않는다', () => {
+  it('앱 소유 파일, 요구사항 기록, tasks/ 아래, .claude/만 막는다. push와 gh는 막지 않는다', () => {
     const s = sideSettings({ port: 51234, taskId: 'side', workDir: WORK_DIR })
     expect(s.permissions.deny).toEqual([
       `Edit(${work}/work.json)`,
@@ -287,6 +288,7 @@ describe('곁 세션 (시나리오 11, D386, D388)', () => {
       `Edit(${work}/intent.md)`,
       `Edit(${work}/decisions.md)`,
       `Edit(${work}/pr-items.json)`,
+      `Edit(${work}/requirements/**)`,
       `Edit(${work}/tasks/**)`,
       `Edit(${work}/.claude/**)`,
     ])

@@ -90,6 +90,7 @@ export function codexToolDenial(
     )
   const protectedDirs = [
     ...input.previousTaskDirs.map(norm),
+    `${root}/requirements`,
     `${root}/.claude`,
     `${root}/.agents`,
     `${root}/.codex`,

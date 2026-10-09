@@ -1046,3 +1046,24 @@ describe('context.md: 서브모듈 (D383)', () => {
     }
   })
 })
+
+describe('context.md: 요구사항 기록 (requirements-extraction-flow.md 결정 38, AI 결정 117)', () => {
+  it('기록 정보가 없으면 절이 없다', () => {
+    expect(sections(buildContext(input('verify'))).has('요구사항 기록')).toBe(false)
+  })
+
+  it('기록 정보가 있으면 폴더, 지금 revision과 그 파일, 해시를 읽기만 하라는 말과 함께 넣는다', () => {
+    const md = buildContext(
+      input('verify', {
+        requirements: { dir: '/w/requirements', revision: 12, hash: 'sha256:abc' },
+      }),
+    )
+    const text = section(md, '요구사항 기록')
+    expect(text).toContain('읽기만 하고 고치지 않는다')
+    expect(text).toContain('- 폴더: /w/requirements')
+    expect(text).toContain('- 지금 revision: 12 (revisions/000012.json)')
+    expect(text).toContain('- 해시: sha256:abc')
+    const titles = [...sections(md).keys()]
+    expect(titles.indexOf('요구사항 기록')).toBe(titles.indexOf('선택 가능한 다음 단계') - 1)
+  })
+})

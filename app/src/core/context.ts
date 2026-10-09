@@ -241,6 +241,11 @@ export interface ContextInput {
   knowledge?: KnowledgeInput | null
   /** worktree의 서브모듈 경로 (D383). 없으면 서브모듈 절이 없다 */
   submodules?: readonly string[]
+  /**
+   * 요구사항 추출 Work의 verify·PR 대응: 앱 소유 기록 폴더의 절대 경로와 지금 revision, 그 해시
+   * (requirements-extraction-flow.md 결정 38, AI 결정 117). 아니면 없다
+   */
+  requirements?: { dir: string; revision: number; hash: string } | null
 }
 
 export interface CarriedCode {
@@ -670,6 +675,22 @@ function respondSection(r: RespondInput, base: string): [string, string] {
 }
 
 /** context.md의 내용 (시나리오 2-4의 표) */
+/** 요구사항 기록 절: 읽기만 하는 앱 소유 기록 (결정 38, AI 결정 117) */
+function requirementsSection(r: NonNullable<ContextInput['requirements']>): [string, string] {
+  return [
+    '요구사항 기록',
+    [
+      '앱 소유 기록이다. 읽기만 하고 고치지 않는다. extraction.md는 이 기록에서 앱이 쓴 것이다.',
+      '',
+      list([
+        `폴더: ${r.dir}`,
+        `지금 revision: ${String(r.revision)} (revisions/${String(r.revision).padStart(6, '0')}.json)`,
+        `해시: ${r.hash}`,
+      ]),
+    ].join('\n'),
+  ]
+}
+
 export function buildContext(input: ContextInput): string {
   const { work, task, config } = input
   const info = NODE_INFO[task.node]
@@ -703,6 +724,7 @@ export function buildContext(input: ContextInput): string {
     ['질문 방식', questionLine(config, work.settings, task.node)],
     ...(input.knowledge ? [knowledgeSection(task.node, input.knowledge)] : []),
     ...(input.submodules?.length ? [submoduleSection(input.submodules)] : []),
+    ...(input.requirements ? [requirementsSection(input.requirements)] : []),
     ['선택 가능한 다음 단계', list(nextSteps(type, task.node))],
     [
       work.intent ? `intent (버전 ${work.intent.version})` : 'intent',

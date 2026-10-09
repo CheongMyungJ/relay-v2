@@ -691,6 +691,14 @@ export interface ExtractHalted extends TaskEvent {
   clearStopAfter?: boolean
 }
 
+/**
+ * 요구사항 추출 결과를 저장소로 내보내 커밋했다 (AI 결정 119). 지금 task가 verify라도 받는다(완료 화면의 일)
+ */
+export interface RequirementsExported extends WorkEvent {
+  type: 'requirements.exported'
+  exported: { path: string; commit: string; at: string }
+}
+
 /** extract가 끝나 앱이 extraction.md와 handoff.md를 썼다 (결정 99). check는 그 형식 검사다 */
 export interface ExtractFinished extends TaskEvent {
   type: 'extract.finished'
@@ -763,6 +771,7 @@ export type MachineEvent =
   | IssueClosed
   | IssueFailed
   | RequirementsUpdated
+  | RequirementsExported
   | ExtractHalted
   | ExtractFinished
 
@@ -1181,6 +1190,16 @@ function endTask(
 ): { task: TaskRecord; effects: Effect[] } | null {
   // 포기와 밖에서 머지됨(D179)은 Work가 끝난다: 승인 대기로도 남기지 않는다
   const final = reason === 'abandoned' || reason === 'pr_merged'
+  // 요구사항 추출의 extract는 세션 대신 run 루프가 돈다: 루프를 멈추고 중단됨으로 둔다 (결정 120)
+  if (appRun(task.node) && task.status === 'working') {
+    return {
+      task: { ...task, status: 'interrupted' },
+      effects: [
+        { type: 'stopExtract', taskId: task.id },
+        log(work, at, 'task.interrupted', { reason }, task),
+      ],
+    }
+  }
   if (task.status === 'queued') {
     const status = final ? 'interrupted' : withoutSession(check)
     return {
@@ -1426,13 +1445,25 @@ function dispatch(work: WorkState, event: MachineEvent, config: AppConfig): Tran
     case 'issue.closed':
     case 'issue.failed':
       return issueEvent(work, event)
+    case 'requirements.exported':
+      return requirementsExported(work, event)
     default:
       return taskTransition(work, event, config)
   }
 }
 
+function requirementsExported(work: WorkState, e: RequirementsExported): Transition {
+  if (work.type !== 'requirements' || !work.requirements)
+    return unchanged(work, '요구사항 추출 기록이 없음')
+  return {
+    work: withRequirements(work, { ...work.requirements, exported: e.exported }),
+    effects: [log(work, e.at, 'requirements.exported', { ...e.exported })],
+  }
+}
+
 type TaskMachineEvent = Exclude<
   MachineEvent,
+  | RequirementsExported
   | StopAfterStep
   | ShelveWork
   | ResumeWork

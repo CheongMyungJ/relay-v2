@@ -311,6 +311,24 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   ipcMain.handle(IPC.extendRequirements, async (_e, workKey: unknown, runs: unknown) =>
     (await ready).extendRequirements(text(workKey), count(runs)),
   )
+  ipcMain.handle(
+    IPC.narrowRequirements,
+    async (_e, workKey: unknown, units: unknown, note: unknown, runs: unknown) =>
+      (await ready).narrowRequirements(text(workKey), texts(units), text(note), count(runs)),
+  )
+  ipcMain.handle(IPC.partialRequirements, async (_e, workKey: unknown) =>
+    (await ready).partialRequirements(text(workKey)),
+  )
+  // run 기록 폴더는 main이 Work 디렉터리에서 계산한다. 렌더러는 경로를 넘기지 않는다 (AI 결정 115)
+  ipcMain.handle(IPC.openRequirementsRuns, async (_e, workKey: unknown) => {
+    const dir = (await ready).requirementsRunsDir(text(workKey))
+    if (!dir) return { ok: false, error: '요구사항 추출 기록이 없음' }
+    const error = await shell.openPath(dir)
+    return error ? { ok: false, error } : { ok: true }
+  })
+  ipcMain.handle(IPC.exportRequirements, async (_e, workKey: unknown, dir: unknown) =>
+    (await ready).exportRequirements(text(workKey), text(dir)),
+  )
   ipcMain.handle(IPC.projectSettings, async (_e, projectId: unknown, settings: unknown) =>
     (await ready).updateProjectSettings(text(projectId), settings),
   )

@@ -503,6 +503,24 @@ export async function commitAll(dir: string, message: string, opts?: GitOptions)
   return headCommit(dir, opts)
 }
 
+/**
+ * 준 경로만 커밋한다 (요구사항 추출 결과 내보내기, AI 결정 119): git add -- <경로> 뒤 그 경로만 git commit. 다른 변경은
+ * 건드리지 않는다. 사용자의 커밋 훅과 서명 설정을 그대로 쓴다. 새 HEAD를 돌려준다
+ */
+export async function commitPaths(
+  dir: string,
+  paths: string[],
+  message: string,
+  opts?: GitOptions,
+): Promise<string> {
+  await git(dir, ['add', '--', ...paths], opts)
+  await git(dir, ['commit', '--quiet', '--message', message, '--', ...paths], {
+    ...opts,
+    timeoutMs: opts?.timeoutMs ?? 120_000,
+  })
+  return headCommit(dir, opts)
+}
+
 // ---------- 정리 (시나리오 8) ----------
 
 /**

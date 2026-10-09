@@ -1,10 +1,11 @@
 // [어댑터] 요구사항 추출의 기록 파일과 헤드리스 run (requirements-extraction-flow.md 결정 33, 38, 41, 42, 93, 97).
 // 실제 파일, git, 훅 서버, 프로세스를 쓴다. run은 가짜 claude(test/support/fake-claude/print-run.mjs)로 돌린다.
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { loadChecklist, loadLayers } from '../../../skills/extract/load.mjs'
+import { loadChecklist, loadLayers, loadPerspectives } from '../../../skills/extract/load.mjs'
 import { buildRun } from '../../../skills/extract/run.mjs'
 import { headCommit } from '../../src/adapters/git'
 import { HookServer } from '../../src/adapters/hooks'
@@ -45,6 +46,36 @@ describe('[어댑터] 기록 파일 (결정 33, 38, 41)', () => {
     const loaded = await files.load({ ...emptyPointer(), revision: 1, revision_hash: hash, next })
     expect(loaded).toEqual([revision])
     expect(fs.readdirSync(files.revisions)).toEqual(['000001.json'])
+  })
+
+  it('되감기로 버린 계보는 이력으로 두고 포인터의 계보만 읽는다. 다음 번호 이상만 고아다 (결정 33, 120)', async () => {
+    const files = new RequirementsFiles(tmp)
+    const first = startRevision(emptyPointer().next, AT)
+    await files.writeRevision(first.revision)
+    const second = { ...first.revision, number: 2, parent: 1, units: [] }
+    await files.writeRevision(second)
+    // 되감기: parent가 없는 새 시작 revision 3과 그 뒤의 4
+    const restart = startRevision({ ...first.next, revision: 3 }, AT, '되감기로 다시 시작')
+    await files.writeRevision(restart.revision)
+    const after = { ...second, number: 4, parent: 3 }
+    const hash = await files.writeRevision(after)
+    await files.writeRevision({ ...second, number: 5, parent: 4 })
+    const loaded = await files.load({
+      ...emptyPointer(),
+      revision: 4,
+      revision_hash: hash,
+      next: { ...restart.next, revision: 5 },
+    })
+    expect(loaded.map((r) => [r.number, r.parent])).toEqual([
+      [3, null],
+      [4, 3],
+    ])
+    expect(fs.readdirSync(files.revisions)).toEqual([
+      '000001.json',
+      '000002.json',
+      '000003.json',
+      '000004.json',
+    ])
   })
 
   it('포인터의 해시가 다르거나 파일이 없으면 무결성 오류다', async () => {
@@ -104,6 +135,42 @@ describe('[어댑터] 기록 파일 (결정 33, 38, 41)', () => {
     expect(result.observations[0]?.anchors[0]?.path).toBe('out.txt')
   })
 
+  it('실행 출력 사본에 명령이 가리키는 scratch 안 입력 파일도 남긴다 (AI 결정 121)', async () => {
+    const files = new RequirementsFiles(tmp)
+    const scratch = files.scratchDir('r-0004')
+    fs.mkdirSync(scratch, { recursive: true })
+    fs.writeFileSync(path.join(scratch, 'out.txt'), 'NaN\n')
+    fs.writeFileSync(path.join(scratch, 'probe.mjs'), 'console.log(0/0)\n')
+    fs.writeFileSync(path.join(scratch, 'data.json'), '[]\n')
+    const result = {
+      observations: [
+        {
+          key: 'o1',
+          anchors: [
+            {
+              kind: 'tool_output',
+              path: 'out.txt',
+              start: 1,
+              end: 1,
+              quote: 'NaN',
+              command: `cd ${scratch} && node probe.mjs --in "data.json" ../../etc/passwd > out.txt`,
+            },
+          ],
+        },
+      ],
+    }
+    const kept = await files.keepOutputs(result, { run: 'r-0004', worktree: path.join(tmp, 'wt') })
+    const a = (
+      kept.result as {
+        observations: { anchors: { inputs?: { path: string; copy: string }[] }[] }[]
+      }
+    ).observations[0]?.anchors[0]
+    expect(a?.inputs?.map((i) => i.path)).toEqual(['probe.mjs', 'data.json'])
+    expect(fs.readFileSync(path.join(tmp, a?.inputs?.[0]?.copy ?? ''), 'utf8')).toBe(
+      'console.log(0/0)\n',
+    )
+  })
+
   it('실행 출력의 인용을 사본과 같은 바이트로 대조하고, 대조한 바이트를 사본으로 둔다 (결정 42, 101)', async () => {
     const files = new RequirementsFiles(tmp)
     const scratch = files.scratchDir('r-0003')
@@ -154,6 +221,19 @@ describe('[어댑터] 지시와 스키마는 평가와 같은 바이트다 (결�
     expect(t.instructions).toContain('## Checklist keys')
     expect(loadChecklist('timing', ROOT).length).toBeGreaterThan(0)
   })
+
+  it('integrate는 관점을, review는 패킷의 질문·서술 키를 결과 스키마의 칸에 넣는다 (AI 결정 108, 112)', () => {
+    const i = assembleRun(ROOT, 'integrate', null)
+    const cov = (i.schema.properties as Record<string, { required: string[] }>)['coverage']
+    expect(cov?.required).toEqual(loadPerspectives(ROOT).map((p) => p.id))
+    expect(i.instructions).toContain('# Integrate run')
+    expect(i.instructions).toContain('### Coverage keys (perspectives)')
+    const r = assembleRun(ROOT, 'review', null, { answers: ['q1'], verdicts: ['s1', 's2'] })
+    const props = r.schema.properties as Record<string, { required: string[] }>
+    expect(props['answers']?.required).toEqual(['q1'])
+    expect(props['verdicts']?.required).toEqual(['s1', 's2'])
+    expect(assembleRun(ROOT, 'summarize', null).instructions).toContain('# Summarize run')
+  })
 })
 
 describe('[어댑터] 기준 커밋 읽기와 반영 검사 (결정 35, 37)', () => {
@@ -192,6 +272,43 @@ describe('[어댑터] 기준 커밋 읽기와 반영 검사 (결정 35, 37)', ()
       expect.stringMatching(/^quote_match: .*the quote is at line 2/),
     ])
     expect(submitReason(problems)).toMatch(/^relay: .*\n- config_known/)
+  })
+
+  it('EUC-KR 주석이 있는 파일은 ASCII 뼈대로 대조한다: 모지바케 인용은 받고 코드가 다른 인용은 걸린다 (AI 결정 123)', async () => {
+    const { repo } = makeRepo(tmp, 'euc', { 'src/p.c': 'x\n' })
+    // "펌프 끄기"의 EUC-KR 바이트
+    const comment = Buffer.from([0xc6, 0xdf, 0xc7, 0xc1, 0x20, 0xb2, 0xf4, 0xb1, 0xe2])
+    fs.writeFileSync(
+      path.join(repo, 'src', 'p.c'),
+      Buffer.concat([
+        Buffer.from('int x;\nvoid pump_off(void) /* '),
+        comment,
+        Buffer.from(' */\n{\n}\n'),
+      ]),
+    )
+    execFileSync('git', ['-C', repo, 'commit', '-qam', 'euc-kr'])
+    const commit = await headCommit(repo)
+    const r = baseReader(repo, commit)
+    expect(await r.read('src/p.c')).toContain('\uFFFD')
+    const result = (quote: string) => ({
+      outcome: 'done',
+      checkpoint: null,
+      observations: [
+        {
+          key: 'o1',
+          text: 't',
+          configs: ['all'],
+          anchors: [{ kind: 'code', path: 'src/p.c', start: 2, end: 2, quote, command: null }],
+          inference: false,
+        },
+      ],
+    })
+    expect(
+      await resultProblems(result('void pump_off(void) /* ÆßÇÁ ²ô±â */'), { repo, read: r.read }),
+    ).toEqual([])
+    expect(
+      await resultProblems(result('void pump_on(void) /* 펌프 켜기 */'), { repo, read: r.read }),
+    ).toEqual([expect.stringMatching(/^quote_match: /)])
   })
 })
 
