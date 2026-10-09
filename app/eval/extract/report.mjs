@@ -32,7 +32,8 @@ export function loadRows(dirs) {
 }
 
 /**
- * 이름표 바꾸기: "A=BASE@e1-twoboard"면 이름표 A이고 시나리오가 e1-twoboard인 행을 BASE로 한다(@ 없으면 모든 시나리오).
+ * 이름표 바꾸기: "A=BASE@e1-twoboard"면 이름표 A이고 시나리오가 e1-twoboard인 행을 BASE로 한다(@ 없으면 모든 시나리오,
+ * "@e1-twoboard.survey"처럼 과제까지 줄 수 있다). 지시 바이트가 같은 층의 run을 고친 판의 이름표로 묶을 때도 쓴다.
  * 같은 때의 기준선이 한 시나리오에만 있을 때 다른 시나리오의 저장한 기준선과 묶어 한 쪽으로 견준다(AI 결정 79)
  */
 export function relabel(rows, specs) {
@@ -43,7 +44,11 @@ export function relabel(rows, specs) {
   })
   return rows.map((r) => {
     const rule = rules.find(
-      (q) => q.from === r.run.label && (!q.scenario || q.scenario === r.run.scenario),
+      (q) =>
+        q.from === r.run.label &&
+        (!q.scenario ||
+          q.scenario === r.run.scenario ||
+          q.scenario === `${r.run.scenario}.${r.run.task}`),
     )
     return rule ? { ...r, run: { ...r.run, label: rule.to } } : r
   })

@@ -682,6 +682,12 @@ describe('저장본과 채택 판정', () => {
     )
     expect(out).toEqual(['BASE.e1', 'A.e2', 'BASE.e2'])
     expect(() => relabel([], ['A'])).toThrow(/--as/)
+    const t = (label, scenario, task) => ({ run: { label, scenario, task }, score: null })
+    expect(
+      relabel([t('C', 'e1', 'survey'), t('C', 'e1', 'trace-timing')], ['C=C2@e1.trace-timing']).map(
+        (x) => x.run.label,
+      ),
+    ).toEqual(['C', 'C2'])
   })
 
   it('옛 저장본(관문 칸 없음)은 관문 위반 0으로 읽는다', () => {
