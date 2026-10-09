@@ -4,7 +4,7 @@
 
 ## Scope
 
-A group of time constants (timeouts, periods, delays, supervision windows): the value in every configuration, where each is consumed, what advances the count, and the unit.
+Every time behavior the unit's purpose names: the constants (timeouts, periods, delays, supervision windows) with their value in every configuration, where each is consumed, what advances the count and the unit, and also the waits on those paths (busy loops, blocking calls, calls into boundaries) with how long each can last.
 
 ## Trace
 
@@ -16,6 +16,7 @@ A group of time constants (timeouts, periods, delays, supervision windows): the 
 - `counting_context`: which context increments and which compares (interrupt, task, loop), and whether that context can be delayed or skipped.
 - `overflow`: the counter's width, how a wrap is handled, and how long until it wraps.
 - `nature`: `setting`, `computed`, `observed` or `spec`, as the contract defines.
+- Waits: for each wait or blocking step on these paths, its duration as far as code or anchored documents give it, and which timeout or supervision window runs around it. When the wait can approach or exceed that window, write an observation that anchors both.
 
 ## Checklist
 

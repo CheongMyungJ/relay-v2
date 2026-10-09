@@ -12,7 +12,8 @@
 3. Interfaces. Buses, pins, links to a host or a peer, storage, and which configurations use them.
 4. Boundaries. Vendor HAL, RTOS kernel, third-party and generated code: `path`, `kind` and the reason (license header, vendor name, directory, generator banner). Do not trace inside them; their configuration values and the calls into them are in scope.
 5. Units. Propose analysis units, each with a lens, `priority`, `depends_on` and `reason`. Cover every command, every piece of state shared between interrupt and task or loop, the time constants, and each place where configurations differ.
-6. Misses. Record in `not_found`, with searches, what you looked for and did not find.
+6. Sweep. Before writing the result, search the whole repository once more for each kind of entry point (vector tables, handler registration, task creation, DMA and timer configuration, command tables) and add every hit that is not yet in `inventory`.
+7. Misses. Record in `not_found`, with searches, what you looked for and did not find.
 
 ## Done when
 
