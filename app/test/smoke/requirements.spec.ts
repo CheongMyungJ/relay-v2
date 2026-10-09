@@ -1,6 +1,7 @@
 // [스모크] 요구사항 추출 유형 (requirements-extraction-flow.md 17.12): 새 Work 대화상자에서 요구사항 추출을 골라 시작하고,
 // 의도를 승인하면 extract가 run을 돈다. survey가 사람 결정 필요를 내면 멈추고 패널의 진행 상자에 양식이 보인다. 선택지를
 // 골라 보내면 반영 대기가 되고, [재개]하면 답을 반영해 trace run을 돌고 승인 대기가 된다. run은 가짜 claude의 -p run이다.
+// 설정 화면의 "요구사항 추출" 절(결정 31, 102)에서 run 상한을 바꾸면 config.json에 쓰고 진행 상자의 상한이 바뀐다.
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -114,4 +115,30 @@ test('요구사항 추출: 사람 결정 필요에 패널 양식으로 답하고
   await expect(box).toContainText('run 2/100', { timeout: 60_000 })
   await expect(box).not.toContainText('h-0001')
   await expect(win.locator('.band')).toContainText('승인 대기', { timeout: 60_000 })
+})
+
+test('설정 화면의 요구사항 추출 절: run 상한을 바꾸면 저장되고 진행 상자에 보인다. 마감이 상한보다 길면 받지 않는다 (결정 31, 102)', async () => {
+  const win = await app.firstWindow()
+  const box = win.getByLabel('요구사항 추출', { exact: true })
+  await expect(box).toContainText('run 2/100')
+  await win.locator('.sidebar').getByRole('button', { name: '설정', exact: true }).click()
+  const budget = win.getByRole('group', { name: '요구사항 추출 예산' })
+  await expect(budget.getByLabel('Work당 run 상한', { exact: true })).toHaveValue('100')
+  await budget.getByLabel('run 하나의 부드러운 마감(분)', { exact: true }).fill('30')
+  await win.getByRole('button', { name: '저장', exact: true }).click()
+  await expect(win.locator('.modal .error')).toContainText('시간 상한(분)보다 짧아야 함')
+  await budget.getByLabel('run 하나의 부드러운 마감(분)', { exact: true }).fill('10')
+  await budget.getByLabel('Work당 run 상한', { exact: true }).fill('50')
+  await win.screenshot({ path: 'test-results/requirements-settings.png' })
+  await win.getByRole('button', { name: '저장', exact: true }).click()
+  await expect(budget).toBeHidden()
+  const saved = JSON.parse(fs.readFileSync(path.join(root, 'home', 'config.json'), 'utf8')) as {
+    requirements_budget: Record<string, number>
+  }
+  expect(saved.requirements_budget).toMatchObject({
+    run_limit: 50,
+    soft_minutes: 10,
+    hard_minutes: 30,
+  })
+  await expect(box).toContainText('run 2/50')
 })

@@ -12,8 +12,10 @@ import {
   AGENT_STEP_TITLES,
   AUTO_APPROVE_TITLES,
   DEFAULT_CONFIG,
+  REQUIREMENTS_BUDGET_TITLES,
   SKILL_TITLES,
 } from '../../src/shared/config'
+import { DEFAULT_REQUIREMENTS_BUDGET } from '../../src/shared/requirements'
 import { WORK_TYPES } from '../../src/shared/work'
 
 describe('config.json 읽기 (5.1.1)', () => {
@@ -605,5 +607,78 @@ describe('[단위] 기본 모델·추론 수준과 단계별 실행 설정', () 
     expect(
       applyConfigPatch(DEFAULT_CONFIG, { agent_steps: { design: { model: 'opus' } } }).ok,
     ).toBe(true)
+  })
+})
+
+describe('[단위] 요구사항 추출 예산 (requirements-extraction-flow.md 결정 30, 31, 102)', () => {
+  it('기본값은 결정 30의 잠정값이고 저장한 값을 다시 읽으면 같은 값이다', () => {
+    expect(DEFAULT_CONFIG.requirements_budget).toEqual(DEFAULT_REQUIREMENTS_BUDGET)
+    const saved = {
+      requirements_budget: {
+        run_limit: 40,
+        hard_minutes: 20,
+        soft_minutes: 10,
+        unit_failures: 3,
+        failures_in_row: 4,
+        unit_incompletes: 2,
+      },
+    }
+    const { config, warnings } = normalizeConfig(JSON.parse(JSON.stringify(saved)))
+    expect(warnings).toEqual([])
+    expect(config.requirements_budget).toEqual(saved.requirements_budget)
+    // 없는 값은 기본값을 쓴다
+    expect(
+      normalizeConfig({ requirements_budget: { run_limit: 7 } }).config.requirements_budget,
+    ).toEqual({ ...DEFAULT_REQUIREMENTS_BUDGET, run_limit: 7 })
+  })
+
+  it('파일의 틀린 값은 그 값만, 마감이 상한보다 길면 둘 다 기본으로 되돌리고 경고한다', () => {
+    const r = normalizeConfig({
+      requirements_budget: { run_limit: 0, unit_failures: 2.5, nope: 1, failures_in_row: 5 },
+    })
+    expect(r.config.requirements_budget).toEqual({
+      ...DEFAULT_REQUIREMENTS_BUDGET,
+      failures_in_row: 5,
+    })
+    expect(r.warnings).toEqual([
+      'config.json 요구사항 추출(Work당 run 상한): 1~1000의 정수여야 함 (지금: 0). 기본값을 씀',
+      'config.json 요구사항 추출(같은 단위 연속 실패): 1~10의 정수여야 함 (지금: 2.5). 기본값을 씀',
+      'config.json 요구사항 추출: 모르는 값 nope. 기본값을 씀',
+    ])
+    const late = normalizeConfig({ requirements_budget: { hard_minutes: 10, soft_minutes: 12 } })
+    expect(late.config.requirements_budget).toEqual(DEFAULT_REQUIREMENTS_BUDGET)
+    expect(late.warnings).toEqual([
+      expect.stringMatching(
+        /부드러운 마감\(분\)은 .*시간 상한\(분\)보다 짧아야 함 \(지금: 12 ≥ 10\)/,
+      ),
+    ])
+    expect(normalizeConfig({ requirements_budget: 3 }).warnings).toEqual([
+      'config.json 요구사항 추출: 객체여야 함. 기본값을 씀',
+    ])
+  })
+
+  it('설정 화면은 준 값만 바꾸고, 바꾼 뒤의 마감이 상한보다 짧아야 한다', () => {
+    const r = applyConfigPatch(DEFAULT_CONFIG, { requirements_budget: { run_limit: 30 } })
+    expect(r).toMatchObject({
+      ok: true,
+      value: { requirements_budget: { ...DEFAULT_REQUIREMENTS_BUDGET, run_limit: 30 } },
+    })
+    expect(
+      applyConfigPatch(DEFAULT_CONFIG, { requirements_budget: { hard_minutes: 15 } }),
+    ).toMatchObject({ ok: false, error: expect.stringContaining('짧아야 함 (지금: 15 ≥ 15)') })
+    expect(
+      applyConfigPatch(DEFAULT_CONFIG, { requirements_budget: { unit_incompletes: 11 } }),
+    ).toEqual({
+      ok: false,
+      error: '요구사항 추출(같은 단위 연속 미완료): 1~10의 정수여야 함 (지금: 11)',
+    })
+    expect(applyConfigPatch(DEFAULT_CONFIG, { requirements_budget: { x: 1 } })).toEqual({
+      ok: false,
+      error: '요구사항 추출: 모르는 값 x',
+    })
+    // 화면 이름은 예산의 모든 값을 덮는다
+    expect(REQUIREMENTS_BUDGET_TITLES.map(([k]) => k).sort()).toEqual(
+      Object.keys(DEFAULT_REQUIREMENTS_BUDGET).sort(),
+    )
   })
 })

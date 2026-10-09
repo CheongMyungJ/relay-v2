@@ -1,6 +1,7 @@
 // 앱 설정 config.json (5.1.1)과 Work별 덮어쓰기 (D72).
 // 파일에 쓰는 모양이라 키는 snake_case다.
 import type { AgentEngine, AgentStep } from './agent'
+import { DEFAULT_REQUIREMENTS_BUDGET, type RequirementsBudget } from './requirements'
 import type { WorkType } from './work'
 
 /**
@@ -95,6 +96,12 @@ export interface AppConfig {
   knowledge_review_model: string
   /** 화면 테마 (D335). 터미널은 테마와 관계없이 어둡다 */
   theme: ThemeChoice
+  /**
+   * 요구사항 추출의 예산 (requirements-extraction-flow.md 결정 30, 31, 102): Work당 run 상한, run 하나의 하드 시간 상한과
+   * 부드러운 마감, 같은 단위 연속 실패·전체 연속 실패·같은 단위 연속 미완료. 다음 run부터 쓴다. Work마다 늘린 양은
+   * work.json에 둔다
+   */
+  requirements_budget: RequirementsBudget
 }
 
 /** work.json의 settings. 앱 설정과 같은 키를 쓰고, 없는 키는 앱 설정을 따른다 (D72) */
@@ -186,6 +193,36 @@ export const AGENT_STEP_TITLES: readonly (readonly [AgentStepName, string, Setti
   ['side', '곁 세션', 'common'],
 ]
 
+/** 요구사항 추출 예산의 화면 이름과 풀이 (결정 31, 102). 설정 화면과 검사 오류가 쓴다 */
+export const REQUIREMENTS_BUDGET_TITLES: readonly (readonly [
+  keyof RequirementsBudget,
+  string,
+  string,
+])[] = [
+  [
+    'run_limit',
+    'Work당 run 상한',
+    '닿으면 다음 run을 띄우지 않고 멈춘다. [계속 +20]으로 늘린다 (결정 24, 26)',
+  ],
+  ['hard_minutes', 'run 하나의 시간 상한(분)', '넘으면 run을 끝내고 실패로 센다 (결정 25)'],
+  [
+    'soft_minutes',
+    'run 하나의 부드러운 마감(분)',
+    '지나면 탐색을 막고 미완료와 checkpoint로 내게 한다. 시간 상한보다 짧아야 한다 (결정 25)',
+  ],
+  [
+    'unit_failures',
+    '같은 단위 연속 실패',
+    '닿으면 그 단위를 "보류: 연속 실패"로 끝내고 다른 단위를 잇는다 (결정 6)',
+  ],
+  ['failures_in_row', '전체 연속 실패', '단위와 관계없이 닿으면 전체를 멈춘다 (결정 6)'],
+  [
+    'unit_incompletes',
+    '같은 단위 연속 미완료',
+    '닿으면 그 단위를 "보류: 수렴 안 됨"으로 끝내고 다른 단위를 잇는다 (결정 30)',
+  ],
+]
+
 /** 질문 방식의 화면 이름 (5.6.1) */
 export const QUESTION_MODE_LABEL: Readonly<Record<QuestionMode, string>> = {
   draft_first: '초안 우선',
@@ -236,4 +273,5 @@ export const DEFAULT_CONFIG: AppConfig = {
   knowledge_review_engine: 'claude',
   knowledge_review_model: '',
   theme: 'system',
+  requirements_budget: { ...DEFAULT_REQUIREMENTS_BUDGET },
 }

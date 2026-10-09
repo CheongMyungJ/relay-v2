@@ -23,6 +23,7 @@ import {
   AUTO_APPROVE_TITLES,
   QUESTION_MODE_LABEL,
   SETTING_GROUP_LABEL,
+  REQUIREMENTS_BUDGET_TITLES,
   SKILL_TITLES,
   THEME_CHOICES,
   THEME_LABEL,
@@ -903,6 +904,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         knowledge_review_engine: value.knowledge_review_engine,
         knowledge_review_model: value.knowledge_review_model,
         theme: value.theme,
+        requirements_budget: value.requirements_budget,
       }),
     )
     setBusy(false)
@@ -1224,6 +1226,32 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 }
               />
             </label>
+          </div>
+          <h3>요구사항 추출</h3>
+          <div className="dim">
+            extract 단계에서 앱이 돌리는 분석 run의 예산입니다. 다음 run부터 씁니다. run 상한에 닿아
+            멈춘 Work는 [계속 +20]으로 그 Work의 상한만 늘립니다.
+          </div>
+          <div className="form-grid" role="group" aria-label="요구사항 추출 예산">
+            {REQUIREMENTS_BUDGET_TITLES.map(([key, label, hint]) => (
+              <label key={key} className="form-row" title={hint}>
+                <span>{label}</span>
+                <input
+                  type="number"
+                  aria-label={label}
+                  value={value.requirements_budget[key]}
+                  onChange={(e) =>
+                    setDraft({
+                      ...value,
+                      requirements_budget: {
+                        ...value.requirements_budget,
+                        [key]: Number(e.target.value),
+                      },
+                    })
+                  }
+                />
+              </label>
+            ))}
           </div>
         </>
       ) : (

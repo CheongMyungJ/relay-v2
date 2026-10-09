@@ -57,7 +57,7 @@ import type {
   TerminalBacklog,
 } from '../shared/views'
 import { WORK_TYPES, type DeliveryChoice, type WorkState, type WorkType } from '../shared/work'
-import { DEFAULT_REQUIREMENTS_BUDGET, type RequirementsBudget } from '../shared/requirements'
+import type { RequirementsBudget } from '../shared/requirements'
 import { SessionPool } from './pool'
 import type { UiPort } from './ports'
 import { checkGh, inspectProject, prepareProject, type ProjectEnv } from './projects'
@@ -74,7 +74,7 @@ export interface RelayOptions {
   /** gh 실행 파일. 기본은 PATH의 gh */
   ghBin?: string
   now?: () => Date
-  /** 요구사항 추출의 예산. 앱 설정의 "요구사항 추출" 절(결정 31)이 생기기 전까지 시험이 줄이는 자리다 */
+  /** 요구사항 추출의 예산을 앱 설정(결정 31, 102) 위에 덮어쓴다. 시험이 run 상한을 줄이는 자리다 */
   requirementsBudget?: Partial<RequirementsBudget>
   /** 앱 설정을 읽었거나 바꿨다. 테마(D335)처럼 Electron이 적용할 것을 main이 적용한다 */
   onConfig?: (config: AppConfig) => void
@@ -219,7 +219,11 @@ export class Relay {
       ui: this.o.ui,
       pool: this.pool,
       config: () => this.config,
-      requirementsBudget: () => ({ ...DEFAULT_REQUIREMENTS_BUDGET, ...this.o.requirementsBudget }),
+      // 앱 설정의 요구사항 추출 절(결정 31, 102). 시험은 RelayOptions로 줄인다
+      requirementsBudget: () => ({
+        ...this.config.requirements_budget,
+        ...this.o.requirementsBudget,
+      }),
       at: () => this.at(),
       size: () => this.size,
       ghBin: this.ghBin(),

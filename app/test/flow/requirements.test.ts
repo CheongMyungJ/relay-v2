@@ -232,8 +232,11 @@ describe('[흐름] 요구사항 추출 (결정 92~99)', () => {
     )
   })
 
-  it('run 상한에 닿으면 멈추고, [계속 +N]은 상한을 늘려 이어서 돈다 (결정 24, 26, 99)', async () => {
-    const s = await setup([survey(), trace()], { run_limit: 1 })
+  it('run 상한에 닿으면 멈추고, [계속 +N]은 상한을 늘려 이어서 돈다 (결정 24, 26, 99). 상한은 앱 설정이다 (결정 31, 102)', async () => {
+    const s = await setup([survey(), trace()])
+    expect(await s.h.relay.updateConfig({ requirements_budget: { run_limit: 1 } })).toMatchObject({
+      ok: true,
+    })
     await drive(s.h.relay, s.h.ui, s.key, { pauseAt: (t) => t.node === 'extract' })
     await s.h.ui.until(
       () => (work(s.dir).requirements?.halt?.reason === 'run_limit' ? true : null),
