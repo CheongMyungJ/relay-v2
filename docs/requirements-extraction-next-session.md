@@ -1,17 +1,19 @@
 # 다음 세션용 프롬프트
 
-아래 내용을 새 세션에 입력한다. [논의 기록](requirements-extraction-flow.md)은 이전 대화 없이 읽을 수 있도록 작성돼 있다. 4차 작업(녹화, 결과 스키마 v0, 평가 하네스, 기준선·A/A)은 17.4절, 봉인 hold-out은 17.5절, 지침 v1은 17.6절, 층 빼기와 v2는 17.7절, v3와 채택은 17.8절, v3의 hold-out 확인은 17.9절, 구성별 빌드 인덱스와 메모리 배치 점검표는 17.10절, AI가 정한 결정은 15.5.1절(결정 43~89)에 있다.
+아래 내용을 새 세션에 입력한다. [논의 기록](requirements-extraction-flow.md)은 이전 대화 없이 읽을 수 있도록 작성돼 있다. 4차 작업(녹화, 결과 스키마 v0, 평가 하네스, 기준선·A/A)은 17.4절, 봉인 hold-out은 17.5절, 지침 v1은 17.6절, 층 빼기와 v2는 17.7절, v3와 채택은 17.8절, v3의 hold-out 확인은 17.9절, 구성별 빌드 인덱스와 메모리 배치 점검표는 17.10절, 그 개발용 측정은 17.11절, AI가 정한 결정은 15.5.1절(결정 43~91)에 있다.
 
 9차 작업의 결론: 개발용에서 채택한 지침 v3(커밋 b5195bc)는 봉인 hold-out(`extract-h1`)에서 결정 62를 넘지 못했다. base와 견줘 PM-A −0.040 [−0.240, 0.120], PM-B 0.018 [−0.008, 0.044](5층, 회차 5)이고 천장은 아니었다(base PM-A 0.44/run). 재현율은 퇴보하지 않았으나 잘못된 확정의 감소가 확인되지 않았다. 잘못된 확정은 두 쪽 모두 survey(0.80 대 0.80)와 trace-command(N 1.00, V 0.80)에 몰렸다. v3는 채택 판에서 내렸고(결정 86) 지금 채택한 판은 없다. `extract-h1`은 소진했다.
 
-10차 작업: 사람의 요청으로 잘못된 확정을 구조로 막는 장치를 먼저 붙였다(17.10절). 구성별 빌드 인덱스(정의된 심볼, 전처리 뒤 살아 있는 줄)와 제출 검사 규칙 `config_active`(하네스는 `run.mjs --build-index`일 때만, 2회까지 되돌림), variant 렌즈 `memory_layout`·shared 렌즈 `dma_memory` 점검표다. 그래서 `skills/extract`의 문구는 v3가 아니라 아직 재지 않은 새 판(v4 후보)이다.
+10차 작업: 사람의 요청으로 잘못된 확정을 구조로 막는 장치를 먼저 붙였다(17.10절). 구성별 빌드 인덱스(정의된 심볼, 전처리 뒤 살아 있는 줄)와 제출 검사 규칙 `config_active`(하네스는 `run.mjs --build-index`일 때만, 2회까지 되돌림), variant 렌즈 `memory_layout`·shared 렌즈 `dma_memory` 점검표다. 그래서 `skills/extract`의 문구는 v3가 아니라 새 판(v4, 커밋 55b857f)이다.
 
-다음은 셋이다. 2(개발용 측정)를 먼저 해도 되지만, 2에서 채택한 판을 확인하려면 1이 먼저 끝나야 한다. 3은 나란히 할 수 있다.
+11차 작업: v4 문구(W)는 개발용 10층에서 base와 견줘 PM-A −0.300 [−0.420, −0.200], PM-B 0.008 [−0.008, 0.023]로 결정 62의 채택 조건을 넘었다(17.11절). 개발용이 v3의 이득을 크게 보인 전례(17.9)가 있어 새 hold-out 확인 전에는 채택 판으로 두지 않는다. 제출 검사(WI)는 개발용 survey에 잡을 구성 병합이 없어 효과를 가르지 못했고, 되돌림 1번은 앵커 줄이 틀린 데서 온 오탐이었다(모델은 앵커를 고쳐 다시 냄).
+
+다음은 셋이다. 1(새 hold-out)이 끝나야 2(W의 hold-out 확인)를 할 수 있다. 3은 나란히 할 수 있다.
 
 ## 1. 새 봉인 hold-out 만들기(지침을 쓰는 세션과 다른 세션)
 
 ```text
-CheongMyungJ/relay-v2의 docs/requirements-extraction-flow-20261008 브랜치에서, 요구사항 추출 run 평가의 새 봉인 hold-out(extract-h2)을 만들어줘. 중간에 나에게 묻지 말고, 결정이 필요하면 결정 1~86과 기존 선례에 가장 잘 맞는 안을 골라 15.5.1절에 결정 87~로 적어.
+CheongMyungJ/relay-v2의 docs/requirements-extraction-flow-20261008 브랜치에서, 요구사항 추출 run 평가의 새 봉인 hold-out(extract-h2)을 만들어줘. 중간에 나에게 묻지 말고, 결정이 필요하면 결정 1~91과 기존 선례에 가장 잘 맞는 안을 골라 15.5.1절에 결정 92~로 적어.
 
 먼저 CLAUDE.md, docs/extract-eval.md(2절, 4절, 6절, 7절), docs/requirements-extraction-flow.md(16.6절, 17.5절, 17.9절, 결정 22·64~68·85~86)를 읽어줘. 지침 문구(skills/extract), 채점 규칙, 채택 규칙(결정 62)은 고치지 않는다. 개발용 시나리오(e1, e2)와 지침 문구를 보고 그에 맞춰 함정을 고르지 않는다(지침 판에 맞춘 hold-out이 되지 않게).
 
@@ -24,29 +26,30 @@ CheongMyungJ/relay-v2의 docs/requirements-extraction-flow-20261008 브랜치에
 실제 모델 run은 하지 않는다(결정 68). 작게 커밋하고 push한다. PR은 만들지 않는다. push 전에 app/에서 npm run typecheck && npm run lint && npm run format:check && npm test && npm run test:contract && npm run test:eval, skills/에서 node check.mjs. 커밋 전마다 git diff --cached에 열쇠나 평문이 없는지 본다.
 ```
 
-## 2. 10차 작업 장치의 개발용 측정(그 뒤 다음 지침 세션)
-
-먼저 10차 작업의 장치를 개발용에서 잰다(아래 틀). 그 뒤 17.9.1절의 제안 가운데 사람이 고른다: (a) 개발용을 넓히기(점검표 밖 범주가 든 셋째 개발 시나리오 e3), (b) 소진한 h1을 개발용으로 돌려 쓰기(열쇠가 필요하고 결정 66의 기록 제한이 풀린다), (c) 호출 상한.
+## 2. v4(W)의 hold-out 확인(1이 끝나고 사람이 열쇠를 줄 때)
 
 ```text
-CheongMyungJ/relay-v2의 docs/requirements-extraction-flow-20261008 브랜치에서, 10차 작업(17.10절)의 장치를 개발용에서 재고 결정 62로 판정해줘. 중간에 나에게 묻지 말고, 결정이 필요하면 결정 1~89와 기존 선례에 가장 잘 맞는 안을 골라 15.5.1절에 적어. 봉인 hold-out은 열지 않는다. 지침 문구, 채점 규칙, 채택 규칙(결정 62)은 결과를 보기 전에 고정하고 측정 중에 고치지 않는다.
+CheongMyungJ/relay-v2의 docs/requirements-extraction-flow-20261008 브랜치에서, 개발용에서 채택 조건을 넘은 요구사항 추출 지침 v4(커밋 55b857f, 지금 skills/extract의 문구)를 봉인 hold-out extract-h2에서 결정 62의 규칙으로 확인하고 보고해줘. 열쇠는 명령의 환경 변수(HOLDOUT_KEY)로만 쓰고 레포의 파일, 문서, 커밋 메시지, 결과 폴더, 보고서에 적지 않는다. 중간에 나에게 묻지 말고, 결정이 필요하면 결정 1~91과 기존 선례에 가장 잘 맞는 안을 골라.
 
-먼저 CLAUDE.md, docs/extract-eval.md, docs/requirements-extraction-flow.md(15.5.1절, 17.8~17.10절)를 읽어줘.
+먼저 CLAUDE.md, docs/extract-eval.md(3절, 5절, 7절), docs/requirements-extraction-flow.md(15.5.1절, 17.9~17.11절)를 읽고 전제가 바뀌었는지 확인해줘. 지침 문구, 채점 규칙, 채택 규칙, 제출 검사 규칙은 이 세션에서 고치지 않는다.
 
-할 일:
-1. app/에서 npm ci 뒤 node eval/extract/build-index.mjs로 두 시나리오의 인덱스가 만들어지고 reference survey가 config_active를 통과하는지 본다.
-2. 결과 폴더 하나(eval/extract/results/m5)에서 같은 때에 세 쪽을 두 시나리오·다섯 과제·회차 5로 돌린다: base(--side base, 이름표 N), v4 문구(--side v1, 이름표 W), v4 문구 + 제출 검사(--side v1 --build-index, 이름표 WI). claude 프로세스는 넷을 넘기지 않는다. score.mjs로 채점한다.
-3. report.mjs --pair W,N --adopt와 --pair WI,N --adopt로 판정하고, --pair WI,W로 제출 검사만의 효과를 본다. 제출 검사는 run.json의 submitCheck(되돌림 수, 남은 문제)도 과제별로 센다. 되돌림이 reference와 다른 근거로 잘못 걸린 경우(오탐)가 있으면 사례를 남긴다.
-4. 결과를 17.11절에 적고 이 파일을 갱신한다. 채택한 판이 있으면 새 hold-out(1)으로 확인하는 세션을 안내한다.
+할 일(17.9절과 같은 순서):
+1. app/에서 npm ci 뒤 HOLDOUT_KEY='<열쇠>' bash eval/unseal.sh extract-h2로 푼다. 해시 확인이 실패하면 멈추고 보고한다. 평문은 커밋하지 않는다(git status로 확인).
+2. node eval/extract/check-fixtures.mjs, npm run test:eval, node eval/extract/build-index.mjs <푼 id>(reference survey가 config_active를 통과하는지)로 확인한다. 실패하면 측정하지 말고 보고한다.
+3. 결과 폴더 eval/extract/results/h2(git에 없음)에서 base(--side base, N), v4(--side v1, W), v4 + 제출 검사(--side v1 --build-index --tasks survey, WI)를 같은 때에 sonnet/medium, 회차 5로 돌린다(--scenarios <푼 id>, claude 프로세스는 넷 이하). WI의 trace 층은 결정 90대로 W run을 --as로 묶는다. score.mjs로 채점하고 report.mjs --pair W,N --adopt와 (--as를 붙여) --pair WI,N --adopt로 판정한다. 결정 68대로 두 쪽 모두 천장이면 가르지 못한 것으로 보고한다.
+4. 보고서 app/eval/extract/reports/<날짜>-v4-holdout.md와 .runs.json은 결정 66·85대로 남긴다(잘못된 확정·놓친 항목 줄을 지우고 violated·missed·softened를 비움, 시나리오 id는 h2로 줄임). 제출 검사의 되돌림은 수만 적는다. 결과는 17.12절에 적는다.
+5. 끝나면 푼 평문 폴더와 결과 폴더 h2를 지운다.
 
-실제 claude 사용량: 세 쪽 × 50 run + 판정이면 약 300번이다. get_usage가 사용량을 주지 않는 환경이면 --always-cap --max-calls <사람이 정한 상한>으로 m5의 calls.jsonl 하나로 묶는다. 상한이 모자라면 survey와 variant·shared 과제(장치가 닿는 층)를 먼저 잰다. 사용량 한도 오류는 5시간 창이면 기다렸다 잇고 주간이면 멈춘다.
+실제 claude 사용량: get_usage가 사용량을 주지 않으면 --always-cap --max-calls 200으로 h2의 calls.jsonl 하나에 묶는다(run 55 + 판정 약 55). 사용량 한도 오류는 5시간 창이면 기다렸다 잇고 주간이면 멈춘다.
 
-작게 커밋하고 push한다. PR은 만들지 않는다. push 전에 app/에서 npm run typecheck && npm run lint && npm run format:check && npm test && npm run test:contract && npm run test:eval, skills/에서 npm ci 뒤 node check.mjs.
+판정에 따른 다음 단계: 확인되면 v4를 앱 구현 PR의 기본 지시 판으로 한다. 확인되지 않으면 v4를 채택 판에서 내리고 원인(쪽별·과제별 숫자로만)과 다음 지침 세션을 제안하며 hold-out은 소진으로 본다.
+
+작게 커밋하고 push한다. PR은 만들지 않는다. push 전에 app/에서 npm run typecheck && npm run lint && npm run format:check && npm test && npm run test:contract && npm run test:eval, skills/에서 npm ci 뒤 node check.mjs. 커밋 전마다 git diff --cached에 열쇠나 hold-out 평문이 없는지 확인한다. 끝나면 놓친 항목과 잘못된 확정은 보고에서만 말하고 이 파일을 갱신한다.
 ```
 
 ## 3. 앱의 requirements 기능 구현 PR(나란히 할 수 있다)
 
-조립(`skills/extract/run.mjs`, `load.mjs`의 `loadLayers`), 규칙 표(`rules.mjs`), 정적 검사(`check.mjs` [6], [6b]), 구성별 빌드 인덱스의 읽기와 판정(`build-index.mjs`)은 지시 판과 상관없다. 구현 PR은 이것을 앱에 붙이고 지시 원본을 `skills/extract`의 파일 그대로 읽는다. 채택한 판이 없어 지금 문구(v4 후보)는 잠정 기본값이다(결정 86). 다음 판이 채택되면 파일만 바뀐다. 인덱스는 survey가 찾은 빌드 명령으로 별도 체크아웃에서 만들고(16.10, intake에서 허용할 때), 제출 검사의 남은 문제는 run 반려로 센다(결정 37). 시작 전에 아래 설계 논의를 사람과 정한다. 결정 13의 run 안 되돌림(StructuredOutput을 PreToolUse에서 검사)은 v3에서 높아진 trace-command의 줄 어긋남(개발용 0.36·0.42, hold-out 0.34)을 줄일 몫이다.
+조립(`skills/extract/run.mjs`, `load.mjs`의 `loadLayers`), 규칙 표(`rules.mjs`), 정적 검사(`check.mjs` [6], [6b]), 구성별 빌드 인덱스의 읽기와 판정(`build-index.mjs`)은 지시 판과 상관없다. 구현 PR은 이것을 앱에 붙이고 지시 원본을 `skills/extract`의 파일 그대로 읽는다. 채택한 판이 없어 지금 문구(v4, 개발용 채택 조건을 넘었고 hold-out 확인 전)는 잠정 기본값이다(결정 86). 다음 판이 채택되면 파일만 바뀐다. 인덱스는 survey가 찾은 빌드 명령으로 별도 체크아웃에서 만들고(16.10, intake에서 허용할 때), 제출 검사의 남은 문제는 run 반려로 센다(결정 37). 시작 전에 아래 설계 논의를 사람과 정한다. 결정 13의 run 안 되돌림(StructuredOutput을 PreToolUse에서 검사)은 v3에서 높아진 trace-command의 줄 어긋남(개발용 0.36·0.42, hold-out 0.34)을 줄일 몫이다.
 
 ## 남은 설계 논의(사람과 정할 것)
 
