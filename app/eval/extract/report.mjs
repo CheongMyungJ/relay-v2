@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // extract run 평가의 집계와 쪽 비교 (docs/extract-eval.md, 결정 23).
 //   node eval/extract/report.mjs <결과 폴더>... [--runs 저장본.runs.json]... [--pair B,base] [--adopt] [--out 보고서.md]
-//     [--runs-out 저장본.runs.json]
+//     [--runs-out 저장본.runs.json] [--as 이름표=새이름표[@시나리오]]...
 // 결과 폴더는 git에 넣지 않으므로 run마다의 점수를 .runs.json으로 남기고(--runs-out), 다음에 그것을 기준선으로 읽는다(--runs).
 // --adopt는 --pair의 앞을 새 쪽, 뒤를 기준선으로 보고 채택 규칙(결정 62, docs/extract-eval.md 5절)을 판정한다.
 // 주지표: PM-A 잘못된 확정 수(낮을수록 좋음), PM-B 알려진 항목 재현율(높을수록 좋음). 관문(0이어야 함): 누출 카나리,
@@ -29,6 +29,24 @@ export function loadRows(dirs) {
     }
   }
   return rows
+}
+
+/**
+ * 이름표 바꾸기: "A=BASE@e1-twoboard"면 이름표 A이고 시나리오가 e1-twoboard인 행을 BASE로 한다(@ 없으면 모든 시나리오).
+ * 같은 때의 기준선이 한 시나리오에만 있을 때 다른 시나리오의 저장한 기준선과 묶어 한 쪽으로 견준다(AI 결정 79)
+ */
+export function relabel(rows, specs) {
+  const rules = specs.map((x) => {
+    const m = /^([^=]+)=([^@]+)(?:@(.+))?$/.exec(x)
+    if (!m) throw new Error(`--as 꼴이 아님: ${x} (예: A=BASE@e1-twoboard)`)
+    return { from: m[1], to: m[2], scenario: m[3] ?? null }
+  })
+  return rows.map((r) => {
+    const rule = rules.find(
+      (q) => q.from === r.run.label && (!q.scenario || q.scenario === r.run.scenario),
+    )
+    return rule ? { ...r, run: { ...r.run, label: rule.to } } : r
+  })
 }
 
 /** run.json·score.json 행을 저장본(.runs.json)의 run 항목으로. 주지표와 보조 지표에 쓰는 값만 남긴다 */
@@ -284,12 +302,14 @@ async function main() {
       runs: { type: 'string', multiple: true, default: [] },
       'runs-out': { type: 'string' },
       adopt: { type: 'boolean', default: false },
+      as: { type: 'string', multiple: true, default: [] },
     },
   })
-  const rows = [
+  const loaded = [
     ...loadRows(positionals),
     ...v.runs.flatMap((f) => fromStored(JSON.parse(fs.readFileSync(f, 'utf8')))),
   ]
+  const rows = v.as.length ? relabel(loaded, v.as) : loaded
   const text = render(rows, v.pair ? v.pair.split(',') : null, { adopt: v.adopt })
   if (v.out) fs.writeFileSync(v.out, text + '\n')
   if (v['runs-out']) {

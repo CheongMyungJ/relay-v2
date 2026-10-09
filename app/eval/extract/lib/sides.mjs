@@ -24,6 +24,21 @@ export const SIDES = {
       '첫 지침 판: L1 고정 계약, L2 종류 절차, L2b 렌즈 카드(skills/extract) + 필드 안내(L3)',
     layers: (kind, lens) => loadLayers(kind, lens),
   },
+  // 층 빼기(7차 작업): v1의 어느 층이 재현율을 떨어뜨렸는지 가른다. 필드 안내(L3)와 스키마는 모두 같다
+  'abl-l1': {
+    describe: '층 빼기: L1 고정 계약만(+ base의 한 문단 과제 설명)',
+    layers: (kind, lens) => ({
+      contract: loadLayers(kind, lens).contract,
+      kind: read('base', `${kind}.md`),
+    }),
+  },
+  'abl-l2': {
+    describe: '층 빼기: L2 종류 절차와 렌즈 카드만(L1 없음)',
+    layers: (kind, lens) => {
+      const { kind: k, lens: l } = loadLayers(kind, lens)
+      return { kind: k, lens: l }
+    },
+  },
 }
 
 /** 쪽 하나의 (종류, 렌즈) 조립본 */

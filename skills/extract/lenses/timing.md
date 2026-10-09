@@ -34,7 +34,7 @@ Every time behavior the unit's purpose names: the constants (timeouts, periods, 
 ## Pitfalls
 
 - A name or comment that says ms, us or Hz is `name_guess` until the rate is derived; write the unit from the name only together with that status.
-- A clock rate that only a datasheet, a comment or vendor initialization outside scope gives ends the chain: keep the value in ticks and add an `unknowns` item with `needs: external_doc`.
+- A clock rate that only a datasheet, a comment or vendor initialization outside scope gives ends the chain: keep the value in ticks, add an `unknowns` item with `needs: external_doc`, and record the comment's figure as `doc_claim`.
 - A busy-wait loop's duration depends on the clock and the compiler: record its count, `unit_status: unknown`, and the loop as an `impl_choices` item.
 - When configurations have different values, write one `values` entry per configuration; `all` only when you checked that they are the same.
 - A time measured in a log or stated in a document is `observed` or `doc_claim`, not the value the code sets; when the two differ, write a `conflicts` item.

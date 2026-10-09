@@ -21,6 +21,7 @@ import {
   expandConfigs,
   hasLeak,
   judgePrompt,
+  nameHas,
   normPath,
   normQuote,
   scoreRun,
@@ -28,7 +29,14 @@ import {
 } from '../extract/lib/score.mjs'
 import { buildSide, sideId } from '../extract/lib/sides.mjs'
 import { guard, parseUsage } from '../extract/lib/usage.mjs'
-import { adoption, comparePair, fromStored, summarize, toStored } from '../extract/report.mjs'
+import {
+  adoption,
+  comparePair,
+  fromStored,
+  relabel,
+  summarize,
+  toStored,
+} from '../extract/report.mjs'
 import { listScenarios, loadScenario, plan } from '../extract/run.mjs'
 import { loadTruth, repoReader, scoreDir } from '../extract/score.mjs'
 
@@ -249,6 +257,13 @@ describe('채점 규칙', () => {
     expect(checkQuantity(q([{ configs: ['b'], value: '1000 tick/s' }]), truth).errors).toEqual([
       'm.q.q.tick.value',
     ])
+  })
+
+  it('인벤토리 이름: 공백·밑줄만 다른 꼴은 같고, 이어지는 숫자는 다른 이름 (2026-10-09 6차 측정)', () => {
+    expect(nameHas('DMA1 stream5 (USART2 RX), DMA1 stream6 (TX)', 'DMA1_Stream5')).toBe(true)
+    expect(nameHas('DMA1 Stream5 (x)', 'DMA1 Stream 5')).toBe(true)
+    expect(nameHas('DMA1 Stream50', 'DMA1_Stream5')).toBe(false)
+    expect(nameHas('XDMA1_Stream5', 'DMA1_Stream5')).toBe(false)
   })
 
   it('단위 키', () => {
@@ -658,6 +673,15 @@ describe('저장본과 채택 판정', () => {
       claude: '2.1.295',
       model: 'claude-sonnet-5-5',
     })
+  })
+
+  it('이름표 바꾸기: 시나리오를 주면 그 시나리오의 행만 바꾼다', () => {
+    const r = (label, scenario) => ({ run: { label, scenario }, score: null })
+    const out = relabel([r('A', 'e1'), r('A', 'e2'), r('N', 'e2')], ['A=BASE@e1', 'N=BASE@e2']).map(
+      (x) => `${x.run.label}.${x.run.scenario}`,
+    )
+    expect(out).toEqual(['BASE.e1', 'A.e2', 'BASE.e2'])
+    expect(() => relabel([], ['A'])).toThrow(/--as/)
   })
 
   it('옛 저장본(관문 칸 없음)은 관문 위반 0으로 읽는다', () => {

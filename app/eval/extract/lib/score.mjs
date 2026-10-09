@@ -107,6 +107,24 @@ const word = (token) =>
     'i',
   )
 
+/**
+ * 인벤토리 이름에 정답 토큰이 있는가. 낱말 경계로 보고, 공백·밑줄·하이픈만 다른 꼴도 같은 이름으로 본다
+ * ("DMA1 stream5" = "DMA1_Stream5" = "DMA1 Stream 5", 2026-10-09 6차 측정). 뒤에 숫자·글자가 이어지면 다른 이름이다
+ */
+export function nameHas(name, tok) {
+  if (word(tok).test(name)) return true
+  const compact = (x) => x.toLowerCase().replace(/[\s_-]+/g, '')
+  const c = compact(name)
+  const t = compact(tok)
+  if (!t) return false
+  for (let i = c.indexOf(t); i >= 0; i = c.indexOf(t, i + 1)) {
+    const before = c[i - 1]
+    const after = c[i + t.length]
+    if (!(before && /[a-z0-9]/.test(before)) && !(after && /[a-z0-9]/.test(after))) return true
+  }
+  return false
+}
+
 /** 초당 횟수: tick/s, ticks per second, interrupts/s */
 const RATE = /^(ticks?|interrupts?|틱)\s*(\/\s*(s|sec|second)|per\s+second)$/
 
@@ -257,7 +275,7 @@ export function detScore(out, truth, task) {
       found = (out.configs ?? []).some((c) => expandConfigs([c.name], truth).includes(d.config))
     else if (d.inventory)
       found = (out.inventory ?? []).some((i) =>
-        d.inventory.some((tok) => word(tok).test(String(i.name ?? ''))),
+        d.inventory.some((tok) => nameHas(String(i.name ?? ''), tok)),
       )
     else if (d.boundary)
       found = (out.boundaries ?? []).some((b) =>
