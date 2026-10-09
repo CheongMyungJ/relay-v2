@@ -1,6 +1,6 @@
 # 다음 세션용 프롬프트
 
-아래 내용을 새 세션에 입력한다. [논의 기록](requirements-extraction-flow.md)은 이전 대화 없이 읽을 수 있도록 작성돼 있다. 4차 작업(녹화, 결과 스키마 v0, 평가 하네스, 기준선·A/A)은 17.4절, 봉인 hold-out은 17.5절, 지침 v1은 17.6절, 층 빼기와 v2는 17.7절, v3와 채택은 17.8절, v3의 hold-out 확인은 17.9절, 구성별 빌드 인덱스와 메모리 배치 점검표는 17.10절, 그 개발용 측정은 17.11절, AI가 정한 결정은 15.5.1절(결정 43~91)에 있다.
+아래 내용을 새 세션에 입력한다. [논의 기록](requirements-extraction-flow.md)은 이전 대화 없이 읽을 수 있도록 작성돼 있다. 4차 작업(녹화, 결과 스키마 v0, 평가 하네스, 기준선·A/A)은 17.4절, 봉인 hold-out은 17.5절, 지침 v1은 17.6절, 층 빼기와 v2는 17.7절, v3와 채택은 17.8절, v3의 hold-out 확인은 17.9절, 구성별 빌드 인덱스와 메모리 배치 점검표는 17.10절, 그 개발용 측정은 17.11절, AI가 정한 결정은 15.5.1절(결정 43~104)에 있다.
 
 9차 작업의 결론: 개발용에서 채택한 지침 v3(커밋 b5195bc)는 봉인 hold-out(`extract-h1`)에서 결정 62를 넘지 못했다. base와 견줘 PM-A −0.040 [−0.240, 0.120], PM-B 0.018 [−0.008, 0.044](5층, 회차 5)이고 천장은 아니었다(base PM-A 0.44/run). 재현율은 퇴보하지 않았으나 잘못된 확정의 감소가 확인되지 않았다. 잘못된 확정은 두 쪽 모두 survey(0.80 대 0.80)와 trace-command(N 1.00, V 0.80)에 몰렸다. v3는 채택 판에서 내렸고(결정 86) 지금 채택한 판은 없다. `extract-h1`은 소진했다.
 
@@ -8,9 +8,11 @@
 
 11차 작업: v4 문구(W)는 개발용 10층에서 base와 견줘 PM-A −0.300 [−0.420, −0.200], PM-B 0.008 [−0.008, 0.023]로 결정 62의 채택 조건을 넘었다(17.11절). 개발용이 v3의 이득을 크게 보인 전례(17.9)가 있어 새 hold-out 확인 전에는 채택 판으로 두지 않는다. 제출 검사(WI)는 개발용 survey에 잡을 구성 병합이 없어 효과를 가르지 못했고, 되돌림 1번은 앵커 줄이 틀린 데서 온 오탐이었다(모델은 앵커를 고쳐 다시 냄).
 
-12차 작업: 사람이 hold-out 확인을 건너뛰고 v4를 채택했다(17.11.1). 그래서 v4가 앱의 기본 지시 판이다. 앱 구현의 설계 질문 넷은 사람이 정했고(17.12 표) 나머지는 결정 92~100이다. 첫 구현(로직, 저장, 순차 run 루프, 최소 화면)은 붙였고 진행과 남은 일은 17.12.1절에 있다. 실제 모델로 앱의 run을 끝까지 돌린 적은 아직 없다.
+12차 작업: 사람이 hold-out 확인을 건너뛰고 v4를 채택했다(17.11.1). 그래서 v4가 앱의 기본 지시 판이다. 앱 구현의 설계 질문 넷은 사람이 정했고(17.12 표) 나머지는 결정 92~100이다. 첫 구현(로직, 저장, 순차 run 루프, 최소 화면)은 붙였고 진행과 남은 일은 17.12.1절에 있다.
 
-다음은 셋이다. 1(새 hold-out)이 끝나야 2(W의 hold-out 확인)를 할 수 있다. 2는 채택을 되돌릴지 보는 확인이다. 3은 나란히 할 수 있다.
+13차 작업(앱 구현 다음 PR, 결정 101~104): 실행 출력 근거의 인용 대조(제출·반영 검사, 결정 101), 앱 설정의 "요구사항 추출" 절(결정 102), 끝난 단위에 걸린 사람 결정의 답으로 그 단위를 다시 열기(결정 103), 뒤 단위가 다룬 미확정 잇기(결정 104)를 붙였다. 실제 claude로 리더보드 레포를 Work 완료까지 다시 돌렸다(`docs/checks.md` "요구사항 추출 유형", 커밋 7524447). 남은 앱 일은 대부분 아래 "남은 설계 논의"의 사람 결정을 기다린다.
+
+다음은 셋이다. 1(새 hold-out)이 끝나야 2(W의 hold-out 확인)를 할 수 있다. 2는 채택을 되돌릴지 보는 확인이다. 3은 나란히 할 수 있으나 먼저 "남은 설계 논의"에서 할 일을 사람이 정한다.
 
 ## 1. 새 봉인 hold-out 만들기(지침을 쓰는 세션과 다른 세션)
 
@@ -49,34 +51,36 @@ CheongMyungJ/relay-v2의 docs/requirements-extraction-flow-20261008 브랜치에
 작게 커밋하고 push한다. PR은 만들지 않는다. push 전에 app/에서 npm run typecheck && npm run lint && npm run format:check && npm test && npm run test:contract && npm run test:eval, skills/에서 npm ci 뒤 node check.mjs. 커밋 전마다 git diff --cached에 열쇠나 hold-out 평문이 없는지 확인한다. 끝나면 놓친 항목과 잘못된 확정은 보고에서만 말하고 이 파일을 갱신한다.
 ```
 
-## 3. 앱의 requirements 기능 다음 PR(나란히 할 수 있다)
+## 3. 앱의 requirements 기능 다음 PR(사람이 "남은 설계 논의"의 일부를 정한 뒤)
 
-첫 구현은 17.12.1절의 체크된 항목까지다. 실제 claude로 작은 저장소 하나를 Work 완료까지 돌렸다(`app/test/claude/requirements.test.ts`, `docs/checks.md` "요구사항 추출 유형"). 지시 원본은 `skills/extract`의 파일 그대로 읽으므로(결정 97) 판이 바뀌어도 앱 코드는 바뀌지 않는다.
+13차 작업까지 17.12.1절의 체크된 항목이다. 지시 원본은 `skills/extract`의 파일 그대로 읽으므로(결정 97) 판이 바뀌어도 앱 코드는 바뀌지 않는다. 사람 결정 없이 앱이 할 수 있는 일은 거의 남지 않았다: 아래 프롬프트의 할 일은 사람이 정한 항목에 맞춰 고친다.
 
 ```text
-CheongMyungJ/relay-v2의 docs/requirements-extraction-flow-20261008 브랜치에서 요구사항 추출 기능의 다음 구현을 이어서 해줘. 중간에 나에게 묻지 말고, 결정이 필요하면 결정 1~100과 기존 relay 선례에 가장 잘 맞는 안을 골라 15.5.1절에 결정 101~로 적어. 다만 아래 "사람과 정할 것"에 걸리는 일은 하지 말고 끝 보고에서 제안만 해.
+CheongMyungJ/relay-v2의 docs/requirements-extraction-flow-20261008 브랜치에서 요구사항 추출 기능의 다음 구현을 이어서 해줘. 중간에 나에게 묻지 말고, 결정이 필요하면 결정 1~104와 기존 relay 선례에 가장 잘 맞는 안을 골라 15.5.1절에 결정 105~로 적어. 다만 아래 "사람과 정할 것"에 걸리는 일은 하지 말고 끝 보고에서 제안만 해.
 
-먼저 CLAUDE.md, CONTRIBUTING.md, docs/requirements-extraction-flow.md(15.2~15.6절, 15.5.1절의 결정 92~100, 17.12절과 17.12.1절), docs/requirements-extraction-next-session.md의 "남은 설계 논의", docs/checks.md의 "요구사항 추출 유형"을 읽어줘. 코드는 app/src/core/requirements.ts(순수 로직, 렌더링), app/src/adapters/requirements.ts(기록 파일, run 실행, 반영 검사), app/src/main/requirements.ts(run 루프), app/src/main/work.ts의 extract 부분, app/src/renderer/src/Requirements.tsx(진행 상자)다. 지침 문구(skills/extract의 L1·카드), 채점 규칙, 채택 규칙(결정 62)은 고치지 않는다.
+먼저 CLAUDE.md, CONTRIBUTING.md, docs/requirements-extraction-flow.md(15.2~15.6절, 15.5.1절의 결정 92~104, 17.12절과 17.12.1절), docs/requirements-extraction-next-session.md의 "남은 설계 논의", docs/checks.md의 "요구사항 추출 유형"을 읽어줘. 코드는 app/src/core/requirements.ts, app/src/adapters/requirements.ts, app/src/main/requirements.ts, app/src/main/work.ts의 extract 부분, app/src/renderer/src/Requirements.tsx다. 지침 문구(skills/extract의 L1·카드), 채점 규칙, 채택 규칙(결정 62)은 고치지 않는다.
 
 할 일(차례대로, 하나씩 시험과 함께 커밋):
-1. 실행 출력 근거의 반영 검사: 이제 requirements/outputs/에 사본이 있으니(결정 42) tool_output 앵커의 줄 범위와 인용을 그 사본과 대조해 quote_match처럼 제출 검사와 반영 검사에 건다. 실제 run에서 "출력 1행을 가리켰으나 내용은 10~11행" 같은 어긋남이 나왔다(checks.md).
-2. 앱 설정의 "요구사항 추출" 절(결정 31): run 상한, 하드·부드러운 마감, 연속 실패·미완료 기준. 지금은 DEFAULT_REQUIREMENTS_BUDGET 고정이고 시험만 RelayOptions.requirementsBudget로 줄인다. 설정 화면과 [스모크]까지.
-3. 모든 단위가 끝난 뒤 나온 사람 결정의 답: 답을 받으면 결정을 낸 단위(또는 refs의 단위)를 다시 여는 안을 15.6절·결정 7·41과 맞춰 정하고 구현한다. 지금은 답이 기록에만 남는다(extraction.md가 그렇다고 적는다).
-4. 앞 run의 미확정이 뒤 run에서 풀려도 남는 문제: 통합 run 없이 앱이 할 수 있는 몫(예: 같은 단위 계열의 미확정을 뒤 run이 refs로 닫는 표시)이 있으면 하고, 없으면 통합 run 설계의 입력으로 17.12.1절에 적는다.
-5. 끝나면 실제 claude로 RELAY_REAL_CLAUDE=1 RELAY_REAL_CASES=requirements npm run test:claude를 한 번 돌려 Work 완료까지 가는지 보고 docs/checks.md "요구사항 추출 유형" 표에 한 줄 더한다(task마다 되돌림·시간, run 수, 제출 되돌림, 검증 지적 수). 실패하면 원인을 고치고 다시 돌린다. 사용량 한도 오류면 멈추고 보고한다.
+1. <사람이 정한 항목. 예: 실행 출력 사본에 입력(스크립트와 인자)도 남기기(17.12.1의 verify 지적), [범위 줄이고 계속](결정 26), run 목록과 결과 화면, 알림·배지(15.6)>
+2. 끝나면 실제 claude로 RELAY_REAL_CLAUDE=1 RELAY_REAL_CASES=requirements npm run test:claude를 한 번 돌려 Work 완료까지 가는지 보고 docs/checks.md "요구사항 추출 유형" 표에 한 줄 더한다(task마다 되돌림·시간, run 수, 제출 되돌림과 규칙, 검증 지적 수). 실패하면 원인을 고치고 다시 돌린다. 사용량 한도 오류면 멈추고 보고한다.
 
-사람과 정할 것(하지 말고 제안만): review·integrate·summarize run과 그 지침·평가, state·lifecycle·protocol 렌즈, 구성별 빌드 인덱스를 앱에서 만드는 방식(16.10, 별도 체크아웃과 빌드 명령 허용), 저장소로 결과 내보내기, 재개·되감기의 고아 파일 규칙(17.3).
+사람과 정할 것(하지 말고 제안만): review·integrate·summarize run과 그 지침·평가, state·lifecycle·protocol 렌즈, 구성별 빌드 인덱스를 앱에서 만드는 방식(16.10), 저장소로 결과 내보내기, 재개·되감기의 고아 파일 규칙(17.3), 결과 스키마에 다른 run의 항목을 가리키는 칸(17.12.1의 통합 run 입력).
 
-규칙: 한 동작은 가장 낮은 층에서 자세히 시험한다(CLAUDE.md). [실제] 시험을 고치면 RELAY_REAL_CLAUDE=dry도 통과시킨다. docs/checks.md에는 prettier를 돌리지 않는다(app/ 밖이라 서식 검사 대상이 아니고 표 전체가 바뀐다). 화면을 고치면 npm run build 뒤 xvfb-run -a npx playwright test로 [스모크]를 돌린다. 끝나면 17.12.1절 진행 표, 15.5.1절 결정, 이 파일(docs/requirements-extraction-next-session.md)을 갱신한다.
+규칙: 한 동작은 가장 낮은 층에서 자세히 시험한다(CLAUDE.md). [실제] 시험을 고치면 RELAY_REAL_CLAUDE=dry도 통과시킨다. docs/checks.md에는 prettier를 돌리지 않는다. 화면을 고치면 npm run build 뒤 xvfb-run -a npx playwright test로 [스모크]를 돌린다. 끝나면 17.12.1절 진행 표, 15.5.1절 결정, 이 파일을 갱신한다.
 
 작게 커밋하고 지정된 개발 브랜치와 docs/requirements-extraction-flow-20261008 두 곳에 push한다. PR은 만들지 않는다. push 전에 app/에서 npm run typecheck && npm run lint && npm run format:check && npm test && npm run test:contract && npm run test:eval, skills/에서 npm ci 뒤 node check.mjs. 끝 보고에는 한 일, 실제 run 결과, 정한 결정, 사람과 정할 것의 제안을 적어줘.
 ```
 
 ## 남은 설계 논의(사람과 정할 것)
 
-1. extract의 화면 나머지: run 목록·결과 화면, 알림과 배지(15.6절). 상태와 버튼, 사람 결정 양식은 17.12에서 정했다.
-2. 재개·되감기와 결정 33의 고아 파일 규칙(17.3절 남은 문제): 되감기도 새 번호의 revision으로 쓰는 안.
+13차 작업이 붙인 제안(AI의 안, 사람이 고른다)을 각 항목 끝에 적었다.
+
+1. extract의 화면 나머지: run 목록·결과 화면, 알림과 배지(15.6절). 상태와 버튼, 사람 결정 양식은 17.12에서 정했다. 제안: run 목록은 진행 상자 아래 접힌 표(run, 단위, 결과, 제출 되돌림, 걸린 시간)로 두고 run 기록 폴더를 연다. 알림은 기존 D81·D184 그대로 "사람 결정 필요"와 멈춤에만 건다.
+2. 재개·되감기와 결정 33의 고아 파일 규칙(17.3절 남은 문제): 되감기도 새 번호의 revision으로 쓰는 안. 제안: 그 안대로 하되 `requirements/outputs/`의 사본은 내용 해시라 고아가 되어도 지우지 않는다(다른 revision이 같은 사본을 가리킬 수 있다).
 3. 서브모듈 안의 근거(D382 ✅): 별도 읽기 전용 체크아웃을 `--add-dir`로 줄지, 경계로 둘지(17.3절 남은 문제).
 4. intake와 verify의 requirements 구간(16.12절).
 5. 평가 측정 환경: `get_usage`가 답하지 않는 클라우드 환경에서는 호출 상한(지금 200)으로 재야 해 표본이 작다. hold-out 확인은 5층이라 구간이 넓었다(PM-A 폭 0.36). 구독 PC에서 돌릴지, 상한을 늘릴지, hold-out 회차를 늘릴지.
-6. review, integrate, summarize run과 state·lifecycle·protocol 렌즈의 지침과 평가(결정 18로 첫 범위 밖).
+6. review, integrate, summarize run과 state·lifecycle·protocol 렌즈의 지침과 평가(결정 18로 첫 범위 밖). 제안: integrate run을 먼저 한다. 13차 실제 run에서 미확정 6건이 모두 refs로 뒤 단위에 이어지지 않았고(결정 104가 다루지 못함), 다시 연 단위는 앞 주장을 남긴다(결정 103). 입력은 17.12.1의 "통합 run 설계의 입력"이다. 결과 스키마에 `resolves`·`supersedes`(전역 ID를 가리키는 칸)를 더하면 L3가 바뀌므로 지침 평가와 같은 세션에서 정한다.
+7. 구성별 빌드 인덱스를 앱에서 만드는 방식(16.10, 결정 87·88): 제안: intake가 빌드 명령과 툴체인을 허용할 때만, Work 디렉터리 아래 별도 체크아웃(기준 커밋, 읽기 전용 worktree)에서 하네스의 `build-index.mjs`와 같은 인자로 만들고, 실패하면 `config_active` 없이 돈다(결정 14의 inference 갈래).
+8. 저장소로 결과 내보내기: 제안: verify 승인 뒤 Work 완료 화면의 [결과 문서 PR] 하나로 `extraction.md`와 기록의 JSON 묶음을 사람이 고른 경로에 커밋한다(spec의 D364 꼴). 채택 칸은 "미결정"(결정 1).
+9. L1의 앱 검사 목록(지침): 결정 101로 `quote_match`가 실행 출력 앵커도 보는데 L1은 "Each `code` anchor's ... quote"라고만 한다. 다음 지침 세션에서 "code and tool_output anchors"로 넓히고 평가한다.

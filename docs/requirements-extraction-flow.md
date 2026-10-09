@@ -1300,14 +1300,26 @@ AI가 정한 구현 설계(결정 92~99)는 15.5.1절 표에 있다. 요약:
 
 #### 17.12.1 첫 구현의 진행과 다음 할 일
 
-사람이 고른 범위(로직 + 저장 + 순차 run 루프 + 최소 화면)를 네 커밋으로 붙였다. 각 층의 시험은 `app/test/unit/requirements.test.ts`, `app/test/adapters/requirements.test.ts`, `app/test/flow/requirements.test.ts`(survey→trace→승인 대기, 결정 대기→답→[재개], run 상한→[계속 +N]), `app/test/smoke/requirements.spec.ts`(패널 양식으로 답하고 [재개])다. 실제 모델로 돌린 run은 아직 없다.
+사람이 고른 범위(로직 + 저장 + 순차 run 루프 + 최소 화면)를 네 커밋으로 붙였다. 13차 작업(결정 101~104)은 실제 run에서 본 틈 셋과 앱 설정 절을 붙였다(아래 체크 항목). 각 층의 시험은 `app/test/unit/requirements.test.ts`, `app/test/adapters/requirements.test.ts`, `app/test/flow/requirements.test.ts`(survey→trace→승인 대기, 결정 대기→답→[재개], run 상한→[계속 +N]), `app/test/smoke/requirements.spec.ts`(패널 양식으로 답하고 [재개])다. 실제 모델로 돌린 run은 아직 없다.
 
 - [x] 변경분 스키마 `docs/contracts/requirements-revision.v0.schema.json`, 순수 로직 `app/src/core/requirements.ts`(접기, 단위 고르기, 결과 반영, 연속 횟수, run 판정, 인용 대조, 패킷·`extraction.md`·`handoff.md`, 진행 상자)
 - [x] 저장과 run 실행 `app/src/adapters/requirements.ts`(불변 revision과 해시, 사람 답 파일, 지시 조립은 `skills/extract`의 `buildRun` 그대로, 헤드리스 run과 훅 토큰, 제출 검사 2회, 부드러운 마감, 사용량 한도 가르기, worktree 지문)
 - [x] Work 종류 `requirements`와 extract 노드, 상태 기계의 run 루프 시작·중단·재개·멈춤·끝(`core/machine.ts`), 루프 `app/src/main/requirements.ts`, 재시작 때 도는 run 끝내기
 - [x] 최소 화면(결정 100): 진행 상자, 사람 결정 양식, [계속 +20], 터미널 자리 안내
-- [ ] 앱 설정의 "요구사항 추출" 절(결정 31): 지금은 결정 30의 잠정값이다
+- [x] 앱 설정의 "요구사항 추출" 절(결정 31, 102): `config.json`의 `requirements_budget`, 설정 화면의 "요구사항 추출" 절, [스모크] `app/test/smoke/requirements.spec.ts`
 - [ ] 구성별 빌드 인덱스(16.10, 결정 87·88): 앱의 제출 검사는 아직 `config_known`까지이고 `config_active`를 쓰지 않는다
 - [ ] review·integrate·summarize run, [범위 줄이고 계속]·[부분 분석으로 넘기기](결정 26), run 목록과 결과 화면, 알림·배지(15.6), intake·verify의 requirements 구간(16.12)
 - [x] 실제 claude로 짧은 저장소 하나를 끝까지 돌려 보기: `app/test/claude/requirements.test.ts`(리더보드 레포). 세 번째에 Work 완료까지 갔다(`docs/checks.md` "요구사항 추출 유형"). 앞의 두 번에서 드러나 고친 것: extraction.md가 intake의 기본 완료조건을 판정할 절(분석 범위·제외 범위, 후보의 근거 위치, 필요한 자료, 누락 가능성, 검증 계획)을 갖게 했고, 실행 출력 근거를 `requirements/outputs/`의 내용 해시 사본으로 두며(결정 42, 앞서 빠져 있었음), work-start의 requirements 블록이 저장소의 결과 문서 경로를 정하지 않고 실행 출력도 근거로 받게 했다
-- [ ] 실제 run에서 본 다음 할 일: 앞 run의 미확정이 뒤 run에서 풀려도 남는다(통합 run의 몫), 실행 출력 앵커의 줄·인용은 반영 검사가 보지 않는다(사본이 생겼으니 `quote_match`를 넓힐 수 있다), 모든 단위가 끝난 뒤 나온 사람 결정의 답으로 다시 분석하는 단위가 없다
+- [x] 실제 run에서 본 다음 할 일(13차 작업, 2026-10-09):
+  - 실행 출력 앵커의 줄·인용을 출력 파일과 대조해 제출 검사와 반영 검사에 건다(결정 101). 규칙 id는 `quote_match` 그대로이고 L1의 앱 검사 목록은 code 앵커만 말한다(다음 지침 세션에 넓히자고 제안)
+  - 모든 단위가 끝난 뒤 나온 사람 결정의 답은 결정을 낸 단위(또는 기다리게 한 끝난 단위)를 같은 revision에서 다시 열어 돌린다(결정 103). 다시 연 survey가 단위를 늘리지 않게 끝난 단위와도 합치고 survey만 내는 절은 마지막 survey run의 것을 쓴다
+  - 앞 run의 미확정: 같은 결과의 단위 제안을 refs로 가리킨 미확정만 그 단위에 잇는다(패킷의 질문, `extraction.md`·`handoff.md`의 "다룬 뒤 단위", 결정 104). 닫지는 않는다. 나머지는 아래 통합 run의 입력이다
+- [x] 13차 작업 뒤 실제 claude로 다시 돌려 보기(커밋 7524447): Work 완료까지 254초, run 4개 모두 성공, 제출 검사 되돌림 3회 가운데 1회가 실행 출력 인용의 줄(결정 101)이었고 모델이 고쳤다. 미확정 6건의 refs는 모두 관찰·대상 항목이라 결정 104로 이은 것은 없었다(`docs/checks.md` "요구사항 추출 유형")
+- [ ] 이 run의 verify가 남긴 것: 요구사항 후보의 문구가 근거보다 넓다(권장 2, 지침의 몫), 실행 출력 사본에 입력(실행한 스크립트와 인자)이 없어 출력만으로 다시 읽기 어렵다(사소. 앱이 scratch의 입력 파일도 사본으로 둘지, 지침이 명령에 입력을 담게 할지 정할 일)
+
+통합 run 설계의 입력(결정 104 뒤에 남은 것, 사람과 정할 review·integrate·summarize run의 몫):
+
+- 풀렸는지의 판정: 앱은 미확정과 뒤 단위를 잇기만 한다. 뒤 단위의 관찰·수치가 미확정의 질문에 답하는지, 일부만 답하는지는 통합 run이 가르고, 상태를 "풀림"으로 바꾸는 근거(그 관찰의 앵커)를 남겨야 한다. 결정 12대로 AI의 동의로 올리지 않으려면 "풀림"은 뒤 관찰의 근거를 가리키는 연결이고 확정 상태가 아니다.
+- refs 없는 짝짓기: 실제 run의 survey 미확정은 단위가 아니라 구성·대상 항목을 refs로 가리키거나 refs가 비는 일이 많다. 같은 범위(경로·심볼)를 다룬 뒤 단위를 찾는 일은 글을 읽어야 해서 통합 run의 입력(미확정 목록과 그 뒤 단위들의 결과 요약)이 필요하다.
+- 앞 주장을 뒤 주장으로 바꾸기: 다시 연 단위(결정 103)와 미완료 뒤 이어 간 단위는 앞 run의 주장을 지우지 않고 새 주장을 더한다. survey만 내는 절은 마지막 survey로 바꿨으나(결정 103) 관찰·수치·후보는 같은 것이 둘 남을 수 있다. 통합 run은 "대체함"을 주장 사이의 연결로 내야 하고, 앱은 그것을 변경분(새 필드)으로 받아 `extraction.md`에서 앞 것을 접어야 한다.
+- 결과 스키마의 칸: 위 셋은 run이 다른 run의 항목을 가리켜야 하므로 전역 ID를 패킷으로 주고 결과에 받는 칸(예: `resolves`, `supersedes`)이 필요하다. 지시 바이트(L3)가 바뀌므로 지침 평가와 함께 정한다.
