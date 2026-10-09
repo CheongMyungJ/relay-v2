@@ -1,0 +1,2314 @@
+{
+ "note": "run마다의 점수(report.mjs --runs-out). 결과 폴더는 git에 넣지 않는다",
+ "runs": [
+  {
+   "id": "B.e1-twoboard.integrate.1",
+   "label": "B",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "integrate",
+   "kind": "integrate",
+   "rep": 1,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 0.75,
+   "violated": [
+    "m.int.merge_hwrev"
+   ],
+   "missed": [
+    "r.int.supersedes_frame",
+    "r.int.merge_timeout"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 6,
+    "ok": 6,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.2144598,
+   "minutes": 0.79,
+   "turns": 6,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:9be82d595db0826cfce4aec4068dc0c85a6829ec364aa62b03d6ab7ea0a8e5d4",
+    "instructions": "sha256:7e1bf43ffc7cc16123a9062cd748dc823d6272a76dd7137ab47da6c859b3acf5"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "B.e1-twoboard.integrate.2",
+   "label": "B",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "integrate",
+   "kind": "integrate",
+   "rep": 2,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 0.75,
+   "violated": [
+    "m.int.wdt_resolved"
+   ],
+   "missed": [
+    "r.int.supersedes_frame",
+    "r.int.merge_timeout"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 3,
+    "ok": 3,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.14277700000000002,
+   "minutes": 0.74,
+   "turns": 5,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:9be82d595db0826cfce4aec4068dc0c85a6829ec364aa62b03d6ab7ea0a8e5d4",
+    "instructions": "sha256:7e1bf43ffc7cc16123a9062cd748dc823d6272a76dd7137ab47da6c859b3acf5"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "B.e1-twoboard.integrate.3",
+   "label": "B",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "integrate",
+   "kind": "integrate",
+   "rep": 3,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 0.875,
+   "violated": [
+    "m.int.wdt_resolved"
+   ],
+   "missed": [
+    "r.int.merge_timeout"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 4,
+    "ok": 4,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.109767,
+   "minutes": 0.55,
+   "turns": 4,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:9be82d595db0826cfce4aec4068dc0c85a6829ec364aa62b03d6ab7ea0a8e5d4",
+    "instructions": "sha256:7e1bf43ffc7cc16123a9062cd748dc823d6272a76dd7137ab47da6c859b3acf5"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "B.e1-twoboard.integrate.4",
+   "label": "B",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "integrate",
+   "kind": "integrate",
+   "rep": 4,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 0.75,
+   "violated": [
+    "m.int.wdt_resolved"
+   ],
+   "missed": [
+    "r.int.conflict_side",
+    "r.int.merge_timeout"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 5,
+    "ok": 5,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.2117976,
+   "minutes": 1.14,
+   "turns": 5,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:9be82d595db0826cfce4aec4068dc0c85a6829ec364aa62b03d6ab7ea0a8e5d4",
+    "instructions": "sha256:7e1bf43ffc7cc16123a9062cd748dc823d6272a76dd7137ab47da6c859b3acf5"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "B.e1-twoboard.integrate.5",
+   "label": "B",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "integrate",
+   "kind": "integrate",
+   "rep": 5,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 0.75,
+   "violated": [
+    "m.int.wdt_resolved"
+   ],
+   "missed": [
+    "r.int.supersedes_frame",
+    "r.int.merge_timeout"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 7,
+    "ok": 6,
+    "lineMismatch": 1,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.127722,
+   "minutes": 0.68,
+   "turns": 4,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:9be82d595db0826cfce4aec4068dc0c85a6829ec364aa62b03d6ab7ea0a8e5d4",
+    "instructions": "sha256:7e1bf43ffc7cc16123a9062cd748dc823d6272a76dd7137ab47da6c859b3acf5"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "B.e1-twoboard.review.1",
+   "label": "B",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "review",
+   "kind": "review",
+   "rep": 1,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 17,
+    "ok": 16,
+    "lineMismatch": 1,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.1265358,
+   "minutes": 0.44,
+   "turns": 6,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:e2be4bc528c6a425c22e7f5a8a2c817146e1f41be73c11e15cd0d77e98a90892",
+    "instructions": "sha256:6f89e755b97a3a37b4bf96fbe8318a5b608842cc026db9653de131b56c8b56d5"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "B.e1-twoboard.review.2",
+   "label": "B",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "review",
+   "kind": "review",
+   "rep": 2,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 14,
+    "ok": 8,
+    "lineMismatch": 6,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.092551,
+   "minutes": 0.39,
+   "turns": 5,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:e2be4bc528c6a425c22e7f5a8a2c817146e1f41be73c11e15cd0d77e98a90892",
+    "instructions": "sha256:6f89e755b97a3a37b4bf96fbe8318a5b608842cc026db9653de131b56c8b56d5"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "B.e1-twoboard.review.3",
+   "label": "B",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "review",
+   "kind": "review",
+   "rep": 3,
+   "failure": null,
+   "pmA": 2,
+   "pmB": 1,
+   "violated": [
+    "m.rev.ct",
+    "m.rev.req"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 16,
+    "ok": 13,
+    "lineMismatch": 3,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.0899964,
+   "minutes": 0.38,
+   "turns": 5,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:e2be4bc528c6a425c22e7f5a8a2c817146e1f41be73c11e15cd0d77e98a90892",
+    "instructions": "sha256:6f89e755b97a3a37b4bf96fbe8318a5b608842cc026db9653de131b56c8b56d5"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "B.e1-twoboard.review.4",
+   "label": "B",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "review",
+   "kind": "review",
+   "rep": 4,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 16,
+    "ok": 16,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.0926034,
+   "minutes": 0.43,
+   "turns": 5,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:e2be4bc528c6a425c22e7f5a8a2c817146e1f41be73c11e15cd0d77e98a90892",
+    "instructions": "sha256:6f89e755b97a3a37b4bf96fbe8318a5b608842cc026db9653de131b56c8b56d5"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "B.e1-twoboard.review.5",
+   "label": "B",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "review",
+   "kind": "review",
+   "rep": 5,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 1,
+   "violated": [
+    "m.rev.req"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 18,
+    "ok": 17,
+    "lineMismatch": 1,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.09361259999999999,
+   "minutes": 0.43,
+   "turns": 5,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:e2be4bc528c6a425c22e7f5a8a2c817146e1f41be73c11e15cd0d77e98a90892",
+    "instructions": "sha256:6f89e755b97a3a37b4bf96fbe8318a5b608842cc026db9653de131b56c8b56d5"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "B.e1-twoboard.summarize.1",
+   "label": "B",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "summarize",
+   "kind": "summarize",
+   "rep": 1,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 0,
+    "ok": 0,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.05656,
+   "minutes": 0.21,
+   "turns": 2,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:8d3982d7cb026f7fcb5f2c5f1d2019b67ddf1493cd43903b13b0f410806dd0df",
+    "instructions": "sha256:d985c535e91d9a0cb95c6eed4ff1853b2f1c13281be20ba7eedf6ba3d695c28b"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "B.e1-twoboard.summarize.2",
+   "label": "B",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "summarize",
+   "kind": "summarize",
+   "rep": 2,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 1,
+   "violated": [
+    "m.sum.gid"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 0,
+    "ok": 0,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.034837,
+   "minutes": 0.24,
+   "turns": 2,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:8d3982d7cb026f7fcb5f2c5f1d2019b67ddf1493cd43903b13b0f410806dd0df",
+    "instructions": "sha256:d985c535e91d9a0cb95c6eed4ff1853b2f1c13281be20ba7eedf6ba3d695c28b"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "B.e1-twoboard.summarize.3",
+   "label": "B",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "summarize",
+   "kind": "summarize",
+   "rep": 3,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 0,
+    "ok": 0,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.034686999999999996,
+   "minutes": 0.22,
+   "turns": 2,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:8d3982d7cb026f7fcb5f2c5f1d2019b67ddf1493cd43903b13b0f410806dd0df",
+    "instructions": "sha256:d985c535e91d9a0cb95c6eed4ff1853b2f1c13281be20ba7eedf6ba3d695c28b"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "B.e1-twoboard.summarize.4",
+   "label": "B",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "summarize",
+   "kind": "summarize",
+   "rep": 4,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 1,
+   "violated": [
+    "m.sum.gid"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 0,
+    "ok": 0,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.0744058,
+   "minutes": 0.39,
+   "turns": 3,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:8d3982d7cb026f7fcb5f2c5f1d2019b67ddf1493cd43903b13b0f410806dd0df",
+    "instructions": "sha256:d985c535e91d9a0cb95c6eed4ff1853b2f1c13281be20ba7eedf6ba3d695c28b"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "B.e1-twoboard.summarize.5",
+   "label": "B",
+   "side": "base",
+   "scenario": "e1-twoboard",
+   "task": "summarize",
+   "kind": "summarize",
+   "rep": 5,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 1,
+   "violated": [
+    "m.sum.gid"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 0,
+    "ok": 0,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.057205799999999994,
+   "minutes": 0.36,
+   "turns": 3,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:8d3982d7cb026f7fcb5f2c5f1d2019b67ddf1493cd43903b13b0f410806dd0df",
+    "instructions": "sha256:d985c535e91d9a0cb95c6eed4ff1853b2f1c13281be20ba7eedf6ba3d695c28b"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "B.e2-gateway.integrate.1",
+   "label": "B",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "integrate",
+   "kind": "integrate",
+   "rep": 1,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 0.75,
+   "violated": [
+    "m.int.timebase_resolved"
+   ],
+   "missed": [
+    "r.int.supersedes_sensor",
+    "r.int.cov_commands"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 6,
+    "ok": 6,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.130967,
+   "minutes": 0.62,
+   "turns": 5,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:9be82d595db0826cfce4aec4068dc0c85a6829ec364aa62b03d6ab7ea0a8e5d4",
+    "instructions": "sha256:7e1bf43ffc7cc16123a9062cd748dc823d6272a76dd7137ab47da6c859b3acf5"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "B.e2-gateway.integrate.2",
+   "label": "B",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "integrate",
+   "kind": "integrate",
+   "rep": 2,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.75,
+   "violated": [],
+   "missed": [
+    "r.int.supersedes_sensor",
+    "r.int.merge_de"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 4,
+    "ok": 4,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.12479480000000001,
+   "minutes": 0.56,
+   "turns": 5,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:9be82d595db0826cfce4aec4068dc0c85a6829ec364aa62b03d6ab7ea0a8e5d4",
+    "instructions": "sha256:7e1bf43ffc7cc16123a9062cd748dc823d6272a76dd7137ab47da6c859b3acf5"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "B.e2-gateway.integrate.3",
+   "label": "B",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "integrate",
+   "kind": "integrate",
+   "rep": 3,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 0.75,
+   "violated": [
+    "m.int.timebase_resolved"
+   ],
+   "missed": [
+    "r.int.supersedes_sensor",
+    "r.int.cov_commands"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 5,
+    "ok": 5,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.1231288,
+   "minutes": 0.59,
+   "turns": 4,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:9be82d595db0826cfce4aec4068dc0c85a6829ec364aa62b03d6ab7ea0a8e5d4",
+    "instructions": "sha256:7e1bf43ffc7cc16123a9062cd748dc823d6272a76dd7137ab47da6c859b3acf5"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "B.e2-gateway.integrate.4",
+   "label": "B",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "integrate",
+   "kind": "integrate",
+   "rep": 4,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 0.875,
+   "violated": [
+    "m.int.timebase_resolved"
+   ],
+   "missed": [
+    "r.int.conflict_side"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 3,
+    "ok": 2,
+    "lineMismatch": 1,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.125531,
+   "minutes": 0.57,
+   "turns": 5,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:9be82d595db0826cfce4aec4068dc0c85a6829ec364aa62b03d6ab7ea0a8e5d4",
+    "instructions": "sha256:7e1bf43ffc7cc16123a9062cd748dc823d6272a76dd7137ab47da6c859b3acf5"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "B.e2-gateway.integrate.5",
+   "label": "B",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "integrate",
+   "kind": "integrate",
+   "rep": 5,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.75,
+   "violated": [],
+   "missed": [
+    "r.int.supersedes_sensor",
+    "r.int.cov_commands"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 3,
+    "ok": 3,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.15340520000000002,
+   "minutes": 0.74,
+   "turns": 5,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:9be82d595db0826cfce4aec4068dc0c85a6829ec364aa62b03d6ab7ea0a8e5d4",
+    "instructions": "sha256:7e1bf43ffc7cc16123a9062cd748dc823d6272a76dd7137ab47da6c859b3acf5"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "B.e2-gateway.review.1",
+   "label": "B",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "review",
+   "kind": "review",
+   "rep": 1,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 1,
+   "violated": [
+    "m.rev.ct"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 12,
+    "ok": 12,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.10579659999999999,
+   "minutes": 0.46,
+   "turns": 6,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:e2be4bc528c6a425c22e7f5a8a2c817146e1f41be73c11e15cd0d77e98a90892",
+    "instructions": "sha256:6f89e755b97a3a37b4bf96fbe8318a5b608842cc026db9653de131b56c8b56d5"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "B.e2-gateway.review.2",
+   "label": "B",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "review",
+   "kind": "review",
+   "rep": 2,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 1,
+   "violated": [
+    "m.rev.ct"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 11,
+    "ok": 11,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.1062256,
+   "minutes": 0.44,
+   "turns": 5,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:e2be4bc528c6a425c22e7f5a8a2c817146e1f41be73c11e15cd0d77e98a90892",
+    "instructions": "sha256:6f89e755b97a3a37b4bf96fbe8318a5b608842cc026db9653de131b56c8b56d5"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "B.e2-gateway.review.3",
+   "label": "B",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "review",
+   "kind": "review",
+   "rep": 3,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 1,
+   "violated": [
+    "m.rev.ct"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 13,
+    "ok": 11,
+    "lineMismatch": 2,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.1074186,
+   "minutes": 0.47,
+   "turns": 6,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:e2be4bc528c6a425c22e7f5a8a2c817146e1f41be73c11e15cd0d77e98a90892",
+    "instructions": "sha256:6f89e755b97a3a37b4bf96fbe8318a5b608842cc026db9653de131b56c8b56d5"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "B.e2-gateway.review.4",
+   "label": "B",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "review",
+   "kind": "review",
+   "rep": 4,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 10,
+    "ok": 8,
+    "lineMismatch": 2,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.12589260000000002,
+   "minutes": 0.46,
+   "turns": 7,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:e2be4bc528c6a425c22e7f5a8a2c817146e1f41be73c11e15cd0d77e98a90892",
+    "instructions": "sha256:6f89e755b97a3a37b4bf96fbe8318a5b608842cc026db9653de131b56c8b56d5"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "B.e2-gateway.review.5",
+   "label": "B",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "review",
+   "kind": "review",
+   "rep": 5,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 1,
+   "violated": [
+    "m.rev.ct"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 11,
+    "ok": 10,
+    "lineMismatch": 1,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.099767,
+   "minutes": 0.42,
+   "turns": 6,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:e2be4bc528c6a425c22e7f5a8a2c817146e1f41be73c11e15cd0d77e98a90892",
+    "instructions": "sha256:6f89e755b97a3a37b4bf96fbe8318a5b608842cc026db9653de131b56c8b56d5"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "B.e2-gateway.summarize.1",
+   "label": "B",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "summarize",
+   "kind": "summarize",
+   "rep": 1,
+   "failure": null,
+   "pmA": 2,
+   "pmB": 1,
+   "violated": [
+    "m.sum.gid",
+    "m.sum.lowered_ok"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 0,
+    "ok": 0,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.040777,
+   "minutes": 0.26,
+   "turns": 2,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:8d3982d7cb026f7fcb5f2c5f1d2019b67ddf1493cd43903b13b0f410806dd0df",
+    "instructions": "sha256:d985c535e91d9a0cb95c6eed4ff1853b2f1c13281be20ba7eedf6ba3d695c28b"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "B.e2-gateway.summarize.2",
+   "label": "B",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "summarize",
+   "kind": "summarize",
+   "rep": 2,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 0,
+    "ok": 0,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.041137,
+   "minutes": 0.27,
+   "turns": 2,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:8d3982d7cb026f7fcb5f2c5f1d2019b67ddf1493cd43903b13b0f410806dd0df",
+    "instructions": "sha256:d985c535e91d9a0cb95c6eed4ff1853b2f1c13281be20ba7eedf6ba3d695c28b"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "B.e2-gateway.summarize.3",
+   "label": "B",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "summarize",
+   "kind": "summarize",
+   "rep": 3,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 0,
+    "ok": 0,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.036726999999999996,
+   "minutes": 0.22,
+   "turns": 2,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:8d3982d7cb026f7fcb5f2c5f1d2019b67ddf1493cd43903b13b0f410806dd0df",
+    "instructions": "sha256:d985c535e91d9a0cb95c6eed4ff1853b2f1c13281be20ba7eedf6ba3d695c28b"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "B.e2-gateway.summarize.4",
+   "label": "B",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "summarize",
+   "kind": "summarize",
+   "rep": 4,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 0,
+    "ok": 0,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.040787,
+   "minutes": 0.26,
+   "turns": 2,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:8d3982d7cb026f7fcb5f2c5f1d2019b67ddf1493cd43903b13b0f410806dd0df",
+    "instructions": "sha256:d985c535e91d9a0cb95c6eed4ff1853b2f1c13281be20ba7eedf6ba3d695c28b"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "B.e2-gateway.summarize.5",
+   "label": "B",
+   "side": "base",
+   "scenario": "e2-gateway",
+   "task": "summarize",
+   "kind": "summarize",
+   "rep": 5,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 1,
+   "violated": [
+    "m.sum.lowered_ok"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 0,
+    "ok": 0,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.040947,
+   "minutes": 0.27,
+   "turns": 2,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:8d3982d7cb026f7fcb5f2c5f1d2019b67ddf1493cd43903b13b0f410806dd0df",
+    "instructions": "sha256:d985c535e91d9a0cb95c6eed4ff1853b2f1c13281be20ba7eedf6ba3d695c28b"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "N.e1-twoboard.integrate.1",
+   "label": "N",
+   "side": "v1",
+   "scenario": "e1-twoboard",
+   "task": "integrate",
+   "kind": "integrate",
+   "rep": 1,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.625,
+   "violated": [],
+   "missed": [
+    "r.int.conflict_side",
+    "r.int.supersedes_frame",
+    "r.int.merge_timeout"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 3,
+    "ok": 1,
+    "lineMismatch": 2,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.1951964,
+   "minutes": 0.7,
+   "turns": 5,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:9be82d595db0826cfce4aec4068dc0c85a6829ec364aa62b03d6ab7ea0a8e5d4",
+    "instructions": "sha256:465671d35ddb18da4e388f46ad045fa77885501f1c671157e10b6d719f0987b5"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "N.e1-twoboard.integrate.2",
+   "label": "N",
+   "side": "v1",
+   "scenario": "e1-twoboard",
+   "task": "integrate",
+   "kind": "integrate",
+   "rep": 2,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.625,
+   "violated": [],
+   "missed": [
+    "r.int.conflict_side",
+    "r.int.merge_timeout",
+    "r.int.conflict_writer"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 4,
+    "ok": 4,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.0957972,
+   "minutes": 0.45,
+   "turns": 4,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:9be82d595db0826cfce4aec4068dc0c85a6829ec364aa62b03d6ab7ea0a8e5d4",
+    "instructions": "sha256:465671d35ddb18da4e388f46ad045fa77885501f1c671157e10b6d719f0987b5"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "N.e1-twoboard.integrate.3",
+   "label": "N",
+   "side": "v1",
+   "scenario": "e1-twoboard",
+   "task": "integrate",
+   "kind": "integrate",
+   "rep": 3,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 0.75,
+   "violated": [
+    "m.int.merge_hwrev"
+   ],
+   "missed": [
+    "r.int.conflict_side",
+    "r.int.merge_timeout"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 3,
+    "ok": 3,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.09270719999999999,
+   "minutes": 0.4,
+   "turns": 4,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:9be82d595db0826cfce4aec4068dc0c85a6829ec364aa62b03d6ab7ea0a8e5d4",
+    "instructions": "sha256:465671d35ddb18da4e388f46ad045fa77885501f1c671157e10b6d719f0987b5"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "N.e1-twoboard.integrate.4",
+   "label": "N",
+   "side": "v1",
+   "scenario": "e1-twoboard",
+   "task": "integrate",
+   "kind": "integrate",
+   "rep": 4,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.5,
+   "violated": [],
+   "missed": [
+    "r.int.conflict_side",
+    "r.int.supersedes_frame",
+    "r.int.merge_timeout",
+    "r.int.conflict_writer"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 3,
+    "ok": 1,
+    "lineMismatch": 2,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.13029020000000002,
+   "minutes": 0.55,
+   "turns": 5,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:9be82d595db0826cfce4aec4068dc0c85a6829ec364aa62b03d6ab7ea0a8e5d4",
+    "instructions": "sha256:465671d35ddb18da4e388f46ad045fa77885501f1c671157e10b6d719f0987b5"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "N.e1-twoboard.integrate.5",
+   "label": "N",
+   "side": "v1",
+   "scenario": "e1-twoboard",
+   "task": "integrate",
+   "kind": "integrate",
+   "rep": 5,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 0.25,
+   "violated": [
+    "m.int.merge_hwrev"
+   ],
+   "missed": [
+    "r.int.conflict_side",
+    "r.int.supersedes_frame",
+    "r.int.merge_timeout",
+    "r.int.conflict_writer",
+    "r.int.cov_lifecycle",
+    "r.int.unit_startup"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 1,
+    "ok": 1,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.0778192,
+   "minutes": 0.3,
+   "turns": 4,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:9be82d595db0826cfce4aec4068dc0c85a6829ec364aa62b03d6ab7ea0a8e5d4",
+    "instructions": "sha256:465671d35ddb18da4e388f46ad045fa77885501f1c671157e10b6d719f0987b5"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "N.e1-twoboard.review.1",
+   "label": "N",
+   "side": "v1",
+   "scenario": "e1-twoboard",
+   "task": "review",
+   "kind": "review",
+   "rep": 1,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 1,
+   "violated": [
+    "m.rev.req"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 17,
+    "ok": 13,
+    "lineMismatch": 4,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.1593094,
+   "minutes": 0.56,
+   "turns": 6,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:e2be4bc528c6a425c22e7f5a8a2c817146e1f41be73c11e15cd0d77e98a90892",
+    "instructions": "sha256:5bcbdd0d9e889979fcf066827de1df7210fa85c03edfe99e8ab89c97930a7219"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "N.e1-twoboard.review.2",
+   "label": "N",
+   "side": "v1",
+   "scenario": "e1-twoboard",
+   "task": "review",
+   "kind": "review",
+   "rep": 2,
+   "failure": null,
+   "pmA": 2,
+   "pmB": 1,
+   "violated": [
+    "m.rev.ct",
+    "m.rev.req"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 19,
+    "ok": 18,
+    "lineMismatch": 1,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.1031114,
+   "minutes": 0.49,
+   "turns": 5,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:e2be4bc528c6a425c22e7f5a8a2c817146e1f41be73c11e15cd0d77e98a90892",
+    "instructions": "sha256:5bcbdd0d9e889979fcf066827de1df7210fa85c03edfe99e8ab89c97930a7219"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "N.e1-twoboard.review.3",
+   "label": "N",
+   "side": "v1",
+   "scenario": "e1-twoboard",
+   "task": "review",
+   "kind": "review",
+   "rep": 3,
+   "failure": null,
+   "pmA": 2,
+   "pmB": 0.8333333333333334,
+   "violated": [
+    "m.rev.ct",
+    "m.rev.req"
+   ],
+   "missed": [
+    "r.rev.retry"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 19,
+    "ok": 16,
+    "lineMismatch": 3,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.1067456,
+   "minutes": 0.48,
+   "turns": 5,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:e2be4bc528c6a425c22e7f5a8a2c817146e1f41be73c11e15cd0d77e98a90892",
+    "instructions": "sha256:5bcbdd0d9e889979fcf066827de1df7210fa85c03edfe99e8ab89c97930a7219"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "N.e1-twoboard.review.4",
+   "label": "N",
+   "side": "v1",
+   "scenario": "e1-twoboard",
+   "task": "review",
+   "kind": "review",
+   "rep": 4,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 17,
+    "ok": 15,
+    "lineMismatch": 2,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.1011022,
+   "minutes": 0.44,
+   "turns": 6,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:e2be4bc528c6a425c22e7f5a8a2c817146e1f41be73c11e15cd0d77e98a90892",
+    "instructions": "sha256:5bcbdd0d9e889979fcf066827de1df7210fa85c03edfe99e8ab89c97930a7219"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "N.e1-twoboard.review.5",
+   "label": "N",
+   "side": "v1",
+   "scenario": "e1-twoboard",
+   "task": "review",
+   "kind": "review",
+   "rep": 5,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 1,
+   "violated": [
+    "m.rev.req"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 16,
+    "ok": 14,
+    "lineMismatch": 2,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.0930026,
+   "minutes": 0.44,
+   "turns": 5,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:e2be4bc528c6a425c22e7f5a8a2c817146e1f41be73c11e15cd0d77e98a90892",
+    "instructions": "sha256:5bcbdd0d9e889979fcf066827de1df7210fa85c03edfe99e8ab89c97930a7219"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "N.e1-twoboard.summarize.1",
+   "label": "N",
+   "side": "v1",
+   "scenario": "e1-twoboard",
+   "task": "summarize",
+   "kind": "summarize",
+   "rep": 1,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 0,
+    "ok": 0,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.051571000000000006,
+   "minutes": 0.2,
+   "turns": 2,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:8d3982d7cb026f7fcb5f2c5f1d2019b67ddf1493cd43903b13b0f410806dd0df",
+    "instructions": "sha256:0f2b5a413f9ea003e00afddcd8837b2e5dbc2257df2e467dcf39c86865f10551"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "N.e1-twoboard.summarize.2",
+   "label": "N",
+   "side": "v1",
+   "scenario": "e1-twoboard",
+   "task": "summarize",
+   "kind": "summarize",
+   "rep": 2,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 1,
+   "violated": [
+    "m.sum.gid"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 0,
+    "ok": 0,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.0339228,
+   "minutes": 0.19,
+   "turns": 2,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:8d3982d7cb026f7fcb5f2c5f1d2019b67ddf1493cd43903b13b0f410806dd0df",
+    "instructions": "sha256:0f2b5a413f9ea003e00afddcd8837b2e5dbc2257df2e467dcf39c86865f10551"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "N.e1-twoboard.summarize.3",
+   "label": "N",
+   "side": "v1",
+   "scenario": "e1-twoboard",
+   "task": "summarize",
+   "kind": "summarize",
+   "rep": 3,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 1,
+   "violated": [
+    "m.sum.gid"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 0,
+    "ok": 0,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.0349728,
+   "minutes": 0.19,
+   "turns": 2,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:8d3982d7cb026f7fcb5f2c5f1d2019b67ddf1493cd43903b13b0f410806dd0df",
+    "instructions": "sha256:0f2b5a413f9ea003e00afddcd8837b2e5dbc2257df2e467dcf39c86865f10551"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "N.e1-twoboard.summarize.4",
+   "label": "N",
+   "side": "v1",
+   "scenario": "e1-twoboard",
+   "task": "summarize",
+   "kind": "summarize",
+   "rep": 4,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 1,
+   "violated": [
+    "m.sum.gid"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 0,
+    "ok": 0,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.0347928,
+   "minutes": 0.2,
+   "turns": 2,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:8d3982d7cb026f7fcb5f2c5f1d2019b67ddf1493cd43903b13b0f410806dd0df",
+    "instructions": "sha256:0f2b5a413f9ea003e00afddcd8837b2e5dbc2257df2e467dcf39c86865f10551"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "N.e1-twoboard.summarize.5",
+   "label": "N",
+   "side": "v1",
+   "scenario": "e1-twoboard",
+   "task": "summarize",
+   "kind": "summarize",
+   "rep": 5,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 0,
+    "ok": 0,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.03846279999999999,
+   "minutes": 0.25,
+   "turns": 2,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:8d3982d7cb026f7fcb5f2c5f1d2019b67ddf1493cd43903b13b0f410806dd0df",
+    "instructions": "sha256:0f2b5a413f9ea003e00afddcd8837b2e5dbc2257df2e467dcf39c86865f10551"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "N.e2-gateway.integrate.1",
+   "label": "N",
+   "side": "v1",
+   "scenario": "e2-gateway",
+   "task": "integrate",
+   "kind": "integrate",
+   "rep": 1,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.375,
+   "violated": [],
+   "missed": [
+    "r.int.conflict_side",
+    "r.int.supersedes_sensor",
+    "r.int.conflict_filter",
+    "r.int.cov_commands",
+    "r.int.unit_console"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 2,
+    "ok": 2,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.1114314,
+   "minutes": 0.46,
+   "turns": 5,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:9be82d595db0826cfce4aec4068dc0c85a6829ec364aa62b03d6ab7ea0a8e5d4",
+    "instructions": "sha256:465671d35ddb18da4e388f46ad045fa77885501f1c671157e10b6d719f0987b5"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "N.e2-gateway.integrate.2",
+   "label": "N",
+   "side": "v1",
+   "scenario": "e2-gateway",
+   "task": "integrate",
+   "kind": "integrate",
+   "rep": 2,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.375,
+   "violated": [],
+   "missed": [
+    "r.int.conflict_side",
+    "r.int.supersedes_sensor",
+    "r.int.conflict_filter",
+    "r.int.cov_commands",
+    "r.int.unit_console"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 2,
+    "ok": 2,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.1076188,
+   "minutes": 0.44,
+   "turns": 5,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:9be82d595db0826cfce4aec4068dc0c85a6829ec364aa62b03d6ab7ea0a8e5d4",
+    "instructions": "sha256:465671d35ddb18da4e388f46ad045fa77885501f1c671157e10b6d719f0987b5"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "N.e2-gateway.integrate.3",
+   "label": "N",
+   "side": "v1",
+   "scenario": "e2-gateway",
+   "task": "integrate",
+   "kind": "integrate",
+   "rep": 3,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.5,
+   "violated": [],
+   "missed": [
+    "r.int.conflict_side",
+    "r.int.supersedes_sensor",
+    "r.int.conflict_filter",
+    "r.int.unit_console"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 2,
+    "ok": 2,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.1183212,
+   "minutes": 0.52,
+   "turns": 4,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:9be82d595db0826cfce4aec4068dc0c85a6829ec364aa62b03d6ab7ea0a8e5d4",
+    "instructions": "sha256:465671d35ddb18da4e388f46ad045fa77885501f1c671157e10b6d719f0987b5"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "N.e2-gateway.integrate.4",
+   "label": "N",
+   "side": "v1",
+   "scenario": "e2-gateway",
+   "task": "integrate",
+   "kind": "integrate",
+   "rep": 4,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.875,
+   "violated": [],
+   "missed": [
+    "r.int.supersedes_sensor"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 2,
+    "ok": 2,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.10620860000000001,
+   "minutes": 0.45,
+   "turns": 4,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:9be82d595db0826cfce4aec4068dc0c85a6829ec364aa62b03d6ab7ea0a8e5d4",
+    "instructions": "sha256:465671d35ddb18da4e388f46ad045fa77885501f1c671157e10b6d719f0987b5"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "N.e2-gateway.integrate.5",
+   "label": "N",
+   "side": "v1",
+   "scenario": "e2-gateway",
+   "task": "integrate",
+   "kind": "integrate",
+   "rep": 5,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 0.5,
+   "violated": [],
+   "missed": [
+    "r.int.conflict_side",
+    "r.int.supersedes_sensor",
+    "r.int.merge_de",
+    "r.int.conflict_filter"
+   ],
+   "softened": [],
+   "anchors": {
+    "total": 1,
+    "ok": 0,
+    "lineMismatch": 1,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.106465,
+   "minutes": 0.45,
+   "turns": 4,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:9be82d595db0826cfce4aec4068dc0c85a6829ec364aa62b03d6ab7ea0a8e5d4",
+    "instructions": "sha256:465671d35ddb18da4e388f46ad045fa77885501f1c671157e10b6d719f0987b5"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "N.e2-gateway.review.1",
+   "label": "N",
+   "side": "v1",
+   "scenario": "e2-gateway",
+   "task": "review",
+   "kind": "review",
+   "rep": 1,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 1,
+   "violated": [
+    "m.rev.ct"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 16,
+    "ok": 15,
+    "lineMismatch": 1,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.11575560000000001,
+   "minutes": 0.51,
+   "turns": 5,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:e2be4bc528c6a425c22e7f5a8a2c817146e1f41be73c11e15cd0d77e98a90892",
+    "instructions": "sha256:5bcbdd0d9e889979fcf066827de1df7210fa85c03edfe99e8ab89c97930a7219"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "N.e2-gateway.review.2",
+   "label": "N",
+   "side": "v1",
+   "scenario": "e2-gateway",
+   "task": "review",
+   "kind": "review",
+   "rep": 2,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 1,
+   "violated": [
+    "m.rev.ct"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 14,
+    "ok": 13,
+    "lineMismatch": 1,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.10719120000000001,
+   "minutes": 0.49,
+   "turns": 5,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:e2be4bc528c6a425c22e7f5a8a2c817146e1f41be73c11e15cd0d77e98a90892",
+    "instructions": "sha256:5bcbdd0d9e889979fcf066827de1df7210fa85c03edfe99e8ab89c97930a7219"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "N.e2-gateway.review.3",
+   "label": "N",
+   "side": "v1",
+   "scenario": "e2-gateway",
+   "task": "review",
+   "kind": "review",
+   "rep": 3,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 1,
+   "violated": [
+    "m.rev.ct"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 17,
+    "ok": 12,
+    "lineMismatch": 5,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.1160788,
+   "minutes": 0.49,
+   "turns": 5,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:e2be4bc528c6a425c22e7f5a8a2c817146e1f41be73c11e15cd0d77e98a90892",
+    "instructions": "sha256:5bcbdd0d9e889979fcf066827de1df7210fa85c03edfe99e8ab89c97930a7219"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "N.e2-gateway.review.4",
+   "label": "N",
+   "side": "v1",
+   "scenario": "e2-gateway",
+   "task": "review",
+   "kind": "review",
+   "rep": 4,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 13,
+    "ok": 11,
+    "lineMismatch": 2,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.11267560000000001,
+   "minutes": 0.5,
+   "turns": 6,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:e2be4bc528c6a425c22e7f5a8a2c817146e1f41be73c11e15cd0d77e98a90892",
+    "instructions": "sha256:5bcbdd0d9e889979fcf066827de1df7210fa85c03edfe99e8ab89c97930a7219"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "N.e2-gateway.review.5",
+   "label": "N",
+   "side": "v1",
+   "scenario": "e2-gateway",
+   "task": "review",
+   "kind": "review",
+   "rep": 5,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 1,
+   "violated": [
+    "m.rev.ct"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 16,
+    "ok": 14,
+    "lineMismatch": 2,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.1240154,
+   "minutes": 0.51,
+   "turns": 6,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:e2be4bc528c6a425c22e7f5a8a2c817146e1f41be73c11e15cd0d77e98a90892",
+    "instructions": "sha256:5bcbdd0d9e889979fcf066827de1df7210fa85c03edfe99e8ab89c97930a7219"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "N.e2-gateway.summarize.1",
+   "label": "N",
+   "side": "v1",
+   "scenario": "e2-gateway",
+   "task": "summarize",
+   "kind": "summarize",
+   "rep": 1,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 1,
+   "violated": [
+    "m.sum.gid"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 0,
+    "ok": 0,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.0362128,
+   "minutes": 0.22,
+   "turns": 2,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:8d3982d7cb026f7fcb5f2c5f1d2019b67ddf1493cd43903b13b0f410806dd0df",
+    "instructions": "sha256:0f2b5a413f9ea003e00afddcd8837b2e5dbc2257df2e467dcf39c86865f10551"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "N.e2-gateway.summarize.2",
+   "label": "N",
+   "side": "v1",
+   "scenario": "e2-gateway",
+   "task": "summarize",
+   "kind": "summarize",
+   "rep": 2,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 0,
+    "ok": 0,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.044252799999999995,
+   "minutes": 0.28,
+   "turns": 2,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:8d3982d7cb026f7fcb5f2c5f1d2019b67ddf1493cd43903b13b0f410806dd0df",
+    "instructions": "sha256:0f2b5a413f9ea003e00afddcd8837b2e5dbc2257df2e467dcf39c86865f10551"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "N.e2-gateway.summarize.3",
+   "label": "N",
+   "side": "v1",
+   "scenario": "e2-gateway",
+   "task": "summarize",
+   "kind": "summarize",
+   "rep": 3,
+   "failure": null,
+   "pmA": 1,
+   "pmB": 1,
+   "violated": [
+    "m.sum.gid"
+   ],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 0,
+    "ok": 0,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.042142799999999994,
+   "minutes": 0.27,
+   "turns": 2,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:8d3982d7cb026f7fcb5f2c5f1d2019b67ddf1493cd43903b13b0f410806dd0df",
+    "instructions": "sha256:0f2b5a413f9ea003e00afddcd8837b2e5dbc2257df2e467dcf39c86865f10551"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "N.e2-gateway.summarize.4",
+   "label": "N",
+   "side": "v1",
+   "scenario": "e2-gateway",
+   "task": "summarize",
+   "kind": "summarize",
+   "rep": 4,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 0,
+    "ok": 0,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.040612800000000004,
+   "minutes": 0.27,
+   "turns": 2,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:8d3982d7cb026f7fcb5f2c5f1d2019b67ddf1493cd43903b13b0f410806dd0df",
+    "instructions": "sha256:0f2b5a413f9ea003e00afddcd8837b2e5dbc2257df2e467dcf39c86865f10551"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  },
+  {
+   "id": "N.e2-gateway.summarize.5",
+   "label": "N",
+   "side": "v1",
+   "scenario": "e2-gateway",
+   "task": "summarize",
+   "kind": "summarize",
+   "rep": 5,
+   "failure": null,
+   "pmA": 0,
+   "pmB": 1,
+   "violated": [],
+   "missed": [],
+   "softened": [],
+   "anchors": {
+    "total": 0,
+    "ok": 0,
+    "lineMismatch": 0,
+    "fabricated": 0
+   },
+   "gates": {
+    "leak": false,
+    "worktreeChanged": false
+   },
+   "costUsd": 0.0410928,
+   "minutes": 0.27,
+   "turns": 2,
+   "softDeadlineHit": false,
+   "hashes": {
+    "schema": "sha256:8d3982d7cb026f7fcb5f2c5f1d2019b67ddf1493cd43903b13b0f410806dd0df",
+    "instructions": "sha256:0f2b5a413f9ea003e00afddcd8837b2e5dbc2257df2e467dcf39c86865f10551"
+   },
+   "model": "claude-sonnet-5-5",
+   "effort": "medium",
+   "claude": "2.1.295"
+  }
+ ]
+}

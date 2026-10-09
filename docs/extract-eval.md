@@ -182,8 +182,11 @@ survey의 PM-A가 N 3.40, W 2.00, WI 1.80이고 trace 넷은 0.00~0.60이다. v4
 
 integrate·review·summarize는 survey·trace의 채택과 따로 본다(AI 결정 127). base(한 문단 과제 설명 + L3)와 v1(L1 + 종류
 절차 + L3)을 같은 때에 쪽마다 회차 5로 돌리고, 6층(2 시나리오 × 3 과제)에 같은 규칙을 쓴다
-(`report.mjs --tasks integrate,review,summarize --pair N,B --adopt`). 이 6층은 아직 측정하지 않았다(기준선도
-이 측정이 처음이다).
+(`report.mjs --tasks integrate,review,summarize --pair N,B --adopt`). 14차 작업에서 처음 쟀다(AI 결정 133): v1(N) − base(B)는
+PM-A −0.133 [−0.400, 0.133], PM-B −0.085 [−0.124, −0.046]로 integrate의 재현율이 낮았다(0.55·0.53 대 0.78·0.78, 놓친 것은 주로
+충돌·합침·대체 연결). integrate는 연결을 먼저, review는 반증의 범위를 좁힌 N2는 PM-A −0.200 [−0.433, 0.033], PM-B −0.013
+[−0.050, 0.021]로 N보다 낫지만 규칙을 넘지 못했다. N2를 잠정 기본값으로 둔다(보고서 `2026-10-09-kinds-NB.md`,
+`2026-10-09-kinds-N2B.md`). 쪽마다 run 30개, 실패·관문 위반 0, run당 약 $0.1·0.5분이다.
 
 근거: A/A의 차이가 PM-A 0.10 [−0.02, 0.22], PM-B 0.005 [−0.011, 0.020]였다(2026-10-09, `app/eval/extract/reports/2026-10-09-base-AA.md`). 기준선은 PM-A 0.25/run, PM-B 0.965이고 e1은 천장에 가깝다(개선은 주로 e2에서 갈린다).
 
