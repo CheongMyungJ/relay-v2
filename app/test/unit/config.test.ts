@@ -51,7 +51,7 @@ describe('config.json 읽기 (5.1.1)', () => {
       'config.json 자동 승인 카운트다운: 1~3600의 정수여야 함 (지금: 0). 기본값 15을 씀',
     )
     expect(warnings).toContain(
-      'config.json 자동 승인: verify는 켤 수 없음 (의도 승인, Work 완료는 늘 수동). 기본값을 씀',
+      'config.json 자동 승인: verify는 켤 수 없음 (의도 승인, 요구사항 추출, Work 완료는 늘 수동). 기본값을 씀',
     )
   })
 
@@ -175,11 +175,12 @@ describe('설정 화면 (D70)', () => {
 
   it('자동 승인을 켤 수 있는 단계가 아닌 노드는 모두 "켤 수 없음"으로 거절한다. 모르는 단계로 거절하지 않는다 (4.2)', () => {
     const manual = ALL_NODES.filter((n) => !(AUTO_APPROVE_NODES as readonly string[]).includes(n))
-    expect(manual).toEqual(['intake', 'verify'])
+    // 요구사항 추출의 extract는 자동 승인을 켤 수 있는 단계로 두기로 했으나(결정 5) 판정하는 때를 정하지 않아 첫 구현은 수동이다
+    expect(manual).toEqual(['intake', 'extract', 'verify'])
     for (const n of manual) {
       expect(applyConfigPatch(DEFAULT_CONFIG, { auto_approve: { [n]: true } }), n).toEqual({
         ok: false,
-        error: `자동 승인: ${n}는 켤 수 없음 (의도 승인, Work 완료는 늘 수동)`,
+        error: `자동 승인: ${n}는 켤 수 없음 (의도 승인, 요구사항 추출, Work 완료는 늘 수동)`,
       })
     }
   })
@@ -187,7 +188,7 @@ describe('설정 화면 (D70)', () => {
   it('의도 승인과 Work 완료는 켤 수 없고 원인 분석과 수정은 켤 수 있다. 카운트다운은 1~3600초다 (4.2)', () => {
     expect(applyConfigPatch(DEFAULT_CONFIG, { auto_approve: { verify: true } })).toEqual({
       ok: false,
-      error: '자동 승인: verify는 켤 수 없음 (의도 승인, Work 완료는 늘 수동)',
+      error: '자동 승인: verify는 켤 수 없음 (의도 승인, 요구사항 추출, Work 완료는 늘 수동)',
     })
     expect(applyConfigPatch(DEFAULT_CONFIG, { auto_approve: { fix: false } })).toEqual({
       ok: true,
@@ -246,7 +247,7 @@ describe('Work별 설정 (D72)', () => {
     expect(checkWorkSettings({ auto_approve: { verify: true } }).ok).toBe(false)
     expect(checkWorkSettings({ auto_approve: { verify: true } })).toEqual({
       ok: false,
-      error: '자동 승인: verify는 켤 수 없음 (의도 승인, Work 완료는 늘 수동)',
+      error: '자동 승인: verify는 켤 수 없음 (의도 승인, 요구사항 추출, Work 완료는 늘 수동)',
     })
     expect(checkWorkSettings({ auto_approve: { intake: false } }).ok).toBe(false)
     expect(checkWorkSettings({ auto_approve: { fix: 1 } }).ok).toBe(false)
@@ -270,10 +271,10 @@ describe('Work별 설정 (D72)', () => {
 })
 
 describe('화면의 스킬 이름', () => {
-  it('노드의 화면 이름(D109)과 같은 순서, 같은 이름이다. PR 대응은 파이프라인 뒤에 둔다. 설계 문답은 질문 방식이 없어 빠진다 (D187, D188, D358, I104)', () => {
+  it('노드의 화면 이름(D109)과 같은 순서, 같은 이름이다. PR 대응은 파이프라인 뒤에 둔다. 설계 문답과 요구사항 추출(세션 없음, 결정 92)은 질문 방식이 없어 빠진다 (D187, D188, D358, I104)', () => {
     expect(SKILL_TITLES.map(([skill, title]) => [skill, title])).toEqual(
       [...ALL_NODES, RESPOND]
-        .filter((n) => n !== 'spec')
+        .filter((n) => n !== 'spec' && n !== 'extract')
         .map((n) => [NODE_INFO[n].skill, NODE_INFO[n].title]),
     )
     expect(SKILL_TITLES).toEqual([
@@ -293,7 +294,7 @@ describe('화면의 스킬 이름', () => {
       const types = WORK_TYPES.filter((t) => PIPELINES[t].includes(n))
       const group = types.length > 1 ? 'common' : types[0]
       const skill = SKILL_TITLES.find(([s]) => s === NODE_INFO[n].skill)
-      if (n === 'spec') expect(skill, n).toBeUndefined()
+      if (n === 'spec' || n === 'extract') expect(skill, n).toBeUndefined()
       else expect(skill?.[2], n).toBe(group)
       const auto = AUTO_APPROVE_TITLES.find(([a]) => a === n)
       if (auto) expect(auto[2], n).toBe(group)
@@ -459,7 +460,7 @@ describe('[단위] 기본 모델·추론 수준과 단계별 실행 설정', () 
     })
   })
 
-  it('단계 목록은 의도 정리부터 PR 대응까지 아홉 단계이고 이름은 노드의 화면 이름이다. 끝은 곁 세션이다 (F3, D391)', () => {
+  it('단계 목록은 의도 정리부터 PR 대응까지 열 단계이고 이름은 노드의 화면 이름이다. 끝은 곁 세션이다 (F3, D391)', () => {
     expect(AGENT_STEP_TITLES.slice(0, -1).map(([skill, title]) => [skill, title])).toEqual(
       [...ALL_NODES, RESPOND].map((n) => [NODE_INFO[n].skill, NODE_INFO[n].title]),
     )
@@ -472,6 +473,7 @@ describe('[단위] 기본 모델·추론 수준과 단계별 실행 설정', () 
       '계획과 리팩터링',
       '설계 문답',
       '실행',
+      '요구사항 추출',
       '리뷰와 검증',
       'PR 대응',
       '곁 세션',

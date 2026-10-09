@@ -311,7 +311,7 @@ function autoApprove(v: unknown): Checked<Partial<Record<AutoApproveNode, boolea
     if ((MANUAL_NODES as readonly string[]).includes(node)) {
       return {
         ok: false,
-        error: `${NAMES.auto_approve}: ${node}는 켤 수 없음 (의도 승인, Work 완료는 늘 수동)`,
+        error: `${NAMES.auto_approve}: ${node}는 켤 수 없음 (의도 승인, 요구사항 추출, Work 완료는 늘 수동)`,
       }
     }
     if (!(AUTO_APPROVE_NODES as readonly string[]).includes(node)) {

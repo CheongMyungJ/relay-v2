@@ -12,6 +12,11 @@ export interface NodeInfo {
   title: string
   /** 필수 산출물 (3.1). awaiting_approval일 때 task 디렉터리에 있어야 한다 (D30) */
   artifacts: readonly string[]
+  /**
+   * 앱이 run을 돌리는 단계(요구사항 추출의 extract, 결정 92). 스킬을 배포하지 않고 CLI 세션을 띄우지 않는다. 산출물은 앱이
+   * 기록에서 렌더링한다(결정 99)
+   */
+  appRun?: true
 }
 
 /**
@@ -26,6 +31,8 @@ export const PIPELINES: Readonly<Record<WorkType, readonly NodeName[]>> = {
   refactor: ['intake', 'refactor', 'verify'],
   spec: ['intake', 'spec', 'verify'],
   general: ['intake', 'execute', 'verify'],
+  // 요구사항 추출: extract는 앱이 run을 돌리는 단계다 (requirements-extraction-flow.md 4절, 결정 92)
+  requirements: ['intake', 'extract', 'verify'],
 }
 
 /** Work의 업무 유형. work.json에 type이 없으면 버그 수정이다 (D256, I58) */
@@ -84,6 +91,7 @@ export const KEEP_CODE: Readonly<Record<WorkType, Readonly<Partial<Record<NodeNa
         note: `${CONTINUE} 아래 폐기된 \`execution.md\`를 참고해 새 \`execution.md\`를 쓴다.`,
       },
     },
+    requirements: {},
   }
 
 /**
@@ -105,6 +113,11 @@ export function keepLabel(type: WorkType, node: NodeName): string {
  */
 export function keepDefault(type: WorkType, node: NodeName): boolean {
   return KEEP_CODE[type][node]?.doc === true
+}
+
+/** 앱이 run을 돌리는 단계인가 (결정 92): 세션 대신 run 루프를 시작하고 멈춘다 */
+export function appRun(node: TaskNode): boolean {
+  return NODE_INFO[node].appRun === true
 }
 
 /** PR 대응 task의 노드 (D187). 파이프라인 밖이다 (D188) */
@@ -133,6 +146,13 @@ export const NODE_INFO: Readonly<Record<TaskNode, NodeInfo>> = {
   },
   spec: { node: 'spec', skill: 'spec', title: '설계 문답', artifacts: ['spec.md'] },
   execute: { node: 'execute', skill: 'execute', title: '실행', artifacts: ['execution.md'] },
+  extract: {
+    node: 'extract',
+    skill: 'extract',
+    title: '요구사항 추출',
+    artifacts: ['extraction.md'],
+    appRun: true,
+  },
   verify: {
     node: 'verify',
     skill: 'verify',

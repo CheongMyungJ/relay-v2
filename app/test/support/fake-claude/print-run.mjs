@@ -8,6 +8,7 @@
 //     "background": false,              // true면 첫 Stop에 백그라운드 작업을 실은 뒤 끝난 것으로 다시 Stop
 //     "write": { "path": "...", "text": "..." },  // 있으면 그 파일을 쓴다(worktree 변경 흉내)
 //     "exitCode": 0 }
+//   또는 { "runs": [<할 일>, ...] }: 부를 때마다 차례로 하나씩 쓴다(마지막 것을 되풀이). 앱의 run 루프 [흐름] 시험이 쓴다
 // 출력 값의 {wt}는 첫 --add-dir로 바꾼다.
 import fs from 'node:fs'
 import path from 'node:path'
@@ -32,7 +33,15 @@ const sessionId = opt('--session-id') ?? randomUUID()
 const wt = opt('--add-dir') ?? process.cwd()
 const tools = (opt('--tools') ?? '').split(',').filter(Boolean)
 const settings = JSON.parse(fs.readFileSync(opt('--settings'), 'utf8'))
-const plan = JSON.parse(fs.readFileSync(process.env.FAKE_CLAUDE_RUN, 'utf8'))
+const planFile = process.env.FAKE_CLAUDE_RUN
+const loaded = JSON.parse(fs.readFileSync(planFile, 'utf8'))
+let plan = loaded
+if (Array.isArray(loaded.runs)) {
+  const counter = `${planFile}.count`
+  const n = fs.existsSync(counter) ? Number(fs.readFileSync(counter, 'utf8')) : 0
+  fs.writeFileSync(counter, String(n + 1))
+  plan = loaded.runs[Math.min(n, loaded.runs.length - 1)]
+}
 const fill = (v) => JSON.parse(JSON.stringify(v).replaceAll('{wt}', wt.replaceAll('\\', '\\\\')))
 
 let packet = ''

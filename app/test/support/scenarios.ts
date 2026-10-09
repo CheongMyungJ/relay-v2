@@ -714,6 +714,9 @@ const decision = (what: string, by: 'ai' | 'human' = 'ai') => ({ what, why: `${w
 
 export function steps(node: NodeName): Step[] {
   switch (node) {
+    case 'extract':
+      // 요구사항 추출의 extract는 세션을 띄우지 않고 앱이 run을 돌린다 (결정 92)
+      return []
     case 'intake':
       return [
         { do: 'prompt' },

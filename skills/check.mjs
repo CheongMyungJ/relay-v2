@@ -216,9 +216,11 @@ const templateSources = {
 };
 // 공용 스킬은 유형마다 조립한 글로 본다 (D279). verify의 pr.md 템플릿은 설계 5.6.6에 유형마다 하나씩 있으므로, 그 유형의
 // 템플릿 절은 있어야 하고 다른 유형에만 있는 절은 없어야 한다
-const PR_MARK = { bugfix: '## 원인', feature: '## 동작', refactor: '## 목표 구조', spec: '## 다시 볼 결정', general: '## 주요 결정' };
+const PR_MARK = { bugfix: '## 원인', feature: '## 동작', refactor: '## 목표 구조', spec: '## 다시 볼 결정', general: '## 주요 결정', requirements: '## 분석 범위' };
 // 설계의 verification.md는 테스트 파일 변경 대신 문서 밖 파일 변경을, 남은 위험 앞에 다시 볼 결정을 둔다 (D374)
 const SPEC_VERIFICATION = { drop: ['## 테스트 파일 변경'], add: ['## 문서 밖 파일 변경', '## 다시 볼 결정'] };
+// 요구사항 추출의 verification.md는 코드를 바꾸지 않아 테스트 파일 변경 절이 없다 (requirements-extraction-flow.md 결정 92)
+const REQUIREMENTS_VERIFICATION = { drop: ['## 테스트 파일 변경'], add: [] };
 for (const [name, sections] of Object.entries(templateSources)) {
   for (const v of variants.filter((x) => x.name === name)) {
     const skillHeadings = codeBlocks(v.text, 'markdown').flatMap(headings);
@@ -228,9 +230,10 @@ for (const [name, sections] of Object.entries(templateSources)) {
       const typed = blocks.some((hs) => hs.includes('# PR 제목')) && SHARED.includes(name);
       const own = typed ? prOf(v.type) ?? [] : [];
       let designHeadings = [...new Set([...blocks.filter((hs) => !typed || !hs.includes('# PR 제목')).flat(), ...own])];
-      if (name === 'verify' && v.type === 'spec') {
-        designHeadings = [...designHeadings.filter((h) => !SPEC_VERIFICATION.drop.includes(h)), ...SPEC_VERIFICATION.add];
-        const left = SPEC_VERIFICATION.drop.filter((h) => skillHeadings.includes(h));
+      const diff = { spec: SPEC_VERIFICATION, requirements: REQUIREMENTS_VERIFICATION }[v.type];
+      if (name === 'verify' && diff) {
+        designHeadings = [...designHeadings.filter((h) => !diff.drop.includes(h)), ...diff.add];
+        const left = diff.drop.filter((h) => skillHeadings.includes(h));
         check(left.length === 0, `${v.label}: 테스트 파일 변경 절이 없음 (D374)${left.length ? ` (${left.join(', ')})` : ''}`);
       }
       const missing = designHeadings.filter((h) => !skillHeadings.includes(h));
@@ -536,7 +539,7 @@ for (const v of variants) {
 }
 check(!/<!-- \/?type/.test(common), '_common.md: 유형 표시가 없음 (모든 유형 공통)');
 // 산출물 이름으로 다른 유형의 글이 섞이지 않았는지 본다. work-start는 유형 불일치 질문(D238)에 네 유형을 말하므로 산출물만 본다
-const ARTIFACT = { bugfix: ['`fix.md`'], feature: ['`design.md`', '`implement.md`'], refactor: ['`refactor.md`'], spec: ['`spec.md`'], general: ['`execution.md`'] };
+const ARTIFACT = { bugfix: ['`fix.md`'], feature: ['`design.md`', '`implement.md`'], refactor: ['`refactor.md`'], spec: ['`spec.md`'], general: ['`execution.md`'], requirements: ['`extraction.md`'] };
 for (const v of variants.filter((x) => SHARED.includes(x.name))) {
   const foreign = TYPES.filter((t) => t !== v.type).flatMap((t) => ARTIFACT[t]).filter((a) => v.text.includes(a));
   check(foreign.length === 0, `${v.label}: 다른 유형의 산출물이 없음${foreign.length ? ` (${foreign.join(', ')})` : ''}`);

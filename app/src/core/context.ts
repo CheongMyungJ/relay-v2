@@ -37,7 +37,8 @@ export function questionMode(
   node: TaskNode,
 ): QuestionMode | null {
   const skill = NODE_INFO[node].skill
-  if (skill === 'spec') return null
+  // 요구사항 추출의 extract는 세션 없이 앱이 run을 돌린다 (결정 92)
+  if (skill === 'spec' || skill === 'extract') return null
   return settings.question_mode?.[skill] ?? config.question_mode[skill]
 }
 

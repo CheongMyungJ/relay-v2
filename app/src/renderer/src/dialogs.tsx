@@ -277,6 +277,7 @@ function issueNumberInput(text: string): number | null | undefined {
 const WORK_TYPE_HINT: Readonly<Partial<Record<WorkType, string>>> = {
   spec: '구현 전에 설계만 정하는 큰 일',
   general: '다른 유형에 맞지 않는 일',
+  requirements: '펌웨어 코드에서 현재 동작의 요구사항 후보와 제약을 근거와 함께 뽑는 일',
 }
 
 /**
@@ -320,6 +321,8 @@ const REQUEST_PLACEHOLDER: Readonly<Record<WorkType, string>> = {
   refactor: '바꿀 구조(예: 어느 계산을 한 모듈로 모을지), 바꿀 곳, 지켜야 할 동작을 적어 주세요',
   spec: '무엇을 설계할지, 정해야 할 것, 설계 문서를 둘 곳이나 고칠 문서를 적어 주세요',
   general: '할 일과 끝났다고 볼 조건을 적어 주세요(무엇을 바꾸고 어떻게 확인할지)',
+  requirements:
+    '분석할 저장소의 범위, 제외할 것(벤더 HAL·RTOS 등), 있는 자료(데이터시트, 툴체인), 결과를 쓸 곳을 적어 주세요',
 }
 
 /** 새 Work: 유형, 요청, 기준 브랜치, 기준 위치 (시나리오 1). 유형을 고르기 전에는 [시작]이 꺼져 있다 (D236) */

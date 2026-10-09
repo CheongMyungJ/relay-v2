@@ -56,10 +56,12 @@ import {
 import { canClean } from './cleanup'
 import { mergeWorkSettings } from './config'
 import { commitMessage, deliveryStart, stashMessage, stoppedVerify } from './delivery'
+import type { RequirementsHalt, RequirementsPointer } from '../shared/requirements'
 import {
   NODE_INFO,
   RESPOND,
   WORK_COMPLETE,
+  appRun,
   defaultNext,
   isPipelineNode,
   stopsForRecommendation,
@@ -671,6 +673,30 @@ export interface IssueFailed extends WorkEvent {
   error: string
 }
 
+/**
+ * 요구사항 추출의 기록 포인터를 바꾼다 (requirements-extraction-flow.md 결정 32, 93). main이 revision 파일을 먼저 쓰고 넣는다:
+ * 반영은 이 work.json 한 번 쓰기로 마친다. log가 있으면 events.jsonl에 extract.run으로 남긴다
+ */
+export interface RequirementsUpdated extends TaskEvent {
+  type: 'requirements.updated'
+  pointer: RequirementsPointer
+  log?: Record<string, unknown>
+}
+
+/** extract의 run 루프가 멈췄다 (결정 98). task는 중단됨이고 [재개]가 루프를 다시 시작한다 */
+export interface ExtractHalted extends TaskEvent {
+  type: 'extract.halted'
+  halt: RequirementsHalt
+  /** [이 단계 끝나면 멈춤]으로 멈췄다: 지금 run이 끝나면 멈춘다는 뜻이라(17.12 사람 결정) 표시를 지운다 */
+  clearStopAfter?: boolean
+}
+
+/** extract가 끝나 앱이 extraction.md와 handoff.md를 썼다 (결정 99). check는 그 형식 검사다 */
+export interface ExtractFinished extends TaskEvent {
+  type: 'extract.finished'
+  check: CheckSummary
+}
+
 export type MachineEvent =
   | RuntimeSignal
   | SessionStarted
@@ -736,6 +762,9 @@ export type MachineEvent =
   | IssuePosted
   | IssueClosed
   | IssueFailed
+  | RequirementsUpdated
+  | ExtractHalted
+  | ExtractFinished
 
 export type Effect =
   /**
@@ -831,6 +860,10 @@ export type Effect =
    * issue.created, issue.posted, issue.closed, issue.failed로 알린다. 이미 게시하는 중이면 그 줄이 이어서 한다
    */
   | { type: 'publishIssue' }
+  /** 요구사항 추출의 run 루프를 시작하거나 잇는다 (결정 92, 98). 세션을 띄우지 않는다 */
+  | { type: 'runExtract'; taskId: string }
+  /** 도는 run의 프로세스 트리를 끝내고 루프를 멈춘다 ([즉시 중단], 17.12) */
+  | { type: 'stopExtract'; taskId: string }
 
 export interface Transition {
   work: WorkState
@@ -933,6 +966,19 @@ export function actions(work: WorkState): WorkActions {
   const task = currentTask(work)
   const active = !!task && taskActive(work, task)
   const live = task?.session?.alive === true
+  // 요구사항 추출의 extract는 세션 없이 앱이 run을 돌린다: 도는 동안 [즉시 중단], 멈췄으면 [재개] (17.12 사람 결정)
+  if (task && appRun(task.node)) {
+    return {
+      interrupt: active && task.status === 'working',
+      resume: active && task.status === 'interrupted',
+      retry: false,
+      resumeWork: work.status === 'stopped' && !stoppedVerify(work),
+      selectStep: canSelectStep(work),
+      stopAfter: work.status === 'active',
+      abandon: work.status === 'active' || work.status === 'stopped',
+      clean: canClean(work),
+    }
+  }
   return {
     interrupt: active && (live || task.status === 'queued'),
     resume:
@@ -1519,6 +1565,12 @@ function taskTransition(work: WorkState, event: TaskMachineEvent, config: AppCon
       return retry(work, task, event)
     case 'check.updated':
       return checkUpdated(work, task, event)
+    case 'requirements.updated':
+      return requirementsUpdated(work, task, event)
+    case 'extract.halted':
+      return extractHalted(work, task, event)
+    case 'extract.finished':
+      return extractFinished(work, task, event)
     case 'SessionEnd':
     case 'pty.exit':
       return sessionEnded(work, task, event)
@@ -1953,6 +2005,7 @@ function checkUpdated(work: WorkState, task: TaskRecord, e: CheckUpdated): Trans
  */
 function interrupt(work: WorkState, task: TaskRecord, e: Interrupt): Transition {
   if (!taskActive(work, task)) return unchanged(work, '진행 중인 Work가 아님')
+  if (appRun(task.node)) return interruptExtract(work, task, e)
   const ended = endTask(work, task, e.at, e.reason, e.check)
   if (!ended) return unchanged(work, `${task.id}에 끝낼 세션이 없음`)
   return { work: withTask(work, ended.task), effects: ended.effects }
@@ -1965,6 +2018,7 @@ function interrupt(work: WorkState, task: TaskRecord, e: Interrupt): Transition 
  * 세션 상한을 넘으면 main이 대기열에 넣는다.
  */
 function resume(work: WorkState, task: TaskRecord): Transition {
+  if (appRun(task.node)) return resumeExtract(work, task)
   if (knownTaskEngine(task) === null)
     return unchanged(work, `${agentLabel(task)}. 이 세션은 재개할 수 없습니다.`)
   if (!taskActive(work, task)) return unchanged(work, '진행 중인 Work가 아님')
@@ -2007,6 +2061,88 @@ function retry(work: WorkState, task: TaskRecord, e: Retry): Transition {
 /** 훅 신뢰 전에 끝나 실제 대화 ID를 받지 못한 Codex는 임의의 ID로 재개하지 않는다. */
 function unidentifiedCodex(task: TaskRecord): boolean {
   return sessionUnknown(task) && task.status === 'interrupted' && task.session?.alive !== true
+}
+
+// ---------- 요구사항 추출의 extract (requirements-extraction-flow.md 결정 92, 98, 99, 17.12) ----------
+
+/** 포인터를 바꾼 Work */
+function withRequirements(work: WorkState, pointer: RequirementsPointer): WorkState {
+  return { ...work, requirements: pointer }
+}
+
+/** [즉시 중단]: 도는 run의 프로세스 트리를 끝내고 루프를 멈춘다. 결과는 버린다 */
+function interruptExtract(work: WorkState, task: TaskRecord, e: Interrupt): Transition {
+  if (task.status !== 'working') return unchanged(work, `${task.id}에 도는 run이 없음`)
+  const halt: RequirementsHalt = {
+    at: e.at,
+    reason: 'human',
+    detail: e.reason === 'app_quit' ? '앱 종료' : '[즉시 중단]',
+  }
+  const base = work.requirements ? withRequirements(work, { ...work.requirements, halt }) : work
+  return {
+    work: withTask(base, { ...task, status: 'interrupted' }),
+    effects: [
+      { type: 'stopExtract', taskId: task.id },
+      log(work, e.at, 'task.interrupted', { reason: e.reason }, task),
+    ],
+  }
+}
+
+/** [재개]: 멈춘 까닭을 지우고 다음 run부터 잇는다 */
+function resumeExtract(work: WorkState, task: TaskRecord): Transition {
+  if (!taskActive(work, task)) return unchanged(work, '진행 중인 Work가 아님')
+  if (task.status !== 'interrupted')
+    return unchanged(work, `${task.id}는 재개할 수 있는 상태가 아님`)
+  const req = work.requirements
+  const base = req ? withRequirements(work, omit(req, 'halt', 'usage_wait')) : work
+  return {
+    work: withTask(base, { ...omit(task, 'error'), status: 'working' }),
+    effects: [{ type: 'runExtract', taskId: task.id }],
+  }
+}
+
+function requirementsUpdated(
+  work: WorkState,
+  task: TaskRecord,
+  e: RequirementsUpdated,
+): Transition {
+  if (!appRun(task.node)) return unchanged(work, `${task.id}는 요구사항 추출 단계가 아님`)
+  return {
+    work: withRequirements(work, e.pointer),
+    effects: e.log ? [log(work, e.at, 'extract.run', e.log, task)] : [],
+  }
+}
+
+function extractHalted(work: WorkState, task: TaskRecord, e: ExtractHalted): Transition {
+  if (!appRun(task.node)) return unchanged(work, `${task.id}는 요구사항 추출 단계가 아님`)
+  let next: WorkState = work.requirements
+    ? withRequirements(work, { ...work.requirements, halt: e.halt })
+    : work
+  if (e.clearStopAfter) next = withoutStopAfter(next)
+  const stopped = task.status === 'working' ? { ...task, status: 'interrupted' as const } : task
+  return {
+    work: withTask(next, stopped),
+    effects: [
+      log(work, e.at, 'extract.halted', { reason: e.halt.reason, detail: e.halt.detail }, task),
+    ],
+  }
+}
+
+function extractFinished(work: WorkState, task: TaskRecord, e: ExtractFinished): Transition {
+  if (!appRun(task.node)) return unchanged(work, `${task.id}는 요구사항 추출 단계가 아님`)
+  if (task.status !== 'working') return unchanged(work, `${task.id}는 도는 extract가 아님`)
+  const status = handoffStatus(e.check) ?? 'interrupted'
+  const req = work.requirements
+  const base = req ? withRequirements(work, omit(req, 'halt', 'usage_wait')) : work
+  return {
+    work: withTask(base, { ...task, status, check: e.check }),
+    effects: [
+      log(work, e.at, 'extract.finished', {}, task),
+      ...(status === 'awaiting_approval'
+        ? [log(work, e.at, 'task.awaiting_approval', { reason: 'extract' }, task)]
+        : []),
+    ],
+  }
 }
 
 // ---------- Work 조작 ----------
@@ -2640,9 +2776,26 @@ function restarted(work: WorkState, e: AppRestarted, config: AppConfig): Transit
     work.cleanup_process !== undefined ||
     work.side?.process !== undefined ||
     tasks.some((t, i) => JSON.stringify(t) !== JSON.stringify(work.tasks[i]))
-  if (!changed) return unchanged(work)
+  // 요구사항 추출: 돌던 run은 결과를 버리고(main이 프로세스를 끝냈다) 루프는 [재개]를 기다린다 (결정 4, 98)
+  const req = work.requirements
+  const reqChanged = !!req?.run
+  if (!changed && !reqChanged) return unchanged(work)
   let next: WorkState = withoutSideProcess(omit({ ...work, tasks }, 'cleanup_process'))
   if (op && cut) next = { ...next, operation: { ...op, interrupted_at: e.at } }
+  if (req?.run) {
+    const { run, ...rest } = req
+    next = {
+      ...next,
+      requirements: {
+        ...rest,
+        halt: {
+          at: e.at,
+          reason: 'restart',
+          detail: `앱을 다시 켜 돌던 run ${run.id}의 결과를 버림`,
+        },
+      },
+    }
+  }
   return { work: next, effects }
 }
 

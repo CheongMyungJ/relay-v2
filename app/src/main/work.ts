@@ -148,7 +148,7 @@ import {
   sameChanges,
   stoppedVerify,
 } from '../core/delivery'
-import { NODE_INFO, RESPOND, workType } from '../core/pipeline'
+import { NODE_INFO, RESPOND, appRun, workType } from '../core/pipeline'
 import {
   ISSUE_LABEL,
   ISSUE_LABEL_COLOR,
@@ -275,10 +275,14 @@ import {
   RESPONSE_FILE,
   VERIFICATION_FILE,
   checkTask,
+  intentDraftBody,
   parseFrontMatter,
   sectionText,
+  summarize,
   type TaskCheck,
 } from '../core/validate'
+import { ExtractRunner } from './requirements'
+import { DEFAULT_REQUIREMENTS_BUDGET, type Answer } from '../shared/requirements'
 import type { AppConfig, WorkSettingsPatch } from '../shared/config'
 import type { NodeName } from '../shared/contracts'
 import {
@@ -617,6 +621,8 @@ export class WorkRunner {
   private mergeConfirms = 0
   /** 정리 세션 ([AI 세션 열기], 7-5) */
   private cleanup: CleanupSession | null = null
+  /** 요구사항 추출 extract의 run 루프 (requirements-extraction-flow.md 결정 92). 처음 쓸 때 만든다 */
+  private extract: ExtractRunner | null = null
   private cleanupSeq = 0
   /** 곁 세션 (시나리오 11). 앱을 다시 켜면 없고, 이어 갈 대화는 work.json의 side에 있다 */
   private side: SideSession | null = null
@@ -695,7 +701,84 @@ export class WorkRunner {
 
   /** 이 앱에서 살아 있는 세션이 있다 (앱 종료 확인, 시나리오 3-6). 정리 세션과 곁 세션(D390)도 센다 */
   hasLiveSession(): boolean {
-    return this.live.size > 0 || this.cleanup?.status === 'live' || this.side?.status === 'live'
+    return (
+      this.live.size > 0 ||
+      this.cleanup?.status === 'live' ||
+      this.side?.status === 'live' ||
+      this.extract?.running === true
+    )
+  }
+
+  /** extract의 run 루프. Work의 처리 줄에서 이벤트를 넣는다 (결정 92) */
+  extractRunner(): ExtractRunner {
+    if (this.extract) return this.extract
+    const ctx = this.ctx
+    this.extract = new ExtractRunner({
+      work: () => this.work,
+      workDir: this.files.dir,
+      worktree: this.worktree,
+      env: ctx.env,
+      hooks: ctx.hooks,
+      skillsRoot: path.dirname(ctx.skills),
+      at: () => ctx.at(),
+      feed: (event) => this.enqueue(async () => void (await this.feed(event))),
+      intent: async () => {
+        const version = this.work.intent?.version
+        if (!version) throw new Error('승인된 intent가 없음')
+        return intentDraftBody(await this.intentText(version)).body
+      },
+      taskDir: (taskId) => {
+        const task = this.task(taskId)
+        if (!task) throw new Error(`${taskId} 없음`)
+        return this.files.taskDir(task)
+      },
+      check: async (taskId) => {
+        const task = this.task(taskId)
+        if (!task) throw new Error(`${taskId} 없음`)
+        return summarize(await this.checkOf(task))
+      },
+      // 평가가 잰 조건(sonnet/medium, 결정 50)을 기본으로 둔다. 상세 설정의 "요구사항 추출"이 바꾼다
+      agent: (taskId) => {
+        const task = this.task(taskId)
+        return { model: task?.model || 'sonnet', effort: task?.effort || 'medium' }
+      },
+      bin: () => findClaude({ env: ctx.env }),
+      acquire: () => ctx.pool.tryAcquire(),
+      release: () => ctx.pool.release(),
+      // 예산은 결정 30의 잠정값이다. 앱 설정의 "요구사항 추출" 절(결정 31)은 다음 PR이다
+      budget: () => DEFAULT_REQUIREMENTS_BUDGET,
+      problem: (m) => this.problem(m),
+      changed: () => this.changed(),
+    })
+    return this.extract
+  }
+
+  /**
+   * 사람 결정 필요의 답 (결정 7, 41): 지금 extract task의 열린 결정에만 받는다. 답은 반영 대기로 두고 루프가 다음 run 전에
+   * revision으로 만든다
+   */
+  async answerRequirements(
+    answers: { decision: string; answer: string }[],
+  ): Promise<CommandResult> {
+    // 열린 결정인지는 처리 줄에서 보고, 답 파일과 포인터는 처리 줄 밖에서 쓴다(루프와 같은 길로 이벤트를 넣는다)
+    const checked = await this.enqueue(async () => {
+      const task = currentTask(this.work)
+      if (!task || task.node !== 'extract') return null
+      const runner = this.extractRunner()
+      await runner.refresh()
+      const open = new Set(
+        (runner.state?.decisions ?? []).filter((d) => !d.answer).map((d) => d.id),
+      )
+      const at = this.ctx.at()
+      const valid: Answer[] = answers
+        .map((a) => ({ decision: a.decision, answer: a.answer.trim(), at }))
+        .filter((a) => open.has(a.decision) && a.answer)
+      return { taskId: task.id, valid }
+    })
+    if (!checked) return { ok: false, error: '지금 단계가 요구사항 추출이 아님' }
+    if (!checked.valid.length) return { ok: false, error: '답할 열린 결정이 없음' }
+    await this.extractRunner().answer(checked.taskId, checked.valid)
+    return { ok: true }
   }
 
   /** Work의 이벤트를 하나씩 처리한다 */
@@ -819,7 +902,15 @@ export class WorkRunner {
         await this.confirmIntent(e.taskId, e.version)
         return
       case 'startTask':
-        await this.requestSession(e.taskId)
+        // 요구사항 추출의 extract는 세션 대신 run 루프를 돈다 (결정 92)
+        if (appRun(e.node)) this.extractRunner().start(e.taskId)
+        else await this.requestSession(e.taskId)
+        return
+      case 'runExtract':
+        this.extractRunner().start(e.taskId)
+        return
+      case 'stopExtract':
+        this.extract?.stop()
         return
       case 'resumeTask':
         this.resumeContinue.set(e.taskId, e.continue)
@@ -3676,7 +3767,7 @@ export class WorkRunner {
     return this.enqueue(async () => {
       this.stopCountdown()
       const task = currentTask(this.work)
-      if (task && this.live.has(task.id)) {
+      if (task && (this.live.has(task.id) || (appRun(task.node) && this.extract?.running))) {
         await this.feed({
           type: 'interrupt',
           taskId: task.id,

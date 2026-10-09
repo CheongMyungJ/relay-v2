@@ -3,6 +3,7 @@
 import type { WorkSettings } from './config'
 import type { AgentEngine } from './agent'
 import type { HandoffStatus, NodeName, TaskNode } from './contracts'
+import type { RequirementsPointer } from './requirements'
 
 /**
  * 업무 유형 (D232, D236, D258, D302, D350): 버그 수정(bugfix), 기능 추가(feature), 리팩터링(refactor), 설계(spec),
@@ -10,7 +11,7 @@ import type { HandoffStatus, NodeName, TaskNode } from './contracts'
  * 다르다 (core/pipeline PIPELINES). 설계는 구현 전에 설계만 정하는 큰 일에 쓰고(D353), 일반은 다른 유형에 맞지 않는
  * 일에 쓴다 (D303)
  */
-export type WorkType = 'bugfix' | 'feature' | 'refactor' | 'spec' | 'general'
+export type WorkType = 'bugfix' | 'feature' | 'refactor' | 'spec' | 'general' | 'requirements'
 
 /** 업무 유형의 화면 이름 (D236) */
 export const WORK_TYPE_LABEL: Readonly<Record<WorkType, string>> = {
@@ -19,6 +20,7 @@ export const WORK_TYPE_LABEL: Readonly<Record<WorkType, string>> = {
   refactor: '리팩터링',
   spec: '설계',
   general: '일반',
+  requirements: '요구사항 추출',
 }
 
 /** 사이드바와 머리 띠에 보이는 짧은 유형 이름 (D256) */
@@ -28,10 +30,18 @@ export const WORK_TYPE_SHORT: Readonly<Record<WorkType, string>> = {
   refactor: '리팩터',
   spec: '설계',
   general: '일반',
+  requirements: '요구사항',
 }
 
 /** 고를 수 있는 업무 유형. 새 Work 대화상자의 버튼 차례다 (D236, D353) */
-export const WORK_TYPES: readonly WorkType[] = ['bugfix', 'feature', 'refactor', 'spec', 'general']
+export const WORK_TYPES: readonly WorkType[] = [
+  'bugfix',
+  'feature',
+  'refactor',
+  'spec',
+  'general',
+  'requirements',
+]
 
 /**
  * Work 상태 (3.3): 진행 중(active), 멈춤(stopped), PR 진행(pr: [PR 생성] 뒤 머지나 [머지 없이 끝내기]까지, D152),
@@ -645,6 +655,11 @@ export interface WorkState {
   pr?: PullRequestRecord
   /** 이슈 기록 (설계 3.7, I96). 이슈 기록이 켜진 프로젝트에서 만든 Work에 있다 */
   issue?: IssueRecord
+  /**
+   * 요구사항 추출의 기록 포인터 (requirements-extraction-flow.md 결정 32, 93). 요구사항 추출 Work의 extract를 시작하면
+   * 생긴다. 단위·주장·근거는 requirements/의 불변 revision에 있다
+   */
+  requirements?: RequirementsPointer
   tasks: TaskRecord[]
 }
 
@@ -681,6 +696,9 @@ export type LifecycleEventType =
   | 'issue.posted'
   | 'issue.post_failed'
   | 'issue.closed'
+  | 'extract.run'
+  | 'extract.halted'
+  | 'extract.finished'
 
 /** events.jsonl의 한 줄 (5.5). task_id는 task 이벤트에만 있다 */
 export interface LifecycleEvent {

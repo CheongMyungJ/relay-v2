@@ -17,12 +17,13 @@ export type SkillName =
   | 'execute'
   | 'verify'
   | 'pr-respond'
+  | 'extract'
 
 /**
  * 질문 방식을 고르는 스킬 (D26, I104). spec(설계 문답)은 결정을 모두 묻으므로 질문 방식 설정이 없다 (D358). 설정 키에서만
  * 빼고, 노드의 스킬과 배포는 SkillName을 쓴다
  */
-export type QuestionSkill = Exclude<SkillName, 'spec'>
+export type QuestionSkill = Exclude<SkillName, 'spec' | 'extract'>
 
 /** 상세 설정(단계별 엔진·모델·추론 수준)의 키: 스킬과 곁 세션 (D391, I129). 곁 세션은 노드가 아니다 */
 export type AgentStepName = SkillName | 'side'
@@ -129,6 +130,7 @@ export const SETTING_GROUP_LABEL: Readonly<Record<SettingGroup, string>> = {
   refactor: '리팩터링',
   spec: '설계',
   general: '일반',
+  requirements: '요구사항 추출',
   pr: 'PR 대응',
 }
 
@@ -178,6 +180,7 @@ export const AGENT_STEP_TITLES: readonly (readonly [AgentStepName, string, Setti
   ['refactor', '계획과 리팩터링', 'refactor'],
   ['spec', '설계 문답', 'spec'],
   ['execute', '실행', 'general'],
+  ['extract', '요구사항 추출', 'requirements'],
   ['verify', '리뷰와 검증', 'common'],
   ['pr-respond', 'PR 대응', 'pr'],
   ['side', '곁 세션', 'common'],

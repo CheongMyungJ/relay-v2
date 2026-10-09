@@ -343,7 +343,8 @@ export interface RecordedProcess {
 }
 
 /**
- * 재시작 때 확인할 프로세스 (D76, D126, D389): 모든 task의 세션과 살아 있던 정리 세션·곁 세션 가운데 시작 시각을 적은 것.
+ * 재시작 때 확인할 프로세스 (D76, D126, D389): 모든 task의 세션과 살아 있던 정리 세션·곁 세션·요구사항 추출 run 가운데 시작
+ * 시각을 적은 것.
  * 시작 시각이 없으면 재사용된 ID를 가릴 수 없어 넣지 않는다. 끝난 세션도 넣는다: SessionEnd 뒤 늦게 끝나는
  * 프로세스가 있고, 시작 시각까지 같으면 같은 프로세스다
  */
@@ -362,6 +363,17 @@ export function recordedProcesses(work: WorkState): RecordedProcess[] {
   const side = work.side?.process
   if (side?.process_started_at) {
     out.push({ taskId: null, label: '곁 세션', pid: side.pid, startedAt: side.process_started_at })
+  }
+  // 요구사항 추출의 도는 run (결정 32, 98). 그 run을 돌리던 extract task에 묶는다
+  const run = work.requirements?.run
+  const extract = work.tasks.findLast((t) => t.node === 'extract')
+  if (run?.pid && run.process_started_at) {
+    out.push({
+      taskId: extract?.id ?? null,
+      label: `요구사항 추출 run ${run.id}`,
+      pid: run.pid,
+      startedAt: run.process_started_at,
+    })
   }
   return out
 }

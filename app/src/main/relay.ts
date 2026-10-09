@@ -580,6 +580,14 @@ export class Relay {
     return this.withWork(workKey, (w) => w.retry(taskId))
   }
 
+  /** 요구사항 추출의 사람 결정 필요에 답한다 (requirements-extraction-flow.md 결정 7, 41, 17.12) */
+  answerRequirements(
+    workKey: string,
+    answers: { decision: string; answer: string }[],
+  ): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.answerRequirements(answers))
+  }
+
   /** [이 단계 끝나면 멈춤] */
   stopAfter(workKey: string, on: boolean): Promise<CommandResult> {
     return this.withWork(workKey, (w) => w.stopAfter(on))

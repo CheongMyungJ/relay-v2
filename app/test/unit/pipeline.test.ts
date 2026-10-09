@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import handoffSchema from '../../src/shared/generated/handoff.v1.schema.json'
 import {
   ALL_NODES,
+  appRun,
   KEEP_CODE_NODES,
   NODE_INFO,
   PIPELINES,
@@ -28,7 +29,13 @@ describe('노드 (3.1)', () => {
       refactor: ['intake', 'refactor', 'verify'],
       spec: ['intake', 'spec', 'verify'],
       general: ['intake', 'execute', 'verify'],
+      requirements: ['intake', 'extract', 'verify'],
     })
+  })
+
+  it('요구사항 추출의 extract만 앱이 run을 돌리는 단계다 (requirements-extraction-flow.md 결정 92)', () => {
+    expect(ALL_NODES.filter(appRun)).toEqual(['extract'])
+    expect(appRun(RESPOND)).toBe(false)
   })
 
   it('모든 노드는 모든 파이프라인의 노드를 모은 것이고 스키마의 노드 열거값과 같다 (I57, I63, I85, I103)', () => {
@@ -40,6 +47,7 @@ describe('노드 (3.1)', () => {
       'refactor',
       'spec',
       'execute',
+      'extract',
       'verify',
     ])
     expect(new Set(Object.values(PIPELINES).flat())).toEqual(new Set(ALL_NODES))
@@ -59,6 +67,7 @@ describe('노드 (3.1)', () => {
       ['refactor', 'refactor', '계획과 리팩터링', ['refactor.md']],
       ['spec', 'spec', '설계 문답', ['spec.md']],
       ['execute', 'execute', '실행', ['execution.md']],
+      ['extract', 'extract', '요구사항 추출', ['extraction.md']],
       ['verify', 'verify', '리뷰와 검증', ['verification.md', 'pr.md']],
     ])
   })
@@ -94,6 +103,7 @@ describe('노드 (3.1)', () => {
       refactor: ['refactor'],
       spec: ['spec'],
       general: ['execute'],
+      requirements: [],
     })
   })
 
