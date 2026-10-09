@@ -569,8 +569,25 @@ function lineOf(lines: string[], quote: string): number | null {
 }
 
 /**
- * code 앵커의 경로가 기준 커밋에 있고 인용이 그 줄에 있는가 (결정 37, 42: code 근거만). readFile은 기준 커밋의 그 경로
- * 내용(없으면 null). 문제마다 고칠 곳을 알린다(결정 13: 그 줄의 실제 내용과 인용이 실제로 있는 줄)
+ * 인용이 앵커의 줄 범위에 있는가. 아니면 고칠 곳을 알리는 글(결정 13: 그 줄의 실제 내용과 인용이 실제로 있는 줄).
+ * where는 문제 글에서 파일을 가리키는 이름이다
+ */
+function quoteProblem(at: string, where: string, text: string, anchor: Anchor): string | null {
+  const quote = normQuote(anchor.quote)
+  const lines = text.replace(/\r\n?/g, '\n').split('\n')
+  const s = Math.max(1, Number(anchor.start) || 1)
+  const e = Math.max(s, Number(anchor.end) || s)
+  if (quote && includesInOrder(normQuote(lines.slice(s - 1, e).join('\n')), quote)) return null
+  const found = quote && includesInOrder(normQuote(text), quote) ? lineOf(lines, quote) : null
+  const actual = normQuote(lines.slice(s - 1, Math.min(e, s + 2)).join('\n')).slice(0, 120)
+  return found
+    ? `${at}: ${where}:${s}-${e} reads "${actual}"; the quote is at line ${found}`
+    : `${at}: ${where}:${s}-${e} reads "${actual}"; the quote is not in this file`
+}
+
+/**
+ * code 앵커의 경로가 기준 커밋에 있고 인용이 그 줄에 있는가 (결정 37, 42: 경로 검사는 code 근거만). readFile은 기준
+ * 커밋의 그 경로 내용(없으면 null)
  */
 export function codeAnchorProblems(
   result: unknown,
@@ -586,19 +603,30 @@ export function codeAnchorProblems(
       out.push({ rule: 'path_at_base', problem: `${at}: ${rel} is not in the base commit` })
       continue
     }
-    const quote = normQuote(anchor.quote)
-    const lines = text.replace(/\r\n?/g, '\n').split('\n')
-    const s = Math.max(1, Number(anchor.start) || 1)
-    const e = Math.max(s, Number(anchor.end) || s)
-    if (quote && includesInOrder(normQuote(lines.slice(s - 1, e).join('\n')), quote)) continue
-    const found = quote && includesInOrder(normQuote(text), quote) ? lineOf(lines, quote) : null
-    const actual = normQuote(lines.slice(s - 1, Math.min(e, s + 2)).join('\n')).slice(0, 120)
-    out.push({
-      rule: 'quote_match',
-      problem: found
-        ? `${at}: ${rel}:${s}-${e} reads "${actual}"; the quote is at line ${found}`
-        : `${at}: ${rel}:${s}-${e} reads "${actual}"; the quote is not in this file`,
-    })
+    const problem = quoteProblem(at, rel, text, anchor)
+    if (problem) out.push({ rule: 'quote_match', problem })
+  }
+  return out
+}
+
+/**
+ * tool_output 앵커의 인용이 출력 파일의 그 줄에 있는가 (결정 101). readOutput은 앵커가 적은 출력 파일의 내용이고,
+ * 앱이 requirements/outputs/에 둘 사본과 같은 바이트다(결정 42). 파일이 없으면 근거가 깨지므로(결정 2) 이것도 문제다.
+ * 규칙 id는 quote_match 그대로다(L1의 앱 검사 목록을 바꾸지 않는다)
+ */
+export function outputAnchorProblems(
+  result: unknown,
+  readOutput: (path: string) => string | null,
+): { rule: 'quote_match'; problem: string }[] {
+  const out: { rule: 'quote_match'; problem: string }[] = []
+  for (const { at, anchor } of anchorsOf(result)) {
+    if (anchor.kind !== 'tool_output') continue
+    const text = readOutput(anchor.path)
+    const problem =
+      text === null
+        ? `${at}: the output file ${anchor.path} was not found; write the tool output to a file in the scratch directory and cite that file`
+        : quoteProblem(at, `output ${anchor.path}`, text, anchor)
+    if (problem) out.push({ rule: 'quote_match', problem })
   }
   return out
 }

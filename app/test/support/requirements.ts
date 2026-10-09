@@ -1,6 +1,6 @@
 // 요구사항 추출 run의 가짜 결과 ([흐름]과 [스모크]가 같이 쓴다). REPO_FILES의 src/avg.js를 본 survey와 command 렌즈 trace다.
 // trace의 checklist는 렌즈 카드의 열쇠 목록을 받는다(skills/extract/load.mjs의 loadChecklist).
-export const code = (p: string, line: number, quote: string) => ({
+export const code = (p: string, line: number, quote: string): Record<string, unknown> => ({
   kind: 'code',
   path: `{wt}/${p}`,
   start: line,

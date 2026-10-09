@@ -104,6 +104,36 @@ describe('[어댑터] 기록 파일 (결정 33, 38, 41)', () => {
     expect(result.observations[0]?.anchors[0]?.path).toBe('out.txt')
   })
 
+  it('실행 출력의 인용을 사본과 같은 바이트로 대조하고, 대조한 바이트를 사본으로 둔다 (결정 42, 101)', async () => {
+    const files = new RequirementsFiles(tmp)
+    const scratch = files.scratchDir('r-0003')
+    fs.mkdirSync(scratch, { recursive: true })
+    fs.writeFileSync(path.join(scratch, 'out.txt'), 'head\nsorted: 10,2,9\n')
+    const o = { run: 'r-0003', worktree: path.join(tmp, 'wt') }
+    const anchor = (start: number, p = 'out.txt') => ({
+      kind: 'tool_output',
+      path: p,
+      start,
+      end: start,
+      quote: 'sorted: 10,2,9',
+      command: 'node rank.mjs',
+    })
+    const result = { observations: [{ key: 'o1', anchors: [anchor(1), anchor(1, 'none.txt')] }] }
+    const reader = files.outputReader(o)
+    const ctx = { repo: o.worktree, read: async () => null, readOutput: reader.read }
+    expect(await resultProblems(result, ctx)).toEqual([
+      expect.stringMatching(/^quote_match: .*output out\.txt:1-1 reads "head".*at line 2/),
+      expect.stringMatching(/^quote_match: .*output file none\.txt was not found/),
+    ])
+    // 읽은 뒤 파일이 바뀌어도 사본은 대조한 바이트다
+    fs.writeFileSync(path.join(scratch, 'out.txt'), 'changed\n')
+    const kept = await files.keepOutputs(result, o, reader)
+    const copy = (kept.result as typeof result).observations[0]?.anchors[0]?.path ?? ''
+    expect(fs.readFileSync(path.join(tmp, copy), 'utf8')).toBe('head\nsorted: 10,2,9\n')
+    // readOutput가 없으면(앞 판의 호출) 실행 출력은 보지 않는다
+    expect(await resultProblems(result, { repo: o.worktree, read: async () => null })).toEqual([])
+  })
+
   it('run 기록은 requirements/runs, scratch는 requirements/ 밖이다 (결정 42)', () => {
     const files = new RequirementsFiles(tmp)
     expect(path.relative(tmp, files.runDir('r-0001'))).toBe(

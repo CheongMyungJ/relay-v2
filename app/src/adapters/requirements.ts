@@ -12,7 +12,13 @@ import Ajv2020 from 'ajv/dist/2020'
 import { checkResult } from '../../../skills/extract/rules.mjs'
 import { buildRun, runArgs } from '../../../skills/extract/run.mjs'
 import { loadChecklist, loadLayers } from '../../../skills/extract/load.mjs'
-import { chainProblem, codeAnchorProblems, repoPath, revisionFile } from '../core/requirements'
+import {
+  chainProblem,
+  codeAnchorProblems,
+  outputAnchorProblems,
+  repoPath,
+  revisionFile,
+} from '../core/requirements'
 import { hookSettings, ruleAbs, HOOK_TOKEN_ENV } from '../core/settings'
 import surveyBase from '../shared/generated/extract-survey.v0.schema.json'
 import traceBase from '../shared/generated/extract-trace.v0.schema.json'
@@ -33,6 +39,11 @@ import { fileHash, jsonText, readText, writeFileAtomic } from './store'
 
 const ajv = new Ajv2020({ allErrors: true, strict: false })
 const validateRevision = ajv.compile<RequirementsRevision>(revisionSchema)
+
+/** 실행 출력 근거의 파일 읽기 (결정 42, 101). 없으면 null */
+export interface OutputReader {
+  read(path: string): Promise<string | null>
+}
 
 /** 무결성 오류 (결정 38): 포인터가 가리키는 파일이 없거나 해시가 다르거나 사슬이 끊겼다 */
 export class IntegrityError extends Error {}
@@ -63,30 +74,52 @@ export class RequirementsFiles {
   }
 
   /**
-   * 실행 출력 근거를 requirements/outputs/에 불변 사본으로 두고 앵커가 그 사본을 가리키게 한다 (결정 42). run은
-   * 출력 파일을 scratch에 쓰고 앵커에 그 경로를 적는다. 경로는 절대 경로이거나 scratch, Work 디렉터리, worktree 상대다.
-   * 사본의 이름은 내용의 sha256이라 같은 출력은 하나다. 찾지 못한 경로는 그대로 두고 돌려준다
+   * 실행 출력 근거의 파일을 읽는다(경로마다 한 번). run은 출력 파일을 scratch에 쓰고 앵커에 그 경로를 적는다. 경로는
+   * 절대 경로이거나 scratch, Work 디렉터리, worktree 상대다. 반영 검사와 사본(keepOutputs)이 같은 reader를 쓰면 대조한
+   * 바이트가 사본의 바이트다 (결정 42, 101). 제출 검사는 되돌린 뒤 run이 파일을 고칠 수 있어 제출마다 새로 만든다
    */
-  async keepOutputs(
-    result: unknown,
-    o: { run: string; worktree: string },
-  ): Promise<{ result: unknown; missing: string[] }> {
-    const missing: string[] = []
-    const kept = new Map<string, string | null>()
-    const keep = async (p: string): Promise<string | null> => {
+  outputReader(o: { run: string; worktree: string }): OutputReader {
+    const cache = new Map<string, Promise<string | null>>()
+    const load = async (p: string): Promise<string | null> => {
       const bases = [this.scratchDir(o.run), this.workDir, o.worktree]
       const tries = path.isAbsolute(p) ? [p] : bases.map((b) => path.join(b, p))
       for (const file of tries) {
         const text = await readText(file).catch(() => null)
-        if (text === null) continue
-        const hash = createHash('sha256').update(text).digest('hex')
-        const name = `${hash}.txt`
-        await fsp.mkdir(this.outputs, { recursive: true })
-        const dest = path.join(this.outputs, name)
-        if ((await readText(dest).catch(() => null)) === null) await writeFileAtomic(dest, text)
-        return path.relative(this.workDir, dest).split(path.sep).join('/')
+        if (text !== null) return text
       }
       return null
+    }
+    return {
+      read: (p) => {
+        let t = cache.get(p)
+        if (!t) {
+          t = load(p)
+          cache.set(p, t)
+        }
+        return t
+      },
+    }
+  }
+
+  /**
+   * 실행 출력 근거를 requirements/outputs/에 불변 사본으로 두고 앵커가 그 사본을 가리키게 한다 (결정 42). 사본의
+   * 이름은 내용의 sha256이라 같은 출력은 하나다. 찾지 못한 경로는 그대로 두고 돌려준다
+   */
+  async keepOutputs(
+    result: unknown,
+    o: { run: string; worktree: string },
+    reader: OutputReader = this.outputReader(o),
+  ): Promise<{ result: unknown; missing: string[] }> {
+    const missing: string[] = []
+    const kept = new Map<string, string | null>()
+    const keep = async (p: string): Promise<string | null> => {
+      const text = await reader.read(p)
+      if (text === null) return null
+      const hash = createHash('sha256').update(text).digest('hex')
+      await fsp.mkdir(this.outputs, { recursive: true })
+      const dest = path.join(this.outputs, `${hash}.txt`)
+      if ((await readText(dest).catch(() => null)) === null) await writeFileAtomic(dest, text)
+      return path.relative(this.workDir, dest).split(path.sep).join('/')
     }
     const walk = async (v: unknown): Promise<unknown> => {
       if (Array.isArray(v)) return Promise.all(v.map(walk))
@@ -242,22 +275,27 @@ export interface CheckContext {
   read: (rel: string) => Promise<string | null>
   /** 이 run이 쓸 수 있는 구성 이름(survey가 낸 것). 모르면 undefined */
   configs?: string[]
+  /** 실행 출력 근거의 파일. 있으면 tool_output 앵커의 인용도 대조한다 (결정 101) */
+  readOutput?: (path: string) => Promise<string | null>
 }
 
 /**
  * 결과의 막는 검사 (결정 37): 규칙 표(rules.mjs)의 결과만으로 가르는 규칙과 config_known, 기준 커밋의 경로·인용 대조
- * (path_at_base, quote_match, code 근거만). 문제 글은 고칠 곳을 알린다(결정 13)
+ * (path_at_base, quote_match, code 근거), 실행 출력 파일의 인용 대조(quote_match, tool_output 근거, 결정 101).
+ * 문제 글은 고칠 곳을 알린다(결정 13)
  */
 export async function resultProblems(result: unknown, ctx: CheckContext): Promise<string[]> {
   const rules = checkResult(result, ctx.configs ? { configs: ctx.configs } : {}).map(
     (p) => `${p.rule}: ${p.problem}`,
   )
   const paths = new Set<string>()
+  const outputPaths = new Set<string>()
   const collect = (v: unknown) => {
     if (Array.isArray(v)) v.forEach(collect)
     else if (v && typeof v === 'object') {
       const a = v as { kind?: unknown; path?: unknown }
       if (a.kind === 'code' && typeof a.path === 'string') paths.add(a.path)
+      if (a.kind === 'tool_output' && typeof a.path === 'string') outputPaths.add(a.path)
       Object.values(v).forEach(collect)
     }
   }
@@ -270,7 +308,14 @@ export async function resultProblems(result: unknown, ctx: CheckContext): Promis
   const anchors = codeAnchorProblems(result, ctx.repo, (rel) => texts.get(rel) ?? null).map(
     (p) => `${p.rule}: ${p.problem}`,
   )
-  return [...rules, ...anchors]
+  const readOutput = ctx.readOutput
+  if (!readOutput) return [...rules, ...anchors]
+  const outputs = new Map<string, string | null>()
+  for (const p of outputPaths) outputs.set(p, await readOutput(p))
+  const outputAnchors = outputAnchorProblems(result, (p) => outputs.get(p) ?? null).map(
+    (p) => `${p.rule}: ${p.problem}`,
+  )
+  return [...rules, ...anchors, ...outputAnchors]
 }
 
 // ---------------------------------------------------------------------------------------------------------------

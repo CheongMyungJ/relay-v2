@@ -10,6 +10,7 @@ import {
   fold,
   judgeRun,
   normQuote,
+  outputAnchorProblems,
   pickUnit,
   renderExtraction,
   renderHandoff,
@@ -427,6 +428,49 @@ describe('기준 커밋의 인용 대조 (path_at_base, quote_match, 결정 13, 
       ),
     ).toEqual([])
     expect(repoPath('C:\\w\\repo\\src\\a.c', 'C:/w/repo')).toBe('src/a.c')
+  })
+})
+
+describe('실행 출력의 인용 대조 (quote_match, 결정 42, 101)', () => {
+  // 실제 run: 앵커는 출력 1행을 가리켰으나 인용은 10~11행에 있었다 (docs/checks.md)
+  const output = [
+    '$ node rank.mjs',
+    ...Array.from({ length: 8 }, (_, i) => `row ${i + 2}`),
+    'sorted: 10,2,9',
+    'expected: 2,9,10',
+  ].join('\n')
+  const out = (start: number, end: number, quote: string, path = 'out/rank.txt') => ({
+    kind: 'tool_output' as const,
+    path,
+    start,
+    end,
+    quote,
+    command: 'node rank.mjs',
+  })
+  const read = (p: string) => (p === 'out/rank.txt' ? output : null)
+  it('인용이 출력 파일의 그 줄에 있으면 문제가 없다', () => {
+    expect(
+      outputAnchorProblems({ a: [out(10, 11, 'sorted: 10,2,9 expected: 2,9,10')] }, read),
+    ).toEqual([])
+  })
+  it('줄이 틀리면 그 줄의 실제 내용과 인용이 있는 줄을 알린다', () => {
+    expect(outputAnchorProblems({ a: [out(1, 1, 'sorted: 10,2,9')] }, read)).toEqual([
+      {
+        rule: 'quote_match',
+        problem: expect.stringMatching(
+          /output out\/rank\.txt:1-1 reads "\$ node rank\.mjs.*the quote is at line 10/,
+        ),
+      },
+    ])
+  })
+  it('출력에 없는 인용, 찾지 못한 출력 파일도 문제다. code 앵커는 보지 않는다', () => {
+    expect(must(outputAnchorProblems({ a: [out(1, 1, 'not printed')] }, read)[0]).problem).toMatch(
+      /not in this file/,
+    )
+    expect(
+      must(outputAnchorProblems({ a: [out(1, 1, 'x', 'gone.txt')] }, read)[0]).problem,
+    ).toMatch(/output file gone\.txt was not found/)
+    expect(outputAnchorProblems({ a: [anchor('src/tach.c', 1, 'nope')] }, read)).toEqual([])
   })
 })
 

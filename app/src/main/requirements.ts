@@ -7,6 +7,7 @@ import path from 'node:path'
 import {
   IntegrityError,
   RequirementsFiles,
+  type OutputReader,
   assembleRun,
   baseReader,
   resultProblems,
@@ -360,7 +361,9 @@ export class ExtractRunner {
       const before = await worktreeFingerprint(host.worktree)
       const reader = baseReader(host.worktree, work.base_commit)
       const surveyConfigs = configsOf(state).map((c) => String(c.name))
-      const ctxFor = (output: unknown) => {
+      const outputsOf = { run: id, worktree: host.worktree }
+      // 실행 출력 파일: 제출마다 새로 읽는다(되돌린 뒤 run이 고칠 수 있다). 반영 검사는 사본과 같은 reader를 쓴다 (결정 101)
+      const ctxFor = (output: unknown, outputs: OutputReader = files.outputReader(outputsOf)) => {
         const own = (output as { configs?: { name?: unknown }[] } | null)?.configs
         const configs =
           unit.kind === 'survey'
@@ -370,7 +373,12 @@ export class ExtractRunner {
             : surveyConfigs.length
               ? surveyConfigs
               : undefined
-        return { repo: host.worktree, read: reader.read, ...(configs ? { configs } : {}) }
+        return {
+          repo: host.worktree,
+          read: reader.read,
+          readOutput: outputs.read,
+          ...(configs ? { configs } : {}),
+        }
       }
       const { model, effort } = host.agent(taskId)
       this.current = { run: id, unit: unit.id, startedAt: Date.now(), tool: null }
@@ -408,8 +416,11 @@ export class ExtractRunner {
       })
       this.current = null
       const after = await worktreeFingerprint(host.worktree)
+      const outputs = files.outputReader(outputsOf)
       const applyProblems =
-        out.output && out.schemaValid ? await resultProblems(out.output, ctxFor(out.output)) : []
+        out.output && out.schemaValid
+          ? await resultProblems(out.output, ctxFor(out.output, outputs))
+          : []
       const latest = host.work().requirements ?? pointer
       const verdict = judgeRun({
         stoppedByApp: out.stoppedByApp,
@@ -435,7 +446,7 @@ export class ExtractRunner {
           if (!(rel in blobs)) blobs[rel] = await reader.blob(rel)
         }
         // 실행 출력 근거는 scratch 밖의 불변 사본으로 (결정 42)
-        const kept = await files.keepOutputs(out.output, { run: id, worktree: host.worktree })
+        const kept = await files.keepOutputs(out.output, outputsOf, outputs)
         if (kept.missing.length)
           warnings.push(`실행 출력 파일을 찾지 못함: ${kept.missing.join(', ')}`)
         const applied = applyResult({

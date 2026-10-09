@@ -30,7 +30,9 @@ const trace = () => extractTrace(loadChecklist('command', ROOT).map((c) => c.id)
 async function setup(runs: object[], budget?: Partial<RequirementsBudget>) {
   planDir = fs.mkdtempSync(path.join(os.tmpdir(), 'relay-req-plan-'))
   const plan = path.join(planDir, 'plan.json')
-  fs.writeFileSync(plan, JSON.stringify({ runs: runs.map((o) => ({ outputs: [o] })) }))
+  // 할 일 그대로(outputs가 있는 것) 또는 구조화 출력 하나
+  const asPlan = (o: object) => ('outputs' in o ? o : { outputs: [o] })
+  fs.writeFileSync(plan, JSON.stringify({ runs: runs.map(asPlan) }))
   h = await harness({
     scenario: scenario(),
     env: { FAKE_CLAUDE_RUN: plan },
@@ -60,7 +62,26 @@ const events = (dir: string) =>
 
 describe('[흐름] 요구사항 추출 (결정 92~99)', () => {
   it('intake → extract(survey run, trace run) → 승인 대기. 반영은 불변 revision과 포인터, 산출물은 앱이 렌더링한다', async () => {
-    const s = await setup([survey(), trace()])
+    // trace run은 실행 출력을 scratch에 쓰고 근거로 든다. 첫 제출은 출력의 줄이 틀려 되돌려진다 (결정 101)
+    const ran = (start: number) => {
+      const t = trace()
+      const o = t.observations[0]
+      if (o)
+        o.anchors.push({
+          kind: 'tool_output',
+          path: 'avg-empty.txt',
+          start,
+          end: start,
+          quote: 'NaN',
+          command: 'node -e "import(\'./src/avg.js\').then(m => console.log(m.avg([])))"',
+        })
+      return t
+    }
+    const traceRun = {
+      write: { path: 'avg-empty.txt', text: '$ node avg\nNaN\n' },
+      outputs: [ran(1), ran(2)],
+    }
+    const s = await setup([survey(), traceRun])
     const paused = await drive(s.h.relay, s.h.ui, s.key, {
       pauseAt: (t) => t.node === 'extract' && t.status === 'awaiting_approval',
     })
@@ -96,8 +117,14 @@ describe('[흐름] 요구사항 추출 (결정 92~99)', () => {
     expect(rev3.cause).toEqual({ kind: 'run', run: 'r-0002', note: '' })
     expect(rev3.claims[0]).toMatchObject({
       section: 'observations',
-      body: { anchors: [{ evidence: 'e-0003' }] },
+      body: { anchors: [{ evidence: 'e-0003' }, { evidence: 'e-0004' }] },
     })
+    // 실행 출력 근거는 대조한 바이트의 사본을 가리킨다 (결정 42)
+    const ev = (
+      rev3 as unknown as { evidence: { id: string; kind: string; path: string }[] }
+    ).evidence.find((e) => e.kind === 'tool_output')
+    expect(ev?.path).toMatch(/^requirements\/outputs\/[0-9a-f]{64}\.txt$/)
+    expect(read(path.join(s.dir, ev?.path ?? ''))).toBe('$ node avg\nNaN\n')
 
     const task = path.join(s.dir, 'tasks', '02-extract')
     const extraction = read(path.join(task, 'extraction.md'))
@@ -110,7 +137,7 @@ describe('[흐름] 요구사항 추출 (결정 92~99)', () => {
         .map((e) => e.payload),
     ).toEqual([
       { run: 'r-0001', unit: 'u-0001', result: 'closed', denials: 0 },
-      { run: 'r-0002', unit: 'u-0002', result: 'closed', denials: 0 },
+      { run: 'r-0002', unit: 'u-0002', result: 'closed', denials: 1 },
     ])
 
     // 승인하면 verify를 시작한다
