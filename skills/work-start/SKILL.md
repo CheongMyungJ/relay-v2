@@ -48,9 +48,10 @@ Read the request, talk with the human, and write the intent draft `intent.draft.
 <!-- /type -->
 <!-- type: requirements -->
 - **This skill does not change code and does not analyze the firmware.** Skim the repository only enough to write the scope. Do not trace behavior or list requirements. That is the job of extract, which the app runs as many small runs.
-- **Do not ask the human to pick boards or features first.** "Every build configuration and the project's own code" is a valid scope. Settle only what to exclude, what material exists (datasheets, schematics, a toolchain the analysis may use) and where the result document goes.
+- **Do not ask the human to pick boards or features first.** "Every build configuration and the project's own code" is a valid scope. Settle only what to exclude and what material exists (datasheets, schematics, a toolchain the analysis may use).
 - **Boundaries:** vendor HAL, RTOS kernels and third-party libraries are boundaries by default: their configuration and call boundary are in scope, their internals are not. If the human wants one traced inside, write it in `제약`.
-- Write the scope and exclusions in `목표` and `비목표`, the material in `제약` as "자료: …", and the result document's path in `제약` as "결과 문서: `<path>`".
+- Write the scope and exclusions in `목표` and `비목표`, and the material in `제약` as "자료: …".
+- **The result document is `extraction.md`.** The app writes it from the records at the end of extract, in the extract task folder. Do not pick a path in the repository for it, and write completion criteria about `extraction.md`.
 <!-- /type -->
 - **Type mismatch:** the human picked the type: `bugfix` (버그 수정: current behavior is wrong), `feature` (기능 추가: new behavior), `refactor` (리팩터링: change structure, keep behavior), `spec` (설계: settle only the design of big work before building it), `requirements` (요구사항 추출: recover the current behavior of existing firmware as requirement candidates and constraints with evidence) or `general` (일반: work that fits none of these, e.g. config, CI, docs, dependency upgrades, mixed work). If it does not fit the request (e.g. `feature`, but the request says current behavior is wrong), ask before you write the draft. If the human wants to change the type, close as `blocked` and tell them to pick the type with [단계 선택] → intake. If they keep it, draft with the picked type. Never change the type yourself.
 - **A design document to follow:** if the request points to a design document in the repo, write "`<path>`의 결정을 따른다" in `제약`, and write the part this Work takes on as goals and completion criteria. If that document is not in the worktree (its design PR is not merged yet), tell the human before you write the draft and ask: wait for the merge (`blocked`) / go on from the request alone, without the document.
@@ -95,7 +96,7 @@ Scope (`비목표`) and completion criteria (`완료조건`). This skill has no 
 <!-- /type -->
 <!-- type: requirements -->
 - Always start with these default items. No test command item: the result is records and a document.
-  `- [ ] 분석 대상 소스·빌드 구성 후보와 제외 범위가 기준 커밋과 함께 있다` / `- [ ] 발견한 분석 항목마다 끝난 상태(완료 / 외부 근거 필요 / 범위 밖·보류와 이유)가 있다` / `- [ ] 모든 요구사항 후보와 제약이 기준 커밋의 원본 위치로 이어진다` / `- [ ] 미확정·충돌·외부 검증 필요 항목이 따로 둔 절에 이유, 필요한 자료와 함께 있다` / `- [ ] 분석 범위와 누락 가능성, 검증 계획이 있다`
+  `- [ ] 분석 대상 소스·빌드 구성 후보와 제외 범위가 기준 커밋과 함께 있다` / `- [ ] 발견한 분석 항목마다 끝난 상태(완료 / 외부 근거 필요 / 범위 밖·보류와 이유)가 있다` / `- [ ] 모든 요구사항 후보와 제약이 근거(기준 커밋의 원본 위치, 또는 실행한 명령과 그 출력)로 이어진다` / `- [ ] 미확정·충돌·외부 검증 필요 항목이 따로 둔 절에 이유, 필요한 자료와 함께 있다` / `- [ ] 분석 범위와 누락 가능성, 검증 계획이 있다`
 - Then add items that fit the request, one per line. Not how to analyze.
 <!-- /type -->
 - One verifiable sentence per line. Never include push or PR. They happen after verify, so verify cannot judge them.
@@ -161,7 +162,6 @@ No front matter: the app adds the type and version when the human approves.
 - 설계 문서: `<경로>` (새 문서 / 기존 문서)
 <!-- /type -->
 <!-- type: requirements -->
-- 결과 문서: `<경로>`
 - 자료: (없으면 "없음")
 <!-- /type -->
 - (선택)

@@ -73,6 +73,37 @@ describe('[어댑터] 기록 파일 (결정 33, 38, 41)', () => {
     await expect(files.readAnswers(p)).rejects.toThrow(IntegrityError)
   })
 
+  it('실행 출력 근거는 requirements/outputs/의 내용 해시 사본을 가리키게 바꾼다 (결정 42)', async () => {
+    const files = new RequirementsFiles(tmp)
+    const scratch = files.scratchDir('r-0002')
+    fs.mkdirSync(scratch, { recursive: true })
+    fs.writeFileSync(path.join(scratch, 'out.txt'), '[9,2]\n')
+    const out = (p: string) => ({
+      kind: 'tool_output',
+      path: p,
+      start: 1,
+      end: 1,
+      quote: '[9,2]',
+      command: 'node d.mjs',
+    })
+    const code = { kind: 'code', path: 'src/a.js', start: 1, end: 1, quote: 'x', command: null }
+    const result = {
+      observations: [{ key: 'o1', anchors: [out('out.txt'), code] }],
+      unknowns: [{ key: 'u1', anchors: [out(path.join(scratch, 'out.txt')), out('none.txt')] }],
+    }
+    const kept = await files.keepOutputs(result, { run: 'r-0002', worktree: path.join(tmp, 'wt') })
+    const k = kept.result as typeof result
+    const copy = k.observations[0]?.anchors[0]?.path ?? ''
+    expect(copy).toMatch(/^requirements\/outputs\/[0-9a-f]{64}\.txt$/)
+    // 절대 경로로 적은 같은 파일은 같은 사본이다
+    expect(k.unknowns[0]?.anchors[0]?.path).toBe(copy)
+    expect(k.observations[0]?.anchors[1]).toEqual(code)
+    expect(fs.readFileSync(path.join(tmp, copy), 'utf8')).toBe('[9,2]\n')
+    expect(kept.missing).toEqual(['none.txt'])
+    // 원래 결과는 바꾸지 않는다
+    expect(result.observations[0]?.anchors[0]?.path).toBe('out.txt')
+  })
+
   it('run 기록은 requirements/runs, scratch는 requirements/ 밖이다 (결정 42)', () => {
     const files = new RequirementsFiles(tmp)
     expect(path.relative(tmp, files.runDir('r-0001'))).toBe(

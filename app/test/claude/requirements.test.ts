@@ -272,12 +272,11 @@ function summary(r: Result): string {
     '',
     '| task | 형식 오류 되돌림 | 오류 무시하고 승인 | 질문 답 | 재촉 | 걸린 시간 |',
     '|---|---|---|---|---|---|',
-    ...r.drive
-      .flatMap((d) => d.tasks)
-      .map(
-        (t) =>
-          `| ${t.label} | ${t.bounces} | ${t.forced ? '씀' : '0'} | ${t.answers} | ${t.nudges} | ${seconds(t.ms)} |`,
-      ),
+    // [재개]로 drive를 다시 부르면 같은 task가 다시 잡힌다. task마다 마지막 것을 쓴다
+    ...[...new Map(r.drive.flatMap((d) => d.tasks).map((t) => [t.taskId, t])).values()].map(
+      (t) =>
+        `| ${t.label} | ${t.bounces} | ${t.forced ? '씀' : '0'} | ${t.answers} | ${t.nudges} | ${seconds(t.ms)} |`,
+    ),
     '',
     '| run | 단위 | 종류 | 결과 | 제출 되돌림 | 실패 |',
     '|---|---|---|---|---|---|',

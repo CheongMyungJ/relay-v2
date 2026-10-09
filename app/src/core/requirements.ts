@@ -716,13 +716,56 @@ const evidenceRefs = (body: unknown, ev: Map<string, Evidence>): string[] => {
     .map((e) =>
       e.kind === 'code' || e.kind === 'doc_claim'
         ? `${e.path}:${e.start}-${e.end}`
-        : `${e.kind} ${e.path}`,
+        : e.kind === 'tool_output'
+          ? `실행${e.command ? ` \`${e.command}\`` : ''} 출력 ${e.path}:${e.start}-${e.end}`
+          : `${e.kind} ${e.path}`,
     )
 }
 
-/** extraction.md (결정 99). 사람이 읽을 요약이고 기준은 revision이다 */
+const NEEDS_LABEL: Readonly<Record<string, string>> = {
+  external_doc: '외부 문서',
+  measurement: '측정',
+  toolchain: '툴체인',
+  other: '기타',
+}
+
+const BOUNDARY_LABEL: Readonly<Record<string, string>> = {
+  vendor_hal: '벤더 HAL',
+  rtos_kernel: 'RTOS 커널',
+  third_party: '서드파티',
+  generated: '생성 코드',
+}
+
+const searchText = (v: unknown): string =>
+  Array.isArray(v)
+    ? (v as { tool?: unknown; pattern?: unknown; scope?: unknown }[])
+        .map((x) => `${text(x.tool ?? '')} \`${text(x.pattern ?? '')}\` (${text(x.scope ?? '')})`)
+        .join('; ')
+    : ''
+
+/**
+ * extraction.md (결정 99). 사람이 읽을 요약이고 기준은 revision이다. intake의 기본 완료조건(work-start의 requirements
+ * 블록)을 이 문서로 판정할 수 있게: 분석 범위와 제외 범위, 항목별 끝난 상태, 후보마다 원본 위치(refs가 가리키는 관찰의
+ * 근거까지), 미확정의 필요한 자료, 누락 가능성과 검증 계획을 둔다
+ */
 export function renderExtraction(state: RequirementsState, base: string): string {
   const ev = new Map(state.evidence.map((e) => [e.id, e]))
+  // 결과 안의 지역 key는 같은 run의 항목을 가리킨다
+  const byKey = new Map(state.claims.map((c) => [`${c.run}/${c.key}`, c]))
+  const of = (section: string) => state.claims.filter((c) => c.section === section)
+  const cell = (v: string) => v.replace(/\|/g, '\\|').replace(/\n/g, ' ')
+  /** 항목의 근거: 자기 앵커와, refs가 가리키는 같은 run 항목(과 그 앵커) */
+  const where = (c: Claim): string[] => {
+    const own = evidenceRefs(c.body, ev)
+    const refs = Array.isArray(c.body.refs) ? (c.body.refs as unknown[]) : []
+    const linked = refs.flatMap((k) => {
+      const r = typeof k === 'string' ? byKey.get(`${c.run}/${k}`) : undefined
+      if (!r) return []
+      const at = evidenceRefs(r.body, ev)
+      return [at.length ? `${r.id}(${at.join(', ')})` : r.id]
+    })
+    return [...own, ...linked]
+  }
   const lines = [
     '# 요구사항 추출 결과',
     '',
@@ -737,6 +780,41 @@ export function renderExtraction(state: RequirementsState, base: string): string
     lines.push(
       `- ${text(c.name)} (${text(c.status)}): ${text(c.select)}${c.build_command ? `, \`${text(c.build_command)}\`` : ''}`,
     )
+
+  // 분석 범위 (기본 완료조건 1, 5)
+  const unitsShown = state.units.filter((u) => u.status !== 'merged')
+  const notDone = unitsShown.filter((u) => u.status !== 'done')
+  lines.push(
+    '',
+    '## 분석 범위',
+    '',
+    `기준 커밋 \`${base}\`의 저장소. intent.md의 비목표에 적은 것은 보지 않았다.`,
+    '',
+  )
+  lines.push('대상(survey가 찾은 것):', '')
+  const inventory = of('inventory')
+  if (!inventory.length) lines.push('- (없음)')
+  for (const c of inventory) {
+    const at = where(c)
+    lines.push(
+      `- ${c.id}: ${text(c.body.name ?? '')} (${text(c.body.kind ?? '')})${at.length ? ` — ${at.join(', ')}` : ''}`,
+    )
+  }
+  lines.push('', '제외 범위(경계, 내부는 보지 않음):', '')
+  const boundaries = of('boundaries')
+  if (!boundaries.length) lines.push('- (survey가 찾은 경계 없음)')
+  for (const c of boundaries)
+    lines.push(
+      `- ${c.id}: \`${text(c.body.path ?? '')}\` (${BOUNDARY_LABEL[text(c.body.kind ?? '')] ?? text(c.body.kind ?? '')}): ${text(c.body.reason ?? '')}`,
+    )
+  lines.push('', '찾았으나 없던 것:', '')
+  const missing = of('not_found')
+  if (!missing.length) lines.push('- (없음)')
+  for (const c of missing) {
+    const how = searchText(c.body.searches)
+    lines.push(`- ${c.id}: ${text(c.body.what ?? '')}${how ? ` — 찾아봄: ${how}` : ''}`)
+  }
+
   lines.push(
     '',
     '## 분석 단위',
@@ -744,12 +822,12 @@ export function renderExtraction(state: RequirementsState, base: string): string
     '| 단위 | 종류 | 목적 | 끝난 상태 | 까닭 |',
     '| --- | --- | --- | --- | --- |',
   )
-  for (const u of state.units) {
-    if (u.status === 'merged') continue
+  for (const u of unitsShown) {
     const kind = u.kind === 'survey' ? 'survey' : `trace(${u.lens})`
-    const cell = (s: string) => s.replace(/\|/g, '\\|').replace(/\n/g, ' ')
+    // survey 단위의 목적은 지시의 영어 문장이라 짧게 보인다
+    const purpose = u.kind === 'survey' ? '구성·진입점·경계를 찾고 분석 단위를 나눈다' : u.purpose
     lines.push(
-      `| ${u.id} | ${kind} | ${cell(u.purpose)} | ${STATUS_LABEL[u.status]} | ${cell(u.reason)} |`,
+      `| ${u.id} | ${kind} | ${cell(purpose)} | ${STATUS_LABEL[u.status]} | ${cell(u.reason)} |`,
     )
   }
   const sections: [string, string, string[]][] = [
@@ -762,7 +840,7 @@ export function renderExtraction(state: RequirementsState, base: string): string
     ['absences', '부재 주장', ['claim']],
   ]
   for (const [section, title, keys] of sections) {
-    const cs = state.claims.filter((c) => c.section === section)
+    const cs = of(section)
     lines.push('', `## ${title}`, '')
     if (!cs.length) {
       lines.push('- (없음)')
@@ -783,21 +861,80 @@ export function renderExtraction(state: RequirementsState, base: string): string
           : ''
         head = `${text(b.symbol)} = ${vals} (${text(b.unit_status ?? '')})`
       }
+      if (section === 'constraints' && typeof b.reason === 'string' && b.reason)
+        head += ` (까닭: ${b.reason})`
       const cfg = Array.isArray(b.configs) ? ` [${(b.configs as string[]).join(', ')}]` : ''
-      const refs = evidenceRefs(b, ev)
+      const tail: string[] = []
+      const at = where(c)
+      if (at.length) tail.push(`근거: ${at.join(', ')}`)
+      if (section === 'unknowns' && typeof b.needs === 'string')
+        tail.push(`필요한 자료: ${NEEDS_LABEL[b.needs] ?? b.needs}`)
+      if (section === 'absences') {
+        const how = searchText(b.searches)
+        if (how) tail.push(`찾아봄: ${how}`)
+      }
       lines.push(
-        `- ${c.id} (${c.unit})${cfg}: ${head || '(글 없음)'}${refs.length ? ` — 근거: ${refs.join(', ')}` : ''}`,
+        `- ${c.id} (${c.unit})${cfg}: ${head || '(글 없음)'}${tail.length ? ` — ${tail.join('. ')}` : ''}`,
       )
     }
   }
   const answered = state.decisions
   if (answered.length) {
     lines.push('', '## 사람 결정', '')
-    for (const d of answered)
+    for (const d of answered) {
+      const after = d.blocks.length
+        ? `기다린 단위 ${d.blocks.join(', ')}가 답을 받고 돌았다`
+        : '기다린 단위가 없어 답은 기록에만 있고, 이 답으로 다시 분석한 단위는 없다'
       lines.push(
-        `- ${d.id} (${d.trigger}): ${d.question} — 답: ${d.answer ? d.answer.answer : '(답 없음)'}`,
+        `- ${d.id} (${d.trigger}): ${d.question} — 답: ${d.answer ? d.answer.answer : '(답 없음)'}. ${after}`,
       )
+    }
   }
+
+  // 누락 가능성과 검증 계획 (기본 완료조건 5)
+  const unknowns = of('unknowns')
+  const conflicts = of('conflicts')
+  const runOnly = of('observations').filter((c) => {
+    const at = evidenceRefs(c.body, ev)
+    return at.length > 0 && at.every((x) => !/:\d+-\d+$/.test(x))
+  })
+  const unsupported = [...of('requirements'), ...of('constraints')].filter((c) => !where(c).length)
+  const needs = unknowns.reduce<Record<string, number>>((m, c) => {
+    const k = NEEDS_LABEL[text(c.body.needs ?? 'other')] ?? text(c.body.needs)
+    return { ...m, [k]: (m[k] ?? 0) + 1 }
+  }, {})
+  lines.push('', '## 누락 가능성', '')
+  const risks = [
+    ...notDone.map((u) => `${u.id}는 ${STATUS_LABEL[u.status]}로 끝났다: ${u.reason}`),
+    ...(unknowns.length ? [`코드로 정할 수 없는 미확정 ${unknowns.length}건이 남았다`] : []),
+    ...(boundaries.length ? [`경계 ${boundaries.length}곳의 내부는 보지 않았다`] : []),
+    ...(unsupported.length
+      ? [
+          `원본 위치가 없는 후보 ${unsupported.length}건: ${unsupported.map((c) => c.id).join(', ')}`,
+        ]
+      : []),
+    'survey가 단위로 나누지 않은 기능, 빌드하지 않은 구성, 실행 중에만 정해지는 동작은 이 기록에 없을 수 있다',
+  ]
+  for (const r of risks) lines.push(`- ${r}`)
+  lines.push('', '## 검증 계획', '')
+  const plan = [
+    '요구사항 후보와 제약 후보마다 근거 위치를 기준 커밋에서 다시 읽어 글과 맞는지 본다',
+    ...(runOnly.length
+      ? [
+          `실행 출력만 근거인 관찰 ${runOnly.length}건(${runOnly.map((c) => c.id).join(', ')})은 같은 입력으로 다시 실행해 본다`,
+        ]
+      : []),
+    ...(unknowns.length
+      ? [
+          `미확정은 필요한 자료(${Object.entries(needs)
+            .map(([k, n]) => `${k} ${n}`)
+            .join(', ')})를 받아 확인한다`,
+        ]
+      : []),
+    ...(conflicts.length ? [`충돌 ${conflicts.length}건은 사람이 의도를 정한다`] : []),
+    ...(notDone.length ? [`끝나지 않은 단위 ${notDone.length}개는 자료를 받은 뒤 다시 돈다`] : []),
+  ]
+  for (const x of plan) lines.push(`- ${x}`)
   lines.push('')
   return lines.join('\n')
 }

@@ -434,12 +434,16 @@ export class ExtractRunner {
           const rel = repoPath(anchor.path, host.worktree)
           if (!(rel in blobs)) blobs[rel] = await reader.blob(rel)
         }
+        // 실행 출력 근거는 scratch 밖의 불변 사본으로 (결정 42)
+        const kept = await files.keepOutputs(out.output, { run: id, worktree: host.worktree })
+        if (kept.missing.length)
+          warnings.push(`실행 출력 파일을 찾지 못함: ${kept.missing.join(', ')}`)
         const applied = applyResult({
           state,
           next: next.next,
           unit,
           run: id,
-          result: out.output as ExtractResult,
+          result: kept.result as ExtractResult,
           base: work.base_commit,
           repo: host.worktree,
           blobs,
@@ -453,7 +457,7 @@ export class ExtractRunner {
           next: applied.next,
         }
         end = applied.closed ? 'closed' : 'incomplete'
-        warnings = applied.warnings
+        warnings = [...warnings, ...applied.warnings]
       } else end = verdict.ok ? 'failed' : verdict.end
       const streak = afterRun(next, unit.id, end, budget)
       next = streak.pointer

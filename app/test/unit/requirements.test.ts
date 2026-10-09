@@ -473,6 +473,59 @@ describe('패킷과 문서 (결정 96, 99)', () => {
     expect(x).toContain('| u-0001 | survey |')
     expect(x).toContain('- lo (confirmed): make lo, `make lo`')
   })
+
+  it('extraction.md는 intake의 기본 완료조건을 판정할 절을 둔다: 분석 범위, 후보의 원본 위치, 필요한 자료, 누락 가능성, 검증 계획', () => {
+    const { revs, state, applied } = afterSurvey(
+      survey({
+        boundaries: [
+          {
+            key: 'b1',
+            path: 'Drivers/HAL',
+            kind: 'vendor_hal',
+            reason: '벤더 코드',
+            anchors: [anchor('/w/repo/Makefile', 3, 'lo: CFLAGS += -DLO')],
+          },
+        ],
+      }),
+    )
+    const unit = must(state.units.find((u) => u.lens === 'command'))
+    const t = applyResult({
+      state,
+      next: applied.next,
+      unit,
+      run: 'r-0002',
+      result: trace({
+        requirements: [
+          {
+            key: 'r1',
+            type: 'functional',
+            condition: '틱마다',
+            behavior: '센다',
+            result: '수가 오른다',
+            configs: ['lo'],
+            refs: ['o1'],
+            basis: 'code',
+          },
+        ],
+        unknowns: [{ key: 'u1', question: '틱 주기는?', needs: 'measurement', refs: [] }],
+      }),
+      base: 'abc',
+      repo: REPO,
+      blobs: { 'src/tach.c': 'b2' },
+      at: AT,
+    })
+    const x = renderExtraction(fold([...revs, t.revision]), 'abc')
+    expect(x).toContain('## 분석 범위')
+    expect(x).toMatch(/- c-\d+: `Drivers\/HAL` \(벤더 HAL\): 벤더 코드/)
+    // 요구사항 후보는 refs가 가리키는 관찰의 근거 위치까지 보인다
+    expect(x).toMatch(/틱마다 → 센다 → 수가 오른다 — 근거: c-\d+\(src\/tach\.c:30-30\)/)
+    expect(x).toContain('틱 주기는? — 필요한 자료: 측정')
+    expect(x).toContain('| u-0001 | survey | 구성·진입점·경계를 찾고 분석 단위를 나눈다 |')
+    expect(x).toContain('## 누락 가능성')
+    expect(x).toContain('- 경계 1곳의 내부는 보지 않았다')
+    expect(x).toContain('## 검증 계획')
+    expect(x).toContain('미확정은 필요한 자료(측정 1)를 받아 확인한다')
+  })
 })
 
 describe('진행 상자 (15.5, 결정 98)', () => {

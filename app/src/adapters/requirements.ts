@@ -5,7 +5,7 @@
 // - run 하나 = claude -p 프로세스 하나. 훅은 run마다 토큰을 두고, PreToolUse에서 StructuredOutput을 검사해 2회까지
 //   되돌리고(결정 13, 45), 부드러운 마감 뒤 탐색 도구를 거부한다(결정 25). 판정은 core/requirements의 judgeRun이 한다.
 import { spawn } from 'node:child_process'
-import { randomBytes, randomUUID } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 import Ajv2020 from 'ajv/dist/2020'
@@ -43,11 +43,14 @@ export class RequirementsFiles {
   readonly revisions: string
   readonly answers: string
   readonly runs: string
+  /** 실행 출력 근거의 불변 사본. 내용 해시가 이름이다 (결정 42) */
+  readonly outputs: string
   constructor(readonly workDir: string) {
     this.dir = path.join(workDir, 'requirements')
     this.revisions = path.join(this.dir, 'revisions')
     this.answers = path.join(this.dir, 'answers')
     this.runs = path.join(this.dir, 'runs')
+    this.outputs = path.join(this.dir, 'outputs')
   }
 
   runDir(run: string): string {
@@ -57,6 +60,53 @@ export class RequirementsFiles {
   /** run의 scratch: requirements/ 밖 (결정 42) */
   scratchDir(run: string): string {
     return path.join(this.workDir, 'scratch', run)
+  }
+
+  /**
+   * 실행 출력 근거를 requirements/outputs/에 불변 사본으로 두고 앵커가 그 사본을 가리키게 한다 (결정 42). run은
+   * 출력 파일을 scratch에 쓰고 앵커에 그 경로를 적는다. 경로는 절대 경로이거나 scratch, Work 디렉터리, worktree 상대다.
+   * 사본의 이름은 내용의 sha256이라 같은 출력은 하나다. 찾지 못한 경로는 그대로 두고 돌려준다
+   */
+  async keepOutputs(
+    result: unknown,
+    o: { run: string; worktree: string },
+  ): Promise<{ result: unknown; missing: string[] }> {
+    const missing: string[] = []
+    const kept = new Map<string, string | null>()
+    const keep = async (p: string): Promise<string | null> => {
+      const bases = [this.scratchDir(o.run), this.workDir, o.worktree]
+      const tries = path.isAbsolute(p) ? [p] : bases.map((b) => path.join(b, p))
+      for (const file of tries) {
+        const text = await readText(file).catch(() => null)
+        if (text === null) continue
+        const hash = createHash('sha256').update(text).digest('hex')
+        const name = `${hash}.txt`
+        await fsp.mkdir(this.outputs, { recursive: true })
+        const dest = path.join(this.outputs, name)
+        if ((await readText(dest).catch(() => null)) === null) await writeFileAtomic(dest, text)
+        return path.relative(this.workDir, dest).split(path.sep).join('/')
+      }
+      return null
+    }
+    const walk = async (v: unknown): Promise<unknown> => {
+      if (Array.isArray(v)) return Promise.all(v.map(walk))
+      if (!v || typeof v !== 'object') return v
+      const obj = v as Record<string, unknown>
+      if (obj['kind'] === 'tool_output' && typeof obj['path'] === 'string' && 'quote' in obj) {
+        const p = obj['path']
+        if (!kept.has(p)) kept.set(p, await keep(p))
+        const to = kept.get(p) ?? null
+        if (to === null) {
+          missing.push(p)
+          return { ...obj }
+        }
+        return { ...obj, path: to }
+      }
+      const out: Record<string, unknown> = {}
+      for (const [k, x] of Object.entries(obj)) out[k] = await walk(x)
+      return out
+    }
+    return { result: await walk(result), missing: [...new Set(missing)] }
   }
 
   revisionPath(n: number): string {
