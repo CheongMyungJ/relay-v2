@@ -12,7 +12,7 @@
 
 13차 작업(앱 구현 다음 PR, 결정 101~104): 실행 출력 근거의 인용 대조(제출·반영 검사, 결정 101), 앱 설정의 "요구사항 추출" 절(결정 102), 끝난 단위에 걸린 사람 결정의 답으로 그 단위를 다시 열기(결정 103), 뒤 단위가 다룬 미확정 잇기(결정 104)를 붙였다. 실제 claude로 리더보드 레포를 Work 완료까지 다시 돌렸다(`docs/checks.md` "요구사항 추출 유형", 커밋 7524447). 남은 앱 일은 대부분 아래 "남은 설계 논의"의 사람 결정을 기다린다.
 
-다음은 셋이다. 1(새 hold-out)이 끝나야 2(W의 hold-out 확인)를 할 수 있다. 2는 채택을 되돌릴지 보는 확인이다. 3은 나란히 할 수 있으나 먼저 "남은 설계 논의"에서 할 일을 사람이 정한다.
+다음은 셋이다. 1(새 hold-out)이 끝나야 2(W의 hold-out 확인)를 할 수 있다. 2는 채택을 되돌릴지 보는 확인이다. 3은 나란히 할 수 있으나 먼저 "남은 설계 논의"에서 할 일을 사람이 정한다. 사람이 그 결정을 AI에게 맡기면 1~3 대신 4를 쓴다.
 
 ## 1. 새 봉인 hold-out 만들기(지침을 쓰는 세션과 다른 세션)
 
@@ -69,6 +69,53 @@ CheongMyungJ/relay-v2의 docs/requirements-extraction-flow-20261008 브랜치에
 규칙: 한 동작은 가장 낮은 층에서 자세히 시험한다(CLAUDE.md). [실제] 시험을 고치면 RELAY_REAL_CLAUDE=dry도 통과시킨다. docs/checks.md에는 prettier를 돌리지 않는다. 화면을 고치면 npm run build 뒤 xvfb-run -a npx playwright test로 [스모크]를 돌린다. 끝나면 17.12.1절 진행 표, 15.5.1절 결정, 이 파일을 갱신한다.
 
 작게 커밋하고 지정된 개발 브랜치와 docs/requirements-extraction-flow-20261008 두 곳에 push한다. PR은 만들지 않는다. push 전에 app/에서 npm run typecheck && npm run lint && npm run format:check && npm test && npm run test:contract && npm run test:eval, skills/에서 npm ci 뒤 node check.mjs. 끝 보고에는 한 일, 실제 run 결과, 정한 결정, 사람과 정할 것의 제안을 적어줘.
+```
+
+## 4. 실제 펌웨어 시범 준비까지 한 번에(1~3과 "남은 설계 논의"를 AI가 정하고 끝까지)
+
+사람이 "남은 설계 논의"를 따로 정하지 않고 AI에게 맡겼다(2026-10-09). 아래 하나로 1·2와 3을 대신한다. 목표는 실제 레거시 펌웨어로 시범 run을 할 수 있는 상태다.
+
+```text
+CheongMyungJ/relay-v2의 docs/requirements-extraction-flow-20261008 브랜치에서 요구사항 추출 기능을 "실제 레거시 펌웨어 저장소로 시범 run을 할 수 있는 상태"까지 개발해줘. 중간에 나에게 묻지 마. 사람과 정할 것으로 남겨 둔 항목(docs/requirements-extraction-next-session.md의 "남은 설계 논의", 17.12.1절)도 이번에는 네가 정한다. 결정 1~104, design.md의 ✅ 결정, 기존 relay 선례에 가장 잘 맞고 실제 펌웨어 시범에 더 나은 안을 골라 15.5.1절에 결정 105~로 적는다(고른 안, 이유, 버린 대안). 사람이 정한 결정 1~42와 17.12 표, design.md의 ✅ 결정과 부딪치면 그것을 바꾸지 말고 가장 덜 바꾸는 안을 고른 뒤 부딪친 점을 결정에 적고 끝 보고에서 알린다.
+
+먼저 읽기: CLAUDE.md, CONTRIBUTING.md, docs/requirements-extraction-flow.md(15~17절, 특히 15.5.1의 결정 43~104, 16.4~16.12, 17.3, 17.12.1과 "통합 run 설계의 입력"), docs/extract-eval.md, docs/requirements-extraction-next-session.md 전체, docs/checks.md "요구사항 추출 유형". 코드: skills/extract/(contract.md, kinds/, lenses/, rules.mjs, run.mjs, load.mjs, build-index.mjs), skills/check.mjs, app/eval/extract/, app/src/core·adapters·main/requirements.ts, app/src/main/work.ts의 extract 부분, app/src/renderer/src/Requirements.tsx.
+
+완료 조건(모두 되면 끝):
+A. 새 봉인 hold-out extract-h2가 있고, 지금 지침 v4를 그것으로 결정 62의 규칙대로 확인해 결과를 17절과 docs/extract-eval.md에 남겼다.
+B. integrate·review·summarize run이 지시(skills/extract), 결과 스키마(docs/contracts), 규칙 표와 반례, 평가(app/eval/extract), 앱 루프까지 붙어 있다.
+C. 앱이 [범위 줄이고 계속]·[부분 분석으로 넘기기](결정 26), run 목록·결과 화면, 알림·배지(15.6), intake·verify의 requirements 구간(16.12), 앱이 만드는 구성별 빌드 인덱스와 config_active 제출 검사(16.10, 결정 87·88), 저장소로 결과 내보내기, 재개·되감기의 고아 파일 규칙(17.3), 실행 출력 사본에 입력도 남기기(17.12.1의 verify 지적)를 갖췄다.
+D. state·lifecycle·protocol 렌즈 카드가 다른 렌즈처럼 Scope·Trace·Pitfalls·Phrasing·Example을 갖췄다(실제 펌웨어의 survey는 이 렌즈의 단위도 낸다).
+E. 실제 claude로 RELAY_REAL_CLAUDE=1 RELAY_REAL_CASES=requirements npm run test:claude가 Work 완료까지 가고, 개발용 합성 펌웨어 e1(작은 두 보드)을 앱으로 intake부터 Work 완료까지 돌리는 [실제] 사례(integrate·summarize run 포함, run 상한 40)를 더해 그것도 Work 완료까지 간다. 둘 다 docs/checks.md에 적었다.
+F. 실제 펌웨어 시범 세션용 프롬프트(사람이 준비할 것, 설정값, 지켜볼 것, 기록할 것)가 docs/requirements-extraction-next-session.md에 있다.
+
+차례(앞 것이 뒤 것의 입력이다):
+1. hold-out(A). 지침을 쓰는 세션과 hold-out을 만드는 쪽을 나누는 결정 22·66을 지키려고, hold-out은 Agent 도구로 띄운 하위 에이전트가 만든다. 이 파일의 "1. 새 봉인 hold-out 만들기" 프롬프트를 주되 보고는 열쇠, 크기, 시험 통과 여부만 하라고 바꾼다(함정 범주·내용·장치 영역은 봉인 묶음 안에만 둔다. 사람은 열쇠로 풀어 본다). 너는 h2의 평문 파일(시나리오 폴더, 정답, 함정, make-fixtures.py)을 직접 열어 읽지 않는다. 그 뒤 "2. v4(W)의 hold-out 확인" 프롬프트의 절차를 네가 한다(열쇠는 명령의 환경 변수로만). 확인되면 v4 그대로 두고, 확인되지 않으면 결정 86처럼 채택 판에서 내리되 잠정 기본값으로 두고 진행하며 원인은 쪽별·과제별 숫자로만 적는다. 이 단계에서 지침 문구는 고치지 않는다. 끝나면 평문과 결과 폴더를 지운다. h2는 소진된다.
+2. 설계 결정을 한 번에 정해 15.5.1에 적고 커밋한다(아래 "출발점"에서 시작).
+3. integrate → review → summarize 차례로 하나씩: 결과 스키마 v0, 지시(kinds/<종류>.md, L1은 꼭 필요할 때만), rules.mjs 규칙과 반례, check.mjs, 평가 픽스처와 채점(결정 21의 꼴: 결정론 + 판정 모델, reference 만점과 함정 검출을 npm run test:eval에서), 최소 지시 판(base) 대 새 판 측정(결정 62의 꼴), 앱 루프 연결과 [단위]·[어댑터]·[흐름] 시험.
+4. state·lifecycle·protocol 카드(D). 개발용 시나리오에 그 렌즈의 과제를 더할 수 있으면 더해 base 대비로 재고, 사용량이 모자라면 정적 검사(check.mjs의 예시·과적합 검사)와 E의 실제 run으로 갈음하고 미측정이라 적는다.
+5. 앱의 나머지(C). 화면을 고치면 [스모크].
+6. 실제 run(E)과 기록, 시범 안내(F).
+
+출발점(근거가 다르면 바꾸되 결정으로 적는다):
+- 다른 run의 항목 가리키기: 패킷에 관련 기록의 전역 ID(c-, u-, h-)와 요약을 주고, integrate 결과가 resolves(미확정 → 그것을 푸는 주장·근거), supersedes(앞 주장 → 대체 주장), merges(같은 주장들), conflicts(서로 어긋나는 주장)를 낸다. 앱은 변경분 스키마의 연결로 받아 extraction.md에서 앞 것을 접어 보인다. 상태를 올리지 않는다(결정 12): "풀림"은 뒤 근거를 가리키는 연결이지 확정이 아니다.
+- 때: integrate는 열린 단위가 없어 끝내기 직전에 한 번, 그리고 반영한 trace가 일정 수(예: 10)를 넘을 때마다. review는 표본(비율과 고르는 규칙을 정한다, 16.12)으로 integrate 뒤에. summarize는 끝에 한 번이고 부분 분석이면 상한 밖에서 한 번(결정 26). summarize는 {글, refs} 서술과 handoff 요약·risks만 내고 문서는 앱이 렌더링한다(결정 15).
+- 빌드 인덱스: intake의 intent가 툴체인과 빌드 명령을 허용할 때만, Work 디렉터리 아래 기준 커밋의 읽기 전용 별도 worktree에서 skills/extract/build-index.mjs와 하네스의 컴파일러 찾기를 써서 만든다. 실패하거나 허용이 없으면 config_active 없이 돌고 extraction.md에 그렇다고 적는다(결정 14).
+- 내보내기: verify 승인 뒤 Work 완료 화면에서 extraction.md와 기록 JSON 묶음(스키마 판 포함)을 사람이 고른 레포 경로로 커밋하는 길(spec의 D364 꼴). 채택 칸은 "미결정"(결정 1).
+- 고아 파일: 되감기도 새 번호 revision으로 쓰고, requirements/outputs/의 사본은 내용 해시라 지우지 않는다.
+- 화면: run 목록은 진행 상자 아래 접힌 표(run, 단위, 종류, 결과, 제출 되돌림, 시간)와 run 기록 폴더 열기. 알림은 D81·D184 그대로(사람 결정 필요, 멈춤).
+
+평가와 사용량:
+- 지침을 바꾸면 결정 62의 규칙으로 잰다. survey·trace의 지시 바이트(L1 포함)를 바꾸면 개발용 10층을 다시 재야 하므로 새 run 종류의 지시는 kinds/<종류>.md에 두고 L1은 꼭 필요할 때만 고친다. L1을 고치게 되면 앱 검사 목록에 tool_output 앵커(결정 101)를 함께 넣고 10층을 다시 잰다.
+- get_usage가 사용량을 주지 않으면 --always-cap으로 결과 폴더마다 상한을 건다: hold-out 확인 200, 새 run 종류와 렌즈의 평가 합계 400. 넘을 것 같으면 회차·층을 줄이고 결정으로 적는다. 앱으로 도는 [실제] 사례는 이 상한 밖이다. 사용량 한도 오류는 5시간 창이면 기다렸다 잇고, 주간이면 그때까지를 커밋·push하고 멈춘 뒤 보고한다.
+- hold-out 열쇠는 레포·문서·커밋 메시지·결과 폴더·보고서에 쓰지 않고 끝 보고에서만 말한다. 커밋 전마다 git diff --cached에 열쇠나 h2 평문이 없는지 본다.
+
+규칙: CLAUDE.md의 시험 층(한 동작은 가장 낮은 층에서 자세히). [실제] 시험을 고치면 RELAY_REAL_CLAUDE=dry도 통과. 훅 본문·claude 옵션·gh JSON의 새 필드를 쓰면 app/test/contract의 계약과 녹화본(8.2). docs/checks.md에는 prettier를 돌리지 않는다. 화면을 고치면 npm run build 뒤 xvfb-run -a npx playwright test. 결정 8의 D/I 번호 옮기기와 main으로의 PR은 이번에 하지 않는다.
+
+진행 기록: 큰 차례가 끝날 때마다 17절의 새 절(14차 작업)과 진행 표, 15.5.1 결정, docs/requirements-extraction-next-session.md를 갱신하고 커밋·push한다. 세션이 끊겨도 다음 세션이 그 파일만 읽고 이을 수 있게 남은 차례와 이어 하기 프롬프트를 늘 최신으로 둔다.
+
+작게 커밋하고 지정된 개발 브랜치와 docs/requirements-extraction-flow-20261008 두 곳에 push한다. PR은 만들지 않는다. push 전에 app/에서 npm run typecheck && npm run lint && npm run format:check && npm test && npm run test:contract && npm run test:eval, skills/에서 npm ci 뒤 node check.mjs.
+
+끝 보고(한국어): 완료 조건 A~F마다 된 것과 안 된 것, hold-out 확인 결과(열쇠는 여기서만), 측정 숫자, 실제 run 결과, 정한 결정 목록(사람이 다시 볼 만한 것을 표시), 실제 펌웨어 시범 전에 사람이 준비할 것.
 ```
 
 ## 남은 설계 논의(사람과 정할 것)
