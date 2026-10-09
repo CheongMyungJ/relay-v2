@@ -212,6 +212,45 @@ describe('채점 규칙', () => {
     expect(r.recall['r.tim.wdt_unknown']).toBe(true)
   })
 
+  it('실제 run의 값 글: 초당 틱은 Hz다 (2026-10-09 6차 측정)', () => {
+    expect(unitKey('tick/s')).toBe('hz')
+    expect(unitKey('ticks per second')).toBe('hz')
+    expect(unitKey('tick')).toBe('tick')
+    const truth = {
+      configs: [
+        { name: 'a', aliases: [] },
+        { name: 'b', aliases: [] },
+      ],
+      quantities: [
+        {
+          id: 'q.tick',
+          symbols: ['TICK_HZ'],
+          per_config: { a: { hz: [1000], ms: [1] }, b: { hz: [500], ms: [2] } },
+          unit_derivable: true,
+        },
+      ],
+    }
+    const q = (values) => ({
+      symbol: 'TICK_HZ',
+      expr: '',
+      unit: 'tick/s',
+      unit_status: 'derived',
+      values,
+    })
+    expect(
+      checkQuantity(
+        q([
+          { configs: ['a'], value: '1000 tick/s' },
+          { configs: ['b'], value: '500 tick/s (1 tick = 2 ms)' },
+        ]),
+        truth,
+      ),
+    ).toEqual({ truth: 'q.tick', errors: [], covers: ['a', 'b'] })
+    expect(checkQuantity(q([{ configs: ['b'], value: '1000 tick/s' }]), truth).errors).toEqual([
+      'm.q.q.tick.value',
+    ])
+  })
+
   it('단위 키', () => {
     expect(
       [

@@ -107,6 +107,9 @@ const word = (token) =>
     'i',
   )
 
+/** 초당 횟수: tick/s, ticks per second, interrupts/s */
+const RATE = /^(ticks?|interrupts?|틱)\s*(\/\s*(s|sec|second)|per\s+second)$/
+
 /** 수치 단위를 정답의 단위 키로. 괄호·등호 뒤의 설명은 뺀다("Hz (tick/s)" → hz) */
 export function unitKey(unit) {
   const u = String(unit ?? '')
@@ -118,6 +121,8 @@ export function unitKey(unit) {
   if (/^(s|sec|secs|second|seconds|초)$/.test(u)) return 's'
   if (/^(us|µs|microsecond|microseconds)$/.test(u)) return 'us'
   if (/^(hz|hertz)(\s|$)/.test(u)) return 'hz'
+  // 초당 횟수는 Hz다("1000 tick/s", "ticks per second", 2026-10-09 6차 측정의 값 글)
+  if (RATE.test(u)) return 'hz'
   if (/tick/.test(u)) return 'tick'
   if (/cycle|period|사이클|주기/.test(u)) return 'cycle'
   if (/^(count|counts|times|retries|attempts|tries|회|번)$/.test(u)) return 'count'
@@ -125,7 +130,7 @@ export function unitKey(unit) {
 }
 
 const UNIT_TOKEN =
-  /(-?\d+(?:\.\d+)?)\s*(milliseconds?|msec|ms|microseconds?|µs|us|seconds?|secs?|s|ticks?|hertz|hz|cycles?|밀리초|초|틱|사이클|회|번)?(?![A-Za-z0-9])/gi
+  /(-?\d+(?:\.\d+)?)\s*((?:ticks?|interrupts?|틱)\s*(?:\/\s*(?:s|sec|second)|per\s+second)|milliseconds?|msec|ms|microseconds?|µs|us|seconds?|secs?|s|ticks?|hertz|hz|cycles?|밀리초|초|틱|사이클|회|번)?(?![A-Za-z0-9])/gi
 
 /**
  * 값 글에서 (수, 단위) 후보를 모은다. 모델은 값을 글로 쓴다("20 tick = 200 ms (21 tick이면 210 ms)"). 단위가 붙지
