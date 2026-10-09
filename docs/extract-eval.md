@@ -63,6 +63,8 @@ node eval/extract/report.mjs eval/extract/results/<폴더> --runs eval/extract/r
 - 사용량(결정 28): run과 판정을 띄우기 전마다 `get_usage`로 주간 사용률을 보고 50%에 닿으면 멈춘다. `get_usage`가
   사용량을 주지 않으면 결과 폴더의 `calls.jsonl`로 실제 claude 호출을 150번까지로 묶는다(AI 결정 51).
   사용량 한도로 실패하면 5시간 창은 재설정 시각까지 기다렸다 같은 run부터 잇고, 주간이면 멈춘다(결정 29).
+- `--always-cap`(run.mjs, score.mjs): `get_usage`가 사용량을 주지 않으면 run의 `rate_limit_event`가 사용률을 알려 줘도
+  `--max-calls` 상한을 함께 건다(AI 결정 76). 여러 이름표를 한 결과 폴더에 두면 `calls.jsonl` 하나로 함께 센다.
 
 run 하나의 조건: 시나리오 `repo/`를 고정한 작성자·시각으로 커밋한 기준 레포(같은 내용이면 같은 커밋 id),
 cwd는 레포 밖 scratch, `--add-dir`로 레포, 쪽의 조립본(지시 파일과 argv 스키마), 표준 입력으로 패킷, 앱과 같은 훅
@@ -105,6 +107,9 @@ recall·must_not·resolvable 항목마다 found/violated/left_unknown과 근거 
 - 관문(누출 카나리, worktree 변경)이 0이고, 실패율이 base보다 10%p 넘게 높지 않다.
 - 그리고 둘 가운데 하나: PM-A 차이(B − base)의 95% 구간 상한 < 0이고 PM-B 차이의 하한 ≥ −0.03, 또는 PM-B 차이의 하한 > 0이고 PM-A 차이의 상한 ≤ +0.25.
 - 채택한 판은 봉인 hold-out에서 같은 규칙으로 한 번 확인한다.
+
+판정은 `report.mjs --pair 새,기준 --adopt`가 코드로 한다(AI 결정 75). 2026-10-09 6차 작업에서 첫 지침 판(v1)과 한 번 고친 판은
+모두 채택하지 않았다(재현율 퇴보, requirements-extraction-flow.md 17.6절).
 
 근거: A/A의 차이가 PM-A 0.10 [−0.02, 0.22], PM-B 0.005 [−0.011, 0.020]였다(2026-10-09, `app/eval/extract/reports/2026-10-09-base-AA.md`). 기준선은 PM-A 0.25/run, PM-B 0.965이고 e1은 천장에 가깝다(개선은 주로 e2에서 갈린다).
 
