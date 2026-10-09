@@ -1,0 +1,1930 @@
+{
+  "note": "run마다의 점수(report.mjs --runs-out). 결과 폴더는 git에 넣지 않는다. hold-out(결정 66): 시나리오 id는 h2로 줄이고 violated·missed·softened는 비웠다",
+  "runs": [
+    {
+      "id": "N.h2.survey.1",
+      "label": "N",
+      "side": "base",
+      "scenario": "h2",
+      "task": "survey",
+      "rep": 1,
+      "failure": null,
+      "pmA": 4,
+      "pmB": 0.8620689655172413,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 32,
+        "ok": 21,
+        "lineMismatch": 11,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.3956164,
+      "minutes": 1.67,
+      "turns": 8,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+        "instructions": "sha256:065742556ac0441ee9bac7d72a447a5f175537b5ee57bb6fbd3f3d11b80cbe18"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "N.h2.survey.2",
+      "label": "N",
+      "side": "base",
+      "scenario": "h2",
+      "task": "survey",
+      "rep": 2,
+      "failure": null,
+      "pmA": 2,
+      "pmB": 0.7586206896551724,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 25,
+        "ok": 18,
+        "lineMismatch": 7,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.1856028,
+      "minutes": 0.87,
+      "turns": 6,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+        "instructions": "sha256:065742556ac0441ee9bac7d72a447a5f175537b5ee57bb6fbd3f3d11b80cbe18"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "N.h2.survey.3",
+      "label": "N",
+      "side": "base",
+      "scenario": "h2",
+      "task": "survey",
+      "rep": 3,
+      "failure": null,
+      "pmA": 4,
+      "pmB": 0.9310344827586207,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 35,
+        "ok": 27,
+        "lineMismatch": 8,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.3594338,
+      "minutes": 1.72,
+      "turns": 8,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+        "instructions": "sha256:065742556ac0441ee9bac7d72a447a5f175537b5ee57bb6fbd3f3d11b80cbe18"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "N.h2.survey.4",
+      "label": "N",
+      "side": "base",
+      "scenario": "h2",
+      "task": "survey",
+      "rep": 4,
+      "failure": null,
+      "pmA": 4,
+      "pmB": 0.8275862068965517,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 30,
+        "ok": 19,
+        "lineMismatch": 11,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.2194602,
+      "minutes": 1.01,
+      "turns": 7,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+        "instructions": "sha256:065742556ac0441ee9bac7d72a447a5f175537b5ee57bb6fbd3f3d11b80cbe18"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "N.h2.survey.5",
+      "label": "N",
+      "side": "base",
+      "scenario": "h2",
+      "task": "survey",
+      "rep": 5,
+      "failure": null,
+      "pmA": 3,
+      "pmB": 0.896551724137931,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 28,
+        "ok": 19,
+        "lineMismatch": 9,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.19542540000000003,
+      "minutes": 0.92,
+      "turns": 7,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+        "instructions": "sha256:065742556ac0441ee9bac7d72a447a5f175537b5ee57bb6fbd3f3d11b80cbe18"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "N.h2.trace-command.1",
+      "label": "N",
+      "side": "base",
+      "scenario": "h2",
+      "task": "trace-command",
+      "rep": 1,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 1,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 62,
+        "ok": 55,
+        "lineMismatch": 7,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.3969532,
+      "minutes": 2.18,
+      "turns": 7,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:e09b5de11c3873cfd5c0afb38f51f1bafe4149b4e403f219fbc2fc88125c47b9",
+        "instructions": "sha256:0e84c48e91494def0925f29309f4c7ebc65f1e3a41d5aef62ff854df041631b9"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "N.h2.trace-command.2",
+      "label": "N",
+      "side": "base",
+      "scenario": "h2",
+      "task": "trace-command",
+      "rep": 2,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 0.8888888888888888,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 66,
+        "ok": 21,
+        "lineMismatch": 45,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.44649760000000005,
+      "minutes": 2.46,
+      "turns": 9,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:e09b5de11c3873cfd5c0afb38f51f1bafe4149b4e403f219fbc2fc88125c47b9",
+        "instructions": "sha256:0e84c48e91494def0925f29309f4c7ebc65f1e3a41d5aef62ff854df041631b9"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "N.h2.trace-command.3",
+      "label": "N",
+      "side": "base",
+      "scenario": "h2",
+      "task": "trace-command",
+      "rep": 3,
+      "failure": null,
+      "pmA": 1,
+      "pmB": 0.9444444444444444,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 64,
+        "ok": 55,
+        "lineMismatch": 9,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.4171174,
+      "minutes": 2.35,
+      "turns": 8,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:e09b5de11c3873cfd5c0afb38f51f1bafe4149b4e403f219fbc2fc88125c47b9",
+        "instructions": "sha256:0e84c48e91494def0925f29309f4c7ebc65f1e3a41d5aef62ff854df041631b9"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "N.h2.trace-command.4",
+      "label": "N",
+      "side": "base",
+      "scenario": "h2",
+      "task": "trace-command",
+      "rep": 4,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 0.9444444444444444,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 66,
+        "ok": 57,
+        "lineMismatch": 9,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.4144588,
+      "minutes": 2.56,
+      "turns": 7,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:e09b5de11c3873cfd5c0afb38f51f1bafe4149b4e403f219fbc2fc88125c47b9",
+        "instructions": "sha256:0e84c48e91494def0925f29309f4c7ebc65f1e3a41d5aef62ff854df041631b9"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "N.h2.trace-command.5",
+      "label": "N",
+      "side": "base",
+      "scenario": "h2",
+      "task": "trace-command",
+      "rep": 5,
+      "failure": null,
+      "pmA": 1,
+      "pmB": 0.7777777777777778,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 73,
+        "ok": 57,
+        "lineMismatch": 16,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.39851880000000006,
+      "minutes": 2.12,
+      "turns": 8,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:e09b5de11c3873cfd5c0afb38f51f1bafe4149b4e403f219fbc2fc88125c47b9",
+        "instructions": "sha256:0e84c48e91494def0925f29309f4c7ebc65f1e3a41d5aef62ff854df041631b9"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "N.h2.trace-shared.1",
+      "label": "N",
+      "side": "base",
+      "scenario": "h2",
+      "task": "trace-shared",
+      "rep": 1,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 0.9,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 61,
+        "ok": 59,
+        "lineMismatch": 2,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.4422536,
+      "minutes": 2.52,
+      "turns": 9,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:5fa164742df929ebf50e5c78782d216a8674b57dc9df627459b499d7664b1e31",
+        "instructions": "sha256:50cc520cc90af1e2c9e7a467590b62f26df577a13660e11e83889ed157f11639"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "N.h2.trace-shared.2",
+      "label": "N",
+      "side": "base",
+      "scenario": "h2",
+      "task": "trace-shared",
+      "rep": 2,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 0.9,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 69,
+        "ok": 58,
+        "lineMismatch": 11,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.4929034,
+      "minutes": 2.62,
+      "turns": 9,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:5fa164742df929ebf50e5c78782d216a8674b57dc9df627459b499d7664b1e31",
+        "instructions": "sha256:50cc520cc90af1e2c9e7a467590b62f26df577a13660e11e83889ed157f11639"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "N.h2.trace-shared.3",
+      "label": "N",
+      "side": "base",
+      "scenario": "h2",
+      "task": "trace-shared",
+      "rep": 3,
+      "failure": null,
+      "pmA": 1,
+      "pmB": 1,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 71,
+        "ok": 61,
+        "lineMismatch": 10,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.576152,
+      "minutes": 3.2,
+      "turns": 13,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:5fa164742df929ebf50e5c78782d216a8674b57dc9df627459b499d7664b1e31",
+        "instructions": "sha256:50cc520cc90af1e2c9e7a467590b62f26df577a13660e11e83889ed157f11639"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "N.h2.trace-shared.4",
+      "label": "N",
+      "side": "base",
+      "scenario": "h2",
+      "task": "trace-shared",
+      "rep": 4,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 0.9,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 61,
+        "ok": 55,
+        "lineMismatch": 5,
+        "fabricated": 1
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.41506960000000004,
+      "minutes": 2.33,
+      "turns": 10,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:5fa164742df929ebf50e5c78782d216a8674b57dc9df627459b499d7664b1e31",
+        "instructions": "sha256:50cc520cc90af1e2c9e7a467590b62f26df577a13660e11e83889ed157f11639"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "N.h2.trace-shared.5",
+      "label": "N",
+      "side": "base",
+      "scenario": "h2",
+      "task": "trace-shared",
+      "rep": 5,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 0.9,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 55,
+        "ok": 47,
+        "lineMismatch": 8,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.4775052000000001,
+      "minutes": 2.54,
+      "turns": 12,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:5fa164742df929ebf50e5c78782d216a8674b57dc9df627459b499d7664b1e31",
+        "instructions": "sha256:50cc520cc90af1e2c9e7a467590b62f26df577a13660e11e83889ed157f11639"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "N.h2.trace-timing.1",
+      "label": "N",
+      "side": "base",
+      "scenario": "h2",
+      "task": "trace-timing",
+      "rep": 1,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 0.9285714285714286,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 78,
+        "ok": 37,
+        "lineMismatch": 40,
+        "fabricated": 1
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.46719419999999995,
+      "minutes": 2.3,
+      "turns": 10,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:a33b91b274c21a1cb861b8f5e4a32e53f2ae162a090337519acb2678521d439c",
+        "instructions": "sha256:8d7a103081bbc5b1a4407d202cf6d6d9f186a5e3160956b7bbec5db5b4a4ca48"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "N.h2.trace-timing.2",
+      "label": "N",
+      "side": "base",
+      "scenario": "h2",
+      "task": "trace-timing",
+      "rep": 2,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 0.8571428571428571,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 59,
+        "ok": 44,
+        "lineMismatch": 15,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.3009464,
+      "minutes": 1.67,
+      "turns": 9,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:a33b91b274c21a1cb861b8f5e4a32e53f2ae162a090337519acb2678521d439c",
+        "instructions": "sha256:8d7a103081bbc5b1a4407d202cf6d6d9f186a5e3160956b7bbec5db5b4a4ca48"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "N.h2.trace-timing.3",
+      "label": "N",
+      "side": "base",
+      "scenario": "h2",
+      "task": "trace-timing",
+      "rep": 3,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 1,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 74,
+        "ok": 59,
+        "lineMismatch": 15,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.7825101999999999,
+      "minutes": 3.66,
+      "turns": 12,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:a33b91b274c21a1cb861b8f5e4a32e53f2ae162a090337519acb2678521d439c",
+        "instructions": "sha256:8d7a103081bbc5b1a4407d202cf6d6d9f186a5e3160956b7bbec5db5b4a4ca48"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "N.h2.trace-timing.4",
+      "label": "N",
+      "side": "base",
+      "scenario": "h2",
+      "task": "trace-timing",
+      "rep": 4,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 0.9285714285714286,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 71,
+        "ok": 53,
+        "lineMismatch": 17,
+        "fabricated": 1
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.35558159999999994,
+      "minutes": 1.84,
+      "turns": 9,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:a33b91b274c21a1cb861b8f5e4a32e53f2ae162a090337519acb2678521d439c",
+        "instructions": "sha256:8d7a103081bbc5b1a4407d202cf6d6d9f186a5e3160956b7bbec5db5b4a4ca48"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "N.h2.trace-timing.5",
+      "label": "N",
+      "side": "base",
+      "scenario": "h2",
+      "task": "trace-timing",
+      "rep": 5,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 1,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 74,
+        "ok": 59,
+        "lineMismatch": 15,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.4809072,
+      "minutes": 2.46,
+      "turns": 12,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:a33b91b274c21a1cb861b8f5e4a32e53f2ae162a090337519acb2678521d439c",
+        "instructions": "sha256:8d7a103081bbc5b1a4407d202cf6d6d9f186a5e3160956b7bbec5db5b4a4ca48"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "N.h2.trace-variant.1",
+      "label": "N",
+      "side": "base",
+      "scenario": "h2",
+      "task": "trace-variant",
+      "rep": 1,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 0.875,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 64,
+        "ok": 36,
+        "lineMismatch": 28,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.32330780000000003,
+      "minutes": 1.82,
+      "turns": 7,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:3cd5a7b592f046b65ffdf398f0a33bdc846d77817a3b8e498742eda4733dc900",
+        "instructions": "sha256:6e4e70442b511989d2a92cc51e618b01eb428f67a9331408efb71780cb3e3fd5"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "N.h2.trace-variant.2",
+      "label": "N",
+      "side": "base",
+      "scenario": "h2",
+      "task": "trace-variant",
+      "rep": 2,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 0.875,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 57,
+        "ok": 47,
+        "lineMismatch": 10,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.3715786,
+      "minutes": 1.79,
+      "turns": 9,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:3cd5a7b592f046b65ffdf398f0a33bdc846d77817a3b8e498742eda4733dc900",
+        "instructions": "sha256:6e4e70442b511989d2a92cc51e618b01eb428f67a9331408efb71780cb3e3fd5"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "N.h2.trace-variant.3",
+      "label": "N",
+      "side": "base",
+      "scenario": "h2",
+      "task": "trace-variant",
+      "rep": 3,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 0.9375,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 66,
+        "ok": 49,
+        "lineMismatch": 17,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.3765974,
+      "minutes": 1.94,
+      "turns": 10,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:3cd5a7b592f046b65ffdf398f0a33bdc846d77817a3b8e498742eda4733dc900",
+        "instructions": "sha256:6e4e70442b511989d2a92cc51e618b01eb428f67a9331408efb71780cb3e3fd5"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "N.h2.trace-variant.4",
+      "label": "N",
+      "side": "base",
+      "scenario": "h2",
+      "task": "trace-variant",
+      "rep": 4,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 0.9375,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 55,
+        "ok": 52,
+        "lineMismatch": 3,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.30854519999999996,
+      "minutes": 1.63,
+      "turns": 9,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:3cd5a7b592f046b65ffdf398f0a33bdc846d77817a3b8e498742eda4733dc900",
+        "instructions": "sha256:6e4e70442b511989d2a92cc51e618b01eb428f67a9331408efb71780cb3e3fd5"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "N.h2.trace-variant.5",
+      "label": "N",
+      "side": "base",
+      "scenario": "h2",
+      "task": "trace-variant",
+      "rep": 5,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 0.9375,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 61,
+        "ok": 43,
+        "lineMismatch": 18,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.3383332,
+      "minutes": 1.75,
+      "turns": 8,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:3cd5a7b592f046b65ffdf398f0a33bdc846d77817a3b8e498742eda4733dc900",
+        "instructions": "sha256:6e4e70442b511989d2a92cc51e618b01eb428f67a9331408efb71780cb3e3fd5"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "W.h2.survey.1",
+      "label": "W",
+      "side": "v1",
+      "scenario": "h2",
+      "task": "survey",
+      "rep": 1,
+      "failure": null,
+      "pmA": 4,
+      "pmB": 0.896551724137931,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 36,
+        "ok": 24,
+        "lineMismatch": 12,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.3070092,
+      "minutes": 1.41,
+      "turns": 7,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+        "instructions": "sha256:824950002eb0794b8353dc995334b935821e8c2b6fab5912029079435daad92c"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "W.h2.survey.2",
+      "label": "W",
+      "side": "v1",
+      "scenario": "h2",
+      "task": "survey",
+      "rep": 2,
+      "failure": null,
+      "pmA": 2,
+      "pmB": 0.8620689655172413,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 33,
+        "ok": 31,
+        "lineMismatch": 2,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.3035352,
+      "minutes": 1.27,
+      "turns": 9,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+        "instructions": "sha256:824950002eb0794b8353dc995334b935821e8c2b6fab5912029079435daad92c"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "W.h2.survey.3",
+      "label": "W",
+      "side": "v1",
+      "scenario": "h2",
+      "task": "survey",
+      "rep": 3,
+      "failure": null,
+      "pmA": 1,
+      "pmB": 0.9310344827586207,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 31,
+        "ok": 28,
+        "lineMismatch": 3,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.26990820000000004,
+      "minutes": 1.22,
+      "turns": 9,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+        "instructions": "sha256:824950002eb0794b8353dc995334b935821e8c2b6fab5912029079435daad92c"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "W.h2.survey.4",
+      "label": "W",
+      "side": "v1",
+      "scenario": "h2",
+      "task": "survey",
+      "rep": 4,
+      "failure": null,
+      "pmA": 1,
+      "pmB": 0.896551724137931,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 44,
+        "ok": 41,
+        "lineMismatch": 3,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.35297239999999996,
+      "minutes": 1.6,
+      "turns": 8,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+        "instructions": "sha256:824950002eb0794b8353dc995334b935821e8c2b6fab5912029079435daad92c"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "W.h2.survey.5",
+      "label": "W",
+      "side": "v1",
+      "scenario": "h2",
+      "task": "survey",
+      "rep": 5,
+      "failure": null,
+      "pmA": 2,
+      "pmB": 0.9310344827586207,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 39,
+        "ok": 30,
+        "lineMismatch": 9,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.3292922,
+      "minutes": 1.4,
+      "turns": 9,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+        "instructions": "sha256:824950002eb0794b8353dc995334b935821e8c2b6fab5912029079435daad92c"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "W.h2.trace-command.1",
+      "label": "W",
+      "side": "v1",
+      "scenario": "h2",
+      "task": "trace-command",
+      "rep": 1,
+      "failure": null,
+      "pmA": 1,
+      "pmB": 0.7777777777777778,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 67,
+        "ok": 59,
+        "lineMismatch": 8,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.4556534,
+      "minutes": 2.14,
+      "turns": 9,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:e09b5de11c3873cfd5c0afb38f51f1bafe4149b4e403f219fbc2fc88125c47b9",
+        "instructions": "sha256:379c937104a738be12f01795e932da0f12e4703aef1e7a29cf3d073903e05d69"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "W.h2.trace-command.2",
+      "label": "W",
+      "side": "v1",
+      "scenario": "h2",
+      "task": "trace-command",
+      "rep": 2,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 0.8888888888888888,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 78,
+        "ok": 70,
+        "lineMismatch": 8,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.7683431999999999,
+      "minutes": 3.96,
+      "turns": 8,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:e09b5de11c3873cfd5c0afb38f51f1bafe4149b4e403f219fbc2fc88125c47b9",
+        "instructions": "sha256:379c937104a738be12f01795e932da0f12e4703aef1e7a29cf3d073903e05d69"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "W.h2.trace-command.3",
+      "label": "W",
+      "side": "v1",
+      "scenario": "h2",
+      "task": "trace-command",
+      "rep": 3,
+      "failure": null,
+      "pmA": 1,
+      "pmB": 0.8888888888888888,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 66,
+        "ok": 62,
+        "lineMismatch": 4,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.6515328,
+      "minutes": 2.97,
+      "turns": 11,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:e09b5de11c3873cfd5c0afb38f51f1bafe4149b4e403f219fbc2fc88125c47b9",
+        "instructions": "sha256:379c937104a738be12f01795e932da0f12e4703aef1e7a29cf3d073903e05d69"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "W.h2.trace-command.4",
+      "label": "W",
+      "side": "v1",
+      "scenario": "h2",
+      "task": "trace-command",
+      "rep": 4,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 0.8888888888888888,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 60,
+        "ok": 49,
+        "lineMismatch": 11,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.3839962,
+      "minutes": 2,
+      "turns": 9,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:e09b5de11c3873cfd5c0afb38f51f1bafe4149b4e403f219fbc2fc88125c47b9",
+        "instructions": "sha256:379c937104a738be12f01795e932da0f12e4703aef1e7a29cf3d073903e05d69"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "W.h2.trace-command.5",
+      "label": "W",
+      "side": "v1",
+      "scenario": "h2",
+      "task": "trace-command",
+      "rep": 5,
+      "failure": null,
+      "pmA": 1,
+      "pmB": 0.7222222222222222,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 72,
+        "ok": 64,
+        "lineMismatch": 8,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.4315434,
+      "minutes": 2.15,
+      "turns": 9,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:e09b5de11c3873cfd5c0afb38f51f1bafe4149b4e403f219fbc2fc88125c47b9",
+        "instructions": "sha256:379c937104a738be12f01795e932da0f12e4703aef1e7a29cf3d073903e05d69"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "W.h2.trace-shared.1",
+      "label": "W",
+      "side": "v1",
+      "scenario": "h2",
+      "task": "trace-shared",
+      "rep": 1,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 0.9,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 83,
+        "ok": 31,
+        "lineMismatch": 52,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.5984212,
+      "minutes": 2.94,
+      "turns": 10,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:5fa164742df929ebf50e5c78782d216a8674b57dc9df627459b499d7664b1e31",
+        "instructions": "sha256:7333825c9ad9364224878cdea39d101c8574ade93a5121e9d5e157d48f01ff28"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "W.h2.trace-shared.2",
+      "label": "W",
+      "side": "v1",
+      "scenario": "h2",
+      "task": "trace-shared",
+      "rep": 2,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 1,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 70,
+        "ok": 67,
+        "lineMismatch": 2,
+        "fabricated": 1
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.4775816,
+      "minutes": 2.29,
+      "turns": 10,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:5fa164742df929ebf50e5c78782d216a8674b57dc9df627459b499d7664b1e31",
+        "instructions": "sha256:7333825c9ad9364224878cdea39d101c8574ade93a5121e9d5e157d48f01ff28"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "W.h2.trace-shared.3",
+      "label": "W",
+      "side": "v1",
+      "scenario": "h2",
+      "task": "trace-shared",
+      "rep": 3,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 0.9,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 63,
+        "ok": 36,
+        "lineMismatch": 27,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.37886000000000003,
+      "minutes": 2.09,
+      "turns": 9,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:5fa164742df929ebf50e5c78782d216a8674b57dc9df627459b499d7664b1e31",
+        "instructions": "sha256:7333825c9ad9364224878cdea39d101c8574ade93a5121e9d5e157d48f01ff28"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "W.h2.trace-shared.4",
+      "label": "W",
+      "side": "v1",
+      "scenario": "h2",
+      "task": "trace-shared",
+      "rep": 4,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 0.9,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 81,
+        "ok": 81,
+        "lineMismatch": 0,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.6059334,
+      "minutes": 3.18,
+      "turns": 13,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:5fa164742df929ebf50e5c78782d216a8674b57dc9df627459b499d7664b1e31",
+        "instructions": "sha256:7333825c9ad9364224878cdea39d101c8574ade93a5121e9d5e157d48f01ff28"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "W.h2.trace-shared.5",
+      "label": "W",
+      "side": "v1",
+      "scenario": "h2",
+      "task": "trace-shared",
+      "rep": 5,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 1,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 66,
+        "ok": 55,
+        "lineMismatch": 11,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.7675352,
+      "minutes": 3.31,
+      "turns": 13,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:5fa164742df929ebf50e5c78782d216a8674b57dc9df627459b499d7664b1e31",
+        "instructions": "sha256:7333825c9ad9364224878cdea39d101c8574ade93a5121e9d5e157d48f01ff28"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "W.h2.trace-timing.1",
+      "label": "W",
+      "side": "v1",
+      "scenario": "h2",
+      "task": "trace-timing",
+      "rep": 1,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 0.9285714285714286,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 95,
+        "ok": 94,
+        "lineMismatch": 1,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.5647584,
+      "minutes": 2.52,
+      "turns": 10,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:a33b91b274c21a1cb861b8f5e4a32e53f2ae162a090337519acb2678521d439c",
+        "instructions": "sha256:414c1655710bfa04443e5d0638bfac51290274b917e008233793a808d2afa750"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "W.h2.trace-timing.2",
+      "label": "W",
+      "side": "v1",
+      "scenario": "h2",
+      "task": "trace-timing",
+      "rep": 2,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 0.9285714285714286,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 114,
+        "ok": 106,
+        "lineMismatch": 8,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.6232260000000001,
+      "minutes": 2.85,
+      "turns": 11,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:a33b91b274c21a1cb861b8f5e4a32e53f2ae162a090337519acb2678521d439c",
+        "instructions": "sha256:414c1655710bfa04443e5d0638bfac51290274b917e008233793a808d2afa750"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "W.h2.trace-timing.3",
+      "label": "W",
+      "side": "v1",
+      "scenario": "h2",
+      "task": "trace-timing",
+      "rep": 3,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 0.9285714285714286,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 91,
+        "ok": 59,
+        "lineMismatch": 32,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.43331319999999995,
+      "minutes": 2.37,
+      "turns": 12,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:a33b91b274c21a1cb861b8f5e4a32e53f2ae162a090337519acb2678521d439c",
+        "instructions": "sha256:414c1655710bfa04443e5d0638bfac51290274b917e008233793a808d2afa750"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "W.h2.trace-timing.4",
+      "label": "W",
+      "side": "v1",
+      "scenario": "h2",
+      "task": "trace-timing",
+      "rep": 4,
+      "failure": null,
+      "pmA": 1,
+      "pmB": 0.9285714285714286,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 94,
+        "ok": 72,
+        "lineMismatch": 22,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.7296842000000001,
+      "minutes": 3.59,
+      "turns": 11,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:a33b91b274c21a1cb861b8f5e4a32e53f2ae162a090337519acb2678521d439c",
+        "instructions": "sha256:414c1655710bfa04443e5d0638bfac51290274b917e008233793a808d2afa750"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "W.h2.trace-timing.5",
+      "label": "W",
+      "side": "v1",
+      "scenario": "h2",
+      "task": "trace-timing",
+      "rep": 5,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 0.9285714285714286,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 95,
+        "ok": 75,
+        "lineMismatch": 20,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.545523,
+      "minutes": 2.66,
+      "turns": 13,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:a33b91b274c21a1cb861b8f5e4a32e53f2ae162a090337519acb2678521d439c",
+        "instructions": "sha256:414c1655710bfa04443e5d0638bfac51290274b917e008233793a808d2afa750"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "W.h2.trace-variant.1",
+      "label": "W",
+      "side": "v1",
+      "scenario": "h2",
+      "task": "trace-variant",
+      "rep": 1,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 0.9375,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 54,
+        "ok": 47,
+        "lineMismatch": 7,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.36477040000000005,
+      "minutes": 1.47,
+      "turns": 8,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:3cd5a7b592f046b65ffdf398f0a33bdc846d77817a3b8e498742eda4733dc900",
+        "instructions": "sha256:7f72d170f23df4264fecedee9ca1d1f0a2fa738d492a41ffcd8ef82739062947"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "W.h2.trace-variant.2",
+      "label": "W",
+      "side": "v1",
+      "scenario": "h2",
+      "task": "trace-variant",
+      "rep": 2,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 0.9375,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 44,
+        "ok": 42,
+        "lineMismatch": 2,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.291894,
+      "minutes": 1.36,
+      "turns": 9,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:3cd5a7b592f046b65ffdf398f0a33bdc846d77817a3b8e498742eda4733dc900",
+        "instructions": "sha256:7f72d170f23df4264fecedee9ca1d1f0a2fa738d492a41ffcd8ef82739062947"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "W.h2.trace-variant.3",
+      "label": "W",
+      "side": "v1",
+      "scenario": "h2",
+      "task": "trace-variant",
+      "rep": 3,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 0.9375,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 50,
+        "ok": 44,
+        "lineMismatch": 6,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.2736068,
+      "minutes": 1.28,
+      "turns": 9,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:3cd5a7b592f046b65ffdf398f0a33bdc846d77817a3b8e498742eda4733dc900",
+        "instructions": "sha256:7f72d170f23df4264fecedee9ca1d1f0a2fa738d492a41ffcd8ef82739062947"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "W.h2.trace-variant.4",
+      "label": "W",
+      "side": "v1",
+      "scenario": "h2",
+      "task": "trace-variant",
+      "rep": 4,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 0.9375,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 65,
+        "ok": 57,
+        "lineMismatch": 7,
+        "fabricated": 1
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.3475434,
+      "minutes": 1.78,
+      "turns": 10,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:3cd5a7b592f046b65ffdf398f0a33bdc846d77817a3b8e498742eda4733dc900",
+        "instructions": "sha256:7f72d170f23df4264fecedee9ca1d1f0a2fa738d492a41ffcd8ef82739062947"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "W.h2.trace-variant.5",
+      "label": "W",
+      "side": "v1",
+      "scenario": "h2",
+      "task": "trace-variant",
+      "rep": 5,
+      "failure": null,
+      "pmA": 0,
+      "pmB": 0.9375,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 50,
+        "ok": 44,
+        "lineMismatch": 6,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.2994542,
+      "minutes": 1.53,
+      "turns": 8,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:3cd5a7b592f046b65ffdf398f0a33bdc846d77817a3b8e498742eda4733dc900",
+        "instructions": "sha256:7f72d170f23df4264fecedee9ca1d1f0a2fa738d492a41ffcd8ef82739062947"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "WI.h2.survey.1",
+      "label": "WI",
+      "side": "v1",
+      "scenario": "h2",
+      "task": "survey",
+      "rep": 1,
+      "failure": null,
+      "pmA": 1,
+      "pmB": 0.8275862068965517,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 29,
+        "ok": 24,
+        "lineMismatch": 5,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.2568778,
+      "minutes": 1.15,
+      "turns": 8,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+        "instructions": "sha256:824950002eb0794b8353dc995334b935821e8c2b6fab5912029079435daad92c"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "WI.h2.survey.2",
+      "label": "WI",
+      "side": "v1",
+      "scenario": "h2",
+      "task": "survey",
+      "rep": 2,
+      "failure": null,
+      "pmA": 3,
+      "pmB": 0.896551724137931,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 39,
+        "ok": 33,
+        "lineMismatch": 6,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.285289,
+      "minutes": 1.39,
+      "turns": 9,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+        "instructions": "sha256:824950002eb0794b8353dc995334b935821e8c2b6fab5912029079435daad92c"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "WI.h2.survey.3",
+      "label": "WI",
+      "side": "v1",
+      "scenario": "h2",
+      "task": "survey",
+      "rep": 3,
+      "failure": null,
+      "pmA": 1,
+      "pmB": 0.9310344827586207,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 36,
+        "ok": 35,
+        "lineMismatch": 1,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.26982940000000005,
+      "minutes": 1.39,
+      "turns": 10,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+        "instructions": "sha256:824950002eb0794b8353dc995334b935821e8c2b6fab5912029079435daad92c"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "WI.h2.survey.4",
+      "label": "WI",
+      "side": "v1",
+      "scenario": "h2",
+      "task": "survey",
+      "rep": 4,
+      "failure": null,
+      "pmA": 1,
+      "pmB": 0.7241379310344828,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 32,
+        "ok": 24,
+        "lineMismatch": 8,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.2536904,
+      "minutes": 1.27,
+      "turns": 6,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+        "instructions": "sha256:824950002eb0794b8353dc995334b935821e8c2b6fab5912029079435daad92c"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    },
+    {
+      "id": "WI.h2.survey.5",
+      "label": "WI",
+      "side": "v1",
+      "scenario": "h2",
+      "task": "survey",
+      "rep": 5,
+      "failure": null,
+      "pmA": 3,
+      "pmB": 0.9310344827586207,
+      "violated": [],
+      "missed": [],
+      "softened": [],
+      "anchors": {
+        "total": 37,
+        "ok": 30,
+        "lineMismatch": 7,
+        "fabricated": 0
+      },
+      "gates": {
+        "leak": false,
+        "worktreeChanged": false
+      },
+      "costUsd": 0.5420886,
+      "minutes": 2.37,
+      "turns": 10,
+      "softDeadlineHit": false,
+      "hashes": {
+        "schema": "sha256:1fdcba72e8b04c3d8bcf6fbf972b4b0c5703c5943ab5efa6d36f4c89e4f41cfa",
+        "instructions": "sha256:824950002eb0794b8353dc995334b935821e8c2b6fab5912029079435daad92c"
+      },
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "claude": "2.1.295"
+    }
+  ]
+}

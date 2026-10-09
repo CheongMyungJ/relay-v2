@@ -23,7 +23,7 @@
 | `app/eval/extract/sides/<쪽>/`, `lib/sides.mjs`                                                              | 쪽의 지시 층. `base`는 최소 지시 판(결정 19), `v1`은 `skills/extract`의 지시 문구 그대로                                                                         |
 | `app/eval/extract/scenarios/<id>/`                                                                           | `repo/`(손으로 쓴 펌웨어), `scenario.json`(과제, 빌드와 단정), `packets/`(손으로 쓴 패킷), `truth.json`(정답), `reference/`(만점 결과와 판정 답), `traps/`(함정) |
 | `app/eval/extract/scenarios/<id>/records/`                                                                   | integrate·review·summarize의 손으로 쓴 기록(2절)                                                                                                                 |
-| `app/eval/seal.sh`, `unseal.sh`, `sealed/extract-h1.*`                                                       | 봉인 hold-out을 만들고 연다(7절)                                                                                                                                 |
+| `app/eval/seal.sh`, `unseal.sh`, `sealed/extract-h1.*`, `sealed/extract-h2.*`                                | 봉인 hold-out을 만들고 연다(7절)                                                                                                                                 |
 | `app/eval/test/extract.test.mjs`                                                                             | 모델 없이 도는 시험: reference 만점, 함정 검출, 채점 규칙, 가짜 claude로 하네스 끝까지                                                                           |
 | `app/test/contract/claude-run.ts`, `live-run.test.ts`, `fakes-run.test.ts`, `fixtures/claude-run.json`       | run의 [계약]과 녹화본, 가짜 run(`test/support/fake-claude/print-run.mjs`)                                                                                        |
 
@@ -53,7 +53,9 @@ integrate·review·summarize는 앞선 run들의 기록을 입력으로 받는�
 
 hold-out은 개발용과 다른 세션이 만들어 봉인했다(결정 22, AI 결정 64~68): `app/eval/sealed/extract-h1.tar.gz.enc`. 개발용과
 같은 다섯 과제와 패킷 틀, 구성 둘, 약 4.5천 줄이고 16.6절 점검표 밖의 함정 범주를 하나 이상 넣었다. 내용과 범주는 이
-레포에 적지 않는다(7절). 9차 작업에서 v3 확인에 한 번 써서 소진했다(17.9절). 다음 판의 확인에는 새 hold-out이 필요하다.
+레포에 적지 않는다(7절). 9차 작업에서 v3 확인에 한 번 써서 소진했다(17.9절). 14차 작업에서 다른 하위 에이전트가 새 hold-out
+`extract-h2`를 만들어 봉인했고(AI 결정 105) 같은 다섯 과제로 v4를 확인하는 데 한 번 써서 소진했다(17.13절, AI 결정 106).
+다음 판의 확인에는 새 hold-out이 필요하다.
 
 함정의 종류(정답 파일의 must_not, recall, resolvable): 구성 병합(`-D` 덮어쓰기, 강제 포함 헤더, 실행 중 등록),
 근거 없는 수치·단위 확정(데이터시트에만 있는 LSI·타이머 클럭·바쁜 대기), 관찰값·문서 주장의 보장화, 숨은 두 번째
@@ -172,6 +174,11 @@ PM-B −0.012 [−0.029, 0.004]로 채택했으나, 9차 작업의 봉인 hold-o
 PM-B 0.018 [−0.008, 0.044]로 규칙을 넘지 못해 채택 판에서 내렸다(17.9절, 보고서 `2026-10-09-v3-holdout.md`). 11차 작업의 v4 문구(v3 + 메모리 배치 점검표와
 앱 검사 목록 한 줄, 커밋 55b857f)는 개발용 10층에서 PM-A −0.300 [−0.420, −0.200], PM-B 0.008 [−0.008, 0.023]로 채택 조건을 넘었다(17.11절,
 보고서 `2026-10-09-v4-m5.md`). 사람이 hold-out 확인 없이 v4를 채택 판으로 정했다(17.11.1절, 결정 62의 hold-out 확인을 이 판에서 건너뜀).
+14차 작업에서 새 봉인 hold-out `extract-h2`로 확인했다(같은 때 회차 1~5, 5층): v4(W) − base(N)는 PM-A −0.240 [−0.520, 0.040],
+PM-B 0.000 [−0.026, 0.027], 제출 검사를 더한 WI − N은 PM-A −0.280 [−0.560, 0.000], PM-B −0.008 [−0.038, 0.022]로 둘 다 규칙을 넘지
+못했다. 쪽마다 run 25개(WI는 survey 5개)에 실패와 관문 위반은 0이고, WI의 제출 검사 되돌림은 run 하나에서 한 번이었다. 층별로는
+survey의 PM-A가 N 3.40, W 2.00, WI 1.80이고 trace 넷은 0.00~0.60이다. v4를 채택 판에서 내리고 잠정 기본값으로 둔다(AI 결정 106,
+보고서 `2026-10-09-v4-holdout.md`).
 
 integrate·review·summarize는 survey·trace의 채택과 따로 본다(AI 결정 127). base(한 문단 과제 설명 + L3)와 v1(L1 + 종류
 절차 + L3)을 같은 때에 쪽마다 회차 5로 돌리고, 6층(2 시나리오 × 3 과제)에 같은 규칙을 쓴다
@@ -195,10 +202,11 @@ integrate·review·summarize는 survey·trace의 채택과 따로 본다(AI 결�
 
 지침 판을 고른 뒤 같은 채택 규칙으로 한 번 확인하는 데만 쓴다(결정 62). 지침을 쓰거나 재는 세션은 열지도 보지도 않는다.
 
-| 이름(`sealed/<이름>.tar.gz.enc`) | 내용                                                                              | 푼 뒤의 자리                      |
-| -------------------------------- | --------------------------------------------------------------------------------- | --------------------------------- |
-| `holdout`                        | 지식 실험의 hold-out(E9에서 풀어 소진)                                            | `eval/scenarios/`, `eval/guides/` |
-| `extract-h1`                     | 요구사항 추출 run 평가의 hold-out 시나리오 하나(9차 작업에서 v3 확인에 써서 소진) | `eval/extract/scenarios/`         |
+| 이름(`sealed/<이름>.tar.gz.enc`) | 내용                                                                               | 푼 뒤의 자리                      |
+| -------------------------------- | ---------------------------------------------------------------------------------- | --------------------------------- |
+| `holdout`                        | 지식 실험의 hold-out(E9에서 풀어 소진)                                             | `eval/scenarios/`, `eval/guides/` |
+| `extract-h1`                     | 요구사항 추출 run 평가의 hold-out 시나리오 하나(9차 작업에서 v3 확인에 써서 소진)  | `eval/extract/scenarios/`         |
+| `extract-h2`                     | 요구사항 추출 run 평가의 hold-out 시나리오 하나(14차 작업에서 v4 확인에 써서 소진) | `eval/extract/scenarios/`         |
 
 푸는 법(`app/`에서, 열쇠는 사람이 확인을 시킬 때 준다):
 
