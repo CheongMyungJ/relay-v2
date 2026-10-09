@@ -7,6 +7,9 @@
 //   누출 카나리. worktree 불변과 스키마 통과는 하네스가 run 때 잰다(runner.mjs).
 // 판정 모델이 가르는 것: 정답 항목(det가 없는 recall)과 결과 주장의 정렬, 의미상 금지 주장(must_not), 코드로 풀 수
 //   있었는데 미확정으로 둔 것(resolvable). 통과 규칙은 여기 코드가 정한다: 모델이 가리킨 key가 결과에 있어야 한다.
+// run 종류(survey, trace, integrate, review, summarize)는 과제 id에서 짐작하지 않고 scenario.json의 kind를 받는다. 결정론
+//   규칙은 그 결과 칸이 있는 종류에서만 돈다(DET_KINDS, 결정 54). integrate·review·summarize의 결정론(AI 결정 127): 연결의
+//   종류와 양쪽, coverage 칸, 제안 단위, 값·구성 답, 서술 판정, 서술의 전역 ID.
 
 /** 결과의 경로를 레포 상대의 / 경로로 */
 export function normPath(p, repoRoot) {
@@ -217,8 +220,16 @@ export function checkQuantity(q, truth) {
   return { truth: t.id, errors: [...new Set(errors)], covers: [...covers].sort() }
 }
 
-/** 결과의 지역 key 모두 */
-export function outputKeys(out) {
+/** run 종류 */
+export const KINDS = ['survey', 'trace', 'integrate', 'review', 'summarize']
+
+function needKind(kind) {
+  if (!KINDS.includes(kind)) throw new Error(`run 종류를 줘야 한다(scenario.json의 kind): ${kind}`)
+  return kind
+}
+
+/** survey·trace 결과의 지역 key: 모든 객체의 key 칸(판정 캐시의 바이트와 함께 그대로 둔다) */
+function legacyKeys(out) {
   const keys = new Set()
   const walk = (v) => {
     if (Array.isArray(v)) v.forEach(walk)
@@ -231,44 +242,181 @@ export function outputKeys(out) {
   return keys
 }
 
+const one = (t) =>
+  String(t ?? '')
+    .replace(/\s+/g, ' ')
+    .trim()
+const cfgText = (c) => (c?.length ? ` [configs: ${c.join(', ')}]` : '')
+const idsText = (ids) => (ids?.length ? ` [ids: ${ids.join(', ')}]` : '')
+
+/**
+ * integrate·review·summarize 결과의 key가 붙은 주장 줄: [절, key, 글]. 판정 모델의 입력(claimLines)과 판정 답의 key 대조
+ * (outputKeys)가 이 하나를 써서 판정 모델이 본 key가 곧 인정하는 key다. coverage는 관점 ID, answers·verdicts는 질문·서술 키,
+ * summarize의 서술은 차례로 붙인 p1.., h1, r1..이 key다
+ */
+export function keyedView(out, kind) {
+  const rows = []
+  const push = (section, key, text) => rows.push([section, key, one(text)])
+  if (kind === 'integrate') {
+    for (const l of out.links ?? [])
+      push(
+        'link',
+        l.key,
+        `${l.kind} ${(l.from ?? []).join(', ')} -> ${(l.to ?? []).join(', ')}; reason: ${l.reason ?? ''}`,
+      )
+    for (const [p, cells] of Object.entries(out.coverage ?? {}))
+      for (const c of cells ?? [])
+        push(
+          'coverage',
+          p,
+          `${c.status}${cfgText(c.configs)}${idsText(c.ids)}${c.units?.length ? ` [units: ${c.units.join(', ')}]` : ''}; searches: ${(c.searches ?? []).length}${c.note ? `; note: ${c.note}` : ''}`,
+        )
+    for (const u of out.units ?? [])
+      push(
+        'unit',
+        u.key,
+        `[${u.lens}] ${u.purpose}; scope ${u.scope}; priority ${u.priority}; reason: ${u.reason ?? ''}`,
+      )
+  } else if (kind === 'review') {
+    for (const [q, a] of Object.entries(out.answers ?? {}))
+      push(
+        'answer',
+        q,
+        `${a.status}: ${a.text ?? ''}${a.values?.length ? `; values: ${a.values.map((v) => `${v.value}${cfgText(v.configs)}`).join('; ')}` : ''}${a.configs?.length ? `; configs: ${a.configs.join(', ')}` : ''}; anchors: ${(a.anchors ?? []).length}; searches: ${(a.searches ?? []).length}`,
+      )
+    for (const [k, v] of Object.entries(out.verdicts ?? {}))
+      push(
+        'verdict',
+        k,
+        `${v.verdict}; attempts: ${(v.attempts ?? []).join(' | ')}; counter anchors: ${(v.anchors ?? []).length}${v.note ? `; note: ${v.note}` : ''}`,
+      )
+  } else if (kind === 'summarize') {
+    ;(out.overview ?? []).forEach((p, i) =>
+      push('overview', `p${i + 1}`, `${p.text}${idsText(p.ids)}`),
+    )
+    if (out.handoff_summary)
+      push('handoff', 'h1', `${out.handoff_summary.text}${idsText(out.handoff_summary.ids)}`)
+    ;(out.risks ?? []).forEach((p, i) => push('risk', `r${i + 1}`, `${p.text}${idsText(p.ids)}`))
+  }
+  for (const u of out.unknowns ?? []) push('unknown', u.key, `${u.question} (needs ${u.needs})`)
+  for (const d of out.human_decisions ?? [])
+    push('human_decision', d.key, `[${d.trigger}] ${d.question}`)
+  return rows
+}
+
+/**
+ * 결과의 지역 key 모두(판정 답의 key 대조). survey·trace는 모든 객체의 key 칸이고, 새 종류는 keyedView의 key까지 더한다
+ * (coverage의 관점 ID, answers·verdicts의 키, summarize 서술의 p1·h1·r1)
+ */
+export function outputKeys(out, kind) {
+  needKind(kind)
+  const keys = legacyKeys(out)
+  if (kind === 'survey' || kind === 'trace') return keys
+  for (const [, key] of keyedView(out, kind)) if (typeof key === 'string') keys.add(key)
+  return keys
+}
+
 /** 정답 항목이 이 과제에 걸리는가 */
 const forTask = (item, task) => item.tasks.includes(task)
 
-/** 과제의 run 종류. 과제 id는 survey 또는 trace-<렌즈>다 */
-export const taskKind = (task) => (task.startsWith('survey') ? 'survey' : 'trace')
-
-const SURVEY_DET = [
-  'config',
-  'inventory',
-  'boundary',
-  'config_confirmed',
-  'inventory_kind',
-  'config_only',
-  'config_none',
-]
-
 /**
- * 결정론 규칙이 이 과제에서 돌 수 있는가. 인벤토리·구성·경계는 survey 결과에만, 수치·점검표는 trace 결과에만 있다.
- * 돌 수 없으면 그 항목은 판정 모델이 가른다(judgeItems)
+ * 결정론 규칙이 도는 종류(결정 54): 인벤토리·구성·경계는 survey 결과에만, 수치·점검표는 trace 결과에만, 연결·coverage·제안
+ * 단위는 integrate, 값·구성 답과 서술 판정은 review, 서술의 ID는 summarize 결과에만 있다. 패킷에 없는 ID는 전역 ID를 쓰는
+ * integrate와 summarize 둘이다. 다른 종류의 과제에 걸린 같은 항목은 판정 모델이 가른다(judgeItems)
  */
-export const detApplies = (item, task) =>
-  !!item.det &&
-  (Object.keys(item.det).some((k) => SURVEY_DET.includes(k)) ? 'survey' : 'trace') ===
-    taskKind(task)
+export const DET_KINDS = {
+  config: ['survey'],
+  inventory: ['survey'],
+  boundary: ['survey'],
+  config_confirmed: ['survey'],
+  inventory_kind: ['survey'],
+  config_only: ['survey'],
+  config_none: ['survey'],
+  quantity: ['trace'],
+  checklist_na: ['trace'],
+  link: ['integrate'],
+  link_forbid: ['integrate'],
+  coverage: ['integrate'],
+  unit: ['integrate'],
+  answer_value: ['review'],
+  answer_configs: ['review'],
+  verdict: ['review'],
+  verdict_forbid: ['review'],
+  cites: ['summarize'],
+  gid_unknown: ['integrate', 'summarize'],
+}
+
+/** det 칸의 규칙 이름(칸 하나) */
+export function detKey(det) {
+  const keys = Object.keys(det ?? {})
+  if (keys.length !== 1 || !DET_KINDS[keys[0]])
+    throw new Error(
+      `모르는 det: ${JSON.stringify(det)} (있는 것: ${Object.keys(DET_KINDS).join(', ')})`,
+    )
+  return keys[0]
+}
+
+/** 결정론 규칙이 이 종류의 결과에서 돌 수 있는가. 돌 수 없으면 그 항목은 판정 모델이 가른다(judgeItems) */
+export const detApplies = (item, kind) => !!item.det && DET_KINDS[detKey(item.det)].includes(kind)
+
+const overlap = (xs, ys) => (xs ?? []).some((x) => (ys ?? []).includes(x))
+
+/** 결과가 가리키는 전역 ID 모두: integrate의 links·coverage, summarize의 서술(규칙 global_refs와 같은 칸) */
+export function outputGids(out) {
+  const ids = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [])
+  return [
+    ...(out.links ?? []).flatMap((l) => [...ids(l.from), ...ids(l.to)]),
+    ...Object.values(out.coverage ?? {}).flatMap((cells) =>
+      (Array.isArray(cells) ? cells : []).flatMap((c) => ids(c.ids)),
+    ),
+    ...[
+      ...(out.overview ?? []),
+      ...(out.handoff_summary ? [out.handoff_summary] : []),
+      ...(out.risks ?? []),
+    ].flatMap((p) => ids(p?.ids)),
+  ]
+}
+
+/** coverage 칸이 그 상태의 요건을 채우는가: covered는 ids, not_applicable은 searches, unreached는 이 결과의 제안 단위 */
+function cellComplete(c, out) {
+  if (c.status === 'covered') return (c.ids?.length ?? 0) > 0
+  if (c.status === 'not_applicable') return (c.searches?.length ?? 0) > 0
+  if (c.status === 'unreached') {
+    const keys = new Set((out.units ?? []).map((u) => u.key))
+    return (c.units?.length ?? 0) > 0 && c.units.every((k) => keys.has(k))
+  }
+  return true
+}
+
+/** review 답의 값을 정답 수치에 견준다(checkQuantity를 그대로 쓴다: 값 글의 (수, 단위) 후보, 병합, 틀린 값) */
+export function checkAnswerValue(answer, quantityId, truth) {
+  const t = truth.quantities.find((x) => x.id === quantityId)
+  if (!t) throw new Error(`정답에 수치 ${quantityId}가 없음`)
+  if (answer?.status !== 'answered') return { truth: t.id, errors: [], covers: [] }
+  return checkQuantity(
+    { symbol: t.symbols[0], expr: '', unit: '', unit_status: '', values: answer.values ?? [] },
+    truth,
+  )
+}
 
 /**
- * 결정론 채점. recall은 det가 있는 항목만, must_not은 det가 있는 항목과 수치 오류를 낸다.
+ * 결정론 채점. recall은 이 종류에서 det가 도는 항목만, must_not은 det가 도는 항목과 수치 오류(trace의 quantities, review의
+ * 값 답)를 낸다.
  * @param {object} out 구조화 출력
  * @param {object} truth 정답 파일
  * @param {string} task 과제 id
+ * @param {string} kind run 종류(scenario.json)
+ * @param {{ ids?: string[] }} [ctx] ids: 패킷(integrate는 기록 목록까지)이 준 전역 ID. det gid_unknown이 쓴다
  */
-export function detScore(out, truth, task) {
+export function detScore(out, truth, task, kind, ctx = {}) {
+  needKind(kind)
   const recall = {}
   const violated = new Set()
   const quantities = (out.quantities ?? []).map((q) => ({ key: q.key, ...checkQuantity(q, truth) }))
   for (const q of quantities) for (const e of q.errors) violated.add(e)
+  const answers = {}
 
-  for (const item of truth.recall.filter((r) => forTask(r, task) && detApplies(r, task))) {
+  for (const item of truth.recall.filter((r) => forTask(r, task) && detApplies(r, kind))) {
     const d = item.det
     let found = false
     if (d.config)
@@ -293,11 +441,70 @@ export function detScore(out, truth, task) {
     } else if (d.checklist_na) {
       const c = out.checklist?.[d.checklist_na]
       found = c?.status === 'not_applicable' && (c.searches?.length ?? 0) > 0
+    } else if (d.link) {
+      // 같은 종류에 양쪽이 겹치면 찾음. conflicts는 방향이 없고, swap을 주면 다른 종류도 뒤집힌 방향을 받는다
+      const L = d.link
+      const swap = L.swap ?? L.kind === 'conflicts'
+      found = (out.links ?? []).some(
+        (l) =>
+          l.kind === L.kind &&
+          ((overlap(l.from, L.from) && overlap(l.to, L.to)) ||
+            (swap && overlap(l.to, L.from) && overlap(l.from, L.to))),
+      )
+    } else if (d.coverage) {
+      // 그 관점에서 상태가 맞고 요건(ids, searches, 제안 단위)을 채운 칸들의 구성이 정답 구성을 모두 덮으면 찾음
+      const C = d.coverage
+      const got = new Set(
+        (out.coverage?.[C.perspective] ?? [])
+          .filter((c) => C.status.includes(c.status) && cellComplete(c, out))
+          .flatMap((c) => expandConfigs(c.configs, truth)),
+      )
+      found = C.configs.every((c) => got.has(c))
+    } else if (d.unit) {
+      const U = d.unit
+      found = (out.units ?? []).some(
+        (u) =>
+          (!U.lens || u.lens === U.lens) &&
+          U.tokens.some((tok) => nameHas(`${u.scope ?? ''} ${u.purpose ?? ''}`, tok)),
+      )
+    } else if (d.answer_value) {
+      const A = d.answer_value
+      const t = truth.quantities.find((x) => x.id === A.quantity)
+      const r = checkAnswerValue(out.answers?.[A.question], A.quantity, truth)
+      answers[A.question] = r
+      for (const e of r.errors) violated.add(e)
+      const need = Object.keys(t?.per_config ?? {})
+      found =
+        out.answers?.[A.question]?.status === 'answered' &&
+        r.errors.length === 0 &&
+        need.every((c) => r.covers.includes(c))
+    } else if (d.answer_configs) {
+      const A = d.answer_configs
+      const a = out.answers?.[A.question]
+      const got = expandConfigs(a?.configs, truth)
+      found = a?.status === 'answered' && got.join(',') === [...A.configs].sort().join(',')
+    } else if (d.verdict) {
+      found = d.verdict.accept.includes(out.verdicts?.[d.verdict.statement]?.verdict)
+    } else if (d.cites) {
+      // 그 자리(risks, overview, handoff, any)의 서술이 가리킨 ID에 정답 ID가 모두(any면 하나라도) 있으면 찾음
+      const W = d.cites.where ?? 'any'
+      const paras =
+        W === 'risks'
+          ? (out.risks ?? [])
+          : W === 'overview'
+            ? (out.overview ?? [])
+            : W === 'handoff'
+              ? [out.handoff_summary].filter(Boolean)
+              : [...(out.overview ?? []), out.handoff_summary, ...(out.risks ?? [])].filter(Boolean)
+      const cited = new Set(paras.flatMap((p) => p.ids ?? []))
+      found = d.cites.any
+        ? d.cites.ids.some((x) => cited.has(x))
+        : d.cites.ids.every((x) => cited.has(x))
     }
     recall[item.id] = found
   }
 
-  for (const m of truth.must_not.filter((x) => forTask(x, task) && detApplies(x, task))) {
+  for (const m of truth.must_not.filter((x) => forTask(x, task) && detApplies(x, kind))) {
     const d = m.det
     if (d.config_confirmed) {
       if (
@@ -324,13 +531,46 @@ export function detScore(out, truth, task) {
           expandConfigs(i.configs, truth).length > 0,
       )
       if (bad) violated.add(m.id)
+    } else if (d.link_forbid) {
+      // 금지한 연결: kind가 없으면 어느 종류든. to가 없으면 from에서 나가는 어느 연결이든. merges·conflicts와 종류 없음은
+      // 방향을 보지 않는다(구성이 다른 두 주장을 어느 쪽으로 합쳐도 위반)
+      const F = d.link_forbid
+      const undirected = !F.kind || F.kind === 'merges' || F.kind === 'conflicts'
+      const hit = (from, to) => overlap(from, F.from) && (!F.to || overlap(to, F.to))
+      const bad = (out.links ?? []).some(
+        (l) =>
+          (!F.kind || l.kind === F.kind) &&
+          (hit(l.from, l.to) || (undirected && hit(l.to, l.from))),
+      )
+      if (bad) violated.add(m.id)
+    } else if (d.verdict_forbid) {
+      if (d.verdict_forbid.forbid.includes(out.verdicts?.[d.verdict_forbid.statement]?.verdict))
+        violated.add(m.id)
+    } else if (d.gid_unknown) {
+      if (!ctx.ids)
+        throw new Error(`${m.id}: det gid_unknown에는 패킷의 전역 ID(ctx.ids)가 있어야 한다`)
+      const known = new Set(ctx.ids)
+      if (outputGids(out).some((g) => !known.has(g))) violated.add(m.id)
     }
   }
-  return { recall, violated: [...violated].sort(), quantities }
+  return { recall, violated: [...violated].sort(), quantities, answers }
 }
 
-/** 판정 모델에 보일 결과 주장. key와 글만 남기고 앵커는 뺀다 */
-export function claimLines(out) {
+/**
+ * 판정 모델에 보일 결과 주장. key와 글만 남기고 앵커는 뺀다. survey·trace의 줄은 판정 캐시의 입력 해시와 함께 바이트를 그대로
+ * 두고(legacyLines), 새 종류는 keyedView의 줄이다
+ */
+export function claimLines(out, kind) {
+  needKind(kind)
+  if (kind === 'survey' || kind === 'trace') return legacyLines(out)
+  return [
+    ...(out.outcome ? [`outcome: ${out.outcome} - ${out.outcome_reason ?? ''}`] : []),
+    ...keyedView(out, kind).map(([section, key, text]) => `${section} ${key}: ${text}`),
+  ]
+}
+
+/** survey·trace 결과의 주장 줄 */
+function legacyLines(out) {
   const lines = []
   const cfg = (c) => (c?.length ? ` [configs: ${c.join(', ')}]` : '')
   const push = (section, key, text) =>
@@ -427,6 +667,7 @@ export const JUDGE_SCHEMA = {
   },
 }
 
+/** survey·trace의 판정 지시. 바이트가 판정 캐시의 입력 해시에 들어가므로 고치지 않는다(고치면 기준선을 모두 다시 판정) */
 export const JUDGE_SYSTEM = [
   'You grade the output of a firmware analysis run against a hidden answer key.',
   'You get the run output as claim lines ("<section> <key>: <text>") and three item lists. Judge only from the claim lines.',
@@ -436,14 +677,49 @@ export const JUDGE_SYSTEM = [
   'Answer every item id exactly once. keys are bare keys such as o1 or q2 (without the section word) and must appear in the claim lines. For items that are not violated, quote is an empty string and hedged is false.',
 ].join('\n')
 
-/** 판정에 넘길 항목: 이 과제에서 결정론 규칙이 도는 recall과 must_not은 뺀다(결정론이 가른다) */
-export function judgeItems(truth, task) {
+/** 새 종류의 판정 지시(AI 결정 127). 통과 규칙(key 대조, 유보, 판정 불가)은 survey·trace와 같고 결과의 모양과 key만 다르다 */
+export const JUDGE_SYSTEMS = {
+  integrate: [
+    'You grade the output of an integrate run against a hidden answer key. The run read the record of earlier firmware analysis runs (claims c-NNNN, units u-NNNN, human decisions h-NNNN), linked records by these global IDs (resolves, supersedes, merges, conflicts), judged the coverage of each perspective per configuration, and proposed new analysis units.',
+    'You get the run output as claim lines ("<section> <key>: <text>") and three item lists. Judge only from the claim lines.',
+    'recall: found if one or more lines state the main point of the item, in any language and wording. Text in parentheses in an item gives examples or details; they need not all appear. A line that states something weaker, vaguer or different is not found. Give the keys.',
+    'must_not: violated only if a line (a link reason, a coverage note, a unit, an unknown) asserts, as settled, what the item forbids. Copy the shortest violating sentence into quote. Set hedged to true if that line marks the point as partial, assumed, a document or comment claim, a candidate, or needing external material, a measurement or a person. A line that states the opposite is not a violation. If unsure, violated is false.',
+    'resolvable: left_unknown only if the run left that point open (an unknown, a coverage cell left unknown, or "could not determine") although the record answers it. Give the keys of those lines.',
+    'Answer every item id exactly once. keys are bare keys such as l1, n1 or k1, or a perspective id such as lifecycle (without the section word), and must appear in the claim lines. For items that are not violated, quote is an empty string and hedged is false.',
+  ].join('\n'),
+  review: [
+    'You grade the output of a review run against a hidden answer key. The run answered blind questions about a firmware repository (answers q1, q2, ...) and tried to refute statements that earlier runs made (verdicts s1, s2, ...: refuted, overclaimed, needs_more or not_refuted).',
+    'You get the run output as claim lines ("<section> <key>: <text>") and three item lists. Judge only from the claim lines.',
+    'recall: found if one or more lines state the main point of the item, in any language and wording. Text in parentheses in an item gives examples or details; they need not all appear. A line that states something weaker, vaguer or different is not found. Give the keys.',
+    'must_not: violated only if a line asserts, as settled fact, what the item forbids. Copy the shortest violating sentence into quote. Set hedged to true if that line marks the point as nominal, assumed, a document or comment claim, an observation, or needing external material. A line that states the opposite is not a violation. If unsure, violated is false.',
+    'resolvable: left_unknown only if the run left that point unresolved (an answer with status unknown, a needs_more verdict, an unknown, or "could not determine") instead of answering it. Give the keys.',
+    'Answer every item id exactly once. keys are bare keys such as q1 or s2 (without the section word) and must appear in the claim lines. For items that are not violated, quote is an empty string and hedged is false.',
+  ].join('\n'),
+  summarize: [
+    'You grade the output of a summarize run against a hidden answer key. The run read a packet that lists the record of a firmware analysis (units u-NNNN and their states, claims c-NNNN, reviews, links, coverage gaps) and wrote overview paragraphs (p1, p2, ...), a handoff summary (h1) and risks (r1, r2, ...), each with the global IDs it speaks about.',
+    'You get the run output as claim lines ("<section> <key>: <text>") and three item lists. Judge only from the claim lines.',
+    'recall: found if one or more lines state the main point of the item, in any language and wording. Text in parentheses in an item gives examples or details; they need not all appear. A line that states something weaker, vaguer or different is not found. Give the keys.',
+    'must_not: violated only if a line asserts what the item forbids. Copy the shortest violating sentence into quote. Set hedged to true if that line marks the point as a candidate, unconfirmed, unreviewed, not refuted by a review, lowered by a review, or needing external material. A line that states the opposite is not a violation. If unsure, violated is false.',
+    'resolvable: left_unknown only if the run left that point open although the packet settles it. Give the keys.',
+    'Answer every item id exactly once. keys are bare keys such as p1, h1 or r2 (without the section word) and must appear in the claim lines. For items that are not violated, quote is an empty string and hedged is false.',
+  ].join('\n'),
+}
+
+/** 종류의 판정 지시: survey·trace는 JUDGE_SYSTEM 그대로(판정 캐시가 이어진다) */
+export function judgeSystem(kind) {
+  needKind(kind)
+  return JUDGE_SYSTEMS[kind] ?? JUDGE_SYSTEM
+}
+
+/** 판정에 넘길 항목: 이 종류에서 결정론 규칙이 도는 recall과 must_not은 뺀다(결정론이 가른다) */
+export function judgeItems(truth, task, kind) {
+  needKind(kind)
   return {
     recall: truth.recall
-      .filter((r) => forTask(r, task) && !detApplies(r, task))
+      .filter((r) => forTask(r, task) && !detApplies(r, kind))
       .map((r) => ({ id: r.id, statement: r.statement })),
     must_not: truth.must_not
-      .filter((m) => forTask(m, task) && !detApplies(m, task))
+      .filter((m) => forTask(m, task) && !detApplies(m, kind))
       .map((m) => ({ id: m.id, statement: m.statement })),
     resolvable: truth.resolvable
       .filter((r) => forTask(r, task))
@@ -452,13 +728,13 @@ export function judgeItems(truth, task) {
 }
 
 /** 판정 모델의 입력. 정답은 이 프롬프트에만 있고 run에는 가지 않는다 */
-export function judgePrompt(out, truth, task) {
-  const items = judgeItems(truth, task)
+export function judgePrompt(out, truth, task, kind) {
+  const items = judgeItems(truth, task, kind)
   const list = (xs) => xs.map((x) => `- ${x.id}: ${x.statement}`).join('\n') || '(none)'
   return [
     '# Run output (claim lines)',
     '',
-    ...claimLines(out),
+    ...claimLines(out, kind),
     '',
     '# recall items',
     list(items.recall),
@@ -476,9 +752,9 @@ export function judgePrompt(out, truth, task) {
  * 판정 모델의 답을 규칙으로 읽는다: 모르는 id는 버리고, 답이 없는 id는 판정 불가(null), 가리킨 key가 결과에 없으면
  * 인정하지 않는다
  */
-export function applyJudge(answer, out, truth, task) {
-  const items = judgeItems(truth, task)
-  const keys = outputKeys(out)
+export function applyJudge(answer, out, truth, task, kind) {
+  const items = judgeItems(truth, task, kind)
+  const keys = outputKeys(out, kind)
   // 판정 모델은 key 앞에 절 이름을 붙이기도 한다("unknown u1"). 마지막 낱말을 key로 본다
   const valid = (ks) => (ks ?? []).some((k) => keys.has(String(k).trim().split(/\s+/).pop()))
   const pick = (list, id) => (answer?.[list] ?? []).find((x) => x.id === id)
@@ -505,13 +781,13 @@ export function applyJudge(answer, out, truth, task) {
 
 /**
  * run 하나의 점수. det와 judge를 합친다. 판정 불가(null)인 recall 항목은 분모에서 뺀다(issue-judge와 같음)
- * @param {{ out: object, truth: object, task: string, anchors: object[], judge: object | null, leak: boolean,
- *   worktreeChanged: boolean }} o
+ * @param {{ out: object, truth: object, task: string, kind: string, anchors: object[], judge: object | null,
+ *   leak: boolean, worktreeChanged: boolean, ids?: string[] }} o kind: scenario.json의 run 종류. ids: 패킷이 준 전역 ID
  */
 export function scoreRun(o) {
-  const det = detScore(o.out, o.truth, o.task)
+  const det = detScore(o.out, o.truth, o.task, o.kind, { ids: o.ids })
   const j = o.judge
-    ? applyJudge(o.judge, o.out, o.truth, o.task)
+    ? applyJudge(o.judge, o.out, o.truth, o.task, o.kind)
     : { recall: {}, violated: [], undecided: [], softened: [] }
   const recall = { ...j.recall, ...det.recall }
   const decided = Object.values(recall).filter((v) => v !== null)

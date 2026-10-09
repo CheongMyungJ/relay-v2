@@ -1,0 +1,24 @@
+{
+  "task": "summarize",
+  "describe": "경보 지연을 정확히 5 s로 확정한다(판정)",
+  "ops": [
+    {
+      "op": "set",
+      "path": "risks.2.text",
+      "value": "g_ms는 정확히 1 ms라 경보 지연은 5 s로 보장된다."
+    }
+  ],
+  "judge": {
+    "must_not": {
+      "m.sum.timebase": {
+        "violated": true,
+        "keys": ["r3"],
+        "quote": "경보 지연은 5 s로 보장된다",
+        "hedged": false
+      }
+    }
+  },
+  "expect": {
+    "violated": ["m.sum.timebase"]
+  }
+}

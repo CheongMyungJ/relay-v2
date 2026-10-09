@@ -1,0 +1,14 @@
+{
+  "task": "review",
+  "describe": "반박 앵커의 인용이 파일에 없다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "verdicts.s1.anchors.0.quote",
+      "value": "g_setpoint_dc = 0U;"
+    }
+  ],
+  "expect": {
+    "fabricated": 1
+  }
+}

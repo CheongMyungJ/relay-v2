@@ -1,0 +1,16 @@
+{
+  "task": "integrate",
+  "describe": "판정 모델이 결과에 없는 key를 가리킨다",
+  "ops": [],
+  "judge": {
+    "recall": {
+      "r.int.conflict_side": {
+        "found": true,
+        "keys": ["l99"]
+      }
+    }
+  },
+  "expect": {
+    "missed": ["r.int.conflict_side"]
+  }
+}

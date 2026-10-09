@@ -1,0 +1,14 @@
+{
+  "task": "review",
+  "describe": "SET_FAN이 모든 구성에 있다고 답한다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "answers.q3.configs",
+      "value": ["all"]
+    }
+  ],
+  "expect": {
+    "missed": ["r.rev.fan_cfg"]
+  }
+}

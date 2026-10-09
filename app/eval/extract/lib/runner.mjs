@@ -6,6 +6,8 @@
 // 하드 상한이 지나면 프로세스 트리를 끝내고 실패로 친다.
 // 제출 검사(결정 13·45의 1번 길, AI 결정 88): o.buildIndex(구성별 빌드 인덱스)가 있으면 StructuredOutput을 PreToolUse에서
 // 규칙 config_active로 검사해 걸리면 이유와 함께 거부한다. 되돌림은 2회까지이고 그 뒤의 제출은 그대로 받아 남은 문제를 기록한다.
+// integrate·review·summarize의 패킷은 시나리오의 기록으로 run 때 만든다(tasks.mjs, AI 결정 109, 127). integrate의 기록 목록은
+// run의 작업 폴더(레포와 scratch 옆)에 쓰고 그 절대 경로를 패킷에 넣는다. 결과 폴더에도 사본(listing.md)을 남긴다.
 import { execFileSync, spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
@@ -18,6 +20,9 @@ import { runArgs } from '../../../../skills/extract/run.mjs'
 import { cleanEnv } from '../../lib/env.mjs'
 import { copyTree } from '../../lib/util.mjs'
 import { buildSide } from './sides.mjs'
+import { renderTask } from './tasks.mjs'
+
+export { renderPacket } from './tasks.mjs'
 
 const TOKEN_ENV = 'RELAY_HOOK_TOKEN'
 const SUBMIT_RULES = ['config_active']
@@ -33,6 +38,11 @@ const HOOK_EVENTS = [
 ]
 export const SOFT_REASON =
   'relay: the soft deadline for this run has passed. Do not explore further. Submit the structured output now: set outcome to incomplete, report what you confirmed, and fill checkpoint with what you checked, what remains and where to look next.'
+/** summarize 결과에는 outcome과 checkpoint가 없다 */
+export const SOFT_REASON_SUMMARIZE =
+  'relay: the soft deadline for this run has passed. Do not explore further. Submit the structured output now with what you have written.'
+/** 부드러운 마감의 거부 이유(종류마다 결과 칸이 다르다) */
+export const softReason = (kind) => (kind === 'summarize' ? SOFT_REASON_SUMMARIZE : SOFT_REASON)
 /** 제출 검사에 걸렸을 때의 이유(결정 13: 지적된 것만 고치고 다른 판단은 바꾸지 않는다) */
 export function submitReason(problems) {
   return [
@@ -81,10 +91,6 @@ export function worktreeChanged(dir, base) {
   const head = git('rev-parse', 'HEAD').trim()
   const status = git('status', '--porcelain', '--untracked-files=all', '--ignored').trim()
   return head !== base || status !== ''
-}
-
-export function renderPacket(template, vars) {
-  return template.replace(/\{(repo|base|scratch)\}/g, (_, k) => vars[k])
 }
 
 function ruleAbs(p) {
@@ -145,16 +151,25 @@ export async function runOne(o) {
   fs.mkdirSync(scratch, { recursive: true })
   const base = prepareRepo(path.join(o.scenarioDir, 'repo'), wt)
 
-  const built = buildSide(o.side, o.task.kind, o.task.lens ?? null)
-  const instructionsPath = path.join(dir, 'instructions.md')
-  fs.writeFileSync(instructionsPath, built.instructions)
-  fs.writeFileSync(path.join(dir, 'schema.json'), built.schemaArg)
-  const packet = renderPacket(fs.readFileSync(path.join(o.scenarioDir, o.task.packet), 'utf8'), {
+  const listingPath = o.task.kind === 'integrate' ? path.join(work, 'listing.md') : null
+  const input = renderTask(o.scenarioDir, o.task, {
     repo: wt,
     base,
     scratch,
+    soft: o.softMs / 60_000,
+    hard: o.hardMs / 60_000,
+    listing: listingPath,
   })
+  const built = buildSide(o.side, o.task.kind, o.task.lens ?? null, input.more)
+  const instructionsPath = path.join(dir, 'instructions.md')
+  fs.writeFileSync(instructionsPath, built.instructions)
+  fs.writeFileSync(path.join(dir, 'schema.json'), built.schemaArg)
+  const packet = input.packet
   fs.writeFileSync(path.join(dir, 'packet.md'), packet)
+  if (input.listing !== null) {
+    fs.writeFileSync(listingPath, input.listing)
+    fs.writeFileSync(path.join(dir, 'listing.md'), input.listing)
+  }
 
   const started = Date.now()
   const hooks = []
@@ -197,7 +212,7 @@ export async function runOne(o) {
           hookSpecificOutput: {
             hookEventName: 'PreToolUse',
             permissionDecision: 'deny',
-            permissionDecisionReason: SOFT_REASON,
+            permissionDecisionReason: softReason(o.task.kind),
           },
         }
       }
@@ -227,7 +242,16 @@ export async function runOne(o) {
       {
         hooks: Object.fromEntries(HOOK_EVENTS.map((e) => [e, hook(e)])),
         autoMemoryEnabled: false,
-        permissions: { deny: [`Write(${ruleAbs(wt)}/**)`, `Edit(${ruleAbs(wt)}/**)`] },
+        permissions: {
+          deny: [
+            `Write(${ruleAbs(wt)}/**)`,
+            `Edit(${ruleAbs(wt)}/**)`,
+            // 기록 목록은 읽기 전용이다(AI 결정 109)
+            ...(listingPath
+              ? [`Write(${ruleAbs(listingPath)})`, `Edit(${ruleAbs(listingPath)})`]
+              : []),
+          ],
+        },
       },
       null,
       2,

@@ -1,0 +1,14 @@
+{
+  "task": "integrate",
+  "describe": "unreached 칸이 결과에 없는 단위를 가리킨다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "coverage.commands.1.units",
+      "value": ["n9"]
+    }
+  ],
+  "expect": {
+    "missed": ["r.int.cov_commands"]
+  }
+}

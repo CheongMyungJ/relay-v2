@@ -1,0 +1,30 @@
+{
+  "task": "review",
+  "describe": "코드로 정해지는 값 질문을 unknown으로 둔다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "answers.q1",
+      "value": {
+        "status": "unknown",
+        "text": "재시도 수는 보드마다 다를 수 있어 정하지 못했다",
+        "values": [],
+        "configs": [],
+        "anchors": [],
+        "searches": []
+      }
+    }
+  ],
+  "judge": {
+    "resolvable": {
+      "v.rev.retry": {
+        "left_unknown": true,
+        "keys": ["q1"]
+      }
+    }
+  },
+  "expect": {
+    "missed": ["r.rev.retry"],
+    "softened": ["v.rev.retry"]
+  }
+}

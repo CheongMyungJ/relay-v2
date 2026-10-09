@@ -1,0 +1,15 @@
+{
+  "task": "review",
+  "describe": "beta의 틱을 틀리게 답한다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "answers.q2.values.1.value",
+      "value": "1000 Hz"
+    }
+  ],
+  "expect": {
+    "violated": ["m.q.q.tick.value"],
+    "missed": ["r.rev.tick"]
+  }
+}

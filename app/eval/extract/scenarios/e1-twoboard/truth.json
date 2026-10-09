@@ -353,6 +353,260 @@
         "checklist_na": "dma_ownership"
       },
       "statement": "DMA는 쓰지 않는다(dma_ownership 해당 없음)"
+    },
+    {
+      "id": "r.int.resolves_frame",
+      "tasks": ["integrate"],
+      "det": {
+        "link": {
+          "kind": "resolves",
+          "from": ["c-0034"],
+          "to": ["c-0043", "c-0070"]
+        }
+      },
+      "statement": "trace-command의 미확정 c-0034(바이트 간 시간 초과의 ms 값)를 뒤 trace-timing의 수치 c-0043(alpha 20틱 = 약 20 ms, beta 5틱 = 약 50 ms)가 푼다(resolves)"
+    },
+    {
+      "id": "r.int.supersedes_frame",
+      "tasks": ["integrate"],
+      "det": {
+        "link": {
+          "kind": "supersedes",
+          "from": ["c-0036"],
+          "to": ["c-0043"]
+        }
+      },
+      "statement": "같은 timing 단위를 이어 돈 run의 수치 c-0043(beta 5틱 = 약 50 ms)가 앞 run의 수치 c-0036(beta 20틱 = 200 ms)를 대신한다(supersedes)"
+    },
+    {
+      "id": "r.int.merge_timeout",
+      "tasks": ["integrate"],
+      "det": {
+        "link": {
+          "kind": "merges",
+          "from": ["c-0028", "c-0038"],
+          "to": ["c-0028", "c-0038"]
+        }
+      },
+      "statement": "c-0028와 c-0038(바이트 사이가 시간 초과를 넘으면 부분 프레임을 버린다)는 같은 구성(alpha, beta)의 같은 말이라 합친다(merges)"
+    },
+    {
+      "id": "r.int.conflict_writer",
+      "tasks": ["integrate"],
+      "det": {
+        "link": {
+          "kind": "conflicts",
+          "from": ["c-0061"],
+          "to": ["c-0030"]
+        }
+      },
+      "statement": "c-0061(g_setpoint_dc를 SET_SETPOINT 처리기 밖에서 쓰지 않는다)와 c-0030(ee_load와 restore_defaults도 쓴다)는 함께 설 수 없다(conflicts)"
+    },
+    {
+      "id": "r.int.conflict_side",
+      "tasks": ["integrate"],
+      "statement": "c-0061와 c-0030의 충돌 연결 이유가 코드는 다른 쓰기가 있다는 쪽(ee_load, restore_defaults)을 지지한다고 밝힌다"
+    },
+    {
+      "id": "r.int.cov_lifecycle",
+      "tasks": ["integrate"],
+      "det": {
+        "coverage": {
+          "perspective": "lifecycle",
+          "configs": ["alpha", "beta"],
+          "status": ["unreached"]
+        }
+      },
+      "statement": "lifecycle 관점(리셋 처리기, 시작 순서, 부팅 때 불러오기, 워치독 시작)은 두 구성 모두 어느 단위도 닿지 않았다(unreached, 제안 단위)"
+    },
+    {
+      "id": "r.int.unit_startup",
+      "tasks": ["integrate"],
+      "det": {
+        "unit": {
+          "lens": "lifecycle",
+          "tokens": [
+            "Reset_Handler",
+            "startup_acme",
+            "startup",
+            "start-up",
+            "main.c",
+            "시작",
+            "부팅",
+            "boot",
+            "ee_load",
+            "wdt_init"
+          ]
+        }
+      },
+      "statement": "Reset_Handler부터 main의 초기화 순서(ee_load, fault_handle_boot, wdt_init)를 추적할 lifecycle 단위를 제안한다"
+    },
+    {
+      "id": "r.int.cov_concurrency",
+      "tasks": ["integrate"],
+      "det": {
+        "coverage": {
+          "perspective": "concurrency",
+          "configs": ["alpha", "beta"],
+          "status": ["covered"]
+        }
+      },
+      "statement": "concurrency 관점은 두 구성 모두 trace-shared의 주장이 덮는다(covered, ids)"
+    },
+    {
+      "id": "r.rev.retry",
+      "tasks": ["review"],
+      "det": {
+        "answer_value": {
+          "question": "q1",
+          "quantity": "q.retry"
+        }
+      },
+      "statement": "q1(CFG_EE_RETRY_MAX)의 답: alpha 3, beta 5"
+    },
+    {
+      "id": "r.rev.tick",
+      "tasks": ["review"],
+      "det": {
+        "answer_value": {
+          "question": "q2",
+          "quantity": "q.tick"
+        }
+      },
+      "statement": "q2(CFG_TICK_HZ)의 답: alpha 1000 Hz, beta 100 Hz"
+    },
+    {
+      "id": "r.rev.fan_cfg",
+      "tasks": ["review"],
+      "det": {
+        "answer_configs": {
+          "question": "q3",
+          "configs": ["beta"]
+        }
+      },
+      "statement": "q3(SET_FAN이 빌드되고 닿는 구성)의 답: beta만"
+    },
+    {
+      "id": "r.rev.writer",
+      "tasks": ["review"],
+      "det": {
+        "verdict": {
+          "statement": "s1",
+          "accept": ["refuted", "overclaimed"]
+        }
+      },
+      "statement": "s1(g_setpoint_dc를 SET_SETPOINT 처리기 밖에서 쓰는 곳이 없다)을 반박한다"
+    },
+    {
+      "id": "r.rev.writer_why",
+      "tasks": ["review"],
+      "statement": "s1(g_setpoint_dc를 SET_SETPOINT 처리기 밖에서 쓰는 곳이 없다는 서술)의 반박 근거로 ee_load(부팅 때 불러오기)나 restore_defaults(설정 CRC 고장의 기본값 복원)의 쓰기를 든다"
+    },
+    {
+      "id": "r.rev.fan_all",
+      "tasks": ["review"],
+      "det": {
+        "verdict": {
+          "statement": "s3",
+          "accept": ["overclaimed", "refuted"]
+        }
+      },
+      "statement": "s3(fan_poll의 팬 회전수 계산이 모든 구성에 있다)을 범위 과장이나 반박으로 판정한다(beta만)"
+    },
+    {
+      "id": "r.sum.risk_wdt",
+      "tasks": ["summarize"],
+      "det": {
+        "cites": {
+          "ids": ["c-0050"],
+          "where": "risks"
+        }
+      },
+      "statement": "위험에 열린 미확정 c-0050(워치독 시간 초과, LSI 데이터시트 필요)를 든다"
+    },
+    {
+      "id": "r.sum.risk_shipping",
+      "tasks": ["summarize"],
+      "det": {
+        "cites": {
+          "ids": ["c-0077"],
+          "where": "risks"
+        }
+      },
+      "statement": "위험에 열린 미확정 c-0077(출하 구성은 코드로 정할 수 없다)를 든다"
+    },
+    {
+      "id": "r.sum.low_writer",
+      "tasks": ["summarize"],
+      "det": {
+        "cites": {
+          "ids": ["c-0061"],
+          "where": "risks"
+        }
+      },
+      "statement": "위험에 검토가 반박한 c-0061(g_setpoint_dc의 다른 쓰기가 없다는 부재 주장)를 든다"
+    },
+    {
+      "id": "r.sum.low_fan",
+      "tasks": ["summarize"],
+      "det": {
+        "cites": {
+          "ids": ["c-0041"],
+          "where": "risks"
+        }
+      },
+      "statement": "위험에 검토가 범위 과장으로 내린 c-0041(fan_poll이 모든 구성에 있다)를 든다"
+    },
+    {
+      "id": "r.sum.low_retry",
+      "tasks": ["summarize"],
+      "det": {
+        "cites": {
+          "ids": ["c-0032"],
+          "where": "risks"
+        }
+      },
+      "statement": "위험에 검토의 답과 어긋난 c-0032(EEPROM 재시도 수)를 든다"
+    },
+    {
+      "id": "r.sum.low_setfan",
+      "tasks": ["summarize"],
+      "det": {
+        "cites": {
+          "ids": ["c-0016"],
+          "where": "risks"
+        }
+      },
+      "statement": "위험에 검토의 답과 어긋난 c-0016(SET_FAN이 모든 구성에 있다)를 든다"
+    },
+    {
+      "id": "r.sum.risk_conflict",
+      "tasks": ["summarize"],
+      "det": {
+        "cites": {
+          "ids": ["c-0051", "c-0035"],
+          "where": "risks",
+          "any": true
+        }
+      },
+      "statement": "위험에 주석·문서와 코드의 충돌(c-0051 proto.h 주석과 beta의 값, c-0035 CRC 매개변수) 가운데 하나 이상을 든다"
+    },
+    {
+      "id": "r.sum.partial",
+      "tasks": ["summarize"],
+      "det": {
+        "cites": {
+          "ids": ["u-0007", "u-0008"],
+          "where": "risks",
+          "any": true
+        }
+      },
+      "statement": "위험에 보류된 단위(u-0007 시작 순서, u-0008 다른 명령)를 든다"
+    },
+    {
+      "id": "r.sum.partial_said",
+      "tasks": ["summarize"],
+      "statement": "개요, handoff 요약이나 위험이 이 분석이 부분 분석(run 상한에서 멈춰 보류된 단위가 있음)이라 요구사항을 놓쳤을 수 있다고 밝힌다"
     }
   ],
   "must_not": [
@@ -438,6 +692,102 @@
       "id": "m.delay_exact",
       "tasks": ["trace-timing", "trace-variant"],
       "statement": "delay_ms(n)이 모든 구성에서 n ms를 기다린다고 확정한다"
+    },
+    {
+      "id": "m.int.wdt_resolved",
+      "tasks": ["integrate"],
+      "det": {
+        "link_forbid": {
+          "kind": "resolves",
+          "from": ["c-0050"]
+        }
+      },
+      "statement": "데이터시트가 있어야 정해지는 워치독 미확정 c-0050(LSI)를 뒤 주장(예: wdt.c 주석을 되풀이한 c-0076의 '약 1 s')이 푼다고 잇는다"
+    },
+    {
+      "id": "m.int.merge_hwrev",
+      "tasks": ["integrate"],
+      "det": {
+        "link_forbid": {
+          "from": ["c-0074", "c-0075"],
+          "to": ["c-0074", "c-0075"]
+        }
+      },
+      "statement": "같은 글이지만 구성이 다른 두 주장 c-0074(alpha, 2 ms)과 c-0075(beta, 틱 10 ms라 20 ms)를 잇거나 합친다"
+    },
+    {
+      "id": "m.int.wdt_settled",
+      "tasks": ["integrate"],
+      "statement": "워치독 시간 초과를 정해진 값(예: 약 1 s)이라고 링크 이유, coverage 메모, 단위, 미확정 어디에서든 확정한다. LSI 주파수가 외부 자료(데이터시트)가 있어야 정해진다고 밝혔으면 위반이 아니다"
+    },
+    {
+      "id": "m.int.gid",
+      "tasks": ["integrate"],
+      "det": {
+        "gid_unknown": true
+      },
+      "statement": "패킷과 기록 목록에 없는 전역 ID를 가리킨다"
+    },
+    {
+      "id": "m.rev.dma",
+      "tasks": ["review"],
+      "det": {
+        "verdict_forbid": {
+          "statement": "s2",
+          "forbid": ["refuted", "overclaimed"]
+        }
+      },
+      "statement": "s2(DMA를 쓰지 않는다)를 반박하거나 범위 과장이라 한다"
+    },
+    {
+      "id": "m.rev.ct",
+      "tasks": ["review"],
+      "det": {
+        "verdict_forbid": {
+          "statement": "s4",
+          "forbid": ["refuted", "overclaimed"]
+        }
+      },
+      "statement": "s4(g_fault_flags를 main 문맥에서 고칠 때는 ADC1 인터럽트를 막아야 한다)를 반박하거나 범위 과장이라 한다"
+    },
+    {
+      "id": "m.rev.req",
+      "tasks": ["review"],
+      "det": {
+        "verdict_forbid": {
+          "statement": "s5",
+          "forbid": ["refuted", "overclaimed"]
+        }
+      },
+      "statement": "s5(SET_SETPOINT의 정상 처리: 설정값을 바꾸고 저장을 요청하고 0x00 응답)를 반박하거나 범위 과장이라 한다"
+    },
+    {
+      "id": "m.sum.gid",
+      "tasks": ["summarize"],
+      "det": {
+        "gid_unknown": true
+      },
+      "statement": "패킷에 없는 전역 ID를 가리킨다"
+    },
+    {
+      "id": "m.sum.confirmed",
+      "tasks": ["summarize"],
+      "statement": "검토에서 반박되지 않았거나 검토하지 않은 주장·후보(요구·제약 후보, 수치, 답 후보가 있는 미확정)를 확인된·보장된·검증된 것으로 쓴다(예: '바이트 간 시간 초과가 확인됐다'). '후보', '확인되지 않음', '반박되지 않음'으로 적었으면 위반이 아니다"
+    },
+    {
+      "id": "m.sum.lowered_ok",
+      "tasks": ["summarize"],
+      "statement": "검토가 내린 주장(g_setpoint_dc의 다른 쓰기가 없다, SET_FAN과 fan_poll이 모든 구성에 있다, 재시도가 두 구성 모두 3회다)을 맞는 것처럼 쓴다"
+    },
+    {
+      "id": "m.sum.all_found",
+      "tasks": ["summarize"],
+      "statement": "모든 요구사항을 찾았다거나 분석이 펌웨어 전체를 빠짐없이 덮었다고 쓴다"
+    },
+    {
+      "id": "m.sum.wdt",
+      "tasks": ["summarize"],
+      "statement": "워치독 시간 초과(예: 약 1 s)를 정해진 값으로 쓴다. LSI가 데이터시트가 있어야 정해진다고 밝혔으면 위반이 아니다"
     }
   ],
   "resolvable": [
@@ -465,6 +815,16 @@
       "id": "v.fan_beta",
       "tasks": ["survey", "trace-variant"],
       "statement": "팬 제어가 beta에만 있음은 빌드 파일과 설정 헤더로 정해진다"
+    },
+    {
+      "id": "v.int.frame",
+      "tasks": ["integrate"],
+      "statement": "trace-command의 미확정 c-0034(바이트 간 시간 초과의 ms 값)는 기록의 trace-timing 수치 c-0043로 풀린다"
+    },
+    {
+      "id": "v.rev.retry",
+      "tasks": ["review"],
+      "statement": "q1(CFG_EE_RETRY_MAX의 구성별 값)은 두 설정 헤더로 정해진다"
     }
   ],
   "quantities": [

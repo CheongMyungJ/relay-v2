@@ -1,0 +1,14 @@
+{
+  "task": "integrate",
+  "describe": "함께 설 수 없는 두 주장을 합친다(충돌을 놓친다)",
+  "ops": [
+    {
+      "op": "set",
+      "path": "links.3.kind",
+      "value": "merges"
+    }
+  ],
+  "expect": {
+    "missed": ["r.int.conflict_writer"]
+  }
+}

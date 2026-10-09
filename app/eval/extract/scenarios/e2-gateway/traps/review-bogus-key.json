@@ -1,0 +1,16 @@
+{
+  "task": "review",
+  "describe": "판정 모델이 결과에 없는 key를 가리킨다",
+  "ops": [],
+  "judge": {
+    "recall": {
+      "r.rev.settings_why": {
+        "found": true,
+        "keys": ["q9"]
+      }
+    }
+  },
+  "expect": {
+    "missed": ["r.rev.settings_why"]
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "task": "integrate",
+  "describe": "어느 단위도 닿지 않은 lifecycle을 covered로 둔다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "coverage.lifecycle",
+      "value": [
+        {
+          "configs": ["alpha", "beta"],
+          "status": "covered",
+          "ids": ["c-0042"],
+          "units": [],
+          "searches": [],
+          "note": ""
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "missed": ["r.int.cov_lifecycle"]
+  }
+}

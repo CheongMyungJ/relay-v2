@@ -1,0 +1,14 @@
+{
+  "task": "integrate",
+  "describe": "covered 칸에 ids가 없다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "coverage.concurrency.0.ids",
+      "value": []
+    }
+  ],
+  "expect": {
+    "missed": ["r.int.cov_concurrency"]
+  }
+}

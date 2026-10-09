@@ -1,0 +1,30 @@
+{
+  "task": "review",
+  "describe": "코드로 정해지는 값 질문을 unknown으로 둔다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "answers.q1",
+      "value": {
+        "status": "unknown",
+        "text": "쓰기 상한은 확인하지 못했다",
+        "values": [],
+        "configs": [],
+        "anchors": [],
+        "searches": []
+      }
+    }
+  ],
+  "judge": {
+    "resolvable": {
+      "v.rev.maxregs": {
+        "left_unknown": true,
+        "keys": ["answer q1"]
+      }
+    }
+  },
+  "expect": {
+    "missed": ["r.rev.maxregs"],
+    "softened": ["v.rev.maxregs"]
+  }
+}

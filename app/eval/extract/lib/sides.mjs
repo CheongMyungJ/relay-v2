@@ -41,21 +41,39 @@ export const SIDES = {
   },
 }
 
-/** 쪽 하나의 (종류, 렌즈) 조립본 */
-export function buildSide(name, kind, lens) {
+/**
+ * 쪽 하나의 (종류, 렌즈) 조립본. more는 결과 스키마에 넣을 칸의 키다: integrate는 관점(coverage), review는 질문·서술 키
+ * (answers, verdicts). survey·trace는 more가 없어 바이트가 예전과 같다(AI 결정 108)
+ */
+export function buildSide(name, kind, lens, more = {}) {
   const side = SIDES[name]
   if (!side) throw new Error(`모르는 쪽: ${name} (있는 쪽: ${Object.keys(SIDES).join(', ')})`)
   return buildRun({
     base: loadBase(kind),
     checklist: lens ? loadChecklist(lens) : null,
     layers: side.layers(kind, lens),
+    more,
   })
 }
 
-/** 쪽 이름: 이름-<조립본 해시 8자>. combos는 [kind, lens] 목록 */
-export function sideId(name, combos) {
-  const all = combos
-    .map(([k, l]) => buildSide(name, k, l))
+/** 쪽 이름에 넣을 조합: [kind, lens, more] 가운데 같은 것은 처음 하나만, 차례는 그대로 */
+export function sideEntries(entries) {
+  const seen = new Set()
+  return entries.filter(([k, l, more]) => {
+    const key = `${k}|${l ?? ''}|${JSON.stringify(more ?? {})}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+/**
+ * 쪽 이름: 이름-<조립본 해시 8자>. entries는 [kind, lens, more?] 목록이다. more(칸 키)가 다르면 스키마 바이트가 달라
+ * 해시에 든다. survey·trace는 more가 없어 이름이 예전과 같다
+ */
+export function sideId(name, entries) {
+  const all = entries
+    .map(([k, l, more]) => buildSide(name, k, l, more ?? {}))
     .map((b) => `${b.hashes.instructions}\n${b.hashes.schema}`)
     .join('\n')
   return `${name}-${sha256(all).slice(7, 15)}`

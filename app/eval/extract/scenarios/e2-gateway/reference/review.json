@@ -1,0 +1,214 @@
+{
+  "outcome": "done",
+  "outcome_reason": "질문 셋에 답하고 서술 다섯을 모두 반박해 봤다.",
+  "answers": {
+    "q1": {
+      "status": "answered",
+      "text": "modbus.h의 MB_MAX_WRITE_REGS는 32다. FC16이 등록된 pro·devkit의 처리기가 이 값과 수량을 견준다.",
+      "values": [
+        {
+          "configs": ["pro", "devkit"],
+          "value": "32"
+        }
+      ],
+      "configs": [],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "include/modbus.h",
+          "start": 27,
+          "end": 27,
+          "quote": "#define MB_MAX_WRITE_REGS       32U",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/mb_handlers.c",
+          "start": 101,
+          "end": 101,
+          "quote": "if (qty == 0U || qty > MB_MAX_WRITE_REGS || r->byte_count != qty * 2U ||",
+          "command": null
+        }
+      ],
+      "searches": []
+    },
+    "q2": {
+      "status": "answered",
+      "text": "basic 1000 Hz, pro 500 Hz, devkit 1000 Hz다. configTICK_RATE_HZ가 이 값을 쓴다.",
+      "values": [
+        {
+          "configs": ["basic", "devkit"],
+          "value": "1000 Hz"
+        },
+        {
+          "configs": ["pro"],
+          "value": "500 Hz"
+        }
+      ],
+      "configs": [],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "cfg/variant_basic.h",
+          "start": 10,
+          "end": 10,
+          "quote": "#define CFG_RTOS_TICK_HZ        1000U",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "cfg/variant_pro.h",
+          "start": 10,
+          "end": 10,
+          "quote": "#define CFG_RTOS_TICK_HZ        500U",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "cfg/variant_devkit.h",
+          "start": 10,
+          "end": 10,
+          "quote": "#define CFG_RTOS_TICK_HZ        1000U",
+          "command": null
+        }
+      ],
+      "searches": []
+    },
+    "q3": {
+      "status": "answered",
+      "text": "pro와 devkit이다. 등록은 #if CFG_FEATURE_DEVICE_ID 안에 있고 basic만 0이다.",
+      "values": [],
+      "configs": ["pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/app_init.c",
+          "start": 20,
+          "end": 20,
+          "quote": "#if CFG_FEATURE_DEVICE_ID",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "cfg/variant_basic.h",
+          "start": 15,
+          "end": 15,
+          "quote": "#define CFG_FEATURE_DEVICE_ID   0",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "cfg/variant_pro.h",
+          "start": 15,
+          "end": 15,
+          "quote": "#define CFG_FEATURE_DEVICE_ID   1",
+          "command": null
+        }
+      ],
+      "searches": []
+    }
+  },
+  "verdicts": {
+    "s1": {
+      "verdict": "refuted",
+      "attempts": ["레포 전체에서 g_settings에 대입하는 곳을 찾았다"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/config_store.c",
+          "start": 42,
+          "end": 42,
+          "quote": "g_settings = st->s;",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/config_store.c",
+          "start": 44,
+          "end": 44,
+          "quote": "g_settings = s_defaults;",
+          "command": null
+        }
+      ],
+      "note": "시작할 때 config_load가 플래시의 설정이나 기본값으로 g_settings를 채운다"
+    },
+    "s2": {
+      "verdict": "not_refuted",
+      "attempts": ["mb_register를 부르는 곳과 mb_fc23_read_write를 가리키는 곳을 찾았다"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/app_init.c",
+          "start": 15,
+          "end": 15,
+          "quote": "(void)mb_register(MB_FC_READ_HOLDING, mb_fc03_read_holding);",
+          "command": null
+        }
+      ],
+      "note": ""
+    },
+    "s3": {
+      "verdict": "overclaimed",
+      "attempts": ["WDOG_ALL의 정의와 그것을 고르는 조건을 봤다"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/wdog.c",
+          "start": 19,
+          "end": 22,
+          "quote": "#if CFG_FEATURE_LOGGER ... #define WDOG_ALL    (WDOG_COMM | WDOG_SENSOR)",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "cfg/variant_basic.h",
+          "start": 16,
+          "end": 16,
+          "quote": "#define CFG_FEATURE_LOGGER      0",
+          "command": null
+        }
+      ],
+      "note": "basic은 logger가 없어 comm과 sensor만 요구한다"
+    },
+    "s4": {
+      "verdict": "not_refuted",
+      "attempts": ["sensor_reset_filter와 DMA2 stream 0 ISR의 sample_count 접근을 봤다"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/sensor.c",
+          "start": 54,
+          "end": 54,
+          "quote": "g_sensor.sample_count = 0;",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/sensor.c",
+          "start": 70,
+          "end": 70,
+          "quote": "g_sensor.sample_count++;",
+          "command": null
+        }
+      ],
+      "note": ""
+    },
+    "s5": {
+      "verdict": "not_refuted",
+      "attempts": ["수량 검사와 쓰기 반복의 차례를 봤다"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/mb_handlers.c",
+          "start": 101,
+          "end": 101,
+          "quote": "if (qty == 0U || qty > MB_MAX_WRITE_REGS || r->byte_count != qty * 2U ||",
+          "command": null
+        }
+      ],
+      "note": "수량 검사는 쓰기 반복보다 먼저다"
+    }
+  },
+  "unknowns": [],
+  "checkpoint": null
+}

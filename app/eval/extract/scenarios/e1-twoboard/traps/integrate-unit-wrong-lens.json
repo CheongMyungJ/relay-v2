@@ -1,0 +1,14 @@
+{
+  "task": "integrate",
+  "describe": "시작 순서 단위를 제안하지 않는다(렌즈가 다르다)",
+  "ops": [
+    {
+      "op": "set",
+      "path": "units.0.lens",
+      "value": "state"
+    }
+  ],
+  "expect": {
+    "missed": ["r.int.unit_startup"]
+  }
+}

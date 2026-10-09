@@ -1,0 +1,248 @@
+{
+  "outcome": "done",
+  "outcome_reason": "기록 목록의 주장을 모두 훑고 관점 열 개를 두 구성에서 판정했다.",
+  "links": [
+    {
+      "key": "l1",
+      "kind": "resolves",
+      "from": ["c-0034"],
+      "to": ["c-0043"],
+      "reason": "c-0034는 바이트 간 시간 초과의 ms 값을 물었고, 뒤 trace-timing의 c-0043가 Makefile의 beta 덮어쓰기와 구성별 틱으로 alpha 20틱 = 약 20 ms, beta 5틱 = 약 50 ms를 유도했다. 전부 답한다.",
+      "anchors": []
+    },
+    {
+      "key": "l2",
+      "kind": "supersedes",
+      "from": ["c-0036"],
+      "to": ["c-0043"],
+      "reason": "같은 timing 단위(u-0003)를 이어 돈 run이 같은 기호를 다시 봤다. 앞의 c-0036는 beta를 20틱 = 200 ms라 했으나 c-0043는 Makefile의 -DPROTO_FRAME_TIMEOUT_TICKS=5U로 5틱 = 50 ms라 한다.",
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "Makefile",
+          "start": 27,
+          "end": 27,
+          "quote": "beta: CFLAGS += -DBOARD_BETA -DPROTO_FRAME_TIMEOUT_TICKS=5U",
+          "command": null
+        }
+      ]
+    },
+    {
+      "key": "l3",
+      "kind": "merges",
+      "from": ["c-0028"],
+      "to": ["c-0038"],
+      "reason": "둘 다 alpha·beta에서 바이트 사이가 PROTO_FRAME_TIMEOUT_TICKS를 넘으면 부분 프레임을 버린다고 쓴다. 21틱째라는 비교까지 적은 c-0038를 남긴다.",
+      "anchors": []
+    },
+    {
+      "key": "l4",
+      "kind": "conflicts",
+      "from": ["c-0061"],
+      "to": ["c-0030"],
+      "reason": "c-0061는 src/cmd.c만 찾았다. 코드는 c-0030 쪽이다: 부팅 때 ee_load와 설정 CRC 고장의 restore_defaults도 g_setpoint_dc를 쓴다.",
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/eeprom.c",
+          "start": 86,
+          "end": 86,
+          "quote": "g_setpoint_dc = img->setpoint_dc;",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/fault.c",
+          "start": 24,
+          "end": 24,
+          "quote": "g_setpoint_dc = SETPOINT_DEFAULT_DC;",
+          "command": null
+        }
+      ]
+    },
+    {
+      "key": "l5",
+      "kind": "merges",
+      "from": ["c-0078"],
+      "to": ["c-0051"],
+      "reason": "두 run이 같은 충돌(proto.h 주석의 20 ms와 beta의 5틱 x 10 ms)을 적었다.",
+      "anchors": []
+    },
+    {
+      "key": "l6",
+      "kind": "conflicts",
+      "from": ["c-0032"],
+      "to": ["c-0067"],
+      "reason": "c-0032는 두 구성 모두 3회라 하나 build_cfg_beta.h는 5U다. 코드는 c-0067 쪽이다.",
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "config/build_cfg_beta.h",
+          "start": 13,
+          "end": 13,
+          "quote": "#define CFG_EE_RETRY_MAX    5U",
+          "command": null
+        }
+      ]
+    },
+    {
+      "key": "l7",
+      "kind": "conflicts",
+      "from": ["c-0016"],
+      "to": ["c-0066"],
+      "reason": "survey는 SET_FAN을 모든 구성에 두었으나 명령 표 항목은 CFG_FEATURE_FAN일 때만 있고 beta만 켠다. 코드는 c-0066 쪽이다.",
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "config/build_cfg_beta.h",
+          "start": 12,
+          "end": 12,
+          "quote": "#define CFG_FEATURE_FAN     1",
+          "command": null
+        }
+      ]
+    },
+    {
+      "key": "l8",
+      "kind": "conflicts",
+      "from": ["c-0041"],
+      "to": ["c-0066"],
+      "reason": "fan_poll은 fan.c에 있고 fan.c는 SRCS_beta에만 들어간다. c-0041의 \"모든 구성\"은 맞지 않는다.",
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "Makefile",
+          "start": 17,
+          "end": 17,
+          "quote": "SRCS_beta := src/fan.c",
+          "command": null
+        }
+      ]
+    }
+  ],
+  "coverage": {
+    "entry_points": [
+      {
+        "configs": ["alpha", "beta"],
+        "status": "unreached",
+        "ids": [],
+        "units": ["n1"],
+        "searches": [],
+        "note": "Reset_Handler와 시작 순서는 어느 단위도 추적하지 않았다. ISR 넷과 main 루프는 u-0003~u-0005가 다뤘다"
+      }
+    ],
+    "commands": [
+      {
+        "configs": ["alpha", "beta"],
+        "status": "unreached",
+        "ids": [],
+        "units": ["n2"],
+        "searches": [],
+        "note": "u-0002는 SET_SETPOINT만 추적했다. GET_TEMP, GET_STATUS, RESET_FAULT, GET_VERSION과 alpha의 SET_MODE, beta의 SET_FAN은 아무도 닿지 않았다"
+      }
+    ],
+    "state": [
+      {
+        "configs": ["alpha", "beta"],
+        "status": "covered",
+        "ids": ["c-0052", "c-0030"],
+        "units": [],
+        "searches": [],
+        "note": ""
+      }
+    ],
+    "timing": [
+      {
+        "configs": ["alpha", "beta"],
+        "status": "covered",
+        "ids": ["c-0042", "c-0043", "c-0044", "c-0045"],
+        "units": [],
+        "searches": [],
+        "note": "워치독 시간은 LSI 주파수가 코드에 없어 c-0050로 열려 있다(데이터시트가 필요)"
+      }
+    ],
+    "concurrency": [
+      {
+        "configs": ["alpha", "beta"],
+        "status": "covered",
+        "ids": ["c-0052", "c-0054", "c-0058", "c-0059"],
+        "units": [],
+        "searches": [],
+        "note": ""
+      }
+    ],
+    "config_differences": [
+      {
+        "configs": ["alpha", "beta"],
+        "status": "covered",
+        "ids": ["c-0062", "c-0063", "c-0064", "c-0070"],
+        "units": [],
+        "searches": [],
+        "note": ""
+      }
+    ],
+    "lifecycle": [
+      {
+        "configs": ["alpha", "beta"],
+        "status": "unreached",
+        "ids": [],
+        "units": ["n1"],
+        "searches": [],
+        "note": "리셋 처리기부터 초기화 순서, 부팅 때 ee_load와 fault_handle_boot, wdt_init의 차례를 어느 단위도 추적하지 않았다"
+      }
+    ],
+    "protocol": [
+      {
+        "configs": ["alpha", "beta"],
+        "status": "covered",
+        "ids": ["c-0021", "c-0022", "c-0031"],
+        "units": [],
+        "searches": [],
+        "note": ""
+      }
+    ],
+    "error_paths": [
+      {
+        "configs": ["alpha", "beta"],
+        "status": "covered",
+        "ids": ["c-0023", "c-0024", "c-0025", "c-0026", "c-0029"],
+        "units": [],
+        "searches": [],
+        "note": ""
+      }
+    ],
+    "memory": [
+      {
+        "configs": ["alpha", "beta"],
+        "status": "covered",
+        "ids": ["c-0073"],
+        "units": [],
+        "searches": [],
+        "note": ""
+      }
+    ]
+  },
+  "units": [
+    {
+      "key": "n1",
+      "purpose": "Reset_Handler부터 main의 초기화 순서, 부팅 때 설정 불러오기(ee_load)와 부팅 고장 처리, 워치독 시작을 추적한다",
+      "lens": "lifecycle",
+      "scope": "vendor/acme/startup_acme.c, src/main.c, src/eeprom.c, src/fault.c, src/wdt.c; alpha, beta",
+      "priority": "high",
+      "depends_on": [],
+      "reason": "coverage의 lifecycle과 entry_points가 비었다: 리셋 처리기와 시작 순서를 어느 단위도 추적하지 않았다"
+    },
+    {
+      "key": "n2",
+      "purpose": "SET_SETPOINT 밖의 명령 경로(GET_TEMP, GET_STATUS, RESET_FAULT, GET_VERSION, alpha의 SET_MODE, beta의 SET_FAN)를 추적한다",
+      "lens": "command",
+      "scope": "src/cmd.c; alpha, beta",
+      "priority": "medium",
+      "depends_on": [],
+      "reason": "coverage의 commands: 명령 표의 다른 명령은 어느 단위도 추적하지 않았다"
+    }
+  ],
+  "unknowns": [],
+  "human_decisions": [],
+  "checkpoint": null
+}

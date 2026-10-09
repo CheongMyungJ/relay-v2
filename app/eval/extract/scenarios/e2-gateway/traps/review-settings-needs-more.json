@@ -1,0 +1,14 @@
+{
+  "task": "review",
+  "describe": "틀린 부재 주장을 보완 필요로만 둔다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "verdicts.s1.verdict",
+      "value": "needs_more"
+    }
+  ],
+  "expect": {
+    "missed": ["r.rev.settings"]
+  }
+}

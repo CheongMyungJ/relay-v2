@@ -1,0 +1,15 @@
+{
+  "task": "summarize",
+  "describe": "전역 ID 자리에 run 안의 지역 key를 쓴다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "risks.1.ids",
+      "value": ["k1"]
+    }
+  ],
+  "expect": {
+    "violated": ["m.sum.gid"],
+    "missed": ["r.sum.risk_wdt"]
+  }
+}

@@ -1,0 +1,235 @@
+{
+  "outcome": "done",
+  "outcome_reason": "질문 셋에 답하고 서술 다섯을 모두 반박해 봤다.",
+  "answers": {
+    "q1": {
+      "status": "answered",
+      "text": "구성 헤더의 CFG_EE_RETRY_MAX가 alpha 3, beta 5다. eeprom.c가 시도 횟수를 이 값과 견준다.",
+      "values": [
+        {
+          "configs": ["alpha"],
+          "value": "3"
+        },
+        {
+          "configs": ["beta"],
+          "value": "5"
+        }
+      ],
+      "configs": [],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "config/build_cfg_alpha.h",
+          "start": 13,
+          "end": 13,
+          "quote": "#define CFG_EE_RETRY_MAX    3U",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "config/build_cfg_beta.h",
+          "start": 13,
+          "end": 13,
+          "quote": "#define CFG_EE_RETRY_MAX    5U",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/eeprom.c",
+          "start": 118,
+          "end": 118,
+          "quote": "if (++s_attempts >= CFG_EE_RETRY_MAX) {",
+          "command": null
+        }
+      ],
+      "searches": []
+    },
+    "q2": {
+      "status": "answered",
+      "text": "alpha 1000 Hz(틱 1 ms), beta 100 Hz(틱 10 ms). SysTick이 CFG_CPU_HZ / CFG_TICK_HZ마다 인터럽트를 낸다.",
+      "values": [
+        {
+          "configs": ["alpha"],
+          "value": "1000 Hz"
+        },
+        {
+          "configs": ["beta"],
+          "value": "100 Hz"
+        }
+      ],
+      "configs": [],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "config/build_cfg_alpha.h",
+          "start": 10,
+          "end": 10,
+          "quote": "#define CFG_TICK_HZ         1000U",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "config/build_cfg_beta.h",
+          "start": 10,
+          "end": 10,
+          "quote": "#define CFG_TICK_HZ         100U",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/timer.c",
+          "start": 10,
+          "end": 10,
+          "quote": "SysTick->LOAD = (CFG_CPU_HZ / CFG_TICK_HZ) - 1U;",
+          "command": null
+        }
+      ],
+      "searches": []
+    },
+    "q3": {
+      "status": "answered",
+      "text": "beta만이다. 명령 표의 SET_FAN 항목은 #if CFG_FEATURE_FAN 안에 있고 beta 설정 헤더만 1로 둔다. fan.c도 SRCS_beta에만 있다.",
+      "values": [],
+      "configs": ["beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/cmd.c",
+          "start": 133,
+          "end": 133,
+          "quote": "#if CFG_FEATURE_FAN",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "config/build_cfg_beta.h",
+          "start": 12,
+          "end": 12,
+          "quote": "#define CFG_FEATURE_FAN     1",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "Makefile",
+          "start": 17,
+          "end": 17,
+          "quote": "SRCS_beta := src/fan.c",
+          "command": null
+        }
+      ],
+      "searches": [
+        {
+          "tool": "Grep",
+          "pattern": "CFG_FEATURE_FAN",
+          "scope": "config/ src/ Makefile",
+          "hits": 6
+        }
+      ]
+    }
+  },
+  "verdicts": {
+    "s1": {
+      "verdict": "refuted",
+      "attempts": [
+        "레포 전체에서 g_setpoint_dc에 대입하는 곳을 찾았다",
+        "fault_actions 표가 부르는 함수를 따라갔다"
+      ],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/eeprom.c",
+          "start": 86,
+          "end": 86,
+          "quote": "g_setpoint_dc = img->setpoint_dc;",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/fault.c",
+          "start": 24,
+          "end": 24,
+          "quote": "g_setpoint_dc = SETPOINT_DEFAULT_DC;",
+          "command": null
+        }
+      ],
+      "note": "부팅 때 ee_load와 설정 CRC 고장의 restore_defaults도 쓴다"
+    },
+    "s2": {
+      "verdict": "not_refuted",
+      "attempts": ["DMA 레지스터, 채널, 버퍼 이름을 src, include, vendor에서 찾았다"],
+      "anchors": [],
+      "note": ""
+    },
+    "s3": {
+      "verdict": "overclaimed",
+      "attempts": ["fan.c를 컴파일하는 구성을 Makefile과 설정 헤더에서 찾았다"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "Makefile",
+          "start": 17,
+          "end": 17,
+          "quote": "SRCS_beta := src/fan.c",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "config/build_cfg_beta.h",
+          "start": 12,
+          "end": 12,
+          "quote": "#define CFG_FEATURE_FAN     1",
+          "command": null
+        }
+      ],
+      "note": "fan_poll과 팬 회전수 계산은 beta에만 있다"
+    },
+    "s4": {
+      "verdict": "not_refuted",
+      "attempts": ["fault_clear와 ADC1 ISR의 쓰기, 인터럽트 막기를 봤다"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/fault.c",
+          "start": 19,
+          "end": 19,
+          "quote": "g_fault_flags &= (uint8_t)~mask;",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/adc.c",
+          "start": 46,
+          "end": 46,
+          "quote": "g_fault_flags |= FAULT_OVERTEMP;",
+          "command": null
+        }
+      ],
+      "note": "fault_clear가 막지 않아 서술대로 막아야 한다"
+    },
+    "s5": {
+      "verdict": "not_refuted",
+      "attempts": ["cmd_set_setpoint의 검사 차례와 저장 요청, 응답을 봤다"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/cmd.c",
+          "start": 49,
+          "end": 49,
+          "quote": "return ERR_RANGE;",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/cmd.c",
+          "start": 54,
+          "end": 55,
+          "quote": "g_setpoint_dc = sp; ... ee_request_save();",
+          "command": null
+        }
+      ],
+      "note": ""
+    }
+  },
+  "unknowns": [],
+  "checkpoint": null
+}

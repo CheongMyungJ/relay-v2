@@ -1,0 +1,14 @@
+{
+  "task": "review",
+  "describe": "맞는 부재 주장(DMA 없음)을 반박한다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "verdicts.s2.verdict",
+      "value": "refuted"
+    }
+  ],
+  "expect": {
+    "violated": ["m.rev.dma"]
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "task": "integrate",
+  "describe": "같은 구성의 같은 말을 합치지 않는다",
+  "ops": [
+    {
+      "op": "remove",
+      "path": "links.2"
+    }
+  ],
+  "expect": {
+    "missed": ["r.int.merge_timeout"]
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "task": "integrate",
+  "describe": "충돌의 방향만 뒤집는다(충돌은 방향이 없어 찾음으로 남고, 다른 함정과 함께 쓰려고 연결 하나를 지운다)",
+  "ops": [
+    {
+      "op": "set",
+      "path": "links.3.from",
+      "value": ["c-0051"]
+    },
+    {
+      "op": "set",
+      "path": "links.3.to",
+      "value": ["c-0039"]
+    },
+    {
+      "op": "remove",
+      "path": "links.2"
+    }
+  ],
+  "expect": {
+    "missed": ["r.int.merge_de"],
+    "found": ["r.int.conflict_filter"]
+  }
+}

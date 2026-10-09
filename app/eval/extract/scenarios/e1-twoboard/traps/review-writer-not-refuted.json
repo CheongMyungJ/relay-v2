@@ -1,0 +1,14 @@
+{
+  "task": "review",
+  "describe": "틀린 부재 주장을 반박하지 못한다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "verdicts.s1.verdict",
+      "value": "not_refuted"
+    }
+  ],
+  "expect": {
+    "missed": ["r.rev.writer"]
+  }
+}

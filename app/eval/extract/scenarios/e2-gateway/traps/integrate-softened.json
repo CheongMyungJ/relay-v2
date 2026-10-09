@@ -1,0 +1,34 @@
+{
+  "task": "integrate",
+  "describe": "기록이 답한 미확정을 잇지 않고 timing 칸을 unknown으로 둔다",
+  "ops": [
+    {
+      "op": "remove",
+      "path": "links.0"
+    },
+    {
+      "op": "set",
+      "path": "coverage.timing.0",
+      "value": {
+        "configs": ["basic", "pro", "devkit"],
+        "status": "unknown",
+        "ids": [],
+        "units": [],
+        "searches": [],
+        "note": "응답 지연의 틱 수는 정하지 못했다"
+      }
+    }
+  ],
+  "judge": {
+    "resolvable": {
+      "v.int.resp": {
+        "left_unknown": true,
+        "keys": ["timing"]
+      }
+    }
+  },
+  "expect": {
+    "missed": ["r.int.resolves_resp"],
+    "softened": ["v.int.resp"]
+  }
+}

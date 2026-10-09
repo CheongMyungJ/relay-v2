@@ -1,0 +1,14 @@
+{
+  "task": "summarize",
+  "describe": "정답 파일의 카나리가 출력에 있다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "overview.0.text",
+      "value": "분석했다 LEAK-7F3Q-E1-ZEBRA"
+    }
+  ],
+  "expect": {
+    "leak": true
+  }
+}

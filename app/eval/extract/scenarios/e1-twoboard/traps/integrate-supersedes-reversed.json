@@ -1,0 +1,19 @@
+{
+  "task": "integrate",
+  "describe": "대체의 방향을 뒤집는다(앞 run의 틀린 수치를 남긴다)",
+  "ops": [
+    {
+      "op": "set",
+      "path": "links.1.from",
+      "value": ["c-0043"]
+    },
+    {
+      "op": "set",
+      "path": "links.1.to",
+      "value": ["c-0036"]
+    }
+  ],
+  "expect": {
+    "missed": ["r.int.supersedes_frame"]
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "task": "integrate",
+  "describe": "기록에 없는 전역 ID를 가리킨다",
+  "ops": [
+    {
+      "op": "push",
+      "path": "coverage.memory.0.ids",
+      "value": "c-0999"
+    }
+  ],
+  "expect": {
+    "violated": ["m.int.gid"]
+  }
+}

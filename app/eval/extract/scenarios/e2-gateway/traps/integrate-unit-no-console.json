@@ -1,0 +1,19 @@
+{
+  "task": "integrate",
+  "describe": "제안 단위가 콘솔을 다루지 않는다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "units.0.purpose",
+      "value": "FC03·FC06·FC43·FC08 처리기를 추적한다"
+    },
+    {
+      "op": "set",
+      "path": "units.0.scope",
+      "value": "src/mb_handlers.c; basic, pro, devkit"
+    }
+  ],
+  "expect": {
+    "missed": ["r.int.unit_console"]
+  }
+}

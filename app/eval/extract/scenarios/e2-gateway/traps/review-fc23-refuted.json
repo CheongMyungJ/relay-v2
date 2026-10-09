@@ -1,0 +1,14 @@
+{
+  "task": "review",
+  "describe": "맞는 부재 주장(FC23 미등록)을 반박한다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "verdicts.s2.verdict",
+      "value": "refuted"
+    }
+  ],
+  "expect": {
+    "violated": ["m.rev.fc23"]
+  }
+}

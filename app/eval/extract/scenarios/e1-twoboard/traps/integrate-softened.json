@@ -1,0 +1,32 @@
+{
+  "task": "integrate",
+  "describe": "기록이 답한 미확정을 잇지 않고 미확정으로 남긴다",
+  "ops": [
+    {
+      "op": "remove",
+      "path": "links.0"
+    },
+    {
+      "op": "push",
+      "path": "unknowns",
+      "value": {
+        "key": "k1",
+        "question": "바이트 간 시간 초과의 ms 값은 정하지 못했다",
+        "needs": "other",
+        "refs": []
+      }
+    }
+  ],
+  "judge": {
+    "resolvable": {
+      "v.int.frame": {
+        "left_unknown": true,
+        "keys": ["k1"]
+      }
+    }
+  },
+  "expect": {
+    "missed": ["r.int.resolves_frame"],
+    "softened": ["v.int.frame"]
+  }
+}

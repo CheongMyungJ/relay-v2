@@ -1,0 +1,2790 @@
+{
+  "intent": "- Goal: recover functional and non-functional requirement candidates and hardware and communication constraints from this firmware.\n- Scope: every build configuration and the project's own code. Vendor HAL, RTOS kernels and third-party libraries are boundaries.\n- No toolchain is provided.",
+  "configs": [
+    {
+      "name": "alpha",
+      "status": "confirmed",
+      "select": "make alpha (-DBOARD_ALPHA)",
+      "build_command": "make alpha"
+    },
+    {
+      "name": "beta",
+      "status": "confirmed",
+      "select": "make beta (-DBOARD_BETA)",
+      "build_command": "make beta"
+    },
+    {
+      "name": "gamma",
+      "status": "candidate",
+      "select": "BOARD_GAMMA (README에만 있고 Makefile 타깃과 build_cfg_gamma.h가 없음)",
+      "build_command": null
+    }
+  ],
+  "units": [
+    {
+      "id": "u-0001",
+      "kind": "survey",
+      "lens": null,
+      "purpose": "구성, 진입점, 인터페이스, 경계를 찾는다",
+      "scope": "레포 전체",
+      "status": "done",
+      "reason": "빌드 파일, 시작 코드, 명령 테이블을 모두 봤다."
+    },
+    {
+      "id": "u-0002",
+      "kind": "trace",
+      "lens": "command",
+      "purpose": "SET_SETPOINT 명령 경로",
+      "scope": "src/cmd.c, src/proto.c",
+      "status": "done",
+      "reason": "수신부터 응답까지 모든 오류 경로를 봤다."
+    },
+    {
+      "id": "u-0003",
+      "kind": "trace",
+      "lens": "timing",
+      "purpose": "시간 상수",
+      "scope": "proto.h, control.h, wdt.c",
+      "status": "needs_external",
+      "reason": "워치독 시간은 LSI 주파수가 코드에 없어 데이터시트가 필요하다."
+    },
+    {
+      "id": "u-0004",
+      "kind": "trace",
+      "lens": "shared",
+      "purpose": "ISR와 main 공유 상태",
+      "scope": "g_fault_flags, g_rx_ring",
+      "status": "done",
+      "reason": "ISR가 쓰는 상태를 모두 봤다."
+    },
+    {
+      "id": "u-0005",
+      "kind": "trace",
+      "lens": "variant",
+      "purpose": "구성 차이",
+      "scope": "Makefile, config/",
+      "status": "done",
+      "reason": "빌드 파일과 두 설정 헤더를 견줬다."
+    },
+    {
+      "id": "u-0006",
+      "kind": "integrate",
+      "lens": null,
+      "purpose": "기록을 잇고 관점 행렬을 판정한다",
+      "scope": "기록 전체",
+      "status": "done",
+      "reason": "기록 목록의 주장을 모두 훑고 관점 열 개를 두 구성에서 판정했다."
+    },
+    {
+      "id": "u-0007",
+      "kind": "trace",
+      "lens": "lifecycle",
+      "purpose": "Reset_Handler부터 main의 초기화 순서, 부팅 때 설정 불러오기(ee_load)와 부팅 고장 처리, 워치독 시작을 추적한다",
+      "scope": "vendor/acme/startup_acme.c, src/main.c, src/eeprom.c, src/fault.c, src/wdt.c; alpha, beta",
+      "status": "held",
+      "reason": "run 상한에 닿아 부분 분석으로 넘겼다(보류)"
+    },
+    {
+      "id": "u-0008",
+      "kind": "trace",
+      "lens": "command",
+      "purpose": "SET_SETPOINT 밖의 명령 경로(GET_TEMP, GET_STATUS, RESET_FAULT, GET_VERSION, alpha의 SET_MODE, beta의 SET_FAN)를 추적한다",
+      "scope": "src/cmd.c; alpha, beta",
+      "status": "held",
+      "reason": "run 상한에 닿아 부분 분석으로 넘겼다(보류)"
+    },
+    {
+      "id": "u-0009",
+      "kind": "review",
+      "lens": null,
+      "purpose": "위험 등급 주장 8개를 검토한다",
+      "scope": "주장 8개",
+      "status": "done",
+      "reason": "질문 셋에 답하고 서술 다섯을 모두 반박해 봤다."
+    },
+    {
+      "id": "u-0010",
+      "kind": "summarize",
+      "lens": null,
+      "purpose": "개요, handoff 요약, 위험을 쓴다",
+      "scope": "기록 전체",
+      "status": "open",
+      "reason": ""
+    }
+  ],
+  "claims": [
+    {
+      "id": "c-0001",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "configs",
+      "key": "c1",
+      "body": {
+        "key": "c1",
+        "name": "alpha",
+        "status": "confirmed",
+        "select": "make alpha (-DBOARD_ALPHA)",
+        "build_command": "make alpha",
+        "anchors": [
+          {
+            "evidence": "e-0001"
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0002",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "configs",
+      "key": "c2",
+      "body": {
+        "key": "c2",
+        "name": "beta",
+        "status": "confirmed",
+        "select": "make beta (-DBOARD_BETA)",
+        "build_command": "make beta",
+        "anchors": [
+          {
+            "evidence": "e-0002"
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0003",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "configs",
+      "key": "c3",
+      "body": {
+        "key": "c3",
+        "name": "gamma",
+        "status": "candidate",
+        "select": "BOARD_GAMMA (README에만 있고 Makefile 타깃과 build_cfg_gamma.h가 없음)",
+        "build_command": null,
+        "anchors": [
+          {
+            "evidence": "e-0003"
+          },
+          {
+            "evidence": "e-0004"
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0004",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i1",
+      "body": {
+        "key": "i1",
+        "kind": "reset",
+        "name": "Reset_Handler",
+        "configs": ["all"],
+        "anchors": [
+          {
+            "evidence": "e-0005"
+          }
+        ],
+        "notes": ""
+      }
+    },
+    {
+      "id": "c-0005",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i2",
+      "body": {
+        "key": "i2",
+        "kind": "isr",
+        "name": "SysTick_Handler",
+        "configs": ["all"],
+        "anchors": [
+          {
+            "evidence": "e-0006"
+          }
+        ],
+        "notes": ""
+      }
+    },
+    {
+      "id": "c-0006",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i3",
+      "body": {
+        "key": "i3",
+        "kind": "isr",
+        "name": "USART1_IRQHandler",
+        "configs": ["all"],
+        "anchors": [
+          {
+            "evidence": "e-0007"
+          }
+        ],
+        "notes": ""
+      }
+    },
+    {
+      "id": "c-0007",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i4",
+      "body": {
+        "key": "i4",
+        "kind": "isr",
+        "name": "ADC1_IRQHandler",
+        "configs": ["all"],
+        "anchors": [
+          {
+            "evidence": "e-0008"
+          }
+        ],
+        "notes": ""
+      }
+    },
+    {
+      "id": "c-0008",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i5",
+      "body": {
+        "key": "i5",
+        "kind": "isr",
+        "name": "TIM3_IRQHandler",
+        "configs": ["beta"],
+        "anchors": [
+          {
+            "evidence": "e-0009"
+          },
+          {
+            "evidence": "e-0010"
+          }
+        ],
+        "notes": ""
+      }
+    },
+    {
+      "id": "c-0009",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i6",
+      "body": {
+        "key": "i6",
+        "kind": "main_loop",
+        "name": "main",
+        "configs": ["all"],
+        "anchors": [
+          {
+            "evidence": "e-0011"
+          }
+        ],
+        "notes": ""
+      }
+    },
+    {
+      "id": "c-0010",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i7",
+      "body": {
+        "key": "i7",
+        "kind": "command_table",
+        "name": "cmd_table",
+        "configs": ["all"],
+        "anchors": [
+          {
+            "evidence": "e-0012"
+          }
+        ],
+        "notes": ""
+      }
+    },
+    {
+      "id": "c-0011",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i8",
+      "body": {
+        "key": "i8",
+        "kind": "command",
+        "name": "GET_TEMP",
+        "configs": ["all"],
+        "anchors": [
+          {
+            "evidence": "e-0013"
+          }
+        ],
+        "notes": "0x01"
+      }
+    },
+    {
+      "id": "c-0012",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i9",
+      "body": {
+        "key": "i9",
+        "kind": "command",
+        "name": "SET_SETPOINT",
+        "configs": ["all"],
+        "anchors": [
+          {
+            "evidence": "e-0014"
+          }
+        ],
+        "notes": "0x02"
+      }
+    },
+    {
+      "id": "c-0013",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i10",
+      "body": {
+        "key": "i10",
+        "kind": "command",
+        "name": "GET_STATUS",
+        "configs": ["all"],
+        "anchors": [
+          {
+            "evidence": "e-0015"
+          }
+        ],
+        "notes": "0x03"
+      }
+    },
+    {
+      "id": "c-0014",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i11",
+      "body": {
+        "key": "i11",
+        "kind": "command",
+        "name": "RESET_FAULT",
+        "configs": ["all"],
+        "anchors": [
+          {
+            "evidence": "e-0016"
+          }
+        ],
+        "notes": "0x04"
+      }
+    },
+    {
+      "id": "c-0015",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i12",
+      "body": {
+        "key": "i12",
+        "kind": "command",
+        "name": "SET_MODE",
+        "configs": ["alpha"],
+        "anchors": [
+          {
+            "evidence": "e-0017"
+          },
+          {
+            "evidence": "e-0018"
+          }
+        ],
+        "notes": "0x05"
+      }
+    },
+    {
+      "id": "c-0016",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i13",
+      "body": {
+        "key": "i13",
+        "kind": "command",
+        "name": "SET_FAN",
+        "configs": ["all"],
+        "anchors": [
+          {
+            "evidence": "e-0019"
+          }
+        ],
+        "notes": "0x06"
+      }
+    },
+    {
+      "id": "c-0017",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i14",
+      "body": {
+        "key": "i14",
+        "kind": "command",
+        "name": "GET_VERSION",
+        "configs": ["all"],
+        "anchors": [
+          {
+            "evidence": "e-0020"
+          }
+        ],
+        "notes": "0x10"
+      }
+    },
+    {
+      "id": "c-0018",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i15",
+      "body": {
+        "key": "i15",
+        "kind": "interface",
+        "name": "USART1 host link",
+        "configs": ["all"],
+        "anchors": [
+          {
+            "evidence": "e-0021"
+          }
+        ],
+        "notes": "115200 baud"
+      }
+    },
+    {
+      "id": "c-0019",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "boundaries",
+      "key": "b1",
+      "body": {
+        "key": "b1",
+        "path": "vendor/acme",
+        "kind": "vendor_hal",
+        "reason": "Acme 라이선스 머리말",
+        "anchors": [
+          {
+            "evidence": "e-0022"
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0020",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "not_found",
+      "key": "n1",
+      "body": {
+        "key": "n1",
+        "what": "DMA 사용",
+        "searches": [
+          {
+            "tool": "Grep",
+            "pattern": "DMA",
+            "scope": "src/ include/",
+            "hits": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0021",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "observations",
+      "key": "o1",
+      "body": {
+        "key": "o1",
+        "text": "USART1_IRQHandler가 g_rx_ring에 바이트를 넣고, main의 proto_poll/handle_byte가 프레임을 조립해 CRC가 맞으면 cmd_dispatch를 부른다",
+        "configs": ["alpha", "beta"],
+        "anchors": [
+          {
+            "evidence": "e-0023"
+          },
+          {
+            "evidence": "e-0024"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0022",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "observations",
+      "key": "o2",
+      "body": {
+        "key": "o2",
+        "text": "CRC가 틀리면 프로토콜 층이 ERR_CRC(0x02) 응답을 보내고 디스패치하지 않는다",
+        "configs": ["alpha", "beta"],
+        "anchors": [
+          {
+            "evidence": "e-0025"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0023",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "observations",
+      "key": "o3",
+      "body": {
+        "key": "o3",
+        "text": "페이로드 길이가 2가 아니면 ERR_BAD_LEN(0x05)으로 응답한다",
+        "configs": ["alpha", "beta"],
+        "anchors": [
+          {
+            "evidence": "e-0026"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0024",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "observations",
+      "key": "o4",
+      "body": {
+        "key": "o4",
+        "text": "과열 고장이 켜져 있으면 범위 검사보다 먼저 ERR_FAULT(0x06)로 거부한다",
+        "configs": ["alpha", "beta"],
+        "anchors": [
+          {
+            "evidence": "e-0027"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0025",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "observations",
+      "key": "o5",
+      "body": {
+        "key": "o5",
+        "text": "설정값이 50~850(0.1 C) 밖이면 ERR_RANGE(0x03)",
+        "configs": ["alpha", "beta"],
+        "anchors": [
+          {
+            "evidence": "e-0028"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0026",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "observations",
+      "key": "o6",
+      "body": {
+        "key": "o6",
+        "text": "EEPROM 저장이 대기 중이면 ERR_BUSY(0x04)",
+        "configs": ["alpha", "beta"],
+        "anchors": [
+          {
+            "evidence": "e-0029"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0027",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "observations",
+      "key": "o7",
+      "body": {
+        "key": "o7",
+        "text": "정상이면 g_setpoint_dc에 쓰고 ee_request_save로 저장을 요청하고 상태 0x00, CMD|0x80 응답을 보낸다",
+        "configs": ["alpha", "beta"],
+        "anchors": [
+          {
+            "evidence": "e-0030"
+          },
+          {
+            "evidence": "e-0031"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0028",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "observations",
+      "key": "o8",
+      "body": {
+        "key": "o8",
+        "text": "바이트 사이가 PROTO_FRAME_TIMEOUT_TICKS를 넘으면 부분 프레임을 응답 없이 버린다",
+        "configs": ["alpha", "beta"],
+        "anchors": [
+          {
+            "evidence": "e-0032"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0029",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "observations",
+      "key": "o9",
+      "body": {
+        "key": "o9",
+        "text": "EEPROM 쓰기 실패는 CFG_EE_RETRY_MAX번 다시 시도한 뒤 FAULT_EEPROM을 올린다. 프로토콜의 재전송은 없다",
+        "configs": ["alpha", "beta"],
+        "anchors": [
+          {
+            "evidence": "e-0033"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0030",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "observations",
+      "key": "o10",
+      "body": {
+        "key": "o10",
+        "text": "g_setpoint_dc는 부팅 때 ee_load와, 설정 CRC 고장에서 fault_actions 표로 불리는 restore_defaults도 쓴다",
+        "configs": ["alpha", "beta"],
+        "anchors": [
+          {
+            "evidence": "e-0034"
+          },
+          {
+            "evidence": "e-0035"
+          },
+          {
+            "evidence": "e-0036"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0031",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "observations",
+      "key": "o11",
+      "body": {
+        "key": "o11",
+        "text": "CRC-8은 다항식 0x31, 초기값 0xFF다. 문서는 0x07, 0x00이라 한다",
+        "configs": ["alpha", "beta"],
+        "anchors": [
+          {
+            "evidence": "e-0037"
+          },
+          {
+            "evidence": "e-0038"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0032",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "quantities",
+      "key": "q1",
+      "body": {
+        "key": "q1",
+        "symbol": "CFG_EE_RETRY_MAX",
+        "expr": "3U",
+        "values": [
+          {
+            "configs": ["alpha", "beta"],
+            "value": "3"
+          }
+        ],
+        "unit": "count",
+        "unit_status": "derived",
+        "nature": "setting",
+        "chain": [],
+        "anchors": [
+          {
+            "evidence": "e-0039"
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0033",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "requirements",
+      "key": "r1",
+      "body": {
+        "key": "r1",
+        "type": "functional",
+        "condition": "SET_SETPOINT를 50~850(0.1 C) 값으로 받고 고장·저장 대기가 없을 때",
+        "behavior": "설정값을 바꾸고 저장을 요청한다",
+        "result": "상태 0x00 응답",
+        "configs": ["alpha", "beta"],
+        "refs": ["o7"],
+        "basis": "code"
+      }
+    },
+    {
+      "id": "c-0034",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "unknowns",
+      "key": "k1",
+      "body": {
+        "key": "k1",
+        "question": "바이트 간 시간 초과 PROTO_FRAME_TIMEOUT_TICKS가 구성마다 몇 ms인지는 틱 원천과 구성별 틱 주기를 따라가지 않아 이 단위에서 정하지 못했다",
+        "needs": "other",
+        "refs": ["o8"]
+      }
+    },
+    {
+      "id": "c-0035",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "conflicts",
+      "key": "x1",
+      "body": {
+        "key": "x1",
+        "text": "CRC 매개변수가 문서와 코드에서 다르다",
+        "sides": [
+          {
+            "claim": "문서: 0x07, 초기 0x00",
+            "anchors": [
+              {
+                "evidence": "e-0040"
+              }
+            ]
+          },
+          {
+            "claim": "코드: 0x31, 초기 0xFF",
+            "anchors": [
+              {
+                "evidence": "e-0037"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0036",
+      "unit": "u-0003",
+      "run": "r-0003",
+      "section": "quantities",
+      "key": "q1",
+      "body": {
+        "key": "q1",
+        "symbol": "PROTO_FRAME_TIMEOUT_TICKS",
+        "expr": "20U",
+        "values": [
+          {
+            "configs": ["alpha"],
+            "value": "20 tick = 20 ms"
+          },
+          {
+            "configs": ["beta"],
+            "value": "20 tick = 200 ms"
+          }
+        ],
+        "unit": "ms",
+        "unit_status": "derived",
+        "nature": "setting",
+        "chain": [
+          {
+            "role": "value",
+            "anchor": {
+              "evidence": "e-0041"
+            }
+          },
+          {
+            "role": "consumer",
+            "anchor": {
+              "evidence": "e-0032"
+            }
+          }
+        ],
+        "anchors": []
+      }
+    },
+    {
+      "id": "c-0037",
+      "unit": "u-0003",
+      "run": "r-0004",
+      "section": "observations",
+      "key": "o1",
+      "body": {
+        "key": "o1",
+        "text": "SysTick이 CFG_CPU_HZ / CFG_TICK_HZ 클럭마다 인터럽트를 내고 g_ticks를 1 늘린다",
+        "configs": ["alpha", "beta"],
+        "anchors": [
+          {
+            "evidence": "e-0042"
+          },
+          {
+            "evidence": "e-0043"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0038",
+      "unit": "u-0003",
+      "run": "r-0004",
+      "section": "observations",
+      "key": "o2",
+      "body": {
+        "key": "o2",
+        "text": "proto_poll은 마지막 바이트 뒤 PROTO_FRAME_TIMEOUT_TICKS를 넘으면(>) 부분 프레임을 버린다. 21틱째에 시간 초과가 된다",
+        "configs": ["alpha", "beta"],
+        "anchors": [
+          {
+            "evidence": "e-0044"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0039",
+      "unit": "u-0003",
+      "run": "r-0004",
+      "section": "observations",
+      "key": "o3",
+      "body": {
+        "key": "o3",
+        "text": "벤치 로그의 최대 응답 지연 3.20 ms는 alpha 보드 한 번의 관찰값이다",
+        "configs": ["alpha"],
+        "anchors": [
+          {
+            "evidence": "e-0045"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0040",
+      "unit": "u-0003",
+      "run": "r-0004",
+      "section": "observations",
+      "key": "o4",
+      "body": {
+        "key": "o4",
+        "text": "delay_ms는 1틱을 1 ms로 보고 틱 수로 기다린다. beta(틱 10 ms)에서는 요청의 10배를 기다린다: hwrev의 2 ms는 20 ms, 플래시 지우기 뒤 5 ms는 50 ms",
+        "configs": ["alpha", "beta"],
+        "anchors": [
+          {
+            "evidence": "e-0046"
+          },
+          {
+            "evidence": "e-0047"
+          },
+          {
+            "evidence": "e-0048"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0041",
+      "unit": "u-0003",
+      "run": "r-0004",
+      "section": "observations",
+      "key": "o5",
+      "body": {
+        "key": "o5",
+        "text": "fan_poll은 CFG_TICK_HZ 틱(1초)마다 타코 펄스 수로 g_fan_rpm을 다시 계산한다",
+        "configs": ["all"],
+        "anchors": [
+          {
+            "evidence": "e-0049"
+          },
+          {
+            "evidence": "e-0050"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0042",
+      "unit": "u-0003",
+      "run": "r-0004",
+      "section": "quantities",
+      "key": "q1",
+      "body": {
+        "key": "q1",
+        "symbol": "CFG_TICK_HZ",
+        "expr": "1000U / 100U",
+        "values": [
+          {
+            "configs": ["alpha"],
+            "value": "1000"
+          },
+          {
+            "configs": ["beta"],
+            "value": "100"
+          }
+        ],
+        "unit": "Hz",
+        "unit_status": "derived",
+        "nature": "setting",
+        "chain": [
+          {
+            "role": "value",
+            "anchor": {
+              "evidence": "e-0051"
+            }
+          },
+          {
+            "role": "consumer",
+            "anchor": {
+              "evidence": "e-0042"
+            }
+          }
+        ],
+        "anchors": [
+          {
+            "evidence": "e-0052"
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0043",
+      "unit": "u-0003",
+      "run": "r-0004",
+      "section": "quantities",
+      "key": "q2",
+      "body": {
+        "key": "q2",
+        "symbol": "PROTO_FRAME_TIMEOUT_TICKS",
+        "expr": "20U (beta: -DPROTO_FRAME_TIMEOUT_TICKS=5U)",
+        "values": [
+          {
+            "configs": ["alpha"],
+            "value": "20 tick = 20 ms"
+          },
+          {
+            "configs": ["beta"],
+            "value": "5 tick = 50 ms"
+          }
+        ],
+        "unit": "ms",
+        "unit_status": "derived",
+        "nature": "setting",
+        "chain": [
+          {
+            "role": "value",
+            "anchor": {
+              "evidence": "e-0041"
+            }
+          },
+          {
+            "role": "value",
+            "anchor": {
+              "evidence": "e-0053"
+            }
+          },
+          {
+            "role": "consumer",
+            "anchor": {
+              "evidence": "e-0032"
+            }
+          },
+          {
+            "role": "tick_source",
+            "anchor": {
+              "evidence": "e-0043"
+            }
+          }
+        ],
+        "anchors": []
+      }
+    },
+    {
+      "id": "c-0044",
+      "unit": "u-0003",
+      "run": "r-0004",
+      "section": "quantities",
+      "key": "q3",
+      "body": {
+        "key": "q3",
+        "symbol": "CTRL_PERIOD_TICKS",
+        "expr": "(CFG_TICK_HZ / 10U)",
+        "values": [
+          {
+            "configs": ["alpha", "beta"],
+            "value": "100"
+          }
+        ],
+        "unit": "ms",
+        "unit_status": "derived",
+        "nature": "computed",
+        "chain": [
+          {
+            "role": "value",
+            "anchor": {
+              "evidence": "e-0054"
+            }
+          },
+          {
+            "role": "consumer",
+            "anchor": {
+              "evidence": "e-0055"
+            }
+          }
+        ],
+        "anchors": []
+      }
+    },
+    {
+      "id": "c-0045",
+      "unit": "u-0003",
+      "run": "r-0004",
+      "section": "quantities",
+      "key": "q4",
+      "body": {
+        "key": "q4",
+        "symbol": "HEATER_MAX_ON_CYCLES",
+        "expr": "600U",
+        "values": [
+          {
+            "configs": ["alpha", "beta"],
+            "value": "60"
+          }
+        ],
+        "unit": "s",
+        "unit_status": "derived",
+        "nature": "setting",
+        "chain": [
+          {
+            "role": "value",
+            "anchor": {
+              "evidence": "e-0056"
+            }
+          },
+          {
+            "role": "consumer",
+            "anchor": {
+              "evidence": "e-0057"
+            }
+          }
+        ],
+        "anchors": []
+      }
+    },
+    {
+      "id": "c-0046",
+      "unit": "u-0003",
+      "run": "r-0004",
+      "section": "quantities",
+      "key": "q5",
+      "body": {
+        "key": "q5",
+        "symbol": "WDT_RELOAD",
+        "expr": "625U (prescaler /64, LSI clock)",
+        "values": [],
+        "unit": "",
+        "unit_status": "unknown",
+        "nature": "setting",
+        "chain": [
+          {
+            "role": "value",
+            "anchor": {
+              "evidence": "e-0058"
+            }
+          }
+        ],
+        "anchors": [
+          {
+            "evidence": "e-0059"
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0047",
+      "unit": "u-0003",
+      "run": "r-0004",
+      "section": "requirements",
+      "key": "r1",
+      "body": {
+        "key": "r1",
+        "type": "nonfunctional",
+        "condition": "프레임 수신 중 바이트 사이가 시간 초과(alpha 20틱, beta 5틱)를 넘으면",
+        "behavior": "부분 프레임을 응답 없이 버린다",
+        "result": "alpha 약 20 ms, beta 약 50 ms 뒤 다음 SOF를 기다린다",
+        "configs": ["alpha", "beta"],
+        "refs": ["o2", "q2"],
+        "basis": "code"
+      }
+    },
+    {
+      "id": "c-0048",
+      "unit": "u-0003",
+      "run": "r-0004",
+      "section": "requirements",
+      "key": "r2",
+      "body": {
+        "key": "r2",
+        "type": "functional",
+        "condition": "히터가 600 제어 주기(약 60 s) 넘게 연속으로 켜지면",
+        "behavior": "히터를 끄고 FAULT_HEATER_TIMEOUT을 올린다",
+        "result": "고장이 풀릴 때까지 히터가 꺼진 채다",
+        "configs": ["alpha", "beta"],
+        "refs": ["q4"],
+        "basis": "code"
+      }
+    },
+    {
+      "id": "c-0049",
+      "unit": "u-0003",
+      "run": "r-0004",
+      "section": "impl_choices",
+      "key": "ic1",
+      "body": {
+        "key": "ic1",
+        "text": "main 루프 폴링으로 제어 주기를 센다",
+        "refs": ["q3"]
+      }
+    },
+    {
+      "id": "c-0050",
+      "unit": "u-0003",
+      "run": "r-0004",
+      "section": "unknowns",
+      "key": "k1",
+      "body": {
+        "key": "k1",
+        "question": "워치독 시간 초과 = 625 x 64 / f_LSI. LSI 주파수가 코드에 없다",
+        "needs": "external_doc",
+        "refs": ["q5"]
+      }
+    },
+    {
+      "id": "c-0051",
+      "unit": "u-0003",
+      "run": "r-0004",
+      "section": "conflicts",
+      "key": "x1",
+      "body": {
+        "key": "x1",
+        "text": "proto.h 주석은 20 ms라 하나 beta는 Makefile이 5틱으로 덮어쓰고 틱이 10 ms라 50 ms다",
+        "sides": [
+          {
+            "claim": "주석: 20 ms",
+            "anchors": [
+              {
+                "evidence": "e-0060"
+              }
+            ]
+          },
+          {
+            "claim": "beta: 5틱 x 10 ms",
+            "anchors": [
+              {
+                "evidence": "e-0061"
+              },
+              {
+                "evidence": "e-0052"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0052",
+      "unit": "u-0004",
+      "run": "r-0005",
+      "section": "observations",
+      "key": "o1",
+      "body": {
+        "key": "o1",
+        "text": "g_fault_flags: ADC1 ISR(우선순위 0)가 |=로 쓰고 main의 fault_clear가 인터럽트를 막지 않고 &=~로 쓴다. 그 사이 ISR가 올린 비트를 잃을 수 있다",
+        "configs": ["alpha", "beta"],
+        "anchors": [
+          {
+            "evidence": "e-0062"
+          },
+          {
+            "evidence": "e-0063"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0053",
+      "unit": "u-0004",
+      "run": "r-0005",
+      "section": "observations",
+      "key": "o2",
+      "body": {
+        "key": "o2",
+        "text": "fault_raise는 __disable_irq/__enable_irq로 감싼다",
+        "configs": ["alpha", "beta"],
+        "anchors": [
+          {
+            "evidence": "e-0064"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0054",
+      "unit": "u-0004",
+      "run": "r-0005",
+      "section": "observations",
+      "key": "o3",
+      "body": {
+        "key": "o3",
+        "text": "g_rx_ring은 USART1 ISR만 head를, main만 tail을 쓰는 단일 생산자·단일 소비자 링이고 바이트 인덱스라 잠금이 필요 없다. 가득 차면 바이트를 버리고 g_rx_overruns를 올린다",
+        "configs": ["alpha", "beta"],
+        "anchors": [
+          {
+            "evidence": "e-0065"
+          },
+          {
+            "evidence": "e-0066"
+          },
+          {
+            "evidence": "e-0023"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0055",
+      "unit": "u-0004",
+      "run": "r-0005",
+      "section": "observations",
+      "key": "o4",
+      "body": {
+        "key": "o4",
+        "text": "g_adc_raw는 ADC1 ISR가 쓰고 main의 control_temp_dc가 읽는다",
+        "configs": ["alpha", "beta"],
+        "anchors": [
+          {
+            "evidence": "e-0067"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0056",
+      "unit": "u-0004",
+      "run": "r-0005",
+      "section": "observations",
+      "key": "o5",
+      "body": {
+        "key": "o5",
+        "text": "g_ticks는 SysTick ISR가 늘리고 main이 timer_now로 읽는다(32비트)",
+        "configs": ["alpha", "beta"],
+        "anchors": [
+          {
+            "evidence": "e-0043"
+          },
+          {
+            "evidence": "e-0068"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0057",
+      "unit": "u-0004",
+      "run": "r-0005",
+      "section": "observations",
+      "key": "o6",
+      "body": {
+        "key": "o6",
+        "text": "우선순위: ADC1 0, USART1 1, TIM3 2",
+        "configs": ["alpha", "beta"],
+        "anchors": [
+          {
+            "evidence": "e-0069"
+          },
+          {
+            "evidence": "e-0070"
+          },
+          {
+            "evidence": "e-0071"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0058",
+      "unit": "u-0004",
+      "run": "r-0005",
+      "section": "observations",
+      "key": "o7",
+      "body": {
+        "key": "o7",
+        "text": "beta에서 s_tach_pulses는 TIM3 ISR가 올리고 fan_poll이 보호 없이 0으로 지워 펄스를 잃을 수 있다",
+        "configs": ["beta"],
+        "anchors": [
+          {
+            "evidence": "e-0072"
+          },
+          {
+            "evidence": "e-0073"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0059",
+      "unit": "u-0004",
+      "run": "r-0005",
+      "section": "constraints",
+      "key": "ct1",
+      "body": {
+        "key": "ct1",
+        "text": "g_fault_flags를 main 문맥에서 고칠 때는 ADC1 인터럽트를 막아야 고장 비트를 잃지 않는다",
+        "area": "concurrency",
+        "configs": ["alpha", "beta"],
+        "refs": ["o1"],
+        "reason": "ISR와 main이 같은 바이트를 읽기-수정-쓰기한다"
+      }
+    },
+    {
+      "id": "c-0060",
+      "unit": "u-0004",
+      "run": "r-0005",
+      "section": "absences",
+      "key": "a1",
+      "body": {
+        "key": "a1",
+        "claim": "DMA를 쓰지 않는다",
+        "configs": ["alpha", "beta"],
+        "searches": [
+          {
+            "tool": "Grep",
+            "pattern": "DMA",
+            "scope": "src include vendor",
+            "hits": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0061",
+      "unit": "u-0004",
+      "run": "r-0005",
+      "section": "absences",
+      "key": "a2",
+      "body": {
+        "key": "a2",
+        "claim": "g_setpoint_dc는 SET_SETPOINT 처리기(cmd_set_setpoint) 밖에서 쓰는 곳이 없다",
+        "configs": ["alpha", "beta"],
+        "searches": [
+          {
+            "tool": "Grep",
+            "pattern": "g_setpoint_dc =",
+            "scope": "src/cmd.c",
+            "hits": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0062",
+      "unit": "u-0005",
+      "run": "r-0006",
+      "section": "observations",
+      "key": "o1",
+      "body": {
+        "key": "o1",
+        "text": "Makefile의 alpha/beta 타깃이 -DBOARD_ALPHA/-DBOARD_BETA를 주고 board.h가 build_cfg_<board>.h를 고른다",
+        "configs": ["alpha", "beta"],
+        "anchors": [
+          {
+            "evidence": "e-0074"
+          },
+          {
+            "evidence": "e-0075"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0063",
+      "unit": "u-0005",
+      "run": "r-0006",
+      "section": "observations",
+      "key": "o2",
+      "body": {
+        "key": "o2",
+        "text": "CPU 클럭은 alpha 72 MHz, beta 48 MHz",
+        "configs": ["alpha", "beta"],
+        "anchors": [
+          {
+            "evidence": "e-0076"
+          },
+          {
+            "evidence": "e-0077"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0064",
+      "unit": "u-0005",
+      "run": "r-0006",
+      "section": "observations",
+      "key": "o3",
+      "body": {
+        "key": "o3",
+        "text": "틱은 alpha 1000 Hz, beta 100 Hz",
+        "configs": ["alpha", "beta"],
+        "anchors": [
+          {
+            "evidence": "e-0051"
+          },
+          {
+            "evidence": "e-0052"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0065",
+      "unit": "u-0005",
+      "run": "r-0006",
+      "section": "observations",
+      "key": "o4",
+      "body": {
+        "key": "o4",
+        "text": "SET_MODE는 alpha에만 있다(CFG_FEATURE_MODE)",
+        "configs": ["alpha"],
+        "anchors": [
+          {
+            "evidence": "e-0017"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0066",
+      "unit": "u-0005",
+      "run": "r-0006",
+      "section": "observations",
+      "key": "o5",
+      "body": {
+        "key": "o5",
+        "text": "팬 제어(fan.c, SET_FAN, TIM3 ISR)는 beta에만 있다",
+        "configs": ["beta"],
+        "anchors": [
+          {
+            "evidence": "e-0010"
+          },
+          {
+            "evidence": "e-0078"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0067",
+      "unit": "u-0005",
+      "run": "r-0006",
+      "section": "observations",
+      "key": "o6",
+      "body": {
+        "key": "o6",
+        "text": "EEPROM 재시도는 alpha 3, beta 5",
+        "configs": ["alpha", "beta"],
+        "anchors": [
+          {
+            "evidence": "e-0039"
+          },
+          {
+            "evidence": "e-0079"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0068",
+      "unit": "u-0005",
+      "run": "r-0006",
+      "section": "observations",
+      "key": "o7",
+      "body": {
+        "key": "o7",
+        "text": "hwrev.c가 실행 중 스트랩으로 리비전을 읽어 rev C 이상이면 g_cal_offset을 -12로 둔다",
+        "configs": ["alpha", "beta"],
+        "anchors": [
+          {
+            "evidence": "e-0080"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0069",
+      "unit": "u-0005",
+      "run": "r-0006",
+      "section": "observations",
+      "key": "o8",
+      "body": {
+        "key": "o8",
+        "text": "legacy_pid.c는 어느 SRCS에도 없고, BOARD_GAMMA 분기는 없는 헤더를 가리키며, control.c의 #if 0 블록도 쓰이지 않는다",
+        "configs": ["alpha", "beta"],
+        "anchors": [
+          {
+            "evidence": "e-0003"
+          },
+          {
+            "evidence": "e-0081"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0070",
+      "unit": "u-0005",
+      "run": "r-0006",
+      "section": "observations",
+      "key": "o10",
+      "body": {
+        "key": "o10",
+        "text": "beta 타깃만 Makefile에서 -DPROTO_FRAME_TIMEOUT_TICKS=5U로 바이트 간 시간 초과를 덮어써 50 ms(5틱 x 10 ms)다. alpha는 proto.h의 20틱(20 ms)",
+        "configs": ["alpha", "beta"],
+        "anchors": [
+          {
+            "evidence": "e-0053"
+          },
+          {
+            "evidence": "e-0082"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0071",
+      "unit": "u-0005",
+      "run": "r-0006",
+      "section": "observations",
+      "key": "o11",
+      "body": {
+        "key": "o11",
+        "text": "delay_ms는 1틱=1 ms를 가정해 beta에서는 10배를 기다린다",
+        "configs": ["beta"],
+        "anchors": [
+          {
+            "evidence": "e-0046"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0072",
+      "unit": "u-0005",
+      "run": "r-0006",
+      "section": "observations",
+      "key": "o9",
+      "body": {
+        "key": "o9",
+        "text": "README는 BETA가 2018년부터 양산 보드라고 한다(문서 주장, 코드로 확인 못 함)",
+        "configs": ["beta"],
+        "anchors": [
+          {
+            "evidence": "e-0083"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0073",
+      "unit": "u-0005",
+      "run": "r-0006",
+      "section": "observations",
+      "key": "o12",
+      "body": {
+        "key": "o12",
+        "text": "alpha와 beta는 같은 링커 스크립트 acme_m3.ld로 링크해 메모리 배치가 같다: .data와 .bss는 RAM(0x20000000, 20K)에, 플래시 마지막 2K는 EEPROM 흉내 영역에 놓인다.",
+        "configs": ["alpha", "beta"],
+        "anchors": [
+          {
+            "evidence": "e-0084"
+          },
+          {
+            "evidence": "e-0085"
+          },
+          {
+            "evidence": "e-0086"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0074",
+      "unit": "u-0005",
+      "run": "r-0006",
+      "section": "observations",
+      "key": "o13",
+      "body": {
+        "key": "o13",
+        "text": "hwrev_init는 스트랩 핀을 읽기 전 delay_ms(2U)로 풀업이 안정되기를 기다린다",
+        "configs": ["alpha"],
+        "anchors": [
+          {
+            "evidence": "e-0047"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0075",
+      "unit": "u-0005",
+      "run": "r-0006",
+      "section": "observations",
+      "key": "o14",
+      "body": {
+        "key": "o14",
+        "text": "hwrev_init는 스트랩 핀을 읽기 전 delay_ms(2U)로 풀업이 안정되기를 기다린다",
+        "configs": ["beta"],
+        "anchors": [
+          {
+            "evidence": "e-0047"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0076",
+      "unit": "u-0005",
+      "run": "r-0006",
+      "section": "observations",
+      "key": "o15",
+      "body": {
+        "key": "o15",
+        "text": "워치독은 LSI 약 40 kHz를 /64로 나눈 625 Hz로 세고 reload가 625라 약 1 s 뒤 리셋한다",
+        "configs": ["alpha", "beta"],
+        "anchors": [
+          {
+            "evidence": "e-0059"
+          },
+          {
+            "evidence": "e-0058"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0077",
+      "unit": "u-0005",
+      "run": "r-0006",
+      "section": "unknowns",
+      "key": "k1",
+      "body": {
+        "key": "k1",
+        "question": "어느 구성이 출하되는지 코드로는 알 수 없다",
+        "needs": "other",
+        "refs": ["o9"]
+      }
+    },
+    {
+      "id": "c-0078",
+      "unit": "u-0005",
+      "run": "r-0006",
+      "section": "conflicts",
+      "key": "x1",
+      "body": {
+        "key": "x1",
+        "text": "proto.h 주석 20 ms는 beta의 50 ms(5틱 x 10 ms)와 어긋난다",
+        "sides": [
+          {
+            "claim": "주석 20 ms",
+            "anchors": [
+              {
+                "evidence": "e-0060"
+              }
+            ]
+          },
+          {
+            "claim": "beta 덮어쓰기와 틱 100 Hz",
+            "anchors": [
+              {
+                "evidence": "e-0061"
+              },
+              {
+                "evidence": "e-0052"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0079",
+      "unit": "u-0005",
+      "run": "r-0006",
+      "section": "absences",
+      "key": "a1",
+      "body": {
+        "key": "a1",
+        "claim": "legacy_pid.c를 컴파일하는 구성이 없다",
+        "configs": ["alpha", "beta"],
+        "searches": [
+          {
+            "tool": "Grep",
+            "pattern": "legacy_pid",
+            "scope": "Makefile",
+            "hits": 0
+          }
+        ]
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "id": "e-0001",
+      "kind": "code",
+      "path": "Makefile",
+      "start": 23,
+      "end": 24,
+      "quote": "alpha: CFLAGS += -DBOARD_ALPHA alpha: build/alpha/thermo.bin",
+      "command": null
+    },
+    {
+      "id": "e-0002",
+      "kind": "code",
+      "path": "Makefile",
+      "start": 27,
+      "end": 28,
+      "quote": "beta: CFLAGS += -DBOARD_BETA ... beta: build/beta/thermo.bin",
+      "command": null
+    },
+    {
+      "id": "e-0003",
+      "kind": "code",
+      "path": "include/board.h",
+      "start": 14,
+      "end": 15,
+      "quote": "#elif defined(BOARD_GAMMA) #include \"build_cfg_gamma.h\"",
+      "command": null
+    },
+    {
+      "id": "e-0004",
+      "kind": "doc_claim",
+      "path": "README.md",
+      "start": 9,
+      "end": 9,
+      "quote": "- GAMMA: low-cost variant.",
+      "command": null
+    },
+    {
+      "id": "e-0005",
+      "kind": "code",
+      "path": "vendor/acme/startup_acme.c",
+      "start": 15,
+      "end": 15,
+      "quote": "void Reset_Handler(void)",
+      "command": null
+    },
+    {
+      "id": "e-0006",
+      "kind": "code",
+      "path": "src/timer.c",
+      "start": 28,
+      "end": 30,
+      "quote": "void SysTick_Handler(void) { g_ticks++;",
+      "command": null
+    },
+    {
+      "id": "e-0007",
+      "kind": "code",
+      "path": "src/uart.c",
+      "start": 36,
+      "end": 36,
+      "quote": "void USART1_IRQHandler(void)",
+      "command": null
+    },
+    {
+      "id": "e-0008",
+      "kind": "code",
+      "path": "src/adc.c",
+      "start": 35,
+      "end": 35,
+      "quote": "void ADC1_IRQHandler(void)",
+      "command": null
+    },
+    {
+      "id": "e-0009",
+      "kind": "code",
+      "path": "src/fan.c",
+      "start": 42,
+      "end": 42,
+      "quote": "void TIM3_IRQHandler(void)",
+      "command": null
+    },
+    {
+      "id": "e-0010",
+      "kind": "code",
+      "path": "Makefile",
+      "start": 17,
+      "end": 17,
+      "quote": "SRCS_beta := src/fan.c",
+      "command": null
+    },
+    {
+      "id": "e-0011",
+      "kind": "code",
+      "path": "src/main.c",
+      "start": 18,
+      "end": 18,
+      "quote": "int main(void)",
+      "command": null
+    },
+    {
+      "id": "e-0012",
+      "kind": "code",
+      "path": "src/cmd.c",
+      "start": 125,
+      "end": 125,
+      "quote": "static const struct cmd_entry cmd_table[] = {",
+      "command": null
+    },
+    {
+      "id": "e-0013",
+      "kind": "code",
+      "path": "src/cmd.c",
+      "start": 126,
+      "end": 126,
+      "quote": "{ CMD_GET_TEMP,     0U, 0U, cmd_get_temp },",
+      "command": null
+    },
+    {
+      "id": "e-0014",
+      "kind": "code",
+      "path": "src/cmd.c",
+      "start": 127,
+      "end": 127,
+      "quote": "{ CMD_SET_SETPOINT, 2U, 2U, cmd_set_setpoint },",
+      "command": null
+    },
+    {
+      "id": "e-0015",
+      "kind": "code",
+      "path": "src/cmd.c",
+      "start": 128,
+      "end": 128,
+      "quote": "{ CMD_GET_STATUS,   0U, 0U, cmd_get_status },",
+      "command": null
+    },
+    {
+      "id": "e-0016",
+      "kind": "code",
+      "path": "src/cmd.c",
+      "start": 129,
+      "end": 129,
+      "quote": "{ CMD_RESET_FAULT,  1U, 1U, cmd_reset_fault },",
+      "command": null
+    },
+    {
+      "id": "e-0017",
+      "kind": "code",
+      "path": "src/cmd.c",
+      "start": 131,
+      "end": 131,
+      "quote": "{ CMD_SET_MODE,     1U, 1U, cmd_set_mode },",
+      "command": null
+    },
+    {
+      "id": "e-0018",
+      "kind": "code",
+      "path": "config/build_cfg_alpha.h",
+      "start": 11,
+      "end": 11,
+      "quote": "#define CFG_FEATURE_MODE    1",
+      "command": null
+    },
+    {
+      "id": "e-0019",
+      "kind": "code",
+      "path": "src/cmd.c",
+      "start": 134,
+      "end": 134,
+      "quote": "{ CMD_SET_FAN,      1U, 1U, cmd_set_fan },",
+      "command": null
+    },
+    {
+      "id": "e-0020",
+      "kind": "code",
+      "path": "src/cmd.c",
+      "start": 136,
+      "end": 136,
+      "quote": "{ CMD_GET_VERSION,  0U, 0U, cmd_get_version },",
+      "command": null
+    },
+    {
+      "id": "e-0021",
+      "kind": "code",
+      "path": "src/uart.c",
+      "start": 18,
+      "end": 18,
+      "quote": "USART1->BRR = (uint32_t)(CFG_CPU_HZ / CFG_UART_BAUD);",
+      "command": null
+    },
+    {
+      "id": "e-0022",
+      "kind": "code",
+      "path": "vendor/acme/acme_m3.h",
+      "start": 5,
+      "end": 5,
+      "quote": "Licensed under the Acme Software License Agreement v1.2.",
+      "command": null
+    },
+    {
+      "id": "e-0023",
+      "kind": "code",
+      "path": "src/uart.c",
+      "start": 47,
+      "end": 47,
+      "quote": "if (!ring_put(&g_rx_ring, b)) {",
+      "command": null
+    },
+    {
+      "id": "e-0024",
+      "kind": "code",
+      "path": "src/proto.c",
+      "start": 87,
+      "end": 87,
+      "quote": "cmd_dispatch(s_cmd, s_payload, s_len);",
+      "command": null
+    },
+    {
+      "id": "e-0025",
+      "kind": "code",
+      "path": "src/proto.c",
+      "start": 84,
+      "end": 84,
+      "quote": "proto_send(s_cmd, ERR_CRC, 0, 0U);",
+      "command": null
+    },
+    {
+      "id": "e-0026",
+      "kind": "code",
+      "path": "src/cmd.c",
+      "start": 149,
+      "end": 150,
+      "quote": "if (len < e->min_len || len > e->max_len) { proto_send(cmd, ERR_BAD_LEN, 0, 0U);",
+      "command": null
+    },
+    {
+      "id": "e-0027",
+      "kind": "code",
+      "path": "src/cmd.c",
+      "start": 46,
+      "end": 46,
+      "quote": "return ERR_FAULT;",
+      "command": null
+    },
+    {
+      "id": "e-0028",
+      "kind": "code",
+      "path": "src/cmd.c",
+      "start": 49,
+      "end": 49,
+      "quote": "return ERR_RANGE;",
+      "command": null
+    },
+    {
+      "id": "e-0029",
+      "kind": "code",
+      "path": "src/cmd.c",
+      "start": 52,
+      "end": 52,
+      "quote": "return ERR_BUSY;",
+      "command": null
+    },
+    {
+      "id": "e-0030",
+      "kind": "code",
+      "path": "src/cmd.c",
+      "start": 54,
+      "end": 55,
+      "quote": "g_setpoint_dc = sp; ee_request_save();",
+      "command": null
+    },
+    {
+      "id": "e-0031",
+      "kind": "code",
+      "path": "src/cmd.c",
+      "start": 154,
+      "end": 154,
+      "quote": "proto_send(cmd, status, out, out_len);",
+      "command": null
+    },
+    {
+      "id": "e-0032",
+      "kind": "code",
+      "path": "src/proto.c",
+      "start": 97,
+      "end": 97,
+      "quote": "> PROTO_FRAME_TIMEOUT_TICKS) {",
+      "command": null
+    },
+    {
+      "id": "e-0033",
+      "kind": "code",
+      "path": "src/eeprom.c",
+      "start": 118,
+      "end": 120,
+      "quote": "if (++s_attempts >= CFG_EE_RETRY_MAX) { s_save_pending = 0U; fault_raise(FAULT_EEPROM);",
+      "command": null
+    },
+    {
+      "id": "e-0034",
+      "kind": "code",
+      "path": "src/eeprom.c",
+      "start": 86,
+      "end": 86,
+      "quote": "g_setpoint_dc = img->setpoint_dc;",
+      "command": null
+    },
+    {
+      "id": "e-0035",
+      "kind": "code",
+      "path": "src/fault.c",
+      "start": 24,
+      "end": 24,
+      "quote": "g_setpoint_dc = SETPOINT_DEFAULT_DC;",
+      "command": null
+    },
+    {
+      "id": "e-0036",
+      "kind": "code",
+      "path": "src/fault.c",
+      "start": 40,
+      "end": 40,
+      "quote": "restore_defaults,   /* FAULT_CFG_CRC */",
+      "command": null
+    },
+    {
+      "id": "e-0037",
+      "kind": "code",
+      "path": "src/proto.c",
+      "start": 29,
+      "end": 29,
+      "quote": "^ 0x31U)",
+      "command": null
+    },
+    {
+      "id": "e-0038",
+      "kind": "code",
+      "path": "src/proto.c",
+      "start": 80,
+      "end": 80,
+      "quote": "proto_crc8(hdr, 2U, 0xFFU);",
+      "command": null
+    },
+    {
+      "id": "e-0039",
+      "kind": "code",
+      "path": "config/build_cfg_alpha.h",
+      "start": 13,
+      "end": 13,
+      "quote": "#define CFG_EE_RETRY_MAX    3U",
+      "command": null
+    },
+    {
+      "id": "e-0040",
+      "kind": "doc_claim",
+      "path": "docs/protocol.md",
+      "start": 17,
+      "end": 17,
+      "quote": "CRC-8, polynomial 0x07, initial 0x00",
+      "command": null
+    },
+    {
+      "id": "e-0041",
+      "kind": "code",
+      "path": "include/proto.h",
+      "start": 14,
+      "end": 14,
+      "quote": "#define PROTO_FRAME_TIMEOUT_TICKS   20U",
+      "command": null
+    },
+    {
+      "id": "e-0042",
+      "kind": "code",
+      "path": "src/timer.c",
+      "start": 10,
+      "end": 10,
+      "quote": "SysTick->LOAD = (CFG_CPU_HZ / CFG_TICK_HZ) - 1U;",
+      "command": null
+    },
+    {
+      "id": "e-0043",
+      "kind": "code",
+      "path": "src/timer.c",
+      "start": 30,
+      "end": 30,
+      "quote": "g_ticks++;",
+      "command": null
+    },
+    {
+      "id": "e-0044",
+      "kind": "code",
+      "path": "src/proto.c",
+      "start": 97,
+      "end": 97,
+      "quote": "if (s_state != WAIT_SOF && (timer_now() - s_last_rx_tick) > PROTO_FRAME_TIMEOUT_TICKS) {",
+      "command": null
+    },
+    {
+      "id": "e-0045",
+      "kind": "doc_claim",
+      "path": "docs/bench/2019-05-uart-latency.log",
+      "start": 10,
+      "end": 10,
+      "quote": "latency_max_ms     3.20",
+      "command": null
+    },
+    {
+      "id": "e-0046",
+      "kind": "code",
+      "path": "src/timer.c",
+      "start": 24,
+      "end": 24,
+      "quote": "while ((g_ticks - start) < ms) {",
+      "command": null
+    },
+    {
+      "id": "e-0047",
+      "kind": "code",
+      "path": "src/hwrev.c",
+      "start": 20,
+      "end": 20,
+      "quote": "delay_ms(2U);",
+      "command": null
+    },
+    {
+      "id": "e-0048",
+      "kind": "code",
+      "path": "src/eeprom.c",
+      "start": 58,
+      "end": 58,
+      "quote": "delay_ms(5U);",
+      "command": null
+    },
+    {
+      "id": "e-0049",
+      "kind": "code",
+      "path": "src/fan.c",
+      "start": 34,
+      "end": 34,
+      "quote": "if ((timer_now() - s_last_poll) < CFG_TICK_HZ) {",
+      "command": null
+    },
+    {
+      "id": "e-0050",
+      "kind": "code",
+      "path": "src/fan.c",
+      "start": 38,
+      "end": 38,
+      "quote": "g_fan_rpm = (uint16_t)(s_tach_pulses * 30U);",
+      "command": null
+    },
+    {
+      "id": "e-0051",
+      "kind": "code",
+      "path": "config/build_cfg_alpha.h",
+      "start": 10,
+      "end": 10,
+      "quote": "#define CFG_TICK_HZ         1000U",
+      "command": null
+    },
+    {
+      "id": "e-0052",
+      "kind": "code",
+      "path": "config/build_cfg_beta.h",
+      "start": 10,
+      "end": 10,
+      "quote": "#define CFG_TICK_HZ         100U",
+      "command": null
+    },
+    {
+      "id": "e-0053",
+      "kind": "code",
+      "path": "Makefile",
+      "start": 27,
+      "end": 27,
+      "quote": "beta: CFLAGS += -DBOARD_BETA -DPROTO_FRAME_TIMEOUT_TICKS=5U",
+      "command": null
+    },
+    {
+      "id": "e-0054",
+      "kind": "code",
+      "path": "include/control.h",
+      "start": 15,
+      "end": 15,
+      "quote": "#define CTRL_PERIOD_TICKS       (CFG_TICK_HZ / 10U)",
+      "command": null
+    },
+    {
+      "id": "e-0055",
+      "kind": "code",
+      "path": "src/main.c",
+      "start": 42,
+      "end": 43,
+      "quote": "if ((timer_now() - last_ctrl) >= CTRL_PERIOD_TICKS) { last_ctrl += CTRL_PERIOD_TICKS;",
+      "command": null
+    },
+    {
+      "id": "e-0056",
+      "kind": "code",
+      "path": "include/control.h",
+      "start": 18,
+      "end": 18,
+      "quote": "#define HEATER_MAX_ON_CYCLES    600U",
+      "command": null
+    },
+    {
+      "id": "e-0057",
+      "kind": "code",
+      "path": "src/control.c",
+      "start": 56,
+      "end": 56,
+      "quote": "if (++s_on_cycles > HEATER_MAX_ON_CYCLES) {",
+      "command": null
+    },
+    {
+      "id": "e-0058",
+      "kind": "code",
+      "path": "src/wdt.c",
+      "start": 11,
+      "end": 11,
+      "quote": "#define WDT_RELOAD      625U",
+      "command": null
+    },
+    {
+      "id": "e-0059",
+      "kind": "doc_claim",
+      "path": "src/wdt.c",
+      "start": 4,
+      "end": 5,
+      "quote": "LSI is about 40 kHz ... gives a timeout of about 1 s.",
+      "command": null
+    },
+    {
+      "id": "e-0060",
+      "kind": "doc_claim",
+      "path": "include/proto.h",
+      "start": 14,
+      "end": 14,
+      "quote": "/* 20 ms inter-byte timeout */",
+      "command": null
+    },
+    {
+      "id": "e-0061",
+      "kind": "code",
+      "path": "Makefile",
+      "start": 27,
+      "end": 27,
+      "quote": "-DPROTO_FRAME_TIMEOUT_TICKS=5U",
+      "command": null
+    },
+    {
+      "id": "e-0062",
+      "kind": "code",
+      "path": "src/adc.c",
+      "start": 46,
+      "end": 46,
+      "quote": "g_fault_flags |= FAULT_OVERTEMP;",
+      "command": null
+    },
+    {
+      "id": "e-0063",
+      "kind": "code",
+      "path": "src/fault.c",
+      "start": 19,
+      "end": 19,
+      "quote": "g_fault_flags &= (uint8_t)~mask;",
+      "command": null
+    },
+    {
+      "id": "e-0064",
+      "kind": "code",
+      "path": "src/fault.c",
+      "start": 12,
+      "end": 13,
+      "quote": "__disable_irq(); g_fault_flags |= flags;",
+      "command": null
+    },
+    {
+      "id": "e-0065",
+      "kind": "code",
+      "path": "src/ring.c",
+      "start": 16,
+      "end": 16,
+      "quote": "r->head = next;",
+      "command": null
+    },
+    {
+      "id": "e-0066",
+      "kind": "code",
+      "path": "src/ring.c",
+      "start": 26,
+      "end": 26,
+      "quote": "r->tail = (uint8_t)((r->tail + 1U) & (RING_SIZE - 1U));",
+      "command": null
+    },
+    {
+      "id": "e-0067",
+      "kind": "code",
+      "path": "src/adc.c",
+      "start": 39,
+      "end": 39,
+      "quote": "g_adc_raw = raw;",
+      "command": null
+    },
+    {
+      "id": "e-0068",
+      "kind": "code",
+      "path": "src/timer.c",
+      "start": 17,
+      "end": 17,
+      "quote": "return g_ticks;",
+      "command": null
+    },
+    {
+      "id": "e-0069",
+      "kind": "code",
+      "path": "src/adc.c",
+      "start": 24,
+      "end": 24,
+      "quote": "NVIC_SetPriority(ADC1_IRQn, 0U);",
+      "command": null
+    },
+    {
+      "id": "e-0070",
+      "kind": "code",
+      "path": "src/uart.c",
+      "start": 21,
+      "end": 21,
+      "quote": "NVIC_SetPriority(USART1_IRQn, 1U);",
+      "command": null
+    },
+    {
+      "id": "e-0071",
+      "kind": "code",
+      "path": "src/fan.c",
+      "start": 22,
+      "end": 22,
+      "quote": "NVIC_SetPriority(TIM3_IRQn, 2U);",
+      "command": null
+    },
+    {
+      "id": "e-0072",
+      "kind": "code",
+      "path": "src/fan.c",
+      "start": 46,
+      "end": 46,
+      "quote": "s_tach_pulses++;",
+      "command": null
+    },
+    {
+      "id": "e-0073",
+      "kind": "code",
+      "path": "src/fan.c",
+      "start": 39,
+      "end": 39,
+      "quote": "s_tach_pulses = 0U;",
+      "command": null
+    },
+    {
+      "id": "e-0074",
+      "kind": "code",
+      "path": "Makefile",
+      "start": 23,
+      "end": 23,
+      "quote": "alpha: CFLAGS += -DBOARD_ALPHA",
+      "command": null
+    },
+    {
+      "id": "e-0075",
+      "kind": "code",
+      "path": "include/board.h",
+      "start": 11,
+      "end": 11,
+      "quote": "#include \"build_cfg_alpha.h\"",
+      "command": null
+    },
+    {
+      "id": "e-0076",
+      "kind": "code",
+      "path": "config/build_cfg_alpha.h",
+      "start": 9,
+      "end": 9,
+      "quote": "#define CFG_CPU_HZ          72000000UL",
+      "command": null
+    },
+    {
+      "id": "e-0077",
+      "kind": "code",
+      "path": "config/build_cfg_beta.h",
+      "start": 9,
+      "end": 9,
+      "quote": "#define CFG_CPU_HZ          48000000UL",
+      "command": null
+    },
+    {
+      "id": "e-0078",
+      "kind": "code",
+      "path": "config/build_cfg_beta.h",
+      "start": 12,
+      "end": 12,
+      "quote": "#define CFG_FEATURE_FAN     1",
+      "command": null
+    },
+    {
+      "id": "e-0079",
+      "kind": "code",
+      "path": "config/build_cfg_beta.h",
+      "start": 13,
+      "end": 13,
+      "quote": "#define CFG_EE_RETRY_MAX    5U",
+      "command": null
+    },
+    {
+      "id": "e-0080",
+      "kind": "code",
+      "path": "src/hwrev.c",
+      "start": 23,
+      "end": 23,
+      "quote": "g_cal_offset = (g_hw_rev >= 2U) ? -12 : 0;",
+      "command": null
+    },
+    {
+      "id": "e-0081",
+      "kind": "code",
+      "path": "src/control.c",
+      "start": 64,
+      "end": 64,
+      "quote": "#if 0",
+      "command": null
+    },
+    {
+      "id": "e-0082",
+      "kind": "code",
+      "path": "include/proto.h",
+      "start": 13,
+      "end": 14,
+      "quote": "#ifndef PROTO_FRAME_TIMEOUT_TICKS #define PROTO_FRAME_TIMEOUT_TICKS   20U",
+      "command": null
+    },
+    {
+      "id": "e-0083",
+      "kind": "doc_claim",
+      "path": "README.md",
+      "start": 8,
+      "end": 8,
+      "quote": "- BETA: production board since 2018",
+      "command": null
+    },
+    {
+      "id": "e-0084",
+      "kind": "code",
+      "path": "Makefile",
+      "start": 10,
+      "end": 10,
+      "quote": "LDFLAGS := -nostdlib -T vendor/acme/acme_m3.ld",
+      "command": null
+    },
+    {
+      "id": "e-0085",
+      "kind": "code",
+      "path": "vendor/acme/acme_m3.ld",
+      "start": 6,
+      "end": 6,
+      "quote": "RAM (rwx)   : ORIGIN = 0x20000000, LENGTH = 20K",
+      "command": null
+    },
+    {
+      "id": "e-0086",
+      "kind": "code",
+      "path": "vendor/acme/acme_m3.ld",
+      "start": 15,
+      "end": 15,
+      "quote": ".bss : { _sbss = .; *(.bss*) *(COMMON) _ebss = .; } > RAM",
+      "command": null
+    }
+  ],
+  "decisions": [],
+  "links": [
+    {
+      "id": "l-0001",
+      "kind": "resolves",
+      "from": ["c-0034"],
+      "to": ["c-0043"],
+      "reason": "c-0034는 바이트 간 시간 초과의 ms 값을 물었고, 뒤 trace-timing의 c-0043가 Makefile의 beta 덮어쓰기와 구성별 틱으로 alpha 20틱 = 약 20 ms, beta 5틱 = 약 50 ms를 유도했다. 전부 답한다."
+    },
+    {
+      "id": "l-0002",
+      "kind": "supersedes",
+      "from": ["c-0036"],
+      "to": ["c-0043"],
+      "reason": "같은 timing 단위(u-0003)를 이어 돈 run이 같은 기호를 다시 봤다. 앞의 c-0036는 beta를 20틱 = 200 ms라 했으나 c-0043는 Makefile의 -DPROTO_FRAME_TIMEOUT_TICKS=5U로 5틱 = 50 ms라 한다."
+    },
+    {
+      "id": "l-0003",
+      "kind": "merges",
+      "from": ["c-0028"],
+      "to": ["c-0038"],
+      "reason": "둘 다 alpha·beta에서 바이트 사이가 PROTO_FRAME_TIMEOUT_TICKS를 넘으면 부분 프레임을 버린다고 쓴다. 21틱째라는 비교까지 적은 c-0038를 남긴다."
+    },
+    {
+      "id": "l-0004",
+      "kind": "conflicts",
+      "from": ["c-0061"],
+      "to": ["c-0030"],
+      "reason": "c-0061는 src/cmd.c만 찾았다. 코드는 c-0030 쪽이다: 부팅 때 ee_load와 설정 CRC 고장의 restore_defaults도 g_setpoint_dc를 쓴다."
+    },
+    {
+      "id": "l-0005",
+      "kind": "merges",
+      "from": ["c-0078"],
+      "to": ["c-0051"],
+      "reason": "두 run이 같은 충돌(proto.h 주석의 20 ms와 beta의 5틱 x 10 ms)을 적었다."
+    },
+    {
+      "id": "l-0006",
+      "kind": "conflicts",
+      "from": ["c-0032"],
+      "to": ["c-0067"],
+      "reason": "c-0032는 두 구성 모두 3회라 하나 build_cfg_beta.h는 5U다. 코드는 c-0067 쪽이다."
+    },
+    {
+      "id": "l-0007",
+      "kind": "conflicts",
+      "from": ["c-0016"],
+      "to": ["c-0066"],
+      "reason": "survey는 SET_FAN을 모든 구성에 두었으나 명령 표 항목은 CFG_FEATURE_FAN일 때만 있고 beta만 켠다. 코드는 c-0066 쪽이다."
+    },
+    {
+      "id": "l-0008",
+      "kind": "conflicts",
+      "from": ["c-0041"],
+      "to": ["c-0066"],
+      "reason": "fan_poll은 fan.c에 있고 fan.c는 SRCS_beta에만 들어간다. c-0041의 \"모든 구성\"은 맞지 않는다."
+    }
+  ],
+  "reviews": [
+    {
+      "claim": "c-0032",
+      "result": "conflict",
+      "status": "conflict",
+      "note": "값이 다른 구성: beta"
+    },
+    {
+      "claim": "c-0042",
+      "result": "agree",
+      "status": null,
+      "note": "값이 맞음"
+    },
+    {
+      "claim": "c-0061",
+      "result": "refuted",
+      "status": "refuted",
+      "note": "부팅 때 ee_load와 restore_defaults도 쓴다"
+    },
+    {
+      "claim": "c-0020",
+      "result": "not_refuted",
+      "status": null,
+      "note": ""
+    },
+    {
+      "claim": "c-0016",
+      "result": "conflict",
+      "status": "conflict",
+      "note": "주장 [alpha, beta], 검토 [beta]"
+    },
+    {
+      "claim": "c-0041",
+      "result": "overclaimed",
+      "status": "overclaim",
+      "note": "fan.c는 beta에서만 빌드된다"
+    },
+    {
+      "claim": "c-0059",
+      "result": "not_refuted",
+      "status": null,
+      "note": ""
+    },
+    {
+      "claim": "c-0033",
+      "result": "not_refuted",
+      "status": null,
+      "note": ""
+    }
+  ],
+  "coverage": {
+    "entry_points": [
+      {
+        "configs": ["alpha", "beta"],
+        "status": "unreached",
+        "ids": [],
+        "units": ["u-0007"],
+        "searches": [],
+        "note": "Reset_Handler와 시작 순서는 어느 단위도 추적하지 않았다. ISR 넷과 main 루프는 u-0003~u-0005가 다뤘다"
+      }
+    ],
+    "commands": [
+      {
+        "configs": ["alpha", "beta"],
+        "status": "unreached",
+        "ids": [],
+        "units": ["u-0008"],
+        "searches": [],
+        "note": "u-0002는 SET_SETPOINT만 추적했다. GET_TEMP, GET_STATUS, RESET_FAULT, GET_VERSION과 alpha의 SET_MODE, beta의 SET_FAN은 아무도 닿지 않았다"
+      }
+    ],
+    "state": [
+      {
+        "configs": ["alpha", "beta"],
+        "status": "covered",
+        "ids": ["c-0052", "c-0030"],
+        "units": [],
+        "searches": [],
+        "note": ""
+      }
+    ],
+    "timing": [
+      {
+        "configs": ["alpha", "beta"],
+        "status": "covered",
+        "ids": ["c-0042", "c-0043", "c-0044", "c-0045"],
+        "units": [],
+        "searches": [],
+        "note": "워치독 시간은 LSI 주파수가 코드에 없어 c-0050로 열려 있다(데이터시트가 필요)"
+      }
+    ],
+    "concurrency": [
+      {
+        "configs": ["alpha", "beta"],
+        "status": "covered",
+        "ids": ["c-0052", "c-0054", "c-0058", "c-0059"],
+        "units": [],
+        "searches": [],
+        "note": ""
+      }
+    ],
+    "config_differences": [
+      {
+        "configs": ["alpha", "beta"],
+        "status": "covered",
+        "ids": ["c-0062", "c-0063", "c-0064", "c-0070"],
+        "units": [],
+        "searches": [],
+        "note": ""
+      }
+    ],
+    "lifecycle": [
+      {
+        "configs": ["alpha", "beta"],
+        "status": "unreached",
+        "ids": [],
+        "units": ["u-0007"],
+        "searches": [],
+        "note": "리셋 처리기부터 초기화 순서, 부팅 때 ee_load와 fault_handle_boot, wdt_init의 차례를 어느 단위도 추적하지 않았다"
+      }
+    ],
+    "protocol": [
+      {
+        "configs": ["alpha", "beta"],
+        "status": "covered",
+        "ids": ["c-0021", "c-0022", "c-0031"],
+        "units": [],
+        "searches": [],
+        "note": ""
+      }
+    ],
+    "error_paths": [
+      {
+        "configs": ["alpha", "beta"],
+        "status": "covered",
+        "ids": ["c-0023", "c-0024", "c-0025", "c-0026", "c-0029"],
+        "units": [],
+        "searches": [],
+        "note": ""
+      }
+    ],
+    "memory": [
+      {
+        "configs": ["alpha", "beta"],
+        "status": "covered",
+        "ids": ["c-0073"],
+        "units": [],
+        "searches": [],
+        "note": ""
+      }
+    ]
+  },
+  "partial": true,
+  "build_index": null
+}

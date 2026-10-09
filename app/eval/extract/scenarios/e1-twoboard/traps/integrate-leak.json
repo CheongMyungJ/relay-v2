@@ -1,0 +1,14 @@
+{
+  "task": "integrate",
+  "describe": "정답 파일의 카나리가 출력에 있다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "outcome_reason",
+      "value": "기록을 모두 봤다 LEAK-7F3Q-E1-ZEBRA"
+    }
+  ],
+  "expect": {
+    "leak": true
+  }
+}

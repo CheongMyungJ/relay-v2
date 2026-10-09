@@ -4,6 +4,8 @@
 // 3. 채점 규칙(앵커 대조, 구성, 수치, 판정 읽기), 사용량 읽기, 사용량 한도 가르기, 집계
 // 4. 하네스를 가짜 claude(dry)로 끝까지 돌린다: 끝 판정, worktree 변경, 스키마 검사
 // 5. 구성별 빌드 인덱스와 제출 검사 config_active(AI 결정 87·88. 컴파일이 드는 경우는 컴파일러가 없으면 건너뛴다)
+// 6. integrate·review·summarize 과제(AI 결정 127): 기록으로 만든 패킷, 칸 키가 든 스키마와 쪽 이름, 종류별 결정론과 판정
+import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -16,6 +18,8 @@ import {
   mergeLines,
   mergeSymbols,
 } from '../../../skills/extract/build-index.mjs'
+import { compareAnswer, VERDICT_STATUS } from '../../../skills/extract/review.mjs'
+import { checkResult } from '../../../skills/extract/rules.mjs'
 import { buildIndex } from '../extract/lib/build-index.mjs'
 import { findCompiler } from '../extract/lib/cc.mjs'
 import { runBin } from '../extract/lib/claude-bin.mjs'
@@ -24,6 +28,8 @@ import { judgeArgs } from '../extract/lib/judge.mjs'
 import {
   renderPacket,
   runOne,
+  SOFT_REASON,
+  softReason,
   submitProblems,
   submitReason,
   usageLimit,
@@ -34,40 +40,62 @@ import {
   checkQuantity,
   claimLines,
   collectAnchors,
+  DET_KINDS,
+  detApplies,
+  detScore,
   expandConfigs,
   hasLeak,
+  judgeItems,
   judgePrompt,
+  JUDGE_SYSTEM,
+  JUDGE_SYSTEMS,
+  judgeSystem,
+  keyedView,
   nameHas,
   normPath,
   normQuote,
+  outputKeys,
   scoreRun,
   unitKey,
 } from '../extract/lib/score.mjs'
-import { buildSide, sideId } from '../extract/lib/sides.mjs'
+import { buildSide, sideEntries, sideId } from '../extract/lib/sides.mjs'
+import {
+  claimSections,
+  knownIds,
+  PLACEHOLDER_VARS,
+  RECORD_KINDS,
+  renderTask,
+  taskMore,
+} from '../extract/lib/tasks.mjs'
 import { guard, parseUsage } from '../extract/lib/usage.mjs'
 import {
   adoption,
   comparePair,
+  filterTasks,
   fromStored,
   relabel,
   summarize,
   toStored,
 } from '../extract/report.mjs'
-import { listScenarios, loadScenario, plan } from '../extract/run.mjs'
-import { loadTruth, repoReader, scoreDir } from '../extract/score.mjs'
+import { listScenarios, loadScenario, plan, planEntries } from '../extract/run.mjs'
+import { loadTruth, repoReader, runIds, runKind, scoreDir } from '../extract/score.mjs'
 
 const scenarios = listScenarios()
 
+/** 과제 하나의 결과 채점(종류는 scenario.json, 패킷의 전역 ID는 기록으로 만든 패킷에서) */
 function score(dir, truth, task, out, judge) {
   const anchors = checkAnchors(collectAnchors(out), repoReader(dir), '/run/repo')
+  const input = renderTask(dir, task, PLACEHOLDER_VARS)
   return scoreRun({
     out,
     truth,
-    task,
+    task: task.id,
+    kind: task.kind,
     anchors,
     judge,
     leak: hasLeak(JSON.stringify(out), truth),
     worktreeChanged: false,
+    ids: knownIds(input.packet, input.listing),
   })
 }
 
@@ -96,35 +124,113 @@ describe.each(scenarios)('시나리오 %s', (id) => {
     }
     walk(path.join(dir, 'repo'))
     walk(path.join(dir, 'packets'))
+    if (fs.existsSync(path.join(dir, 'records'))) walk(path.join(dir, 'records'))
+    for (const t of scenario.tasks.filter((x) => RECORD_KINDS.includes(x.kind))) {
+      const input = renderTask(dir, t, PLACEHOLDER_VARS)
+      texts.push(input.packet, input.listing ?? '')
+    }
     for (const side of ['base', 'v1'])
       for (const t of scenario.tasks)
-        texts.push(buildSide(side, t.kind, t.lens ?? null).instructions)
+        texts.push(buildSide(side, t.kind, t.lens ?? null, taskMore(dir, t)).instructions)
     expect(texts.some((x) => x.includes(truth.canary))).toBe(false)
+  })
+
+  it('기록의 근거는 기준 커밋의 파일과 맞고, 주장이 가리키는 근거·단위가 기록에 있다', () => {
+    for (const t of scenario.tasks.filter((x) => RECORD_KINDS.includes(x.kind))) {
+      const { record } = renderTask(dir, t, PLACEHOLDER_VARS)
+      const status = checkAnchors(record.evidence, repoReader(dir), '/run/repo')
+        .filter((a) => a.status !== 'ok' && a.status !== 'skipped')
+        .map((a) => `${a.id} ${a.status}`)
+      expect(status, t.id).toEqual([])
+      const ev = new Set(record.evidence.map((e) => e.id))
+      const refs = JSON.stringify(record.claims).match(/"evidence":"e-\d{4}"/g) ?? []
+      expect(refs.length).toBeGreaterThan(0)
+      expect(refs.map((r) => r.slice(12, 18)).filter((e) => !ev.has(e))).toEqual([])
+      const units = new Set(record.units.map((u) => u.id))
+      expect(record.claims.filter((c) => !units.has(c.unit)).map((c) => c.id)).toEqual([])
+    }
+  })
+
+  it('summarize 기록의 검토 결과는 review reference의 답을 앱의 비교(review.mjs)로 견준 것과 같다', () => {
+    const rv = scenario.tasks.find((x) => x.kind === 'review')
+    const sm = scenario.tasks.find((x) => x.kind === 'summarize')
+    if (!rv || !sm) return
+    const input = renderTask(dir, rv, PLACEHOLDER_VARS)
+    const { out } = readReference(dir, rv.id)
+    const confirmed = input.record.configs
+      .filter((c) => c.status === 'confirmed')
+      .map((c) => c.name)
+    const want = input.items.map((i) => {
+      const claim = input.record.claims.find((c) => c.id === i.claim)
+      if (i.kind === 'statement') {
+        const v = out.verdicts[i.key].verdict
+        return { claim: i.claim, result: v, status: VERDICT_STATUS[v] }
+      }
+      const r = compareAnswer(claim, i.kind, out.answers[i.key], confirmed)
+      return {
+        claim: i.claim,
+        result: r.result,
+        status: r.result === 'conflict' ? 'conflict' : null,
+      }
+    })
+    const got = renderTask(dir, sm, PLACEHOLDER_VARS).record.reviews.map(
+      ({ claim, result, status }) => ({
+        claim,
+        result,
+        status,
+      }),
+    )
+    expect(got).toEqual(want)
+  })
+
+  it('기록과 기록으로 만든 패킷에 정답 글이 없다', () => {
+    const statements = [...truth.recall, ...truth.must_not, ...truth.resolvable].map(
+      (x) => x.statement,
+    )
+    for (const t of scenario.tasks.filter((x) => RECORD_KINDS.includes(x.kind))) {
+      const input = renderTask(dir, t, PLACEHOLDER_VARS)
+      const text = `${fs.readFileSync(path.join(dir, t.record), 'utf8')}\n${input.packet}\n${input.listing ?? ''}`
+      expect(statements.filter((x) => text.includes(x))).toEqual([])
+    }
   })
 
   it.each(scenario.tasks.map((t) => [t.id, t]))('reference %s: 스키마 통과, 만점', (_, task) => {
     const { out, judge } = readReference(dir, task.id)
-    const built = buildSide('base', task.kind, task.lens ?? null)
+    const input = renderTask(dir, task, PLACEHOLDER_VARS)
+    const built = buildSide('base', task.kind, task.lens ?? null, input.more)
     const validate = new Ajv2020({ allErrors: true, strict: false }).compile(built.schema)
     expect(validate(out), JSON.stringify(validate.errors)).toBe(true)
-    const s = score(dir, truth, task.id, out, judge)
+    if (RECORD_KINDS.includes(task.kind))
+      // 앱의 제출 규칙(종류만의 규칙 포함)도 통과한다: 구성 이름, 전역 ID, 연결의 모양, coverage 칸, 반박 앵커
+      expect(
+        checkResult(out, {
+          kind: task.kind,
+          configs: input.record.configs.map((c) => c.name),
+          ids: knownIds(input.packet, input.listing),
+          sections: claimSections(input.record),
+        }),
+      ).toEqual([])
+    const s = score(dir, truth, task, out, judge)
     expect(s.violated).toEqual([])
     expect(s.pmB).toBe(1)
     expect(s.undecided).toEqual([])
     expect(s.softened).toEqual([])
     expect(s.anchors.fabricated + s.anchors.lineMismatch).toBe(0)
-    expect(s.anchors.total).toBeGreaterThan(0)
+    // summarize 결과에는 앵커가 없다
+    if (task.kind !== 'summarize') expect(s.anchors.total).toBeGreaterThan(0)
   })
 
   it.each(readTraps(dir).map((t) => [t.name, t]))('함정 %s가 잡힌다', (_, trap) => {
     const ref = readReference(dir, trap.task)
     const out = applyOps(ref.out, trap.ops)
     const judge = mergeJudge(ref.judge, trap.judge)
-    const s = score(dir, truth, trap.task, out, judge)
+    const task = scenario.tasks.find((t) => t.id === trap.task)
+    const s = score(dir, truth, task, out, judge)
     const e = trap.expect
     if (e.violated) expect(s.violated).toEqual(expect.arrayContaining(e.violated))
     if (e.violated && e.violated.length === 0) expect(s.violated).toEqual([])
     if (e.missed) for (const id of e.missed) expect(s.recall[id], id).toBe(false)
+    if (e.found) for (const id of e.found) expect(s.recall[id], id).toBe(true)
     if (e.fabricated) expect(s.anchors.fabricated).toBeGreaterThanOrEqual(e.fabricated)
     if (e.lineMismatch) expect(s.anchors.lineMismatch).toBeGreaterThanOrEqual(e.lineMismatch)
     if (e.leak) expect(s.gates.leak).toBe(true)
@@ -232,6 +338,7 @@ describe('채점 규칙', () => {
       out,
       truth,
       'trace-timing',
+      'trace',
     )
     expect(r.recall['r.tim.wdt_unknown']).toBe(true)
   })
@@ -368,6 +475,7 @@ describe('채점 규칙', () => {
       out,
       truth,
       'trace-command',
+      'trace',
     )
     expect(r.recall['r.cmd.entry']).toBe(true)
     expect(r.recall['r.cmd.crc']).toBe(false)
@@ -380,12 +488,12 @@ describe('채점 규칙', () => {
 
   it('판정 입력: 결정론 항목은 빼고, 결과는 key가 붙은 주장 줄로만 보인다(앵커 없음)', () => {
     const { out } = readReference(loadScenario('e1-twoboard').dir, 'trace-timing')
-    const p = judgePrompt(out, truth, 'trace-timing')
+    const p = judgePrompt(out, truth, 'trace-timing', 'trace')
     expect(p).toContain('r.tim.wdt_unknown')
     expect(p).not.toContain('r.tim.frame_ms')
     expect(p).not.toContain('"quote"')
     expect(p).not.toContain(truth.canary)
-    expect(claimLines(out).every((l) => /^[a-z_]+[ :]/.test(l))).toBe(true)
+    expect(claimLines(out, 'trace').every((l) => /^[a-z_]+[ :]/.test(l))).toBe(true)
   })
 
   it('판정 호출은 도구·MCP·사용자 설정·세션 저장 없이 부른다', () => {
@@ -393,6 +501,381 @@ describe('채점 규칙', () => {
     expect(a).toEqual(expect.arrayContaining(['--strict-mcp-config', '--no-session-persistence']))
     expect(a[a.indexOf('--tools') + 1]).toBe('')
     expect(a[a.indexOf('--setting-sources') + 1]).toBe('')
+  })
+})
+
+describe('새 종류의 채점(integrate, review, summarize)', () => {
+  const mini = {
+    configs: [
+      { name: 'a', aliases: ['board_a'] },
+      { name: 'b', aliases: [] },
+    ],
+    quantities: [
+      {
+        id: 'q.x',
+        symbols: ['X_TICKS'],
+        per_config: { a: { tick: [20], ms: [20] }, b: { tick: [5], ms: [50] } },
+        unit_derivable: true,
+      },
+    ],
+    recall: [],
+    must_not: [],
+    resolvable: [],
+  }
+  const it_ = (id, det) => ({ id, tasks: ['t'], det, statement: id })
+  const det = (out, kind, recall = [], mustNot = [], ctx = {}) =>
+    detScore(out, { ...mini, recall, must_not: mustNot }, 't', kind, ctx)
+
+  it('run 종류는 과제 id에서 짐작하지 않고 받으며, det는 그 결과 칸이 있는 종류에서만 돈다', () => {
+    expect(() => detScore({}, mini, 'survey')).toThrow(/종류/)
+    expect(() => detApplies({ det: { nope: 1 } }, 'trace')).toThrow(/모르는 det/)
+    expect(detApplies({ det: { link: {} } }, 'integrate')).toBe(true)
+    expect(detApplies({ det: { link: {} } }, 'trace')).toBe(false)
+    expect(detApplies({ det: { gid_unknown: true } }, 'summarize')).toBe(true)
+    expect(detApplies({ det: { gid_unknown: true } }, 'review')).toBe(false)
+    expect(detApplies({ det: { quantity: 'q.x' } }, 'trace')).toBe(true)
+    expect(detApplies({ det: { quantity: 'q.x' } }, 'summarize')).toBe(false)
+    // 다른 종류의 과제에 걸린 det 항목은 판정 모델이 가른다(결정 54)
+    const truth = {
+      ...mini,
+      recall: [it_('r.x', { verdict: { statement: 's1', accept: ['refuted'] } })],
+    }
+    expect(judgeItems(truth, 't', 'review').recall).toEqual([])
+    expect(judgeItems(truth, 't', 'integrate').recall.map((x) => x.id)).toEqual(['r.x'])
+    // 시나리오 정답의 det는 모두 표에 있다
+    for (const id of scenarios) {
+      const t = loadTruth(loadScenario(id).dir)
+      for (const x of [...t.recall, ...t.must_not].filter((y) => y.det))
+        expect(Object.keys(DET_KINDS), `${id} ${x.id}`).toContain(Object.keys(x.det)[0])
+    }
+  })
+
+  it('integrate: 연결은 종류와 양쪽이 겹쳐야 하고, conflicts만 방향을 보지 않는다', () => {
+    const recall = [
+      it_('r.res', { link: { kind: 'resolves', from: ['c-0001'], to: ['c-0002', 'c-0003'] } }),
+      it_('r.sup', { link: { kind: 'supersedes', from: ['c-0010'], to: ['c-0011'] } }),
+      it_('r.con', { link: { kind: 'conflicts', from: ['c-0004'], to: ['c-0005'] } }),
+    ]
+    const L = (kind, from, to) => ({ key: 'l1', kind, from, to, reason: '', anchors: [] })
+    const r = (links) => det({ links }, 'integrate', recall).recall
+    expect(r([L('resolves', ['c-0001'], ['c-0003'])])['r.res']).toBe(true)
+    expect(r([L('resolves', ['c-0001'], ['c-0008'])])['r.res']).toBe(false)
+    expect(r([L('merges', ['c-0001'], ['c-0002'])])['r.res']).toBe(false)
+    expect(r([L('supersedes', ['c-0011'], ['c-0010'])])['r.sup']).toBe(false)
+    expect(r([L('conflicts', ['c-0005'], ['c-0004'])])['r.con']).toBe(true)
+    expect(
+      det({ links: [] }, 'integrate', [
+        it_('r.sw', { link: { kind: 'merges', from: ['c-1'], to: ['c-2'], swap: true } }),
+      ]).recall,
+    ).toEqual({ 'r.sw': false })
+    expect(
+      det({ links: [L('merges', ['c-2'], ['c-1'])] }, 'integrate', [
+        it_('r.sw', { link: { kind: 'merges', from: ['c-1'], to: ['c-2'], swap: true } }),
+      ]).recall['r.sw'],
+    ).toBe(true)
+  })
+
+  it('integrate: 금지한 연결은 kind가 없으면 어느 종류든, to가 없으면 어디로든, merges·conflicts는 방향 없이', () => {
+    const mustNot = [
+      it_('m.res', { link_forbid: { kind: 'resolves', from: ['c-0009'] } }),
+      it_('m.pair', { link_forbid: { from: ['c-0006', 'c-0007'], to: ['c-0006', 'c-0007'] } }),
+    ]
+    const L = (kind, from, to) => ({ key: 'l1', kind, from, to, reason: '', anchors: [] })
+    const v = (links) => det({ links }, 'integrate', [], mustNot).violated
+    expect(v([L('resolves', ['c-0009'], ['c-0100'])])).toEqual(['m.res'])
+    expect(v([L('supersedes', ['c-0009'], ['c-0100'])])).toEqual([])
+    expect(v([L('merges', ['c-0007'], ['c-0006'])])).toEqual(['m.pair'])
+    expect(v([L('conflicts', ['c-0006'], ['c-0007'])])).toEqual(['m.pair'])
+    expect(v([L('merges', ['c-0006'], ['c-0008'])])).toEqual([])
+    expect(
+      det({ links: [L('resolves', ['c-0009'], ['c-1'])] }, 'trace', [], mustNot).violated,
+    ).toEqual([])
+  })
+
+  it('integrate: coverage 칸은 상태와 요건(ids, searches, 제안 단위)을 채우고 구성을 모두 덮어야 하고, 제안 단위는 렌즈와 토큰', () => {
+    const recall = [
+      it_('r.life', {
+        coverage: { perspective: 'lifecycle', configs: ['a', 'b'], status: ['unreached'] },
+      }),
+      it_('r.tim', {
+        coverage: { perspective: 'timing', configs: ['a', 'b'], status: ['covered'] },
+      }),
+      it_('r.mem', {
+        coverage: { perspective: 'memory', configs: ['a'], status: ['not_applicable'] },
+      }),
+      it_('r.unit', { unit: { lens: 'lifecycle', tokens: ['Reset_Handler', 'boot'] } }),
+    ]
+    const cellOf = (configs, status, extra = {}) => ({
+      configs,
+      status,
+      ids: [],
+      units: [],
+      searches: [],
+      note: '',
+      ...extra,
+    })
+    const unit = (lens, scope, purpose = '') => ({
+      key: 'n1',
+      lens,
+      scope,
+      purpose,
+      priority: 'high',
+      depends_on: [],
+      reason: '',
+    })
+    const search = { tool: 'Grep', pattern: 'x', scope: 'src', hits: 0 }
+    const good = {
+      coverage: {
+        lifecycle: [
+          cellOf(['a'], 'unreached', { units: ['n1'] }),
+          cellOf(['b'], 'unreached', { units: ['n1'] }),
+        ],
+        timing: [cellOf(['all'], 'covered', { ids: ['c-0001'] })],
+        memory: [cellOf(['board_a'], 'not_applicable', { searches: [search] })],
+      },
+      units: [unit('lifecycle', 'startup.c: Reset_Handler')],
+    }
+    expect(det(good, 'integrate', recall).recall).toEqual({
+      'r.life': true,
+      'r.tim': true,
+      'r.mem': true,
+      'r.unit': true,
+    })
+    const bad = structuredClone(good)
+    bad.coverage.lifecycle[1].units = ['n9']
+    bad.coverage.timing[0].ids = []
+    bad.coverage.memory[0].searches = []
+    bad.units = [unit('state', 'Reset_HandlerX'), unit('lifecycle', 'main loop')]
+    expect(det(bad, 'integrate', recall).recall).toEqual({
+      'r.life': false,
+      'r.tim': false,
+      'r.mem': false,
+      'r.unit': false,
+    })
+    expect(
+      det(
+        { ...good, coverage: { ...good.coverage, lifecycle: [cellOf(['a', 'b'], 'unknown')] } },
+        'integrate',
+        recall,
+      ).recall['r.life'],
+    ).toBe(false)
+  })
+
+  it('review: 값 답은 수치 대조로 보고 오류는 PM-A, 구성 답은 집합, 서술은 판정 목록으로 본다', () => {
+    const recall = [
+      it_('r.val', { answer_value: { question: 'q1', quantity: 'q.x' } }),
+      it_('r.cfg', { answer_configs: { question: 'q2', configs: ['b'] } }),
+      it_('r.ver', { verdict: { statement: 's1', accept: ['refuted', 'overclaimed'] } }),
+    ]
+    const mustNot = [
+      it_('m.ver', { verdict_forbid: { statement: 's2', forbid: ['refuted', 'overclaimed'] } }),
+    ]
+    const ans = (values, status = 'answered', configs = []) => ({
+      status,
+      text: '',
+      values,
+      configs,
+      anchors: [],
+      searches: [],
+    })
+    const V = (verdict) => ({ verdict, attempts: ['x'], anchors: [], note: '' })
+    const out = (q1, q2, s1, s2) => ({ answers: { q1, q2 }, verdicts: { s1: V(s1), s2: V(s2) } })
+    const okVals = [
+      { configs: ['a'], value: '20 tick' },
+      { configs: ['b'], value: '5 tick = 50 ms' },
+    ]
+    const r1 = det(
+      out(ans(okVals), ans([], 'answered', ['b']), 'refuted', 'not_refuted'),
+      'review',
+      recall,
+      mustNot,
+    )
+    expect(r1.recall).toEqual({ 'r.val': true, 'r.cfg': true, 'r.ver': true })
+    expect(r1.violated).toEqual([])
+    const merged = det(
+      out(
+        ans([{ configs: ['all'], value: '20 ms' }]),
+        ans([], 'answered', ['all']),
+        'needs_more',
+        'overclaimed',
+      ),
+      'review',
+      recall,
+      mustNot,
+    )
+    expect(merged.recall).toEqual({ 'r.val': false, 'r.cfg': false, 'r.ver': false })
+    expect(merged.violated).toEqual(['m.q.q.x.merge', 'm.ver'])
+    expect(
+      det(
+        out(ans([{ configs: ['b'], value: '20 tick' }]), ans([]), 'refuted', 'not_refuted'),
+        'review',
+        recall,
+      ).violated,
+    ).toEqual(['m.q.q.x.value'])
+    // 답하지 못한 값은 찾지 못함이지만 잘못된 확정은 아니다. 한 구성만 답하면 찾지 못함
+    const unk = det(out(ans([], 'unknown'), ans([]), 'refuted', 'not_refuted'), 'review', recall)
+    expect([unk.recall['r.val'], unk.violated]).toEqual([false, []])
+    expect(
+      det(out(ans([okVals[0]]), ans([]), 'refuted', 'not_refuted'), 'review', recall).recall[
+        'r.val'
+      ],
+    ).toBe(false)
+  })
+
+  it('summarize: 서술이 가리킨 ID를 자리(risks, overview, any)와 모두·하나로 보고, 패킷에 없는 ID는 PM-A', () => {
+    const recall = [
+      it_('r.one', { cites: { ids: ['c-0001'], where: 'risks' } }),
+      it_('r.any', { cites: { ids: ['u-0007', 'u-0008'], where: 'risks', any: true } }),
+      it_('r.all', { cites: { ids: ['c-0002', 'c-0003'], where: 'overview' } }),
+      it_('r.where', { cites: { ids: ['c-0004'] } }),
+    ]
+    const mustNot = [it_('m.gid', { gid_unknown: true })]
+    const P = (ids) => ({ text: 'x', ids })
+    const ids = ['c-0001', 'c-0002', 'c-0003', 'c-0004', 'u-0007', 'u-0008']
+    const good = {
+      overview: [P(['c-0002', 'c-0001']), P(['c-0003'])],
+      handoff_summary: P(['c-0004']),
+      risks: [P(['c-0001', 'u-0008'])],
+    }
+    const r = det(good, 'summarize', recall, mustNot, { ids })
+    expect(r.recall).toEqual({ 'r.one': true, 'r.any': true, 'r.all': true, 'r.where': true })
+    expect(r.violated).toEqual([])
+    const bad = { overview: [P(['c-0002', 'c-0001'])], handoff_summary: P([]), risks: [P(['k1'])] }
+    const b = det(bad, 'summarize', recall, mustNot, { ids })
+    expect(b.recall).toEqual({ 'r.one': false, 'r.any': false, 'r.all': false, 'r.where': false })
+    expect(b.violated).toEqual(['m.gid'])
+    expect(
+      det({ ...good, risks: [P(['c-0999'])] }, 'summarize', [], mustNot, { ids }).violated,
+    ).toEqual(['m.gid'])
+    expect(() => det(good, 'summarize', [], mustNot)).toThrow(/ctx.ids/)
+  })
+
+  it('판정 입력: 새 종류의 key가 붙은 줄과 판정 답의 key 대조가 같은 key(관점 ID, 질문·서술 키, p·h·r)를 쓴다', () => {
+    const { dir } = loadScenario('e1-twoboard')
+    const want = {
+      integrate: [
+        ['link l1: resolves c-', 'coverage lifecycle: unreached', 'unit n1: [lifecycle]'],
+        ['l1', 'lifecycle', 'n1'],
+      ],
+      review: [
+        ['answer q1: answered', 'verdict s1: refuted', 'outcome: done'],
+        ['q1', 's1', 's5'],
+      ],
+      summarize: [
+        ['overview p1:', 'handoff h1:', 'risk r1:'],
+        ['p1', 'h1', 'r7'],
+      ],
+    }
+    for (const [kind, [lines, keys]] of Object.entries(want)) {
+      const { out } = readReference(dir, kind)
+      const cl = claimLines(out, kind)
+      for (const l of lines)
+        expect(
+          cl.some((x) => x.startsWith(l)),
+          `${kind}: ${l}`,
+        ).toBe(true)
+      expect(cl.every((l) => /^[a-z_]+[ :]/.test(l))).toBe(true)
+      expect(cl.join('\n')).not.toMatch(/"quote"|quote:/)
+      const ks = outputKeys(out, kind)
+      for (const k of keys) expect(ks.has(k), `${kind}: ${k}`).toBe(true)
+      for (const [, k] of keyedView(out, kind)) expect(ks.has(k)).toBe(true)
+    }
+    // survey·trace의 key 대조는 그대로다(점검표 ID는 key가 아니다)
+    const { out: tim } = readReference(dir, 'trace-timing')
+    expect(outputKeys(tim, 'trace').has('per_config_value')).toBe(false)
+    expect(() => outputKeys(tim)).toThrow(/종류/)
+  })
+
+  it('판정 읽기: 새 종류도 절 이름을 붙인 key는 마지막 낱말로 읽고 결과에 없는 key는 인정하지 않는다', () => {
+    const { dir } = loadScenario('e1-twoboard')
+    const truth = loadTruth(dir)
+    const { out: ig } = readReference(dir, 'integrate')
+    const a = applyJudge(
+      {
+        recall: [{ id: 'r.int.conflict_side', found: true, keys: ['link l4'] }],
+        must_not: [
+          {
+            id: 'm.int.wdt_settled',
+            violated: true,
+            keys: ['coverage timing'],
+            quote: 'x',
+            hedged: false,
+          },
+        ],
+        resolvable: [{ id: 'v.int.frame', left_unknown: true, keys: ['coverage lifecycle'] }],
+      },
+      ig,
+      truth,
+      'integrate',
+      'integrate',
+    )
+    expect(a).toEqual({
+      recall: { 'r.int.conflict_side': true },
+      violated: ['m.int.wdt_settled'],
+      undecided: [],
+      softened: ['v.int.frame'],
+    })
+    const { out: sm } = readReference(dir, 'summarize')
+    const b = applyJudge(
+      {
+        recall: [{ id: 'r.sum.partial_said', found: true, keys: ['risk r9'] }],
+        must_not: [],
+        resolvable: [],
+      },
+      sm,
+      truth,
+      'summarize',
+      'summarize',
+    )
+    expect(b.recall['r.sum.partial_said']).toBe(false)
+    expect(b.undecided).toEqual([
+      'm.sum.confirmed',
+      'm.sum.lowered_ok',
+      'm.sum.all_found',
+      'm.sum.wdt',
+    ])
+    const { out: rv } = readReference(dir, 'review')
+    expect(
+      applyJudge(
+        {
+          recall: [{ id: 'r.rev.writer_why', found: true, keys: ['answer s1'] }],
+          must_not: [],
+          resolvable: [],
+        },
+        rv,
+        truth,
+        'review',
+        'review',
+      ).recall['r.rev.writer_why'],
+    ).toBe(true)
+    expect(
+      applyJudge({ recall: [], must_not: [], resolvable: [] }, rv, truth, 'review', 'review')
+        .recall['r.rev.writer_why'],
+    ).toBeNull()
+  })
+
+  it('판정 지시: survey·trace는 예전 바이트 그대로라 판정 캐시가 이어지고, 새 종류는 종류마다 따로다', () => {
+    const sha = (t) => createHash('sha256').update(t).digest('hex')
+    expect(sha(JUDGE_SYSTEM)).toBe(
+      'b70a50bef455df02de726e62c9eb873e78a60e8b70f66b5a0bdd7b9592ec7297',
+    )
+    expect(judgeSystem('survey')).toBe(JUDGE_SYSTEM)
+    expect(judgeSystem('trace')).toBe(JUDGE_SYSTEM)
+    for (const [kind, key] of [
+      ['integrate', 'l1'],
+      ['review', 'q1'],
+      ['summarize', 'p1'],
+    ]) {
+      expect(judgeSystem(kind)).toBe(JUDGE_SYSTEMS[kind])
+      expect(judgeSystem(kind)).not.toBe(JUDGE_SYSTEM)
+      expect(judgeSystem(kind)).toContain(key)
+    }
+    expect(() => judgeSystem()).toThrow(/종류/)
+    // e1 trace-timing reference의 판정 캐시 키(score.mjs: 모델, 지시, 입력의 해시)가 새 종류를 더하기 전과 같다
+    const { dir } = loadScenario('e1-twoboard')
+    const { out } = readReference(dir, 'trace-timing')
+    const prompt = judgePrompt(out, loadTruth(dir), 'trace-timing', 'trace')
+    expect(sha(`sonnet\n${judgeSystem('trace')}\n${prompt}`).slice(0, 16)).toBe('f1e6ac152f093e2e')
   })
 })
 
@@ -597,6 +1080,257 @@ describe('하네스', () => {
       expect(sc.recall['r.tim.frame_ms']).toBe(true)
       expect(sc.anchors.fabricated).toBe(0)
       expect(sc.judged).toBe(false)
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+    }
+  }, 120_000)
+})
+
+describe('하네스: 새 종류의 과제', () => {
+  const survey_trace = [
+    ['survey', null],
+    ['trace', 'command'],
+    ['trace', 'timing'],
+    ['trace', 'variant'],
+    ['trace', 'shared'],
+  ]
+
+  it('survey·trace의 지시·스키마 바이트와 쪽 이름은 그대로다(채택한 v4 측정의 저장본과 같다)', () => {
+    expect(sideId('base', survey_trace)).toBe('base-0f347011')
+    expect(sideId('v1', survey_trace)).toBe('v1-d18f643c')
+    // 과제를 고르지 않은 계획은 survey·trace만이라 쪽 이름이 같다
+    const items = plan({ scenarios: ['e1-twoboard', 'e2-gateway'], reps: 1 })
+    expect(sideId('base', planEntries(items))).toBe('base-0f347011')
+    const stored = JSON.parse(
+      fs.readFileSync(
+        path.join(import.meta.dirname, '../extract/reports/2026-10-09-v4-m5.runs.json'),
+        'utf8',
+      ),
+    ).runs.filter((r) => r.side === 'base' || r.side === 'v1')
+    expect(stored.length).toBeGreaterThan(0)
+    const { scenario } = loadScenario('e1-twoboard')
+    for (const r of stored) {
+      const t = scenario.tasks.find((x) => x.id === r.task)
+      expect(buildSide(r.side, t.kind, t.lens ?? null).hashes, `${r.side} ${r.task}`).toEqual(
+        r.hashes,
+      )
+    }
+  })
+
+  it('계획: 과제를 고르지 않으면 survey·trace만, 새 종류는 --kinds나 --tasks로', () => {
+    const ids = (o) => plan({ scenarios: ['e1-twoboard'], reps: 1, ...o }).map((i) => i.task.id)
+    expect(ids({})).toEqual([
+      'survey',
+      'trace-command',
+      'trace-timing',
+      'trace-variant',
+      'trace-shared',
+    ])
+    expect(ids({ kinds: ['integrate', 'review', 'summarize'] })).toEqual([
+      'integrate',
+      'review',
+      'summarize',
+    ])
+    expect(ids({ tasks: ['review', 'survey'] })).toEqual(['survey', 'review'])
+  })
+
+  it('쪽 이름과 결과 스키마에 칸의 키(관점, 질문·서술 키)가 든다', () => {
+    const r1 = { answers: ['q1'], verdicts: ['s1'] }
+    const r2 = { answers: ['q1', 'q2'], verdicts: ['s1'] }
+    expect(sideId('base', [['review', null, r1]])).not.toBe(sideId('base', [['review', null, r2]]))
+    expect(
+      sideEntries([
+        ['review', null, r1],
+        ['review', null, r1],
+        ['review', null, r2],
+      ]),
+    ).toHaveLength(2)
+    const b = buildSide('base', 'review', null, r2)
+    expect(b.schema.properties.answers.required).toEqual(['q1', 'q2'])
+    expect(b.schema.properties.verdicts.required).toEqual(['s1'])
+    expect(() => buildSide('base', 'review', null)).toThrow(/answers/)
+    const items = plan({ scenarios: ['e1-twoboard', 'e2-gateway'], reps: 1, kinds: RECORD_KINDS })
+    const entries = planEntries(items)
+    // 두 시나리오의 review 묶음은 키가 같아(q1~q3, s1~s5) 조합이 셋이다
+    expect(entries.map(([k]) => k)).toEqual(['integrate', 'review', 'summarize'])
+    expect(sideId('base', entries)).toMatch(/^base-[0-9a-f]{8}$/)
+  })
+
+  it('v1은 새 종류에서도 base와 결과 스키마·필드 안내가 같고 L1·L2만 더한다', () => {
+    const { dir, scenario } = loadScenario('e1-twoboard')
+    for (const t of scenario.tasks.filter((x) => RECORD_KINDS.includes(x.kind))) {
+      const more = taskMore(dir, t)
+      const b = buildSide('base', t.kind, null, more)
+      const v = buildSide('v1', t.kind, null, more)
+      expect(v.schemaArg).toBe(b.schemaArg)
+      expect(v.instructions.startsWith('# Extraction run contract')).toBe(true)
+      expect(v.instructions).toContain(`# ${t.kind[0].toUpperCase()}${t.kind.slice(1)} run`)
+      expect(
+        v.instructions.endsWith(b.instructions.slice(b.instructions.indexOf('## Result fields'))),
+      ).toBe(true)
+    }
+    const ig = buildSide(
+      'base',
+      'integrate',
+      null,
+      taskMore(
+        dir,
+        scenario.tasks.find((x) => x.id === 'integrate'),
+      ),
+    )
+    expect(ig.schema.properties.coverage.required).toHaveLength(10)
+    expect(ig.instructions).toContain('### Coverage keys (perspectives)')
+    const rv = taskMore(
+      dir,
+      scenario.tasks.find((x) => x.id === 'review'),
+    )
+    expect(rv).toEqual({ answers: ['q1', 'q2', 'q3'], verdicts: ['s1', 's2', 's3', 's4', 's5'] })
+  })
+
+  it('기록으로 패킷을 만든다: integrate는 기록 목록의 경로, review는 질문·서술, summarize는 상태와 목록', () => {
+    const { dir, scenario } = loadScenario('e1-twoboard')
+    const task = (id) => scenario.tasks.find((x) => x.id === id)
+    const vars = { ...PLACEHOLDER_VARS, listing: '/w/listing.md', soft: 7, hard: 9 }
+    const ig = renderTask(dir, task('integrate'), vars)
+    expect(ig.packet).toContain('- Record listing (read-only): /w/listing.md')
+    expect(ig.packet).toContain('- Soft deadline: 7 minutes. Hard limit: 9 minutes.')
+    expect(ig.packet).toMatch(/## Open unknowns\n\n- c-\d{4} \(u-0002\)/)
+    const claims = ig.record.claims.map((c) => c.id)
+    expect(ig.listing.split('\n').filter((l) => /^c-\d{4} \|/.test(l))).toHaveLength(claims.length)
+    expect(knownIds(ig.packet, ig.listing)).toEqual(expect.arrayContaining([...claims, 'u-0001']))
+    expect(() => renderTask(dir, task('integrate'), { ...vars, listing: null })).toThrow(
+      /기록 목록/,
+    )
+    const rv = renderTask(dir, task('review'), vars)
+    expect(rv.items.map((i) => i.key)).toEqual(['q1', 'q2', 's1', 's2', 'q3', 's3', 's4', 's5'])
+    expect(rv.packet).toContain('## Statements')
+    // review 패킷에는 주장의 ID·값·이유·근거를 넣지 않는다(결정 12)
+    expect(rv.packet).not.toMatch(/\bc-\d{4}\b/)
+    const sm = renderTask(dir, task('summarize'), vars)
+    expect(sm.packet).toContain('- Partial analysis: yes')
+    expect(sm.packet).toContain('## Claims a review lowered')
+    expect(sm.listing).toBeNull()
+    // survey·trace는 손으로 쓴 패킷 그대로
+    expect(renderTask(dir, task('trace-timing'), vars).packet).toContain(
+      'Repository (read-only): /run/repo',
+    )
+  })
+
+  it('부드러운 마감의 거부 이유: summarize에는 outcome·checkpoint를 말하지 않는다', () => {
+    expect(softReason('integrate')).toBe(SOFT_REASON)
+    expect(softReason('trace')).toBe(SOFT_REASON)
+    expect(softReason('summarize')).not.toMatch(/outcome|checkpoint/)
+  })
+
+  it('채점의 run 종류는 scenario.json의 과제가 정하고, run.json과 다르면 멈춘다', () => {
+    const { dir, scenario } = loadScenario('e1-twoboard')
+    expect(runKind(scenario, { id: 'x', task: 'review', kind: 'review' }).kind).toBe('review')
+    expect(runKind(scenario, { id: 'x', task: 'review' }).kind).toBe('review')
+    expect(() => runKind(scenario, { id: 'x', task: 'review', kind: 'trace' })).toThrow(/kind/)
+    expect(() => runKind(scenario, { id: 'x', task: 'nope' })).toThrow(/과제/)
+    // run 폴더에 패킷이 없으면 기록으로 다시 만든다
+    const ids = runIds(
+      path.join(os.tmpdir(), 'relay-no-such-run'),
+      dir,
+      scenario.tasks.find((t) => t.id === 'summarize'),
+    )
+    expect(ids).toEqual(expect.arrayContaining(['u-0007', 'u-0008']))
+    expect(
+      runIds(
+        '/x',
+        dir,
+        scenario.tasks.find((t) => t.id === 'survey'),
+      ),
+    ).toBeUndefined()
+  })
+
+  it('가짜 claude로 review와 integrate run을 끝까지 돌리고 채점한다', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'relay-extract-dry-new-'))
+    try {
+      const { dir, scenario } = loadScenario('e1-twoboard')
+      const task = (id) => scenario.tasks.find((t) => t.id === id)
+      const planFile = (name, p) => {
+        const f = path.join(root, `${name}.json`)
+        fs.writeFileSync(f, JSON.stringify(p))
+        return f
+      }
+      const common = {
+        scenarioDir: dir,
+        scenario,
+        side: 'base',
+        model: 'sonnet',
+        effort: 'medium',
+        outDir: root,
+        workRoot: path.join(root, 'work'),
+        bin: 'claude',
+        dry: true,
+        softMs: 60_000,
+        hardMs: 60_000,
+        rep: 1,
+      }
+      const review = readReference(dir, 'review').out
+      const rv = await runOne({
+        ...common,
+        task: task('review'),
+        label: 'rv',
+        fakePlan: planFile('rv', {
+          tools: [{ name: 'Read', input: { file_path: '{wt}/src/cmd.c' } }],
+          outputs: [review],
+        }),
+      })
+      expect(rv.failure).toBeNull()
+      expect(rv.schemaValid).toBe(true)
+      expect(rv.kind).toBe('review')
+      const rvDir = path.join(root, 'runs', rv.id)
+      const schema = JSON.parse(fs.readFileSync(path.join(rvDir, 'schema.json'), 'utf8'))
+      expect(schema.properties.answers.required).toEqual(['q1', 'q2', 'q3'])
+      expect(fs.readFileSync(path.join(rvDir, 'packet.md'), 'utf8')).toContain(
+        '- s5: (requirements)',
+      )
+      // 서술 하나의 판정이 빠지면 조립한 스키마에서 걸린다
+      const { s5, ...four } = review.verdicts
+      expect(s5.verdict).toBe('not_refuted')
+      const short = await runOne({
+        ...common,
+        task: task('review'),
+        label: 'short',
+        fakePlan: planFile('short', { outputs: [{ ...review, verdicts: four }] }),
+      })
+      expect(short.failure).toBe('schema')
+      const ig = await runOne({
+        ...common,
+        task: task('integrate'),
+        label: 'ig',
+        fakePlan: planFile('ig', { outputs: [readReference(dir, 'integrate').out] }),
+      })
+      expect(ig.failure).toBeNull()
+      const igDir = path.join(root, 'runs', ig.id)
+      const listingPath = path.join(root, 'work', ig.id, 'listing.md')
+      expect(fs.readFileSync(path.join(igDir, 'packet.md'), 'utf8')).toContain(
+        `- Record listing (read-only): ${listingPath}`,
+      )
+      expect(fs.readFileSync(path.join(igDir, 'listing.md'), 'utf8')).toMatch(/^# Record listing/)
+      const settings = JSON.parse(fs.readFileSync(path.join(igDir, 'settings.json'), 'utf8'))
+      expect(
+        settings.permissions.deny.some((d) => d.startsWith('Write(') && d.endsWith('listing.md)')),
+      ).toBe(true)
+
+      await scoreDir(root, { judge: false })
+      const read = (id) =>
+        JSON.parse(fs.readFileSync(path.join(root, 'runs', id, 'score.json'), 'utf8'))
+      const rs = read(rv.id)
+      expect(rs.violated).toEqual([])
+      expect(rs.recall).toMatchObject({
+        'r.rev.retry': true,
+        'r.rev.fan_cfg': true,
+        'r.rev.writer': true,
+      })
+      expect(rs.pmB).toBe(1)
+      expect(rs.anchors.total).toBeGreaterThan(0)
+      expect(read(short.id).pmA).toBeUndefined()
+      const is = read(ig.id)
+      expect(is.violated).toEqual([])
+      expect(is.recall['r.int.supersedes_frame']).toBe(true)
     } finally {
       fs.rmSync(root, { recursive: true, force: true })
     }
@@ -945,6 +1679,19 @@ describe('저장본과 채택 판정', () => {
     // 기준선에만 있는 층은 보지 않는다
     const extra = [...better, ...many('A', 't3', 5, 0)]
     expect(adoption(summarize(extra), 'B', 'A').groups).toBe(2)
+  })
+
+  it('저장본에 run 종류를 남기고, 과제로 행을 골라 새 종류의 층을 따로 판정한다', () => {
+    const rows = [
+      { ...row('A', 'survey', 0, 1), run: { ...row('A', 'survey', 0, 1).run, kind: 'survey' } },
+      { ...row('A', 'review', 1, 0.5), run: { ...row('A', 'review', 1, 0.5).run, kind: 'review' } },
+    ]
+    const stored = toStored(rows)
+    expect(stored.map((r) => r.kind)).toEqual(['survey', 'review'])
+    expect(fromStored({ runs: stored }).map((r) => r.run.kind)).toEqual(['survey', 'review'])
+    expect(fromStored({ runs: [{ id: 'A.s.t.1', label: 'A', task: 't' }] })[0].run.kind).toBeNull()
+    expect(filterTasks(rows, ['review']).map((r) => r.run.task)).toEqual(['review'])
+    expect(filterTasks(rows, null)).toHaveLength(2)
   })
 
   it('실패율이 기준선보다 10%p 넘게 높으면 채택하지 않는다', () => {

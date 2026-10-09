@@ -31,6 +31,21 @@
       "kind": "trace",
       "lens": "shared",
       "packet": "packets/trace-shared.md"
+    },
+    {
+      "id": "integrate",
+      "kind": "integrate",
+      "record": "records/integrate.json"
+    },
+    {
+      "id": "review",
+      "kind": "review",
+      "record": "records/review.json"
+    },
+    {
+      "id": "summarize",
+      "kind": "summarize",
+      "record": "records/summarize.json"
     }
   ],
   "build": {
