@@ -7,7 +7,7 @@
 //     claims: [{id, unit, run, section, key, body}], evidence: [{id, kind, path, start, end, command}],
 //     decisions: [{id, trigger, question, answer: string | null}], links: [{id, kind, from, to, reason}],
 //     reviews: [{claim, result, status, note}], coverage: {관점: [칸]} | null, partial: boolean,
-//     build_index: {status, detail} | null }
+//     build_index: {status, detail} | null, notes?: [{at, text}] }
 import { reviewItems } from './review.mjs';
 
 const one = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
@@ -19,7 +19,7 @@ export function claimSummary(c) {
   const b = c.body ?? {};
   switch (c.section) {
     case 'quantities':
-      return `${one(b.symbol) || one(b.expr)} = ${(b.values ?? []).map((v) => `${one(v.value)} ${cfg(v.configs)}`.trim()).join('; ')} (${one(b.unit)}, ${one(b.unit_status)}, ${one(b.nature)})`;
+      return `${one(b.symbol) || one(b.expr)} = ${(b.values ?? []).map((v) => `${one(v.value)} ${cfg(v.configs)}`.trim()).join('; ') || one(b.expr) || '?'} (${[b.unit, b.unit_status, b.nature].map(one).filter(Boolean).join(', ')})`;
     case 'requirements':
       return [b.condition, b.behavior, b.result].map(one).filter(Boolean).join(' → ');
     case 'unknowns':
@@ -74,20 +74,21 @@ export function resolvedBy(links) {
 }
 
 /**
- * 기록 목록: 주장 한 줄씩(전역 ID | 단위 | 절 | 구성 | 요약 | 근거 위치 | 연결). integrate run이 Grep·Read로 찾는 파일이다
+ * 기록 목록: 주장 한 줄씩(전역 ID | 단위 | run | 절 | 구성 | 요약 | 근거 위치 | 연결). integrate run이 Grep·Read로 찾는 파일이다.
+ * run 칸은 같은 단위의 뒤 run(supersedes)을 가르는 데 쓴다
  * @param {object} record
  */
 export function recordListing(record) {
   const folded = foldedBy(record.links);
   const resolved = resolvedBy(record.links);
-  const lines = ['# Record listing: global ID | unit | section | configurations | summary | evidence | links', ''];
+  const lines = ['# Record listing: global ID | unit | run | section | configurations | summary | evidence | links', ''];
   for (const c of record.claims ?? []) {
     const marks = [
       ...(folded.has(c.id) ? [`folded into ${folded.get(c.id).join(', ')}`] : []),
       ...(resolved.has(c.id) ? [`answered by ${resolved.get(c.id).join(', ')}`] : []),
     ];
     lines.push(
-      [c.id, c.unit, c.section, cfg(c.body?.configs) || '-', clip(claimSummary(c), 400) || '-', claimLocations(c, record.evidence).join(', ') || '-', marks.join('; ') || '-'].join(' | '),
+      [c.id, c.unit, c.run ?? '-', c.section, cfg(c.body?.configs) || '-', clip(claimSummary(c), 400) || '-', claimLocations(c, record.evidence).join(', ') || '-', marks.join('; ') || '-'].join(' | '),
     );
   }
   return lines.join('\n') + '\n';
@@ -124,8 +125,12 @@ function configsBlock(record) {
 
 function decisionsBlock(record) {
   const answered = (record.decisions ?? []).filter((d) => d.answer);
-  if (!answered.length) return [];
-  return ['## Human decisions', '', ...answered.flatMap((d) => [`- ${d.id} Q: ${one(d.question)}`, `  A: ${one(d.answer)}`]), ''];
+  const notes = record.notes ?? [];
+  return [
+    ...(answered.length ? ['## Human decisions', '', ...answered.flatMap((d) => [`- ${d.id} Q: ${one(d.question)}`, `  A: ${one(d.answer)}`]), ''] : []),
+    // 사람 메모: 범위 줄이기와 되감기의 추가 지시(AI 결정 114, 120)
+    ...(notes.length ? ['## Notes from a person', '', ...notes.map((n) => `- ${one(n.text)}`), ''] : []),
+  ];
 }
 
 function limits(o) {
@@ -217,7 +222,10 @@ export function renderSummarizePacket(o) {
   list('Conflicts', 'conflicts', 30);
   const links = (r.links ?? []).filter((l) => l.kind === 'conflicts').map((l) => `- ${l.id}: ${(l.from ?? []).join(', ')} ↔ ${(l.to ?? []).join(', ')}: ${clip(one(l.reason), 200)}`);
   if (links.length) out.push('## Conflicting claims (links)', '', ...links, '');
-  if (lowered.length) out.push('## Claims a review lowered', '', ...lowered.map((x) => `- ${x.claim}: ${x.status}${x.note ? ` (${clip(one(x.note), 160)})` : ''}`), '');
+  // 내린 주장의 글도 보인다: 관찰·목록·부재는 다른 절에 나오지 않는다
+  const byId = new Map((r.claims ?? []).map((c) => [c.id, c]));
+  const what = (id) => (byId.has(id) ? ` (${byId.get(id).section}) ${clip(claimSummary(byId.get(id)), 200)}` : '');
+  if (lowered.length) out.push('## Claims a review lowered', '', ...lowered.map((x) => `- ${x.claim}${what(x.claim)}: ${x.status}${x.note ? ` (${clip(one(x.note), 160)})` : ''}`), '');
   if (r.coverage) {
     const gaps = Object.entries(r.coverage).flatMap(([p, cells]) => (cells ?? []).filter((c) => c.status === 'unreached' || c.status === 'unknown').map((c) => `- ${p} ${cfg(c.configs)}: ${c.status}${c.note ? ` (${clip(one(c.note), 160)})` : ''}`));
     out.push('## Coverage gaps', '', ...(gaps.length ? gaps : ['- (none)']), '');

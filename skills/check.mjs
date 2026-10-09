@@ -221,7 +221,8 @@ const PR_MARK = { bugfix: '## 원인', feature: '## 동작', refactor: '## 목�
 // 설계의 verification.md는 테스트 파일 변경 대신 문서 밖 파일 변경을, 남은 위험 앞에 다시 볼 결정을 둔다 (D374)
 const SPEC_VERIFICATION = { drop: ['## 테스트 파일 변경'], add: ['## 문서 밖 파일 변경', '## 다시 볼 결정'] };
 // 요구사항 추출의 verification.md는 코드를 바꾸지 않아 테스트 파일 변경 절이 없다 (requirements-extraction-flow.md 결정 92)
-const REQUIREMENTS_VERIFICATION = { drop: ['## 테스트 파일 변경'], add: [] };
+// 사람 표본 확인 절을 남은 위험 앞에 둔다 (AI 결정 117)
+const REQUIREMENTS_VERIFICATION = { drop: ['## 테스트 파일 변경'], add: ['## 사람 표본 확인'] };
 for (const [name, sections] of Object.entries(templateSources)) {
   for (const v of variants.filter((x) => x.name === name)) {
     const skillHeadings = codeBlocks(v.text, 'markdown').flatMap(headings);
@@ -331,6 +332,9 @@ const spec = {
     ['D354', '"<무엇>을 정한다" 한 줄에 하나, 어떻게는 쓰지 않음, 사람과 맞춤', /"<무엇>을 정한다", one per line[\s\S]*Not how to decide it[\s\S]*Agree on this list with the human/, ['spec']],
     ['D356', '확인 방법을 붙이지 않음', /No check method[\s\S]*verify judges them by reading the document and the diff/, ['spec']],
     ['D351', '완료조건: 대상 문서 경로가 제약에', /## Done when[\s\S]*target document's path is in `제약`/, ['spec']],
+    ['AI 117', '요구사항 추출: 빌드 허용과 툴체인을 물어 제약에, 앱이 다시 묻는다', /ask whether the analysis may run the repository's build commands[\s\S]*"빌드: 허용 \(툴체인 …\)"[\s\S]*asks again before it builds/, ['requirements']],
+    ['AI 122', '요구사항 추출: 서브모듈 안은 경계', /lists submodules, write "서브모듈 안은 경계"/, ['requirements']],
+    ['AI 117', '요구사항 추출 완료조건: 자료·빌드·경계 줄', /## Done when[\s\S]*`제약` has the 자료, 빌드 and 경계 lines/, ['requirements']],
   ],
   design: [
     ['5.6.8', '입력: context.md, request.md 경로', /`context\.md`[\s\S]*`request\.md`/],
@@ -494,6 +498,9 @@ const spec = {
     ['D364', '설계 pr.md: 요약 / 주요 결정 / 다시 볼 결정 / 정하지 않은 것 / 구현 나눔 / 변경', /## 요약\n## 주요 결정\n## 다시 볼 결정\n## 정하지 않은 것\n## 구현 나눔\n## 변경/, ['spec']],
     ['D366', '구현 나눔은 정했을 때만', /`구현 나눔`: only when it was decided/, ['spec']],
     ['D374', '완료조건: 일곱 절, 문서 밖 파일 변경과 다시 볼 결정', /## Done when[\s\S]*seven template sections[\s\S]*picked[\s\S]*verdict and evidence[\s\S]*`문서 밖 파일 변경`[\s\S]*`다시 볼 결정` is written[\s\S]*`pr\.md` is written/, ['spec']],
+    ['AI 117', '요구사항 추출: 사람 표본 확인 셋까지 한 질문, 맞음 / 틀림 / 모름, 기록은 고치지 않음', /사람 표본 확인:\*\* pick up to three claims from the risk classes[\s\S]*one question[\s\S]*맞음 \/ 틀림 \/ 모름[\s\S]*`by: human`[\s\S]*Do not change the records/, ['requirements']],
+    ['AI 117', '요구사항 추출: 고른 지적은 ID와 바랄 처리로, 되감을 때 지시로 붙일 꼴', /IDs it concerns[\s\S]*철회 \/ 범위 좁힘 \/ 단위 다시 보기 \/ 자료 필요[\s\S]*paste it as the instruction when they rewind to extract/, ['requirements']],
+    ['AI 117', '요구사항 추출 완료조건: 여섯 절, 사람 표본 확인', /## Done when[\s\S]*all six template sections[\s\S]*`사람 표본 확인` has the human's answers/, ['requirements']],
   ],
   'pr-respond': [
     ['D192', '입력: context.md(이번 라운드의 항목, 사람 지시, PR 정보, 앞 라운드 요약)와 파이프라인 산출물(경로)', /`context\.md`[\s\S]*this round's items, the human's instruction, the PR[\s\S]*summaries of earlier rounds[\s\S]*pipeline artifacts/],
@@ -607,9 +614,10 @@ console.log('\n[6] extract run 조립 (16.11 [정적], 결정 36)');
 console.log('\n[6b] extract 지시 문구 (16.5, 16.9, 16.10, 16.11 [정적])');
 {
   const bases = Object.fromEntries(KINDS.map((k) => [k, loadBase(k)]));
-  // 문구를 쓴 렌즈(평가 범위, 결정 18). 쓴 카드는 모든 절(Scope, Trace, Checklist, Pitfalls, Phrasing, Example)을 갖는다
+  // 렌즈 카드는 모두 trace 절을 쓴다(14차 작업에서 state·lifecycle·protocol을 더함, AI 결정 128). 카드마다 모든 절(Scope, Trace,
+  // Checklist, Pitfalls, Phrasing, Example)을 갖는다
   const WRITTEN = LENSES.filter((l) => lensLayer(readFileSync(lensCardPath(l), 'utf8')));
-  check(['command', 'timing', 'variant', 'shared'].every((l) => WRITTEN.includes(l)), `trace 절을 쓴 렌즈: ${WRITTEN.join(', ')} (${WRITTEN.length}/${LENSES.length})`);
+  check(LENSES.every((l) => WRITTEN.includes(l)), `trace 절을 쓴 렌즈: ${WRITTEN.join(', ')} (${WRITTEN.length}/${LENSES.length})`);
   for (const l of WRITTEN) {
     const card = readFileSync(lensCardPath(l), 'utf8');
     const missing = ['Scope', 'Trace', 'Checklist', 'Pitfalls', 'Phrasing', 'Example'].filter((h) => section(card, h) === null);

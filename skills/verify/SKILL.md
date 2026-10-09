@@ -26,7 +26,7 @@ Review the whole change of this Work, apply only the findings the human picks, t
 - `execution.md` at the path in `context.md`: the plan, the change, and the self-check of each 완료조건.
 <!-- /type -->
 <!-- type: requirements -->
-- `extraction.md` at the path in `context.md`: the configurations, every analysis unit with its ending state, and the requirement candidates, constraints, unknowns and conflicts with their source locations. The records it is drawn from are app-owned (`requirements/` in the Work directory): read them, never edit them.
+- `extraction.md` at the path in `context.md`: the configurations, every analysis unit with its ending state, and the requirement candidates, constraints, unknowns and conflicts with their source locations. When present, also its overview, coverage by perspective, folded claims, AI review, conflict links, partial-analysis banner and build-index line. The records it is drawn from are app-owned (the folder under `요구사항 기록` in `context.md`): read them, never edit them.
 <!-- /type -->
 - The change to review is from the base commit (from `context.md`) to now: `git diff <base commit>`.
 
@@ -38,7 +38,7 @@ Review the whole change of this Work, apply only the findings the human picks, t
 3. **Apply** only the picked findings, commit, and run the intent's test command. Fill in `## 반영` and `## 반영하지 않은 지적`. Do not review again afterwards, and do not add new findings.
 <!-- /type -->
 <!-- type: requirements -->
-3. **Apply nothing here.** The records are app-owned. Write the picked findings under `## 반영하지 않은 지적` with "extract를 다시 돌려 고칠 것", so the human can rewind to extract, and leave `## 반영` as "없음". Do not review again afterwards, and do not add new findings.
+3. **Apply nothing here.** The records are app-owned. Write each picked finding under `## 반영하지 않은 지적` with the IDs it concerns (`c-`, `u-`, `e-`), what extract should do (철회 / 범위 좁힘 / 단위 다시 보기 / 자료 필요) and why, worded so the human can paste it as the instruction when they rewind to extract. Leave `## 반영` as "없음". Do not review again afterwards, and do not add new findings.
 <!-- /type -->
 <!-- type: spec -->
 3. **Apply** only the picked findings to the document and commit. There is no test command to run. Fill in `## 반영` and `## 반영하지 않은 지적`. Do not review again afterwards, and do not add new findings.
@@ -70,7 +70,8 @@ Review the whole change of this Work, apply only the findings the human picks, t
 <!-- type: requirements -->
 - Review the extraction, not code changes: open the cited source locations and check that each requirement candidate and constraint says what the code at the base commit does, in the configurations it names.
 - Claims that merge configurations, state a unit or a guarantee the code does not show, or treat an observed or nominal value as a guarantee.
-- Gaps: entry points, configurations or units with no ending state, and unknowns without the material they need.
+- Gaps: entry points, configurations or units with no ending state, and unknowns without the material they need. Coverage cells left unknown or unreached, and units held by a partial analysis, are gaps only when `extraction.md` does not say so.
+- Judge whether claims match the source and the configurations, not whether the requirements are good.
 <!-- /type -->
 <!-- type: refactor -->
 - Did any logic change in the diff (outside the differences the human accepted)? A behavior change the human did not accept is a 차단 finding. Are the structural goals met? Did the scope grow beyond the plan?
@@ -184,6 +185,9 @@ Ask on the spot:
 <!-- type: general -->
 - **`확인: 사람` items:** gather them all into one question. For each, show what to look at (file, diff location, run result). The human's answer decides 통과 or 실패. Write "사람 확인" and the answer in the evidence, and record the answer in `decisions` with `by: human`.
 <!-- /type -->
+<!-- type: requirements -->
+- **사람 표본 확인:** pick up to three claims from the risk classes (numbers, absence claims, hardware, communication or concurrency constraints, requirement candidates, claims for all configurations), preferring ones the AI review did not lower and ones in different units. Gather them into one question. For each, show the ID, the claim text, `path:line` and the quote. The human opens the source and answers 맞음 / 틀림 / 모름. Write the answers under `## 사람 표본 확인` and record them in `decisions` with `by: human`. A 틀림 is a 차단 finding for extract. Do not change the records.
+<!-- /type -->
 <!-- type: bugfix feature refactor general -->
 - **A test change looks like weakening:** show which test changed and how. If the human says it is not weakening, "기존 테스트를 약화하거나 삭제하지 않는다" is 통과. If they say it is, it is 실패.
 <!-- /type -->
@@ -217,8 +221,9 @@ Ask on the spot:
 - Every changed test file is judged.
 <!-- /type -->
 <!-- type: requirements -->
-- `verification.md` has all five template sections.
-- If there were findings, the human picked; the picked ones are under `반영하지 않은 지적` for extract.
+- `verification.md` has all six template sections.
+- If there were findings, the human picked; the picked ones are under `반영하지 않은 지적` for extract, with IDs and what extract should do.
+- `사람 표본 확인` has the human's answers, or "없음" with the reason (no risk-class claim).
 - Every 완료조건 of the intent has a verdict and evidence, judged on `extraction.md` and the cited source locations.
 <!-- /type -->
 <!-- type: spec -->
@@ -276,6 +281,11 @@ Ask on the spot:
 ## 테스트 파일 변경
 - 파일 — 약화 아님 / 약화 의심(사람 판단: …) — 이유
 (바뀐 테스트 파일이 없으면 "없음")
+<!-- /type -->
+<!-- type: requirements -->
+## 사람 표본 확인
+- ID — 주장 — `경로:줄` — 맞음 / 틀림 / 모름
+(위험 등급 주장이 없으면 "없음"과 까닭)
 <!-- /type -->
 <!-- type: spec -->
 ## 문서 밖 파일 변경
@@ -347,7 +357,7 @@ Ask on the spot:
 ```
 <!-- /type -->
 <!-- type: requirements -->
-- `분석 범위`: the configurations and units covered, and what was left out or held, with the reason. `미확정과 충돌`: copy the counts and the main items from `extraction.md`, or "없음". `변경`: the result document added or changed, or "없음".
+- `분석 범위`: the configurations and units covered, and what was left out or held, with the reason. `미확정과 충돌`: copy the counts and the main items from `extraction.md`, or "없음". `변경`: "없음" (the result is exported to `docs/requirements/<Work id>` from the completion screen, which adds a line to the PR body).
 
 ```markdown
 # PR 제목

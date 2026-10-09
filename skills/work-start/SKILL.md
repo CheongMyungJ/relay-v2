@@ -48,9 +48,10 @@ Read the request, talk with the human, and write the intent draft `intent.draft.
 <!-- /type -->
 <!-- type: requirements -->
 - **This skill does not change code and does not analyze the firmware.** Skim the repository only enough to write the scope. Do not trace behavior or list requirements. That is the job of extract, which the app runs as many small runs.
-- **Do not ask the human to pick boards or features first.** "Every build configuration and the project's own code" is a valid scope. Settle only what to exclude and what material exists (datasheets, schematics, a toolchain the analysis may use).
-- **Boundaries:** vendor HAL, RTOS kernels and third-party libraries are boundaries by default: their configuration and call boundary are in scope, their internals are not. If the human wants one traced inside, write it in `제약`.
-- Write the scope and exclusions in `목표` and `비목표`, and the material in `제약` as "자료: …".
+- **Do not ask the human to pick boards or features first.** "Every build configuration and the project's own code" is a valid scope. Settle only what to exclude and what material exists (datasheets, schematics and their versions, a toolchain the analysis may use).
+- **Build:** ask whether the analysis may run the repository's build commands, and which toolchain (name and version) is installed. This is information you cannot draft without, not a human decision. Write it in `제약` as "빌드: 허용 (툴체인 …)" or "빌드: 허용하지 않음 (까닭)". It is a record for people and runs: the app still shows the real commands after the survey and asks again before it builds.
+- **Boundaries:** vendor HAL, RTOS kernels and third-party libraries are boundaries by default: their configuration and call boundary are in scope, their internals are not. If the human wants one traced inside, write it in `제약` as "경계: …". If context.md lists submodules, write "서브모듈 안은 경계" in `제약`: they are not checked out.
+- Write the scope and exclusions in `목표` and `비목표`, and the material, build and boundary lines in `제약`.
 - **The result document is `extraction.md`.** The app writes it from the records at the end of extract, in the extract task folder. Do not pick a path in the repository for it, and write completion criteria about `extraction.md`.
 <!-- /type -->
 - **Type mismatch:** the human picked the type: `bugfix` (버그 수정: current behavior is wrong), `feature` (기능 추가: new behavior), `refactor` (리팩터링: change structure, keep behavior), `spec` (설계: settle only the design of big work before building it), `requirements` (요구사항 추출: recover the current behavior of existing firmware as requirement candidates and constraints with evidence) or `general` (일반: work that fits none of these, e.g. config, CI, docs, dependency upgrades, mixed work). If it does not fit the request (e.g. `feature`, but the request says current behavior is wrong), ask before you write the draft. If the human wants to change the type, close as `blocked` and tell them to pick the type with [단계 선택] → intake. If they keep it, draft with the picked type. Never change the type yourself.
@@ -112,6 +113,9 @@ Scope (`비목표`) and completion criteria (`완료조건`). This skill has no 
 <!-- type: spec -->
 - The target document's path is in `제약`.
 <!-- /type -->
+<!-- type: requirements -->
+- `제약` has the 자료, 빌드 and 경계 lines.
+<!-- /type -->
 
 ## Artifact template: `intent.draft.md`
 
@@ -163,6 +167,8 @@ No front matter: the app adds the type and version when the human approves.
 <!-- /type -->
 <!-- type: requirements -->
 - 자료: (없으면 "없음")
+- 빌드: (허용 (툴체인 …) / 허용하지 않음 (까닭))
+- 경계: (기본 외에 안까지 볼 것, 없으면 "기본". 서브모듈이 있으면 "서브모듈 안은 경계")
 <!-- /type -->
 - (선택)
 

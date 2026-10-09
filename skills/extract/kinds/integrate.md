@@ -5,7 +5,7 @@
 ## Inputs
 
 - The packet: intent, configurations (from the survey), every unit with its state, the entry points the survey found, the open unknowns, the links earlier integrate runs made, and limits.
-- The record listing named in the packet: one line per claim of earlier runs with its global ID, unit, section, configurations, a short summary and its evidence locations. Search it with Grep or Read instead of relying on memory.
+- The record listing named in the packet: one line per claim of earlier runs with its global ID, unit, run, section, configurations, a short summary and its evidence locations. Search it with Grep or Read instead of relying on memory.
 - The repository at the base commit, to check a link or a gap against the code.
 - The perspective keys are listed with the result fields.
 

@@ -3,8 +3,7 @@
 //   주장 ID의 해시로 고르므로 다시 해도 같다). 미확정·충돌·구성·경계·구현 선택은 검토하지 않는다(이미 빈 곳이거나 제약이 아니다).
 // - 맹검 질문은 주장 칸(기호, 구성, 이름과 종류)에서 만들고 주장의 값·서술·이유·근거는 주지 않는다. 행동 서술은 서술 그대로
 //   주고 반박을 시도하게 한다. 답의 비교는 앱이 한다(16.9): 값은 (수, 단위) 후보로, 구성은 집합으로 견준다.
-// 파일을 읽지 않는 순수 함수만 둔다.
-import { createHash } from 'node:crypto';
+// 파일을 읽지 않는 순수 함수만 둔다. 앱의 core가 부르므로 Node API도 쓰지 않는다(표본의 해시는 FNV-1a).
 
 /** review 단위 하나의 질문과 서술 수 상한. 스키마의 필수 키 수와 run 시간을 정한다(결정 36, AI 결정 112) */
 export const REVIEW_BATCH = 8;
@@ -31,10 +30,19 @@ export function riskClass(claim) {
   return null;
 }
 
-/** 표본으로 고르는가: 주장 ID의 sha256 앞 8자리를 [0, 1)로 */
+/** 표본으로 고르는가: 주장 ID의 FNV-1a 32비트 해시(뒤섞기 fmix32)를 [0, 1)로 */
 export function sampled(id, rate = SAMPLE_RATE) {
-  const h = createHash('sha256').update(String(id)).digest('hex').slice(0, 8);
-  return parseInt(h, 16) / 0x100000000 < rate;
+  let h = 0x811c9dc5;
+  for (const ch of String(id)) {
+    h ^= ch.codePointAt(0);
+    h = Math.imul(h, 0x01000193);
+  }
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
+  return (h >>> 0) / 0x100000000 < rate;
 }
 
 /** 검토할 주장인가(위험 등급이면 모두, 아니면 표본) */
