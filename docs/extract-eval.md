@@ -7,21 +7,22 @@
 
 ## 1. 구성
 
-| 위치                                                                                                   | 내용                                                                                                                                                             |
-| ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `skills/extract/run.mjs`, `load.mjs`                                                                   | 지시·결과 스키마 조립과 run 인자. 앱, `skills/check.mjs`, 하네스가 함께 쓴다(16.3)                                                                               |
-| `skills/extract/contract.md`, `kinds/*.md`, `lenses/*.md`                                              | 지시 문구: L1 고정 계약, L2 종류 절차, 렌즈 카드(점검표와 trace 절. state·lifecycle·protocol은 점검표만, 결정 36, 70)                                            |
-| `skills/extract/rules.mjs`, `counter/*.json`                                                           | 앱이 제출 때 보는 규칙 표와 규칙마다 반례(결정 71)                                                                                                               |
-| `docs/contracts/extract-{survey,trace}.v0.schema.json`                                                 | 결과 스키마 v0(기본 스키마, 점검표 칸은 비어 있다)                                                                                                               |
-| `app/eval/extract/run.mjs`                                                                             | 하네스: 쪽 하나를 시나리오·과제마다 회차만큼 돌린다                                                                                                              |
-| `app/eval/extract/score.mjs`                                                                           | 채점: 결정론 채점과 판정 모델                                                                                                                                    |
-| `app/eval/extract/report.mjs`                                                                          | 집계와 쪽 비교(bootstrap)                                                                                                                                        |
-| `app/eval/extract/check-fixtures.mjs`                                                                  | 픽스처가 구성마다 컴파일되고 핵심 상수가 맞는지(clang 또는 zig cc)                                                                                               |
-| `app/eval/extract/sides/<쪽>/`, `lib/sides.mjs`                                                        | 쪽의 지시 층. `base`는 최소 지시 판(결정 19), `v1`은 `skills/extract`의 지시 문구 그대로                                                                         |
-| `app/eval/extract/scenarios/<id>/`                                                                     | `repo/`(손으로 쓴 펌웨어), `scenario.json`(과제, 빌드와 단정), `packets/`(손으로 쓴 패킷), `truth.json`(정답), `reference/`(만점 결과와 판정 답), `traps/`(함정) |
-| `app/eval/seal.sh`, `unseal.sh`, `sealed/extract-h1.*`                                                 | 봉인 hold-out을 만들고 연다(7절)                                                                                                                                 |
-| `app/eval/test/extract.test.mjs`                                                                       | 모델 없이 도는 시험: reference 만점, 함정 검출, 채점 규칙, 가짜 claude로 하네스 끝까지                                                                           |
-| `app/test/contract/claude-run.ts`, `live-run.test.ts`, `fakes-run.test.ts`, `fixtures/claude-run.json` | run의 [계약]과 녹화본, 가짜 run(`test/support/fake-claude/print-run.mjs`)                                                                                        |
+| 위치                                                                                                         | 내용                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `skills/extract/run.mjs`, `load.mjs`                                                                         | 지시·결과 스키마 조립과 run 인자. 앱, `skills/check.mjs`, 하네스가 함께 쓴다(16.3)                                                                               |
+| `skills/extract/contract.md`, `kinds/*.md`, `lenses/*.md`                                                    | 지시 문구: L1 고정 계약, L2 종류 절차, 렌즈 카드(점검표와 trace 절. state·lifecycle·protocol은 점검표만, 결정 36, 70)                                            |
+| `skills/extract/rules.mjs`, `counter/*.json`                                                                 | 앱이 제출 때 보는 규칙 표와 규칙마다 반례(결정 71)                                                                                                               |
+| `docs/contracts/extract-{survey,trace}.v0.schema.json`                                                       | 결과 스키마 v0(기본 스키마, 점검표 칸은 비어 있다)                                                                                                               |
+| `app/eval/extract/run.mjs`                                                                                   | 하네스: 쪽 하나를 시나리오·과제마다 회차만큼 돌린다                                                                                                              |
+| `app/eval/extract/score.mjs`                                                                                 | 채점: 결정론 채점과 판정 모델                                                                                                                                    |
+| `app/eval/extract/report.mjs`                                                                                | 집계와 쪽 비교(bootstrap)                                                                                                                                        |
+| `app/eval/extract/check-fixtures.mjs`                                                                        | 픽스처가 구성마다 컴파일되고 핵심 상수가 맞는지(clang 또는 zig cc)                                                                                               |
+| `skills/extract/build-index.mjs`, `app/eval/extract/lib/build-index.mjs`, `app/eval/extract/build-index.mjs` | 구성별 빌드 인덱스(정의된 심볼, 전처리 뒤 살아 있는 줄)와 제출 검사 규칙 `config_active`(AI 결정 87·88). 컴파일러 찾기와 인자는 `lib/cc.mjs`                     |
+| `app/eval/extract/sides/<쪽>/`, `lib/sides.mjs`                                                              | 쪽의 지시 층. `base`는 최소 지시 판(결정 19), `v1`은 `skills/extract`의 지시 문구 그대로                                                                         |
+| `app/eval/extract/scenarios/<id>/`                                                                           | `repo/`(손으로 쓴 펌웨어), `scenario.json`(과제, 빌드와 단정), `packets/`(손으로 쓴 패킷), `truth.json`(정답), `reference/`(만점 결과와 판정 답), `traps/`(함정) |
+| `app/eval/seal.sh`, `unseal.sh`, `sealed/extract-h1.*`                                                       | 봉인 hold-out을 만들고 연다(7절)                                                                                                                                 |
+| `app/eval/test/extract.test.mjs`                                                                             | 모델 없이 도는 시험: reference 만점, 함정 검출, 채점 규칙, 가짜 claude로 하네스 끝까지                                                                           |
+| `app/test/contract/claude-run.ts`, `live-run.test.ts`, `fakes-run.test.ts`, `fixtures/claude-run.json`       | run의 [계약]과 녹화본, 가짜 run(`test/support/fake-claude/print-run.mjs`)                                                                                        |
 
 ## 2. 시나리오
 
@@ -65,6 +66,10 @@ node eval/extract/report.mjs eval/extract/results/<폴더> --as C=C2@e1-twoboard
 - 사용량(결정 28): run과 판정을 띄우기 전마다 `get_usage`로 주간 사용률을 보고 50%에 닿으면 멈춘다. `get_usage`가
   사용량을 주지 않으면 결과 폴더의 `calls.jsonl`로 실제 claude 호출을 150번까지로 묶는다(AI 결정 51).
   사용량 한도로 실패하면 5시간 창은 재설정 시각까지 기다렸다 같은 run부터 잇고, 주간이면 멈춘다(결정 29).
+- `--build-index`(run.mjs): 시나리오마다 구성별 빌드 인덱스를 만들고(C 컴파일러 필요) 제출 때 규칙 `config_active`로 검사해
+  걸리면 2회까지 되돌린다(AI 결정 88). 기본은 끔이다. run.json의 `submitCheck`에 제출마다 걸린 문제, 되돌림 수, 받은 제출에
+  남은 문제가 남고, 인덱스는 결과 폴더의 `build-index.<시나리오>.json`이다. 인덱스만 보거나 결과 하나를 검사하려면
+  `node eval/extract/build-index.mjs [시나리오] [--out 폴더] [--check 결과.json]`.
 - `--always-cap`(run.mjs, score.mjs): `get_usage`가 사용량을 주지 않으면 run의 `rate_limit_event`가 사용률을 알려 줘도
   `--max-calls` 상한을 함께 건다(AI 결정 76). 여러 이름표를 한 결과 폴더에 두면 `calls.jsonl` 하나로 함께 센다.
 
