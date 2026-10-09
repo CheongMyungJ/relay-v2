@@ -51,7 +51,26 @@ CheongMyungJ/relay-v2의 docs/requirements-extraction-flow-20261008 브랜치에
 
 ## 3. 앱의 requirements 기능 다음 PR(나란히 할 수 있다)
 
-첫 구현은 17.12.1절의 체크된 항목까지다. 실제 claude로 작은 저장소 하나를 Work 완료까지 돌렸다(`app/test/claude/requirements.test.ts`, `docs/checks.md`). 다음 PR 후보는 17.12.1절의 체크되지 않은 항목이고, 먼저 앱 설정의 "요구사항 추출" 절(결정 31)과 구성별 빌드 인덱스(16.10, 결정 87·88)를 붙인다. 지시 원본은 `skills/extract`의 파일 그대로 읽으므로(결정 97) 판이 바뀌어도 앱 코드는 바뀌지 않는다.
+첫 구현은 17.12.1절의 체크된 항목까지다. 실제 claude로 작은 저장소 하나를 Work 완료까지 돌렸다(`app/test/claude/requirements.test.ts`, `docs/checks.md` "요구사항 추출 유형"). 지시 원본은 `skills/extract`의 파일 그대로 읽으므로(결정 97) 판이 바뀌어도 앱 코드는 바뀌지 않는다.
+
+```text
+CheongMyungJ/relay-v2의 docs/requirements-extraction-flow-20261008 브랜치에서 요구사항 추출 기능의 다음 구현을 이어서 해줘. 중간에 나에게 묻지 말고, 결정이 필요하면 결정 1~100과 기존 relay 선례에 가장 잘 맞는 안을 골라 15.5.1절에 결정 101~로 적어. 다만 아래 "사람과 정할 것"에 걸리는 일은 하지 말고 끝 보고에서 제안만 해.
+
+먼저 CLAUDE.md, CONTRIBUTING.md, docs/requirements-extraction-flow.md(15.2~15.6절, 15.5.1절의 결정 92~100, 17.12절과 17.12.1절), docs/requirements-extraction-next-session.md의 "남은 설계 논의", docs/checks.md의 "요구사항 추출 유형"을 읽어줘. 코드는 app/src/core/requirements.ts(순수 로직, 렌더링), app/src/adapters/requirements.ts(기록 파일, run 실행, 반영 검사), app/src/main/requirements.ts(run 루프), app/src/main/work.ts의 extract 부분, app/src/renderer/src/Requirements.tsx(진행 상자)다. 지침 문구(skills/extract의 L1·카드), 채점 규칙, 채택 규칙(결정 62)은 고치지 않는다.
+
+할 일(차례대로, 하나씩 시험과 함께 커밋):
+1. 실행 출력 근거의 반영 검사: 이제 requirements/outputs/에 사본이 있으니(결정 42) tool_output 앵커의 줄 범위와 인용을 그 사본과 대조해 quote_match처럼 제출 검사와 반영 검사에 건다. 실제 run에서 "출력 1행을 가리켰으나 내용은 10~11행" 같은 어긋남이 나왔다(checks.md).
+2. 앱 설정의 "요구사항 추출" 절(결정 31): run 상한, 하드·부드러운 마감, 연속 실패·미완료 기준. 지금은 DEFAULT_REQUIREMENTS_BUDGET 고정이고 시험만 RelayOptions.requirementsBudget로 줄인다. 설정 화면과 [스모크]까지.
+3. 모든 단위가 끝난 뒤 나온 사람 결정의 답: 답을 받으면 결정을 낸 단위(또는 refs의 단위)를 다시 여는 안을 15.6절·결정 7·41과 맞춰 정하고 구현한다. 지금은 답이 기록에만 남는다(extraction.md가 그렇다고 적는다).
+4. 앞 run의 미확정이 뒤 run에서 풀려도 남는 문제: 통합 run 없이 앱이 할 수 있는 몫(예: 같은 단위 계열의 미확정을 뒤 run이 refs로 닫는 표시)이 있으면 하고, 없으면 통합 run 설계의 입력으로 17.12.1절에 적는다.
+5. 끝나면 실제 claude로 RELAY_REAL_CLAUDE=1 RELAY_REAL_CASES=requirements npm run test:claude를 한 번 돌려 Work 완료까지 가는지 보고 docs/checks.md "요구사항 추출 유형" 표에 한 줄 더한다(task마다 되돌림·시간, run 수, 제출 되돌림, 검증 지적 수). 실패하면 원인을 고치고 다시 돌린다. 사용량 한도 오류면 멈추고 보고한다.
+
+사람과 정할 것(하지 말고 제안만): review·integrate·summarize run과 그 지침·평가, state·lifecycle·protocol 렌즈, 구성별 빌드 인덱스를 앱에서 만드는 방식(16.10, 별도 체크아웃과 빌드 명령 허용), 저장소로 결과 내보내기, 재개·되감기의 고아 파일 규칙(17.3).
+
+규칙: 한 동작은 가장 낮은 층에서 자세히 시험한다(CLAUDE.md). [실제] 시험을 고치면 RELAY_REAL_CLAUDE=dry도 통과시킨다. docs/checks.md에는 prettier를 돌리지 않는다(app/ 밖이라 서식 검사 대상이 아니고 표 전체가 바뀐다). 화면을 고치면 npm run build 뒤 xvfb-run -a npx playwright test로 [스모크]를 돌린다. 끝나면 17.12.1절 진행 표, 15.5.1절 결정, 이 파일(docs/requirements-extraction-next-session.md)을 갱신한다.
+
+작게 커밋하고 지정된 개발 브랜치와 docs/requirements-extraction-flow-20261008 두 곳에 push한다. PR은 만들지 않는다. push 전에 app/에서 npm run typecheck && npm run lint && npm run format:check && npm test && npm run test:contract && npm run test:eval, skills/에서 npm ci 뒤 node check.mjs. 끝 보고에는 한 일, 실제 run 결과, 정한 결정, 사람과 정할 것의 제안을 적어줘.
+```
 
 ## 남은 설계 논의(사람과 정할 것)
 
