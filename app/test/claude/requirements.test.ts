@@ -51,6 +51,8 @@ interface RunRecord {
   failure: string | null
   end: string
   denials: number
+  /** 되돌린 제출의 규칙 이름과 수 (quote_match는 code와 tool_output 앵커를 함께 센다, 결정 101) */
+  denied: string
 }
 
 interface Result {
@@ -188,8 +190,19 @@ function inspect(
           if (!fs.existsSync(file)) return []
           const r = readJson<Record<string, unknown>>(file)
           const submits = Array.isArray(r['submits'])
-            ? (r['submits'] as { denied?: boolean }[])
+            ? (r['submits'] as { denied?: boolean; problems?: string[] }[])
             : []
+          const rules = submits
+            .filter((x) => x.denied)
+            .flatMap((x) => x.problems ?? [])
+            .map((p) => {
+              const rule = p.split(':')[0] ?? ''
+              return rule === 'quote_match' && / output /.test(p) ? 'quote_match(출력)' : rule
+            })
+          const count = rules.reduce<Record<string, number>>(
+            (m, x) => ({ ...m, [x]: (m[x] ?? 0) + 1 }),
+            {},
+          )
           return [
             {
               id,
@@ -197,7 +210,10 @@ function inspect(
               kind: String(r['kind'] ?? ''),
               failure: typeof r['failure'] === 'string' ? r['failure'] : null,
               end: String(r['end'] ?? ''),
-              denials: submits.filter((s) => s.denied).length,
+              denials: submits.filter((x) => x.denied).length,
+              denied: Object.entries(count)
+                .map(([k, n]) => `${k}×${n}`)
+                .join(', '),
             },
           ]
         })
@@ -278,10 +294,11 @@ function summary(r: Result): string {
         `| ${t.label} | ${t.bounces} | ${t.forced ? '씀' : '0'} | ${t.answers} | ${t.nudges} | ${seconds(t.ms)} |`,
     ),
     '',
-    '| run | 단위 | 종류 | 결과 | 제출 되돌림 | 실패 |',
-    '|---|---|---|---|---|---|',
+    '| run | 단위 | 종류 | 결과 | 제출 되돌림 | 되돌린 규칙 | 실패 |',
+    '|---|---|---|---|---|---|---|',
     ...r.runs.map(
-      (x) => `| ${x.id} | ${x.unit} | ${x.kind} | ${x.end} | ${x.denials} | ${x.failure ?? ''} |`,
+      (x) =>
+        `| ${x.id} | ${x.unit} | ${x.kind} | ${x.end} | ${x.denials} | ${x.denied} | ${x.failure ?? ''} |`,
     ),
     '',
     `- 사람 결정 필요에 대신 한 답: ${r.answers.length ? r.answers.map((a) => `${a.decision} "${a.question}" → ${a.answer}`).join('; ') : '없음'}`,
