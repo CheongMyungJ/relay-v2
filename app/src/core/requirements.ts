@@ -1855,7 +1855,8 @@ export function renderExtraction(state: RequirementsState, base: string): string
     ['absences', '부재 주장', ['claim']],
   ]
   for (const [section, title, keys] of sections) {
-    const cs = of(section)
+    // 충돌은 연결로 접혀도 이 절에 남긴다: 접힌 쪽만 보면 충돌이 없어 보인다(14차 [실제] 사례의 verify 지적)
+    const cs = section === 'conflicts' ? currentClaims(state, section) : of(section)
     const conflictLinks =
       section === 'conflicts' ? state.links.filter((l) => l.kind === 'conflicts') : []
     lines.push('', `## ${title}`, '')
@@ -1907,6 +1908,8 @@ export function renderExtraction(state: RequirementsState, base: string): string
         const how = searchText(b.searches)
         if (how) tail.push(`찾아봄: ${how}`)
       }
+      if (section === 'conflicts' && folded.has(c.id))
+        tail.push(`접힘: ${folded.get(c.id)?.join(', ')}(대체되거나 합쳐진 주장 절)`)
       const rt = reviewTag(c.id)
       if (rt) tail.push(rt)
       lines.push(

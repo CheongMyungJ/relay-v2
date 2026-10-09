@@ -204,12 +204,14 @@ export function renderSummarizePacket(o) {
   out.push(`- Partial analysis: ${r.partial ? 'yes, stopped at the run limit; open units were held' : 'no'}`);
   if (r.build_index) out.push(`- Build index: ${r.build_index.status}${r.build_index.detail ? ` (${one(r.build_index.detail)})` : ''}`);
   const count = (xs) => Object.entries(xs.reduce((m, x) => ({ ...m, [x]: (m[x] ?? 0) + 1 }), {})).map(([k, n]) => `${k} ${n}`).join(', ');
-  out.push(`- Units: ${(r.units ?? []).length} (${count((r.units ?? []).map((u) => u.status)) || 'none'})`);
+  // 이 run의 summarize 단위는 도는 중이라 열려 있다: 목록과 수에서 뺀다(14차 [실제] 사례의 verify 지적)
+  const units = (r.units ?? []).filter((u) => u.kind !== 'summarize');
+  out.push(`- Units: ${units.length} (${count(units.map((u) => u.status)) || 'none'})`);
   out.push(`- Claims: ${claims.length} (${count(claims.map((c) => c.section)) || 'none'}); folded by links: ${folded.size}`);
   const lowered = (r.reviews ?? []).filter((x) => x.status);
   out.push(`- Reviews: ${(r.reviews ?? []).length} (lowered ${lowered.length}); every claim is unreviewed or lowered`, '');
   out.push(...configsBlock(r));
-  out.push('## Units', '', ...(r.units ?? []).map((u) => `- ${u.id} ${u.kind === 'trace' ? `trace (${u.lens})` : u.kind} ${u.status}: ${clip(one(u.kind === 'survey' ? 'whole repository' : u.purpose), 160)}${u.reason ? ` — ${clip(one(u.reason), 160)}` : ''}`), '');
+  out.push('## Units', '', ...units.map((u) => `- ${u.id} ${u.kind === 'trace' ? `trace (${u.lens})` : u.kind} ${u.status}: ${clip(one(u.kind === 'survey' ? 'whole repository' : u.purpose), 160)}${u.reason ? ` — ${clip(one(u.reason), 160)}` : ''}`), '');
   const list = (title, sec, n) => {
     const xs = by(sec).map((c) => `- ${c.id} ${cfg(c.body?.configs)} ${clip(claimSummary(c), 240)}`.replace(/\s+/g, ' ').replace(/^- /, '- '));
     out.push(`## ${title}`, '', ...(xs.length ? capped(xs, n, `${xs.length - n} not shown`) : ['- (none)']), '');

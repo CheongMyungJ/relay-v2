@@ -761,3 +761,72 @@ describe('구성별 빌드 인덱스 (AI 결정 118)', () => {
     expect(clean.revision.unit_updates).toEqual([])
   })
 })
+
+describe('[실제] 사례의 verify 지적에서 고친 문서와 패킷 (14차 작업)', () => {
+  it('합침 연결로 접힌 충돌 주장도 충돌 절에 접힌 곳과 함께 남는다', () => {
+    const r = new Record_()
+    r.apply('u-0001', survey([unitProposal('k1', 'command', 'src/pump.c stop')]))
+    r.apply(
+      'u-0002',
+      trace({
+        conflicts: [
+          {
+            key: 'x1',
+            text: '주석은 20틱이라 하나 코드는 5틱이다',
+            sides: [
+              { claim: '주석: 20틱', anchors: [anchor('src/pump.c', 4, '/* 20 ticks */')] },
+              { claim: '코드: 5틱', anchors: [anchor('src/pump.c', 5, '#define STOP_TICKS 5')] },
+            ],
+          },
+        ],
+      }),
+    )
+    const conflict = must(r.state.claims.find((c) => c.section === 'conflicts'))
+    const obs = must(r.state.claims.find((c) => c.section === 'observations'))
+    const i = must(r.schedule())
+    r.apply(
+      must(i.revision.units[0]).id,
+      integrate({
+        links: [
+          {
+            key: 'l1',
+            kind: 'merges',
+            from: [conflict.id],
+            to: [obs.id],
+            reason: '같은 정지 지연을 말한다',
+            anchors: [],
+          },
+        ],
+      }),
+    )
+    const doc = renderExtraction(r.state, 'abc')
+    const section = doc.slice(doc.indexOf('## 충돌'), doc.indexOf('## 부재 주장'))
+    expect(section).toContain(`${conflict.id} `)
+    expect(section).toContain(`접힘: ${obs.id}(대체되거나 합쳐진 주장 절)`)
+  })
+
+  it('summarize 패킷은 도는 summarize 단위를 단위 목록과 수에서 뺀다', () => {
+    const r = surveyed()
+    const i = must(r.schedule())
+    const out = r.apply(must(i.revision.units[0]).id, integrate())
+    for (const u of out.revision.units.filter((x) => x.kind === 'review')) {
+      const c = closeRevision(r.next, u.id, 'failed', '실패', null, AT)
+      r.revs.push(c.revision)
+      r.next = c.next
+    }
+    const sum = must(r.schedule())
+    const built = buildPacket({
+      unit: r.unit(must(sum.revision.units[0]).id),
+      state: r.state,
+      intent: '목표',
+      repo: REPO,
+      base: 'abc',
+      scratch: '/s',
+      budget: DEFAULT_REQUIREMENTS_BUDGET,
+      listingPath: '/l.md',
+    })
+    expect(built.packet).toContain('# Packet: summarize')
+    expect(built.packet).not.toMatch(/- u-\d+ summarize open/)
+    expect(built.packet).not.toMatch(/Units: \d+ \([^)]*open/)
+  })
+})
