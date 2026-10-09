@@ -9,6 +9,7 @@ import {
   codeAnchorProblems,
   emptyPointer,
   fold,
+  followingUnits,
   judgeRun,
   normQuote,
   outputAnchorProblems,
@@ -708,6 +709,75 @@ describe('패킷과 문서 (결정 96, 99)', () => {
     expect(x).toContain('- 경계 1곳의 내부는 보지 않았다')
     expect(x).toContain('## 검증 계획')
     expect(x).toContain('미확정은 필요한 자료(측정 1)를 받아 확인한다')
+  })
+})
+
+describe('뒤 단위가 다룬 미확정 (결정 104)', () => {
+  it('미확정의 refs가 같은 결과의 단위 제안을 가리키면 그 단위의 패킷에 질문으로 넣고, 끝나면 문서에 잇는다. 닫지는 않는다', () => {
+    const { revs, applied, state } = afterSurvey(
+      survey({
+        unknowns: [
+          {
+            key: 'n1',
+            question: 'SET_SPEED의 범위 검사는 어디서 하나?',
+            needs: 'other',
+            refs: ['k2'],
+          },
+          { key: 'n2', question: '클럭은?', needs: 'external_doc', refs: ['i1'] },
+        ],
+      }),
+    )
+    const [n1, n2] = state.claims.filter((c) => c.section === 'unknowns')
+    expect(followingUnits(state, must(n1)).map((u) => u.id)).toEqual(['u-0003'])
+    expect(followingUnits(state, must(n2))).toEqual([])
+    const unit = must(state.units.find((u) => u.id === 'u-0003'))
+    const packet = renderPacket({
+      unit,
+      state,
+      intent: 'x',
+      repo: REPO,
+      base: 'abc',
+      scratch: '/s',
+      budget: DEFAULT_REQUIREMENTS_BUDGET,
+    })
+    expect(packet).toContain(
+      '- The run that proposed this unit left these questions open about it:\n  - SET_SPEED의 범위 검사는 어디서 하나?',
+    )
+    // 다른 단위의 패킷에는 없다
+    expect(
+      renderPacket({
+        unit: must(state.units.find((u) => u.id === 'u-0002')),
+        state,
+        intent: 'x',
+        repo: REPO,
+        base: 'abc',
+        scratch: '/s',
+        budget: DEFAULT_REQUIREMENTS_BUDGET,
+      }),
+    ).not.toContain('left these questions open')
+    const t = applyResult({
+      state,
+      next: applied.next,
+      unit,
+      run: 'r-0002',
+      result: trace(),
+      base: 'abc',
+      repo: REPO,
+      blobs: {},
+      at: AT,
+    })
+    const done = fold([...revs, t.revision])
+    const md = renderExtraction(done, 'abc')
+    expect(md).toMatch(
+      /- c-\d+ \(u-0001\): SET_SPEED의 범위 검사는 어디서 하나\? — .*다룬 뒤 단위: u-0003\(완료\)/,
+    )
+    expect(md).toContain('미확정 2건이 남았다(그 가운데 1건은 뒤 단위가 다뤄 완료했으나')
+    expect(md).toMatch(/뒤 단위가 다룬 미확정 1건\(c-\d+\)은 그 단위의 관찰로 풀렸는지 본다/)
+    expect(renderHandoff(done)).toContain(
+      '미확정 2건이 extraction.md의 미확정 절에 있다(그 가운데 1건은 뒤 단위가 다뤘다)',
+    )
+    // 미확정은 그대로 남는다
+    expect(done.claims.filter((c) => c.section === 'unknowns')).toHaveLength(2)
   })
 })
 

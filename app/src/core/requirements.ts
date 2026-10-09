@@ -710,6 +710,24 @@ export function currentClaims(state: RequirementsState, section: string): Claim[
   return of.filter((c) => c.run === last)
 }
 
+/**
+ * 미확정이 가리킨 뒤 단위 (결정 104): 미확정의 refs가 같은 run이 낸 단위 제안의 key를 가리키면 그 제안으로 만든 단위.
+ * run은 다른 run의 항목을 가리킬 수 없어(지역 key) 앱이 이을 수 있는 것은 이것뿐이다. 미확정을 닫지는 않는다
+ */
+export function followingUnits(state: RequirementsState, claim: Claim): UnitState[] {
+  const refs = Array.isArray(claim.body.refs)
+    ? (claim.body.refs as unknown[]).filter((r): r is string => typeof r === 'string')
+    : []
+  return state.units.filter((u) => u.from && u.from.run === claim.run && refs.includes(u.from.key))
+}
+
+/** 단위를 낸 run이 그 단위 제안에 이은 미확정 (결정 104). 그 단위의 패킷에 질문으로 들어간다 */
+export function linkedUnknowns(state: RequirementsState, unit: UnitState): Claim[] {
+  return state.claims.filter(
+    (c) => c.section === 'unknowns' && followingUnits(state, c).some((u) => u.id === unit.id),
+  )
+}
+
 /** survey가 낸 구성 (주장의 configs 절) */
 export function configsOf(state: RequirementsState): Record<string, unknown>[] {
   return currentClaims(state, 'configs').map((c) => c.body)
@@ -754,6 +772,11 @@ export function renderPacket(o: PacketInput): string {
       `  - Q: ${reopened.question}`,
       `  - A: ${reopened.answer.answer}`,
     )
+  const questions = linkedUnknowns(o.state, u)
+  if (questions.length) {
+    out.push('- The run that proposed this unit left these questions open about it:')
+    for (const q of questions) out.push(`  - ${text(q.body.question ?? '')}`)
+  }
   if (u.checkpoint) {
     const cp = u.checkpoint as { checked?: string[]; remaining?: string[]; next?: string }
     out.push(
@@ -971,6 +994,13 @@ export function renderExtraction(state: RequirementsState, base: string): string
       if (at.length) tail.push(`근거: ${at.join(', ')}`)
       if (section === 'unknowns' && typeof b.needs === 'string')
         tail.push(`필요한 자료: ${NEEDS_LABEL[b.needs] ?? b.needs}`)
+      if (section === 'unknowns') {
+        const later = followingUnits(state, c)
+        if (later.length)
+          tail.push(
+            `다룬 뒤 단위: ${later.map((u) => `${u.id}(${STATUS_LABEL[u.status]})`).join(', ')}`,
+          )
+      }
       if (section === 'absences') {
         const how = searchText(b.searches)
         if (how) tail.push(`찾아봄: ${how}`)
@@ -1006,6 +1036,8 @@ export function renderExtraction(state: RequirementsState, base: string): string
     return at.length > 0 && at.every((x) => !/:\d+-\d+$/.test(x))
   })
   const unsupported = [...of('requirements'), ...of('constraints')].filter((c) => !where(c).length)
+  // 뒤 단위가 다룬 미확정 (결정 104): 풀렸는지는 그 단위의 결과로 사람이나 verify가 본다
+  const followed = unknowns.filter((c) => followingUnits(state, c).some((u) => u.status === 'done'))
   const needs = unknowns.reduce<Record<string, number>>((m, c) => {
     const k = NEEDS_LABEL[text(c.body.needs ?? 'other')] ?? text(c.body.needs)
     return { ...m, [k]: (m[k] ?? 0) + 1 }
@@ -1013,7 +1045,11 @@ export function renderExtraction(state: RequirementsState, base: string): string
   lines.push('', '## 누락 가능성', '')
   const risks = [
     ...notDone.map((u) => `${u.id}는 ${STATUS_LABEL[u.status]}로 끝났다: ${u.reason}`),
-    ...(unknowns.length ? [`코드로 정할 수 없는 미확정 ${unknowns.length}건이 남았다`] : []),
+    ...(unknowns.length
+      ? [
+          `코드로 정할 수 없는 미확정 ${unknowns.length}건이 남았다${followed.length ? `(그 가운데 ${followed.length}건은 뒤 단위가 다뤄 완료했으나 앱은 풀렸는지 가르지 않는다)` : ''}`,
+        ]
+      : []),
     ...(boundaries.length ? [`경계 ${boundaries.length}곳의 내부는 보지 않았다`] : []),
     ...(unsupported.length
       ? [
@@ -1038,6 +1074,11 @@ export function renderExtraction(state: RequirementsState, base: string): string
             .join(', ')})를 받아 확인한다`,
         ]
       : []),
+    ...(followed.length
+      ? [
+          `뒤 단위가 다룬 미확정 ${followed.length}건(${followed.map((c) => c.id).join(', ')})은 그 단위의 관찰로 풀렸는지 본다`,
+        ]
+      : []),
     ...(conflicts.length ? [`충돌 ${conflicts.length}건은 사람이 의도를 정한다`] : []),
     ...(notDone.length ? [`끝나지 않은 단위 ${notDone.length}개는 자료를 받은 뒤 다시 돈다`] : []),
   ]
@@ -1048,7 +1089,11 @@ export function renderExtraction(state: RequirementsState, base: string): string
 
 /** extract의 handoff.md (결정 99). 기존 승인 화면이 읽는다 */
 export function renderHandoff(state: RequirementsState): string {
-  const unknowns = state.claims.filter((c) => c.section === 'unknowns').length
+  const unknownClaims = state.claims.filter((c) => c.section === 'unknowns')
+  const unknowns = unknownClaims.length
+  const followed = unknownClaims.filter((c) =>
+    followingUnits(state, c).some((u) => u.status === 'done'),
+  ).length
   const conflicts = state.claims.filter((c) => c.section === 'conflicts').length
   const held = state.units.filter((u) => u.status === 'failed' || u.status === 'stalled')
   const decisions = state.decisions
@@ -1060,7 +1105,11 @@ export function renderHandoff(state: RequirementsState): string {
     }))
   const yamlStr = (s: string) => JSON.stringify(s)
   const open = [
-    ...(unknowns ? [`미확정 ${unknowns}건이 extraction.md의 미확정 절에 있다`] : []),
+    ...(unknowns
+      ? [
+          `미확정 ${unknowns}건이 extraction.md의 미확정 절에 있다${followed ? `(그 가운데 ${followed}건은 뒤 단위가 다뤘다)` : ''}`,
+        ]
+      : []),
     ...(conflicts ? [`충돌 ${conflicts}건이 extraction.md의 충돌 절에 있다`] : []),
     ...held.map((u) => `${u.id}는 ${STATUS_LABEL[u.status]}로 끝났다: ${u.reason}`),
   ]
