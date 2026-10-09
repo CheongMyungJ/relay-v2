@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "relay/extract-summarize.v0.schema.json",
+  "title": "extract summarize run 결과 (v0)",
+  "description": "요구사항 추출 extract의 summarize run이 내는 결과 제안(requirements-extraction-flow.md 16.4, 결정 15, AI 결정 113). 앱이 렌더링한 통계와 목록만 읽고 {글, 전역 ID} 서술, handoff 요약, risks를 낸다. extraction.md와 handoff.md는 앱이 렌더링한다(결정 15). 필드 설명은 영어로 쓴다(16.2, D98).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["overview", "handoff_summary", "risks"],
+  "properties": {
+    "overview": {
+      "description": "Paragraphs for the overview at the top of the result document: what was analyzed, what was found, and what remains open. Each paragraph lists the global IDs it speaks about.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/para"
+      }
+    },
+    "handoff_summary": {
+      "description": "Two or three sentences for the next step, which reviews the result.",
+      "$ref": "#/$defs/para"
+    },
+    "risks": {
+      "description": "What the next step should watch: open unknowns, conflicts, held or failed units, lowered or unreviewed claims, perspectives nothing reached, a partial analysis.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/para"
+      }
+    }
+  },
+  "$defs": {
+    "gid": {
+      "description": "A global ID from the packet or the record listing: c-NNNN claim, u-NNNN unit, h-NNNN human decision. Never a local key.",
+      "type": "string"
+    },
+    "gids": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/gid"
+      }
+    },
+    "para": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "ids"],
+      "properties": {
+        "text": {
+          "description": "The text.",
+          "type": "string"
+        },
+        "ids": {
+          "description": "Global IDs from the packet that this text speaks about.",
+          "$ref": "#/$defs/gids"
+        }
+      }
+    }
+  }
+}

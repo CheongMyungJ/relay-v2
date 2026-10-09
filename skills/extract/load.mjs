@@ -1,10 +1,10 @@
 // extract run 조립의 원본을 레포에서 읽는다 (run.mjs는 읽지 않는 순수 함수만 둔다).
 // 기본 스키마: docs/contracts/extract-<kind>.v0.schema.json. 점검표: skills/extract/lenses/<lens>.md의 ## Checklist.
-// 지시 층: contract.md(L1), kinds/<kind>.md(L2), 렌즈 카드의 trace 절(L2b).
+// 지시 층: contract.md(L1), kinds/<kind>.md(L2), 렌즈 카드의 trace 절(L2b). integrate의 관점: perspectives.md.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { KINDS, LENSES, layerText, lensLayer, parseChecklist } from './run.mjs';
+import { KINDS, LENSES, layerText, lensLayer, parseChecklist, parsePerspectives } from './run.mjs';
 
 /** 레포 뿌리 (이 파일은 skills/extract/에 있다) */
 export const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -25,6 +25,15 @@ export function lensCardPath(lens, root = REPO) {
 
 export function loadChecklist(lens, root = REPO) {
   return parseChecklist(fs.readFileSync(lensCardPath(lens, root), 'utf8'));
+}
+
+export function perspectivesPath(root = REPO) {
+  return path.join(root, 'skills', 'extract', 'perspectives.md');
+}
+
+/** integrate의 관점 목록(coverage의 키, AI 결정 111) */
+export function loadPerspectives(root = REPO) {
+  return parsePerspectives(fs.readFileSync(perspectivesPath(root), 'utf8'));
 }
 
 export function contractPath(root = REPO) {

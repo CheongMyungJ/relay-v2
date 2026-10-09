@@ -1,0 +1,200 @@
+{
+  "rule": "global_refs",
+  "note": "패킷과 기록 목록에 없는 전역 ID를 가리킨다",
+  "kind": "integrate",
+  "ctx": {
+    "configs": [
+      "lamp_a",
+      "lamp_b"
+    ],
+    "ids": [
+      "u-0001",
+      "u-0002",
+      "u-0003",
+      "c-0004",
+      "c-0007",
+      "c-0009",
+      "c-0012"
+    ],
+    "sections": {
+      "c-0004": "unknowns",
+      "c-0007": "quantities",
+      "c-0009": "observations",
+      "c-0012": "observations"
+    }
+  },
+  "result": {
+    "outcome": "done",
+    "outcome_reason": "조명 제어기의 기록 전체를 관점마다 보았다.",
+    "links": [
+      {
+        "key": "l1",
+        "kind": "resolves",
+        "from": [
+          "c-0004"
+        ],
+        "to": [
+          "c-0099"
+        ],
+        "reason": "뒤 trace가 답한다.",
+        "anchors": []
+      }
+    ],
+    "coverage": {
+      "entry_points": [
+        {
+          "configs": [
+            "lamp_a",
+            "lamp_b"
+          ],
+          "status": "covered",
+          "ids": [
+            "u-0002"
+          ],
+          "units": [],
+          "searches": [],
+          "note": ""
+        }
+      ],
+      "commands": [
+        {
+          "configs": [
+            "lamp_a",
+            "lamp_b"
+          ],
+          "status": "covered",
+          "ids": [
+            "u-0002"
+          ],
+          "units": [],
+          "searches": [],
+          "note": ""
+        }
+      ],
+      "state": [
+        {
+          "configs": [
+            "lamp_a",
+            "lamp_b"
+          ],
+          "status": "covered",
+          "ids": [
+            "u-0002"
+          ],
+          "units": [],
+          "searches": [],
+          "note": ""
+        }
+      ],
+      "timing": [
+        {
+          "configs": [
+            "lamp_a",
+            "lamp_b"
+          ],
+          "status": "covered",
+          "ids": [
+            "u-0002"
+          ],
+          "units": [],
+          "searches": [],
+          "note": ""
+        }
+      ],
+      "concurrency": [
+        {
+          "configs": [
+            "lamp_a",
+            "lamp_b"
+          ],
+          "status": "covered",
+          "ids": [
+            "u-0002"
+          ],
+          "units": [],
+          "searches": [],
+          "note": ""
+        }
+      ],
+      "config_differences": [
+        {
+          "configs": [
+            "lamp_a",
+            "lamp_b"
+          ],
+          "status": "covered",
+          "ids": [
+            "u-0002"
+          ],
+          "units": [],
+          "searches": [],
+          "note": ""
+        }
+      ],
+      "lifecycle": [
+        {
+          "configs": [
+            "lamp_a",
+            "lamp_b"
+          ],
+          "status": "covered",
+          "ids": [
+            "u-0002"
+          ],
+          "units": [],
+          "searches": [],
+          "note": ""
+        }
+      ],
+      "protocol": [
+        {
+          "configs": [
+            "lamp_a",
+            "lamp_b"
+          ],
+          "status": "covered",
+          "ids": [
+            "u-0002"
+          ],
+          "units": [],
+          "searches": [],
+          "note": ""
+        }
+      ],
+      "error_paths": [
+        {
+          "configs": [
+            "lamp_a",
+            "lamp_b"
+          ],
+          "status": "covered",
+          "ids": [
+            "u-0002"
+          ],
+          "units": [],
+          "searches": [],
+          "note": ""
+        }
+      ],
+      "memory": [
+        {
+          "configs": [
+            "lamp_a",
+            "lamp_b"
+          ],
+          "status": "covered",
+          "ids": [
+            "u-0002"
+          ],
+          "units": [],
+          "searches": [],
+          "note": ""
+        }
+      ]
+    },
+    "units": [],
+    "unknowns": [],
+    "human_decisions": [],
+    "checkpoint": null
+  }
+}

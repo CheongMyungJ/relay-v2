@@ -1,0 +1,61 @@
+{
+  "rule": "attempts_listed",
+  "note": "판정에 시도한 반박이 없다",
+  "kind": "review",
+  "ctx": {
+    "configs": [
+      "lamp_a",
+      "lamp_b"
+    ]
+  },
+  "result": {
+    "outcome": "done",
+    "outcome_reason": "질문 하나와 서술 하나를 코드로 보았다.",
+    "answers": {
+      "q1": {
+        "status": "answered",
+        "text": "두 구성 모두 4 tick이다.",
+        "values": [
+          {
+            "configs": [
+              "lamp_a",
+              "lamp_b"
+            ],
+            "value": "4 tick"
+          }
+        ],
+        "configs": [],
+        "anchors": [
+          {
+            "kind": "code",
+            "path": "src/dimmer.c",
+            "start": 20,
+            "end": 20,
+            "quote": "dim_step = DIM_STEP_TICKS;",
+            "command": null
+          }
+        ],
+        "searches": []
+      }
+    },
+    "verdicts": {
+      "s1": {
+        "verdict": "not_refuted",
+        "attempts": [],
+        "anchors": [
+          {
+            "kind": "code",
+            "path": "src/dimmer.c",
+            "start": 20,
+            "end": 20,
+            "quote": "dim_step = DIM_STEP_TICKS;",
+            "command": null
+          }
+        ],
+        "note": ""
+      }
+    },
+    "unknowns": [],
+    "checkpoint": null
+  }
+}

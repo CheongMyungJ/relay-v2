@@ -1,0 +1,352 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "relay/extract-integrate.v0.schema.json",
+  "title": "extract integrate run 결과 (v0)",
+  "description": "요구사항 추출 extract의 integrate run이 내는 결과 제안(requirements-extraction-flow.md 16.4, 결정 10·12, AI 결정 107~111). 앞선 run들의 기록을 전역 ID로 잇고(links: resolves, supersedes, merges, conflicts), 관점×구성의 빈칸(coverage)을 판정하고, 빈칸을 채울 단위를 제안한다. 연결은 상태를 올리지 않는다(결정 12). coverage의 키는 앱이 skills/extract/perspectives.md의 관점 ID로 채운다(결정 36의 꼴). 공통 $defs는 survey·trace와 같아야 한다(skills/check.mjs가 본다). 필드 설명은 지시의 필드 안내(L3)로 렌더링하므로 영어로 쓴다(16.2, D98).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "outcome",
+    "outcome_reason",
+    "links",
+    "coverage",
+    "units",
+    "unknowns",
+    "human_decisions",
+    "checkpoint"
+  ],
+  "properties": {
+    "outcome": {
+      "description": "done: you went through the record and judged every perspective. incomplete: deadline, limit or context ran out (checkpoint required).",
+      "enum": ["done", "incomplete"]
+    },
+    "outcome_reason": {
+      "description": "One or two sentences on why this outcome.",
+      "type": "string"
+    },
+    "links": {
+      "description": "Links between records from earlier runs, by global ID.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/link"
+      }
+    },
+    "coverage": {
+      "description": "Perspective by configuration coverage of the whole record. The app fills the keys with the perspective IDs for each run.",
+      "type": "object"
+    },
+    "units": {
+      "description": "New analysis units for gaps nothing in the record reaches: an entry point, handler, command or perspective cell no unit has traced.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/unit"
+      }
+    },
+    "unknowns": {
+      "description": "What code cannot settle and needs outside material, measurement or a person. Things you could still trace in code go to followups (trace) or units (survey).",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/unknown"
+      }
+    },
+    "human_decisions": {
+      "description": "Only for the closed triggers. Plain lack of material is an unknown, not a decision.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/decision"
+      }
+    },
+    "checkpoint": {
+      "description": "Required when outcome is incomplete: where to resume. Otherwise null.",
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/checkpoint"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "key": {
+      "description": "Local key, unique within this result (e.g. o1, q2). Other items point to it from refs.",
+      "type": "string"
+    },
+    "refs": {
+      "description": "Keys of other items in this result.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "configs": {
+      "description": "Configuration names this applies to, as named in the packet. Use the single name \"all\" only when a tool showed it is active in every confirmed configuration. Never merge behavior of different configurations into one item.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "anchor": {
+      "description": "Where the evidence is. quote is a short verbatim copy of lines you opened in this run.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "path", "start", "end", "quote", "command"],
+      "properties": {
+        "kind": {
+          "description": "code: source at the base commit. tool_output: output file of a tool you ran in scratch. doc_claim: a claim in a document or comment inside the repo. external_spec: material outside the repo (datasheet, standard).",
+          "enum": ["code", "tool_output", "doc_claim", "external_spec"]
+        },
+        "path": {
+          "description": "Repo-relative path. For tool_output the output file in scratch; for external_spec the document id.",
+          "type": "string"
+        },
+        "start": {
+          "description": "First line (1-based).",
+          "type": "integer"
+        },
+        "end": {
+          "description": "Last line.",
+          "type": "integer"
+        },
+        "quote": {
+          "description": "Verbatim text of those lines (short).",
+          "type": "string"
+        },
+        "command": {
+          "description": "For tool_output the command you ran, otherwise null.",
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "anchors": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/anchor"
+      }
+    },
+    "search": {
+      "description": "One search that supports an absence or a not_applicable.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool", "pattern", "scope", "hits"],
+      "properties": {
+        "tool": {
+          "description": "Tool used (Grep, Glob, a Bash command).",
+          "type": "string"
+        },
+        "pattern": {
+          "description": "What you searched for.",
+          "type": "string"
+        },
+        "scope": {
+          "description": "Where (paths, configurations).",
+          "type": "string"
+        },
+        "hits": {
+          "description": "Number of hits.",
+          "type": "integer"
+        }
+      }
+    },
+    "searches": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/search"
+      }
+    },
+    "unknown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "question", "needs", "refs"],
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "question": {
+          "description": "What could not be confirmed.",
+          "type": "string"
+        },
+        "needs": {
+          "description": "What would settle it: external_doc (datasheet, spec), measurement (on real hardware), toolchain (a build or tool you could not run), other.",
+          "enum": ["external_doc", "measurement", "toolchain", "other"]
+        },
+        "refs": {
+          "$ref": "#/$defs/refs"
+        }
+      }
+    },
+    "unit": {
+      "description": "A proposed analysis unit. Give priority, dependencies and the reason as data; the app picks the order.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "purpose",
+        "lens",
+        "scope",
+        "priority",
+        "depends_on",
+        "reason"
+      ],
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "lens": {
+          "enum": [
+            "command",
+            "state",
+            "timing",
+            "shared",
+            "variant",
+            "lifecycle",
+            "protocol"
+          ]
+        },
+        "scope": {
+          "description": "Scope (symbols, paths, configurations).",
+          "type": "string"
+        },
+        "priority": {
+          "enum": ["high", "medium", "low"]
+        },
+        "depends_on": {
+          "$ref": "#/$defs/refs"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "trigger", "question", "options", "refs"],
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "trigger": {
+          "description": "Closed triggers only: scope_budget (widen scope or budget), shipping_config (which configuration ships cannot be told from code), product_intent (interpreting product intent), toolchain_material (a toolchain or material the intent did not provide).",
+          "enum": [
+            "scope_budget",
+            "shipping_config",
+            "product_intent",
+            "toolchain_material"
+          ]
+        },
+        "question": {
+          "type": "string"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "refs": {
+          "$ref": "#/$defs/refs"
+        }
+      }
+    },
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checked", "remaining", "next"],
+      "properties": {
+        "checked": {
+          "description": "What you covered.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "remaining": {
+          "description": "Paths still open.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "next": {
+          "description": "Where to look next.",
+          "type": "string"
+        }
+      }
+    },
+    "gid": {
+      "description": "A global ID from the packet or the record listing: c-NNNN claim, u-NNNN unit, h-NNNN human decision. Never a local key.",
+      "type": "string"
+    },
+    "gids": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/gid"
+      }
+    },
+    "link": {
+      "description": "A link between records from earlier runs, by their global IDs. A link shows a relation for a person to read; it does not confirm, close or remove anything.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "kind", "from", "to", "reason", "anchors"],
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "kind": {
+          "description": "resolves: the to claims answer the unknown in from (say in reason whether wholly or partly). supersedes: the to claims replace the from claims about the same thing in the same configurations (a later, reopened or continued run looked again). merges: the from claims say the same as the to claim for the same configurations; the to claim is kept. conflicts: from and to cannot both hold.",
+          "enum": ["resolves", "supersedes", "merges", "conflicts"]
+        },
+        "from": {
+          "description": "Global IDs the link starts from. For resolves, the unknown.",
+          "$ref": "#/$defs/gids"
+        },
+        "to": {
+          "description": "Global IDs the link points to.",
+          "$ref": "#/$defs/gids"
+        },
+        "reason": {
+          "description": "Why, in one or two sentences.",
+          "type": "string"
+        },
+        "anchors": {
+          "description": "Extra evidence you opened for this link; empty when the linked claims already carry it.",
+          "$ref": "#/$defs/anchors"
+        }
+      }
+    },
+    "cell": {
+      "description": "One coverage judgement for some configurations. covered: ids required. not_applicable: searches required. unknown: you could not tell. unreached: nothing in the record reaches it; units names the units you propose for it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["configs", "status", "ids", "units", "searches", "note"],
+      "properties": {
+        "configs": {
+          "$ref": "#/$defs/configs"
+        },
+        "status": {
+          "enum": ["covered", "not_applicable", "unknown", "unreached"]
+        },
+        "ids": {
+          "description": "Global IDs of the claims or units that cover it.",
+          "$ref": "#/$defs/gids"
+        },
+        "units": {
+          "description": "Keys of units in this result proposed for it.",
+          "$ref": "#/$defs/refs"
+        },
+        "searches": {
+          "$ref": "#/$defs/searches"
+        },
+        "note": {
+          "description": "Short note; empty string if none.",
+          "type": "string"
+        }
+      }
+    }
+  }
+}
