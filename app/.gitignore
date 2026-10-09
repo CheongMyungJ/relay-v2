@@ -8,3 +8,5 @@ src/shared/generated/
 eval/results/
 # 요구사항 추출 run 평가의 결과 (docs/extract-eval.md)
 eval/extract/results/
+# 요구사항 추출 평가의 hold-out(h로 시작하는 시나리오)은 봉인해서만 둔다. 푼 평문은 커밋하지 않는다 (docs/extract-eval.md)
+eval/extract/scenarios/h[0-9]*/
