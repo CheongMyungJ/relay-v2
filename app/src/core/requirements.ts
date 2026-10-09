@@ -1,8 +1,10 @@
 // 요구사항 추출 extract의 순수 로직 (requirements-extraction-flow.md 8절, 15.3, 결정 6·7·24~42, 92~99).
 // 기록(revision 변경분) 접기, 다음 단위 고르기, run 결과를 변경분으로 바꾸기, 연속 횟수와 멈춤, run 판정, 기준 커밋의
 // 인용 대조, 패킷과 extraction.md·handoff.md 렌더링. 파일·git·프로세스는 adapters/requirements가 맡는다 (I9).
+import type { RequirementsView } from '../shared/views'
 import type {
   ActiveRun,
+  Answer,
   Claim,
   DecisionState,
   Evidence,
@@ -862,4 +864,66 @@ export function withoutRun(p: RequirementsPointer): RequirementsPointer {
 /** 도는 run 기록 */
 export function withRun(p: RequirementsPointer, run: ActiveRun): RequirementsPointer {
   return { ...p, run }
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// 화면 (15.5, 결정 98)
+
+/** 멈춘 까닭의 이름 (결정 98) */
+export const HALT_LABEL: Record<HaltReason, string> = {
+  human: '사람이 멈춤',
+  failures: '연속 실패',
+  decisions: '사람 결정 필요에 답해야 함',
+  integrity: '기록 무결성 오류',
+  source_changed: '기준 소스가 바뀜',
+  run_limit: 'run 상한에 닿음',
+  usage_weekly: '주간 사용량 한도',
+  restart: '앱을 다시 켬',
+  launch: 'run을 띄우지 못함',
+}
+
+const STOPPED: readonly UnitStatus[] = ['failed', 'stalled']
+
+/**
+ * 패널의 진행 상자. state는 마지막으로 접은 기록(아직 못 읽었으면 null), pending은 반영 대기 답의 내용이다. 포인터에
+ * 반영 대기가 없으면 pending은 이미 revision이 된 것이라 보지 않는다
+ */
+export function requirementsView(input: {
+  pointer: RequirementsPointer
+  state: RequirementsState | null
+  pending: readonly Answer[]
+  current: { run: string; unit: string; tool: string | null } | null
+  budget: RequirementsBudget
+}): RequirementsView {
+  const { pointer: p, state, current } = input
+  const units = state?.units ?? []
+  const pending = new Map(
+    p.pending_answers?.length ? input.pending.map((a) => [a.decision, a.answer]) : [],
+  )
+  return {
+    runsUsed: p.runs_used,
+    runLimit: runLimit(p, input.budget),
+    units: {
+      open: units.filter((u) => u.status === 'open').length,
+      done: units.filter((u) => CLOSED_STATUSES.includes(u.status) && !STOPPED.includes(u.status))
+        .length,
+      stopped: units.filter((u) => STOPPED.includes(u.status)).length,
+    },
+    current: current
+      ? {
+          ...current,
+          purpose: units.find((u) => u.id === current.unit)?.purpose ?? '',
+        }
+      : null,
+    halt: p.halt
+      ? { reason: p.halt.reason, label: HALT_LABEL[p.halt.reason], detail: p.halt.detail }
+      : null,
+    usageWait: p.usage_wait?.until ?? null,
+    decisions: (state ? openDecisions(state) : []).map((d) => ({
+      id: d.id,
+      question: d.question,
+      options: [...d.options],
+      pending: pending.get(d.id) ?? null,
+    })),
+  }
 }

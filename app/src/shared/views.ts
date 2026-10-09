@@ -3,6 +3,7 @@ import type { WorkSettings } from './config'
 import type { Decision, HandoffStatus, NodeName, TaskNode } from './contracts'
 import type { PendingQuestionView } from './questions'
 import type { PrItemKind, PrItemStatus } from './pr'
+import type { HaltReason } from './requirements'
 import type {
   ApprovedIntent,
   DeliveryChoice,
@@ -598,6 +599,8 @@ export interface WorkView {
   operation: OperationView | null
   /** 이슈 기록 (설계 3.7). 이슈 기록이 켜진 프로젝트에서 만든 Work에 있다 */
   issue: IssueView | null
+  /** 요구사항 추출의 진행 (requirements-extraction-flow.md 17.12). 요구사항 추출 Work의 extract를 시작했으면 있다 */
+  requirements: RequirementsView | null
   /** 재시작 때와 실행 중의 알림: 끝낸 고아 프로세스, 앱 밖에서 바뀐 파일 (D76, D121, D124) */
   notices: NoticeView[]
   tasks: TaskView[]
@@ -624,6 +627,30 @@ export interface IssueView {
   failure: { at: string; error: string } | null
   /** 앱이 닫았다 (D346) */
   closed: boolean
+}
+
+/** 요구사항 추출의 진행 상자 (requirements-extraction-flow.md 15.5, 17.12, 결정 98) */
+export interface RequirementsView {
+  runsUsed: number
+  runLimit: number
+  /** 열린 단위, 끝난 단위(done·needs_external·out_of_scope·merged), 멈춘 단위(failed·stalled) */
+  units: { open: number; done: number; stopped: number }
+  /** 지금 도는 run */
+  current: { run: string; unit: string; purpose: string; tool: string | null } | null
+  /** 멈춘 까닭. 사람이 멈췄거나 루프가 멈췄으면 있다 */
+  halt: { reason: HaltReason; label: string; detail: string } | null
+  /** 5시간 창 사용량 한도로 기다리는 끝 시각 (결정 29) */
+  usageWait: string | null
+  /** 답을 기다리는 사람 결정 필요 (결정 7, 41) */
+  decisions: RequirementsDecisionView[]
+}
+
+export interface RequirementsDecisionView {
+  id: string
+  question: string
+  options: string[]
+  /** 보냈지만 아직 revision으로 반영하지 않은 답 */
+  pending: string | null
 }
 
 /** 끊긴 작업의 알림 (시나리오 9-4, D121~D123): 무엇이 어디서 끊겼는지와 [다시 시도]·[무시]가 할 일 */

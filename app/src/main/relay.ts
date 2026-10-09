@@ -57,6 +57,7 @@ import type {
   TerminalBacklog,
 } from '../shared/views'
 import { WORK_TYPES, type DeliveryChoice, type WorkState, type WorkType } from '../shared/work'
+import { DEFAULT_REQUIREMENTS_BUDGET, type RequirementsBudget } from '../shared/requirements'
 import { SessionPool } from './pool'
 import type { UiPort } from './ports'
 import { checkGh, inspectProject, prepareProject, type ProjectEnv } from './projects'
@@ -73,6 +74,8 @@ export interface RelayOptions {
   /** gh 실행 파일. 기본은 PATH의 gh */
   ghBin?: string
   now?: () => Date
+  /** 요구사항 추출의 예산. 앱 설정의 "요구사항 추출" 절(결정 31)이 생기기 전까지 시험이 줄이는 자리다 */
+  requirementsBudget?: Partial<RequirementsBudget>
   /** 앱 설정을 읽었거나 바꿨다. 테마(D335)처럼 Electron이 적용할 것을 main이 적용한다 */
   onConfig?: (config: AppConfig) => void
 }
@@ -216,6 +219,7 @@ export class Relay {
       ui: this.o.ui,
       pool: this.pool,
       config: () => this.config,
+      requirementsBudget: () => ({ ...DEFAULT_REQUIREMENTS_BUDGET, ...this.o.requirementsBudget }),
       at: () => this.at(),
       size: () => this.size,
       ghBin: this.ghBin(),
@@ -586,6 +590,11 @@ export class Relay {
     answers: { decision: string; answer: string }[],
   ): Promise<CommandResult> {
     return this.withWork(workKey, (w) => w.answerRequirements(answers))
+  }
+
+  /** 요구사항 추출의 [계속 +N] (requirements-extraction-flow.md 결정 26, 99) */
+  extendRequirements(workKey: string, runs: number): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.extendRequirements(runs))
   }
 
   /** [이 단계 끝나면 멈춤] */

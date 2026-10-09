@@ -43,6 +43,7 @@ import type {
   Answer,
   ExtractResult,
   HaltReason,
+  PendingAnswer,
   RequirementsBudget,
   RequirementsPointer,
   RequirementsState,
@@ -64,6 +65,8 @@ export interface ExtractHost {
   at(): string
   /** Work의 처리 줄에서 machine 이벤트를 넣는다 */
   feed(event: MachineEvent): Promise<void>
+  /** Work의 처리 줄에서 그때의 work.json으로 이벤트를 만들어 넣는다 */
+  feedWith(make: (work: WorkState) => MachineEvent): Promise<void>
   /** 승인된 intent 본문(머리글 없이) */
   intent(): Promise<string>
   /** task 디렉터리 */
@@ -112,6 +115,8 @@ export class ExtractRunner {
   current: CurrentRun | null = null
   /** 마지막으로 접은 기록 (화면용) */
   state: RequirementsState | null = null
+  /** 반영 대기 사람 답의 내용 (화면용) */
+  pending: Answer[] = []
 
   constructor(private readonly host: ExtractHost) {}
 
@@ -147,7 +152,11 @@ export class ExtractRunner {
     const p = this.host.work().requirements
     if (!p || p.revision === 0) return
     try {
-      this.state = fold(await new RequirementsFiles(this.host.workDir).load(p))
+      const files = new RequirementsFiles(this.host.workDir)
+      this.state = fold(await files.load(p))
+      this.pending = (
+        await Promise.all((p.pending_answers ?? []).map((a) => files.readAnswers(a)))
+      ).flat()
     } catch (e) {
       this.host.problem(`요구사항 추출 기록을 읽지 못함: ${message(e)}`)
     }
@@ -160,13 +169,18 @@ export class ExtractRunner {
   async answer(taskId: string, answers: Answer[]): Promise<void> {
     const files = new RequirementsFiles(this.host.workDir)
     const pending = await files.writeAnswers(answers, this.host.at())
-    const p = this.host.work().requirements ?? emptyPointer()
-    await this.host.feed({
-      type: 'requirements.updated',
-      taskId,
-      at: this.host.at(),
-      pointer: { ...p, pending_answers: [...(p.pending_answers ?? []), pending] },
+    // 루프의 포인터 갱신과 엇갈려도 답이 사라지지 않게 처리 줄에서 그때의 포인터에 더한다
+    await this.host.feedWith((w) => {
+      const p = w.requirements ?? emptyPointer()
+      return {
+        type: 'requirements.updated',
+        taskId,
+        at: this.host.at(),
+        pointer: { ...p, pending_answers: [...(p.pending_answers ?? []), pending] },
+      }
     })
+    await this.refresh()
+    this.host.changed()
   }
 
   private async halt(taskId: string, reason: HaltReason, detail: string, clearStopAfter = false) {
@@ -179,17 +193,29 @@ export class ExtractRunner {
     })
   }
 
+  /**
+   * 포인터를 바꾼다. 반영 대기 답은 처리 줄에서 그때의 포인터 것을 이어받고, consumed(이번에 revision으로 만든 답)만
+   * 뺀다. 루프가 포인터를 읽은 뒤 사람이 답해도 답이 사라지지 않는다 (결정 41)
+   */
   private async setPointer(
     taskId: string,
     pointer: RequirementsPointer,
     log?: Record<string, unknown>,
+    consumed: readonly PendingAnswer[] = [],
   ) {
-    await this.host.feed({
-      type: 'requirements.updated',
-      taskId,
-      at: this.host.at(),
-      pointer,
-      ...(log ? { log } : {}),
+    const { pending_answers: _mine, ...rest } = pointer
+    void _mine
+    await this.host.feedWith((w) => {
+      const pending = (w.requirements?.pending_answers ?? []).filter(
+        (a) => !consumed.some((c) => c.file === a.file),
+      )
+      return {
+        type: 'requirements.updated',
+        taskId,
+        at: this.host.at(),
+        pointer: pending.length ? { ...rest, pending_answers: pending } : rest,
+        ...(log ? { log } : {}),
+      }
     })
   }
 
@@ -227,14 +253,12 @@ export class ExtractRunner {
           ).flat()
           const { revision, next } = answerRevision(p.next, answers, this.host.at())
           const hash = await files.writeRevision(revision)
-          const { pending_answers: _done, ...rest } = p
-          void _done
-          await this.setPointer(taskId, {
-            ...rest,
-            revision: revision.number,
-            revision_hash: hash,
-            next,
-          })
+          await this.setPointer(
+            taskId,
+            { ...p, revision: revision.number, revision_hash: hash, next },
+            undefined,
+            p.pending_answers,
+          )
           continue
         }
         const state = fold(await files.load(p))
@@ -257,11 +281,7 @@ export class ExtractRunner {
         }
         const budget = this.host.budget()
         if (p.runs_used >= runLimit(p, budget)) {
-          await this.halt(
-            taskId,
-            'run_limit',
-            `run 상한 ${runLimit(p, budget)}에 닿음 (결정 24, 26)`,
-          )
+          await this.halt(taskId, 'run_limit', `run 상한 ${runLimit(p, budget)}에 닿음`)
           return
         }
         const pick = pickUnit(state)
@@ -271,7 +291,7 @@ export class ExtractRunner {
             await this.halt(
               taskId,
               'decisions',
-              `사람 결정 필요 ${open.length}건에 답해야 이어서 돈다 (결정 7)`,
+              `사람 결정 필요 ${open.length}건에 답해야 이어서 돈다`,
             )
             return
           }
@@ -440,8 +460,8 @@ export class ExtractRunner {
       if (streak.close) {
         const reason =
           streak.close === 'failed'
-            ? `같은 항목 연속 실패 ${budget.unit_failures}회 (결정 6)`
-            : `같은 항목 연속 미완료 ${budget.unit_incompletes}회 (결정 30)`
+            ? `같은 항목 연속 실패 ${budget.unit_failures}회`
+            : `같은 항목 연속 미완료 ${budget.unit_incompletes}회`
         const c = closeRevision(
           next.next,
           unit.id,
@@ -494,11 +514,11 @@ export class ExtractRunner {
       if (halt && this.live(taskId)) {
         const detail =
           halt === 'source_changed'
-            ? `run ${id}이 분석 대상 worktree를 바꿈 (결정 39)`
+            ? `run ${id}이 분석 대상 worktree를 바꿈`
             : halt === 'failures'
-              ? `연속 실패 ${budget.failures_in_row}회 (결정 6)`
+              ? `연속 실패 ${budget.failures_in_row}회`
               : halt === 'usage_weekly'
-                ? '주간 사용량 한도 (결정 29)'
+                ? '주간 사용량 한도'
                 : (failure ?? '')
         await this.halt(taskId, halt, detail)
       }

@@ -7,9 +7,11 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { loadChecklist } from '../../../skills/extract/load.mjs'
+import type { RequirementsBudget } from '../../src/shared/requirements'
 import type { LifecycleEvent, WorkState } from '../../src/shared/work'
 import { drive } from '../support/driver'
 import { harness, makeRepo, register, settle, type Harness } from '../support/harness'
+import { extractSurvey as survey, extractTrace } from '../support/requirements'
 import { REPO_FILES, scenario } from '../support/scenarios'
 
 const ROOT = path.resolve(import.meta.dirname, '../../..')
@@ -24,96 +26,16 @@ afterEach(async () => {
 })
 
 const read = (file: string) => fs.readFileSync(file, 'utf8')
-const code = (p: string, line: number, quote: string) => ({
-  kind: 'code',
-  path: `{wt}/${p}`,
-  start: line,
-  end: line,
-  quote,
-  command: null,
-})
-
-function survey(extra: Record<string, unknown> = {}) {
-  return {
-    outcome: 'done',
-    outcome_reason: '빌드 설정과 진입점을 봤다',
-    configs: [
-      {
-        key: 'c1',
-        name: 'node',
-        status: 'confirmed',
-        select: 'npm test',
-        build_command: null,
-        anchors: [code('package.json', 5, '"test": "node --test"')],
-      },
-    ],
-    inventory: [
-      {
-        key: 'i1',
-        kind: 'other',
-        name: 'avg',
-        configs: ['all'],
-        anchors: [code('src/avg.js', 1, 'export function avg(xs) {')],
-        notes: '',
-      },
-    ],
-    boundaries: [],
-    units: [
-      {
-        key: 'k1',
-        purpose: 'avg의 빈 배열 처리',
-        lens: 'command',
-        scope: 'src/avg.js avg',
-        priority: 'high',
-        depends_on: [],
-        reason: '유일한 공개 함수',
-      },
-    ],
-    not_found: [],
-    unknowns: [],
-    human_decisions: [],
-    checkpoint: null,
-    ...extra,
-  }
-}
-
-function trace() {
-  return {
-    outcome: 'done',
-    outcome_reason: '끝까지 따라갔다',
-    observations: [
-      {
-        key: 'o1',
-        text: '빈 배열이면 합 0을 길이 0으로 나눈다',
-        configs: ['all'],
-        anchors: [code('src/avg.js', 2, 'return xs.reduce((a, b) => a + b, 0) / xs.length')],
-        inference: false,
-      },
-    ],
-    quantities: [],
-    requirements: [],
-    constraints: [],
-    impl_choices: [],
-    unknowns: [],
-    conflicts: [],
-    absences: [],
-    checklist: Object.fromEntries(
-      loadChecklist('command', ROOT).map((c) => [
-        c.id,
-        { status: 'unknown', refs: [], searches: [] },
-      ]),
-    ),
-    followups: [],
-    human_decisions: [],
-    checkpoint: null,
-  }
-}
-
-async function setup(runs: object[]) {
+const trace = () => extractTrace(loadChecklist('command', ROOT).map((c) => c.id))
+async function setup(runs: object[], budget?: Partial<RequirementsBudget>) {
   planDir = fs.mkdtempSync(path.join(os.tmpdir(), 'relay-req-plan-'))
   const plan = path.join(planDir, 'plan.json')
   fs.writeFileSync(plan, JSON.stringify({ runs: runs.map((o) => ({ outputs: [o] })) }))
-  h = await harness({ scenario: scenario(), env: { FAKE_CLAUDE_RUN: plan } })
+  h = await harness({
+    scenario: scenario(),
+    env: { FAKE_CLAUDE_RUN: plan },
+    ...(budget ? { requirementsBudget: budget } : {}),
+  })
   const hh = h
   const { repo } = makeRepo(hh.root, 'sample', REPO_FILES)
   const projectId = await register(hh, repo)
@@ -228,6 +150,14 @@ describe('[흐름] 요구사항 추출 (결정 92~99)', () => {
     const stopped = work(s.dir)
     expect(stopped.tasks.at(-1)?.status).toBe('interrupted')
     expect(stopped.requirements?.runs_used).toBe(1)
+    // 패널의 진행 상자: 멈춘 까닭과 답할 결정
+    expect(s.h.ui.works.get(s.key)?.requirements).toMatchObject({
+      runsUsed: 1,
+      units: { open: 1, done: 1, stopped: 0 },
+      current: null,
+      halt: { reason: 'decisions' },
+      decisions: [{ id: 'h-0001', options: ['node'], pending: null }],
+    })
 
     expect(
       await s.h.relay.answerRequirements(s.key, [{ decision: 'h-0099', answer: 'x' }]),
@@ -242,6 +172,13 @@ describe('[흐름] 요구사항 추출 (결정 92~99)', () => {
     })
     await settle(s.h, s.key)
     expect(work(s.dir).requirements?.pending_answers).toHaveLength(1)
+    expect(s.h.ui.works.get(s.key)?.requirements?.decisions).toMatchObject([
+      { id: 'h-0001', pending: 'node만 출하' },
+    ])
+    // 반영 대기 답이 있는 결정은 다시 받지 않는다
+    expect(
+      await s.h.relay.answerRequirements(s.key, [{ decision: 'h-0001', answer: '둘 다' }]),
+    ).toEqual({ ok: false, error: '답할 열린 결정이 없음' })
 
     const extract = stopped.tasks.at(-1)
     expect(await s.h.relay.resume(s.key, extract?.id ?? '')).toEqual({ ok: true })
@@ -255,6 +192,7 @@ describe('[흐름] 요구사항 추출 (결정 92~99)', () => {
     // 시작, survey, 답, trace
     expect(done.requirements).toMatchObject({ revision: 4, runs_used: 2 })
     expect(done.requirements?.pending_answers).toBeUndefined()
+    expect(s.h.ui.works.get(s.key)?.requirements).toMatchObject({ halt: null, decisions: [] })
     const rev3 = JSON.parse(read(path.join(s.dir, 'requirements', 'revisions', '000003.json'))) as {
       cause: { kind: string }
       answers: { answer: string }[]
@@ -265,5 +203,39 @@ describe('[흐름] 요구사항 추출 (결정 92~99)', () => {
     expect(read(path.join(s.dir, 'requirements', 'runs', 'r-0002', 'packet.md'))).toContain(
       'A: node만 출하',
     )
+  })
+
+  it('run 상한에 닿으면 멈추고, [계속 +N]은 상한을 늘려 이어서 돈다 (결정 24, 26, 99)', async () => {
+    const s = await setup([survey(), trace()], { run_limit: 1 })
+    await drive(s.h.relay, s.h.ui, s.key, { pauseAt: (t) => t.node === 'extract' })
+    await s.h.ui.until(
+      () => (work(s.dir).requirements?.halt?.reason === 'run_limit' ? true : null),
+      'run 상한으로 멈춤',
+      30_000,
+    )
+    await settle(s.h, s.key)
+    expect(s.h.ui.works.get(s.key)?.requirements).toMatchObject({
+      runsUsed: 1,
+      runLimit: 1,
+      halt: { reason: 'run_limit', label: 'run 상한에 닿음' },
+    })
+    expect(await s.h.relay.extendRequirements(s.key, 0)).toEqual({
+      ok: false,
+      error: '늘릴 run 수가 아님',
+    })
+    expect(await s.h.relay.extendRequirements(s.key, 2)).toEqual({ ok: true })
+    await s.h.ui.until(
+      () => (work(s.dir).tasks.at(-1)?.status === 'awaiting_approval' ? true : null),
+      'extract 승인 대기',
+      30_000,
+    )
+    await settle(s.h, s.key)
+    expect(work(s.dir).requirements).toMatchObject({ runs_used: 2, runs_extra: 2 })
+    expect(work(s.dir).requirements?.halt).toBeUndefined()
+    // 멈추지 않았으면 받지 않는다
+    expect(await s.h.relay.extendRequirements(s.key, 2)).toEqual({
+      ok: false,
+      error: 'run 상한으로 멈춘 요구사항 추출이 아님',
+    })
   })
 })

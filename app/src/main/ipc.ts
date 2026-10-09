@@ -80,6 +80,16 @@ function texts(v: unknown): string[] {
   return v.map(text)
 }
 
+/** 요구사항 추출의 사람 답 목록 */
+function requirementsAnswers(v: unknown): { decision: string; answer: string }[] {
+  if (!Array.isArray(v)) throw new Error('답 목록이 아님')
+  return v.map((a: unknown) => {
+    if (!a || typeof a !== 'object') throw new Error('답이 아님')
+    const o = a as Record<string, unknown>
+    return { decision: text(o['decision']), answer: text(o['answer']) }
+  })
+}
+
 function choice(v: unknown): DeliveryChoice {
   if (v !== 'push' && v !== 'pr') throw new Error('전달 선택이 아님')
   return v
@@ -294,6 +304,12 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   ipcMain.handle(IPC.prRerun, async (_e, workKey: unknown) => (await ready).prRerun(text(workKey)))
   ipcMain.handle(IPC.issueRetry, async (_e, workKey: unknown) =>
     (await ready).issueRetry(text(workKey)),
+  )
+  ipcMain.handle(IPC.answerRequirements, async (_e, workKey: unknown, answers: unknown) =>
+    (await ready).answerRequirements(text(workKey), requirementsAnswers(answers)),
+  )
+  ipcMain.handle(IPC.extendRequirements, async (_e, workKey: unknown, runs: unknown) =>
+    (await ready).extendRequirements(text(workKey), count(runs)),
   )
   ipcMain.handle(IPC.projectSettings, async (_e, projectId: unknown, settings: unknown) =>
     (await ready).updateProjectSettings(text(projectId), settings),

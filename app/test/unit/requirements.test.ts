@@ -15,6 +15,7 @@ import {
   renderHandoff,
   renderPacket,
   repoPath,
+  requirementsView,
   revisionFile,
   startRevision,
   type RunFacts,
@@ -471,5 +472,61 @@ describe('패킷과 문서 (결정 96, 99)', () => {
     const x = renderExtraction(state, 'abc')
     expect(x).toContain('| u-0001 | survey |')
     expect(x).toContain('- lo (confirmed): make lo, `make lo`')
+  })
+})
+
+describe('진행 상자 (15.5, 결정 98)', () => {
+  const decision = {
+    key: 'd1',
+    trigger: 'shipping_config' as const,
+    question: '어느 구성이 출하되나?',
+    options: ['lo', 'hi'],
+    refs: ['k1'],
+  }
+
+  it('run 수와 상한, 단위 수, 지금 run의 목적, 멈춘 까닭을 보인다', () => {
+    const { revs, applied } = afterSurvey()
+    const c = closeRevision(applied.next, 'u-0003', 'stalled', '미완료 3', null, AT)
+    const state = fold([...revs, c.revision])
+    const pointer = {
+      ...emptyPointer(),
+      runs_used: 4,
+      runs_extra: 10,
+      halt: { at: AT, reason: 'failures' as const, detail: '연속 실패 3' },
+    }
+    const v = requirementsView({
+      pointer,
+      state,
+      pending: [],
+      current: { run: 'r-0005', unit: 'u-0002', tool: 'Read' },
+      budget: DEFAULT_REQUIREMENTS_BUDGET,
+    })
+    expect(v).toEqual({
+      runsUsed: 4,
+      runLimit: DEFAULT_REQUIREMENTS_BUDGET.run_limit + 10,
+      units: { open: 1, done: 1, stopped: 1 },
+      current: { run: 'r-0005', unit: 'u-0002', purpose: '회전 감시 시간', tool: 'Read' },
+      halt: { reason: 'failures', label: '연속 실패', detail: '연속 실패 3' },
+      usageWait: null,
+      decisions: [],
+    })
+  })
+
+  it('열린 결정을 보이고, 포인터에 반영 대기가 있을 때만 보낸 답을 붙인다 (결정 41)', () => {
+    const { state } = afterSurvey(survey({ human_decisions: [decision] }))
+    const sent = [{ decision: 'h-0001', answer: 'lo만', at: AT }]
+    const view = (pending_answers?: { file: string; hash: string }[]) =>
+      requirementsView({
+        pointer: { ...emptyPointer(), ...(pending_answers ? { pending_answers } : {}) },
+        state,
+        pending: sent,
+        current: null,
+        budget: DEFAULT_REQUIREMENTS_BUDGET,
+      }).decisions
+    expect(view([{ file: 'a.json', hash: 'sha256:0' }])).toEqual([
+      { id: 'h-0001', question: '어느 구성이 출하되나?', options: ['lo', 'hi'], pending: 'lo만' },
+    ])
+    // 이미 revision이 된 답(반영 대기 없음)은 붙이지 않는다
+    expect(view()[0]?.pending).toBeNull()
   })
 })

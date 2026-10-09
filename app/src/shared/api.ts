@@ -157,6 +157,13 @@ export interface RelayApi {
   prRerun(workKey: string): Promise<CommandResult>
   /** 이슈 기록의 [다시 시도] (설계 3.7, D344) */
   issueRetry(workKey: string): Promise<CommandResult>
+  /** 요구사항 추출의 사람 결정 필요에 답한다 (requirements-extraction-flow.md 결정 7, 41) */
+  answerRequirements(
+    workKey: string,
+    answers: { decision: string; answer: string }[],
+  ): Promise<CommandResult>
+  /** run 상한으로 멈춘 요구사항 추출의 [계속 +N]: 상한을 늘리고 이어서 돈다 (결정 26, 99) */
+  extendRequirements(workKey: string, runs: number): Promise<CommandResult>
   /** 프로젝트 설정 (5.1.2, D185): 받을 봇과 기본 머지 방식, 이슈 기록(D337) */
   updateProjectSettings(projectId: string, settings: ProjectSettings): Promise<CommandResult>
   /** Work별 자동 승인과 질문 방식 (D72). 준 키만 바꾸고, 빈 값이면 앱 설정을 따른다 */
@@ -232,6 +239,8 @@ export const IPC = {
   prRespond: 'pr:respond',
   prRerun: 'pr:rerun',
   issueRetry: 'issue:retry',
+  answerRequirements: 'requirements:answer',
+  extendRequirements: 'requirements:extend',
   projectSettings: 'project:settings',
   workSettings: 'work:settings',
   config: 'config:get',

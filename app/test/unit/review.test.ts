@@ -85,6 +85,12 @@ describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
     ).toBe('04 원인 분석과 수정 · 세션 재개 · 이유: 기본 진행')
   })
 
+  it('요구사항 추출의 extract는 세션 없이 앱이 run을 돌린다 (requirements-extraction-flow.md 결정 92)', () => {
+    expect(bandText({ seq: 2, node: 'extract', reason: 'default' })).toBe(
+      '02 요구사항 추출 · 앱이 run을 돌림 · 이유: 기본 진행',
+    )
+  })
+
   it('권한 확인 끈 모드가 아니면 경고한다 (D94)', () => {
     expect(permissionNotice({})).toBeNull()
     expect(permissionNotice({ permission_mode: 'bypassPermissions' })).toBeNull()

@@ -15,6 +15,7 @@ import { badge, holdNeedsNotice, holdText } from './approval'
 import {
   NODE_INFO,
   WORK_COMPLETE,
+  appRun,
   defaultNext,
   isPipelineNode,
   inPipeline,
@@ -63,7 +64,12 @@ export const REASON_LABEL: Readonly<Record<StartReason, string>> = {
 export function bandText(
   task: Pick<TaskRecord, 'seq' | 'node' | 'reason'> & Partial<Pick<TaskRecord, 'session'>>,
 ): string {
-  const session = task.session?.resumed_at ? '세션 재개' : '새 세션'
+  // 요구사항 추출의 extract는 세션 없이 앱이 run을 돌린다 (requirements-extraction-flow.md 결정 92)
+  const session = appRun(task.node)
+    ? '앱이 run을 돌림'
+    : task.session?.resumed_at
+      ? '세션 재개'
+      : '새 세션'
   return `${taskLabel(task)} · ${session} · 이유: ${REASON_LABEL[task.reason]}`
 }
 

@@ -519,7 +519,13 @@ export function App() {
                       terminalKey={t.terminal}
                       info={info}
                       live={t.live}
-                      active={w.key === selected && !cleanupTab && !sideTab && t.id === taskId}
+                      active={
+                        w.key === selected &&
+                        !cleanupTab &&
+                        !sideTab &&
+                        t.id === taskId &&
+                        t.node !== 'extract'
+                      }
                     />
                   )),
                   ...(w.cleanup
@@ -546,6 +552,13 @@ export function App() {
                     : []),
                 ])
             : null}
+          {/* 요구사항 추출의 extract는 터미널이 없다. 앱이 run을 돌리고 진행은 패널에 보인다 (17.12) */}
+          {work && task?.node === 'extract' && !cleanupTab && !sideTab ? (
+            <div className="empty">
+              이 단계는 세션 없이 앱이 분석 run을 하나씩 돌립니다. 진행과 사람 결정은 오른쪽 패널에
+              있습니다.
+            </div>
+          ) : null}
           {!work ? (
             <div className="empty">
               {projects.length === 0 ? (

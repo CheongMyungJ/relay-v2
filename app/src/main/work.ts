@@ -281,8 +281,9 @@ import {
   summarize,
   type TaskCheck,
 } from '../core/validate'
+import { requirementsView } from '../core/requirements'
 import { ExtractRunner } from './requirements'
-import { DEFAULT_REQUIREMENTS_BUDGET, type Answer } from '../shared/requirements'
+import type { Answer, RequirementsBudget } from '../shared/requirements'
 import type { AppConfig, WorkSettingsPatch } from '../shared/config'
 import type { NodeName } from '../shared/contracts'
 import {
@@ -308,6 +309,7 @@ import type {
   DeliverInput,
   DeliverResult,
   IssueView,
+  RequirementsView,
   KnowledgeChange,
   MergeInfoResult,
   MergeInput,
@@ -402,6 +404,8 @@ export interface RunnerContext {
   pool: SessionPool
   /** 판정하는 때의 앱 설정 (D73) */
   config(): AppConfig
+  /** 요구사항 추출의 예산 (결정 30, 31) */
+  requirementsBudget(): RequirementsBudget
   /** gh 실행 파일 (D67, 시나리오 7-4) */
   ghBin: string
   /** 프로젝트의 origin·gh 점검 결과 (D67) */
@@ -722,6 +726,7 @@ export class WorkRunner {
       skillsRoot: path.dirname(ctx.skills),
       at: () => ctx.at(),
       feed: (event) => this.enqueue(async () => void (await this.feed(event))),
+      feedWith: (make) => this.enqueue(async () => void (await this.feed(make(this.work)))),
       intent: async () => {
         const version = this.work.intent?.version
         if (!version) throw new Error('승인된 intent가 없음')
@@ -745,8 +750,7 @@ export class WorkRunner {
       bin: () => findClaude({ env: ctx.env }),
       acquire: () => ctx.pool.tryAcquire(),
       release: () => ctx.pool.release(),
-      // 예산은 결정 30의 잠정값이다. 앱 설정의 "요구사항 추출" 절(결정 31)은 다음 PR이다
-      budget: () => DEFAULT_REQUIREMENTS_BUDGET,
+      budget: () => this.requirementsBudget(),
       problem: (m) => this.problem(m),
       changed: () => this.changed(),
     })
@@ -766,8 +770,16 @@ export class WorkRunner {
       if (!task || task.node !== 'extract') return null
       const runner = this.extractRunner()
       await runner.refresh()
+      // 반영 대기 답이 있는 결정은 다시 받지 않는다
+      const sent = new Set(
+        this.work.requirements?.pending_answers?.length
+          ? runner.pending.map((a) => a.decision)
+          : [],
+      )
       const open = new Set(
-        (runner.state?.decisions ?? []).filter((d) => !d.answer).map((d) => d.id),
+        (runner.state?.decisions ?? [])
+          .filter((d) => !d.answer && !sent.has(d.id))
+          .map((d) => d.id),
       )
       const at = this.ctx.at()
       const valid: Answer[] = answers
@@ -779,6 +791,27 @@ export class WorkRunner {
     if (!checked.valid.length) return { ok: false, error: '답할 열린 결정이 없음' }
     await this.extractRunner().answer(checked.taskId, checked.valid)
     return { ok: true }
+  }
+
+  /**
+   * run 상한에 닿아 멈춘 extract의 [계속 +N] (결정 26, 99): 늘린 run 수를 포인터에 더하고 [재개]처럼 루프를 다시 시작한다
+   */
+  extendRequirements(runs: number): Promise<CommandResult> {
+    return this.enqueue(async () => {
+      const task = currentTask(this.work)
+      const p = this.work.requirements
+      if (!task || task.node !== 'extract' || !p || p.halt?.reason !== 'run_limit')
+        return { ok: false, error: 'run 상한으로 멈춘 요구사항 추출이 아님' }
+      if (!Number.isInteger(runs) || runs < 1) return { ok: false, error: '늘릴 run 수가 아님' }
+      const at = this.ctx.at()
+      await this.feed({
+        type: 'requirements.updated',
+        taskId: task.id,
+        at,
+        pointer: { ...p, runs_extra: p.runs_extra + runs },
+      })
+      return this.unlessCleanup({ type: 'resume', taskId: task.id, at })
+    })
   }
 
   /** Work의 이벤트를 하나씩 처리한다 */
@@ -3612,6 +3645,11 @@ export class WorkRunner {
         },
         { quiet: true },
       )
+      // 요구사항 추출의 진행 상자는 기록을 읽어야 그린다
+      if (this.work.requirements) {
+        await this.extractRunner().refresh()
+        this.changed()
+      }
       // 결과를 모르는 머지는 다시 켠 뒤에도 앱이 다시 확인한다 (D330)
       const op = cutOperation(this.work)
       if (op?.kind === 'merge' && op.unconfirmed) {
@@ -5379,6 +5417,25 @@ export class WorkRunner {
     }
   }
 
+  /** 패널의 요구사항 추출 진행 (requirements-extraction-flow.md 15.5, 17.12) */
+  private requirementsView(): RequirementsView | null {
+    const pointer = this.work.requirements
+    if (!pointer) return null
+    const runner = this.extract
+    return requirementsView({
+      pointer,
+      state: runner?.state ?? null,
+      pending: runner?.pending ?? [],
+      current: runner?.current ?? null,
+      budget: this.requirementsBudget(),
+    })
+  }
+
+  /** 요구사항 추출의 예산. 결정 30의 잠정값이다. 앱 설정의 "요구사항 추출" 절(결정 31)은 다음 PR이다 */
+  private requirementsBudget(): RequirementsBudget {
+    return this.ctx.requirementsBudget()
+  }
+
   // ---------- 스냅샷 (I14) ----------
 
   private changed(): void {
@@ -5423,6 +5480,7 @@ export class WorkRunner {
       side: this.sideView(),
       operation: operationView(w),
       issue: this.issueView(),
+      requirements: this.requirementsView(),
       notices: this.noticeViews(),
       tasks: w.tasks.map((t) => this.taskView(t)),
       current: currentTask(w)?.id ?? null,

@@ -5,6 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { Relay } from '../../src/main/relay'
 import type { AppConfig } from '../../src/shared/config'
+import type { RequirementsBudget } from '../../src/shared/requirements'
 import { FakeUi } from './ui'
 
 export { addSubmodule, checkoutSubmodules, git, makeRepo, writeFiles, type Repo } from './repo'
@@ -50,6 +51,8 @@ export interface HarnessOptions {
   /** gh 실행 파일. 기본은 가짜 gh다. [실제]의 PR 진행(M9)은 실제 gh를 쓴다 */
   ghBin?: string
   ui?: FakeUi
+  /** 요구사항 추출의 예산 (run 상한을 줄여 [계속 +N]을 본다) */
+  requirementsBudget?: Partial<RequirementsBudget>
 }
 
 export interface Harness {
@@ -111,7 +114,15 @@ export async function harness(o: HarnessOptions = {}): Promise<Harness> {
   }
   const ui = o.ui ?? new FakeUi()
   const ghBin = o.ghBin ?? FAKE_GH
-  const open = (u: FakeUi) => Relay.open({ home, skills: SKILLS, ui: u, env, ghBin })
+  const open = (u: FakeUi) =>
+    Relay.open({
+      home,
+      skills: SKILLS,
+      ui: u,
+      env,
+      ghBin,
+      ...(o.requirementsBudget ? { requirementsBudget: o.requirementsBudget } : {}),
+    })
   const jsonl = (name: string) => {
     const file = path.join(record, name)
     if (!fs.existsSync(file)) return []

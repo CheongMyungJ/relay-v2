@@ -28,6 +28,7 @@ import { call } from './commands'
 import { ConfirmDialog, UncommittedDialog } from './dialogs'
 import { Diff, Markdown } from './Markdown'
 import { PrPanel } from './PrPanel'
+import { RequirementsBox } from './Requirements'
 import { focusTerm } from './terminals'
 
 type Tab = 'summary' | 'artifacts' | 'changes' | 'verdicts' | 'work' | 'knowledge'
@@ -61,7 +62,13 @@ export function wantsApproval(review: ReviewView | null): boolean {
 
 export function Panel({ work, task, review, onApproved, onSelectStep, onShowCleanup }: Props) {
   const recovery = (
-    <Recovery key={work.key} work={work} onDone={onApproved} onShowCleanup={onShowCleanup} />
+    <>
+      <Recovery key={work.key} work={work} onDone={onApproved} onShowCleanup={onShowCleanup} />
+      {/* 요구사항 추출의 run 진행과 사람 결정 양식. extract task를 볼 때만 (17.12) */}
+      {work.requirements && task.node === 'extract' ? (
+        <RequirementsBox workKey={work.key} req={work.requirements} />
+      ) : null}
+    </>
   )
   if (!review) {
     return (
@@ -303,6 +310,10 @@ function TaskNotice({ task, pr }: { task: TaskView; pr: boolean }) {
         새로 시작하세요.
       </div>
     )
+  }
+  // 요구사항 추출의 extract는 세션이 없다. 멈춘 까닭은 위의 진행 상자에 있다 (17.12)
+  if (task.status === 'interrupted' && task.node === 'extract') {
+    return <div className="notice">중단됨. [재개]하면 요구사항 추출 run을 이어서 돌립니다.</div>
   }
   if (task.status === 'interrupted') {
     return (
