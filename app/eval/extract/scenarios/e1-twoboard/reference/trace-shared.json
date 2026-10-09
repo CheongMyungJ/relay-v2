@@ -241,6 +241,18 @@
       "status": "covered",
       "refs": ["o1", "o7"],
       "searches": []
+    },
+    "dma_memory": {
+      "status": "not_applicable",
+      "refs": [],
+      "searches": [
+        {
+          "tool": "Grep",
+          "pattern": "DMA",
+          "scope": "src include vendor",
+          "hits": 0
+        }
+      ]
     }
   }
 }

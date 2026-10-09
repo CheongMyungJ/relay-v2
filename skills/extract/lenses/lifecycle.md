@@ -11,4 +11,4 @@
 | `low_power` | Low-power entry and wake-up |
 | `watchdog` | Watchdog |
 | `fault` | Fault handling |
-| `across_reset` | Data that survives reset |
+| `across_reset` | Data that survives reset, where it is placed and what clears it first (startup code, bootloader) |

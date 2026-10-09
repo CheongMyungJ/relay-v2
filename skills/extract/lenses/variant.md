@@ -12,6 +12,7 @@ How the configurations differ in the unit's area: what selects each difference (
 - `runtime_selection`: values read at run time (straps, stored settings, detected hardware) and registrations made at initialization, and which behavior each enables. Two configurations with the same build can still differ here.
 - `per_config_diff`: for each difference, the behavior or value per configuration, each as its own item with its `configs`.
 - `shipping_config`: which configuration ships. Code rarely says so; a default target or a comment is a `doc_claim`. When it matters and code cannot tell, write a `human_decisions` item with trigger `shipping_config`.
+- `memory_layout`: the linker script and memory map each configuration links with: where each section and named buffer lands, which RAM keeps its contents across a reset and what clears or fills it before the application starts (startup copy and zero loops, a bootloader that runs first), and which regions a DMA engine cannot reach. Two configurations built from the same sources can differ only here.
 - `dead_code`: code that no configuration builds or reaches (an `#if` branch no configuration selects, a function nothing calls or registers), as `absences` with the searches.
 
 ## Checklist
@@ -22,6 +23,7 @@ How the configurations differ in the unit's area: what selects each difference (
 | `runtime_selection` | Configuration selection at run time |
 | `per_config_diff` | Differences between configurations |
 | `shipping_config` | Which configuration ships |
+| `memory_layout` | Memory placement per configuration (linker script, sections, RAM kept across reset and what clears it, regions DMA cannot reach) |
 | `dead_code` | Code no configuration uses |
 
 ## Pitfalls
@@ -31,6 +33,7 @@ How the configurations differ in the unit's area: what selects each difference (
 - A macro can be set in more than one place; resolve it per configuration before writing a value, and cite every place that sets it.
 - Behavior gated by a run-time registration or setting differs even inside one build; write the condition into the item.
 - Two configurations that look the same in one file can differ through another; check the source lists before writing `all`.
+- A comment or header saying where a buffer or a retained area is placed is a `doc_claim` until that configuration's linker script confirms it. Before writing that data survives a reset, check what runs first after reset (startup code, a bootloader) and whether it clears that address range.
 
 ## Phrasing
 

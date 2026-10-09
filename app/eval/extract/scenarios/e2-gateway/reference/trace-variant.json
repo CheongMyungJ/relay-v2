@@ -271,6 +271,38 @@
         }
       ],
       "inference": false
+    },
+    {
+      "key": "o14",
+      "text": "basic, pro, devkit은 같은 링커 스크립트 n4_flash.ld로 링크해 메모리 배치가 같다: .data와 .bss는 SRAM(0x20000000, 128K)에, 섹터 11은 설정 영역에 놓인다.",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "Makefile",
+          "start": 22,
+          "end": 22,
+          "quote": "LDFLAGS := -nostdlib -T vendor/nimbus/n4_flash.ld -Wl,--gc-sections",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "vendor/nimbus/n4_flash.ld",
+          "start": 6,
+          "end": 6,
+          "quote": "RAM (rwx)     : ORIGIN = 0x20000000, LENGTH = 128K",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "vendor/nimbus/n4_flash.ld",
+          "start": 15,
+          "end": 15,
+          "quote": ".bss : { _sbss = .; *(.bss*) *(COMMON) _ebss = .; } > RAM",
+          "command": null
+        }
+      ],
+      "inference": false
     }
   ],
   "quantities": [
@@ -393,6 +425,11 @@
     "dead_code": {
       "status": "covered",
       "refs": ["o11", "a1"],
+      "searches": []
+    },
+    "memory_layout": {
+      "status": "covered",
+      "refs": ["o14"],
       "searches": []
     }
   }

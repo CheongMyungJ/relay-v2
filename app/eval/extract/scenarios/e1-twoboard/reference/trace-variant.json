@@ -231,6 +231,38 @@
         }
       ],
       "inference": false
+    },
+    {
+      "key": "o12",
+      "text": "alpha와 beta는 같은 링커 스크립트 acme_m3.ld로 링크해 메모리 배치가 같다: .data와 .bss는 RAM(0x20000000, 20K)에, 플래시 마지막 2K는 EEPROM 흉내 영역에 놓인다.",
+      "configs": ["alpha", "beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "Makefile",
+          "start": 10,
+          "end": 10,
+          "quote": "LDFLAGS := -nostdlib -T vendor/acme/acme_m3.ld",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "vendor/acme/acme_m3.ld",
+          "start": 6,
+          "end": 6,
+          "quote": "RAM (rwx)   : ORIGIN = 0x20000000, LENGTH = 20K",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "vendor/acme/acme_m3.ld",
+          "start": 15,
+          "end": 15,
+          "quote": ".bss : { _sbss = .; *(.bss*) *(COMMON) _ebss = .; } > RAM",
+          "command": null
+        }
+      ],
+      "inference": false
     }
   ],
   "quantities": [],
@@ -331,6 +363,11 @@
     "dead_code": {
       "status": "covered",
       "refs": ["o8", "a1"],
+      "searches": []
+    },
+    "memory_layout": {
+      "status": "covered",
+      "refs": ["o12"],
       "searches": []
     }
   }

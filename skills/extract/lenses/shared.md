@@ -13,6 +13,7 @@ One piece of shared state (a variable, a buffer, a peripheral register, a DMA bu
 - `protection`: what guards each access (interrupt masking, a critical section, a lock, an atomic type or instruction), and whether that guard is valid in the context that uses it.
 - `read_modify_write`: sequences that read, change and write back, and whether another writer can run between the read and the write.
 - `dma_ownership`: when the DMA engine owns a buffer and when the CPU does, which event hands it over, and whether the CPU touches it while the DMA engine owns it.
+- `dma_memory`: for each buffer a DMA engine uses, the section and memory region it lands in for each configuration (linker script, section attributes) and whether that DMA engine can reach that region. Code that looks right still fails when the buffer sits where the DMA cannot reach.
 - `unprotected_pairs`: pairs of accesses with no guard between them, and for each pair whether preemption between them is possible given the priorities.
 
 ## Checklist
@@ -24,6 +25,7 @@ One piece of shared state (a variable, a buffer, a peripheral register, a DMA bu
 | `protection` | Protection (critical section, lock, atomicity) |
 | `read_modify_write` | Read-modify-write sequences |
 | `dma_ownership` | Ownership of DMA buffers |
+| `dma_memory` | Whether each DMA buffer sits in memory that DMA can reach, per configuration |
 | `unprotected_pairs` | Access pairs without protection |
 
 ## Pitfalls

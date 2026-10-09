@@ -223,6 +223,46 @@
         }
       ],
       "inference": false
+    },
+    {
+      "key": "o11",
+      "text": "DMA 버퍼 s_adc_buf, s_rx_buf, s_tx_buf는 섹션 지정 없는 정적 배열이라 모든 구성에서 .bss로 SRAM(0x20000000, 128K) 한 영역에 놓인다. 이 SRAM에 DMA가 닿는지는 칩 자료가 정한다.",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/sensor.c",
+          "start": 20,
+          "end": 20,
+          "quote": "static uint16_t s_adc_buf[2][SAMPLES_PER_HALF][SENSOR_MAX_CH];",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/rs485.c",
+          "start": 24,
+          "end": 24,
+          "quote": "static uint8_t s_rx_buf[RS485_RX_DMA_SIZE];",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/rs485.c",
+          "start": 26,
+          "end": 26,
+          "quote": "static uint8_t s_tx_buf[MB_FRAME_MAX];",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "vendor/nimbus/n4_flash.ld",
+          "start": 15,
+          "end": 15,
+          "quote": ".bss : { _sbss = .; *(.bss*) *(COMMON) _ebss = .; } > RAM",
+          "command": null
+        }
+      ],
+      "inference": false
     }
   ],
   "quantities": [],
@@ -275,6 +315,11 @@
     "unprotected_pairs": {
       "status": "covered",
       "refs": ["o1", "o2", "o3", "o4", "o8"],
+      "searches": []
+    },
+    "dma_memory": {
+      "status": "covered",
+      "refs": ["o11"],
       "searches": []
     }
   }
