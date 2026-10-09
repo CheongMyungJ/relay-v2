@@ -27,6 +27,8 @@ const CURSOR_LINE = /^\s*[│|]?\s*[❯>]\s+\S/
 // 수락 항목: "Yes", "2. Yes, I accept", "1. Yes, proceed" 등
 const ACCEPT_LINE = /^\s*[│|]?\s*(?:[❯>]\s*)?(?:\d+\.\s*)?(yes|i accept|accept|proceed|trust)\b/i
 const PRESS_ENTER = /press enter|enter to continue/i
+// 번호도 확인 안내도 없는 첫 실행 목록. 2.1.295(Linux)의 테마 고르기는 "❯ ✔ Dark mode"처럼 그린다
+const UNNUMBERED_PICKER = /choose the text style/i
 const KEY_UP = '\x1b[A'
 const KEY_DOWN = '\x1b[B'
 // 같은 창이 이만큼 그대로일 때만 누른다. 2.1.283(Linux)은 신뢰 창을 처음 그리고 150ms쯤 뒤에
@@ -81,7 +83,10 @@ export class ScreenUi extends FakeUi {
    */
   async handleDialogs(relay: Relay, key: string): Promise<boolean> {
     const scr = this.screen(key)
-    const isSelect = NUMBERED_CURSOR.test(scr) || CONFIRM_HINT.test(scr)
+    const isSelect =
+      NUMBERED_CURSOR.test(scr) ||
+      CONFIRM_HINT.test(scr) ||
+      (UNNUMBERED_PICKER.test(scr) && scr.split('\n').some((l) => CURSOR_LINE.test(l)))
     const isEnter = PRESS_ENTER.test(scr)
     if (!isSelect && !isEnter) {
       this.shown.delete(key)
