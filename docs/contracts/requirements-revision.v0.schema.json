@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "relay/requirements-revision.v0.schema.json",
+  "title": "요구사항 추출 기록의 revision 변경분 (v0)",
+  "description": "requirements/revisions/NNNNNN.json 하나. 앱만 쓰는 불변 파일이고, 반영 한 번(run 결과, 앱의 판정, 사람 답)이 하나를 만든다(requirements-extraction-flow.md 결정 32~35, 41, 93~95). 지금 기록은 parent를 따라 변경분을 차례로 접어 만든다. 주장(claims)의 body는 run 결과의 그 항목 원문이고 앵커만 근거 ID(evidence)로 바꾼다. work.json의 requirements가 현재 revision 번호와 이 파일의 해시를 가리킨다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "number",
+    "parent",
+    "at",
+    "cause",
+    "units",
+    "unit_updates",
+    "claims",
+    "evidence",
+    "decisions",
+    "answers"
+  ],
+  "properties": {
+    "schema_version": { "const": 0 },
+    "number": { "description": "revision 번호. 1부터 오르고 재사용하지 않는다", "type": "integer", "minimum": 1 },
+    "parent": {
+      "description": "앞 revision 번호. 첫 revision은 null",
+      "oneOf": [{ "type": "null" }, { "type": "integer", "minimum": 1 }]
+    },
+    "at": { "description": "쓴 때(오프셋을 붙인 현지 ISO 8601)", "type": "string" },
+    "cause": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "run", "note"],
+      "properties": {
+        "kind": {
+          "description": "run: run 결과를 반영했다. app: 앱의 판정(시작, 실패·미완료 상한으로 끝난 단위). human: 사람의 답",
+          "enum": ["run", "app", "human"]
+        },
+        "run": {
+          "description": "반영한 run id(r-NNNN). run이 아니면 null",
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/runId" }]
+        },
+        "note": { "description": "짧은 까닭. 없으면 빈 글", "type": "string" }
+      }
+    },
+    "units": { "description": "새 분석 단위", "type": "array", "items": { "$ref": "#/$defs/unit" } },
+    "unit_updates": {
+      "description": "단위의 상태 바꿈",
+      "type": "array",
+      "items": { "$ref": "#/$defs/unitUpdate" }
+    },
+    "claims": { "description": "새 주장", "type": "array", "items": { "$ref": "#/$defs/claim" } },
+    "evidence": { "description": "새 근거", "type": "array", "items": { "$ref": "#/$defs/evidence" } },
+    "decisions": {
+      "description": "새 사람 결정 필요 항목(결정 7)",
+      "type": "array",
+      "items": { "$ref": "#/$defs/decision" }
+    },
+    "answers": {
+      "description": "사람 결정 필요 항목에 사람이 준 답(결정 41)",
+      "type": "array",
+      "items": { "$ref": "#/$defs/answer" }
+    }
+  },
+  "$defs": {
+    "runId": { "type": "string", "pattern": "^r-[0-9]{4,}$" },
+    "unitId": { "type": "string", "pattern": "^u-[0-9]{4,}$" },
+    "claimId": { "type": "string", "pattern": "^c-[0-9]{4,}$" },
+    "evidenceId": { "type": "string", "pattern": "^e-[0-9]{4,}$" },
+    "decisionId": { "type": "string", "pattern": "^h-[0-9]{4,}$" },
+    "lens": { "enum": ["command", "state", "timing", "shared", "variant", "lifecycle", "protocol"] },
+    "unit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "lens", "purpose", "scope", "priority", "depends_on", "reason", "from"],
+      "properties": {
+        "id": { "$ref": "#/$defs/unitId" },
+        "kind": { "description": "run 종류(16.4)", "enum": ["survey", "trace"] },
+        "lens": {
+          "description": "trace의 렌즈. survey는 null",
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/lens" }]
+        },
+        "purpose": { "type": "string" },
+        "scope": { "type": "string" },
+        "priority": { "enum": ["high", "medium", "low"] },
+        "depends_on": { "type": "array", "items": { "$ref": "#/$defs/unitId" } },
+        "reason": { "type": "string" },
+        "from": {
+          "description": "이 단위를 낸 run과 결과 안의 지역 key. 앱이 만든 단위(첫 survey)는 null",
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["run", "key"],
+              "properties": { "run": { "$ref": "#/$defs/runId" }, "key": { "type": "string" } }
+            }
+          ]
+        }
+      }
+    },
+    "unitUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "reason", "run", "checkpoint", "checklist"],
+      "properties": {
+        "id": { "$ref": "#/$defs/unitId" },
+        "status": {
+          "description": "open: 열림(미완료면 checkpoint와 함께). done, needs_external, out_of_scope: run이 낸 끝난 상태. failed: 같은 항목 연속 실패 상한(결정 6). stalled: 연속 미완료 상한(결정 30). merged: 같은 렌즈·범위의 열린 단위에 합쳐짐(reason에 그 단위 id)",
+          "enum": ["open", "done", "needs_external", "out_of_scope", "failed", "stalled", "merged"]
+        },
+        "reason": { "description": "결과의 outcome_reason이나 앱의 까닭", "type": "string" },
+        "run": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/runId" }] },
+        "checkpoint": {
+          "description": "미완료 run의 checkpoint 원문. 없으면 null",
+          "oneOf": [{ "type": "null" }, { "type": "object" }]
+        },
+        "checklist": {
+          "description": "trace 결과의 점검표 원문. 없으면 null",
+          "oneOf": [{ "type": "null" }, { "type": "object" }]
+        }
+      }
+    },
+    "claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "unit", "run", "section", "key", "body"],
+      "properties": {
+        "id": { "$ref": "#/$defs/claimId" },
+        "unit": { "$ref": "#/$defs/unitId" },
+        "run": { "$ref": "#/$defs/runId" },
+        "section": {
+          "description": "결과의 절 이름(observations, quantities, requirements, inventory, configs, …)",
+          "type": "string"
+        },
+        "key": { "description": "결과 안의 지역 key", "type": "string" },
+        "body": { "description": "그 항목 원문. 앵커는 {\"evidence\": \"e-NNNN\"}로 바뀐다", "type": "object" }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "path", "start", "end", "quote", "command", "commit", "blob"],
+      "properties": {
+        "id": { "$ref": "#/$defs/evidenceId" },
+        "kind": { "enum": ["code", "tool_output", "doc_claim", "external_spec"] },
+        "path": { "type": "string" },
+        "start": { "type": "integer" },
+        "end": { "type": "integer" },
+        "quote": { "type": "string" },
+        "command": { "oneOf": [{ "type": "null" }, { "type": "string" }] },
+        "commit": {
+          "description": "code·doc_claim은 기준 커밋. 그 밖은 null",
+          "oneOf": [{ "type": "null" }, { "type": "string" }]
+        },
+        "blob": {
+          "description": "기준 커밋에서 그 파일의 blob sha. 레포 안의 파일이 아니면 null",
+          "oneOf": [{ "type": "null" }, { "type": "string" }]
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "unit", "run", "key", "trigger", "question", "options", "blocks"],
+      "properties": {
+        "id": { "$ref": "#/$defs/decisionId" },
+        "unit": { "$ref": "#/$defs/unitId" },
+        "run": { "$ref": "#/$defs/runId" },
+        "key": { "type": "string" },
+        "trigger": { "enum": ["scope_budget", "shipping_config", "product_intent", "toolchain_material"] },
+        "question": { "type": "string" },
+        "options": { "type": "array", "items": { "type": "string" } },
+        "blocks": {
+          "description": "답을 받을 때까지 기다리는 단위(결정 7)",
+          "type": "array",
+          "items": { "$ref": "#/$defs/unitId" }
+        }
+      }
+    },
+    "answer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision", "answer", "at"],
+      "properties": {
+        "decision": { "$ref": "#/$defs/decisionId" },
+        "answer": { "description": "사람의 답 원문", "type": "string", "minLength": 1 },
+        "at": { "type": "string" }
+      }
+    }
+  }
+}
