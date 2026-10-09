@@ -1525,6 +1525,14 @@ export function renderPacket(o: PacketInput): string {
       const cmd = c.build_command ? `\`${String(c.build_command)}\`` : 'build command unknown'
       out.push(`- ${String(c.name)} (${String(c.status)}): ${cmd}; selected by ${String(c.select)}`)
     }
+    // 빌드 인덱스는 앱이 만든다: run이 툴체인이 없다는 미확정을 되풀이하지 않게 알린다 (AI 결정 118, 14차 [실제] e1)
+    const bi = o.state.build_index
+    if (bi)
+      out.push(
+        bi.status === 'built'
+          ? `- Build index: the app built it for ${bi.configs.join(', ')} (defined symbols and compiled lines per configuration) and checked the survey's configuration claims against it. You do not need to build.`
+          : `- Build index: not built (${bi.status}${bi.detail ? `: ${text(bi.detail)}` : ''}). Configuration claims rest on reading the build files.`,
+      )
     out.push('')
   }
   out.push('## Unit', '')

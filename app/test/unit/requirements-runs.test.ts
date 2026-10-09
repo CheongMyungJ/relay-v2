@@ -760,6 +760,35 @@ describe('구성별 빌드 인덱스 (AI 결정 118)', () => {
     expect(clean.reopened).toBeNull()
     expect(clean.revision.unit_updates).toEqual([])
   })
+
+  it('trace 패킷은 빌드 인덱스 상태를 알린다: run이 툴체인이 없다는 미확정을 되풀이하지 않게 (14차 [실제] e1)', () => {
+    const r = new Record_()
+    r.apply('u-0001', makeSurvey())
+    push(r, answerRevision(r.state, r.next, [{ decision: 'h-0001', answer: '허용', at: AT }], AT))
+    const packet = () =>
+      renderPacket({
+        unit: r.unit('u-0002'),
+        state: r.state,
+        intent: '의도',
+        repo: REPO,
+        base: 'abc',
+        scratch: '/w/scratch',
+        budget: DEFAULT_REQUIREMENTS_BUDGET,
+      })
+    expect(packet()).not.toContain('Build index')
+    push(
+      r,
+      buildIndexRevision(r.state, r.next, AT, {
+        status: 'built',
+        configs: ['a', 'b'],
+        file: 'build-index/abc.json',
+        detail: '',
+        problems: [],
+      }),
+    )
+    expect(packet()).toContain('- Build index: the app built it for a, b')
+    expect(packet()).toContain('You do not need to build.')
+  })
 })
 
 describe('[실제] 사례의 verify 지적에서 고친 문서와 패킷 (14차 작업)', () => {
