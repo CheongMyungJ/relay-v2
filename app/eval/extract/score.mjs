@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // extract run 평가의 채점 (docs/extract-eval.md). run.json마다 score.json을 쓴다.
-//   node eval/extract/score.mjs <결과 폴더>... [--judge-model sonnet] [--redo] [--no-judge]
+//   node eval/extract/score.mjs <결과 폴더>... [--judge-model sonnet] [--redo] [--no-judge] [--max-calls 150]
+//     [--always-cap]
 // 결정론 채점(lib/score.mjs)에 판정 모델의 정렬을 더한다. 판정은 run 폴더의 judge.json에 입력 해시와 함께 두고 같은
 // 입력이면 다시 부르지 않는다(--redo면 다시 부른다). 판정을 부르기 전에도 사용량을 확인한다(결정 28).
 import { createHash } from 'node:crypto'
@@ -56,7 +57,14 @@ async function judgeRun(run, truth, o) {
     const old = JSON.parse(fs.readFileSync(file, 'utf8'))
     if (old.hash === hash) return { answer: old.answer, cached: true }
   }
-  const g = await guard({ bin: o.bin, env: o.env, callsFile: o.callsFile, observed: o.observed })
+  const g = await guard({
+    bin: o.bin,
+    env: o.env,
+    callsFile: o.callsFile,
+    observed: o.observed,
+    maxCalls: o.maxCalls ?? 150,
+    alwaysCap: !!o.alwaysCap,
+  })
   if (!g.ok) throw new Error(`판정 전 멈춤: ${g.why}`)
   const cfg = fs.mkdtempSync(path.join(os.tmpdir(), 'relay-extract-judge-'))
   let r
@@ -184,6 +192,8 @@ async function main() {
       'no-judge': { type: 'boolean', default: false },
       concurrency: { type: 'string', default: '1' },
       'calls-file': { type: 'string' },
+      'max-calls': { type: 'string', default: '150' },
+      'always-cap': { type: 'boolean', default: false },
     },
   })
   const bin = runBin()
@@ -198,6 +208,8 @@ async function main() {
       bin,
       env,
       callsFile: path.resolve(v['calls-file'] ?? path.join(outDir, 'calls.jsonl')),
+      maxCalls: Number(v['max-calls']),
+      alwaysCap: v['always-cap'],
     })
     console.log(`${outDir}: run ${r.runs}개 채점, 판정 호출 ${r.judged}번`)
   }

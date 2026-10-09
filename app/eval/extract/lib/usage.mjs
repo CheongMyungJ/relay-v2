@@ -114,9 +114,20 @@ export async function guard({
   maxCalls = 150,
   dry = false,
   observed = null,
+  alwaysCap = false,
 }) {
   if (dry) return { ok: true, why: 'dry', usage: null }
   const usage = await getUsage(bin, env)
+  // --always-cap: get_usage가 사용량을 주지 않으면 run이 본 사용률이 있어도 호출 상한을 함께 건다(사람의 지시, AI 결정 76)
+  if (alwaysCap && !usage.available) {
+    const n = countCalls(callsFile)
+    if (n >= maxCalls)
+      return {
+        ok: false,
+        why: `get_usage가 사용량을 주지 않아 호출 상한 ${maxCalls}에 닿음(${n})`,
+        usage,
+      }
+  }
   // get_usage는 오래된 값을 줄 수 있어(2.1.293, 같은 때 rate_limit_event보다 낮았다) 최근 run에서 본 값과 큰 쪽을 쓴다
   if (observed?.weeklyPct != null) {
     usage.available = true

@@ -7,17 +7,20 @@
 // 4. 설계 대조: 산출물 템플릿의 절 제목, 입력·결정 지점·사람이 정할 결정·완료조건 항목 (5.6.1~5.6.12, I60, I65, I89, I107)
 // 5. 유형별 조립: 공용 스킬의 유형 표시, 조립한 글에 다른 유형의 산출물이 없음 (D279, I68)
 // 6. 요구사항 추출 extract run 조립: 렌즈 카드의 점검표 ID = 조립한 결과 스키마의 필수 키, 스키마 크기와 cmd.exe 글자,
-//    필드 안내의 필드, survey와 trace의 공통 $defs (docs/requirements-extraction-flow.md 16.11 [정적], 결정 36)
-// 6. 요구사항 추출 extract run 조립: 렌즈 카드의 점검표 ID = 조립한 결과 스키마의 필수 키, 스키마 크기와 cmd.exe 글자,
-//    survey와 trace의 공통 $defs (docs/requirements-extraction-flow.md 16.11 [정적], 결정 36)
+//    필드 안내의 필드, survey와 trace의 공통 $defs (docs/requirements-extraction-flow.md 16.11 [정적], 결정 36).
+//    지시 문구(L1 contract.md, L2 kinds/, L2b 렌즈 카드): 층과 조립본의 크기(16.10, 넘으면 경고), 금지 문구(앱의 일, 넓은 금지,
+//    개발용 픽스처의 식별자), 금지마다 대신 적을 곳(D230의 꼴), 지시에 나온 필드 이름, 앱 검사 목록 = 규칙 표(rules.mjs),
+//    렌즈 카드의 Example이 스키마와 규칙을 통과하고 counter/<규칙>.json이 그 규칙에서만 실패하는지
 
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TYPES, assemble } from './assemble.mjs';
 import { CHECK_METHOD } from './check-method.mjs';
-import { CMD_META, KINDS, LENSES, SCHEMA_ARGV_TARGET, buildRun } from './extract/run.mjs';
-import { loadBase, loadChecklist } from './extract/load.mjs';
+import { readdirSync, existsSync } from 'node:fs';
+import { CMD_META, KINDS, LENSES, SCHEMA_ARGV_TARGET, buildRun, lensLayer, section } from './extract/run.mjs';
+import { contractPath, lensCardPath, loadBase, loadChecklist, loadLayers } from './extract/load.mjs';
+import { RULES, checkResult } from './extract/rules.mjs';
 import YAML from 'yaml';
 import Ajv2020 from 'ajv/dist/2020.js';
 
@@ -582,6 +585,160 @@ console.log('\n[6] extract run 조립 (16.11 [정적], 결정 36)');
   const shared = Object.keys(bases.survey.$defs).filter((d) => d in bases.trace.$defs);
   const differ = shared.filter((d) => JSON.stringify(bases.survey.$defs[d]) !== JSON.stringify(bases.trace.$defs[d]));
   check(differ.length === 0, `survey와 trace의 공통 $defs ${shared.length}개가 같음${differ.length ? ` (다름: ${differ.join(', ')})` : ''}`);
+}
+
+console.log('\n[6b] extract 지시 문구 (16.5, 16.9, 16.10, 16.11 [정적])');
+{
+  const bases = Object.fromEntries(KINDS.map((k) => [k, loadBase(k)]));
+  // 문구를 쓴 렌즈(평가 범위, 결정 18). 나머지 렌즈 카드는 점검표만 있다
+  const WRITTEN = LENSES.filter((l) => lensLayer(readFileSync(lensCardPath(l), 'utf8')));
+  check(['command', 'timing', 'variant', 'shared'].every((l) => WRITTEN.includes(l)), `trace 절을 쓴 렌즈: ${WRITTEN.join(', ')}`);
+  const combos = [['survey', null], ...WRITTEN.map((l) => ['trace', l])];
+
+  // 크기(16.10): 글자 수 ÷ 4 어림(D95). 목표를 넘으면 경고만 한다
+  const TARGET = { contract: 4000, kind: 2500, lens: 3000, assembled: 12000 };
+  const est = (t) => Math.round((t ?? '').length / 4);
+  const rows = [];
+  for (const [kind, lens] of combos) {
+    const layers = loadLayers(kind, lens);
+    const built = buildRun({ base: bases[kind], checklist: lens ? loadChecklist(lens) : null, layers });
+    const r = { 조합: lens ? `${kind}.${lens}` : kind, L1: est(layers.contract), L2: est(layers.kind), L2b: est(layers.lens), 조립본: est(built.instructions) };
+    rows.push(r);
+    for (const [k, t] of [['L1', 'contract'], ['L2', 'kind'], ['L2b', 'lens'], ['조립본', 'assembled']])
+      if (r[k] > TARGET[t]) console.log(`  WARN  ${r.조합}: ${k} ${r[k]} > 목표 ${TARGET[t]} (16.10)`);
+  }
+  console.table(rows);
+
+  const texts = [
+    ['contract.md', loadLayers('survey').contract],
+    ...KINDS.map((k) => [`kinds/${k}.md`, loadLayers(k).kind]),
+    ...WRITTEN.map((l) => [`lenses/${l}.md`, loadLayers('trace', l).lens]),
+  ];
+  // 산문만(예시 JSON 블록 빼고)
+  const prose = (t) => t.replace(/```[\s\S]*?```/g, '');
+
+  // 금지 문구: 앱의 일을 시키는 문장(16.9), 넓은 금지(16.5), 사람에게 묻기(결정 7)
+  const BANNED = [
+    [/\b(update|write|edit)\b[^.\n]{0,40}\b(state file|work\.json|extraction\.md|handoff\.md)/i, '앱의 일: 상태·문서 파일 쓰기'],
+    [/\b(choose|pick|decide|select)\b[^.\n]{0,30}\bnext (run|unit)\b/i, '앱의 일: 다음 단위 지정'],
+    [/\b(ask|confirm with|check with)\b[^.\n]{0,20}\b(the )?(user|person|human)\b/i, '사람에게 확인'],
+    [/AskUserQuestion/, '사람에게 묻는 도구'],
+    [/\b(do not|don't|never)\s+(guess|assume|speculate|infer)\b/i, '넓은 금지(16.5): 기록할 곳으로 바꾼다'],
+    [/\bavoid (assumptions|guessing|speculation)\b/i, '넓은 금지(16.5)'],
+  ];
+  for (const [name, t] of texts) {
+    const hits = BANNED.filter(([re]) => re.test(prose(t))).map(([, why]) => why);
+    check(hits.length === 0, `${name}: 금지 문구 없음${hits.length ? ` (${hits.join(', ')})` : ''}`);
+  }
+
+  // 금지마다 대신 적을 곳(D230의 꼴): 금지가 든 줄에 기록할 곳이나 대신 할 일이 함께 있다
+  const REDIRECT = /\b(instead|put|record|write|goes? to|go in|use|keep|submit|mark|give|leave|add|cite|describe|say|stop|fix|name|point)\b|`[a-z_]+`/i;
+  for (const [name, t] of texts) {
+    const bare = prose(t)
+      .split('\n')
+      .filter((l) => /\b(do not|don't|never|not yours)\b/i.test(l))
+      .filter((l) => !REDIRECT.test(l.replace(/\b(do not|don't|never)\s+\w+/gi, '')));
+    check(bare.length === 0, `${name}: 금지마다 대신 적을 곳이 있음 (D230의 꼴)${bare.length ? `\n        ${bare.join('\n        ')}` : ''}`);
+  }
+
+  // 개발용 픽스처의 식별자를 지시에 쓰지 않는다(과적합, K5): 평가 시나리오 레포의 매크로와 함수 이름
+  const scenDir = join(root, 'app', 'eval', 'extract', 'scenarios');
+  const fixtureIds = new Set();
+  const walkRepo = (d) => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const p = join(d, e.name);
+      if (e.isDirectory()) walkRepo(p);
+      else if (/\.(c|h|s|S)$/.test(e.name)) {
+        const src = readFileSync(p, 'utf8');
+        for (const m of src.matchAll(/#\s*define\s+([A-Za-z_][A-Za-z0-9_]*)/g)) if (m[1].includes('_') && m[1].length >= 5) fixtureIds.add(m[1]);
+        for (const m of src.matchAll(/^[A-Za-z_][\w \t*]*?\b([a-z][a-z0-9]*_[a-z0-9_]+)\s*\(/gm)) fixtureIds.add(m[1]);
+      }
+    }
+  };
+  for (const id of existsSync(scenDir) ? readdirSync(scenDir) : []) if (existsSync(join(scenDir, id, 'repo'))) walkRepo(join(scenDir, id, 'repo'));
+  const FIXTURE_WORDS = /\b(modbus|picortos|nimbus|thermostat|rs-?485)\b/i;
+  for (const [name, t] of texts) {
+    const words = new Set(t.match(/[A-Za-z_][A-Za-z0-9_]*/g) ?? []);
+    const hits = [...words].filter((w) => fixtureIds.has(w));
+    const dom = t.match(FIXTURE_WORDS);
+    check(fixtureIds.size > 0 && hits.length === 0 && !dom, `${name}: 개발용 픽스처의 식별자·영역 낱말 없음 (식별자 ${fixtureIds.size}개와 대조)${hits.length || dom ? ` (${[...hits, dom?.[0]].filter(Boolean).join(', ')})` : ''}`);
+  }
+
+  // 지시에 나온 필드 이름(`snake_case`)이 스키마의 필드, $defs, enum, 점검표 ID 가운데 하나다
+  const known = new Set(['all']);
+  for (const b of Object.values(bases))
+    for (const [at, v] of (function* walk(n, a = '') { yield [a, n]; if (n && typeof n === 'object') for (const [k, x] of Object.entries(n)) yield* walk(x, `${a}/${k}`); })(b)) {
+      if (/\/(properties|\$defs)$/.test(at) && v && typeof v === 'object') Object.keys(v).forEach((k) => known.add(k));
+      if (/\/enum$/.test(at) && Array.isArray(v)) v.forEach((e) => known.add(String(e)));
+    }
+  for (const l of LENSES) loadChecklist(l).forEach((c) => known.add(c.id));
+  for (const [name, t] of texts) {
+    const used = [...prose(t).matchAll(/`([a-z][a-z0-9]*(?:_[a-z0-9]+)*)(?::[^`]*)?`/g)].map((m) => m[1]);
+    const unknown = [...new Set(used.filter((u) => !known.has(u)))];
+    check(unknown.length === 0, `${name}: 지시의 필드 이름이 스키마·점검표에 있음${unknown.length ? ` (${unknown.join(', ')})` : ''}`);
+  }
+
+  // 앱 검사 목록(contract.md) = 규칙 표(rules.mjs)
+  const listed = /<!--\s*rules:([^>]*)-->/.exec(readFileSync(contractPath(), 'utf8'))?.[1].trim().split(/\s+/) ?? [];
+  check(sameSet(listed, RULES.map((r) => r.id)), `contract.md의 앱 검사 목록 = rules.mjs의 규칙 ${RULES.length}개`);
+  check(section(readFileSync(contractPath(), 'utf8'), 'What the app checks on submit') !== null, 'contract.md에 앱 검사 절이 있음');
+
+  // 렌즈 카드의 Example: JSON 하나, 결과의 일부를 빈 결과에 끼우면 스키마와 규칙을 통과한다
+  const ajvEx = new Ajv2020({ allErrors: true, strict: false });
+  const skeleton = (kind, ids) => {
+    const b = bases[kind];
+    const r = {};
+    for (const [k, p] of Object.entries(b.properties)) r[k] = p.type === 'array' ? [] : null;
+    r.outcome = 'done';
+    r.outcome_reason = '예시';
+    if (ids) r.checklist = Object.fromEntries(ids.map((id) => [id, { status: 'unknown', refs: [], searches: [] }]));
+    return r;
+  };
+  for (const lens of WRITTEN) {
+    const card = readFileSync(lensCardPath(lens), 'utf8');
+    const blocks = [...(section(card, 'Example') ?? '').matchAll(/```json\n([\s\S]*?)```/g)];
+    if (blocks.length !== 1) {
+      fail(`lenses/${lens}.md: Example에 JSON 블록이 하나 (${blocks.length}개)`);
+      continue;
+    }
+    let ex;
+    try {
+      ex = JSON.parse(blocks[0][1]);
+    } catch (e) {
+      fail(`lenses/${lens}.md: Example JSON을 읽음 (${e.message})`);
+      continue;
+    }
+    const ids = loadChecklist(lens).map((c) => c.id);
+    const full = skeleton('trace', ids);
+    const extra = Object.keys(ex).filter((k) => !(k in full));
+    for (const [k, v] of Object.entries(ex)) full[k] = k === 'checklist' ? { ...full.checklist, ...v } : v;
+    const schema = buildRun({ base: bases.trace, checklist: loadChecklist(lens) }).schema;
+    const v = ajvEx.compile(schema);
+    const okSchema = v(full);
+    const problems = checkResult(full);
+    check(
+      extra.length === 0 && okSchema && problems.length === 0,
+      `lenses/${lens}.md: Example이 스키마와 규칙을 통과${extra.length ? ` (없는 필드 ${extra.join(', ')})` : ''}${okSchema ? '' : ` (${v.errors.slice(0, 3).map((e) => `${e.instancePath} ${e.message}`).join('; ')})`}${problems.length ? ` (${problems.map((p) => `${p.rule}: ${p.problem}`).join('; ')})` : ''}`,
+    );
+  }
+
+  // 반례: counter/<규칙>.json은 스키마를 통과하고 그 규칙에서만 실패한다. 결과만으로 가르는 규칙마다 하나
+  const counterDir = join(here, 'extract', 'counter');
+  const files = existsSync(counterDir) ? readdirSync(counterDir).filter((f) => f.endsWith('.json')) : [];
+  for (const f of files) {
+    const c = JSON.parse(readFileSync(join(counterDir, f), 'utf8'));
+    const schema = buildRun({ base: bases[c.kind], checklist: c.lens ? loadChecklist(c.lens) : null }).schema;
+    const v = ajvEx.compile(schema);
+    const okSchema = v(c.result);
+    const rules = [...new Set(checkResult(c.result, c.ctx).map((p) => p.rule))];
+    check(
+      okSchema && rules.length === 1 && rules[0] === c.rule && f === `${c.rule}.json`,
+      `counter/${f}: 스키마는 통과하고 ${c.rule}에서만 실패 (${okSchema ? '스키마 통과' : '스키마 실패'}, 실패한 규칙: ${rules.join(', ') || '없음'})`,
+    );
+  }
+  const need = RULES.filter((r) => r.check).map((r) => r.id);
+  const missing = need.filter((id) => !files.includes(`${id}.json`));
+  check(missing.length === 0, `결과만으로 가르는 규칙 ${need.length}개마다 반례가 있음${missing.length ? ` (없음: ${missing.join(', ')})` : ''}`);
 }
 
 console.log(failures ? `\n실패 ${failures}건` : '\n모두 통과');

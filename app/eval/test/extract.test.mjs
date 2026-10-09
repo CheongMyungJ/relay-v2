@@ -27,8 +27,8 @@ import {
   unitKey,
 } from '../extract/lib/score.mjs'
 import { buildSide, sideId } from '../extract/lib/sides.mjs'
-import { parseUsage } from '../extract/lib/usage.mjs'
-import { comparePair, summarize } from '../extract/report.mjs'
+import { guard, parseUsage } from '../extract/lib/usage.mjs'
+import { adoption, comparePair, fromStored, summarize, toStored } from '../extract/report.mjs'
 import { listScenarios, loadScenario, plan } from '../extract/run.mjs'
 import { loadTruth, repoReader, scoreDir } from '../extract/score.mjs'
 
@@ -72,8 +72,9 @@ describe.each(scenarios)('시나리오 %s', (id) => {
     }
     walk(path.join(dir, 'repo'))
     walk(path.join(dir, 'packets'))
-    for (const t of scenario.tasks)
-      texts.push(buildSide('base', t.kind, t.lens ?? null).instructions)
+    for (const side of ['base', 'v1'])
+      for (const t of scenario.tasks)
+        texts.push(buildSide(side, t.kind, t.lens ?? null).instructions)
     expect(texts.some((x) => x.includes(truth.canary))).toBe(false)
   })
 
@@ -326,6 +327,21 @@ describe('채점 규칙', () => {
 })
 
 describe('사용량과 실행 파일', () => {
+  it('get_usage가 없으면 호출 상한을 건다. --always-cap이면 run이 본 사용률이 있어도 건다', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'relay-guard-'))
+    const callsFile = path.join(dir, 'calls.jsonl')
+    fs.writeFileSync(callsFile, '{"kind":"run"}\n{"kind":"judge"}\n')
+    const o = { bin: path.join(dir, 'no-claude'), env: {}, callsFile, maxCalls: 2 }
+    expect((await guard(o)).ok).toBe(false)
+    const observed = { weeklyPct: 12, fiveHourPct: 3 }
+    expect((await guard({ ...o, observed })).ok).toBe(true)
+    const capped = await guard({ ...o, observed, alwaysCap: true })
+    expect(capped.ok).toBe(false)
+    expect(capped.why).toMatch(/호출 상한 2/)
+    expect((await guard({ ...o, maxCalls: 3, observed, alwaysCap: true })).ok).toBe(true)
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
   it('get_usage 응답에서 주간 사용률은 seven_day와 weekly 묶음 가운데 가장 높은 것이다', () => {
     // 2026-10-09 구독(max) 로그인에서 받은 응답의 일부(녹화, docs/requirements-extraction-flow.md 17.4)
     const r = parseUsage({
@@ -411,6 +427,24 @@ describe('하네스', () => {
     expect(sideId('base', combos)).toBe(sideId('base', combos))
     expect(sideId('base', combos)).toMatch(/^base-[0-9a-f]{8}$/)
     expect(sideId('base', combos)).not.toBe(sideId('base', [['survey', null]]))
+  })
+
+  it('v1은 base와 결과 스키마·필드 안내가 같고 L1·L2·L2b만 더한다', () => {
+    for (const [kind, lens] of [
+      ['survey', null],
+      ['trace', 'timing'],
+    ]) {
+      const b = buildSide('base', kind, lens)
+      const v = buildSide('v1', kind, lens)
+      expect(v.schemaArg).toBe(b.schemaArg)
+      expect(v.instructions.startsWith('# Extraction run contract')).toBe(true)
+      expect(
+        v.instructions.endsWith(b.instructions.slice(b.instructions.indexOf('## Result fields'))),
+      ).toBe(true)
+      expect(v.instructions).not.toMatch(/<!--/)
+      if (lens) expect(v.instructions).toMatch(/# Lens: timing[\s\S]*## Example/)
+      if (lens) expect(v.instructions).not.toMatch(/## Checklist\n/)
+    }
   })
 
   it('패킷의 자리표시를 채운다', () => {
@@ -538,5 +572,98 @@ describe('집계', () => {
     const c = comparePair(s, 'A', 'B')
     expect(c['PM-A'].diff).toBe(2)
     expect(c['PM-B'].diff).toBeCloseTo(-0.35)
+  })
+})
+
+describe('저장본과 채택 판정', () => {
+  const row = (label, task, pmA, pmB, extra = {}) => ({
+    run: {
+      id: `${label}.s.${task}.1`,
+      label,
+      side: label === 'B' ? 'v1' : 'base',
+      scenario: 's',
+      task,
+      rep: 1,
+      failure: extra.failure ?? null,
+      ms: 90000,
+      model: 'sonnet',
+      effort: 'medium',
+      result: { total_cost_usd: 0.5, num_turns: 7 },
+      worktreeChanged: !!extra.worktree,
+      init: { model: 'claude-sonnet-5-5', version: '2.1.295' },
+    },
+    score: extra.failure
+      ? { gates: {} }
+      : {
+          pmA,
+          pmB,
+          recall: { 'r.a': true, 'r.b': pmB === 1 },
+          violated: pmA ? ['m.x'] : [],
+          softened: [],
+          anchors: { total: 4, ok: 4, fabricated: 0, lineMismatch: 0 },
+          gates: { leak: false, worktreeChanged: !!extra.worktree },
+        },
+  })
+
+  it('저장본으로 쓰고 다시 읽어도 집계가 같다', () => {
+    const rows = [
+      row('A', 't1', 1, 0.5),
+      row('A', 't2', 0, 1),
+      row('A', 't2', 0, 0, { failure: 'schema' }),
+    ]
+    const back = fromStored(JSON.parse(JSON.stringify({ runs: toStored(rows) })))
+    const strip = (s) => s.map(({ cost, minutes, turns, ...x }) => ({ ...x, cost, minutes, turns }))
+    expect(strip(summarize(back))).toEqual(strip(summarize(rows)))
+    expect(toStored(rows)[0]).toMatchObject({
+      missed: ['r.b'],
+      claude: '2.1.295',
+      model: 'claude-sonnet-5-5',
+    })
+  })
+
+  it('옛 저장본(관문 칸 없음)은 관문 위반 0으로 읽는다', () => {
+    const [r] = fromStored({
+      runs: [{ id: 'A.s.t.1', label: 'A', scenario: 's', task: 't', pmA: 0, pmB: 1, missed: [] }],
+    })
+    expect(summarize([r])[0].gates).toBe(0)
+  })
+
+  it('채택: PM-A가 분명히 낮고 PM-B 퇴보가 한도 안이면 채택, 관문 위반이나 PM-A 퇴보면 아니다', () => {
+    const many = (label, task, pmA, pmB, n = 5) =>
+      Array.from({ length: n }, () => row(label, task, pmA, pmB))
+    const better = [
+      ...many('B', 't1', 0, 1),
+      ...many('B', 't2', 0, 1),
+      ...many('A', 't1', 1, 1),
+      ...many('A', 't2', 1, 1),
+    ]
+    expect(adoption(summarize(better), 'B', 'A').adopt).toBe(true)
+    const worse = [
+      ...many('B', 't1', 1, 1),
+      ...many('B', 't2', 1, 1),
+      ...many('A', 't1', 0, 1),
+      ...many('A', 't2', 0, 1),
+    ]
+    expect(adoption(summarize(worse), 'B', 'A').adopt).toBe(false)
+    const gate = [...better, row('B', 't1', 0, 1, { worktree: true })]
+    const d = adoption(summarize(gate), 'B', 'A')
+    expect(d.adopt).toBe(false)
+    expect(d.gates).toBe(1)
+    // 기준선에만 있는 층은 보지 않는다
+    const extra = [...better, ...many('A', 't3', 5, 0)]
+    expect(adoption(summarize(extra), 'B', 'A').groups).toBe(2)
+  })
+
+  it('실패율이 기준선보다 10%p 넘게 높으면 채택하지 않는다', () => {
+    const many = (label, task, pmA, pmB, n = 5) =>
+      Array.from({ length: n }, () => row(label, task, pmA, pmB))
+    const rows = [
+      ...many('B', 't1', 0, 1, 4),
+      row('B', 't1', 0, 0, { failure: 'schema' }),
+      ...many('A', 't1', 1, 1),
+    ]
+    const d = adoption(summarize(rows), 'B', 'A')
+    expect(d.failDiff).toBeCloseTo(0.2)
+    expect(d.adopt).toBe(false)
   })
 })

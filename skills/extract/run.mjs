@@ -44,6 +44,41 @@ export function parseChecklist(card) {
   return out;
 }
 
+/** trace run이 렌즈 카드에서 받는 절(16.3). Checklist의 뜻은 필드 안내(L3)로 가고, Review questions는 review run의 몫이다 */
+export const LENS_TRACE_SECTIONS = ['Scope', 'Trace', 'Pitfalls', 'Phrasing', 'Example'];
+
+/** 원본 글에서 사람용 HTML 주석을 뺀다. 지시 층의 바이트는 이 결과다 */
+export function layerText(md) {
+  return md
+    .replace(/\r\n?/g, '\n')
+    .replace(/<!--[\s\S]*?-->\n?/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/**
+ * 렌즈 카드에서 trace run에 줄 층(L2b): 제목과 LENS_TRACE_SECTIONS 절을 카드의 차례대로. 그 절이 하나도 없으면 빈 글이다
+ * (점검표만 있는 카드)
+ */
+export function lensLayer(card) {
+  const text = layerText(card);
+  const parts = text.split(/\n(?=## )/);
+  const title = parts[0].startsWith('# ') ? parts[0].split('\n')[0] : null;
+  const keep = parts.filter((p) => {
+    const m = /^## (.+)$/m.exec(p.split('\n')[0]);
+    return m && LENS_TRACE_SECTIONS.includes(m[1].trim());
+  });
+  if (!keep.length) return '';
+  return [title, ...keep.map((p) => p.trim())].filter(Boolean).join('\n\n');
+}
+
+/** 마크다운의 `## 제목` 절 본문(제목 줄 빼고). 없으면 null */
+export function section(md, heading) {
+  const parts = layerText(md).split(/\n(?=## )/);
+  const p = parts.find((x) => x.split('\n')[0].trim() === `## ${heading}`);
+  return p ? p.split('\n').slice(1).join('\n').trim() : null;
+}
+
 /** 스키마에서 주석 키워드를 뺀다. properties·$defs의 키는 이름이라 건드리지 않는다 */
 function strip(node) {
   if (Array.isArray(node)) return node.map(strip);

@@ -13,6 +13,10 @@ export interface RunLayers {
   kind?: string
   lens?: string
 }
+export declare const LENS_TRACE_SECTIONS: readonly string[]
+export declare function layerText(md: string): string
+export declare function lensLayer(card: string): string
+export declare function section(md: string, heading: string): string | null
 export declare function sha256(text: string): string
 export declare function parseChecklist(card: string): ChecklistItem[]
 export declare function assembleSchema(base: object, checklist: ChecklistItem[] | null): Record<string, unknown>

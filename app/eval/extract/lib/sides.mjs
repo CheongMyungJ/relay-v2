@@ -4,10 +4,12 @@
 // base: 최소 지시 판(결정 19). 종류마다 한 문단짜리 과제 설명(sides/base/<kind>.md)과, 스키마 원본의 설명에서 기계로
 //   렌더링한 필드 안내(L3)만 준다. 고정 계약(L1), 종류 절차(L2), 렌즈 카드의 점검표 밖 절(L2b)은 없다. 결과 스키마는
 //   다른 쪽과 같다(16.6 초안 점검표 포함). L3를 넣는 까닭은 AI 결정 49.
+// v1: 첫 지침 판. 제품의 원본(skills/extract/contract.md, kinds/<kind>.md, 렌즈 카드의 trace 절)을 앱과 같은 load.mjs로
+//   읽어 그대로 준다. 필드 안내(L3)와 결과 스키마는 base와 같아, 두 쪽의 차이는 L1·L2·L2b 문구뿐이다.
 import fs from 'node:fs'
 import path from 'node:path'
 import { buildRun, sha256 } from '../../../../skills/extract/run.mjs'
-import { loadBase, loadChecklist } from '../../../../skills/extract/load.mjs'
+import { loadBase, loadChecklist, loadLayers } from '../../../../skills/extract/load.mjs'
 
 const HERE = path.join(import.meta.dirname, '..', 'sides')
 const read = (...p) => fs.readFileSync(path.join(HERE, ...p), 'utf8')
@@ -16,6 +18,11 @@ export const SIDES = {
   base: {
     describe: '최소 지시 판(결정 19): 한 문단 과제 설명 + 필드 안내(L3)',
     layers: (kind) => ({ kind: read('base', `${kind}.md`) }),
+  },
+  v1: {
+    describe:
+      '첫 지침 판: L1 고정 계약, L2 종류 절차, L2b 렌즈 카드(skills/extract) + 필드 안내(L3)',
+    layers: (kind, lens) => loadLayers(kind, lens),
   },
 }
 

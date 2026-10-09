@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // extract run 단위 평가 하네스 (docs/extract-eval.md, requirements-extraction-flow.md 결정 17~23, 28).
 //   node eval/extract/run.mjs --side base --label A --reps 5 [--scenarios e1-twoboard] [--tasks survey,trace-timing]
-//     [--model sonnet] [--effort medium] [--concurrency 2] [--out 폴더] [--dry]
+//     [--model sonnet] [--effort medium] [--concurrency 2] [--out 폴더] [--calls-file 파일] [--max-calls 150]
+//     [--always-cap] [--dry]
 // 쪽(지침 판) 하나를 시나리오·과제마다 회차만큼 돌려 runs/<label>.<시나리오>.<과제>.<회차>/run.json에 남긴다.
 // 채점은 score.mjs, 집계와 비교는 report.mjs가 한다. A/A는 같은 쪽을 다른 --label로 두 번 돌린다.
 // 사용량: run을 띄우기 전마다 guard(usage.mjs)가 주간 사용률을 보고 남은 비율이 하한에 닿으면 멈춘다(결정 28).
@@ -61,6 +62,7 @@ async function main() {
       'floor-pct': { type: 'string', default: '50' },
       'max-calls': { type: 'string', default: '150' },
       'calls-file': { type: 'string' },
+      'always-cap': { type: 'boolean', default: false },
       dry: { type: 'boolean', default: false },
       'fake-plan': { type: 'string' },
     },
@@ -126,6 +128,7 @@ async function main() {
         maxCalls: Number(v['max-calls']),
         dry: v.dry,
         observed,
+        alwaysCap: v['always-cap'],
       })
       if (!g.ok) {
         stopped = g.why

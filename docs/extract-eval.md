@@ -10,13 +10,14 @@
 | 위치                                                                                                   | 내용                                                                                                                                                             |
 | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `skills/extract/run.mjs`, `load.mjs`                                                                   | 지시·결과 스키마 조립과 run 인자. 앱, `skills/check.mjs`, 하네스가 함께 쓴다(16.3)                                                                               |
-| `skills/extract/lenses/*.md`                                                                           | 렌즈 카드. 지금은 16.6절 초안의 점검표 ID만 있다(결정 16, 36)                                                                                                    |
+| `skills/extract/contract.md`, `kinds/*.md`, `lenses/*.md`                                              | 지시 문구: L1 고정 계약, L2 종류 절차, 렌즈 카드(점검표와 trace 절. state·lifecycle·protocol은 점검표만, 결정 36, 70)                                            |
+| `skills/extract/rules.mjs`, `counter/*.json`                                                           | 앱이 제출 때 보는 규칙 표와 규칙마다 반례(결정 71)                                                                                                               |
 | `docs/contracts/extract-{survey,trace}.v0.schema.json`                                                 | 결과 스키마 v0(기본 스키마, 점검표 칸은 비어 있다)                                                                                                               |
 | `app/eval/extract/run.mjs`                                                                             | 하네스: 쪽 하나를 시나리오·과제마다 회차만큼 돌린다                                                                                                              |
 | `app/eval/extract/score.mjs`                                                                           | 채점: 결정론 채점과 판정 모델                                                                                                                                    |
 | `app/eval/extract/report.mjs`                                                                          | 집계와 쪽 비교(bootstrap)                                                                                                                                        |
 | `app/eval/extract/check-fixtures.mjs`                                                                  | 픽스처가 구성마다 컴파일되고 핵심 상수가 맞는지(clang 또는 zig cc)                                                                                               |
-| `app/eval/extract/sides/<쪽>/`                                                                         | 쪽의 지시 층. `base`는 최소 지시 판(결정 19)                                                                                                                     |
+| `app/eval/extract/sides/<쪽>/`, `lib/sides.mjs`                                                        | 쪽의 지시 층. `base`는 최소 지시 판(결정 19), `v1`은 `skills/extract`의 지시 문구 그대로                                                                         |
 | `app/eval/extract/scenarios/<id>/`                                                                     | `repo/`(손으로 쓴 펌웨어), `scenario.json`(과제, 빌드와 단정), `packets/`(손으로 쓴 패킷), `truth.json`(정답), `reference/`(만점 결과와 판정 답), `traps/`(함정) |
 | `app/eval/seal.sh`, `unseal.sh`, `sealed/extract-h1.*`                                                 | 봉인 hold-out을 만들고 연다(7절)                                                                                                                                 |
 | `app/eval/test/extract.test.mjs`                                                                       | 모델 없이 도는 시험: reference 만점, 함정 검출, 채점 규칙, 가짜 claude로 하네스 끝까지                                                                           |
@@ -49,6 +50,10 @@ node eval/extract/run.mjs --side base --label A --reps 5 --out eval/extract/resu
 node eval/extract/run.mjs --side base --label A2 --reps 5 --out eval/extract/results/<폴더>   # A/A
 node eval/extract/score.mjs eval/extract/results/<폴더>
 node eval/extract/report.mjs eval/extract/results/<폴더> --pair A,A2 --out 보고서.md
+# 새 쪽을 기준선과 견주고 채택 규칙(5절)을 판정, run마다의 점수를 저장본으로 남김
+node eval/extract/report.mjs eval/extract/results/<폴더> --pair B,N --adopt --out 보고서.md --runs-out 보고서.runs.json
+# 저장한 기준선(git에 있음)을 함께 읽기
+node eval/extract/report.mjs eval/extract/results/<폴더> --runs eval/extract/reports/2026-10-09-base-AA.runs.json --pair B,A --adopt
 ```
 
 - 기본: 모델 sonnet, effort medium, 동시 2, 부드러운 마감 15분, 하드 상한 30분(결정 25, 30), 판정 sonnet.
