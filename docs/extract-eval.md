@@ -18,6 +18,7 @@
 | `app/eval/extract/check-fixtures.mjs`                                                                  | 픽스처가 구성마다 컴파일되고 핵심 상수가 맞는지(clang 또는 zig cc)                                                                                               |
 | `app/eval/extract/sides/<쪽>/`                                                                         | 쪽의 지시 층. `base`는 최소 지시 판(결정 19)                                                                                                                     |
 | `app/eval/extract/scenarios/<id>/`                                                                     | `repo/`(손으로 쓴 펌웨어), `scenario.json`(과제, 빌드와 단정), `packets/`(손으로 쓴 패킷), `truth.json`(정답), `reference/`(만점 결과와 판정 답), `traps/`(함정) |
+| `app/eval/seal.sh`, `unseal.sh`, `sealed/extract-h1.*`                                                 | 봉인 hold-out을 만들고 연다(7절)                                                                                                                                 |
 | `app/eval/test/extract.test.mjs`                                                                       | 모델 없이 도는 시험: reference 만점, 함정 검출, 채점 규칙, 가짜 claude로 하네스 끝까지                                                                           |
 | `app/test/contract/claude-run.ts`, `live-run.test.ts`, `fakes-run.test.ts`, `fixtures/claude-run.json` | run의 [계약]과 녹화본, 가짜 run(`test/support/fake-claude/print-run.mjs`)                                                                                        |
 
@@ -29,7 +30,10 @@
 | e2-gateway  | picoRTOS 위 Modbus RTU 게이트웨이, ISR 넷, DMA 셋, SPI 플래시 로그 | basic, pro, devkit(+ 빌드되지 않는 lite) | 약 4.9천 |
 
 과제는 시나리오마다 다섯이다: survey, trace-command, trace-timing, trace-variant, trace-shared(결정 18).
-hold-out은 다른 세션이 만들어 봉인한다(결정 22). 이 레포에는 없다.
+
+hold-out은 개발용과 다른 세션이 만들어 봉인했다(결정 22, AI 결정 64~68): `app/eval/sealed/extract-h1.tar.gz.enc`. 개발용과
+같은 다섯 과제와 패킷 틀, 구성 둘, 약 4.5천 줄이고 16.6절 점검표 밖의 함정 범주를 하나 이상 넣었다. 내용과 범주는 이
+레포에 적지 않는다(7절).
 
 함정의 종류(정답 파일의 must_not, recall, resolvable): 구성 병합(`-D` 덮어쓰기, 강제 포함 헤더, 실행 중 등록),
 근거 없는 수치·단위 확정(데이터시트에만 있는 LSI·타이머 클럭·바쁜 대기), 관찰값·문서 주장의 보장화, 숨은 두 번째
@@ -107,3 +111,42 @@ recall·must_not·resolvable 항목마다 found/violated/left_unknown과 근거 
   시나리오마다 reference가 스키마를 통과하고 만점이며, 함정마다 해당 지표에서 reference보다 나빠야 한다.
 - 채점 규칙을 고치면 이 시험에 경우를 더한다(CLAUDE.md). 실제 run에서 본 값 글은 회귀 시험으로 남긴다.
 - 정답을 고치면 `reference/`와 `traps/`가 여전히 만점·검출인지 본다. 픽스처를 고치면 `check-fixtures.mjs`를 돌린다.
+
+## 7. 봉인 hold-out
+
+지침 판을 고른 뒤 같은 채택 규칙으로 한 번 확인하는 데만 쓴다(결정 62). 지침을 쓰거나 재는 세션은 열지도 보지도 않는다.
+
+| 이름(`sealed/<이름>.tar.gz.enc`) | 내용                                            | 푼 뒤의 자리                      |
+| -------------------------------- | ----------------------------------------------- | --------------------------------- |
+| `holdout`                        | 지식 실험의 hold-out(E9에서 풀어 소진)          | `eval/scenarios/`, `eval/guides/` |
+| `extract-h1`                     | 요구사항 추출 run 평가의 hold-out 시나리오 하나 | `eval/extract/scenarios/`         |
+
+푸는 법(`app/`에서, 열쇠는 사람이 확인을 시킬 때 준다):
+
+```bash
+HOLDOUT_KEY='<열쇠>' bash eval/unseal.sh extract-h1
+node eval/extract/check-fixtures.mjs        # 풀린 시나리오도 컴파일되는지
+npm run test:eval                            # reference 만점, 함정 검출
+node eval/extract/run.mjs --side <쪽> --label H --reps 5 --scenarios <푼 시나리오 id> --out eval/extract/results/<폴더>
+```
+
+- `unseal.sh`는 암호문과 푼 묶음의 해시(`sealed/<이름>.SHA256SUMS`, `<이름>.PLAIN.SHA256SUMS`)를 확인하고 `eval/` 아래 제자리에
+  꺼낸다. 열쇠가 틀리면 풀지 않는다. 이름을 빼면 `holdout`이다.
+- 푼 시나리오는 `listScenarios()`에 잡혀 하네스·시험이 그대로 쓴다. 평문은 커밋하지 않는다: `app/.gitignore`가
+  `eval/extract/scenarios/h[0-9]*/`를 뺀다(hold-out 시나리오 id는 `h`와 숫자로 시작한다).
+- 시나리오 폴더의 `make-fixtures.py`가 정답·패킷·reference·함정을 만든다. 픽스처를 고치면 다시 돌리고(줄 번호가 따라온다)
+  다시 봉인한다.
+
+봉인하는 법(만든 세션이 시나리오를 확인한 뒤 한 번):
+
+```bash
+HOLDOUT_KEY='<열쇠>' bash eval/seal.sh <이름> extract/scenarios/<시나리오 id>
+```
+
+- 경로는 `eval/` 기준이다. 이름순·고정 시각·고정 소유자로 묶어(같은 내용이면 같은 묶음) `unseal.sh`와 같은 매개변수
+  (AES-256-CBC, PBKDF2 200,000번, SHA-256)로 암호화하고, 두 해시 파일을 쓴 뒤 같은 열쇠로 풀어 원본과 같은지 본다. git에
+  들어 있는 경로는 봉인하지 않는다(평문이 남는다).
+- 열쇠는 무작위 256비트(`openssl rand -hex 32`)로 만들어 사람에게만 알린다. 레포, 문서, 커밋 메시지, 결과 폴더에 남기지
+  않는다.
+- 봉인한 뒤 평문 폴더를 지우거나 레포 밖으로 옮기고, `unseal.sh`로 풀어 원본과 같은지와 `check-fixtures.mjs`,
+  `npm run test:eval`이 통과하는지 확인한다.
