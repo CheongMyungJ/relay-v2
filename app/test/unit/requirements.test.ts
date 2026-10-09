@@ -5,6 +5,7 @@ import {
   applyResult,
   chainProblem,
   closeRevision,
+  currentClaims,
   codeAnchorProblems,
   emptyPointer,
   fold,
@@ -15,6 +16,7 @@ import {
   renderExtraction,
   renderHandoff,
   renderPacket,
+  reopenTargets,
   repoPath,
   requirementsView,
   revisionFile,
@@ -233,6 +235,34 @@ describe('run 결과를 변경분으로 (결정 34, 35, 94, 95)', () => {
     expect(t.warnings).toEqual([expect.stringMatching(/u-0002/)])
   })
 
+  it('렌즈·범위가 같은 끝난 단위가 있어도 새로 만들지 않고 그 단위를 가리킨다 (결정 37, 103)', () => {
+    const { revs, applied } = afterSurvey()
+    const c = closeRevision(applied.next, 'u-0002', 'stalled', '수렴 안 됨', null, AT)
+    const state = fold([...revs, c.revision])
+    const t = applyResult({
+      state,
+      next: c.next,
+      unit: must(state.units[0]),
+      run: 'r-0003',
+      result: survey({
+        human_decisions: [
+          { key: 'd1', trigger: 'product_intent', question: 'Q', options: [], refs: ['k1'] },
+        ],
+      }),
+      base: 'abc',
+      repo: REPO,
+      blobs: {},
+      at: AT,
+    })
+    expect(t.revision.units).toEqual([])
+    expect(t.warnings).toEqual([
+      expect.stringMatching(/k1.*끝난 단위 u-0002\(stalled\).*새로 만들지 않았다/),
+      expect.stringMatching(/k2.*끝난 단위 u-0003\(open\)|k2.*열린 단위 u-0003/),
+    ])
+    // 결정은 그 단위를 가리킨다
+    expect(t.revision.decisions[0]?.blocks).toEqual(['u-0002'])
+  })
+
   it('미완료는 checkpoint와 함께 열린 채로 남는다', () => {
     const cp = { checked: ['a'], remaining: ['b'], next: 'c' }
     const { state } = afterSurvey(survey({ outcome: 'incomplete', checkpoint: cp, units: [] }))
@@ -276,9 +306,118 @@ describe('다음 단위 (결정 95)', () => {
       }),
     )
     expect(pickUnit(fold(revs)).unit).toBeNull()
-    const ans = answerRevision(applied.next, [{ decision: 'h-0001', answer: 'A', at: AT }], AT)
+    const ans = answerRevision(
+      fold(revs),
+      applied.next,
+      [{ decision: 'h-0001', answer: 'A', at: AT }],
+      AT,
+    )
     expect(ans.revision.cause.kind).toBe('human')
+    // 기다리던 단위는 열려 있어 다시 열지 않는다
+    expect(ans.revision.unit_updates).toEqual([])
     expect(pickUnit(fold([...revs, ans.revision])).unit?.id).toBe('u-0002')
+  })
+
+  it('모든 단위가 끝난 뒤 나온 결정의 답은 결정을 낸 단위를 같은 revision에서 다시 연다 (결정 103)', () => {
+    const { revs, applied } = afterSurvey(survey({ units: [] }))
+    // trace 단위 하나를 만들고 끝낸다: 그 run이 단위를 가리키지 않는 결정을 낸다
+    const s1 = fold(revs)
+    const u = applyResult({
+      state: s1,
+      next: applied.next,
+      unit: must(s1.units[0]),
+      run: 'r-0001',
+      result: survey({ units: [must(survey().units[1])] }),
+      base: 'abc',
+      repo: REPO,
+      blobs: {},
+      at: AT,
+    })
+    const s2 = fold([...revs, u.revision])
+    const unit = must(s2.units.find((x) => x.kind === 'trace'))
+    const t = applyResult({
+      state: s2,
+      next: u.next,
+      unit,
+      run: 'r-0002',
+      result: trace({
+        human_decisions: [
+          {
+            key: 'd1',
+            trigger: 'product_intent',
+            question: '빈 입력은 오류인가?',
+            options: ['오류', '0'],
+            refs: ['o1'],
+          },
+        ],
+      }),
+      base: 'abc',
+      repo: REPO,
+      blobs: {},
+      at: AT,
+    })
+    const done = fold([...revs, u.revision, t.revision])
+    expect(done.units.map((x) => x.status)).toEqual(['done', 'done'])
+    expect(done.decisions).toMatchObject([{ id: 'h-0001', unit: unit.id, blocks: [] }])
+    expect(pickUnit(done).unit).toBeNull()
+
+    const answers = [{ decision: 'h-0001', answer: '오류', at: AT }]
+    expect(reopenTargets(done, answers)).toEqual([{ unit: unit.id, decision: 'h-0001' }])
+    const ans = answerRevision(done, t.next, answers, AT)
+    expect(ans.revision.cause.note).toBe(`사람 결정 필요의 답. 다시 연 단위 ${unit.id}`)
+    const after = fold([...revs, u.revision, t.revision, ans.revision])
+    const reopened = must(pickUnit(after).unit ?? undefined)
+    expect(reopened).toMatchObject({ id: unit.id, reopened_by: 'h-0001' })
+    // 다시 연 단위의 패킷은 결정과 답을 알린다
+    const packet = renderPacket({
+      unit: reopened,
+      state: after,
+      intent: 'x',
+      repo: REPO,
+      base: 'abc',
+      scratch: '/s',
+      budget: DEFAULT_REQUIREMENTS_BUDGET,
+    })
+    expect(packet).toContain('Analyse it again with the answer')
+    expect(packet).toContain('  - Q: 빈 입력은 오류인가?\n  - A: 오류')
+    // 이미 답한 결정은 다시 열지 않는다
+    expect(reopenTargets(after, answers)).toEqual([])
+    // 다시 돌아 끝나면 extraction.md는 다시 열어 돌렸다고 적는다
+    const again = applyResult({
+      state: after,
+      next: ans.next,
+      unit: reopened,
+      run: 'r-0003',
+      result: trace(),
+      base: 'abc',
+      repo: REPO,
+      blobs: {},
+      at: AT,
+    })
+    const final = fold([...revs, u.revision, t.revision, ans.revision, again.revision])
+    expect(renderExtraction(final, 'abc')).toContain(
+      `h-0001 (product_intent): 빈 입력은 오류인가? — 답: 오류. 끝난 단위 ${unit.id}를 답을 받아 다시 열어 돌렸다`,
+    )
+  })
+
+  it('survey만 내는 절은 마지막 survey run의 것이 지금의 것이다 (결정 103)', () => {
+    const { state } = afterSurvey()
+    const again = applyResult({
+      state,
+      next: { ...emptyPointer().next, unit: 9, claim: 9, evidence: 9, revision: 3 },
+      unit: must(state.units[0]),
+      run: 'r-0009',
+      result: survey({ units: [] }),
+      base: 'abc',
+      repo: REPO,
+      blobs: {},
+      at: AT,
+    })
+    const s = fold([...afterSurvey().revs, { ...again.revision, number: 3, parent: 2 }])
+    expect(s.claims.filter((c) => c.section === 'configs')).toHaveLength(2)
+    expect(currentClaims(s, 'configs').map((c) => c.run)).toEqual(['r-0009'])
+    expect(currentClaims(s, 'inventory').map((c) => c.run)).toEqual(['r-0009'])
+    expect(renderExtraction(s, 'abc').match(/- lo \(confirmed\)/g)).toHaveLength(1)
   })
 
   it('앱이 끝낸 단위(failed, stalled)는 끝난 상태다', () => {

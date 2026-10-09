@@ -247,12 +247,13 @@ export class ExtractRunner {
         const work = this.host.work()
         const p = work.requirements
         if (!p) return
-        // 반영 대기 사람 답부터 revision으로 (결정 41)
+        // 반영 대기 사람 답부터 revision으로 (결정 41). 답으로 다시 볼 끝난 단위를 같은 revision에서 연다 (결정 103)
         if (p.pending_answers?.length) {
           const answers = (
             await Promise.all(p.pending_answers.map((a) => files.readAnswers(a)))
           ).flat()
-          const { revision, next } = answerRevision(p.next, answers, this.host.at())
+          const before = fold(await files.load(p))
+          const { revision, next } = answerRevision(before, p.next, answers, this.host.at())
           const hash = await files.writeRevision(revision)
           await this.setPointer(
             taskId,

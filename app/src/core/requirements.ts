@@ -89,6 +89,7 @@ export function fold(revisions: readonly RequirementsRevision[]): RequirementsSt
       s.checkpoint = up.checkpoint
       if (up.checklist) s.checklist = up.checklist
       if (up.status === 'merged') s.merged_into = up.reason
+      if (up.decision) s.reopened_by = up.decision
     }
     claims.push(...r.claims)
     evidence.push(...r.evidence)
@@ -321,27 +322,31 @@ export function applyResult(o: ApplyInput): ApplyOutput {
     }
   }
 
-  // 단위: survey의 units, trace의 followups (결정 95)
+  // 단위: survey의 units, trace의 followups (결정 95). 렌즈·범위가 같은 단위가 이미 있으면(끝난 것도) 새로 만들지 않고
+  // 그 단위를 가리킨다 (결정 37, 103: 다시 연 survey가 같은 단위를 다시 낸다)
   const proposed = ('units' in o.result ? o.result.units : o.result.followups) ?? []
-  const openByScope = new Map(
-    openUnits(o.state)
-      .filter((u) => u.id !== o.unit.id)
-      .map((u) => [`${u.lens}|${scopeKey(u.scope)}`, u.id]),
+  const byScope = new Map<string, UnitState>(
+    o.state.units
+      .filter((u) => u.id !== o.unit.id && u.status !== 'merged')
+      .map((u) => [`${u.lens}|${scopeKey(u.scope)}`, u] as const),
   )
   const localToId = new Map<string, string>()
   const fresh: Unit[] = []
   for (const p of proposed) {
     const k = `${p.lens}|${scopeKey(p.scope)}`
-    const same = openByScope.get(k)
+    const same = byScope.get(k)
     if (same) {
-      localToId.set(p.key, same)
-      warnings.push(`후속 단위 ${p.key}(${p.lens})는 열린 단위 ${same}와 렌즈·범위가 같아 합쳤다`)
+      localToId.set(p.key, same.id)
+      warnings.push(
+        same.status === 'open'
+          ? `후속 단위 ${p.key}(${p.lens})는 열린 단위 ${same.id}와 렌즈·범위가 같아 합쳤다`
+          : `후속 단위 ${p.key}(${p.lens})는 끝난 단위 ${same.id}(${same.status})와 렌즈·범위가 같아 새로 만들지 않았다`,
+      )
       continue
     }
     const id = unitId(next.unit++)
     localToId.set(p.key, id)
-    openByScope.set(k, id)
-    fresh.push({
+    const unit: Unit = {
       id,
       kind: 'trace',
       lens: p.lens,
@@ -351,6 +356,15 @@ export function applyResult(o: ApplyInput): ApplyOutput {
       depends_on: [],
       reason: p.reason,
       from: { run: o.run, key: p.key },
+    }
+    fresh.push(unit)
+    byScope.set(k, {
+      ...unit,
+      status: 'open',
+      reason: '',
+      run: null,
+      checkpoint: null,
+      checklist: null,
     })
   }
   for (const p of proposed) {
@@ -396,14 +410,51 @@ export function applyResult(o: ApplyInput): ApplyOutput {
   return { revision: rev, next, warnings, closed }
 }
 
-/** 사람 답을 revision으로 (결정 41) */
+/**
+ * 답을 받은 결정으로 다시 열 단위 (결정 103): 결정이 기다리게 한 단위(blocks) 가운데 이미 끝난 것, blocks가 없으면 결정을
+ * 낸 단위가 이미 끝났을 때 그 단위. 열린 단위는 답을 받고 어차피 돌고, 합쳐진 단위는 받은 단위가 대신한다
+ */
+export function reopenTargets(
+  state: RequirementsState,
+  answers: readonly { decision: string }[],
+): { unit: string; decision: string }[] {
+  const units = new Map(state.units.map((u) => [u.id, u]))
+  const out: { unit: string; decision: string }[] = []
+  for (const a of answers) {
+    const d = state.decisions.find((x) => x.id === a.decision)
+    if (!d || d.answer) continue
+    for (const id of d.blocks.length ? d.blocks : [d.unit]) {
+      const u = units.get(id)
+      if (!u || u.status === 'open' || u.status === 'merged') continue
+      if (!out.some((x) => x.unit === id)) out.push({ unit: id, decision: d.id })
+    }
+  }
+  return out
+}
+
+/** 사람 답을 revision으로 (결정 41). 답으로 다시 볼 끝난 단위를 같은 revision에서 연다 (결정 103) */
 export function answerRevision(
+  state: RequirementsState,
   next: NextIds,
   answers: RequirementsRevision['answers'],
   at: string,
 ): { revision: RequirementsRevision; next: NextIds } {
-  const rev = revision(next.revision, at, { kind: 'human', run: null, note: '사람 결정 필요의 답' })
+  const reopen = reopenTargets(state, answers)
+  const note = reopen.length
+    ? `사람 결정 필요의 답. 다시 연 단위 ${reopen.map((r) => r.unit).join(', ')}`
+    : '사람 결정 필요의 답'
+  const rev = revision(next.revision, at, { kind: 'human', run: null, note })
   rev.answers.push(...answers)
+  for (const r of reopen)
+    rev.unit_updates.push({
+      id: r.unit,
+      status: 'open',
+      reason: `사람 결정 ${r.decision}의 답을 받아 다시 연다`,
+      run: null,
+      checkpoint: null,
+      checklist: null,
+      decision: r.decision,
+    })
   return { revision: rev, next: { ...next, revision: next.revision + 1 } }
 }
 
@@ -645,9 +696,23 @@ export interface PacketInput {
   budget: RequirementsBudget
 }
 
+/** survey만 내는 절. 다시 연 survey는 앞 survey의 것을 다시 낸다 (결정 103) */
+const SURVEY_SECTIONS = new Set(['configs', 'inventory', 'boundaries', 'not_found'])
+
+/**
+ * 한 절의 지금 주장. survey만 내는 절은 마지막 survey run의 것만이다(앞 run의 것은 기록에 남는다, 결정 103). 다른 절은
+ * 모든 run의 것이다
+ */
+export function currentClaims(state: RequirementsState, section: string): Claim[] {
+  const of = state.claims.filter((c) => c.section === section)
+  if (!SURVEY_SECTIONS.has(section)) return of
+  const last = state.claims.filter((c) => SURVEY_SECTIONS.has(c.section)).at(-1)?.run
+  return of.filter((c) => c.run === last)
+}
+
 /** survey가 낸 구성 (주장의 configs 절) */
 export function configsOf(state: RequirementsState): Record<string, unknown>[] {
-  return state.claims.filter((c) => c.section === 'configs').map((c) => c.body)
+  return currentClaims(state, 'configs').map((c) => c.body)
 }
 
 /** run의 패킷 (평가의 손으로 쓴 패킷과 같은 꼴, 결정 96) */
@@ -680,6 +745,15 @@ export function renderPacket(o: PacketInput): string {
   out.push('## Unit', '')
   if (u.lens) out.push(`- Lens: ${u.lens}`)
   out.push(`- Purpose: ${u.purpose}`, `- Scope: ${u.scope}`)
+  const reopened = u.reopened_by
+    ? o.state.decisions.find((d) => d.id === u.reopened_by && d.answer)
+    : undefined
+  if (reopened?.answer)
+    out.push(
+      '- This unit was analysed before a human answered a decision about it. Analyse it again with the answer and record what changes:',
+      `  - Q: ${reopened.question}`,
+      `  - A: ${reopened.answer.answer}`,
+    )
   if (u.checkpoint) {
     const cp = u.checkpoint as { checked?: string[]; remaining?: string[]; next?: string }
     out.push(
@@ -780,7 +854,7 @@ export function renderExtraction(state: RequirementsState, base: string): string
   const ev = new Map(state.evidence.map((e) => [e.id, e]))
   // 결과 안의 지역 key는 같은 run의 항목을 가리킨다
   const byKey = new Map(state.claims.map((c) => [`${c.run}/${c.key}`, c]))
-  const of = (section: string) => state.claims.filter((c) => c.section === section)
+  const of = (section: string) => currentClaims(state, section)
   const cell = (v: string) => v.replace(/\|/g, '\\|').replace(/\n/g, ' ')
   /** 항목의 근거: 자기 앵커와, refs가 가리키는 같은 run 항목(과 그 앵커) */
   const where = (c: Claim): string[] => {
@@ -910,11 +984,16 @@ export function renderExtraction(state: RequirementsState, base: string): string
   if (answered.length) {
     lines.push('', '## 사람 결정', '')
     for (const d of answered) {
-      const after = d.blocks.length
-        ? `기다린 단위 ${d.blocks.join(', ')}가 답을 받고 돌았다`
-        : '기다린 단위가 없어 답은 기록에만 있고, 이 답으로 다시 분석한 단위는 없다'
+      const reopened = state.units.filter((u) => u.reopened_by === d.id).map((u) => u.id)
+      const waited = d.blocks.filter((b) => !reopened.includes(b))
+      const after = [
+        ...(waited.length ? [`기다린 단위 ${waited.join(', ')}가 답을 받고 돌았다`] : []),
+        ...(reopened.length
+          ? [`끝난 단위 ${reopened.join(', ')}를 답을 받아 다시 열어 돌렸다`]
+          : []),
+      ].join('. ')
       lines.push(
-        `- ${d.id} (${d.trigger}): ${d.question} — 답: ${d.answer ? d.answer.answer : '(답 없음)'}. ${after}`,
+        `- ${d.id} (${d.trigger}): ${d.question} — 답: ${d.answer ? d.answer.answer : '(답 없음)'}.${after ? ` ${after}` : ''}`,
       )
     }
   }

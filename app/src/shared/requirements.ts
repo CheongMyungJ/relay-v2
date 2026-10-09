@@ -158,6 +158,8 @@ export interface UnitState extends Unit {
   checklist: Record<string, unknown> | null
   /** 합쳐진 단위(merged)면 받은 단위 */
   merged_into?: string
+  /** 끝난 뒤 사람 결정의 답으로 다시 열렸으면 그 결정 (결정 103) */
+  reopened_by?: string
 }
 
 export interface DecisionState extends HumanDecision {

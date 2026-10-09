@@ -117,6 +117,10 @@
         "checklist": {
           "description": "trace 결과의 점검표 원문. 없으면 null",
           "oneOf": [{ "type": "null" }, { "type": "object" }]
+        },
+        "decision": {
+          "description": "끝난 단위를 다시 연(open) 까닭인 사람 결정(결정 103). 그 밖에는 두지 않는다",
+          "$ref": "#/$defs/decisionId"
         }
       }
     },

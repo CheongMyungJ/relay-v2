@@ -232,6 +232,64 @@ describe('[흐름] 요구사항 추출 (결정 92~99)', () => {
     )
   })
 
+  it('모든 단위가 끝난 뒤 나온 결정에 답하면 결정을 낸 단위를 다시 열어 돌린다 (결정 103)', async () => {
+    const asks = {
+      ...trace(),
+      human_decisions: [
+        {
+          key: 'd1',
+          trigger: 'product_intent',
+          question: '빈 배열의 평균은 오류여야 하나?',
+          options: ['오류', 'NaN 그대로'],
+          refs: ['o1'],
+        },
+      ],
+    }
+    const s = await setup([survey(), asks, trace()])
+    await drive(s.h.relay, s.h.ui, s.key, { pauseAt: (t) => t.node === 'extract' })
+    await s.h.ui.until(
+      () => (work(s.dir).requirements?.halt?.reason === 'decisions' ? true : null),
+      '결정 대기로 멈춤',
+      30_000,
+    )
+    await settle(s.h, s.key)
+    // 열린 단위가 없는데 결정이 남아 멈췄다
+    expect(s.h.ui.works.get(s.key)?.requirements).toMatchObject({
+      runsUsed: 2,
+      units: { open: 0, done: 2 },
+      decisions: [{ id: 'h-0001', pending: null }],
+    })
+    expect(
+      await s.h.relay.answerRequirements(s.key, [{ decision: 'h-0001', answer: '오류' }]),
+    ).toEqual({ ok: true })
+    const extract = work(s.dir).tasks.at(-1)
+    expect(await s.h.relay.resume(s.key, extract?.id ?? '')).toEqual({ ok: true })
+    await s.h.ui.until(
+      () => (work(s.dir).tasks.at(-1)?.status === 'awaiting_approval' ? true : null),
+      'extract 승인 대기',
+      30_000,
+    )
+    await settle(s.h, s.key)
+    // 시작, survey, trace, 답(다시 엶), 다시 돈 trace
+    expect(work(s.dir).requirements).toMatchObject({ revision: 5, runs_used: 3 })
+    const rev4 = JSON.parse(read(path.join(s.dir, 'requirements', 'revisions', '000004.json'))) as {
+      unit_updates: unknown[]
+    }
+    expect(rev4.unit_updates).toEqual([
+      expect.objectContaining({ id: 'u-0002', status: 'open', decision: 'h-0001' }),
+    ])
+    const run3 = JSON.parse(
+      read(path.join(s.dir, 'requirements', 'runs', 'r-0003', 'run.json')),
+    ) as Record<string, unknown>
+    expect(run3).toMatchObject({ unit: 'u-0002', end: 'closed' })
+    expect(read(path.join(s.dir, 'requirements', 'runs', 'r-0003', 'packet.md'))).toContain(
+      '  - A: 오류',
+    )
+    expect(read(path.join(s.dir, 'tasks', '02-extract', 'extraction.md'))).toContain(
+      '끝난 단위 u-0002를 답을 받아 다시 열어 돌렸다',
+    )
+  })
+
   it('run 상한에 닿으면 멈추고, [계속 +N]은 상한을 늘려 이어서 돈다 (결정 24, 26, 99). 상한은 앱 설정이다 (결정 31, 102)', async () => {
     const s = await setup([survey(), trace()])
     expect(await s.h.relay.updateConfig({ requirements_budget: { run_limit: 1 } })).toMatchObject({
