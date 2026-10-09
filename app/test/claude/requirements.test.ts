@@ -15,7 +15,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { loadChecklist, loadPerspectives } from '../../../skills/extract/load.mjs'
 import { taskDirName } from '../../src/core/machine'
 import { fold } from '../../src/core/requirements'
-import { sectionNames } from '../../src/core/validate'
+import { sectionNames, sectionText } from '../../src/core/validate'
 import type { RequirementsRevision } from '../../src/shared/requirements'
 import type { WorkState } from '../../src/shared/work'
 import { drive, type DriveResult } from '../support/driver'
@@ -66,6 +66,8 @@ interface Result {
   claudeVersion: string | null
   /** 사람 결정 필요에 앱이 대신 한 답 */
   answers: { decision: string; question: string; answer: string }[]
+  /** verify의 되돌림으로 extract에 되감은 추가 지시 (결정 120) */
+  rewinds: string[]
   runs: RunRecord[]
   problems: string[]
   notes: string[]
@@ -89,6 +91,37 @@ function dryPlan(dir: string): string {
 
 const readJson = <T>(file: string) => JSON.parse(fs.readFileSync(file, 'utf8')) as T
 
+/**
+ * verify가 extract로 되돌려 Work가 멈추면 사람 역할은 한 번, verify가 고른 지적(반영하지 않은 지적)을 추가 지시로 붙여
+ * [현재 기록 위에서 이어서] extract로 되감는다 (결정 120, verify 스킬의 되돌아가기). 되감았으면 그 지시를 돌려준다
+ */
+async function rewindToExtract(
+  h: Awaited<ReturnType<typeof harness>>,
+  key: string,
+  workDir: string,
+  reason: string | null,
+): Promise<string | null> {
+  if (!reason?.includes('(extract)')) return null
+  const work = readJson<WorkState>(path.join(workDir, 'work.json'))
+  const verify = work.tasks.findLast((t) => t.node === 'verify')
+  if (!verify) return null
+  const file = path.join(workDir, 'tasks', taskDirName(verify), 'verification.md')
+  const picked = fs.existsSync(file)
+    ? (sectionText(fs.readFileSync(file, 'utf8'), '반영하지 않은 지적') ?? '')
+    : ''
+  const instruction = picked.trim() || reason
+  const preview = await h.relay.stepPreview(key, 'extract', true)
+  if (!preview.ok) throw new Error(`되감기 미리 보기 실패: ${preview.error}`)
+  const r = await h.relay.selectStep(key, {
+    node: 'extract',
+    keepCode: true,
+    instruction,
+    expect: preview.preview.expect,
+  })
+  if (!r.ok) throw new Error(`extract로 되감지 못함: ${r.error}`)
+  return instruction
+}
+
 async function run(): Promise<Result> {
   const ui = new ScreenUi()
   fs.mkdirSync(path.join(APP, 'test-results'), { recursive: true })
@@ -107,6 +140,7 @@ async function run(): Promise<Result> {
   const dir = path.join(OUT, 'requirements')
   let workDir: string | null = null
   const answers: Result['answers'] = []
+  const rewinds: string[] = []
   try {
     const { repo } = dry
       ? makeRepo(h.root, 'sample', REPO_FILES)
@@ -141,6 +175,12 @@ async function run(): Promise<Result> {
         },
       })
       drives.push(drove)
+      if (drove.status === 'stopped' && rewinds.length < 1) {
+        const rewound = await rewindToExtract(h, key, workDir, drove.reason)
+        if (!rewound) break
+        rewinds.push(rewound)
+        continue
+      }
       if (drove.status !== 'paused') break
       await settle(h, key)
       const view = ui.works.get(key)
@@ -164,6 +204,7 @@ async function run(): Promise<Result> {
       drive: drives,
       claudeVersion: work.tasks[0]?.claude_version ?? null,
       answers,
+      rewinds,
       ...inspect(work, workDir, tree, base),
     }
   } finally {
@@ -312,6 +353,7 @@ function summary(r: Result): string {
         `| ${x.id} | ${x.unit} | ${x.kind} | ${x.end} | ${x.denials} | ${x.denied} | ${x.failure ?? ''} |`,
     ),
     '',
+    `- verify의 되돌림으로 extract에 되감음: ${r.rewinds.length ? `${r.rewinds.length}회 (지시: ${r.rewinds.map((x) => x.split('\n')[0]?.slice(0, 120) ?? '').join(' / ')})` : '없음'}`,
     `- 사람 결정 필요에 대신 한 답: ${r.answers.length ? r.answers.map((a) => `${a.decision} "${a.question}" → ${a.answer}`).join('; ') : '없음'}`,
     `- 산출물 확인: ${r.problems.length ? r.problems.join('; ') : '통과'}`,
     ...r.notes.map((n) => `- ${n}`),
