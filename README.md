@@ -206,7 +206,7 @@ relay는 Work의 worktree에 서브모듈을 받지 않고, 서브모듈 안의 
 
 - **추출 단계에는 세션이 없습니다:** 앱이 분석 run을 하나씩 돌립니다. 진행 상황과 사람 결정 양식은 오른쪽 패널의 진행 상자에 있습니다.
 - **사람이 할 일:** 결정에 답하고, 멈추면 까닭을 보고 [재개]합니다. run 상한에 닿으면 상한을 늘리거나, 범위를 줄이거나, 부분 분석으로 넘깁니다.
-- **결과:** `extraction.md`입니다. 리뷰와 검증의 완료 화면에서 [결과를 저장소에 커밋]을 누르면 `docs/requirements/<Work id>`에 커밋합니다.
+- **결과:** `extraction.md`입니다. 리뷰와 검증의 완료 화면에서 [결과를 저장소에 커밋]을 누르면 기본으로 `docs/requirements/<Work id>`에 커밋합니다(폴더는 바꿀 수 있습니다).
 - 쓰는 법과 화면, 설정, 멈췄을 때 할 일은 [docs/requirements-extraction.md](docs/requirements-extraction.md)에 있습니다.
 
 ## 안전 장치
