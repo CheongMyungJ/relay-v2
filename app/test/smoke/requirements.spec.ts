@@ -209,11 +209,17 @@ test('run 상한에 닿으면 [범위 줄이고 계속]과 [부분 분석으로 
   await expect(box).toContainText('부분 분석: 보류한 단위가 있다')
   await win.screenshot({ path: 'test-results/requirements-partial.png' })
 
+  // extract에는 세션이 없다: 열린 질문은 extraction.md의 절을 가리키고 [세션 재개]를 말하지 않는다 (결정 92)
+  const questions = win.locator('.em-open_questions')
+  await expect(questions).toContainText('이 단계는 세션이 없어 여기서 답하지 않습니다')
+  await expect(questions).not.toContainText('세션 재개')
   // extract를 승인하면 verify가 돌고, 승인 대기에서 결과를 저장소로 내보낸다
   await win.getByRole('button', { name: '승인', exact: true }).click()
   // 부분 분석은 보류한 단위를 열린 질문으로 남겨 승인 전에 한 번 묻는다
   const unanswered = win.getByRole('dialog', { name: '답하지 않은 열린 질문' })
   await expect(unanswered).toContainText('부분 분석이다')
+  await expect(unanswered).toContainText('승인하면 리뷰와 검증이 이어서 봅니다')
+  await expect(unanswered).not.toContainText('세션 재개')
   await unanswered.getByRole('button', { name: '승인', exact: true }).click()
   const exportBox = win.getByLabel('결과 내보내기', { exact: true })
   await expect(exportBox).toBeVisible({ timeout: 60_000 })

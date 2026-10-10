@@ -11,6 +11,7 @@ import {
   isPipelineNode,
   keepDefault,
   keepLabel,
+  keepText,
   isPrevious,
   previousSteps,
   recommendableNodes,
@@ -136,6 +137,20 @@ describe('노드 (3.1)', () => {
           expect(KEEP_CODE_NODES[type], `${type} ${node}`).toContain(node)
       }
     }
+  })
+
+  it('[현재 기록 위에서 이어서]의 풀이와 미리 보기는 코드를 고친다고 하지 않는다 (결정 120)', () => {
+    expect(keepText('requirements', 'extract')).toEqual({
+      hint: '지금 요구사항 기록 위에 추가 지시를 메모로 두고 이어서 돈다. 풀면 survey부터 처음 다시 돈다',
+      code: '커밋을 되돌리지 않고 지금 요구사항 기록 위에서 이어서 돕니다',
+    })
+    expect(keepText('spec', 'spec').hint).toBe(
+      '문답으로 정한 결정을 문서에 둔 채 다시 볼 결정만 다시 묻는다',
+    )
+    expect(keepText('bugfix', 'fix')).toEqual({
+      hint: 'verify가 작은 문제를 찾았을 때 수정을 처음부터 다시 하지 않는다',
+      code: '커밋을 되돌리지 않고 그 위에서 이어서 고칩니다',
+    })
   })
 })
 

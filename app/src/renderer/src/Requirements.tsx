@@ -27,7 +27,9 @@ export function RequirementsBox({ workKey, req }: { workKey: string; req: Requir
         </div>
       ) : null}
       {req.usageWait ? (
-        <div className="dim">사용량 한도: {req.usageWait}까지 기다렸다 같은 단위부터 잇습니다</div>
+        <div className="dim">
+          사용량 한도: {localTime(req.usageWait)}까지 기다렸다 같은 단위부터 잇습니다
+        </div>
       ) : null}
       {req.partial ? (
         <div>부분 분석: 보류한 단위가 있다. 끝나면 결과 문서에 부분 분석으로 보인다</div>
@@ -286,6 +288,12 @@ export function RequirementsExport({
       </div>
     </div>
   )
+}
+
+/** 기록의 ISO 시각을 이 컴퓨터의 시각으로 보인다. 읽지 못하면 그대로 */
+function localTime(iso: string): string {
+  const t = new Date(iso)
+  return Number.isNaN(t.getTime()) ? iso : t.toLocaleString()
 }
 
 /** 사람 결정 필요의 양식 (결정 7, 41): 선택지를 고르거나 직접 적는다. 반영 대기인 답은 고칠 수 없다 */

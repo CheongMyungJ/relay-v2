@@ -22,6 +22,7 @@ import type {
   TaskView,
   WorkView,
 } from '../../shared/views'
+import { RECORD_ISSUE_FILE } from '../../shared/requirements'
 import type { DeliveryChoice, UncommittedAction } from '../../shared/work'
 import { Activity } from './Activity'
 import { call } from './commands'
@@ -637,7 +638,9 @@ function Review({
               <span className="error">
                 {respond
                   ? 'replies.md의 오류는 넘길 수 없습니다: 터미널에서 고치게 하세요 (D204)'
-                  : 'intent 초안의 머리글 오류는 넘길 수 없습니다 (D90)'}
+                  : gate.blocking.some((e) => e.file === RECORD_ISSUE_FILE)
+                    ? '요구사항 기록의 오류는 넘길 수 없습니다 (결정 2)'
+                    : 'intent 초안의 머리글 오류는 넘길 수 없습니다 (D90)'}
               </span>
             ) : null}
             {respond?.blocked ? <span className="error">{respond.blocked}</span> : null}
@@ -658,6 +661,7 @@ function Review({
         <OpenQuestionsDialog
           questions={questions}
           live={!!liveTask}
+          appRun={review.node === 'extract'}
           confirm={approveLabel}
           onConfirm={() => void approve(false)}
           onClose={() => setAsking(false)}
@@ -1329,21 +1333,32 @@ function CompletionActions({
 }
 
 /**
- * 답하지 않은 열린 질문을 두고 승인하거나 전달할 때의 확인 창 (D222). 세션이 없으면 [세션 재개]를 먼저 누르라고 한다
+ * 답하지 않은 열린 질문을 두고 승인하거나 전달할 때의 확인 창 (D222). 세션이 없으면 [세션 재개]를 먼저 누르라고 한다.
+ * 앱이 run을 돌리는 단계(요구사항 추출의 extract, 결정 92)는 세션이 없고 질문이 extraction.md의 절을 가리킨다
  */
 function OpenQuestionsDialog({
   questions,
   live,
+  appRun = false,
   confirm,
   onConfirm,
   onClose,
 }: {
   questions: readonly string[]
   live: boolean
+  appRun?: boolean
   confirm: string
   onConfirm: () => void
   onClose: () => void
 }) {
+  const lead = appRun
+    ? `열린 질문 ${questions.length}개가 extraction.md에 남아 있습니다. 승인하면 리뷰와 검증이 이어서 봅니다.`
+    : `답하지 않은 열린 질문 ${questions.length}개: 에이전트는 가정으로 진행합니다.`
+  const how = appRun
+    ? '다시 돌리려면 [취소]하고 [단계 선택]으로 요구사항 추출을 고르세요.'
+    : live
+      ? '답하려면 [취소]하고 가운데 터미널에 쓰세요.'
+      : '답하려면 [취소]하고 [세션 재개]를 누른 뒤 가운데 터미널에 쓰세요.'
   return (
     <ConfirmDialog
       title="답하지 않은 열린 질문"
@@ -1351,17 +1366,13 @@ function OpenQuestionsDialog({
       onConfirm={onConfirm}
       onClose={onClose}
     >
-      <p>답하지 않은 열린 질문 {questions.length}개: 에이전트는 가정으로 진행합니다.</p>
+      <p>{lead}</p>
       <ul>
         {questions.map((q, i) => (
           <li key={i}>{q}</li>
         ))}
       </ul>
-      <p className="dim">
-        {live
-          ? '답하려면 [취소]하고 가운데 터미널에 쓰세요.'
-          : '답하려면 [취소]하고 [세션 재개]를 누른 뒤 가운데 터미널에 쓰세요.'}
-      </p>
+      <p className="dim">{how}</p>
     </ConfirmDialog>
   )
 }

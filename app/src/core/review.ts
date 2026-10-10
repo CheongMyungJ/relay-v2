@@ -318,7 +318,11 @@ export function emphasis(input: EmphasisInput): Emphasis[] {
       kind: 'open_questions',
       title: '열린 질문',
       lines: [...h.open_questions],
-      hint: input.live === false ? OPEN_QUESTIONS_HINT_NO_SESSION : OPEN_QUESTIONS_HINT,
+      hint: appRun(input.node)
+        ? OPEN_QUESTIONS_HINT_APP_RUN
+        : input.live === false
+          ? OPEN_QUESTIONS_HINT_NO_SESSION
+          : OPEN_QUESTIONS_HINT,
     })
   }
   const rec = h?.recommended_next
@@ -377,6 +381,13 @@ export const OPEN_QUESTIONS_HINT =
 /** 세션이 없을 때(앱이 꺼져 끝난 세션 등) 열린 질문에 답하는 곳. 터미널은 [세션 재개] 전에는 읽기 전용이다 */
 const OPEN_QUESTIONS_HINT_NO_SESSION =
   '세션이 끝나 있습니다. [세션 재개]를 누른 뒤 가운데 터미널에 답을 쓰세요. 답하면 에이전트가 산출물을 고쳐 다시 승인 대기가 됩니다.'
+
+/**
+ * 앱이 run을 돌리는 단계(요구사항 추출의 extract, 결정 92)의 열린 질문. 답할 세션이 없고, 질문은 앱이 기록에서 센
+ * extraction.md의 절을 가리킨다
+ */
+const OPEN_QUESTIONS_HINT_APP_RUN =
+  '이 단계는 세션이 없어 여기서 답하지 않습니다. 항목마다 extraction.md의 해당 절에 있고, 승인하면 리뷰와 검증이 이어서 봅니다. 다시 돌리려면 [단계 선택]으로 요구사항 추출을 고르세요.'
 
 /**
  * PTY 출력에 보이는 글자가 있는가 (D217). 제어 문자와 이스케이프 시퀀스(CSI, OSC 등)만 있으면 없다. Windows에서는

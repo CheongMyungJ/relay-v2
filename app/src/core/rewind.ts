@@ -20,6 +20,7 @@ import {
   isPipelineNode,
   keepDefault,
   keepLabel,
+  keepText,
   order,
   workType,
 } from './pipeline'
@@ -263,6 +264,8 @@ export function stepChoices(work: WorkState): StepChoice[] {
       keepCode: kind === 'rewind' && KEEP_CODE_NODES[type].includes(node),
       keepLabel: keepLabel(type, node),
       keepDefault: kind === 'rewind' && keepDefault(type, node),
+      keepHint: keepText(type, node).hint,
+      keepCodeLine: keepText(type, node).code,
       typeChange: why === null && typeChangeAllowed(work, node),
     }
   })

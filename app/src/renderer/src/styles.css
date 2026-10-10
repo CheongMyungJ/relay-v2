@@ -1609,6 +1609,11 @@ button.ready {
   border-radius: var(--radius);
 }
 
+/* 빌드 인덱스 질문처럼 여러 줄인 질문의 줄바꿈을 살린다 */
+.requirements-decision legend {
+  white-space: pre-wrap;
+}
+
 .requirements-decision label.radio {
   display: block;
 }

@@ -748,6 +748,9 @@ export interface StepChoice {
   keepLabel: string
   /** 고르면 [현재 코드 위에서 이어서]가 처음부터 체크되어 있다. 설계의 spec만 참이다 (D365, I105) */
   keepDefault: boolean
+  /** [현재 코드 위에서 이어서]의 풀이와 체크했을 때 미리 보기의 코드 줄 (결정 120) */
+  keepHint: string
+  keepCodeLine: string
   /** 고르며 유형을 바꿀 수 있다: 의도 승인 전 [intake 다시] (D237) */
   typeChange: boolean
 }

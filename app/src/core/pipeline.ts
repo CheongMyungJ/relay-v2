@@ -131,6 +131,26 @@ export function keepDefault(type: WorkType, node: NodeName): boolean {
   return keep?.doc === true || keep?.record === true
 }
 
+/**
+ * 단계 선택 대화상자의 [현재 코드 위에서 이어서] 풀이(hint)와, 체크했을 때 미리 보기의 코드 줄(code). 요구사항 추출의
+ * extract는 코드를 고치지 않고 기록 위에서 잇는다 (결정 120)
+ */
+export function keepText(type: WorkType, node: NodeName): { hint: string; code: string } {
+  const keep = KEEP_CODE[type][node]
+  if (keep?.record) {
+    return {
+      hint: '지금 요구사항 기록 위에 추가 지시를 메모로 두고 이어서 돈다. 풀면 survey부터 처음 다시 돈다',
+      code: '커밋을 되돌리지 않고 지금 요구사항 기록 위에서 이어서 돕니다',
+    }
+  }
+  return {
+    hint: keep?.doc
+      ? '문답으로 정한 결정을 문서에 둔 채 다시 볼 결정만 다시 묻는다'
+      : 'verify가 작은 문제를 찾았을 때 수정을 처음부터 다시 하지 않는다',
+    code: '커밋을 되돌리지 않고 그 위에서 이어서 고칩니다',
+  }
+}
+
 /** 앱이 run을 돌리는 단계인가 (결정 92): 세션 대신 run 루프를 시작하고 멈춘다 */
 export function appRun(node: TaskNode): boolean {
   return NODE_INFO[node].appRun === true

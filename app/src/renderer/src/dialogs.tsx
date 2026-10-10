@@ -1272,8 +1272,10 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
 
 const short = (commit: string | null) => (commit ? commit.slice(0, 8) : '')
 
-/** 미리 보기의 코드 줄 (D116, D117). keepLabel은 [현재 코드 위에서 이어서]의 이름이다 (I105) */
-function codeLines(code: StepPreview['code'], keepLabel: string): string[] {
+/**
+ * 미리 보기의 코드 줄 (D116, D117). keep은 [현재 코드 위에서 이어서]의 이름(I105)과 체크했을 때의 코드 줄이다 (결정 120)
+ */
+function codeLines(code: StepPreview['code'], keep: { label: string; line: string }): string[] {
   const n = code.uncommitted.length
   if (code.kind === 'reset') {
     const where = `고른 단계를 시작할 때의 커밋(${short(code.to)})`
@@ -1288,15 +1290,13 @@ function codeLines(code: StepPreview['code'], keepLabel: string): string[] {
     ]
   }
   return [
-    code.kind === 'keep'
-      ? `[${keepLabel}]: 커밋을 되돌리지 않고 그 위에서 이어서 고칩니다`
-      : '코드를 되돌리지 않습니다',
+    code.kind === 'keep' ? `[${keep.label}]: ${keep.line}` : '코드를 되돌리지 않습니다',
     ...(n ? [`커밋 안 된 변경 ${n}개는 그대로 둡니다`] : []),
   ]
 }
 
 /** 고른 단계의 결과 (D82): 중단할 task, 폐기될 산출물, 코드, 건너뛸 단계, intent */
-function PreviewView({ p, keepLabel }: { p: StepPreview; keepLabel: string }) {
+function PreviewView({ p, keep }: { p: StepPreview; keep: { label: string; line: string } }) {
   return (
     <div className="step-preview" aria-label="미리 보기">
       <div>
@@ -1321,7 +1321,7 @@ function PreviewView({ p, keepLabel }: { p: StepPreview; keepLabel: string }) {
       <section>
         <h3>코드</h3>
         <ul>
-          {codeLines(p.code, keepLabel).map((l) => (
+          {codeLines(p.code, keep).map((l) => (
             <li key={l}>{l}</li>
           ))}
         </ul>
@@ -1454,14 +1454,7 @@ export function StepDialog({
         ))}
       </fieldset>
       {keepOffered ? (
-        <label
-          className="toggle"
-          title={
-            choice?.keepDefault
-              ? '문답으로 정한 결정을 문서에 둔 채 다시 볼 결정만 다시 묻는다'
-              : 'verify가 작은 문제를 찾았을 때 수정을 처음부터 다시 하지 않는다'
-          }
-        >
+        <label className="toggle" title={choice?.keepHint}>
           <input
             type="checkbox"
             checked={keepCode}
@@ -1481,7 +1474,13 @@ export function StepDialog({
       ) : failed ? (
         <div className="error">{failed}</div>
       ) : shown ? (
-        <PreviewView p={shown} keepLabel={choice?.keepLabel ?? '현재 코드 위에서 이어서'} />
+        <PreviewView
+          p={shown}
+          keep={{
+            label: choice?.keepLabel ?? '현재 코드 위에서 이어서',
+            line: choice?.keepCodeLine ?? '커밋을 되돌리지 않고 그 위에서 이어서 고칩니다',
+          }}
+        />
       ) : (
         <div className="dim">미리 보는 중…</div>
       )}
