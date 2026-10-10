@@ -1,0 +1,20 @@
+{
+  "task": "review",
+  "describe": "재시도 수를 두 구성에 한 값으로 답한다(병합)",
+  "ops": [
+    {
+      "op": "set",
+      "path": "answers.q1.values",
+      "value": [
+        {
+          "configs": ["alpha", "beta"],
+          "value": "3"
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "violated": ["m.q.q.retry.merge"],
+    "missed": ["r.rev.retry"]
+  }
+}

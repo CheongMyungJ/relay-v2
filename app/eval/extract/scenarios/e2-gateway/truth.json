@@ -1,0 +1,1131 @@
+{
+  "scenario": "e2-gateway",
+  "note": "정답 파일. 평가 하네스는 repo/만 복사하므로 run에 보이지 않는다. 결과 스키마와 떼어 의미 단위로 쓴다(requirements-extraction-flow.md 17.1).",
+  "canary": "LEAK-9K2M-E2-HERON",
+  "configs": [
+    {
+      "id": "cfg.basic",
+      "name": "basic",
+      "aliases": ["basic", "variant_basic", "gw-400", "gw400"]
+    },
+    {
+      "id": "cfg.pro",
+      "name": "pro",
+      "aliases": ["pro", "variant_pro", "gw-400 pro"]
+    },
+    {
+      "id": "cfg.devkit",
+      "name": "devkit",
+      "aliases": ["devkit", "variant_devkit"]
+    }
+  ],
+  "recall": [
+    {
+      "id": "r.cfg.basic",
+      "tasks": ["survey"],
+      "det": {
+        "config": "basic"
+      },
+      "statement": "basic 구성(make VARIANT=basic, 기본값)"
+    },
+    {
+      "id": "r.cfg.pro",
+      "tasks": ["survey"],
+      "det": {
+        "config": "pro"
+      },
+      "statement": "pro 구성(make VARIANT=pro)"
+    },
+    {
+      "id": "r.cfg.devkit",
+      "tasks": ["survey"],
+      "det": {
+        "config": "devkit"
+      },
+      "statement": "devkit 구성(make VARIANT=devkit, 내부용)"
+    },
+    {
+      "id": "r.inv.reset",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["Reset_Handler"]
+      },
+      "statement": "Reset_Handler(vendor/nimbus/src/startup_n4.c)"
+    },
+    {
+      "id": "r.inv.usart2",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["USART2_IRQHandler"]
+      },
+      "statement": "USART2_IRQHandler: RS-485 idle-line 인터럽트(src/rs485.c)"
+    },
+    {
+      "id": "r.inv.txdma",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["DMA1_Stream6_IRQHandler"]
+      },
+      "statement": "DMA1_Stream6_IRQHandler: RS-485 송신 DMA 완료(src/rs485.c)"
+    },
+    {
+      "id": "r.inv.adcdma",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["DMA2_Stream0_IRQHandler"]
+      },
+      "statement": "DMA2_Stream0_IRQHandler: ADC DMA 반 버퍼(src/sensor.c)"
+    },
+    {
+      "id": "r.inv.tim7",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["TIM7_IRQHandler"]
+      },
+      "statement": "TIM7_IRQHandler: 1 kHz 타임베이스(src/timebase.c)"
+    },
+    {
+      "id": "r.inv.comm",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["mb_task", "comm"]
+      },
+      "statement": "comm 태스크 mb_task(src/modbus.c)"
+    },
+    {
+      "id": "r.inv.sensor",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["sensor_task"]
+      },
+      "statement": "sensor_task(src/sensor.c)"
+    },
+    {
+      "id": "r.inv.wdog",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["wdog_task"]
+      },
+      "statement": "wdog_task(src/wdog.c)"
+    },
+    {
+      "id": "r.inv.cfg",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["cfg_task"]
+      },
+      "statement": "cfg_task: 설정 저장(src/config_store.c)"
+    },
+    {
+      "id": "r.inv.logger",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["logger_task"]
+      },
+      "statement": "logger_task(src/logger.c, pro·devkit)"
+    },
+    {
+      "id": "r.inv.console",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["console_task", "console"]
+      },
+      "statement": "USART1 디버그 콘솔 console_task(src/console.c, devkit)"
+    },
+    {
+      "id": "r.inv.fc03",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["FC03", "FC 03", "0x03", "mb_fc03_read_holding", "Read Holding Registers"]
+      },
+      "statement": "Modbus 함수 03 read holding registers"
+    },
+    {
+      "id": "r.inv.fc06",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["FC06", "FC 06", "0x06", "mb_fc06_write_single", "Write Single Register"]
+      },
+      "statement": "Modbus 함수 06 write single register"
+    },
+    {
+      "id": "r.inv.fc16",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["FC16", "FC 16", "0x10", "mb_fc16_write_multiple", "Write Multiple Registers"]
+      },
+      "statement": "Modbus 함수 16 write multiple registers(pro·devkit)"
+    },
+    {
+      "id": "r.inv.fc43",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["FC43", "FC 43", "0x2B", "mb_fc43_device_id", "Device Identification"]
+      },
+      "statement": "Modbus 함수 43 device identification(pro·devkit)"
+    },
+    {
+      "id": "r.inv.fc08",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["FC08", "FC 08", "0x08", "mb_fc08_diagnostics", "Diagnostics"]
+      },
+      "statement": "Modbus 함수 08 diagnostics(devkit)"
+    },
+    {
+      "id": "r.inv.dma_rx",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["DMA1_Stream5", "DMA1 Stream 5", "DMA1 stream 5"]
+      },
+      "statement": "DMA1 stream 5: RS-485 수신 원형 DMA"
+    },
+    {
+      "id": "r.inv.dma_adc",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["DMA2_Stream0", "DMA2 Stream 0", "DMA2 stream 0", "DMA2_Stream0_IRQHandler"]
+      },
+      "statement": "DMA2 stream 0: ADC 원형 DMA"
+    },
+    {
+      "id": "r.bnd.rtos",
+      "tasks": ["survey"],
+      "det": {
+        "boundary": "third_party/picortos"
+      },
+      "statement": "third_party/picortos는 RTOS 커널 경계(MIT 라이선스)"
+    },
+    {
+      "id": "r.bnd.vendor",
+      "tasks": ["survey"],
+      "det": {
+        "boundary": "vendor/nimbus"
+      },
+      "statement": "vendor/nimbus는 벤더 HAL 경계"
+    },
+    {
+      "id": "r.sv.forced_include",
+      "tasks": ["survey", "trace-variant"],
+      "statement": "구성은 make VARIANT=<이름>으로 고르고, variants/<이름>.mk가 플래그와 소스를 더하며 cfg/variant_<이름>.h를 -include로 모든 번역 단위에 강제로 넣는다(소스에 #include가 없다)"
+    },
+    {
+      "id": "r.cmd.entry",
+      "tasks": ["trace-command"],
+      "statement": "수신: USART2 idle-line 인터럽트가 원형 수신 DMA의 바이트를 프레임으로 복사해 g_mb_rx_q에 넣고, mb_task가 꺼내 길이·CRC·주소를 본 뒤 등록 표에서 처리기를 찾는다"
+    },
+    {
+      "id": "r.cmd.registration",
+      "tasks": ["trace-command", "trace-variant"],
+      "statement": "FC16은 app_init에서 CFG_FEATURE_FC16일 때만 등록된다(pro·devkit). basic에서는 처리기가 없어 예외 01(illegal function)"
+    },
+    {
+      "id": "r.cmd.qty",
+      "tasks": ["trace-command"],
+      "statement": "PDU가 6바이트보다 짧거나, 수량이 0이거나 32(MB_MAX_WRITE_REGS)를 넘거나, byte count가 수량x2가 아니거나 PDU 길이가 맞지 않으면 예외 03"
+    },
+    {
+      "id": "r.cmd.addr",
+      "tasks": ["trace-command"],
+      "statement": "쓰기 전에 범위 안의 모든 주소가 있는지(regs_exists)만 미리 보고, 없으면 예외 02"
+    },
+    {
+      "id": "r.cmd.partial",
+      "tasks": ["trace-command"],
+      "statement": "읽기 전용(예외 02), 범위 밖 값(예외 03), 설정 저장 중(예외 06)은 쓰기 반복 안에서야 걸려, 앞선 레지스터는 이미 쓰이고 저장도 요청된 채 예외를 돌려준다(원자적이지 않다. 문서의 all or nothing과 다르다)"
+    },
+    {
+      "id": "r.cmd.busy",
+      "tasks": ["trace-command"],
+      "statement": "설정 저장 중(g_cfg_busy)에는 regs_write가 REG_BUSY를 내어 예외 06(device busy)"
+    },
+    {
+      "id": "r.cmd.normal",
+      "tasks": ["trace-command"],
+      "statement": "정상이면 레지스터마다 regs_write로 쓰고 설정 레지스터는 config_request_save로 cfg 태스크가 플래시 섹터 11에 저장하며, 응답은 시작 주소와 수량을 되돌린다"
+    },
+    {
+      "id": "r.cmd.apply_reset",
+      "tasks": ["trace-command"],
+      "statement": "슬레이브 주소·보율 레지스터를 써도 g_settings만 바뀌고 실제 주소·보율은 다음 리셋의 시작에서 적용된다"
+    },
+    {
+      "id": "r.cmd.silent",
+      "tasks": ["trace-command"],
+      "statement": "4바이트보다 짧은 프레임과 CRC 오류는 응답 없이 버리고 카운터만 올린다. 브로드캐스트(주소 0)는 실행하지만 응답하지 않는다"
+    },
+    {
+      "id": "r.cmd.reply",
+      "tasks": ["trace-command"],
+      "statement": "응답 전 task_delay(pdMS_TO_TICKS(2))로 기다린 뒤 DE를 올리고 바쁜 대기 후 송신 DMA를 시작하며, 50 ms(MB_TX_TIMEOUT_MS) 안에 완료 세마포어가 오지 않으면 DMA를 멈추고 tx_timeouts를 올린다"
+    },
+    {
+      "id": "r.cmd.de_release",
+      "tasks": ["trace-command", "trace-shared"],
+      "statement": "DE는 송신 DMA 완료 인터럽트에서 내리는데, 이는 DMA가 마지막 바이트를 USART에 넘긴 때라 USART가 그 바이트를 다 내보내기(TC) 전이다. 응답의 마지막 바이트가 버스에서 잘릴 수 있다"
+    },
+    {
+      "id": "r.cmd.t35",
+      "tasks": ["trace-command", "trace-timing"],
+      "statement": "rs485.c 주석은 프레임 끝을 t3.5로 가른다고 하나, 코드는 USART idle-line(문자 하나 시간)으로 가른다"
+    },
+    {
+      "id": "r.tim.tick",
+      "tasks": ["trace-timing", "trace-variant"],
+      "det": {
+        "quantity": "q.tick"
+      },
+      "statement": "RTOS 틱(configTICK_RATE_HZ = CFG_RTOS_TICK_HZ): basic 1000 Hz, pro 500 Hz, devkit 1000 Hz"
+    },
+    {
+      "id": "r.tim.sensor",
+      "tasks": ["trace-timing"],
+      "det": {
+        "quantity": "q.sensor"
+      },
+      "statement": "센서 주기 SENSOR_PERIOD_MS 25는 pdMS_TO_TICKS가 버려 pro에서는 12틱 = 24 ms, basic·devkit은 25 ms"
+    },
+    {
+      "id": "r.tim.resp",
+      "tasks": ["trace-timing"],
+      "statement": "응답 지연 MB_RESP_DELAY_MS 2는 basic·devkit 2틱, pro 1틱이고, task_delay(n)은 틱 경계 때문에 n-1~n틱을 기다려 pro에서는 거의 0 ms일 수 있다"
+    },
+    {
+      "id": "r.tim.txto",
+      "tasks": ["trace-timing"],
+      "det": {
+        "quantity": "q.txto"
+      },
+      "statement": "송신 시간 초과 MB_TX_TIMEOUT_MS 50: 모든 구성 50 ms(basic 50틱, pro 25틱)"
+    },
+    {
+      "id": "r.tim.wdog",
+      "tasks": ["trace-timing"],
+      "statement": "IWDG는 /64, reload 1000이고 LSI 주파수(주석의 명목 32 kHz)가 코드에 없어 약 2 s라는 값은 외부 자료(데이터시트)가 있어야 정해진다"
+    },
+    {
+      "id": "r.tim.timebase",
+      "tasks": ["trace-timing"],
+      "statement": "TIM7 타임베이스는 타이머 클럭을 PCLK1(CPU/4)로 보고 분주를 정한다. N4에서 APB 분주가 1이 아니면 타이머 클럭이 어떻게 되는지는 레퍼런스 매뉴얼에 있어, g_ms(그리고 그것을 쓰는 경보 지연 5 s)의 실제 속도는 외부 자료로 확인해야 한다"
+    },
+    {
+      "id": "r.tim.erase",
+      "tasks": ["trace-timing"],
+      "statement": "설정 저장의 섹터 지우기는 벤더 주석상 전형 0.5 s, 최대 2 s이고 그동안 CPU가 플래시에서 명령을 가져오지 못해 멈춘다. 약 2 s 워치독과 겹칠 수 있다"
+    },
+    {
+      "id": "r.tim.de",
+      "tasks": ["trace-timing"],
+      "statement": "DE 준비 대기는 DE_SETUP_LOOPS 420번의 바쁜 반복이고 주석의 '168 MHz에서 약 10 us'는 반복당 사이클 수에 달려 코드로 정해지지 않으며, basic(84 MHz)에서는 더 길다"
+    },
+    {
+      "id": "r.var.cpu_tick",
+      "tasks": ["trace-variant"],
+      "statement": "CPU 클럭 basic 84 MHz, pro·devkit 168 MHz. RTOS 틱 basic 1000 Hz, pro 500 Hz, devkit 1000 Hz"
+    },
+    {
+      "id": "r.var.baud",
+      "tasks": ["trace-variant"],
+      "statement": "기본 직렬 설정이 basic 19200 8E1, pro·devkit 115200 8N1로 구성마다 다르다(문서는 모든 제품 19200 8E1이라 한다)"
+    },
+    {
+      "id": "r.var.functions",
+      "tasks": ["trace-variant"],
+      "statement": "FC16과 FC43은 pro·devkit, FC08은 devkit(MB_DIAG_ENABLE)에서만 등록된다. FC23 처리기(mb_fc23_read_write)는 있으나 어느 구성에서도 등록되지 않는다(문서는 지원한다고 한다)"
+    },
+    {
+      "id": "r.var.logger",
+      "tasks": ["trace-variant"],
+      "statement": "logger 태스크와 SPI 플래시 로그는 pro·devkit에만 있고, 그 구성에서는 워치독이 logger의 신호도 요구한다"
+    },
+    {
+      "id": "r.var.console",
+      "tasks": ["trace-variant"],
+      "statement": "USART1 디버그 콘솔은 devkit에만 있다(Modbus를 거치지 않고 레지스터를 쓸 수 있다)"
+    },
+    {
+      "id": "r.var.lowpower",
+      "tasks": ["trace-variant"],
+      "statement": "pro만 power.c가 커널의 약한 idle 훅을 덮어써 쉴 때 WFI로 잔다"
+    },
+    {
+      "id": "r.var.assert",
+      "tasks": ["trace-variant"],
+      "statement": "configASSERT는 devkit에서만 켜진다"
+    },
+    {
+      "id": "r.var.channels",
+      "tasks": ["trace-variant"],
+      "statement": "센서 채널 수가 basic 2, pro·devkit 4로 다르다(레지스터 0x0002·0x0003은 4채널 구성에만 있다)"
+    },
+    {
+      "id": "r.var.runtime",
+      "tasks": ["trace-variant"],
+      "statement": "실행 중 선택: 플래시에 저장된 보율 코드와 슬레이브 주소가 유효하면 시작할 때 구성 기본값 대신 쓰인다"
+    },
+    {
+      "id": "r.var.lite",
+      "tasks": ["trace-variant"],
+      "statement": "lite는 variants/lite.mk만 있고 cfg/variant_lite.h가 없어 빌드되지 않는다(문서상 단종)"
+    },
+    {
+      "id": "r.var.shipping",
+      "tasks": ["trace-variant"],
+      "statement": "출하 구성은 코드로 정할 수 없다. 릴리스 노트는 basic과 Pro를 출하한다고 한다(문서 주장)"
+    },
+    {
+      "id": "r.sh.tim7",
+      "tasks": ["trace-shared"],
+      "statement": "TIM7_IRQHandler는 우선순위 2로 configMAX_SYSCALL_INTERRUPT_PRIORITY(5)보다 급한데 queue_send_from_isr를 부른다. 커널 임계 구역이 이 인터럽트를 막지 않아 커널 목록이 깨질 수 있다"
+    },
+    {
+      "id": "r.sh.stats64",
+      "tasks": ["trace-shared"],
+      "statement": "g_stats.rx_frames·rx_bytes는 64비트이고 USART2 ISR가 올리며, regs_read·logger·console이 보호 없이 읽어 32비트 코어에서 찢어진 값을 읽을 수 있다"
+    },
+    {
+      "id": "r.sh.sample_count",
+      "tasks": ["trace-shared"],
+      "statement": "g_sensor.sample_count는 DMA2 stream 0 ISR가 ++하고 sensor_reset_filter가 0으로 지운다. 뮤텍스는 ISR를 막지 못한다"
+    },
+    {
+      "id": "r.sh.reset_filter",
+      "tasks": ["trace-shared"],
+      "statement": "sensor_reset_filter는 주석과 달리 뮤텍스 없이 comm 태스크(우선순위 3, regs_write)에서 불려, 누적 중인 sensor 태스크(우선순위 2)를 선점해 s_acc·s_acc_n을 망칠 수 있다"
+    },
+    {
+      "id": "r.sh.adc_dma",
+      "tasks": ["trace-shared"],
+      "statement": "ADC DMA는 원형으로 계속 쓰고, sensor 태스크는 ISR가 알린 반쪽을 복사 없이 나중에(주기당 한 번) 읽어 DMA가 다시 쓰는 중에 읽을 수 있다"
+    },
+    {
+      "id": "r.sh.rx_tx",
+      "tasks": ["trace-shared"],
+      "statement": "수신 원형 DMA 버퍼는 USART2 ISR에서만 읽어 큐 항목으로 복사하고, 송신 버퍼는 완료 세마포어(또는 시간 초과 뒤 DMA 정지) 뒤에야 다시 쓴다"
+    },
+    {
+      "id": "r.sh.mutex",
+      "tasks": ["trace-shared"],
+      "statement": "g_sensor의 값은 g_sensor_mutex로 sensor 태스크, regs_read(comm), logger 사이에서 보호된다"
+    },
+    {
+      "id": "r.sh.settings",
+      "tasks": ["trace-shared"],
+      "statement": "g_settings는 comm 태스크(devkit은 console 태스크도)가 잠금 없이 쓰고 sensor(경보)와 cfg 태스크가 읽는다"
+    },
+    {
+      "id": "r.sh.prios",
+      "tasks": ["trace-shared"],
+      "statement": "인터럽트 우선순위: TIM7 2, USART2 5, DMA1 stream 6 5, DMA2 stream 0 6. 태스크: wdog 4, comm 3, sensor 2, cfg 1, logger 1"
+    },
+    {
+      "id": "r.int.resolves_resp",
+      "tasks": ["integrate"],
+      "det": {
+        "link": {
+          "kind": "resolves",
+          "from": ["c-0043"],
+          "to": ["c-0069", "c-0062"]
+        }
+      },
+      "statement": "trace-command의 미확정 c-0043(응답 지연이 구성마다 몇 틱인지)를 뒤 trace-timing의 c-0069(basic·devkit 2틱, pro 1틱)나 c-0062이 푼다(resolves)"
+    },
+    {
+      "id": "r.int.supersedes_sensor",
+      "tasks": ["integrate"],
+      "det": {
+        "link": {
+          "kind": "supersedes",
+          "from": ["c-0061"],
+          "to": ["c-0068"]
+        }
+      },
+      "statement": "같은 timing 단위를 이어 돈 run의 수치 c-0068(pro 12틱 = 24 ms)가 앞 run의 수치 c-0061(세 구성 모두 25 ms)를 대신한다(supersedes)"
+    },
+    {
+      "id": "r.int.merge_de",
+      "tasks": ["integrate"],
+      "det": {
+        "link": {
+          "kind": "merges",
+          "from": ["c-0037", "c-0057"],
+          "to": ["c-0037", "c-0057"]
+        }
+      },
+      "statement": "c-0037와 c-0057(DE를 DMA 완료에서 내려 마지막 바이트가 잘릴 수 있다)는 같은 구성의 같은 말이라 합친다(merges)"
+    },
+    {
+      "id": "r.int.conflict_filter",
+      "tasks": ["integrate"],
+      "det": {
+        "link": {
+          "kind": "conflicts",
+          "from": ["c-0039"],
+          "to": ["c-0051"]
+        }
+      },
+      "statement": "c-0039(sensor_reset_filter는 뮤텍스를 잡은 채 불린다)와 c-0051(뮤텍스 없이 comm 태스크에서 불린다)는 함께 설 수 없다(conflicts)"
+    },
+    {
+      "id": "r.int.conflict_side",
+      "tasks": ["integrate"],
+      "statement": "c-0039와 c-0051의 충돌 연결 이유가 코드는 뮤텍스 없이 불린다는 쪽(regs_write가 잠금 없이 sensor_reset_filter를 부름, 주석만 뮤텍스를 말함)을 지지한다고 밝힌다"
+    },
+    {
+      "id": "r.int.cov_commands",
+      "tasks": ["integrate"],
+      "det": {
+        "coverage": {
+          "perspective": "commands",
+          "configs": ["devkit"],
+          "status": ["unreached"]
+        }
+      },
+      "statement": "commands 관점에서 devkit의 명령 경로(USART1 디버그 콘솔, FC08)는 어느 단위도 닿지 않았다(unreached, 제안 단위)"
+    },
+    {
+      "id": "r.int.unit_console",
+      "tasks": ["integrate"],
+      "det": {
+        "unit": {
+          "lens": "command",
+          "tokens": ["console_task", "console.c", "console", "콘솔", "USART1"]
+        }
+      },
+      "statement": "devkit의 디버그 콘솔(console_task, Modbus를 거치지 않는 레지스터 쓰기) 경로를 추적할 command 단위를 제안한다"
+    },
+    {
+      "id": "r.int.cov_concurrency",
+      "tasks": ["integrate"],
+      "det": {
+        "coverage": {
+          "perspective": "concurrency",
+          "configs": ["basic", "pro", "devkit"],
+          "status": ["covered"]
+        }
+      },
+      "statement": "concurrency 관점은 세 구성 모두 trace-shared의 주장이 덮는다(covered, ids)"
+    },
+    {
+      "id": "r.rev.maxregs",
+      "tasks": ["review"],
+      "det": {
+        "answer_value": {
+          "question": "q1",
+          "quantity": "q.maxregs"
+        }
+      },
+      "statement": "q1(MB_MAX_WRITE_REGS)의 답: pro·devkit 32"
+    },
+    {
+      "id": "r.rev.tick",
+      "tasks": ["review"],
+      "det": {
+        "answer_value": {
+          "question": "q2",
+          "quantity": "q.tick"
+        }
+      },
+      "statement": "q2(CFG_RTOS_TICK_HZ)의 답: basic 1000 Hz, pro 500 Hz, devkit 1000 Hz"
+    },
+    {
+      "id": "r.rev.fc43_cfg",
+      "tasks": ["review"],
+      "det": {
+        "answer_configs": {
+          "question": "q3",
+          "configs": ["pro", "devkit"]
+        }
+      },
+      "statement": "q3(FC43이 빌드되고 닿는 구성)의 답: pro와 devkit"
+    },
+    {
+      "id": "r.rev.settings",
+      "tasks": ["review"],
+      "det": {
+        "verdict": {
+          "statement": "s1",
+          "accept": ["refuted", "overclaimed"]
+        }
+      },
+      "statement": "s1(g_settings를 regs_write 밖에서 쓰는 곳이 없다)을 반박한다"
+    },
+    {
+      "id": "r.rev.settings_why",
+      "tasks": ["review"],
+      "statement": "s1(g_settings를 regs_write 밖에서 쓰는 곳이 없다는 서술)의 반박 근거로 config_load(시작할 때 플래시의 설정이나 기본값으로 g_settings를 채움)를 든다"
+    },
+    {
+      "id": "r.rev.wdog_all",
+      "tasks": ["review"],
+      "det": {
+        "verdict": {
+          "statement": "s3",
+          "accept": ["overclaimed", "refuted"]
+        }
+      },
+      "statement": "s3(워치독이 모든 구성에서 logger 신호를 요구한다)을 범위 과장이나 반박으로 판정한다(pro·devkit만)"
+    },
+    {
+      "id": "r.sum.risk_iwdg",
+      "tasks": ["summarize"],
+      "det": {
+        "cites": {
+          "ids": ["c-0074"],
+          "where": "risks"
+        }
+      },
+      "statement": "위험에 열린 미확정 c-0074(IWDG 시간 초과, LSI 데이터시트 필요)를 든다"
+    },
+    {
+      "id": "r.sum.risk_timebase",
+      "tasks": ["summarize"],
+      "det": {
+        "cites": {
+          "ids": ["c-0075"],
+          "where": "risks"
+        }
+      },
+      "statement": "위험에 열린 미확정 c-0075(TIM7 타이머 클럭, 레퍼런스 매뉴얼 필요)를 든다"
+    },
+    {
+      "id": "r.sum.risk_de",
+      "tasks": ["summarize"],
+      "det": {
+        "cites": {
+          "ids": ["c-0076"],
+          "where": "risks"
+        }
+      },
+      "statement": "위험에 열린 미확정 c-0076(DE 준비 대기, 측정 필요)를 든다"
+    },
+    {
+      "id": "r.sum.risk_shipping",
+      "tasks": ["summarize"],
+      "det": {
+        "cites": {
+          "ids": ["c-0096"],
+          "where": "risks"
+        }
+      },
+      "statement": "위험에 열린 미확정 c-0096(출하 구성은 코드로 정할 수 없다)를 든다"
+    },
+    {
+      "id": "r.sum.low_settings",
+      "tasks": ["summarize"],
+      "det": {
+        "cites": {
+          "ids": ["c-0047"],
+          "where": "risks"
+        }
+      },
+      "statement": "위험에 검토가 반박한 c-0047(g_settings의 다른 쓰기가 없다는 부재 주장)를 든다"
+    },
+    {
+      "id": "r.sum.low_wdog",
+      "tasks": ["summarize"],
+      "det": {
+        "cites": {
+          "ids": ["c-0066"],
+          "where": "risks"
+        }
+      },
+      "statement": "위험에 검토가 범위 과장으로 내린 c-0066(워치독이 모든 구성에서 logger 신호를 요구한다)를 든다"
+    },
+    {
+      "id": "r.sum.low_maxregs",
+      "tasks": ["summarize"],
+      "det": {
+        "cites": {
+          "ids": ["c-0040"],
+          "where": "risks"
+        }
+      },
+      "statement": "위험에 검토의 답과 어긋난 c-0040(FC16 쓰기 상한)를 든다"
+    },
+    {
+      "id": "r.sum.low_fc43",
+      "tasks": ["summarize"],
+      "det": {
+        "cites": {
+          "ids": ["c-0019"],
+          "where": "risks"
+        }
+      },
+      "statement": "위험에 검토의 답과 어긋난 c-0019(FC43이 모든 구성에 있다)를 든다"
+    },
+    {
+      "id": "r.sum.risk_conflict",
+      "tasks": ["summarize"],
+      "det": {
+        "cites": {
+          "ids": ["c-0044", "c-0039", "c-0051"],
+          "where": "risks",
+          "any": true
+        }
+      },
+      "statement": "위험에 충돌(c-0044 FC16 all or nothing 문서와 부분 쓰기, c-0039·c-0051 sensor_reset_filter의 뮤텍스) 가운데 하나 이상을 든다"
+    },
+    {
+      "id": "r.sum.partial",
+      "tasks": ["summarize"],
+      "det": {
+        "cites": {
+          "ids": ["u-0007", "u-0008"],
+          "where": "risks",
+          "any": true
+        }
+      },
+      "statement": "위험에 보류된 단위(u-0007 다른 기능 코드와 콘솔, u-0008 시작 순서)를 든다"
+    },
+    {
+      "id": "r.sum.partial_said",
+      "tasks": ["summarize"],
+      "statement": "개요, handoff 요약이나 위험이 이 분석이 부분 분석(run 상한에서 멈춰 보류된 단위가 있음)이라 요구사항을 놓쳤을 수 있다고 밝힌다"
+    }
+  ],
+  "must_not": [
+    {
+      "id": "m.cfg.lite",
+      "tasks": ["survey", "trace-variant"],
+      "det": {
+        "config_confirmed": ["lite", "variant_lite"]
+      },
+      "statement": "lite를 빌드되는(확인된) 구성으로 다룬다"
+    },
+    {
+      "id": "m.fc23",
+      "tasks": ["survey", "trace-command", "trace-variant"],
+      "det": {
+        "config_none": {
+          "tokens": ["FC23", "FC 23", "0x17", "mb_fc23_read_write", "Read/Write Multiple"]
+        }
+      },
+      "statement": "FC23(read/write multiple)을 어느 구성에서 지원한다고 한다"
+    },
+    {
+      "id": "m.merge.fc16",
+      "tasks": ["survey"],
+      "det": {
+        "config_only": {
+          "tokens": ["FC16", "FC 16", "mb_fc16_write_multiple", "Write Multiple Registers"],
+          "configs": ["pro", "devkit"]
+        }
+      },
+      "statement": "FC16을 basic에도 있다고 한다"
+    },
+    {
+      "id": "m.merge.fc43",
+      "tasks": ["survey"],
+      "det": {
+        "config_only": {
+          "tokens": ["FC43", "FC 43", "mb_fc43_device_id", "Device Identification"],
+          "configs": ["pro", "devkit"]
+        }
+      },
+      "statement": "FC43을 basic에도 있다고 한다"
+    },
+    {
+      "id": "m.merge.fc08",
+      "tasks": ["survey"],
+      "det": {
+        "config_only": {
+          "tokens": ["FC08", "FC 08", "mb_fc08_diagnostics", "Diagnostics"],
+          "configs": ["devkit"]
+        }
+      },
+      "statement": "FC08을 devkit 밖에도 있다고 한다"
+    },
+    {
+      "id": "m.merge.logger",
+      "tasks": ["survey"],
+      "det": {
+        "config_only": {
+          "tokens": ["logger_task"],
+          "configs": ["pro", "devkit"]
+        }
+      },
+      "statement": "logger 태스크를 basic에도 있다고 한다"
+    },
+    {
+      "id": "m.merge.console",
+      "tasks": ["survey"],
+      "det": {
+        "config_only": {
+          "tokens": ["console_task"],
+          "configs": ["devkit"]
+        }
+      },
+      "statement": "디버그 콘솔을 devkit 밖에도 있다고 한다"
+    },
+    {
+      "id": "m.fc16_basic",
+      "tasks": ["trace-command", "trace-variant"],
+      "statement": "FC16을 basic에서도 처리한다고 한다"
+    },
+    {
+      "id": "m.fc16_atomic",
+      "tasks": ["trace-command"],
+      "statement": "FC16이 원자적(all or nothing)이라 오류면 아무 레지스터도 바뀌지 않는다고 한다"
+    },
+    {
+      "id": "m.crc_ccitt",
+      "tasks": ["trace-command"],
+      "statement": "CRC가 문서대로 CRC-16/CCITT라고 한다(코드는 Modbus CRC: 0xA001 반사, 초기 0xFFFF)"
+    },
+    {
+      "id": "m.t35",
+      "tasks": ["trace-command", "trace-timing"],
+      "statement": "프레임 끝을 t3.5 무음 간격으로 가른다고 확정한다"
+    },
+    {
+      "id": "m.latency_req",
+      "tasks": ["trace-command", "trace-timing"],
+      "statement": "시험 보고서의 응답 시간(최대 6.2 ms·3.1 ms)이나 문서의 10 ms를 관찰값·문서 주장이라고 밝히지 않고 보장된 요구로 확정한다"
+    },
+    {
+      "id": "m.sensor_25_all",
+      "tasks": ["trace-timing", "trace-variant"],
+      "statement": "센서 주기가 모든 구성에서 25 ms라고 확정한다"
+    },
+    {
+      "id": "m.iwdg_exact",
+      "tasks": ["trace-timing"],
+      "statement": "LSI 주파수를 주석이나 코드만으로 정해진 값처럼 써서 워치독 시간 초과(예: 약 2 s)를 확인된 요구·제약으로 확정한다. LSI를 가정, 주석의 주장, 외부 자료가 필요한 것으로 밝혔으면 위반이 아니다"
+    },
+    {
+      "id": "m.timebase_exact",
+      "tasks": ["trace-timing"],
+      "statement": "TIM7 타이머 클럭을 PCLK1과 같다고 단정해 g_ms가 정확히 1 ms(경보 지연이 정확히 5 s)라고 확인된 사실로 확정한다. 코드의 가정이라고 밝혔거나 외부 자료가 필요하다고 적었으면 위반이 아니다"
+    },
+    {
+      "id": "m.de_exact",
+      "tasks": ["trace-timing"],
+      "statement": "DE 준비 대기가 모든 구성에서 10 us라고 확정한다"
+    },
+    {
+      "id": "m.baud_all",
+      "tasks": ["trace-variant"],
+      "statement": "모든 구성의 기본 직렬 설정이 문서대로 19200 8E1이라고 한다"
+    },
+    {
+      "id": "m.shipping",
+      "tasks": ["survey", "trace-variant"],
+      "statement": "어떤 구성이 출하되는지 코드로 확인된 사실처럼 쓴다"
+    },
+    {
+      "id": "m.tim7_ok",
+      "tasks": ["trace-shared"],
+      "statement": "모든 인터럽트가 커널 호출 규칙을 지킨다거나 TIM7의 queue_send_from_isr 호출이 안전하다고 한다"
+    },
+    {
+      "id": "m.mutex_isr",
+      "tasks": ["trace-shared"],
+      "statement": "g_sensor_mutex가 g_sensor를 DMA 인터럽트로부터도 보호한다고 한다"
+    },
+    {
+      "id": "m.tx_race",
+      "tasks": ["trace-shared"],
+      "statement": "송신 버퍼 s_tx_buf가 DMA가 보내는 중에 덮어써진다고 한다"
+    },
+    {
+      "id": "m.int.timebase_resolved",
+      "tasks": ["integrate"],
+      "det": {
+        "link_forbid": {
+          "kind": "resolves",
+          "from": ["c-0075"]
+        }
+      },
+      "statement": "레퍼런스 매뉴얼이 있어야 정해지는 미확정 c-0075(TIM7 타이머 클럭)를 뒤 주장(예: timebase.c 주석을 되풀이한 c-0094)이 푼다고 잇는다"
+    },
+    {
+      "id": "m.int.merge_sensor",
+      "tasks": ["integrate"],
+      "det": {
+        "link_forbid": {
+          "from": ["c-0092", "c-0093"],
+          "to": ["c-0092", "c-0093"]
+        }
+      },
+      "statement": "같은 글이지만 구성이 다른 두 주장 c-0092(basic·devkit, 25 ms)와 c-0093(pro, 24 ms)를 잇거나 합친다"
+    },
+    {
+      "id": "m.int.timebase_settled",
+      "tasks": ["integrate"],
+      "statement": "TIM7 타이머 클럭이 PCLK1과 같아 g_ms가 정확히 1 ms라고(경보 지연이 정확히 5 s라고) 링크 이유, coverage 메모, 단위, 미확정 어디에서든 확정한다. 코드의 가정이라거나 레퍼런스 매뉴얼이 필요하다고 밝혔으면 위반이 아니다"
+    },
+    {
+      "id": "m.int.gid",
+      "tasks": ["integrate"],
+      "det": {
+        "gid_unknown": true
+      },
+      "statement": "패킷과 기록 목록에 없는 전역 ID를 가리킨다"
+    },
+    {
+      "id": "m.rev.fc23",
+      "tasks": ["review"],
+      "det": {
+        "verdict_forbid": {
+          "statement": "s2",
+          "forbid": ["refuted", "overclaimed"]
+        }
+      },
+      "statement": "s2(mb_fc23_read_write를 등록하는 곳이 없다)를 반박하거나 범위 과장이라 한다"
+    },
+    {
+      "id": "m.rev.ct",
+      "tasks": ["review"],
+      "det": {
+        "verdict_forbid": {
+          "statement": "s4",
+          "forbid": ["refuted", "overclaimed"]
+        }
+      },
+      "statement": "s4(sample_count를 태스크에서 지울 때 DMA2 stream 0 인터럽트를 막아야 한다)를 반박하거나 범위 과장이라 한다"
+    },
+    {
+      "id": "m.rev.req",
+      "tasks": ["review"],
+      "det": {
+        "verdict_forbid": {
+          "statement": "s5",
+          "forbid": ["refuted", "overclaimed"]
+        }
+      },
+      "statement": "s5(FC16 수량이 틀리면 아무것도 쓰지 않고 예외 03)를 반박하거나 범위 과장이라 한다"
+    },
+    {
+      "id": "m.sum.gid",
+      "tasks": ["summarize"],
+      "det": {
+        "gid_unknown": true
+      },
+      "statement": "패킷에 없는 전역 ID를 가리킨다"
+    },
+    {
+      "id": "m.sum.confirmed",
+      "tasks": ["summarize"],
+      "statement": "검토에서 반박되지 않았거나 검토하지 않은 주장·후보(요구·제약 후보, 수치, 답 후보가 있는 미확정)를 확인된·보장된·검증된 것으로 쓴다(예: 'FC16의 수량 검사가 검증됐다'). '후보', '확인되지 않음', '반박되지 않음'으로 적었으면 위반이 아니다"
+    },
+    {
+      "id": "m.sum.lowered_ok",
+      "tasks": ["summarize"],
+      "statement": "검토가 내린 주장(g_settings를 regs_write만 쓴다, FC43이 모든 구성에 있다, 워치독이 모든 구성에서 logger 신호를 요구한다, 쓰기 상한이 64다)을 맞는 것처럼 쓴다"
+    },
+    {
+      "id": "m.sum.all_found",
+      "tasks": ["summarize"],
+      "statement": "모든 요구사항을 찾았다거나 분석이 펌웨어 전체를 빠짐없이 덮었다고 쓴다"
+    },
+    {
+      "id": "m.sum.timebase",
+      "tasks": ["summarize"],
+      "statement": "g_ms가 정확히 1 ms이거나 경보 지연이 정확히 5 s라고 확정한다. 타이머 클럭이 외부 자료로 확인해야 한다고 밝혔으면 위반이 아니다"
+    }
+  ],
+  "resolvable": [
+    {
+      "id": "v.tick",
+      "tasks": ["trace-timing", "trace-variant"],
+      "statement": "구성별 RTOS 틱(1000/500/1000 Hz)은 생성 헤더로 정해진다"
+    },
+    {
+      "id": "v.sensor_ms",
+      "tasks": ["trace-timing"],
+      "statement": "구성별 센서 주기(pro 24 ms, 나머지 25 ms)는 코드로 정해진다"
+    },
+    {
+      "id": "v.fc16_configs",
+      "tasks": ["survey", "trace-command", "trace-variant"],
+      "statement": "FC16이 어느 구성에 있는지는 app_init과 생성 헤더로 정해진다"
+    },
+    {
+      "id": "v.crc",
+      "tasks": ["trace-command"],
+      "statement": "CRC 매개변수는 mb_crc16으로 정해진다"
+    },
+    {
+      "id": "v.lite",
+      "tasks": ["survey", "trace-variant"],
+      "statement": "lite가 빌드되지 않음은 cfg/variant_lite.h가 없음으로 정해진다"
+    },
+    {
+      "id": "v.int.resp",
+      "tasks": ["integrate"],
+      "statement": "trace-command의 미확정 c-0043(응답 지연의 틱 수)는 기록의 trace-timing 수치 c-0069로 풀린다"
+    },
+    {
+      "id": "v.rev.maxregs",
+      "tasks": ["review"],
+      "statement": "q1(MB_MAX_WRITE_REGS)은 modbus.h로 정해진다"
+    }
+  ],
+  "quantities": [
+    {
+      "id": "q.tick",
+      "symbols": ["CFG_RTOS_TICK_HZ", "configTICK_RATE_HZ"],
+      "tasks": ["trace-timing", "trace-variant"],
+      "per_config": {
+        "basic": {
+          "hz": [1000],
+          "ms": [1]
+        },
+        "pro": {
+          "hz": [500],
+          "ms": [2]
+        },
+        "devkit": {
+          "hz": [1000],
+          "ms": [1]
+        }
+      },
+      "unit_derivable": true
+    },
+    {
+      "id": "q.sensor",
+      "symbols": ["SENSOR_PERIOD_MS"],
+      "tasks": ["trace-timing"],
+      "per_config": {
+        "basic": {
+          "ms": [25],
+          "tick": [25]
+        },
+        "pro": {
+          "ms": [24],
+          "tick": [12]
+        },
+        "devkit": {
+          "ms": [25],
+          "tick": [25]
+        }
+      },
+      "unit_derivable": true,
+      "merge_id": "m.sensor_25_all"
+    },
+    {
+      "id": "q.resp",
+      "symbols": ["MB_RESP_DELAY_MS"],
+      "tasks": ["trace-timing"],
+      "per_config": {
+        "basic": {
+          "ms": [1, 2],
+          "tick": [2]
+        },
+        "pro": {
+          "ms": [0, 1, 2],
+          "tick": [1]
+        },
+        "devkit": {
+          "ms": [1, 2],
+          "tick": [2]
+        }
+      },
+      "unit_derivable": true
+    },
+    {
+      "id": "q.txto",
+      "symbols": ["MB_TX_TIMEOUT_MS"],
+      "tasks": ["trace-timing", "trace-command"],
+      "per_config": {
+        "basic": {
+          "ms": [50],
+          "tick": [50]
+        },
+        "pro": {
+          "ms": [50],
+          "tick": [25]
+        },
+        "devkit": {
+          "ms": [50],
+          "tick": [50]
+        }
+      },
+      "unit_derivable": true
+    },
+    {
+      "id": "q.idle",
+      "symbols": ["MB_IDLE_POLL_MS"],
+      "tasks": ["trace-timing"],
+      "per_config": {
+        "basic": {
+          "ms": [100],
+          "tick": [100]
+        },
+        "pro": {
+          "ms": [100],
+          "tick": [50]
+        },
+        "devkit": {
+          "ms": [100],
+          "tick": [100]
+        }
+      },
+      "unit_derivable": true
+    },
+    {
+      "id": "q.wdog_check",
+      "symbols": ["WDOG_CHECK_MS"],
+      "tasks": ["trace-timing"],
+      "per_config": {
+        "basic": {
+          "ms": [500],
+          "tick": [500]
+        },
+        "pro": {
+          "ms": [500],
+          "tick": [250]
+        },
+        "devkit": {
+          "ms": [500],
+          "tick": [500]
+        }
+      },
+      "unit_derivable": true
+    },
+    {
+      "id": "q.iwdg",
+      "symbols": ["IWDG_RELOAD", "IWDG_PRESCALER_DIV64", "IWDG"],
+      "tasks": ["trace-timing"],
+      "per_config": {},
+      "unit_derivable": false,
+      "overclaim_id": "m.iwdg_exact",
+      "note": "LSI 주파수가 코드에 없다"
+    },
+    {
+      "id": "q.timebase",
+      "symbols": ["g_ms", "TIM7", "ALARM_DELAY_MS", "timebase_ms"],
+      "tasks": ["trace-timing"],
+      "per_config": {},
+      "unit_derivable": false,
+      "overclaim_id": "m.timebase_exact",
+      "note": "타이머 클럭과 APB 분주의 관계가 레퍼런스 매뉴얼에 있다"
+    },
+    {
+      "id": "q.de",
+      "symbols": ["DE_SETUP_LOOPS"],
+      "tasks": ["trace-timing"],
+      "per_config": {},
+      "unit_derivable": false,
+      "overclaim_id": "m.de_exact",
+      "note": "반복당 사이클 수를 코드로 알 수 없다"
+    },
+    {
+      "id": "q.maxregs",
+      "symbols": ["MB_MAX_WRITE_REGS"],
+      "tasks": ["trace-command"],
+      "per_config": {
+        "pro": {
+          "count": [32],
+          "": [32]
+        },
+        "devkit": {
+          "count": [32],
+          "": [32]
+        }
+      },
+      "unit_derivable": true
+    }
+  ]
+}

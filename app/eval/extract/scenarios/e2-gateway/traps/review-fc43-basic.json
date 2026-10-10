@@ -1,0 +1,14 @@
+{
+  "task": "review",
+  "describe": "FC43이 basic에도 있다고 답한다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "answers.q3.configs",
+      "value": ["basic", "pro", "devkit"]
+    }
+  ],
+  "expect": {
+    "missed": ["r.rev.fc43_cfg"]
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "task": "survey",
+  "describe": "lite를 확인된 구성으로 둔다(생성 헤더가 없다)",
+  "ops": [
+    {
+      "op": "set",
+      "path": "configs.3.status",
+      "value": "confirmed"
+    }
+  ],
+  "expect": {
+    "violated": ["m.cfg.lite"]
+  }
+}

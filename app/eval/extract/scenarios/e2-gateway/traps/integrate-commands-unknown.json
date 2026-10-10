@@ -1,0 +1,21 @@
+{
+  "task": "integrate",
+  "describe": "devkit의 콘솔 경로를 unknown으로 두고 단위를 제안하지 않는다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "coverage.commands.1",
+      "value": {
+        "configs": ["devkit"],
+        "status": "unknown",
+        "ids": [],
+        "units": [],
+        "searches": [],
+        "note": ""
+      }
+    }
+  ],
+  "expect": {
+    "missed": ["r.int.cov_commands"]
+  }
+}

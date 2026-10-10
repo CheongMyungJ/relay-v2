@@ -249,9 +249,12 @@ export async function drive(
         }
         case 'asking':
         case 'input_needed': {
-          // 첫 선택지(추천)로 답한다. 여러 질문이면 Enter를 여러 번 누른다 (S2)
+          // 첫 선택지(추천)로 답한다. 여러 질문이면 Enter를 여러 번 누른다 (S2). 여러 개 고르는 질문은 Enter가 체크만
+          // 바꾸므로, 화면(ScreenUi)에 체크된 항목이 보이면 Tab으로 다음 질문(마지막은 Submit)으로 간다
+          const screen = (ui as { screen?: (key: string) => string }).screen
           for (let i = 0; i < 10; i++) {
-            relay.terminalWrite(task.terminal, '\r')
+            const checked = screen ? /\[✔\]/.test(screen.call(ui, task.terminal)) : false
+            relay.terminalWrite(task.terminal, checked ? '\t' : '\r')
             out.answers++
             const moved = await ui
               .until(

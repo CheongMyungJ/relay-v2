@@ -1,0 +1,419 @@
+{
+  "outcome": "done",
+  "outcome_reason": "빌드 파일, 시작 코드, 명령 테이블을 모두 봤다.",
+  "configs": [
+    {
+      "key": "c1",
+      "name": "alpha",
+      "status": "confirmed",
+      "select": "make alpha (-DBOARD_ALPHA)",
+      "build_command": "make alpha",
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "Makefile",
+          "start": 23,
+          "end": 24,
+          "quote": "alpha: CFLAGS += -DBOARD_ALPHA alpha: build/alpha/thermo.bin",
+          "command": null
+        }
+      ]
+    },
+    {
+      "key": "c2",
+      "name": "beta",
+      "status": "confirmed",
+      "select": "make beta (-DBOARD_BETA)",
+      "build_command": "make beta",
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "Makefile",
+          "start": 27,
+          "end": 28,
+          "quote": "beta: CFLAGS += -DBOARD_BETA ... beta: build/beta/thermo.bin",
+          "command": null
+        }
+      ]
+    },
+    {
+      "key": "c3",
+      "name": "gamma",
+      "status": "candidate",
+      "select": "BOARD_GAMMA (README에만 있고 Makefile 타깃과 build_cfg_gamma.h가 없음)",
+      "build_command": null,
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "include/board.h",
+          "start": 14,
+          "end": 15,
+          "quote": "#elif defined(BOARD_GAMMA) #include \"build_cfg_gamma.h\"",
+          "command": null
+        },
+        {
+          "kind": "doc_claim",
+          "path": "README.md",
+          "start": 9,
+          "end": 9,
+          "quote": "- GAMMA: low-cost variant.",
+          "command": null
+        }
+      ]
+    }
+  ],
+  "inventory": [
+    {
+      "key": "i1",
+      "kind": "reset",
+      "name": "Reset_Handler",
+      "configs": ["all"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "vendor/acme/startup_acme.c",
+          "start": 15,
+          "end": 15,
+          "quote": "void Reset_Handler(void)",
+          "command": null
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "key": "i2",
+      "kind": "isr",
+      "name": "SysTick_Handler",
+      "configs": ["all"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/timer.c",
+          "start": 28,
+          "end": 30,
+          "quote": "void SysTick_Handler(void) { g_ticks++;",
+          "command": null
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "key": "i3",
+      "kind": "isr",
+      "name": "USART1_IRQHandler",
+      "configs": ["all"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/uart.c",
+          "start": 36,
+          "end": 36,
+          "quote": "void USART1_IRQHandler(void)",
+          "command": null
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "key": "i4",
+      "kind": "isr",
+      "name": "ADC1_IRQHandler",
+      "configs": ["all"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/adc.c",
+          "start": 35,
+          "end": 35,
+          "quote": "void ADC1_IRQHandler(void)",
+          "command": null
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "key": "i5",
+      "kind": "isr",
+      "name": "TIM3_IRQHandler",
+      "configs": ["beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/fan.c",
+          "start": 42,
+          "end": 42,
+          "quote": "void TIM3_IRQHandler(void)",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "Makefile",
+          "start": 17,
+          "end": 17,
+          "quote": "SRCS_beta := src/fan.c",
+          "command": null
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "key": "i6",
+      "kind": "main_loop",
+      "name": "main",
+      "configs": ["all"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/main.c",
+          "start": 18,
+          "end": 18,
+          "quote": "int main(void)",
+          "command": null
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "key": "i7",
+      "kind": "command_table",
+      "name": "cmd_table",
+      "configs": ["all"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/cmd.c",
+          "start": 125,
+          "end": 125,
+          "quote": "static const struct cmd_entry cmd_table[] = {",
+          "command": null
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "key": "i8",
+      "kind": "command",
+      "name": "GET_TEMP",
+      "configs": ["all"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/cmd.c",
+          "start": 126,
+          "end": 126,
+          "quote": "{ CMD_GET_TEMP,     0U, 0U, cmd_get_temp },",
+          "command": null
+        }
+      ],
+      "notes": "0x01"
+    },
+    {
+      "key": "i9",
+      "kind": "command",
+      "name": "SET_SETPOINT",
+      "configs": ["all"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/cmd.c",
+          "start": 127,
+          "end": 127,
+          "quote": "{ CMD_SET_SETPOINT, 2U, 2U, cmd_set_setpoint },",
+          "command": null
+        }
+      ],
+      "notes": "0x02"
+    },
+    {
+      "key": "i10",
+      "kind": "command",
+      "name": "GET_STATUS",
+      "configs": ["all"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/cmd.c",
+          "start": 128,
+          "end": 128,
+          "quote": "{ CMD_GET_STATUS,   0U, 0U, cmd_get_status },",
+          "command": null
+        }
+      ],
+      "notes": "0x03"
+    },
+    {
+      "key": "i11",
+      "kind": "command",
+      "name": "RESET_FAULT",
+      "configs": ["all"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/cmd.c",
+          "start": 129,
+          "end": 129,
+          "quote": "{ CMD_RESET_FAULT,  1U, 1U, cmd_reset_fault },",
+          "command": null
+        }
+      ],
+      "notes": "0x04"
+    },
+    {
+      "key": "i12",
+      "kind": "command",
+      "name": "SET_MODE",
+      "configs": ["alpha"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/cmd.c",
+          "start": 131,
+          "end": 131,
+          "quote": "{ CMD_SET_MODE,     1U, 1U, cmd_set_mode },",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "config/build_cfg_alpha.h",
+          "start": 11,
+          "end": 11,
+          "quote": "#define CFG_FEATURE_MODE    1",
+          "command": null
+        }
+      ],
+      "notes": "0x05"
+    },
+    {
+      "key": "i13",
+      "kind": "command",
+      "name": "SET_FAN",
+      "configs": ["beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/cmd.c",
+          "start": 134,
+          "end": 134,
+          "quote": "{ CMD_SET_FAN,      1U, 1U, cmd_set_fan },",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "config/build_cfg_beta.h",
+          "start": 12,
+          "end": 12,
+          "quote": "#define CFG_FEATURE_FAN     1",
+          "command": null
+        }
+      ],
+      "notes": "0x06"
+    },
+    {
+      "key": "i14",
+      "kind": "command",
+      "name": "GET_VERSION",
+      "configs": ["all"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/cmd.c",
+          "start": 136,
+          "end": 136,
+          "quote": "{ CMD_GET_VERSION,  0U, 0U, cmd_get_version },",
+          "command": null
+        }
+      ],
+      "notes": "0x10"
+    },
+    {
+      "key": "i15",
+      "kind": "interface",
+      "name": "USART1 host link",
+      "configs": ["all"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/uart.c",
+          "start": 18,
+          "end": 18,
+          "quote": "USART1->BRR = (uint32_t)(CFG_CPU_HZ / CFG_UART_BAUD);",
+          "command": null
+        }
+      ],
+      "notes": "115200 baud"
+    }
+  ],
+  "boundaries": [
+    {
+      "key": "b1",
+      "path": "vendor/acme",
+      "kind": "vendor_hal",
+      "reason": "Acme 라이선스 머리말",
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "vendor/acme/acme_m3.h",
+          "start": 5,
+          "end": 5,
+          "quote": "Licensed under the Acme Software License Agreement v1.2.",
+          "command": null
+        }
+      ]
+    }
+  ],
+  "units": [
+    {
+      "key": "u1",
+      "purpose": "SET_SETPOINT 명령 경로",
+      "lens": "command",
+      "scope": "src/cmd.c, src/proto.c",
+      "priority": "high",
+      "depends_on": [],
+      "reason": "설정 변경과 저장"
+    },
+    {
+      "key": "u2",
+      "purpose": "시간 상수",
+      "lens": "timing",
+      "scope": "proto.h, control.h, wdt.c",
+      "priority": "high",
+      "depends_on": [],
+      "reason": "구성마다 틱이 다름"
+    },
+    {
+      "key": "u3",
+      "purpose": "ISR와 main 공유 상태",
+      "lens": "shared",
+      "scope": "g_fault_flags, g_rx_ring",
+      "priority": "high",
+      "depends_on": [],
+      "reason": "ISR 세 개"
+    },
+    {
+      "key": "u4",
+      "purpose": "구성 차이",
+      "lens": "variant",
+      "scope": "Makefile, config/",
+      "priority": "medium",
+      "depends_on": [],
+      "reason": "두 보드"
+    }
+  ],
+  "not_found": [
+    {
+      "key": "n1",
+      "what": "DMA 사용",
+      "searches": [
+        {
+          "tool": "Grep",
+          "pattern": "DMA",
+          "scope": "src/ include/",
+          "hits": 0
+        }
+      ]
+    }
+  ],
+  "unknowns": [],
+  "human_decisions": [],
+  "checkpoint": null
+}

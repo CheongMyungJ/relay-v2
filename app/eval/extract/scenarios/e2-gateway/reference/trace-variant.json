@@ -1,0 +1,436 @@
+{
+  "observations": [
+    {
+      "key": "o1",
+      "text": "make VARIANT=<이름>이 variants/<이름>.mk를 넣고 cfg/variant_<이름>.h를 -include로 모든 번역 단위에 강제로 넣는다",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "Makefile",
+          "start": 13,
+          "end": 13,
+          "quote": "include variants/$(VARIANT).mk",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "Makefile",
+          "start": 21,
+          "end": 21,
+          "quote": "-include cfg/variant_$(VARIANT).h $(VARIANT_CFLAGS)",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o2",
+      "text": "CPU basic 84 MHz, pro·devkit 168 MHz. RTOS 틱 basic 1000, pro 500, devkit 1000 Hz",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "cfg/variant_basic.h",
+          "start": 9,
+          "end": 9,
+          "quote": "#define CFG_CPU_HZ              84000000UL",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "cfg/variant_pro.h",
+          "start": 10,
+          "end": 10,
+          "quote": "#define CFG_RTOS_TICK_HZ        500U",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o3",
+      "text": "기본 직렬 설정 basic 19200 8E1, pro·devkit 115200 8N1. 문서는 모두 19200 8E1이라 한다",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "cfg/variant_basic.h",
+          "start": 12,
+          "end": 12,
+          "quote": "#define CFG_MB_PARITY_EVEN      1",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "cfg/variant_pro.h",
+          "start": 11,
+          "end": 11,
+          "quote": "#define CFG_MB_BAUD             115200UL",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o4",
+      "text": "FC16·FC43은 pro·devkit, FC08은 devkit에서만 등록. FC23은 어디에서도 등록되지 않는다",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/app_init.c",
+          "start": 17,
+          "end": 17,
+          "quote": "#if CFG_FEATURE_FC16",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/app_init.c",
+          "start": 23,
+          "end": 23,
+          "quote": "#ifdef MB_DIAG_ENABLE",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o5",
+      "text": "logger·SPI 플래시는 pro·devkit에만 있고 워치독이 logger 신호도 요구한다",
+      "configs": ["pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "variants/pro.mk",
+          "start": 3,
+          "end": 3,
+          "quote": "VARIANT_SRCS  := src/logger.c src/spi_flash.c src/power.c",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/wdog.c",
+          "start": 20,
+          "end": 20,
+          "quote": "#define WDOG_ALL    (WDOG_COMM | WDOG_SENSOR | WDOG_LOGGER)",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o6",
+      "text": "USART1 디버그 콘솔은 devkit에만 있고 레지스터를 직접 쓸 수 있다",
+      "configs": ["devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "variants/devkit.mk",
+          "start": 3,
+          "end": 3,
+          "quote": "src/console.c",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/console.c",
+          "start": 103,
+          "end": 103,
+          "quote": "puts_(regs_write(addr, val) == REG_OK ? \"ok\\r\\n\" : \"refused\\r\\n\");",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o7",
+      "text": "pro만 power.c가 약한 idle 훅을 덮어써 WFI로 잔다",
+      "configs": ["pro"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/power.c",
+          "start": 10,
+          "end": 10,
+          "quote": "void rtos_idle_hook(void)",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o8",
+      "text": "configASSERT는 devkit에서만 켜진다",
+      "configs": ["devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "include/picortos_config.h",
+          "start": 19,
+          "end": 20,
+          "quote": "#if defined(VARIANT_DEVKIT) #define configASSERT_ENABLED                1",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o9",
+      "text": "센서 채널 basic 2, pro·devkit 4. 0x0002·0x0003은 4채널에만 있다",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "cfg/variant_basic.h",
+          "start": 18,
+          "end": 18,
+          "quote": "#define CFG_SENSOR_CHANNELS     2U",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/regs.c",
+          "start": 53,
+          "end": 53,
+          "quote": "if ((s_regs[i].flags & F_4CH) && CFG_SENSOR_CHANNELS < 4U) {",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o10",
+      "text": "저장된 보율 코드와 슬레이브 주소가 유효하면 시작할 때 구성 기본값 대신 쓰인다",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/config_store.c",
+          "start": 58,
+          "end": 58,
+          "quote": "return CFG_MB_BAUD;",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/app_init.c",
+          "start": 38,
+          "end": 38,
+          "quote": "rs485_init(config_baud());",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o11",
+      "text": "lite는 variants/lite.mk만 있고 cfg/variant_lite.h가 없어 빌드되지 않는다",
+      "configs": [],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "variants/lite.mk",
+          "start": 2,
+          "end": 2,
+          "quote": "VARIANT_CFLAGS := -DVARIANT_LITE",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o12",
+      "text": "릴리스 노트는 basic과 Pro를 출하한다고 한다(문서 주장)",
+      "configs": ["basic", "pro"],
+      "anchors": [
+        {
+          "kind": "doc_claim",
+          "path": "docs/release-notes.md",
+          "start": 20,
+          "end": 20,
+          "quote": "Products shipped: GW-400 (basic) and GW-400 Pro.",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o13",
+      "text": "pro의 500 Hz 틱 때문에 pdMS_TO_TICKS 결과가 달라진다: 센서 주기 24 ms, 응답 지연 1틱",
+      "configs": ["pro"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "third_party/picortos/include/picortos.h",
+          "start": 36,
+          "end": 36,
+          "quote": "#define pdMS_TO_TICKS(ms)   ((tick_t)(((uint32_t)(ms) * (uint32_t)configTICK_RATE_HZ) / 1000UL))",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o14",
+      "text": "basic, pro, devkit은 같은 링커 스크립트 n4_flash.ld로 링크해 메모리 배치가 같다: .data와 .bss는 SRAM(0x20000000, 128K)에, 섹터 11은 설정 영역에 놓인다.",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "Makefile",
+          "start": 22,
+          "end": 22,
+          "quote": "LDFLAGS := -nostdlib -T vendor/nimbus/n4_flash.ld -Wl,--gc-sections",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "vendor/nimbus/n4_flash.ld",
+          "start": 6,
+          "end": 6,
+          "quote": "RAM (rwx)     : ORIGIN = 0x20000000, LENGTH = 128K",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "vendor/nimbus/n4_flash.ld",
+          "start": 15,
+          "end": 15,
+          "quote": ".bss : { _sbss = .; *(.bss*) *(COMMON) _ebss = .; } > RAM",
+          "command": null
+        }
+      ],
+      "inference": false
+    }
+  ],
+  "quantities": [
+    {
+      "key": "q1",
+      "symbol": "CFG_RTOS_TICK_HZ",
+      "expr": "1000U / 500U / 1000U",
+      "values": [
+        {
+          "configs": ["basic", "devkit"],
+          "value": "1000"
+        },
+        {
+          "configs": ["pro"],
+          "value": "500"
+        }
+      ],
+      "unit": "Hz",
+      "unit_status": "derived",
+      "nature": "setting",
+      "chain": [],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "cfg/variant_devkit.h",
+          "start": 10,
+          "end": 10,
+          "quote": "#define CFG_RTOS_TICK_HZ        1000U",
+          "command": null
+        }
+      ]
+    }
+  ],
+  "requirements": [],
+  "constraints": [],
+  "impl_choices": [],
+  "unknowns": [
+    {
+      "key": "k1",
+      "question": "어느 구성이 출하되는지는 코드로 알 수 없다",
+      "needs": "other",
+      "refs": ["o12"]
+    }
+  ],
+  "conflicts": [
+    {
+      "key": "x1",
+      "text": "문서는 모든 제품 19200 8E1이라 하나 pro·devkit 기본값은 115200 8N1이다",
+      "sides": [
+        {
+          "claim": "문서",
+          "anchors": [
+            {
+              "kind": "doc_claim",
+              "path": "docs/protocol.md",
+              "start": 8,
+              "end": 8,
+              "quote": "19200 baud, 8 data bits, even parity, 1 stop bit (all products).",
+              "command": null
+            }
+          ]
+        },
+        {
+          "claim": "코드",
+          "anchors": [
+            {
+              "kind": "code",
+              "path": "cfg/variant_pro.h",
+              "start": 11,
+              "end": 11,
+              "quote": "#define CFG_MB_BAUD             115200UL",
+              "command": null
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "absences": [
+    {
+      "key": "a1",
+      "claim": "mb_fc23_read_write를 등록하는 곳이 없다",
+      "configs": ["basic", "pro", "devkit"],
+      "searches": [
+        {
+          "tool": "Grep",
+          "pattern": "mb_fc23_read_write",
+          "scope": "src",
+          "hits": 2
+        }
+      ]
+    }
+  ],
+  "followups": [],
+  "human_decisions": [],
+  "checkpoint": null,
+  "outcome": "done",
+  "outcome_reason": "빌드 파일과 생성 헤더를 견줬다.",
+  "checklist": {
+    "build_selection": {
+      "status": "covered",
+      "refs": ["o1"],
+      "searches": []
+    },
+    "runtime_selection": {
+      "status": "covered",
+      "refs": ["o10"],
+      "searches": []
+    },
+    "per_config_diff": {
+      "status": "covered",
+      "refs": ["o2", "o3", "o4", "o5", "o6", "o7", "o8", "o9", "o13"],
+      "searches": []
+    },
+    "shipping_config": {
+      "status": "unknown",
+      "refs": ["k1"],
+      "searches": []
+    },
+    "dead_code": {
+      "status": "covered",
+      "refs": ["o11", "a1"],
+      "searches": []
+    },
+    "memory_layout": {
+      "status": "covered",
+      "refs": ["o14"],
+      "searches": []
+    }
+  }
+}

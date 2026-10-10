@@ -1,0 +1,13 @@
+{
+  "task": "summarize",
+  "describe": "검토가 반박한 주장을 위험에 들지 않는다",
+  "ops": [
+    {
+      "op": "remove",
+      "path": "risks.3"
+    }
+  ],
+  "expect": {
+    "missed": ["r.sum.low_writer"]
+  }
+}

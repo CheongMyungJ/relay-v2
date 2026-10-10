@@ -1,0 +1,410 @@
+{
+  "observations": [
+    {
+      "key": "o1",
+      "text": "task_delay(n)은 다음 틱 경계부터 세므로 n-1~n틱을 기다린다. pro의 응답 지연 1틱은 거의 0 ms일 수 있다",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "third_party/picortos/src/tasks.c",
+          "start": 97,
+          "end": 97,
+          "quote": "t->wake_tick = s_ticks + timeout;",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/modbus.c",
+          "start": 126,
+          "end": 126,
+          "quote": "task_delay(pdMS_TO_TICKS(MB_RESP_DELAY_MS));",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o2",
+      "text": "프레임 끝은 USART idle-line(문자 하나 시간)으로 가른다. 주석의 t3.5와 다르다",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/rs485.c",
+          "start": 51,
+          "end": 51,
+          "quote": "hal_uart_enable_idle_irq(RS485_UART);",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o3",
+      "text": "섹터 지우기는 벤더 주석상 전형 0.5 s, 최대 2 s이고 그동안 CPU가 멈춘다. 약 2 s 워치독과 겹칠 수 있다",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "doc_claim",
+          "path": "vendor/nimbus/src/nimbus_hal.c",
+          "start": 179,
+          "end": 179,
+          "quote": "Typical 0.5 s, maximum 2 s",
+          "command": null
+        },
+        {
+          "kind": "doc_claim",
+          "path": "src/config_store.c",
+          "start": 4,
+          "end": 4,
+          "quote": "Writing needs a sector erase, which stalls the CPU while it runs.",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o4",
+      "text": "시험 보고서의 응답 시간 최대 6.2 ms(basic)·3.1 ms(Pro)는 한 번의 관찰값이다",
+      "configs": ["basic", "pro"],
+      "anchors": [
+        {
+          "kind": "doc_claim",
+          "path": "docs/test-report-2021.md",
+          "start": 13,
+          "end": 13,
+          "quote": "| basic | 19200  | 3.9 ms  | 6.2 ms  |",
+          "command": null
+        }
+      ],
+      "inference": false
+    }
+  ],
+  "quantities": [
+    {
+      "key": "q1",
+      "symbol": "CFG_RTOS_TICK_HZ",
+      "expr": "1000U / 500U / 1000U",
+      "values": [
+        {
+          "configs": ["basic", "devkit"],
+          "value": "1000"
+        },
+        {
+          "configs": ["pro"],
+          "value": "500"
+        }
+      ],
+      "unit": "Hz",
+      "unit_status": "derived",
+      "nature": "setting",
+      "chain": [
+        {
+          "role": "value",
+          "anchor": {
+            "kind": "code",
+            "path": "cfg/variant_pro.h",
+            "start": 10,
+            "end": 10,
+            "quote": "#define CFG_RTOS_TICK_HZ        500U",
+            "command": null
+          }
+        },
+        {
+          "role": "consumer",
+          "anchor": {
+            "kind": "code",
+            "path": "include/picortos_config.h",
+            "start": 8,
+            "end": 8,
+            "quote": "#define configTICK_RATE_HZ                  CFG_RTOS_TICK_HZ",
+            "command": null
+          }
+        }
+      ],
+      "anchors": []
+    },
+    {
+      "key": "q2",
+      "symbol": "SENSOR_PERIOD_MS",
+      "expr": "pdMS_TO_TICKS(25U)",
+      "values": [
+        {
+          "configs": ["basic", "devkit"],
+          "value": "25 ticks = 25 ms"
+        },
+        {
+          "configs": ["pro"],
+          "value": "12 ticks = 24 ms"
+        }
+      ],
+      "unit": "ms",
+      "unit_status": "derived",
+      "nature": "computed",
+      "chain": [
+        {
+          "role": "value",
+          "anchor": {
+            "kind": "code",
+            "path": "include/sensor.h",
+            "start": 10,
+            "end": 10,
+            "quote": "#define SENSOR_PERIOD_MS    25U",
+            "command": null
+          }
+        },
+        {
+          "role": "consumer",
+          "anchor": {
+            "kind": "code",
+            "path": "src/sensor.c",
+            "start": 121,
+            "end": 121,
+            "quote": "task_delay_until(&last, pdMS_TO_TICKS(SENSOR_PERIOD_MS));",
+            "command": null
+          }
+        },
+        {
+          "role": "unit",
+          "anchor": {
+            "kind": "code",
+            "path": "third_party/picortos/include/picortos.h",
+            "start": 36,
+            "end": 36,
+            "quote": "#define pdMS_TO_TICKS(ms)   ((tick_t)(((uint32_t)(ms) * (uint32_t)configTICK_RATE_HZ) / 1000UL))",
+            "command": null
+          }
+        }
+      ],
+      "anchors": []
+    },
+    {
+      "key": "q3",
+      "symbol": "MB_RESP_DELAY_MS",
+      "expr": "2U",
+      "values": [
+        {
+          "configs": ["basic", "devkit"],
+          "value": "2 ticks (1~2 ms)"
+        },
+        {
+          "configs": ["pro"],
+          "value": "1 tick (0~2 ms)"
+        }
+      ],
+      "unit": "tick",
+      "unit_status": "derived",
+      "nature": "computed",
+      "chain": [],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "include/modbus.h",
+          "start": 31,
+          "end": 31,
+          "quote": "#define MB_RESP_DELAY_MS        2U",
+          "command": null
+        }
+      ]
+    },
+    {
+      "key": "q4",
+      "symbol": "MB_TX_TIMEOUT_MS",
+      "expr": "50U",
+      "values": [
+        {
+          "configs": ["basic", "pro", "devkit"],
+          "value": "50"
+        }
+      ],
+      "unit": "ms",
+      "unit_status": "derived",
+      "nature": "setting",
+      "chain": [],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "include/modbus.h",
+          "start": 32,
+          "end": 32,
+          "quote": "#define MB_TX_TIMEOUT_MS        50U",
+          "command": null
+        }
+      ]
+    },
+    {
+      "key": "q5",
+      "symbol": "IWDG_RELOAD",
+      "expr": "1000U, /64, LSI",
+      "values": [],
+      "unit": "",
+      "unit_status": "unknown",
+      "nature": "setting",
+      "chain": [],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/wdog.c",
+          "start": 17,
+          "end": 17,
+          "quote": "#define IWDG_RELOAD             1000U",
+          "command": null
+        },
+        {
+          "kind": "doc_claim",
+          "path": "src/wdog.c",
+          "start": 7,
+          "end": 7,
+          "quote": "reload of 1000 it expires after about 2 s.",
+          "command": null
+        }
+      ]
+    },
+    {
+      "key": "q6",
+      "symbol": "g_ms",
+      "expr": "TIM7->PSC = CPU/4/1MHz - 1, ARR 999",
+      "values": [],
+      "unit": "",
+      "unit_status": "name_guess",
+      "nature": "computed",
+      "chain": [],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/timebase.c",
+          "start": 18,
+          "end": 18,
+          "quote": "TIM7->PSC = (uint32_t)(CFG_CPU_HZ / 4UL / 1000000UL) - 1U;",
+          "command": null
+        }
+      ]
+    },
+    {
+      "key": "q7",
+      "symbol": "DE_SETUP_LOOPS",
+      "expr": "420U",
+      "values": [],
+      "unit": "",
+      "unit_status": "unknown",
+      "nature": "setting",
+      "chain": [],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/rs485.c",
+          "start": 19,
+          "end": 19,
+          "quote": "#define DE_SETUP_LOOPS      420U",
+          "command": null
+        }
+      ]
+    }
+  ],
+  "requirements": [],
+  "constraints": [],
+  "impl_choices": [],
+  "unknowns": [
+    {
+      "key": "k1",
+      "question": "IWDG 시간 초과는 64 x 1000 / f_LSI이고 LSI 주파수가 코드에 없다",
+      "needs": "external_doc",
+      "refs": ["q5"]
+    },
+    {
+      "key": "k2",
+      "question": "TIM7의 실제 타이머 클럭(APB1 분주가 1이 아닐 때)이 레퍼런스 매뉴얼에 있어 g_ms와 경보 지연 5 s의 실제 값을 확인해야 한다",
+      "needs": "external_doc",
+      "refs": ["q6"]
+    },
+    {
+      "key": "k3",
+      "question": "DE 준비 대기(420번 반복)의 실제 시간은 반복당 사이클에 달려 측정이 필요하다",
+      "needs": "measurement",
+      "refs": ["q7"]
+    }
+  ],
+  "conflicts": [
+    {
+      "key": "x1",
+      "text": "rs485.c 주석은 t3.5라 하나 코드는 idle-line으로 프레임 끝을 가른다",
+      "sides": [
+        {
+          "claim": "주석",
+          "anchors": [
+            {
+              "kind": "doc_claim",
+              "path": "src/rs485.c",
+              "start": 5,
+              "end": 5,
+              "quote": "detected with the t3.5 silent interval required by Modbus RTU",
+              "command": null
+            }
+          ]
+        },
+        {
+          "claim": "코드",
+          "anchors": [
+            {
+              "kind": "code",
+              "path": "src/rs485.c",
+              "start": 51,
+              "end": 51,
+              "quote": "hal_uart_enable_idle_irq(RS485_UART);",
+              "command": null
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "absences": [],
+  "followups": [],
+  "human_decisions": [],
+  "checkpoint": null,
+  "outcome": "needs_external",
+  "outcome_reason": "LSI·타이머 클럭·DE 반복 시간은 데이터시트가 필요하다.",
+  "checklist": {
+    "per_config_value": {
+      "status": "covered",
+      "refs": ["q1", "q2", "q3"],
+      "searches": []
+    },
+    "consumer": {
+      "status": "covered",
+      "refs": ["q2", "o1"],
+      "searches": []
+    },
+    "tick_source": {
+      "status": "covered",
+      "refs": ["q1", "q6"],
+      "searches": []
+    },
+    "unit": {
+      "status": "covered",
+      "refs": ["q2", "q5", "q6"],
+      "searches": []
+    },
+    "comparison": {
+      "status": "covered",
+      "refs": ["o1"],
+      "searches": []
+    },
+    "counting_context": {
+      "status": "covered",
+      "refs": ["o1"],
+      "searches": []
+    },
+    "overflow": {
+      "status": "unknown",
+      "refs": ["q6"],
+      "searches": []
+    },
+    "nature": {
+      "status": "covered",
+      "refs": ["o4"],
+      "searches": []
+    }
+  }
+}

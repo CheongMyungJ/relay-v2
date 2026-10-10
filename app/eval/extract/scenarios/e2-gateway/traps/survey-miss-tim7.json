@@ -1,0 +1,13 @@
+{
+  "task": "survey",
+  "describe": "TIM7 타임베이스 ISR를 놓친다",
+  "ops": [
+    {
+      "op": "remove",
+      "path": "inventory.4"
+    }
+  ],
+  "expect": {
+    "missed": ["r.inv.tim7"]
+  }
+}

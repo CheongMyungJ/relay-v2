@@ -1,0 +1,21 @@
+{
+  "task": "summarize",
+  "describe": "보류된 단위를 위험에 들지 않는다",
+  "ops": [
+    {
+      "op": "remove",
+      "path": "risks.0"
+    }
+  ],
+  "judge": {
+    "recall": {
+      "r.sum.partial_said": {
+        "found": true,
+        "keys": ["p3"]
+      }
+    }
+  },
+  "expect": {
+    "missed": ["r.sum.partial"]
+  }
+}

@@ -1,0 +1,925 @@
+{
+  "scenario": "e1-twoboard",
+  "note": "정답 파일. 평가 하네스는 repo/만 복사하므로 run에 보이지 않는다. 결과 스키마와 떼어 의미 단위로 쓴다(requirements-extraction-flow.md 17.1).",
+  "canary": "LEAK-7F3Q-E1-ZEBRA",
+  "configs": [
+    {
+      "id": "cfg.alpha",
+      "name": "alpha",
+      "aliases": ["alpha", "board_alpha"]
+    },
+    {
+      "id": "cfg.beta",
+      "name": "beta",
+      "aliases": ["beta", "board_beta"]
+    }
+  ],
+  "recall": [
+    {
+      "id": "r.cfg.alpha",
+      "tasks": ["survey"],
+      "det": {
+        "config": "alpha"
+      },
+      "statement": "alpha 구성(make alpha, -DBOARD_ALPHA, config/build_cfg_alpha.h)"
+    },
+    {
+      "id": "r.cfg.beta",
+      "tasks": ["survey"],
+      "det": {
+        "config": "beta"
+      },
+      "statement": "beta 구성(make beta, -DBOARD_BETA, config/build_cfg_beta.h)"
+    },
+    {
+      "id": "r.inv.reset",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["Reset_Handler"]
+      },
+      "statement": "리셋 진입점 Reset_Handler(vendor/acme/startup_acme.c)"
+    },
+    {
+      "id": "r.inv.systick",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["SysTick_Handler"]
+      },
+      "statement": "SysTick_Handler ISR(src/timer.c)"
+    },
+    {
+      "id": "r.inv.usart1",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["USART1_IRQHandler"]
+      },
+      "statement": "USART1_IRQHandler ISR(src/uart.c)"
+    },
+    {
+      "id": "r.inv.adc",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["ADC1_IRQHandler"]
+      },
+      "statement": "ADC1_IRQHandler ISR(src/adc.c)"
+    },
+    {
+      "id": "r.inv.tim3",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["TIM3_IRQHandler"]
+      },
+      "statement": "TIM3_IRQHandler ISR(src/fan.c, beta만)"
+    },
+    {
+      "id": "r.inv.main",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["main"]
+      },
+      "statement": "main 루프(src/main.c)"
+    },
+    {
+      "id": "r.inv.cmdtable",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["cmd_table"]
+      },
+      "statement": "명령 테이블 cmd_table(src/cmd.c)"
+    },
+    {
+      "id": "r.inv.get_temp",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["GET_TEMP", "cmd_get_temp"]
+      },
+      "statement": "GET_TEMP(0x01)"
+    },
+    {
+      "id": "r.inv.set_setpoint",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["SET_SETPOINT", "cmd_set_setpoint"]
+      },
+      "statement": "SET_SETPOINT(0x02)"
+    },
+    {
+      "id": "r.inv.get_status",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["GET_STATUS", "cmd_get_status"]
+      },
+      "statement": "GET_STATUS(0x03)"
+    },
+    {
+      "id": "r.inv.reset_fault",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["RESET_FAULT", "cmd_reset_fault"]
+      },
+      "statement": "RESET_FAULT(0x04)"
+    },
+    {
+      "id": "r.inv.set_mode",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["SET_MODE", "cmd_set_mode"]
+      },
+      "statement": "SET_MODE(0x05, alpha만)"
+    },
+    {
+      "id": "r.inv.set_fan",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["SET_FAN", "cmd_set_fan"]
+      },
+      "statement": "SET_FAN(0x06, beta만)"
+    },
+    {
+      "id": "r.inv.get_version",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["GET_VERSION", "cmd_get_version"]
+      },
+      "statement": "GET_VERSION(0x10)"
+    },
+    {
+      "id": "r.inv.uart",
+      "tasks": ["survey"],
+      "det": {
+        "inventory": ["USART1", "UART"]
+      },
+      "statement": "호스트 링크 인터페이스 USART1(115200)"
+    },
+    {
+      "id": "r.bnd.vendor",
+      "tasks": ["survey"],
+      "det": {
+        "boundary": "vendor/acme"
+      },
+      "statement": "vendor/acme는 벤더 코드 경계(Acme 라이선스 머리말)"
+    },
+    {
+      "id": "r.cmd.entry",
+      "tasks": ["trace-command"],
+      "statement": "수신 경로: USART1_IRQHandler가 g_rx_ring에 넣고, main 루프의 proto_poll/handle_byte가 프레임을 조립해 cmd_dispatch를 부른다"
+    },
+    {
+      "id": "r.cmd.bad_len",
+      "tasks": ["trace-command"],
+      "statement": "페이로드 길이가 2가 아니면 cmd_dispatch가 ERR_BAD_LEN(0x05)으로 응답한다"
+    },
+    {
+      "id": "r.cmd.fault",
+      "tasks": ["trace-command"],
+      "statement": "과열 고장(FAULT_OVERTEMP)이 켜져 있으면 ERR_FAULT(0x06)로 거부한다(범위 검사보다 먼저)"
+    },
+    {
+      "id": "r.cmd.range",
+      "tasks": ["trace-command"],
+      "statement": "설정값이 SETPOINT_MIN_DC(50)~SETPOINT_MAX_DC(850), 단위 0.1 C 밖이면 ERR_RANGE(0x03)"
+    },
+    {
+      "id": "r.cmd.busy",
+      "tasks": ["trace-command"],
+      "statement": "EEPROM 저장이 대기 중이면(ee_busy) ERR_BUSY(0x04)로 거부한다"
+    },
+    {
+      "id": "r.cmd.normal",
+      "tasks": ["trace-command"],
+      "statement": "정상이면 g_setpoint_dc에 저장하고 ee_request_save로 저장을 요청하며 상태 0x00 응답(CMD|0x80)을 보낸다"
+    },
+    {
+      "id": "r.cmd.crc",
+      "tasks": ["trace-command"],
+      "statement": "CRC가 틀리면 프로토콜 층이 디스패치 전에 ERR_CRC(0x02) 응답을 보낸다"
+    },
+    {
+      "id": "r.cmd.timeout",
+      "tasks": ["trace-command"],
+      "statement": "바이트 사이가 PROTO_FRAME_TIMEOUT_TICKS보다 길면 부분 프레임을 응답 없이 버린다"
+    },
+    {
+      "id": "r.cmd.retry",
+      "tasks": ["trace-command"],
+      "statement": "EEPROM 저장 실패는 CFG_EE_RETRY_MAX번(alpha 3, beta 5) 다시 시도한 뒤 FAULT_EEPROM을 올린다. 프로토콜 층의 재전송은 없다"
+    },
+    {
+      "id": "r.cmd.second_writer",
+      "tasks": ["trace-command"],
+      "statement": "g_setpoint_dc는 SET_SETPOINT 말고도 부팅 때 ee_load와, 설정 CRC 고장에서 fault_actions 함수 포인터 표로 불리는 restore_defaults가 쓴다"
+    },
+    {
+      "id": "r.tim.frame_ms",
+      "tasks": ["trace-timing"],
+      "det": {
+        "quantity": "q.frame_to"
+      },
+      "statement": "프레임 바이트 간 시간 초과: alpha는 proto.h의 20틱 x 1 ms = 약 20 ms, beta는 Makefile이 -DPROTO_FRAME_TIMEOUT_TICKS=5U로 덮어써 5틱 x 10 ms = 약 50 ms"
+    },
+    {
+      "id": "r.tim.tick",
+      "tasks": ["trace-timing"],
+      "det": {
+        "quantity": "q.tick"
+      },
+      "statement": "틱 원천은 SysTick이고 CFG_TICK_HZ가 alpha 1000, beta 100이다"
+    },
+    {
+      "id": "r.tim.ctrl",
+      "tasks": ["trace-timing"],
+      "det": {
+        "quantity": "q.ctrl"
+      },
+      "statement": "제어 주기 CTRL_PERIOD_TICKS = CFG_TICK_HZ/10은 두 구성 모두 100 ms다"
+    },
+    {
+      "id": "r.tim.heater",
+      "tasks": ["trace-timing"],
+      "det": {
+        "quantity": "q.heater"
+      },
+      "statement": "히터 연속 켜짐 상한 HEATER_MAX_ON_CYCLES 600은 제어 주기 100 ms 기준 약 60 s다"
+    },
+    {
+      "id": "r.tim.wdt_unknown",
+      "tasks": ["trace-timing"],
+      "statement": "워치독 시간 초과는 625 x 64 / f_LSI이고 LSI 주파수가 코드에 없어 외부 자료(데이터시트)가 있어야 정해진다"
+    },
+    {
+      "id": "r.tim.conflict",
+      "tasks": ["trace-timing", "trace-variant"],
+      "statement": "proto.h의 주석 \"20 ms inter-byte timeout\"은 beta의 실제 값(5틱 x 10 ms = 약 50 ms)과 어긋난다"
+    },
+    {
+      "id": "r.tim.offbyone",
+      "tasks": ["trace-timing"],
+      "statement": "시간 초과 비교가 '>'라 20틱을 넘어야(21틱째) 시간 초과가 된다"
+    },
+    {
+      "id": "r.tim.delay",
+      "tasks": ["trace-timing", "trace-variant"],
+      "statement": "delay_ms는 1틱을 1 ms로 가정해 틱 수만큼 기다리므로 beta(틱 10 ms)에서는 요청의 10배를 기다린다(hwrev의 2 ms는 20 ms, 플래시 지우기 뒤 5 ms는 50 ms)"
+    },
+    {
+      "id": "r.var.select",
+      "tasks": ["trace-variant"],
+      "statement": "구성 선택: Makefile의 alpha/beta 타깃이 -DBOARD_ALPHA/-DBOARD_BETA를 주고 board.h가 config/build_cfg_<board>.h를 고른다"
+    },
+    {
+      "id": "r.var.cpu",
+      "tasks": ["trace-variant"],
+      "statement": "CPU 클럭: alpha 72 MHz, beta 48 MHz(CFG_CPU_HZ)"
+    },
+    {
+      "id": "r.var.tick",
+      "tasks": ["trace-variant"],
+      "statement": "틱: alpha 1000 Hz, beta 100 Hz(CFG_TICK_HZ)"
+    },
+    {
+      "id": "r.var.mode",
+      "tasks": ["trace-variant"],
+      "statement": "SET_MODE 명령은 alpha에만 있다(CFG_FEATURE_MODE)"
+    },
+    {
+      "id": "r.var.fan",
+      "tasks": ["trace-variant"],
+      "statement": "팬 제어(fan.c, SET_FAN, TIM3 ISR)는 beta에만 있다(CFG_FEATURE_FAN, Makefile SRCS_beta)"
+    },
+    {
+      "id": "r.var.retry",
+      "tasks": ["trace-variant"],
+      "statement": "EEPROM 재시도: alpha 3, beta 5(CFG_EE_RETRY_MAX)"
+    },
+    {
+      "id": "r.var.runtime",
+      "tasks": ["trace-variant"],
+      "statement": "실행 중 선택: hwrev.c가 PA6/PA7 스트랩으로 하드웨어 리비전을 읽어 rev C 이상이면 g_cal_offset을 -12로 둔다"
+    },
+    {
+      "id": "r.var.dead",
+      "tasks": ["trace-variant"],
+      "statement": "죽은 코드: legacy_pid.c는 어느 타깃의 SRCS에도 없고, BOARD_GAMMA 분기는 없는 헤더를 가리키며, control.c의 #if 0 PID 블록"
+    },
+    {
+      "id": "r.var.shipping",
+      "tasks": ["trace-variant"],
+      "statement": "출하 구성은 코드로 정할 수 없다(README의 'BETA가 2018년부터 양산'은 문서 주장)"
+    },
+    {
+      "id": "r.var.override",
+      "tasks": ["trace-variant"],
+      "statement": "beta 타깃만 Makefile의 -DPROTO_FRAME_TIMEOUT_TICKS=5U로 proto.h의 기본값(20틱)을 덮어쓴다"
+    },
+    {
+      "id": "r.sh.fault_rmw",
+      "tasks": ["trace-shared"],
+      "statement": "g_fault_flags: ADC1 ISR가 |=로 쓰고, main 문맥의 fault_clear(RESET_FAULT)가 인터럽트를 막지 않고 &=~로 써서 ISR이 그 사이에 올린 비트를 잃을 수 있다"
+    },
+    {
+      "id": "r.sh.raise_protected",
+      "tasks": ["trace-shared"],
+      "statement": "fault_raise는 __disable_irq/__enable_irq로 보호된다"
+    },
+    {
+      "id": "r.sh.ring",
+      "tasks": ["trace-shared"],
+      "statement": "g_rx_ring은 단일 생산자(USART1 ISR가 head)·단일 소비자(main이 tail)이고 바이트 크기 인덱스라 잠금 없이 안전하다. 가득 차면 바이트를 버리고 g_rx_overruns를 올린다"
+    },
+    {
+      "id": "r.sh.adc_raw",
+      "tasks": ["trace-shared"],
+      "statement": "g_adc_raw는 ADC1 ISR가 쓰고 main(control_temp_dc)이 읽는다"
+    },
+    {
+      "id": "r.sh.ticks",
+      "tasks": ["trace-shared"],
+      "statement": "g_ticks는 SysTick ISR가 증가시키고 main이 읽는다(32비트 정렬 접근)"
+    },
+    {
+      "id": "r.sh.prio",
+      "tasks": ["trace-shared"],
+      "statement": "인터럽트 우선순위: ADC1 0(가장 높음), USART1 1, TIM3 2"
+    },
+    {
+      "id": "r.sh.tach",
+      "tasks": ["trace-shared"],
+      "statement": "beta의 s_tach_pulses는 TIM3 ISR가 ++하고 fan_poll이 보호 없이 0으로 지워 펄스를 잃을 수 있다"
+    },
+    {
+      "id": "r.sh.no_dma",
+      "tasks": ["trace-shared"],
+      "det": {
+        "checklist_na": "dma_ownership"
+      },
+      "statement": "DMA는 쓰지 않는다(dma_ownership 해당 없음)"
+    },
+    {
+      "id": "r.int.resolves_frame",
+      "tasks": ["integrate"],
+      "det": {
+        "link": {
+          "kind": "resolves",
+          "from": ["c-0034"],
+          "to": ["c-0043", "c-0070"]
+        }
+      },
+      "statement": "trace-command의 미확정 c-0034(바이트 간 시간 초과의 ms 값)를 뒤 trace-timing의 수치 c-0043(alpha 20틱 = 약 20 ms, beta 5틱 = 약 50 ms)가 푼다(resolves)"
+    },
+    {
+      "id": "r.int.supersedes_frame",
+      "tasks": ["integrate"],
+      "det": {
+        "link": {
+          "kind": "supersedes",
+          "from": ["c-0036"],
+          "to": ["c-0043"]
+        }
+      },
+      "statement": "같은 timing 단위를 이어 돈 run의 수치 c-0043(beta 5틱 = 약 50 ms)가 앞 run의 수치 c-0036(beta 20틱 = 200 ms)를 대신한다(supersedes)"
+    },
+    {
+      "id": "r.int.merge_timeout",
+      "tasks": ["integrate"],
+      "det": {
+        "link": {
+          "kind": "merges",
+          "from": ["c-0028", "c-0038"],
+          "to": ["c-0028", "c-0038"]
+        }
+      },
+      "statement": "c-0028와 c-0038(바이트 사이가 시간 초과를 넘으면 부분 프레임을 버린다)는 같은 구성(alpha, beta)의 같은 말이라 합친다(merges)"
+    },
+    {
+      "id": "r.int.conflict_writer",
+      "tasks": ["integrate"],
+      "det": {
+        "link": {
+          "kind": "conflicts",
+          "from": ["c-0061"],
+          "to": ["c-0030"]
+        }
+      },
+      "statement": "c-0061(g_setpoint_dc를 SET_SETPOINT 처리기 밖에서 쓰지 않는다)와 c-0030(ee_load와 restore_defaults도 쓴다)는 함께 설 수 없다(conflicts)"
+    },
+    {
+      "id": "r.int.conflict_side",
+      "tasks": ["integrate"],
+      "statement": "c-0061와 c-0030의 충돌 연결 이유가 코드는 다른 쓰기가 있다는 쪽(ee_load, restore_defaults)을 지지한다고 밝힌다"
+    },
+    {
+      "id": "r.int.cov_lifecycle",
+      "tasks": ["integrate"],
+      "det": {
+        "coverage": {
+          "perspective": "lifecycle",
+          "configs": ["alpha", "beta"],
+          "status": ["unreached"]
+        }
+      },
+      "statement": "lifecycle 관점(리셋 처리기, 시작 순서, 부팅 때 불러오기, 워치독 시작)은 두 구성 모두 어느 단위도 닿지 않았다(unreached, 제안 단위)"
+    },
+    {
+      "id": "r.int.unit_startup",
+      "tasks": ["integrate"],
+      "det": {
+        "unit": {
+          "lens": "lifecycle",
+          "tokens": [
+            "Reset_Handler",
+            "startup_acme",
+            "startup",
+            "start-up",
+            "main.c",
+            "시작",
+            "부팅",
+            "boot",
+            "ee_load",
+            "wdt_init"
+          ]
+        }
+      },
+      "statement": "Reset_Handler부터 main의 초기화 순서(ee_load, fault_handle_boot, wdt_init)를 추적할 lifecycle 단위를 제안한다"
+    },
+    {
+      "id": "r.int.cov_concurrency",
+      "tasks": ["integrate"],
+      "det": {
+        "coverage": {
+          "perspective": "concurrency",
+          "configs": ["alpha", "beta"],
+          "status": ["covered"]
+        }
+      },
+      "statement": "concurrency 관점은 두 구성 모두 trace-shared의 주장이 덮는다(covered, ids)"
+    },
+    {
+      "id": "r.rev.retry",
+      "tasks": ["review"],
+      "det": {
+        "answer_value": {
+          "question": "q1",
+          "quantity": "q.retry"
+        }
+      },
+      "statement": "q1(CFG_EE_RETRY_MAX)의 답: alpha 3, beta 5"
+    },
+    {
+      "id": "r.rev.tick",
+      "tasks": ["review"],
+      "det": {
+        "answer_value": {
+          "question": "q2",
+          "quantity": "q.tick"
+        }
+      },
+      "statement": "q2(CFG_TICK_HZ)의 답: alpha 1000 Hz, beta 100 Hz"
+    },
+    {
+      "id": "r.rev.fan_cfg",
+      "tasks": ["review"],
+      "det": {
+        "answer_configs": {
+          "question": "q3",
+          "configs": ["beta"]
+        }
+      },
+      "statement": "q3(SET_FAN이 빌드되고 닿는 구성)의 답: beta만"
+    },
+    {
+      "id": "r.rev.writer",
+      "tasks": ["review"],
+      "det": {
+        "verdict": {
+          "statement": "s1",
+          "accept": ["refuted", "overclaimed"]
+        }
+      },
+      "statement": "s1(g_setpoint_dc를 SET_SETPOINT 처리기 밖에서 쓰는 곳이 없다)을 반박한다"
+    },
+    {
+      "id": "r.rev.writer_why",
+      "tasks": ["review"],
+      "statement": "s1(g_setpoint_dc를 SET_SETPOINT 처리기 밖에서 쓰는 곳이 없다는 서술)의 반박 근거로 ee_load(부팅 때 불러오기)나 restore_defaults(설정 CRC 고장의 기본값 복원)의 쓰기를 든다"
+    },
+    {
+      "id": "r.rev.fan_all",
+      "tasks": ["review"],
+      "det": {
+        "verdict": {
+          "statement": "s3",
+          "accept": ["overclaimed", "refuted"]
+        }
+      },
+      "statement": "s3(fan_poll의 팬 회전수 계산이 모든 구성에 있다)을 범위 과장이나 반박으로 판정한다(beta만)"
+    },
+    {
+      "id": "r.sum.risk_wdt",
+      "tasks": ["summarize"],
+      "det": {
+        "cites": {
+          "ids": ["c-0050"],
+          "where": "risks"
+        }
+      },
+      "statement": "위험에 열린 미확정 c-0050(워치독 시간 초과, LSI 데이터시트 필요)를 든다"
+    },
+    {
+      "id": "r.sum.risk_shipping",
+      "tasks": ["summarize"],
+      "det": {
+        "cites": {
+          "ids": ["c-0077"],
+          "where": "risks"
+        }
+      },
+      "statement": "위험에 열린 미확정 c-0077(출하 구성은 코드로 정할 수 없다)를 든다"
+    },
+    {
+      "id": "r.sum.low_writer",
+      "tasks": ["summarize"],
+      "det": {
+        "cites": {
+          "ids": ["c-0061"],
+          "where": "risks"
+        }
+      },
+      "statement": "위험에 검토가 반박한 c-0061(g_setpoint_dc의 다른 쓰기가 없다는 부재 주장)를 든다"
+    },
+    {
+      "id": "r.sum.low_fan",
+      "tasks": ["summarize"],
+      "det": {
+        "cites": {
+          "ids": ["c-0041"],
+          "where": "risks"
+        }
+      },
+      "statement": "위험에 검토가 범위 과장으로 내린 c-0041(fan_poll이 모든 구성에 있다)를 든다"
+    },
+    {
+      "id": "r.sum.low_retry",
+      "tasks": ["summarize"],
+      "det": {
+        "cites": {
+          "ids": ["c-0032"],
+          "where": "risks"
+        }
+      },
+      "statement": "위험에 검토의 답과 어긋난 c-0032(EEPROM 재시도 수)를 든다"
+    },
+    {
+      "id": "r.sum.low_setfan",
+      "tasks": ["summarize"],
+      "det": {
+        "cites": {
+          "ids": ["c-0016"],
+          "where": "risks"
+        }
+      },
+      "statement": "위험에 검토의 답과 어긋난 c-0016(SET_FAN이 모든 구성에 있다)를 든다"
+    },
+    {
+      "id": "r.sum.risk_conflict",
+      "tasks": ["summarize"],
+      "det": {
+        "cites": {
+          "ids": ["c-0051", "c-0035"],
+          "where": "risks",
+          "any": true
+        }
+      },
+      "statement": "위험에 주석·문서와 코드의 충돌(c-0051 proto.h 주석과 beta의 값, c-0035 CRC 매개변수) 가운데 하나 이상을 든다"
+    },
+    {
+      "id": "r.sum.partial",
+      "tasks": ["summarize"],
+      "det": {
+        "cites": {
+          "ids": ["u-0007", "u-0008"],
+          "where": "risks",
+          "any": true
+        }
+      },
+      "statement": "위험에 보류된 단위(u-0007 시작 순서, u-0008 다른 명령)를 든다"
+    },
+    {
+      "id": "r.sum.partial_said",
+      "tasks": ["summarize"],
+      "statement": "개요, handoff 요약이나 위험이 이 분석이 부분 분석(run 상한에서 멈춰 보류된 단위가 있음)이라 요구사항을 놓쳤을 수 있다고 밝힌다"
+    }
+  ],
+  "must_not": [
+    {
+      "id": "m.cfg.gamma",
+      "tasks": ["survey", "trace-variant"],
+      "det": {
+        "config_confirmed": ["gamma", "board_gamma"]
+      },
+      "statement": "GAMMA를 빌드되는(확인된) 구성으로 다룬다. Makefile 타깃도 build_cfg_gamma.h도 없다"
+    },
+    {
+      "id": "m.dma",
+      "tasks": ["survey", "trace-shared"],
+      "det": {
+        "inventory_kind": "dma_channel"
+      },
+      "statement": "이 펌웨어에 DMA 채널이나 DMA 버퍼 소유권 문제가 있다고 한다"
+    },
+    {
+      "id": "m.merge.set_mode",
+      "tasks": ["survey"],
+      "det": {
+        "config_only": {
+          "tokens": ["SET_MODE", "cmd_set_mode"],
+          "configs": ["alpha"]
+        }
+      },
+      "statement": "SET_MODE를 beta에도 있다고 한다"
+    },
+    {
+      "id": "m.merge.set_fan",
+      "tasks": ["survey"],
+      "det": {
+        "config_only": {
+          "tokens": ["SET_FAN", "cmd_set_fan", "TIM3_IRQHandler"],
+          "configs": ["beta"]
+        }
+      },
+      "statement": "팬 제어를 alpha에도 있다고 한다"
+    },
+    {
+      "id": "m.only_writer",
+      "tasks": ["trace-command"],
+      "statement": "g_setpoint_dc를 SET_SETPOINT 처리기 말고는 쓰는 곳이 없다고 한다(ee_load와 restore_defaults를 빠뜨림). 다른 쓰기를 함께 적었으면 위반이 아니다"
+    },
+    {
+      "id": "m.latency_req",
+      "tasks": ["trace-command", "trace-timing"],
+      "statement": "벤치 로그의 최대 3.2 ms나 문서의 5 ms를 관찰값·문서 주장이라고 밝히지 않고 보장된 응답 시간 요구로 확정한다"
+    },
+    {
+      "id": "m.frame_20ms_all",
+      "tasks": ["trace-command", "trace-timing", "trace-variant"],
+      "statement": "바이트 간 시간 초과가 두 구성 모두(또는 구성 구분 없이) 같은 ms 값(예: 20 ms)이라고 확정한다"
+    },
+    {
+      "id": "m.wdt_exact",
+      "tasks": ["trace-timing"],
+      "statement": "LSI 주파수를 주석이나 코드만으로 정해진 값처럼 써서 워치독 시간 초과(예: 약 1 s)를 확인된 요구·제약으로 확정한다. LSI를 가정, 주석의 주장, 외부 자료가 필요한 것으로 밝혔으면 위반이 아니다"
+    },
+    {
+      "id": "m.crc_doc",
+      "tasks": ["trace-command"],
+      "statement": "CRC를 문서대로 다항식 0x07, 초기값 0x00이라고 한다(코드는 0x31, 초기값 0xFF)"
+    },
+    {
+      "id": "m.shipping",
+      "tasks": ["survey", "trace-variant"],
+      "statement": "BETA(또는 다른 구성)가 출하 구성이라고 코드로 확인된 사실처럼 쓴다"
+    },
+    {
+      "id": "m.ring_race",
+      "tasks": ["trace-shared"],
+      "statement": "g_rx_ring의 head/tail 접근이 보호되지 않은 경쟁이라 잠금이 필요하다고 한다"
+    },
+    {
+      "id": "m.polling_constraint",
+      "tasks": ["trace-timing", "trace-shared", "trace-command"],
+      "statement": "메인 루프 폴링, 링 버퍼 크기, 폴링 송신 같은 구현 선택을 재설계에서 바꿀 수 없는 하드웨어·통신 요구로 확정한다. 인터페이스 자체(보율, 프레임 형식, 핀)를 제약으로 적은 것, 구현 선택에서 나온 위험·한계를 구현 선택의 결과라고 밝혀 적은 것은 위반이 아니다"
+    },
+    {
+      "id": "m.delay_exact",
+      "tasks": ["trace-timing", "trace-variant"],
+      "statement": "delay_ms(n)이 모든 구성에서 n ms를 기다린다고 확정한다"
+    },
+    {
+      "id": "m.int.wdt_resolved",
+      "tasks": ["integrate"],
+      "det": {
+        "link_forbid": {
+          "kind": "resolves",
+          "from": ["c-0050"]
+        }
+      },
+      "statement": "데이터시트가 있어야 정해지는 워치독 미확정 c-0050(LSI)를 뒤 주장(예: wdt.c 주석을 되풀이한 c-0076의 '약 1 s')이 푼다고 잇는다"
+    },
+    {
+      "id": "m.int.merge_hwrev",
+      "tasks": ["integrate"],
+      "det": {
+        "link_forbid": {
+          "from": ["c-0074", "c-0075"],
+          "to": ["c-0074", "c-0075"]
+        }
+      },
+      "statement": "같은 글이지만 구성이 다른 두 주장 c-0074(alpha, 2 ms)과 c-0075(beta, 틱 10 ms라 20 ms)를 잇거나 합친다"
+    },
+    {
+      "id": "m.int.wdt_settled",
+      "tasks": ["integrate"],
+      "statement": "워치독 시간 초과를 정해진 값(예: 약 1 s)이라고 링크 이유, coverage 메모, 단위, 미확정 어디에서든 확정한다. LSI 주파수가 외부 자료(데이터시트)가 있어야 정해진다고 밝혔으면 위반이 아니다"
+    },
+    {
+      "id": "m.int.gid",
+      "tasks": ["integrate"],
+      "det": {
+        "gid_unknown": true
+      },
+      "statement": "패킷과 기록 목록에 없는 전역 ID를 가리킨다"
+    },
+    {
+      "id": "m.rev.dma",
+      "tasks": ["review"],
+      "det": {
+        "verdict_forbid": {
+          "statement": "s2",
+          "forbid": ["refuted", "overclaimed"]
+        }
+      },
+      "statement": "s2(DMA를 쓰지 않는다)를 반박하거나 범위 과장이라 한다"
+    },
+    {
+      "id": "m.rev.ct",
+      "tasks": ["review"],
+      "det": {
+        "verdict_forbid": {
+          "statement": "s4",
+          "forbid": ["refuted", "overclaimed"]
+        }
+      },
+      "statement": "s4(g_fault_flags를 main 문맥에서 고칠 때는 ADC1 인터럽트를 막아야 한다)를 반박하거나 범위 과장이라 한다"
+    },
+    {
+      "id": "m.rev.req",
+      "tasks": ["review"],
+      "det": {
+        "verdict_forbid": {
+          "statement": "s5",
+          "forbid": ["refuted", "overclaimed"]
+        }
+      },
+      "statement": "s5(SET_SETPOINT의 정상 처리: 설정값을 바꾸고 저장을 요청하고 0x00 응답)를 반박하거나 범위 과장이라 한다"
+    },
+    {
+      "id": "m.sum.gid",
+      "tasks": ["summarize"],
+      "det": {
+        "gid_unknown": true
+      },
+      "statement": "패킷에 없는 전역 ID를 가리킨다"
+    },
+    {
+      "id": "m.sum.confirmed",
+      "tasks": ["summarize"],
+      "statement": "검토에서 반박되지 않았거나 검토하지 않은 주장·후보(요구·제약 후보, 수치, 답 후보가 있는 미확정)를 확인된·보장된·검증된 것으로 쓴다(예: '바이트 간 시간 초과가 확인됐다'). '후보', '확인되지 않음', '반박되지 않음'으로 적었으면 위반이 아니다"
+    },
+    {
+      "id": "m.sum.lowered_ok",
+      "tasks": ["summarize"],
+      "statement": "검토가 내린 주장(g_setpoint_dc의 다른 쓰기가 없다, SET_FAN과 fan_poll이 모든 구성에 있다, 재시도가 두 구성 모두 3회다)을 맞는 것처럼 쓴다"
+    },
+    {
+      "id": "m.sum.all_found",
+      "tasks": ["summarize"],
+      "statement": "모든 요구사항을 찾았다거나 분석이 펌웨어 전체를 빠짐없이 덮었다고 쓴다"
+    },
+    {
+      "id": "m.sum.wdt",
+      "tasks": ["summarize"],
+      "statement": "워치독 시간 초과(예: 약 1 s)를 정해진 값으로 쓴다. LSI가 데이터시트가 있어야 정해진다고 밝혔으면 위반이 아니다"
+    }
+  ],
+  "resolvable": [
+    {
+      "id": "v.tick_period",
+      "tasks": ["trace-timing", "trace-variant"],
+      "statement": "구성별 틱 주기(alpha 1 ms, beta 10 ms)는 코드로 정해진다"
+    },
+    {
+      "id": "v.frame_ms",
+      "tasks": ["trace-timing", "trace-command"],
+      "statement": "바이트 간 시간 초과의 ms 값(alpha 약 20, beta 약 50)은 빌드 파일과 코드로 정해진다"
+    },
+    {
+      "id": "v.heater_s",
+      "tasks": ["trace-timing"],
+      "statement": "히터 연속 켜짐 상한(약 60 s)은 코드로 정해진다"
+    },
+    {
+      "id": "v.crc_params",
+      "tasks": ["trace-command"],
+      "statement": "CRC 매개변수(다항식 0x31, 초기값 0xFF)는 코드로 정해진다"
+    },
+    {
+      "id": "v.fan_beta",
+      "tasks": ["survey", "trace-variant"],
+      "statement": "팬 제어가 beta에만 있음은 빌드 파일과 설정 헤더로 정해진다"
+    },
+    {
+      "id": "v.int.frame",
+      "tasks": ["integrate"],
+      "statement": "trace-command의 미확정 c-0034(바이트 간 시간 초과의 ms 값)는 기록의 trace-timing 수치 c-0043로 풀린다"
+    },
+    {
+      "id": "v.rev.retry",
+      "tasks": ["review"],
+      "statement": "q1(CFG_EE_RETRY_MAX의 구성별 값)은 두 설정 헤더로 정해진다"
+    }
+  ],
+  "quantities": [
+    {
+      "id": "q.frame_to",
+      "symbols": ["PROTO_FRAME_TIMEOUT_TICKS"],
+      "tasks": ["trace-timing", "trace-command"],
+      "per_config": {
+        "alpha": {
+          "ms": [20, 21],
+          "tick": [20]
+        },
+        "beta": {
+          "ms": [50, 60],
+          "tick": [5]
+        }
+      },
+      "unit_derivable": true,
+      "merge_id": "m.frame_20ms_all",
+      "note": "beta는 Makefile이 -DPROTO_FRAME_TIMEOUT_TICKS=5U로 덮어쓴다"
+    },
+    {
+      "id": "q.tick",
+      "symbols": ["CFG_TICK_HZ", "TICK_HZ"],
+      "tasks": ["trace-timing", "trace-variant"],
+      "per_config": {
+        "alpha": {
+          "hz": [1000],
+          "ms": [1]
+        },
+        "beta": {
+          "hz": [100],
+          "ms": [10]
+        }
+      },
+      "unit_derivable": true
+    },
+    {
+      "id": "q.ctrl",
+      "symbols": ["CTRL_PERIOD_TICKS"],
+      "tasks": ["trace-timing"],
+      "per_config": {
+        "alpha": {
+          "ms": [100],
+          "tick": [100]
+        },
+        "beta": {
+          "ms": [100],
+          "tick": [10]
+        }
+      },
+      "unit_derivable": true
+    },
+    {
+      "id": "q.heater",
+      "symbols": ["HEATER_MAX_ON_CYCLES"],
+      "tasks": ["trace-timing"],
+      "per_config": {
+        "alpha": {
+          "s": [60, 60.1],
+          "ms": [60000, 60100],
+          "cycle": [600, 601]
+        },
+        "beta": {
+          "s": [60, 60.1],
+          "ms": [60000, 60100],
+          "cycle": [600, 601]
+        }
+      },
+      "unit_derivable": true
+    },
+    {
+      "id": "q.wdt",
+      "symbols": ["WDT_RELOAD", "WDT_PRESCALER", "IWDG"],
+      "tasks": ["trace-timing"],
+      "per_config": {},
+      "unit_derivable": false,
+      "note": "LSI 주파수가 코드에 없다. 시간 단위로 derived를 주면 근거 없는 확정이다",
+      "overclaim_id": "m.wdt_exact"
+    },
+    {
+      "id": "q.retry",
+      "symbols": ["CFG_EE_RETRY_MAX", "EE_RETRY_MAX"],
+      "tasks": ["trace-command", "trace-variant"],
+      "per_config": {
+        "alpha": {
+          "count": [3],
+          "": [3]
+        },
+        "beta": {
+          "count": [5],
+          "": [5]
+        }
+      },
+      "unit_derivable": true
+    }
+  ]
+}

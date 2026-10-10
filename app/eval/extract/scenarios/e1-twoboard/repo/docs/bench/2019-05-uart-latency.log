@@ -1,0 +1,11 @@
+# bench run 2019-05-14, board ALPHA rev B, fw 2.3.0
+# host: lab PC, USB-serial adapter FT232R, 115200 8N1
+# test: 10000 x GET_TEMP, measure time from last request byte to first response byte
+frames_sent        10000
+frames_answered    10000
+crc_errors         0
+latency_min_ms     0.41
+latency_avg_ms     0.87
+latency_p99_ms     2.10
+latency_max_ms     3.20
+# note: max seen while an EEPROM save was running

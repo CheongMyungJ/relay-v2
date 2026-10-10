@@ -1,0 +1,14 @@
+{
+  "task": "integrate",
+  "describe": "정답 파일의 카나리가 출력에 있다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "links.0.reason",
+      "value": "LEAK-9K2M-E2-HERON"
+    }
+  ],
+  "expect": {
+    "leak": true
+  }
+}

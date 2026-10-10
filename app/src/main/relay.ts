@@ -57,6 +57,7 @@ import type {
   TerminalBacklog,
 } from '../shared/views'
 import { WORK_TYPES, type DeliveryChoice, type WorkState, type WorkType } from '../shared/work'
+import type { RequirementsBudget } from '../shared/requirements'
 import { SessionPool } from './pool'
 import type { UiPort } from './ports'
 import { checkGh, inspectProject, prepareProject, type ProjectEnv } from './projects'
@@ -73,6 +74,8 @@ export interface RelayOptions {
   /** gh 실행 파일. 기본은 PATH의 gh */
   ghBin?: string
   now?: () => Date
+  /** 요구사항 추출의 예산을 앱 설정(결정 31, 102) 위에 덮어쓴다. 시험이 run 상한을 줄이는 자리다 */
+  requirementsBudget?: Partial<RequirementsBudget>
   /** 앱 설정을 읽었거나 바꿨다. 테마(D335)처럼 Electron이 적용할 것을 main이 적용한다 */
   onConfig?: (config: AppConfig) => void
 }
@@ -216,6 +219,11 @@ export class Relay {
       ui: this.o.ui,
       pool: this.pool,
       config: () => this.config,
+      // 앱 설정의 요구사항 추출 절(결정 31, 102). 시험은 RelayOptions로 줄인다
+      requirementsBudget: () => ({
+        ...this.config.requirements_budget,
+        ...this.o.requirementsBudget,
+      }),
       at: () => this.at(),
       size: () => this.size,
       ghBin: this.ghBin(),
@@ -578,6 +586,44 @@ export class Relay {
   /** [이 단계 새 세션으로 다시] (D114) */
   retry(workKey: string, taskId: string): Promise<CommandResult> {
     return this.withWork(workKey, (w) => w.retry(taskId))
+  }
+
+  /** 요구사항 추출의 사람 결정 필요에 답한다 (requirements-extraction-flow.md 결정 7, 41, 17.12) */
+  answerRequirements(
+    workKey: string,
+    answers: { decision: string; answer: string }[],
+  ): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.answerRequirements(answers))
+  }
+
+  /** 요구사항 추출의 [계속 +N] (requirements-extraction-flow.md 결정 26, 99) */
+  extendRequirements(workKey: string, runs: number): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.extendRequirements(runs))
+  }
+
+  /** 요구사항 추출의 [범위 줄이고 계속] (AI 결정 114) */
+  narrowRequirements(
+    workKey: string,
+    units: string[],
+    note: string,
+    runs: number,
+  ): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.narrowRequirements(units, note, runs))
+  }
+
+  /** 요구사항 추출의 [부분 분석으로 넘기기] (AI 결정 114) */
+  partialRequirements(workKey: string): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.partialRequirements())
+  }
+
+  /** 요구사항 추출의 run 기록 폴더 (AI 결정 115). Work가 없거나 기록이 없으면 null */
+  requirementsRunsDir(workKey: string): string | null {
+    return this.works.get(workKey)?.requirementsRunsDir() ?? null
+  }
+
+  /** 요구사항 추출 결과를 저장소로 내보낸다 (AI 결정 119) */
+  exportRequirements(workKey: string, dir: string): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.exportRequirements(dir))
   }
 
   /** [이 단계 끝나면 멈춤] */

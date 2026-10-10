@@ -43,6 +43,11 @@ if (argv[0] === 'auth' && argv[1] === 'status') {
   process.exit(ok ? 0 : 1)
 }
 
+// 요구사항 추출의 extract run(claude -p, stream-json, --json-schema, 결정 97)은 run용 가짜(print-run.mjs)가 한다
+if (argv[0] === '-p' && argv.includes('--json-schema') && argv.includes('stream-json')) {
+  await import('./print-run.mjs')
+}
+
 // claude -p (지식 검토 호출, D300): 표준 입력의 프롬프트를 남기고 시나리오의 review[n](n번째 호출, 없으면 문제 없음)를
 // 구조화된 출력으로 돌려준다. FAKE_CLAUDE_REVIEW_FAIL이 있으면 종료 코드 1로 끝난다
 if (argv[0] === '-p') {

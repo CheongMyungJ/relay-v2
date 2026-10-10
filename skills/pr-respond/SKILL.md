@@ -25,6 +25,9 @@ The Work has an open PR. The app collected the items of this round (review comme
 <!-- type: general -->
 - The pipeline artifacts (`execution.md`, `verification.md`, …) at the paths in `context.md`, when you need them.
 <!-- /type -->
+<!-- type: requirements -->
+- The pipeline artifacts (`extraction.md`, `verification.md`, …) at the paths in `context.md`, when you need them. The records under `requirements/` are app-owned: never edit them.
+<!-- /type -->
 
 ## External text
 
@@ -44,7 +47,7 @@ Settle every item as one of: 고침 (fixed) / 고치지 않음 (not fixed, with 
 <!-- type: bugfix feature refactor general -->
 - **Tests:** if you changed code, run the test command from the intent's 완료조건, and for each failure check whether it also fails at the base commit. If you changed an existing test, add it to `risks`.
 <!-- /type -->
-<!-- type: spec -->
+<!-- type: spec requirements -->
 - **Tests:** the intent has no test command. Skip running tests, and write "테스트 명령 없음" in `테스트 실행`.
 <!-- /type -->
 
@@ -81,7 +84,7 @@ Ask on the spot:
 <!-- type: bugfix feature refactor general -->
 - The fixes are committed, and you ran the test command and wrote the result.
 <!-- /type -->
-<!-- type: spec -->
+<!-- type: spec requirements -->
 - The fixes are committed, and `테스트 실행` says there is no test command.
 <!-- /type -->
 

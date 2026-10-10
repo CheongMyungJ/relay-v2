@@ -3,7 +3,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { ALL_NODES, NODE_INFO, PIPELINES } from '../../src/core/pipeline'
+import { ALL_NODES, NODE_INFO, PIPELINES, appRun } from '../../src/core/pipeline'
 import { checkIntentDraft, checkTask, isValid } from '../../src/core/validate'
 import { DEFAULT_CONFIG } from '../../src/shared/config'
 import type { NodeName } from '../../src/shared/contracts'
@@ -45,7 +45,9 @@ describe('스킬 원본이 있다 (5.6.3)', () => {
   it('노드마다 skills/<스킬>/SKILL.md가 있다. design, implement, refactor, execute를 포함한다 (D232, D258, D302)', () => {
     for (const n of [...ALL_NODES, 'respond' as const]) {
       const skill = NODE_INFO[n].skill
-      expect(fs.existsSync(path.join(SKILLS, skill, 'SKILL.md')), skill).toBe(true)
+      // 앱이 run을 돌리는 단계(extract)는 SKILL.md 대신 지시 층(contract.md, kinds, lenses)을 둔다 (결정 9, 92)
+      const file = appRun(n) ? 'contract.md' : 'SKILL.md'
+      expect(fs.existsSync(path.join(SKILLS, skill, file)), skill).toBe(true)
     }
   })
 })

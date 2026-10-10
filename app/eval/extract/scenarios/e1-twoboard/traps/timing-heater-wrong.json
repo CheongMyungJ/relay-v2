@@ -1,0 +1,20 @@
+{
+  "task": "trace-timing",
+  "describe": "히터 상한을 6 s로 잘못 계산한다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "quantities.3.values",
+      "value": [
+        {
+          "configs": ["alpha", "beta"],
+          "value": "6"
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "violated": ["m.q.q.heater.value"],
+    "missed": ["r.tim.heater"]
+  }
+}

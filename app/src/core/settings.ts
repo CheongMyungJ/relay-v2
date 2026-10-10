@@ -111,7 +111,8 @@ export interface DenyInput {
 
 /**
  * deny 규칙 (D17, 시나리오 2-3): git push, gh pr 계열, 앱 소유 파일(work.json, request.md, intent.md,
- * decisions.md, pr-items.json(D191), 이전 task 디렉터리, Work 디렉터리의 .claude/) 편집.
+ * decisions.md, pr-items.json(D191), 요구사항 기록 requirements/(requirements-extraction-flow.md 결정 38),
+ * 이전 task 디렉터리, Work 디렉터리의 .claude/) 편집.
  * 출처: spikes/s4-permissions.mjs (Bash(git push*), Bash(gh pr*), Edit(ruleAbs(…)))
  */
 export function denyRules(input: DenyInput): string[] {
@@ -120,6 +121,7 @@ export function denyRules(input: DenyInput): string[] {
     'Bash(git push*)',
     'Bash(gh pr*)',
     ...APP_OWNED_FILES.map((f) => `Edit(${ruleJoin(work, f)})`),
+    `Edit(${ruleJoin(work, 'requirements', '**')})`,
     ...input.previousTaskDirs.map((d) => `Edit(${ruleJoin(ruleAbs(d), '**')})`),
     `Edit(${ruleJoin(work, '.claude', '**')})`,
   ]
@@ -249,13 +251,14 @@ export interface SideSettings {
 }
 
 /**
- * 곁 세션의 deny 규칙 (D388): 앱 소유 파일, tasks/ 아래 전부, Work 디렉터리의 .claude/ 편집. 사람이 옆에서 허락하는
+ * 곁 세션의 deny 규칙 (D388): 앱 소유 파일, 요구사항 기록(결정 38), tasks/ 아래 전부, Work 디렉터리의 .claude/ 편집. 사람이 옆에서 허락하는
  * 세션이라 git push와 gh는 막지 않는다(task의 D17과 다름)
  */
 export function sideDenyRules(workDir: string): string[] {
   const work = ruleAbs(workDir)
   return [
     ...APP_OWNED_FILES.map((f) => `Edit(${ruleJoin(work, f)})`),
+    `Edit(${ruleJoin(work, 'requirements', '**')})`,
     `Edit(${ruleJoin(work, 'tasks', '**')})`,
     `Edit(${ruleJoin(work, '.claude', '**')})`,
   ]

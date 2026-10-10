@@ -80,6 +80,16 @@ function texts(v: unknown): string[] {
   return v.map(text)
 }
 
+/** 요구사항 추출의 사람 답 목록 */
+function requirementsAnswers(v: unknown): { decision: string; answer: string }[] {
+  if (!Array.isArray(v)) throw new Error('답 목록이 아님')
+  return v.map((a: unknown) => {
+    if (!a || typeof a !== 'object') throw new Error('답이 아님')
+    const o = a as Record<string, unknown>
+    return { decision: text(o['decision']), answer: text(o['answer']) }
+  })
+}
+
 function choice(v: unknown): DeliveryChoice {
   if (v !== 'push' && v !== 'pr') throw new Error('전달 선택이 아님')
   return v
@@ -294,6 +304,30 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   ipcMain.handle(IPC.prRerun, async (_e, workKey: unknown) => (await ready).prRerun(text(workKey)))
   ipcMain.handle(IPC.issueRetry, async (_e, workKey: unknown) =>
     (await ready).issueRetry(text(workKey)),
+  )
+  ipcMain.handle(IPC.answerRequirements, async (_e, workKey: unknown, answers: unknown) =>
+    (await ready).answerRequirements(text(workKey), requirementsAnswers(answers)),
+  )
+  ipcMain.handle(IPC.extendRequirements, async (_e, workKey: unknown, runs: unknown) =>
+    (await ready).extendRequirements(text(workKey), count(runs)),
+  )
+  ipcMain.handle(
+    IPC.narrowRequirements,
+    async (_e, workKey: unknown, units: unknown, note: unknown, runs: unknown) =>
+      (await ready).narrowRequirements(text(workKey), texts(units), text(note), count(runs)),
+  )
+  ipcMain.handle(IPC.partialRequirements, async (_e, workKey: unknown) =>
+    (await ready).partialRequirements(text(workKey)),
+  )
+  // run 기록 폴더는 main이 Work 디렉터리에서 계산한다. 렌더러는 경로를 넘기지 않는다 (AI 결정 115)
+  ipcMain.handle(IPC.openRequirementsRuns, async (_e, workKey: unknown) => {
+    const dir = (await ready).requirementsRunsDir(text(workKey))
+    if (!dir) return { ok: false, error: '요구사항 추출 기록이 없음' }
+    const error = await shell.openPath(dir)
+    return error ? { ok: false, error } : { ok: true }
+  })
+  ipcMain.handle(IPC.exportRequirements, async (_e, workKey: unknown, dir: unknown) =>
+    (await ready).exportRequirements(text(workKey), text(dir)),
   )
   ipcMain.handle(IPC.projectSettings, async (_e, projectId: unknown, settings: unknown) =>
     (await ready).updateProjectSettings(text(projectId), settings),

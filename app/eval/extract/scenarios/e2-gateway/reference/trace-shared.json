@@ -1,0 +1,326 @@
+{
+  "observations": [
+    {
+      "key": "o1",
+      "text": "TIM7_IRQHandler는 우선순위 2(configMAX_SYSCALL_INTERRUPT_PRIORITY 5보다 급함)인데 queue_send_from_isr를 불러 커널 목록이 깨질 수 있다",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "include/board.h",
+          "start": 35,
+          "end": 35,
+          "quote": "#define IRQ_PRIO_TIMEBASE   2U",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/timebase.c",
+          "start": 42,
+          "end": 42,
+          "quote": "(void)queue_send_from_isr(g_event_q, &ev, &woken);",
+          "command": null
+        },
+        {
+          "kind": "doc_claim",
+          "path": "third_party/picortos/src/queue.c",
+          "start": 8,
+          "end": 8,
+          "quote": "Calling them from a more urgent interrupt corrupts the",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o2",
+      "text": "g_stats.rx_frames·rx_bytes는 64비트이고 USART2 ISR가 올리며 regs_read·logger·console이 보호 없이 읽어 찢어진 값을 읽을 수 있다",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/rs485.c",
+          "start": 94,
+          "end": 94,
+          "quote": "g_stats.rx_frames++;",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/regs.c",
+          "start": 122,
+          "end": 122,
+          "quote": "uint64_t frames = g_stats.rx_frames;",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o3",
+      "text": "g_sensor.sample_count는 DMA2 stream 0 ISR가 ++하고 sensor_reset_filter가 0으로 지운다. 뮤텍스는 ISR를 막지 못한다",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/sensor.c",
+          "start": 70,
+          "end": 70,
+          "quote": "g_sensor.sample_count++;",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/sensor.c",
+          "start": 54,
+          "end": 54,
+          "quote": "g_sensor.sample_count = 0;",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o4",
+      "text": "sensor_reset_filter는 주석과 달리 뮤텍스 없이 comm 태스크(regs_write)에서 불려 sensor 태스크의 누적(s_acc, s_acc_n)을 망칠 수 있다",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/sensor.c",
+          "start": 49,
+          "end": 49,
+          "quote": "/* called with g_sensor_mutex held */",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/regs.c",
+          "start": 160,
+          "end": 160,
+          "quote": "sensor_reset_filter();",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o5",
+      "text": "ADC DMA는 원형으로 계속 쓰고 sensor 태스크는 알린 반쪽을 복사 없이 나중에 읽어 덮어쓰는 중에 읽을 수 있다",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/sensor.c",
+          "start": 103,
+          "end": 103,
+          "quote": "s_acc[ch] += s_adc_buf[half][s][ch];",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o6",
+      "text": "수신 원형 버퍼는 USART2 ISR에서만 읽어 큐로 복사하고, 송신 버퍼는 완료 세마포어 뒤에야 다시 쓴다",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/rs485.c",
+          "start": 89,
+          "end": 89,
+          "quote": "frame.data[i] = s_rx_buf[(s_rx_pos + i) % RS485_RX_DMA_SIZE];",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/rs485.c",
+          "start": 121,
+          "end": 121,
+          "quote": "memcpy(s_tx_buf, data, len);",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o7",
+      "text": "g_sensor 값은 g_sensor_mutex로 sensor 태스크·regs_read·logger 사이에서 보호된다",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/regs.c",
+          "start": 91,
+          "end": 91,
+          "quote": "if (mutex_lock(g_sensor_mutex, pdMS_TO_TICKS(10U)) != pdPASS) {",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o8",
+      "text": "g_settings는 comm(devkit은 console도)이 잠금 없이 쓰고 sensor(경보)와 cfg가 읽는다",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/regs.c",
+          "start": 152,
+          "end": 152,
+          "quote": "g_settings.alarm_high = v;",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/sensor.c",
+          "start": 116,
+          "end": 116,
+          "quote": "alarm_update(g_sensor.value[0], g_settings.alarm_high, g_settings.alarm_low);",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o9",
+      "text": "우선순위: TIM7 2, USART2 5, DMA1 S6 5, DMA2 S0 6. 태스크 wdog 4, comm 3, sensor 2, cfg 1, logger 1",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "include/board.h",
+          "start": 38,
+          "end": 38,
+          "quote": "#define IRQ_PRIO_ADC_DMA    6U",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "include/app.h",
+          "start": 12,
+          "end": 12,
+          "quote": "#define PRIO_COMM           3U",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o10",
+      "text": "DE는 DMA 완료에서 내려 마지막 바이트가 잘릴 수 있다",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/rs485.c",
+          "start": 110,
+          "end": 111,
+          "quote": "hal_gpio_write(RS485_PORT, RS485_DE_PIN, 0); sem_give_from_isr(s_tx_done, &woken);",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o11",
+      "text": "DMA 버퍼 s_adc_buf, s_rx_buf, s_tx_buf는 섹션 지정 없는 정적 배열이라 모든 구성에서 .bss로 SRAM(0x20000000, 128K) 한 영역에 놓인다. 이 SRAM에 DMA가 닿는지는 칩 자료가 정한다.",
+      "configs": ["basic", "pro", "devkit"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/sensor.c",
+          "start": 20,
+          "end": 20,
+          "quote": "static uint16_t s_adc_buf[2][SAMPLES_PER_HALF][SENSOR_MAX_CH];",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/rs485.c",
+          "start": 24,
+          "end": 24,
+          "quote": "static uint8_t s_rx_buf[RS485_RX_DMA_SIZE];",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/rs485.c",
+          "start": 26,
+          "end": 26,
+          "quote": "static uint8_t s_tx_buf[MB_FRAME_MAX];",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "vendor/nimbus/n4_flash.ld",
+          "start": 15,
+          "end": 15,
+          "quote": ".bss : { _sbss = .; *(.bss*) *(COMMON) _ebss = .; } > RAM",
+          "command": null
+        }
+      ],
+      "inference": false
+    }
+  ],
+  "quantities": [],
+  "requirements": [],
+  "constraints": [
+    {
+      "key": "ct1",
+      "text": "커널 *_from_isr 호출은 우선순위 5 이상(덜 급한) 인터럽트에서만 한다",
+      "area": "concurrency",
+      "configs": ["basic", "pro", "devkit"],
+      "refs": ["o1"],
+      "reason": "커널 임계 구역이 BASEPRI로 그보다 급한 인터럽트를 막지 않는다"
+    }
+  ],
+  "impl_choices": [],
+  "unknowns": [],
+  "conflicts": [],
+  "absences": [],
+  "followups": [],
+  "human_decisions": [],
+  "checkpoint": null,
+  "outcome": "done",
+  "outcome_reason": "ISR 넷과 태스크 다섯의 공유 상태를 봤다.",
+  "checklist": {
+    "access_list": {
+      "status": "covered",
+      "refs": ["o2", "o3", "o4", "o6", "o7", "o8"],
+      "searches": []
+    },
+    "context_priority": {
+      "status": "covered",
+      "refs": ["o9"],
+      "searches": []
+    },
+    "protection": {
+      "status": "covered",
+      "refs": ["o6", "o7"],
+      "searches": []
+    },
+    "read_modify_write": {
+      "status": "covered",
+      "refs": ["o3"],
+      "searches": []
+    },
+    "dma_ownership": {
+      "status": "covered",
+      "refs": ["o5", "o6"],
+      "searches": []
+    },
+    "unprotected_pairs": {
+      "status": "covered",
+      "refs": ["o1", "o2", "o3", "o4", "o8"],
+      "searches": []
+    },
+    "dma_memory": {
+      "status": "covered",
+      "refs": ["o11"],
+      "searches": []
+    }
+  }
+}

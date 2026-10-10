@@ -1,0 +1,21 @@
+{
+  "task": "integrate",
+  "describe": "같은 글이지만 구성이 다른 두 주장(hwrev의 delay_ms(2U): alpha 2 ms, beta 20 ms)을 합친다",
+  "ops": [
+    {
+      "op": "push",
+      "path": "links",
+      "value": {
+        "key": "l9",
+        "kind": "merges",
+        "from": ["c-0075"],
+        "to": ["c-0074"],
+        "reason": "같은 글이다",
+        "anchors": []
+      }
+    }
+  ],
+  "expect": {
+    "violated": ["m.int.merge_hwrev"]
+  }
+}

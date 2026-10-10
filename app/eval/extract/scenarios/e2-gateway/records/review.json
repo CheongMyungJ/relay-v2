@@ -1,0 +1,3352 @@
+{
+  "intent": "- Goal: recover functional and non-functional requirement candidates and hardware and communication constraints from this firmware.\n- Scope: every build configuration and the project's own code. Vendor HAL, RTOS kernels and third-party libraries are boundaries.\n- No toolchain is provided.",
+  "configs": [
+    {
+      "name": "basic",
+      "status": "confirmed",
+      "select": "make VARIANT=basic (기본값)",
+      "build_command": "make VARIANT=basic"
+    },
+    {
+      "name": "pro",
+      "status": "confirmed",
+      "select": "make VARIANT=pro",
+      "build_command": "make VARIANT=pro"
+    },
+    {
+      "name": "devkit",
+      "status": "confirmed",
+      "select": "make VARIANT=devkit",
+      "build_command": "make VARIANT=devkit"
+    },
+    {
+      "name": "lite",
+      "status": "candidate",
+      "select": "variants/lite.mk만 있고 cfg/variant_lite.h가 없어 빌드되지 않는다",
+      "build_command": null
+    }
+  ],
+  "units": [
+    {
+      "id": "u-0001",
+      "kind": "survey",
+      "lens": null,
+      "purpose": "구성, 진입점, 인터페이스, 경계를 찾는다",
+      "scope": "레포 전체",
+      "status": "done",
+      "reason": "Makefile, variants/, cfg/, app_init.c와 시작 코드를 봤다."
+    },
+    {
+      "id": "u-0002",
+      "kind": "trace",
+      "lens": "command",
+      "purpose": "FC16 경로",
+      "scope": "src/modbus.c, src/mb_handlers.c, src/regs.c",
+      "status": "done",
+      "reason": "수신부터 응답까지 봤다."
+    },
+    {
+      "id": "u-0003",
+      "kind": "trace",
+      "lens": "shared",
+      "purpose": "ISR와 태스크 공유 상태",
+      "scope": "g_stats, g_sensor, DMA 버퍼",
+      "status": "done",
+      "reason": "ISR 넷과 태스크 다섯의 공유 상태를 봤다."
+    },
+    {
+      "id": "u-0004",
+      "kind": "trace",
+      "lens": "variant",
+      "purpose": "구성 헤더는 Makefile의 -include로 강제로 들어간다",
+      "scope": "Makefile, variants/, cfg/",
+      "status": "done",
+      "reason": "빌드 파일과 생성 헤더를 견줬다."
+    },
+    {
+      "id": "u-0005",
+      "kind": "trace",
+      "lens": "timing",
+      "purpose": "응답 지연, 송신 시간 초과, 센서 주기와 그 틱 원천",
+      "scope": "include/modbus.h, src/rs485.c, src/sensor.c, src/wdog.c, src/timebase.c",
+      "status": "needs_external",
+      "reason": "LSI·타이머 클럭·DE 반복 시간은 데이터시트가 필요하다."
+    }
+  ],
+  "claims": [
+    {
+      "id": "c-0001",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "configs",
+      "key": "c1",
+      "body": {
+        "key": "c1",
+        "name": "basic",
+        "status": "confirmed",
+        "select": "make VARIANT=basic (기본값)",
+        "build_command": "make VARIANT=basic",
+        "anchors": [
+          {
+            "evidence": "e-0001"
+          },
+          {
+            "evidence": "e-0002"
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0002",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "configs",
+      "key": "c2",
+      "body": {
+        "key": "c2",
+        "name": "pro",
+        "status": "confirmed",
+        "select": "make VARIANT=pro",
+        "build_command": "make VARIANT=pro",
+        "anchors": [
+          {
+            "evidence": "e-0003"
+          },
+          {
+            "evidence": "e-0004"
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0003",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "configs",
+      "key": "c3",
+      "body": {
+        "key": "c3",
+        "name": "devkit",
+        "status": "confirmed",
+        "select": "make VARIANT=devkit",
+        "build_command": "make VARIANT=devkit",
+        "anchors": [
+          {
+            "evidence": "e-0005"
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0004",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "configs",
+      "key": "c4",
+      "body": {
+        "key": "c4",
+        "name": "lite",
+        "status": "candidate",
+        "select": "variants/lite.mk만 있고 cfg/variant_lite.h가 없어 빌드되지 않는다",
+        "build_command": null,
+        "anchors": [
+          {
+            "evidence": "e-0006"
+          },
+          {
+            "evidence": "e-0007"
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0005",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i1",
+      "body": {
+        "key": "i1",
+        "kind": "reset",
+        "name": "Reset_Handler",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0008"
+          }
+        ],
+        "notes": ""
+      }
+    },
+    {
+      "id": "c-0006",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i2",
+      "body": {
+        "key": "i2",
+        "kind": "isr",
+        "name": "USART2_IRQHandler",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0009"
+          }
+        ],
+        "notes": "RS-485 idle line"
+      }
+    },
+    {
+      "id": "c-0007",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i3",
+      "body": {
+        "key": "i3",
+        "kind": "isr",
+        "name": "DMA1_Stream6_IRQHandler",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0010"
+          }
+        ],
+        "notes": "RS-485 송신 완료"
+      }
+    },
+    {
+      "id": "c-0008",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i4",
+      "body": {
+        "key": "i4",
+        "kind": "isr",
+        "name": "DMA2_Stream0_IRQHandler",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0011"
+          }
+        ],
+        "notes": "ADC 반 버퍼"
+      }
+    },
+    {
+      "id": "c-0009",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i5",
+      "body": {
+        "key": "i5",
+        "kind": "isr",
+        "name": "TIM7_IRQHandler",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0012"
+          }
+        ],
+        "notes": "1 kHz 타임베이스"
+      }
+    },
+    {
+      "id": "c-0010",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i6",
+      "body": {
+        "key": "i6",
+        "kind": "task",
+        "name": "mb_task",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0013"
+          }
+        ],
+        "notes": "comm"
+      }
+    },
+    {
+      "id": "c-0011",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i7",
+      "body": {
+        "key": "i7",
+        "kind": "task",
+        "name": "sensor_task",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0014"
+          }
+        ],
+        "notes": ""
+      }
+    },
+    {
+      "id": "c-0012",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i8",
+      "body": {
+        "key": "i8",
+        "kind": "task",
+        "name": "wdog_task",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0015"
+          }
+        ],
+        "notes": ""
+      }
+    },
+    {
+      "id": "c-0013",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i9",
+      "body": {
+        "key": "i9",
+        "kind": "task",
+        "name": "cfg_task",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0016"
+          }
+        ],
+        "notes": ""
+      }
+    },
+    {
+      "id": "c-0014",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i10",
+      "body": {
+        "key": "i10",
+        "kind": "task",
+        "name": "logger_task",
+        "configs": ["pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0017"
+          }
+        ],
+        "notes": ""
+      }
+    },
+    {
+      "id": "c-0015",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i11",
+      "body": {
+        "key": "i11",
+        "kind": "task",
+        "name": "console_task",
+        "configs": ["devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0018"
+          },
+          {
+            "evidence": "e-0019"
+          }
+        ],
+        "notes": ""
+      }
+    },
+    {
+      "id": "c-0016",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i12",
+      "body": {
+        "key": "i12",
+        "kind": "command",
+        "name": "FC03 read holding registers",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0020"
+          }
+        ],
+        "notes": ""
+      }
+    },
+    {
+      "id": "c-0017",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i13",
+      "body": {
+        "key": "i13",
+        "kind": "command",
+        "name": "FC06 write single register",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0021"
+          }
+        ],
+        "notes": ""
+      }
+    },
+    {
+      "id": "c-0018",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i14",
+      "body": {
+        "key": "i14",
+        "kind": "command",
+        "name": "FC16 write multiple registers",
+        "configs": ["pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0022"
+          }
+        ],
+        "notes": ""
+      }
+    },
+    {
+      "id": "c-0019",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i15",
+      "body": {
+        "key": "i15",
+        "kind": "command",
+        "name": "FC43 device identification",
+        "configs": ["all"],
+        "anchors": [
+          {
+            "evidence": "e-0023"
+          }
+        ],
+        "notes": ""
+      }
+    },
+    {
+      "id": "c-0020",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i16",
+      "body": {
+        "key": "i16",
+        "kind": "command",
+        "name": "FC08 diagnostics",
+        "configs": ["devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0024"
+          }
+        ],
+        "notes": ""
+      }
+    },
+    {
+      "id": "c-0021",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i17",
+      "body": {
+        "key": "i17",
+        "kind": "command",
+        "name": "mb_fc23_read_write",
+        "configs": [],
+        "anchors": [
+          {
+            "evidence": "e-0025"
+          }
+        ],
+        "notes": "정의만 있고 어느 구성에서도 등록되지 않는다"
+      }
+    },
+    {
+      "id": "c-0022",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i18",
+      "body": {
+        "key": "i18",
+        "kind": "dma_channel",
+        "name": "DMA1_Stream5 (USART2 RX)",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0026"
+          }
+        ],
+        "notes": ""
+      }
+    },
+    {
+      "id": "c-0023",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i19",
+      "body": {
+        "key": "i19",
+        "kind": "dma_channel",
+        "name": "DMA1_Stream6 (USART2 TX)",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0027"
+          }
+        ],
+        "notes": ""
+      }
+    },
+    {
+      "id": "c-0024",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "inventory",
+      "key": "i20",
+      "body": {
+        "key": "i20",
+        "kind": "dma_channel",
+        "name": "DMA2_Stream0 (ADC1)",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0028"
+          }
+        ],
+        "notes": ""
+      }
+    },
+    {
+      "id": "c-0025",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "boundaries",
+      "key": "b1",
+      "body": {
+        "key": "b1",
+        "path": "third_party/picortos",
+        "kind": "rtos_kernel",
+        "reason": "picoRTOS 3.2.1, MIT 라이선스",
+        "anchors": [
+          {
+            "evidence": "e-0029"
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0026",
+      "unit": "u-0001",
+      "run": "r-0001",
+      "section": "boundaries",
+      "key": "b2",
+      "body": {
+        "key": "b2",
+        "path": "vendor/nimbus",
+        "kind": "vendor_hal",
+        "reason": "Nimbus Device Software License 머리말",
+        "anchors": [
+          {
+            "evidence": "e-0030"
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0027",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "observations",
+      "key": "o1",
+      "body": {
+        "key": "o1",
+        "text": "USART2 idle-line 인터럽트가 원형 수신 DMA의 바이트를 프레임으로 복사해 g_mb_rx_q에 넣고, mb_task가 길이·CRC·주소를 본 뒤 등록 표에서 처리기를 찾는다",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0031"
+          },
+          {
+            "evidence": "e-0032"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0028",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "observations",
+      "key": "o2",
+      "body": {
+        "key": "o2",
+        "text": "FC16은 CFG_FEATURE_FC16일 때만 등록되어 pro·devkit에만 있다. basic에서는 처리기가 없어 예외 01",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0033"
+          },
+          {
+            "evidence": "e-0034"
+          },
+          {
+            "evidence": "e-0035"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0029",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "observations",
+      "key": "o3",
+      "body": {
+        "key": "o3",
+        "text": "PDU 6바이트 미만, 수량 0 또는 MB_MAX_WRITE_REGS 초과, byte count != 수량x2, 길이 불일치면 예외 03",
+        "configs": ["pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0036"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0030",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "observations",
+      "key": "o4",
+      "body": {
+        "key": "o4",
+        "text": "쓰기 전에 모든 주소의 존재만 보고 없으면 예외 02",
+        "configs": ["pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0037"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0031",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "observations",
+      "key": "o5",
+      "body": {
+        "key": "o5",
+        "text": "읽기 전용·범위 밖·저장 중은 쓰기 반복 안에서 걸려 앞 레지스터가 이미 쓰인 채 예외(02, 03, 06)를 낸다. 원자적이지 않다",
+        "configs": ["pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0038"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0032",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "observations",
+      "key": "o6",
+      "body": {
+        "key": "o6",
+        "text": "설정 저장 중(g_cfg_busy)이면 regs_write가 REG_BUSY라 예외 06",
+        "configs": ["pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0039"
+          },
+          {
+            "evidence": "e-0040"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0033",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "observations",
+      "key": "o7",
+      "body": {
+        "key": "o7",
+        "text": "정상이면 레지스터마다 쓰고 설정이면 config_request_save로 cfg 태스크가 섹터 11에 저장하며, 응답은 시작 주소와 수량을 되돌린다",
+        "configs": ["pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0041"
+          },
+          {
+            "evidence": "e-0042"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0034",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "observations",
+      "key": "o8",
+      "body": {
+        "key": "o8",
+        "text": "슬레이브 주소·보율은 g_settings만 바뀌고 다음 리셋의 시작(app_init)에서 적용된다",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0043"
+          },
+          {
+            "evidence": "e-0044"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0035",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "observations",
+      "key": "o9",
+      "body": {
+        "key": "o9",
+        "text": "4바이트 미만과 CRC 오류는 응답 없이 버리고 카운터를 올린다. 브로드캐스트는 실행하지만 응답하지 않는다",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0045"
+          },
+          {
+            "evidence": "e-0046"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0036",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "observations",
+      "key": "o10",
+      "body": {
+        "key": "o10",
+        "text": "응답 전 task_delay(pdMS_TO_TICKS(MB_RESP_DELAY_MS)), DE를 올리고 바쁜 대기 뒤 송신 DMA, 50 ms 안에 완료가 없으면 DMA를 멈추고 tx_timeouts를 올린다",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0047"
+          },
+          {
+            "evidence": "e-0048"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0037",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "observations",
+      "key": "o11",
+      "body": {
+        "key": "o11",
+        "text": "DE는 송신 DMA 완료 인터럽트에서 내린다. DMA 완료는 USART가 마지막 바이트를 다 보내기(TC) 전이라 응답 끝이 잘릴 수 있다",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0049"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0038",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "observations",
+      "key": "o12",
+      "body": {
+        "key": "o12",
+        "text": "CRC는 Modbus CRC(다항식 0xA001 반사, 초기 0xFFFF)다",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0050"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0039",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "observations",
+      "key": "o13",
+      "body": {
+        "key": "o13",
+        "text": "regs_write가 평균 창(REG_AVG_WINDOW)을 바꾸면 sensor_reset_filter를 부르고, 이 함수는 주석대로 g_sensor_mutex를 잡은 채 불려 sensor 태스크의 누적과 겹치지 않는다",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0051"
+          },
+          {
+            "evidence": "e-0052"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0040",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "quantities",
+      "key": "q1",
+      "body": {
+        "key": "q1",
+        "symbol": "MB_MAX_WRITE_REGS",
+        "expr": "64U",
+        "values": [
+          {
+            "configs": ["pro", "devkit"],
+            "value": "64"
+          }
+        ],
+        "unit": "count",
+        "unit_status": "derived",
+        "nature": "setting",
+        "chain": [],
+        "anchors": [
+          {
+            "evidence": "e-0053"
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0041",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "quantities",
+      "key": "q2",
+      "body": {
+        "key": "q2",
+        "symbol": "MB_TX_TIMEOUT_MS",
+        "expr": "50U",
+        "values": [
+          {
+            "configs": ["basic", "pro", "devkit"],
+            "value": "50"
+          }
+        ],
+        "unit": "ms",
+        "unit_status": "derived",
+        "nature": "setting",
+        "chain": [],
+        "anchors": [
+          {
+            "evidence": "e-0054"
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0042",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "requirements",
+      "key": "r1",
+      "body": {
+        "key": "r1",
+        "type": "functional",
+        "condition": "FC16 요청의 수량이 0이거나 MB_MAX_WRITE_REGS를 넘거나 byte count가 수량x2가 아닐 때",
+        "behavior": "레지스터를 하나도 쓰지 않는다",
+        "result": "예외 03(illegal data value)을 돌려준다",
+        "configs": ["pro", "devkit"],
+        "refs": ["o3"],
+        "basis": "code"
+      }
+    },
+    {
+      "id": "c-0043",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "unknowns",
+      "key": "k1",
+      "body": {
+        "key": "k1",
+        "question": "응답 지연 MB_RESP_DELAY_MS(2 ms)가 구성마다 몇 틱을 기다리는지는 RTOS 틱과 pdMS_TO_TICKS를 따라가지 않아 이 단위에서 정하지 못했다",
+        "needs": "other",
+        "refs": ["o10"]
+      }
+    },
+    {
+      "id": "c-0044",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "conflicts",
+      "key": "x1",
+      "body": {
+        "key": "x1",
+        "text": "문서는 FC16이 all or nothing이라 하나 코드는 부분 쓰기를 남긴다",
+        "sides": [
+          {
+            "claim": "문서",
+            "anchors": [
+              {
+                "evidence": "e-0055"
+              }
+            ]
+          },
+          {
+            "claim": "코드",
+            "anchors": [
+              {
+                "evidence": "e-0056"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0045",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "conflicts",
+      "key": "x2",
+      "body": {
+        "key": "x2",
+        "text": "rs485.c 주석은 t3.5라 하나 코드는 idle-line(문자 하나 시간)으로 프레임 끝을 가른다",
+        "sides": [
+          {
+            "claim": "주석",
+            "anchors": [
+              {
+                "evidence": "e-0057"
+              }
+            ]
+          },
+          {
+            "claim": "코드",
+            "anchors": [
+              {
+                "evidence": "e-0058"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0046",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "conflicts",
+      "key": "x3",
+      "body": {
+        "key": "x3",
+        "text": "문서는 CRC-16/CCITT-FALSE라 하나 코드는 Modbus CRC다",
+        "sides": [
+          {
+            "claim": "문서",
+            "anchors": [
+              {
+                "evidence": "e-0059"
+              }
+            ]
+          },
+          {
+            "claim": "코드",
+            "anchors": [
+              {
+                "evidence": "e-0060"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0047",
+      "unit": "u-0002",
+      "run": "r-0002",
+      "section": "absences",
+      "key": "a1",
+      "body": {
+        "key": "a1",
+        "claim": "g_settings는 Modbus 쓰기 처리 regs_write 밖에서 쓰는 곳이 없다",
+        "configs": ["basic", "pro", "devkit"],
+        "searches": [
+          {
+            "tool": "Grep",
+            "pattern": "g_settings\\.[a-z_]* =",
+            "scope": "src/regs.c src/mb_handlers.c",
+            "hits": 5
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0048",
+      "unit": "u-0003",
+      "run": "r-0003",
+      "section": "observations",
+      "key": "o1",
+      "body": {
+        "key": "o1",
+        "text": "TIM7_IRQHandler는 우선순위 2(configMAX_SYSCALL_INTERRUPT_PRIORITY 5보다 급함)인데 queue_send_from_isr를 불러 커널 목록이 깨질 수 있다",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0061"
+          },
+          {
+            "evidence": "e-0062"
+          },
+          {
+            "evidence": "e-0063"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0049",
+      "unit": "u-0003",
+      "run": "r-0003",
+      "section": "observations",
+      "key": "o2",
+      "body": {
+        "key": "o2",
+        "text": "g_stats.rx_frames·rx_bytes는 64비트이고 USART2 ISR가 올리며 regs_read·logger·console이 보호 없이 읽어 찢어진 값을 읽을 수 있다",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0064"
+          },
+          {
+            "evidence": "e-0065"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0050",
+      "unit": "u-0003",
+      "run": "r-0003",
+      "section": "observations",
+      "key": "o3",
+      "body": {
+        "key": "o3",
+        "text": "g_sensor.sample_count는 DMA2 stream 0 ISR가 올리고 sensor_reset_filter가 0으로 지운다. 뮤텍스는 ISR를 막지 못한다",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0066"
+          },
+          {
+            "evidence": "e-0067"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0051",
+      "unit": "u-0003",
+      "run": "r-0003",
+      "section": "observations",
+      "key": "o4",
+      "body": {
+        "key": "o4",
+        "text": "sensor_reset_filter는 주석과 달리 뮤텍스 없이 comm 태스크(regs_write)에서 불려 sensor 태스크의 누적(s_acc, s_acc_n)을 망칠 수 있다",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0068"
+          },
+          {
+            "evidence": "e-0051"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0052",
+      "unit": "u-0003",
+      "run": "r-0003",
+      "section": "observations",
+      "key": "o5",
+      "body": {
+        "key": "o5",
+        "text": "ADC DMA는 원형으로 계속 쓰고 sensor 태스크는 알린 반쪽을 복사 없이 나중에 읽어 덮어쓰는 중에 읽을 수 있다",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0069"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0053",
+      "unit": "u-0003",
+      "run": "r-0003",
+      "section": "observations",
+      "key": "o6",
+      "body": {
+        "key": "o6",
+        "text": "수신 원형 버퍼는 USART2 ISR에서만 읽어 큐로 복사하고, 송신 버퍼는 완료 세마포어 뒤에야 다시 쓴다",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0070"
+          },
+          {
+            "evidence": "e-0071"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0054",
+      "unit": "u-0003",
+      "run": "r-0003",
+      "section": "observations",
+      "key": "o7",
+      "body": {
+        "key": "o7",
+        "text": "g_sensor 값은 g_sensor_mutex로 sensor 태스크·regs_read·logger 사이에서 보호된다",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0072"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0055",
+      "unit": "u-0003",
+      "run": "r-0003",
+      "section": "observations",
+      "key": "o8",
+      "body": {
+        "key": "o8",
+        "text": "g_settings는 comm(devkit은 console도)이 잠금 없이 쓰고 sensor(경보)와 cfg가 읽는다",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0073"
+          },
+          {
+            "evidence": "e-0074"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0056",
+      "unit": "u-0003",
+      "run": "r-0003",
+      "section": "observations",
+      "key": "o9",
+      "body": {
+        "key": "o9",
+        "text": "우선순위: TIM7 2, USART2 5, DMA1 S6 5, DMA2 S0 6. 태스크 wdog 4, comm 3, sensor 2, cfg 1, logger 1",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0075"
+          },
+          {
+            "evidence": "e-0076"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0057",
+      "unit": "u-0003",
+      "run": "r-0003",
+      "section": "observations",
+      "key": "o10",
+      "body": {
+        "key": "o10",
+        "text": "DE는 DMA 완료에서 내려 마지막 바이트가 잘릴 수 있다",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0077"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0058",
+      "unit": "u-0003",
+      "run": "r-0003",
+      "section": "observations",
+      "key": "o11",
+      "body": {
+        "key": "o11",
+        "text": "DMA 버퍼 s_adc_buf, s_rx_buf, s_tx_buf는 섹션 지정 없는 정적 배열이라 모든 구성에서 .bss로 SRAM(0x20000000, 128K) 한 영역에 놓인다. 이 SRAM에 DMA가 닿는지는 칩 자료가 정한다.",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0078"
+          },
+          {
+            "evidence": "e-0079"
+          },
+          {
+            "evidence": "e-0080"
+          },
+          {
+            "evidence": "e-0081"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0059",
+      "unit": "u-0003",
+      "run": "r-0003",
+      "section": "constraints",
+      "key": "ct1",
+      "body": {
+        "key": "ct1",
+        "text": "커널 *_from_isr 호출은 우선순위 5 이상(덜 급한) 인터럽트에서만 한다",
+        "area": "concurrency",
+        "configs": ["basic", "pro", "devkit"],
+        "refs": ["o1"],
+        "reason": "커널 임계 구역이 BASEPRI로 그보다 급한 인터럽트를 막지 않는다"
+      }
+    },
+    {
+      "id": "c-0060",
+      "unit": "u-0003",
+      "run": "r-0003",
+      "section": "constraints",
+      "key": "ct2",
+      "body": {
+        "key": "ct2",
+        "text": "g_sensor.sample_count를 태스크 문맥에서 0으로 지울 때는 DMA2 stream 0 인터럽트를 막아야 그 사이에 센 반 버퍼를 잃지 않는다",
+        "area": "concurrency",
+        "configs": ["basic", "pro", "devkit"],
+        "refs": ["o3"],
+        "reason": "ISR의 ++와 태스크의 = 0이 보호 없이 겹친다"
+      }
+    },
+    {
+      "id": "c-0061",
+      "unit": "u-0005",
+      "run": "r-0004",
+      "section": "quantities",
+      "key": "q1",
+      "body": {
+        "key": "q1",
+        "symbol": "SENSOR_PERIOD_MS",
+        "expr": "25U",
+        "values": [
+          {
+            "configs": ["basic", "pro", "devkit"],
+            "value": "25 ms"
+          }
+        ],
+        "unit": "ms",
+        "unit_status": "derived",
+        "nature": "setting",
+        "chain": [
+          {
+            "role": "value",
+            "anchor": {
+              "evidence": "e-0082"
+            }
+          },
+          {
+            "role": "consumer",
+            "anchor": {
+              "evidence": "e-0083"
+            }
+          }
+        ],
+        "anchors": []
+      }
+    },
+    {
+      "id": "c-0062",
+      "unit": "u-0005",
+      "run": "r-0005",
+      "section": "observations",
+      "key": "o1",
+      "body": {
+        "key": "o1",
+        "text": "task_delay(n)은 다음 틱 경계부터 세므로 n-1~n틱을 기다린다. pro의 응답 지연 1틱은 거의 0 ms일 수 있다",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0084"
+          },
+          {
+            "evidence": "e-0047"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0063",
+      "unit": "u-0005",
+      "run": "r-0005",
+      "section": "observations",
+      "key": "o2",
+      "body": {
+        "key": "o2",
+        "text": "프레임 끝은 USART idle-line(문자 하나 시간)으로 가른다. 주석의 t3.5와 다르다",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0058"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0064",
+      "unit": "u-0005",
+      "run": "r-0005",
+      "section": "observations",
+      "key": "o3",
+      "body": {
+        "key": "o3",
+        "text": "섹터 지우기는 벤더 주석상 전형 0.5 s, 최대 2 s이고 그동안 CPU가 멈춘다. 약 2 s 워치독과 겹칠 수 있다",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0085"
+          },
+          {
+            "evidence": "e-0086"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0065",
+      "unit": "u-0005",
+      "run": "r-0005",
+      "section": "observations",
+      "key": "o4",
+      "body": {
+        "key": "o4",
+        "text": "시험 보고서의 응답 시간 최대 6.2 ms(basic)·3.1 ms(Pro)는 한 번의 관찰값이다",
+        "configs": ["basic", "pro"],
+        "anchors": [
+          {
+            "evidence": "e-0087"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0066",
+      "unit": "u-0005",
+      "run": "r-0005",
+      "section": "observations",
+      "key": "o5",
+      "body": {
+        "key": "o5",
+        "text": "wdog_task는 comm, sensor, logger 태스크가 모두 wdog_alive를 부른 뒤에만 IWDG를 다시 채운다",
+        "configs": ["all"],
+        "anchors": [
+          {
+            "evidence": "e-0088"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0067",
+      "unit": "u-0005",
+      "run": "r-0005",
+      "section": "quantities",
+      "key": "q1",
+      "body": {
+        "key": "q1",
+        "symbol": "CFG_RTOS_TICK_HZ",
+        "expr": "1000U / 500U / 1000U",
+        "values": [
+          {
+            "configs": ["basic", "devkit"],
+            "value": "1000"
+          },
+          {
+            "configs": ["pro"],
+            "value": "500"
+          }
+        ],
+        "unit": "Hz",
+        "unit_status": "derived",
+        "nature": "setting",
+        "chain": [
+          {
+            "role": "value",
+            "anchor": {
+              "evidence": "e-0089"
+            }
+          },
+          {
+            "role": "consumer",
+            "anchor": {
+              "evidence": "e-0090"
+            }
+          }
+        ],
+        "anchors": []
+      }
+    },
+    {
+      "id": "c-0068",
+      "unit": "u-0005",
+      "run": "r-0005",
+      "section": "quantities",
+      "key": "q2",
+      "body": {
+        "key": "q2",
+        "symbol": "SENSOR_PERIOD_MS",
+        "expr": "pdMS_TO_TICKS(25U)",
+        "values": [
+          {
+            "configs": ["basic", "devkit"],
+            "value": "25 ticks = 25 ms"
+          },
+          {
+            "configs": ["pro"],
+            "value": "12 ticks = 24 ms"
+          }
+        ],
+        "unit": "ms",
+        "unit_status": "derived",
+        "nature": "computed",
+        "chain": [
+          {
+            "role": "value",
+            "anchor": {
+              "evidence": "e-0082"
+            }
+          },
+          {
+            "role": "consumer",
+            "anchor": {
+              "evidence": "e-0083"
+            }
+          },
+          {
+            "role": "unit",
+            "anchor": {
+              "evidence": "e-0091"
+            }
+          }
+        ],
+        "anchors": []
+      }
+    },
+    {
+      "id": "c-0069",
+      "unit": "u-0005",
+      "run": "r-0005",
+      "section": "quantities",
+      "key": "q3",
+      "body": {
+        "key": "q3",
+        "symbol": "MB_RESP_DELAY_MS",
+        "expr": "2U",
+        "values": [
+          {
+            "configs": ["basic", "devkit"],
+            "value": "2 ticks (1~2 ms)"
+          },
+          {
+            "configs": ["pro"],
+            "value": "1 tick (0~2 ms)"
+          }
+        ],
+        "unit": "tick",
+        "unit_status": "derived",
+        "nature": "computed",
+        "chain": [],
+        "anchors": [
+          {
+            "evidence": "e-0092"
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0070",
+      "unit": "u-0005",
+      "run": "r-0005",
+      "section": "quantities",
+      "key": "q4",
+      "body": {
+        "key": "q4",
+        "symbol": "MB_TX_TIMEOUT_MS",
+        "expr": "50U",
+        "values": [
+          {
+            "configs": ["basic", "pro", "devkit"],
+            "value": "50"
+          }
+        ],
+        "unit": "ms",
+        "unit_status": "derived",
+        "nature": "setting",
+        "chain": [],
+        "anchors": [
+          {
+            "evidence": "e-0054"
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0071",
+      "unit": "u-0005",
+      "run": "r-0005",
+      "section": "quantities",
+      "key": "q5",
+      "body": {
+        "key": "q5",
+        "symbol": "IWDG_RELOAD",
+        "expr": "1000U, /64, LSI",
+        "values": [],
+        "unit": "",
+        "unit_status": "unknown",
+        "nature": "setting",
+        "chain": [],
+        "anchors": [
+          {
+            "evidence": "e-0093"
+          },
+          {
+            "evidence": "e-0094"
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0072",
+      "unit": "u-0005",
+      "run": "r-0005",
+      "section": "quantities",
+      "key": "q6",
+      "body": {
+        "key": "q6",
+        "symbol": "g_ms",
+        "expr": "TIM7->PSC = CPU/4/1MHz - 1, ARR 999",
+        "values": [],
+        "unit": "",
+        "unit_status": "name_guess",
+        "nature": "computed",
+        "chain": [],
+        "anchors": [
+          {
+            "evidence": "e-0095"
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0073",
+      "unit": "u-0005",
+      "run": "r-0005",
+      "section": "quantities",
+      "key": "q7",
+      "body": {
+        "key": "q7",
+        "symbol": "DE_SETUP_LOOPS",
+        "expr": "420U",
+        "values": [],
+        "unit": "",
+        "unit_status": "unknown",
+        "nature": "setting",
+        "chain": [],
+        "anchors": [
+          {
+            "evidence": "e-0096"
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0074",
+      "unit": "u-0005",
+      "run": "r-0005",
+      "section": "unknowns",
+      "key": "k1",
+      "body": {
+        "key": "k1",
+        "question": "IWDG 시간 초과는 64 x 1000 / f_LSI이고 LSI 주파수가 코드에 없다",
+        "needs": "external_doc",
+        "refs": ["q5"]
+      }
+    },
+    {
+      "id": "c-0075",
+      "unit": "u-0005",
+      "run": "r-0005",
+      "section": "unknowns",
+      "key": "k2",
+      "body": {
+        "key": "k2",
+        "question": "TIM7의 실제 타이머 클럭(APB1 분주가 1이 아닐 때)이 레퍼런스 매뉴얼에 있어 g_ms와 경보 지연 5 s의 실제 값을 확인해야 한다",
+        "needs": "external_doc",
+        "refs": ["q6"]
+      }
+    },
+    {
+      "id": "c-0076",
+      "unit": "u-0005",
+      "run": "r-0005",
+      "section": "unknowns",
+      "key": "k3",
+      "body": {
+        "key": "k3",
+        "question": "DE 준비 대기(420번 반복)의 실제 시간은 반복당 사이클에 달려 측정이 필요하다",
+        "needs": "measurement",
+        "refs": ["q7"]
+      }
+    },
+    {
+      "id": "c-0077",
+      "unit": "u-0005",
+      "run": "r-0005",
+      "section": "conflicts",
+      "key": "x1",
+      "body": {
+        "key": "x1",
+        "text": "rs485.c 주석은 t3.5라 하나 코드는 idle-line으로 프레임 끝을 가른다",
+        "sides": [
+          {
+            "claim": "주석",
+            "anchors": [
+              {
+                "evidence": "e-0057"
+              }
+            ]
+          },
+          {
+            "claim": "코드",
+            "anchors": [
+              {
+                "evidence": "e-0058"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0078",
+      "unit": "u-0004",
+      "run": "r-0006",
+      "section": "observations",
+      "key": "o1",
+      "body": {
+        "key": "o1",
+        "text": "make VARIANT=<이름>이 variants/<이름>.mk를 넣고 cfg/variant_<이름>.h를 -include로 모든 번역 단위에 강제로 넣는다",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0097"
+          },
+          {
+            "evidence": "e-0098"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0079",
+      "unit": "u-0004",
+      "run": "r-0006",
+      "section": "observations",
+      "key": "o2",
+      "body": {
+        "key": "o2",
+        "text": "CPU basic 84 MHz, pro·devkit 168 MHz. RTOS 틱 basic 1000, pro 500, devkit 1000 Hz",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0099"
+          },
+          {
+            "evidence": "e-0089"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0080",
+      "unit": "u-0004",
+      "run": "r-0006",
+      "section": "observations",
+      "key": "o3",
+      "body": {
+        "key": "o3",
+        "text": "기본 직렬 설정 basic 19200 8E1, pro·devkit 115200 8N1. 문서는 모두 19200 8E1이라 한다",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0100"
+          },
+          {
+            "evidence": "e-0101"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0081",
+      "unit": "u-0004",
+      "run": "r-0006",
+      "section": "observations",
+      "key": "o4",
+      "body": {
+        "key": "o4",
+        "text": "FC16·FC43은 pro·devkit, FC08은 devkit에서만 등록. FC23은 어디에서도 등록되지 않는다",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0033"
+          },
+          {
+            "evidence": "e-0102"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0082",
+      "unit": "u-0004",
+      "run": "r-0006",
+      "section": "observations",
+      "key": "o5",
+      "body": {
+        "key": "o5",
+        "text": "logger·SPI 플래시는 pro·devkit에만 있고 워치독이 logger 신호도 요구한다",
+        "configs": ["pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0103"
+          },
+          {
+            "evidence": "e-0088"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0083",
+      "unit": "u-0004",
+      "run": "r-0006",
+      "section": "observations",
+      "key": "o6",
+      "body": {
+        "key": "o6",
+        "text": "USART1 디버그 콘솔은 devkit에만 있고 레지스터를 직접 쓸 수 있다",
+        "configs": ["devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0019"
+          },
+          {
+            "evidence": "e-0104"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0084",
+      "unit": "u-0004",
+      "run": "r-0006",
+      "section": "observations",
+      "key": "o7",
+      "body": {
+        "key": "o7",
+        "text": "pro만 power.c가 약한 idle 훅을 덮어써 WFI로 잔다",
+        "configs": ["pro"],
+        "anchors": [
+          {
+            "evidence": "e-0105"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0085",
+      "unit": "u-0004",
+      "run": "r-0006",
+      "section": "observations",
+      "key": "o8",
+      "body": {
+        "key": "o8",
+        "text": "configASSERT는 devkit 구성에서만 켜진다",
+        "configs": ["devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0106"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0086",
+      "unit": "u-0004",
+      "run": "r-0006",
+      "section": "observations",
+      "key": "o9",
+      "body": {
+        "key": "o9",
+        "text": "센서 채널 basic 2, pro·devkit 4. 0x0002·0x0003은 4채널에만 있다",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0107"
+          },
+          {
+            "evidence": "e-0108"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0087",
+      "unit": "u-0004",
+      "run": "r-0006",
+      "section": "observations",
+      "key": "o10",
+      "body": {
+        "key": "o10",
+        "text": "저장된 보율 코드와 슬레이브 주소가 유효하면 시작할 때 구성 기본값 대신 쓰인다",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0109"
+          },
+          {
+            "evidence": "e-0110"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0088",
+      "unit": "u-0004",
+      "run": "r-0006",
+      "section": "observations",
+      "key": "o11",
+      "body": {
+        "key": "o11",
+        "text": "lite는 variants/lite.mk만 있고 cfg/variant_lite.h가 없어 빌드되지 않는다",
+        "configs": [],
+        "anchors": [
+          {
+            "evidence": "e-0006"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0089",
+      "unit": "u-0004",
+      "run": "r-0006",
+      "section": "observations",
+      "key": "o12",
+      "body": {
+        "key": "o12",
+        "text": "릴리스 노트는 basic과 Pro를 출하한다고 한다(문서 주장)",
+        "configs": ["basic", "pro"],
+        "anchors": [
+          {
+            "evidence": "e-0111"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0090",
+      "unit": "u-0004",
+      "run": "r-0006",
+      "section": "observations",
+      "key": "o13",
+      "body": {
+        "key": "o13",
+        "text": "pro의 500 Hz 틱 때문에 pdMS_TO_TICKS 결과가 달라진다: 센서 주기 24 ms, 응답 지연 1틱",
+        "configs": ["pro"],
+        "anchors": [
+          {
+            "evidence": "e-0091"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0091",
+      "unit": "u-0004",
+      "run": "r-0006",
+      "section": "observations",
+      "key": "o14",
+      "body": {
+        "key": "o14",
+        "text": "basic, pro, devkit은 같은 링커 스크립트 n4_flash.ld로 링크해 메모리 배치가 같다: .data와 .bss는 SRAM(0x20000000, 128K)에, 섹터 11은 설정 영역에 놓인다.",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0112"
+          },
+          {
+            "evidence": "e-0113"
+          },
+          {
+            "evidence": "e-0081"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0092",
+      "unit": "u-0004",
+      "run": "r-0006",
+      "section": "observations",
+      "key": "o15",
+      "body": {
+        "key": "o15",
+        "text": "sensor_task는 task_delay_until(&last, pdMS_TO_TICKS(SENSOR_PERIOD_MS))로 주기를 맞춘다",
+        "configs": ["basic", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0083"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0093",
+      "unit": "u-0004",
+      "run": "r-0006",
+      "section": "observations",
+      "key": "o16",
+      "body": {
+        "key": "o16",
+        "text": "sensor_task는 task_delay_until(&last, pdMS_TO_TICKS(SENSOR_PERIOD_MS))로 주기를 맞춘다",
+        "configs": ["pro"],
+        "anchors": [
+          {
+            "evidence": "e-0083"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0094",
+      "unit": "u-0004",
+      "run": "r-0006",
+      "section": "observations",
+      "key": "o17",
+      "body": {
+        "key": "o17",
+        "text": "timebase.c 주석대로 TIM7은 PCLK1(CPU/4)에서 1 MHz로 세고 1000번마다 넘쳐 g_ms는 1 ms마다 오른다",
+        "configs": ["basic", "pro", "devkit"],
+        "anchors": [
+          {
+            "evidence": "e-0114"
+          },
+          {
+            "evidence": "e-0095"
+          }
+        ],
+        "inference": false
+      }
+    },
+    {
+      "id": "c-0095",
+      "unit": "u-0004",
+      "run": "r-0006",
+      "section": "quantities",
+      "key": "q1",
+      "body": {
+        "key": "q1",
+        "symbol": "CFG_RTOS_TICK_HZ",
+        "expr": "1000U / 500U / 1000U",
+        "values": [
+          {
+            "configs": ["basic", "devkit"],
+            "value": "1000"
+          },
+          {
+            "configs": ["pro"],
+            "value": "500"
+          }
+        ],
+        "unit": "Hz",
+        "unit_status": "derived",
+        "nature": "setting",
+        "chain": [],
+        "anchors": [
+          {
+            "evidence": "e-0115"
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0096",
+      "unit": "u-0004",
+      "run": "r-0006",
+      "section": "unknowns",
+      "key": "k1",
+      "body": {
+        "key": "k1",
+        "question": "어느 구성이 출하되는지는 코드로 알 수 없다",
+        "needs": "other",
+        "refs": ["o12"]
+      }
+    },
+    {
+      "id": "c-0097",
+      "unit": "u-0004",
+      "run": "r-0006",
+      "section": "conflicts",
+      "key": "x1",
+      "body": {
+        "key": "x1",
+        "text": "문서는 모든 제품 19200 8E1이라 하나 pro·devkit 기본값은 115200 8N1이다",
+        "sides": [
+          {
+            "claim": "문서",
+            "anchors": [
+              {
+                "evidence": "e-0116"
+              }
+            ]
+          },
+          {
+            "claim": "코드",
+            "anchors": [
+              {
+                "evidence": "e-0101"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "c-0098",
+      "unit": "u-0004",
+      "run": "r-0006",
+      "section": "absences",
+      "key": "a1",
+      "body": {
+        "key": "a1",
+        "claim": "mb_fc23_read_write를 등록하는 곳이 없다",
+        "configs": ["basic", "pro", "devkit"],
+        "searches": [
+          {
+            "tool": "Grep",
+            "pattern": "mb_fc23_read_write",
+            "scope": "src",
+            "hits": 2
+          }
+        ]
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "id": "e-0001",
+      "kind": "code",
+      "path": "Makefile",
+      "start": 12,
+      "end": 12,
+      "quote": "VARIANT ?= basic",
+      "command": null
+    },
+    {
+      "id": "e-0002",
+      "kind": "code",
+      "path": "variants/basic.mk",
+      "start": 2,
+      "end": 2,
+      "quote": "VARIANT_CFLAGS := -DVARIANT_BASIC",
+      "command": null
+    },
+    {
+      "id": "e-0003",
+      "kind": "code",
+      "path": "variants/pro.mk",
+      "start": 2,
+      "end": 2,
+      "quote": "VARIANT_CFLAGS := -DVARIANT_PRO",
+      "command": null
+    },
+    {
+      "id": "e-0004",
+      "kind": "code",
+      "path": "cfg/variant_pro.h",
+      "start": 8,
+      "end": 8,
+      "quote": "#define CFG_VARIANT_NAME        \"pro\"",
+      "command": null
+    },
+    {
+      "id": "e-0005",
+      "kind": "code",
+      "path": "variants/devkit.mk",
+      "start": 2,
+      "end": 2,
+      "quote": "VARIANT_CFLAGS := -DVARIANT_DEVKIT -DMB_DIAG_ENABLE",
+      "command": null
+    },
+    {
+      "id": "e-0006",
+      "kind": "code",
+      "path": "variants/lite.mk",
+      "start": 2,
+      "end": 2,
+      "quote": "VARIANT_CFLAGS := -DVARIANT_LITE",
+      "command": null
+    },
+    {
+      "id": "e-0007",
+      "kind": "code",
+      "path": "Makefile",
+      "start": 21,
+      "end": 21,
+      "quote": "-include cfg/variant_$(VARIANT).h",
+      "command": null
+    },
+    {
+      "id": "e-0008",
+      "kind": "code",
+      "path": "vendor/nimbus/src/startup_n4.c",
+      "start": 18,
+      "end": 18,
+      "quote": "void Reset_Handler(void)",
+      "command": null
+    },
+    {
+      "id": "e-0009",
+      "kind": "code",
+      "path": "src/rs485.c",
+      "start": 67,
+      "end": 67,
+      "quote": "void USART2_IRQHandler(void)",
+      "command": null
+    },
+    {
+      "id": "e-0010",
+      "kind": "code",
+      "path": "src/rs485.c",
+      "start": 103,
+      "end": 103,
+      "quote": "void DMA1_Stream6_IRQHandler(void)",
+      "command": null
+    },
+    {
+      "id": "e-0011",
+      "kind": "code",
+      "path": "src/sensor.c",
+      "start": 57,
+      "end": 57,
+      "quote": "void DMA2_Stream0_IRQHandler(void)",
+      "command": null
+    },
+    {
+      "id": "e-0012",
+      "kind": "code",
+      "path": "src/timebase.c",
+      "start": 31,
+      "end": 31,
+      "quote": "void TIM7_IRQHandler(void)",
+      "command": null
+    },
+    {
+      "id": "e-0013",
+      "kind": "code",
+      "path": "src/app_init.c",
+      "start": 46,
+      "end": 46,
+      "quote": "(void)task_create(mb_task, \"comm\", STACK_COMM, 0, PRIO_COMM, 0);",
+      "command": null
+    },
+    {
+      "id": "e-0014",
+      "kind": "code",
+      "path": "src/app_init.c",
+      "start": 47,
+      "end": 47,
+      "quote": "(void)task_create(sensor_task, \"sensor\", STACK_SENSOR, 0, PRIO_SENSOR, 0);",
+      "command": null
+    },
+    {
+      "id": "e-0015",
+      "kind": "code",
+      "path": "src/app_init.c",
+      "start": 45,
+      "end": 45,
+      "quote": "(void)task_create(wdog_task, \"wdog\", STACK_WDOG, 0, PRIO_WDOG, 0);",
+      "command": null
+    },
+    {
+      "id": "e-0016",
+      "kind": "code",
+      "path": "src/app_init.c",
+      "start": 48,
+      "end": 48,
+      "quote": "(void)task_create(cfg_task, \"cfg\", STACK_CFG, 0, PRIO_CFG, 0);",
+      "command": null
+    },
+    {
+      "id": "e-0017",
+      "kind": "code",
+      "path": "src/app_init.c",
+      "start": 50,
+      "end": 50,
+      "quote": "(void)task_create(logger_task, \"logger\", STACK_LOGGER, 0, PRIO_LOGGER, 0);",
+      "command": null
+    },
+    {
+      "id": "e-0018",
+      "kind": "code",
+      "path": "src/console.c",
+      "start": 144,
+      "end": 144,
+      "quote": "(void)task_create(console_task, \"console\", 384U, 0, PRIO_CONSOLE, 0);",
+      "command": null
+    },
+    {
+      "id": "e-0019",
+      "kind": "code",
+      "path": "variants/devkit.mk",
+      "start": 3,
+      "end": 3,
+      "quote": "src/console.c",
+      "command": null
+    },
+    {
+      "id": "e-0020",
+      "kind": "code",
+      "path": "src/app_init.c",
+      "start": 15,
+      "end": 15,
+      "quote": "(void)mb_register(MB_FC_READ_HOLDING, mb_fc03_read_holding);",
+      "command": null
+    },
+    {
+      "id": "e-0021",
+      "kind": "code",
+      "path": "src/app_init.c",
+      "start": 16,
+      "end": 16,
+      "quote": "(void)mb_register(MB_FC_WRITE_SINGLE, mb_fc06_write_single);",
+      "command": null
+    },
+    {
+      "id": "e-0022",
+      "kind": "code",
+      "path": "src/app_init.c",
+      "start": 17,
+      "end": 18,
+      "quote": "#if CFG_FEATURE_FC16 ... (void)mb_register(MB_FC_WRITE_MULTIPLE, mb_fc16_write_multiple);",
+      "command": null
+    },
+    {
+      "id": "e-0023",
+      "kind": "code",
+      "path": "src/app_init.c",
+      "start": 21,
+      "end": 21,
+      "quote": "(void)mb_register(MB_FC_DEVICE_ID, mb_fc43_device_id);",
+      "command": null
+    },
+    {
+      "id": "e-0024",
+      "kind": "code",
+      "path": "src/app_init.c",
+      "start": 23,
+      "end": 24,
+      "quote": "#ifdef MB_DIAG_ENABLE ... (void)mb_register(MB_FC_DIAGNOSTICS, mb_fc08_diagnostics);",
+      "command": null
+    },
+    {
+      "id": "e-0025",
+      "kind": "code",
+      "path": "src/mb_handlers.c",
+      "start": 124,
+      "end": 124,
+      "quote": "uint8_t mb_fc23_read_write(",
+      "command": null
+    },
+    {
+      "id": "e-0026",
+      "kind": "code",
+      "path": "src/rs485.c",
+      "start": 21,
+      "end": 21,
+      "quote": "static const hal_dma_t s_rx_dma = { DMA1, DMA1_Stream5, 5U, 4U };",
+      "command": null
+    },
+    {
+      "id": "e-0027",
+      "kind": "code",
+      "path": "src/rs485.c",
+      "start": 22,
+      "end": 22,
+      "quote": "static const hal_dma_t s_tx_dma = { DMA1, DMA1_Stream6, 6U, 4U };",
+      "command": null
+    },
+    {
+      "id": "e-0028",
+      "kind": "code",
+      "path": "src/sensor.c",
+      "start": 19,
+      "end": 19,
+      "quote": "static const hal_dma_t s_adc_dma = { DMA2, DMA2_Stream0, 0U, 0U };",
+      "command": null
+    },
+    {
+      "id": "e-0029",
+      "kind": "code",
+      "path": "third_party/picortos/LICENSE",
+      "start": 1,
+      "end": 1,
+      "quote": "picoRTOS 3.2.1",
+      "command": null
+    },
+    {
+      "id": "e-0030",
+      "kind": "code",
+      "path": "vendor/nimbus/include/nimbus_n4.h",
+      "start": 5,
+      "end": 5,
+      "quote": "Distributed under the Nimbus Device Software License v2. Do not modify.",
+      "command": null
+    },
+    {
+      "id": "e-0031",
+      "kind": "code",
+      "path": "src/rs485.c",
+      "start": 96,
+      "end": 96,
+      "quote": "if (queue_send_from_isr(g_mb_rx_q, &frame, &woken) != pdPASS) {",
+      "command": null
+    },
+    {
+      "id": "e-0032",
+      "kind": "code",
+      "path": "src/modbus.c",
+      "start": 74,
+      "end": 74,
+      "quote": "mb_handler_fn fn = find_handler(pdu[0]);",
+      "command": null
+    },
+    {
+      "id": "e-0033",
+      "kind": "code",
+      "path": "src/app_init.c",
+      "start": 17,
+      "end": 17,
+      "quote": "#if CFG_FEATURE_FC16",
+      "command": null
+    },
+    {
+      "id": "e-0034",
+      "kind": "code",
+      "path": "cfg/variant_basic.h",
+      "start": 14,
+      "end": 14,
+      "quote": "#define CFG_FEATURE_FC16        0",
+      "command": null
+    },
+    {
+      "id": "e-0035",
+      "kind": "code",
+      "path": "src/modbus.c",
+      "start": 76,
+      "end": 76,
+      "quote": "ex = MB_EX_ILLEGAL_FUNCTION;",
+      "command": null
+    },
+    {
+      "id": "e-0036",
+      "kind": "code",
+      "path": "src/mb_handlers.c",
+      "start": 101,
+      "end": 101,
+      "quote": "if (qty == 0U || qty > MB_MAX_WRITE_REGS || r->byte_count != qty * 2U ||",
+      "command": null
+    },
+    {
+      "id": "e-0037",
+      "kind": "code",
+      "path": "src/mb_handlers.c",
+      "start": 50,
+      "end": 51,
+      "quote": "if (!regs_exists((uint16_t)(start + i))) { return MB_EX_ILLEGAL_ADDRESS;",
+      "command": null
+    },
+    {
+      "id": "e-0038",
+      "kind": "code",
+      "path": "src/mb_handlers.c",
+      "start": 111,
+      "end": 113,
+      "quote": "int w = regs_write((uint16_t)(start + i), be16(&r->values[i * 2U])); if (w != REG_OK) { return to_exception(w);",
+      "command": null
+    },
+    {
+      "id": "e-0039",
+      "kind": "code",
+      "path": "src/regs.c",
+      "start": 147,
+      "end": 148,
+      "quote": "if (g_cfg_busy) { return REG_BUSY;",
+      "command": null
+    },
+    {
+      "id": "e-0040",
+      "kind": "code",
+      "path": "src/mb_handlers.c",
+      "start": 32,
+      "end": 32,
+      "quote": "return MB_EX_DEVICE_BUSY;",
+      "command": null
+    },
+    {
+      "id": "e-0041",
+      "kind": "code",
+      "path": "src/regs.c",
+      "start": 171,
+      "end": 171,
+      "quote": "config_request_save();",
+      "command": null
+    },
+    {
+      "id": "e-0042",
+      "kind": "code",
+      "path": "src/mb_handlers.c",
+      "start": 117,
+      "end": 118,
+      "quote": "put_be16(&resp[1], start); put_be16(&resp[3], qty);",
+      "command": null
+    },
+    {
+      "id": "e-0043",
+      "kind": "code",
+      "path": "src/regs.c",
+      "start": 163,
+      "end": 163,
+      "quote": "g_settings.slave_addr = (uint8_t)v;",
+      "command": null
+    },
+    {
+      "id": "e-0044",
+      "kind": "code",
+      "path": "src/app_init.c",
+      "start": 36,
+      "end": 36,
+      "quote": "mb_init(g_settings.slave_addr);",
+      "command": null
+    },
+    {
+      "id": "e-0045",
+      "kind": "code",
+      "path": "src/modbus.c",
+      "start": 113,
+      "end": 113,
+      "quote": "g_stats.crc_errors++;",
+      "command": null
+    },
+    {
+      "id": "e-0046",
+      "kind": "code",
+      "path": "src/modbus.c",
+      "start": 124,
+      "end": 124,
+      "quote": "continue;   /* broadcasts are executed but never answered */",
+      "command": null
+    },
+    {
+      "id": "e-0047",
+      "kind": "code",
+      "path": "src/modbus.c",
+      "start": 126,
+      "end": 126,
+      "quote": "task_delay(pdMS_TO_TICKS(MB_RESP_DELAY_MS));",
+      "command": null
+    },
+    {
+      "id": "e-0048",
+      "kind": "code",
+      "path": "src/rs485.c",
+      "start": 125,
+      "end": 125,
+      "quote": "if (sem_take(s_tx_done, pdMS_TO_TICKS(MB_TX_TIMEOUT_MS)) != pdPASS) {",
+      "command": null
+    },
+    {
+      "id": "e-0049",
+      "kind": "code",
+      "path": "src/rs485.c",
+      "start": 109,
+      "end": 110,
+      "quote": "if (flags & HAL_DMA_FLAG_TC) { hal_gpio_write(RS485_PORT, RS485_DE_PIN, 0);",
+      "command": null
+    },
+    {
+      "id": "e-0050",
+      "kind": "code",
+      "path": "src/modbus.c",
+      "start": 32,
+      "end": 32,
+      "quote": "crc = (crc & 1U) ? (uint16_t)((crc >> 1) ^ 0xA001U) : (uint16_t)(crc >> 1);",
+      "command": null
+    },
+    {
+      "id": "e-0051",
+      "kind": "code",
+      "path": "src/regs.c",
+      "start": 160,
+      "end": 160,
+      "quote": "sensor_reset_filter();",
+      "command": null
+    },
+    {
+      "id": "e-0052",
+      "kind": "doc_claim",
+      "path": "src/sensor.c",
+      "start": 49,
+      "end": 49,
+      "quote": "/* called with g_sensor_mutex held */",
+      "command": null
+    },
+    {
+      "id": "e-0053",
+      "kind": "code",
+      "path": "include/modbus.h",
+      "start": 26,
+      "end": 26,
+      "quote": "#define MB_MAX_READ_REGS        64U",
+      "command": null
+    },
+    {
+      "id": "e-0054",
+      "kind": "code",
+      "path": "include/modbus.h",
+      "start": 32,
+      "end": 32,
+      "quote": "#define MB_TX_TIMEOUT_MS        50U",
+      "command": null
+    },
+    {
+      "id": "e-0055",
+      "kind": "doc_claim",
+      "path": "docs/protocol.md",
+      "start": 26,
+      "end": 26,
+      "quote": "up to 32 registers, all or nothing",
+      "command": null
+    },
+    {
+      "id": "e-0056",
+      "kind": "code",
+      "path": "src/mb_handlers.c",
+      "start": 113,
+      "end": 113,
+      "quote": "return to_exception(w);",
+      "command": null
+    },
+    {
+      "id": "e-0057",
+      "kind": "doc_claim",
+      "path": "src/rs485.c",
+      "start": 5,
+      "end": 5,
+      "quote": "detected with the t3.5 silent interval required by Modbus RTU",
+      "command": null
+    },
+    {
+      "id": "e-0058",
+      "kind": "code",
+      "path": "src/rs485.c",
+      "start": 51,
+      "end": 51,
+      "quote": "hal_uart_enable_idle_irq(RS485_UART);",
+      "command": null
+    },
+    {
+      "id": "e-0059",
+      "kind": "doc_claim",
+      "path": "docs/protocol.md",
+      "start": 16,
+      "end": 16,
+      "quote": "CRC: CRC-16/CCITT-FALSE, low byte first.",
+      "command": null
+    },
+    {
+      "id": "e-0060",
+      "kind": "code",
+      "path": "src/modbus.c",
+      "start": 32,
+      "end": 32,
+      "quote": "^ 0xA001U)",
+      "command": null
+    },
+    {
+      "id": "e-0061",
+      "kind": "code",
+      "path": "include/board.h",
+      "start": 35,
+      "end": 35,
+      "quote": "#define IRQ_PRIO_TIMEBASE   2U",
+      "command": null
+    },
+    {
+      "id": "e-0062",
+      "kind": "code",
+      "path": "src/timebase.c",
+      "start": 42,
+      "end": 42,
+      "quote": "(void)queue_send_from_isr(g_event_q, &ev, &woken);",
+      "command": null
+    },
+    {
+      "id": "e-0063",
+      "kind": "doc_claim",
+      "path": "third_party/picortos/src/queue.c",
+      "start": 8,
+      "end": 8,
+      "quote": "Calling them from a more urgent interrupt corrupts the",
+      "command": null
+    },
+    {
+      "id": "e-0064",
+      "kind": "code",
+      "path": "src/rs485.c",
+      "start": 94,
+      "end": 94,
+      "quote": "g_stats.rx_frames++;",
+      "command": null
+    },
+    {
+      "id": "e-0065",
+      "kind": "code",
+      "path": "src/regs.c",
+      "start": 122,
+      "end": 122,
+      "quote": "uint64_t frames = g_stats.rx_frames;",
+      "command": null
+    },
+    {
+      "id": "e-0066",
+      "kind": "code",
+      "path": "src/sensor.c",
+      "start": 70,
+      "end": 70,
+      "quote": "g_sensor.sample_count++;",
+      "command": null
+    },
+    {
+      "id": "e-0067",
+      "kind": "code",
+      "path": "src/sensor.c",
+      "start": 54,
+      "end": 54,
+      "quote": "g_sensor.sample_count = 0;",
+      "command": null
+    },
+    {
+      "id": "e-0068",
+      "kind": "code",
+      "path": "src/sensor.c",
+      "start": 49,
+      "end": 49,
+      "quote": "/* called with g_sensor_mutex held */",
+      "command": null
+    },
+    {
+      "id": "e-0069",
+      "kind": "code",
+      "path": "src/sensor.c",
+      "start": 103,
+      "end": 103,
+      "quote": "s_acc[ch] += s_adc_buf[half][s][ch];",
+      "command": null
+    },
+    {
+      "id": "e-0070",
+      "kind": "code",
+      "path": "src/rs485.c",
+      "start": 89,
+      "end": 89,
+      "quote": "frame.data[i] = s_rx_buf[(s_rx_pos + i) % RS485_RX_DMA_SIZE];",
+      "command": null
+    },
+    {
+      "id": "e-0071",
+      "kind": "code",
+      "path": "src/rs485.c",
+      "start": 121,
+      "end": 121,
+      "quote": "memcpy(s_tx_buf, data, len);",
+      "command": null
+    },
+    {
+      "id": "e-0072",
+      "kind": "code",
+      "path": "src/regs.c",
+      "start": 91,
+      "end": 91,
+      "quote": "if (mutex_lock(g_sensor_mutex, pdMS_TO_TICKS(10U)) != pdPASS) {",
+      "command": null
+    },
+    {
+      "id": "e-0073",
+      "kind": "code",
+      "path": "src/regs.c",
+      "start": 152,
+      "end": 152,
+      "quote": "g_settings.alarm_high = v;",
+      "command": null
+    },
+    {
+      "id": "e-0074",
+      "kind": "code",
+      "path": "src/sensor.c",
+      "start": 116,
+      "end": 116,
+      "quote": "alarm_update(g_sensor.value[0], g_settings.alarm_high, g_settings.alarm_low);",
+      "command": null
+    },
+    {
+      "id": "e-0075",
+      "kind": "code",
+      "path": "include/board.h",
+      "start": 38,
+      "end": 38,
+      "quote": "#define IRQ_PRIO_ADC_DMA    6U",
+      "command": null
+    },
+    {
+      "id": "e-0076",
+      "kind": "code",
+      "path": "include/app.h",
+      "start": 12,
+      "end": 12,
+      "quote": "#define PRIO_COMM           3U",
+      "command": null
+    },
+    {
+      "id": "e-0077",
+      "kind": "code",
+      "path": "src/rs485.c",
+      "start": 110,
+      "end": 111,
+      "quote": "hal_gpio_write(RS485_PORT, RS485_DE_PIN, 0); sem_give_from_isr(s_tx_done, &woken);",
+      "command": null
+    },
+    {
+      "id": "e-0078",
+      "kind": "code",
+      "path": "src/sensor.c",
+      "start": 20,
+      "end": 20,
+      "quote": "static uint16_t s_adc_buf[2][SAMPLES_PER_HALF][SENSOR_MAX_CH];",
+      "command": null
+    },
+    {
+      "id": "e-0079",
+      "kind": "code",
+      "path": "src/rs485.c",
+      "start": 24,
+      "end": 24,
+      "quote": "static uint8_t s_rx_buf[RS485_RX_DMA_SIZE];",
+      "command": null
+    },
+    {
+      "id": "e-0080",
+      "kind": "code",
+      "path": "src/rs485.c",
+      "start": 26,
+      "end": 26,
+      "quote": "static uint8_t s_tx_buf[MB_FRAME_MAX];",
+      "command": null
+    },
+    {
+      "id": "e-0081",
+      "kind": "code",
+      "path": "vendor/nimbus/n4_flash.ld",
+      "start": 15,
+      "end": 15,
+      "quote": ".bss : { _sbss = .; *(.bss*) *(COMMON) _ebss = .; } > RAM",
+      "command": null
+    },
+    {
+      "id": "e-0082",
+      "kind": "code",
+      "path": "include/sensor.h",
+      "start": 10,
+      "end": 10,
+      "quote": "#define SENSOR_PERIOD_MS    25U",
+      "command": null
+    },
+    {
+      "id": "e-0083",
+      "kind": "code",
+      "path": "src/sensor.c",
+      "start": 121,
+      "end": 121,
+      "quote": "task_delay_until(&last, pdMS_TO_TICKS(SENSOR_PERIOD_MS));",
+      "command": null
+    },
+    {
+      "id": "e-0084",
+      "kind": "code",
+      "path": "third_party/picortos/src/tasks.c",
+      "start": 97,
+      "end": 97,
+      "quote": "t->wake_tick = s_ticks + timeout;",
+      "command": null
+    },
+    {
+      "id": "e-0085",
+      "kind": "doc_claim",
+      "path": "vendor/nimbus/src/nimbus_hal.c",
+      "start": 179,
+      "end": 179,
+      "quote": "Typical 0.5 s, maximum 2 s",
+      "command": null
+    },
+    {
+      "id": "e-0086",
+      "kind": "doc_claim",
+      "path": "src/config_store.c",
+      "start": 4,
+      "end": 4,
+      "quote": "Writing needs a sector erase, which stalls the CPU while it runs.",
+      "command": null
+    },
+    {
+      "id": "e-0087",
+      "kind": "doc_claim",
+      "path": "docs/test-report-2021.md",
+      "start": 13,
+      "end": 13,
+      "quote": "| basic | 19200  | 3.9 ms  | 6.2 ms  |",
+      "command": null
+    },
+    {
+      "id": "e-0088",
+      "kind": "code",
+      "path": "src/wdog.c",
+      "start": 20,
+      "end": 20,
+      "quote": "#define WDOG_ALL    (WDOG_COMM | WDOG_SENSOR | WDOG_LOGGER)",
+      "command": null
+    },
+    {
+      "id": "e-0089",
+      "kind": "code",
+      "path": "cfg/variant_pro.h",
+      "start": 10,
+      "end": 10,
+      "quote": "#define CFG_RTOS_TICK_HZ        500U",
+      "command": null
+    },
+    {
+      "id": "e-0090",
+      "kind": "code",
+      "path": "include/picortos_config.h",
+      "start": 8,
+      "end": 8,
+      "quote": "#define configTICK_RATE_HZ                  CFG_RTOS_TICK_HZ",
+      "command": null
+    },
+    {
+      "id": "e-0091",
+      "kind": "code",
+      "path": "third_party/picortos/include/picortos.h",
+      "start": 36,
+      "end": 36,
+      "quote": "#define pdMS_TO_TICKS(ms)   ((tick_t)(((uint32_t)(ms) * (uint32_t)configTICK_RATE_HZ) / 1000UL))",
+      "command": null
+    },
+    {
+      "id": "e-0092",
+      "kind": "code",
+      "path": "include/modbus.h",
+      "start": 31,
+      "end": 31,
+      "quote": "#define MB_RESP_DELAY_MS        2U",
+      "command": null
+    },
+    {
+      "id": "e-0093",
+      "kind": "code",
+      "path": "src/wdog.c",
+      "start": 17,
+      "end": 17,
+      "quote": "#define IWDG_RELOAD             1000U",
+      "command": null
+    },
+    {
+      "id": "e-0094",
+      "kind": "doc_claim",
+      "path": "src/wdog.c",
+      "start": 7,
+      "end": 7,
+      "quote": "reload of 1000 it expires after about 2 s.",
+      "command": null
+    },
+    {
+      "id": "e-0095",
+      "kind": "code",
+      "path": "src/timebase.c",
+      "start": 18,
+      "end": 18,
+      "quote": "TIM7->PSC = (uint32_t)(CFG_CPU_HZ / 4UL / 1000000UL) - 1U;",
+      "command": null
+    },
+    {
+      "id": "e-0096",
+      "kind": "code",
+      "path": "src/rs485.c",
+      "start": 19,
+      "end": 19,
+      "quote": "#define DE_SETUP_LOOPS      420U",
+      "command": null
+    },
+    {
+      "id": "e-0097",
+      "kind": "code",
+      "path": "Makefile",
+      "start": 13,
+      "end": 13,
+      "quote": "include variants/$(VARIANT).mk",
+      "command": null
+    },
+    {
+      "id": "e-0098",
+      "kind": "code",
+      "path": "Makefile",
+      "start": 21,
+      "end": 21,
+      "quote": "-include cfg/variant_$(VARIANT).h $(VARIANT_CFLAGS)",
+      "command": null
+    },
+    {
+      "id": "e-0099",
+      "kind": "code",
+      "path": "cfg/variant_basic.h",
+      "start": 9,
+      "end": 9,
+      "quote": "#define CFG_CPU_HZ              84000000UL",
+      "command": null
+    },
+    {
+      "id": "e-0100",
+      "kind": "code",
+      "path": "cfg/variant_basic.h",
+      "start": 12,
+      "end": 12,
+      "quote": "#define CFG_MB_PARITY_EVEN      1",
+      "command": null
+    },
+    {
+      "id": "e-0101",
+      "kind": "code",
+      "path": "cfg/variant_pro.h",
+      "start": 11,
+      "end": 11,
+      "quote": "#define CFG_MB_BAUD             115200UL",
+      "command": null
+    },
+    {
+      "id": "e-0102",
+      "kind": "code",
+      "path": "src/app_init.c",
+      "start": 23,
+      "end": 23,
+      "quote": "#ifdef MB_DIAG_ENABLE",
+      "command": null
+    },
+    {
+      "id": "e-0103",
+      "kind": "code",
+      "path": "variants/pro.mk",
+      "start": 3,
+      "end": 3,
+      "quote": "VARIANT_SRCS  := src/logger.c src/spi_flash.c src/power.c",
+      "command": null
+    },
+    {
+      "id": "e-0104",
+      "kind": "code",
+      "path": "src/console.c",
+      "start": 103,
+      "end": 103,
+      "quote": "puts_(regs_write(addr, val) == REG_OK ? \"ok\\r\\n\" : \"refused\\r\\n\");",
+      "command": null
+    },
+    {
+      "id": "e-0105",
+      "kind": "code",
+      "path": "src/power.c",
+      "start": 10,
+      "end": 10,
+      "quote": "void rtos_idle_hook(void)",
+      "command": null
+    },
+    {
+      "id": "e-0106",
+      "kind": "code",
+      "path": "include/picortos_config.h",
+      "start": 19,
+      "end": 20,
+      "quote": "#if defined(VARIANT_DEVKIT) #define configASSERT_ENABLED                1",
+      "command": null
+    },
+    {
+      "id": "e-0107",
+      "kind": "code",
+      "path": "cfg/variant_basic.h",
+      "start": 18,
+      "end": 18,
+      "quote": "#define CFG_SENSOR_CHANNELS     2U",
+      "command": null
+    },
+    {
+      "id": "e-0108",
+      "kind": "code",
+      "path": "src/regs.c",
+      "start": 53,
+      "end": 53,
+      "quote": "if ((s_regs[i].flags & F_4CH) && CFG_SENSOR_CHANNELS < 4U) {",
+      "command": null
+    },
+    {
+      "id": "e-0109",
+      "kind": "code",
+      "path": "src/config_store.c",
+      "start": 58,
+      "end": 58,
+      "quote": "return CFG_MB_BAUD;",
+      "command": null
+    },
+    {
+      "id": "e-0110",
+      "kind": "code",
+      "path": "src/app_init.c",
+      "start": 38,
+      "end": 38,
+      "quote": "rs485_init(config_baud());",
+      "command": null
+    },
+    {
+      "id": "e-0111",
+      "kind": "doc_claim",
+      "path": "docs/release-notes.md",
+      "start": 20,
+      "end": 20,
+      "quote": "Products shipped: GW-400 (basic) and GW-400 Pro.",
+      "command": null
+    },
+    {
+      "id": "e-0112",
+      "kind": "code",
+      "path": "Makefile",
+      "start": 22,
+      "end": 22,
+      "quote": "LDFLAGS := -nostdlib -T vendor/nimbus/n4_flash.ld -Wl,--gc-sections",
+      "command": null
+    },
+    {
+      "id": "e-0113",
+      "kind": "code",
+      "path": "vendor/nimbus/n4_flash.ld",
+      "start": 6,
+      "end": 6,
+      "quote": "RAM (rwx)     : ORIGIN = 0x20000000, LENGTH = 128K",
+      "command": null
+    },
+    {
+      "id": "e-0114",
+      "kind": "doc_claim",
+      "path": "src/timebase.c",
+      "start": 17,
+      "end": 17,
+      "quote": "TIM7 runs from PCLK1 (CPU / 4): 1 MHz count, reload every 1000 counts",
+      "command": null
+    },
+    {
+      "id": "e-0115",
+      "kind": "code",
+      "path": "cfg/variant_devkit.h",
+      "start": 10,
+      "end": 10,
+      "quote": "#define CFG_RTOS_TICK_HZ        1000U",
+      "command": null
+    },
+    {
+      "id": "e-0116",
+      "kind": "doc_claim",
+      "path": "docs/protocol.md",
+      "start": 8,
+      "end": 8,
+      "quote": "19200 baud, 8 data bits, even parity, 1 stop bit (all products).",
+      "command": null
+    }
+  ],
+  "decisions": [],
+  "links": [
+    {
+      "id": "l-0001",
+      "kind": "resolves",
+      "from": ["c-0043"],
+      "to": ["c-0069", "c-0062"],
+      "reason": "c-0043는 응답 지연이 구성마다 몇 틱인지 물었고, 뒤 trace-timing의 c-0069가 pdMS_TO_TICKS로 basic·devkit 2틱, pro 1틱을 유도했으며 c-0062이 task_delay가 n-1~n틱을 기다림을 적었다. 전부 답한다."
+    },
+    {
+      "id": "l-0002",
+      "kind": "supersedes",
+      "from": ["c-0061"],
+      "to": ["c-0068"],
+      "reason": "같은 timing 단위(u-0005)를 이어 돈 run이 SENSOR_PERIOD_MS를 다시 봤다. 앞의 c-0061는 세 구성 모두 25 ms라 했으나 c-0068는 pro가 500 Hz 틱에서 버림으로 12틱 = 24 ms라 한다."
+    },
+    {
+      "id": "l-0003",
+      "kind": "merges",
+      "from": ["c-0057"],
+      "to": ["c-0037"],
+      "reason": "둘 다 모든 구성에서 DE를 송신 DMA 완료 인터럽트에서 내려 응답의 마지막 바이트가 잘릴 수 있다고 쓴다."
+    },
+    {
+      "id": "l-0004",
+      "kind": "conflicts",
+      "from": ["c-0039"],
+      "to": ["c-0051"],
+      "reason": "c-0039는 sensor.c의 주석을 믿었다. 코드는 c-0051 쪽이다: regs_write는 뮤텍스를 잡지 않고 sensor_reset_filter를 부른다."
+    },
+    {
+      "id": "l-0005",
+      "kind": "merges",
+      "from": ["c-0077"],
+      "to": ["c-0045"],
+      "reason": "두 run이 같은 충돌(rs485.c 주석의 t3.5와 코드의 idle-line)을 적었다."
+    },
+    {
+      "id": "l-0006",
+      "kind": "conflicts",
+      "from": ["c-0019"],
+      "to": ["c-0081"],
+      "reason": "survey는 FC43을 모든 구성에 두었으나 등록은 CFG_FEATURE_DEVICE_ID일 때만이고 basic은 0이다. 코드는 c-0081 쪽이다."
+    },
+    {
+      "id": "l-0007",
+      "kind": "conflicts",
+      "from": ["c-0066"],
+      "to": ["c-0082"],
+      "reason": "WDOG_ALL에 logger가 드는 것은 CFG_FEATURE_LOGGER일 때뿐이다. basic은 comm과 sensor만 요구하므로 c-0066의 \"모든 구성\"은 맞지 않는다."
+    }
+  ],
+  "reviews": [],
+  "coverage": {
+    "entry_points": [
+      {
+        "configs": ["basic", "pro", "devkit"],
+        "status": "unreached",
+        "ids": [],
+        "units": ["u-0007", "u-0008"],
+        "searches": [],
+        "note": "Reset_Handler와 시작 순서(selftest_run, app_init), cfg_task, devkit의 console_task는 어느 단위도 추적하지 않았다"
+      }
+    ],
+    "commands": [
+      {
+        "configs": ["basic", "pro"],
+        "status": "unreached",
+        "ids": [],
+        "units": ["u-0007"],
+        "searches": [],
+        "note": "u-0002는 FC16만 추적했다. FC03, FC06과 pro의 FC43은 아무도 닿지 않았다"
+      },
+      {
+        "configs": ["devkit"],
+        "status": "unreached",
+        "ids": [],
+        "units": ["u-0007"],
+        "searches": [],
+        "note": "devkit은 FC08과 USART1 디버그 콘솔(Modbus를 거치지 않고 레지스터를 쓰는 set 명령)도 추적하지 않았다"
+      }
+    ],
+    "state": [
+      {
+        "configs": ["basic", "pro", "devkit"],
+        "status": "covered",
+        "ids": ["c-0055", "c-0050"],
+        "units": [],
+        "searches": [],
+        "note": ""
+      }
+    ],
+    "timing": [
+      {
+        "configs": ["basic", "pro", "devkit"],
+        "status": "covered",
+        "ids": ["c-0067", "c-0068", "c-0069", "c-0070"],
+        "units": [],
+        "searches": [],
+        "note": "IWDG 시간, TIM7의 타이머 클럭, DE 준비 대기는 외부 자료나 측정이 필요해 열려 있다(c-0074, c-0075, c-0076)"
+      }
+    ],
+    "concurrency": [
+      {
+        "configs": ["basic", "pro", "devkit"],
+        "status": "covered",
+        "ids": ["c-0048", "c-0049", "c-0050", "c-0051", "c-0052"],
+        "units": [],
+        "searches": [],
+        "note": ""
+      }
+    ],
+    "config_differences": [
+      {
+        "configs": ["basic", "pro", "devkit"],
+        "status": "covered",
+        "ids": ["c-0078", "c-0079", "c-0080", "c-0081", "c-0082", "c-0090"],
+        "units": [],
+        "searches": [],
+        "note": ""
+      }
+    ],
+    "lifecycle": [
+      {
+        "configs": ["basic", "pro", "devkit"],
+        "status": "unreached",
+        "ids": [],
+        "units": ["u-0008"],
+        "searches": [],
+        "note": "selftest_run(리셋 원인, RAM·플래시 검사)과 app_init의 초기화·태스크 생성 차례는 어느 단위도 추적하지 않았다"
+      }
+    ],
+    "protocol": [
+      {
+        "configs": ["basic", "pro", "devkit"],
+        "status": "covered",
+        "ids": ["c-0027", "c-0035", "c-0038"],
+        "units": [],
+        "searches": [],
+        "note": ""
+      }
+    ],
+    "error_paths": [
+      {
+        "configs": ["basic", "pro", "devkit"],
+        "status": "covered",
+        "ids": ["c-0028", "c-0030", "c-0031", "c-0032", "c-0036"],
+        "units": [],
+        "searches": [],
+        "note": ""
+      }
+    ],
+    "memory": [
+      {
+        "configs": ["basic", "pro", "devkit"],
+        "status": "covered",
+        "ids": ["c-0091", "c-0058"],
+        "units": [],
+        "searches": [],
+        "note": ""
+      }
+    ]
+  },
+  "partial": false,
+  "build_index": null,
+  "batch": ["c-0040", "c-0067", "c-0047", "c-0098", "c-0019", "c-0066", "c-0060", "c-0042"]
+}

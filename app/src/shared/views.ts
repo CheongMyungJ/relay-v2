@@ -3,6 +3,7 @@ import type { WorkSettings } from './config'
 import type { Decision, HandoffStatus, NodeName, TaskNode } from './contracts'
 import type { PendingQuestionView } from './questions'
 import type { PrItemKind, PrItemStatus } from './pr'
+import type { HaltReason } from './requirements'
 import type {
   ApprovedIntent,
   DeliveryChoice,
@@ -430,6 +431,7 @@ export interface RespondStartInput {
 export type BadgeKind =
   | 'recovery'
   | 'asking'
+  | 'decision_needed'
   | 'awaiting_approval'
   | 'blocked'
   | 'stopped'
@@ -438,6 +440,7 @@ export type BadgeKind =
   | 'pr_closed'
   | 'mergeable'
   | 'session_ended'
+  | 'extract_halted'
   | 'working'
   | 'idle'
   | 'queued'
@@ -598,6 +601,8 @@ export interface WorkView {
   operation: OperationView | null
   /** 이슈 기록 (설계 3.7). 이슈 기록이 켜진 프로젝트에서 만든 Work에 있다 */
   issue: IssueView | null
+  /** 요구사항 추출의 진행 (requirements-extraction-flow.md 17.12). 요구사항 추출 Work의 extract를 시작했으면 있다 */
+  requirements: RequirementsView | null
   /** 재시작 때와 실행 중의 알림: 끝낸 고아 프로세스, 앱 밖에서 바뀐 파일 (D76, D121, D124) */
   notices: NoticeView[]
   tasks: TaskView[]
@@ -624,6 +629,53 @@ export interface IssueView {
   failure: { at: string; error: string } | null
   /** 앱이 닫았다 (D346) */
   closed: boolean
+}
+
+/** 요구사항 추출의 진행 상자 (requirements-extraction-flow.md 15.5, 17.12, 결정 98) */
+export interface RequirementsView {
+  runsUsed: number
+  runLimit: number
+  /** 열린 단위, 끝난 단위(done·needs_external·out_of_scope·merged), 멈춘 단위(failed·stalled) */
+  units: { open: number; done: number; stopped: number }
+  /** 지금 도는 run */
+  current: { run: string; unit: string; purpose: string; tool: string | null } | null
+  /** 멈춘 까닭. 사람이 멈췄거나 루프가 멈췄으면 있다 */
+  halt: { reason: HaltReason; label: string; detail: string } | null
+  /** 5시간 창 사용량 한도로 기다리는 끝 시각 (결정 29) */
+  usageWait: string | null
+  /** 답을 기다리는 사람 결정 필요 (결정 7, 41) */
+  decisions: RequirementsDecisionView[]
+  /** 열린 단위: [범위 줄이고 계속]에서 고른다 (결정 26, AI 결정 114) */
+  openUnits: { id: string; kind: string; lens: string | null; purpose: string; scope: string }[]
+  /** 부분 분석으로 넘겼다(보류: 예산 상한 단위가 있다) */
+  partial: boolean
+  /** 끝난 run의 목록 (AI 결정 115). 앞이 먼저 돈 것이다 */
+  runs: RequirementsRunView[]
+  /** 저장소로 내보낸 결과 (AI 결정 119) */
+  exported: { path: string; commit: string; at: string } | null
+}
+
+/** run 목록의 한 줄 (AI 결정 115): run.json에서 */
+export interface RequirementsRunView {
+  id: string
+  unit: string
+  kind: string
+  lens: string | null
+  /** closed·incomplete나 실패 까닭 */
+  result: string
+  denials: number
+  ms: number | null
+  cost: number | null
+  /** 반영 검사 문제, 스키마 오류, 경고 (행 아래에 접어 보인다) */
+  details: string[]
+}
+
+export interface RequirementsDecisionView {
+  id: string
+  question: string
+  options: string[]
+  /** 보냈지만 아직 revision으로 반영하지 않은 답 */
+  pending: string | null
 }
 
 /** 끊긴 작업의 알림 (시나리오 9-4, D121~D123): 무엇이 어디서 끊겼는지와 [다시 시도]·[무시]가 할 일 */
@@ -696,6 +748,9 @@ export interface StepChoice {
   keepLabel: string
   /** 고르면 [현재 코드 위에서 이어서]가 처음부터 체크되어 있다. 설계의 spec만 참이다 (D365, I105) */
   keepDefault: boolean
+  /** [현재 코드 위에서 이어서]의 풀이와 체크했을 때 미리 보기의 코드 줄 (결정 120) */
+  keepHint: string
+  keepCodeLine: string
   /** 고르며 유형을 바꿀 수 있다: 의도 승인 전 [intake 다시] (D237) */
   typeChange: boolean
 }

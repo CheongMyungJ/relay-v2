@@ -1,0 +1,16 @@
+{
+  "task": "summarize",
+  "describe": "판정 모델이 결과에 없는 key를 가리킨다",
+  "ops": [],
+  "judge": {
+    "recall": {
+      "r.sum.partial_said": {
+        "found": true,
+        "keys": ["overview p7"]
+      }
+    }
+  },
+  "expect": {
+    "missed": ["r.sum.partial_said"]
+  }
+}

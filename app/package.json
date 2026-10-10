@@ -22,7 +22,7 @@
     "test:flow": "npm run contracts && vitest run --project flow",
     "test:claude": "npm run contracts && vitest run --project claude",
     "test:contract": "npm run contracts && vitest run --project contract",
-    "test:eval": "vitest run --project eval && node eval/check-scenario.mjs all",
+    "test:eval": "vitest run --project eval && node eval/check-scenario.mjs all && node eval/extract/check-fixtures.mjs",
     "dist:win": "npm run build && electron-builder --win --x64 --publish never",
     "dist:linux": "npm run build && electron-builder --linux deb --x64 --publish never"
   },

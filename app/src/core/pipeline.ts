@@ -12,6 +12,11 @@ export interface NodeInfo {
   title: string
   /** 필수 산출물 (3.1). awaiting_approval일 때 task 디렉터리에 있어야 한다 (D30) */
   artifacts: readonly string[]
+  /**
+   * 앱이 run을 돌리는 단계(요구사항 추출의 extract, 결정 92). 스킬을 배포하지 않고 CLI 세션을 띄우지 않는다. 산출물은 앱이
+   * 기록에서 렌더링한다(결정 99)
+   */
+  appRun?: true
 }
 
 /**
@@ -26,6 +31,8 @@ export const PIPELINES: Readonly<Record<WorkType, readonly NodeName[]>> = {
   refactor: ['intake', 'refactor', 'verify'],
   spec: ['intake', 'spec', 'verify'],
   general: ['intake', 'execute', 'verify'],
+  // 요구사항 추출: extract는 앱이 run을 돌리는 단계다 (requirements-extraction-flow.md 4절, 결정 92)
+  requirements: ['intake', 'extract', 'verify'],
 }
 
 /** Work의 업무 유형. work.json에 type이 없으면 버그 수정이다 (D256, I58) */
@@ -48,6 +55,8 @@ const CONTINUE =
 export interface KeepCode {
   note: string
   doc?: true
+  /** 요구사항 추출의 extract: [현재 기록 위에서 이어서]이고 처음부터 체크되어 있다 (requirements-extraction-flow.md 결정 120) */
+  record?: true
 }
 
 /**
@@ -84,6 +93,12 @@ export const KEEP_CODE: Readonly<Record<WorkType, Readonly<Partial<Record<NodeNa
         note: `${CONTINUE} 아래 폐기된 \`execution.md\`를 참고해 새 \`execution.md\`를 쓴다.`,
       },
     },
+    requirements: {
+      extract: {
+        note: '[현재 기록 위에서 이어서]: 지금 요구사항 기록을 parent로 둔 revision에 사람의 추가 지시를 메모로 두고 integrate 단위를 연다. integrate가 지시를 단위로 바꾸고 루프가 이어서 돈다. 체크를 풀면 parent 없는 새 시작 revision에서 survey부터 다시 돈다. 어느 쪽이든 run 수는 이어서 센다.',
+        record: true,
+      },
+    },
   }
 
 /**
@@ -94,17 +109,51 @@ export const KEEP_CODE_NODES: Readonly<Record<WorkType, readonly NodeName[]>> = 
   WORK_TYPES.map((t) => [t, Object.keys(KEEP_CODE[t]) as NodeName[]]),
 ) as Record<WorkType, NodeName[]>
 
-/** 단계 선택 대화상자의 [현재 코드 위에서 이어서] 이름. 설계의 spec은 [현재 문서 위에서 이어서]다 (D365, I105) */
+/**
+ * 단계 선택 대화상자의 [현재 코드 위에서 이어서] 이름. 설계의 spec은 [현재 문서 위에서 이어서](D365, I105), 요구사항 추출의
+ * extract는 [현재 기록 위에서 이어서]다 (결정 120)
+ */
 export function keepLabel(type: WorkType, node: NodeName): string {
-  return KEEP_CODE[type][node]?.doc ? '현재 문서 위에서 이어서' : '현재 코드 위에서 이어서'
+  const keep = KEEP_CODE[type][node]
+  return keep?.doc
+    ? '현재 문서 위에서 이어서'
+    : keep?.record
+      ? '현재 기록 위에서 이어서'
+      : '현재 코드 위에서 이어서'
 }
 
 /**
- * 되감기로 고르면 [현재 코드 위에서 이어서]가 처음부터 체크되어 있는가. 설계의 spec만 참이다: 이 유형에서 되감는 까닭은
- * 대부분 결정 한두 개를 다시 보는 것이다 (D365, I105)
+ * 되감기로 고르면 [현재 코드 위에서 이어서]가 처음부터 체크되어 있는가. 설계의 spec과 요구사항 추출의 extract만 참이다: 이
+ * 유형들에서 되감는 까닭은 대부분 결정 한두 개나 verify의 지적을 다시 보는 것이다 (D365, I105, 결정 120)
  */
 export function keepDefault(type: WorkType, node: NodeName): boolean {
-  return KEEP_CODE[type][node]?.doc === true
+  const keep = KEEP_CODE[type][node]
+  return keep?.doc === true || keep?.record === true
+}
+
+/**
+ * 단계 선택 대화상자의 [현재 코드 위에서 이어서] 풀이(hint)와, 체크했을 때 미리 보기의 코드 줄(code). 요구사항 추출의
+ * extract는 코드를 고치지 않고 기록 위에서 잇는다 (결정 120)
+ */
+export function keepText(type: WorkType, node: NodeName): { hint: string; code: string } {
+  const keep = KEEP_CODE[type][node]
+  if (keep?.record) {
+    return {
+      hint: '지금 요구사항 기록 위에 추가 지시를 메모로 두고 이어서 돈다. 풀면 survey부터 처음 다시 돈다',
+      code: '커밋을 되돌리지 않고 지금 요구사항 기록 위에서 이어서 돕니다',
+    }
+  }
+  return {
+    hint: keep?.doc
+      ? '문답으로 정한 결정을 문서에 둔 채 다시 볼 결정만 다시 묻는다'
+      : 'verify가 작은 문제를 찾았을 때 수정을 처음부터 다시 하지 않는다',
+    code: '커밋을 되돌리지 않고 그 위에서 이어서 고칩니다',
+  }
+}
+
+/** 앱이 run을 돌리는 단계인가 (결정 92): 세션 대신 run 루프를 시작하고 멈춘다 */
+export function appRun(node: TaskNode): boolean {
+  return NODE_INFO[node].appRun === true
 }
 
 /** PR 대응 task의 노드 (D187). 파이프라인 밖이다 (D188) */
@@ -133,6 +182,13 @@ export const NODE_INFO: Readonly<Record<TaskNode, NodeInfo>> = {
   },
   spec: { node: 'spec', skill: 'spec', title: '설계 문답', artifacts: ['spec.md'] },
   execute: { node: 'execute', skill: 'execute', title: '실행', artifacts: ['execution.md'] },
+  extract: {
+    node: 'extract',
+    skill: 'extract',
+    title: '요구사항 추출',
+    artifacts: ['extraction.md'],
+    appRun: true,
+  },
   verify: {
     node: 'verify',
     skill: 'verify',

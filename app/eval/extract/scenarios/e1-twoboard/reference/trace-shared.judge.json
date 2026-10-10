@@ -1,0 +1,57 @@
+{
+  "recall": [
+    {
+      "id": "r.sh.fault_rmw",
+      "found": true,
+      "keys": ["o1"]
+    },
+    {
+      "id": "r.sh.raise_protected",
+      "found": true,
+      "keys": ["o2"]
+    },
+    {
+      "id": "r.sh.ring",
+      "found": true,
+      "keys": ["o3"]
+    },
+    {
+      "id": "r.sh.adc_raw",
+      "found": true,
+      "keys": ["o4"]
+    },
+    {
+      "id": "r.sh.ticks",
+      "found": true,
+      "keys": ["o5"]
+    },
+    {
+      "id": "r.sh.prio",
+      "found": true,
+      "keys": ["o6"]
+    },
+    {
+      "id": "r.sh.tach",
+      "found": true,
+      "keys": ["o7"]
+    }
+  ],
+  "must_not": [
+    {
+      "id": "m.ring_race",
+      "violated": false,
+      "keys": []
+    },
+    {
+      "id": "m.polling_constraint",
+      "violated": false,
+      "keys": []
+    },
+    {
+      "id": "m.dma",
+      "violated": false,
+      "keys": []
+    }
+  ],
+  "resolvable": []
+}

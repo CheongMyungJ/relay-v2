@@ -1,0 +1,239 @@
+{
+  "outcome": "done",
+  "outcome_reason": "기록 목록의 주장을 모두 훑고 관점 열 개를 세 구성에서 판정했다.",
+  "links": [
+    {
+      "key": "l1",
+      "kind": "resolves",
+      "from": ["c-0043"],
+      "to": ["c-0069", "c-0062"],
+      "reason": "c-0043는 응답 지연이 구성마다 몇 틱인지 물었고, 뒤 trace-timing의 c-0069가 pdMS_TO_TICKS로 basic·devkit 2틱, pro 1틱을 유도했으며 c-0062이 task_delay가 n-1~n틱을 기다림을 적었다. 전부 답한다.",
+      "anchors": []
+    },
+    {
+      "key": "l2",
+      "kind": "supersedes",
+      "from": ["c-0061"],
+      "to": ["c-0068"],
+      "reason": "같은 timing 단위(u-0005)를 이어 돈 run이 SENSOR_PERIOD_MS를 다시 봤다. 앞의 c-0061는 세 구성 모두 25 ms라 했으나 c-0068는 pro가 500 Hz 틱에서 버림으로 12틱 = 24 ms라 한다.",
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "third_party/picortos/include/picortos.h",
+          "start": 36,
+          "end": 36,
+          "quote": "#define pdMS_TO_TICKS(ms)",
+          "command": null
+        }
+      ]
+    },
+    {
+      "key": "l3",
+      "kind": "merges",
+      "from": ["c-0057"],
+      "to": ["c-0037"],
+      "reason": "둘 다 모든 구성에서 DE를 송신 DMA 완료 인터럽트에서 내려 응답의 마지막 바이트가 잘릴 수 있다고 쓴다.",
+      "anchors": []
+    },
+    {
+      "key": "l4",
+      "kind": "conflicts",
+      "from": ["c-0039"],
+      "to": ["c-0051"],
+      "reason": "c-0039는 sensor.c의 주석을 믿었다. 코드는 c-0051 쪽이다: regs_write는 뮤텍스를 잡지 않고 sensor_reset_filter를 부른다.",
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/regs.c",
+          "start": 157,
+          "end": 160,
+          "quote": "case REG_AVG_WINDOW: ... sensor_reset_filter();",
+          "command": null
+        }
+      ]
+    },
+    {
+      "key": "l5",
+      "kind": "merges",
+      "from": ["c-0077"],
+      "to": ["c-0045"],
+      "reason": "두 run이 같은 충돌(rs485.c 주석의 t3.5와 코드의 idle-line)을 적었다.",
+      "anchors": []
+    },
+    {
+      "key": "l6",
+      "kind": "conflicts",
+      "from": ["c-0019"],
+      "to": ["c-0081"],
+      "reason": "survey는 FC43을 모든 구성에 두었으나 등록은 CFG_FEATURE_DEVICE_ID일 때만이고 basic은 0이다. 코드는 c-0081 쪽이다.",
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/app_init.c",
+          "start": 20,
+          "end": 20,
+          "quote": "#if CFG_FEATURE_DEVICE_ID",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "cfg/variant_basic.h",
+          "start": 15,
+          "end": 15,
+          "quote": "#define CFG_FEATURE_DEVICE_ID   0",
+          "command": null
+        }
+      ]
+    },
+    {
+      "key": "l7",
+      "kind": "conflicts",
+      "from": ["c-0066"],
+      "to": ["c-0082"],
+      "reason": "WDOG_ALL에 logger가 드는 것은 CFG_FEATURE_LOGGER일 때뿐이다. basic은 comm과 sensor만 요구하므로 c-0066의 \"모든 구성\"은 맞지 않는다.",
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/wdog.c",
+          "start": 19,
+          "end": 22,
+          "quote": "#if CFG_FEATURE_LOGGER ... #define WDOG_ALL    (WDOG_COMM | WDOG_SENSOR)",
+          "command": null
+        }
+      ]
+    }
+  ],
+  "coverage": {
+    "entry_points": [
+      {
+        "configs": ["basic", "pro", "devkit"],
+        "status": "unreached",
+        "ids": [],
+        "units": ["n1", "n2"],
+        "searches": [],
+        "note": "Reset_Handler와 시작 순서(selftest_run, app_init), cfg_task, devkit의 console_task는 어느 단위도 추적하지 않았다"
+      }
+    ],
+    "commands": [
+      {
+        "configs": ["basic", "pro"],
+        "status": "unreached",
+        "ids": [],
+        "units": ["n1"],
+        "searches": [],
+        "note": "u-0002는 FC16만 추적했다. FC03, FC06과 pro의 FC43은 아무도 닿지 않았다"
+      },
+      {
+        "configs": ["devkit"],
+        "status": "unreached",
+        "ids": [],
+        "units": ["n1"],
+        "searches": [],
+        "note": "devkit은 FC08과 USART1 디버그 콘솔(Modbus를 거치지 않고 레지스터를 쓰는 set 명령)도 추적하지 않았다"
+      }
+    ],
+    "state": [
+      {
+        "configs": ["basic", "pro", "devkit"],
+        "status": "covered",
+        "ids": ["c-0055", "c-0050"],
+        "units": [],
+        "searches": [],
+        "note": ""
+      }
+    ],
+    "timing": [
+      {
+        "configs": ["basic", "pro", "devkit"],
+        "status": "covered",
+        "ids": ["c-0067", "c-0068", "c-0069", "c-0070"],
+        "units": [],
+        "searches": [],
+        "note": "IWDG 시간, TIM7의 타이머 클럭, DE 준비 대기는 외부 자료나 측정이 필요해 열려 있다(c-0074, c-0075, c-0076)"
+      }
+    ],
+    "concurrency": [
+      {
+        "configs": ["basic", "pro", "devkit"],
+        "status": "covered",
+        "ids": ["c-0048", "c-0049", "c-0050", "c-0051", "c-0052"],
+        "units": [],
+        "searches": [],
+        "note": ""
+      }
+    ],
+    "config_differences": [
+      {
+        "configs": ["basic", "pro", "devkit"],
+        "status": "covered",
+        "ids": ["c-0078", "c-0079", "c-0080", "c-0081", "c-0082", "c-0090"],
+        "units": [],
+        "searches": [],
+        "note": ""
+      }
+    ],
+    "lifecycle": [
+      {
+        "configs": ["basic", "pro", "devkit"],
+        "status": "unreached",
+        "ids": [],
+        "units": ["n2"],
+        "searches": [],
+        "note": "selftest_run(리셋 원인, RAM·플래시 검사)과 app_init의 초기화·태스크 생성 차례는 어느 단위도 추적하지 않았다"
+      }
+    ],
+    "protocol": [
+      {
+        "configs": ["basic", "pro", "devkit"],
+        "status": "covered",
+        "ids": ["c-0027", "c-0035", "c-0038"],
+        "units": [],
+        "searches": [],
+        "note": ""
+      }
+    ],
+    "error_paths": [
+      {
+        "configs": ["basic", "pro", "devkit"],
+        "status": "covered",
+        "ids": ["c-0028", "c-0030", "c-0031", "c-0032", "c-0036"],
+        "units": [],
+        "searches": [],
+        "note": ""
+      }
+    ],
+    "memory": [
+      {
+        "configs": ["basic", "pro", "devkit"],
+        "status": "covered",
+        "ids": ["c-0091", "c-0058"],
+        "units": [],
+        "searches": [],
+        "note": ""
+      }
+    ]
+  },
+  "units": [
+    {
+      "key": "n1",
+      "purpose": "FC03·FC06·FC43·FC08 처리기와 devkit의 USART1 디버그 콘솔 명령(stats, reg, set, tick, assert) 경로를 추적한다",
+      "lens": "command",
+      "scope": "src/mb_handlers.c, src/console.c; basic, pro, devkit",
+      "priority": "high",
+      "depends_on": [],
+      "reason": "coverage의 commands와 entry_points가 비었다: FC16 밖의 기능 코드와 console_task를 어느 단위도 추적하지 않았다"
+    },
+    {
+      "key": "n2",
+      "purpose": "Reset_Handler부터 selftest_run, app_init의 초기화와 태스크 생성 차례, 리셋 원인 처리를 추적한다",
+      "lens": "lifecycle",
+      "scope": "vendor/nimbus/src/startup_n4.c, src/main.c, src/selftest.c, src/app_init.c; basic, pro, devkit",
+      "priority": "medium",
+      "depends_on": [],
+      "reason": "coverage의 lifecycle이 비었다"
+    }
+  ],
+  "unknowns": [],
+  "human_decisions": [],
+  "checkpoint": null
+}

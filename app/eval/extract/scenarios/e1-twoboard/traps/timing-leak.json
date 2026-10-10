@@ -1,0 +1,14 @@
+{
+  "task": "trace-timing",
+  "describe": "출력에 정답 파일의 누출 카나리가 있다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "outcome_reason",
+      "value": "see LEAK-7F3Q-E1-ZEBRA"
+    }
+  ],
+  "expect": {
+    "leak": true
+  }
+}

@@ -57,6 +57,14 @@ const api: RelayApi = {
   prRespond: (workKey, input) => ipcRenderer.invoke(IPC.prRespond, workKey, input),
   prRerun: (workKey) => ipcRenderer.invoke(IPC.prRerun, workKey),
   issueRetry: (workKey) => ipcRenderer.invoke(IPC.issueRetry, workKey),
+  answerRequirements: (workKey, answers) =>
+    ipcRenderer.invoke(IPC.answerRequirements, workKey, answers),
+  extendRequirements: (workKey, runs) => ipcRenderer.invoke(IPC.extendRequirements, workKey, runs),
+  narrowRequirements: (workKey, units, note, runs) =>
+    ipcRenderer.invoke(IPC.narrowRequirements, workKey, units, note, runs),
+  partialRequirements: (workKey) => ipcRenderer.invoke(IPC.partialRequirements, workKey),
+  openRequirementsRuns: (workKey) => ipcRenderer.invoke(IPC.openRequirementsRuns, workKey),
+  exportRequirements: (workKey, dir) => ipcRenderer.invoke(IPC.exportRequirements, workKey, dir),
   updateProjectSettings: (projectId, settings) =>
     ipcRenderer.invoke(IPC.projectSettings, projectId, settings),
   updateWorkSettings: (workKey, settings) =>

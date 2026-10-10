@@ -51,6 +51,8 @@ import {
   changedPaths,
   checkedOutSubmodules,
   commitAll,
+  commitPaths,
+  git,
   commitInfo,
   commitsOnlyIn,
   commitsWithParents,
@@ -116,6 +118,7 @@ import {
   previousInputs,
   selectionKind,
   type CarriedCode,
+  type ContextInput,
   type PreviousRound,
   type PreviousTask,
   type RespondInput,
@@ -148,7 +151,7 @@ import {
   sameChanges,
   stoppedVerify,
 } from '../core/delivery'
-import { NODE_INFO, RESPOND, workType } from '../core/pipeline'
+import { NODE_INFO, RESPOND, appRun, workType } from '../core/pipeline'
 import {
   ISSUE_LABEL,
   ISSUE_LABEL_COLOR,
@@ -275,10 +278,29 @@ import {
   RESPONSE_FILE,
   VERIFICATION_FILE,
   checkTask,
+  intentDraftBody,
   parseFrontMatter,
   sectionText,
+  summarize,
   type TaskCheck,
 } from '../core/validate'
+import {
+  defaultExportDir,
+  exportDir,
+  exportRecord,
+  extractRunAgent,
+  fold,
+  outputCopies,
+  requirementsView,
+} from '../core/requirements'
+import { ExtractRunner } from './requirements'
+import {
+  EXPORT_SCHEMAS,
+  RequirementsFiles,
+  exportProblem,
+  recordProblems,
+} from '../adapters/requirements'
+import { RECORD_ISSUE_FILE, type Answer, type RequirementsBudget } from '../shared/requirements'
 import type { AppConfig, WorkSettingsPatch } from '../shared/config'
 import type { NodeName } from '../shared/contracts'
 import {
@@ -304,6 +326,7 @@ import type {
   DeliverInput,
   DeliverResult,
   IssueView,
+  RequirementsView,
   KnowledgeChange,
   MergeInfoResult,
   MergeInput,
@@ -398,6 +421,8 @@ export interface RunnerContext {
   pool: SessionPool
   /** 판정하는 때의 앱 설정 (D73) */
   config(): AppConfig
+  /** 요구사항 추출의 예산 (결정 30, 31) */
+  requirementsBudget(): RequirementsBudget
   /** gh 실행 파일 (D67, 시나리오 7-4) */
   ghBin: string
   /** 프로젝트의 origin·gh 점검 결과 (D67) */
@@ -617,6 +642,8 @@ export class WorkRunner {
   private mergeConfirms = 0
   /** 정리 세션 ([AI 세션 열기], 7-5) */
   private cleanup: CleanupSession | null = null
+  /** 요구사항 추출 extract의 run 루프 (requirements-extraction-flow.md 결정 92). 처음 쓸 때 만든다 */
+  private extract: ExtractRunner | null = null
   private cleanupSeq = 0
   /** 곁 세션 (시나리오 11). 앱을 다시 켜면 없고, 이어 갈 대화는 work.json의 side에 있다 */
   private side: SideSession | null = null
@@ -695,7 +722,224 @@ export class WorkRunner {
 
   /** 이 앱에서 살아 있는 세션이 있다 (앱 종료 확인, 시나리오 3-6). 정리 세션과 곁 세션(D390)도 센다 */
   hasLiveSession(): boolean {
-    return this.live.size > 0 || this.cleanup?.status === 'live' || this.side?.status === 'live'
+    return (
+      this.live.size > 0 ||
+      this.cleanup?.status === 'live' ||
+      this.side?.status === 'live' ||
+      this.extract?.running === true
+    )
+  }
+
+  /** extract의 run 루프. Work의 처리 줄에서 이벤트를 넣는다 (결정 92) */
+  extractRunner(): ExtractRunner {
+    if (this.extract) return this.extract
+    const ctx = this.ctx
+    this.extract = new ExtractRunner({
+      work: () => this.work,
+      workDir: this.files.dir,
+      worktree: this.worktree,
+      env: ctx.env,
+      hooks: ctx.hooks,
+      skillsRoot: path.dirname(ctx.skills),
+      at: () => ctx.at(),
+      feed: (event) => this.enqueue(async () => void (await this.feed(event))),
+      feedWith: (make) => this.enqueue(async () => void (await this.feed(make(this.work)))),
+      intent: async () => {
+        const version = this.work.intent?.version
+        if (!version) throw new Error('승인된 intent가 없음')
+        return intentDraftBody(await this.intentText(version)).body
+      },
+      taskDir: (taskId) => {
+        const task = this.task(taskId)
+        if (!task) throw new Error(`${taskId} 없음`)
+        return this.files.taskDir(task)
+      },
+      check: async (taskId) => {
+        const task = this.task(taskId)
+        if (!task) throw new Error(`${taskId} 없음`)
+        return summarize(await this.checkOf(task))
+      },
+      // 평가가 잰 조건(sonnet/medium, 결정 50)을 기본으로 둔다. 상세 설정의 "요구사항 추출"이 바꾼다
+      agent: (taskId) => extractRunAgent(this.task(taskId)),
+      bin: () => findClaude({ env: ctx.env }),
+      acquire: () => ctx.pool.tryAcquire(),
+      release: () => ctx.pool.release(),
+      budget: () => this.requirementsBudget(),
+      problem: (m) => this.problem(m),
+      changed: () => this.changed(),
+    })
+    return this.extract
+  }
+
+  /**
+   * 사람 결정 필요의 답 (결정 7, 41): 지금 extract task의 열린 결정에만 받는다. 답은 반영 대기로 두고 루프가 다음 run 전에
+   * revision으로 만든다
+   */
+  async answerRequirements(
+    answers: { decision: string; answer: string }[],
+  ): Promise<CommandResult> {
+    // 열린 결정인지는 처리 줄에서 보고, 답 파일과 포인터는 처리 줄 밖에서 쓴다(루프와 같은 길로 이벤트를 넣는다)
+    const checked = await this.enqueue(async () => {
+      const task = currentTask(this.work)
+      if (!task || task.node !== 'extract') return null
+      const runner = this.extractRunner()
+      await runner.refresh()
+      // 반영 대기 답이 있는 결정은 다시 받지 않는다
+      const sent = new Set(
+        this.work.requirements?.pending_answers?.length
+          ? runner.pending.map((a) => a.decision)
+          : [],
+      )
+      const open = new Set(
+        (runner.state?.decisions ?? [])
+          .filter((d) => !d.answer && !sent.has(d.id))
+          .map((d) => d.id),
+      )
+      const at = this.ctx.at()
+      const valid: Answer[] = answers
+        .map((a) => ({ decision: a.decision, answer: a.answer.trim(), at }))
+        .filter((a) => open.has(a.decision) && a.answer)
+      return { taskId: task.id, valid }
+    })
+    if (!checked) return { ok: false, error: '지금 단계가 요구사항 추출이 아님' }
+    if (!checked.valid.length) return { ok: false, error: '답할 열린 결정이 없음' }
+    await this.extractRunner().answer(checked.taskId, checked.valid)
+    return { ok: true }
+  }
+
+  /**
+   * run 상한에 닿아 멈춘 extract의 [계속 +N] (결정 26, 99): 늘린 run 수를 포인터에 더하고 [재개]처럼 루프를 다시 시작한다
+   */
+  extendRequirements(runs: number): Promise<CommandResult> {
+    return this.enqueue(async () => {
+      const task = currentTask(this.work)
+      const p = this.work.requirements
+      if (!task || task.node !== 'extract' || !p || p.halt?.reason !== 'run_limit')
+        return { ok: false, error: 'run 상한으로 멈춘 요구사항 추출이 아님' }
+      if (!Number.isInteger(runs) || runs < 1) return { ok: false, error: '늘릴 run 수가 아님' }
+      const at = this.ctx.at()
+      await this.feed({
+        type: 'requirements.updated',
+        taskId: task.id,
+        at,
+        pointer: { ...p, runs_extra: p.runs_extra + runs },
+      })
+      return this.unlessCleanup({ type: 'resume', taskId: task.id, at })
+    })
+  }
+
+  /**
+   * run 상한에 닿아 멈춘 extract의 [범위 줄이고 계속] (결정 26, AI 결정 114): 고른 열린 단위를 범위에서 빼고 메모를 남긴 뒤
+   * [계속 +N]과 같은 수를 늘려 잇는다
+   */
+  narrowRequirements(units: string[], note: string, runs: number): Promise<CommandResult> {
+    return this.enqueue(async () => {
+      const task = currentTask(this.work)
+      const p = this.work.requirements
+      if (!task || task.node !== 'extract' || !p || p.halt?.reason !== 'run_limit')
+        return { ok: false, error: 'run 상한으로 멈춘 요구사항 추출이 아님' }
+      if (!Number.isInteger(runs) || runs < 1) return { ok: false, error: '늘릴 run 수가 아님' }
+      const r = await this.extractRunner().narrow(p, units, note, runs)
+      if (!r.units.length) return { ok: false, error: '범위에서 뺄 열린 단위를 고르세요' }
+      const at = this.ctx.at()
+      await this.feed({ type: 'requirements.updated', taskId: task.id, at, pointer: r.pointer })
+      await this.extractRunner().refresh()
+      return this.unlessCleanup({ type: 'resume', taskId: task.id, at })
+    })
+  }
+
+  /**
+   * run 상한에 닿아 멈춘 extract의 [부분 분석으로 넘기기] (결정 26, AI 결정 114): 열린 단위를 보류로 닫고 summarize 하나를
+   * 상한 밖에서 돌려 끝낸다
+   */
+  partialRequirements(): Promise<CommandResult> {
+    return this.enqueue(async () => {
+      const task = currentTask(this.work)
+      const p = this.work.requirements
+      if (!task || task.node !== 'extract' || !p || p.halt?.reason !== 'run_limit')
+        return { ok: false, error: 'run 상한으로 멈춘 요구사항 추출이 아님' }
+      const pointer = await this.extractRunner().partial(p)
+      const at = this.ctx.at()
+      await this.feed({ type: 'requirements.updated', taskId: task.id, at, pointer })
+      await this.extractRunner().refresh()
+      return this.unlessCleanup({ type: 'resume', taskId: task.id, at })
+    })
+  }
+
+  /**
+   * 요구사항 추출 결과를 저장소로 내보낸다 (11절, 결정 1, AI 결정 119): 레포 상대 폴더에 승인된 extraction.md, record.json
+   * (docs/contracts/requirements-export.v0), 실행 출력과 그 입력의 사본(outputs/), 기록 스키마 사본(schemas/)을 쓰고 그 폴더만
+   * 커밋한다. 완료 화면(verify 승인 대기)이나 끝난 Work에서 받는다. 전달(push·PR)과 따로라 [완료만]에서도 로컬 커밋으로 남는다
+   */
+  exportRequirements(dir: string): Promise<CommandResult> {
+    return this.enqueue(async () => {
+      const w = this.work
+      const p = w.requirements
+      const task = currentTask(w)
+      if (w.type !== 'requirements' || !p) return { ok: false, error: '요구사항 추출 기록이 없음' }
+      // 완료 화면: 승인할 수 있는 verify(승인 대기, 대기, 세션 종료)나 끝난 Work (AI 결정 119)
+      const atCompletion =
+        (task?.node === 'verify' && REVIEWABLE.includes(task.status)) || w.status === 'completed'
+      if (!atCompletion) return { ok: false, error: 'verify 승인 대기나 끝난 Work에서만 내보낸다' }
+      const rel = exportDir(dir || defaultExportDir(w.work_id))
+      if (!rel)
+        return { ok: false, error: '레포 안의 상대 폴더를 적으세요 (.., 절대 경로, .git 안 됨)' }
+      const extract = w.tasks.findLast((t) => t.node === 'extract' && t.status === 'approved')
+      const extraction = extract
+        ? (await this.files.taskFiles(extract))['extraction.md']
+        : undefined
+      if (!extraction) return { ok: false, error: '승인된 extract의 extraction.md가 없음' }
+      const files = new RequirementsFiles(this.files.dir)
+      const state = fold(await files.load(p))
+      const target = path.join(this.worktree, ...rel.split('/'))
+      await fsp.mkdir(path.join(target, 'outputs'), { recursive: true })
+      const outputs = new Map<string, string>()
+      for (const copy of outputCopies(state)) {
+        const name = path.basename(copy)
+        await fsp.copyFile(
+          path.join(this.files.dir, ...copy.split('/')),
+          path.join(target, 'outputs', name),
+        )
+        outputs.set(copy, `outputs/${name}`)
+      }
+      const at = this.ctx.at()
+      const record = exportRecord(state, {
+        work: { id: w.work_id, title: this.title },
+        base: w.base_commit,
+        revisionHash: p.revision_hash ?? '',
+        at,
+        outputs,
+      })
+      const bad = exportProblem(record)
+      if (bad) return { ok: false, error: `record.json이 스키마를 통과하지 않음: ${bad}` }
+      await fsp.mkdir(path.join(target, 'schemas'), { recursive: true })
+      await writeFileAtomic(path.join(target, 'extraction.md'), extraction)
+      await writeFileAtomic(
+        path.join(target, 'record.json'),
+        JSON.stringify(record, null, 2) + '\n',
+      )
+      for (const [name, schema] of Object.entries(EXPORT_SCHEMAS))
+        await writeFileAtomic(
+          path.join(target, 'schemas', name),
+          JSON.stringify(schema, null, 2) + '\n',
+        )
+      const env = this.ctx.env
+      const dirty = await git(this.worktree, ['status', '--porcelain', '--', rel], { env })
+      if (!dirty.trim()) return { ok: false, error: `${rel}에 바뀐 것이 없음(이미 내보냈다)` }
+      const commit = await commitPaths(
+        this.worktree,
+        [rel],
+        `요구사항 추출 결과 내보내기: ${rel}`,
+        { env },
+      )
+      await this.feed({ type: 'requirements.exported', at, exported: { path: rel, commit, at } })
+      return { ok: true }
+    })
+  }
+
+  /** run 기록 폴더 (AI 결정 115). 렌더러는 경로를 넘기지 않고 main이 Work 디렉터리에서 계산한다 */
+  requirementsRunsDir(): string | null {
+    return this.work.requirements ? new RequirementsFiles(this.files.dir).runs : null
   }
 
   /** Work의 이벤트를 하나씩 처리한다 */
@@ -819,7 +1063,15 @@ export class WorkRunner {
         await this.confirmIntent(e.taskId, e.version)
         return
       case 'startTask':
-        await this.requestSession(e.taskId)
+        // 요구사항 추출의 extract는 세션 대신 run 루프를 돈다 (결정 92)
+        if (appRun(e.node)) this.extractRunner().start(e.taskId)
+        else await this.requestSession(e.taskId)
+        return
+      case 'runExtract':
+        this.extractRunner().start(e.taskId)
+        return
+      case 'stopExtract':
+        this.extract?.stop()
         return
       case 'resumeTask':
         this.resumeContinue.set(e.taskId, e.continue)
@@ -894,6 +1146,34 @@ export class WorkRunner {
   ): Promise<TaskCheck> {
     const f = files ?? (await this.files.taskFiles(task))
     return this.check(task, f, await this.knowledgeCheck(task, f, opts))
+  }
+
+  /**
+   * 승인과 승인 화면의 검사: 형식 검사에 요구사항 추출의 기록 무결성을 더한다 (결정 2, AI 결정 124). requirements Work의
+   * extract와 verify만 보고, 그 문제는 넘길 수 없다(core/approval의 unignorable). Stop의 되돌림에는 넣지 않는다: 세션이
+   * 고칠 수 없는 앱 소유 기록이다
+   */
+  private async approvalCheck(
+    task: TaskRecord,
+    files?: Readonly<Record<string, string>>,
+  ): Promise<TaskCheck> {
+    const check = await this.checkOf(task, files)
+    if (workType(this.work) !== 'requirements') return check
+    if (task.node !== 'extract' && task.node !== 'verify') return check
+    // 승인할 수 있는 때만 본다: 도는 중이거나 멈춘 extract에는 열린 단위가 있는 것이 정상이다
+    if (!REVIEWABLE.includes(task.status)) return check
+    const p = this.work.requirements
+    const problems =
+      p && p.revision > 0
+        ? await recordProblems(new RequirementsFiles(this.files.dir), p)
+        : ['요구사항 기록이 없음']
+    if (!problems.length) return check
+    const issues = problems.map((message) => ({
+      file: RECORD_ISSUE_FILE,
+      part: 'file' as const,
+      message,
+    }))
+    return { ...check, errors: [...check.errors, ...issues] }
   }
 
   /**
@@ -1435,7 +1715,20 @@ export class WorkRunner {
       respond: await this.respondInput(task),
       // 서브모듈을 읽지 못하면 안내 없이 간다 (D383)
       submodules: await submodulePaths(this.worktree, { env: this.ctx.env }).catch(() => []),
+      requirements: this.requirementsContext(task),
     })
+  }
+
+  /** context.md의 요구사항 기록 절: 요구사항 추출 Work의 verify와 PR 대응에서 기록이 있을 때 (AI 결정 117) */
+  private requirementsContext(task: TaskRecord): ContextInput['requirements'] {
+    const p = this.work.requirements
+    if (workType(this.work) !== 'requirements' || !p?.revision_hash) return null
+    if (task.node !== 'verify' && task.node !== 'respond') return null
+    return {
+      dir: new RequirementsFiles(this.files.dir).dir,
+      revision: p.revision,
+      hash: p.revision_hash,
+    }
   }
 
   /**
@@ -2177,7 +2470,7 @@ export class WorkRunner {
       if (this.cleanupOpen()) return { ok: false, error: CLEANUP_BLOCKS }
       const task = this.task(taskId)
       if (!task) return { ok: false, error: `${taskId} 없음` }
-      const check = await this.checkOf(task)
+      const check = await this.approvalCheck(task)
       // PR 대응 task는 승인하면 push하고 답글을 게시한다. 실패하면 그 오류를 돌려준다 (시나리오 10-6)
       this.opError = null
       const r = await this.command({
@@ -2705,12 +2998,17 @@ export class WorkRunner {
           facts.draft = this.ctx.config().pr_draft
           // 이슈 기록이 있으면 본문 끝에 Closes를 붙인다 (D346). 이어받은 PR의 본문은 고치지 않는다 (D349)
           const issue = this.work.issue?.number ?? null
+          // 요구사항 추출 결과를 내보냈으면 그 경로를 본문 끝에 적는다 (AI 결정 119): verify가 pr.md를 쓴 뒤의 일이라서다
+          const exported = this.work.requirements?.exported
+          const body = exported
+            ? `${pr.body.trimEnd()}\n\n요구사항 추출 결과: \`${exported.path}\` (커밋 ${exported.commit.slice(0, 7)}, extraction.md와 record.json)\n`
+            : pr.body
           facts.prUrl = await ghCreatePr(this.ctx.ghBin, {
             ...gh,
             base: e.base,
             head: e.branch,
             title: pr.title,
-            body: issue === null ? pr.body : withCloses(pr.body, issue),
+            body: issue === null ? body : withCloses(body, issue),
             draft: facts.draft,
           })
         }
@@ -3521,6 +3819,11 @@ export class WorkRunner {
         },
         { quiet: true },
       )
+      // 요구사항 추출의 진행 상자는 기록을 읽어야 그린다
+      if (this.work.requirements) {
+        await this.extractRunner().refresh()
+        this.changed()
+      }
       // 결과를 모르는 머지는 다시 켠 뒤에도 앱이 다시 확인한다 (D330)
       const op = cutOperation(this.work)
       if (op?.kind === 'merge' && op.unconfirmed) {
@@ -3676,7 +3979,7 @@ export class WorkRunner {
     return this.enqueue(async () => {
       this.stopCountdown()
       const task = currentTask(this.work)
-      if (task && this.live.has(task.id)) {
+      if (task && (this.live.has(task.id) || (appRun(task.node) && this.extract?.running))) {
         await this.feed({
           type: 'interrupt',
           taskId: task.id,
@@ -3765,7 +4068,7 @@ export class WorkRunner {
     if (!task) return null
     const { env } = this.ctx
     const files = await this.files.taskFiles(task)
-    const check = await this.checkOf(task, files)
+    const check = await this.approvalCheck(task, files)
     // 끝난 task는 그 task가 끝났을 때의 코드까지 본다. 작업 트리는 지금 코드의 마지막 task만 본다.
     // 정리한 Work는 worktree가 없어 메인 체크아웃에서 커밋끼리 비교한다 (시나리오 8)
     const range = changeRange(this.work, task.id)
@@ -5288,6 +5591,26 @@ export class WorkRunner {
     }
   }
 
+  /** 패널의 요구사항 추출 진행 (requirements-extraction-flow.md 15.5, 17.12) */
+  private requirementsView(): RequirementsView | null {
+    const pointer = this.work.requirements
+    if (!pointer) return null
+    const runner = this.extract
+    return requirementsView({
+      pointer,
+      state: runner?.state ?? null,
+      pending: runner?.pending ?? [],
+      current: runner?.current ?? null,
+      budget: this.requirementsBudget(),
+      runs: runner?.runs ?? [],
+    })
+  }
+
+  /** 요구사항 추출의 예산. 결정 30의 잠정값이다. 앱 설정의 "요구사항 추출" 절(결정 31)은 다음 PR이다 */
+  private requirementsBudget(): RequirementsBudget {
+    return this.ctx.requirementsBudget()
+  }
+
   // ---------- 스냅샷 (I14) ----------
 
   private changed(): void {
@@ -5332,6 +5655,7 @@ export class WorkRunner {
       side: this.sideView(),
       operation: operationView(w),
       issue: this.issueView(),
+      requirements: this.requirementsView(),
       notices: this.noticeViews(),
       tasks: w.tasks.map((t) => this.taskView(t)),
       current: currentTask(w)?.id ?? null,

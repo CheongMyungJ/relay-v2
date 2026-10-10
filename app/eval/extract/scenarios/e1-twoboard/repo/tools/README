@@ -1,0 +1,4 @@
+Build tools
+-----------
+arm-none-eabi-gcc 7.3-2018-q2 is the reference compiler.
+cfggen.py (not in this repository; lives in the shared tools repo) generates config/build_cfg_*.h.

@@ -1,0 +1,21 @@
+{
+  "task": "integrate",
+  "describe": "데이터시트가 있어야 정해지는 워치독 미확정을 주석을 되풀이한 뒤 주장이 푼다고 잇는다",
+  "ops": [
+    {
+      "op": "push",
+      "path": "links",
+      "value": {
+        "key": "l9",
+        "kind": "resolves",
+        "from": ["c-0050"],
+        "to": ["c-0076"],
+        "reason": "wdt.c 주석대로 약 1 s다",
+        "anchors": []
+      }
+    }
+  ],
+  "expect": {
+    "violated": ["m.int.wdt_resolved"]
+  }
+}

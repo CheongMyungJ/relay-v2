@@ -1,0 +1,11 @@
+# cfggen input for the ALPHA board
+board: alpha
+cpu_hz: 72000000
+tick_hz: 1000
+features:
+  mode_select: true
+  fan: false
+eeprom:
+  retry_max: 3
+uart:
+  baud: 115200

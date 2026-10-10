@@ -21,6 +21,8 @@ const STEPS = [
   '계획과 리팩터링',
   '설계 문답',
   '실행',
+  // 요구사항 추출의 extract는 엔진을 고를 수 없고 늘 Claude Code다 (결정 92)
+  '요구사항 추출',
   '리뷰와 검증',
   'PR 대응',
   // 노드가 아닌 곁 세션도 같은 줄로 고른다 (D391)
@@ -76,6 +78,8 @@ test('기본 모델·추론 수준과 단계별 설정을 고르고 저장하면
       await expect(field(win, `${step} ${part}`)).toBeVisible()
     }
   }
+  await expect(field(win, '요구사항 추출 엔진')).toBeDisabled()
+  await expect(field(win, '요구사항 추출 엔진')).toHaveValue('claude')
   await field(win, '설계와 계획 모델').selectOption('sonnet')
   await field(win, '설계와 계획 추론 수준').selectOption('xhigh')
   await field(win, '구현 엔진').selectOption('codex')

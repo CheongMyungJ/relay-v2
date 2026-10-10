@@ -1,0 +1,14 @@
+{
+  "task": "review",
+  "describe": "맞는 요구 후보를 범위 과장이라 한다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "verdicts.s5.verdict",
+      "value": "overclaimed"
+    }
+  ],
+  "expect": {
+    "violated": ["m.rev.req"]
+  }
+}

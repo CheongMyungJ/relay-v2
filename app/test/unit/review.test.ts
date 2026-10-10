@@ -85,6 +85,12 @@ describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
     ).toBe('04 원인 분석과 수정 · 세션 재개 · 이유: 기본 진행')
   })
 
+  it('요구사항 추출의 extract는 세션 없이 앱이 run을 돌린다 (requirements-extraction-flow.md 결정 92)', () => {
+    expect(bandText({ seq: 2, node: 'extract', reason: 'default' })).toBe(
+      '02 요구사항 추출 · 앱이 run을 돌림 · 이유: 기본 진행',
+    )
+  })
+
   it('권한 확인 끈 모드가 아니면 경고한다 (D94)', () => {
     expect(permissionNotice({})).toBeNull()
     expect(permissionNotice({ permission_mode: 'bypassPermissions' })).toBeNull()
@@ -573,6 +579,18 @@ describe('강조 영역 (D83, 시나리오 4-2)', () => {
     })
     expect(ended[0]?.hint).toBe(
       '세션이 끝나 있습니다. [세션 재개]를 누른 뒤 가운데 터미널에 답을 쓰세요. 답하면 에이전트가 산출물을 고쳐 다시 승인 대기가 됩니다.',
+    )
+    // 앱이 run을 돌리는 extract에는 세션이 없다: 질문은 extraction.md의 절을 가리키고 [세션 재개]를 말하지 않는다 (결정 92)
+    const extract = emphasis({
+      node: 'extract',
+      type: 'requirements',
+      handoff: { ...HANDOFF, open_questions: ['미확정 2건이 extraction.md의 미확정 절에 있다'] },
+      errors: [],
+      uncommitted: [],
+      live: false,
+    })
+    expect(extract[0]?.hint).toBe(
+      '이 단계는 세션이 없어 여기서 답하지 않습니다. 항목마다 extraction.md의 해당 절에 있고, 승인하면 리뷰와 검증이 이어서 봅니다. 다시 돌리려면 [단계 선택]으로 요구사항 추출을 고르세요.',
     )
   })
 

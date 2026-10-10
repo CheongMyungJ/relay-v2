@@ -1,0 +1,21 @@
+{
+  "task": "integrate",
+  "describe": "레퍼런스 매뉴얼이 있어야 정해지는 TIM7 클럭 미확정을 주석을 되풀이한 뒤 주장이 푼다고 잇는다",
+  "ops": [
+    {
+      "op": "push",
+      "path": "links",
+      "value": {
+        "key": "l9",
+        "kind": "resolves",
+        "from": ["c-0075"],
+        "to": ["c-0094"],
+        "reason": "주석대로 1 MHz다",
+        "anchors": []
+      }
+    }
+  ],
+  "expect": {
+    "violated": ["m.int.timebase_resolved"]
+  }
+}

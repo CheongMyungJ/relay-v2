@@ -15,6 +15,7 @@ import {
   pendingBackground,
 } from '../../src/core/approval'
 import { createWork } from '../../src/core/machine'
+import type { HaltReason } from '../../src/shared/requirements'
 import { checkTask } from '../../src/core/validate'
 import { DEFAULT_CONFIG, type AppConfig } from '../../src/shared/config'
 import type { Handoff, NodeName } from '../../src/shared/contracts'
@@ -85,6 +86,20 @@ describe('승인 버튼의 판정 (4.1, D90, D112)', () => {
       errors: [pr],
       blocking: [],
     })
+  })
+
+  it('요구사항 추출의 기록 무결성 문제는 extract와 verify 모두 넘길 수 없다 (결정 2, AI 결정 124)', () => {
+    const broken: FormatIssue = {
+      file: 'requirements/',
+      part: 'file',
+      message: '기록 무결성 오류: revision 3의 해시가 다름',
+    }
+    for (const node of ['extract', 'verify'] as const)
+      expect(gate(node, 'awaiting_approval', check([broken]))).toMatchObject({
+        approve: false,
+        force: false,
+        blocking: [broken],
+      })
   })
 
   it('handoff가 없거나 blocked면 승인하지 않는다. 머리글을 읽지 못한 handoff는 무시하고 승인할 수 있다', () => {
@@ -407,12 +422,14 @@ describe('사이드바 배지 (D80)', () => {
     }
   }
 
-  it('우선순위는 끊긴 작업 > 질문 대기·입력 필요 > 승인 대기 > 막힘 > 멈춤 > 자동 대응 멈춤 > 대응 거리 있음 > PR 닫힘 > 머지 가능 > 세션 종료 > 작업 중 > 대기 > 대기열 > 리뷰·CI 대기 > 중단됨 > 완료·포기 (D121, D183)', () => {
+  it('우선순위는 끊긴 작업 > 질문 대기·입력 필요 > 결정 필요 > 승인 대기 > 막힘 > 추출 멈춤 > 멈춤 > 자동 대응 멈춤 > 대응 거리 있음 > PR 닫힘 > 머지 가능 > 세션 종료 > 작업 중 > 대기 > 대기열 > 리뷰·CI 대기 > 중단됨 > 완료·포기 (D121, D183)', () => {
     expect(BADGE_ORDER).toEqual([
       'recovery',
       'asking',
+      'decision_needed',
       'awaiting_approval',
       'blocked',
+      'extract_halted',
       'stopped',
       'auto_paused',
       'pr_items',
@@ -430,8 +447,10 @@ describe('사이드바 배지 (D80)', () => {
     expect(HUMAN_BADGES).toEqual([
       'recovery',
       'asking',
+      'decision_needed',
       'awaiting_approval',
       'blocked',
+      'extract_halted',
       'stopped',
       'auto_paused',
       'pr_items',
@@ -456,6 +475,60 @@ describe('사이드바 배지 (D80)', () => {
     for (const [status, kind, label, hot] of rows) {
       expect(badge(work('active', status))).toEqual({ kind, label, hot })
     }
+  })
+
+  it('요구사항 추출의 extract: 열린 사람 결정과 사람이 필요한 멈춤은 강조하고, 사람이 멈춘 것과 재시작은 조용하다 (AI 결정 116)', () => {
+    const req = createWork({
+      type: 'requirements',
+      workId: 'w',
+      baseBranch: 'main',
+      baseCommit: 'c',
+      at: 'x',
+    }).work
+    const extract = (status: TaskStatus, p: Partial<WorkState['requirements']>): WorkState => ({
+      ...req,
+      tasks: [
+        { ...(req.tasks[0] as WorkState['tasks'][number]), status: 'approved' },
+        {
+          ...(req.tasks[0] as WorkState['tasks'][number]),
+          id: 't-02',
+          node: 'extract',
+          status,
+          session: null,
+        },
+      ],
+      requirements: {
+        revision: 1,
+        revision_hash: null,
+        next: { unit: 2, claim: 1, evidence: 1, decision: 1, revision: 2, run: 1 },
+        runs_used: 0,
+        runs_extra: 0,
+        failures_in_row: 0,
+        streaks: {},
+        ...p,
+      },
+    })
+    const halt = (reason: HaltReason) => ({ at: 'x', reason, detail: '' })
+    expect(badge(extract('working', { open_decisions: 2 }))).toEqual({
+      kind: 'decision_needed',
+      label: '사람 결정 필요',
+      hot: true,
+    })
+    expect(badge(extract('working', {}))).toMatchObject({ kind: 'working', hot: false })
+    expect(badge(extract('interrupted', { halt: halt('decisions') }))).toMatchObject({
+      kind: 'decision_needed',
+      hot: true,
+    })
+    expect(badge(extract('interrupted', { halt: halt('run_limit') }))).toEqual({
+      kind: 'extract_halted',
+      label: '멈춤: run 상한에 닿음',
+      hot: true,
+    })
+    for (const quiet of ['human', 'restart'] as const)
+      expect(badge(extract('interrupted', { halt: halt(quiet) }))).toMatchObject({
+        kind: 'interrupted',
+        hot: false,
+      })
   })
 
   it('멈춘 Work는 멈춤이다. 완료, 포기, 보관됨은 지금 task와 상관없이 끝난 상태를 보인다', () => {

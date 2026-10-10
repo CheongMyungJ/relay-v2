@@ -22,6 +22,22 @@ const PASS = [
   'REQUESTS_CA_BUNDLE',
   'DISPLAY',
   'XAUTHORITY',
+  // Windows: 설정 폴더(USERPROFILE), 셸과 도구가 기대는 시스템 변수. Linux에는 없어 영향이 없다
+  'USERPROFILE',
+  'APPDATA',
+  'LOCALAPPDATA',
+  'SystemRoot',
+  'SystemDrive',
+  'windir',
+  'ComSpec',
+  'PATHEXT',
+  'TEMP',
+  'TMP',
+  'HOMEDRIVE',
+  'HOMEPATH',
+  'ProgramFiles',
+  'ProgramData',
+  'CLAUDE_CODE_GIT_BASH_PATH',
 ]
 
 /** 고른 변수만 담은 환경. root에서는 IS_SANDBOX=1이 있어야 --dangerously-skip-permissions로 뜬다 */
@@ -30,7 +46,7 @@ export function cleanEnv(extra = {}) {
   for (const k of PASS) if (process.env[k] !== undefined) env[k] = process.env[k]
   env.TERM = 'xterm-256color'
   env.LANG = env.LANG || 'C.UTF-8'
-  env.SHELL = env.SHELL || '/bin/bash'
+  if (!env.SHELL && process.platform !== 'win32') env.SHELL = '/bin/bash'
   if (process.getuid?.() === 0) env.IS_SANDBOX = '1'
   // 자동 업데이트 알림이 화면에 끼지 않게 한다 (두 쪽 같음)
   env.DISABLE_AUTOUPDATER = '1'

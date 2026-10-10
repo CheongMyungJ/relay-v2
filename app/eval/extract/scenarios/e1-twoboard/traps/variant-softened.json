@@ -1,0 +1,27 @@
+{
+  "task": "trace-variant",
+  "describe": "코드로 정할 수 있는 틱 주기를 미확정으로 남긴다(소극화)",
+  "ops": [
+    {
+      "op": "push",
+      "path": "unknowns",
+      "value": {
+        "key": "k2",
+        "question": "구성별 틱 주기를 확인하지 못했다",
+        "needs": "external_doc",
+        "refs": []
+      }
+    }
+  ],
+  "judge": {
+    "resolvable": {
+      "v.tick_period": {
+        "left_unknown": true,
+        "keys": ["k2"]
+      }
+    }
+  },
+  "expect": {
+    "softened": ["v.tick_period"]
+  }
+}

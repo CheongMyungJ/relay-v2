@@ -1,0 +1,14 @@
+{
+  "task": "survey",
+  "describe": "FC16을 basic에도 있다고 한다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "inventory.13.configs",
+      "value": ["all"]
+    }
+  ],
+  "expect": {
+    "violated": ["m.merge.fc16"]
+  }
+}

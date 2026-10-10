@@ -1589,6 +1589,40 @@ button.ready {
   margin-bottom: 8px;
 }
 
+/* 요구사항 추출의 진행 상자와 사람 결정 양식 (17.12) */
+.requirements-box {
+  margin-bottom: 8px;
+}
+/* 요구사항 추출의 run 목록 (AI 결정 115): 360px 패널에 맞게 작게 */
+.requirements-runs table {
+  font-size: 12px;
+  width: 100%;
+}
+.requirements-runs td,
+.requirements-runs th {
+  padding: 2px 4px;
+}
+
+.requirements-decision {
+  margin: 8px 0 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+/* 빌드 인덱스 질문처럼 여러 줄인 질문의 줄바꿈을 살린다 */
+.requirements-decision legend {
+  white-space: pre-wrap;
+}
+
+.requirements-decision label.radio {
+  display: block;
+}
+
+.requirements-decision input[type='text'] {
+  width: 100%;
+  margin-top: 4px;
+}
+
 .issue-line.failed {
   padding: 10px 12px;
   border-radius: var(--radius);

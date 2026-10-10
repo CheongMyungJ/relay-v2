@@ -1,0 +1,14 @@
+{
+  "task": "review",
+  "describe": "맞는 동시성 제약을 반박한다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "verdicts.s4.verdict",
+      "value": "refuted"
+    }
+  ],
+  "expect": {
+    "violated": ["m.rev.ct"]
+  }
+}

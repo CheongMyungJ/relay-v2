@@ -1,0 +1,449 @@
+{
+  "observations": [
+    {
+      "key": "o1",
+      "text": "SysTick이 CFG_CPU_HZ / CFG_TICK_HZ 클럭마다 인터럽트를 내고 g_ticks를 1 늘린다",
+      "configs": ["alpha", "beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/timer.c",
+          "start": 10,
+          "end": 10,
+          "quote": "SysTick->LOAD = (CFG_CPU_HZ / CFG_TICK_HZ) - 1U;",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/timer.c",
+          "start": 30,
+          "end": 30,
+          "quote": "g_ticks++;",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o2",
+      "text": "proto_poll은 마지막 바이트 뒤 PROTO_FRAME_TIMEOUT_TICKS를 넘으면(>) 부분 프레임을 버린다. 21틱째에 시간 초과가 된다",
+      "configs": ["alpha", "beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/proto.c",
+          "start": 97,
+          "end": 97,
+          "quote": "if (s_state != WAIT_SOF && (timer_now() - s_last_rx_tick) > PROTO_FRAME_TIMEOUT_TICKS) {",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o3",
+      "text": "벤치 로그의 최대 응답 지연 3.20 ms는 alpha 보드 한 번의 관찰값이다",
+      "configs": ["alpha"],
+      "anchors": [
+        {
+          "kind": "doc_claim",
+          "path": "docs/bench/2019-05-uart-latency.log",
+          "start": 10,
+          "end": 10,
+          "quote": "latency_max_ms     3.20",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o4",
+      "text": "delay_ms는 1틱을 1 ms로 보고 틱 수로 기다린다. beta(틱 10 ms)에서는 요청의 10배를 기다린다: hwrev의 2 ms는 20 ms, 플래시 지우기 뒤 5 ms는 50 ms",
+      "configs": ["alpha", "beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/timer.c",
+          "start": 24,
+          "end": 24,
+          "quote": "while ((g_ticks - start) < ms) {",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/hwrev.c",
+          "start": 20,
+          "end": 20,
+          "quote": "delay_ms(2U);",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/eeprom.c",
+          "start": 58,
+          "end": 58,
+          "quote": "delay_ms(5U);",
+          "command": null
+        }
+      ],
+      "inference": false
+    }
+  ],
+  "quantities": [
+    {
+      "key": "q1",
+      "symbol": "CFG_TICK_HZ",
+      "expr": "1000U / 100U",
+      "values": [
+        {
+          "configs": ["alpha"],
+          "value": "1000"
+        },
+        {
+          "configs": ["beta"],
+          "value": "100"
+        }
+      ],
+      "unit": "Hz",
+      "unit_status": "derived",
+      "nature": "setting",
+      "chain": [
+        {
+          "role": "value",
+          "anchor": {
+            "kind": "code",
+            "path": "config/build_cfg_alpha.h",
+            "start": 10,
+            "end": 10,
+            "quote": "#define CFG_TICK_HZ         1000U",
+            "command": null
+          }
+        },
+        {
+          "role": "consumer",
+          "anchor": {
+            "kind": "code",
+            "path": "src/timer.c",
+            "start": 10,
+            "end": 10,
+            "quote": "SysTick->LOAD = (CFG_CPU_HZ / CFG_TICK_HZ) - 1U;",
+            "command": null
+          }
+        }
+      ],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "config/build_cfg_beta.h",
+          "start": 10,
+          "end": 10,
+          "quote": "#define CFG_TICK_HZ         100U",
+          "command": null
+        }
+      ]
+    },
+    {
+      "key": "q2",
+      "symbol": "PROTO_FRAME_TIMEOUT_TICKS",
+      "expr": "20U (beta: -DPROTO_FRAME_TIMEOUT_TICKS=5U)",
+      "values": [
+        {
+          "configs": ["alpha"],
+          "value": "20 tick = 20 ms"
+        },
+        {
+          "configs": ["beta"],
+          "value": "5 tick = 50 ms"
+        }
+      ],
+      "unit": "ms",
+      "unit_status": "derived",
+      "nature": "setting",
+      "chain": [
+        {
+          "role": "value",
+          "anchor": {
+            "kind": "code",
+            "path": "include/proto.h",
+            "start": 14,
+            "end": 14,
+            "quote": "#define PROTO_FRAME_TIMEOUT_TICKS   20U",
+            "command": null
+          }
+        },
+        {
+          "role": "value",
+          "anchor": {
+            "kind": "code",
+            "path": "Makefile",
+            "start": 27,
+            "end": 27,
+            "quote": "beta: CFLAGS += -DBOARD_BETA -DPROTO_FRAME_TIMEOUT_TICKS=5U",
+            "command": null
+          }
+        },
+        {
+          "role": "consumer",
+          "anchor": {
+            "kind": "code",
+            "path": "src/proto.c",
+            "start": 97,
+            "end": 97,
+            "quote": "> PROTO_FRAME_TIMEOUT_TICKS) {",
+            "command": null
+          }
+        },
+        {
+          "role": "tick_source",
+          "anchor": {
+            "kind": "code",
+            "path": "src/timer.c",
+            "start": 30,
+            "end": 30,
+            "quote": "g_ticks++;",
+            "command": null
+          }
+        }
+      ],
+      "anchors": []
+    },
+    {
+      "key": "q3",
+      "symbol": "CTRL_PERIOD_TICKS",
+      "expr": "(CFG_TICK_HZ / 10U)",
+      "values": [
+        {
+          "configs": ["alpha", "beta"],
+          "value": "100"
+        }
+      ],
+      "unit": "ms",
+      "unit_status": "derived",
+      "nature": "computed",
+      "chain": [
+        {
+          "role": "value",
+          "anchor": {
+            "kind": "code",
+            "path": "include/control.h",
+            "start": 15,
+            "end": 15,
+            "quote": "#define CTRL_PERIOD_TICKS       (CFG_TICK_HZ / 10U)",
+            "command": null
+          }
+        },
+        {
+          "role": "consumer",
+          "anchor": {
+            "kind": "code",
+            "path": "src/main.c",
+            "start": 42,
+            "end": 43,
+            "quote": "if ((timer_now() - last_ctrl) >= CTRL_PERIOD_TICKS) { last_ctrl += CTRL_PERIOD_TICKS;",
+            "command": null
+          }
+        }
+      ],
+      "anchors": []
+    },
+    {
+      "key": "q4",
+      "symbol": "HEATER_MAX_ON_CYCLES",
+      "expr": "600U",
+      "values": [
+        {
+          "configs": ["alpha", "beta"],
+          "value": "60"
+        }
+      ],
+      "unit": "s",
+      "unit_status": "derived",
+      "nature": "setting",
+      "chain": [
+        {
+          "role": "value",
+          "anchor": {
+            "kind": "code",
+            "path": "include/control.h",
+            "start": 18,
+            "end": 18,
+            "quote": "#define HEATER_MAX_ON_CYCLES    600U",
+            "command": null
+          }
+        },
+        {
+          "role": "consumer",
+          "anchor": {
+            "kind": "code",
+            "path": "src/control.c",
+            "start": 56,
+            "end": 56,
+            "quote": "if (++s_on_cycles > HEATER_MAX_ON_CYCLES) {",
+            "command": null
+          }
+        }
+      ],
+      "anchors": []
+    },
+    {
+      "key": "q5",
+      "symbol": "WDT_RELOAD",
+      "expr": "625U (prescaler /64, LSI clock)",
+      "values": [],
+      "unit": "",
+      "unit_status": "unknown",
+      "nature": "setting",
+      "chain": [
+        {
+          "role": "value",
+          "anchor": {
+            "kind": "code",
+            "path": "src/wdt.c",
+            "start": 11,
+            "end": 11,
+            "quote": "#define WDT_RELOAD      625U",
+            "command": null
+          }
+        }
+      ],
+      "anchors": [
+        {
+          "kind": "doc_claim",
+          "path": "src/wdt.c",
+          "start": 4,
+          "end": 5,
+          "quote": "LSI is about 40 kHz ... gives a timeout of about 1 s.",
+          "command": null
+        }
+      ]
+    }
+  ],
+  "requirements": [
+    {
+      "key": "r1",
+      "type": "nonfunctional",
+      "condition": "프레임 수신 중 바이트 사이가 시간 초과(alpha 20틱, beta 5틱)를 넘으면",
+      "behavior": "부분 프레임을 응답 없이 버린다",
+      "result": "alpha 약 20 ms, beta 약 50 ms 뒤 다음 SOF를 기다린다",
+      "configs": ["alpha", "beta"],
+      "refs": ["o2", "q2"],
+      "basis": "code"
+    },
+    {
+      "key": "r2",
+      "type": "functional",
+      "condition": "히터가 600 제어 주기(약 60 s) 넘게 연속으로 켜지면",
+      "behavior": "히터를 끄고 FAULT_HEATER_TIMEOUT을 올린다",
+      "result": "고장이 풀릴 때까지 히터가 꺼진 채다",
+      "configs": ["alpha", "beta"],
+      "refs": ["q4"],
+      "basis": "code"
+    }
+  ],
+  "constraints": [],
+  "impl_choices": [
+    {
+      "key": "ic1",
+      "text": "main 루프 폴링으로 제어 주기를 센다",
+      "refs": ["q3"]
+    }
+  ],
+  "unknowns": [
+    {
+      "key": "k1",
+      "question": "워치독 시간 초과 = 625 x 64 / f_LSI. LSI 주파수가 코드에 없다",
+      "needs": "external_doc",
+      "refs": ["q5"]
+    }
+  ],
+  "conflicts": [
+    {
+      "key": "x1",
+      "text": "proto.h 주석은 20 ms라 하나 beta는 Makefile이 5틱으로 덮어쓰고 틱이 10 ms라 50 ms다",
+      "sides": [
+        {
+          "claim": "주석: 20 ms",
+          "anchors": [
+            {
+              "kind": "doc_claim",
+              "path": "include/proto.h",
+              "start": 14,
+              "end": 14,
+              "quote": "/* 20 ms inter-byte timeout */",
+              "command": null
+            }
+          ]
+        },
+        {
+          "claim": "beta: 5틱 x 10 ms",
+          "anchors": [
+            {
+              "kind": "code",
+              "path": "Makefile",
+              "start": 27,
+              "end": 27,
+              "quote": "-DPROTO_FRAME_TIMEOUT_TICKS=5U",
+              "command": null
+            },
+            {
+              "kind": "code",
+              "path": "config/build_cfg_beta.h",
+              "start": 10,
+              "end": 10,
+              "quote": "#define CFG_TICK_HZ         100U",
+              "command": null
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "absences": [],
+  "followups": [],
+  "human_decisions": [],
+  "checkpoint": null,
+  "outcome": "needs_external",
+  "outcome_reason": "워치독 시간은 LSI 주파수가 코드에 없어 데이터시트가 필요하다.",
+  "checklist": {
+    "per_config_value": {
+      "status": "covered",
+      "refs": ["q1", "q2"],
+      "searches": []
+    },
+    "consumer": {
+      "status": "covered",
+      "refs": ["q2", "q3", "q4"],
+      "searches": []
+    },
+    "tick_source": {
+      "status": "covered",
+      "refs": ["o1"],
+      "searches": []
+    },
+    "unit": {
+      "status": "covered",
+      "refs": ["q2", "q5", "o4"],
+      "searches": []
+    },
+    "comparison": {
+      "status": "covered",
+      "refs": ["o2"],
+      "searches": []
+    },
+    "counting_context": {
+      "status": "covered",
+      "refs": ["q3"],
+      "searches": []
+    },
+    "overflow": {
+      "status": "covered",
+      "refs": ["o1"],
+      "searches": []
+    },
+    "nature": {
+      "status": "covered",
+      "refs": ["q1", "o3"],
+      "searches": []
+    }
+  }
+}

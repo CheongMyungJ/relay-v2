@@ -5,6 +5,7 @@ import {
   AGENT_STEP_TITLES,
   AUTO_APPROVE_TITLES,
   DEFAULT_CONFIG,
+  REQUIREMENTS_BUDGET_TITLES,
   SKILL_TITLES,
   THEME_CHOICES,
   type AppConfig,
@@ -17,6 +18,7 @@ import {
   type WorkSettingsPatch,
 } from '../shared/config'
 import type { NodeName } from '../shared/contracts'
+import type { RequirementsBudget } from '../shared/requirements'
 import type { ProjectSettings } from '../shared/project'
 import type { MergeMethod } from '../shared/work'
 import { ALL_NODES } from './pipeline'
@@ -71,6 +73,7 @@ const EDITABLE_KEYS = [
   'knowledge_review_engine',
   'knowledge_review_model',
   'theme',
+  'requirements_budget',
 ] as const
 
 export type EditableKey = (typeof EDITABLE_KEYS)[number]
@@ -261,6 +264,79 @@ function integer(key: IntegerKey, v: unknown): Checked<number> {
   return { ok: true, value: v }
 }
 
+/**
+ * 요구사항 추출 예산의 범위 (결정 31, 102) **(기본값)**. run 상한은 1~1000, 시간은 분, 연속 횟수는 1~10이다. 부드러운
+ * 마감은 시간 상한보다 짧아야 한다(같거나 길면 마감이 오기 전에 run이 끝난다)
+ */
+const BUDGET_RANGES: Readonly<Record<keyof RequirementsBudget, readonly [number, number]>> = {
+  run_limit: [1, 1000],
+  hard_minutes: [2, 240],
+  soft_minutes: [1, 239],
+  unit_failures: [1, 10],
+  failures_in_row: [1, 10],
+  unit_incompletes: [1, 10],
+}
+
+const BUDGET_NAME: ReadonlyMap<string, string> = new Map(
+  REQUIREMENTS_BUDGET_TITLES.map(([key, title]) => [key, title]),
+)
+
+/** 부드러운 마감이 시간 상한보다 짧은가. 아니면 이유 */
+function budgetFits(b: RequirementsBudget): string | null {
+  return b.soft_minutes < b.hard_minutes
+    ? null
+    : `요구사항 추출: ${BUDGET_NAME.get('soft_minutes')}은 ${BUDGET_NAME.get('hard_minutes')}보다 짧아야 함 (지금: ${b.soft_minutes} ≥ ${b.hard_minutes})`
+}
+
+/** 요구사항 추출 예산 한 값 */
+function budgetValue(key: string, v: unknown): Checked<number> {
+  const range = BUDGET_RANGES[key as keyof RequirementsBudget] as
+    readonly [number, number] | undefined
+  if (!range) return { ok: false, error: `요구사항 추출: 모르는 값 ${key}` }
+  const [min, max] = range
+  if (typeof v !== 'number' || !Number.isInteger(v) || v < min || v > max) {
+    return {
+      ok: false,
+      error: `요구사항 추출(${BUDGET_NAME.get(key) ?? key}): ${min}~${max}의 정수여야 함 (지금: ${String(v)})`,
+    }
+  }
+  return { ok: true, value: v }
+}
+
+/** 설정 화면의 요구사항 추출 예산: 준 값만 바꾸고, 바꾼 뒤의 값끼리 맞아야 한다 */
+function requirementsBudget(current: RequirementsBudget, v: unknown): Checked<RequirementsBudget> {
+  if (!isRecord(v)) return { ok: false, error: '요구사항 추출: 객체여야 함' }
+  const next = { ...current }
+  for (const [key, x] of Object.entries(v)) {
+    const r = budgetValue(key, x)
+    if (!r.ok) return r
+    next[key as keyof RequirementsBudget] = r.value
+  }
+  const why = budgetFits(next)
+  return why ? { ok: false, error: why } : { ok: true, value: next }
+}
+
+/** config.json의 요구사항 추출 예산. 틀린 값은 그 값만, 마감이 상한보다 길면 둘 다 기본값으로 되돌리고 경고한다 */
+function normalizeBudget(v: unknown, warnings: string[]): RequirementsBudget {
+  const out = { ...DEFAULT_CONFIG.requirements_budget }
+  if (!isRecord(v)) {
+    warnings.push('config.json 요구사항 추출: 객체여야 함. 기본값을 씀')
+    return out
+  }
+  for (const [key, x] of Object.entries(v)) {
+    const r = budgetValue(key, x)
+    if (r.ok) out[key as keyof RequirementsBudget] = r.value
+    else warnings.push(`config.json ${r.error}. 기본값을 씀`)
+  }
+  const why = budgetFits(out)
+  if (why) {
+    warnings.push(`config.json ${why}. 기본값을 씀`)
+    out.hard_minutes = DEFAULT_CONFIG.requirements_budget.hard_minutes
+    out.soft_minutes = DEFAULT_CONFIG.requirements_budget.soft_minutes
+  }
+  return out
+}
+
 /** 참·거짓 값: draft PR(D71), 대응 자동 시작(D154) */
 const BOOLEAN_KEYS: readonly BooleanKey[] = ['pr_draft', 'respond_auto_start', 'side_notice']
 
@@ -311,7 +387,7 @@ function autoApprove(v: unknown): Checked<Partial<Record<AutoApproveNode, boolea
     if ((MANUAL_NODES as readonly string[]).includes(node)) {
       return {
         ok: false,
-        error: `${NAMES.auto_approve}: ${node}는 켤 수 없음 (의도 승인, Work 완료는 늘 수동)`,
+        error: `${NAMES.auto_approve}: ${node}는 켤 수 없음 (의도 승인, 요구사항 추출, Work 완료는 늘 수동)`,
       }
     }
     if (!(AUTO_APPROVE_NODES as readonly string[]).includes(node)) {
@@ -339,6 +415,7 @@ export function normalizeConfig(data: unknown): { config: AppConfig; warnings: s
     auto_approve: { ...DEFAULT_CONFIG.auto_approve },
     question_mode: { ...DEFAULT_CONFIG.question_mode },
     agent_steps: {},
+    requirements_budget: { ...DEFAULT_CONFIG.requirements_budget },
   }
   if (data['agent_engine'] !== undefined) {
     const r = agentEngine(data['agent_engine'])
@@ -388,12 +465,14 @@ export function normalizeConfig(data: unknown): { config: AppConfig; warnings: s
     if (r.ok) config.auto_approve = { ...config.auto_approve, ...r.value }
     else warnings.push(`config.json ${r.error}. 기본값을 씀`)
   }
+  if (data['requirements_budget'] !== undefined)
+    config.requirements_budget = normalizeBudget(data['requirements_budget'], warnings)
   return { config, warnings }
 }
 
 /**
  * 설정 화면에서 바꾼 값을 적용한다 (D70). 바꿀 수 있는 키만 받고, 값이 틀리면 아무것도 바꾸지 않는다.
- * 질문 방식은 스킬마다, 자동 승인과 상세 설정은 단계마다 덮어쓴다. 상세 설정의 빈 객체는 그 단계를 지운다. 엔진·모델·
+ * 질문 방식은 스킬마다, 자동 승인과 상세 설정은 단계마다, 요구사항 추출 예산은 값마다 덮어쓴다. 상세 설정의 빈 객체는 그 단계를 지운다. 엔진·모델·
  * 추론 수준은 바꾼 뒤의 값끼리 맞아야 한다.
  */
 export function applyConfigPatch(current: AppConfig, patch: unknown): Checked<AppConfig> {
@@ -456,6 +535,10 @@ export function applyConfigPatch(current: AppConfig, patch: unknown): Checked<Ap
       const r = autoApprove(v)
       if (!r.ok) return r
       next.auto_approve = { ...next.auto_approve, ...r.value }
+    } else if (key === 'requirements_budget') {
+      const r = requirementsBudget(next.requirements_budget, v)
+      if (!r.ok) return r
+      next.requirements_budget = r.value
     } else {
       const k = key as IntegerKey
       const r = integer(k, v)

@@ -1,0 +1,24 @@
+{
+  "task": "summarize",
+  "describe": "검토가 내린 주장을 맞는 것처럼 쓴다(판정)",
+  "ops": [
+    {
+      "op": "set",
+      "path": "overview.1.text",
+      "value": "FC43 장치 식별은 모든 구성에 있고 g_settings는 regs_write만 쓴다."
+    }
+  ],
+  "judge": {
+    "must_not": {
+      "m.sum.lowered_ok": {
+        "violated": true,
+        "keys": ["p2"],
+        "quote": "FC43 장치 식별은 모든 구성에 있고",
+        "hedged": false
+      }
+    }
+  },
+  "expect": {
+    "violated": ["m.sum.lowered_ok"]
+  }
+}

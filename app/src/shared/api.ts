@@ -157,6 +157,26 @@ export interface RelayApi {
   prRerun(workKey: string): Promise<CommandResult>
   /** 이슈 기록의 [다시 시도] (설계 3.7, D344) */
   issueRetry(workKey: string): Promise<CommandResult>
+  /** 요구사항 추출의 사람 결정 필요에 답한다 (requirements-extraction-flow.md 결정 7, 41) */
+  answerRequirements(
+    workKey: string,
+    answers: { decision: string; answer: string }[],
+  ): Promise<CommandResult>
+  /** run 상한으로 멈춘 요구사항 추출의 [계속 +N]: 상한을 늘리고 이어서 돈다 (결정 26, 99) */
+  extendRequirements(workKey: string, runs: number): Promise<CommandResult>
+  /** run 상한으로 멈춘 요구사항 추출의 [범위 줄이고 계속]: 고른 단위를 빼고 메모를 남기고 runs만큼 늘린다 (AI 결정 114) */
+  narrowRequirements(
+    workKey: string,
+    units: string[],
+    note: string,
+    runs: number,
+  ): Promise<CommandResult>
+  /** run 상한으로 멈춘 요구사항 추출의 [부분 분석으로 넘기기] (결정 26, AI 결정 114) */
+  partialRequirements(workKey: string): Promise<CommandResult>
+  /** 요구사항 추출의 run 기록 폴더를 연다 (AI 결정 115) */
+  openRequirementsRuns(workKey: string): Promise<CommandResult>
+  /** 요구사항 추출 결과를 저장소의 폴더(레포 상대)에 쓰고 커밋한다 (AI 결정 119) */
+  exportRequirements(workKey: string, dir: string): Promise<CommandResult>
   /** 프로젝트 설정 (5.1.2, D185): 받을 봇과 기본 머지 방식, 이슈 기록(D337) */
   updateProjectSettings(projectId: string, settings: ProjectSettings): Promise<CommandResult>
   /** Work별 자동 승인과 질문 방식 (D72). 준 키만 바꾸고, 빈 값이면 앱 설정을 따른다 */
@@ -232,6 +252,12 @@ export const IPC = {
   prRespond: 'pr:respond',
   prRerun: 'pr:rerun',
   issueRetry: 'issue:retry',
+  answerRequirements: 'requirements:answer',
+  extendRequirements: 'requirements:extend',
+  narrowRequirements: 'requirements:narrow',
+  partialRequirements: 'requirements:partial',
+  openRequirementsRuns: 'requirements:open-runs',
+  exportRequirements: 'requirements:export',
   projectSettings: 'project:settings',
   workSettings: 'work:settings',
   config: 'config:get',

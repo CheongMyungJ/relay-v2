@@ -1,0 +1,19 @@
+{
+  "task": "trace-timing",
+  "describe": "구성을 적지 않은 값은 모든 구성에 대한 주장으로 본다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "quantities.1.values",
+      "value": [
+        {
+          "configs": [],
+          "value": "20"
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "violated": ["m.frame_20ms_all"]
+  }
+}

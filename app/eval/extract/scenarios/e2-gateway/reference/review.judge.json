@@ -1,0 +1,17 @@
+{
+  "recall": [
+    {
+      "id": "r.rev.settings_why",
+      "found": true,
+      "keys": ["s1"]
+    }
+  ],
+  "must_not": [],
+  "resolvable": [
+    {
+      "id": "v.rev.maxregs",
+      "left_unknown": false,
+      "keys": []
+    }
+  ]
+}

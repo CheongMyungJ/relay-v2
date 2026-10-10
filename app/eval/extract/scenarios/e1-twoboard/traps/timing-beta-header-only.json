@@ -1,0 +1,24 @@
+{
+  "task": "trace-timing",
+  "describe": "beta 값을 proto.h만 보고 20틱 x 10 ms = 200 ms로 계산한다(Makefile 덮어쓰기를 놓침)",
+  "ops": [
+    {
+      "op": "set",
+      "path": "quantities.1.values",
+      "value": [
+        {
+          "configs": ["alpha"],
+          "value": "20 ms"
+        },
+        {
+          "configs": ["beta"],
+          "value": "200 ms"
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "violated": ["m.q.q.frame_to.value"],
+    "missed": ["r.tim.frame_ms"]
+  }
+}

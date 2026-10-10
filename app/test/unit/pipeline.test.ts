@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import handoffSchema from '../../src/shared/generated/handoff.v1.schema.json'
 import {
   ALL_NODES,
+  appRun,
   KEEP_CODE_NODES,
   NODE_INFO,
   PIPELINES,
@@ -10,6 +11,7 @@ import {
   isPipelineNode,
   keepDefault,
   keepLabel,
+  keepText,
   isPrevious,
   previousSteps,
   recommendableNodes,
@@ -28,7 +30,13 @@ describe('노드 (3.1)', () => {
       refactor: ['intake', 'refactor', 'verify'],
       spec: ['intake', 'spec', 'verify'],
       general: ['intake', 'execute', 'verify'],
+      requirements: ['intake', 'extract', 'verify'],
     })
+  })
+
+  it('요구사항 추출의 extract만 앱이 run을 돌리는 단계다 (requirements-extraction-flow.md 결정 92)', () => {
+    expect(ALL_NODES.filter(appRun)).toEqual(['extract'])
+    expect(appRun(RESPOND)).toBe(false)
   })
 
   it('모든 노드는 모든 파이프라인의 노드를 모은 것이고 스키마의 노드 열거값과 같다 (I57, I63, I85, I103)', () => {
@@ -40,6 +48,7 @@ describe('노드 (3.1)', () => {
       'refactor',
       'spec',
       'execute',
+      'extract',
       'verify',
     ])
     expect(new Set(Object.values(PIPELINES).flat())).toEqual(new Set(ALL_NODES))
@@ -59,6 +68,7 @@ describe('노드 (3.1)', () => {
       ['refactor', 'refactor', '계획과 리팩터링', ['refactor.md']],
       ['spec', 'spec', '설계 문답', ['spec.md']],
       ['execute', 'execute', '실행', ['execution.md']],
+      ['extract', 'extract', '요구사항 추출', ['extraction.md']],
       ['verify', 'verify', '리뷰와 검증', ['verification.md', 'pr.md']],
     ])
   })
@@ -87,21 +97,24 @@ describe('노드 (3.1)', () => {
     expect(workType({ type: 'spec' })).toBe('spec')
   })
 
-  it('[현재 코드 위에서 이어서]는 버그 수정의 fix, 기능 추가의 design과 implement, 리팩터링의 refactor, 설계의 spec, 일반의 execute에서 준다 (6.2, D254, D278, D316, D365)', () => {
+  it('[현재 코드 위에서 이어서]는 버그 수정의 fix, 기능 추가의 design과 implement, 리팩터링의 refactor, 설계의 spec, 일반의 execute, 요구사항 추출의 extract에서 준다 (6.2, D254, D278, D316, D365, 결정 120)', () => {
     expect(KEEP_CODE_NODES).toEqual({
       bugfix: ['fix'],
       feature: ['design', 'implement'],
       refactor: ['refactor'],
       spec: ['spec'],
       general: ['execute'],
+      requirements: ['extract'],
     })
   })
 
-  it('설계의 spec만 "현재 문서 위에서 이어서"이고 처음부터 체크되어 있다 (D365, I105)', () => {
+  it('설계의 spec은 "현재 문서 위에서 이어서", 요구사항 추출의 extract는 "현재 기록 위에서 이어서"이고 둘만 처음부터 체크되어 있다 (D365, I105, 결정 120)', () => {
     expect(keepLabel('spec', 'spec')).toBe('현재 문서 위에서 이어서')
     expect(keepDefault('spec', 'spec')).toBe(true)
+    expect(keepLabel('requirements', 'extract')).toBe('현재 기록 위에서 이어서')
+    expect(keepDefault('requirements', 'extract')).toBe(true)
     for (const [type, nodes] of Object.entries(KEEP_CODE_NODES) as [WorkType, NodeName[]][]) {
-      for (const node of nodes.filter((n) => n !== 'spec')) {
+      for (const node of nodes.filter((n) => n !== 'spec' && n !== 'extract')) {
         expect(keepLabel(type, node), `${type} ${node}`).toBe('현재 코드 위에서 이어서')
         expect(keepDefault(type, node), `${type} ${node}`).toBe(false)
       }
@@ -124,6 +137,20 @@ describe('노드 (3.1)', () => {
           expect(KEEP_CODE_NODES[type], `${type} ${node}`).toContain(node)
       }
     }
+  })
+
+  it('[현재 기록 위에서 이어서]의 풀이와 미리 보기는 코드를 고친다고 하지 않는다 (결정 120)', () => {
+    expect(keepText('requirements', 'extract')).toEqual({
+      hint: '지금 요구사항 기록 위에 추가 지시를 메모로 두고 이어서 돈다. 풀면 survey부터 처음 다시 돈다',
+      code: '커밋을 되돌리지 않고 지금 요구사항 기록 위에서 이어서 돕니다',
+    })
+    expect(keepText('spec', 'spec').hint).toBe(
+      '문답으로 정한 결정을 문서에 둔 채 다시 볼 결정만 다시 묻는다',
+    )
+    expect(keepText('bugfix', 'fix')).toEqual({
+      hint: 'verify가 작은 문제를 찾았을 때 수정을 처음부터 다시 하지 않는다',
+      code: '커밋을 되돌리지 않고 그 위에서 이어서 고칩니다',
+    })
   })
 })
 

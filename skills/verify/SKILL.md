@@ -25,6 +25,9 @@ Review the whole change of this Work, apply only the findings the human picks, t
 <!-- type: general -->
 - `execution.md` at the path in `context.md`: the plan, the change, and the self-check of each 완료조건.
 <!-- /type -->
+<!-- type: requirements -->
+- `extraction.md` at the path in `context.md`: the configurations, every analysis unit with its ending state, and the requirement candidates, constraints, unknowns and conflicts with their source locations. When present, also its overview, coverage by perspective, folded claims, AI review, conflict links, partial-analysis banner and build-index line. The records it is drawn from are app-owned (the folder under `요구사항 기록` in `context.md`): read them, never edit them.
+<!-- /type -->
 - The change to review is from the base commit (from `context.md`) to now: `git diff <base commit>`.
 
 ## Order
@@ -33,6 +36,9 @@ Review the whole change of this Work, apply only the findings the human picks, t
 2. **Pick findings** (human decision below). Skip this if there are no findings.
 <!-- type: bugfix feature refactor general -->
 3. **Apply** only the picked findings, commit, and run the intent's test command. Fill in `## 반영` and `## 반영하지 않은 지적`. Do not review again afterwards, and do not add new findings.
+<!-- /type -->
+<!-- type: requirements -->
+3. **Apply nothing here.** The records are app-owned. Write each picked finding under `## 반영하지 않은 지적` with the IDs it concerns (`c-`, `u-`, `e-`), what extract should do (철회 / 범위 좁힘 / 단위 다시 보기 / 자료 필요) and why, worded so the human can paste it as the instruction when they rewind to extract. Leave `## 반영` as "없음". Do not review again afterwards, and do not add new findings.
 <!-- /type -->
 <!-- type: spec -->
 3. **Apply** only the picked findings to the document and commit. There is no test command to run. Fill in `## 반영` and `## 반영하지 않은 지적`. Do not review again afterwards, and do not add new findings.
@@ -60,6 +66,12 @@ Review the whole change of this Work, apply only the findings the human picks, t
 <!-- /type -->
 <!-- type: feature -->
 - Does the implementation fit the user scenarios, requirements and approach in `design.md`? Is `계획과 달라진 점` in `implement.md` reasonable? Do not judge requirements added in the design or non-functional requirements: write a mismatch as a finding.
+<!-- /type -->
+<!-- type: requirements -->
+- Review the extraction, not code changes: open the cited source locations and check that each requirement candidate and constraint says what the code at the base commit does, in the configurations it names.
+- Claims that merge configurations, state a unit or a guarantee the code does not show, or treat an observed or nominal value as a guarantee.
+- Gaps: entry points, configurations or units with no ending state, and unknowns without the material they need. Coverage cells left unknown or unreached, and units held by a partial analysis, are gaps only when `extraction.md` does not say so.
+- Judge whether claims match the source and the configurations, not whether the requirements are good.
 <!-- /type -->
 <!-- type: refactor -->
 - Did any logic change in the diff (outside the differences the human accepted)? A behavior change the human did not accept is a 차단 finding. Are the structural goals met? Did the scope grow beyond the plan?
@@ -101,6 +113,11 @@ Review the whole change of this Work, apply only the findings the human picks, t
 - **`다시 볼 결정`:** a decision with a better alternative or a missed risk goes in `다시 볼 결정`, not in `리뷰 지적`. It is not a finding to pick: the Work completion screen and `pr.md` only show it. To change it, the human rewinds to spec.
 - **A finding that needs a new decision:** do not decide it here. Keep it in `반영하지 않은 지적`, and set `recommended_next` to `spec` with the reason.
 - **Verdicts on the document:** judge each 완료조건 by reading the document and the diff. Judge "대상 문서와 지식 파일 밖의 파일을 바꾸지 않는다" from the diff against the base commit, and list every other changed file in `문서 밖 파일 변경`.
+- **No test command:** the intent has none. Skip running tests.
+<!-- /type -->
+<!-- type: requirements -->
+- **Records and code:** do not change code or the records under `requirements/`. A picked finding needs extract again: see Going back.
+- **Verdicts on the extraction:** judge each 완료조건 by reading `extraction.md` and opening the source locations it cites at the base commit.
 - **No test command:** the intent has none. Skip running tests.
 <!-- /type -->
 <!-- type: bugfix -->
@@ -149,6 +166,9 @@ Review the whole change of this Work, apply only the findings the human picks, t
 <!-- type: spec -->
 - **Going back:** if the document is wrong, write it as a 차단 finding. If the human does not pick it to apply here, or applying it needs a new decision, set `recommended_next` with the reason: `spec` if the document is wrong or needs a new decision, `intake` if the intent is wrong. The app stops and the human picks the step.
 <!-- /type -->
+<!-- type: requirements -->
+- **Going back:** if the extraction is wrong or misses something, write it as a 차단 finding and set `recommended_next` with the reason: `extract` if the extraction is wrong, `intake` if the intent is wrong. The app stops and the human picks the step.
+<!-- /type -->
 <!-- type: general -->
 - **Going back:** if the change is wrong, write it as a 차단 finding. If the human does not pick it to apply here, set `recommended_next` with the reason: `execute` if the change is wrong, `intake` if the intent is wrong. The app stops and the human picks the step.
 <!-- /type -->
@@ -164,6 +184,9 @@ Ask on the spot:
 - **Which findings to apply** (only when there are findings). In one question, list each finding in one line (number, severity, what). Offer: 차단·권장만 반영 / 모두 반영 / 반영하지 않음, and put the one you recommend first. The human can also type the numbers. Record what they picked and what they did not in `decisions` with `by: human`.
 <!-- type: general -->
 - **`확인: 사람` items:** gather them all into one question. For each, show what to look at (file, diff location, run result). The human's answer decides 통과 or 실패. Write "사람 확인" and the answer in the evidence, and record the answer in `decisions` with `by: human`.
+<!-- /type -->
+<!-- type: requirements -->
+- **사람 표본 확인:** pick up to three claims from the risk classes (numbers, absence claims, hardware, communication or concurrency constraints, requirement candidates, claims for all configurations), preferring ones the AI review did not lower and ones in different units. Gather them into one question. For each, show the ID, the claim text, `path:line` and the quote. The human opens the source and answers 맞음 / 틀림 / 모름. Write the answers under `## 사람 표본 확인` and record them in `decisions` with `by: human`. A 틀림 is a 차단 finding for extract. Do not change the records.
 <!-- /type -->
 <!-- type: bugfix feature refactor general -->
 - **A test change looks like weakening:** show which test changed and how. If the human says it is not weakening, "기존 테스트를 약화하거나 삭제하지 않는다" is 통과. If they say it is, it is 실패.
@@ -181,6 +204,9 @@ Ask on the spot:
 <!-- type: spec -->
   - Go back: set `recommended_next` to the earlier step to return to (usually `spec`). The app stops and the human picks the step.
 <!-- /type -->
+<!-- type: requirements -->
+  - Go back: set `recommended_next` to the earlier step to return to (usually `extract`). The app stops and the human picks the step.
+<!-- /type -->
 <!-- type: general -->
   - Go back: set `recommended_next` to the earlier step to return to (usually `execute`). The app stops and the human picks the step.
 <!-- /type -->
@@ -193,6 +219,12 @@ Ask on the spot:
 - If there were findings, the human picked; the picked ones are fixed and committed, and the test result is in `반영`.
 - Every 완료조건 of the intent has a verdict and evidence, judged on the final code.
 - Every changed test file is judged.
+<!-- /type -->
+<!-- type: requirements -->
+- `verification.md` has all six template sections.
+- If there were findings, the human picked; the picked ones are under `반영하지 않은 지적` for extract, with IDs and what extract should do.
+- `사람 표본 확인` has the human's answers, or "없음" with the reason (no risk-class claim).
+- Every 완료조건 of the intent has a verdict and evidence, judged on `extraction.md` and the cited source locations.
 <!-- /type -->
 <!-- type: spec -->
 - `verification.md` has all seven template sections.
@@ -223,6 +255,9 @@ Ask on the spot:
 <!-- type: spec -->
 - 지적 번호 — 문서에서 고친 곳, 커밋
 <!-- /type -->
+<!-- type: requirements -->
+(요구사항 추출은 이 단계에서 반영하지 않으므로 "없음")
+<!-- /type -->
 (사람이 고른 것이 없으면 "없음")
 
 ## 반영하지 않은 지적
@@ -238,11 +273,19 @@ Ask on the spot:
 <!-- type: spec -->
 | (완료조건 그대로) | 통과 | 읽은 곳(문서의 절, diff) |
 <!-- /type -->
+<!-- type: requirements -->
+| (완료조건 그대로) | 통과 | 읽은 곳(extraction.md의 절, 원본 위치) |
+<!-- /type -->
 
 <!-- type: bugfix feature refactor general -->
 ## 테스트 파일 변경
 - 파일 — 약화 아님 / 약화 의심(사람 판단: …) — 이유
 (바뀐 테스트 파일이 없으면 "없음")
+<!-- /type -->
+<!-- type: requirements -->
+## 사람 표본 확인
+- ID — 주장 — `경로:줄` — 맞음 / 틀림 / 모름
+(위험 등급 주장이 없으면 "없음"과 까닭)
 <!-- /type -->
 <!-- type: spec -->
 ## 문서 밖 파일 변경
@@ -311,6 +354,18 @@ Ask on the spot:
 ## 주요 결정
 ## 변경
 ## 테스트
+```
+<!-- /type -->
+<!-- type: requirements -->
+- `분석 범위`: the configurations and units covered, and what was left out or held, with the reason. `미확정과 충돌`: copy the counts and the main items from `extraction.md`, or "없음". `변경`: "없음" (the result is exported to `docs/requirements/<Work id>` from the completion screen, which adds a line to the PR body).
+
+```markdown
+# PR 제목
+
+## 요약
+## 분석 범위
+## 미확정과 충돌
+## 변경
 ```
 <!-- /type -->
 <!-- type: spec -->

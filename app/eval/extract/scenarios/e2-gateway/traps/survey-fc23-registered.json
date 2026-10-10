@@ -1,0 +1,14 @@
+{
+  "task": "survey",
+  "describe": "등록되지 않는 FC23을 모든 구성의 명령으로 둔다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "inventory.16.configs",
+      "value": ["basic", "pro", "devkit"]
+    }
+  ],
+  "expect": {
+    "violated": ["m.fc23"]
+  }
+}

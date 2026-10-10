@@ -1,0 +1,11 @@
+# cfggen input for the BETA board
+board: beta
+cpu_hz: 48000000
+tick_hz: 100
+features:
+  mode_select: false
+  fan: true
+eeprom:
+  retry_max: 5
+uart:
+  baud: 115200

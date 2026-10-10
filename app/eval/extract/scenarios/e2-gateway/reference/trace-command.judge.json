@@ -1,0 +1,108 @@
+{
+  "recall": [
+    {
+      "id": "r.cmd.entry",
+      "found": true,
+      "keys": ["o1"]
+    },
+    {
+      "id": "r.cmd.registration",
+      "found": true,
+      "keys": ["o2"]
+    },
+    {
+      "id": "r.cmd.qty",
+      "found": true,
+      "keys": ["o3"]
+    },
+    {
+      "id": "r.cmd.addr",
+      "found": true,
+      "keys": ["o4"]
+    },
+    {
+      "id": "r.cmd.partial",
+      "found": true,
+      "keys": ["o5"]
+    },
+    {
+      "id": "r.cmd.busy",
+      "found": true,
+      "keys": ["o6"]
+    },
+    {
+      "id": "r.cmd.normal",
+      "found": true,
+      "keys": ["o7"]
+    },
+    {
+      "id": "r.cmd.apply_reset",
+      "found": true,
+      "keys": ["o8"]
+    },
+    {
+      "id": "r.cmd.silent",
+      "found": true,
+      "keys": ["o9"]
+    },
+    {
+      "id": "r.cmd.reply",
+      "found": true,
+      "keys": ["o10"]
+    },
+    {
+      "id": "r.cmd.de_release",
+      "found": true,
+      "keys": ["o11"]
+    },
+    {
+      "id": "r.cmd.t35",
+      "found": true,
+      "keys": ["x2"]
+    }
+  ],
+  "must_not": [
+    {
+      "id": "m.fc23",
+      "violated": false,
+      "keys": []
+    },
+    {
+      "id": "m.fc16_basic",
+      "violated": false,
+      "keys": []
+    },
+    {
+      "id": "m.fc16_atomic",
+      "violated": false,
+      "keys": []
+    },
+    {
+      "id": "m.crc_ccitt",
+      "violated": false,
+      "keys": []
+    },
+    {
+      "id": "m.t35",
+      "violated": false,
+      "keys": []
+    },
+    {
+      "id": "m.latency_req",
+      "violated": false,
+      "keys": []
+    }
+  ],
+  "resolvable": [
+    {
+      "id": "v.fc16_configs",
+      "left_unknown": false,
+      "keys": []
+    },
+    {
+      "id": "v.crc",
+      "left_unknown": false,
+      "keys": []
+    }
+  ]
+}

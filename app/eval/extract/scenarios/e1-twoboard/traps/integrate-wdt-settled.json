@@ -1,0 +1,24 @@
+{
+  "task": "integrate",
+  "describe": "coverage 메모가 워치독 시간 초과를 약 1 s로 확정한다(판정)",
+  "ops": [
+    {
+      "op": "set",
+      "path": "coverage.timing.0.note",
+      "value": "워치독은 wdt.c대로 약 1 s로 정해졌다"
+    }
+  ],
+  "judge": {
+    "must_not": {
+      "m.int.wdt_settled": {
+        "violated": true,
+        "keys": ["timing"],
+        "quote": "워치독은 wdt.c대로 약 1 s로 정해졌다",
+        "hedged": false
+      }
+    }
+  },
+  "expect": {
+    "violated": ["m.int.wdt_settled"]
+  }
+}

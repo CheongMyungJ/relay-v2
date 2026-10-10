@@ -1,0 +1,78 @@
+{
+  "recall": [
+    {
+      "id": "r.cmd.t35",
+      "found": true,
+      "keys": ["o2", "x1"]
+    },
+    {
+      "id": "r.tim.resp",
+      "found": true,
+      "keys": ["q3", "o1"]
+    },
+    {
+      "id": "r.tim.wdog",
+      "found": true,
+      "keys": ["k1"]
+    },
+    {
+      "id": "r.tim.timebase",
+      "found": true,
+      "keys": ["k2"]
+    },
+    {
+      "id": "r.tim.erase",
+      "found": true,
+      "keys": ["o3"]
+    },
+    {
+      "id": "r.tim.de",
+      "found": true,
+      "keys": ["k3", "q7"]
+    }
+  ],
+  "must_not": [
+    {
+      "id": "m.t35",
+      "violated": false,
+      "keys": []
+    },
+    {
+      "id": "m.latency_req",
+      "violated": false,
+      "keys": []
+    },
+    {
+      "id": "m.sensor_25_all",
+      "violated": false,
+      "keys": []
+    },
+    {
+      "id": "m.iwdg_exact",
+      "violated": false,
+      "keys": []
+    },
+    {
+      "id": "m.timebase_exact",
+      "violated": false,
+      "keys": []
+    },
+    {
+      "id": "m.de_exact",
+      "violated": false,
+      "keys": []
+    }
+  ],
+  "resolvable": [
+    {
+      "id": "v.tick",
+      "left_unknown": false,
+      "keys": []
+    },
+    {
+      "id": "v.sensor_ms",
+      "left_unknown": false,
+      "keys": []
+    }
+  ]
+}

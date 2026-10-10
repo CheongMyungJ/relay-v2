@@ -1,0 +1,267 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "relay/extract-review.v0.schema.json",
+  "title": "extract review run 결과 (v0)",
+  "description": "요구사항 추출 extract의 review run이 내는 결과 제안(requirements-extraction-flow.md 16.4, 16.7, 결정 12, AI 결정 112). 앱이 주장 칸에서 만든 맹검 질문(값·구성)에 답하고(비교는 앱이 한다), 행동 서술마다 반박을 시도한다. 반박에는 반대 앵커가 필요하다. 검토는 상태를 내리기만 한다. answers와 verdicts의 키는 앱이 패킷의 질문·서술 키로 채운다(결정 36). 공통 $defs는 survey·trace와 같아야 한다. 필드 설명은 영어로 쓴다(16.2, D98).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "outcome",
+    "outcome_reason",
+    "answers",
+    "verdicts",
+    "unknowns",
+    "checkpoint"
+  ],
+  "properties": {
+    "outcome": {
+      "description": "done: you answered every question and judged every statement. incomplete: deadline, limit or context ran out (checkpoint required).",
+      "enum": ["done", "incomplete"]
+    },
+    "outcome_reason": {
+      "description": "One or two sentences on why this outcome.",
+      "type": "string"
+    },
+    "answers": {
+      "description": "One answer per question in the packet. The app fills the keys with the question keys.",
+      "type": "object"
+    },
+    "verdicts": {
+      "description": "One verdict per statement in the packet. The app fills the keys with the statement keys.",
+      "type": "object"
+    },
+    "unknowns": {
+      "description": "What code cannot settle and needs outside material, measurement or a person. Things you could still trace in code go to followups (trace) or units (survey).",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/unknown"
+      }
+    },
+    "checkpoint": {
+      "description": "Required when outcome is incomplete: where to resume. Otherwise null.",
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/checkpoint"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "key": {
+      "description": "Local key, unique within this result (e.g. o1, q2). Other items point to it from refs.",
+      "type": "string"
+    },
+    "refs": {
+      "description": "Keys of other items in this result.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "configs": {
+      "description": "Configuration names this applies to, as named in the packet. Use the single name \"all\" only when a tool showed it is active in every confirmed configuration. Never merge behavior of different configurations into one item.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "anchor": {
+      "description": "Where the evidence is. quote is a short verbatim copy of lines you opened in this run.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "path", "start", "end", "quote", "command"],
+      "properties": {
+        "kind": {
+          "description": "code: source at the base commit. tool_output: output file of a tool you ran in scratch. doc_claim: a claim in a document or comment inside the repo. external_spec: material outside the repo (datasheet, standard).",
+          "enum": ["code", "tool_output", "doc_claim", "external_spec"]
+        },
+        "path": {
+          "description": "Repo-relative path. For tool_output the output file in scratch; for external_spec the document id.",
+          "type": "string"
+        },
+        "start": {
+          "description": "First line (1-based).",
+          "type": "integer"
+        },
+        "end": {
+          "description": "Last line.",
+          "type": "integer"
+        },
+        "quote": {
+          "description": "Verbatim text of those lines (short).",
+          "type": "string"
+        },
+        "command": {
+          "description": "For tool_output the command you ran, otherwise null.",
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "anchors": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/anchor"
+      }
+    },
+    "search": {
+      "description": "One search that supports an absence or a not_applicable.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool", "pattern", "scope", "hits"],
+      "properties": {
+        "tool": {
+          "description": "Tool used (Grep, Glob, a Bash command).",
+          "type": "string"
+        },
+        "pattern": {
+          "description": "What you searched for.",
+          "type": "string"
+        },
+        "scope": {
+          "description": "Where (paths, configurations).",
+          "type": "string"
+        },
+        "hits": {
+          "description": "Number of hits.",
+          "type": "integer"
+        }
+      }
+    },
+    "searches": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/search"
+      }
+    },
+    "unknown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "question", "needs", "refs"],
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "question": {
+          "description": "What could not be confirmed.",
+          "type": "string"
+        },
+        "needs": {
+          "description": "What would settle it: external_doc (datasheet, spec), measurement (on real hardware), toolchain (a build or tool you could not run), other.",
+          "enum": ["external_doc", "measurement", "toolchain", "other"]
+        },
+        "refs": {
+          "$ref": "#/$defs/refs"
+        }
+      }
+    },
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checked", "remaining", "next"],
+      "properties": {
+        "checked": {
+          "description": "What you covered.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "remaining": {
+          "description": "Paths still open.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "next": {
+          "description": "Where to look next.",
+          "type": "string"
+        }
+      }
+    },
+    "answer": {
+      "description": "Your own answer to one question, found in the code.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "text",
+        "values",
+        "configs",
+        "anchors",
+        "searches"
+      ],
+      "properties": {
+        "status": {
+          "description": "answered: you found it in the code. unknown: the code cannot settle it (say why in text).",
+          "enum": ["answered", "unknown"]
+        },
+        "text": {
+          "description": "The answer in one or two sentences.",
+          "type": "string"
+        },
+        "values": {
+          "description": "For a value question: the value per configuration with its unit. Split when configurations differ. Empty for other questions.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/value"
+          }
+        },
+        "configs": {
+          "description": "For a configuration question: every configuration where it is built and reached; empty if none. Empty for other questions.",
+          "$ref": "#/$defs/configs"
+        },
+        "anchors": {
+          "$ref": "#/$defs/anchors"
+        },
+        "searches": {
+          "$ref": "#/$defs/searches"
+        }
+      }
+    },
+    "value": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["configs", "value"],
+      "properties": {
+        "configs": {
+          "$ref": "#/$defs/configs"
+        },
+        "value": {
+          "description": "Value with its unit as text (for example 20 tick); empty string if unknown.",
+          "type": "string"
+        }
+      }
+    },
+    "verdict": {
+      "description": "Your attempt to refute one statement.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verdict", "attempts", "anchors", "note"],
+      "properties": {
+        "verdict": {
+          "description": "refuted: the code shows the statement is false (counter-evidence in anchors). overclaimed: it holds only under narrower conditions or in fewer configurations than stated (counter-evidence in anchors). needs_more: what you found neither supports nor refutes it. not_refuted: your attempts did not refute it.",
+          "enum": ["refuted", "overclaimed", "needs_more", "not_refuted"]
+        },
+        "attempts": {
+          "description": "What you checked to try to refute it.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "anchors": {
+          "description": "Counter-evidence for refuted or overclaimed; otherwise the lines you checked.",
+          "$ref": "#/$defs/anchors"
+        },
+        "note": {
+          "description": "Short note; empty string if none.",
+          "type": "string"
+        }
+      }
+    }
+  }
+}

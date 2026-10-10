@@ -4,7 +4,7 @@
 // `<!-- type: a b -->` 줄과 `<!-- /type -->` 줄 사이는 적힌 유형에만 남고, 표시 줄은 지운다. 표시 밖은 모든 유형에 남는다.
 // 표시처럼 보이지만 모양이 다른 줄(`<!--type: x-->`, 대문자, 끝 공백 등), 모르는 유형, 겹침, 짝 없음은 오류다.
 
-export const TYPES = ['bugfix', 'feature', 'refactor', 'spec', 'general'];
+export const TYPES = ['bugfix', 'feature', 'refactor', 'spec', 'general', 'requirements'];
 
 const OPEN = /^<!-- type: ([a-z]+(?: [a-z]+)*) -->$/;
 const CLOSE = '<!-- /type -->';

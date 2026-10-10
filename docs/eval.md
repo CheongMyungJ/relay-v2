@@ -32,7 +32,8 @@
 | `eval/knowledge-quality.mjs` | 남은 지식의 질, kind 분포, 지식 검토 호출의 시간·비용 (`docs/knowledge-experiment/followup.md` 9절). 기준은 `eval/knowledge-truth/<시나리오>.json` |
 | `eval/primary.mjs` | 지식 실험의 주지표와 두 쪽 차이의 bootstrap 구간 (`docs/knowledge-experiment/protocol.md` 4절) |
 | `eval/ref-app.sh` | 견줄 다른 커밋의 앱을 git worktree로 꺼내 빌드한다 |
-| `eval/unseal.sh` | 봉인한 hold-out(`eval/sealed/`)을 연다(열쇠는 사람이 줌) |
+| `eval/unseal.sh [이름]` | 봉인한 hold-out(`eval/sealed/<이름>.tar.gz.enc`, 기본 `holdout`)을 연다(열쇠는 사람이 줌) |
+| `eval/seal.sh <이름> <경로>...` | hold-out을 봉인한다(`docs/extract-eval.md` 7절) |
 | `eval/lib/relay-arm.mjs` | 앱 띄우기와 프로젝트 등록, 화면 읽기(스크린샷, 보이는 글자, 누를 수 있는 요소), 행동, 비정상 종료 |
 | `eval/lib/cli-arm.mjs` | bash와 claude를 PTY로 띄우기, 터미널 화면(xterm headless), 입력, 새 터미널, 비정상 종료 |
 | `eval/lib/human.mjs` | 사람 역할의 시스템 프롬프트, 차례마다 보일 화면, 행동 형식, 설문 |

@@ -1,0 +1,40 @@
+{
+  "recall": [
+    {
+      "id": "r.sum.partial_said",
+      "found": true,
+      "keys": ["r1", "p3"]
+    }
+  ],
+  "must_not": [
+    {
+      "id": "m.sum.confirmed",
+      "violated": false,
+      "keys": [],
+      "quote": "",
+      "hedged": false
+    },
+    {
+      "id": "m.sum.lowered_ok",
+      "violated": false,
+      "keys": [],
+      "quote": "",
+      "hedged": false
+    },
+    {
+      "id": "m.sum.all_found",
+      "violated": false,
+      "keys": [],
+      "quote": "",
+      "hedged": false
+    },
+    {
+      "id": "m.sum.wdt",
+      "violated": false,
+      "keys": [],
+      "quote": "",
+      "hedged": false
+    }
+  ],
+  "resolvable": []
+}

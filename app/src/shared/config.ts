@@ -1,6 +1,7 @@
 // 앱 설정 config.json (5.1.1)과 Work별 덮어쓰기 (D72).
 // 파일에 쓰는 모양이라 키는 snake_case다.
 import type { AgentEngine, AgentStep } from './agent'
+import { DEFAULT_REQUIREMENTS_BUDGET, type RequirementsBudget } from './requirements'
 import type { WorkType } from './work'
 
 /**
@@ -17,12 +18,13 @@ export type SkillName =
   | 'execute'
   | 'verify'
   | 'pr-respond'
+  | 'extract'
 
 /**
  * 질문 방식을 고르는 스킬 (D26, I104). spec(설계 문답)은 결정을 모두 묻으므로 질문 방식 설정이 없다 (D358). 설정 키에서만
  * 빼고, 노드의 스킬과 배포는 SkillName을 쓴다
  */
-export type QuestionSkill = Exclude<SkillName, 'spec'>
+export type QuestionSkill = Exclude<SkillName, 'spec' | 'extract'>
 
 /** 상세 설정(단계별 엔진·모델·추론 수준)의 키: 스킬과 곁 세션 (D391, I129). 곁 세션은 노드가 아니다 */
 export type AgentStepName = SkillName | 'side'
@@ -94,6 +96,12 @@ export interface AppConfig {
   knowledge_review_model: string
   /** 화면 테마 (D335). 터미널은 테마와 관계없이 어둡다 */
   theme: ThemeChoice
+  /**
+   * 요구사항 추출의 예산 (requirements-extraction-flow.md 결정 30, 31, 102): Work당 run 상한, run 하나의 하드 시간 상한과
+   * 부드러운 마감, 같은 단위 연속 실패·전체 연속 실패·같은 단위 연속 미완료. 다음 run부터 쓴다. Work마다 늘린 양은
+   * work.json에 둔다
+   */
+  requirements_budget: RequirementsBudget
 }
 
 /** work.json의 settings. 앱 설정과 같은 키를 쓰고, 없는 키는 앱 설정을 따른다 (D72) */
@@ -129,6 +137,7 @@ export const SETTING_GROUP_LABEL: Readonly<Record<SettingGroup, string>> = {
   refactor: '리팩터링',
   spec: '설계',
   general: '일반',
+  requirements: '요구사항 추출',
   pr: 'PR 대응',
 }
 
@@ -178,9 +187,43 @@ export const AGENT_STEP_TITLES: readonly (readonly [AgentStepName, string, Setti
   ['refactor', '계획과 리팩터링', 'refactor'],
   ['spec', '설계 문답', 'spec'],
   ['execute', '실행', 'general'],
+  ['extract', '요구사항 추출', 'requirements'],
   ['verify', '리뷰와 검증', 'common'],
   ['pr-respond', 'PR 대응', 'pr'],
   ['side', '곁 세션', 'common'],
+]
+
+/** 엔진을 고르지 않고 늘 Claude Code로 도는 단계: 요구사항 추출의 extract는 앱이 `claude -p` run을 돌린다 (결정 92) */
+export const CLAUDE_ONLY_STEPS: readonly AgentStepName[] = ['extract']
+
+/** 요구사항 추출 예산의 화면 이름과 풀이 (결정 31, 102). 설정 화면과 검사 오류가 쓴다 */
+export const REQUIREMENTS_BUDGET_TITLES: readonly (readonly [
+  keyof RequirementsBudget,
+  string,
+  string,
+])[] = [
+  [
+    'run_limit',
+    'Work당 run 상한',
+    '닿으면 다음 run을 띄우지 않고 멈춘다. [계속 +20]으로 늘린다 (결정 24, 26)',
+  ],
+  ['hard_minutes', 'run 하나의 시간 상한(분)', '넘으면 run을 끝내고 실패로 센다 (결정 25)'],
+  [
+    'soft_minutes',
+    'run 하나의 부드러운 마감(분)',
+    '지나면 탐색을 막고 미완료와 checkpoint로 내게 한다. 시간 상한보다 짧아야 한다 (결정 25)',
+  ],
+  [
+    'unit_failures',
+    '같은 단위 연속 실패',
+    '닿으면 그 단위를 "보류: 연속 실패"로 끝내고 다른 단위를 잇는다 (결정 6)',
+  ],
+  ['failures_in_row', '전체 연속 실패', '단위와 관계없이 닿으면 전체를 멈춘다 (결정 6)'],
+  [
+    'unit_incompletes',
+    '같은 단위 연속 미완료',
+    '닿으면 그 단위를 "보류: 수렴 안 됨"으로 끝내고 다른 단위를 잇는다 (결정 30)',
+  ],
 ]
 
 /** 질문 방식의 화면 이름 (5.6.1) */
@@ -233,4 +276,5 @@ export const DEFAULT_CONFIG: AppConfig = {
   knowledge_review_engine: 'claude',
   knowledge_review_model: '',
   theme: 'system',
+  requirements_budget: { ...DEFAULT_REQUIREMENTS_BUDGET },
 }

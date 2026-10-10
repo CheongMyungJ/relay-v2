@@ -1,0 +1,24 @@
+{
+  "task": "integrate",
+  "describe": "단위 이유가 g_ms를 정확히 1 ms로 확정한다(판정)",
+  "ops": [
+    {
+      "op": "set",
+      "path": "units.1.reason",
+      "value": "g_ms는 정확히 1 ms라 경보 지연은 5 s다"
+    }
+  ],
+  "judge": {
+    "must_not": {
+      "m.int.timebase_settled": {
+        "violated": true,
+        "keys": ["n2"],
+        "quote": "g_ms는 정확히 1 ms라",
+        "hedged": false
+      }
+    }
+  },
+  "expect": {
+    "violated": ["m.int.timebase_settled"]
+  }
+}

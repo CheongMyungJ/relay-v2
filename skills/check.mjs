@@ -6,12 +6,22 @@
 // 3. 템플릿: 주석 단 템플릿에 값을 채운 예시가 docs/contracts 스키마를 통과하는지 (D87). intent 초안은 머리글이 없다 (D236)
 // 4. 설계 대조: 산출물 템플릿의 절 제목, 입력·결정 지점·사람이 정할 결정·완료조건 항목 (5.6.1~5.6.12, I60, I65, I89, I107)
 // 5. 유형별 조립: 공용 스킬의 유형 표시, 조립한 글에 다른 유형의 산출물이 없음 (D279, I68)
+// 6. 요구사항 추출 extract run 조립: 렌즈 카드의 점검표 ID = 조립한 결과 스키마의 필수 키, 스키마 크기와 cmd.exe 글자,
+//    필드 안내의 필드, survey와 trace의 공통 $defs (docs/requirements-extraction-flow.md 16.11 [정적], 결정 36).
+//    지시 문구(L1 contract.md, L2 kinds/, L2b 렌즈 카드): 층과 조립본의 크기(16.10, 넘으면 경고), 금지 문구(앱의 일, 넓은 금지,
+//    개발용 픽스처의 식별자), 금지마다 대신 적을 곳(D230의 꼴), 지시에 나온 필드 이름, 앱 검사 목록 = 규칙 표(rules.mjs),
+//    렌즈 카드의 Example이 스키마와 규칙을 통과하고 counter/<규칙>.json이 그 규칙에서만 실패하는지
 
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TYPES, assemble } from './assemble.mjs';
 import { CHECK_METHOD } from './check-method.mjs';
+import { readdirSync, existsSync } from 'node:fs';
+import { CMD_META, KINDS, LENSES, SCHEMA_ARGV_TARGET, buildRun, lensLayer, section } from './extract/run.mjs';
+import { REVIEW_BATCH } from './extract/review.mjs';
+import { contractPath, kindPath, lensCardPath, loadBase, loadChecklist, loadLayers, loadPerspectives } from './extract/load.mjs';
+import { RULES, checkResult, rulesFor } from './extract/rules.mjs';
 import YAML from 'yaml';
 import Ajv2020 from 'ajv/dist/2020.js';
 
@@ -207,9 +217,12 @@ const templateSources = {
 };
 // 공용 스킬은 유형마다 조립한 글로 본다 (D279). verify의 pr.md 템플릿은 설계 5.6.6에 유형마다 하나씩 있으므로, 그 유형의
 // 템플릿 절은 있어야 하고 다른 유형에만 있는 절은 없어야 한다
-const PR_MARK = { bugfix: '## 원인', feature: '## 동작', refactor: '## 목표 구조', spec: '## 다시 볼 결정', general: '## 주요 결정' };
+const PR_MARK = { bugfix: '## 원인', feature: '## 동작', refactor: '## 목표 구조', spec: '## 다시 볼 결정', general: '## 주요 결정', requirements: '## 분석 범위' };
 // 설계의 verification.md는 테스트 파일 변경 대신 문서 밖 파일 변경을, 남은 위험 앞에 다시 볼 결정을 둔다 (D374)
 const SPEC_VERIFICATION = { drop: ['## 테스트 파일 변경'], add: ['## 문서 밖 파일 변경', '## 다시 볼 결정'] };
+// 요구사항 추출의 verification.md는 코드를 바꾸지 않아 테스트 파일 변경 절이 없다 (requirements-extraction-flow.md 결정 92)
+// 사람 표본 확인 절을 남은 위험 앞에 둔다 (AI 결정 117)
+const REQUIREMENTS_VERIFICATION = { drop: ['## 테스트 파일 변경'], add: ['## 사람 표본 확인'] };
 for (const [name, sections] of Object.entries(templateSources)) {
   for (const v of variants.filter((x) => x.name === name)) {
     const skillHeadings = codeBlocks(v.text, 'markdown').flatMap(headings);
@@ -219,9 +232,10 @@ for (const [name, sections] of Object.entries(templateSources)) {
       const typed = blocks.some((hs) => hs.includes('# PR 제목')) && SHARED.includes(name);
       const own = typed ? prOf(v.type) ?? [] : [];
       let designHeadings = [...new Set([...blocks.filter((hs) => !typed || !hs.includes('# PR 제목')).flat(), ...own])];
-      if (name === 'verify' && v.type === 'spec') {
-        designHeadings = [...designHeadings.filter((h) => !SPEC_VERIFICATION.drop.includes(h)), ...SPEC_VERIFICATION.add];
-        const left = SPEC_VERIFICATION.drop.filter((h) => skillHeadings.includes(h));
+      const diff = { spec: SPEC_VERIFICATION, requirements: REQUIREMENTS_VERIFICATION }[v.type];
+      if (name === 'verify' && diff) {
+        designHeadings = [...designHeadings.filter((h) => !diff.drop.includes(h)), ...diff.add];
+        const left = diff.drop.filter((h) => skillHeadings.includes(h));
         check(left.length === 0, `${v.label}: 테스트 파일 변경 절이 없음 (D374)${left.length ? ` (${left.join(', ')})` : ''}`);
       }
       const missing = designHeadings.filter((h) => !skillHeadings.includes(h));
@@ -318,6 +332,10 @@ const spec = {
     ['D354', '"<무엇>을 정한다" 한 줄에 하나, 어떻게는 쓰지 않음, 사람과 맞춤', /"<무엇>을 정한다", one per line[\s\S]*Not how to decide it[\s\S]*Agree on this list with the human/, ['spec']],
     ['D356', '확인 방법을 붙이지 않음', /No check method[\s\S]*verify judges them by reading the document and the diff/, ['spec']],
     ['D351', '완료조건: 대상 문서 경로가 제약에', /## Done when[\s\S]*target document's path is in `제약`/, ['spec']],
+    ['AI 117', '요구사항 추출: 빌드 허용과 툴체인을 물어 제약에, 앱이 다시 묻는다', /ask whether the analysis may run the repository's build commands[\s\S]*"빌드: 허용 \(툴체인 …\)"[\s\S]*asks again before it builds/, ['requirements']],
+    ['AI 122', '요구사항 추출: 서브모듈 안은 경계', /lists submodules, write "서브모듈 안은 경계"/, ['requirements']],
+    ['AI 130', '요구사항 추출: 완료조건은 내용으로, 앱이 그리는 절에 없는 표기·꼴을 요구하지 않음', /Criteria about content, not wording[\s\S]*"코드에서 확인됨" \/ "코드에서 확인되지 않음"[\s\S]*do not add criteria for other labels or formats/, ['requirements']],
+    ['AI 117', '요구사항 추출 완료조건: 자료·빌드·경계 줄', /## Done when[\s\S]*`제약` has the 자료, 빌드 and 경계 lines/, ['requirements']],
   ],
   design: [
     ['5.6.8', '입력: context.md, request.md 경로', /`context\.md`[\s\S]*`request\.md`/],
@@ -481,6 +499,9 @@ const spec = {
     ['D364', '설계 pr.md: 요약 / 주요 결정 / 다시 볼 결정 / 정하지 않은 것 / 구현 나눔 / 변경', /## 요약\n## 주요 결정\n## 다시 볼 결정\n## 정하지 않은 것\n## 구현 나눔\n## 변경/, ['spec']],
     ['D366', '구현 나눔은 정했을 때만', /`구현 나눔`: only when it was decided/, ['spec']],
     ['D374', '완료조건: 일곱 절, 문서 밖 파일 변경과 다시 볼 결정', /## Done when[\s\S]*seven template sections[\s\S]*picked[\s\S]*verdict and evidence[\s\S]*`문서 밖 파일 변경`[\s\S]*`다시 볼 결정` is written[\s\S]*`pr\.md` is written/, ['spec']],
+    ['AI 117', '요구사항 추출: 사람 표본 확인 셋까지 한 질문, 맞음 / 틀림 / 모름, 기록은 고치지 않음', /사람 표본 확인:\*\* pick up to three claims from the risk classes[\s\S]*one question[\s\S]*맞음 \/ 틀림 \/ 모름[\s\S]*`by: human`[\s\S]*Do not change the records/, ['requirements']],
+    ['AI 117', '요구사항 추출: 고른 지적은 ID와 바랄 처리로, 되감을 때 지시로 붙일 꼴', /IDs it concerns[\s\S]*철회 \/ 범위 좁힘 \/ 단위 다시 보기 \/ 자료 필요[\s\S]*paste it as the instruction when they rewind to extract/, ['requirements']],
+    ['AI 117', '요구사항 추출 완료조건: 여섯 절, 사람 표본 확인', /## Done when[\s\S]*all six template sections[\s\S]*`사람 표본 확인` has the human's answers/, ['requirements']],
   ],
   'pr-respond': [
     ['D192', '입력: context.md(이번 라운드의 항목, 사람 지시, PR 정보, 앞 라운드 요약)와 파이프라인 산출물(경로)', /`context\.md`[\s\S]*this round's items, the human's instruction, the PR[\s\S]*summaries of earlier rounds[\s\S]*pipeline artifacts/],
@@ -527,10 +548,283 @@ for (const v of variants) {
 }
 check(!/<!-- \/?type/.test(common), '_common.md: 유형 표시가 없음 (모든 유형 공통)');
 // 산출물 이름으로 다른 유형의 글이 섞이지 않았는지 본다. work-start는 유형 불일치 질문(D238)에 네 유형을 말하므로 산출물만 본다
-const ARTIFACT = { bugfix: ['`fix.md`'], feature: ['`design.md`', '`implement.md`'], refactor: ['`refactor.md`'], spec: ['`spec.md`'], general: ['`execution.md`'] };
+const ARTIFACT = { bugfix: ['`fix.md`'], feature: ['`design.md`', '`implement.md`'], refactor: ['`refactor.md`'], spec: ['`spec.md`'], general: ['`execution.md`'], requirements: ['`extraction.md`'] };
 for (const v of variants.filter((x) => SHARED.includes(x.name))) {
   const foreign = TYPES.filter((t) => t !== v.type).flatMap((t) => ARTIFACT[t]).filter((a) => v.text.includes(a));
   check(foreign.length === 0, `${v.label}: 다른 유형의 산출물이 없음${foreign.length ? ` (${foreign.join(', ')})` : ''}`);
+}
+
+console.log('\n[6] extract run 조립 (16.11 [정적], 결정 36)');
+{
+  // 지시 문구(L1 고정 계약, L2 종류 절차, 렌즈 카드의 점검표 밖 절)는 기준선을 잰 뒤에 쓴다(결정 16). 그때 예시·반례·금지
+  // 문구·검사 규칙 표의 검사를 여기에 더한다
+  const bases = Object.fromEntries(KINDS.map((k) => [k, loadBase(k)]));
+  // integrate는 관점을, review는 가장 큰 묶음(질문과 서술 REVIEW_BATCH개)의 키를 칸에 넣어 잰다(결정 36, AI 결정 108·112)
+  const reviewKeys = (n) => ({ answers: Array.from({ length: n }, (_, i) => `q${i + 1}`), verdicts: Array.from({ length: n }, (_, i) => `s${i + 1}`) });
+  const MORE = { integrate: { coverage: loadPerspectives() }, review: reviewKeys(REVIEW_BATCH), summarize: {} };
+  const combos = [['survey', null], ...LENSES.map((l) => ['trace', l]), ['integrate', null], ['review', null], ['summarize', null]];
+  const ajvRun = new Ajv2020({ allErrors: true, strict: true });
+  const sizes = [];
+  for (const [kind, lens] of combos) {
+    const label = lens ? `${kind}.${lens}` : kind;
+    let built;
+    try {
+      built = buildRun({ base: bases[kind], checklist: lens ? loadChecklist(lens) : null, more: MORE[kind] });
+    } catch (e) {
+      fail(`${label}: 조립 실패 (${e.message})`);
+      continue;
+    }
+    if (lens) {
+      const ids = loadChecklist(lens).map((c) => c.id);
+      const slot = built.schema.properties.checklist;
+      check(
+        sameSet(slot.required, ids) && sameSet(Object.keys(slot.properties), ids),
+        `${label}: 렌즈 카드의 점검표 ID = 결과 스키마 checklist의 필수 키 (${ids.length}개)`,
+      );
+    }
+    if (kind === 'integrate') {
+      const ids = loadPerspectives().map((c) => c.id);
+      const slot = built.schema.properties.coverage;
+      check(sameSet(slot.required, ids) && sameSet(Object.keys(slot.properties), ids), `${label}: perspectives.md의 관점 ID = 결과 스키마 coverage의 필수 키 (${ids.length}개)`);
+    }
+    try {
+      ajvRun.compile(built.schema);
+      ok(`${label}: 조립한 스키마가 컴파일됨 (ajv strict)`);
+    } catch (e) {
+      fail(`${label}: 조립한 스키마가 컴파일되지 않음 (${e.message})`);
+    }
+    check(!/"(title|description|\$comment|\$id|\$schema)":/.test(built.schemaArg), `${label}: 조립한 스키마(L4)에 주석 키워드가 없음`);
+    check(!CMD_META.test(built.schemaArg), `${label}: 조립한 스키마에 cmd.exe가 다르게 읽는 글자가 없음`);
+    check(built.schemaArg.length <= SCHEMA_ARGV_TARGET, `${label}: 스키마 ${built.schemaArg.length}자 <= ${SCHEMA_ARGV_TARGET}자`);
+    const named = [...built.instructions.matchAll(/`([a-z_]+)\.([a-z_]+)`/g)];
+    const unknown = named.filter(([, def, prop]) => !bases[kind].$defs?.[def]?.properties?.[prop]).map((m) => m[0]);
+    check(unknown.length === 0, `${label}: 필드 안내의 필드가 모두 스키마에 있음${unknown.length ? ` (${unknown.join(', ')})` : ''}`);
+    sizes.push({ 조합: label, 스키마: built.schemaArg.length, 필드안내: built.instructions.length });
+  }
+  console.table(sizes);
+  // 종류마다 같은 이름의 $defs는 같은 정의다(AI 결정 47). trace를 기준으로 견준다
+  for (const k of KINDS.filter((x) => x !== 'trace')) {
+    const shared = Object.keys(bases[k].$defs ?? {}).filter((d) => d in bases.trace.$defs);
+    const differ = shared.filter((d) => JSON.stringify(bases[k].$defs[d]) !== JSON.stringify(bases.trace.$defs[d]));
+    check(differ.length === 0, `${k}와 trace의 공통 $defs ${shared.length}개가 같음${differ.length ? ` (다름: ${differ.join(', ')})` : ''}`);
+  }
+  // integrate와 summarize의 전역 ID 정의도 같다
+  check(JSON.stringify(bases.integrate.$defs.gid) === JSON.stringify(bases.summarize.$defs.gid) && JSON.stringify(bases.integrate.$defs.gids) === JSON.stringify(bases.summarize.$defs.gids), 'integrate와 summarize의 gid·gids가 같음');
+}
+
+console.log('\n[6b] extract 지시 문구 (16.5, 16.9, 16.10, 16.11 [정적])');
+{
+  const bases = Object.fromEntries(KINDS.map((k) => [k, loadBase(k)]));
+  // 렌즈 카드는 모두 trace 절을 쓴다(14차 작업에서 state·lifecycle·protocol을 더함, AI 결정 128). 카드마다 모든 절(Scope, Trace,
+  // Checklist, Pitfalls, Phrasing, Example)을 갖는다
+  const WRITTEN = LENSES.filter((l) => lensLayer(readFileSync(lensCardPath(l), 'utf8')));
+  check(LENSES.every((l) => WRITTEN.includes(l)), `trace 절을 쓴 렌즈: ${WRITTEN.join(', ')} (${WRITTEN.length}/${LENSES.length})`);
+  for (const l of WRITTEN) {
+    const card = readFileSync(lensCardPath(l), 'utf8');
+    const missing = ['Scope', 'Trace', 'Checklist', 'Pitfalls', 'Phrasing', 'Example'].filter((h) => section(card, h) === null);
+    check(missing.length === 0, `lenses/${l}.md: 카드의 절이 모두 있음${missing.length ? ` (없음: ${missing.join(', ')})` : ''}`);
+  }
+  const MORE6 = { integrate: { coverage: loadPerspectives() }, review: { answers: ['q1'], verdicts: ['s1'] }, summarize: {} };
+  const combos = [['survey', null], ...WRITTEN.map((l) => ['trace', l]), ['integrate', null], ['review', null], ['summarize', null]];
+
+  // 크기(16.10): 글자 수 ÷ 4 어림(D95). 목표를 넘으면 경고만 한다
+  const TARGET = { contract: 4000, kind: 2500, lens: 3000, assembled: 12000 };
+  const est = (t) => Math.round((t ?? '').length / 4);
+  const rows = [];
+  for (const [kind, lens] of combos) {
+    const layers = loadLayers(kind, lens);
+    const built = buildRun({ base: bases[kind], checklist: lens ? loadChecklist(lens) : null, layers, more: MORE6[kind] });
+    const r = { 조합: lens ? `${kind}.${lens}` : kind, L1: est(layers.contract), L2: est(layers.kind), L2b: est(layers.lens), 조립본: est(built.instructions) };
+    rows.push(r);
+    for (const [k, t] of [['L1', 'contract'], ['L2', 'kind'], ['L2b', 'lens'], ['조립본', 'assembled']])
+      if (r[k] > TARGET[t]) console.log(`  WARN  ${r.조합}: ${k} ${r[k]} > 목표 ${TARGET[t]} (16.10)`);
+  }
+  console.table(rows);
+
+  const texts = [
+    ['contract.md', loadLayers('survey').contract],
+    ...KINDS.map((k) => [`kinds/${k}.md`, loadLayers(k).kind]),
+    ...WRITTEN.map((l) => [`lenses/${l}.md`, loadLayers('trace', l).lens]),
+  ];
+  // 산문만(예시 JSON 블록 빼고)
+  const prose = (t) => t.replace(/```[\s\S]*?```/g, '');
+
+  // 금지 문구: 앱의 일을 시키는 문장(16.9), 넓은 금지(16.5), 사람에게 묻기(결정 7)
+  const BANNED = [
+    [/\b(update|write|edit)\b[^.\n]{0,40}\b(state file|work\.json|extraction\.md|handoff\.md)/i, '앱의 일: 상태·문서 파일 쓰기'],
+    [/\b(choose|pick|decide|select)\b[^.\n]{0,30}\bnext (run|unit)\b/i, '앱의 일: 다음 단위 지정'],
+    [/\b(ask|confirm with|check with)\b[^.\n]{0,20}\b(the )?(user|person|human)\b/i, '사람에게 확인'],
+    [/AskUserQuestion/, '사람에게 묻는 도구'],
+    [/\b(do not|don't|never)\s+(guess|assume|speculate|infer)\b/i, '넓은 금지(16.5): 기록할 곳으로 바꾼다'],
+    [/\bavoid (assumptions|guessing|speculation)\b/i, '넓은 금지(16.5)'],
+  ];
+  for (const [name, t] of texts) {
+    const hits = BANNED.filter(([re]) => re.test(prose(t))).map(([, why]) => why);
+    check(hits.length === 0, `${name}: 금지 문구 없음${hits.length ? ` (${hits.join(', ')})` : ''}`);
+  }
+
+  // 금지마다 대신 적을 곳(D230의 꼴): 금지가 든 줄에 기록할 곳이나 대신 할 일이 함께 있다
+  const REDIRECT = /\b(instead|put|record|write|goes? to|go in|use|keep|submit|mark|give|leave|add|cite|describe|say|stop|fix|name|point)\b|`[a-z_]+`/i;
+  for (const [name, t] of texts) {
+    const bare = prose(t)
+      .split('\n')
+      .filter((l) => /\b(do not|don't|never|not yours)\b/i.test(l))
+      .filter((l) => !REDIRECT.test(l.replace(/\b(do not|don't|never)\s+\w+/gi, '')));
+    check(bare.length === 0, `${name}: 금지마다 대신 적을 곳이 있음 (D230의 꼴)${bare.length ? `\n        ${bare.join('\n        ')}` : ''}`);
+  }
+
+  // 개발용 픽스처의 식별자를 지시에 쓰지 않는다(과적합, K5): 평가 시나리오 레포의 매크로와 함수 이름
+  const scenDir = join(root, 'app', 'eval', 'extract', 'scenarios');
+  const fixtureIds = new Set();
+  const walkRepo = (d) => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const p = join(d, e.name);
+      if (e.isDirectory()) walkRepo(p);
+      else if (/\.(c|h|s|S)$/.test(e.name)) {
+        const src = readFileSync(p, 'utf8');
+        for (const m of src.matchAll(/#\s*define\s+([A-Za-z_][A-Za-z0-9_]*)/g)) if (m[1].includes('_') && m[1].length >= 5) fixtureIds.add(m[1]);
+        for (const m of src.matchAll(/^[A-Za-z_][\w \t*]*?\b([a-z][a-z0-9]*_[a-z0-9_]+)\s*\(/gm)) fixtureIds.add(m[1]);
+      }
+    }
+  };
+  for (const id of existsSync(scenDir) ? readdirSync(scenDir) : []) if (existsSync(join(scenDir, id, 'repo'))) walkRepo(join(scenDir, id, 'repo'));
+  const FIXTURE_WORDS = /\b(modbus|picortos|nimbus|thermostat|rs-?485)\b/i;
+  for (const [name, t] of texts) {
+    const words = new Set(t.match(/[A-Za-z_][A-Za-z0-9_]*/g) ?? []);
+    const hits = [...words].filter((w) => fixtureIds.has(w));
+    const dom = t.match(FIXTURE_WORDS);
+    check(fixtureIds.size > 0 && hits.length === 0 && !dom, `${name}: 개발용 픽스처의 식별자·영역 낱말 없음 (식별자 ${fixtureIds.size}개와 대조)${hits.length || dom ? ` (${[...hits, dom?.[0]].filter(Boolean).join(', ')})` : ''}`);
+  }
+
+  // 지시에 나온 필드 이름(`snake_case`)이 스키마의 필드, $defs, enum, 점검표 ID 가운데 하나다
+  const known = new Set(['all']);
+  for (const b of Object.values(bases))
+    for (const [at, v] of (function* walk(n, a = '') { yield [a, n]; if (n && typeof n === 'object') for (const [k, x] of Object.entries(n)) yield* walk(x, `${a}/${k}`); })(b)) {
+      if (/\/(properties|\$defs)$/.test(at) && v && typeof v === 'object') Object.keys(v).forEach((k) => known.add(k));
+      if (/\/enum$/.test(at) && Array.isArray(v)) v.forEach((e) => known.add(String(e)));
+    }
+  for (const l of LENSES) loadChecklist(l).forEach((c) => known.add(c.id));
+  loadPerspectives().forEach((c) => known.add(c.id));
+  for (const [name, t] of texts) {
+    const used = [...prose(t).matchAll(/`([a-z][a-z0-9]*(?:_[a-z0-9]+)*)(?::[^`]*)?`/g)].map((m) => m[1]);
+    const unknown = [...new Set(used.filter((u) => !known.has(u)))];
+    check(unknown.length === 0, `${name}: 지시의 필드 이름이 스키마·점검표에 있음${unknown.length ? ` (${unknown.join(', ')})` : ''}`);
+  }
+
+  // 앱 검사 목록(contract.md) = 규칙 표(rules.mjs)의 모든 종류에 걸리는 규칙. 종류만의 규칙은 kinds/<종류>.md의 목록에 있다
+  const listedIn = (file) => /<!--\s*rules:([^>]*)-->/.exec(readFileSync(file, 'utf8'))?.[1].trim().split(/\s+/) ?? [];
+  const general = RULES.filter((r) => !r.kinds).map((r) => r.id);
+  check(sameSet(listedIn(contractPath()), general), `contract.md의 앱 검사 목록 = rules.mjs의 모든 종류 규칙 ${general.length}개`);
+  check(section(readFileSync(contractPath(), 'utf8'), 'What the app checks on submit') !== null, 'contract.md에 앱 검사 절이 있음');
+  for (const k of KINDS) {
+    const own = rulesFor(k).filter((r) => r.kinds).map((r) => r.id);
+    const listed = listedIn(kindPath(k));
+    check(sameSet(listed, own), `kinds/${k}.md의 앱 검사 목록 = rules.mjs의 ${k} 규칙 ${own.length}개${own.length ? ` (${own.join(', ')})` : ''}`);
+    if (own.length) check(section(readFileSync(kindPath(k), 'utf8'), 'What the app also checks') !== null, `kinds/${k}.md에 앱 검사 절이 있음`);
+  }
+  check(RULES.filter((r) => r.kinds).every((r) => r.kinds.every((k) => KINDS.includes(k))), 'rules.mjs의 kinds가 모두 run 종류');
+
+  // 렌즈 카드의 Example: JSON 하나, 결과의 일부를 빈 결과에 끼우면 스키마와 규칙을 통과한다
+  const ajvEx = new Ajv2020({ allErrors: true, strict: false });
+  const skeleton = (kind, ids) => {
+    const b = bases[kind];
+    const r = {};
+    for (const [k, p] of Object.entries(b.properties)) r[k] = p.type === 'array' ? [] : null;
+    if ('outcome' in b.properties) {
+      r.outcome = 'done';
+      r.outcome_reason = '예시';
+    }
+    if (ids) r.checklist = Object.fromEntries(ids.map((id) => [id, { status: 'unknown', refs: [], searches: [] }]));
+    if ('coverage' in b.properties)
+      r.coverage = Object.fromEntries(loadPerspectives().map((p) => [p.id, [{ configs: ['all'], status: 'unknown', ids: [], units: [], searches: [], note: '' }]]));
+    if ('answers' in b.properties) r.answers = {};
+    if ('verdicts' in b.properties) r.verdicts = {};
+    if ('handoff_summary' in b.properties) r.handoff_summary = { text: '예시', ids: [] };
+    return r;
+  };
+  /** 결과에 맞춘 run 스키마: review는 결과의 질문·서술 키로 칸을 채운다 */
+  const schemaFor = (kind, lens, result) =>
+    buildRun({
+      base: bases[kind],
+      checklist: lens ? loadChecklist(lens) : null,
+      more:
+        kind === 'integrate'
+          ? { coverage: loadPerspectives() }
+          : kind === 'review'
+            ? { answers: Object.keys(result?.answers ?? {}), verdicts: Object.keys(result?.verdicts ?? {}) }
+            : kind === 'summarize'
+              ? {}
+              : undefined,
+    }).schema;
+  // 종류 절차(kinds/<종류>.md)의 Example도 같은 꼴로 본다(integrate, review, summarize)
+  for (const kind of KINDS.filter((k) => section(readFileSync(kindPath(k), 'utf8'), 'Example') !== null)) {
+    const blocks = [...(section(readFileSync(kindPath(kind), 'utf8'), 'Example') ?? '').matchAll(/```json\n([\s\S]*?)```/g)];
+    if (blocks.length !== 1) {
+      fail(`kinds/${kind}.md: Example에 JSON 블록이 하나 (${blocks.length}개)`);
+      continue;
+    }
+    let ex;
+    try {
+      ex = JSON.parse(blocks[0][1]);
+    } catch (e) {
+      fail(`kinds/${kind}.md: Example JSON을 읽음 (${e.message})`);
+      continue;
+    }
+    const full = skeleton(kind, null);
+    const extra = Object.keys(ex).filter((k) => !(k in full));
+    for (const [k, v] of Object.entries(ex)) full[k] = k === 'coverage' ? { ...full.coverage, ...v } : v;
+    const v = ajvEx.compile(schemaFor(kind, null, full));
+    const okSchema = v(full);
+    const problems = checkResult(full, { kind });
+    check(
+      extra.length === 0 && okSchema && problems.length === 0,
+      `kinds/${kind}.md: Example이 스키마와 규칙을 통과${extra.length ? ` (없는 필드 ${extra.join(', ')})` : ''}${okSchema ? '' : ` (${v.errors.slice(0, 3).map((e) => `${e.instancePath} ${e.message}`).join('; ')})`}${problems.length ? ` (${problems.map((p) => `${p.rule}: ${p.problem}`).join('; ')})` : ''}`,
+    );
+  }
+  for (const lens of WRITTEN) {
+    const card = readFileSync(lensCardPath(lens), 'utf8');
+    const blocks = [...(section(card, 'Example') ?? '').matchAll(/```json\n([\s\S]*?)```/g)];
+    if (blocks.length !== 1) {
+      fail(`lenses/${lens}.md: Example에 JSON 블록이 하나 (${blocks.length}개)`);
+      continue;
+    }
+    let ex;
+    try {
+      ex = JSON.parse(blocks[0][1]);
+    } catch (e) {
+      fail(`lenses/${lens}.md: Example JSON을 읽음 (${e.message})`);
+      continue;
+    }
+    const ids = loadChecklist(lens).map((c) => c.id);
+    const full = skeleton('trace', ids);
+    const extra = Object.keys(ex).filter((k) => !(k in full));
+    for (const [k, v] of Object.entries(ex)) full[k] = k === 'checklist' ? { ...full.checklist, ...v } : v;
+    const schema = buildRun({ base: bases.trace, checklist: loadChecklist(lens) }).schema;
+    const v = ajvEx.compile(schema);
+    const okSchema = v(full);
+    const problems = checkResult(full);
+    check(
+      extra.length === 0 && okSchema && problems.length === 0,
+      `lenses/${lens}.md: Example이 스키마와 규칙을 통과${extra.length ? ` (없는 필드 ${extra.join(', ')})` : ''}${okSchema ? '' : ` (${v.errors.slice(0, 3).map((e) => `${e.instancePath} ${e.message}`).join('; ')})`}${problems.length ? ` (${problems.map((p) => `${p.rule}: ${p.problem}`).join('; ')})` : ''}`,
+    );
+  }
+
+  // 반례: counter/<규칙>.json은 스키마를 통과하고 그 규칙에서만 실패한다. 결과만으로 가르는 규칙마다 하나
+  const counterDir = join(here, 'extract', 'counter');
+  const files = existsSync(counterDir) ? readdirSync(counterDir).filter((f) => f.endsWith('.json')) : [];
+  for (const f of files) {
+    const c = JSON.parse(readFileSync(join(counterDir, f), 'utf8'));
+    const v = ajvEx.compile(schemaFor(c.kind, c.lens, c.result));
+    const okSchema = v(c.result);
+    const rules = [...new Set(checkResult(c.result, { ...(c.ctx ?? {}), kind: c.kind }).map((p) => p.rule))];
+    check(
+      okSchema && rules.length === 1 && rules[0] === c.rule && f === `${c.rule}.json`,
+      `counter/${f}: 스키마는 통과하고 ${c.rule}에서만 실패 (${okSchema ? '스키마 통과' : '스키마 실패'}, 실패한 규칙: ${rules.join(', ') || '없음'})`,
+    );
+  }
+  const need = RULES.filter((r) => r.check).map((r) => r.id);
+  const missing = need.filter((id) => !files.includes(`${id}.json`));
+  check(missing.length === 0, `결과만으로 가르는 규칙 ${need.length}개마다 반례가 있음${missing.length ? ` (없음: ${missing.join(', ')})` : ''}`);
 }
 
 console.log(failures ? `\n실패 ${failures}건` : '\n모두 통과');

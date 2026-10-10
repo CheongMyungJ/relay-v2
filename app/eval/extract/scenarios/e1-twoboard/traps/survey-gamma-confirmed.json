@@ -1,0 +1,14 @@
+{
+  "task": "survey",
+  "describe": "GAMMA를 확인된 구성으로 둔다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "configs.2.status",
+      "value": "confirmed"
+    }
+  ],
+  "expect": {
+    "violated": ["m.cfg.gamma"]
+  }
+}

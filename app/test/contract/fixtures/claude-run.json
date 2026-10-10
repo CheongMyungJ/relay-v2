@@ -1,0 +1,332 @@
+{
+  "claudeVersion": "2.1.293 (Claude Code)",
+  "recordedAt": "2026-10-08",
+  "flags": [
+    "--add-dir",
+    "--append-system-prompt-file",
+    "--dangerously-skip-permissions",
+    "--disable-slash-commands",
+    "--effort",
+    "--json-schema",
+    "--model",
+    "--output-format",
+    "--session-id",
+    "--setting-sources",
+    "--settings",
+    "--strict-mcp-config",
+    "--tools",
+    "--verbose",
+    "-p"
+  ],
+  "init": {
+    "shape": {
+      "agents": "array",
+      "analytics_disabled": "boolean",
+      "apiKeySource": "string",
+      "capabilities": "array",
+      "claude_code_version": "string",
+      "cwd": "string",
+      "fast_mode_disabled_reason": "string",
+      "fast_mode_state": "string",
+      "mcp_servers": "array",
+      "messaging_socket_path": "string",
+      "model": "string",
+      "output_style": "string",
+      "per_turn_effort_active": "boolean",
+      "permissionMode": "string",
+      "plugins": "array",
+      "powershell_path": "string",
+      "product_feedback_disabled": "boolean",
+      "session_id": "string",
+      "skills": "array",
+      "slash_commands": "array",
+      "subtype": "string",
+      "tools": "array",
+      "type": "string",
+      "uuid": "string",
+      "view_mode": "string"
+    },
+    "sample": {
+      "type": "system",
+      "subtype": "init",
+      "cwd": "<cwd>",
+      "session_id": "<session_id>",
+      "tools": ["Bash", "Glob", "Grep", "Read", "StructuredOutput", "Write"],
+      "mcp_servers": [],
+      "model": "claude-haiku-5-5",
+      "permissionMode": "bypassPermissions",
+      "slash_commands": [],
+      "apiKeySource": "none",
+      "claude_code_version": "2.1.293",
+      "output_style": "default",
+      "agents": ["claude", "Explore", "general-purpose", "Plan", "statusline-setup"],
+      "skills": [],
+      "plugins": [
+        {
+          "name": "cc-plugin-agents-md",
+          "path": "builtin",
+          "source": "cc-plugin-agents-md@builtin"
+        },
+        {
+          "name": "cc-plugin-telemetry",
+          "path": "builtin",
+          "source": "cc-plugin-telemetry@builtin"
+        },
+        {
+          "name": "cc-plugin-plugin-authoring",
+          "path": "builtin",
+          "source": "cc-plugin-plugin-authoring@builtin"
+        }
+      ],
+      "capabilities": [
+        "interrupt_receipt_v1",
+        "interrupt_cancel_queued_v1",
+        "interrupt_send_now_v1",
+        "msg_lifecycle_v1",
+        "request_marker_lists_v1",
+        "sdk_mcp_tools_list_changed",
+        "sdk_mcp_manifests",
+        "mcp_read_resource_v1",
+        "mcp_tool_ui_meta_v1",
+        "ui_surface_v1"
+      ],
+      "analytics_disabled": false,
+      "product_feedback_disabled": false,
+      "uuid": "<uuid>",
+      "messaging_socket_path": "<messaging_socket_path>",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required",
+      "per_turn_effort_active": true,
+      "view_mode": "default",
+      "powershell_path": "<powershell_path>"
+    }
+  },
+  "rateLimit": {
+    "shape": {
+      "rate_limit_info": "object",
+      "session_id": "string",
+      "type": "string",
+      "uuid": "string"
+    },
+    "info": {
+      "isUsingOverage": "boolean",
+      "overageDisabledReason": "string",
+      "overageStatus": "string",
+      "rateLimitType": "string",
+      "resetsAt": "number",
+      "status": "string",
+      "unifiedWindows": "object"
+    },
+    "sample": {
+      "type": "rate_limit_event",
+      "rate_limit_info": {
+        "status": "allowed",
+        "resetsAt": 1791495000,
+        "rateLimitType": "five_hour",
+        "overageStatus": "rejected",
+        "overageDisabledReason": "org_level_disabled",
+        "isUsingOverage": false,
+        "unifiedWindows": {
+          "five_hour": {
+            "utilization": 0,
+            "resetsAt": 1791495000
+          },
+          "seven_day": {
+            "utilization": 0.07,
+            "resetsAt": 1792040400
+          }
+        }
+      },
+      "uuid": "<uuid>",
+      "session_id": "<session_id>"
+    }
+  },
+  "result": {
+    "shape": {
+      "api_error_status": "null",
+      "duration_api_ms": "number",
+      "duration_ms": "number",
+      "fast_mode_disabled_reason": "string",
+      "fast_mode_state": "string",
+      "first_content_frame_ms": "number",
+      "is_error": "boolean",
+      "modelUsage": "object",
+      "num_turns": "number",
+      "permission_denials": "array",
+      "queued_turn_count": "number",
+      "result": "string",
+      "result_index": "number",
+      "safety_stops": "number",
+      "session_id": "string",
+      "stop_reason": "string",
+      "structured_output": "object",
+      "subagent_stats": "object",
+      "subtype": "string",
+      "terminal_reason": "string",
+      "time_to_request_ms": "number",
+      "total_cost_usd": "number",
+      "ttft_ms": "number",
+      "ttft_stream_ms": "number",
+      "type": "string",
+      "usage": "object",
+      "uuid": "string"
+    },
+    "sample": {
+      "duration_api_ms": 5888,
+      "stop_reason": "tool_use",
+      "session_id": "<session_id>",
+      "total_cost_usd": 0.0013262900000000002,
+      "usage": {
+        "input_tokens": 6,
+        "cache_creation_input_tokens": 2447,
+        "cache_read_input_tokens": 22729,
+        "output_tokens": 1218,
+        "output_tokens_details": {
+          "thinking_tokens": 429
+        },
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 2447,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 351,
+            "cache_read_input_tokens": 8534,
+            "cache_creation_input_tokens": 495,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 495
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard",
+        "fallback_credit": null
+      },
+      "modelUsage": {
+        "claude-haiku-5-5": {
+          "inputTokens": 6,
+          "outputTokens": 1218,
+          "cacheReadInputTokens": 22729,
+          "cacheCreationInputTokens": 2447,
+          "webSearchRequests": 0,
+          "costUSD": 0.0013262900000000002,
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "thinkingTokens": 429,
+          "canonicalModel": "claude-haiku-5-5",
+          "provider": "firstParty",
+          "costBasis": "list"
+        }
+      },
+      "permission_denials": [
+        {
+          "tool_name": "StructuredOutput",
+          "tool_use_id": "toolu_01DmH6K4Ln9eZ7dMfCw99eEm",
+          "tool_input": {
+            "outcome": "done",
+            "files": [
+              {
+                "path": "C:\\Users\\USER\\AppData\\Local\\Temp\\relay-contract-run-yUS4p1\\wt\\src\\a.c",
+                "start": 1,
+                "end": 2
+              }
+            ],
+            "note": null
+          }
+        }
+      ],
+      "terminal_reason": "completed",
+      "fast_mode_state": "off",
+      "fast_mode_disabled_reason": "sdk_opt_in_required",
+      "subagent_stats": {
+        "spawned": 0,
+        "requested": {
+          "background": 0,
+          "foreground": 0,
+          "unset": 0
+        },
+        "started_in_background": 0,
+        "max_depth": 0,
+        "spawned_by_subagents": 0,
+        "completed": 0,
+        "failed": 0,
+        "killed": {
+          "parent": 0,
+          "user": 0,
+          "system": 0
+        },
+        "refused": {
+          "depth_limit": 0,
+          "concurrency_limit": 0,
+          "budget": 0
+        },
+        "by_type": {}
+      },
+      "safety_stops": 0,
+      "is_error": false,
+      "num_turns": 7,
+      "subtype": "success",
+      "api_error_status": null,
+      "result": "<string>",
+      "structured_output": {
+        "outcome": "done",
+        "files": [
+          {
+            "path": "C:\\Users\\USER\\AppData\\Local\\Temp\\relay-contract-run-yUS4p1\\wt\\src\\a.c",
+            "start": 1,
+            "end": 2
+          }
+        ],
+        "note": "checked"
+      },
+      "ttft_ms": 1032,
+      "type": "result",
+      "duration_ms": 6675,
+      "uuid": "<uuid>",
+      "ttft_stream_ms": 733,
+      "time_to_request_ms": 155,
+      "first_content_frame_ms": 733,
+      "queued_turn_count": 0,
+      "result_index": 0
+    }
+  },
+  "toolInputs": {
+    "Read": {
+      "file_path": "string"
+    },
+    "Grep": {
+      "-n": "boolean",
+      "output_mode": "string",
+      "path": "string",
+      "pattern": "string"
+    },
+    "Glob": {
+      "path": "string",
+      "pattern": "string"
+    },
+    "StructuredOutput": {
+      "files": "array",
+      "note": "null",
+      "outcome": "string"
+    }
+  },
+  "backgroundTask": {
+    "command": "string",
+    "description": "string",
+    "id": "string",
+    "status": "string",
+    "type": "string"
+  },
+  "behavior": {
+    "structuredOutputResubmitted": true,
+    "waitedForBackground": true
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "task": "summarize",
+  "describe": "패킷에 없는 전역 ID를 가리킨다(대체되어 접힌 주장)",
+  "ops": [
+    {
+      "op": "push",
+      "path": "risks.6.ids",
+      "value": "c-0036"
+    }
+  ],
+  "expect": {
+    "violated": ["m.sum.gid"]
+  }
+}

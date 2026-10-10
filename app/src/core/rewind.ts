@@ -14,11 +14,13 @@ import {
   KEEP_CODE_NODES,
   NODE_INFO,
   PIPELINES,
+  appRun,
   defaultNext,
   inPipeline,
   isPipelineNode,
   keepDefault,
   keepLabel,
+  keepText,
   order,
   workType,
 } from './pipeline'
@@ -35,7 +37,7 @@ export interface StepPlan {
   /** k가 끝났다(승인하고 Work가 멈춤). 아니면 k 진행 중이다 (6.2의 표) */
   done: boolean
   /** 진행 중인 k를 끝낸다: 세션이 살아 있으면 session, 대기열에 있으면 queue */
-  interrupt: 'session' | 'queue' | null
+  interrupt: 'session' | 'queue' | 'run' | null
   /** 폐기할 task. 순번 차례다 */
   discard: TaskRecord[]
   /** 건너뛸 단계: 파이프라인에서 k와 고른 단계 사이 */
@@ -173,7 +175,9 @@ export function planStep(work: WorkState, node: NodeName, opts: StepOptions = {}
       ? 'session'
       : from.status === 'queued'
         ? 'queue'
-        : null
+        : appRun(fromNode) && from.status === 'working'
+          ? 'run'
+          : null
 
   if (kind === 'rewind') {
     const discard = work.tasks.filter(
@@ -260,6 +264,8 @@ export function stepChoices(work: WorkState): StepChoice[] {
       keepCode: kind === 'rewind' && KEEP_CODE_NODES[type].includes(node),
       keepLabel: keepLabel(type, node),
       keepDefault: kind === 'rewind' && keepDefault(type, node),
+      keepHint: keepText(type, node).hint,
+      keepCodeLine: keepText(type, node).code,
       typeChange: why === null && typeChangeAllowed(work, node),
     }
   })
@@ -298,7 +304,9 @@ export function stepPreview(work: WorkState, plan: StepPlan, facts: PreviewFacts
       ? `진행 중인 ${taskLabel(plan.from)}의 세션을 끝냅니다`
       : plan.interrupt === 'queue'
         ? `대기열의 ${taskLabel(plan.from)}을(를) 대기열에서 뺍니다`
-        : null
+        : plan.interrupt === 'run'
+          ? `${taskLabel(plan.from)}의 run 루프를 멈춥니다(도는 run의 결과는 버립니다)`
+          : null
   const version = work.intent ? work.intent.version + 1 : 1
   return {
     node: plan.node,

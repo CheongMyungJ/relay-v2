@@ -1,0 +1,13 @@
+{
+  "task": "summarize",
+  "describe": "TIM7 클럭 미확정을 위험에 들지 않는다",
+  "ops": [
+    {
+      "op": "remove",
+      "path": "risks.2"
+    }
+  ],
+  "expect": {
+    "missed": ["r.sum.risk_timebase"]
+  }
+}

@@ -21,8 +21,10 @@ import {
 import {
   AGENT_STEP_TITLES,
   AUTO_APPROVE_TITLES,
+  CLAUDE_ONLY_STEPS,
   QUESTION_MODE_LABEL,
   SETTING_GROUP_LABEL,
+  REQUIREMENTS_BUDGET_TITLES,
   SKILL_TITLES,
   THEME_CHOICES,
   THEME_LABEL,
@@ -277,6 +279,7 @@ function issueNumberInput(text: string): number | null | undefined {
 const WORK_TYPE_HINT: Readonly<Partial<Record<WorkType, string>>> = {
   spec: '구현 전에 설계만 정하는 큰 일',
   general: '다른 유형에 맞지 않는 일',
+  requirements: '펌웨어 코드에서 현재 동작의 요구사항 후보와 제약을 근거와 함께 뽑는 일',
 }
 
 /**
@@ -320,6 +323,8 @@ const REQUEST_PLACEHOLDER: Readonly<Record<WorkType, string>> = {
   refactor: '바꿀 구조(예: 어느 계산을 한 모듈로 모을지), 바꿀 곳, 지켜야 할 동작을 적어 주세요',
   spec: '무엇을 설계할지, 정해야 할 것, 설계 문서를 둘 곳이나 고칠 문서를 적어 주세요',
   general: '할 일과 끝났다고 볼 조건을 적어 주세요(무엇을 바꾸고 어떻게 확인할지)',
+  requirements:
+    '분석할 저장소의 범위, 제외할 것(벤더 HAL·RTOS 등), 있는 자료(데이터시트, 툴체인), 결과를 쓸 곳을 적어 주세요',
 }
 
 /** 새 Work: 유형, 요청, 기준 브랜치, 기준 위치 (시나리오 1). 유형을 고르기 전에는 [시작]이 꺼져 있다 (D236) */
@@ -482,6 +487,7 @@ const GROUPS: readonly SettingGroup[] = [
   'refactor',
   'spec',
   'general',
+  'requirements',
   'pr',
 ]
 
@@ -900,6 +906,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         knowledge_review_engine: value.knowledge_review_engine,
         knowledge_review_model: value.knowledge_review_model,
         theme: value.theme,
+        requirements_budget: value.requirements_budget,
       }),
     )
     setBusy(false)
@@ -1058,12 +1065,30 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               items={AGENT_STEP_TITLES}
               type={null}
               row={(skill, title) => {
-                const step = value.agent_steps[skill] ?? {}
+                // 요구사항 추출의 extract는 엔진을 고르지 않고 늘 Claude Code로 돈다 (결정 92)
+                const claudeOnly = CLAUDE_ONLY_STEPS.includes(skill)
+                const saved = value.agent_steps[skill] ?? {}
+                const step: AgentStep = claudeOnly ? { ...saved, engine: 'claude' } : saved
                 const engine = step.engine ?? value.agent_engine
+                // extract는 고르지도 물려받지도 않은 모델·추론 수준을 앱이 sonnet·medium으로 채운다 (결정 50)
+                const inherits = value.agent_engine === engine
+                const modelEmpty =
+                  claudeOnly && !(inherits && value.agent_model)
+                    ? '기본 따름 (sonnet)'
+                    : '기본 따름'
+                const effortEmpty =
+                  claudeOnly && !(inherits && value.agent_effort)
+                    ? '기본 따름 (medium)'
+                    : '기본 따름'
                 const set = (next: AgentStep) =>
                   setDraft({
                     ...value,
-                    agent_steps: setAgentStep(value.agent_steps, skill, next, value),
+                    agent_steps: setAgentStep(
+                      value.agent_steps,
+                      skill,
+                      claudeOnly ? { ...next, engine: 'claude' } : next,
+                      value,
+                    ),
                   })
                 return (
                   <div key={skill} className="form-row agent-step">
@@ -1073,7 +1098,9 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                     <div className="agent-step-selects">
                       <select
                         aria-label={`${title} 엔진`}
-                        value={step.engine ?? ''}
+                        value={claudeOnly ? 'claude' : (step.engine ?? '')}
+                        disabled={claudeOnly}
+                        title={claudeOnly ? '앱이 Claude Code로 분석 run을 돌립니다' : undefined}
                         onChange={(e) =>
                           set(
                             changeStepEngine(
@@ -1084,8 +1111,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                           )
                         }
                       >
-                        <option value="">앱 기본 따름</option>
-                        {AGENT_ENGINES.map((e) => (
+                        {claudeOnly ? null : <option value="">앱 기본 따름</option>}
+                        {(claudeOnly ? (['claude'] as const) : AGENT_ENGINES).map((e) => (
                           <option key={e} value={e}>
                             {AGENT_LABELS[e]}
                           </option>
@@ -1095,7 +1122,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                         label={`${title} 모델`}
                         engine={engine}
                         value={step.model ?? ''}
-                        empty="기본 따름"
+                        empty={modelEmpty}
                         onChange={(model) => set({ ...step, model })}
                       />
                       <EffortSelect
@@ -1103,7 +1130,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                         engine={engine}
                         model={stepModel(value, step)}
                         value={step.effort ?? ''}
-                        empty="기본 따름"
+                        empty={effortEmpty}
                         onChange={(effort) => set({ ...step, effort })}
                       />
                     </div>
@@ -1222,6 +1249,32 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               />
             </label>
           </div>
+          <h3>요구사항 추출</h3>
+          <div className="dim">
+            extract 단계에서 앱이 돌리는 분석 run의 예산입니다. 다음 run부터 씁니다. run 상한에 닿아
+            멈춘 Work는 [계속 +20]으로 그 Work의 상한만 늘립니다.
+          </div>
+          <div className="form-grid" role="group" aria-label="요구사항 추출 예산">
+            {REQUIREMENTS_BUDGET_TITLES.map(([key, label, hint]) => (
+              <label key={key} className="form-row" title={hint}>
+                <span>{label}</span>
+                <input
+                  type="number"
+                  aria-label={label}
+                  value={value.requirements_budget[key]}
+                  onChange={(e) =>
+                    setDraft({
+                      ...value,
+                      requirements_budget: {
+                        ...value.requirements_budget,
+                        [key]: Number(e.target.value),
+                      },
+                    })
+                  }
+                />
+              </label>
+            ))}
+          </div>
         </>
       ) : (
         <div className="dim">불러오는 중…</div>
@@ -1241,8 +1294,10 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
 
 const short = (commit: string | null) => (commit ? commit.slice(0, 8) : '')
 
-/** 미리 보기의 코드 줄 (D116, D117). keepLabel은 [현재 코드 위에서 이어서]의 이름이다 (I105) */
-function codeLines(code: StepPreview['code'], keepLabel: string): string[] {
+/**
+ * 미리 보기의 코드 줄 (D116, D117). keep은 [현재 코드 위에서 이어서]의 이름(I105)과 체크했을 때의 코드 줄이다 (결정 120)
+ */
+function codeLines(code: StepPreview['code'], keep: { label: string; line: string }): string[] {
   const n = code.uncommitted.length
   if (code.kind === 'reset') {
     const where = `고른 단계를 시작할 때의 커밋(${short(code.to)})`
@@ -1257,15 +1312,13 @@ function codeLines(code: StepPreview['code'], keepLabel: string): string[] {
     ]
   }
   return [
-    code.kind === 'keep'
-      ? `[${keepLabel}]: 커밋을 되돌리지 않고 그 위에서 이어서 고칩니다`
-      : '코드를 되돌리지 않습니다',
+    code.kind === 'keep' ? `[${keep.label}]: ${keep.line}` : '코드를 되돌리지 않습니다',
     ...(n ? [`커밋 안 된 변경 ${n}개는 그대로 둡니다`] : []),
   ]
 }
 
 /** 고른 단계의 결과 (D82): 중단할 task, 폐기될 산출물, 코드, 건너뛸 단계, intent */
-function PreviewView({ p, keepLabel }: { p: StepPreview; keepLabel: string }) {
+function PreviewView({ p, keep }: { p: StepPreview; keep: { label: string; line: string } }) {
   return (
     <div className="step-preview" aria-label="미리 보기">
       <div>
@@ -1290,7 +1343,7 @@ function PreviewView({ p, keepLabel }: { p: StepPreview; keepLabel: string }) {
       <section>
         <h3>코드</h3>
         <ul>
-          {codeLines(p.code, keepLabel).map((l) => (
+          {codeLines(p.code, keep).map((l) => (
             <li key={l}>{l}</li>
           ))}
         </ul>
@@ -1423,14 +1476,7 @@ export function StepDialog({
         ))}
       </fieldset>
       {keepOffered ? (
-        <label
-          className="toggle"
-          title={
-            choice?.keepDefault
-              ? '문답으로 정한 결정을 문서에 둔 채 다시 볼 결정만 다시 묻는다'
-              : 'verify가 작은 문제를 찾았을 때 수정을 처음부터 다시 하지 않는다'
-          }
-        >
+        <label className="toggle" title={choice?.keepHint}>
           <input
             type="checkbox"
             checked={keepCode}
@@ -1450,7 +1496,13 @@ export function StepDialog({
       ) : failed ? (
         <div className="error">{failed}</div>
       ) : shown ? (
-        <PreviewView p={shown} keepLabel={choice?.keepLabel ?? '현재 코드 위에서 이어서'} />
+        <PreviewView
+          p={shown}
+          keep={{
+            label: choice?.keepLabel ?? '현재 코드 위에서 이어서',
+            line: choice?.keepCodeLine ?? '커밋을 되돌리지 않고 그 위에서 이어서 고칩니다',
+          }}
+        />
       ) : (
         <div className="dim">미리 보는 중…</div>
       )}

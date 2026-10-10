@@ -1,0 +1,361 @@
+{
+  "observations": [
+    {
+      "key": "o1",
+      "text": "USART1_IRQHandler가 g_rx_ring에 바이트를 넣고, main의 proto_poll/handle_byte가 프레임을 조립해 CRC가 맞으면 cmd_dispatch를 부른다",
+      "configs": ["alpha", "beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/uart.c",
+          "start": 47,
+          "end": 47,
+          "quote": "if (!ring_put(&g_rx_ring, b)) {",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/proto.c",
+          "start": 87,
+          "end": 87,
+          "quote": "cmd_dispatch(s_cmd, s_payload, s_len);",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o2",
+      "text": "CRC가 틀리면 프로토콜 층이 ERR_CRC(0x02) 응답을 보내고 디스패치하지 않는다",
+      "configs": ["alpha", "beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/proto.c",
+          "start": 84,
+          "end": 84,
+          "quote": "proto_send(s_cmd, ERR_CRC, 0, 0U);",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o3",
+      "text": "페이로드 길이가 2가 아니면 ERR_BAD_LEN(0x05)으로 응답한다",
+      "configs": ["alpha", "beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/cmd.c",
+          "start": 149,
+          "end": 150,
+          "quote": "if (len < e->min_len || len > e->max_len) { proto_send(cmd, ERR_BAD_LEN, 0, 0U);",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o4",
+      "text": "과열 고장이 켜져 있으면 범위 검사보다 먼저 ERR_FAULT(0x06)로 거부한다",
+      "configs": ["alpha", "beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/cmd.c",
+          "start": 46,
+          "end": 46,
+          "quote": "return ERR_FAULT;",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o5",
+      "text": "설정값이 50~850(0.1 C) 밖이면 ERR_RANGE(0x03)",
+      "configs": ["alpha", "beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/cmd.c",
+          "start": 49,
+          "end": 49,
+          "quote": "return ERR_RANGE;",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o6",
+      "text": "EEPROM 저장이 대기 중이면 ERR_BUSY(0x04)",
+      "configs": ["alpha", "beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/cmd.c",
+          "start": 52,
+          "end": 52,
+          "quote": "return ERR_BUSY;",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o7",
+      "text": "정상이면 g_setpoint_dc에 쓰고 ee_request_save로 저장을 요청하고 상태 0x00, CMD|0x80 응답을 보낸다",
+      "configs": ["alpha", "beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/cmd.c",
+          "start": 54,
+          "end": 55,
+          "quote": "g_setpoint_dc = sp; ee_request_save();",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/cmd.c",
+          "start": 154,
+          "end": 154,
+          "quote": "proto_send(cmd, status, out, out_len);",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o8",
+      "text": "바이트 사이가 PROTO_FRAME_TIMEOUT_TICKS를 넘으면 부분 프레임을 응답 없이 버린다",
+      "configs": ["alpha", "beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/proto.c",
+          "start": 97,
+          "end": 97,
+          "quote": "> PROTO_FRAME_TIMEOUT_TICKS) {",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o9",
+      "text": "EEPROM 쓰기 실패는 CFG_EE_RETRY_MAX번(alpha 3, beta 5) 다시 시도한 뒤 FAULT_EEPROM을 올린다. 프로토콜의 재전송은 없다",
+      "configs": ["alpha", "beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/eeprom.c",
+          "start": 118,
+          "end": 120,
+          "quote": "if (++s_attempts >= CFG_EE_RETRY_MAX) { s_save_pending = 0U; fault_raise(FAULT_EEPROM);",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o10",
+      "text": "g_setpoint_dc는 부팅 때 ee_load와, 설정 CRC 고장에서 fault_actions 표로 불리는 restore_defaults도 쓴다",
+      "configs": ["alpha", "beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/eeprom.c",
+          "start": 86,
+          "end": 86,
+          "quote": "g_setpoint_dc = img->setpoint_dc;",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/fault.c",
+          "start": 24,
+          "end": 24,
+          "quote": "g_setpoint_dc = SETPOINT_DEFAULT_DC;",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/fault.c",
+          "start": 40,
+          "end": 40,
+          "quote": "restore_defaults,   /* FAULT_CFG_CRC */",
+          "command": null
+        }
+      ],
+      "inference": false
+    },
+    {
+      "key": "o11",
+      "text": "CRC-8은 다항식 0x31, 초기값 0xFF다. 문서는 0x07, 0x00이라 한다",
+      "configs": ["alpha", "beta"],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "src/proto.c",
+          "start": 29,
+          "end": 29,
+          "quote": "^ 0x31U)",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "src/proto.c",
+          "start": 80,
+          "end": 80,
+          "quote": "proto_crc8(hdr, 2U, 0xFFU);",
+          "command": null
+        }
+      ],
+      "inference": false
+    }
+  ],
+  "quantities": [
+    {
+      "key": "q1",
+      "symbol": "CFG_EE_RETRY_MAX",
+      "expr": "3U / 5U",
+      "values": [
+        {
+          "configs": ["alpha"],
+          "value": "3"
+        },
+        {
+          "configs": ["beta"],
+          "value": "5"
+        }
+      ],
+      "unit": "count",
+      "unit_status": "derived",
+      "nature": "setting",
+      "chain": [],
+      "anchors": [
+        {
+          "kind": "code",
+          "path": "config/build_cfg_alpha.h",
+          "start": 13,
+          "end": 13,
+          "quote": "#define CFG_EE_RETRY_MAX    3U",
+          "command": null
+        },
+        {
+          "kind": "code",
+          "path": "config/build_cfg_beta.h",
+          "start": 13,
+          "end": 13,
+          "quote": "#define CFG_EE_RETRY_MAX    5U",
+          "command": null
+        }
+      ]
+    }
+  ],
+  "requirements": [
+    {
+      "key": "r1",
+      "type": "functional",
+      "condition": "SET_SETPOINT를 50~850(0.1 C) 값으로 받고 고장·저장 대기가 없을 때",
+      "behavior": "설정값을 바꾸고 저장을 요청한다",
+      "result": "상태 0x00 응답",
+      "configs": ["alpha", "beta"],
+      "refs": ["o7"],
+      "basis": "code"
+    }
+  ],
+  "constraints": [],
+  "impl_choices": [],
+  "unknowns": [],
+  "conflicts": [
+    {
+      "key": "x1",
+      "text": "CRC 매개변수가 문서와 코드에서 다르다",
+      "sides": [
+        {
+          "claim": "문서: 0x07, 초기 0x00",
+          "anchors": [
+            {
+              "kind": "doc_claim",
+              "path": "docs/protocol.md",
+              "start": 17,
+              "end": 17,
+              "quote": "CRC-8, polynomial 0x07, initial 0x00",
+              "command": null
+            }
+          ]
+        },
+        {
+          "claim": "코드: 0x31, 초기 0xFF",
+          "anchors": [
+            {
+              "kind": "code",
+              "path": "src/proto.c",
+              "start": 29,
+              "end": 29,
+              "quote": "^ 0x31U)",
+              "command": null
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "absences": [],
+  "followups": [],
+  "human_decisions": [],
+  "checkpoint": null,
+  "outcome": "done",
+  "outcome_reason": "수신부터 응답까지 모든 오류 경로를 봤다.",
+  "checklist": {
+    "entry": {
+      "status": "covered",
+      "refs": ["o1"],
+      "searches": []
+    },
+    "dispatch": {
+      "status": "covered",
+      "refs": ["o1"],
+      "searches": []
+    },
+    "precondition": {
+      "status": "covered",
+      "refs": ["o3", "o4", "o5"],
+      "searches": []
+    },
+    "normal": {
+      "status": "covered",
+      "refs": ["o7"],
+      "searches": []
+    },
+    "error": {
+      "status": "covered",
+      "refs": ["o2", "o3", "o4", "o5"],
+      "searches": []
+    },
+    "timeout": {
+      "status": "covered",
+      "refs": ["o8"],
+      "searches": []
+    },
+    "retry": {
+      "status": "covered",
+      "refs": ["o9"],
+      "searches": []
+    },
+    "busy_request": {
+      "status": "covered",
+      "refs": ["o6"],
+      "searches": []
+    },
+    "response": {
+      "status": "covered",
+      "refs": ["o7"],
+      "searches": []
+    }
+  }
+}

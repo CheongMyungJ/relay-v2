@@ -1,0 +1,20 @@
+{
+  "task": "review",
+  "describe": "쓰기 상한을 64로 답한다(틀린 값)",
+  "ops": [
+    {
+      "op": "set",
+      "path": "answers.q1.values",
+      "value": [
+        {
+          "configs": ["pro", "devkit"],
+          "value": "64"
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "violated": ["m.q.q.maxregs.value"],
+    "missed": ["r.rev.maxregs"]
+  }
+}

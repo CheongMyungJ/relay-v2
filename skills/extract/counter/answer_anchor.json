@@ -1,0 +1,53 @@
+{
+  "rule": "answer_anchor",
+  "note": "답했는데 앵커가 없다",
+  "kind": "review",
+  "ctx": {
+    "configs": [
+      "lamp_a",
+      "lamp_b"
+    ]
+  },
+  "result": {
+    "outcome": "done",
+    "outcome_reason": "질문 하나와 서술 하나를 코드로 보았다.",
+    "answers": {
+      "q1": {
+        "status": "answered",
+        "text": "4 tick이다.",
+        "values": [
+          {
+            "configs": [
+              "lamp_a"
+            ],
+            "value": "4 tick"
+          }
+        ],
+        "configs": [],
+        "anchors": [],
+        "searches": []
+      }
+    },
+    "verdicts": {
+      "s1": {
+        "verdict": "not_refuted",
+        "attempts": [
+          "lamp_b의 디밍 처리기 등록을 찾았다"
+        ],
+        "anchors": [
+          {
+            "kind": "code",
+            "path": "src/dimmer.c",
+            "start": 20,
+            "end": 20,
+            "quote": "dim_step = DIM_STEP_TICKS;",
+            "command": null
+          }
+        ],
+        "note": ""
+      }
+    },
+    "unknowns": [],
+    "checkpoint": null
+  }
+}

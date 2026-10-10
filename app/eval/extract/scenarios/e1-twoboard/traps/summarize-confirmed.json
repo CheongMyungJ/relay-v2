@@ -1,0 +1,24 @@
+{
+  "task": "summarize",
+  "describe": "후보를 확인된 요구로 쓴다(판정)",
+  "ops": [
+    {
+      "op": "set",
+      "path": "overview.1.text",
+      "value": "바이트 간 시간 초과(alpha 20 ms, beta 50 ms)와 히터 상한은 확인된 요구사항이다."
+    }
+  ],
+  "judge": {
+    "must_not": {
+      "m.sum.confirmed": {
+        "violated": true,
+        "keys": ["p2"],
+        "quote": "확인된 요구사항이다",
+        "hedged": false
+      }
+    }
+  },
+  "expect": {
+    "violated": ["m.sum.confirmed"]
+  }
+}

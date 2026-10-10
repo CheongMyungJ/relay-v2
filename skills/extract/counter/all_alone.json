@@ -1,0 +1,174 @@
+{
+  "rule": "all_alone",
+  "note": "all을 다른 구성과 함께 쓴다",
+  "kind": "trace",
+  "lens": "timing",
+  "ctx": {
+    "configs": [
+      "fan_lo",
+      "fan_hi"
+    ]
+  },
+  "result": {
+    "outcome": "done",
+    "outcome_reason": "팬 회전 감시 시간 상수를 두 구성에서 끝까지 따라갔다.",
+    "observations": [
+      {
+        "key": "o1",
+        "text": "fan_lo와 fan_hi에서 fan_watch가 매 틱 spin_cnt를 FAN_SPIN_TICKS와 비교한다.",
+        "configs": [
+          "all",
+          "fan_hi"
+        ],
+        "anchors": [
+          {
+            "kind": "code",
+            "path": "src/fan_watch.c",
+            "start": 31,
+            "end": 31,
+            "quote": "if (spin_cnt > FAN_SPIN_TICKS) {",
+            "command": null
+          }
+        ],
+        "inference": false
+      }
+    ],
+    "quantities": [
+      {
+        "key": "q1",
+        "symbol": "FAN_SPIN_TICKS",
+        "expr": "#define FAN_SPIN_TICKS 25",
+        "values": [
+          {
+            "configs": [
+              "fan_lo",
+              "fan_hi"
+            ],
+            "value": "25 tick (26 tick에 판정)"
+          }
+        ],
+        "unit": "tick",
+        "unit_status": "derived",
+        "nature": "setting",
+        "chain": [
+          {
+            "role": "value",
+            "anchor": {
+              "kind": "code",
+              "path": "inc/fan_cfg.h",
+              "start": 4,
+              "end": 4,
+              "quote": "#define FAN_SPIN_TICKS 25",
+              "command": null
+            }
+          },
+          {
+            "role": "consumer",
+            "anchor": {
+              "kind": "code",
+              "path": "src/fan_watch.c",
+              "start": 31,
+              "end": 31,
+              "quote": "if (spin_cnt > FAN_SPIN_TICKS) {",
+              "command": null
+            }
+          }
+        ],
+        "anchors": []
+      }
+    ],
+    "requirements": [
+      {
+        "key": "r1",
+        "type": "functional",
+        "condition": "팬이 26 tick 동안 회전 신호를 내지 않으면",
+        "behavior": "팬 고장을 기록한다",
+        "result": "고장 플래그가 선다",
+        "configs": [
+          "fan_lo",
+          "fan_hi"
+        ],
+        "refs": [
+          "o1"
+        ],
+        "basis": "code"
+      }
+    ],
+    "constraints": [],
+    "impl_choices": [],
+    "unknowns": [],
+    "conflicts": [],
+    "absences": [
+      {
+        "key": "a1",
+        "claim": "spin_cnt를 0으로 되돌리는 곳은 fan_tach_isr 하나다.",
+        "configs": [
+          "fan_lo",
+          "fan_hi"
+        ],
+        "searches": [
+          {
+            "tool": "Grep",
+            "pattern": "spin_cnt\\s*=",
+            "scope": "src/",
+            "hits": 1
+          }
+        ]
+      }
+    ],
+    "checklist": {
+      "per_config_value": {
+        "status": "covered",
+        "refs": [
+          "q1"
+        ],
+        "searches": []
+      },
+      "consumer": {
+        "status": "unknown",
+        "refs": [],
+        "searches": []
+      },
+      "tick_source": {
+        "status": "unknown",
+        "refs": [],
+        "searches": []
+      },
+      "unit": {
+        "status": "unknown",
+        "refs": [],
+        "searches": []
+      },
+      "comparison": {
+        "status": "unknown",
+        "refs": [],
+        "searches": []
+      },
+      "counting_context": {
+        "status": "unknown",
+        "refs": [],
+        "searches": []
+      },
+      "overflow": {
+        "status": "not_applicable",
+        "refs": [],
+        "searches": [
+          {
+            "tool": "Grep",
+            "pattern": "FAN_SPIN_TICKS",
+            "scope": "src/, inc/",
+            "hits": 3
+          }
+        ]
+      },
+      "nature": {
+        "status": "unknown",
+        "refs": [],
+        "searches": []
+      }
+    },
+    "followups": [],
+    "human_decisions": [],
+    "checkpoint": null
+  }
+}

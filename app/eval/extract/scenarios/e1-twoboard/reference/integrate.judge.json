@@ -1,0 +1,25 @@
+{
+  "recall": [
+    {
+      "id": "r.int.conflict_side",
+      "found": true,
+      "keys": ["l4"]
+    }
+  ],
+  "must_not": [
+    {
+      "id": "m.int.wdt_settled",
+      "violated": false,
+      "keys": [],
+      "quote": "",
+      "hedged": false
+    }
+  ],
+  "resolvable": [
+    {
+      "id": "v.int.frame",
+      "left_unknown": false,
+      "keys": []
+    }
+  ]
+}

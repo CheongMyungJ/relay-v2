@@ -1,0 +1,21 @@
+{
+  "task": "trace-timing",
+  "describe": "인용은 맞지만 줄 번호가 어긋난다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "observations.1.anchors.0",
+      "value": {
+        "kind": "code",
+        "path": "src/proto.c",
+        "start": 90,
+        "end": 90,
+        "quote": "if (s_state != WAIT_SOF && (timer_now() - s_last_rx_tick) > PROTO_FRAME_TIMEOUT_TICKS) {",
+        "command": null
+      }
+    }
+  ],
+  "expect": {
+    "lineMismatch": 1
+  }
+}

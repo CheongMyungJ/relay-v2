@@ -1,0 +1,134 @@
+{
+  "rule": "config_active",
+  "note": "fan_lo 빌드에는 weak 기본 정의뿐인 처리기를 모든 구성에 있다고 한다",
+  "kind": "survey",
+  "ctx": {
+    "build": {
+      "version": 1,
+      "configs": {
+        "fan_lo": {
+          "symbols": {
+            "Reset_Handler": "strong",
+            "TIM4_IRQHandler": "weak",
+            "Default_Handler": "strong"
+          },
+          "lines": {
+            "src/startup.c": [
+              [
+                10,
+                40
+              ]
+            ]
+          }
+        },
+        "fan_hi": {
+          "symbols": {
+            "Reset_Handler": "strong",
+            "TIM4_IRQHandler": "strong",
+            "Default_Handler": "strong"
+          },
+          "lines": {
+            "src/startup.c": [
+              [
+                10,
+                40
+              ]
+            ],
+            "src/tach.c": [
+              [
+                1,
+                60
+              ]
+            ]
+          }
+        }
+      }
+    }
+  },
+  "result": {
+    "outcome": "done",
+    "outcome_reason": "빌드 파일과 시작 코드, 벡터 표를 모두 봤다.",
+    "configs": [
+      {
+        "key": "c1",
+        "name": "fan_lo",
+        "status": "confirmed",
+        "select": "make fan_lo",
+        "build_command": "make fan_lo",
+        "anchors": [
+          {
+            "kind": "code",
+            "path": "Makefile",
+            "start": 8,
+            "end": 8,
+            "quote": "fan_lo: CFLAGS += -DFAN_LO",
+            "command": null
+          }
+        ]
+      },
+      {
+        "key": "c2",
+        "name": "fan_hi",
+        "status": "confirmed",
+        "select": "make fan_hi (src/tach.c 추가)",
+        "build_command": "make fan_hi",
+        "anchors": [
+          {
+            "kind": "code",
+            "path": "Makefile",
+            "start": 12,
+            "end": 12,
+            "quote": "fan_hi: SRCS += src/tach.c",
+            "command": null
+          }
+        ]
+      }
+    ],
+    "inventory": [
+      {
+        "key": "i1",
+        "kind": "reset",
+        "name": "Reset_Handler",
+        "configs": [
+          "all"
+        ],
+        "anchors": [
+          {
+            "kind": "code",
+            "path": "src/startup.c",
+            "start": 12,
+            "end": 12,
+            "quote": "void Reset_Handler(void)",
+            "command": null
+          }
+        ],
+        "notes": ""
+      },
+      {
+        "key": "i2",
+        "kind": "isr",
+        "name": "TIM4_IRQHandler",
+        "configs": [
+          "all"
+        ],
+        "anchors": [
+          {
+            "kind": "code",
+            "path": "src/tach.c",
+            "start": 30,
+            "end": 30,
+            "quote": "void TIM4_IRQHandler(void)",
+            "command": null
+          }
+        ],
+        "notes": "회전 신호 펄스를 센다."
+      }
+    ],
+    "boundaries": [],
+    "units": [],
+    "not_found": [],
+    "unknowns": [],
+    "human_decisions": [],
+    "checkpoint": null
+  }
+}

@@ -3761,3 +3761,170 @@ describe('[단위] 새 task에 엔진·모델·추론 수준을 고정 (F6, F8, 
     })
   })
 })
+
+describe('요구사항 추출의 extract (requirements-extraction-flow.md 결정 92, 98, 99, 17.12)', () => {
+  const pointer = {
+    revision: 2,
+    revision_hash: 'sha256:aa',
+    next: { unit: 3, claim: 1, evidence: 1, decision: 1, revision: 3, run: 2 },
+    runs_used: 1,
+    runs_extra: 0,
+    failures_in_row: 0,
+    streaks: {},
+  }
+
+  /** 도는 extract task(세션 없음) */
+  function extracting(): WorkState {
+    const work = createWork({
+      type: 'requirements',
+      workId: 'w-20261009-001',
+      baseBranch: 'main',
+      baseCommit: 'base0001',
+      at: at(),
+    }).work
+    const first = currentTask(work)
+    if (!first) throw new Error('intake 없음')
+    const intake = { ...first, status: 'approved' as const }
+    const extract: TaskRecord = {
+      id: 't-02',
+      seq: 2,
+      node: 'extract',
+      status: 'working',
+      reason: 'default',
+      format_version: 1,
+      created_at: at(),
+      session: null,
+      bounce_count: 0,
+      check: null,
+    }
+    return { ...work, intent: { version: 1 }, tasks: [intake, extract], requirements: pointer }
+  }
+
+  it('의도를 승인하면 extract task를 만들고 시작한다(세션은 main이 띄우지 않고 run 루프를 돈다)', () => {
+    const work = launch(
+      createWork({
+        type: 'requirements',
+        workId: 'w-20261009-002',
+        baseBranch: 'main',
+        baseCommit: 'base0001',
+        at: at(),
+      }).work,
+    )
+    const r = approve(stop(work, valid()).work, valid())
+    expect(currentTask(r.work)).toMatchObject({ node: 'extract', status: 'working', session: null })
+    expect(r.effects).toContainEqual(
+      expect.objectContaining({ type: 'startTask', node: 'extract' }),
+    )
+  })
+
+  it('도는 동안 [즉시 중단]만, 멈추면 [재개]만 보인다', () => {
+    const work = extracting()
+    expect(actions(work)).toMatchObject({ interrupt: true, resume: false, retry: false })
+    const stopped = apply(work, { type: 'interrupt', taskId: 't-02', at: at(), reason: 'human' })
+    expect(actions(stopped.work)).toMatchObject({ interrupt: false, resume: true, retry: false })
+  })
+
+  it('[즉시 중단]은 run을 끝내고 멈춘 까닭을 남긴다. [재개]는 까닭을 지우고 루프를 다시 시작한다', () => {
+    const r = apply(extracting(), { type: 'interrupt', taskId: 't-02', at: at(), reason: 'human' })
+    expect(status(r.work)).toBe('interrupted')
+    expect(r.work.requirements?.halt).toMatchObject({ reason: 'human', detail: '[즉시 중단]' })
+    expect(types(r.effects)).toEqual(['stopExtract', 'log:task.interrupted'])
+    const back = apply(r.work, { type: 'resume', taskId: 't-02', at: at() })
+    expect(status(back.work)).toBe('working')
+    expect(back.work.requirements?.halt).toBeUndefined()
+    expect(types(back.effects)).toEqual(['runExtract'])
+  })
+
+  it('포인터 바꾸기는 work.json의 requirements만 바꾸고 run 기록을 남긴다', () => {
+    const next = { ...pointer, revision: 3, runs_used: 2 }
+    const r = apply(extracting(), {
+      type: 'requirements.updated',
+      taskId: 't-02',
+      at: at(),
+      pointer: next,
+      log: { run: 'r-0002', unit: 'u-0002', result: 'ok' },
+    })
+    expect(r.work.requirements).toEqual(next)
+    expect(types(r.effects)).toEqual(['log:extract.run'])
+  })
+
+  it('루프가 멈추면 중단됨이고, [이 단계 끝나면 멈춤]으로 멈췄으면 그 표시를 지운다', () => {
+    const work = { ...extracting(), stop_after_step: true }
+    const r = apply(work, {
+      type: 'extract.halted',
+      taskId: 't-02',
+      at: at(),
+      halt: { at: at(), reason: 'human', detail: '이 단계 끝나면 멈춤' },
+      clearStopAfter: true,
+    })
+    expect(status(r.work)).toBe('interrupted')
+    expect(r.work.stop_after_step).toBeUndefined()
+    expect(r.work.requirements?.halt?.reason).toBe('human')
+    expect(types(r.effects)).toEqual(['log:extract.halted'])
+  })
+
+  it('extract가 끝나면 승인 대기이고, 승인하면 verify를 시작한다', () => {
+    const r = apply(extracting(), {
+      type: 'extract.finished',
+      taskId: 't-02',
+      at: at(),
+      check: valid(),
+    })
+    expect(status(r.work)).toBe('awaiting_approval')
+    const next = approve(r.work, valid())
+    expect(currentTask(next.work)?.node).toBe('verify')
+  })
+
+  it('[Work 포기]와 단계 선택은 도는 run 루프를 멈춘다 (결정 120)', () => {
+    const gone = apply(extracting(), { type: 'abandon', at: at() })
+    expect(gone.work.status).toBe('abandoned')
+    expect(status(gone.work)).toBe('interrupted')
+    expect(types(gone.effects)).toEqual([
+      'stopExtract',
+      'log:task.interrupted',
+      'log:work.abandoned',
+    ])
+    const back = apply(extracting(), {
+      type: 'selectStep',
+      node: 'intake',
+      keepCode: false,
+      instruction: '',
+      expect: { taskId: 't-02', done: false },
+      backups: [],
+      at: at(),
+    })
+    expect(back.effects).toContainEqual({ type: 'stopExtract', taskId: 't-02' })
+    expect(back.work.tasks.find((t) => t.id === 't-02')?.status).not.toBe('working')
+    // 멈춘 extract(중단됨)에는 멈출 루프가 없다
+    const halted = apply(extracting(), {
+      type: 'interrupt',
+      taskId: 't-02',
+      at: at(),
+      reason: 'human',
+    })
+    const later = apply(halted.work, { type: 'abandon', at: at() })
+    expect(types(later.effects)).not.toContain('stopExtract')
+  })
+
+  it('재시작하면 돌던 run의 결과를 버리고 [재개]를 기다린다 (결정 4)', () => {
+    const work = {
+      ...extracting(),
+      requirements: {
+        ...pointer,
+        run: {
+          id: 'r-0002',
+          unit: 'u-0002',
+          pid: 4242,
+          process_started_at: '2026-10-09T01:00:00.000Z',
+          started_at: at(),
+          input_revision: 2,
+          hashes: { packet: 'p', instructions: 'i', schema: 's' },
+        },
+      },
+    }
+    const r = apply(work, { type: 'app.restarted', at: at(), check: MISSING })
+    expect(status(r.work)).toBe('interrupted')
+    expect(r.work.requirements?.run).toBeUndefined()
+    expect(r.work.requirements?.halt?.reason).toBe('restart')
+  })
+})

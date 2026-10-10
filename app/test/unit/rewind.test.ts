@@ -328,6 +328,8 @@ describe('고를 수 있는 단계 (6.3)', () => {
         keepCode: false,
         keepLabel: '현재 코드 위에서 이어서',
         keepDefault: false,
+        keepHint: 'verify가 작은 문제를 찾았을 때 수정을 처음부터 다시 하지 않는다',
+        keepCodeLine: '커밋을 되돌리지 않고 그 위에서 이어서 고칩니다',
         typeChange: false,
       },
       {
@@ -341,6 +343,8 @@ describe('고를 수 있는 단계 (6.3)', () => {
         keepCode: true,
         keepLabel: '현재 코드 위에서 이어서',
         keepDefault: false,
+        keepHint: 'verify가 작은 문제를 찾았을 때 수정을 처음부터 다시 하지 않는다',
+        keepCodeLine: '커밋을 되돌리지 않고 그 위에서 이어서 고칩니다',
         typeChange: false,
       },
       {
@@ -354,6 +358,8 @@ describe('고를 수 있는 단계 (6.3)', () => {
         keepCode: false,
         keepLabel: '현재 코드 위에서 이어서',
         keepDefault: false,
+        keepHint: 'verify가 작은 문제를 찾았을 때 수정을 처음부터 다시 하지 않는다',
+        keepCodeLine: '커밋을 되돌리지 않고 그 위에서 이어서 고칩니다',
         typeChange: false,
       },
     ])

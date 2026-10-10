@@ -1,0 +1,14 @@
+{
+  "task": "survey",
+  "describe": "SET_FAN을 모든 구성에 있다고 한다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "inventory.12.configs",
+      "value": ["all"]
+    }
+  ],
+  "expect": {
+    "violated": ["m.merge.set_fan"]
+  }
+}

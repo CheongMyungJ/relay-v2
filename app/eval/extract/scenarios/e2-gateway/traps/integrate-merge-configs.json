@@ -1,0 +1,21 @@
+{
+  "task": "integrate",
+  "describe": "같은 글이지만 구성이 다른 두 주장(센서 주기: basic·devkit 25 ms, pro 24 ms)을 합친다",
+  "ops": [
+    {
+      "op": "push",
+      "path": "links",
+      "value": {
+        "key": "l9",
+        "kind": "merges",
+        "from": ["c-0092"],
+        "to": ["c-0093"],
+        "reason": "같은 글이다",
+        "anchors": []
+      }
+    }
+  ],
+  "expect": {
+    "violated": ["m.int.merge_sensor"]
+  }
+}

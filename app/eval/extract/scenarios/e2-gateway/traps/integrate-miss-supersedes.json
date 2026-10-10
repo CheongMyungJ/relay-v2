@@ -1,0 +1,13 @@
+{
+  "task": "integrate",
+  "describe": "이어 돈 run이 다시 본 수치를 잇지 않는다",
+  "ops": [
+    {
+      "op": "remove",
+      "path": "links.1"
+    }
+  ],
+  "expect": {
+    "missed": ["r.int.supersedes_sensor"]
+  }
+}

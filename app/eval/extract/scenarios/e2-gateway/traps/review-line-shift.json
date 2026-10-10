@@ -1,0 +1,19 @@
+{
+  "task": "review",
+  "describe": "반박 앵커의 줄 번호가 어긋난다",
+  "ops": [
+    {
+      "op": "set",
+      "path": "verdicts.s1.anchors.0.start",
+      "value": 30
+    },
+    {
+      "op": "set",
+      "path": "verdicts.s1.anchors.0.end",
+      "value": 30
+    }
+  ],
+  "expect": {
+    "lineMismatch": 1
+  }
+}

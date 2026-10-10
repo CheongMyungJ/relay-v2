@@ -1,0 +1,17 @@
+{
+  "recall": [],
+  "must_not": [
+    {
+      "id": "m.shipping",
+      "violated": false,
+      "keys": []
+    }
+  ],
+  "resolvable": [
+    {
+      "id": "v.fan_beta",
+      "left_unknown": false,
+      "keys": []
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "task": "summarize",
+  "describe": "맹검 답과 어긋난 주장을 위험에 들지 않는다",
+  "ops": [
+    {
+      "op": "remove",
+      "path": "risks.7"
+    }
+  ],
+  "expect": {
+    "missed": ["r.sum.low_maxregs", "r.sum.low_fc43"]
+  }
+}

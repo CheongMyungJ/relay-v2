@@ -140,11 +140,17 @@ export function stepModel(config: AgentConfig, step: AgentStep): string {
 
 /**
  * 한 단계의 실행 설정을 정한다. 엔진 = 단계 ?? 기본. 모델·추론 수준 = 단계 ?? (엔진이 기본 엔진과 같으면 기본, 다르면
- * 엔진 기본). 저장 검사를 지난 설정이면 버릴 것이 없지만, 그 엔진에 없는 모델과 고른 모델이 받지 않는 추론 수준은 버린다
+ * 엔진 기본). 저장 검사를 지난 설정이면 버릴 것이 없지만, 그 엔진에 없는 모델과 고른 모델이 받지 않는 추론 수준은 버린다.
+ * fixed는 엔진을 고를 수 없는 단계의 엔진이다(요구사항 추출의 extract는 늘 Claude Code, 결정 92)
  */
-export function resolveAgent(config: AgentConfig, skill: string): ResolvedAgent {
-  const step = config.agent_steps?.[skill] ?? {}
-  const engine = stepEngine(config, skill)
+export function resolveAgent(
+  config: AgentConfig,
+  skill: string,
+  fixed?: AgentEngine,
+): ResolvedAgent {
+  const set = config.agent_steps?.[skill] ?? {}
+  const step = fixed ? { ...set, engine: fixed } : set
+  const engine = step.engine ?? config.agent_engine
   const wantModel = stepModel(config, step)
   const model = modelError(engine, wantModel) ? '' : wantModel
   const wantEffort = step.effort ?? (inherits(config, step) ? (config.agent_effort ?? '') : '')
