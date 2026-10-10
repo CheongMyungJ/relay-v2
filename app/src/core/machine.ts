@@ -1347,7 +1347,11 @@ function withEngines(work: WorkState, result: Transition, config: AppConfig): Tr
   const tasks = result.work.tasks.map((t) => {
     if (previousIds.has(t.id)) return t
     created = true
-    return { ...t, ...resolveAgent(config, NODE_INFO[t.node].skill) }
+    // 앱이 run을 돌리는 단계(요구사항 추출의 extract)는 늘 claude로 돈다: 기본 엔진의 모델을 물려받지 않는다 (결정 92)
+    return {
+      ...t,
+      ...resolveAgent(config, NODE_INFO[t.node].skill, appRun(t.node) ? 'claude' : undefined),
+    }
   })
   return created ? { ...result, work: { ...result.work, tasks } } : result
 }

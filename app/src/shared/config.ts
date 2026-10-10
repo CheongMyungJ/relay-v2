@@ -193,6 +193,9 @@ export const AGENT_STEP_TITLES: readonly (readonly [AgentStepName, string, Setti
   ['side', '곁 세션', 'common'],
 ]
 
+/** 엔진을 고르지 않고 늘 Claude Code로 도는 단계: 요구사항 추출의 extract는 앱이 `claude -p` run을 돌린다 (결정 92) */
+export const CLAUDE_ONLY_STEPS: readonly AgentStepName[] = ['extract']
+
 /** 요구사항 추출 예산의 화면 이름과 풀이 (결정 31, 102). 설정 화면과 검사 오류가 쓴다 */
 export const REQUIREMENTS_BUDGET_TITLES: readonly (readonly [
   keyof RequirementsBudget,

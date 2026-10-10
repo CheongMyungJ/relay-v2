@@ -115,6 +115,44 @@ describe('엔진 선택과 이전 기록 (E3, E5)', () => {
     expect(currentTask(restarted.work)?.countdown).toBeUndefined()
   })
 
+  it('요구사항 추출의 extract는 기본 엔진이 Codex여도 claude로 돌고 Codex 모델을 물려받지 않는다 (결정 92)', () => {
+    const initial = createWork({
+      type: 'requirements',
+      engine: 'claude',
+      workId: 'w-20260930-002',
+      baseBranch: 'main',
+      baseCommit: 'base',
+      at,
+    }).work
+    const ready: WorkState = {
+      ...initial,
+      intent: { version: 1 },
+      tasks: [{ ...firstTask(initial), status: 'awaiting_approval' }],
+    }
+    const next = transition(
+      ready,
+      {
+        type: 'approve',
+        taskId: 't-01',
+        at,
+        check: {
+          handoff_present: true,
+          status: 'awaiting_approval',
+          errors: [],
+          warnings: [],
+          handoff,
+          handoffHeader: handoff,
+        },
+      },
+      { ...codex, agent_model: 'gpt-6.1-sol', agent_effort: 'ultra' },
+    )
+    expect(next.rejected).toBeUndefined()
+    expect(next.work.tasks.map((t) => [t.node, t.engine, t.model, t.effort])).toEqual([
+      ['intake', 'claude', undefined, undefined],
+      ['extract', 'claude', undefined, undefined],
+    ])
+  })
+
   it('처음 만든 task의 엔진은 대기열과 설정 변경 후에도 유지한다', () => {
     const initial = makeWork('codex')
     const queued = transition(
@@ -278,6 +316,24 @@ describe('[단위] 모델 카탈로그와 단계별 실행 설정 해석', () =>
       model: 'gpt-6.1-sol',
       effort: 'ultra',
     })
+  })
+
+  it('엔진을 고를 수 없는 단계는 그 엔진으로 해석한다: 기본 엔진이 같을 때만 기본 모델을 물려받는다 (결정 92)', () => {
+    const fromCodex = { ...base, agent_engine: 'codex' as const, agent_model: 'gpt-6.1-sol' }
+    expect(resolveAgent(fromCodex, 'extract', 'claude')).toEqual({ engine: 'claude' })
+    expect(
+      resolveAgent(
+        {
+          ...fromCodex,
+          agent_steps: { extract: { engine: 'claude', model: 'opus', effort: 'high' } },
+        },
+        'extract',
+        'claude',
+      ),
+    ).toEqual({ engine: 'claude', model: 'opus', effort: 'high' })
+    expect(
+      resolveAgent({ ...base, agent_model: 'opus', agent_effort: 'high' }, 'extract', 'claude'),
+    ).toEqual({ engine: 'claude', model: 'opus', effort: 'high' })
   })
 
   it('단계 엔진이 기본 엔진과 다르면 기본 모델·추론 수준을 물려받지 않는다 (F6)', () => {

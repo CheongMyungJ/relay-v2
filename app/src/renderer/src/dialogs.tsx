@@ -21,6 +21,7 @@ import {
 import {
   AGENT_STEP_TITLES,
   AUTO_APPROVE_TITLES,
+  CLAUDE_ONLY_STEPS,
   QUESTION_MODE_LABEL,
   SETTING_GROUP_LABEL,
   REQUIREMENTS_BUDGET_TITLES,
@@ -486,6 +487,7 @@ const GROUPS: readonly SettingGroup[] = [
   'refactor',
   'spec',
   'general',
+  'requirements',
   'pr',
 ]
 
@@ -1063,12 +1065,20 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               items={AGENT_STEP_TITLES}
               type={null}
               row={(skill, title) => {
-                const step = value.agent_steps[skill] ?? {}
+                // 요구사항 추출의 extract는 엔진을 고르지 않고 늘 Claude Code로 돈다 (결정 92)
+                const claudeOnly = CLAUDE_ONLY_STEPS.includes(skill)
+                const saved = value.agent_steps[skill] ?? {}
+                const step: AgentStep = claudeOnly ? { ...saved, engine: 'claude' } : saved
                 const engine = step.engine ?? value.agent_engine
                 const set = (next: AgentStep) =>
                   setDraft({
                     ...value,
-                    agent_steps: setAgentStep(value.agent_steps, skill, next, value),
+                    agent_steps: setAgentStep(
+                      value.agent_steps,
+                      skill,
+                      claudeOnly ? { ...next, engine: 'claude' } : next,
+                      value,
+                    ),
                   })
                 return (
                   <div key={skill} className="form-row agent-step">
@@ -1078,7 +1088,9 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                     <div className="agent-step-selects">
                       <select
                         aria-label={`${title} 엔진`}
-                        value={step.engine ?? ''}
+                        value={claudeOnly ? 'claude' : (step.engine ?? '')}
+                        disabled={claudeOnly}
+                        title={claudeOnly ? '앱이 Claude Code로 분석 run을 돌립니다' : undefined}
                         onChange={(e) =>
                           set(
                             changeStepEngine(
@@ -1089,8 +1101,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                           )
                         }
                       >
-                        <option value="">앱 기본 따름</option>
-                        {AGENT_ENGINES.map((e) => (
+                        {claudeOnly ? null : <option value="">앱 기본 따름</option>}
+                        {(claudeOnly ? (['claude'] as const) : AGENT_ENGINES).map((e) => (
                           <option key={e} value={e}>
                             {AGENT_LABELS[e]}
                           </option>
