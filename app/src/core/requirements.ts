@@ -30,6 +30,7 @@ import type {
   UnitStatus,
 } from '../shared/requirements'
 import { CLOSED_STATUSES } from '../shared/requirements'
+import { effortsFor, type AgentEngine } from '../shared/agent'
 import {
   VERDICT_STATUS,
   compareAnswer,
@@ -853,10 +854,32 @@ function buildIndexDecision(
 export const BUILD_ALLOW = '허용'
 export const BUILD_DENY = '허용하지 않음'
 
-/** 빌드 인덱스 결정의 답이 허용인가: "허용"으로 시작하되 "허용하지"는 아니다(영어 yes, allow도) */
+/** 허용으로 시작해도 부정하는 말이 있으면 허용이 아니다: "허용하지 않음", "허용 안 함", "허용 불가", "allow? no" */
+const BUILD_NEGATION =
+  /하지|안\s*(함|해|됨|돼|합)|(^|\s)안($|[\s.,!)])|않|불가|불허|금지|말아|말고|거절|거부|\bno\b|\bnot\b|\bdon'?t\b|(^|\s)[xX✗]($|\s)/i
+
+/**
+ * 빌드 인덱스 결정의 답이 허용인가: "허용"(영어 yes, allow)으로 시작하고 부정하는 말이 없다. 잘못 읽으면 사람이 거절한
+ * 빌드 명령을 돌리므로 모호하면 거절로 읽는다
+ */
 export function allowsBuild(answer: string): boolean {
   const a = answer.trim()
-  return /^허용(?!하지)/.test(a) || /^(yes|allow)\b/i.test(a)
+  return (/^허용/.test(a) || /^(yes|allow)\b/i.test(a)) && !BUILD_NEGATION.test(a)
+}
+
+/**
+ * 요구사항 추출 run의 모델·추론 수준 (결정 50, 92). task에 고정한 Claude 값을 쓰고, 없으면 평가가 잰 sonnet/medium이다.
+ * 다른 엔진으로 고정된 옛 task의 값은 claude에 넘기지 않고, 모델이 받지 않는 추론 수준(haiku 등)은 넘기지 않는다
+ */
+export function extractRunAgent(
+  task: { engine?: AgentEngine; model?: string; effort?: string } | undefined,
+): { model: string; effort?: string } {
+  const own = task?.engine === undefined || task.engine === 'claude'
+  const model = (own && task?.model) || 'sonnet'
+  const effort = (own && task?.effort) || 'medium'
+  return (effortsFor('claude', model) as readonly string[]).includes(effort)
+    ? { model, effort }
+    : { model }
 }
 
 /**

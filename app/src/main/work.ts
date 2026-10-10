@@ -288,6 +288,7 @@ import {
   defaultExportDir,
   exportDir,
   exportRecord,
+  extractRunAgent,
   fold,
   outputCopies,
   requirementsView,
@@ -759,10 +760,7 @@ export class WorkRunner {
         return summarize(await this.checkOf(task))
       },
       // 평가가 잰 조건(sonnet/medium, 결정 50)을 기본으로 둔다. 상세 설정의 "요구사항 추출"이 바꾼다
-      agent: (taskId) => {
-        const task = this.task(taskId)
-        return { model: task?.model || 'sonnet', effort: task?.effort || 'medium' }
-      },
+      agent: (taskId) => extractRunAgent(this.task(taskId)),
       bin: () => findClaude({ env: ctx.env }),
       acquire: () => ctx.pool.tryAcquire(),
       release: () => ctx.pool.release(),

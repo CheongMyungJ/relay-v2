@@ -1070,6 +1070,16 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 const saved = value.agent_steps[skill] ?? {}
                 const step: AgentStep = claudeOnly ? { ...saved, engine: 'claude' } : saved
                 const engine = step.engine ?? value.agent_engine
+                // extract는 고르지도 물려받지도 않은 모델·추론 수준을 앱이 sonnet·medium으로 채운다 (결정 50)
+                const inherits = value.agent_engine === engine
+                const modelEmpty =
+                  claudeOnly && !(inherits && value.agent_model)
+                    ? '기본 따름 (sonnet)'
+                    : '기본 따름'
+                const effortEmpty =
+                  claudeOnly && !(inherits && value.agent_effort)
+                    ? '기본 따름 (medium)'
+                    : '기본 따름'
                 const set = (next: AgentStep) =>
                   setDraft({
                     ...value,
@@ -1112,7 +1122,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                         label={`${title} 모델`}
                         engine={engine}
                         value={step.model ?? ''}
-                        empty="기본 따름"
+                        empty={modelEmpty}
                         onChange={(model) => set({ ...step, model })}
                       />
                       <EffortSelect
@@ -1120,7 +1130,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                         engine={engine}
                         model={stepModel(value, step)}
                         value={step.effort ?? ''}
-                        empty="기본 따름"
+                        empty={effortEmpty}
                         onChange={(effort) => set({ ...step, effort })}
                       />
                     </div>

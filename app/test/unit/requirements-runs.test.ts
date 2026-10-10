@@ -5,6 +5,7 @@ import { loadPerspectives } from '../../../skills/extract/load.mjs'
 import {
   allowsBuild,
   answerRevision,
+  extractRunAgent,
   applyResult,
   buildIndexRevision,
   buildIndexWork,
@@ -673,6 +674,21 @@ describe('구성별 빌드 인덱스 (AI 결정 118)', () => {
     expect(none.state.build_index).toBeNull()
   })
 
+  it('run의 모델·추론 수준: task의 Claude 값, 없으면 sonnet/medium. 다른 엔진의 값과 모델이 받지 않는 수준은 넘기지 않는다 (결정 50, 92)', () => {
+    expect(extractRunAgent(undefined)).toEqual({ model: 'sonnet', effort: 'medium' })
+    expect(extractRunAgent({ engine: 'claude', model: 'opus', effort: 'high' })).toEqual({
+      model: 'opus',
+      effort: 'high',
+    })
+    // 기본 엔진이 Codex일 때 만든 옛 task의 값은 claude에 넘기지 않는다
+    expect(extractRunAgent({ engine: 'codex', model: 'gpt-6.1-sol', effort: 'ultra' })).toEqual({
+      model: 'sonnet',
+      effort: 'medium',
+    })
+    // haiku는 추론 수준을 받지 않는다
+    expect(extractRunAgent({ engine: 'claude', model: 'haiku' })).toEqual({ model: 'haiku' })
+  })
+
   it('답: "허용"이면 만들 구성, 아니면 거절. 답이 단위를 다시 열지는 않는다', () => {
     expect(['허용', ' 허용 (gcc 12)', 'yes', 'Allow'].map(allowsBuild)).toEqual([
       true,
@@ -681,6 +697,22 @@ describe('구성별 빌드 인덱스 (AI 결정 118)', () => {
       true,
     ])
     expect(['허용하지 않음', '아니오', ''].map(allowsBuild)).toEqual([false, false, false])
+    // 허용으로 시작해도 부정하는 말이 있으면 거절이다: 잘못 읽으면 사람이 거절한 빌드 명령을 돌린다
+    expect(
+      [
+        '허용 안 함',
+        '허용 안됨',
+        '허용 불가',
+        '허용 X',
+        '허용 안',
+        'allow? no',
+        'yes, but do not build',
+      ].map(allowsBuild),
+    ).toEqual([false, false, false, false, false, false, false])
+    expect(['허용 (서브모듈 안은 빼고)', '허용. 안전한 명령이다'].map(allowsBuild)).toEqual([
+      true,
+      true,
+    ])
     const r = new Record_()
     r.apply('u-0001', makeSurvey())
     const answer = (text: string) =>
