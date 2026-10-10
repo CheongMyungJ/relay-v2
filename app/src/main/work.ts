@@ -1162,6 +1162,8 @@ export class WorkRunner {
     const check = await this.checkOf(task, files)
     if (workType(this.work) !== 'requirements') return check
     if (task.node !== 'extract' && task.node !== 'verify') return check
+    // 승인할 수 있는 때만 본다: 도는 중이거나 멈춘 extract에는 열린 단위가 있는 것이 정상이다
+    if (!REVIEWABLE.includes(task.status)) return check
     const p = this.work.requirements
     const problems =
       p && p.revision > 0

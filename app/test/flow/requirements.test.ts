@@ -241,6 +241,9 @@ describe('[흐름] 요구사항 추출 (결정 92~99)', () => {
     const stopped = work(s.dir)
     expect(stopped.tasks.at(-1)?.status).toBe('interrupted')
     expect(stopped.requirements?.runs_used).toBe(1)
+    // 멈춘 extract에는 열린 단위가 있는 것이 정상이라 기록 무결성 문제로 보이지 않는다(승인할 때만 본다, AI 결정 124)
+    const paused1 = await s.h.relay.review(s.key, stopped.tasks.at(-1)?.id ?? '')
+    expect(paused1?.errors.filter((e) => e.file === 'requirements/')).toEqual([])
     // 패널의 진행 상자: 멈춘 까닭과 답할 결정
     expect(s.h.ui.works.get(s.key)?.requirements).toMatchObject({
       runsUsed: 1,
