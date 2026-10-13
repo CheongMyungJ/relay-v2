@@ -10,8 +10,13 @@
 //   5. teammate Work가 있으면(팀원 교대에서 도구가 앞 Work를 main에 머지한다) reference-1..n을 차례로 모두 적용해도
 //      npm test와 모든 숨긴 시험이 통과한다(머지된 앞 Work가 뒤 Work의 시험을 깨지 않는다)
 //   6. 숨긴 쟁점(설계 시나리오, relay I111): `{ name, issue }`는 시험 파일이 없고 판정 모델이 가르므로 여기서는 돌리지
-//      않는다(위 1~3의 숨긴 시험에서 뺀다). 모양만 본다: issue 글이 있고 file이 없다, Work 하나짜리다. 범위 guard
-//      `{ name, guard: true, scope: true }`는 기대 밖 파일이 없으면 통과다(위 1~3에서 guard로 돈다)
+//      않는다(위 1~3의 숨긴 시험에서 뺀다). 모양만 본다: issue 글이 있고 file이 없다, Work 하나짜리거나 이어 머지 시나리오다.
+//      범위 guard `{ name, guard: true, scope: true }`는 기대 밖 파일이 없으면 통과다(위 1~3에서 guard로 돈다)
+//   7. 이어 머지(merge Work, docs/eval-ssd.md)가 있으면 정답 패치가 앞 Work의 정답 위에 쌓인다. Work n마다:
+//      reference-1..n-1을 적용한 상태에서 레포 시험과 그 Work의 guard는 통과하고 나머지 숨긴 시험은 실패, reference-n까지
+//      적용하면 그 Work의 숨긴 시험과 레포 시험이 통과하고 기대 밖 파일이 없다. traps/<n>-*.patch는 reference-1..n-1 위에
+//      적용해 그 Work의 숨긴 시험 하나 이상이 실패한다. 마지막으로 모두 적용한 상태에서 모든 Work의 숨긴 시험이 통과한다.
+//      `--works 3-5`로 일부 Work만 본다(마지막 확인은 모든 Work를 볼 때만)
 // 시나리오 폴더는 RELAY_EVAL_SCENARIOS가 있으면 그곳이다(봉인한 hold-out을 만들 때)
 // 패치는 repo/를 뿌리로 한 git diff(a/src/..., b/src/...)다. 평가 도구는 repo/만 복사하므로 에이전트에게 보이지 않는다.
 import fs from 'node:fs'
@@ -20,7 +25,7 @@ import path from 'node:path'
 import { judgeTree } from './lib/repo.mjs'
 import { copyTree, isMain, run } from './lib/util.mjs'
 import { isIssue } from './lib/issue-judge.mjs'
-import { allChecks, multiWork, workParts } from './lib/works.mjs'
+import { allChecks, chained, multiWork, workParts, workScenario } from './lib/works.mjs'
 
 const SCENARIOS = process.env.RELAY_EVAL_SCENARIOS
   ? path.resolve(process.env.RELAY_EVAL_SCENARIOS)
@@ -42,9 +47,9 @@ function pick(spec) {
 }
 
 /** repo/를 복사하고 패치를 적용한 폴더. 패치가 없으면 기준 그대로 */
-function prepare(dir, work, patches) {
+function prepare(dir, work, patches, ignore = []) {
   const tree = path.join(work, 'tree-src')
-  copyTree(path.join(dir, 'repo'), tree)
+  copyTree(path.join(dir, 'repo'), tree, ignore)
   for (const patch of [patches].flat().filter(Boolean)) {
     // 임시 폴더가 다른 git 레포 안에 있으면 git apply가 그 레포 기준으로 경로를 풀어 조용히 건너뛴다
     const r = run('git', ['apply', '--whitespace=nowarn', patch], {
@@ -79,8 +84,8 @@ export function shapeProblems(scenario) {
       if (c.guard || c.scope) problems.push(`숨긴 쟁점은 guard나 scope가 아님: ${c.name}`)
       if (c.ask !== undefined && typeof c.ask !== 'boolean')
         problems.push(`숨긴 쟁점의 ask는 true/false: ${c.name}`)
-      if (multiWork(scenario))
-        problems.push(`숨긴 쟁점은 Work 하나짜리 시나리오에만 둔다: ${c.name}`)
+      if (multiWork(scenario) && !chained(scenario))
+        problems.push(`숨긴 쟁점은 Work 하나짜리나 이어 머지 시나리오에만 둔다: ${c.name}`)
     } else if (c.scope) {
       if (!c.guard) problems.push(`범위 검사는 guard여야 함: ${c.name}`)
       if (c.file) problems.push(`범위 검사에 file이 있음: ${c.name}`)
@@ -91,9 +96,134 @@ export function shapeProblems(scenario) {
   return problems
 }
 
-function checkOne(id) {
+/**
+ * 이어 머지 시나리오 (7). 정답 패치가 앞 Work 위에 쌓이므로 Work마다 앞 정답까지 적용한 상태가 그 Work의 기준이다
+ * @param {number[]|null} only 볼 Work 번호(1부터). null이면 모두
+ */
+function checkChained(id, dir, scenario, only) {
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), `check-${id}-`))
+  const problems = []
+  const parts = workParts(scenario)
+  const ignore = scenario.copyIgnore ?? []
+  const refs = parts.map((_, n) => path.join(dir, `reference-${n + 1}.patch`))
+  const trapsDir = path.join(dir, 'traps')
+  const traps = fs.existsSync(trapsDir)
+    ? fs.readdirSync(trapsDir).filter((f) => f.endsWith('.patch'))
+    : []
+  const names = allChecks(scenario).map((c) => c.name)
+  console.log(`== ${id} (이어 머지, Work ${parts.length}개)`)
+  if (new Set(names).size !== names.length) problems.push('숨긴 시험 이름이 시나리오 안에서 겹침')
+  problems.push(...shapeProblems(scenario))
+  const at = (label, n, patches, base) => {
+    const w = path.join(work, label)
+    const tree = prepare(dir, w, patches, ignore)
+    return judgeTree({
+      tree,
+      baseDir: base ?? tree,
+      hiddenDir: path.join(dir, 'hidden'),
+      scenario: workScenario(scenario, n),
+      work: path.join(w, 'judge'),
+    })
+  }
+  const ran = (j) => ({ ...j, checks: j.checks.filter((c) => !c.issue) })
+  const line = (label, j) =>
+    `  ${label.padEnd(26)} 레포 시험 ${mark(j.repoTests.pass)}  ${j.checks.map((c) => `${c.name}${c.guard ? '(guard)' : ''} ${mark(c.pass)}`).join(', ')}`
+  try {
+    for (let n = 0; n < parts.length; n++) {
+      if (only && !only.includes(n + 1)) continue
+      const ws = workScenario(scenario, n)
+      const guard = new Map(ws.checks.map((c) => [c.name, !!c.guard]))
+      const label = `Work ${n + 1} (${ws.type ?? 'bugfix'})`
+      if (!fs.existsSync(refs[n])) {
+        problems.push(`${label}: reference-${n + 1}.patch 없음`)
+        continue
+      }
+      const preDir = path.join(work, `pre-${n + 1}`)
+      const preTree = prepare(dir, preDir, refs.slice(0, n), ignore)
+      const pre = ran(at(`pre-j-${n + 1}`, n, refs.slice(0, n)))
+      console.log(
+        line(`${label} 앞`, {
+          ...pre,
+          checks: pre.checks.map((c) => ({ ...c, guard: guard.get(c.name) })),
+        }),
+      )
+      if (!pre.repoTests.pass)
+        problems.push(
+          `${label}: 앞 정답까지 적용한 상태에서 레포 시험 실패\n${pre.repoTests.output}`,
+        )
+      for (const c of pre.checks) {
+        if (guard.get(c.name) && !c.pass)
+          problems.push(`${label}: 앞 상태에서 guard 실패: ${c.name}\n${c.output}`)
+        if (!guard.get(c.name) && c.pass)
+          problems.push(`${label}: 앞 상태에서 통과하는 숨긴 시험(못 잡음): ${c.name}`)
+      }
+      const post = ran(at(`post-${n + 1}`, n, refs.slice(0, n + 1), preTree))
+      console.log(
+        line(`${label} 정답`, {
+          ...post,
+          checks: post.checks.map((c) => ({ ...c, guard: guard.get(c.name) })),
+        }),
+      )
+      if (!post.files.length) problems.push(`${label}: 정답 패치를 적용했는데 바뀐 파일이 없음`)
+      if (!post.repoTests.pass)
+        problems.push(`${label}: 정답에서 레포 시험 실패\n${post.repoTests.output}`)
+      for (const c of post.checks)
+        if (!c.pass) problems.push(`${label}: 정답에서 숨긴 시험 실패: ${c.name}\n${c.output}`)
+      if (post.unrelated.length)
+        problems.push(`${label}: 정답 패치가 기대 밖 파일을 바꿈: ${post.unrelated.join(', ')}`)
+      for (const t of traps.filter((f) => f.startsWith(`${n + 1}-`)).sort()) {
+        const j = ran(at(`trap-${t}`, n, [...refs.slice(0, n), path.join(trapsDir, t)], preTree))
+        console.log(line(`  함정 ${t}`, j))
+        if (!j.files.length)
+          problems.push(`${label}: 함정 패치를 적용했는데 바뀐 파일이 없음: ${t}`)
+        if (j.checks.every((c) => c.pass))
+          problems.push(`${label}: 함정 패치가 숨긴 시험을 모두 통과함: ${t}`)
+      }
+      fs.rmSync(path.join(work, `pre-j-${n + 1}`), { recursive: true, force: true })
+      fs.rmSync(path.join(work, `post-${n + 1}`), { recursive: true, force: true })
+      fs.rmSync(preDir, { recursive: true, force: true })
+    }
+    if (!only && refs.every((f) => fs.existsSync(f))) {
+      const tree = prepare(dir, path.join(work, 'all'), refs, ignore)
+      const j = ran(
+        judgeTree({
+          tree,
+          baseDir: tree,
+          hiddenDir: path.join(dir, 'hidden'),
+          scenario: { ...scenario, checks: allChecks(scenario) },
+          work: path.join(work, 'all', 'judge'),
+        }),
+      )
+      console.log(line('정답 모두', j))
+      if (!j.repoTests.pass)
+        problems.push(`정답을 모두 적용하면 레포 시험 실패\n${j.repoTests.output}`)
+      for (const c of j.checks)
+        if (!c.pass) problems.push(`정답을 모두 적용하면 숨긴 시험 실패: ${c.name}\n${c.output}`)
+    }
+  } catch (e) {
+    problems.push(String(e.message ?? e))
+  } finally {
+    fs.rmSync(work, { recursive: true, force: true })
+  }
+  for (const p of problems) console.log(`  문제: ${p.split('\n').slice(0, 30).join('\n    ')}`)
+  console.log(problems.length ? `  => 문제 ${problems.length}개` : '  => 이상 없음')
+  return problems.length === 0
+}
+
+/** --works 3-5,7 → [3,4,5,7] */
+function parseWorks(argv) {
+  const i = argv.indexOf('--works')
+  if (i < 0 || !argv[i + 1]) return null
+  return argv[i + 1].split(',').flatMap((x) => {
+    const [a, b] = x.split('-').map(Number)
+    return b ? Array.from({ length: b - a + 1 }, (_, k) => a + k) : [a]
+  })
+}
+
+function checkOne(id, only = null) {
   const dir = path.join(SCENARIOS, id)
   const scenario = JSON.parse(fs.readFileSync(path.join(dir, 'scenario.json'), 'utf8'))
+  if (chained(scenario)) return checkChained(id, dir, scenario, only)
   const work = fs.mkdtempSync(path.join(os.tmpdir(), `check-${id}-`))
   const problems = []
   const guard = new Map(allChecks(scenario).map((c) => [c.name, !!c.guard]))
@@ -203,6 +333,7 @@ function checkOne(id) {
 // 시험(app/eval/test)이 shapeProblems만 가져다 쓸 때는 돌리지 않는다
 if (isMain(import.meta.url)) {
   const ids = pick(process.argv[2])
-  const ok = ids.map(checkOne).every(Boolean)
+  const only = parseWorks(process.argv)
+  const ok = ids.map((id) => checkOne(id, only)).every(Boolean)
   process.exit(ok ? 0 : 1)
 }

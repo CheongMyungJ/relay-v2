@@ -110,18 +110,32 @@ export function codeOutcome(outcome) {
  * @param {string} o.hiddenDir 시나리오의 hidden/
  * @param {object} o.scenario
  * @param {string} o.work 판정용 임시 폴더
+ * @param {boolean} [o.skipTests] 레포 시험과 숨긴 시험을 돌리지 않는다(차이만 본다)
  */
 export function judgeTree(o) {
-  const { copy, files: all, diff } = diffTree(o.tree, o.baseDir, o.work)
+  const { copy, files: all, diff } = diffTree(o.tree, o.baseDir, o.work, o.scenario.copyIgnore)
   // 지식 파일은 코드 결과에서 뺀다. diff는 그대로 돌려줘 저장한다(지식의 질은 따로 본다)
   const files = all.filter((f) => !isKnowledge(f.file))
   const knowledgeFiles = all.filter((f) => isKnowledge(f.file)).map((f) => f.file)
   const allowed = (o.scenario.expectedFiles ?? []).map(globToRe)
   const unrelated = files.filter((f) => !allowed.some((re) => re.test(f.file))).map((f) => f.file)
 
+  if (o.skipTests)
+    return {
+      files,
+      linesAdded: files.reduce((a, f) => a + f.add, 0),
+      linesRemoved: files.reduce((a, f) => a + f.del, 0),
+      unrelated,
+      knowledgeFiles,
+      repoTests: { pass: null, output: '(돌리지 않음)' },
+      checks: [],
+      diff,
+    }
   // 레포의 시험 (에이전트가 더한 시험 포함). 숨긴 시험을 eval-hidden/에 복사하기 전에 돌린다.
-  // 인자 없는 "node --test"는 eval-hidden/*.test.js도 찾아 돌리므로 순서를 바꾸면 레포 시험 결과가 달라진다
-  const repoTest = run('npm', ['test', '--silent'], { cwd: copy, timeoutMs: 120_000 })
+  // 인자 없는 "node --test"는 eval-hidden/*.test.js도 찾아 돌리므로 순서를 바꾸면 레포 시험 결과가 달라진다.
+  // 시나리오의 repoTest로 명령을 바꾼다(C 레포의 make test 등)
+  const [cmd, ...args] = o.scenario.repoTest ?? ['npm', 'test', '--silent']
+  const repoTest = run(cmd, args, { cwd: copy, timeoutMs: o.scenario.repoTestTimeoutMs ?? 120_000 })
   // 숨긴 시험: hidden/의 파일을 레포에 겹쳐 놓고 돌린다
   if (fs.existsSync(o.hiddenDir))
     fs.cpSync(o.hiddenDir, path.join(copy, 'eval-hidden'), { recursive: true })
@@ -147,7 +161,7 @@ export function judgeTree(o) {
     const r = run('node', ['--test', path.join('eval-hidden', c.file)], {
       cwd: copy,
       env: { ...process.env, ...(c.env ?? {}) },
-      timeoutMs: 60_000,
+      timeoutMs: c.timeoutMs ?? 60_000,
     })
     return { name: c.name, bug: c.bug ?? null, pass: r.code === 0, output: r.out.slice(-3000) }
   })
@@ -163,12 +177,12 @@ export function judgeTree(o) {
   }
 }
 
-/** 기준(시나리오의 repo/)과 결과 폴더의 차이. work 아래에 base와 tree를 복사해 비교한다 */
-export function diffTree(tree, baseDir, work) {
+/** 기준(시나리오의 repo/)과 결과 폴더의 차이. work 아래에 base와 tree를 복사해 비교한다. ignore는 copyTree와 같다 */
+export function diffTree(tree, baseDir, work, ignore = []) {
   const copy = path.join(work, 'tree')
-  copyTree(tree, copy)
+  copyTree(tree, copy, ignore)
   const base = path.join(work, 'base')
-  copyTree(baseDir, base)
+  copyTree(baseDir, base, ignore)
   const numstat = run('git', ['diff', '--no-index', '--numstat', 'base', 'tree'], { cwd: work })
   const diff = run('git', ['diff', '--no-index', 'base', 'tree'], { cwd: work }).out
   const files = numstat.out
@@ -182,16 +196,12 @@ export function diffTree(tree, baseDir, work) {
 }
 
 /**
- * 팀원 교대(works의 teammate Work, docs/knowledge-experiment/protocol.md). 앞 사람의 레포에서 main 밖의 로컬 브랜치 가운데
- * main에 아직 없는 커밋이 있는 것을 오래된 차례로 main에 머지하고(PR 머지와 같음), 팀 원격(bare)에 올린 뒤 새로 clone한다.
- * 커밋하지 않은 변경은 건너가지 않는다. 충돌하면 그 머지를 되돌리고 뒤 브랜치 쪽(-X theirs)으로 다시 머지하고 적는다.
- * @param {string} prevRepo 앞 사람의 레포
- * @param {string} remote 팀 원격(makeRepo의 bare 레포)
- * @param {string} dest 새 사람의 clone 경로
- * @returns {{ repo: string, merged: string[], conflicts: string[], failed: string[], head: string }}
+ * 앞 사람 레포의 브랜치를 머지할 임시 clone을 만들고, main 밖의 로컬 브랜치 가운데 main에 아직 없는 커밋이 있는 것을
+ * 오래된 차례로 main에 머지한다(PR 머지와 같음). 충돌하면 그 머지를 되돌리고 뒤 브랜치 쪽(-X theirs)으로 다시 머지하고 적는다.
+ * 커밋하지 않은 변경은 건너가지 않는다
+ * @returns {{ work: string, merged: string[], conflicts: string[], failed: string[] }}
  */
-export function handoffRepo(prevRepo, remote, dest) {
-  const work = `${dest}-merge`
+function mergeBranches(prevRepo, work) {
   fs.rmSync(work, { recursive: true, force: true })
   git(path.dirname(work), 'clone', '-q', '--no-local', prevRepo, work)
   setUser(work)
@@ -226,12 +236,66 @@ export function handoffRepo(prevRepo, remote, dest) {
     }
     merged.push(ref.replace(/^origin\//, ''))
   }
+  return { work, merged, conflicts, failed }
+}
+
+/**
+ * 팀원 교대(works의 teammate Work, docs/knowledge-experiment/protocol.md). 앞 사람의 레포에서 브랜치를 main에 머지하고
+ * (mergeBranches), 팀 원격(bare)에 올린 뒤 새로 clone한다.
+ * @param {string} prevRepo 앞 사람의 레포
+ * @param {string} remote 팀 원격(makeRepo의 bare 레포)
+ * @param {string} dest 새 사람의 clone 경로
+ * @returns {{ repo: string, merged: string[], conflicts: string[], failed: string[], head: string }}
+ */
+export function handoffRepo(prevRepo, remote, dest) {
+  const { work, merged, conflicts, failed } = mergeBranches(prevRepo, `${dest}-merge`)
   git(work, 'push', '-q', '-f', remote, 'HEAD:main')
   fs.rmSync(dest, { recursive: true, force: true })
   git(path.dirname(dest), 'clone', '-q', '--no-local', remote, dest)
   setUser(dest)
   fs.rmSync(work, { recursive: true, force: true })
   return { repo: dest, merged, conflicts, failed, head: git(dest, 'rev-parse', 'HEAD') }
+}
+
+/**
+ * 이어 머지(works의 merge Work, docs/eval-ssd.md 4절). 같은 사람이 같은 레포(relay는 같은 앱과 프로젝트)에서 이어 가되,
+ * 그 Work 전에 앞 Work 브랜치를 main에 머지한다(PR 머지와 같음). 머지는 임시 clone에서 하고(mergeBranches), 팀 원격의 main과
+ * 레포의 로컬 main을 그 커밋으로 옮긴다. 레포가 main을 체크아웃하고 있고 깨끗하면 작업 폴더도 따라가고, 다른 브랜치에 깨끗하면
+ * main을 체크아웃한다. 커밋하지 않은 변경이 있으면 main 참조만 옮기고 작업 폴더는 그대로 둔다(dirty)
+ * @param {string} repo 레포 (relay에 등록한 프로젝트, 맨 CLI의 작업 폴더)
+ * @param {string} remote 팀 원격
+ * @param {string} scratch 임시 clone 경로
+ * @returns {{ merged: string[], conflicts: string[], failed: string[], head: string, dirty: boolean }}
+ */
+export function mergeInPlace(repo, remote, scratch) {
+  const { work, merged, conflicts, failed } = mergeBranches(repo, scratch)
+  const head = git(work, 'rev-parse', 'HEAD')
+  git(work, 'push', '-q', '-f', remote, 'HEAD:main')
+  git(repo, 'fetch', '-q', work, 'HEAD')
+  const branch = git(repo, 'rev-parse', '--abbrev-ref', 'HEAD')
+  const dirty = git(repo, 'status', '--porcelain').trim() !== ''
+  if (dirty) {
+    if (branch !== 'main') git(repo, 'update-ref', 'refs/heads/main', head)
+  } else if (branch === 'main') {
+    git(repo, 'merge', '-q', '--ff-only', head)
+  } else {
+    git(repo, 'update-ref', 'refs/heads/main', head)
+    git(repo, 'checkout', '-q', 'main')
+  }
+  run('git', ['fetch', '-q', 'origin'], { cwd: repo })
+  fs.rmSync(work, { recursive: true, force: true })
+  return { merged, conflicts, failed, head, dirty: dirty && branch === 'main' }
+}
+
+/** 레포의 커밋을 폴더로 꺼낸다(.git 없이). 이어 머지 뒤 그 Work의 기준(diff와 판정의 base)으로 쓴다 */
+export function exportCommit(repo, commit, dest) {
+  fs.rmSync(dest, { recursive: true, force: true })
+  fs.mkdirSync(dest, { recursive: true })
+  const r = run('sh', ['-c', `git archive --format=tar ${commit} | tar -x -C "${dest}"`], {
+    cwd: repo,
+  })
+  if (r.code !== 0) throw new Error(`git archive 실패: ${r.out}`)
+  return dest
 }
 
 function setUser(dir) {

@@ -93,8 +93,11 @@ export function dialogueFromTranscript(entries) {
   return out
 }
 
-/** 에이전트 설정 폴더(CLAUDE_CONFIG_DIR)의 모든 세션 기록에서 대화를 뽑아 시각 차례로 둔다. 서브에이전트 폴더는 뺀다 */
-export function readDialogue(configDir) {
+/**
+ * 에이전트 설정 폴더(CLAUDE_CONFIG_DIR)의 세션 기록에서 대화를 뽑아 시각 차례로 둔다. 서브에이전트 폴더는 뺀다.
+ * sessions(세션 id의 Set)를 주면 그 세션들만 본다(Work 여럿인 시나리오에서 그 Work의 대화만)
+ */
+export function readDialogue(configDir, sessions = null) {
   const dir = path.join(configDir, 'projects')
   if (!fs.existsSync(dir)) return []
   const all = []
@@ -102,6 +105,7 @@ export function readDialogue(configDir) {
     if (!project.isDirectory()) continue
     for (const f of fs.readdirSync(path.join(dir, project.name))) {
       if (!f.endsWith('.jsonl')) continue
+      if (sessions && !sessions.has(f.slice(0, -'.jsonl'.length))) continue
       const entries = fs
         .readFileSync(path.join(dir, project.name, f), 'utf8')
         .split('\n')

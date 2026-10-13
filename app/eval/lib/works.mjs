@@ -6,6 +6,10 @@
 // - knowledge 항목의 `carry: true`: 앞 Work에서 사람이 이미 알려 줬거나 알려 줄 수 있었던 사실이다. 사람 역할이 이것을
 //   다시 알려 준 횟수(carriedTold)가 "다시 말하게 한 부담"이다.
 // - 시나리오의 `measure`: 재는 Work의 번호(1부터). 없으면 첫 Work를 뺀 모두다.
+// SSD 연속 평가(docs/eval-ssd.md)에서 더한 것:
+// - Work의 `merge: true`: 같은 사람·같은 레포(relay는 같은 앱과 프로젝트)에서 이어 가되, 그 Work 전에 도구가 앞 Work 브랜치를
+//   main에 머지한다(PR 머지와 같음). 그 Work의 판정 기준(diff의 base)은 머지한 main이다.
+// - Work의 `type`, `expectedFiles`, `limits`, `preferences`: 그 Work만의 값. 없으면 시나리오의 값이다.
 
 /** Work 목록. works가 없으면 시나리오 자신이 Work 하나다 */
 export function workParts(scenario) {
@@ -40,12 +44,26 @@ export function workScenario(scenario, n) {
   delete rest.works
   return {
     ...rest,
+    ...(w.type ? { type: w.type } : {}),
+    ...(w.expectedFiles ? { expectedFiles: w.expectedFiles } : {}),
+    ...(w.limits ? { limits: w.limits } : {}),
+    ...(w.preferences ? { preferences: w.preferences } : {}),
+    ...(w.title ? { workTitle: w.title } : {}),
     report: w.report,
     knowledge: w.knowledge ?? [],
     checks: w.checks ?? [],
-    work: { index: n, count: parts.length, teammate: !!w.teammate, mates: mateIndex(parts, n) },
+    work: {
+      index: n,
+      count: parts.length,
+      teammate: !!w.teammate,
+      merge: !!w.merge,
+      mates: mateIndex(parts, n),
+    },
   }
 }
+
+/** 이어 머지(merge Work)가 있는 시나리오. 정답 패치는 앞 Work의 정답 위에 쌓인다 */
+export const chained = (scenario) => workParts(scenario).some((w) => w.merge)
 
 /** n번째 Work를 하는 사람이 몇 번째 사람인지(0부터). teammate Work마다 사람이 바뀐다 */
 function mateIndex(parts, n) {

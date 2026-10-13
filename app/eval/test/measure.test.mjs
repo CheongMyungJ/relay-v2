@@ -5,9 +5,16 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { CliArm } from '../lib/cli-arm.mjs'
-import { codeOutcome, judgeTree, makeRepo, withoutKnowledge } from '../lib/repo.mjs'
+import {
+  codeOutcome,
+  exportCommit,
+  judgeTree,
+  makeRepo,
+  mergeInPlace,
+  withoutKnowledge,
+} from '../lib/repo.mjs'
 import { agentUsage, agentUsageBySession, git, questionsBySession, stats } from '../lib/util.mjs'
-import { measuredWorks, pairOf, workParts, workScenario } from '../lib/works.mjs'
+import { chained, measuredWorks, pairOf, workParts, workScenario } from '../lib/works.mjs'
 import { compare } from '../primary.mjs'
 import { kindOf, knowledgeInDiff } from '../knowledge-quality.mjs'
 
@@ -115,6 +122,45 @@ describe('결과 판정', () => {
     expect(withoutKnowledge(r.diff)).toContain('src/add.js')
   })
 
+  it('copyIgnore의 빌드 산출물은 차이와 범위에서 빼고 repoTest로 레포 시험 명령을 바꾼다', () => {
+    const { root, base, hidden } = scenarioDirs()
+    const tree = path.join(root, 'tree')
+    fs.cpSync(base, tree, { recursive: true })
+    write(tree, { 'src/add.js': 'export const add = (a, b) => a + b\n', 'host/build/x.o': 'bin' })
+    write(base, { Makefile: 'test:\n\t@node --test test\n' })
+    write(tree, { Makefile: 'test:\n\t@node --test test\n' })
+    const scenario = {
+      expectedFiles: ['src/**'],
+      copyIgnore: ['host/build'],
+      repoTest: ['make', '-s', 'test'],
+      checks: [{ name: '더하기', file: 'add.test.js' }],
+    }
+    const r = judgeTree({ tree, baseDir: base, hiddenDir: hidden, scenario, work: tmp() })
+    expect(r.files.map((f) => f.file)).toEqual(['src/add.js'])
+    expect(r.unrelated).toEqual([])
+    expect(r.repoTests.pass).toBe(true)
+    expect(r.checks[0].pass).toBe(true)
+    const bad = judgeTree({
+      tree,
+      baseDir: base,
+      hiddenDir: hidden,
+      scenario: { ...scenario, repoTest: ['false'] },
+      work: tmp(),
+    })
+    expect(bad.repoTests.pass).toBe(false)
+    const skipped = judgeTree({
+      tree,
+      baseDir: base,
+      hiddenDir: hidden,
+      scenario,
+      work: tmp(),
+      skipTests: true,
+    })
+    expect(skipped.checks).toEqual([])
+    expect(skipped.repoTests.pass).toBe(null)
+    expect(skipped.files.map((f) => f.file)).toEqual(['src/add.js'])
+  })
+
   it('고치지 않은 기준은 숨긴 시험이 실패한다', () => {
     const { base, hidden } = scenarioDirs()
     const scenario = { expectedFiles: [], checks: [{ name: '더하기', file: 'add.test.js' }] }
@@ -205,6 +251,75 @@ describe('에이전트 대화 기록 집계', () => {
   })
 })
 
+describe('이어 머지 (docs/eval-ssd.md)', () => {
+  function repoWithWork() {
+    const { root, base } = scenarioDirs()
+    const r = makeRepo(path.join(root, 'work'), 'repo', base)
+    git(r.repo, 'checkout', '-q', '-b', 'relay/w1')
+    fs.writeFileSync(path.join(r.repo, 'src/add.js'), 'export const add = (a, b) => a + b\n')
+    git(r.repo, 'commit', '-q', '-am', 'fix')
+    return { ...r, root }
+  }
+
+  it('앞 Work 브랜치를 main에 머지하고 원격과 작업 폴더의 main을 옮긴다', () => {
+    const { root, repo, remote, base } = repoWithWork()
+    git(repo, 'checkout', '-q', 'main')
+    const m = mergeInPlace(repo, remote, path.join(root, 'scratch'))
+    expect(m.merged).toEqual(['relay/w1'])
+    expect(m.dirty).toBe(false)
+    expect(git(repo, 'rev-parse', 'main')).toBe(m.head)
+    expect(git(remote, 'rev-parse', 'main')).toBe(m.head)
+    expect(fs.readFileSync(path.join(repo, 'src/add.js'), 'utf8')).toContain('a + b')
+    expect(git(repo, 'merge-base', '--is-ancestor', base, 'main')).toBe('')
+    // 다시 머지하면 새로 머지할 것이 없다
+    expect(mergeInPlace(repo, remote, path.join(root, 'scratch')).merged).toEqual([])
+    // 그 main을 폴더로 꺼내 다음 Work의 기준으로 쓴다
+    const dest = exportCommit(repo, m.head, path.join(root, 'base-2'))
+    expect(fs.readFileSync(path.join(dest, 'src/add.js'), 'utf8')).toContain('a + b')
+    expect(fs.existsSync(path.join(dest, '.git'))).toBe(false)
+  })
+
+  it('다른 브랜치에 깨끗하면 main을 체크아웃하고, main에 커밋 안 된 변경이 있으면 작업 폴더는 그대로 둔다', () => {
+    const a = repoWithWork()
+    mergeInPlace(a.repo, a.remote, path.join(a.root, 'scratch'))
+    expect(git(a.repo, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('main')
+
+    const b = repoWithWork()
+    git(b.repo, 'checkout', '-q', 'main')
+    fs.writeFileSync(path.join(b.repo, 'src/other.js'), 'export const other = 9\n')
+    const m = mergeInPlace(b.repo, b.remote, path.join(b.root, 'scratch'))
+    expect(m.dirty).toBe(true)
+    expect(fs.readFileSync(path.join(b.repo, 'src/add.js'), 'utf8')).toContain('a - b')
+    expect(git(b.remote, 'rev-parse', 'main')).toBe(m.head)
+  })
+
+  it('Work의 유형·기대 파일·제한은 Work의 값이 시나리오의 값을 덮는다', () => {
+    const s = {
+      type: 'feature',
+      expectedFiles: ['src/**'],
+      limits: { minutes: 40 },
+      works: [
+        { report: 'd', type: 'spec', expectedFiles: ['docs/**'], limits: { minutes: 30 } },
+        { report: 'f', merge: true },
+      ],
+    }
+    expect(chained(s)).toBe(true)
+    expect(chained({ works: [{ report: 'a' }, { report: 'b', teammate: true }] })).toBe(false)
+    expect(workScenario(s, 0)).toMatchObject({
+      type: 'spec',
+      expectedFiles: ['docs/**'],
+      limits: { minutes: 30 },
+    })
+    const w2 = workScenario(s, 1)
+    expect(w2).toMatchObject({
+      type: 'feature',
+      expectedFiles: ['src/**'],
+      limits: { minutes: 40 },
+    })
+    expect(w2.work).toMatchObject({ index: 1, merge: true })
+  })
+})
+
 describe('Work 여럿을 잇는 시나리오', () => {
   const multi = {
     id: 'x',
@@ -233,7 +348,7 @@ describe('Work 여럿을 잇는 시나리오', () => {
     const w = workScenario(multi, 2)
     expect(w.report).toBe('w3')
     expect(w.works).toBeUndefined()
-    expect(w.work).toEqual({ index: 2, count: 3, teammate: false, mates: 1 })
+    expect(w.work).toEqual({ index: 2, count: 3, teammate: false, merge: false, mates: 1 })
     expect(() => workScenario(multi, 5)).toThrow()
   })
 })

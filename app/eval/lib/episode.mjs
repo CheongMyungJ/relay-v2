@@ -10,7 +10,15 @@ import { armBase } from './kind.mjs'
 import { RelayArm } from './relay-arm.mjs'
 import { auditTold } from './told.mjs'
 import { judgeIssues, isIssue, readDialogue } from './issue-judge.mjs'
-import { diffTree, handoffRepo, judgeTree, makeRepo, withoutKnowledge } from './repo.mjs'
+import {
+  diffTree,
+  exportCommit,
+  handoffRepo,
+  judgeTree,
+  makeRepo,
+  mergeInPlace,
+  withoutKnowledge,
+} from './repo.mjs'
 import {
   agentUsage,
   agentUsageBySession,
@@ -21,7 +29,7 @@ import {
   sleep,
   writeJson,
 } from './util.mjs'
-import { allChecks, multiWork, workParts, workScenario } from './works.mjs'
+import { allChecks, chained, multiWork, workParts, workScenario } from './works.mjs'
 
 const STABLE_MS = 6000
 const MAX_BUSY_MS = 4 * 60 * 1000
@@ -143,7 +151,14 @@ export async function runEpisode(o) {
   const humanDir = path.join(o.workDir, 'human')
   const shots = path.join(humanDir, 'shots')
   fs.mkdirSync(shots, { recursive: true })
-  const armOpts = { dir: o.workDir, repo, base, agentEnv: agentEnv(opts), agentConfigDir }
+  const armOpts = {
+    dir: o.workDir,
+    repo,
+    base,
+    agentEnv: agentEnv(opts),
+    agentConfigDir,
+    copyIgnore: scenario.copyIgnore ?? [],
+  }
   const screenType = screenKind(kind)
   // 쪽의 앱 빌드: @<유형>(I93)과 -off를 뗀 이름이 --app에 있으면 그 폴더, 없으면 이 체크아웃의 앱
   const build = armBase(kind).replace(/-off$/, '')
@@ -174,10 +189,13 @@ export async function runEpisode(o) {
     humans.push(h)
     return h
   }
-  const limits = {
-    minutes: opts.maxMinutes ?? scenario.limits?.minutes ?? 40,
-    turns: opts.maxTurns ?? scenario.limits?.turns ?? 60,
-  }
+  // Work마다의 제한 (Work의 limits가 있으면 그것, 없으면 시나리오의 limits)
+  const limitsOf = (n) => ({
+    minutes: opts.maxMinutes ?? parts[n]?.limits?.minutes ?? scenario.limits?.minutes ?? 40,
+    turns: opts.maxTurns ?? parts[n]?.limits?.turns ?? scenario.limits?.turns ?? 60,
+  })
+  // 이어 머지(merge Work)가 있으면 Work마다 기준이 머지한 main이다. 차이 보기와 판정이 그 기준으로 본다
+  let partBase = baseDir
 
   const t0 = Date.now()
   const turns = []
@@ -209,7 +227,12 @@ export async function runEpisode(o) {
     const parts = []
     const all = trees()
     for (const t of all) {
-      const d = diffTree(t.path, baseDir, path.join(o.workDir, 'inspect', t.label))
+      const d = diffTree(
+        t.path,
+        partBase,
+        path.join(o.workDir, 'inspect', t.label),
+        scenario.copyIgnore ?? [],
+      )
       // 맨 CLI는 체크아웃되지 않은 브랜치에 고친 것이 있을 때만 브랜치를 밝힌다
       const head =
         screenType === 'relay'
@@ -276,12 +299,40 @@ export async function runEpisode(o) {
           label: t.label,
           ...judgeTree({
             tree: t.path,
-            baseDir,
+            baseDir: p.baseDir,
             hiddenDir: path.join(o.scenarioDir, 'hidden'),
             scenario: ws,
             work: path.join(o.workDir, 'judge', `work-${p.n + 1}`, t.label),
           }),
         }))
+        // 설계 Work의 숨긴 쟁점: 그 Work에서 생긴 에이전트 세션의 대화와 그 Work의 문서 차이로 판정 모델이 가른다
+        const issues = ws.checks.filter(isIssue)
+        if (issues.length) {
+          const dialogue = readDialogue(
+            agentConfigDir,
+            new Set(newSessions(p.sessions, agentUsageBySession(agentConfigDir))),
+          )
+          let cost = 0
+          for (const j of judged.filter((x) => x.files.length > 0)) {
+            try {
+              const r = await judgeIssues({
+                issues,
+                diff: withoutKnowledge(j.diff ?? ''),
+                dialogue,
+                model: opts.judgeModel ?? 'sonnet',
+                workDir: path.join(o.workDir, 'issues', `work-${p.n + 1}`, j.label),
+              })
+              cost += r.costUsd
+              j.checks = j.checks.map((c) => r.checks.find((x) => x.name === c.name) ?? c)
+            } catch (e) {
+              say(`Work ${p.n + 1} 숨긴 쟁점 판정 실패: ${String(e).slice(0, 200)}`)
+              j.checks = j.checks.map((c) =>
+                c.issue && c.pending ? { ...c, pass: null, output: '판정 모델 오류' } : c,
+              )
+            }
+          }
+          r.issueJudgeCostUsd = cost
+        }
         const checks = combineChecks(ws.checks, judged)
         r.outcome = {
           success: outcomeSuccess(checks),
@@ -289,7 +340,14 @@ export async function runEpisode(o) {
           trees: judged.map((j) => ({
             label: j.label,
             files: j.files.map((f) => f.file),
+            unrelated: j.unrelated,
             repoTestsPass: j.repoTests.pass,
+            checks: j.checks.map((c) => ({
+              name: c.name,
+              pass: c.pass,
+              ...(c.issue ? { asked: c.asked, reflected: c.reflected, evidence: c.evidence } : {}),
+              ...(c.pass === false && c.output ? { output: String(c.output).slice(-1500) } : {}),
+            })),
           })),
         }
       } catch (e) {
@@ -323,6 +381,8 @@ export async function runEpisode(o) {
       )
     }
     workResults.push(r)
+    // 연쇄가 길면 실행 하나가 몇 시간이다. 도구가 중간에 멈춰도 끝낸 Work의 결과가 남게 Work마다 이어 쓴다
+    if (multi) writeJson(path.join(o.outDir, 'progress.json'), { workResults, handoffs })
   }
 
   try {
@@ -336,7 +396,25 @@ export async function runEpisode(o) {
         sessionsBefore = new Set(agentUsageBySession(agentConfigDir).keys())
         arm.snapshot()
         let moved
-        if (parts[w].teammate) {
+        if (parts[w].merge && !parts[w].teammate) {
+          // 이어 머지: 같은 레포에서 앞 Work 브랜치를 main에 머지하고 그 main을 이 Work의 기준으로 삼는다
+          const m = mergeInPlace(arm.o.repo, remote, path.join(o.workDir, `merge-${w + 1}`))
+          partBase = exportCommit(arm.o.repo, m.head, path.join(o.workDir, `base-${w + 1}`))
+          handoff = {
+            work: w + 1,
+            inPlace: true,
+            merged: m.merged,
+            conflicts: m.conflicts,
+            failed: m.failed,
+            dirty: m.dirty,
+            head: m.head,
+          }
+          handoffs.push(handoff)
+          say(
+            `이어 머지: ${m.merged.length}개${m.conflicts.length ? `, 충돌 ${m.conflicts.length}개(뒤 쪽으로 머지)` : ''}${m.failed.length ? `, 머지 못함 ${m.failed.length}개` : ''}${m.dirty ? ', 커밋 안 된 변경 있음' : ''}`,
+          )
+          moved = await arm.nextWork()
+        } else if (parts[w].teammate) {
           // 팀원 교대: 앞 사람의 브랜치를 main에 머지하고 새 clone, 새 앱 저장소(relay)나 새 터미널(맨 CLI)에서 시작한다
           const h = handoffRepo(
             arm.o.repo,
@@ -367,7 +445,9 @@ export async function runEpisode(o) {
         trees: new Set(trees().map((t) => t.label)),
         works: new Set(arm.works().map((x) => x.id)),
         handoff,
+        baseDir: partBase,
       }
+      const limits = limitsOf(w)
       ending = null
       summary = ''
       if (multi) {
@@ -613,12 +693,14 @@ export async function runEpisode(o) {
     arm.snapshot()
     works = arm.works()
     final = trees().map((t) => {
+      // 이어 머지 시나리오는 Work마다 판정한 것이 결과다. 마지막에는 차이만 남긴다(결과 폴더 수 × 숨긴 시험 수가 크다)
       const j = judgeTree({
         tree: t.path,
         baseDir,
         hiddenDir: path.join(o.scenarioDir, 'hidden'),
         scenario: { ...scenario, checks: allChecks(scenario) },
         work: path.join(o.workDir, 'judge', t.label),
+        skipTests: chained(scenario),
       })
       fs.mkdirSync(path.join(o.outDir, 'final'), { recursive: true })
       fs.writeFileSync(path.join(o.outDir, 'final', `${t.label}.diff`), j.diff)
@@ -697,7 +779,10 @@ export async function runEpisode(o) {
         !multi || (workResults.length === parts.length && workResults.every((r) => !!r.outcome)),
       ),
       checks,
-      repoTestsPass: changedTrees.length > 0 && changedTrees.every((f) => f.repoTests.pass),
+      repoTestsPass: chained(scenario)
+        ? workResults.length > 0 &&
+          workResults.every((r) => (r.outcome?.trees ?? []).every((t) => t.repoTestsPass))
+        : changedTrees.length > 0 && changedTrees.every((f) => f.repoTests.pass),
       filesChanged: [...new Set(changedTrees.flatMap((f) => f.files.map((x) => x.file)))],
       linesChanged: changedTrees.reduce((a, f) => a + f.linesAdded + f.linesRemoved, 0),
       unrelated: [...new Set(changedTrees.flatMap((f) => f.unrelated))],

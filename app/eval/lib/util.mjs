@@ -32,14 +32,20 @@ export function run(cmd, args, o = {}) {
 
 export const hash = (s) => crypto.createHash('sha1').update(s).digest('hex')
 
-/** .git과 node_modules를 빼고 폴더를 복사한다 */
-export function copyTree(from, to) {
+/**
+ * 폴더를 복사한다. .git과 node_modules는 뺀다. ignore는 from 기준 상대 경로(예: "host/build")로, 그 폴더나 파일도 뺀다
+ * (빌드 산출물이 결과 차이와 범위 판정에 섞이지 않게, 시나리오의 copyIgnore)
+ */
+export function copyTree(from, to, ignore = []) {
   fs.rmSync(to, { recursive: true, force: true })
   fs.cpSync(from, to, {
     recursive: true,
     filter: (src) => {
       const b = path.basename(src)
-      return b !== '.git' && b !== 'node_modules'
+      if (b === '.git' || b === 'node_modules') return false
+      if (!ignore.length) return true
+      const rel = path.relative(from, src).split(path.sep).join('/')
+      return !ignore.some((i) => rel === i || rel.startsWith(`${i}/`))
     },
   })
 }

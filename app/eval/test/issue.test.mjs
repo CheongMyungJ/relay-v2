@@ -138,6 +138,8 @@ describe('대화 기록 (I111)', () => {
     })
     expect(readDialogue(dir).map((d) => d.text)).toEqual(['첫 task', '둘째 task'])
     expect(readDialogue(path.join(dir, 'none'))).toEqual([])
+    // Work 여럿인 시나리오는 그 Work의 세션만 본다
+    expect(readDialogue(dir, new Set(['b'])).map((d) => d.text)).toEqual(['둘째 task'])
   })
 })
 
@@ -313,7 +315,16 @@ describe('범위 guard와 시나리오 모양 (I111)', () => {
           { report: 'y', checks: [] },
         ],
       }),
-    ).toEqual(['숨긴 쟁점은 Work 하나짜리 시나리오에만 둔다: 방해 금지 시간대'])
+    ).toEqual(['숨긴 쟁점은 Work 하나짜리나 이어 머지 시나리오에만 둔다: 방해 금지 시간대'])
+    // 이어 머지 시나리오는 Work마다 그 Work의 대화로 판정한다
+    expect(
+      shapeProblems({
+        works: [
+          { report: 'x', checks: [ISSUES[0]] },
+          { report: 'y', checks: [], merge: true },
+        ],
+      }),
+    ).toEqual([])
   })
 })
 

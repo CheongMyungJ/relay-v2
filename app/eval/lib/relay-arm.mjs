@@ -452,7 +452,7 @@ export class RelayArm {
    */
   snapshot() {
     for (const t of this.worktrees()) {
-      copyTree(t.path, path.join(this.o.dir, 'snapshots', t.label))
+      copyTree(t.path, path.join(this.o.dir, 'snapshots', t.label), this.o.copyIgnore ?? [])
       this.snapped.set(t.label, gitState(t.path, this.o.base))
     }
   }

@@ -131,6 +131,11 @@
 | `knowledge[].carry` | 앞 Work에서 사람이 이미 알려 줬던 사실. 사람 역할이 이것을 다시 알려 주면 `carriedTold`로 센다 |
 | `measure` | 재는 Work의 번호(1부터). 없으면 첫 Work를 뺀 모두 |
 | `dev` | `true`면 개발용 시나리오다(25~27). `--scenarios all`(기본)에 들지 않고 번호나 이름으로만 고른다 |
+| `works[].merge` | `true`면 그 Work 전에 도구가 앞 Work 브랜치를 main에 머지한다(이어 머지, `docs/eval-ssd.md`). 같은 사람·같은 앱에서 이어 가고, 그 Work의 차이와 판정은 머지한 main을 기준으로 본다. 정답 패치는 앞 Work의 정답 위에 쌓이고, 설계 Work의 숨긴 쟁점은 그 Work에서 생긴 에이전트 세션의 대화로 가른다 |
+| `works[].type`, `expectedFiles`, `limits`, `preferences` | 그 Work만의 값. 없으면 시나리오의 값이다 |
+| `repoTest` | 레포 시험 명령(배열). 없으면 `["npm", "test", "--silent"]`. `repoTestTimeoutMs`로 시간 제한을 바꾼다 |
+| `copyIgnore` | 차이·범위 판정과 스냅숏에서 뺄 경로(레포 기준, 예: `["host/build"]`). 빌드 산출물이 기대 밖 파일로 잡히지 않게 한다 |
+| `checks[].timeoutMs` | 숨긴 시험 하나의 시간 제한(기본 60초) |
 
 시나리오를 더할 때: `repo/`의 `npm test`는 기준 상태에서 통과해야 한다(리포트의 버그를 잡지 않는 시험). 숨긴 시험은 `../src/...`로 불러온다(레포의 `eval-hidden/`에 복사해 돌린다). `guard`가 아닌 숨긴 시험은 기준 상태에서 실패해야 한다.
 
@@ -177,7 +182,7 @@ node eval/report.mjs eval/results/<폴더>                # 보고서 다시 만
 
 - 기본값: 에이전트 `sonnet`·effort `medium`, 사람 역할 `sonnet`·effort `medium`, 판정 `sonnet`. 옵션 전체(`--human-effort`, `--no-vision`, `--max-minutes`, `--max-turns`, `--no-judge` 포함)는 `node eval/run.mjs --help`로 본다.
 - **교차 비교(relay I93):** `--arms`의 relay 쪽 뒤에 `@<유형>`을 붙이면(`relay@general`) 사람 역할이 시나리오의 유형 대신 그 유형으로 새 Work를 만든다(설명서에 "이번 평가 조건"으로 알린다). 같은 빌드에서 `relay`와 `relay@general`을 함께 돌리고 짝 `relay:relay@general`을 판정해, 전용 유형과 일반 유형의 수고와 결과 확신을 견준다. 맨 CLI는 유형이 없어 다시 돌리지 않는다. 결과 폴더는 `<시나리오>/relay@general-<회차>/`이고 보고서의 쪽 이름은 "relay (일반 유형)"이다.
-- 결과: `app/eval/results/<시각>/`(git에 넣지 않음). `report.md`, `report.json`, `config.json`, `<시나리오>/<쪽>-<회차>/`에 `run.json`(relay의 단계별 토큰 `agentSteps` 포함), `turns.jsonl`(차례 기록), `shots/`(relay 스크린샷), `final/*.diff`, `works/`(relay 산출물과 `pty.log`), `<시나리오>/judge-<회차>.json`.
+- 결과: `app/eval/results/<시각>/`(git에 넣지 않음). Work 여럿인 시나리오는 Work를 끝낼 때마다 `progress.json`에 그때까지의 Work 결과를 이어 쓴다(실행이 길 때 도구가 멈춰도 남는다). `report.md`, `report.json`, `config.json`, `<시나리오>/<쪽>-<회차>/`에 `run.json`(relay의 단계별 토큰 `agentSteps` 포함), `turns.jsonl`(차례 기록), `shots/`(relay 스크린샷), `final/*.diff`, `works/`(relay 산출물과 `pty.log`), `<시나리오>/judge-<회차>.json`.
 - 작업 폴더: `/tmp/relay-eval/<결과 폴더 이름>/`(레포, relay 저장소, 설정 폴더). 컨테이너가 끝나면 없어진다. 같은 `--out`으로 다시 돌리면 같은 회차의 작업 폴더와 결과 폴더를 비우고 새로 한다.
 - 시간: 실행 하나에 3~20분쯤이다. `--parallel 2`까지 권한다(Electron과 claude 둘이 함께 돈다).
 
