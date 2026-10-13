@@ -1,0 +1,55 @@
+diff --git a/src/config.js b/src/config.js
+index 020fc5d..7544279 100644
+--- a/src/config.js
++++ b/src/config.js
+@@ -5,3 +5,5 @@ export const HOLIDAYS = ['2026-10-09', '2026-11-17', '2026-12-25', '2026-12-31',
+ // 대출 규칙 (docs/loans.md 결정 표)
+ export const LOAN_DAYS = 14 // D1
+ export const MAX_LOANS = 5 // D3
++export const FEE_PER_DAY = 100 // D6
++export const MAX_FEE = 3000 // D6
+diff --git a/src/index.js b/src/index.js
+index b42e004..02b0c9d 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -4,3 +4,4 @@ export { getBook, listBooks, resetBooks, saveBook } from './books/store.js'
+ export { getMember, resetMembers } from './members/store.js'
+ export { getLoan, listLoans, nextLoanId, resetLoans, saveLoan } from './loans/store.js'
+ export { checkout } from './loans/checkout.js'
++export { returnBook } from './loans/return.js'
+diff --git a/src/loans/overdue.js b/src/loans/overdue.js
+new file mode 100644
+index 0000000..8197ca0
+--- /dev/null
++++ b/src/loans/overdue.js
+@@ -0,0 +1,6 @@
++import { diffDays } from '../util/dates.js'
++
++/** 연체일수: dueOn 다음 날부터 today까지의 날 수 */
++export function overdueDays(dueOn, today) {
++  return Math.max(0, diffDays(today, dueOn))
++}
+diff --git a/src/loans/return.js b/src/loans/return.js
+new file mode 100644
+index 0000000..1cdf882
+--- /dev/null
++++ b/src/loans/return.js
+@@ -0,0 +1,18 @@
++import { FEE_PER_DAY, MAX_FEE } from '../config.js'
++import { LoanError } from '../errors.js'
++import { getBook, saveBook } from '../books/store.js'
++import { overdueDays } from './overdue.js'
++import { getLoan, saveLoan } from './store.js'
++
++/** 반납을 처리하고 갱신된 기록을 돌려준다 (D6, D7) */
++export function returnBook(loanId, today) {
++  const loan = getLoan(loanId)
++  if (!loan) throw new LoanError('NOT_FOUND', `없는 대출: ${loanId}`)
++  if (loan.returnedOn) throw new LoanError('ALREADY_RETURNED', '이미 반납했다')
++  const book = getBook(loan.bookId)
++  if (!book) throw new LoanError('NOT_FOUND', `없는 책: ${loan.bookId}`)
++
++  const feeWon = Math.min(overdueDays(loan.dueOn, today) * FEE_PER_DAY, MAX_FEE, book.priceWon)
++  saveBook({ ...book, available: book.available + 1 })
++  return saveLoan({ ...loan, returnedOn: today, feeWon })
++}

@@ -1,0 +1,68 @@
+diff --git a/src/config.js b/src/config.js
+index 7544279..acd769a 100644
+--- a/src/config.js
++++ b/src/config.js
+@@ -7,3 +7,4 @@ export const LOAN_DAYS = 14 // D1
+ export const MAX_LOANS = 5 // D3
+ export const FEE_PER_DAY = 100 // D6
+ export const MAX_FEE = 3000 // D6
++export const MAX_RENEWALS = 1 // D8
+diff --git a/src/index.js b/src/index.js
+index 02b0c9d..e7b6397 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -5,3 +5,4 @@ export { getMember, resetMembers } from './members/store.js'
+ export { getLoan, listLoans, nextLoanId, resetLoans, saveLoan } from './loans/store.js'
+ export { checkout } from './loans/checkout.js'
+ export { returnBook } from './loans/return.js'
++export { renewLoan } from './loans/renew.js'
+diff --git a/src/loans/renew.js b/src/loans/renew.js
+new file mode 100644
+index 0000000..2ae80e2
+--- /dev/null
++++ b/src/loans/renew.js
+@@ -0,0 +1,21 @@
++import { nextOpenDay } from '../calendar.js'
++import { LOAN_DAYS, MAX_RENEWALS } from '../config.js'
++import { LoanError } from '../errors.js'
++import { getBook } from '../books/store.js'
++import { addDays } from '../util/dates.js'
++import { getLoan, saveLoan } from './store.js'
++
++/** 연장하고 갱신된 기록을 돌려준다 (D8, D9) */
++export function renewLoan(loanId, today) {
++  const loan = getLoan(loanId)
++  if (!loan) throw new LoanError('NOT_FOUND', `없는 대출: ${loanId}`)
++  if (loan.returnedOn) throw new LoanError('ALREADY_RETURNED', '이미 반납했다')
++  if (today > loan.dueOn) throw new LoanError('OVERDUE', '연체 중에는 연장할 수 없다')
++  if (loan.renewals >= MAX_RENEWALS) throw new LoanError('RENEW_LIMIT', '연장은 한 번만')
++  const book = getBook(loan.bookId)
++  if (book && book.holds > 0) throw new LoanError('HELD', '예약자가 있어 연장할 수 없다')
++
++  // 연장하는 날이 아니라 기준 기한에서 이어 붙인다. 휴관으로 미뤄 준 날은 쌓지 않는다 (D8)
++  const baseDueOn = addDays(loan.baseDueOn, LOAN_DAYS)
++  return saveLoan({ ...loan, renewals: loan.renewals + 1, baseDueOn, dueOn: nextOpenDay(baseDueOn) })
++}
+diff --git a/test/renew.test.js b/test/renew.test.js
+new file mode 100644
+index 0000000..332c9aa
+--- /dev/null
++++ b/test/renew.test.js
+@@ -0,0 +1,17 @@
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { renewLoan, resetBooks, resetLoans } from '../src/index.js'
++
++const loan = {
++  id: 'L-0001', memberId: 'M-1', bookId: 'B-1', borrowedOn: '2026-09-25',
++  baseDueOn: '2026-10-09', dueOn: '2026-10-10', renewals: 0, returnedOn: null, feeWon: null,
++}
++
++test('연장은 기준 기한에서 14일을 이어 붙인다', () => {
++  resetBooks([{ id: 'B-1', title: '책', available: 0, priceWon: 10000, holds: 0 }])
++  resetLoans([loan])
++  const renewed = renewLoan('L-0001', '2026-10-06')
++  assert.equal(renewed.baseDueOn, '2026-10-23')
++  assert.equal(renewed.dueOn, '2026-10-23')
++  assert.throws(() => renewLoan('L-0001', '2026-10-07'), { code: 'RENEW_LIMIT' })
++})
