@@ -17,6 +17,7 @@ import {
   judgeTree,
   makeRepo,
   mergeInPlace,
+  openRepo,
   withoutKnowledge,
 } from './repo.mjs'
 import {
@@ -26,6 +27,8 @@ import {
   clip,
   hash,
   questionsBySession,
+  readJson,
+  readJsonl,
   sleep,
   writeJson,
 } from './util.mjs'
@@ -106,6 +109,51 @@ const ENDINGS = {
   turn_limit: '차례 제한에 걸림',
 }
 
+/**
+ * 이어 돌리기(run.mjs --resume): 앞 실행이 결과 폴더에 남긴 progress.json(끝낸 Work의 결과)과 turns.jsonl(차례)을 읽는다.
+ * 끊긴 Work의 차례는 turns.jsonl에서 지운다(그 Work는 처음부터 다시 한다). 사람 행동 수는 남은 차례에서 다시 센다.
+ * 끝낸 Work가 없으면 null이다(처음부터 돈다)
+ */
+export function resumeState(outDir) {
+  const progress = readJson(path.join(outDir, 'progress.json'))
+  if (!progress?.workResults?.length) return null
+  const done = progress.workResults.length
+  const file = path.join(outDir, 'turns.jsonl')
+  const lines = readJsonl(file)
+  const cut = lines.findIndex((l) => l.event === 'work' && l.text === `Work ${done + 1}`)
+  const kept = cut < 0 ? lines : lines.slice(0, cut)
+  fs.writeFileSync(file, kept.map((l) => `${JSON.stringify(l)}\n`).join(''))
+  const turns = kept.filter((l) => typeof l.turn === 'number')
+  const counts = {}
+  let charsTyped = 0
+  let invalid = 0
+  let refusedDone = 0
+  for (const t of turns)
+    for (const a of t.actions ?? []) {
+      if (a.refused) {
+        refusedDone++
+        continue
+      }
+      counts[a.do] = (counts[a.do] ?? 0) + 1
+      if (typeof a.text === 'string' && (a.do === 'type' || a.do === 'fill'))
+        charsTyped += a.text.length
+      if (a.ok === false) invalid++
+    }
+  // 끝낸 relay Work의 id. 옛 progress.json에는 없다(그때는 쪽이 id 차례로 가린다)
+  const ids = progress.workResults.map((r) => r.relayWorks)
+  return {
+    workResults: progress.workResults,
+    handoffs: progress.handoffs ?? [],
+    turns,
+    counts,
+    charsTyped,
+    invalid,
+    refusedDone,
+    lastT: kept.reduce((m, l) => Math.max(m, l.t ?? 0), 0),
+    keepWorks: ids.every(Array.isArray) ? new Set(ids.flat()) : null,
+  }
+}
+
 const mmss = (ms) => {
   const s = Math.round(ms / 1000)
   return `${Math.floor(s / 60)}분 ${s % 60}초`
@@ -122,14 +170,22 @@ const mmss = (ms) => {
  * @param {object} o.opts 실행 옵션 (run.mjs)
  * @param {string} o.outDir 결과 폴더
  * @param {string} o.workDir 작업 폴더 (/tmp 아래)
+ * @param {boolean} [o.resume] 이어 돌리기(run.mjs --resume). 결과 폴더의 progress.json과 작업 폴더의 레포·앱 저장소를 이어받아
+ *   끝내지 못한 Work부터 돈다. 끝낸 Work가 없으면 처음부터 돈다
  */
 export async function runEpisode(o) {
   const { scenario, kind, opts } = o
   const tag = `[${scenario.id} ${kind}#${o.index}]`
   const say = (m) => console.log(`${new Date().toISOString().slice(11, 19)} ${tag} ${m}`)
+  const resumed = o.resume ? resumeState(o.outDir) : null
+  if (o.resume && !resumed) say('이어 돌릴 Work가 없어 처음부터 돈다')
+  if (resumed && workParts(scenario).some((w) => w.teammate))
+    throw new Error('팀원 교대(teammate Work)가 있는 시나리오는 이어 돌리기를 하지 않습니다')
   // 같은 결과 폴더로 다시 돌리면 같은 회차 번호의 폴더를 다시 쓴다. 앞 실행의 레포, relay 저장소, 결과가 섞이지 않게 비운다
-  fs.rmSync(o.workDir, { recursive: true, force: true })
-  fs.rmSync(o.outDir, { recursive: true, force: true })
+  if (!resumed) {
+    fs.rmSync(o.workDir, { recursive: true, force: true })
+    fs.rmSync(o.outDir, { recursive: true, force: true })
+  }
   // 이 회차의 짝 판정도 새 결과로 다시 해야 한다
   fs.rmSync(path.join(path.dirname(o.outDir), `judge-${o.index}.json`), { force: true })
   fs.mkdirSync(o.workDir, { recursive: true })
@@ -138,7 +194,9 @@ export async function runEpisode(o) {
 
   const baseDir = path.join(o.scenarioDir, 'repo')
   const repoName = scenario.repoName ?? 'repo'
-  const { repo, remote, base } = makeRepo(o.workDir, repoName, baseDir)
+  const { repo, remote, base } = resumed
+    ? openRepo(o.workDir, repoName)
+    : makeRepo(o.workDir, repoName, baseDir)
   const agentConfigDir = makeClaudeConfig(path.join(o.workDir, 'cfg-agent'))
   /** before 뒤에 새로 생긴 에이전트 세션 (Work마다의 토큰과 질문 수) */
   const newSessions = (before, bySession = agentUsageBySession(agentConfigDir)) =>
@@ -170,7 +228,7 @@ export async function runEpisode(o) {
           knowledge: !armBase(kind).endsWith('-off'),
         })
       : new CliArm({ ...armOpts, claudeArgs: opts.cliArgs })
-  const handoffs = []
+  const handoffs = resumed?.handoffs ?? []
   // Work 둘을 잇는 시나리오는 Work마다 사람 역할 세션을 새로 둔다. 같은 사람이지만 그 Work의 사정만 받는다
   const multi = multiWork(scenario)
   const parts = workParts(scenario)
@@ -197,13 +255,14 @@ export async function runEpisode(o) {
   // 이어 머지(merge Work)가 있으면 Work마다 기준이 머지한 main이다. 차이 보기와 판정이 그 기준으로 본다
   let partBase = baseDir
 
-  const t0 = Date.now()
-  const turns = []
+  // 이어 돌리면 앞 실행의 차례 시각에 이어 센다(멈춰 있던 동안은 빠진다)
+  const t0 = Date.now() - (resumed?.lastT ?? 0)
+  const turns = resumed?.turns ?? []
   const setupDialogs = []
-  const counts = {}
-  let charsTyped = 0
-  let invalid = 0
-  let refusedDone = 0
+  const counts = resumed?.counts ?? {}
+  let charsTyped = resumed?.charsTyped ?? 0
+  let invalid = resumed?.invalid ?? 0
+  let refusedDone = resumed?.refusedDone ?? 0
   let ending = null
   let summary = ''
   let error = null
@@ -245,7 +304,7 @@ export async function runEpisode(o) {
     return clip(parts.join('\n\n') || '(Work가 아직 없음)', 12_000)
   }
 
-  const workResults = []
+  const workResults = resumed?.workResults ?? []
   // 지금 Work: 시작한 차례, 때, 그때 있던 에이전트 세션·결과 폴더·relay Work
   let part = null
   /** Work 하나를 마친다: 그 Work의 사람 역할 설문과, Work 둘을 잇는 시나리오면 그 Work의 판정과 에이전트 */
@@ -376,6 +435,11 @@ export async function runEpisode(o) {
       r.knowledgeChars = tasks.some((t) => typeof t.knowledgeChars === 'number')
         ? tasks.reduce((a, t) => a + (t.knowledgeChars ?? 0), 0)
         : null
+      // 이어 돌리기가 끝낸 relay Work를 가리는 데 쓴다
+      r.relayWorks = arm
+        .works()
+        .filter((w) => !p.works.has(w.id))
+        .map((w) => w.id)
       say(
         `Work ${r.work} 끝: ${partEnding} (${(r.outcome?.checks ?? []).map((c) => `${c.name} ${c.pass ? 'O' : 'X'}`).join(', ')}), 차례 ${r.human.turns}, 질문 ${r.agent.questions}`,
       )
@@ -389,8 +453,14 @@ export async function runEpisode(o) {
     say(`준비 (${repo})`)
     // 에이전트 세션은 쪽이 claude를 띄우기 전(준비, 다음 Work로 넘김)에 센다. 맨 CLI는 띄울 때 세션이 생길 수 있다
     let sessionsBefore = new Set(agentUsageBySession(agentConfigDir).keys())
-    await arm.prepare()
-    for (let w = 0; w < parts.length; w++) {
+    const startW = resumed?.workResults.length ?? 0
+    if (resumed) {
+      // 끊긴 Work의 사람 역할 기록도 지운다. 그 Work의 사람은 새로 시작한다
+      fs.rmSync(path.join(o.workDir, `cfg-human-${startW + 1}`), { recursive: true, force: true })
+      say(`이어 돌리기: Work ${startW + 1}부터 (끝낸 Work ${startW}개)`)
+      say(await arm.resume(resumed.keepWorks, startW))
+    } else await arm.prepare()
+    for (let w = startW; w < parts.length; w++) {
       let handoff = null
       if (w > 0) {
         sessionsBefore = new Set(agentUsageBySession(agentConfigDir).keys())

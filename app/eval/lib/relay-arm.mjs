@@ -5,7 +5,7 @@ import path from 'node:path'
 import { _electron as electron } from '@playwright/test'
 import { cleanEnv, findClaude } from './env.mjs'
 import { DialogGuard } from './dialogs.mjs'
-import { gitState } from './repo.mjs'
+import { dropBranch, gitState } from './repo.mjs'
 import { copyTree, sleep } from './util.mjs'
 
 const APP_DIR = path.resolve(import.meta.dirname, '../..')
@@ -474,6 +474,27 @@ export class RelayArm {
       }
     }
     return trees
+  }
+
+  /**
+   * 이어 돌리기(run.mjs --resume): 앞 실행의 앱 저장소와 Electron 사용자 폴더로 앱을 다시 띄운다(프로젝트는 등록돼 있다).
+   * 끝내지 못한 relay Work는 기록, worktree, 브랜치를 지워 그 Work를 처음부터 다시 하게 한다. keep은 끝낸 relay Work의 id이고,
+   * 없으면(옛 progress.json) id 차례로 앞의 done개를 끝낸 것으로 본다(평가 Work 하나에 relay Work 하나). 브랜치가 main에
+   * 머지됐는지로는 가르지 못한다: 커밋 전에 끊긴 Work의 브랜치는 main과 같은 커밋이다
+   * @param {Set<string> | null} keep
+   * @param {number} done 끝낸 평가 Work 수
+   */
+  async resume(keep, done) {
+    const dropped = []
+    const all = this.works().sort((a, b) => (a.id < b.id ? -1 : 1))
+    for (const [i, w] of all.entries()) {
+      if (keep ? keep.has(w.id) : i < done) continue
+      dropBranch(this.o.repo, w.branch ?? `relay/${w.id}`)
+      fs.rmSync(w.dir, { recursive: true, force: true })
+      dropped.push(w.id)
+    }
+    await this.launch()
+    return `앱을 다시 띄움${dropped.length ? `, 끝내지 못한 Work ${dropped.join(', ')}를 지움` : ''}`
   }
 
   /** 다음 Work로 넘어갈 때(works 시나리오). 사람이 같은 앱과 프로젝트에서 [새 Work]를 누르므로 할 일이 없다 */

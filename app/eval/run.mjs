@@ -13,7 +13,7 @@ import { parseArgs } from 'node:util'
 import { runEpisode } from './lib/episode.mjs'
 import { cleanEnv, findClaude } from './lib/env.mjs'
 import { armBase, armType, words } from './lib/kind.mjs'
-import { sleep, writeJson } from './lib/util.mjs'
+import { readJson, sleep, writeJson } from './lib/util.mjs'
 import { pairOf } from './lib/works.mjs'
 import { buildReport, judgeAll } from './report.mjs'
 
@@ -49,6 +49,9 @@ const HELP = `쓰는 법: node eval/run.mjs [옵션]
   --max-turns <n>          사람 차례 제한 (기본은 시나리오 값)
   --no-judge               짝 판정을 하지 않는다
   --out <폴더>             결과 폴더 (기본 eval/results/<시각>)
+  --resume                 --out의 실행을 이어 돌린다(컨테이너가 다시 시작돼 멈춘 경우). run.json이 있는 실행은
+                           건너뛰고, Work 여럿인 실행은 progress.json의 끝낸 Work 다음부터 같은 레포와 앱 저장소에서
+                           돈다(끊긴 Work는 처음부터). 나머지 옵션은 처음과 같게 준다. relay 쪽만 된다
 `
 
 export function listScenarios() {
@@ -143,6 +146,7 @@ async function main() {
       'max-turns': { type: 'string' },
       'no-judge': { type: 'boolean' },
       out: { type: 'string' },
+      resume: { type: 'boolean' },
     },
   })
   if (v.help) return console.log(HELP)
@@ -192,6 +196,7 @@ async function main() {
   preflight(arms, apps)
 
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..*/, '').replace('T', '-')
+  if (v.resume && !v.out) throw new Error('--resume에는 이어 돌릴 결과 폴더(--out)를 줍니다')
   const outDir = path.resolve(v.out ?? path.join(EVAL, 'results', stamp))
   const workRoot = path.join(os.tmpdir(), 'relay-eval', path.basename(outDir))
   fs.mkdirSync(outDir, { recursive: true })
@@ -224,16 +229,24 @@ async function main() {
   }
   const commit = commitOf(APP)
   const appCommits = Object.fromEntries(Object.entries(apps).map(([k, d]) => [k, commitOf(d)]))
-  writeJson(path.join(outDir, 'config.json'), {
-    startedAt: new Date().toISOString(),
-    commit,
-    appCommits,
-    claudeVersion,
-    scenarios: scenarios.map((s) => s.id),
-    runs,
-    arms,
-    ...opts,
-  })
+  // 이어 돌리면 처음 설정은 두고 이어 돈 때를 더한다
+  const prevConfig = v.resume ? readJson(path.join(outDir, 'config.json')) : null
+  if (prevConfig)
+    writeJson(path.join(outDir, 'config.json'), {
+      ...prevConfig,
+      resumedAt: [...(prevConfig.resumedAt ?? []), new Date().toISOString()],
+    })
+  else
+    writeJson(path.join(outDir, 'config.json'), {
+      startedAt: new Date().toISOString(),
+      commit,
+      appCommits,
+      claudeVersion,
+      scenarios: scenarios.map((s) => s.id),
+      runs,
+      arms,
+      ...opts,
+    })
   console.log(`결과 폴더: ${outDir}`)
   console.log(`작업 폴더: ${workRoot}`)
 
@@ -250,6 +263,12 @@ async function main() {
       const job = jobs.shift()
       if (!job) return
       const { s, kind, i } = job
+      const runOut = path.join(outDir, s.id, `${kind}-${i}`)
+      if (v.resume && fs.existsSync(path.join(runOut, 'run.json'))) {
+        done++
+        console.log(`[${s.id} ${kind}#${i}] 이미 끝남, 건너뜀`)
+        continue
+      }
       try {
         await runEpisode({
           scenario: s,
@@ -257,8 +276,9 @@ async function main() {
           kind,
           index: i,
           opts,
-          outDir: path.join(outDir, s.id, `${kind}-${i}`),
+          outDir: runOut,
           workDir: path.join(workRoot, `${s.id}-${kind}-${i}`),
+          resume: !!v.resume,
         })
       } catch (e) {
         console.log(`[${s.id} ${kind}#${i}] 실행 실패: ${e instanceof Error ? e.stack : e}`)

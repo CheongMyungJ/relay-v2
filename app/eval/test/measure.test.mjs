@@ -7,12 +7,15 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { CliArm } from '../lib/cli-arm.mjs'
 import {
   codeOutcome,
+  dropBranch,
   exportCommit,
   judgeTree,
   makeRepo,
   mergeInPlace,
+  openRepo,
   withoutKnowledge,
 } from '../lib/repo.mjs'
+import { resumeState } from '../lib/episode.mjs'
 import { agentUsage, agentUsageBySession, git, questionsBySession, stats } from '../lib/util.mjs'
 import { chained, measuredWorks, pairOf, workParts, workScenario } from '../lib/works.mjs'
 import { compare } from '../primary.mjs'
@@ -248,6 +251,93 @@ describe('에이전트 대화 기록 집계', () => {
     const q = questionsBySession(configDir())
     expect(q.get('s1')).toBe(1)
     expect(q.get('s2')).toBe(0)
+  })
+})
+
+describe('이어 돌리기 (run.mjs --resume)', () => {
+  it('끝낸 Work의 결과와 차례를 읽고 끊긴 Work의 차례는 지운다', () => {
+    const out = fs.mkdtempSync(path.join(os.tmpdir(), 'resume-'))
+    const turn = (n, work, actions, t) => ({ turn: n, work, t, actions })
+    const lines = [
+      { event: 'work', t: 1, text: 'Work 1' },
+      turn(
+        1,
+        1,
+        [
+          { do: 'fill', text: '요청 글', ok: true },
+          { do: 'click', ok: true },
+        ],
+        10,
+      ),
+      turn(
+        2,
+        1,
+        [
+          { do: 'click', ok: false },
+          { do: 'done', refused: true },
+        ],
+        20,
+      ),
+      { event: 'work', t: 30, text: 'Work 2' },
+      turn(3, 2, [{ do: 'wait' }, { do: 'done' }], 40),
+      { event: 'work', t: 50, text: 'Work 3' },
+      turn(4, 3, [{ do: 'type', text: '끊긴 Work', ok: true }], 60),
+    ]
+    fs.writeFileSync(
+      path.join(out, 'turns.jsonl'),
+      lines.map((l) => `${JSON.stringify(l)}\n`).join(''),
+    )
+    expect(resumeState(out)).toBeNull()
+    fs.writeFileSync(
+      path.join(out, 'progress.json'),
+      JSON.stringify({
+        workResults: [
+          { work: 1, relayWorks: ['w-1'] },
+          { work: 2, relayWorks: ['w-2', 'w-3'] },
+        ],
+        handoffs: [{ work: 2, inPlace: true }],
+      }),
+    )
+    const r = resumeState(out)
+    expect(r.workResults.map((x) => x.work)).toEqual([1, 2])
+    expect(r.handoffs).toEqual([{ work: 2, inPlace: true }])
+    expect(r.turns.map((t) => t.turn)).toEqual([1, 2, 3])
+    expect(r.counts).toEqual({ fill: 1, click: 2, wait: 1, done: 1 })
+    expect(r.charsTyped).toBe('요청 글'.length)
+    expect(r.invalid).toBe(1)
+    expect(r.refusedDone).toBe(1)
+    expect(r.lastT).toBe(40)
+    expect([...r.keepWorks]).toEqual(['w-1', 'w-2', 'w-3'])
+    // 끊긴 Work 3의 차례는 파일에서도 지운다
+    const kept = fs.readFileSync(path.join(out, 'turns.jsonl'), 'utf8').trim().split('\n')
+    expect(kept).toHaveLength(5)
+    // 옛 progress.json(relayWorks 없음)은 끝낸 relay Work를 모른다
+    fs.writeFileSync(
+      path.join(out, 'progress.json'),
+      JSON.stringify({ workResults: [{ work: 1 }] }),
+    )
+    expect(resumeState(out).keepWorks).toBeNull()
+    fs.rmSync(out, { recursive: true, force: true })
+  })
+
+  it('레포를 다시 열고, 끊긴 Work의 브랜치와 worktree를 지운다', () => {
+    const { root, base } = scenarioDirs()
+    const r = makeRepo(path.join(root, 'work'), 'repo', base)
+    const wt = path.join(root, 'wt')
+    git(r.repo, 'worktree', 'add', '-q', '-b', 'relay/w-2', wt)
+    fs.writeFileSync(path.join(wt, 'half.txt'), '하다 만 것\n')
+    git(wt, 'add', '-A')
+    git(wt, 'commit', '-q', '-m', 'half')
+    git(r.repo, 'branch', 'relay/w-1')
+    git(r.repo, 'commit', '-q', '--allow-empty', '-m', 'merged')
+    const o = openRepo(path.join(root, 'work'), 'repo')
+    expect(o).toEqual({ repo: r.repo, remote: r.remote, base: r.base })
+    dropBranch(o.repo, 'relay/w-2')
+    expect(fs.existsSync(wt)).toBe(false)
+    expect(git(o.repo, 'branch', '--list', 'relay/*')).toBe('relay/w-1')
+    // 없는 브랜치는 그냥 지나간다
+    dropBranch(o.repo, 'relay/w-9')
+    expect(() => openRepo(path.join(root, 'work'), 'none')).toThrow(/이어 돌릴 레포가 없음/)
   })
 })
 

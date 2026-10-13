@@ -23,6 +23,27 @@ export function makeRepo(root, name, srcDir) {
   return { repo, remote, base: git(repo, 'rev-parse', 'HEAD') }
 }
 
+/** 이어 돌리기(run.mjs --resume): makeRepo가 만든 레포와 원격을 다시 연다. base는 첫 커밋이다 */
+export function openRepo(root, name) {
+  const repo = path.join(root, name)
+  const remote = path.join(root, `${name}.git`)
+  if (!fs.existsSync(path.join(repo, '.git')) || !fs.existsSync(remote))
+    throw new Error(`이어 돌릴 레포가 없음: ${repo}`)
+  const base = git(repo, 'rev-list', '--max-parents=0', 'main').split('\n')[0]
+  return { repo, remote, base }
+}
+
+/** 브랜치와 그 브랜치를 체크아웃한 worktree를 지운다(이어 돌리기에서 끊긴 Work). 없으면 아무것도 하지 않는다 */
+export function dropBranch(repo, branch) {
+  for (const block of git(repo, 'worktree', 'list', '--porcelain').split(/\n\s*\n/)) {
+    const dir = block.match(/^worktree (.+)$/m)?.[1]
+    const b = block.match(/^branch refs\/heads\/(.+)$/m)?.[1]
+    if (dir && b === branch) git(repo, 'worktree', 'remove', '--force', dir)
+  }
+  run('git', ['worktree', 'prune'], { cwd: repo })
+  run('git', ['branch', '-D', branch], { cwd: repo })
+}
+
 /** git 레포(또는 worktree)의 커밋과 커밋 안 된 변경 */
 export function gitState(dir, base) {
   if (!fs.existsSync(path.join(dir, '.git'))) return null

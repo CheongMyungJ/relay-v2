@@ -292,6 +292,11 @@ export class CliArm {
     return []
   }
 
+  /** 이어 돌리기(run.mjs --resume)는 relay 쪽만 한다. 맨 CLI의 터미널과 브랜치 상태는 되살리지 않는다 */
+  async resume() {
+    throw new Error('맨 CLI 쪽은 이어 돌리기를 하지 않습니다')
+  }
+
   async close() {
     for (const t of this.terms) {
       try {
