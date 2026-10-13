@@ -19,3 +19,7 @@
   - F3(36): 심은 문제 해결 relay 9/9, pre 6/9(+33%포인트). 멀쩡한 항목 보존 3/3 대 3/3. 입력 글자 0 대 198. pre가 놓친 것: pre-2는 이름이 바뀐 함수를 가리키는 `discount-name.md`(코드에 없는 anchor), pre-3은 같은 anchor의 `min-order.md`·`minimum-shipping.md`(중복). 둘 다 F3가 기계적으로 찾는 후보다. 규칙대로면 남김.
   - 여기서 개발을 고정한다(기능 코드를 더 바꾸지 않음). 다음: hold-out을 열어 같은 명령으로 3회씩.
 - 2026-10-13 hold-out을 열었다(`sealed/scale-holdout.tar.gz.enc`, 해시 확인). 돌리기 전 확인: h-tidy의 지식 파일은 모두 `checkEntryFormat` 통과, `check-scenario` 이상 없음. h-plan은 guard가 앞 조각이 머지된 main 기준이고 함정이 앞 정답 위에 쌓이는 방식이라 `check-scenario`의 가정과 달라 문제 4개가 나오고, 만든 에이전트의 쌓아 보는 검증(정답 1..n, 함정 모두 걸림)은 이상 없다. 개발이 고정된 뒤이므로 평문을 커밋한다.
+- 2026-10-13 hold-out 평가(`eval/results/20261013-220029`, 보고서 `app/eval/reports/2026-10-13-scale-holdout.md`, 12회). 같은 명령에 `--scenarios h-tidy-route-dispatch,h-plan-library-loan`.
+  - F3: 심은 문제 relay 12/15(5, 4, 3), pre 10/15(2, 3, 5). 멀쩡한 항목 6/6 대 6/6. relay-3은 후보 버튼을 쓰지 않았다. relay-2의 rebalanceCouriers는 anchor를 고쳤으나 "15분" 문장을 남겨 실패로 셌다(시험은 고치지 않음).
+  - F1: 모두 통과 relay 3/3, pre 2/3(pre-1은 Work 1에서 사람 역할이 포기, 사람만 아는 휴관일 규칙에서 "문서 먼저 고침"을 고름. 조각 목표에 없는 규칙이라 F1과 관계없음). 입력 글자 711 대 659, 걸린 시간 19.9 대 16.0분(+24%).
+  - 결정(규약 4절, "방향"은 지표마다 차이의 부호로 읽음. 결과를 본 뒤 정한 해석이라 보고서에 밝힘): F3 남김(합쳐 +20.8%포인트). F1 남김(숨긴 시험이 높고 시간은 합쳐 +14.6%), 단 pre-1을 빼면 버림이라 근거 약함. `report.md`.
