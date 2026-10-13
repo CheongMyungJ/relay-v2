@@ -645,7 +645,17 @@ export interface WorkState {
   pr?: PullRequestRecord
   /** 이슈 기록 (설계 3.7, I96). 이슈 기록이 켜진 프로젝트에서 만든 Work에 있다 */
   issue?: IssueRecord
+  /** 설계 문서의 구현 나눔에서 고른 조각 (D393). 조각으로 만든 Work에만 있다 */
+  plan?: PlanRef
   tasks: TaskRecord[]
+}
+
+/** 조각 Work가 맡은 설계 문서와 조각 (D393, core/plan) */
+export interface PlanRef {
+  /** 레포 맨 위에서의 설계 문서 경로 */
+  doc: string
+  /** 그 문서의 `## 구현 나눔` 표의 조각 id */
+  slice: string
 }
 
 /** events.jsonl의 이벤트 유형 (5.5) */

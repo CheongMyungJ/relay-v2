@@ -11,14 +11,21 @@ import {
   commitOf,
   fetchBranch,
   hasRemote,
+  isAncestor,
+  refCommit,
   remoteUrl,
 } from '../adapters/git'
+import { readPlanDocAt, readPlanDocs } from '../adapters/plan'
+import { filesAt, namesInCode, readKnowledgeAt } from '../adapters/knowledge'
+import { knowledgeEnabled } from '../core/knowledge'
+import { anchorNames, tidyCandidates, tidyRequest } from '../core/knowledge-tidy'
 import { HookServer } from '../adapters/hooks'
 import { killOrphans } from '../adapters/pty'
 import {
   WorkFiles,
   loadConfig,
   loadProjects,
+  readText,
   saveConfig,
   saveProject,
   workDir,
@@ -29,6 +36,16 @@ import { applyConfigPatch, checkProjectSettings, checkWorkSettings } from '../co
 import { createWork } from '../core/machine'
 import { NODE_INFO } from '../core/pipeline'
 import { issueMarkId } from '../core/issue'
+import {
+  ancestorsOf,
+  sliceBlocked,
+  sliceRequest,
+  sliceStates,
+  type PlanContextInput,
+  type SliceDigest,
+  type SliceWork,
+} from '../core/plan'
+import { PR_FILE, sectionText } from '../core/validate'
 import { localIso, nextWorkId, workBranch } from '../core/records'
 import { recordedProcesses, type RecordedProcess } from '../core/recovery'
 import { resolveAgent } from '../shared/agent'
@@ -47,7 +64,9 @@ import type {
   MergeInfoResult,
   MergeInput,
   NewWorkInput,
+  PlanDocView,
   PrItemAction,
+  TidyView,
   ProjectInspection,
   ProjectView,
   RespondStartInput,
@@ -222,6 +241,7 @@ export class Relay {
       checks: (projectId) => this.projects.get(projectId)?.checks,
       project: (projectId) => this.projects.get(projectId),
       recheck: (projectId) => this.recheck(projectId),
+      plan: (projectId, workId) => this.planContext(projectId, workId),
       knowledgeSources: (projectId, except) =>
         [...this.works.values()]
           .filter(
@@ -428,6 +448,148 @@ export class Relay {
     return [project.default_branch, ...rest]
   }
 
+  // ---------- 구현 나눔 (D393~D396) ----------
+
+  /** 프로젝트의 Work 가운데 그 설계 문서의 조각을 맡은 것과 머지됐는지 */
+  private async sliceWorks(
+    project: ProjectState,
+    doc: string,
+  ): Promise<{ info: SliceWork; runner: WorkRunner }[]> {
+    const out: { info: SliceWork; runner: WorkRunner }[] = []
+    for (const w of this.works.values()) {
+      const plan = w.work.plan
+      if (w.project.project_id !== project.project_id || plan?.doc !== doc) continue
+      out.push({
+        info: {
+          workId: w.work.work_id,
+          doc,
+          slice: plan.slice,
+          status: w.work.status,
+          merged: await this.sliceMerged(project, w.work),
+        },
+        runner: w,
+      })
+    }
+    return out
+  }
+
+  /**
+   * 조각 Work가 머지됐는가 (D394): PR이 머지됐거나, 커밋이 있는 Work 브랜치가 기준 브랜치(로컬이나 origin)에 들어 있다.
+   * 포기한 Work는 머지되지 않은 것으로 본다
+   */
+  private async sliceMerged(project: ProjectState, work: WorkState): Promise<boolean> {
+    if (work.pr?.merged) return true
+    if (work.status === 'abandoned') return false
+    const opts = { env: this.env }
+    const repo = project.repo_path
+    const tip = await refCommit(repo, workBranch(work.work_id), opts)
+    if (!tip || tip === work.base_commit) return false
+    for (const base of [work.base_branch, `origin/${work.base_branch}`]) {
+      const commit = await refCommit(repo, base, opts)
+      if (commit && (await isAncestor(repo, tip, commit, opts).catch(() => false))) return true
+    }
+    return false
+  }
+
+  /** 새 Work 대화상자의 설계 문서와 조각 (D393). 원격 기준이면 마지막으로 fetch한 origin/<브랜치>에서 읽는다 */
+  async planDocs(
+    projectId: string,
+    baseBranch: string,
+    location: 'local' | 'remote',
+  ): Promise<PlanDocView[]> {
+    const project = this.projects.get(projectId)
+    const branch = baseBranch.trim()
+    if (!project || !branch) return []
+    const ref = location === 'remote' ? `origin/${branch}` : branch
+    const views: PlanDocView[] = []
+    for (const doc of await readPlanDocs(project.repo_path, ref, { env: this.env })) {
+      const states = sliceStates(
+        doc,
+        (await this.sliceWorks(project, doc.path)).map((x) => x.info),
+      )
+      views.push({
+        path: doc.path,
+        issues: doc.issues,
+        slices: states.map((s) => ({
+          id: s.slice.id,
+          name: s.slice.name,
+          type: s.slice.type,
+          after: s.slice.after,
+          goal: s.slice.goal,
+          status: s.status,
+          works: s.works,
+          blocked: sliceBlocked(doc, s),
+          request: sliceRequest(doc, s.slice.id),
+        })),
+      })
+    }
+    return views
+  }
+
+  /**
+   * 새 Work 대화상자의 지식 정리 후보 (D397): 기준 브랜치의 지식 파일과 코드에서 모델 없이 찾는다. 지식 관리를 끄면
+   * (RELAY_KNOWLEDGE=off) 후보가 없다
+   */
+  async knowledgeTidy(
+    projectId: string,
+    baseBranch: string,
+    location: 'local' | 'remote',
+  ): Promise<TidyView> {
+    const project = this.projects.get(projectId)
+    const branch = baseBranch.trim()
+    const none: TidyView = { candidates: [], request: '' }
+    if (!project || !branch || !knowledgeEnabled(this.env)) return none
+    const opts = { env: this.env }
+    const repo = project.repo_path
+    const ref = location === 'remote' ? `origin/${branch}` : branch
+    try {
+      const entries = await readKnowledgeAt(repo, ref, opts)
+      if (!entries.length) return none
+      const candidates = tidyCandidates(entries, {
+        found: await namesInCode(repo, ref, anchorNames(entries), opts),
+        files: await filesAt(repo, ref, opts),
+      })
+      return candidates.length ? { candidates, request: tidyRequest(candidates) } : none
+    } catch {
+      return none
+    }
+  }
+
+  /** 조각 Work의 context.md에 넣을 묶음 (D395). 조각 Work가 아니면 null */
+  private async planContext(projectId: string, workId: string): Promise<PlanContextInput | null> {
+    const runner = [...this.works.values()].find(
+      (w) => w.project.project_id === projectId && w.work.work_id === workId,
+    )
+    const ref = runner?.work.plan
+    if (!runner || !ref) return null
+    const doc = await readPlanDocAt(runner.worktree, ref.doc)
+    const works = await this.sliceWorks(runner.project, ref.doc)
+    const before: SliceDigest[] = []
+    for (const id of doc ? ancestorsOf(doc, ref.slice) : []) {
+      for (const x of works) {
+        if (x.info.slice !== id || x.runner === runner || x.info.status === 'abandoned') continue
+        before.push({
+          slice: id,
+          workId: x.info.workId,
+          merged: x.info.merged,
+          summary: await sliceSummary(x.runner),
+          criteria: sectionText((await readText(x.runner.files.intent)) ?? '', '완료조건'),
+        })
+      }
+    }
+    return {
+      ref,
+      doc,
+      states: doc
+        ? sliceStates(
+            doc,
+            works.map((x) => x.info),
+          )
+        : [],
+      before,
+    }
+  }
+
   // ---------- Work 생성 (시나리오 1) ----------
 
   /**
@@ -485,6 +647,19 @@ export class Relay {
     } catch {
       return { ok: false, error: `기준 브랜치를 찾을 수 없습니다: ${ref}` }
     }
+    // 조각은 기준 커밋의 문서로 다시 확인한다: 먼저 조각이 머지되지 않았으면 만들지 않는다 (D394)
+    if (input.plan) {
+      const plan = input.plan
+      const doc = (await readPlanDocs(repo, baseCommit, { env })).find((d) => d.path === plan.doc)
+      if (!doc)
+        return { ok: false, error: `기준 커밋에 구현 나눔이 있는 \`${plan.doc}\`가 없습니다` }
+      const state = sliceStates(
+        doc,
+        (await this.sliceWorks(project, doc.path)).map((x) => x.info),
+      ).find((s) => s.slice.id === plan.slice)
+      const blocked = sliceBlocked(doc, state)
+      if (blocked) return { ok: false, error: blocked }
+    }
 
     const at = this.at()
     const relayBranches = (await gitBranches(repo, { env })).local
@@ -511,6 +686,7 @@ export class Relay {
       baseCommit,
       settings,
       requestHash,
+      ...(input.plan ? { plan: input.plan } : {}),
       // 이슈 기록은 Work를 만들 때 프로젝트 설정으로 정한다 (I96)
       ...(issueLogOn(project)
         ? {
@@ -773,4 +949,14 @@ export class Relay {
     const t = this.terminal(key)
     t?.runner.resize(t.taskId, cols, rows)
   }
+}
+
+/** 조각 Work의 마지막 verify가 쓴 pr.md의 `## 요약` (D395). 없으면 null */
+async function sliceSummary(runner: WorkRunner): Promise<string | null> {
+  const verify = runner.work.tasks
+    .filter((t) => t.node === 'verify' && t.status !== 'discarded')
+    .sort((a, b) => b.seq - a.seq)[0]
+  if (!verify) return null
+  const text = await readText(path.join(runner.files.taskDir(verify), PR_FILE))
+  return text ? sectionText(text, '요약') : null
 }

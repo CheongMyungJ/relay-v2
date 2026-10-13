@@ -1,0 +1,127 @@
+diff --git a/docs/knowledge/coupon/discount-name.md b/docs/knowledge/coupon/discount-name.md
+index 688ea71..c792277 100644
+--- a/docs/knowledge/coupon/discount-name.md
++++ b/docs/knowledge/coupon/discount-name.md
+@@ -1,12 +1,13 @@
+ ---
+ kind: rule
+ source: agent
+-anchor: calcCouponDiscount
++anchor: discountAmount
+ ---
+ # 할인 계산은 한 함수에서만
+ 
+ ## 규칙
+-- 할인 금액 계산은 `calcCouponDiscount` 한 곳에서만 한다. 화면이나 주문 모듈에서 따로 계산하지 않는다.
++- 할인 금액 계산은 `discountAmount` 한 곳에서만 한다. 화면이나 주문 모듈에서 따로 계산하지 않는다.
+ 
+ ## 바뀐 이력
+ - 2026-05-30 처음 남김 (Work w-20260530-002)
++- 2026-10-13 함수 이름이 바뀌어 anchor를 고침
+diff --git a/docs/knowledge/coupon/legacy-prefix.md b/docs/knowledge/coupon/legacy-prefix.md
+deleted file mode 100644
+index 1f317a3..0000000
+--- a/docs/knowledge/coupon/legacy-prefix.md
++++ /dev/null
+@@ -1,12 +0,0 @@
+----
+-kind: rule
+-source: human
+-anchor: LEGACY_PREFIX
+----
+-# 옛 쿠폰 코드는 OLD- 접두로 가른다
+-
+-## 규칙
+-- `OLD-`로 시작하는 쿠폰 코드는 옛 시스템의 것이라 정액 할인으로만 계산한다. 접두는 `LEGACY_PREFIX`에 둔다.
+-
+-## 바뀐 이력
+-- 2026-04-02 처음 남김 (Work w-20260402-001)
+diff --git a/docs/knowledge/coupon/min-order.md b/docs/knowledge/coupon/min-order.md
+index 4fce3bf..3a0c47a 100644
+--- a/docs/knowledge/coupon/min-order.md
++++ b/docs/knowledge/coupon/min-order.md
+@@ -3,10 +3,12 @@ kind: rule
+ source: human
+ anchor: MIN_ORDER_AMOUNT
+ ---
+-# 최소 주문 금액 1만 원
++# 최소 주문 금액 1만 원 (배송비 제외)
+ 
+ ## 규칙
+ - 주문 금액이 10,000원보다 적으면 쿠폰을 쓸 수 없다(할인 0).
++- 최소 주문 금액을 볼 때 배송비는 빼고 상품 금액만 더한다.
+ 
+ ## 바뀐 이력
+ - 2026-05-12 처음 남김 (Work w-20260512-001)
++- 2026-10-13 `minimum-shipping.md`(배송비 제외)를 합침
+diff --git a/docs/knowledge/coupon/minimum-shipping.md b/docs/knowledge/coupon/minimum-shipping.md
+deleted file mode 100644
+index b28bc18..0000000
+--- a/docs/knowledge/coupon/minimum-shipping.md
++++ /dev/null
+@@ -1,12 +0,0 @@
+----
+-kind: rule
+-source: human
+-anchor: MIN_ORDER_AMOUNT
+----
+-# 최소 주문 금액에 배송비는 넣지 않는다
+-
+-## 규칙
+-- 최소 주문 금액을 볼 때 배송비는 빼고 상품 금액만 더한다.
+-
+-## 바뀐 이력
+-- 2026-08-21 처음 남김 (Work w-20260821-002)
+diff --git a/docs/knowledge/coupon/refund-policy.md b/docs/knowledge/coupon/refund-policy.md
+deleted file mode 100644
+index 920622f..0000000
+--- a/docs/knowledge/coupon/refund-policy.md
++++ /dev/null
+@@ -1,11 +0,0 @@
+----
+-kind: rule
+-source: human
+----
+-# 환불 정책
+-
+-## 규칙
+-- 환불해도 쓴 쿠폰은 돌려주지 않는다. 쿠폰은 쓰는 순간 소멸한다(2026-03 정책).
+-
+-## 바뀐 이력
+-- 2026-03-18 처음 남김 (Work w-20260318-001)
+diff --git a/docs/knowledge/coupon/refund-returns.md b/docs/knowledge/coupon/refund-returns.md
+index 43d5cbb..b8a0b33 100644
+--- a/docs/knowledge/coupon/refund-returns.md
++++ b/docs/knowledge/coupon/refund-returns.md
+@@ -10,3 +10,4 @@ anchor: refundCoupon
+ 
+ ## 바뀐 이력
+ - 2026-08-14 처음 남김 (Work w-20260814-001)
++- 2026-10-13 옛 정책(2026-03, 돌려주지 않음)의 `refund-policy.md`를 지움. 지금 정책은 이 항목이다(사람 확인)
+diff --git a/docs/knowledge/coupon/stack-rule.md b/docs/knowledge/coupon/stack-rule.md
+deleted file mode 100644
+index 67839d6..0000000
+--- a/docs/knowledge/coupon/stack-rule.md
++++ /dev/null
+@@ -1,12 +0,0 @@
+----
+-kind: rule
+-source: human
+-anchor: canStack
+----
+-# 쿠폰 중복 사용 금지
+-
+-## 규칙
+-- 쿠폰은 주문마다 한 장. 두 번째 쿠폰은 막는다.
+-
+-## 바뀐 이력
+-- 2026-07-02 처음 남김 (Work w-20260702-001)
+diff --git a/docs/knowledge/coupon/stacking.md b/docs/knowledge/coupon/stacking.md
+index 142af87..23bb737 100644
+--- a/docs/knowledge/coupon/stacking.md
++++ b/docs/knowledge/coupon/stacking.md
+@@ -10,3 +10,4 @@ anchor: canStack
+ 
+ ## 바뀐 이력
+ - 2026-05-20 처음 남김 (Work w-20260520-003)
++- 2026-10-13 같은 규칙의 `stack-rule.md`를 합침

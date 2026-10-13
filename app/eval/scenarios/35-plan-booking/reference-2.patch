@@ -1,0 +1,36 @@
+diff --git a/src/booking.js b/src/booking.js
+index 8e051d1..4ab0077 100644
+--- a/src/booking.js
++++ b/src/booking.js
+@@ -36,3 +36,13 @@ export function listBookings(store, room) {
+     .filter((b) => b.room === room)
+     .sort((a, b) => toMinutes(a.start) - toMinutes(b.start))
+ }
++
++// B3: 취소한 예약은 남기고 상태만 바꾼다. 겹침 판정은 active만 본다. 이미 시작한 예약은 취소할 수 없다(운영팀)
++export function cancelBooking(store, id, { now }) {
++  const booking = store.bookings.find((b) => b.id === id)
++  if (!booking) throw fail('NOT_FOUND', `예약 ${id}가 없다`)
++  if (toMinutes(now) >= toMinutes(booking.start))
++    throw fail('ALREADY_STARTED', '이미 시작한 예약은 취소할 수 없다')
++  booking.status = 'cancelled'
++  return booking
++}
+diff --git a/test/cancel.test.js b/test/cancel.test.js
+new file mode 100644
+index 0000000..efeca5d
+--- /dev/null
++++ b/test/cancel.test.js
+@@ -0,0 +1,12 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import { cancelBooking, createBooking, listBookings } from '../src/booking.js'
++import { createStore } from '../src/store.js'
++
++test('취소한 시간에 다시 예약할 수 있다', () => {
++  const s = createStore()
++  const b = createBooking(s, { room: 'A', start: '2026-11-02T10:00', end: '2026-11-02T11:00', by: 'kim' })
++  cancelBooking(s, b.id, { now: '2026-11-01T09:00' })
++  createBooking(s, { room: 'A', start: '2026-11-02T10:00', end: '2026-11-02T11:00', by: 'lee' })
++  assert.equal(listBookings(s, 'A').length, 2)
++})

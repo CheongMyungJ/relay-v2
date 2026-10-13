@@ -192,7 +192,27 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
       ...(input.settings === undefined ? {} : { settings: input.settings }),
       // 기존 이슈 번호 (D338). 정수인지는 Relay.createWork가 본다
       ...(typeof input.issueNumber === 'number' ? { issueNumber: input.issueNumber } : {}),
+      // 조각 (D393). 시작할 수 있는지는 Relay.createWork가 기준 커밋의 문서로 본다
+      ...(input.plan && typeof input.plan === 'object'
+        ? { plan: { doc: text(input.plan.doc), slice: text(input.plan.slice) } }
+        : {}),
     }),
+  )
+  ipcMain.handle(IPC.planDocs, async (_e, projectId: unknown, branch: unknown, location: unknown) =>
+    (await ready).planDocs(
+      text(projectId),
+      text(branch),
+      location === 'remote' ? 'remote' : 'local',
+    ),
+  )
+  ipcMain.handle(
+    IPC.knowledgeTidy,
+    async (_e, projectId: unknown, branch: unknown, location: unknown) =>
+      (await ready).knowledgeTidy(
+        text(projectId),
+        text(branch),
+        location === 'remote' ? 'remote' : 'local',
+      ),
   )
   ipcMain.handle(IPC.review, async (_e, workKey: unknown, taskId: unknown) =>
     (await ready).review(text(workKey), text(taskId)),

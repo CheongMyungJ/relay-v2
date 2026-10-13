@@ -205,33 +205,66 @@ export function handoffRepo(prevRepo, remote, dest) {
   )
     .split('\n')
     .filter((r) => r && r !== 'origin/HEAD' && r !== 'origin/main' && r !== 'origin')
-  const merged = []
-  const conflicts = []
-  const failed = []
-  for (const ref of refs) {
-    if (run('git', ['merge-base', '--is-ancestor', ref, 'HEAD'], { cwd: work }).code === 0) continue
-    const msg = `Merge ${ref.replace(/^origin\//, '')} (팀 공유 머지, 평가 도구)`
-    let r = run('git', ['merge', '--no-ff', '--no-edit', '-m', msg, ref], { cwd: work })
-    if (r.code !== 0) {
-      run('git', ['merge', '--abort'], { cwd: work })
-      conflicts.push(ref)
-      r = run('git', ['merge', '--no-ff', '--no-edit', '-X', 'theirs', '-m', msg, ref], {
-        cwd: work,
-      })
-      if (r.code !== 0) {
-        run('git', ['merge', '--abort'], { cwd: work })
-        failed.push(ref)
-        continue
-      }
-    }
-    merged.push(ref.replace(/^origin\//, ''))
-  }
+  const { merged, conflicts, failed } = mergeRefs(work, refs, '팀 공유 머지')
   git(work, 'push', '-q', '-f', remote, 'HEAD:main')
   fs.rmSync(dest, { recursive: true, force: true })
   git(path.dirname(dest), 'clone', '-q', '--no-local', remote, dest)
   setUser(dest)
   fs.rmSync(work, { recursive: true, force: true })
   return { repo: dest, merged, conflicts, failed, head: git(dest, 'rev-parse', 'HEAD') }
+}
+
+/**
+ * refs를 차례로 지금 브랜치(main)에 머지한다. 이미 들어 있는 것은 건너뛴다. 충돌하면 되돌리고 뒤 쪽(-X theirs)으로 다시
+ * 머지하고 적는다. 그래도 안 되면 failed에 적는다
+ */
+function mergeRefs(dir, refs, why) {
+  const merged = []
+  const conflicts = []
+  const failed = []
+  for (const ref of refs) {
+    if (run('git', ['merge-base', '--is-ancestor', ref, 'HEAD'], { cwd: dir }).code === 0) continue
+    const msg = `Merge ${ref.replace(/^origin\//, '')} (${why}, 평가 도구)`
+    let r = run('git', ['merge', '--no-ff', '--no-edit', '-m', msg, ref], { cwd: dir })
+    if (r.code !== 0) {
+      run('git', ['merge', '--abort'], { cwd: dir })
+      conflicts.push(ref)
+      r = run('git', ['merge', '--no-ff', '--no-edit', '-X', 'theirs', '-m', msg, ref], {
+        cwd: dir,
+      })
+      if (r.code !== 0) {
+        run('git', ['merge', '--abort'], { cwd: dir })
+        failed.push(ref)
+        continue
+      }
+    }
+    merged.push(ref.replace(/^origin\//, ''))
+  }
+  return { merged, conflicts, failed }
+}
+
+/**
+ * 앞 Work 머지(works의 merge Work, docs/scale-experiment/protocol.md 3절). 같은 사람이 같은 레포에서 이어 가되, 앞 Work의
+ * 브랜치가 PR로 main에 머지된 뒤다. 레포의 main(체크아웃된 브랜치여야 함)에 main 밖의 로컬 브랜치 가운데 main에 아직 없는
+ * 커밋이 있는 것을 오래된 차례로 머지한다. 커밋하지 않은 변경은 건너가지 않는다
+ * @param {string} repo
+ * @returns {{ merged: string[], conflicts: string[], failed: string[], head: string }}
+ */
+export function mergeLocal(repo) {
+  const current = git(repo, 'rev-parse', '--abbrev-ref', 'HEAD')
+  if (current !== 'main')
+    throw new Error(`앞 Work 머지: 레포의 체크아웃된 브랜치가 main이 아님 (${current})`)
+  const refs = git(
+    repo,
+    'for-each-ref',
+    '--sort=committerdate',
+    '--format=%(refname:short)',
+    'refs/heads',
+  )
+    .split('\n')
+    .filter((r) => r && r !== 'main')
+  const r = mergeRefs(repo, refs, '앞 Work의 PR 머지')
+  return { ...r, head: git(repo, 'rev-parse', 'HEAD') }
 }
 
 function setUser(dir) {

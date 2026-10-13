@@ -20,6 +20,10 @@ const api: RelayApi = {
   registerProject: (path, branch) => ipcRenderer.invoke(IPC.registerProject, path, branch),
   branches: (projectId) => ipcRenderer.invoke(IPC.branches, projectId),
   createWork: (projectId, input) => ipcRenderer.invoke(IPC.createWork, projectId, input),
+  planDocs: (projectId, branch, location) =>
+    ipcRenderer.invoke(IPC.planDocs, projectId, branch, location),
+  knowledgeTidy: (projectId, branch, location) =>
+    ipcRenderer.invoke(IPC.knowledgeTidy, projectId, branch, location),
   review: (workKey, taskId) => ipcRenderer.invoke(IPC.review, workKey, taskId),
   approve: (workKey, taskId, opts) => ipcRenderer.invoke(IPC.approve, workKey, taskId, opts),
   cancelCountdown: (workKey, taskId) => ipcRenderer.invoke(IPC.cancelCountdown, workKey, taskId),

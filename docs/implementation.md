@@ -1121,6 +1121,15 @@ app/src/
 - [계약] 가짜 쪽 통과, 녹화본의 옵션에 `--append-system-prompt-file`.
 - [스모크] 곁 세션 탭.
 
+### M22. 대규모 기능 실험 (D393~D398)
+
+`docs/scale-experiment/`의 규약대로 만들고 잰다. 남길지 버릴지는 그 규약의 결정 규칙이 정한다.
+
+- **F1 구현 나눔(D393~D396):** `core/plan`(표 읽기, 조각 상태, 막는 까닭, 요청, `context.md` 절), `adapters/plan`(기준 커밋에서 `git grep`으로 문서 찾기, worktree에서 읽기), `Relay.planDocs`와 `createWork`의 확인, `RunnerContext.plan`, 새 Work 대화상자의 조각 고르기, `WorkState.plan`, spec 스킬의 표 템플릿.
+- **F3 지식 정리(D397, D398):** `core/knowledge-tidy`(후보, 요청), `adapters/knowledge`의 `readKnowledgeAt`·`namesInCode`·`filesAt`, `Relay.knowledgeTidy`, 새 Work 대화상자의 후보와 [지식 정리 Work로 채우기].
+- **평가 도구:** Work의 `merge: true`(앞 Work 머지, `lib/repo.mjs`의 `mergeLocal`), 앞 Work 머지가 있는 시나리오의 정답을 쌓아 보는 `check-scenario`, 앞 조각 동작을 보는 `regression` 시험, 지식만 바꾸는 정답, 시나리오 35·36, 실험 전 빌드의 설명서 `guides/pre.md`.
+- **시험:** [단위] `plan.test.ts`, `knowledge-tidy.test.ts`. [흐름] `plan.test.ts`(조각 상태, 막음, 머지 뒤 뒤 조각과 `context.md`), `knowledge-tidy.test.ts`. 평가 도구 `measure.test.mjs`의 앞 Work 머지.
+
 ## 8. 테스트 전략
 
 ### 8.1 시험의 층

@@ -1,0 +1,51 @@
+{
+  "id": "36-knowledge-tidy",
+  "repoName": "shop-coupon",
+  "type": "general",
+  "dev": true,
+  "title": "쌓인 팀 지식의 중복·낡은 항목·어긋난 규칙 정리",
+  "purpose": "대규모 기능 실험 F3(docs/scale-experiment/protocol.md). docs/knowledge/coupon/에 항목 12개가 있다. 같은 anchor의 중복 두 쌍(canStack은 같은 규칙, MIN_ORDER_AMOUNT는 서로 다른 사실을 합쳐야 함), 코드에서 사라진 이름을 가리키는 항목 둘(LEGACY_PREFIX는 없어진 기능이라 지움, calcCouponDiscount는 discountAmount로 이름이 바뀜), anchor가 달라 앱이 못 찾는 어긋난 규칙 한 쌍(환불 쿠폰: 지금은 되돌려 준다. 사람만 앎), 손대면 안 되는 멀쩡한 항목 넷. 새 빌드(relay)는 [새 Work]에서 앱이 찾은 후보로 요청을 채울 수 있고, 실험 전 빌드(pre)는 사람이 요청만 쓴다. 심은 문제가 얼마나 풀렸는지와 멀쩡한 항목을 지켰는지, 코드를 바꾸지 않았는지를 본다.",
+  "report": "팀 지식(docs/knowledge/)이 많아져서 정리하고 싶다. 중복되거나 낡은 건 손봐 줘. 코드는 건드리지 마.",
+  "knowledge": [
+    {
+      "share": "on_ask",
+      "text": "환불 쿠폰 정책: 2026-03에 '돌려주지 않는다'로 바꿨다가 2026-08에 다시 '환불하면 쓴 쿠폰을 되돌려 준다(만료된 쿠폰은 제외)'로 돌아왔다. 지금은 되돌려 준다."
+    },
+    {
+      "share": "on_ask",
+      "text": "OLD- 접두의 옛 쿠폰 코드는 2026-09에 모두 없앴다. 그 기능은 이제 없다."
+    }
+  ],
+  "checks": [
+    {
+      "name": "중복 합침",
+      "file": "tidy-duplicates.test.js"
+    },
+    {
+      "name": "낡은 항목",
+      "file": "tidy-stale.test.js"
+    },
+    {
+      "name": "어긋난 규칙",
+      "file": "tidy-contradiction.test.js"
+    },
+    {
+      "name": "멀쩡한 항목 그대로",
+      "file": "tidy-healthy.test.js",
+      "guard": true
+    },
+    {
+      "name": "코드 그대로",
+      "guard": true,
+      "scope": true
+    }
+  ],
+  "preferences": ["지울지 고칠지 애매한 것은 물어봐 주면 좋겠다."],
+  "reveals": [],
+  "events": [],
+  "expectedFiles": ["docs/knowledge/**"],
+  "limits": {
+    "minutes": 30,
+    "turns": 60
+  }
+}

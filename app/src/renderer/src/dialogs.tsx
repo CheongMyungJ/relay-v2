@@ -36,10 +36,21 @@ import {
   type WorkSettings,
 } from '../../shared/config'
 import type { NodeName } from '../../shared/contracts'
-import { WORK_TYPES, WORK_TYPE_LABEL, type MergeMethod, type WorkType } from '../../shared/work'
+import {
+  WORK_TYPES,
+  WORK_TYPE_LABEL,
+  type MergeMethod,
+  type PlanRef,
+  type WorkType,
+} from '../../shared/work'
 import type {
   CleanPreview,
+  PlanDocView,
+  PlanSliceStatus,
+  PlanSliceView,
   ProjectInspection,
+  TidyCandidateView,
+  TidyView,
   ProjectView,
   StepPreview,
   StepPreviewResult,
@@ -313,6 +324,93 @@ function WorkTypePicker({
   )
 }
 
+/**
+ * 설계 문서의 구현 나눔에서 조각 고르기 (D393). 조각마다 상태를 보이고, 먼저 조각이 머지되지 않았거나 이미 머지된 조각은
+ * 고를 수 없다. 고르면 유형과 요청을 채운다(요청은 고칠 수 있다)
+ */
+function PlanPicker({
+  docs,
+  value,
+  onPick,
+  onClear,
+}: {
+  docs: PlanDocView[]
+  value: PlanRef | null
+  onPick: (doc: PlanDocView, slice: PlanSliceView) => void
+  onClear: () => void
+}) {
+  return (
+    <details className="field plan-picker" open={value !== null || undefined}>
+      <summary>설계 문서의 구현 나눔에서 고르기</summary>
+      {docs.map((doc) => (
+        <div key={doc.path} role="group" aria-label={`구현 나눔 ${doc.path}`}>
+          <div className="dim">{doc.path}</div>
+          {doc.issues.length ? (
+            <div className="error">표에 문제가 있습니다: {doc.issues.join('; ')}</div>
+          ) : null}
+          <div className="plan-slices">
+            {doc.slices.map((s) => {
+              const picked = value?.doc === doc.path && value.slice === s.id
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  className={picked ? 'primary' : ''}
+                  aria-pressed={picked}
+                  disabled={s.blocked !== null}
+                  title={s.blocked ?? s.goal}
+                  onClick={() => onPick(doc, s)}
+                >
+                  {s.id} {s.name} · {PLAN_STATUS_LABEL[s.status]}
+                  {s.after.length ? ` (먼저: ${s.after.join(', ')})` : ''}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ))}
+      {value ? (
+        <button type="button" onClick={onClear}>
+          조각 고르지 않음
+        </button>
+      ) : null}
+    </details>
+  )
+}
+
+const TIDY_KIND_LABEL: Readonly<Record<TidyCandidateView['kind'], string>> = {
+  same_anchor: '같은 anchor',
+  stale_anchor: '코드에 없는 anchor',
+  missing_path: '없는 경로',
+  format: '형식 문제',
+}
+
+/** 지식 정리 후보 (D397). 누르면 후보로 채운 일반 Work의 요청을 넣는다 */
+function TidyNotice({ view, onUse }: { view: TidyView; onUse: (view: TidyView) => void }) {
+  return (
+    <details className="field tidy-notice">
+      <summary>지식 정리 후보 {view.candidates.length}건</summary>
+      <ul>
+        {view.candidates.map((c, i) => (
+          <li key={i}>
+            {TIDY_KIND_LABEL[c.kind]} {c.detail}: {c.paths.join(', ')}
+          </li>
+        ))}
+      </ul>
+      <button type="button" onClick={() => onUse(view)}>
+        지식 정리 Work로 채우기
+      </button>
+    </details>
+  )
+}
+
+const PLAN_STATUS_LABEL: Readonly<Record<PlanSliceStatus, string>> = {
+  merged: '머지됨',
+  active: '진행 중',
+  ready: '시작할 수 있음',
+  waiting: '기다림',
+}
+
 /** 요청 입력의 예시 문구. 유형을 고르기 전에는 버그 수정의 것이다 (D261, I88) */
 const REQUEST_PLACEHOLDER: Readonly<Record<WorkType, string>> = {
   bugfix: '버그 설명, 로그, 이슈 내용을 붙여 넣으세요',
@@ -342,6 +440,9 @@ export function NewWorkDialog({
   const [auto, setAuto] = useState<AutoOverrides>({})
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [planDocs, setPlanDocs] = useState<PlanDocView[]>([])
+  const [plan, setPlan] = useState<PlanRef | null>(null)
+  const [tidy, setTidy] = useState<TidyView | null>(null)
   const config = useConfig()
 
   useEffect(() => {
@@ -349,6 +450,27 @@ export function NewWorkDialog({
       if (list.length) setBranches(list)
     })
   }, [project.id])
+
+  // 기준이 바뀌면 그 기준의 설계 문서를 다시 읽고 고른 조각을 푼다 (D393)
+  useEffect(() => {
+    void window.relay.planDocs(project.id, branch, location).then((docs) => {
+      setPlanDocs(docs)
+      setPlan(null)
+    })
+    void window.relay.knowledgeTidy(project.id, branch, location).then(setTidy)
+  }, [project.id, branch, location])
+
+  const useTidy = (view: TidyView) => {
+    setPlan(null)
+    setType('general')
+    setRequest(view.request)
+  }
+
+  const pickSlice = (doc: PlanDocView, slice: PlanSliceView) => {
+    setPlan({ doc: doc.path, slice: slice.id })
+    if (slice.type) setType(slice.type)
+    setRequest(slice.request)
+  }
 
   const start = async () => {
     if (!type) return
@@ -375,6 +497,7 @@ export function NewWorkDialog({
         baseLocation: location,
         ...(Object.keys(settings).length ? { settings } : {}),
         ...(issueNumber !== null ? { issueNumber } : {}),
+        ...(plan ? { plan } : {}),
       }),
     )
     setBusy(false)
@@ -384,6 +507,10 @@ export function NewWorkDialog({
 
   return (
     <Modal title={`새 Work · ${project.name}`} onClose={onClose}>
+      {planDocs.length ? (
+        <PlanPicker docs={planDocs} value={plan} onPick={pickSlice} onClear={() => setPlan(null)} />
+      ) : null}
+      {tidy?.candidates.length ? <TidyNotice view={tidy} onUse={useTidy} /> : null}
       <div className="field">
         유형
         <WorkTypePicker value={type} onChange={setType} />

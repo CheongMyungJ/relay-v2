@@ -7,6 +7,8 @@
 //   3. traps/*.patch(있으면): 숨긴 시험 하나 이상 실패
 //   4. Work 둘을 잇는 시나리오(works)의 reference-<n>.patch(있으면): 그것만 적용하면 n번째 Work의 숨긴 시험과
 //      npm test가 통과하고, 다른 Work의 guard가 아닌 숨긴 시험은 실패한다(Work마다 고칠 것이 갈린다)
+//      앞 Work 머지(merge) Work가 있으면 Work n은 reference-1..n을 차례로 쌓아 보고, 1..n번째 Work의 시험이 통과하고 뒤
+//      Work의 guard가 아닌 숨긴 시험은 실패한다(docs/scale-experiment/protocol.md 3절)
 //   5. teammate Work가 있으면(팀원 교대에서 도구가 앞 Work를 main에 머지한다) reference-1..n을 차례로 모두 적용해도
 //      npm test와 모든 숨긴 시험이 통과한다(머지된 앞 Work가 뒤 Work의 시험을 깨지 않는다)
 //   6. 숨긴 쟁점(설계 시나리오, relay I111): `{ name, issue }`는 시험 파일이 없고 판정 모델이 가르므로 여기서는 돌리지
@@ -97,6 +99,8 @@ function checkOne(id) {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), `check-${id}-`))
   const problems = []
   const guard = new Map(allChecks(scenario).map((c) => [c.name, !!c.guard]))
+  // 앞 Work의 동작을 뒤 Work가 깨지 않는지 보는 시험(regression, 앞 Work 머지가 있는 시나리오). 앞 Work의 정답만으로도 통과한다
+  const regression = new Map(allChecks(scenario).map((c) => [c.name, !!c.regression]))
   const names = allChecks(scenario).map((c) => c.name)
   // 숨긴 쟁점은 판정 모델이 가르므로 돌린 결과에서 뺀다 (relay I111)
   const ran = (j) => ({ ...j, checks: j.checks.filter((c) => !c.issue) })
@@ -123,7 +127,8 @@ function checkOne(id) {
     if (fs.existsSync(ref)) {
       const j = ran(judge(dir, scenario, path.join(work, 'reference'), ref))
       console.log(line('reference.patch', j))
-      if (!j.files.length) problems.push('정답 패치를 적용했는데 바뀐 파일이 없음')
+      if (!j.files.length && !j.knowledgeFiles.length)
+        problems.push('정답 패치를 적용했는데 바뀐 파일이 없음')
       if (!j.repoTests.pass) problems.push(`정답 패치에서 npm test 실패\n${j.repoTests.output}`)
       for (const c of j.checks)
         if (!c.pass) problems.push(`정답 패치에서 숨긴 시험 실패: ${c.name}\n${c.output}`)
@@ -135,6 +140,9 @@ function checkOne(id) {
 
     // Work마다의 정답 (works). 그 Work의 시험만 통과하고 다른 Work의 시험은 그대로 실패해야 한다
     const parts = workParts(scenario)
+    // 앞 Work 머지(merge)가 있으면 Work n은 앞 Work들이 머지된 위에서 한다: 정답을 1..n 차례로 쌓아 보고, 앞 Work의
+    // 시험도 통과해야 한다
+    const stacked = parts.some((w) => w.merge)
     if (parts.length > 1) {
       parts.forEach((w, n) => {
         const patch = path.join(dir, `reference-${n + 1}.patch`)
@@ -142,16 +150,23 @@ function checkOne(id) {
           console.log(`  (reference-${n + 1}.patch 없음)`)
           return
         }
-        const j = judge(dir, scenario, path.join(work, `reference-${n + 1}`), patch)
-        console.log(line(`reference-${n + 1}.patch`, j))
-        const own = new Set((w.checks ?? []).map((c) => c.name))
+        const patches = stacked
+          ? parts.map((_, k) => path.join(dir, `reference-${k + 1}.patch`)).slice(0, n + 1)
+          : patch
+        const j = judge(dir, scenario, path.join(work, `reference-${n + 1}`), patches)
+        console.log(line(stacked ? `reference-1..${n + 1}.patch` : `reference-${n + 1}.patch`, j))
+        const own = new Set(
+          (stacked ? parts.slice(0, n + 1) : [w]).flatMap((x) =>
+            (x.checks ?? []).map((c) => c.name),
+          ),
+        )
         if (!j.files.length) problems.push(`Work ${n + 1} 정답 패치를 적용했는데 바뀐 파일이 없음`)
         if (!j.repoTests.pass)
           problems.push(`Work ${n + 1} 정답 패치에서 npm test 실패\n${j.repoTests.output}`)
         for (const c of j.checks) {
           if ((own.has(c.name) || guard.get(c.name)) && !c.pass)
             problems.push(`Work ${n + 1} 정답 패치에서 숨긴 시험 실패: ${c.name}\n${c.output}`)
-          if (!own.has(c.name) && !guard.get(c.name) && c.pass)
+          if (!own.has(c.name) && !guard.get(c.name) && !regression.get(c.name) && c.pass)
             problems.push(
               `Work ${n + 1} 정답 패치만으로 다른 Work의 숨긴 시험이 통과함(Work끼리 갈리지 않음): ${c.name}`,
             )
@@ -162,7 +177,7 @@ function checkOne(id) {
     }
 
     // 팀원 교대가 있으면 정답을 차례로 모두 적용한 상태(머지된 main)에서도 모든 시험이 통과해야 한다
-    if (parts.some((w) => w.teammate)) {
+    if (parts.some((w) => w.teammate || w.merge)) {
       const all = parts.map((_, n) => path.join(dir, `reference-${n + 1}.patch`))
       if (all.every((f) => fs.existsSync(f))) {
         const j = judge(dir, scenario, path.join(work, 'reference-all'), all)
@@ -173,7 +188,7 @@ function checkOne(id) {
           if (!c.pass)
             problems.push(`정답을 차례로 모두 적용하면 숨긴 시험 실패: ${c.name}\n${c.output}`)
       } else {
-        problems.push('teammate Work가 있는데 reference-<n>.patch가 모두 있지는 않음')
+        problems.push('teammate·merge Work가 있는데 reference-<n>.patch가 모두 있지는 않음')
       }
     }
 
@@ -187,7 +202,8 @@ function checkOne(id) {
     for (const t of traps) {
       const j = ran(judge(dir, scenario, path.join(work, `trap-${t}`), path.join(trapsDir, t)))
       console.log(line(`traps/${t}`, j))
-      if (!j.files.length) problems.push(`함정 패치를 적용했는데 바뀐 파일이 없음: ${t}`)
+      if (!j.files.length && !j.knowledgeFiles.length)
+        problems.push(`함정 패치를 적용했는데 바뀐 파일이 없음: ${t}`)
       if (j.checks.every((c) => c.pass)) problems.push(`함정 패치가 숨긴 시험을 모두 통과함: ${t}`)
     }
   } catch (e) {

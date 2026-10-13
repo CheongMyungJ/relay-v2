@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { CliArm } from '../lib/cli-arm.mjs'
-import { codeOutcome, judgeTree, makeRepo, withoutKnowledge } from '../lib/repo.mjs'
+import { codeOutcome, judgeTree, makeRepo, mergeLocal, withoutKnowledge } from '../lib/repo.mjs'
 import { agentUsage, agentUsageBySession, git, questionsBySession, stats } from '../lib/util.mjs'
 import { measuredWorks, pairOf, workParts, workScenario } from '../lib/works.mjs'
 import { compare } from '../primary.mjs'
@@ -233,7 +233,7 @@ describe('Work 여럿을 잇는 시나리오', () => {
     const w = workScenario(multi, 2)
     expect(w.report).toBe('w3')
     expect(w.works).toBeUndefined()
-    expect(w.work).toEqual({ index: 2, count: 3, teammate: false, mates: 1 })
+    expect(w.work).toEqual({ index: 2, count: 3, teammate: false, merge: false, mates: 1 })
     expect(() => workScenario(multi, 5)).toThrow()
   })
 })
@@ -284,5 +284,35 @@ describe('통계와 지식', () => {
     expect(kindOf('---\nkind: pitfall\n---\n본문')).toBe('pitfall')
     expect(kindOf('---\nkind: 규칙\n---\n')).toBe('기타')
     expect(kindOf('머리글 없음')).toBe('없음')
+  })
+})
+
+describe('앞 Work 머지 (merge Work, docs/scale-experiment/protocol.md 3절)', () => {
+  it('main 밖의 로컬 브랜치를 오래된 차례로 main에 머지하고, 이미 들어 있는 브랜치는 건너뛴다', () => {
+    const root = tmp()
+    const src = path.join(root, 'src')
+    write(src, { 'a.js': 'a\n' })
+    const { repo } = makeRepo(path.join(root, 'work'), 'repo', src)
+    // 다른 worktree에서 브랜치에 커밋한다 (relay의 Work worktree와 같음)
+    const tree = path.join(root, 'tree')
+    git(repo, 'worktree', 'add', '-q', '-b', 'relay/w-1', tree)
+    fs.writeFileSync(path.join(tree, 'b.js'), 'b\n')
+    git(tree, 'add', '-A')
+    git(tree, 'commit', '-q', '-m', 'w-1')
+    git(repo, 'branch', 'already', 'main')
+    const r = mergeLocal(repo)
+    expect(r.merged).toEqual(['relay/w-1'])
+    expect(r.conflicts).toEqual([])
+    expect(fs.readFileSync(path.join(repo, 'b.js'), 'utf8')).toBe('b\n')
+    expect(mergeLocal(repo).merged).toEqual([])
+  })
+
+  it('main이 체크아웃되어 있지 않으면 멈춘다', () => {
+    const root = tmp()
+    const src = path.join(root, 'src')
+    write(src, { 'a.js': 'a\n' })
+    const { repo } = makeRepo(path.join(root, 'work'), 'repo', src)
+    git(repo, 'checkout', '-q', '-b', 'other')
+    expect(() => mergeLocal(repo)).toThrow('main이 아님')
   })
 })

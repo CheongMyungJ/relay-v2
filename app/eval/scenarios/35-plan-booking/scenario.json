@@ -1,0 +1,95 @@
+{
+  "id": "35-plan-booking",
+  "repoName": "rooms",
+  "type": "feature",
+  "dev": true,
+  "title": "머지된 설계 문서의 구현 나눔(조각 셋, 의존 있음)을 Work 셋으로 차례로 구현",
+  "purpose": "대규모 기능 실험 F1(docs/scale-experiment/protocol.md). 설계 문서 docs/booking.md가 이미 머지되어 있고 구현 나눔에 조각 s1(예약 만들기) → s2(예약 취소) → s3(반복 예약)이 있다. Work마다 조각 하나를 구현하고, Work 사이에 앞 Work가 PR로 main에 머지된다. 뒤 조각은 앞 조각의 결정(B1 30분 단위, B2 끝=시작은 겹치지 않음, B3 취소한 예약은 남기고 겹침에서 뺌)을 지키고, s3은 B4(한 회차라도 거절되면 아무것도 만들지 않음)를 지켜야 한다. 회차마다 createBooking을 부르는 흔한 구현은 B4를 어긴다. 사람만 아는 것: 이미 시작한 예약은 취소할 수 없음(s2), 반복은 최대 12주(s3). 새 빌드(relay)는 [새 Work]에서 조각을 골라 시작하고 조각 Work가 앞 조각의 요약과 완료조건을 받는다. 실험 전 빌드(pre)는 사람이 요청을 직접 쓴다.",
+  "measure": [1, 2, 3],
+  "works": [
+    {
+      "report": "`docs/booking.md` 설계(팀 리뷰를 거쳐 main에 머지됨)의 구현 나눔에서 s1(예약 만들기)부터 하자.",
+      "knowledge": [
+        {
+          "share": "upfront",
+          "text": "설계 문서 docs/booking.md는 팀이 리뷰해 머지한 것이다. 문서의 결정과 모듈 모양대로 하면 된다."
+        }
+      ],
+      "checks": [
+        {
+          "name": "만들기 규칙",
+          "file": "create.test.js"
+        }
+      ]
+    },
+    {
+      "merge": true,
+      "report": "`docs/booking.md` 구현 나눔의 s2(예약 취소)를 할 차례다.",
+      "knowledge": [
+        {
+          "share": "on_ask",
+          "text": "운영팀이 정했다: 이미 시작한 예약(지금 시각이 시작 시각과 같거나 지난 예약)은 취소할 수 없다. 오류 코드는 ALREADY_STARTED이고, 예약은 그대로 둔다."
+        }
+      ],
+      "checks": [
+        {
+          "name": "취소 규칙",
+          "file": "cancel.test.js"
+        },
+        {
+          "name": "시작한 예약 취소 불가",
+          "file": "cancel-started.test.js"
+        },
+        {
+          "name": "앞 조각: 만들기 규칙(s2 뒤)",
+          "file": "create.test.js",
+          "regression": true
+        }
+      ]
+    },
+    {
+      "merge": true,
+      "report": "`docs/booking.md` 구현 나눔의 s3(반복 예약)을 할 차례다.",
+      "knowledge": [
+        {
+          "share": "on_ask",
+          "text": "운영팀이 정했다: 반복은 최대 12주다. 1~12를 벗어나면 오류 코드 INVALID_WEEKS이고 아무것도 만들지 않는다."
+        }
+      ],
+      "checks": [
+        {
+          "name": "반복 회차",
+          "file": "weekly.test.js"
+        },
+        {
+          "name": "반복은 전부 아니면 없음",
+          "file": "weekly-atomic.test.js"
+        },
+        {
+          "name": "반복 상한",
+          "file": "weekly-limit.test.js"
+        },
+        {
+          "name": "앞 조각: 만들기 규칙(s3 뒤)",
+          "file": "create.test.js",
+          "regression": true
+        },
+        {
+          "name": "앞 조각: 취소 규칙(s3 뒤)",
+          "file": "cancel.test.js",
+          "regression": true
+        }
+      ]
+    }
+  ],
+  "preferences": [
+    "설계 문서의 결정은 바꾸지 않고 따르고 싶다. 바꿔야 하면 먼저 물어봐 주면 좋겠다."
+  ],
+  "reveals": [],
+  "events": [],
+  "expectedFiles": ["src/**", "test/**", "docs/booking.md"],
+  "limits": {
+    "minutes": 40,
+    "turns": 80
+  }
+}

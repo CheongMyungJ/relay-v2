@@ -199,6 +199,16 @@ function nextWorkLines(kind, scenario) {
       '',
     ]
   }
+  if (scenario.work.merge) {
+    return [
+      `이 레포에서 앞서 다른 일을 이미 끝냈고, 이번이 ${n + 1}번째 일이다. 앞 일의 변경은 PR로 main(기준 브랜치)에 머지됐다. ${
+        kind === 'cli'
+          ? '앞 일의 터미널은 닫았고, 같은 레포 폴더(main)에서 claude를 새로 띄워 두었다.'
+          : '앱과 프로젝트는 앞 일 그대로다. 화면에 남아 있는 완료된 Work는 앞 일이다. 이번 일은 [새 Work]로 시작한다.'
+      }`,
+      '',
+    ]
+  }
   return [
     `이 레포에서 앞서 다른 일을 이미 끝냈고, 이번이 ${n + 1}번째 일이다. ${
       kind === 'cli'

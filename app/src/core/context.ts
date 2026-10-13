@@ -26,6 +26,7 @@ import {
 import { workBranch } from './records'
 import { REPLIES_FILE, RESPONSE_FILE, parseFrontMatter, sectionText } from './validate'
 import { knowledgeSection, type KnowledgeInput } from './knowledge'
+import { planSection, type PlanContextInput } from './plan'
 
 /**
  * 이 노드 스킬의 질문 방식. Work 설정, 앱 설정 순서로 본다 (D26, D72). 설계 문답(spec)은 질문 방식 설정이 없어 null이다
@@ -207,6 +208,8 @@ export interface SelectionInput {
 
 export interface ContextInput {
   work: WorkState
+  /** 조각 Work의 묶음 (D395). 조각으로 만든 Work가 아니면 없다 */
+  plan?: PlanContextInput | null
   /** 시작하는 task */
   task: TaskRecord
   /** task를 시작하는 때의 앱 설정. 질문 방식은 이때의 값을 쓴다 (D73) */
@@ -700,6 +703,7 @@ export function buildContext(input: ContextInput): string {
     ['승인 방식', approvalSection(config, work.settings, task.node, taskEngine(task))],
     ['마무리 안내 문구', closingMessage(task.node, input.delivery, taskEngine(task))],
     ['질문 방식', questionLine(config, work.settings, task.node)],
+    ...(input.plan ? [planSection(input.plan)] : []),
     ...(input.knowledge ? [knowledgeSection(task.node, input.knowledge)] : []),
     ...(input.submodules?.length ? [submoduleSection(input.submodules)] : []),
     ['선택 가능한 다음 단계', list(nextSteps(type, task.node))],

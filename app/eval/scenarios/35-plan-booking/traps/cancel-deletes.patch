@@ -1,0 +1,98 @@
+diff --git a/src/booking.js b/src/booking.js
+new file mode 100644
+index 0000000..5e3c94f
+--- /dev/null
++++ b/src/booking.js
+@@ -0,0 +1,48 @@
++import { isTime, onHalfHour, toMinutes } from './time.js'
++
++function fail(code, message) {
++  return Object.assign(new Error(message), { code })
++}
++
++function overlaps(a, b) {
++  return toMinutes(a.start) < toMinutes(b.end) && toMinutes(b.start) < toMinutes(a.end)
++}
++
++// B1: 정각이나 30분, 끝은 시작보다 늦다
++function checkSlot(start, end) {
++  if (!isTime(start) || !isTime(end) || !onHalfHour(start) || !onHalfHour(end))
++    throw fail('INVALID_SLOT', '시작과 끝은 정각이나 30분이어야 한다')
++  if (toMinutes(end) <= toMinutes(start)) throw fail('INVALID_SLOT', '끝은 시작보다 늦어야 한다')
++}
++
++// B2: 같은 회의실의 겹치는 예약은 거절한다(끝과 시작이 같으면 겹치지 않음)
++function checkFree(store, slot) {
++  const clash = store.bookings.find(
++    (b) => b.room === slot.room && b.status === 'active' && overlaps(b, slot),
++  )
++  if (clash) throw fail('OVERLAP', `예약 ${clash.id}와 겹친다`)
++}
++
++export function createBooking(store, { room, start, end, by }) {
++  checkSlot(start, end)
++  checkFree(store, { room, start, end })
++  const booking = { id: store.nextId++, room, start, end, by, status: 'active' }
++  store.bookings.push(booking)
++  return booking
++}
++
++export function listBookings(store, room) {
++  return store.bookings
++    .filter((b) => b.room === room)
++    .sort((a, b) => toMinutes(a.start) - toMinutes(b.start))
++}
++
++// B3: 취소한 예약은 남기고 상태만 바꾼다. 겹침 판정은 active만 본다. 이미 시작한 예약은 취소할 수 없다(운영팀)
++export function cancelBooking(store, id, { now }) {
++  const booking = store.bookings.find((b) => b.id === id)
++  if (!booking) throw fail('NOT_FOUND', `예약 ${id}가 없다`)
++  if (toMinutes(now) >= toMinutes(booking.start))
++    throw fail('ALREADY_STARTED', '이미 시작한 예약은 취소할 수 없다')
++  store.bookings.splice(store.bookings.indexOf(booking), 1)
++  return { ...booking, status: 'cancelled' }
++}
+diff --git a/test/booking.test.js b/test/booking.test.js
+new file mode 100644
+index 0000000..225be02
+--- /dev/null
++++ b/test/booking.test.js
+@@ -0,0 +1,20 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import { createBooking, listBookings } from '../src/booking.js'
++import { createStore } from '../src/store.js'
++
++test('예약을 만들고 회의실별로 시작 차례로 본다', () => {
++  const s = createStore()
++  createBooking(s, { room: 'A', start: '2026-11-02T10:00', end: '2026-11-02T11:00', by: 'kim' })
++  createBooking(s, { room: 'A', start: '2026-11-02T09:00', end: '2026-11-02T10:00', by: 'lee' })
++  assert.deepEqual(listBookings(s, 'A').map((b) => b.by), ['lee', 'kim'])
++})
++
++test('겹치면 거절한다', () => {
++  const s = createStore()
++  createBooking(s, { room: 'A', start: '2026-11-02T10:00', end: '2026-11-02T11:00', by: 'kim' })
++  assert.throws(
++    () => createBooking(s, { room: 'A', start: '2026-11-02T10:30', end: '2026-11-02T11:30', by: 'lee' }),
++    { code: 'OVERLAP' },
++  )
++})
+diff --git a/test/cancel.test.js b/test/cancel.test.js
+new file mode 100644
+index 0000000..efeca5d
+--- /dev/null
++++ b/test/cancel.test.js
+@@ -0,0 +1,12 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import { cancelBooking, createBooking, listBookings } from '../src/booking.js'
++import { createStore } from '../src/store.js'
++
++test('취소한 시간에 다시 예약할 수 있다', () => {
++  const s = createStore()
++  const b = createBooking(s, { room: 'A', start: '2026-11-02T10:00', end: '2026-11-02T11:00', by: 'kim' })
++  cancelBooking(s, b.id, { now: '2026-11-01T09:00' })
++  createBooking(s, { room: 'A', start: '2026-11-02T10:00', end: '2026-11-02T11:00', by: 'lee' })
++  assert.equal(listBookings(s, 'A').length, 2)
++})

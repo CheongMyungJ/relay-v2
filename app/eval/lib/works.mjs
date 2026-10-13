@@ -5,6 +5,8 @@
 //   레포를 새로 clone해 새 앱 저장소(relay)나 새 터미널(맨 CLI)에서 시작한다. 레포로 건너가지 않은 지식은 닿지 않는다.
 // - knowledge 항목의 `carry: true`: 앞 Work에서 사람이 이미 알려 줬거나 알려 줄 수 있었던 사실이다. 사람 역할이 이것을
 //   다시 알려 준 횟수(carriedTold)가 "다시 말하게 한 부담"이다.
+// 대규모 기능 실험(docs/scale-experiment/protocol.md)에서 더한 것:
+// - Work의 `merge: true`: 같은 사람이 같은 앱과 레포에서 이어 가되, 앞 Work들의 브랜치가 PR로 main에 머지된 뒤다(도구가 머지).
 // - 시나리오의 `measure`: 재는 Work의 번호(1부터). 없으면 첫 Work를 뺀 모두다.
 
 /** Work 목록. works가 없으면 시나리오 자신이 Work 하나다 */
@@ -43,7 +45,13 @@ export function workScenario(scenario, n) {
     report: w.report,
     knowledge: w.knowledge ?? [],
     checks: w.checks ?? [],
-    work: { index: n, count: parts.length, teammate: !!w.teammate, mates: mateIndex(parts, n) },
+    work: {
+      index: n,
+      count: parts.length,
+      teammate: !!w.teammate,
+      merge: !!w.merge,
+      mates: mateIndex(parts, n),
+    },
   }
 }
 

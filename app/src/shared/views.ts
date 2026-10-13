@@ -11,6 +11,7 @@ import type {
   TaskStatus,
   UncommittedAction,
   WorkStatus,
+  PlanRef,
   WorkType,
 } from './work'
 
@@ -932,6 +933,48 @@ export interface NewWorkInput {
   settings?: WorkSettings
   /** 요청이 온 기존 이슈의 번호 (D338). 이슈 기록이 켜진 프로젝트에서만 쓴다. 없으면 새 이슈를 만든다 */
   issueNumber?: number | null
+  /** 설계 문서의 구현 나눔에서 고른 조각 (D393) */
+  plan?: PlanRef
+}
+
+/** 구현 나눔 조각의 상태 (D394): 머지됨 / 진행 중 / 시작할 수 있음 / 기다림 */
+export type PlanSliceStatus = 'merged' | 'active' | 'ready' | 'waiting'
+
+/** 새 Work 대화상자의 조각 (D393) */
+export interface PlanSliceView {
+  id: string
+  name: string
+  type: WorkType | null
+  after: string[]
+  goal: string
+  status: PlanSliceStatus
+  /** 이 조각을 맡은 Work (포기한 것은 뺌) */
+  works: string[]
+  /** 새 Work로 시작할 수 없는 까닭. 시작할 수 있으면 null */
+  blocked: string | null
+  /** 고르면 채울 요청 */
+  request: string
+}
+
+/** 지식 정리 후보 (D397) */
+export interface TidyCandidateView {
+  kind: 'same_anchor' | 'stale_anchor' | 'missing_path' | 'format'
+  paths: string[]
+  detail: string
+}
+
+/** 새 Work 대화상자의 지식 정리 (D397). 후보가 없거나 지식 관리를 끄면 candidates가 비어 있다 */
+export interface TidyView {
+  candidates: TidyCandidateView[]
+  /** [지식 정리 Work로 채우기]가 채울 요청 */
+  request: string
+}
+
+/** 기준 브랜치에서 찾은 `## 구현 나눔`이 있는 설계 문서 (D393) */
+export interface PlanDocView {
+  path: string
+  issues: string[]
+  slices: PlanSliceView[]
 }
 
 export interface ApproveOptions {

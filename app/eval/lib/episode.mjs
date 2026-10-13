@@ -10,7 +10,14 @@ import { armBase } from './kind.mjs'
 import { RelayArm } from './relay-arm.mjs'
 import { auditTold } from './told.mjs'
 import { judgeIssues, isIssue, readDialogue } from './issue-judge.mjs'
-import { diffTree, handoffRepo, judgeTree, makeRepo, withoutKnowledge } from './repo.mjs'
+import {
+  diffTree,
+  handoffRepo,
+  judgeTree,
+  makeRepo,
+  mergeLocal,
+  withoutKnowledge,
+} from './repo.mjs'
 import {
   agentUsage,
   agentUsageBySession,
@@ -349,6 +356,15 @@ export async function runEpisode(o) {
             `팀원 교대: 머지 ${h.merged.length}개${h.conflicts.length ? `, 충돌 ${h.conflicts.length}개(뒤 쪽으로 머지)` : ''}${h.failed.length ? `, 머지 못함 ${h.failed.length}개` : ''}`,
           )
           moved = await arm.handoff(h.repo)
+        } else if (parts[w].merge) {
+          // 앞 Work 머지: 같은 사람, 같은 앱과 레포. 앞 Work의 브랜치를 main에 머지한 뒤 다음 Work를 시작한다
+          const h = mergeLocal(arm.o.repo)
+          handoff = { work: w + 1, merged: h.merged, conflicts: h.conflicts, failed: h.failed }
+          handoffs.push(handoff)
+          say(
+            `앞 Work 머지: ${h.merged.length}개${h.conflicts.length ? `, 충돌 ${h.conflicts.length}개(뒤 쪽으로 머지)` : ''}${h.failed.length ? `, 머지 못함 ${h.failed.length}개` : ''}`,
+          )
+          moved = await arm.nextWork()
         } else {
           moved = await arm.nextWork()
         }

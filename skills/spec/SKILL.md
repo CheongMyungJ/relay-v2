@@ -23,7 +23,7 @@ For a spec Work, settle with the human, one by one, what the intent says to deci
 
 ## Topic list
 
-- Start from the intent's "<무엇>을 정한다" items and add the issues you found reading the code. End the list with "구현 나눔": the split into Works, their order, and a goal of a line or two for each piece.
+- Start from the intent's "<무엇>을 정한다" items and add the issues you found reading the code. End the list with "구현 나눔": the split into Works, their order, and a goal of a line or two for each piece. Write it in the document as the table in the template below (the app reads it to start each piece as a Work, D393): one row per piece, `먼저` lists the pieces that must be merged first.
 - Write the list in terminal text, then confirm it with `AskUserQuestion`. Adding an issue the intent does not have widens the scope, and dropping a topic changes it: the human decides both here. The human can also change the order or drop 구현 나눔.
 
 ## Questions
@@ -96,7 +96,11 @@ Ask on the spot:
 - 무엇 — 왜 정하지 않았는지, 누가 언제 정하나 (없으면 "없음")
 
 ## 구현 나눔
-(정했을 때만)
+(정했을 때만. 앱이 이 표를 읽어 조각마다 Work를 만든다)
+| 조각 | 이름 | 유형 | 먼저 | 목표 |
+|---|---|---|---|---|
+| s1 | <짧은 이름> | 기능 추가 | | <한두 줄> |
+| s2 | <짧은 이름> | 기능 추가 | s1 | <한두 줄> |
 
 ## 변경 이력
 ```

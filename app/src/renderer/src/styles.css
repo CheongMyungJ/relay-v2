@@ -1967,3 +1967,11 @@ button.link:hover:not(:disabled) {
   margin-top: 2px;
   font-size: 12px;
 }
+
+/* 구현 나눔에서 조각 고르기 (D393) */
+.plan-picker .plan-slices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 8px;
+}

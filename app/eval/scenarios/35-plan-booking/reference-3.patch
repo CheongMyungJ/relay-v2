@@ -1,0 +1,53 @@
+diff --git a/src/booking.js b/src/booking.js
+index 4ab0077..1450145 100644
+--- a/src/booking.js
++++ b/src/booking.js
+@@ -1,4 +1,4 @@
+-import { isTime, onHalfHour, toMinutes } from './time.js'
++import { addDays, isTime, onHalfHour, toMinutes } from './time.js'
+ 
+ function fail(code, message) {
+   return Object.assign(new Error(message), { code })
+@@ -46,3 +46,26 @@ export function cancelBooking(store, id, { now }) {
+   booking.status = 'cancelled'
+   return booking
+ }
++
++const MAX_WEEKS = 12
++
++// B4: 회차마다 예약 하나, 같은 series. 한 회차라도 안 되면 아무것도 만들지 않는다. 반복은 최대 12주(운영팀)
++export function createWeekly(store, { room, start, end, by, weeks }) {
++  if (!Number.isInteger(weeks) || weeks < 1 || weeks > MAX_WEEKS)
++    throw fail('INVALID_WEEKS', `반복은 1~${MAX_WEEKS}주`)
++  const slots = Array.from({ length: weeks }, (_, k) => ({
++    room,
++    start: addDays(start, 7 * k),
++    end: addDays(end, 7 * k),
++  }))
++  for (const slot of slots) {
++    checkSlot(slot.start, slot.end)
++    checkFree(store, slot)
++  }
++  const series = store.nextId
++  return slots.map((slot) => {
++    const booking = { id: store.nextId++, ...slot, by, status: 'active', series }
++    store.bookings.push(booking)
++    return booking
++  })
++}
+diff --git a/test/weekly.test.js b/test/weekly.test.js
+new file mode 100644
+index 0000000..19aafdc
+--- /dev/null
++++ b/test/weekly.test.js
+@@ -0,0 +1,10 @@
++import { test } from 'node:test'
++import assert from 'node:assert'
++import { createWeekly } from '../src/booking.js'
++import { createStore } from '../src/store.js'
++
++test('매주 반복', () => {
++  const s = createStore()
++  const list = createWeekly(s, { room: 'A', start: '2026-11-02T10:00', end: '2026-11-02T11:00', by: 'kim', weeks: 3 })
++  assert.deepEqual(list.map((b) => b.start), ['2026-11-02T10:00', '2026-11-09T10:00', '2026-11-16T10:00'])
++})

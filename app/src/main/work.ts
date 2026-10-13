@@ -380,6 +380,7 @@ import {
   type KnowledgeInput,
   type KnowledgeQuery,
 } from '../core/knowledge'
+import type { PlanContextInput } from '../core/plan'
 
 /** verify의 지식 확인 결과: 되돌리는 것(errors)과 보이기만 하는 것(warnings, 되돌린 뒤의 지식 검토) */
 interface KnowledgeCheck {
@@ -411,6 +412,8 @@ export interface RunnerContext {
    * 오래된 차례다
    */
   knowledgeSources(projectId: string, exceptWorkId: string): KnowledgeSource[]
+  /** 조각 Work의 묶음 (D395, core/plan). 조각으로 만든 Work가 아니면 null */
+  plan(projectId: string, workId: string): Promise<PlanContextInput | null>
   /** 지금 시각. 현지 시각과 오프셋을 담은 ISO 8601 */
   at(): string
   /** 새 PTY의 크기. 탭이 크기를 알리면 그 크기를 쓴다 */
@@ -1421,6 +1424,8 @@ export class WorkRunner {
       )
     return buildContext({
       knowledge,
+      // 읽지 못하면 묶음 없이 간다
+      plan: await this.ctx.plan(this.project.project_id, this.work.work_id).catch(() => null),
       work: this.work,
       task,
       config: this.ctx.config(),

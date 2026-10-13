@@ -34,6 +34,7 @@ import type {
   MergeOperation,
   OwnedFile,
   OwnedFileHashes,
+  PlanRef,
   PrMerged,
   RespondOperation,
   RespondRound,
@@ -1190,6 +1191,8 @@ export interface NewWork {
    * 않는 표시의 id(D349)다. 없으면 이슈 기록이 없다
    */
   issue?: { linked: number | null; mark: string }
+  /** 설계 문서의 구현 나눔에서 고른 조각 (D393) */
+  plan?: PlanRef
   at: string
 }
 
@@ -1209,6 +1212,7 @@ export function createWork(input: NewWork): Transition {
     settings: mergeWorkSettings({}, input.settings ?? {}),
     file_hashes: hashes,
     ...(input.issue ? { issue: newIssueRecord(input.issue.linked, input.issue.mark) } : {}),
+    ...(input.plan ? { plan: input.plan } : {}),
     tasks: [],
   }
   const intake = {
@@ -1223,6 +1227,7 @@ export function createWork(input: NewWork): Transition {
         type: input.type,
         base_branch: input.baseBranch,
         base_commit: input.baseCommit,
+        ...(input.plan ? { plan: input.plan } : {}),
       }),
       { type: 'startTask', taskId: intake.id, node: intake.node, reason: intake.reason },
     ],
