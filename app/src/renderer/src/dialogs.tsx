@@ -340,7 +340,8 @@ function PlanPicker({
   onClear: () => void
 }) {
   return (
-    <details className="field plan-picker" open={value !== null || undefined}>
+    // 처음부터 펼쳐 둔다: 접혀 있으면 조각이 있는 줄 모르고 지나친다(평가 시범)
+    <details className="field plan-picker" open>
       <summary>설계 문서의 구현 나눔에서 고르기</summary>
       {docs.map((doc) => (
         <div key={doc.path} role="group" aria-label={`구현 나눔 ${doc.path}`}>
@@ -358,6 +359,8 @@ function PlanPicker({
                   className={picked ? 'primary' : ''}
                   aria-pressed={picked}
                   disabled={s.blocked !== null}
+                  // 이름은 보이는 글자로 둔다. 까닭과 목표는 설명(title)으로만 보인다
+                  aria-label={`${s.id} ${s.name} · ${PLAN_STATUS_LABEL[s.status]}`}
                   title={s.blocked ?? s.goal}
                   onClick={() => onPick(doc, s)}
                 >
