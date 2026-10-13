@@ -16,7 +16,7 @@ import {
 import { agentUsage, agentUsageBySession, git, questionsBySession, stats } from '../lib/util.mjs'
 import { chained, measuredWorks, pairOf, workParts, workScenario } from '../lib/works.mjs'
 import { compare } from '../primary.mjs'
-import { kindOf, knowledgeInDiff } from '../knowledge-quality.mjs'
+import { finalKnowledge, kindOf, knowledgeInDiff } from '../knowledge-quality.mjs'
 
 const dirs = []
 const tmp = () => {
@@ -393,6 +393,32 @@ describe('통계와 지식', () => {
     expect([...k.keys()].sort()).toEqual(['docs/knowledge/old.md', 'docs/knowledge/vat.md'])
     expect(k.get('docs/knowledge/vat.md')).toBe('---\nkind: rule\n')
     expect(k.get('docs/knowledge/old.md')).toBeNull()
+  })
+
+  it('finalKnowledge는 이어 머지 Work의 diff를 레포 전체로 본다(앞 Work에서 지운 지식이 남지 않음)', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kq-'))
+    const file = (name, text) =>
+      [
+        `diff --git a/base/docs/knowledge/${name} b/tree/docs/knowledge/${name}`,
+        'new file mode 100644',
+        '--- /dev/null',
+        `+++ b/tree/docs/knowledge/${name}`,
+        '@@ -0,0 +1 @@',
+        `+${text}`,
+      ].join('\n')
+    fs.mkdirSync(path.join(dir, 'final'))
+    fs.writeFileSync(
+      path.join(dir, 'final', 'w1.diff'),
+      `${file('a.md', '하나')}\n${file('b.md', '둘')}\n`,
+    )
+    fs.writeFileSync(path.join(dir, 'final', 'w2.diff'), `${file('a.md', '하나 고침')}\n`)
+    const run = { dir, works: [{ id: 'w1' }, { id: 'w2' }] }
+    const merged = finalKnowledge(run, { works: [{}, { merge: true }] })
+    expect(merged).toEqual([{ path: 'docs/knowledge/a.md', text: '하나 고침\n' }])
+    // 같은 사람이 main에서 따로 시작하는 Work는 앞 Work의 지식 위에 덮는다
+    const same = finalKnowledge(run, { works: [{}, {}] })
+    expect(same.map((k) => k.path)).toEqual(['docs/knowledge/a.md', 'docs/knowledge/b.md'])
+    fs.rmSync(dir, { recursive: true, force: true })
   })
 
   it('kindOf는 머리글의 kind를 정한 값으로만 읽는다', () => {

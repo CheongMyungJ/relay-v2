@@ -158,9 +158,10 @@ export function judgeTree(o) {
         pass: false,
         output: '',
       }
+    // EVAL_BASE_DIR: 기준 폴더. 리팩터링의 숨긴 시험이 기준과 결과의 동작(예: NAND 명령 기록)을 견줄 때 쓴다
     const r = run('node', ['--test', path.join('eval-hidden', c.file)], {
       cwd: copy,
-      env: { ...process.env, ...(c.env ?? {}) },
+      env: { ...process.env, EVAL_BASE_DIR: path.resolve(o.baseDir), ...(c.env ?? {}) },
       timeoutMs: c.timeoutMs ?? 60_000,
     })
     return { name: c.name, bug: c.bug ?? null, pass: r.code === 0, output: r.out.slice(-3000) }

@@ -9,7 +9,7 @@
 // 지식 검토 호출(D300)의 기록(verify task의 knowledge-review.json)이 있으면 쪽마다 호출 수, 시간, 비용, 토큰, 되돌림을 센다.
 // kind 분포(머리글 kind마다 파일 수, 머리글이 없는 옛 형식은 "없음")는 기준이 없는 시나리오에서도 센다.
 // 레포에 남는 지식: Work의 diff(final/<id>.diff)는 시나리오 repo/에서 그 Work 끝까지의 차이다. 팀원 Work는 앞 Work를
-// 머지한 main에서 시작하므로 그 diff의 지식이 레포 전체다. 같은 사람의 Work는 main에서 따로 시작하므로 앞 Work의 지식
+// 머지한 main에서 시작하므로 그 diff의 지식이 레포 전체다. 이어 머지 Work(merge)도 같다. 같은 사람의 다른 Work는 main에서 따로 시작하므로 앞 Work의 지식
 // 위에 덮는다(같은 경로는 뒤 Work가 이긴다, 머지에서 뒤 브랜치를 고르는 것과 같음).
 //   node eval/knowledge-quality.mjs <결과 폴더>... [--model sonnet] [--redo] [--out 파일.md]
 import fs from 'node:fs'
@@ -58,7 +58,7 @@ export function finalKnowledge(run, scenario) {
     const file = path.join(run.dir, 'final', `${w.id}.diff`)
     if (!fs.existsSync(file)) return
     const k = knowledgeInDiff(fs.readFileSync(file, 'utf8'))
-    if (parts[n]?.teammate) state = new Map()
+    if (parts[n]?.teammate || parts[n]?.merge) state = new Map()
     for (const [p, text] of k) {
       if (text === null) state.delete(p)
       else state.set(p, text)
