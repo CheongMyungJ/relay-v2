@@ -8,7 +8,7 @@ const HEALTHY = {
   "docs/knowledge/coupon/max-rate.md": "bce80d2de671cc5bdb41d7fe58b587f140591705d1368a3ed63dc8334fe9ac2e",
   "docs/knowledge/coupon/expiry-kst.md": "75a4b47780e8a30b2a3c458ba5163010e3b7d3ae67d397bbe81c27479b93fec2",
   "docs/knowledge/coupon/rounding.md": "d0628571610f8297f6f2061ae3e5f6ddec5497e6e3d6fcfd0f618033b57ef47f",
-  "docs/knowledge/coupon/test-clock.md": "eaf751a17410a7959e85d4dbaa1e9974e6a7478d35e13da689f02d35cd8eb915"
+  "docs/knowledge/coupon/test-clock.md": "d32c82c6e2614b0364320100845f6db8ed5cdbc16bd3ffd7d335555ecb6efcb2"
 }
 
 test('멀쩡한 항목은 그대로다', () => {

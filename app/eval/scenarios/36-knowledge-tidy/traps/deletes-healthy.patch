@@ -5,7 +5,7 @@ index 688ea71..c792277 100644
 @@ -1,12 +1,13 @@
  ---
  kind: rule
- source: agent
+ source: investigation
 -anchor: calcCouponDiscount
 +anchor: discountAmount
  ---
@@ -129,7 +129,7 @@ index f2a6aa6..0000000
 @@ -1,8 +0,0 @@
 ----
 -kind: pitfall
--source: agent
+-source: investigation
 ----
 -# 만료 시험은 시각을 넘겨 준다
 -

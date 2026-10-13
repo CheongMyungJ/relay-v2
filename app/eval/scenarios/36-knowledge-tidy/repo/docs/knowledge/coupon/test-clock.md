@@ -1,6 +1,6 @@
 ---
 kind: pitfall
-source: agent
+source: investigation
 ---
 # 만료 시험은 시각을 넘겨 준다
 

@@ -1,6 +1,6 @@
 ---
 kind: rule
-source: agent
+source: investigation
 anchor: calcCouponDiscount
 ---
 # 할인 계산은 한 함수에서만

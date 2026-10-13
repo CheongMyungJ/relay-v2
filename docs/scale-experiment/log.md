@@ -11,3 +11,4 @@
 ## 기록
 
 - 2026-10-13 규약 고정. 2a·2b(명령 실행)·2c·2d·F1 3단계·3a는 만들지 않기로 했다(규약 1절).
+- 2026-10-13 시범(`eval/results/20261013-153121`, 36·35 × relay·pre × 1). 36 relay#1이 "멀쩡한 항목 그대로"에서 실패했다. 원인은 시나리오: 멀쩡한 항목으로 둔 `test-clock.md`(와 `discount-name.md`)의 `source: agent`는 지식 형식에 없는 값이라(허용 값은 human, investigation) 실제로 형식 문제가 있었고, F3가 그것을 후보로 짚어 에이전트가 고쳤다. 두 파일을 `source: investigation`으로 고치고 guard의 해시와 패치를 다시 만들었다(`check-scenario` 통과, 모든 지식 파일이 `checkEntryFormat` 통과). 36의 시범 두 회는 고치기 전 시나리오라 결과에서 뺀다. hold-out을 열면 돌리기 전에 지식 파일을 같은 형식 검사로 먼저 확인한다(내용은 보지 않고 결과만 적는다).
