@@ -1,7 +1,7 @@
 // 지식 정리 실험의 지표 (eval/tidy.mjs, docs/tidy-experiment/protocol.md 4절). 모델을 부르지 않는다
 import { describe, expect, it } from 'vitest'
 import { tidyRequest } from '../../src/core/knowledge-tidy'
-import { badgeClicks, checkRoles, isTidyRequest, runMetrics, summarize } from '../tidy.mjs'
+import { badgeClicks, checkRoles, isTidyRequest, runMetrics, summarize, table } from '../tidy.mjs'
 
 const scenario = {
   checks: [
@@ -88,5 +88,11 @@ describe('지식 정리 실험 지표', () => {
       minutes: 10,
       humanCost: 3,
     })
+  })
+
+  it('사이드바 후보 누름 열(D395, 버림)은 누른 실행이 있을 때만 보인다', () => {
+    const s = summarize([runMetrics(run({ 버그: true }), scenario, [], [])])
+    expect(table('t', [['relay', s]])).not.toContain('사이드바')
+    expect(table('t', [['relay', { ...s, badge: 1 }]])).toContain('| 사이드바 후보 누름 |')
   })
 })

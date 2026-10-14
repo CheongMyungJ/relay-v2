@@ -15,7 +15,10 @@ const TOOL_ERRORS = new Set(['harness_error', 'human_error'])
 /** 지식 정리 후보로 채운 요청의 첫머리 (core/knowledge-tidy tidyRequest) */
 export const TIDY_HEAD = '`docs/knowledge/`의 팀 지식을 정리한다. 앱이 모델 없이 찾은 후보는'
 
-/** 사이드바의 후보 단추(aria-label "지식 정리 후보 n건", D395). 대화상자의 접기 요약은 summary라 걸리지 않는다 */
+/**
+ * 사이드바의 후보 단추(aria-label "지식 정리 후보 n건", D395). 대화상자의 접기 요약은 summary라 걸리지 않는다. D395는 실험
+ * 뒤 버렸으므로 지금 빌드에서는 늘 0이다(그 실험의 결과 폴더를 다시 셀 때 쓴다). 보고서에서는 누른 실행이 있을 때만 열을 보인다
+ */
 const BADGE = /^button "지식 정리 후보 \d+건"$/
 
 /** 요청 글이 후보로 채운 것인가. 사람이 뒤를 고쳤어도 첫머리가 남아 있으면 그렇다 */
@@ -116,17 +119,40 @@ function judgeCost(dirs) {
 
 const pct = (x) => (x === null ? '-' : `${(x * 100).toFixed(1)}%`)
 
-function table(title, rows) {
+/** 쪽마다 한 줄. 사이드바 후보 누름(D395, 버림)은 누른 실행이 있을 때만 열로 보인다 */
+export function table(title, rows) {
+  const badge = rows.some(([, s]) => s.badge > 0)
+  const head = [
+    '쪽',
+    '실행',
+    '후보로 정리 Work',
+    ...(badge ? ['사이드바 후보 누름'] : []),
+    '심은 문제 해결',
+    '버그 고침',
+    '멀쩡한 항목',
+    '걸린 시간(분)',
+    '사람 역할($)',
+  ]
   const lines = [
     `### ${title}`,
     '',
-    '| 쪽 | 실행 | 후보로 정리 Work | 사이드바 후보 누름 | 심은 문제 해결 | 버그 고침 | 멀쩡한 항목 | 걸린 시간(분) | 사람 역할($) |',
-    '|---|---|---|---|---|---|---|---|---|',
+    `| ${head.join(' | ')} |`,
+    `|${head.map(() => '---').join('|')}|`,
   ]
-  for (const [kind, s] of rows)
-    lines.push(
-      `| ${kind} | ${s.runs} | ${s.tidyWork}/${s.runs} | ${s.badge}/${s.runs} | ${s.planted}/${s.plantedTotal} (${pct(s.plantedRate)}) | ${s.bugRuns ? `${s.bug}/${s.bugRuns}` : '-'} | ${s.guard}/${s.runs} | ${s.minutes === null ? '-' : s.minutes.toFixed(1)} | ${s.humanCost.toFixed(2)} |`,
-    )
+  for (const [kind, s] of rows) {
+    const cells = [
+      kind,
+      s.runs,
+      `${s.tidyWork}/${s.runs}`,
+      ...(badge ? [`${s.badge}/${s.runs}`] : []),
+      `${s.planted}/${s.plantedTotal} (${pct(s.plantedRate)})`,
+      s.bugRuns ? `${s.bug}/${s.bugRuns}` : '-',
+      `${s.guard}/${s.runs}`,
+      s.minutes === null ? '-' : s.minutes.toFixed(1),
+      s.humanCost.toFixed(2),
+    ]
+    lines.push(`| ${cells.join(' | ')} |`)
+  }
   return [...lines, ''].join('\n')
 }
 

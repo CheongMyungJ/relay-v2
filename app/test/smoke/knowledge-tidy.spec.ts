@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test'
-import { makeRepo } from '../support/repo'
+import { git, makeRepo } from '../support/repo'
 import { REPO_FILES } from '../support/scenarios'
 
 const isWin = process.platform === 'win32'
@@ -29,6 +29,11 @@ test.beforeAll(async () => {
     'docs/knowledge/billing/vat-a.md': rule('VAT_RATE'),
     'docs/knowledge/billing/vat-b.md': rule('VAT_RATE'),
   })
+  // 후보가 없는 기준 브랜치
+  git(repo, 'checkout', '-q', '-b', 'tidy')
+  git(repo, 'rm', '-q', 'docs/knowledge/billing/vat-b.md')
+  git(repo, 'commit', '-q', '-m', 'tidy')
+  git(repo, 'checkout', '-q', 'main')
   const env = {
     ...process.env,
     CLAUDE_BIN: FAKE,
@@ -65,12 +70,23 @@ test('새 Work 대화상자의 지식 정리 후보로 요청을 채운다 (D393
   await expect(win.locator('.tidy-notice')).toContainText('같은 anchor VAT_RATE', {
     timeout: 30_000,
   })
-  await win.getByRole('button', { name: '지식 정리 Work로 채우기' }).click()
-
+  // 사람이 쓴 요청이 있으면 바꾸기 전에 묻는다
   const request = win.getByLabel('요청')
+  await request.fill('버그 설명')
+  await win.getByRole('button', { name: '지식 정리 Work로 채우기' }).click()
+  await win.getByRole('button', { name: '그대로 두기' }).click()
+  await expect(request).toHaveValue('버그 설명')
+  await win.getByRole('button', { name: '지식 정리 Work로 채우기' }).click()
+  await win.getByRole('button', { name: '요청 바꾸기' }).click()
+
   await expect(request).toHaveValue(/`docs\/knowledge\/`의 팀 지식을 정리한다/, { timeout: 30_000 })
   await expect(request).toHaveValue(/같은 anchor `VAT_RATE`/)
   const types = win.getByRole('radiogroup', { name: '업무 유형' })
   await expect(types.getByRole('radio', { name: '일반' })).toHaveAttribute('aria-checked', 'true')
   await win.screenshot({ path: 'test-results/knowledge-tidy-dialog.png' })
+
+  // 고치지 않은 채 후보가 없는 기준으로 바꾸면 앞 기준의 후보 요청을 남기지 않는다
+  await win.getByLabel('기준 브랜치').selectOption('tidy')
+  await expect(request).toHaveValue('', { timeout: 30_000 })
+  await expect(win.locator('.tidy-notice')).toHaveCount(0)
 })

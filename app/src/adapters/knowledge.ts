@@ -8,7 +8,7 @@ import {
   type KnowledgeEntry,
   type KnowledgeFileChange,
 } from '../core/knowledge'
-import { branchExists, git, isAncestor, type GitOptions } from './git'
+import { branchExists, git, gitOrNull, isAncestor, type GitOptions } from './git'
 
 /** worktree의 지식 파일: `docs/knowledge/`와 그 아래 영역 폴더 한 단계 (D293). 폴더가 없으면 빈 목록 */
 export async function readRepoKnowledge(worktree: string): Promise<KnowledgeEntry[]> {
@@ -239,30 +239,41 @@ async function landedIn(
 
 // ---------- 지식 정리 (D393) ----------
 
-/** 커밋의 지식 파일을 읽는다(작업 트리를 건드리지 않음). 읽지 못한 파일은 뺀다 */
+/** 지식 파일을 한 번에 읽는 수. 지식이 많은 레포에서 git을 하나씩 차례로 띄우지 않되 한꺼번에 수백 개를 띄우지도 않는다 */
+const READ_AT_ONCE = 8
+
+/**
+ * 커밋의 지식 파일을 읽는다(작업 트리를 건드리지 않음). files는 그 커밋의 모든 경로(filesAt)다. 읽지 못한 파일은 뺀다.
+ * 경로 차례다
+ */
 export async function readKnowledgeAt(
   repo: string,
   ref: string,
+  files: ReadonlySet<string>,
   opts?: GitOptions,
 ): Promise<KnowledgeEntry[]> {
-  let paths: string[]
-  try {
-    paths = await knowledgePathsAt(repo, ref, opts)
-  } catch {
-    return []
+  const paths = [...files].filter(isKnowledgePath).sort()
+  const out: (KnowledgeEntry | null)[] = []
+  for (let i = 0; i < paths.length; i += READ_AT_ONCE) {
+    out.push(
+      ...(await Promise.all(
+        paths.slice(i, i + READ_AT_ONCE).map((p) =>
+          git(repo, ['show', `${ref}:${p}`], opts).then(
+            (text) => ({ path: p, text }),
+            () => null,
+          ),
+        ),
+      )),
+    )
   }
-  const out: KnowledgeEntry[] = []
-  for (const p of paths.sort()) {
-    try {
-      out.push({ path: p, text: await git(repo, ['show', `${ref}:${p}`], opts) })
-    } catch {
-      // 읽지 못한 파일은 넣지 않는다
-    }
-  }
-  return out
+  return out.filter((e): e is KnowledgeEntry => e !== null)
 }
 
-/** 지식 밖의 파일에서 낱말로 찾은 이름 (git grep -w -F, 바이너리 제외). 찾은 것이 없으면 빈 집합 */
+/**
+ * 지식과 문서(Markdown) 밖의 파일에서 낱말로 찾은 이름 (git grep -w -F, 바이너리 제외). 문서에 남은 이름은 코드에 있는
+ * 것으로 보지 않는다(설계 문서나 README에 옛 함수 이름이 남아도 낡은 anchor로 잡는다). 찾은 것이 없으면 빈 집합이다.
+ * git grep이 실패하면(시간 초과, 잘못된 ref) GitError다: 빈 집합으로 삼키면 모든 anchor가 "코드에 없음" 후보가 된다
+ */
 export async function namesInCode(
   repo: string,
   ref: string,
@@ -270,29 +281,27 @@ export async function namesInCode(
   opts?: GitOptions,
 ): Promise<Set<string>> {
   if (!names.length) return new Set()
-  try {
-    const out = await git(
-      repo,
-      [
-        'grep',
-        '-w',
-        '-F',
-        '-o',
-        '-h',
-        '-I',
-        ...names.flatMap((n) => ['-e', n]),
-        ref,
-        '--',
-        '.',
-        `:(exclude)${KNOWLEDGE_DIR}`,
-      ],
-      opts,
-    )
-    return new Set(out.split(/\r?\n/).filter(Boolean))
-  } catch {
+  const out = await gitOrNull(
+    repo,
+    [
+      'grep',
+      '-w',
+      '-F',
+      '-o',
+      '-h',
+      '-I',
+      ...names.flatMap((n) => ['-e', n]),
+      ref,
+      '--',
+      '.',
+      `:(exclude)${KNOWLEDGE_DIR}`,
+      ':(exclude,glob)**/*.md',
+    ],
     // 찾은 것이 없으면 git grep은 1로 끝난다
-    return new Set()
-  }
+    [1],
+    opts,
+  )
+  return new Set((out ?? '').split(/\r?\n/).filter(Boolean))
 }
 
 /** 커밋의 모든 파일 경로 */

@@ -449,11 +449,13 @@ export class Relay {
     const repo = project.repo_path
     const ref = location === 'remote' ? `origin/${branch}` : branch
     try {
-      const entries = await readKnowledgeAt(repo, ref, opts)
+      const files = await filesAt(repo, ref, opts)
+      const entries = await readKnowledgeAt(repo, ref, files, opts)
       if (!entries.length) return none
+      // 코드에서 이름을 찾지 못하면(git grep 실패) 아래 catch로 후보 없이 끝낸다: 모든 anchor를 낡았다고 하지 않는다
       const candidates = tidyCandidates(entries, {
         found: await namesInCode(repo, ref, anchorNames(entries), opts),
-        files: await filesAt(repo, ref, opts),
+        files,
       })
       return candidates.length ? { candidates, request: tidyRequest(candidates) } : none
     } catch {
