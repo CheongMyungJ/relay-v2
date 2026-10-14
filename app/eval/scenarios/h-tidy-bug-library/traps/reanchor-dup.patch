@@ -1,0 +1,62 @@
+diff --git a/docs/knowledge/fines/overdue-start.md b/docs/knowledge/fines/overdue-start.md
+index e2a5325..90e92ee 100644
+--- a/docs/knowledge/fines/overdue-start.md
++++ b/docs/knowledge/fines/overdue-start.md
+@@ -1,7 +1,7 @@
+ ---
+ kind: rule
+ source: human
+-anchor: DAILY_FINE
++anchor: fineStart
+ ---
+ # 연체료는 반납 기한 다음 날부터
+ 
+diff --git a/docs/knowledge/loans/borrow-limit.md b/docs/knowledge/loans/borrow-limit.md
+index 9cb6ba3..7503a4b 100644
+--- a/docs/knowledge/loans/borrow-limit.md
++++ b/docs/knowledge/loans/borrow-limit.md
+@@ -1,7 +1,7 @@
+ ---
+ kind: rule
+ source: human
+-anchor: checkoutAllowed
++anchor: canBorrow
+ ---
+ # 한 사람은 5권까지 빌린다
+ 
+@@ -11,3 +11,4 @@ anchor: checkoutAllowed
+ 
+ ## 바뀐 이력
+ - 2026-04-08 처음 남김 (Work w-20260408-001)
++- 2026-10-14 anchor를 바뀐 함수 이름 canBorrow로 고침 (Work w-20261014-001)
+diff --git a/docs/knowledge/loans/renewal.md b/docs/knowledge/loans/renewal.md
+deleted file mode 100644
+index 7ef47ae..0000000
+--- a/docs/knowledge/loans/renewal.md
++++ /dev/null
+@@ -1,12 +0,0 @@
+----
+-kind: rule
+-source: human
+-anchor: RENEWAL_DAYS
+----
+-# 대출 연장은 한 번, 7일
+-
+-## 규칙
+-- 반납 기한 전에 한 번만 연장할 수 있고, 연장하면 기한이 7일 늘어난다. 예약이 걸린 책은 연장할 수 없다.
+-
+-## 바뀐 이력
+-- 2025-11-17 처음 남김 (Work w-20251117-002)
+diff --git a/src/loans.js b/src/loans.js
+index 076f046..77482dc 100644
+--- a/src/loans.js
++++ b/src/loans.js
+@@ -9,7 +9,7 @@ const DAY = 24 * 60 * 60 * 1000
+ // 지금 빌린 권수(borrowed)와 연체 중인 권수(overdue)로 한 권 더 빌릴 수 있나
+ export function canBorrow(member) {
+   if (member.overdue > 0) return false
+-  return member.borrowed <= MAX_LOANS
++  return member.borrowed < MAX_LOANS
+ }
+ 
+ export function dueDate(loanedAt, book) {
