@@ -7,7 +7,13 @@ import { _electron as electron, expect, test, type ElectronApplication } from '@
 import { makeRepo } from '../support/repo'
 import { REPO_FILES } from '../support/scenarios'
 
+const isWin = process.platform === 'win32'
 const APP_DIR = path.resolve(__dirname, '../..')
+const FAKE = path.resolve(
+  __dirname,
+  '../support/fake-claude',
+  isWin ? 'fake-claude.cmd' : 'fake-claude.mjs',
+)
 
 const rule = (anchor: string) =>
   `---\nkind: rule\nsource: human\nanchor: ${anchor}\n---\n# ${anchor}\n\n## 규칙\n- 규칙\n`
@@ -25,6 +31,7 @@ test.beforeAll(async () => {
   })
   const env = {
     ...process.env,
+    CLAUDE_BIN: FAKE,
     RELAY_HOME: path.join(root, 'home'),
     RELAY_UPDATE: 'off',
     RELAY_KNOWLEDGE: 'on',
