@@ -369,6 +369,18 @@ describe('이어 머지 (docs/eval-ssd.md)', () => {
     expect(fs.existsSync(path.join(dest, '.git'))).toBe(false)
   })
 
+  it('relay가 되감기로 버린 시도(-discarded-<n>)는 머지하지 않는다', () => {
+    const { root, repo, remote } = repoWithWork()
+    git(repo, 'checkout', '-q', '-b', 'relay/w1-discarded-1', 'main')
+    fs.writeFileSync(path.join(repo, 'src/add.js'), 'export const add = (a, b) => a * b\n')
+    git(repo, 'commit', '-q', '-am', '버린 시도')
+    git(repo, 'checkout', '-q', 'main')
+    const m = mergeInPlace(repo, remote, path.join(root, 'scratch'))
+    expect(m.merged).toEqual(['relay/w1'])
+    expect(m.conflicts).toEqual([])
+    expect(fs.readFileSync(path.join(repo, 'src/add.js'), 'utf8')).toContain('a + b')
+  })
+
   it('다른 브랜치에 깨끗하면 main을 체크아웃하고, main에 커밋 안 된 변경이 있으면 작업 폴더는 그대로 둔다', () => {
     const a = repoWithWork()
     mergeInPlace(a.repo, a.remote, path.join(a.root, 'scratch'))

@@ -1,6 +1,6 @@
 # SSD 펌웨어 연속 평가 (Cosmos+ OpenSSD)
 
-- 상태: 시나리오 팩(Work 21개의 숨긴 시험, 정답·함정 패치) 작성 끝, 실제 실행 전 (2026-10-13)
+- 상태: 첫 실행 끝(2026-10-14, 회차 1). 결과와 분석은 `app/eval/reports/2026-10-14-ssd-campaign.md`
 - 대상: [Cosmos+ OpenSSD](https://github.com/Cosmos-OpenSSD/Cosmos-plus-OpenSSD)의 `GreedyFTL-3.0.0` 펌웨어 (C, GPLv3)
 - 시나리오 팩: 포크 `CheongMyungJ/Cosmos-plus-OpenSSD`의 `relay-eval` 브랜치 `relay-eval/scenarios/40-ssd-campaign/`. GPL 코드라 이 레포(MIT)에는 넣지 않고 `RELAY_EVAL_SCENARIOS`로 가리킨다 (`docs/eval.md` 7절)
 
@@ -158,3 +158,11 @@ RELAY_EVAL_SCENARIOS=/tmp/cosmos-eval/relay-eval/scenarios node eval/run.mjs --s
 - 실제 보드가 아니다. NSC 타이밍, DMA, 캐시 일관성은 시뮬레이터가 단순화한다. 시험은 FTL 논리만 본다.
 - 앞 Work의 구현이 다르면 뒤 Work의 출발점이 달라진다. 두 쪽(relay, relay-off)은 서로 다른 코드 위에서 뒤 Work를 하게 되고, 이것은 연쇄 평가의 본래 성질이다.
 - 사람 역할과 판정이 모두 Claude다(`docs/eval.md` 8절).
+
+## 7. 첫 실행에서 배운 것 (2026-10-14)
+
+자세한 것은 `app/eval/reports/2026-10-14-ssd-campaign.md`.
+
+- 지식을 켠 쪽이 숨긴 시험·쟁점을 더 통과했다(43/46 대 38/46). 차이는 문서에 들어가지 않는 팀 규칙(K6, K8)과 다른 설계의 값(K7)에서 났다. 다시 알려 준 수(PM1)는 같았다(6/52). 지식이 늦게 남았고(K3는 Work 8, K2는 Work 13), 설계 문서가 두 쪽 모두에 사실을 나른다.
+- Work마다 그 Work의 시험만 보면 뒤 Work가 앞 기능을 깨뜨린 것(두 쪽 모두, relay는 Work 20이 전원 손실 복구를 깸)을 놓친다. 기능 Work의 guard에 앞 기능의 핵심 시험을 더한다.
+- 실행 하나가 16시간을 넘어 컨테이너 재시작을 겪는다. `run.mjs --resume`으로 이어 돌린다(`docs/eval.md`).

@@ -237,6 +237,9 @@ function mergeBranches(prevRepo, work) {
   )
     .split('\n')
     .filter((r) => r && r !== 'origin/HEAD' && r !== 'origin/main' && r !== 'origin')
+    // relay의 되감기 백업(relay/<work-id>-discarded-<n>, D115)은 버린 시도다. PR로 머지할 브랜치가 아니다
+    // (2026-10-14 SSD 연속 평가에서 버린 시도가 충돌을 뒤 쪽으로 풀며 main에 들어갔다)
+    .filter((r) => !/-discarded-\d+$/.test(r))
   const merged = []
   const conflicts = []
   const failed = []

@@ -491,6 +491,10 @@ export class RelayArm {
       if (keep ? keep.has(w.id) : i < done) continue
       dropBranch(this.o.repo, w.branch ?? `relay/${w.id}`)
       fs.rmSync(w.dir, { recursive: true, force: true })
+      // 스냅숏도 지운다. 다시 만든 Work가 같은 id를 받으면 남은 스냅숏 때문에 그 Work의 결과 폴더를 앞 Work의 것으로 봐서,
+      // 그 Work를 판정할 때 모든 결과 폴더를 보게 된다(2026-10-14 SSD 연속 평가)
+      fs.rmSync(path.join(this.o.dir, 'snapshots', w.id), { recursive: true, force: true })
+      this.snapped.delete(w.id)
       dropped.push(w.id)
     }
     await this.launch()
