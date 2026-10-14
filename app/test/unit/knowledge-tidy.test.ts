@@ -1,12 +1,6 @@
 // 지식 정리의 순수 함수 (core/knowledge-tidy, D393, D394)
 import { describe, expect, it } from 'vitest'
-import {
-  anchorName,
-  anchorNames,
-  sidebarLocation,
-  tidyCandidates,
-  tidyRequest,
-} from '../../src/core/knowledge-tidy'
+import { anchorName, anchorNames, tidyCandidates, tidyRequest } from '../../src/core/knowledge-tidy'
 
 const entry = (path: string, anchor: string | null, extra = '') => ({
   path,
@@ -92,16 +86,5 @@ describe('tidyRequest', () => {
     expect(text).toContain('코드에서 찾지 못한 anchor `Y`')
     expect(text).toContain('어느 쪽이 지금 맞는지 사람에게 묻고')
     expect(text).toContain('문제가 없는 항목은 바꾸지 않는다. 코드는 바꾸지 않는다.')
-  })
-})
-
-describe('sidebarLocation (D395)', () => {
-  it('origin이 로컬보다 앞서 있을 때만 origin, 그 밖에는 로컬. 로컬이 없으면 origin', () => {
-    expect(sidebarLocation({ local: 'a', remote: 'b', localBehind: true })).toBe('remote')
-    expect(sidebarLocation({ local: 'a', remote: 'b', localBehind: false })).toBe('local')
-    expect(sidebarLocation({ local: 'a', remote: 'a', localBehind: true })).toBe('local')
-    expect(sidebarLocation({ local: 'a', remote: null, localBehind: false })).toBe('local')
-    expect(sidebarLocation({ local: null, remote: 'b', localBehind: false })).toBe('remote')
-    expect(sidebarLocation({ local: null, remote: null, localBehind: false })).toBeNull()
   })
 })

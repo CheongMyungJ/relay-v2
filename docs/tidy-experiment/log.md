@@ -9,6 +9,7 @@
 | 시작 | 0 | 0 | 50~70%, 상한 80% |
 | 시범 (37 × relay·f3 × 1) | 2 | 1.46 (사람 역할 1.41, 판정 0.05). 에이전트는 실행마다 입력 약 0.6M 토큰(캐시 포함) | 시작 때와 거의 같음(1%p 미만) |
 | 개발용 (37 × relay·f3 × 3) | 8 | 4.45 (이번 2.99: 사람 역할 2.88, 판정 0.11) | 묻지 않음 |
+| hold-out (3) · 회귀 36·h-tidy-route-dispatch (2) | 22 | 18.9 (이번 14.5) | 묻지 않음 |
 
 ## 기록
 
@@ -22,3 +23,7 @@
   - 심은 문제 해결: relay 2/9, f3 1/9. 모두 버그 Work의 verify가 넣은 지식을 고친 것(낡은 anchor)이다. 버그 3/3 대 3/3, 멀쩡한 항목 3/3 대 3/3. 걸린 시간 2.7분 대 2.6분.
   - 여기서 개발을 고정한다(앱 코드, 설명서, 시나리오 37을 더 바꾸지 않음). 다음: hold-out을 열고 같은 명령으로 3회, 회귀 확인(36, h-tidy-route-dispatch) 2회.
 - 2026-10-14 hold-out을 열었다(`HOLDOUT_NAME=tidy bash eval/unseal.sh`, 해시 확인). `h-tidy-bug-library`(도서관). 돌리기 전 확인: 지식 파일은 모두 `checkEntryFormat` 통과, `check-scenario` 이상 없음. 개발이 고정된 뒤이므로 평문을 커밋한다.
+- 2026-10-14 hold-out 평가(`eval/results/tidy-holdout`, h-tidy-bug-library × relay·f3 × 3)와 회귀(`eval/results/tidy-regress`, 36·h-tidy-route-dispatch × 2). 같은 명령.
+  - hold-out: 후보로 정리 Work 0/3 대 0/3, 심은 문제 0/9 대 3/9(모두 버그 Work의 verify가 고친 낡은 anchor), 버그 3/3 대 3/3, 멀쩡한 항목 3/3 대 3/3.
+  - 회귀: 후보로 정리 Work 4/4 대 4/4(relay는 모두 사이드바 단추), 심은 문제 16/16 대 16/16, 멀쩡한 항목 4/4 대 4/4.
+  - 결정(규약 4절): 사이드바 알림은 규칙 1·2·3을 못 채워 버림. F3는 ask 무리 f3 100%로 기준(60%)을 넘어 PR로 낸다. 사이드바 코드를 빼고(D395를 "실험 후 버림"으로) 새 Work 대화상자의 후보는 [스모크]로 지킨다. `report.md`.

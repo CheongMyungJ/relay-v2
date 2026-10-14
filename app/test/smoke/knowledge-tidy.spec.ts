@@ -1,5 +1,5 @@
-// [스모크] 사이드바의 지식 정리 후보 (D395): 같은 anchor의 지식 항목이 둘인 레포를 등록하면 프로젝트 줄에 후보 수가
-// 보이고, 누르면 새 Work 대화상자가 후보로 채운 요청과 일반 유형으로 열린다. 후보를 세는 경우는 [흐름]이 본다.
+// [스모크] 지식 정리 후보 (D393): 같은 anchor의 지식 항목이 둘인 레포를 등록하고 새 Work 대화상자를 열면 후보가 펼쳐져
+// 보이고, [지식 정리 Work로 채우기]를 누르면 후보로 채운 요청과 일반 유형이 된다. 후보를 찾는 경우는 [흐름]과 [단위]가 본다.
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -44,7 +44,7 @@ test.afterAll(async () => {
   fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
 })
 
-test('프로젝트 줄의 지식 정리 후보를 누르면 후보로 채운 일반 Work 대화상자가 열린다 (D395)', async () => {
+test('새 Work 대화상자의 지식 정리 후보로 요청을 채운다 (D393)', async () => {
   const win = await app.firstWindow()
   await expect(win.locator('.layout')).toBeVisible()
   await win.locator('.sidebar').getByRole('button', { name: '프로젝트 추가' }).click()
@@ -54,15 +54,16 @@ test('프로젝트 줄의 지식 정리 후보를 누르면 후보로 채운 일
   })
   await win.getByRole('button', { name: '등록' }).click()
 
-  const badge = win.locator('.sidebar').getByRole('button', { name: '지식 정리 후보 1건' })
-  await expect(badge).toBeVisible({ timeout: 30_000 })
-  await expect(badge).toHaveText('지식 정리 1')
-  await badge.click()
+  await win.getByRole('button', { name: '새 Work' }).click()
+  await expect(win.locator('.tidy-notice')).toContainText('같은 anchor VAT_RATE', {
+    timeout: 30_000,
+  })
+  await win.getByRole('button', { name: '지식 정리 Work로 채우기' }).click()
 
   const request = win.getByLabel('요청')
   await expect(request).toHaveValue(/`docs\/knowledge\/`의 팀 지식을 정리한다/, { timeout: 30_000 })
   await expect(request).toHaveValue(/같은 anchor `VAT_RATE`/)
   const types = win.getByRole('radiogroup', { name: '업무 유형' })
   await expect(types.getByRole('radio', { name: '일반' })).toHaveAttribute('aria-checked', 'true')
-  await win.screenshot({ path: 'test-results/knowledge-tidy-sidebar.png' })
+  await win.screenshot({ path: 'test-results/knowledge-tidy-dialog.png' })
 })

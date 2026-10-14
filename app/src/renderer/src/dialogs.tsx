@@ -351,18 +351,13 @@ const REQUEST_PLACEHOLDER: Readonly<Record<WorkType, string>> = {
   general: '할 일과 끝났다고 볼 조건을 적어 주세요(무엇을 바꾸고 어떻게 확인할지)',
 }
 
-/**
- * 새 Work: 유형, 요청, 기준 브랜치, 기준 위치 (시나리오 1). 유형을 고르기 전에는 [시작]이 꺼져 있다 (D236). 사이드바의
- * 지식 정리 후보로 열면(tidy) 그 위치의 기본 브랜치에서 찾은 후보로 요청을 채워 일반 유형으로 시작한다 (D395)
- */
+/** 새 Work: 유형, 요청, 기준 브랜치, 기준 위치 (시나리오 1). 유형을 고르기 전에는 [시작]이 꺼져 있다 (D236) */
 export function NewWorkDialog({
   project,
-  tidy: tidyStart,
   onClose,
   onCreated,
 }: {
   project: ProjectView
-  tidy?: 'local' | 'remote'
   onClose: () => void
   onCreated: (workKey: string) => void
 }) {
@@ -370,7 +365,7 @@ export function NewWorkDialog({
   const [request, setRequest] = useState('')
   const [branches, setBranches] = useState<string[]>([project.defaultBranch])
   const [branch, setBranch] = useState(project.defaultBranch)
-  const [location, setLocation] = useState<'local' | 'remote'>(tidyStart ?? 'local')
+  const [location, setLocation] = useState<'local' | 'remote'>('local')
   const [issue, setIssue] = useState('')
   const [modes, setModes] = useState<Overrides>({})
   const [auto, setAuto] = useState<AutoOverrides>({})
@@ -385,22 +380,15 @@ export function NewWorkDialog({
     })
   }, [project.id])
 
-  // 사이드바에서 열었으면 처음 찾은 후보로 한 번 채운다 (D395)
-  const fillTidy = useRef(tidyStart !== undefined)
+  // 기준이 바뀌면 그 기준의 지식 정리 후보를 다시 찾는다 (D393)
+  useEffect(() => {
+    void window.relay.knowledgeTidy(project.id, branch, location).then(setTidy)
+  }, [project.id, branch, location])
 
-  const applyTidy = (view: TidyView) => {
+  const useTidy = (view: TidyView) => {
     setType('general')
     setRequest(view.request)
   }
-
-  // 기준이 바뀌면 그 기준의 지식 정리 후보를 다시 찾는다 (D393)
-  useEffect(() => {
-    void window.relay.knowledgeTidy(project.id, branch, location).then((view) => {
-      setTidy(view)
-      if (fillTidy.current && view.candidates.length) applyTidy(view)
-      fillTidy.current = false
-    })
-  }, [project.id, branch, location])
 
   const start = async () => {
     if (!type) return
@@ -436,7 +424,7 @@ export function NewWorkDialog({
 
   return (
     <Modal title={`새 Work · ${project.name}`} onClose={onClose}>
-      {tidy?.candidates.length ? <TidyNotice view={tidy} onUse={applyTidy} /> : null}
+      {tidy?.candidates.length ? <TidyNotice view={tidy} onUse={useTidy} /> : null}
       <div className="field">
         유형
         <WorkTypePicker value={type} onChange={setType} />

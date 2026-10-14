@@ -406,8 +406,6 @@ export interface RunnerContext {
   project(projectId: string): ProjectState | undefined
   /** origin·gh를 다시 점검해 project.json을 고친다. verify를 시작할 때와 [다시 점검]에서 부른다 (D118) */
   recheck(projectId: string): Promise<void>
-  /** Work가 완료됐거나 PR이 머지됐다. 사이드바의 지식 정리 후보를 다시 센다 (D395) */
-  workSettled?(projectId: string): void
   /**
    * 지식을 읽을 앞 Work (core/knowledge): 같은 프로젝트에서 완료했거나 PR 진행인 다른 Work의 브랜치와 기준 커밋.
    * 오래된 차례다
@@ -761,11 +759,6 @@ export class WorkRunner {
     this.workText = saved.text
     if (saved.changed) this.workJsonChanges.push({ at, copy: saved.copy })
     this.changed()
-    if (
-      (before.completed_at === undefined && work.completed_at !== undefined) ||
-      (before.pr?.merged === undefined && work.pr?.merged !== undefined)
-    )
-      this.ctx.workSettled?.(this.project.project_id)
     const notice = opts.quiet ? null : humanNotice(before, work)
     if (notice) this.notify(notice)
     let reply: HookReply = null
