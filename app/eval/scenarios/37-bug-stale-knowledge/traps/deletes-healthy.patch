@@ -1,0 +1,118 @@
+diff --git a/docs/knowledge/orders/cod-fee.md b/docs/knowledge/orders/cod-fee.md
+deleted file mode 100644
+index 7d7f7ca..0000000
+--- a/docs/knowledge/orders/cod-fee.md
++++ /dev/null
+@@ -1,12 +0,0 @@
+----
+-kind: rule
+-source: human
+-anchor: COD_FEE
+----
+-# 착불 주문은 수수료 1,000원
+-
+-## 규칙
+-- 착불(COD) 주문은 배송비에 착불 수수료 1,000원을 더한다.
+-
+-## 바뀐 이력
+-- 2025-12-09 처음 남김 (Work w-20251209-001)
+diff --git a/docs/knowledge/orders/test-dates.md b/docs/knowledge/orders/test-dates.md
+deleted file mode 100644
+index 0a3ba99..0000000
+--- a/docs/knowledge/orders/test-dates.md
++++ /dev/null
+@@ -1,8 +0,0 @@
+----
+-kind: pitfall
+-source: investigation
+----
+-# 날짜 시험은 시각을 고정한다
+-
+-## 내용
+-- 반품 기한과 출고 시각 시험은 `new Date()`를 쓰지 않고 시각을 고정해 넘긴다. 날짜가 바뀌는 때 시험이 흔들린다.
+diff --git a/docs/knowledge/returns/return-days.md b/docs/knowledge/returns/return-days.md
+deleted file mode 100644
+index df4f119..0000000
+--- a/docs/knowledge/returns/return-days.md
++++ /dev/null
+@@ -1,13 +0,0 @@
+----
+-kind: rule
+-source: human
+-anchor: RETURN_DAYS
+----
+-# 반품 기한 7일, 단순 변심은 왕복 배송비 고객 부담
+-
+-## 규칙
+-- 반품 기한은 7일이다.
+-- 단순 변심 반품은 왕복 배송비 6,000원을 고객이 낸다. 상품 불량이면 받지 않는다.
+-
+-## 바뀐 이력
+-- 2026-08-03 처음 남김 (Work w-20260803-002)
+diff --git a/docs/knowledge/returns/return-window.md b/docs/knowledge/returns/return-window.md
+index a82ed13..0221ccf 100644
+--- a/docs/knowledge/returns/return-window.md
++++ b/docs/knowledge/returns/return-window.md
+@@ -3,10 +3,12 @@ kind: rule
+ source: human
+ anchor: RETURN_DAYS
+ ---
+-# 반품은 받은 뒤 7일 안
++# 반품은 받은 뒤 7일 안, 단순 변심은 왕복 배송비 고객 부담
+ 
+ ## 규칙
+ - 배송 완료 시각부터 7일(168시간) 안에만 반품을 받는다.
++- 단순 변심 반품은 왕복 배송비 6,000원을 고객이 낸다. 상품 불량이면 받지 않는다.
+ 
+ ## 바뀐 이력
+ - 2026-05-20 처음 남김 (Work w-20260520-001)
++- 2026-10-14 return-days.md와 합침 (Work w-20261014-001)
+diff --git a/docs/knowledge/shipping/cutoff-time.md b/docs/knowledge/shipping/cutoff-time.md
+deleted file mode 100644
+index 064f5da..0000000
+--- a/docs/knowledge/shipping/cutoff-time.md
++++ /dev/null
+@@ -1,12 +0,0 @@
+----
+-kind: rule
+-source: human
+-anchor: CUTOFF_HOUR
+----
+-# 오후 2시 전 주문은 당일 출고
+-
+-## 규칙
+-- 14시 전에 들어온 주문은 그날 출고한다. 14시 정각부터는 다음 날 출고다.
+-
+-## 바뀐 이력
+-- 2026-03-11 처음 남김 (Work w-20260311-002)
+diff --git a/docs/knowledge/shipping/free-shipping.md b/docs/knowledge/shipping/free-shipping.md
+index 82c187a..59e1d9b 100644
+--- a/docs/knowledge/shipping/free-shipping.md
++++ b/docs/knowledge/shipping/free-shipping.md
+@@ -1,7 +1,7 @@
+ ---
+ kind: rule
+ source: human
+-anchor: calcShippingFee
++anchor: shippingFee
+ ---
+ # 5만 원 이상 주문은 무료 배송
+ 
+@@ -11,3 +11,4 @@ anchor: calcShippingFee
+ 
+ ## 바뀐 이력
+ - 2026-04-02 처음 남김 (Work w-20260402-001)
++- 2026-10-14 anchor를 바뀐 함수 이름 shippingFee로 고침 (Work w-20261014-001)
+diff --git a/src/shipping.js b/src/shipping.js
+index ab9421c..196d129 100644
+--- a/src/shipping.js
++++ b/src/shipping.js
+@@ -8,7 +8,7 @@ export const CUTOFF_HOUR = 14
+ 
+ export function shippingFee(order) {
+   const extra = order.remote ? REMOTE_EXTRA : 0
+-  if (order.subtotal > FREE_SHIPPING_MIN) return extra
++  if (order.subtotal >= FREE_SHIPPING_MIN) return extra
+   return BASE_FEE + extra
+ }
+ 
