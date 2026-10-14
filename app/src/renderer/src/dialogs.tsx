@@ -42,6 +42,8 @@ import type {
   ProjectInspection,
   ProjectView,
   StepPreview,
+  TidyCandidateView,
+  TidyView,
   StepPreviewResult,
   WorkView,
 } from '../../shared/views'
@@ -313,6 +315,33 @@ function WorkTypePicker({
   )
 }
 
+const TIDY_KIND_LABEL: Readonly<Record<TidyCandidateView['kind'], string>> = {
+  same_anchor: '같은 anchor',
+  stale_anchor: '코드에 없는 anchor',
+  missing_path: '없는 경로',
+  format: '형식 문제',
+}
+
+/** 지식 정리 후보 (D393). 누르면 후보로 채운 일반 Work의 요청을 넣는다 */
+function TidyNotice({ view, onUse }: { view: TidyView; onUse: (view: TidyView) => void }) {
+  return (
+    // 처음부터 펼쳐 둔다: 접힌 목록 안의 버튼은 지나치기 쉽다(대규모 기능 실험 시범)
+    <details className="field tidy-notice" open>
+      <summary>지식 정리 후보 {view.candidates.length}건</summary>
+      <ul>
+        {view.candidates.map((c, i) => (
+          <li key={i}>
+            {TIDY_KIND_LABEL[c.kind]} {c.detail}: {c.paths.join(', ')}
+          </li>
+        ))}
+      </ul>
+      <button type="button" onClick={() => onUse(view)}>
+        지식 정리 Work로 채우기
+      </button>
+    </details>
+  )
+}
+
 /** 요청 입력의 예시 문구. 유형을 고르기 전에는 버그 수정의 것이다 (D261, I88) */
 const REQUEST_PLACEHOLDER: Readonly<Record<WorkType, string>> = {
   bugfix: '버그 설명, 로그, 이슈 내용을 붙여 넣으세요',
@@ -342,6 +371,7 @@ export function NewWorkDialog({
   const [auto, setAuto] = useState<AutoOverrides>({})
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [tidy, setTidy] = useState<TidyView | null>(null)
   const config = useConfig()
 
   useEffect(() => {
@@ -349,6 +379,16 @@ export function NewWorkDialog({
       if (list.length) setBranches(list)
     })
   }, [project.id])
+
+  // 기준이 바뀌면 그 기준의 지식 정리 후보를 다시 찾는다 (D393)
+  useEffect(() => {
+    void window.relay.knowledgeTidy(project.id, branch, location).then(setTidy)
+  }, [project.id, branch, location])
+
+  const useTidy = (view: TidyView) => {
+    setType('general')
+    setRequest(view.request)
+  }
 
   const start = async () => {
     if (!type) return
@@ -384,6 +424,7 @@ export function NewWorkDialog({
 
   return (
     <Modal title={`새 Work · ${project.name}`} onClose={onClose}>
+      {tidy?.candidates.length ? <TidyNotice view={tidy} onUse={useTidy} /> : null}
       <div className="field">
         유형
         <WorkTypePicker value={type} onChange={setType} />

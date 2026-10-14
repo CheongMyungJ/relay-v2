@@ -1121,6 +1121,15 @@ app/src/
 - [계약] 가짜 쪽 통과, 녹화본의 옵션에 `--append-system-prompt-file`.
 - [스모크] 곁 세션 탭.
 
+### M22. 지식 정리 후보 (D393, D394)
+
+대규모 기능 실험(`docs/scale-experiment/`)의 F3만 옮긴다. 같은 실험의 F1(구현 나눔)은 옮기지 않았다.
+
+- **core와 adapters:** `core/knowledge-tidy`(후보, 요청), `adapters/knowledge`의 `readKnowledgeAt`·`namesInCode`·`filesAt`.
+- **main과 화면:** `Relay.knowledgeTidy`와 IPC, 새 Work 대화상자의 후보와 [지식 정리 Work로 채우기].
+- **평가 도구:** 지식 파일만 바꾸는 정답·함정을 세는 `check-scenario`, 시나리오 36과 hold-out `h-tidy-route-dispatch`, 실험 전 빌드의 설명서 `guides/pre.md`.
+- **시험:** [단위] `knowledge-tidy.test.ts`. [흐름] `knowledge-tidy.test.ts`.
+
 ## 8. 테스트 전략
 
 ### 8.1 시험의 층

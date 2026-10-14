@@ -236,3 +236,67 @@ async function landedIn(
   // :<옛 모드> <새 모드> <옛 blob> <새 blob> <상태>\t<경로>
   return log.split(/\r?\n/).some((line) => line.split(/\s+/)[3] === blob)
 }
+
+// ---------- 지식 정리 (D393) ----------
+
+/** 커밋의 지식 파일을 읽는다(작업 트리를 건드리지 않음). 읽지 못한 파일은 뺀다 */
+export async function readKnowledgeAt(
+  repo: string,
+  ref: string,
+  opts?: GitOptions,
+): Promise<KnowledgeEntry[]> {
+  let paths: string[]
+  try {
+    paths = await knowledgePathsAt(repo, ref, opts)
+  } catch {
+    return []
+  }
+  const out: KnowledgeEntry[] = []
+  for (const p of paths.sort()) {
+    try {
+      out.push({ path: p, text: await git(repo, ['show', `${ref}:${p}`], opts) })
+    } catch {
+      // 읽지 못한 파일은 넣지 않는다
+    }
+  }
+  return out
+}
+
+/** 지식 밖의 파일에서 낱말로 찾은 이름 (git grep -w -F, 바이너리 제외). 찾은 것이 없으면 빈 집합 */
+export async function namesInCode(
+  repo: string,
+  ref: string,
+  names: readonly string[],
+  opts?: GitOptions,
+): Promise<Set<string>> {
+  if (!names.length) return new Set()
+  try {
+    const out = await git(
+      repo,
+      [
+        'grep',
+        '-w',
+        '-F',
+        '-o',
+        '-h',
+        '-I',
+        ...names.flatMap((n) => ['-e', n]),
+        ref,
+        '--',
+        '.',
+        `:(exclude)${KNOWLEDGE_DIR}`,
+      ],
+      opts,
+    )
+    return new Set(out.split(/\r?\n/).filter(Boolean))
+  } catch {
+    // 찾은 것이 없으면 git grep은 1로 끝난다
+    return new Set()
+  }
+}
+
+/** 커밋의 모든 파일 경로 */
+export async function filesAt(repo: string, ref: string, opts?: GitOptions): Promise<Set<string>> {
+  const out = await git(repo, ['ls-tree', '-r', '--name-only', ref], opts)
+  return new Set(out.split(/\r?\n/).filter(Boolean))
+}

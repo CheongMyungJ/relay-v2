@@ -194,6 +194,15 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
       ...(typeof input.issueNumber === 'number' ? { issueNumber: input.issueNumber } : {}),
     }),
   )
+  ipcMain.handle(
+    IPC.knowledgeTidy,
+    async (_e, projectId: unknown, branch: unknown, location: unknown) =>
+      (await ready).knowledgeTidy(
+        text(projectId),
+        text(branch),
+        location === 'remote' ? 'remote' : 'local',
+      ),
+  )
   ipcMain.handle(IPC.review, async (_e, workKey: unknown, taskId: unknown) =>
     (await ready).review(text(workKey), text(taskId)),
   )

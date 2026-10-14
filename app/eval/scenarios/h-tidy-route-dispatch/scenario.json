@@ -1,0 +1,37 @@
+{
+  "id": "h-tidy-route-dispatch",
+  "type": "general",
+  "dev": true,
+  "repoName": "routedesk",
+  "title": "쌓인 지식 파일 정리하기 (중복, 낡은 항목, 어긋난 쌍, 멀쩡한 항목은 그대로)",
+  "purpose": "대규모 기능 실험(docs/scale-experiment/protocol.md)의 F3 hold-out. 레포의 docs/knowledge/에 지식 항목 12개가 있고, 사람은 '지식이 많아져 정리하고 싶다'만 말한다. 심어 둔 것: (a) 같은 anchor(assignOrders, loadFactor)의 중복 쌍 둘 — 하나로 합치되 두 항목의 내용이 모두 살아 있어야 한다. (b) 코드에서 사라진 anchor(rebalanceCouriers, routeCacheTtl)를 가리키는 낡은 항목 둘 — 지우거나, 지금 코드(redistributeStops)에 맞게 anchor와 본문을 고친다. (c) 지연 문자 기준이 20분(최근 날짜, investigation)과 30분(옛 날짜, human)으로 어긋나는 쌍 — 코드의 DELAY_NOTICE_MIN(25)은 예시 값이라 코드로 가를 수 없고, 사람만 안다(30분이 맞고 20분은 스테이징 설정을 잘못 읽은 것). 날짜가 최신인 쪽을 믿으면 틀린다. (d) 멀쩡한 항목 넷은 한 글자도 바뀌면 안 된다(guard, 파일 내용 해시). 정리 뒤에도 모든 지식 파일이 형식(kind, source, anchor, 제목, 본문 절)에 맞아야 하고(guard), 코드는 바뀌지 않아야 한다(범위 guard). 지식 파일만 바뀌는 시나리오라 정답과 함정 패치도 docs/knowledge/만 바꾼다.",
+  "report": "지식 파일이 많아져서 정리하고 싶다. 중복되거나 낡은 건 손봐 줘.",
+  "knowledge": [
+    {
+      "share": "on_ask",
+      "text": "지연 문자는 지금 도착 창이 지난 지 30분이 넘어야 나간다. 5월에 20분에서 30분으로 올렸다. 20분이라고 적힌 항목은 9월에 누가 스테이징 설정을 보고 잘못 적은 것이라 틀렸다. 코드의 DELAY_NOTICE_MIN 값은 예시라 믿으면 안 된다."
+    },
+    {
+      "share": "on_ask",
+      "text": "경로 캐시는 올해 없앴고, 15분마다 기사 부하를 다시 맞추던 작업도 없앴다. 지금은 새 기사가 출근할 때 한 번만 정거장을 다시 나눈다."
+    }
+  ],
+  "preferences": ["코드는 건드리지 말고 지식 파일만 정리했으면 한다."],
+  "reveals": [],
+  "events": [],
+  "expectedFiles": [],
+  "checks": [
+    { "name": "assignOrders 중복이 하나로 합쳐짐", "file": "dup-assign.test.js" },
+    { "name": "loadFactor 중복이 하나로 합쳐짐", "file": "dup-load.test.js" },
+    { "name": "낡은 항목(rebalanceCouriers) 정리", "file": "stale-rebalance.test.js" },
+    { "name": "낡은 항목(routeCacheTtl) 정리", "file": "stale-cache.test.js" },
+    { "name": "지연 문자 기준이 사람의 답대로 정리됨", "file": "contradiction.test.js" },
+    { "name": "멀쩡한 항목 그대로", "file": "keep-healthy.test.js", "guard": true },
+    { "name": "지식 파일 형식 유지", "file": "knowledge-format.test.js", "guard": true },
+    { "name": "코드를 바꾸지 않음", "guard": true, "scope": true }
+  ],
+  "limits": {
+    "minutes": 40,
+    "turns": 60
+  }
+}
