@@ -1,0 +1,13 @@
+diff --git a/src/shipping.js b/src/shipping.js
+index ab9421c..196d129 100644
+--- a/src/shipping.js
++++ b/src/shipping.js
+@@ -8,7 +8,7 @@ export const CUTOFF_HOUR = 14
+ 
+ export function shippingFee(order) {
+   const extra = order.remote ? REMOTE_EXTRA : 0
+-  if (order.subtotal > FREE_SHIPPING_MIN) return extra
++  if (order.subtotal >= FREE_SHIPPING_MIN) return extra
+   return BASE_FEE + extra
+ }
+ 

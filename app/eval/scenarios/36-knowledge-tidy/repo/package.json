@@ -1,0 +1,8 @@
+{
+  "name": "shop-coupon",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

@@ -934,6 +934,20 @@ export interface NewWorkInput {
   issueNumber?: number | null
 }
 
+/** 지식 정리 후보 (D393) */
+export interface TidyCandidateView {
+  kind: 'same_anchor' | 'stale_anchor' | 'missing_path' | 'format'
+  paths: string[]
+  detail: string
+}
+
+/** 새 Work 대화상자의 지식 정리 (D393). 후보가 없거나 지식 관리를 끄면 candidates가 비어 있다 */
+export interface TidyView {
+  candidates: TidyCandidateView[]
+  /** [지식 정리 Work로 채우기]가 채울 요청 */
+  request: string
+}
+
 export interface ApproveOptions {
   /** [오류 무시하고 승인] (D112) */
   force?: boolean

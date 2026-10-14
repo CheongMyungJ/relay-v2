@@ -1,0 +1,62 @@
+diff --git a/docs/knowledge/orders/cod-fee.md b/docs/knowledge/orders/cod-fee.md
+deleted file mode 100644
+index 7d7f7ca..0000000
+--- a/docs/knowledge/orders/cod-fee.md
++++ /dev/null
+@@ -1,12 +0,0 @@
+----
+-kind: rule
+-source: human
+-anchor: COD_FEE
+----
+-# 착불 주문은 수수료 1,000원
+-
+-## 규칙
+-- 착불(COD) 주문은 배송비에 착불 수수료 1,000원을 더한다.
+-
+-## 바뀐 이력
+-- 2025-12-09 처음 남김 (Work w-20251209-001)
+diff --git a/docs/knowledge/returns/return-days.md b/docs/knowledge/returns/return-days.md
+index df4f119..77c6847 100644
+--- a/docs/knowledge/returns/return-days.md
++++ b/docs/knowledge/returns/return-days.md
+@@ -1,7 +1,7 @@
+ ---
+ kind: rule
+ source: human
+-anchor: RETURN_DAYS
++anchor: returnDays
+ ---
+ # 반품 기한 7일, 단순 변심은 왕복 배송비 고객 부담
+ 
+diff --git a/docs/knowledge/shipping/free-shipping.md b/docs/knowledge/shipping/free-shipping.md
+index 82c187a..59e1d9b 100644
+--- a/docs/knowledge/shipping/free-shipping.md
++++ b/docs/knowledge/shipping/free-shipping.md
+@@ -1,7 +1,7 @@
+ ---
+ kind: rule
+ source: human
+-anchor: calcShippingFee
++anchor: shippingFee
+ ---
+ # 5만 원 이상 주문은 무료 배송
+ 
+@@ -11,3 +11,4 @@ anchor: calcShippingFee
+ 
+ ## 바뀐 이력
+ - 2026-04-02 처음 남김 (Work w-20260402-001)
++- 2026-10-14 anchor를 바뀐 함수 이름 shippingFee로 고침 (Work w-20261014-001)
+diff --git a/src/shipping.js b/src/shipping.js
+index ab9421c..196d129 100644
+--- a/src/shipping.js
++++ b/src/shipping.js
+@@ -8,7 +8,7 @@ export const CUTOFF_HOUR = 14
+ 
+ export function shippingFee(order) {
+   const extra = order.remote ? REMOTE_EXTRA : 0
+-  if (order.subtotal > FREE_SHIPPING_MIN) return extra
++  if (order.subtotal >= FREE_SHIPPING_MIN) return extra
+   return BASE_FEE + extra
+ }
+ 

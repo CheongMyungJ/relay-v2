@@ -42,6 +42,8 @@ import type {
   ProjectInspection,
   ProjectView,
   StepPreview,
+  TidyCandidateView,
+  TidyView,
   StepPreviewResult,
   WorkView,
 } from '../../shared/views'
@@ -313,6 +315,66 @@ function WorkTypePicker({
   )
 }
 
+const TIDY_KIND_LABEL: Readonly<Record<TidyCandidateView['kind'], string>> = {
+  same_anchor: '같은 anchor',
+  stale_anchor: '코드에 없는 anchor',
+  missing_path: '없는 경로',
+  format: '형식 문제',
+}
+
+/**
+ * 지식 정리 후보 (D393). 누르면 후보로 채운 일반 Work의 요청을 넣는다. 사람이 쓴 요청이 있으면(overwrites) 바꾸기 전에
+ * 한 번 묻는다. basis는 후보를 찾은 기준(원격이면 마지막으로 fetch한 것)이다
+ */
+function TidyNotice({
+  view,
+  basis,
+  overwrites,
+  onUse,
+}: {
+  view: TidyView
+  basis: string
+  overwrites: boolean
+  onUse: (view: TidyView) => void
+}) {
+  const [confirm, setConfirm] = useState(false)
+  return (
+    // 처음부터 펼쳐 둔다: 접힌 목록 안의 버튼은 지나치기 쉽다(대규모 기능 실험 시범)
+    <details className="field tidy-notice" open>
+      <summary>지식 정리 후보 {view.candidates.length}건</summary>
+      <div className="dim">{basis} 기준</div>
+      <ul>
+        {view.candidates.map((c, i) => (
+          <li key={i}>
+            {TIDY_KIND_LABEL[c.kind]} {c.detail}: {c.paths.join(', ')}
+          </li>
+        ))}
+      </ul>
+      {confirm && overwrites ? (
+        <div className="row">
+          <span>쓴 요청이 후보 목록으로 바뀝니다.</span>
+          <button
+            type="button"
+            onClick={() => {
+              setConfirm(false)
+              onUse(view)
+            }}
+          >
+            요청 바꾸기
+          </button>
+          <button type="button" onClick={() => setConfirm(false)}>
+            그대로 두기
+          </button>
+        </div>
+      ) : (
+        <button type="button" onClick={() => (overwrites ? setConfirm(true) : onUse(view))}>
+          지식 정리 Work로 채우기
+        </button>
+      )}
+    </details>
+  )
+}
+
 /** 요청 입력의 예시 문구. 유형을 고르기 전에는 버그 수정의 것이다 (D261, I88) */
 const REQUEST_PLACEHOLDER: Readonly<Record<WorkType, string>> = {
   bugfix: '버그 설명, 로그, 이슈 내용을 붙여 넣으세요',
@@ -342,6 +404,15 @@ export function NewWorkDialog({
   const [auto, setAuto] = useState<AutoOverrides>({})
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // 지식 정리 후보와 그것을 찾은 기준("<브랜치>|<위치>"). 늦게 온 앞 기준의 결과는 보이지 않는다 (D393)
+  const [tidy, setTidy] = useState<{ basis: string; view: TidyView } | null>(null)
+  // 후보로 채운 요청. 사람이 고치지 않은 채 기준이 바뀌면 새 기준의 후보로 다시 채운다
+  const filled = useRef<string | null>(null)
+  const [filledText, setFilledText] = useState<string | null>(null)
+  const requestNow = useRef(request)
+  useEffect(() => {
+    requestNow.current = request
+  }, [request])
   const config = useConfig()
 
   useEffect(() => {
@@ -349,6 +420,32 @@ export function NewWorkDialog({
       if (list.length) setBranches(list)
     })
   }, [project.id])
+
+  // 기준이 바뀌면 그 기준의 지식 정리 후보를 다시 찾는다 (D393). 후보로 채운 요청을 고치지 않았으면 새 기준의 후보로
+  // 바꾼다(앞 기준의 후보로 다른 브랜치에서 시작하지 않게)
+  useEffect(() => {
+    let current = true
+    void window.relay.knowledgeTidy(project.id, branch, location).then((view) => {
+      if (!current) return
+      setTidy({ basis: `${branch}|${location}`, view })
+      if (filled.current !== null && requestNow.current === filled.current) {
+        filled.current = view.request || null
+        setFilledText(filled.current)
+        setRequest(view.request)
+      }
+    })
+    return () => {
+      current = false
+    }
+  }, [project.id, branch, location])
+
+  const applyTidy = (view: TidyView) => {
+    filled.current = view.request
+    setFilledText(view.request)
+    setType('general')
+    setRequest(view.request)
+  }
+  const shownTidy = tidy?.basis === `${branch}|${location}` ? tidy.view : null
 
   const start = async () => {
     if (!type) return
@@ -384,6 +481,14 @@ export function NewWorkDialog({
 
   return (
     <Modal title={`새 Work · ${project.name}`} onClose={onClose}>
+      {shownTidy?.candidates.length ? (
+        <TidyNotice
+          view={shownTidy}
+          basis={location === 'remote' ? `마지막으로 받은(fetch) origin/${branch}` : branch}
+          overwrites={request.trim() !== '' && request !== filledText}
+          onUse={applyTidy}
+        />
+      ) : null}
       <div className="field">
         유형
         <WorkTypePicker value={type} onChange={setType} />

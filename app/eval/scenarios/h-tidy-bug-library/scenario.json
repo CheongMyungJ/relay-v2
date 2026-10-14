@@ -1,0 +1,41 @@
+{
+  "id": "h-tidy-bug-library",
+  "repoName": "library-loans",
+  "type": "bugfix",
+  "dev": true,
+  "title": "평범한 버그 수정, 그 버그와 이어진 낡은 지식과 정리 안 된 지식이 있는 레포 (hold-out)",
+  "purpose": "지식 정리 실험(docs/tidy-experiment/protocol.md)의 봉인한 hold-out. 37의 쌍둥이. 사람은 대출 권수 경계 버그(이미 5권 빌린 회원이 6번째 책을 빌림)만 고치러 왔고 지식 정리를 말하지 않는다. docs/knowledge/에 항목 8개: 그 버그 규칙을 담았지만 이름이 바뀐 함수(checkoutAllowed → canBorrow)를 가리키는 항목, 같은 anchor(DAILY_FINE)의 중복 쌍(장애인 면제와 다음 날부터 셈, 합쳐야 함), 없어진 대출 연장(RENEWAL_DAYS) 항목, 멀쩡한 항목 넷. 앱이 찾는 후보는 셋이다. 사람이 후보로 정리 Work를 시작하는지, 심은 지식 문제가 풀리는지, 버그가 고쳐지는지, 멀쩡한 항목을 지키는지 본다.",
+  "report": "사서 문의: 이미 5권을 빌린 회원이 6번째 책을 빌려 갔다고 한다. 한 사람이 동시에 빌릴 수 있는 건 5권까지다. (src/loans.js)",
+  "knowledge": [
+    {
+      "share": "on_ask",
+      "text": "연체 중인 책이 한 권이라도 있으면 빌린 권수와 상관없이 더 빌릴 수 없다."
+    },
+    {
+      "share": "on_ask",
+      "text": "대출 연장은 2026-06에 없앴다(대출 기간을 14일로 늘리면서). 그 기능은 이제 없다."
+    }
+  ],
+  "preferences": [],
+  "reveals": [],
+  "events": [],
+  "expectedFiles": ["src/**", "test/**", "docs/knowledge/**"],
+  "checks": [
+    {
+      "name": "대출 권수 경계",
+      "file": "borrow-limit.test.js",
+      "tidyRole": "bug"
+    },
+    {
+      "name": "낡은 anchor(checkoutAllowed) 고침",
+      "file": "stale-anchor.test.js"
+    },
+    { "name": "연체료 중복 합침", "file": "duplicate.test.js" },
+    { "name": "없어진 대출 연장 항목 정리", "file": "removed-feature.test.js" },
+    { "name": "멀쩡한 항목 그대로", "file": "healthy.test.js", "guard": true }
+  ],
+  "limits": {
+    "minutes": 45,
+    "turns": 80
+  }
+}

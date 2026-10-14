@@ -17,6 +17,7 @@ import type {
   MergeInfoResult,
   MergeInput,
   NewWorkInput,
+  TidyView,
   PrItemAction,
   ProjectInspection,
   ProjectView,
@@ -79,6 +80,12 @@ export interface RelayApi {
   /** 기준 브랜치 목록. 프로젝트의 기본 브랜치가 맨 앞이다 */
   branches(projectId: string): Promise<string[]>
   createWork(projectId: string, input: NewWorkInput): Promise<CreateWorkResult>
+  /** 기준 브랜치의 지식 정리 후보 (D393) */
+  knowledgeTidy(
+    projectId: string,
+    baseBranch: string,
+    location: 'local' | 'remote',
+  ): Promise<TidyView>
   review(workKey: string, taskId: string): Promise<ReviewView | null>
   approve(workKey: string, taskId: string, opts: ApproveOptions): Promise<CommandResult>
   /** 승인 화면의 [취소]: 자동 승인 카운트다운을 멈춘다 (4.3) */
@@ -197,6 +204,7 @@ export const IPC = {
   registerProject: 'project:register',
   branches: 'project:branches',
   createWork: 'work:create',
+  knowledgeTidy: 'work:knowledge-tidy',
   review: 'work:review',
   approve: 'work:approve',
   cancelCountdown: 'work:cancel-countdown',

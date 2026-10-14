@@ -1,0 +1,121 @@
+diff --git a/docs/knowledge/fines/daily-fine.md b/docs/knowledge/fines/daily-fine.md
+index b5560af..7c9e155 100644
+--- a/docs/knowledge/fines/daily-fine.md
++++ b/docs/knowledge/fines/daily-fine.md
+@@ -3,11 +3,13 @@ kind: rule
+ source: human
+ anchor: DAILY_FINE
+ ---
+-# 연체료는 하루 100원, 장애인 회원은 면제
++# 연체료는 반납 기한 다음 날부터 하루 100원, 장애인 회원은 면제
+ 
+ ## 규칙
+ - 연체료는 책 한 권에 하루 100원이다.
++- 연체료는 반납 기한 다음 날부터 센다. 휴관일은 세지 않는다.
+ - 장애인 회원은 연체료를 내지 않는다. 연체 중 대출 정지는 똑같이 받는다.
+ 
+ ## 바뀐 이력
+ - 2026-07-21 처음 남김 (Work w-20260721-003)
++- 2026-10-14 overdue-start.md와 합침 (Work w-20261014-001)
+diff --git a/docs/knowledge/fines/fine-cap.md b/docs/knowledge/fines/fine-cap.md
+deleted file mode 100644
+index b63d9cd..0000000
+--- a/docs/knowledge/fines/fine-cap.md
++++ /dev/null
+@@ -1,12 +0,0 @@
+----
+-kind: fact
+-source: investigation
+-anchor: FINE_CAP
+----
+-# 연체료 상한은 한 권에 3,000원
+-
+-## 내용
+-- 연체료는 책 한 권마다 3,000원에서 멈춘다. 시 조례로 정한 상한이라 지점에서 바꿀 수 없다.
+-
+-## 바뀐 이력
+-- 2026-05-06 처음 남김 (Work w-20260506-001)
+diff --git a/docs/knowledge/fines/overdue-start.md b/docs/knowledge/fines/overdue-start.md
+deleted file mode 100644
+index e2a5325..0000000
+--- a/docs/knowledge/fines/overdue-start.md
++++ /dev/null
+@@ -1,12 +0,0 @@
+----
+-kind: rule
+-source: human
+-anchor: DAILY_FINE
+----
+-# 연체료는 반납 기한 다음 날부터
+-
+-## 규칙
+-- 연체료(하루 100원)는 반납 기한 다음 날부터 센다. 휴관일은 세지 않는다.
+-
+-## 바뀐 이력
+-- 2026-01-12 처음 남김 (Work w-20260112-001)
+diff --git a/docs/knowledge/loans/borrow-limit.md b/docs/knowledge/loans/borrow-limit.md
+index 9cb6ba3..7503a4b 100644
+--- a/docs/knowledge/loans/borrow-limit.md
++++ b/docs/knowledge/loans/borrow-limit.md
+@@ -1,7 +1,7 @@
+ ---
+ kind: rule
+ source: human
+-anchor: checkoutAllowed
++anchor: canBorrow
+ ---
+ # 한 사람은 5권까지 빌린다
+ 
+@@ -11,3 +11,4 @@ anchor: checkoutAllowed
+ 
+ ## 바뀐 이력
+ - 2026-04-08 처음 남김 (Work w-20260408-001)
++- 2026-10-14 anchor를 바뀐 함수 이름 canBorrow로 고침 (Work w-20261014-001)
+diff --git a/docs/knowledge/loans/renewal.md b/docs/knowledge/loans/renewal.md
+deleted file mode 100644
+index 7ef47ae..0000000
+--- a/docs/knowledge/loans/renewal.md
++++ /dev/null
+@@ -1,12 +0,0 @@
+----
+-kind: rule
+-source: human
+-anchor: RENEWAL_DAYS
+----
+-# 대출 연장은 한 번, 7일
+-
+-## 규칙
+-- 반납 기한 전에 한 번만 연장할 수 있고, 연장하면 기한이 7일 늘어난다. 예약이 걸린 책은 연장할 수 없다.
+-
+-## 바뀐 이력
+-- 2025-11-17 처음 남김 (Work w-20251117-002)
+diff --git a/docs/knowledge/loans/test-clock.md b/docs/knowledge/loans/test-clock.md
+deleted file mode 100644
+index 8a2b85f..0000000
+--- a/docs/knowledge/loans/test-clock.md
++++ /dev/null
+@@ -1,11 +0,0 @@
+----
+-kind: pitfall
+-source: investigation
+----
+-# 날짜 시험은 시각을 고정한다
+-
+-## 내용
+-- 반납 기한 시험은 `new Date()`를 쓰지 않고 UTC 시각을 고정해 넘긴다. 자정 무렵에 돌리면 시험이 흔들린다.
+-
+-## 바뀐 이력
+-- 2026-03-30 처음 남김 (Work w-20260330-002)
+diff --git a/src/loans.js b/src/loans.js
+index 076f046..77482dc 100644
+--- a/src/loans.js
++++ b/src/loans.js
+@@ -9,7 +9,7 @@ const DAY = 24 * 60 * 60 * 1000
+ // 지금 빌린 권수(borrowed)와 연체 중인 권수(overdue)로 한 권 더 빌릴 수 있나
+ export function canBorrow(member) {
+   if (member.overdue > 0) return false
+-  return member.borrowed <= MAX_LOANS
++  return member.borrowed < MAX_LOANS
+ }
+ 
+ export function dueDate(loanedAt, book) {

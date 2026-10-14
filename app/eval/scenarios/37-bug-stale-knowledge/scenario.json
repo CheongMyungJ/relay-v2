@@ -1,0 +1,34 @@
+{
+  "id": "37-bug-stale-knowledge",
+  "repoName": "shop-orders",
+  "type": "bugfix",
+  "dev": true,
+  "title": "평범한 버그 수정, 그 버그와 이어진 낡은 지식과 정리 안 된 지식이 있는 레포",
+  "purpose": "지식 정리 실험(docs/tidy-experiment/protocol.md)의 개발용. 사람은 배송비 경계 버그(5만 원 딱 맞춘 주문에 배송비가 붙음)만 고치러 왔고 지식 정리를 말하지 않는다. docs/knowledge/에 항목 9개: 그 버그 규칙을 담았지만 이름이 바뀐 함수(calcShippingFee → shippingFee)를 가리키는 항목, 같은 anchor(RETURN_DAYS)의 중복 쌍(7일과 왕복 배송비, 합쳐야 함), 없어진 착불(COD_FEE) 항목, 멀쩡한 항목 넷. 앱이 찾는 후보는 셋이다. 새 빌드(relay)는 사이드바의 [지식 정리 n]과 새 Work 대화상자에 후보가 보이고, 견줄 빌드(f3)는 대화상자에만 보인다. 사람이 후보로 정리 Work를 시작하는지, 심은 지식 문제가 풀리는지, 버그가 고쳐지는지, 멀쩡한 항목을 지키는지 본다.",
+  "report": "고객 문의: 상품 금액을 50,000원 딱 맞춰 주문했는데 배송비 3,000원이 붙었다고 한다. 5만 원 이상이면 무료 배송이어야 한다. (src/shipping.js)",
+  "knowledge": [
+    {
+      "share": "on_ask",
+      "text": "도서산간 추가 배송비(4,000원)는 무료 배송이어도 따로 붙는다."
+    },
+    {
+      "share": "on_ask",
+      "text": "착불(COD) 주문은 2026-07에 없앴다. 그 기능은 이제 없다."
+    }
+  ],
+  "preferences": [],
+  "reveals": [],
+  "events": [],
+  "expectedFiles": ["src/**", "test/**", "docs/knowledge/**"],
+  "checks": [
+    { "name": "배송비 경계", "file": "fee-boundary.test.js", "tidyRole": "bug" },
+    { "name": "낡은 anchor(calcShippingFee) 고침", "file": "stale-anchor.test.js" },
+    { "name": "반품 기한 중복 합침", "file": "duplicate.test.js" },
+    { "name": "없어진 착불 항목 정리", "file": "removed-feature.test.js" },
+    { "name": "멀쩡한 항목 그대로", "file": "healthy.test.js", "guard": true }
+  ],
+  "limits": {
+    "minutes": 45,
+    "turns": 80
+  }
+}

@@ -1,0 +1,13 @@
+diff --git a/src/loans.js b/src/loans.js
+index 076f046..77482dc 100644
+--- a/src/loans.js
++++ b/src/loans.js
+@@ -9,7 +9,7 @@ const DAY = 24 * 60 * 60 * 1000
+ // 지금 빌린 권수(borrowed)와 연체 중인 권수(overdue)로 한 권 더 빌릴 수 있나
+ export function canBorrow(member) {
+   if (member.overdue > 0) return false
+-  return member.borrowed <= MAX_LOANS
++  return member.borrowed < MAX_LOANS
+ }
+ 
+ export function dueDate(loanedAt, book) {

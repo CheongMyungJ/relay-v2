@@ -30,9 +30,10 @@
 | `eval/lib/episode.mjs` | 실행 하나: 레포 준비, 사람 깨우기, 사건, 판정. Work 둘을 잇는 시나리오는 Work마다 사람 역할을 새로 두고 Work마다 판정한다 |
 | `eval/lib/works.mjs` | Work 여럿을 잇는 시나리오(`works`)의 Work 나누기, 팀원 교대, 재는 Work, 시나리오의 짝(relay 대 맨 CLI, relay 대 relay-off) |
 | `eval/knowledge-quality.mjs` | 남은 지식의 질, kind 분포, 지식 검토 호출의 시간·비용 (`docs/knowledge-experiment/followup.md` 9절). 기준은 `eval/knowledge-truth/<시나리오>.json` |
+| `eval/tidy.mjs` | 지식 정리 실험의 지표: 후보로 채운 정리 Work, 사이드바 후보 누름, 심은 지식 문제, 버그, 멀쩡한 항목 (`docs/tidy-experiment/protocol.md` 4절) |
 | `eval/primary.mjs` | 지식 실험의 주지표와 두 쪽 차이의 bootstrap 구간 (`docs/knowledge-experiment/protocol.md` 4절) |
 | `eval/ref-app.sh` | 견줄 다른 커밋의 앱을 git worktree로 꺼내 빌드한다 |
-| `eval/unseal.sh` | 봉인한 hold-out(`eval/sealed/`)을 연다(열쇠는 사람이 줌) |
+| `eval/unseal.sh` | 봉인한 hold-out(`eval/sealed/`)을 연다(열쇠는 사람이 줌). 이름을 붙인 봉인은 `HOLDOUT_NAME=<이름>` |
 | `eval/lib/relay-arm.mjs` | 앱 띄우기와 프로젝트 등록, 화면 읽기(스크린샷, 보이는 글자, 누를 수 있는 요소), 행동, 비정상 종료 |
 | `eval/lib/cli-arm.mjs` | bash와 claude를 PTY로 띄우기, 터미널 화면(xterm headless), 입력, 새 터미널, 비정상 종료 |
 | `eval/lib/human.mjs` | 사람 역할의 시스템 프롬프트, 차례마다 보일 화면, 행동 형식, 설문 |
@@ -110,6 +111,10 @@
 | 32-subscription-pause | (기능 추가, 짧은 요청) "구독을 일시정지했다가 다시 시작할 수 있게 해 줘"와 부를 함수 이름만 말함. 재개 때 결제일을 정지한 날 수만큼 밂, 최대 28일 뒤 자동 재개, 연간 플랜 정지 불가는 코드에 단서가 없는 업무 규칙(recall). 결제·안내는 cancelledOn으로, 배송은 status로 해지를 걸러 새 상태 하나로는 정지가 다 빠지지 않음 | 코드로 알 수 없는 동작의 선택지를 묻는지(D242), 묻지 않고 흔한 구현(결제일 그대로, 기한 없음, 모든 플랜 허용)으로 가는지, 정지를 빠짐없이 거르는지. 함정 넷은 모두 레포 시험을 통과한다 |
 | 33-notify-settings | (설계, 중간, 새 문서) 알림 설정 기능의 설계를 새 문서로 정함. 사람만 앎: 방해 금지 시간은 사용자 시간대 기준(서버는 UTC), 수신 거부 링크는 법적 요구라 끌 수 없음 | 쟁점을 짚어 사람에게 묻고 문서에 맞게 적는지(숨긴 쟁점, 판정 모델), 코드를 바꾸지 않는지(범위 guard), 사람의 수고 |
 | 34-order-refund | (설계, 큼, 기존 문서) 주문 취소·환불을 기존 `docs/design.md`의 결정 표와 번호에 더함. 사람만 앎: 부분 환불은 관리자만, 환불은 결제 취소가 아니라 별도 환불 기록. 함정: 기존 문서는 결제를 동기 호출로 적었지만 코드는 큐와 워커 | 위에 더해 지금 코드와 다른 서술을 바로잡는지(묻지 않아도 되는 쟁점, `ask: false`) |
+| 36-knowledge-tidy | (일반) 쌓인 팀 지식의 중복 두 쌍, 낡은 항목 둘, anchor가 달라 앱이 못 찾는 어긋난 규칙 한 쌍, 멀쩡한 항목 넷. 사람만 앎: 지금 환불 쿠폰 정책 | 지식 정리 후보(D393). relay 대 그 전 빌드: 심은 문제의 해결, 멀쩡한 항목 보존(guard), 코드 그대로(범위 guard) |
+| 37-bug-stale-knowledge | (버그 수정, 정리 요청 없음) 배송비 경계 버그. 지식에 그 버그 규칙의 낡은 anchor, 다른 영역의 같은 anchor 중복, 없어진 기능의 항목, 멀쩡한 항목 넷 | 지식 정리 후속 실험(`docs/tidy-experiment/`). 정리하라는 말이 없어도 사람이 후보로 정리 Work를 시작하는지(`eval/tidy.mjs`), 심은 지식 문제, 버그, 멀쩡한 항목 |
+| h-tidy-bug-library | (버그 수정, 정리 요청 없음, 지식 정리 후속 실험의 hold-out이었고 열었음) 37과 같은 모양, 다른 도메인(도서관 대출) | 37과 같음 |
+| h-tidy-route-dispatch | (일반, 대규모 기능 실험 F3의 hold-out이었고 열었음) 같은 모양, 다른 도메인(배차): 중복 두 쌍, 낡은 항목 둘, 사람만 아는 어긋난 쌍, 멀쩡한 항목 넷, 지식 형식 guard | 36과 같음 |
 
 `scenario.json`의 필드:
 

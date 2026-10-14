@@ -34,6 +34,26 @@ export async function git(
   return r.stdout.replace(/\r?\n$/, '')
 }
 
+/**
+ * git을 실행한다. 종료 코드가 quiet에 있으면(예: git grep이 찾은 것이 없을 때의 1) null이다. 그 밖의 실패(시간 초과, 잘못된
+ * ref)는 git()처럼 GitError다
+ */
+export async function gitOrNull(
+  cwd: string,
+  args: readonly string[],
+  quiet: readonly number[],
+  opts: GitOptions = {},
+): Promise<string | null> {
+  const r = await run('git', [...BASE_ARGS, ...args], {
+    cwd,
+    env: gitEnv(opts.env),
+    timeoutMs: opts.timeoutMs ?? 60_000,
+  })
+  if (r.code !== null && quiet.includes(r.code)) return null
+  if (r.code !== 0) throw new GitError(`git ${args[0] ?? ''} 실패: ${describeFailure(r)}`)
+  return r.stdout.replace(/\r?\n$/, '')
+}
+
 async function tryGit(
   cwd: string,
   args: readonly string[],

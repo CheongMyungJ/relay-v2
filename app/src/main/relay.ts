@@ -13,6 +13,9 @@ import {
   hasRemote,
   remoteUrl,
 } from '../adapters/git'
+import { filesAt, namesInCode, readKnowledgeAt } from '../adapters/knowledge'
+import { knowledgeEnabled } from '../core/knowledge'
+import { anchorNames, tidyCandidates, tidyRequest } from '../core/knowledge-tidy'
 import { HookServer } from '../adapters/hooks'
 import { killOrphans } from '../adapters/pty'
 import {
@@ -48,6 +51,7 @@ import type {
   MergeInput,
   NewWorkInput,
   PrItemAction,
+  TidyView,
   ProjectInspection,
   ProjectView,
   RespondStartInput,
@@ -426,6 +430,37 @@ export class Relay {
     const names = [...new Set([...local, ...remote])].filter((b) => !b.startsWith(RELAY_BRANCH))
     const rest = names.filter((b) => b !== project.default_branch).sort()
     return [project.default_branch, ...rest]
+  }
+
+  /**
+   * 새 Work 대화상자의 지식 정리 후보 (D393): 기준 브랜치의 지식 파일과 코드에서 모델 없이 찾는다. 지식 관리를 끄면
+   * (RELAY_KNOWLEDGE=off) 후보가 없다
+   */
+  async knowledgeTidy(
+    projectId: string,
+    baseBranch: string,
+    location: 'local' | 'remote',
+  ): Promise<TidyView> {
+    const project = this.projects.get(projectId)
+    const branch = baseBranch.trim()
+    const none: TidyView = { candidates: [], request: '' }
+    if (!project || !branch || !knowledgeEnabled(this.env)) return none
+    const opts = { env: this.env }
+    const repo = project.repo_path
+    const ref = location === 'remote' ? `origin/${branch}` : branch
+    try {
+      const files = await filesAt(repo, ref, opts)
+      const entries = await readKnowledgeAt(repo, ref, files, opts)
+      if (!entries.length) return none
+      // 코드에서 이름을 찾지 못하면(git grep 실패) 아래 catch로 후보 없이 끝낸다: 모든 anchor를 낡았다고 하지 않는다
+      const candidates = tidyCandidates(entries, {
+        found: await namesInCode(repo, ref, anchorNames(entries), opts),
+        files,
+      })
+      return candidates.length ? { candidates, request: tidyRequest(candidates) } : none
+    } catch {
+      return none
+    }
   }
 
   // ---------- Work 생성 (시나리오 1) ----------

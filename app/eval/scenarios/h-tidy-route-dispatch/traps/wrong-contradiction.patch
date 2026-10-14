@@ -1,0 +1,157 @@
+diff --git a/docs/knowledge/couriers/load-factor.md b/docs/knowledge/couriers/load-factor.md
+index 6f7be4d..85ad795 100644
+--- a/docs/knowledge/couriers/load-factor.md
++++ b/docs/knowledge/couriers/load-factor.md
+@@ -3,11 +3,13 @@ kind: fact
+ source: investigation
+ anchor: loadFactor
+ ---
+-# 기사 부하는 정거장 칸 수를 12로 나눈 값이고 냉장은 2칸이다
++# 기사 부하는 정거장 칸 수를 12로 나눈 값이고, 1 이상이면 새 주문을 주지 않는다
+ 
+ ## 내용
+-- `loadFactor`는 정거장 칸 수를 `MAX_STOPS`로 나눈 값이다. 냉장·냉동 주문은 2칸으로 센다(보냉 가방이 자리를 더 차지한다).
+-- 값은 0에서 1 사이로 읽으면 된다.
++- `loadFactor`는 정거장 칸 수를 `MAX_STOPS`로 나눈 값이다. 냉장·냉동 주문은 2칸으로 센다(보냉 가방이 자리를 더 차지한다). 값은 0에서 1 사이로 읽으면 된다.
++- `loadFactor`가 1 이상인 기사는 `assignOrders`에서 후보에서 뺀다. 이 기사에게 더 주면 정거장이 `MAX_STOPS`를 넘어간다. 후보가 모두 1 이상이면 주문은 `unassigned`에 남고, 억지로 배정하지 않는다.
+ 
+ ## 바뀐 이력
+ - 2026-05-09 처음 남김 (Work w-20260509-002)
++- 2026-06-25 1 이상이면 새 주문을 주지 않는다는 내용을 더함 (Work w-20260625-001)
++- 2026-10-13 같은 anchor의 두 항목을 하나로 합침 (Work w-20261013-001)
+diff --git a/docs/knowledge/couriers/rebalance-15min.md b/docs/knowledge/couriers/rebalance-15min.md
+deleted file mode 100644
+index 3f9ead2..0000000
+--- a/docs/knowledge/couriers/rebalance-15min.md
++++ /dev/null
+@@ -1,13 +0,0 @@
+----
+-kind: fact
+-source: investigation
+-anchor: rebalanceCouriers
+----
+-# 기사 부하는 15분마다 다시 맞춘다
+-
+-## 내용
+-- `rebalanceCouriers`가 15분마다 돌아, 부하가 가장 높은 기사의 마지막 정거장 하나를 같은 구역에서 가장 한가한 기사에게 넘긴다.
+-- 정거장을 넘길 때 고객에게는 따로 알리지 않는다.
+-
+-## 바뀐 이력
+-- 2026-03-18 처음 남김 (Work w-20260318-002)
+diff --git a/docs/knowledge/couriers/redistribute-stops.md b/docs/knowledge/couriers/redistribute-stops.md
+new file mode 100644
+index 0000000..dd07b67
+--- /dev/null
++++ b/docs/knowledge/couriers/redistribute-stops.md
+@@ -0,0 +1,14 @@
++---
++kind: fact
++source: investigation
++anchor: redistributeStops
++---
++# 정거장은 새 기사가 출근할 때 한 번 다시 나눈다
++
++## 내용
++- `redistributeStops`가 새 기사가 출근했을 때 같은 구역에서 가장 바쁜 기사의 마지막 정거장을 가장 한가한 기사에게 넘긴다. 두 기사의 부하 차이가 0.2 미만이 될 때까지 되풀이한다.
++- 예전의 주기적인 재조정(15분마다 도는 작업)은 없어졌다. 정거장을 넘길 때 고객에게는 따로 알리지 않는다.
++
++## 바뀐 이력
++- 2026-03-18 처음 남김 (Work w-20260318-002)
++- 2026-10-13 사라진 `rebalanceCouriers` 대신 지금 코드의 `redistributeStops`로 고침 (Work w-20261013-001)
+diff --git a/docs/knowledge/notify/delay-notice-after-30.md b/docs/knowledge/notify/delay-notice-after-30.md
+deleted file mode 100644
+index 50871b3..0000000
+--- a/docs/knowledge/notify/delay-notice-after-30.md
++++ /dev/null
+@@ -1,13 +0,0 @@
+----
+-kind: rule
+-source: human
+-anchor: sendDelayNotice
+----
+-# 지연 문자는 창이 지난 지 30분이 넘은 뒤에만 보낸다
+-
+-## 규칙
+-- `sendDelayNotice`로 보내는 지연 문자는 도착 창이 지난 지 30분이 넘은 뒤에만 나간다. 그 전의 지연은 기사에게만 알린다.
+-- 문자를 너무 일찍 보내면 곧 도착하는 주문에도 걱정 문자가 가서 문의가 늘었다.
+-
+-## 바뀐 이력
+-- 2026-05-14 처음 남김 (Work w-20260514-001)
+diff --git a/docs/knowledge/ops/overload-limit.md b/docs/knowledge/ops/overload-limit.md
+deleted file mode 100644
+index 47d8fcf..0000000
+--- a/docs/knowledge/ops/overload-limit.md
++++ /dev/null
+@@ -1,13 +0,0 @@
+----
+-kind: pitfall
+-source: human
+-anchor: loadFactor
+----
+-# 부하가 1 이상인 기사에게는 새 주문을 주지 않는다
+-
+-## 내용
+-- `loadFactor`가 1 이상인 기사는 `assignOrders`에서 후보에서 뺀다. 이 기사에게 더 주면 정거장이 `MAX_STOPS`를 넘어간다.
+-- 부하는 정거장 칸 수를 12로 나눈 값이고 냉장 주문은 2칸으로 센다. 후보가 모두 1 이상이면 주문은 `unassigned`에 남고, 억지로 배정하지 않는다.
+-
+-## 바뀐 이력
+-- 2026-06-25 처음 남김 (Work w-20260625-001)
+diff --git a/docs/knowledge/routing/assign-order.md b/docs/knowledge/routing/assign-order.md
+index e3683e9..0b8e053 100644
+--- a/docs/knowledge/routing/assign-order.md
++++ b/docs/knowledge/routing/assign-order.md
+@@ -3,11 +3,13 @@ kind: rule
+ source: human
+ anchor: assignOrders
+ ---
+-# 주문은 중요한 순서대로 하나씩 배정한다
++# 주문은 중요한 순서대로 하나씩 배정하고, 부하가 같으면 기사 id가 작은 쪽이다
+ 
+ ## 규칙
+-- `assignOrders`는 주문을 `priorityOf` 순서(같으면 주문 id 순)로 하나씩 처리한다. 순서에 따라 누가 먼저 기사를 차지하는지가 달라지므로 정렬을 빼거나 바꾸지 않는다.
+-- 냉장·냉동 주문이 가장 먼저 처리되도록 이 정렬이 있다.
++- `assignOrders`는 주문을 `priorityOf` 순서(같으면 주문 id 순)로 하나씩 처리한다. 순서에 따라 누가 먼저 기사를 차지하는지가 달라지므로 정렬을 빼거나 바꾸지 않는다. 냉장·냉동 주문이 가장 먼저 처리되도록 이 정렬이 있다.
++- 같은 구역에서 부하(`loadFactor`)가 같은 기사가 둘 이상이면 기사 id가 작은 쪽에 준다. 이 규칙이 없으면 같은 입력에서 결과가 실행마다 달라진다.
+ 
+ ## 바뀐 이력
+ - 2026-05-02 처음 남김 (Work w-20260502-001)
++- 2026-06-19 부하가 같을 때 기사 id가 작은 쪽이라는 규칙을 더함 (Work w-20260619-003)
++- 2026-10-13 같은 anchor의 두 항목을 하나로 합침 (Work w-20261013-001)
+diff --git a/docs/knowledge/routing/assign-tiebreak.md b/docs/knowledge/routing/assign-tiebreak.md
+deleted file mode 100644
+index 3254b8d..0000000
+--- a/docs/knowledge/routing/assign-tiebreak.md
++++ /dev/null
+@@ -1,13 +0,0 @@
+----
+-kind: rule
+-source: investigation
+-anchor: assignOrders
+----
+-# 배정은 priorityOf 순서이고, 부하가 같으면 기사 id가 작은 쪽이다
+-
+-## 규칙
+-- `assignOrders`가 주문을 `priorityOf` 순서로 처리하는 것은 바꾸지 않는다.
+-- 같은 구역에서 부하(`loadFactor`)가 같은 기사가 둘 이상이면 기사 id가 작은 쪽에 준다. 이 규칙이 없으면 같은 입력에서 결과가 실행마다 달라진다.
+-
+-## 바뀐 이력
+-- 2026-06-19 처음 남김 (Work w-20260619-003)
+diff --git a/docs/knowledge/routing/route-cache.md b/docs/knowledge/routing/route-cache.md
+deleted file mode 100644
+index f27ce7a..0000000
+--- a/docs/knowledge/routing/route-cache.md
++++ /dev/null
+@@ -1,13 +0,0 @@
+----
+-kind: pitfall
+-source: human
+-anchor: routeCacheTtl
+----
+-# 경로 캐시 유효 시간을 길게 두면 공사 구간으로 보낸다
+-
+-## 내용
+-- `routeCacheTtl`을 길게(1시간 넘게) 두면 도로 공사가 시작된 뒤에도 캐시된 옛 경로가 기사에게 나간다. 10분 이하로 둔다.
+-- 공사 소식이 들어오면 해당 구역의 캐시를 비운다.
+-
+-## 바뀐 이력
+-- 2026-03-30 처음 남김 (Work w-20260330-001)

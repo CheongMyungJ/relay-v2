@@ -6,8 +6,11 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   changedCodePaths,
   changedKnowledge,
+  filesAt,
   knowledgeFileChanges,
   knowledgePathsAt,
+  namesInCode,
+  readKnowledgeAt,
   readPendingKnowledge,
   readRepoKnowledge,
   removedKnowledge,
@@ -190,5 +193,49 @@ describe('[어댑터] 지식 읽기', () => {
     writeFiles(repo, { 'docs/knowledge/rate.md': '# 적립률은 2%\n' })
     git(repo, 'commit', '-q', '-am', '2%')
     expect(await readPendingKnowledge(repo, git(repo, 'rev-parse', 'HEAD'), source)).toEqual([])
+  })
+})
+
+describe('[어댑터] 지식 정리의 커밋 읽기 (D393)', () => {
+  it('커밋의 지식 파일과 경로를 읽고, 지식과 문서 밖의 파일에서 낱말로만 이름을 찾는다', async () => {
+    root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'relay-knowledge-')))
+    const { repo } = makeRepo(root, 'r', {
+      'src/vat.js': 'const VAT_RATE_OLD = 1\nconst VAT_RATE = 0.1\n',
+      'src/round.js': 'export const roundLineTotal = 1\n',
+      'docs/design.md': '옛 함수 legacyRound는 없앴다\n',
+      'docs/knowledge/billing/vat.md': '# VAT_RATE와 onlyInKnowledge\n',
+      'docs/knowledge/README.md': '# 안내\n',
+    })
+    git(repo, 'checkout', '-q', '-b', 'later')
+    writeFiles(repo, { 'docs/knowledge/billing/later.md': '# 뒤\n' })
+    git(repo, 'add', '-A')
+    git(repo, 'commit', '-q', '-m', 'later')
+    git(repo, 'checkout', '-q', 'main')
+
+    const files = await filesAt(repo, 'main')
+    expect([...files].sort()).toEqual([
+      'docs/design.md',
+      'docs/knowledge/README.md',
+      'docs/knowledge/billing/vat.md',
+      'src/round.js',
+      'src/vat.js',
+    ])
+    // 작업 트리가 아니라 커밋에서 읽는다(지금 체크아웃은 main, 읽는 것은 later)
+    const later = await readKnowledgeAt(repo, 'later', await filesAt(repo, 'later'))
+    expect(later.map((e) => e.path)).toEqual([
+      'docs/knowledge/billing/later.md',
+      'docs/knowledge/billing/vat.md',
+    ])
+    expect(later[1]?.text).toBe('# VAT_RATE와 onlyInKnowledge')
+
+    // -w: VAT_RATE_OLD 안의 VAT_RATE나 roundLineTotal 안의 roundLine은 같은 이름이 아니다
+    expect(
+      await namesInCode(repo, 'main', ['VAT_RATE', 'roundLine', 'legacyRound', 'onlyInKnowledge']),
+    ).toEqual(new Set(['VAT_RATE']))
+    // 찾은 것이 없으면(git grep 1) 빈 집합, 이름이 없으면 git을 부르지 않는다
+    expect(await namesInCode(repo, 'main', ['nowhere'])).toEqual(new Set())
+    expect(await namesInCode(repo, 'no-such-ref', [])).toEqual(new Set())
+    // 그 밖의 실패는 빈 집합으로 삼키지 않는다: 모든 anchor가 "코드에 없음"이 되지 않게
+    await expect(namesInCode(repo, 'no-such-ref', ['VAT_RATE'])).rejects.toThrow()
   })
 })

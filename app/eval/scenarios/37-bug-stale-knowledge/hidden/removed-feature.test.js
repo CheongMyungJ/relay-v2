@@ -1,0 +1,10 @@
+import { test } from 'node:test'
+import assert from 'node:assert'
+import { entries } from './kn.js'
+
+test('없어진 착불(COD_FEE)을 말하는 항목이 남지 않았다', () => {
+  for (const e of entries()) {
+    assert.notEqual(e.anchor, 'COD_FEE', e.path)
+    assert.ok(!/(착불|COD)/.test(e.body), e.path)
+  }
+})
