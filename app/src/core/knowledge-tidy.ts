@@ -65,6 +65,20 @@ export function tidyCandidates(
   return out
 }
 
+/**
+ * 사이드바의 후보를 셀 기준 (D395): 기본 브랜치의 로컬과 마지막으로 fetch한 origin 가운데 새 것. origin이 로컬보다 앞서
+ * 있으면(로컬이 그 조상) origin이고, 그 밖에는 로컬이다. 로컬이 없으면 origin이다. 둘 다 없으면 null
+ */
+export function sidebarLocation(refs: {
+  local: string | null
+  remote: string | null
+  /** 로컬이 origin의 조상이다 */
+  localBehind: boolean
+}): 'local' | 'remote' | null {
+  if (!refs.local) return refs.remote ? 'remote' : null
+  return refs.remote && refs.remote !== refs.local && refs.localBehind ? 'remote' : 'local'
+}
+
 /** 후보에 들어 있는 anchor 이름들 (main이 코드에서 찾을 것) */
 export function anchorNames(entries: readonly KnowledgeEntry[]): string[] {
   const names = entries

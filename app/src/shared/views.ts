@@ -469,6 +469,11 @@ export interface ProjectView {
   mergeMethod: MergeMethod | null
   /** 이슈 기록이 켜져 있다 (D337) */
   issueLog: boolean
+  /**
+   * 사이드바의 지식 정리 후보 (D395): 기본 브랜치에서 센 후보 수와 센 위치. 후보가 없거나 아직 세지 않았거나 지식 관리를
+   * 끄면 null
+   */
+  tidy: { count: number; location: 'local' | 'remote' } | null
 }
 
 export interface TaskView {

@@ -1129,6 +1129,7 @@ app/src/
 - **main과 화면:** `Relay.knowledgeTidy`와 IPC, 새 Work 대화상자의 후보와 [지식 정리 Work로 채우기].
 - **평가 도구:** 지식 파일만 바꾸는 정답·함정을 세는 `check-scenario`, 시나리오 36과 hold-out `h-tidy-route-dispatch`, 실험 전 빌드의 설명서 `guides/pre.md`.
 - **시험:** [단위] `knowledge-tidy.test.ts`. [흐름] `knowledge-tidy.test.ts`.
+- **사이드바 알림(D395):** `Relay.refreshTidy`(앱을 켤 때, 등록 뒤, `RunnerContext.workSettled`로 Work 완료와 PR 머지 뒤), `ProjectView.tidy`, 프로젝트 줄의 [지식 정리 n]과 후보로 채워 여는 새 Work 대화상자. 시험: [단위] `sidebarLocation`, [흐름] 등록·Work 완료·다시 켤 때 세기와 origin이 앞설 때, 지식 관리를 끄면 세지 않음, [스모크] `knowledge-tidy.spec.ts`. 쓰이지 않는 지식 후보는 만들지 않았다(D396).
 
 ## 8. 테스트 전략
 

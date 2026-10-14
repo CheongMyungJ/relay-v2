@@ -1967,3 +1967,12 @@ button.link:hover:not(:disabled) {
   margin-top: 2px;
   font-size: 12px;
 }
+
+/* 사이드바의 지식 정리 후보 (D395) */
+.group-head .tidy-badge {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 9px;
+  color: var(--accent-text);
+  white-space: nowrap;
+}

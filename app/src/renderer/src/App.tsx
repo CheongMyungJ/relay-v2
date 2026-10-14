@@ -42,7 +42,7 @@ import {
 type Dialog =
   | { kind: 'project' }
   | { kind: 'project-settings'; project: ProjectView }
-  | { kind: 'work'; project: ProjectView }
+  | { kind: 'work'; project: ProjectView; tidy?: 'local' | 'remote' }
   | { kind: 'settings' }
   | { kind: 'work-settings'; workKey: string }
   | { kind: 'abandon'; workKey: string }
@@ -345,6 +345,16 @@ export function App() {
                 >
                   {p.name}
                 </button>
+                {p.tidy ? (
+                  // 지식 정리 후보 (D395): 누르면 후보로 요청을 채운 새 Work 대화상자를 연다
+                  <button
+                    className="tidy-badge"
+                    aria-label={`지식 정리 후보 ${p.tidy.count}건`}
+                    onClick={() => setDialog({ kind: 'work', project: p, tidy: p.tidy?.location })}
+                  >
+                    지식 정리 {p.tidy.count}
+                  </button>
+                ) : null}
               </div>
               {open ? (
                 <>
@@ -606,6 +616,7 @@ export function App() {
       {dialog?.kind === 'work' ? (
         <NewWorkDialog
           project={dialog.project}
+          {...(dialog.tidy ? { tidy: dialog.tidy } : {})}
           onClose={() => setDialog(null)}
           onCreated={(key) => {
             setDialog(null)

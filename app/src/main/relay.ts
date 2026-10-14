@@ -11,11 +11,13 @@ import {
   commitOf,
   fetchBranch,
   hasRemote,
+  isAncestor,
+  refCommit,
   remoteUrl,
 } from '../adapters/git'
 import { filesAt, namesInCode, readKnowledgeAt } from '../adapters/knowledge'
 import { knowledgeEnabled } from '../core/knowledge'
-import { anchorNames, tidyCandidates, tidyRequest } from '../core/knowledge-tidy'
+import { anchorNames, sidebarLocation, tidyCandidates, tidyRequest } from '../core/knowledge-tidy'
 import { HookServer } from '../adapters/hooks'
 import { killOrphans } from '../adapters/pty'
 import {
@@ -83,6 +85,8 @@ export interface RelayOptions {
 
 const RELAY_BRANCH = 'relay/'
 
+const NO_TIDY: TidyView = { candidates: [], request: '' }
+
 export class Relay {
   private readonly projects = new Map<string, ProjectState>()
   private readonly works = new Map<string, WorkRunner>()
@@ -98,6 +102,10 @@ export class Relay {
   private configQueue: Promise<unknown> = Promise.resolve()
   /** project.json 고치기의 차례 (updateProject) */
   private projectWrites: Promise<unknown> = Promise.resolve()
+  /** 프로젝트마다 사이드바의 지식 정리 후보 (D395). 메모리에만 둔다 */
+  private readonly tidy = new Map<string, NonNullable<ProjectView['tidy']>>()
+  /** 프로젝트마다 후보 세기의 차례. 겹친 세기가 앞 결과로 덮지 않게 */
+  private readonly tidyRuns = new Map<string, Promise<void>>()
 
   private constructor(private readonly o: RelayOptions) {
     this.env = o.env ?? process.env
@@ -155,6 +163,8 @@ export class Relay {
     )
     // 이슈 기록에 남은 게시를 앞부터 잇는다 (I98, D344). 기다리지 않는다
     for (const r of loaded) if (!failed.has(r)) r.publishIssueSoon()
+    // 사이드바의 지식 정리 후보를 센다 (D395). 기다리지 않는다
+    for (const id of this.projects.keys()) void this.refreshTidy(id)
     // PR 진행인 Work는 항목을 읽어 두고 PR을 한 번 읽는다 (D159). 읽은 결과로 알리지 않는다
     await Promise.all(
       loaded
@@ -205,6 +215,7 @@ export class Relay {
   /** 하던 PR 읽기가 모두 끝나기를 기다린다 (WorkRunner.prIdle). 시험 도구가 close 뒤에 부른다 */
   async settled(): Promise<void> {
     await Promise.all([...this.works.values()].map((w) => Promise.all([w.prIdle(), w.issueIdle()])))
+    await Promise.all(this.tidyRuns.values())
   }
 
   /** 이 앱에서 살아 있는 세션이 있다. 앱을 끝낼 때 확인 창을 띄운다 (시나리오 3-6) */
@@ -226,6 +237,8 @@ export class Relay {
       checks: (projectId) => this.projects.get(projectId)?.checks,
       project: (projectId) => this.projects.get(projectId),
       recheck: (projectId) => this.recheck(projectId),
+      // Work가 완료됐거나 PR이 머지됐다: 사이드바의 지식 정리 후보를 다시 센다 (D395)
+      workSettled: (projectId) => void this.refreshTidy(projectId),
       knowledgeSources: (projectId, except) =>
         [...this.works.values()]
           .filter(
@@ -334,6 +347,7 @@ export class Relay {
       allowedBots: p.allowed_bots ?? [],
       mergeMethod: p.merge_method ?? null,
       issueLog: issueLogOn(p),
+      tidy: this.tidy.get(p.project_id) ?? null,
     }))
   }
 
@@ -392,6 +406,7 @@ export class Relay {
     await saveProject(this.o.home, r.project)
     this.projects.set(r.project.project_id, r.project)
     this.o.ui.projects(this.projectViews())
+    void this.refreshTidy(r.project.project_id)
     return { ok: true, projectId: r.project.project_id }
   }
 
@@ -443,22 +458,60 @@ export class Relay {
   ): Promise<TidyView> {
     const project = this.projects.get(projectId)
     const branch = baseBranch.trim()
-    const none: TidyView = { candidates: [], request: '' }
-    if (!project || !branch || !knowledgeEnabled(this.env)) return none
+    if (!project || !branch || !knowledgeEnabled(this.env)) return NO_TIDY
+    return this.tidyAt(project.repo_path, location === 'remote' ? `origin/${branch}` : branch)
+  }
+
+  /** 커밋(ref)의 지식 파일과 코드에서 찾은 정리 후보 (D393). 읽지 못하면 후보가 없다 */
+  private async tidyAt(repo: string, ref: string): Promise<TidyView> {
     const opts = { env: this.env }
-    const repo = project.repo_path
-    const ref = location === 'remote' ? `origin/${branch}` : branch
     try {
       const entries = await readKnowledgeAt(repo, ref, opts)
-      if (!entries.length) return none
+      if (!entries.length) return NO_TIDY
       const candidates = tidyCandidates(entries, {
         found: await namesInCode(repo, ref, anchorNames(entries), opts),
         files: await filesAt(repo, ref, opts),
       })
-      return candidates.length ? { candidates, request: tidyRequest(candidates) } : none
+      return candidates.length ? { candidates, request: tidyRequest(candidates) } : NO_TIDY
     } catch {
-      return none
+      return NO_TIDY
     }
+  }
+
+  /**
+   * 사이드바의 지식 정리 후보를 다시 센다 (D395): 앱을 켤 때, 프로젝트를 등록한 뒤, Work가 완료되거나 PR이 머지된 뒤.
+   * git을 읽기만 한다(fetch하지 않음). 기본 브랜치의 로컬과 마지막으로 fetch한 origin 가운데 새 것에서 센다. 지식 관리를
+   * 끄면 세지 않는다. 프로젝트마다 차례로 하고, 수가 바뀌면 프로젝트 목록을 다시 보낸다
+   */
+  refreshTidy(projectId: string): Promise<void> {
+    const run = (this.tidyRuns.get(projectId) ?? Promise.resolve()).then(async () => {
+      const project = this.projects.get(projectId)
+      if (!project || !knowledgeEnabled(this.env)) return
+      const opts = { env: this.env }
+      const repo = project.repo_path
+      const branch = project.default_branch
+      const local = await refCommit(repo, branch, opts)
+      const remote = await refCommit(repo, `origin/${branch}`, opts)
+      const location = sidebarLocation({
+        local,
+        remote,
+        localBehind:
+          !!local && !!remote && (await isAncestor(repo, local, remote, opts).catch(() => false)),
+      })
+      const count = location
+        ? (await this.tidyAt(repo, location === 'remote' ? `origin/${branch}` : branch)).candidates
+            .length
+        : 0
+      const before = this.tidy.get(projectId)
+      const next = count && location ? { count, location } : undefined
+      if (next) this.tidy.set(projectId, next)
+      else this.tidy.delete(projectId)
+      if (before?.count !== next?.count || before?.location !== next?.location)
+        this.o.ui.projects(this.projectViews())
+    })
+    const settled = run.catch(() => undefined)
+    this.tidyRuns.set(projectId, settled)
+    return settled
   }
 
   // ---------- Work 생성 (시나리오 1) ----------
