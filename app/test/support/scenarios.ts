@@ -62,6 +62,13 @@ export interface Scenario {
   /** 가짜 codex의 곁 세션만의 단계 (있으면 side·sideResume 대신). 가짜 codex의 단계는 Step 밖의 것도 있다 */
   sideCodex?: object[]
   sideResumeCodex?: object[]
+  /** 기본 세션(시나리오 12)의 단계. 곁 세션과 같은 인자이고 훅 URL이 /hook/session/이다. 없으면 입력을 기다리기만 한다 */
+  session?: Step[]
+  /** --resume으로 다시 연 기본 세션의 단계 */
+  sessionResume?: Step[]
+  /** 가짜 codex의 기본 세션만의 단계 (있으면 session·sessionResume 대신) */
+  sessionCodex?: object[]
+  sessionResumeCodex?: object[]
   /** 지식 검토 호출(claude -p, D300)의 n번째 결과. 없으면 문제 없음 */
   review?: { issues: { file: string; kind: string; quote: string; fix: string }[] }[]
 }

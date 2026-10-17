@@ -7,8 +7,10 @@ import { WORK_TYPE_LABEL, WORK_TYPE_SHORT } from '../../shared/work'
 import type {
   ActivityView,
   CommandResult,
+  DraftView,
   ProjectView,
   ReviewView,
+  SessionView,
   TaskView,
   WorkView,
 } from '../../shared/views'
@@ -29,9 +31,18 @@ import { withOpened } from './opened'
 import { Panel, showsPr, wantsApproval } from './Panel'
 import { TerminalView } from './TerminalView'
 import { QuestionDialog } from './QuestionDialog'
+import {
+  DeleteSessionDialog,
+  NewSessionDialog,
+  RenameSessionDialog,
+  SessionActions,
+  SessionBand,
+  SessionPanel,
+} from './Session'
 import { UpdateButton } from './UpdateButton'
 import {
   ARCHIVE_GROUP,
+  SESSIONS_GROUP,
   loadCollapsed,
   pruned,
   saveCollapsed,
@@ -42,14 +53,24 @@ import {
 type Dialog =
   | { kind: 'project' }
   | { kind: 'project-settings'; project: ProjectView }
-  | { kind: 'work'; project: ProjectView }
+  | { kind: 'work'; project: ProjectView; draft?: DraftView }
   | { kind: 'settings' }
   | { kind: 'work-settings'; workKey: string }
   | { kind: 'abandon'; workKey: string }
   | { kind: 'step'; workKey: string; node?: NodeName }
   | { kind: 'clean'; workKey: string }
   | { kind: 'side'; workKey: string; fresh: boolean }
+  | { kind: 'session-new' }
+  | { kind: 'session-rename'; id: string }
+  | { kind: 'session-delete'; id: string }
   | null
+
+/** 고른 것 (I136): Work(키는 <project-id>/<work-id>)나 기본 세션(키는 session-id) */
+type Selected = { kind: 'work' | 'session'; key: string }
+
+/** 터미널을 만든 표시(D143)의 기본 세션 키. Work 키와 겹치지 않는다 */
+const openedKey = (s: Selected | null) =>
+  s === null ? null : s.kind === 'work' ? s.key : `@session/${s.key}`
 
 /** 정리 세션 탭을 고른 표시 (7-5). task id와 겹치지 않는다 */
 const CLEANUP_TAB = '@cleanup'
@@ -85,7 +106,10 @@ export function App() {
   const [works, setWorks] = useState<Record<string, WorkView>>({})
   const [activities, setActivities] = useState<Activities>({})
   const [warnings, setWarnings] = useState<string[]>([])
-  const [selected, setSelected] = useState<string | null>(null)
+  const [sessions, setSessions] = useState<SessionView[]>([])
+  const [selected, setSelected] = useState<Selected | null>(null)
+  const selectedWork = selected?.kind === 'work' ? selected.key : null
+  const selectWorkKey = useCallback((key: string) => setSelected({ kind: 'work', key }), [])
   // Work마다 사람이 고른 탭. 없으면 지금 task를 따라간다
   const [picked, setPicked] = useState<Record<string, string>>({})
   const [dialog, setDialog] = useState<Dialog>(null)
@@ -93,13 +117,12 @@ export function App() {
   const [hiddenQuestionId, setHiddenQuestionId] = useState<string | null>(null)
   // 접은 프로젝트와 아카이브. 이 컴퓨터의 화면 설정이라 브라우저 저장소에 둔다
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(loadCollapsed)
-  // 보관된 Work의 우클릭 메뉴. 옮기지 못하면 그 까닭을 메뉴 안에 보인다
-  const [menu, setMenu] = useState<{
-    workKey: string
-    x: number
-    y: number
-    error?: string
-  } | null>(null)
+  // 보관된 Work와 기본 세션의 우클릭 메뉴. 옮기지 못하면 그 까닭을 메뉴 안에 보인다
+  const [menu, setMenu] = useState<
+    | { kind: 'work'; workKey: string; x: number; y: number; error?: string }
+    | { kind: 'session'; id: string; x: number; y: number }
+    | null
+  >(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -123,14 +146,16 @@ export function App() {
       )
     }
     const offProjects = window.relay.onProjects(showProjects)
+    const offSessions = window.relay.onSessions(setSessions)
     // 알림을 누르면 그 Work를 고른다 (D81)
-    const offFocus = window.relay.onFocusWork((key) => setSelected(key))
+    const offFocus = window.relay.onFocusWork((key) => setSelected({ kind: 'work', key }))
     void window.relay.snapshot().then((s) => {
       showProjects(s.projects)
       setWarnings(s.warnings)
+      setSessions(s.sessions)
       // 앱을 켜면 가장 최근 Work를 고른다
       const newest = [...s.works].sort((a, b) => b.workId.localeCompare(a.workId))[0]
-      if (newest) setSelected((cur) => cur ?? newest.key)
+      if (newest) setSelected((cur) => cur ?? { kind: 'work', key: newest.key })
       setWorks((m) => {
         const next = { ...m }
         for (const w of s.works) {
@@ -144,21 +169,26 @@ export function App() {
       offWork()
       offActivity()
       offProjects()
+      offSessions()
       offFocus()
     }
   }, [])
 
-  // 보고 있는 Work를 main에 알린다. 그 Work의 알림은 보내지 않는다 (D81)
+  // 보고 있는 Work를 main에 알린다. 그 Work의 알림은 보내지 않는다 (D81). 기본 세션을 고르면 보고 있는 Work가 없다 (I136)
   useEffect(() => {
-    window.relay.selectWork(selected)
-  }, [selected])
+    window.relay.selectWork(selectedWork)
+  }, [selectedWork])
 
-  // 터미널은 고른 적 있는 Work만 만든다 (D143). 고른 Work가 바뀌면 렌더 중에 더한다(React 문서의 이전 렌더 정보 저장)
+  // 터미널은 고른 적 있는 Work와 기본 세션만 만든다 (D143). 고른 것이 바뀌면 렌더 중에 더한다(React 문서의 이전 렌더
+  // 정보 저장)
   const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set())
-  const nextOpened = withOpened(opened, selected)
+  const nextOpened = withOpened(opened, openedKey(selected))
   if (nextOpened !== opened) setOpened(nextOpened)
 
-  const work = selected ? works[selected] : undefined
+  const work = selectedWork ? works[selectedWork] : undefined
+  const session =
+    selected?.kind === 'session' ? sessions.find((x) => x.id === selected.key) : undefined
+  // 지운 세션을 고르고 있으면 session이 없어 고르지 않은 화면이다
   const pickedId = work ? (picked[work.key] ?? work.current) : null
   // 정리 세션 탭(7-5)을 고르면 터미널은 정리 세션이고, 패널은 지금 task(Work 완료 화면)다
   const cleanupTab = !!work?.cleanup && pickedId === CLEANUP_TAB
@@ -258,13 +288,13 @@ export function App() {
     return (
       <button
         key={w.key}
-        className={`work-item${w.key === selected ? ' selected' : ''}`}
-        onClick={() => setSelected(w.key)}
+        className={`work-item${w.key === selectedWork ? ' selected' : ''}`}
+        onClick={() => selectWorkKey(w.key)}
         onContextMenu={
           w.canShelve
             ? (e) => {
                 e.preventDefault()
-                setMenu({ workKey: w.key, x: e.clientX, y: e.clientY })
+                setMenu({ kind: 'work', workKey: w.key, x: e.clientX, y: e.clientY })
               }
             : undefined
         }
@@ -290,6 +320,29 @@ export function App() {
     )
   }
 
+  /** 사이드바의 기본 세션 한 줄 (D405): 이름, 살아 있음 표시, Work 초안 수 */
+  const sessionItem = (x: SessionView) => (
+    <button
+      key={x.id}
+      className={`work-item session-item${
+        selected?.kind === 'session' && selected.key === x.id ? ' selected' : ''
+      }`}
+      onClick={() => setSelected({ kind: 'session', key: x.id })}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        setMenu({ kind: 'session', id: x.id, x: e.clientX, y: e.clientY })
+      }}
+      title={`${x.name} · ${x.cwd}`}
+    >
+      <span
+        className={`dot s-${x.status === 'live' ? 'working' : 'interrupted'}`}
+        aria-label={x.status === 'live' ? '살아 있음' : '닫힘'}
+      />
+      <span className="work-title">{x.name}</span>
+      {x.drafts.length ? <span className="work-step">Work 초안 {x.drafts.length}</span> : null}
+    </button>
+  )
+
   // 머지 뒤 정리 창 (D178, D200): 머지로 완료한 Work를 보고 있으면 한 번 연다. 앱에서 머지했거나 밖에서 머지된 것을
   // 읽었을 때, 다른 Work를 보고 있었으면 그 Work를 고를 때다. 연 것을 main에 알려 다시 열지 않는다
   const offered = useRef(new Set<string>())
@@ -310,6 +363,10 @@ export function App() {
     dialog?.kind === 'side'
       ? works[dialog.workKey]
       : null
+  const dialogSession =
+    dialog?.kind === 'session-rename' || dialog?.kind === 'session-delete'
+      ? sessions.find((x) => x.id === dialog.id)
+      : undefined
   // 단계 선택 대화상자 (6.2). node는 처음 고를 단계다(이전 단계 추천, D23)
   const openStep = (workKey: string, node?: NodeName) =>
     setDialog({ kind: 'step', workKey, ...(node ? { node } : {}) })
@@ -332,6 +389,27 @@ export function App() {
             {w}
           </div>
         ))}
+        {/* 기본 세션 (D405): 프로젝트들 위에 두고 프로젝트가 없어도 보인다 */}
+        <div className="sessions">
+          <div className="group-head">
+            <GroupToggle
+              open={!collapsed.has(SESSIONS_GROUP)}
+              label="기본 세션"
+              onToggle={() => toggleGroup(SESSIONS_GROUP)}
+            />
+            <span className="group-name">
+              기본 세션 {sessions.length ? <span className="dim">{sessions.length}</span> : null}
+            </span>
+          </div>
+          {collapsed.has(SESSIONS_GROUP) ? null : (
+            <>
+              {sessions.map(sessionItem)}
+              <button className="new-work" onClick={() => setDialog({ kind: 'session-new' })}>
+                새 세션
+              </button>
+            </>
+          )}
+        </div>
         {projects.map((p) => {
           const open = !collapsed.has(p.id)
           return (
@@ -375,7 +453,37 @@ export function App() {
             {collapsed.has(ARCHIVE_GROUP) ? null : groups.archive.map((w) => workItem(w, true))}
           </div>
         ) : null}
-        {menu ? (
+        {menu?.kind === 'session' ? (
+          <div
+            ref={menuRef}
+            className="context-menu"
+            role="menu"
+            style={{ left: menu.x, top: menu.y }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              role="menuitem"
+              onClick={() => {
+                setMenu(null)
+                setDialog({ kind: 'session-rename', id: menu.id })
+              }}
+            >
+              이름 바꾸기
+            </button>
+            <button
+              role="menuitem"
+              disabled={sessions.find((x) => x.id === menu.id)?.status === 'live'}
+              title="끝난 세션만 지웁니다"
+              onClick={() => {
+                setMenu(null)
+                setDialog({ kind: 'session-delete', id: menu.id })
+              }}
+            >
+              지우기
+            </button>
+          </div>
+        ) : null}
+        {menu?.kind === 'work' ? (
           <div
             ref={menuRef}
             className="context-menu"
@@ -389,7 +497,13 @@ export function App() {
                 const key = menu.workKey
                 void call(() => window.relay.shelve(key)).then((r) => {
                   // 실패는 다른 명령처럼 누른 곳 옆(메뉴 안)에 보이고, 메뉴를 닫으면 사라진다
-                  setMenu((m) => (m?.workKey !== key ? m : r.ok ? null : { ...m, error: r.error }))
+                  setMenu((m) =>
+                    m?.kind !== 'work' || m.workKey !== key
+                      ? m
+                      : r.ok
+                        ? null
+                        : { ...m, error: r.error },
+                  )
                 })
               }}
             >
@@ -413,6 +527,17 @@ export function App() {
 
       <main className="center">
         <div className="tabs" role="tablist">
+          {session?.terminal ? (
+            <div
+              role="tab"
+              aria-selected="true"
+              className={`tab side active${session.status === 'live' ? ' live' : ''}`}
+              title={`기본 세션: ${session.name}`}
+            >
+              <span className={`dot s-${session.status === 'live' ? 'working' : 'interrupted'}`} />
+              {session.name}
+            </div>
+          ) : null}
           {work?.tasks.map((t) => (
             <div
               key={t.id}
@@ -467,7 +592,9 @@ export function App() {
           ) : null}
         </div>
         <div className="band">
-          {sideTab && work ? (
+          {session ? (
+            <SessionBand session={session} />
+          ) : sideTab && work ? (
             <SideBand work={work} onFresh={() => requestSide(work.key, true)} />
           ) : cleanupTab && work?.cleanup ? (
             <>
@@ -519,7 +646,7 @@ export function App() {
                       terminalKey={t.terminal}
                       info={info}
                       live={t.live}
-                      active={w.key === selected && !cleanupTab && !sideTab && t.id === taskId}
+                      active={w.key === selectedWork && !cleanupTab && !sideTab && t.id === taskId}
                     />
                   )),
                   ...(w.cleanup
@@ -529,7 +656,7 @@ export function App() {
                           terminalKey={w.cleanup.terminal}
                           info={info}
                           live={w.cleanup.status === 'live'}
-                          active={w.key === selected && cleanupTab}
+                          active={w.key === selectedWork && cleanupTab}
                         />,
                       ]
                     : []),
@@ -540,13 +667,31 @@ export function App() {
                           terminalKey={w.side.terminal}
                           info={info}
                           live={w.side.status === 'live'}
-                          active={w.key === selected && sideTab}
+                          active={w.key === selectedWork && sideTab}
                         />,
                       ]
                     : []),
                 ])
             : null}
-          {!work ? (
+          {info
+            ? sessions
+                .filter((x) => x.terminal && nextOpened.has(`@session/${x.id}`))
+                .map((x) => (
+                  <TerminalView
+                    key={x.terminal}
+                    terminalKey={x.terminal ?? ''}
+                    info={info}
+                    live={x.status === 'live'}
+                    active={x.id === session?.id}
+                  />
+                ))
+            : null}
+          {session && !session.terminal ? (
+            <div className="empty">
+              <span className="dim">[열기]로 이 세션을 엽니다</span>
+            </div>
+          ) : null}
+          {!work && !session ? (
             <div className="empty">
               {projects.length === 0 ? (
                 <Welcome onAddProject={() => setDialog({ kind: 'project' })} />
@@ -556,7 +701,9 @@ export function App() {
             </div>
           ) : null}
         </div>
-        {work ? (
+        {session ? (
+          <SessionActions key={session.id} session={session} />
+        ) : work ? (
           <ActionBar
             key={work.key}
             work={work}
@@ -573,7 +720,14 @@ export function App() {
       </main>
 
       <aside className="panel">
-        {work && task ? (
+        {session ? (
+          <SessionPanel
+            key={session.id}
+            session={session}
+            projects={projects}
+            onCreateWork={(draft, project) => setDialog({ kind: 'work', project, draft })}
+          />
+        ) : work && task ? (
           <Panel
             work={work}
             task={task}
@@ -606,11 +760,28 @@ export function App() {
       {dialog?.kind === 'work' ? (
         <NewWorkDialog
           project={dialog.project}
+          {...(dialog.draft ? { draft: dialog.draft } : {})}
           onClose={() => setDialog(null)}
           onCreated={(key) => {
             setDialog(null)
-            setSelected(key)
+            selectWorkKey(key)
           }}
+        />
+      ) : null}
+      {dialog?.kind === 'session-new' ? (
+        <NewSessionDialog
+          onClose={() => setDialog(null)}
+          onSelect={(id) => setSelected({ kind: 'session', key: id })}
+        />
+      ) : null}
+      {dialog?.kind === 'session-rename' && dialogSession ? (
+        <RenameSessionDialog session={dialogSession} onClose={() => setDialog(null)} />
+      ) : null}
+      {dialog?.kind === 'session-delete' && dialogSession ? (
+        <DeleteSessionDialog
+          session={dialogSession}
+          onClose={() => setDialog(null)}
+          onDeleted={() => setDialog(null)}
         />
       ) : null}
       {dialog?.kind === 'settings' ? <SettingsDialog onClose={() => setDialog(null)} /> : null}

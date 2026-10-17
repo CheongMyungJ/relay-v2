@@ -67,6 +67,21 @@ export function nextWorkId(at: string, taken: Iterable<string>): string {
   }
 }
 
+/** 기본 세션의 id: s-YYYYMMDD-NNN. 날짜는 세션을 만든 현지 날짜다 (D402) */
+export function sessionId(at: string, seq: number): string {
+  const [y, mo, d] = isoParts(at)
+  return `s-${y}${mo}${d}-${pad(seq, 3)}`
+}
+
+/** 이 날짜의 다음 기본 세션 id (nextWorkId와 같은 방식). taken은 이미 쓰인 id다(sessions/ 아래 디렉터리) */
+export function nextSessionId(at: string, taken: Iterable<string>): string {
+  const used = new Set(taken)
+  for (let seq = 1; ; seq++) {
+    const id = sessionId(at, seq)
+    if (!used.has(id)) return id
+  }
+}
+
 /**
  * 권한 규칙의 경로는 gitignore 패턴이고, 설정 파일에 직접 쓴 규칙은 이스케이프되지 않는다
  * (Claude Code 문서 permissions). 이 문자가 경로에 있으면 deny 규칙이 맞지 않는다.

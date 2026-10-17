@@ -5,6 +5,7 @@ import type {
   ActivityUpdate,
   ActivityView,
   ProjectView,
+  SessionView,
   TerminalChunk,
   WorkView,
 } from '../../src/shared/views'
@@ -17,6 +18,8 @@ export class FakeUi implements UiPort {
   /** Work마다 받은 스냅샷 전부 (되돌림 횟수 세기용) */
   readonly history: WorkView[] = []
   projectList: ProjectView[] = []
+  /** 기본 세션 목록 (D405). 마지막으로 받은 것 */
+  sessionList: SessionView[] = []
   readonly output = new Map<string, string>()
   readonly notices: Notice[] = []
   /** 도구 훅으로 따로 온 진행 표시 (D216). 받은 것 전부는 activityLog에 남는다 */
@@ -50,6 +53,16 @@ export class FakeUi implements UiPort {
   projects(views: ProjectView[]): void {
     this.projectList = views
     this.wake()
+  }
+
+  sessions(views: SessionView[]): void {
+    this.sessionList = views
+    this.wake()
+  }
+
+  /** 기본 세션 하나 */
+  session(id: string): SessionView | undefined {
+    return this.sessionList.find((s) => s.id === id)
   }
 
   terminal(key: string, chunk: TerminalChunk): void {

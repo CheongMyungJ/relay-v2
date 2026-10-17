@@ -39,6 +39,7 @@ import type { NodeName } from '../../shared/contracts'
 import { WORK_TYPES, WORK_TYPE_LABEL, type MergeMethod, type WorkType } from '../../shared/work'
 import type {
   CleanPreview,
+  DraftView,
   ProjectInspection,
   ProjectView,
   StepPreview,
@@ -92,7 +93,7 @@ export function ProjectDialog({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState<string | null>(null)
 
   const pick = async () => {
-    const dir = await window.relay.pickFolder()
+    const dir = await window.relay.pickFolder('등록할 레포 폴더')
     if (!dir) return
     setBusy(true)
     setError(null)
@@ -387,17 +388,22 @@ const REQUEST_PLACEHOLDER: Readonly<Record<WorkType, string>> = {
 /** 새 Work: 유형, 요청, 기준 브랜치, 기준 위치 (시나리오 1). 유형을 고르기 전에는 [시작]이 꺼져 있다 (D236) */
 export function NewWorkDialog({
   project,
+  draft,
   onClose,
   onCreated,
 }: {
   project: ProjectView
+  /**
+   * 채울 Work 초안 (D404). 지식 정리 후보처럼 칸을 채우고(D393), 맞는 칸만 채운다. 만들면 main이 그 초안을 지운다
+   */
+  draft?: DraftView
   onClose: () => void
   onCreated: (workKey: string) => void
 }) {
-  const [type, setType] = useState<WorkType | null>(null)
-  const [request, setRequest] = useState('')
+  const [type, setType] = useState<WorkType | null>(draft?.type ?? null)
+  const [request, setRequest] = useState(draft?.request ?? '')
   const [branches, setBranches] = useState<string[]>([project.defaultBranch])
-  const [branch, setBranch] = useState(project.defaultBranch)
+  const [branch, setBranch] = useState(draft?.base ?? project.defaultBranch)
   const [location, setLocation] = useState<'local' | 'remote'>('local')
   const [issue, setIssue] = useState('')
   const [modes, setModes] = useState<Overrides>({})
@@ -472,15 +478,27 @@ export function NewWorkDialog({
         baseLocation: location,
         ...(Object.keys(settings).length ? { settings } : {}),
         ...(issueNumber !== null ? { issueNumber } : {}),
+        ...(draft ? { draft: draft.ref } : {}),
       }),
     )
     setBusy(false)
     if (r.ok) onCreated(r.workKey)
     else setError(r.error)
   }
+  // 초안의 기준 브랜치가 목록에 없어도(지운 브랜치, 원격에만 있음) 고른 채로 보이고, 없으면 만들기가 알린다
+  const branchList = branches.includes(branch) ? branches : [...branches, branch]
 
   return (
     <Modal title={`새 Work · ${project.name}`} onClose={onClose}>
+      {draft ? (
+        <div className="notice">
+          Work 초안 <code>{draft.ref.name}</code>으로 채웠습니다. 고친 뒤 [시작]을 누르면 Work를
+          만들고 초안을 지웁니다.
+          {draft.errors.length ? (
+            <div className="error">초안의 형식 오류: {draft.errors.join(' · ')}</div>
+          ) : null}
+        </div>
+      ) : null}
       {shownTidy?.candidates.length ? (
         <TidyNotice
           view={shownTidy}
@@ -511,7 +529,7 @@ export function NewWorkDialog({
             value={branch}
             onChange={(e) => setBranch(e.target.value)}
           >
-            {branches.map((b) => (
+            {branchList.map((b) => (
               <option key={b} value={b}>
                 {b}
               </option>
@@ -1005,6 +1023,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         knowledge_review_engine: value.knowledge_review_engine,
         knowledge_review_model: value.knowledge_review_model,
         theme: value.theme,
+        session_dir: value.session_dir,
       }),
     )
     setBusy(false)
@@ -1150,6 +1169,19 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 aria-label="답글 표시 문구"
                 value={value.reply_signature}
                 onChange={(e) => setDraft({ ...value, reply_signature: e.target.value })}
+              />
+            </label>
+            <label
+              className="form-row"
+              title="[새 세션] 창에 채울 폴더(절대 경로). 비우면 <RELAY_HOME>/home/. 다음에 만드는 세션부터 씁니다 (D398)"
+            >
+              <span>기본 세션 폴더</span>
+              <input
+                type="text"
+                aria-label="기본 세션 폴더"
+                placeholder="<RELAY_HOME>/home/"
+                value={value.session_dir}
+                onChange={(e) => setDraft({ ...value, session_dir: e.target.value })}
               />
             </label>
           </div>

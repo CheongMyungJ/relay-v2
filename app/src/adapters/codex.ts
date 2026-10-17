@@ -9,6 +9,8 @@ import {
   relaySkillName,
   type LaunchInput,
   type ResumeInput,
+  type SessionArgsInput,
+  type SessionSettingsInput,
   type SideArgsInput,
   type SideSettingsInput,
 } from '../core/settings'
@@ -206,6 +208,14 @@ export function codexSideSettings(input: SideSettingsInput): CodexSettings {
   return { overrides: baseOverrides(input) }
 }
 
+/**
+ * 기본 세션의 Codex 설정 (D399, D401): 곁 세션과 같은 모양(훅, 메모리 끔, 모델·추론 수준. relay MCP 없음)이다. 보호할
+ * 범위는 훅(codexSessionToolDenial)이 정한다
+ */
+export function codexSessionSettings(input: SessionSettingsInput): CodexSettings {
+  return { overrides: baseOverrides(input) }
+}
+
 async function options(settingsPath: string): Promise<{ args: string[]; settings: CodexSettings }> {
   const settings = JSON.parse(await fsp.readFile(settingsPath, 'utf8')) as CodexSettings
   return {
@@ -255,6 +265,11 @@ export async function codexSideArgs(input: SideArgsInput): Promise<string[]> {
     input.workDir,
     ...(input.resume ? ['resume', input.sessionId] : []),
   ]
+}
+/** 기본 세션의 Codex 인자 (D399): 곁 세션과 같고 --add-dir만 RELAY_HOME이다. 안내는 SessionStart 훅으로 준다 */
+export async function codexSessionArgs(input: SessionArgsInput): Promise<string[]> {
+  const { home, ...rest } = input
+  return codexSideArgs({ ...rest, workDir: home })
 }
 export function codexLaunchEnv(
   token: string,

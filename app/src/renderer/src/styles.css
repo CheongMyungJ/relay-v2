@@ -1967,3 +1967,79 @@ button.link:hover:not(:disabled) {
   margin-top: 2px;
   font-size: 12px;
 }
+
+/* ---------- 기본 세션 (시나리오 12, D405) ---------- */
+
+.sessions {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* 기본 세션 묶음의 이름. 프로젝트 이름(설정을 엶)과 달리 누르지 않는다 */
+.group-name {
+  flex: 1;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--text-dim);
+  padding: 2px 6px;
+}
+
+.session-item .dot {
+  justify-self: center;
+}
+
+.row .grow {
+  flex: 1;
+}
+
+.row .grow input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Work 초안 카드 (D404) */
+.drafts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.draft-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  background: var(--bg-raise);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+}
+
+.draft-card.has-errors {
+  border-left-color: var(--bad);
+}
+
+.draft-title {
+  font-weight: 500;
+  word-break: break-word;
+}
+
+.draft-meta {
+  font-size: 12px;
+}
+
+.draft-errors {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+}
+
+.draft-card .notice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

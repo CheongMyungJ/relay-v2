@@ -314,3 +314,71 @@ export function sideArgs(input: SideArgsInput): string[] {
     ...modelArgs(input),
   ]
 }
+
+// ---------- 기본 세션 (시나리오 12, D397~D406) ----------
+
+/**
+ * 기본 세션 설정 파일의 내용 (D401). 훅은 UserPromptSubmit 하나다. 자동 메모리 설정을 넣지 않아 CLI 설정을 따른다:
+ * task는 메모리를 끄므로(D113) 기본 세션의 메모리가 task에 들지 않는다
+ */
+export interface SessionSettings {
+  hooks: Pick<Record<HookEvent, HookGroup[]>, 'UserPromptSubmit'>
+  permissions: { deny: string[] }
+}
+
+/** 기본 세션의 훅 URL(/hook/session/<Event>)의 id (I133). 세션마다 토큰으로 가른다 */
+export const SESSION_HOOK_ID = 'session'
+
+/**
+ * 기본 세션의 deny 규칙 (D401): RELAY_HOME의 config.json, projects/ 아래 전부(Work 디렉터리와 worktree),
+ * sessions/*\/session.json 편집. home/과 Work 초안 폴더는 써야 하므로 RELAY_HOME 전체를 막지 않는다. 사람이 옆에서 허락하는
+ * 세션이라 git push와 gh는 막지 않는다(D388과 같음)
+ */
+export function sessionDenyRules(home: string): string[] {
+  const root = ruleAbs(home)
+  return [
+    `Edit(${ruleJoin(root, 'config.json')})`,
+    `Edit(${ruleJoin(root, 'projects', '**')})`,
+    `Edit(${ruleJoin(root, 'sessions', '*', 'session.json')})`,
+  ]
+}
+
+export interface SessionSettingsInput {
+  port: number
+  /** RELAY_HOME */
+  home: string
+  /** 설정에서 정한 모델·추론 수준 (D399). Claude는 실행 인자로 주고, Codex는 설정 덮어쓰기로 준다 */
+  model?: string
+  effort?: string
+}
+
+/** 기본 세션 설정 (D401): deny 규칙과 UserPromptSubmit 훅. 훅의 session_id로 다시 열 대화를, prompt로 이름을 적는다 */
+export function sessionSettings(input: SessionSettingsInput): SessionSettings {
+  return {
+    hooks: { UserPromptSubmit: hookSettings(input.port, SESSION_HOOK_ID).UserPromptSubmit },
+    permissions: { deny: sessionDenyRules(input.home) },
+  }
+}
+
+export interface SessionArgsInput {
+  /** 새 대화면 --session-id로, 이어 가면 --resume으로 준다 */
+  sessionId: string
+  resume: boolean
+  /** RELAY_HOME. 에이전트가 프로젝트와 Work를 스스로 읽게 --add-dir로 더한다 (D399) */
+  home: string
+  settingsPath: string
+  /** 안내(시스템 프롬프트, D400) 파일 */
+  guidePath: string
+  /** 설정에서 정한 모델·추론 수준 (D399). 없으면 엔진의 기본 */
+  model?: string
+  effort?: string
+}
+
+/**
+ * 기본 세션의 실행 인자 (D399). 곁 세션(sideArgs)과 같은 모양이고 --add-dir만 RELAY_HOME이다. 첫 프롬프트를 주지 않아
+ * 사람의 입력을 기다리고, 안내는 시스템 프롬프트에 덧붙여 다시 열 때도 다시 준다
+ */
+export function sessionArgs(input: SessionArgsInput): string[] {
+  const { home, ...rest } = input
+  return sideArgs({ ...rest, workDir: home })
+}

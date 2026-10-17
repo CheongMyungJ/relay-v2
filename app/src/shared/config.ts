@@ -24,8 +24,11 @@ export type SkillName =
  */
 export type QuestionSkill = Exclude<SkillName, 'spec'>
 
-/** 상세 설정(단계별 엔진·모델·추론 수준)의 키: 스킬과 곁 세션 (D391, I129). 곁 세션은 노드가 아니다 */
-export type AgentStepName = SkillName | 'side'
+/**
+ * 상세 설정(단계별 엔진·모델·추론 수준)의 키: 스킬과 곁 세션, 기본 세션 (D391, D399, I129). 곁 세션과 기본 세션은 노드가
+ * 아니다
+ */
+export type AgentStepName = SkillName | 'side' | 'session'
 
 /** 질문 방식 (5.6.1). 초안 우선 / 결정마다 확인 */
 export type QuestionMode = 'draft_first' | 'confirm_each'
@@ -94,6 +97,8 @@ export interface AppConfig {
   knowledge_review_model: string
   /** 화면 테마 (D335). 터미널은 테마와 관계없이 어둡다 */
   theme: ThemeChoice
+  /** [새 세션] 창의 폴더 기본값 (D398). 빈 글이면 <RELAY_HOME>/home/이다. 바꾸면 다음에 만드는 세션부터 쓴다 */
+  session_dir: string
 }
 
 /** work.json의 settings. 앱 설정과 같은 키를 쓰고, 없는 키는 앱 설정을 따른다 (D72) */
@@ -168,7 +173,7 @@ export const AUTO_APPROVE_TITLES: readonly (readonly [AutoApproveNode, string, S
 
 /**
  * 상세 설정(단계별 엔진·모델·추론 수준)의 단계와 화면 이름과 묶음. 모든 스킬이고 순서는 노드의 화면 순서다. core/pipeline의
- * NODE_INFO에 맞는지 [단위]가 확인한다. 끝의 곁 세션은 노드가 아니다 (D391)
+ * NODE_INFO에 맞는지 [단위]가 확인한다. 끝의 곁 세션과 기본 세션은 노드가 아니다 (D391, D399)
  */
 export const AGENT_STEP_TITLES: readonly (readonly [AgentStepName, string, SettingGroup])[] = [
   ['work-start', '의도 정리', 'common'],
@@ -181,6 +186,7 @@ export const AGENT_STEP_TITLES: readonly (readonly [AgentStepName, string, Setti
   ['verify', '리뷰와 검증', 'common'],
   ['pr-respond', 'PR 대응', 'pr'],
   ['side', '곁 세션', 'common'],
+  ['session', '기본 세션', 'common'],
 ]
 
 /** 질문 방식의 화면 이름 (5.6.1) */
@@ -233,4 +239,5 @@ export const DEFAULT_CONFIG: AppConfig = {
   knowledge_review_engine: 'claude',
   knowledge_review_model: '',
   theme: 'system',
+  session_dir: '',
 }

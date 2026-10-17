@@ -11,6 +11,8 @@ import {
   relaySkillName,
   resumeArgs,
   ruleAbs,
+  sessionArgs,
+  sessionSettings,
   sideArgs,
   sideSettings,
   taskSettings,
@@ -299,6 +301,53 @@ describe('곁 세션 (시나리오 11, D386, D388)', () => {
     expect(Object.keys(s.hooks)).toEqual(['UserPromptSubmit'])
     expect(s.hooks.UserPromptSubmit[0]?.hooks[0]?.url).toBe(
       hookUrl(51234, 'side', 'UserPromptSubmit'),
+    )
+  })
+})
+
+describe('기본 세션 (시나리오 12, D399, D401)', () => {
+  const HOME = 'C:\\Users\\u\\.relay'
+  const home = ruleAbs(HOME)
+
+  it('곁 세션과 같은 모양으로 첫 프롬프트 없이 RELAY_HOME을 붙이고 안내를 시스템 프롬프트에 덧붙인다. 다시 열면 --resume이다', () => {
+    const input = { sessionId: 's-1', home: HOME, settingsPath: 'S', guidePath: 'G' }
+    expect(sessionArgs({ ...input, resume: false })).toEqual([
+      '--dangerously-skip-permissions',
+      '--session-id',
+      's-1',
+      '--add-dir',
+      HOME,
+      '--settings',
+      'S',
+      '--append-system-prompt-file',
+      'G',
+    ])
+    expect(sessionArgs({ ...input, resume: true }).slice(1, 3)).toEqual(['--resume', 's-1'])
+    expect(sessionArgs({ ...input, resume: true, model: 'opus', effort: 'max' }).slice(9)).toEqual([
+      '--model',
+      'opus',
+      '--effort',
+      'max',
+    ])
+  })
+
+  it('config.json, projects/ 아래, sessions/*/session.json만 막는다. push와 gh는 막지 않고 자동 메모리는 CLI 설정을 따른다', () => {
+    const s = sessionSettings({ port: 51234, home: HOME })
+    expect(s.permissions.deny).toEqual([
+      `Edit(${home}/config.json)`,
+      `Edit(${home}/projects/**)`,
+      `Edit(${home}/sessions/*/session.json)`,
+    ])
+    expect(home).toBe('//c/Users/u/.relay')
+    expect(s.permissions.deny.some((r) => r.startsWith('Bash('))).toBe(false)
+    expect(s).not.toHaveProperty('autoMemoryEnabled')
+  })
+
+  it('훅은 UserPromptSubmit 하나이고 URL은 /hook/session/이다 (I133)', () => {
+    const s = sessionSettings({ port: 51234, home: HOME })
+    expect(Object.keys(s.hooks)).toEqual(['UserPromptSubmit'])
+    expect(s.hooks.UserPromptSubmit[0]?.hooks[0]?.url).toBe(
+      hookUrl(51234, 'session', 'UserPromptSubmit'),
     )
   })
 })

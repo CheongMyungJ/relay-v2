@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   ARCHIVE_GROUP,
+  SESSIONS_GROUP,
   loadCollapsed,
   pruned,
   saveCollapsed,
@@ -44,9 +45,9 @@ describe('사이드바 목록 구성', () => {
     expect([...none]).toEqual([])
   })
 
-  it('접은 상태에서 등록되지 않은 프로젝트를 지우고 아카이브는 둔다', () => {
-    const c: ReadonlySet<string> = new Set(['a', 'gone', ARCHIVE_GROUP])
-    expect([...pruned(c, ['a', 'b'])].sort()).toEqual([ARCHIVE_GROUP, 'a'].sort())
+  it('접은 상태에서 등록되지 않은 프로젝트를 지우고 아카이브와 기본 세션 묶음은 둔다', () => {
+    const c: ReadonlySet<string> = new Set(['a', 'gone', ARCHIVE_GROUP, SESSIONS_GROUP])
+    expect([...pruned(c, ['a', 'b'])].sort()).toEqual([ARCHIVE_GROUP, SESSIONS_GROUP, 'a'].sort())
     expect(pruned(c, ['a', 'gone'])).toBe(c)
   })
 })

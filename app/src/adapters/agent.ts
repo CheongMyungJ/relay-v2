@@ -6,9 +6,14 @@ import {
   launchArgs,
   resumeArgs,
   launchEnv,
+  sessionArgs,
+  sessionSettings,
   sideArgs,
   sideSettings,
   taskSettings,
+  type SessionArgsInput,
+  type SessionSettings,
+  type SessionSettingsInput,
   type SideArgsInput,
   type SideSettings,
   type SideSettingsInput,
@@ -26,6 +31,8 @@ import {
   codexLaunchArgs,
   codexLaunchEnv,
   codexResumeArgs,
+  codexSessionArgs,
+  codexSessionSettings,
   codexSettings,
   codexSideArgs,
   codexSideSettings,
@@ -65,6 +72,9 @@ export interface AgentRuntime {
   /** 곁 세션의 설정과 인자 (시나리오 11, D388, D391) */
   sideSettings(input: SideSettingsInput): SideSettings | CodexSettings
   sideArgs(input: SideArgsInput): string[] | Promise<string[]>
+  /** 기본 세션의 설정과 인자 (시나리오 12, D399, D401) */
+  sessionSettings(input: SessionSettingsInput): SessionSettings | CodexSettings
+  sessionArgs(input: SessionArgsInput): string[] | Promise<string[]>
 }
 
 export interface AgentSettingsInput extends TaskSettingsInput {
@@ -90,6 +100,8 @@ const claude: AgentRuntime = {
   cleanupArgs,
   sideSettings,
   sideArgs,
+  sessionSettings,
+  sessionArgs,
 }
 
 const codex: AgentRuntime = {
@@ -107,6 +119,8 @@ const codex: AgentRuntime = {
   cleanupArgs: codexCleanupArgs,
   sideSettings: codexSideSettings,
   sideArgs: codexSideArgs,
+  sessionSettings: codexSessionSettings,
+  sessionArgs: codexSessionArgs,
 }
 
 export function agentRuntime(engine: AgentEngine): AgentRuntime {

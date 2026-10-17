@@ -5,7 +5,7 @@
 // 대화형에서만 달라지는 필드는 녹화본에 없다. 그런 차이는 [실제](실제 claude를 앱으로 띄움)가 잡는다.
 //
 // - 훅 본문: 앱이 읽는 필드와 그 타입(src/main/work.ts, src/core/approval.ts). 앱이 읽지 않는 필드는 계약에 넣지 않는다.
-// - 실행 인자: 앱이 claude에 넘기는 옵션(src/core/settings.ts의 launchArgs·resumeArgs·cleanupArgs·sideArgs,
+// - 실행 인자: 앱이 claude에 넘기는 옵션(src/core/settings.ts의 launchArgs·resumeArgs·cleanupArgs·sideArgs·sessionArgs,
 //   src/adapters/claude.ts의 claudeJsonArgs). 실제 claude의 --help에 모두 있어야 한다.
 import fs from 'node:fs'
 import http from 'node:http'
@@ -17,6 +17,7 @@ import {
   HOOK_EVENTS,
   launchArgs,
   resumeArgs,
+  sessionArgs,
   sideArgs,
   type HookEvent,
 } from '../../src/core/settings'
@@ -39,7 +40,7 @@ const TOOL: Record<string, FieldType> = {
 
 /** 이벤트마다 앱이 읽는 필드 */
 export const HOOK_CONTRACT: Record<HookEvent, Record<string, FieldType>> = {
-  // turn.started의 권한 모드 (D17)
+  // turn.started의 권한 모드 (D17), 기본 세션의 이름 (prompt의 첫 줄, D403)
   UserPromptSubmit: { ...COMMON, prompt: 'string', permission_mode: 'string' },
   // 진행 표시(D216)는 tool_name·tool_input·tool_use_id·cwd를, 질문 대기(D24)는 tool_name을 읽는다
   PreToolUse: { ...COMMON, ...TOOL },
@@ -113,6 +114,16 @@ export function appFlags(): string[] {
     ...cleanupArgs(p),
     ...sideArgs({ sessionId: 'id', resume: false, workDir: p, settingsPath: p, guidePath: p }),
     ...sideArgs({ sessionId: 'id', resume: true, workDir: p, settingsPath: p, guidePath: p }),
+    ...sessionArgs({ sessionId: 'id', resume: false, home: p, settingsPath: p, guidePath: p }),
+    ...sessionArgs({
+      sessionId: 'id',
+      resume: true,
+      home: p,
+      settingsPath: p,
+      guidePath: p,
+      model: 'm',
+      effort: 'low',
+    }),
     ...claudeJsonArgs({ model: 'm', effort: 'low', system: 's', schema: {} }),
   ]
   return [...new Set(args.filter((a) => /^--?[a-z]/.test(a)))].sort()

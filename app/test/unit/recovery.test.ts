@@ -376,6 +376,15 @@ describe('[단위] 고아 프로세스 (D76, D126)', () => {
     ])
     expect(recordedProcesses(work({ side: { session_id: 's-1' } }))).toEqual([])
   })
+  it('기본 세션의 기록도 받는다. 대화만 있거나 시작 시각이 없으면 없다 (D402)', () => {
+    const session = { id: 's-20261017-001', cwd: '/h', created_at: 'x', session_id: 'c-1' }
+    const process = { pid: 400, process_started_at: '2026-10-17T12:00:00+09:00', started_at: 'x' }
+    expect(recordedProcesses({ ...session, process })).toEqual([
+      { taskId: null, label: '기본 세션', pid: 400, startedAt: '2026-10-17T12:00:00+09:00' },
+    ])
+    expect(recordedProcesses(session)).toEqual([])
+    expect(recordedProcesses({ ...session, process: { pid: 1, started_at: 'x' } })).toEqual([])
+  })
 })
 
 describe('[단위] 앱 소유 파일의 해시 (D124)', () => {
