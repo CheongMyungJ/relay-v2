@@ -737,9 +737,19 @@ function findDir(dir: string, name: string, parent: string): string | null {
   return null
 }
 
-/** name 파일을 찾는다. within이 있으면 그 이름의 폴더 안에서만 찾는다 */
+/**
+ * name 파일을 찾는다. within이 있으면 그 이름의 폴더 안에서만 찾는다. 찾는 동안 앱이 지운 폴더(다음 task의 스킬을 배포하며
+ * 지운 앞 스킬 폴더 등)는 건너뛴다
+ */
 function findFile(dir: string, name: string, within?: string): string | null {
-  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+  let entries: fs.Dirent[]
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true })
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw e
+  }
+  for (const e of entries) {
     const p = path.join(dir, e.name)
     if (e.isFile() && e.name === name && (!within || path.basename(dir) === within)) return p
     if (e.isDirectory() && e.name !== 'worktrees') {
