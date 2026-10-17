@@ -16,11 +16,15 @@ import { TYPES, assemble } from '../../../skills/assemble.mjs'
 import {
   WorkFiles,
   loadConfig,
+  loadSessions,
+  readDrafts,
   readThemeSync,
   partialUtf8,
   relayHome,
+  saveSession,
   writeFileAtomic,
 } from '../../src/adapters/store'
+import { DRAFT_MAX_BYTES, isDraftFile, parseDraft } from '../../src/core/draft'
 import { DEFAULT_CONFIG } from '../../src/shared/config'
 import { FAKE_CLAUDE, SKILLS } from '../support/harness'
 
@@ -174,6 +178,49 @@ describe('[어댑터] 저장소 (5.1)', () => {
     expect(partialUtf8(Buffer.from([0xf0, 0x9f, 0x98]))).toBe(3)
     expect(partialUtf8(Buffer.from('😀'))).toBe(0)
     expect(partialUtf8(Buffer.alloc(0))).toBe(0)
+  })
+})
+
+describe('[어댑터] 기본 세션의 기록과 Work 초안 (D402, D404, I135)', () => {
+  it('sessions/<id>/session.json을 쓰고 읽는다. 깨지거나 id가 맞지 않는 기록은 그 세션만 빼고 경고한다 (D332처럼)', async () => {
+    const record = {
+      id: 's-20261017-001',
+      cwd: '/h',
+      created_at: '2026-10-17T10:00:00+09:00',
+      name: '쿠폰',
+      named_by: 'app' as const,
+    }
+    await saveSession(root, record)
+    const broken = path.join(root, 'sessions', 's-20261017-002', 'session.json')
+    fs.mkdirSync(path.dirname(broken), { recursive: true })
+    fs.writeFileSync(broken, '{ 깨짐')
+    const moved = path.join(root, 'sessions', 's-20261017-003', 'session.json')
+    fs.mkdirSync(path.dirname(moved), { recursive: true })
+    fs.writeFileSync(moved, JSON.stringify({ ...record, id: 's-20261017-009' }))
+    // session.json이 없는 디렉터리는 건너뛴다
+    fs.mkdirSync(path.join(root, 'sessions', 's-20261017-004'))
+    const problems: string[] = []
+    expect(await loadSessions(root, problems)).toEqual([record])
+    expect(problems).toHaveLength(2)
+    expect(problems[0]).toContain(`${broken}: 읽을 수 없어 이 기본 세션을 열지 않음`)
+    expect(problems[1]).toContain('id나 cwd가 맞지 않음')
+    // 파일은 건드리지 않는다
+    expect(fs.readFileSync(broken, 'utf8')).toBe('{ 깨짐')
+    expect(await loadSessions(path.join(root, 'none'))).toEqual([])
+  })
+
+  it('초안 폴더의 *.md를 이름 차례로 읽는다. 큰 파일은 한도를 넘는 만큼만 읽어 형식 오류로 보인다', async () => {
+    const dir = path.join(root, 'work-drafts')
+    expect(await readDrafts(dir, isDraftFile, DRAFT_MAX_BYTES)).toEqual([])
+    fs.mkdirSync(path.join(dir, 'sub.md'), { recursive: true })
+    fs.writeFileSync(path.join(dir, 'b.md'), '---\nproject: p\ntype: bugfix\n---\n요청')
+    fs.writeFileSync(path.join(dir, 'a.txt'), '무시')
+    fs.writeFileSync(path.join(dir, 'big.md'), '가'.repeat(DRAFT_MAX_BYTES))
+    const drafts = await readDrafts(dir, isDraftFile, DRAFT_MAX_BYTES)
+    expect(drafts.map((d) => d.name)).toEqual(['b.md', 'big.md'])
+    expect(drafts[0]?.text).toBe('---\nproject: p\ntype: bugfix\n---\n요청')
+    expect(Buffer.byteLength(drafts[1]?.text ?? '')).toBeLessThanOrEqual(DRAFT_MAX_BYTES + 3)
+    expect(parseDraft(drafts[1]?.text ?? '', ['p']).errors).toEqual(['파일이 64KB를 넘음'])
   })
 })
 

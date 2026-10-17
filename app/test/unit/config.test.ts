@@ -448,6 +448,47 @@ describe('[단위] 화면 테마 (D335)', () => {
   })
 })
 
+describe('[단위] 기본 세션 폴더 (D398)', () => {
+  it('기본은 빈 글(<RELAY_HOME>/home/)이다', () => {
+    expect(DEFAULT_CONFIG.session_dir).toBe('')
+    expect(normalizeConfig({}).config.session_dir).toBe('')
+  })
+
+  it('빈 글이나 한 줄의 절대 경로를 받고 앞뒤 공백을 뗀다', () => {
+    for (const [v, want] of [
+      ['  /home/u/scratch  ', '/home/u/scratch'],
+      ['C:\\Users\\u\\work', 'C:\\Users\\u\\work'],
+      ['\\\\server\\share', '\\\\server\\share'],
+      ['   ', ''],
+    ] as const) {
+      expect(applyConfigPatch(DEFAULT_CONFIG, { session_dir: v })).toMatchObject({
+        ok: true,
+        value: { session_dir: want },
+      })
+    }
+  })
+
+  it('상대 경로, 여러 줄, 문자열이 아닌 값은 받지 않고, 파일의 틀린 값은 기본값으로 읽는다', () => {
+    for (const v of ['scratch', '~/work', '/a\n/b', 3]) {
+      expect(applyConfigPatch(DEFAULT_CONFIG, { session_dir: v }).ok, String(v)).toBe(false)
+    }
+    const bad = normalizeConfig({ session_dir: 'relative' })
+    expect(bad.config.session_dir).toBe('')
+    expect(bad.warnings).toEqual([
+      'config.json 기본 세션 폴더: 절대 경로이거나 비워야 함 (지금: relative). 기본값(빈 글)을 씀',
+    ])
+  })
+
+  it('상세 설정의 기본 세션 줄도 다른 단계처럼 저장하고 검사한다 (D399)', () => {
+    expect(
+      applyConfigPatch(DEFAULT_CONFIG, { agent_steps: { session: { engine: 'codex' } } }),
+    ).toMatchObject({ ok: true, value: { agent_steps: { session: { engine: 'codex' } } } })
+    expect(
+      applyConfigPatch(DEFAULT_CONFIG, { agent_steps: { session: { model: 'gpt-6-sol' } } }).ok,
+    ).toBe(false)
+  })
+})
+
 describe('[단위] 기본 모델·추론 수준과 단계별 실행 설정', () => {
   it('새 키가 없는 config.json은 모델·추론 수준이 비고(엔진 기본) 단계 설정이 없다 (F1, N1)', () => {
     expect(DEFAULT_CONFIG).toMatchObject({ agent_model: '', agent_effort: '', agent_steps: {} })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { codexToolDenial, tomlValue } from '../../src/core/codex'
+import { codexSessionToolDenial, codexToolDenial, tomlValue } from '../../src/core/codex'
 import { actions, createWork, currentTask, transition } from '../../src/core/machine'
 import { DEFAULT_CONFIG } from '../../src/shared/config'
 import type { Handoff } from '../../src/shared/contracts'
@@ -374,5 +374,47 @@ describe('Codex 완료와 자동 승인', () => {
     expect(currentTask(fired.work)?.status).toBe('awaiting_approval')
     expect(currentTask(fired.work)?.auto_hold?.reasons).toEqual(['settings'])
     expect(fired.effects.some((e) => e.type === 'startTask' || e.type === 'respond')).toBe(false)
+  })
+})
+
+describe('Codex 기본 세션의 보호 범위 (D401)', () => {
+  const input = {
+    home: '/u/.relay',
+    cwd: '/u/.relay/home',
+    sessionIds: ['s-20261017-001', 's-20261017-002'],
+    allowPush: true,
+  }
+  it('push와 PR 조작, home/과 초안 폴더는 막지 않는다', () => {
+    for (const command of ['git push origin main', 'gh pr create --fill'])
+      expect(codexSessionToolDenial(input, 'exec_command', { cmd: command }), command).toBeNull()
+    expect(codexSessionToolDenial(input, 'Write', { path: 'notes.md' })).toBeNull()
+    expect(
+      codexSessionToolDenial(input, 'Write', {
+        path: '/u/.relay/sessions/s-20261017-001/work-drafts/coupon.md',
+      }),
+    ).toBeNull()
+  })
+  it('config.json, projects/ 아래, 세션의 session.json은 막는다', () => {
+    for (const path of [
+      '/u/.relay/config.json',
+      '../config.json',
+      '/u/.relay/projects/shop-a1b2c3/works/w-1/work.json',
+      '/u/.relay/projects/shop-a1b2c3/worktrees/w-1/src/a.ts',
+      '/u/.relay/sessions/s-20261017-002/session.json',
+    ])
+      expect(codexSessionToolDenial(input, 'Edit', { file_path: path }), path).toBeTruthy()
+    expect(
+      codexSessionToolDenial(input, 'exec_command', { cmd: 'rm -rf /u/.relay/projects' }),
+    ).toBeTruthy()
+    expect(
+      codexSessionToolDenial(input, 'exec_command', {
+        cmd: 'rm -rf /u/.relay/sessions/s-20261017-001',
+      }),
+    ).toBeTruthy()
+  })
+  it('안내가 들어가기 전에는 push와 PR 조작을 막는다 (D391과 같음)', () => {
+    expect(
+      codexSessionToolDenial({ ...input, allowPush: false }, 'exec_command', { cmd: 'git push' }),
+    ).toBeTruthy()
   })
 })

@@ -150,6 +150,14 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I134 | 안내(D400)가 가리키는 사용자 문서는 앱에 묶는다: electron-builder `extraResources`에 레포의 `README.md`를 `README.md`로 넣는다. 개발 실행은 레포의 `README.md`다 | |
 | I135 | Work 초안 폴더는 `watchDir`(I15)로 보고, 바뀌면 다시 읽어 스냅샷에 넣는다. 초안 머리는 첫 줄과 다음 `---` 줄 사이의 `key: value` 줄만 읽는다(YAML 라이브러리를 쓰지 않음). 모르는 키는 무시한다. 파일 하나는 64KB까지 읽고 넘으면 형식 오류다. `project`는 등록된 프로젝트 id만 받는다(안내가 목록을 준다) | |
 | I136 | 렌더러의 고른 것을 Work 키에서 `{ kind: 'work' | 'session', key }`로 넓힌다. 기본 세션을 고르면 main의 `selectWork`에는 null을 보낸다(Work 알림의 "보고 있는 Work"가 아님). 새 Work 대화상자는 초안을 받으면 그 값으로 칸을 채운다(지식 정리 후보의 채우기와 같은 길, D393) | |
+| I137 | I132의 함께 쓰는 띄우기는 `main/launch`의 `launchChat`이다: 엔진의 실행 파일 찾기, 임시 폴더(`relay-<이름>-*`)에 안내와 설정 파일, 실행 인자, PTY, 훅 토큰 등록. 띄우지 못하면 만든 것을 치우고 던진다. 터미널 보관, 기록, 끝내기는 부르는 쪽(곁 세션의 `WorkRunner`, 기본 세션의 `SessionRunner`)이 한다. 기본 세션의 터미널 키는 `sessions/<session-id>/session-<n>`이고 Relay가 앞부분으로 주인을 가른다 | 기록과 끝내기는 곁 세션(work.json, 정리와 같이 끝냄)과 기본 세션(session.json)이 달라 띄우는 데까지만 묶는다. 프로젝트 id는 늘 `-<해시 6자>`로 끝나 `sessions`와 겹치지 않는다 | |
+| I138 | [새 세션]의 폴더: 비우면 기본값(설정 `session_dir`, 빈 글이면 `<RELAY_HOME>/home/`)이고 절대 경로만 받는다. 기본 폴더 `<RELAY_HOME>/home/`만 없으면 만들고, 고른 폴더는 있어야 한다. 설정의 `session_dir`는 빈 글이나 1000자 이하 한 줄의 절대 경로다. 만들었지만 띄우지 못하면(실행 파일 없음 등) 세션은 남아 [열기]로 다시 열고, 결과는 오류와 그 id다 | 사람이 고른 폴더를 앱이 몰래 만들면 오타로 엉뚱한 폴더가 생긴다(D398은 기본 폴더만 "없으면 만든다") | |
+| I139 | 재시작 때 끝낸 기본 세션의 고아 프로세스(D402)는 Work 패널이 없어 사이드바의 시작 경고로 알린다. 읽을 수 없거나 id·cwd가 맞지 않는 `session.json`은 그 세션만 빼고 경고한다(D332처럼, 파일은 그대로). 앱 종료 확인은 기본 세션을 Work 세션과 같이 센다(D406) | 알릴 자리가 사이드바뿐이다 | |
+| I140 | Work 초안(D404)의 세부: 초안 파일은 숨김이 아닌 `*.md`이고 [버리기]는 경로 구분자가 든 이름을 받지 않는다. 머리 값의 앞뒤 따옴표는 뗀다. 머리가 없거나 닫히지 않으면 글 전체를 요청으로 두고 형식 오류다. 프로젝트를 등록하면 초안을 다시 읽어 `project` 검사를 새로 한다. 카드의 `project`가 틀리면 카드에서 열 프로젝트를 고른다(첫 프로젝트가 기본). 초안의 기준 브랜치가 목록에 없어도 고른 채로 두고 [시작]이 알린다. 초안으로 Work를 만들면 만든 뒤 지우고, 지우지 못해도 Work는 그대로다 | "맞는 칸만 채워 열 수 있다"를 지키며 새 Work 대화상자는 프로젝트 하나에 열린다 | |
+| I141 | 기본 세션의 Codex 도구 보호는 `codexSessionToolDenial`이다: `config.json`, `projects/` 아래, 알려진 세션들의 `session.json`. task와 곁 세션의 `codexToolDenial`과 판정 부분(`protectionDenial`)을 함께 쓴다. 곁 세션처럼 안내가 들어가기 전(SessionStart 전)에는 push와 PR 조작을 막고 머리 띠로 닫고 다시 열라고 알린다 | Claude의 `sessionDenyRules`와 같은 범위다. 안내 없는 대화는 바꾸기 전에 묻는 규칙(D400)을 모른다 | |
+| I142 | 사용자 문서 경로(I134)는 Relay의 `readme` 옵션이다. 없으면 스킬 원본 옆의 `README.md`다(설치본은 둘 다 `resources/`, 개발과 시험은 레포 루트) | [흐름]이 Electron 없이 같은 경로를 쓴다 | |
+| I143 | [이름 바꾸기](D403)는 줄바꿈을 공백으로 바꾸고 자른다. 빈 이름은 받지 않는다. 렌더러는 지운 세션을 고르고 있으면 고르지 않은 화면을 보인다. 사이드바의 기본 세션 묶음은 프로젝트와 다른 표시(`.sessions`)로 둔다 | 기존 [스모크]가 프로젝트 묶음을 `.project`로 찾는다 | |
+| I144 | 가짜 claude는 `--append-system-prompt-file`을 받고 설정 파일의 훅 URL이 `/hook/session/`이면 기본 세션이라 시나리오의 `session`·`sessionResume`을 하고 기록에 `session: true`를 남긴다. 가짜 codex는 `RELAY_HOOK_TASK`가 `session`이면 곁 세션처럼 돌고 `session`·`sessionResume`(`sessionCodex`·`sessionResumeCodex`)을 한다. 녹화본에 없는 필드는 보내지 않는다 | 실행 인자가 곁 세션과 같아 앱이 정한 훅 URL로만 가른다 | |
 
 ## 3. 확인한 사실
 

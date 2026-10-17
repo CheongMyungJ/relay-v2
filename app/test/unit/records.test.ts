@@ -7,6 +7,7 @@ import {
   decisionsWithout,
   localIso,
   localMinute,
+  nextSessionId,
   nextWorkId,
   projectId,
   workId,
@@ -38,6 +39,14 @@ describe('work-id와 project-id (5.1)', () => {
     )
     // 비어 있는 번호가 있으면 그 번호를 쓴다(예: 브랜치만 남은 번호는 taken에 들어 있다)
     expect(nextWorkId(at, ['w-20260926-002'])).toBe('w-20260926-001')
+  })
+
+  it('기본 세션 id는 s-YYYYMMDD-NNN이고 그날 쓰이지 않은 다음 번호다 (D402)', () => {
+    const at = '2026-10-17T09:00:00+09:00'
+    expect(nextSessionId(at, [])).toBe('s-20261017-001')
+    expect(nextSessionId(at, ['s-20261017-001', 's-20261016-002', 'w-20261017-002'])).toBe(
+      's-20261017-002',
+    )
   })
 
   it('project-id는 <폴더 이름>-<해시 앞 6자>다', () => {
