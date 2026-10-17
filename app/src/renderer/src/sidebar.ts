@@ -1,9 +1,12 @@
 // 사이드바의 목록 구성. 프로젝트마다 그 Work를 두고, 아카이브로 옮긴 보관된 Work는 프로젝트들과 같은 계층의
-// 공통 아카이브 하나에 모은다. 프로젝트와 아카이브는 따로 접는다.
+// 공통 아카이브 하나에 모은다. 기본 세션 묶음, 프로젝트, 아카이브는 따로 접는다 (D380, D381, D405).
 import type { WorkView } from '../../shared/views'
 
 /** 접은 표시의 아카이브 키. 프로젝트 id와 겹치지 않는다 */
 export const ARCHIVE_GROUP = '@archive'
+
+/** 접은 표시의 기본 세션 묶음 키 (D405) */
+export const SESSIONS_GROUP = '@sessions'
 
 export interface SidebarGroups {
   /** 프로젝트 id별 Work. 아카이브로 옮긴 Work는 빠진다 */
@@ -37,14 +40,14 @@ export function toggled(collapsed: ReadonlySet<string>, group: string): Readonly
 }
 
 /**
- * 등록된 프로젝트와 아카이브만 남긴다. 지운 프로젝트를 같은 경로로 다시 등록하면 id가 같아(폴더 이름과 경로의
+ * 등록된 프로젝트와 아카이브, 기본 세션 묶음만 남긴다. 지운 프로젝트를 같은 경로로 다시 등록하면 id가 같아(폴더 이름과 경로의
  * 해시) 접힌 채로 나오지 않게 한다. 바뀐 것이 없으면 같은 집합을 돌려준다
  */
 export function pruned(
   collapsed: ReadonlySet<string>,
   projectIds: readonly string[],
 ): ReadonlySet<string> {
-  const keep = new Set([...projectIds, ARCHIVE_GROUP])
+  const keep = new Set([...projectIds, ARCHIVE_GROUP, SESSIONS_GROUP])
   const next = new Set([...collapsed].filter((k) => keep.has(k)))
   return next.size === collapsed.size ? collapsed : next
 }
