@@ -1,6 +1,6 @@
 # relay-v2 구현 계획
 
-- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102), v0.17의 설계 유형(M20, I103~I113), v0.18의 곁 세션(M21, I125~I131), v0.19의 기본 세션(M23, I132~I136)
+- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102), v0.17의 설계 유형(M20, I103~I113), v0.18의 곁 세션(M21, I125~I131), v0.19의 기본 세션(M23, I132~I136), v0.20의 Work에서 만드는 Work 초안(M24, I145~I150)
 - 상태: 정함. 주제마다 사람과 문답으로 정했다(설계 부록 A의 진행 규칙). 바꾸려면 사용자와 다시 정한다.
 
 Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서는 [engines.md](engines.md)에서 관리한다. 이 문서의 기존 Claude 동작은 확장 중 회귀 시험의 기준이다.
@@ -158,6 +158,12 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I142 | 사용자 문서 경로(I134)는 Relay의 `readme` 옵션이다. 없으면 스킬 원본 옆의 `README.md`다(설치본은 둘 다 `resources/`, 개발과 시험은 레포 루트) | [흐름]이 Electron 없이 같은 경로를 쓴다 | |
 | I143 | [이름 바꾸기](D403)는 줄바꿈을 공백으로 바꾸고 자른다. 빈 이름은 받지 않는다. 렌더러는 지운 세션을 고르고 있으면 고르지 않은 화면을 보인다. 사이드바의 기본 세션 묶음은 프로젝트와 다른 표시(`.sessions`)로 둔다 | 기존 [스모크]가 프로젝트 묶음을 `.project`로 찾는다 | |
 | I144 | 가짜 claude는 `--append-system-prompt-file`을 받고 설정 파일의 훅 URL이 `/hook/session/`이면 기본 세션이라 시나리오의 `session`·`sessionResume`을 하고 기록에 `session: true`를 남긴다. 가짜 codex는 `RELAY_HOOK_TASK`가 `session`이면 곁 세션처럼 돌고 `session`·`sessionResume`(`sessionCodex`·`sessionResumeCodex`)을 한다. 녹화본에 없는 필드는 보내지 않는다 | 실행 인자가 곁 세션과 같아 앱이 정한 훅 URL로만 가른다 | |
+| I145 | Work 초안의 만든 곳(D407, D412)은 `DraftSource`에 `{ kind: 'work'; project; work; task?: string }`를 더한다. `task`가 있으면 verify task의 `work-drafts/`, 없으면 Work 디렉터리의 `work-drafts/`(곁 세션)다. `parseDraft`는 머리의 `why`를 읽어 `ParsedDraft.why`로 돌려준다(없으면 null, 형식 오류 아님). 카드, [버리기], 초안으로 만든 뒤 지우기는 기본 세션의 길(I135, I140)을 그대로 쓰고 `DraftRef`로 가른다 | 형식, 읽기, 카드, 대화상자를 그대로 쓰도록 D404가 만든 곳과 상관없는 모양으로 둔 것을 따른다 | |
+| I146 | Work 쪽 초안은 늘 감시하지 않는다. `WorkRunner`가 시작할 때와 [버리기]·초안으로 만들기 뒤에 한 번 읽고, verify task가 도는 동안은 그 task의 `work-drafts/`를, 곁 세션이 살아 있는 동안은 Work 디렉터리의 `work-drafts/`를 `watchDir`(I15)로 본다. verify의 Stop과 곁 세션의 UserPromptSubmit·끝날 때 다시 읽는다(I140의 감시 실패 대비). 폐기된 task의 초안은 읽지 않는다. 결과는 `WorkView.drafts`(`DraftView[]`)다 | 보관된 Work까지 폴더마다 감시를 걸면 Work 수만큼 감시가 는다. 초안이 생기는 때는 verify와 곁 세션이 도는 동안뿐이다 | |
+| I147 | `work.json`의 `origin`(D412)은 `{ kind: 'session', id } \| { kind: 'work', project, work, task? }`이고 Work를 만들 때 받은 `DraftRef`의 만든 곳에서 적는다. 이름은 보일 때 찾고, 지운 세션이나 없는 Work면 id를 보인다. 필드가 없는 기존 기록은 출처 없음이다(`schema_version`은 그대로) | 이름을 적어 두면 [이름 바꾸기] 뒤 어긋난다 | |
+| I148 | 초안 안내 글은 `core/draft`의 `draftGuide`(형식, 유형 목록, 프로젝트 id 규칙, 쓴 뒤 안내) 하나를 기본 세션 안내(`sessionGuide`), 곁 세션 안내(`sideGuide`), verify 스킬의 조립이 함께 쓴다. verify의 `context.md`에 이 task의 초안 폴더와 곁 세션의 초안 폴더(있으면)를 적는다. 기본 세션 지도(D415)는 Work마다 경로를 늘어놓지 않고 두 폴더의 모양(`works/<work-id>/work-drafts/`, `works/<work-id>/tasks/<nn>-verify/work-drafts/`)과 "폐기된 task의 초안은 버린 것"만 더한다 | 형식 설명이 세 곳에서 갈라지지 않게 한다. Work가 많으면 경로 목록이 안내를 늘린다 | |
+| I149 | verify 스킬: 후속 초안 규칙(D408, D409)은 공용 verify 본문에, 유형마다의 근거(리팩터링의 찾은 버그, 설계의 구현 나눔 D410)는 유형 구간에 둔다. `node skills/check.mjs`의 크기 목표 [2] 안에 든다 | 공용 스킬 조립(D279)을 따른다 | |
+| I150 | 새 Work 대화상자의 초안 목록(D414)은 `Relay.drafts(projectId)`가 기본 세션과 Work(폐기된 task 제외)의 초안 가운데 `project`가 그 프로젝트인 것을 모은다. 목록은 지식 정리 후보(D393)처럼 대화상자 안에 두고, 고르면 I136의 채우기 길을 쓴다. 사람이 쓴 요청이 있으면 바꾸기 전에 묻는다(D393과 같음) | 채우기를 한 길로 둔다 | |
 
 ## 3. 확인한 사실
 
@@ -326,6 +332,7 @@ app/src/
 - 설계 v0.17의 설계 유형은 M20이다. M18과 같은 차례로 나눠 커밋하고 core와 스킬은 한 커밋이다(I113).
 - 설계 v0.18의 곁 세션은 M21이다. core → main → 화면 → 시험 차례로 나눠 커밋한다.
 - 설계 v0.19의 기본 세션은 M23이다. core → main → 화면 → 시험·문서 차례로 나눠 커밋한다.
+- 설계 v0.20의 Work에서 만드는 Work 초안은 M24다. M23과 같은 차례로 나눠 커밋하되 core와 스킬은 한 커밋이다.
 - 설계 v0.13의 일반 유형은 M18이다. M15와 같은 차례로 나눠 커밋하되 core와 스킬은 한 커밋이다(I94). M17과 I69~I84는 지식 관리에 쓴 번호라 건너뛴다.
 - 완료 기준 앞의 꼬리표는 확인 방법이다: [단위], [어댑터], [흐름], [스모크], [실제], [실기]. 뜻은 8.1을 따른다. [실제]와 [실기]의 결과는 `docs/checks.md`에 기록한다(I30).
 
@@ -353,6 +360,7 @@ app/src/
 | M20 | 설계 유형 | 새 Work에서 설계를 고르면 `intake → spec(설계 문답) → verify`, 레포의 설계 문서를 문답으로 정해 PR로 리뷰(D350~D374) | M19 |
 | M21 | 곁 세션 | Work마다 언제든 열고 닫는 Claude Code 세션. 첫 프롬프트 없이 안내를 시스템 프롬프트로 주고, 묻고 나서만 바꾼다(D385~D390) | M20 |
 | M23 | 기본 세션 | 프로젝트나 Work에 매이지 않는 세션 여러 개. 맨 CLI처럼, relay 도우미, 새 Work 구상. 에이전트가 쓴 Work 초안을 카드로 보이고 새 Work 대화상자로 잇는다(D397~D406) | M21 |
+| M24 | Work에서 만드는 Work 초안 | verify가 근거 있는 후속 일을, 곁 세션이 범위 밖 일을 초안으로 쓰고, Work 완료 화면·Work 패널·새 Work 대화상자에 카드로 보인다(D407~D416) | M23 |
 
 ### M0. 골격과 배포
 
@@ -1189,6 +1197,49 @@ app/src/
 
 - [단위], [어댑터], [흐름], [스모크] 위 시험. 기존 시험이 그대로 통과한다.
 - [계약] 가짜 쪽 통과.
+
+### M24. Work에서 만드는 Work 초안 (D407~D416)
+
+설계 v0.20, 시나리오 7·8·11·12. Work 초안(D404)을 만드는 곳에 verify와 곁 세션을 더하고, 남은 초안을 Work 완료 화면, Work 패널, 새 Work 대화상자에서 보인다. 상태 기계, handoff 형식, 형식 검사, verify의 완료조건은 그대로다. 아래 넷을 하고 단계마다 커밋하되, core와 스킬은 한 커밋이다. 단계가 끝날 때마다 `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`, `npm run test:contract`, `node skills/check.mjs`를 돌린다.
+
+**1. core와 스킬**
+
+- **초안(I145):** `DraftSource`의 `work` 종류, `parseDraft`의 `why`. 초안 안내 글 `draftGuide`(I148).
+- **출처(I147):** `shared/work`의 `WorkRecord.origin`. 새 Work를 만드는 입력(`NewWorkInput.draft`)의 만든 곳에서 적는다.
+- **안내:** `sideGuide`에 "Work 초안" 절(D411)과 이 Work의 초안 폴더. `sessionGuide`의 지도에 Work 초안 폴더의 모양과 읽는 규칙(D415, I148).
+- **context:** verify의 `context.md`에 이 task의 초안 폴더와 곁 세션의 초안 폴더(I148).
+- **스킬(I149):** verify에 후속 초안 규칙(D408, D409), 지적 고르기 질문의 "후속" 한 줄(D408), 리팩터링 구간의 찾은 버그, 설계 구간의 구현 나눔 초안(D410).
+
+**2. main**
+
+- **`WorkRunner`(I146):** Work 디렉터리와 폐기되지 않은 verify task의 `work-drafts/` 읽기, verify가 도는 동안과 곁 세션이 살아 있는 동안의 감시, `WorkView.drafts`. [버리기]와 초안으로 만든 뒤 지우기가 `work` 종류의 `DraftRef`를 받는다.
+- **`Relay`(I150):** `drafts(projectId)`(기본 세션과 Work의 초안), 새 Work를 만들 때 `origin` 적기.
+- **[Work 정리]:** 정리 창의 요약에 남은 초안 수(D413). 초안은 지우지 않는다.
+- **IPC와 스냅샷:** `WorkView.drafts`, `WorkView.origin`(이름을 찾은 것), `projectDrafts(projectId)`.
+
+**3. 화면**
+
+- Work 완료 화면의 판정표 탭, `다시 볼 결정` 아래의 "후속 Work 초안"(`DraftCards`, D413). 전달 버튼과 따로 둔다.
+- 승인 대기가 아닌 Work의 오른쪽 패널 아래쪽 카드(진행 중, 완료, PR 진행, 보관됨). PR 진행이면 PR 탭 아래쪽이다.
+- 카드에 `why`와 출처 Work의 상태(머지로 완료되지 않았을 때). 초안으로 만든 Work의 패널에 출처 한 줄(D412).
+- 새 Work 대화상자의 초안 목록과 채우기(D414). 정리 창의 남은 초안 줄.
+- 사이드바, 배지, OS 알림은 바꾸지 않는다(D413).
+
+**4. 시험과 문서**
+
+- **[단위]:** `parseDraft`의 `why`(있음, 없음, 따옴표), `draftGuide`, `sideGuide`의 초안 절과 폴더, `sessionGuide`의 초안 지도, verify `context.md`의 초안 폴더, `origin`의 기록과 기존 기록 읽기, 정리 창 요약의 초안 수.
+- **[어댑터]:** Work 디렉터리와 task 디렉터리의 `work-drafts/` 읽기(폐기된 task 빼기, 깨진 파일은 그 카드의 형식 오류).
+- **[흐름] `test/flow/work-drafts.test.ts`(가짜 claude):** verify가 초안을 쓰면 Work 완료 화면 스냅샷에 카드가 생기고, 그 초안으로 Work를 만들면 초안이 지워지고 새 Work에 `origin`이 적힌다. 곁 세션이 Work 디렉터리에 초안을 쓰면 카드가 생긴다. verify를 되감아 폐기하면 그 초안이 사라진다. 완료하고 정리한 Work의 초안이 새 Work 대화상자의 목록에 남는다. 가짜 claude는 시나리오 단계로 초안 파일만 쓴다(녹화본의 필드를 바꾸지 않음).
+- **[스모크]:** Work 완료 화면의 "후속 Work 초안" 카드의 [새 Work로 만들기]가 채워진 대화상자를 연다. 새 Work 대화상자의 초안 목록.
+- **[실제]:** `refactor.test.ts`에 찾은 버그가 있으면 verify가 버그 수정 초안을 쓰는지, `spec.test.ts`에 사람 역할이 구현 나눔을 고르면 조각마다 초안이 생기는지 더한다. 근거가 없는 Work(`real.test.ts`의 S 요청)에서는 초안이 생기지 않는지 본다(잡음, D409). `RELAY_REAL_CLAUDE=dry`도 통과하게 한다.
+- **[실기] 대신 확인:** 실제 claude 곁 세션에서 범위 밖 일을 따로 하자고 하면 묻고 나서 형식대로 쓰는지 본다(`docs/checks.md`).
+- **문서:** README의 Work 완료와 곁 세션 절에 후속 Work 초안.
+
+**완료 기준**
+
+- [단위], [어댑터], [흐름], [스모크] 위 시험. 기존 시험이 그대로 통과한다.
+- [계약] 가짜 쪽 통과(계약은 바뀌지 않는다).
+- [실제] 위 경우와 `RELAY_REAL_CLAUDE=dry`.
 
 ## 8. 테스트 전략
 
