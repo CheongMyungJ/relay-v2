@@ -41,6 +41,7 @@ import type {
   CleanPreview,
   DraftView,
   ProjectInspection,
+  ProjectRemovePreview,
   ProjectView,
   StepPreview,
   TidyCandidateView,
@@ -1713,8 +1714,17 @@ export function UncommittedDialog({
  * 확인해야 [정리]를 누를 수 있다. 작업 브랜치는 기본으로 두고 push됐거나 머지됐을 때만 삭제를 제안한다.
  * PR을 머지해 완료한 Work는 작업 브랜치 삭제가 기본으로 체크되고, origin의 작업 브랜치 삭제도 고를 수 있다
  * (D178, 기본은 끔). 되감기 백업 브랜치의 "함께 삭제"는 기본으로 체크한다. 산출물은 지우지 않는다.
+ * remove면 [기록 지우기](D407)다: 같은 확인으로 정리한 뒤 산출물과 기록도 지운다.
  */
-export function CleanDialog({ work, onClose }: { work: WorkView; onClose: () => void }) {
+export function CleanDialog({
+  work,
+  remove = false,
+  onClose,
+}: {
+  work: WorkView
+  remove?: boolean
+  onClose: () => void
+}) {
   const [preview, setPreview] = useState<CleanPreview | null>(null)
   const [deleteBranch, setDeleteBranch] = useState(false)
   const [deleteRemote, setDeleteRemote] = useState(false)
@@ -1743,15 +1753,16 @@ export function CleanDialog({ work, onClose }: { work: WorkView; onClose: () => 
     if (!preview) return
     setBusy(true)
     setError(null)
+    const input = {
+      deleteBranch: deleteBranch && preview.branch.deletable,
+      deleteRemote: deleteRemote && preview.remote?.exists === true,
+      deleteBackups,
+      confirmed,
+      confirmLost,
+      expect: preview.expect,
+    }
     const r = await call(() =>
-      window.relay.clean(work.key, {
-        deleteBranch: deleteBranch && preview.branch.deletable,
-        deleteRemote: deleteRemote && preview.remote?.exists === true,
-        deleteBackups,
-        confirmed,
-        confirmLost,
-        expect: preview.expect,
-      }),
+      remove ? window.relay.deleteWork(work.key, input) : window.relay.clean(work.key, input),
     )
     setBusy(false)
     if (r.ok) onClose()
@@ -1760,15 +1771,28 @@ export function CleanDialog({ work, onClose }: { work: WorkView; onClose: () => 
 
   const b = preview?.branch
   return (
-    <Modal title={`Work 정리 · ${work.workId}`} onClose={onClose}>
+    <Modal
+      title={`${remove ? 'Work 기록 지우기' : 'Work 정리'} · ${work.workId}`}
+      onClose={onClose}
+    >
       {!preview ? (
         <div className="dim">{error ? null : '확인하는 중…'}</div>
       ) : (
         <div className="clean-summary" aria-label="정리 요약">
-          <div>
-            worktree를 지웁니다{preview.worktree ? '' : ' (이미 없음)'}. 산출물과 기록(works/
-            {work.workId}/)은 남습니다.
-          </div>
+          {remove ? (
+            <>
+              <div>
+                worktree를 지우고{preview.worktree ? '' : ' (이미 없음)'}, 산출물과 기록(works/
+                {work.workId}/)도 지웁니다. 되돌릴 수 없습니다.
+              </div>
+              <DeleteNotes work={work} />
+            </>
+          ) : (
+            <div>
+              worktree를 지웁니다{preview.worktree ? '' : ' (이미 없음)'}. 산출물과 기록(works/
+              {work.workId}/)은 남습니다.
+            </div>
+          )}
           <section>
             <h3>커밋 안 된 변경</h3>
             {preview.uncommitted.length ? (
@@ -1915,7 +1939,128 @@ export function CleanDialog({ work, onClose }: { work: WorkView; onClose: () => 
           }
           onClick={() => void clean()}
         >
-          {busy ? '정리하는 중…' : '정리'}
+          {busy ? (remove ? '지우는 중…' : '정리하는 중…') : remove ? '정리하고 지우기' : '정리'}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+/** [기록 지우기]가 두는 것과 잃는 것 (D407) */
+function DeleteNotes({ work }: { work: WorkView }) {
+  const pending = work.issue?.pending ?? 0
+  return (
+    <>
+      <div className="dim">
+        레포에 남은 작업 브랜치와 에이전트 CLI의 대화 파일은 그대로 둡니다. 기록이 없어지면 남은
+        브랜치의 지식은 새 Work에 넣지 않습니다.
+      </div>
+      {pending ? (
+        <div className="notice">이슈에 아직 올리지 못한 기록 {pending}개는 올리지 않습니다.</div>
+      ) : null}
+    </>
+  )
+}
+
+/** 보관된 Work의 [기록 지우기] (D407): worktree는 이미 없어 확인만 받는다 */
+export function DeleteWorkDialog({ work, onClose }: { work: WorkView; onClose: () => void }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const remove = async () => {
+    setBusy(true)
+    setError(null)
+    const r = await call(() => window.relay.deleteWork(work.key, null))
+    setBusy(false)
+    // 지우면 이 Work가 목록에서 빠져 창도 닫힌다
+    if (r.ok) onClose()
+    else setError(r.error)
+  }
+  return (
+    <Modal title={`Work 기록 지우기 · ${work.workId}`} onClose={onClose}>
+      <p>
+        {work.title || work.workId}의 산출물과 기록(works/{work.workId}/)을 지웁니다. 되돌릴 수
+        없습니다.
+      </p>
+      <DeleteNotes work={work} />
+      {error ? <div className="error">{error}</div> : null}
+      <div className="buttons">
+        <button onClick={onClose}>취소</button>
+        <button className="danger" disabled={busy} onClick={() => void remove()}>
+          {busy ? '지우는 중…' : '지우기'}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+// ---------- 프로젝트 등록 해제 (D408) ----------
+
+/**
+ * 프로젝트 우클릭 [등록 해제] (D408). Work가 모두 보관됐을 때만 받고, 그 Work의 기록(아카이브로 옮긴 것 포함)을 함께
+ * 지운다. 막을지와 지울 Work 수는 main이 정해 보낸다(D409). 막으면 그 까닭을 보이고 누르지 못하게 둔다
+ */
+export function RemoveProjectDialog({
+  project,
+  onClose,
+}: {
+  project: ProjectView
+  onClose: () => void
+}) {
+  const [preview, setPreview] = useState<ProjectRemovePreview | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let stale = false
+    void call(() => window.relay.projectRemovePreview(project.id)).then((r) => {
+      if (stale) return
+      if (r.ok) setPreview(r.preview)
+      else setError(r.error)
+    })
+    return () => {
+      stale = true
+    }
+  }, [project.id])
+
+  const remove = async () => {
+    setBusy(true)
+    setError(null)
+    const r = await call(() => window.relay.removeProject(project.id))
+    setBusy(false)
+    if (r.ok) onClose()
+    else setError(r.error)
+  }
+  return (
+    <Modal title={`프로젝트 등록 해제 · ${project.name}`} onClose={onClose}>
+      {!preview ? (
+        <div className="dim">{error ? null : '확인하는 중…'}</div>
+      ) : preview.block ? (
+        <p role="alert" aria-label="해제할 수 없는 까닭">
+          해제할 수 없습니다. {preview.block}
+        </p>
+      ) : (
+        <>
+          <p>
+            {project.name}의 등록을 해제합니다.{' '}
+            {preview.works
+              ? `Work 기록 ${preview.works}개${preview.shelved ? `(아카이브 ${preview.shelved}개 포함)` : ''}와 산출물을 함께 지웁니다. 되돌릴 수 없습니다.`
+              : '이 프로젝트에는 Work가 없습니다.'}
+          </p>
+          <div className="dim">
+            레포({project.repoPath})와 브랜치는 그대로 둡니다. 같은 폴더를 다시 등록하면 Work 없이
+            새로 시작합니다.
+          </div>
+        </>
+      )}
+      {error ? <div className="error">{error}</div> : null}
+      <div className="buttons">
+        <button onClick={onClose}>취소</button>
+        <button
+          className="danger"
+          disabled={busy || !preview || preview.block !== null}
+          onClick={() => void remove()}
+        >
+          {busy ? '해제하는 중…' : '등록 해제'}
         </button>
       </div>
     </Modal>

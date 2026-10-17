@@ -21,7 +21,13 @@ import {
   readThemeSync,
   partialUtf8,
   relayHome,
+  loadProjects,
+  removeProjectDir,
+  removeTree,
   saveSession,
+  unregisterProject,
+  worktreeIds,
+  worktreesDir,
   writeFileAtomic,
 } from '../../src/adapters/store'
 import { DRAFT_MAX_BYTES, isDraftFile, parseDraft } from '../../src/core/draft'
@@ -178,6 +184,31 @@ describe('[어댑터] 저장소 (5.1)', () => {
     expect(partialUtf8(Buffer.from([0xf0, 0x9f, 0x98]))).toBe(3)
     expect(partialUtf8(Buffer.from('😀'))).toBe(0)
     expect(partialUtf8(Buffer.alloc(0))).toBe(0)
+  })
+})
+
+describe('[어댑터] 프로젝트 등록 해제의 파일 (D408, D409)', () => {
+  it('worktrees/ 아래 폴더를 읽고, project.json을 먼저 지우면 다시 켤 때 읽지 않으며, 디렉터리를 통째로 지운다', async () => {
+    const dir = path.join(root, 'projects', 'sample-abc123')
+    fs.mkdirSync(path.join(dir, 'works', 'w-20261017-001'), { recursive: true })
+    fs.writeFileSync(path.join(dir, 'works', 'w-20261017-001', 'work.json'), '{}\n')
+    fs.writeFileSync(
+      path.join(dir, 'project.json'),
+      `${JSON.stringify({ project_id: 'sample-abc123' })}\n`,
+    )
+    expect(worktreesDir(root, 'sample-abc123')).toBe(path.join(dir, 'worktrees'))
+    expect(await worktreeIds(root, 'sample-abc123')).toEqual([])
+    fs.mkdirSync(path.join(dir, 'worktrees', 'w-20261017-002'), { recursive: true })
+    expect(await worktreeIds(root, 'sample-abc123')).toEqual(['w-20261017-002'])
+    expect(await loadProjects(root)).toHaveLength(1)
+    await unregisterProject(root, 'sample-abc123')
+    expect(fs.existsSync(path.join(dir, 'works', 'w-20261017-001', 'work.json'))).toBe(true)
+    expect(await loadProjects(root)).toEqual([])
+    // 이미 없어도 된다
+    await unregisterProject(root, 'sample-abc123')
+    await removeProjectDir(root, 'sample-abc123')
+    expect(fs.existsSync(dir)).toBe(false)
+    await removeTree(dir)
   })
 })
 

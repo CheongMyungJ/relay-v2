@@ -112,6 +112,7 @@ function showManualInstall(reason: ManualInstallReason, version: string, file: s
 
 const ui: UiPort = {
   work: (view) => send(IPC.work, view),
+  workRemoved: (workKey) => send(IPC.workRemoved, workKey),
   activity: (update) => send(IPC.activity, update),
   projects: (views) => send(IPC.projects, views),
   sessions: (views) => send(IPC.sessions, views),

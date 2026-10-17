@@ -505,3 +505,202 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
     expect(verify?.completion?.diff).toContain('+  if (xs.length === 0) return 0')
   })
 })
+
+describe('[흐름] Work 기록 지우기와 프로젝트 등록 해제 (D407~D409)', () => {
+  /** Work 없이 등록한 프로젝트 */
+  async function project(): Promise<{ h: Harness; repo: string; projectId: string; dir: string }> {
+    h = await harness({ scenario: scenario() })
+    const { repo } = makeRepo(h.root, 'sample', REPO_FILES)
+    const projectId = await register(h, repo)
+    return { h, repo, projectId, dir: path.join(h.home, 'projects', projectId) }
+  }
+
+  /** 처음 정리 요약으로 만든 정리 확인 */
+  async function cleanInput(s: Setup) {
+    const summary = await preview(s)
+    return { deleteBranch: false, deleteBackups: true, confirmed: false, expect: summary.expect }
+  }
+
+  it('완료한 Work는 정리 확인과 함께 지운다: worktree와 기록이 없고 작업 브랜치는 남으며, 다시 켜도 없다', async () => {
+    const s = await setup(scenario())
+    const done = await drive(s.h.relay, s.h.ui, s.key)
+    expect(done.status).toBe('completed')
+    expect(s.h.ui.works.get(s.key)).toMatchObject({ canDelete: true, canShelve: false })
+    // 정리하지 않은 Work는 정리 확인 없이 지우지 않는다
+    const refused = await s.h.relay.deleteWork(s.key, null)
+    expect(refused.ok).toBe(false)
+    expect(fs.existsSync(s.dir)).toBe(true)
+    expect(await s.h.relay.deleteWork(s.key, await cleanInput(s))).toEqual({ ok: true })
+    expect(fs.existsSync(s.tree)).toBe(false)
+    expect(fs.existsSync(s.dir)).toBe(false)
+    expect(git(s.repo, 'branch', '--list', s.branch).trim()).not.toBe('')
+    expect(s.h.ui.removed).toEqual([s.key])
+    expect(s.h.ui.works.has(s.key)).toBe(false)
+    expect(s.h.relay.snapshot().works).toEqual([])
+    expect((await s.h.relay.deleteWork(s.key, null)).ok).toBe(false)
+    await s.h.relay.close()
+    await s.h.reopen()
+    expect(s.h.relay.snapshot().works).toEqual([])
+  })
+
+  it('보관된 Work는 확인만으로 지운다', async () => {
+    const s = await setup(scenario())
+    await drive(s.h.relay, s.h.ui, s.key)
+    expect(await s.h.relay.clean(s.key, await cleanInput(s))).toEqual({ ok: true })
+    await settle(s.h, s.key)
+    expect(s.h.ui.works.get(s.key)).toMatchObject({ status: 'archived', canDelete: true })
+    expect(await s.h.relay.deleteWork(s.key, null)).toEqual({ ok: true })
+    expect(fs.existsSync(s.dir)).toBe(false)
+    expect(s.h.ui.removed).toEqual([s.key])
+  })
+
+  it.runIf(canLock)(
+    '기록을 지우다 실패하면 work.json을 다시 써 Work를 남기고 까닭을 돌려준다. 원인을 치우면 다시 지운다',
+    async () => {
+      const s = await setup(scenario())
+      await drive(s.h.relay, s.h.ui, s.key)
+      expect(await s.h.relay.clean(s.key, await cleanInput(s))).toEqual({ ok: true })
+      await settle(s.h, s.key)
+      const stuck = path.join(s.dir, 'stuck', 'x.txt')
+      fs.mkdirSync(path.dirname(stuck))
+      fs.writeFileSync(stuck, '지울 수 없음\n')
+      expect(immutable(stuck, true)).toBe(true)
+      try {
+        const r = await s.h.relay.deleteWork(s.key, null)
+        expect(r.ok).toBe(false)
+        expect(!r.ok && r.error).toMatch(/^Work 기록을 지우지 못함: /)
+        expect(work(s).status).toBe('archived')
+        expect(s.h.ui.removed).toEqual([])
+        expect(s.h.ui.works.get(s.key)?.status).toBe('archived')
+      } finally {
+        immutable(stuck, false)
+      }
+      expect(await s.h.relay.deleteWork(s.key, null)).toEqual({ ok: true })
+      expect(fs.existsSync(s.dir)).toBe(false)
+    },
+  )
+
+  it('프로젝트는 Work가 모두 보관됐을 때만 해제하고 기록을 함께 지운다. 레포는 그대로이고 다시 등록하면 Work가 없다', async () => {
+    const s = await setup(scenario())
+    const projectId = s.key.split('/')[0] ?? ''
+    const projectDir = path.join(s.h.home, 'projects', projectId)
+    await drive(s.h.relay, s.h.ui, s.key)
+    const preview = await s.h.relay.projectRemovePreview(projectId)
+    expect(preview.ok && preview.preview.block).toContain(s.workId)
+    const blocked = await s.h.relay.removeProject(projectId)
+    expect(blocked.ok).toBe(false)
+    if (!blocked.ok) expect(blocked.error).toContain(s.workId)
+    expect(fs.existsSync(path.join(projectDir, 'project.json'))).toBe(true)
+    expect(await s.h.relay.clean(s.key, await cleanInput(s))).toEqual({ ok: true })
+    await settle(s.h, s.key)
+    expect(await s.h.relay.shelve(s.key)).toEqual({ ok: true })
+    expect(await s.h.relay.projectRemovePreview(projectId)).toEqual({
+      ok: true,
+      preview: { block: null, works: 1, shelved: 1 },
+    })
+    expect(await s.h.relay.removeProject(projectId)).toEqual({ ok: true })
+    expect(fs.existsSync(projectDir)).toBe(false)
+    expect(s.h.ui.projectList).toEqual([])
+    expect(s.h.ui.removed).toEqual([s.key])
+    expect(s.h.relay.snapshot()).toMatchObject({ projects: [], works: [] })
+    expect(git(s.repo, 'branch', '--list', s.branch).trim()).not.toBe('')
+    expect(fs.existsSync(path.join(s.repo, '.git'))).toBe(true)
+    // 지운 프로젝트에는 Work를 만들지 않는다
+    const r = await s.h.relay.createWork(projectId, {
+      request: REQUEST,
+      baseBranch: 'main',
+      type: 'bugfix',
+      baseLocation: 'local',
+    })
+    expect(r.ok).toBe(false)
+    await s.h.relay.close()
+    await s.h.reopen()
+    expect(s.h.relay.snapshot()).toMatchObject({ projects: [], works: [] })
+    expect(await register(s.h, s.repo)).toBe(projectId)
+    expect(s.h.relay.snapshot().works).toEqual([])
+  })
+
+  it('앱이 읽지 못한 Work 기록이나 남은 worktree 폴더가 있으면 해제하지 않는다 (D409)', async () => {
+    const p = await project()
+    const unread = path.join(p.dir, 'works', 'w-20261017-099')
+    fs.mkdirSync(unread, { recursive: true })
+    fs.writeFileSync(path.join(unread, 'work.json'), '{ 깨진 기록')
+    const r1 = await p.h.relay.removeProject(p.projectId)
+    expect(!r1.ok && r1.error).toContain('읽지 못한 Work 기록이 있음 (w-20261017-099)')
+    expect(fs.existsSync(path.join(unread, 'work.json'))).toBe(true)
+    fs.rmSync(unread, { recursive: true })
+    const tree = path.join(p.dir, 'worktrees', 'w-20261017-098')
+    fs.mkdirSync(tree, { recursive: true })
+    const preview = await p.h.relay.projectRemovePreview(p.projectId)
+    expect(preview.ok && preview.preview.block).toContain(
+      'worktree 폴더가 남아 있음: w-20261017-098',
+    )
+    expect((await p.h.relay.removeProject(p.projectId)).ok).toBe(false)
+    expect(fs.existsSync(tree)).toBe(true)
+    fs.rmSync(tree, { recursive: true })
+    expect(await p.h.relay.removeProject(p.projectId)).toEqual({ ok: true })
+    expect(fs.existsSync(p.dir)).toBe(false)
+  })
+
+  it('하던 [기록 지우기]와 겹친 등록 해제는 그 지우기를 기다린 뒤 해제한다', async () => {
+    const s = await setup(scenario())
+    const projectId = s.key.split('/')[0] ?? ''
+    await drive(s.h.relay, s.h.ui, s.key)
+    expect(await s.h.relay.clean(s.key, await cleanInput(s))).toEqual({ ok: true })
+    await settle(s.h, s.key)
+    const deleting = s.h.relay.deleteWork(s.key, null)
+    expect(await s.h.relay.deleteWork(s.key, null)).toEqual({
+      ok: false,
+      error: '이 Work를 지우는 중입니다',
+    })
+    const [deleted, removed] = await Promise.all([deleting, s.h.relay.removeProject(projectId)])
+    expect(deleted).toEqual({ ok: true })
+    expect(removed).toEqual({ ok: true })
+    expect(s.h.ui.removed).toEqual([s.key])
+    expect(fs.existsSync(path.join(s.h.home, 'projects', projectId))).toBe(false)
+  })
+
+  it('Work를 만드는 중에는 등록 해제하지 않는다', async () => {
+    const p = await project()
+    const creating = p.h.relay.createWork(p.projectId, {
+      request: REQUEST,
+      baseBranch: 'main',
+      type: 'bugfix',
+      baseLocation: 'local',
+    })
+    const removed = await p.h.relay.removeProject(p.projectId)
+    expect(removed).toEqual({ ok: false, error: '다른 Work를 만드는 중입니다' })
+    const created = await creating
+    expect(created.ok).toBe(true)
+    expect(fs.existsSync(path.join(p.dir, 'project.json'))).toBe(true)
+    expect(p.h.ui.projectList).toHaveLength(1)
+  })
+
+  it.runIf(canLock)(
+    'project.json을 지우지 못하면 등록된 채 두고, 그 뒤 폴더를 다 지우지 못하면 해제는 하고 직접 지우라고 알린다',
+    async () => {
+      const p = await project()
+      const json = path.join(p.dir, 'project.json')
+      expect(immutable(json, true)).toBe(true)
+      try {
+        const r = await p.h.relay.removeProject(p.projectId)
+        expect(!r.ok && r.error).toMatch(/^project.json을 지우지 못함: /)
+        expect(p.h.ui.projectList).toHaveLength(1)
+      } finally {
+        immutable(json, false)
+      }
+      const stuck = path.join(p.dir, 'stuck', 'x.txt')
+      fs.mkdirSync(path.dirname(stuck))
+      fs.writeFileSync(stuck, '지울 수 없음\n')
+      expect(immutable(stuck, true)).toBe(true)
+      try {
+        const r = await p.h.relay.removeProject(p.projectId)
+        expect(!r.ok && r.error).toMatch(/^등록은 해제했지만 프로젝트 폴더를 다 지우지 못함: /)
+        expect(p.h.ui.projectList).toEqual([])
+        expect(fs.existsSync(json)).toBe(false)
+      } finally {
+        immutable(stuck, false)
+      }
+    },
+  )
+})

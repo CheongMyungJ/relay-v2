@@ -18,10 +18,12 @@ import { call } from './commands'
 import {
   CleanDialog,
   ConfirmDialog,
+  DeleteWorkDialog,
   Modal,
   NewWorkDialog,
   ProjectDialog,
   ProjectSettingsDialog,
+  RemoveProjectDialog,
   SettingsDialog,
   StepDialog,
   WorkSettingsDialog,
@@ -53,12 +55,15 @@ import {
 type Dialog =
   | { kind: 'project' }
   | { kind: 'project-settings'; project: ProjectView }
+  | { kind: 'project-remove'; project: ProjectView }
   | { kind: 'work'; project: ProjectView; draft?: DraftView }
   | { kind: 'settings' }
   | { kind: 'work-settings'; workKey: string }
   | { kind: 'abandon'; workKey: string }
   | { kind: 'step'; workKey: string; node?: NodeName }
   | { kind: 'clean'; workKey: string }
+  /** cleaned는 연 때 보관됐는지다. 정리한 뒤 지우다 실패해도 연 창에 그 까닭을 보인다 */
+  | { kind: 'work-delete'; workKey: string; cleaned: boolean }
   | { kind: 'side'; workKey: string; fresh: boolean }
   | { kind: 'session-new' }
   | { kind: 'session-rename'; id: string }
@@ -117,13 +122,16 @@ export function App() {
   const [hiddenQuestionId, setHiddenQuestionId] = useState<string | null>(null)
   // 접은 프로젝트와 아카이브. 이 컴퓨터의 화면 설정이라 브라우저 저장소에 둔다
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(loadCollapsed)
-  // 보관된 Work와 기본 세션의 우클릭 메뉴. 옮기지 못하면 그 까닭을 메뉴 안에 보인다
+  // 끝난 Work, 기본 세션, 프로젝트의 우클릭 메뉴. 옮기지 못하면 그 까닭을 메뉴 안에 보인다
   const [menu, setMenu] = useState<
     | { kind: 'work'; workKey: string; x: number; y: number; error?: string }
     | { kind: 'session'; id: string; x: number; y: number }
+    | { kind: 'project'; project: ProjectView; x: number; y: number }
     | null
   >(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  // 머지 뒤 정리 창(D178, D200)을 연 Work. 아래 effect가 쓴다
+  const offered = useRef(new Set<string>())
 
   useEffect(() => {
     void window.relay.appInfo().then(setInfo)
@@ -131,6 +139,15 @@ export function App() {
       setWorks((m) => ({ ...m, [w.key]: w }))
       // 스냅샷의 진행 표시가 그 앞에 따로 온 것보다 새것이다 (D216)
       setActivities((m) => withoutWork(m, w.key))
+    })
+    // 기록을 지운 Work (D407, D408): 목록에서 빼고, 고르고 있었으면 고르지 않은 화면이다
+    const offRemoved = window.relay.onWorkRemoved((key) => {
+      setWorks((m) => without(m, key))
+      setActivities((m) => withoutWork(m, key))
+      setPicked((m) => without(m, key))
+      setSelected((cur) => (cur?.kind === 'work' && cur.key === key ? null : cur))
+      // 지운 Work의 id는 다시 쓰일 수 있다: 새 Work가 머지 뒤 정리 창을 받게 한다
+      offered.current.delete(key)
     })
     const offActivity = window.relay.onActivity((u) =>
       setActivities((m) => ({ ...m, [`${u.workKey}|${u.taskId}`]: u.activity })),
@@ -167,6 +184,7 @@ export function App() {
     })
     return () => {
       offWork()
+      offRemoved()
       offActivity()
       offProjects()
       offSessions()
@@ -291,7 +309,7 @@ export function App() {
         className={`work-item${w.key === selectedWork ? ' selected' : ''}`}
         onClick={() => selectWorkKey(w.key)}
         onContextMenu={
-          w.canShelve
+          w.canShelve || w.canDelete
             ? (e) => {
                 e.preventDefault()
                 setMenu({ kind: 'work', workKey: w.key, x: e.clientX, y: e.clientY })
@@ -345,7 +363,6 @@ export function App() {
 
   // 머지 뒤 정리 창 (D178, D200): 머지로 완료한 Work를 보고 있으면 한 번 연다. 앱에서 머지했거나 밖에서 머지된 것을
   // 읽었을 때, 다른 Work를 보고 있었으면 그 Work를 고를 때다. 연 것을 main에 알려 다시 열지 않는다
-  const offered = useRef(new Set<string>())
   useEffect(() => {
     if (!work?.pr?.offerClean || dialog !== null || offered.current.has(work.key)) return
     offered.current.add(work.key)
@@ -360,6 +377,7 @@ export function App() {
     dialog?.kind === 'abandon' ||
     dialog?.kind === 'step' ||
     dialog?.kind === 'clean' ||
+    dialog?.kind === 'work-delete' ||
     dialog?.kind === 'side'
       ? works[dialog.workKey]
       : null
@@ -420,6 +438,10 @@ export function App() {
                   className="project-name"
                   title={`${p.repoPath} · 프로젝트 설정 (D185)`}
                   onClick={() => setDialog({ kind: 'project-settings', project: p })}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    setMenu({ kind: 'project', project: p, x: e.clientX, y: e.clientY })
+                  }}
                 >
                   {p.name}
                 </button>
@@ -483,7 +505,7 @@ export function App() {
             </button>
           </div>
         ) : null}
-        {menu?.kind === 'work' ? (
+        {menu?.kind === 'project' ? (
           <div
             ref={menuRef}
             className="context-menu"
@@ -493,22 +515,59 @@ export function App() {
           >
             <button
               role="menuitem"
+              title="Work가 모두 보관됐을 때만 해제합니다"
               onClick={() => {
-                const key = menu.workKey
-                void call(() => window.relay.shelve(key)).then((r) => {
-                  // 실패는 다른 명령처럼 누른 곳 옆(메뉴 안)에 보이고, 메뉴를 닫으면 사라진다
-                  setMenu((m) =>
-                    m?.kind !== 'work' || m.workKey !== key
-                      ? m
-                      : r.ok
-                        ? null
-                        : { ...m, error: r.error },
-                  )
-                })
+                setMenu(null)
+                setDialog({ kind: 'project-remove', project: menu.project })
               }}
             >
-              아카이브로 옮기기
+              등록 해제
             </button>
+          </div>
+        ) : null}
+        {menu?.kind === 'work' ? (
+          <div
+            ref={menuRef}
+            className="context-menu"
+            role="menu"
+            style={{ left: menu.x, top: menu.y }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {works[menu.workKey]?.canShelve ? (
+              <button
+                role="menuitem"
+                onClick={() => {
+                  const key = menu.workKey
+                  void call(() => window.relay.shelve(key)).then((r) => {
+                    // 실패는 다른 명령처럼 누른 곳 옆(메뉴 안)에 보이고, 메뉴를 닫으면 사라진다
+                    setMenu((m) =>
+                      m?.kind !== 'work' || m.workKey !== key
+                        ? m
+                        : r.ok
+                          ? null
+                          : { ...m, error: r.error },
+                    )
+                  })
+                }}
+              >
+                아카이브로 옮기기
+              </button>
+            ) : null}
+            {works[menu.workKey]?.canDelete ? (
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setMenu(null)
+                  setDialog({
+                    kind: 'work-delete',
+                    workKey: menu.workKey,
+                    cleaned: works[menu.workKey]?.status === 'archived',
+                  })
+                }}
+              >
+                기록 지우기
+              </button>
+            ) : null}
             {menu.error ? (
               <div className="error" role="alert">
                 아카이브로 옮기지 못함: {menu.error}
@@ -793,6 +852,17 @@ export function App() {
       ) : null}
       {dialog?.kind === 'clean' && dialogWork ? (
         <CleanDialog work={dialogWork} onClose={() => setDialog(null)} />
+      ) : null}
+      {/* 보관된 Work는 지우기만 확인하고, 정리하지 않은 Work는 정리 확인과 함께 지운다 (D407) */}
+      {dialog?.kind === 'work-delete' && dialogWork ? (
+        dialog.cleaned ? (
+          <DeleteWorkDialog work={dialogWork} onClose={() => setDialog(null)} />
+        ) : (
+          <CleanDialog work={dialogWork} remove onClose={() => setDialog(null)} />
+        )
+      ) : null}
+      {dialog?.kind === 'project-remove' ? (
+        <RemoveProjectDialog project={dialog.project} onClose={() => setDialog(null)} />
       ) : null}
       {dialog?.kind === 'side' && dialogWork ? (
         <SideNoticeDialog

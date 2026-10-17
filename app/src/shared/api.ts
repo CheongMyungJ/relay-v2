@@ -21,6 +21,7 @@ import type {
   TidyView,
   PrItemAction,
   ProjectInspection,
+  ProjectRemovePreviewResult,
   ProjectView,
   RespondStartInput,
   ReviewView,
@@ -72,6 +73,8 @@ export interface RelayApi {
   appInfo(): Promise<AppInfo>
   snapshot(): Promise<AppSnapshot>
   onWork(cb: (work: WorkView) => void): () => void
+  /** Work 기록을 지웠다 (D407, D408). 받은 키의 Work를 목록에서 뺀다 */
+  onWorkRemoved(cb: (workKey: string) => void): () => void
   /** 도구 훅으로 바뀐 진행 표시 (D216). 스냅샷보다 자주 온다 */
   onActivity(cb: (update: ActivityUpdate) => void): () => void
   onProjects(cb: (projects: ProjectView[]) => void): () => void
@@ -81,6 +84,10 @@ export interface RelayApi {
   pickFolder(title: string): Promise<string | null>
   inspectProject(path: string): Promise<ProjectInspection>
   registerProject(path: string, defaultBranch: string): Promise<CommandResult>
+  /** [등록 해제] 창을 열 때 (D408): 막는 까닭과 함께 지울 Work 수 */
+  projectRemovePreview(projectId: string): Promise<ProjectRemovePreviewResult>
+  /** 프로젝트 우클릭 [등록 해제] (D408): Work가 모두 보관됐을 때만. 프로젝트의 기록을 함께 지운다 */
+  removeProject(projectId: string): Promise<CommandResult>
   /** 기준 브랜치 목록. 프로젝트의 기본 브랜치가 맨 앞이다 */
   branches(projectId: string): Promise<string[]>
   createWork(projectId: string, input: NewWorkInput): Promise<CreateWorkResult>
@@ -115,6 +122,11 @@ export interface RelayApi {
   resumeWork(workKey: string): Promise<CommandResult>
   /** [Work 포기] (3.3) */
   abandon(workKey: string): Promise<CommandResult>
+  /**
+   * 우클릭 [기록 지우기] (D407): Work의 기록과 산출물을 지운다. 보관되지 않은 완료·포기 Work는 clean(정리 확인)으로
+   * 먼저 정리한다. 보관된 Work는 null이다
+   */
+  deleteWork(workKey: string, clean: CleanInput | null): Promise<CommandResult>
   /** 단계 선택 대화상자의 미리 보기 (6.2, D82). type은 의도 승인 전 [intake 다시]에서 고른 유형이다 (D237) */
   stepPreview(
     workKey: string,
@@ -215,12 +227,15 @@ export const IPC = {
   appInfo: 'app:info',
   snapshot: 'app:snapshot',
   work: 'app:work',
+  workRemoved: 'app:work-removed',
   activity: 'app:activity',
   projects: 'app:projects',
   sessions: 'app:sessions',
   pickFolder: 'project:pick-folder',
   inspectProject: 'project:inspect',
   registerProject: 'project:register',
+  removeProject: 'project:remove',
+  projectRemovePreview: 'project:remove-preview',
   branches: 'project:branches',
   createWork: 'work:create',
   knowledgeTidy: 'work:knowledge-tidy',
@@ -235,6 +250,7 @@ export const IPC = {
   shelve: 'work:shelve',
   resumeWork: 'work:resume-work',
   abandon: 'work:abandon',
+  deleteWork: 'work:delete',
   stepPreview: 'work:step-preview',
   selectStep: 'work:select-step',
   deliver: 'work:deliver',

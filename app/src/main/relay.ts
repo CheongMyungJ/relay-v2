@@ -24,15 +24,20 @@ import {
   loadConfig,
   loadProjects,
   loadSessions,
+  removeProjectDir,
   saveConfig,
   saveProject,
   saveSession,
   sessionDir,
   sessionIds,
+  unregisterProject,
   workDir,
   workIds,
   worktreeDir,
+  worktreeIds,
+  worktreesDir,
 } from '../adapters/store'
+import { projectRemoveBlock } from '../core/cleanup'
 import { applyConfigPatch, checkProjectSettings, checkWorkSettings } from '../core/config'
 import { createWork } from '../core/machine'
 import { NODE_INFO } from '../core/pipeline'
@@ -60,6 +65,7 @@ import type {
   PrItemAction,
   TidyView,
   ProjectInspection,
+  ProjectRemovePreviewResult,
   ProjectView,
   RespondStartInput,
   ReviewView,
@@ -117,6 +123,10 @@ export class Relay {
   private readonly warnings: string[] = []
   private size = { cols: 120, rows: 32 }
   private creating = false
+  /** [등록 해제]하는 중인 프로젝트 (D409). 그동안 그 프로젝트에 Work를 만들거나 지우지 않고, 같은 폴더를 등록하지 않는다 */
+  private readonly removing = new Set<string>()
+  /** [기록 지우기]하는 중인 Work (D409). 키는 Work 키다. [등록 해제]는 이것이 끝나기를 기다린다 */
+  private readonly deleting = new Map<string, Promise<CommandResult>>()
   private creatingSession = false
   /** 설정 바꾸기를 차례로 한다. 겹친 두 바꾸기가 서로의 값을 지우지 않게 */
   private configQueue: Promise<unknown> = Promise.resolve()
@@ -450,12 +460,100 @@ export class Relay {
   ): Promise<CommandResult & { projectId?: string }> {
     const r = await prepareProject(dir, defaultBranch, this.at(), this.projectEnv())
     if (!r.ok) return r
+    // 같은 폴더(같은 id)의 등록을 해제하는 중이면 그 디렉터리를 지우는 중이다 (D409)
+    if (this.removing.has(r.project.project_id))
+      return { ok: false, error: '이 폴더의 등록을 해제하는 중입니다. 끝난 뒤 다시 등록하세요' }
     await saveProject(this.o.home, r.project)
     this.projects.set(r.project.project_id, r.project)
     this.o.ui.projects(this.projectViews())
     // 초안의 project는 등록된 프로젝트만 받는다 (I135)
     for (const session of this.sessions.values()) void session.refreshDrafts()
     return { ok: true, projectId: r.project.project_id }
+  }
+
+  /**
+   * [등록 해제]를 막는 까닭과 함께 지울 Work (D408, D409): 보관되지 않은 Work, 앱이 읽지 못한 Work 기록(works/에 있는데
+   * 목록에 없음), 남은 worktree 폴더를 core 규칙으로 본다
+   */
+  private async removeCheck(
+    projectId: string,
+  ): Promise<{ block: string | null; runners: WorkRunner[] }> {
+    const runners = [...this.works.values()].filter((w) => w.project.project_id === projectId)
+    const loaded = new Set(runners.map((w) => w.work.work_id))
+    const unread = (await workIds(this.o.home, projectId)).filter((id) => !loaded.has(id))
+    const block = projectRemoveBlock(
+      runners.map((w) => w.work),
+      {
+        unread,
+        worktrees: await worktreeIds(this.o.home, projectId),
+        worktreesDir: worktreesDir(this.o.home, projectId),
+      },
+    )
+    return { block, runners }
+  }
+
+  /** [등록 해제] 창을 열 때 (D408): 막는 까닭과 함께 지울 Work 수. 판정은 [등록 해제]가 다시 한다 */
+  async projectRemovePreview(projectId: string): Promise<ProjectRemovePreviewResult> {
+    if (!this.projects.has(projectId)) return { ok: false, error: '프로젝트가 없습니다' }
+    try {
+      const { block, runners } = await this.removeCheck(projectId)
+      const shelved = runners.filter((w) => w.work.shelved_at !== undefined).length
+      return { ok: true, preview: { block, works: runners.length, shelved } }
+    } catch (e) {
+      return { ok: false, error: `확인하지 못함: ${String(e)}` }
+    }
+  }
+
+  /**
+   * 프로젝트 우클릭 [등록 해제] (D408, D409). Work가 모두 보관됐을 때만 받는다(Work가 없어도 된다). project.json을 먼저
+   * 지우고, Work의 runner를 함께 멈춘 뒤 프로젝트 디렉터리를 한 번에 지운다. 레포와 브랜치는 건드리지 않는다.
+   * project.json 고치기와 같은 줄에서 해 다시 점검이나 설정 저장이 지운 project.json을 다시 쓰지 않는다
+   */
+  removeProject(projectId: string): Promise<CommandResult> {
+    const run = this.projectWrites.then(async (): Promise<CommandResult> => {
+      if (!this.projects.has(projectId)) return { ok: false, error: '프로젝트가 없습니다' }
+      // 검사와 표시 사이에 기다림이 없어야 한다: 이 뒤로 그 프로젝트에 Work를 만들거나 지우지 않는다
+      if (this.creating) return { ok: false, error: '다른 Work를 만드는 중입니다' }
+      this.removing.add(projectId)
+      try {
+        // 하던 [기록 지우기]가 끝나기를 기다린다. 실패했으면 아래 검사가 남은 Work로 다시 본다
+        await Promise.all(
+          [...this.deleting]
+            .filter(([key]) => key.startsWith(`${projectId}/`))
+            .map(([, deleting]) => deleting.catch(() => undefined)),
+        )
+        const { block, runners } = await this.removeCheck(projectId)
+        if (block) return { ok: false, error: block }
+        try {
+          await unregisterProject(this.o.home, projectId)
+        } catch (e) {
+          return { ok: false, error: `project.json을 지우지 못함: ${String(e)}` }
+        }
+        // 이제 다시 켜도 이 프로젝트를 읽지 않는다. 기록은 아래에서 디렉터리째 지운다
+        await Promise.all(runners.map((r) => r.remove({ files: false })))
+        for (const r of runners) {
+          this.works.delete(r.key)
+          this.o.ui.workRemoved(r.key)
+        }
+        this.projects.delete(projectId)
+        this.o.ui.projects(this.projectViews())
+        // 이 프로젝트의 초안은 모르는 프로젝트가 된다 (D404)
+        for (const session of this.sessions.values()) void session.refreshDrafts()
+        try {
+          await removeProjectDir(this.o.home, projectId)
+        } catch (e) {
+          return {
+            ok: false,
+            error: `등록은 해제했지만 프로젝트 폴더를 다 지우지 못함: ${String(e)}. 폴더를 직접 지우세요`,
+          }
+        }
+        return { ok: true }
+      } finally {
+        this.removing.delete(projectId)
+      }
+    })
+    this.projectWrites = run.catch(() => undefined)
+    return run
   }
 
   /**
@@ -537,6 +635,8 @@ export class Relay {
   async createWork(projectId: string, input: NewWorkInput): Promise<CreateWorkResult> {
     const project = this.projects.get(projectId)
     if (!project) return { ok: false, error: '프로젝트가 없습니다' }
+    if (this.removing.has(projectId))
+      return { ok: false, error: '등록을 해제하는 중인 프로젝트입니다' }
     // work-id를 겹치지 않게 정하려고 한 번에 하나씩 만든다
     if (this.creating) return { ok: false, error: '다른 Work를 만드는 중입니다' }
     if (!input.request.trim()) return { ok: false, error: '요청을 입력하세요' }
@@ -700,6 +800,35 @@ export class Relay {
   /** [Work 포기] */
   abandon(workKey: string): Promise<CommandResult> {
     return this.withWork(workKey, (w) => w.abandon())
+  }
+
+  /**
+   * 우클릭 [기록 지우기] (D407). 보관되지 않은 완료·포기 Work는 받은 정리 확인으로 먼저 정리한다(시나리오 8과 같음).
+   * 정리가 실패하면 지우지 않는다. 정리한 뒤 지우다 실패하면 보관됨으로 남는다. 같은 Work를 겹쳐 지우지 않는다
+   */
+  deleteWork(workKey: string, clean: CleanInput | null): Promise<CommandResult> {
+    const runner = this.works.get(workKey)
+    if (!runner) return Promise.resolve({ ok: false, error: 'Work가 없습니다' })
+    if (this.removing.has(runner.project.project_id))
+      return Promise.resolve({ ok: false, error: '등록을 해제하는 중인 프로젝트입니다' })
+    if (this.deleting.has(workKey))
+      return Promise.resolve({ ok: false, error: '이 Work를 지우는 중입니다' })
+    const run = this.deleteNow(runner, clean).finally(() => this.deleting.delete(workKey))
+    this.deleting.set(workKey, run)
+    return run
+  }
+
+  private async deleteNow(runner: WorkRunner, clean: CleanInput | null): Promise<CommandResult> {
+    if (runner.work.status !== 'archived') {
+      if (!clean) return { ok: false, error: '정리하지 않은 Work임. 정리 확인과 함께 지우세요' }
+      const r = await runner.clean(clean)
+      if (!r.ok) return r
+    }
+    const r = await runner.remove()
+    if (!r.ok) return r
+    this.works.delete(runner.key)
+    this.o.ui.workRemoved(runner.key)
+    return { ok: true }
   }
 
   // ---------- 단계 선택 (6.2) ----------
