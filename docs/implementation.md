@@ -1,6 +1,6 @@
 # relay-v2 구현 계획
 
-- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102), v0.17의 설계 유형(M20, I103~I113), v0.18의 곁 세션(M21, I125~I131)
+- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102), v0.17의 설계 유형(M20, I103~I113), v0.18의 곁 세션(M21, I125~I131), v0.19의 기본 세션(M23, I132~I136)
 - 상태: 정함. 주제마다 사람과 문답으로 정했다(설계 부록 A의 진행 규칙). 바꾸려면 사용자와 다시 정한다.
 
 Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서는 [engines.md](engines.md)에서 관리한다. 이 문서의 기존 Claude 동작은 확장 중 회귀 시험의 기준이다.
@@ -145,6 +145,11 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I129 | D391의 설정: 상세 설정의 키를 `AgentStepName`(`SkillName`과 `side`)으로 넓히고 `AGENT_STEP_TITLES` 끝에 `side`("곁 세션", 공통 묶음)를 둔다. `side`는 노드가 아니므로 [단위]의 노드 대조는 마지막 줄을 뺀다. 열 때 `resolveAgent(config, 'side')`로 정하고 `work.json`의 `side.engine`에 대화의 엔진을 적는다(엔진이 없는 옛 기록은 Claude) | 단계 설정과 같은 화면, 검사, 해석을 그대로 쓴다 | |
 | I130 | D391의 Codex 곁 세션: 설정은 `codexSideSettings`(task와 같은 훅, 메모리 끔, 모델·추론 수준. relay MCP는 없음). 인자는 `codexSideArgs`(새 대화: 옵션과 `--add-dir`, 이어 가기: 그 뒤에 `resume <id>`). 훅은 처리 줄 밖에서 답한다: SessionStart에 안내를 `additionalContext`로 돌려주고 그 대화를 안내된 것(`guided`)으로 둔다. PreToolUse는 `codexToolDenial`의 `allowPush`를 `guided`로 준다(안내 전에는 push와 PR 조작을 막음). 안내 전이면 머리 띠가 훅 신뢰와 다시 열기를 알린다. 질문 처리는 없다. 정리 세션과 겹치는 끝내기는 `AuxSession`과 `killAux`·`dropAux`로 묶고, 터미널 id로 보조 세션을 찾는 곳은 `auxOf` 하나다. 가짜 codex는 `RELAY_HOOK_TASK`가 `side`면 시나리오의 `side`·`sideResume`을 하고, relay MCP가 설정에 없으면 띄우지 않으며, `sideNoStart`면 새 곁 세션의 SessionStart를 보내지 않는다(훅 신뢰 전) | 사람이 터미널에서 대화하는 세션에 앱 질문창을 두면 task 질문을 가리고 대화 전환 뒤 남는다(PR #48 리뷰). 정리 세션과 한쪽만 고쳐지지 않게 공통 부분을 묶는다 | |
 | I131 | D392의 안내 창은 렌더러가 띄운다(main은 열기만 함). "다시 보지 않기"는 `side_notice: false`를 설정에 저장하고(`BOOLEAN_KEYS`), 설정 화면의 "곁 세션을 열 때 안내 보기"로 다시 켠다 | 열기 명령은 그대로 두고 화면에서만 확인받는다 | |
+| I132 | 기본 세션(D397~D406)의 배치: 안내(`sessionGuide`)와 이름 짓기(`sessionName`, D403)는 `core/session`, Work 초안의 읽기와 검사(`parseDraft`, D404)는 `core/draft`, 실행 인자와 설정(`sessionArgs`, `sessionSettings`)은 `core/settings`, `sessions/` 읽기·쓰기와 id(`nextSessionId`)는 `adapters/store`와 `core/records`. 세션 하나는 main의 `SessionRunner`(`main/session.ts`)이고 목록은 `Relay`가 가진다. PTY를 띄우고 훅을 등록하고 임시 폴더를 치우는 부분은 `WorkRunner.launchSide`에서 뽑아 곁 세션과 함께 쓴다(인자 모양이 같다) | |
+| I133 | 기본 세션의 훅 URL은 `/hook/session/<Event>`이고 토큰은 띄울 때마다 새로 만든다. 받는 것은 UserPromptSubmit의 `session_id`와 `prompt`뿐이다. `prompt`는 Claude 녹화본에 이미 있다(8.2). 안내와 설정 파일은 곁 세션처럼 띄울 때마다 임시 폴더(`relay-session-*`)에 만든다(I126) | |
+| I134 | 안내(D400)가 가리키는 사용자 문서는 앱에 묶는다: electron-builder `extraResources`에 레포의 `README.md`를 `README.md`로 넣는다. 개발 실행은 레포의 `README.md`다 | |
+| I135 | Work 초안 폴더는 `watchDir`(I15)로 보고, 바뀌면 다시 읽어 스냅샷에 넣는다. 초안 머리는 첫 줄과 다음 `---` 줄 사이의 `key: value` 줄만 읽는다(YAML 라이브러리를 쓰지 않음). 모르는 키는 무시한다. 파일 하나는 64KB까지 읽고 넘으면 형식 오류다. `project`는 등록된 프로젝트 id만 받는다(안내가 목록을 준다) | |
+| I136 | 렌더러의 고른 것을 Work 키에서 `{ kind: 'work' | 'session', key }`로 넓힌다. 기본 세션을 고르면 main의 `selectWork`에는 null을 보낸다(Work 알림의 "보고 있는 Work"가 아님). 새 Work 대화상자는 초안을 받으면 그 값으로 칸을 채운다(지식 정리 후보의 채우기와 같은 길, D393) | |
 
 ## 3. 확인한 사실
 
@@ -312,6 +317,7 @@ app/src/
 - 설계 v0.16의 이슈 기록은 M19다. core → main·어댑터 → 화면 → 시험 차례로 나눠 커밋한다.
 - 설계 v0.17의 설계 유형은 M20이다. M18과 같은 차례로 나눠 커밋하고 core와 스킬은 한 커밋이다(I113).
 - 설계 v0.18의 곁 세션은 M21이다. core → main → 화면 → 시험 차례로 나눠 커밋한다.
+- 설계 v0.19의 기본 세션은 M23이다. core → main → 화면 → 시험·문서 차례로 나눠 커밋한다.
 - 설계 v0.13의 일반 유형은 M18이다. M15와 같은 차례로 나눠 커밋하되 core와 스킬은 한 커밋이다(I94). M17과 I69~I84는 지식 관리에 쓴 번호라 건너뛴다.
 - 완료 기준 앞의 꼬리표는 확인 방법이다: [단위], [어댑터], [흐름], [스모크], [실제], [실기]. 뜻은 8.1을 따른다. [실제]와 [실기]의 결과는 `docs/checks.md`에 기록한다(I30).
 
@@ -338,6 +344,7 @@ app/src/
 | M19 | 이슈 기록 | 의도 승인 때 GitHub 이슈를 만들고 승인된 task마다 코멘트를 덧붙이며, PR은 `Closes`로 잇는다(D336~D349) | M18 |
 | M20 | 설계 유형 | 새 Work에서 설계를 고르면 `intake → spec(설계 문답) → verify`, 레포의 설계 문서를 문답으로 정해 PR로 리뷰(D350~D374) | M19 |
 | M21 | 곁 세션 | Work마다 언제든 열고 닫는 Claude Code 세션. 첫 프롬프트 없이 안내를 시스템 프롬프트로 주고, 묻고 나서만 바꾼다(D385~D390) | M20 |
+| M23 | 기본 세션 | 프로젝트나 Work에 매이지 않는 세션 여러 개. 맨 CLI처럼, relay 도우미, 새 Work 구상. 에이전트가 쓴 Work 초안을 카드로 보이고 새 Work 대화상자로 잇는다(D397~D406) | M21 |
 
 ### M0. 골격과 배포
 
@@ -1131,6 +1138,49 @@ app/src/
 - **시험:** [단위] `knowledge-tidy.test.ts`. [흐름] `knowledge-tidy.test.ts`.
 - **[스모크]** `knowledge-tidy.spec.ts`: 새 Work 대화상자의 후보와 [지식 정리 Work로 채우기].
 - 후속 실험(`docs/tidy-experiment/`): 사이드바 알림(D395)은 만들어 재고 버렸다. 쓰이지 않는 지식 후보는 만들지 않았다(D396).
+
+### M23. 기본 세션 (D397~D406)
+
+설계 v0.19, 시나리오 12. 프로젝트나 Work에 매이지 않는 세션을 여럿 둔다. task가 아니므로 상태 기계, 스킬, 형식 검사는 그대로다. 실행 방식은 곁 세션(M21)을 함께 쓴다. 아래 넷을 하고 단계마다 커밋한다. 단계가 끝날 때마다 `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`, `npm run test:contract`를 돌린다.
+
+**1. core와 계약**
+
+- **기록(D402, I132):** `shared/session`의 `SessionRecord`(id, `name`, `named_by`: `app`·`human`, `cwd`, `created_at`, `engine`, `session_id`, `process`). id는 `s-<날짜>-<nnn>`(`nextSessionId`, `nextWorkId`와 같은 방식). `recovery`의 `recordedProcesses`가 기본 세션도 받는다(이름 "기본 세션").
+- **이름(D403):** `sessionName(prompt)`: 앞뒤 공백을 지운 첫 줄, 빈 글이나 `/`로 시작하면 없음, 20자(코드 포인트) 넘으면 앞 20자와 `…`. 사람이 바꾼 이름에도 같은 자르기.
+- **실행 인자와 설정(D399, D401):** `sessionArgs`(곁 세션의 `sideArgs`와 같은 모양, `--add-dir <RELAY_HOME>`), `sessionSettings`(deny: `config.json`, `projects/**`, `sessions/*/session.json`. push와 gh는 없음. 훅은 UserPromptSubmit뿐. 자동 메모리 설정을 넣지 않음). Codex는 곁 세션의 Codex 설정과 같은 모양에 도구 보호 범위만 바꾼다.
+- **안내(D400, `core/session`):** `sessionGuide`가 역할, 지도(`RELAY_HOME`, 사용자 문서 경로, 프로젝트, 보관되지 않은 Work와 지금 단계, 세션 폴더, 초안 폴더), 읽는 규칙, 바꾸는 규칙, 초안 형식과 안내, 답글 표시 문구를 쓴다.
+- **Work 초안(D404, I135, `core/draft`):** `parseDraft(text, projects)`가 `{ project, type, base, request, errors }`를 돌려준다. 모르는 프로젝트·유형, 빈 요청, 머리 없음, 크기 초과가 오류다. 만든 곳(`DraftSource`: 지금은 `{ kind: 'session', id }`)과 상관없는 모양으로 둔다.
+- **설정:** `session_dir`(빈 글), `agent_steps.session`과 상세 설정의 "기본 세션" 줄(`AGENT_STEP_TITLES`의 `side` 뒤).
+- **계약:** `appFlags`에 `sessionArgs`. UserPromptSubmit의 `prompt`를 읽는 것을 계약 쪽 사용 목록에 더한다(녹화본에 있음, 8.2).
+
+**2. main**
+
+- **`SessionRunner`(I132, I133):** [열기](이어 가기·새 대화), [닫기], 이름 바꾸기, 지우기(끝난 세션만). 폴더가 없으면 거절한다(D398). 띄우면 프로세스를, UserPromptSubmit마다 `session_id`를, 이름이 없으면 `sessionName`을 `session.json`에 적는다. 곁 세션과 PTY·훅·임시 폴더 처리를 함께 쓴다.
+- **`Relay`:** 시작 때 `sessions/`를 읽고 고아 프로세스를 task와 같이 끝낸다(D76). [새 세션](`createSession(cwd)`: 폴더를 만들거나 확인하고 기록을 쓰고 바로 띄움). `hasLiveSessions`와 앱 종료에 기본 세션을 넣는다(D406). 세션 상한을 거치지 않는다.
+- **초안(I135):** 세션마다 `work-drafts/`를 보고 스냅샷에 카드(`DraftView`)를 넣는다. [버리기]는 지운다. 새 Work를 만들 때 초안의 자리(`DraftRef`)를 받으면 만든 뒤 그 초안을 지운다.
+- **IPC와 스냅샷:** `createSession`, `openSession(id, fresh)`, `closeSession`, `renameSession`, `deleteSession`, `discardDraft`, `pickFolder`의 제목 인자. `AppSnapshot.sessions`(`SessionView`: id, 이름, 폴더, 엔진, 상태, 터미널 키, 이어 갈 대화가 있는지, 초안 카드).
+
+**3. 화면**
+
+- 사이드바 맨 위의 "기본 세션" 묶음(접고 펴기, 최근 것이 위, 살아 있음 표시, 초안 수)과 [새 세션], 우클릭의 [이름 바꾸기]·[지우기]. 프로젝트가 없어도 보인다.
+- [새 세션] 창: 폴더 칸(설정의 기본값), [찾아보기], [만들기].
+- 세션을 고르면(I136) 가운데는 그 세션의 탭과 머리 띠, 액션 바는 [닫기] 또는 [열기]·[새 대화로 열기], 오른쪽 패널은 폴더·엔진과 초안 카드([새 Work로 만들기], [버리기], 형식 오류).
+- 새 Work 대화상자가 초안을 받아 유형·요청·기준 브랜치를 채운다. 설정 화면에 `session_dir`.
+
+**4. 시험과 문서**
+
+- **[단위]:** `sessionName`(첫 줄, 20자 자르기, 슬래시 명령, 빈 글), `parseDraft`(맞는 초안과 오류마다), `sessionArgs`·`sessionSettings`(deny 범위, push·gh 없음, 첫 프롬프트 없음), `sessionGuide`(프로젝트·Work 목록, 초안 폴더와 형식, 바꾸는 규칙), `nextSessionId`, `recordedProcesses`, 설정 검사.
+- **[어댑터]:** `sessions/` 읽기·쓰기(깨진 `session.json`은 그 세션만 빼고 경고, D332처럼).
+- **[흐름] `test/flow/session.test.ts`(가짜 claude):** 프로젝트 없이 만들면 고른 폴더에서 첫 프롬프트 없이 뜬다. 세션 상한이 1이고 task가 돌아도 바로 뜬다. 두 세션을 동시에 연다. 첫 요청 뒤 이름과 `session_id`가 적히고, 닫았다 열면 `--resume`, [새 대화로 열기]는 새 `--session-id`이고 이름은 그대로다. 폴더를 지우면 열지 않는다. 초안 파일을 쓰면 카드가 생기고, 그 초안으로 Work를 만들면 초안이 지워진다. 앱을 다시 켜면 살아남은 프로세스를 끝내고 대화는 남는다.
+- **가짜 claude:** 녹화본에 없는 필드를 지어내지 않는다. 기본 세션은 곁 세션과 같은 인자라 시나리오 단계 이름만 더한다(`session`, `sessionResume`).
+- **[스모크] `session.spec.ts`:** [새 세션]으로 만들면 사이드바와 탭이 생기고, 초안 카드의 [새 Work로 만들기]가 채워진 대화상자를 연다.
+- **[실기] 대신 확인:** 실제 claude를 `sessionArgs`와 `sessionSettings`로 앱 전용 폴더에서 띄워, 입력 전에 아무것도 하지 않고, 안내의 프로젝트 목록을 답하고, 초안 파일을 형식대로 쓰는지 본다(`docs/checks.md`).
+- **문서:** README의 기본 세션 절과 주요 기능, 안전 장치의 예외(곁 세션과 같이 push와 GitHub 글쓰기를 묻고 나서 함).
+
+**완료 기준**
+
+- [단위], [어댑터], [흐름], [스모크] 위 시험. 기존 시험이 그대로 통과한다.
+- [계약] 가짜 쪽 통과.
 
 ## 8. 테스트 전략
 
