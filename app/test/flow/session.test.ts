@@ -4,6 +4,7 @@
 // work-drafts/에 쓴 초안은 카드가 되고, 그 초안으로 Work를 만들면 지운다. 재시작 때 살아남은 프로세스를 끝낸다.
 import { spawn, type ChildProcess } from 'node:child_process'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
@@ -229,13 +230,19 @@ describe('기본 세션 (시나리오 12)', () => {
     // 최근에 만든 것이 앞이다 (D405)
     expect(hh.ui.sessionList.map((s) => s.id)).toEqual([b, a])
     expect(hh.relay.hasLiveSessions()).toBe(true)
-    // 안내에 프로젝트와 Work가 있다 (D400)
-    const guide = (await sessionStart(hh, 1)).guide
-    expect(guide).toContain(`(id: ${projectId})`)
-    expect(guide).toContain(`- ${w.workKey.split('/')[1]} "`)
-    expect(fs.realpathSync.native((await sessionStart(hh, 1)).cwd)).toBe(
-      fs.realpathSync.native(dir),
+    // 두 세션은 각자 고른 폴더에서 뜬다. 가짜 claude가 기록을 남기는 차례는 정해져 있지 않아 폴더로 찾는다
+    await sessionStart(hh, 2)
+    const starts = hh
+      .records()
+      .filter((r) => r['type'] === 'start' && r['session'] === true) as unknown as Start[]
+    expect(starts.map((x) => fs.realpathSync.native(x.cwd)).sort()).toEqual(
+      [fs.realpathSync.native(dir), path.join(hh.home, 'home')].sort(),
     )
+    // 안내에 프로젝트와 Work가 있다 (D400)
+    for (const { guide } of starts) {
+      expect(guide).toContain(`(id: ${projectId})`)
+      expect(guide).toContain(`- ${w.workKey.split('/')[1]} "`)
+    }
     // intake는 승인 대기로 자리를 차지한 채이고 대기열은 비어 있다
     expect(hh.ui.works.get(w.workKey)?.tasks[0]?.live).toBe(true)
 
@@ -287,7 +294,6 @@ describe('기본 세션 (시나리오 12)', () => {
     expect(cards.drafts[1]).toMatchObject({
       ref: { source: { kind: 'session', id }, name: 'fix-avg.md' },
       project: projectId,
-      projectName: 'sample',
       type: 'bugfix',
       base: 'main',
       request: REQUEST.trim(),
@@ -312,6 +318,48 @@ describe('기본 세션 (시나리오 12)', () => {
     await until(hh, id, (s) => s.drafts.length === 0, '버림')
     expect(await hh.relay.discardDraft(id, '../session.json')).toMatchObject({ ok: false })
     expect(fs.existsSync(path.join(hh.home, 'sessions', id, 'session.json'))).toBe(true)
+  })
+
+  it('초안 폴더의 감시를 놓쳐도 다음 요청 때 다시 읽어 카드가 생긴다 (I140)', async () => {
+    h = await harness({ scenario: { ...scenario(), session: ASK('초안 써 줘') } })
+    const hh = h
+    const id = await create(hh, '')
+    const live = await until(hh, id, (s) => s.status === 'live', '기본 세션')
+    // 폴더를 옮기고 새로 만들면 감시는 옮긴 폴더에 남는다(fs.watch는 알리지 않음)
+    const drafts = path.join(hh.home, 'sessions', id, 'work-drafts')
+    fs.renameSync(drafts, `${drafts}.old`)
+    fs.mkdirSync(drafts)
+    // 옮김 자체는 옛 감시가 알릴 수 있다. 그 다시 읽기가 지나간 뒤에 쓴다
+    await sleep(1000)
+    fs.writeFileSync(path.join(drafts, 'a.md'), '---\nproject: x\ntype: bugfix\n---\n요청\n')
+    await sleep(1000)
+    expect(hh.ui.session(id)?.drafts).toEqual([])
+    // 사람이 요청하면 다시 걸고 읽는다
+    hh.relay.terminalWrite(live.terminal ?? '', '\r')
+    await until(hh, id, (s) => s.drafts.length === 1, '다음 요청 뒤의 카드')
+    // 다시 건 감시가 이후의 초안을 본다
+    fs.writeFileSync(path.join(drafts, 'b.md'), '---\nproject: x\ntype: bugfix\n---\n요청\n')
+    await until(hh, id, (s) => s.drafts.length === 2, '다시 건 감시의 카드')
+  })
+
+  it('만들었지만 띄우지 못하면 세션은 남고 그 id와 까닭을 돌려준다. 지우는 중에 들어온 명령은 기록을 되살리지 않는다 (I138, D402)', async () => {
+    h = await harness({ env: { CLAUDE_BIN: path.join(os.tmpdir(), 'relay-no-claude', 'claude') } })
+    const hh = h
+    const r = await hh.relay.createSession('')
+    if (r.ok || !r.id) throw new Error(`띄우지 못한 결과가 아님: ${JSON.stringify(r)}`)
+    expect(r.error).toContain('기본 세션을 열지 못함')
+    expect(hh.ui.sessionList.map((s) => s.id)).toEqual([r.id])
+    expect(record(hh, r.id)).toMatchObject({ id: r.id, cwd: path.join(hh.home, 'home') })
+    expect(fs.existsSync(path.join(hh.home, 'sessions', r.id, 'work-drafts'))).toBe(true)
+    // [지우기] 바로 뒤에 줄에 들어온 [이름 바꾸기]는 지운 세션을 되살리지 않는다
+    const [removed, renamed] = await Promise.all([
+      hh.relay.deleteSession(r.id),
+      hh.relay.renameSession(r.id, '늦은 이름'),
+    ])
+    expect(removed).toEqual({ ok: true })
+    expect(renamed).toMatchObject({ ok: false })
+    expect(fs.existsSync(path.join(hh.home, 'sessions', r.id))).toBe(false)
+    expect(hh.ui.sessionList).toEqual([])
   })
 
   it.runIf(listing)(

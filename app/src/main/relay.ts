@@ -42,7 +42,7 @@ import { recordedProcesses, type RecordedProcess } from '../core/recovery'
 import { resolveAgent } from '../shared/agent'
 import { DEFAULT_CONFIG, type AppConfig, type WorkSettingsPatch } from '../shared/config'
 import type { NodeName } from '../shared/contracts'
-import { issueLogOn, type ProjectChecks, type ProjectState } from '../shared/project'
+import { issueLogOn, projectName, type ProjectChecks, type ProjectState } from '../shared/project'
 import type { SessionRecord } from '../shared/session'
 import type {
   AppSnapshot,
@@ -384,7 +384,7 @@ export class Relay {
   private projectViews(): ProjectView[] {
     return [...this.projects.values()].map((p) => ({
       id: p.project_id,
-      name: path.basename(p.repo_path),
+      name: projectName(p),
       repoPath: p.repo_path,
       defaultBranch: p.default_branch,
       origin: p.checks.origin,
@@ -838,7 +838,7 @@ export class Relay {
         [...this.works.values()].map((w) => ({
           project: w.project,
           work: w.work,
-          title: w.view().title,
+          title: w.title,
           worktree: w.worktree,
           workDir: w.files.dir,
         })),
@@ -879,15 +879,20 @@ export class Relay {
       await saveSession(this.o.home, record)
       runner = this.sessionRunner(record)
       this.sessions.set(id, runner)
-      await runner.start()
     } catch (e) {
       return { ok: false, error: `세션을 만들지 못함: ${String(e)}` }
     } finally {
       this.creatingSession = false
     }
+    // 기록을 쓴 뒤로는 세션이 있다: 사이드바에 보이고, 아래가 실패해도 그 id와 까닭을 돌려준다 (I138)
     this.o.ui.sessions(this.sessionViews())
-    const r = await runner.open(false)
     const id = runner.record.id
+    try {
+      await runner.start()
+    } catch (e) {
+      return { ok: false, error: `Work 초안 폴더를 만들지 못함: ${String(e)}`, id }
+    }
+    const r = await runner.open(false)
     return r.ok ? { ok: true, id } : { ok: false, error: r.error, id }
   }
 

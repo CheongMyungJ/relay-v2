@@ -1,7 +1,7 @@
 // 기본 세션 (시나리오 12, D397~D406): 프로젝트나 Work에 매이지 않고 사람이 언제든 만들고 여는 에이전트 세션의 안내
 // (시스템 프롬프트)와 이름. 안내는 곁 세션(D387)처럼 내용이 아니라 지도와 규칙이다 (D400). 에이전트는 --add-dir로 붙인
 // RELAY_HOME의 프로젝트와 Work, 앱에 묶은 사용자 문서를 스스로 읽는다.
-import type { ProjectState } from '../shared/project'
+import { projectName, type ProjectState } from '../shared/project'
 import { SESSION_NAME_MAX } from '../shared/session'
 import type { WorkState } from '../shared/work'
 import { WORK_TYPES, WORK_TYPE_LABEL } from '../shared/work'
@@ -53,8 +53,6 @@ export interface SessionGuideInput {
   /** 앱이 게시하는 답글의 표시 문구 (D173). GitHub에 쓰는 글에도 붙인다 (D400) */
   signature: string
 }
-
-const projectName = (p: ProjectState) => p.repo_path.replace(/[\\/]+$/, '').replace(/^.*[\\/]/, '')
 
 /** Work 한 줄: id, 제목, 유형, 상태와 지금 단계, worktree, Work 디렉터리 */
 function workLines(w: SessionGuideWork): string[] {

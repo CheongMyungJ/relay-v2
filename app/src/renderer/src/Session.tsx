@@ -120,6 +120,8 @@ export function NewSessionDialog({
   const [dir, setDir] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // 만들었지만 띄우지 못한 세션. [만들기]를 다시 누르면 세션이 또 생기므로 막고 액션 바의 [열기]로 안내한다
+  const [created, setCreated] = useState(false)
   useEffect(() => {
     void call(() => window.relay.defaultSessionDir()).then((d) => {
       setDir((cur) => cur ?? (typeof d === 'string' ? d : ''))
@@ -140,7 +142,10 @@ export function NewSessionDialog({
       return
     }
     // 만들었지만 띄우지 못했으면 세션은 남는다: 고르고 창에 까닭을 보인다
-    if ('id' in r && r.id) onSelect(r.id)
+    if ('id' in r && r.id) {
+      onSelect(r.id)
+      setCreated(true)
+    }
     setError(r.error)
   }
   return (
@@ -154,18 +159,26 @@ export function NewSessionDialog({
           폴더
           <input
             aria-label="세션 폴더"
+            disabled={created}
             value={dir ?? ''}
             onChange={(e) => setDir(e.target.value)}
           />
         </label>
-        <button onClick={() => void browse()}>찾아보기</button>
+        <button disabled={created} onClick={() => void browse()}>
+          찾아보기
+        </button>
       </div>
       {error ? <div className="error">{error}</div> : null}
+      {created ? (
+        <div className="dim">세션은 만들었습니다. 까닭을 고친 뒤 액션 바의 [열기]로 여세요.</div>
+      ) : null}
       <div className="buttons">
-        <button onClick={onClose}>취소</button>
-        <button className="primary" disabled={busy || dir === null} onClick={() => void create()}>
-          {busy ? '만드는 중…' : '만들기'}
-        </button>
+        <button onClick={onClose}>{created ? '닫기' : '취소'}</button>
+        {created ? null : (
+          <button className="primary" disabled={busy || dir === null} onClick={() => void create()}>
+            {busy ? '만드는 중…' : '만들기'}
+          </button>
+        )}
       </div>
     </Modal>
   )

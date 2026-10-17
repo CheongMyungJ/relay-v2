@@ -239,8 +239,13 @@ export async function loadSessions(
     try {
       const r = await readJson<SessionRecord>(file)
       if (!r) continue
-      if (typeof r !== 'object' || r.id !== id || typeof r.cwd !== 'string')
-        throw new Error('id나 cwd가 맞지 않음')
+      if (
+        typeof r !== 'object' ||
+        r.id !== id ||
+        typeof r.cwd !== 'string' ||
+        typeof r.created_at !== 'string'
+      )
+        throw new Error('id, cwd, created_at이 맞지 않음')
       out.push(r)
     } catch (e) {
       problems.push(
@@ -256,14 +261,14 @@ export async function saveSession(home: string, record: SessionRecord): Promise<
 }
 
 /**
- * 초안 폴더의 파일 (D404, I135): 이름과 내용. *.md만 읽고, limit 바이트를 넘는 파일은 limit+1바이트까지만 읽어
- * 크기 검사가 형식 오류로 보이게 한다. 폴더가 없으면 빈 목록이다
+ * 초안 폴더의 파일 (D404, I135): 이름, 내용, 읽은 바이트 수. *.md만 읽고, limit 바이트를 넘는 파일은 limit+1바이트까지만
+ * 읽는다(bytes가 limit를 넘으면 큰 파일이다). 폴더가 없으면 빈 목록이다
  */
 export async function readDrafts(
   dir: string,
   isDraft: (name: string) => boolean,
   limit: number,
-): Promise<{ name: string; text: string }[]> {
+): Promise<{ name: string; text: string; bytes: number }[]> {
   let names: string[]
   try {
     names = (await fsp.readdir(dir, { withFileTypes: true }))
@@ -274,14 +279,14 @@ export async function readDrafts(
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') return []
     throw e
   }
-  const out: { name: string; text: string }[] = []
+  const out: { name: string; text: string; bytes: number }[] = []
   for (const name of names) {
     const fh = await fsp.open(path.join(dir, name), 'r').catch(() => null)
     if (!fh) continue
     try {
       const buf = Buffer.alloc(limit + 1)
       const { bytesRead } = await fh.read(buf, 0, limit + 1, 0)
-      out.push({ name, text: buf.subarray(0, bytesRead).toString('utf8') })
+      out.push({ name, text: buf.subarray(0, bytesRead).toString('utf8'), bytes: bytesRead })
     } finally {
       await fh.close()
     }

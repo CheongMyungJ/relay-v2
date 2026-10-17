@@ -48,3 +48,9 @@ export interface ProjectSettings {
 export function issueLogOn(project: Pick<ProjectState, 'issue_log'>): boolean {
   return project.issue_log !== false
 }
+
+/** 프로젝트의 화면 이름: 레포 폴더 이름. 사이드바, 새 Work 대화상자, 기본 세션의 안내가 같이 쓴다 */
+export function projectName(project: Pick<ProjectState, 'repo_path'>): string {
+  const trimmed = project.repo_path.replace(/[\\/]+$/, '')
+  return trimmed.replace(/^.*[\\/]/, '') || project.repo_path
+}

@@ -722,6 +722,7 @@ export function App() {
       <aside className="panel">
         {session ? (
           <SessionPanel
+            key={session.id}
             session={session}
             projects={projects}
             onCreateWork={(draft, project) => setDialog({ kind: 'work', project, draft })}

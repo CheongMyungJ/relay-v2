@@ -909,8 +909,6 @@ export interface DraftView extends ParsedDraft {
   ref: DraftRef
   /** 요청의 첫 줄 (Work 제목이 될 글) */
   title: string
-  /** 프로젝트 이름. 모르는 프로젝트면 null */
-  projectName: string | null
 }
 
 /** 기본 세션 하나 (D405). task가 아니다 */

@@ -29,7 +29,8 @@ export function DraftCards({
     <div className="drafts">
       {drafts.map((d) => (
         <DraftCard
-          key={d.ref.name}
+          // 만든 곳과 파일 이름으로 가른다: 다른 세션의 같은 이름 초안에 고른 것이 넘어가지 않게
+          key={`${d.ref.source.kind}/${d.ref.source.id}/${d.ref.name}`}
           draft={d}
           projects={projects}
           onCreate={onCreate}
@@ -52,9 +53,10 @@ function DraftCard({
   onDiscard: (draft: DraftView) => Promise<CommandResult>
 }) {
   const known = projects.find((p) => p.id === draft.project)
-  // 프로젝트가 틀렸으면 맞는 칸만 채워 열도록 사람이 프로젝트를 고른다 (D404)
-  const [pick, setPick] = useState(projects[0]?.id ?? '')
-  const project = known ?? projects.find((p) => p.id === pick)
+  // 프로젝트가 틀렸으면 맞는 칸만 채워 열도록 사람이 프로젝트를 고른다 (D404). 고른 것이 없거나 목록에 없으면(카드를 그린
+  // 뒤 프로젝트를 등록함) 첫 프로젝트다
+  const [pick, setPick] = useState<string | null>(null)
+  const project = known ?? projects.find((p) => p.id === pick) ?? projects[0]
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const discard = async () => {
@@ -84,7 +86,11 @@ function DraftCard({
       {!known && projects.length ? (
         <label className="field">
           열 프로젝트
-          <select aria-label="열 프로젝트" value={pick} onChange={(e) => setPick(e.target.value)}>
+          <select
+            aria-label="열 프로젝트"
+            value={project?.id ?? ''}
+            onChange={(e) => setPick(e.target.value)}
+          >
             {projects.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}

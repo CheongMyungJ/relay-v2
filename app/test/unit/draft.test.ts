@@ -26,7 +26,7 @@ describe('Work 초안 읽기 (D404)', () => {
   })
 
   it('base는 선택이다. 모르는 키는 무시하고 따옴표와 CRLF, BOM을 받는다', () => {
-    const text = `﻿${draft(['project: "api-0f0f0f"', "type: 'bugfix'", 'title: 무시'], '고칠 것')}`
+    const text = `\uFEFF${draft(['project: "api-0f0f0f"', "type: 'bugfix'", 'title: 무시'], '고칠 것')}`
     expect(parseDraft(text.replace(/\n/g, '\r\n'), PROJECTS)).toEqual({
       project: 'api-0f0f0f',
       type: 'bugfix',
@@ -82,6 +82,14 @@ describe('Work 초안 읽기 (D404)', () => {
       request: '',
       errors: ['파일이 64KB를 넘음'],
     })
+  })
+
+  it('크기는 읽은 쪽이 준 바이트 수로 본다 (I135)', () => {
+    const text = draft(['project: shop-a1b2c3', 'type: bugfix'], '요청')
+    expect(parseDraft(text, PROJECTS, DRAFT_MAX_BYTES + 1).errors).toEqual(['파일이 64KB를 넘음'])
+    // 다시 인코딩하면 늘어나는 글(깨진 바이트의 U+FFFD)도 파일 크기가 한도 안이면 받는다
+    const replaced = draft(['project: shop-a1b2c3', 'type: bugfix'], '\uFFFD'.repeat(30_000))
+    expect(parseDraft(replaced, PROJECTS, 30_100).errors).toEqual([])
   })
 
   it('초안 파일은 숨김 파일이 아닌 *.md다', () => {

@@ -23,11 +23,16 @@ function unquote(v: string): string {
 /**
  * 초안을 읽는다 (D404, I135). 머리(front matter)는 첫 줄과 다음 `---` 줄 사이의 `key: value` 줄만 읽고 모르는 키는
  * 무시한다(YAML 라이브러리를 쓰지 않음). `project`는 등록된 프로젝트 id만 받는다. 형식 오류(크기 초과, 머리 없음, 모르는
- * 프로젝트·유형, 빈 요청)는 errors에 모으고, 맞는 칸은 그대로 돌려줘 화면이 맞는 칸만 채워 열 수 있게 한다
+ * 프로젝트·유형, 빈 요청)는 errors에 모으고, 맞는 칸은 그대로 돌려줘 화면이 맞는 칸만 채워 열 수 있게 한다. bytes는 파일의
+ * 바이트 수다(읽은 쪽이 안다). 글을 다시 인코딩해 세면 깨진 바이트가 U+FFFD(3바이트)로 늘어 작은 파일도 넘친다
  */
-export function parseDraft(text: string, projects: readonly string[]): ParsedDraft {
+export function parseDraft(
+  text: string,
+  projects: readonly string[],
+  bytes = new TextEncoder().encode(text).length,
+): ParsedDraft {
   const out: ParsedDraft = { project: null, type: null, base: null, request: '', errors: [] }
-  if (new TextEncoder().encode(text).length > DRAFT_MAX_BYTES) {
+  if (bytes > DRAFT_MAX_BYTES) {
     out.errors.push(`파일이 ${DRAFT_MAX_BYTES / 1024}KB를 넘음`)
     return out
   }

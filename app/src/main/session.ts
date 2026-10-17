@@ -1,12 +1,12 @@
 // 기본 세션 하나 (시나리오 12, D397~D406, I132). 프로젝트나 Work에 매이지 않고 사람이 언제든 열고 닫는 에이전트 세션이다.
 // task가 아니므로 파이프라인, handoff, 승인, 세션 상한(D18)과 무관하고 이벤트와 터미널 기록을 남기지 않는다. 기록은
-// sessions/<session-id>/session.json이고(D402), 띄우기는 곁 세션과 함께 쓴다(main/launch). 목록은 Relay가 가진다.
+// sessions/<session-id>/session.json이고(D402), 띄우기·훅·끝내기는 곁 세션과 함께 쓴다(main/chat). 목록은 Relay가 가진다.
 // 세션 디렉터리의 work-drafts/를 보고 Work 초안을 카드로 보인다 (D404, I135).
 import { randomUUID } from 'node:crypto'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 import type { HookReply, HookRequest, HookServer } from '../adapters/hooks'
-import { processStartTime, type PtySession } from '../adapters/pty'
+import { processStartTime } from '../adapters/pty'
 import { readDrafts, saveSession } from '../adapters/store'
 import { watchDir } from '../adapters/watch'
 import { codexSessionToolDenial } from '../core/codex'
@@ -24,8 +24,17 @@ import type {
   TerminalBacklog,
   TerminalChunk,
 } from '../shared/views'
-import { launchChat } from './launch'
-import { TerminalBuffer } from './terminals'
+import {
+  chatHook,
+  chatMark,
+  chatNotice,
+  chatSession,
+  dropAux,
+  killAux,
+  openChat,
+  type ChatSession,
+} from './chat'
+import type { TerminalBuffer } from './terminals'
 import { workTitle } from './work'
 
 export interface SessionContext {
@@ -50,36 +59,9 @@ export interface SessionContext {
   changed: () => void
 }
 
-/** 살아 있거나 끝난, 이 앱에서 연 세션 하나. 다시 열면 새 터미널이다 */
-interface ChatSession {
-  /** 터미널 id: session-<n> */
-  id: string
-  engine: AgentEngine
-  guide: string
-  /** Codex 훅을 한 번이라도 받았다. 받기 전에는 훅 신뢰 안내를 보인다 */
-  hooksReady: boolean
-  /** 안내가 대화에 들어갔다. Claude는 실행 인자로 늘, Codex는 SessionStart 훅에 안내를 돌려준 뒤다 (D391과 같음) */
-  guided: boolean
-  status: 'live' | 'ended'
-  pty: PtySession | null
-  exited: Promise<void> | null
-  unregister: () => void
-  dir: string | null
-  /** 끝난 세션을 이미 처리했다. 늦게 온 PTY 종료는 무시한다 */
-  handled: boolean
-  /** 앱이 끝내는 중이다. 이 세션의 훅은 바로 답한다 (D231) */
-  ending: boolean
-}
-
-const KILL_WAIT_MS = 10_000
+const NAME = '기본 세션'
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
-const str = (v: unknown) => (typeof v === 'string' ? v : undefined)
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
-
-/** 세션의 출력 앞에 넣는 줄 (시나리오 12). 이어 가면 CLI가 앞 대화를 다시 그린다 (D406) */
-const sessionMark = (resume: boolean) =>
-  `\x1b[0m\x1b[2m── relay: 기본 세션 · ${resume ? '앞 대화를 이어 갑니다 (--resume)' : '새 대화'} ──\x1b[0m\r\n`
 
 /** 살아 있는 동안의 프로세스를 뺀 기록 */
 function withoutProcess(r: SessionRecord): SessionRecord {
@@ -107,6 +89,8 @@ export class SessionRunner {
   private stopWatch: () => void = () => {}
   private draftsRead: Promise<void> | null = null
   private draftsAgain = false
+  /** [지우기]로 세션 디렉터리를 지우는 중이거나 지웠다. 더는 기록을 쓰지 않고 명령을 받지 않는다 */
+  private removed = false
 
   constructor(
     private readonly ctx: SessionContext,
@@ -123,9 +107,19 @@ export class SessionRunner {
 
   /** 초안 폴더를 만들고 보기 시작한다 (I135). 바뀌면 다시 읽어 화면에 넣는다 */
   async start(): Promise<void> {
+    await this.watchDrafts()
+    await this.refreshDrafts()
+  }
+
+  /**
+   * 초안 폴더를 (다시) 만들고 새로 본다. 감시는 폴더가 지워졌다 다시 생기거나 시작에 실패하면 알리지 않으므로(watchDir),
+   * 사람의 요청과 [열기] 때마다 다시 건다
+   */
+  private async watchDrafts(): Promise<void> {
+    if (this.removed) return
+    this.stopWatch()
     await fsp.mkdir(this.draftsDir, { recursive: true })
     this.stopWatch = watchDir(this.draftsDir, () => void this.refreshDrafts())
-    await this.refreshDrafts()
   }
 
   /** 이벤트를 하나씩 처리한다 */
@@ -136,6 +130,8 @@ export class SessionRunner {
   }
 
   private async save(): Promise<void> {
+    // 지운 세션의 기록을 되살리지 않는다
+    if (this.removed) return
     await saveSession(this.ctx.home, this.record)
     this.ctx.changed()
   }
@@ -166,12 +162,15 @@ export class SessionRunner {
    */
   open(fresh: boolean): Promise<CommandResult> {
     return this.enqueue(async () => {
+      if (this.removed) return { ok: false, error: '지운 기본 세션임' }
       if (this.chat?.status === 'live') return { ok: false, error: '기본 세션이 이미 열려 있음' }
       if (!(await isDir(this.record.cwd)))
         return {
           ok: false,
           error: `폴더가 없어 열지 않음: ${this.record.cwd}. 폴더는 만든 뒤 바꾸지 않으니 폴더를 되살리거나 새 세션을 만드세요`,
         }
+      await this.watchDrafts().catch(() => undefined)
+      void this.refreshDrafts()
       return this.launch(fresh)
     })
   }
@@ -184,10 +183,10 @@ export class SessionRunner {
     // Claude는 새 대화의 id를 정해 준다. Codex는 훅이 알려 주는 id를 첫 요청 때 적는다 (D391과 같음)
     const sessionId = previous ?? randomUUID()
     const id = `session-${++this.seq}`
-    const c: ChatSession = {
+    const c = chatSession(
       id,
-      engine: agent.engine,
-      guide: sessionGuide({
+      agent.engine,
+      sessionGuide({
         home: this.ctx.home,
         readme: this.ctx.readme,
         cwd: this.record.cwd,
@@ -196,60 +195,39 @@ export class SessionRunner {
         works: this.ctx.works(),
         signature: config.reply_signature,
       }),
-      hooksReady: false,
-      guided: agent.engine === 'claude',
-      status: 'live',
-      pty: null,
-      exited: null,
-      unregister: () => {},
-      dir: null,
-      handled: false,
-      ending: false,
-    }
-    const buffer = new TerminalBuffer()
-    buffer.live = true
-    buffer.push(sessionMark(resume))
-    this.terminals.set(id, buffer)
-    const key = this.terminalKey(id)
+    )
     const model = {
       ...(agent.model ? { model: agent.model } : {}),
       ...(agent.effort ? { effort: agent.effort } : {}),
     }
     let pid: number
     try {
-      const launched = await launchChat({
-        engine: agent.engine,
+      pid = await openChat({
+        session: c,
         env: this.ctx.env,
         hooks: this.ctx.hooks,
         hookId: SESSION_HOOK_ID,
         name: 'session',
         cwd: this.record.cwd,
-        guide: c.guide,
         settings: (driver) =>
           driver.sessionSettings({ port: this.ctx.hooks.port, home: this.ctx.home, ...model }),
         args: (driver, files) =>
           driver.sessionArgs({ sessionId, resume, home: this.ctx.home, ...files, ...model }),
         size: this.ctx.size(),
-        onData: (data) => {
-          if (!c.handled) this.ctx.terminal(key, buffer.push(data))
-        },
+        terminals: this.terminals,
+        terminalKey: this.terminalKey(id),
+        mark: chatMark(NAME, resume),
+        output: (key, chunk) => this.ctx.terminal(key, chunk),
         onExit: () => void this.enqueue(() => this.onExit(c)),
         onHook: (req) => this.hook(c, req),
       })
-      c.pty = launched.pty
-      c.exited = launched.exited
-      c.dir = launched.dir
-      c.unregister = launched.unregister
-      // 끝난 앞 세션의 터미널은 새 터미널로 바꾼다
-      if (this.chat) this.terminals.delete(this.chat.id)
-      this.chat = c
-      this.ctx.changed()
-      pid = launched.pty.pid
     } catch (err) {
-      c.handled = true
-      this.terminals.delete(id)
       return { ok: false, error: `기본 세션을 열지 못함: ${message(err)}` }
     }
+    // 끝난 앞 세션의 터미널은 새 터미널로 바꾼다
+    if (this.chat) this.terminals.delete(this.chat.id)
+    this.chat = c
+    this.ctx.changed()
     // 살아 있는 동안 프로세스 ID와 시작 시각을 적는다. 앱이 충돌한 뒤 살아남으면 재시작 때 끝낸다 (D402)
     const startedAt = await processStartTime(pid)
     if (this.chat === c && !c.handled) {
@@ -266,44 +244,27 @@ export class SessionRunner {
     return { ok: true }
   }
 
-  /**
-   * 훅 (D401). 처리 줄에 넣지 않고 바로 답해 사람의 요청과 도구를 붙잡지 않는다. 기록을 적는 일만 줄에 넣는다. Claude는
-   * UserPromptSubmit만 온다. Codex는 SessionStart에 안내를 돌려주고 도구 보호를 한다: 안내가 들어간 뒤에는 push와 PR
-   * 조작을 막지 않는다 (곁 세션과 같음, I130)
-   */
+  /** 훅 (D401): 함께 쓰는 처리(chatHook)에 기본 세션의 도구 보호와 기록 적기를 준다 */
   private hook(c: ChatSession, req: HookRequest): Promise<HookReply> {
-    if (this.chat !== c || c.status !== 'live' || c.ending) return Promise.resolve(null)
-    const codex = c.engine === 'codex'
-    if (codex && !c.hooksReady) {
-      c.hooksReady = true
-      this.ctx.changed()
-    }
-    if (codex && str(req.body['agent_id']) !== undefined && req.event !== 'PreToolUse')
-      return Promise.resolve(null)
-    if (codex && req.event === 'PreToolUse') return Promise.resolve(this.toolReply(c, req))
-    if (codex && req.event === 'SessionStart') {
-      if (!c.guided) {
-        c.guided = true
-        this.ctx.changed()
-      }
-      return Promise.resolve({
-        hookSpecificOutput: { hookEventName: req.event, additionalContext: c.guide },
-      })
-    }
-    const sessionId = str(req.body['session_id'])
-    if (req.event === 'UserPromptSubmit' && sessionId) {
-      // 녹화본이 없는 Codex처럼 prompt가 없으면 이름을 짓지 않는다 (D403)
-      const prompt = str(req.body['prompt'])
-      void this.enqueue(async () => {
-        if (this.chat === c && !c.handled) await this.conversation(c, sessionId, prompt)
-      })
-    }
-    return Promise.resolve(null)
+    return chatHook(c, req, {
+      current: () => this.chat === c,
+      changed: () => this.ctx.changed(),
+      toolReply: (r, allowPush) => this.toolReply(r, allowPush),
+      conversation: (sessionId, prompt) =>
+        void this.enqueue(async () => {
+          if (this.chat !== c || c.handled) return
+          await this.conversation(c, sessionId, prompt)
+          // 사람이 요청할 때마다 초안 폴더를 다시 걸고 읽는다: 감시를 놓쳤어도 다음 요청에 카드가 맞는다 (I140)
+          await this.watchDrafts().catch(() => undefined)
+          void this.refreshDrafts()
+        }),
+    })
   }
 
   /** 요청마다 다시 열 대화를 적고, 이름이 없으면 첫 요청으로 짓는다(앱이 짓는 것은 한 번뿐, D403) */
   private async conversation(c: ChatSession, sessionId: string, prompt?: string): Promise<void> {
     const r = this.record
+    // 녹화본이 없는 Codex처럼 prompt가 없으면 이름을 짓지 않는다 (D403)
     const name = r.name === undefined && prompt !== undefined ? sessionName(prompt) : null
     if (r.session_id === sessionId && r.engine === c.engine && !name) return
     this.record = {
@@ -315,18 +276,20 @@ export class SessionRunner {
     await this.save()
   }
 
-  private toolReply(c: ChatSession, req: HookRequest): HookReply {
+  /** Codex PreToolUse의 도구 보호 (D401, I141) */
+  private toolReply(req: HookRequest, allowPush: boolean): HookReply {
     const b = req.body
     const args = b['tool_input']
+    const cwd = typeof b['cwd'] === 'string' ? b['cwd'] : undefined
     const reason = codexSessionToolDenial(
       {
         home: this.ctx.home,
         cwd: this.record.cwd,
-        ...(str(b['cwd']) ? { hookCwd: str(b['cwd']) } : {}),
+        ...(cwd ? { hookCwd: cwd } : {}),
         sessionIds: this.ctx.sessionIds(),
-        allowPush: c.guided,
+        allowPush,
       },
-      str(b['tool_name']) ?? '',
+      typeof b['tool_name'] === 'string' ? b['tool_name'] : '',
       typeof args === 'object' && args !== null ? (args as Record<string, unknown>) : {},
     )
     return reason
@@ -346,30 +309,22 @@ export class SessionRunner {
     await this.release(c)
   }
 
-  /** 걸어 둔 것을 푼다: 훅 토큰, 터미널의 살아 있음, 임시 폴더, 적어 둔 프로세스. 끝난 것으로 둔다 */
+  /** 걸어 둔 것을 푼다(dropAux)와 적어 둔 프로세스. 끝난 것으로 둔다 */
   private async release(c: ChatSession): Promise<void> {
     c.status = 'ended'
-    c.handled = true
-    c.unregister()
-    const buffer = this.terminals.get(c.id)
-    if (buffer) buffer.live = false
-    if (c.dir) await fsp.rm(c.dir, { recursive: true, force: true }).catch(() => undefined)
-    c.dir = null
+    await dropAux(c, this.terminals)
     if (this.record.process) {
       this.record = withoutProcess(this.record)
       await this.save()
-    } else this.ctx.changed()
+    }
+    this.ctx.changed()
   }
 
   /** 살아 있는 세션의 프로세스 트리를 끝내고 기다린 뒤 푼다 */
   private async end(): Promise<void> {
     const c = this.chat
     if (!c || c.handled) return
-    if (c.pty) {
-      c.ending = true
-      await c.pty.killTree()
-      await Promise.race([c.exited, sleep(KILL_WAIT_MS)])
-    }
+    await killAux(c)
     await this.release(c)
   }
 
@@ -393,6 +348,7 @@ export class SessionRunner {
   /** [이름 바꾸기] (D403): 같은 20자 제한. 사람이 고친 이름은 앱이 다시 바꾸지 않는다 */
   rename(name: string): Promise<CommandResult> {
     return this.enqueue(async () => {
+      if (this.removed) return { ok: false, error: '지운 기본 세션임' }
       const clipped = clipSessionName(name.replace(/\s*[\r\n]+\s*/g, ' '))
       if (!clipped) return { ok: false, error: '이름을 입력하세요' }
       this.record = { ...this.record, name: clipped, named_by: 'human' }
@@ -401,15 +357,24 @@ export class SessionRunner {
     })
   }
 
-  /** [지우기] (D402): 끝난 세션만. 세션 디렉터리와 초안을 지운다(CLI의 대화 파일과 고른 폴더는 그대로) */
+  /**
+   * [지우기] (D402): 끝난 세션만. 세션 디렉터리와 초안을 지운다(CLI의 대화 파일과 고른 폴더는 그대로). 지우는 동안과 지운
+   * 뒤에는 기록을 쓰지 않는다. 지우지 못하면 세션을 되살리고 초안 폴더를 다시 본다
+   */
   remove(): Promise<CommandResult> {
     return this.enqueue(async () => {
+      if (this.removed) return { ok: false, error: '지운 기본 세션임' }
       if (this.chat?.status === 'live')
         return { ok: false, error: '열려 있는 기본 세션은 지울 수 없음. 먼저 닫으세요' }
+      this.removed = true
       this.stopWatch()
       try {
         await fsp.rm(this.dir, { recursive: true, force: true })
       } catch (e) {
+        this.removed = false
+        // 일부만 지웠으면 기록을 다시 쓰고 초안 폴더를 다시 본다
+        await this.save().catch(() => undefined)
+        await this.start().catch(() => undefined)
         return { ok: false, error: `세션 디렉터리를 지우지 못함: ${message(e)}` }
       }
       return { ok: true }
@@ -437,17 +402,15 @@ export class SessionRunner {
   }
 
   private async readDraftsNow(): Promise<void> {
+    if (this.removed) return
     const files = await readDrafts(this.draftsDir, isDraftFile, DRAFT_MAX_BYTES)
-    const projects = this.ctx.projects()
-    const ids = projects.map((p) => p.project_id)
-    this.drafts = files.map(({ name, text }) => {
-      const parsed = parseDraft(text, ids)
-      const project = projects.find((p) => p.project_id === parsed.project)
+    const ids = this.ctx.projects().map((p) => p.project_id)
+    this.drafts = files.map(({ name, text, bytes }) => {
+      const parsed = parseDraft(text, ids, bytes)
       return {
         ...parsed,
         ref: { source: { kind: 'session', id: this.record.id }, name },
         title: workTitle(parsed.request),
-        projectName: project ? path.basename(project.repo_path) : null,
       }
     })
     this.ctx.changed()
@@ -481,7 +444,7 @@ export class SessionRunner {
       status: c?.status ?? null,
       terminal: c ? this.terminalKey(c.id) : null,
       resumable: this.resumeId(next) !== null,
-      ...(c ? notice(c) : {}),
+      ...(c ? chatNotice(c, NAME) : {}),
       drafts: this.drafts,
     }
   }
@@ -496,7 +459,7 @@ export class SessionRunner {
     return this.terminals.get(id)?.backlog() ?? { data: '', next: 0, live: false }
   }
 
-  private ptyOf(id: string): PtySession | undefined {
+  private ptyOf(id: string) {
     const c = this.chat
     return c?.id === id && c.status === 'live' ? (c.pty ?? undefined) : undefined
   }
@@ -507,15 +470,5 @@ export class SessionRunner {
 
   resize(id: string, cols: number, rows: number): void {
     this.ptyOf(id)?.resize(cols, rows)
-  }
-}
-
-/** Codex 세션의 안내가 아직 대화에 들어가지 않았을 때의 머리 띠 안내 (곁 세션과 같음, D391) */
-function notice(c: ChatSession): { notice?: string } {
-  if (c.status !== 'live' || c.guided) return {}
-  return {
-    notice: c.hooksReady
-      ? '이 대화에는 기본 세션 안내가 들어가지 않았습니다(훅을 신뢰하기 전에 시작됨). 닫고 다시 여세요. 그때까지 push와 PR 조작은 막습니다.'
-      : 'Codex 터미널의 폴더 신뢰 확인 후 /hooks로 relay 훅을 검토·신뢰한 뒤 닫고 다시 여세요. 그래야 기본 세션 안내가 들어갑니다.',
   }
 }

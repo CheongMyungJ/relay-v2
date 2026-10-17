@@ -182,7 +182,7 @@ describe('[어댑터] 저장소 (5.1)', () => {
 })
 
 describe('[어댑터] 기본 세션의 기록과 Work 초안 (D402, D404, I135)', () => {
-  it('sessions/<id>/session.json을 쓰고 읽는다. 깨지거나 id가 맞지 않는 기록은 그 세션만 빼고 경고한다 (D332처럼)', async () => {
+  it('sessions/<id>/session.json을 쓰고 읽는다. 깨지거나 id·cwd·created_at이 맞지 않는 기록은 그 세션만 빼고 경고한다 (D332처럼)', async () => {
     const record = {
       id: 's-20261017-001',
       cwd: '/h',
@@ -199,17 +199,22 @@ describe('[어댑터] 기본 세션의 기록과 Work 초안 (D402, D404, I135)'
     fs.writeFileSync(moved, JSON.stringify({ ...record, id: 's-20261017-009' }))
     // session.json이 없는 디렉터리는 건너뛴다
     fs.mkdirSync(path.join(root, 'sessions', 's-20261017-004'))
+    // 만든 때가 없으면 목록 정렬이 깨지므로 받지 않는다
+    const undated = path.join(root, 'sessions', 's-20261017-005', 'session.json')
+    fs.mkdirSync(path.dirname(undated), { recursive: true })
+    fs.writeFileSync(undated, JSON.stringify({ id: 's-20261017-005', cwd: '/h' }))
     const problems: string[] = []
     expect(await loadSessions(root, problems)).toEqual([record])
-    expect(problems).toHaveLength(2)
+    expect(problems).toHaveLength(3)
     expect(problems[0]).toContain(`${broken}: 읽을 수 없어 이 기본 세션을 열지 않음`)
-    expect(problems[1]).toContain('id나 cwd가 맞지 않음')
+    expect(problems[1]).toContain('id, cwd, created_at이 맞지 않음')
+    expect(problems[2]).toContain(`${undated}: 읽을 수 없어`)
     // 파일은 건드리지 않는다
     expect(fs.readFileSync(broken, 'utf8')).toBe('{ 깨짐')
     expect(await loadSessions(path.join(root, 'none'))).toEqual([])
   })
 
-  it('초안 폴더의 *.md를 이름 차례로 읽는다. 큰 파일은 한도를 넘는 만큼만 읽어 형식 오류로 보인다', async () => {
+  it('초안 폴더의 *.md를 이름 차례로 읽고 읽은 바이트 수를 준다. 큰 파일은 한도를 넘는 만큼만 읽어 형식 오류로 보인다', async () => {
     const dir = path.join(root, 'work-drafts')
     expect(await readDrafts(dir, isDraftFile, DRAFT_MAX_BYTES)).toEqual([])
     fs.mkdirSync(path.join(dir, 'sub.md'), { recursive: true })
@@ -219,8 +224,22 @@ describe('[어댑터] 기본 세션의 기록과 Work 초안 (D402, D404, I135)'
     const drafts = await readDrafts(dir, isDraftFile, DRAFT_MAX_BYTES)
     expect(drafts.map((d) => d.name)).toEqual(['b.md', 'big.md'])
     expect(drafts[0]?.text).toBe('---\nproject: p\ntype: bugfix\n---\n요청')
-    expect(Buffer.byteLength(drafts[1]?.text ?? '')).toBeLessThanOrEqual(DRAFT_MAX_BYTES + 3)
-    expect(parseDraft(drafts[1]?.text ?? '', ['p']).errors).toEqual(['파일이 64KB를 넘음'])
+    expect(drafts[0]?.bytes).toBe(Buffer.byteLength(drafts[0]?.text ?? ''))
+    expect(drafts[1]?.bytes).toBe(DRAFT_MAX_BYTES + 1)
+    expect(parseDraft(drafts[1]?.text ?? '', ['p'], drafts[1]?.bytes).errors).toEqual([
+      '파일이 64KB를 넘음',
+    ])
+    // 깨진 바이트가 많아도 파일 크기로 판정한다: 다시 인코딩하면 U+FFFD(3바이트)로 늘어 한도를 넘는다
+    fs.rmSync(path.join(dir, 'big.md'))
+    const latin1 = Buffer.concat([
+      Buffer.from('---\nproject: p\ntype: bugfix\n---\n'),
+      Buffer.alloc(30_000, 0xe9),
+    ])
+    fs.writeFileSync(path.join(dir, 'c.md'), latin1)
+    const c = (await readDrafts(dir, isDraftFile, DRAFT_MAX_BYTES)).find((d) => d.name === 'c.md')
+    expect(c?.bytes).toBe(latin1.length)
+    expect(Buffer.byteLength(c?.text ?? '')).toBeGreaterThan(DRAFT_MAX_BYTES)
+    expect(parseDraft(c?.text ?? '', ['p'], c?.bytes).errors).toEqual([])
   })
 })
 
