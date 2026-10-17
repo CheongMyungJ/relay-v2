@@ -707,8 +707,8 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await expect(verdicts).toContainText('재현 절차가 더 이상 실패하지 않는다', { timeout: 30_000 })
   await win2.screenshot({ path: 'test-results/archive.png' })
 
-  // [기록 지우기] (D407): 보관된 Work는 확인만 받고 기록과 산출물을 지운다. 비면 아카이브도 사라진다
-  const projects = path.join(home, 'projects')
+  // [기록 지우기] (D407): 보관된 Work는 확인만 받고 기록과 산출물을 지운다(디스크는 [흐름]이 본다). 비면 아카이브도
+  // 사라진다
   await shelved.click({ button: 'right' })
   await menu.getByRole('menuitem', { name: '기록 지우기', exact: true }).click()
   const remove2 = win2.getByRole('dialog', { name: /Work 기록 지우기/ })
@@ -716,14 +716,16 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await remove2.getByRole('button', { name: '지우기', exact: true }).click()
   await expect(remove2).toBeHidden({ timeout: 30_000 })
   await expect(archive).toHaveCount(0)
-  expect(findDir(projects, workId2 ?? '', 'works')).toBeNull()
 
-  // [등록 해제] (D408): 보관되지 않은 Work가 있으면 그 목록을 보이고 누르지 못한다
+  // [등록 해제] (D408): 보관되지 않은 Work가 있으면 main이 보낸 까닭을 보이고 누르지 못한다
   const projectName = project.locator('.project-name')
   await projectName.click({ button: 'right' })
   await menu.getByRole('menuitem', { name: '등록 해제', exact: true }).click()
   const unregister = win2.getByRole('dialog', { name: /프로젝트 등록 해제/ })
-  await expect(unregister.getByLabel('보관되지 않은 Work')).toContainText(workId1)
+  await expect(unregister.getByRole('alert', { name: '해제할 수 없는 까닭' })).toContainText(
+    workId1,
+    { timeout: 30_000 },
+  )
   await expect(unregister.getByRole('button', { name: '등록 해제', exact: true })).toBeDisabled()
   await win2.screenshot({ path: 'test-results/unregister-blocked.png' })
   await unregister.getByRole('button', { name: '취소', exact: true }).click()
@@ -749,18 +751,15 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await remove1.getByRole('button', { name: '정리하고 지우기', exact: true }).click()
   await expect(remove1).toBeHidden({ timeout: 30_000 })
   await expect(project.locator('.work-item')).toHaveCount(0)
-  expect(findDir(projects, workId1, 'works')).toBeNull()
-  expect(findDir(projects, workId1, 'worktrees')).toBeNull()
 
   // Work가 모두 지워지면 등록 해제한다. 프로젝트가 없으면 첫 사용 안내가 보인다
   await projectName.click({ button: 'right' })
   await menu.getByRole('menuitem', { name: '등록 해제', exact: true }).click()
-  await expect(unregister).toContainText('이 프로젝트에는 Work가 없습니다')
+  await expect(unregister).toContainText('이 프로젝트에는 Work가 없습니다', { timeout: 30_000 })
   await unregister.getByRole('button', { name: '등록 해제', exact: true }).click()
   await expect(unregister).toBeHidden({ timeout: 30_000 })
   await expect(win2.locator('.project')).toHaveCount(0)
   await expect(win2.getByRole('region', { name: '첫 사용' })).toBeVisible()
-  expect(fs.readdirSync(projects)).toEqual([])
   await win2.screenshot({ path: 'test-results/unregistered.png' })
 })
 

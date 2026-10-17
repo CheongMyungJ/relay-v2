@@ -21,6 +21,7 @@ import type {
   TidyView,
   PrItemAction,
   ProjectInspection,
+  ProjectRemovePreviewResult,
   ProjectView,
   RespondStartInput,
   ReviewView,
@@ -83,6 +84,8 @@ export interface RelayApi {
   pickFolder(title: string): Promise<string | null>
   inspectProject(path: string): Promise<ProjectInspection>
   registerProject(path: string, defaultBranch: string): Promise<CommandResult>
+  /** [등록 해제] 창을 열 때 (D408): 막는 까닭과 함께 지울 Work 수 */
+  projectRemovePreview(projectId: string): Promise<ProjectRemovePreviewResult>
   /** 프로젝트 우클릭 [등록 해제] (D408): Work가 모두 보관됐을 때만. 프로젝트의 기록을 함께 지운다 */
   removeProject(projectId: string): Promise<CommandResult>
   /** 기준 브랜치 목록. 프로젝트의 기본 브랜치가 맨 앞이다 */
@@ -232,6 +235,7 @@ export const IPC = {
   inspectProject: 'project:inspect',
   registerProject: 'project:register',
   removeProject: 'project:remove',
+  projectRemovePreview: 'project:remove-preview',
   branches: 'project:branches',
   createWork: 'work:create',
   knowledgeTidy: 'work:knowledge-tidy',

@@ -87,6 +87,7 @@ import { processStartTime, startPty, type PtySession } from '../adapters/pty'
 import {
   pathKey,
   readText,
+  removeTree,
   sha256,
   writeFileAtomic,
   writeJson,
@@ -619,6 +620,8 @@ export class WorkRunner {
   private readonly runEvents = new Map<number, string>()
   /** 앱을 끝낸다. 읽기를 더 걸지 않는다 */
   private closing = false
+  /** 앱을 끝내라고 했다 (shutdown). 지우기가 실패해 closing을 되돌릴 때 이것을 따른다 */
+  private quitting = false
   /** 기록을 지웠다 (D407). work.json을 다시 쓰지 않고 스냅샷도 보내지 않는다 */
   private removed = false
   /**
@@ -3331,7 +3334,7 @@ export class WorkRunner {
     }
     if (!(await exists(path.join(this.worktree, '.git')))) {
       await pruneWorktrees(repo, opts)
-      await fsp.rm(this.worktree, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 })
+      await removeTree(this.worktree)
       return
     }
     const r = cleanResume(recordedForce, await statusLines(this.worktree, opts))
@@ -3551,6 +3554,7 @@ export class WorkRunner {
    * 대기열의 task는 그대로 두고 다음 실행 때 중단됨으로 바꾼다 (D78).
    */
   shutdown(): Promise<void> {
+    this.quitting = true
     this.closing = true
     if (this.prTimer) clearTimeout(this.prTimer)
     this.prTimer = null
@@ -3577,13 +3581,13 @@ export class WorkRunner {
   /**
    * [기록 지우기] (D407): 보관된 Work의 기록과 산출물(works/<work-id>/)을 지운다. 정리하지 않은 Work는 Relay가 먼저
    * 정리한다. 하던 PR 읽기와 이슈 게시가 끝나기를 기다리고 더 걸지 않는다. 보관된 Work에는 세션이 없지만(정리가 끝냄,
-   * 곁 세션은 열지 않음) 남았으면 끝낸다. 지우다 실패하면 work.json을 다시 써 Work를 남긴다. 지운 뒤로는 이 runner를
-   * 쓰지 않는다
+   * 곁 세션은 열지 않음) 남았으면 끝낸다. 지우다 실패하면 work.json을 다시 써 Work를 남기고 멈춘 게시를 다시 건다.
+   * files가 false면 디렉터리는 지우지 않고 멈추기만 한다: [등록 해제]가 프로젝트 디렉터리를 한 번에 지운다 (D409).
+   * 지운 뒤로는 이 runner를 쓰지 않는다
    */
-  async remove(): Promise<CommandResult> {
+  async remove(opts: { files: boolean } = { files: true }): Promise<CommandResult> {
     if (this.removed) return { ok: false, error: '지운 Work임' }
     if (this.work.status !== 'archived') return { ok: false, error: '보관된 Work만 지움' }
-    const wasClosing = this.closing
     this.closing = true
     if (this.prTimer) clearTimeout(this.prTimer)
     this.prTimer = null
@@ -3592,7 +3596,7 @@ export class WorkRunner {
     return this.enqueue(async () => {
       if (this.removed) return { ok: false, error: '지운 Work임' }
       if (this.work.status !== 'archived' || this.work.operation) {
-        this.closing = wasClosing
+        this.resumeAfterRemove()
         return { ok: false, error: '보관된 Work만 지움' }
       }
       this.stopCountdown()
@@ -3602,27 +3606,29 @@ export class WorkRunner {
         this.endSide(),
       ])
       this.removed = true
+      if (!opts.files) return { ok: true }
       try {
-        await fsp.rm(this.files.dir, {
-          recursive: true,
-          force: true,
-          maxRetries: 3,
-          retryDelay: 200,
-        })
+        await removeTree(this.files.dir)
       } catch (e) {
         this.removed = false
-        this.closing = wasClosing
         // 일부만 지웠으면 기록을 다시 써 Work를 남긴다
         try {
           this.workText = (await this.files.save(this.work)).text
         } catch (err) {
           this.problem(`work.json을 다시 쓰지 못함: ${message(err)}`)
         }
+        this.resumeAfterRemove()
         this.changed()
         return { ok: false, error: `Work 기록을 지우지 못함: ${message(e)}` }
       }
       return { ok: true }
     })
+  }
+
+  /** 지우지 못했다: 앱을 끝내는 중이 아니면 읽기와 게시를 다시 받고, 남은 이슈 게시를 다시 건다 */
+  private resumeAfterRemove(): void {
+    this.closing = this.quitting
+    this.publishIssueSoon()
   }
 
   /**

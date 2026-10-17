@@ -19,14 +19,33 @@ export function canDelete(work: WorkState): boolean {
   return (work.status === 'archived' && !work.operation) || canClean(work)
 }
 
+/** [등록 해제]의 판정에 쓰는 디스크의 사실 (D408, D409). main이 읽는다 */
+export interface ProjectDisk {
+  /** works/ 아래에 있는데 앱이 읽지 못한(목록에 없는) Work 디렉터리 */
+  unread: readonly string[]
+  /** worktrees/ 아래에 남은 폴더 */
+  worktrees: readonly string[]
+  /** worktrees/ 폴더의 경로 */
+  worktreesDir: string
+}
+
 /**
- * [등록 해제]를 막는 까닭 (D408). 프로젝트의 Work가 모두 보관됐어야 한다(Work가 없어도 된다). 막지 않으면 null
+ * [등록 해제]를 막는 까닭 (D408, D409). 프로젝트의 Work가 모두 보관됐어야 한다(Work가 없어도 된다). 앱이 읽지 못한 Work
+ * 기록이나 남은 worktree 폴더가 있으면 앱이 지우지 않고 사람에게 맡긴다. 막지 않으면 null
  */
-export function projectRemoveBlock(works: readonly WorkState[]): string | null {
+export function projectRemoveBlock(works: readonly WorkState[], disk: ProjectDisk): string | null {
   const left = works.filter((w) => w.status !== 'archived' || w.operation)
-  if (left.length === 0) return null
-  const ids = left.map((w) => w.work_id).join(', ')
-  return `보관되지 않은 Work ${left.length}개가 있음 (${ids}). [Work 정리]나 [기록 지우기]로 먼저 정리하세요`
+  if (left.length) {
+    const ids = left.map((w) => w.work_id).join(', ')
+    return `보관되지 않은 Work ${left.length}개가 있음 (${ids}). [Work 정리]나 [기록 지우기]로 먼저 정리하세요`
+  }
+  if (disk.unread.length) {
+    return `읽지 못한 Work 기록이 있음 (${disk.unread.join(', ')}). work.json을 고쳐 앱을 다시 켜거나 그 폴더를 직접 지운 뒤 다시 누르세요`
+  }
+  if (disk.worktrees.length) {
+    return `worktree 폴더가 남아 있음: ${disk.worktrees.join(', ')} (${disk.worktreesDir}). 폴더를 확인하고 직접 지운 뒤 다시 누르세요`
+  }
+  return null
 }
 
 /** 정리 요약에 쓰는 사실. main이 git과 세션에서 읽는다 */

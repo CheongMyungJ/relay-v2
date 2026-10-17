@@ -41,6 +41,7 @@ import type {
   CleanPreview,
   DraftView,
   ProjectInspection,
+  ProjectRemovePreview,
   ProjectView,
   StepPreview,
   TidyCandidateView,
@@ -1996,21 +1997,31 @@ export function DeleteWorkDialog({ work, onClose }: { work: WorkView; onClose: (
 
 /**
  * 프로젝트 우클릭 [등록 해제] (D408). Work가 모두 보관됐을 때만 받고, 그 Work의 기록(아카이브로 옮긴 것 포함)을 함께
- * 지운다. 보관되지 않은 Work가 있으면 그 목록을 보이고 누르지 못하게 둔다. 판정은 main이 다시 한다
+ * 지운다. 막을지와 지울 Work 수는 main이 정해 보낸다(D409). 막으면 그 까닭을 보이고 누르지 못하게 둔다
  */
 export function RemoveProjectDialog({
   project,
-  works,
   onClose,
 }: {
   project: ProjectView
-  works: WorkView[]
   onClose: () => void
 }) {
+  const [preview, setPreview] = useState<ProjectRemovePreview | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const left = works.filter((w) => w.status !== 'archived')
-  const shelved = works.filter((w) => w.shelved).length
+
+  useEffect(() => {
+    let stale = false
+    void call(() => window.relay.projectRemovePreview(project.id)).then((r) => {
+      if (stale) return
+      if (r.ok) setPreview(r.preview)
+      else setError(r.error)
+    })
+    return () => {
+      stale = true
+    }
+  }, [project.id])
+
   const remove = async () => {
     setBusy(true)
     setError(null)
@@ -2021,26 +2032,18 @@ export function RemoveProjectDialog({
   }
   return (
     <Modal title={`프로젝트 등록 해제 · ${project.name}`} onClose={onClose}>
-      {left.length ? (
-        <>
-          <p>
-            보관되지 않은 Work {left.length}개가 있어 해제할 수 없습니다. [Work 정리]나 [기록
-            지우기]로 먼저 정리하세요.
-          </p>
-          <ul className="files" aria-label="보관되지 않은 Work">
-            {left.map((w) => (
-              <li key={w.key}>
-                {w.workId} {w.title} ({w.statusLabel})
-              </li>
-            ))}
-          </ul>
-        </>
+      {!preview ? (
+        <div className="dim">{error ? null : '확인하는 중…'}</div>
+      ) : preview.block ? (
+        <p role="alert" aria-label="해제할 수 없는 까닭">
+          해제할 수 없습니다. {preview.block}
+        </p>
       ) : (
         <>
           <p>
             {project.name}의 등록을 해제합니다.{' '}
-            {works.length
-              ? `Work 기록 ${works.length}개${shelved ? `(아카이브 ${shelved}개 포함)` : ''}와 산출물을 함께 지웁니다. 되돌릴 수 없습니다.`
+            {preview.works
+              ? `Work 기록 ${preview.works}개${preview.shelved ? `(아카이브 ${preview.shelved}개 포함)` : ''}와 산출물을 함께 지웁니다. 되돌릴 수 없습니다.`
               : '이 프로젝트에는 Work가 없습니다.'}
           </p>
           <div className="dim">
@@ -2052,7 +2055,11 @@ export function RemoveProjectDialog({
       {error ? <div className="error">{error}</div> : null}
       <div className="buttons">
         <button onClick={onClose}>취소</button>
-        <button className="danger" disabled={busy || left.length > 0} onClick={() => void remove()}>
+        <button
+          className="danger"
+          disabled={busy || !preview || preview.block !== null}
+          onClick={() => void remove()}
+        >
           {busy ? '해제하는 중…' : '등록 해제'}
         </button>
       </div>

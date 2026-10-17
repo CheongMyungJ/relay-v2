@@ -218,6 +218,19 @@ export interface CleanPreview {
 
 export type CleanPreviewResult = { ok: true; preview: CleanPreview } | { ok: false; error: string }
 
+/** [등록 해제] 창 (D408): main이 core 규칙으로 정한 막는 까닭과 함께 지울 Work 수 */
+export interface ProjectRemovePreview {
+  /** 막는 까닭. 해제할 수 있으면 null */
+  block: string | null
+  /** 함께 지울 Work 기록 수 */
+  works: number
+  /** 그 가운데 아카이브로 옮긴 것 */
+  shelved: number
+}
+
+export type ProjectRemovePreviewResult =
+  { ok: true; preview: ProjectRemovePreview } | { ok: false; error: string }
+
 /** [Work 정리]의 [정리] (시나리오 8-2) */
 export interface CleanInput {
   /** 작업 브랜치도 지운다. push됐거나 머지됐을 때만 받는다 */

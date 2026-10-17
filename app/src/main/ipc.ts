@@ -191,6 +191,9 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
     const r = await (await ready).registerProject(text(dir), text(branch))
     return r.ok ? { ok: true } : r
   })
+  ipcMain.handle(IPC.projectRemovePreview, async (_e, projectId: unknown) =>
+    (await ready).projectRemovePreview(text(projectId)),
+  )
   ipcMain.handle(IPC.removeProject, async (_e, projectId: unknown) =>
     (await ready).removeProject(text(projectId)),
   )

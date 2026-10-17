@@ -213,9 +213,14 @@ export async function workIds(home: string, projectId: string): Promise<string[]
   return subdirs(path.join(projectDir(home, projectId), 'works'))
 }
 
+/** 프로젝트의 worktree 폴더들이 있는 곳: projects/<project-id>/worktrees */
+export function worktreesDir(home: string, projectId: string): string {
+  return path.join(projectDir(home, projectId), 'worktrees')
+}
+
 /** 프로젝트의 worktree 폴더 이름 (worktrees/ 아래 디렉터리). [등록 해제]는 남은 것이 있으면 하지 않는다 (D408) */
 export async function worktreeIds(home: string, projectId: string): Promise<string[]> {
-  return subdirs(path.join(projectDir(home, projectId), 'worktrees'))
+  return subdirs(worktreesDir(home, projectId))
 }
 
 /**
@@ -228,12 +233,15 @@ export async function unregisterProject(home: string, projectId: string): Promis
 
 /** [등록 해제] (D408): 프로젝트 디렉터리를 지운다. 레포는 건드리지 않는다 */
 export async function removeProjectDir(home: string, projectId: string): Promise<void> {
-  await fsp.rm(projectDir(home, projectId), {
-    recursive: true,
-    force: true,
-    maxRetries: 3,
-    retryDelay: 200,
-  })
+  await removeTree(projectDir(home, projectId))
+}
+
+/**
+ * 폴더를 통째로 지운다. 없으면 그대로다. Windows에서 다른 프로세스(백신, 색인)가 파일을 잠깐 열고 있으면 실패하므로 몇 번
+ * 다시 해 본다
+ */
+export async function removeTree(dir: string): Promise<void> {
+  await fsp.rm(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 })
 }
 
 // ---------- 기본 세션 (D402) ----------

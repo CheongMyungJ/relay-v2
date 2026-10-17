@@ -103,17 +103,33 @@ describe('기록 지우기와 프로젝트 등록 해제 (D407, D408)', () => {
     expect(canDelete(at('archived', cut))).toBe(false)
   })
 
+  const clear = { unread: [], worktrees: [], worktreesDir: '/h/projects/p-1/worktrees' }
+
   it('등록 해제는 Work가 모두 보관됐거나 없을 때만 받고, 막으면 보관되지 않은 Work를 적는다', () => {
-    expect(projectRemoveBlock([])).toBeNull()
-    expect(projectRemoveBlock([at('archived'), at('archived', { shelved_at: 'x' })])).toBeNull()
-    const blocked = projectRemoveBlock([
-      at('archived'),
-      at('completed', { work_id: 'w-20261017-002' }),
-      at('active', { work_id: 'w-20261017-003' }),
-    ])
+    expect(projectRemoveBlock([], clear)).toBeNull()
+    expect(
+      projectRemoveBlock([at('archived'), at('archived', { shelved_at: 'x' })], clear),
+    ).toBeNull()
+    const blocked = projectRemoveBlock(
+      [
+        at('archived'),
+        at('completed', { work_id: 'w-20261017-002' }),
+        at('active', { work_id: 'w-20261017-003' }),
+      ],
+      clear,
+    )
     expect(blocked).toContain('보관되지 않은 Work 2개')
     expect(blocked).toContain('w-20261017-002, w-20261017-003')
-    expect(projectRemoveBlock([at('archived', cut)])).toContain('1개')
+    expect(projectRemoveBlock([at('archived', cut)], clear)).toContain('1개')
+  })
+
+  it('앱이 읽지 못한 Work 기록이나 남은 worktree 폴더가 있으면 지우지 않고 사람에게 맡긴다 (D409)', () => {
+    const unread = projectRemoveBlock([at('archived')], { ...clear, unread: ['w-20261017-009'] })
+    expect(unread).toContain('읽지 못한 Work 기록이 있음 (w-20261017-009)')
+    const trees = projectRemoveBlock([], { ...clear, worktrees: ['w-20261017-004'] })
+    expect(trees).toBe(
+      'worktree 폴더가 남아 있음: w-20261017-004 (/h/projects/p-1/worktrees). 폴더를 확인하고 직접 지운 뒤 다시 누르세요',
+    )
   })
 })
 

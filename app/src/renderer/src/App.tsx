@@ -130,6 +130,8 @@ export function App() {
     | null
   >(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  // 머지 뒤 정리 창(D178, D200)을 연 Work. 아래 effect가 쓴다
+  const offered = useRef(new Set<string>())
 
   useEffect(() => {
     void window.relay.appInfo().then(setInfo)
@@ -144,6 +146,8 @@ export function App() {
       setActivities((m) => withoutWork(m, key))
       setPicked((m) => without(m, key))
       setSelected((cur) => (cur?.kind === 'work' && cur.key === key ? null : cur))
+      // 지운 Work의 id는 다시 쓰일 수 있다: 새 Work가 머지 뒤 정리 창을 받게 한다
+      offered.current.delete(key)
     })
     const offActivity = window.relay.onActivity((u) =>
       setActivities((m) => ({ ...m, [`${u.workKey}|${u.taskId}`]: u.activity })),
@@ -359,7 +363,6 @@ export function App() {
 
   // 머지 뒤 정리 창 (D178, D200): 머지로 완료한 Work를 보고 있으면 한 번 연다. 앱에서 머지했거나 밖에서 머지된 것을
   // 읽었을 때, 다른 Work를 보고 있었으면 그 Work를 고를 때다. 연 것을 main에 알려 다시 열지 않는다
-  const offered = useRef(new Set<string>())
   useEffect(() => {
     if (!work?.pr?.offerClean || dialog !== null || offered.current.has(work.key)) return
     offered.current.add(work.key)
@@ -859,11 +862,7 @@ export function App() {
         )
       ) : null}
       {dialog?.kind === 'project-remove' ? (
-        <RemoveProjectDialog
-          project={dialog.project}
-          works={Object.values(works).filter((w) => w.projectId === dialog.project.id)}
-          onClose={() => setDialog(null)}
-        />
+        <RemoveProjectDialog project={dialog.project} onClose={() => setDialog(null)} />
       ) : null}
       {dialog?.kind === 'side' && dialogWork ? (
         <SideNoticeDialog

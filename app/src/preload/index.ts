@@ -20,6 +20,7 @@ const api: RelayApi = {
   pickFolder: (title) => ipcRenderer.invoke(IPC.pickFolder, title),
   inspectProject: (path) => ipcRenderer.invoke(IPC.inspectProject, path),
   registerProject: (path, branch) => ipcRenderer.invoke(IPC.registerProject, path, branch),
+  projectRemovePreview: (projectId) => ipcRenderer.invoke(IPC.projectRemovePreview, projectId),
   removeProject: (projectId) => ipcRenderer.invoke(IPC.removeProject, projectId),
   branches: (projectId) => ipcRenderer.invoke(IPC.branches, projectId),
   createWork: (projectId, input) => ipcRenderer.invoke(IPC.createWork, projectId, input),
