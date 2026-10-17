@@ -104,6 +104,7 @@ import {
 } from '../core/approval'
 import {
   canClean,
+  canDelete,
   cleanPreview,
   halfRemovedHint,
   planClean,
@@ -618,6 +619,8 @@ export class WorkRunner {
   private readonly runEvents = new Map<number, string>()
   /** 앱을 끝낸다. 읽기를 더 걸지 않는다 */
   private closing = false
+  /** 기록을 지웠다 (D407). work.json을 다시 쓰지 않고 스냅샷도 보내지 않는다 */
+  private removed = false
   /**
    * 자동 대응을 바란다 (D210): 읽기가 받은 새 항목이 있을 때 대응 자동 시작이 켜져 있었다. 시작하거나 상한에서 멈추거나
    * 넣을 새 항목이 없어지거나 자동 시작이 꺼지면 버린다. 도는 대응 task, 진행 중 작업, 닫힌 PR로 막히면 남겨 두고 풀리면
@@ -688,7 +691,7 @@ export class WorkRunner {
     effects: readonly Effect[],
     opts: { quiet?: boolean } = {},
   ): Promise<HookReply> {
-    if (work === this.work && effects.length === 0) return null
+    if (this.removed || (work === this.work && effects.length === 0)) return null
     // 상태가 그대로이고 기록만 남기는 전이(세션 시각, D217)는 work.json을 다시 쓰지 않고 스냅샷도 보내지 않는다
     if (work === this.work && effects.every((e) => e.type === 'log')) {
       for (const e of effects) {
@@ -3572,6 +3575,57 @@ export class WorkRunner {
   }
 
   /**
+   * [기록 지우기] (D407): 보관된 Work의 기록과 산출물(works/<work-id>/)을 지운다. 정리하지 않은 Work는 Relay가 먼저
+   * 정리한다. 하던 PR 읽기와 이슈 게시가 끝나기를 기다리고 더 걸지 않는다. 보관된 Work에는 세션이 없지만(정리가 끝냄,
+   * 곁 세션은 열지 않음) 남았으면 끝낸다. 지우다 실패하면 work.json을 다시 써 Work를 남긴다. 지운 뒤로는 이 runner를
+   * 쓰지 않는다
+   */
+  async remove(): Promise<CommandResult> {
+    if (this.removed) return { ok: false, error: '지운 Work임' }
+    if (this.work.status !== 'archived') return { ok: false, error: '보관된 Work만 지움' }
+    const wasClosing = this.closing
+    this.closing = true
+    if (this.prTimer) clearTimeout(this.prTimer)
+    this.prTimer = null
+    await this.prIdle()
+    await this.issueIdle()
+    return this.enqueue(async () => {
+      if (this.removed) return { ok: false, error: '지운 Work임' }
+      if (this.work.status !== 'archived' || this.work.operation) {
+        this.closing = wasClosing
+        return { ok: false, error: '보관된 Work만 지움' }
+      }
+      this.stopCountdown()
+      await Promise.all([
+        ...[...this.live.keys()].map((id) => this.endSession(id)),
+        this.endCleanup(),
+        this.endSide(),
+      ])
+      this.removed = true
+      try {
+        await fsp.rm(this.files.dir, {
+          recursive: true,
+          force: true,
+          maxRetries: 3,
+          retryDelay: 200,
+        })
+      } catch (e) {
+        this.removed = false
+        this.closing = wasClosing
+        // 일부만 지웠으면 기록을 다시 써 Work를 남긴다
+        try {
+          this.workText = (await this.files.save(this.work)).text
+        } catch (err) {
+          this.problem(`work.json을 다시 쓰지 못함: ${message(err)}`)
+        }
+        this.changed()
+        return { ok: false, error: `Work 기록을 지우지 못함: ${message(e)}` }
+      }
+      return { ok: true }
+    })
+  }
+
+  /**
    * 작업 브랜치의 커밋 (D225): 기준 커밋 뒤의 커밋 수와 마지막 커밋, worktree 경로. 브랜치는 모든 worktree가 함께
    * 보므로 메인 체크아웃에서 읽는다. 커밋 안 된 변경은 넣지 않는다. 브랜치가 없으면(정리로 지움) null이다
    */
@@ -5169,6 +5223,7 @@ export class WorkRunner {
   // ---------- 스냅샷 (I14) ----------
 
   private changed(): void {
+    if (this.removed) return
     this.revision++
     this.ctx.ui.work(this.view())
   }
@@ -5194,6 +5249,7 @@ export class WorkRunner {
       completedAt: w.completed_at ?? null,
       shelved: w.shelved_at !== undefined,
       canShelve: canShelve(w),
+      canDelete: canDelete(w),
       badge: badge(w, this.prBadge()),
       actions: this.cleanupOpen() ? cleanupActions(actions(w)) : actions(w),
       stopAfterStep: w.stop_after_step === true,

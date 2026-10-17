@@ -213,6 +213,29 @@ export async function workIds(home: string, projectId: string): Promise<string[]
   return subdirs(path.join(projectDir(home, projectId), 'works'))
 }
 
+/** 프로젝트의 worktree 폴더 이름 (worktrees/ 아래 디렉터리). [등록 해제]는 남은 것이 있으면 하지 않는다 (D408) */
+export async function worktreeIds(home: string, projectId: string): Promise<string[]> {
+  return subdirs(path.join(projectDir(home, projectId), 'worktrees'))
+}
+
+/**
+ * [등록 해제] (D408): project.json을 지운다. 이것만 지워도 다시 켤 때 이 프로젝트를 읽지 않는다. 남은 폴더는
+ * removeProjectDir가 지운다
+ */
+export async function unregisterProject(home: string, projectId: string): Promise<void> {
+  await fsp.rm(path.join(projectDir(home, projectId), 'project.json'), { force: true })
+}
+
+/** [등록 해제] (D408): 프로젝트 디렉터리를 지운다. 레포는 건드리지 않는다 */
+export async function removeProjectDir(home: string, projectId: string): Promise<void> {
+  await fsp.rm(projectDir(home, projectId), {
+    recursive: true,
+    force: true,
+    maxRetries: 3,
+    retryDelay: 200,
+  })
+}
+
 // ---------- 기본 세션 (D402) ----------
 
 /** 기본 세션 디렉터리: sessions/<session-id> */

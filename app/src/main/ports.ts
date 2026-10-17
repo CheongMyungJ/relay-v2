@@ -11,6 +11,8 @@ import type {
 export interface UiPort {
   /** Work 스냅샷. 상태가 바뀔 때마다 보낸다 (I14) */
   work(view: WorkView): void
+  /** Work 기록을 지웠다 (D407, D408). 그 Work의 스냅샷은 더 오지 않는다 */
+  workRemoved(workKey: string): void
   /**
    * 도구 훅으로 바뀐 진행 표시 (D216). 도구를 쓸 때마다 오므로 스냅샷(과 승인 화면을 다시 읽기)을 부르지 않고 따로
    * 보낸다

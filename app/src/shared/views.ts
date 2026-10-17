@@ -570,6 +570,8 @@ export interface WorkView {
   shelved: boolean
   /** 우클릭 메뉴에 [아카이브로 옮기기]를 보인다 (core/machine canShelve) */
   canShelve: boolean
+  /** 우클릭 메뉴에 [기록 지우기]를 보인다 (core/cleanup canDelete, D407) */
+  canDelete: boolean
   /** 사이드바 배지 (D80) */
   badge: Badge
   /** 액션 바에서 누를 수 있는 조작 (core/machine actions) */

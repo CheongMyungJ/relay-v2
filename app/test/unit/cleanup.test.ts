@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { canClean, cleanPreview, planClean, type CleanFacts } from '../../src/core/cleanup'
+import {
+  canClean,
+  canDelete,
+  cleanPreview,
+  planClean,
+  projectRemoveBlock,
+  type CleanFacts,
+} from '../../src/core/cleanup'
 import { createWork } from '../../src/core/machine'
 import type { CleanInput } from '../../src/shared/views'
 import type { WorkState } from '../../src/shared/work'
@@ -60,6 +67,53 @@ describe('정리할 수 있는 Work (시나리오 8)', () => {
       },
     })
     expect(canClean(busy)).toBe(false)
+  })
+})
+
+describe('기록 지우기와 프로젝트 등록 해제 (D407, D408)', () => {
+  const base = createWork({
+    type: 'bugfix',
+    workId: 'w-20261017-001',
+    baseBranch: 'main',
+    baseCommit: 'c',
+    at: 'x',
+  }).work
+  const at = (status: WorkState['status'], patch: Partial<WorkState> = {}): WorkState => ({
+    ...base,
+    status,
+    ...patch,
+  })
+  const cut: Partial<WorkState> = {
+    operation: {
+      kind: 'clean',
+      stage: 'worktree',
+      started_at: 'x',
+      force: false,
+      delete_branches: [],
+      head: null,
+    },
+  }
+
+  it('보관됐거나 정리할 수 있는 Work만 지운다. 끊긴 작업이 있으면 지우지 않는다', () => {
+    for (const s of ['completed', 'abandoned', 'archived'] as const)
+      expect(canDelete(at(s))).toBe(true)
+    for (const s of ['active', 'stopped', 'pr'] as const) expect(canDelete(at(s))).toBe(false)
+    expect(canDelete(at('archived', { shelved_at: 'x' }))).toBe(true)
+    expect(canDelete(at('completed', cut))).toBe(false)
+    expect(canDelete(at('archived', cut))).toBe(false)
+  })
+
+  it('등록 해제는 Work가 모두 보관됐거나 없을 때만 받고, 막으면 보관되지 않은 Work를 적는다', () => {
+    expect(projectRemoveBlock([])).toBeNull()
+    expect(projectRemoveBlock([at('archived'), at('archived', { shelved_at: 'x' })])).toBeNull()
+    const blocked = projectRemoveBlock([
+      at('archived'),
+      at('completed', { work_id: 'w-20261017-002' }),
+      at('active', { work_id: 'w-20261017-003' }),
+    ])
+    expect(blocked).toContain('보관되지 않은 Work 2개')
+    expect(blocked).toContain('w-20261017-002, w-20261017-003')
+    expect(projectRemoveBlock([at('archived', cut)])).toContain('1개')
   })
 })
 

@@ -505,3 +505,104 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
     expect(verify?.completion?.diff).toContain('+  if (xs.length === 0) return 0')
   })
 })
+
+describe('[흐름] Work 기록 지우기와 프로젝트 등록 해제 (D407, D408)', () => {
+  /** 처음 정리 요약으로 만든 정리 확인 */
+  async function cleanInput(s: Setup) {
+    const summary = await preview(s)
+    return { deleteBranch: false, deleteBackups: true, confirmed: false, expect: summary.expect }
+  }
+
+  it('완료한 Work는 정리 확인과 함께 지운다: worktree와 기록이 없고 작업 브랜치는 남으며, 다시 켜도 없다', async () => {
+    const s = await setup(scenario())
+    const done = await drive(s.h.relay, s.h.ui, s.key)
+    expect(done.status).toBe('completed')
+    expect(s.h.ui.works.get(s.key)).toMatchObject({ canDelete: true, canShelve: false })
+    // 정리하지 않은 Work는 정리 확인 없이 지우지 않는다
+    const refused = await s.h.relay.deleteWork(s.key, null)
+    expect(refused.ok).toBe(false)
+    expect(fs.existsSync(s.dir)).toBe(true)
+    expect(await s.h.relay.deleteWork(s.key, await cleanInput(s))).toEqual({ ok: true })
+    expect(fs.existsSync(s.tree)).toBe(false)
+    expect(fs.existsSync(s.dir)).toBe(false)
+    expect(git(s.repo, 'branch', '--list', s.branch).trim()).not.toBe('')
+    expect(s.h.ui.removed).toEqual([s.key])
+    expect(s.h.ui.works.has(s.key)).toBe(false)
+    expect(s.h.relay.snapshot().works).toEqual([])
+    expect((await s.h.relay.deleteWork(s.key, null)).ok).toBe(false)
+    await s.h.relay.close()
+    await s.h.reopen()
+    expect(s.h.relay.snapshot().works).toEqual([])
+  })
+
+  it('보관된 Work는 확인만으로 지운다', async () => {
+    const s = await setup(scenario())
+    await drive(s.h.relay, s.h.ui, s.key)
+    expect(await s.h.relay.clean(s.key, await cleanInput(s))).toEqual({ ok: true })
+    await settle(s.h, s.key)
+    expect(s.h.ui.works.get(s.key)).toMatchObject({ status: 'archived', canDelete: true })
+    expect(await s.h.relay.deleteWork(s.key, null)).toEqual({ ok: true })
+    expect(fs.existsSync(s.dir)).toBe(false)
+    expect(s.h.ui.removed).toEqual([s.key])
+  })
+
+  it.runIf(canLock)(
+    '기록을 지우다 실패하면 work.json을 다시 써 Work를 남기고 까닭을 돌려준다. 원인을 치우면 다시 지운다',
+    async () => {
+      const s = await setup(scenario())
+      await drive(s.h.relay, s.h.ui, s.key)
+      expect(await s.h.relay.clean(s.key, await cleanInput(s))).toEqual({ ok: true })
+      await settle(s.h, s.key)
+      const stuck = path.join(s.dir, 'stuck', 'x.txt')
+      fs.mkdirSync(path.dirname(stuck))
+      fs.writeFileSync(stuck, '지울 수 없음\n')
+      expect(immutable(stuck, true)).toBe(true)
+      try {
+        const r = await s.h.relay.deleteWork(s.key, null)
+        expect(r.ok).toBe(false)
+        expect(!r.ok && r.error).toMatch(/^Work 기록을 지우지 못함: /)
+        expect(work(s).status).toBe('archived')
+        expect(s.h.ui.removed).toEqual([])
+        expect(s.h.ui.works.get(s.key)?.status).toBe('archived')
+      } finally {
+        immutable(stuck, false)
+      }
+      expect(await s.h.relay.deleteWork(s.key, null)).toEqual({ ok: true })
+      expect(fs.existsSync(s.dir)).toBe(false)
+    },
+  )
+
+  it('프로젝트는 Work가 모두 보관됐을 때만 해제하고 기록을 함께 지운다. 레포는 그대로이고 다시 등록하면 Work가 없다', async () => {
+    const s = await setup(scenario())
+    const projectId = s.key.split('/')[0] ?? ''
+    const projectDir = path.join(s.h.home, 'projects', projectId)
+    await drive(s.h.relay, s.h.ui, s.key)
+    const blocked = await s.h.relay.removeProject(projectId)
+    expect(blocked.ok).toBe(false)
+    if (!blocked.ok) expect(blocked.error).toContain(s.workId)
+    expect(fs.existsSync(path.join(projectDir, 'project.json'))).toBe(true)
+    expect(await s.h.relay.clean(s.key, await cleanInput(s))).toEqual({ ok: true })
+    await settle(s.h, s.key)
+    expect(await s.h.relay.shelve(s.key)).toEqual({ ok: true })
+    expect(await s.h.relay.removeProject(projectId)).toEqual({ ok: true })
+    expect(fs.existsSync(projectDir)).toBe(false)
+    expect(s.h.ui.projectList).toEqual([])
+    expect(s.h.ui.removed).toEqual([s.key])
+    expect(s.h.relay.snapshot()).toMatchObject({ projects: [], works: [] })
+    expect(git(s.repo, 'branch', '--list', s.branch).trim()).not.toBe('')
+    expect(fs.existsSync(path.join(s.repo, '.git'))).toBe(true)
+    // 지운 프로젝트에는 Work를 만들지 않는다
+    const r = await s.h.relay.createWork(projectId, {
+      request: REQUEST,
+      baseBranch: 'main',
+      type: 'bugfix',
+      baseLocation: 'local',
+    })
+    expect(r.ok).toBe(false)
+    await s.h.relay.close()
+    await s.h.reopen()
+    expect(s.h.relay.snapshot()).toMatchObject({ projects: [], works: [] })
+    expect(await register(s.h, s.repo)).toBe(projectId)
+    expect(s.h.relay.snapshot().works).toEqual([])
+  })
+})

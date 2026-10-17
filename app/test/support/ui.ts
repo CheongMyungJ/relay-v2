@@ -18,6 +18,8 @@ export class FakeUi implements UiPort {
   /** Work마다 받은 스냅샷 전부 (되돌림 횟수 세기용) */
   readonly history: WorkView[] = []
   projectList: ProjectView[] = []
+  /** 기록을 지운 Work의 키 (D407, D408) */
+  readonly removed: string[] = []
   /** 기본 세션 목록 (D405). 마지막으로 받은 것 */
   sessionList: SessionView[] = []
   readonly output = new Map<string, string>()
@@ -34,6 +36,12 @@ export class FakeUi implements UiPort {
     for (const k of [...this.activities.keys()]) {
       if (k.startsWith(`${view.key}|`)) this.activities.delete(k)
     }
+    this.wake()
+  }
+
+  workRemoved(workKey: string): void {
+    this.works.delete(workKey)
+    this.removed.push(workKey)
     this.wake()
   }
 

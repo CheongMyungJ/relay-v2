@@ -1,5 +1,6 @@
 // [스모크] 설치한 앱이 뜨고, 새 Work에서 유형(버그 수정)을 고른 뒤에야 [시작]이 켜지고(M14, D236, 유형 다섯은 M15·M18·M20), 가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화면(자동 승인 포함), [단계 선택],
-// 자동 승인 카운트다운의 [취소], [push]와 [Work 정리], 다시 켠 뒤 끊긴 작업의 [다시 시도], 보관된 Work의 [아카이브로 옮기기]를 누른다 (I27).
+// 자동 승인 카운트다운의 [취소], [push]와 [Work 정리], 다시 켠 뒤 끊긴 작업의 [다시 시도], 보관된 Work의 [아카이브로 옮기기],
+// Work의 [기록 지우기]와 프로젝트의 [등록 해제]를 누른다 (I27).
 // M2: 프로젝트 등록 → 새 Work → intake 탭에 PTY 출력 → 창 크기 변경이 PTY에 전달 → [의도 승인]
 // → intent.md 확정, intake 세션 트리 종료, 다음 task 시작. M12: 다음 task의 터미널은 표시 줄로 시작하고, 머리 띠와
 // 패널에 진행 표시(마지막 동작 Bash(npm test))가 보인다. 첫 intake의 [요약] 맨 위에 의도 초안이, 열린 질문에 답할 곳과
@@ -32,7 +33,11 @@
 // intake를 되감기로 다시 시작한다.
 // 아카이브(D380): 보관된 두 번째 Work를 우클릭해 [아카이브로 옮기기]하면 프로젝트 목록에서 빠지고, 프로젝트들 아래 같은
 // 계층의 공통 아카이브에 프로젝트 이름과 함께 보인다. 메뉴는 Esc나 다른 곳 우클릭으로 닫히고, 보관 전 Work와 옮긴 Work에는
-// 없다 → 프로젝트와 아카이브를 따로 접고 편다 → 아카이브의 Work를 고르면 판정표가 보인다 → 앱 종료 확인을 거쳐 끝낸다.
+// 없다 → 프로젝트와 아카이브를 따로 접고 편다 → 아카이브의 Work를 고르면 판정표가 보인다.
+// 기록 지우기와 등록 해제(D407, D408): 아카이브의 Work를 우클릭해 [기록 지우기]하면 기록이 없어지고 아카이브도 사라진다 →
+// 프로젝트를 우클릭해 [등록 해제]를 열면 보관되지 않은 첫 Work를 보이고 누르지 못한다 → 첫 Work를 포기하고 [기록 지우기]하면
+// 정리 확인과 함께 worktree와 기록을 지운다 → 다시 [등록 해제]하면 프로젝트가 빠지고 첫 사용 안내가 보인다 → 앱 종료 확인을
+// 거쳐 끝낸다.
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -194,7 +199,7 @@ test.afterAll(async () => {
   fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
 })
 
-test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화면, [단계 선택], 자동 승인 카운트다운의 [취소], [push]와 [Work 정리], 다시 켠 뒤 끊긴 작업의 [다시 시도], 보관된 Work의 [아카이브로 옮기기]를 누른다', async () => {
+test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화면, [단계 선택], 자동 승인 카운트다운의 [취소], [push]와 [Work 정리], 다시 켠 뒤 끊긴 작업의 [다시 시도], 보관된 Work의 [아카이브로 옮기기], [기록 지우기]와 [등록 해제]를 누른다', async () => {
   const win = await app.firstWindow()
   await expect(win.locator('.layout')).toBeVisible()
   await expect(win.locator('.sidebar')).toBeVisible()
@@ -656,7 +661,8 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await expect(menu).toHaveCount(0)
   await work2.click({ button: 'right' })
   await expect(menu).toBeVisible()
-  await work1.click({ button: 'right' })
+  // 메뉴는 누른 자리(가운데)에서 아래로 열려 바로 아래 Work의 가운데를 덮는다. 덮이지 않은 왼쪽 끝을 우클릭한다
+  await work1.click({ button: 'right', position: { x: 4, y: 4 } })
   await expect(menu).toHaveCount(0)
   await work2.click({ button: 'right' })
   await menu.getByRole('menuitem', { name: '아카이브로 옮기기', exact: true }).click()
@@ -670,7 +676,10 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await expect(shelved).toHaveCount(1)
   await expect(shelved.locator('.badge')).toHaveText('보관됨')
   await expect(shelved.locator('.work-step')).toHaveText('sample')
+  // 옮긴 Work의 메뉴에는 [기록 지우기]만 있다 (D407)
   await shelved.click({ button: 'right' })
+  await expect(menu.getByRole('menuitem')).toHaveText(['기록 지우기'])
+  await win2.keyboard.press('Escape')
   await expect(menu).toHaveCount(0)
 
   // 프로젝트와 아카이브는 따로 접고 편다. 프로젝트를 접으면 [새 Work]도 숨는다
@@ -697,6 +706,62 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   const verdicts = win2.locator('table.verdicts')
   await expect(verdicts).toContainText('재현 절차가 더 이상 실패하지 않는다', { timeout: 30_000 })
   await win2.screenshot({ path: 'test-results/archive.png' })
+
+  // [기록 지우기] (D407): 보관된 Work는 확인만 받고 기록과 산출물을 지운다. 비면 아카이브도 사라진다
+  const projects = path.join(home, 'projects')
+  await shelved.click({ button: 'right' })
+  await menu.getByRole('menuitem', { name: '기록 지우기', exact: true }).click()
+  const remove2 = win2.getByRole('dialog', { name: /Work 기록 지우기/ })
+  await expect(remove2).toContainText(`works/${workId2 ?? ''}/`)
+  await remove2.getByRole('button', { name: '지우기', exact: true }).click()
+  await expect(remove2).toBeHidden({ timeout: 30_000 })
+  await expect(archive).toHaveCount(0)
+  expect(findDir(projects, workId2 ?? '', 'works')).toBeNull()
+
+  // [등록 해제] (D408): 보관되지 않은 Work가 있으면 그 목록을 보이고 누르지 못한다
+  const projectName = project.locator('.project-name')
+  await projectName.click({ button: 'right' })
+  await menu.getByRole('menuitem', { name: '등록 해제', exact: true }).click()
+  const unregister = win2.getByRole('dialog', { name: /프로젝트 등록 해제/ })
+  await expect(unregister.getByLabel('보관되지 않은 Work')).toContainText(workId1)
+  await expect(unregister.getByRole('button', { name: '등록 해제', exact: true })).toBeDisabled()
+  await win2.screenshot({ path: 'test-results/unregister-blocked.png' })
+  await unregister.getByRole('button', { name: '취소', exact: true }).click()
+  await expect(unregister).toBeHidden()
+
+  // 첫 Work를 포기한 뒤 [기록 지우기]는 [Work 정리]의 확인과 함께 worktree와 기록을 지운다
+  await work1.click()
+  await win2.getByRole('button', { name: 'Work 포기', exact: true }).click()
+  const abandon = win2.getByRole('dialog', { name: 'Work 포기' })
+  await abandon.getByRole('button', { name: 'Work 포기', exact: true }).click()
+  await expect(abandon).toBeHidden({ timeout: 30_000 })
+  await expect(work1.locator('.badge')).toHaveText('포기', { timeout: 30_000 })
+  await work1.click({ button: 'right' })
+  await expect(menu.getByRole('menuitem')).toHaveText(['기록 지우기'])
+  await menu.getByRole('menuitem', { name: '기록 지우기', exact: true }).click()
+  const remove1 = win2.getByRole('dialog', { name: /Work 기록 지우기/ })
+  await expect(remove1.getByLabel('정리 요약')).toContainText('worktree를 지우고', {
+    timeout: 30_000,
+  })
+  const confirm = remove1.getByLabel('확인', { exact: true })
+  if ((await confirm.count()) > 0) await confirm.check()
+  await win2.screenshot({ path: 'test-results/delete-work.png' })
+  await remove1.getByRole('button', { name: '정리하고 지우기', exact: true }).click()
+  await expect(remove1).toBeHidden({ timeout: 30_000 })
+  await expect(project.locator('.work-item')).toHaveCount(0)
+  expect(findDir(projects, workId1, 'works')).toBeNull()
+  expect(findDir(projects, workId1, 'worktrees')).toBeNull()
+
+  // Work가 모두 지워지면 등록 해제한다. 프로젝트가 없으면 첫 사용 안내가 보인다
+  await projectName.click({ button: 'right' })
+  await menu.getByRole('menuitem', { name: '등록 해제', exact: true }).click()
+  await expect(unregister).toContainText('이 프로젝트에는 Work가 없습니다')
+  await unregister.getByRole('button', { name: '등록 해제', exact: true }).click()
+  await expect(unregister).toBeHidden({ timeout: 30_000 })
+  await expect(win2.locator('.project')).toHaveCount(0)
+  await expect(win2.getByRole('region', { name: '첫 사용' })).toBeVisible()
+  expect(fs.readdirSync(projects)).toEqual([])
+  await win2.screenshot({ path: 'test-results/unregistered.png' })
 })
 
 // 대화상자가 top layer에 떠 있고(showModal) 포커스가 그 안에 있다

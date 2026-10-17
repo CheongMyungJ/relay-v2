@@ -191,6 +191,9 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
     const r = await (await ready).registerProject(text(dir), text(branch))
     return r.ok ? { ok: true } : r
   })
+  ipcMain.handle(IPC.removeProject, async (_e, projectId: unknown) =>
+    (await ready).removeProject(text(projectId)),
+  )
   ipcMain.handle(IPC.branches, async (_e, projectId: unknown) =>
     (await ready).branches(text(projectId)),
   )
@@ -250,6 +253,9 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
     (await ready).resumeWork(text(workKey)),
   )
   ipcMain.handle(IPC.abandon, async (_e, workKey: unknown) => (await ready).abandon(text(workKey)))
+  ipcMain.handle(IPC.deleteWork, async (_e, workKey: unknown, clean: unknown) =>
+    (await ready).deleteWork(text(workKey), clean === null ? null : cleanInput(clean)),
+  )
   ipcMain.handle(
     IPC.stepPreview,
     async (_e, workKey: unknown, step: unknown, keepCode: unknown, type: unknown) =>

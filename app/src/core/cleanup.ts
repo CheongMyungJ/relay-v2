@@ -11,6 +11,24 @@ export function canClean(work: WorkState): boolean {
   return (work.status === 'completed' || work.status === 'abandoned') && !work.operation
 }
 
+/**
+ * [기록 지우기]를 받는 Work (D407): 보관됐거나 정리할 수 있는 Work다. 정리하지 않은 Work는 지우기 전에 정리한다.
+ * 사이드바의 우클릭 메뉴도 이것으로 정한다
+ */
+export function canDelete(work: WorkState): boolean {
+  return (work.status === 'archived' && !work.operation) || canClean(work)
+}
+
+/**
+ * [등록 해제]를 막는 까닭 (D408). 프로젝트의 Work가 모두 보관됐어야 한다(Work가 없어도 된다). 막지 않으면 null
+ */
+export function projectRemoveBlock(works: readonly WorkState[]): string | null {
+  const left = works.filter((w) => w.status !== 'archived' || w.operation)
+  if (left.length === 0) return null
+  const ids = left.map((w) => w.work_id).join(', ')
+  return `보관되지 않은 Work ${left.length}개가 있음 (${ids}). [Work 정리]나 [기록 지우기]로 먼저 정리하세요`
+}
+
 /** 정리 요약에 쓰는 사실. main이 git과 세션에서 읽는다 */
 /**
  * 반쯤 지운 worktree 폴더의 안내 (D140). git worktree remove가 파일을 지우다 실패해도 git은 관리 정보를 지워, 남은
