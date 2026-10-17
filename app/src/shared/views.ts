@@ -3,6 +3,7 @@ import type { WorkSettings } from './config'
 import type { Decision, HandoffStatus, NodeName, TaskNode } from './contracts'
 import type { PendingQuestionView } from './questions'
 import type { PrItemKind, PrItemStatus } from './pr'
+import type { DraftRef, ParsedDraft } from './session'
 import type {
   ApprovedIntent,
   DeliveryChoice,
@@ -769,6 +770,8 @@ export interface SelectStepInput {
 export interface AppSnapshot {
   projects: ProjectView[]
   works: WorkView[]
+  /** 기본 세션 (D405). 최근에 만든 것이 앞이다 */
+  sessions: SessionView[]
   /** 앱을 띄울 때의 경고 (예: config.json을 읽지 못함) */
   warnings: string[]
 }
@@ -898,6 +901,44 @@ export type CommandResult = { ok: true } | { ok: false; error: string }
 /** Work 생성 결과. 만든 Work의 키를 돌려준다 */
 export type CreateWorkResult = { ok: true; workKey: string } | { ok: false; error: string }
 
+// ---------- 기본 세션 (시나리오 12, D397~D406) ----------
+
+/** Work 초안 카드 (D404). 만든 곳과 상관없는 모양이다. 틀린 칸은 null이고 형식 오류는 errors에 있다 */
+export interface DraftView extends ParsedDraft {
+  /** 초안의 자리. [새 Work로 만들기]가 새 Work 입력에 실어 보내고, [버리기]가 지운다 */
+  ref: DraftRef
+  /** 요청의 첫 줄 (Work 제목이 될 글) */
+  title: string
+  /** 프로젝트 이름. 모르는 프로젝트면 null */
+  projectName: string | null
+}
+
+/** 기본 세션 하나 (D405). task가 아니다 */
+export interface SessionView {
+  id: string
+  /** 이름. 짓기 전에는 "새 세션"이다 (D403) */
+  name: string
+  /** 만들 때 고른 폴더 (D398) */
+  cwd: string
+  created_at: string
+  /** 엔진 이름. 열린 세션은 그 엔진, 아니면 열 때 쓸 설정의 엔진이다 (D399) */
+  engineLabel: string
+  /** 살아 있음, 끝남. 이 앱에서 연 적이 없으면 null이다 (앱을 다시 켜도 없음) */
+  status: 'live' | 'ended' | null
+  /** 이 세션 터미널의 키. 연 적이 없으면 null이다 */
+  terminal: string | null
+  /** 이어 갈 대화가 있다. [열기]가 --resume으로 잇는다 */
+  resumable: boolean
+  /** Codex 세션의 안내가 아직 대화에 들어가지 않았을 때의 안내 (훅 신뢰, 다시 열기) */
+  notice?: string
+  /** Work 초안 카드 (D404). 파일 이름 차례다 */
+  drafts: DraftView[]
+}
+
+/** [새 세션]의 결과. 만들었지만 띄우지 못했으면 id와 함께 오류다 */
+export type CreateSessionResult =
+  { ok: true; id: string } | { ok: false; error: string; id?: string }
+
 export type CheckId = 'git_root' | 'claude' | 'codex' | 'duplicate' | 'origin' | 'gh' | 'submodules'
 
 /** 프로젝트 등록 점검 표의 한 행 (시나리오 0, D67) */
@@ -932,6 +973,8 @@ export interface NewWorkInput {
   settings?: WorkSettings
   /** 요청이 온 기존 이슈의 번호 (D338). 이슈 기록이 켜진 프로젝트에서만 쓴다. 없으면 새 이슈를 만든다 */
   issueNumber?: number | null
+  /** 채운 Work 초안 (D404). Work를 만들면 앱이 그 초안을 지운다 */
+  draft?: DraftRef
 }
 
 /** 지식 정리 후보 (D393) */

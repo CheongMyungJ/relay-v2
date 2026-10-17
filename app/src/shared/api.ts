@@ -11,6 +11,7 @@ import type {
   CleanInput,
   CleanPreviewResult,
   CommandResult,
+  CreateSessionResult,
   CreateWorkResult,
   DeliverInput,
   DeliverResult,
@@ -26,6 +27,7 @@ import type {
   SelectStepInput,
   StepPreviewResult,
   TerminalBacklog,
+  SessionView,
   TerminalChunk,
   WorkView,
 } from './views'
@@ -73,8 +75,10 @@ export interface RelayApi {
   /** 도구 훅으로 바뀐 진행 표시 (D216). 스냅샷보다 자주 온다 */
   onActivity(cb: (update: ActivityUpdate) => void): () => void
   onProjects(cb: (projects: ProjectView[]) => void): () => void
-  /** 폴더 선택 창. 취소하면 null */
-  pickFolder(): Promise<string | null>
+  /** 기본 세션 목록 (D405) */
+  onSessions(cb: (sessions: SessionView[]) => void): () => void
+  /** 폴더 선택 창. title은 창의 제목이다. 취소하면 null */
+  pickFolder(title: string): Promise<string | null>
   inspectProject(path: string): Promise<ProjectInspection>
   registerProject(path: string, defaultBranch: string): Promise<CommandResult>
   /** 기준 브랜치 목록. 프로젝트의 기본 브랜치가 맨 앞이다 */
@@ -132,6 +136,20 @@ export interface RelayApi {
   closeSide(workKey: string): Promise<CommandResult>
   /** [정리 끝 → push/PR 진행] (7-5) */
   finishCleanup(workKey: string): Promise<DeliverResult>
+  /** [새 세션] 창의 폴더 기본값 (D398) */
+  defaultSessionDir(): Promise<string>
+  /** [새 세션]의 [만들기] (시나리오 12-1). 만들고 바로 띄운다 */
+  createSession(cwd: string): Promise<CreateSessionResult>
+  /** 기본 세션의 [열기]·[새 대화로 열기] (시나리오 12-6) */
+  openSession(id: string, fresh: boolean): Promise<CommandResult>
+  /** 기본 세션의 [닫기] */
+  closeSession(id: string): Promise<CommandResult>
+  /** 기본 세션의 [이름 바꾸기] (D403) */
+  renameSession(id: string, name: string): Promise<CommandResult>
+  /** 기본 세션의 [지우기] (D402): 끝난 세션만 */
+  deleteSession(id: string): Promise<CommandResult>
+  /** 초안 카드의 [버리기] (D404) */
+  discardDraft(sessionId: string, name: string): Promise<CommandResult>
   /** Work 완료 화면의 [다시 점검]: origin과 gh를 다시 점검한다 (D118) */
   recheck(workKey: string): Promise<CommandResult>
   /** [Work 정리]의 확인 요약 (시나리오 8-1) */
@@ -199,6 +217,7 @@ export const IPC = {
   work: 'app:work',
   activity: 'app:activity',
   projects: 'app:projects',
+  sessions: 'app:sessions',
   pickFolder: 'project:pick-folder',
   inspectProject: 'project:inspect',
   registerProject: 'project:register',
@@ -224,6 +243,13 @@ export const IPC = {
   openSide: 'work:open-side',
   closeSide: 'work:close-side',
   finishCleanup: 'work:finish-cleanup',
+  defaultSessionDir: 'session:default-dir',
+  createSession: 'session:create',
+  openSession: 'session:open',
+  closeSession: 'session:close',
+  renameSession: 'session:rename',
+  deleteSession: 'session:delete',
+  discardDraft: 'session:discard-draft',
   recheck: 'work:recheck',
   cleanPreview: 'work:clean-preview',
   clean: 'work:clean',

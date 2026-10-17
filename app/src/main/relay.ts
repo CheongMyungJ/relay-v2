@@ -18,12 +18,17 @@ import { knowledgeEnabled } from '../core/knowledge'
 import { anchorNames, tidyCandidates, tidyRequest } from '../core/knowledge-tidy'
 import { HookServer } from '../adapters/hooks'
 import { killOrphans } from '../adapters/pty'
+import fsp from 'node:fs/promises'
 import {
   WorkFiles,
   loadConfig,
   loadProjects,
+  loadSessions,
   saveConfig,
   saveProject,
+  saveSession,
+  sessionDir,
+  sessionIds,
   workDir,
   workIds,
   worktreeDir,
@@ -32,18 +37,20 @@ import { applyConfigPatch, checkProjectSettings, checkWorkSettings } from '../co
 import { createWork } from '../core/machine'
 import { NODE_INFO } from '../core/pipeline'
 import { issueMarkId } from '../core/issue'
-import { localIso, nextWorkId, workBranch } from '../core/records'
+import { localIso, nextSessionId, nextWorkId, workBranch } from '../core/records'
 import { recordedProcesses, type RecordedProcess } from '../core/recovery'
 import { resolveAgent } from '../shared/agent'
 import { DEFAULT_CONFIG, type AppConfig, type WorkSettingsPatch } from '../shared/config'
 import type { NodeName } from '../shared/contracts'
 import { issueLogOn, type ProjectChecks, type ProjectState } from '../shared/project'
+import type { SessionRecord } from '../shared/session'
 import type {
   AppSnapshot,
   ApproveOptions,
   CleanInput,
   CleanPreviewResult,
   CommandResult,
+  CreateSessionResult,
   CreateWorkResult,
   DeliverInput,
   DeliverResult,
@@ -57,6 +64,7 @@ import type {
   RespondStartInput,
   ReviewView,
   SelectStepInput,
+  SessionView,
   StepPreviewResult,
   TerminalBacklog,
 } from '../shared/views'
@@ -64,6 +72,7 @@ import { WORK_TYPES, type DeliveryChoice, type WorkState, type WorkType } from '
 import { SessionPool } from './pool'
 import type { UiPort } from './ports'
 import { checkGh, inspectProject, prepareProject, type ProjectEnv } from './projects'
+import { SessionRunner, type SessionContext } from './session'
 import { WorkRunner, workTitle, type RunnerContext } from './work'
 
 export interface RelayOptions {
@@ -79,6 +88,18 @@ export interface RelayOptions {
   now?: () => Date
   /** 앱 설정을 읽었거나 바꿨다. 테마(D335)처럼 Electron이 적용할 것을 main이 적용한다 */
   onConfig?: (config: AppConfig) => void
+  /**
+   * 앱에 묶은 사용자 문서 README.md (I134). 기본 세션의 안내가 가리킨다. 없으면 스킬 원본 옆이다(설치본은
+   * resources/README.md, 개발 중과 시험은 레포의 README.md)
+   */
+  readme?: string
+}
+
+/** 터미널을 가진 것: Work(task, 보조 세션)와 기본 세션 */
+interface TerminalOwner {
+  attach(id: string): Promise<TerminalBacklog>
+  write(id: string, data: string): void
+  resize(id: string, cols: number, rows: number): void
 }
 
 const RELAY_BRANCH = 'relay/'
@@ -86,6 +107,8 @@ const RELAY_BRANCH = 'relay/'
 export class Relay {
   private readonly projects = new Map<string, ProjectState>()
   private readonly works = new Map<string, WorkRunner>()
+  /** 기본 세션 (시나리오 12). 키는 session-id다 */
+  private readonly sessions = new Map<string, SessionRunner>()
   private readonly hooks = new HookServer()
   private readonly env: NodeJS.ProcessEnv
   private config: AppConfig = DEFAULT_CONFIG
@@ -94,6 +117,7 @@ export class Relay {
   private readonly warnings: string[] = []
   private size = { cols: 120, rows: 32 }
   private creating = false
+  private creatingSession = false
   /** 설정 바꾸기를 차례로 한다. 겹친 두 바꾸기가 서로의 값을 지우지 않게 */
   private configQueue: Promise<unknown> = Promise.resolve()
   /** project.json 고치기의 차례 (updateProject) */
@@ -137,8 +161,24 @@ export class Relay {
         }
       }
     }
-    // 1. 고아 프로세스 (시나리오 9-1): 모든 Work의 기록을 모아 한 번에 확인하고 끝낸다
-    const killed = await this.killOrphans(loaded)
+    for (const record of await loadSessions(this.o.home, this.warnings)) {
+      this.sessions.set(record.id, this.sessionRunner(record))
+    }
+    // 1. 고아 프로세스 (시나리오 9-1): 모든 Work와 기본 세션(D402)의 기록을 모아 한 번에 확인하고 끝낸다
+    const killed = await this.killOrphans(loaded, [...this.sessions.values()])
+    // 기본 세션은 프로세스 기록만 지우고 대화는 남긴다. 끝낸 것은 경고로 알린다
+    for (const r of this.sessions.values()) {
+      for (const p of killed.get(r) ?? [])
+        this.warnings.push(
+          `기본 세션 "${r.view().name}": 앱을 다시 켜며 남아 있던 프로세스(PID ${p.pid})를 끝냈습니다. [열기]로 대화를 잇습니다`,
+        )
+      try {
+        await r.reconcile()
+        await r.start()
+      } catch (e) {
+        this.warnings.push(`기본 세션 ${r.record.id}: 기록을 쓰지 못함 (${String(e)})`)
+      }
+    }
     // 2~6. 재시작 조정. Work마다 따로라 함께 한다. 조정하지 못한 Work만 빼고 앱을 연다 (D332)
     const failed = new Set<WorkRunner>()
     await Promise.all(
@@ -168,14 +208,18 @@ export class Relay {
   }
 
   /**
-   * 기록한 claude 프로세스(task의 세션과 살아 있던 정리 세션) 가운데 ID와 시작 시각이 같은 것이 살아 있으면 트리째
-   * 끝낸다 (시나리오 9-1, D76, D126). 시작 시각이 다르면 건드리지 않는다. Work마다 끝낸 기록을 돌려준다
+   * 기록한 claude 프로세스(task의 세션과 살아 있던 정리 세션·곁 세션, 기본 세션) 가운데 ID와 시작 시각이 같은 것이 살아
+   * 있으면 트리째 끝낸다 (시나리오 9-1, D76, D126, D402). 시작 시각이 다르면 건드리지 않는다. 주인마다 끝낸 기록을 돌려준다
    */
   private async killOrphans(
     runners: readonly WorkRunner[],
-  ): Promise<Map<WorkRunner, RecordedProcess[]>> {
-    const records = runners.flatMap((r) => recordedProcesses(r.work).map((p) => ({ r, p })))
-    const out = new Map<WorkRunner, RecordedProcess[]>()
+    sessions: readonly SessionRunner[],
+  ): Promise<Map<WorkRunner | SessionRunner, RecordedProcess[]>> {
+    const records = [
+      ...runners.flatMap((r) => recordedProcesses(r.work).map((p) => ({ r, p }))),
+      ...sessions.flatMap((r) => recordedProcesses(r.record).map((p) => ({ r, p }))),
+    ]
+    const out = new Map<WorkRunner | SessionRunner, RecordedProcess[]>()
     if (records.length === 0) return out
     let killed: { pid: number; startedAt: string }[]
     try {
@@ -198,7 +242,11 @@ export class Relay {
    */
   async close(): Promise<void> {
     this.pool.close()
-    await Promise.all([...this.works.values()].map((w) => w.shutdown()))
+    await Promise.all([
+      ...[...this.works.values()].map((w) => w.shutdown()),
+      // 기본 세션도 끝낸다 (D406)
+      ...[...this.sessions.values()].map((s) => s.shutdown()),
+    ])
     await this.hooks.close()
   }
 
@@ -207,9 +255,12 @@ export class Relay {
     await Promise.all([...this.works.values()].map((w) => Promise.all([w.prIdle(), w.issueIdle()])))
   }
 
-  /** 이 앱에서 살아 있는 세션이 있다. 앱을 끝낼 때 확인 창을 띄운다 (시나리오 3-6) */
+  /** 이 앱에서 살아 있는 세션이 있다. 앱을 끝낼 때 확인 창을 띄운다 (시나리오 3-6). 기본 세션도 센다 (D406) */
   hasLiveSessions(): boolean {
-    return [...this.works.values()].some((w) => w.hasLiveSession())
+    return (
+      [...this.works.values()].some((w) => w.hasLiveSession()) ||
+      [...this.sessions.values()].some((s) => s.hasLiveSession())
+    )
   }
 
   private context(): RunnerContext {
@@ -318,8 +369,16 @@ export class Relay {
     return {
       projects: this.projectViews(),
       works: [...this.works.values()].map((w) => w.view()),
+      sessions: this.sessionViews(),
       warnings: [...this.warnings],
     }
+  }
+
+  /** 기본 세션 목록 (D405): 최근에 만든 것이 앞이다 */
+  private sessionViews(): SessionView[] {
+    return [...this.sessions.values()]
+      .map((s) => s.view())
+      .sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id))
   }
 
   private projectViews(): ProjectView[] {
@@ -362,6 +421,8 @@ export class Relay {
       this.o.onConfig?.(r.value)
       this.pool.fill()
       for (const w of this.works.values()) void w.configChanged()
+      // 기본 세션의 다음 엔진 (D399)
+      this.o.ui.sessions(this.sessionViews())
       return { ok: true, config: r.value }
     })
     this.configQueue = run.catch(() => undefined)
@@ -392,6 +453,8 @@ export class Relay {
     await saveProject(this.o.home, r.project)
     this.projects.set(r.project.project_id, r.project)
     this.o.ui.projects(this.projectViews())
+    // 초안의 project는 등록된 프로젝트만 받는다 (I135)
+    for (const session of this.sessions.values()) void session.refreshDrafts()
     return { ok: true, projectId: r.project.project_id }
   }
 
@@ -487,11 +550,15 @@ export class Relay {
     const settings = checkWorkSettings(input.settings ?? {})
     if (!settings.ok) return { ok: false, error: settings.error }
     this.creating = true
+    let r: CreateWorkResult
     try {
-      return await this.create(project, input, branch, settings.value)
+      r = await this.create(project, input, branch, settings.value)
     } finally {
       this.creating = false
     }
+    // 초안으로 만들었으면 그 초안을 지운다 (D404). 지우지 못해도 Work는 생겼다
+    if (r.ok && input.draft) await this.removeDraft(input.draft.source.id, input.draft.name)
+    return r
   }
 
   private async create(
@@ -755,6 +822,118 @@ export class Relay {
     return this.withWork(workKey, (w) => w.retryIssue())
   }
 
+  // ---------- 기본 세션 (시나리오 12, D397~D406) ----------
+
+  private sessionContext(): SessionContext {
+    return {
+      home: this.o.home,
+      readme: this.o.readme ?? path.resolve(this.o.skills, '..', 'README.md'),
+      env: this.env,
+      hooks: this.hooks,
+      config: () => this.config,
+      at: () => this.at(),
+      size: () => this.size,
+      projects: () => [...this.projects.values()],
+      works: () =>
+        [...this.works.values()].map((w) => ({
+          project: w.project,
+          work: w.work,
+          title: w.view().title,
+          worktree: w.worktree,
+          workDir: w.files.dir,
+        })),
+      sessionIds: () => [...this.sessions.keys()],
+      terminal: (key, chunk) => this.o.ui.terminal(key, chunk),
+      changed: () => this.o.ui.sessions(this.sessionViews()),
+    }
+  }
+
+  private sessionRunner(record: SessionRecord): SessionRunner {
+    return new SessionRunner(this.sessionContext(), record, sessionDir(this.o.home, record.id))
+  }
+
+  /** [새 세션] 창의 폴더 기본값 (D398): 설정의 session_dir, 빈 글이면 <RELAY_HOME>/home/ */
+  defaultSessionDir(): string {
+    return this.config.session_dir || path.join(this.o.home, 'home')
+  }
+
+  /**
+   * [새 세션]의 [만들기] (시나리오 12-1). 폴더가 비면 기본값이다. 기본 폴더(<RELAY_HOME>/home/)는 없으면 만들고, 고른
+   * 폴더는 있어야 한다 (D398). sessions/<session-id>/session.json을 쓰고 바로 띄운다. 세션 상한을 거치지 않는다 (D397).
+   * 띄우지 못해도 세션은 남아 [열기]로 다시 연다
+   */
+  async createSession(cwd: string): Promise<CreateSessionResult> {
+    const dir = cwd.trim() || this.defaultSessionDir()
+    if (!path.isAbsolute(dir)) return { ok: false, error: `폴더는 절대 경로여야 함: ${dir}` }
+    if (this.creatingSession) return { ok: false, error: '다른 세션을 만드는 중입니다' }
+    this.creatingSession = true
+    let runner: SessionRunner
+    try {
+      const home = path.join(this.o.home, 'home')
+      if (path.resolve(dir) === path.resolve(home)) await fsp.mkdir(home, { recursive: true })
+      const st = await fsp.stat(dir).catch(() => null)
+      if (!st?.isDirectory()) return { ok: false, error: `폴더가 없음: ${dir}` }
+      const at = this.at()
+      const id = nextSessionId(at, [...this.sessions.keys(), ...(await sessionIds(this.o.home))])
+      const record: SessionRecord = { id, cwd: path.resolve(dir), created_at: at }
+      await saveSession(this.o.home, record)
+      runner = this.sessionRunner(record)
+      this.sessions.set(id, runner)
+      await runner.start()
+    } catch (e) {
+      return { ok: false, error: `세션을 만들지 못함: ${String(e)}` }
+    } finally {
+      this.creatingSession = false
+    }
+    this.o.ui.sessions(this.sessionViews())
+    const r = await runner.open(false)
+    const id = runner.record.id
+    return r.ok ? { ok: true, id } : { ok: false, error: r.error, id }
+  }
+
+  /** 기본 세션의 명령을 부른다 */
+  private withSession(
+    id: string,
+    fn: (runner: SessionRunner) => Promise<CommandResult>,
+  ): Promise<CommandResult> {
+    const runner = this.sessions.get(id)
+    return runner ? fn(runner) : Promise.resolve({ ok: false, error: '기본 세션이 없습니다' })
+  }
+
+  /** [열기]·[새 대화로 열기] (시나리오 12-6) */
+  openSession(id: string, fresh: boolean): Promise<CommandResult> {
+    return this.withSession(id, (s) => s.open(fresh))
+  }
+
+  /** [닫기] (시나리오 12-6) */
+  closeSession(id: string): Promise<CommandResult> {
+    return this.withSession(id, (s) => s.close())
+  }
+
+  /** 우클릭 [이름 바꾸기] (시나리오 12-7, D403) */
+  renameSession(id: string, name: string): Promise<CommandResult> {
+    return this.withSession(id, (s) => s.rename(name))
+  }
+
+  /** 우클릭 [지우기] (시나리오 12-7, D402): 끝난 세션만 */
+  async deleteSession(id: string): Promise<CommandResult> {
+    const r = await this.withSession(id, (s) => s.remove())
+    if (r.ok) {
+      this.sessions.delete(id)
+      this.o.ui.sessions(this.sessionViews())
+    }
+    return r
+  }
+
+  /** 초안 카드의 [버리기] (D404) */
+  discardDraft(sessionId: string, name: string): Promise<CommandResult> {
+    return this.removeDraft(sessionId, name)
+  }
+
+  private removeDraft(sessionId: string, name: string): Promise<CommandResult> {
+    return this.withSession(sessionId, (s) => s.removeDraft(name))
+  }
+
   // ---------- 재시작과 복구 (시나리오 9) ----------
 
   /** 끊긴 작업의 [다시 시도] (D123). 끊긴 전달은 커밋 안 된 변경이 남았으면 목록을 돌려준다 (7-5) */
@@ -785,10 +964,17 @@ export class Relay {
 
   // ---------- 터미널 ----------
 
-  /** 터미널 키 <project-id>/<work-id>/<task-id>를 Work와 task로 나눈다 */
-  private terminal(key: string): { runner: WorkRunner; taskId: string } | null {
+  /**
+   * 터미널 키를 주인과 터미널 id로 나눈다: <project-id>/<work-id>/<task-id>는 Work, sessions/<session-id>/<id>는 기본
+   * 세션이다. 프로젝트 id는 늘 -<해시>로 끝나 sessions와 겹치지 않는다
+   */
+  private terminal(key: string): { runner: TerminalOwner; taskId: string } | null {
     const i = key.lastIndexOf('/')
-    const runner = i > 0 ? this.works.get(key.slice(0, i)) : undefined
+    if (i <= 0) return null
+    const owner = key.slice(0, i)
+    const runner: TerminalOwner | undefined = owner.startsWith('sessions/')
+      ? this.sessions.get(owner.slice('sessions/'.length))
+      : this.works.get(owner)
     return runner ? { runner, taskId: key.slice(i + 1) } : null
   }
 

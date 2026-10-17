@@ -22,6 +22,9 @@ extraResources:
     to: codex-hook.ps1
   - from: scripts/codex-bridge.mjs
     to: codex-bridge.mjs
+  # 기본 세션의 안내가 가리키는 사용자 문서 (I134)
+  - from: ../README.md
+    to: README.md
   - from: ../skills
     to: skills
     filter:

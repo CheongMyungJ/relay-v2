@@ -11,6 +11,7 @@ import { appendBlock } from '../core/records'
 import { DEFAULT_CONFIG, type AppConfig, type ThemeChoice } from '../shared/config'
 import { EMPTY_PR_ITEMS, type PrItemsFile } from '../shared/pr'
 import type { ProjectState } from '../shared/project'
+import type { SessionRecord } from '../shared/session'
 import type { LifecycleEvent, OwnedFile, TaskRecord, WorkState } from '../shared/work'
 
 /** 저장소 위치. 환경 변수 RELAY_HOME으로만 바꾼다 (D74). 기본은 사용자 폴더의 .relay */
@@ -210,6 +211,82 @@ export async function saveProject(home: string, project: ProjectState): Promise<
 /** 프로젝트의 Work id (works/ 아래 디렉터리 이름) */
 export async function workIds(home: string, projectId: string): Promise<string[]> {
   return subdirs(path.join(projectDir(home, projectId), 'works'))
+}
+
+// ---------- 기본 세션 (D402) ----------
+
+/** 기본 세션 디렉터리: sessions/<session-id> */
+export function sessionDir(home: string, id: string): string {
+  return path.join(home, 'sessions', id)
+}
+
+/** sessions/ 아래의 세션 id (디렉터리 이름) */
+export async function sessionIds(home: string): Promise<string[]> {
+  return subdirs(path.join(home, 'sessions'))
+}
+
+/**
+ * 기본 세션의 기록을 읽는다. 읽을 수 없거나 모양이 틀린 session.json은 그 세션만 빼고 problems에 파일과 까닭을 남긴다.
+ * 파일은 건드리지 않는다 (D332와 같음). session.json이 없는 디렉터리는 건너뛴다
+ */
+export async function loadSessions(
+  home: string,
+  problems: string[] = [],
+): Promise<SessionRecord[]> {
+  const out: SessionRecord[] = []
+  for (const id of await sessionIds(home)) {
+    const file = path.join(sessionDir(home, id), 'session.json')
+    try {
+      const r = await readJson<SessionRecord>(file)
+      if (!r) continue
+      if (typeof r !== 'object' || r.id !== id || typeof r.cwd !== 'string')
+        throw new Error('id나 cwd가 맞지 않음')
+      out.push(r)
+    } catch (e) {
+      problems.push(
+        `${file}: 읽을 수 없어 이 기본 세션을 열지 않음. 파일을 고친 뒤 앱을 다시 켜세요 (${e instanceof Error ? e.message : String(e)})`,
+      )
+    }
+  }
+  return out
+}
+
+export async function saveSession(home: string, record: SessionRecord): Promise<void> {
+  await writeJson(path.join(sessionDir(home, record.id), 'session.json'), record)
+}
+
+/**
+ * 초안 폴더의 파일 (D404, I135): 이름과 내용. *.md만 읽고, limit 바이트를 넘는 파일은 limit+1바이트까지만 읽어
+ * 크기 검사가 형식 오류로 보이게 한다. 폴더가 없으면 빈 목록이다
+ */
+export async function readDrafts(
+  dir: string,
+  isDraft: (name: string) => boolean,
+  limit: number,
+): Promise<{ name: string; text: string }[]> {
+  let names: string[]
+  try {
+    names = (await fsp.readdir(dir, { withFileTypes: true }))
+      .filter((e) => e.isFile() && isDraft(e.name))
+      .map((e) => e.name)
+      .sort()
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return []
+    throw e
+  }
+  const out: { name: string; text: string }[] = []
+  for (const name of names) {
+    const fh = await fsp.open(path.join(dir, name), 'r').catch(() => null)
+    if (!fh) continue
+    try {
+      const buf = Buffer.alloc(limit + 1)
+      const { bytesRead } = await fh.read(buf, 0, limit + 1, 0)
+      out.push({ name, text: buf.subarray(0, bytesRead).toString('utf8') })
+    } finally {
+      await fh.close()
+    }
+  }
+  return out
 }
 
 // ---------- Work (5.1) ----------

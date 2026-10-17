@@ -337,6 +337,7 @@ import type {
 import type { SessionPool } from './pool'
 import type { UiPort } from './ports'
 import { listPrComments, readPr, receivedCommits, fetchTip, type PrFetched } from './pr'
+import { launchChat } from './launch'
 import { TerminalBuffer } from './terminals'
 import {
   changedKnowledge,
@@ -3055,7 +3056,7 @@ export class WorkRunner {
       : null
   }
 
-  /** 곁 세션을 띄운다. 안내와 설정은 열 때마다 임시 폴더에 새로 만든다 (I126) */
+  /** 곁 세션을 띄운다. 안내와 설정은 열 때마다 임시 폴더에 새로 만든다 (I126). 띄우기는 기본 세션과 함께 쓴다 (I132) */
   private async launchSide(fresh: boolean): Promise<CommandResult> {
     const { env } = this.ctx
     const config = this.ctx.config()
@@ -3086,79 +3087,54 @@ export class WorkRunner {
       handled: false,
       ending: false,
     }
+    const buffer = new TerminalBuffer()
+    buffer.live = true
+    buffer.push(sideMark(resume))
+    this.terminals.set(id, buffer)
+    const key = this.terminalKey(id)
+    const model = {
+      ...(agent.model ? { model: agent.model } : {}),
+      ...(agent.effort ? { effort: agent.effort } : {}),
+    }
     let pid: number
     try {
-      const driver = agentRuntime(agent.engine)
-      const bin = driver.find(env)
-      if (!bin) throw new Error(driver.installGuide)
-      s.dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'relay-side-'))
-      const settingsPath = path.join(s.dir, 'side.settings.json')
-      const guidePath = path.join(s.dir, 'side.guide.md')
-      await writeJson(
-        settingsPath,
-        driver.sideSettings({
-          port: this.ctx.hooks.port,
-          taskId: SIDE_ID,
-          workDir: this.files.dir,
-          ...(agent.model ? { model: agent.model } : {}),
-          ...(agent.effort ? { effort: agent.effort } : {}),
-        }),
-      )
-      await fsp.writeFile(guidePath, s.guide, 'utf8')
-      const args = await driver.sideArgs({
-        sessionId,
-        resume,
-        workDir: this.files.dir,
-        settingsPath,
-        guidePath,
-        ...(agent.model ? { model: agent.model } : {}),
-        ...(agent.effort ? { effort: agent.effort } : {}),
-      })
-      const token = randomBytes(32).toString('hex')
-      const { cols, rows } = this.ctx.size()
-      const buffer = new TerminalBuffer()
-      buffer.live = true
-      buffer.push(sideMark(resume))
-      this.terminals.set(id, buffer)
-      const pty = startPty({
-        bin,
-        args,
+      const launched = await launchChat({
+        engine: agent.engine,
+        env,
+        hooks: this.ctx.hooks,
+        hookId: SIDE_ID,
+        name: 'side',
         cwd: this.worktree,
-        env: { ...env, ...driver.launchEnv(token, this.ctx.hooks.port, SIDE_ID) },
-        cols,
-        rows,
-        answerQueries: true,
+        guide: s.guide,
+        settings: (driver) =>
+          driver.sideSettings({
+            port: this.ctx.hooks.port,
+            taskId: SIDE_ID,
+            workDir: this.files.dir,
+            ...model,
+          }),
+        args: (driver, files) =>
+          driver.sideArgs({ sessionId, resume, workDir: this.files.dir, ...files, ...model }),
+        size: this.ctx.size(),
+        onData: (data) => {
+          if (!s.handled) this.ctx.ui.terminal(key, buffer.push(data))
+        },
+        onExit: () => void this.enqueue(() => this.onSideExit(s)),
+        onHook: (req) => this.sideHook(s, req),
       })
-      const key = this.terminalKey(id)
-      let exited!: () => void
-      s.exited = new Promise((r) => (exited = r))
-      s.pty = pty
-      pty.onData((data) => {
-        if (!s.handled) this.ctx.ui.terminal(key, buffer.push(data))
-      })
-      pty.onExit(() => {
-        exited()
-        void this.enqueue(() => this.onSideExit(s))
-      })
-      s.unregister = this.ctx.hooks.register(
-        token,
-        SIDE_ID,
-        (req) => this.sideHook(s, req),
-        // Codex 도구 보호 훅은 main의 오류를 빈 성공으로 번역하지 않는다. 질문창(relay MCP)은 없다 (I130)
-        agent.engine === 'codex' ? { failClosed: true } : {},
-      )
+      s.pty = launched.pty
+      s.exited = launched.exited
+      s.dir = launched.dir
+      s.unregister = launched.unregister
       // 끝난 앞 곁 세션의 터미널은 새 터미널로 바꾼다
       if (this.side) this.terminals.delete(this.side.id)
       this.side = s
       this.changed()
-      pid = pty.pid
+      pid = launched.pty.pid
     } catch (err) {
-      // 띄우지 못했으면 만든 것을 치우고 앞 곁 세션(끝난 터미널)은 그대로 둔다
+      // 띄우지 못했으면 터미널을 치우고 앞 곁 세션(끝난 터미널)은 그대로 둔다
       s.handled = true
-      s.unregister()
-      if (s.pty) await s.pty.killTree().catch(() => undefined)
       this.terminals.delete(id)
-      if (s.dir) await fsp.rm(s.dir, { recursive: true, force: true }).catch(() => undefined)
       return { ok: false, error: `곁 세션을 열지 못함: ${message(err)}` }
     }
     // 살아 있는 동안 프로세스 ID와 시작 시각을 적는다. 앱이 충돌한 뒤 살아남으면 재시작 때 끝낸다 (D389)

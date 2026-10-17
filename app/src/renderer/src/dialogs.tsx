@@ -92,7 +92,7 @@ export function ProjectDialog({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState<string | null>(null)
 
   const pick = async () => {
-    const dir = await window.relay.pickFolder()
+    const dir = await window.relay.pickFolder('등록할 레포 폴더')
     if (!dir) return
     setBusy(true)
     setError(null)

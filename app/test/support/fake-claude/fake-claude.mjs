@@ -19,6 +19,8 @@
 // - --append-system-prompt-file을 받은 세션은 곁 세션(시나리오 11, I127)이라 시나리오의 side 단계(--resume이면
 //   sideResume)를 하고, 기록에 side: true와 안내 파일의 내용을 남긴다. 실제처럼 새 대화는 첫 요청(prompt 단계) 뒤에야
 //   저장해, 묻지 않고 닫은 대화를 --resume하면 "No conversation found"로 끝난다(D389).
+// - 그 가운데 설정 파일의 훅 URL이 /hook/session/인 세션은 기본 세션(시나리오 12)이라 시나리오의 session 단계(--resume이면
+//   sessionResume)를 하고, 기록에 side 대신 session: true를 남긴다. 실행 인자는 곁 세션과 같다(I132)
 // - PR 대응 task(스킬 pr-respond)의 respond 단계는 context.md의 이번 라운드 항목(`#### \`<항목 id>\` — …`)을 읽어
 //   response.md(항목마다 한 줄)와 replies.md(코멘트 항목마다 `## <항목 id>`, D190)를 쓴다. merge 단계는 앱이 fetch한
 //   원격 브랜치(remote: PR 브랜치, base: 기준 브랜치)를 worktree에서 병합한다(D181, D193. context.md의 브랜치 이름).
@@ -463,7 +465,13 @@ async function run() {
     process.exit(1)
   }
   const side = opts.guide !== null
-  // 곁 세션의 새 대화는 첫 요청 뒤에 저장한다 (실제 claude, D389)
+  // 기본 세션은 곁 세션과 같은 인자이고 훅 URL의 id가 session이다 (I133)
+  const session =
+    side &&
+    (loadSettings().hooks?.UserPromptSubmit ?? []).some((g) =>
+      (g.hooks ?? []).some((h) => /\/hook\/session\//.test(h.url ?? '')),
+    )
+  // 곁 세션과 기본 세션의 새 대화는 첫 요청 뒤에 저장한다 (실제 claude, D389)
   if (side && !opts.resume) unsaved = true
   else if (!opts.resume) saveSession(ctx)
   record({
@@ -471,7 +479,9 @@ async function run() {
     args: argv,
     resume: opts.resume,
     cleanup: !side && !opts.resume && opts.prompt === null,
-    ...(side ? { side: true, guide: fs.readFileSync(opts.guide, 'utf8') } : {}),
+    ...(side
+      ? { [session ? 'session' : 'side']: true, guide: fs.readFileSync(opts.guide, 'utf8') }
+      : {}),
     cwd: process.cwd(),
     token: Boolean(env.RELAY_HOOK_TOKEN),
     skill: ctx.skill,
@@ -483,13 +493,15 @@ async function run() {
   // 첫 프롬프트가 없으면 정리 세션이다 (7-5). cleanup 시나리오가 없으면 입력을 기다리기만 한다
   const vars = { taskDir: ctx.taskDir, taskId: ctx.taskId, node: ctx.node, attempt: 0 }
   if (opts.resume && opts.prompt !== null) await steps([{ do: 'prompt' }], ctx, vars)
-  const list = side
-    ? ((opts.resume ? scenario.sideResume : scenario.side) ?? [])
-    : opts.resume
-      ? (scenario.resume?.[ctx.taskId] ?? scenario.resume?.[ctx.skill] ?? [])
-      : opts.prompt === null
-        ? (scenario.cleanup ?? [])
-        : (scenario.tasks?.[ctx.taskId] ?? scenario.tasks?.[ctx.skill] ?? [{ do: 'prompt' }])
+  const list = session
+    ? ((opts.resume ? scenario.sessionResume : scenario.session) ?? [])
+    : side
+      ? ((opts.resume ? scenario.sideResume : scenario.side) ?? [])
+      : opts.resume
+        ? (scenario.resume?.[ctx.taskId] ?? scenario.resume?.[ctx.skill] ?? [])
+        : opts.prompt === null
+          ? (scenario.cleanup ?? [])
+          : (scenario.tasks?.[ctx.taskId] ?? scenario.tasks?.[ctx.skill] ?? [{ do: 'prompt' }])
   await steps(list, ctx, vars)
   out('[가짜 claude] 대기')
 }

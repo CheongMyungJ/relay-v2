@@ -197,7 +197,10 @@ if (mcp)
 const scenario = JSON.parse(fs.readFileSync(env.FAKE_CODEX_SCENARIO, 'utf8'))
 // 곁 세션(시나리오 11, I130)은 앱이 훅 경로로 넘기는 RELAY_HOOK_TASK가 side다. 시나리오의 side·sideResume을 한다.
 // 가짜 claude와 같은 시나리오에서 Codex만 따로 하려면 sideCodex·sideResumeCodex를 쓴다
-const side = env.RELAY_HOOK_TASK === 'side'
+// 기본 세션(시나리오 12)은 RELAY_HOOK_TASK가 session이다. 곁 세션처럼 돌고 session·sessionResume(Codex만 따로면
+// sessionCodex·sessionResumeCodex)을 한다
+const session = env.RELAY_HOOK_TASK === 'session'
+const side = env.RELAY_HOOK_TASK === 'side' || session
 // sideNoStart: 훅을 신뢰하기 전에 SessionStart가 지나간 새 곁 세션을 흉내 낸다(실제 Codex는 신뢰 전 훅을 보내지 않음)
 if (!(side && !resumeId && scenario.sideNoStart))
   await hook('SessionStart', { source: resumeId ? 'resume' : 'startup' })
@@ -287,12 +290,16 @@ async function steps(list) {
 }
 await steps(
   resumeId
-    ? ((side
-        ? (scenario.sideResumeCodex ?? scenario.sideResume)
-        : scenario.resume?.[context.skill]) ?? [])
+    ? ((session
+        ? (scenario.sessionResumeCodex ?? scenario.sessionResume)
+        : side
+          ? (scenario.sideResumeCodex ?? scenario.sideResume)
+          : scenario.resume?.[context.skill]) ?? [])
     : context.skill
       ? (scenario.tasks?.[context.skill] ?? [])
-      : side
-        ? (scenario.sideCodex ?? scenario.side ?? [])
-        : (scenario.cleanup ?? []),
+      : session
+        ? (scenario.sessionCodex ?? scenario.session ?? [])
+        : side
+          ? (scenario.sideCodex ?? scenario.side ?? [])
+          : (scenario.cleanup ?? []),
 )

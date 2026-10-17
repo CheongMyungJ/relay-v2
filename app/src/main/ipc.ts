@@ -5,6 +5,7 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { ALL_NODES } from '../core/pipeline'
 import { IPC, type AppInfo, type UpdateState } from '../shared/api'
 import type { NodeName } from '../shared/contracts'
+import type { DraftRef } from '../shared/session'
 import type {
   ApproveOptions,
   CleanExpect,
@@ -146,6 +147,17 @@ function respondInput(v: unknown): RespondStartInput {
   return { items: items.map(text), instruction: text(o['instruction']) }
 }
 
+/** 새 Work를 만든 초안의 자리 (D404) */
+function draftRef(v: unknown): DraftRef {
+  if (!v || typeof v !== 'object') throw new Error('초안 자리가 아님')
+  const o = v as Record<string, unknown>
+  const source = o['source']
+  if (!source || typeof source !== 'object') throw new Error('초안을 만든 곳이 없음')
+  const src = source as Record<string, unknown>
+  if (src['kind'] !== 'session') throw new Error('모르는 초안의 만든 곳')
+  return { source: { kind: 'session', id: text(src['id']) }, name: text(o['name']) }
+}
+
 export interface IpcHooks {
   /** 사람이 보고 있는 Work가 바뀌었다 (D81) */
   onSelectWork(workKey: string | null): void
@@ -166,9 +178,9 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   ipcMain.handle(IPC.installUpdate, () => hooks.installUpdate())
   ipcMain.handle(IPC.snapshot, async () => (await ready).snapshot())
 
-  ipcMain.handle(IPC.pickFolder, async (event) => {
+  ipcMain.handle(IPC.pickFolder, async (event, title: unknown) => {
     const win = BrowserWindow.fromWebContents(event.sender)
-    const opts = { properties: ['openDirectory' as const], title: '등록할 레포 폴더' }
+    const opts = { properties: ['openDirectory' as const], title: text(title) }
     const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
     return r.canceled ? null : (r.filePaths[0] ?? null)
   })
@@ -192,6 +204,7 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
       ...(input.settings === undefined ? {} : { settings: input.settings }),
       // 기존 이슈 번호 (D338). 정수인지는 Relay.createWork가 본다
       ...(typeof input.issueNumber === 'number' ? { issueNumber: input.issueNumber } : {}),
+      ...(input.draft === undefined ? {} : { draft: draftRef(input.draft) }),
     }),
   )
   ipcMain.handle(
@@ -262,6 +275,23 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   )
   ipcMain.handle(IPC.closeSide, async (_e, workKey: unknown) =>
     (await ready).closeSide(text(workKey)),
+  )
+  ipcMain.handle(IPC.defaultSessionDir, async () => (await ready).defaultSessionDir())
+  ipcMain.handle(IPC.createSession, async (_e, cwd: unknown) =>
+    (await ready).createSession(text(cwd)),
+  )
+  ipcMain.handle(IPC.openSession, async (_e, id: unknown, fresh: unknown) =>
+    (await ready).openSession(text(id), flag(fresh)),
+  )
+  ipcMain.handle(IPC.closeSession, async (_e, id: unknown) => (await ready).closeSession(text(id)))
+  ipcMain.handle(IPC.renameSession, async (_e, id: unknown, name: unknown) =>
+    (await ready).renameSession(text(id), text(name)),
+  )
+  ipcMain.handle(IPC.deleteSession, async (_e, id: unknown) =>
+    (await ready).deleteSession(text(id)),
+  )
+  ipcMain.handle(IPC.discardDraft, async (_e, sessionId: unknown, name: unknown) =>
+    (await ready).discardDraft(text(sessionId), text(name)),
   )
   ipcMain.handle(IPC.recheck, async (_e, workKey: unknown) =>
     (await ready).recheckWork(text(workKey)),

@@ -114,8 +114,16 @@ const ui: UiPort = {
   work: (view) => send(IPC.work, view),
   activity: (update) => send(IPC.activity, update),
   projects: (views) => send(IPC.projects, views),
+  sessions: (views) => send(IPC.sessions, views),
   terminal: (key, chunk) => send(IPC.terminalData(key), chunk),
   notify,
+}
+
+/** 앱에 묶은 사용자 문서 (I134). 설치본은 resources/README.md, 개발 중에는 레포의 README.md */
+function bundledReadme(): string {
+  return app.isPackaged
+    ? join(process.resourcesPath, 'README.md')
+    : join(app.getAppPath(), '..', 'README.md')
 }
 
 /** 앱에 묶은 스킬 원본 (I7, D103). 설치본은 resources/skills, 개발 중에는 레포의 skills/ */
@@ -144,6 +152,7 @@ const ready: Promise<Relay> = primary
       Relay.open({
         home: relayHome(),
         skills: skillsDir(process.env, bundledSkills()),
+        readme: bundledReadme(),
         ui,
         onConfig: (config) => applyTheme(config.theme),
       }),
