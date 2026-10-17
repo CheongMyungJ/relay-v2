@@ -459,11 +459,14 @@ describe('[단위] 기본 모델·추론 수준과 단계별 실행 설정', () 
     })
   })
 
-  it('단계 목록은 의도 정리부터 PR 대응까지 아홉 단계이고 이름은 노드의 화면 이름이다. 끝은 곁 세션이다 (F3, D391)', () => {
-    expect(AGENT_STEP_TITLES.slice(0, -1).map(([skill, title]) => [skill, title])).toEqual(
+  it('단계 목록은 의도 정리부터 PR 대응까지 아홉 단계이고 이름은 노드의 화면 이름이다. 끝은 곁 세션과 기본 세션이다 (F3, D391, D399)', () => {
+    expect(AGENT_STEP_TITLES.slice(0, -2).map(([skill, title]) => [skill, title])).toEqual(
       [...ALL_NODES, RESPOND].map((n) => [NODE_INFO[n].skill, NODE_INFO[n].title]),
     )
-    expect(AGENT_STEP_TITLES.at(-1)).toEqual(['side', '곁 세션', 'common'])
+    expect(AGENT_STEP_TITLES.slice(-2)).toEqual([
+      ['side', '곁 세션', 'common'],
+      ['session', '기본 세션', 'common'],
+    ])
     expect(AGENT_STEP_TITLES.map(([, title]) => title)).toEqual([
       '의도 정리',
       '원인 분석과 수정',
@@ -475,6 +478,7 @@ describe('[단위] 기본 모델·추론 수준과 단계별 실행 설정', () 
       '리뷰와 검증',
       'PR 대응',
       '곁 세션',
+      '기본 세션',
     ])
   })
 

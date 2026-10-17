@@ -75,27 +75,96 @@ export function codexToolDenial(
 ): string | null {
   const norm = (s: string) => s.replace(/\\/g, '/').replace(/\/+$/, '')
   const root = norm(input.workDir)
-  const protectedFiles = [
-    'work.json',
-    'request.md',
-    'intent.md',
-    'decisions.md',
-    'pr-items.json',
-  ].map((f) => `${root}/${f}`)
+  const files = ['work.json', 'request.md', 'intent.md', 'decisions.md', 'pr-items.json'].map(
+    (f) => `${root}/${f}`,
+  )
   if (input.taskDir)
-    protectedFiles.push(
+    files.push(
       ...['context.md', 'task.settings.json', 'pty.log'].map(
         (f) => `${norm(input.taskDir ?? '')}/${f}`,
       ),
     )
-  const protectedDirs = [
+  const dirs = [
     ...input.previousTaskDirs.map(norm),
     `${root}/.claude`,
     `${root}/.agents`,
     `${root}/.codex`,
     ...(input.taskDir ? [`${norm(input.taskDir)}/.agents`] : []),
   ]
-  const canonical = (s: string, base = input.worktree) => {
+  return protectionDenial(
+    {
+      files,
+      dirs,
+      base: input.worktree,
+      ...(input.cwd ? { cwd: input.cwd } : {}),
+      ...(input.allowPush ? { allowPush: input.allowPush } : {}),
+      what: '앱 소유 파일이나 이전 task 기록',
+    },
+    tool,
+    args,
+  )
+}
+
+/**
+ * 기본 세션의 도구 보호 (D401): RELAY_HOME의 config.json, projects/ 아래 전부, sessions/*\/session.json(sessionIds의 것).
+ * Claude의 sessionDenyRules와 같은 범위다. 사람이 허락하면 push와 PR 조작을 한다(allowPush, 곁 세션과 같음)
+ */
+export function codexSessionToolDenial(
+  input: {
+    home: string
+    /** 이 세션의 폴더 (D398). 도구가 폴더를 주지 않으면 여기서 푼다 */
+    cwd: string
+    /** 훅 본문의 cwd */
+    hookCwd?: string
+    /** session.json을 지킬 세션 id */
+    sessionIds: readonly string[]
+    allowPush?: boolean
+  },
+  tool: string,
+  args: Readonly<Record<string, unknown>>,
+): string | null {
+  const root = input.home.replace(/\\/g, '/').replace(/\/+$/, '')
+  return protectionDenial(
+    {
+      files: [
+        `${root}/config.json`,
+        ...input.sessionIds.map((id) => `${root}/sessions/${id}/session.json`),
+      ],
+      dirs: [`${root}/projects`],
+      base: input.cwd,
+      ...(input.hookCwd ? { cwd: input.hookCwd } : {}),
+      ...(input.allowPush ? { allowPush: input.allowPush } : {}),
+      what: '앱 소유 파일이나 Work 기록',
+    },
+    tool,
+    args,
+  )
+}
+
+interface ProtectionInput {
+  /** 지킬 파일. 그 파일이나 그 위 폴더를 바꾸면 막는다 */
+  files: readonly string[]
+  /** 지킬 폴더. 그 안이나 그 위 폴더를 바꾸면 막는다 */
+  dirs: readonly string[]
+  /** 상대 경로를 푸는 기본 폴더 (worktree, 기본 세션의 폴더) */
+  base: string
+  /** 훅 본문의 cwd */
+  cwd?: string
+  allowPush?: boolean
+  /** 거절 까닭에 쓰는 이름 */
+  what: string
+}
+
+/** 명시된 경로와 직접 명령이 지킬 파일·폴더를 바꾸거나 push·PR 조작을 하는지 본다 */
+function protectionDenial(
+  input: ProtectionInput,
+  tool: string,
+  args: Readonly<Record<string, unknown>>,
+): string | null {
+  const norm = (s: string) => s.replace(/\\/g, '/').replace(/\/+$/, '')
+  const protectedFiles = input.files
+  const protectedDirs = input.dirs
+  const canonical = (s: string, base = input.base) => {
     const absolute = /^(?:\/|[A-Za-z]:[\\/])/.test(s) ? norm(s) : `${norm(base)}/${norm(s)}`
     const parts: string[] = []
     for (const p of absolute.split('/')) {
@@ -108,10 +177,10 @@ export function codexToolDenial(
     return /^[A-Za-z]:/.test(result) ? result.toLowerCase() : result
   }
   const workdir =
-    [args['workdir'], args['cwd'], input.cwd, input.worktree].find(
+    [args['workdir'], args['cwd'], input.cwd, input.base].find(
       (value): value is string => typeof value === 'string' && value.trim() !== '',
-    ) ?? input.worktree
-  const workingDir = canonical(workdir, input.cwd ?? input.worktree)
+    ) ?? input.base
+  const workingDir = canonical(workdir, input.cwd ?? input.base)
   const within = (p: string, dir: string) => p === dir || p.startsWith(`${dir.replace(/\/$/, '')}/`)
   const protectedPath = (s: string) => {
     const p = canonical(s, workingDir)
@@ -140,17 +209,17 @@ export function codexToolDenial(
     if (match[1]) paths.push(match[1])
   for (const match of command.matchAll(/^\*\*\* Move to:\s*(.+)$/gm))
     if (match[1]) paths.push(match[1])
-  if (paths.some(protectedPath)) return '앱 소유 파일이나 이전 task 기록은 편집할 수 없습니다.'
+  if (paths.some(protectedPath)) return `${input.what}은 편집할 수 없습니다.`
   if (
     /(?:\b(?:rm|mv|cp|tee|truncate|Set-Content|Add-Content|Remove-Item|Move-Item)\b|\bsed\b[^\n]*\s-i\b|write_text|writeFile|open\([^\n]*['"](?:w|a)['"]|(?:^|[^<])>)/i.test(
       execution,
     )
   ) {
     if (shellMutationPaths(execution).some(protectedPath))
-      return '명령이 앱 소유 파일이나 이전 task 기록을 변경하려고 합니다.'
+      return `명령이 ${input.what}을 변경하려고 합니다.`
     const normalized = norm(execution)
     if ([...protectedFiles, ...protectedDirs].some((p) => normalized.includes(p)))
-      return '명령이 앱 소유 파일이나 이전 task 기록을 변경하려고 합니다.'
+      return `명령이 ${input.what}을 변경하려고 합니다.`
   }
   return null
 }

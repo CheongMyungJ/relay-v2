@@ -71,6 +71,7 @@ const EDITABLE_KEYS = [
   'knowledge_review_engine',
   'knowledge_review_model',
   'theme',
+  'session_dir',
 ] as const
 
 export type EditableKey = (typeof EDITABLE_KEYS)[number]
@@ -245,6 +246,25 @@ function normalizeAgent(data: Record<string, unknown>, config: AppConfig, warnin
   }
 }
 
+/** 경로 글의 길이 상한 **(기본값)** */
+const SESSION_DIR_MAX = 1000
+
+/**
+ * [새 세션]의 폴더 기본값 (D398): 빈 글(<RELAY_HOME>/home/)이거나 한 줄의 절대 경로다. 앞뒤 공백은 뗀다. 폴더가 있는지는
+ * 세션을 만들 때 본다
+ */
+function sessionDir(v: unknown): Checked<string> {
+  const t = typeof v === 'string' ? v.trim() : null
+  const name = '기본 세션 폴더'
+  if (t === null) return { ok: false, error: `${name}: 문자열이어야 함` }
+  if (!t) return { ok: true, value: '' }
+  if (/[\r\n]/.test(t) || t.length > SESSION_DIR_MAX)
+    return { ok: false, error: `${name}: ${SESSION_DIR_MAX}자 이하의 한 줄이어야 함` }
+  if (!/^(?:\/|[A-Za-z]:[\\/]|\\\\)/.test(t))
+    return { ok: false, error: `${name}: 절대 경로이거나 비워야 함 (지금: ${t})` }
+  return { ok: true, value: t }
+}
+
 /** 화면 테마 (D335) */
 function theme(v: unknown): Checked<ThemeChoice> {
   const found = THEME_CHOICES.find((t) => t === v)
@@ -378,6 +398,11 @@ export function normalizeConfig(data: unknown): { config: AppConfig; warnings: s
     if (r.ok) config.theme = r.value
     else warnings.push(`config.json ${r.error}. 기본값 system을 씀`)
   }
+  if (data['session_dir'] !== undefined) {
+    const r = sessionDir(data['session_dir'])
+    if (r.ok) config.session_dir = r.value
+    else warnings.push(`config.json ${r.error}. 기본값(빈 글)을 씀`)
+  }
   if (data['question_mode'] !== undefined) {
     const r = questionModes(data['question_mode'])
     if (r.ok) config.question_mode = { ...config.question_mode, ...r.value }
@@ -440,6 +465,10 @@ export function applyConfigPatch(current: AppConfig, patch: unknown): Checked<Ap
       const r = theme(v)
       if (!r.ok) return r
       next.theme = r.value
+    } else if (key === 'session_dir') {
+      const r = sessionDir(v)
+      if (!r.ok) return r
+      next.session_dir = r.value
     } else if ((BOOLEAN_KEYS as readonly string[]).includes(key)) {
       const k = key as BooleanKey
       if (typeof v !== 'boolean') return { ok: false, error: `${NAMES[k]}: true/false여야 함` }

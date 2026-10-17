@@ -2,6 +2,7 @@
 // 무엇을 하는지, 재시작 때 확인할 프로세스, 앱 소유 파일의 해시가 다를 때의 경고. 프로세스를 찾아 끝내는 것과
 // 해시 계산, 파일 읽기는 main이 adapters로 한다. machine의 전이와 화면이 같은 규칙을 쓴다.
 import type { NodeName } from '../shared/contracts'
+import type { SessionRecord } from '../shared/session'
 import type { NoticeView, OperationView } from '../shared/views'
 import type {
   CleanOperation,
@@ -334,20 +335,28 @@ export function cleanResume(recordedForce: boolean, status: readonly string[]): 
 
 /** 재시작 때 확인할 프로세스 */
 export interface RecordedProcess {
-  /** task id. 정리 세션이면 null */
+  /** task id. 정리 세션, 곁 세션, 기본 세션이면 null */
   taskId: string | null
-  /** "02 원인 분석과 수정"이나 "정리 세션" */
+  /** "02 원인 분석과 수정"이나 "정리 세션", "기본 세션" */
   label: string
   pid: number
   startedAt: string
 }
 
 /**
- * 재시작 때 확인할 프로세스 (D76, D126, D389): 모든 task의 세션과 살아 있던 정리 세션·곁 세션 가운데 시작 시각을 적은 것.
+ * 재시작 때 확인할 프로세스 (D76, D126, D389, D402): 모든 task의 세션과 살아 있던 정리 세션·곁 세션, 기본 세션 가운데
+ * 시작 시각을 적은 것.
  * 시작 시각이 없으면 재사용된 ID를 가릴 수 없어 넣지 않는다. 끝난 세션도 넣는다: SessionEnd 뒤 늦게 끝나는
  * 프로세스가 있고, 시작 시각까지 같으면 같은 프로세스다
  */
-export function recordedProcesses(work: WorkState): RecordedProcess[] {
+export function recordedProcesses(work: WorkState | SessionRecord): RecordedProcess[] {
+  if (!('tasks' in work)) {
+    // 기본 세션 (D402): 살아 있는 동안의 프로세스 하나
+    const p = work.process
+    return p?.process_started_at
+      ? [{ taskId: null, label: '기본 세션', pid: p.pid, startedAt: p.process_started_at }]
+      : []
+  }
   const out: RecordedProcess[] = []
   for (const t of work.tasks) {
     const s = t.session
