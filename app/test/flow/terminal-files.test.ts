@@ -44,9 +44,14 @@ describe('터미널의 파일 (D410~D412)', () => {
         [path.join(tree, 'package.json')],
       ]),
     ).toEqual([0, 1, null, 0])
+    expect(await hh.relay.terminalTarget(work, 'package.json')).toEqual({
+      path: path.join(tree, 'package.json'),
+      open: true,
+    })
+    // Windows는 .js를 WSH가 실행하므로 열지 않고 폴더에서 보여 준다 (D412)
     expect(await hh.relay.terminalTarget(work, 'src/avg.js')).toEqual({
       path: path.join(tree, 'src', 'avg.js'),
-      open: true,
+      open: process.platform !== 'win32',
     })
     expect(await hh.relay.terminalTarget(work, 'src')).toEqual({
       path: path.join(tree, 'src'),
