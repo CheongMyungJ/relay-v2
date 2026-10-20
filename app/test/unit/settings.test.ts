@@ -254,6 +254,29 @@ describe('[단위] 모델·추론 수준 인자 (F7, F8, F10)', () => {
   })
 })
 
+describe('[단위] 서브모듈 Work의 메인 통합 검증 worktree (D414)', () => {
+  it('시작, 재개, 곁 세션에 Work 디렉터리 다음 --add-dir로 더한다. 없으면 지금과 같다', () => {
+    const base = { sessionId: 'id-1', workDir: WORK_DIR, settingsPath: 'S' }
+    const launched = launchArgs({
+      ...base,
+      skill: 'implement',
+      contextPath: 'context.md',
+      extraDirs: ['/main'],
+    })
+    expect(launched.slice(3, 7)).toEqual(['--add-dir', WORK_DIR, '--add-dir', '/main'])
+    expect(resumeArgs({ ...base, extraDirs: ['/main'] }).slice(3, 7)).toEqual([
+      '--add-dir',
+      WORK_DIR,
+      '--add-dir',
+      '/main',
+    ])
+    expect(
+      sideArgs({ ...base, resume: false, guidePath: 'G', extraDirs: ['/main'] }).slice(3, 7),
+    ).toEqual(['--add-dir', WORK_DIR, '--add-dir', '/main'])
+    expect(resumeArgs({ ...base, extraDirs: [] })).toEqual(resumeArgs(base))
+  })
+})
+
 describe('곁 세션 (시나리오 11, D386, D388)', () => {
   const work = ruleAbs(WORK_DIR)
 

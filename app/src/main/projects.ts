@@ -5,11 +5,22 @@ import path from 'node:path'
 import { agentRuntime } from '../adapters/agent'
 import type { AgentEngine } from '../shared/agent'
 import { ghAuthStatus, ghVersion } from '../adapters/gh'
-import { branches, defaultBranch, remoteUrl, repoRoot, submodulePaths } from '../adapters/git'
+import {
+  branches,
+  defaultBranch,
+  initSubmodule,
+  originHead,
+  remoteUrl,
+  repoRoot,
+  submoduleBranch,
+  submoduleList,
+  submodulePaths,
+} from '../adapters/git'
 import { canonicalPath, pathKey, sha256 } from '../adapters/store'
 import { remoteRepo } from '../core/delivery'
 import { MIN_GH_VERSION, ghAuthActive, ghTooOld, ghVersionReason } from '../core/pr'
 import { projectId } from '../core/records'
+import { submoduleDefaultBranch } from '../core/submodule'
 import type { ProjectState } from '../shared/project'
 import type { CheckItem, ProjectInspection } from '../shared/views'
 
@@ -149,7 +160,7 @@ async function inspect(
       ok: false,
       blocking: false,
       detail:
-        '서브모듈이 있습니다. relay는 Work의 worktree에 서브모듈을 받지 않고, 서브모듈 안의 변경을 커밋·전달·되감기하지 않습니다. [Work 정리]는 서브모듈 안의 작업도 함께 지웁니다',
+        '서브모듈이 있습니다. 메인 레포의 Work는 worktree에 서브모듈을 받지 않고, 서브모듈 안의 변경을 커밋·전달·되감기하지 않습니다. [Work 정리]는 서브모듈 안의 작업도 함께 지웁니다. 서브모듈을 고치려면 새 Work의 대상에서 그 서브모듈을 고릅니다',
     })
   }
 
@@ -194,6 +205,68 @@ export async function prepareProject(
       default_branch: name,
       created_at: at,
       checks: { origin: check('origin'), gh: gh.auth, gh_version: gh.version, checked_at: at },
+    },
+  }
+}
+
+/**
+ * 서브모듈 프로젝트를 만든다 (D413). 메인 프로젝트의 서브모듈 하나(`.gitmodules`에 있고 index에서 gitlink인 것)를
+ * 대상으로 하고, 레포 경로는 메인 체크아웃의 그 서브모듈 폴더다. 메인 체크아웃에 받아 두지 않았으면 받는다. 등록 점검은
+ * origin과 gh만 다시 한다(엔진 로그인은 메인과 같다). 기본 브랜치는 submoduleDefaultBranch로 고른다
+ */
+export async function prepareSubmoduleProject(
+  main: ProjectState,
+  subPath: string,
+  at: string,
+  o: ProjectEnv,
+): Promise<Registration> {
+  const env = o.env
+  if (main.parent) return { ok: false, error: '서브모듈 안의 서브모듈은 대상으로 고를 수 없습니다' }
+  const entry = (await submoduleList(main.repo_path, { env })).find((e) => e.path === subPath)
+  if (!entry) return { ok: false, error: `서브모듈이 아닙니다: ${subPath}` }
+  const repo = path.join(main.repo_path, ...subPath.split('/'))
+  if (!entry.initialized) {
+    try {
+      await initSubmodule(main.repo_path, subPath, { env })
+    } catch (e) {
+      return {
+        ok: false,
+        error: `서브모듈 ${subPath}을 받지 못했습니다. 터미널에서 git submodule update --init -- ${subPath}로 받은 뒤 다시 고르세요. ${String(e)}`,
+      }
+    }
+  }
+  const root = await repoRoot(repo, { env })
+  if (!root || pathKey(root) !== pathKey(repo)) {
+    return { ok: false, error: `서브모듈 폴더를 git 레포로 읽지 못했습니다: ${repo}` }
+  }
+  const id = projectId(folderName(repo), sha256(pathKey(repo)))
+  const dup = o.registered.find(
+    (p) => p.project_id === id || pathKey(p.repo_path) === pathKey(repo),
+  )
+  if (dup && dup.parent?.project_id !== main.project_id) {
+    return { ok: false, error: `이 폴더는 따로 등록된 프로젝트입니다 (${dup.project_id})` }
+  }
+  const originUrl = await remoteUrl(repo, 'origin', { env })
+  const gh = (await checkGh(o.ghBin, env, originUrl)).check
+  const { remote } = await branches(repo, { env })
+  const branch = submoduleDefaultBranch({
+    remoteHead: await originHead(repo, { env }),
+    configured: await submoduleBranch(main.repo_path, entry.name, { env }),
+    remote,
+  })
+  if (!branch)
+    return { ok: false, error: `서브모듈 ${subPath}의 origin에서 브랜치를 찾지 못했습니다` }
+  return {
+    ok: true,
+    project: {
+      ...(dup ?? {}),
+      schema_version: 1,
+      project_id: id,
+      repo_path: repo,
+      default_branch: dup?.default_branch ?? branch,
+      created_at: dup?.created_at ?? at,
+      checks: { origin: originUrl !== null, gh: gh.auth, gh_version: gh.version, checked_at: at },
+      parent: { project_id: main.project_id, path: subPath, name: entry.name },
     },
   }
 }

@@ -27,6 +27,7 @@ import type {
   ReviewView,
   SelectStepInput,
   StepPreviewResult,
+  SubmoduleView,
   TerminalBacklog,
   SessionView,
   TerminalChunk,
@@ -101,6 +102,13 @@ export interface RelayApi {
   removeProject(projectId: string): Promise<CommandResult>
   /** 기준 브랜치 목록. 프로젝트의 기본 브랜치가 맨 앞이다 */
   branches(projectId: string): Promise<string[]>
+  /** 새 Work 대화상자의 대상 목록: 메인 프로젝트의 서브모듈 (D413) */
+  submodules(projectId: string): Promise<SubmoduleView[]>
+  /** 서브모듈을 대상으로 고른다: 서브모듈 프로젝트를 만들거나 다시 점검한다 (D413) */
+  prepareSubmodule(
+    projectId: string,
+    path: string,
+  ): Promise<CommandResult & { project?: ProjectView }>
   createWork(projectId: string, input: NewWorkInput): Promise<CreateWorkResult>
   /** 기준 브랜치의 지식 정리 후보 (D393) */
   knowledgeTidy(
@@ -248,6 +256,8 @@ export const IPC = {
   removeProject: 'project:remove',
   projectRemovePreview: 'project:remove-preview',
   branches: 'project:branches',
+  submodules: 'project:submodules',
+  prepareSubmodule: 'project:prepare-submodule',
   createWork: 'work:create',
   knowledgeTidy: 'work:knowledge-tidy',
   review: 'work:review',

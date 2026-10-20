@@ -23,6 +23,8 @@ const api: RelayApi = {
   projectRemovePreview: (projectId) => ipcRenderer.invoke(IPC.projectRemovePreview, projectId),
   removeProject: (projectId) => ipcRenderer.invoke(IPC.removeProject, projectId),
   branches: (projectId) => ipcRenderer.invoke(IPC.branches, projectId),
+  submodules: (projectId) => ipcRenderer.invoke(IPC.submodules, projectId),
+  prepareSubmodule: (projectId, path) => ipcRenderer.invoke(IPC.prepareSubmodule, projectId, path),
   createWork: (projectId, input) => ipcRenderer.invoke(IPC.createWork, projectId, input),
   knowledgeTidy: (projectId, branch, location) =>
     ipcRenderer.invoke(IPC.knowledgeTidy, projectId, branch, location),

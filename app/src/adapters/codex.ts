@@ -6,6 +6,7 @@ import { CODEX_HOOK_EVENTS, codexFirstPrompt, tomlValue } from '../core/codex'
 import {
   HOOK_TOKEN_ENV,
   STOP_HOOK_TIMEOUT_SEC,
+  extraDirArgs,
   relaySkillName,
   type LaunchInput,
   type ResumeInput,
@@ -238,6 +239,7 @@ export async function codexLaunchArgs(input: LaunchInput): Promise<string[]> {
     ...args,
     '--add-dir',
     input.workDir,
+    ...extraDirArgs(input),
     codexFirstPrompt(input.skill, settings.skillPath, input.contextPath),
   ]
 }
@@ -246,6 +248,7 @@ export async function codexResumeArgs(input: ResumeInput): Promise<string[]> {
     ...(await options(input.settingsPath)).args,
     '--add-dir',
     input.workDir,
+    ...extraDirArgs(input),
     'resume',
     input.sessionId,
     ...(input.prompt ? [input.prompt] : []),
@@ -263,6 +266,7 @@ export async function codexSideArgs(input: SideArgsInput): Promise<string[]> {
     ...(await options(input.settingsPath)).args,
     '--add-dir',
     input.workDir,
+    ...extraDirArgs(input),
     ...(input.resume ? ['resume', input.sessionId] : []),
   ]
 }

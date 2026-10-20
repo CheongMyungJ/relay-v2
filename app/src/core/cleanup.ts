@@ -86,6 +86,8 @@ export interface CleanFacts {
   merged: boolean
   /** origin의 작업 브랜치와 있는지. 머지로 완료한 Work만 본다 (D178). 아니면 null */
   remote: { name: string; exists: boolean } | null
+  /** 서브모듈 Work의 메인 통합 검증 worktree와 그 메인 쪽 변경 (D416). 폴더가 없거나 서브모듈 Work가 아니면 없다 */
+  integration?: { root: string; changes: readonly string[] } | null
 }
 
 /**
@@ -108,6 +110,12 @@ export function cleanPreview(facts: CleanFacts): CleanPreview {
       `체크아웃된 서브모듈 ${facts.submodules.length}개(${facts.submodules.join(', ')}) 안의 커밋 안 된 변경과 push 안 한 커밋도 함께 지웁니다`,
     )
   }
+  const g = facts.integration ?? null
+  if (g && g.changes.length > 0) {
+    confirm.push(
+      `메인 통합 검증 worktree의 메인 쪽 변경 ${g.changes.length}개(전달 안 됨)를 백업 없이 지웁니다`,
+    )
+  }
   const b = facts.branch
   const lost = b.pushed || b.merged ? [] : [...(b.lost ?? [])]
   return {
@@ -127,6 +135,7 @@ export function cleanPreview(facts: CleanFacts): CleanPreview {
     backups: [...facts.backups],
     merged: facts.merged,
     remote: facts.remote ? { ...facts.remote } : null,
+    integration: g ? { root: g.root, changes: [...g.changes] } : null,
     confirm,
     expect: {
       uncommitted: [...facts.uncommitted],
@@ -136,6 +145,7 @@ export function cleanPreview(facts: CleanFacts): CleanPreview {
       remote: facts.remote?.exists === true,
       lost: lost.map((c) => c.sha),
       submodules: [...facts.submodules],
+      ...(g ? { integration: [...g.changes] } : {}),
     },
   }
 }
@@ -148,7 +158,8 @@ function sameExpect(a: CleanExpect, b: CleanExpect): boolean {
     sameChanges(a.locks, b.locks) &&
     sameChanges(a.backups, b.backups) &&
     sameChanges(a.lost ?? [], b.lost ?? []) &&
-    sameChanges(a.submodules ?? [], b.submodules ?? [])
+    sameChanges(a.submodules ?? [], b.submodules ?? []) &&
+    sameChanges(a.integration ?? [], b.integration ?? [])
   )
 }
 

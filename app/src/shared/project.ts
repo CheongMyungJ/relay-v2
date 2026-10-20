@@ -34,6 +34,20 @@ export interface ProjectState {
   merge_method?: MergeMethod | null
   /** 이슈 기록 (설계 3.7, D337, D345). 없으면 켜짐이다. 바꾸면 다음에 만드는 Work부터 따른다 (I96) */
   issue_log?: boolean
+  /**
+   * 서브모듈 프로젝트 (D413): 메인 프로젝트의 서브모듈 하나를 대상으로 한 프로젝트다. repo_path는 메인 체크아웃의 그
+   * 서브모듈 폴더다. 새 Work 대화상자에서 서브모듈을 처음 고를 때 앱이 만든다. 메인 프로젝트면 없다
+   */
+  parent?: SubmoduleParent
+}
+
+/** 서브모듈 프로젝트의 메인 프로젝트와 그 안의 자리 (D413) */
+export interface SubmoduleParent {
+  project_id: string
+  /** 메인 레포 안의 서브모듈 경로 (`.gitmodules`의 path, `/`로 나눔) */
+  path: string
+  /** `.gitmodules`의 서브모듈 이름. git 설정(`submodule.<이름>.*`)과 저장소 폴더(`modules/<이름>`)의 이름이다 */
+  name: string
 }
 
 /** 프로젝트 설정 화면에서 바꾸는 값 (5.1.2, D185) */
@@ -50,7 +64,9 @@ export function issueLogOn(project: Pick<ProjectState, 'issue_log'>): boolean {
 }
 
 /** 프로젝트의 화면 이름: 레포 폴더 이름. 사이드바, 새 Work 대화상자, 기본 세션의 안내가 같이 쓴다 */
-export function projectName(project: Pick<ProjectState, 'repo_path'>): string {
+export function projectName(project: Pick<ProjectState, 'repo_path' | 'parent'>): string {
+  // 서브모듈 프로젝트는 메인 레포 안의 경로다 (D413)
+  if (project.parent) return project.parent.path
   const trimmed = project.repo_path.replace(/[\\/]+$/, '')
   return trimmed.replace(/^.*[\\/]/, '') || project.repo_path
 }

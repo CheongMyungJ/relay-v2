@@ -1024,6 +1024,43 @@ describe('context.md: 설계 (D350, D358, D365, D374)', () => {
   })
 })
 
+describe('context.md: 서브모듈 Work (D413, D414)', () => {
+  it('메인 레포의 Work면 절이 없다', () => {
+    expect(sections(buildContext(input('fix'))).has('서브모듈 Work')).toBe(false)
+  })
+
+  it('메인 통합 검증 worktree가 있으면 어디서 고치고 어디서 검증하는지, 하지 않을 것을 넣는다', () => {
+    const md = buildContext(
+      input('fix', {
+        target: {
+          main: 'app',
+          path: 'lib',
+          integration: { root: '/w/root', baseBranch: 'main', baseCommit: 'abc' },
+        },
+        submodules: ['vendor'],
+      }),
+    )
+    const text = section(md, '서브모듈 Work')
+    expect(text).toContain('메인 레포 `app`의 서브모듈 `lib`의 레포만 다룬다')
+    expect(text).toContain('메인 레포의 통합 검증 worktree: `/w/root`')
+    expect(text).toContain('`main`의 커밋 `abc`')
+    expect(text).toContain('메인 레포의 파일은 고치지 않고')
+    expect(text).toContain('`--checkout` 같은 옵션으로 `lib`를 갱신하지 않는다')
+    // 서브모듈 레포 자신의 서브모듈 절(D383) 앞이다
+    const titles = [...sections(md).keys()]
+    expect(titles.indexOf('서브모듈 Work')).toBe(titles.indexOf('서브모듈') - 1)
+  })
+
+  it('메인 통합 검증 worktree가 없으면 서브모듈만으로 확인하고 못 한 것은 통과로 보지 않는다', () => {
+    const text = section(
+      buildContext(input('verify', { target: { main: 'app', path: 'lib', integration: null } })),
+      '서브모듈 Work',
+    )
+    expect(text).toContain('통합 검증 worktree는 만들지 않았다')
+    expect(text).toContain('통과로 보지 않고')
+  })
+})
+
 describe('context.md: 서브모듈 (D383)', () => {
   it('서브모듈이 없으면 절이 없다', () => {
     expect(sections(buildContext(input('fix'))).has('서브모듈')).toBe(false)

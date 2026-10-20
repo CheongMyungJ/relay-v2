@@ -338,6 +338,38 @@ export function App() {
     )
   }
 
+  /** 사이드바의 프로젝트 묶음: 이름, Work, [새 Work]. 서브모듈 프로젝트는 그 안에 같은 모양으로 둔다 (D413) */
+  const projectGroup = (p: ProjectView, subs: readonly ProjectView[]) => {
+    const open = !collapsed.has(p.id)
+    return (
+      <div key={p.id} className={`project${p.parent ? ' sub-project' : ''}`}>
+        <div className="group-head">
+          <GroupToggle open={open} label={p.name} onToggle={() => toggleGroup(p.id)} />
+          <button
+            className="project-name"
+            title={`${p.repoPath} · 프로젝트 설정 (D185)`}
+            onClick={() => setDialog({ kind: 'project-settings', project: p })}
+            onContextMenu={(e) => {
+              e.preventDefault()
+              setMenu({ kind: 'project', project: p, x: e.clientX, y: e.clientY })
+            }}
+          >
+            {p.parent ? <span className="type-tag">서브모듈</span> : null} {p.name}
+          </button>
+        </div>
+        {open ? (
+          <>
+            {(groups.byProject.get(p.id) ?? []).map((w) => workItem(w, false))}
+            <button className="new-work" onClick={() => setDialog({ kind: 'work', project: p })}>
+              새 Work
+            </button>
+            {subs.map((s) => projectGroup(s, []))}
+          </>
+        ) : null}
+      </div>
+    )
+  }
+
   /** 사이드바의 기본 세션 한 줄 (D405): 이름, 살아 있음 표시, Work 초안 수 */
   const sessionItem = (x: SessionView) => (
     <button
@@ -428,38 +460,15 @@ export function App() {
             </>
           )}
         </div>
-        {projects.map((p) => {
-          const open = !collapsed.has(p.id)
-          return (
-            <div key={p.id} className="project">
-              <div className="group-head">
-                <GroupToggle open={open} label={p.name} onToggle={() => toggleGroup(p.id)} />
-                <button
-                  className="project-name"
-                  title={`${p.repoPath} · 프로젝트 설정 (D185)`}
-                  onClick={() => setDialog({ kind: 'project-settings', project: p })}
-                  onContextMenu={(e) => {
-                    e.preventDefault()
-                    setMenu({ kind: 'project', project: p, x: e.clientX, y: e.clientY })
-                  }}
-                >
-                  {p.name}
-                </button>
-              </div>
-              {open ? (
-                <>
-                  {(groups.byProject.get(p.id) ?? []).map((w) => workItem(w, false))}
-                  <button
-                    className="new-work"
-                    onClick={() => setDialog({ kind: 'work', project: p })}
-                  >
-                    새 Work
-                  </button>
-                </>
-              ) : null}
-            </div>
-          )
-        })}
+        {/* 서브모듈 프로젝트는 메인 프로젝트 아래에 둔다 (D413) */}
+        {projects
+          .filter((p) => !p.parent)
+          .map((p) =>
+            projectGroup(
+              p,
+              projects.filter((s) => s.parent?.id === p.id),
+            ),
+          )}
         {groups.archive.length > 0 ? (
           <div className="project archive">
             <div className="group-head">
@@ -819,6 +828,7 @@ export function App() {
       {dialog?.kind === 'work' ? (
         <NewWorkDialog
           project={dialog.project}
+          projects={projects}
           {...(dialog.draft ? { draft: dialog.draft } : {})}
           onClose={() => setDialog(null)}
           onCreated={(key) => {

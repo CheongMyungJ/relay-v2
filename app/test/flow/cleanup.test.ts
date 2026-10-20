@@ -171,6 +171,7 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
       backups: [backup],
       merged: false,
       remote: null,
+      integration: null,
       confirm: [],
       expect: {
         uncommitted: [],
