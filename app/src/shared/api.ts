@@ -67,6 +67,17 @@ export interface TerminalApi {
   resize(key: string, cols: number, rows: number): Promise<void>
   /** 구독을 끊는 함수를 돌려준다 */
   onData(key: string, cb: (chunk: TerminalChunk) => void): () => void
+  /**
+   * 터미널에 보인 경로 글마다 있는 파일이나 폴더의 절대 경로, 없으면 null (D411). 상대 경로는 그 터미널의 폴더에서
+   * 푼다
+   */
+  paths(key: string, raws: string[]): Promise<(string | null)[]>
+  /** 경로 글은 파일을 열고(실행 파일은 폴더에서 보여 줌), http(s) 주소는 브라우저로 연다 (D411) */
+  open(key: string, target: string): Promise<void>
+  /** 끌어 놓거나 붙여넣은 파일의 경로. 디스크에 없는 것(브라우저의 그림 등)은 빈 글이다 (D410) */
+  fileFor(file: File): string
+  /** 붙여넣은 그림을 저장하고 경로를 돌려준다 (D410) */
+  saveImage(data: ArrayBuffer, mime: string): Promise<string>
 }
 
 export interface RelayApi {
@@ -295,5 +306,8 @@ export const IPC = {
   terminalAttach: 'terminal:attach',
   terminalWrite: 'terminal:write',
   terminalResize: 'terminal:resize',
+  terminalPaths: 'terminal:paths',
+  terminalOpen: 'terminal:open',
+  terminalSaveImage: 'terminal:save-image',
   terminalData: (key: string) => `terminal:data:${key}`,
 } as const

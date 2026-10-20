@@ -5019,6 +5019,11 @@ export class WorkRunner {
     this.ptyOf(taskId)?.resize(cols, rows)
   }
 
+  /** 터미널의 폴더. task와 보조 세션 모두 worktree에서 돈다 */
+  cwd(): string {
+    return this.worktree
+  }
+
   // ---------- 이슈 기록 (설계 3.7, D336~D349, I98~I100) ----------
 
   /**

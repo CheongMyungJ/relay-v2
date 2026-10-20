@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { AppInfo } from '../../shared/api'
-import { ensureTerm, fitIfVisible } from './terminals'
+import { acceptFiles, ensureTerm, fitIfVisible } from './terminals'
 
 interface Props {
   terminalKey: string
@@ -22,7 +22,11 @@ export function TerminalView({ terminalKey, info, active, live }: Props) {
     // 창 크기 변경 → xterm 크기 → onResize → PTY resize
     const ro = new ResizeObserver(() => fitIfVisible(entry, el))
     ro.observe(el)
-    return () => ro.disconnect()
+    const offFiles = acceptFiles(terminalKey, el, info)
+    return () => {
+      ro.disconnect()
+      offFiles()
+    }
   }, [terminalKey, info])
 
   useEffect(() => {

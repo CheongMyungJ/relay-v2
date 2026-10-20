@@ -4,6 +4,7 @@
 // Electron을 import하지 않으므로 흐름 시험이 Vitest(Node)에서 이 코드를 그대로 불러 쓴다.
 // 창과 알림, 렌더러로 보내기는 UiPort로 받는다.
 import { randomBytes } from 'node:crypto'
+import os from 'node:os'
 import path from 'node:path'
 import {
   addWorktree,
@@ -77,6 +78,7 @@ import type {
 import { WORK_TYPES, type DeliveryChoice, type WorkState, type WorkType } from '../shared/work'
 import { SessionPool } from './pool'
 import type { UiPort } from './ports'
+import { PASTE_KEEP_MS, executableLike, linkPath } from './links'
 import { checkGh, inspectProject, prepareProject, type ProjectEnv } from './projects'
 import { SessionRunner, type SessionContext } from './session'
 import { WorkRunner, workTitle, type RunnerContext } from './work'
@@ -106,6 +108,8 @@ interface TerminalOwner {
   attach(id: string): Promise<TerminalBacklog>
   write(id: string, data: string): void
   resize(id: string, cols: number, rows: number): void
+  /** 터미널의 폴더. 출력의 상대 경로를 여기서 푼다 (D411) */
+  cwd(id: string): string
 }
 
 const RELAY_BRANCH = 'relay/'
@@ -1127,5 +1131,56 @@ export class Relay {
     this.size = { cols, rows }
     const t = this.terminal(key)
     t?.runner.resize(t.taskId, cols, rows)
+  }
+
+  /**
+   * 터미널에 보인 경로 글들을 있는 파일이나 폴더의 절대 경로로 바꾼다 (D411). 없거나 받지 않는 경로는 null이다.
+   * 열면 실행될 파일인지도 함께 준다
+   */
+  async terminalPaths(
+    key: string,
+    raws: readonly string[],
+  ): Promise<({ path: string; dir: boolean; executable: boolean } | null)[]> {
+    const t = this.terminal(key)
+    if (!t) return raws.map(() => null)
+    const cwd = t.runner.cwd(t.taskId)
+    const home = os.homedir()
+    return Promise.all(
+      raws.map(async (raw) => {
+        const abs = linkPath(raw, cwd, home)
+        if (!abs) return null
+        const st = await fsp.stat(abs).catch(() => null)
+        if (!st) return null
+        // 링크는 가리키는 파일의 이름으로도 본다
+        const real = await fsp.realpath(abs).catch(() => abs)
+        const bit = (st.mode & 0o111) !== 0
+        return {
+          path: abs,
+          dir: st.isDirectory(),
+          executable: st.isFile() && (executableLike(abs, bit) || executableLike(real, bit)),
+        }
+      }),
+    )
+  }
+
+  /**
+   * 붙여넣은 그림을 `<RELAY_HOME>/pastes/`에 저장하고 경로를 돌려준다 (D410). 엔진은 붙여넣은 그림 경로를 읽어
+   * 첨부한다. 저장할 때 오래된 것(PASTE_KEEP_MS)을 지운다
+   */
+  async savePaste(data: Uint8Array, ext: string): Promise<string> {
+    const dir = path.join(this.o.home, 'pastes')
+    await fsp.mkdir(dir, { recursive: true })
+    const now = this.o.now ? this.o.now() : new Date()
+    for (const name of await fsp.readdir(dir).catch(() => [])) {
+      const file = path.join(dir, name)
+      const st = await fsp.stat(file).catch(() => null)
+      if (st?.isFile() && now.getTime() - st.mtimeMs > PASTE_KEEP_MS) {
+        await fsp.rm(file, { force: true }).catch(() => undefined)
+      }
+    }
+    const stamp = now.toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15)
+    const file = path.join(dir, `paste-${stamp}-${randomBytes(4).toString('hex')}.${ext}`)
+    await fsp.writeFile(file, data, { flag: 'wx' })
+    return file
   }
 }

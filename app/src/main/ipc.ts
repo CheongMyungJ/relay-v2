@@ -1,7 +1,7 @@
 // 렌더러 명령을 Relay로 잇는다 (I14). 명령은 invoke로 받고, 상태는 UiPort가 스냅샷으로 보낸다.
 // 값은 여기서 모양만 확인하고, 뜻(상태에 맞는 명령인지, 설정 값의 범위)은 Relay와 core가 판정한다.
 import os from 'node:os'
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } from 'electron'
 import { ALL_NODES } from '../core/pipeline'
 import { IPC, type AppInfo, type UpdateState } from '../shared/api'
 import type { NodeName } from '../shared/contracts'
@@ -19,6 +19,7 @@ import type {
 } from '../shared/views'
 import { WORK_TYPES, type DeliveryChoice, type MergeMethod, type WorkType } from '../shared/work'
 import type { Relay } from './relay'
+import { PASTE_MAX_BYTES, pasteExt } from './links'
 import { externalUrl } from './security'
 
 function windowsBuild(): number | null {
@@ -35,6 +36,12 @@ function text(v: unknown): string {
 function count(v: unknown): number {
   if (typeof v !== 'number' || !Number.isFinite(v)) throw new Error('숫자가 아님')
   return Math.floor(v)
+}
+
+function bytes(v: unknown): Uint8Array {
+  if (v instanceof ArrayBuffer) return new Uint8Array(v)
+  if (ArrayBuffer.isView(v)) return new Uint8Array(v.buffer, v.byteOffset, v.byteLength)
+  throw new Error('바이트가 아님')
 }
 
 function flag(v: unknown): boolean {
@@ -370,5 +377,35 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   })
   ipcMain.handle(IPC.terminalResize, async (_e, key: unknown, cols: unknown, rows: unknown) => {
     ;(await ready).terminalResize(text(key), count(cols), count(rows))
+  })
+  // 터미널의 경로와 주소 열기 (D411). 경로는 main이 그 터미널의 폴더에서 다시 풀고 있는지 본다
+  ipcMain.handle(IPC.terminalPaths, async (_e, key: unknown, raws: unknown) => {
+    const found = await (await ready).terminalPaths(text(key), texts(raws).slice(0, 100))
+    return found.map((f) => f?.path ?? null)
+  })
+  ipcMain.handle(IPC.terminalOpen, async (_e, key: unknown, target: unknown) => {
+    const t = text(target)
+    if (/^https?:\/\//i.test(t)) return shell.openExternal(externalUrl(t))
+    const [found] = await (await ready).terminalPaths(text(key), [t])
+    if (!found) throw new Error(`열 수 있는 파일이 아님: ${t}`)
+    // 열면 실행되는 파일은 실행하지 않고 폴더에서 보여 준다
+    if (found.executable) return shell.showItemInFolder(found.path)
+    const error = await shell.openPath(found.path)
+    if (error) throw new Error(error)
+  })
+  // 붙여넣거나 끌어 놓은 그림 (D410). 엔진이 받지 않는 형식은 PNG로 바꾼다
+  ipcMain.handle(IPC.terminalSaveImage, async (_e, data: unknown, mime: unknown) => {
+    let image = bytes(data)
+    if (image.byteLength === 0 || image.byteLength > PASTE_MAX_BYTES) {
+      throw new Error('그림이 비었거나 너무 큼')
+    }
+    let ext = pasteExt(text(mime))
+    if (!ext) {
+      const native = nativeImage.createFromBuffer(Buffer.from(image))
+      if (native.isEmpty()) throw new Error(`읽을 수 없는 그림 형식: ${text(mime)}`)
+      image = native.toPNG()
+      ext = 'png'
+    }
+    return (await ready).savePaste(image, ext)
   })
 }
