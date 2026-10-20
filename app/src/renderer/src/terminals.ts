@@ -1,11 +1,12 @@
 // task마다 xterm 인스턴스를 React 수명주기 밖에서 들고 있는다.
 // React가 컴포넌트를 다시 붙여도(StrictMode 포함) 화면과 구독이 끊기지 않게 하려고.
 // task는 main이 시작하므로 탭은 나중에 붙는다. 붙을 때 지금까지의 출력을 받고, 그 뒤의 조각을 이어 쓴다.
-import { Terminal } from '@xterm/xterm'
+import { Terminal, type ILink } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import type { AppInfo } from '../../shared/api'
 import type { TerminalChunk } from '../../shared/views'
+import { findLinks, logicalLine, pasteText, pastesFiles, type LinkMatch } from './links'
 
 export interface TermEntry {
   term: Terminal
@@ -59,9 +60,19 @@ export function ensureTerm(key: string, info: AppInfo): TermEntry {
     windowsPty: info.windowsBuild
       ? { backend: 'conpty', buildNumber: info.windowsBuild }
       : undefined,
+    // 프로그램이 건 링크(OSC 8). file: 주소도 받아 main이 경로로 연다 (D411)
+    linkHandler: {
+      allowNonHttpProtocols: true,
+      activate: (ev, uri) => openLink(key, ev, uri),
+      hover: () => setOpenHint(term, true),
+      leave: () => setOpenHint(term, false),
+    },
   })
   const fit = new FitAddon()
   term.loadAddon(fit)
+  const links = term.registerLinkProvider({
+    provideLinks: (y, cb) => void provideLinks(key, term, y).then(cb, () => cb(undefined)),
+  })
 
   // 일반 터미널(Windows Terminal)처럼 Ctrl+V는 붙여넣기, 선택이 있을 때 Ctrl+C는 복사.
   // false를 돌려주면 xterm이 키를 보내지 않고 브라우저 기본 동작(copy/paste 이벤트)이 일어난다.
@@ -103,6 +114,7 @@ export function ensureTerm(key: string, info: AppInfo): TermEntry {
     fit,
     dispose: () => {
       offData()
+      links.dispose()
       inData.dispose()
       inResize.dispose()
       term.dispose()
@@ -115,4 +127,129 @@ export function ensureTerm(key: string, info: AppInfo): TermEntry {
 /** 보이는 상태일 때만 맞춘다. 숨긴 탭은 크기가 0이라 맞추면 안 된다 */
 export function fitIfVisible(entry: TermEntry, el: HTMLElement): void {
   if (el.clientWidth > 0 && el.clientHeight > 0) entry.fit.fit()
+}
+
+// ---------- 파일 열기 (D411) ----------
+
+const OPEN_HINT = 'Ctrl+클릭으로 열기'
+
+/** 링크 위에 있는 동안 여는 방법을 알린다 */
+function setOpenHint(term: Terminal, on: boolean): void {
+  const el = term.element
+  if (!el) return
+  if (on) el.title = OPEN_HINT
+  else el.removeAttribute('title')
+}
+
+/** Ctrl(macOS는 Cmd)+클릭만 연다. 그냥 누르기는 포커스와 선택에 쓴다. 주소는 브라우저로, 나머지는 경로로 연다 */
+function openLink(key: string, ev: MouseEvent, target: string): void {
+  if (!ev.ctrlKey && !ev.metaKey) return
+  const opening = /^https?:\/\//i.test(target)
+    ? window.relay.openExternal(target)
+    : window.relay.terminal.open(key, target)
+  opening.catch((e: unknown) => console.warn(e))
+}
+
+/** 터미널 줄(1부터)의 주소와 있는 파일 경로 */
+async function provideLinks(key: string, term: Terminal, y: number): Promise<ILink[]> {
+  const { text, cells } = logicalLine(term.buffer.active, y - 1)
+  const found = findLinks(text)
+  const toLink = (m: LinkMatch): ILink | null => {
+    const a = cells[m.start]
+    const b = cells[m.end - 1]
+    if (!a || !b) return null
+    return {
+      range: { start: { x: a.x, y: a.y }, end: { x: b.x + b.w - 1, y: b.y } },
+      text: m.text,
+      activate: (ev, t) => openLink(key, ev, t),
+      hover: () => setOpenHint(term, true),
+      leave: () => setOpenHint(term, false),
+    }
+  }
+  const out: ILink[] = []
+  for (const u of found.urls) {
+    const link = toLink(u)
+    if (link) out.push(link)
+  }
+  if (found.paths.length) {
+    // 경로를 보지 못해도 주소 링크는 남긴다
+    const hits = await window.relay.terminal
+      .paths(
+        key,
+        found.paths.map((tries) => tries.map((m) => m.text)),
+      )
+      .catch((e: unknown) => {
+        console.warn(e)
+        return []
+      })
+    found.paths.forEach((tries, i) => {
+      const hit = hits[i]
+      const link = typeof hit === 'number' && tries[hit] ? toLink(tries[hit]) : null
+      if (link) out.push(link)
+    })
+  }
+  return out
+}
+
+// ---------- 파일과 그림 붙여넣기 (D410) ----------
+
+/**
+ * 붙여넣거나 끌어 놓은 파일과 그림을 경로로 넣는다. 글이 있는 붙여넣기는 그대로 xterm이 한다.
+ * 디스크에 없는 그림(화면 캡처, 브라우저의 그림)은 main이 저장한 파일의 경로를 넣는다. 구독을 끊는 함수를 돌려준다
+ */
+export function acceptFiles(key: string, el: HTMLElement, info: AppInfo): () => void {
+  const onPaste = (ev: ClipboardEvent) => {
+    const data = ev.clipboardData
+    if (!data) return
+    const files = Array.from(data.files)
+    const onDisk = files.some((f) => window.relay.terminal.fileFor(f))
+    if (!pastesFiles(data.getData('text/plain'), files.length, onDisk)) return
+    ev.preventDefault()
+    ev.stopPropagation()
+    void insertFiles(key, files, info)
+  }
+  const onDragOver = (ev: DragEvent) => {
+    if (!ev.dataTransfer?.types.includes('Files')) return
+    ev.preventDefault()
+    ev.dataTransfer.dropEffect = entries.get(key)?.term.options.disableStdin ? 'none' : 'copy'
+  }
+  const onDrop = (ev: DragEvent) => {
+    const files = Array.from(ev.dataTransfer?.files ?? [])
+    if (files.length === 0) return
+    ev.preventDefault()
+    ev.stopPropagation()
+    void insertFiles(key, files, info)
+  }
+  // 붙여넣기는 xterm의 textarea보다 먼저 받는다
+  el.addEventListener('paste', onPaste, true)
+  el.addEventListener('dragover', onDragOver)
+  el.addEventListener('drop', onDrop)
+  return () => {
+    el.removeEventListener('paste', onPaste, true)
+    el.removeEventListener('dragover', onDragOver)
+    el.removeEventListener('drop', onDrop)
+  }
+}
+
+async function insertFiles(key: string, files: File[], info: AppInfo): Promise<void> {
+  const term = entries.get(key)?.term
+  if (!term || term.options.disableStdin) return
+  const api = window.relay.terminal
+  const paths: string[] = []
+  for (const file of files) {
+    let p = api.fileFor(file)
+    if (!p && file.type.startsWith('image/')) {
+      p = await api.saveImage(await file.arrayBuffer(), file.type).catch((e: unknown) => {
+        console.warn(e)
+        return ''
+      })
+    }
+    if (p) paths.push(p)
+  }
+  // 경로마다 따로 붙여넣는다: 엔진은 붙여넣은 글 하나가 그림 경로일 때 그림으로 받는다
+  paths.forEach((p, i) => {
+    if (i > 0) term.input(' ')
+    term.paste(pasteText(p, info.platform))
+  })
+  term.focus()
 }

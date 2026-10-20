@@ -471,4 +471,8 @@ export class SessionRunner {
   resize(id: string, cols: number, rows: number): void {
     this.ptyOf(id)?.resize(cols, rows)
   }
+
+  cwd(): string {
+    return this.record.cwd
+  }
 }

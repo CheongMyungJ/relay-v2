@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 import { API_KEY, IPC, type RelayApi } from '../shared/api'
 
 function subscribe<T>(channel: string, cb: (value: T) => void): () => void {
@@ -88,6 +88,10 @@ const api: RelayApi = {
     write: (key, data) => ipcRenderer.invoke(IPC.terminalWrite, key, data),
     resize: (key, cols, rows) => ipcRenderer.invoke(IPC.terminalResize, key, cols, rows),
     onData: (key, cb) => subscribe(IPC.terminalData(key), cb),
+    paths: (key, groups) => ipcRenderer.invoke(IPC.terminalPaths, key, groups),
+    open: (key, path) => ipcRenderer.invoke(IPC.terminalOpen, key, path),
+    fileFor: (file) => webUtils.getPathForFile(file),
+    saveImage: (data, mime) => ipcRenderer.invoke(IPC.terminalSaveImage, data, mime),
   },
 }
 

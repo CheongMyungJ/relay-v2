@@ -158,6 +158,7 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I142 | 사용자 문서 경로(I134)는 Relay의 `readme` 옵션이다. 없으면 스킬 원본 옆의 `README.md`다(설치본은 둘 다 `resources/`, 개발과 시험은 레포 루트) | [흐름]이 Electron 없이 같은 경로를 쓴다 | |
 | I143 | [이름 바꾸기](D403)는 줄바꿈을 공백으로 바꾸고 자른다. 빈 이름은 받지 않는다. 렌더러는 지운 세션을 고르고 있으면 고르지 않은 화면을 보인다. 사이드바의 기본 세션 묶음은 프로젝트와 다른 표시(`.sessions`)로 둔다 | 기존 [스모크]가 프로젝트 묶음을 `.project`로 찾는다 | |
 | I144 | 가짜 claude는 `--append-system-prompt-file`을 받고 설정 파일의 훅 URL이 `/hook/session/`이면 기본 세션이라 시나리오의 `session`·`sessionResume`을 하고 기록에 `session: true`를 남긴다. 가짜 codex는 `RELAY_HOOK_TASK`가 `session`이면 곁 세션처럼 돌고 `session`·`sessionResume`(`sessionCodex`·`sessionResumeCodex`)을 한다. 녹화본에 없는 필드는 보내지 않는다 | 실행 인자가 곁 세션과 같아 앱이 정한 훅 URL로만 가른다 | |
+| I145 | D410~D412의 배치: 렌더러의 `links`가 터미널 한 줄을 읽고(`logicalLine`: 줄바꿈으로 이어진 화면 줄은 한 줄로, 넓은 글자는 두 칸으로, 넓은 글자가 들어가지 못해 남은 줄 끝 빈 칸은 빼고) 주소와 경로 후보를 찾으며(`findLinks`: 도구 이름의 괄호, `@`언급, `:줄:칸`·`#L줄`, 붙은 한글 조사를 뗀 것도 시도), 붙여넣기를 파일로 받을지(`pastesFiles`)와 붙여넣을 경로의 모양(`pasteText`: Windows는 `\`를 `/`로 바꾸고 공백이면 따옴표, Linux는 공백이면 따옴표이고 따옴표나 `\`가 들면 하나씩 이스케이프)을 정한다. `terminals`가 xterm의 link provider와 `linkHandler`(OSC 8)로 링크를 걸고, 탭 칸(`TerminalView`)의 capture 단계 `paste`와 `drop`에서 파일을 받는다. 파일 경로는 preload의 `webUtils.getPathForFile`이고, 경로가 없는 그림은 바이트를 main에 보내 저장한다. 경로는 하나씩 `term.paste`로 넣고 사이에 공백을 친다. 주소는 기존 `openExternal`로 연다. main의 `links`(Electron 없음)가 경로 풀기(`linkPath`), 링크 따라가기(`realLinkPath`, 파일 시스템은 `LinkFs`로 받음), 여는 형식(`opensSafely`), 그림 형식(`pasteExt`)을 맡는다. `Relay.terminalPaths`는 마우스를 올릴 때 낱말마다 처음으로 있는 시도의 번호만 내고, `Relay.terminalTarget`은 Ctrl+클릭 때 열지 폴더에서 보일지를 정한다. 경로는 터미널 키의 주인(`TerminalOwner.cwd`: Work는 worktree, 정리한 Work는 메인 체크아웃, 기본 세션은 고른 폴더)의 폴더에서 푼다. `Relay.savePaste`가 저장과 7일 지난 것 지우기를 한다. `ipc`는 `shell.openPath`·`showItemInFolder`와 `nativeImage`의 PNG 바꾸기(엔진이 받지 않는 형식, 30 MB 상한)만 한다 | Claude Code 2.1.304는 붙여넣은 글 전체(앞뒤 공백·따옴표를 떼고 `\`를 이스케이프로 읽음)가 `.png`·`.jpg`·`.jpeg`·`.gif`·`.webp`로 끝나는 절대 경로이면 그림으로 읽는다(3절). 경로를 하나씩 붙여넣어야 각각 그림이 된다. 링크 후보마다 있는지 보는 것은 마우스가 그 줄에 올 때만이고, 실제 경로와 여는 형식은 열 때만 본다(PR #54 리뷰) | |
 
 ## 3. 확인한 사실
 
@@ -165,6 +166,7 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 
 | 항목 | 내용 | 출처 (확인일) |
 |---|---|---|
+| Claude Code의 그림 경로 붙여넣기 | 대화형 입력에 붙여넣은(bracketed paste) 글이 앞뒤 공백과 감싼 따옴표를 떼고 `\`를 이스케이프로 푼 뒤 `.png`·`.jpe?g`·`.gif`·`.webp`(대소문자 무시)로 끝나면 그 파일을 그림으로 읽어 `[Image #n]`으로 첨부한다. 상대 경로는 클립보드의 경로와 이름이 같을 때만 읽는다. 그림 경로가 아닌 글은 그대로 글이다. 붙여넣기 두 번(사이에 공백)이면 그림 둘이다. Windows 경로의 `\`도 이스케이프로 읽으므로(WSL만 예외) 앱은 `/`로 바꿔 넣는다 | 실제 `claude` 2.1.304를 PTY로 띄워 붙여넣기로 확인, 실행 파일의 붙여넣기 처리 코드 (2026-10-20) |
 | Electron 프로세스 | 메인 프로세스는 Node.js 환경이라 Node API를 모두 쓴다. 렌더러는 기본으로 Node API가 없다. preload는 렌더러에서 Node 접근을 가진 채 먼저 실행되고, context isolation(기본 켜짐) 아래에서 `contextBridge.exposeInMainWorld()`로 API를 내보낸다. utility process는 메인이 띄우는 Node 자식 프로세스다 | Electron 문서 `docs/tutorial/process-model.md` (2026-09-26) |
 | 네이티브 모듈 | Electron은 Node와 ABI가 달라 네이티브 모듈을 Electron용으로 다시 빌드해야 한다. `@electron/rebuild`가 이를 한다 | Electron 문서 `docs/tutorial/using-native-node-modules.md` (2026-09-26) |
 | node-pty 1.1.0 | `node-addon-api`(N-API) 기반이고, 패키지에 `win32-x64`, `win32-arm64`, `darwin-*` 사전 빌드(`pty.node`, `conpty.node`, `conpty.dll`, `OpenConsole.exe`)가 들어 있다. 설치 때 사전 빌드가 있으면 컴파일하지 않는다. 스레드 안전하지 않아 여러 worker thread에서 쓰지 말라고 한다. Windows는 1809 이상의 ConPTY를 쓴다 | npm 패키지 `node-pty@1.1.0` 내용, README (2026-09-26) |
@@ -285,6 +287,7 @@ app/src/
 | main | `terminals` | task 터미널 출력 보관과 탭이 붙을 때 넘겨 주기 | I14 |
 | main | `notices` | OS 알림 붙잡기와 Windows 앱 ID | D81, D142, I37 |
 | main | `security` | 창의 격리 설정과 외부 주소 검사 | I2 |
+| main | `links` | 터미널 출력의 경로 풀기, 열면 실행되는 파일 판정, 붙여넣은 그림의 형식 | D410~D412, I145 |
 | main | `ipc`, `ports` | 렌더러 명령 처리와 스냅샷 전송, 조립 코드가 주입받는 바깥(창, 알림) | I14, I26 |
 | renderer | 화면 | 사이드바, 터미널 탭과 머리 띠, 액션 바, 오른쪽 패널(승인 화면), 대화상자, PR 패널 | 화면 구성 |
 

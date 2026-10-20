@@ -4,6 +4,7 @@
 // Electron을 import하지 않으므로 흐름 시험이 Vitest(Node)에서 이 코드를 그대로 불러 쓴다.
 // 창과 알림, 렌더러로 보내기는 UiPort로 받는다.
 import { randomBytes } from 'node:crypto'
+import os from 'node:os'
 import path from 'node:path'
 import {
   addWorktree,
@@ -19,6 +20,7 @@ import { anchorNames, tidyCandidates, tidyRequest } from '../core/knowledge-tidy
 import { HookServer } from '../adapters/hooks'
 import { killOrphans } from '../adapters/pty'
 import fsp from 'node:fs/promises'
+import type { Stats } from 'node:fs'
 import {
   WorkFiles,
   loadConfig,
@@ -77,6 +79,7 @@ import type {
 import { WORK_TYPES, type DeliveryChoice, type WorkState, type WorkType } from '../shared/work'
 import { SessionPool } from './pool'
 import type { UiPort } from './ports'
+import { PASTE_KEEP_MS, linkPath, opensSafely, realLinkPath, type LinkFs } from './links'
 import { checkGh, inspectProject, prepareProject, type ProjectEnv } from './projects'
 import { SessionRunner, type SessionContext } from './session'
 import { WorkRunner, workTitle, type RunnerContext } from './work'
@@ -106,9 +109,17 @@ interface TerminalOwner {
   attach(id: string): Promise<TerminalBacklog>
   write(id: string, data: string): void
   resize(id: string, cols: number, rows: number): void
+  /** 터미널의 폴더. 출력의 상대 경로를 여기서 푼다 (D411) */
+  cwd(id: string): string
 }
 
 const RELAY_BRANCH = 'relay/'
+
+/** 터미널 경로를 풀 때 링크를 따라가지 않고 보는 파일 시스템 (D412) */
+const LINK_FS: LinkFs = {
+  lstat: (file) => fsp.lstat(file).catch(() => null),
+  readlink: (file) => fsp.readlink(file).catch(() => null),
+}
 
 export class Relay {
   private readonly projects = new Map<string, ProjectState>()
@@ -1127,5 +1138,73 @@ export class Relay {
     this.size = { cols, rows }
     const t = this.terminal(key)
     t?.runner.resize(t.taskId, cols, rows)
+  }
+
+  /** 터미널에 보인 경로 글을 있는 파일이나 폴더로 푼다 (D411). 링크는 네트워크를 가리키지 않는지 보며 따라간다 (D412) */
+  private async resolveLink(
+    cwd: string,
+    raw: string,
+  ): Promise<{ path: string; real: string; st: Stats } | null> {
+    const abs = linkPath(raw, cwd, os.homedir())
+    if (!abs) return null
+    const real = await realLinkPath(abs, LINK_FS)
+    if (!real) return null
+    const st = await fsp.stat(real).catch(() => null)
+    return st ? { path: abs, real, st } : null
+  }
+
+  /**
+   * 터미널 줄의 경로 낱말마다 시도할 글들 중 처음으로 있는 것의 번호, 없으면 null (D411). 마우스를 올릴 때마다
+   * 부르므로 있는지만 본다
+   */
+  async terminalPaths(
+    key: string,
+    groups: readonly (readonly string[])[],
+  ): Promise<(number | null)[]> {
+    const t = this.terminal(key)
+    if (!t) return groups.map(() => null)
+    const cwd = t.runner.cwd(t.taskId)
+    return Promise.all(
+      groups.map(async (tries) => {
+        for (const [i, raw] of tries.entries()) if (await this.resolveLink(cwd, raw)) return i
+        return null
+      }),
+    )
+  }
+
+  /**
+   * Ctrl+클릭한 경로를 어떻게 열지 (D411, D412). 안전한 형식(이름과 링크가 가리키는 것 모두)이면 실제 경로를 열고,
+   * 아니면 그 자리를 폴더에서 보여 준다. 없거나 받지 않는 경로는 null이다
+   */
+  async terminalTarget(key: string, raw: string): Promise<{ path: string; open: boolean } | null> {
+    const t = this.terminal(key)
+    const found = t ? await this.resolveLink(t.runner.cwd(t.taskId), raw) : null
+    if (!found) return null
+    const { path: abs, real, st } = found
+    const dir = st.isDirectory()
+    const bit = (st.mode & 0o111) !== 0
+    const open = opensSafely(abs, dir, bit) && opensSafely(real, dir, bit)
+    return open ? { path: real, open } : { path: abs, open }
+  }
+
+  /**
+   * 붙여넣은 그림을 `<RELAY_HOME>/pastes/`에 저장하고 경로를 돌려준다 (D410). 엔진은 붙여넣은 그림 경로를 읽어
+   * 첨부한다. 저장할 때 오래된 것(PASTE_KEEP_MS)을 지운다
+   */
+  async savePaste(data: Uint8Array, ext: string): Promise<string> {
+    const dir = path.join(this.o.home, 'pastes')
+    await fsp.mkdir(dir, { recursive: true })
+    const now = this.o.now ? this.o.now() : new Date()
+    for (const name of await fsp.readdir(dir).catch(() => [])) {
+      const file = path.join(dir, name)
+      const st = await fsp.stat(file).catch(() => null)
+      if (st?.isFile() && now.getTime() - st.mtimeMs > PASTE_KEEP_MS) {
+        await fsp.rm(file, { force: true }).catch(() => undefined)
+      }
+    }
+    const stamp = now.toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15)
+    const file = path.join(dir, `paste-${stamp}-${randomBytes(4).toString('hex')}.${ext}`)
+    await fsp.writeFile(file, data, { flag: 'wx' })
+    return file
   }
 }
