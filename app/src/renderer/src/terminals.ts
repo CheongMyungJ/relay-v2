@@ -1,12 +1,12 @@
 // task마다 xterm 인스턴스를 React 수명주기 밖에서 들고 있는다.
 // React가 컴포넌트를 다시 붙여도(StrictMode 포함) 화면과 구독이 끊기지 않게 하려고.
 // task는 main이 시작하므로 탭은 나중에 붙는다. 붙을 때 지금까지의 출력을 받고, 그 뒤의 조각을 이어 쓴다.
-import { Terminal, type IBufferCellPosition, type ILink } from '@xterm/xterm'
+import { Terminal, type ILink } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import type { AppInfo } from '../../shared/api'
 import type { TerminalChunk } from '../../shared/views'
-import { findLinks, pasteText, type LinkMatch } from './links'
+import { findLinks, logicalLine, pasteText, pastesFiles, type LinkMatch } from './links'
 
 export interface TermEntry {
   term: Terminal
@@ -141,42 +141,18 @@ function setOpenHint(term: Terminal, on: boolean): void {
   else el.removeAttribute('title')
 }
 
-/** Ctrl(macOS는 Cmd)+클릭만 연다. 그냥 누르기는 포커스와 선택에 쓴다 */
+/** Ctrl(macOS는 Cmd)+클릭만 연다. 그냥 누르기는 포커스와 선택에 쓴다. 주소는 브라우저로, 나머지는 경로로 연다 */
 function openLink(key: string, ev: MouseEvent, target: string): void {
   if (!ev.ctrlKey && !ev.metaKey) return
-  window.relay.terminal.open(key, target).catch((e: unknown) => console.warn(e))
-}
-
-/** 줄바꿈으로 이어진 화면 줄들을 한 줄 글로 읽는다. 글자마다 칸 위치를 같이 준다(넓은 글자는 두 칸) */
-function logicalLine(
-  term: Terminal,
-  row: number,
-): { text: string; cells: (IBufferCellPosition & { w: number })[] } {
-  const buf = term.buffer.active
-  let first = row
-  while (first > 0 && first > row - 10 && buf.getLine(first)?.isWrapped) first--
-  let last = row
-  while (last < row + 10 && buf.getLine(last + 1)?.isWrapped) last++
-  let text = ''
-  const cells: (IBufferCellPosition & { w: number })[] = []
-  for (let y = first; y <= last; y++) {
-    const line = buf.getLine(y)
-    if (!line) break
-    for (let x = 0; x < line.length; x++) {
-      const cell = line.getCell(x)
-      const w = cell?.getWidth() ?? 1
-      if (!cell || w === 0) continue
-      const chars = cell.getChars() || ' '
-      for (let i = 0; i < chars.length; i++) cells.push({ x: x + 1, y: y + 1, w })
-      text += chars
-    }
-  }
-  return { text, cells }
+  const opening = /^https?:\/\//i.test(target)
+    ? window.relay.openExternal(target)
+    : window.relay.terminal.open(key, target)
+  opening.catch((e: unknown) => console.warn(e))
 }
 
 /** 터미널 줄(1부터)의 주소와 있는 파일 경로 */
 async function provideLinks(key: string, term: Terminal, y: number): Promise<ILink[]> {
-  const { text, cells } = logicalLine(term, y - 1)
+  const { text, cells } = logicalLine(term.buffer.active, y - 1)
   const found = findLinks(text)
   const toLink = (m: LinkMatch): ILink | null => {
     const a = cells[m.start]
@@ -196,18 +172,21 @@ async function provideLinks(key: string, term: Terminal, y: number): Promise<ILi
     if (link) out.push(link)
   }
   if (found.paths.length) {
-    const flat = found.paths.flat()
-    const resolved = await window.relay.terminal.paths(
-      key,
-      flat.map((m) => m.text),
-    )
-    let i = 0
-    for (const tries of found.paths) {
-      const hit = tries.find((_, j) => Boolean(resolved[i + j]))
-      i += tries.length
-      const link = hit ? toLink(hit) : null
+    // 경로를 보지 못해도 주소 링크는 남긴다
+    const hits = await window.relay.terminal
+      .paths(
+        key,
+        found.paths.map((tries) => tries.map((m) => m.text)),
+      )
+      .catch((e: unknown) => {
+        console.warn(e)
+        return []
+      })
+    found.paths.forEach((tries, i) => {
+      const hit = hits[i]
+      const link = typeof hit === 'number' && tries[hit] ? toLink(tries[hit]) : null
       if (link) out.push(link)
-    }
+    })
   }
   return out
 }
@@ -221,9 +200,10 @@ async function provideLinks(key: string, term: Terminal, y: number): Promise<ILi
 export function acceptFiles(key: string, el: HTMLElement, info: AppInfo): () => void {
   const onPaste = (ev: ClipboardEvent) => {
     const data = ev.clipboardData
-    if (!data || data.getData('text/plain')) return
+    if (!data) return
     const files = Array.from(data.files)
-    if (files.length === 0) return
+    const onDisk = files.some((f) => window.relay.terminal.fileFor(f))
+    if (!pastesFiles(data.getData('text/plain'), files.length, onDisk)) return
     ev.preventDefault()
     ev.stopPropagation()
     void insertFiles(key, files, info)

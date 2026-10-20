@@ -378,19 +378,18 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   ipcMain.handle(IPC.terminalResize, async (_e, key: unknown, cols: unknown, rows: unknown) => {
     ;(await ready).terminalResize(text(key), count(cols), count(rows))
   })
-  // 터미널의 경로와 주소 열기 (D411). 경로는 main이 그 터미널의 폴더에서 다시 풀고 있는지 본다
-  ipcMain.handle(IPC.terminalPaths, async (_e, key: unknown, raws: unknown) => {
-    const found = await (await ready).terminalPaths(text(key), texts(raws).slice(0, 100))
-    return found.map((f) => f?.path ?? null)
+  // 터미널의 경로 열기 (D411, D412). 경로는 main이 그 터미널의 폴더에서 다시 풀고 있는지 본다. 주소는 openExternal로 연다
+  ipcMain.handle(IPC.terminalPaths, async (_e, key: unknown, groups: unknown) => {
+    if (!Array.isArray(groups)) throw new Error('경로 목록이 아님')
+    const tries = groups.slice(0, 50).map((g) => texts(g).slice(0, 4))
+    return (await ready).terminalPaths(text(key), tries)
   })
-  ipcMain.handle(IPC.terminalOpen, async (_e, key: unknown, target: unknown) => {
-    const t = text(target)
-    if (/^https?:\/\//i.test(t)) return shell.openExternal(externalUrl(t))
-    const [found] = await (await ready).terminalPaths(text(key), [t])
-    if (!found) throw new Error(`열 수 있는 파일이 아님: ${t}`)
-    // 열면 실행되는 파일은 실행하지 않고 폴더에서 보여 준다
-    if (found.executable) return shell.showItemInFolder(found.path)
-    const error = await shell.openPath(found.path)
+  ipcMain.handle(IPC.terminalOpen, async (_e, key: unknown, raw: unknown) => {
+    const target = await (await ready).terminalTarget(text(key), text(raw))
+    if (!target) throw new Error(`열 수 있는 파일이 아님: ${text(raw)}`)
+    // 안전한 형식이 아니면 실행하지 않고 폴더에서 보여 준다
+    if (!target.open) return shell.showItemInFolder(target.path)
+    const error = await shell.openPath(target.path)
     if (error) throw new Error(error)
   })
   // 붙여넣거나 끌어 놓은 그림 (D410). 엔진이 받지 않는 형식은 PNG로 바꾼다

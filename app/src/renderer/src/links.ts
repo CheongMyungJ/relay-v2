@@ -51,6 +51,58 @@ function pathLike(s: string): boolean {
   return EXTENSION.test(s)
 }
 
+/** xterm 화면 버퍼에서 쓰는 만큼 (IBuffer) */
+export interface LineBuffer {
+  getLine(y: number):
+    | {
+        isWrapped: boolean
+        length: number
+        getCell(x: number): { getChars(): string; getWidth(): number } | undefined
+      }
+    | undefined
+}
+
+/** 글자 하나의 칸 (1부터). 넓은 글자는 w가 2다 */
+export interface CellAt {
+  x: number
+  y: number
+  w: number
+}
+
+/** 줄바꿈으로 이어진 화면 줄들을 한 줄 글로 읽는다. 글자마다 칸 위치를 같이 준다(넓은 글자는 두 칸) */
+export function logicalLine(buf: LineBuffer, row: number): { text: string; cells: CellAt[] } {
+  let first = row
+  while (first > 0 && first > row - 10 && buf.getLine(first)?.isWrapped) first--
+  let last = row
+  while (last < row + 10 && buf.getLine(last + 1)?.isWrapped) last++
+  let text = ''
+  const cells: CellAt[] = []
+  for (let y = first; y <= last; y++) {
+    const line = buf.getLine(y)
+    if (!line) break
+    // 다음 줄로 이어지는 줄 끝의 빈 칸은 넓은 글자가 들어가지 못해 남은 자리다. 공백으로 읽으면 낱말이 끊긴다
+    let end = line.length
+    if (y < last) {
+      while (
+        end > 0 &&
+        line.getCell(end - 1)?.getChars() === '' &&
+        line.getCell(end - 1)?.getWidth() === 1
+      ) {
+        end--
+      }
+    }
+    for (let x = 0; x < end; x++) {
+      const cell = line.getCell(x)
+      const w = cell?.getWidth() ?? 1
+      if (!cell || w === 0) continue
+      const chars = cell.getChars() || ' '
+      for (let i = 0; i < chars.length; i++) cells.push({ x: x + 1, y: y + 1, w })
+      text += chars
+    }
+  }
+  return { text, cells }
+}
+
 /** 한 줄 글에서 열 수 있어 보이는 것을 찾는다 */
 export function findLinks(line: string): LinkCandidates {
   const urls: LinkMatch[] = []
@@ -85,6 +137,14 @@ export function findLinks(line: string): LinkCandidates {
     if (tries.length) paths.push(tries)
   }
   return { urls, paths }
+}
+
+/**
+ * 붙여넣기를 파일로 받을지 (D410). 글이 함께 있으면 글이다(표를 복사하면 그림도 함께 온다). 다만 디스크에 있는 파일이
+ * 있으면 파일 관리자가 함께 넣은 파일 이름 글은 버린다
+ */
+export function pastesFiles(text: string, files: number, onDisk: boolean): boolean {
+  return files > 0 && (!text || onDisk)
 }
 
 /**

@@ -68,12 +68,12 @@ export interface TerminalApi {
   /** 구독을 끊는 함수를 돌려준다 */
   onData(key: string, cb: (chunk: TerminalChunk) => void): () => void
   /**
-   * 터미널에 보인 경로 글마다 있는 파일이나 폴더의 절대 경로, 없으면 null (D411). 상대 경로는 그 터미널의 폴더에서
-   * 푼다
+   * 터미널 줄의 경로 낱말마다 시도할 글들 중 처음으로 있는 파일이나 폴더의 번호, 없으면 null (D411). 상대 경로는 그
+   * 터미널의 폴더에서 푼다
    */
-  paths(key: string, raws: string[]): Promise<(string | null)[]>
-  /** 경로 글은 파일을 열고(실행 파일은 폴더에서 보여 줌), http(s) 주소는 브라우저로 연다 (D411) */
-  open(key: string, target: string): Promise<void>
+  paths(key: string, groups: string[][]): Promise<(number | null)[]>
+  /** 경로 글의 파일을 연다. 안전한 형식이 아니면 폴더에서 보여 준다 (D411, D412). 주소는 openExternal로 연다 */
+  open(key: string, path: string): Promise<void>
   /** 끌어 놓거나 붙여넣은 파일의 경로. 디스크에 없는 것(브라우저의 그림 등)은 빈 글이다 (D410) */
   fileFor(file: File): string
   /** 붙여넣은 그림을 저장하고 경로를 돌려준다 (D410) */

@@ -3,7 +3,13 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test'
+import {
+  _electron as electron,
+  expect,
+  test,
+  type ElectronApplication,
+  type Page,
+} from '@playwright/test'
 import { scenario, type Scenario } from '../support/scenarios'
 
 const isWin = process.platform === 'win32'
@@ -28,7 +34,11 @@ test.beforeAll(async () => {
   const scenarioFile = path.join(root, 'scenario.json')
   const s: Scenario = {
     ...scenario(),
-    session: [{ do: 'print', text: 'Wrote 1 lines to notes.md' }, { do: 'wait' }],
+    session: [
+      { do: 'print', text: 'Wrote 1 lines to notes.md' },
+      { do: 'print', text: 'PR: https://github.com/o/r/pull/7' },
+      { do: 'wait' },
+    ],
   }
   fs.writeFileSync(scenarioFile, JSON.stringify(s))
   const env = {
@@ -53,6 +63,10 @@ test.beforeAll(async () => {
       opened.push(p)
       return Promise.resolve('')
     }
+    shell.openExternal = (url: string) => {
+      opened.push(url)
+      return Promise.resolve()
+    }
   })
 })
 
@@ -73,23 +87,7 @@ test('출력의 경로를 Ctrl+클릭하면 열고, 붙여넣은 그림은 저�
   await create.getByRole('button', { name: '만들기' }).click()
   await expect(create).toBeHidden()
 
-  // 경로 글자의 가운데
-  const row = win.locator('.xterm-rows > div', { hasText: 'Wrote 1 lines to notes.md' })
-  await expect(row).toBeVisible({ timeout: 30_000 })
-  const { x, y } = await row.evaluate((el, word) => {
-    const doc = el.ownerDocument
-    const walker = doc.createTreeWalker(el, 4 /* NodeFilter.SHOW_TEXT */)
-    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-      const i = n.textContent?.indexOf(word) ?? -1
-      if (i < 0) continue
-      const range = doc.createRange()
-      range.setStart(n, i)
-      range.setEnd(n, i + word.length)
-      const r = range.getBoundingClientRect()
-      return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
-    }
-    throw new Error(`터미널 줄에 ${word}가 없음`)
-  }, 'notes.md')
+  const { x, y } = await wordAt(win, 'Wrote 1 lines to notes.md', 'notes.md')
 
   await win.mouse.move(x, y)
   // 링크로 알아보면 여는 방법을 알린다
@@ -106,6 +104,14 @@ test('출력의 경로를 Ctrl+클릭하면 열고, 붙여넣은 그림은 저�
   await win.keyboard.up('Control')
   await expect.poll(opened).toEqual([path.join(cwd, 'notes.md')])
 
+  // 주소는 브라우저로 연다
+  const url = await wordAt(win, 'PR: https://github.com/o/r/pull/7', 'github.com')
+  await win.mouse.move(url.x, url.y)
+  await win.keyboard.down('Control')
+  await win.mouse.click(url.x, url.y)
+  await win.keyboard.up('Control')
+  await expect.poll(opened).toEqual([path.join(cwd, 'notes.md'), 'https://github.com/o/r/pull/7'])
+
   // 디스크에 없는 그림(화면 캡처)을 붙여넣으면 저장한다
   await win.locator('.terminal-host:not([hidden]) textarea').evaluate((textarea) => {
     const view = textarea.ownerDocument.defaultView
@@ -121,3 +127,23 @@ test('출력의 경로를 Ctrl+클릭하면 열고, 붙여넣은 그림은 저�
     )
     .toEqual([expect.stringMatching(/^paste-\d{8}-\d{6}-[0-9a-f]{8}\.png$/)])
 })
+
+/** 터미널 줄에 보인 낱말의 가운데 자리 */
+async function wordAt(win: Page, line: string, word: string): Promise<{ x: number; y: number }> {
+  const row = win.locator('.xterm-rows > div', { hasText: line })
+  await expect(row).toBeVisible({ timeout: 30_000 })
+  return row.evaluate((el, word) => {
+    const doc = el.ownerDocument
+    const walker = doc.createTreeWalker(el, 4 /* NodeFilter.SHOW_TEXT */)
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const i = n.textContent?.indexOf(word) ?? -1
+      if (i < 0) continue
+      const range = doc.createRange()
+      range.setStart(n, i)
+      range.setEnd(n, i + word.length)
+      const r = range.getBoundingClientRect()
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
+    }
+    throw new Error(`터미널 줄에 ${word}가 없음`)
+  }, word)
+}

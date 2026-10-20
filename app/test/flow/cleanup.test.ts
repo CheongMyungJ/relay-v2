@@ -236,6 +236,8 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
     // 폐기된 fix는 백업 커밋을 가리킨다. 백업 브랜치를 지워도 git이 치우기 전에는 읽는다
     expect((await s.h.relay.review(s.key, 't-02'))?.diff).toBe(oldFix)
     expect((await s.h.relay.terminalAttach(`${s.key}/t-05`)).data).toContain('FAKE-CLAUDE READY')
+    // worktree가 없어 탭의 상대 경로는 메인 체크아웃에서 푼다 (D411)
+    expect(await s.h.relay.terminalPaths(`${s.key}/t-05`, [['src/avg.js']])).toEqual([0])
     // 다시 정리하지 않는다
     expect((await s.h.relay.cleanPreview(s.key)).ok).toBe(false)
     expect(
