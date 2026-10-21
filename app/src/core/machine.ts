@@ -292,8 +292,10 @@ export interface ResumeWork extends WorkEvent {
 /** [Work 포기] (3.3) */
 export interface Abandon extends WorkEvent {
   type: 'abandon'
-  /** 다시 하려고 포기한다: 이 Work의 초안으로 만든 새 Work의 id (D421). 이슈는 새 Work가 이어 써 닫지 않는다 */
+  /** 다시 하려고 포기한다: 이 Work의 초안으로 만든 새 Work의 id (D421) */
   redoBy?: string
+  /** 새 Work가 이 Work의 이슈를 이어 쓴다. 이슈를 닫지 않는다 (D421) */
+  issueKept?: boolean
 }
 
 /**
@@ -1444,7 +1446,8 @@ function sessionStarted(work: WorkState, task: TaskRecord, e: SessionStarted): T
   const started: TaskRecord = {
     ...omit(unqueued(task), 'error'),
     status: 'working',
-    start_commit: e.startCommit,
+    // 같은 task를 새 세션으로 다시 시작하면(D423) 처음 시작 커밋을 둔다: [변경]의 범위가 앞 세션의 커밋을 잃지 않는다
+    start_commit: task.start_commit ?? e.startCommit,
     skill_hash: e.skillHash,
     ...versionRecord(task, e),
     session: {
@@ -1969,7 +1972,12 @@ function abandon(work: WorkState, e: Abandon): Transition {
     work: { ...rest, status: 'abandoned', abandoned_at: e.at },
     effects: [
       ...(ended?.effects ?? []),
-      log(work, e.at, 'work.abandoned', e.redoBy ? { redo_by: e.redoBy } : {}),
+      log(
+        work,
+        e.at,
+        'work.abandoned',
+        e.redoBy ? { redo_by: e.redoBy, ...(e.issueKept ? { issue_kept: true } : {}) } : {},
+      ),
     ],
   }
 }

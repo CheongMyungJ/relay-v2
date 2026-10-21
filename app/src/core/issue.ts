@@ -146,18 +146,20 @@ function started(issue: IssueRecord): boolean {
 }
 
 /**
- * 끝 문구와 닫는 까닭 (D346, D347). work.completed의 payload와 끝낸 뒤의 Work로 정한다. 다시 하려고 포기했으면(D421) 새 Work가
- * 이슈를 이어 쓰므로 닫지 않는다(redo)
+ * 끝 문구와 닫는 까닭 (D346, D347). work.completed의 payload와 끝낸 뒤의 Work로 정한다. 다시 하려고 포기했으면(D421) 새 Work를
+ * 적고, 새 Work가 이슈를 이어 쓰면(issue_kept) 닫지 않는다(redo)
  */
 export function endOf(
   work: WorkState,
   event: LifecycleEvent,
 ): { text: string; reason: IssueCloseReason; redo?: true } | null {
   if (event.type === 'work.abandoned') {
-    const redo = event.payload['redo_by']
-    return typeof redo === 'string'
-      ? { text: `Work 포기: ${redo}로 다시 시작`, reason: 'not_planned', redo: true }
-      : { text: 'Work 포기', reason: 'not_planned' }
+    const by = event.payload['redo_by']
+    if (typeof by !== 'string') return { text: 'Work 포기', reason: 'not_planned' }
+    const text = `Work 포기: ${by}로 다시 시작`
+    return event.payload['issue_kept'] === true
+      ? { text, reason: 'not_planned', redo: true }
+      : { text, reason: 'not_planned' }
   }
   if (event.type !== 'work.completed') return null
   const delivery = event.payload['delivery']

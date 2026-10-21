@@ -259,9 +259,9 @@ describe('다시 한 Work의 이슈 이어 쓰기 (D421)', () => {
     ])
   })
 
-  it('다시 하려고 포기한 원래 Work는 끝 코멘트에 새 Work를 적고 이슈를 닫지 않는다', () => {
+  it('다시 하려고 포기한 원래 Work는 끝 코멘트에 새 Work를 적고, 새 Work가 이슈를 이어 쓰면 닫지 않는다', () => {
     const started = withIssue(newWork(), { posted: [{ key: 'body', at: at() }] })
-    const redo = ev('work.abandoned', { redo_by: 'w-20261005-002' })
+    const redo = ev('work.abandoned', { redo_by: 'w-20261005-002', issue_kept: true })
     expect(endOf(started, redo)).toEqual({
       text: 'Work 포기: w-20261005-002로 다시 시작',
       reason: 'not_planned',
@@ -269,6 +269,20 @@ describe('다시 한 Work의 이슈 이어 쓰기 (D421)', () => {
     })
     expect(issueEntries(started, [redo])).toEqual([
       { kind: 'end', text: 'Work 포기: w-20261005-002로 다시 시작' },
+    ])
+  })
+
+  it('새 Work가 이슈를 이어 쓰지 않으면 다시 하려고 포기해도 원래 이슈를 닫는다 (리뷰 반영)', () => {
+    // 다른 프로젝트의 초안, 이슈 번호를 바꾼 경우, 이슈 기록이 꺼진 프로젝트: 아무도 이어 쓰지 않는 이슈가 열린 채 남지 않는다
+    const started = withIssue(newWork(), { posted: [{ key: 'body', at: at() }] })
+    const redo = ev('work.abandoned', { redo_by: 'w-20261005-002' })
+    expect(endOf(started, redo)).toEqual({
+      text: 'Work 포기: w-20261005-002로 다시 시작',
+      reason: 'not_planned',
+    })
+    expect(issueEntries(started, [redo])).toEqual([
+      { kind: 'end', text: 'Work 포기: w-20261005-002로 다시 시작' },
+      { kind: 'close', reason: 'not_planned' },
     ])
   })
 })

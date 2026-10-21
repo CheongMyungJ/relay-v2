@@ -366,6 +366,7 @@ describe('[흐름] 이슈 기록 (M19, 설계 3.7)', () => {
     expect(work(s).issue?.closed).toBeUndefined()
     expect(events(s).find((e) => e.type === 'work.abandoned')?.payload).toEqual({
       redo_by: newId,
+      issue_kept: true,
     })
   })
 

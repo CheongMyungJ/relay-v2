@@ -3126,6 +3126,18 @@ describe('다시 하기: 새 Work (D420, D421)', () => {
     expect(logged?.type === 'log' && logged.event.payload).toEqual({
       redo_by: 'w-20260926-002',
     })
+    // 새 Work가 이슈를 이어 쓰면 적는다: 원래 Work는 이슈를 닫지 않는다
+    const kept = apply(fixLive(), {
+      type: 'abandon',
+      at: at(),
+      redoBy: 'w-20260926-002',
+      issueKept: true,
+    })
+    const k = kept.effects.find((e) => e.type === 'log' && e.event.type === 'work.abandoned')
+    expect(k?.type === 'log' && k.event.payload).toEqual({
+      redo_by: 'w-20260926-002',
+      issue_kept: true,
+    })
     // 그냥 포기하면 비어 있다
     const plain = apply(fixLive(), { type: 'abandon', at: at() })
     const p = plain.effects.find((e) => e.type === 'log' && e.event.type === 'work.abandoned')
@@ -3204,6 +3216,27 @@ describe('대화 ID를 받지 못한 Codex의 [재개] (D423)', () => {
         status,
       ).toEqual([['t-01', null]])
     }
+  })
+
+  it('새 세션으로 다시 시작해도 처음 시작 커밋을 둔다: [변경]이 앞 세션의 커밋을 잃지 않는다 (리뷰 반영)', () => {
+    const before = codexAt('interrupted')
+    const work = {
+      ...before,
+      tasks: before.tasks.map((t) => ({ ...t, start_commit: 'first001' })),
+    }
+    const r = apply(work, { type: 'resume', taskId: 't-01', at: at() })
+    const started = apply(r.work, {
+      type: 'session.started',
+      taskId: 't-01',
+      at: at(),
+      sessionId: '',
+      pid: 2000,
+      startCommit: 'later002',
+      skillHash: 'skillhash',
+      engineVersion: 'codex-cli 1.0.0',
+    })
+    expect(started.rejected).toBeUndefined()
+    expect(currentTask(started.work)).toMatchObject({ status: 'working', start_commit: 'first001' })
   })
 
   it('승인 대기와 막힘은 산출물이 있어 다시 시작하지 않는다: [재개]가 꺼지고 받지 않는다', () => {

@@ -384,10 +384,6 @@ const REQUEST_PLACEHOLDER: Readonly<Record<WorkType, string>> = {
   general: '할 일과 끝났다고 볼 조건을 적어 주세요(무엇을 바꾸고 어떻게 확인할지)',
 }
 
-/**
- * 새 Work: 대상, 유형, 요청, 기준 브랜치, 기준 위치 (시나리오 1). 유형을 고르기 전에는 [시작]이 꺼져 있다 (D236).
- * 서브모듈이 있는 레포는 대상으로 서브모듈 하나를 고를 수 있고, 그러면 메인 통합 검증 worktree를 고른다 (D413, D414)
- */
 /** Work에서 쓴 초안(D421)으로 열 때의 원래 Work: 비운 칸을 채우고, 포기할지 고르게 한다 */
 export interface DraftOrigin {
   /** 사이드바의 Work 제목 */
@@ -400,6 +396,10 @@ export interface DraftOrigin {
   abandonable: boolean
 }
 
+/**
+ * 새 Work: 대상, 유형, 요청, 기준 브랜치, 기준 위치 (시나리오 1). 유형을 고르기 전에는 [시작]이 꺼져 있다 (D236).
+ * 서브모듈이 있는 레포는 대상으로 서브모듈 하나를 고를 수 있고, 그러면 메인 통합 검증 worktree를 고른다 (D413, D414)
+ */
 export function NewWorkDialog({
   project,
   projects,
@@ -441,13 +441,18 @@ export function NewWorkDialog({
   const [branches, setBranches] = useState<string[]>([project.defaultBranch])
   const [branch, setBranch] = useState(draft?.base ?? origin?.baseBranch ?? project.defaultBranch)
   const [location, setLocation] = useState<'local' | 'remote'>('local')
-  // 다시 하기는 원래 Work의 이슈를 이어 쓴다 (D421). 번호를 바꾸면 그 이슈에 쓴다
-  const [issue, setIssue] = useState(
-    origin?.issueNumber !== null && origin?.issueNumber !== undefined
-      ? String(origin.issueNumber)
-      : '',
-  )
+  // 다시 하기는 원래 Work를 포기하며 그 이슈를 이어 쓴다 (D421, I153). 포기하지 않으면 두 Work가 한 이슈를 쓰게 되어 채우지
+  // 않는다. 번호를 바꾸면 그 이슈에 쓴다
+  const originIssue =
+    origin?.abandonable && origin.issueNumber !== null ? String(origin.issueNumber) : ''
+  const [issue, setIssue] = useState(originIssue)
   const [abandon, setAbandon] = useState(origin?.abandonable === true)
+  const toggleAbandon = (on: boolean) => {
+    setAbandon(on)
+    if (!originIssue) return
+    if (on && !issue.trim()) setIssue(originIssue)
+    if (!on && issue.trim() === originIssue) setIssue('')
+  }
   const [modes, setModes] = useState<Overrides>({})
   const [auto, setAuto] = useState<AutoOverrides>({})
   const [busy, setBusy] = useState(false)
@@ -755,7 +760,7 @@ export function NewWorkDialog({
             type="checkbox"
             aria-label="원래 Work 포기"
             checked={abandon}
-            onChange={(e) => setAbandon(e.target.checked)}
+            onChange={(e) => toggleAbandon(e.target.checked)}
           />
           원래 Work 포기: {origin.title}
         </label>

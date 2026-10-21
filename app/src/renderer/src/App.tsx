@@ -421,7 +421,9 @@ export function App() {
     ? {
         title: originWork.title,
         baseBranch: sameProject ? originWork.baseBranch : null,
-        issueNumber: sameProject ? (originWork.issue?.number ?? null) : null,
+        // 이미 닫힌 이슈는 이어 쓰지 않는다
+        issueNumber:
+          sameProject && !originWork.issue?.closed ? (originWork.issue?.number ?? null) : null,
         abandonable: originWork.status === 'active' || originWork.status === 'stopped',
       }
     : undefined

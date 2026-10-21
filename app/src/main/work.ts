@@ -84,7 +84,6 @@ import type { HookReply, HookRequest, HookServer } from '../adapters/hooks'
 import { processStartTime, startPty, type PtySession } from '../adapters/pty'
 import {
   pathKey,
-  readDrafts,
   readText,
   removeTree,
   sha256,
@@ -258,7 +257,8 @@ import {
   visibleBody,
   wantsAutoStart,
 } from '../core/respond'
-import { DRAFT_MAX_BYTES, DRAFTS_DIR, isDraftFile, parseDraft } from '../core/draft'
+import { DRAFTS_DIR } from '../core/draft'
+import { DraftFolder } from './drafts'
 import { continuePrompt } from '../core/settings'
 import { sideBlock, sideGuide } from '../core/side'
 import {
@@ -297,7 +297,6 @@ import type {
   Completion,
   DeliverInput,
   DeliverResult,
-  DraftView,
   IssueView,
   KnowledgeChange,
   MergeInfoResult,
@@ -533,12 +532,7 @@ function turnSnapshot(
 /** 한 번의 답글 게시에서 받아 둔 코멘트 목록 (인라인 코멘트, 대화 코멘트) */
 type ReplyLists = Map<'inline' | 'convo', Promise<unknown[]>>
 
-/** 요청의 첫 줄. 사이드바의 Work 제목이다 */
-export function workTitle(request: string): string {
-  const line = request.split(/\r?\n/).find((l) => l.trim()) ?? ''
-  const t = line.trim()
-  return t.length > 80 ? `${t.slice(0, 80)}…` : t
-}
+export { workTitle } from './drafts'
 
 /** 결과를 모르는 머지를 다시 확인하는 간격과 횟수 (D330). 간격은 환경 변수 RELAY_MERGE_CONFIRM_MS(시험)로 바꾼다 */
 const MERGE_CONFIRM_MS = 30_000
@@ -562,11 +556,8 @@ export class WorkRunner {
   private readonly launchedAt = new Map<string, number>()
   private readonly problems: string[] = []
   private revision = 0
-  /** 이 Work의 초안 폴더에서 읽은 Work 초안 (D421) */
-  private drafts: DraftView[] = []
-  private stopDrafts: () => void = () => {}
-  private draftsRead: Promise<void> | null = null
-  private draftsAgain = false
+  /** 이 Work의 Work 초안 폴더 (D421) */
+  private readonly drafts: DraftFolder
   /** 이번 명령의 전달이나 정리가 실패한 이유. 명령의 결과로 돌려준다 */
   private opError: string | null = null
   /** 결과를 모르는 머지를 앱이 다시 확인한 횟수 (D330) */
@@ -659,75 +650,58 @@ export class WorkRunner {
     readonly integrationRoot: string | null = null,
   ) {
     this.key = `${project.project_id}/${work.work_id}`
+    this.drafts = new DraftFolder({
+      dir: path.join(files.dir, DRAFTS_DIR),
+      source: { kind: 'work', id: this.key },
+      projectIds: () => ctx.projectIds(),
+      changed: () => this.changed(),
+      live: () => !this.removed,
+    })
   }
 
   /** 이 Work의 Work 초안 폴더 (D421): task와 곁 세션이 다시 할 Work의 초안을 쓰는 곳 */
   get draftsDir(): string {
-    return path.join(this.files.dir, DRAFTS_DIR)
+    return this.drafts.dir
   }
 
   /**
-   * 초안 폴더를 만들고 보기 시작한다 (D421, I135). 보관된 Work는 쓸 세션이 없어 폴더를 만들지 않고 남은 초안만 읽는다.
-   * 감시는 폴더가 지워졌다 다시 생기면 알리지 않으므로(watchDir) 곁 세션을 열 때와 task를 시작할 때 다시 건다
+   * 초안 폴더를 만들고 본다 (D421, I135). 초안을 쓰는 세션(task, 곁 세션)을 띄울 때 건다: 감시는 폴더가 지워졌다 다시
+   * 생기면 알리지 않으므로(watchDir) 띄울 때마다 다시 건다. 보관된 Work는 쓸 세션이 없어 폴더를 만들지 않고 남은 초안만 읽는다
    */
-  async startDrafts(): Promise<void> {
-    if (this.removed) return
-    this.stopDrafts()
-    if (this.work.status !== 'archived') {
-      await fsp.mkdir(this.draftsDir, { recursive: true })
-      this.stopDrafts = watchDir(this.draftsDir, () => void this.refreshDrafts())
-    }
-    await this.refreshDrafts()
+  async watchDrafts(): Promise<void> {
+    if (this.work.status !== 'archived') await this.drafts.watch()
+    await this.drafts.refresh()
   }
 
-  /** 초안 폴더를 다시 읽는다. 읽는 중에 또 바뀌면 끝난 뒤 한 번 더 읽는다 */
-  private refreshDrafts(): Promise<void> {
-    if (this.draftsRead) {
-      this.draftsAgain = true
-      return this.draftsRead
-    }
-    this.draftsRead = this.readDraftsNow()
-      .catch(() => undefined)
-      .finally(() => {
-        this.draftsRead = null
-        if (this.draftsAgain) {
-          this.draftsAgain = false
-          void this.refreshDrafts()
-        }
-      })
-    return this.draftsRead
-  }
-
-  private async readDraftsNow(): Promise<void> {
-    if (this.removed) return
-    const files = await readDrafts(this.draftsDir, isDraftFile, DRAFT_MAX_BYTES)
-    const ids = this.ctx.projectIds()
-    this.drafts = files.map(({ name, text, bytes }) => {
-      const parsed = parseDraft(text, ids, bytes)
-      return {
-        ...parsed,
-        ref: { source: { kind: 'work', id: this.key }, name },
-        title: workTitle(parsed.request),
-      }
-    })
-    this.changed()
+  /** 초안 폴더를 다시 읽는다: 앱을 켤 때, 프로젝트 목록이 바뀔 때 (초안의 project를 맞춰 봄) */
+  refreshDrafts(): Promise<void> {
+    return this.drafts.refresh()
   }
 
   /** 초안을 지운다: [버리기], 그 초안으로 Work를 만든 뒤 (D404, D421) */
-  async removeDraft(name: string): Promise<CommandResult> {
-    if (!isDraftFile(name)) return { ok: false, error: '초안 파일 이름이 아님' }
-    try {
-      await fsp.rm(path.join(this.draftsDir, name), { force: true })
-    } catch (e) {
-      return { ok: false, error: `초안을 지우지 못함: ${message(e)}` }
-    }
-    await this.refreshDrafts()
-    return { ok: true }
+  removeDraft(name: string): Promise<CommandResult> {
+    return this.drafts.remove(name)
   }
 
-  /** 다시 하기로 새 Work를 만들며 포기할 수 있는 Work인가: 진행 중이거나 멈췄다 (D421) */
-  redoAbandonable(): boolean {
-    return this.work.status === 'active' || this.work.status === 'stopped'
+  /**
+   * 다시 하기로 새 Work를 만들며 이 Work를 포기할 수 없는 까닭 (D421). 포기할 수 있으면 null이다: 진행 중이거나 멈췄고,
+   * 끊긴 작업이 없고(D122), 정리 세션이 열려 있지 않다(D137). 새 Work를 만들기 전에 본다
+   */
+  redoAbandonBlock(): string | null {
+    if (this.work.status !== 'active' && this.work.status !== 'stopped') {
+      return '원래 Work는 진행 중이거나 멈춘 Work가 아니라 포기할 수 없습니다'
+    }
+    if (this.work.operation) return `원래 Work를 포기할 수 없음: ${OPERATION_BLOCKS}`
+    if (this.cleanupOpen()) return `원래 Work를 포기할 수 없음: ${CLEANUP_BLOCKS}`
+    return null
+  }
+
+  /** 다시 하기로 새 Work는 만들었는데 이 Work를 포기하지 못했다: 이 Work에 알린다 (D421) */
+  redoAbandonFailed(newWorkId: string, error: string): void {
+    this.problem(
+      `${newWorkId}로 다시 하며 이 Work를 포기하지 못함: ${error}. [Work 포기]를 누르세요`,
+    )
+    this.changed()
   }
 
   /** 서브모듈 Work의 메인 프로젝트 (D413). 메인 레포의 Work거나 메인 프로젝트를 찾지 못하면 null */
@@ -1309,6 +1283,9 @@ export class WorkRunner {
     try {
       const dir = this.files.taskDir(task)
       await fsp.mkdir(dir, { recursive: true })
+      // 한 번 시작했던 task를 새 세션으로 다시 시작한다(대화 ID를 받지 못한 Codex, D423, I154). 앞 세션이 남긴
+      // handoff.md가 새 세션의 턴 끝 검사에 읽히지 않게 지운다. 산출물은 새 세션이 다시 쓴다
+      if (task.start_commit) await fsp.rm(path.join(dir, HANDOFF_FILE), { force: true })
       const startCommit = await headCommit(this.worktree, { env })
       const driver = agentRuntime(taskEngine(task))
       const bin = driver.find(env)
@@ -1474,7 +1451,7 @@ export class WorkRunner {
     }
     const discarded = this.work.tasks.filter((t) => t.status === 'discarded').map((t) => t.id)
     // task가 초안을 쓸 폴더를 (다시) 만들고 본다 (D421)
-    await this.startDrafts().catch(() => undefined)
+    await this.watchDrafts().catch(() => undefined)
     // 읽은 앱 소유 파일을 적힌 해시와 비교한다. 다르면 알리고 그 내용을 쓴다 (D124)
     const request = await this.files.readOwned('request.md')
     const intent = await this.files.readOwned('intent.md')
@@ -2382,15 +2359,15 @@ export class WorkRunner {
   }
 
   /**
-   * [Work 포기]. 끝난 정리 세션이 남아 있으면 치운다. 열려 있으면 받지 않는다 (D137). redoBy는 이 Work의 초안으로 만든 새
-   * Work의 id다: 다시 하려고 포기한다 (D421)
+   * [Work 포기]. 끝난 정리 세션이 남아 있으면 치운다. 열려 있으면 받지 않는다 (D137). redo는 다시 하려고 포기할 때다: 이
+   * Work의 초안으로 만든 새 Work의 id와, 그 Work가 이 Work의 이슈를 이어 쓰는지 (D421)
    */
-  abandon(redoBy?: string): Promise<CommandResult> {
+  abandon(redo?: { redoBy: string; issueKept: boolean }): Promise<CommandResult> {
     return this.enqueue(async () => {
       const r = await this.unlessCleanup({
         type: 'abandon',
         at: this.ctx.at(),
-        ...(redoBy ? { redoBy } : {}),
+        ...(redo ? { redoBy: redo.redoBy, ...(redo.issueKept ? { issueKept: true } : {}) } : {}),
       })
       if (r.ok && this.cleanup) {
         await this.endCleanup()
@@ -2868,7 +2845,7 @@ export class WorkRunner {
       if (blocked) return { ok: false, error: blocked }
       if (this.side?.status === 'live') return { ok: false, error: '곁 세션이 이미 열려 있음' }
       // 곁 세션이 초안을 쓸 폴더를 (다시) 만들고 본다 (D421)
-      await this.startDrafts().catch(() => undefined)
+      await this.watchDrafts().catch(() => undefined)
       return this.launchSide(fresh)
     })
   }
@@ -3479,7 +3456,7 @@ export class WorkRunner {
   shutdown(): Promise<void> {
     this.quitting = true
     this.closing = true
-    this.stopDrafts()
+    this.drafts.stop()
     if (this.prTimer) clearTimeout(this.prTimer)
     this.prTimer = null
     return this.enqueue(async () => {
@@ -3530,7 +3507,7 @@ export class WorkRunner {
         this.endSide(),
       ])
       this.removed = true
-      this.stopDrafts()
+      this.drafts.stop()
       if (!opts.files) return { ok: true }
       try {
         await removeTree(this.files.dir)
@@ -5205,7 +5182,7 @@ export class WorkRunner {
       pr: this.prPanel(),
       cleanup: this.cleanupView(),
       side: this.sideView(),
-      drafts: this.drafts,
+      drafts: this.drafts.list,
       operation: operationView(w),
       issue: this.issueView(),
       notices: this.noticeViews(),
