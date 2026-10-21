@@ -129,10 +129,14 @@ const errs = (v) => (v.errors ?? []).map((e) => `${e.instancePath || '/'} ${e.me
 // handoff 템플릿 (_common.md)
 const handoffTpl = codeBlocks(common, 'yaml').find((b) => b.includes('status:'));
 check(!!handoffTpl, '_common.md: handoff 템플릿 있음');
+// 스키마에 남긴 옛 필드(D418 전 형식, 에이전트는 쓰지 않음)는 템플릿에 없다 (D422)
+const handoffFields = Object.entries(handoffSchema.properties)
+  .filter(([, p]) => !String(p.description ?? '').startsWith('D418 전 형식'))
+  .map(([k]) => k);
 if (handoffTpl) {
   const tplFm = frontMatter(handoffTpl);
   const keys = Object.keys(tplFm.data);
-  check(sameSet(keys, Object.keys(handoffSchema.properties)), `handoff 템플릿 필드 = 스키마 필드 (${keys.join(', ')})`);
+  check(sameSet(keys, handoffFields), `handoff 템플릿 필드 = 스키마 필드 (${keys.join(', ')})`);
 
   const designTpl = codeBlocks(designSection('#### 5.6.2'), 'yaml').find((b) => b.includes('status:'));
   check(designTpl && sameSet(keys, Object.keys(frontMatter(designTpl).data)), 'handoff 템플릿 필드 = 설계 5.6.2 템플릿 필드');
@@ -149,9 +153,6 @@ if (handoffTpl) {
   const blocked = { ...tplFm.data, status: 'blocked', blocked_reason: '재현에 필요한 운영 로그가 없음' };
   check(vHandoff(blocked), `채운 예시(blocked + blocked_reason) 통과 ${errs(vHandoff)}`);
 
-  const back = { ...awaiting, recommended_next: { node: 'fix', reason: '원인이 틀림' } };
-  check(vHandoff(back), `채운 예시(recommended_next 있음) 통과 ${errs(vHandoff)}`);
-
   // 스키마가 막아야 하는 것
   check(!vHandoff({ ...tplFm.data, status: 'blocked' }), '반례: blocked인데 blocked_reason 빈 값 → 오류');
   check(!vHandoff({ ...tplFm.data, status: null }), '반례: status 빈 값 → 오류');
@@ -161,7 +162,7 @@ if (handoffTpl) {
   check(!!filled, '_common.md: 값을 채운 handoff 예시 있음');
   if (filled) {
     const fm = frontMatter(filled);
-    check(sameSet(Object.keys(fm.data), Object.keys(handoffSchema.properties)), '채운 예시의 필드 = 스키마 필드');
+    check(sameSet(Object.keys(fm.data), handoffFields), '채운 예시의 필드 = 스키마 필드');
     check(vHandoff(fm.data), `채운 예시가 스키마를 통과 ${errs(vHandoff)}`);
     check(/^## 요약\n[\s\S]*^## 다음 task가 알아야 할 것\n/m.test(fm.body), '채운 예시의 본문에 필수 절 둘');
     // 글 값: decisions의 what·why와 글 목록의 항목
@@ -261,12 +262,17 @@ const spec = {
     ['D88', '앱이 아는 값은 쓰지 않음', /Do not add fields for IDs/],
     ['D221', '글 값은 큰따옴표로 감쌈', /Put every text value in double quotes[\s\S]*contains `: `[\s\S]*starts with a backtick/],
     ['D221', '큰따옴표 안의 역슬래시는 \\\\로, 경로는 /로', /`\\\\` for a backslash\. Write paths with `\/`, not `\\`/],
-    ['5.2.1', '추가 검사: recommended_next.node', /`recommended_next\.node` is one of the selectable next steps/],
     ['5.2.1', '추가 검사: 필수 산출물', /required artifacts exist in the task directory/],
     ['5.2.1', '추가 검사: intent 초안 절과 완료조건 줄', /`목표`, `비목표`, `원하는 결과`, `완료조건`[\s\S]*`- \[ \] `/],
     ['5.2.1', '추가 검사: pr.md 첫 줄', /first line of `pr\.md` starts with `# `/],
     ['5.2.1', '추가 검사: replies.md의 절 (D190)', /`replies\.md` has one `## <item id>` section with a non-empty reply for each comment item/],
     ['D100', '형식 오류 되돌림: 파일 고침, 판단은 유지, 3~4 다시', /fix the file it names[\s\S]*Do not change your judgments[\s\S]*steps 3 and 4 again/],
+    ['D418', '앞 단계로 돌아가지 않음: 앞 결과가 틀리면 물음(이 Work에서 고침 / 새 Work)', /There is no going back to an earlier step[\s\S]*fix it within this Work \/ start over as a new Work/],
+    ['D422', '이 Work에서 고치면 intent는 그대로, intent_deviation과 by: human', /Fix it within this Work: keep the intent as it is[\s\S]*`intent_deviation`[\s\S]*`by: human`/],
+    ['D420', 'Work 초안: 허락 뒤 Work 초안 폴더에, project·type 머리와 요청', /Write it only after the human agreed[\s\S]*`Work 초안 폴더`[\s\S]*project: [\s\S]*type: [\s\S]*request/],
+    ['D420', '요청에 원래 요청, 승인된 intent, 해 본 것과 버리는 까닭, 사람 지시', /original request, the approved intent[\s\S]*what was tried and why it is dropped[\s\S]*human's instructions/],
+    ['D421', 'blocked_reason은 새 Work로 다시, 사람이 카드로 만들고 포기를 고름', /"새 Work로 다시: <file name>"[\s\S]*draft card[\s\S]*abandon this Work/],
+    ['D420', '실행하는 때: 새 Work로 다시 하기로 함 → 초안과 blocked', /start over as a new Work \| a Work draft, then `status: blocked`/],
     ['D369', '설계 문서를 따르는 Work: 제약의 "<경로>의 결정을 따른다"', /## Works that follow a design document[\s\S]*"`<path>`의 결정을 따른다"/],
     ['D369', '문서와 다르게 가면 제약에 닿음: 사람이 정할 결정으로 그 자리에서 물음', /different way from the document touches a constraint[\s\S]*human decision[\s\S]*Ask on the spot/],
     ['D371', '큰 방향을 뒤집으면 "멈추고 설계 Work를 먼저 함"(blocked)', /overturns a major direction[\s\S]*"멈추고 설계 Work를 먼저 함" \(`blocked`\)/],
@@ -274,7 +280,7 @@ const spec = {
   ],
   'work-start': [
     ['5.6.3', '입력: context.md부터 (요청 원문 포함)', /Read it first[\s\S]*request text/],
-    ['D40', '되감기: 현재 intent를 출발점으로', /Start from the current intent/],
+    ['D420', '다시 하는 Work: 요청의 앞 intent를 출발점으로', /Starting over from an earlier Work[\s\S]*start from that intent/],
     ['5.6.4', '코드를 바꾸지 않음', /does not change code/],
     ['5.6.4', '재현·원인 추적 안 함', /Do not reproduce the bug or trace the cause/, ['bugfix']],
     ['D39', '사람 의심 지점 → 추가 의견, 확인 안 됨', /\(사람 추정, 확인 안 됨\)/, ['bugfix']],
@@ -289,7 +295,7 @@ const spec = {
     ['D236', '유형은 context.md에서 읽음(사람이 고름)', /Work type \(`업무 유형`\) the human picked/],
     ['D236', '템플릿에 머리글 없음, 앱이 붙임', /No front matter: the app adds the type and version/],
     ['5.6.4', '기능 추가의 설계도 하지 않음', /Do not design the feature\. That is the job of design/, ['feature']],
-    ['D238', '유형 불일치: 초안 전에 물음, 바꾸면 blocked, 직접 바꾸지 않음', /Type mismatch[\s\S]*ask before you write the draft[\s\S]*`blocked`[\s\S]*Never change the type yourself/],
+    ['D238', '유형 불일치: 초안 전에 물음, 바꾸면 새 유형으로 Work 초안을 쓰고 blocked, 직접 바꾸지 않음', /Type mismatch[\s\S]*ask before you write the draft[\s\S]*Work draft with the new type[\s\S]*`blocked`[\s\S]*Never change the type yourself/],
     ['D239', '기능 추가 기본 완료조건 세 개', /`- \[ \] <test command>가 통과한다` \/ `- \[ \] 기존 테스트를 약화하거나 삭제하지 않는다` \/ `- \[ \] 완료조건의 각 동작을 확인하는 테스트가 있다`/, ['feature']],
     ['D240', '인수 조건: 밖에서 보이는 동작, "<조건>이면 <결과>", 구현 세부 없음', /behavior seen from outside[\s\S]*"<조건>이면 <결과>"[\s\S]*No implementation details/, ['feature']],
     ['D241', '사람 제안: 반드시면 제약, 아니면 (사람 제안)', /`제약` when it is a must[\s\S]*"\(사람 제안\)"/, ['feature', 'refactor']],
@@ -321,7 +327,6 @@ const spec = {
   ],
   design: [
     ['5.6.8', '입력: context.md, request.md 경로', /`context\.md`[\s\S]*`request\.md`/],
-    ['D254', '현재 코드 위에서 이어서: 코드를 읽고 design.md를 고침, 코드는 그대로', /Continuing on current code[\s\S]*revise `design\.md`\. Leave the code as it is/],
     ['D233', '작은 feature도 거치고 분량만 줄임', /Small features go through this step too/],
     ['D243', '코드를 바꾸지 않음, 실험은 되돌림', /does not change code[\s\S]*Revert any experiment/],
     ['5.6.8', '순서: 시나리오 → 요구사항 → 물음 → 접근과 바뀌는 곳 → 계획', /User scenarios\.[\s\S]*Requirements\.[\s\S]*Ask if needed[\s\S]*Approach and what changes[\s\S]*Implementation plan and test plan/],
@@ -331,14 +336,13 @@ const spec = {
     ['D241', '사람 제안마다 받아들일지와 이유를 접근에', /"\(사람 제안\)"[\s\S]*`접근`/],
     ['D247', '구현 계획: 단계마다 바꿀 것과 요구사항, 테스트할 수 있는 크기', /for each step, what changes and which requirements[\s\S]*small enough to test/],
     ['D239', '테스트 계획: 완료조건의 각 동작이 테스트에 닿음, 못 하면 이유', /Each behavior in the intent's 완료조건 must be covered[\s\S]*write why/],
-    ['D23', 'intent와 어긋나면 intent_deviation, 의도 변경은 intake', /`intent_deviation`[\s\S]*`recommended_next` to `intake`/],
+    ['D422', 'intent와 어긋나면 intent_deviation, 의도를 바꿔야 하면 사람에게 물음', /`intent_deviation`[\s\S]*If the intent must change, ask the human/],
     ['5.6.8', '결정 지점: 접근, 바뀌는 곳, 계획의 나눔', /The approach, what changes, and how to split the plan/],
     ['D242', '사람이 정할 결정 셋', /Several options change what is seen from outside[\s\S]*widens the scope, or touches the intent's non-goals or constraints[\s\S]*do not take a human suggestion/],
     ['5.6.8', '완료조건: 일곱 절, 요구사항 출처와 계획, 테스트 계획, 사람 결정, 코드 안 바꿈', /## Done when[\s\S]*seven template sections[\s\S]*source and is in a step[\s\S]*test plan[\s\S]*`decisions`[\s\S]*No code changed/],
   ],
   implement: [
     ['5.6.9', '입력: context.md, design.md', /`context\.md`[\s\S]*`design\.md`/],
-    ['6.2', '현재 코드 위에서 이어서', /Continuing on current code/],
     ['D247', '순서: 테스트 먼저 → 구현 전 실패 → 구현 → 통과 → 커밋, 끝나면 테스트 명령', /Write the tests[\s\S]*fail before the change[\s\S]*Implement[\s\S]*pass[\s\S]*Commit[\s\S]*test command/],
     ['D247', '처음부터 통과하는 테스트는 고침, 못 하면 이유와 risks', /passes from the start does not catch the new behavior[\s\S]*`risks`/],
     ['D257', '지금 동작을 지키는 완료조건의 테스트는 구현 전 통과도 됨', /keep the current behavior[\s\S]*may pass before the change/],
@@ -346,14 +350,13 @@ const spec = {
     ['D56', '기존 테스트 변경 → risks, 변경 요약에 표시', /existing test must change[\s\S]*`risks`[\s\S]*`변경 요약`/],
     ['D57', '테스트 명령 실행, 기준 커밋 실패 구분', /Run tests[\s\S]*also fails at the base commit/],
     ['D248', '작은 어긋남은 정해서 계획과 달라진 점에', /Small departures[\s\S]*`계획과 달라진 점`/],
-    ['D248', '설계가 틀리면 recommended_next: design', /`recommended_next` to `design`/],
+    ['D422', '설계가 틀리면 물음: 고쳐 이어서 / 새 Work, 고치면 계획과 달라진 점과 by: human', /The design is wrong:\*\* ask the human[\s\S]*start over as a new Work[\s\S]*`계획과 달라진 점`[\s\S]*`by: human`/],
     ['5.6.9', '결정 지점: 계획이 정하지 않은 구현 세부', /Implementation details the plan does not settle/],
     ['D248', '크게 벗어남 넷', /behavior or interface\) differs from the design[\s\S]*scope widens[\s\S]*different way from `접근`[\s\S]*dependency the design does not have, or change a data format or schema/],
     ['5.6.9', '완료조건: 네 절, 계획 단계, 새 동작 테스트, 물음, 커밋, 테스트 명령', /## Done when[\s\S]*four template sections[\s\S]*Every step of the plan[\s\S]*failed before[\s\S]*and passed after[\s\S]*`decisions`[\s\S]*committed[\s\S]*test command/],
   ],
   refactor: [
     ['5.6.10', '입력: context.md, request.md 경로', /`context\.md`[\s\S]*`request\.md`/],
-    ['D278', '현재 코드 위에서 이어서: 안전망 커밋을 다시 만들지 않음', /Continuing on current code[\s\S]*Do not make the safety-net commit again/],
     ['5.6.10', '순서: 계획 → 물음 → 안전망 커밋 → 단계마다 커밋 → 테스트 명령', /Plan\.[\s\S]*Ask if needed[\s\S]*Safety net\.[\s\S]*Steps\.[\s\S]*test command at the end/],
     ['D260', '동작을 바꾸지 않음, 찾은 버그는 고치지 않고 적음', /Do not change behavior[\s\S]*do not fix it[\s\S]*`찾은 버그와 받아들인 차이`[\s\S]*`risks`/],
     ['D268', '기존 테스트가 덮으면 근거와 함께 적고 빈 곳만 새로, 커버리지 도구', /existing tests already cover[\s\S]*reason[\s\S]*only for behavior no test covers[\s\S]*coverage tool/],
@@ -363,7 +366,7 @@ const spec = {
     ['D265', '기존 테스트는 호출 이름·import·위치·준비 코드만, 기대값과 입력은 바꾸지 않음', /call names, import paths, file location and setup code[\s\S]*Never change their expected values or inputs/],
     ['D269', '안전망 커밋 하나와 단계마다 커밋, 커밋마다 테스트 통과', /one safety-net commit, then one commit per plan step[\s\S]*pass at every commit/],
     ['D57', '테스트 명령 실행, 기준 커밋 실패 구분', /Run tests[\s\S]*also fails at the base commit/],
-    ['D23', 'intent와 어긋나면 intent_deviation, 의도 변경은 intake', /`intent_deviation`[\s\S]*`recommended_next` to `intake`/],
+    ['D422', 'intent와 어긋나면 intent_deviation, 의도를 바꿔야 하면 사람에게 물음', /`intent_deviation`[\s\S]*If the intent must change, ask the human/],
     ['5.6.10', '결정 지점: 목표 구조, 계획의 나눔, 새 안전망', /The target structure, how to split the plan, which safety-net tests/],
     ['D267', '사람이 정할 결정: 목표 구조 선택지, 범위·비목표·제약, 사람 제안', /Several target structures[\s\S]*widens the scope, or touches the intent's non-goals or constraints[\s\S]*do not take a human suggestion/],
     ['D270', '동작 차이: 다른 방법 / 받아들임 / 범위에서 뺌, 받아들이면 그 기대값만, by: human', /must change behavior a little[\s\S]*keep the current behavior another way \/ accept the difference \/ drop that part[\s\S]*only that expected value[\s\S]*`by: human`/],
@@ -371,7 +374,6 @@ const spec = {
   ],
   execute: [
     ['5.6.11', '입력: context.md, request.md 경로', /`context\.md`[\s\S]*`request\.md`/],
-    ['D316', '현재 코드 위에서 이어서: 폐기된 execution.md를 읽고 새로 씀', /Continuing on current code[\s\S]*discarded `execution\.md`[\s\S]*new `execution\.md`/],
     ['5.6.11', '순서: 계획 → 물음 → 작업과 커밋 → 자체 확인 → 테스트 명령', /Plan\.[\s\S]*Ask if needed[\s\S]*Do the work and commit[\s\S]*Self-check\.[\s\S]*test command at the end/],
     ['D302', '진행 방식은 execute가 정하고 계획과 decisions에 적음', /How to work[\s\S]*yours to decide[\s\S]*`계획`[\s\S]*`decisions`/],
     ['D307', '동작을 바꾸면 테스트를 더함, 순서 자유, 못 하면 이유와 risks, 기존 테스트 약화 금지', /change how code behaves, add a test[\s\S]*before or after[\s\S]*cannot add one[\s\S]*`risks`[\s\S]*Never weaken or delete existing tests/],
@@ -379,14 +381,13 @@ const spec = {
     ['D309', '커밋 수 제한 없음, 레포 관례, 모두 커밋, 실험 되돌림', /any number[\s\S]*commit message convention[\s\S]*Commit all changes before you close[\s\S]*Revert experimental changes/],
     ['D57', '테스트 명령 실행, 기준 커밋 실패 구분', /Run tests[\s\S]*also fails at the base commit/],
     ['5.6.11', '범위 밖 문제는 고치지 않고 risks, 고치려면 사람 결정', /outside the scope[\s\S]*do not fix them[\s\S]*`risks`[\s\S]*human decision/],
-    ['D23', 'intent와 어긋나면 intent_deviation, 의도 변경은 intake', /`intent_deviation`[\s\S]*`recommended_next` to `intake`/],
+    ['D422', 'intent와 어긋나면 intent_deviation, 의도를 바꿔야 하면 사람에게 물음', /`intent_deviation`[\s\S]*If the intent must change, ask the human/],
     ['5.6.11', '결정 지점: 방식, 나눔, 더할 테스트', /How to do the work, how to split it, which tests to add/],
     ['D308', '사람이 정할 결정 셋', /Several options change what is seen from outside[\s\S]*widens the scope, or touches the intent's non-goals or constraints[\s\S]*do not take a human suggestion/],
     ['5.6.11', '완료조건: 네 절, 자체 확인, 테스트, 커밋, 사람 결정, 테스트 명령', /## Done when[\s\S]*four template sections[\s\S]*check method[\s\S]*has a test, or the reason[\s\S]*committed[\s\S]*`decisions`[\s\S]*test command/],
   ],
   spec: [
     ['5.6.12', '입력: context.md, 대상 문서는 intent 제약, request.md 경로', /`context\.md`[\s\S]*target document's path is in the intent's `제약`[\s\S]*`request\.md`/],
-    ['D365', '현재 문서 위에서 이어서: 결정은 그대로, 추가 지시와 (있으면) 폐기된 verification.md의 다시 볼 결정에서 시작, 폐기된 spec.md를 읽고 새로, 사람 결정을 옮겨 적음(I115)', /Continuing on the current document[\s\S]*keep the decisions[\s\S]*extra instructions, and from `다시 볼 결정` in the discarded `verification\.md` if there is one[\s\S]*discarded `spec\.md`[\s\S]*new `spec\.md`[\s\S]*Copy the decisions the human made in the discarded attempt[\s\S]*`by: human`/],
     ['D357', '순서: 읽기 → 주제 목록 확인 → 주제마다 설명과 질문 묶음 → 받을 때마다 문서 → 다시 읽기 → 커밋', /\*\*Read\*\* the code and the target document[\s\S]*\*\*Topic list:\*\*[\s\S]*confirmed[\s\S]*\*\*Each topic:\*\*[\s\S]*question batch[\s\S]*\*\*Write\*\* each decision[\s\S]*as soon as[\s\S]*\*\*Re-read\*\* the whole document[\s\S]*\*\*Commit\*\* the target document/],
     ['D354', '주제 목록: "정한다" 항목에 코드에서 찾은 쟁점을 더함', /"<무엇>을 정한다" items and add the issues you found reading the code/],
     ['D366', '주제 목록 끝에 구현 나눔(Work 단위의 조각, 순서, 조각마다 목표)', /End the list with "구현 나눔"[\s\S]*split into Works[\s\S]*order[\s\S]*goal/],
@@ -402,14 +403,13 @@ const spec = {
     ['D361', '지식: 설계 결정은 후보 아님, 설계 밖에서도 통하는 것만', /design decisions are not knowledge candidates[\s\S]*`knowledge_candidates` only what the human told you that holds beyond this design/],
     ['D361', '지식 파일은 verify가 씀(spec은 대상 문서만)', /Knowledge files are not yours to write: verify writes them from your `knowledge_candidates`/],
     ['D374', '커밋: 대상 문서를 커밋, 그 밖의 파일은 바꾸지 않음', /changes the target document\. Commit it before you close\. Do not change any other file/],
-    ['5.6.12', 'intent와 어긋날 때: 물음, 정하지 않은 것, intent_deviation과 intake', /conflict or cannot be decided[\s\S]*ask the human[\s\S]*undecided section[\s\S]*`intent_deviation`[\s\S]*`recommended_next` to `intake`/],
+    ['5.6.12', 'intent와 어긋날 때: 물음, 정하지 않은 것, intent_deviation과 사람에게 물음', /conflict or cannot be decided[\s\S]*ask the human[\s\S]*undecided section[\s\S]*`intent_deviation` and ask the human/],
     ['5.6.12', '결정 지점: 주제 목록과 순서, 주제마다의 결정. 모두 물음', /The topic list and its order, and every decision of each topic\. Ask the human about all of them/],
     ['5.6.12', '완료조건: 네 절, 정한다 항목과 더한 쟁점, 이유·표시·by: human, 다시 읽기, 커밋과 실험 되돌림', /## Done when[\s\S]*four template sections[\s\S]*every issue the human added[\s\S]*undecided section[\s\S]*reason[\s\S]*marked[\s\S]*`by: human`[\s\S]*re-read the whole document[\s\S]*committed[\s\S]*experiments reverted/],
   ],
   fix: [
     ['5.6.5', '입력: context.md, request.md 경로', /`context\.md`[\s\S]*`request\.md`/],
     ['D97', '기준 커밋은 context.md', /base commit[\s\S]*base commit \(from `context\.md`\)/],
-    ['6.2', '현재 코드 위에서 이어서', /Continuing on current code/],
     ['D228', '순서: 재현 → 원인 → 필요하면 물음 → 수정', /Reproduce\.[\s\S]*Find the cause\.[\s\S]*Ask if needed[\s\S]*Fix/],
     ['D49', '원인은 재현/비재현 조건 모두 설명, 실험 또는 assumptions', /reproduces and those where it does not[\s\S]*experiment[\s\S]*`assumptions`/],
     ['D48', '사람 추정 판정, 틀리면 rejected', /맞음 \/ 틀림 \/ 판단 불가[\s\S]*`rejected`/],
@@ -443,8 +443,8 @@ const spec = {
     ['D60', '기준 커밋과 비교한 테스트 파일 모두 판정', /changed since the base commit[\s\S]*약화 아님[\s\S]*약화 의심/, ['bugfix', 'feature', 'refactor', 'general']],
     ['D229', '반영할 지적은 그 자리에서 질문으로 고름, 번호 입력도 받음, decisions by: human', /Which findings to apply[\s\S]*차단·권장만 반영 \/ 모두 반영 \/ 반영하지 않음[\s\S]*type the numbers[\s\S]*`by: human`/],
     ['D60', '약화 의심 → 사람 결정', /looks like weakening[\s\S]*통과[\s\S]*실패/, ['bugfix', 'feature', 'refactor', 'general']],
-    ['D61', '실패·판정 불가 → 되돌아가기 / 이대로', /Any 실패 or 판정 불가[\s\S]*`recommended_next`[\s\S]*`recommended_next: null`/],
-    ['5.6.6', '이전 단계 추천: fix', /`recommended_next` to `fix`/, ['bugfix']],
+    ['D419', '실패·판정 불가 → 여기서 고침 / 이대로 / 새 Work', /Any 실패 or 판정 불가[\s\S]*Fix it here[\s\S]*judge again on the final code[\s\S]*completion screen as is[\s\S]*Start over as a new Work/],
+    ['D419', '앞 결과가 틀리면: 차단 지적은 여기서 고침, 근본부터면 물음(여기서 고침 / 새 Work), 앞 단계로 돌아가지 않음', /An earlier result is wrong:\*\*[\s\S]*차단 finding[\s\S]*fix it here[\s\S]*start over as a new Work[\s\S]*no going back/],
     ['5.6.6', '결정 지점: 고른 지적의 수정 방식, 판정', /How to fix a picked finding, and the verdict of each 완료조건/],
     ['D62', 'pr.md 첫 줄 # 제목', /first line is `# <PR title>`/],
     ['D101', 'pr.md 언어는 레포 관례, PR 템플릿 따르기', /language the repo uses[\s\S]*PR template/],
@@ -453,31 +453,27 @@ const spec = {
     ['D253', '기능 추가 입력: design.md와 implement.md (fix.md와 재현 규칙 없음)', /`design\.md` and `implement\.md` at the paths in `context\.md`/, ['feature']],
     ['D245', '기능 추가 리뷰: 설계와 맞는지, 달라진 점, 새 동작 테스트. 설계의 요구사항은 판정 안 하고 지적으로', /fit the user scenarios, requirements and approach[\s\S]*`계획과 달라진 점`[\s\S]*Do not judge requirements added in the design[\s\S]*finding[\s\S]*new behavior tests really catch/, ['feature']],
     ['D251', '새 동작 테스트 항목: 있는지, 동작을 확인하는지, 직접 실행, 구현 전은 implement.md, 없으면 판정 불가', /완료조건의 각 동작을 확인하는 테스트가 있다[\s\S]*really checks that behavior[\s\S]*run it yourself[\s\S]*`implement\.md`[\s\S]*판정 불가/, ['feature']],
-    ['D253', '기능 추가 이전 단계 추천: 구현이면 implement, 설계면 design', /`implement` if the implementation is wrong, `design` if the design is wrong/, ['feature']],
     ['D252', '기능 추가 pr.md: 요약 / 동작 / 주요 설계 결정 / 변경 / 테스트', /## 요약\n## 동작\n## 주요 설계 결정\n## 변경\n## 테스트/, ['feature']],
     ['D275', '리팩터링 입력: refactor.md (fix.md와 재현 규칙 없음)', /`refactor\.md` at the path in `context\.md`/, ['refactor']],
     ['D275', '리팩터링 리뷰: 로직 변경 없음, 받아들이지 않은 동작 변경은 차단, 구조 목표, 범위', /logic change[\s\S]*did not accept is a 차단 finding[\s\S]*structural goals[\s\S]*scope grow/, ['refactor']],
     ['D273', '안전망 항목: 같은 worktree에서 안전망 커밋 체크아웃(I64), 마지막 코드에서도, 둘 다 통과, 없으면 판정 불가, 브랜치 확인', /same worktree[\s\S]*safety-net commit[\s\S]*final code too[\s\S]*only if both pass[\s\S]*판정 불가[\s\S]*`git branch --show-current`/, ['refactor']],
     ['D264', '공개 인터페이스 항목: diff로 판정, intent가 정한 것은 뺌', /used outside the repo changed[\s\S]*Leave out what the intent says to change/, ['refactor']],
     ['D265', '따라 고친 기존 테스트는 약화 아님, 기대값·입력 변경이나 삭제는 물음', /followed an internal interface change[\s\S]*약화 아님[\s\S]*expected values or inputs changed[\s\S]*ask/, ['refactor']],
-    ['D275', '리팩터링 이전 단계 추천: 변경이면 refactor, 의도면 intake', /`refactor` if the change is wrong, `intake` if the intent is wrong/, ['refactor']],
     ['D274', '리팩터링 pr.md: 요약 / 목표 구조 / 동작 보존 / 변경 / 찾은 버그 / 테스트', /## 요약\n## 목표 구조\n## 동작 보존\n## 변경\n## 찾은 버그\n## 테스트/, ['refactor']],
     ['D314', '일반 입력: execution.md (fix.md와 재현 규칙 없음)', /`execution\.md` at the path in `context\.md`/, ['general']],
     ['D314', '일반 리뷰: 계획과 맞는지, 범위, 확인 방법이 제대로 확인하는지, 동작을 바꾼 곳의 테스트와 이유', /fit the plan in `execution\.md`[\s\S]*scope grow[\s\S]*check method[\s\S]*really check it[\s\S]*change in code behavior have a test[\s\S]*reason/, ['general']],
     ['D312', '확인 방법을 먼저 직접 실행, 부족하면 보완해 판정하고 근거에 둘 다, 남은 위험, intent는 그대로', /run the method at the end of each 완료조건 line yourself[\s\S]*add your own check[\s\S]*write both in the evidence[\s\S]*`남은 위험`[\s\S]*Do not change the intent/, ['general']],
     ['D311', '사람 확인 항목: 한 질문, 볼 것, 답으로 통과/실패, 사람 확인과 답, by: human', /`확인: 사람` items:\*\* gather them all into one question[\s\S]*what to look at[\s\S]*통과 or 실패[\s\S]*"사람 확인"[\s\S]*`by: human`/, ['general']],
-    ['D314', '일반 이전 단계 추천: 변경이면 execute, 의도면 intake', /`execute` if the change is wrong, `intake` if the intent is wrong/, ['general']],
     ['D313', '일반 pr.md: 요약 / 주요 결정 / 변경 / 테스트', /## 요약\n## 주요 결정\n## 변경\n## 테스트/, ['general']],
     ['D311', '완료조건: 사람 확인 항목을 묻고 기록', /## Done when[\s\S]*`확인: 사람` item was asked about/, ['general']],
     ['D362', '설계 입력: spec.md, 대상 문서는 제약, spec handoff', /`spec\.md` at the path in `context\.md`[\s\S]*target document[\s\S]*`제약`[\s\S]*spec handoff/, ['spec']],
     ['D362', '설계 리뷰: 코드 대신 문서의 일관성과 근거, 결정이 좋은지는 지적 안 함', /Review the target document, not code[\s\S]*consistency and grounds[\s\S]*Do not judge whether a decision is good/, ['spec']],
     ['D362', '설계 리뷰 항목: 모순과 결정 표 어긋남, 코드 서술 하나씩, 이유 없거나 추측, 빠진 정한다 항목, 모호한 곳, 사람 결정 표시와 by: human', /Contradictions inside the document[\s\S]*decision table and the body[\s\S]*statement about the current code[\s\S]*one by one[\s\S]*no reason[\s\S]*guess[\s\S]*"<무엇>을 정한다" items[\s\S]*misses[\s\S]*vague[\s\S]*decide again[\s\S]*human-decision marks[\s\S]*`by: human`/, ['spec']],
-    ['D362', '다시 볼 결정: 따로 적고 고르지 않음, 완료 화면과 pr.md에 보이기만, 바꾸려면 spec으로 되감기', /better alternative or a missed risk goes in `다시 볼 결정`[\s\S]*not a finding to pick[\s\S]*completion screen and `pr\.md` only show it[\s\S]*rewinds to spec/, ['spec']],
+    ['D362', '다시 볼 결정: 따로 적고 고르지 않음, 완료 화면과 pr.md에 보이기만, 바꾸려면 승인 전 터미널 지시', /better alternative or a missed risk goes in `다시 볼 결정`[\s\S]*not a finding to pick[\s\S]*completion screen and `pr\.md` only show it[\s\S]*tells you in the terminal before approving/, ['spec']],
     ['D363', '반영: 고른 지적을 문서에 반영해 커밋', /change the target document only for the findings the human picked, and commit/, ['spec']],
-    ['D363', '새 결정이 필요한 지적은 정하지 않고 반영하지 않은 지적, recommended_next에 spec', /needs a new decision[\s\S]*do not decide it here[\s\S]*`반영하지 않은 지적`[\s\S]*`recommended_next` to `spec`/, ['spec']],
+    ['D363', '새 결정이 필요한 지적은 spec처럼 그 자리에서 물음, 문서와 결정 표에 사람 결정', /needs a new decision:\*\* ask the human on the spot[\s\S]*\(추천\)[\s\S]*decision table[\s\S]*human's decision/, ['spec']],
     ['D374', '판정: 문서와 diff, 대상 문서 밖 변경은 기준 커밋 diff로, 문서 밖 파일 변경 절', /reading the document and the diff[\s\S]*diff against the base commit[\s\S]*`문서 밖 파일 변경`/, ['spec']],
     ['D374', '테스트 명령 없음: 테스트 실행 건너뜀', /No test command[\s\S]*Skip running tests/, ['spec']],
-    ['D374', '설계 이전 단계 추천: 문서가 틀렸거나 새 결정이면 spec, 의도면 intake', /`spec` if the document is wrong or needs a new decision, `intake` if the intent is wrong/, ['spec']],
     ['D364', '설계 pr.md: 요약 / 주요 결정 / 다시 볼 결정 / 정하지 않은 것 / 구현 나눔 / 변경', /## 요약\n## 주요 결정\n## 다시 볼 결정\n## 정하지 않은 것\n## 구현 나눔\n## 변경/, ['spec']],
     ['D366', '구현 나눔은 정했을 때만', /`구현 나눔`: only when it was decided/, ['spec']],
     ['D374', '완료조건: 일곱 절, 문서 밖 파일 변경과 다시 볼 결정', /## Done when[\s\S]*seven template sections[\s\S]*picked[\s\S]*verdict and evidence[\s\S]*`문서 밖 파일 변경`[\s\S]*`다시 볼 결정` is written[\s\S]*`pr\.md` is written/, ['spec']],
@@ -502,7 +498,6 @@ const spec = {
     ['5.6.7', '답글: 고친 것은 무엇을 어떻게, 고치지 않은 것은 이유. 코멘트의 언어', /what you fixed and how, or why you did not[\s\S]*language of the comment/],
     ['D173', '표시 문구와 원래 코멘트 링크는 앱이 붙이므로 쓰지 않음 (D207)', /Do not write a signature or a link[\s\S]*the app adds them/],
     ['D15', '코드를 바꾸는 단계: 모두 커밋, push하지 않음(앱이 함)', /this step changes code\. Commit all changes[\s\S]*Do not push/],
-    ['D188', 'recommended_next는 늘 null', /`recommended_next`:\*\* always null/],
     ['5.6.7', '결정 지점: 항목마다 고칠지와 방식. 결정마다 확인이면 코드 전에 물음', /Whether and how to fix each item[\s\S]*결정마다 확인, ask before you change code/],
     ['5.6.7', '완료조건: 셋 중 하나 또는 open_questions, 코멘트 항목마다 답글, 커밋과 테스트 결과', /## Done when[\s\S]*settled as one of the three[\s\S]*has a reply in `replies\.md`[\s\S]*committed[\s\S]*test command/],
   ],

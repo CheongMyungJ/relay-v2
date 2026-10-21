@@ -10,7 +10,6 @@ For a refactoring Work, change the structure without changing behavior. In one s
 ## Inputs
 
 - The argument gives the path of `context.md`. Read it first. It has the intent and the Work's base commit. If you need the request text, read `request.md` at the path in `context.md`.
-- **Continuing on current code** (chosen when rewinding to refactor): keep the existing commits and change on top of them. Do not make the safety-net commit again: copy the `안전망 커밋` hash from the discarded `refactor.md` (path in `context.md`). If you need more safety-net tests, commit them separately before you change structure further, mark them (추가) in the table, and get their base-code result with the procedure below.
 
 ## Order
 
@@ -30,7 +29,7 @@ For a refactoring Work, change the structure without changing behavior. In one s
 - **Interfaces:** you may change names, signatures and module boundaries used only inside the repo, and fix the callers in the repo together. Existing tests may follow such a change only in call names, import paths, file location and setup code. Never change their expected values or inputs. Change an interface used outside the repo (what a library exports, HTTP API, CLI arguments, stored formats and schemas) only when the intent says so.
 - **Commits:** one safety-net commit, then one commit per plan step. The test command must pass at every commit. Follow the repo's commit message convention. Commit all changes before you close. Revert experimental changes such as debug output.
 - **Run tests:** run the test command from the intent's 완료조건. For each failure, check whether it also fails at the base commit (from `context.md`), and say which.
-- **Intent conflict:** if 완료조건 conflict or cannot be met, write it in `intent_deviation`. If the intent must change, set `recommended_next` to `intake`.
+- **Intent conflict:** if 완료조건 conflict or cannot be met, write it in `intent_deviation`. If the intent must change, ask the human (see "When an earlier result is wrong" in the common rules).
 
 ## Decision points
 

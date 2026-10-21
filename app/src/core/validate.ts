@@ -8,7 +8,7 @@ import type { AppConfig } from '../shared/config'
 import type { Handoff, HandoffStatus, TaskNode } from '../shared/contracts'
 import handoffSchemaV1 from '../shared/generated/handoff.v1.schema.json'
 import type { CheckSummary, FormatIssue, WorkType } from '../shared/work'
-import { ALL_NODES, NODE_INFO, recommendableNodes } from './pipeline'
+import { NODE_INFO } from './pipeline'
 
 /** 지금 쓰는 형식 버전 (5.2.1). task를 시작할 때 work.json에 기록하고, 그 버전의 스키마로 검사한다 */
 export const FORMAT_VERSION = 1
@@ -330,7 +330,7 @@ function schemaErrors(
   return ordered.filter((f) => !seen.has(f.field) && seen.add(f.field))
 }
 
-/** 스키마에 없는 필드 (D85). 중첩 객체(decisions의 항목, recommended_next 등)도 본다 */
+/** 스키마에 없는 필드 (D85). 중첩 객체(decisions의 항목 등)도 본다 */
 function unknownFields(schema: SchemaNode, value: unknown, path = ''): string[] {
   if (Array.isArray(value)) {
     const items = schema.items
@@ -490,7 +490,7 @@ function checkHeader<T>(
 
 export interface HandoffCheckOptions {
   node: TaskNode
-  /** Work의 업무 유형. recommended_next.node의 허용값이 유형마다 다르다 (3.2) */
+  /** Work의 업무 유형 (D232) */
   type: WorkType
   warnChars: number
   formatVersion?: number
@@ -508,19 +508,6 @@ export function checkHandoff(text: string, opts: HandoffCheckOptions): HandoffCh
   const file = HANDOFF_FILE
   const h = checkHeader(file, text, schemas(opts.formatVersion ?? FORMAT_VERSION).handoff)
   const errors = [...h.errors]
-  const rec = h.data?.['recommended_next']
-  const node = isRecord(rec) ? rec['node'] : undefined
-  if (ALL_NODES.some((n) => n === node)) {
-    const allowed = recommendableNodes(opts.type, opts.node)
-    if (!allowed.some((n) => n === node)) {
-      errors.push({
-        file,
-        part: 'header',
-        field: 'recommended_next.node',
-        message: `\`recommended_next.node\` 값이 선택 가능한 다음 단계가 아님 (허용값: ${allowed.join(' | ') || '없음'}, 지금: ${String(node)})`,
-      })
-    }
-  }
   if (h.data) errors.push(...missingSections(file, h.body, HANDOFF_SECTIONS, 'handoff 본문'))
   const status = h.data?.['status']
   return {
@@ -705,7 +692,7 @@ export function checkReplies(
 
 export interface TaskCheckInput {
   node: TaskNode
-  /** Work의 업무 유형 (D232). recommended_next.node의 허용값을 정한다 */
+  /** Work의 업무 유형 (D232) */
   type: WorkType
   /** task 디렉터리 바로 아래의 .md 파일. 이름 → 내용 */
   files: Readonly<Record<string, string>>

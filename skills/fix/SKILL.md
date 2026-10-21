@@ -11,7 +11,6 @@ Reproduce the bug, find the cause, fix the code and commit. Write what you found
 
 - The argument gives the path of `context.md`. Read it first. It has the intent and the Work's base commit.
 - If you need the original request, read `request.md` at the path in `context.md`.
-- **Continuing on current code** (chosen when rewinding to fix): keep the existing commits and fix on top of them.
 
 ## Order
 

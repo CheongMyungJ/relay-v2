@@ -10,7 +10,6 @@ For a general Work, do the work the intent asks for. How you do it is up to you:
 ## Inputs
 
 - The argument gives the path of `context.md`. Read it first. It has the intent and the Work's base commit. If you need the request text, read `request.md` at the path in `context.md`.
-- **Continuing on current code** (chosen when rewinding to execute): keep the existing commits and continue on top of them. Read the discarded `execution.md` (path in `context.md`) and write a new `execution.md`.
 
 ## Order
 
@@ -28,7 +27,7 @@ For a general Work, do the work the intent asks for. How you do it is up to you:
 - **Commits:** any number. Follow the repo's commit message convention. Commit all changes before you close. Revert experimental changes such as debug output.
 - **Run tests:** run the test command from the intent's 완료조건. For each failure, check whether it also fails at the base commit (from `context.md`), and say which.
 - **Problems outside the scope:** do not fix them. Write them in `risks`. Fixing one widens the scope, which is a human decision.
-- **Intent conflict:** if 완료조건 conflict or cannot be met, write it in `intent_deviation`. If the intent must change, set `recommended_next` to `intake`.
+- **Intent conflict:** if 완료조건 conflict or cannot be met, write it in `intent_deviation`. If the intent must change, ask the human (see "When an earlier result is wrong" in the common rules).
 
 ## Decision points
 

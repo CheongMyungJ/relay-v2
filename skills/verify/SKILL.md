@@ -98,8 +98,8 @@ Review the whole change of this Work, apply only the findings the human picks, t
 <!-- /type -->
 <!-- type: spec -->
 - **Document:** change the target document only for the findings the human picked, and commit. Do not change code. Revert any experimental change when you close.
-- **`다시 볼 결정`:** a decision with a better alternative or a missed risk goes in `다시 볼 결정`, not in `리뷰 지적`. It is not a finding to pick: the Work completion screen and `pr.md` only show it. To change it, the human rewinds to spec.
-- **A finding that needs a new decision:** do not decide it here. Keep it in `반영하지 않은 지적`, and set `recommended_next` to `spec` with the reason.
+- **`다시 볼 결정`:** a decision with a better alternative or a missed risk goes in `다시 볼 결정`, not in `리뷰 지적`. It is not a finding to pick: the Work completion screen and `pr.md` only show it. To change it, the human tells you in the terminal before approving: then decide it like a new decision below.
+- **A finding that needs a new decision:** ask the human on the spot, in the same shape as the spec step asks: options, the recommended one first with "(추천)", and the reason in its description. Change the document and its decision table by the answer, and mark it as the human's decision.
 - **Verdicts on the document:** judge each 완료조건 by reading the document and the diff. Judge "대상 문서와 지식 파일 밖의 파일을 바꾸지 않는다" from the diff against the base commit, and list every other changed file in `문서 밖 파일 변경`.
 - **No test command:** the intent has none. Skip running tests.
 <!-- /type -->
@@ -137,21 +137,7 @@ Review the whole change of this Work, apply only the findings the human picks, t
 <!-- type: refactor -->
   An existing test that only followed an internal interface change (call names, import paths, file location, setup code) is 약화 아님. If its expected values or inputs changed, or a test disappeared, it looks like weakening: ask.
 <!-- /type -->
-<!-- type: bugfix -->
-- **Going back:** if the fix itself is wrong (e.g. it only hides the symptom), write it as a 차단 finding. If the human does not pick it to apply here, set `recommended_next` to `fix` with the reason. The app stops and the human picks the step.
-<!-- /type -->
-<!-- type: feature -->
-- **Going back:** if the implementation or the design is wrong, write it as a 차단 finding. If the human does not pick it to apply here, set `recommended_next` with the reason: `implement` if the implementation is wrong, `design` if the design is wrong. The app stops and the human picks the step.
-<!-- /type -->
-<!-- type: refactor -->
-- **Going back:** if the change is wrong (e.g. it changes behavior), write it as a 차단 finding. If the human does not pick it to apply here, set `recommended_next` with the reason: `refactor` if the change is wrong, `intake` if the intent is wrong. The app stops and the human picks the step.
-<!-- /type -->
-<!-- type: spec -->
-- **Going back:** if the document is wrong, write it as a 차단 finding. If the human does not pick it to apply here, or applying it needs a new decision, set `recommended_next` with the reason: `spec` if the document is wrong or needs a new decision, `intake` if the intent is wrong. The app stops and the human picks the step.
-<!-- /type -->
-<!-- type: general -->
-- **Going back:** if the change is wrong, write it as a 차단 finding. If the human does not pick it to apply here, set `recommended_next` with the reason: `execute` if the change is wrong, `intake` if the intent is wrong. The app stops and the human picks the step.
-<!-- /type -->
+- **An earlier result is wrong:** if the change itself is wrong (e.g. it only hides the symptom), write it as a 차단 finding; if the human picks it, fix it here. If the intent, the cause or the design is wrong and the work must start over, ask the human: fix it here / start over as a new Work (see "When an earlier result is wrong" in the common rules). There is no going back to an earlier step.
 
 ## Decision points
 
@@ -169,22 +155,9 @@ Ask on the spot:
 - **A test change looks like weakening:** show which test changed and how. If the human says it is not weakening, "기존 테스트를 약화하거나 삭제하지 않는다" is 통과. If they say it is, it is 실패.
 <!-- /type -->
 - **Any 실패 or 판정 불가:** let the human choose:
-<!-- type: bugfix -->
-  - Go back: set `recommended_next` to the earlier step to return to (usually `fix`). The app stops and the human picks the step.
-<!-- /type -->
-<!-- type: feature -->
-  - Go back: set `recommended_next` to the earlier step to return to (usually `implement`). The app stops and the human picks the step.
-<!-- /type -->
-<!-- type: refactor -->
-  - Go back: set `recommended_next` to the earlier step to return to (usually `refactor`). The app stops and the human picks the step.
-<!-- /type -->
-<!-- type: spec -->
-  - Go back: set `recommended_next` to the earlier step to return to (usually `spec`). The app stops and the human picks the step.
-<!-- /type -->
-<!-- type: general -->
-  - Go back: set `recommended_next` to the earlier step to return to (usually `execute`). The app stops and the human picks the step.
-<!-- /type -->
-  - Go to the completion screen as is: `recommended_next: null`. The screen shows a warning.
+  - Fix it here: fix and commit, run the test commands (if any), and judge again on the final code. Write what you did in `반영`.
+  - Go to the completion screen as is. The screen shows a warning.
+  - Start over as a new Work: write a Work draft and close as `blocked` (see the common rules).
 
 ## Done when
 

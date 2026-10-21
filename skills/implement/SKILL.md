@@ -11,7 +11,6 @@ For a feature Work, follow the implementation plan in `design.md`: write the tes
 
 - The argument gives the path of `context.md`. Read it first. It has the intent and the Work's base commit.
 - `design.md` at the path in `context.md`: the requirements, the approach, the implementation plan and the test plan.
-- **Continuing on current code** (chosen when rewinding to implement or design): keep the existing commits and change on top of them.
 
 ## Order
 
@@ -32,7 +31,7 @@ When all steps are done, run the intent's test command.
 - **Changing existing tests:** if an existing test must change, change it, add it to `risks`, and mark it as an existing-test change in `변경 요약`. Whether it weakens the test is judged by verify.
 - **Run tests:** run the test command from the intent's 완료조건. For each failure, check whether it also fails at the base commit (from `context.md`), and say which.
 - **Small departures from the plan** (how files are split, names, the order of steps, small helper functions): decide yourself and write them in `계획과 달라진 점`.
-- **The design is wrong:** set `recommended_next` to `design` with the reason. The app stops and the human picks the step.
+- **The design is wrong:** ask the human: fix the design and go on / start over as a new Work (see the common rules). If fixing, write the changed design in `계획과 달라진 점` and the decision in `decisions` with `by: human`.
 
 ## Decision points
 

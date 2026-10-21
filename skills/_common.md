@@ -44,6 +44,28 @@ If the intent's `제약` says "`<path>`의 결정을 따른다", that design doc
 - Going a different way from the document touches a constraint: it is a human decision of this skill. Ask on the spot. If the change overturns a major direction, offer "멈추고 설계 Work를 먼저 함" (`blocked`).
 - If the human decides to change the design, change the design document too in this task: in its decision table, record what changed, the history and that the human decided it. Commit it with the code.
 
+## When an earlier result is wrong
+
+There is no going back to an earlier step. If you find that an earlier result (the intent, the cause, the design) is wrong, ask the human on the spot: fix it within this Work / start over as a new Work.
+
+- Fix it within this Work: keep the intent as it is. Write what differs in `intent_deviation` and the human's decision in `decisions` (`by: human`).
+- Start over: write a Work draft (below) and close as `blocked`.
+
+## Starting over: a Work draft
+
+Write it only after the human agreed. Put one Markdown file `<short-english-name>.md` in the Work draft folder (`Work 초안 폴더` in context.md):
+
+```markdown
+---
+project: <프로젝트 id in context.md>
+type: <bugfix | feature | refactor | spec | general>
+---
+<request: the new Work's request.md. Its first line is the Work title>
+```
+
+- In the request, write the original request, the approved intent (if any), what was tried and why it is dropped (with artifact paths), and the human's instructions.
+- Set `blocked_reason` to "새 Work로 다시: <file name>". The human makes the new Work from the draft card in the app and picks there whether to abandon this Work.
+
 ## Closing procedure
 
 Run it when:
@@ -52,6 +74,7 @@ Run it when:
 |---|---|
 | All completion criteria of this skill are met | `status: awaiting_approval` |
 | You cannot proceed | `status: blocked` and `blocked_reason` |
+| The human decided to start over as a new Work | a Work draft, then `status: blocked` (see above) |
 | The human asks you to wrap up | what you have so far. Put unfinished items in `open_questions` or `risks` |
 | You applied a change the human asked for | run the procedure again |
 
@@ -74,7 +97,6 @@ rejected: []         # things tried and rejected, one line each with the reason
 open_questions: []   # questions that still need a human answer
 intent_deviation: null   # facts that contradict the intent: {summary, evidence}. Otherwise null
 risks: []            # remaining risks
-recommended_next: null   # null for the default next step. Otherwise {node, reason}. node must be one of the selectable next steps in context.md
 knowledge_candidates: []  # optional. facts worth reusing later
 ---
 ## 요약
@@ -103,7 +125,6 @@ open_questions: []
 intent_deviation: null
 risks:
   - "음수만 있는 배열은 확인하지 않음"
-recommended_next: null
 knowledge_candidates: []
 ---
 ## 요약
@@ -115,7 +136,6 @@ knowledge_candidates: []
 The app checks the format when your turn ends. You do not run a validator. It checks:
 
 - The front matter against the schema: required fields, types, allowed values, `blocked_reason` when `blocked`.
-- `recommended_next.node` is one of the selectable next steps.
 - With `awaiting_approval`, the required artifacts exist in the task directory.
 - The handoff body has `## 요약` and `## 다음 task가 알아야 할 것`.
 - The body of `intent.draft.md` has `목표`, `비목표`, `원하는 결과`, `완료조건`, and each 완료조건 line starts with `- [ ] `.

@@ -1,7 +1,7 @@
 // 곁 세션 (시나리오 11, D385~D390): 사람이 언제든 여는 Claude Code 세션의 안내(시스템 프롬프트)와 열 수 있는지.
 // 안내는 내용이 아니라 지도와 규칙이다 (D387). 에이전트는 --add-dir로 붙인 Work 디렉터리의 산출물을 스스로 읽는다.
 import type { TaskRecord, WorkState } from '../shared/work'
-import { WORK_TYPE_LABEL } from '../shared/work'
+import { WORK_TYPES, WORK_TYPE_LABEL } from '../shared/work'
 import { currentTask, taskDirName } from './machine'
 import { workType } from './pipeline'
 import { workBranch } from './records'
@@ -19,6 +19,10 @@ export interface SideGuideInput {
   worktree: string
   /** Work 디렉터리 (works/<work-id>). --add-dir로 붙인다 */
   workDir: string
+  /** 이 Work의 프로젝트 id. Work 초안의 project다 (D421) */
+  projectId: string
+  /** 이 Work의 Work 초안 폴더 (D421). 다시 하기로 하면 새 Work의 초안을 쓴다 */
+  draftsDir: string
   /** 앱이 게시하는 답글의 표시 문구 (D173). GitHub에 쓰는 글에도 붙인다 (D387) */
   signature: string
 }
@@ -68,8 +72,9 @@ export function sideGuide(input: SideGuideInput): string {
     '## 이 세션의 역할',
     '',
     '- 질문에 답하고, 논의하고, 리뷰 의견을 주고, 앱의 다음 조작을 안내하는 곳이다. 단계 흐름을 대신하지 않는다.',
-    '- 사람이 코드 수정 같은 일을 맡기면 먼저 단계 흐름을 권한다: 지금 Work면 [단계 선택]의 추가 지시, 다른 일이면',
-    '  새 Work. 단계 흐름은 재현 테스트, 리뷰, 판정표, 승인을 거치지만 이 세션에서 바꾼 것은 그 기록에 따로 남지 않는다.',
+    '- 사람이 코드 수정 같은 일을 맡기면 먼저 단계 흐름을 권한다: 지금 Work면 지금 단계의 터미널에 지시, 다른 일이나',
+    '  근본부터 다시 할 일이면 새 Work(아래 Work 초안). 단계 흐름은 재현 테스트, 리뷰, 판정표, 승인을 거치지만 이 세션에서',
+    '  바꾼 것은 그 기록에 따로 남지 않는다.',
     '  그래도 여기서 하길 원하면 아래 바꾸는 규칙대로 한다.',
     '- 사람은 이 터미널에서 직접 대화한다. 물을 것은 여기서 묻고 턴을 끝내 답을 기다린다(앱 질문창은 없다).',
     '',
@@ -108,9 +113,28 @@ export function sideGuide(input: SideGuideInput): string {
     '  보이고 묻는다. 허락받은 것만 한다. 예외는 없다.',
     `- task가 작업 중이면(${[...RUNNING].map((s) => TASK_STATUS_LABEL[s]).join(', ')}) 코드는 바꾸지 않고 제안만 한다. 바꾸기 전에 \`work.json\`으로 다시 확인한다.${running ? ' 열 때 작업 중인 task가 있었다.' : ''}`,
     '- 앱 소유 파일(`work.json`, `request.md`, `intent.md`, `decisions.md`, `pr-items.json`)과 `tasks/` 아래는',
-    '  고칠 수 없다. 산출물이나 앱 상태를 바꿔야 하면 앱의 버튼을 안내한다: [재개], [단계 선택]의 추가 지시,',
-    '  [오류 무시하고 승인], PR 진행의 [대응 시작].',
+    '  고칠 수 없다. 산출물이나 앱 상태를 바꿔야 하면 앱의 버튼을 안내한다: [재개], [오류 무시하고 승인],',
+    '  PR 진행의 [대응 시작]. 앞 단계로 돌아가는 버튼은 없다: 근본부터 다시 하려면 새 Work로 한다.',
     `- GitHub에 쓰는 글 끝에는 빈 줄 뒤에 이 표시를 붙인다: ${input.signature}`,
+    '',
+    '## Work 초안 (다시 하기)',
+    '',
+    '사람과 근본부터 다시 하기로 정하면(의도가 틀림, 원인이나 설계가 틀림) 이 Work를 고치지 않고 새 Work로 한다.',
+    `무엇을 쓸지 보이고 허락받은 뒤, 이 Work의 초안 폴더 \`${input.draftsDir}\`에 초안을 Markdown 파일 하나로 쓴다`,
+    '(`<짧은 영어 이름>.md`). 형식:',
+    '',
+    '```markdown',
+    '---',
+    `project: ${input.projectId}`,
+    `type: <${WORK_TYPES.join(' | ')}. 보통 이 Work와 같은 ${workType(work)}>`,
+    '---',
+    '<요청: 새 Work의 request.md가 될 글. 첫 줄이 Work 제목이다>',
+    '```',
+    '',
+    '- 요청에는 원래 요청, 지금 승인된 intent(있으면), 해 본 것과 버리는 까닭(산출물 경로), 사람의 지시를 담는다.',
+    '  새 Work의 의도 정리는 요청에 담긴 intent를 출발점으로 삼는다.',
+    '- 쓴 뒤에는 사람에게 오른쪽 패널의 초안 카드에서 [새 Work로 만들기]를 누르라고 안내한다. 새 Work 대화상자에서',
+    '  이 Work를 포기할지 고른다.',
     '',
   ].join('\n')
 }

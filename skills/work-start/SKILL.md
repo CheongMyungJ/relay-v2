@@ -10,7 +10,7 @@ Read the request, talk with the human, and write the intent draft `intent.draft.
 ## Inputs
 
 - The argument gives the path of `context.md`. Read it first. For intake it contains the request text (`request.md`) in full, and the Work type (`업무 유형`) the human picked.
-- **Rewound to intake:** `context.md` also has the current approved intent and the human's extra instructions. Start from the current intent and revise it to fit the instructions. Do not rewrite from scratch.
+- **Starting over from an earlier Work:** if the request carries the approved intent of an earlier Work (see "Starting over" in the common rules), start from that intent and revise it to fit the request's instructions. Do not rewrite from scratch.
 
 ## Rules
 
@@ -46,7 +46,7 @@ Read the request, talk with the human, and write the intent draft `intent.draft.
 - **A small request:** `spec` is for big work whose design is settled before it is built. If the request is small enough that `feature` fits better, say why before you write the draft, and ask: keep `spec` / change the type (`blocked`). If they keep it, draft with `spec`.
 - **Target document:** settle with the human which design document this goes into, a new one or an existing one, and write it in `제약` as "설계 문서: `<path>` (새 문서 / 기존 문서)". For a new document, if the repo has no convention for design documents, propose `docs/design/<english-name>.md`. The target document is not a document to follow: do not also write "의 결정을 따른다" for it.
 <!-- /type -->
-- **Type mismatch:** the human picked the type: `bugfix` (버그 수정: current behavior is wrong), `feature` (기능 추가: new behavior), `refactor` (리팩터링: change structure, keep behavior), `spec` (설계: settle only the design of big work before building it) or `general` (일반: work that fits none of these, e.g. config, CI, docs, dependency upgrades, mixed work). If it does not fit the request (e.g. `feature`, but the request says current behavior is wrong), ask before you write the draft. If the human wants to change the type, close as `blocked` and tell them to pick the type with [단계 선택] → intake. If they keep it, draft with the picked type. Never change the type yourself.
+- **Type mismatch:** the human picked the type: `bugfix` (버그 수정: current behavior is wrong), `feature` (기능 추가: new behavior), `refactor` (리팩터링: change structure, keep behavior), `spec` (설계: settle only the design of big work before building it) or `general` (일반: work that fits none of these, e.g. config, CI, docs, dependency upgrades, mixed work). If it does not fit the request (e.g. `feature`, but the request says current behavior is wrong), ask before you write the draft. If the human wants to change the type, write a Work draft with the new type and the request as it is (see "Starting over" in the common rules), and close as `blocked`. If they keep it, draft with the picked type. Never change the type yourself.
 - **A design document to follow:** if the request points to a design document in the repo, write "`<path>`의 결정을 따른다" in `제약`, and write the part this Work takes on as goals and completion criteria. If that document is not in the worktree (its design PR is not merged yet), tell the human before you write the draft and ask: wait for the merge (`blocked`) / go on from the request alone, without the document.
 - **Your own hypotheses** do not go in the intent. Put them only in the handoff section `## 다음 task가 알아야 할 것`, as reference.
 - Keep the intent around 1,500 characters. It goes into every task.

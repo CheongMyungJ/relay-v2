@@ -101,7 +101,7 @@ export function SessionPanel({
           drafts={session.drafts}
           projects={projects}
           onCreate={onCreateWork}
-          onDiscard={(d) => window.relay.discardDraft(session.id, d.ref.name)}
+          onDiscard={(d) => window.relay.discardDraft(d.ref)}
         />
       </div>
     </div>

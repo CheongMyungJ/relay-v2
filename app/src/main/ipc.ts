@@ -2,9 +2,7 @@
 // 값은 여기서 모양만 확인하고, 뜻(상태에 맞는 명령인지, 설정 값의 범위)은 Relay와 core가 판정한다.
 import os from 'node:os'
 import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } from 'electron'
-import { ALL_NODES } from '../core/pipeline'
 import { IPC, type AppInfo, type UpdateState } from '../shared/api'
-import type { NodeName } from '../shared/contracts'
 import type { DraftRef } from '../shared/session'
 import type {
   ApproveOptions,
@@ -15,7 +13,6 @@ import type {
   NewWorkInput,
   PrItemAction,
   RespondStartInput,
-  SelectStepInput,
 } from '../shared/views'
 import { WORK_TYPES, type DeliveryChoice, type MergeMethod, type WorkType } from '../shared/work'
 import type { Relay } from './relay'
@@ -49,38 +46,11 @@ function flag(v: unknown): boolean {
   return v
 }
 
-function node(v: unknown): NodeName {
-  const found = ALL_NODES.find((n) => n === v)
-  if (!found) throw new Error('파이프라인 단계가 아님')
-  return found
-}
-
 /** 업무 유형 (D236) */
 function workType(v: unknown): WorkType {
   const found = WORK_TYPES.find((t) => t === v)
   if (!found) throw new Error('업무 유형이 아님')
   return found
-}
-
-/** 고르지 않을 수 있는 업무 유형: undefined나 null이면 없다 ([intake 다시]의 유형 고르기, D237) */
-function optionalType(v: unknown): WorkType | undefined {
-  return v === undefined || v === null ? undefined : workType(v)
-}
-
-function stepInput(v: unknown): SelectStepInput {
-  if (!v || typeof v !== 'object') throw new Error('단계 선택 입력이 아님')
-  const o = v as Record<string, unknown>
-  const expect = o['expect']
-  if (!expect || typeof expect !== 'object') throw new Error('expect가 없음')
-  const e = expect as Record<string, unknown>
-  const type = optionalType(o['type'])
-  return {
-    node: node(o['node']),
-    keepCode: flag(o['keepCode']),
-    instruction: text(o['instruction']),
-    expect: { taskId: text(e['taskId']), done: flag(e['done']) },
-    ...(type === undefined ? {} : { type }),
-  }
 }
 
 function texts(v: unknown): string[] {
@@ -162,8 +132,9 @@ function draftRef(v: unknown): DraftRef {
   const source = o['source']
   if (!source || typeof source !== 'object') throw new Error('초안을 만든 곳이 없음')
   const src = source as Record<string, unknown>
-  if (src['kind'] !== 'session') throw new Error('모르는 초안의 만든 곳')
-  return { source: { kind: 'session', id: text(src['id']) }, name: text(o['name']) }
+  const kind = src['kind']
+  if (kind !== 'session' && kind !== 'work') throw new Error('모르는 초안의 만든 곳')
+  return { source: { kind, id: text(src['id']) }, name: text(o['name']) }
 }
 
 export interface IpcHooks {
@@ -225,6 +196,8 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
       // 기존 이슈 번호 (D338). 정수인지는 Relay.createWork가 본다
       ...(typeof input.issueNumber === 'number' ? { issueNumber: input.issueNumber } : {}),
       ...(input.draft === undefined ? {} : { draft: draftRef(input.draft) }),
+      // 다시 하기: Work에서 쓴 초안으로 만들 때 원래 Work를 포기한다 (D421)
+      ...(input.abandonOriginal === true ? { abandonOriginal: true } : {}),
       // 메인 통합 검증 worktree (D414). 서브모듈 프로젝트인지는 Relay.createWork가 본다
       ...(input.integration && typeof input.integration === 'object'
         ? {
@@ -268,9 +241,6 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   ipcMain.handle(IPC.resume, async (_e, workKey: unknown, taskId: unknown) =>
     (await ready).resume(text(workKey), text(taskId)),
   )
-  ipcMain.handle(IPC.retry, async (_e, workKey: unknown, taskId: unknown) =>
-    (await ready).retry(text(workKey), text(taskId)),
-  )
   ipcMain.handle(IPC.stopAfter, async (_e, workKey: unknown, on: unknown) =>
     (await ready).stopAfter(text(workKey), flag(on)),
   )
@@ -281,14 +251,6 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   ipcMain.handle(IPC.abandon, async (_e, workKey: unknown) => (await ready).abandon(text(workKey)))
   ipcMain.handle(IPC.deleteWork, async (_e, workKey: unknown, clean: unknown) =>
     (await ready).deleteWork(text(workKey), clean === null ? null : cleanInput(clean)),
-  )
-  ipcMain.handle(
-    IPC.stepPreview,
-    async (_e, workKey: unknown, step: unknown, keepCode: unknown, type: unknown) =>
-      (await ready).stepPreview(text(workKey), node(step), flag(keepCode), optionalType(type)),
-  )
-  ipcMain.handle(IPC.selectStep, async (_e, workKey: unknown, input: unknown) =>
-    (await ready).selectStep(text(workKey), stepInput(input)),
   )
   ipcMain.handle(IPC.deliver, async (_e, workKey: unknown, input: unknown) =>
     (await ready).deliver(text(workKey), deliverInput(input)),
@@ -322,8 +284,8 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   ipcMain.handle(IPC.deleteSession, async (_e, id: unknown) =>
     (await ready).deleteSession(text(id)),
   )
-  ipcMain.handle(IPC.discardDraft, async (_e, sessionId: unknown, name: unknown) =>
-    (await ready).discardDraft(text(sessionId), text(name)),
+  ipcMain.handle(IPC.discardDraft, async (_e, ref: unknown) =>
+    (await ready).discardDraft(draftRef(ref)),
   )
   ipcMain.handle(IPC.recheck, async (_e, workKey: unknown) =>
     (await ready).recheckWork(text(workKey)),

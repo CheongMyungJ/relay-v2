@@ -9,15 +9,16 @@
 // 지금 task가 PR 대응 task면 PR 패널과 그 대응 task를 탭으로 오가고, 승인할 때는 대응 승인 화면(항목별 결과, 게시될 모양의
 // 답글, 기존 테스트 변경, D172, D202, D207)을 먼저 보인다.
 import { useEffect, useState } from 'react'
-import type { NodeName } from '../../shared/contracts'
 import type {
   BranchInfo,
   CommandResult,
   CountdownView,
   DeliverResult,
+  DraftView,
   IssueView,
   KnowledgeChange,
   PrView,
+  ProjectView,
   ReviewView,
   TaskView,
   WorkView,
@@ -26,6 +27,7 @@ import type { DeliveryChoice, UncommittedAction } from '../../shared/work'
 import { Activity } from './Activity'
 import { call } from './commands'
 import { ConfirmDialog, UncommittedDialog } from './dialogs'
+import { DraftCards } from './DraftCards'
 import { Diff, Markdown } from './Markdown'
 import { PrPanel } from './PrPanel'
 import { focusTerm } from './terminals'
@@ -37,8 +39,10 @@ interface Props {
   task: TaskView
   review: ReviewView | null
   onApproved: () => void
-  /** 단계 선택 대화상자를 연다. node는 처음 고를 단계다 */
-  onSelectStep: (node?: NodeName) => void
+  /** 등록된 프로젝트. Work 초안 카드가 쓴다 (D421) */
+  projects: readonly ProjectView[]
+  /** Work 초안 카드의 [새 Work로 만들기] (D421) */
+  onCreateWork: (draft: DraftView, project: ProjectView) => void
   /** 정리 세션 탭을 고른다 (7-5) */
   onShowCleanup: () => void
 }
@@ -59,9 +63,31 @@ export function wantsApproval(review: ReviewView | null): boolean {
   )
 }
 
-export function Panel({ work, task, review, onApproved, onSelectStep, onShowCleanup }: Props) {
+export function Panel({
+  work,
+  task,
+  review,
+  onApproved,
+  projects,
+  onCreateWork,
+  onShowCleanup,
+}: Props) {
   const recovery = (
-    <Recovery key={work.key} work={work} onDone={onApproved} onShowCleanup={onShowCleanup} />
+    <>
+      <Recovery key={work.key} work={work} onDone={onApproved} onShowCleanup={onShowCleanup} />
+      {/* 다시 하기로 task나 곁 세션이 쓴 Work 초안 (D421). 없으면 보이지 않는다 */}
+      {work.drafts.length ? (
+        <section className="work-drafts" aria-label="Work 초안">
+          <h3>Work 초안</h3>
+          <DraftCards
+            drafts={work.drafts}
+            projects={projects}
+            onCreate={onCreateWork}
+            onDiscard={(d) => window.relay.discardDraft(d.ref)}
+          />
+        </section>
+      ) : null}
+    </>
   )
   if (!review) {
     return (
@@ -71,8 +97,6 @@ export function Panel({ work, task, review, onApproved, onSelectStep, onShowClea
       </div>
     )
   }
-  // 이전 단계 추천으로 멈췄으면 추천한 단계를 처음 고른다 (D23)
-  const recommended = work.steps.find((c) => c.recommended && c.allowed)?.node
   return (
     <div className="panel-body">
       {recovery}
@@ -85,21 +109,11 @@ export function Panel({ work, task, review, onApproved, onSelectStep, onShowClea
         <div className="notice stop">
           {work.stopNotice}
           {work.stopHint ? <div className="dim">{work.stopHint}</div> : null}
-          {work.actions.selectStep ? (
-            <div className="notice-actions">
-              <button
-                className={recommended ? 'primary' : ''}
-                onClick={() => onSelectStep(recommended)}
-              >
-                단계 선택
-              </button>
-            </div>
-          ) : null}
         </div>
       ) : null}
       {task.status === 'discarded' ? (
         <div className="notice">
-          폐기됨: 단계 선택으로 이후 입력에서 빠졌습니다. 파일과 기록은 남습니다.
+          폐기됨: 예전 앱의 단계 선택으로 이후 입력에서 빠졌습니다. 파일과 기록은 남습니다.
         </div>
       ) : null}
       {(work.status === 'completed' || (work.status === 'archived' && work.completedAt)) &&
@@ -229,13 +243,17 @@ function Recovery({
               <li key={i}>{l}</li>
             ))}
           </ul>
-          <div className="dim">{op.retry}</div>
+          {op.retry ? <div className="dim">{op.retry}</div> : null}
           <div className="dim">{op.ignore}</div>
           <div className="notice-actions">
-            <button className="primary" disabled={!!busy} onClick={() => void retry()}>
-              다시 시도
-            </button>
+            {/* D418 전에 끊긴 되감기는 이어서 하지 않는다: [무시]만 있다 (D424) */}
+            {op.retry ? (
+              <button className="primary" disabled={!!busy} onClick={() => void retry()}>
+                다시 시도
+              </button>
+            ) : null}
             <button
+              className={op.retry ? '' : 'primary'}
               disabled={!!busy}
               onClick={() => void command('무시', () => window.relay.ignoreOperation(work.key))}
             >
@@ -299,8 +317,8 @@ function TaskNotice({ task, pr }: { task: TaskView; pr: boolean }) {
     return (
       <div className="notice">
         {task.status === 'interrupted' ? '중단됨. ' : 'handoff 없이 세션이 끝났습니다. '}
-        대화 ID를 받지 못해 같은 대화를 다시 열 수 없습니다. [이 단계 새 세션으로 다시]로 이 단계를
-        새로 시작하세요.
+        대화 ID를 받지 못해 같은 대화를 다시 열 수 없습니다. [재개]하면 이 단계를 새 세션으로
+        시작합니다.
       </div>
     )
   }
@@ -319,7 +337,7 @@ function TaskNotice({ task, pr }: { task: TaskView; pr: boolean }) {
       <div className="notice">
         handoff 없이 세션이 끝났습니다. [세션 재개]하면 같은 대화를 다시 엽니다. 에이전트는 입력을
         기다리니 이어서 할 일을 터미널에 말하세요.
-        {pr ? null : ' 처음부터 다시 하려면 [이 단계 새 세션으로 다시]를 누르세요.'}
+        {pr ? null : ' 근본부터 다시 하려면 새 Work로 하세요.'}
       </div>
     )
   }
@@ -342,8 +360,8 @@ function TaskNotice({ task, pr }: { task: TaskView; pr: boolean }) {
   if (task.status === 'blocked' && !task.live) {
     return (
       <div className="notice">
-        막힘. 세션이 없습니다. [세션 재개]로 필요한 것을 주거나, [단계 선택]으로 다른 단계로 가거나,
-        [Work 포기]하세요.
+        막힘. 세션이 없습니다. [세션 재개]로 필요한 것을 주거나 [Work 포기]하세요. 다시 하기로 해
+        막혔으면 위의 Work 초안으로 새 Work를 만드세요.
       </div>
     )
   }
@@ -568,7 +586,7 @@ function Review({
           <section className="revisit" aria-label="다시 볼 결정">
             <h3>다시 볼 결정</h3>
             <Markdown text={review.completion.revisit} />
-            <div className="dim">바꾸려면 [단계 선택]에서 설계 문답으로 되감기</div>
+            <div className="dim">바꾸려면 승인 전에 터미널에서 지시하세요</div>
           </section>
         ) : null}
         {tab === 'work' && review.completion ? <Diff text={review.completion.diff} /> : null}

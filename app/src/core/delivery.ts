@@ -1,8 +1,8 @@
 // 전달 (시나리오 7, D15, D67, D71, D118~D120): Work 완료 화면의 전달 버튼과 그 이유, 전달을 시작할 수 있는지,
 // pr.md의 제목과 본문, push 뒤의 비교 URL, 커밋 안 된 변경을 처리하는 커밋과 stash의 메시지(7-5).
 // git과 gh는 main이 adapters로 부른다. machine의 전달 전이와 승인 화면이 같은 판정을 쓴다.
-import type { Handoff, NodeName } from '../shared/contracts'
 import type { ProjectChecks } from '../shared/project'
+import type { Handoff } from '../shared/contracts'
 import type { ButtonState, DeliveryButtons, DeliveryView, WorkActions } from '../shared/views'
 import type {
   CheckSummary,
@@ -13,7 +13,6 @@ import type {
   WorkState,
 } from '../shared/work'
 import { REVIEWABLE, approvalGate } from './approval'
-import { stopsForRecommendation, workType } from './pipeline'
 import { ghTooOld, ghVersionReason } from './pr'
 import { normalizeText } from './validate'
 
@@ -22,11 +21,11 @@ export const CLEANUP_BLOCKS =
   '정리 세션이 열려 있음: 먼저 [정리 세션 닫기]나 [정리 끝 → push/PR 진행]을 누르세요'
 
 /**
- * 정리 세션이 열린 동안(대기열 포함)의 조작 (D137). 같은 worktree에서 다른 claude를 띄우거나 코드를 되돌리거나 Work를
+ * 정리 세션이 열린 동안(대기열 포함)의 조작 (D137). 같은 worktree에서 다른 claude를 띄우거나 Work를
  * 끝내는 조작을 끈다. 승인과 [완료만]도 받지 않는다(main이 막는다)
  */
 export function cleanupActions(a: WorkActions): WorkActions {
-  return { ...a, resume: false, retry: false, resumeWork: false, selectStep: false, abandon: false }
+  return { ...a, resume: false, resumeWork: false, abandon: false }
 }
 
 /** 전달 버튼의 이름 (시나리오 7-3) */
@@ -81,19 +80,11 @@ export function closingButtons(
 }
 
 /**
- * 승인하면 Work가 멈추는가: 에이전트가 이전 단계를 추천했거나(D23) [이 단계 끝나면 멈춤]이 켜져 있다
- * (시나리오 3-4). verify에서는 전달 버튼 대신 [승인하고 멈춤] 하나를 보인다 (D119).
+ * 승인하면 Work가 멈추는가: [이 단계 끝나면 멈춤]이 켜져 있다 (시나리오 3-4). verify에서는 전달 버튼 대신
+ * [승인하고 멈춤] 하나를 보인다 (D119).
  */
-export function approvalStops(
-  work: Pick<WorkState, 'stop_after_step' | 'type'>,
-  node: NodeName,
-  header: Pick<Handoff, 'recommended_next'> | null,
-): boolean {
-  const rec = header?.recommended_next
-  return (
-    work.stop_after_step === true ||
-    (!!rec && stopsForRecommendation(workType(work), node, rec.node))
-  )
+export function approvalStops(work: Pick<WorkState, 'stop_after_step'>): boolean {
+  return work.stop_after_step === true
 }
 
 /** verify에서 멈춘 Work의 verify task (D119). 아니면 undefined */
@@ -129,7 +120,7 @@ export function deliveryStart(
   if (!check || !approvalGate(task, check).approve) {
     return { ok: false, error: `${task.id}의 handoff가 유효하지 않음` }
   }
-  if (approvalStops(work, task.node, check.handoffHeader ?? null)) {
+  if (approvalStops(work)) {
     return { ok: false, error: '승인하면 Work가 멈춤: [승인하고 멈춤]을 누르세요' }
   }
   return { ok: true, from: 'review', task }

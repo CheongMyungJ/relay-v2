@@ -15,7 +15,7 @@ import type {
   WorkType,
 } from '../shared/work'
 import { AUTO_APPROVE_NODES } from './config'
-import { RESPOND, defaultNext, isPipelineNode } from './pipeline'
+import { RESPOND } from './pipeline'
 import { isRespondPending } from './respond'
 import { INTENT_DRAFT_FILE, REPLIES_FILE, isValid } from './validate'
 
@@ -104,7 +104,7 @@ export interface AutoApproveInput {
 /**
  * 자동 승인 조건 (4.3, D129)에서 어긴 것. 비어 있으면 모두 만족한다:
  * handoff 형식이 유효하고 awaiting_approval, open_questions가 비어 있음, intent_deviation이 없음,
- * recommended_next가 null이거나 기본 다음 단계, Stop 때 백그라운드 작업과 예약된 깨우기가 없음.
+ * Stop 때 백그라운드 작업과 예약된 깨우기가 없음. 이전 단계 추천은 없다 (D418, D422).
  * "턴이 끝난 뒤 새 요청이 없음"은 machine이 새 요청(UserPromptSubmit)을 받으면 카운트다운을 멈추는 것으로 지킨다.
  * 모든 조건은 에이전트가 쓴 내용과 에이전트의 세션이다(D7). 커밋 안 된 변경은 조건이 아니다(승인 화면의 경고).
  */
@@ -115,10 +115,6 @@ export function autoApproveHolds(input: AutoApproveInput): AutoHoldReason[] {
   const out: AutoHoldReason[] = []
   if (h.open_questions.length > 0) out.push('open_questions')
   if (h.intent_deviation) out.push('intent_deviation')
-  const rec = h.recommended_next
-  if (rec && (!isPipelineNode(input.node) || rec.node !== defaultNext(input.type, input.node))) {
-    out.push('recommended_next')
-  }
   if (input.background) out.push('background')
   return out
 }
@@ -127,6 +123,7 @@ export function autoApproveHolds(input: AutoApproveInput): AutoHoldReason[] {
 export const AUTO_HOLD_LABEL: Readonly<Record<AutoHoldReason, string>> = {
   open_questions: '열린 질문이 있음',
   intent_deviation: '의도와 어긋남(intent_deviation)이 있음',
+  // recommended_next와 step은 D418 전 기록에만 있다 (D424)
   recommended_next: '기본 다음 단계가 아닌 단계를 추천함',
   background: '턴이 끝날 때 백그라운드 작업이나 예약된 깨우기가 남아 있었음',
   completion_unknown: 'Codex의 미완료 작업 여부를 확인할 수 없어 사람이 승인해야 함',

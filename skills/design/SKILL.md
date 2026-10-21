@@ -11,7 +11,6 @@ For a feature Work, write what to build (user scenarios, requirements) and how t
 
 - The argument gives the path of `context.md`. Read it first. It has the intent and the Work's base commit.
 - If you need the original request, read `request.md` at the path in `context.md`.
-- **Continuing on current code** (chosen when rewinding to design): read the current code (the earlier implementation) and revise `design.md`. Leave the code as it is.
 
 ## Order
 
@@ -30,7 +29,7 @@ For a feature Work, write what to build (user scenarios, requirements) and how t
 - **Human suggestions:** for each "(사람 제안)" in the intent's `추가 의견`, write in `접근` whether you take it and why.
 - **Implementation plan:** for each step, what changes and which requirements it covers. implement writes the tests first for each step, so make each step small enough to test.
 - **Test plan:** for each requirement, where and how it is tested. Each behavior in the intent's 완료조건 must be covered by at least one test. If a behavior cannot get a test (e.g. UI behavior, needs an external service), write why.
-- **Conflict with the intent:** if 완료조건 contradict each other or cannot be met, write it in `intent_deviation`. If the intent must change, set `recommended_next` to `intake`.
+- **Conflict with the intent:** if 완료조건 contradict each other or cannot be met, write it in `intent_deviation`. If the intent must change, ask the human (see "When an earlier result is wrong" in the common rules).
 
 ## Decision points
 

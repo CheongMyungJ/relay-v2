@@ -139,7 +139,7 @@ export function sessionGuide(input: SessionGuideInput): string {
     '  할지 보이고 묻는다. 허락받은 것만 한다. 예외는 없다.',
     `- RELAY_HOME 아래에서는 \`home/\`과 이 세션의 Work 초안 폴더만 쓴다. \`config.json\`, \`projects/\` 아래 전부,`,
     '  `sessions/*/session.json`은 고칠 수 없다. 앱 상태를 바꿔야 하면 앱의 버튼을 안내한다.',
-    '- Work의 worktree는 고치지 않는다. 그 Work의 곁 세션이나 단계 흐름([단계 선택]의 추가 지시)을 안내한다.',
+    '- Work의 worktree는 고치지 않는다. 그 Work의 곁 세션이나 단계 흐름(지금 단계의 터미널에 지시)을 안내한다.',
     `- GitHub에 쓰는 글 끝에는 빈 줄 뒤에 이 표시를 붙인다: ${input.signature}`,
     '',
     '## Work 초안',
