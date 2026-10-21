@@ -69,6 +69,11 @@ async function setup(s: Scenario): Promise<Setup> {
   if (!r.ok || !r.project) throw new Error(`서브모듈 준비 실패: ${r.ok ? '' : r.error}`)
   // 고르면 메인 체크아웃에 받는다
   expect(fs.existsSync(path.join(checkout, 'lib', 'lib.txt'))).toBe(true)
+  // 가짜 claude가 서브모듈 레포에 커밋할 수 있게 사용자 설정을 둔다(CI에는 전역 설정이 없다, support/repo.ts와 같음)
+  const lib = path.join(checkout, 'lib')
+  git(lib, 'config', 'user.email', 'relay-test@example.com')
+  git(lib, 'config', 'user.name', 'relay test')
+  git(lib, 'config', 'commit.gpgsign', 'false')
   const off = await hh.relay.updateProjectSettings(r.project.id, {
     allowed_bots: [],
     merge_method: null,
