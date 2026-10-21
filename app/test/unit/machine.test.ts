@@ -5,6 +5,7 @@ import {
   createWork,
   currentTask,
   permissionWarning,
+  PR_TARGET_FIXED,
   taskDirName,
   taskId,
   transition,
@@ -1680,6 +1681,53 @@ describe('전달 (시나리오 7, D77, D119, D120)', () => {
     })
   })
 
+  it('Work를 만들 때 작업 브랜치와 머지 대상을 적는다. 머지 대상이 기준 브랜치와 같으면 적지 않는다 (D425, D428)', () => {
+    const input = {
+      type: 'bugfix' as const,
+      workId: 'w-20260926-001',
+      baseBranch: 'relay/w-20260925-001-aaaa',
+      baseCommit: 'base0001',
+      branch: 'fix/x-k7q2',
+      at: at(),
+    }
+    const made = createWork({ ...input, targetBranch: 'main' })
+    expect(made.work).toMatchObject({ branch: 'fix/x-k7q2', target_branch: 'main' })
+    expect(made.effects[0]).toMatchObject({
+      event: { payload: { branch: 'fix/x-k7q2', target_branch: 'main' } },
+    })
+    const same = createWork({ ...input, targetBranch: input.baseBranch }).work
+    expect(same.target_branch).toBeUndefined()
+  })
+
+  it('작업 브랜치는 work.json의 이름을 push하고, PR은 머지 대상으로 보낸다 (D425, D428)', () => {
+    const work = { ...atVerify(), branch: 'fix/x-k7q2', target_branch: 'release' }
+    const r = deliver(work, 'pr')
+    expect(r.work.operation).toMatchObject({ branch: 'fix/x-k7q2', base: 'release' })
+    expect(r.effects.at(-1)).toMatchObject({ branch: 'fix/x-k7q2', base: 'release' })
+  })
+
+  it('머지 대상은 PR을 만들기 전에만 바꾼다. 기준 브랜치로 되돌리면 적은 것을 지운다 (D428)', () => {
+    const work = atVerify()
+    const set = apply(work, { type: 'target.set', at: at(), branch: 'release' })
+    expect(set.rejected).toBeUndefined()
+    expect(set.work.target_branch).toBe('release')
+    expect(set.effects).toEqual([])
+    const back = apply(set.work, { type: 'target.set', at: at(), branch: 'main' })
+    expect(back.work.target_branch).toBeUndefined()
+    expect(apply(work, { type: 'target.set', at: at(), branch: BRANCH }).rejected).toContain(
+      '작업 브랜치',
+    )
+    expect(apply(work, { type: 'target.set', at: at(), branch: ' ' }).rejected).toBeDefined()
+    expect(
+      apply({ ...work, status: 'pr' }, { type: 'target.set', at: at(), branch: 'release' })
+        .rejected,
+    ).toBe(PR_TARGET_FIXED)
+    const busy = deliver(work, 'push').work
+    expect(apply(busy, { type: 'target.set', at: at(), branch: 'release' }).rejected).toBe(
+      OPERATION_BLOCKS,
+    )
+  })
+
   it('커밋 안 된 변경을 처리하면 prepare 단계부터 기록하고 커밋이나 stash의 메시지를 준다 (7-5)', () => {
     const discard = deliver(atVerify(), 'pr', 'discard')
     expect(discard.work.operation).toMatchObject({ stage: 'prepare', uncommitted: 'discard' })
@@ -2853,6 +2901,19 @@ describe('PR 진행 (시나리오 10, D152~D200)', () => {
       notAccepted: [],
       ...o,
     })
+
+  it('읽은 PR의 base가 머지 대상과 다르면 따른다. 기준 브랜치로 돌아오면 적은 것을 지운다 (D428)', () => {
+    const work = inPr()
+    // 쌓은 앞 Work의 브랜치가 머지되어 지워지면 GitHub가 base를 옮긴다
+    const moved = readPr(
+      { ...work, target_branch: 'relay/w-20260925-001-aaaa' },
+      { baseRef: 'release' },
+    )
+    expect(moved.work.target_branch).toBe('release')
+    expect(readPr(moved.work, { baseRef: 'main' }).work.target_branch).toBeUndefined()
+    // 비었으면(읽지 못함) 그대로다
+    expect(readPr(moved.work, { baseRef: '' }).work.target_branch).toBe('release')
+  })
 
   it('[PR 생성]이 성공하면 완료 대신 PR 진행이다. 번호, 주소, head, gh 버전을 적는다 (D152, D191, D198)', () => {
     const work = inPr()

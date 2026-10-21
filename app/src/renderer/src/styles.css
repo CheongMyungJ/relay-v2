@@ -1999,6 +1999,23 @@ button.link:hover:not(:disabled) {
   justify-self: center;
 }
 
+/* 새 Work의 작업 브랜치, 짧은 이름, 머지 대상 (D425~D428) */
+.row.branch-row {
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.branch-name {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.branch-name input {
+  flex: 1;
+  min-width: 16em;
+}
+
 .row .grow {
   flex: 1;
 }

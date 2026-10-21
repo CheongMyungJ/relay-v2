@@ -138,6 +138,19 @@ describe('context.md: 시나리오 2-4 표의 항목', () => {
     )
   })
 
+  it('작업 브랜치는 work.json의 이름이고, 머지 대상을 골랐으면 함께 적는다 (D425, D428)', () => {
+    const base = input('verify')
+    const info = section(
+      buildContext({
+        ...base,
+        work: { ...base.work, branch: 'fix/x-k7q2', target_branch: 'release' },
+      }),
+      'task 정보',
+    )
+    expect(info).toContain('- 작업 브랜치: fix/x-k7q2')
+    expect(info).toContain('- 머지 대상 브랜치: release (PR의 base, D428)')
+  })
+
   it('승인 방식과 마무리 안내 문구 (D104, D132)', () => {
     expect(section(md, '승인 방식')).toBe('수동 승인 (의도 승인, Work 완료는 늘 수동)')
     expect(section(md, '마무리 안내 문구')).toBe(

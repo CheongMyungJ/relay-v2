@@ -1,6 +1,6 @@
 // 앱이 쓰는 파일의 모양과 id (5.1, 5.3, 5.4). 파일을 읽고 쓰는 것은 adapters/store가 한다.
 import type { Decision, TaskNode } from '../shared/contracts'
-import type { ApprovalBy, WorkType } from '../shared/work'
+import type { ApprovalBy, WorkState, WorkType } from '../shared/work'
 import { intentDraftBody, normalizeText } from './validate'
 
 export type { ApprovalBy }
@@ -43,22 +43,29 @@ export function workId(at: string, seq: number): string {
   return `w-${y}${mo}${d}-${pad(seq, 3)}`
 }
 
-/** Work 브랜치: relay/<work-id> (시나리오 1). 전달은 origin의 같은 이름으로 push한다 (7-4) */
-export function workBranch(workId: string): string {
-  return `relay/${workId}`
+/**
+ * Work 브랜치 (시나리오 1, D425). Work를 만들 때 정해 work.json의 branch에 적는다. 그 전에 만든 Work는 relay/<work-id>다.
+ * 전달은 origin의 같은 이름으로 push한다 (7-4)
+ */
+export function workBranch(work: Pick<WorkState, 'work_id' | 'branch'>): string {
+  return work.branch ?? `relay/${work.work_id}`
+}
+
+/** 머지 대상 브랜치 (D428): PR의 base다. 고르지 않았으면 기준 브랜치다 */
+export function targetBranch(work: Pick<WorkState, 'base_branch' | 'target_branch'>): string {
+  return work.target_branch ?? work.base_branch
 }
 
 /**
  * worktree가 Work 브랜치에 있지 않을 때의 오류 (D138). 전달과 되감기는 Work 브랜치를 옮기므로 HEAD가 그 브랜치에
  * 있어야 사람이 본 코드를 다룬다. 있으면 null. current가 null이면 분리된 HEAD다
  */
-export function offWorkBranch(workId: string, current: string | null): string | null {
-  const branch = workBranch(workId)
+export function offWorkBranch(branch: string, current: string | null): string | null {
   if (current === branch) return null
   return `worktree가 Work 브랜치에 있지 않음(지금: ${current ?? '분리된 HEAD'}). worktree에서 \`git switch ${branch}\`로 돌아온 뒤 다시 누르세요`
 }
 
-/** 이 날짜의 다음 work-id. taken은 이미 쓰인 id다(Work 디렉터리, relay/<work-id> 브랜치) */
+/** 이 날짜의 다음 work-id. taken은 이미 쓰인 id다(Work 디렉터리) */
 export function nextWorkId(at: string, taken: Iterable<string>): string {
   const used = new Set(taken)
   for (let seq = 1; ; seq++) {

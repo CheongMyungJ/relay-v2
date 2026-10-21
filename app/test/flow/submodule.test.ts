@@ -18,6 +18,7 @@ import {
   settle,
   writeFiles,
   type Harness,
+  workBranchOf,
 } from '../support/harness'
 import { REQUEST, scenario, steps, type Scenario } from '../support/scenarios'
 
@@ -99,7 +100,7 @@ async function create(s: Setup, integration = true) {
   return {
     key: r.workKey,
     workId,
-    branch: `relay/${workId}`,
+    branch: workBranchOf(workId),
     dir: path.join(s.h.home, 'projects', s.sub.id, 'works', workId),
     root,
     tree: integration ? path.join(root, 'lib') : root,

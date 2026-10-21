@@ -18,6 +18,7 @@ import {
   register,
   settle,
   type Harness,
+  workBranchOf,
 } from '../support/harness'
 import { FIXED_FILES, REPO_FILES, REQUEST, scenario, type Scenario } from '../support/scenarios'
 
@@ -79,7 +80,7 @@ async function setup(s: Scenario): Promise<Setup> {
     dir: path.join(hh.home, 'projects', projectId, 'works', workId),
     tree: path.join(hh.home, 'projects', projectId, 'worktrees', workId),
     workId,
-    branch: `relay/${workId}`,
+    branch: workBranchOf(workId),
   }
 }
 
@@ -120,7 +121,7 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
       ok: true,
     })
     await settle(s.h, s.key)
-    const backup = `${s.branch}-discarded-1`
+    const backup = `relay/${s.workId}-discarded-1`
     git(s.repo, 'branch', backup, s.branch)
     const head = git(s.tree, 'rev-parse', 'HEAD')
     const before = listFiles(s.dir)
@@ -233,7 +234,7 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
       ok: true,
     })
     // 사람이 만든 다른 백업 브랜치라고 치자
-    const backup = `${s.branch}-discarded-1`
+    const backup = `relay/${s.workId}-discarded-1`
     git(s.repo, 'branch', backup, 'main')
     const summary = await preview(s)
     expect(summary.branch.deletable).toBe(true)

@@ -7,7 +7,15 @@ import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { LifecycleEvent, WorkState } from '../../src/shared/work'
 import { drive } from '../support/driver'
-import { git, harness, makeRepo, register, settle, type Harness } from '../support/harness'
+import {
+  git,
+  harness,
+  makeRepo,
+  register,
+  settle,
+  workBranchOf,
+  type Harness,
+} from '../support/harness'
 import { REPO_FILES, REQUEST, scenario, type Scenario } from '../support/scenarios'
 
 let h: Harness | undefined
@@ -225,7 +233,7 @@ describe('[흐름] 이슈 기록 (M19, 설계 3.7)', () => {
       '### t-01 의도 정리 · 승인(사람)',
       '### t-02 원인 분석과 수정 · 승인(사람)',
       '### t-03 리뷰와 검증 · 승인(사람)',
-      `Work 완료(push): 브랜치 \`relay/${s.workId}\``,
+      `Work 완료(push): 브랜치 \`${workBranchOf(s.workId)}\``,
     ])
     expect(issue).toMatchObject({ state: 'closed', state_reason: 'completed' })
     expect(work(s).issue).toMatchObject({ pending: [], closed: { reason: 'completed' } })

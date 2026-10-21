@@ -111,7 +111,9 @@ export async function harness(o: HarnessOptions = {}): Promise<Harness> {
   }
   const ui = o.ui ?? new FakeUi()
   const ghBin = o.ghBin ?? FAKE_GH
-  const open = (u: FakeUi) => Relay.open({ home, skills: SKILLS, ui: u, env, ghBin })
+  // 작업 브랜치 끝의 임의의 4자(D427)를 aaaa로 고정한다: 시험이 브랜치 이름을 안다 (workBranchOf)
+  const open = (u: FakeUi) =>
+    Relay.open({ home, skills: SKILLS, ui: u, env, ghBin, random: () => 0 })
   const jsonl = (name: string) => {
     const file = path.join(record, name)
     if (!fs.existsSync(file)) return []
@@ -172,4 +174,9 @@ export async function register(
     if (!off.ok) throw new Error(`이슈 기록을 끄지 못함: ${off.error}`)
   }
   return r.projectId
+}
+
+/** harness가 만든 Work의 작업 브랜치 (D425~D427): 기본 규칙 relay/{work-id}에 고정한 임의의 4자 aaaa를 붙인 것 */
+export function workBranchOf(workId: string): string {
+  return `relay/${workId}-aaaa`
 }

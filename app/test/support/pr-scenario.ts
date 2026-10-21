@@ -31,7 +31,7 @@ import type { PrItemsFile } from '../../src/shared/pr'
 import type { CleanPreview, PrView, TaskView, WorkView } from '../../src/shared/views'
 import type { LifecycleEvent, WorkState, WorkType } from '../../src/shared/work'
 import { drive } from './driver'
-import { git, settle, sleep, type Harness } from './harness'
+import { git, settle, sleep, workBranchOf, type Harness } from './harness'
 import { handoff, scenario, steps, type Scenario, type Step } from './scenarios'
 
 /** relay 밖의 GitHub: 사람, 봇, CI */
@@ -216,7 +216,7 @@ export async function openPrWork(
   })
   if (!created.ok) throw new Error(`Work 생성 실패: ${created.error}`)
   const workId = created.workKey.split('/')[1] ?? ''
-  const entry = { branch: `relay/${workId}`, pr: null as number | null }
+  const entry = { branch: workBranchOf(workId), pr: null as number | null }
   ctx.created.push(entry)
   const r = await drive(h.relay, h.ui, created.workKey, {
     pauseAt: (t) => t.node === 'verify' && t.status === 'awaiting_approval',

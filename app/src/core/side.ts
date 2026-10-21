@@ -84,7 +84,7 @@ export function sideGuide(input: SideGuideInput): string {
     `- 유형: ${WORK_TYPE_LABEL[workType(work)]}`,
     `- 상태(열 때): ${WORK_STATUS_LABEL[work.status]}${now ? `, 지금 단계 ${taskLabel(now)} (${TASK_STATUS_LABEL[now.status]})` : ''}`,
     `- 기준 브랜치와 커밋: ${work.base_branch} ${work.base_commit}`,
-    `- Work 브랜치: ${workBranch(work.work_id)}`,
+    `- Work 브랜치: ${workBranch(work)}`,
     `- worktree(지금 폴더): ${input.worktree}`,
     `- Work 디렉터리: ${input.workDir}`,
     '',

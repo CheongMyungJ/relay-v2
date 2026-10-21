@@ -425,6 +425,13 @@ export class FakeGitHub {
     })
   }
 
+  /** GitHub에서 PR의 base를 바꾼다 (웹 편집, 쌓은 base 브랜치를 지워 GitHub가 옮김) */
+  setBase(n: number, base: string): void {
+    this.updatePr(n, (p) => {
+      p.base = base
+    })
+  }
+
   reopen(n: number): void {
     this.updatePr(n, (p) => {
       p.state = 'open'

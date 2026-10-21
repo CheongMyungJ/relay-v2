@@ -171,7 +171,7 @@ export function endOf(
   }
   if (delivery === 'push') {
     return {
-      text: `Work 완료(push): 브랜치 \`${workBranch(work.work_id)}\``,
+      text: `Work 완료(push): 브랜치 \`${workBranch(work)}\``,
       reason: 'completed',
     }
   }

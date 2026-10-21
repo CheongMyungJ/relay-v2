@@ -231,6 +231,25 @@ describe('정리 전 확인 요약 (8-1)', () => {
     expect(gone.branch.deletable).toBe(false)
   })
 
+  it('PR을 만들기 전의 다른 Work가 머지 대상으로 쓰는 브랜치는 로컬도 origin도 지우지 않는다 (D428)', () => {
+    const stacked = ['w-20260927-002']
+    const p = cleanPreview(
+      facts({
+        merged: true,
+        branch: { name: BRANCH, exists: true, pushed: true, merged: true, lost: [], stacked },
+        remote: { name: BRANCH, exists: true },
+      }),
+    )
+    expect(p.branch).toMatchObject({ deletable: false, stacked })
+    expect(p.remote).toBeNull()
+    const error =
+      'w-20260927-002가 이 브랜치를 머지 대상으로 씀. 지우려면 그 Work의 머지 대상을 바꾸세요'
+    expect(planClean(p, input(p, { deleteBranch: true }))).toEqual({ ok: false, error })
+    expect(planClean(p, input(p, { deleteRemote: true }))).toEqual({ ok: false, error })
+    // 백업 브랜치와 worktree는 그대로 정리한다
+    expect(planClean(p, input(p))).toMatchObject({ ok: true, deleteRemote: null })
+  })
+
   it('PR을 머지한 Work의 작업 브랜치는 머지한 PR에 없는 커밋이 없으면 지울 수 있다 (squash 머지 뒤, D329)', () => {
     const branch = { name: BRANCH, exists: true, pushed: false, merged: false }
     const p = cleanPreview(facts({ merged: true, branch: { ...branch, lost: [] } }))

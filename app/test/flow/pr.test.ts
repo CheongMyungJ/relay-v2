@@ -310,6 +310,17 @@ describe('[흐름] PR 진행 (M9, 시나리오 10)', () => {
     expect(workState(w).pr?.merged).toMatchObject({ head, method: 'squash', outside: false })
   })
 
+  it('GitHub에서 PR의 base가 바뀌면 머지 대상을 따른다 (D428)', async () => {
+    const s = await setup()
+    const w = await openWork(s)
+    expect(workState(w).target_branch).toBeUndefined()
+    s.gh.setBase(w.pr, 'release')
+    expect(await s.ctx.h.relay.prRefresh(w.key)).toEqual({ ok: true })
+    await settle(s.ctx.h, w.key)
+    expect(workState(w).target_branch).toBe('release')
+    expect(s.ctx.h.ui.works.get(w.key)?.targetBranch).toBe('release')
+  })
+
   it('실패한 스텝의 로그가 비면 "비어 있음"으로 한 번 남기고 읽을 때마다 다시 받지 않는다', async () => {
     const s = await setup()
     const w = await openWork(s)

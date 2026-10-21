@@ -6,7 +6,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { taskDirName } from '../../src/core/machine'
+import { PR_TARGET_FIXED, taskDirName } from '../../src/core/machine'
 import type { DeliverInput, WorkView } from '../../src/shared/views'
 import type { LifecycleEvent, WorkState } from '../../src/shared/work'
 import { drive } from '../support/driver'
@@ -20,6 +20,7 @@ import {
   settle,
   writeFiles,
   type Harness,
+  workBranchOf,
 } from '../support/harness'
 import {
   REPO_FILES,
@@ -96,7 +97,7 @@ async function setup(s: Scenario, o: Options = {}): Promise<Setup> {
     dir: path.join(hh.home, 'projects', projectId, 'works', workId),
     tree: path.join(hh.home, 'projects', projectId, 'worktrees', workId),
     workId,
-    branch: `relay/${workId}`,
+    branch: workBranchOf(workId),
   }
 }
 
@@ -268,7 +269,7 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
     ])
     expect(create?.body).toBe('## 요약\n## 원인\n## 변경\n## 테스트')
     expect(fs.realpathSync.native(create?.cwd ?? '')).toBe(fs.realpathSync.native(s.repo))
-    const compare = `https://github.com/relay-test/sample/compare/main...relay%2F${s.workId}?expand=1`
+    const compare = `https://github.com/relay-test/sample/compare/main...relay%2F${s.workId}-aaaa?expand=1`
     const w = work(s)
     // 완료 대신 PR 진행이다 (M9, D120, D152). PR 번호, 주소, head, gh 버전을 적는다 (D191, D198)
     expect(w.status).toBe('pr')
@@ -301,6 +302,25 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
       compareUrl: compare,
       draft: true,
       prExisting: false,
+    })
+  })
+
+  it('[PR 생성]은 고른 머지 대상으로 PR을 만든다. PR을 만든 뒤에는 머지 대상을 바꾸지 않는다 (D428)', async () => {
+    const s = await setup(scenario(), { github: true })
+    await toVerify(s)
+    expect(await s.h.relay.setTarget(s.key, 'release')).toEqual({ ok: true })
+    expect(view(s)).toMatchObject({ targetBranch: 'release', canSetTarget: true })
+    expect(await deliver(s, 'pr')).toEqual({ ok: true })
+    await settle(s.h, s.key)
+    const [create] = gh(s, 'pr create')
+    expect(create?.args.slice(4, 8)).toEqual(['--base', 'release', '--head', s.branch])
+    expect(work(s).delivery?.compare_url).toBe(
+      `https://github.com/relay-test/sample/compare/release...relay%2F${s.workId}-aaaa?expand=1`,
+    )
+    expect(view(s)?.canSetTarget).toBe(false)
+    expect(await s.h.relay.setTarget(s.key, 'main')).toEqual({
+      ok: false,
+      error: PR_TARGET_FIXED,
     })
   })
 

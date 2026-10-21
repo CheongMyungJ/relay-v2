@@ -61,7 +61,7 @@ import {
   isPipelineNode,
   workType,
 } from './pipeline'
-import { workBranch } from './records'
+import { targetBranch, workBranch } from './records'
 import { CUT_ERROR, OPERATION_BLOCKS, OWNED_FILES, cutOperation } from './recovery'
 import {
   AUTO_LIMIT,
@@ -279,6 +279,15 @@ export interface StopAfterStep extends WorkEvent {
   on: boolean
 }
 
+/**
+ * 머지 대상 브랜치를 바꾼다 (D428). PR을 만들기 전에만 받는다: 만든 PR의 base는 GitHub에서 바꾼다. 기준 브랜치와 같으면
+ * 적은 것을 지운다
+ */
+export interface SetTarget extends WorkEvent {
+  type: 'target.set'
+  branch: string
+}
+
 /** 보관된 Work를 사이드바의 공통 아카이브로 옮긴다. 기록과 산출물은 그대로 둔다 */
 export interface ShelveWork extends WorkEvent {
   type: 'shelve'
@@ -480,6 +489,11 @@ export interface PrRead extends WorkEvent {
   received: readonly string[]
   notAccepted: readonly string[]
   synced?: { commits: readonly string[]; baseCommit?: string }
+  /**
+   * 읽은 PR의 base 브랜치(baseRefName). 머지 대상과 다르면 따른다 (D428): GitHub에서 base를 바꿨거나, 쌓은 앞 Work의
+   * 브랜치가 머지되어 지워지면 GitHub가 base를 그 머지 대상으로 옮긴다. 비었으면 보지 않는다
+   */
+  baseRef?: string
 }
 
 /**
@@ -636,6 +650,7 @@ export type MachineEvent =
   | Interrupt
   | Resume
   | StopAfterStep
+  | SetTarget
   | ShelveWork
   | ResumeWork
   | Abandon
@@ -1103,6 +1118,10 @@ export interface NewWork {
   /** 기준 브랜치와, Work를 만들 때 분기한 기준 커밋 (시나리오 1, D97) */
   baseBranch: string
   baseCommit: string
+  /** 작업 브랜치 (D425). main이 만든 worktree의 브랜치다. 없으면 적지 않는다(relay/<work-id>로 읽음) */
+  branch?: string
+  /** 머지 대상 브랜치 (D428). 없거나 기준 브랜치와 같으면 적지 않는다 */
+  targetBranch?: string
   /** 서브모듈 Work의 메인 통합 검증 worktree (D414): 메인 레포의 기준 브랜치와 고정한 커밋 */
   integration?: { base_branch: string; base_commit: string }
   settings?: WorkSettingsPatch
@@ -1120,6 +1139,7 @@ export interface NewWork {
 
 /** Work를 만들고 intake task를 시작한다 (시나리오 1-2, 1-3) */
 export function createWork(input: NewWork): Transition {
+  const target = input.targetBranch !== input.baseBranch ? input.targetBranch : undefined
   const hashes: OwnedFileHashes = input.requestHash ? { 'request.md': input.requestHash } : {}
   const empty: WorkState = {
     schema_version: 1,
@@ -1129,6 +1149,8 @@ export function createWork(input: NewWork): Transition {
     created_at: input.at,
     base_branch: input.baseBranch,
     base_commit: input.baseCommit,
+    ...(input.branch ? { branch: input.branch } : {}),
+    ...(target ? { target_branch: target } : {}),
     ...(input.integration ? { integration: { ...input.integration } } : {}),
     intent: null,
     // 빈 값은 앱 설정을 따른다는 뜻이라 두지 않는다 (D72)
@@ -1152,6 +1174,8 @@ export function createWork(input: NewWork): Transition {
         type: input.type,
         base_branch: input.baseBranch,
         base_commit: input.baseCommit,
+        ...(input.branch ? { branch: input.branch } : {}),
+        ...(target ? { target_branch: target } : {}),
         ...(input.integration ? { integration: input.integration } : {}),
         ...(input.fromWork ? { from_work: input.fromWork } : {}),
       }),
@@ -1183,6 +1207,7 @@ const BLOCKED_BY_OPERATION: readonly MachineEvent['type'][] = [
   'interrupt',
   'resume',
   'stopAfter',
+  'target.set',
   'resumeWork',
   'abandon',
   'deliver',
@@ -1222,6 +1247,8 @@ function dispatch(work: WorkState, event: MachineEvent, config: AppConfig): Tran
   switch (event.type) {
     case 'stopAfter':
       return stopAfter(work, event)
+    case 'target.set':
+      return setTarget(work, event)
     case 'shelve':
       return shelve(work, event)
     case 'resumeWork':
@@ -1308,6 +1335,7 @@ function dispatch(work: WorkState, event: MachineEvent, config: AppConfig): Tran
 type TaskMachineEvent = Exclude<
   MachineEvent,
   | StopAfterStep
+  | SetTarget
   | ShelveWork
   | ResumeWork
   | Abandon
@@ -1907,6 +1935,31 @@ function unidentifiedCodex(task: TaskRecord): boolean {
 
 // ---------- Work 조작 ----------
 
+/** PR을 만든 뒤 머지 대상을 바꾸려 할 때 */
+export const PR_TARGET_FIXED =
+  'PR을 만든 뒤에는 머지 대상을 바꾸지 않음(GitHub에서 PR의 base를 바꾸세요)'
+
+/** 머지 대상 브랜치 (D428). PR을 만든 뒤나 끝난 Work에서는 바꾸지 않는다 */
+function setTarget(work: WorkState, e: SetTarget): Transition {
+  if (work.status !== 'active' && work.status !== 'stopped') {
+    return unchanged(
+      work,
+      work.status === 'pr' ? PR_TARGET_FIXED : '끝난 Work의 머지 대상은 바꾸지 않음',
+    )
+  }
+  const branch = e.branch.trim()
+  if (!branch) return unchanged(work, '머지 대상 브랜치를 고르세요')
+  if (branch === workBranch(work)) return unchanged(work, '머지 대상은 작업 브랜치와 달라야 함')
+  if (branch === targetBranch(work)) return unchanged(work)
+  return {
+    work:
+      branch === work.base_branch
+        ? omit(work, 'target_branch')
+        : { ...work, target_branch: branch },
+    effects: [],
+  }
+}
+
 /** [이 단계 끝나면 멈춤] (시나리오 3-4). 지금 단계가 승인되면 다음 단계를 시작하지 않고 멈춘다 */
 function stopAfter(work: WorkState, e: StopAfterStep): Transition {
   if (work.status !== 'active') return unchanged(work, '진행 중인 Work가 아님')
@@ -2035,7 +2088,7 @@ function deliver(work: WorkState, e: Deliver): Transition {
     effects.push({ type: 'openCleanup', choice: e.choice })
     return { work: next, effects }
   }
-  const branch = workBranch(work.work_id)
+  const branch = workBranch(work)
   const operation: DeliverOperation = {
     kind: 'deliver',
     stage: e.uncommitted ? 'prepare' : 'push',
@@ -2044,7 +2097,7 @@ function deliver(work: WorkState, e: Deliver): Transition {
     task_id: task.id,
     uncommitted: e.uncommitted,
     branch,
-    base: work.base_branch,
+    base: targetBranch(work),
   }
   effects.push({
     type: 'deliver',
@@ -2058,7 +2111,7 @@ function deliver(work: WorkState, e: Deliver): Transition {
           ? stashMessage(work.work_id)
           : null,
     branch,
-    base: work.base_branch,
+    base: targetBranch(work),
   })
   return { work: { ...next, operation }, effects }
 }
@@ -2540,6 +2593,12 @@ function prRead(work: WorkState, e: PrRead): Transition {
   }
   const effects: Effect[] = []
   let next: WorkState = { ...work, pr: { ...pr, head: e.head, read_at: e.at } }
+  if (e.baseRef && e.baseRef !== targetBranch(next)) {
+    next =
+      e.baseRef === next.base_branch
+        ? omit(next, 'target_branch')
+        : { ...next, target_branch: e.baseRef }
+  }
   const synced = e.synced
   if (synced && synced.commits.length) {
     if (synced.baseCommit) next = { ...next, base_commit: synced.baseCommit }

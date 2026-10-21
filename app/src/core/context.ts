@@ -10,7 +10,7 @@ import type { PrItem } from '../shared/pr'
 import { WORK_TYPE_LABEL, type TaskRecord, type WorkState } from '../shared/work'
 import { approvalMode, autoApprovable, type ApprovalMode } from './approval'
 import { NODE_INFO, RESPOND, isPipelineNode, workType } from './pipeline'
-import { workBranch } from './records'
+import { targetBranch, workBranch } from './records'
 import { REPLIES_FILE, RESPONSE_FILE, parseFrontMatter } from './validate'
 import { knowledgeSection, type KnowledgeInput } from './knowledge'
 
@@ -467,7 +467,7 @@ export function buildContext(input: ContextInput): string {
   const { work, task, config } = input
   const info = NODE_INFO[task.node]
   const type = workType(work)
-  const entry = input.respond ? respondSection(input.respond, work.base_branch) : null
+  const entry = input.respond ? respondSection(input.respond, targetBranch(work)) : null
   const sections: [string, string][] = [
     ...(entry ? [entry] : []),
     [
@@ -481,9 +481,12 @@ export function buildContext(input: ContextInput): string {
         `skill: ${info.skill}`,
         `승인된 intent 버전: ${work.intent ? String(work.intent.version) : '없음 (의도 승인 전)'}`,
         `task 디렉터리: ${input.taskDir}`,
-        `작업 브랜치: ${workBranch(work.work_id)}`,
+        `작업 브랜치: ${workBranch(work)}`,
         `기준 브랜치: ${work.base_branch}`,
         `기준 커밋: ${work.base_commit}`,
+        ...(work.target_branch
+          ? [`머지 대상 브랜치: ${work.target_branch} (PR의 base, D428)`]
+          : []),
         `Work 초안 폴더: ${input.draftsDir} (근본부터 다시 하기로 사람과 정했을 때 새 Work의 초안을 쓰는 곳, D420)`,
       ]),
     ],

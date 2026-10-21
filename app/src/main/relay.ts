@@ -48,7 +48,15 @@ import { applyConfigPatch, checkProjectSettings, checkWorkSettings } from '../co
 import { createWork } from '../core/machine'
 import { NODE_INFO } from '../core/pipeline'
 import { issueMarkId, type InheritedIssue } from '../core/issue'
-import { localIso, nextSessionId, nextWorkId, workBranch } from '../core/records'
+import {
+  DEFAULT_BRANCH_RULE,
+  checkBranchName,
+  pickWorkBranch,
+  renderBranchRule,
+  ruleHasSlug,
+  workIdsInBranches,
+} from '../core/branch'
+import { localIso, nextSessionId, nextWorkId, targetBranch, workBranch } from '../core/records'
 import { recordedProcesses, type RecordedProcess } from '../core/recovery'
 import { resolveAgent } from '../shared/agent'
 import { DEFAULT_CONFIG, type AppConfig, type WorkSettingsPatch } from '../shared/config'
@@ -78,7 +86,7 @@ import type {
   SubmoduleView,
   TerminalBacklog,
 } from '../shared/views'
-import { WORK_TYPES, type DeliveryChoice, type WorkState } from '../shared/work'
+import { WORK_TYPES, type DeliveryChoice, type WorkState, type WorkType } from '../shared/work'
 import { SessionPool } from './pool'
 import type { UiPort } from './ports'
 import { PASTE_KEEP_MS, linkPath, opensSafely, realLinkPath, type LinkFs } from './links'
@@ -103,6 +111,8 @@ export interface RelayOptions {
   /** gh 실행 파일. 기본은 PATH의 gh */
   ghBin?: string
   now?: () => Date
+  /** 작업 브랜치 끝의 임의의 4자를 뽑는 [0, 1)의 수 (D427). 기본은 Math.random이다(시험에서 고정한다) */
+  random?: () => number
   /** 앱 설정을 읽었거나 바꿨다. 테마(D335)처럼 Electron이 적용할 것을 main이 적용한다 */
   onConfig?: (config: AppConfig) => void
   /**
@@ -121,7 +131,8 @@ interface TerminalOwner {
   cwd(id: string): string
 }
 
-const RELAY_BRANCH = 'relay/'
+/** 예전 되감기의 백업 브랜치 relay/<work-id>-discarded-<n> (D115, D424). 기준 브랜치로 고르지 않는다 */
+const DISCARDED_BACKUP = /^relay\/w-\d{8}-\d+-discarded-\d+$/
 
 /** 터미널 경로를 풀 때 링크를 따라가지 않고 보는 파일 시스템 (D412) */
 const LINK_FS: LinkFs = {
@@ -344,9 +355,20 @@ export class Relay {
           )
           .map((w) => ({
             workId: w.work.work_id,
-            branch: `${RELAY_BRANCH}${w.work.work_id}`,
+            branch: workBranch(w.work),
             baseCommit: w.work.base_commit,
           })),
+      stackedOn: (projectId, branch, except) =>
+        [...this.works.values()]
+          .filter(
+            (w) =>
+              w.project.project_id === projectId &&
+              w.work.work_id !== except &&
+              (w.work.status === 'active' || w.work.status === 'stopped') &&
+              targetBranch(w.work) === branch,
+          )
+          .map((w) => w.work.work_id),
+      workBranches: (projectId) => this.workBranches(projectId),
     }
   }
 
@@ -457,6 +479,8 @@ export class Relay {
       allowedBots: p.allowed_bots ?? [],
       mergeMethod: p.merge_method ?? null,
       issueLog: issueLogOn(p),
+      branchRule: p.branch_rule ?? DEFAULT_BRANCH_RULE,
+      branchSlug: ruleHasSlug(p.branch_rule ?? DEFAULT_BRANCH_RULE),
       parent: p.parent ? { id: p.parent.project_id, path: p.parent.path } : null,
     }))
   }
@@ -636,6 +660,9 @@ export class Relay {
         allowed_bots: r.value.allowed_bots,
         merge_method: r.value.merge_method,
         ...(r.value.issue_log === undefined ? {} : { issue_log: r.value.issue_log }),
+        ...(r.value.branch_rule === undefined
+          ? {}
+          : { branch_rule: r.value.branch_rule || undefined }),
       }))
       await Promise.all(
         [...this.works.values()]
@@ -648,14 +675,39 @@ export class Relay {
     return run
   }
 
-  /** 기준 브랜치 목록 (시나리오 1). 프로젝트의 기본 브랜치를 맨 앞에 둔다 */
+  /** 새 Work 대화상자의 작업 브랜치 이름 (D426): 다음 work-id로 규칙을 채운다. 끝의 임의의 4자는 만들 때 붙인다 */
+  async branchName(projectId: string, type: WorkType, slug: string): Promise<string> {
+    const project = this.projects.get(projectId)
+    if (!project) return ''
+    const local = await gitBranches(project.repo_path, { env: this.env })
+      .then((b) => b.local)
+      .catch(() => [])
+    const workId = await this.nextWorkId(project, this.at(), local)
+    return renderBranchRule(project.branch_rule ?? DEFAULT_BRANCH_RULE, { workId, type, slug })
+  }
+
+  /**
+   * 기준 브랜치와 머지 대상 목록 (시나리오 1, D428). 프로젝트의 기본 브랜치를 맨 앞에 둔다. 앞 Work의 작업 브랜치도 넣는다:
+   * 그 위에 이어 쌓고 한 번에 기본 브랜치로 넣을 수 있다. 예전 되감기의 백업 브랜치(D115, D424)만 뺀다
+   */
   async branches(projectId: string): Promise<string[]> {
     const project = this.projects.get(projectId)
     if (!project) return []
     const { local, remote } = await gitBranches(project.repo_path, { env: this.env })
-    const names = [...new Set([...local, ...remote])].filter((b) => !b.startsWith(RELAY_BRANCH))
+    // 사람이 지은 Work 브랜치가 백업 브랜치의 모양과 같을 수 있다(D426): Work 브랜치는 빼지 않는다
+    const works = new Set(this.workBranches(projectId))
+    const names = [...new Set([...local, ...remote])].filter(
+      (b) => works.has(b) || !DISCARDED_BACKUP.test(b),
+    )
     const rest = names.filter((b) => b !== project.default_branch).sort()
     return [project.default_branch, ...rest]
+  }
+
+  /** 이 프로젝트의 모든 Work의 작업 브랜치 (D425) */
+  private workBranches(projectId: string): string[] {
+    return [...this.works.values()]
+      .filter((w) => w.project.project_id === projectId)
+      .map((w) => workBranch(w.work))
   }
 
   /** 메인 프로젝트의 서브모듈 프로젝트 (D413) */
@@ -761,7 +813,7 @@ export class Relay {
   // ---------- Work 생성 (시나리오 1) ----------
 
   /**
-   * work-id, relay/<work-id> 브랜치와 worktree, 기준 커밋(D97), request.md, work.json을 만들고
+   * work-id, 작업 브랜치(D425~D427)와 worktree, 기준 커밋(D97), request.md, work.json을 만들고
    * intake task를 시작한다. 기준 위치가 원격이면 fetch한 origin/<브랜치>에서 분기하고,
    * fetch가 실패하면 Work를 만들지 않는다. 세션 상한을 넘으면 intake는 대기열에서 기다린다 (D18).
    * Work별 자동 승인과 질문 방식을 받으면 work.json에 둔다 (D72). 고른 업무 유형을 work.json에 적는다 (D236).
@@ -781,6 +833,12 @@ export class Relay {
     }
     const branch = input.baseBranch.trim()
     if (!branch) return { ok: false, error: '기준 브랜치를 고르세요' }
+    const target = input.targetBranch?.trim()
+    if (input.targetBranch !== undefined && !target) {
+      return { ok: false, error: '머지 대상 브랜치를 고르세요' }
+    }
+    const badTarget = target ? checkBranchName(target) : null
+    if (badTarget) return { ok: false, error: `머지 대상: ${badTarget}` }
     if (input.integration) {
       const main = project.parent ? this.projects.get(project.parent.project_id) : undefined
       if (!main) return { ok: false, error: '메인 통합 검증은 서브모듈 프로젝트에서만 고릅니다' }
@@ -807,7 +865,14 @@ export class Relay {
     this.creating = true
     let r: CreateWorkResult
     try {
-      r = await this.create(project, input, branch, settings.value, original?.work, inherited)
+      r = await this.create(
+        project,
+        input,
+        { base: branch, target },
+        settings.value,
+        original?.work,
+        inherited,
+      )
     } finally {
       this.creating = false
     }
@@ -825,11 +890,13 @@ export class Relay {
   private async create(
     project: ProjectState,
     input: NewWorkInput,
-    branch: string,
+    /** 확인한 기준 브랜치와 머지 대상(없으면 기준 브랜치, D428) */
+    branches: { base: string; target: string | undefined },
     settings: WorkSettingsPatch,
     original?: WorkState,
     inherited?: InheritedIssue,
   ): Promise<CreateWorkResult> {
+    const branch = branches.base
     const repo = project.repo_path
     const env = this.env
     let ref = branch
@@ -860,13 +927,18 @@ export class Relay {
     }
 
     const at = this.at()
-    const relayBranches = (await gitBranches(repo, { env })).local
-      .filter((b) => b.startsWith(RELAY_BRANCH))
-      .map((b) => b.slice(RELAY_BRANCH.length))
-    const workId = nextWorkId(at, [
-      ...(await workIds(this.o.home, project.project_id)),
-      ...relayBranches,
-    ])
+    const existing = await gitBranches(repo, { env })
+    const workId = await this.nextWorkId(project, at, existing.local)
+    const named = pickWorkBranch({
+      rule: project.branch_rule ?? DEFAULT_BRANCH_RULE,
+      name: input.branchName ?? null,
+      slug: input.slug ?? '',
+      workId,
+      type: input.type,
+      existing: [...existing.local, ...existing.remote],
+      ...(this.o.random ? { random: this.o.random } : {}),
+    })
+    if (!named.ok) return named
     const { tree, root } = this.workTree(project, workId, integration !== undefined)
     // 메인 통합 검증 worktree를 먼저 만들고 그 안의 서브모듈 자리(빈 폴더)에 이 Work의 worktree를 만든다 (D414)
     if (main && integration && root) {
@@ -877,7 +949,7 @@ export class Relay {
       }
     }
     try {
-      await addWorktree(repo, tree, workBranch(workId), baseCommit, { env })
+      await addWorktree(repo, tree, named.branch, baseCommit, { env })
     } catch (e) {
       if (main && root)
         await removeWorktree(main.repo_path, root, { env, force: true }).catch(() => {})
@@ -892,6 +964,8 @@ export class Relay {
       type: input.type,
       baseBranch: branch,
       baseCommit,
+      branch: named.branch,
+      ...(branches.target ? { targetBranch: branches.target } : {}),
       ...(integration ? { integration } : {}),
       settings,
       requestHash,
@@ -912,6 +986,17 @@ export class Relay {
     this.works.set(runner.key, runner)
     await runner.enqueue(() => runner.apply(created.work, created.effects))
     return { ok: true, workKey: runner.key }
+  }
+
+  /**
+   * 이 날짜의 다음 work-id. 기록을 지운 Work의 브랜치가 남아 있으면 그 이름에 든 id(workIdsInBranches)도 쓰지 않는다: 같은
+   * id의 두 Work가 헷갈린다
+   */
+  private async nextWorkId(project: ProjectState, at: string, local: readonly string[]) {
+    return nextWorkId(at, [
+      ...(await workIds(this.o.home, project.project_id)),
+      ...workIdsInBranches(local),
+    ])
   }
 
   /**
@@ -1009,6 +1094,13 @@ export class Relay {
   /** [이 단계 끝나면 멈춤] */
   stopAfter(workKey: string, on: boolean): Promise<CommandResult> {
     return this.withWork(workKey, (w) => w.stopAfter(on))
+  }
+
+  /** 머지 대상 브랜치 (D428). 브랜치 이름으로 쓸 수 있는지만 보고, 있는지는 PR을 만들 때 GitHub가 본다 */
+  setTarget(workKey: string, branch: string): Promise<CommandResult> {
+    const bad = checkBranchName(branch.trim())
+    if (bad) return Promise.resolve({ ok: false, error: `머지 대상: ${bad}` })
+    return this.withWork(workKey, (w) => w.setTarget(branch))
   }
 
   /** [아카이브로 옮기기] */

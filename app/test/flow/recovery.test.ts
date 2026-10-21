@@ -38,6 +38,7 @@ import {
   sleep,
   writeFiles,
   type Harness,
+  workBranchOf,
 } from '../support/harness'
 import { REPO_FILES, REQUEST, scenario, type Scenario } from '../support/scenarios'
 
@@ -95,7 +96,7 @@ async function newWork(hh: Harness, projectId: string): Promise<WorkPaths> {
     dir: path.join(hh.home, 'projects', projectId, 'works', workId),
     tree: path.join(hh.home, 'projects', projectId, 'worktrees', workId),
     workId,
-    branch: `relay/${workId}`,
+    branch: workBranchOf(workId),
   }
 }
 
@@ -129,7 +130,12 @@ function view(hh: Harness, w: WorkPaths): WorkView {
 
 /** 이 Work의 되감기 백업 브랜치 (D115) */
 const backups = (s: Setup) =>
-  git(s.repo, 'for-each-ref', '--format=%(refname:short)', `refs/heads/${s.branch}-discarded-*`)
+  git(
+    s.repo,
+    'for-each-ref',
+    '--format=%(refname:short)',
+    `refs/heads/relay/${s.workId}-discarded-*`,
+  )
     .split('\n')
     .filter(Boolean)
 
@@ -398,7 +404,7 @@ describe('[흐름] D418 전에 끊긴 되감기 (시나리오 9-4, D122, D424)',
       instruction: null,
       discard: ['t-02', 't-03'],
       reset_to: b.work.tasks[1]?.start_commit ?? '',
-      backup_branch: `${s.branch}-discarded-1`,
+      backup_branch: `relay/${s.workId}-discarded-1`,
       backup_commit: null,
     }
     await crash(s.h, [{ w: s, work: { ...b.work, operation: op }, events: b.events }])
@@ -654,14 +660,14 @@ describe('[흐름] 끊긴 정리 (M6, 시나리오 9-4, 8-2, D121~D123)', () => 
       ok: true,
     })
     // 되감기 백업 브랜치가 하나 있다
-    git(s.repo, 'branch', `${s.branch}-discarded-1`, 'main')
+    git(s.repo, 'branch', `relay/${s.workId}-discarded-1`, 'main')
     const b = await before(s.h, s)
     const { cleaning, deleteBranches } = await cleanStarted(s, b, {
       deleteBranch: true,
       deleteBackups: true,
       confirmed: false,
     })
-    expect(deleteBranches).toEqual([s.branch, `${s.branch}-discarded-1`])
+    expect(deleteBranches).toEqual([s.branch, `relay/${s.workId}-discarded-1`])
     // worktree를 지웠고 브랜치를 지우다 꺼졌다: 작업 브랜치만 지웠다
     const removing = step(cleaning, { type: 'clean.removed', at: at() })
     git(s.repo, 'worktree', 'remove', s.tree)

@@ -13,6 +13,7 @@ import {
   register,
   settle,
   type Harness,
+  workBranchOf,
 } from '../support/harness'
 import { REPO_FILES } from '../support/scenarios'
 
@@ -224,7 +225,7 @@ describe('[어댑터] Work 생성: worktree와 기준 커밋 (시나리오 1, D9
     const [, workId] = workKey.split('/')
     expect(workId).toMatch(/^w-\d{8}-001$/)
     const tree = worktreeOf(h, workKey)
-    expect(git(tree, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe(`relay/${workId}`)
+    expect(git(tree, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe(workBranchOf(workId ?? ''))
     expect(git(tree, 'rev-parse', 'HEAD')).toBe(base)
     expect(git(repo, 'config', '--get', 'core.longpaths')).toBe('true')
     const work = JSON.parse(
@@ -236,7 +237,7 @@ describe('[어댑터] Work 생성: worktree와 기준 커밋 (시나리오 1, D9
     const second = await create(h, projectId, 'local')
     expect(second.split('/')[1]).toMatch(/^w-\d{8}-002$/)
     expect(git(worktreeOf(h, second), 'rev-parse', '--abbrev-ref', 'HEAD')).toBe(
-      `relay/${second.split('/')[1] ?? ''}`,
+      workBranchOf(second.split('/')[1] ?? ''),
     )
   })
 
@@ -302,7 +303,126 @@ describe('[어댑터] Work 생성: worktree와 기준 커밋 (시나리오 1, D9
     const today = new Date()
     const ymd = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`
     git(repo, 'branch', `relay/w-${ymd}-001`)
+    // 끝에 4자가 붙은 브랜치와 규칙의 {date}-{seq} 모양도 그 id를 쓴 것으로 본다 (D427)
+    git(repo, 'branch', `relay/w-${ymd}-002-k7q2`)
+    git(repo, 'branch', `fix/${ymd}-003-login-k7q2`)
     const workKey = await create(h, projectId, 'local')
-    expect(workKey.split('/')[1]).toBe(`w-${ymd}-002`)
+    expect(workKey.split('/')[1]).toBe(`w-${ymd}-004`)
+  })
+})
+
+describe('[어댑터] 작업 브랜치와 머지 대상 (D425~D428)', () => {
+  const work = (h: Harness, workKey: string) =>
+    JSON.parse(fs.readFileSync(path.join(workDirOf(h, workKey), 'work.json'), 'utf8')) as WorkState
+
+  it('프로젝트의 규칙과 짧은 이름으로 이름을 짓고 끝에 임의의 4자를 붙인다. 고친 이름이 있으면 그것을 쓴다', async () => {
+    h = await harness({ scenario: WAIT })
+    const { repo } = makeRepo(h.root, 'sample', REPO_FILES)
+    const projectId = await register(h, repo)
+    expect(
+      await h.relay.updateProjectSettings(projectId, {
+        allowed_bots: [],
+        merge_method: null,
+        branch_rule: '{type}/{date}-{seq}-{slug}',
+      }),
+    ).toEqual({ ok: true })
+    const preview = await h.relay.branchName(projectId, 'feature', 'Login Timeout')
+    expect(preview).toMatch(/^feat\/\d{8}-001-login-timeout$/)
+
+    const r = await h.relay.createWork(projectId, {
+      request: '요청\n',
+      baseBranch: 'main',
+      type: 'feature',
+      baseLocation: 'local',
+      slug: 'Login Timeout',
+    })
+    if (!r.ok) throw new Error(r.error)
+    await settle(h, r.workKey)
+    expect(work(h, r.workKey).branch).toBe(`${preview}-aaaa`)
+    expect(git(worktreeOf(h, r.workKey), 'rev-parse', '--abbrev-ref', 'HEAD')).toBe(
+      `${preview}-aaaa`,
+    )
+
+    const edited = await h.relay.createWork(projectId, {
+      request: '요청\n',
+      baseBranch: 'main',
+      type: 'feature',
+      baseLocation: 'local',
+      branchName: 'team/payment',
+    })
+    if (!edited.ok) throw new Error(edited.error)
+    await settle(h, edited.workKey)
+    expect(work(h, edited.workKey).branch).toBe('team/payment-aaaa')
+
+    // 쓸 수 없는 이름은 Work를 만들지 않는다
+    const bad = await h.relay.createWork(projectId, {
+      request: '요청\n',
+      baseBranch: 'main',
+      type: 'feature',
+      baseLocation: 'local',
+      branchName: 'a..b',
+    })
+    expect(bad).toMatchObject({ ok: false, error: expect.stringContaining('a..b') })
+  })
+
+  it('백업 브랜치 모양으로 지은 Work 브랜치도 목록에 있고, 정리가 백업으로 보지 않는다 (D424, D426)', async () => {
+    h = await harness({ scenario: WAIT })
+    const { repo } = makeRepo(h.root, 'sample', REPO_FILES)
+    const projectId = await register(h, repo)
+    const preview = await h.relay.branchName(projectId, 'bugfix', '')
+    const r = await h.relay.createWork(projectId, {
+      request: '요청\n',
+      baseBranch: 'main',
+      type: 'bugfix',
+      baseLocation: 'local',
+      branchName: `${preview}-discarded`,
+    })
+    if (!r.ok) throw new Error(r.error)
+    await settle(h, r.workKey)
+    const branch = `${preview}-discarded-aaaa`
+    expect(work(h, r.workKey).branch).toBe(branch)
+    expect(await h.relay.abandon(r.workKey)).toEqual({ ok: true })
+    const clean = await h.relay.cleanPreview(r.workKey)
+    expect(clean).toMatchObject({ ok: true, preview: { backups: [], branch: { name: branch } } })
+  })
+
+  it('앞 Work의 작업 브랜치에서 분기해 쌓고 머지 대상을 고른다. 백업 브랜치만 목록에서 뺀다', async () => {
+    h = await harness({ scenario: WAIT })
+    const { repo } = makeRepo(h.root, 'sample', REPO_FILES)
+    const projectId = await register(h, repo)
+    const first = await create(h, projectId, 'local')
+    const firstBranch = workBranchOf(first.split('/')[1] ?? '')
+    git(repo, 'branch', 'relay/w-20200101-001-discarded-1', 'main')
+    const list = await h.relay.branches(projectId)
+    expect(list[0]).toBe('main')
+    expect(list).toContain(firstBranch)
+    expect(list).not.toContain('relay/w-20200101-001-discarded-1')
+
+    const r = await h.relay.createWork(projectId, {
+      request: '요청\n',
+      baseBranch: firstBranch,
+      type: 'bugfix',
+      baseLocation: 'local',
+      targetBranch: 'main',
+    })
+    if (!r.ok) throw new Error(r.error)
+    await settle(h, r.workKey)
+    expect(work(h, r.workKey)).toMatchObject({ base_branch: firstBranch, target_branch: 'main' })
+    expect(h.relay.snapshot().works.find((w) => w.key === r.workKey)).toMatchObject({
+      targetBranch: 'main',
+    })
+
+    // PR을 만들기 전에는 머지 대상을 바꾼다. 기준 브랜치로 되돌리면 적은 것을 지운다
+    expect(await h.relay.setTarget(r.workKey, firstBranch)).toEqual({ ok: true })
+    expect(work(h, r.workKey).target_branch).toBeUndefined()
+    expect(await h.relay.setTarget(r.workKey, 'a b')).toMatchObject({ ok: false })
+
+    // 앞 Work를 정리할 때, PR 전의 뒤 Work가 머지 대상으로 쓰는 그 브랜치는 지우지 않는다
+    expect(await h.relay.abandon(first)).toEqual({ ok: true })
+    const clean = await h.relay.cleanPreview(first)
+    expect(clean).toMatchObject({
+      ok: true,
+      preview: { branch: { deletable: false, stacked: [r.workKey.split('/')[1]] } },
+    })
   })
 })

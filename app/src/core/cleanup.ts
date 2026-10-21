@@ -57,6 +57,11 @@ export function halfRemovedHint(dir: string): string {
   return `반쯤 지운 worktree 폴더가 남아 있음: ${dir} (git은 이 폴더를 더 이상 worktree로 보지 않음). 폴더를 직접 지운 뒤 다시 누르세요`
 }
 
+/** 쌓은 Work가 있어 작업 브랜치를 지우지 않는 까닭 (D428) */
+export function stackedBlock(stacked: readonly string[]): string {
+  return `${stacked.join(', ')}가 이 브랜치를 머지 대상으로 씀. 지우려면 그 Work의 머지 대상을 바꾸세요`
+}
+
 /** 이 Work의 되감기 백업 브랜치를 찾는 git for-each-ref 패턴 (D115). D418 전에 만든 것을 [Work 정리]가 지운다 (D424) */
 export function backupPattern(workId: string): string {
   return `refs/heads/relay/${workId}-discarded-*`
@@ -74,7 +79,7 @@ export interface CleanFacts {
   /** 이 앱에서 살아 있는 세션 */
   live: number
   /**
-   * 작업 브랜치(relay/<work-id>)와, 그 커밋이 origin의 같은 이름 브랜치나 기준 브랜치에 있는지. lost는 PR을 머지한
+   * 작업 브랜치(D425)와, 그 커밋이 origin의 같은 이름 브랜치나 머지 대상 브랜치(D428)에 있는지. lost는 PR을 머지한
    * Work에서 머지한 PR head에 없는 이 브랜치의 커밋이다(D329). 머지한 Work가 아니거나 그 head를 로컬에서 찾지
    * 못하면 null
    */
@@ -84,6 +89,11 @@ export interface CleanFacts {
     pushed: boolean
     merged: boolean
     lost: readonly { sha: string; subject: string }[] | null
+    /**
+     * 이 브랜치를 머지 대상으로 쓰는, PR을 만들기 전의 다른 Work의 id (D428). 있으면 로컬과 origin의 브랜치를 지우지 않는다.
+     * 없으면 빈 목록이다
+     */
+    stacked?: readonly string[]
   }
   /** 이 Work의 되감기 백업 브랜치 (D115). D418 전에 만든 것만 있다 (D424) */
   backups: readonly string[]
@@ -123,6 +133,7 @@ export function cleanPreview(facts: CleanFacts): CleanPreview {
   }
   const b = facts.branch
   const lost = b.pushed || b.merged ? [] : [...(b.lost ?? [])]
+  const stacked = [...(b.stacked ?? [])]
   return {
     worktree: facts.worktree,
     uncommitted: [...facts.uncommitted],
@@ -134,12 +145,17 @@ export function cleanPreview(facts: CleanFacts): CleanPreview {
       exists: b.exists,
       pushed: b.pushed,
       merged: b.merged,
-      deletable: b.exists && (b.pushed || b.merged || (facts.merged && b.lost !== null)),
+      deletable:
+        stacked.length === 0 &&
+        b.exists &&
+        (b.pushed || b.merged || (facts.merged && b.lost !== null)),
       lost,
+      ...(stacked.length ? { stacked } : {}),
     },
     backups: [...facts.backups],
     merged: facts.merged,
-    remote: facts.remote ? { ...facts.remote } : null,
+    // 쌓은 Work가 이 브랜치로 PR을 만들 수 있게 origin의 브랜치도 고르지 못하게 둔다 (D428)
+    remote: facts.remote && stacked.length === 0 ? { ...facts.remote } : null,
     integration: g ? { root: g.root, changes: [...g.changes] } : null,
     confirm,
     expect: {
@@ -147,7 +163,7 @@ export function cleanPreview(facts: CleanFacts): CleanPreview {
       locks: [...facts.locks],
       live: facts.live,
       backups: [...facts.backups],
-      remote: facts.remote?.exists === true,
+      remote: facts.remote?.exists === true && stacked.length === 0,
       lost: lost.map((c) => c.sha),
       submodules: [...facts.submodules],
       ...(g ? { integration: [...g.changes] } : {}),
@@ -184,6 +200,10 @@ export function planClean(preview: CleanPreview, input: CleanInput): CleanPlan {
   }
   if (preview.confirm.length > 0 && !input.confirmed) {
     return { ok: false, error: `확인이 필요함: ${preview.confirm.join(', ')}` }
+  }
+  const stacked = preview.branch.stacked ?? []
+  if ((input.deleteBranch || input.deleteRemote) && stacked.length > 0) {
+    return { ok: false, error: stackedBlock(stacked) }
   }
   if (input.deleteBranch && !preview.branch.deletable) {
     return { ok: false, error: '작업 브랜치는 push됐거나 머지됐을 때만 지움' }
