@@ -123,7 +123,7 @@ describe('[흐름] 리팩터링 유형 (M15)', () => {
     // context.md: 업무 유형과 리팩터링의 다음 단계 (D261, 3.2). verify는 refactor.md 경로를 받는다 (D275)
     const refactorCtx = read(path.join(dir, 'tasks', '02-refactor', 'context.md'))
     expect(refactorCtx).toContain('- 업무 유형: 리팩터링 (`refactor`)')
-    expect(refactorCtx).toContain('- 기본 다음 단계: verify (리뷰와 검증)')
+    expect(refactorCtx).not.toContain('선택 가능한 다음 단계')
     const verifyCtx = read(path.join(dir, 'tasks', '03-verify', 'context.md'))
     expect(verifyCtx).toContain(path.join(dir, 'tasks', '02-refactor', 'refactor.md'))
 

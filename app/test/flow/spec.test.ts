@@ -163,7 +163,7 @@ describe('[흐름] 설계 유형 (M20)', () => {
     // context.md: 업무 유형, 설계의 다음 단계, 고정된 질문 방식. verify는 spec.md 경로를 받는다 (D374)
     const specCtx = read(path.join(dir, 'tasks', '02-spec', 'context.md'))
     expect(specCtx).toContain('- 업무 유형: 설계 (`spec`)')
-    expect(specCtx).toContain('- 기본 다음 단계: verify (리뷰와 검증)')
+    expect(specCtx).not.toContain('선택 가능한 다음 단계')
     expect(specCtx).toContain(
       '결정마다 확인 (`confirm_each`). 설계 문답은 결정을 모두 묻는다 (D358)',
     )

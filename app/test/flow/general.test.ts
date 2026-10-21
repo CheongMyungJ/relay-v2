@@ -116,7 +116,7 @@ describe('[흐름] 일반 유형 (M18)', () => {
     // context.md: 업무 유형과 일반의 다음 단계 (D303, 3.2). verify는 execution.md 경로를 받는다 (D314)
     const executeCtx = read(path.join(dir, 'tasks', '02-execute', 'context.md'))
     expect(executeCtx).toContain('- 업무 유형: 일반 (`general`)')
-    expect(executeCtx).toContain('- 기본 다음 단계: verify (리뷰와 검증)')
+    expect(executeCtx).not.toContain('선택 가능한 다음 단계')
     const verifyCtx = read(path.join(dir, 'tasks', '03-verify', 'context.md'))
     expect(verifyCtx).toContain(path.join(dir, 'tasks', '02-execute', 'execution.md'))
 

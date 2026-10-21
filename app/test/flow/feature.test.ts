@@ -136,7 +136,7 @@ describe('[흐름] 기능 추가 유형 (M14)', () => {
     // context.md: 업무 유형과 기능 추가의 다음 단계 (D236, 3.2). verify는 design.md와 implement.md 경로를 받는다
     const designCtx = read(path.join(dir, 'tasks', '02-design', 'context.md'))
     expect(designCtx).toContain('- 업무 유형: 기능 추가 (`feature`)')
-    expect(designCtx).toContain('- 기본 다음 단계: implement (구현)')
+    expect(designCtx).not.toContain('선택 가능한 다음 단계')
     const verifyCtx = read(path.join(dir, 'tasks', '04-verify', 'context.md'))
     expect(verifyCtx).toContain(path.join(dir, 'tasks', '02-design', 'design.md'))
     expect(verifyCtx).toContain(path.join(dir, 'tasks', '03-implement', 'implement.md'))

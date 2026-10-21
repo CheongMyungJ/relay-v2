@@ -265,7 +265,7 @@ describe('[흐름] 최소 흐름 (M2)', () => {
     expect(hooks.some((r) => r['event'] === 'PreToolUse')).toBe(true)
   })
 
-  it('단계마다 제 스킬과 선택 가능한 다음 단계를 받는다. 권한 확인 끈 모드가 아니면 머리 띠에 경고한다 (3.2, 5.6.3, D94)', async () => {
+  it('단계마다 제 스킬과 Work 초안 폴더를 받고 고를 다음 단계 목록은 없다. 권한 확인 끈 모드가 아니면 머리 띠에 경고한다 (3.2, 5.6.3, D94)', async () => {
     const s = await start(scenario(), { FAKE_CLAUDE_PERMISSION_MODE: 'auto' })
     const result = await drive(s.h.relay, s.h.ui, s.workKey)
     await settle(s.h, s.workKey)
