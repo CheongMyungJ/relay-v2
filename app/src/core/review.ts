@@ -227,7 +227,8 @@ export interface ChangeRange {
  * 다음에 시작한 task가 있으면 그 시작 커밋까지다. 코드를 되돌린 되감기가 먼저 오면 되돌리기 전의 코드,
  * 곧 백업 커밋(커밋 안 된 변경 포함, D116)까지다. 백업이 없었으면 되돌리기 전 HEAD다.
  * 뒤에 코드를 바꾼 task가 없으면 지금 코드의 마지막 task라 작업 트리까지다. 정리한 Work(보관됨)는
- * 작업 트리가 없어 정리하기 전 HEAD까지다(시나리오 8). 시작하지 않은 task는 null이다.
+ * 작업 트리가 없어 정리하기 전 HEAD까지다(시나리오 8). 정리 중인 Work도 지우는 worktree를 읽지 않게 정리를 시작할 때의
+ * HEAD까지다. 시작하지 않은 task는 null이다.
  */
 export function changeRange(work: WorkState, taskId: string): ChangeRange | null {
   const i = work.tasks.findIndex((t) => t.id === taskId)
@@ -239,6 +240,8 @@ export function changeRange(work: WorkState, taskId: string): ChangeRange | null
     if (next.start_commit) return { from, to: next.start_commit }
   }
   if (work.status === 'archived') return { from, to: work.cleaned?.head ?? from }
+  // 정리 중에는 worktree를 지우고 있어 작업 트리 대신 정리를 시작할 때의 HEAD까지 본다
+  if (work.operation?.kind === 'clean') return { from, to: work.operation.head ?? from }
   return { from, to: null }
 }
 

@@ -1,10 +1,16 @@
 // [어댑터] git 작업: 커밋 수, D418 전 되감기의 백업 브랜치 찾기([Work 정리]가 지운다, D115, D424), 머지한 PR에 없는
-// 커밋(D329). 실제 git으로 worktree를 만들어 돌린다.
+// 커밋(D329), 앱의 git status가 index를 고쳐 쓰지 않음. 실제 git으로 worktree를 만들어 돌린다.
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { addWorktree, commitsOnlyIn, countCommits, refNames } from '../../src/adapters/git'
+import {
+  addWorktree,
+  commitsOnlyIn,
+  countCommits,
+  refNames,
+  statusLines,
+} from '../../src/adapters/git'
 import { backupPattern } from '../../src/core/cleanup'
 import { git, makeRepo, writeFiles } from '../support/repo'
 
@@ -86,5 +92,20 @@ describe('[어댑터] 머지한 PR에 없는 커밋 (D329)', () => {
     expect(only?.map((c) => c.subject)).toEqual(['미룬 push 하나', '미룬 push 둘'])
     expect(only?.[1]?.sha).toBe(git(tree, 'rev-parse', 'HEAD'))
     expect(await commitsOnlyIn(repo, `refs/heads/${BRANCH}`, 'f'.repeat(40))).toBeNull()
+  })
+})
+
+describe('[어댑터] 앱의 git status (시나리오 8)', () => {
+  it('index를 고쳐 쓰지 않는다: 같은 worktree의 다른 git 작업과 [Work 정리]가 그 사이의 index.lock을 보지 않는다', async () => {
+    const index = git(tree, 'rev-parse', '--path-format=absolute', '--git-path', 'index')
+    // 내용은 그대로 두고 시각만 바꾸면 index의 stat 정보가 낡아 git status가 index를 고쳐 쓰려 한다
+    const old = new Date('2001-01-01T00:00:00Z')
+    fs.utimesSync(path.join(tree, 'src/avg.js'), old, old)
+    const before = fs.readFileSync(index)
+    expect(await statusLines(tree)).toEqual([])
+    expect(fs.readFileSync(index).equals(before)).toBe(true)
+    // 막지 않은 git status는 index.lock을 잡고 고쳐 쓴다
+    git(tree, 'status', '--porcelain')
+    expect(fs.readFileSync(index).equals(before)).toBe(false)
   })
 })
