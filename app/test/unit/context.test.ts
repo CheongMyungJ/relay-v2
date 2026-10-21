@@ -3,11 +3,9 @@ import { approvalMode } from '../../src/core/approval'
 import {
   buildContext,
   closingMessage,
-  discardedAttempts,
   previousInputs,
   questionMode,
   type ContextInput,
-  type SelectionInput,
 } from '../../src/core/context'
 import { createWork, taskDirName, taskId } from '../../src/core/machine'
 import { PIPELINES } from '../../src/core/pipeline'
@@ -70,6 +68,8 @@ function input(node: NodeName, overrides: Partial<ContextInput> = {}, config?: A
     task,
     config: config ?? DEFAULT_CONFIG,
     taskDir: `${WORK_DIR}\\tasks\\${taskDirName(task)}`,
+    draftsDir: `${WORK_DIR}\\work-drafts`,
+    projectId: 'my-api-3f9a1c',
     request: { path: `${WORK_DIR}\\request.md`, text: REQUEST },
     intent: node === 'intake' ? null : INTENT,
     decisionLog: node === 'intake' ? '' : DECISIONS,
@@ -119,11 +119,12 @@ function section(md: string, title: string): string {
 describe('context.md: 시나리오 2-4 표의 항목', () => {
   const md = buildContext(input('verify'))
 
-  it('task 정보: work_id, task_id, node, skill, 승인된 intent 버전, task 디렉터리, 작업 브랜치, 기준 브랜치와 기준 커밋 (D97, D282)', () => {
+  it('task 정보: work_id, task_id, 프로젝트 id, node, skill, 승인된 intent 버전, task 디렉터리, 작업 브랜치, 기준 브랜치와 기준 커밋, Work 초안 폴더 (D97, D282, D421)', () => {
     expect(section(md, 'task 정보')).toBe(
       [
         '- work_id: w-20260926-001',
         '- task_id: t-03',
+        '- 프로젝트 id: my-api-3f9a1c',
         '- 업무 유형: 버그 수정 (`bugfix`)',
         '- node: verify (리뷰와 검증)',
         '- skill: verify',
@@ -132,6 +133,7 @@ describe('context.md: 시나리오 2-4 표의 항목', () => {
         '- 작업 브랜치: relay/w-20260926-001',
         '- 기준 브랜치: main',
         '- 기준 커밋: 1a2b3c4d5e6f',
+        `- Work 초안 폴더: ${WORK_DIR}\\work-drafts (근본부터 다시 하기로 사람과 정했을 때 새 Work의 초안을 쓰는 곳, D420)`,
       ].join('\n'),
     )
   })
@@ -139,7 +141,7 @@ describe('context.md: 시나리오 2-4 표의 항목', () => {
   it('승인 방식과 마무리 안내 문구 (D104, D132)', () => {
     expect(section(md, '승인 방식')).toBe('수동 승인 (의도 승인, Work 완료는 늘 수동)')
     expect(section(md, '마무리 안내 문구')).toBe(
-      '산출물과 handoff를 썼습니다. 오른쪽 패널에서 확인하고 [완료만]을 누르세요. [이 단계 끝나면 멈춤]이 켜져 있거나 이전 단계를 추천했으면 [승인하고 멈춤]을 누르고, 전달은 멈춘 뒤 Work 완료 화면에서 고르세요. 고칠 점은 여기에 말해 주세요.',
+      '산출물과 handoff를 썼습니다. 오른쪽 패널에서 확인하고 [완료만]을 누르세요. [이 단계 끝나면 멈춤]이 켜져 있으면 [승인하고 멈춤]을 누르고, 전달은 멈춘 뒤 Work 완료 화면에서 고르세요. 고칠 점은 여기에 말해 주세요.',
     )
   })
 
@@ -147,13 +149,9 @@ describe('context.md: 시나리오 2-4 표의 항목', () => {
     expect(section(md, '질문 방식')).toBe('초안 우선 (`draft_first`)')
   })
 
-  it('선택 가능한 다음 단계 (3.2)', () => {
-    expect(section(md, '선택 가능한 다음 단계')).toBe(
-      [
-        '- 기본 다음 단계: Work 완료',
-        '- 이전 단계: intake (의도 정리), fix (원인 분석과 수정)',
-      ].join('\n'),
-    )
+  it('선택 가능한 다음 단계 절은 없다: 파이프라인은 앞으로만 간다 (D418, D422)', () => {
+    expect(sections(md).has('선택 가능한 다음 단계')).toBe(false)
+    expect(md).not.toContain('recommended_next')
   })
 
   it('intent: 최신 승인 버전의 본문', () => {
@@ -200,7 +198,6 @@ describe('context.md: 시나리오 2-4 표의 항목', () => {
       '승인 방식',
       '마무리 안내 문구',
       '질문 방식',
-      '선택 가능한 다음 단계',
       'intent (버전 1)',
       'Work 요청 원문',
       '결정 로그',
@@ -220,12 +217,9 @@ describe('context.md: intake (처음)', () => {
     )
   })
 
-  it('의도 승인 전이라 intent가 없고, 기본 다음 단계는 fix다 (3.2, D227)', () => {
+  it('의도 승인 전이라 intent가 없다 (D227)', () => {
     expect(section(md, 'task 정보')).toContain('- 승인된 intent 버전: 없음 (의도 승인 전)')
     expect(section(md, 'intent')).toBe('없음 (의도 승인 전)')
-    expect(section(md, '선택 가능한 다음 단계')).toBe(
-      ['- 기본 다음 단계: fix (원인 분석과 수정)', '- 이전 단계: 없음'].join('\n'),
-    )
     expect(md).not.toContain('size')
   })
 
@@ -263,12 +257,6 @@ describe('context.md: fix (D228)', () => {
     expect(section(md, 'task 정보')).toContain(`- task 디렉터리: ${WORK_DIR}\\tasks\\02-fix`)
   })
 
-  it('기본 다음 단계는 verify이고, 이전 단계는 intake다 (3.2)', () => {
-    expect(section(md, '선택 가능한 다음 단계')).toBe(
-      ['- 기본 다음 단계: verify (리뷰와 검증)', '- 이전 단계: intake (의도 정리)'].join('\n'),
-    )
-  })
-
   it('자동 승인은 기본으로 켜져 있다 (D214). 마무리 안내 문구는 수동과 자동을 한 문구에 적는다 (D132)', () => {
     expect(section(md, '승인 방식')).toBe(
       '자동 승인 (task를 시작할 때의 설정. 설정은 바로 적용되고, 자동 승인 여부는 턴이 끝날 때의 설정으로 정한다)',
@@ -300,13 +288,7 @@ describe('context.md: fix (D228)', () => {
 describe('context.md: verify (D229)', () => {
   const md = buildContext(input('verify'))
 
-  it('기본 다음 단계는 Work 완료이고, [승인]은 Work 완료 화면의 [완료만]이다 (D104)', () => {
-    expect(section(md, '선택 가능한 다음 단계')).toBe(
-      [
-        '- 기본 다음 단계: Work 완료',
-        '- 이전 단계: intake (의도 정리), fix (원인 분석과 수정)',
-      ].join('\n'),
-    )
+  it('[승인]은 Work 완료 화면의 [완료만]이다 (D104)', () => {
     expect(section(md, '마무리 안내 문구')).toContain('[완료만]을 누르세요')
   })
 
@@ -348,13 +330,13 @@ describe('마무리 안내 문구 (D104, D132)', () => {
       '산출물과 handoff를 썼습니다. 오른쪽 패널에서 확인하고 [의도 승인]을 누르세요. 고칠 점은 여기에 말해 주세요.',
     )
     expect(closingMessage('verify')).toBe(
-      '산출물과 handoff를 썼습니다. 오른쪽 패널에서 확인하고 [완료만]을 누르세요. [이 단계 끝나면 멈춤]이 켜져 있거나 이전 단계를 추천했으면 [승인하고 멈춤]을 누르고, 전달은 멈춘 뒤 Work 완료 화면에서 고르세요. 고칠 점은 여기에 말해 주세요.',
+      '산출물과 handoff를 썼습니다. 오른쪽 패널에서 확인하고 [완료만]을 누르세요. [이 단계 끝나면 멈춤]이 켜져 있으면 [승인하고 멈춤]을 누르고, 전달은 멈춘 뒤 Work 완료 화면에서 고르세요. 고칠 점은 여기에 말해 주세요.',
     )
   })
 
   it('verify는 Work 완료 화면에서 누를 수 있는 전달 버튼을 적는다 (D104, D67, D118)', () => {
     expect(closingMessage('verify', ['[완료만]', '[push]', '[PR 생성]'])).toBe(
-      '산출물과 handoff를 썼습니다. 오른쪽 패널에서 확인하고 [완료만], [push], [PR 생성] 중 하나를 누르세요. [이 단계 끝나면 멈춤]이 켜져 있거나 이전 단계를 추천했으면 [승인하고 멈춤]을 누르고, 전달은 멈춘 뒤 Work 완료 화면에서 고르세요. 고칠 점은 여기에 말해 주세요.',
+      '산출물과 handoff를 썼습니다. 오른쪽 패널에서 확인하고 [완료만], [push], [PR 생성] 중 하나를 누르세요. [이 단계 끝나면 멈춤]이 켜져 있으면 [승인하고 멈춤]을 누르고, 전달은 멈춘 뒤 Work 완료 화면에서 고르세요. 고칠 점은 여기에 말해 주세요.',
     )
     expect(closingMessage('verify', ['[완료만]', '[push]'])).toContain(
       '[완료만], [push] 중 하나를 누르세요',
@@ -369,10 +351,10 @@ describe('마무리 안내 문구 (D104, D132)', () => {
   })
 
   it('verify는 승인하면 멈출 때의 [승인하고 멈춤]도 적는다. 다른 노드는 [승인]뿐이다 (D119)', () => {
-    // [이 단계 끝나면 멈춤]은 task가 도는 중에도 켜고 끌 수 있고, 이전 단계 추천은 에이전트가 마지막에 정한다
+    // [이 단계 끝나면 멈춤]은 task가 도는 중에도 켜고 끌 수 있다
     for (const buttons of [[], ['[완료만]', '[push]'], ['[완료만]', '[push]', '[PR 생성]']]) {
       expect(closingMessage('verify', buttons)).toContain(
-        '누르세요. [이 단계 끝나면 멈춤]이 켜져 있거나 이전 단계를 추천했으면 [승인하고 멈춤]을 누르고, 전달은 멈춘 뒤 Work 완료 화면에서 고르세요. 고칠 점은',
+        '누르세요. [이 단계 끝나면 멈춤]이 켜져 있으면 [승인하고 멈춤]을 누르고, 전달은 멈춘 뒤 Work 완료 화면에서 고르세요. 고칠 점은',
       )
     }
     for (const node of ['intake', 'fix', 'respond'] as const) {
@@ -510,198 +492,6 @@ describe('이전 task의 입력 (시나리오 2-4, D89)', () => {
   })
 })
 
-describe('단계 선택으로 들어온 task (시나리오 2-4, 6.2)', () => {
-  const rewind: SelectionInput = {
-    reason: 'rewind',
-    from: { taskId: 't-03', node: 'verify' },
-    instruction: '빈 배열 말고 null도 봐 줘.\n\n```\nnull\n```',
-    discarded: [
-      {
-        taskId: 't-02',
-        node: 'fix',
-        handoff: true,
-        summary: '빈 배열이면 0.\n여러 줄 요약',
-        rejected: ['캐시 가설: 없음'],
-        recommended: null,
-      },
-      {
-        taskId: 't-03',
-        node: 'verify',
-        handoff: true,
-        summary: null,
-        rejected: [],
-        recommended: { node: 'fix', reason: '완료조건 2 실패' },
-      },
-      {
-        taskId: 't-04',
-        node: 'verify',
-        handoff: false,
-        summary: null,
-        rejected: [],
-        recommended: null,
-      },
-    ],
-    dropped: [],
-    skipped: [],
-    keepCode: false,
-    reset: true,
-  }
-
-  it('되감기: 사람 추가 지시, 폐기된 시도 요약, 코드를 맨 위에 넣는다', () => {
-    const md = buildContext(input('fix', { selection: rewind }))
-    expect([...sections(md).keys()][0]).toBe('되감기로 들어옴 (먼저 읽을 것)')
-    expect(section(md, '되감기로 들어옴 (먼저 읽을 것)')).toBe(
-      [
-        '사람이 단계 선택으로 이 단계를 다시 실행한다(t-03 verify (리뷰와 검증)에서 고름). 폐기된 task의 산출물, 결정, 기각 목록은 아래 입력에서 뺐다. 사람 추가 지시를 따르고, 폐기된 시도를 그대로 되풀이하지 않는다.',
-        '',
-        '### 사람 추가 지시',
-        '',
-        '````text',
-        '빈 배열 말고 null도 봐 줘.',
-        '',
-        '```',
-        'null',
-        '```',
-        '````',
-        '',
-        '### 폐기된 시도 요약',
-        '',
-        '- t-02 fix (원인 분석과 수정)',
-        '  - 요약: 빈 배열이면 0. 여러 줄 요약',
-        '  - 기각: 캐시 가설: 없음',
-        '- t-03 verify (리뷰와 검증)',
-        '  - 요약: 없음',
-        '  - 기각: 없음',
-        '  - 이전 단계 추천: fix (원인 분석과 수정) — 완료조건 2 실패',
-        '- t-04 verify (리뷰와 검증): handoff 없음',
-        '',
-        '### 코드',
-        '',
-        '고른 단계를 시작할 때의 커밋으로 되돌렸다. 폐기된 시도의 코드는 입력이 아니다.',
-      ].join('\n'),
-    )
-    // 나머지 절은 처음 실행할 때와 같다
-    expect([...sections(md).keys()].slice(1)).toEqual([
-      ...sections(buildContext(input('fix'))).keys(),
-    ])
-  })
-
-  it('[현재 코드 위에서 이어서]와 되돌리지 않은 코드, 없는 추가 지시', () => {
-    const keep = buildContext(
-      input('fix', { selection: { ...rewind, keepCode: true, reset: false } }),
-    )
-    expect(section(keep, '되감기로 들어옴 (먼저 읽을 것)')).toContain(
-      '### 코드\n\n[현재 코드 위에서 이어서]: 폐기된 시도의 커밋이 남아 있다. 그 위에서 이어서 고친다.',
-    )
-    const none = buildContext(
-      input('fix', { selection: { ...rewind, instruction: null, discarded: [], reset: false } }),
-    )
-    const body = section(none, '되감기로 들어옴 (먼저 읽을 것)')
-    expect(body).toContain('### 사람 추가 지시\n\n없음\n')
-    expect(body).toContain('### 폐기된 시도 요약\n\n없음\n')
-    expect(body).toContain('### 코드\n\n코드는 되돌리지 않았다.')
-  })
-
-  it('건너뛰기: 건너뛴 단계, 폐기한 task, 사람 추가 지시. 폐기된 시도 요약은 없다', () => {
-    const skip: SelectionInput = {
-      ...rewind,
-      reason: 'skip',
-      from: { taskId: 't-01', node: 'intake' },
-      instruction: '바로 검증해 줘',
-      dropped: [{ taskId: 't-01', node: 'intake' }],
-      skipped: ['fix'],
-    }
-    const md = buildContext(input('verify', { selection: skip }))
-    expect(section(md, '건너뛰어 들어옴 (먼저 읽을 것)')).toBe(
-      [
-        '사람이 단계 선택으로 이 단계를 실행한다(t-01 intake (의도 정리)에서 고름). 입력은 지금까지 승인된 것이다. 코드는 되돌리지 않았다.',
-        '',
-        '- 건너뛴 단계: fix (원인 분석과 수정)',
-        '- 폐기한 task: t-01 intake (의도 정리)',
-        '',
-        '### 사람 추가 지시',
-        '',
-        '```text',
-        '바로 검증해 줘',
-        '```',
-      ].join('\n'),
-    )
-    expect(md).not.toContain('폐기된 시도 요약')
-  })
-
-  it('기본 진행으로 들어왔으면 사람 추가 지시가 있을 때만 넣는다', () => {
-    const plain: SelectionInput = { ...rewind, reason: 'default', discarded: [] }
-    const md = buildContext(input('fix', { selection: plain }))
-    expect([...sections(md).keys()][0]).toBe('사람 추가 지시 (먼저 읽을 것)')
-    expect(section(md, '사람 추가 지시 (먼저 읽을 것)')).toMatch(
-      /^사람이 단계 선택으로 이 단계를 고르며 남긴 지시다\(t-03 verify \(리뷰와 검증\)에서 고름\)\./,
-    )
-    const empty = buildContext(input('fix', { selection: { ...plain, instruction: null } }))
-    expect(empty).toBe(buildContext(input('fix')))
-  })
-
-  it('폐기된 시도 요약은 handoff의 요약, rejected, 이전 단계 추천이다', () => {
-    const handoff = [
-      '---',
-      'status: awaiting_approval',
-      'rejected:',
-      '  - "캐시 가설: 없음"',
-      'recommended_next:',
-      '  node: fix',
-      '  reason: "완료조건 2 실패"',
-      '---',
-      '## 요약',
-      '검증 실패',
-      '',
-      '## 다음 task가 알아야 할 것',
-      '- x',
-      '',
-    ].join('\n')
-    expect(
-      discardedAttempts('bugfix', [
-        { taskId: 't-03', node: 'verify', handoff },
-        // 이전 단계가 아닌 추천(fix가 fix를 추천)은 넣지 않는다
-        { taskId: 't-02', node: 'fix', handoff },
-        { taskId: 't-01', node: 'intake', handoff: '머리글 없음\n## 요약\n본문만 있음\n' },
-        { taskId: 't-04', node: 'verify' },
-      ]),
-    ).toEqual([
-      {
-        taskId: 't-03',
-        node: 'verify',
-        handoff: true,
-        summary: '검증 실패',
-        rejected: ['캐시 가설: 없음'],
-        recommended: { node: 'fix', reason: '완료조건 2 실패' },
-      },
-      {
-        taskId: 't-02',
-        node: 'fix',
-        handoff: true,
-        summary: '검증 실패',
-        rejected: ['캐시 가설: 없음'],
-        recommended: null,
-      },
-      {
-        taskId: 't-01',
-        node: 'intake',
-        handoff: true,
-        summary: '본문만 있음',
-        rejected: [],
-        recommended: null,
-      },
-      {
-        taskId: 't-04',
-        node: 'verify',
-        handoff: false,
-        summary: null,
-        rejected: [],
-        recommended: null,
-      },
-    ])
-  })
-})
-
 describe('context.md: 엔진별 승인 정책', () => {
   it('Codex fix/리뷰와 검증/PR 대응은 현재 기본 엔진과 관계없이 수동이며 카운트다운을 약속하지 않는다', () => {
     const config = {
@@ -753,21 +543,6 @@ describe('context.md: 기능 추가 (D232, D236, D256)', () => {
     expect(section(md, 'task 정보')).toContain('- node: design (설계와 계획)\n- skill: design')
   })
 
-  it('선택 가능한 다음 단계는 기능 추가의 파이프라인이다 (3.2)', () => {
-    const steps = (node: NodeName) =>
-      section(buildContext(featureInput(node)), '선택 가능한 다음 단계')
-    expect(steps('intake')).toBe('- 기본 다음 단계: design (설계와 계획)\n- 이전 단계: 없음')
-    expect(steps('design')).toBe(
-      '- 기본 다음 단계: implement (구현)\n- 이전 단계: intake (의도 정리)',
-    )
-    expect(steps('implement')).toBe(
-      '- 기본 다음 단계: verify (리뷰와 검증)\n- 이전 단계: intake (의도 정리), design (설계와 계획)',
-    )
-    expect(steps('verify')).toBe(
-      '- 기본 다음 단계: Work 완료\n- 이전 단계: intake (의도 정리), design (설계와 계획), implement (구현)',
-    )
-  })
-
   it('design과 implement의 마무리 안내 문구는 fix와 같다. 승인 방식은 설정을 따른다 (D132, D234, D249)', () => {
     expect(closingMessage('design')).toBe(closingMessage('fix'))
     expect(closingMessage('implement')).toBe(closingMessage('fix'))
@@ -777,37 +552,6 @@ describe('context.md: 기능 추가 (D232, D236, D256)', () => {
     expect(section(buildContext(featureInput('implement')), '승인 방식')).toMatch(
       /^자동 승인 \(task를/,
     )
-  })
-
-  it('[현재 코드 위에서 이어서]로 design에 들어오면 코드를 바꾸지 않고 design.md를 고치라고 적는다 (D254)', () => {
-    const selection: SelectionInput = {
-      reason: 'rewind',
-      from: { taskId: 't-04', node: 'verify' },
-      instruction: null,
-      discarded: [],
-      dropped: [],
-      skipped: [],
-      keepCode: true,
-      reset: false,
-    }
-    const md = buildContext(featureInput('design', { selection }))
-    expect(section(md, '되감기로 들어옴 (먼저 읽을 것)')).toContain(
-      '[현재 코드 위에서 이어서]: 폐기된 시도의 커밋이 남아 있다. 지금 코드를 읽고 `design.md`를 고친다. 코드는 바꾸지 않는다.',
-    )
-    const impl = buildContext(featureInput('implement', { selection }))
-    expect(section(impl, '되감기로 들어옴 (먼저 읽을 것)')).toContain('그 위에서 이어서 고친다.')
-  })
-
-  it('폐기된 시도의 이전 단계 추천은 기능 추가의 파이프라인으로 가린다', () => {
-    const handoff =
-      '---\nrecommended_next:\n  node: design\n  reason: "설계가 틀림"\n---\n## 요약\nx\n'
-    expect(
-      discardedAttempts('feature', [{ taskId: 't-03', node: 'implement', handoff }])[0]
-        ?.recommended,
-    ).toEqual({ node: 'design', reason: '설계가 틀림' })
-    expect(
-      discardedAttempts('bugfix', [{ taskId: 't-03', node: 'verify', handoff }])[0]?.recommended,
-    ).toBeNull()
   })
 })
 
@@ -831,51 +575,11 @@ describe('context.md: 리팩터링 (D258, D278)', () => {
     )
   })
 
-  it('선택 가능한 다음 단계는 리팩터링의 파이프라인이다 (3.2)', () => {
-    const steps = (node: NodeName) =>
-      section(buildContext(refactorInput(node)), '선택 가능한 다음 단계')
-    expect(steps('intake')).toBe('- 기본 다음 단계: refactor (계획과 리팩터링)\n- 이전 단계: 없음')
-    expect(steps('refactor')).toBe(
-      '- 기본 다음 단계: verify (리뷰와 검증)\n- 이전 단계: intake (의도 정리)',
-    )
-    expect(steps('verify')).toBe(
-      '- 기본 다음 단계: Work 완료\n- 이전 단계: intake (의도 정리), refactor (계획과 리팩터링)',
-    )
-  })
-
   it('refactor의 마무리 안내 문구는 fix와 같고 기본은 자동 승인이다 (D132, D276)', () => {
     expect(closingMessage('refactor')).toBe(closingMessage('fix'))
     expect(section(buildContext(refactorInput('refactor')), '승인 방식')).toMatch(
       /^자동 승인 \(task를/,
     )
-  })
-
-  it('[현재 코드 위에서 이어서]로 refactor에 들어오면 안전망 커밋을 다시 만들지 않는다고 적는다 (5.6.10, D278)', () => {
-    const selection: SelectionInput = {
-      reason: 'rewind',
-      from: { taskId: 't-03', node: 'verify' },
-      instruction: null,
-      discarded: [],
-      dropped: [],
-      skipped: [],
-      keepCode: true,
-      reset: false,
-    }
-    const kept = 'C:\\w\\tasks\\02-refactor\\refactor.md'
-    const md = buildContext(
-      refactorInput('refactor', {
-        selection: {
-          ...selection,
-          keptArtifacts: [{ taskId: 't-02', node: 'refactor', path: kept }],
-        },
-      }),
-    )
-    const entry = section(md, '되감기로 들어옴 (먼저 읽을 것)')
-    // 안전망 커밋 해시는 폐기된 refactor.md에서 이어받는다 (D281, PR #24 리뷰)
-    expect(entry).toContain(
-      '안전망 커밋은 다시 만들지 않는다. 아래 폐기된 `refactor.md`의 `안전망 커밋` 해시',
-    )
-    expect(entry).toContain(`- t-02 refactor (계획과 리팩터링): ${kept}`)
   })
 })
 
@@ -897,45 +601,11 @@ describe('context.md: 일반 (D302, D316, D318)', () => {
     expect(section(md, 'task 정보')).toContain('- node: execute (실행)\n- skill: execute')
   })
 
-  it('선택 가능한 다음 단계는 일반의 파이프라인이다 (3.2)', () => {
-    const steps = (node: NodeName) =>
-      section(buildContext(generalInput(node)), '선택 가능한 다음 단계')
-    expect(steps('intake')).toBe('- 기본 다음 단계: execute (실행)\n- 이전 단계: 없음')
-    expect(steps('execute')).toBe(
-      '- 기본 다음 단계: verify (리뷰와 검증)\n- 이전 단계: intake (의도 정리)',
-    )
-    expect(steps('verify')).toBe(
-      '- 기본 다음 단계: Work 완료\n- 이전 단계: intake (의도 정리), execute (실행)',
-    )
-  })
-
   it('execute의 마무리 안내 문구는 fix와 같고 기본은 자동 승인이다 (D132, D315)', () => {
     expect(closingMessage('execute')).toBe(closingMessage('fix'))
     expect(section(buildContext(generalInput('execute')), '승인 방식')).toMatch(
       /^자동 승인 \(task를/,
     )
-  })
-
-  it('[현재 코드 위에서 이어서]로 execute에 들어오면 폐기된 execution.md를 참고하라고 적는다 (D316)', () => {
-    const kept = 'C:\\w\\tasks\\02-execute\\execution.md'
-    const md = buildContext(
-      generalInput('execute', {
-        selection: {
-          reason: 'rewind',
-          from: { taskId: 't-03', node: 'verify' },
-          instruction: null,
-          discarded: [],
-          dropped: [],
-          skipped: [],
-          keepCode: true,
-          reset: false,
-          keptArtifacts: [{ taskId: 't-02', node: 'execute', path: kept }],
-        },
-      }),
-    )
-    const entry = section(md, '되감기로 들어옴 (먼저 읽을 것)')
-    expect(entry).toContain('아래 폐기된 `execution.md`를 참고해 새 `execution.md`를 쓴다.')
-    expect(entry).toContain(`- t-02 execute (실행): ${kept}`)
   })
 })
 
@@ -957,18 +627,6 @@ describe('context.md: 설계 (D350, D358, D365, D374)', () => {
     expect(section(md, 'task 정보')).toContain('- node: spec (설계 문답)\n- skill: spec')
   })
 
-  it('선택 가능한 다음 단계는 설계의 파이프라인이다 (3.2)', () => {
-    const steps = (node: NodeName) =>
-      section(buildContext(specInput(node)), '선택 가능한 다음 단계')
-    expect(steps('intake')).toBe('- 기본 다음 단계: spec (설계 문답)\n- 이전 단계: 없음')
-    expect(steps('spec')).toBe(
-      '- 기본 다음 단계: verify (리뷰와 검증)\n- 이전 단계: intake (의도 정리)',
-    )
-    expect(steps('verify')).toBe(
-      '- 기본 다음 단계: Work 완료\n- 이전 단계: intake (의도 정리), spec (설계 문답)',
-    )
-  })
-
   it('spec의 마무리 안내 문구는 fix와 같고 기본은 자동 승인이다 (D132, D367)', () => {
     expect(closingMessage('spec')).toBe(closingMessage('fix'))
     expect(section(buildContext(specInput('spec')), '승인 방식')).toMatch(/^자동 승인 \(task를/)
@@ -986,41 +644,6 @@ describe('context.md: 설계 (D350, D358, D365, D374)', () => {
     expect(section(buildContext(specInput('verify')), '질문 방식')).toBe(
       '초안 우선 (`draft_first`)',
     )
-  })
-
-  it('[현재 문서 위에서 이어서]로 spec에 들어오면 다시 볼 결정에서 시작하라고 적고 폐기된 spec.md와 verification.md 경로를 넣는다 (D365, I105)', () => {
-    const spec = 'C:\\w\\tasks\\02-spec\\spec.md'
-    const verification = 'C:\\w\\tasks\\03-verify\\verification.md'
-    const md = buildContext(
-      specInput('spec', {
-        selection: {
-          reason: 'rewind',
-          from: { taskId: 't-03', node: 'verify' },
-          instruction: '결정 2를 다시 본다',
-          discarded: [],
-          dropped: [],
-          skipped: [],
-          keepCode: true,
-          reset: false,
-          keptArtifacts: [
-            { taskId: 't-02', node: 'spec', path: spec },
-            { taskId: 't-03', node: 'verify', path: verification },
-          ],
-        },
-      }),
-    )
-    const entry = section(md, '되감기로 들어옴 (먼저 읽을 것)')
-    expect(entry).toContain(
-      '[현재 문서 위에서 이어서]: 폐기된 시도가 설계 문서에 적은 것이 그대로 남아 있다(커밋했든 안 했든).',
-    )
-    // verify를 거치지 않은 되감기도 있으므로 verification.md는 있을 때만 본다 (PR #36 리뷰)
-    expect(entry).toContain(
-      '아래 폐기된 산출물에 `verification.md`가 있으면 그 `다시 볼 결정`도 본다.',
-    )
-    // 폐기된 시도의 사람 결정을 새 handoff에 옮겨 적어 다음 verify의 대조가 맞는다 (I115)
-    expect(entry).toContain('새 handoff의 `decisions`에 `by: human`으로 옮겨 적는다.')
-    expect(entry).toContain(`- t-02 spec (설계 문답): ${spec}`)
-    expect(entry).toContain(`- t-03 verify (리뷰와 검증): ${verification}`)
   })
 })
 
@@ -1077,9 +700,9 @@ describe('context.md: 서브모듈 (D383)', () => {
       expect(text).toContain('건너뛴 테스트를 통과로 보지 않는다')
       expect(text).toContain('서브모듈 안의 파일은 고치지 않는다')
       expect(text).toContain('`git submodule update --recursive`로 맞춘다')
-      // 앱이 정하는 절 다음, 선택 가능한 다음 단계 앞이다
+      // 앱이 정하는 절 다음, intent 앞이다
       const titles = [...sections(md).keys()]
-      expect(titles.indexOf('서브모듈')).toBe(titles.indexOf('선택 가능한 다음 단계') - 1)
+      expect(titles.indexOf('서브모듈')).toBe(titles.findIndex((t) => t.startsWith('intent')) - 1)
     }
   })
 })

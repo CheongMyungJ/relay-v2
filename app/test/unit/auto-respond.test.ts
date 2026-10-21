@@ -750,6 +750,8 @@ describe('자동 대응 task의 context.md와 머리 띠 (시나리오 2-4, 2-5)
       task: task(work),
       config: ON,
       taskDir: '/w/tasks/05-respond',
+      draftsDir: '/w/work-drafts',
+      projectId: 'app-3f9a1c',
       request: { path: '/w/request.md', text: '요청' },
       intent: '# intent',
       decisionLog: '',

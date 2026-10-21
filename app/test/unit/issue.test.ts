@@ -14,6 +14,7 @@ import {
   issueNumberOf,
   issueTitle,
   issueUrlOf,
+  newIssueRecord,
   openFence,
   stepComment,
   taskComment,
@@ -24,6 +25,7 @@ import {
   currentTask,
   transition,
   type MachineEvent,
+  type NewWork,
   type Transition,
 } from '../../src/core/machine'
 import type { TaskCheck } from '../../src/core/validate'
@@ -70,9 +72,7 @@ const VALID: TaskCheck = {
 
 const apply = (work: WorkState, event: MachineEvent): Transition => transition(work, event, MANUAL)
 
-function newWork(
-  issue: { linked: number | null; mark: string } | null = { linked: null, mark: 'w-1-abcd' },
-): WorkState {
+function newWork(issue: NewWork['issue'] | null = { linked: null, mark: 'w-1-abcd' }): WorkState {
   return createWork({
     type: 'bugfix',
     workId: 'w-20261005-001',
@@ -171,24 +171,6 @@ describe('이슈 기록의 대기열 (I97)', () => {
     expect(issueEntries(work, [ev('task.approved', { by: 'human' }, 't-04')])).toEqual([])
   })
 
-  it('되감기와 건너뛰기는 올렸거나 올릴 task를 폐기했을 때만 코멘트를 더한다 (D341)', () => {
-    const work = withIssue(newWork(), {
-      posted: [
-        { key: 'body', at: at() },
-        { key: 't-01', at: at() },
-      ],
-      pending: [{ kind: 'task', task_id: 't-02' }],
-    })
-    const rewound = (discarded: string[]) =>
-      issueEntries(work, [ev('task.rewound', { node: 'fix', discarded }, 't-05')])
-    expect(rewound(['t-02', 't-03'])).toEqual([{ kind: 'step', task_id: 't-05' }])
-    expect(rewound(['t-01'])).toEqual([{ kind: 'step', task_id: 't-05' }])
-    expect(rewound(['t-03'])).toEqual([])
-    expect(
-      issueEntries(work, [ev('task.skipped_to', { node: 'verify', discarded: ['t-02'] }, 't-05')]),
-    ).toEqual([{ kind: 'step', task_id: 't-05' }])
-  })
-
   it('Work가 끝나면 끝 코멘트와, 새 이슈면 닫기를 더한다. 의도 승인 전에는 없다 (D346, D347)', () => {
     const started = withIssue(newWork(), { posted: [{ key: 'body', at: at() }] })
     expect(issueEntries(started, [ev('work.abandoned')])).toEqual([
@@ -231,6 +213,63 @@ describe('이슈 기록의 대기열 (I97)', () => {
     })
     expect(endOf(work, ev('work.abandoned'))).toEqual({ text: 'Work 포기', reason: 'not_planned' })
     expect(endOf(work, ev('task.approved'))).toBeNull()
+  })
+})
+
+describe('다시 한 Work의 이슈 이어 쓰기 (D421)', () => {
+  const from = {
+    work_id: 'w-20261005-000',
+    linked: false,
+    number: 9,
+    url: 'https://github.com/o/r/issues/9',
+  }
+
+  it('원래 Work의 이슈 번호, 주소, 방식을 이어받고 원래 Work를 적는다', () => {
+    expect(newIssueRecord(null, 'w-2-abcd', from)).toEqual({
+      linked: false,
+      number: 9,
+      url: 'https://github.com/o/r/issues/9',
+      mark: 'w-2-abcd',
+      pending: [],
+      posted: [],
+      from_work: 'w-20261005-000',
+    })
+    expect(newIssueRecord(9, 'w-2-abcd', { ...from, linked: true }).linked).toBe(true)
+  })
+
+  it('이슈를 새로 만들지 않고 intake 코멘트부터 단다', () => {
+    const r = approveCurrent(newWork({ linked: 9, mark: 'w-2-abcd', from }))
+    expect(r.work.issue).toMatchObject({ linked: false, number: 9, from_work: 'w-20261005-000' })
+    expect(r.work.issue?.pending).toEqual([{ kind: 'task', task_id: 't-01', intent_version: 1 }])
+  })
+
+  it('앱이 만든 이슈를 이어 쓰면 이 Work가 끝날 때 닫는다. 기존 이슈를 이어 쓰면 닫지 않는다', () => {
+    const inherited = withIssue(newWork(), {
+      number: 9,
+      from_work: 'w-20261005-000',
+      posted: [{ key: 't-01', at: at() }],
+    })
+    expect(issueEntries(inherited, [ev('work.abandoned')])).toEqual([
+      { kind: 'end', text: 'Work 포기' },
+      { kind: 'close', reason: 'not_planned' },
+    ])
+    const linked = { ...inherited, issue: { ...(inherited.issue as IssueRecord), linked: true } }
+    expect(issueEntries(linked, [ev('work.abandoned')])).toEqual([
+      { kind: 'end', text: 'Work 포기' },
+    ])
+  })
+
+  it('다시 하려고 포기한 원래 Work는 끝 코멘트에 새 Work를 적고 이슈를 닫지 않는다', () => {
+    const started = withIssue(newWork(), { posted: [{ key: 'body', at: at() }] })
+    const redo = ev('work.abandoned', { redo_by: 'w-20261005-002' })
+    expect(endOf(started, redo)).toEqual({
+      text: 'Work 포기: w-20261005-002로 다시 시작',
+      reason: 'not_planned',
+      redo: true,
+    })
+    expect(issueEntries(started, [redo])).toEqual([
+      { kind: 'end', text: 'Work 포기: w-20261005-002로 다시 시작' },
+    ])
   })
 })
 
@@ -420,6 +459,8 @@ describe('이슈의 글 (D336, D339, D341, D347, D348, D349)', () => {
     expect(commentShowsIntent({ linked: false }, 1)).toBe(false)
     expect(commentShowsIntent({ linked: false }, 2)).toBe(true)
     expect(commentShowsIntent({ linked: true }, 1)).toBe(true)
+    // 원래 Work에서 이어 쓰는 이슈는 본문이 이 Work의 intent가 아니라 v1도 펼친다 (D421)
+    expect(commentShowsIntent({ linked: false, from_work: 'w-20261005-000' }, 1)).toBe(true)
     const text = taskComment({
       mark: 'w-1',
       task: { id: 't-04', node: 'intake', approved_by: 'human' },
@@ -485,7 +526,7 @@ describe('이슈의 글 (D336, D339, D341, D347, D348, D349)', () => {
     expect(openFence(text)).toBeNull()
   })
 
-  it('단계 선택 코멘트는 폐기한 task, 다시 하는 task, 추가 지시다 (D341)', () => {
+  it('D418 전 앱이 대기열에 남긴 단계 선택 코멘트는 폐기한 task, 다시 하는 task, 추가 지시다 (D341, D424)', () => {
     const text = stepComment({
       mark: 'w-1',
       task: {

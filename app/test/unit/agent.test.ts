@@ -158,17 +158,6 @@ describe('엔진 선택과 이전 기록 (E3, E5)', () => {
     ])
   })
 
-  it('handoff 없이 끝난 단계를 새 세션으로 다시 하면 현재 기본 엔진으로 새 task를 만든다', () => {
-    const initial = makeWork()
-    const ended: WorkState = {
-      ...initial,
-      tasks: [{ ...firstTask(initial), status: 'session_ended' }],
-    }
-    const retried = transition(ended, { type: 'retry', taskId: 't-01', at }, codex)
-    expect(retried.rejected).toBeUndefined()
-    expect(retried.work.tasks.map((t) => t.engine)).toEqual(['claude', 'codex'])
-  })
-
   it('다른 기본 엔진을 고른 뒤 재개해도 기존 엔진과 대화 ID를 유지하고 버전만 갱신한다', () => {
     const started = transition(
       makeWork(),

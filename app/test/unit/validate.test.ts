@@ -34,7 +34,6 @@ const HANDOFF_FIELDS = {
   open_questions: [],
   intent_deviation: null,
   risks: [],
-  recommended_next: null,
   knowledge_candidates: [],
 }
 
@@ -210,11 +209,13 @@ describe('스키마 검사: handoff (5.2.1)', () => {
     ])
   })
 
-  it('통과: recommended_next는 null이거나 {node, reason}이다', () => {
+  it('통과: D418 전 형식의 recommended_next는 없어도 되고, 있으면 null이거나 {node, reason}이다 (D422)', () => {
+    expect(run({ recommended_next: undefined })).toEqual([])
+    expect(run({ recommended_next: null })).toEqual([])
     expect(run({ recommended_next: { node: 'intake', reason: '의도가 틀림' } })).toEqual([])
   })
 
-  it('실패: recommended_next의 형식이나 node가 틀렸다', () => {
+  it('실패: D418 전 형식의 recommended_next를 쓰면 그 형식은 지금도 본다', () => {
     expect(run({ recommended_next: 'fix' })).toEqual([
       '`recommended_next` 형식이 틀림 (기대: null 또는 {node, reason}, 지금: 문자열)',
     ])
@@ -341,56 +342,22 @@ describe('intent 초안: 일반의 확인 방법 (D305, I86)', () => {
 
 // ---------- 추가 검사 ----------
 
-describe('추가 검사: recommended_next.node가 선택 가능한 다음 단계 안에 있다 (3.2)', () => {
+describe('D418 전 형식의 recommended_next (D422)', () => {
   const rec = (node: string) => handoff({ recommended_next: { node, reason: '이유' } })
-  const run = (text: string, node: NodeName) => errorsOf(checkHandoff(text, { node, ...WARN }))
 
-  it('기능 추가: 그 유형의 이전 단계나 기본 다음 단계만 쓴다 (3.2, D232)', () => {
-    const feature = (text: string, node: NodeName) =>
-      errorsOf(checkHandoff(text, { node, ...WARN, type: 'feature' }))
-    expect(feature(rec('design'), 'intake')).toEqual([])
-    expect(feature(rec('implement'), 'design')).toEqual([])
-    expect(feature(rec('design'), 'implement')).toEqual([])
-    expect(feature(rec('verify'), 'implement')).toEqual([])
-    expect(feature(rec('implement'), 'verify')).toEqual([])
-    expect(feature(rec('fix'), 'verify')).toEqual([
-      '`recommended_next.node` 값이 선택 가능한 다음 단계가 아님 (허용값: intake | design | implement, 지금: fix)',
-    ])
-    expect(run(rec('design'), 'verify')).toEqual([
-      '`recommended_next.node` 값이 선택 가능한 다음 단계가 아님 (허용값: intake | fix, 지금: design)',
-    ])
-  })
-
-  it('통과: 이전 단계나 기본 다음 단계', () => {
-    expect(run(rec('fix'), 'intake')).toEqual([])
-    expect(run(rec('intake'), 'fix')).toEqual([])
-    expect(run(rec('verify'), 'fix')).toEqual([])
-    expect(run(rec('intake'), 'verify')).toEqual([])
-    expect(run(rec('fix'), 'verify')).toEqual([])
-  })
-
-  it('실패: 뒤 단계를 건너뛰거나 지금 단계를 추천했다', () => {
-    expect(run(rec('verify'), 'intake')).toEqual([
-      '`recommended_next.node` 값이 선택 가능한 다음 단계가 아님 (허용값: fix, 지금: verify)',
-    ])
-    expect(run(rec('intake'), 'intake')).toEqual([
-      '`recommended_next.node` 값이 선택 가능한 다음 단계가 아님 (허용값: fix, 지금: intake)',
-    ])
-    expect(run(rec('fix'), 'fix')).toEqual([
-      '`recommended_next.node` 값이 선택 가능한 다음 단계가 아님 (허용값: intake | verify, 지금: fix)',
-    ])
-    // verify의 기본 다음 단계는 Work 완료라 노드로 추천할 수 없다
-    expect(run(rec('verify'), 'verify')).toEqual([
-      '`recommended_next.node` 값이 선택 가능한 다음 단계가 아님 (허용값: intake | fix, 지금: verify)',
-    ])
-  })
-
-  it('intake도 의도 승인 전에 기본 다음 단계 fix를 확정해 검사한다 (D227)', () => {
-    const files = (node: string) => ({ 'handoff.md': rec(node), 'intent.draft.md': draft() })
-    expect(errorsOf(check('intake', files('fix')))).toEqual([])
-    expect(errorsOf(check('intake', files('verify')))).toEqual([
-      '`recommended_next.node` 값이 선택 가능한 다음 단계가 아님 (허용값: fix, 지금: verify)',
-    ])
+  it('어느 단계를 적어도 선택 가능한 다음 단계를 검사하지 않는다: 오류도 경고도 없다', () => {
+    for (const [node, at] of [
+      ['verify', 'intake'],
+      ['fix', 'fix'],
+      ['intake', 'verify'],
+      ['design', 'verify'],
+    ] as const) {
+      const r = checkHandoff(rec(node), { node: at, ...WARN })
+      expect(errorsOf(r), `${at}→${node}`).toEqual([])
+      expect(r.warnings, `${at}→${node}`).toEqual([])
+    }
+    const files = { 'handoff.md': rec('verify'), 'intent.draft.md': draft() }
+    expect(errorsOf(check('intake', files))).toEqual([])
   })
 })
 
@@ -535,8 +502,8 @@ describe('경고는 오류로 치지 않는다 (D85, D86, 분량 기준)', () =>
     expect(r.errors).toEqual([])
     expect(r.warnings.map((w) => w.message)).toEqual([
       '정의되지 않은 필드 `decisions[0].confidence`: 앱은 무시함',
-      '정의되지 않은 필드 `recommended_next.urgent`: 앱은 무시함',
       '정의되지 않은 필드 `priority`: 앱은 무시함',
+      '정의되지 않은 필드 `recommended_next.urgent`: 앱은 무시함',
     ])
     expect(r.value).not.toBeNull()
   })
