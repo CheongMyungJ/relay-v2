@@ -16,10 +16,11 @@ import { badge } from '../../src/core/approval'
 import { OPERATION_BLOCKS } from '../../src/core/recovery'
 import type { TaskCheck } from '../../src/core/validate'
 import { DEFAULT_CONFIG, type AppConfig } from '../../src/shared/config'
-import type { Handoff, NodeName, TaskNode } from '../../src/shared/contracts'
+import type { Handoff, TaskNode } from '../../src/shared/contracts'
 import type {
   AutoHoldReason,
   FormatIssue,
+  RewindOperation,
   TaskRecord,
   TaskStatus,
   WorkState,
@@ -831,7 +832,7 @@ describe('승인과 다음 task (시나리오 4, 5)', () => {
   })
 })
 
-describe('이전 단계 추천에서 멈춤 (D23)', () => {
+describe('앞 단계로 돌아가지 않음 (D418, D422)', () => {
   /** verify까지 가서 verify 세션이 살아 있는 Work: t-01 intake, t-02 fix, t-03 verify */
   function toVerify(): WorkState {
     let work = newWork()
@@ -848,47 +849,19 @@ describe('이전 단계 추천에서 멈춤 (D23)', () => {
     return launch(work)
   }
 
-  it('verify가 fix를 추천하면 승인 뒤 다음 task를 시작하지 않고 멈춘다', () => {
+  it('verify가 D418 전 형식의 recommended_next를 적어도 멈추지 않고 Work를 완료한다', () => {
     const rec = valid({ recommended_next: { node: 'fix', reason: '완료조건 2 실패' } })
     const r = approve(stop(toVerify(), rec).work, rec)
-    expect(r.work.status).toBe('stopped')
-    expect(r.work.stop).toEqual({
-      kind: 'recommended_back',
-      task_id: 't-03',
-      node: 'fix',
-      reason: '완료조건 2 실패',
-    })
-    expect(types(r.effects)).toEqual(['log:task.approved', 'endSession', 'appendDecisions'])
+    expect(r.work.status).toBe('completed')
+    expect(r.work.stop).toBeUndefined()
     expect(r.work.tasks).toHaveLength(3)
   })
 
-  it('fix가 intake를 추천하면 멈춘다 (D23, D228)', () => {
+  it('fix가 intake를 적어도 기본 다음 단계 verify를 시작한다', () => {
     const rec = valid({ recommended_next: { node: 'intake', reason: '의도가 원인과 맞지 않음' } })
-    const r = approve(stop(toFix(), rec).work, rec)
-    expect(r.work.status).toBe('stopped')
-    expect(r.work.stop).toMatchObject({ kind: 'recommended_back', task_id: 't-02', node: 'intake' })
-    expect(r.work.tasks).toHaveLength(2)
-  })
-
-  it('기본 다음 단계를 추천하면 그대로 진행한다', () => {
-    const rec = valid({ recommended_next: { node: 'verify', reason: '다음은 리뷰와 검증' } })
     const r = approve(stop(toFix(), rec).work, rec)
     expect(r.work.status).toBe('active')
     expect(currentTask(r.work)?.node).toBe('verify')
-  })
-
-  it('verify가 intake를 추천해도 멈춘다 (5.6.6, D23)', () => {
-    const toIntake = valid({ recommended_next: { node: 'intake', reason: '완료조건이 틀림' } })
-    const r = approve(stop(toVerify(), toIntake).work, toIntake)
-    expect(r.work.status).toBe('stopped')
-    expect(r.work.stop).toMatchObject({ kind: 'recommended_back', task_id: 't-03', node: 'intake' })
-  })
-
-  it('멈춘 Work에는 늦은 신호가 와도 바뀌지 않는다', () => {
-    const rec = valid({ recommended_next: { node: 'fix', reason: '실패' } })
-    const stopped = approve(stop(toVerify(), rec).work, rec).work
-    const r = apply(stopped, { type: 'pty.exit', taskId: 't-03', at: at() })
-    expect(r.work).toBe(stopped)
   })
 })
 
@@ -1354,29 +1327,15 @@ describe('[재개]와 [세션 재개] (시나리오 3-4, 3-5, 4.4)', () => {
   })
 })
 
-describe('[이 단계 새 세션으로 다시] (시나리오 3-5, D114)', () => {
-  it('handoff 없이 끝난 세션이면 같은 노드의 새 task를 새 세션으로 시작한다', () => {
-    const work = fixLive()
-    const ended = apply(work, { type: 'pty.exit', taskId: 't-02', at: at() }).work
-    const r = apply(ended, { type: 'retry', taskId: 't-02', at: '2026-09-26T12:00:00+09:00' })
+describe('handoff 없이 끝난 세션 (시나리오 3-5, D423)', () => {
+  it('[세션 재개]로 같은 task를 잇는다. 같은 단계를 새 task로 다시 하는 조작은 없다', () => {
+    const ended = apply(fixLive(), { type: 'pty.exit', taskId: 't-02', at: at() }).work
+    expect(actions(ended)).toMatchObject({ resume: true })
+    expect(Object.keys(actions(ended))).not.toContain('retry')
+    const r = apply(ended, { type: 'resume', taskId: 't-02', at: at() })
     expect(r.rejected).toBeUndefined()
-    expect(r.work.tasks.map((t) => [t.id, t.node, t.status, t.reason])).toEqual([
-      ['t-01', 'intake', 'approved', 'default'],
-      ['t-02', 'fix', 'session_ended', 'default'],
-      ['t-03', 'fix', 'working', 'resume'],
-    ])
-    expect(r.effects).toEqual([
-      { type: 'startTask', taskId: 't-03', node: 'fix', reason: 'resume' },
-    ])
-  })
-
-  it('세션 종료가 아니면 받지 않는다', () => {
-    for (const s of ['working', 'idle', 'interrupted', 'awaiting_approval'] as const) {
-      const work = running(s)
-      expect(apply(work, { type: 'retry', taskId: 't-01', at: at() }).rejected).toMatch(
-        /handoff 없이 끝난 세션이 아님/,
-      )
-    }
+    expect(r.effects).toEqual([{ type: 'resumeTask', taskId: 't-02', continue: false }])
+    expect(r.work.tasks.map((t) => t.id)).toEqual(['t-01', 't-02'])
   })
 })
 
@@ -1439,10 +1398,13 @@ describe('[이 단계 끝나면 멈춤]과 멈춘 Work의 [재개] (시나리오
     expect(types(done.effects)).toEqual(['log:work.completed'])
   })
 
-  it('이전 단계 추천으로 멈춘 Work를 [재개]하면 추천을 따르지 않고 기본 다음 단계로 간다', () => {
-    const rec = valid({ recommended_next: { node: 'intake', reason: '의도를 다시' } })
-    const stopped = approve(stop(fixLive(), rec).work, rec).work
-    expect(stopped.stop).toMatchObject({ kind: 'recommended_back', node: 'intake' })
+  it('D418 전에 이전 단계 추천으로 멈춘 Work를 [재개]하면 기본 다음 단계로 간다 (D424)', () => {
+    const on = stopAfter(fixLive(), true).work
+    const after = approve(stop(on, valid()).work, valid()).work
+    const stopped: WorkState = {
+      ...after,
+      stop: { kind: 'recommended_back', task_id: 't-02', node: 'intake', reason: '의도를 다시' },
+    }
     const r = apply(stopped, { type: 'resumeWork', at: at() })
     expect(r.effects).toEqual([
       { type: 'startTask', taskId: 't-03', node: 'verify', reason: 'default' },
@@ -1455,8 +1417,9 @@ describe('[이 단계 끝나면 멈춤]과 멈춘 Work의 [재개] (시나리오
       work = approve(stop(launch(work), check).work, check).work
     }
     expect(currentTask(work)?.node).toBe('verify')
-    const rec = valid({ recommended_next: { node: 'fix', reason: '완료조건 2 실패' } })
-    const stopped = approve(stop(launch(work), rec).work, rec).work
+    const on = stopAfter(launch(work), true).work
+    const stopped = approve(stop(on, valid()).work, valid()).work
+    expect(stopped.status).toBe('stopped')
     const r = apply(stopped, { type: 'resumeWork', at: at() })
     expect(r.work.status).toBe('completed')
     expect(types(r.effects)).toEqual(['log:work.completed'])
@@ -1621,18 +1584,22 @@ describe('재시작 조정 (시나리오 9, D75, D78)', () => {
 describe('액션 바의 조작 (시나리오 3-4, 3-5, 4.4)', () => {
   it('상태마다 누를 수 있는 버튼', () => {
     const live = actions(running('working'))
-    expect(live).toMatchObject({ interrupt: true, resume: false, retry: false, stopAfter: true })
+    expect(live).toMatchObject({ interrupt: true, resume: false, stopAfter: true })
+    // 앞 단계로 돌아가거나 같은 단계를 새 세션으로 다시 하는 조작은 없다 (D418, D423)
+    expect(Object.keys(live).sort()).toEqual(
+      ['abandon', 'clean', 'interrupt', 'resume', 'resumeWork', 'stopAfter'].sort(),
+    )
     const q = apply(newWork(), { type: 'task.queued', taskId: 't-01', at: at() }).work
     expect(actions(q)).toMatchObject({ interrupt: true, resume: false })
     const ended = apply(running('idle'), { type: 'pty.exit', taskId: 't-01', at: at() }).work
-    expect(actions(ended)).toMatchObject({ interrupt: false, resume: true, retry: true })
+    expect(actions(ended)).toMatchObject({ interrupt: false, resume: true })
     const interrupted = apply(running(), {
       type: 'interrupt',
       taskId: 't-01',
       at: at(),
       reason: 'human',
     }).work
-    expect(actions(interrupted)).toMatchObject({ interrupt: false, resume: true, retry: false })
+    expect(actions(interrupted)).toMatchObject({ interrupt: false, resume: true })
     const stopped = { ...running('approved'), status: 'stopped' as const }
     expect(actions(stopped)).toMatchObject({
       interrupt: false,
@@ -1649,356 +1616,6 @@ describe('액션 바의 조작 (시나리오 3-4, 3-5, 4.4)', () => {
     expect(actions({ ...done, status: 'abandoned' }).clean).toBe(true)
     const archived = { ...done, status: 'archived' as const }
     expect(Object.values(actions(archived)).every((v) => !v)).toBe(true)
-  })
-})
-
-describe('단계 선택 (6.2, D77, D115~D117)', () => {
-  /** verify까지 가서 verify 세션이 살아 있는 Work: t-01 intake, t-02 fix, t-03 verify */
-  function toVerify(): WorkState {
-    let work = newWork()
-    for (const check of [valid(), valid()]) {
-      work = approve(stop(launch(work), check).work, check).work
-    }
-    return launch(work)
-  }
-
-  /** 의도 승인 뒤 fix 세션이 살아 있는 Work: t-01 intake, t-02 fix */
-  function toFix(): WorkState {
-    const work = approve(stop(launch(newWork()), valid()).work, valid()).work
-    return launch(work)
-  }
-
-  function select(
-    work: WorkState,
-    node: NodeName,
-    opts: {
-      keepCode?: boolean
-      instruction?: string
-      expect?: { taskId: string; done: boolean }
-    } = {},
-  ): Transition {
-    const task = currentTask(work)
-    return apply(work, {
-      type: 'selectStep',
-      at: at(),
-      node,
-      keepCode: opts.keepCode ?? false,
-      instruction: opts.instruction ?? '',
-      expect: opts.expect ?? { taskId: task?.id ?? '', done: task?.status === 'approved' },
-      backups: [],
-    })
-  }
-
-  const BACKUP = 'relay/w-20260926-001-discarded-1'
-
-  it('코드를 되돌리는 되감기는 진행 중 작업을 기록하고 세션을 끝낸 뒤 코드를 main에 맡긴다 (D77)', () => {
-    const r = select(toVerify(), 'fix', { instruction: '  완료조건 2를 다시 봐 줘\n' })
-    expect(r.rejected).toBeUndefined()
-    expect(r.work.operation).toEqual({
-      kind: 'rewind',
-      stage: 'backup',
-      started_at: r.work.operation?.started_at,
-      node: 'fix',
-      from_task: 't-03',
-      instruction: '완료조건 2를 다시 봐 줘',
-      discard: ['t-02', 't-03'],
-      reset_to: 'start-t-02',
-      backup_branch: BACKUP,
-      backup_commit: null,
-    })
-    expect(types(r.effects)).toEqual(['log:task.interrupted', 'endSession', 'rewindCode'])
-    const logged = r.effects[0]
-    expect(logged?.type === 'log' && logged.event.payload).toEqual({ reason: 'rewind' })
-    expect(r.effects[2]).toEqual({
-      type: 'rewindCode',
-      to: 'start-t-02',
-      backupBranch: BACKUP,
-      message: 'relay(w-20260926-001): 되감기 전 커밋 안 된 변경',
-    })
-    // 폐기와 새 task는 코드를 되돌린 뒤다
-    expect(r.work.tasks.map((t) => [t.id, t.status])).toEqual([
-      ['t-01', 'approved'],
-      ['t-02', 'approved'],
-      ['t-03', 'interrupted'],
-    ])
-    expect(r.work.tasks[2]?.session?.alive).toBe(false)
-  })
-
-  it('백업하고 되돌리면 task를 폐기하고 고른 단계를 되감기로 시작하며 기록을 지운다', () => {
-    const phase1 = select(toVerify(), 'fix', { instruction: '다시' }).work
-    const backedUp = apply(phase1, {
-      type: 'rewind.backedUp',
-      at: at(),
-      branch: BACKUP,
-      commit: 'backup-commit',
-    })
-    expect(backedUp.work.operation).toMatchObject({
-      stage: 'reset',
-      backup_branch: BACKUP,
-      backup_commit: 'backup-commit',
-    })
-    expect(backedUp.effects).toEqual([])
-    const r = apply(backedUp.work, { type: 'rewind.applied', at: at(), head: 'head-before' })
-    expect(r.work.operation).toBeUndefined()
-    expect(r.work.status).toBe('active')
-    expect(r.work.tasks.map((t) => [t.id, t.node, t.status, t.reason])).toEqual([
-      ['t-01', 'intake', 'approved', 'default'],
-      ['t-02', 'fix', 'discarded', 'default'],
-      ['t-03', 'verify', 'discarded', 'default'],
-      ['t-04', 'fix', 'working', 'rewind'],
-    ])
-    expect(r.work.tasks[1]).toMatchObject({ discarded_by: 't-04', approved_by: 'human' })
-    expect(r.work.tasks[1]?.discarded_at).toBeDefined()
-    expect(r.work.tasks[3]?.selection).toEqual({
-      from_task: 't-03',
-      instruction: '다시',
-      discarded: ['t-02', 't-03'],
-      skipped: [],
-      keep_code: false,
-      reset: {
-        from: 'head-before',
-        to: 'start-t-02',
-        backup_branch: BACKUP,
-        backup_commit: 'backup-commit',
-      },
-    })
-    expect(r.effects).toEqual([
-      {
-        type: 'log',
-        event: {
-          ts: expect.any(String) as string,
-          work_id: 'w-20260926-001',
-          task_id: 't-04',
-          type: 'task.rewound',
-          payload: {
-            node: 'fix',
-            from_task: 't-03',
-            discarded: ['t-02', 't-03'],
-            keep_code: false,
-            reset_to: 'start-t-02',
-            backup_branch: BACKUP,
-          },
-        },
-      },
-      { type: 'startTask', taskId: 't-04', node: 'fix', reason: 'rewind' },
-    ])
-    // 폐기된 task에 늦게 온 신호는 무시한다
-    const late = apply(r.work, { type: 'pty.exit', taskId: 't-03', at: at() })
-    expect(late.work).toBe(r.work)
-  })
-
-  it('백업할 것이 없었으면 백업 브랜치는 null이다 (D116)', () => {
-    const phase1 = select(toVerify(), 'verify').work
-    const none = apply(phase1, { type: 'rewind.backedUp', at: at(), branch: null, commit: null })
-    const r = apply(none.work, { type: 'rewind.applied', at: at(), head: 'start-t-03' })
-    expect(r.work.tasks.at(-1)?.selection?.reset).toEqual({
-      from: 'start-t-03',
-      to: 'start-t-03',
-      backup_branch: null,
-      backup_commit: null,
-    })
-    const logged = r.effects[0]
-    expect(logged?.type === 'log' && logged.event.payload['backup_branch']).toBeNull()
-  })
-
-  it('git이 실패하면 기록만 지우고 Work는 그대로 둔다. 끝낸 task는 [재개]할 수 있다', () => {
-    const phase1 = select(toVerify(), 'fix').work
-    const r = apply(phase1, { type: 'rewind.failed', at: at(), error: 'index.lock' })
-    expect(r.work.operation).toBeUndefined()
-    expect(r.work.tasks).toEqual(phase1.tasks)
-    expect(r.effects).toEqual([])
-    expect(actions(r.work)).toMatchObject({ resume: true, selectStep: true })
-    // 기록이 없는데 온 결과는 받지 않는다
-    expect(apply(r.work, { type: 'rewind.applied', at: at(), head: 'h' }).rejected).toBe(
-      '진행 중인 되감기가 없음',
-    )
-    expect(
-      apply(r.work, { type: 'rewind.backedUp', at: at(), branch: null, commit: null }).work,
-    ).toBe(r.work)
-  })
-
-  it('git이 실패했는데 코드가 이미 바뀌었으면 끊긴 되감기로 남긴다. 승인과 전달을 막고 [다시 시도]로 잇는다 (D136)', () => {
-    const phase1 = select(toVerify(), 'fix').work
-    const backedUp = apply(phase1, {
-      type: 'rewind.backedUp',
-      at: at(),
-      branch: BACKUP,
-      commit: 'backup1',
-      head: 'fixhead1',
-    }).work
-    const failedAt = at()
-    const r = apply(backedUp, { type: 'rewind.failed', at: failedAt, error: 'clean', cut: true })
-    expect(r.work.operation).toEqual({ ...backedUp.operation, interrupted_at: failedAt })
-    expect(r.work.tasks).toEqual(backedUp.tasks)
-    expect(badge(r.work).kind).toBe('recovery')
-    expect(approve(r.work, valid()).rejected).toBe(OPERATION_BLOCKS)
-    const retry = apply(r.work, { type: 'operationRetry', at: at() })
-    expect(retry.effects.map((e) => e.type)).toEqual(['resumeRewind'])
-  })
-
-  it('건너뛰기는 한 번에 반영한다: 진행 중인 k를 끝내고 폐기하고 고른 단계를 시작한다. 코드는 그대로다 (D117)', () => {
-    const r = select(toFix(), 'verify', { instruction: '바로 검증해 줘' })
-    expect(r.work.operation).toBeUndefined()
-    expect(r.work.tasks.map((t) => [t.id, t.node, t.status, t.reason])).toEqual([
-      ['t-01', 'intake', 'approved', 'default'],
-      ['t-02', 'fix', 'discarded', 'default'],
-      ['t-03', 'verify', 'working', 'skip'],
-    ])
-    expect(r.work.tasks[1]?.session?.alive).toBe(false)
-    expect(types(r.effects)).toEqual([
-      'log:task.interrupted',
-      'endSession',
-      'log:task.skipped_to',
-      'startTask',
-    ])
-    const skipped = r.effects[2]
-    // fix와 verify 사이에는 단계가 없다 (D227)
-    expect(skipped?.type === 'log' && skipped.event).toMatchObject({
-      task_id: 't-03',
-      payload: {
-        node: 'verify',
-        from_task: 't-02',
-        discarded: ['t-02'],
-        skipped: [],
-      },
-    })
-    expect(r.work.tasks[2]?.selection).toEqual({
-      from_task: 't-02',
-      instruction: '바로 검증해 줘',
-      discarded: ['t-02'],
-      skipped: [],
-      keep_code: false,
-      reset: null,
-    })
-  })
-
-  it('의도 승인 뒤 멈춘 Work에서 verify를 고르면 fix를 건너뛴다. 끝난 intake는 폐기하지 않는다 (D117)', () => {
-    const on = apply(launch(newWork()), { type: 'stopAfter', at: at(), on: true }).work
-    const stopped = approve(stop(on, valid()).work, valid()).work
-    expect(stopped.status).toBe('stopped')
-    const r = select(stopped, 'verify')
-    expect(r.rejected).toBeUndefined()
-    expect(r.work.status).toBe('active')
-    expect(r.work.tasks.map((t) => [t.id, t.node, t.status, t.reason])).toEqual([
-      ['t-01', 'intake', 'approved', 'default'],
-      ['t-02', 'verify', 'working', 'skip'],
-    ])
-    expect(types(r.effects)).toEqual(['log:task.skipped_to', 'startTask'])
-    expect(r.work.tasks[1]?.selection).toMatchObject({ discarded: [], skipped: ['fix'] })
-  })
-
-  it('[현재 코드 위에서 이어서]는 코드를 두고 한 번에 반영한다 (6.2)', () => {
-    const r = select(toVerify(), 'fix', { keepCode: true })
-    expect(r.work.operation).toBeUndefined()
-    expect(types(r.effects)).toEqual([
-      'log:task.interrupted',
-      'endSession',
-      'log:task.rewound',
-      'startTask',
-    ])
-    const logged = r.effects[2]
-    expect(logged?.type === 'log' && logged.event.payload).toEqual({
-      node: 'fix',
-      from_task: 't-03',
-      discarded: ['t-02', 't-03'],
-      keep_code: true,
-    })
-    expect(r.work.tasks.at(-1)?.selection).toMatchObject({ keep_code: true, reset: null })
-  })
-
-  it('이전 단계 추천으로 멈춘 Work에서 추천대로 고르면 진행 중으로 되돌리고 멈춤 표시를 지운다 (D23)', () => {
-    const rec = valid({ recommended_next: { node: 'fix', reason: '완료조건 2 실패' } })
-    const stopped = approve(stop(toVerify(), rec).work, rec).work
-    expect(stopped.status).toBe('stopped')
-    const phase1 = select(stopped, 'fix')
-    // 끝난 k라 끝낼 세션이 없다
-    expect(types(phase1.effects)).toEqual(['rewindCode'])
-    expect(phase1.work.status).toBe('stopped')
-    const r = apply(phase1.work, { type: 'rewind.applied', at: at(), head: 'h' })
-    expect(r.work.status).toBe('active')
-    expect(r.work.stop).toBeUndefined()
-    expect(r.work.tasks.map((t) => [t.id, t.status])).toEqual([
-      ['t-01', 'approved'],
-      ['t-02', 'discarded'],
-      ['t-03', 'discarded'],
-      ['t-04', 'working'],
-    ])
-  })
-
-  it('끝난 k 다음의 기본 다음 단계를 고르면 기본 진행이고 추가 지시만 남는다', () => {
-    const on = apply(launch(newWork()), { type: 'stopAfter', at: at(), on: true }).work
-    const ready = stop(on, valid()).work
-    const stopped = approve(ready, valid()).work
-    expect(stopped.status).toBe('stopped')
-    const r = select(stopped, 'fix', { instruction: '로그를 먼저 봐 줘' })
-    expect(r.work.status).toBe('active')
-    expect(types(r.effects)).toEqual(['startTask'])
-    expect(r.work.tasks[1]).toMatchObject({
-      node: 'fix',
-      reason: 'default',
-      selection: { instruction: '로그를 먼저 봐 줘', discarded: [], skipped: [] },
-    })
-  })
-
-  it('미리 본 뒤 지금 task나 그 task가 끝났는지가 바뀌었으면 받지 않는다', () => {
-    const work = toVerify()
-    expect(select(work, 'fix', { expect: { taskId: 't-02', done: false } }).rejected).toBe(
-      '미리 본 뒤 Work가 바뀌었음. 단계 선택을 다시 여세요',
-    )
-    expect(select(work, 'fix', { expect: { taskId: 't-03', done: true } }).rejected).toBeDefined()
-  })
-
-  it('의도 승인 전에는 intake만 고를 수 있다. intake로 되감은 뒤 의도 승인하면 intent 새 버전이다 (6.3, D40)', () => {
-    const before = launch(newWork())
-    for (const node of ['fix', 'verify'] as const) {
-      expect(select(before, node).rejected).toBe('의도 승인 전에는 intake만 고를 수 있음 (6.3)')
-    }
-    expect(select(before, 'intake').work.operation).toMatchObject({
-      node: 'intake',
-      discard: ['t-01'],
-      reset_to: 'start-t-01',
-    })
-
-    const phase1 = select(toVerify(), 'intake', { instruction: '범위를 넓혀 줘' }).work
-    const rewound = apply(phase1, { type: 'rewind.applied', at: at(), head: 'h' }).work
-    expect(rewound.tasks.map((t) => t.status)).toEqual([
-      'discarded',
-      'discarded',
-      'discarded',
-      'working',
-    ])
-    // 새 intake가 승인되기 전에는 지금 승인된 intent가 그대로다
-    expect(rewound.intent).toEqual({ version: 1 })
-    const ready = stop(launch(rewound), valid()).work
-    const r = approve(ready, valid())
-    expect(r.work.intent).toEqual({ version: 2 })
-    expect(r.effects).toContainEqual({
-      type: 'confirmIntent',
-      taskId: 't-04',
-      version: 2,
-    })
-    expect(currentTask(r.work)).toMatchObject({ id: 't-05', node: 'fix', reason: 'default' })
-  })
-
-  it('끝난 Work에서는 고르지 않는다. [단계 선택]은 진행 중이거나 멈춘 Work에서 누른다', () => {
-    const done = { ...running('approved'), status: 'completed' as const }
-    expect(select(done, 'intake', { expect: { taskId: 't-01', done: true } }).rejected).toBe(
-      '진행 중이거나 멈춘 Work가 아님',
-    )
-    expect(actions(done).selectStep).toBe(false)
-    expect(actions(running('working')).selectStep).toBe(true)
-    expect(actions({ ...running('approved'), status: 'stopped' }).selectStep).toBe(true)
-    expect(actions({ ...running('working'), status: 'abandoned' }).selectStep).toBe(false)
-  })
-
-  it('재시작 조정은 남은 되감기 기록을 끊긴 작업으로 표시한다 (시나리오 9-4, D121)', () => {
-    const phase1 = select(toVerify(), 'fix').work
-    const when = at()
-    const r = apply(phase1, { type: 'app.restarted', at: when, check: null })
-    expect(r.work.operation).toEqual({ ...phase1.operation, interrupted_at: when })
-    // 또 켜도 처음 찾은 때를 둔다
-    const again = apply(r.work, { type: 'app.restarted', at: at(), check: null })
-    expect(again.work).toBe(r.work)
   })
 })
 
@@ -2233,17 +1850,16 @@ describe('전달 (시나리오 7, D77, D119, D120)', () => {
   it('승인하면 멈추는 verify는 전달하지 않고 [승인하고 멈춤]으로 멈춘다. 멈춘 Work에서 전달하면 완료한다 (D119)', () => {
     const on = apply(atVerify(), { type: 'stopAfter', at: at(), on: true }).work
     expect(deliver(on, 'push').rejected).toBe('승인하면 Work가 멈춤: [승인하고 멈춤]을 누르세요')
+    // D418 전 형식의 이전 단계 추천은 멈추지 않는다: 전달한다 (D422)
     const back = valid({ recommended_next: { node: 'fix', reason: '완료조건 2 실패' } })
-    expect(deliver(atVerify(), 'push', null, back).rejected).toBe(
-      '승인하면 Work가 멈춤: [승인하고 멈춤]을 누르세요',
-    )
+    expect(deliver(atVerify(), 'push', null, back).rejected).toBeUndefined()
     // [승인하고 멈춤]은 승인이다: Work가 멈추고 액션 바의 [재개]는 보이지 않는다
     const stopped = approve(on, valid()).work
     expect(stopped).toMatchObject({
       status: 'stopped',
       stop: { kind: 'after_step', task_id: 't-03' },
     })
-    expect(actions(stopped)).toMatchObject({ resumeWork: false, selectStep: true, abandon: true })
+    expect(actions(stopped)).toMatchObject({ resumeWork: false, abandon: true })
     // 멈춘 Work에서 전달한다. 세션은 이미 끝났고 승인은 다시 남기지 않는다
     const r = deliver(stopped, 'push', null, null)
     expect(r.rejected).toBeUndefined()
@@ -2438,18 +2054,30 @@ describe('끊긴 작업 (시나리오 9-4, D121~D123)', () => {
     }).work
   }
 
-  /** verify에서 fix로 되감다 끊긴 Work (backup 단계) */
+  /**
+   * D418 전 앱이 verify에서 fix로 되감다 남긴 기록 (backup 단계). 그 앱은 verify 세션을 끝내고 기록을 적었다. 지금 앱은
+   * 되감기를 새로 쓰지 않지만 남은 기록을 읽는다 (D424)
+   */
   function rewinding(): WorkState {
-    const work = toVerify()
-    return apply(work, {
-      type: 'selectStep',
+    const work = apply(toVerify(), {
+      type: 'interrupt',
+      taskId: 't-03',
       at: at(),
-      node: 'fix',
-      keepCode: false,
-      instruction: '다시 고쳐 줘',
-      expect: { taskId: 't-03', done: false },
-      backups: [],
+      reason: 'human',
     }).work
+    const operation: RewindOperation = {
+      kind: 'rewind',
+      stage: 'backup',
+      started_at: at(),
+      node: 'fix',
+      from_task: 't-03',
+      instruction: '다시 고쳐 줘',
+      discard: ['t-02', 't-03'],
+      reset_to: 'start-t-02',
+      backup_branch: BACKUP,
+      backup_commit: null,
+    }
+    return { ...work, operation }
   }
 
   /** verify의 [push]가 끊긴 Work */
@@ -2486,19 +2114,9 @@ describe('끊긴 작업 (시나리오 9-4, D121~D123)', () => {
       { type: 'approve', taskId: verify, at: at(), check: valid() },
       { type: 'interrupt', taskId: verify, at: at(), reason: 'human' },
       { type: 'resume', taskId: verify, at: at() },
-      { type: 'retry', taskId: verify, at: at() },
       { type: 'stopAfter', at: at(), on: true },
       { type: 'resumeWork', at: at() },
       { type: 'abandon', at: at() },
-      {
-        type: 'selectStep',
-        at: at(),
-        node: 'verify',
-        keepCode: false,
-        instruction: '',
-        expect: { taskId: verify, done: false },
-        backups: [],
-      },
       { type: 'deliver', at: at(), choice: 'push', uncommitted: null, check: valid() },
       { type: 'clean', at: at(), force: false, deleteBranches: [], head: null },
     ]
@@ -2517,7 +2135,7 @@ describe('끊긴 작업 (시나리오 9-4, D121~D123)', () => {
     expect(settings.work.settings).toEqual({ question_mode: { fix: 'confirm_each' } })
   })
 
-  it('[무시]: 되감기와 정리는 기록만 지운다. 끝낸 task는 끝난 채다 (D123)', () => {
+  it('[무시]: D418 전의 되감기와 정리는 기록만 지운다. 끝낸 task는 끝난 채다 (D123, D424)', () => {
     const cut = restart(rewinding())
     const r = apply(cut, { type: 'operationIgnore', at: at() })
     expect(r.rejected).toBeUndefined()
@@ -2525,7 +2143,7 @@ describe('끊긴 작업 (시나리오 9-4, D121~D123)', () => {
     expect(r.work.operation).toBeUndefined()
     // 되감으려고 끝낸 verify는 승인 대기가 아니었으니 중단됨이고, [재개]할 수 있다
     expect(currentTask(r.work)).toMatchObject({ id: 't-03', status: 'interrupted' })
-    expect(actions(r.work)).toMatchObject({ resume: true, selectStep: true })
+    expect(actions(r.work)).toMatchObject({ resume: true })
 
     const cleanCut = restart(cleaning())
     const c = apply(cleanCut, { type: 'operationIgnore', at: at() })
@@ -2534,93 +2152,16 @@ describe('끊긴 작업 (시나리오 9-4, D121~D123)', () => {
     expect(actions(c.work).clean).toBe(true)
   })
 
-  it('되감기 [다시 시도]: 끊긴 표시를 지우고 끊긴 곳부터 main에 맡긴다. 결과는 보통의 되감기처럼 받는다 (D123)', () => {
+  it('D418 전에 끊긴 되감기는 [다시 시도]를 받지 않는다: 이어서 하지 않고 [무시]만 받는다 (D424)', () => {
     const cut = restart(rewinding())
-    const op = cut.operation
-    expect(op).toMatchObject({
-      kind: 'rewind',
-      stage: 'backup',
-      interrupted_at: expect.any(String),
-    })
+    expect(cut.operation?.interrupted_at).toEqual(expect.any(String))
     const r = apply(cut, { type: 'operationRetry', at: at() })
-    expect(r.rejected).toBeUndefined()
-    if (!op) throw new Error('기록이 없음')
-    const live: Record<string, unknown> = { ...op }
-    delete live['interrupted_at']
-    expect(r.work.operation).toEqual(live)
-    expect(r.effects).toEqual([
-      {
-        type: 'resumeRewind',
-        operation: live,
-        message: 'relay(w-20260926-001): 되감기 전 커밋 안 된 변경',
-      },
-    ])
-    // 다시 진행 중인 작업이라 배지는 끊긴 작업이 아니다
-    expect(badge(r.work).kind).not.toBe('recovery')
-
-    // 백업 단계가 끝나면 되돌리기 전 HEAD도 적는다
-    const backedUp = apply(r.work, {
-      type: 'rewind.backedUp',
-      at: at(),
-      branch: BACKUP,
-      commit: 'backup01',
-      head: 'fixhead1',
-    }).work
-    expect(backedUp.operation).toMatchObject({
-      stage: 'reset',
-      backup_branch: BACKUP,
-      backup_commit: 'backup01',
-      head: 'fixhead1',
-    })
-    // 덤으로 남긴 백업은 task.rewound에 적는다
-    const applied = apply(backedUp, {
-      type: 'rewind.applied',
-      at: at(),
-      head: 'fixhead1',
-      extraBackup: 'relay/w-20260926-001-discarded-2',
-    })
-    expect(applied.work.operation).toBeUndefined()
-    const rewound = applied.effects.find((e) => e.type === 'log' && e.event.type === 'task.rewound')
-    expect(rewound?.type === 'log' && rewound.event.payload).toMatchObject({
-      node: 'fix',
-      discarded: ['t-02', 't-03'],
-      reset_to: 'start-t-02',
-      backup_branch: BACKUP,
-      extra_backup_branch: 'relay/w-20260926-001-discarded-2',
-    })
-    expect(currentTask(applied.work)).toMatchObject({
-      node: 'fix',
-      reason: 'rewind',
-      selection: {
-        reset: {
-          from: 'fixhead1',
-          to: 'start-t-02',
-          backup_branch: BACKUP,
-          backup_commit: 'backup01',
-        },
-      },
-    })
-  })
-
-  it('reset 단계에서 끊긴 되감기도 [다시 시도]로 이어 한다. 실패하면 M4처럼 기록을 지운다', () => {
-    const backedUp = apply(rewinding(), {
-      type: 'rewind.backedUp',
-      at: at(),
-      branch: BACKUP,
-      commit: 'backup01',
-      head: 'fixhead1',
-    }).work
-    const cut = restart(backedUp)
-    const r = apply(cut, { type: 'operationRetry', at: at() })
-    const [effect] = r.effects
-    expect(effect?.type === 'resumeRewind' && effect.operation).toMatchObject({
-      stage: 'reset',
-      backup_branch: BACKUP,
-      head: 'fixhead1',
-    })
-    const failed = apply(r.work, { type: 'rewind.failed', at: at(), error: 'git 실패' })
-    expect(failed.work.operation).toBeUndefined()
-    expect(currentTask(failed.work)?.status).toBe('interrupted')
+    expect(r.rejected).toMatch(/끊긴 되감기는 이어서 할 수 없음/)
+    expect(r.work).toBe(cut)
+    expect(r.effects).toEqual([])
+    // 재시작은 남은 되감기 기록을 끊긴 작업으로 표시하고, 또 켜도 처음 찾은 때를 둔다 (시나리오 9-4, D121)
+    expect(restart(cut)).toBe(cut)
+    expect(apply(cut, { type: 'operationIgnore', at: at() }).work.operation).toBeUndefined()
   })
 
   it('정리 [다시 시도]: 끊긴 단계부터 main에 맡기고, 끝나면 보관됨이다 (D123)', () => {
@@ -2947,11 +2488,6 @@ describe('자동 승인 (4.3, D127~D131)', () => {
         false,
         'intent_deviation',
       ],
-      [
-        valid({ recommended_next: { node: 'intake', reason: '의도 다시' } }),
-        false,
-        'recommended_next',
-      ],
       [valid(), true, 'background'],
     ]
     for (const [check, background, reason] of rows) {
@@ -3112,7 +2648,7 @@ describe('자동 승인 (4.3, D127~D131)', () => {
     expect(types(r.effects)).toEqual(['log:task.awaiting_approval'])
   })
 
-  it('앱 종료 확인과 [단계 선택]으로 세션을 끝내도 멈춘다. 까닭은 끝낸 까닭대로 적는다 (D130, D145)', () => {
+  it('앱 종료 확인으로 세션을 끝내도 멈춘다. 까닭은 끝낸 까닭대로 적는다 (D130, D145)', () => {
     const quit = apply(
       counting(),
       { type: 'interrupt', taskId: 't-02', at: at(), reason: 'app_quit' },
@@ -3127,33 +2663,6 @@ describe('자동 승인 (4.3, D127~D131)', () => {
     // 다시 켜도 재시작 조정은 까닭을 바꾸지 않는다: 카운트다운은 끌 때 이미 멈췄다
     const reopened = apply(quit.work, { type: 'app.restarted', at: at(), check: valid() }, AUTO)
     expect(task(reopened.work).auto_hold?.reasons).toEqual(['quit'])
-    // 코드를 되돌리는 [단계 선택]은 git이 실패하면 끝낸 task가 승인 대기로 남는다 (6.2)
-    const selected = apply(
-      counting(),
-      {
-        type: 'selectStep',
-        at: at(),
-        node: 'fix',
-        keepCode: false,
-        instruction: '',
-        expect: { taskId: 't-02', done: false },
-        backups: [],
-      },
-      AUTO,
-    )
-    expect(selected.rejected).toBeUndefined()
-    expect(types(selected.effects)).toEqual([
-      'stopCountdown',
-      'log:task.interrupted',
-      'endSession',
-      'rewindCode',
-    ])
-    const failed = apply(selected.work, { type: 'rewind.failed', at: at(), error: 'index.lock' })
-    expect(task(failed.work)).toMatchObject({
-      status: 'awaiting_approval',
-      session: { alive: false },
-      auto_hold: { reasons: ['step'] },
-    })
   })
 
   it('끝날 때 다시 판정한다: 설정을 껐거나 handoff가 바뀌었으면 승인하지 않는다 (D128, D130)', () => {
@@ -3295,30 +2804,11 @@ describe('자동 승인 (4.3, D127~D131)', () => {
     expect(types(r.effects)).not.toContain('startTask')
   })
 
-  it('단계 선택과 포기는 카운트다운을 지운다 (6.2, 3.3)', () => {
+  it('포기는 카운트다운을 지운다 (3.3)', () => {
     const abandoned = apply(counting(), { type: 'abandon', at: at() }, AUTO)
     expect(task(abandoned.work)).toMatchObject({ status: 'interrupted' })
     expect(task(abandoned.work).countdown ?? task(abandoned.work).auto_hold).toBeUndefined()
     expect(types(abandoned.effects)[0]).toBe('stopCountdown')
-    const w = counting()
-    const skipped = apply(
-      w,
-      {
-        type: 'selectStep',
-        at: at(),
-        node: 'verify',
-        keepCode: false,
-        instruction: '',
-        expect: { taskId: 't-02', done: false },
-        backups: [],
-      },
-      AUTO,
-    )
-    expect(skipped.rejected).toBeUndefined()
-    const t2 = skipped.work.tasks.find((t) => t.id === 't-02')
-    expect(t2?.status).toBe('discarded')
-    expect(t2?.countdown ?? t2?.auto_hold).toBeUndefined()
-    expect(types(skipped.effects)[0]).toBe('stopCountdown')
   })
 })
 
@@ -3377,13 +2867,11 @@ describe('PR 진행 (시나리오 10, D152~D200)', () => {
       started_at: work.delivery?.at,
     })
     expect(currentTask(work)).toMatchObject({ status: 'approved', session: { alive: false } })
-    // PR 진행 중에는 [단계 선택], [이 단계 끝나면 멈춤], [Work 포기], [Work 정리]가 없다 (D182)
+    // PR 진행 중에는 [이 단계 끝나면 멈춤], [Work 포기], [Work 정리]가 없다 (D182)
     expect(actions(work)).toEqual({
       interrupt: false,
       resume: false,
-      retry: false,
       resumeWork: false,
-      selectStep: false,
       stopAfter: false,
       abandon: false,
       clean: false,
@@ -3616,76 +3104,149 @@ describe('기능 추가 (D232~D237, D249)', () => {
     expect(currentTask(implement)?.countdown).toBeDefined()
   })
 
-  it('implement가 design을 추천하면 자동 승인하지 않고, 승인하면 멈춘다 (D23, D248)', () => {
+  it('implement가 D418 전 형식의 design 추천을 적어도 자동 승인 조건을 어기지 않고, 승인하면 verify로 간다 (D418, D422)', () => {
     let work = featureWork()
     for (let i = 0; i < 2; i++) work = approve(stop(launch(work), valid()).work, valid()).work
     const back = valid({ recommended_next: { node: 'design', reason: '설계가 틀림' } })
     const held = stop(launch(work), back, {}, DEFAULT_CONFIG).work
-    expect(currentTask(held)?.countdown).toBeUndefined()
-    expect(currentTask(held)?.auto_hold?.reasons).toEqual(['recommended_next'])
+    expect(currentTask(held)?.countdown).toBeDefined()
+    expect(currentTask(held)?.auto_hold).toBeUndefined()
     const r = approve(held, back)
-    expect(r.work.status).toBe('stopped')
-    expect(r.work.stop).toMatchObject({ kind: 'recommended_back', node: 'design' })
-    // 기본 다음 단계(verify)를 추천하면 자동 승인 조건을 만족한다
-    const next = valid({ recommended_next: { node: 'verify', reason: '다음' } })
-    expect(currentTask(stop(launch(work), next, {}, DEFAULT_CONFIG).work)?.countdown).toBeDefined()
+    expect(r.work.status).toBe('active')
+    expect(currentTask(r.work)?.node).toBe('verify')
   })
+})
 
-  it('verify가 이 유형에 없는 단계(fix)를 추천한 채 [오류 무시하고 승인]해도 Work를 완료하지 않고 멈춘다 (D23, PR #23 리뷰)', () => {
-    let work = featureWork()
-    for (let i = 0; i < 3; i++) work = approve(stop(launch(work), valid()).work, valid()).work
-    expect(currentTask(work)?.node).toBe('verify')
-    const back = valid({ recommended_next: { node: 'fix', reason: '수정부터 다시' } })
-    const r = approve(stop(launch(work), back).work, back)
-    expect(r.work.status).toBe('stopped')
-    expect(r.work.stop).toMatchObject({ kind: 'recommended_back', node: 'fix' })
-  })
-
-  it('의도 승인 전 [intake 다시]에서 유형을 바꾸면 work.json의 type을 바꾸고 task.rewound에 남긴다 (D237, I59)', () => {
-    const work = stop(launch(newWork()), valid()).work
-    const r = apply(work, {
-      type: 'selectStep',
-      at: at(),
-      node: 'intake',
-      keepCode: false,
-      workType: 'feature',
-      instruction: '',
-      expect: { taskId: 't-01', done: false },
-      backups: [],
-    })
+describe('다시 하기: 새 Work (D420, D421)', () => {
+  it('다시 하려고 포기하면 work.abandoned에 새 Work를 적는다', () => {
+    const r = apply(fixLive(), { type: 'abandon', at: at(), redoBy: 'w-20260926-002' })
     expect(r.rejected).toBeUndefined()
-    // intake의 시작 커밋으로 되돌리는 되감기라 진행 중 작업에 유형을 적는다
-    expect(r.work.operation).toMatchObject({ kind: 'rewind', node: 'intake', type: 'feature' })
-    expect(r.work.type).toBe('bugfix')
-    const applied = apply(r.work, { type: 'rewind.applied', at: at(), head: 'start-t-01' })
-    expect(applied.work.type).toBe('feature')
-    expect(nodes(applied.work)).toEqual([
-      ['intake', 'discarded'],
-      ['intake', 'working'],
-    ])
-    const logged = applied.effects.find((e) => e.type === 'log')
-    expect(logged?.type === 'log' && logged.event.payload).toMatchObject({
-      type_from: 'bugfix',
-      type_to: 'feature',
+    expect(r.work.status).toBe('abandoned')
+    const logged = r.effects.find((e) => e.type === 'log' && e.event.type === 'work.abandoned')
+    expect(logged?.type === 'log' && logged.event.payload).toEqual({
+      redo_by: 'w-20260926-002',
     })
-    // 의도 승인 뒤의 다음 단계는 바꾼 유형의 것이다
-    const next = approve(stop(launch(applied.work), valid()).work, valid()).work
-    expect(currentTask(next)?.node).toBe('design')
+    // 새 Work가 이슈를 이어 쓰면 적는다: 원래 Work는 이슈를 닫지 않는다
+    const kept = apply(fixLive(), {
+      type: 'abandon',
+      at: at(),
+      redoBy: 'w-20260926-002',
+      issueKept: true,
+    })
+    const k = kept.effects.find((e) => e.type === 'log' && e.event.type === 'work.abandoned')
+    expect(k?.type === 'log' && k.event.payload).toEqual({
+      redo_by: 'w-20260926-002',
+      issue_kept: true,
+    })
+    // 그냥 포기하면 비어 있다
+    const plain = apply(fixLive(), { type: 'abandon', at: at() })
+    const p = plain.effects.find((e) => e.type === 'log' && e.event.type === 'work.abandoned')
+    expect(p?.type === 'log' && p.event.payload).toEqual({})
   })
 
-  it('의도 승인 뒤에는 유형을 바꾸지 않는다 (D237)', () => {
-    const work = launch(approve(stop(launch(featureWork()), valid()).work, valid()).work)
-    const r = apply(work, {
-      type: 'selectStep',
+  it('다시 한 Work는 원래 Work를 적고 work.created에 남긴다. 원래 Work의 이슈를 이어 쓴다', () => {
+    const r = createWork({
+      type: 'bugfix',
+      workId: 'w-20260926-002',
+      baseBranch: 'main',
+      baseCommit: 'base0001',
+      fromWork: 'w-20260926-001',
+      issue: {
+        linked: 9,
+        mark: 'w-20260926-002-abcd',
+        from: {
+          work_id: 'w-20260926-001',
+          linked: false,
+          number: 9,
+          url: 'https://github.com/o/r/issues/9',
+        },
+      },
       at: at(),
-      node: 'intake',
-      keepCode: false,
-      workType: 'bugfix',
-      instruction: '',
-      expect: { taskId: 't-02', done: false },
-      backups: [],
     })
-    expect(r.rejected).toBe('유형은 의도 승인 전 [intake 다시]에서만 바꿀 수 있음 (D237)')
+    expect(r.work.from_work).toBe('w-20260926-001')
+    expect(r.work.issue).toEqual({
+      linked: false,
+      number: 9,
+      url: 'https://github.com/o/r/issues/9',
+      mark: 'w-20260926-002-abcd',
+      pending: [],
+      posted: [],
+      from_work: 'w-20260926-001',
+    })
+    const logged = r.effects[0]
+    expect(logged?.type === 'log' && logged.event.payload).toMatchObject({
+      type: 'bugfix',
+      from_work: 'w-20260926-001',
+    })
+    // 다시 한 Work가 아니면 적지 않는다
+    expect(newWork().from_work).toBeUndefined()
+  })
+})
+
+describe('대화 ID를 받지 못한 Codex의 [재개] (D423)', () => {
+  /** 훅으로 대화 ID를 받기 전에 끝난 Codex intake */
+  function codexAt(status: TaskStatus): WorkState {
+    const w = createWork({
+      type: 'bugfix',
+      engine: 'codex',
+      workId: 'w-20260926-001',
+      baseBranch: 'main',
+      baseCommit: 'base0001',
+      at: at(),
+    }).work
+    const t = w.tasks[0] as TaskRecord
+    return {
+      ...w,
+      tasks: [{ ...t, status, session: { id: '', pid: 1, started_at: at(), alive: false } }],
+    }
+  }
+
+  it('중단됐거나 handoff 없이 끝났으면 같은 task를 새 세션으로 시작한다: 세션 기록을 지운다', () => {
+    for (const status of ['interrupted', 'session_ended'] as const) {
+      const work = codexAt(status)
+      expect(actions(work).resume, status).toBe(true)
+      const r = apply(work, { type: 'resume', taskId: 't-01', at: at() })
+      expect(r.rejected, status).toBeUndefined()
+      expect(r.effects, status).toEqual([
+        { type: 'startTask', taskId: 't-01', node: 'intake', reason: 'default' },
+      ])
+      // main이 --resume하지 않게 세션 기록을 지운다. 새 task는 만들지 않는다
+      expect(
+        r.work.tasks.map((t) => [t.id, t.session]),
+        status,
+      ).toEqual([['t-01', null]])
+    }
+  })
+
+  it('새 세션으로 다시 시작해도 처음 시작 커밋을 둔다: [변경]이 앞 세션의 커밋을 잃지 않는다 (리뷰 반영)', () => {
+    const before = codexAt('interrupted')
+    const work = {
+      ...before,
+      tasks: before.tasks.map((t) => ({ ...t, start_commit: 'first001' })),
+    }
+    const r = apply(work, { type: 'resume', taskId: 't-01', at: at() })
+    const started = apply(r.work, {
+      type: 'session.started',
+      taskId: 't-01',
+      at: at(),
+      sessionId: '',
+      pid: 2000,
+      startCommit: 'later002',
+      skillHash: 'skillhash',
+      engineVersion: 'codex-cli 1.0.0',
+    })
+    expect(started.rejected).toBeUndefined()
+    expect(currentTask(started.work)).toMatchObject({ status: 'working', start_commit: 'first001' })
+  })
+
+  it('승인 대기와 막힘은 산출물이 있어 다시 시작하지 않는다: [재개]가 꺼지고 받지 않는다', () => {
+    for (const status of ['awaiting_approval', 'blocked'] as const) {
+      const work = codexAt(status)
+      expect(actions(work).resume, status).toBe(false)
+      const r = apply(work, { type: 'resume', taskId: 't-01', at: at() })
+      expect(r.rejected, status).toBe('Codex 대화 ID를 받지 못해 다시 열 수 없습니다.')
+      expect(r.work, status).toBe(work)
+    }
   })
 })
 

@@ -163,6 +163,11 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I147 | `core.worktree` 되돌리기(D415)는 서브모듈 체크아웃의 `.git`(디렉터리, 또는 `gitdir:` 파일이 가리키는 곳)을 직접 읽고 그 `config`를 `git config -f`로 레포 밖(임시 폴더)에서 읽고 쓴다: 깨진 저장소 안에서 git을 부르면 시작부터 실패한다. 같은 곳을 가리키는 값(절대 경로 등)은 그대로 둔다. 되돌린 task는 메모리에만 두고(`submoduleRepaired`) 그 task의 승인 화면에 알린다. 승인 화면의 통합 검증 사실(`IntegrationFacts`)은 지금 코드의 task(마지막 task)만 읽고, 처리 줄 밖이라 되돌리지 않는다. 같은 설정 파일의 되돌리기는 어댑터가 파일마다 차례로 한다(앱을 켤 때 여러 Work가 함께 조정함). 브랜치는 `headBranch`로 읽어 분리된 HEAD와 git 실패를 가린다(실패면 알리지 않음). 메인 쪽 변경은 승인 화면과 정리 요약이 같은 함수(`WorkRunner.mainChanges`)로 읽고, git이 따옴표로 감싼 경로는 풀어서 서브모듈 자리와 견준다 | 다시 켜도 같은 사실은 git에서 다시 읽힌다 | |
 | I148 | 에이전트의 메인 worktree 접근은 `LaunchInput`·`ResumeInput`·`SideArgsInput`의 `extraDirs`(`--add-dir`, Claude와 Codex 모두)다. 가짜 claude는 이미 `--add-dir`를 여럿 받는다. 새 옵션이 아니라 계약과 녹화본은 그대로다 | |
 | I149 | 새 Work 대화상자는 연 프로젝트가 서브모듈 프로젝트면 그 서브모듈을 대상으로 골라 둔다. 대상을 처음 고르면 `prepareSubmodule`가 만든 `ProjectView`를 돌려줘 스냅샷의 프로젝트 목록보다 먼저 와도 기준 브랜치를 채운다. 사이드바는 `parent`가 없는 프로젝트만 맨 위에 두고 서브모듈 프로젝트를 그 안에 같은 모양(`projectGroup`)으로 둔다 | |
+| I150 | 되감기를 걷어낸 뒤(D418, D423) 예전 기록을 읽는 것만 남긴다: task 상태 `discarded`, 시작 이유 `rewind`·`skip`·`resume`, `StepSelection`(`changeRange`가 되돌린 코드를 봄), 멈춤 `recommended_back`, 진행 중 작업 `rewind`(끊긴 것은 [무시]만 받고 `OperationView.retry`가 null), 자동 승인 보류 까닭 `recommended_next`·`step`의 문구, 이슈 항목 `step`과 `stepComment`(대기열에 남은 것만 게시), 백업 브랜치 패턴(`core/cleanup`의 `backupPattern`, [Work 정리]가 지움). `core/rewind`와 git의 백업·되돌리기(`createBackup`, `resetHard`, `worktreeTree`, `treeOf`)는 지운다 | D424의 "읽기만". 새로 만드는 길이 없으니 계산과 git 작업은 남길 까닭이 없다 | |
+| I151 | handoff 스키마의 형식 버전은 올리지 않는다. `recommended_next`를 필수에서 빼고, 속성은 설명 "D418 전 형식"으로 남긴다. 예전 handoff도 경고 없이 통과하고 앱은 읽지 않는다. `skills/check.mjs`는 그 설명으로 시작하는 필드를 템플릿과 비교하는 필드에서 뺀다 | 속성까지 지우면 앱을 고칠 때 승인 대기였던 handoff가 "정의되지 않은 필드" 경고를 보인다(D85). 버전을 올리면 스키마 파일과 생성 타입이 둘이 된다 | |
+| I152 | Work 초안의 출처에 `{ kind: 'work', id: <Work 키> }`를 더한다(D421). 초안 폴더의 감시·읽기·지우기는 `main/drafts`의 `DraftFolder` 하나로 기본 세션과 Work가 함께 쓴다(감시는 겹쳐 불러도 차례로 건다). Work는 초안을 쓰는 세션을 띄울 때(곁 세션을 열 때, task의 `context.md`를 쓸 때) 폴더를 만들고 감시를 걸며, 앱을 켤 때와 프로젝트 목록이 바뀔 때는 남은 초안만 읽는다. 보관된 Work는 폴더를 만들지 않는다. `WorkView.drafts`로 보낸다. `discardDraft`는 `DraftRef`를 받는다. `context.md`의 task 정보에 프로젝트 id와 Work 초안 폴더를, 곁 세션 안내에 초안 절을 넣는다 | 기본 세션의 초안(D404, I135)과 같은 읽기·카드·대화상자를 쓰고 만든 곳만 더한다. 초안의 `project`는 에이전트가 알아야 쓴다 | |
+| I153 | 다시 하기(D420, D421)는 `NewWorkInput.abandonOriginal`이다. `Relay.createWork`가 초안의 출처로 원래 Work를 찾아 새 Work의 `from_work`를 적는다. 포기를 고르면 먼저 포기할 수 있는지 본다(`redoAbandonBlock`: 진행 중이거나 멈춤, 끊긴 작업 없음, 정리 세션 닫힘). 그때만, 같은 프로젝트이고 원래 Work의 이슈가 아직 닫히지 않았고 이슈 번호 칸이 그 번호 그대로면 그 이슈를 이어 쓴다(`IssueRecord.from_work`, `linked`는 원래 것). 만든 뒤 초안을 지우고 원래 Work를 `abandon`(`redoBy`, 이어 썼으면 `issueKept`)한다. `work.abandoned`의 `redo_by`가 있으면 끝 코멘트가 "Work 포기: <새 work-id>로 다시 시작"이고, `issue_kept`면 이슈를 닫지 않는다. 그래도 포기하지 못하면 새 Work는 그대로 열고 원래 Work에 알린다. 대화상자는 포기를 켤 때만 이슈 번호를 채운다 | 사람이 칸을 바꾸면 그 이슈에 쓰는 것이 D338과 같다. 두 Work가 한 이슈를 쓰면 먼저 끝난 쪽이 닫는다. 새 Work를 먼저 만들어야 원래 Work의 끝 코멘트에 새 id를 적는다. 새 Work를 만들고 실패를 돌려주면 사람이 다시 눌러 같은 Work가 둘 생긴다(PR #56 리뷰) | |
+| I154 | 대화 ID를 받지 못한 Codex task가 중단됐거나 handoff 없이 끝났으면 [재개]가 쓸 수 없는 세션 기록을 지우고 같은 task를 새 세션으로 시작한다(`startTask`). 세션 기록이 없는 중단됨의 [재개](D218)와 같다. 승인 대기와 막힘은 산출물이 있어 [재개]를 끈다. 다시 시작할 때 처음 시작 커밋은 그대로 두고(`[변경]`의 범위), 앞 세션이 남긴 `handoff.md`는 지운다 | 이 경우의 길이던 [이 단계 새 세션으로 다시]가 없어졌다(D423). 임의의 ID로 재개하지 않는 것(engines.md 4.3)은 그대로다 | |
 
 ## 3. 확인한 사실
 
@@ -362,6 +367,7 @@ app/src/
 | M21 | 곁 세션 | Work마다 언제든 열고 닫는 Claude Code 세션. 첫 프롬프트 없이 안내를 시스템 프롬프트로 주고, 묻고 나서만 바꾼다(D385~D390) | M20 |
 | M23 | 기본 세션 | 프로젝트나 Work에 매이지 않는 세션 여러 개. 맨 CLI처럼, relay 도우미, 새 Work 구상. 에이전트가 쓴 Work 초안을 카드로 보이고 새 Work 대화상자로 잇는다(D397~D406) | M21 |
 | M24 | 서브모듈 Work | Work의 대상으로 서브모듈 하나를 고르면 그 서브모듈 레포만 다루고 전달한다. 메인 레포의 통합 검증 worktree 안에서 일하고, 사용자 체크아웃이 깨지지 않게 막고 되돌린다(D413~D417) | M5 |
+| M25 | 앞으로만 가는 파이프라인 | 단계 선택(되감기·건너뛰기), 이전 단계 추천, [이 단계 새 세션으로 다시], [intake 다시]를 없앤다. verify가 찾은 문제는 그 자리에서 고치고, 다시 하기는 Work 초안으로 새 Work를 만든다(D418~D424) | M23 |
 
 ### M0. 골격과 배포
 
@@ -1229,6 +1235,32 @@ app/src/
 
 - [단위], [어댑터], [흐름] 위 시험. 기존 시험이 그대로 통과한다. [계약] 가짜 쪽 통과.
 
+### M25. 앞으로만 가는 파이프라인 (D418~D424)
+
+설계 v0.21. 사람이 "단계 건너뛰기나 되돌리기 대신 잘못되면 새 Work로 다시 하자"고 제안해 정했다.
+
+**1. 없앤 것**
+
+- `core/rewind`, `machine`의 단계 선택·되감기 이벤트(`selectStep`, `rewind.*`)와 할 일(`rewindCode`, `resumeRewind`), [이 단계 새 세션으로 다시](`retry`), 이전 단계 추천으로 멈추기와 그 강조 영역·자동 승인 보류, `pipeline`의 [현재 코드 위에서 이어서] 표(`KEEP_CODE`)와 이전 단계·선택 가능한 다음 단계, `context.md`의 단계 선택 절과 "선택 가능한 다음 단계" 절, 형식 검사의 `recommended_next.node`, 단계 선택 대화상자와 액션 바의 [단계 선택]·[이 단계 새 세션으로 다시], git의 백업과 되돌리기. 예전 기록은 I150대로 읽기만 한다.
+
+**2. 바꾼 것과 더한 것**
+
+- handoff의 `recommended_next`(I151). 끊긴 되감기는 [무시]만(D424). 대화 ID를 받지 못한 Codex의 [재개](I154).
+- Work 초안(I152, I153): Work의 `work-drafts/`, 오른쪽 패널 맨 위의 초안 카드, 새 Work 대화상자의 "원래 Work 포기"와 원래 Work의 기준 브랜치·이슈 번호 채우기, `work.json`과 `work.created`의 `from_work`, 이슈 이어 쓰기와 다시 하려고 포기한 Work의 끝 코멘트.
+- 스킬: `_common.md`에 "When an earlier result is wrong"(그 자리에서 묻기)과 "Starting over: a Work draft"(초안 형식), 마무리 표의 줄. verify는 실패·판정 불가를 여기서 고침 / 이대로 / 새 Work로, 설계 Work의 새 결정은 그 자리에서 묻는다(D363을 바꿈). implement는 설계가 틀리면 묻고 `계획과 달라진 점`에 적는다. work-start는 유형을 바꾸면 새 유형의 초안을 쓰고, 요청에 앞 Work의 intent가 있으면 그것을 출발점으로 삼는다. 각 스킬의 "Continuing on current code"를 지운다.
+- 문서: README의 "고치기와 다시 하기", 곁 세션 안내.
+
+**3. 시험**
+
+- 지운 기능의 시험(`test/unit/rewind.test.ts`, `test/unit/carried.test.ts`, `test/flow/rewind.test.ts`, [실제] rewind-intake·rewind-fix)은 지운다.
+- **[단위]:** 액션에 단계 선택과 새 세션으로 다시가 없음, 이전 단계 추천이 있는 handoff도 멈추지 않음, Codex의 [재개]가 새 세션, `redoBy`와 `from_work`의 기록, 끊긴 되감기의 [다시 시도]는 받지 않고 [무시]는 받음, 이슈 이어 쓰기와 다시 하기의 끝 코멘트, `context.md`의 프로젝트 id와 초안 폴더, 곁 세션 안내의 초안 절.
+- **[흐름]:** task가 쓴 초안이 카드로 보이고, 그 초안으로 만든 새 Work가 `from_work`와 이어 쓴 이슈를 갖고 원래 Work가 포기된다(`redo_by`). 완료한 Work의 초안으로는 포기를 받지 않는다. [버리기]가 초안을 지운다.
+- **[스모크]:** 액션 바에 [단계 선택]이 없고, Work 패널의 초안 카드와 새 Work 대화상자의 "원래 Work 포기".
+
+**완료 기준**
+
+- 위 시험과 기존 시험, [계약] 가짜 쪽, `RELAY_REAL_CLAUDE=dry`의 [실제], 스킬 정적 검사가 통과한다.
+
 ## 8. 테스트 전략
 
 ### 8.1 시험의 층
@@ -1297,9 +1329,7 @@ app/src/
 - 사람 역할: 첫 실행 창은 I17의 도구로 수락하고, 질문(`AskUserQuestion`)에는 첫 선택지(추천)로 답한다. 승인 대기가 되면 [승인]한다.
 - 판정: Work 완료까지 갔는지, task마다 형식 오류 되돌림 횟수, [오류 무시하고 승인]을 쓴 횟수(0이어야 함), 걸린 시간.
 - 재개(M3): intake 세션에 표식을 알려 준 뒤 [즉시 중단]하고 [재개]한다. 다시 연 세션에 표식을 파일에 쓰게 해 파일로 판정한다(다시 연 화면에는 앞 대화가 보여 화면으로는 가를 수 없음).
-- 되감기(M4, 사용자 결정): S 경로 레포에서 최종 검증이 승인 대기가 되면 [단계 선택]으로 되감고 Work 완료까지 간다. 가짜 `claude`로는 스킬이 `context.md`의 되감기 절을 따르는지 볼 수 없어서 둔다.
-  - rewind-intake: 완료조건을 하나 더하라는 추가 지시와 함께 intake로 되감는다. intent v2가 v1을 출발점으로 고쳐졌는지(완료조건이 늘고 v1 항목이 남는지, D40), 되돌린 수정 커밋이 백업 브랜치에 있는지 본다.
-  - rewind-fix: 재현 테스트 이름을 정한 추가 지시와 함께 fix로 되감는다. 되감은 fix가 추가 지시를 따랐는지, 되돌린 커밋이 백업 브랜치에 있는지 본다.
+- 되감기(M4): D418로 되감기를 없애 rewind-intake·rewind-fix 경우도 뺐다(M25).
 - 전달(M5, 사용자 결정): S 경로 레포에서 최종 검증이 승인 대기가 되면, 사람 역할이 worktree에 커밋 안 된 메모를 남기고 [PR 생성]을 누른다. 선택지에서 [AI 세션 열기]로 정리 세션을 열어 메모를 지워 달라고 하고, git status가 깨끗해지면 [정리 끝 → push/PR 진행]을 누른 뒤 [Work 정리]를 한다. 실제 스킬이 쓴 `pr.md`가 PR 제목과 본문으로 가는지, 에이전트가 스스로 push하지 않는지, 첫 프롬프트 없이 연 정리 세션이 요청을 받아 일하고 Stop 훅이 오는지 본다. gh는 가짜 gh다(시험 환경에 gh 로그인이 없음). 실제 PR은 [실기]에서 본다.
 - 재시작(M6, 사용자 결정): 앱(Relay)을 자식 프로세스(`test/claude/app-process.mjs`)로 띄워 S 경로 레포의 intake가 첫 요청을 받아 일하는 중에 그 프로세스만 SIGKILL로 끝낸다(앱 충돌). 다시 켜면 조정과 고아 확인을 하고(D75, D76), 중단됨이 된 intake를 [재개]로 같은 세션(`--resume`)으로 열어 이어서 하라고 한 뒤 Work 완료까지 간다. 앱이 죽은 뒤 `claude`가 남았는지, 남았으면 재시작이 끝내고 알렸는지 적는다. 자식 프로세스는 Vite의 SSR 모듈 로더로 앱 코드를 TypeScript 그대로 불러 쓴다.
 - 자동 승인(M7, 사용자 결정): S 경로 레포에서 수정 단계의 자동 승인을 켜고(카운트다운 5초) 사람 역할은 카운트다운을 기다린다. 실제 Stop 본문의 `background_tasks`와 `session_crons`가 턴이 끝날 때 비어 있어 카운트다운이 시작되는지(D129), 실제 스킬이 마무리 안내 문구(D132)를 그대로 찍는지, 자동 승인 뒤 세션을 끝내 다음 단계(M8부터 리뷰)로 가고 승인 방식이 자동으로 남는지 본다. 자동 승인하지 않으면 알림의 까닭을 남기고 실패로 친다.

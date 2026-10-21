@@ -28,7 +28,10 @@ export const ISSUE_TITLE_LIMIT = 256
 /** 잘린 산출물 끝에 붙이는 말 (D349) */
 export const CUT_NOTE = '(잘림. 전문은 relay의 산출물)'
 
-/** 항목의 키 (D349): 새 이슈는 body, task는 task id, 단계 선택은 rewind-<새 task id>, 끝은 end, 닫기는 close */
+/**
+ * 항목의 키 (D349): 새 이슈는 body, task는 task id, 끝은 end, 닫기는 close. 단계 선택의 rewind-<새 task id>는 D418 전에
+ * 대기열에 남은 것뿐이다 (D424)
+ */
 export function issueKey(entry: IssueEntry): string {
   switch (entry.kind) {
     case 'issue':
@@ -90,32 +93,74 @@ export function withCloses(body: string, issue: number): string {
 
 // ---------- 대기열 (I97) ----------
 
-/**
- * 새 Work의 이슈 기록 (I96). linked는 새 Work 대화상자에 적은 기존 이슈 번호(D338), mark는 표시 id(issueMarkId)다
- */
-export function newIssueRecord(linked: number | null, mark: string): IssueRecord {
-  return { linked: linked !== null, number: linked, url: null, mark, pending: [], posted: [] }
+/** 다시 한 Work가 이어 쓸 원래 Work의 이슈 (D421) */
+export interface InheritedIssue {
+  work_id: string
+  linked: boolean
+  number: number
+  url: string | null
 }
 
 /**
- * intake 코멘트에 intent를 펼치는가 (D339): 기존 이슈거나 v2부터. 새 이슈의 v1은 본문과 같아 뺀다
+ * 새 Work의 이슈 기록 (I96). linked는 새 Work 대화상자에 적은 기존 이슈 번호(D338), mark는 표시 id(issueMarkId)다.
+ * from이 있으면 다시 한 Work가 원래 Work의 이슈를 이어 쓴다 (D421): 번호와 방식(linked)을 이어받는다
  */
-export function commentShowsIntent(issue: Pick<IssueRecord, 'linked'>, version: number): boolean {
-  return issue.linked || version > 1
+export function newIssueRecord(
+  linked: number | null,
+  mark: string,
+  from?: InheritedIssue,
+): IssueRecord {
+  if (from) {
+    return {
+      linked: from.linked,
+      number: from.number,
+      url: from.url,
+      mark,
+      pending: [],
+      posted: [],
+      from_work: from.work_id,
+    }
+  }
+  return { linked: linked !== null, number: linked, url: null, mark, pending: [], posted: [] }
+}
+
+/** 이미 있는 이슈에 쓰는가: 새 Work 대화상자에 적은 기존 이슈(D338)거나 원래 Work에서 이어 쓰는 이슈(D421)다 */
+function existing(issue: Pick<IssueRecord, 'linked' | 'from_work'>): boolean {
+  return issue.linked || issue.from_work !== undefined
+}
+
+/**
+ * intake 코멘트에 intent를 펼치는가 (D339): 기존 이슈거나 이어 쓰는 이슈(D421)거나 v2부터. 새 이슈의 v1은 본문과 같아 뺀다
+ */
+export function commentShowsIntent(
+  issue: Pick<IssueRecord, 'linked' | 'from_work'>,
+  version: number,
+): boolean {
+  return existing(issue) || version > 1
 }
 
 /** 이슈 기록이 시작됐는가: 새 이슈는 만들기가 대기열이나 게시에 있고, 기존 이슈는 무엇이든 올렸거나 올릴 것이 있다 */
 function started(issue: IssueRecord): boolean {
-  if (issue.linked) return issue.posted.length > 0 || issue.pending.length > 0
+  if (existing(issue)) return issue.posted.length > 0 || issue.pending.length > 0
   return issue.posted.some((p) => p.key === 'body') || issue.pending.some((e) => e.kind === 'issue')
 }
 
-/** 끝 문구와 닫는 까닭 (D346, D347). work.completed의 payload와 끝낸 뒤의 Work로 정한다 */
+/**
+ * 끝 문구와 닫는 까닭 (D346, D347). work.completed의 payload와 끝낸 뒤의 Work로 정한다. 다시 하려고 포기했으면(D421) 새 Work를
+ * 적고, 새 Work가 이슈를 이어 쓰면(issue_kept) 닫지 않는다(redo)
+ */
 export function endOf(
   work: WorkState,
   event: LifecycleEvent,
-): { text: string; reason: IssueCloseReason } | null {
-  if (event.type === 'work.abandoned') return { text: 'Work 포기', reason: 'not_planned' }
+): { text: string; reason: IssueCloseReason; redo?: true } | null {
+  if (event.type === 'work.abandoned') {
+    const by = event.payload['redo_by']
+    if (typeof by !== 'string') return { text: 'Work 포기', reason: 'not_planned' }
+    const text = `Work 포기: ${by}로 다시 시작`
+    return event.payload['issue_kept'] === true
+      ? { text, reason: 'not_planned', redo: true }
+      : { text, reason: 'not_planned' }
+  }
   if (event.type !== 'work.completed') return null
   const delivery = event.payload['delivery']
   const pr = work.pr ? `PR #${work.pr.number}` : 'PR'
@@ -137,7 +182,6 @@ export function endOf(
  * 전이가 남긴 이벤트로 게시할 항목을 정한다 (I97, D336~D347). 이슈 기록이 없는 Work나 더할 것이 없으면 빈 목록이다.
  * - 의도 승인: 새 이슈면 만들기를 먼저(한 번만), 그 뒤 intake 코멘트 (D336, D338)
  * - task 승인: 코멘트. PR 대응은 올리지 않는다 (D340)
- * - 되감기·건너뛰기: 올렸거나 올릴 task를 폐기했을 때만 (D341)
  * - Work 끝: 끝 코멘트와, 새 이슈면 닫기 (D346, D347). 이슈 기록이 시작되기 전(의도 승인 전)에는 없다
  */
 export function issueEntries(after: WorkState, events: readonly LifecycleEvent[]): IssueEntry[] {
@@ -145,9 +189,6 @@ export function issueEntries(after: WorkState, events: readonly LifecycleEvent[]
   if (!issue) return []
   const out: IssueEntry[] = []
   const queued = () => [...issue.pending, ...out]
-  const known = (taskId: string) =>
-    issue.posted.some((p) => p.key === taskId) ||
-    queued().some((e) => e.kind === 'task' && e.task_id === taskId)
   const isStarted = () => started({ ...issue, pending: queued() })
   for (const ev of events) {
     if (ev.type === 'task.approved') {
@@ -155,25 +196,17 @@ export function issueEntries(after: WorkState, events: readonly LifecycleEvent[]
       if (!task || task.node === 'respond') continue
       if (task.node === 'intake') {
         const version = after.intent?.version ?? 1
-        if (!issue.linked && !isStarted()) out.push({ kind: 'issue', intent_version: version })
+        if (!existing(issue) && !isStarted()) out.push({ kind: 'issue', intent_version: version })
         out.push({ kind: 'task', task_id: task.id, intent_version: version })
         continue
       }
       if (isStarted()) out.push({ kind: 'task', task_id: task.id })
       continue
     }
-    if (ev.type === 'task.rewound' || ev.type === 'task.skipped_to') {
-      const discarded = ev.payload['discarded']
-      if (!ev.task_id || !Array.isArray(discarded)) continue
-      if (discarded.some((id) => typeof id === 'string' && known(id))) {
-        out.push({ kind: 'step', task_id: ev.task_id })
-      }
-      continue
-    }
     const end = endOf(after, ev)
     if (end && isStarted()) {
       out.push({ kind: 'end', text: end.text })
-      if (!issue.linked) out.push({ kind: 'close', reason: end.reason })
+      if (!issue.linked && !end.redo) out.push({ kind: 'close', reason: end.reason })
     }
   }
   return out
@@ -262,7 +295,7 @@ export function taskComment(o: {
   return limited(head, artifacts, issueMarker(o.mark, o.task.id))
 }
 
-/** 단계 선택 코멘트 (D341): 폐기한 task, 고른 단계, 사람 추가 지시 */
+/** D418 전의 단계 선택 코멘트 (D341). 그 앱이 대기열에 남긴 것만 게시한다 (D424) */
 export function stepComment(o: {
   /** 표시 id (issueMarkId) */
   mark: string

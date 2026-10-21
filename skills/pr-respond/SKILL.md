@@ -58,7 +58,6 @@ Settle every item as one of: 고침 (fixed) / 고치지 않음 (not fixed, with 
 ## Rules
 
 - **Code:** this step changes code. Commit all changes before you close. Do not push, and do not use `gh`: the app pushes and posts after approval.
-- **`recommended_next`:** always null. There is no next step to pick.
 
 ## Human decisions
 

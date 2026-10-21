@@ -270,9 +270,7 @@ describe('PR 진행 중의 액션 바와 배지 (D182, D183)', () => {
     expect(actions(live)).toEqual({
       interrupt: true,
       resume: false,
-      retry: false,
       resumeWork: false,
-      selectStep: false,
       stopAfter: false,
       abandon: false,
       clean: false,
@@ -975,7 +973,7 @@ describe('replies.md 형식 검사 (5.2.1, D190)', () => {
     ])
     expect(check(files(), []).errors).toEqual([])
     expect(check(files('## review:1\n답\n## inline:2\n답\n'), ids).errors).toEqual([])
-    // recommended_next는 늘 null이다 (D188)
+    // D418 전 형식의 recommended_next는 읽지 않는다: 다음 단계를 고르는 필드가 없다 (D422)
     const rec = check(
       {
         ...files('## review:1\n답\n## inline:2\n답\n'),
@@ -986,7 +984,8 @@ describe('replies.md 형식 검사 (5.2.1, D190)', () => {
       },
       ids,
     )
-    expect(rec.errors.map((e) => e.field)).toEqual(['recommended_next.node'])
+    expect(rec.errors).toEqual([])
+    expect(rec.warnings).toEqual([])
   })
 })
 
@@ -1014,7 +1013,7 @@ const handoffText = [
 // ---------- context.md (D192) ----------
 
 describe('PR 대응 task의 context.md (D162, D192, 시나리오 2-4)', () => {
-  it('맨 위에 PR 정보, 사람 지시, 외부 글을 감싼 항목, 앞 라운드를 넣고, 다음 단계는 없다', () => {
+  it('맨 위에 PR 정보, 사람 지시, 외부 글을 감싼 항목, 앞 라운드를 넣고, 다음 단계 절은 없다', () => {
     const work = respond(
       inPr(),
       ['review:1', 'ci:h:ci/test (push)', 'diverged:r0'],
@@ -1063,6 +1062,8 @@ describe('PR 대응 task의 context.md (D162, D192, 시나리오 2-4)', () => {
       task,
       config: DEFAULT_CONFIG,
       taskDir: '/w/tasks/06-respond',
+      draftsDir: '/w/work-drafts',
+      projectId: 'app-3f9a1c',
       request: { path: '/w/request.md', text: '요청' },
       intent: '# intent',
       decisionLog: '',
@@ -1088,9 +1089,8 @@ describe('PR 대응 task의 context.md (D162, D192, 시나리오 2-4)', () => {
     expect(text).toContain(
       '- 라운드 1 (t-05)\n  - 항목: convo:3\n  - 사람 지시: 없음\n  - 요약: 대화 코멘트에 답했다.',
     )
-    expect(text).toContain(
-      '없음: PR 대응 task는 파이프라인 밖이다. `recommended_next`는 null로 둔다 (D188)',
-    )
+    expect(text).not.toContain('## 선택 가능한 다음 단계')
+    expect(text).not.toContain('recommended_next')
     // 승인 방식은 설정을 따른다(D169). 기본은 수동이다
     expect(text).toContain(
       '수동 승인 (task를 시작할 때의 설정. 설정은 바로 적용되고, 자동 승인 여부는 턴이 끝날 때의 설정으로 정한다. 승인하면 앱이 push하고 답글을 게시한다)',

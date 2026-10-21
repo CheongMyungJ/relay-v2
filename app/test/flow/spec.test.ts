@@ -1,7 +1,6 @@
 // [흐름] 설계 유형 (docs/implementation.md M20, I109). 가짜 claude로 설계 Work가 intake → spec → verify → Work 완료로
-// 가고(설계 문서가 커밋되고 pr.md가 설계 템플릿), 설계 문답의 기본 자동 승인, 열린 질문이 남으면 멈춤, verify가 spec을
-// 추천하면 멈춤, Work 완료 화면의 다시 볼 결정(revisit), spec으로 되감기의 기본([현재 문서 위에서 이어서])과 체크를 끈
-// 되감기, 의도 승인 전 [intake 다시]로 유형을 설계로 바꾸기, PR 대응 context.md의 spec.md 경로를 본다. 다른 유형의
+// 가고(설계 문서가 커밋되고 pr.md가 설계 템플릿), 설계 문답의 기본 자동 승인, 열린 질문이 남으면 멈춤, Work 완료 화면의
+// 다시 볼 결정(revisit), PR 대응 context.md의 spec.md 경로를 본다. 다른 유형의
 // 흐름은 flow.test.ts, feature.test.ts, refactor.test.ts, general.test.ts가 본다.
 import fs from 'node:fs'
 import path from 'node:path'
@@ -9,7 +8,6 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { skillText } from '../../src/adapters/claude'
 import { parseFrontMatter } from '../../src/core/validate'
 import type { AppConfig } from '../../src/shared/config'
-import type { WorkView } from '../../src/shared/views'
 import type { LifecycleEvent, WorkState, WorkType } from '../../src/shared/work'
 import { drive } from '../support/driver'
 import { CART_FILES, FakeGitHub, FakeWorld } from '../support/github'
@@ -24,7 +22,6 @@ import {
   SPEC_REQUEST,
   SPEC_REVISIT,
   handoff,
-  scenario,
   specScenario,
   specVerification,
   steps,
@@ -86,23 +83,6 @@ function events(dir: string): LifecycleEvent[] {
     .split('\n')
     .filter(Boolean)
     .map((l) => JSON.parse(l) as LifecycleEvent)
-}
-
-function untilTask(
-  s: Setup,
-  key: string,
-  pred: (t: WorkView['tasks'][number], w: WorkView) => boolean,
-  label: string,
-) {
-  return s.h.ui.until(
-    () => {
-      const w = s.h.ui.works.get(key)
-      const t = w?.tasks.find((x) => x.id === w.current)
-      return w && t && pred(t, w) ? t : null
-    },
-    label,
-    60_000,
-  )
 }
 
 const statuses = (w: WorkState) => w.tasks.map((t) => [t.id, t.node, t.status, t.reason])
@@ -183,7 +163,7 @@ describe('[흐름] 설계 유형 (M20)', () => {
     // context.md: 업무 유형, 설계의 다음 단계, 고정된 질문 방식. verify는 spec.md 경로를 받는다 (D374)
     const specCtx = read(path.join(dir, 'tasks', '02-spec', 'context.md'))
     expect(specCtx).toContain('- 업무 유형: 설계 (`spec`)')
-    expect(specCtx).toContain('- 기본 다음 단계: verify (리뷰와 검증)')
+    expect(specCtx).not.toContain('선택 가능한 다음 단계')
     expect(specCtx).toContain(
       '결정마다 확인 (`confirm_each`). 설계 문답은 결정을 모두 묻는다 (D358)',
     )
@@ -244,161 +224,25 @@ describe('[흐름] 설계 유형 (M20)', () => {
     expect(work(open.dir(key2)).tasks.at(-1)?.auto_hold?.reasons).toContain('open_questions')
   })
 
-  it('verify가 설계 문답을 추천하면 멈춘다. 다시 볼 결정이 "없음"이면 완료 화면에 보이지 않는다 (D363, D374, I106)', async () => {
+  it('다시 볼 결정이 "없음"이면 완료 화면에 보이지 않는다 (D374, I106)', async () => {
     const s = await setup(
       specScenario({
         verify: specVerify().map((st) =>
           st.do === 'write' && st.file === 'verification.md'
             ? { ...st, text: specVerification('없음') }
-            : st.do === 'write' && st.file === 'handoff.md'
-              ? {
-                  ...st,
-                  text: handoff({
-                    recommended_next: { node: 'spec', reason: '반영하려면 새 결정이 필요함' },
-                  }),
-                }
-              : st,
+            : st,
         ),
       }),
     )
     const key = await s.create()
     const dir = s.dir(key)
-    const stopped = await drive(s.h.relay, s.h.ui, key)
-    expect(stopped, s.h.ui.dump()).toMatchObject({
-      status: 'stopped',
-      reason: '이전 단계 추천으로 멈춤: 설계 문답(spec)로 — 반영하려면 새 결정이 필요함',
+    const paused = await drive(s.h.relay, s.h.ui, key, {
+      pauseAt: (t) => t.node === 'verify' && t.status === 'awaiting_approval',
     })
+    expect(paused, s.h.ui.dump()).toMatchObject({ status: 'paused' })
     await settle(s.h, key)
     const review = await s.h.relay.review(key, work(dir).tasks.at(-1)?.id ?? '')
     expect(review?.completion?.revisit).toBeNull()
-    expect(s.h.ui.works.get(key)?.steps.map((c) => [c.node, c.recommended, c.keepDefault])).toEqual(
-      [
-        ['intake', false, false],
-        ['spec', true, true],
-        ['verify', false, false],
-      ],
-    )
-  })
-
-  it('spec으로 되감으면 [현재 문서 위에서 이어서]가 기본이다: 문서 커밋이 남고 폐기된 spec.md와 verification.md 경로를 넣는다. 끄면 되돌린다 (D365, I105)', async () => {
-    const s = await setup(specScenario())
-    const key = await s.create()
-    const dir = s.dir(key)
-    const paused = await drive(s.h.relay, s.h.ui, key, {
-      pauseAt: (t) => t.node === 'verify' && t.status === 'awaiting_approval',
-    })
-    expect(paused, s.h.ui.dump()).toMatchObject({ status: 'paused' })
-    await settle(s.h, key)
-    const head = git(s.tree(key), 'rev-parse', 'HEAD')
-    const choice = s.h.ui.works.get(key)?.steps.find((c) => c.node === 'spec')
-    expect(choice).toMatchObject({
-      keepCode: true,
-      keepLabel: '현재 문서 위에서 이어서',
-      keepDefault: true,
-    })
-
-    // 체크를 끄면 다른 유형처럼 spec을 시작할 때의 커밋으로 되돌린다
-    const reset = await s.h.relay.stepPreview(key, 'spec', false)
-    if (!reset.ok) throw new Error(reset.error)
-    expect(reset.preview.code).toMatchObject({ kind: 'reset', commits: 1 })
-
-    const r = await s.h.relay.stepPreview(key, 'spec', true)
-    if (!r.ok) throw new Error(r.error)
-    expect(r.preview).toMatchObject({
-      node: 'spec',
-      kind: 'rewind',
-      keepCodeOffered: true,
-      code: { kind: 'keep', commits: 0 },
-      discard: [{ taskId: 't-02' }, { taskId: 't-03' }],
-    })
-    expect(
-      await s.h.relay.selectStep(key, {
-        node: 'spec',
-        keepCode: true,
-        instruction: '결정 2를 다시 본다',
-        expect: r.preview.expect,
-      }),
-    ).toEqual({ ok: true })
-    await untilTask(s, key, (t) => t.id === 't-04' && t.live, '되감은 spec')
-    await settle(s.h, key)
-    expect(git(s.tree(key), 'rev-parse', 'HEAD')).toBe(head)
-    const w = work(dir)
-    expect(statuses(w).slice(-1)).toEqual([['t-04', 'spec', 'working', 'rewind']])
-    expect(w.tasks.at(-1)?.selection?.keep_code).toBe(true)
-    const ctx = read(path.join(dir, 'tasks', '04-spec', 'context.md'))
-    expect(ctx).toContain('[현재 문서 위에서 이어서]')
-    expect(ctx).toContain('결정 2를 다시 본다')
-    expect(ctx).toContain(path.join(dir, 'tasks', '02-spec', 'spec.md'))
-    expect(ctx).toContain(path.join(dir, 'tasks', '03-verify', 'verification.md'))
-  })
-
-  it('체크를 끄고 spec으로 되감으면 문서 커밋을 백업 브랜치에 남기고 되돌린다 (D365, 6.2)', async () => {
-    const s = await setup(specScenario())
-    const key = await s.create()
-    const base = git(s.repo, 'rev-parse', 'main')
-    const paused = await drive(s.h.relay, s.h.ui, key, {
-      pauseAt: (t) => t.node === 'verify' && t.status === 'awaiting_approval',
-    })
-    expect(paused, s.h.ui.dump()).toMatchObject({ status: 'paused' })
-    await settle(s.h, key)
-    const r = await s.h.relay.stepPreview(key, 'spec', false)
-    if (!r.ok) throw new Error(r.error)
-    expect(
-      await s.h.relay.selectStep(key, {
-        node: 'spec',
-        keepCode: false,
-        instruction: '',
-        expect: r.preview.expect,
-      }),
-    ).toEqual({ ok: true })
-    await untilTask(s, key, (t) => t.id === 't-04' && t.live, '되감은 spec')
-    await settle(s.h, key)
-    expect(git(s.tree(key), 'rev-parse', 'HEAD')).toBe(base)
-    expect(fs.existsSync(path.join(s.tree(key), SPEC_DOC_PATH))).toBe(false)
-    expect(r.preview.code.backupBranch).toBeTruthy()
-    expect(git(s.repo, 'branch', '--list', r.preview.code.backupBranch ?? '')).toContain(
-      r.preview.code.backupBranch ?? '',
-    )
-  })
-
-  it('의도 승인 전 [intake 다시]에서 유형을 설계로 바꾸면 다음 단계가 spec이다 (D237, D353)', async () => {
-    const s = await setup({
-      tasks: {
-        ...scenario().tasks,
-        't-02': specScenario().tasks['work-start'] ?? [],
-        spec: steps('spec'),
-      },
-    })
-    const key = await s.create('bugfix')
-    const dir = s.dir(key)
-    await untilTask(s, key, (t) => t.id === 't-01' && t.status === 'awaiting_approval', '의도 정리')
-
-    const r = await s.h.relay.stepPreview(key, 'intake', false, 'spec')
-    if (!r.ok) throw new Error(r.error)
-    expect(r.preview.typeChange).toBe(
-      '유형을 버그 수정에서 설계(으)로 바꿉니다. 의도 승인 뒤에는 바꿀 수 없습니다 (D237)',
-    )
-    expect(
-      await s.h.relay.selectStep(key, {
-        node: 'intake',
-        keepCode: false,
-        instruction: '',
-        expect: r.preview.expect,
-        type: 'spec',
-      }),
-    ).toEqual({ ok: true })
-    await untilTask(s, key, (t, w) => t.id === 't-02' && w.type === 'spec', '다시 돈 intake')
-    await settle(s.h, key)
-    expect(work(dir).type).toBe('spec')
-
-    const paused = await drive(s.h.relay, s.h.ui, key, { pauseAt: (t) => t.node === 'verify' })
-    expect(paused, s.h.ui.dump()).toMatchObject({ status: 'paused' })
-    expect(statuses(work(dir)).map(([, node]) => node)).toEqual([
-      'intake',
-      'intake',
-      'spec',
-      'verify',
-    ])
   })
 
   it('설계 Work의 PR 대응 context.md에 spec.md 경로가 있다 (D374)', async () => {

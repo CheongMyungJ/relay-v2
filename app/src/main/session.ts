@@ -7,23 +7,16 @@ import fsp from 'node:fs/promises'
 import path from 'node:path'
 import type { HookReply, HookRequest, HookServer } from '../adapters/hooks'
 import { processStartTime } from '../adapters/pty'
-import { readDrafts, saveSession } from '../adapters/store'
-import { watchDir } from '../adapters/watch'
+import { saveSession } from '../adapters/store'
 import { codexSessionToolDenial } from '../core/codex'
-import { DRAFT_MAX_BYTES, DRAFTS_DIR, isDraftFile, parseDraft } from '../core/draft'
+import { DRAFTS_DIR } from '../core/draft'
 import { clipSessionName, sessionGuide, sessionName, type SessionGuideWork } from '../core/session'
 import { SESSION_HOOK_ID } from '../core/settings'
 import { AGENT_LABELS, resolveAgent, type AgentEngine } from '../shared/agent'
 import type { AppConfig } from '../shared/config'
 import type { ProjectState } from '../shared/project'
 import { NEW_SESSION_NAME, type SessionRecord } from '../shared/session'
-import type {
-  CommandResult,
-  DraftView,
-  SessionView,
-  TerminalBacklog,
-  TerminalChunk,
-} from '../shared/views'
+import type { CommandResult, SessionView, TerminalBacklog, TerminalChunk } from '../shared/views'
 import {
   chatHook,
   chatMark,
@@ -35,7 +28,7 @@ import {
   type ChatSession,
 } from './chat'
 import type { TerminalBuffer } from './terminals'
-import { workTitle } from './work'
+import { DraftFolder } from './drafts'
 
 export interface SessionContext {
   /** RELAY_HOME. --add-dir로 붙인다 (D399) */
@@ -85,10 +78,7 @@ export class SessionRunner {
   private chat: ChatSession | null = null
   private seq = 0
   private readonly terminals = new Map<string, TerminalBuffer>()
-  private drafts: DraftView[] = []
-  private stopWatch: () => void = () => {}
-  private draftsRead: Promise<void> | null = null
-  private draftsAgain = false
+  private readonly drafts: DraftFolder
   /** [지우기]로 세션 디렉터리를 지우는 중이거나 지웠다. 더는 기록을 쓰지 않고 명령을 받지 않는다 */
   private removed = false
 
@@ -99,10 +89,17 @@ export class SessionRunner {
     readonly dir: string,
   ) {
     this.key = `sessions/${record.id}`
+    this.drafts = new DraftFolder({
+      dir: path.join(dir, DRAFTS_DIR),
+      source: { kind: 'session', id: record.id },
+      projectIds: () => this.ctx.projects().map((p) => p.project_id),
+      changed: () => this.ctx.changed(),
+      live: () => !this.removed,
+    })
   }
 
   get draftsDir(): string {
-    return path.join(this.dir, DRAFTS_DIR)
+    return this.drafts.dir
   }
 
   /** 초안 폴더를 만들고 보기 시작한다 (I135). 바뀌면 다시 읽어 화면에 넣는다 */
@@ -115,11 +112,8 @@ export class SessionRunner {
    * 초안 폴더를 (다시) 만들고 새로 본다. 감시는 폴더가 지워졌다 다시 생기거나 시작에 실패하면 알리지 않으므로(watchDir),
    * 사람의 요청과 [열기] 때마다 다시 건다
    */
-  private async watchDrafts(): Promise<void> {
-    if (this.removed) return
-    this.stopWatch()
-    await fsp.mkdir(this.draftsDir, { recursive: true })
-    this.stopWatch = watchDir(this.draftsDir, () => void this.refreshDrafts())
+  private watchDrafts(): Promise<void> {
+    return this.drafts.watch()
   }
 
   /** 이벤트를 하나씩 처리한다 */
@@ -339,7 +333,7 @@ export class SessionRunner {
 
   /** 앱을 끝낸다 (D406). 살아 있으면 끝내고, 초안 폴더를 그만 본다 */
   shutdown(): Promise<void> {
-    this.stopWatch()
+    this.drafts.stop()
     return this.enqueue(() => this.end())
   }
 
@@ -367,7 +361,7 @@ export class SessionRunner {
       if (this.chat?.status === 'live')
         return { ok: false, error: '열려 있는 기본 세션은 지울 수 없음. 먼저 닫으세요' }
       this.removed = true
-      this.stopWatch()
+      this.drafts.stop()
       try {
         await fsp.rm(this.dir, { recursive: true, force: true })
       } catch (e) {
@@ -385,47 +379,12 @@ export class SessionRunner {
 
   /** 초안 폴더를 다시 읽는다. 읽는 중에 또 바뀌면 끝난 뒤 한 번 더 읽는다 */
   refreshDrafts(): Promise<void> {
-    if (this.draftsRead) {
-      this.draftsAgain = true
-      return this.draftsRead
-    }
-    this.draftsRead = this.readDraftsNow()
-      .catch(() => undefined)
-      .finally(() => {
-        this.draftsRead = null
-        if (this.draftsAgain) {
-          this.draftsAgain = false
-          void this.refreshDrafts()
-        }
-      })
-    return this.draftsRead
-  }
-
-  private async readDraftsNow(): Promise<void> {
-    if (this.removed) return
-    const files = await readDrafts(this.draftsDir, isDraftFile, DRAFT_MAX_BYTES)
-    const ids = this.ctx.projects().map((p) => p.project_id)
-    this.drafts = files.map(({ name, text, bytes }) => {
-      const parsed = parseDraft(text, ids, bytes)
-      return {
-        ...parsed,
-        ref: { source: { kind: 'session', id: this.record.id }, name },
-        title: workTitle(parsed.request),
-      }
-    })
-    this.ctx.changed()
+    return this.drafts.refresh()
   }
 
   /** 초안을 지운다: [버리기], 그 초안으로 Work를 만든 뒤 (D404) */
-  async removeDraft(name: string): Promise<CommandResult> {
-    if (!isDraftFile(name)) return { ok: false, error: '초안 파일 이름이 아님' }
-    try {
-      await fsp.rm(path.join(this.draftsDir, name), { force: true })
-    } catch (e) {
-      return { ok: false, error: `초안을 지우지 못함: ${message(e)}` }
-    }
-    await this.refreshDrafts()
-    return { ok: true }
+  removeDraft(name: string): Promise<CommandResult> {
+    return this.drafts.remove(name)
   }
 
   // ---------- 화면 ----------
@@ -445,7 +404,7 @@ export class SessionRunner {
       terminal: c ? this.terminalKey(c.id) : null,
       resumable: this.resumeId(next) !== null,
       ...(c ? chatNotice(c, NAME) : {}),
-      drafts: this.drafts,
+      drafts: this.drafts.list,
     }
   }
 

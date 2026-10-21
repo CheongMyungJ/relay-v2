@@ -12,15 +12,7 @@ import type {
   WorkType,
 } from '../shared/work'
 import { badge, holdNeedsNotice, holdText } from './approval'
-import {
-  NODE_INFO,
-  WORK_COMPLETE,
-  defaultNext,
-  isPipelineNode,
-  inPipeline,
-  stopsForRecommendation,
-  workType,
-} from './pipeline'
+import { NODE_INFO, WORK_COMPLETE, defaultNext, isPipelineNode, workType } from './pipeline'
 import {
   DESIGN_FILE,
   FIX_FILE,
@@ -44,8 +36,8 @@ export function taskLabel(task: Pick<TaskRecord, 'seq' | 'node'>): string {
 }
 
 /**
- * 머리 띠의 이유 문구 (시나리오 2-5): 기본 진행 / 되감기 / 건너뛰기 / 재개, PR 대응 task는 대응 시작이다 (자동 대응은
- * M11)
+ * 머리 띠의 이유 문구 (시나리오 2-5): 기본 진행 / 재개, PR 대응 task는 대응 시작과 자동 대응이다. 되감기와 건너뛰기는
+ * D418 전에 만든 task에만 있다 (D424)
  */
 export const REASON_LABEL: Readonly<Record<StartReason, string>> = {
   default: '기본 진행',
@@ -163,7 +155,7 @@ export const WORK_STATUS_LABEL: Readonly<Record<WorkStatus, string>> = {
   archived: '보관됨',
 }
 
-/** Work가 멈춘 이유: 이전 단계 추천(D23), [이 단계 끝나면 멈춤](시나리오 3-4) */
+/** Work가 멈춘 이유: [이 단계 끝나면 멈춤](시나리오 3-4). 이전 단계 추천(D23)으로 멈춘 것은 D418 전 기록이다 (D424) */
 export function stopNotice(work: WorkState): string | null {
   const stop = work.stop
   if (work.status !== 'stopped' || !stop) return null
@@ -175,9 +167,8 @@ export function stopNotice(work: WorkState): string | null {
 }
 
 /**
- * 멈춘 Work에서 [재개]가 할 일 (3.3). 멈추게 한 task의 기본 다음 단계를 시작한다. 이전 단계 추천(D23)은
- * 따르지 않는다. 추천대로 되돌아가는 것은 [단계 선택]이다 (6.2). verify에서 멈췄으면 [재개] 대신
- * Work 완료 화면의 전달 버튼으로 Work를 완료한다 (D119).
+ * 멈춘 Work에서 [재개]가 할 일 (3.3). 멈추게 한 task의 기본 다음 단계를 시작한다. 파이프라인은 앞으로만 간다 (D418).
+ * verify에서 멈췄으면 [재개] 대신 Work 완료 화면의 전달 버튼으로 Work를 완료한다 (D119).
  */
 export function resumeHint(work: WorkState): string | null {
   const stop = work.stop
@@ -185,16 +176,10 @@ export function resumeHint(work: WorkState): string | null {
   const task = work.tasks.find((t) => t.id === stop.task_id)
   // 멈추는 것은 파이프라인 task의 승인뿐이다. PR 대응 task는 멈추지 않는다 (D188)
   const next = task && isPipelineNode(task.node) ? defaultNext(workType(work), task.node) : null
-  const back = '추천대로 되돌아가려면 [단계 선택]을 누르세요.'
-  if (next === WORK_COMPLETE) {
-    const done = 'Work 완료 화면에서 전달을 고르면 Work를 완료합니다'
-    return stop.kind === 'recommended_back' ? `추천을 따르지 않고 ${done}. ${back}` : `${done}.`
-  }
+  if (next === WORK_COMPLETE) return 'Work 완료 화면에서 전달을 고르면 Work를 완료합니다.'
   const action =
     next === null ? '기본 다음 단계로 갑니다' : `다음 단계(${NODE_INFO[next].title})를 시작합니다`
-  return stop.kind === 'recommended_back'
-    ? `[재개]하면 추천을 따르지 않고 ${action}. ${back}`
-    : `[재개]하면 ${action}.`
+  return `[재개]하면 ${action}.`
 }
 
 /**
@@ -327,18 +312,6 @@ export function emphasis(input: EmphasisInput): Emphasis[] {
       title: '열린 질문',
       lines: [...h.open_questions],
       hint: input.live === false ? OPEN_QUESTIONS_HINT_NO_SESSION : OPEN_QUESTIONS_HINT,
-    })
-  }
-  const rec = h?.recommended_next
-  if (rec && stopsForRecommendation(input.type, input.node, rec.node)) {
-    const outside = inPipeline(input.type, rec.node) ? '' : ' (이 유형의 단계가 아님)'
-    out.push({
-      kind: 'recommended_back',
-      title: '이전 단계 추천',
-      lines: [
-        `${NODE_INFO[rec.node].title}(${rec.node})${outside}로 — ${rec.reason}`,
-        '승인하면 다음 단계를 시작하지 않고 멈춥니다. 되돌아갈 단계는 멈춘 뒤 [단계 선택]으로 고릅니다.',
-      ],
     })
   }
   if (input.tests?.length) {

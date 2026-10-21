@@ -139,16 +139,16 @@ describe('전달을 시작할 수 있는 verify (7-3, D119, D120)', () => {
     })
   })
 
-  it('승인하면 멈추는 verify는 전달하지 않는다: [이 단계 끝나면 멈춤], 이전 단계 추천 (D119)', () => {
+  it('승인하면 멈추는 verify는 전달하지 않는다: [이 단계 끝나면 멈춤] (D119)', () => {
     const error = '승인하면 Work가 멈춤: [승인하고 멈춤]을 누르세요'
     expect(
       deliveryStart(atVerify('awaiting_approval', { stop_after_step: true }), check()),
     ).toEqual({ ok: false, error })
+    // D418 전 형식의 이전 단계 추천은 멈추지 않는다: 앞 단계로 돌아가는 길이 없다 (D422)
     const back = check({ recommended_next: { node: 'fix', reason: '완료조건 2 실패' } })
-    expect(deliveryStart(atVerify('awaiting_approval'), back)).toEqual({ ok: false, error })
-    expect(approvalStops({}, 'verify', back.handoffHeader)).toBe(true)
-    expect(approvalStops({}, 'verify', check().handoffHeader)).toBe(false)
-    expect(approvalStops({ stop_after_step: true }, 'fix', null)).toBe(true)
+    expect(deliveryStart(atVerify('awaiting_approval'), back)).toMatchObject({ ok: true })
+    expect(approvalStops({})).toBe(false)
+    expect(approvalStops({ stop_after_step: true })).toBe(true)
   })
 
   it('verify에서 멈춘 Work는 전달한다. verify는 이미 승인됐다 (D119)', () => {
@@ -345,13 +345,11 @@ describe('전달 결과의 화면 (7-6)', () => {
 })
 
 describe('정리 세션이 열린 동안의 조작 (D137)', () => {
-  it('재개, 다시, 단계 선택, 포기를 끈다. 나머지는 그대로다', () => {
+  it('재개와 포기를 끈다. 나머지는 그대로다', () => {
     const all = {
       interrupt: true,
       resume: true,
-      retry: true,
       resumeWork: true,
-      selectStep: true,
       stopAfter: true,
       abandon: true,
       clean: true,
@@ -359,9 +357,7 @@ describe('정리 세션이 열린 동안의 조작 (D137)', () => {
     expect(cleanupActions(all)).toEqual({
       interrupt: true,
       resume: false,
-      retry: false,
       resumeWork: false,
-      selectStep: false,
       stopAfter: true,
       abandon: false,
       clean: true,

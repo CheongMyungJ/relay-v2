@@ -47,14 +47,13 @@ import { projectRemoveBlock } from '../core/cleanup'
 import { applyConfigPatch, checkProjectSettings, checkWorkSettings } from '../core/config'
 import { createWork } from '../core/machine'
 import { NODE_INFO } from '../core/pipeline'
-import { issueMarkId } from '../core/issue'
+import { issueMarkId, type InheritedIssue } from '../core/issue'
 import { localIso, nextSessionId, nextWorkId, workBranch } from '../core/records'
 import { recordedProcesses, type RecordedProcess } from '../core/recovery'
 import { resolveAgent } from '../shared/agent'
 import { DEFAULT_CONFIG, type AppConfig, type WorkSettingsPatch } from '../shared/config'
-import type { NodeName } from '../shared/contracts'
 import { issueLogOn, projectName, type ProjectChecks, type ProjectState } from '../shared/project'
-import type { SessionRecord } from '../shared/session'
+import type { DraftRef, SessionRecord } from '../shared/session'
 import type {
   AppSnapshot,
   ApproveOptions,
@@ -75,13 +74,11 @@ import type {
   ProjectView,
   RespondStartInput,
   ReviewView,
-  SelectStepInput,
   SessionView,
-  StepPreviewResult,
   SubmoduleView,
   TerminalBacklog,
 } from '../shared/views'
-import { WORK_TYPES, type DeliveryChoice, type WorkState, type WorkType } from '../shared/work'
+import { WORK_TYPES, type DeliveryChoice, type WorkState } from '../shared/work'
 import { SessionPool } from './pool'
 import type { UiPort } from './ports'
 import { PASTE_KEEP_MS, linkPath, opensSafely, realLinkPath, type LinkFs } from './links'
@@ -130,6 +127,21 @@ const RELAY_BRANCH = 'relay/'
 const LINK_FS: LinkFs = {
   lstat: (file) => fsp.lstat(file).catch(() => null),
   readlink: (file) => fsp.readlink(file).catch(() => null),
+}
+
+/**
+ * 다시 한 Work가 이어 쓸 원래 Work의 이슈 (D421, I153): 같은 프로젝트(이슈는 레포의 것)이고, 이슈가 있고 아직 닫히지 않았고,
+ * 사람이 이슈 번호 칸을 바꾸지 않았을 때다. 아니면 undefined라 새 Work는 이슈 번호 칸대로 한다
+ */
+function inheritedIssue(
+  original: WorkRunner,
+  project: ProjectState,
+  input: NewWorkInput,
+): InheritedIssue | undefined {
+  const from = original.work.issue
+  if (original.project.project_id !== project.project_id || !from?.number || from.closed) return
+  if ((input.issueNumber ?? null) !== from.number) return
+  return { work_id: original.work.work_id, linked: from.linked, number: from.number, url: from.url }
 }
 
 export class Relay {
@@ -229,6 +241,8 @@ export class Relay {
     )
     // 이슈 기록에 남은 게시를 앞부터 잇는다 (I98, D344). 기다리지 않는다
     for (const r of loaded) if (!failed.has(r)) r.publishIssueSoon()
+    // 남은 Work 초안을 읽는다 (D421). 기다리지 않는다. 감시는 초안을 쓰는 세션(task, 곁 세션)을 띄울 때 건다
+    for (const r of loaded) if (!failed.has(r)) void r.refreshDrafts()
     // PR 진행인 Work는 항목을 읽어 두고 PR을 한 번 읽는다 (D159). 읽은 결과로 알리지 않는다
     await Promise.all(
       loaded
@@ -310,6 +324,7 @@ export class Relay {
       ghBin: this.ghBin(),
       checks: (projectId) => this.projects.get(projectId)?.checks,
       project: (projectId) => this.projects.get(projectId),
+      projectIds: () => [...this.projects.keys()],
       recheck: (projectId) => this.recheck(projectId),
       knowledgeSources: (projectId, except) =>
         [...this.works.values()]
@@ -507,7 +522,7 @@ export class Relay {
     this.projects.set(r.project.project_id, r.project)
     this.o.ui.projects(this.projectViews())
     // 초안의 project는 등록된 프로젝트만 받는다 (I135)
-    for (const session of this.sessions.values()) void session.refreshDrafts()
+    this.refreshAllDrafts()
     return { ok: true, projectId: r.project.project_id }
   }
 
@@ -588,7 +603,7 @@ export class Relay {
         this.projects.delete(projectId)
         this.o.ui.projects(this.projectViews())
         // 이 프로젝트의 초안은 모르는 프로젝트가 된다 (D404)
-        for (const session of this.sessions.values()) void session.refreshDrafts()
+        this.refreshAllDrafts()
         try {
           await removeProjectDir(this.o.home, projectId)
         } catch (e) {
@@ -774,15 +789,36 @@ export class Relay {
     }
     const settings = checkWorkSettings(input.settings ?? {})
     if (!settings.ok) return { ok: false, error: settings.error }
+    // Work에서 쓴 초안이면 다시 하기다 (D421): 원래 Work를 적고, 그 이슈를 이어 쓰고, 고르면 원래 Work를 포기한다
+    const source = input.draft?.source
+    const original = source?.kind === 'work' ? this.works.get(source.id) : undefined
+    if (source?.kind === 'work' && !original)
+      return { ok: false, error: '초안을 쓴 Work가 없습니다' }
+    // 포기할 수 없으면(끊긴 작업, 열린 정리 세션 포함) 새 Work를 만들기 전에 막는다
+    const blocked = !input.abandonOriginal
+      ? null
+      : original
+        ? original.redoAbandonBlock()
+        : '원래 Work가 없어 포기할 수 없습니다'
+    if (blocked) return { ok: false, error: blocked }
+    // 원래 Work의 이슈는 원래 Work를 포기할 때만 이어 쓴다: 둘이 같은 이슈를 쓰면 먼저 끝난 쪽이 닫는다
+    const inherited =
+      original && input.abandonOriginal ? inheritedIssue(original, project, input) : undefined
     this.creating = true
     let r: CreateWorkResult
     try {
-      r = await this.create(project, input, branch, settings.value)
+      r = await this.create(project, input, branch, settings.value, original?.work, inherited)
     } finally {
       this.creating = false
     }
     // 초안으로 만들었으면 그 초안을 지운다 (D404). 지우지 못해도 Work는 생겼다
-    if (r.ok && input.draft) await this.removeDraft(input.draft.source.id, input.draft.name)
+    if (r.ok && input.draft) await this.removeDraft(input.draft)
+    if (r.ok && original && input.abandonOriginal) {
+      // 새 Work는 생겼으니 포기하지 못해도 새 Work를 연다. 원래 Work에 알린다
+      const workId = this.works.get(r.workKey)?.work.work_id ?? r.workKey
+      const a = await original.abandon({ redoBy: workId, issueKept: inherited !== undefined })
+      if (!a.ok) original.redoAbandonFailed(workId, a.error)
+    }
     return r
   }
 
@@ -791,6 +827,8 @@ export class Relay {
     input: NewWorkInput,
     branch: string,
     settings: WorkSettingsPatch,
+    original?: WorkState,
+    inherited?: InheritedIssue,
   ): Promise<CreateWorkResult> {
     const repo = project.repo_path
     const env = this.env
@@ -863,9 +901,11 @@ export class Relay {
             issue: {
               linked: input.issueNumber ?? null,
               mark: issueMarkId(workId, randomBytes(4).toString('hex')),
+              ...(inherited ? { from: inherited } : {}),
             },
           }
         : {}),
+      ...(original ? { fromWork: original.work_id } : {}),
       at,
     })
     const runner = this.runner(project, files, created.work, workTitle(input.request))
@@ -966,11 +1006,6 @@ export class Relay {
     return this.withWork(workKey, (w) => w.resume(taskId))
   }
 
-  /** [이 단계 새 세션으로 다시] (D114) */
-  retry(workKey: string, taskId: string): Promise<CommandResult> {
-    return this.withWork(workKey, (w) => w.retry(taskId))
-  }
-
   /** [이 단계 끝나면 멈춤] */
   stopAfter(workKey: string, on: boolean): Promise<CommandResult> {
     return this.withWork(workKey, (w) => w.stopAfter(on))
@@ -1018,26 +1053,6 @@ export class Relay {
     this.works.delete(runner.key)
     this.o.ui.workRemoved(runner.key)
     return { ok: true }
-  }
-
-  // ---------- 단계 선택 (6.2) ----------
-
-  /** 단계 선택 대화상자의 미리 보기 (D82) */
-  async stepPreview(
-    workKey: string,
-    node: NodeName,
-    keepCode: boolean,
-    type?: WorkType,
-  ): Promise<StepPreviewResult> {
-    const runner = this.works.get(workKey)
-    return runner
-      ? runner.stepPreview(node, keepCode, type)
-      : { ok: false, error: 'Work가 없습니다' }
-  }
-
-  /** [단계 선택]의 [확인] */
-  selectStep(workKey: string, input: SelectStepInput): Promise<CommandResult> {
-    return this.withWork(workKey, (w) => w.selectStep(input))
   }
 
   // ---------- 전달 (시나리오 7) ----------
@@ -1248,13 +1263,22 @@ export class Relay {
     return r
   }
 
-  /** 초안 카드의 [버리기] (D404) */
-  discardDraft(sessionId: string, name: string): Promise<CommandResult> {
-    return this.removeDraft(sessionId, name)
+  /** 기본 세션과 Work의 초안을 다시 읽는다: 프로젝트 목록이 바뀌면 초안의 project가 맞는지 달라진다 */
+  private refreshAllDrafts(): void {
+    for (const session of this.sessions.values()) void session.refreshDrafts()
+    for (const work of this.works.values()) void work.refreshDrafts()
   }
 
-  private removeDraft(sessionId: string, name: string): Promise<CommandResult> {
-    return this.withSession(sessionId, (s) => s.removeDraft(name))
+  /** 초안 카드의 [버리기] (D404, D421) */
+  discardDraft(ref: DraftRef): Promise<CommandResult> {
+    return this.removeDraft(ref)
+  }
+
+  /** 초안을 지운다: 만든 곳이 기본 세션이면 그 세션, Work면 그 Work의 초안 폴더다 (D421) */
+  private removeDraft(ref: DraftRef): Promise<CommandResult> {
+    return ref.source.kind === 'work'
+      ? this.withWork(ref.source.id, (w) => w.removeDraft(ref.name))
+      : this.withSession(ref.source.id, (s) => s.removeDraft(ref.name))
   }
 
   // ---------- 재시작과 복구 (시나리오 9) ----------

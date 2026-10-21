@@ -33,15 +33,11 @@ async function setup(scenario: object, config: Partial<AppConfig> = { agent_engi
   const key = created.workKey
   const view = () => hh.ui.works.get(key)
   const task = () => view()?.tasks[0]
-  const read = () =>
-    JSON.parse(
-      fs.readFileSync(
-        path.join(hh.home, 'projects', projectId, 'works', key.split('/')[1] ?? '', 'work.json'),
-        'utf8',
-      ),
-    ) as WorkState
+  const file = () =>
+    path.join(hh.home, 'projects', projectId, 'works', key.split('/')[1] ?? '', 'work.json')
+  const read = () => JSON.parse(fs.readFileSync(file(), 'utf8')) as WorkState
   const question = () => task()?.question
-  return { hh, key, view, task, read, question }
+  return { hh, key, view, task, read, file, question }
 }
 
 describe('[흐름] Codex CLI와 실제 훅·MCP 브리지', () => {
@@ -181,6 +177,43 @@ describe('[흐름] Codex CLI와 실제 훅·MCP 브리지', () => {
       false,
     )
     expect(s.hh.records().filter((r) => r['type'] === 'start')).toHaveLength(0)
+  })
+
+  it('대화 ID를 받지 못한 Codex의 [재개]는 같은 task에서 이 단계를 새 세션으로 시작한다 (D423)', async () => {
+    // 첫 세션은 SessionStart를 보내지 않는다: 앱은 대화 ID를 받지 못한다
+    const s = await setup({
+      taskNoStartOnce: true,
+      tasks: { 'work-start': [{ do: 'wait' }] },
+    })
+    const starts = () => s.hh.codexRecords().filter((r) => r['type'] === 'start')
+    // 가짜 Codex가 SessionStart를 건너뛴 뒤에 끝낸다
+    const skipped = path.join(s.hh.root, 'scenario.json.task-no-start')
+    await s.hh.ui.until(() => fs.existsSync(skipped), 'SessionStart 건너뜀')
+    await s.hh.ui.until(() => s.task()?.live, 'Codex 세션')
+    expect(await s.hh.relay.interrupt(s.key, 't-01')).toEqual({ ok: true })
+    await s.hh.ui.until(() => s.task()?.status === 'interrupted', '중단됨')
+    expect(s.read().tasks[0]?.session?.id).toBe('')
+    expect(s.task()?.sessionUnknown).toBe(true)
+    // 같은 단계를 새 세션으로 다시 하는 버튼은 없고 [재개]가 맡는다
+    expect(s.view()?.actions).toMatchObject({ resume: true })
+    expect(s.view()?.actions).not.toHaveProperty('retry')
+
+    expect(await s.hh.relay.resume(s.key, 't-01')).toEqual({ ok: true })
+    await s.hh.ui.until(() => starts().length === 2, 'Codex 새 세션')
+    // --resume이 아니라 새 세션이다
+    expect(starts()[1]?.['args'] as string[]).not.toContain('resume')
+    const id = await s.hh.ui.until(() => s.read().tasks[0]?.session?.id, '새 대화 ID')
+    expect(id).toMatch(/^[a-f0-9-]{36}$/)
+    const w = s.read()
+    expect(w.tasks.map((t) => t.id)).toEqual(['t-01'])
+    expect(w.tasks[0]).toMatchObject({ session: { id, alive: true } })
+    const dir = path.dirname(s.file())
+    const events = fs
+      .readFileSync(path.join(dir, 'events.jsonl'), 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map((l) => JSON.parse(l) as { type: string; task_id?: string })
+    expect(events.filter((e) => e.type === 'task.started' && e.task_id === 't-01')).toHaveLength(2)
   })
 
   it('CLI 내부 대화 전환은 PTY를 끝내지 않고 새 실제 ID로 재개한다', async () => {

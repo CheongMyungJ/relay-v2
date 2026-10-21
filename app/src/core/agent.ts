@@ -33,7 +33,7 @@ export function taskEngineVersion(
 
 /**
  * 대화 ID를 받지 못한 세션인가: Codex는 SessionStart 훅으로 ID를 받기 전에 끝나면 빈 문자열로 남는다(engines.md 4.3).
- * 같은 대화를 다시 열 수 없어 [이 단계 새 세션으로 다시]만 할 수 있다
+ * 같은 대화를 다시 열 수 없어 [재개]가 이 단계를 새 세션으로 시작한다 (D423)
  */
 export function sessionUnknown(task: Pick<TaskRecord, 'engine' | 'session'>): boolean {
   return task.engine === 'codex' && task.session?.id === ''

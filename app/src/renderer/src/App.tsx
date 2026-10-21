@@ -2,7 +2,6 @@
 // 화면은 메인이 보낸 스냅샷을 그리기만 하고, 명령은 invoke로 보낸다 (I14).
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { AppInfo } from '../../shared/api'
-import type { NodeName } from '../../shared/contracts'
 import { WORK_TYPE_LABEL, WORK_TYPE_SHORT } from '../../shared/work'
 import type {
   ActivityView,
@@ -22,10 +21,10 @@ import {
   Modal,
   NewWorkDialog,
   ProjectDialog,
+  type DraftOrigin,
   ProjectSettingsDialog,
   RemoveProjectDialog,
   SettingsDialog,
-  StepDialog,
   WorkSettingsDialog,
 } from './dialogs'
 import { Activity } from './Activity'
@@ -60,7 +59,6 @@ type Dialog =
   | { kind: 'settings' }
   | { kind: 'work-settings'; workKey: string }
   | { kind: 'abandon'; workKey: string }
-  | { kind: 'step'; workKey: string; node?: NodeName }
   | { kind: 'clean'; workKey: string }
   /** cleaned는 연 때 보관됐는지다. 정리한 뒤 지우다 실패해도 연 창에 그 까닭을 보인다 */
   | { kind: 'work-delete'; workKey: string; cleaned: boolean }
@@ -407,19 +405,32 @@ export function App() {
   const dialogWork =
     dialog?.kind === 'work-settings' ||
     dialog?.kind === 'abandon' ||
-    dialog?.kind === 'step' ||
     dialog?.kind === 'clean' ||
     dialog?.kind === 'work-delete' ||
     dialog?.kind === 'side'
       ? works[dialog.workKey]
       : null
+  // Work에서 쓴 초안(D421)으로 연 새 Work 대화상자: 원래 Work의 기준 브랜치와 이슈를 채우고 포기할지 고르게 한다
+  const originWork =
+    dialog?.kind === 'work' && dialog.draft?.ref.source.kind === 'work'
+      ? works[dialog.draft.ref.source.id]
+      : undefined
+  // 기준 브랜치와 이슈는 그 레포의 것이라 같은 프로젝트일 때만 채운다
+  const sameProject = dialog?.kind === 'work' && originWork?.projectId === dialog.project.id
+  const draftOrigin: DraftOrigin | undefined = originWork
+    ? {
+        title: originWork.title,
+        baseBranch: sameProject ? originWork.baseBranch : null,
+        // 이미 닫힌 이슈는 이어 쓰지 않는다
+        issueNumber:
+          sameProject && !originWork.issue?.closed ? (originWork.issue?.number ?? null) : null,
+        abandonable: originWork.status === 'active' || originWork.status === 'stopped',
+      }
+    : undefined
   const dialogSession =
     dialog?.kind === 'session-rename' || dialog?.kind === 'session-delete'
       ? sessions.find((x) => x.id === dialog.id)
       : undefined
-  // 단계 선택 대화상자 (6.2). node는 처음 고를 단계다(이전 단계 추천, D23)
-  const openStep = (workKey: string, node?: NodeName) =>
-    setDialog({ kind: 'step', workKey, ...(node ? { node } : {}) })
 
   return (
     <div className={`layout${wide ? ' wide' : ''}`}>
@@ -776,7 +787,6 @@ export function App() {
             onSettings={() => setDialog({ kind: 'work-settings', workKey: work.key })}
             onAbandon={() => setDialog({ kind: 'abandon', workKey: work.key })}
             onClean={() => setDialog({ kind: 'clean', workKey: work.key })}
-            onSelectStep={() => openStep(work.key)}
             onResumed={() => setPicked((m) => without(m, work.key))}
             onOpenSide={() => requestSide(work.key, false)}
           />
@@ -799,7 +809,8 @@ export function App() {
             task={task}
             review={review?.taskId === task.id && review.workKey === work.key ? review : null}
             onApproved={() => setPicked((m) => without(m, work.key))}
-            onSelectStep={(node) => openStep(work.key, node)}
+            onCreateWork={(draft, project) => setDialog({ kind: 'work', project, draft })}
+            projects={projects}
             onShowCleanup={() => setPicked((m) => ({ ...m, [work.key]: CLEANUP_TAB }))}
           />
         ) : (
@@ -828,6 +839,7 @@ export function App() {
           project={dialog.project}
           projects={projects}
           {...(dialog.draft ? { draft: dialog.draft } : {})}
+          {...(draftOrigin ? { origin: draftOrigin } : {})}
           onClose={() => setDialog(null)}
           onCreated={(key) => {
             setDialog(null)
@@ -880,17 +892,6 @@ export function App() {
           onOpened={() => {
             setDialog(null)
             setPicked((m) => ({ ...m, [dialogWork.key]: SIDE_TAB }))
-          }}
-        />
-      ) : null}
-      {dialog?.kind === 'step' && dialogWork ? (
-        <StepDialog
-          work={dialogWork}
-          {...(dialog.node ? { initial: dialog.node } : {})}
-          onClose={() => setDialog(null)}
-          onDone={() => {
-            setDialog(null)
-            setPicked((m) => without(m, dialogWork.key))
           }}
         />
       ) : null}
@@ -953,8 +954,8 @@ function Welcome({ onAddProject }: { onAddProject: () => void }) {
 }
 
 /**
- * 액션 바 (시나리오 3-4, 3-5, 4.4, 6.2, 8): [즉시 중단], [재개]·[세션 재개], [이 단계 새 세션으로 다시],
- * [이 단계 끝나면 멈춤], [단계 선택], [Work 설정], [Work 포기], [Work 정리]. 누를 수 있는지는 main이 core로
+ * 액션 바 (시나리오 3-4, 3-5, 4.4, 8): [즉시 중단], [재개]·[세션 재개], [이 단계 끝나면 멈춤], [Work 설정],
+ * [Work 포기], [Work 정리]. 앞 단계로 돌아가는 조작은 없다 (D418, D423). 누를 수 있는지는 main이 core로
  * 판정해 보낸다. 조작은 지금 task에 한다.
  */
 /** 곁 세션 탭의 머리 띠 (시나리오 11). 끝났으면 [새 대화로 열기]를 둔다 */
@@ -1037,9 +1038,10 @@ function SideNoticeDialog({
           앱이 꼬였을 때 원인과 다음 조작 묻기.
         </li>
         <li>
-          <strong>단계 흐름을 대신하지는 마세요:</strong> 코드를 바꾸는 일은 [단계 선택]의 추가
-          지시나 새 Work로 맡기기를 권합니다. 단계 흐름은 재현 테스트, 리뷰, 판정표, 승인을
-          거치지만, 곁 세션에서 바꾼 것은 그 기록에 따로 남지 않습니다.
+          <strong>단계 흐름을 대신하지는 마세요:</strong> 코드를 바꾸는 일은 지금 단계의 터미널이나
+          새 Work로 맡기기를 권합니다. 근본부터 다시 하기로 하면 곁 세션이 새 Work의 초안을 씁니다.
+          단계 흐름은 재현 테스트, 리뷰, 판정표, 승인을 거치지만, 곁 세션에서 바꾼 것은 그 기록에
+          따로 남지 않습니다.
         </li>
         <li>에이전트는 코드 수정, push, GitHub 글쓰기를 하기 전에 묻습니다.</li>
       </ul>
@@ -1063,7 +1065,6 @@ function ActionBar({
   onSettings,
   onAbandon,
   onClean,
-  onSelectStep,
   onResumed,
   onOpenSide,
 }: {
@@ -1071,7 +1072,6 @@ function ActionBar({
   onSettings: () => void
   onAbandon: () => void
   onClean: () => void
-  onSelectStep: () => void
   onResumed: () => void
   onOpenSide: () => Promise<CommandResult>
 }) {
@@ -1108,14 +1108,6 @@ function ActionBar({
           {task.status === 'interrupted' ? '재개' : '세션 재개'}
         </button>
       ) : null}
-      {a.retry && task ? (
-        <button
-          disabled={busy}
-          onClick={() => void run(() => window.relay.retry(work.key, task.id), onResumed)}
-        >
-          이 단계 새 세션으로 다시
-        </button>
-      ) : null}
       {a.resumeWork ? (
         <button
           className="primary"
@@ -1135,11 +1127,6 @@ function ActionBar({
           />
           이 단계 끝나면 멈춤
         </label>
-      ) : null}
-      {a.selectStep ? (
-        <button disabled={busy} onClick={onSelectStep}>
-          단계 선택
-        </button>
       ) : null}
       {/* PR 진행 중에도 [Work 설정]을 받는다: 대응 자동 시작과 PR 대응 자동 승인을 바꾼다 (D209) */}
       {work.status === 'active' || work.status === 'stopped' || work.status === 'pr' ? (

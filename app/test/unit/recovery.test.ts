@@ -2,7 +2,6 @@
 import { describe, expect, it } from 'vitest'
 import { createWork } from '../../src/core/machine'
 import {
-  backupHead,
   changedCopyName,
   changedFileLine,
   changedFiles,
@@ -15,7 +14,6 @@ import {
   operationView,
   orphanNotice,
   recordedProcesses,
-  rewindResumePlan,
   workJsonNotice,
 } from '../../src/core/recovery'
 import type {
@@ -106,7 +104,7 @@ describe('[단위] 끊긴 작업의 알림 (D121, D123)', () => {
     expect(operationView(work({ operation: REWIND }))).toBeNull()
   })
 
-  it('되감기: [intake 다시]의 유형 변경이 끊기면 바꿀 유형과, [무시]하면 유형이 그대로라는 것을 보인다 (D237, PR #23 리뷰)', () => {
+  it('D418 전 되감기: [intake 다시]의 유형 변경이 끊기면 바꿀 유형과, [무시]하면 유형이 그대로라는 것을 보인다 (D237, D424)', () => {
     const tasks = [task('t-01', 1, 'intake')]
     const op = { ...REWIND, node: 'intake' as const, type: 'feature' as const, interrupted_at: 'y' }
     const view = operationView(work({ tasks, operation: op }))
@@ -114,15 +112,14 @@ describe('[단위] 끊긴 작업의 알림 (D121, D123)', () => {
       '고른 단계: 의도 정리(intake)',
       '바꿀 유형: 기능 추가 (D237)',
     ])
-    expect(view?.retry).toContain(
-      '유형을 기능 추가(으)로 바꿔 의도 정리(intake)을(를) 되감기로 시작합니다.',
-    )
+    // 되감기는 없어 이어서 하지 않는다: [다시 시도]가 없다 (D424)
+    expect(view?.retry).toBeNull()
     expect(view?.ignore).toBe(
       '[무시]: 기록만 지웁니다. 코드와 백업 브랜치는 지금 그대로이고, task는 폐기하지 않습니다. 유형도 버그 수정(으)로 남고 바뀌지 않습니다.',
     )
   })
 
-  it('되감기: 고른 단계, 끊긴 단계, 백업, 되돌릴 커밋, 폐기할 task와 [다시 시도]·[무시]가 할 일', () => {
+  it('D418 전 되감기: 고른 단계, 끊긴 단계, 백업, 되돌릴 커밋, 폐기할 task를 보이고 [무시]만 받는다 (D424)', () => {
     const tasks = [task('t-01', 1, 'intake'), task('t-02', 2, 'fix'), task('t-03', 3, 'verify')]
     const backup = operationView(work({ tasks, operation: { ...REWIND, interrupted_at: 'y' } }))
     expect(backup).toEqual({
@@ -135,9 +132,9 @@ describe('[단위] 끊긴 작업의 알림 (D121, D123)', () => {
         '코드는 아직 되돌리지 않았습니다.',
         '되돌릴 커밋: base0001',
         '폐기할 task: 02 원인 분석과 수정, 03 리뷰와 검증',
+        '지금 앱에는 되감기가 없어 이어서 하지 않습니다 (D418). 코드를 확인하고 [무시]를 누르세요.',
       ],
-      retry:
-        '[다시 시도]: 백업이 지금 코드와 다르면 한 번 더 백업하고 base0001로 되돌린 뒤, 폐기하고 원인 분석과 수정(fix)을(를) 되감기로 시작합니다.',
+      retry: null,
       ignore:
         '[무시]: 기록만 지웁니다. 코드와 백업 브랜치는 지금 그대로이고, task는 폐기하지 않습니다.',
       choice: null,
@@ -238,67 +235,6 @@ describe('[단위] 끊긴 머지의 알림 (D77, D123, M9)', () => {
     })
     expect(v?.retry).toContain('이미 머지됐으면 완료(머지됨)합니다')
     expect(v?.ignore).toContain('PR 진행으로 남고')
-  })
-})
-
-describe('[단위] 끊긴 되감기의 [다시 시도] (D116, D123)', () => {
-  const made = { branch: BACKUP, commit: 'bk', head: 'h1', tree: 't-bk' }
-
-  it('코드가 이미 되돌릴 커밋이고 깨끗하면 백업도 되돌리기도 하지 않는다', () => {
-    expect(
-      rewindResumePlan(REWIND, { head: REWIND.reset_to, dirty: false, tree: null, made: null }),
-    ).toEqual({ backup: false, reset: false, keep: 'none', from: REWIND.reset_to })
-    // 되돌린 뒤 끊겼으면(reset 단계) 기록한 백업과 되돌리기 전 HEAD를 선택 기록에 둔다
-    const reset = { ...REWIND, stage: 'reset' as const, backup_commit: 'bk', head: 'h1' }
-    expect(
-      rewindResumePlan(reset, { head: REWIND.reset_to, dirty: false, tree: null, made }),
-    ).toEqual({ backup: false, reset: false, keep: 'made', from: 'h1' })
-  })
-
-  it('백업 전에 끊겼으면 지금 코드를 백업하고 되돌린다. 그 백업이 선택 기록의 백업이다', () => {
-    expect(rewindResumePlan(REWIND, { head: 'h1', dirty: true, tree: 't1', made: null })).toEqual({
-      backup: true,
-      reset: true,
-      keep: 'new',
-      from: 'h1',
-    })
-  })
-
-  it('이미 만든 백업이 지금 코드와 같으면 다시 만들지 않고 되돌린다', () => {
-    expect(rewindResumePlan(REWIND, { head: 'h1', dirty: true, tree: 't-bk', made })).toEqual({
-      backup: false,
-      reset: true,
-      keep: 'made',
-      from: 'h1',
-    })
-  })
-
-  it('이미 만든 백업과 지금 코드가 다르면(사람이 그 뒤에 고침) 한 번 더 백업한다. 선택 기록은 처음 백업이다', () => {
-    // 커밋 안 된 변경이 다르다
-    expect(rewindResumePlan(REWIND, { head: 'h1', dirty: true, tree: 't-new', made })).toEqual({
-      backup: true,
-      reset: true,
-      keep: 'made',
-      from: 'h1',
-    })
-    // 새 커밋이 생겼다
-    expect(
-      rewindResumePlan(REWIND, { head: 'h2', dirty: false, tree: 't-bk', made }),
-    ).toMatchObject({ backup: true, keep: 'made', from: 'h1' })
-  })
-
-  it('백업할 것이 없던 reset 단계에서 사람이 고쳤으면 백업하되 선택 기록에는 넣지 않는다', () => {
-    const reset = { ...REWIND, stage: 'reset' as const, backup_branch: null, head: 'base0001aaaa' }
-    expect(
-      rewindResumePlan(reset, { head: 'base0001aaaa', dirty: true, tree: 't', made: null }),
-    ).toEqual({ backup: true, reset: true, keep: 'none', from: 'base0001aaaa' })
-  })
-
-  it('백업 커밋이 커밋 안 된 변경을 담은 것(메시지)이면 되돌리기 전 HEAD는 그 부모다', () => {
-    const message = `relay(${WORK_ID}): 되감기 전 커밋 안 된 변경`
-    expect(backupHead(WORK_ID, { id: 'bk', subject: message, parent: 'h1' })).toBe('h1')
-    expect(backupHead(WORK_ID, { id: 'bk', subject: 'fix: 고침', parent: 'h0' })).toBe('bk')
-    expect(backupHead('w-20260927-002', { id: 'bk', subject: message, parent: 'h1' })).toBe('bk')
   })
 })
 

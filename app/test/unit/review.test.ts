@@ -57,11 +57,11 @@ describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
     expect(bandText({ seq: 4, node: 'fix', reason: 'default' })).toBe(
       '04 원인 분석과 수정 · 새 세션 · 이유: 기본 진행',
     )
-    // [이 단계 새 세션으로 다시]로 만든 task (D114)
+    // D418 전에 [이 단계 새 세션으로 다시]로 만든 task (D114, D424)
     expect(bandText({ seq: 5, node: 'fix', reason: 'resume' })).toBe(
       '05 원인 분석과 수정 · 새 세션 · 이유: 재개',
     )
-    // 단계 선택으로 들어온 task (6.2)
+    // D418 전에 단계 선택으로 들어온 task (D424)
     expect(bandText({ seq: 6, node: 'fix', reason: 'rewind' })).toBe(
       '06 원인 분석과 수정 · 새 세션 · 이유: 되감기',
     )
@@ -184,11 +184,12 @@ describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
       node,
       reason: '다시',
     })
+    // D418 전에 이전 단계 추천으로 멈춘 Work도 같다: 앞 단계로 돌아가는 길이 없다 (D424)
     expect(resumeHint(at('fix', back('intake')))).toBe(
-      '[재개]하면 추천을 따르지 않고 다음 단계(리뷰와 검증)를 시작합니다. 추천대로 되돌아가려면 [단계 선택]을 누르세요.',
+      '[재개]하면 다음 단계(리뷰와 검증)를 시작합니다.',
     )
     expect(resumeHint(at('verify', back('fix')))).toBe(
-      '추천을 따르지 않고 Work 완료 화면에서 전달을 고르면 Work를 완료합니다. 추천대로 되돌아가려면 [단계 선택]을 누르세요.',
+      'Work 완료 화면에서 전달을 고르면 Work를 완료합니다.',
     )
   })
 })
@@ -265,7 +266,7 @@ describe('진행 표시의 도구 이름 (D216)', () => {
 })
 
 describe('리뷰와 검증에서 멈춘 Work (D229)', () => {
-  it('verify가 의도 정리를 추천해 멈추면 알리고, [재개] 대신 Work 완료 화면에서 전달을 고른다', () => {
+  it('D418 전에 verify가 의도 정리를 추천해 멈춘 Work는 그 까닭을 보이고, Work 완료 화면에서 전달을 고른다 (D424)', () => {
     const work = createWork({
       type: 'bugfix',
       workId: 'w',
@@ -281,9 +282,7 @@ describe('리뷰와 검증에서 멈춘 Work (D229)', () => {
       stop: { kind: 'recommended_back', task_id: 't-01', node: 'intake', reason: '다시' },
     }
     expect(stopNotice(back)).toBe('이전 단계 추천으로 멈춤: 의도 정리(intake)로 — 다시')
-    expect(resumeHint(back)).toBe(
-      '추천을 따르지 않고 Work 완료 화면에서 전달을 고르면 Work를 완료합니다. 추천대로 되돌아가려면 [단계 선택]을 누르세요.',
-    )
+    expect(resumeHint(back)).toBe('Work 완료 화면에서 전달을 고르면 Work를 완료합니다.')
   })
 })
 
@@ -558,7 +557,7 @@ describe('강조 영역 (D83, 시나리오 4-2)', () => {
     })
   })
 
-  it('intent_deviation, 열린 질문, 이전 단계 추천, 커밋 안 된 변경, 형식 오류를 순서대로 모은다', () => {
+  it('intent_deviation, 열린 질문, 커밋 안 된 변경, 형식 오류를 순서대로 모은다. 이전 단계 추천은 없다 (D422)', () => {
     const items = emphasis({
       node: 'verify',
       type: 'bugfix',
@@ -574,16 +573,11 @@ describe('강조 영역 (D83, 시나리오 4-2)', () => {
     expect(items.map((i) => i.kind)).toEqual([
       'intent_deviation',
       'open_questions',
-      'recommended_back',
       'uncommitted',
       'format_errors',
     ])
     expect(items[0]?.lines).toEqual(['범위를 넘음', '근거: refresh.ts도 바뀜'])
-    expect(items[2]?.lines).toEqual([
-      '원인 분석과 수정(fix)로 — 완료조건 2 실패',
-      '승인하면 다음 단계를 시작하지 않고 멈춥니다. 되돌아갈 단계는 멈춘 뒤 [단계 선택]으로 고릅니다.',
-    ])
-    expect(items[4]?.lines).toEqual(['handoff.md: `## 요약` 절 없음'])
+    expect(items[3]?.lines).toEqual(['handoff.md: `## 요약` 절 없음'])
     // 열린 질문은 어디에 답하는지 알린다 (D222)
     expect(items[1]).toEqual({
       kind: 'open_questions',
@@ -606,7 +600,7 @@ describe('강조 영역 (D83, 시나리오 4-2)', () => {
     )
   })
 
-  it('기본 다음 단계 추천은 강조하지 않는다. 막힘은 blocked_reason을 맨 앞에 둔다 (4.4)', () => {
+  it('D418 전 형식의 recommended_next는 강조하지 않는다. 막힘은 blocked_reason을 맨 앞에 둔다 (4.4)', () => {
     expect(
       emphasis({
         node: 'fix',
@@ -714,19 +708,6 @@ describe('강조 영역 (D83, 시나리오 4-2)', () => {
     })
     expect(stageLead('design', {})).toBeNull()
     expect(stageLead('implement', { 'design.md': design })).toBeNull()
-  })
-
-  it('강조 영역의 이전 단계 추천은 그 Work 유형으로 가린다 (D23)', () => {
-    const rec = { ...HANDOFF, recommended_next: { node: 'design' as const, reason: '설계' } }
-    const back = emphasis({
-      node: 'implement',
-      type: 'feature',
-      handoff: rec,
-      errors: [],
-      uncommitted: [],
-    })
-    expect(back.map((e) => e.kind)).toEqual(['recommended_back'])
-    expect(back[0]?.lines[0]).toBe('설계와 계획(design)로 — 설계')
   })
 
   it('[요약] 맨 위: 원인 분석과 수정은 fix.md의 원인 절이다. 절이나 파일이 없으면 없다 (D223, D228)', () => {

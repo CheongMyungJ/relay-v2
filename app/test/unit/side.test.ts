@@ -36,6 +36,8 @@ const guide = (w: WorkState) =>
     title: '할인 계산이 틀림',
     worktree: '/r/worktrees/w-20261008-001',
     workDir: '/r/works/w-20261008-001',
+    projectId: 'app-3f9a1c',
+    draftsDir: '/r/works/w-20261008-001/work-drafts',
     signature: '_relay가 쓴 답글입니다_',
   })
 
@@ -74,7 +76,8 @@ describe('곁 세션의 안내 (D387)', () => {
       'task가 작업 중이면(작업 중, 질문 대기, 입력 필요) 코드는 바꾸지 않고 제안만 한다',
     )
     expect(text).not.toContain('열 때 작업 중인 task가 있었다')
-    expect(text).toContain('[단계 선택]의 추가 지시')
+    expect(text).not.toContain('[단계 선택]')
+    expect(text).toContain('앞 단계로 돌아가는 버튼은 없다: 근본부터 다시 하려면 새 Work로 한다.')
     expect(text).toContain('이 표시를 붙인다: _relay가 쓴 답글입니다_')
     expect(guide(work([task('t-01', 1, 'intake', 'working')]))).toContain(
       '열 때 작업 중인 task가 있었다',
@@ -87,6 +90,19 @@ describe('곁 세션의 안내 (D387)', () => {
     expect(text).toContain('먼저 단계 흐름을 권한다')
     // 사람이 터미널에서 대화하므로 앱 질문창이 없다 (I130)
     expect(text).toContain('물을 것은 여기서 묻고 턴을 끝내 답을 기다린다(앱 질문창은 없다)')
+  })
+
+  it('Work 초안: 다시 하기로 정하면 이 Work의 초안 폴더에 이 프로젝트의 초안을 쓴다 (D420, D421)', () => {
+    expect(text).toContain('## Work 초안 (다시 하기)')
+    expect(text).toContain('이 Work를 고치지 않고 새 Work로 한다')
+    expect(text).toContain('이 Work의 초안 폴더 `/r/works/w-20261008-001/work-drafts`에')
+    expect(text).toContain(
+      'project: app-3f9a1c\ntype: <bugfix | feature | refactor | spec | general. 보통 이 Work와 같은 bugfix>',
+    )
+    expect(text).toContain(
+      '원래 요청, 지금 승인된 intent(있으면), 해 본 것과 버리는 까닭(산출물 경로), 사람의 지시',
+    )
+    expect(text).toContain('[새 Work로 만들기]')
   })
 
   it('task가 없으면 그렇게 적는다', () => {

@@ -21,7 +21,6 @@ import { NODE_INFO, workType } from './pipeline'
 import { localMinute } from './records'
 import { RESPOND_STAGE_LABEL } from './respond'
 import { taskLabel } from './review'
-import { backupMessage } from './rewind'
 
 const short = (commit: string) => commit.slice(0, 8)
 const title = (node: NodeName) => `${NODE_INFO[node].title}(${node})`
@@ -31,7 +30,7 @@ const title = (node: NodeName) => `${NODE_INFO[node].title}(${node})`
 /**
  * 끊긴 작업: 앱을 다시 켜며 남아 있던 진행 중 작업 기록 (재시작 조정이 표시한다). 없으면 undefined.
  * 진행 중 작업 기록은 명령 하나 안에서 쓰고 지우므로 명령 사이에 남는 것은 앱이 도중에 꺼졌을 때와,
- * 되감기가 코드를 바꾼 뒤 실패했을 때(D136)다
+ * D418 전의 되감기가 코드를 바꾼 뒤 실패했을 때(D136)다
  */
 export function cutOperation(work: WorkState): WorkOperation | undefined {
   return work.operation?.interrupted_at === undefined ? undefined : work.operation
@@ -134,10 +133,10 @@ function rewindView(work: WorkState, op: RewindOperation): OperationView {
       ...code,
       `되돌릴 커밋: ${short(op.reset_to)}`,
       `폐기할 task: ${labels.length ? labels.join(', ') : '없음'}`,
+      '지금 앱에는 되감기가 없어 이어서 하지 않습니다 (D418). 코드를 확인하고 [무시]를 누르세요.',
     ],
-    retry:
-      `[다시 시도]: 백업이 지금 코드와 다르면 한 번 더 백업하고 ${short(op.reset_to)}로 되돌린 뒤, ` +
-      `폐기하고 ${op.type ? `유형을 ${WORK_TYPE_LABEL[op.type]}(으)로 바꿔 ` : ''}${title(op.node)}을(를) 되감기로 시작합니다.`,
+    // 되감기는 없다 (D418). 끊긴 되감기는 이어서 하지 않고 [무시]만 받는다 (D424)
+    retry: null,
     ignore:
       '[무시]: 기록만 지웁니다. 코드와 백업 브랜치는 지금 그대로이고, task는 폐기하지 않습니다.' +
       (op.type ? ` 유형도 ${WORK_TYPE_LABEL[workType(work)]}(으)로 남고 바뀌지 않습니다.` : ''),
@@ -196,71 +195,6 @@ function cleanView(op: CleanOperation): OperationView {
     ignore: '[무시]: 기록만 지웁니다. [Work 정리]를 다시 할 수 있습니다.',
     choice: null,
   }
-}
-
-// ---------- 끊긴 되감기의 [다시 시도] (D116, D123) ----------
-
-/**
- * 끊긴 되감기가 이미 만든 백업: 기록(reset 단계)이나, backup 단계에서 계획한 이름으로 git에 있는 브랜치.
- * 이 Work의 되감기는 기록이 있는 동안 다른 되감기를 받지 않으므로(D122) 그 이름의 브랜치는 끊긴 되감기가 만든 것이다
- */
-export interface MadeBackup {
-  branch: string
-  commit: string
-  /** 백업할 때의 HEAD (backupHead) */
-  head: string
-  /** 백업 커밋의 tree */
-  tree: string
-}
-
-/** 되감기를 다시 할 때 main이 git에서 읽는 사실 */
-export interface RewindResumeFacts {
-  /** 지금 HEAD */
-  head: string
-  /** 커밋 안 된 변경(추적하지 않는 파일 포함, 무시하는 파일 제외)이 있다 */
-  dirty: boolean
-  /** 지금 작업 트리의 tree(커밋 안 된 변경 포함). 이미 만든 백업과 비교할 때만 읽는다 */
-  tree: string | null
-  made: MadeBackup | null
-}
-
-export interface RewindResumePlan {
-  /** 지금 코드를 다음 번호의 백업 브랜치에 남긴다 */
-  backup: boolean
-  /** 되돌릴 커밋으로 되돌린다 */
-  reset: boolean
-  /**
-   * 새 task의 선택 기록(reset)에 남길 백업. made는 끊긴 되감기가 만든 백업, new는 이번에 만든 백업, none은
-   * 백업이 없다. made가 있으면 이번에 만든 백업은 덤으로 남긴 것이다(사람이 그 뒤에 고친 코드)
-   */
-  keep: 'made' | 'new' | 'none'
-  /** 선택 기록에 남길 되돌리기 전 HEAD. new면 지금 HEAD다 */
-  from: string
-}
-
-/**
- * 끊긴 되감기를 끊긴 곳부터 잇는다 (D123). 코드가 이미 되돌릴 커밋이고 깨끗하면 백업도 되돌리기도 하지 않는다.
- * 이미 만든 백업이 지금 코드(HEAD와 커밋 안 된 변경)와 같으면 다시 만들지 않는다. 다르면(백업 전에 끊겼거나, 재시작
- * 뒤 사람이 고쳤으면) 다음 번호로 백업한 뒤 되돌린다. 되돌리기 전에 지금 코드가 늘 백업에 있다 (D116).
- */
-export function rewindResumePlan(op: RewindOperation, f: RewindResumeFacts): RewindResumePlan {
-  const atTarget = f.head === op.reset_to && !f.dirty
-  const captured = f.made !== null && f.head === f.made.head && f.tree === f.made.tree
-  const backup = !atTarget && !captured
-  const keep = f.made ? 'made' : op.stage === 'backup' && backup ? 'new' : 'none'
-  const from = f.made ? f.made.head : op.stage === 'reset' ? (op.head ?? f.head) : f.head
-  return { backup, reset: !atTarget, keep, from }
-}
-
-/**
- * 백업 커밋이 가리키는 되돌리기 전 HEAD. 커밋 안 된 변경을 담은 백업 커밋(메시지로 안다, D116)이면 그 부모, 아니면
- * 백업 브랜치가 HEAD를 가리킨 것이라 그 커밋이다
- */
-export function backupHead(
-  workId: string,
-  commit: { id: string; subject: string; parent: string | null },
-): string {
-  return commit.subject === backupMessage(workId) && commit.parent ? commit.parent : commit.id
 }
 
 // ---------- 끊긴 전달 (D123) ----------

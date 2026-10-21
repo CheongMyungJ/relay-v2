@@ -57,6 +57,11 @@ export function halfRemovedHint(dir: string): string {
   return `반쯤 지운 worktree 폴더가 남아 있음: ${dir} (git은 이 폴더를 더 이상 worktree로 보지 않음). 폴더를 직접 지운 뒤 다시 누르세요`
 }
 
+/** 이 Work의 되감기 백업 브랜치를 찾는 git for-each-ref 패턴 (D115). D418 전에 만든 것을 [Work 정리]가 지운다 (D424) */
+export function backupPattern(workId: string): string {
+  return `refs/heads/relay/${workId}-discarded-*`
+}
+
 export interface CleanFacts {
   /** worktree가 있다 */
   worktree: boolean
@@ -80,7 +85,7 @@ export interface CleanFacts {
     merged: boolean
     lost: readonly { sha: string; subject: string }[] | null
   }
-  /** 이 Work의 되감기 백업 브랜치 (D115) */
+  /** 이 Work의 되감기 백업 브랜치 (D115). D418 전에 만든 것만 있다 (D424) */
   backups: readonly string[]
   /** 머지로 완료한 Work다 (D178) */
   merged: boolean

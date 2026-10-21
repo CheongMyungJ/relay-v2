@@ -227,7 +227,7 @@ describe('Codex 보호 범위', () => {
 })
 
 describe('Codex 완료와 자동 승인', () => {
-  it('신뢰 전 중단하여 실제 ID가 없으면 재개 대신 새 task로 다시 실행할 수 있다', () => {
+  it('신뢰 전 중단하여 실제 ID가 없으면 [재개]가 같은 task를 새 세션으로 시작한다 (D423)', () => {
     let work = createWork({
       type: 'bugfix',
       engine: 'codex',
@@ -254,13 +254,17 @@ describe('Codex 완료와 자동 승인', () => {
       { type: 'interrupt', taskId: 't-01', at: 'now', reason: 'human' },
       DEFAULT_CONFIG,
     ).work
-    expect(actions(work)).toMatchObject({ resume: false, retry: true })
-    expect(
-      transition(work, { type: 'resume', taskId: 't-01', at: 'now' }, DEFAULT_CONFIG).rejected,
-    ).toBeTruthy()
-    const retry = transition(work, { type: 'retry', taskId: 't-01', at: 'now' }, DEFAULT_CONFIG)
-    expect(retry.rejected).toBeUndefined()
-    expect(currentTask(retry.work)).toMatchObject({ id: 't-02', engine: 'claude', session: null })
+    expect(actions(work)).toMatchObject({ resume: true })
+    expect(actions(work)).not.toHaveProperty('retry')
+    const resumed = transition(work, { type: 'resume', taskId: 't-01', at: 'now' }, DEFAULT_CONFIG)
+    expect(resumed.rejected).toBeUndefined()
+    // 임의의 ID로 --resume하지 않고 같은 task를 새 세션으로 띄운다: 새 task는 만들지 않는다
+    expect(resumed.effects).toEqual([
+      { type: 'startTask', taskId: 't-01', node: 'intake', reason: 'default' },
+    ])
+    expect(resumed.work.tasks.map((t) => t.id)).toEqual(['t-01'])
+    // 세션 기록을 지워 main이 --resume 대신 새 세션으로 띄운다
+    expect(currentTask(resumed.work)?.session).toBeNull()
   })
   it('유효한 handoff의 Stop을 받아도 알 수 없는 미완료 작업을 없음으로 보지 않는다', () => {
     const config = {

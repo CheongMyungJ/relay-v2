@@ -11,8 +11,7 @@
     "rejected",
     "open_questions",
     "intent_deviation",
-    "risks",
-    "recommended_next"
+    "risks"
   ],
   "properties": {
     "status": { "enum": ["awaiting_approval", "blocked"] },
@@ -52,6 +51,7 @@
     },
     "risks": { "type": "array", "items": { "type": "string" } },
     "recommended_next": {
+      "description": "D418 전 형식. 앞 단계로 돌아가는 길이 없어 에이전트는 쓰지 않고 앱은 읽지 않는다(D422). 그 전에 쓴 handoff가 경고 없이 통과하게 둔다.",
       "oneOf": [
         { "type": "null" },
         {

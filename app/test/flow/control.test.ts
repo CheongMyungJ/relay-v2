@@ -1,6 +1,6 @@
 // [흐름] 사람 조작과 여러 Work (docs/implementation.md M3, I25, I26).
 // 여러 Work와 대기열(D18), [즉시 중단]과 [재개](--resume), [이 단계 끝나면 멈춤], [Work 포기],
-// [이 단계 새 세션으로 다시](D114), 재시작 조정(D75, D78), 설정(D70, D72, D73), 알림(D81).
+// handoff 없이 끝난 세션의 [세션 재개](D423), 재시작 조정(D75, D78), 설정(D70, D72, D73), 알림(D81).
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -466,49 +466,52 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
     expect((await s.h.relay.resume(key, 't-01')).ok).toBe(false)
   })
 
-  it('handoff 없이 끝난 세션은 [세션 재개]하거나 [이 단계 새 세션으로 다시] 새 task로 시작한다 (시나리오 3-5, D114)', async () => {
+  it('handoff 없이 끝난 세션은 [세션 재개]로 같은 task를 잇는다. 같은 단계를 새 세션으로 다시 하는 버튼은 없다 (시나리오 3-5, D423)', async () => {
     const s = await setup({
       tasks: {
         ...scenario().tasks,
         'work-start': [{ do: 'prompt' }, { do: 'stop' }, { do: 'exit' }],
-        't-02': steps('intake'),
       },
-      resume: { 'work-start': [{ do: 'exit' }] },
+      // 다시 연 세션은 사람의 입력을 기다린다. 이어서 할 일을 말하면 초안을 쓴다
+      resume: {
+        'work-start': [
+          { do: 'waitEnter' },
+          { do: 'prompt', text: '이어서 해 줘' },
+          ...steps('intake').slice(1),
+          { do: 'wait' },
+        ],
+      },
     })
     const key = await s.create()
     await untilTask(s, key, (t) => t.status === 'session_ended', '세션 종료')
-    expect(s.h.ui.works.get(key)?.actions).toMatchObject({ resume: true, retry: true })
+    const actions = s.h.ui.works.get(key)?.actions
+    expect(actions).toMatchObject({ resume: true })
+    expect(actions).not.toHaveProperty('retry')
+    expect(actions).not.toHaveProperty('selectStep')
     expect(s.h.ui.notices.at(-1)?.body).toBe('01 의도 정리: handoff 없이 세션 종료')
 
-    // [세션 재개]: 다시 연 세션이 또 끝나면 세션 종료다
+    // [세션 재개]: 같은 task의 대화를 --resume으로 다시 연다. 이어서 할 일을 말하면 초안을 쓴다
     expect(await s.h.relay.resume(key, 't-01')).toEqual({ ok: true })
+    await untilTask(s, key, (t) => t.live, '재개')
     await s.h.ui.until(() => starts(s).length === 2, '재개', 30_000)
-    await untilTask(s, key, (t) => t.status === 'session_ended' && t.resumed, '다시 세션 종료')
-
-    // [이 단계 새 세션으로 다시]: 같은 노드의 새 task
-    expect(await s.h.relay.retry(key, 't-01')).toEqual({ ok: true })
-    const retried = await untilTask(s, key, (t) => t.id === 't-02', '새 task')
-    expect(retried.band).toBe('02 의도 정리 · 새 세션 · 이유: 재개')
+    s.h.relay.terminalWrite(`${key}/t-01`, '\r')
+    await untilTask(s, key, (t) => t.status === 'awaiting_approval', '이어서 쓴 초안')
     const result = await drive(s.h.relay, s.h.ui, key)
     expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed' })
     await settle(s.h, key)
     const w = work(s.dir(key))
     expect(w.tasks.map((t) => [t.id, t.node, t.status, t.reason])).toEqual([
-      ['t-01', 'intake', 'session_ended', 'default'],
-      ['t-02', 'intake', 'approved', 'resume'],
-      ['t-03', 'fix', 'approved', 'default'],
-      ['t-04', 'verify', 'approved', 'default'],
+      ['t-01', 'intake', 'approved', 'default'],
+      ['t-02', 'fix', 'approved', 'default'],
+      ['t-03', 'verify', 'approved', 'default'],
     ])
-    const third = starts(s)[2]
-    expect(third?.args).toContain('--session-id')
-    expect(third?.args.at(-1)).toContain(path.join('tasks', '02-intake', 'context.md'))
-    // 앞 task의 세션이 아니라 새 세션이다
-    expect(third?.args).not.toContain(w.tasks[0]?.session?.id)
+    const second = starts(s)[1]
+    expect(second?.args).toContain('--resume')
+    expect(second?.args).toContain(w.tasks[0]?.session?.id)
     expect(fs.readdirSync(path.join(s.dir(key), 'tasks'))).toEqual([
       '01-intake',
-      '02-intake',
-      '03-fix',
-      '04-verify',
+      '02-fix',
+      '03-verify',
     ])
   })
 

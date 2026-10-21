@@ -2008,7 +2008,15 @@ button.link:hover:not(:disabled) {
   box-sizing: border-box;
 }
 
-/* Work 초안 카드 (D404) */
+/* Work 초안 카드 (D404). Work의 패널에서는 맨 위에 둔다 (D421) */
+.work-drafts {
+  margin-bottom: 12px;
+}
+
+.work-drafts h3 {
+  margin: 0 0 6px;
+}
+
 .drafts {
   display: flex;
   flex-direction: column;

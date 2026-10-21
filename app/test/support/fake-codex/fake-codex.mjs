@@ -201,8 +201,12 @@ const scenario = JSON.parse(fs.readFileSync(env.FAKE_CODEX_SCENARIO, 'utf8'))
 // sessionCodex·sessionResumeCodex)을 한다
 const session = env.RELAY_HOOK_TASK === 'session'
 const side = env.RELAY_HOOK_TASK === 'side' || session
-// sideNoStart: 훅을 신뢰하기 전에 SessionStart가 지나간 새 곁 세션을 흉내 낸다(실제 Codex는 신뢰 전 훅을 보내지 않음)
-if (!(side && !resumeId && scenario.sideNoStart))
+// sideNoStart: 훅을 신뢰하기 전에 SessionStart가 지나간 새 곁 세션을 흉내 낸다(실제 Codex는 신뢰 전 훅을 보내지 않음).
+// taskNoStartOnce: task의 첫 새 세션만 그렇게 한다. 앱은 대화 ID를 받지 못한다 (D423의 [재개] 시험)
+const noStartMark = `${env.FAKE_CODEX_SCENARIO}.task-no-start`
+const taskNoStart = !side && !resumeId && scenario.taskNoStartOnce && !fs.existsSync(noStartMark)
+if (taskNoStart) fs.writeFileSync(noStartMark, '')
+if (!(side && !resumeId && scenario.sideNoStart) && !taskNoStart)
   await hook('SessionStart', { source: resumeId ? 'resume' : 'startup' })
 // {workDir}는 --add-dir로 받은 Work 디렉터리다 (곁 세션의 보호 시험)
 const fill = (s) =>

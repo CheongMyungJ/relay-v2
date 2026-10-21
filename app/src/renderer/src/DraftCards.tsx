@@ -1,5 +1,6 @@
-// Work 초안 카드 (D404). 만든 곳(DraftSource)과 상관없는 공용 컴포넌트다: 지금은 기본 세션의 오른쪽 패널이 쓰고, 곁 세션과
-// Work 마무리로 넓힐 때 그 패널에 그대로 둔다. [새 Work로 만들기]는 새 Work 대화상자를 채워 열고, [버리기]는 초안을 지운다.
+// Work 초안 카드 (D404). 만든 곳(DraftSource)과 상관없는 공용 컴포넌트다: 기본 세션의 오른쪽 패널과, Work의 task와 곁 세션이
+// 다시 하기로 쓴 초안을 보이는 Work의 오른쪽 패널(D421)이 쓴다. [새 Work로 만들기]는 새 Work 대화상자를 채워 열고, [버리기]는
+// 초안을 지운다.
 import { useState } from 'react'
 import { WORK_TYPE_LABEL } from '../../shared/work'
 import type { CommandResult, DraftView, ProjectView } from '../../shared/views'

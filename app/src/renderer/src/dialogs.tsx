@@ -1,5 +1,5 @@
 // 대화상자: 프로젝트 등록(시나리오 0), 프로젝트 설정(D185), 새 Work(시나리오 1, 유형 고르기 D236), 설정 화면(D70),
-// Work 설정(D72: 자동 승인, 질문 방식, 대응 자동 시작. PR 진행 중에도 연다, D209), 단계 선택(6.2, D82, D237),
+// Work 설정(D72: 자동 승인, 질문 방식, 대응 자동 시작. PR 진행 중에도 연다, D209),
 // 커밋 안 된 변경의 선택지(7-5), Work 정리(시나리오 8, D178),
 // 확인 창([오류 무시하고 승인] 4.1, [Work 포기] 3.3, [머지 없이 끝내기] D179).
 import { useEffect, useRef, useState, type ReactNode } from 'react'
@@ -35,7 +35,6 @@ import {
   type ThemeChoice,
   type WorkSettings,
 } from '../../shared/config'
-import type { NodeName } from '../../shared/contracts'
 import { WORK_TYPES, WORK_TYPE_LABEL, type MergeMethod, type WorkType } from '../../shared/work'
 import type {
   CleanPreview,
@@ -43,11 +42,9 @@ import type {
   ProjectInspection,
   ProjectRemovePreview,
   ProjectView,
-  StepPreview,
   SubmoduleView,
   TidyCandidateView,
   TidyView,
-  StepPreviewResult,
   WorkView,
 } from '../../shared/views'
 import { call } from './commands'
@@ -387,6 +384,18 @@ const REQUEST_PLACEHOLDER: Readonly<Record<WorkType, string>> = {
   general: '할 일과 끝났다고 볼 조건을 적어 주세요(무엇을 바꾸고 어떻게 확인할지)',
 }
 
+/** Work에서 쓴 초안(D421)으로 열 때의 원래 Work: 비운 칸을 채우고, 포기할지 고르게 한다 */
+export interface DraftOrigin {
+  /** 사이드바의 Work 제목 */
+  title: string
+  /** 원래 Work의 기준 브랜치. 다른 프로젝트의 초안이면 null이다 */
+  baseBranch: string | null
+  /** 원래 Work의 이슈 번호. 없거나 다른 프로젝트의 초안이면 null이다 */
+  issueNumber: number | null
+  /** 진행 중이거나 멈춘 Work라 포기할 수 있다 */
+  abandonable: boolean
+}
+
 /**
  * 새 Work: 대상, 유형, 요청, 기준 브랜치, 기준 위치 (시나리오 1). 유형을 고르기 전에는 [시작]이 꺼져 있다 (D236).
  * 서브모듈이 있는 레포는 대상으로 서브모듈 하나를 고를 수 있고, 그러면 메인 통합 검증 worktree를 고른다 (D413, D414)
@@ -395,6 +404,7 @@ export function NewWorkDialog({
   project,
   projects,
   draft,
+  origin,
   onClose,
   onCreated,
 }: {
@@ -406,6 +416,8 @@ export function NewWorkDialog({
    * 채울 Work 초안 (D404). 지식 정리 후보처럼 칸을 채우고(D393), 맞는 칸만 채운다. 만들면 main이 그 초안을 지운다
    */
   draft?: DraftView
+  /** 초안이 Work에서 나왔으면 그 Work (D421) */
+  origin?: DraftOrigin
   onClose: () => void
   onCreated: (workKey: string) => void
 }) {
@@ -427,9 +439,20 @@ export function NewWorkDialog({
   const [type, setType] = useState<WorkType | null>(draft?.type ?? null)
   const [request, setRequest] = useState(draft?.request ?? '')
   const [branches, setBranches] = useState<string[]>([project.defaultBranch])
-  const [branch, setBranch] = useState(draft?.base ?? project.defaultBranch)
+  const [branch, setBranch] = useState(draft?.base ?? origin?.baseBranch ?? project.defaultBranch)
   const [location, setLocation] = useState<'local' | 'remote'>('local')
-  const [issue, setIssue] = useState('')
+  // 다시 하기는 원래 Work를 포기하며 그 이슈를 이어 쓴다 (D421, I153). 포기하지 않으면 두 Work가 한 이슈를 쓰게 되어 채우지
+  // 않는다. 번호를 바꾸면 그 이슈에 쓴다
+  const originIssue =
+    origin?.abandonable && origin.issueNumber !== null ? String(origin.issueNumber) : ''
+  const [issue, setIssue] = useState(originIssue)
+  const [abandon, setAbandon] = useState(origin?.abandonable === true)
+  const toggleAbandon = (on: boolean) => {
+    setAbandon(on)
+    if (!originIssue) return
+    if (on && !issue.trim()) setIssue(originIssue)
+    if (!on && issue.trim() === originIssue) setIssue('')
+  }
   const [modes, setModes] = useState<Overrides>({})
   const [auto, setAuto] = useState<AutoOverrides>({})
   const [busy, setBusy] = useState(false)
@@ -550,6 +573,7 @@ export function NewWorkDialog({
         ...(Object.keys(settings).length ? { settings } : {}),
         ...(issueNumber !== null ? { issueNumber } : {}),
         ...(draft ? { draft: draft.ref } : {}),
+        ...(origin?.abandonable && abandon ? { abandonOriginal: true } : {}),
       }),
     )
     setBusy(false)
@@ -725,6 +749,20 @@ export function NewWorkDialog({
             placeholder="요청이 온 이슈의 번호. 비우면 의도를 승인할 때 새 이슈를 만듭니다"
             onChange={(e) => setIssue(e.target.value)}
           />
+        </label>
+      ) : null}
+      {origin?.abandonable ? (
+        <label
+          className="toggle"
+          title="다시 하기: 새 Work를 만든 뒤 원래 Work를 포기합니다 (D421)"
+        >
+          <input
+            type="checkbox"
+            aria-label="원래 Work 포기"
+            checked={abandon}
+            onChange={(e) => toggleAbandon(e.target.checked)}
+          />
+          원래 Work 포기: {origin.title}
         </label>
       ) : null}
       {/* 처음 쓰는 사람을 헷갈리게 하지 않게 하나로 접는다. PR 자동 대응은 PR 진행이 된 뒤 [Work 설정]에서 고른다 (D226) */}
@@ -1524,244 +1562,6 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         <button onClick={onClose}>취소</button>
         <button className="primary" disabled={busy || !value} onClick={() => void save()}>
           저장
-        </button>
-      </div>
-    </Modal>
-  )
-}
-
-// ---------- 단계 선택 (6.2, 6.3, D82) ----------
-
-const short = (commit: string | null) => (commit ? commit.slice(0, 8) : '')
-
-/** 미리 보기의 코드 줄 (D116, D117). keepLabel은 [현재 코드 위에서 이어서]의 이름이다 (I105) */
-function codeLines(code: StepPreview['code'], keepLabel: string): string[] {
-  const n = code.uncommitted.length
-  if (code.kind === 'reset') {
-    const where = `고른 단계를 시작할 때의 커밋(${short(code.to)})`
-    return [
-      code.commits > 0 || n > 0
-        ? `되돌릴 커밋 ${code.commits}개: ${where}으로 되돌립니다`
-        : `되돌릴 커밋 0개: 코드가 이미 ${where}에 있습니다`,
-      ...(n ? [`커밋 안 된 변경 ${n}개는 백업 브랜치에 커밋으로 넣고 지웁니다`] : []),
-      code.backupBranch
-        ? `백업 브랜치: ${code.backupBranch}`
-        : '백업할 것이 없어 백업 브랜치를 만들지 않습니다',
-    ]
-  }
-  return [
-    code.kind === 'keep'
-      ? `[${keepLabel}]: 커밋을 되돌리지 않고 그 위에서 이어서 고칩니다`
-      : '코드를 되돌리지 않습니다',
-    ...(n ? [`커밋 안 된 변경 ${n}개는 그대로 둡니다`] : []),
-  ]
-}
-
-/** 고른 단계의 결과 (D82): 중단할 task, 폐기될 산출물, 코드, 건너뛸 단계, intent */
-function PreviewView({ p, keepLabel }: { p: StepPreview; keepLabel: string }) {
-  return (
-    <div className="step-preview" aria-label="미리 보기">
-      <div>
-        <strong>{p.title}</strong> · {p.kind === 'rewind' ? '되감기' : '건너뛰기'} · 새 task의 이유:{' '}
-        {p.reason}
-      </div>
-      {p.interrupt ? <div className="notice">{p.interrupt}</div> : null}
-      <section>
-        <h3>폐기될 산출물</h3>
-        {p.discard.length ? (
-          <ul>
-            {p.discard.map((d) => (
-              <li key={d.taskId}>
-                {d.label}: {d.artifacts.length ? d.artifacts.join(', ') : '산출물 없음'}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <div className="dim">없음</div>
-        )}
-      </section>
-      <section>
-        <h3>코드</h3>
-        <ul>
-          {codeLines(p.code, keepLabel).map((l) => (
-            <li key={l}>{l}</li>
-          ))}
-        </ul>
-        {p.code.uncommitted.length ? (
-          <ul className="files">
-            {p.code.uncommitted.map((f) => (
-              <li key={f}>{f}</li>
-            ))}
-          </ul>
-        ) : null}
-      </section>
-      <section>
-        <h3>건너뛸 단계</h3>
-        {p.skipped.length ? p.skipped.join(', ') : <span className="dim">없음</span>}
-      </section>
-      {p.typeChange ? <div className="notice">{p.typeChange}</div> : null}
-      {p.intent ? <div className="notice">{p.intent}</div> : null}
-    </div>
-  )
-}
-
-/**
- * 단계 선택 대화상자 (D82): 그 Work 유형의 파이프라인 단계를 차례로 보이고(6.3의 제약을 따른다), 고른 단계의 결과를
- * 미리 보인다. 추가 지시는 선택이고, 버그 수정의 fix, 기능 추가의 design과 implement 등으로 되감으면 [현재 코드 위에서
- * 이어서]를 고를 수 있다(D254). 설계의 spec은 [현재 문서 위에서 이어서]이고 처음부터 체크되어 있다 (D365, I105). 의도 승인 전 [intake 다시]에서는 유형을 다시 고를 수 있고 지금 유형이 골라져 있다 (D237).
- * [확인]을 눌러야 실행한다. 미리 본 뒤 Work가 바뀌었으면 main이 받지 않는다.
- */
-export function StepDialog({
-  work,
-  initial,
-  onClose,
-  onDone,
-}: {
-  work: WorkView
-  /** 처음 고른 단계. 이전 단계 추천으로 멈췄으면 추천한 단계다 (D23) */
-  initial?: NodeName
-  onClose: () => void
-  onDone: () => void
-}) {
-  const recommended = work.steps.find((c) => c.recommended && c.allowed)?.node
-  const [node, setNode] = useState<NodeName | null>(initial ?? recommended ?? null)
-  // 설계의 spec은 [현재 문서 위에서 이어서]가 처음부터 체크되어 있다 (D365, I105)
-  const [keepCode, setKeepCode] = useState(
-    work.steps.find((c) => c.node === (initial ?? recommended))?.keepDefault === true,
-  )
-  const [type, setType] = useState<WorkType>(work.type)
-  const [instruction, setInstruction] = useState('')
-  // 미리 본 단계와 선택지. 고른 것과 다르면 보이지 않고 [확인]할 수 없다
-  const [preview, setPreview] = useState<{
-    node: NodeName
-    keepCode: boolean
-    type: WorkType
-    result: StepPreviewResult
-  } | null>(null)
-  const choice = work.steps.find((c) => c.node === node)
-  // [현재 코드 위에서 이어서]는 되감기로 KEEP_CODE_NODES의 단계를 고를 때만 있다 (6.2, D254)
-  const keepOffered = choice?.keepCode === true
-  // 보내는 값은 줄 수 있는 단계일 때만 참이다. 체크 상태가 남아 있어도 다른 단계로 보내지 않는다 (PR #36 리뷰)
-  const keep = keepOffered && keepCode
-  // 유형은 의도 승인 전 [intake 다시]에서만 고른다 (D237)
-  const typeOffered = choice?.typeChange === true
-  const chosenType = typeOffered ? type : work.type
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  // 고른 단계의 결과를 미리 본다. Work가 바뀌면 다시 본다
-  useEffect(() => {
-    if (!node) return
-    let stale = false
-    void call(() => window.relay.stepPreview(work.key, node, keep, chosenType)).then((result) => {
-      if (!stale) setPreview({ node, keepCode: keep, type: chosenType, result })
-    })
-    return () => {
-      stale = true
-    }
-  }, [work.key, work.revision, node, keep, chosenType])
-
-  const current =
-    preview && preview.node === node && preview.keepCode === keep && preview.type === chosenType
-      ? preview
-      : null
-  const shown = current?.result.ok ? current.result.preview : null
-  const failed = current && !current.result.ok ? current.result.error : null
-
-  const pick = (next: NodeName) => {
-    setNode(next)
-    setKeepCode(work.steps.find((c) => c.node === next)?.keepDefault === true)
-    setType(work.type)
-  }
-
-  const confirm = async () => {
-    if (!shown) return
-    setBusy(true)
-    setError(null)
-    const r = await call(() =>
-      window.relay.selectStep(work.key, {
-        node: shown.node,
-        keepCode: keep,
-        instruction,
-        expect: shown.expect,
-        ...(chosenType !== work.type ? { type: chosenType } : {}),
-      }),
-    )
-    setBusy(false)
-    if (r.ok) onDone()
-    else setError(r.error)
-  }
-
-  return (
-    <Modal title={`단계 선택 · ${work.workId}`} onClose={onClose}>
-      <fieldset className="steps">
-        <legend>단계</legend>
-        {work.steps.map((c) => (
-          <label key={c.node} className={c.allowed ? 'step' : 'step disabled'} title={c.why ?? ''}>
-            <input
-              type="radio"
-              name="step"
-              aria-label={c.title}
-              disabled={!c.allowed}
-              checked={node === c.node}
-              onChange={() => pick(c.node)}
-            />
-            <span>{c.title}</span>
-            <span className="dim">
-              {c.kind === 'rewind' ? '되감기' : '건너뛰기'}
-              {c.current ? ' · 지금 단계' : ''}
-            </span>
-            {c.recommended ? <span className="badge hot">추천</span> : null}
-          </label>
-        ))}
-      </fieldset>
-      {keepOffered ? (
-        <label
-          className="toggle"
-          title={
-            choice?.keepDefault
-              ? '문답으로 정한 결정을 문서에 둔 채 다시 볼 결정만 다시 묻는다'
-              : 'verify가 작은 문제를 찾았을 때 수정을 처음부터 다시 하지 않는다'
-          }
-        >
-          <input
-            type="checkbox"
-            checked={keepCode}
-            onChange={(e) => setKeepCode(e.target.checked)}
-          />
-          {choice?.keepLabel}
-        </label>
-      ) : null}
-      {typeOffered ? (
-        <div className="field">
-          유형 (의도 승인 전까지만 바꿀 수 있음)
-          <WorkTypePicker value={type} onChange={setType} />
-        </div>
-      ) : null}
-      {node === null ? (
-        <div className="dim">단계를 고르면 결과를 미리 보입니다.</div>
-      ) : failed ? (
-        <div className="error">{failed}</div>
-      ) : shown ? (
-        <PreviewView p={shown} keepLabel={choice?.keepLabel ?? '현재 코드 위에서 이어서'} />
-      ) : (
-        <div className="dim">미리 보는 중…</div>
-      )}
-      <label className="field">
-        추가 지시 (선택)
-        <textarea
-          aria-label="추가 지시"
-          rows={4}
-          value={instruction}
-          onChange={(e) => setInstruction(e.target.value)}
-          placeholder="새 task의 context.md 맨 위에 넣습니다"
-        />
-      </label>
-      {error ? <div className="error">{error}</div> : null}
-      <div className="buttons">
-        <button onClick={onClose}>취소</button>
-        <button className="primary" disabled={busy || !shown} onClick={() => void confirm()}>
-          {busy ? '실행하는 중…' : '확인'}
         </button>
       </div>
     </Modal>

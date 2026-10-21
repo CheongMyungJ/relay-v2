@@ -207,8 +207,10 @@ describe('자동 승인 조건 (4.3, D129)', () => {
 
   it('조건을 모두 만족하면 어긴 것이 없다', () => {
     expect(holds(valid())).toEqual([])
-    // 기본 다음 단계(fix 다음은 verify)를 추천해도 된다
-    expect(holds(valid({ recommended_next: { node: 'verify', reason: '기본' } }))).toEqual([])
+    // D418 전 형식의 recommended_next는 어떤 단계든 조건이 아니다 (D422)
+    for (const node of ['intake', 'fix', 'verify'] as const) {
+      expect(holds(valid({ recommended_next: { node, reason: '다시' } })), node).toEqual([])
+    }
   })
 
   it('조건을 하나씩 어기면 자동 승인하지 않는다', () => {
@@ -234,12 +236,6 @@ describe('자동 승인 조건 (4.3, D129)', () => {
         false,
         'intent_deviation',
       ],
-      [
-        '이전 단계 추천 (D23)',
-        valid({ recommended_next: { node: 'intake', reason: '의도 다시' } }),
-        false,
-        'recommended_next',
-      ],
       ['백그라운드 작업 (D129)', valid(), true, 'background'],
     ]
     for (const [label, c, background, reason] of rows) {
@@ -247,34 +243,11 @@ describe('자동 승인 조건 (4.3, D129)', () => {
     }
   })
 
-  it('fix의 기본 다음 단계는 verify다. 자기 단계나 intake를 추천하면 자동 승인하지 않는다 (3.2)', () => {
-    const fix = (h: Partial<Handoff>) =>
-      autoApproveHolds({ node: 'fix', type: 'bugfix', check: valid(h), background: false })
-    expect(fix({ recommended_next: { node: 'verify', reason: '기본' } })).toEqual([])
-    for (const node of ['intake', 'fix'] as const) {
-      expect(fix({ recommended_next: { node, reason: '다시' } }), node).toEqual([
-        'recommended_next',
-      ])
-    }
-  })
-
-  it('기능 추가: design의 기본 다음 단계는 implement, implement는 verify다. design 추천이면 멈춘다 (3.2, D248)', () => {
-    const run = (node: 'design' | 'implement', h: Partial<Handoff>) =>
+  it('기능 추가와 PR 대응도 recommended_next를 보지 않는다 (D422)', () => {
+    const run = (node: 'implement' | 'respond', h: Partial<Handoff>) =>
       autoApproveHolds({ node, type: 'feature', check: valid(h), background: false })
-    expect(run('design', { recommended_next: { node: 'implement', reason: '기본' } })).toEqual([])
-    expect(run('implement', { recommended_next: { node: 'verify', reason: '기본' } })).toEqual([])
-    expect(run('implement', { recommended_next: { node: 'design', reason: '설계' } })).toEqual([
-      'recommended_next',
-    ])
-  })
-
-  it('PR 대응은 선택 가능한 다음 단계가 없어 어떤 추천이든 자동 승인하지 않는다 (D188)', () => {
-    const respond = (h: Partial<Handoff>) =>
-      autoApproveHolds({ node: 'respond', type: 'bugfix', check: valid(h), background: false })
-    expect(respond({})).toEqual([])
-    expect(respond({ recommended_next: { node: 'verify', reason: '다시' } })).toEqual([
-      'recommended_next',
-    ])
+    expect(run('implement', { recommended_next: { node: 'design', reason: '설계' } })).toEqual([])
+    expect(run('respond', { recommended_next: { node: 'verify', reason: '다시' } })).toEqual([])
   })
 
   it('여럿을 어기면 모두 적는다', () => {
@@ -283,11 +256,10 @@ describe('자동 승인 조건 (4.3, D129)', () => {
         valid({
           open_questions: ['?'],
           intent_deviation: { summary: 's', evidence: 'e' },
-          recommended_next: { node: 'intake', reason: 'r' },
         }),
         true,
       ),
-    ).toEqual(['open_questions', 'intent_deviation', 'recommended_next', 'background'])
+    ).toEqual(['open_questions', 'intent_deviation', 'background'])
   })
 
   it('Stop 본문의 background_tasks나 session_crons가 비어 있지 않으면 쉬는 중이다. 없으면 비어 있는 것으로 본다 (D129)', () => {
@@ -363,7 +335,7 @@ describe('자동 승인하지 않은 까닭 (D128~D131)', () => {
     })
   })
 
-  it('사람이 앱에서 한 일([취소], [즉시 중단], 앱 종료, [단계 선택], 설정)과 재시작 조정은 알리지 않는다 (D130, D121, D145)', () => {
+  it('사람이 앱에서 한 일([취소], [즉시 중단], 앱 종료, D418 전의 [단계 선택], 설정)과 재시작 조정은 알리지 않는다 (D130, D121, D145)', () => {
     for (const r of ['cancel', 'interrupt', 'quit', 'step', 'settings', 'restart'] as const) {
       expect(holdNeedsNotice([r]), r).toBe(false)
     }

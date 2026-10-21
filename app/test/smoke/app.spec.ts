@@ -1,5 +1,5 @@
-// [스모크] 설치한 앱이 뜨고, 새 Work에서 유형(버그 수정)을 고른 뒤에야 [시작]이 켜지고(M14, D236, 유형 다섯은 M15·M18·M20), 가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화면(자동 승인 포함), [단계 선택],
-// 자동 승인 카운트다운의 [취소], [push]와 [Work 정리], 다시 켠 뒤 끊긴 작업의 [다시 시도], 보관된 Work의 [아카이브로 옮기기],
+// [스모크] 설치한 앱이 뜨고, 새 Work에서 유형(버그 수정)을 고른 뒤에야 [시작]이 켜지고(M14, D236, 유형 다섯은 M15·M18·M20), 가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화면(자동 승인 포함), Work 초안 카드,
+// 자동 승인 카운트다운의 [취소], [push]와 [Work 정리], 다시 켠 뒤 끊긴 작업의 [무시], 보관된 Work의 [아카이브로 옮기기],
 // Work의 [기록 지우기]와 프로젝트의 [등록 해제]를 누른다 (I27).
 // M2: 프로젝트 등록 → 새 Work → intake 탭에 PTY 출력 → 창 크기 변경이 PTY에 전달 → [의도 승인]
 // → intent.md 확정, intake 세션 트리 종료, 다음 task 시작. M12: 다음 task의 터미널은 표시 줄로 시작하고, 머리 띠와
@@ -10,9 +10,9 @@
 // M3: 다음 task(원인 분석과 수정)를 [즉시 중단]하면 중단됨·읽기 전용이 되고 트리가 끝난다 → [재개]하면 같은 세션을
 // --resume으로 이전 화면 뒤에 잇고, 이어서 하라는 입력으로 바로 작업 중이 된다(M12) → 설정 화면에서 세션 상한을
 // 바꾼다. M7: 같은 설정 화면에서 카운트다운을 600초로 바꾼다(원인 분석과 수정의 자동 승인은 기본으로 켜져 있다).
-// M4: [단계 선택]에서 intake를 고르면 미리 보기(폐기될 산출물, 중단할 task, 코드, intent 새 버전)를 보이고,
-// 추가 지시와 함께 [확인]하면 진행 중인 세션을 끝내고 intake를 되감기로 다시 시작한다(앞 탭은 폐기됨)
-// → 새 intake를 [의도 승인]하면 intent v2가 되고 v1은 intent.history에 남는다.
+// D418, D421: [단계 선택]과 [이 단계 새 세션으로 다시]는 없다. 첫 Work의 초안 폴더에 다시 할 Work의 초안을 쓰면 패널
+// 맨 위에 "Work 초안" 카드가 보이고, [새 Work로 만들기]는 새 Work 대화상자를 채우며 "원래 Work 포기"가 켜져 있다 →
+// [취소]한 뒤 [버리기]하면 카드와 파일이 없어진다.
 // M5: 두 번째 Work를 리뷰와 검증까지 가면 Work 완료 화면에 전달 버튼이 보인다 → [push]하면 리뷰와 검증이 남긴
 // 열린 질문 때문에 한 번 확인받고(D222), 커밋 안 된 파일 때문에 선택지가 뜨고, [AI 세션 열기]로 정리 세션을 연다(7-5) → 정리 세션 중에 [이 단계 끝나면 멈춤]을
 // 켜면 [승인하고 멈춤] 화면이 되어도 [정리 세션 닫기]가 남고, 멈추는 동안은 전달하지 않는다(D137) → 끄고
@@ -27,10 +27,10 @@
 // M8: 설정 화면에 리뷰와 검증의 질문 방식이 있고 자동 승인은 없다(늘 수동, D229) → 두 번째 Work는 원인 분석과 수정
 // 뒤 리뷰와 검증으로 간다. Work 완료 화면의 [요약] 맨 위에 리뷰 지적과 반영이, [산출물]에 verification.md와 pr.md가
 // 보인다.
-// M6: 앱 종료 확인을 거쳐 앱을 끄고, 첫 Work의 work.json에 끊긴 되감기 기록을 넣고 decisions.md를 고친 뒤 다시
-// 켠다 → 첫 Work의 배지가 "끊긴 작업"이고, 패널 맨 위에 끊긴 곳과 [다시 시도]·[무시], 바뀐 파일과 [확인]이
-// 보인다. 끊긴 동안 [단계 선택]은 없다 → [확인]하면 파일 알림이 닫히고, [다시 시도]하면 앞 task를 폐기하고
-// intake를 되감기로 다시 시작한다.
+// M6: 앱 종료 확인을 거쳐 앱을 끄고, 첫 Work의 work.json에 D418 전의 끊긴 되감기 기록을 넣고 decisions.md를 고친 뒤
+// 다시 켠다 → 첫 Work의 배지가 "끊긴 작업"이고, 패널 맨 위에 끊긴 곳과 [무시](되감기는 이어서 하지 않아 [다시 시도]가
+// 없다, D424), 바뀐 파일과 [확인]이 보인다 → [확인]하면 파일 알림이 닫히고, [무시]하면 기록만 지우고 task는 중단됨으로
+// 남는다.
 // 아카이브(D380): 보관된 두 번째 Work를 우클릭해 [아카이브로 옮기기]하면 프로젝트 목록에서 빠지고, 프로젝트들 아래 같은
 // 계층의 공통 아카이브에 프로젝트 이름과 함께 보인다. 메뉴는 Esc나 다른 곳 우클릭으로 닫히고, 보관 전 Work와 옮긴 Work에는
 // 없다 → 프로젝트와 아카이브를 따로 접고 편다 → 아카이브의 Work를 고르면 판정표가 보인다.
@@ -154,7 +154,7 @@ test.beforeAll(async () => {
       { do: 'stop' },
     ],
   })
-  // 두 Work의 첫 intake(t-01)는 열린 질문 하나를 남긴다 (D222). 되감기로 다시 한 intake는 남기지 않는다
+  // 두 Work의 첫 intake(t-01)는 열린 질문 하나를 남긴다 (D222)
   const s: Scenario = {
     tasks: {
       ...base.tasks,
@@ -199,7 +199,7 @@ test.afterAll(async () => {
   fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
 })
 
-test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화면, [단계 선택], 자동 승인 카운트다운의 [취소], [push]와 [Work 정리], 다시 켠 뒤 끊긴 작업의 [다시 시도], 보관된 Work의 [아카이브로 옮기기], [기록 지우기]와 [등록 해제]를 누른다', async () => {
+test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화면, Work 초안 카드, 자동 승인 카운트다운의 [취소], [push]와 [Work 정리], 다시 켠 뒤 끊긴 작업의 [무시], 보관된 Work의 [아카이브로 옮기기], [기록 지우기]와 [등록 해제]를 누른다', async () => {
   const win = await app.firstWindow()
   await expect(win.locator('.layout')).toBeVisible()
   await expect(win.locator('.sidebar')).toBeVisible()
@@ -391,62 +391,41 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   })
   expect(config().auto_approve_countdown_sec).toBe(600)
 
-  // [단계 선택] (6.2, D82): intake를 고르면 결과를 미리 보인다
-  const resumedPid = lastPid((await rows.textContent()) ?? '')
-  expect(alive(resumedPid)).toBe(true)
-  await win.getByRole('button', { name: '단계 선택', exact: true }).click()
-  const dialog = win.getByRole('dialog', { name: /단계 선택/ })
-  await expectModal(dialog)
-  await dialog.getByLabel('의도 정리(intake)').check()
-  const preview = dialog.getByLabel('미리 보기')
-  await expect(preview).toContainText('01 의도 정리: intent.draft.md', { timeout: 30_000 })
-  await expect(preview).toContainText('02 원인 분석과 수정: 산출물 없음')
-  await expect(preview).toContainText('진행 중인 02 원인 분석과 수정의 세션을 끝냅니다')
-  await expect(preview).toContainText('되돌릴 커밋 0개')
-  await expect(preview).toContainText('백업 브랜치를 만들지 않습니다')
-  await expect(preview).toContainText('intent 새 버전(v2)')
-  await dialog.getByLabel('추가 지시').fill('완료조건에 음수만 든 배열을 더해 주세요')
-  await win.screenshot({ path: 'test-results/step-select.png' })
-  await dialog.getByRole('button', { name: '확인', exact: true }).click()
-
-  // 진행 중인 세션을 끝내고 intake를 되감기로 다시 시작한다. 앞 task는 폐기됨이다
-  await expect(win.getByRole('tab', { name: /03 의도 정리/ })).toBeVisible({ timeout: 30_000 })
-  await expect(win.locator('.band')).toContainText('03 의도 정리 · 새 세션 · 이유: 되감기')
-  await expect(win.locator('.tab.discarded')).toHaveCount(2)
-  await expect.poll(() => alive(resumedPid), { timeout: 15_000 }).toBe(false)
-  const intentFile = findFile(path.join(home, 'projects'), 'intent.md') ?? ''
-  const v1 = fs.readFileSync(intentFile, 'utf8')
-  // context.md는 탭이 보인 뒤 task를 띄우며 쓴다
-  await expect
-    .poll(() => findFile(path.join(home, 'projects'), 'context.md', '03-intake'))
-    .not.toBeNull()
-  const context = findFile(path.join(home, 'projects'), 'context.md', '03-intake') ?? ''
-  expect(fs.readFileSync(context, 'utf8')).toContain('완료조건에 음수만 든 배열을 더해 주세요')
-
-  // 새 intake를 [의도 승인]하면 intent v2가 된다 (D40)
-  const again = win.getByRole('button', { name: '의도 승인' })
-  await expect(again).toBeEnabled({ timeout: 60_000 })
-  await win.screenshot({ path: 'test-results/rewound.png' })
-  await again.click()
-  await expect(win.getByRole('tab', { name: /04 원인 분석과 수정/ })).toBeVisible({
-    timeout: 60_000,
+  // Work 초안 (D421): 다시 하기로 task가 쓴 초안은 그 Work의 패널 맨 위에 카드로 보인다. 단계 선택은 없다 (D418)
+  await expect(win.getByRole('button', { name: '단계 선택', exact: true })).toHaveCount(0)
+  await expect(win.getByRole('button', { name: '이 단계 새 세션으로 다시' })).toHaveCount(0)
+  const workJson1 = findFile(path.join(home, 'projects'), 'work.json') ?? ''
+  const workDir1 = path.dirname(workJson1)
+  const projectId = path.basename(path.dirname(path.dirname(workDir1)))
+  const draftFile = path.join(workDir1, 'work-drafts', 'redo.md')
+  await expect.poll(() => fs.existsSync(path.dirname(draftFile)), { timeout: 30_000 }).toBe(true)
+  fs.writeFileSync(
+    draftFile,
+    `---\nproject: ${projectId}\ntype: bugfix\n---\n빈 배열 평균 다시 하기\n원인을 다시 잡는다\n`,
+  )
+  const drafts = win.getByRole('region', { name: 'Work 초안' })
+  await expect(drafts.locator('.draft-title')).toHaveText('빈 배열 평균 다시 하기', {
+    timeout: 30_000,
   })
-  // 첫 Work의 원인 분석과 수정(t-04)은 시작만 한다. 가짜 claude가 시나리오를 읽은 뒤, 두 번째 Work의 원인 분석과
-  // 수정(t-02)이 끝까지 가도록 시나리오를 바꾼다. 가짜 claude는 뜰 때 시나리오 파일을 읽는다
-  await expect(rows).toContainText('── relay: 04 원인 분석과 수정 · 새 세션을 띄우는 중 ──', {
-    timeout: 60_000,
-  })
-  await expect(rows).toContainText('[가짜 claude] wait', { timeout: 60_000 })
+  // [새 Work로 만들기]는 새 Work 대화상자를 채우고, 진행 중인 원래 Work를 포기하는 칸이 켜져 있다 (D421)
+  await drafts.getByRole('button', { name: '새 Work로 만들기', exact: true }).click()
+  const redo = win.getByRole('dialog', { name: /^새 Work/ })
+  await expect(redo.getByLabel('요청')).toHaveValue(/빈 배열 평균 다시 하기/)
+  await expect(redo.getByRole('radio', { name: '버그 수정' })).toBeChecked()
+  await expect(redo.getByLabel('원래 Work 포기')).toBeChecked()
+  await win.screenshot({ path: 'test-results/redo-draft.png' })
+  await redo.getByRole('button', { name: '취소', exact: true }).click()
+  await expect(redo).toBeHidden()
+  // [버리기]는 초안을 지운다
+  await drafts.getByRole('button', { name: '버리기', exact: true }).click()
+  await expect(drafts).toHaveCount(0, { timeout: 30_000 })
+  expect(fs.existsSync(draftFile)).toBe(false)
+  // 첫 Work의 원인 분석과 수정(t-02)은 시작만 했다. 두 번째 Work의 원인 분석과 수정(t-02)은 끝까지 가도록 시나리오를
+  // 바꾼다. 가짜 claude는 뜰 때 시나리오 파일을 읽는다
   fs.writeFileSync(
     scenarioFile,
     JSON.stringify({ ...scenarioData, tasks: { ...scenarioData.tasks, 't-02': steps('fix') } }),
   )
-  await expect
-    .poll(() => fs.readFileSync(intentFile, 'utf8'), { timeout: 15_000 })
-    .toContain('version: 2\n')
-  expect(
-    fs.readFileSync(path.join(path.dirname(intentFile), 'intent.history', 'v1.md'), 'utf8'),
-  ).toBe(v1)
 
   // 두 번째 Work (M5): 리뷰와 검증까지 간다. 세션 상한 2에서 첫 Work의 세션 하나와 함께 돈다
   await win.getByRole('button', { name: '새 Work' }).click()
@@ -587,8 +566,8 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   expect(findFile(path.join(home, 'projects'), 'pr.md', '03-verify')).not.toBeNull()
   await win.screenshot({ path: 'test-results/archived.png' })
 
-  // M6: 앱을 끈다(살아 있는 세션이 있어 종료 확인을 거친다). 되감기가 백업 브랜치를 만들기 전에 앱이 꺼진 것처럼
-  // 첫 Work의 work.json에 진행 중 작업 기록을 넣고, 꺼진 동안 스크립트가 decisions.md를 고친다
+  // M6: 앱을 끈다(살아 있는 세션이 있어 종료 확인을 거친다). D418 전의 앱이 되감기 백업 브랜치를 만들기 전에 꺼진
+  // 것처럼 첫 Work의 work.json에 진행 중 작업 기록을 넣고, 꺼진 동안 스크립트가 decisions.md를 고친다 (D424)
   await app.close()
   const works = path.dirname(findDir(path.join(home, 'projects'), workId2 ?? '', 'works') ?? '')
   const workId1 = fs.readdirSync(works).sort()[0] ?? ''
@@ -597,16 +576,16 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
     tasks: { id: string; created_at: string; start_commit?: string }[]
     operation?: object
   }
-  const intake3 = w1.tasks.find((t) => t.id === 't-03')
+  const fix1 = w1.tasks.find((t) => t.id === 't-02')
   w1.operation = {
     kind: 'rewind',
     stage: 'backup',
     started_at: w1.tasks.at(-1)?.created_at,
-    node: 'intake',
-    from_task: 't-04',
+    node: 'fix',
+    from_task: 't-02',
     instruction: null,
-    discard: ['t-03', 't-04'],
-    reset_to: intake3?.start_commit,
+    discard: ['t-02'],
+    reset_to: fix1?.start_commit,
     backup_branch: `relay/${workId1}-discarded-1`,
     backup_commit: null,
   }
@@ -619,14 +598,15 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   const item1 = win2.locator('.work-item').nth(1)
   await expect(item1.locator('.badge')).toHaveText('끊긴 작업', { timeout: 30_000 })
   await item1.click()
-  // 패널 맨 위에 무엇이 어디서 끊겼는지와 [다시 시도]·[무시] (D123)
+  // 패널 맨 위에 무엇이 어디서 끊겼는지와 [무시] (D123). 되감기는 이어서 하지 않아 [다시 시도]가 없다 (D424)
   const cut = win2.getByRole('alert', { name: '끊긴 작업' })
   await expect(cut).toContainText('되감기가 끊겼습니다', { timeout: 30_000 })
   await expect(cut).toContainText('끊긴 곳: 백업 브랜치를 만드는 단계')
-  await expect(cut).toContainText('폐기할 task: 03 의도 정리, 04 원인 분석과 수정')
+  await expect(cut).toContainText('폐기할 task: 02 원인 분석과 수정')
+  await expect(cut).toContainText('지금 앱에는 되감기가 없어 이어서 하지 않습니다')
   await expect(cut.getByRole('button', { name: '무시', exact: true })).toBeEnabled()
-  // 끊긴 동안은 [다시 시도], [무시], Work 설정만 받는다 (D122)
-  await expect(win2.getByRole('button', { name: '단계 선택', exact: true })).toHaveCount(0)
+  await expect(cut.getByRole('button', { name: '다시 시도', exact: true })).toHaveCount(0)
+  // 끊긴 동안은 [무시]와 Work 설정만 받는다 (D122)
   await expect(win2.getByRole('button', { name: 'Work 설정', exact: true })).toBeVisible()
   // 앱 밖에서 바뀐 decisions.md (D124)
   const changed = win2.locator('.recovery .notice', { hasText: '앱 밖에서 바뀐 파일이 있습니다' })
@@ -635,14 +615,14 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await changed.getByRole('button', { name: '확인', exact: true }).click()
   await expect(changed).toBeHidden({ timeout: 30_000 })
 
-  // [다시 시도]: 끊긴 곳부터 잇는다. 코드는 이미 되돌릴 커밋이라 백업 없이 폐기하고 intake를 되감기로 시작한다
-  await cut.getByRole('button', { name: '다시 시도', exact: true }).click()
-  await expect(win2.getByRole('tab', { name: /05 의도 정리/ })).toBeVisible({ timeout: 60_000 })
-  await expect(win2.locator('.band')).toContainText('05 의도 정리 · 새 세션 · 이유: 되감기')
-  await expect(cut).toBeHidden()
+  // [무시]: 기록만 지운다. task는 폐기하지 않고 중단됨으로 남아 [재개]할 수 있다
+  await cut.getByRole('button', { name: '무시', exact: true }).click()
+  await expect(cut).toBeHidden({ timeout: 30_000 })
   await expect(item1.locator('.badge')).not.toHaveText('끊긴 작업')
-  await expect(win2.locator('.tab.discarded')).toHaveCount(4)
-  await expect(win2.getByRole('button', { name: '의도 승인' })).toBeEnabled({ timeout: 60_000 })
+  await expect(win2.locator('.tab.discarded')).toHaveCount(0)
+  await expect(win2.getByRole('button', { name: '재개', exact: true })).toBeVisible({
+    timeout: 30_000,
+  })
   await win2.screenshot({ path: 'test-results/recovered.png' })
 
   // 아카이브 (D380): 보관된 두 번째 Work의 우클릭 메뉴로 옮긴다. 보관 전 Work에는 메뉴가 없고, 메뉴는 Esc나 다른 곳
@@ -770,10 +750,6 @@ async function expectModal(dialog: Locator): Promise<void> {
     (el) => el.matches(':modal') && el.contains(el.ownerDocument.activeElement),
   )
   expect(modal).toBe(true)
-}
-
-function lastPid(text: string): number {
-  return Number([...text.matchAll(/PID (\d+)/g)].pop()?.[1] ?? 0)
 }
 
 function lastSize(text: string): string | undefined {

@@ -246,6 +246,9 @@ function readContext() {
     taskDir: field('task 디렉터리') ?? path.dirname(contextPath),
     taskId: field('task_id'),
     node: field('node')?.split(' ')[0] ?? null,
+    // 다시 하기의 Work 초안 (D420, D421): 초안 폴더와 초안의 project
+    draftsDir: field('Work 초안 폴더')?.split(' (')[0] ?? null,
+    projectId: field('프로젝트 id'),
   }
 }
 
@@ -311,7 +314,8 @@ async function steps(list, ctx, vars) {
       opts.sessionId = randomUUID()
       unsaved = true
     } else if (s === 'write') {
-      const file = path.join(ctx.taskDir, step.file)
+      // 파일은 task 디렉터리 기준이다. {draftsDir}처럼 채운 절대 경로도 받는다
+      const file = path.resolve(ctx.taskDir, fill(step.file, vars))
       fs.mkdirSync(path.dirname(file), { recursive: true })
       fs.writeFileSync(file, fill(step.text, vars))
     } else if (s === 'remove') {
@@ -491,7 +495,14 @@ async function run() {
   // 다시 연 세션은 사람의 입력을 기다린다. resume 시나리오가 없으면 아무것도 하지 않는다. --resume과 함께 입력을
   // 주면(중단됨의 [재개], D218) 실제 claude처럼 그것을 첫 요청으로 바로 보낸 뒤 resume 시나리오를 한다.
   // 첫 프롬프트가 없으면 정리 세션이다 (7-5). cleanup 시나리오가 없으면 입력을 기다리기만 한다
-  const vars = { taskDir: ctx.taskDir, taskId: ctx.taskId, node: ctx.node, attempt: 0 }
+  const vars = {
+    taskDir: ctx.taskDir,
+    taskId: ctx.taskId,
+    node: ctx.node,
+    draftsDir: ctx.draftsDir ?? '',
+    projectId: ctx.projectId ?? '',
+    attempt: 0,
+  }
   if (opts.resume && opts.prompt !== null) await steps([{ do: 'prompt' }], ctx, vars)
   const list = session
     ? ((opts.resume ? scenario.sessionResume : scenario.session) ?? [])

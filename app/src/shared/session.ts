@@ -31,10 +31,10 @@ export const NEW_SESSION_NAME = '새 세션'
 export const SESSION_NAME_MAX = 20
 
 /**
- * Work 초안을 만든 곳 (D404). 지금은 기본 세션뿐이다. 곁 세션과 Work 마무리로 넓힐 때 여기에 종류를 더하고 초안 폴더만
- * 정한다 (9절)
+ * Work 초안을 만든 곳 (D404): 기본 세션(id는 세션 id)과 Work(id는 Work 키 <project-id>/<work-id>, D421). Work의 초안은 그
+ * Work의 task와 곁 세션이 같은 폴더에 쓴다
  */
-export type DraftSource = { kind: 'session'; id: string }
+export type DraftSource = { kind: 'session'; id: string } | { kind: 'work'; id: string }
 
 /** 초안 하나의 자리: 만든 곳과 파일 이름. 새 Work를 만들면 앱이 이 초안을 지운다 (D404) */
 export interface DraftRef {

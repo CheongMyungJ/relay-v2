@@ -1,6 +1,6 @@
 // 렌더러로 보내는 스냅샷과 조회 결과 (I14). main이 core로 계산하고, 화면은 받은 것을 그리기만 한다.
 import type { WorkSettings } from './config'
-import type { Decision, HandoffStatus, NodeName, TaskNode } from './contracts'
+import type { Decision, HandoffStatus, TaskNode } from './contracts'
 import type { PendingQuestionView } from './questions'
 import type { PrItemKind, PrItemStatus } from './pr'
 import type { DraftRef, ParsedDraft } from './session'
@@ -619,12 +619,10 @@ export interface WorkView {
   /** 메인 통합 검증 worktree (D414): 메인 레포의 기준 브랜치, 고정한 커밋, 그 폴더. 없으면 null */
   integration: { baseBranch: string; baseCommit: string; root: string } | null
   intent: ApprovedIntent | null
-  /** 멈춘 이유: 이전 단계 추천(D23), [이 단계 끝나면 멈춤] */
+  /** 멈춘 이유: [이 단계 끝나면 멈춤]. 이전 단계 추천(D23)은 D418 전 기록이다 */
   stopNotice: string | null
   /** 멈춘 Work에서 [재개]가 할 일 (3.3) */
   stopHint: string | null
-  /** 단계 선택 대화상자의 단계 (6.2, 6.3, D82) */
-  steps: StepChoice[]
   /** 마지막 전달 결과 (시나리오 7) */
   delivery: DeliveryView | null
   /** PR 진행 (시나리오 10). [PR 생성]이 성공한 Work에 있다 */
@@ -633,6 +631,8 @@ export interface WorkView {
   cleanup: CleanupView | null
   /** 곁 세션 (시나리오 11) */
   side: SideView
+  /** 이 Work의 task와 곁 세션이 쓴 Work 초안 (D421). 오른쪽 패널 맨 위에 카드로 보인다 */
+  drafts: DraftView[]
   /** 끊긴 작업 (시나리오 9-4, D121~D123). 있으면 [다시 시도]·[무시]만 받는다 */
   operation: OperationView | null
   /** 이슈 기록 (설계 3.7). 이슈 기록이 켜진 프로젝트에서 만든 Work에 있다 */
@@ -670,8 +670,8 @@ export interface OperationView {
   kind: 'rewind' | 'deliver' | 'clean' | 'merge' | 'respond'
   title: string
   lines: string[]
-  /** [다시 시도]가 할 일 */
-  retry: string
+  /** [다시 시도]가 할 일. null이면 [다시 시도]가 없다: D418 전에 끊긴 되감기 (D424) */
+  retry: string | null
   /** [무시]가 할 일 */
   ignore: string
   /** 끊긴 전달의 선택. [다시 시도]가 커밋 안 된 변경을 돌려주면 선택지를 이 이름으로 보인다 (7-5) */
@@ -697,112 +697,14 @@ export interface WorkActions {
   interrupt: boolean
   /** [재개](중단됨), [세션 재개](세션 종료, 세션 없는 승인 대기와 막힘) */
   resume: boolean
-  /** [이 단계 새 세션으로 다시] (D114) */
-  retry: boolean
   /** 멈춘 Work의 [재개] */
   resumeWork: boolean
-  /** [단계 선택] (6.2) */
-  selectStep: boolean
   /** [이 단계 끝나면 멈춤] */
   stopAfter: boolean
   /** [Work 포기] */
   abandon: boolean
   /** [Work 정리]: 완료나 포기한 Work (시나리오 8) */
   clean: boolean
-}
-
-// ---------- 단계 선택 (6.2, 6.3, D82) ----------
-
-/** 되감기(고른 단계가 지금 단계 이하) 또는 건너뛰기(지금 단계보다 뒤) (6.2) */
-export type StepKind = 'rewind' | 'skip'
-
-/** 단계 선택 대화상자의 한 단계. 파이프라인 차례로 보인다 */
-export interface StepChoice {
-  node: NodeName
-  /** "수정(fix)" */
-  title: string
-  kind: StepKind
-  /** 고를 수 있다. 아니면 why가 이유다 (6.3: 의도 승인 전에는 intake만) */
-  allowed: boolean
-  why: string | null
-  /** 지금 단계 */
-  current: boolean
-  /** 에이전트가 추천한 이전 단계 (D23) */
-  recommended: boolean
-  /** 되감기로 고르면 [현재 코드 위에서 이어서]를 줄 수 있다 (6.2, D254) */
-  keepCode: boolean
-  /** [현재 코드 위에서 이어서]의 이름. 설계의 spec은 "현재 문서 위에서 이어서"다 (D365, I105) */
-  keepLabel: string
-  /** 고르면 [현재 코드 위에서 이어서]가 처음부터 체크되어 있다. 설계의 spec만 참이다 (D365, I105) */
-  keepDefault: boolean
-  /** 고르며 유형을 바꿀 수 있다: 의도 승인 전 [intake 다시] (D237) */
-  typeChange: boolean
-}
-
-/** 미리 본 때의 지금 task(6.2의 k)와 그 task가 끝났는지. [확인]에 함께 보내 그 사이 바뀌었으면 받지 않는다 */
-export interface StepExpect {
-  taskId: string
-  done: boolean
-}
-
-/** 폐기될 task와 그 산출물 (D82) */
-export interface DiscardView {
-  taskId: string
-  /** "04 수정" */
-  label: string
-  /** 산출물 파일 이름 (D89: context.md와 handoff.md는 뺀다) */
-  artifacts: string[]
-}
-
-/**
- * 고른 단계의 결과 (D82): 폐기될 산출물, 되돌릴 커밋 수와 커밋 안 된 변경과 백업 브랜치, 건너뛸 단계,
- * 진행 중인 task를 중단하는지. core가 계산하고 main이 git에서 읽은 것을 더한다.
- */
-export interface StepPreview {
-  node: NodeName
-  title: string
-  kind: StepKind
-  /** 새 task의 머리 띠 이유: 되감기, 건너뛰기, 기본 진행 */
-  reason: string
-  expect: StepExpect
-  /** 진행 중인 task를 중단한다는 안내. 없으면 null */
-  interrupt: string | null
-  discard: DiscardView[]
-  /** 건너뛸 단계의 화면 이름 */
-  skipped: string[]
-  code: {
-    /** reset: 되돌린다, keep: [현재 코드 위에서 이어서], none: 되돌리지 않는다 */
-    kind: 'reset' | 'keep' | 'none'
-    /** 되돌릴 커밋 */
-    to: string | null
-    /** 되돌릴 커밋 수 */
-    commits: number
-    /** 커밋 안 된 변경 (git status). reset이면 백업에 넣고 지운다 (D116) */
-    uncommitted: string[]
-    /** 만들 백업 브랜치 (D115). 되돌릴 것이 없으면 null */
-    backupBranch: string | null
-  }
-  /** [현재 코드 위에서 이어서]를 고를 수 있다 (6.2, D254) */
-  keepCodeOffered: boolean
-  /** intake로 되감으면 intent 새 버전을 만든다는 안내 (D40) */
-  intent: string | null
-  /** 의도 승인 전 [intake 다시]에서 유형을 바꾼다는 안내 (D237). 바꾸지 않으면 null */
-  typeChange: string | null
-}
-
-/** 미리 보기의 결과. 고를 수 없는 단계거나 git을 읽지 못하면 오류다 */
-export type StepPreviewResult = { ok: true; preview: StepPreview } | { ok: false; error: string }
-
-/** [단계 선택]의 [확인] (6.2) */
-export interface SelectStepInput {
-  node: NodeName
-  /** [현재 코드 위에서 이어서] (6.2, D254) */
-  keepCode: boolean
-  /** 사람 추가 지시(선택) */
-  instruction: string
-  expect: StepExpect
-  /** 의도 승인 전 [intake 다시]에서 고른 유형 (D237). 지금 유형과 같거나 없으면 바꾸지 않는다 */
-  type?: WorkType
 }
 
 export interface AppSnapshot {
@@ -1011,6 +913,11 @@ export interface NewWorkInput {
   issueNumber?: number | null
   /** 채운 Work 초안 (D404). Work를 만들면 앱이 그 초안을 지운다 */
   draft?: DraftRef
+  /**
+   * Work에서 쓴 초안(D421)으로 만들 때 원래 Work를 포기한다: 다시 하기. 원래 Work가 진행 중이거나 멈춤일 때만 쓴다.
+   * 새 Work를 만든 뒤 포기한다
+   */
+  abandonOriginal?: boolean
   /**
    * 서브모듈 Work의 메인 통합 검증 worktree (D414). 서브모듈 프로젝트에서만 쓴다. 메인 레포의 기준 브랜치와 기준 위치다
    * (메인 레포에 origin이 없을 수 있어 Work의 기준 위치와 따로 고른다). 없거나 null이면 서브모듈 worktree만 만든다

@@ -48,7 +48,7 @@ export type WorkStatus = 'active' | 'stopped' | 'pr' | 'completed' | 'abandoned'
  * - session_ended: handoff 없이 세션이 끝났다. 3.3의 "중단됨"에 들지만 배지가 따로 있다 (D80)
  * - interrupted: 중단됨. [즉시 중단], 앱 종료, 재시작 조정(D75, D78), task를 띄우지 못했을 때
  * - approved: 승인됨
- * - discarded: 폐기됨. 되감기나 건너뛰기로 이후 입력에서 빠졌다 (6.2). 파일과 기록은 남는다
+ * - discarded: 폐기됨. D418 전의 되감기나 건너뛰기로 이후 입력에서 빠졌다. 파일과 기록은 남는다. 새로 생기지 않는다 (D424)
  */
 export type TaskStatus =
   | 'queued'
@@ -64,15 +64,13 @@ export type TaskStatus =
   | 'discarded'
 
 /**
- * task를 시작한 이유 (시나리오 2-5의 머리 띠): 기본 진행, 되감기, 건너뛰기, 재개, 대응 시작.
- * 재개는 handoff 없이 끝난 세션을 [이 단계 새 세션으로 다시] 한 새 task다 (D114).
- * 되감기와 건너뛰기는 단계 선택(6.2)으로 들어온 task다. 단계 선택에서 기본 다음 단계를 골라
- * 건너뛴 단계도 폐기한 task도 없으면 기본 진행이다. 대응 시작은 PR 패널의 [대응 시작]으로 시작한 PR 대응 task이고
- * (시나리오 10-3), 자동 대응은 앱이 받은 새 항목으로 자동으로 시작한 PR 대응 task다 (D154, D210)
+ * task를 시작한 이유 (시나리오 2-5의 머리 띠): 기본 진행, 대응 시작, 자동 대응. 대응 시작은 PR 패널의 [대응 시작]으로
+ * 시작한 PR 대응 task이고 (시나리오 10-3), 자동 대응은 앱이 받은 새 항목으로 자동으로 시작한 PR 대응 task다 (D154, D210).
+ * 되감기·건너뛰기(단계 선택)와 재개([이 단계 새 세션으로 다시], D114)는 D418 전에 만든 task에만 있다 (D424)
  */
 export type StartReason = 'default' | 'rewind' | 'skip' | 'resume' | 'respond' | 'auto_respond'
 
-/** 단계 선택(6.2)으로 들어온 task의 입력과 코드. context.md의 맨 위에 넣는다 (시나리오 2-4) */
+/** D418 전에 단계 선택으로 들어온 task의 입력과 코드. 읽기만 한다: [변경]의 범위가 되돌린 코드를 본다 (D424) */
 export interface StepSelection {
   /** 단계를 고른 때의 지금 task (6.2의 k) */
   from_task: string
@@ -140,10 +138,11 @@ export interface Countdown {
 
 /**
  * 자동 승인이 켜진 단계에서 자동 승인하지 않은 까닭 (4.3, D128~D130, D75, D122).
- * 조건: open_questions, intent_deviation, recommended_next(기본 다음 단계가 아님), background(Stop 때 백그라운드 작업이나
- * 예약된 깨우기가 남음, D129), invalid(다시 읽은 handoff가 유효하지 않음).
- * 멈춤: cancel([취소]), interrupt([즉시 중단]), quit(앱 종료 확인), step([단계 선택], D145), session(세션 종료),
- * settings(자동 승인을 끔), restart(재시작 조정), operation(끊긴 작업), pr_closed(PR 대응인데 PR이 닫혀 승인을 받지 않음, D179)
+ * 조건: open_questions, intent_deviation, background(Stop 때 백그라운드 작업이나 예약된 깨우기가 남음, D129),
+ * invalid(다시 읽은 handoff가 유효하지 않음).
+ * 멈춤: cancel([취소]), interrupt([즉시 중단]), quit(앱 종료 확인), session(세션 종료), settings(자동 승인을 끔),
+ * restart(재시작 조정), operation(끊긴 작업), pr_closed(PR 대응인데 PR이 닫혀 승인을 받지 않음, D179).
+ * recommended_next(기본 다음 단계가 아님)와 step([단계 선택], D145)은 D418 전 기록에만 있다 (D424)
  */
 export type AutoHoldReason =
   | 'open_questions'
@@ -231,7 +230,7 @@ export interface TaskRecord {
   /** handoff를 검사할 형식 버전 (5.2.1) */
   format_version: number
   created_at: string
-  /** task 시작 커밋 (시나리오 2-1). 되감기의 기준이다 (6.2) */
+  /** task 시작 커밋 (시나리오 2-1). [변경]의 범위가 쓴다 */
   start_commit?: string
   /** 배포한 스킬의 해시 (D103) */
   skill_hash?: string
@@ -263,9 +262,9 @@ export interface TaskRecord {
   ignored_errors?: FormatIssue[]
   /** task를 띄우지 못한 이유 */
   error?: string
-  /** 단계 선택(6.2)으로 들어온 task */
+  /** D418 전에 단계 선택으로 들어온 task (D424) */
   selection?: StepSelection
-  /** 폐기한 때와, 폐기를 부른 단계 선택이 만든 task (6.2) */
+  /** D418 전의 단계 선택으로 폐기한 때와, 폐기를 부른 단계 선택이 만든 task (D424) */
   discarded_at?: string
   discarded_by?: string
   /** PR 대응 task의 라운드 (시나리오 10). respond 노드에만 있다 */
@@ -277,7 +276,7 @@ export interface ApprovedIntent {
   version: number
 }
 
-/** Work가 멈춘 이유 (3.3): 이전 단계 추천(D23), [이 단계 끝나면 멈춤] (시나리오 3-4) */
+/** Work가 멈춘 이유 (3.3): [이 단계 끝나면 멈춤] (시나리오 3-4). 이전 단계 추천(D23)은 D418 전 기록이다 (D424) */
 export type WorkStop =
   | {
       kind: 'recommended_back'
@@ -304,9 +303,8 @@ interface OperationBase {
 }
 
 /**
- * 코드를 되돌리는 되감기의 진행 중 작업 기록 (6.2, D77). 세션을 끝낸 뒤 백업 브랜치를 만들고(backup),
- * 코드를 되돌리고(reset), task를 폐기하고 새 task를 만든다. 마지막은 work.json 한 번 쓰기라 기록을 지우는 것과
- * 같이 한다. 재시작 때 남아 있으면 끊긴 작업이다 (D123).
+ * 코드를 되돌리는 되감기의 진행 중 작업 기록 (D77). D418 전 기록이다: 되감기는 없어 새로 쓰지 않고, 끊긴 채 남은
+ * 기록은 [무시]만 받는다 (D424).
  */
 export interface RewindOperation extends OperationBase {
   kind: 'rewind'
@@ -551,7 +549,7 @@ export type IssueCloseReason = 'completed' | 'not_planned'
  * 이슈 기록의 게시 하나 (설계 3.7, D339, D341, D346, D347, D349). 대기열의 앞부터 차례로 게시한다 (D344).
  * - issue: 새 이슈를 만든다. 본문은 그때 확정한 intent다 (D336). 기존 이슈(D338)에는 없다
  * - task: 승인된 task의 코멘트 (D339). intake면 그때 확정한 intent 버전을 적는다
- * - step: 단계 선택(되감기·건너뛰기)으로 만든 task. 폐기한 task 목록은 그 task의 selection이다 (D341)
+ * - step: D418 전의 단계 선택(되감기·건너뛰기) 코멘트. 그 앱이 대기열에 남긴 것만 게시한다 (D424)
  * - end: Work가 어떻게 끝났는지 한 줄 (D347)
  * - close: 이슈를 닫는다 (D346). 기존 이슈에는 없다
  */
@@ -598,6 +596,11 @@ export interface IssueRecord {
   failure?: { at: string; key: string; error: string }
   /** 앱이 닫은 때와 까닭 (D346) */
   closed?: { at: string; reason: IssueCloseReason }
+  /**
+   * 다시 한 Work가 원래 Work에서 이어 쓰는 이슈 (D421): 원래 Work의 id. 이슈가 이미 있어 새로 만들지 않고 intent부터
+   * 코멘트로 단다. linked는 원래 Work의 것이라, 앱이 만든 이슈면 이 Work가 끝날 때 닫는다
+   */
+  from_work?: string
 }
 
 export interface WorkState {
@@ -650,6 +653,8 @@ export interface WorkState {
   pr?: PullRequestRecord
   /** 이슈 기록 (설계 3.7, I96). 이슈 기록이 켜진 프로젝트에서 만든 Work에 있다 */
   issue?: IssueRecord
+  /** 다시 한 Work면 원래 Work의 id (D421). Work에서 쓴 초안으로 만들었을 때 있다 */
+  from_work?: string
   tasks: TaskRecord[]
 }
 
@@ -668,8 +673,6 @@ export type LifecycleEventType =
   | 'task.approved'
   | 'task.interrupted'
   | 'task.resumed'
-  | 'task.rewound'
-  | 'task.skipped_to'
   | 'delivery.succeeded'
   | 'delivery.failed'
   | 'pr.items_received'

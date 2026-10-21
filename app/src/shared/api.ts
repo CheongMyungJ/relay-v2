@@ -2,7 +2,6 @@
 // 렌더러는 명령을 invoke로 보내고, 메인은 상태가 바뀔 때마다 Work 스냅샷을 보낸다.
 // 터미널 출력은 task별 채널로 보낸다. 메인과 렌더러가 같은 타입을 보도록 여기에 둔다.
 import type { AppConfig, WorkSettingsPatch } from './config'
-import type { NodeName } from './contracts'
 import type { ProjectSettings } from './project'
 import type {
   ActivityUpdate,
@@ -25,16 +24,15 @@ import type {
   ProjectView,
   RespondStartInput,
   ReviewView,
-  SelectStepInput,
-  StepPreviewResult,
   SubmoduleView,
   TerminalBacklog,
   SessionView,
   TerminalChunk,
   WorkView,
 } from './views'
-import type { DeliveryChoice, WorkType } from './work'
+import type { DeliveryChoice } from './work'
 import type { HumanAnswers } from './questions'
+import type { DraftRef } from './session'
 
 export interface AppInfo {
   platform: string
@@ -131,8 +129,6 @@ export interface RelayApi {
   interrupt(workKey: string, taskId: string): Promise<CommandResult>
   /** [재개], [세션 재개] (시나리오 3-4, 3-5, 4.4) */
   resume(workKey: string, taskId: string): Promise<CommandResult>
-  /** [이 단계 새 세션으로 다시] (시나리오 3-5, D114) */
-  retry(workKey: string, taskId: string): Promise<CommandResult>
   /** [이 단계 끝나면 멈춤]을 켜거나 끈다 (시나리오 3-4) */
   stopAfter(workKey: string, on: boolean): Promise<CommandResult>
   /** [아카이브로 옮기기]: 보관된 Work를 사이드바의 공통 아카이브로 옮긴다 */
@@ -146,15 +142,6 @@ export interface RelayApi {
    * 먼저 정리한다. 보관된 Work는 null이다
    */
   deleteWork(workKey: string, clean: CleanInput | null): Promise<CommandResult>
-  /** 단계 선택 대화상자의 미리 보기 (6.2, D82). type은 의도 승인 전 [intake 다시]에서 고른 유형이다 (D237) */
-  stepPreview(
-    workKey: string,
-    node: NodeName,
-    keepCode: boolean,
-    type?: WorkType,
-  ): Promise<StepPreviewResult>
-  /** [단계 선택]의 [확인] (6.2) */
-  selectStep(workKey: string, input: SelectStepInput): Promise<CommandResult>
   /** [push]·[PR 생성] (시나리오 7-4~7-6). 커밋 안 된 변경이 있으면 목록을 돌려준다 (7-5) */
   deliver(workKey: string, input: DeliverInput): Promise<DeliverResult>
   /** [AI 세션 열기] (7-5) */
@@ -179,8 +166,8 @@ export interface RelayApi {
   renameSession(id: string, name: string): Promise<CommandResult>
   /** 기본 세션의 [지우기] (D402): 끝난 세션만 */
   deleteSession(id: string): Promise<CommandResult>
-  /** 초안 카드의 [버리기] (D404) */
-  discardDraft(sessionId: string, name: string): Promise<CommandResult>
+  /** 초안 카드의 [버리기] (D404, D421) */
+  discardDraft(ref: DraftRef): Promise<CommandResult>
   /** Work 완료 화면의 [다시 점검]: origin과 gh를 다시 점검한다 (D118) */
   recheck(workKey: string): Promise<CommandResult>
   /** [Work 정리]의 확인 요약 (시나리오 8-1) */
@@ -266,14 +253,11 @@ export const IPC = {
   answerQuestion: 'work:answer-question',
   interrupt: 'work:interrupt',
   resume: 'work:resume',
-  retry: 'work:retry',
   stopAfter: 'work:stop-after',
   shelve: 'work:shelve',
   resumeWork: 'work:resume-work',
   abandon: 'work:abandon',
   deleteWork: 'work:delete',
-  stepPreview: 'work:step-preview',
-  selectStep: 'work:select-step',
   deliver: 'work:deliver',
   openCleanup: 'work:open-cleanup',
   closeCleanup: 'work:close-cleanup',

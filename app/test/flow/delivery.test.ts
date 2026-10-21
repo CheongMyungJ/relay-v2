@@ -562,35 +562,21 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
     const dirty = git(s.tree, 'status', '--porcelain')
     expect(dirty).not.toBe('')
     // 버튼을 끄고 main도 받지 않는다
-    expect(opened.actions).toMatchObject({
-      resume: false,
-      retry: false,
-      selectStep: false,
-      abandon: false,
-    })
+    expect(opened.actions).toMatchObject({ resume: false, abandon: false })
     const blocked = {
       ok: false,
       error: '정리 세션이 열려 있음: 먼저 [정리 세션 닫기]나 [정리 끝 → push/PR 진행]을 누르세요',
     }
     expect(await s.h.relay.resume(s.key, 't-03')).toEqual(blocked)
-    expect(await s.h.relay.retry(s.key, 't-03')).toEqual(blocked)
     expect(await s.h.relay.approve(s.key, 't-03', {})).toEqual(blocked)
     expect(await s.h.relay.abandon(s.key)).toEqual(blocked)
-    expect(
-      await s.h.relay.selectStep(s.key, {
-        node: 'fix',
-        keepCode: false,
-        instruction: '',
-        expect: { taskId: 't-03', done: false },
-      }),
-    ).toEqual(blocked)
     expect(work(s).tasks).toHaveLength(3)
 
     expect(await s.h.relay.closeCleanup(s.key)).toEqual({ ok: true })
     await settle(s.h, s.key)
     const closed = view(s)
     expect(closed?.cleanup).toBeNull()
-    expect(closed?.actions).toMatchObject({ resume: true, selectStep: true, abandon: true })
+    expect(closed?.actions).toMatchObject({ resume: true, abandon: true })
     // 전달하지 않았고 변경은 worktree에 남는다
     const w = work(s)
     expect(w.status).toBe('active')
@@ -707,7 +693,7 @@ describe('[흐름] 전달 (M5, 시나리오 7)', () => {
     await toVerify(s)
     // verify가 도는 중에 멈춤을 켜도 마무리 안내 문구가 맞다: [승인하고 멈춤]을 함께 적었다 (D104)
     expect(read(path.join(s.dir, 'tasks', '03-verify', 'context.md'))).toContain(
-      '[이 단계 끝나면 멈춤]이 켜져 있거나 이전 단계를 추천했으면 [승인하고 멈춤]을 누르고',
+      '[이 단계 끝나면 멈춤]이 켜져 있으면 [승인하고 멈춤]을 누르고',
     )
     expect(await s.h.relay.stopAfter(s.key, true)).toEqual({ ok: true })
     expect((await s.h.relay.review(s.key, 't-03'))?.completion?.mode).toBe('stop')

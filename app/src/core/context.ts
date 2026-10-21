@@ -1,6 +1,5 @@
 // context.md 조립 (시나리오 2-4, D19). 앱이 task를 시작할 때 task 디렉터리에 쓰고,
 // 첫 프롬프트에는 이 파일의 경로만 넣는다. 스킬은 이 파일부터 읽는다 (5.6.3).
-// 단계 선택(6.2)으로 들어온 task는 사람 추가 지시와, 되감기면 폐기된 시도 요약을 맨 위에 강조해 넣는다.
 // PR 대응 task는 이번 라운드의 항목(외부 글은 데이터로 감쌈), 사람 지시, PR 정보, 앞 라운드의 요약을 맨 위에 넣는다 (D192).
 // 서브모듈이 있는 레포는 서브모듈을 받는 법과 다루지 않을 것을 고정 문구로 넣는다 (D383).
 import type { AgentEngine } from '../shared/agent'
@@ -8,23 +7,11 @@ import { taskEngine } from './agent'
 import type { AppConfig, QuestionMode, WorkSettings } from '../shared/config'
 import type { NodeName, TaskNode } from '../shared/contracts'
 import type { PrItem } from '../shared/pr'
-import { WORK_TYPE_LABEL, type TaskRecord, type WorkState, type WorkType } from '../shared/work'
+import { WORK_TYPE_LABEL, type TaskRecord, type WorkState } from '../shared/work'
 import { approvalMode, autoApprovable, type ApprovalMode } from './approval'
-import {
-  ALL_NODES,
-  KEEP_CODE,
-  NODE_INFO,
-  RESPOND,
-  WORK_COMPLETE,
-  defaultNext,
-  isPipelineNode,
-  isPrevious,
-  previousSteps,
-  workType,
-  type NextStep,
-} from './pipeline'
+import { NODE_INFO, RESPOND, isPipelineNode, workType } from './pipeline'
 import { workBranch } from './records'
-import { REPLIES_FILE, RESPONSE_FILE, parseFrontMatter, sectionText } from './validate'
+import { REPLIES_FILE, RESPONSE_FILE, parseFrontMatter } from './validate'
 import { knowledgeSection, type KnowledgeInput } from './knowledge'
 
 /**
@@ -64,15 +51,15 @@ const RESPOND_CLOSING =
 
 /** 승인하면 멈추는 verify의 버튼 (D119). 멈춤은 context.md를 쓴 뒤에도 켜고 끌 수 있어 늘 함께 적는다 */
 const VERIFY_STOPS =
-  '[이 단계 끝나면 멈춤]이 켜져 있거나 이전 단계를 추천했으면 [승인하고 멈춤]을 누르고, ' +
+  '[이 단계 끝나면 멈춤]이 켜져 있으면 [승인하고 멈춤]을 누르고, ' +
   '전달은 멈춘 뒤 Work 완료 화면에서 고르세요.'
 
 /**
  * 누를 버튼의 문장 (D104). intake는 [의도 승인]이다. verify는 승인 화면(Work 완료 화면, 시나리오 7-3)에
  * 실제로 있는 버튼이다: [완료만]과, origin과 gh 점검(D67, D118)에 따라 [push], [PR 생성]. 전달 버튼이
  * [완료만]뿐이면 [완료만]이다. 승인하면 멈추는 verify의 승인 화면은 [승인하고 멈춤] 하나라서(D119) 그 경우도
- * 적는다. [이 단계 끝나면 멈춤]은 task가 도는 중에도 켜고 끌 수 있고, 이전 단계 추천(D23)은 에이전트가
- * 마지막에 정하며, 스킬은 이 문구를 그대로 찍으므로(_common.md) 둘 중 하나를 골라 적을 수 없다.
+ * 적는다. [이 단계 끝나면 멈춤]은 task가 도는 중에도 켜고 끌 수 있고, 스킬은 이 문구를 그대로 찍으므로(_common.md)
+ * 둘 중 하나를 골라 적을 수 없다.
  */
 function pressSentence(node: NodeName, delivery: readonly string[], engine: AgentEngine): string {
   if (node === 'intake') return '[의도 승인]을 누르세요.'
@@ -137,22 +124,10 @@ function questionLine(config: AppConfig, settings: WorkSettings, node: TaskNode)
   return mode ? QUESTION_LABEL[mode] : SPEC_QUESTION_LINE
 }
 
-/** 이전 task의 파일이나 값. 폐기된 task는 넣지 않는다 (5.4, 6.2) */
+/** 이전 task의 파일이나 값. 폐기된 task(D418 전 기록)는 넣지 않는다 (5.4, D424) */
 export interface TaskRef {
   taskId: string
   node: TaskNode
-}
-
-/** 되감기로 폐기한 시도 하나 (6.2의 폐기된 시도 요약). 폐기한 task의 handoff에서 읽는다 */
-export interface DiscardedAttempt extends TaskRef {
-  /** handoff가 있었다 */
-  handoff: boolean
-  /** handoff 본문의 `## 요약` */
-  summary: string | null
-  /** handoff의 rejected */
-  rejected: string[]
-  /** handoff가 이전 단계를 추천했으면 그 단계와 이유 (D23) */
-  recommended: { node: NodeName; reason: string } | null
 }
 
 /** 앞 대응 라운드 하나 (D192): 그 대응 task의 handoff 요약과 항목, 사람 지시 */
@@ -181,30 +156,6 @@ export interface RespondInput {
   previous: readonly PreviousRound[]
 }
 
-/** 단계 선택(6.2)으로 들어온 task의 입력. context.md의 맨 위에 강조해 넣는다 (시나리오 2-4) */
-export interface SelectionInput {
-  /** 되감기, 건너뛰기, 기본 진행(건너뛴 것도 폐기한 것도 없음) */
-  reason: 'rewind' | 'skip' | 'default'
-  /** 단계를 고른 때의 지금 task */
-  from: TaskRef
-  instruction: string | null
-  /** 되감기의 폐기된 시도 요약. 건너뛰기에는 넣지 않는다 (6.2) */
-  discarded: readonly DiscardedAttempt[]
-  /** 건너뛰기: 폐기한 task */
-  dropped: readonly TaskRef[]
-  /** 건너뛰기: 건너뛴 단계 */
-  skipped: readonly NodeName[]
-  /** [현재 코드 위에서 이어서]를 골랐다 (6.2, D254) */
-  keepCode: boolean
-  /**
-   * [현재 코드 위에서 이어서]: 폐기된 task의 산출물 경로. 코드가 남아 있어 그 산출물에만 있는 사실(예: 안전망 커밋 해시)을
-   * 이어받아야 한다 (D278, PR #24 리뷰). 참고용이고 입력이 아니다. 아니면 없다
-   */
-  keptArtifacts?: readonly (TaskRef & { path: string })[]
-  /** 코드를 되돌렸다 (D116, D117) */
-  reset: boolean
-}
-
 export interface ContextInput {
   work: WorkState
   /** 시작하는 task */
@@ -213,6 +164,10 @@ export interface ContextInput {
   config: AppConfig
   /** 이 task 디렉터리의 절대 경로 */
   taskDir: string
+  /** 이 Work의 Work 초안 폴더(work-drafts/)의 절대 경로 (D421). 다시 하기로 하면 에이전트가 초안을 쓴다 */
+  draftsDir: string
+  /** 이 Work의 프로젝트 id. Work 초안의 project다 (D404, D421) */
+  projectId: string
   /** request.md의 절대 경로와 내용. intake에는 본문을, 이후 task에는 경로를 넣는다 (D34) */
   request: { path: string; text: string }
   /** 승인된 최신 intent.md의 내용. 의도 승인 전에는 null */
@@ -225,17 +180,10 @@ export interface ContextInput {
   previousHandoff: (TaskRef & { text: string }) | null
   /** 이전 task의 산출물 경로 (D89). 경로만 넣는다 */
   artifacts: readonly (TaskRef & { path: string })[]
-  /** 단계 선택으로 들어온 task (6.2). 아니면 없다 */
-  selection?: SelectionInput | null
   /** verify: Work 완료 화면에서 누를 수 있는 전달 버튼 (D104, core/delivery closingButtons) */
   delivery?: readonly string[]
   /** PR 대응 task (D192). 아니면 없다 */
   respond?: RespondInput | null
-  /**
-   * [현재 코드 위에서 이어서]로 되감은 design 다음에 기본 진행으로 시작한 implement (D254). 그 design과, 그 되감기가
-   * 폐기한 task의 산출물 경로. 아니면 없다
-   */
-  carried?: CarriedCode | null
   /** 지식 (core/knowledge). 지식 관리를 끄면(RELAY_KNOWLEDGE=off) 없다 */
   knowledge?: KnowledgeInput | null
   /** worktree의 서브모듈 경로 (D383). 없으면 서브모듈 절이 없다 */
@@ -252,57 +200,6 @@ export interface SubmoduleTarget {
   path: string
   /** 메인 통합 검증 worktree. 만들지 않았으면 null */
   integration: { root: string; baseBranch: string; baseCommit: string } | null
-}
-
-export interface CarriedCode {
-  /** [현재 코드 위에서 이어서]로 되감은 design task */
-  from: TaskRef
-  /** 그 되감기가 폐기한 task의 산출물 경로. 참고용이다 */
-  discarded: readonly (TaskRef & { path: string })[]
-}
-
-/** 단계 선택으로 들어온 task의 선택 종류: 되감기, 건너뛰기, 기본 진행. 이어받은 선택(D327)은 적힌 종류다 */
-export function selectionKind(
-  task: Pick<TaskRecord, 'reason' | 'selection'>,
-): 'rewind' | 'skip' | 'default' {
-  return (
-    task.selection?.kind ??
-    (task.reason === 'rewind' || task.reason === 'skip' ? task.reason : 'default')
-  )
-}
-
-/**
- * [현재 코드 위에서 이어서]가 이어지는 implement인가 (D254): 기본 진행으로 시작한 implement(새 세션으로 다시 한 것과,
- * [단계 선택]으로 기본 다음 단계를 고른 것 포함)이고, 바로 앞의 승인된 파이프라인 task가 [현재 코드 위에서 이어서]로
- * 되감은 design이다. 그 design을 돌려준다. design은 코드를 바꾸지 않으므로(D243) 폐기된 구현의 커밋이 implement까지
- * 남아 있다
- */
-export function keptCodeDesign(work: WorkState, task: TaskRecord): TaskRecord | null {
-  if (task.node !== 'implement') return null
-  if (task.selection && (selectionKind(task) !== 'default' || task.selection.keep_code)) return null
-  const before = work.tasks.filter(
-    (t) => t.seq < task.seq && t.status === 'approved' && isPipelineNode(t.node),
-  )
-  const prev = before[before.length - 1]
-  return prev?.node === 'design' && prev.selection?.keep_code === true ? prev : null
-}
-
-/** [현재 코드 위에서 이어서]가 이어지는 implement의 절 (D254, PR #23 리뷰) */
-function carriedSection(c: CarriedCode): [string, string] {
-  const paths = c.discarded.length
-    ? c.discarded.map((a) => `- ${taskRef(a)}: ${a.path}`).join('\n')
-    : '없음'
-  return [
-    '현재 코드 위에서 이어서 (먼저 읽을 것)',
-    [
-      `사람이 ${taskRef(c.from)}을(를) [현재 코드 위에서 이어서]로 되감았다. 폐기된 구현의 커밋이 지금 코드에 남아 있다. 처음부터 다시 만들지 말고, 고친 \`design.md\`에 맞게 지금 코드 위에서 이어서 고친다.`,
-      '이미 있는 동작의 테스트는 구현 전에도 통과할 수 있다. 그때는 `새 동작 테스트`의 구현 전을 "통과(이전 구현에 이미 있음)"로 적는다.',
-      '',
-      '### 폐기된 시도의 산출물 (참고, 입력이 아니다)',
-      '',
-      paths,
-    ].join('\n'),
-  ]
 }
 
 /** 이전 task에서 main이 읽은 것. 폐기되지 않은 task를 순서대로 넘긴다 */
@@ -345,46 +242,7 @@ export function previousInputs(
   }
 }
 
-/** handoff 머리글의 이전 단계 추천 (D23). 머리글을 읽지 못하거나 이전 단계가 아니면 null이다 */
-function recommendedBack(
-  type: WorkType,
-  node: TaskNode,
-  data: Record<string, unknown>,
-): DiscardedAttempt['recommended'] {
-  const rec = data['recommended_next']
-  if (!rec || typeof rec !== 'object') return null
-  const { node: to, reason } = rec as Record<string, unknown>
-  const target = ALL_NODES.find((n) => n === to)
-  if (!target || typeof reason !== 'string' || !isPrevious(type, node, target)) return null
-  return { node: target, reason }
-}
-
-/**
- * 폐기된 시도 요약 (6.2): 폐기한 task마다 handoff의 요약, 기각 목록, 이전 단계 추천.
- * handoff가 없으면 없다고만 적는다. 머리글을 읽지 못해도 본문의 요약은 읽는다.
- */
-export function discardedAttempts(
-  type: WorkType,
-  tasks: readonly (TaskRef & { handoff?: string })[],
-): DiscardedAttempt[] {
-  return tasks.map((t) => {
-    const ref = { taskId: t.taskId, node: t.node }
-    if (t.handoff === undefined) {
-      return { ...ref, handoff: false, summary: null, rejected: [], recommended: null }
-    }
-    const fm = parseFrontMatter(t.handoff)
-    return {
-      ...ref,
-      handoff: true,
-      summary: sectionText(fm.body, '요약'),
-      rejected: rejectedOf(t.handoff),
-      recommended: fm.ok ? recommendedBack(type, t.node, fm.data) : null,
-    }
-  })
-}
-
 const nodeLabel = (node: TaskNode) => `${node} (${NODE_INFO[node].title})`
-const stepLabel = (step: NextStep) => (step === WORK_COMPLETE ? 'Work 완료' : nodeLabel(step))
 
 /** 내용에 든 어떤 백틱 줄보다 긴 코드 펜스로 감싼다. 넣은 문서의 제목이 이 파일의 절과 섞이지 않는다 */
 function fenced(text: string, lang = 'markdown'): string {
@@ -458,120 +316,7 @@ function targetSection(t: SubmoduleTarget): [string, string] {
   ]
 }
 
-function nextSteps(type: WorkType, node: TaskNode): string[] {
-  if (!isPipelineNode(node)) {
-    return ['없음: PR 대응 task는 파이프라인 밖이다. `recommended_next`는 null로 둔다 (D188)']
-  }
-  const previous = previousSteps(type, node)
-  return [
-    `기본 다음 단계: ${stepLabel(defaultNext(type, node))}`,
-    `이전 단계: ${previous.length ? previous.map(nodeLabel).join(', ') : '없음'}`,
-  ]
-}
-
 const oneLine = (text: string) => text.replace(/\s*\n\s*/g, ' ').trim()
-const taskRef = (t: TaskRef) => `${t.taskId} ${nodeLabel(t.node)}`
-
-/** 폐기된 시도 요약의 목록 (6.2) */
-function attempts(items: readonly DiscardedAttempt[]): string {
-  if (items.length === 0) return '없음'
-  return items
-    .map((a) => {
-      if (!a.handoff) return `- ${taskRef(a)}: handoff 없음`
-      const lines = [
-        `- ${taskRef(a)}`,
-        `  - 요약: ${a.summary ? oneLine(a.summary) : '없음'}`,
-        ...(a.rejected.length
-          ? a.rejected.map((r) => `  - 기각: ${oneLine(r)}`)
-          : ['  - 기각: 없음']),
-      ]
-      if (a.recommended) {
-        lines.push(
-          `  - 이전 단계 추천: ${nodeLabel(a.recommended.node)} — ${oneLine(a.recommended.reason)}`,
-        )
-      }
-      return lines.join('\n')
-    })
-    .join('\n')
-}
-
-/**
- * 되감기의 코드 (6.2, D116, D117). [현재 코드 위에서 이어서]의 안내는 단계마다 pipeline의 KEEP_CODE에 있고, 남은
- * 코드와 함께 이어받을 폐기된 산출물 경로를 붙인다 (D254, D278)
- */
-function codeNote(type: WorkType, sel: SelectionInput, node: TaskNode): string {
-  if (sel.keepCode) {
-    const note = isPipelineNode(node) ? KEEP_CODE[type][node]?.note : undefined
-    const kept = sel.keptArtifacts ?? []
-    const paths = kept.length ? kept.map((a) => `- ${taskRef(a)}: ${a.path}`).join('\n') : '없음'
-    return [
-      note ?? '[현재 코드 위에서 이어서]: 폐기된 시도의 커밋이 남아 있다. 그 위에서 이어서 고친다.',
-      '',
-      '폐기된 시도의 산출물 (참고, 입력이 아니다):',
-      '',
-      paths,
-    ].join('\n')
-  }
-  return sel.reset
-    ? '고른 단계를 시작할 때의 커밋으로 되돌렸다. 폐기된 시도의 코드는 입력이 아니다.'
-    : '코드는 되돌리지 않았다.'
-}
-
-/**
- * 단계 선택으로 들어온 경우의 절 (시나리오 2-4의 "맨 위 강조", 6.2).
- * 되감기: 사람 추가 지시, 폐기된 시도 요약, 코드. 건너뛰기: 건너뛴 단계와 폐기한 task, 사람 추가 지시.
- * 기본 진행으로 들어왔으면 사람 추가 지시가 있을 때만 넣는다.
- */
-function selectionSection(
-  type: WorkType,
-  sel: SelectionInput,
-  node: TaskNode,
-): [string, string] | null {
-  const from = `${taskRef(sel.from)}에서 고름`
-  const instruction = sel.instruction ? fenced(sel.instruction, 'text') : '없음'
-  if (sel.reason === 'rewind') {
-    return [
-      '되감기로 들어옴 (먼저 읽을 것)',
-      [
-        `사람이 단계 선택으로 이 단계를 다시 실행한다(${from}). 폐기된 task의 산출물, 결정, 기각 목록은 아래 입력에서 뺐다. 사람 추가 지시를 따르고, 폐기된 시도를 그대로 되풀이하지 않는다.`,
-        '',
-        '### 사람 추가 지시',
-        '',
-        instruction,
-        '',
-        '### 폐기된 시도 요약',
-        '',
-        attempts(sel.discarded),
-        '',
-        '### 코드',
-        '',
-        codeNote(type, sel, node),
-      ].join('\n'),
-    ]
-  }
-  if (sel.reason === 'skip') {
-    const skipped = sel.skipped.length ? sel.skipped.map(nodeLabel).join(', ') : '없음'
-    const dropped = sel.dropped.length ? sel.dropped.map(taskRef).join(', ') : '없음'
-    return [
-      '건너뛰어 들어옴 (먼저 읽을 것)',
-      [
-        `사람이 단계 선택으로 이 단계를 실행한다(${from}). 입력은 지금까지 승인된 것이다. 코드는 되돌리지 않았다.`,
-        '',
-        `- 건너뛴 단계: ${skipped}`,
-        `- 폐기한 task: ${dropped}`,
-        '',
-        '### 사람 추가 지시',
-        '',
-        instruction,
-      ].join('\n'),
-    ]
-  }
-  if (!sel.instruction) return null
-  return [
-    '사람 추가 지시 (먼저 읽을 것)',
-    [`사람이 단계 선택으로 이 단계를 고르며 남긴 지시다(${from}).`, '', instruction].join('\n'),
-  ]
-}
 
 /** 외부 글이 데이터라는 안내 (D162, 5.6.7) */
 const EXTERNAL_NOTE =
@@ -722,13 +467,7 @@ export function buildContext(input: ContextInput): string {
   const { work, task, config } = input
   const info = NODE_INFO[task.node]
   const type = workType(work)
-  const entry = input.respond
-    ? respondSection(input.respond, work.base_branch)
-    : input.selection
-      ? selectionSection(type, input.selection, task.node)
-      : input.carried
-        ? carriedSection(input.carried)
-        : null
+  const entry = input.respond ? respondSection(input.respond, work.base_branch) : null
   const sections: [string, string][] = [
     ...(entry ? [entry] : []),
     [
@@ -736,6 +475,7 @@ export function buildContext(input: ContextInput): string {
       list([
         `work_id: ${work.work_id}`,
         `task_id: ${task.id}`,
+        `프로젝트 id: ${input.projectId}`,
         `업무 유형: ${WORK_TYPE_LABEL[type]} (\`${type}\`)`,
         `node: ${nodeLabel(task.node)}`,
         `skill: ${info.skill}`,
@@ -744,6 +484,7 @@ export function buildContext(input: ContextInput): string {
         `작업 브랜치: ${workBranch(work.work_id)}`,
         `기준 브랜치: ${work.base_branch}`,
         `기준 커밋: ${work.base_commit}`,
+        `Work 초안 폴더: ${input.draftsDir} (근본부터 다시 하기로 사람과 정했을 때 새 Work의 초안을 쓰는 곳, D420)`,
       ]),
     ],
     ['승인 방식', approvalSection(config, work.settings, task.node, taskEngine(task))],
@@ -752,7 +493,6 @@ export function buildContext(input: ContextInput): string {
     ...(input.knowledge ? [knowledgeSection(task.node, input.knowledge)] : []),
     ...(input.target ? [targetSection(input.target)] : []),
     ...(input.submodules?.length ? [submoduleSection(input.submodules)] : []),
-    ['선택 가능한 다음 단계', list(nextSteps(type, task.node))],
     [
       work.intent ? `intent (버전 ${work.intent.version})` : 'intent',
       input.intent === null ? '없음 (의도 승인 전)' : fenced(input.intent),
