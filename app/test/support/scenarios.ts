@@ -4,6 +4,7 @@ import type { SkillName } from '../../src/shared/config'
 
 export type Step =
   | { do: 'prompt'; text?: string }
+  /** file은 task 디렉터리 기준이다. {draftsDir}(context.md의 Work 초안 폴더)처럼 채운 경로도 쓴다. text의 {projectId}도 채운다 */
   | { do: 'write'; file: string; text: string }
   | { do: 'remove'; file: string }
   | { do: 'commit'; files: Record<string, string>; message: string }
@@ -122,7 +123,7 @@ const q = (s: string) => JSON.stringify(s)
 
 /** handoff.md. 템플릿(_common.md)의 필드를 모두 쓴다. D418 전 형식의 recommended_next는 쓰지 않는다 (D422) */
 export function handoff(
-  h: Partial<Omit<Handoff, 'recommended_next'>> & { summary?: string; omit?: string[] } = {},
+  h: Partial<Handoff> & { recommended_next?: never; summary?: string; omit?: string[] } = {},
 ): string {
   const decisions = h.decisions ?? []
   const list = (items: readonly string[] | undefined) =>

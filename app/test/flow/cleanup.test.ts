@@ -19,15 +19,7 @@ import {
   settle,
   type Harness,
 } from '../support/harness'
-import {
-  FIXED_FILES,
-  REPO_FILES,
-  REQUEST,
-  handoff,
-  scenario,
-  steps,
-  type Scenario,
-} from '../support/scenarios'
+import { FIXED_FILES, REPO_FILES, REQUEST, scenario, type Scenario } from '../support/scenarios'
 
 let h: Harness | undefined
 

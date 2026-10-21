@@ -1,7 +1,7 @@
 // [흐름] 자동 승인 (docs/implementation.md M7, I25, I26).
 // 조건을 모두 만족하면 카운트다운 뒤 자동 승인하고 다음 단계로 간다(4.3). [취소]와 새 요청, [즉시 중단], 세션 종료,
-// 조건을 어긴 handoff는 카운트다운을 멈추고 사람의 승인을 기다린다(D130). 확인 창으로 앱을 끄거나 [단계 선택]으로
-// 세션을 끝내도 멈추고, 까닭은 끝낸 까닭대로 남는다(D145). 멈춘 뒤에는 턴이 끝날 때 다시 판정한다(D131). 조건을
+// 조건을 어긴 handoff는 카운트다운을 멈추고 사람의 승인을 기다린다(D130). 확인 창으로 앱을 꺼도 멈추고, 까닭은
+// 끝낸 까닭대로 남는다(D145). 멈춘 뒤에는 턴이 끝날 때 다시 판정한다(D131). 조건을
 // 어기면 카운트다운하지 않는다(4.3, D129). Work 설정이 앱 설정보다 우선하고(D72), 자동 승인 여부는 턴이 끝날 때의
 // 설정을 쓴다(D73, D128). 카운트다운 시작을 알리고(D81), 앱을 다시 켜면 자동 승인하지 않는다(D75).
 import { createHash } from 'node:crypto'
@@ -12,7 +12,7 @@ import type { AppConfig } from '../../src/shared/config'
 import type { TaskView, WorkView } from '../../src/shared/views'
 import type { LifecycleEvent, WorkState } from '../../src/shared/work'
 import { drive } from '../support/driver'
-import { git, harness, makeRepo, register, settle, sleep, type Harness } from '../support/harness'
+import { harness, makeRepo, register, settle, sleep, type Harness } from '../support/harness'
 import {
   FIXED_FILES,
   FIX_DOC,

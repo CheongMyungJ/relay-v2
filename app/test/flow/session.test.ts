@@ -314,9 +314,13 @@ describe('기본 세션 (시나리오 12)', () => {
     expect(fs.existsSync(path.join(drafts, 'fix-avg.md'))).toBe(false)
     await until(hh, id, (s) => s.drafts.length === 1, '만든 초안을 지움')
     // [버리기]
-    expect(await hh.relay.discardDraft(id, 'empty.md')).toEqual({ ok: true })
+    expect(
+      await hh.relay.discardDraft({ source: { kind: 'session', id }, name: 'empty.md' }),
+    ).toEqual({ ok: true })
     await until(hh, id, (s) => s.drafts.length === 0, '버림')
-    expect(await hh.relay.discardDraft(id, '../session.json')).toMatchObject({ ok: false })
+    expect(
+      await hh.relay.discardDraft({ source: { kind: 'session', id }, name: '../session.json' }),
+    ).toMatchObject({ ok: false })
     expect(fs.existsSync(path.join(hh.home, 'sessions', id, 'session.json'))).toBe(true)
   })
 
