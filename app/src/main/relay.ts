@@ -795,9 +795,11 @@ export class Relay {
     if (source?.kind === 'work' && !original)
       return { ok: false, error: '초안을 쓴 Work가 없습니다' }
     // 포기할 수 없으면(끊긴 작업, 열린 정리 세션 포함) 새 Work를 만들기 전에 막는다
-    const blocked = input.abandonOriginal
-      ? (original?.redoAbandonBlock() ?? '원래 Work가 없어 포기할 수 없습니다')
-      : null
+    const blocked = !input.abandonOriginal
+      ? null
+      : original
+        ? original.redoAbandonBlock()
+        : '원래 Work가 없어 포기할 수 없습니다'
     if (blocked) return { ok: false, error: blocked }
     // 원래 Work의 이슈는 원래 Work를 포기할 때만 이어 쓴다: 둘이 같은 이슈를 쓰면 먼저 끝난 쪽이 닫는다
     const inherited =
