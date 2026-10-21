@@ -2902,6 +2902,19 @@ describe('PR 진행 (시나리오 10, D152~D200)', () => {
       ...o,
     })
 
+  it('읽은 PR의 base가 머지 대상과 다르면 따른다. 기준 브랜치로 돌아오면 적은 것을 지운다 (D428)', () => {
+    const work = inPr()
+    // 쌓은 앞 Work의 브랜치가 머지되어 지워지면 GitHub가 base를 옮긴다
+    const moved = readPr(
+      { ...work, target_branch: 'relay/w-20260925-001-aaaa' },
+      { baseRef: 'release' },
+    )
+    expect(moved.work.target_branch).toBe('release')
+    expect(readPr(moved.work, { baseRef: 'main' }).work.target_branch).toBeUndefined()
+    // 비었으면(읽지 못함) 그대로다
+    expect(readPr(moved.work, { baseRef: '' }).work.target_branch).toBe('release')
+  })
+
   it('[PR 생성]이 성공하면 완료 대신 PR 진행이다. 번호, 주소, head, gh 버전을 적는다 (D152, D191, D198)', () => {
     const work = inPr()
     expect(work.status).toBe('pr')

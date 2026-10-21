@@ -10,6 +10,7 @@ import {
   ruleHasSlug,
   slugOf,
   withSuffix,
+  workIdsInBranches,
 } from '../../src/core/branch'
 import { targetBranch, workBranch } from '../../src/core/records'
 
@@ -37,7 +38,9 @@ describe('작업 브랜치 규칙 (D426)', () => {
       renderBranchRule(rule, { workId: WORK, type: 'refactor', slug: '' })
     expect(at('{type}/{date}-{seq}-{slug}')).toBe('refactor/20261021-003')
     expect(at('{type}/{slug}')).toBe('refactor')
-    expect(at('{slug}_{seq}')).toBe('_003')
+    expect(at('{slug}_{seq}')).toBe('003')
+    expect(at('{slug}-{work-id}')).toBe('w-20261021-003')
+    expect(at('{type}/{slug}/{seq}')).toBe('refactor/003')
   })
 
   it('짧은 이름은 영문 소문자, 숫자, -만 남긴다', () => {
@@ -56,6 +59,9 @@ describe('작업 브랜치 규칙 (D426)', () => {
     expect(checkBranchRule('{type/{seq}')).toContain('{ }')
     expect(checkBranchRule('a..b/{seq}')).toContain('a..b')
     expect(checkBranchRule('  ')).toContain('비었')
+    // 짧은 이름을 비우면 이름이 남지 않는 규칙
+    expect(checkBranchRule('{slug}')).toContain('{slug}')
+    expect(checkBranchRule('{slug}/{type}')).toBeNull()
     expect(ruleHasSlug('{type}/{slug}')).toBe(true)
     expect(ruleHasSlug(DEFAULT_BRANCH_RULE)).toBe(false)
   })
@@ -136,11 +142,30 @@ describe('Work를 만들 때의 작업 브랜치 (D425~D427)', () => {
   })
 
   it('쓸 수 없는 이름이나 늘 부딪히는 이름은 오류다', () => {
+    expect(pickWorkBranch({ ...base, rule: '{slug}', slug: '' })).toMatchObject({
+      ok: false,
+      error: expect.stringContaining('비었'),
+    })
     expect(pickWorkBranch({ ...base, name: 'a b' })).toMatchObject({ ok: false })
     // feat가 있으면 feat/<4자>는 만들 수 없다
     expect(
       pickWorkBranch({ ...base, name: 'feat/', existing: ['feat'], random: () => 0 }),
     ).toMatchObject({ ok: false, error: expect.stringContaining('feat') })
+  })
+})
+
+describe('브랜치 이름에 든 work-id (D427)', () => {
+  it('w-YYYYMMDD-NNN과 규칙의 {date}-{seq} 모양을 찾아 다시 쓰지 않게 한다', () => {
+    expect(
+      workIdsInBranches([
+        'relay/w-20261021-001',
+        'relay/w-20261021-002-k7q2',
+        'fix/20261021-003-login-k7q2',
+        'feat/x_20261021-004',
+        'main',
+        'release/2026',
+      ]),
+    ).toEqual(['w-20261021-001', 'w-20261021-002', 'w-20261021-003', 'w-20261021-004'])
   })
 })
 

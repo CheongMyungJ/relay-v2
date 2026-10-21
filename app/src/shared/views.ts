@@ -206,6 +206,11 @@ export interface CleanPreview {
     deletable: boolean
     /** 작업 브랜치에만 있는 커밋: PR을 머지한 Work에서 머지한 PR head에 없는 것. 지우려면 잃는 것을 확인한다 (D329) */
     lost: { sha: string; subject: string }[]
+    /**
+     * 이 브랜치를 머지 대상으로 쓰는, PR을 만들기 전의 다른 Work (D428). 있으면 로컬과 origin의 브랜치를 지우지 않는다.
+     * 예전 기록에는 없다
+     */
+    stacked?: string[]
   }
   /** 되감기 백업 브랜치 (D115). "함께 삭제"의 기본은 체크다 */
   backups: string[]
@@ -494,6 +499,8 @@ export interface ProjectView {
   issueLog: boolean
   /** 작업 브랜치 이름 규칙 (D426). 설정하지 않았으면 기본 규칙이다 */
   branchRule: string
+  /** 규칙에 {slug}가 있다: 새 Work 대화상자에 짧은 이름 칸을 보인다 (D426) */
+  branchSlug: boolean
   /** 서브모듈 프로젝트의 메인 프로젝트 id와 그 안의 경로 (D413). 메인 프로젝트면 null */
   parent: { id: string; path: string } | null
 }

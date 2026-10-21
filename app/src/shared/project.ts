@@ -65,6 +65,9 @@ export interface ProjectSettings {
   branch_rule?: string
 }
 
+/** 규칙이 없을 때의 작업 브랜치 규칙 (D426). 예전 Work의 브랜치 이름(relay/<work-id>)과 같은 모양이다 */
+export const DEFAULT_BRANCH_RULE = 'relay/{work-id}'
+
 /** 이슈 기록이 켜져 있는가 (D337): 없으면 켜짐이다 */
 export function issueLogOn(project: Pick<ProjectState, 'issue_log'>): boolean {
   return project.issue_log !== false

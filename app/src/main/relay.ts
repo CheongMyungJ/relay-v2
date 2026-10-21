@@ -53,8 +53,10 @@ import {
   checkBranchName,
   pickWorkBranch,
   renderBranchRule,
+  ruleHasSlug,
+  workIdsInBranches,
 } from '../core/branch'
-import { localIso, nextSessionId, nextWorkId, workBranch } from '../core/records'
+import { localIso, nextSessionId, nextWorkId, targetBranch, workBranch } from '../core/records'
 import { recordedProcesses, type RecordedProcess } from '../core/recovery'
 import { resolveAgent } from '../shared/agent'
 import { DEFAULT_CONFIG, type AppConfig, type WorkSettingsPatch } from '../shared/config'
@@ -129,7 +131,6 @@ interface TerminalOwner {
   cwd(id: string): string
 }
 
-const RELAY_BRANCH = 'relay/'
 /** 예전 되감기의 백업 브랜치 relay/<work-id>-discarded-<n> (D115, D424). 기준 브랜치로 고르지 않는다 */
 const DISCARDED_BACKUP = /^relay\/w-\d{8}-\d+-discarded-\d+$/
 
@@ -357,6 +358,17 @@ export class Relay {
             branch: workBranch(w.work),
             baseCommit: w.work.base_commit,
           })),
+      stackedOn: (projectId, branch, except) =>
+        [...this.works.values()]
+          .filter(
+            (w) =>
+              w.project.project_id === projectId &&
+              w.work.work_id !== except &&
+              (w.work.status === 'active' || w.work.status === 'stopped') &&
+              targetBranch(w.work) === branch,
+          )
+          .map((w) => w.work.work_id),
+      workBranches: (projectId) => this.workBranches(projectId),
     }
   }
 
@@ -468,6 +480,7 @@ export class Relay {
       mergeMethod: p.merge_method ?? null,
       issueLog: issueLogOn(p),
       branchRule: p.branch_rule ?? DEFAULT_BRANCH_RULE,
+      branchSlug: ruleHasSlug(p.branch_rule ?? DEFAULT_BRANCH_RULE),
       parent: p.parent ? { id: p.parent.project_id, path: p.parent.path } : null,
     }))
   }
@@ -681,9 +694,20 @@ export class Relay {
     const project = this.projects.get(projectId)
     if (!project) return []
     const { local, remote } = await gitBranches(project.repo_path, { env: this.env })
-    const names = [...new Set([...local, ...remote])].filter((b) => !DISCARDED_BACKUP.test(b))
+    // 사람이 지은 Work 브랜치가 백업 브랜치의 모양과 같을 수 있다(D426): Work 브랜치는 빼지 않는다
+    const works = new Set(this.workBranches(projectId))
+    const names = [...new Set([...local, ...remote])].filter(
+      (b) => works.has(b) || !DISCARDED_BACKUP.test(b),
+    )
     const rest = names.filter((b) => b !== project.default_branch).sort()
     return [project.default_branch, ...rest]
+  }
+
+  /** 이 프로젝트의 모든 Work의 작업 브랜치 (D425) */
+  private workBranches(projectId: string): string[] {
+    return [...this.works.values()]
+      .filter((w) => w.project.project_id === projectId)
+      .map((w) => workBranch(w.work))
   }
 
   /** 메인 프로젝트의 서브모듈 프로젝트 (D413) */
@@ -841,7 +865,14 @@ export class Relay {
     this.creating = true
     let r: CreateWorkResult
     try {
-      r = await this.create(project, input, branch, settings.value, original?.work, inherited)
+      r = await this.create(
+        project,
+        input,
+        { base: branch, target },
+        settings.value,
+        original?.work,
+        inherited,
+      )
     } finally {
       this.creating = false
     }
@@ -859,11 +890,13 @@ export class Relay {
   private async create(
     project: ProjectState,
     input: NewWorkInput,
-    branch: string,
+    /** 확인한 기준 브랜치와 머지 대상(없으면 기준 브랜치, D428) */
+    branches: { base: string; target: string | undefined },
     settings: WorkSettingsPatch,
     original?: WorkState,
     inherited?: InheritedIssue,
   ): Promise<CreateWorkResult> {
+    const branch = branches.base
     const repo = project.repo_path
     const env = this.env
     let ref = branch
@@ -932,7 +965,7 @@ export class Relay {
       baseBranch: branch,
       baseCommit,
       branch: named.branch,
-      ...(input.targetBranch?.trim() ? { targetBranch: input.targetBranch.trim() } : {}),
+      ...(branches.target ? { targetBranch: branches.target } : {}),
       ...(integration ? { integration } : {}),
       settings,
       requestHash,
@@ -956,13 +989,13 @@ export class Relay {
   }
 
   /**
-   * 이 날짜의 다음 work-id. 예전 Work의 relay/<work-id> 브랜치가 남아 있으면(기록을 지운 Work) 그 id도 쓰지 않는다: 같은
+   * 이 날짜의 다음 work-id. 기록을 지운 Work의 브랜치가 남아 있으면 그 이름에 든 id(workIdsInBranches)도 쓰지 않는다: 같은
    * id의 두 Work가 헷갈린다
    */
   private async nextWorkId(project: ProjectState, at: string, local: readonly string[]) {
     return nextWorkId(at, [
       ...(await workIds(this.o.home, project.project_id)),
-      ...local.filter((b) => b.startsWith(RELAY_BRANCH)).map((b) => b.slice(RELAY_BRANCH.length)),
+      ...workIdsInBranches(local),
     ])
   }
 

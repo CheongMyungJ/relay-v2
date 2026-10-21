@@ -1006,9 +1006,15 @@ function MergeTarget({ work, disabled }: { work: WorkView; disabled: boolean }) 
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
     let current = true
-    void window.relay.branches(work.projectId).then((list) => {
-      if (current) setBranches(list)
-    })
+    void window.relay
+      .branches(work.projectId)
+      .then((list) => {
+        if (current) setBranches(list)
+      })
+      .catch((e: unknown) => {
+        if (current)
+          setError(`브랜치 목록을 읽지 못함: ${e instanceof Error ? e.message : String(e)}`)
+      })
     return () => {
       current = false
     }

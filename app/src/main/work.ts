@@ -415,6 +415,13 @@ export interface RunnerContext {
    * 오래된 차례다
    */
   knowledgeSources(projectId: string, exceptWorkId: string): KnowledgeSource[]
+  /**
+   * 이 브랜치를 머지 대상으로 쓰는, 아직 PR을 만들지 않은 같은 프로젝트의 다른 Work의 id (D428). 정리가 그 브랜치를 지우지
+   * 않게 한다: 지우면 그 Work의 [PR 생성]이 없는 base로 간다
+   */
+  stackedOn(projectId: string, branch: string, exceptWorkId: string): string[]
+  /** 같은 프로젝트의 모든 Work의 작업 브랜치 (D425). 예전 되감기 백업 브랜치를 찾을 때 Work 브랜치를 뺀다 */
+  workBranches(projectId: string): string[]
   /** 지금 시각. 현지 시각과 오프셋을 담은 ISO 8601 */
   at(): string
   /** 새 PTY의 크기. 탭이 크기를 알리면 그 크기를 쓴다 */
@@ -3075,8 +3082,12 @@ export class WorkRunner {
         merged:
           (await contains(`refs/heads/${base}`)) || (await contains(`refs/remotes/origin/${base}`)),
         lost: await this.lostCommits(repo, name, head),
+        stacked: this.ctx.stackedOn(this.project.project_id, name, this.work.work_id),
       },
-      backups: await refNames(repo, backupPattern(this.work.work_id), opts),
+      // 사람이 지은 Work 브랜치가 백업 브랜치의 모양과 같을 수 있다(D426): Work 브랜치는 백업으로 보지 않는다
+      backups: (await refNames(repo, backupPattern(this.work.work_id), opts)).filter(
+        (b) => !this.ctx.workBranches(this.project.project_id).includes(b),
+      ),
       merged,
       remote,
       integration: await this.integrationCleanFacts(),
@@ -4007,6 +4018,7 @@ export class WorkRunner {
         number,
         state: f.view.state,
         head: f.view.head,
+        baseRef: f.view.baseRef,
         received: gathered.received,
         notAccepted: gathered.notAccepted,
         ...(synced

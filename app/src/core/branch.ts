@@ -1,9 +1,9 @@
 // 작업 브랜치 이름 (D425~D427). 프로젝트 설정의 규칙으로 만들고, 사람이 새 Work 대화상자에서 고칠 수 있다.
 // 끝에는 앱이 늘 임의의 4자를 붙인다: 같은 날 두 사람이 같은 이름으로 만들어 push해도 겹치지 않게 한다
+import { DEFAULT_BRANCH_RULE } from '../shared/project'
 import type { WorkType } from '../shared/work'
 
-/** 규칙이 없을 때의 작업 브랜치 규칙. 예전 Work의 브랜치 이름(relay/<work-id>)과 같은 모양이다 */
-export const DEFAULT_BRANCH_RULE = 'relay/{work-id}'
+export { DEFAULT_BRANCH_RULE }
 
 /** 규칙에 쓰는 자리 (D426) */
 export const BRANCH_RULE_KEYS = ['work-id', 'date', 'seq', 'type', 'slug'] as const
@@ -72,25 +72,28 @@ export function checkBranchRule(rule: string): string | null {
   if (unknown.length) {
     return `브랜치 규칙에 모르는 자리가 있습니다: ${unknown.map((k) => `{${k}}`).join(', ')}`
   }
-  const sample = renderBranchRule(r, {
-    workId: 'w-20260101-001',
-    type: 'bugfix',
-    slug: 'sample',
-  })
-  return checkBranchName(sample) ? `이 규칙으로는 브랜치 이름을 만들 수 없습니다: ${sample}` : null
+  // 짧은 이름은 선택이라 적었을 때와 비웠을 때를 모두 본다
+  for (const slug of ['sample', '']) {
+    const sample = renderBranchRule(r, { workId: 'w-20260101-001', type: 'bugfix', slug })
+    if (!sample)
+      return '짧은 이름을 비우면 이름이 남지 않습니다. {slug} 말고 다른 자리나 글자를 넣으세요'
+    if (checkBranchName(sample)) return `이 규칙으로는 브랜치 이름을 만들 수 없습니다: ${sample}`
+  }
+  return null
 }
 
 export interface BranchRuleInput {
   /** w-YYYYMMDD-NNN */
   workId: string
   type: WorkType
-  /** 짧은 이름. 비면 {slug}와 그 바로 앞 구분자를 함께 뺀다 */
+  /** 짧은 이름. 비면 {slug}와 그 옆 구분자 하나를 함께 뺀다 */
   slug: string
 }
 
 /**
- * 규칙에 값을 채운다 (D426). {date}와 {seq}는 work-id의 날짜(YYYYMMDD)와 순번(NNN)이다. {slug}가 비면 그 앞의 구분자
- * (-, _, /, .) 하나도 뺀다. 끝의 임의의 4자는 붙이지 않는다(withSuffix)
+ * 규칙에 값을 채운다 (D426). {date}와 {seq}는 work-id의 날짜(YYYYMMDD)와 순번(NNN)이다. {slug}가 비면 그 옆의 구분자
+ * (-, _, /, .)를 하나만 남기거나(양쪽에 있을 때) 뺀다: x-{slug}-y는 x-y, x-{slug}는 x, {slug}-x는 x다. 끝의 임의의 4자는
+ * 붙이지 않는다(withSuffix)
  */
 export function renderBranchRule(rule: string, input: BranchRuleInput): string {
   const m = /^w-(\d{8})-(\d+)$/.exec(input.workId)
@@ -101,7 +104,13 @@ export function renderBranchRule(rule: string, input: BranchRuleInput): string {
     type: BRANCH_TYPE[input.type],
     slug: slugOf(input.slug),
   }
-  const r = values.slug ? rule.trim() : rule.trim().replace(/[-_/.]?\{slug\}/g, '')
+  const r = values.slug
+    ? rule.trim()
+    : rule
+        .trim()
+        .replace(/([-_/.])?\{slug\}([-_/.])?/g, (_all, before?: string, after?: string) =>
+          before && after ? before : '',
+        )
   return r.replace(/\{([^{}]*)\}/g, (all, key: string) =>
     key in values ? values[key as BranchRuleKey] : all,
   )
@@ -143,6 +152,21 @@ export function branchClash(name: string, existing: Iterable<string>): string | 
   return null
 }
 
+/**
+ * 브랜치 이름에 든 work-id (D427). 기록을 지운 Work의 브랜치가 남아 있으면 그 id를 다시 쓰지 않게 한다. w-YYYYMMDD-NNN과
+ * 규칙의 {date}-{seq} 모양(YYYYMMDD-NNN)을 구분자(-, _, /, .) 사이에서 찾는다. 다른 것을 잘못 찾아도 그 id를 건너뛸
+ * 뿐이다
+ */
+export function workIdsInBranches(branches: Iterable<string>): string[] {
+  const ids = new Set<string>()
+  for (const b of branches) {
+    for (const m of b.matchAll(/(?:^|[-_/.])(?:w-)?(\d{8})-(\d{3,})(?=$|[-_/.])/g)) {
+      ids.add(`w-${m[1] ?? ''}-${m[2] ?? ''}`)
+    }
+  }
+  return [...ids]
+}
+
 /** 임의의 4자를 다시 뽑는 횟수. 36^4(약 168만) 가지라 거의 한 번에 정해진다 */
 const SUFFIX_TRIES = 20
 
@@ -170,6 +194,8 @@ export function pickWorkBranch(
   const stem =
     input.name?.trim() ||
     renderBranchRule(input.rule, { workId: input.workId, type: input.type, slug: input.slug })
+  if (!stem)
+    return { ok: false, error: '브랜치 이름이 비었습니다. 짧은 이름이나 브랜치 이름을 적으세요' }
   const probe = withSuffix(stem, 'a'.repeat(SUFFIX_LENGTH))
   const bad = checkBranchName(probe)
   if (bad) return { ok: false, error: bad }

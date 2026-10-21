@@ -489,6 +489,11 @@ export interface PrRead extends WorkEvent {
   received: readonly string[]
   notAccepted: readonly string[]
   synced?: { commits: readonly string[]; baseCommit?: string }
+  /**
+   * 읽은 PR의 base 브랜치(baseRefName). 머지 대상과 다르면 따른다 (D428): GitHub에서 base를 바꿨거나, 쌓은 앞 Work의
+   * 브랜치가 머지되어 지워지면 GitHub가 base를 그 머지 대상으로 옮긴다. 비었으면 보지 않는다
+   */
+  baseRef?: string
 }
 
 /**
@@ -2588,6 +2593,12 @@ function prRead(work: WorkState, e: PrRead): Transition {
   }
   const effects: Effect[] = []
   let next: WorkState = { ...work, pr: { ...pr, head: e.head, read_at: e.at } }
+  if (e.baseRef && e.baseRef !== targetBranch(next)) {
+    next =
+      e.baseRef === next.base_branch
+        ? omit(next, 'target_branch')
+        : { ...next, target_branch: e.baseRef }
+  }
   const synced = e.synced
   if (synced && synced.commits.length) {
     if (synced.baseCommit) next = { ...next, base_commit: synced.baseCommit }

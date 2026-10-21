@@ -35,6 +35,7 @@ import {
   type ThemeChoice,
   type WorkSettings,
 } from '../../shared/config'
+import { DEFAULT_BRANCH_RULE } from '../../shared/project'
 import { WORK_TYPES, WORK_TYPE_LABEL, type MergeMethod, type WorkType } from '../../shared/work'
 import type {
   CleanPreview,
@@ -260,7 +261,7 @@ export function ProjectSettingsDialog({
         <input
           aria-label="작업 브랜치 규칙"
           value={branchRule}
-          placeholder="relay/{work-id}"
+          placeholder={DEFAULT_BRANCH_RULE}
           onChange={(e) => setBranchRule(e.target.value)}
         />
       </label>
@@ -403,6 +404,9 @@ const REQUEST_PLACEHOLDER: Readonly<Record<WorkType, string>> = {
   general: '할 일과 끝났다고 볼 조건을 적어 주세요(무엇을 바꾸고 어떻게 확인할지)',
 }
 
+/** 짧은 이름을 치다 멈춘 뒤 브랜치 이름을 묻기까지 기다리는 시간 */
+const BRANCH_NAME_DELAY_MS = 250
+
 /** Work에서 쓴 초안(D421)으로 열 때의 원래 Work: 비운 칸을 채우고, 포기할지 고르게 한다 */
 export interface DraftOrigin {
   /** 사이드바의 Work 제목 */
@@ -510,15 +514,24 @@ export function NewWorkDialog({
     })
   }, [mainId])
 
-  // 규칙으로 채운 작업 브랜치 이름 (D426). 유형을 고르기 전에는 {type}을 모르므로 채우지 않는다
+  // 규칙으로 채운 작업 브랜치 이름 (D426). 유형을 고르기 전에는 {type}을 모르므로 채우지 않는다. main이 git과 Work
+  // 폴더를 읽으므로 짧은 이름을 치는 동안은 기다렸다가 한 번 묻는다
   useEffect(() => {
     if (!type) return
     let current = true
-    void window.relay.branchName(target.id, type, slug).then((name) => {
-      if (current) setRuleName(name)
-    })
+    const timer = setTimeout(() => {
+      void window.relay
+        .branchName(target.id, type, slug)
+        .then((name) => {
+          if (current) setRuleName(name)
+        })
+        .catch(() => {
+          if (current) setRuleName('')
+        })
+    }, BRANCH_NAME_DELAY_MS)
     return () => {
       current = false
+      clearTimeout(timer)
     }
   }, [target.id, type, slug])
 
@@ -529,6 +542,9 @@ export function NewWorkDialog({
     setBranches([next.defaultBranch])
     setBranch(next.defaultBranch)
     setMergeTarget(null)
+    // 브랜치 이름과 짧은 이름은 그 레포의 규칙과 work-id로 다시 채운다
+    setEdited(null)
+    setSlug('')
     if (!next.origin) setLocation('local')
     // 이슈 번호는 그 레포의 이슈다. 다른 레포로 옮기지 않는다
     setIssue('')
@@ -607,7 +623,7 @@ export function NewWorkDialog({
         baseLocation: location,
         ...(edited !== null ? { branchName: edited } : {}),
         ...(hasSlug && slug.trim() ? { slug } : {}),
-        ...(mergeTarget !== null && mergeTarget !== branch ? { targetBranch: mergeTarget } : {}),
+        ...(mergeTarget !== null ? { targetBranch: mergeTarget } : {}),
         ...(target.parent && integrate
           ? { integration: { baseBranch: mainBranch, baseLocation: mainLocation } }
           : {}),
@@ -624,7 +640,7 @@ export function NewWorkDialog({
   // 초안의 기준 브랜치가 목록에 없어도(지운 브랜치, 원격에만 있음) 고른 채로 보이고, 없으면 만들기가 알린다
   const branchList = branches.includes(branch) ? branches : [...branches, branch]
   const sub = target.parent ? target : null
-  const hasSlug = target.branchRule.includes('{slug}')
+  const hasSlug = target.branchSlug
   const shownTarget = mergeTarget ?? branch
 
   return (
@@ -1906,7 +1922,12 @@ export function CleanDialog({
                   checked={deleteBranch && b.deletable}
                   onChange={(e) => setDeleteBranch(e.target.checked)}
                 />
-                작업 브랜치 삭제 {b.deletable ? '' : '(push됐거나 머지됐을 때만)'}
+                작업 브랜치 삭제{' '}
+                {b.stacked?.length
+                  ? `(${b.stacked.join(', ')}가 머지 대상으로 씀. 그 Work의 머지 대상을 바꾸면 지울 수 있음)`
+                  : b.deletable
+                    ? ''
+                    : '(push됐거나 머지됐을 때만)'}
               </label>
               {deleteBranch && b.deletable && b.lost.length ? (
                 <label className="toggle">
