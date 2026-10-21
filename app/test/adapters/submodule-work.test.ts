@@ -10,7 +10,9 @@ import {
   addDetachedWorktree,
   addWorktree,
   currentBranch,
+  headBranch,
   initSubmodule,
+  isGitlinkAt,
   originHead,
   removeWorktree,
   repairSubmoduleWorktree,
@@ -85,7 +87,8 @@ describe('[어댑터] 서브모듈 Work의 worktree (D413, D414)', () => {
 
   it('메인 worktree 안의 서브모듈 자리에 서브모듈 레포의 worktree가 있고, 커밋은 서브모듈 레포에 쌓인다', async () => {
     expect(await currentBranch(tree)).toBe(BRANCH)
-    expect(git(tree, 'rev-parse', '--show-toplevel')).toBe(tree)
+    // Windows의 git은 경로를 /로 쓴다
+    expect(path.resolve(git(tree, 'rev-parse', '--show-toplevel'))).toBe(tree)
     writeFiles(tree, { 'lib.txt': '고침\n' })
     git(tree, 'commit', '-q', '-am', '서브모듈 고침')
     expect(git(lib, 'log', '-1', '--format=%s', BRANCH)).toBe('서브모듈 고침')
@@ -121,6 +124,27 @@ describe('[어댑터] 서브모듈 Work의 worktree (D413, D414)', () => {
     expect(await currentBranch(tree)).toBeNull()
     expect(await repairSubmoduleWorktree(lib)).toBe(true)
     expect(coreWorktree()).toBe(original)
+  })
+
+  it('여러 Work가 함께 되돌려도 하나만 고치고 잠금 파일에서 실패하지 않는다 (D415)', async () => {
+    const original = coreWorktree()
+    gitEnv(main, FILE_ENV, 'submodule', 'update', '--init', '--recursive')
+    const results = await Promise.all([1, 2, 3, 4].map(() => repairSubmoduleWorktree(lib)))
+    expect(results.filter(Boolean)).toHaveLength(1)
+    expect(coreWorktree()).toBe(original)
+  })
+
+  it('메인 커밋에 서브모듈 자리가 있는지 본다. 브랜치는 분리된 HEAD와 git 실패를 가린다 (D414)', async () => {
+    const first = git(repo, 'rev-list', '--max-parents=0', 'HEAD')
+    expect(await isGitlinkAt(repo, 'HEAD', 'lib')).toBe(true)
+    expect(await isGitlinkAt(repo, first, 'lib')).toBe(false)
+    expect(await isGitlinkAt(repo, 'HEAD', 'README.md')).toBe(false)
+    expect(await isGitlinkAt(repo, 'HEAD', 'li')).toBe(false)
+
+    expect(await headBranch(tree)).toBe(BRANCH)
+    git(tree, 'checkout', '-q', '--detach')
+    expect(await headBranch(tree)).toBeNull()
+    await expect(headBranch(path.join(root, 'missing'))).rejects.toThrow()
   })
 
   it('저장소가 체크아웃 안(.git 디렉터리)에 있으면 core.worktree가 없어야 한다', async () => {

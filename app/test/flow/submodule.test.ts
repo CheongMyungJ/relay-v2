@@ -84,7 +84,9 @@ async function create(s: Setup, integration = true) {
     type: 'bugfix',
     baseBranch: 'main',
     baseLocation: 'remote',
-    ...(integration ? { integration: { baseBranch: 'main' } } : {}),
+    ...(integration
+      ? { integration: { baseBranch: 'main', baseLocation: 'remote' as const } }
+      : {}),
   })
   if (!r.ok) throw new Error(`Work 생성 실패: ${r.error}`)
   const workId = r.workKey.split('/')[1] ?? ''
@@ -223,7 +225,8 @@ describe('[흐름] 서브모듈 Work (D413~D417)', () => {
     const w = await create(s, false)
     expect(work(w).integration).toBeUndefined()
     expect(git(w.tree, 'branch', '--show-current')).toBe(w.branch)
-    expect(git(w.tree, 'rev-parse', '--show-toplevel')).toBe(w.tree)
+    // Windows의 git은 경로를 /로 쓴다
+    expect(path.resolve(git(w.tree, 'rev-parse', '--show-toplevel'))).toBe(w.tree)
     expect(s.h.ui.works.get(w.key)?.integration).toBeNull()
     // 메인 프로젝트에서 통합 검증을 고르면 받지 않는다
     const r = await s.h.relay.createWork(s.mainId, {
@@ -231,8 +234,26 @@ describe('[흐름] 서브모듈 Work (D413~D417)', () => {
       type: 'bugfix',
       baseBranch: 'main',
       baseLocation: 'local',
-      integration: { baseBranch: 'main' },
+      integration: { baseBranch: 'main', baseLocation: 'local' },
     })
     expect(!r.ok && r.error).toBe('메인 통합 검증은 서브모듈 프로젝트에서만 고릅니다')
+  })
+
+  it('메인 기준 브랜치에 그 서브모듈 자리가 없으면 Work를 만들지 않는다 (D414)', async () => {
+    const s = await setup(scenario())
+    // 서브모듈을 더하기 전의 커밋
+    git(s.checkout, 'branch', 'old', git(s.checkout, 'rev-list', '--max-parents=0', 'HEAD'))
+    const r = await s.h.relay.createWork(s.sub.id, {
+      request: REQUEST,
+      type: 'bugfix',
+      baseBranch: 'main',
+      baseLocation: 'remote',
+      integration: { baseBranch: 'old', baseLocation: 'local' },
+    })
+    expect(!r.ok && r.error).toBe(
+      '메인 레포의 old에는 서브모듈 lib이 없습니다. 메인 기준 브랜치를 바꾸거나 통합 검증을 끄세요',
+    )
+    expect(fs.existsSync(path.join(s.h.home, 'projects', s.sub.id, 'worktrees'))).toBe(false)
+    expect(git(s.checkout, 'worktree', 'list', '--porcelain').match(/^worktree /gm)).toHaveLength(1)
   })
 })

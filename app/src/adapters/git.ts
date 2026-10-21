@@ -166,6 +166,30 @@ export async function currentBranch(dir: string, opts?: GitOptions): Promise<str
   return tryGit(dir, ['symbolic-ref', '--quiet', '--short', 'HEAD'], opts)
 }
 
+/**
+ * HEAD가 가리키는 브랜치 이름. 분리된 HEAD면 null이다. currentBranch와 달리 git이 실패하면(폴더가 없음 등) GitError다:
+ * git symbolic-ref --quiet는 분리된 HEAD에서만 1로 끝난다 (git 문서 git-symbolic-ref)
+ */
+export async function headBranch(dir: string, opts?: GitOptions): Promise<string | null> {
+  return gitOrNull(dir, ['symbolic-ref', '--quiet', '--short', 'HEAD'], [1], opts)
+}
+
+/**
+ * 커밋의 tree에서 경로가 서브모듈(gitlink, 모드 160000)인가 (D414: 메인 통합 검증의 기준 커밋에 그 서브모듈 자리가 있나).
+ * git ls-tree <커밋> -- <경로> (git 문서 git-ls-tree)
+ */
+export async function isGitlinkAt(
+  repo: string,
+  commit: string,
+  sub: string,
+  opts?: GitOptions,
+): Promise<boolean> {
+  const out = await git(repo, ['ls-tree', '-z', commit, '--', sub], opts)
+  return out
+    .split('\0')
+    .some((entry) => entry.startsWith('160000 commit ') && entry.endsWith(`\t${sub}`))
+}
+
 export async function headCommit(dir: string, opts?: GitOptions): Promise<string> {
   return git(dir, ['rev-parse', 'HEAD'], opts)
 }
@@ -395,6 +419,31 @@ export async function repairSubmoduleWorktree(sub: string, opts?: GitOptions): P
   const gitDir = await checkoutGitDir(sub)
   if (!gitDir) return false
   const config = path.join(gitDir, 'config')
+  // 같은 서브모듈의 Work 여럿(앱을 켤 때의 조정 등)이 함께 고치면 git config의 잠금 파일에서 하나가 실패한다.
+  // 앱 안에서는 설정 파일마다 차례로 한다
+  const key = pathKey(config)
+  const before = repairing.get(key) ?? Promise.resolve()
+  const run = before.then(() => repairConfig(sub, gitDir, config, opts))
+  const settled = run.then(
+    () => undefined,
+    () => undefined,
+  )
+  repairing.set(key, settled)
+  void settled.then(() => {
+    if (repairing.get(key) === settled) repairing.delete(key)
+  })
+  return run
+}
+
+/** 설정 파일마다 하는 중인 되돌리기 (repairSubmoduleWorktree) */
+const repairing = new Map<string, Promise<void>>()
+
+async function repairConfig(
+  sub: string,
+  gitDir: string,
+  config: string,
+  opts?: GitOptions,
+): Promise<boolean> {
   // 깨진 저장소 안에서 git을 부르면 시작부터 실패하므로 레포 밖에서 파일만 읽고 쓴다
   const cwd = os.tmpdir()
   const current = await gitOrNull(

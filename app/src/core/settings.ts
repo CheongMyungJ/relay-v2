@@ -242,10 +242,16 @@ export function launchEnv(token: string): Record<string, string> {
 /**
  * 정리 세션([AI 세션 열기], 시나리오 7-5)의 실행 인자. 기록하지 않는 일반 터미널이라 세션 id, 스킬,
  * 첫 프롬프트가 없고 사람이 터미널에서 시킨다. 설정 파일로 훅(턴이 끝날 때 git status를 확인),
- * deny 규칙(push와 PR은 계속 막힘, D17), 자동 메모리 끔(D113)을 준다.
+ * deny 규칙(push와 PR은 계속 막힘, D17), 자동 메모리 끔(D113)을 준다. 서브모듈 Work는 메인 통합 검증 worktree를
+ * --add-dir로 더한다(D414).
  */
-export function cleanupArgs(settingsPath: string): string[] {
-  return ['--dangerously-skip-permissions', '--settings', settingsPath]
+export function cleanupArgs(settingsPath: string, extraDirs: readonly string[] = []): string[] {
+  return [
+    '--dangerously-skip-permissions',
+    ...extraDirArgs({ extraDirs }),
+    '--settings',
+    settingsPath,
+  ]
 }
 
 // ---------- 곁 세션 (시나리오 11, D385~D390) ----------

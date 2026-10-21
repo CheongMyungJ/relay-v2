@@ -227,7 +227,12 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
       ...(input.draft === undefined ? {} : { draft: draftRef(input.draft) }),
       // 메인 통합 검증 worktree (D414). 서브모듈 프로젝트인지는 Relay.createWork가 본다
       ...(input.integration && typeof input.integration === 'object'
-        ? { integration: { baseBranch: text(input.integration.baseBranch) } }
+        ? {
+            integration: {
+              baseBranch: text(input.integration.baseBranch),
+              baseLocation: input.integration.baseLocation === 'remote' ? 'remote' : 'local',
+            },
+          }
         : {}),
     }),
   )

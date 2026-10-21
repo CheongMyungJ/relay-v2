@@ -460,14 +460,12 @@ export function App() {
             </>
           )}
         </div>
-        {/* 서브모듈 프로젝트는 메인 프로젝트 아래에 둔다 (D413) */}
+        {/* 서브모듈 프로젝트는 메인 프로젝트 아래에 둔다 (D413). 메인 프로젝트를 읽지 못했으면 맨 위에 둔다: 그 Work가
+            사이드바에서 사라지지 않게 */}
         {projects
-          .filter((p) => !p.parent)
+          .filter((p) => !p.parent || !projects.some((m) => m.id === p.parent?.id))
           .map((p) =>
-            projectGroup(
-              p,
-              projects.filter((s) => s.parent?.id === p.id),
-            ),
+            projectGroup(p, p.parent ? [] : projects.filter((s) => s.parent?.id === p.id)),
           )}
         {groups.archive.length > 0 ? (
           <div className="project archive">

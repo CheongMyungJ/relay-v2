@@ -63,6 +63,7 @@ import {
   deleteRemoteBranch,
   diffFrom,
   hasCommit,
+  headBranch,
   headCommit,
   isAncestor,
   lockFiles,
@@ -662,18 +663,13 @@ export class WorkRunner {
     /** 사이드바의 Work 제목 (요청의 첫 줄) */
     readonly title: string,
     private workText: string | null = null,
+    /**
+     * 메인 통합 검증 worktree의 폴더 (D414). 이 Work의 worktree는 그 안의 서브모듈 자리다. 배치는 Relay가 정한다.
+     * 서브모듈 Work가 아니거나 만들지 않았으면 null
+     */
+    readonly integrationRoot: string | null = null,
   ) {
     this.key = `${project.project_id}/${work.work_id}`
-  }
-
-  /**
-   * 메인 통합 검증 worktree의 폴더 (D414). 이 Work의 worktree는 그 안의 서브모듈 자리다. 서브모듈 Work가 아니거나 만들지
-   * 않았으면 null
-   */
-  get integrationRoot(): string | null {
-    const parent = this.project.parent
-    if (!this.work.integration || !parent) return null
-    return path.resolve(this.worktree, ...parent.path.split('/').map(() => '..'))
   }
 
   /** 서브모듈 Work의 메인 프로젝트 (D413). 메인 레포의 Work거나 메인 프로젝트를 찾지 못하면 null */
@@ -1480,27 +1476,43 @@ export class WorkRunner {
   }
 
   /**
-   * 승인 화면의 메인 통합 검증 worktree 사실 (D414, D415): 서브모듈 설정을 되돌리고, 서브모듈 worktree의 브랜치와 메인
-   * 쪽 변경을 읽는다. 메인 통합 검증 worktree가 없으면 null. 읽지 못한 것은 비워 둔다
+   * 승인 화면의 메인 통합 검증 worktree 사실 (D414, D415): 서브모듈 worktree의 브랜치와 메인 쪽 변경을 읽는다. 읽기만
+   * 한다: 서브모듈 설정 되돌리기는 Work의 처리 줄(턴 끝, 정리, 앱 시작)에서 한다. 메인 통합 검증 worktree가 없으면
+   * null. git이 실패해 브랜치를 모르면 브랜치는 알리지 않는다
    */
   private async integrationFacts(taskId: string): Promise<IntegrationFacts | null> {
-    const root = this.integrationRoot
     const parent = this.project.parent
-    if (root === null || !parent) return null
-    const opts = { env: this.ctx.env }
-    await this.guardSubmodule(taskId)
-    const lines = await statusLines(root, opts).catch(() => [])
-    const dirty = await dirtySubmodules(root, opts).catch(() => [])
+    if (this.integrationRoot === null || !parent) return null
     const workBranchName = workBranch(this.work.work_id)
+    const [mainChanges, branch] = await Promise.all([
+      this.mainChanges(),
+      headBranch(this.worktree, { env: this.ctx.env }).catch(() => workBranchName),
+    ])
     return {
-      mainChanges: [
-        ...mainSideChanges(lines, parent.path),
-        ...dirty.filter((p) => p !== parent.path).map((p) => `서브모듈 ${p} 안의 변경`),
-      ],
-      branch: await currentBranch(this.worktree, opts).catch(() => workBranchName),
+      mainChanges,
+      branch,
       workBranch: workBranchName,
       repaired: this.submoduleRepaired.has(taskId),
     }
+  }
+
+  /**
+   * 메인 통합 검증 worktree의 메인 쪽 변경 (D414, D416): 커밋 안 된 변경에서 서브모듈 자리를 빼고, 받아 둔 다른 서브모듈
+   * 안의 변경을 더한다. 승인 화면과 정리 요약이 같은 목록을 보인다. 읽지 못한 것은 비워 둔다
+   */
+  private async mainChanges(): Promise<string[]> {
+    const root = this.integrationRoot
+    const parent = this.project.parent
+    if (root === null || !parent) return []
+    const opts = { env: this.ctx.env }
+    const [lines, dirty] = await Promise.all([
+      statusLines(root, opts).catch(() => []),
+      dirtySubmodules(root, opts).catch(() => []),
+    ])
+    return [
+      ...mainSideChanges(lines, parent.path),
+      ...dirty.filter((p) => p !== parent.path).map((p) => `서브모듈 ${p} 안의 변경`),
+    ]
   }
 
   /**
@@ -2902,7 +2914,7 @@ export class WorkRunner {
       const { cols, rows } = this.ctx.size()
       const pty = startPty({
         bin,
-        args: await driver.cleanupArgs(settingsPath),
+        args: await driver.cleanupArgs(settingsPath, this.extraDirs().extraDirs ?? []),
         cwd: this.worktree,
         env: { ...this.agentEnv(), ...driver.launchEnv(token, this.ctx.hooks.port, CLEANUP_ID) },
         cols,
@@ -3331,19 +3343,9 @@ export class WorkRunner {
    */
   private async integrationCleanFacts(): Promise<CleanFacts['integration']> {
     const root = this.integrationRoot
-    const parent = this.project.parent
-    if (root === null || !parent || !(await exists(root))) return null
+    if (root === null || !(await exists(root))) return null
     await this.guardSubmodule()
-    const opts = { env: this.ctx.env }
-    const lines = await statusLines(root, opts).catch(() => [])
-    const dirty = await dirtySubmodules(root, opts).catch(() => [])
-    return {
-      root,
-      changes: [
-        ...mainSideChanges(lines, parent.path),
-        ...dirty.filter((p) => p !== parent.path).map((p) => `서브모듈 ${p} 안의 변경`),
-      ],
-    }
+    return { root, changes: await this.mainChanges() }
   }
 
   /**

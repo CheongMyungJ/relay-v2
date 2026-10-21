@@ -248,14 +248,17 @@ export async function prepareSubmoduleProject(
   }
   const originUrl = await remoteUrl(repo, 'origin', { env })
   const gh = (await checkGh(o.ghBin, env, originUrl)).check
-  const { remote } = await branches(repo, { env })
-  const branch = submoduleDefaultBranch({
-    remoteHead: await originHead(repo, { env }),
-    configured: await submoduleBranch(main.repo_path, entry.name, { env }),
-    remote,
-  })
-  if (!branch)
-    return { ok: false, error: `서브모듈 ${subPath}의 origin에서 브랜치를 찾지 못했습니다` }
+  const { local, remote } = await branches(repo, { env })
+  // 이미 있는 서브모듈 프로젝트는 그 기본 브랜치를 그대로 둔다
+  const branch =
+    dup?.default_branch ??
+    submoduleDefaultBranch({
+      remoteHead: await originHead(repo, { env }),
+      configured: await submoduleBranch(main.repo_path, entry.name, { env }),
+      remote,
+      local,
+    })
+  if (!branch) return { ok: false, error: `서브모듈 ${subPath}에서 브랜치를 찾지 못했습니다` }
   return {
     ok: true,
     project: {
@@ -263,7 +266,7 @@ export async function prepareSubmoduleProject(
       schema_version: 1,
       project_id: id,
       repo_path: repo,
-      default_branch: dup?.default_branch ?? branch,
+      default_branch: branch,
       created_at: dup?.created_at ?? at,
       checks: { origin: originUrl !== null, gh: gh.auth, gh_version: gh.version, checked_at: at },
       parent: { project_id: main.project_id, path: subPath, name: entry.name },

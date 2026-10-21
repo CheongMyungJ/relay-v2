@@ -1012,10 +1012,10 @@ export interface NewWorkInput {
   /** 채운 Work 초안 (D404). Work를 만들면 앱이 그 초안을 지운다 */
   draft?: DraftRef
   /**
-   * 서브모듈 Work의 메인 통합 검증 worktree (D414). 서브모듈 프로젝트에서만 쓴다. 메인 레포의 기준 브랜치이고 기준 위치는
-   * Work와 같다. 없거나 null이면 서브모듈 worktree만 만든다
+   * 서브모듈 Work의 메인 통합 검증 worktree (D414). 서브모듈 프로젝트에서만 쓴다. 메인 레포의 기준 브랜치와 기준 위치다
+   * (메인 레포에 origin이 없을 수 있어 Work의 기준 위치와 따로 고른다). 없거나 null이면 서브모듈 worktree만 만든다
    */
-  integration?: { baseBranch: string } | null
+  integration?: { baseBranch: string; baseLocation: 'local' | 'remote' } | null
 }
 
 /** 지식 정리 후보 (D393) */

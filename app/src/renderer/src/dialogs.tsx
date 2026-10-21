@@ -422,6 +422,8 @@ export function NewWorkDialog({
   const [integrate, setIntegrate] = useState(true)
   const [mainBranches, setMainBranches] = useState<string[]>([main.defaultBranch])
   const [mainBranch, setMainBranch] = useState(main.defaultBranch)
+  // 메인 레포의 기준 위치. 메인 레포에 origin이 없을 수 있어 Work의 기준 위치와 따로 고른다 (D414)
+  const [mainLocation, setMainLocation] = useState<'local' | 'remote'>('local')
   const [type, setType] = useState<WorkType | null>(draft?.type ?? null)
   const [request, setRequest] = useState(draft?.request ?? '')
   const [branches, setBranches] = useState<string[]>([project.defaultBranch])
@@ -467,6 +469,8 @@ export function NewWorkDialog({
     setBranches([next.defaultBranch])
     setBranch(next.defaultBranch)
     if (!next.origin) setLocation('local')
+    // 이슈 번호는 그 레포의 이슈다. 다른 레포로 옮기지 않는다
+    setIssue('')
   }
   const chooseTarget = async (value: string) => {
     setError(null)
@@ -540,7 +544,9 @@ export function NewWorkDialog({
         type,
         baseBranch: branch,
         baseLocation: location,
-        ...(target.parent && integrate ? { integration: { baseBranch: mainBranch } } : {}),
+        ...(target.parent && integrate
+          ? { integration: { baseBranch: mainBranch, baseLocation: mainLocation } }
+          : {}),
         ...(Object.keys(settings).length ? { settings } : {}),
         ...(issueNumber !== null ? { issueNumber } : {}),
         ...(draft ? { draft: draft.ref } : {}),
@@ -623,6 +629,32 @@ export function NewWorkDialog({
                 ))}
               </select>
             </label>
+          ) : null}
+          {integrate ? (
+            <fieldset className="field">
+              <legend>메인 기준 위치</legend>
+              <label>
+                <input
+                  type="radio"
+                  checked={mainLocation === 'local'}
+                  onChange={() => setMainLocation('local')}
+                />
+                로컬
+              </label>
+              <label
+                title={
+                  main.origin ? 'git fetch 뒤 origin/<브랜치>' : '메인 레포에 origin 원격이 없음'
+                }
+              >
+                <input
+                  type="radio"
+                  disabled={!main.origin}
+                  checked={mainLocation === 'remote'}
+                  onChange={() => setMainLocation('remote')}
+                />
+                원격
+              </label>
+            </fieldset>
           ) : null}
           <span className="dim">
             {integrate

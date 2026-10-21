@@ -254,8 +254,11 @@ export async function codexResumeArgs(input: ResumeInput): Promise<string[]> {
     ...(input.prompt ? [input.prompt] : []),
   ]
 }
-export async function codexCleanupArgs(settingsPath: string): Promise<string[]> {
-  return (await options(settingsPath)).args
+export async function codexCleanupArgs(
+  settingsPath: string,
+  extraDirs: readonly string[] = [],
+): Promise<string[]> {
+  return [...(await options(settingsPath)).args, ...extraDirArgs({ extraDirs })]
 }
 /**
  * 곁 세션의 Codex 인자 (D391, I130). 첫 프롬프트가 없어 입력을 기다린다. 시스템 프롬프트를 덧붙이는 옵션이 없어 안내는

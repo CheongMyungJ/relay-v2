@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   HOOK_EVENTS,
+  cleanupArgs,
   continuePrompt,
   denyRules,
   firstPrompt,
@@ -274,6 +275,14 @@ describe('[단위] 서브모듈 Work의 메인 통합 검증 worktree (D414)', (
       sideArgs({ ...base, resume: false, guidePath: 'G', extraDirs: ['/main'] }).slice(3, 7),
     ).toEqual(['--add-dir', WORK_DIR, '--add-dir', '/main'])
     expect(resumeArgs({ ...base, extraDirs: [] })).toEqual(resumeArgs(base))
+    expect(cleanupArgs('S', ['/main'])).toEqual([
+      '--dangerously-skip-permissions',
+      '--add-dir',
+      '/main',
+      '--settings',
+      'S',
+    ])
+    expect(cleanupArgs('S')).toEqual(['--dangerously-skip-permissions', '--settings', 'S'])
   })
 })
 

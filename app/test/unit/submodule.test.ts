@@ -5,6 +5,7 @@ import {
   mainSideChanges,
   submoduleDefaultBranch,
   submoduleGuardEnv,
+  unquote,
 } from '../../src/core/submodule'
 
 describe('[단위] 서브모듈 프로젝트의 기본 브랜치 (D413)', () => {
@@ -24,6 +25,25 @@ describe('[단위] 서브모듈 프로젝트의 기본 브랜치 (D413)', () => 
     expect(
       submoduleDefaultBranch({ remoteHead: null, configured: 'gone', remote: ['master'] }),
     ).toBe('master')
+  })
+
+  it('origin에 브랜치가 없으면 로컬 브랜치에서 고른다', () => {
+    expect(
+      submoduleDefaultBranch({
+        remoteHead: null,
+        configured: null,
+        remote: [],
+        local: ['x', 'master'],
+      }),
+    ).toBe('master')
+    expect(
+      submoduleDefaultBranch({
+        remoteHead: null,
+        configured: 'x',
+        remote: [],
+        local: ['x', 'master'],
+      }),
+    ).toBe('x')
   })
 
   it('main, master 다음은 origin의 첫 브랜치다. 브랜치가 없으면 null', () => {
@@ -72,5 +92,19 @@ describe('[단위] 메인 통합 검증 worktree의 메인 쪽 변경 (D414)', (
       mainSideChanges([' M lib', ' M src/app.c', '?? notes.txt', 'R  a.c -> lib2/a.c'], 'lib'),
     ).toEqual([' M src/app.c', '?? notes.txt', 'R  a.c -> lib2/a.c'])
     expect(mainSideChanges([' M libs/core'], 'libs/core')).toEqual([])
+  })
+
+  it('git이 따옴표로 감싼 경로와 폴더 끝의 /도 같은 자리로 본다', () => {
+    expect(mainSideChanges([' M "my lib"', '?? "my lib/"', ' M "a\\"b"'], 'my lib')).toEqual([
+      ' M "a\\"b"',
+    ])
+    expect(mainSideChanges(['R  "old name" -> "third party/lib"'], 'third party/lib')).toEqual([])
+    expect(mainSideChanges(['?? lib/'], 'lib')).toEqual([])
+  })
+
+  it('따옴표로 감싼 경로를 푼다: 이스케이프와 8진수 UTF-8 바이트', () => {
+    expect(unquote('"a\\tb\\\\c\\"d"')).toBe('a\tb\\c"d')
+    expect(unquote('"\\355\\225\\234 x"')).toBe('한 x')
+    expect(unquote('plain')).toBe('plain')
   })
 })

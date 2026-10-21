@@ -4,19 +4,22 @@
 
 /**
  * 서브모듈 프로젝트의 기본 브랜치 (D413). 서브모듈 체크아웃은 보통 분리된 HEAD라 현재 브랜치로 채울 수 없다:
- * origin/HEAD, `.gitmodules`의 branch, origin의 main·master, origin의 첫 브랜치 차례로 고른다. 없으면 null
+ * origin/HEAD, `.gitmodules`의 branch, main·master, 첫 브랜치 차례로 고른다. 브랜치는 origin의 것을 먼저 보고 없으면
+ * 로컬 브랜치를 본다(origin이 없는 서브모듈). 없으면 null
  */
 export function submoduleDefaultBranch(input: {
   remoteHead: string | null
   configured: string | null
   remote: readonly string[]
+  local?: readonly string[]
 }): string | null {
   if (input.remoteHead) return input.remoteHead
+  const names = input.remote.length ? input.remote : (input.local ?? [])
   // `.gitmodules`의 branch = .은 메인 레포와 같은 이름이라는 뜻이다(git 문서 gitmodules). 그 이름은 여기서 모른다
-  if (input.configured && input.configured !== '.' && input.remote.includes(input.configured))
+  if (input.configured && input.configured !== '.' && names.includes(input.configured))
     return input.configured
-  for (const name of ['main', 'master']) if (input.remote.includes(name)) return name
-  return input.remote[0] ?? null
+  for (const name of ['main', 'master']) if (names.includes(name)) return name
+  return names[0] ?? null
 }
 
 /**
@@ -47,12 +50,53 @@ export function submoduleGuardEnv(
  * Work의 자리(그 서브모듈이 가리키는 커밋이 바뀐 것)를 뺀다. 이 변경은 전달되지 않는다
  */
 export function mainSideChanges(lines: readonly string[], submodulePath: string): string[] {
-  return lines.filter((l) => statusPath(l) !== submodulePath)
+  return lines.filter((l) => statusPath(l).replace(/\/$/, '') !== submodulePath)
 }
 
-/** porcelain v1 한 줄의 경로. 이름을 바꾼 줄은 새 이름이다. 따옴표로 감싼 이름은 그대로 둔다 */
+/**
+ * porcelain v1 한 줄의 경로. 이름을 바꾼 줄은 새 이름이다. git은 core.quotepath=false여도 공백, 따옴표, 역슬래시, 제어
+ * 문자가 든 경로를 C 문자열처럼 따옴표로 감싼다(git 문서 git-status, core.quotePath). 감싼 이름은 푼다
+ */
 function statusPath(line: string): string {
   const rest = line.slice(3)
-  const arrow = rest.indexOf(' -> ')
-  return arrow >= 0 ? rest.slice(arrow + 4) : rest
+  const m = /^(?:"(?:[^"\\]|\\.)*"|.*?) -> (.*)$/.exec(rest)
+  return unquote(m?.[1] ?? rest)
+}
+
+const UTF8 = new TextEncoder()
+
+const ESCAPES: Readonly<Record<string, string>> = {
+  a: '\x07',
+  b: '\b',
+  f: '\f',
+  n: '\n',
+  r: '\r',
+  t: '\t',
+  v: '\v',
+  '"': '"',
+  '\\': '\\',
+}
+
+/** git이 따옴표로 감싼 경로를 푼다. 8진수 바이트(\ooo)는 UTF-8로 읽는다. 감싸지 않았으면 그대로다 */
+export function unquote(p: string): string {
+  if (!p.startsWith('"') || !p.endsWith('"') || p.length < 2) return p
+  const bytes: number[] = []
+  const body = p.slice(1, -1)
+  for (let i = 0; i < body.length; i++) {
+    const c = body[i] ?? ''
+    if (c !== '\\') {
+      bytes.push(...UTF8.encode(c))
+      continue
+    }
+    const next = body[i + 1] ?? ''
+    const octal = /^[0-7]{3}/.exec(body.slice(i + 1))
+    if (octal) {
+      bytes.push(parseInt(octal[0], 8))
+      i += 3
+    } else {
+      bytes.push(...UTF8.encode(ESCAPES[next] ?? next))
+      i += 1
+    }
+  }
+  return new TextDecoder().decode(new Uint8Array(bytes))
 }
