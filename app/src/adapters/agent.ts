@@ -68,7 +68,8 @@ export interface AgentRuntime {
   launchEnv(token: string, port: number, taskId: string): Record<string, string>
   launchArgs(input: LaunchInput): string[] | Promise<string[]>
   resumeArgs(input: ResumeInput): string[] | Promise<string[]>
-  cleanupArgs(settingsPath: string): string[] | Promise<string[]>
+  /** extraDirs: --add-dir로 더 줄 폴더 (D414: 메인 통합 검증 worktree) */
+  cleanupArgs(settingsPath: string, extraDirs?: readonly string[]): string[] | Promise<string[]>
   /** 곁 세션의 설정과 인자 (시나리오 11, D388, D391) */
   sideSettings(input: SideSettingsInput): SideSettings | CodexSettings
   sideArgs(input: SideArgsInput): string[] | Promise<string[]>

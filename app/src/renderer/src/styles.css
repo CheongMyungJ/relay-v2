@@ -291,6 +291,13 @@ textarea {
   gap: 2px;
 }
 
+/* 메인 프로젝트 안의 서브모듈 프로젝트 (D413) */
+.project.sub-project {
+  margin-left: 10px;
+  padding-left: 6px;
+  border-left: 1px solid var(--border);
+}
+
 /* 누르면 프로젝트 설정 (D185) */
 .project-name {
   font-weight: 600;

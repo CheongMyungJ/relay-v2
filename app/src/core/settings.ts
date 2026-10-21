@@ -155,6 +155,8 @@ export interface LaunchInput {
   sessionId: string
   /** Work 디렉터리. 스킬을 읽게 --add-dir로 더한다 (D32) */
   workDir: string
+  /** --add-dir로 더 줄 폴더. 서브모듈 Work의 메인 통합 검증 worktree다 (D414). 없으면 넣지 않는다 */
+  extraDirs?: readonly string[]
   /** task 설정 파일 경로 */
   settingsPath: string
   skill: SkillName
@@ -163,6 +165,11 @@ export interface LaunchInput {
   model?: string
   /** task에 고정한 추론 수준. 없으면 엔진의 기본 */
   effort?: string
+}
+
+/** 더 줄 폴더의 --add-dir (D414). 없으면 넣지 않아 지금과 같은 인자다 */
+export function extraDirArgs(input: { extraDirs?: readonly string[] }): string[] {
+  return (input.extraDirs ?? []).flatMap((d) => ['--add-dir', d])
 }
 
 /** 모델·추론 수준 옵션. 값이 없으면 넣지 않아 지금과 같은 인자다 */
@@ -181,6 +188,7 @@ export function launchArgs(input: LaunchInput): string[] {
     input.sessionId,
     '--add-dir',
     input.workDir,
+    ...extraDirArgs(input),
     '--settings',
     input.settingsPath,
     ...modelArgs(input),
@@ -206,6 +214,7 @@ export function resumeArgs(input: ResumeInput): string[] {
     input.sessionId,
     '--add-dir',
     input.workDir,
+    ...extraDirArgs(input),
     '--settings',
     input.settingsPath,
     ...modelArgs(input),
@@ -233,10 +242,16 @@ export function launchEnv(token: string): Record<string, string> {
 /**
  * 정리 세션([AI 세션 열기], 시나리오 7-5)의 실행 인자. 기록하지 않는 일반 터미널이라 세션 id, 스킬,
  * 첫 프롬프트가 없고 사람이 터미널에서 시킨다. 설정 파일로 훅(턴이 끝날 때 git status를 확인),
- * deny 규칙(push와 PR은 계속 막힘, D17), 자동 메모리 끔(D113)을 준다.
+ * deny 규칙(push와 PR은 계속 막힘, D17), 자동 메모리 끔(D113)을 준다. 서브모듈 Work는 메인 통합 검증 worktree를
+ * --add-dir로 더한다(D414).
  */
-export function cleanupArgs(settingsPath: string): string[] {
-  return ['--dangerously-skip-permissions', '--settings', settingsPath]
+export function cleanupArgs(settingsPath: string, extraDirs: readonly string[] = []): string[] {
+  return [
+    '--dangerously-skip-permissions',
+    ...extraDirArgs({ extraDirs }),
+    '--settings',
+    settingsPath,
+  ]
 }
 
 // ---------- 곁 세션 (시나리오 11, D385~D390) ----------
@@ -288,6 +303,8 @@ export interface SideArgsInput {
   resume: boolean
   /** Work 디렉터리. 에이전트가 산출물을 스스로 읽게 --add-dir로 더한다 (D386) */
   workDir: string
+  /** --add-dir로 더 줄 폴더 (D414). 없으면 넣지 않는다 */
+  extraDirs?: readonly string[]
   settingsPath: string
   /** 안내(시스템 프롬프트, D387) 파일 */
   guidePath: string
@@ -307,6 +324,7 @@ export function sideArgs(input: SideArgsInput): string[] {
     input.sessionId,
     '--add-dir',
     input.workDir,
+    ...extraDirArgs(input),
     '--settings',
     input.settingsPath,
     '--append-system-prompt-file',

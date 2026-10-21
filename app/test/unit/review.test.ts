@@ -528,6 +528,36 @@ describe('강조 영역 (D83, 시나리오 4-2)', () => {
     ).toEqual([])
   })
 
+  it('서브모듈 Work: 작업 브랜치에서 벗어남, 앱이 되돌린 서브모듈 설정, 메인 쪽 변경을 알린다 (D414, D415)', () => {
+    const base = {
+      node: 'verify' as const,
+      type: 'bugfix' as const,
+      handoff: HANDOFF,
+      errors: [],
+      uncommitted: [],
+    }
+    const fine = { mainChanges: [], branch: 'relay/w-1', workBranch: 'relay/w-1', repaired: false }
+    expect(emphasis({ ...base, integration: fine })).toEqual([])
+    const items = emphasis({
+      ...base,
+      integration: {
+        mainChanges: [' M src/app.c'],
+        branch: null,
+        workBranch: 'relay/w-1',
+        repaired: true,
+      },
+    })
+    expect(items.map((i) => i.kind)).toEqual(['submodule_guard', 'main_changes'])
+    expect(items[0]?.lines[0]).toContain(
+      '작업 브랜치 relay/w-1에 있지 않습니다 (지금: 분리된 HEAD)',
+    )
+    expect(items[0]?.lines[1]).toContain('core.worktree')
+    expect(items[1]).toMatchObject({
+      title: '메인 레포 변경 (전달 안 됨)',
+      lines: [' M src/app.c'],
+    })
+  })
+
   it('intent_deviation, 열린 질문, 이전 단계 추천, 커밋 안 된 변경, 형식 오류를 순서대로 모은다', () => {
     const items = emphasis({
       node: 'verify',

@@ -7,12 +7,16 @@ import { randomBytes } from 'node:crypto'
 import os from 'node:os'
 import path from 'node:path'
 import {
+  addDetachedWorktree,
   addWorktree,
   branches as gitBranches,
   commitOf,
   fetchBranch,
   hasRemote,
+  isGitlinkAt,
   remoteUrl,
+  removeWorktree,
+  submoduleList,
 } from '../adapters/git'
 import { filesAt, namesInCode, readKnowledgeAt } from '../adapters/knowledge'
 import { knowledgeEnabled } from '../core/knowledge'
@@ -74,13 +78,20 @@ import type {
   SelectStepInput,
   SessionView,
   StepPreviewResult,
+  SubmoduleView,
   TerminalBacklog,
 } from '../shared/views'
 import { WORK_TYPES, type DeliveryChoice, type WorkState, type WorkType } from '../shared/work'
 import { SessionPool } from './pool'
 import type { UiPort } from './ports'
 import { PASTE_KEEP_MS, linkPath, opensSafely, realLinkPath, type LinkFs } from './links'
-import { checkGh, inspectProject, prepareProject, type ProjectEnv } from './projects'
+import {
+  checkGh,
+  inspectProject,
+  prepareProject,
+  prepareSubmoduleProject,
+  type ProjectEnv,
+} from './projects'
 import { SessionRunner, type SessionContext } from './session'
 import { WorkRunner, workTitle, type RunnerContext } from './work'
 
@@ -143,6 +154,8 @@ export class Relay {
   private configQueue: Promise<unknown> = Promise.resolve()
   /** project.json 고치기의 차례 (updateProject) */
   private projectWrites: Promise<unknown> = Promise.resolve()
+  /** 준비하는 중인 서브모듈 (prepareSubmodule). 키는 메인 프로젝트 id와 서브모듈 경로다 */
+  private readonly preparing = new Map<string, Promise<CommandResult & { project?: ProjectView }>>()
 
   private constructor(private readonly o: RelayOptions) {
     this.env = o.env ?? process.env
@@ -376,8 +389,23 @@ export class Relay {
     title: string,
     text: string | null = null,
   ): WorkRunner {
-    const tree = worktreeDir(this.o.home, project.project_id, work.work_id)
-    return new WorkRunner(this.context(), project, files, tree, work, title, text)
+    const { tree, root } = this.workTree(project, work.work_id, work.integration !== undefined)
+    return new WorkRunner(this.context(), project, files, tree, work, title, text, root)
+  }
+
+  /**
+   * Work의 worktree와 메인 통합 검증 worktree (D414). 통합 검증이 있는 서브모듈 Work는 메인 worktree가
+   * worktrees/<work-id>이고 이 Work의 worktree는 그 안의 서브모듈 자리(worktrees/<work-id>/<서브모듈 경로>)다. 아니면
+   * root가 null이다. 이 배치는 여기서만 정한다
+   */
+  private workTree(
+    project: ProjectState,
+    workId: string,
+    integrated: boolean,
+  ): { tree: string; root: string | null } {
+    const dir = worktreeDir(this.o.home, project.project_id, workId)
+    if (!integrated || !project.parent) return { tree: dir, root: null }
+    return { tree: path.join(dir, ...project.parent.path.split('/')), root: dir }
   }
 
   private at(): string {
@@ -414,6 +442,7 @@ export class Relay {
       allowedBots: p.allowed_bots ?? [],
       mergeMethod: p.merge_method ?? null,
       issueLog: issueLogOn(p),
+      parent: p.parent ? { id: p.parent.project_id, path: p.parent.path } : null,
     }))
   }
 
@@ -509,7 +538,15 @@ export class Relay {
     try {
       const { block, runners } = await this.removeCheck(projectId)
       const shelved = runners.filter((w) => w.work.shelved_at !== undefined).length
-      return { ok: true, preview: { block, works: runners.length, shelved } }
+      const subs = this.subProjects(projectId)
+      return {
+        ok: true,
+        preview: {
+          block: block ?? (subs.length ? subProjectsBlock(subs) : null),
+          works: runners.length,
+          shelved,
+        },
+      }
     } catch (e) {
       return { ok: false, error: `확인하지 못함: ${String(e)}` }
     }
@@ -535,6 +572,8 @@ export class Relay {
         )
         const { block, runners } = await this.removeCheck(projectId)
         if (block) return { ok: false, error: block }
+        const subs = this.subProjects(projectId)
+        if (subs.length) return { ok: false, error: subProjectsBlock(subs) }
         try {
           await unregisterProject(this.o.home, projectId)
         } catch (e) {
@@ -604,6 +643,75 @@ export class Relay {
     return [project.default_branch, ...rest]
   }
 
+  /** 메인 프로젝트의 서브모듈 프로젝트 (D413) */
+  private subProjects(projectId: string): ProjectState[] {
+    return [...this.projects.values()].filter((p) => p.parent?.project_id === projectId)
+  }
+
+  /**
+   * 새 Work 대화상자의 대상 목록 (D413): 메인 프로젝트의 서브모듈과 이미 만든 서브모듈 프로젝트. 서브모듈 프로젝트나
+   * 읽지 못한 레포면 빈 목록이다
+   */
+  async submodules(projectId: string): Promise<SubmoduleView[]> {
+    const project = this.projects.get(projectId)
+    if (!project || project.parent) return []
+    const list = await submoduleList(project.repo_path, { env: this.env }).catch(() => [])
+    const subs = this.subProjects(projectId)
+    return list.map((e) => ({
+      ...e,
+      projectId: subs.find((p) => p.parent?.path === e.path)?.project_id ?? null,
+    }))
+  }
+
+  /**
+   * 새 Work 대화상자에서 서브모듈을 대상으로 고른다 (D413). 서브모듈 프로젝트가 없으면 만들고(메인 체크아웃에 받지 않았으면
+   * 받는다), 있으면 origin과 gh를 다시 점검한다. 받기는 오래 걸릴 수 있어 project.json 고치기 줄 밖에서 하고, 쓰기만 그
+   * 줄에서 한다. 같은 서브모듈을 겹쳐 고르면 앞의 준비를 함께 기다린다
+   */
+  prepareSubmodule(
+    projectId: string,
+    subPath: string,
+  ): Promise<CommandResult & { project?: ProjectView }> {
+    const key = `${projectId}\0${subPath}`
+    const running = this.preparing.get(key)
+    if (running) return running
+    const run = this.prepareSubmoduleNow(projectId, subPath).finally(() =>
+      this.preparing.delete(key),
+    )
+    this.preparing.set(key, run)
+    return run
+  }
+
+  private async prepareSubmoduleNow(
+    projectId: string,
+    subPath: string,
+  ): Promise<CommandResult & { project?: ProjectView }> {
+    const main = this.projects.get(projectId)
+    if (!main) return { ok: false, error: '프로젝트가 없습니다' }
+    if (this.removing.has(projectId))
+      return { ok: false, error: '등록을 해제하는 중인 프로젝트입니다' }
+    const r = await prepareSubmoduleProject(main, subPath, this.at(), this.projectEnv())
+    if (!r.ok) return r
+    const made = r.project
+    const save = this.projectWrites.then(
+      async (): Promise<CommandResult & { project?: ProjectView }> => {
+        // 받는 동안 메인 프로젝트를 해제했거나, 다시 점검·설정 저장이 같은 프로젝트를 고쳤을 수 있다
+        if (!this.projects.has(projectId) || this.removing.has(projectId))
+          return { ok: false, error: '메인 프로젝트의 등록이 해제되었습니다' }
+        if (this.removing.has(made.project_id))
+          return { ok: false, error: '이 서브모듈 프로젝트의 등록을 해제하는 중입니다' }
+        const latest = this.projects.get(made.project_id)
+        await this.saveProjectState(
+          latest ? { ...latest, checks: made.checks, parent: made.parent } : made,
+        )
+        const view = this.projectViews().find((p) => p.id === made.project_id)
+        return view ? { ok: true, project: view } : { ok: true }
+      },
+    )
+    this.projectWrites = save.catch(() => undefined)
+    return save
+  }
+
   /**
    * 새 Work 대화상자의 지식 정리 후보 (D393): 기준 브랜치의 지식 파일과 코드에서 모델 없이 찾는다. 지식 관리를 끄면
    * (RELAY_KNOWLEDGE=off) 후보가 없다
@@ -658,6 +766,12 @@ export class Relay {
     }
     const branch = input.baseBranch.trim()
     if (!branch) return { ok: false, error: '기준 브랜치를 고르세요' }
+    if (input.integration) {
+      const main = project.parent ? this.projects.get(project.parent.project_id) : undefined
+      if (!main) return { ok: false, error: '메인 통합 검증은 서브모듈 프로젝트에서만 고릅니다' }
+      if (!input.integration.baseBranch.trim())
+        return { ok: false, error: '메인 레포의 기준 브랜치를 고르세요' }
+    }
     const settings = checkWorkSettings(input.settings ?? {})
     if (!settings.ok) return { ok: false, error: settings.error }
     this.creating = true
@@ -698,6 +812,14 @@ export class Relay {
     } catch {
       return { ok: false, error: `기준 브랜치를 찾을 수 없습니다: ${ref}` }
     }
+    const main =
+      input.integration && project.parent ? this.projects.get(project.parent.project_id) : null
+    let integration: WorkState['integration']
+    if (main && input.integration) {
+      const r = await this.integrationBase(main, project, input.integration)
+      if (!r.ok) return r
+      integration = r.base
+    }
 
     const at = this.at()
     const relayBranches = (await gitBranches(repo, { env })).local
@@ -707,10 +829,20 @@ export class Relay {
       ...(await workIds(this.o.home, project.project_id)),
       ...relayBranches,
     ])
-    const tree = worktreeDir(this.o.home, project.project_id, workId)
+    const { tree, root } = this.workTree(project, workId, integration !== undefined)
+    // 메인 통합 검증 worktree를 먼저 만들고 그 안의 서브모듈 자리(빈 폴더)에 이 Work의 worktree를 만든다 (D414)
+    if (main && integration && root) {
+      try {
+        await addDetachedWorktree(main.repo_path, root, integration.base_commit, { env })
+      } catch (e) {
+        return { ok: false, error: `메인 통합 검증 worktree를 만들지 못했습니다. ${String(e)}` }
+      }
+    }
     try {
       await addWorktree(repo, tree, workBranch(workId), baseCommit, { env })
     } catch (e) {
+      if (main && root)
+        await removeWorktree(main.repo_path, root, { env, force: true }).catch(() => {})
       return { ok: false, error: `worktree를 만들지 못했습니다. ${String(e)}` }
     }
 
@@ -722,6 +854,7 @@ export class Relay {
       type: input.type,
       baseBranch: branch,
       baseCommit,
+      ...(integration ? { integration } : {}),
       settings,
       requestHash,
       // 이슈 기록은 Work를 만들 때 프로젝트 설정으로 정한다 (I96)
@@ -739,6 +872,51 @@ export class Relay {
     this.works.set(runner.key, runner)
     await runner.enqueue(() => runner.apply(created.work, created.effects))
     return { ok: true, workKey: runner.key }
+  }
+
+  /**
+   * 메인 통합 검증 worktree의 기준 커밋 (D414). 기준 위치는 메인 레포의 것을 따로 고른다: 원격이면 메인 레포에서 fetch한
+   * origin/<브랜치>다. fetch가 실패하거나, 그 커밋에 이 서브모듈의 자리(gitlink)가 없으면 Work를 만들지 않는다
+   */
+  private async integrationBase(
+    main: ProjectState,
+    project: ProjectState,
+    pick: { baseBranch: string; baseLocation: 'local' | 'remote' },
+  ): Promise<
+    { ok: true; base: { base_branch: string; base_commit: string } } | { ok: false; error: string }
+  > {
+    const env = this.env
+    const branch = pick.baseBranch.trim()
+    const sub = project.parent?.path ?? ''
+    let ref = branch
+    if (pick.baseLocation === 'remote') {
+      if (!(await hasRemote(main.repo_path, 'origin', { env }))) {
+        return { ok: false, error: '메인 레포에 origin 원격이 없어 원격 기준으로 만들 수 없습니다' }
+      }
+      try {
+        await fetchBranch(main.repo_path, branch, 'origin', { env })
+      } catch (e) {
+        return {
+          ok: false,
+          error: `메인 레포의 git fetch가 실패해 Work를 만들지 않았습니다. ${String(e)}`,
+        }
+      }
+      ref = `origin/${branch}`
+    }
+    let commit: string
+    try {
+      commit = await commitOf(main.repo_path, ref, { env })
+    } catch {
+      return { ok: false, error: `메인 레포의 기준 브랜치를 찾을 수 없습니다: ${ref}` }
+    }
+    // 서브모듈이 없던 브랜치나 다른 경로로 옮긴 브랜치면 서브모듈 자리가 없어 통합 검증이 되지 않는다
+    if (!(await isGitlinkAt(main.repo_path, commit, sub, { env }).catch(() => false))) {
+      return {
+        ok: false,
+        error: `메인 레포의 ${ref}에는 서브모듈 ${sub}이 없습니다. 메인 기준 브랜치를 바꾸거나 통합 검증을 끄세요`,
+      }
+    }
+    return { ok: true, base: { base_branch: branch, base_commit: commit } }
   }
 
   // ---------- 승인 (시나리오 4) ----------
@@ -1207,4 +1385,10 @@ export class Relay {
     await fsp.writeFile(file, data, { flag: 'wx' })
     return file
   }
+}
+
+/** 서브모듈 프로젝트가 남아 메인 프로젝트의 [등록 해제]를 막는 까닭 (D417) */
+function subProjectsBlock(subs: readonly ProjectState[]): string {
+  const names = subs.map((p) => p.parent?.path ?? p.project_id).join(', ')
+  return `서브모듈 프로젝트가 있음 (${names}). 서브모듈 프로젝트를 먼저 등록 해제하세요`
 }

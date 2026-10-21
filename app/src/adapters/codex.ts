@@ -6,6 +6,7 @@ import { CODEX_HOOK_EVENTS, codexFirstPrompt, tomlValue } from '../core/codex'
 import {
   HOOK_TOKEN_ENV,
   STOP_HOOK_TIMEOUT_SEC,
+  extraDirArgs,
   relaySkillName,
   type LaunchInput,
   type ResumeInput,
@@ -238,6 +239,7 @@ export async function codexLaunchArgs(input: LaunchInput): Promise<string[]> {
     ...args,
     '--add-dir',
     input.workDir,
+    ...extraDirArgs(input),
     codexFirstPrompt(input.skill, settings.skillPath, input.contextPath),
   ]
 }
@@ -246,13 +248,17 @@ export async function codexResumeArgs(input: ResumeInput): Promise<string[]> {
     ...(await options(input.settingsPath)).args,
     '--add-dir',
     input.workDir,
+    ...extraDirArgs(input),
     'resume',
     input.sessionId,
     ...(input.prompt ? [input.prompt] : []),
   ]
 }
-export async function codexCleanupArgs(settingsPath: string): Promise<string[]> {
-  return (await options(settingsPath)).args
+export async function codexCleanupArgs(
+  settingsPath: string,
+  extraDirs: readonly string[] = [],
+): Promise<string[]> {
+  return [...(await options(settingsPath)).args, ...extraDirArgs({ extraDirs })]
 }
 /**
  * 곁 세션의 Codex 인자 (D391, I130). 첫 프롬프트가 없어 입력을 기다린다. 시스템 프롬프트를 덧붙이는 옵션이 없어 안내는
@@ -263,6 +269,7 @@ export async function codexSideArgs(input: SideArgsInput): Promise<string[]> {
     ...(await options(input.settingsPath)).args,
     '--add-dir',
     input.workDir,
+    ...extraDirArgs(input),
     ...(input.resume ? ['resume', input.sessionId] : []),
   ]
 }

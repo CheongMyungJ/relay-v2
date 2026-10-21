@@ -1182,6 +1182,8 @@ export interface NewWork {
   /** 기준 브랜치와, Work를 만들 때 분기한 기준 커밋 (시나리오 1, D97) */
   baseBranch: string
   baseCommit: string
+  /** 서브모듈 Work의 메인 통합 검증 worktree (D414): 메인 레포의 기준 브랜치와 고정한 커밋 */
+  integration?: { base_branch: string; base_commit: string }
   settings?: WorkSettingsPatch
   /** 앱이 쓴 request.md의 해시 (D124) */
   requestHash?: string
@@ -1204,6 +1206,7 @@ export function createWork(input: NewWork): Transition {
     created_at: input.at,
     base_branch: input.baseBranch,
     base_commit: input.baseCommit,
+    ...(input.integration ? { integration: { ...input.integration } } : {}),
     intent: null,
     // 빈 값은 앱 설정을 따른다는 뜻이라 두지 않는다 (D72)
     settings: mergeWorkSettings({}, input.settings ?? {}),
@@ -1223,6 +1226,7 @@ export function createWork(input: NewWork): Transition {
         type: input.type,
         base_branch: input.baseBranch,
         base_commit: input.baseCommit,
+        ...(input.integration ? { integration: input.integration } : {}),
       }),
       { type: 'startTask', taskId: intake.id, node: intake.node, reason: intake.reason },
     ],

@@ -3,6 +3,7 @@ import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { describeFailure, run } from './exec'
+import { pathKey } from './store'
 
 export class GitError extends Error {}
 
@@ -81,13 +82,29 @@ export async function hasRemote(repo: string, name = 'origin', opts?: GitOptions
 
 /** 기본 브랜치: origin/HEAD, 없으면 현재 브랜치 (시나리오 0-3). 둘 다 없으면 null */
 export async function defaultBranch(repo: string, opts?: GitOptions): Promise<string | null> {
+  return (
+    (await originHead(repo, opts)) ??
+    tryGit(repo, ['symbolic-ref', '--quiet', '--short', 'HEAD'], opts)
+  )
+}
+
+/** origin/HEAD가 가리키는 브랜치 이름. 없으면 null (D413: 서브모듈 프로젝트의 기본 브랜치) */
+export async function originHead(repo: string, opts?: GitOptions): Promise<string | null> {
   const remoteHead = await tryGit(
     repo,
     ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'],
     opts,
   )
-  if (remoteHead?.startsWith('origin/')) return remoteHead.slice('origin/'.length)
-  return tryGit(repo, ['symbolic-ref', '--quiet', '--short', 'HEAD'], opts)
+  return remoteHead?.startsWith('origin/') ? remoteHead.slice('origin/'.length) : null
+}
+
+/** `.gitmodules`에 적은 서브모듈의 branch (git 문서 gitmodules). 없으면 null */
+export async function submoduleBranch(
+  repo: string,
+  name: string,
+  opts?: GitOptions,
+): Promise<string | null> {
+  return tryGit(repo, ['config', '-f', '.gitmodules', '--get', `submodule.${name}.branch`], opts)
 }
 
 /** 로컬 브랜치와 origin의 원격 추적 브랜치 이름 (시나리오 1의 기준 브랜치 목록) */
@@ -147,6 +164,30 @@ export async function addWorktree(
 /** HEAD가 가리키는 브랜치 이름. 분리된 HEAD면 null (git 문서 git-symbolic-ref) */
 export async function currentBranch(dir: string, opts?: GitOptions): Promise<string | null> {
   return tryGit(dir, ['symbolic-ref', '--quiet', '--short', 'HEAD'], opts)
+}
+
+/**
+ * HEAD가 가리키는 브랜치 이름. 분리된 HEAD면 null이다. currentBranch와 달리 git이 실패하면(폴더가 없음 등) GitError다:
+ * git symbolic-ref --quiet는 분리된 HEAD에서만 1로 끝난다 (git 문서 git-symbolic-ref)
+ */
+export async function headBranch(dir: string, opts?: GitOptions): Promise<string | null> {
+  return gitOrNull(dir, ['symbolic-ref', '--quiet', '--short', 'HEAD'], [1], opts)
+}
+
+/**
+ * 커밋의 tree에서 경로가 서브모듈(gitlink, 모드 160000)인가 (D414: 메인 통합 검증의 기준 커밋에 그 서브모듈 자리가 있나).
+ * git ls-tree <커밋> -- <경로> (git 문서 git-ls-tree)
+ */
+export async function isGitlinkAt(
+  repo: string,
+  commit: string,
+  sub: string,
+  opts?: GitOptions,
+): Promise<boolean> {
+  const out = await git(repo, ['ls-tree', '-z', commit, '--', sub], opts)
+  return out
+    .split('\0')
+    .some((entry) => entry.startsWith('160000 commit ') && entry.endsWith(`\t${sub}`))
 }
 
 export async function headCommit(dir: string, opts?: GitOptions): Promise<string> {
@@ -312,6 +353,115 @@ async function submoduleEntries(
 /** 서브모듈의 경로 (D383). 체크아웃했는지는 보지 않는다 */
 export async function submodulePaths(dir: string, opts?: GitOptions): Promise<string[]> {
   return (await submoduleEntries(dir, opts)).map((e) => e.path)
+}
+
+/**
+ * 서브모듈 Work의 대상 목록 (D413): 이름, 경로, 이 체크아웃에 받아 두었는지(폴더에 .git이 있음). 서브모듈은
+ * submodulePaths와 같은 기준이다 (D384)
+ */
+export async function submoduleList(
+  dir: string,
+  opts?: GitOptions,
+): Promise<{ name: string; path: string; initialized: boolean }[]> {
+  const out: { name: string; path: string; initialized: boolean }[] = []
+  for (const e of await submoduleEntries(dir, opts)) {
+    out.push({ ...e, initialized: await exists(path.join(dir, e.path, '.git')) })
+  }
+  return out
+}
+
+/** 서브모듈 하나를 받는다 (D413): git submodule update --init -- <경로>. 사용자의 자격 증명을 쓴다 */
+export async function initSubmodule(repo: string, sub: string, opts?: GitOptions): Promise<void> {
+  await git(repo, ['submodule', 'update', '--init', '--', sub], {
+    ...opts,
+    timeoutMs: opts?.timeoutMs ?? 600_000,
+  })
+}
+
+/**
+ * 커밋에 분리된 HEAD로 worktree를 만든다 (D414: 서브모듈 Work의 메인 통합 검증 worktree). 브랜치를 만들지 않는다.
+ * 경로가 길어질 수 있어 core.longpaths를 켠다 (addWorktree와 같음)
+ */
+export async function addDetachedWorktree(
+  repo: string,
+  dir: string,
+  commit: string,
+  opts?: GitOptions,
+): Promise<void> {
+  await git(repo, ['config', 'core.longpaths', 'true'], opts)
+  await git(repo, ['worktree', 'add', '--detach', dir, commit], opts)
+}
+
+/**
+ * 서브모듈 체크아웃(sub)의 git 폴더. 폴더 안의 .git이 디렉터리면 그것이고, 파일이면 `gitdir: <경로>`가 가리키는 곳이다
+ * (git 문서 gitrepository-layout). 둘 다 아니면 null
+ */
+async function checkoutGitDir(sub: string): Promise<string | null> {
+  const dotGit = path.join(sub, '.git')
+  try {
+    const st = await fsp.stat(dotGit)
+    if (st.isDirectory()) return dotGit
+    const m = /^gitdir:\s*(.+?)\s*$/m.exec(await fsp.readFile(dotGit, 'utf8'))
+    return m?.[1] ? path.resolve(sub, m[1]) : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 서브모듈 저장소의 core.worktree를 사용자 체크아웃(sub)으로 되돌린다 (D415). 메인 레포의 다른 worktree 안에 이
+ * 저장소의 linked worktree를 두고 거기서 `git submodule update`를 하면 git이 함께 쓰는 설정의 core.worktree를 그
+ * worktree로 바꿔 써, 사용자 체크아웃의 git이 "cannot chdir"로 깨진다(실행). 저장소가 체크아웃 안(.git 디렉터리)에
+ * 있으면 core.worktree가 없어야 하고, 밖(.git/modules/<이름>)에 있으면 sub를 가리켜야 한다. 같은 곳을 가리키면
+ * 그대로 둔다. 되돌렸으면 true다. git 폴더를 찾지 못하면 아무것도 하지 않는다
+ */
+export async function repairSubmoduleWorktree(sub: string, opts?: GitOptions): Promise<boolean> {
+  const gitDir = await checkoutGitDir(sub)
+  if (!gitDir) return false
+  const config = path.join(gitDir, 'config')
+  // 같은 서브모듈의 Work 여럿(앱을 켤 때의 조정 등)이 함께 고치면 git config의 잠금 파일에서 하나가 실패한다.
+  // 앱 안에서는 설정 파일마다 차례로 한다
+  const key = pathKey(config)
+  const before = repairing.get(key) ?? Promise.resolve()
+  const run = before.then(() => repairConfig(sub, gitDir, config, opts))
+  const settled = run.then(
+    () => undefined,
+    () => undefined,
+  )
+  repairing.set(key, settled)
+  void settled.then(() => {
+    if (repairing.get(key) === settled) repairing.delete(key)
+  })
+  return run
+}
+
+/** 설정 파일마다 하는 중인 되돌리기 (repairSubmoduleWorktree) */
+const repairing = new Map<string, Promise<void>>()
+
+async function repairConfig(
+  sub: string,
+  gitDir: string,
+  config: string,
+  opts?: GitOptions,
+): Promise<boolean> {
+  // 깨진 저장소 안에서 git을 부르면 시작부터 실패하므로 레포 밖에서 파일만 읽고 쓴다
+  const cwd = os.tmpdir()
+  const current = await gitOrNull(
+    cwd,
+    ['config', '-f', config, '--get', 'core.worktree'],
+    [1],
+    opts,
+  )
+  const inside = pathKey(gitDir) === pathKey(path.join(sub, '.git'))
+  if (inside) {
+    if (current === null) return false
+    await git(cwd, ['config', '-f', config, '--unset-all', 'core.worktree'], opts)
+    return true
+  }
+  if (current !== null && pathKey(path.resolve(gitDir, current)) === pathKey(sub)) return false
+  const relative = path.relative(gitDir, sub).split(path.sep).join('/')
+  await git(cwd, ['config', '-f', config, 'core.worktree', relative], opts)
+  return true
 }
 
 /**

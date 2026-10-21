@@ -268,12 +268,26 @@ export interface EmphasisInput {
   uncommitted: readonly string[]
   /** 안에 커밋 안 된 변경이 있는 서브모듈 (D384). 없으면 없다 */
   submodules?: readonly string[]
+  /** 서브모듈 Work의 메인 통합 검증 worktree (D414, D415). 없으면 없다 */
+  integration?: IntegrationFacts
   /** PR 대응 task: 이번 라운드에 바뀌거나 지워진 기존 테스트 파일 (D180, D202) */
   tests?: readonly string[]
   /** PR 대응 task: 승인 뒤 실패한 push나 답글 게시 (시나리오 10-6) */
   failure?: { stage: string; error: string } | null
   /** 세션이 살아 있다. 아니면 열린 질문의 안내가 [세션 재개]를 먼저 누르라고 한다 (D222). 없으면 살아 있다 */
   live?: boolean
+}
+
+/** 승인 화면이 보는 메인 통합 검증 worktree의 사실 (D414, D415). main이 git에서 읽는다 */
+export interface IntegrationFacts {
+  /** 메인 worktree의 커밋 안 된 변경 가운데 메인 쪽 변경(서브모듈 자리 제외). 전달되지 않는다 */
+  mainChanges: readonly string[]
+  /** 서브모듈 worktree의 지금 브랜치. 분리된 HEAD면 null */
+  branch: string | null
+  /** 서브모듈 worktree가 있어야 할 작업 브랜치 (relay/<work-id>) */
+  workBranch: string
+  /** 앱이 서브모듈 저장소의 core.worktree를 되돌린 적이 있다 */
+  repaired: boolean
 }
 
 /**
@@ -346,6 +360,33 @@ export function emphasis(input: EmphasisInput): Emphasis[] {
       title: '서브모듈 안의 변경',
       lines: [...input.submodules],
       hint: '서브모듈 안에서 커밋하지 않은 변경입니다. relay는 이 변경을 커밋하거나 전달하지 않고, [Work 정리] 때 지웁니다. 필요하면 서브모듈 레포에서 따로 다룹니다.',
+    })
+  }
+  const g = input.integration
+  if (g && (g.branch !== g.workBranch || g.repaired)) {
+    out.push({
+      kind: 'submodule_guard',
+      title: '서브모듈 worktree',
+      lines: [
+        ...(g.branch !== g.workBranch
+          ? [
+              `서브모듈 worktree가 작업 브랜치 ${g.workBranch}에 있지 않습니다 (지금: ${g.branch ?? '분리된 HEAD'}). 전달은 작업 브랜치만 보냅니다. 터미널에서 git switch ${g.workBranch}로 돌아가거나 에이전트에게 맡기세요.`,
+            ]
+          : []),
+        ...(g.repaired
+          ? [
+              '메인 worktree에서 한 git submodule update가 서브모듈 저장소의 설정(core.worktree)을 바꿔 앱이 되돌렸습니다. 그동안 메인 체크아웃의 서브모듈 폴더에서 git이 실패했을 수 있습니다.',
+            ]
+          : []),
+      ],
+    })
+  }
+  if (g?.mainChanges.length) {
+    out.push({
+      kind: 'main_changes',
+      title: '메인 레포 변경 (전달 안 됨)',
+      lines: [...g.mainChanges],
+      hint: '통합 검증용 메인 worktree의 변경입니다. 이 Work는 서브모듈 레포만 전달하고 이 변경은 [Work 정리] 때 지웁니다. 메인 레포도 고쳐야 하면 메인 프로젝트에서 따로 Work를 만듭니다.',
     })
   }
   if (input.errors.length > 0) {

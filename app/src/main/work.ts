@@ -63,6 +63,7 @@ import {
   deleteRemoteBranch,
   diffFrom,
   hasCommit,
+  headBranch,
   headCommit,
   isAncestor,
   lockFiles,
@@ -74,6 +75,7 @@ import {
   remoteBranchExists,
   remoteUrl,
   removeWorktree,
+  repairSubmoduleWorktree,
   repoRoot,
   resetHard,
   stashEntries,
@@ -122,6 +124,7 @@ import {
   type PreviousTask,
   type RespondInput,
   type SelectionInput,
+  type SubmoduleTarget,
   type TaskRef,
 } from '../core/context'
 import {
@@ -240,6 +243,7 @@ import {
   taskLabel,
   toolLabel,
   verdicts,
+  type IntegrationFacts,
 } from '../core/review'
 import {
   GONE_SKIP,
@@ -292,6 +296,7 @@ import {
   type PrSynced,
 } from '../shared/pr'
 import { projectName, type ProjectChecks, type ProjectState } from '../shared/project'
+import { mainSideChanges, submoduleGuardEnv } from '../core/submodule'
 import type {
   ActivityView,
   ApproveOptions,
@@ -624,6 +629,8 @@ export class WorkRunner {
   private quitting = false
   /** 기록을 지웠다 (D407). work.json을 다시 쓰지 않고 스냅샷도 보내지 않는다 */
   private removed = false
+  /** 도는 동안 앱이 서브모듈 저장소의 core.worktree를 되돌린 task (D415). 승인 화면에 알린다. 메모리에만 둔다 */
+  private readonly submoduleRepaired = new Set<string>()
   /**
    * 자동 대응을 바란다 (D210): 읽기가 받은 새 항목이 있을 때 대응 자동 시작이 켜져 있었다. 시작하거나 상한에서 멈추거나
    * 넣을 새 항목이 없어지거나 자동 시작이 꺼지면 버린다. 도는 대응 task, 진행 중 작업, 닫힌 PR로 막히면 남겨 두고 풀리면
@@ -656,8 +663,53 @@ export class WorkRunner {
     /** 사이드바의 Work 제목 (요청의 첫 줄) */
     readonly title: string,
     private workText: string | null = null,
+    /**
+     * 메인 통합 검증 worktree의 폴더 (D414). 이 Work의 worktree는 그 안의 서브모듈 자리다. 배치는 Relay가 정한다.
+     * 서브모듈 Work가 아니거나 만들지 않았으면 null
+     */
+    readonly integrationRoot: string | null = null,
   ) {
     this.key = `${project.project_id}/${work.work_id}`
+  }
+
+  /** 서브모듈 Work의 메인 프로젝트 (D413). 메인 레포의 Work거나 메인 프로젝트를 찾지 못하면 null */
+  private mainProject(): ProjectState | null {
+    const parent = this.project.parent
+    return parent ? (this.ctx.project(parent.project_id) ?? null) : null
+  }
+
+  /**
+   * 에이전트 세션(task, 곁 세션, 정리 세션)의 환경 변수 (D415). 메인 통합 검증 worktree가 있으면 git submodule update가
+   * 이 서브모듈을 건너뛰게 한다
+   */
+  private agentEnv(): NodeJS.ProcessEnv {
+    const parent = this.project.parent
+    if (this.integrationRoot === null || !parent) return this.ctx.env
+    return { ...this.ctx.env, ...submoduleGuardEnv(this.ctx.env, [parent.name]) }
+  }
+
+  /** 에이전트가 함께 쓰는 폴더 (D414): 메인 통합 검증 worktree. 없으면 빈 값이다 */
+  private extraDirs(): { extraDirs?: string[] } {
+    const root = this.integrationRoot
+    return root ? { extraDirs: [root] } : {}
+  }
+
+  /**
+   * 서브모듈 저장소의 core.worktree를 사용자 체크아웃으로 되돌린다 (D415). 메인 통합 검증 worktree가 있는 Work만 본다.
+   * 턴이 끝날 때, 승인 화면과 정리 요약을 만들 때, 앱을 켤 때 부른다. 되돌렸으면 알리고, taskId가 있으면 그 task의 승인
+   * 화면에도 알린다. 실패하면 알리기만 한다
+   */
+  private async guardSubmodule(taskId?: string): Promise<void> {
+    if (this.integrationRoot === null) return
+    try {
+      if (!(await repairSubmoduleWorktree(this.project.repo_path, { env: this.ctx.env }))) return
+      if (taskId) this.submoduleRepaired.add(taskId)
+      this.problem(
+        `서브모듈 저장소의 core.worktree가 바뀌어 ${this.project.repo_path}로 되돌렸습니다 (메인 worktree의 git submodule update)`,
+      )
+    } catch (e) {
+      this.problem(`서브모듈 저장소의 core.worktree를 확인하지 못함: ${message(e)}`)
+    }
   }
 
   /** 이 앱에서 살아 있는 세션이 있다 (앱 종료 확인, 시나리오 3-6). 정리 세션과 곁 세션(D390)도 센다 */
@@ -1231,6 +1283,7 @@ export class WorkRunner {
       const args = await driver.launchArgs({
         sessionId,
         workDir: this.files.dir,
+        ...this.extraDirs(),
         settingsPath,
         skill,
         contextPath,
@@ -1284,6 +1337,7 @@ export class WorkRunner {
       const args = await driver.resumeArgs({
         sessionId,
         workDir: this.files.dir,
+        ...this.extraDirs(),
         settingsPath,
         ...pinnedAgent(task),
         ...(prompt ? { prompt } : {}),
@@ -1402,7 +1456,63 @@ export class WorkRunner {
       respond: await this.respondInput(task),
       // 서브모듈을 읽지 못하면 안내 없이 간다 (D383)
       submodules: await submodulePaths(this.worktree, { env: this.ctx.env }).catch(() => []),
+      target: this.targetInput(),
     })
+  }
+
+  /** context.md의 서브모듈 Work 절 (D413, D414). 메인 레포의 Work면 null */
+  private targetInput(): SubmoduleTarget | null {
+    const parent = this.project.parent
+    if (!parent) return null
+    const main = this.mainProject()
+    const root = this.integrationRoot
+    const g = this.work.integration
+    return {
+      main: main ? projectName(main) : parent.project_id,
+      path: parent.path,
+      integration:
+        root && g ? { root, baseBranch: g.base_branch, baseCommit: g.base_commit } : null,
+    }
+  }
+
+  /**
+   * 승인 화면의 메인 통합 검증 worktree 사실 (D414, D415): 서브모듈 worktree의 브랜치와 메인 쪽 변경을 읽는다. 읽기만
+   * 한다: 서브모듈 설정 되돌리기는 Work의 처리 줄(턴 끝, 정리, 앱 시작)에서 한다. 메인 통합 검증 worktree가 없으면
+   * null. git이 실패해 브랜치를 모르면 브랜치는 알리지 않는다
+   */
+  private async integrationFacts(taskId: string): Promise<IntegrationFacts | null> {
+    const parent = this.project.parent
+    if (this.integrationRoot === null || !parent) return null
+    const workBranchName = workBranch(this.work.work_id)
+    const [mainChanges, branch] = await Promise.all([
+      this.mainChanges(),
+      headBranch(this.worktree, { env: this.ctx.env }).catch(() => workBranchName),
+    ])
+    return {
+      mainChanges,
+      branch,
+      workBranch: workBranchName,
+      repaired: this.submoduleRepaired.has(taskId),
+    }
+  }
+
+  /**
+   * 메인 통합 검증 worktree의 메인 쪽 변경 (D414, D416): 커밋 안 된 변경에서 서브모듈 자리를 빼고, 받아 둔 다른 서브모듈
+   * 안의 변경을 더한다. 승인 화면과 정리 요약이 같은 목록을 보인다. 읽지 못한 것은 비워 둔다
+   */
+  private async mainChanges(): Promise<string[]> {
+    const root = this.integrationRoot
+    const parent = this.project.parent
+    if (root === null || !parent) return []
+    const opts = { env: this.ctx.env }
+    const [lines, dirty] = await Promise.all([
+      statusLines(root, opts).catch(() => []),
+      dirtySubmodules(root, opts).catch(() => []),
+    ])
+    return [
+      ...mainSideChanges(lines, parent.path),
+      ...dirty.filter((p) => p !== parent.path).map((p) => `서브모듈 ${p} 안의 변경`),
+    ]
   }
 
   /**
@@ -1640,7 +1750,7 @@ export class WorkRunner {
       args,
       cwd: this.worktree,
       env: {
-        ...this.ctx.env,
+        ...this.agentEnv(),
         ...agentRuntime(taskEngine(task)).launchEnv(token, this.ctx.hooks.port, task.id),
       },
       cols,
@@ -2028,6 +2138,8 @@ export class WorkRunner {
             decision: 'block',
             reason: '앱 질문창의 답변을 기다리세요. 취소를 답변이나 동의로 해석하지 마세요.',
           }
+        // 턴 안에서 한 git submodule update가 바꾼 서브모듈 설정을 바로 되돌린다 (D415)
+        await this.guardSubmodule(taskId)
         const files = await this.files.taskFiles(task)
         const snapshot = await this.turnState(task, files)
         const changed = session !== undefined && snapshot !== session.turnFiles
@@ -2802,9 +2914,9 @@ export class WorkRunner {
       const { cols, rows } = this.ctx.size()
       const pty = startPty({
         bin,
-        args: await driver.cleanupArgs(settingsPath),
+        args: await driver.cleanupArgs(settingsPath, this.extraDirs().extraDirs ?? []),
         cwd: this.worktree,
-        env: { ...env, ...driver.launchEnv(token, this.ctx.hooks.port, CLEANUP_ID) },
+        env: { ...this.agentEnv(), ...driver.launchEnv(token, this.ctx.hooks.port, CLEANUP_ID) },
         cols,
         rows,
         answerQueries: true,
@@ -3011,7 +3123,6 @@ export class WorkRunner {
 
   /** 곁 세션을 띄운다. 안내와 설정은 열 때마다 임시 폴더에 새로 만든다 (I126). 띄우기는 기본 세션과 함께 쓴다 (I132) */
   private async launchSide(fresh: boolean): Promise<CommandResult> {
-    const { env } = this.ctx
     const config = this.ctx.config()
     const agent = resolveAgent(config, 'side')
     const previous = fresh ? null : this.sideResumeId(agent.engine)
@@ -3038,7 +3149,8 @@ export class WorkRunner {
     try {
       pid = await openChat({
         session: s,
-        env,
+        // 메인 통합 검증 worktree의 보호 (D415)
+        env: this.agentEnv(),
         hooks: this.ctx.hooks,
         hookId: SIDE_ID,
         name: 'side',
@@ -3051,7 +3163,14 @@ export class WorkRunner {
             ...model,
           }),
         args: (driver, files) =>
-          driver.sideArgs({ sessionId, resume, workDir: this.files.dir, ...files, ...model }),
+          driver.sideArgs({
+            sessionId,
+            resume,
+            workDir: this.files.dir,
+            ...this.extraDirs(),
+            ...files,
+            ...model,
+          }),
         size: this.ctx.size(),
         terminals: this.terminals,
         terminalKey: this.terminalKey(id),
@@ -3214,7 +3333,45 @@ export class WorkRunner {
       backups: await refNames(repo, backupPattern(this.work.work_id), opts),
       merged,
       remote,
+      integration: await this.integrationCleanFacts(),
     }
+  }
+
+  /**
+   * 정리 요약의 메인 통합 검증 worktree (D416): 그 폴더와 메인 쪽 변경(서브모듈 자리 제외, 받아 둔 다른 서브모듈 안의
+   * 변경 포함). 폴더가 없거나 서브모듈 Work가 아니면 null
+   */
+  private async integrationCleanFacts(): Promise<CleanFacts['integration']> {
+    const root = this.integrationRoot
+    if (root === null || !(await exists(root))) return null
+    await this.guardSubmodule()
+    return { root, changes: await this.mainChanges() }
+  }
+
+  /**
+   * 메인 통합 검증 worktree를 지운다 (D416). 서브모듈 worktree를 지운 뒤에 부른다: 먼저 지우면 git이 그 안의 서브모듈
+   * worktree를 커밋 안 된 변경과 함께 확인 없이 지운다(실행). 메인 쪽 변경과 받아 둔 다른 서브모듈이 있어도 지우게
+   * --force다(정리 요약에서 확인받음). 폴더가 없으면 관리 정보만 prune하고, 반쯤 지운 폴더(.git 없음)는 prune한 뒤 지운다
+   */
+  private async removeIntegration(): Promise<void> {
+    const root = this.integrationRoot
+    if (root === null) return
+    const main = this.mainProject()
+    if (!main) throw new Error('메인 프로젝트를 찾지 못해 메인 통합 검증 worktree를 지우지 못함')
+    const opts = { env: this.ctx.env }
+    if (await exists(path.join(this.worktree, '.git'))) {
+      throw new Error('서브모듈 worktree가 남아 있어 메인 통합 검증 worktree를 지우지 않음')
+    }
+    if (!(await exists(root))) {
+      await pruneWorktrees(main.repo_path, opts)
+      return
+    }
+    if (!(await exists(path.join(root, '.git')))) {
+      await pruneWorktrees(main.repo_path, opts)
+      await removeTree(root)
+      return
+    }
+    await removeWorktree(main.repo_path, root, { ...opts, force: true })
   }
 
   /** [Work 정리]의 확인 요약 (시나리오 8-1) */
@@ -3282,14 +3439,18 @@ export class WorkRunner {
       this.cleanup = null
       // 곁 세션도 끝낸다: worktree를 지운다 (D390)
       await this.endSide()
+      // 서브모듈 저장소가 깨져 있으면 git worktree remove가 실패한다 (D415)
+      await this.guardSubmodule()
       if (e.resume === undefined) {
         if (await exists(this.worktree)) {
           await removeWorktree(repo, this.worktree, { ...opts, force: e.force })
         } else {
           await pruneWorktrees(repo, opts)
         }
+        await this.removeIntegration()
       } else if (e.resume === 'worktree') {
         await this.removeCutWorktree(e.force)
+        await this.removeIntegration()
       }
     } catch (err) {
       await this.cleanFailed(err)
@@ -3386,6 +3547,8 @@ export class WorkRunner {
    */
   reconcile(killed: readonly RecordedProcess[] = []): Promise<void> {
     return this.enqueue(async () => {
+      // 꺼져 있던 동안 남은 서브모듈 설정 바뀜도 되돌린다 (D415)
+      if (this.work.status !== 'archived') await this.guardSubmodule()
       const task = currentTask(this.work)
       const check = task ? await this.checkOf(task) : null
       const tasks = killed.flatMap((p) => (p.taskId ? [{ taskId: p.taskId, pid: p.pid }] : []))
@@ -3712,6 +3875,7 @@ export class WorkRunner {
     const uncommitted = latest ? await statusLines(this.worktree, { env }).catch(() => []) : []
     // 서브모듈 안의 변경은 커밋 안 된 변경에 들지 않고 전달되지 않아 따로 알린다 (D384)
     const submodules = latest ? await dirtySubmodules(this.worktree, { env }).catch(() => []) : []
+    const integration = latest ? await this.integrationFacts(taskId) : null
     const diffTo = (from: string) =>
       diffFrom(cwd, from, range?.to ?? null, { env }).catch(
         (e: unknown) => `변경을 읽지 못함: ${message(e)}`,
@@ -3775,6 +3939,7 @@ export class WorkRunner {
         errors: check.errors,
         uncommitted,
         submodules,
+        ...(integration ? { integration } : {}),
         live: this.live.has(task.id),
         ...(respond ? { tests: respond.tests, failure: respond.view.failure } : {}),
       }),
@@ -5267,6 +5432,14 @@ export class WorkRunner {
       settings: w.settings,
       baseBranch: w.base_branch,
       baseCommit: w.base_commit,
+      integration:
+        w.integration && this.integrationRoot
+          ? {
+              baseBranch: w.integration.base_branch,
+              baseCommit: w.integration.base_commit,
+              root: this.integrationRoot,
+            }
+          : null,
       intent: w.intent,
       stopNotice: stopNotice(w),
       stopHint: resumeHint(w),

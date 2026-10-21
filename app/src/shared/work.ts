@@ -616,6 +616,11 @@ export interface WorkState {
   /** 기준 브랜치와 기준 커밋 (시나리오 1, D97) */
   base_branch: string
   base_commit: string
+  /**
+   * 메인 통합 검증 worktree (D414). 서브모듈 Work에서 함께 만들었으면 있다: 메인 레포의 기준 브랜치와 고정한 커밋이다.
+   * 이 Work의 worktree는 그 안의 서브모듈 자리에 있다
+   */
+  integration?: { base_branch: string; base_commit: string }
   /** 승인된 intent. 의도 승인 전에는 null */
   intent: ApprovedIntent | null
   /** Work별 설정 (D72) */

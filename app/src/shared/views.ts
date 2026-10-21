@@ -37,6 +37,8 @@ export type EmphasisKind =
   | 'existing_tests'
   | 'uncommitted'
   | 'submodule_changes'
+  | 'submodule_guard'
+  | 'main_changes'
   | 'format_errors'
 
 /** 승인 화면 강조 영역의 한 항목. 사람이 봐야 할 것만 모은다 (D83) */
@@ -174,6 +176,8 @@ export interface CleanExpect {
   lost: string[]
   /** 체크아웃된 서브모듈 (D382) */
   submodules: string[]
+  /** 메인 통합 검증 worktree의 메인 쪽 변경 (D416). 없으면 없다 */
+  integration?: string[]
 }
 
 /** [Work 정리]의 확인 요약 (시나리오 8-1) */
@@ -211,6 +215,11 @@ export interface CleanPreview {
    * origin의 작업 브랜치 (D178). 머지로 완료한 Work만 삭제를 고를 수 있고 기본은 끈다. 머지로 완료하지 않았으면 null
    */
   remote: { name: string; exists: boolean } | null
+  /**
+   * 서브모듈 Work의 메인 통합 검증 worktree (D416): 그 폴더와 메인 쪽 변경(전달 안 됨). 서브모듈 worktree를 지운 뒤
+   * --force로 지운다. 없으면 null
+   */
+  integration: { root: string; changes: string[] } | null
   /** 사람이 명시적으로 확인해야 하는 것. 비어 있지 않으면 확인해야 [정리]를 누를 수 있다 */
   confirm: string[]
   expect: CleanExpect
@@ -483,6 +492,18 @@ export interface ProjectView {
   mergeMethod: MergeMethod | null
   /** 이슈 기록이 켜져 있다 (D337) */
   issueLog: boolean
+  /** 서브모듈 프로젝트의 메인 프로젝트 id와 그 안의 경로 (D413). 메인 프로젝트면 null */
+  parent: { id: string; path: string } | null
+}
+
+/** 새 Work 대화상자의 대상 목록에 보이는 서브모듈 (D413) */
+export interface SubmoduleView {
+  name: string
+  path: string
+  /** 메인 체크아웃에 받아 두었다. 아니면 고를 때 앱이 받는다 */
+  initialized: boolean
+  /** 이 서브모듈의 프로젝트. 아직 고른 적이 없으면 null */
+  projectId: string | null
 }
 
 export interface TaskView {
@@ -595,6 +616,8 @@ export interface WorkView {
   settings: WorkSettings
   baseBranch: string
   baseCommit: string
+  /** 메인 통합 검증 worktree (D414): 메인 레포의 기준 브랜치, 고정한 커밋, 그 폴더. 없으면 null */
+  integration: { baseBranch: string; baseCommit: string; root: string } | null
   intent: ApprovedIntent | null
   /** 멈춘 이유: 이전 단계 추천(D23), [이 단계 끝나면 멈춤] */
   stopNotice: string | null
@@ -988,6 +1011,11 @@ export interface NewWorkInput {
   issueNumber?: number | null
   /** 채운 Work 초안 (D404). Work를 만들면 앱이 그 초안을 지운다 */
   draft?: DraftRef
+  /**
+   * 서브모듈 Work의 메인 통합 검증 worktree (D414). 서브모듈 프로젝트에서만 쓴다. 메인 레포의 기준 브랜치와 기준 위치다
+   * (메인 레포에 origin이 없을 수 있어 Work의 기준 위치와 따로 고른다). 없거나 null이면 서브모듈 worktree만 만든다
+   */
+  integration?: { baseBranch: string; baseLocation: 'local' | 'remote' } | null
 }
 
 /** 지식 정리 후보 (D393) */

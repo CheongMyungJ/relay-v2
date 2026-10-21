@@ -190,6 +190,23 @@ describe('정리 전 확인 요약 (8-1)', () => {
     expect(planClean(p, input(none, { confirmed: true }))).toMatchObject({ ok: false })
   })
 
+  it('메인 통합 검증 worktree의 메인 쪽 변경은 지움을 확인해야 한다. 변경이 없으면 확인 없이 함께 지운다 (D416)', () => {
+    const clean = cleanPreview(facts({ integration: { root: '/w/root', changes: [] } }))
+    expect(clean.integration).toEqual({ root: '/w/root', changes: [] })
+    expect(clean.confirm).toEqual([])
+    expect(planClean(clean, input(clean))).toMatchObject({ ok: true, force: false })
+
+    const p = cleanPreview(facts({ integration: { root: '/w/root', changes: [' M src/app.c'] } }))
+    expect(p.confirm).toEqual([
+      '메인 통합 검증 worktree의 메인 쪽 변경 1개(전달 안 됨)를 백업 없이 지웁니다',
+    ])
+    expect(planClean(p, input(p)).ok).toBe(false)
+    expect(planClean(p, input(p, { confirmed: true }))).toMatchObject({ ok: true })
+    // 확인한 뒤 메인 쪽 변경이 생겼으면 받지 않는다
+    expect(planClean(p, input(clean, { confirmed: true }))).toMatchObject({ ok: false })
+    expect(cleanPreview(facts()).integration).toBeNull()
+  })
+
   it('작업 브랜치는 push됐거나 머지됐을 때만 삭제를 제안한다 (8-2)', () => {
     for (const [pushed, merged, deletable] of [
       [true, false, true],

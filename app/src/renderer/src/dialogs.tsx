@@ -44,6 +44,7 @@ import type {
   ProjectRemovePreview,
   ProjectView,
   StepPreview,
+  SubmoduleView,
   TidyCandidateView,
   TidyView,
   StepPreviewResult,
@@ -386,14 +387,21 @@ const REQUEST_PLACEHOLDER: Readonly<Record<WorkType, string>> = {
   general: '할 일과 끝났다고 볼 조건을 적어 주세요(무엇을 바꾸고 어떻게 확인할지)',
 }
 
-/** 새 Work: 유형, 요청, 기준 브랜치, 기준 위치 (시나리오 1). 유형을 고르기 전에는 [시작]이 꺼져 있다 (D236) */
+/**
+ * 새 Work: 대상, 유형, 요청, 기준 브랜치, 기준 위치 (시나리오 1). 유형을 고르기 전에는 [시작]이 꺼져 있다 (D236).
+ * 서브모듈이 있는 레포는 대상으로 서브모듈 하나를 고를 수 있고, 그러면 메인 통합 검증 worktree를 고른다 (D413, D414)
+ */
 export function NewWorkDialog({
   project,
+  projects,
   draft,
   onClose,
   onCreated,
 }: {
+  /** 연 프로젝트. 서브모듈 프로젝트면 그 서브모듈이 대상으로 골라져 있다 */
   project: ProjectView
+  /** 등록된 프로젝트. 대상의 메인 프로젝트와 서브모듈 프로젝트를 찾는다 */
+  projects: readonly ProjectView[]
   /**
    * 채울 Work 초안 (D404). 지식 정리 후보처럼 칸을 채우고(D393), 맞는 칸만 채운다. 만들면 main이 그 초안을 지운다
    */
@@ -401,6 +409,21 @@ export function NewWorkDialog({
   onClose: () => void
   onCreated: (workKey: string) => void
 }) {
+  const mainId = project.parent?.id ?? project.id
+  const main = projects.find((p) => p.id === mainId) ?? project
+  const [targetId, setTargetId] = useState(project.id)
+  // 고를 때 만든 서브모듈 프로젝트. 스냅샷의 프로젝트 목록보다 먼저 올 수 있다
+  const [prepared, setPrepared] = useState<ProjectView | null>(null)
+  const target =
+    projects.find((p) => p.id === targetId) ?? (prepared?.id === targetId ? prepared : project)
+  const [submodules, setSubmodules] = useState<SubmoduleView[]>([])
+  // 고른 서브모듈을 준비하는 중(받기, 서브모듈 프로젝트 만들기)이면 그 경로 (D413)
+  const [preparing, setPreparing] = useState<string | null>(null)
+  const [integrate, setIntegrate] = useState(true)
+  const [mainBranches, setMainBranches] = useState<string[]>([main.defaultBranch])
+  const [mainBranch, setMainBranch] = useState(main.defaultBranch)
+  // 메인 레포의 기준 위치. 메인 레포에 origin이 없을 수 있어 Work의 기준 위치와 따로 고른다 (D414)
+  const [mainLocation, setMainLocation] = useState<'local' | 'remote'>('local')
   const [type, setType] = useState<WorkType | null>(draft?.type ?? null)
   const [request, setRequest] = useState(draft?.request ?? '')
   const [branches, setBranches] = useState<string[]>([project.defaultBranch])
@@ -423,16 +446,60 @@ export function NewWorkDialog({
   const config = useConfig()
 
   useEffect(() => {
-    void window.relay.branches(project.id).then((list) => {
-      if (list.length) setBranches(list)
+    let current = true
+    void window.relay.branches(target.id).then((list) => {
+      if (current && list.length) setBranches(list)
     })
-  }, [project.id])
+    return () => {
+      current = false
+    }
+  }, [target.id])
+
+  useEffect(() => {
+    void window.relay.submodules(mainId).then(setSubmodules)
+    void window.relay.branches(mainId).then((list) => {
+      if (list.length) setMainBranches(list)
+    })
+  }, [mainId])
+
+  // 대상을 바꾸면 기준 브랜치를 그 레포의 기본 브랜치로 되돌린다 (D413)
+  const pickTarget = (next: ProjectView) => {
+    if (next.id === target.id) return
+    setTargetId(next.id)
+    setBranches([next.defaultBranch])
+    setBranch(next.defaultBranch)
+    if (!next.origin) setLocation('local')
+    // 이슈 번호는 그 레포의 이슈다. 다른 레포로 옮기지 않는다
+    setIssue('')
+  }
+  const chooseTarget = async (value: string) => {
+    setError(null)
+    if (value === main.id) return pickTarget(main)
+    const sub = submodules.find((m) => m.path === value)
+    if (!sub) return
+    const known = sub.projectId ? projects.find((p) => p.id === sub.projectId) : undefined
+    if (known) return pickTarget(known)
+    setPreparing(sub.path)
+    const r = await call(() => window.relay.prepareSubmodule(mainId, sub.path))
+    setPreparing(null)
+    if (!r.ok) {
+      setError(r.error)
+      return
+    }
+    if (!r.project) return
+    const made = r.project
+    setSubmodules((list) =>
+      list.map((m) => (m.path === sub.path ? { ...m, initialized: true, projectId: made.id } : m)),
+    )
+    setPrepared(made)
+    pickTarget(made)
+  }
 
   // 기준이 바뀌면 그 기준의 지식 정리 후보를 다시 찾는다 (D393). 후보로 채운 요청을 고치지 않았으면 새 기준의 후보로
   // 바꾼다(앞 기준의 후보로 다른 브랜치에서 시작하지 않게)
   useEffect(() => {
     let current = true
-    void window.relay.knowledgeTidy(project.id, branch, location).then((view) => {
+    void window.relay.knowledgeTidy(target.id, branch, location).then((view) => {
       if (!current) return
       setTidy({ basis: `${branch}|${location}`, view })
       if (filled.current !== null && requestNow.current === filled.current) {
@@ -444,7 +511,7 @@ export function NewWorkDialog({
     return () => {
       current = false
     }
-  }, [project.id, branch, location])
+  }, [target.id, branch, location])
 
   const applyTidy = (view: TidyView) => {
     filled.current = view.request
@@ -472,11 +539,14 @@ export function NewWorkDialog({
       return
     }
     const r = await call(() =>
-      window.relay.createWork(project.id, {
+      window.relay.createWork(target.id, {
         request,
         type,
         baseBranch: branch,
         baseLocation: location,
+        ...(target.parent && integrate
+          ? { integration: { baseBranch: mainBranch, baseLocation: mainLocation } }
+          : {}),
         ...(Object.keys(settings).length ? { settings } : {}),
         ...(issueNumber !== null ? { issueNumber } : {}),
         ...(draft ? { draft: draft.ref } : {}),
@@ -488,9 +558,10 @@ export function NewWorkDialog({
   }
   // 초안의 기준 브랜치가 목록에 없어도(지운 브랜치, 원격에만 있음) 고른 채로 보이고, 없으면 만들기가 알린다
   const branchList = branches.includes(branch) ? branches : [...branches, branch]
+  const sub = target.parent ? target : null
 
   return (
-    <Modal title={`새 Work · ${project.name}`} onClose={onClose}>
+    <Modal title={`새 Work · ${sub ? `${main.name}/${sub.name}` : main.name}`} onClose={onClose}>
       {draft ? (
         <div className="notice">
           Work 초안 <code>{draft.ref.name}</code>으로 채웠습니다. 고친 뒤 [시작]을 누르면 Work를
@@ -507,6 +578,90 @@ export function NewWorkDialog({
           overwrites={request.trim() !== '' && request !== filledText}
           onUse={applyTidy}
         />
+      ) : null}
+      {submodules.length > 0 || sub ? (
+        <label className="field">
+          대상
+          <select
+            aria-label="대상"
+            value={preparing ?? sub?.parent?.path ?? main.id}
+            disabled={preparing !== null || busy}
+            onChange={(e) => void chooseTarget(e.target.value)}
+          >
+            <option value={main.id}>{main.name} (메인 레포)</option>
+            {submodules.map((m) => (
+              <option key={m.path} value={m.path}>
+                {m.path} (서브모듈{m.initialized ? '' : ', 고르면 메인 체크아웃에 받습니다'})
+              </option>
+            ))}
+          </select>
+          {preparing ? <span className="dim">서브모듈 {preparing} 준비 중…</span> : null}
+          {sub ? (
+            <span className="dim">
+              이 Work는 서브모듈 레포만 고치고 전달합니다(push, PR). 메인 레포는 고치지 않습니다.
+            </span>
+          ) : null}
+        </label>
+      ) : null}
+      {sub ? (
+        <div className="row">
+          <label className="toggle">
+            <input
+              type="checkbox"
+              aria-label="메인 레포에서 통합 검증"
+              checked={integrate}
+              onChange={(e) => setIntegrate(e.target.checked)}
+            />
+            메인 레포에서 통합 검증
+          </label>
+          {integrate ? (
+            <label className="field">
+              메인 기준 브랜치
+              <select
+                aria-label="메인 기준 브랜치"
+                value={mainBranch}
+                onChange={(e) => setMainBranch(e.target.value)}
+              >
+                {mainBranches.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          {integrate ? (
+            <fieldset className="field">
+              <legend>메인 기준 위치</legend>
+              <label>
+                <input
+                  type="radio"
+                  checked={mainLocation === 'local'}
+                  onChange={() => setMainLocation('local')}
+                />
+                로컬
+              </label>
+              <label
+                title={
+                  main.origin ? 'git fetch 뒤 origin/<브랜치>' : '메인 레포에 origin 원격이 없음'
+                }
+              >
+                <input
+                  type="radio"
+                  disabled={!main.origin}
+                  checked={mainLocation === 'remote'}
+                  onChange={() => setMainLocation('remote')}
+                />
+                원격
+              </label>
+            </fieldset>
+          ) : null}
+          <span className="dim">
+            {integrate
+              ? '메인 레포의 worktree를 함께 만들고 그 안의 서브모듈 자리에서 일합니다. 메인 쪽 변경은 전달하지 않습니다.'
+              : '서브모듈 레포만으로 빌드하고 테스트합니다.'}
+          </span>
+        </div>
       ) : null}
       <div className="field">
         유형
@@ -548,11 +703,11 @@ export function NewWorkDialog({
             로컬
           </label>
           <label
-            title={project.origin ? 'git fetch 뒤 origin/<브랜치>에서 분기' : 'origin 원격이 없음'}
+            title={target.origin ? 'git fetch 뒤 origin/<브랜치>에서 분기' : 'origin 원격이 없음'}
           >
             <input
               type="radio"
-              disabled={!project.origin}
+              disabled={!target.origin}
               checked={location === 'remote'}
               onChange={() => setLocation('remote')}
             />
@@ -560,7 +715,7 @@ export function NewWorkDialog({
           </label>
         </fieldset>
       </div>
-      {project.issueLog ? (
+      {target.issueLog ? (
         <label className="field">
           이슈 번호 (선택)
           <input
@@ -586,7 +741,7 @@ export function NewWorkDialog({
         <button onClick={onClose}>취소</button>
         <button
           className="primary"
-          disabled={busy || !type || !request.trim()}
+          disabled={busy || preparing !== null || !type || !request.trim()}
           title={type ? '' : '유형을 고르세요'}
           onClick={() => void start()}
         >

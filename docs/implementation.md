@@ -1,6 +1,6 @@
 # relay-v2 구현 계획
 
-- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102), v0.17의 설계 유형(M20, I103~I113), v0.18의 곁 세션(M21, I125~I131), v0.19의 기본 세션(M23, I132~I136)
+- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102), v0.17의 설계 유형(M20, I103~I113), v0.18의 곁 세션(M21, I125~I131), v0.19의 기본 세션(M23, I132~I136), v0.20의 서브모듈 Work(M24, I146~I149)
 - 상태: 정함. 주제마다 사람과 문답으로 정했다(설계 부록 A의 진행 규칙). 바꾸려면 사용자와 다시 정한다.
 
 Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서는 [engines.md](engines.md)에서 관리한다. 이 문서의 기존 Claude 동작은 확장 중 회귀 시험의 기준이다.
@@ -159,6 +159,10 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I143 | [이름 바꾸기](D403)는 줄바꿈을 공백으로 바꾸고 자른다. 빈 이름은 받지 않는다. 렌더러는 지운 세션을 고르고 있으면 고르지 않은 화면을 보인다. 사이드바의 기본 세션 묶음은 프로젝트와 다른 표시(`.sessions`)로 둔다 | 기존 [스모크]가 프로젝트 묶음을 `.project`로 찾는다 | |
 | I144 | 가짜 claude는 `--append-system-prompt-file`을 받고 설정 파일의 훅 URL이 `/hook/session/`이면 기본 세션이라 시나리오의 `session`·`sessionResume`을 하고 기록에 `session: true`를 남긴다. 가짜 codex는 `RELAY_HOOK_TASK`가 `session`이면 곁 세션처럼 돌고 `session`·`sessionResume`(`sessionCodex`·`sessionResumeCodex`)을 한다. 녹화본에 없는 필드는 보내지 않는다 | 실행 인자가 곁 세션과 같아 앱이 정한 훅 URL로만 가른다 | |
 | I145 | D410~D412의 배치: 렌더러의 `links`가 터미널 한 줄을 읽고(`logicalLine`: 줄바꿈으로 이어진 화면 줄은 한 줄로, 넓은 글자는 두 칸으로, 넓은 글자가 들어가지 못해 남은 줄 끝 빈 칸은 빼고) 주소와 경로 후보를 찾으며(`findLinks`: 도구 이름의 괄호, `@`언급, `:줄:칸`·`#L줄`, 붙은 한글 조사를 뗀 것도 시도), 붙여넣기를 파일로 받을지(`pastesFiles`)와 붙여넣을 경로의 모양(`pasteText`: Windows는 `\`를 `/`로 바꾸고 공백이면 따옴표, Linux는 공백이면 따옴표이고 따옴표나 `\`가 들면 하나씩 이스케이프)을 정한다. `terminals`가 xterm의 link provider와 `linkHandler`(OSC 8)로 링크를 걸고, 탭 칸(`TerminalView`)의 capture 단계 `paste`와 `drop`에서 파일을 받는다. 파일 경로는 preload의 `webUtils.getPathForFile`이고, 경로가 없는 그림은 바이트를 main에 보내 저장한다. 경로는 하나씩 `term.paste`로 넣고 사이에 공백을 친다. 주소는 기존 `openExternal`로 연다. main의 `links`(Electron 없음)가 경로 풀기(`linkPath`), 링크 따라가기(`realLinkPath`, 파일 시스템은 `LinkFs`로 받음), 여는 형식(`opensSafely`), 그림 형식(`pasteExt`)을 맡는다. `Relay.terminalPaths`는 마우스를 올릴 때 낱말마다 처음으로 있는 시도의 번호만 내고, `Relay.terminalTarget`은 Ctrl+클릭 때 열지 폴더에서 보일지를 정한다. 경로는 터미널 키의 주인(`TerminalOwner.cwd`: Work는 worktree, 정리한 Work는 메인 체크아웃, 기본 세션은 고른 폴더)의 폴더에서 푼다. `Relay.savePaste`가 저장과 7일 지난 것 지우기를 한다. `ipc`는 `shell.openPath`·`showItemInFolder`와 `nativeImage`의 PNG 바꾸기(엔진이 받지 않는 형식, 30 MB 상한)만 한다 | Claude Code 2.1.304는 붙여넣은 글 전체(앞뒤 공백·따옴표를 떼고 `\`를 이스케이프로 읽음)가 `.png`·`.jpg`·`.jpeg`·`.gif`·`.webp`로 끝나는 절대 경로이면 그림으로 읽는다(3절). 경로를 하나씩 붙여넣어야 각각 그림이 된다. 링크 후보마다 있는지 보는 것은 마우스가 그 줄에 올 때만이고, 실제 경로와 여는 형식은 열 때만 본다(PR #54 리뷰) | |
+| I146 | D413~D417의 배치: 순수 규칙(기본 브랜치 고르기 `submoduleDefaultBranch`, 환경 변수 보호 `submoduleGuardEnv`, 메인 쪽 변경 `mainSideChanges`)은 `core/submodule`, git(`submoduleList`, `initSubmodule`, `addDetachedWorktree`, `originHead`, `submoduleBranch`, `repairSubmoduleWorktree`)은 `adapters/git`, 서브모듈 프로젝트 만들기(`prepareSubmoduleProject`)는 `main/projects`. `Relay`는 대상 목록(`submodules`)과 고르기(`prepareSubmodule`, project.json 고치기 줄에서)를 맡는다. Work의 worktree와 메인 통합 검증 worktree의 경로는 `Relay.workTree`만 정한다: 통합 검증이면 `worktrees/<work-id>`와 `worktrees/<work-id>/<서브모듈 경로>`이고 `WorkRunner`는 둘을 받는다(`integrationRoot`). 그래서 전달·되감기·PR 진행 코드는 바뀌지 않는다 | 서브모듈 Work도 레포 하나의 Work라 바뀌는 곳을 만들기, 에이전트 환경, 승인 화면, 정리로 모은다 | |
+| I147 | `core.worktree` 되돌리기(D415)는 서브모듈 체크아웃의 `.git`(디렉터리, 또는 `gitdir:` 파일이 가리키는 곳)을 직접 읽고 그 `config`를 `git config -f`로 레포 밖(임시 폴더)에서 읽고 쓴다: 깨진 저장소 안에서 git을 부르면 시작부터 실패한다. 같은 곳을 가리키는 값(절대 경로 등)은 그대로 둔다. 되돌린 task는 메모리에만 두고(`submoduleRepaired`) 그 task의 승인 화면에 알린다. 승인 화면의 통합 검증 사실(`IntegrationFacts`)은 지금 코드의 task(마지막 task)만 읽고, 처리 줄 밖이라 되돌리지 않는다. 같은 설정 파일의 되돌리기는 어댑터가 파일마다 차례로 한다(앱을 켤 때 여러 Work가 함께 조정함). 브랜치는 `headBranch`로 읽어 분리된 HEAD와 git 실패를 가린다(실패면 알리지 않음). 메인 쪽 변경은 승인 화면과 정리 요약이 같은 함수(`WorkRunner.mainChanges`)로 읽고, git이 따옴표로 감싼 경로는 풀어서 서브모듈 자리와 견준다 | 다시 켜도 같은 사실은 git에서 다시 읽힌다 | |
+| I148 | 에이전트의 메인 worktree 접근은 `LaunchInput`·`ResumeInput`·`SideArgsInput`의 `extraDirs`(`--add-dir`, Claude와 Codex 모두)다. 가짜 claude는 이미 `--add-dir`를 여럿 받는다. 새 옵션이 아니라 계약과 녹화본은 그대로다 | |
+| I149 | 새 Work 대화상자는 연 프로젝트가 서브모듈 프로젝트면 그 서브모듈을 대상으로 골라 둔다. 대상을 처음 고르면 `prepareSubmodule`가 만든 `ProjectView`를 돌려줘 스냅샷의 프로젝트 목록보다 먼저 와도 기준 브랜치를 채운다. 사이드바는 `parent`가 없는 프로젝트만 맨 위에 두고 서브모듈 프로젝트를 그 안에 같은 모양(`projectGroup`)으로 둔다 | |
 
 ## 3. 확인한 사실
 
@@ -329,6 +333,7 @@ app/src/
 - 설계 v0.17의 설계 유형은 M20이다. M18과 같은 차례로 나눠 커밋하고 core와 스킬은 한 커밋이다(I113).
 - 설계 v0.18의 곁 세션은 M21이다. core → main → 화면 → 시험 차례로 나눠 커밋한다.
 - 설계 v0.19의 기본 세션은 M23이다. core → main → 화면 → 시험·문서 차례로 나눠 커밋한다.
+- 설계 v0.20의 서브모듈 Work는 M24다.
 - 설계 v0.13의 일반 유형은 M18이다. M15와 같은 차례로 나눠 커밋하되 core와 스킬은 한 커밋이다(I94). M17과 I69~I84는 지식 관리에 쓴 번호라 건너뛴다.
 - 완료 기준 앞의 꼬리표는 확인 방법이다: [단위], [어댑터], [흐름], [스모크], [실제], [실기]. 뜻은 8.1을 따른다. [실제]와 [실기]의 결과는 `docs/checks.md`에 기록한다(I30).
 
@@ -356,6 +361,7 @@ app/src/
 | M20 | 설계 유형 | 새 Work에서 설계를 고르면 `intake → spec(설계 문답) → verify`, 레포의 설계 문서를 문답으로 정해 PR로 리뷰(D350~D374) | M19 |
 | M21 | 곁 세션 | Work마다 언제든 열고 닫는 Claude Code 세션. 첫 프롬프트 없이 안내를 시스템 프롬프트로 주고, 묻고 나서만 바꾼다(D385~D390) | M20 |
 | M23 | 기본 세션 | 프로젝트나 Work에 매이지 않는 세션 여러 개. 맨 CLI처럼, relay 도우미, 새 Work 구상. 에이전트가 쓴 Work 초안을 카드로 보이고 새 Work 대화상자로 잇는다(D397~D406) | M21 |
+| M24 | 서브모듈 Work | Work의 대상으로 서브모듈 하나를 고르면 그 서브모듈 레포만 다루고 전달한다. 메인 레포의 통합 검증 worktree 안에서 일하고, 사용자 체크아웃이 깨지지 않게 막고 되돌린다(D413~D417) | M5 |
 
 ### M0. 골격과 배포
 
@@ -1192,6 +1198,36 @@ app/src/
 
 - [단위], [어댑터], [흐름], [스모크] 위 시험. 기존 시험이 그대로 통과한다.
 - [계약] 가짜 쪽 통과.
+
+### M24. 서브모듈 Work (D413~D417)
+
+설계 v0.20. 서브모듈이 있는 레포에서 Work의 대상으로 서브모듈 하나를 고르면 그 서브모듈 레포만 다루고, 메인 레포의 통합 검증 worktree 안에서 일한다.
+
+**1. core와 어댑터**
+
+- `core/submodule`(I146): 서브모듈 프로젝트의 기본 브랜치, 에이전트 세션의 git 설정 보호(환경 변수 설정 뒤에 붙임), 메인 쪽 변경 거르기.
+- `adapters/git`: 서브모듈 목록과 받기, 분리된 HEAD worktree, `core.worktree` 되돌리기(I147).
+- `core/context`의 "서브모듈 Work" 절, `core/review`의 강조 영역 `submodule_guard`·`main_changes`, `core/cleanup`의 메인 통합 검증 worktree(확인과 expect), `core/settings`·`adapters/codex`의 `extraDirs`(I148).
+
+**2. main**
+
+- `project.json`의 `parent`, `work.json`의 `integration`. `Relay`: 대상 목록과 고르기, 통합 검증 Work 만들기(메인 worktree 먼저, 실패하면 지움), 서브모듈 프로젝트가 있으면 메인 [등록 해제] 막기.
+- `WorkRunner`: 에이전트 환경(task, 곁 세션, 정리 세션), `--add-dir`, 턴 끝·승인 화면·정리·앱 시작의 `core.worktree` 되돌리기, 정리 순서(서브모듈 worktree 뒤 메인 worktree).
+
+**3. 화면**
+
+- 새 Work 대화상자의 대상, "메인 레포에서 통합 검증", 메인 기준 브랜치(I149). 사이드바의 서브모듈 프로젝트. 정리 창은 확인 문구로 메인 쪽 변경을 보인다.
+
+**4. 시험과 문서**
+
+- **[단위]:** `core/submodule`, 정리 요약의 메인 쪽 변경, 강조 영역, `context.md` 절, `--add-dir`.
+- **[어댑터] `submodule-work.test.ts`:** 목록과 받기, 통합 검증 worktree 안의 서브모듈 worktree, 보호 없는 `git submodule update`가 사용자 체크아웃을 깨는 것과 되돌리기, 환경 변수 보호와 막지 못하는 `--checkout`, 지우는 순서.
+- **[흐름] `submodule.test.ts`:** 고르면 받고 프로젝트를 만든다, 통합 검증 Work에서 서브모듈 레포로만 push, 메인 쪽 변경 알림과 정리, 등록 해제 순서, 턴 끝의 되돌리기와 알림, 통합 검증을 끈 Work.
+- **문서:** `docs/submodules.md`, README의 서브모듈 절.
+
+**완료 기준**
+
+- [단위], [어댑터], [흐름] 위 시험. 기존 시험이 그대로 통과한다. [계약] 가짜 쪽 통과.
 
 ## 8. 테스트 전략
 

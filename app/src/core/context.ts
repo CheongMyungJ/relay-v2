@@ -240,6 +240,18 @@ export interface ContextInput {
   knowledge?: KnowledgeInput | null
   /** worktree의 서브모듈 경로 (D383). 없으면 서브모듈 절이 없다 */
   submodules?: readonly string[]
+  /** 서브모듈 Work (D413, D414). 메인 레포의 Work면 없다 */
+  target?: SubmoduleTarget | null
+}
+
+/** 서브모듈 Work의 대상과 메인 통합 검증 worktree (D413, D414) */
+export interface SubmoduleTarget {
+  /** 메인 레포의 폴더 이름 */
+  main: string
+  /** 메인 레포 안의 서브모듈 경로 */
+  path: string
+  /** 메인 통합 검증 worktree. 만들지 않았으면 null */
+  integration: { root: string; baseBranch: string; baseCommit: string } | null
 }
 
 export interface CarriedCode {
@@ -404,6 +416,43 @@ function submoduleSection(paths: readonly string[]): [string, string] {
         '서브모듈이 없어 건너뛴 테스트를 통과로 보지 않는다.',
         '서브모듈 안의 파일은 고치지 않는다. 앱은 서브모듈 안의 변경을 커밋하거나 전달하지 않는다. 서브모듈을 고쳐야 하면 사람에게 알린다. 요청이 서브모듈이 가리키는 커밋을 바꾸라고 하면 서브모듈에서 그 커밋을 체크아웃하고 이 레포에서 커밋한다.',
         '기준 브랜치를 병합하거나 커밋을 받아 서브모듈이 가리키는 커밋이 바뀌면 `git submodule update --recursive`로 맞춘다. 맞추지 않은 채 커밋하면 서브모듈이 옛 커밋으로 되돌아간다.',
+      ]),
+    ].join('\n'),
+  ]
+}
+
+/**
+ * 서브모듈 Work 절 (D413, D414, D415). 이 Work는 서브모듈 레포만 전달한다. 메인 통합 검증 worktree가 있으면 그 안에서
+ * 메인 레포와 함께 빌드·테스트하되 메인 레포는 고치거나 커밋하지 않고, 이 서브모듈을 git submodule update로 되돌리지 않게
+ * 한다(앱이 환경 변수로 막지만 --checkout 같은 명시 옵션은 막지 못한다)
+ */
+function targetSection(t: SubmoduleTarget): [string, string] {
+  const g = t.integration
+  const where = `이 Work는 메인 레포 \`${t.main}\`의 서브모듈 \`${t.path}\`의 레포만 다룬다. 지금 폴더는 서브모듈 레포의 worktree이고, 작업 브랜치·커밋·전달(push, PR)은 모두 서브모듈 레포 기준이다.`
+  if (!g) {
+    return [
+      '서브모듈 Work',
+      [
+        where,
+        '',
+        list([
+          '메인 레포의 통합 검증 worktree는 만들지 않았다. 서브모듈 레포만으로 빌드하고 테스트한다.',
+          '메인 레포와 함께 빌드해야만 확인할 수 있는 것은 통과로 보지 않고, 확인하지 못했다고 handoff에 적는다.',
+          '메인 레포도 고쳐야 하면(서브모듈이 가리키는 커밋 맞추기 포함) 고치지 말고 사람에게 알린다. 메인 레포는 메인 프로젝트의 Work가 다룬다.',
+        ]),
+      ].join('\n'),
+    ]
+  }
+  return [
+    '서브모듈 Work',
+    [
+      where,
+      '',
+      list([
+        `메인 레포의 통합 검증 worktree: \`${g.root}\`. 메인 기준 브랜치 \`${g.baseBranch}\`의 커밋 \`${g.baseCommit}\`에 분리된 HEAD로 고정했고, 그 안의 \`${t.path}\`가 지금 폴더다. 메인 레포와 함께 빌드하고 테스트할 때는 그 폴더에서 돌린다.`,
+        '메인 레포의 파일은 고치지 않고, 메인 worktree에서 커밋하지 않는다. 앱은 메인 쪽 변경을 전달하지 않고 [Work 정리] 때 지운다. 검증에 꼭 필요해 고쳤으면 무엇을 왜 고쳤는지 handoff에 적는다.',
+        `메인 worktree에서 다른 서브모듈이 필요하면 \`git submodule update --init --recursive\`로 받는다. 앱이 \`${t.path}\`는 건너뛰게 해 두었다. \`--checkout\` 같은 옵션으로 \`${t.path}\`를 갱신하지 않는다: 작업 브랜치에서 벗어나고 사용자 체크아웃의 서브모듈이 깨진다.`,
+        '메인 레포도 고쳐야 하면(서브모듈이 가리키는 커밋 맞추기 포함) 사람에게 알린다. 메인 레포는 메인 프로젝트의 Work가 다룬다.',
       ]),
     ].join('\n'),
   ]
@@ -701,6 +750,7 @@ export function buildContext(input: ContextInput): string {
     ['마무리 안내 문구', closingMessage(task.node, input.delivery, taskEngine(task))],
     ['질문 방식', questionLine(config, work.settings, task.node)],
     ...(input.knowledge ? [knowledgeSection(task.node, input.knowledge)] : []),
+    ...(input.target ? [targetSection(input.target)] : []),
     ...(input.submodules?.length ? [submoduleSection(input.submodules)] : []),
     ['선택 가능한 다음 단계', list(nextSteps(type, task.node))],
     [

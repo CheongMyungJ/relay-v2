@@ -119,6 +119,7 @@ function cleanInput(v: unknown): CleanInput {
     remote: flag(x['remote']),
     lost: x['lost'] === undefined ? [] : texts(x['lost']),
     submodules: x['submodules'] === undefined ? [] : texts(x['submodules']),
+    ...(x['integration'] === undefined ? {} : { integration: texts(x['integration']) }),
   }
   return {
     deleteBranch: flag(o['deleteBranch']),
@@ -207,6 +208,12 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   ipcMain.handle(IPC.branches, async (_e, projectId: unknown) =>
     (await ready).branches(text(projectId)),
   )
+  ipcMain.handle(IPC.submodules, async (_e, projectId: unknown) =>
+    (await ready).submodules(text(projectId)),
+  )
+  ipcMain.handle(IPC.prepareSubmodule, async (_e, projectId: unknown, sub: unknown) =>
+    (await ready).prepareSubmodule(text(projectId), text(sub)),
+  )
 
   ipcMain.handle(IPC.createWork, async (_e, projectId: unknown, input: NewWorkInput) =>
     (await ready).createWork(text(projectId), {
@@ -218,6 +225,15 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
       // 기존 이슈 번호 (D338). 정수인지는 Relay.createWork가 본다
       ...(typeof input.issueNumber === 'number' ? { issueNumber: input.issueNumber } : {}),
       ...(input.draft === undefined ? {} : { draft: draftRef(input.draft) }),
+      // 메인 통합 검증 worktree (D414). 서브모듈 프로젝트인지는 Relay.createWork가 본다
+      ...(input.integration && typeof input.integration === 'object'
+        ? {
+            integration: {
+              baseBranch: text(input.integration.baseBranch),
+              baseLocation: input.integration.baseLocation === 'remote' ? 'remote' : 'local',
+            },
+          }
+        : {}),
     }),
   )
   ipcMain.handle(
