@@ -17,7 +17,9 @@ export interface GitOptions {
 
 function gitEnv(env: NodeJS.ProcessEnv | undefined): NodeJS.ProcessEnv {
   // 앱에는 터미널이 없으므로 자격 증명을 터미널에서 묻지 않는다. 창으로 묻는 도우미는 그대로 쓴다.
-  return { ...(env ?? process.env), GIT_TERMINAL_PROMPT: '0' }
+  // 앱의 git status는 읽기만 한다: index를 고쳐 쓰려고 index.lock을 잡지 않게 한다(GIT_OPTIONAL_LOCKS). 잡으면 같은
+  // worktree의 다른 git 작업이 실패하고, [Work 정리]의 요약과 [정리]가 다른 잠금 파일을 본다
+  return { ...(env ?? process.env), GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0' }
 }
 
 /** git을 실행하고 표준 출력을 돌려준다. 끝의 줄바꿈 하나만 뗀다. 실패하면 GitError */

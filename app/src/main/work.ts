@@ -3607,10 +3607,14 @@ export class WorkRunner {
     const files = await this.files.taskFiles(task)
     const check = await this.checkOf(task, files)
     // 끝난 task는 그 task가 끝났을 때의 코드까지 본다. 작업 트리는 지금 코드의 마지막 task만 본다.
-    // 정리한 Work는 worktree가 없어 메인 체크아웃에서 커밋끼리 비교한다 (시나리오 8)
+    // 정리한 Work는 worktree가 없어 메인 체크아웃에서 커밋끼리 비교한다 (시나리오 8). 정리 중에도 그렇다: 이 읽기는
+    // 처리 줄 밖이라 지우는 worktree 안에서 git을 띄우면 Windows에서 git worktree remove가 실패한다
     const range = changeRange(this.work, task.id)
     const latest = range?.to === null
-    const cwd = this.work.status === 'archived' ? this.project.repo_path : this.worktree
+    const cwd =
+      this.work.status === 'archived' || this.work.operation?.kind === 'clean'
+        ? this.project.repo_path
+        : this.worktree
     const uncommitted = latest ? await statusLines(this.worktree, { env }).catch(() => []) : []
     // 서브모듈 안의 변경은 커밋 안 된 변경에 들지 않고 전달되지 않아 따로 알린다 (D384)
     const submodules = latest ? await dirtySubmodules(this.worktree, { env }).catch(() => []) : []

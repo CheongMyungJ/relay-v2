@@ -22,6 +22,7 @@ import {
 import type { Handoff, NodeName } from '../../src/shared/contracts'
 import type {
   AutoHoldReason,
+  CleanOperation,
   FormatIssue,
   StepSelection,
   TaskRecord,
@@ -491,6 +492,26 @@ describe('[변경]의 범위 (D83: 이 task의 diff)', () => {
     // worktree가 없어 HEAD를 몰랐으면 빈 범위다
     const unknown: WorkState = { ...archived, cleaned: { ...cleaned, head: null } }
     expect(changeRange(unknown, 't-03')).toEqual({ from: 'b', to: 'b' })
+  })
+
+  it('정리 중인 Work는 지우는 worktree를 읽지 않게 마지막 task도 정리를 시작할 때의 HEAD까지다 (시나리오 8)', () => {
+    const operation: CleanOperation = {
+      kind: 'clean',
+      stage: 'worktree',
+      started_at: 'x',
+      force: false,
+      delete_branches: [],
+      head: 'h',
+    }
+    const cleaning: WorkState = {
+      ...withTasks(task(1, 'intake', { start_commit: 'a' }), task(2, 'fix', { start_commit: 'b' })),
+      status: 'abandoned',
+      operation,
+    }
+    expect(changeRange(cleaning, 't-01')).toEqual({ from: 'a', to: 'b' })
+    expect(changeRange(cleaning, 't-02')).toEqual({ from: 'b', to: 'h' })
+    const unknown: WorkState = { ...cleaning, operation: { ...operation, head: null } }
+    expect(changeRange(unknown, 't-02')).toEqual({ from: 'b', to: 'b' })
   })
 })
 
