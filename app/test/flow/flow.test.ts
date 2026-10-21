@@ -302,17 +302,17 @@ describe('[흐름] 최소 흐름 (M2)', () => {
       expect(read(path.join(task(dir), 'context.md'))).toContain(`- skill: ${skill}`)
     }
 
-    // 선택 가능한 다음 단계 (3.2): intake의 기본 다음 단계는 fix로 정해져 있다
+    // 다음 단계는 늘 파이프라인의 다음이라 고를 목록이 없다 (3.2, D418, D422). 다시 하기로 하면 쓸 Work 초안 폴더와
+    // 그 초안의 project를 적는다 (D421)
     const ctx = (dir: string) => read(path.join(task(dir), 'context.md'))
-    expect(ctx('01-intake')).toContain(
-      '- 기본 다음 단계: fix (원인 분석과 수정)\n- 이전 단계: 없음',
-    )
-    expect(ctx('02-fix')).toContain(
-      '- 기본 다음 단계: verify (리뷰와 검증)\n- 이전 단계: intake (의도 정리)',
-    )
-    expect(ctx('03-verify')).toContain(
-      '- 기본 다음 단계: Work 완료\n- 이전 단계: intake (의도 정리), fix (원인 분석과 수정)',
-    )
+    for (const dir of ['01-intake', '02-fix', '03-verify']) {
+      expect(ctx(dir)).not.toContain('선택 가능한 다음 단계')
+      expect(ctx(dir)).toContain(`- 프로젝트 id: ${s.workKey.split('/')[0] ?? ''}`)
+      expect(ctx(dir)).toContain(
+        `- Work 초안 폴더: ${path.join(s.workDir, 'work-drafts')} (근본부터 다시 하기로 사람과 정했을 때 새 Work의 초안을 쓰는 곳, D420)`,
+      )
+    }
+    expect(fs.existsSync(path.join(s.workDir, 'work-drafts'))).toBe(true)
 
     // 권한 확인 끈 모드가 아니면 머리 띠에 경고한다 (D94). task는 계속한다
     expect(w.tasks.every((t) => t.permission_mode === 'auto')).toBe(true)
@@ -456,16 +456,15 @@ describe('[흐름] 최소 흐름 (M2)', () => {
     expect(decisions).toContain('- [사람] 지적 1 반영 — 사람이 질문에서 고름')
     expect(decisions).toContain('- [사람] 지적 2 반영 안 함 — 사람이 고르지 않음')
 
-    // verify의 context.md: 스킬, 마무리 안내 문구, 승인 방식, 이전 단계, fix의 산출물 (5.6.6, 시나리오 2-4)
+    // verify의 context.md: 스킬, 마무리 안내 문구, 승인 방식, fix의 산출물 (5.6.6, 시나리오 2-4)
     const task = (dir: string) => path.join(s.workDir, 'tasks', dir)
     const verifyCtx = read(path.join(task('03-verify'), 'context.md'))
     expect(verifyCtx).toContain('- skill: verify')
     expect(verifyCtx).toContain(
-      '산출물과 handoff를 썼습니다. 오른쪽 패널에서 확인하고 [완료만], [push], [PR 생성] 중 하나를 누르세요. [이 단계 끝나면 멈춤]이 켜져 있거나 이전 단계를 추천했으면 [승인하고 멈춤]을 누르고, 전달은 멈춘 뒤 Work 완료 화면에서 고르세요. 고칠 점은 여기에 말해 주세요.',
+      '산출물과 handoff를 썼습니다. 오른쪽 패널에서 확인하고 [완료만], [push], [PR 생성] 중 하나를 누르세요. [이 단계 끝나면 멈춤]이 켜져 있으면 [승인하고 멈춤]을 누르고, 전달은 멈춘 뒤 Work 완료 화면에서 고르세요. 고칠 점은 여기에 말해 주세요.',
     )
     expect(verifyCtx).not.toContain('반영할 지적은 번호로')
     expect(verifyCtx).toContain('수동 승인 (의도 승인, Work 완료는 늘 수동)')
-    expect(verifyCtx).toContain('- 이전 단계: intake (의도 정리), fix (원인 분석과 수정)')
     // 재현 절차가 적힌 fix.md를 받는다. 리뷰는 재현 절차가 쓰는 코드를 지킨다 (D195)
     expect(verifyCtx).toContain(`- t-02 fix: ${path.join(task('02-fix'), 'fix.md')}`)
     // 배포한 스킬 (D103)
@@ -679,41 +678,29 @@ describe('[흐름] 최소 흐름 (M2)', () => {
     expect(idle.bounces).toBe(1)
   })
 
-  it('verify가 이전 단계를 추천하면 승인 뒤 멈추고 알린다 (D23)', async () => {
+  it('D418 전 형식의 recommended_next가 handoff에 있어도 경고 없이 무시하고 다음 단계로 간다 (D422, D424)', async () => {
+    const old = handoff().replace(
+      'knowledge_candidates: []',
+      'recommended_next:\n  node: fix\n  reason: "완료조건 2 실패"\nknowledge_candidates: []',
+    )
     const back = steps('verify').map((st) =>
-      st.do === 'write' && st.file === 'handoff.md'
-        ? { ...st, text: handoff({ recommended_next: { node: 'fix', reason: '완료조건 2 실패' } }) }
-        : st,
+      st.do === 'write' && st.file === 'handoff.md' ? { ...st, text: old } : st,
     )
     const s = await start(scenario({ verify: back }))
-    const result = await drive(s.h.relay, s.h.ui, s.workKey)
+    const paused = await drive(s.h.relay, s.h.ui, s.workKey, {
+      pauseAt: (t) => t.node === 'verify' && t.status === 'awaiting_approval',
+    })
+    expect(paused, s.h.ui.dump()).toMatchObject({ status: 'paused' })
     await settle(s.h, s.workKey)
-    expect(result, s.h.ui.dump()).toMatchObject({
-      status: 'stopped',
-      reason: '이전 단계 추천으로 멈춤: 원인 분석과 수정(fix)로 — 완료조건 2 실패',
-    })
+    const review = await s.h.relay.review(s.workKey, 't-03')
+    expect(review?.errors).toEqual([])
+    expect(review?.warnings).toEqual([])
+    expect(review?.emphasis.map((e) => e.kind)).not.toContain('recommended_back')
+    const result = await drive(s.h.relay, s.h.ui, s.workKey)
+    expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed' })
     const w = work(s.workDir)
-    expect(w).toMatchObject({
-      status: 'stopped',
-      stop: { kind: 'recommended_back', task_id: 't-03', node: 'fix', reason: '완료조건 2 실패' },
-    })
+    expect(w.stop).toBeUndefined()
     expect(w.tasks).toHaveLength(3)
-    // 멈추면 알린다 (D23, D81). 앞의 알림은 task마다의 승인 대기다
-    expect(s.h.ui.notices.at(-1)).toEqual({
-      workKey: s.workKey,
-      title: expect.stringContaining('빈 배열의 평균이 NaN') as string,
-      body: '이전 단계 추천으로 멈춤: 원인 분석과 수정(fix)로 — 완료조건 2 실패',
-    })
-    expect(s.h.ui.notices.map((n) => n.body)).toEqual([
-      '01 의도 정리: 승인 대기',
-      '02 원인 분석과 수정: 승인 대기',
-      '03 리뷰와 검증: 승인 대기',
-      '이전 단계 추천으로 멈춤: 원인 분석과 수정(fix)로 — 완료조건 2 실패',
-    ])
-    expect(events(s.workDir).map((e) => e.type)).not.toContain('work.completed')
-    expect(read(path.join(s.workDir, 'decisions.md'))).toContain('## t-03 verify — ')
-    // 새 task를 시작하지 않았고 세션도 남지 않았다
-    expect(s.h.ui.works.get(s.workKey)?.tasks.every((t) => !t.live)).toBe(true)
   })
 
   it('handoff 없이 세션이 끝나면 세션 종료로 남는다 (시나리오 3)', async () => {

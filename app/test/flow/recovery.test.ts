@@ -1,6 +1,6 @@
 // [흐름] 재시작과 복구 (docs/implementation.md M6, 시나리오 9, D76, D91, D121~D126, I33).
 // 앱이 도중에 꺼진 모습은 그때 앱이 썼을 work.json과 git 상태로 만든다: work.json은 core의 전이로 만들고(앱이
-// 명령을 받아 쓴 것), git은 끊긴 곳까지 한 일(백업, push, stash, 반쯤 지운 worktree)을 손으로 한다. 다시 켜면
+// 명령을 받아 쓴 것), git은 끊긴 곳까지 한 일(push, stash, 반쯤 지운 worktree)을 손으로 한다. 다시 켜면
 // 무엇이 어디서 끊겼는지 패널에 알리고, [다시 시도]와 [무시]가 각각 끝까지 간다. 앱이 충돌한 뒤 살아남은 claude의
 // 자리는 분리해 띄운 프로세스 트리다: 기록과 시작 시각이 같으면 트리째 끝내고 알리며, 다르면 건드리지 않는다.
 // 앱 밖에서 바뀐 앱 소유 파일과 work.json은 알린다. 잘린 pty.log는 경고 없이 남은 만큼 보인다.
@@ -8,7 +8,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createBackup, stashAll } from '../../src/adapters/git'
+import { stashAll } from '../../src/adapters/git'
 import {
   isAlive,
   killOrphans,
@@ -24,7 +24,6 @@ import { stashMessage } from '../../src/core/delivery'
 import { transition, type MachineEvent } from '../../src/core/machine'
 import { localIso } from '../../src/core/records'
 import { CUT_ERROR, OPERATION_BLOCKS } from '../../src/core/recovery'
-import { backupMessage } from '../../src/core/rewind'
 import { checkTask, type TaskCheck } from '../../src/core/validate'
 import { DEFAULT_CONFIG } from '../../src/shared/config'
 import type { CleanInput, WorkView } from '../../src/shared/views'
@@ -40,7 +39,7 @@ import {
   writeFiles,
   type Harness,
 } from '../support/harness'
-import { REPO_FILES, REQUEST, handoff, scenario, steps, type Scenario } from '../support/scenarios'
+import { REPO_FILES, REQUEST, scenario, type Scenario } from '../support/scenarios'
 
 let h: Harness | undefined
 /** 시험이 띄운 자식 프로세스와, 그 트리의 ID와 시작 시각. 시험이 실패해도 남기지 않는다 */
@@ -143,22 +142,6 @@ async function toVerify(s: Setup): Promise<void> {
   await settle(s.h, s.key)
 }
 
-/** verify가 fix를 추천해 멈추는 기본 경로 (D23). 되감기 시험이 여기서 시작한다 */
-function recommendFix(): Scenario {
-  const recommending = steps('verify').map((st) =>
-    st.do === 'write' && st.file === 'handoff.md'
-      ? { ...st, text: handoff({ recommended_next: { node: 'fix', reason: '완료조건 2 실패' } }) }
-      : st,
-  )
-  return { tasks: { ...scenario().tasks, 't-03': recommending } }
-}
-
-async function toStopped(s: Setup): Promise<void> {
-  const r = await drive(s.h.relay, s.h.ui, s.key)
-  expect(r, s.h.ui.dump()).toMatchObject({ status: 'stopped' })
-  await settle(s.h, s.key)
-}
-
 // ---------- 충돌 흉내 ----------
 
 const at = () => localIso(new Date())
@@ -212,29 +195,6 @@ async function checkOf(w: WorkPaths, work: WorkState, taskId: string): Promise<T
     config: DEFAULT_CONFIG,
     formatVersion: task.format_version,
   })
-}
-
-/** [단계 선택]의 [확인]으로 fix로 되감는 명령을 받은 work.json (D77의 backup 단계) */
-async function rewindStarted(
-  s: Setup,
-  b: Before,
-): Promise<{ rewinding: WorkState; op: RewindOperation & { backup_branch: string } }> {
-  const p = await s.h.relay.stepPreview(s.key, 'fix', false)
-  if (!p.ok) throw new Error(p.error)
-  const rewinding = step(b.work, {
-    type: 'selectStep',
-    at: at(),
-    node: 'fix',
-    keepCode: false,
-    instruction: '빈 배열 검사를 다시 보세요',
-    expect: p.preview.expect,
-    backups: [],
-  })
-  const op = rewinding.operation
-  if (op?.kind !== 'rewind' || op.stage !== 'backup' || !op.backup_branch) {
-    throw new Error('되감기 기록이 없음')
-  }
-  return { rewinding, op: { ...op, backup_branch: op.backup_branch } }
 }
 
 /** [Work 정리]의 [정리]를 받은 work.json (D77의 worktree 단계) */
@@ -421,205 +381,72 @@ describe('[흐름] 고아 프로세스와 정리 세션 (M6, 시나리오 9-1, D
   })
 })
 
-describe('[흐름] 끊긴 되감기 (M6, 시나리오 9-4, D116, D121~D123)', () => {
-  it('백업 브랜치를 만든 뒤 끊긴 되감기를 알린다. 기록이 있는 동안 다른 명령은 받지 않고, [다시 시도]는 만든 백업을 쓰고 되돌려 끝까지 간다', async () => {
-    const s = await setup(recommendFix())
-    await toStopped(s)
-    // 사람이 worktree를 고친 채 fix로 되감는다. 커밋 안 된 변경도 백업에 들어간다 (D116)
-    writeFiles(s.tree, { 'src/avg.js': '// 사람이 고침\n', 'notes.txt': '메모\n' })
+describe('[흐름] D418 전에 끊긴 되감기 (시나리오 9-4, D122, D424)', () => {
+  it('알리고 [무시]만 받는다. [다시 시도]는 받지 않고, [무시]는 기록만 지워 코드와 task를 그대로 둔다', async () => {
+    const s = await setup(scenario())
+    await toVerify(s)
+    writeFiles(s.tree, { 'notes.txt': '메모\n' })
     const head = git(s.tree, 'rev-parse', 'HEAD')
     const b = await before(s.h, s)
-    const { rewinding, op } = await rewindStarted(s, b)
-    // 앱은 백업 브랜치를 만들고 기록하기 전에 꺼졌다
-    const backup = await createBackup(s.tree, op.backup_branch, {
-      uncommitted: true,
-      message: backupMessage(s.workId),
-    })
-    await crash(s.h, [{ w: s, work: rewinding, events: b.events }])
+    // D418 전의 앱이 [단계 선택]으로 fix로 되감다가 백업 브랜치를 만들기 전에 꺼졌다
+    const op: RewindOperation = {
+      kind: 'rewind',
+      stage: 'backup',
+      started_at: at(),
+      node: 'fix',
+      from_task: 't-03',
+      instruction: null,
+      discard: ['t-02', 't-03'],
+      reset_to: b.work.tasks[1]?.start_commit ?? '',
+      backup_branch: `${s.branch}-discarded-1`,
+      backup_commit: null,
+    }
+    await crash(s.h, [{ w: s, work: { ...b.work, operation: op }, events: b.events }])
 
     const v = view(s.h, s)
     expect(v.badge).toEqual({ kind: 'recovery', label: '끊긴 작업', hot: true })
     expect(v.operation).toMatchObject({
       kind: 'rewind',
       title: '되감기가 끊겼습니다',
+      retry: null,
       choice: null,
     })
     expect(v.operation?.lines).toEqual([
       '고른 단계: 원인 분석과 수정(fix)',
       '끊긴 곳: 백업 브랜치를 만드는 단계',
-      `만들려던 백업 브랜치: ${op.backup_branch}`,
+      `만들려던 백업 브랜치: ${op.backup_branch ?? ''}`,
       '코드는 아직 되돌리지 않았습니다.',
       `되돌릴 커밋: ${op.reset_to.slice(0, 8)}`,
       '폐기할 task: 02 원인 분석과 수정, 03 리뷰와 검증',
+      '지금 앱에는 되감기가 없어 이어서 하지 않습니다 (D418). 코드를 확인하고 [무시]를 누르세요.',
     ])
     expect(Object.values(v.actions).some(Boolean)).toBe(false)
     expect(s.h.ui.notices).toEqual([])
-    // 기록이 있는 동안은 [다시 시도], [무시], Work 설정만 받는다 (D122)
-    expect(await s.h.relay.resumeWork(s.key)).toEqual({ ok: false, error: OPERATION_BLOCKS })
+    // 기록이 있는 동안은 [무시]와 Work 설정만 받는다 (D122)
+    expect(await s.h.relay.approve(s.key, 't-03', {})).toEqual({
+      ok: false,
+      error: OPERATION_BLOCKS,
+    })
     expect(await s.h.relay.abandon(s.key)).toEqual({ ok: false, error: OPERATION_BLOCKS })
-    expect(
-      await s.h.relay.selectStep(s.key, {
-        node: 'intake',
-        keepCode: false,
-        instruction: '',
-        expect: { taskId: 't-03', done: true },
-      }),
-    ).toEqual({ ok: false, error: OPERATION_BLOCKS })
     expect(await s.h.relay.updateWorkSettings(s.key, { question_mode: {} })).toEqual({ ok: true })
-
-    expect(await s.h.relay.retryOperation(s.key)).toEqual({ ok: true })
-    await settle(s.h, s.key)
-    // 만든 백업이 지금 코드와 같아 다시 만들지 않았다. 코드를 되돌린 뒤 새 task가 시작했다(새 task는 곧 커밋하므로
-    // worktree 대신 새 task의 시작 커밋과 지운 파일로 본다)
-    expect(backups(s)).toEqual([op.backup_branch])
-    expect(git(s.repo, 'show', `${op.backup_branch}:notes.txt`)).toBe('메모')
-    expect(fs.existsSync(path.join(s.tree, 'notes.txt'))).toBe(false)
-    const w = workOf(s)
-    expect(w.tasks[3]?.start_commit).toBe(op.reset_to)
-    expect(w.operation).toBeUndefined()
-    expect(w.tasks.map((t) => [t.id, t.status])).toEqual([
-      ['t-01', 'approved'],
-      ['t-02', 'discarded'],
-      ['t-03', 'discarded'],
-      ['t-04', expect.any(String)],
-    ])
-    expect(w.tasks[3]).toMatchObject({
-      node: 'fix',
-      reason: 'rewind',
-      selection: {
-        instruction: '빈 배열 검사를 다시 보세요',
-        reset: {
-          from: head,
-          to: op.reset_to,
-          backup_branch: op.backup_branch,
-          backup_commit: backup,
-        },
-      },
-    })
-    const rewound = eventsOf(s).find((e) => e.type === 'task.rewound')
-    expect(rewound?.payload).toMatchObject({
-      reset_to: op.reset_to,
-      backup_branch: op.backup_branch,
-    })
-    expect(rewound?.payload).not.toHaveProperty('extra_backup_branch')
-    expect(view(s.h, s).operation).toBeNull()
-
-    const done = await drive(s.h.relay, s.h.ui, s.key)
-    expect(done, s.h.ui.dump()).toMatchObject({ status: 'completed' })
-  })
-
-  it('되돌리다 끊긴 뒤 사람이 코드를 고쳤으면 [다시 시도]는 다음 번호로 한 번 더 백업하고 되돌린다', async () => {
-    const s = await setup(recommendFix())
-    await toStopped(s)
-    writeFiles(s.tree, { 'src/avg.js': '// 사람이 고침\n', 'notes.txt': '메모\n' })
-    const head = git(s.tree, 'rev-parse', 'HEAD')
-    const b = await before(s.h, s)
-    const { rewinding, op } = await rewindStarted(s, b)
-    const backup = await createBackup(s.tree, op.backup_branch, {
-      uncommitted: true,
-      message: backupMessage(s.workId),
-    })
-    // 백업을 기록한 뒤 되돌리다 꺼졌다: reset --hard는 했고 추적하지 않는 파일은 남았다
-    const resetting = step(rewinding, {
-      type: 'rewind.backedUp',
-      at: at(),
-      branch: op.backup_branch,
-      commit: backup,
-      head,
-    })
-    git(s.tree, 'reset', '-q', '--hard', op.reset_to)
-    await crash(s.h, [{ w: s, work: resetting, events: b.events }])
-    expect(view(s.h, s).operation?.lines).toEqual(
-      expect.arrayContaining([
-        '끊긴 곳: 코드를 되돌리는 단계',
-        `백업 브랜치: ${op.backup_branch} (${backup.slice(0, 8)})`,
-        '코드는 되돌렸을 수도 있습니다.',
-      ]),
-    )
-    // 다시 켠 뒤 사람이 또 고쳤다
-    writeFiles(s.tree, { 'later.txt': '다시 켠 뒤\n' })
-
-    expect(await s.h.relay.retryOperation(s.key)).toEqual({ ok: true })
-    await settle(s.h, s.key)
-    const extra = `${s.branch}-discarded-2`
-    expect(backups(s)).toEqual([op.backup_branch, extra])
-    expect(git(s.repo, 'show', `${extra}:later.txt`)).toBe('다시 켠 뒤')
-    expect(git(s.repo, 'show', `${extra}:notes.txt`)).toBe('메모')
-    expect(fs.existsSync(path.join(s.tree, 'notes.txt'))).toBe(false)
-    expect(fs.existsSync(path.join(s.tree, 'later.txt'))).toBe(false)
-    expect(workOf(s).tasks.at(-1)?.start_commit).toBe(op.reset_to)
-    // 폐기한 task의 [변경]이 볼 백업은 처음 백업이다. 덤으로 남긴 백업은 이벤트에 남긴다
-    expect(workOf(s).tasks.at(-1)?.selection?.reset).toEqual({
-      from: head,
-      to: op.reset_to,
-      backup_branch: op.backup_branch,
-      backup_commit: backup,
-    })
-    expect(eventsOf(s).find((e) => e.type === 'task.rewound')?.payload).toMatchObject({
-      backup_branch: op.backup_branch,
-      extra_backup_branch: extra,
-    })
-    const done = await drive(s.h.relay, s.h.ui, s.key)
-    expect(done, s.h.ui.dump()).toMatchObject({ status: 'completed' })
-  })
-
-  it('끊긴 되감기의 [다시 시도]는 worktree가 Work 브랜치에 있지 않으면 하지 않고 끊긴 채로 둔다 (D138)', async () => {
-    const s = await setup(recommendFix())
-    await toStopped(s)
-    const head = git(s.tree, 'rev-parse', 'HEAD')
-    const b = await before(s.h, s)
-    const { rewinding } = await rewindStarted(s, b)
-    await crash(s.h, [{ w: s, work: rewinding, events: b.events }])
-    git(s.tree, 'checkout', '--quiet', '--detach')
-
     expect(await s.h.relay.retryOperation(s.key)).toEqual({
       ok: false,
-      error: `되감기 실패: worktree가 Work 브랜치에 있지 않음(지금: 분리된 HEAD). worktree에서 \`git switch ${s.branch}\`로 돌아온 뒤 다시 누르세요`,
+      error: '끊긴 되감기는 이어서 할 수 없음: [무시]를 누르세요 (D424)',
     })
     await settle(s.h, s.key)
     expect(workOf(s).operation?.interrupted_at).toBeDefined()
-    expect(view(s.h, s).badge.kind).toBe('recovery')
-    expect(backups(s)).toEqual([])
-    expect(git(s.tree, 'rev-parse', 'HEAD')).toBe(head)
-
-    git(s.tree, 'switch', '--quiet', s.branch)
-    expect(await s.h.relay.retryOperation(s.key)).toEqual({ ok: true })
-    await settle(s.h, s.key)
-    expect(workOf(s).operation).toBeUndefined()
-  })
-
-  it('[무시]는 기록만 지운다. 코드와 task는 그대로이고, 다시 단계를 골라 끝까지 간다', async () => {
-    const s = await setup(recommendFix())
-    await toStopped(s)
-    writeFiles(s.tree, { 'notes.txt': '메모\n' })
-    const head = git(s.tree, 'rev-parse', 'HEAD')
-    const b = await before(s.h, s)
-    const { rewinding } = await rewindStarted(s, b)
-    await crash(s.h, [{ w: s, work: rewinding, events: b.events }])
 
     expect(await s.h.relay.ignoreOperation(s.key)).toEqual({ ok: true })
     await settle(s.h, s.key)
     const w = workOf(s)
     expect(w.operation).toBeUndefined()
-    expect(w.status).toBe('stopped')
-    expect(w.tasks).toEqual(b.work.tasks)
+    expect(w.tasks.map((t) => [t.id, t.status])).toEqual(b.work.tasks.map((t) => [t.id, t.status]))
     expect(backups(s)).toEqual([])
     expect(git(s.tree, 'rev-parse', 'HEAD')).toBe(head)
     expect(git(s.tree, 'status', '--porcelain')).toBe('?? notes.txt')
     expect(view(s.h, s).operation).toBeNull()
-    expect(view(s.h, s).actions.selectStep).toBe(true)
-
-    const p = await s.h.relay.stepPreview(s.key, 'fix', false)
-    if (!p.ok) throw new Error(p.error)
-    expect(
-      await s.h.relay.selectStep(s.key, {
-        node: 'fix',
-        keepCode: false,
-        instruction: '',
-        expect: p.preview.expect,
-      }),
-    ).toEqual({ ok: true })
-    expect(backups(s)).toEqual([`${s.branch}-discarded-1`])
+    expect(eventsOf(s).map((e) => e.type)).not.toContain('task.rewound')
+    // 하던 verify를 승인해 끝까지 간다
     const done = await drive(s.h.relay, s.h.ui, s.key)
     expect(done, s.h.ui.dump()).toMatchObject({ status: 'completed' })
   })

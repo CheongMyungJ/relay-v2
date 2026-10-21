@@ -20,7 +20,7 @@ export interface DriveOptions {
   tick?: (task: TaskView) => unknown
   /**
    * 사람이 할 일이 생긴 task가 이것을 만족하면 손대지 않고 paused로 돌아온다.
-   * 승인 대기에서 단계 선택을 하는 시험(M4)이 쓴다
+   * 승인 대기에서 사람이 직접 무언가를 하는 시험(전달, 정리 등)이 쓴다
    */
   pauseAt?: (task: TaskView) => boolean
   /** [승인]을 누르기 바로 전에 부른다. 승인하는 때의 코드(HEAD)를 남기는 데 쓴다 ([실제] 리뷰 판정) */

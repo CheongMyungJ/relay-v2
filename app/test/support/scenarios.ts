@@ -120,12 +120,13 @@ export function intentDraft(opts: { omit?: string[]; note?: string } = {}) {
 
 const q = (s: string) => JSON.stringify(s)
 
-/** handoff.md. 템플릿(_common.md)의 필드를 모두 쓴다 */
-export function handoff(h: Partial<Handoff> & { summary?: string; omit?: string[] } = {}): string {
+/** handoff.md. 템플릿(_common.md)의 필드를 모두 쓴다. D418 전 형식의 recommended_next는 쓰지 않는다 (D422) */
+export function handoff(
+  h: Partial<Omit<Handoff, 'recommended_next'>> & { summary?: string; omit?: string[] } = {},
+): string {
   const decisions = h.decisions ?? []
   const list = (items: readonly string[] | undefined) =>
     items && items.length ? `\n${items.map((i) => `  - ${q(i)}`).join('\n')}` : ' []'
-  const rec = h.recommended_next
   const header = [
     '---',
     `status: ${h.status ?? 'awaiting_approval'}`,
@@ -144,7 +145,6 @@ export function handoff(h: Partial<Handoff> & { summary?: string; omit?: string[
         : ' null'
     }`,
     `risks:${list(h.risks)}`,
-    `recommended_next:${rec ? `\n  node: ${rec.node}\n  reason: ${q(rec.reason)}` : ' null'}`,
     'knowledge_candidates: []',
     '---',
   ]

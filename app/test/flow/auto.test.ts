@@ -768,7 +768,7 @@ describe('[흐름] 자동 승인 (M7)', () => {
     ])
   })
 
-  it('확인 창으로 앱을 끄거나 [단계 선택]이 git에서 실패해도, 카운트다운을 멈춘 까닭은 끝낸 까닭대로 남는다 (D130, D145)', async () => {
+  it('확인 창으로 앱을 끄면 카운트다운을 멈춘 까닭은 끝낸 까닭대로 남는다 (D130, D145)', async () => {
     const s = await setup(
       {
         ...scenario({
@@ -825,35 +825,6 @@ describe('[흐름] 자동 승인 (M7)', () => {
     )
     expect(s.h.ui.notices).toEqual([])
 
-    // [세션 재개] 뒤 턴이 끝나 다시 카운트다운하는 중에 코드를 되돌리는 [단계 선택]을 고르고, git이 실패한다
-    expect(await s.h.relay.resume(key, t.id)).toEqual({ ok: true })
-    await untilTask(s, key, (x) => x.live, '재개')
-    s.h.relay.terminalWrite(`${key}/${t.id}`, '\r')
-    await untilTask(s, key, (x) => x.countdown !== null, '다시 카운트다운')
-    await settle(s.h, key)
-    const tree = s.tree(key)
-    const lock = path.resolve(tree, git(tree, 'rev-parse', '--git-path', 'index.lock'))
-    fs.writeFileSync(lock, '')
-    const p = await s.h.relay.stepPreview(key, 'fix', false)
-    if (!p.ok) throw new Error(`미리 보기 실패: ${p.error}`)
-    expect(p.preview.code.kind).toBe('reset')
-    const r = await s.h.relay.selectStep(key, {
-      node: 'fix',
-      keepCode: false,
-      instruction: '',
-      expect: p.preview.expect,
-    })
-    expect(!r.ok && r.error).toMatch(/^되감기 실패: /)
-    await settle(s.h, key)
-    fs.rmSync(lock)
-    expect(work(dir).tasks[1]).toMatchObject({
-      status: 'awaiting_approval',
-      session: { alive: false },
-      auto_hold: { reasons: ['step'] },
-    })
-    expect(await hold()).toBe(
-      '자동 승인하지 않음: [단계 선택]을 누름. 다음 턴이 끝날 때 다시 판정합니다.',
-    )
     // 사람이 한 일이라 알리지 않는다
     expect(noticesOf(s, key).filter((n) => n.includes('자동 승인하지 않음'))).toEqual([])
   })

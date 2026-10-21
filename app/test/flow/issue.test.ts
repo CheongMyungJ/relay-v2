@@ -1,6 +1,6 @@
 // [흐름] 이슈 기록 (docs/implementation.md M19, 설계 3.7, D336~D349, I96~I101).
 // 의도 승인 때 가짜 gh로 이슈를 만들고, 승인된 task마다 코멘트를 덧붙이고, [PR 생성]의 본문 끝에 Closes를 붙인다.
-// 되감기는 코멘트 하나로 알리고, Work가 끝나면 끝 코멘트를 단 뒤 닫는다(기존 이슈는 닫지 않음). 게시가 실패해도 흐름은
+// Work가 끝나면 끝 코멘트를 단 뒤 닫는다(기존 이슈는 닫지 않음). 다시 하는 Work는 원래 Work의 이슈를 이어 쓴다(D421). 게시가 실패해도 흐름은
 // 막히지 않고 [다시 시도]와 앱을 다시 켤 때 앞부터 순서대로 올라가며, 결과를 모르는 게시는 표시로 찾아 두 번 올리지 않는다.
 import fs from 'node:fs'
 import path from 'node:path'
@@ -308,29 +308,65 @@ describe('[흐름] 이슈 기록 (M19, 설계 3.7)', () => {
     expect(work(s).issue).toMatchObject({ linked: true, number: 7, url: `${ISSUE_URL}/7` })
   })
 
-  it('되감기로 올린 task를 폐기하면 코멘트 하나로 알린다 (D341)', async () => {
+  it('다시 하는 Work는 원래 Work의 이슈를 이어 쓴다: 새 이슈 없이 intent부터 코멘트로 달고, 원래 Work는 끝 코멘트만 달고 닫지 않는다 (D421)', async () => {
     const s = await setup(scenario())
     await toVerify(s)
-    const p = await s.h.relay.stepPreview(s.key, 'fix', false)
-    if (!p.ok) throw new Error(p.error)
-    expect(
-      await s.h.relay.selectStep(s.key, {
-        node: 'fix',
-        keepCode: false,
-        instruction: '경계값도 확인한다',
-        expect: p.preview.expect,
-      }),
-    ).toEqual({ ok: true })
+    const original = work(s).issue?.number ?? 0
+    expect(original).toBeGreaterThan(0)
+    // 곁 세션이 다시 할 Work의 초안을 쓴다
+    const projectId = s.key.split('/')[0] ?? ''
+    fs.writeFileSync(
+      path.join(s.dir, 'work-drafts', 'redo.md'),
+      `---\nproject: ${projectId}\ntype: bugfix\n---\n${REQUEST}\n\n원인을 다시 찾는다.\n`,
+    )
+    const draft = await s.h.ui.until(() => s.h.ui.works.get(s.key)?.drafts[0], '초안 카드')
+    const r = await s.h.relay.createWork(projectId, {
+      request: draft.request,
+      type: 'bugfix',
+      baseBranch: 'main',
+      baseLocation: 'local',
+      issueNumber: original,
+      draft: draft.ref,
+      abandonOriginal: true,
+    })
+    if (!r.ok) throw new Error(r.error)
+    const newId = r.workKey.split('/')[1] ?? ''
     await published(s)
-    const comments = issues(s).issues[0]?.comments ?? []
-    expect(comments.map((c) => c.body.split('\n')[0])).toEqual([
+    const t: Setup = {
+      h: s.h,
+      key: r.workKey,
+      dir: path.join(s.h.home, 'projects', projectId, 'works', newId),
+      workId: newId,
+    }
+    const intake = await drive(t.h.relay, t.h.ui, t.key, {
+      pauseAt: (x) => x.node === 'fix',
+    })
+    expect(intake, t.h.ui.dump()).toMatchObject({ status: 'paused' })
+    await published(t)
+
+    // 이슈는 하나뿐이고 열려 있다. 원래 Work는 끝 코멘트만 달고 닫지 않았다
+    expect(gh(t, 'issue create')).toHaveLength(1)
+    expect(gh(t, 'issue close')).toEqual([])
+    const all = issues(t).issues
+    expect(all).toHaveLength(1)
+    expect(all[0]).toMatchObject({ number: original, state: 'open' })
+    const heads = all[0]?.comments.map((c) => c.body.split('\n')[0])
+    expect(heads).toEqual([
       '### t-01 의도 정리 · 승인(사람)',
       '### t-02 원인 분석과 수정 · 승인(사람)',
-      '### 되감기: t-02 원인 분석과 수정, t-03 리뷰와 검증 폐기',
+      `Work 포기: ${newId}로 다시 시작`,
+      '### t-01 의도 정리 · 승인(사람)',
     ])
-    expect(comments[2]?.body).toContain('t-04 원인 분석과 수정부터 다시 한다.')
-    expect(comments[2]?.body).toContain('**추가 지시**\n\n경계값도 확인한다')
-    expect(comments[2]?.body).toContain(marker(s, 'rewind-t-04'))
+    // 이어 쓰는 이슈라 새 Work의 intake 코멘트는 intent를 펼친다 (D339, D421)
+    expect(all[0]?.comments[3]?.body).toContain('**intent v1**\n\n## 목표')
+    expect(work(t)).toMatchObject({
+      from_work: s.workId,
+      issue: { linked: false, number: original, from_work: s.workId },
+    })
+    expect(work(s).issue?.closed).toBeUndefined()
+    expect(events(s).find((e) => e.type === 'work.abandoned')?.payload).toEqual({
+      redo_by: newId,
+    })
   })
 
   it('게시가 실패해도 흐름은 막히지 않고, [다시 시도]와 앱을 다시 켤 때 앞부터 순서대로 올린다 (D344, I98)', async () => {
