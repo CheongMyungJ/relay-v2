@@ -537,7 +537,10 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await expect(done).toContainText('Work 완료 (전달: push)', { timeout: 60_000 })
   await expect(done).toContainText('비교 URL이 없습니다')
   // 작업 브랜치와 기준 뒤 커밋, worktree (D225)
-  await expect(done.locator('.branch-line')).toContainText(/작업 브랜치 relay\/w-\d{8}-\d{3}: 기준/)
+  // 작업 브랜치 끝에는 임의의 4자가 붙는다 (D427)
+  await expect(done.locator('.branch-line')).toContainText(
+    /작업 브랜치 relay\/w-\d{8}-\d{3}-[a-z0-9]{4}: 기준/,
+  )
   await expect(done.locator('.branch-line')).toContainText('worktree:')
   const badge2 = win.locator('.work-item.selected .badge')
   await expect(badge2).toHaveText('완료')
@@ -545,8 +548,8 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
     (await win.locator('.action-bar .info').textContent()) ?? '',
   )?.[0]
   expect(workId2).toBeTruthy()
-  expect(git(remote, 'branch', '--list', `relay/${workId2 ?? ''}`)).toContain(
-    `relay/${workId2 ?? ''}`,
+  expect(git(remote, 'branch', '--list', `relay/${workId2 ?? ''}-*`)).toMatch(
+    new RegExp(`relay/${workId2 ?? ''}-[a-z0-9]{4}`),
   )
   await win.screenshot({ path: 'test-results/delivered.png' })
 

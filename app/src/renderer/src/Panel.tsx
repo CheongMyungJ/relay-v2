@@ -974,7 +974,7 @@ function DoneNotice({ work, branch }: { work: WorkView; branch: BranchInfo | nul
 
 /**
  * 작업 브랜치와 기준 뒤 커밋, 마지막 커밋, worktree (D225): 끝났을 때 어디에 무엇이 남았는지 보인다.
- * 예: "작업 브랜치 relay/w-20260930-001: 기준(main 3943005e) 뒤 커밋 2개, 마지막 1a2b3c4d fix: 빈 배열의 평균은 0"
+ * 예: "작업 브랜치 relay/w-20260930-001-k7q2: 기준(main 3943005e) 뒤 커밋 2개, 마지막 1a2b3c4d fix: 빈 배열의 평균은 0"
  */
 function BranchLine({ work, branch }: { work: WorkView; branch: BranchInfo }) {
   const base = `${work.baseBranch} ${work.baseCommit.slice(0, 8)}`
@@ -993,6 +993,52 @@ function BranchLine({ work, branch }: { work: WorkView; branch: BranchInfo }) {
           worktree: <code>{branch.worktree}</code>
         </div>
       ) : null}
+    </div>
+  )
+}
+
+/**
+ * 머지 대상 (D428): [PR 생성]이 PR을 보낼 브랜치. 새 Work 대화상자에서 고른 것을 전달 전에 바꿀 수 있다. 앞 Work의 작업
+ * 브랜치에 쌓다가 한 번에 기본 브랜치로 보낼 때 고른다
+ */
+function MergeTarget({ work, disabled }: { work: WorkView; disabled: boolean }) {
+  const [branches, setBranches] = useState<string[]>([])
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    let current = true
+    void window.relay.branches(work.projectId).then((list) => {
+      if (current) setBranches(list)
+    })
+    return () => {
+      current = false
+    }
+  }, [work.projectId])
+  const choose = async (branch: string) => {
+    setError(null)
+    const r = await call(() => window.relay.setTarget(work.key, branch))
+    if (!r.ok) setError(r.error)
+  }
+  // 작업 브랜치 자신은 머지 대상이 아니다
+  const list = branches.filter((b) => b !== work.branch)
+  const shown = list.includes(work.targetBranch) ? list : [work.targetBranch, ...list]
+  return (
+    <div className="dim">
+      <label>
+        [PR 생성]의 머지 대상{' '}
+        <select
+          aria-label="머지 대상"
+          value={work.targetBranch}
+          disabled={disabled || !work.canSetTarget}
+          onChange={(e) => void choose(e.target.value)}
+        >
+          {shown.map((b) => (
+            <option key={b} value={b}>
+              {b === work.baseBranch ? `${b} (기준 브랜치)` : b}
+            </option>
+          ))}
+        </select>
+      </label>
+      {error ? <span className="error"> {error}</span> : null}
     </div>
   )
 }
@@ -1271,6 +1317,7 @@ function CompletionActions({
         ) : null}
         {busy ? <span className="dim">{busy}: 하는 중…</span> : null}
       </footer>
+      <MergeTarget work={work} disabled={!!busy || open} />
       {blocked.length ? (
         <div className="dim">
           {blocked.map((k) => (

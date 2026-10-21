@@ -74,7 +74,7 @@ export interface CleanFacts {
   /** 이 앱에서 살아 있는 세션 */
   live: number
   /**
-   * 작업 브랜치(relay/<work-id>)와, 그 커밋이 origin의 같은 이름 브랜치나 기준 브랜치에 있는지. lost는 PR을 머지한
+   * 작업 브랜치(D425)와, 그 커밋이 origin의 같은 이름 브랜치나 머지 대상 브랜치(D428)에 있는지. lost는 PR을 머지한
    * Work에서 머지한 PR head에 없는 이 브랜치의 커밋이다(D329). 머지한 Work가 아니거나 그 head를 로컬에서 찾지
    * 못하면 null
    */

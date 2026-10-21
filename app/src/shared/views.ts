@@ -62,7 +62,7 @@ export interface StageLead {
 
 /** 작업 브랜치의 커밋 (D225). Work 완료 화면과 완료 알림에 보인다 */
 export interface BranchInfo {
-  /** 작업 브랜치: relay/<work-id> */
+  /** 작업 브랜치 (D425) */
   name: string
   /** 기준 커밋 뒤의 커밋 수 */
   ahead: number
@@ -492,6 +492,8 @@ export interface ProjectView {
   mergeMethod: MergeMethod | null
   /** 이슈 기록이 켜져 있다 (D337) */
   issueLog: boolean
+  /** 작업 브랜치 이름 규칙 (D426). 설정하지 않았으면 기본 규칙이다 */
+  branchRule: string
   /** 서브모듈 프로젝트의 메인 프로젝트 id와 그 안의 경로 (D413). 메인 프로젝트면 null */
   parent: { id: string; path: string } | null
 }
@@ -616,6 +618,12 @@ export interface WorkView {
   settings: WorkSettings
   baseBranch: string
   baseCommit: string
+  /** 작업 브랜치 (D425) */
+  branch: string
+  /** 머지 대상 브랜치 (D428). 고르지 않았으면 기준 브랜치다 */
+  targetBranch: string
+  /** 머지 대상을 바꿀 수 있다: PR을 만들기 전의 진행 중이거나 멈춘 Work다 */
+  canSetTarget: boolean
   /** 메인 통합 검증 worktree (D414): 메인 레포의 기준 브랜치, 고정한 커밋, 그 폴더. 없으면 null */
   integration: { baseBranch: string; baseCommit: string; root: string } | null
   intent: ApprovedIntent | null
@@ -907,6 +915,15 @@ export interface NewWorkInput {
   baseBranch: string
   /** 원격이면 git fetch 뒤 origin/<브랜치>에서 분기한다 */
   baseLocation: 'local' | 'remote'
+  /**
+   * 사람이 고친 작업 브랜치 이름 (D425). 앱이 끝에 임의의 4자를 붙인다(D427). 없거나 비었으면 프로젝트의 규칙으로
+   * 만든다(D426)
+   */
+  branchName?: string | null
+  /** 규칙의 {slug}에 넣을 짧은 이름 (D426). 비면 그 자리와 바로 앞 구분자를 뺀다 */
+  slug?: string
+  /** 머지 대상 브랜치 (D428): PR의 base다. 없으면 기준 브랜치다 */
+  targetBranch?: string
   /** Work별 설정 (D72): 단계별 자동 승인과 스킬별 질문 방식. 없는 것은 앱 설정을 따른다 */
   settings?: WorkSettings
   /** 요청이 온 기존 이슈의 번호 (D338). 이슈 기록이 켜진 프로젝트에서만 쓴다. 없으면 새 이슈를 만든다 */

@@ -9,7 +9,16 @@ import { sha256 } from '../../src/adapters/store'
 import { BOUNCE_HEAD, parseFrontMatter } from '../../src/core/validate'
 import type { LifecycleEvent, WorkState } from '../../src/shared/work'
 import { drive } from '../support/driver'
-import { git, harness, makeRepo, register, settle, sleep, type Harness } from '../support/harness'
+import {
+  git,
+  harness,
+  makeRepo,
+  register,
+  settle,
+  sleep,
+  workBranchOf,
+  type Harness,
+} from '../support/harness'
 import {
   FIXED_FILES,
   FIX_CAUSE,
@@ -176,7 +185,12 @@ describe('[흐름] 최소 흐름 (M2)', () => {
       expect(e.ts).toMatch(ISO)
       expect(e.work_id).toBe(s.workId)
     }
-    expect(ev[0]?.payload).toEqual({ type: 'bugfix', base_branch: 'main', base_commit: base })
+    expect(ev[0]?.payload).toEqual({
+      type: 'bugfix',
+      base_branch: 'main',
+      base_commit: base,
+      branch: workBranchOf(s.workId),
+    })
     expect(ev.at(-1)?.payload).toEqual({ delivery: 'none' })
     expect(ev[5]?.payload).toEqual({ by: 'human' })
     for (const t of w.tasks) {
@@ -397,7 +411,7 @@ describe('[흐름] 최소 흐름 (M2)', () => {
     const worktree = path.join(s.h.home, 'projects', s.projectId, 'worktrees', s.workId)
     const head = git(worktree, 'rev-parse', 'HEAD')
     const branch = {
-      name: `relay/${s.workId}`,
+      name: workBranchOf(s.workId),
       ahead: 1,
       last: { sha: head.slice(0, 8), subject: 'fix: 빈 배열의 평균은 0' },
       worktree,

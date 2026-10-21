@@ -356,7 +356,7 @@ export interface DeliverOperation extends OperationBase {
   task_id: string
   /** 커밋 안 된 변경을 어떻게 하는가. 없었으면 null */
   uncommitted: UncommittedAction | null
-  /** push할 브랜치(relay/<work-id>)와 PR 대상 브랜치(기준 브랜치) */
+  /** push할 브랜치(작업 브랜치, D425)와 PR 대상 브랜치(머지 대상, D428) */
   branch: string
   base: string
   /** 커밋 안 된 변경을 처리하며 만든 stash나 커밋 (7-5). prepare 단계를 마치고 push로 옮길 때 적는다 */
@@ -619,6 +619,13 @@ export interface WorkState {
   /** 기준 브랜치와 기준 커밋 (시나리오 1, D97) */
   base_branch: string
   base_commit: string
+  /**
+   * 작업 브랜치 (D425). 프로젝트의 브랜치 규칙(D426)이나 사람이 고친 이름 끝에 임의의 4자를 붙인 것이다(D427). 이것을
+   * 적기 전에 만든 Work면 없고 relay/<work-id>로 읽는다. 읽는 쪽은 core/records의 workBranch를 쓴다
+   */
+  branch?: string
+  /** 머지 대상 브랜치 (D428): PR의 base다. 없으면 기준 브랜치다. 읽는 쪽은 core/records의 targetBranch를 쓴다 */
+  target_branch?: string
   /**
    * 메인 통합 검증 worktree (D414). 서브모듈 Work에서 함께 만들었으면 있다: 메인 레포의 기준 브랜치와 고정한 커밋이다.
    * 이 Work의 worktree는 그 안의 서브모듈 자리에 있다

@@ -35,6 +35,11 @@ export interface ProjectState {
   /** 이슈 기록 (설계 3.7, D337, D345). 없으면 켜짐이다. 바꾸면 다음에 만드는 Work부터 따른다 (I96) */
   issue_log?: boolean
   /**
+   * 작업 브랜치 이름 규칙 (D426). 자리는 {work-id}, {date}, {seq}, {type}, {slug}다. 없으면 relay/{work-id}다. 앱이 끝에 임의의
+   * 4자를 붙인다 (D427). 바꾸면 다음에 만드는 Work부터 따른다
+   */
+  branch_rule?: string
+  /**
    * 서브모듈 프로젝트 (D413): 메인 프로젝트의 서브모듈 하나를 대상으로 한 프로젝트다. repo_path는 메인 체크아웃의 그
    * 서브모듈 폴더다. 새 Work 대화상자에서 서브모듈을 처음 고를 때 앱이 만든다. 메인 프로젝트면 없다
    */
@@ -56,6 +61,8 @@ export interface ProjectSettings {
   merge_method: MergeMethod | null
   /** 이슈 기록 (D337). 없으면 바꾸지 않는다 */
   issue_log?: boolean
+  /** 작업 브랜치 이름 규칙 (D426). 없으면 바꾸지 않는다. 빈 문자열이면 지운다(기본 규칙) */
+  branch_rule?: string
 }
 
 /** 이슈 기록이 켜져 있는가 (D337): 없으면 켜짐이다 */

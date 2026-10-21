@@ -27,6 +27,7 @@ import {
   register,
   settle,
   sleep,
+  workBranchOf,
 } from '../support/harness'
 import { scenario, type Scenario } from '../support/scenarios'
 import { S_CASE } from './repos'
@@ -142,7 +143,7 @@ async function run(): Promise<Result> {
     if (!created.ok) throw new Error(`Work 생성 실패: ${created.error}`)
     const key = created.workKey
     const workId = key.split('/')[1] ?? ''
-    const branch = `relay/${workId}`
+    const branch = workBranchOf(workId)
     workDir = path.join(h.home, 'projects', projectId, 'works', workId)
     const tree = path.join(h.home, 'projects', projectId, 'worktrees', workId)
     const load = () =>

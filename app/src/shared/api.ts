@@ -30,7 +30,7 @@ import type {
   TerminalChunk,
   WorkView,
 } from './views'
-import type { DeliveryChoice } from './work'
+import type { DeliveryChoice, WorkType } from './work'
 import type { HumanAnswers } from './questions'
 import type { DraftRef } from './session'
 
@@ -100,6 +100,11 @@ export interface RelayApi {
   removeProject(projectId: string): Promise<CommandResult>
   /** 기준 브랜치 목록. 프로젝트의 기본 브랜치가 맨 앞이다 */
   branches(projectId: string): Promise<string[]>
+  /**
+   * 새 Work 대화상자의 작업 브랜치 이름 (D426): 프로젝트의 규칙에 다음 work-id와 유형, 짧은 이름을 채운 것이다. 끝의 임의의
+   * 4자는 넣지 않는다(만들 때 붙인다, D427)
+   */
+  branchName(projectId: string, type: WorkType, slug: string): Promise<string>
   /** 새 Work 대화상자의 대상 목록: 메인 프로젝트의 서브모듈 (D413) */
   submodules(projectId: string): Promise<SubmoduleView[]>
   /** 서브모듈을 대상으로 고른다: 서브모듈 프로젝트를 만들거나 다시 점검한다 (D413) */
@@ -131,6 +136,8 @@ export interface RelayApi {
   resume(workKey: string, taskId: string): Promise<CommandResult>
   /** [이 단계 끝나면 멈춤]을 켜거나 끈다 (시나리오 3-4) */
   stopAfter(workKey: string, on: boolean): Promise<CommandResult>
+  /** 머지 대상 브랜치를 바꾼다 (D428). PR을 만들기 전에만 받는다 */
+  setTarget(workKey: string, branch: string): Promise<CommandResult>
   /** [아카이브로 옮기기]: 보관된 Work를 사이드바의 공통 아카이브로 옮긴다 */
   shelve(workKey: string): Promise<CommandResult>
   /** 멈춘 Work의 [재개] (3.3) */
@@ -243,6 +250,7 @@ export const IPC = {
   removeProject: 'project:remove',
   projectRemovePreview: 'project:remove-preview',
   branches: 'project:branches',
+  branchName: 'project:branch-name',
   submodules: 'project:submodules',
   prepareSubmodule: 'project:prepare-submodule',
   createWork: 'work:create',
@@ -254,6 +262,7 @@ export const IPC = {
   interrupt: 'work:interrupt',
   resume: 'work:resume',
   stopAfter: 'work:stop-after',
+  setTarget: 'work:set-target',
   shelve: 'work:shelve',
   resumeWork: 'work:resume-work',
   abandon: 'work:abandon',

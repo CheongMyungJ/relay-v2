@@ -191,6 +191,7 @@ import {
   decisionsBlock,
   decisionsWithout,
   offWorkBranch,
+  targetBranch,
   workBranch,
 } from '../core/records'
 import {
@@ -1513,7 +1514,7 @@ export class WorkRunner {
   private async integrationFacts(taskId: string): Promise<IntegrationFacts | null> {
     const parent = this.project.parent
     if (this.integrationRoot === null || !parent) return null
-    const workBranchName = workBranch(this.work.work_id)
+    const workBranchName = workBranch(this.work)
     const [mainChanges, branch] = await Promise.all([
       this.mainChanges(),
       headBranch(this.worktree, { env: this.ctx.env }).catch(() => workBranchName),
@@ -1658,7 +1659,7 @@ export class WorkRunner {
     }
     const opts = { env: this.ctx.env }
     const repo = this.project.repo_path
-    const branch = workBranch(this.work.work_id)
+    const branch = workBranch(this.work)
     return {
       round: r.round,
       ...(task.reason === 'auto_respond' ? { auto: true } : {}),
@@ -1666,7 +1667,7 @@ export class WorkRunner {
       pr: { number: pr.number, url: pr.url, head: pr.head },
       branch,
       remote: {
-        base: await refCommit(repo, `refs/remotes/origin/${this.work.base_branch}`, opts),
+        base: await refCommit(repo, `refs/remotes/origin/${targetBranch(this.work)}`, opts),
         branch: await refCommit(repo, `refs/remotes/origin/${branch}`, opts),
       },
       items,
@@ -2348,6 +2349,11 @@ export class WorkRunner {
     return this.enqueue(() => this.command({ type: 'stopAfter', at: this.ctx.at(), on }))
   }
 
+  /** 머지 대상 브랜치 (D428) */
+  setTarget(branch: string): Promise<CommandResult> {
+    return this.enqueue(() => this.command({ type: 'target.set', at: this.ctx.at(), branch }))
+  }
+
   /** [아카이브로 옮기기]: 보관된 Work를 사이드바의 공통 아카이브로 옮긴다 */
   shelve(): Promise<CommandResult> {
     return this.enqueue(() => this.command({ type: 'shelve', at: this.ctx.at() }))
@@ -2381,7 +2387,7 @@ export class WorkRunner {
   /** worktree가 Work 브랜치에 있지 않으면 그 오류 (D138) */
   private async offBranch(): Promise<string | null> {
     const current = await currentBranch(this.worktree, { env: this.ctx.env })
-    return offWorkBranch(this.work.work_id, current)
+    return offWorkBranch(workBranch(this.work), current)
   }
 
   // ---------- 전달 (시나리오 7) ----------
@@ -3034,13 +3040,14 @@ export class WorkRunner {
       .then((st) => st.isDirectory())
       .catch(() => false)
     if (worktree && (await this.halfRemoved())) throw new Error(halfRemovedHint(this.worktree))
-    const name = workBranch(this.work.work_id)
+    const name = workBranch(this.work)
     const head = await refCommit(repo, `refs/heads/${name}`, opts)
     const contains = async (ref: string) => {
       const tip = await refCommit(repo, ref, opts)
       return !!head && !!tip && (await isAncestor(repo, head, tip, opts))
     }
-    const base = this.work.base_branch
+    // PR이 머지되는 곳은 머지 대상이다 (D428)
+    const base = targetBranch(this.work)
     // 머지로 완료한 Work는 origin의 브랜치 삭제도 고를 수 있다 (D178). 원격에 닿지 못하면 고르지 못하게 둔다
     const merged = this.work.pr?.merged !== undefined
     let remote: CleanFacts['remote'] = null
@@ -3540,7 +3547,7 @@ export class WorkRunner {
   private async branchInfo(): Promise<BranchInfo | null> {
     const opts = { env: this.ctx.env }
     const repo = this.project.repo_path
-    const name = workBranch(this.work.work_id)
+    const name = workBranch(this.work)
     const head = await refCommit(repo, name, opts).catch(() => null)
     if (!head) return null
     const ahead = await countCommits(repo, this.work.base_commit, head, opts).catch(() => 0)
@@ -3902,7 +3909,7 @@ export class WorkRunner {
           env: this.ctx.env,
           repo: this.project.repo_path,
           worktree: this.worktree,
-          branch: workBranch(this.work.work_id),
+          branch: workBranch(this.work),
           location,
           runEvents: this.runEvents,
         },
@@ -4056,7 +4063,7 @@ export class WorkRunner {
   ): Promise<PrSynced> {
     const opts = { env: this.ctx.env }
     const repo = this.project.repo_path
-    const branch = workBranch(this.work.work_id)
+    const branch = workBranch(this.work)
     if ((await refCommit(repo, `refs/heads/${branch}`, opts)) !== local) {
       throw new Error('읽은 뒤 로컬 Work 브랜치가 바뀜')
     }
@@ -4073,7 +4080,7 @@ export class WorkRunner {
       local,
       remote,
       this.work.base_commit,
-      () => fetchTip(ctx, baseRef || this.work.base_branch),
+      () => fetchTip(ctx, baseRef || targetBranch(this.work)),
     )
     return { at, from: local, commits: received, ...(base ? { base_commit: base } : {}) }
   }
@@ -4378,8 +4385,8 @@ export class WorkRunner {
    */
   private async fetchForRound(): Promise<string | null> {
     const ctx = { repo: this.project.repo_path, env: this.ctx.env }
-    await fetchTip(ctx, this.work.base_branch)
-    return fetchTip(ctx, workBranch(this.work.work_id))
+    await fetchTip(ctx, targetBranch(this.work))
+    return fetchTip(ctx, workBranch(this.work))
   }
 
   /**
@@ -4439,7 +4446,7 @@ export class WorkRunner {
   private async syncForRespond(remote: string, at: string): Promise<PrSynced | null> {
     const opts = { env: this.ctx.env }
     const repo = this.project.repo_path
-    const branch = workBranch(this.work.work_id)
+    const branch = workBranch(this.work)
     const local = await refCommit(repo, `refs/heads/${branch}`, opts)
     if (!local || local === remote) return null
     const localInRemote = await isAncestor(repo, local, remote, opts)
@@ -4448,7 +4455,7 @@ export class WorkRunner {
     const onBranch = (await currentBranch(this.worktree, opts)) === branch
     const kind = syncKind({ local, remote, localInRemote, remoteInLocal: false, clean, onBranch })
     if (kind !== 'ff') return null
-    return this.fastForward(local, remote, this.work.base_branch, at)
+    return this.fastForward(local, remote, targetBranch(this.work), at)
   }
 
   // ---------- 자동 대응 (D154, D159, D171, D184, D210) ----------
@@ -4603,7 +4610,7 @@ export class WorkRunner {
     const opts = { env: this.ctx.env }
     const repo = this.project.repo_path
     const ctx = { repo, env: this.ctx.env }
-    const branch = workBranch(this.work.work_id)
+    const branch = workBranch(this.work)
     const off = await this.offBranch()
     if (off) throw new Error(off)
     const head = await headCommit(this.worktree, opts)
@@ -4647,7 +4654,7 @@ export class WorkRunner {
     const base = first
       ? (
           await receivedCommits(ctx, first, head, this.work.base_commit, () =>
-            fetchTip(ctx, this.work.base_branch),
+            fetchTip(ctx, targetBranch(this.work)),
           )
         ).base
       : null
@@ -5171,6 +5178,9 @@ export class WorkRunner {
       settings: w.settings,
       baseBranch: w.base_branch,
       baseCommit: w.base_commit,
+      branch: workBranch(w),
+      targetBranch: targetBranch(w),
+      canSetTarget: (w.status === 'active' || w.status === 'stopped') && !w.operation,
       integration:
         w.integration && this.integrationRoot
           ? {

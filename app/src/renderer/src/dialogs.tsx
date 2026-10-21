@@ -168,7 +168,8 @@ const METHOD_LABEL: Readonly<Record<MergeMethod, string>> = {
 }
 
 /**
- * 프로젝트 설정 (5.1.2, D185): 받을 봇(D161, 이름 모양은 D197)과 머지 창의 기본 방식(D177), 이슈 기록(D337). 사이드바의
+ * 프로젝트 설정 (5.1.2, D185): 받을 봇(D161, 이름 모양은 D197)과 머지 창의 기본 방식(D177), 이슈 기록(D337), 작업 브랜치
+ * 규칙(D426). 사이드바의
  * 프로젝트 이름으로 연다. 받을 봇을 바꾸면 PR 진행인 Work의 항목에 바로 다시 적용한다
  */
 export function ProjectSettingsDialog({
@@ -181,6 +182,7 @@ export function ProjectSettingsDialog({
   const [bots, setBots] = useState(project.allowedBots.join('\n'))
   const [method, setMethod] = useState<MergeMethod | null>(project.mergeMethod)
   const [issueLog, setIssueLog] = useState(project.issueLog)
+  const [branchRule, setBranchRule] = useState(project.branchRule)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -195,6 +197,7 @@ export function ProjectSettingsDialog({
           .filter(Boolean),
         merge_method: method,
         issue_log: issueLog,
+        branch_rule: branchRule,
       }),
     )
     setBusy(false)
@@ -251,6 +254,22 @@ export function ProjectSettingsDialog({
         의도를 승인하면 GitHub 이슈를 만들고 승인된 단계마다 코멘트를 덧붙입니다. 팀원이 PR을 리뷰할
         때 맥락을 봅니다. 공개 레포에서는 산출물이 그대로 공개됩니다. 바꾸면 다음에 만드는 Work부터
         따릅니다 (D336, D337).
+      </div>
+      <label className="form-row">
+        <span>작업 브랜치 규칙</span>
+        <input
+          aria-label="작업 브랜치 규칙"
+          value={branchRule}
+          placeholder="relay/{work-id}"
+          onChange={(e) => setBranchRule(e.target.value)}
+        />
+      </label>
+      <div className="dim">
+        새 Work의 작업 브랜치 이름입니다. 자리: {'{work-id}'}(w-20261021-001), {'{date}'}(20261021),
+        {' {seq}'}(001), {'{type}'}(fix, feat, refactor, spec, chore), {'{slug}'}(새 Work에서 적는
+        짧은 이름, 비우면 앞 구분자와 함께 빠짐). 예: {'{type}/{date}-{seq}-{slug}'}. 끝에는 앱이
+        임의의 영문·숫자 4자를 붙입니다. 비우면 relay/{'{work-id}'}입니다. 바꾸면 다음에 만드는
+        Work부터 따릅니다 (D426, D427).
       </div>
       <div className="dim">
         gh {project.ghVersion ?? '버전 모름'} · origin {project.origin ? '있음' : '없음'} · gh
@@ -441,6 +460,12 @@ export function NewWorkDialog({
   const [branches, setBranches] = useState<string[]>([project.defaultBranch])
   const [branch, setBranch] = useState(draft?.base ?? origin?.baseBranch ?? project.defaultBranch)
   const [location, setLocation] = useState<'local' | 'remote'>('local')
+  // 머지 대상 (D428). null이면 기준 브랜치를 따른다
+  const [mergeTarget, setMergeTarget] = useState<string | null>(null)
+  // 작업 브랜치 (D425, D426): 규칙으로 채운 이름. 사람이 고치면 edited에 두고 규칙으로 다시 채우지 않는다
+  const [slug, setSlug] = useState('')
+  const [ruleName, setRuleName] = useState('')
+  const [edited, setEdited] = useState<string | null>(null)
   // 다시 하기는 원래 Work를 포기하며 그 이슈를 이어 쓴다 (D421, I153). 포기하지 않으면 두 Work가 한 이슈를 쓰게 되어 채우지
   // 않는다. 번호를 바꾸면 그 이슈에 쓴다
   const originIssue =
@@ -485,12 +510,25 @@ export function NewWorkDialog({
     })
   }, [mainId])
 
+  // 규칙으로 채운 작업 브랜치 이름 (D426). 유형을 고르기 전에는 {type}을 모르므로 채우지 않는다
+  useEffect(() => {
+    if (!type) return
+    let current = true
+    void window.relay.branchName(target.id, type, slug).then((name) => {
+      if (current) setRuleName(name)
+    })
+    return () => {
+      current = false
+    }
+  }, [target.id, type, slug])
+
   // 대상을 바꾸면 기준 브랜치를 그 레포의 기본 브랜치로 되돌린다 (D413)
   const pickTarget = (next: ProjectView) => {
     if (next.id === target.id) return
     setTargetId(next.id)
     setBranches([next.defaultBranch])
     setBranch(next.defaultBranch)
+    setMergeTarget(null)
     if (!next.origin) setLocation('local')
     // 이슈 번호는 그 레포의 이슈다. 다른 레포로 옮기지 않는다
     setIssue('')
@@ -567,6 +605,9 @@ export function NewWorkDialog({
         type,
         baseBranch: branch,
         baseLocation: location,
+        ...(edited !== null ? { branchName: edited } : {}),
+        ...(hasSlug && slug.trim() ? { slug } : {}),
+        ...(mergeTarget !== null && mergeTarget !== branch ? { targetBranch: mergeTarget } : {}),
         ...(target.parent && integrate
           ? { integration: { baseBranch: mainBranch, baseLocation: mainLocation } }
           : {}),
@@ -583,6 +624,8 @@ export function NewWorkDialog({
   // 초안의 기준 브랜치가 목록에 없어도(지운 브랜치, 원격에만 있음) 고른 채로 보이고, 없으면 만들기가 알린다
   const branchList = branches.includes(branch) ? branches : [...branches, branch]
   const sub = target.parent ? target : null
+  const hasSlug = target.branchRule.includes('{slug}')
+  const shownTarget = mergeTarget ?? branch
 
   return (
     <Modal title={`새 Work · ${sub ? `${main.name}/${sub.name}` : main.name}`} onClose={onClose}>
@@ -738,6 +781,67 @@ export function NewWorkDialog({
             원격
           </label>
         </fieldset>
+      </div>
+      <div className="row branch-row">
+        <label
+          className="field grow"
+          title="프로젝트 설정의 브랜치 규칙으로 채웁니다. 고칠 수 있고, 끝에는 앱이 임의의 4자를 붙입니다 (D425~D427)"
+        >
+          작업 브랜치
+          <span className="branch-name">
+            <input
+              aria-label="작업 브랜치"
+              value={edited ?? ruleName}
+              placeholder={type ? target.branchRule : '유형을 고르면 규칙으로 채웁니다'}
+              onChange={(e) => setEdited(e.target.value.trim() ? e.target.value : null)}
+            />
+            <code className="dim">-xxxx</code>
+          </span>
+          <span className="dim">
+            끝의 -xxxx는 만들 때 붙이는 임의의 영문·숫자 4자입니다(다른 사람과 이름이 겹치지 않게).
+            {edited !== null ? (
+              <>
+                {' '}
+                <button className="link" onClick={() => setEdited(null)}>
+                  규칙으로 되돌리기
+                </button>
+              </>
+            ) : null}
+          </span>
+        </label>
+        {hasSlug ? (
+          <label className="field">
+            짧은 이름 (선택)
+            <input
+              aria-label="짧은 이름"
+              value={slug}
+              placeholder="login-timeout"
+              onChange={(e) => setSlug(e.target.value)}
+            />
+            <span className="dim">
+              브랜치 규칙의 {'{slug}'} 자리. 영문 소문자, 숫자, -만 씁니다
+            </span>
+          </label>
+        ) : null}
+        <label
+          className="field"
+          title="[PR 생성]이 PR을 보낼 브랜치입니다. 앞 Work의 작업 브랜치 위에 쌓을 때 고릅니다 (D428)"
+        >
+          머지 대상
+          <select
+            aria-label="머지 대상"
+            value={shownTarget}
+            onChange={(e) => setMergeTarget(e.target.value === branch ? null : e.target.value)}
+          >
+            {(branchList.includes(shownTarget) ? branchList : [...branchList, shownTarget]).map(
+              (b) => (
+                <option key={b} value={b}>
+                  {b === branch ? `${b} (기준 브랜치)` : b}
+                </option>
+              ),
+            )}
+          </select>
+        </label>
       </div>
       {target.issueLog ? (
         <label className="field">

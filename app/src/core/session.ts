@@ -60,7 +60,7 @@ function workLines(w: SessionGuideWork): string[] {
   const step = now ? `, 지금 단계 ${taskLabel(now)} (${TASK_STATUS_LABEL[now.status]})` : ''
   return [
     `- ${w.work.work_id} "${w.title || w.work.work_id}" — ${WORK_TYPE_LABEL[workType(w.work)]}, ${WORK_STATUS_LABEL[w.work.status]}${step}`,
-    `  - worktree: ${w.worktree} (브랜치 ${workBranch(w.work.work_id)})`,
+    `  - worktree: ${w.worktree} (브랜치 ${workBranch(w.work)})`,
     `  - Work 디렉터리: ${w.workDir}`,
   ]
 }

@@ -168,6 +168,8 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I152 | Work 초안의 출처에 `{ kind: 'work', id: <Work 키> }`를 더한다(D421). 초안 폴더의 감시·읽기·지우기는 `main/drafts`의 `DraftFolder` 하나로 기본 세션과 Work가 함께 쓴다(감시는 겹쳐 불러도 차례로 건다). Work는 초안을 쓰는 세션을 띄울 때(곁 세션을 열 때, task의 `context.md`를 쓸 때) 폴더를 만들고 감시를 걸며, 앱을 켤 때와 프로젝트 목록이 바뀔 때는 남은 초안만 읽는다. 보관된 Work는 폴더를 만들지 않는다. `WorkView.drafts`로 보낸다. `discardDraft`는 `DraftRef`를 받는다. `context.md`의 task 정보에 프로젝트 id와 Work 초안 폴더를, 곁 세션 안내에 초안 절을 넣는다 | 기본 세션의 초안(D404, I135)과 같은 읽기·카드·대화상자를 쓰고 만든 곳만 더한다. 초안의 `project`는 에이전트가 알아야 쓴다 | |
 | I153 | 다시 하기(D420, D421)는 `NewWorkInput.abandonOriginal`이다. `Relay.createWork`가 초안의 출처로 원래 Work를 찾아 새 Work의 `from_work`를 적는다. 포기를 고르면 먼저 포기할 수 있는지 본다(`redoAbandonBlock`: 진행 중이거나 멈춤, 끊긴 작업 없음, 정리 세션 닫힘). 그때만, 같은 프로젝트이고 원래 Work의 이슈가 아직 닫히지 않았고 이슈 번호 칸이 그 번호 그대로면 그 이슈를 이어 쓴다(`IssueRecord.from_work`, `linked`는 원래 것). 만든 뒤 초안을 지우고 원래 Work를 `abandon`(`redoBy`, 이어 썼으면 `issueKept`)한다. `work.abandoned`의 `redo_by`가 있으면 끝 코멘트가 "Work 포기: <새 work-id>로 다시 시작"이고, `issue_kept`면 이슈를 닫지 않는다. 그래도 포기하지 못하면 새 Work는 그대로 열고 원래 Work에 알린다. 대화상자는 포기를 켤 때만 이슈 번호를 채운다 | 사람이 칸을 바꾸면 그 이슈에 쓰는 것이 D338과 같다. 두 Work가 한 이슈를 쓰면 먼저 끝난 쪽이 닫는다. 새 Work를 먼저 만들어야 원래 Work의 끝 코멘트에 새 id를 적는다. 새 Work를 만들고 실패를 돌려주면 사람이 다시 눌러 같은 Work가 둘 생긴다(PR #56 리뷰) | |
 | I154 | 대화 ID를 받지 못한 Codex task가 중단됐거나 handoff 없이 끝났으면 [재개]가 쓸 수 없는 세션 기록을 지우고 같은 task를 새 세션으로 시작한다(`startTask`). 세션 기록이 없는 중단됨의 [재개](D218)와 같다. 승인 대기와 막힘은 산출물이 있어 [재개]를 끈다. 다시 시작할 때 처음 시작 커밋은 그대로 두고(`[변경]`의 범위), 앞 세션이 남긴 `handoff.md`는 지운다 | 이 경우의 길이던 [이 단계 새 세션으로 다시]가 없어졌다(D423). 임의의 ID로 재개하지 않는 것(engines.md 4.3)은 그대로다 | |
+| I155 | 작업 브랜치 이름(D425~D427)은 `core/branch`가 짓는다: `renderBranchRule`(규칙에 work-id·유형·짧은 이름을 채움), `checkBranchName`(git check-ref-format의 규칙을 옮김), `pickWorkBranch`(끝에 임의의 4자를 붙이고 로컬·origin의 원격 추적 브랜치와 부딪히면 다시 뽑음, 20번). `RelayOptions.random`으로 임의의 수를 바꾼다: 시험 harness는 `() => 0`(4자 `aaaa`, `workBranchOf`)이다. 원격은 `ls-remote`하지 않는다: Work 만들기가 네트워크에 묶이고, 임의의 4자가 겹침을 막는다 | 시험이 브랜치 이름을 알아야 함. 원격을 묻지 않아도 겹칠 확률은 36^4분의 1이다 |
+| I156 | `core/records`의 `workBranch(work)`는 `work.json`의 `branch`, 없으면 `relay/<work-id>`다. `targetBranch(work)`는 `target_branch`, 없으면 `base_branch`다. `NewWork.branch`가 없으면 `branch`를 적지 않는다(시험과 예전 Work). 머지 대상은 machine 이벤트 `target.set`(진행 중·멈춤만, 진행 중 작업이 있으면 받지 않음, 기록하지 않음)으로 바꾸고 `WorkView.canSetTarget`이 화면에 알린다. 새 Work 대화상자의 이름 미리보기는 `branchName(projectId, type, slug)`(다음 work-id로 채움, 4자 없음)이고, 사람이 고치지 않았으면 `branchName`을 보내지 않아 main이 만들 때 다시 채운다 | 미리보기와 만들기 사이에 다른 Work가 생겨도 순번이 맞음 |
 
 ## 3. 확인한 사실
 
@@ -368,6 +370,7 @@ app/src/
 | M23 | 기본 세션 | 프로젝트나 Work에 매이지 않는 세션 여러 개. 맨 CLI처럼, relay 도우미, 새 Work 구상. 에이전트가 쓴 Work 초안을 카드로 보이고 새 Work 대화상자로 잇는다(D397~D406) | M21 |
 | M24 | 서브모듈 Work | Work의 대상으로 서브모듈 하나를 고르면 그 서브모듈 레포만 다루고 전달한다. 메인 레포의 통합 검증 worktree 안에서 일하고, 사용자 체크아웃이 깨지지 않게 막고 되돌린다(D413~D417) | M5 |
 | M25 | 앞으로만 가는 파이프라인 | 단계 선택(되감기·건너뛰기), 이전 단계 추천, [이 단계 새 세션으로 다시], [intake 다시]를 없앤다. verify가 찾은 문제는 그 자리에서 고치고, 다시 하기는 Work 초안으로 새 Work를 만든다(D418~D424) | M23 |
+| M26 | 작업 브랜치 이름과 머지 대상 | 프로젝트의 작업 브랜치 규칙, 새 Work에서 브랜치 이름 고치기, 끝의 임의의 4자, 앞 Work의 브랜치를 기준으로 고르기, 머지 대상 고르기(D425~D428) | M25 |
 
 ### M0. 골격과 배포
 
@@ -1260,6 +1263,21 @@ app/src/
 **완료 기준**
 
 - 위 시험과 기존 시험, [계약] 가짜 쪽, `RELAY_REAL_CLAUDE=dry`의 [실제], 스킬 정적 검사가 통과한다.
+
+### M26. 작업 브랜치 이름과 머지 대상 (D425~D428)
+
+사람이 "앞 Work의 브랜치에 이어 쌓다가 한 번에 main에 넣고, 브랜치 이름은 정할 수 있게, 프로젝트에 규칙을 두고, 끝에는 겹치지 않게 임의의 4자를"이라고 정했다.
+
+- `core/branch`(I155), `WorkState.branch`·`target_branch`와 `workBranch`·`targetBranch`(I156). 브랜치 이름을 work-id로 만들던 곳(전달, PR 진행, 정리, `context.md`, 곁 세션·기본 세션 안내, 이슈 끝 코멘트, 지식의 앞 Work 브랜치)은 `workBranch`를 쓴다. PR의 base와 PR 진행의 기준 브랜치 fetch·받은 커밋 판정·정리의 머지 여부는 `targetBranch`를 쓴다.
+- 기준 브랜치 목록은 예전 되감기의 백업 브랜치만 뺀다.
+- 화면: 프로젝트 설정의 "작업 브랜치 규칙", 새 Work 대화상자의 "작업 브랜치"(규칙으로 채움, 고침, `-xxxx`)·"짧은 이름"(규칙에 `{slug}`가 있을 때)·"머지 대상", Work 완료 화면의 "[PR 생성]의 머지 대상".
+
+**시험**
+
+- **[단위]:** 규칙 채우기와 짧은 이름, 규칙·브랜치 이름 확인, 임의의 4자와 다시 뽑기(`branch.test.ts`), 만들 때 적는 `branch`·`target_branch`와 `target.set`, 전달이 작업 브랜치와 머지 대상을 쓰는 것(`machine.test.ts`), `context.md`의 머지 대상, 프로젝트 설정의 `branch_rule`.
+- **[어댑터]:** 규칙·짧은 이름·고친 이름으로 만든 worktree의 브랜치, 쓸 수 없는 이름, 기준 브랜치 목록에 앞 Work의 브랜치가 있고 백업 브랜치는 없음, 앞 Work의 브랜치에서 분기하고 머지 대상을 바꿈(`project.test.ts`).
+- **[흐름]:** 고른 머지 대상으로 `gh pr create --base`를 부르고, PR을 만든 뒤에는 바꾸지 않는다(`delivery.test.ts`). 기존 흐름 시험은 `workBranchOf`로 브랜치 이름을 읽는다.
+- **[스모크]:** 완료 화면의 작업 브랜치가 `relay/<work-id>-<4자>`다.
 
 ## 8. 테스트 전략
 

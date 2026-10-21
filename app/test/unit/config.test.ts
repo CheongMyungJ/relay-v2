@@ -382,10 +382,26 @@ describe('PR 진행의 설정 (D158, D185, 5.1.2)', () => {
       ok: true,
       value: { allowed_bots: [], merge_method: null },
     })
+    // 작업 브랜치 규칙 (D426): 앞뒤 공백을 떼고, 비우면 기본 규칙으로 돌린다
+    expect(
+      checkProjectSettings({
+        allowed_bots: [],
+        merge_method: null,
+        branch_rule: ' {type}/{slug} ',
+      }),
+    ).toEqual({
+      ok: true,
+      value: { allowed_bots: [], merge_method: null, branch_rule: '{type}/{slug}' },
+    })
+    expect(checkProjectSettings({ allowed_bots: [], merge_method: null, branch_rule: '' })).toEqual(
+      { ok: true, value: { allowed_bots: [], merge_method: null, branch_rule: '' } },
+    )
     for (const bad of [
       { allowed_bots: 'github-actions', merge_method: null },
       { allowed_bots: [1], merge_method: null },
       { allowed_bots: [], merge_method: 'fast-forward' },
+      { allowed_bots: [], merge_method: null, branch_rule: 1 },
+      { allowed_bots: [], merge_method: null, branch_rule: '{name}/{seq}' },
       null,
     ]) {
       expect(checkProjectSettings(bad).ok, JSON.stringify(bad)).toBe(false)

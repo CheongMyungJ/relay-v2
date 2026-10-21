@@ -179,6 +179,9 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   ipcMain.handle(IPC.branches, async (_e, projectId: unknown) =>
     (await ready).branches(text(projectId)),
   )
+  ipcMain.handle(IPC.branchName, async (_e, projectId: unknown, type: unknown, slug: unknown) =>
+    (await ready).branchName(text(projectId), workType(type), text(slug)),
+  )
   ipcMain.handle(IPC.submodules, async (_e, projectId: unknown) =>
     (await ready).submodules(text(projectId)),
   )
@@ -192,6 +195,10 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
       type: workType(input.type),
       baseBranch: text(input.baseBranch),
       baseLocation: input.baseLocation === 'remote' ? 'remote' : 'local',
+      // 작업 브랜치와 머지 대상 (D425~D428). 이름을 쓸 수 있는지는 Relay.createWork가 본다
+      ...(typeof input.branchName === 'string' ? { branchName: input.branchName } : {}),
+      ...(typeof input.slug === 'string' ? { slug: input.slug } : {}),
+      ...(typeof input.targetBranch === 'string' ? { targetBranch: input.targetBranch } : {}),
       ...(input.settings === undefined ? {} : { settings: input.settings }),
       // 기존 이슈 번호 (D338). 정수인지는 Relay.createWork가 본다
       ...(typeof input.issueNumber === 'number' ? { issueNumber: input.issueNumber } : {}),
@@ -243,6 +250,9 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   )
   ipcMain.handle(IPC.stopAfter, async (_e, workKey: unknown, on: unknown) =>
     (await ready).stopAfter(text(workKey), flag(on)),
+  )
+  ipcMain.handle(IPC.setTarget, async (_e, workKey: unknown, branch: unknown) =>
+    (await ready).setTarget(text(workKey), text(branch)),
   )
   ipcMain.handle(IPC.shelve, async (_e, workKey: unknown) => (await ready).shelve(text(workKey)))
   ipcMain.handle(IPC.resumeWork, async (_e, workKey: unknown) =>
