@@ -1,5 +1,5 @@
 // [어댑터] 재시작과 복구 (시나리오 9, D76, D123, D124, I33): 앱 역할 프로세스를 강제 종료한 뒤 남은 프로세스를
-// ID와 시작 시각으로 찾아 트리째 끝낸다(시작 시각이 다르면 건드리지 않음). 끊긴 되감기·전달·정리를 다시 할 때 쓰는
+// ID와 시작 시각으로 찾아 트리째 끝낸다(시작 시각이 다르면 건드리지 않음). 끊긴 전달·정리를 다시 할 때 쓰는
 // git 동작, 앱 소유 파일의 해시와 work.json 비교, 잘린 pty.log 읽기를 실제 git과 파일로 본다.
 import { spawn, type ChildProcess } from 'node:child_process'
 import fs from 'node:fs'
@@ -9,15 +9,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   addWorktree,
   commitInfo,
-  createBackup,
   deleteBranches,
   headCommit,
   pruneWorktrees,
   removeWorktree,
   stashAll,
   stashEntries,
-  treeOf,
-  worktreeTree,
 } from '../../src/adapters/git'
 import {
   isAlive,
@@ -32,7 +29,6 @@ import { WorkFiles, fileHash } from '../../src/adapters/store'
 import { createWork } from '../../src/core/machine'
 import { lostStashes } from '../../src/core/recovery'
 import { stashMessage } from '../../src/core/delivery'
-import { backupMessage } from '../../src/core/rewind'
 import { git, makeRepo, writeFiles } from '../support/repo'
 
 const isWin = process.platform === 'win32'
@@ -163,7 +159,7 @@ describe('[어댑터] 고아 프로세스 (시나리오 9-1, D76, I33)', () => {
   )
 })
 
-describe('[어댑터] 끊긴 되감기와 전달의 git (D123)', () => {
+describe('[어댑터] 끊긴 전달의 git (D123)', () => {
   let repo: string
   let tree: string
 
@@ -176,32 +172,14 @@ describe('[어댑터] 끊긴 되감기와 전달의 git (D123)', () => {
     await addWorktree(repo, tree, BRANCH, git(repo, 'rev-parse', 'HEAD'))
   })
 
-  it('작업 트리의 tree는 커밋 안 된 변경을 담은 백업 커밋의 tree와 같다. 깨끗하면 HEAD의 tree다 (D116)', async () => {
+  it('커밋의 id, 제목, 첫 부모를 읽는다. 끊긴 전달의 [커밋하고 진행]이 남긴 커밋을 제목으로 찾는다', async () => {
     const head = await headCommit(tree)
-    expect(await worktreeTree(tree)).toBe(await treeOf(tree, head))
-    writeFiles(tree, {
-      'src/avg.js': 'export const avg = () => 0\n',
-      'notes.txt': '메모\n',
-      'node_modules/pkg/index.js': 'keep\n',
-    })
-    git(tree, 'add', 'notes.txt')
-    const staged = git(tree, 'diff', '--cached', '--name-only')
-    const backup = await createBackup(tree, `${BRANCH}-discarded-1`, {
-      uncommitted: true,
-      message: backupMessage(WORK_ID),
-    })
-    expect(await worktreeTree(tree)).toBe(await treeOf(tree, backup))
-    // 진짜 index는 그대로다
-    expect(git(tree, 'diff', '--cached', '--name-only')).toBe(staged)
-    expect(await commitInfo(repo, backup)).toEqual({
-      id: backup,
-      subject: backupMessage(WORK_ID),
-      parent: head,
-    })
-    // 그 뒤에 고치면 다르다
-    writeFiles(tree, { 'notes.txt': '메모 더\n' })
-    expect(await worktreeTree(tree)).not.toBe(await treeOf(tree, backup))
-    expect((await commitInfo(repo, head)).subject).toBe('init')
+    expect(await commitInfo(repo, head)).toEqual({ id: head, subject: 'init', parent: null })
+    writeFiles(tree, { 'notes.txt': '메모\n' })
+    git(tree, 'add', '.')
+    git(tree, 'commit', '-q', '-m', '남은 변경')
+    const next = git(tree, 'rev-parse', 'HEAD')
+    expect(await commitInfo(tree, 'HEAD')).toEqual({ id: next, subject: '남은 변경', parent: head })
   })
 
   it('stash의 제목은 On <브랜치>: <메시지>다. 끊긴 전달이 만든 stash를 메시지로 찾는다', async () => {

@@ -38,7 +38,7 @@ on:
         required: false
         default: "low"
       cases:
-        description: "돌릴 경우 (예: S resume rewind-fix restart feature refactor general spec spec-follow). rewind는 rewind-intake와 rewind-fix. 비우면 전부. pr, pr-cleanup, pr-auto는 따로(PR 진행과 대응, Linux). contract는 [계약] 실제 쪽(Linux)"
+        description: "돌릴 경우 (예: S resume restart feature refactor general spec spec-follow). 비우면 전부. pr, pr-cleanup, pr-auto는 따로(PR 진행과 대응, Linux). contract는 [계약] 실제 쪽(Linux)"
         required: false
         default: ""
       update_contract:
@@ -195,7 +195,7 @@ jobs:
         if: always()
         working-directory: app
         run: |
-          foreach ($name in @('summary.md', 'resume.md', 'rewind.md', 'deliver.md', 'restart.md', 'auto.md', 'feature.md', 'refactor.md', 'general.md', 'spec.md')) {
+          foreach ($name in @('summary.md', 'resume.md', 'deliver.md', 'restart.md', 'auto.md', 'feature.md', 'refactor.md', 'general.md', 'spec.md')) {
             $file = "test-results/claude/$name"
             if (Test-Path $file) {
               Get-Content $file -Raw -Encoding utf8 | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8

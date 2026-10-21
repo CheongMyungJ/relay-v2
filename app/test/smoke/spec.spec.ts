@@ -1,6 +1,5 @@
-// [스모크] 설계 유형 (M20, D353, D365, I105): 새 Work 대화상자에서 설계를 골라 시작하고, 의도를 승인해 설계 문답이 도는
-// 동안 [단계 선택]에서 설계 문답을 고르면 "현재 문서 위에서 이어서"가 처음부터 체크되어 있다. 끄면 미리 보기가 되돌림으로
-// 바뀐다. 설계 문답은 시작만 하고 기다린다.
+// [스모크] 설계 유형 (M20, D353): 새 Work 대화상자에서 설계를 골라 시작하고, 의도를 승인하면 설계 문답이 돈다. 앞 단계로
+// 되감는 [단계 선택]은 없다 (D418). 설계 문답은 시작만 하고 기다린다.
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -65,7 +64,7 @@ test.afterAll(async () => {
   fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
 })
 
-test('설계로 시작하고, 설계 문답으로 되감는 [단계 선택]은 "현재 문서 위에서 이어서"가 체크되어 있다 (D353, D365)', async () => {
+test('설계로 시작하고, 의도를 승인하면 설계 문답이 돈다 (D353)', async () => {
   const win = await app.firstWindow()
   await expect(win.locator('.layout')).toBeVisible()
   await win.locator('.sidebar').getByRole('button', { name: '프로젝트 추가' }).click()
@@ -91,26 +90,7 @@ test('설계로 시작하고, 설계 문답으로 되감는 [단계 선택]은 "
   await expect(win.getByRole('tab', { name: /02 설계 문답/ })).toBeVisible({ timeout: 60_000 })
   await expect(win.locator('.band')).toContainText('02 설계 문답', { timeout: 60_000 })
 
-  // [단계 선택]에서 설계 문답을 고르면 "현재 문서 위에서 이어서"가 처음부터 체크되어 있다 (D365, I105)
-  await win.getByRole('button', { name: '단계 선택', exact: true }).click()
-  const dialog = win.getByRole('dialog', { name: /단계 선택/ })
-  await expect(dialog).toBeVisible()
-  await dialog.getByLabel('설계 문답(spec)').check()
-  const keep = dialog.getByRole('checkbox', { name: '현재 문서 위에서 이어서' })
-  await expect(keep).toBeChecked()
-  const preview = dialog.getByLabel('미리 보기')
-  await expect(preview).toContainText('[현재 문서 위에서 이어서]: 커밋을 되돌리지 않고', {
-    timeout: 30_000,
-  })
-  await win.screenshot({ path: 'test-results/spec-step-select.png' })
-  // 끄면 다른 유형처럼 되돌린다
-  await keep.uncheck()
-  await expect(preview).toContainText('되돌릴 커밋', { timeout: 30_000 })
-  // 의도 정리를 고르면 체크가 없고, 다시 설계 문답을 고르면 또 체크되어 있다
-  await dialog.getByLabel('의도 정리(intake)').check()
-  await expect(dialog.getByRole('checkbox', { name: '현재 문서 위에서 이어서' })).toHaveCount(0)
-  await dialog.getByLabel('설계 문답(spec)').check()
-  await expect(keep).toBeChecked()
-  await dialog.getByRole('button', { name: '취소', exact: true }).click()
-  await expect(dialog).toBeHidden()
+  // 앞 단계로 되감는 [단계 선택]은 없다 (D418)
+  await expect(win.getByRole('button', { name: '단계 선택', exact: true })).toHaveCount(0)
+  await win.screenshot({ path: 'test-results/spec-running.png' })
 })
