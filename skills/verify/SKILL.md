@@ -90,7 +90,7 @@ Review the whole change of this Work, apply only the findings the human picks, t
 - Fit with the existing structure: the layer or module each change sits in, dependency directions, the patterns the code around it follows.
 - Duplication: code that repeats a function or abstraction the repo already has.
 - Maintainability: complexity that grows (deep nesting, long functions, more flags), and tests tied to internal details that will break on any change.
-- A rule in the team knowledge (`kind: rule`, in `context.md`) that the change breaks is a 차단 finding.
+- A rule in the team knowledge (`kind: rule`, in `context.md`) that the change breaks is a 차단 finding. For entries listed by title only, open the ones that touch the changed code to see whether they are rules.
 - Changes that are not needed.
 - **Out of scope:** a maintainability problem beyond this Work (it was there before, or fixing it would widen the diff) is not a finding. Write it in `나중에 정리할 곳` with why it is worth cleaning up. It is not picked or applied.
 <!-- /type -->
@@ -142,7 +142,7 @@ Review the whole change of this Work, apply only the findings the human picks, t
 - **Changed test files:** list every test file changed since the base commit (`git diff <base commit>`), including ones the step's artifact does not mention. Mark each 약화 아님 or 약화 의심, with the reason.
 <!-- /type -->
 <!-- type: feature -->
-  A change to a test of a behavior marked (바뀜) or (없앰) in the 완료조건 is 약화 아님 when its new expected values match that line: write "약화 아님 — (바뀜) n" and do not ask. If the test of the old behavior was only deleted, with no test of the changed behavior or of the removal, it looks like weakening: ask. Judge any other change as above.
+  A change to a test of a behavior marked (바뀜) or (없앰) in the 완료조건 is 약화 아님 when its new expected values match that line: write "약화 아님 — (바뀜) n" or "약화 아님 — (없앰) n", with the marker of that line, and do not ask. n is the line's position among all 완료조건 lines of the intent, counting from 1 (default items included), as in `implement.md`. If the test of the old behavior was only deleted, with no test of the changed behavior or of the removal, it looks like weakening: ask. Judge any other change as above.
 <!-- /type -->
 <!-- type: refactor -->
   An existing test that only followed an internal interface change (call names, import paths, file location, setup code) is 약화 아님. If its expected values or inputs changed, or a test disappeared, it looks like weakening: ask.

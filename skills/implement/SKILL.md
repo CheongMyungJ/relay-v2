@@ -31,7 +31,7 @@ When all steps are done, run the intent's test command.
 - **Reuse:** before you add a helper function, look for a similar one that already exists, and use it if it fits.
 - **Removing:** if something goes away, when all steps are done, search the repo for the removed names, config keys and mentions in docs. Write what was left and what you did about it in `변경 요약`.
 - **Commits:** any number. Follow the repo's commit message convention. Commit all changes before you close. Revert experimental changes such as debug output.
-- **Changing existing tests:** if an existing test must change, change it, add it to `risks`, and mark it as an existing-test change in `변경 요약`, with why: "(바뀜) n 때문" / "(없앰) n 때문" for a marked 완료조건 n, otherwise "목록 밖". Whether it weakens the test is judged by verify.
+- **Changing existing tests:** if an existing test must change, change it, add it to `risks`, and mark it as an existing-test change in `변경 요약`, with why: "(바뀜) n 때문" / "(없앰) n 때문" for a marked 완료조건, otherwise "목록 밖". n is that line's position among all 완료조건 lines of the intent, counting from 1 (default items included). Whether it weakens the test is judged by verify.
 - **Run tests:** run the test command from the intent's 완료조건. For each failure, check whether it also fails at the base commit (from `context.md`), and say which.
 - **Small departures from the plan** (how files are split, names, the order of steps, small helper functions): decide yourself and write them in `계획과 달라진 점`.
 - **The design is wrong:** ask the human: fix the design and go on / start over as a new Work (see the common rules). If fixing, write the changed design in `계획과 달라진 점` and the decision in `decisions` with `by: human`.
