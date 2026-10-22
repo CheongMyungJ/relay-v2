@@ -1,6 +1,5 @@
 ---
 description: relay execute step (general Work). Plans and does the work the intent asks for, in whatever way fits, checks each completion criterion with its check method, and writes it up (execution.md).
-disable-model-invocation: true
 ---
 
 # relay: execute (실행)

@@ -1,6 +1,5 @@
 ---
 description: relay fix step. Reproduces the bug, finds the root cause, fixes the code, commits, and writes it all up (fix.md).
-disable-model-invocation: true
 ---
 
 # relay: fix

@@ -30,7 +30,8 @@ const enabled = (mode === '1' || dry) && chosen.length > 0
 const OUT = path.join(APP, 'test-results', 'claude')
 const TASK_TIMEOUT_MS = 25 * 60 * 1000
 /** handoff 없이 턴이 끝났을 때 사람이 보내는 말 */
-const NUDGE = '스킬의 절차를 계속해 주세요. 마치면 종료 절차대로 handoff를 쓰고 턴을 끝내 주세요.'
+const NUDGE =
+  '이 단계의 절차를 계속해 주세요. 마치면 종료 절차대로 handoff를 쓰고 턴을 끝내 주세요.'
 
 interface CaseResult {
   name: string

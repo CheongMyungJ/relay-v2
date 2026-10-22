@@ -619,8 +619,13 @@ export class WorkFiles {
   }
 }
 
-/** 앱이 쓰는 입력 파일: context.md, 지식을 넣은 기록(core/knowledge INJECTED_FILE) */
-const NOT_ARTIFACTS = new Set(['context.md', 'handoff.md', 'knowledge-injected.md'])
+/** 앱이 쓰는 입력 파일: context.md, 단계 절차(core/settings INSTRUCTIONS_FILE, D440), 지식을 넣은 기록(core/knowledge INJECTED_FILE) */
+const NOT_ARTIFACTS = new Set([
+  'context.md',
+  'instructions.md',
+  'handoff.md',
+  'knowledge-injected.md',
+])
 
 /** 끝에 덜 쓴 UTF-8 문자가 있으면 그 바이트 수, 없으면 0 */
 export function partialUtf8(buf: Buffer): number {

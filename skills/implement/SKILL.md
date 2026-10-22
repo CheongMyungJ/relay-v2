@@ -1,6 +1,5 @@
 ---
 description: relay implement step (feature). Writes tests first and implements the plan in design.md, commits, and writes it up (implement.md).
-disable-model-invocation: true
 ---
 
 # relay: implement (구현)

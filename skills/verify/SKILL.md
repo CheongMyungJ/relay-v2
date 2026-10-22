@@ -1,6 +1,5 @@
 ---
 description: relay verify step. Reviews the whole change, applies the findings the human picks, judges each completion criterion and drafts the PR (verification.md, pr.md).
-disable-model-invocation: true
 ---
 
 # relay: verify

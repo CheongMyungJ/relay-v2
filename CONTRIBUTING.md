@@ -7,7 +7,7 @@ relay를 고치거나 기여하려는 사람을 위한 글입니다. 사용법�
 | 폴더 | 내용 |
 |---|---|
 | `app/` | Electron 앱. `src/core`(순수 로직), `src/adapters`(git, PTY, gh 등 바깥 세계), `src/main`(조립), `src/renderer`(화면) |
-| `skills/` | 단계마다 에이전트가 따르는 스킬 원본. 앱이 Work마다 배포합니다 |
+| `skills/` | 단계마다 에이전트가 따르는 절차의 원본. 앱이 task마다 조립해 시스템 프롬프트에 덧붙입니다(Codex는 스킬로 배포) |
 | `docs/` | 설계(`design.md`), 구현 계획(`implementation.md`), 확인 기록(`checks.md`), 평가(`eval.md`) |
 | `app/eval/` | 맨 Claude Code CLI와 견주는 사용성 평가 도구 |
 | `spikes/` | 설계 전제를 확인한 탐색 코드(보관) |

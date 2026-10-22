@@ -1,6 +1,5 @@
 ---
 description: relay PR response step. Responds to the review comments and CI failures of an open PR, commits the fixes, and drafts replies (response.md, replies.md).
-disable-model-invocation: true
 ---
 
 # relay: pr-respond

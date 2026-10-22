@@ -40,7 +40,8 @@ const TASK_TIMEOUT_MS = 25 * 60 * 1000
  */
 const WORK_MS = dry ? 1000 : 3_000
 /** handoff 없이 턴이 끝났을 때 사람이 보내는 말 (real.test.ts와 같음) */
-const NUDGE = '스킬의 절차를 계속해 주세요. 마치면 종료 절차대로 handoff를 쓰고 턴을 끝내 주세요.'
+const NUDGE =
+  '이 단계의 절차를 계속해 주세요. 마치면 종료 절차대로 handoff를 쓰고 턴을 끝내 주세요.'
 
 /** 가짜 claude의 시나리오 (dry): 첫 세션은 요청을 받고 멈춰 있고, 다시 연 세션이 intake를 마친다 */
 function dryScenario(): Scenario {

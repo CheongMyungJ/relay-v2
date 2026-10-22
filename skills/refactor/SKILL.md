@@ -1,6 +1,5 @@
 ---
 description: relay refactor step (refactoring). Plans the target structure, commits safety-net tests first, changes structure step by step without changing behavior, and writes it up (refactor.md).
-disable-model-invocation: true
 ---
 
 # relay: refactor (계획과 리팩터링)

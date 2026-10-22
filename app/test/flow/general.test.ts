@@ -128,7 +128,7 @@ describe('[흐름] 일반 유형 (M18)', () => {
 
     // 공용 스킬은 일반의 구간만 배포한다 (D279): verify에 execution.md는 있고 다른 유형의 산출물은 없다
     const skillsSrc = path.resolve(__dirname, '../../../skills')
-    const deployed = read(path.join(dir, '.claude', 'skills', 'relay-verify', 'SKILL.md'))
+    const deployed = read(path.join(dir, 'tasks', '03-verify', 'instructions.md'))
     expect(deployed).toBe(await skillText(skillsSrc, 'verify', 'general'))
     expect(deployed).toContain('`execution.md`')
     expect(deployed).not.toContain('`fix.md`')

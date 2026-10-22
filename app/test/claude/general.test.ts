@@ -27,7 +27,8 @@ const cases = (process.env['RELAY_REAL_CASES'] ?? '').split(/[\s,]+/).filter(Boo
 const enabled = (mode === '1' || dry) && (cases.length === 0 || cases.includes('general'))
 const OUT = path.join(APP, 'test-results', 'claude')
 const TASK_TIMEOUT_MS = 25 * 60 * 1000
-const NUDGE = '스킬의 절차를 계속해 주세요. 마치면 종료 절차대로 handoff를 쓰고 턴을 끝내 주세요.'
+const NUDGE =
+  '이 단계의 절차를 계속해 주세요. 마치면 종료 절차대로 handoff를 쓰고 턴을 끝내 주세요.'
 
 /**
  * 작은 일반 Work: slug 레포(S 요청과 같은 파일)에 README와 lint 스크립트를 더한다. 문서와 설정이라 다른 유형에 맞지

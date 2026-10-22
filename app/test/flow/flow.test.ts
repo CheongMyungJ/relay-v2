@@ -3,7 +3,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { mergeSkill, selectType, skillText } from '../../src/adapters/claude'
+import { mergeSkill, selectType, skillText, stripFrontMatter } from '../../src/adapters/claude'
 import { OPEN_QUESTIONS_HINT } from '../../src/core/review'
 import { sha256 } from '../../src/adapters/store'
 import { BOUNCE_HEAD, parseFrontMatter } from '../../src/core/validate'
@@ -245,18 +245,22 @@ describe('[흐름] 최소 흐름 (M2)', () => {
     expect(settings.hooks['Stop']?.[0]?.hooks[0]?.url).toMatch(
       /^http:\/\/127\.0\.0\.1:\d+\/hook\/t-03\/Stop$/,
     )
-    expect(settings.permissions.deny.filter((r) => r.includes('/tasks/'))).toHaveLength(2)
+    expect(settings.permissions.deny.filter((r) => r.includes('/tasks/'))).toHaveLength(3)
 
-    // 스킬 배포 (5.6.3, D108): 이번 task의 스킬만 남고 공통 규칙이 붙어 있다
-    const skills = path.join(s.workDir, '.claude', 'skills')
-    expect(fs.readdirSync(skills)).toEqual(['relay-verify'])
+    // 단계 절차 (5.6.3, D440): task마다 그 task 디렉터리의 instructions.md에 공통 규칙을 붙여 쓰고, 스킬로는 배포하지 않는다.
+    // 이번 task의 instructions.md는 편집을 막는다 (D443)
+    expect(fs.existsSync(path.join(s.workDir, '.claude', 'skills'))).toBe(false)
     const skillsSrc = path.resolve(__dirname, '../../../skills')
-    expect(read(path.join(skills, 'relay-verify', 'SKILL.md'))).toBe(
+    const instructions = path.join(task('03-verify'), 'instructions.md')
+    expect(read(instructions)).toBe(
       mergeSkill(
-        selectType(read(path.join(skillsSrc, 'verify', 'SKILL.md')), 'bugfix'),
+        selectType(stripFrontMatter(read(path.join(skillsSrc, 'verify', 'SKILL.md'))), 'bugfix'),
         read(path.join(skillsSrc, '_common.md')),
       ),
     )
+    expect(
+      settings.permissions.deny.filter((r) => r.endsWith('/tasks/03-verify/instructions.md)')),
+    ).toHaveLength(1)
 
     // 실행 인자 (시나리오 2-5)와 토큰 (I13)
     const starts = s.h.records().filter((r) => r['type'] === 'start')
@@ -271,8 +275,15 @@ describe('[흐름] 최소 흐름 (M2)', () => {
       s.workDir,
       '--settings',
       path.join(task('01-intake'), 'task.settings.json'),
-      `/relay-work-start 이 task의 컨텍스트: ${path.join(task('01-intake'), 'context.md')}`,
+      '--append-system-prompt-file',
+      path.join(task('01-intake'), 'instructions.md'),
+      `relay work-start 단계를 시작합니다. 이 task의 컨텍스트: ${path.join(task('01-intake'), 'context.md')}`,
     ])
+    // 가짜 claude는 task로 보고(곁 세션이 아님) 받은 절차를 남긴다
+    expect(starts.map((r) => r['side'])).toEqual([undefined, undefined, undefined])
+    expect((starts[0] as { instructions?: string }).instructions).toBe(
+      read(path.join(task('01-intake'), 'instructions.md')),
+    )
     // 훅은 모두 받아들였다
     const hooks = s.h.records().filter((r) => r['type'] === 'hook')
     expect(hooks.every((r) => r['status'] === 200)).toBe(true)
@@ -311,7 +322,10 @@ describe('[흐름] 최소 흐름 (M2)', () => {
         `sha256:${sha256(await skillText(skillsSrc, skill, 'bugfix'))}`,
       )
       expect(started[i]?.args).toContain(
-        `/relay-${skill} 이 task의 컨텍스트: ${path.join(task(dir), 'context.md')}`,
+        `relay ${skill} 단계를 시작합니다. 이 task의 컨텍스트: ${path.join(task(dir), 'context.md')}`,
+      )
+      expect(read(path.join(task(dir), 'instructions.md'))).toBe(
+        await skillText(skillsSrc, skill, 'bugfix'),
       )
       expect(read(path.join(task(dir), 'context.md'))).toContain(`- skill: ${skill}`)
     }

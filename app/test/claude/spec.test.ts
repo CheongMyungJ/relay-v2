@@ -26,7 +26,8 @@ const cases = (process.env['RELAY_REAL_CASES'] ?? '').split(/[\s,]+/).filter(Boo
 const runs = (name: string) => (mode === '1' || dry) && (cases.length === 0 || cases.includes(name))
 const OUT = path.join(APP, 'test-results', 'claude')
 const TASK_TIMEOUT_MS = 25 * 60 * 1000
-const NUDGE = '스킬의 절차를 계속해 주세요. 마치면 종료 절차대로 handoff를 쓰고 턴을 끝내 주세요.'
+const NUDGE =
+  '이 단계의 절차를 계속해 주세요. 마치면 종료 절차대로 handoff를 쓰고 턴을 끝내 주세요.'
 
 /** 작은 설계 Work: slug의 규칙을 정해 새 설계 문서에 남긴다. 코드는 바꾸지 않는다 */
 const SPEC_REQUEST = [

@@ -10,6 +10,7 @@ import {
   mergeSkill,
   selectType,
   skillText,
+  stripFrontMatter,
 } from '../../src/adapters/claude'
 import { WORK_TYPES } from '../../src/shared/work'
 import { TYPES, assemble } from '../../../skills/assemble.mjs'
@@ -274,56 +275,94 @@ describe('[어댑터] 기본 세션의 기록과 Work 초안 (D402, D404, I135)'
   })
 })
 
-describe('[어댑터] 스킬 배포와 claude 실행 (5.6.3, D103, D105, D108)', () => {
-  it('이번 task의 스킬에 공통 규칙을 붙여 배포하고 다른 relay 스킬은 지운다', async () => {
+describe('[어댑터] 단계 절차 배포와 claude 실행 (5.6.3, D103, D105, D440, D443)', () => {
+  it('이번 task의 스킬 본문(머리글을 뗌)에 공통 규칙을 붙여 task 디렉터리의 instructions.md에 쓰고, 남은 relay 스킬 폴더는 지운다', async () => {
     const workDir = path.join(root, 'w')
+    const taskDir = path.join(workDir, 'tasks', '02-fix')
     const skills = path.join(workDir, '.claude', 'skills')
     fs.mkdirSync(path.join(skills, 'relay-work-start'), { recursive: true })
     fs.writeFileSync(path.join(skills, 'relay-work-start', 'SKILL.md'), 'old')
     fs.mkdirSync(path.join(skills, 'my-own'), { recursive: true })
-    const first = await deploySkill({ source: SKILLS, workDir, skill: 'fix', type: 'bugfix' })
-    expect(fs.readdirSync(skills).sort()).toEqual(['my-own', 'relay-fix'])
+    const first = await deploySkill({
+      source: SKILLS,
+      workDir,
+      taskDir,
+      skill: 'fix',
+      type: 'bugfix',
+    })
+    expect(first.file).toBe(path.join(taskDir, 'instructions.md'))
+    // 스킬로 배포하지 않는다. 이전 버전이 남긴 relay 스킬만 지우고 사람이 둔 스킬은 그대로다 (D443)
+    expect(fs.readdirSync(skills)).toEqual(['my-own'])
     const expected = mergeSkill(
-      read(path.join(SKILLS, 'fix', 'SKILL.md')),
+      stripFrontMatter(read(path.join(SKILLS, 'fix', 'SKILL.md'))),
       read(path.join(SKILLS, '_common.md')),
     )
     expect(read(first.file)).toBe(expected)
     expect(await skillText(SKILLS, 'fix', 'bugfix')).toBe(expected)
     // 원인 분석과 수정은 재현부터 수정까지 한 스킬이다 (D228)
-    expect(read(first.file)).toMatch(/^---\ndescription: relay fix step/)
-    expect(read(first.file)).toContain('\n# relay: fix')
+    expect(read(first.file)).toMatch(/^# relay: fix\n/)
+    expect(read(first.file)).not.toContain('description: relay fix step')
     expect(read(first.file)).toContain('## Artifact template: `fix.md`')
     expect(first.hash).toMatch(/^sha256:[0-9a-f]{64}$/)
     // 같은 원본이면 해시가 같다
     expect(
-      (await deploySkill({ source: SKILLS, workDir, skill: 'fix', type: 'bugfix' })).hash,
+      (await deploySkill({ source: SKILLS, workDir, taskDir, skill: 'fix', type: 'bugfix' })).hash,
     ).toBe(first.hash)
   })
 
-  it('verify는 리뷰와 최종 검증을 한 스킬로 배포한다: relay-verify에 공통 규칙을 붙인다 (D229, 5.6.6)', async () => {
+  it('Work 디렉터리에 .claude/skills가 없어도 배포한다', async () => {
+    const workDir = path.join(root, 'w-empty')
+    const taskDir = path.join(workDir, 'tasks', '01-intake')
+    const deployed = await deploySkill({
+      source: SKILLS,
+      workDir,
+      taskDir,
+      skill: 'work-start',
+      type: 'bugfix',
+    })
+    expect(fs.existsSync(deployed.file)).toBe(true)
+    expect(fs.existsSync(path.join(workDir, '.claude'))).toBe(false)
+  })
+
+  it('머리글은 맨 앞의 것만 뗀다', () => {
+    expect(stripFrontMatter('---\ndescription: x\n---\n\n# relay: x\n\n---\n\nbody\n')).toBe(
+      '# relay: x\n\n---\n\nbody\n',
+    )
+    expect(stripFrontMatter('# 머리글 없음\n---\n')).toBe('# 머리글 없음\n---\n')
+  })
+
+  it('verify는 리뷰와 최종 검증을 한 절차로 배포한다: verify 본문에 공통 규칙을 붙인다 (D229, 5.6.6)', async () => {
     const workDir = path.join(root, 'w-verify')
-    const deployed = await deploySkill({ source: SKILLS, workDir, skill: 'verify', type: 'bugfix' })
-    expect(path.basename(path.dirname(deployed.file))).toBe('relay-verify')
+    const taskDir = path.join(workDir, 'tasks', '03-verify')
+    const deployed = await deploySkill({
+      source: SKILLS,
+      workDir,
+      taskDir,
+      skill: 'verify',
+      type: 'bugfix',
+    })
+    expect(deployed.file).toBe(path.join(taskDir, 'instructions.md'))
     const text = read(deployed.file)
     expect(text).toBe(
       mergeSkill(
-        selectType(read(path.join(SKILLS, 'verify', 'SKILL.md')), 'bugfix'),
+        selectType(stripFrontMatter(read(path.join(SKILLS, 'verify', 'SKILL.md'))), 'bugfix'),
         read(path.join(SKILLS, '_common.md')),
       ),
     )
-    // 머리글은 하나이고, 스킬 본문 뒤에 공통 규칙이 있다
-    expect(text.match(/^description: /gm)).toHaveLength(1)
-    expect(text).toMatch(/^---\ndescription: relay verify step/)
+    // 머리글이 없고, 스킬 본문 뒤에 공통 규칙이 있다
+    expect(text.match(/^description: /gm)).toBeNull()
+    expect(text).toMatch(/^# relay: verify\n/)
     const order = ['# relay: verify', '# Common rules']
-    const at = order.map((h) => text.indexOf(`\n${h}`))
-    expect(at.every((i) => i > 0)).toBe(true)
+    const lines = text.split('\n')
+    const at = order.map((h) => lines.findIndex((l) => l.startsWith(h)))
+    expect(at.every((i) => i >= 0)).toBe(true)
     expect([...at].sort((a, b) => a - b)).toEqual(at)
     // 산출물 둘의 템플릿이 있다. 리뷰 지적은 verification.md에 쓴다 (3.1, D229)
     for (const f of ['verification.md', 'pr.md']) {
       expect(text).toContain(`## Artifact template: \`${f}\``)
     }
     expect(text).not.toContain('`review.md`')
-    expect(fs.readdirSync(path.join(workDir, '.claude', 'skills'))).toEqual(['relay-verify'])
+    expect(fs.existsSync(path.join(workDir, '.claude', 'skills'))).toBe(false)
   })
 
   it('공통 규칙은 SKILL.md 끝에 붙인다. 줄 끝은 LF로 맞춘다 (skills/check.mjs와 같은 방식)', () => {

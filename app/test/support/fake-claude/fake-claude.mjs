@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // 가짜 claude (I25, docs/implementation.md 8.2). 실제와 같은 인자를 받아 PTY 안에서 돈다.
 // - `--version`은 버전을 찍고(D105), `auth status`는 FAKE_CLAUDE_AUTH가 fail이면 종료 코드 1이다(D67).
-// - FAKE_CLAUDE_SCENARIO가 있으면 첫 프롬프트(/relay-<스킬> 이 task의 컨텍스트: <경로>)의 스킬이나
+// - FAKE_CLAUDE_SCENARIO가 있으면 첫 프롬프트(relay <스킬> 단계를 시작합니다. 이 task의 컨텍스트: <경로>, D442)의 스킬이나
 //   context.md의 task id에 맞는 단계를 차례로 한다: 훅 신호 보내기, 산출물과 handoff 쓰기, worktree에
 //   커밋하기, 커밋하지 않고 worktree 고치기, 질문 대기와 도구 호출 흉내, Stop 보내고 되돌림을 받으면 고쳐 쓰기, 종료.
 // - 훅은 --settings 파일의 URL과 머리글로 보낸다. 머리글의 $VAR는 allowedEnvVars에 있는 것만 푼다
@@ -16,7 +16,8 @@
 //   새 세션은 다음 요청으로 대화가 생겨야 --resume으로 열 수 있다.
 // - 첫 프롬프트 없이 연 세션은 정리 세션([AI 세션 열기], 시나리오 7-5)이라 시나리오의 cleanup 단계를 한다.
 //   git 단계는 worktree에서 git을 부른다(정리 세션이 변경을 되돌리거나 커밋하는 것을 흉내 낸다).
-// - --append-system-prompt-file을 받은 세션은 곁 세션(시나리오 11, I127)이라 시나리오의 side 단계(--resume이면
+// - task는 단계 절차(instructions.md)를 --append-system-prompt-file로 받는다(D440). 기록에 그 내용을 instructions로 남긴다.
+// - task가 아닌데 --append-system-prompt-file을 받은 세션은 곁 세션(시나리오 11, I127)이라 시나리오의 side 단계(--resume이면
 //   sideResume)를 하고, 기록에 side: true와 안내 파일의 내용을 남긴다. 실제처럼 새 대화는 첫 요청(prompt 단계) 뒤에야
 //   저장해, 묻지 않고 닫은 대화를 --resume하면 "No conversation found"로 끝난다(D389).
 // - 그 가운데 설정 파일의 훅 URL이 /hook/session/인 세션은 기본 세션(시나리오 12)이라 시나리오의 session 단계(--resume이면
@@ -235,7 +236,9 @@ process.on('SIGHUP', () => {
 // ---------- 시나리오 ----------
 
 function readContext() {
-  const m = /^\/relay-([\w-]+)\s+이 task의 컨텍스트:\s*(.+)$/.exec(opts.prompt ?? '')
+  const m = /^relay ([\w-]+) 단계를 시작합니다\. 이 task의 컨텍스트:\s*(.+)$/.exec(
+    opts.prompt ?? '',
+  )
   if (!m) return { skill: null, taskDir: process.cwd(), taskId: null, node: null }
   const [, skill, contextPath] = m
   const text = fs.readFileSync(contextPath.trim(), 'utf8')
@@ -468,7 +471,8 @@ async function run() {
     out(`No conversation found with session ID: ${opts.sessionId}`)
     process.exit(1)
   }
-  const side = opts.guide !== null
+  // task(첫 프롬프트나 저장한 대화에 스킬이 있음)도 단계 절차를 같은 옵션으로 받는다 (D440)
+  const side = opts.guide !== null && !ctx.skill
   // 기본 세션은 곁 세션과 같은 인자이고 훅 URL의 id가 session이다 (I133)
   const session =
     side &&
@@ -485,7 +489,9 @@ async function run() {
     cleanup: !side && !opts.resume && opts.prompt === null,
     ...(side
       ? { [session ? 'session' : 'side']: true, guide: fs.readFileSync(opts.guide, 'utf8') }
-      : {}),
+      : opts.guide !== null
+        ? { instructions: fs.readFileSync(opts.guide, 'utf8') }
+        : {}),
     cwd: process.cwd(),
     token: Boolean(env.RELAY_HOOK_TOKEN),
     skill: ctx.skill,

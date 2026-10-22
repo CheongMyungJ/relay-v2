@@ -260,7 +260,7 @@ import {
 } from '../core/respond'
 import { DRAFTS_DIR } from '../core/draft'
 import { DraftFolder } from './drafts'
-import { continuePrompt } from '../core/settings'
+import { continuePrompt, INSTRUCTIONS_FILE } from '../core/settings'
 import { sideBlock, sideGuide } from '../core/side'
 import {
   HANDOFF_FILE,
@@ -1322,6 +1322,7 @@ export class WorkRunner {
         workDir: this.files.dir,
         ...this.extraDirs(),
         settingsPath,
+        instructionsPath: deployed.file,
         skill,
         contextPath,
         ...pinnedAgent(task),
@@ -1349,7 +1350,9 @@ export class WorkRunner {
 
   /**
    * 끝난 세션을 같은 옵션과 --resume <세션 id>로 다시 연다 (시나리오 3-4, 3-5, 6절).
-   * 설정 파일은 새로 쓴다(훅 서버의 포트와 토큰이 바뀔 수 있음, I13). 스킬과 context.md는 그대로 둔다.
+   * 설정 파일은 새로 쓴다(훅 서버의 포트와 토큰이 바뀔 수 있음, I13). 단계 절차와 context.md는 그대로 둔다:
+   * task를 시작할 때 쓴 instructions.md를 같은 플래그로 다시 준다 (D441). 이 변경 전에 스킬로 시작한 task는 그 파일이 없어
+   * 넣지 않는다(스킬 본문이 대화에 있다).
    * 탭에는 이전 화면을 먼저 보이고 그 뒤에 다시 연 세션의 출력을 잇는다.
    */
   private async resumeSession(task: TaskRecord): Promise<boolean> {
@@ -1371,11 +1374,13 @@ export class WorkRunner {
         ? continuePrompt(task.session?.app_ended !== undefined)
         : undefined
       this.resumeContinue.delete(task.id)
+      const instructionsPath = path.join(this.files.taskDir(task), INSTRUCTIONS_FILE)
       const args = await driver.resumeArgs({
         sessionId,
         workDir: this.files.dir,
         ...this.extraDirs(),
         settingsPath,
+        ...((await exists(instructionsPath)) ? { instructionsPath } : {}),
         ...pinnedAgent(task),
         ...(prompt ? { prompt } : {}),
       })
@@ -3703,7 +3708,11 @@ export class WorkRunner {
       lead: stageLead(task.node, files),
       artifacts: Object.entries(files)
         .filter(
-          ([name]) => name !== CONTEXT_FILE && name !== HANDOFF_FILE && name !== INJECTED_FILE,
+          ([name]) =>
+            name !== CONTEXT_FILE &&
+            name !== INSTRUCTIONS_FILE &&
+            name !== HANDOFF_FILE &&
+            name !== INJECTED_FILE,
         )
         .map(([name, text]) => ({ name, text })),
       diff: clip(diff),

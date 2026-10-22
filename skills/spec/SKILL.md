@@ -1,6 +1,5 @@
 ---
 description: relay spec step (spec Work). Settles the design decisions with the human topic by topic, writes them into the design document in the repo and commits it (spec.md). Does not change code.
-disable-model-invocation: true
 ---
 
 # relay: spec (설계 문답)

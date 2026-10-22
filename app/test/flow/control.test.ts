@@ -274,6 +274,9 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
       workDir,
       '--settings',
       settingsPath,
+      // task를 시작할 때 쓴 단계 절차를 다시 준다. 빼면 압축 뒤 절차가 사라진다 (D441)
+      '--append-system-prompt-file',
+      path.join(dir, 'tasks', '01-intake', 'instructions.md'),
       continuePrompt(false),
     ])
     expect(all[1]?.resume).toBe(true)

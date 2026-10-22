@@ -1,4 +1,5 @@
 // task 설정 파일(task.settings.json)의 내용과 claude 실행 인자 (시나리오 2-3, 2-5, 3-4, 6절).
+// 단계 절차는 task 디렉터리의 instructions.md를 시스템 프롬프트에 덧붙여 준다 (D440).
 // 훅은 Claude Code 내장 HTTP 훅으로 앱의 로컬 서버에 보낸다 (D20, I13).
 // deny 규칙은 git push, gh pr, 앱 소유 파일 편집을 막는다 (D17). 실수를 막는 장치다 (D91).
 // 자동 메모리는 끈다 (D113).
@@ -102,16 +103,21 @@ function ruleJoin(base: string, ...names: string[]): string {
 /** Work 디렉터리 안의 앱 소유 파일 (시나리오 2-3). pr-items.json은 PR 진행의 항목이다 (D191) */
 const APP_OWNED_FILES = ['work.json', 'request.md', 'intent.md', 'decisions.md', 'pr-items.json']
 
+/** task 디렉터리의 단계 절차. 앱이 조립해 쓰고 --append-system-prompt-file로 준다 (D440, 5.6.3) */
+export const INSTRUCTIONS_FILE = 'instructions.md'
+
 export interface DenyInput {
   /** Work 디렉터리(works/<work-id>)의 절대 경로 */
   workDir: string
   /** 이전 task 디렉터리의 절대 경로. 지금 task 디렉터리는 넣지 않는다 */
   previousTaskDirs: readonly string[]
+  /** 지금 task 디렉터리. 있으면 그 안의 단계 절차(instructions.md) 편집을 막는다 (D443) */
+  taskDir?: string
 }
 
 /**
  * deny 규칙 (D17, 시나리오 2-3): git push, gh pr 계열, 앱 소유 파일(work.json, request.md, intent.md,
- * decisions.md, pr-items.json(D191), 이전 task 디렉터리, Work 디렉터리의 .claude/) 편집.
+ * decisions.md, pr-items.json(D191), 이전 task 디렉터리, 이번 task의 instructions.md(D443), Work 디렉터리의 .claude/) 편집.
  * 출처: spikes/s4-permissions.mjs (Bash(git push*), Bash(gh pr*), Edit(ruleAbs(…)))
  */
 export function denyRules(input: DenyInput): string[] {
@@ -121,6 +127,7 @@ export function denyRules(input: DenyInput): string[] {
     'Bash(gh pr*)',
     ...APP_OWNED_FILES.map((f) => `Edit(${ruleJoin(work, f)})`),
     ...input.previousTaskDirs.map((d) => `Edit(${ruleJoin(ruleAbs(d), '**')})`),
+    ...(input.taskDir ? [`Edit(${ruleJoin(ruleAbs(input.taskDir), INSTRUCTIONS_FILE)})`] : []),
     `Edit(${ruleJoin(work, '.claude', '**')})`,
   ]
 }
@@ -140,25 +147,27 @@ export function taskSettings(input: TaskSettingsInput): TaskSettings {
   }
 }
 
-/** relay 스킬의 이름. Work 디렉터리의 .claude/skills/<이름>/에 배포하고 /<이름>으로 부른다 (D32, D33) */
+/** relay 스킬의 이름. Codex task의 스킬 배포본 폴더 이름이다 (engines.md) */
 export function relaySkillName(skill: SkillName): string {
   return `relay-${skill}`
 }
 
-/** 첫 프롬프트: 스킬 호출과 context.md 경로만 담는다 (D19, 5.6.3) */
+/** 첫 프롬프트: 단계 이름과 context.md 경로만 담는다. 절차는 시스템 프롬프트에 있다 (D442, 5.6.3) */
 export function firstPrompt(skill: SkillName, contextPath: string): string {
-  return `/${relaySkillName(skill)} 이 task의 컨텍스트: ${contextPath}`
+  return `relay ${skill} 단계를 시작합니다. 이 task의 컨텍스트: ${contextPath}`
 }
 
 export interface LaunchInput {
   /** --session-id로 줄 uuid */
   sessionId: string
-  /** Work 디렉터리. 스킬을 읽게 --add-dir로 더한다 (D32) */
+  /** Work 디렉터리. 산출물과 앞 단계 파일을 읽게 --add-dir로 더한다 (D32) */
   workDir: string
   /** --add-dir로 더 줄 폴더. 서브모듈 Work의 메인 통합 검증 worktree다 (D414). 없으면 넣지 않는다 */
   extraDirs?: readonly string[]
   /** task 설정 파일 경로 */
   settingsPath: string
+  /** 시스템 프롬프트에 덧붙일 단계 절차(instructions.md) 경로 (D440). Codex는 쓰지 않는다 */
+  instructionsPath: string
   skill: SkillName
   contextPath: string
   /** task에 고정한 모델. 없으면 엔진의 기본 */
@@ -170,6 +179,11 @@ export interface LaunchInput {
 /** 더 줄 폴더의 --add-dir (D414). 없으면 넣지 않아 지금과 같은 인자다 */
 export function extraDirArgs(input: { extraDirs?: readonly string[] }): string[] {
   return (input.extraDirs ?? []).flatMap((d) => ['--add-dir', d])
+}
+
+/** 단계 절차를 시스템 프롬프트 끝에 덧붙이는 옵션 (D440). 기본 시스템 프롬프트는 그대로 둔다 */
+function instructionsArgs(input: { instructionsPath?: string }): string[] {
+  return input.instructionsPath ? ['--append-system-prompt-file', input.instructionsPath] : []
 }
 
 /** 모델·추론 수준 옵션. 값이 없으면 넣지 않아 지금과 같은 인자다 */
@@ -191,12 +205,18 @@ export function launchArgs(input: LaunchInput): string[] {
     ...extraDirArgs(input),
     '--settings',
     input.settingsPath,
+    ...instructionsArgs(input),
     ...modelArgs(input),
     firstPrompt(input.skill, input.contextPath),
   ]
 }
 
-export type ResumeInput = Omit<LaunchInput, 'skill' | 'contextPath'> & {
+export type ResumeInput = Omit<LaunchInput, 'skill' | 'contextPath' | 'instructionsPath'> & {
+  /**
+   * task를 시작할 때 쓴 단계 절차 (D441). 빼면 압축 뒤 절차가 사라지므로 늘 준다(스파이크 S8).
+   * 없으면 이 변경 전에 스킬로 시작한 task라 넣지 않는다
+   */
+  instructionsPath?: string
   /** 다시 연 세션에 줄 첫 입력 (D218). 없으면 다시 연 세션은 사람의 입력을 기다린다 (S6) */
   prompt?: string
 }
@@ -204,7 +224,9 @@ export type ResumeInput = Omit<LaunchInput, 'skill' | 'contextPath'> & {
 /**
  * 끝난 세션을 다시 여는 인자 (시나리오 3-4, 6절): 같은 옵션 + --resume <세션 id>.
  * --settings, --add-dir, 권한 확인 끈 모드는 --resume이 복원하지 않아 다시 준다(Claude Code 문서 sessions).
- * --session-id는 새 세션에 쓰는 것이라 빼고, 첫 프롬프트는 스킬을 다시 시작하므로 뺀다. 확인: 스파이크 S6.
+ * 단계 절차도 같은 파일을 다시 준다. Claude Code는 처음 만든 시스템 프롬프트를 압축 전까지 쓰고, 압축하면 이때의 플래그로
+ * 다시 만든다 (D441, 스파이크 S8).
+ * --session-id는 새 세션에 쓰는 것이라 빼고, 첫 프롬프트는 단계를 다시 시작하므로 뺀다. 확인: 스파이크 S6.
  * 중단됨의 [재개]는 대신 이어서 하라는 첫 입력을 맨 뒤에 준다 (D218). 모델·추론 수준도 task에 고정한 값을 다시 준다
  */
 export function resumeArgs(input: ResumeInput): string[] {
@@ -217,6 +239,7 @@ export function resumeArgs(input: ResumeInput): string[] {
     ...extraDirArgs(input),
     '--settings',
     input.settingsPath,
+    ...instructionsArgs(input),
     ...modelArgs(input),
     ...(input.prompt ? [input.prompt] : []),
   ]

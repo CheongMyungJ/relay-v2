@@ -185,7 +185,8 @@ const SECRET_VALUES = [
   .map((k) => process.env[k] ?? '')
   .filter((v) => v.length >= 8)
 
-const NUDGE = '스킬의 절차를 계속해 주세요. 마치면 종료 절차대로 handoff를 쓰고 턴을 끝내 주세요.'
+const NUDGE =
+  '이 단계의 절차를 계속해 주세요. 마치면 종료 절차대로 handoff를 쓰고 턴을 끝내 주세요.'
 /** 질문을 받으면 사람이 터미널로 보내는 답 */
 const ANSWER = '추천하는 쪽으로 진행해 주세요.'
 const HUMAN = new Set([

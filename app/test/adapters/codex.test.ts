@@ -109,6 +109,7 @@ describe('Codex CLI 점검과 스킬·설정', () => {
       workDir: dir,
       settingsPath: file,
       sessionId: 'fake-id',
+      instructionsPath: path.join(dir, 'task/instructions.md'),
       skill: 'verify',
       contextPath: path.join(dir, 'task/context.md'),
     })
