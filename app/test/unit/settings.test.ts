@@ -349,11 +349,13 @@ describe('곁 세션 (시나리오 11, D386, D388)', () => {
       'S',
       '--append-system-prompt-file',
       'G',
+      '--system-prompt-snapshot',
+      'off',
     ])
     expect(sideArgs({ ...input, resume: true }).slice(1, 3)).toEqual(['--resume', 's-1'])
-    expect(sideArgs({ ...input, resume: true })).toHaveLength(9)
+    expect(sideArgs({ ...input, resume: true })).toHaveLength(11)
     // 설정의 모델·추론 수준 (D391)
-    expect(sideArgs({ ...input, resume: true, model: 'haiku', effort: 'low' }).slice(9)).toEqual([
+    expect(sideArgs({ ...input, resume: true, model: 'haiku', effort: 'low' }).slice(11)).toEqual([
       '--model',
       'haiku',
       '--effort',
@@ -385,6 +387,26 @@ describe('곁 세션 (시나리오 11, D386, D388)', () => {
   })
 })
 
+describe('[단위] 다시 연 곁·기본 세션의 안내 (D446)', () => {
+  it('곁·기본 세션은 시작과 재개 모두 시스템 프롬프트를 기록해 다시 쓰지 않는다. task는 기록한 것을 쓴다 (D441)', () => {
+    const snapshotOff = (args: string[]) => {
+      const i = args.indexOf('--system-prompt-snapshot')
+      return i >= 0 && args[i + 1] === 'off'
+    }
+    const side = { sessionId: 's-1', workDir: WORK_DIR, settingsPath: 'S', guidePath: 'G' }
+    const session = { sessionId: 's-1', home: WORK_DIR, settingsPath: 'S', guidePath: 'G' }
+    for (const resume of [false, true]) {
+      expect(snapshotOff(sideArgs({ ...side, resume }))).toBe(true)
+      expect(snapshotOff(sessionArgs({ ...session, resume }))).toBe(true)
+    }
+    const task = { sessionId: 't', workDir: WORK_DIR, settingsPath: 'S', instructionsPath: 'I' }
+    expect(launchArgs({ ...task, skill: 'fix', contextPath: 'C' })).not.toContain(
+      '--system-prompt-snapshot',
+    )
+    expect(resumeArgs(task)).not.toContain('--system-prompt-snapshot')
+  })
+})
+
 describe('기본 세션 (시나리오 12, D399, D401)', () => {
   const HOME = 'C:\\Users\\u\\.relay'
   const home = ruleAbs(HOME)
@@ -401,14 +423,13 @@ describe('기본 세션 (시나리오 12, D399, D401)', () => {
       'S',
       '--append-system-prompt-file',
       'G',
+      '--system-prompt-snapshot',
+      'off',
     ])
     expect(sessionArgs({ ...input, resume: true }).slice(1, 3)).toEqual(['--resume', 's-1'])
-    expect(sessionArgs({ ...input, resume: true, model: 'opus', effort: 'max' }).slice(9)).toEqual([
-      '--model',
-      'opus',
-      '--effort',
-      'max',
-    ])
+    expect(sessionArgs({ ...input, resume: true, model: 'opus', effort: 'max' }).slice(11)).toEqual(
+      ['--model', 'opus', '--effort', 'max'],
+    )
   })
 
   it('config.json, projects/ 아래, sessions/*/session.json만 막는다. push와 gh는 막지 않고 자동 메모리는 CLI 설정을 따른다', () => {

@@ -1,4 +1,4 @@
-// S8. 단계 절차를 시스템 프롬프트에 두기 (D440~D444): 스킬(지금), --agent, --append-system-prompt-file이
+// S8. 단계 절차를 시스템 프롬프트에 두기 (D440~D446): 스킬(지금), --agent, --append-system-prompt-file이
 // 모델에 가는 요청을 어떻게 바꾸는지, 재개·압축·/clear 뒤에 절차가 남는지 본다.
 // 가짜 API(lib/mockapi.mjs)로 요청 본문만 보므로 모델과 인증이 필요 없다. 절차에는 표식을 넣어 요청에서 찾는다.
 import fs from 'node:fs';
@@ -176,6 +176,15 @@ export default async function run() {
     const appendChanged = await resumed('append-changed', APPEND, ['--append-system-prompt-file', proc2]);
     r.observe('append: 다른 파일로 재개하면 v1 (압축 전 / 뒤)', both(appendChanged, V1));
     r.observe('append: 다른 파일로 재개하면 v2 (압축 전 / 뒤)', both(appendChanged, V2));
+
+    // 곁·기본 세션(D446): --system-prompt-snapshot off로 열고 다른 안내로 다시 열면 압축 전에도 새 안내다
+    const SNAP = ['--system-prompt-snapshot', 'off'];
+    const snapChanged = await resumed('snapshot-off', [...SNAP, ...APPEND], [...SNAP, '--append-system-prompt-file', proc2]);
+    r.check(
+      'snapshot off: 다른 안내로 다시 열면 압축 전부터 새 안내만 있음 (D446)',
+      has(snapChanged.beforeCompact, V2).시스템 && !kept(snapChanged.beforeCompact, V1) && has(snapChanged.afterCompact, V2).시스템,
+      JSON.stringify({ v1: both(snapChanged, V1), v2: both(snapChanged, V2) }),
+    );
 
     // 4. /clear (D110: 같은 프로세스가 새 대화로 계속 돈다)
     for (const [name, args, check] of [['skill-clear', SKILL, false], ['append-clear', APPEND, true]]) {

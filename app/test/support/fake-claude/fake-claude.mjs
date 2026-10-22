@@ -129,6 +129,8 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--append-system-prompt-file') opts.guide = argv[++i]
   else if (a === '--effort') opts.effort = argv[++i]
   else if (a === '--model') i++
+  // 곁·기본 세션의 --system-prompt-snapshot off (D446). 값을 첫 프롬프트로 읽지 않는다
+  else if (a === '--system-prompt-snapshot') i++
   else if (!a.startsWith('--') && opts.prompt === null) opts.prompt = a
 }
 

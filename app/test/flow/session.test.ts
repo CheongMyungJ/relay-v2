@@ -105,7 +105,7 @@ describe('기본 세션 (시나리오 12)', () => {
 
     // 첫 프롬프트 없이 RELAY_HOME을 붙이고 안내를 시스템 프롬프트 파일로 준다 (D399)
     const first = await sessionStart(hh, 1)
-    expect(first.args).toHaveLength(9)
+    expect(first.args).toHaveLength(11)
     expect(first.args.slice(0, 2)).toEqual(['--dangerously-skip-permissions', '--session-id'])
     const sessionId = first.args[2] ?? ''
     expect(first.args.slice(3)).toEqual([
@@ -115,6 +115,9 @@ describe('기본 세션 (시나리오 12)', () => {
       expect.stringMatching(/session\.settings\.json$/),
       '--append-system-prompt-file',
       expect.stringMatching(/session\.guide\.md$/),
+      // 다시 열 때 새로 쓴 안내가 바로 쓰이게 시스템 프롬프트를 기록하지 않는다 (D446)
+      '--system-prompt-snapshot',
+      'off',
     ])
     expect(fs.realpathSync.native(first.cwd)).toBe(path.join(hh.home, 'home'))
     // 안내는 열 때의 지도다 (D400). 프로젝트가 없다

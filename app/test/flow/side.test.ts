@@ -112,7 +112,7 @@ describe('곁 세션 (시나리오 11)', () => {
 
     // 첫 프롬프트 없이 Work 디렉터리를 붙이고 안내를 시스템 프롬프트 파일로 준다 (D386)
     const first = await sideStart(s, 1)
-    expect(first.args).toHaveLength(9)
+    expect(first.args).toHaveLength(11)
     expect(first.args.slice(0, 2)).toEqual(['--dangerously-skip-permissions', '--session-id'])
     const sessionId = first.args[2] ?? ''
     expect(first.args.slice(3)).toEqual([
@@ -122,6 +122,9 @@ describe('곁 세션 (시나리오 11)', () => {
       expect.stringMatching(/side\.settings\.json$/),
       '--append-system-prompt-file',
       expect.stringMatching(/side\.guide\.md$/),
+      // 다시 열 때 새로 쓴 안내가 바로 쓰이게 시스템 프롬프트를 기록하지 않는다 (D446)
+      '--system-prompt-snapshot',
+      'off',
     ])
     expect(fs.realpathSync.native(first.cwd)).toBe(fs.realpathSync.native(s.tree))
     // 안내는 열 때의 지도다 (D387)
@@ -170,12 +173,14 @@ describe('곁 세션 (시나리오 11)', () => {
       error: '곁 세션이 열려 있지 않음',
     })
 
-    // 다시 열면 --resume으로 잇고, 안내는 지금 상태로 새로 만든다 (D386)
+    // 다시 열면 --resume으로 잇고, 안내는 지금 상태로 새로 만든다 (D386). 기록한 시스템 프롬프트를 쓰지 않아
+    // 다시 연 세션에 새 안내가 바로 들어간다 (D446)
     expect(await s.h.relay.openSide(s.key, false)).toEqual({ ok: true })
     const second = await sideStart(s, 2)
     expect(second.resume).toBe(true)
     expect(second.args.slice(1, 3)).toEqual(['--resume', sessionId])
-    expect(second.args).toHaveLength(9)
+    expect(second.args).toHaveLength(11)
+    expect(second.args.slice(-2)).toEqual(['--system-prompt-snapshot', 'off'])
     expect(second.guide).toContain('- t-01 01 의도 정리: 승인됨, tasks/01-intake/\n')
     expect(second.guide).toContain('- t-02 02 원인 분석과 수정: 승인 대기')
     // 열 때마다 새 터미널이다

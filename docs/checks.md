@@ -363,3 +363,12 @@ Windows 10/11 PC에서 설치한 앱과 실제 `claude`로 본다. 결과는 위
 |---|---|---|---|---|---|---|
 | 2026-10-22 | 8cce0be | 해당 없음(가짜 `claude`) | Linux 클라우드 컨테이너(Claude Code 웹 세션), 예비 확인 | [단위]·[어댑터]·[흐름]·[계약]·[실제] dry | 통과 | `typecheck`, `lint`, `format:check` 통과. `npm test` 80개 파일 1190개 통과·3개 건너뜀. `test:contract` 9개 통과·5개 건너뜀. `RELAY_REAL_CLAUDE=dry npm run test:claude` 11개 통과·4개 건너뜀. 스킬 정적 검사 통과 |
 | 2026-10-22 | 8cce0be | 2.1.308 | Linux 클라우드 컨테이너(Claude Code 웹 세션), 예비 확인 | [실제] S | 통과 | `RELAY_REAL_CASES=S`, effort medium, 모델은 기본(Sonnet 5.5). Work 완료 66초: 의도 정리 0회 23초, 원인 분석과 수정 0회 21초, 리뷰와 검증 0회 22초(괄호 앞은 형식 오류 되돌림. 재촉, [오류 무시하고 승인] 모두 0). 스킬 호출 없이 첫 프롬프트(`relay work-start 단계를 시작합니다. 이 task의 컨텍스트: …`)와 시스템 프롬프트의 절차만으로 `context.md`를 읽고 intent 초안과 handoff를 쓴 뒤 마무리 안내 문구를 그대로 출력했다(터미널 기록). 첫 실행은 이 컨테이너의 설정 폴더가 온보딩 전이라 테마 선택 창에서 멈춰 1500초 시간 초과였고(앱과 상관없음), 온보딩만 적은 새 `CLAUDE_CONFIG_DIR`로 다시 돌려 통과했다. 이 컨테이너의 `CLAUDE_CODE_CHILD_SESSION` 표시를 물려받아 대화 기록 저장이 꺼진다는 경고가 떴다. 그래서 재개(`resume`)는 여기서 돌리지 않았다 |
+
+## M29. 다시 연 곁·기본 세션의 안내 (D446)
+
+| 날짜 | 앱 커밋 | Claude Code 버전 | OS | 종류 | 결과 | 메모 |
+|---|---|---|---|---|---|---|
+| 2026-10-22 | (이 커밋) | 2.1.308 | Linux 클라우드 컨테이너(Claude Code 웹 세션), 예비 확인 | [계약] 실제 쪽 | 통과 | `RELAY_CONTRACT_LIVE=1`(haiku). `--help`에 `--system-prompt-snapshot`을 포함해 앱이 넘기는 옵션이 모두 있고, 훅 본문은 녹화본(2.1.293)과 다른 필드가 없었다. `RELAY_CONTRACT_UPDATE=1`로 녹화본을 2.1.308로 새로 썼다(옵션 목록에 `--system-prompt-snapshot`이 더해지고 나머지는 시간 값만 바뀜) |
+| 2026-10-22 | (이 커밋) | 해당 없음(가짜 `claude`) | Linux 클라우드 컨테이너(Claude Code 웹 세션), 예비 확인 | [단위]·[어댑터]·[흐름]·[계약]·[실제] dry | 통과 | `typecheck`, `lint`, `format:check` 통과. `npm test` 80개 파일 1191개 통과·3개 건너뜀. `test:contract` 9개 통과·5개 건너뜀. `RELAY_REAL_CLAUDE=dry npm run test:claude` 11개 통과·4개 건너뜀 |
+| 2026-10-22 | (이 커밋) | 2.1.308 | 같음, 가짜 API | 스파이크 S8 | 통과 | 절차 6(`--system-prompt-snapshot off`로 다른 안내를 주어 재개)을 더해 다시 돌렸다. 성공 기준 다섯 모두 통과(`docs/spikes.md` S8) |
+

@@ -129,7 +129,7 @@ export function sessionGuide(input: SessionGuideInput): string {
     ...projectLines(input),
     '## 읽는 규칙',
     '',
-    '- 위 목록은 열 때의 것이다. 상태가 중요하면 `work.json`을 다시 읽고, 새로 생긴 것은 `projects/`를 다시 본다.',
+    '- 위 목록은 이 세션을 마지막으로 연(다시 연) 때의 것이다. 상태가 중요하면 `work.json`을 다시 읽고, 새로 생긴 것은 `projects/`를 다시 본다.',
     '- 폐기된 task(`status: discarded`)의 산출물과 결정은 버린 시도다. 사실이나 결정으로 받지 않는다.',
     '- 승인 전 task의 handoff에 적힌 결정은 아직 사람이 승인하지 않았다.',
     '',

@@ -338,7 +338,9 @@ export interface SideArgsInput {
 
 /**
  * 곁 세션의 실행 인자 (D386). 첫 프롬프트를 주지 않아 열어도 사람의 입력을 기다린다. 안내는 시스템 프롬프트에 덧붙인다:
- * 대화 기록에 남지 않아 다시 열 때도 다시 준다. 이어서 하라는 입력(D218)은 주지 않는다
+ * 대화 기록에 남지 않아 다시 열 때도 다시 준다. 이어서 하라는 입력(D218)은 주지 않는다.
+ * --system-prompt-snapshot off로 처음 연 때 기록한 시스템 프롬프트를 쓰지 않고 요청마다 다시 만들어, 다시 연 세션에
+ * 그때 새로 쓴 안내가 바로 들어간다 (D446, 스파이크 S8). task는 이 옵션을 주지 않는다: 한 대화 안의 절차가 같아야 한다(D441)
  */
 export function sideArgs(input: SideArgsInput): string[] {
   return [
@@ -352,6 +354,8 @@ export function sideArgs(input: SideArgsInput): string[] {
     input.settingsPath,
     '--append-system-prompt-file',
     input.guidePath,
+    '--system-prompt-snapshot',
+    'off',
     ...modelArgs(input),
   ]
 }
@@ -417,7 +421,7 @@ export interface SessionArgsInput {
 
 /**
  * 기본 세션의 실행 인자 (D399). 곁 세션(sideArgs)과 같은 모양이고 --add-dir만 RELAY_HOME이다. 첫 프롬프트를 주지 않아
- * 사람의 입력을 기다리고, 안내는 시스템 프롬프트에 덧붙여 다시 열 때도 다시 준다
+ * 사람의 입력을 기다리고, 안내는 시스템 프롬프트에 덧붙여 다시 열 때도 다시 준다. 다시 연 때의 안내가 바로 쓰인다(D446)
  */
 export function sessionArgs(input: SessionArgsInput): string[] {
   const { home, ...rest } = input
