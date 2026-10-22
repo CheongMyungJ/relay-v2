@@ -1312,7 +1312,7 @@ app/src/
 - **[어댑터]:** `instructions.md`의 내용(머리글 없음, 공통 규칙이 뒤), 남은 relay 스킬 폴더만 지움, `.claude/skills`가 없어도 됨, 머리글 떼기(`store.test.ts`).
 - **[흐름]:** task마다 `instructions.md`와 실행 인자, 가짜 `claude`가 task로 보고 받은 절차를 남김, `.claude/skills`가 생기지 않음, deny 규칙(`flow.test.ts`). [재개]의 인자에 같은 파일(`control.test.ts`). 공용 스킬의 유형별 조립은 `instructions.md`로 본다(`refactor`·`spec`·`general.test.ts`).
 - **[계약]:** 앱이 넘기는 옵션에 `--append-system-prompt-file`이 들어가고, 녹화본(2.1.293)에 이미 있다.
-- **[실제]:** 바꾸지 않았다. 실제 모델이 첫 프롬프트와 시스템 프롬프트의 절차만으로 단계를 시작하는지는 다음 정기 실행에서 본다(`RELAY_REAL_CLAUDE=dry`는 통과).
+- **[실제]:** 시험은 그대로이고, 사람 역할의 재촉 문구만 "이 단계의 절차를 계속해 주세요"로 바꿨다. S 경우가 실제 모델로 첫 프롬프트와 시스템 프롬프트의 절차만으로 끝까지 갔다(`docs/checks.md` M28). 재개(`resume`) 경우는 다음 정기 실행에서 본다(`RELAY_REAL_CLAUDE=dry`는 통과).
 - 스킬 정적 검사가 통과한다. 스파이크 S8(`docs/spikes.md`)이 전제를 본다.
 
 ## 8. 테스트 전략
