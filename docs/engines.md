@@ -161,7 +161,7 @@ Claude AskUserQuestion은 유지한다. Codex는 확정된 Q3에 따라 `mcp__re
 
 MCP 기다림은 WorkRunner 직렬 처리 줄 밖에서 await한다. 그동안 다른 훅·IPC·중단 명령을 처리할 수 있다. Stop 도중 질문이 남아 있으면 완료를 막는다.
 
-스킬과 공통 종료 규칙은 같은 원본을 사용한다. Codex 배포본만 name/description과 질문 도구 이름을 바꾸어 `<taskDir>/.agents/skills/relay-*/SKILL.md`에 쓴다. 원본·worktree에 지시 파일을 추가하지 않는다. `--add-dir`이 외부 스킬을 자동 발견한다고 가정하지 않는다. 짧은 첫 프롬프트로 스킬·context 경로를 명시적으로 읽게 하고, MCP 초기 instructions와 SessionStart(startup/resume/clear/compact)의 additionalContext에도 지시를 전달한다. 전역 memories 기능·사용·생성을 이 실행에서 끈다. 실제 Linux 모델이 외부 스킬과 context를 읽고, 압축·재개 뒤에도 현재 단계와 질문 규칙을 따르는 것을 확인했다. 전역 메모리 격리의 장기 검증과 Windows 실제 모델 시험은 남아 있다. Codex용 배포 지시는 현재 task 산출물과 handoff를 `apply_patch`로 작성하도록 안내한다. 이전 task 경로를 본문에 적은 쉘 쓰기 명령도 보수적인 보호 훅이 거부할 수 있기 때문이다. 보호 대상이나 거부된 도구를 우회하는 허용은 아니다.
+스킬과 공통 종료 규칙은 같은 원본을 사용한다. Claude Code task는 조립한 절차를 스킬이 아니라 `--append-system-prompt-file`로 받는다(design.md D440~D442). Codex 배포본만 name/description과 질문 도구 이름을 바꾸어 `<taskDir>/.agents/skills/relay-*/SKILL.md`에 쓴다. 원본·worktree에 지시 파일을 추가하지 않는다. `--add-dir`이 외부 스킬을 자동 발견한다고 가정하지 않는다. 짧은 첫 프롬프트로 스킬·context 경로를 명시적으로 읽게 하고, MCP 초기 instructions와 SessionStart(startup/resume/clear/compact)의 additionalContext에도 지시를 전달한다. 전역 memories 기능·사용·생성을 이 실행에서 끈다. 실제 Linux 모델이 외부 스킬과 context를 읽고, 압축·재개 뒤에도 현재 단계와 질문 규칙을 따르는 것을 확인했다. 전역 메모리 격리의 장기 검증과 Windows 실제 모델 시험은 남아 있다. Codex용 배포 지시는 현재 task 산출물과 handoff를 `apply_patch`로 작성하도록 안내한다. 이전 task 경로를 본문에 적은 쉘 쓰기 명령도 보수적인 보호 훅이 거부할 수 있기 때문이다. 보호 대상이나 거부된 도구를 우회하는 허용은 아니다.
 
 ### 5.3 보호와 자동 승인
 

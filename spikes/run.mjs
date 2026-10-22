@@ -1,6 +1,7 @@
 // 스파이크 실행기. 인자로 스파이크 id를 주면 그것만 돌린다(예: node run.mjs S2 S3).
 // S5는 깨끗한 사용자 프로필이 필요하므로 가장 먼저 돌린다.
 // S7(GitHub 연동)은 Claude Code를 쓰지 않고 사람의 단계가 있어 "전부"에 넣지 않는다. 이름을 적어야 돈다.
+// S8은 가짜 API로 돌아 인증이 필요 없다.
 import fs from 'node:fs';
 import path from 'node:path';
 import { RESULTS, MODEL, sh } from './lib/util.mjs';
@@ -14,6 +15,7 @@ const ALL = {
   S4: './s4-permissions.mjs',
   S6: './s6-resume.mjs',
   S7: './s7-github.mjs',
+  S8: './s8-system-prompt.mjs',
 };
 const wanted = process.argv.slice(2).map((a) => a.toUpperCase());
 const ids = Object.keys(ALL).filter((id) => (wanted.length === 0 ? id !== 'S7' : wanted.includes(id)));
