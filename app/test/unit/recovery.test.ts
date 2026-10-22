@@ -110,7 +110,7 @@ describe('[단위] 끊긴 작업의 알림 (D121, D123)', () => {
     const view = operationView(work({ tasks, operation: op }))
     expect(view?.lines.slice(0, 2)).toEqual([
       '고른 단계: 의도 정리(intake)',
-      '바꿀 유형: 기능 추가 (D237)',
+      '바꿀 유형: 기능 추가·변경 (D237)',
     ])
     // 되감기는 없어 이어서 하지 않는다: [다시 시도]가 없다 (D424)
     expect(view?.retry).toBeNull()

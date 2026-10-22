@@ -103,7 +103,7 @@ describe('기본 세션의 안내 (D400)', () => {
     expect(g).toContain('### shop (id: shop-a1b2c3)')
     expect(g).toContain('- 기본 브랜치: main')
     expect(g).toContain(
-      '- w-20261017-001 "쿠폰 적용" — 기능 추가, 진행 중, 지금 단계 01 의도 정리 (승인 대기)',
+      '- w-20261017-001 "쿠폰 적용" — 기능 추가·변경, 진행 중, 지금 단계 01 의도 정리 (승인 대기)',
     )
     expect(g).toContain(
       '  - worktree: /u/.relay/projects/shop-a1b2c3/worktrees/w-20261017-001 (브랜치 relay/w-20261017-001)',

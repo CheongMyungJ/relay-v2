@@ -295,14 +295,18 @@ function issueNumberInput(text: string): number | null | undefined {
   return /^\d+$/.test(t) && Number.isInteger(n) && n > 0 ? n : undefined
 }
 
-/** 유형 버튼의 설명. 설계는 구현 전에 설계만 정하는 큰 일(D353), 일반은 다른 유형에 맞지 않는 일에 쓴다 (D303, I88) */
+/**
+ * 유형 버튼의 설명. 기능 추가·변경은 동작을 바꾸거나 없애는 일도 맡고(D429), 설계는 구현 전에 설계만 정하는 큰 일(D353),
+ * 일반은 다른 유형에 맞지 않는 일에 쓴다 (D303, I88)
+ */
 const WORK_TYPE_HINT: Readonly<Partial<Record<WorkType, string>>> = {
+  feature: '새 동작을 더하거나 지금 동작을 바꾸거나 없애는 일',
   spec: '구현 전에 설계만 정하는 큰 일',
   general: '다른 유형에 맞지 않는 일',
 }
 
 /**
- * 업무 유형 고르기 (D236, D237, D261, D303, D353): 버그 수정 / 기능 추가 / 리팩터링 / 설계 / 일반 버튼. 새 Work에는 기본 선택이
+ * 업무 유형 고르기 (D236, D237, D261, D303, D353, D429): 버그 수정 / 기능 추가·변경 / 리팩터링 / 설계 / 일반 버튼. 새 Work에는 기본 선택이
  * 없다(value가 null). 설명이 있는 유형은 버튼의 title로 두고, 그 유형을 골랐을 때 버튼 줄 아래에 보인다 (I88)
  */
 function WorkTypePicker({
@@ -398,7 +402,7 @@ function TidyNotice({
 /** 요청 입력의 예시 문구. 유형을 고르기 전에는 버그 수정의 것이다 (D261, I88) */
 const REQUEST_PLACEHOLDER: Readonly<Record<WorkType, string>> = {
   bugfix: '버그 설명, 로그, 이슈 내용을 붙여 넣으세요',
-  feature: '만들 기능, 쓰는 흐름, 참고할 이슈 내용을 붙여 넣으세요',
+  feature: '만들 기능이나 바꾸거나 없앨 동작, 쓰는 흐름, 참고할 이슈 내용을 붙여 넣으세요',
   refactor: '바꿀 구조(예: 어느 계산을 한 모듈로 모을지), 바꿀 곳, 지켜야 할 동작을 적어 주세요',
   spec: '무엇을 설계할지, 정해야 할 것, 설계 문서를 둘 곳이나 고칠 문서를 적어 주세요',
   general: '할 일과 끝났다고 볼 조건을 적어 주세요(무엇을 바꾸고 어떻게 확인할지)',
@@ -923,7 +927,7 @@ const GROUPS: readonly SettingGroup[] = [
 ]
 
 /**
- * 설정 목록을 묶음(공통 / 버그 수정 / 기능 추가 / 리팩터링 / 설계 / 일반 / PR 대응)마다 모은다 (D256, D278, D318, D374). type을 주면 그 유형에서 보이는 묶음만
+ * 설정 목록을 묶음(공통 / 버그 수정 / 기능 추가·변경 / 리팩터링 / 설계 / 일반 / PR 대응)마다 모은다 (D256, D278, D318, D374). type을 주면 그 유형에서 보이는 묶음만
  * 둔다. Work 설정은 그 Work 유형의 단계만 보인다 (I57)
  */
 function grouped<K extends string>(

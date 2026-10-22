@@ -1394,7 +1394,7 @@ fieldset.field {
   justify-self: start;
 }
 
-/* 설정 목록의 묶음: 공통 / 버그 수정 / 기능 추가 / PR 대응 (D256) */
+/* 설정 목록의 묶음: 공통 / 버그 수정 / 기능 추가·변경 / PR 대응 (D256) */
 .form-group {
   display: grid;
   gap: 8px;

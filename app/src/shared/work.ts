@@ -5,17 +5,17 @@ import type { AgentEngine } from './agent'
 import type { HandoffStatus, NodeName, TaskNode } from './contracts'
 
 /**
- * 업무 유형 (D232, D236, D258, D302, D350): 버그 수정(bugfix), 기능 추가(feature), 리팩터링(refactor), 설계(spec),
+ * 업무 유형 (D232, D236, D258, D302, D350): 버그 수정(bugfix), 기능 추가·변경(feature, D429), 리팩터링(refactor), 설계(spec),
  * 일반(general). 사람이 새 Work 대화상자에서 고르고, 의도 승인 전까지만 바꿀 수 있다 (D237). 유형마다 파이프라인이
  * 다르다 (core/pipeline PIPELINES). 설계는 구현 전에 설계만 정하는 큰 일에 쓰고(D353), 일반은 다른 유형에 맞지 않는
  * 일에 쓴다 (D303)
  */
 export type WorkType = 'bugfix' | 'feature' | 'refactor' | 'spec' | 'general'
 
-/** 업무 유형의 화면 이름 (D236) */
+/** 업무 유형의 화면 이름 (D236). 기능 추가는 동작을 바꾸거나 없애는 일도 맡아 "기능 추가·변경"이다 (D429) */
 export const WORK_TYPE_LABEL: Readonly<Record<WorkType, string>> = {
   bugfix: '버그 수정',
-  feature: '기능 추가',
+  feature: '기능 추가·변경',
   refactor: '리팩터링',
   spec: '설계',
   general: '일반',

@@ -552,7 +552,7 @@ describe('context.md: 기능 추가 (D232, D236, D256)', () => {
 
   it('task 정보에 업무 유형을 넣는다 (D236)', () => {
     const md = buildContext(featureInput('design'))
-    expect(section(md, 'task 정보')).toContain('- 업무 유형: 기능 추가 (`feature`)')
+    expect(section(md, 'task 정보')).toContain('- 업무 유형: 기능 추가·변경 (`feature`)')
     expect(section(md, 'task 정보')).toContain('- node: design (설계와 계획)\n- skill: design')
   })
 
