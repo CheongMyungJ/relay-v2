@@ -368,7 +368,7 @@ Windows 10/11 PC에서 설치한 앱과 실제 `claude`로 본다. 결과는 위
 
 | 날짜 | 앱 커밋 | Claude Code 버전 | OS | 종류 | 결과 | 메모 |
 |---|---|---|---|---|---|---|
-| 2026-10-22 | (이 커밋) | 2.1.308 | Linux 클라우드 컨테이너(Claude Code 웹 세션), 예비 확인 | [계약] 실제 쪽 | 통과 | `RELAY_CONTRACT_LIVE=1`(haiku). `--help`에 `--system-prompt-snapshot`을 포함해 앱이 넘기는 옵션이 모두 있고, 훅 본문은 녹화본(2.1.293)과 다른 필드가 없었다. `RELAY_CONTRACT_UPDATE=1`로 녹화본을 2.1.308로 새로 썼다(옵션 목록에 `--system-prompt-snapshot`이 더해지고 나머지는 시간 값만 바뀜) |
-| 2026-10-22 | (이 커밋) | 해당 없음(가짜 `claude`) | Linux 클라우드 컨테이너(Claude Code 웹 세션), 예비 확인 | [단위]·[어댑터]·[흐름]·[계약]·[실제] dry | 통과 | `typecheck`, `lint`, `format:check` 통과. `npm test` 80개 파일 1191개 통과·3개 건너뜀. `test:contract` 9개 통과·5개 건너뜀. `RELAY_REAL_CLAUDE=dry npm run test:claude` 11개 통과·4개 건너뜀 |
-| 2026-10-22 | (이 커밋) | 2.1.308 | 같음, 가짜 API | 스파이크 S8 | 통과 | 절차 6(`--system-prompt-snapshot off`로 다른 안내를 주어 재개)을 더해 다시 돌렸다. 성공 기준 다섯 모두 통과(`docs/spikes.md` S8) |
+| 2026-10-22 | 7e4bbf0 | 2.1.308 | Linux 클라우드 컨테이너(Claude Code 웹 세션), 예비 확인 | [계약] 실제 쪽 | 통과 | `RELAY_CONTRACT_LIVE=1`(haiku). `--help`에 `--system-prompt-snapshot`을 포함해 앱이 넘기는 옵션이 모두 있고, 훅 본문은 녹화본(2.1.293)과 다른 필드가 없었다. `RELAY_CONTRACT_UPDATE=1`로 녹화본을 2.1.308로 새로 썼다(옵션 목록에 `--system-prompt-snapshot`이 더해지고 나머지는 시간 값만 바뀜) |
+| 2026-10-22 | 7e4bbf0 | 해당 없음(가짜 `claude`) | Linux 클라우드 컨테이너(Claude Code 웹 세션), 예비 확인 | [단위]·[어댑터]·[흐름]·[계약]·[실제] dry | 통과 | `typecheck`, `lint`, `format:check` 통과. `npm test` 80개 파일 1191개 통과·3개 건너뜀. `test:contract` 9개 통과·5개 건너뜀. `RELAY_REAL_CLAUDE=dry npm run test:claude` 11개 통과·4개 건너뜀 |
+| 2026-10-22 | 7e4bbf0 | 2.1.308 | 같음, 가짜 API | 스파이크 S8 | 통과 | 절차 6(`--system-prompt-snapshot off`로 다른 안내를 주어 재개)을 더해 다시 돌렸다. 성공 기준 다섯 모두 통과(`docs/spikes.md` S8) |
 
