@@ -60,6 +60,8 @@ Review the whole change of this Work, apply only the findings the human picks, t
 <!-- /type -->
 <!-- type: feature -->
 - Does the implementation fit the user scenarios, requirements and approach in `design.md`? Is `계획과 달라진 점` in `implement.md` reasonable? Do not judge requirements added in the design or non-functional requirements: write a mismatch as a finding.
+- Does the change sit where `구조 맞춤` in `design.md` says?
+- If something goes away: is it all gone? Look for references left, dead code, and config or docs no longer used.
 <!-- /type -->
 <!-- type: refactor -->
 - Did any logic change in the diff (outside the differences the human accepted)? A behavior change the human did not accept is a 차단 finding. Are the structural goals met? Did the scope grow beyond the plan?
@@ -85,7 +87,12 @@ Review the whole change of this Work, apply only the findings the human picks, t
 <!-- /type -->
 <!-- type: bugfix feature refactor general -->
 - The repo's conventions and readability.
+- Fit with the existing structure: the layer or module each change sits in, dependency directions, the patterns the code around it follows.
+- Duplication: code that repeats a function or abstraction the repo already has.
+- Maintainability: complexity that grows (deep nesting, long functions, more flags), and tests tied to internal details that will break on any change.
+- A rule in the team knowledge (`kind: rule`, in `context.md`) that the change breaks is a 차단 finding. For entries listed by title only, open the ones that touch the changed code to see whether they are rules.
 - Changes that are not needed.
+- **Out of scope:** a maintainability problem beyond this Work (it was there before, or fixing it would widen the diff) is not a finding. Write it in `나중에 정리할 곳` with why it is worth cleaning up. It is not picked or applied.
 <!-- /type -->
 <!-- type: bugfix -->
 - Code that the reproduction steps use is not unused code.
@@ -134,6 +141,9 @@ Review the whole change of this Work, apply only the findings the human picks, t
 <!-- type: bugfix feature refactor general -->
 - **Changed test files:** list every test file changed since the base commit (`git diff <base commit>`), including ones the step's artifact does not mention. Mark each 약화 아님 or 약화 의심, with the reason.
 <!-- /type -->
+<!-- type: feature -->
+  A change to a test of a behavior marked (바뀜) or (없앰) in the 완료조건 is 약화 아님 when its new expected values match that line: write "약화 아님 — (바뀜) n" or "약화 아님 — (없앰) n", with the marker of that line, and do not ask. n is the line's position among all 완료조건 lines of the intent, counting from 1 (default items included), as in `implement.md`. If the test of the old behavior was only deleted, with no test of the changed behavior or of the removal, it looks like weakening: ask. Judge any other change as above.
+<!-- /type -->
 <!-- type: refactor -->
   An existing test that only followed an internal interface change (call names, import paths, file location, setup code) is 약화 아님. If its expected values or inputs changed, or a test disappeared, it looks like weakening: ask.
 <!-- /type -->
@@ -152,7 +162,7 @@ Ask on the spot:
 - **`확인: 사람` items:** gather them all into one question. For each, show what to look at (file, diff location, run result). The human's answer decides 통과 or 실패. Write "사람 확인" and the answer in the evidence, and record the answer in `decisions` with `by: human`.
 <!-- /type -->
 <!-- type: bugfix feature refactor general -->
-- **A test change looks like weakening:** show which test changed and how. If the human says it is not weakening, "기존 테스트를 약화하거나 삭제하지 않는다" is 통과. If they say it is, it is 실패.
+- **A test change looks like weakening:** show which test changed and how. If the human says it is not weakening, the 완료조건 on weakening tests is 통과. If they say it is, it is 실패.
 <!-- /type -->
 - **Any 실패 or 판정 불가:** let the human choose:
   - Fix it here: fix and commit, run the test commands (if any), and judge again on the final code. Write what you did in `반영`.
@@ -162,7 +172,7 @@ Ask on the spot:
 ## Done when
 
 <!-- type: bugfix feature refactor general -->
-- `verification.md` has all six template sections.
+- `verification.md` has all seven template sections.
 - If there were findings, the human picked; the picked ones are fixed and committed, and the test result is in `반영`.
 - Every 완료조건 of the intent has a verdict and evidence, judged on the final code.
 - Every changed test file is judged.
@@ -216,6 +226,10 @@ Ask on the spot:
 ## 테스트 파일 변경
 - 파일 — 약화 아님 / 약화 의심(사람 판단: …) — 이유
 (바뀐 테스트 파일이 없으면 "없음")
+
+## 나중에 정리할 곳
+- 파일·모듈 — 무엇이 문제인지, 정리하면 좋을 까닭
+(없으면 "없음")
 <!-- /type -->
 <!-- type: spec -->
 ## 문서 밖 파일 변경
@@ -248,13 +262,14 @@ Ask on the spot:
 ```
 <!-- /type -->
 <!-- type: feature -->
-- `동작`: what the user scenarios in `design.md` can now do. `주요 설계 결정`: the chosen way and rejected alternatives, briefly.
+- `동작`: what the user scenarios in `design.md` can now do. Split it into 새로 되는 것 / 바뀌는 것 / 없어지는 것, only those that apply. `호환성`: only when a 완료조건 is marked "(레포 밖 인터페이스)": what breaks for users outside the repo and how they move over; otherwise leave the section out. `주요 설계 결정`: the chosen way and rejected alternatives, briefly.
 
 ```markdown
 # PR 제목
 
 ## 요약
 ## 동작
+## 호환성
 ## 주요 설계 결정
 ## 변경
 ## 테스트

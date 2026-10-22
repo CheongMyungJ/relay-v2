@@ -194,7 +194,7 @@ export const FIX_DOC = [
   '',
 ].join('\n')
 
-/** verification.md의 판정 절들 (5.6.6): 완료조건 판정, 테스트 파일 변경, 남은 위험 */
+/** verification.md의 판정 절들 (5.6.6, D437): 완료조건 판정, 테스트 파일 변경, 나중에 정리할 곳, 남은 위험 */
 export const VERDICTS = [
   '## 완료조건 판정',
   '| 완료조건 | 판정 | 근거 |',
@@ -205,6 +205,9 @@ export const VERDICTS = [
   '',
   '## 테스트 파일 변경',
   '- test/avg.test.js — 약화 아님 — 시험 추가',
+  '',
+  '## 나중에 정리할 곳',
+  '- 없음',
   '',
   '## 남은 위험',
   '- 없음',
@@ -313,7 +316,7 @@ export const DESIGN_REQUIREMENTS = [
   '없음',
 ].join('\n')
 
-/** design.md (5.6.8, D244): 일곱 절 */
+/** design.md (5.6.8, D244, D431): 여덟 절 */
 export const DESIGN_DOC = [
   '## 유저 시나리오',
   DESIGN_SCENARIO,
@@ -323,11 +326,17 @@ export const DESIGN_DOC = [
   '',
   '## 접근',
   '- 방식: 정렬한 사본의 가운데 값',
+  '- 구조 맞춤: 기존 구조 그대로 (src/avg.js의 avg 옆)',
+  '- 재사용: 없음',
   '- 고려한 대안: 없음',
   '- 사람 제안 판정: 없음',
   '',
   '## 바뀌는 곳',
   '- src/avg.js — median(xs)를 내보낸다',
+  '- 없애는 것: 없음',
+  '',
+  '## 기존 동작 영향',
+  '없음',
   '',
   '## 구현 계획',
   '1. median 더하기 — src/avg.js — F1, F2',
@@ -392,6 +401,9 @@ export const FEATURE_VERDICTS = [
   '## 테스트 파일 변경',
   '- test/median.test.js — 약화 아님 — 새 파일',
   '',
+  '## 나중에 정리할 곳',
+  '- 없음',
+  '',
   '## 남은 위험',
   '- 없음',
   '',
@@ -448,6 +460,9 @@ export const REFACTOR_VERDICTS = [
   '',
   '## 테스트 파일 변경',
   '- test/avg-safety.test.js — 약화 아님 — 새 파일',
+  '',
+  '## 나중에 정리할 곳',
+  '- 없음',
   '',
   '## 남은 위험',
   '- 없음',
@@ -543,6 +558,9 @@ export const GENERAL_VERDICTS = [
   '| README의 avg 설명이 처음 보는 사람에게 읽힌다 | 통과 | 사람 확인: 읽힌다 |',
   '',
   '## 테스트 파일 변경',
+  '- 없음',
+  '',
+  '## 나중에 정리할 곳',
   '- 없음',
   '',
   '## 남은 위험',

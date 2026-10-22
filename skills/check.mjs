@@ -209,8 +209,9 @@ const templateSources = {
 // 공용 스킬은 유형마다 조립한 글로 본다 (D279). verify의 pr.md 템플릿은 설계 5.6.6에 유형마다 하나씩 있으므로, 그 유형의
 // 템플릿 절은 있어야 하고 다른 유형에만 있는 절은 없어야 한다
 const PR_MARK = { bugfix: '## 원인', feature: '## 동작', refactor: '## 목표 구조', spec: '## 다시 볼 결정', general: '## 주요 결정' };
-// 설계의 verification.md는 테스트 파일 변경 대신 문서 밖 파일 변경을, 남은 위험 앞에 다시 볼 결정을 둔다 (D374)
-const SPEC_VERIFICATION = { drop: ['## 테스트 파일 변경'], add: ['## 문서 밖 파일 변경', '## 다시 볼 결정'] };
+// 설계의 verification.md는 테스트 파일 변경 대신 문서 밖 파일 변경을, 남은 위험 앞에 다시 볼 결정을 둔다 (D374).
+// 나중에 정리할 곳은 코드를 바꾸는 유형에만 있다 (D437)
+const SPEC_VERIFICATION = { drop: ['## 테스트 파일 변경', '## 나중에 정리할 곳'], add: ['## 문서 밖 파일 변경', '## 다시 볼 결정'] };
 for (const [name, sections] of Object.entries(templateSources)) {
   for (const v of variants.filter((x) => x.name === name)) {
     const skillHeadings = codeBlocks(v.text, 'markdown').flatMap(headings);
@@ -223,7 +224,7 @@ for (const [name, sections] of Object.entries(templateSources)) {
       if (name === 'verify' && v.type === 'spec') {
         designHeadings = [...designHeadings.filter((h) => !SPEC_VERIFICATION.drop.includes(h)), ...SPEC_VERIFICATION.add];
         const left = SPEC_VERIFICATION.drop.filter((h) => skillHeadings.includes(h));
-        check(left.length === 0, `${v.label}: 테스트 파일 변경 절이 없음 (D374)${left.length ? ` (${left.join(', ')})` : ''}`);
+        check(left.length === 0, `${v.label}: 테스트 파일 변경·나중에 정리할 곳 절이 없음 (D374, D437)${left.length ? ` (${left.join(', ')})` : ''}`);
       }
       const missing = designHeadings.filter((h) => !skillHeadings.includes(h));
       check(missing.length === 0, `${v.label}: 설계 ${sec.replace(/#+ /, '')} 템플릿 절 ${designHeadings.length}개 모두 있음${missing.length ? ` (빠짐: ${missing.join(', ')})` : ''}`);
@@ -298,6 +299,10 @@ const spec = {
     ['D238', '유형 불일치: 초안 전에 물음, 바꾸면 새 유형으로 Work 초안을 쓰고 blocked, 직접 바꾸지 않음', /Type mismatch[\s\S]*ask before you write the draft[\s\S]*Work draft with the new type[\s\S]*`blocked`[\s\S]*Never change the type yourself/],
     ['D239', '기능 추가 기본 완료조건 세 개', /`- \[ \] <test command>가 통과한다` \/ `- \[ \] 기존 테스트를 약화하거나 삭제하지 않는다` \/ `- \[ \] 완료조건의 각 동작을 확인하는 테스트가 있다`/, ['feature']],
     ['D240', '인수 조건: 밖에서 보이는 동작, "<조건>이면 <결과>", 구현 세부 없음', /behavior seen from outside[\s\S]*"<조건>이면 <결과>"[\s\S]*No implementation details/, ['feature']],
+    ['D429', '기능 추가·변경: 의도대로인 동작을 바꾸거나 없애는 일도 맡음, 의도와 다르면 버그(유형 불일치)', /Changing or removing behavior:\*\* this type also covers[\s\S]*works as intended now[\s\S]*it is a bug: that is a type mismatch/, ['feature']],
+    ['D429', '유형 설명: feature는 기능 추가·변경', /`feature` \(기능 추가·변경: new behavior, or changing or removing a behavior that works as intended now\)/],
+    ['D430', '바뀜·없앰 표시와 지금 결과, 레포 밖 인터페이스 표시', /"\(바뀜\) <조건>이면 <새 결과> \(지금: <옛 결과>\)"[\s\S]*"\(없앰\) <조건>이면 <결과> \(지금: <옛 결과>\)"[\s\S]*"\(레포 밖 인터페이스\)"/, ['feature']],
+    ['D430', '표시가 있으면 약화 금지 기본 항목을 바꿈', /marked \(바뀜\) or \(없앰\), write the second default item as `- \[ \] \(바뀜\)·\(없앰\) 항목의 옛 동작을 잡던 테스트 밖에서는 기존 테스트를 약화하거나 삭제하지 않는다`/, ['feature']],
     ['D241', '사람 제안: 반드시면 제약, 아니면 (사람 제안)', /`제약` when it is a must[\s\S]*"\(사람 제안\)"/, ['feature', 'refactor']],
     ['D375', '설계의 사람 제안: 반드시면 제약, 아니면 (사람 제안), spec이 그래도 물음', /how something should be decided[\s\S]*`제약` when it is a must[\s\S]*"\(사람 제안\)"[\s\S]*spec still asks about it/, ['spec']],
     ['5.6.4', '리팩터링의 계획도 하지 않음', /Do not plan how to reach the structure\. That is the job of refactor/, ['refactor']],
@@ -329,7 +334,12 @@ const spec = {
     ['5.6.8', '입력: context.md, request.md 경로', /`context\.md`[\s\S]*`request\.md`/],
     ['D233', '작은 feature도 거치고 분량만 줄임', /Small features go through this step too/],
     ['D243', '코드를 바꾸지 않음, 실험은 되돌림', /does not change code[\s\S]*Revert any experiment/],
-    ['5.6.8', '순서: 시나리오 → 요구사항 → 물음 → 접근과 바뀌는 곳 → 계획', /User scenarios\.[\s\S]*Requirements\.[\s\S]*Ask if needed[\s\S]*Approach and what changes[\s\S]*Implementation plan and test plan/],
+    ['5.6.8', '순서: 시나리오 → 요구사항 → 물음 → 접근, 바뀌는 곳, 기존 동작 영향 → 계획', /User scenarios\.[\s\S]*Requirements\.[\s\S]*Ask if needed[\s\S]*Approach, what changes and the impact on existing behavior[\s\S]*Implementation plan and test plan/],
+    ['D431', '바뀜·없앰이면 옛 동작에 기대는 곳을 모두 찾음(필요한 만큼만 읽기의 예외)', /marked \(바뀜\) or \(없앰\), find every place that depends on the old behavior[\s\S]*exception to reading only as far as the design needs/],
+    ['D431', '없애는 기능의 유저 시나리오: 못 하게 되는 것과 대신 할 것', /For a removal: who can no longer do what, and what they do instead/],
+    ['D432', '접근의 구조 맞춤과 재사용, 대안에 바꾸기 쉬운지', /Fit with the existing structure:\*\* in `접근`[\s\S]*layer or module[\s\S]*"기존 구조 그대로"[\s\S]*reuses[\s\S]*places likely to change next stay easy to change/],
+    ['D431', '기존 동작 영향: 기대는 곳과 처리, 추가만이면 없음, 없애는 것은 바뀌는 곳에', /`기존 동작 영향`, for each \(바뀜\)\/\(없앰\) line[\s\S]*fix together \/ migrate \/ deprecate first[\s\S]*"없음"[\s\S]*goes away[\s\S]*`바뀌는 곳`/],
+    ['D431', '없애는 것이 있으면 마지막 단계는 남은 참조 정리, 테스트 계획에 바뀌는 기존 테스트', /last step cleans up the references left[\s\S]*which existing tests change/],
     ['5.6.8', '유저 시나리오: 누가 무엇을 어떻게, 내부 기능은 호출하는 코드', /who does what[\s\S]*calling code or the developer/],
     ['D245', '기능 요구사항: 출처, intent에 없으면 물음, 참고용', /\(F1, F2…\)[\s\S]*완료조건 n \/ 설계에서 더함[\s\S]*ask the human[\s\S]*verify judges only the intent's 완료조건/],
     ['D246', '비기능 관점 목록, 해당 없으면 없음', /performance, compatibility and migration, security, error handling, accessibility[\s\S]*"없음"/],
@@ -338,8 +348,8 @@ const spec = {
     ['D239', '테스트 계획: 완료조건의 각 동작이 테스트에 닿음, 못 하면 이유', /Each behavior in the intent's 완료조건 must be covered[\s\S]*write why/],
     ['D422', 'intent와 어긋나면 intent_deviation, 의도를 바꿔야 하면 사람에게 물음', /`intent_deviation`[\s\S]*If the intent must change, ask the human/],
     ['5.6.8', '결정 지점: 접근, 바뀌는 곳, 계획의 나눔', /The approach, what changes, and how to split the plan/],
-    ['D242', '사람이 정할 결정 셋', /Several options change what is seen from outside[\s\S]*widens the scope, or touches the intent's non-goals or constraints[\s\S]*do not take a human suggestion/],
-    ['5.6.8', '완료조건: 일곱 절, 요구사항 출처와 계획, 테스트 계획, 사람 결정, 코드 안 바꿈', /## Done when[\s\S]*seven template sections[\s\S]*source and is in a step[\s\S]*test plan[\s\S]*`decisions`[\s\S]*No code changed/],
+    ['D242', '사람이 정할 결정 다섯 (D433)', /Several options change what is seen from outside[\s\S]*widens the scope, or touches the intent's non-goals or constraints[\s\S]*do not take a human suggestion[\s\S]*used outside the repo changes or goes away[\s\S]*remove it at once \/ deprecate it first \/ migrate[\s\S]*departs from the existing structure[\s\S]*new layer or module[\s\S]*dependency direction/],
+    ['5.6.8', '완료조건: 여덟 절, 요구사항 출처와 계획, 테스트 계획, 기존 동작 영향, 사람 결정, 코드 안 바꿈', /## Done when[\s\S]*eight template sections[\s\S]*source and is in a step[\s\S]*test plan[\s\S]*`기존 동작 영향`[\s\S]*`decisions`[\s\S]*No code changed/],
   ],
   implement: [
     ['5.6.9', '입력: context.md, design.md', /`context\.md`[\s\S]*`design\.md`/],
@@ -348,11 +358,16 @@ const spec = {
     ['D257', '지금 동작을 지키는 완료조건의 테스트는 구현 전 통과도 됨', /keep the current behavior[\s\S]*may pass before the change/],
     ['D54', '커밋 수 제한 없음, 레포 관례', /any number[\s\S]*commit message convention/],
     ['D56', '기존 테스트 변경 → risks, 변경 요약에 표시', /existing test must change[\s\S]*`risks`[\s\S]*`변경 요약`/],
+    ['D434', '기존 테스트 변경마다 (바뀜) n 때문 / (없앰) n 때문 / 목록 밖', /existing test must change[\s\S]*"\(바뀜\) n 때문" \/ "\(없앰\) n 때문"[\s\S]*"목록 밖"/],
+    ['D434', '바뀜은 옛 테스트 기대값을 먼저 고쳐, 없앰은 없어졌음을 확인하는 테스트로 구현 전 실패', /marked \(바뀜\), first change the expected values[\s\S]*fail before the change[\s\S]*marked \(없앰\), write a test that checks the old path is gone[\s\S]*fails before the change/],
+    ['D434', 'n은 완료조건 전체(기본 항목 포함)에서의 차례', /n is that line's position among all 완료조건 lines of the intent, counting from 1 \(default items included\)/],
+    ['D434', '도우미 전에 비슷한 기존 함수를 찾음', /before you add a helper function, look for a similar one/],
+    ['D434', '없앤 뒤 남은 이름·설정 키·문서 언급을 찾아 변경 요약에', /search the repo for the removed names, config keys and mentions in docs[\s\S]*`변경 요약`/],
     ['D57', '테스트 명령 실행, 기준 커밋 실패 구분', /Run tests[\s\S]*also fails at the base commit/],
     ['D248', '작은 어긋남은 정해서 계획과 달라진 점에', /Small departures[\s\S]*`계획과 달라진 점`/],
     ['D422', '설계가 틀리면 물음: 고쳐 이어서 / 새 Work, 고치면 계획과 달라진 점과 by: human', /The design is wrong:\*\* ask the human[\s\S]*start over as a new Work[\s\S]*`계획과 달라진 점`[\s\S]*`by: human`/],
     ['5.6.9', '결정 지점: 계획이 정하지 않은 구현 세부', /Implementation details the plan does not settle/],
-    ['D248', '크게 벗어남 넷', /behavior or interface\) differs from the design[\s\S]*scope widens[\s\S]*different way from `접근`[\s\S]*dependency the design does not have, or change a data format or schema/],
+    ['D248', '크게 벗어남 다섯 (D434)', /behavior or interface\) differs from the design[\s\S]*scope widens[\s\S]*different way from `접근`[\s\S]*dependency the design does not have, or change a data format or schema[\s\S]*another layer or module than `구조 맞춤`[\s\S]*new dependency direction/],
     ['5.6.9', '완료조건: 네 절, 계획 단계, 새 동작 테스트, 물음, 커밋, 테스트 명령', /## Done when[\s\S]*four template sections[\s\S]*Every step of the plan[\s\S]*failed before[\s\S]*and passed after[\s\S]*`decisions`[\s\S]*committed[\s\S]*test command/],
   ],
   refactor: [
@@ -448,12 +463,17 @@ const spec = {
     ['5.6.6', '결정 지점: 고른 지적의 수정 방식, 판정', /How to fix a picked finding, and the verdict of each 완료조건/],
     ['D62', 'pr.md 첫 줄 # 제목', /first line is `# <PR title>`/],
     ['D101', 'pr.md 언어는 레포 관례, PR 템플릿 따르기', /language the repo uses[\s\S]*PR template/],
-    ['5.6.6', '완료조건: 여섯 절, 지적 반영, 판정, 테스트 파일, pr.md, 질문', /## Done when[\s\S]*six template sections[\s\S]*picked[\s\S]*verdict and evidence[\s\S]*test file is judged[\s\S]*`pr\.md` is written[\s\S]*`decisions`/, ['bugfix', 'feature', 'refactor', 'general']],
+    ['5.6.6', '완료조건: 일곱 절(D437), 지적 반영, 판정, 테스트 파일, pr.md, 질문', /## Done when[\s\S]*seven template sections[\s\S]*picked[\s\S]*verdict and evidence[\s\S]*test file is judged[\s\S]*`pr\.md` is written[\s\S]*`decisions`/, ['bugfix', 'feature', 'refactor', 'general']],
     ['D371', '설계 문서를 따르면 변경이 문서의 결정과 맞는지, 바꾼 결정이 문서에도 이력과 함께 (모든 유형)', /follow a design document[\s\S]*match its decisions[\s\S]*also changed in that document, with its history/],
     ['D253', '기능 추가 입력: design.md와 implement.md (fix.md와 재현 규칙 없음)', /`design\.md` and `implement\.md` at the paths in `context\.md`/, ['feature']],
     ['D245', '기능 추가 리뷰: 설계와 맞는지, 달라진 점, 새 동작 테스트. 설계의 요구사항은 판정 안 하고 지적으로', /fit the user scenarios, requirements and approach[\s\S]*`계획과 달라진 점`[\s\S]*Do not judge requirements added in the design[\s\S]*finding[\s\S]*new behavior tests really catch/, ['feature']],
     ['D251', '새 동작 테스트 항목: 있는지, 동작을 확인하는지, 직접 실행, 구현 전은 implement.md, 없으면 판정 불가', /완료조건의 각 동작을 확인하는 테스트가 있다[\s\S]*really checks that behavior[\s\S]*run it yourself[\s\S]*`implement\.md`[\s\S]*판정 불가/, ['feature']],
-    ['D252', '기능 추가 pr.md: 요약 / 동작 / 주요 설계 결정 / 변경 / 테스트', /## 요약\n## 동작\n## 주요 설계 결정\n## 변경\n## 테스트/, ['feature']],
+    ['D252', '기능 추가·변경 pr.md: 요약 / 동작 / 호환성 / 주요 설계 결정 / 변경 / 테스트 (D438)', /## 요약\n## 동작\n## 호환성\n## 주요 설계 결정\n## 변경\n## 테스트/, ['feature']],
+    ['D438', '동작은 새로 되는 것 / 바뀌는 것 / 없어지는 것, 호환성은 레포 밖 인터페이스 항목이 있을 때만', /새로 되는 것 \/ 바뀌는 것 \/ 없어지는 것[\s\S]*`호환성`: only when a 완료조건 is marked "\(레포 밖 인터페이스\)"[\s\S]*leave the section out/, ['feature']],
+    ['D435', '바뀜·없앰 항목에 걸린 테스트 변경은 그 줄의 표시대로 약화 아님, 묻지 않음, n은 implement와 같음, 지우기만 했으면 약화 의심', /marked \(바뀜\) or \(없앰\) in the 완료조건 is 약화 아님[\s\S]*"약화 아님 — \(바뀜\) n" or "약화 아님 — \(없앰\) n"[\s\S]*do not ask[\s\S]*position among all 완료조건 lines[\s\S]*as in `implement\.md`[\s\S]*only deleted[\s\S]*looks like weakening: ask/, ['feature']],
+    ['D436', '기능 추가·변경 리뷰: 구조 맞춤대로인지, 없앤 것이 다 없어졌는지', /sit where `구조 맞춤` in `design\.md` says[\s\S]*is it all gone\? Look for references left, dead code/, ['feature']],
+    ['D436', '리뷰: 구조 맞춤, 중복, 유지보수성, 팀 지식 규칙 위반은 차단', /Fit with the existing structure[\s\S]*dependency directions[\s\S]*Duplication[\s\S]*Maintainability[\s\S]*tests tied to internal details[\s\S]*`kind: rule`[\s\S]*차단 finding[\s\S]*listed by title only, open the ones that touch the changed code/, ['bugfix', 'feature', 'refactor', 'general']],
+    ['D437', '범위 밖 유지보수성 문제는 지적이 아니라 나중에 정리할 곳에, 고르지 않음', /Out of scope:\*\* a maintainability problem beyond this Work[\s\S]*not a finding[\s\S]*`나중에 정리할 곳`[\s\S]*not picked or applied/, ['bugfix', 'feature', 'refactor', 'general']],
     ['D275', '리팩터링 입력: refactor.md (fix.md와 재현 규칙 없음)', /`refactor\.md` at the path in `context\.md`/, ['refactor']],
     ['D275', '리팩터링 리뷰: 로직 변경 없음, 받아들이지 않은 동작 변경은 차단, 구조 목표, 범위', /logic change[\s\S]*did not accept is a 차단 finding[\s\S]*structural goals[\s\S]*scope grow/, ['refactor']],
     ['D273', '안전망 항목: 같은 worktree에서 안전망 커밋 체크아웃(I64), 마지막 코드에서도, 둘 다 통과, 없으면 판정 불가, 브랜치 확인', /same worktree[\s\S]*safety-net commit[\s\S]*final code too[\s\S]*only if both pass[\s\S]*판정 불가[\s\S]*`git branch --show-current`/, ['refactor']],

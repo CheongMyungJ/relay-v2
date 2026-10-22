@@ -27,8 +27,11 @@ When all steps are done, run the intent's test command.
 ## Rules
 
 - **New behavior tests:** a test that passes from the start does not catch the new behavior. Fix it. Exception: when a 완료조건 asks to keep the current behavior (e.g. "without the option, it works as now"), its test may pass before the change. Record its before as "통과(지금 동작을 지킴)". If a behavior cannot get a test (e.g. UI behavior, needs an external service), write why in `implement.md` and `risks`. Record before and after for each test in `새 동작 테스트`.
+- **Changed or removed behavior:** for a 완료조건 marked (바뀜), first change the expected values of the tests that caught the old behavior and confirm they fail before the change. For one marked (없앰), write a test that checks the old path is gone (e.g. an error) and confirm it fails before the change.
+- **Reuse:** before you add a helper function, look for a similar one that already exists, and use it if it fits.
+- **Removing:** if something goes away, when all steps are done, search the repo for the removed names, config keys and mentions in docs. Write what was left and what you did about it in `변경 요약`.
 - **Commits:** any number. Follow the repo's commit message convention. Commit all changes before you close. Revert experimental changes such as debug output.
-- **Changing existing tests:** if an existing test must change, change it, add it to `risks`, and mark it as an existing-test change in `변경 요약`. Whether it weakens the test is judged by verify.
+- **Changing existing tests:** if an existing test must change, change it, add it to `risks`, and mark it as an existing-test change in `변경 요약`, with why: "(바뀜) n 때문" / "(없앰) n 때문" for a marked 완료조건, otherwise "목록 밖". n is that line's position among all 완료조건 lines of the intent, counting from 1 (default items included). Whether it weakens the test is judged by verify.
 - **Run tests:** run the test command from the intent's 완료조건. For each failure, check whether it also fails at the base commit (from `context.md`), and say which.
 - **Small departures from the plan** (how files are split, names, the order of steps, small helper functions): decide yourself and write them in `계획과 달라진 점`.
 - **The design is wrong:** ask the human: fix the design and go on / start over as a new Work (see the common rules). If fixing, write the changed design in `계획과 달라진 점` and the decision in `decisions` with `by: human`.
@@ -45,6 +48,7 @@ Ask on the spot, before you change code, only when the implementation departs fa
 - The scope widens, or the change touches the intent's non-goals or constraints.
 - You go a different way from `접근` (e.g. another library, another way to store data).
 - You add a dependency the design does not have, or change a data format or schema.
+- You put the change in another layer or module than `구조 맞춤` in `접근` says, or create a new dependency direction.
 
 ## Done when
 
@@ -60,7 +64,8 @@ Ask on the spot, before you change code, only when the implementation departs fa
 ```markdown
 ## 변경 요약
 - 계획 단계 n — 파일 — 무엇을 바꿨는지, 커밋
-- (기존 테스트 변경) 파일 — 무엇을 왜 바꿨는지
+- (기존 테스트 변경) 파일 — 무엇을 왜 바꿨는지 — (바뀜) n 때문 / (없앰) n 때문 / 목록 밖
+- (남은 참조) 없앤 이름 — 찾은 곳과 처리 (없앤 것이 없으면 빼기)
 
 ## 계획과 달라진 점
 - 무엇이 왜 달라졌는지 (사람이 정했으면 표시)

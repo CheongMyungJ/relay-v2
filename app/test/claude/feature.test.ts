@@ -1,9 +1,9 @@
 // [실제] 실제 claude로 작은 기능 추가가 intake → design → implement → verify를 지나 끝까지 간다
 // (docs/implementation.md M14, 8.4). 가짜 claude로는 볼 수 없는 것을 본다:
 // - work-start가 머리글 없는 intent 초안에 기능 추가의 기본 완료조건 셋과 인수 조건을 쓴다 (D236, D239, D240)
-// - design이 코드를 바꾸지 않고 design.md 일곱 절을 쓴다 (D243, D244)
+// - design이 코드를 바꾸지 않고 design.md 여덟 절을 쓴다 (D243, D244, D431)
 // - implement가 테스트를 먼저 커밋하거나 implement.md에 구현 전 실패를 적는다 (D247, D250)
-// - verify가 기능 추가 pr.md(동작, 주요 설계 결정)를 쓴다 (D252)
+// - verify가 verification.md에 나중에 정리할 곳을 두고(D437) 기능 추가 pr.md(동작, 주요 설계 결정)를 쓴다 (D252)
 // 사람 역할: 첫 실행 창은 수락하고(I17), 질문에는 첫 선택지(추천)로 답하고, 승인 대기가 되면 승인한다. 앱 설정은
 // 기본값(설계와 계획 수동, 구현 자동)이고 자동 승인 카운트다운을 기다린다(awaitAuto).
 // RELAY_REAL_CLAUDE=1이면 실제 claude, dry면 가짜 claude로 도구만 확인한다. RELAY_REAL_CASES의 feature로 고른다.
@@ -142,11 +142,12 @@ function inspect(
       '요구사항',
       '접근',
       '바뀌는 곳',
+      '기존 동작 영향',
       '구현 계획',
       '테스트 계획',
       '위험',
     ]) {
-      need(names.includes(s), `design.md에 ## ${s} 없음 (D244)`)
+      need(names.includes(s), `design.md에 ## ${s} 없음 (D244, D431)`)
     }
   }
   const designTask = task('design')
@@ -168,6 +169,15 @@ function inspect(
   }
   const log = git(tree, 'log', '--reverse', '--format=%s', `${base}..HEAD`)
   notes.push(`커밋: ${log.split('\n').filter(Boolean).join(' / ') || '없음'}`)
+
+  const verification = readIn('verify', 'verification.md')
+  need(verification !== null, 'verification.md 없음')
+  if (verification !== null) {
+    need(
+      sectionNames(verification).includes('나중에 정리할 곳'),
+      'verification.md에 ## 나중에 정리할 곳 없음 (D437)',
+    )
+  }
 
   const pr = readIn('verify', 'pr.md')
   need(pr !== null, 'pr.md 없음')

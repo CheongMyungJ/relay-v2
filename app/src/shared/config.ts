@@ -4,7 +4,7 @@ import type { AgentEngine, AgentStep } from './agent'
 import type { WorkType } from './work'
 
 /**
- * relay 스킬 (5.6). fix는 버그 수정, design과 implement는 기능 추가, refactor는 리팩터링, spec은 설계, execute는 일반에만
+ * relay 스킬 (5.6). fix는 버그 수정, design과 implement는 기능 추가·변경, refactor는 리팩터링, spec은 설계, execute는 일반에만
  * 쓴다 (D232, D256, D278, D318, D372). pr-respond는 파이프라인 밖의 PR 대응 task다 (D168, D187)
  */
 export type SkillName =
@@ -35,7 +35,7 @@ export type QuestionMode = 'draft_first' | 'confirm_each'
 
 /**
  * 자동 승인을 켤 수 있는 노드. intake(의도 승인)와 verify(리뷰와 검증 = Work 완료)는 항상 수동이다 (4.2).
- * design과 implement는 기능 추가, refactor는 리팩터링, spec은 설계, execute는 일반의 단계다 (D234, D249, D276, D367,
+ * design과 implement는 기능 추가·변경, refactor는 리팩터링, spec은 설계, execute는 일반의 단계다 (D234, D249, D276, D367,
  * D315). respond는 PR 대응 task다 (D169)
  */
 export type AutoApproveNode =
@@ -130,7 +130,7 @@ export type SettingGroup = 'common' | WorkType | 'pr'
 export const SETTING_GROUP_LABEL: Readonly<Record<SettingGroup, string>> = {
   common: '공통',
   bugfix: '버그 수정',
-  feature: '기능 추가',
+  feature: '기능 추가·변경',
   refactor: '리팩터링',
   spec: '설계',
   general: '일반',
