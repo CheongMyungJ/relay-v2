@@ -382,6 +382,18 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   ipcMain.handle(IPC.closeSide, async (_e, workKey: unknown) =>
     (await ready).closeSide(text(workKey)),
   )
+  // [파일] 탭 (D464~D468). 경로는 worktree 기준으로 adapters/files가 다시 검사한다
+  ipcMain.handle(IPC.workFiles, async (_e, workKey: unknown, rel: unknown) =>
+    (await ready).workFiles(text(workKey), text(rel)),
+  )
+  ipcMain.handle(IPC.readWorkFile, async (_e, workKey: unknown, rel: unknown) =>
+    (await ready).readWorkFile(text(workKey), text(rel)),
+  )
+  ipcMain.handle(
+    IPC.saveWorkFile,
+    async (_e, workKey: unknown, rel: unknown, body: unknown, hash: unknown) =>
+      (await ready).saveWorkFile(text(workKey), text(rel), text(body), optionalText(hash)),
+  )
   ipcMain.handle(IPC.defaultSessionDir, async () => (await ready).defaultSessionDir())
   ipcMain.handle(IPC.createSession, async (_e, cwd: unknown) =>
     (await ready).createSession(text(cwd)),

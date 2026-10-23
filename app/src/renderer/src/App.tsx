@@ -29,6 +29,7 @@ import {
 } from './dialogs'
 import { CustomTypesDialog } from './CustomTypes'
 import { Activity } from './Activity'
+import { FilesView } from './Files'
 import { withOpened } from './opened'
 import { Panel, showsPr, wantsApproval } from './Panel'
 import { TerminalView } from './TerminalView'
@@ -81,6 +82,8 @@ const openedKey = (s: Selected | null) =>
 const CLEANUP_TAB = '@cleanup'
 /** 곁 세션 탭 (시나리오 11) */
 const SIDE_TAB = '@side'
+/** [파일] 탭 (D464) */
+const FILES_TAB = '@files'
 
 function currentTask(w: WorkView) {
   return w.tasks.find((t) => t.id === w.current)
@@ -202,6 +205,8 @@ export function App() {
   const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set())
   const nextOpened = withOpened(opened, openedKey(selected))
   if (nextOpened !== opened) setOpened(nextOpened)
+  // [파일] 탭을 연 Work. 다른 탭으로 옮겨도 고치던 글이 남도록 숨겨 둔다 (D464)
+  const [filesOpened, setFilesOpened] = useState<ReadonlySet<string>>(() => new Set())
 
   const work = selectedWork ? works[selectedWork] : undefined
   const session =
@@ -212,10 +217,17 @@ export function App() {
   const cleanupTab = !!work?.cleanup && pickedId === CLEANUP_TAB
   // 곁 세션 탭(시나리오 11)도 패널은 지금 task다
   const sideTab = !!work?.side.terminal && pickedId === SIDE_TAB
+  // [파일] 탭(D464)도 패널은 지금 task다. 정리한 Work는 worktree가 없어 탭이 없다
+  const filesTab = !!work && work.status !== 'archived' && pickedId === FILES_TAB
   const taskId =
-    cleanupTab || sideTab || pickedId === CLEANUP_TAB || pickedId === SIDE_TAB
+    cleanupTab ||
+    sideTab ||
+    pickedId === CLEANUP_TAB ||
+    pickedId === SIDE_TAB ||
+    pickedId === FILES_TAB
       ? (work?.current ?? null)
       : pickedId
+  if (filesTab && !filesOpened.has(work.key)) setFilesOpened(new Set(filesOpened).add(work.key))
   const found = work?.tasks.find((t) => t.id === taskId)
   // 도구 훅으로 따로 온 진행 표시가 있으면 그것을 보인다 (D216)
   const task = found && work ? withActivity(found, activities[`${work.key}|${found.id}`]) : found
@@ -664,6 +676,17 @@ export function App() {
               곁 세션
             </div>
           ) : null}
+          {work && work.status !== 'archived' ? (
+            <div
+              role="tab"
+              aria-selected={filesTab}
+              className={`tab${filesTab ? ' active' : ''}`}
+              title="worktree의 파일을 보고 고칩니다 (D464)"
+              onClick={() => setPicked((m) => ({ ...m, [work.key]: FILES_TAB }))}
+            >
+              파일
+            </div>
+          ) : null}
           {question ? (
             <button className="question-reopen" onClick={() => setHiddenQuestionId(null)}>
               Codex 질문 답변
@@ -675,6 +698,10 @@ export function App() {
             <SessionBand session={session} />
           ) : sideTab && work ? (
             <SideBand work={work} onFresh={() => requestSide(work.key, true)} />
+          ) : filesTab ? (
+            <span className="band-text">
+              파일 · worktree의 파일을 보고 고칩니다 · 고친 것은 에이전트에게 따로 알리지 않습니다
+            </span>
           ) : cleanupTab && work?.cleanup ? (
             <>
               <span className="band-text">
@@ -728,7 +755,13 @@ export function App() {
                       terminalKey={t.terminal}
                       info={info}
                       live={t.live}
-                      active={w.key === selectedWork && !cleanupTab && !sideTab && t.id === taskId}
+                      active={
+                        w.key === selectedWork &&
+                        !cleanupTab &&
+                        !sideTab &&
+                        !filesTab &&
+                        t.id === taskId
+                      }
                     />
                   )),
                   ...(w.cleanup
@@ -768,6 +801,11 @@ export function App() {
                   />
                 ))
             : null}
+          {Object.values(works)
+            .filter((w) => filesOpened.has(w.key) && w.status !== 'archived')
+            .map((w) => (
+              <FilesView key={w.key} workKey={w.key} active={w.key === selectedWork && filesTab} />
+            ))}
           {session && !session.terminal ? (
             <div className="empty">
               <span className="dim">[열기]로 이 세션을 엽니다</span>

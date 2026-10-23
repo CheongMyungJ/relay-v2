@@ -865,6 +865,31 @@ export type CommandResult = { ok: true } | { ok: false; error: string }
 /** Work 생성 결과. 만든 Work의 키를 돌려준다 */
 export type CreateWorkResult = { ok: true; workKey: string } | { ok: false; error: string }
 
+// ---------- [파일] 탭 (D464~D468) ----------
+
+/** 트리의 항목 하나. other는 worktree 밖을 가리키거나 깨진 링크, 파일도 폴더도 아닌 것이라 열지 않는다 */
+export interface FileEntryView {
+  name: string
+  kind: 'dir' | 'file' | 'other'
+}
+
+/** 폴더 하나의 항목 (D465). more는 상한(DIR_MAX_ENTRIES)을 넘어 보이지 않는 개수다 */
+export type FileListResult =
+  { ok: true; entries: FileEntryView[]; more: number } | { ok: false; error: string }
+
+/**
+ * 연 파일 (D466). text는 줄 끝을 `\n`으로 바꾼 글이고 hash는 디스크의 바이트로 계산한다(저장할 때 바뀌었는지 본다).
+ * 글이 아니거나 너무 큰 파일은 크기만 돌려준다
+ */
+export type FileReadResult =
+  | { ok: true; kind: 'text'; text: string; hash: string }
+  | { ok: true; kind: 'binary' | 'large'; size: number }
+  | { ok: false; error: string }
+
+/** 저장 결과 (D467). 연 뒤 파일이 바뀌었으면 conflict다 */
+export type FileSaveResult =
+  { ok: true; hash: string } | { ok: false; error: string; conflict?: boolean }
+
 // ---------- 기본 세션 (시나리오 12, D397~D406) ----------
 
 /** Work 초안 카드 (D404). 만든 곳과 상관없는 모양이다. 틀린 칸은 null이고 형식 오류는 errors에 있다 */

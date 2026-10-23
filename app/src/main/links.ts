@@ -2,21 +2,13 @@
 // 터미널 출력은 에이전트가 쓴 글이라 믿지 않는다: 네트워크 경로와 장치는 보지 않고, 안전한 형식만 연다.
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { localLinkTarget, networkPath, windowsDeviceName } from '../core/files'
 
 /** 경로가 쓰는 OS. 시험에서 바꿔 넣는다 */
 export type PathPlatform = 'win32' | 'posix'
 
 export function pathPlatform(platform: NodeJS.Platform = process.platform): PathPlatform {
   return platform === 'win32' ? 'win32' : 'posix'
-}
-
-/** Windows가 어느 폴더에서나 장치로 여는 이름. 확장자가 붙어도(`nul.txt`) 장치다 */
-const DEVICE_NAME =
-  /^(con|prn|aux|nul|clock\$|conin\$|conout\$|com[0-9\u00b9\u00b2\u00b3]|lpt[0-9\u00b9\u00b2\u00b3])$/i
-
-/** `\\서버\…`, `//서버/…`처럼 다른 컴퓨터를 가리키는 경로 */
-function networkPath(p: string): boolean {
-  return /^[\\/]{2}/.test(p)
 }
 
 /**
@@ -48,9 +40,7 @@ export function linkPath(
     // 드라이브 뒤의 ':'는 NTFS 스트림이나 장치다
     if (abs.indexOf(':', 2) >= 0) return null
     const names = abs.slice(p.parse(abs).root.length).split(p.sep)
-    if (names.some((n) => DEVICE_NAME.test((n.split('.')[0] ?? '').trimEnd()))) {
-      return null
-    }
+    if (names.some(windowsDeviceName)) return null
   }
   return abs
 }
@@ -61,17 +51,6 @@ export interface LinkFs {
   lstat(file: string): Promise<{ isSymbolicLink(): boolean } | null>
   /** 링크가 가리키는 글. 읽지 못하면 null */
   readlink(file: string): Promise<string | null>
-}
-
-/** 링크가 가리키는 글을 이 컴퓨터의 경로로. `\\?\`, `\??\` 앞머리를 떼고, 네트워크 경로는 null이다 */
-function linkTarget(target: string | null, platform: PathPlatform): string | null {
-  if (target === null) return null
-  let t = target
-  if (platform === 'win32') {
-    if (/^[\\/]{2}[?.][\\/]unc[\\/]/i.test(t) || /^\\\?\?\\unc\\/i.test(t)) return null
-    t = t.replace(/^(?:[\\/]{2}[?.][\\/]|\\\?\?\\)(?=[a-z]:)/i, '')
-  }
-  return networkPath(t) ? null : t
 }
 
 /**
@@ -97,7 +76,7 @@ export async function realLinkPath(
       cur = next
       continue
     }
-    const target = linkTarget(await fs.readlink(next), platform)
+    const target = localLinkTarget(await fs.readlink(next), platform === 'win32')
     if (target === null) return null
     const resolved = p.resolve(cur, target)
     if (networkPath(resolved)) return null

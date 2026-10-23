@@ -59,6 +59,10 @@ const api: RelayApi = {
   closeCleanup: (workKey) => ipcRenderer.invoke(IPC.closeCleanup, workKey),
   openSide: (workKey, fresh) => ipcRenderer.invoke(IPC.openSide, workKey, fresh),
   closeSide: (workKey) => ipcRenderer.invoke(IPC.closeSide, workKey),
+  workFiles: (workKey, rel) => ipcRenderer.invoke(IPC.workFiles, workKey, rel),
+  readWorkFile: (workKey, rel) => ipcRenderer.invoke(IPC.readWorkFile, workKey, rel),
+  saveWorkFile: (workKey, rel, text, hash) =>
+    ipcRenderer.invoke(IPC.saveWorkFile, workKey, rel, text, hash),
   defaultSessionDir: () => ipcRenderer.invoke(IPC.defaultSessionDir),
   createSession: (cwd) => ipcRenderer.invoke(IPC.createSession, cwd),
   openSession: (id, fresh) => ipcRenderer.invoke(IPC.openSession, id, fresh),

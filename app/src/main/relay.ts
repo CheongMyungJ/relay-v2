@@ -18,6 +18,7 @@ import {
   removeWorktree,
   submoduleList,
 } from '../adapters/git'
+import { listFiles, readTextFile, writeTextFile } from '../adapters/files'
 import { filesAt, namesInCode, readKnowledgeAt } from '../adapters/knowledge'
 import { procedureText } from '../adapters/claude'
 import {
@@ -98,6 +99,9 @@ import type {
   CustomTypeFiles,
   CustomTypeList,
   CustomTypeView,
+  FileListResult,
+  FileReadResult,
+  FileSaveResult,
   MergeInput,
   NewWorkInput,
   PrItemAction,
@@ -165,6 +169,9 @@ interface TerminalOwner {
 
 /** 예전 되감기의 백업 브랜치 relay/<work-id>-discarded-<n> (D115, D424). 기준 브랜치로 고르지 않는다 */
 const DISCARDED_BACKUP = /^relay\/w-\d{8}-\d+-discarded-\d+$/
+
+/** [파일] 탭을 볼 worktree가 없을 때: Work가 없거나 정리했다 (D464) */
+const NO_WORKTREE = 'worktree가 없습니다 (정리한 Work)'
 
 /** 터미널 경로를 풀 때 링크를 따라가지 않고 보는 파일 시스템 (D412) */
 const LINK_FS: LinkFs = {
@@ -1582,6 +1589,37 @@ export class Relay {
     const r = checkWorkSettings(settings)
     if (!r.ok) return Promise.resolve({ ok: false, error: r.error })
     return this.withWork(workKey, (w) => w.updateSettings(r.value))
+  }
+
+  // ---------- [파일] 탭 (D464~D468) ----------
+
+  private filesRoot(workKey: string): string | null {
+    return this.works.get(workKey)?.filesRoot() ?? null
+  }
+
+  /** [파일] 탭의 폴더 하나 (D465). rel은 worktree 기준 상대 경로이고 빈 글은 worktree다 */
+  workFiles(workKey: string, rel: string): Promise<FileListResult> {
+    const root = this.filesRoot(workKey)
+    return root ? listFiles(root, rel) : Promise.resolve({ ok: false, error: NO_WORKTREE })
+  }
+
+  /** [파일] 탭에서 연 파일 (D466) */
+  readWorkFile(workKey: string, rel: string): Promise<FileReadResult> {
+    const root = this.filesRoot(workKey)
+    return root ? readTextFile(root, rel) : Promise.resolve({ ok: false, error: NO_WORKTREE })
+  }
+
+  /** [파일] 탭의 [저장] (D467). hash가 null이면 바뀐 파일을 덮어쓴다 */
+  saveWorkFile(
+    workKey: string,
+    rel: string,
+    text: string,
+    hash: string | null,
+  ): Promise<FileSaveResult> {
+    const root = this.filesRoot(workKey)
+    return root
+      ? writeTextFile(root, rel, text, hash)
+      : Promise.resolve({ ok: false, error: NO_WORKTREE })
   }
 
   // ---------- 터미널 ----------
