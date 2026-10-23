@@ -83,6 +83,7 @@ import {
 import type { HookReply, HookRequest, HookServer } from '../adapters/hooks'
 import { processStartTime, startPty, type PtySession } from '../adapters/pty'
 import {
+  isArtifactName,
   pathKey,
   readText,
   removeTree,
@@ -1299,10 +1300,12 @@ export class WorkRunner {
       const bin = driver.find(env)
       if (!bin) throw new Error(driver.installGuide)
       const skill = NODE_INFO[task.node].skill
+      const contextPath = path.join(dir, CONTEXT_FILE)
       const deployed = await driver.deploySkill({
         source: this.ctx.skills,
         workDir: this.files.dir,
         taskDir: dir,
+        contextPath,
         skill,
         type: workType(this.work),
       })
@@ -1311,7 +1314,6 @@ export class WorkRunner {
       // verify의 마무리 안내 문구(D104)와 Work 완료 화면의 전달 버튼이 쓸 점검을 새로 한다 (D118)
       if (task.node === 'verify') await this.recheckProject()
       const settingsPath = await this.writeSettings(task)
-      const contextPath = path.join(dir, CONTEXT_FILE)
       await writeFileAtomic(contextPath, await this.context(task, dir, this.approvedBefore(task)))
 
       // Codex의 id는 SessionStart/턴 훅에서 받는다. 임의의 UUID로 재개하지 않는다.
@@ -1322,6 +1324,7 @@ export class WorkRunner {
         workDir: this.files.dir,
         ...this.extraDirs(),
         settingsPath,
+        // 배포한 절차 파일. Claude는 시스템 프롬프트에 덧붙이고(D440), Codex는 설정의 skillPath를 쓴다
         instructionsPath: deployed.file,
         skill,
         contextPath,
@@ -1351,8 +1354,8 @@ export class WorkRunner {
   /**
    * 끝난 세션을 같은 옵션과 --resume <세션 id>로 다시 연다 (시나리오 3-4, 3-5, 6절).
    * 설정 파일은 새로 쓴다(훅 서버의 포트와 토큰이 바뀔 수 있음, I13). 단계 절차와 context.md는 그대로 둔다:
-   * task를 시작할 때 쓴 instructions.md를 같은 플래그로 다시 준다 (D441). 이 변경 전에 스킬로 시작한 task는 그 파일이 없어
-   * 넣지 않는다(스킬 본문이 대화에 있다).
+   * Claude는 task를 시작할 때 쓴 instructions.md를 같은 플래그로 다시 준다 (D441). 그 파일이 없으면(이 변경 전에 스킬로
+   * 시작한 task, 지워진 파일) 지금 원본으로 조립해 쓴다: 빼면 압축 뒤 절차가 사라진다(스파이크 S8).
    * 탭에는 이전 화면을 먼저 보이고 그 뒤에 다시 연 세션의 출력을 잇는다.
    */
   private async resumeSession(task: TaskRecord): Promise<boolean> {
@@ -1374,13 +1377,14 @@ export class WorkRunner {
         ? continuePrompt(task.session?.app_ended !== undefined)
         : undefined
       this.resumeContinue.delete(task.id)
-      const instructionsPath = path.join(this.files.taskDir(task), INSTRUCTIONS_FILE)
+      const instructionsPath =
+        driver.engine === 'claude' ? await this.instructionsFor(task) : undefined
       const args = await driver.resumeArgs({
         sessionId,
         workDir: this.files.dir,
         ...this.extraDirs(),
         settingsPath,
-        ...((await exists(instructionsPath)) ? { instructionsPath } : {}),
+        ...(instructionsPath ? { instructionsPath } : {}),
         ...pinnedAgent(task),
         ...(prompt ? { prompt } : {}),
       })
@@ -1406,6 +1410,26 @@ export class WorkRunner {
     } catch (err) {
       return this.launchFailed(task.id, err)
     }
+  }
+
+  /**
+   * 재개할 Claude task의 단계 절차 (D441). 시작할 때 쓴 instructions.md가 있으면 그대로 쓰고, 없으면 지금 원본으로 조립한다.
+   * 다시 조립한 절차의 해시는 적지 않는다(work.json의 skill_hash는 시작할 때의 것)
+   */
+  private async instructionsFor(task: TaskRecord): Promise<string> {
+    const dir = this.files.taskDir(task)
+    const file = path.join(dir, INSTRUCTIONS_FILE)
+    if (await exists(file)) return file
+    console.error(`[${this.key}] ${task.id}의 ${INSTRUCTIONS_FILE}가 없어 지금 원본으로 조립한다`)
+    const deployed = await agentRuntime('claude').deploySkill({
+      source: this.ctx.skills,
+      workDir: this.files.dir,
+      taskDir: dir,
+      contextPath: path.join(dir, CONTEXT_FILE),
+      skill: NODE_INFO[task.node].skill,
+      type: workType(this.work),
+    })
+    return deployed.file
   }
 
   /**
@@ -3707,13 +3731,7 @@ export class WorkRunner {
       }),
       lead: stageLead(task.node, files),
       artifacts: Object.entries(files)
-        .filter(
-          ([name]) =>
-            name !== CONTEXT_FILE &&
-            name !== INSTRUCTIONS_FILE &&
-            name !== HANDOFF_FILE &&
-            name !== INJECTED_FILE,
-        )
+        .filter(([name]) => isArtifactName(name))
         .map(([name, text]) => ({ name, text })),
       diff: clip(diff),
       gate: approvalGate(task, check),

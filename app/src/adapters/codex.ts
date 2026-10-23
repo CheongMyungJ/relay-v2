@@ -91,7 +91,8 @@ export function codexSkillPath(taskDir: string, skill: SkillName): string {
 export async function deployCodexSkill(o: {
   source: string
   workDir: string
-  taskDir?: string
+  taskDir: string
+  contextPath: string
   skill: SkillName
   type: WorkType
 }): Promise<DeployedSkill> {
@@ -101,7 +102,7 @@ export async function deployCodexSkill(o: {
   const writing =
     'Write or update current task artifacts and handoff.md with apply_patch. Shell redirects or heredocs containing previous task paths can be rejected by the conservative file guard, even when those paths are only references in the document. Never edit app-owned files or previous task files, and never bypass a tool denial.\n\n'
   const content = `---\nname: ${relaySkillName(o.skill)}\ndescription: The active relay ${o.skill} task. Follow only this step and wait for human answers through relay MCP.\n---\n${writing}${body}`
-  const file = codexSkillPath(o.taskDir ?? o.workDir, o.skill)
+  const file = codexSkillPath(o.taskDir, o.skill)
   await writeFileAtomic(file, content)
   return { file, hash: `sha256:${sha256(content)}` }
 }

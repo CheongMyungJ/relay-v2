@@ -253,7 +253,10 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
     expect((await s.h.relay.interrupt(key, 't-01')).ok).toBe(false)
 
     // [재개]: 같은 옵션 + --resume <같은 id>. --session-id와 첫 프롬프트는 없고, 맨 뒤에 이어서 하라는 입력이 있다.
-    // 다시 연 세션은 사람이 치지 않아도 그 입력으로 이어서 일해 승인 대기가 된다 (D218)
+    // 다시 연 세션은 사람이 치지 않아도 그 입력으로 이어서 일해 승인 대기가 된다 (D218).
+    // 단계 절차 파일이 없어도(이 변경 전에 스킬로 시작한 task 등) 빼지 않고 지금 원본으로 다시 조립해 준다 (D441)
+    const instructions = path.join(dir, 'tasks', '01-intake', 'instructions.md')
+    fs.rmSync(instructions)
     expect(await s.h.relay.resume(key, 't-01')).toEqual({ ok: true })
     const resumed = await untilTask(s, key, (t) => t.live, '재개')
     expect(resumed).toMatchObject({
@@ -276,9 +279,10 @@ describe('[흐름] 사람 조작과 여러 Work (M3)', () => {
       settingsPath,
       // task를 시작할 때 쓴 단계 절차를 다시 준다. 빼면 압축 뒤 절차가 사라진다 (D441)
       '--append-system-prompt-file',
-      path.join(dir, 'tasks', '01-intake', 'instructions.md'),
+      instructions,
       continuePrompt(false),
     ])
+    expect(fs.readFileSync(instructions, 'utf8')).toContain('# relay: work-start')
     expect(all[1]?.resume).toBe(true)
     const prompts = s.h
       .records()

@@ -12,6 +12,7 @@ import { startPty, type PtySession } from '../adapters/pty'
 import { writeJson } from '../adapters/store'
 import type { AgentEngine } from '../shared/agent'
 import type { TerminalChunk } from '../shared/views'
+import { promptSnapshotOff } from '../core/settings'
 import { TerminalBuffer } from './terminals'
 
 /**
@@ -81,6 +82,8 @@ export const chatMark = (name: string, resume: boolean) =>
 export interface ChatFiles {
   settingsPath: string
   guidePath: string
+  /** 다시 열 때 새 안내가 바로 쓰이게 하는가 (D446). Claude Code의 버전으로 정한다 */
+  refreshGuide: boolean
 }
 
 export interface ChatOpenInput {
@@ -126,9 +129,13 @@ export async function openChat(input: ChatOpenInput): Promise<number> {
     const bin = driver.find(input.env)
     if (!bin) throw new Error(driver.installGuide)
     dir = await fsp.mkdtemp(path.join(os.tmpdir(), `relay-${input.name}-`))
+    // --system-prompt-snapshot은 2.1.257에 생겨 그보다 낮은 claude에는 주지 않는다 (D446). Codex는 쓰지 않는다
+    const version =
+      driver.engine === 'claude' ? await driver.version(bin, input.env).catch(() => null) : null
     const files: ChatFiles = {
       settingsPath: path.join(dir, `${input.name}.settings.json`),
       guidePath: path.join(dir, `${input.name}.guide.md`),
+      refreshGuide: promptSnapshotOff(version),
     }
     await writeJson(files.settingsPath, input.settings(driver))
     await fsp.writeFile(files.guidePath, s.guide, 'utf8')

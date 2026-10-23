@@ -30,7 +30,8 @@ interface Setup {
 
 /** 시나리오는 가짜 claude와 가짜 codex가 함께 읽는다 (codex 단계는 Scenario 타입 밖) */
 async function setup(s: Scenario | object, config: object = {}): Promise<Setup> {
-  h = await harness({ scenario: s, config })
+  // --system-prompt-snapshot은 2.1.257부터라 그 이상의 버전을 알린다 (D446). 가짜의 기본 버전은 0.0.0이다
+  h = await harness({ scenario: s, config, env: { FAKE_CLAUDE_VERSION: '2.1.308 (Claude Code)' } })
   const hh = h
   const { repo } = makeRepo(hh.root, 'sample', REPO_FILES)
   const projectId = await register(hh, repo)

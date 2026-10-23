@@ -3,7 +3,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { mergeSkill, selectType, skillText, stripFrontMatter } from '../../src/adapters/claude'
+import { skillText } from '../../src/adapters/claude'
 import { OPEN_QUESTIONS_HINT } from '../../src/core/review'
 import { sha256 } from '../../src/adapters/store'
 import { BOUNCE_HEAD, parseFrontMatter } from '../../src/core/validate'
@@ -247,16 +247,12 @@ describe('[흐름] 최소 흐름 (M2)', () => {
     )
     expect(settings.permissions.deny.filter((r) => r.includes('/tasks/'))).toHaveLength(3)
 
-    // 단계 절차 (5.6.3, D440): task마다 그 task 디렉터리의 instructions.md에 공통 규칙을 붙여 쓰고, 스킬로는 배포하지 않는다.
-    // 이번 task의 instructions.md는 편집을 막는다 (D443)
+    // 단계 절차 (5.6.3, D440): task마다 그 task 디렉터리의 instructions.md에 쓰고(조립은 [어댑터] store.test.ts가 본다),
+    // 스킬로는 배포하지 않는다. 끝에 그 task의 context.md 경로가 있고(D442), 편집을 막는다 (D443)
     expect(fs.existsSync(path.join(s.workDir, '.claude', 'skills'))).toBe(false)
-    const skillsSrc = path.resolve(__dirname, '../../../skills')
     const instructions = path.join(task('03-verify'), 'instructions.md')
-    expect(read(instructions)).toBe(
-      mergeSkill(
-        selectType(stripFrontMatter(read(path.join(skillsSrc, 'verify', 'SKILL.md'))), 'bugfix'),
-        read(path.join(skillsSrc, '_common.md')),
-      ),
+    expect(read(instructions)).toContain(
+      `- \`context.md\`: \`${path.join(task('03-verify'), 'context.md')}\``,
     )
     expect(
       settings.permissions.deny.filter((r) => r.endsWith('/tasks/03-verify/instructions.md)')),
@@ -323,9 +319,6 @@ describe('[흐름] 최소 흐름 (M2)', () => {
       )
       expect(started[i]?.args).toContain(
         `relay ${skill} 단계를 시작합니다. 이 task의 컨텍스트: ${path.join(task(dir), 'context.md')}`,
-      )
-      expect(read(path.join(task(dir), 'instructions.md'))).toBe(
-        await skillText(skillsSrc, skill, 'bugfix'),
       )
       expect(read(path.join(task(dir), 'context.md'))).toContain(`- skill: ${skill}`)
     }

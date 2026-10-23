@@ -4,6 +4,7 @@
 // deny 규칙은 git push, gh pr, 앱 소유 파일 편집을 막는다 (D17). 실수를 막는 장치다 (D91).
 // 자동 메모리는 끈다 (D113).
 import type { SkillName } from '../shared/config'
+import { older } from './pr'
 
 /** 앱이 받는 훅 일곱 가지 (시나리오 2-3) */
 export const HOOK_EVENTS = [
@@ -331,6 +332,11 @@ export interface SideArgsInput {
   settingsPath: string
   /** 안내(시스템 프롬프트, D387) 파일 */
   guidePath: string
+  /**
+   * 시스템 프롬프트를 기록하지 않아 다시 열 때 새 안내가 바로 쓰이게 한다(--system-prompt-snapshot off, D446). 없으면 준다.
+   * 그 옵션이 없는 Claude Code(promptSnapshotOff)면 false다
+   */
+  refreshGuide?: boolean
   /** 설정에서 정한 모델·추론 수준 (D391). 없으면 엔진의 기본 */
   model?: string
   effort?: string
@@ -354,10 +360,21 @@ export function sideArgs(input: SideArgsInput): string[] {
     input.settingsPath,
     '--append-system-prompt-file',
     input.guidePath,
-    '--system-prompt-snapshot',
-    'off',
+    ...(input.refreshGuide === false ? [] : ['--system-prompt-snapshot', 'off']),
     ...modelArgs(input),
   ]
+}
+
+/** --system-prompt-snapshot이 생긴 Claude Code 버전 (Claude Code 문서 cli-reference) */
+export const PROMPT_SNAPSHOT_VERSION = '2.1.257'
+
+/**
+ * 곁·기본 세션에 --system-prompt-snapshot off를 줄 수 있는가 (D446). `claude --version`의 결과(예: "2.1.308 (Claude Code)")를
+ * 숫자로 읽을 수 없거나 모르면 주지 않는다: 모르는 옵션이면 claude가 뜨지 않으므로, 처음 연 때의 안내가 남는 쪽이 낫다
+ * (ghAuthActive와 같은 판단)
+ */
+export function promptSnapshotOff(version: string | null | undefined): boolean {
+  return version ? older(version, PROMPT_SNAPSHOT_VERSION) === false : false
 }
 
 // ---------- 기본 세션 (시나리오 12, D397~D406) ----------
@@ -414,6 +431,8 @@ export interface SessionArgsInput {
   settingsPath: string
   /** 안내(시스템 프롬프트, D400) 파일 */
   guidePath: string
+  /** 곁 세션(SideArgsInput)과 같다 (D446) */
+  refreshGuide?: boolean
   /** 설정에서 정한 모델·추론 수준 (D399). 없으면 엔진의 기본 */
   model?: string
   effort?: string

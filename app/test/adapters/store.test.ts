@@ -1,4 +1,5 @@
 // [어댑터] 중앙 저장소 (5.1): 원자적 쓰기, config.json 기본값, intent 이력, decisions.md, 산출물, 스킬 배포.
+import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import os from 'node:os'
@@ -11,9 +12,10 @@ import {
   selectType,
   skillText,
   stripFrontMatter,
+  taskFooter,
 } from '../../src/adapters/claude'
 import { WORK_TYPES } from '../../src/shared/work'
-import { TYPES, assemble } from '../../../skills/assemble.mjs'
+import { TYPES, assemble, stripFrontMatter as assembleStrip } from '../../../skills/assemble.mjs'
 import {
   WorkFiles,
   loadConfig,
@@ -287,6 +289,7 @@ describe('[어댑터] 단계 절차 배포와 claude 실행 (5.6.3, D103, D105, 
       source: SKILLS,
       workDir,
       taskDir,
+      contextPath: path.join(taskDir, 'context.md'),
       skill: 'fix',
       type: 'bugfix',
     })
@@ -297,16 +300,30 @@ describe('[어댑터] 단계 절차 배포와 claude 실행 (5.6.3, D103, D105, 
       stripFrontMatter(read(path.join(SKILLS, 'fix', 'SKILL.md'))),
       read(path.join(SKILLS, '_common.md')),
     )
-    expect(read(first.file)).toBe(expected)
+    // 끝에 이 task의 context.md와 task 디렉터리 경로를 붙인다: 첫 프롬프트는 압축이나 /clear로 사라질 수 있다 (D442)
+    expect(read(first.file)).toBe(expected + taskFooter(path.join(taskDir, 'context.md'), taskDir))
+    expect(read(first.file)).toContain(`- \`context.md\`: \`${path.join(taskDir, 'context.md')}\``)
     expect(await skillText(SKILLS, 'fix', 'bugfix')).toBe(expected)
+    // 해시(D103)는 경로를 뺀 절차로 계산한다: 같은 원본이면 task가 달라도 같다
+    expect(first.hash).toBe(`sha256:${createHash('sha256').update(expected).digest('hex')}`)
     // 원인 분석과 수정은 재현부터 수정까지 한 스킬이다 (D228)
     expect(read(first.file)).toMatch(/^# relay: fix\n/)
     expect(read(first.file)).not.toContain('description: relay fix step')
     expect(read(first.file)).toContain('## Artifact template: `fix.md`')
     expect(first.hash).toMatch(/^sha256:[0-9a-f]{64}$/)
     // 같은 원본이면 해시가 같다
+    const other = path.join(workDir, 'tasks', '04-fix')
     expect(
-      (await deploySkill({ source: SKILLS, workDir, taskDir, skill: 'fix', type: 'bugfix' })).hash,
+      (
+        await deploySkill({
+          source: SKILLS,
+          workDir,
+          taskDir: other,
+          contextPath: path.join(other, 'context.md'),
+          skill: 'fix',
+          type: 'bugfix',
+        })
+      ).hash,
     ).toBe(first.hash)
   })
 
@@ -317,6 +334,7 @@ describe('[어댑터] 단계 절차 배포와 claude 실행 (5.6.3, D103, D105, 
       source: SKILLS,
       workDir,
       taskDir,
+      contextPath: path.join(taskDir, 'context.md'),
       skill: 'work-start',
       type: 'bugfix',
     })
@@ -331,6 +349,15 @@ describe('[어댑터] 단계 절차 배포와 claude 실행 (5.6.3, D103, D105, 
     expect(stripFrontMatter('# 머리글 없음\n---\n')).toBe('# 머리글 없음\n---\n')
   })
 
+  it('머리글 떼기는 skills/assemble.mjs(check.mjs가 크기를 잴 때 씀)와 같다', () => {
+    const cases = [
+      ...['fix', 'verify', 'work-start'].map((s) => read(path.join(SKILLS, s, 'SKILL.md'))),
+      '---\r\ndescription: x\r\n---\r\n\r\n# relay: x\r\n',
+      '# 머리글 없음\n',
+    ]
+    for (const text of cases) expect(stripFrontMatter(text)).toBe(assembleStrip(text))
+  })
+
   it('verify는 리뷰와 최종 검증을 한 절차로 배포한다: verify 본문에 공통 규칙을 붙인다 (D229, 5.6.6)', async () => {
     const workDir = path.join(root, 'w-verify')
     const taskDir = path.join(workDir, 'tasks', '03-verify')
@@ -338,6 +365,7 @@ describe('[어댑터] 단계 절차 배포와 claude 실행 (5.6.3, D103, D105, 
       source: SKILLS,
       workDir,
       taskDir,
+      contextPath: path.join(taskDir, 'context.md'),
       skill: 'verify',
       type: 'bugfix',
     })
@@ -347,7 +375,7 @@ describe('[어댑터] 단계 절차 배포와 claude 실행 (5.6.3, D103, D105, 
       mergeSkill(
         selectType(stripFrontMatter(read(path.join(SKILLS, 'verify', 'SKILL.md'))), 'bugfix'),
         read(path.join(SKILLS, '_common.md')),
-      ),
+      ) + taskFooter(path.join(taskDir, 'context.md'), taskDir),
     )
     // 머리글이 없고, 스킬 본문 뒤에 공통 규칙이 있다
     expect(text.match(/^description: /gm)).toBeNull()

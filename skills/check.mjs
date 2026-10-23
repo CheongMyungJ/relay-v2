@@ -10,7 +10,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { TYPES, assemble } from './assemble.mjs';
+import { TYPES, assemble, stripFrontMatter } from './assemble.mjs';
 import { CHECK_METHOD } from './check-method.mjs';
 import YAML from 'yaml';
 import Ajv2020 from 'ajv/dist/2020.js';
@@ -89,7 +89,8 @@ const sameSet = (a, b) => a.length === b.length && a.every((x) => b.includes(x))
 
 // ---------- 1. 머리글 ----------
 
-// 앱은 머리글을 떼고 시스템 프롬프트에 덧붙인다(D440). description은 Codex 배포본이 쓴다(engines.md)
+// 앱은 머리글을 떼고 시스템 프롬프트에 덧붙인다(D440). 머리글은 배포본에 들어가지 않는다: description은 사람이 읽는
+// 스킬 요약이고, Codex 배포본은 자기 머리글을 따로 쓴다(D444, engines.md)
 console.log('\n[1] 머리글 (D444)');
 for (const [name, text] of Object.entries(skills)) {
   const fm = frontMatter(text);
@@ -97,6 +98,8 @@ for (const [name, text] of Object.entries(skills)) {
   check(fm && !('disable-model-invocation' in fm.data), `${name}: disable-model-invocation 없음 (스킬로 부르지 않음)`);
   check(fm && !('name' in fm.data), `${name}: name 없음 (Codex 배포본이 relay-${name}으로 붙임)`);
   check(!/\bthis skill\b/i.test(text), `${name}: 자기를 "this skill"이 아니라 "this step"으로 부름`);
+  // 스킬로 부르지 않아 인자가 없다. context.md 경로는 첫 프롬프트와 절차 끝에 있다 (D442)
+  check(!/\bthe argument\b/i.test(text), `${name}: 스킬 인자를 말하지 않음 (context.md 경로는 relay가 줌)`);
 }
 check(!/\bthis skill\b/i.test(common), '_common.md: 자기를 "this skill"이 아니라 "this step"으로 부름');
 check(!/^---\n[\s\S]*?\n---\n/.test(common) || !YAML.parse(common.match(/^---\n([\s\S]*?)\n---\n/)?.[1] ?? '')?.description,
@@ -108,7 +111,7 @@ console.log('\n[2] 크기: SKILL.md + _common.md (참고, D445)');
 const hangul = (s) => (s.match(/[가-힣]/g) ?? []).length;
 const rows = [];
 for (const { label: name, text } of variants) {
-  const merged = `${text.replace(/^---\n[\s\S]*?\n---\n+/, '').trimEnd()}\n${common}`; // 앱이 머리글을 떼고 끝에 붙인다 (5.6.3)
+  const merged = `${stripFrontMatter(text).trimEnd()}\n${common}`; // 앱이 머리글을 떼고 끝에 붙인다 (5.6.3)
   const chars = merged.length;
   const cc = Math.round(chars / 4); // Claude Code 어림 (2.1.283에서 확인)
   const h = hangul(merged);

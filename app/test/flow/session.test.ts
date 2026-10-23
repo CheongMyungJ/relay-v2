@@ -87,6 +87,7 @@ describe('기본 세션 (시나리오 12)', () => {
   it('프로젝트 없이 기본 폴더에서 첫 프롬프트 없이 뜨고, 첫 요청으로 이름과 대화를 적는다. 닫았다 열면 잇고 [새 대화로 열기]는 이름을 둔다 (D397~D403)', async () => {
     h = await harness({
       scenario: { ...scenario(), session: ASK('로그인 버그를 어떤 Work로 맡길까?\n자세히는') },
+      env: { FAKE_CLAUDE_VERSION: '2.1.308 (Claude Code)' },
     })
     const hh = h
     expect(hh.relay.snapshot().sessions).toEqual([])
@@ -265,6 +266,8 @@ describe('기본 세션 (시나리오 12)', () => {
     const hh = h
     const id = await create(hh, '')
     await until(hh, id, (s) => s.status === 'live', '기본 세션')
+    // 가짜의 버전(0.0.0)은 --system-prompt-snapshot이 생기기 전이라 주지 않는다 (D446)
+    expect((await sessionStart(hh, 1)).args).not.toContain('--system-prompt-snapshot')
     const drafts = path.join(hh.home, 'sessions', id, 'work-drafts')
     // 프로젝트를 등록하기 전의 초안은 모르는 프로젝트다
     fs.writeFileSync(

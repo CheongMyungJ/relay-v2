@@ -68,8 +68,8 @@ function parts(version: string): [number, number, number] | null {
   return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null
 }
 
-/** 버전 a가 b보다 낮은가. 둘 중 하나라도 숫자로 읽을 수 없으면 null */
-function older(a: string, b: string): boolean | null {
+/** 버전 a가 b보다 낮은가. 둘 중 하나라도 숫자로 읽을 수 없으면 null. Claude Code 버전에도 쓴다 (D446) */
+export function older(a: string, b: string): boolean | null {
   const v = parts(a)
   const w = parts(b)
   if (!v || !w) return null

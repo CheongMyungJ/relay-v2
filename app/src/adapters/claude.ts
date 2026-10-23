@@ -147,22 +147,34 @@ export interface DeployedSkill {
 }
 
 /**
+ * instructions.md 끝에 붙이는 이 task의 경로 (D442). 첫 프롬프트는 압축이나 /clear로 사라질 수 있어 시스템 프롬프트에도
+ * 둔다. Codex는 SessionStart의 additionalContext로 같은 경로를 다시 준다 (engines.md)
+ */
+export function taskFooter(contextPath: string, taskDir: string): string {
+  return `\n## This task\n\n- \`context.md\`: \`${contextPath}\`\n- Task directory: \`${taskDir}\`\n`
+}
+
+/**
  * 이번 task의 단계 절차를 task 디렉터리의 instructions.md에 쓴다. 실행 인자가 --append-system-prompt-file로 준다 (D440).
- * 스킬로 배포하지 않는다. 이전 버전이 Work 디렉터리에 남긴 .claude/skills/relay-*는 지운다: 남겨 두면 사람이 /relay-…로
- * 다른 단계를 부를 수 있다 (D443). worktree는 건드리지 않는다 (D32)
+ * 끝에 이 task의 context.md와 task 디렉터리 경로를 붙인다(taskFooter). 해시(D103)는 경로를 뺀 절차로 계산해 같은 원본이면
+ * task가 달라도 같다. 스킬로 배포하지 않는다. 이전 버전이 Work 디렉터리에 남긴 .claude/skills/relay-*는 지운다: 남겨 두면
+ * 사람이 /relay-…로 다른 단계를 부를 수 있다 (D443). worktree는 건드리지 않는다 (D32)
  */
 export async function deploySkill(o: {
   source: string
   workDir: string
-  taskDir?: string
+  /** task 디렉터리. instructions.md는 늘 여기에 두고 재개와 deny 규칙이 이 경로를 쓴다 (D441, D443) */
+  taskDir: string
+  /** 이 task의 context.md. Codex는 쓰지 않는다 */
+  contextPath: string
   skill: SkillName
   /** Work 유형. 공용 스킬에서 그 유형의 구간만 배포한다 (D279) */
   type: WorkType
 }): Promise<DeployedSkill> {
   const text = await skillText(o.source, o.skill, o.type)
   await removeRelaySkills(o.workDir)
-  const file = path.join(o.taskDir ?? o.workDir, INSTRUCTIONS_FILE)
-  await writeFileAtomic(file, text)
+  const file = path.join(o.taskDir, INSTRUCTIONS_FILE)
+  await writeFileAtomic(file, text + taskFooter(o.contextPath, o.taskDir))
   return { file, hash: `sha256:${sha256(text)}` }
 }
 

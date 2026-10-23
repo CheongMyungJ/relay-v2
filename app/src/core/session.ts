@@ -122,7 +122,7 @@ export function sessionGuide(input: SessionGuideInput): string {
     '  - `work.json`: 앱의 상태. `status`가 Work 상태, `tasks[].status`가 task 상태다',
     '  - `request.md`(처음 받은 요청), `intent.md`(승인된 의도), `decisions.md`(승인된 task의 결정)',
     '  - `events.jsonl`: 수명주기 이벤트',
-    '  - `tasks/<nn>-<node>/`: task마다 `context.md`(그 task에 준 입력), 산출물, `handoff.md`, `pty.log`(터미널 기록)',
+    '  - `tasks/<nn>-<node>/`: task마다 `context.md`(그 task에 준 입력), `instructions.md`(앱이 조립해 준 그 단계의 절차. 산출물이 아니다), 산출물, `handoff.md`, `pty.log`(터미널 기록)',
     '',
     '## 프로젝트와 Work (열 때)',
     '',

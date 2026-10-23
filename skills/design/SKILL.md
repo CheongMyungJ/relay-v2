@@ -8,7 +8,7 @@ For a feature Work (a new behavior, or a change or removal of a behavior), write
 
 ## Inputs
 
-- The argument gives the path of `context.md`. Read it first. It has the intent and the Work's base commit.
+- relay gives you the path of `context.md` when the step starts. Read it first. It has the intent and the Work's base commit.
 - If you need the original request, read `request.md` at the path in `context.md`.
 
 ## Order

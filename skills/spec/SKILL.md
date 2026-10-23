@@ -8,7 +8,7 @@ For a spec Work, settle with the human, one by one, what the intent says to deci
 
 ## Inputs
 
-- The argument gives the path of `context.md`. Read it first. It has the intent and the Work's base commit. The target document's path is in the intent's `제약` ("설계 문서: `<path>` (새 문서 / 기존 문서)"). If you need the request text, read `request.md` at the path in `context.md`.
+- relay gives you the path of `context.md` when the step starts. Read it first. It has the intent and the Work's base commit. The target document's path is in the intent's `제약` ("설계 문서: `<path>` (새 문서 / 기존 문서)"). If you need the request text, read `request.md` at the path in `context.md`.
 
 ## Order
 

@@ -8,7 +8,7 @@ Read the request, talk with the human, and write the intent draft `intent.draft.
 
 ## Inputs
 
-- The argument gives the path of `context.md`. Read it first. For intake it contains the request text (`request.md`) in full, and the Work type (`업무 유형`) the human picked.
+- relay gives you the path of `context.md` when the step starts. Read it first. For intake it contains the request text (`request.md`) in full, and the Work type (`업무 유형`) the human picked.
 - **Starting over from an earlier Work:** if the request carries the approved intent of an earlier Work (see "Starting over" in the common rules), start from that intent and revise it to fit the request's instructions. Do not rewrite from scratch.
 
 ## Rules

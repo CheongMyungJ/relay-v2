@@ -17,10 +17,10 @@
 // - 첫 프롬프트 없이 연 세션은 정리 세션([AI 세션 열기], 시나리오 7-5)이라 시나리오의 cleanup 단계를 한다.
 //   git 단계는 worktree에서 git을 부른다(정리 세션이 변경을 되돌리거나 커밋하는 것을 흉내 낸다).
 // - task는 단계 절차(instructions.md)를 --append-system-prompt-file로 받는다(D440). 기록에 그 내용을 instructions로 남긴다.
-// - task가 아닌데 --append-system-prompt-file을 받은 세션은 곁 세션(시나리오 11, I127)이라 시나리오의 side 단계(--resume이면
+// - 훅 URL의 id가 side인 세션은 곁 세션(시나리오 11, I127)이라 시나리오의 side 단계(--resume이면
 //   sideResume)를 하고, 기록에 side: true와 안내 파일의 내용을 남긴다. 실제처럼 새 대화는 첫 요청(prompt 단계) 뒤에야
 //   저장해, 묻지 않고 닫은 대화를 --resume하면 "No conversation found"로 끝난다(D389).
-// - 그 가운데 설정 파일의 훅 URL이 /hook/session/인 세션은 기본 세션(시나리오 12)이라 시나리오의 session 단계(--resume이면
+// - 훅 URL이 /hook/session/인 세션은 기본 세션(시나리오 12)이라 시나리오의 session 단계(--resume이면
 //   sessionResume)를 하고, 기록에 side 대신 session: true를 남긴다. 실행 인자는 곁 세션과 같다(I132)
 // - PR 대응 task(스킬 pr-respond)의 respond 단계는 context.md의 이번 라운드 항목(`#### \`<항목 id>\` — …`)을 읽어
 //   response.md(항목마다 한 줄)와 replies.md(코멘트 항목마다 `## <항목 id>`, D190)를 쓴다. merge 단계는 앱이 fetch한
@@ -473,14 +473,13 @@ async function run() {
     out(`No conversation found with session ID: ${opts.sessionId}`)
     process.exit(1)
   }
-  // task(첫 프롬프트나 저장한 대화에 스킬이 있음)도 단계 절차를 같은 옵션으로 받는다 (D440)
-  const side = opts.guide !== null && !ctx.skill
-  // 기본 세션은 곁 세션과 같은 인자이고 훅 URL의 id가 session이다 (I133)
-  const session =
-    side &&
-    (loadSettings().hooks?.UserPromptSubmit ?? []).some((g) =>
-      (g.hooks ?? []).some((h) => /\/hook\/session\//.test(h.url ?? '')),
-    )
+  // 곁 세션과 기본 세션은 훅 URL의 id(/hook/side/, /hook/session/)로 안다 (I133). task도 단계 절차를 같은
+  // --append-system-prompt-file로 받으므로(D440) 옵션으로는 가르지 않는다
+  const hookIds = (loadSettings().hooks?.UserPromptSubmit ?? []).flatMap((g) =>
+    (g.hooks ?? []).map((h) => /\/hook\/([^/]+)\//.exec(h.url ?? '')?.[1]),
+  )
+  const session = hookIds.includes('session')
+  const side = session || hookIds.includes('side')
   // 곁 세션과 기본 세션의 새 대화는 첫 요청 뒤에 저장한다 (실제 claude, D389)
   if (side && !opts.resume) unsaved = true
   else if (!opts.resume) saveSession(ctx)

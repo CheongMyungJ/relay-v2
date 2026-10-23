@@ -8,7 +8,7 @@ Review the whole change of this Work, apply only the findings the human picks, t
 
 ## Inputs
 
-- The argument gives the path of `context.md`. Read it first. It has the intent and the Work's base commit.
+- relay gives you the path of `context.md` when the step starts. Read it first. It has the intent and the Work's base commit.
 <!-- type: bugfix -->
 - `fix.md` at the path in `context.md`: the reproduction steps (`## 재현`), the cause, the change and the reproduction test.
 <!-- /type -->

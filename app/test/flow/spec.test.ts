@@ -5,7 +5,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { skillText } from '../../src/adapters/claude'
 import { parseFrontMatter } from '../../src/core/validate'
 import type { AppConfig } from '../../src/shared/config'
 import type { LifecycleEvent, WorkState, WorkType } from '../../src/shared/work'
@@ -177,9 +176,7 @@ describe('[흐름] 설계 유형 (M20)', () => {
     expect(skills).toEqual(['work-start', 'spec', 'verify'])
 
     // 공용 스킬은 설계의 구간만 배포한다 (D279)
-    const skillsSrc = path.resolve(__dirname, '../../../skills')
     const deployed = read(path.join(dir, 'tasks', '03-verify', 'instructions.md'))
-    expect(deployed).toBe(await skillText(skillsSrc, 'verify', 'spec'))
     expect(deployed).toContain('`spec.md`')
     expect(deployed).toContain('## 문서 밖 파일 변경')
     expect(deployed).not.toContain('`fix.md`')

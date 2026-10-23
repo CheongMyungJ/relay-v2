@@ -94,7 +94,7 @@ export function sideGuide(input: SideGuideInput): string {
     '- `intent.md`: 승인된 의도(목표, 비목표, 완료조건). 의도 승인 전에는 없고 intake task의 `intent.draft.md`가 초안이다',
     '- `decisions.md`: 승인된 task의 결정. 폐기된 task의 항목도 지우지 않고 남아 있다',
     '- `work.json`: 앱의 상태. `status`가 Work 상태, `tasks[].status`가 task 상태다',
-    '- `tasks/<nn>-<node>/`: task마다 `context.md`(그 task에 준 입력), 산출물, `handoff.md`',
+    '- `tasks/<nn>-<node>/`: task마다 `context.md`(그 task에 준 입력), `instructions.md`(앱이 조립해 준 그 단계의 절차. 산출물이 아니다), 산출물, `handoff.md`',
     '- 코드 변경은 worktree의 git 이력에 있다: `git log` / `git diff <기준 커밋>`',
     '',
     '## task (열 때)',

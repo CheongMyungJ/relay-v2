@@ -9,6 +9,7 @@ import {
   hookUrl,
   launchArgs,
   launchEnv,
+  promptSnapshotOff,
   relaySkillName,
   resumeArgs,
   ruleAbs,
@@ -404,6 +405,22 @@ describe('[단위] 다시 연 곁·기본 세션의 안내 (D446)', () => {
       '--system-prompt-snapshot',
     )
     expect(resumeArgs(task)).not.toContain('--system-prompt-snapshot')
+  })
+
+  it('옵션이 생긴 2.1.257 이상일 때만 준다. 버전을 모르면 주지 않는다: 모르는 옵션이면 claude가 뜨지 않는다', () => {
+    expect(promptSnapshotOff('2.1.308 (Claude Code)')).toBe(true)
+    expect(promptSnapshotOff('2.1.257 (Claude Code)')).toBe(true)
+    expect(promptSnapshotOff('2.1.256 (Claude Code)')).toBe(false)
+    expect(promptSnapshotOff('2.0.999 (Claude Code)')).toBe(false)
+    expect(promptSnapshotOff(null)).toBe(false)
+    expect(promptSnapshotOff('dev build')).toBe(false)
+    const side = { sessionId: 's-1', workDir: WORK_DIR, settingsPath: 'S', guidePath: 'G' }
+    expect(sideArgs({ ...side, resume: true, refreshGuide: false })).not.toContain(
+      '--system-prompt-snapshot',
+    )
+    expect(
+      sessionArgs({ ...side, home: WORK_DIR, resume: false, refreshGuide: false }),
+    ).not.toContain('--system-prompt-snapshot')
   })
 })
 

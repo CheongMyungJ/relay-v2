@@ -88,6 +88,7 @@ describe('Codex CLI 점검과 스킬·설정', () => {
       source: SKILLS,
       workDir: dir,
       taskDir: path.join(dir, 'task'),
+      contextPath: path.join(dir, 'task', 'context.md'),
       skill: 'verify',
       type: 'bugfix',
     })
