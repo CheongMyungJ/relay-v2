@@ -1353,7 +1353,8 @@ S8에서 다시 연 곁·기본 세션이 처음 연 때의 안내를 압축 전
 
 **평가 (D463)**
 
-- 시나리오 38-price-sweep(커스텀 유형 '조사 후 적용', 테스트가 덮지 않는 운영 스크립트의 쓰임). 짝은 `relay`(그 유형) 대 `relay@general`이다(`eval/lib/works.mjs` `pairOf`). 사람 역할은 레포 유형 '<이름> (레포)'를 고른다(`eval/lib/human.mjs` `pickTypeLines`). `check-scenario.mjs`와 `app/eval/test/`의 시험이 통과한다. 평가 실행과 보고서는 따로 한다.
+- 시나리오 38-price-sweep(커스텀 유형 '조사 후 적용', 테스트가 덮지 않는 운영 스크립트의 쓰임). 짝은 `relay`(그 유형) 대 `relay@general`이다(`eval/lib/works.mjs` `pairOf`). 사람 역할은 레포 유형 '<이름> (레포)'를 고른다(`eval/lib/human.mjs` `pickTypeLines`). `check-scenario.mjs`와 `app/eval/test/`의 시험이 통과한다.
+- 평가 실행(`app/eval/reports/2026-10-23-38-custom.md`, 각 3번): 두 쪽 모두 숨긴 시험 3/3으로 함정이 효과를 가르지 못했다. 커스텀 쪽은 단계가 늘어도 시간과 사람 차례가 늘지 않았고(4.2분 대 4.7분, 6.7 대 7.3) 에이전트 토큰은 세션 하나만큼 늘었다. 효과를 재려면 grep으로 찾기 어려운 쓰임을 둔 시나리오가 필요하다.
 
 ## 8. 테스트 전략
 
