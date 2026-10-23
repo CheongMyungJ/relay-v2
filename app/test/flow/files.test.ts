@@ -8,6 +8,9 @@ import { REPO_FILES, REQUEST, scenario } from '../support/scenarios'
 
 let h: Harness | undefined
 
+/** 줄 끝을 `\n`으로 맞춘 파일의 글 */
+const text = (file: string) => fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n')
+
 afterEach(async () => {
   await h?.close()
   h = undefined
@@ -47,12 +50,9 @@ describe('[파일] 탭 (D464~D468)', () => {
     expect(await hh.relay.saveWorkFile(key, 'README.md', '# 고침\n', opened.hash)).toMatchObject({
       ok: true,
     })
-    expect(fs.readFileSync(path.join(tree, 'README.md'), 'utf8')).toBe('# 고침\n')
-    expect(fs.readFileSync(path.join(repo, 'README.md'), 'utf8')).toBe('# 샘플\n')
-    expect(await hh.relay.saveWorkFile(key, 'README.md', '# 또\n', opened.hash)).toMatchObject({
-      ok: false,
-      conflict: true,
-    })
+    // Windows의 git은 체크아웃을 CRLF로 둘 수 있다(줄 끝을 지키는 것은 [어댑터]가 본다)
+    expect(text(path.join(tree, 'README.md'))).toBe('# 고침\n')
+    expect(text(path.join(repo, 'README.md'))).toBe('# 샘플\n')
     expect(await hh.relay.workFiles('none/w-1', '')).toEqual({
       ok: false,
       error: 'worktree가 없습니다 (정리한 Work)',

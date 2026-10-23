@@ -1,9 +1,10 @@
 // Work의 [파일] 탭의 파일 읽기와 쓰기 (D464~D468). worktree 안의 폴더를 읽고, 글 파일을 읽고 고친다.
 // 경로는 worktree 기준 상대 경로만 받는다(core/files). 링크(심볼릭 링크, junction)는 따라가는 stat 전에 readlink로 하나씩
 // 풀고, 가리키는 곳이 worktree 밖이면 보지 않는다: 밖의 파일을 읽거나 쓰지 않고, 네트워크 경로에 닿지 않는다 (D412, D468).
-import { createHash } from 'node:crypto'
+import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
+import { promisify } from 'node:util'
 import {
   DIR_MAX_ENTRIES,
   FILE_MAX_BYTES,
@@ -11,30 +12,56 @@ import {
   encodeText,
   fileSegments,
   hiddenName,
+  localLinkTarget,
   sortEntries,
 } from '../core/files'
 import type { FileEntryView, FileListResult, FileReadResult, FileSaveResult } from '../shared/views'
+import { sha256 } from './store'
 
 const WIN32 = process.platform === 'win32'
+
+/** 실제 경로. Windows는 8.3 짧은 이름과 대소문자를 실제 이름으로 바꾼다(store의 canonicalPath와 같음) */
+const realpathNative = promisify(fs.realpath.native)
 
 /** 링크를 따라가는 횟수의 상한 */
 const MAX_HOPS = 32
 
-const hashOf = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex')
+/**
+ * worktree의 두 경로: 실제 경로(realpath, Windows는 긴 이름)와 Work가 아는 경로. 에이전트는 Work가 아는 경로에서 돌아
+ * 절대 경로 링크를 그 경로로 만든다(RELAY_HOME이 링크 아래일 때 둘이 다르다). 없으면 null
+ */
+interface Root {
+  real: string
+  logical: string
+}
 
-/** worktree의 실제 경로. 없으면 null */
-async function rootOf(worktree: string): Promise<string | null> {
-  const root = await fsp.realpath(worktree).catch(() => null)
-  const st = root ? await fsp.stat(root).catch(() => null) : null
-  return st?.isDirectory() ? root : null
+async function rootOf(worktree: string): Promise<Root | null> {
+  const real = await realpathNative(worktree).catch(() => null)
+  const st = real ? await fsp.stat(real).catch(() => null) : null
+  return real && st?.isDirectory() ? { real, logical: path.resolve(worktree) } : null
+}
+
+/**
+ * 절대 경로를 worktree 기준 이름 목록으로. 실제 경로나 Work가 아는 경로 아래면 받고, 밖이거나 `.git` 등 core/files가
+ * 받지 않는 이름이면 null이다
+ */
+function innerNames(root: Root, abs: string): string[] | null {
+  for (const base of [root.real, root.logical]) {
+    const rel = path.relative(base, abs)
+    if (rel === '') return []
+    if (path.isAbsolute(rel) || rel === '..' || rel.startsWith(`..${path.sep}`)) continue
+    return fileSegments(rel.split(path.sep).join('/'), WIN32)
+  }
+  return null
 }
 
 /**
  * worktree 안 이름 목록의 실제 자리. 링크는 readlink로 따라가고, 가리키는 곳을 다시 worktree 기준 이름으로 바꿔 검사한다
- * (`..`로 나가거나 다른 드라이브·네트워크·`.git`이면 null). 없는 자리도 null이다. 돌려준 경로의 이름은 모두 링크가 아니다
+ * (밖, 다른 드라이브, 네트워크, `.git`이면 null). 없는 자리도 null이다. 돌려준 경로의 이름은 모두 링크가 아니다.
+ * Windows는 8.3 짧은 이름(`GIT~1`)이 `.git`을 가리킬 수 있어 마지막에 긴 이름으로 다시 본다
  */
-async function inside(root: string, names: readonly string[], hops = 0): Promise<string | null> {
-  let cur = root
+async function inside(root: Root, names: readonly string[], hops = 0): Promise<string | null> {
+  let cur = root.real
   for (const [i, name] of names.entries()) {
     const next = path.join(cur, name)
     const st = await fsp.lstat(next).catch(() => null)
@@ -44,15 +71,16 @@ async function inside(root: string, names: readonly string[], hops = 0): Promise
       continue
     }
     if (hops >= MAX_HOPS) return null
-    let target = await fsp.readlink(next).catch(() => null)
+    const target = localLinkTarget(await fsp.readlink(next).catch(() => null), WIN32)
     if (target === null) return null
-    // junction은 `\\?\C:\…`로 읽힌다
-    if (WIN32) target = target.replace(/^(?:\\\\\?\\|\\\?\?\\)(?=[a-z]:)/i, '')
-    const rel = path.relative(root, path.resolve(cur, target))
-    if (path.isAbsolute(rel)) return null
-    const inner = fileSegments(rel.split(path.sep).join('/'), WIN32)
+    const inner = innerNames(root, path.resolve(cur, target))
     if (!inner) return null
     return inside(root, [...inner, ...names.slice(i + 1)], hops + 1)
+  }
+  if (WIN32 && cur !== root.real) {
+    // 가는 길에 링크가 없어 긴 이름을 얻는 데 밖에 닿지 않는다
+    const long = await realpathNative(cur).catch(() => null)
+    if (!long || !innerNames({ real: root.real, logical: root.real }, long)) return null
   }
   return cur
 }
@@ -61,7 +89,7 @@ async function inside(root: string, names: readonly string[], hops = 0): Promise
 async function locate(
   worktree: string,
   rel: string,
-): Promise<{ root: string; names: string[]; real: string } | { error: string }> {
+): Promise<{ root: Root; names: string[]; real: string } | { error: string }> {
   const names = fileSegments(rel, WIN32)
   if (!names) return { error: `받지 않는 경로: ${rel}` }
   const root = await rootOf(worktree)
@@ -110,12 +138,13 @@ export async function readTextFile(worktree: string, rel: string): Promise<FileR
   if (bytes.byteLength > FILE_MAX_BYTES) return { ok: true, kind: 'large', size: bytes.byteLength }
   const decoded = decodeText(bytes)
   if (!decoded) return { ok: true, kind: 'binary', size: bytes.byteLength }
-  return { ok: true, kind: 'text', text: decoded.text, hash: hashOf(bytes) }
+  return { ok: true, kind: 'text', text: decoded.text, hash: sha256(bytes) }
 }
 
 /**
  * 고친 글을 저장한다 (D467). 있는 글 파일만 고친다. expectHash가 지금 파일과 다르면(연 뒤 바뀜) 쓰지 않고 conflict다.
- * null이면 비교하지 않고 덮어쓴다. 줄 끝과 BOM은 지금 파일의 것을 붙인다. 그 자리에 써서 링크와 권한은 그대로다
+ * null이면 비교하지 않고 덮어쓴다. 줄 끝과 BOM은 지금 파일의 것을 붙인다. 그 자리에 써서 링크와 권한은 그대로다.
+ * 하드 링크가 있는 파일은 쓰지 않는다
  */
 export async function writeTextFile(
   worktree: string,
@@ -128,11 +157,14 @@ export async function writeTextFile(
   const st = await fsp.stat(at.real).catch(() => null)
   if (!st?.isFile()) return { ok: false, error: `파일이 아님: ${rel}` }
   if (st.size > FILE_MAX_BYTES) return { ok: false, error: `파일이 너무 큼: ${rel}` }
+  // 하드 링크는 worktree 밖(pnpm 저장소, 홈의 파일)과 같은 파일일 수 있다 (D468)
+  if (st.nlink > 1)
+    return { ok: false, error: `다른 이름(하드 링크)이 있는 파일이라 고치지 않음: ${rel}` }
   const current = await fsp.readFile(at.real).catch(() => null)
   if (!current) return { ok: false, error: `파일을 읽지 못함: ${rel}` }
   const decoded = decodeText(current)
   if (!decoded) return { ok: false, error: `글 파일이 아님: ${rel}` }
-  if (expectHash !== null && hashOf(current) !== expectHash) {
+  if (expectHash !== null && sha256(current) !== expectHash) {
     return { ok: false, conflict: true, error: '연 뒤 파일이 바뀌었습니다' }
   }
   const bytes = encodeText(text, decoded.shape)
@@ -142,5 +174,5 @@ export async function writeTextFile(
   } catch (e) {
     return { ok: false, error: `저장하지 못함: ${e instanceof Error ? e.message : String(e)}` }
   }
-  return { ok: true, hash: hashOf(bytes) }
+  return { ok: true, hash: sha256(bytes) }
 }

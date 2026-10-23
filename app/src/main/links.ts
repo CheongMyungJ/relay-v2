@@ -2,18 +2,13 @@
 // 터미널 출력은 에이전트가 쓴 글이라 믿지 않는다: 네트워크 경로와 장치는 보지 않고, 안전한 형식만 연다.
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { windowsDeviceName } from '../core/files'
+import { localLinkTarget, networkPath, windowsDeviceName } from '../core/files'
 
 /** 경로가 쓰는 OS. 시험에서 바꿔 넣는다 */
 export type PathPlatform = 'win32' | 'posix'
 
 export function pathPlatform(platform: NodeJS.Platform = process.platform): PathPlatform {
   return platform === 'win32' ? 'win32' : 'posix'
-}
-
-/** `\\서버\…`, `//서버/…`처럼 다른 컴퓨터를 가리키는 경로 */
-function networkPath(p: string): boolean {
-  return /^[\\/]{2}/.test(p)
 }
 
 /**
@@ -58,17 +53,6 @@ export interface LinkFs {
   readlink(file: string): Promise<string | null>
 }
 
-/** 링크가 가리키는 글을 이 컴퓨터의 경로로. `\\?\`, `\??\` 앞머리를 떼고, 네트워크 경로는 null이다 */
-function linkTarget(target: string | null, platform: PathPlatform): string | null {
-  if (target === null) return null
-  let t = target
-  if (platform === 'win32') {
-    if (/^[\\/]{2}[?.][\\/]unc[\\/]/i.test(t) || /^\\\?\?\\unc\\/i.test(t)) return null
-    t = t.replace(/^(?:[\\/]{2}[?.][\\/]|\\\?\?\\)(?=[a-z]:)/i, '')
-  }
-  return networkPath(t) ? null : t
-}
-
 /**
  * 절대 경로의 링크(심볼릭 링크, junction)를 앞에서부터 하나씩 따라가 실제 경로를 낸다. 링크를 따라가는 stat보다
  * 먼저 부른다: 가는 길에 네트워크 경로를 가리키는 링크가 있거나, 없는 경로이거나, 링크가 너무 깊으면 null이다 (D412)
@@ -92,7 +76,7 @@ export async function realLinkPath(
       cur = next
       continue
     }
-    const target = linkTarget(await fs.readlink(next), platform)
+    const target = localLinkTarget(await fs.readlink(next), platform === 'win32')
     if (target === null) return null
     const resolved = p.resolve(cur, target)
     if (networkPath(resolved)) return null

@@ -24,7 +24,7 @@ export function relayHome(env: NodeJS.ProcessEnv = process.env): string {
 }
 
 /** 출처: spikes/lib/util.mjs sha256 */
-export function sha256(data: string | Buffer): string {
+export function sha256(data: string | Uint8Array): string {
   return createHash('sha256').update(data).digest('hex')
 }
 

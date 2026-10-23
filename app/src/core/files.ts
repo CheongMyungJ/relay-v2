@@ -12,11 +12,31 @@ export const DIR_MAX_ENTRIES = 2000
 const HIDDEN = new Set(['.git'])
 
 /** Windows가 어느 폴더에서나 장치로 여는 이름. 확장자가 붙어도(`nul.txt`) 장치다 */
-const DEVICE_NAME = /^(con|prn|aux|nul|clock\$|conin\$|conout\$|com[0-9¹²³]|lpt[0-9¹²³])$/i
+const DEVICE_NAME =
+  /^(con|prn|aux|nul|clock\$|conin\$|conout\$|com[0-9\u00b9\u00b2\u00b3]|lpt[0-9\u00b9\u00b2\u00b3])$/i
 
 /** 장치 이름인가 (`nul`, `COM1.txt`, `aux .md`) */
 export function windowsDeviceName(name: string): boolean {
   return DEVICE_NAME.test((name.split('.')[0] ?? '').trimEnd())
+}
+
+/** `\\서버\…`, `//서버/…`처럼 다른 컴퓨터를 가리키는 경로 */
+export function networkPath(p: string): boolean {
+  return /^[\\/]{2}/.test(p)
+}
+
+/**
+ * 링크가 가리키는 글을 이 컴퓨터의 경로로. Windows는 `\\?\`, `\\.\`, `\??\` 앞머리를 떼고(junction은 `\\?\C:\…`로
+ * 읽힌다), 네트워크 경로(`\\?\UNC\…` 포함)는 null이다 (D412, D468)
+ */
+export function localLinkTarget(target: string | null, win32: boolean): string | null {
+  if (target === null) return null
+  let t = target
+  if (win32) {
+    if (/^[\\/]{2}[?.][\\/]unc[\\/]/i.test(t) || /^\\\?\?\\unc\\/i.test(t)) return null
+    t = t.replace(/^(?:[\\/]{2}[?.][\\/]|\\\?\?\\)(?=[a-z]:)/i, '')
+  }
+  return networkPath(t) ? null : t
 }
 
 /** 트리에서 뺀 이름 */

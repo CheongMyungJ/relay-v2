@@ -1,7 +1,7 @@
 // Work의 [파일] 탭 (D464~D468): worktree의 파일 트리와 연 파일. 마크다운은 [보기]로 그리고, 글 파일은 고쳐 저장한다.
 // 트리는 폴더를 펼칠 때 그 폴더만 읽는다. 탭을 다시 열거나 [새로 고침]을 누르면 펼친 폴더와 연 파일(고치지 않았으면)을
 // 다시 읽는다. 다른 탭이나 Work로 옮겨도 고치던 글이 남도록 Work마다 한 번 만들어 숨겨 둔다.
-import { useEffect, useEffectEvent, useState, type ReactNode } from 'react'
+import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from 'react'
 import type { FileEntryView, FileReadResult } from '../../shared/views'
 import { call } from './commands'
 import { Markdown } from './Markdown'
@@ -38,6 +38,8 @@ export function FilesView({ workKey, active }: { workKey: string; active: boolea
   const [conflict, setConflict] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // 마지막으로 연 파일의 차례. 늦게 온 앞 응답이 나중에 고른 파일을 덮지 않게 한다
+  const openSeq = useRef(0)
 
   const loadDir = async (rel: string) => {
     const r = await call(() => window.relay.workFiles(workKey, rel))
@@ -46,7 +48,9 @@ export function FilesView({ workKey, active }: { workKey: string; active: boolea
   }
 
   const openFile = async (rel: string) => {
+    const seq = ++openSeq.current
     const file = await call(() => window.relay.readWorkFile(workKey, rel))
+    if (seq !== openSeq.current) return
     setPending(null)
     setConflict(false)
     setError(null)
@@ -64,9 +68,9 @@ export function FilesView({ workKey, active }: { workKey: string; active: boolea
     await Promise.all([...expanded].map((rel) => loadDir(rel)))
     if (!file || isDirty(file)) return
     const again = await call(() => window.relay.readWorkFile(workKey, file.path))
-    // 읽는 사이에 다른 파일을 열었거나 고치기 시작했으면 두고 본다
+    // 읽는 사이에 다른 파일을 열었거나, 고치기 시작했거나, 저장했으면(file이 바뀜) 두고 본다
     setOpened((cur) =>
-      cur?.path !== file.path || isDirty(cur)
+      cur?.path !== file.path || cur.file !== file.file || isDirty(cur)
         ? cur
         : { ...cur, file: again, draft: again.ok && again.kind === 'text' ? again.text : '' },
     )
@@ -82,11 +86,8 @@ export function FilesView({ workKey, active }: { workKey: string; active: boolea
 
   const toggle = (rel: string) => {
     if (expanded.has(rel)) {
-      setExpanded((s) => {
-        const next = new Set(s)
-        next.delete(rel)
-        return next
-      })
+      // 접은 폴더 아래에 펼쳐 둔 폴더도 접는다: [새로 고침]이 보이지 않는 폴더를 읽지 않게
+      setExpanded((s) => new Set([...s].filter((d) => d !== rel && !d.startsWith(`${rel}/`))))
       return
     }
     setExpanded((s) => new Set(s).add(rel))
@@ -100,7 +101,9 @@ export function FilesView({ workKey, active }: { workKey: string; active: boolea
   }
 
   const save = async (force: boolean) => {
-    if (!opened || !opened.file.ok || opened.file.kind !== 'text' || busy) return
+    // 고친 것이 없으면 쓰지 않는다: 줄 끝이 섞인 파일을 바꾸거나 거짓 충돌을 알리지 않게
+    if (!opened || !opened.file.ok || opened.file.kind !== 'text' || busy || !isDirty(opened))
+      return
     const { path: rel, draft } = opened
     const hash = force ? null : opened.file.hash
     setBusy(true)
@@ -202,8 +205,9 @@ export function FilesView({ workKey, active }: { workKey: string; active: boolea
       <div
         className="file-pane"
         onKeyDown={(e) => {
-          // Ctrl+S (macOS Cmd+S)로 저장한다
-          if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 's') {
+          // Ctrl+S (macOS Cmd+S)로 저장한다. 한글 자판에서는 key가 'ㄴ'이라 자리(code)로도 본다
+          const s = e.code === 'KeyS' || e.key.toLowerCase() === 's'
+          if ((e.ctrlKey || e.metaKey) && !e.altKey && s) {
             e.preventDefault()
             void save(false)
           }

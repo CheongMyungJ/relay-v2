@@ -1,5 +1,6 @@
 // [어댑터] Work의 [파일] 탭의 파일 읽기와 쓰기 (D464~D468): 폴더의 항목, 링크 따라가기와 worktree 밖 막기, 글 파일
 // 읽기, 줄 끝을 지키는 저장과 바뀐 파일 알리기. 경로 검사와 글 판정의 세부는 [단위] `test/unit/work-files.test.ts`가 본다.
+import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -84,6 +85,17 @@ describe('[어댑터] [파일] 탭의 폴더 (D465)', () => {
     expect(await readTextFile(tree, 'src-link/avg.js')).toMatchObject({ kind: 'text' })
     expect(await listFiles(tree, 'out-link')).toMatchObject({ ok: false })
     expect(await readTextFile(tree, 'out-link/x.md')).toMatchObject({ ok: false })
+  })
+
+  it('Work가 아는 worktree 경로가 링크를 지나도(RELAY_HOME이 링크 아래), 그 경로로 만든 절대 경로 링크를 안으로 본다 (D468)', async () => {
+    // 에이전트는 Work가 아는 경로(alias)에서 돌아 링크를 그 경로로 만든다
+    const alias = path.join(root, 'alias')
+    fs.symlinkSync(tree, alias, 'junction')
+    fs.symlinkSync(path.join(alias, 'src'), path.join(tree, 'abs-src'), 'junction')
+    const r = await listFiles(alias, '')
+    if (!r.ok) throw new Error(r.error)
+    expect(r.entries.find((e) => e.name === 'abs-src')).toEqual({ name: 'abs-src', kind: 'dir' })
+    expect(await readTextFile(alias, 'abs-src/avg.js')).toMatchObject({ kind: 'text' })
   })
 
   it.skipIf(isWin)(
@@ -192,6 +204,36 @@ describe('[어댑터] [파일] 탭의 읽기와 저장 (D466, D467)', () => {
     })
     expect(fs.readFileSync(path.join(tree, 'README.md'), 'utf8')).toBe('# 안내\n')
   })
+
+  it('하드 링크가 있는 파일은 읽기만 하고 쓰지 않는다: worktree 밖과 같은 파일일 수 있다 (D468)', async () => {
+    const secret = path.join(root, 'secret.txt')
+    fs.linkSync(secret, path.join(tree, 'hard.md'))
+    expect(await readTextFile(tree, 'hard.md')).toMatchObject({ kind: 'text', text: '비밀\n' })
+    expect(await writeTextFile(tree, 'hard.md', '바꿈\n', null)).toEqual({
+      ok: false,
+      error: '다른 이름(하드 링크)이 있는 파일이라 고치지 않음: hard.md',
+    })
+    expect(fs.readFileSync(secret, 'utf8')).toBe('비밀\n')
+  })
+
+  it.runIf(isWin)(
+    'Windows의 8.3 짧은 이름(`GIT~1`)으로도 `.git`을 열지 않는다 (D468)',
+    async (ctx) => {
+      // cmd의 for가 짧은 이름을 낸다. 읽지 못하면 빈 글이다
+      const git = path.join(tree, '.git')
+      const out = spawnSync('cmd', ['/d', '/s', '/c', `"for %I in ("${git}") do @echo %~snxI"`], {
+        windowsVerbatimArguments: true,
+        encoding: 'utf8',
+      })
+      const short = (out.stdout ?? '').trim()
+      // 짧은 이름을 만들지 않는 볼륨이면 긴 이름이 나온다
+      if (!short || short.toLowerCase() === '.git') return ctx.skip()
+      expect(await listFiles(tree, short)).toMatchObject({ ok: false })
+      expect(await readTextFile(tree, `${short}/config`)).toMatchObject({ ok: false })
+      expect(await writeTextFile(tree, `${short}/config`, 'x', null)).toMatchObject({ ok: false })
+      expect(fs.readFileSync(path.join(tree, '.git', 'config'), 'utf8')).toBe('[core]\n')
+    },
+  )
 
   it.skipIf(isWin)('실행 권한은 저장한 뒤에도 그대로다', async () => {
     const script = path.join(tree, 'run.sh')

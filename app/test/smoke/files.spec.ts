@@ -100,15 +100,22 @@ test('[파일] 탭에서 worktree의 파일을 보고, 마크다운을 그려 �
   await expect(preview.locator('li')).toHaveText(['첫 항목', '둘째 항목'])
   await win.screenshot({ path: 'test-results/files-preview.png' })
 
-  // [편집]으로 고치고 Ctrl+S로 저장한다. worktree의 파일이 바뀐다
+  // [편집]으로 고치고 Ctrl+S로 저장한다. worktree의 파일이 바뀌고 원래 줄 끝을 지킨다(Windows의 git은 CRLF로 둘 수 있다)
+  const readme = path.join(worktree(), 'README.md')
+  const eol = fs.readFileSync(readme, 'utf8').includes('\r\n') ? '\r\n' : '\n'
   await win.locator('.file-mode').getByRole('tab', { name: '편집' }).click()
   const editor = win.getByLabel('README.md 편집')
   await editor.fill('# 고친 안내\n\n본문\n')
   await expect(win.locator('.file-dirty')).toHaveText('저장하지 않음')
   await editor.press('Control+s')
   await expect(win.locator('.file-dirty')).toHaveCount(0)
-  expect(fs.readFileSync(path.join(worktree(), 'README.md'), 'utf8')).toBe('# 고친 안내\n\n본문\n')
+  expect(fs.readFileSync(readme, 'utf8')).toBe('# 고친 안내\n\n본문\n'.replace(/\n/g, eol))
   expect(fs.readFileSync(path.join(repo, 'README.md'), 'utf8')).toContain('# 샘플 안내')
+  // 고친 것이 없으면 Ctrl+S가 쓰지 않는다: 그사이 밖에서 바뀐 파일을 건드리지 않고 충돌도 알리지 않는다
+  fs.writeFileSync(readme, '# 밖에서 고침\n')
+  await editor.press('Control+s')
+  await expect(win.locator('.file-banner')).toHaveCount(0)
+  expect(fs.readFileSync(readme, 'utf8')).toBe('# 밖에서 고침\n')
   await win.locator('.file-mode').getByRole('tab', { name: '보기' }).click()
   await expect(preview.locator('h1')).toHaveText('고친 안내')
 
