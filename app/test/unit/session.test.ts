@@ -136,7 +136,8 @@ describe('기본 세션의 안내 (D400)', () => {
       [
         '---',
         'project: <프로젝트 id>',
-        'type: <bugfix | feature | refactor | spec | general>',
+        'type: <bugfix | feature | refactor | spec | general | custom>',
+        'custom_type: <type이 custom일 때만. 커스텀 유형 id>',
       ].join('\n'),
     )
     expect(g).toContain('`bugfix` 버그 수정')

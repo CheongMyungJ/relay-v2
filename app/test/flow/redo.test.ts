@@ -103,6 +103,7 @@ describe('[흐름] 다시 하기: 새 Work (D420, D421)', () => {
     expect(draft).toEqual({
       project: s.projectId,
       type: 'bugfix',
+      customType: null,
       base: null,
       request: REDO_REQUEST,
       errors: [],

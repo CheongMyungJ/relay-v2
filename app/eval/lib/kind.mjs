@@ -1,4 +1,4 @@
-// 시나리오의 업무 유형(relay D236, D261, D303, D353)에 따른 낱말. scenario.json의 type이 없으면 버그 수정이다 (relay I62, I67, I92, I112)
+// 시나리오의 업무 유형(relay D236, D261, D303, D353, D447)에 따른 낱말. scenario.json의 type이 없으면 버그 수정이다 (relay I62, I67, I92, I112)
 const WORDS = {
   bugfix: {
     label: '버그 수정',
@@ -51,6 +51,19 @@ const WORDS = {
   },
   general: {
     label: '일반',
+    task: '일을 한다',
+    goal: '일이 요구대로 됐다고',
+    subject: '할 일 (네가 받은 요청)',
+    done: '이 일을 한',
+    again: '비슷한 일에',
+    report: '요청',
+    same: '같은 일을',
+    did: '한',
+    made: '요구대로 됐나',
+  },
+  // 커스텀 유형(relay D447)은 팀이 정한 단계로 일반과 같은 일을 한다. 어느 유형인지는 scenario.customType이다
+  custom: {
+    label: '커스텀',
     task: '일을 한다',
     goal: '일이 요구대로 됐다고',
     subject: '할 일 (네가 받은 요청)',

@@ -114,6 +114,8 @@ export const DECISIONS_UNREADABLE = 'handoff 머리글 오류로 결정을 읽�
 export interface DecisionsEntry {
   taskId: string
   node: TaskNode
+  /** 커스텀 단계의 단계 id. 머리 줄에 custom:<id>로 적는다 (D462) */
+  step?: string
   /** 승인 시각 (ISO 8601) */
   at: string
   by: ApprovalBy
@@ -128,7 +130,8 @@ const oneLine = (s: string) => s.replace(/\s*\n\s*/g, ' ').trim()
  * 머리 줄은 task id, 노드, 승인 시각, 승인 방식이고, 항목은 `[사람]`/`[AI]` 뒤에 `what — why`다.
  */
 export function decisionsBlock(e: DecisionsEntry): string {
-  const head = `## ${e.taskId} ${e.node} — ${localMinute(e.at)} (${APPROVAL_LABEL[e.by]})`
+  const node = e.step ? `${e.node}:${e.step}` : e.node
+  const head = `## ${e.taskId} ${node} — ${localMinute(e.at)} (${APPROVAL_LABEL[e.by]})`
   const body =
     e.decisions === null
       ? [DECISIONS_UNREADABLE]

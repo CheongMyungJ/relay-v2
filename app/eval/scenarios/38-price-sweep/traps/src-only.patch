@@ -1,0 +1,43 @@
+diff --git a/src/cart.js b/src/cart.js
+index de86bd0..67fd91d 100644
+--- a/src/cart.js
++++ b/src/cart.js
+@@ -1,6 +1,6 @@
+-import { formatPrice } from './price.js'
++import { formatMoney } from './price.js'
+ 
+ export function cartTotal(items) {
+   const total = items.reduce((sum, i) => sum + i.price * i.qty, 0)
+-  return `합계 ${formatPrice(total)}`
++  return `합계 ${formatMoney(total)}`
+ }
+diff --git a/src/price.js b/src/price.js
+index a2b91d5..c4da795 100644
+--- a/src/price.js
++++ b/src/price.js
+@@ -1,11 +1,6 @@
+ // 금액 표시
+ const group = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+ 
+-/** 옛 표시. formatMoney로 옮기는 중이다 */
+-export function formatPrice(n) {
+-  return `${group(n)}원`
+-}
+-
+ /** 새 표시. 단위를 고를 수 있다 */
+ export function formatMoney(n, { unit = '원' } = {}) {
+   return `${group(n)}${unit}`
+diff --git a/src/receipt.js b/src/receipt.js
+index 8310cbf..b11ee9d 100644
+--- a/src/receipt.js
++++ b/src/receipt.js
+@@ -1,7 +1,7 @@
+-import { formatMoney, formatPrice } from './price.js'
++import { formatMoney } from './price.js'
+ 
+ export function receiptLines(items) {
+-  return items.map((i) => `${i.name} ${i.qty}개 ${formatPrice(i.price * i.qty)}`)
++  return items.map((i) => `${i.name} ${i.qty}개 ${formatMoney(i.price * i.qty)}`)
+ }
+ 
+ export function pointsLine(points) {

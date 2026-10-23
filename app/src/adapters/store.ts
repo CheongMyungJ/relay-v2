@@ -364,6 +364,8 @@ export class WorkFiles {
   readonly events: string
   /** PR 진행의 항목 (D191) */
   readonly prItems: string
+  /** 커스텀 Work면 Work를 만들 때 복사한 유형 폴더 (D458) */
+  readonly customType: string
 
   constructor(readonly dir: string) {
     this.workJson = path.join(dir, 'work.json')
@@ -373,6 +375,7 @@ export class WorkFiles {
     this.decisions = path.join(dir, 'decisions.md')
     this.events = path.join(dir, 'events.jsonl')
     this.prItems = path.join(dir, 'pr-items.json')
+    this.customType = path.join(dir, 'type')
   }
 
   /**
@@ -395,8 +398,8 @@ export class WorkFiles {
     await writeJson(this.prItems, file)
   }
 
-  /** tasks/<nn>-<node> */
-  taskDir(task: Pick<TaskRecord, 'seq' | 'node'>): string {
+  /** tasks/<nn>-<node>. 커스텀 단계는 tasks/<nn>-<단계 id>다 (D462) */
+  taskDir(task: Pick<TaskRecord, 'seq' | 'node' | 'step'>): string {
     return path.join(this.dir, 'tasks', taskDirName(task))
   }
 
@@ -535,7 +538,9 @@ export class WorkFiles {
   }
 
   /** task 디렉터리 바로 아래의 .md 파일. 이름 → 내용 (core/validate checkTask의 입력) */
-  async taskFiles(task: Pick<TaskRecord, 'seq' | 'node'>): Promise<Record<string, string>> {
+  async taskFiles(
+    task: Pick<TaskRecord, 'seq' | 'node' | 'step'>,
+  ): Promise<Record<string, string>> {
     const dir = this.taskDir(task)
     const out: Record<string, string> = {}
     for (const name of await mdFiles(dir)) {
@@ -547,7 +552,7 @@ export class WorkFiles {
 
   /** 산출물의 이름과 내용 (D89): artifacts와 같은 파일이다. 이슈 기록의 코멘트에 접어 넣는다 (D339) */
   async artifactTexts(
-    task: Pick<TaskRecord, 'seq' | 'node'>,
+    task: Pick<TaskRecord, 'seq' | 'node' | 'step'>,
   ): Promise<{ name: string; text: string }[]> {
     const out: { name: string; text: string }[] = []
     for (const file of await this.artifacts(task)) {
@@ -558,7 +563,7 @@ export class WorkFiles {
   }
 
   /** 산출물의 절대 경로: task 디렉터리의 .md 중 context.md와 handoff.md를 뺀 것 (D89) */
-  async artifacts(task: Pick<TaskRecord, 'seq' | 'node'>): Promise<string[]> {
+  async artifacts(task: Pick<TaskRecord, 'seq' | 'node' | 'step'>): Promise<string[]> {
     const dir = this.taskDir(task)
     return (await mdFiles(dir)).filter(isArtifactName).map((n) => path.join(dir, n))
   }
@@ -568,7 +573,7 @@ export class WorkFiles {
    * 돌려준다. 경고하지 않는다 (시나리오 9-5). TextDecoder에 stream을 주면 끝의 덜 쓴 바이트 열을 다음 호출까지
    * 안에 둔다 (Node 문서 util TextDecoder). 없으면 null
    */
-  async readPtyLog(task: Pick<TaskRecord, 'seq' | 'node'>): Promise<string | null> {
+  async readPtyLog(task: Pick<TaskRecord, 'seq' | 'node' | 'step'>): Promise<string | null> {
     let buf: Buffer
     try {
       buf = await fsp.readFile(path.join(this.taskDir(task), 'pty.log'))
@@ -583,7 +588,10 @@ export class WorkFiles {
    * pty.log 끝에 표시 줄을 붙인다 (D219). 이미 그 줄로 끝나면 다시 붙이지 않는다. 충돌로 끝에 덜 쓴 UTF-8 문자가
    * 남았으면(시나리오 9-5) 그 바이트를 지우고 붙인다: 두면 다시 읽을 때 깨진 글자가 된다. pty.log가 없으면 하지 않는다
    */
-  async appendPtyMark(task: Pick<TaskRecord, 'seq' | 'node'>, mark: string): Promise<void> {
+  async appendPtyMark(
+    task: Pick<TaskRecord, 'seq' | 'node' | 'step'>,
+    mark: string,
+  ): Promise<void> {
     let handle: fsp.FileHandle
     try {
       handle = await fsp.open(path.join(this.taskDir(task), 'pty.log'), 'r+')
@@ -606,7 +614,7 @@ export class WorkFiles {
   }
 
   /** 터미널 출력을 이어 쓰는 pty.log (시나리오 5-1). 충돌하면 끝부분이 잘릴 수 있다 (시나리오 9-5) */
-  openPtyLog(task: Pick<TaskRecord, 'seq' | 'node'>): PtyLog {
+  openPtyLog(task: Pick<TaskRecord, 'seq' | 'node' | 'step'>): PtyLog {
     const file = path.join(this.taskDir(task), 'pty.log')
     fs.mkdirSync(path.dirname(file), { recursive: true })
     const stream = fs.createWriteStream(file, { flags: 'a' })

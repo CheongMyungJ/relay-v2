@@ -8,6 +8,7 @@ import type { ApprovalGate, Badge, BadgeKind } from '../shared/views'
 import type {
   AutoHoldReason,
   CheckSummary,
+  CustomStep,
   FormatIssue,
   TaskRecord,
   TaskStatus,
@@ -70,14 +71,23 @@ export function autoApprovable(node: TaskNode): node is AutoApproveNode {
   return (AUTO_APPROVE_NODES as readonly TaskNode[]).includes(node)
 }
 
-/** 승인 방식. intake와 verify는 항상 수동이고, Codex는 수동이고, Claude의 나머지는 Work 설정, 앱 설정 순서로 본다 (4.2, D72, D169) */
+/**
+ * 승인 방식. intake와 verify는 항상 수동이고, Codex는 수동이고, Claude의 나머지는 Work 설정, 앱 설정 순서로 본다 (4.2, D72, D169).
+ * 커스텀 단계는 Work 설정, 그 단계의 type.json 기본값 순서로 본다. 단계 정의(step)가 없으면 수동이다 (D457)
+ */
 export function approvalMode(
   config: Pick<AppConfig, 'auto_approve'>,
   settings: WorkSettings,
   node: TaskNode,
   engine: AgentEngine | null = 'claude',
+  step?: Pick<CustomStep, 'id' | 'auto_approve'>,
 ): ApprovalMode {
-  if (engine !== 'claude' || !autoApprovable(node)) return 'manual'
+  if (engine !== 'claude') return 'manual'
+  if (node === 'custom') {
+    const on = step ? (settings.custom_auto_approve?.[step.id] ?? step.auto_approve) : false
+    return on ? 'auto' : 'manual'
+  }
+  if (!autoApprovable(node)) return 'manual'
   return (settings.auto_approve?.[node] ?? config.auto_approve[node]) ? 'auto' : 'manual'
 }
 

@@ -9,8 +9,11 @@ export type HandoffStatus = Handoff['status']
 export type Decision = Handoff['decisions'][number]
 export type RecommendedNext = NonNullable<Handoff['recommended_next']>
 
-/** 파이프라인 노드 (3.1) */
-export type NodeName = RecommendedNext['node']
+/**
+ * 파이프라인 노드 (3.1). 커스텀 단계(D447)는 모두 노드 custom이고 단계 id는 task의 step에 있다 (D462). handoff의
+ * recommended_next는 D418 전 형식이라 custom이 없다
+ */
+export type NodeName = RecommendedNext['node'] | 'custom'
 
 /**
  * task의 노드 (3.1). 파이프라인 노드에 파이프라인 밖의 PR 대응(respond, D187, D188)을 더한다. PR 대응은 선택 가능한

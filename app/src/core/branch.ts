@@ -16,7 +16,13 @@ export const BRANCH_TYPE: Readonly<Record<WorkType, string>> = {
   refactor: 'refactor',
   spec: 'spec',
   general: 'chore',
+  // 커스텀 유형은 그 id를 쓴다 (D462). 이 값은 id를 모를 때만 쓴다
+  custom: 'custom',
 }
+
+/** {type} 자리의 값. 커스텀 유형이면 그 id다 (D462) */
+export const branchType = (type: WorkType, customId?: string) =>
+  type === 'custom' && customId ? customId : BRANCH_TYPE[type]
 
 /** 끝에 붙이는 임의의 글자 수와 글자 (D427) */
 export const SUFFIX_LENGTH = 4
@@ -86,6 +92,8 @@ export interface BranchRuleInput {
   /** w-YYYYMMDD-NNN */
   workId: string
   type: WorkType
+  /** 커스텀 유형의 id. {type}에 들어간다 (D462) */
+  customId?: string
   /** 짧은 이름. 비면 {slug}와 그 옆 구분자 하나를 함께 뺀다 */
   slug: string
 }
@@ -101,7 +109,7 @@ export function renderBranchRule(rule: string, input: BranchRuleInput): string {
     'work-id': input.workId,
     date: m?.[1] ?? '',
     seq: m?.[2] ?? '',
-    type: BRANCH_TYPE[input.type],
+    type: branchType(input.type, input.customId),
     slug: slugOf(input.slug),
   }
   const r = values.slug
@@ -179,6 +187,7 @@ export interface PickInput {
   slug: string
   workId: string
   type: WorkType
+  customId?: string
   /** 이미 있는 브랜치(로컬과 origin) */
   existing: readonly string[]
   random?: () => number
@@ -193,7 +202,12 @@ export function pickWorkBranch(
 ): { ok: true; branch: string } | { ok: false; error: string } {
   const stem =
     input.name?.trim() ||
-    renderBranchRule(input.rule, { workId: input.workId, type: input.type, slug: input.slug })
+    renderBranchRule(input.rule, {
+      workId: input.workId,
+      type: input.type,
+      slug: input.slug,
+      ...(input.customId ? { customId: input.customId } : {}),
+    })
   if (!stem)
     return { ok: false, error: '브랜치 이름이 비었습니다. 짧은 이름이나 브랜치 이름을 적으세요' }
   const probe = withSuffix(stem, 'a'.repeat(SUFFIX_LENGTH))

@@ -176,8 +176,8 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I160 | 가짜 `claude`는 첫 프롬프트 `relay <스킬> 단계를 시작합니다. 이 task의 컨텍스트: <경로>`로 task의 스킬과 컨텍스트를 읽는다. 곁 세션과 기본 세션은 설정 파일의 훅 URL id(`/hook/side/`, `/hook/session/`)로 안다(첫 프롬프트 문구가 바뀌어도 task를 곁 세션으로 잘못 보지 않게, PR #60 리뷰). task가 받은 `--append-system-prompt-file`의 내용은 기록에 `instructions`로 남긴다. `--append-system-prompt-file`은 곁 세션 때문에 이미 [계약] 녹화본의 옵션 목록에 있어 다시 녹화하지 않았다 | 곁 세션과 task가 같은 옵션을 쓰게 되어, 옵션만으로 가르던 것을 훅 URL로 가른다 | |
 | I161 | `sideArgs`가 `--append-system-prompt-file` 다음에 `--system-prompt-snapshot off`를 넣고, `sessionArgs`는 `sideArgs`를 써서 같다(D446). 시작과 재개가 같다. `openChat`이 Claude면 `claude --version`을 읽고 `promptSnapshotOff`(2.1.257 이상이면 참, 읽지 못하면 거짓)로 `ChatFiles.refreshGuide`를 정한다. 거짓이면 이 옵션을 빼 예전처럼 뜬다. 버전 비교는 gh와 같은 `core/pr`의 `older`다. 가짜 `claude`는 이 옵션의 값을 첫 프롬프트로 읽지 않게 건너뛴다. 가짜의 기본 버전(0.0.0)은 이 옵션보다 낮아, 곁·기본 세션의 [흐름] 시험은 `FAKE_CLAUDE_VERSION`을 준다. [계약] 녹화본은 2.1.308로 다시 녹화해 옵션 목록에 이 옵션이 들어갔다(훅 본문의 모양은 그대로) | 모르는 옵션이면 claude가 뜨지 않아, 낮은 버전에서는 이전처럼 여는 쪽이 낫다(PR #60 리뷰). gh의 `--active`(D67)와 같은 판단이다. 곁·기본 세션을 열 때마다 `--version`을 한 번 더 부른다 | |
 | I162 | 커스텀 유형의 정의 검사는 `core/custom-type`(순수 함수)이 하고, 전역·레포 폴더 읽기와 같은 id 고르기(D451)는 `adapters/custom-types`가 한다. 검사 결과는 `CustomTypeDef` 또는 오류 목록이고, 화면(D459, D460)은 오류 목록을 그대로 보인다 | 형식 검사를 OS 없이 [단위]에서 보고, 읽기는 [어댑터]에서 본다(CLAUDE.md의 층) | |
-| I163 | 순서에 기대는 함수는 유형 이름 대신 Work에서 푼 `Pipeline` 값(노드 목록과 노드 정보)을 받는다. 기본 유형의 `Pipeline`은 지금 표(`PIPELINES`, `NODE_INFO`)에서, 커스텀 Work의 것은 Work 디렉터리의 `type/` 복사본(D458)에서 만든다 | `Record<WorkType, …>` 표에 커스텀 유형을 넣을 수 없다. I57(순서에 기대는 함수는 유형을 함께 받음)을 한 단계 넓힌 것이고, 기본 유형의 표는 그대로 둔다 | |
-| I164 | `work.json`의 `type`은 기본 유형 이름이거나 커스텀 id이고, 커스텀이면 `custom_type: { source: "global" \| "repo", hash }`를 둔다. handoff 스키마의 노드 값은 기본 노드 목록 또는 단계 id 모양(D449의 정규식)이다 | 기존 `work.json`과 handoff는 그대로 읽힌다. 노드 이름에 접두를 붙이지 않는 D462를 따른다 | |
+| I163 | 커스텀 단계는 노드 하나(`custom`)로 두고 task에 `step`(단계 id)과 `step_title`(화면 이름)을 적는다(D462). 순서에 기대는 함수는 `core/pipeline`의 `Stage`(노드와 단계 id)로 본다: `stagesOf(work)`, `nextStage(work, stage)`, `stageOf(task)`, `customStep(work, task)`, `nodeTitle(task)`·`taskTitle(work, task)`, `taskArtifacts(task)`, `customSections(step)`. 기본 유형의 표(`PIPELINES`, `NODE_INFO`)는 그대로 두고 `PIPELINES.custom`은 `['intake', 'custom', 'verify']`다. 커스텀 단계의 승인 방식은 `approvalMode(…, step)`가 Work 설정의 `custom_auto_approve`, 정의의 `auto_approve` 순으로 본다 | 노드 이름을 단계 id로 넓히면 `Record<NodeName, …>` 표(스킬, 설정 묶음, 단계별 엔진, 자동 승인 키)를 모두 바꿔야 한다. 노드 하나에 단계 id를 붙이면 표는 그대로이고 순서를 보는 곳만 바뀐다. 화면 이름을 task에 옮겨 두면 Work를 받지 않는 `taskLabel`도 이름을 안다 | |
+| I164 | `work.json`의 `type`은 `custom`, `custom_type`은 `{ id, name, description, steps, source, hash }`다(D462). core는 파일을 읽지 않고 `custom_type`만으로 파이프라인을 안다. Work 디렉터리의 `type/`(`WorkFiles.customType`)은 절차 조립(`adapters/claude`의 `skillText(…, custom)`)만 읽는다. handoff 스키마는 바꾸지 않는다(`recommended_next`는 D418 전 형식). Work 초안(D404)은 `type: custom`과 `custom_type: <id>`로 가리킨다 | 기존 `work.json`과 handoff는 그대로 읽힌다. 단계 목록을 `work.json`에 두면 상태 기계와 화면이 Work 디렉터리를 읽지 않는다 | |
 
 ## 3. 확인한 사실
 
@@ -1335,47 +1335,25 @@ S8에서 다시 연 곁·기본 세션이 처음 연 때의 안내를 압축 전
 
 ### M30. 커스텀 유형 (D447~D463)
 
-설계 v0.25(D447~D463). 사람이 정의한 유형이 `intake → 커스텀 단계 1~n개 → verify`를 지난다. 기본 다섯 유형의 흐름은 그대로다. 아래 다섯을 하고 단계마다 커밋한다. 단계가 끝날 때마다 `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`, `npm run test:contract`, `node skills/check.mjs`를 돌린다.
+사람이 "커스텀 유형 추가 기능"을 제안했고, 설계 v0.25를 부록 A로 정한 뒤 구현했다. 기본 다섯 유형의 흐름은 그대로다.
 
-**1. core와 계약 (I162~I164)**
+- core: `core/custom-type`(type.json 검사, I162), `core/pipeline`의 `Stage`와 커스텀 단계 함수(I163), `core/machine`(만들 때 `custom_type`, 승인과 [재개]가 다음 자리로, task의 `step`·`step_title`, task 디렉터리 `<nn>-<단계 id>`), `core/context`(`## 커스텀 유형` 절, 커스텀 단계의 산출물과 절, 고정 질문 방식 줄, 앞 task의 `custom:<단계 id>`), `core/validate`(산출물 `<단계 id>.md`와 정의의 절, 커스텀 intent의 확인 방법), `core/approval`(I163), `core/config`(`custom_auto_approve`), `core/branch`(`{type}`은 유형 id), `core/draft`(`custom_type`), `core/records`(결정 로그 머리 줄), `core/review`(승인 화면의 단계 핵심은 커스텀 단계 산출물의 정의한 절, D223), `core/settings`(`type/` 편집 deny).
+- 어댑터: `adapters/custom-types`(전역·레포 읽기와 합치기, 복사와 해시, 편집 화면의 쓰기·지우기, [레포로 복사]), `adapters/claude`의 `skillText(…, custom)`(커스텀 단계 절차, `intake.md`·`verify.md`)와 `procedureText`(시작점), Codex 배포본도 같은 글(D461).
+- 스킬: `skills/custom/SKILL.md`(공통 바탕 일곱 규칙, D452), work-start·verify·pr-respond의 `custom` 구간(D455, D456), `skills/assemble.mjs`의 `TYPES`에 `custom`, `skills/check.mjs`의 커스텀 대조.
+- 앱과 화면: Work 생성의 유형 고르기와 복사(`Relay.createWork`), 업무 유형 명령(`customTypes`, `customTypeList`, `customTypeFiles`, `saveCustomType`, `deleteCustomType`, `copyCustomTypeToRepo`, `openCustomTypeFolder`, `skillProcedure`), 새 Work 대화상자의 구분선 뒤 커스텀 유형과 설명·단계, 고급 설정과 [Work 설정]의 커스텀 단계 자동 승인, 업무 유형 화면(`renderer/src/CustomTypes.tsx`, 설정 화면의 [업무 유형…]), 초안 카드의 없는 유형 막기.
 
-- **정의 읽기와 검사(I162):** `core/custom-type`(새로)이 `type.json`을 검사한다(id·단계 id 모양과 겹침, `steps` 하나 이상, `sections`·`auto_approve` 기본값, D449, D453, D457). 결과는 `CustomTypeDef` 또는 사람이 읽는 오류 목록이다. 파일 읽기는 `adapters/custom-types`(새로)가 하고 전역(`<RELAY_HOME>/types/`)과 레포(`.relay/types/`)를 합친다(같은 id는 레포, D451).
-- **파이프라인(I163):** `PIPELINES`·`NODE_INFO`는 기본 유형 표로 둔다. 순서에 기대는 함수(`order`, `defaultNext`, `inPipeline`, 필수 산출물, 마무리 안내, 자동 승인 대상)는 유형 대신 Work에서 푼 `Pipeline`(노드 목록과 노드마다의 화면 이름·산출물·절·자동 승인 기본값)을 받는다. 커스텀 Work의 `Pipeline`은 Work 디렉터리의 `type/` 복사본에서 만든다(D458).
-- **`work.json`과 계약(I164):** `type`은 `WorkType | string`(커스텀 id), `custom_type: { source, hash }`. handoff 스키마와 생성본의 노드 값에 단계 id 모양(D462). 산출물 검사는 `<단계 id>.md`의 절(D453). `{type}` 브랜치 자리(D462).
-- **`context.md`:** task 정보에 유형의 이름·설명·단계 목록(D456), 커스텀 단계에는 앞 커스텀 단계의 산출물 경로, verify에는 모든 커스텀 단계의 산출물 경로. 질문 방식 줄은 커스텀 단계에 없다(D457).
+**시험**
 
-**2. 스킬과 조립**
+- **[단위]** `test/unit/custom-type.test.ts`: type.json 검사(모양, 겹침, 기본값, 다시 읽기), 파이프라인과 다음 자리, 상태 기계(단계마다 task, [이 단계 끝나면 멈춤] 뒤 [재개], 자동 승인 카운트다운), 승인 방식, `context.md`, 산출물 형식 검사, 브랜치·초안·Work 설정·결정 로그. 기존 기대값(파이프라인 표, 노드 목록, 단계별 실행 설정, 초안의 `customType`, 안내의 초안 형식, deny 규칙)을 고쳤다.
+- **[어댑터]** `test/adapters/custom-types.test.ts`: 폴더 읽기와 깨진 폴더, 같은 id의 합치기, 복사와 해시, 편집과 지우기, [레포로 복사], 커스텀 단계·intake·verify의 조립, Codex 배포본, 시작점. `store.test.ts`의 조립 비교에 `custom`을 더했다.
+- **[흐름]** `test/flow/custom.test.ts`: 레포 유형의 두 단계 Work가 intake → 조사 → 적용(자동 승인) → verify → 완료, 만든 뒤 원본을 고쳐도 복사본으로 돎, 같은 id면 레포 것, 깨진·없는 유형 막기, 업무 유형 명령. 가짜 claude는 커스텀 단계를 task id로 고른다(`customSteps`).
+- **[스모크]** `test/smoke/custom.spec.ts`: 업무 유형 화면에서 유형을 만들고(시작점 복사 포함), 새 Work 대화상자에 여섯째 버튼과 설명·단계가 보이며, 의도 승인 뒤 `02 조사` 탭이 돈다.
+- **[실제]** `test/claude/custom.test.ts`(`RELAY_REAL_CASES=custom`): 작은 두 단계 유형 Work가 끝까지 가고, 조사 단계가 절차대로 커밋하지 않는지 본다. `RELAY_REAL_CLAUDE=dry`도 통과한다. 실제 쪽의 결과는 `docs/checks.md` M30.
+- **[계약]** 바뀌지 않았다: `claude`의 새 옵션, 훅 본문, gh JSON의 새 필드를 쓰지 않는다.
 
-- **`skills/custom/SKILL.md`(새로):** 공통 바탕 일곱 규칙(5.6.13, D452). 머리글은 `description`만.
-- **조립:** `skills/assemble.mjs`의 `TYPES`와 앱의 `selectType`에 `custom`. 커스텀 단계는 `공통 바탕 + "## 이 단계의 절차" + <단계 id>.md + _common.md`(D452). 공용 스킬의 `custom` 구간 끝에 `intake.md`·`verify.md`(D456).
-- **work-start, verify:** `custom` 구간(유형 설명과 불일치 질문, intent는 일반과 같음, 커스텀 단계 산출물 읽기, 리뷰 관점, 일반 `pr.md`). pr-respond는 일반과 같은 구간을 쓴다.
-- **`skills/check.mjs`:** 공통 바탕 대조(5.6.13), 공용 스킬의 `custom` 구간 대조. Codex는 같은 조립본을 배포하므로 따로 할 일이 없다(D461).
+**평가 (D463)**
 
-**3. 앱과 화면**
-
-- **Work 생성(D458):** 고른 유형 폴더를 `works/<id>/type/`에 복사하고 해시를 적는다. 앱 소유 파일 해시(D124)에 넣는다.
-- **새 Work 대화상자(D460):** 기본 다섯 뒤 구분선, 레포 유형("(레포)"), 전역 유형. 설명과 단계 목록, 깨진 유형은 꺼짐. 고급 설정의 자동 승인에 커스텀 단계(기본값은 `type.json`, D457).
-- **업무 유형 화면(D459):** 목록, [새 유형](빈 유형 / 기존 단계 절차 복사), 편집, [레포로 복사], [폴더 열기]. 레포 유형은 읽기 전용.
-- **Work 초안 카드(D458):** 없는 커스텀 유형이면 이유를 보이고 [새 Work로 만들기]를 막는다.
-
-**4. 시험**
-
-- **[단위]:** `type.json` 검사(모양, 겹침, 기본값), 같은 id의 출처 고르기, 커스텀 `Pipeline`의 다음 단계·필수 산출물·자동 승인 대상, `context.md`의 유형 정보와 산출물 경로, 산출물 절 검사, 브랜치 `{type}`.
-- **[어댑터]:** 전역·레포 폴더 읽기와 깨진 폴더, Work 생성 때의 복사와 해시, 커스텀 단계의 `instructions.md` 조립(공통 바탕, 단계 절차, `_common.md` 순), 공용 스킬의 `custom` 구간에 `intake.md`·`verify.md`.
-- **[흐름] `test/flow/custom.test.ts`:** 두 단계 커스텀 유형의 Work가 intake → 단계 1 → 단계 2 → verify → Work 완료로 간다. 원본을 고쳐도 진행 중인 Work는 복사본으로 돈다. 단계별 자동 승인 기본값. 가짜 `claude`의 커스텀 시나리오는 녹화본에 없는 필드를 짓지 않는다.
-- **[계약]:** handoff 스키마의 노드 값이 넓어진 것 말고 `claude`·gh 쪽은 바뀌지 않는다.
-- **[스모크]:** 새 Work 대화상자의 구분선과 커스텀 유형, 업무 유형 화면에서 유형을 만들고 새 Work에 보임.
-- **[실제]:** `custom` 경우(두 단계 유형이 끝까지 감). `RELAY_REAL_CLAUDE=dry`도 통과.
-
-**5. 평가 (D463)**
-
-- 시나리오 하나(두 단계 커스텀 유형과 그 유형에 맞는 일)를 커스텀 유형 relay와 일반 유형 relay로 각 3번. `check-scenario.mjs` 통과, `relay-arm.mjs`·`guides/relay.md`·relay-eval 스킬을 커스텀 유형으로 넓힌다. 판정·집계를 고치면 `app/eval/test/`에 시험을 더한다. 보고서는 따로 커밋한다.
-
-**완료 기준**
-
-- 위 시험이 모두 통과하고, 기존 다섯 유형의 흐름 시험이 그대로 통과한다.
-- `skills/check.mjs`가 통과한다.
-- 평가 시나리오가 `check-scenario.mjs`를 통과하고 `npm run test:eval`이 통과한다.
+- 시나리오 38-price-sweep(커스텀 유형 '조사 후 적용', 테스트가 덮지 않는 운영 스크립트의 쓰임). 짝은 `relay`(그 유형) 대 `relay@general`이다(`eval/lib/works.mjs` `pairOf`). 사람 역할은 레포 유형 '<이름> (레포)'를 고른다(`eval/lib/human.mjs` `pickTypeLines`). `check-scenario.mjs`와 `app/eval/test/`의 시험이 통과한다. 평가 실행과 보고서는 따로 한다.
 
 ## 8. 테스트 전략
 

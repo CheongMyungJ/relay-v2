@@ -174,7 +174,9 @@ describe('설정 화면 (D70)', () => {
   })
 
   it('자동 승인을 켤 수 있는 단계가 아닌 노드는 모두 "켤 수 없음"으로 거절한다. 모르는 단계로 거절하지 않는다 (4.2)', () => {
-    const manual = ALL_NODES.filter((n) => !(AUTO_APPROVE_NODES as readonly string[]).includes(n))
+    const manual = ALL_NODES.filter(
+      (n) => n !== 'custom' && !(AUTO_APPROVE_NODES as readonly string[]).includes(n),
+    )
     expect(manual).toEqual(['intake', 'verify'])
     for (const n of manual) {
       expect(applyConfigPatch(DEFAULT_CONFIG, { auto_approve: { [n]: true } }), n).toEqual({
@@ -182,6 +184,11 @@ describe('설정 화면 (D70)', () => {
         error: `자동 승인: ${n}는 켤 수 없음 (의도 승인, Work 완료는 늘 수동)`,
       })
     }
+    // 커스텀 단계는 앱 설정에 항목이 없다. 기본값은 type.json에 있다 (D457)
+    expect(applyConfigPatch(DEFAULT_CONFIG, { auto_approve: { custom: true } })).toEqual({
+      ok: false,
+      error: '자동 승인: 모르는 단계 custom',
+    })
   })
 
   it('의도 승인과 Work 완료는 켤 수 없고 원인 분석과 수정은 켤 수 있다. 카운트다운은 1~3600초다 (4.2)', () => {
@@ -270,10 +277,10 @@ describe('Work별 설정 (D72)', () => {
 })
 
 describe('화면의 스킬 이름', () => {
-  it('노드의 화면 이름(D109)과 같은 순서, 같은 이름이다. PR 대응은 파이프라인 뒤에 둔다. 설계 문답은 질문 방식이 없어 빠진다 (D187, D188, D358, I104)', () => {
+  it('노드의 화면 이름(D109)과 같은 순서, 같은 이름이다. PR 대응은 파이프라인 뒤에 둔다. 설계 문답과 커스텀 단계는 질문 방식이 없어 빠진다 (D187, D188, D358, I104, D457)', () => {
     expect(SKILL_TITLES.map(([skill, title]) => [skill, title])).toEqual(
       [...ALL_NODES, RESPOND]
-        .filter((n) => n !== 'spec')
+        .filter((n) => n !== 'spec' && n !== 'custom')
         .map((n) => [NODE_INFO[n].skill, NODE_INFO[n].title]),
     )
     expect(SKILL_TITLES).toEqual([
@@ -516,7 +523,7 @@ describe('[단위] 기본 모델·추론 수준과 단계별 실행 설정', () 
     })
   })
 
-  it('단계 목록은 의도 정리부터 PR 대응까지 아홉 단계이고 이름은 노드의 화면 이름이다. 끝은 곁 세션과 기본 세션이다 (F3, D391, D399)', () => {
+  it('단계 목록은 의도 정리부터 PR 대응까지 열 단계(커스텀 단계 포함, D461)이고 이름은 노드의 화면 이름이다. 끝은 곁 세션과 기본 세션이다 (F3, D391, D399)', () => {
     expect(AGENT_STEP_TITLES.slice(0, -2).map(([skill, title]) => [skill, title])).toEqual(
       [...ALL_NODES, RESPOND].map((n) => [NODE_INFO[n].skill, NODE_INFO[n].title]),
     )
@@ -532,6 +539,7 @@ describe('[단위] 기본 모델·추론 수준과 단계별 실행 설정', () 
       '계획과 리팩터링',
       '설계 문답',
       '실행',
+      '커스텀 단계',
       '리뷰와 검증',
       'PR 대응',
       '곁 세션',

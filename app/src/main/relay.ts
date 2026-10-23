@@ -19,6 +19,21 @@ import {
   submoduleList,
 } from '../adapters/git'
 import { filesAt, namesInCode, readKnowledgeAt } from '../adapters/knowledge'
+import { procedureText } from '../adapters/claude'
+import {
+  copyTypeToRepo,
+  customTypeView,
+  deleteCustomType,
+  globalTypesDir,
+  listGlobalTypes,
+  listRepoTypes,
+  mergeTypes,
+  readCustomTypeFiles,
+  repoTypesDir,
+  saveCustomType,
+  snapshotCustomType,
+} from '../adapters/custom-types'
+import { typeIdError } from '../core/custom-type'
 import { knowledgeEnabled } from '../core/knowledge'
 import { anchorNames, tidyCandidates, tidyRequest } from '../core/knowledge-tidy'
 import { HookServer } from '../adapters/hooks'
@@ -59,7 +74,12 @@ import {
 import { localIso, nextSessionId, nextWorkId, targetBranch, workBranch } from '../core/records'
 import { recordedProcesses, type RecordedProcess } from '../core/recovery'
 import { resolveAgent } from '../shared/agent'
-import { DEFAULT_CONFIG, type AppConfig, type WorkSettingsPatch } from '../shared/config'
+import {
+  DEFAULT_CONFIG,
+  type AppConfig,
+  type SkillName,
+  type WorkSettingsPatch,
+} from '../shared/config'
 import { issueLogOn, projectName, type ProjectChecks, type ProjectState } from '../shared/project'
 import type { DraftRef, SessionRecord } from '../shared/session'
 import type {
@@ -73,6 +93,9 @@ import type {
   DeliverInput,
   DeliverResult,
   MergeInfoResult,
+  CustomTypeFiles,
+  CustomTypeList,
+  CustomTypeView,
   MergeInput,
   NewWorkInput,
   PrItemAction,
@@ -86,7 +109,14 @@ import type {
   SubmoduleView,
   TerminalBacklog,
 } from '../shared/views'
-import { WORK_TYPES, type DeliveryChoice, type WorkState, type WorkType } from '../shared/work'
+import {
+  WORK_TYPES,
+  type CustomTypeSource,
+  type DeliveryChoice,
+  type WorkCustomType,
+  type WorkState,
+  type WorkType,
+} from '../shared/work'
 import { SessionPool } from './pool'
 import type { UiPort } from './ports'
 import { PASTE_KEEP_MS, linkPath, opensSafely, realLinkPath, type LinkFs } from './links'
@@ -676,14 +706,24 @@ export class Relay {
   }
 
   /** 새 Work 대화상자의 작업 브랜치 이름 (D426): 다음 work-id로 규칙을 채운다. 끝의 임의의 4자는 만들 때 붙인다 */
-  async branchName(projectId: string, type: WorkType, slug: string): Promise<string> {
+  async branchName(
+    projectId: string,
+    type: WorkType,
+    slug: string,
+    customType?: string,
+  ): Promise<string> {
     const project = this.projects.get(projectId)
     if (!project) return ''
     const local = await gitBranches(project.repo_path, { env: this.env })
       .then((b) => b.local)
       .catch(() => [])
     const workId = await this.nextWorkId(project, this.at(), local)
-    return renderBranchRule(project.branch_rule ?? DEFAULT_BRANCH_RULE, { workId, type, slug })
+    return renderBranchRule(project.branch_rule ?? DEFAULT_BRANCH_RULE, {
+      workId,
+      type,
+      slug,
+      ...(type === 'custom' && customType ? { customId: customType } : {}),
+    })
   }
 
   /**
@@ -810,6 +850,116 @@ export class Relay {
     }
   }
 
+  // ---------- 커스텀 유형 (5.6.13, D449~D451, D459) ----------
+
+  /** 한 프로젝트에서 고를 수 있는 유형과 가려진 전역 유형 (D451) */
+  private async typesOf(project: ProjectState | undefined) {
+    const global = await listGlobalTypes(this.o.home).catch(() => [])
+    const repo = project ? await listRepoTypes(project.repo_path) : []
+    return mergeTypes(repo, global)
+  }
+
+  /** 새 Work 대화상자의 커스텀 유형 (D460): 레포 유형, 가려지지 않은 전역 유형 순 */
+  async customTypes(projectId: string): Promise<CustomTypeView[]> {
+    return (await this.typesOf(this.projects.get(projectId))).types.map((t) => customTypeView(t))
+  }
+
+  /** 업무 유형 화면의 목록 (D459). 레포 유형에 가려진 전역 유형은 그 프로젝트의 목록에 가려졌다고 보인다 */
+  async customTypeList(): Promise<CustomTypeList> {
+    const global = await listGlobalTypes(this.o.home).catch(() => [])
+    const projects = await Promise.all(
+      [...this.projects.values()].map(async (p) => {
+        const repo = await listRepoTypes(p.repo_path)
+        const { shadowed } = mergeTypes(repo, global)
+        return {
+          projectId: p.project_id,
+          projectName: projectName(p),
+          types: [
+            ...repo.map((t) => customTypeView(t)),
+            ...shadowed.map((t) => customTypeView(t, true)),
+          ],
+        }
+      }),
+    )
+    return { global: global.map((t) => customTypeView(t)), projects }
+  }
+
+  /** 유형이 있는 위치. 레포 유형은 프로젝트의 레포 아래다 (D450) */
+  private typesRoot(source: CustomTypeSource, projectId: string | null): string | null {
+    if (source === 'global') return globalTypesDir(this.o.home)
+    const project = projectId ? this.projects.get(projectId) : undefined
+    return project ? repoTypesDir(project.repo_path) : null
+  }
+
+  async customTypeFiles(
+    source: CustomTypeSource,
+    projectId: string | null,
+    id: string,
+  ): Promise<CustomTypeFiles | null> {
+    const root = this.typesRoot(source, projectId)
+    if (!root || typeIdError(id)) return null
+    return readCustomTypeFiles(path.join(root, id))
+  }
+
+  /** 전역 유형을 쓴다 (D459). 레포 유형은 앱에서 고치지 않는다 */
+  async saveCustomType(files: CustomTypeFiles, previousId: string | null): Promise<CommandResult> {
+    const root = globalTypesDir(this.o.home)
+    try {
+      if (previousId !== files.def.id) {
+        const taken = await listGlobalTypes(this.o.home)
+        if (taken.some((t) => t.id === files.def.id))
+          return { ok: false, error: `같은 id의 전역 유형이 이미 있습니다: ${files.def.id}` }
+      }
+      await saveCustomType(root, files)
+      if (previousId && previousId !== files.def.id) await deleteCustomType(root, previousId)
+      return { ok: true }
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  }
+
+  async deleteCustomType(id: string): Promise<CommandResult> {
+    try {
+      await deleteCustomType(globalTypesDir(this.o.home), id)
+      return { ok: true }
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  }
+
+  /** [레포로 복사] (D450): 전역 유형을 프로젝트 레포의 .relay/types/에 복사한다. 커밋은 사람이 한다 */
+  async copyCustomTypeToRepo(
+    id: string,
+    projectId: string,
+  ): Promise<CommandResult & { path?: string }> {
+    const project = this.projects.get(projectId)
+    if (!project) return { ok: false, error: '프로젝트가 없습니다' }
+    const entry = (await listGlobalTypes(this.o.home)).find((t) => t.id === id)
+    if (!entry) return { ok: false, error: `전역 유형이 없습니다: ${id}` }
+    try {
+      return { ok: true, path: await copyTypeToRepo(entry, project.repo_path) }
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  }
+
+  /** [폴더 열기]가 열 폴더. 전역 위치는 없으면 만든다. 열 수 없으면 null이다 */
+  async customTypeFolder(
+    source: CustomTypeSource,
+    projectId: string | null,
+    id: string | null,
+  ): Promise<string | null> {
+    const root = this.typesRoot(source, projectId)
+    if (!root || (id !== null && typeIdError(id))) return null
+    if (source === 'global') await fsp.mkdir(root, { recursive: true })
+    return id === null ? root : path.join(root, id)
+  }
+
+  /** [새 유형]의 시작점 (D448): 기존 단계 절차에서 머리글과 유형 표시 구간을 뗀 글 */
+  async skillProcedure(skill: SkillName): Promise<string> {
+    return procedureText(this.o.skills, skill)
+  }
+
   // ---------- Work 생성 (시나리오 1) ----------
 
   /**
@@ -826,7 +976,20 @@ export class Relay {
     // work-id를 겹치지 않게 정하려고 한 번에 하나씩 만든다
     if (this.creating) return { ok: false, error: '다른 Work를 만드는 중입니다' }
     if (!input.request.trim()) return { ok: false, error: '요청을 입력하세요' }
-    if (!WORK_TYPES.includes(input.type)) return { ok: false, error: '업무 유형을 고르세요' }
+    if (input.type !== 'custom' && !WORK_TYPES.some((t) => t === input.type))
+      return { ok: false, error: '업무 유형을 고르세요' }
+    // 커스텀 유형은 이 프로젝트에서 고를 수 있는 것(레포 먼저, D451)에서 찾고, 깨졌으면 만들지 않는다 (D460)
+    const custom =
+      input.type === 'custom'
+        ? (await this.typesOf(project)).types.find((t) => t.id === input.customType)
+        : undefined
+    if (input.type === 'custom' && !custom)
+      return { ok: false, error: `커스텀 유형이 없습니다: ${input.customType ?? '(고르지 않음)'}` }
+    if (custom && !custom.def)
+      return {
+        ok: false,
+        error: `유형 \`${custom.id}\`의 형식이 깨졌습니다: ${custom.errors.join('; ')}`,
+      }
     const issue = input.issueNumber ?? null
     if (issue !== null && (!Number.isInteger(issue) || issue <= 0)) {
       return { ok: false, error: '이슈 번호는 1 이상의 정수여야 합니다' }
@@ -872,6 +1035,7 @@ export class Relay {
         settings.value,
         original?.work,
         inherited,
+        custom,
       )
     } finally {
       this.creating = false
@@ -895,6 +1059,7 @@ export class Relay {
     settings: WorkSettingsPatch,
     original?: WorkState,
     inherited?: InheritedIssue,
+    custom?: { dir: string; source: CustomTypeSource },
   ): Promise<CreateWorkResult> {
     const branch = branches.base
     const repo = project.repo_path
@@ -935,10 +1100,22 @@ export class Relay {
       slug: input.slug ?? '',
       workId,
       type: input.type,
+      ...(custom && input.customType ? { customId: input.customType } : {}),
       existing: [...existing.local, ...existing.remote],
       ...(this.o.random ? { random: this.o.random } : {}),
     })
     if (!named.ok) return named
+    const files = new WorkFiles(workDir(this.o.home, project.project_id, workId))
+    // 고른 유형 폴더를 Work 디렉터리에 복사한다: 이 Work는 끝까지 복사본으로 돈다 (D458)
+    let customType: WorkCustomType | undefined
+    if (custom) {
+      try {
+        customType = await snapshotCustomType(custom, files.customType)
+      } catch (e) {
+        await fsp.rm(files.dir, { recursive: true, force: true }).catch(() => {})
+        return { ok: false, error: e instanceof Error ? e.message : String(e) }
+      }
+    }
     const { tree, root } = this.workTree(project, workId, integration !== undefined)
     // 메인 통합 검증 worktree를 먼저 만들고 그 안의 서브모듈 자리(빈 폴더)에 이 Work의 worktree를 만든다 (D414)
     if (main && integration && root) {
@@ -956,12 +1133,12 @@ export class Relay {
       return { ok: false, error: `worktree를 만들지 못했습니다. ${String(e)}` }
     }
 
-    const files = new WorkFiles(workDir(this.o.home, project.project_id, workId))
     const requestHash = await files.writeRequest(input.request)
     const created = createWork({
       agent: resolveAgent(this.config, NODE_INFO.intake.skill),
       workId,
       type: input.type,
+      ...(customType ? { customType } : {}),
       baseBranch: branch,
       baseCommit,
       branch: named.branch,

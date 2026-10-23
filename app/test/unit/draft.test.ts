@@ -19,6 +19,7 @@ describe('Work 초안 읽기 (D404)', () => {
     ).toEqual({
       project: 'shop-a1b2c3',
       type: 'feature',
+      customType: null,
       base: 'develop',
       request: '쿠폰 적용\n\n자세히',
       errors: [],
@@ -30,6 +31,7 @@ describe('Work 초안 읽기 (D404)', () => {
     expect(parseDraft(text.replace(/\n/g, '\r\n'), PROJECTS)).toEqual({
       project: 'api-0f0f0f',
       type: 'bugfix',
+      customType: null,
       base: null,
       request: '고칠 것',
       errors: [],
@@ -40,6 +42,7 @@ describe('Work 초안 읽기 (D404)', () => {
     expect(parseDraft(draft(['project: gone-000000', 'type: bugfix'], '요청'), PROJECTS)).toEqual({
       project: null,
       type: 'bugfix',
+      customType: null,
       base: null,
       request: '요청',
       errors: ['모르는 프로젝트: gone-000000'],
@@ -47,16 +50,17 @@ describe('Work 초안 읽기 (D404)', () => {
     expect(parseDraft(draft(['project: shop-a1b2c3', 'type: hotfix'], '  \n'), PROJECTS)).toEqual({
       project: 'shop-a1b2c3',
       type: null,
+      customType: null,
       base: null,
       request: '',
       errors: [
-        '모르는 유형: hotfix (bugfix | feature | refactor | spec | general 중 하나)',
+        '모르는 유형: hotfix (bugfix | feature | refactor | spec | general | custom 중 하나)',
         '요청(본문)이 비어 있음',
       ],
     })
     expect(parseDraft(draft([], '요청'), PROJECTS).errors).toEqual([
       'project(프로젝트 id)가 없음',
-      'type(bugfix | feature | refactor | spec | general)이 없음',
+      'type(bugfix | feature | refactor | spec | general | custom)이 없음',
     ])
   })
 
@@ -64,6 +68,7 @@ describe('Work 초안 읽기 (D404)', () => {
     expect(parseDraft('그냥 요청\n둘째 줄', PROJECTS)).toEqual({
       project: null,
       type: null,
+      customType: null,
       base: null,
       request: '그냥 요청\n둘째 줄',
       errors: ['머리(--- 사이의 project, type)가 없음'],
@@ -78,6 +83,7 @@ describe('Work 초안 읽기 (D404)', () => {
     expect(parseDraft(big, PROJECTS)).toEqual({
       project: null,
       type: null,
+      customType: null,
       base: null,
       request: '',
       errors: ['파일이 64KB를 넘음'],

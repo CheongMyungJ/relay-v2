@@ -118,7 +118,7 @@ export interface DenyInput {
 
 /**
  * deny 규칙 (D17, 시나리오 2-3): git push, gh pr 계열, 앱 소유 파일(work.json, request.md, intent.md,
- * decisions.md, pr-items.json(D191), 이전 task 디렉터리, 이번 task의 instructions.md(D443), Work 디렉터리의 .claude/) 편집.
+ * decisions.md, pr-items.json(D191), 이전 task 디렉터리, 이번 task의 instructions.md(D443), Work 디렉터리의 .claude/와 커스텀 유형 복사본 type/(D458)) 편집.
  * 출처: spikes/s4-permissions.mjs (Bash(git push*), Bash(gh pr*), Edit(ruleAbs(…)))
  */
 export function denyRules(input: DenyInput): string[] {
@@ -130,6 +130,8 @@ export function denyRules(input: DenyInput): string[] {
     ...input.previousTaskDirs.map((d) => `Edit(${ruleJoin(ruleAbs(d), '**')})`),
     ...(input.taskDir ? [`Edit(${ruleJoin(ruleAbs(input.taskDir), INSTRUCTIONS_FILE)})`] : []),
     `Edit(${ruleJoin(work, '.claude', '**')})`,
+    // 커스텀 Work의 유형 복사본: 뒤 단계의 절차가 된다 (D458)
+    `Edit(${ruleJoin(work, 'type', '**')})`,
   ]
 }
 

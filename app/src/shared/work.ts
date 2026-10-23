@@ -6,11 +6,14 @@ import type { HandoffStatus, NodeName, TaskNode } from './contracts'
 
 /**
  * 업무 유형 (D232, D236, D258, D302, D350): 버그 수정(bugfix), 기능 추가·변경(feature, D429), 리팩터링(refactor), 설계(spec),
- * 일반(general). 사람이 새 Work 대화상자에서 고르고, 의도 승인 전까지만 바꿀 수 있다 (D237). 유형마다 파이프라인이
+ * 일반(general), 커스텀(custom, D447). 사람이 새 Work 대화상자에서 고르고, 의도 승인 전까지만 바꿀 수 있다 (D237). 유형마다 파이프라인이
  * 다르다 (core/pipeline PIPELINES). 설계는 구현 전에 설계만 정하는 큰 일에 쓰고(D353), 일반은 다른 유형에 맞지 않는
- * 일에 쓴다 (D303)
+ * 일에 쓴다 (D303). 커스텀은 사람이 정의한 유형이고 어느 유형인지는 work.json의 custom_type에 있다 (D462)
  */
-export type WorkType = 'bugfix' | 'feature' | 'refactor' | 'spec' | 'general'
+export type WorkType = 'bugfix' | 'feature' | 'refactor' | 'spec' | 'general' | 'custom'
+
+/** 기본 업무 유형: 커스텀이 아닌 유형 */
+export type BuiltinWorkType = Exclude<WorkType, 'custom'>
 
 /** 업무 유형의 화면 이름 (D236). 기능 추가는 동작을 바꾸거나 없애는 일도 맡아 "기능 추가·변경"이다 (D429) */
 export const WORK_TYPE_LABEL: Readonly<Record<WorkType, string>> = {
@@ -19,6 +22,7 @@ export const WORK_TYPE_LABEL: Readonly<Record<WorkType, string>> = {
   refactor: '리팩터링',
   spec: '설계',
   general: '일반',
+  custom: '커스텀',
 }
 
 /** 사이드바와 머리 띠에 보이는 짧은 유형 이름 (D256) */
@@ -28,10 +32,54 @@ export const WORK_TYPE_SHORT: Readonly<Record<WorkType, string>> = {
   refactor: '리팩터',
   spec: '설계',
   general: '일반',
+  custom: '커스텀',
 }
 
-/** 고를 수 있는 업무 유형. 새 Work 대화상자의 버튼 차례다 (D236, D353) */
-export const WORK_TYPES: readonly WorkType[] = ['bugfix', 'feature', 'refactor', 'spec', 'general']
+/** 고를 수 있는 기본 업무 유형. 새 Work 대화상자의 버튼 차례다 (D236, D353). 커스텀 유형은 그 뒤에 온다 (D460) */
+export const WORK_TYPES: readonly BuiltinWorkType[] = [
+  'bugfix',
+  'feature',
+  'refactor',
+  'spec',
+  'general',
+]
+
+/** 커스텀 단계 하나 (5.6.13, D449, D453, D457) */
+export interface CustomStep {
+  /** 단계 id. 영어 소문자·숫자·`-`. 절차 파일 `<id>.md`와 산출물 `<id>.md`, task 디렉터리의 이름이다 (D462) */
+  id: string
+  /** 화면 이름 */
+  title: string
+  /** 산출물의 절 제목. 비우면 기본 두 절이다 (D453) */
+  sections: string[]
+  /** 자동 승인 기본값 (D457) */
+  auto_approve: boolean
+}
+
+/** 커스텀 유형의 정의 (type.json, D449) */
+export interface CustomTypeDef {
+  /** 폴더 이름 */
+  id: string
+  name: string
+  description: string
+  steps: CustomStep[]
+}
+
+/** 커스텀 유형의 출처 (D450): 전역(<RELAY_HOME>/types/) / 레포(.relay/types/) */
+export type CustomTypeSource = 'global' | 'repo'
+
+/** Work를 만들 때 복사한 커스텀 유형 (D458). 단계 목록도 여기 두어 core가 파일 없이 파이프라인을 안다 */
+export interface WorkCustomType extends CustomTypeDef {
+  source: CustomTypeSource
+  /** 복사본(Work 디렉터리의 type/)의 해시 */
+  hash: string
+}
+
+/** Work의 유형 화면 이름. 커스텀이면 그 유형의 이름이다 (D460) */
+export function workTypeLabel(work: { type?: WorkType; custom_type?: { name: string } }): string {
+  const type = work.type ?? 'bugfix'
+  return type === 'custom' && work.custom_type ? work.custom_type.name : WORK_TYPE_LABEL[type]
+}
 
 /**
  * Work 상태 (3.3): 진행 중(active), 멈춤(stopped), PR 진행(pr: [PR 생성] 뒤 머지나 [머지 없이 끝내기]까지, D152),
@@ -222,9 +270,13 @@ export interface TaskRecord {
   engine_version?: string
   /** t-01. 순번은 Work 안에서 1부터 오른다 */
   id: string
-  /** task 디렉터리 tasks/<nn>-<node>의 nn */
+  /** task 디렉터리 tasks/<nn>-<node>(커스텀 단계는 <nn>-<step>)의 nn */
   seq: number
   node: TaskNode
+  /** 커스텀 단계(node가 custom)의 단계 id (D462). task 디렉터리는 tasks/<nn>-<step>이다 */
+  step?: string
+  /** 커스텀 단계의 화면 이름. task를 만들 때 Work의 custom_type에서 옮긴다 (D462) */
+  step_title?: string
   status: TaskStatus
   reason: StartReason
   /** handoff를 검사할 형식 버전 (5.2.1) */
@@ -612,6 +664,8 @@ export interface WorkState {
    * core/pipeline의 workType을 쓴다
    */
   type?: WorkType
+  /** 커스텀 유형이면 Work를 만들 때 복사한 정의와 출처, 해시 (D458). type이 custom일 때만 있다 */
+  custom_type?: WorkCustomType
   status: WorkStatus
   created_at: string
   completed_at?: string

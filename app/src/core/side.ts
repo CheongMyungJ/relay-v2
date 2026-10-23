@@ -1,7 +1,7 @@
 // 곁 세션 (시나리오 11, D385~D390): 사람이 언제든 여는 Claude Code 세션의 안내(시스템 프롬프트)와 열 수 있는지.
 // 안내는 내용이 아니라 지도와 규칙이다 (D387). 에이전트는 --add-dir로 붙인 Work 디렉터리의 산출물을 스스로 읽는다.
 import type { TaskRecord, WorkState } from '../shared/work'
-import { WORK_TYPES, WORK_TYPE_LABEL } from '../shared/work'
+import { WORK_TYPES, workTypeLabel } from '../shared/work'
 import { currentTask, taskDirName } from './machine'
 import { workType } from './pipeline'
 import { workBranch } from './records'
@@ -81,7 +81,7 @@ export function sideGuide(input: SideGuideInput): string {
     '## 이 Work',
     '',
     `- 제목: ${input.title || work.work_id}`,
-    `- 유형: ${WORK_TYPE_LABEL[workType(work)]}`,
+    `- 유형: ${workTypeLabel(work)}`,
     `- 상태(열 때): ${WORK_STATUS_LABEL[work.status]}${now ? `, 지금 단계 ${taskLabel(now)} (${TASK_STATUS_LABEL[now.status]})` : ''}`,
     `- 기준 브랜치와 커밋: ${work.base_branch} ${work.base_commit}`,
     `- Work 브랜치: ${workBranch(work)}`,
@@ -126,7 +126,10 @@ export function sideGuide(input: SideGuideInput): string {
     '```markdown',
     '---',
     `project: ${input.projectId}`,
-    `type: <${WORK_TYPES.join(' | ')}. 보통 이 Work와 같은 ${workType(work)}>`,
+    `type: <${WORK_TYPES.join(' | ')} | custom. 보통 이 Work와 같은 ${workType(work)}>`,
+    ...(work.custom_type
+      ? [`custom_type: <type이 custom일 때만. 보통 이 Work와 같은 ${work.custom_type.id}>`]
+      : []),
     '---',
     '<요청: 새 Work의 request.md가 될 글. 첫 줄이 Work 제목이다>',
     '```',

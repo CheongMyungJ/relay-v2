@@ -12,7 +12,7 @@ import type {
   WorkType,
 } from '../shared/work'
 import { WORK_TYPE_LABEL } from '../shared/work'
-import { NODE_INFO } from './pipeline'
+import { nodeTitle } from './pipeline'
 import { workBranch } from './records'
 import { normalizeText, parseFrontMatter, sectionText } from './validate'
 
@@ -284,7 +284,7 @@ export function taskComment(o: {
   intent?: { version: number; text: string } | null
 }): string {
   const by = o.task.approved_by === 'auto' ? '자동' : '사람'
-  const head = [`### ${o.task.id} ${NODE_INFO[o.task.node].title} · 승인(${by})`]
+  const head = [`### ${o.task.id} ${nodeTitle(o.task)} · 승인(${by})`]
   if (o.intent) head.push(`**intent v${o.intent.version}**\n\n${intentBody(o.intent.text)}`)
   const fm = o.handoff === null ? null : parseFrontMatter(o.handoff)
   const summary = fm ? sectionText(fm.body, '요약') : null
@@ -306,7 +306,7 @@ export function stepComment(o: {
   const kind = o.task.reason === 'skip' ? '건너뛰기' : '되감기'
   const lines = [
     `### ${kind}: ${o.discarded.join(', ')} 폐기`,
-    `앞에 단 이 task들의 코멘트는 더는 유효하지 않다. ${o.task.id} ${NODE_INFO[o.task.node].title}부터 다시 한다.`,
+    `앞에 단 이 task들의 코멘트는 더는 유효하지 않다. ${o.task.id} ${nodeTitle(o.task)}부터 다시 한다.`,
   ]
   const instruction = o.task.selection?.instruction?.trim()
   if (instruction) lines.push(`**추가 지시**\n\n${instruction}`)

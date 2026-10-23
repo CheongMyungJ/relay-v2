@@ -24,13 +24,16 @@ Review the whole change of this Work, apply only the findings the human picks, t
 <!-- type: general -->
 - `execution.md` at the path in `context.md`: the plan, the change, and the self-check of each 완료조건.
 <!-- /type -->
+<!-- type: custom -->
+- The artifacts of the custom steps (`<step id>.md`, one per step) at the paths in `context.md`: what each step did and its self-check. The steps of this Work type are in `context.md` (`## 커스텀 유형`).
+<!-- /type -->
 - The change to review is from the base commit (from `context.md`) to now: `git diff <base commit>`.
 
 ## Order
 
 1. **Review.** Write each finding under `## 리뷰 지적` of `verification.md` as a numbered item: severity (차단 / 권장 / 사소), file and line, what is wrong and what you suggest. If there is nothing, write "없음".
 2. **Pick findings** (human decision below). Skip this if there are no findings.
-<!-- type: bugfix feature refactor general -->
+<!-- type: bugfix feature refactor general custom -->
 3. **Apply** only the picked findings, commit, and run the intent's test command. Fill in `## 반영` and `## 반영하지 않은 지적`. Do not review again afterwards, and do not add new findings.
 <!-- /type -->
 <!-- type: spec -->
@@ -42,7 +45,7 @@ Review the whole change of this Work, apply only the findings the human picks, t
 ## What to review
 
 - If the intent's `제약` says to follow a design document ("`<path>`의 결정을 따른다"): does the change match its decisions? Is every decision the change departs from also changed in that document, with its history and the human's decision?
-<!-- type: bugfix feature refactor general -->
+<!-- type: bugfix feature refactor general custom -->
 - Does the change fit the intent's `목표` and `비목표`?
 <!-- /type -->
 <!-- type: spec -->
@@ -69,7 +72,12 @@ Review the whole change of this Work, apply only the findings the human picks, t
 - Does the change fit the plan in `execution.md`? Did the scope grow beyond it?
 - Does each 완료조건's check method (`— 확인: …`) really check it?
 <!-- /type -->
-<!-- type: bugfix feature refactor general -->
+<!-- type: custom -->
+- Does the change fit what each custom step's artifact says it did? Did the scope grow beyond it?
+- Does each 완료조건's check method (`— 확인: …`) really check it?
+- **The type's review points:** if these instructions end with `## This Work type's review points`, review those points too. They come from whoever defined the type.
+<!-- /type -->
+<!-- type: bugfix feature refactor general custom -->
 - Missing cases and edge conditions.
 <!-- /type -->
 <!-- type: bugfix -->
@@ -84,7 +92,10 @@ Review the whole change of this Work, apply only the findings the human picks, t
 <!-- type: general -->
 - Does every change in code behavior have a test that catches it? If not, is the reason in `execution.md` sound?
 <!-- /type -->
-<!-- type: bugfix feature refactor general -->
+<!-- type: custom -->
+- Does every change in code behavior have a test that catches it? If not, is the reason in the custom step's artifact sound?
+<!-- /type -->
+<!-- type: bugfix feature refactor general custom -->
 - The repo's conventions and readability.
 - Fit with the existing structure: the layer or module each change sits in, dependency directions, the patterns the code around it follows.
 - Duplication: code that repeats a function or abstraction the repo already has.
@@ -99,7 +110,7 @@ Review the whole change of this Work, apply only the findings the human picks, t
 
 ## Rules
 
-<!-- type: bugfix feature refactor general -->
+<!-- type: bugfix feature refactor general custom -->
 - **Code:** change code only for the findings the human picked. Commit those changes. Revert any other experimental change when you close.
 <!-- /type -->
 <!-- type: spec -->
@@ -128,8 +139,13 @@ Review the whole change of this Work, apply only the findings the human picks, t
   Run them on the final code too, at their current paths (a moved test shows its new path in `refactor.md`). 통과 only if both pass. Check that every changed place has a safety net that really catches its behavior. Accepted differences are exceptions. If a place had no safety net (reason in `refactor.md`), it is 판정 불가. Before you close, confirm `git branch --show-current` is the work branch.
 - **"레포 밖 공개 인터페이스가 바뀌지 않는다":** judge from the diff against the base commit whether anything used outside the repo changed (exports, HTTP API, CLI arguments, stored formats and schemas). Leave out what the intent says to change.
 <!-- /type -->
+<!-- type: custom -->
+- **Re-run everything yourself** when you verify: each 완료조건's check method and the test commands. Use the results in the custom steps' artifacts only for comparison.
+<!-- /type -->
 <!-- type: general -->
 - **Re-run everything yourself** when you verify: each 완료조건's check method and the test commands. Use the results in `execution.md` only for comparison.
+<!-- /type -->
+<!-- type: general custom -->
 - **Check methods:** first run the method at the end of each 완료조건 line yourself. If it does not really check that 완료조건 (e.g. the command never runs that behavior), add your own check (read the code, run more), judge with both, write both in the evidence, and write in `남은 위험` that the check method fell short. Do not change the intent.
 - **`확인: 사람` items:** judge them by asking the human (see Human decisions). Before you ask, check what you can yourself and show it.
 <!-- /type -->
@@ -137,7 +153,7 @@ Review the whole change of this Work, apply only the findings the human picks, t
 <!-- type: bugfix -->
   For example, the reproduction test passes in a Work that never reproduced the bug. If the Work proceeded without reproduction, "재현 절차가 더 이상 실패하지 않는다" is 판정 불가. If there are neither reproduction steps nor a reproduction test, it is 판정 불가 too.
 <!-- /type -->
-<!-- type: bugfix feature refactor general -->
+<!-- type: bugfix feature refactor general custom -->
 - **Changed test files:** list every test file changed since the base commit (`git diff <base commit>`), including ones the step's artifact does not mention. Mark each 약화 아님 or 약화 의심, with the reason.
 <!-- /type -->
 <!-- type: feature -->
@@ -157,10 +173,10 @@ Review the whole change of this Work, apply only the findings the human picks, t
 Ask on the spot:
 
 - **Which findings to apply** (only when there are findings). In one question, list each finding in one line (number, severity, what). Offer: 차단·권장만 반영 / 모두 반영 / 반영하지 않음, and put the one you recommend first. The human can also type the numbers. Record what they picked and what they did not in `decisions` with `by: human`.
-<!-- type: general -->
+<!-- type: general custom -->
 - **`확인: 사람` items:** gather them all into one question. For each, show what to look at (file, diff location, run result). The human's answer decides 통과 or 실패. Write "사람 확인" and the answer in the evidence, and record the answer in `decisions` with `by: human`.
 <!-- /type -->
-<!-- type: bugfix feature refactor general -->
+<!-- type: bugfix feature refactor general custom -->
 - **A test change looks like weakening:** show which test changed and how. If the human says it is not weakening, the 완료조건 on weakening tests is 통과. If they say it is, it is 실패.
 <!-- /type -->
 - **Any 실패 or 판정 불가:** let the human choose:
@@ -170,7 +186,7 @@ Ask on the spot:
 
 ## Done when
 
-<!-- type: bugfix feature refactor general -->
+<!-- type: bugfix feature refactor general custom -->
 - `verification.md` has all seven template sections.
 - If there were findings, the human picked; the picked ones are fixed and committed, and the test result is in `반영`.
 - Every 완료조건 of the intent has a verdict and evidence, judged on the final code.
@@ -184,7 +200,7 @@ Ask on the spot:
 <!-- /type -->
 - `pr.md` is written.
 - Any weakening suspicion, 실패 or 판정 불가 was asked about, and the answer recorded in `decisions`.
-<!-- type: general -->
+<!-- type: general custom -->
 - Every `확인: 사람` item was asked about, and the answer recorded in `decisions`.
 <!-- /type -->
 
@@ -199,7 +215,7 @@ Ask on the spot:
 <!-- type: bugfix -->
 - 지적 번호 — 한 일, 커밋, 테스트 명령과 결과 (재현 절차를 바꿨으면 달라진 절차)
 <!-- /type -->
-<!-- type: feature refactor general -->
+<!-- type: feature refactor general custom -->
 - 지적 번호 — 한 일, 커밋, 테스트 명령과 결과
 <!-- /type -->
 <!-- type: spec -->
@@ -214,14 +230,14 @@ Ask on the spot:
 ## 완료조건 판정
 | 완료조건 | 판정 | 근거 |
 |---|---|---|
-<!-- type: bugfix feature refactor general -->
+<!-- type: bugfix feature refactor general custom -->
 | (완료조건 그대로) | 통과 | 실행한 명령과 결과 |
 <!-- /type -->
 <!-- type: spec -->
 | (완료조건 그대로) | 통과 | 읽은 곳(문서의 절, diff) |
 <!-- /type -->
 
-<!-- type: bugfix feature refactor general -->
+<!-- type: bugfix feature refactor general custom -->
 ## 테스트 파일 변경
 - 파일 — 약화 아님 / 약화 의심(사람 판단: …) — 이유
 (바뀐 테스트 파일이 없으면 "없음")
@@ -288,7 +304,7 @@ Ask on the spot:
 ## 테스트
 ```
 <!-- /type -->
-<!-- type: general -->
+<!-- type: general custom -->
 - `주요 결정`: the chosen way, rejected alternatives and what the human decided, briefly.
 
 ```markdown

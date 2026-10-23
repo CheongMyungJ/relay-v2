@@ -39,6 +39,7 @@ import { DEFAULT_BRANCH_RULE } from '../../shared/project'
 import { WORK_TYPES, WORK_TYPE_LABEL, type MergeMethod, type WorkType } from '../../shared/work'
 import type {
   CleanPreview,
+  CustomTypeView,
   DraftView,
   ProjectInspection,
   ProjectRemovePreview,
@@ -305,18 +306,30 @@ const WORK_TYPE_HINT: Readonly<Partial<Record<WorkType, string>>> = {
   general: '다른 유형에 맞지 않는 일',
 }
 
+/** 커스텀 유형의 단계 줄: 의도 정리 → … → 리뷰와 검증 (D460) */
+export function customStages(steps: readonly { title: string }[]): string {
+  return ['의도 정리', ...steps.map((s) => s.title), '리뷰와 검증'].join(' → ')
+}
+
 /**
- * 업무 유형 고르기 (D236, D237, D261, D303, D353, D429): 버그 수정 / 기능 추가·변경 / 리팩터링 / 설계 / 일반 버튼. 새 Work에는 기본 선택이
- * 없다(value가 null). 설명이 있는 유형은 버튼의 title로 두고, 그 유형을 골랐을 때 버튼 줄 아래에 보인다 (I88)
+ * 업무 유형 고르기 (D236, D237, D261, D303, D353, D429): 버튼 차례는 버그 수정 / 기능 추가·변경 / 리팩터링 / 설계 / 일반이고, 그 뒤에 구분선을 두고
+ * 커스텀 유형(레포 유형, 전역 유형 순)이 온다 (D460). 새 Work에는 기본 선택이 없다(value가 null). 설명이 있는 유형은 버튼의
+ * title로 두고, 그 유형을 골랐을 때 버튼 줄 아래에 보인다 (I88). 커스텀 유형은 설명과 단계 목록을 보이고, 깨진 유형은 까닭과
+ * 함께 꺼져 있다
  */
 function WorkTypePicker({
   value,
+  customId,
+  customTypes,
   onChange,
 }: {
   value: WorkType | null
-  onChange: (type: WorkType) => void
+  customId: string | null
+  customTypes: readonly CustomTypeView[]
+  onChange: (type: WorkType, customId: string | null) => void
 }) {
-  const hint = value ? WORK_TYPE_HINT[value] : undefined
+  const custom = value === 'custom' ? customTypes.find((t) => t.id === customId) : undefined
+  const hint = value && value !== 'custom' ? WORK_TYPE_HINT[value] : undefined
   return (
     <>
       <div className="work-type" role="radiogroup" aria-label="업무 유형">
@@ -328,13 +341,38 @@ function WorkTypePicker({
             aria-checked={value === type}
             className={value === type ? 'primary' : ''}
             title={WORK_TYPE_HINT[type]}
-            onClick={() => onChange(type)}
+            onClick={() => onChange(type, null)}
           >
             {WORK_TYPE_LABEL[type]}
           </button>
         ))}
+        {customTypes.length ? <span className="work-type-sep" aria-hidden="true" /> : null}
+        {customTypes.map((t) => {
+          const on = value === 'custom' && customId === t.id
+          return (
+            <button
+              key={`${t.source}:${t.id}`}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              className={on ? 'primary' : ''}
+              disabled={t.errors.length > 0}
+              title={t.errors.length ? `형식 오류: ${t.errors.join(' · ')}` : t.description}
+              onClick={() => onChange('custom', t.id)}
+            >
+              {t.name}
+              {t.source === 'repo' ? ' (레포)' : ''}
+            </button>
+          )
+        })}
       </div>
       {hint && <div className="work-type-hint">{hint}</div>}
+      {custom ? (
+        <div className="work-type-hint">
+          {custom.description ? <div>{custom.description}</div> : null}
+          <div className="dim">단계: {customStages(custom.steps)}</div>
+        </div>
+      ) : null}
     </>
   )
 }
@@ -406,6 +444,7 @@ const REQUEST_PLACEHOLDER: Readonly<Record<WorkType, string>> = {
   refactor: '바꿀 구조(예: 어느 계산을 한 모듈로 모을지), 바꿀 곳, 지켜야 할 동작을 적어 주세요',
   spec: '무엇을 설계할지, 정해야 할 것, 설계 문서를 둘 곳이나 고칠 문서를 적어 주세요',
   general: '할 일과 끝났다고 볼 조건을 적어 주세요(무엇을 바꾸고 어떻게 확인할지)',
+  custom: '이 유형에 맞는 할 일과 끝났다고 볼 조건을 적어 주세요(무엇을 바꾸고 어떻게 확인할지)',
 }
 
 /** 짧은 이름을 치다 멈춘 뒤 브랜치 이름을 묻기까지 기다리는 시간 */
@@ -464,6 +503,15 @@ export function NewWorkDialog({
   // 메인 레포의 기준 위치. 메인 레포에 origin이 없을 수 있어 Work의 기준 위치와 따로 고른다 (D414)
   const [mainLocation, setMainLocation] = useState<'local' | 'remote'>('local')
   const [type, setType] = useState<WorkType | null>(draft?.type ?? null)
+  // 커스텀 유형의 id와 이 대상에서 고를 수 있는 유형 (D451, D460)
+  const [customId, setCustomId] = useState<string | null>(draft?.customType ?? null)
+  const [customTypes, setCustomTypes] = useState<CustomTypeView[]>([])
+  const [customAuto, setCustomAuto] = useState<Record<string, boolean>>({})
+  const pickType = (next: WorkType, id: string | null) => {
+    setType(next)
+    setCustomId(id)
+    setCustomAuto({})
+  }
   const [request, setRequest] = useState(draft?.request ?? '')
   const [branches, setBranches] = useState<string[]>([project.defaultBranch])
   const [branch, setBranch] = useState(draft?.base ?? origin?.baseBranch ?? project.defaultBranch)
@@ -512,6 +560,16 @@ export function NewWorkDialog({
   }, [target.id])
 
   useEffect(() => {
+    let current = true
+    void window.relay.customTypes(target.id).then((list) => {
+      if (current) setCustomTypes(list)
+    })
+    return () => {
+      current = false
+    }
+  }, [target.id])
+
+  useEffect(() => {
     void window.relay.submodules(mainId).then(setSubmodules)
     void window.relay.branches(mainId).then((list) => {
       if (list.length) setMainBranches(list)
@@ -525,7 +583,7 @@ export function NewWorkDialog({
     let current = true
     const timer = setTimeout(() => {
       void window.relay
-        .branchName(target.id, type, slug)
+        .branchName(target.id, type, slug, customId ?? undefined)
         .then((name) => {
           if (current) setRuleName(name)
         })
@@ -537,7 +595,7 @@ export function NewWorkDialog({
       current = false
       clearTimeout(timer)
     }
-  }, [target.id, type, slug])
+  }, [target.id, type, slug, customId])
 
   // 대상을 바꾸면 기준 브랜치를 그 레포의 기본 브랜치로 되돌린다 (D413)
   const pickTarget = (next: ProjectView) => {
@@ -597,7 +655,7 @@ export function NewWorkDialog({
   const applyTidy = (view: TidyView) => {
     filled.current = view.request
     setFilledText(view.request)
-    setType('general')
+    pickType('general', null)
     setRequest(view.request)
   }
   const shownTidy = tidy?.basis === `${branch}|${location}` ? tidy.view : null
@@ -611,6 +669,9 @@ export function NewWorkDialog({
     const question_mode = only(modes, SKILL_TITLES, type)
     const settings: WorkSettings = {
       ...(Object.keys(auto_approve).length ? { auto_approve } : {}),
+      ...(type === 'custom' && Object.keys(customAuto).length
+        ? { custom_auto_approve: customAuto }
+        : {}),
       ...(Object.keys(question_mode).length ? { question_mode } : {}),
     }
     const issueNumber = issueNumberInput(issue)
@@ -623,6 +684,7 @@ export function NewWorkDialog({
       window.relay.createWork(target.id, {
         request,
         type,
+        ...(type === 'custom' && customId ? { customType: customId } : {}),
         baseBranch: branch,
         baseLocation: location,
         ...(edited !== null ? { branchName: edited } : {}),
@@ -646,6 +708,10 @@ export function NewWorkDialog({
   const sub = target.parent ? target : null
   const hasSlug = target.branchSlug
   const shownTarget = mergeTarget ?? branch
+  const chosenCustom =
+    type === 'custom'
+      ? customTypes.find((t) => t.id === customId && t.errors.length === 0)
+      : undefined
 
   return (
     <Modal title={`새 Work · ${sub ? `${main.name}/${sub.name}` : main.name}`} onClose={onClose}>
@@ -752,7 +818,17 @@ export function NewWorkDialog({
       ) : null}
       <div className="field">
         유형
-        <WorkTypePicker value={type} onChange={setType} />
+        <WorkTypePicker
+          value={type}
+          customId={customId}
+          customTypes={customTypes}
+          onChange={pickType}
+        />
+        {type === 'custom' && customId && !chosenCustom ? (
+          <div className="error">
+            커스텀 유형 <code>{customId}</code>이 없습니다. 지웠거나 이 프로젝트의 유형이 아닙니다.
+          </div>
+        ) : null}
       </div>
       <label className="field">
         요청
@@ -895,6 +971,13 @@ export function NewWorkDialog({
         <h3>이 Work의 자동 승인 (Claude Code)</h3>
         <div className="dim">{AGENT_APPROVAL_NOTICE}</div>
         <AutoApproveOverrides config={config} type={type} value={auto} onChange={setAuto} />
+        {chosenCustom ? (
+          <CustomAutoApprove
+            steps={chosenCustom.steps}
+            value={customAuto}
+            onChange={setCustomAuto}
+          />
+        ) : null}
         <h3>이 Work의 질문 방식</h3>
         <QuestionModes config={config} type={type} value={modes} onChange={setModes} />
       </details>
@@ -903,7 +986,13 @@ export function NewWorkDialog({
         <button onClick={onClose}>취소</button>
         <button
           className="primary"
-          disabled={busy || preparing !== null || !type || !request.trim()}
+          disabled={
+            busy ||
+            preparing !== null ||
+            !type ||
+            !request.trim() ||
+            (type === 'custom' && !chosenCustom)
+          }
           title={type ? '' : '유형을 고르세요'}
           onClick={() => void start()}
         >
@@ -923,6 +1012,7 @@ const GROUPS: readonly SettingGroup[] = [
   'refactor',
   'spec',
   'general',
+  'custom',
   'pr',
 ]
 
@@ -1097,6 +1187,51 @@ function AutoApproveOverrides({
 }
 
 /**
+ * 커스텀 단계의 자동 승인 (D457): 고르지 않은 단계는 유형 정의(type.json)의 기본값을 따른다. 의도 정리와 리뷰와 검증은 늘
+ * 수동이다
+ */
+function CustomAutoApprove({
+  steps,
+  value,
+  onChange,
+}: {
+  steps: readonly { id: string; title: string; autoApprove: boolean }[]
+  value: Record<string, boolean>
+  onChange: (v: Record<string, boolean>) => void
+}) {
+  const set = (step: string, v: string) => {
+    const rest = Object.fromEntries(Object.entries(value).filter(([k]) => k !== step))
+    onChange(v ? { ...rest, [step]: v === 'on' } : rest)
+  }
+  return (
+    <div className="form-grid">
+      <div className="form-group" role="group" aria-label="커스텀 단계">
+        <div className="form-group-title">커스텀 단계</div>
+        {steps.map((s) => {
+          const v = value[s.id]
+          return (
+            <label key={s.id} className="form-row">
+              <span>
+                {s.title} <span className="dim">({s.id})</span>
+              </span>
+              <select
+                aria-label={`${s.title} 자동 승인`}
+                value={v === undefined ? '' : v ? 'on' : 'off'}
+                onChange={(e) => set(s.id, e.target.value)}
+              >
+                <option value="">유형 기본값 따름 ({onOff(s.autoApprove)})</option>
+                <option value="on">켜기</option>
+                <option value="off">끄기</option>
+              </select>
+            </label>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/**
  * Work별 대응 자동 시작 (D72, D154): 앱 설정 따름, 켜기, 끄기. 켜도 이미 받은 새 항목으로는 시작하지 않고, 다음에 PR을 읽어
  * 새 항목이 들어오면 쌓인 것과 함께 시작한다 (D210)
  */
@@ -1140,6 +1275,9 @@ function AutoStartOverride({
 export function WorkSettingsDialog({ work, onClose }: { work: WorkView; onClose: () => void }) {
   const [modes, setModes] = useState<Overrides>(work.settings.question_mode ?? {})
   const [auto, setAuto] = useState<AutoOverrides>(work.settings.auto_approve ?? {})
+  const [customAuto, setCustomAuto] = useState<Record<string, boolean>>(
+    work.settings.custom_auto_approve ?? {},
+  )
   const [autoStart, setAutoStart] = useState<boolean | undefined>(work.settings.respond_auto_start)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -1151,6 +1289,7 @@ export function WorkSettingsDialog({ work, onClose }: { work: WorkView; onClose:
       // 보이지 않는 다른 유형의 단계 값은 남기지 않는다. 사람이 보거나 지울 수 없어서다 (D256, PR #23 리뷰)
       window.relay.updateWorkSettings(work.key, {
         auto_approve: only(auto, AUTO_APPROVE_TITLES, work.type),
+        ...(work.customType ? { custom_auto_approve: customAuto } : {}),
         question_mode: only(modes, SKILL_TITLES, work.type),
         respond_auto_start: autoStart ?? null,
       }),
@@ -1161,7 +1300,10 @@ export function WorkSettingsDialog({ work, onClose }: { work: WorkView; onClose:
   }
 
   return (
-    <Modal title={`Work 설정 · ${work.workId} (${WORK_TYPE_LABEL[work.type]})`} onClose={onClose}>
+    <Modal
+      title={`Work 설정 · ${work.workId} (${work.customType?.name ?? WORK_TYPE_LABEL[work.type]})`}
+      onClose={onClose}
+    >
       <h3>자동 승인 (Claude Code)</h3>
       <div className="dim">{AGENT_APPROVAL_NOTICE}</div>
       <div className="dim">
@@ -1169,6 +1311,13 @@ export function WorkSettingsDialog({ work, onClose }: { work: WorkView; onClose:
         지적이 없을 때만 자동 승인합니다.
       </div>
       <AutoApproveOverrides config={config} type={work.type} value={auto} onChange={setAuto} />
+      {work.customType ? (
+        <CustomAutoApprove
+          steps={work.customType.steps}
+          value={customAuto}
+          onChange={setCustomAuto}
+        />
+      ) : null}
       <h3>자동 대응 (PR 진행)</h3>
       <div className="dim">
         켜도 이미 받은 새 항목으로는 시작하지 않고, 다음에 새 항목이 들어오면 함께 시작합니다.
@@ -1305,7 +1454,14 @@ function EffortSelect(props: {
  * 앱 설정 (D70). 바꾸면 바로 적용하고, 질문 방식만 다음에 시작하는 task부터 쓴다 (D73).
  * 자동 승인은 턴이 끝날 때의 설정으로 판정하고, 카운트다운 중에 끄면 멈춘다. 카운트다운 초는 다음 카운트다운부터 쓴다 (D128)
  */
-export function SettingsDialog({ onClose }: { onClose: () => void }) {
+export function SettingsDialog({
+  onClose,
+  onCustomTypes,
+}: {
+  onClose: () => void
+  /** 업무 유형 화면을 연다 (D459) */
+  onCustomTypes?: () => void
+}) {
   const config = useConfig()
   const [draft, setDraft] = useState<AppConfig | null>(null)
   const [busy, setBusy] = useState(false)
@@ -1351,6 +1507,12 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal title="설정" onClose={onClose}>
+      {onCustomTypes ? (
+        <div className="row">
+          <button onClick={onCustomTypes}>업무 유형…</button>
+          <span className="dim">커스텀 유형을 만들고 고칩니다</span>
+        </div>
+      ) : null}
       {value ? (
         <>
           <div className="dim">

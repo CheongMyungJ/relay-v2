@@ -14,7 +14,10 @@ import {
   stripFrontMatter,
   taskFooter,
 } from '../../src/adapters/claude'
-import { WORK_TYPES } from '../../src/shared/work'
+import { WORK_TYPES, type WorkType } from '../../src/shared/work'
+
+/** 공용 스킬을 조립하는 유형: 기본 다섯과 custom (D456) */
+const ASSEMBLY: readonly WorkType[] = [...WORK_TYPES, 'custom']
 import { TYPES, assemble, stripFrontMatter as assembleStrip } from '../../../skills/assemble.mjs'
 import {
   WorkFiles,
@@ -452,6 +455,7 @@ describe('[어댑터] 단계 절차 배포와 claude 실행 (5.6.3, D103, D105, 
           'refactor',
           'spec',
           'execute',
+          'custom',
         ].map((s) => fsp.readFile(path.join(SKILLS, s, 'SKILL.md'), 'utf8')),
       )),
       await fsp.readFile(path.join(SKILLS, '_common.md'), 'utf8'),
@@ -461,7 +465,8 @@ describe('[어댑터] 단계 절차 배포와 claude 실행 (5.6.3, D103, D105, 
       '<!-- type: bugfix -->\nx',
       'x\n<!-- /type -->',
     ]
-    expect(TYPES).toEqual(WORK_TYPES)
+    // 커스텀 유형은 모두 custom 구간을 함께 쓴다 (D456)
+    expect(TYPES).toEqual([...WORK_TYPES, 'custom'])
     const outcome = (f: () => string) => {
       try {
         return { ok: f() }
@@ -470,7 +475,7 @@ describe('[어댑터] 단계 절차 배포와 claude 실행 (5.6.3, D103, D105, 
       }
     }
     for (const [i, text] of samples.entries()) {
-      for (const type of WORK_TYPES) {
+      for (const type of ASSEMBLY) {
         expect(
           outcome(() => selectType(text, type)),
           `${i} ${type}`,
@@ -488,7 +493,7 @@ describe('[어댑터] 단계 절차 배포와 claude 실행 (5.6.3, D103, D105, 
       general: 'execution.md',
     } as const
     for (const skill of ['work-start', 'verify', 'pr-respond'] as const) {
-      for (const type of WORK_TYPES) {
+      for (const type of ASSEMBLY) {
         const text = await skillText(SKILLS, skill, type)
         expect(text, `${skill} ${type}`).not.toContain('<!-- type:')
         expect(text, `${skill} ${type}`).not.toContain('<!-- /type -->')
@@ -502,7 +507,7 @@ describe('[어댑터] 단계 절차 배포와 claude 실행 (5.6.3, D103, D105, 
   })
 
   it('설계 문서를 따르는 요청의 줄(D369, D370)은 모든 유형의 intake에, 그 Work의 규칙(D371)은 모든 스킬에 있다 (I107)', async () => {
-    for (const type of WORK_TYPES) {
+    for (const type of ASSEMBLY) {
       const intake = await skillText(SKILLS, 'work-start', type)
       expect(intake, type).toContain('write "`<path>`의 결정을 따른다" in `제약`')
       expect(intake, type).toContain('wait for the merge (`blocked`)')

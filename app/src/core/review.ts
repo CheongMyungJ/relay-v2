@@ -12,7 +12,15 @@ import type {
   WorkType,
 } from '../shared/work'
 import { badge, holdNeedsNotice, holdText } from './approval'
-import { NODE_INFO, WORK_COMPLETE, defaultNext, isPipelineNode, workType } from './pipeline'
+import {
+  NODE_INFO,
+  WORK_COMPLETE,
+  customSections,
+  nextStage,
+  nodeTitle,
+  stageOf,
+  stageTitle,
+} from './pipeline'
 import {
   DESIGN_FILE,
   FIX_FILE,
@@ -31,8 +39,8 @@ import {
 const pad = (n: number) => String(n).padStart(2, '0')
 
 /** 탭과 사이드바의 task 이름: "02 원인 분석과 수정" (D109) */
-export function taskLabel(task: Pick<TaskRecord, 'seq' | 'node'>): string {
-  return `${pad(task.seq)} ${NODE_INFO[task.node].title}`
+export function taskLabel(task: Pick<TaskRecord, 'seq' | 'node' | 'step' | 'step_title'>): string {
+  return `${pad(task.seq)} ${nodeTitle(task)}`
 }
 
 /**
@@ -175,10 +183,11 @@ export function resumeHint(work: WorkState): string | null {
   if (work.status !== 'stopped' || !stop) return null
   const task = work.tasks.find((t) => t.id === stop.task_id)
   // 멈추는 것은 파이프라인 task의 승인뿐이다. PR 대응 task는 멈추지 않는다 (D188)
-  const next = task && isPipelineNode(task.node) ? defaultNext(workType(work), task.node) : null
+  const stage = task ? stageOf(task) : null
+  const next = stage ? nextStage(work, stage) : null
   if (next === WORK_COMPLETE) return 'Work 완료 화면에서 전달을 고르면 Work를 완료합니다.'
   const action =
-    next === null ? '기본 다음 단계로 갑니다' : `다음 단계(${NODE_INFO[next].title})를 시작합니다`
+    next === null ? '기본 다음 단계로 갑니다' : `다음 단계(${stageTitle(work, next)})를 시작합니다`
   return `[재개]하면 ${action}.`
 }
 
@@ -440,8 +449,13 @@ const LEAD: Partial<
 export function stageLead(
   node: TaskNode,
   files: Readonly<Record<string, string>>,
+  step?: { id: string; title: string; sections: readonly string[] },
 ): StageLead | null {
-  const lead = LEAD[node]
+  // 커스텀 단계는 산출물 <단계 id>.md의 정의한 절이다 (D453)
+  const lead =
+    node === 'custom' && step
+      ? { file: `${step.id}.md`, title: step.title, sections: [...customSections(step)] }
+      : LEAD[node]
   const text = lead ? files[lead.file] : undefined
   if (!lead || text === undefined) return null
   const body = lead.draft ? intentDraftBody(text).body : normalizeText(text)

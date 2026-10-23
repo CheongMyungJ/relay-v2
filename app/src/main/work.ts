@@ -145,7 +145,14 @@ import {
   sameChanges,
   stoppedVerify,
 } from '../core/delivery'
-import { NODE_INFO, RESPOND, workType } from '../core/pipeline'
+import {
+  NODE_INFO,
+  RESPOND,
+  customSections,
+  customStep,
+  taskArtifacts,
+  workType,
+} from '../core/pipeline'
 import {
   ISSUE_LABEL,
   ISSUE_LABEL_COLOR,
@@ -367,7 +374,7 @@ import {
   type ReviewInput,
   type ReviewRecord,
 } from '../core/knowledge-review'
-import { claudeJson, findClaude } from '../adapters/claude'
+import { claudeJson, findClaude, type CustomSource } from '../adapters/claude'
 import {
   INJECTED_FILE,
   INJECT_LIMIT,
@@ -867,6 +874,7 @@ export class WorkRunner {
           decisionsBlock({
             taskId: e.taskId,
             node: e.node,
+            ...(this.task(e.taskId)?.step ? { step: this.task(e.taskId)?.step } : {}),
             at: e.at,
             by: e.by,
             decisions: e.decisions,
@@ -924,6 +932,7 @@ export class WorkRunner {
     files: Readonly<Record<string, string>>,
     knowledge?: KnowledgeCheck,
   ): TaskCheck {
+    const step = customStep(this.work, task)
     return checkTask({
       node: task.node,
       type: workType(this.work),
@@ -934,6 +943,7 @@ export class WorkRunner {
       ...(task.respond ? { replyItems: replyItemIds(task.respond.items) } : {}),
       ...(knowledge ? { knowledgeIssues: knowledge.errors } : {}),
       ...(knowledge?.warnings.length ? { knowledgeWarnings: knowledge.warnings } : {}),
+      ...(step ? { customStep: { id: step.id, sections: customSections(step) } } : {}),
     })
   }
 
@@ -1308,6 +1318,7 @@ export class WorkRunner {
         contextPath,
         skill,
         type: workType(this.work),
+        ...this.customSource(task),
       })
       const version = await driver.version(bin, env)
 
@@ -1428,8 +1439,20 @@ export class WorkRunner {
       contextPath: path.join(dir, CONTEXT_FILE),
       skill: NODE_INFO[task.node].skill,
       type: workType(this.work),
+      ...this.customSource(task),
     })
     return deployed.file
+  }
+
+  /** 커스텀 Work의 절차 재료 (D452, D456): 복사한 유형 폴더와 커스텀 단계의 id. 커스텀 Work가 아니면 없다 */
+  private customSource(task: TaskRecord): { custom?: CustomSource } {
+    if (workType(this.work) !== 'custom') return {}
+    return {
+      custom: {
+        dir: this.files.customType,
+        ...(task.node === 'custom' && task.step ? { step: task.step } : {}),
+      },
+    }
   }
 
   /**
@@ -1482,6 +1505,7 @@ export class WorkRunner {
       earlier.push({
         taskId: t.id,
         node: t.node,
+        ...(t.step !== undefined ? { step: t.step } : {}),
         ...(handoff === undefined ? {} : { handoff }),
         artifacts: await this.files.artifacts(t),
       })
@@ -3729,7 +3753,7 @@ export class WorkRunner {
         live: this.live.has(task.id),
         ...(respond ? { tests: respond.tests, failure: respond.view.failure } : {}),
       }),
-      lead: stageLead(task.node, files),
+      lead: stageLead(task.node, files, customStep(this.work, task)),
       artifacts: Object.entries(files)
         .filter(([name]) => isArtifactName(name))
         .map(([name, text]) => ({ name, text })),
@@ -5151,7 +5175,7 @@ export class WorkRunner {
       })
       return stepComment({ mark, task, discarded })
     }
-    const order: readonly string[] = NODE_INFO[task.node].artifacts
+    const order: readonly string[] = taskArtifacts(task)
     const rank = (n: string) => (order.includes(n) ? order.indexOf(n) : order.length)
     const artifacts: IssueArtifact[] = (await this.files.artifactTexts(task)).sort(
       (a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name),
@@ -5204,6 +5228,18 @@ export class WorkRunner {
       projectName: projectName(this.project),
       workId: w.work_id,
       type: workType(w),
+      customType: w.custom_type
+        ? {
+            id: w.custom_type.id,
+            name: w.custom_type.name,
+            source: w.custom_type.source,
+            steps: w.custom_type.steps.map((s) => ({
+              id: s.id,
+              title: s.title,
+              autoApprove: s.auto_approve,
+            })),
+          }
+        : null,
       title: this.title,
       status: w.status,
       statusLabel: WORK_STATUS_LABEL[w.status],

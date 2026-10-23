@@ -1466,6 +1466,45 @@ fieldset.field {
   border-color: var(--accent);
 }
 
+/* 기본 유형과 커스텀 유형 사이의 구분선 (D460). 커스텀 유형이 많으면 줄을 바꾼다 */
+.work-type {
+  flex-wrap: wrap;
+}
+
+.work-type-sep {
+  width: 1px;
+  margin: 2px 4px;
+  background: var(--border);
+}
+
+/* 업무 유형 화면 (D459) */
+.custom-types {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.custom-type-row {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-group);
+}
+
+.custom-step {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.custom-step legend button {
+  margin-left: 6px;
+}
+
 /* 고른 유형의 설명: 일반은 다른 유형에 맞지 않는 일 (D303, I88) */
 .work-type-hint {
   color: var(--text-dim);

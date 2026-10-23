@@ -20,10 +20,12 @@ describe('노드 (3.1)', () => {
       refactor: ['intake', 'refactor', 'verify'],
       spec: ['intake', 'spec', 'verify'],
       general: ['intake', 'execute', 'verify'],
+      // 커스텀은 단계 수만큼 custom이 든다 (stagesOf, D447)
+      custom: ['intake', 'custom', 'verify'],
     })
   })
 
-  it('모든 노드는 모든 파이프라인의 노드를 모은 것이고 스키마의 노드 열거값과 같다 (I57, I63, I85, I103)', () => {
+  it('모든 노드는 모든 파이프라인의 노드를 모은 것이고, 커스텀 단계를 빼면 스키마의 노드 열거값과 같다 (I57, I63, I85, I103, D462)', () => {
     expect(ALL_NODES).toEqual([
       'intake',
       'fix',
@@ -32,11 +34,12 @@ describe('노드 (3.1)', () => {
       'refactor',
       'spec',
       'execute',
+      'custom',
       'verify',
     ])
     expect(new Set(Object.values(PIPELINES).flat())).toEqual(new Set(ALL_NODES))
-    // D418 전 형식의 recommended_next는 스키마에 남아 옛 handoff가 통과한다 (D422)
-    expect(ALL_NODES).toEqual(
+    // D418 전 형식의 recommended_next는 스키마에 남아 옛 handoff가 통과한다 (D422). 커스텀 단계는 그 뒤에 생겨 없다
+    expect(ALL_NODES.filter((n) => n !== 'custom')).toEqual(
       handoffSchema.properties.recommended_next.oneOf[1]?.properties?.node.enum,
     )
   })
@@ -52,6 +55,7 @@ describe('노드 (3.1)', () => {
       ['refactor', 'refactor', '계획과 리팩터링', ['refactor.md']],
       ['spec', 'spec', '설계 문답', ['spec.md']],
       ['execute', 'execute', '실행', ['execution.md']],
+      ['custom', 'custom', '커스텀 단계', []],
       ['verify', 'verify', '리뷰와 검증', ['verification.md', 'pr.md']],
     ])
   })
