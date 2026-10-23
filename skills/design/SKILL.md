@@ -1,6 +1,5 @@
 ---
 description: relay design step (feature). Writes the user scenarios, requirements, approach, impact on existing behavior and implementation plan of a feature, or of a change or removal of behavior (design.md). Does not change code.
-disable-model-invocation: true
 ---
 
 # relay: design (설계와 계획)
@@ -9,7 +8,7 @@ For a feature Work (a new behavior, or a change or removal of a behavior), write
 
 ## Inputs
 
-- The argument gives the path of `context.md`. Read it first. It has the intent and the Work's base commit.
+- relay gives you the path of `context.md` when the step starts. Read it first. It has the intent and the Work's base commit.
 - If you need the original request, read `request.md` at the path in `context.md`.
 
 ## Order
@@ -22,7 +21,7 @@ For a feature Work (a new behavior, or a change or removal of a behavior), write
 
 ## Rules
 
-- **This skill does not change code.** Read the code only as far as the design needs. Revert any experiment when you close.
+- **This step does not change code.** Read the code only as far as the design needs. Revert any experiment when you close.
 - **Changed or removed behavior:** if the intent's 완료조건 has lines marked (바뀜) or (없앰), find every place that depends on the old behavior: callers in the repo, users outside the repo, stored data, config, docs. This is the exception to reading only as far as the design needs.
 - **User scenarios:** who does what, for what, and how, in a few steps. One scenario for a small feature. For an internal feature with no user, the calling code or the developer is "who". For a removal: who can no longer do what, and what they do instead.
 - **Functional requirements** (F1, F2…): make the intent's 완료조건 concrete, and give each its source (완료조건 n / 설계에서 더함). Adding a requirement the intent does not have widens the scope: ask the human. Requirements are for reference: verify judges only the intent's 완료조건.

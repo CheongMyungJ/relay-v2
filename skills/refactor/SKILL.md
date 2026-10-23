@@ -1,6 +1,5 @@
 ---
 description: relay refactor step (refactoring). Plans the target structure, commits safety-net tests first, changes structure step by step without changing behavior, and writes it up (refactor.md).
-disable-model-invocation: true
 ---
 
 # relay: refactor (계획과 리팩터링)
@@ -9,7 +8,7 @@ For a refactoring Work, change the structure without changing behavior. In one s
 
 ## Inputs
 
-- The argument gives the path of `context.md`. Read it first. It has the intent and the Work's base commit. If you need the request text, read `request.md` at the path in `context.md`.
+- relay gives you the path of `context.md` when the step starts. Read it first. It has the intent and the Work's base commit. If you need the request text, read `request.md` at the path in `context.md`.
 
 ## Order
 

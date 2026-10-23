@@ -1,6 +1,5 @@
 ---
 description: relay fix step. Reproduces the bug, finds the root cause, fixes the code, commits, and writes it all up (fix.md).
-disable-model-invocation: true
 ---
 
 # relay: fix
@@ -9,7 +8,7 @@ Reproduce the bug, find the cause, fix the code and commit. Write what you found
 
 ## Inputs
 
-- The argument gives the path of `context.md`. Read it first. It has the intent and the Work's base commit.
+- relay gives you the path of `context.md` when the step starts. Read it first. It has the intent and the Work's base commit.
 - If you need the original request, read `request.md` at the path in `context.md`.
 
 ## Order

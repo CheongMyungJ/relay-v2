@@ -1,8 +1,8 @@
 // relay 스킬 정적 검증 (docs/design.md 5.6).
 // 모델을 부르지 않는다. 실행: cd skills && npm install && npm run check
 //
-// 1. 머리글: disable-model-invocation: true, description 있음, name 없음 (D33)
-// 2. 크기: SKILL.md + _common.md. Claude Code 어림(글자 수 / 4)으로 판정, 모델 토큰 어림은 참고 (D31, D95)
+// 1. 머리글: description만 있음. disable-model-invocation과 name 없음 (D444)
+// 2. 크기: SKILL.md + _common.md. Claude Code 어림(글자 수 / 4)과 모델 토큰 어림을 참고로만 보여 준다 (D445)
 // 3. 템플릿: 주석 단 템플릿에 값을 채운 예시가 docs/contracts 스키마를 통과하는지 (D87). intent 초안은 머리글이 없다 (D236)
 // 4. 설계 대조: 산출물 템플릿의 절 제목, 입력·결정 지점·사람이 정할 결정·완료조건 항목 (5.6.1~5.6.12, I60, I65, I89, I107)
 // 5. 유형별 조립: 공용 스킬의 유형 표시, 조립한 글에 다른 유형의 산출물이 없음 (D279, I68)
@@ -10,7 +10,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { TYPES, assemble } from './assemble.mjs';
+import { TYPES, assemble, stripFrontMatter } from './assemble.mjs';
 import { CHECK_METHOD } from './check-method.mjs';
 import YAML from 'yaml';
 import Ajv2020 from 'ajv/dist/2020.js';
@@ -19,7 +19,6 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..');
 const read = (p) => readFileSync(join(root, p), 'utf8').replace(/\r\n/g, '\n');
 
-const SIZE_TARGET = 5000; // D31
 const SKILLS = ['work-start', 'fix', 'design', 'implement', 'refactor', 'spec', 'execute', 'verify', 'pr-respond'];
 
 // 업무 유형(D232, D258, D302, D350)과 유형마다 조립하는 공용 스킬(D279)
@@ -90,33 +89,37 @@ const sameSet = (a, b) => a.length === b.length && a.every((x) => b.includes(x))
 
 // ---------- 1. 머리글 ----------
 
-console.log('\n[1] 머리글 (D33)');
+// 앱은 머리글을 떼고 시스템 프롬프트에 덧붙인다(D440). 머리글은 배포본에 들어가지 않는다: description은 사람이 읽는
+// 스킬 요약이고, Codex 배포본은 자기 머리글을 따로 쓴다(D444, engines.md)
+console.log('\n[1] 머리글 (D444)');
 for (const [name, text] of Object.entries(skills)) {
   const fm = frontMatter(text);
-  check(fm && fm.data['disable-model-invocation'] === true, `${name}: disable-model-invocation: true`);
   check(fm && typeof fm.data.description === 'string' && fm.data.description.length > 0, `${name}: description 있음`);
-  check(fm && !('name' in fm.data), `${name}: name 없음 (배포 폴더 이름 relay-${name}이 명령이 됨)`);
+  check(fm && !('disable-model-invocation' in fm.data), `${name}: disable-model-invocation 없음 (스킬로 부르지 않음)`);
+  check(fm && !('name' in fm.data), `${name}: name 없음 (Codex 배포본이 relay-${name}으로 붙임)`);
+  check(!/\bthis skill\b/i.test(text), `${name}: 자기를 "this skill"이 아니라 "this step"으로 부름`);
+  // 스킬로 부르지 않아 인자가 없다. context.md 경로는 첫 프롬프트와 절차 끝에 있다 (D442)
+  check(!/\bthe argument\b/i.test(text), `${name}: 스킬 인자를 말하지 않음 (context.md 경로는 relay가 줌)`);
 }
+check(!/\bthis skill\b/i.test(common), '_common.md: 자기를 "this skill"이 아니라 "this step"으로 부름');
 check(!/^---\n[\s\S]*?\n---\n/.test(common) || !YAML.parse(common.match(/^---\n([\s\S]*?)\n---\n/)?.[1] ?? '')?.description,
   '_common.md: 머리글 없음 (SKILL.md 끝에 붙음)');
 
 // ---------- 2. 크기 ----------
 
-console.log(`\n[2] 크기: SKILL.md + _common.md (목표 ${SIZE_TARGET}, D31·D95)`);
+console.log('\n[2] 크기: SKILL.md + _common.md (참고, D445)');
 const hangul = (s) => (s.match(/[가-힣]/g) ?? []).length;
 const rows = [];
 for (const { label: name, text } of variants) {
-  const merged = `${text.trimEnd()}\n${common}`; // 앱이 SKILL.md 끝에 붙인다 (5.6.3)
+  const merged = `${stripFrontMatter(text).trimEnd()}\n${common}`; // 앱이 머리글을 떼고 끝에 붙인다 (5.6.3)
   const chars = merged.length;
   const cc = Math.round(chars / 4); // Claude Code 어림 (2.1.283에서 확인)
   const h = hangul(merged);
   const model = h + Math.round((chars - h) / 4); // 참고용 모델 토큰 어림 (기본값)
-  rows.push({ skill: name, chars, 'Claude Code 어림': cc, '모델 토큰 어림(참고)': model, 판정: cc <= SIZE_TARGET ? '목표 안' : '목표 초과' });
+  rows.push({ skill: name, chars, 'Claude Code 어림': cc, '모델 토큰 어림': model });
 }
+// 시스템 프롬프트는 압축 뒤 잘리지 않아 판정하지 않는다(스파이크 S8). 요청마다 드는 입력이라 보여 준다
 console.table(rows);
-const over = rows.filter((r) => r['Claude Code 어림'] > SIZE_TARGET);
-if (over.length) console.log(`  WARN  목표 초과: ${over.map((r) => r.skill).join(', ')}. 사람에게 알린다(D31).`);
-else ok('모든 스킬이 목표 안');
 
 // ---------- 3. 템플릿과 스키마 (D87) ----------
 
@@ -251,7 +254,7 @@ const spec = {
     ['5.6.1', '답 기록: 알아서 해 → 추천안, by: ai', /알아서 해[\s\S]*`by: ai`/],
     ['5.6.1', '답 기록: 모름', /모름[\s\S]*`assumptions`[\s\S]*`open_questions`/],
     ['D230', 'open_questions는 물었는데 답이 없는 것만', /`open_questions` holds only questions you asked the human that are still unanswered[\s\S]*the intent already settles/],
-    ['5.6.2', '실행하는 때: 완료조건 충족', /completion criteria of this skill are met \| `status: awaiting_approval`/],
+    ['5.6.2', '실행하는 때: 완료조건 충족', /completion criteria of this step are met \| `status: awaiting_approval`/],
     ['5.6.2', '실행하는 때: 진행 불가', /cannot proceed \| `status: blocked`/],
     ['5.6.2', '실행하는 때: 사람의 마무리 요청', /asks you to wrap up/],
     ['5.6.2', '실행하는 때: 수정 요청 반영 뒤 다시', /run the procedure again/],

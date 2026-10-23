@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       spikes:
-        description: "돌릴 스파이크 (예: S2 S3). 비우면 S7을 뺀 전부 (S5, S1, S2, S3, S3B, S4, S6 순서). S7은 S7만 적는다(다른 것과 함께 적으면 시작 전에 멈춤)"
+        description: "돌릴 스파이크 (예: S2 S3). 비우면 S7을 뺀 전부 (S5, S1, S2, S3, S3B, S4, S6, S8 순서). S7은 S7만 적는다(다른 것과 함께 적으면 시작 전에 멈춤)"
         required: false
         default: ""
       model:

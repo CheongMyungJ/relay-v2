@@ -9,6 +9,7 @@ import {
   hookUrl,
   launchArgs,
   launchEnv,
+  promptSnapshotOff,
   relaySkillName,
   resumeArgs,
   ruleAbs,
@@ -119,6 +120,23 @@ describe('deny 규칙 (D17, 시나리오 2-3)', () => {
     expect(rules.join('\n')).not.toContain('02-fix')
   })
 
+  it('지금 task 디렉터리를 주면 그 안의 단계 절차(instructions.md)만 막는다 (D443)', () => {
+    const rules = denyRules({
+      workDir: WORK_DIR,
+      previousTaskDirs: [`${TASKS}\\01-intake`],
+      taskDir: `${TASKS}\\02-fix`,
+    })
+    const w = '//c/Users/u/.relay/projects/my-api-3f9a1c/works/w-20260926-001'
+    expect(rules.filter((r) => r.includes('02-fix'))).toEqual([
+      `Edit(${w}/tasks/02-fix/instructions.md)`,
+    ])
+    expect(rules).toEqual([
+      ...denyRules({ workDir: WORK_DIR, previousTaskDirs: [`${TASKS}\\01-intake`] }).slice(0, -1),
+      `Edit(${w}/tasks/02-fix/instructions.md)`,
+      `Edit(${w}/.claude/**)`,
+    ])
+  })
+
   it('끝의 경로 구분자가 있어도 같은 규칙이다', () => {
     expect(denyRules({ workDir: `${WORK_DIR}\\`, previousTaskDirs: [] })).toEqual(
       denyRules({ workDir: WORK_DIR, previousTaskDirs: [] }),
@@ -144,13 +162,14 @@ describe('task 설정 파일 (시나리오 2-3)', () => {
 })
 
 describe('실행 인자 (시나리오 2-5, 6절)', () => {
-  it('권한 확인 없이, 세션 id, Work 디렉터리, 설정 파일, 첫 프롬프트로 실행한다', () => {
+  it('권한 확인 없이, 세션 id, Work 디렉터리, 설정 파일, 단계 절차, 첫 프롬프트로 실행한다 (D440)', () => {
     const context = `${TASKS}\\03-verify\\context.md`
     expect(
       launchArgs({
         sessionId: '0b8f0d8e-6c1a-4f1e-9d9b-3c2f4a5e6d7f',
         workDir: WORK_DIR,
         settingsPath: `${TASKS}\\03-verify\\task.settings.json`,
+        instructionsPath: `${TASKS}\\03-verify\\instructions.md`,
         skill: 'verify',
         contextPath: context,
       }),
@@ -162,16 +181,19 @@ describe('실행 인자 (시나리오 2-5, 6절)', () => {
       WORK_DIR,
       '--settings',
       `${TASKS}\\03-verify\\task.settings.json`,
-      `/relay-verify 이 task의 컨텍스트: ${context}`,
+      '--append-system-prompt-file',
+      `${TASKS}\\03-verify\\instructions.md`,
+      `relay verify 단계를 시작합니다. 이 task의 컨텍스트: ${context}`,
     ])
   })
 
-  it('재개는 같은 옵션 + --resume이고 --session-id와 첫 프롬프트는 뺀다 (시나리오 3-4, S6)', () => {
+  it('재개는 같은 옵션(단계 절차 포함) + --resume이고 --session-id와 첫 프롬프트는 뺀다 (시나리오 3-4, S6, D441)', () => {
     expect(
       resumeArgs({
         sessionId: '0b8f0d8e-6c1a-4f1e-9d9b-3c2f4a5e6d7f',
         workDir: WORK_DIR,
         settingsPath: `${TASKS}\\03-verify\\task.settings.json`,
+        instructionsPath: `${TASKS}\\03-verify\\instructions.md`,
       }),
     ).toEqual([
       '--dangerously-skip-permissions',
@@ -181,7 +203,31 @@ describe('실행 인자 (시나리오 2-5, 6절)', () => {
       WORK_DIR,
       '--settings',
       `${TASKS}\\03-verify\\task.settings.json`,
+      '--append-system-prompt-file',
+      `${TASKS}\\03-verify\\instructions.md`,
     ])
+  })
+
+  it('시작과 재개는 단계 절차를 같은 옵션으로 준다. 빼면 압축 뒤 절차가 사라진다 (D441, 스파이크 S8)', () => {
+    const common = {
+      sessionId: 'id-1',
+      workDir: WORK_DIR,
+      settingsPath: 'S',
+      instructionsPath: 'I',
+    }
+    const flag = (args: string[]) =>
+      args.slice(
+        args.indexOf('--append-system-prompt-file'),
+        args.indexOf('--append-system-prompt-file') + 2,
+      )
+    const launched = launchArgs({ ...common, skill: 'fix', contextPath: 'C' })
+    const resumed = resumeArgs({ ...common, prompt: continuePrompt(false) })
+    expect(flag(launched)).toEqual(['--append-system-prompt-file', 'I'])
+    expect(flag(resumed)).toEqual(flag(launched))
+    // 이 변경 전에 스킬로 시작한 task는 단계 절차 파일이 없어 넣지 않는다
+    expect(resumeArgs({ sessionId: 'id-1', workDir: WORK_DIR, settingsPath: 'S' })).not.toContain(
+      '--append-system-prompt-file',
+    )
   })
 
   it('중단됨의 [재개]는 이어서 하라는 첫 입력을 맨 뒤에 준다. 앱이 꺼져 끊겼으면 그렇다고 적는다 (D218, D219)', () => {
@@ -200,11 +246,12 @@ describe('실행 인자 (시나리오 2-5, 6절)', () => {
     )
   })
 
-  it('첫 프롬프트는 스킬 호출과 context.md 경로만 담는다 (D19)', () => {
+  it('첫 프롬프트는 단계 이름과 context.md 경로만 담는다. 스킬을 부르지 않는다 (D442)', () => {
     expect(relaySkillName('work-start')).toBe('relay-work-start')
     expect(firstPrompt('work-start', 'C:\\x\\context.md')).toBe(
-      '/relay-work-start 이 task의 컨텍스트: C:\\x\\context.md',
+      'relay work-start 단계를 시작합니다. 이 task의 컨텍스트: C:\\x\\context.md',
     )
+    expect(firstPrompt('work-start', 'C:\\x\\context.md')).not.toMatch(/^\//)
   })
 })
 
@@ -228,6 +275,7 @@ describe('[단위] 모델·추론 수준 인자 (F7, F8, F10)', () => {
     sessionId: 'id-1',
     workDir: WORK_DIR,
     settingsPath: 'task.settings.json',
+    instructionsPath: 'instructions.md',
     skill: 'implement' as const,
     contextPath: 'context.md',
   }
@@ -240,7 +288,7 @@ describe('[단위] 모델·추론 수준 인자 (F7, F8, F10)', () => {
       'opus',
       '--effort',
       'high',
-      '/relay-implement 이 task의 컨텍스트: context.md',
+      'relay implement 단계를 시작합니다. 이 task의 컨텍스트: context.md',
     ])
     const resumed = resumeArgs({ ...resume, model: 'opus', effort: 'high', prompt: '이어서' })
     expect(resumed.slice(-5)).toEqual(['--model', 'opus', '--effort', 'high', '이어서'])
@@ -260,6 +308,7 @@ describe('[단위] 서브모듈 Work의 메인 통합 검증 worktree (D414)', (
     const base = { sessionId: 'id-1', workDir: WORK_DIR, settingsPath: 'S' }
     const launched = launchArgs({
       ...base,
+      instructionsPath: 'I',
       skill: 'implement',
       contextPath: 'context.md',
       extraDirs: ['/main'],
@@ -301,11 +350,13 @@ describe('곁 세션 (시나리오 11, D386, D388)', () => {
       'S',
       '--append-system-prompt-file',
       'G',
+      '--system-prompt-snapshot',
+      'off',
     ])
     expect(sideArgs({ ...input, resume: true }).slice(1, 3)).toEqual(['--resume', 's-1'])
-    expect(sideArgs({ ...input, resume: true })).toHaveLength(9)
+    expect(sideArgs({ ...input, resume: true })).toHaveLength(11)
     // 설정의 모델·추론 수준 (D391)
-    expect(sideArgs({ ...input, resume: true, model: 'haiku', effort: 'low' }).slice(9)).toEqual([
+    expect(sideArgs({ ...input, resume: true, model: 'haiku', effort: 'low' }).slice(11)).toEqual([
       '--model',
       'haiku',
       '--effort',
@@ -337,6 +388,42 @@ describe('곁 세션 (시나리오 11, D386, D388)', () => {
   })
 })
 
+describe('[단위] 다시 연 곁·기본 세션의 안내 (D446)', () => {
+  it('곁·기본 세션은 시작과 재개 모두 시스템 프롬프트를 기록해 다시 쓰지 않는다. task는 기록한 것을 쓴다 (D441)', () => {
+    const snapshotOff = (args: string[]) => {
+      const i = args.indexOf('--system-prompt-snapshot')
+      return i >= 0 && args[i + 1] === 'off'
+    }
+    const side = { sessionId: 's-1', workDir: WORK_DIR, settingsPath: 'S', guidePath: 'G' }
+    const session = { sessionId: 's-1', home: WORK_DIR, settingsPath: 'S', guidePath: 'G' }
+    for (const resume of [false, true]) {
+      expect(snapshotOff(sideArgs({ ...side, resume }))).toBe(true)
+      expect(snapshotOff(sessionArgs({ ...session, resume }))).toBe(true)
+    }
+    const task = { sessionId: 't', workDir: WORK_DIR, settingsPath: 'S', instructionsPath: 'I' }
+    expect(launchArgs({ ...task, skill: 'fix', contextPath: 'C' })).not.toContain(
+      '--system-prompt-snapshot',
+    )
+    expect(resumeArgs(task)).not.toContain('--system-prompt-snapshot')
+  })
+
+  it('옵션이 생긴 2.1.257 이상일 때만 준다. 버전을 모르면 주지 않는다: 모르는 옵션이면 claude가 뜨지 않는다', () => {
+    expect(promptSnapshotOff('2.1.308 (Claude Code)')).toBe(true)
+    expect(promptSnapshotOff('2.1.257 (Claude Code)')).toBe(true)
+    expect(promptSnapshotOff('2.1.256 (Claude Code)')).toBe(false)
+    expect(promptSnapshotOff('2.0.999 (Claude Code)')).toBe(false)
+    expect(promptSnapshotOff(null)).toBe(false)
+    expect(promptSnapshotOff('dev build')).toBe(false)
+    const side = { sessionId: 's-1', workDir: WORK_DIR, settingsPath: 'S', guidePath: 'G' }
+    expect(sideArgs({ ...side, resume: true, refreshGuide: false })).not.toContain(
+      '--system-prompt-snapshot',
+    )
+    expect(
+      sessionArgs({ ...side, home: WORK_DIR, resume: false, refreshGuide: false }),
+    ).not.toContain('--system-prompt-snapshot')
+  })
+})
+
 describe('기본 세션 (시나리오 12, D399, D401)', () => {
   const HOME = 'C:\\Users\\u\\.relay'
   const home = ruleAbs(HOME)
@@ -353,14 +440,13 @@ describe('기본 세션 (시나리오 12, D399, D401)', () => {
       'S',
       '--append-system-prompt-file',
       'G',
+      '--system-prompt-snapshot',
+      'off',
     ])
     expect(sessionArgs({ ...input, resume: true }).slice(1, 3)).toEqual(['--resume', 's-1'])
-    expect(sessionArgs({ ...input, resume: true, model: 'opus', effort: 'max' }).slice(9)).toEqual([
-      '--model',
-      'opus',
-      '--effort',
-      'max',
-    ])
+    expect(sessionArgs({ ...input, resume: true, model: 'opus', effort: 'max' }).slice(11)).toEqual(
+      ['--model', 'opus', '--effort', 'max'],
+    )
   })
 
   it('config.json, projects/ 아래, sessions/*/session.json만 막는다. push와 gh는 막지 않고 자동 메모리는 CLI 설정을 따른다', () => {

@@ -6,8 +6,11 @@ import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { normalizeConfig } from '../core/config'
+import { INJECTED_FILE } from '../core/knowledge'
 import { taskDirName } from '../core/machine'
 import { appendBlock } from '../core/records'
+import { INSTRUCTIONS_FILE } from '../core/settings'
+import { HANDOFF_FILE } from '../core/validate'
 import { DEFAULT_CONFIG, type AppConfig, type ThemeChoice } from '../shared/config'
 import { EMPTY_PR_ITEMS, type PrItemsFile } from '../shared/pr'
 import type { ProjectState } from '../shared/project'
@@ -557,7 +560,7 @@ export class WorkFiles {
   /** 산출물의 절대 경로: task 디렉터리의 .md 중 context.md와 handoff.md를 뺀 것 (D89) */
   async artifacts(task: Pick<TaskRecord, 'seq' | 'node'>): Promise<string[]> {
     const dir = this.taskDir(task)
-    return (await mdFiles(dir)).filter((n) => !NOT_ARTIFACTS.has(n)).map((n) => path.join(dir, n))
+    return (await mdFiles(dir)).filter(isArtifactName).map((n) => path.join(dir, n))
   }
 
   /**
@@ -619,8 +622,13 @@ export class WorkFiles {
   }
 }
 
-/** 앱이 쓰는 입력 파일: context.md, 지식을 넣은 기록(core/knowledge INJECTED_FILE) */
-const NOT_ARTIFACTS = new Set(['context.md', 'handoff.md', 'knowledge-injected.md'])
+/** 산출물이 아닌 task 디렉터리의 .md: 앱이 쓰는 입력(context.md, 단계 절차 D440, 지식을 넣은 기록 D289)과 handoff.md */
+const NOT_ARTIFACTS = new Set(['context.md', INSTRUCTIONS_FILE, HANDOFF_FILE, INJECTED_FILE])
+
+/** task 디렉터리의 .md 이름이 산출물인가 (D89). 산출물 목록, 이슈 기록, 승인 화면의 [산출물]이 같이 쓴다 */
+export function isArtifactName(name: string): boolean {
+  return !NOT_ARTIFACTS.has(name)
+}
 
 /** 끝에 덜 쓴 UTF-8 문자가 있으면 그 바이트 수, 없으면 0 */
 export function partialUtf8(buf: Buffer): number {

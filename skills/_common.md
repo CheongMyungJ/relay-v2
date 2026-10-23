@@ -1,7 +1,7 @@
 
 ---
 
-# Common rules (all relay skills)
+# Common rules (all relay steps)
 
 ## Language
 
@@ -13,8 +13,8 @@ The question mode is in context.md.
 
 | Mode | Ask |
 |---|---|
-| 초안 우선 (`draft_first`) | (1) information you cannot proceed without, (2) the human decisions listed in this skill |
-| 결정마다 확인 (`confirm_each`) | (1) and (2), plus every other decision point of this skill, before you decide it |
+| 초안 우선 (`draft_first`) | (1) information you cannot proceed without, (2) the human decisions listed in this step |
+| 결정마다 확인 (`confirm_each`) | (1) and (2), plus every other decision point of this step, before you decide it |
 
 - Anything you do not ask, you decide. Put what you inferred in `assumptions`.
 - Human decisions are never left as a draft. Ask on the spot.
@@ -41,7 +41,7 @@ Recording answers:
 
 If the intent's `제약` says "`<path>`의 결정을 따른다", that design document has settled those decisions.
 
-- Going a different way from the document touches a constraint: it is a human decision of this skill. Ask on the spot. If the change overturns a major direction, offer "멈추고 설계 Work를 먼저 함" (`blocked`).
+- Going a different way from the document touches a constraint: it is a human decision of this step. Ask on the spot. If the change overturns a major direction, offer "멈추고 설계 Work를 먼저 함" (`blocked`).
 - If the human decides to change the design, change the design document too in this task: in its decision table, record what changed, the history and that the human decided it. Commit it with the code.
 
 ## When an earlier result is wrong
@@ -72,7 +72,7 @@ Run it when:
 
 | When | Close with |
 |---|---|
-| All completion criteria of this skill are met | `status: awaiting_approval` |
+| All completion criteria of this step are met | `status: awaiting_approval` |
 | You cannot proceed | `status: blocked` and `blocked_reason` |
 | The human decided to start over as a new Work | a Work draft, then `status: blocked` (see above) |
 | The human asks you to wrap up | what you have so far. Put unfinished items in `open_questions` or `risks` |
@@ -80,8 +80,8 @@ Run it when:
 
 Steps:
 
-1. **Artifacts:** the required artifacts of this skill are in the task directory and have every template section.
-2. **Git:** if this skill changes code, commit all changes. Otherwise revert the experimental changes you made (debug output etc.). Do not touch files the human changed. List remaining changes in `risks`.
+1. **Artifacts:** the required artifacts of this step are in the task directory and have every template section.
+2. **Git:** if this step changes code, commit all changes. Otherwise revert the experimental changes you made (debug output etc.). Do not touch files the human changed. List remaining changes in `risks`.
 3. **Handoff:** write `handoff.md` in the task directory with the template below. Then compare it with the template field by field.
 4. **Message:** print the closing message from context.md verbatim and end the turn. If `blocked`, print `blocked_reason` and what the human needs to do.
 

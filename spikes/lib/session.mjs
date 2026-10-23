@@ -54,11 +54,12 @@ export function resolveClaude() {
 }
 
 export class Session {
-  constructor({ args = [], cwd, env = {}, cols = 120, rows = 40, logPath, name = 'session' }) {
+  // inheritEnv가 false면 env만 넘긴다(S8: 이 프로세스의 인증과 Claude Code 환경 변수를 넘기지 않음)
+  constructor({ args = [], cwd, env = {}, inheritEnv = true, cols = 120, rows = 40, logPath, name = 'session' }) {
     this.name = name;
     this.args = args;
     this.cwd = cwd;
-    this.env = { ...process.env, ...env };
+    this.env = inheritEnv ? { ...process.env, ...env } : env;
     this.cols = cols;
     this.rows = rows;
     this.logPath = logPath;

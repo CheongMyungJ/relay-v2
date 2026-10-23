@@ -1,6 +1,5 @@
 ---
 description: relay PR response step. Responds to the review comments and CI failures of an open PR, commits the fixes, and drafts replies (response.md, replies.md).
-disable-model-invocation: true
 ---
 
 # relay: pr-respond
@@ -9,7 +8,7 @@ The Work has an open PR. The app collected the items of this round (review comme
 
 ## Inputs
 
-- The argument gives the path of `context.md`. Read it first. Its PR section has this round's items, the human's instruction, the PR (number, URL, head commit, the remote refs the app fetched) and summaries of earlier rounds. It also has the intent and the Work's base commit.
+- relay gives you the path of `context.md` when the step starts. Read it first. Its PR section has this round's items, the human's instruction, the PR (number, URL, head commit, the remote refs the app fetched) and summaries of earlier rounds. It also has the intent and the Work's base commit.
 <!-- type: bugfix -->
 - The pipeline artifacts (`fix.md`, `verification.md`, …) at the paths in `context.md`, when you need them.
 <!-- /type -->

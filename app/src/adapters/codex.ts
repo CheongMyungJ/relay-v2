@@ -91,18 +91,18 @@ export function codexSkillPath(taskDir: string, skill: SkillName): string {
 export async function deployCodexSkill(o: {
   source: string
   workDir: string
-  taskDir?: string
+  taskDir: string
+  contextPath: string
   skill: SkillName
   type: WorkType
 }): Promise<DeployedSkill> {
   const original = await skillText(o.source, o.skill, o.type)
-  const body = original
-    .replace(/^---\n[\s\S]*?\n---\n/, '')
-    .replaceAll('`AskUserQuestion`', '`mcp__relay__ask_human`')
+  // skillText는 머리글을 뗀 절차다 (D444). 질문 도구 이름만 바꾼다
+  const body = original.replaceAll('`AskUserQuestion`', '`mcp__relay__ask_human`')
   const writing =
     'Write or update current task artifacts and handoff.md with apply_patch. Shell redirects or heredocs containing previous task paths can be rejected by the conservative file guard, even when those paths are only references in the document. Never edit app-owned files or previous task files, and never bypass a tool denial.\n\n'
   const content = `---\nname: ${relaySkillName(o.skill)}\ndescription: The active relay ${o.skill} task. Follow only this step and wait for human answers through relay MCP.\n---\n${writing}${body}`
-  const file = codexSkillPath(o.taskDir ?? o.workDir, o.skill)
+  const file = codexSkillPath(o.taskDir, o.skill)
   await writeFileAtomic(file, content)
   return { file, hash: `sha256:${sha256(content)}` }
 }

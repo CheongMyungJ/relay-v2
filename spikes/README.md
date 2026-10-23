@@ -2,7 +2,7 @@
 
 - 상태: 보관 (2026-10-05). 스파이크는 설계의 전제를 확인하는 탐색이고 시험이 아니다. 계속 확인할 것은 [계약](`app/test/contract`, `docs/implementation.md` 8.1)으로 옮겼다: S2의 훅 본문과 Stop 응답은 `live.test.ts`(실제 `claude`의 훅 본문, 정기 실행), S7의 gh·GitHub 모양은 `live-gh.test.ts`(시험용 레포의 PR을 앱의 어댑터로 읽음)가 본다. 새 전제를 확인할 때만 스파이크를 더하거나 다시 돌린다.
 
-`docs/spikes.md`의 S1~S7을 자동으로 확인하는 코드다. S1~S6은 Claude Code를 node-pty(Windows는 ConPTY)로 띄우고, 화면은 xterm headless로 읽고, 상태는 로컬 HTTP 훅 서버로 받는다. S7은 Claude Code 없이 gh와 git으로 시험용 레포(`CheongMyungJ/relay-v2-test`)에 PR을 만들어 GitHub 동작을 본다.
+`docs/spikes.md`의 S1~S8을 자동으로 확인하는 코드다. S1~S6은 Claude Code를 node-pty(Windows는 ConPTY)로 띄우고, 화면은 xterm headless로 읽고, 상태는 로컬 HTTP 훅 서버로 받는다. S8은 같은 방법으로 띄우되 가짜 API 서버로 요청 본문만 보므로 모델과 인증이 필요 없다. S7은 Claude Code 없이 gh와 git으로 시험용 레포(`CheongMyungJ/relay-v2-test`)에 PR을 만들어 GitHub 동작을 본다.
 
 ## 파일
 
@@ -16,7 +16,8 @@
 | `s5-first-run.mjs` | S5 첫 실행 창. 깨끗한 사용자 프로필이 필요해 가장 먼저 돌린다 |
 | `s6-resume.mjs` | S6 강제 종료 뒤 `--resume`. 강제 종료는 Windows는 `taskkill /T /F`, Linux는 프로세스 그룹에 SIGKILL이다 |
 | `s7-github.mjs` | S7 GitHub 연동. 시험용 레포에 PR을 만들어 상태, 체크와 실패 로그, 코멘트의 작성자, 답글과 보이지 않는 표시, 체크 재실행, 충돌, 원격 PR 브랜치 맞추기, 머지, API 한도를 본다. 단계(start, finish, cleanup)로 나뉜다 |
-| `lib/` | PTY 세션, 훅 서버, 테스트용 레포와 결과 기록 |
+| `s8-system-prompt.mjs` | S8 단계 절차를 시스템 프롬프트에 두기. 스킬, `--agent`, `--append-system-prompt-file`이 보내는 요청을 견주고 재개·압축·`/clear` 뒤 절차가 남는지 본다 |
+| `lib/` | PTY 세션, 훅 서버, 가짜 API 서버(S8), 테스트용 레포와 결과 기록 |
 
 ## 실행
 
@@ -44,6 +45,17 @@ env -i HOME="$HOME" PATH="$PATH" SHELL=/bin/bash TERM=xterm-256color LANG=C.UTF-
   IS_SANDBOX=1 CLAUDE_CONFIG_DIR=<설정 폴더> SPIKE_MODEL=sonnet CLAUDE_CODE_EFFORT_LEVEL=low \
   node run.mjs S6
 ```
+
+### S8 (단계 절차를 시스템 프롬프트에 두기)
+
+인증이 필요 없다. `ANTHROPIC_BASE_URL`을 가짜 API 서버(`lib/mockapi.mjs`)로 주고 이 프로세스의 `ANTHROPIC_*`, `CLAUDE_*`, 프록시 환경 변수는 넘기지 않으며, 경우마다 새 설정 폴더(`CLAUDE_CONFIG_DIR`, Windows가 아니면 `HOME`도)를 만든다. 그래서 Claude Code 웹 세션의 컨테이너에서도 `env -i` 없이 돈다(root면 `IS_SANDBOX=1`).
+
+```bash
+cd spikes && npm ci
+IS_SANDBOX=1 node run.mjs S8
+```
+
+가짜 API는 기능 플래그를 주지 않으므로, 기본 시스템 프롬프트의 문구는 로그인한 계정에서 받는 것과 조금 다를 수 있다. 압축 요약도 가짜 API가 "ok"로 답한 것이라, 압축 뒤 무엇이 다시 붙는지만 본다. 결과는 `results/S8.json`이고, 경우마다의 화면은 `work/s8/<경우>-<n>.log`에 남는다.
 
 ### S7 (GitHub 연동)
 

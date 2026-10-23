@@ -59,12 +59,15 @@ beforeAll(async () => {
     fs.writeFileSync(settings, JSON.stringify({ hooks: hookSettings(server.port, 'contract') }))
     const contextPath = path.join(root, 'context.md')
     fs.writeFileSync(contextPath, `- task 디렉터리: ${root}\n- task_id: t-01\n- node: intake\n`)
+    const instructionsPath = path.join(root, 'instructions.md')
+    fs.writeFileSync(instructionsPath, '# relay: work-start\n')
     const scenario = path.join(root, 'scenario.json')
     fs.writeFileSync(scenario, JSON.stringify({ tasks: { 'work-start': STEPS } }))
     const args = launchArgs({
       sessionId: randomUUID(),
       workDir: root,
       settingsPath: settings,
+      instructionsPath,
       skill: 'work-start',
       contextPath,
     })

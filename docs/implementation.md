@@ -1,6 +1,6 @@
 # relay-v2 구현 계획
 
-- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102), v0.17의 설계 유형(M20, I103~I113), v0.18의 곁 세션(M21, I125~I131), v0.19의 기본 세션(M23, I132~I136), v0.20의 서브모듈 Work(M24, I146~I149)
+- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102), v0.17의 설계 유형(M20, I103~I113), v0.18의 곁 세션(M21, I125~I131), v0.19의 기본 세션(M23, I132~I136), v0.20의 서브모듈 Work(M24, I146~I149), v0.23의 단계 절차를 시스템 프롬프트로(M28, I158~I160), v0.24의 다시 연 곁·기본 세션의 안내(M29, I161)
 - 상태: 정함. 주제마다 사람과 문답으로 정했다(설계 부록 A의 진행 규칙). 바꾸려면 사용자와 다시 정한다.
 
 Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서는 [engines.md](engines.md)에서 관리한다. 이 문서의 기존 Claude 동작은 확장 중 회귀 시험의 기준이다.
@@ -171,6 +171,10 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I155 | 작업 브랜치 이름(D425~D427)은 `core/branch`가 짓는다: `renderBranchRule`(규칙에 work-id·유형·짧은 이름을 채움), `checkBranchName`(git check-ref-format의 규칙을 옮김), `pickWorkBranch`(끝에 임의의 4자를 붙이고 로컬·origin의 원격 추적 브랜치와 부딪히면 다시 뽑음, 20번). `RelayOptions.random`으로 임의의 수를 바꾼다: 시험 harness는 `() => 0`(4자 `aaaa`, `workBranchOf`)이다. 원격은 `ls-remote`하지 않는다: Work 만들기가 네트워크에 묶이고, 임의의 4자가 겹침을 막는다 | 시험이 브랜치 이름을 알아야 함. 원격을 묻지 않아도 겹칠 확률은 36^4분의 1이다 |
 | I156 | `core/records`의 `workBranch(work)`는 `work.json`의 `branch`, 없으면 `relay/<work-id>`다. `targetBranch(work)`는 `target_branch`, 없으면 `base_branch`다. `NewWork.branch`가 없으면 `branch`를 적지 않는다(시험과 예전 Work). 머지 대상은 machine 이벤트 `target.set`(진행 중·멈춤만, 진행 중 작업이 있으면 받지 않음, 기록하지 않음)으로 바꾸고 `WorkView.canSetTarget`이 화면에 알린다. 새 Work 대화상자의 이름 미리보기는 `branchName(projectId, type, slug)`(다음 work-id로 채움, 4자 없음)이고, 사람이 고치지 않았으면 `branchName`을 보내지 않아 main이 만들 때 다시 채운다 | 미리보기와 만들기 사이에 다른 Work가 생겨도 순번이 맞음 |
 | I157 | PR을 읽을 때 `pr.read`에 `baseRef`(gh의 `baseRefName`)를 넣고, machine이 머지 대상과 다르면 `target_branch`를 바꾼다(D428). 정리 요약의 `branch.stacked`는 `WorkContext.stackedOn`(같은 프로젝트에서 진행 중·멈춤이고 이 브랜치가 머지 대상인 Work)이고, 있으면 `deletable`이 거짓이고 `remote`가 null이다. 백업 브랜치 찾기와 기준 브랜치 목록은 `workBranches`(앱이 아는 Work 브랜치)를 뺀다. 새 Work 대화상자는 짧은 이름을 친 뒤 250ms 기다려 `branchName`을 묻고, 대상 레포를 바꾸면 고친 이름과 짧은 이름을 비운다. 짧은 이름 칸을 보일지는 `ProjectView.branchSlug`다 | PR #58 리뷰 |
+| I158 | 단계 절차(D440)는 `adapters/claude`의 `deploySkill`이 쓴다. 이름은 엔진마다의 배포(`AgentRuntime.deploySkill`)라 그대로 두었다. `skillText`가 스킬 원본의 머리글과 그 뒤 빈 줄을 떼고(`stripFrontMatter`) 공통 규칙을 붙인 글을 돌려주고, Claude는 그 글 끝에 이 task의 경로(`taskFooter`: `## This task`의 `context.md`와 task 디렉터리, D442)를 붙여 task 디렉터리의 `instructions.md`(`core/settings`의 `INSTRUCTIONS_FILE`)에 쓴다. 그래서 배포는 `taskDir`와 `contextPath`를 반드시 받는다(Codex는 `contextPath`를 쓰지 않음). Codex 배포본은 같은 글 앞에 자기 머리글을 붙인다. 해시(D103)는 경로를 뺀 그 글로 계산해 같은 원본이면 task가 달라도 같고, 이전 버전의 해시와는 다르다. 머리글 떼기는 `skills/assemble.mjs`의 `stripFrontMatter`(check.mjs가 크기를 잴 때 씀)와 같은지 [어댑터] 시험이 비교한다. Work 디렉터리의 `.claude/skills/relay-*`는 배포할 때마다 지우고(D443), 폴더가 없으면 만들지 않는다. `instructions.md`는 산출물이 아니라 [산출물] 목록과 이슈 기록, 승인 화면에서 뺀다(`adapters/store`의 `isArtifactName` 하나를 같이 씀, `context.md`와 같음). 곁·기본 세션 안내의 task 디렉터리 설명에도 이 파일을 적는다 | 엔진마다의 배포 경계를 바꾸지 않고 배포 위치만 바꾼다. 머리글을 `skillText`에서 떼면 Claude와 Codex가 같은 절차 글을 쓴다 | |
+| I159 | `LaunchInput.instructionsPath`는 반드시 주고, `launchArgs`가 `--settings` 다음에 `--append-system-prompt-file <경로>`를 넣는다. `ResumeInput.instructionsPath`는 고를 수 있다(Codex는 주지 않음): Claude의 `resumeSession`은 `instructionsFor`로 task 디렉터리의 `instructions.md`를 주고, 없으면(이 변경 전에 스킬로 시작한 task, 지워진 파일) 지금 원본으로 조립해 준다(D441, 다시 조립한 해시는 적지 않음). Codex에는 `deployed.file`(스킬 배포본)이 `instructionsPath`로 들어가지만 `codexLaunchArgs`는 쓰지 않는다. deny 규칙은 `DenyInput.taskDir`가 있으면 그 안의 `instructions.md`의 `Edit(…)`을 더한다(D443. 정리 세션은 task 디렉터리가 없어 넣지 않음) | 없는 파일을 주면 claude가 뜨지 않고, 빼면 압축 뒤 절차가 사라진다(S8). 그래서 없으면 만들어 준다. 시작과 재개가 같은 플래그를 주는 것은 [단위] 시험이, 파일이 없을 때 다시 조립하는 것은 [흐름] `control.test.ts`가 본다 | |
+| I160 | 가짜 `claude`는 첫 프롬프트 `relay <스킬> 단계를 시작합니다. 이 task의 컨텍스트: <경로>`로 task의 스킬과 컨텍스트를 읽는다. 곁 세션과 기본 세션은 설정 파일의 훅 URL id(`/hook/side/`, `/hook/session/`)로 안다(첫 프롬프트 문구가 바뀌어도 task를 곁 세션으로 잘못 보지 않게, PR #60 리뷰). task가 받은 `--append-system-prompt-file`의 내용은 기록에 `instructions`로 남긴다. `--append-system-prompt-file`은 곁 세션 때문에 이미 [계약] 녹화본의 옵션 목록에 있어 다시 녹화하지 않았다 | 곁 세션과 task가 같은 옵션을 쓰게 되어, 옵션만으로 가르던 것을 훅 URL로 가른다 | |
+| I161 | `sideArgs`가 `--append-system-prompt-file` 다음에 `--system-prompt-snapshot off`를 넣고, `sessionArgs`는 `sideArgs`를 써서 같다(D446). 시작과 재개가 같다. `openChat`이 Claude면 `claude --version`을 읽고 `promptSnapshotOff`(2.1.257 이상이면 참, 읽지 못하면 거짓)로 `ChatFiles.refreshGuide`를 정한다. 거짓이면 이 옵션을 빼 예전처럼 뜬다. 버전 비교는 gh와 같은 `core/pr`의 `older`다. 가짜 `claude`는 이 옵션의 값을 첫 프롬프트로 읽지 않게 건너뛴다. 가짜의 기본 버전(0.0.0)은 이 옵션보다 낮아, 곁·기본 세션의 [흐름] 시험은 `FAKE_CLAUDE_VERSION`을 준다. [계약] 녹화본은 2.1.308로 다시 녹화해 옵션 목록에 이 옵션이 들어갔다(훅 본문의 모양은 그대로) | 모르는 옵션이면 claude가 뜨지 않아, 낮은 버전에서는 이전처럼 여는 쪽이 낫다(PR #60 리뷰). gh의 `--active`(D67)와 같은 판단이다. 곁·기본 세션을 열 때마다 `--version`을 한 번 더 부른다 | |
 
 ## 3. 확인한 사실
 
@@ -1294,6 +1298,37 @@ app/src/
 - **[실제]:** feature 경우가 `design.md`의 `기존 동작 영향`과 `verification.md`의 `나중에 정리할 곳`을 본다(`RELAY_REAL_CLAUDE=dry`도 통과).
 - **[스모크]:** 유형 버튼 이름과, 기능 추가·변경을 고르면 보이는 설명.
 - 스킬 정적 검사가 통과한다.
+
+### M28. 단계 절차를 시스템 프롬프트로 (D440~D445)
+
+사람이 각 단계를 스킬 대신 `--agent`로 띄우면 어떤지 물었고, 스파이크 S8을 보고 `--append-system-prompt-file`을 골랐다(설계 v0.23).
+
+- 앱: 단계 절차를 task 디렉터리의 `instructions.md`에 쓰고(I158), 시작과 재개에 `--append-system-prompt-file`로 준다(I159). 첫 프롬프트는 `relay <스킬> 단계를 시작합니다. 이 task의 컨텍스트: <경로>`다(D442). deny 규칙에 이번 task의 `instructions.md`를 더하고, 남은 `.claude/skills/relay-*`는 지운다(D443). [산출물]에는 보이지 않는다.
+- 스킬: 머리글에서 `disable-model-invocation`을 빼고, 본문과 `_common.md`의 "this skill"을 "this step"으로 바꿨다(D444). `skills/check.mjs`는 머리글(description만, disable-model-invocation·name·"this skill" 없음)을 보고 크기는 참고로만 보여 준다(D445).
+- Codex task는 그대로 스킬 배포본(`<task>/.agents/skills/relay-*/SKILL.md`)을 쓴다. 절차 글은 같다(I158).
+
+**시험**
+
+- **[단위]:** 시작과 재개의 `--append-system-prompt-file`이 같고, 파일이 없는 옛 task의 재개에는 넣지 않으며, 첫 프롬프트가 `/`로 시작하지 않는다. 이번 task의 `instructions.md`만 막는 deny 규칙(`settings.test.ts`).
+- **[어댑터]:** `instructions.md`의 내용(머리글 없음, 공통 규칙이 뒤), 남은 relay 스킬 폴더만 지움, `.claude/skills`가 없어도 됨, 머리글 떼기(`store.test.ts`).
+- **[흐름]:** task마다 `instructions.md`와 실행 인자, 가짜 `claude`가 task로 보고 받은 절차를 남김, `.claude/skills`가 생기지 않음, deny 규칙(`flow.test.ts`). [재개]의 인자에 같은 파일(`control.test.ts`). 공용 스킬의 유형별 조립은 `instructions.md`로 본다(`refactor`·`spec`·`general.test.ts`).
+- **[계약]:** 앱이 넘기는 옵션에 `--append-system-prompt-file`이 들어가고, 녹화본(2.1.293)에 이미 있다.
+- **[실제]:** 시험은 그대로이고, 사람 역할의 재촉 문구만 "이 단계의 절차를 계속해 주세요"로 바꿨다. S 경우가 실제 모델로 첫 프롬프트와 시스템 프롬프트의 절차만으로 끝까지 갔다(`docs/checks.md` M28). 재개(`resume`) 경우는 다음 정기 실행에서 본다(`RELAY_REAL_CLAUDE=dry`는 통과).
+- 스킬 정적 검사가 통과한다. 스파이크 S8(`docs/spikes.md`)이 전제를 본다.
+
+### M29. 다시 연 곁·기본 세션의 안내 (D446)
+
+S8에서 다시 연 곁·기본 세션이 처음 연 때의 안내를 압축 전까지 쓰는 것을 보고, 사람이 실행 인자에 `--system-prompt-snapshot off`를 더하는 안을 골랐다(설계 v0.24).
+
+- 앱: 곁·기본 세션의 시작과 재개 인자(I161). 안내에 "열 때"가 이 세션을 마지막으로 연(다시 연) 때라고 적는다. task는 그대로다(D441).
+
+**시험**
+
+- **[단위]:** 곁·기본 세션의 시작과 재개에 `--system-prompt-snapshot off`가 있고 task의 시작·재개에는 없다. 2.1.257보다 낮거나 버전을 모르면 주지 않는다(`settings.test.ts`).
+- **[흐름]:** 가짜의 기본 버전(0.0.0)으로 연 기본 세션에는 이 옵션이 없다(`session.test.ts`).
+- **[흐름]:** 곁·기본 세션의 실행 인자, 다시 연 곁 세션의 인자 끝(`side.test.ts`, `session.test.ts`).
+- **[계약]:** 실제 쪽을 2.1.308로 돌려 옵션이 `--help`에 있고 녹화본을 새로 썼다. 가짜 쪽은 앱이 넘기는 옵션이 모두 녹화본에 있는지 본다.
+- 스파이크 S8의 절차 6이 전제를 본다.
 
 ## 8. 테스트 전략
 

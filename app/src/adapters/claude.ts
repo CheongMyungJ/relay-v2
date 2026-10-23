@@ -1,10 +1,10 @@
-// claude 실행 파일 찾기(D106), 버전과 인증 점검(D105, D67), 이번 task의 스킬 배포(5.6.3, D103, D108).
+// claude 실행 파일 찾기(D106), 버전과 인증 점검(D105, D67), 이번 task의 단계 절차 배포(5.6.3, D103, D440, D443).
 // 실행 파일 찾기의 출처: spikes/lib/session.mjs resolveClaude. 스파이크는 못 찾으면 'claude'를 돌려줬지만,
 // 앱은 PATH를 직접 뒤지고 못 찾으면 null을 돌려준다 (D106: 못 찾으면 등록을 막는다).
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
-import { relaySkillName } from '../core/settings'
+import { INSTRUCTIONS_FILE } from '../core/settings'
 import type { SkillName } from '../shared/config'
 import { WORK_TYPES, type WorkType } from '../shared/work'
 import { describeFailure, run } from './exec'
@@ -64,7 +64,7 @@ export async function claudeAuthStatus(bin: string, env?: NodeJS.ProcessEnv): Pr
   return { ok: false, detail: describeFailure(r) }
 }
 
-// ---------- 스킬 배포 (5.6.3, D103, D108) ----------
+// ---------- 단계 절차 배포 (5.6.3, D103, D440) ----------
 
 const SKILL_FILE = 'SKILL.md'
 const COMMON_FILE = '_common.md'
@@ -124,44 +124,72 @@ export function selectType(text: string, type: WorkType): string {
   return out.join('\n')
 }
 
-/** 배포할 스킬 내용: 그 Work 유형의 구간만 남기고(D279) 공통 규칙을 끝에 붙인다 (5.6.3) */
+/** 스킬 원본 맨 앞의 머리글(`---`로 감싼 YAML)과 그 뒤의 빈 줄을 뗀다. 시스템 프롬프트에 넣는 절차에는 필요 없다 (D440, D444) */
+export function stripFrontMatter(text: string): string {
+  return lf(text).replace(/^---\n[\s\S]*?\n---\n+/, '')
+}
+
+/**
+ * 배포할 단계 절차: 스킬 원본의 머리글을 떼고, 그 Work 유형의 구간만 남기고(D279) 공통 규칙을 끝에 붙인다 (5.6.3, D440).
+ * Codex 배포본은 이 글 앞에 자기 머리글을 붙인다 (engines.md)
+ */
 export async function skillText(source: string, skill: SkillName, type: WorkType): Promise<string> {
   const body = await fsp.readFile(path.join(source, skill, SKILL_FILE), 'utf8')
   const common = await fsp.readFile(path.join(source, COMMON_FILE), 'utf8')
-  return mergeSkill(selectType(body, type), selectType(common, type))
+  return mergeSkill(selectType(stripFrontMatter(body), type), selectType(common, type))
 }
 
 export interface DeployedSkill {
-  /** 배포한 SKILL.md의 경로 */
+  /** 배포한 파일의 경로. Claude Code는 task 디렉터리의 instructions.md다 (D440) */
   file: string
   /** 배포한 내용의 해시. work.json에 적는다 (D103) */
   hash: string
 }
 
 /**
- * 이번 task의 스킬을 Work 디렉터리의 .claude/skills/relay-<이름>/에 배포하고 다른 relay 스킬 폴더는 지운다 (D108).
- * Claude Code는 --add-dir로 더한 디렉터리의 .claude/skills/를 읽으므로 worktree는 건드리지 않는다 (D32).
+ * instructions.md 끝에 붙이는 이 task의 경로 (D442). 첫 프롬프트는 압축이나 /clear로 사라질 수 있어 시스템 프롬프트에도
+ * 둔다. Codex는 SessionStart의 additionalContext로 같은 경로를 다시 준다 (engines.md)
+ */
+export function taskFooter(contextPath: string, taskDir: string): string {
+  return `\n## This task\n\n- \`context.md\`: \`${contextPath}\`\n- Task directory: \`${taskDir}\`\n`
+}
+
+/**
+ * 이번 task의 단계 절차를 task 디렉터리의 instructions.md에 쓴다. 실행 인자가 --append-system-prompt-file로 준다 (D440).
+ * 끝에 이 task의 context.md와 task 디렉터리 경로를 붙인다(taskFooter). 해시(D103)는 경로를 뺀 절차로 계산해 같은 원본이면
+ * task가 달라도 같다. 스킬로 배포하지 않는다. 이전 버전이 Work 디렉터리에 남긴 .claude/skills/relay-*는 지운다: 남겨 두면
+ * 사람이 /relay-…로 다른 단계를 부를 수 있다 (D443). worktree는 건드리지 않는다 (D32)
  */
 export async function deploySkill(o: {
   source: string
   workDir: string
-  taskDir?: string
+  /** task 디렉터리. instructions.md는 늘 여기에 두고 재개와 deny 규칙이 이 경로를 쓴다 (D441, D443) */
+  taskDir: string
+  /** 이 task의 context.md. Codex는 쓰지 않는다 */
+  contextPath: string
   skill: SkillName
   /** Work 유형. 공용 스킬에서 그 유형의 구간만 배포한다 (D279) */
   type: WorkType
 }): Promise<DeployedSkill> {
-  const merged = await skillText(o.source, o.skill, o.type)
-  const root = path.join(o.workDir, '.claude', 'skills')
-  const name = relaySkillName(o.skill)
-  await fsp.mkdir(root, { recursive: true })
-  for (const entry of await fsp.readdir(root, { withFileTypes: true })) {
+  const text = await skillText(o.source, o.skill, o.type)
+  await removeRelaySkills(o.workDir)
+  const file = path.join(o.taskDir, INSTRUCTIONS_FILE)
+  await writeFileAtomic(file, text + taskFooter(o.contextPath, o.taskDir))
+  return { file, hash: `sha256:${sha256(text)}` }
+}
+
+/** 이전 버전이 배포한 relay 스킬 폴더(.claude/skills/relay-*)를 지운다. 사람이 둔 다른 스킬은 그대로 둔다 (D443) */
+async function removeRelaySkills(workDir: string): Promise<void> {
+  const root = path.join(workDir, '.claude', 'skills')
+  const entries = await fsp.readdir(root, { withFileTypes: true }).catch((err: unknown) => {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return []
+    throw err
+  })
+  for (const entry of entries) {
     if (entry.isDirectory() && entry.name.startsWith('relay-')) {
       await fsp.rm(path.join(root, entry.name), { recursive: true, force: true })
     }
   }
-  const file = path.join(root, name, SKILL_FILE)
-  await writeFileAtomic(file, merged)
-  return { file, hash: `sha256:${sha256(merged)}` }
 }
 
 // ---------- 짧은 모델 호출 (D300) ----------

@@ -1,6 +1,5 @@
 ---
 description: relay spec step (spec Work). Settles the design decisions with the human topic by topic, writes them into the design document in the repo and commits it (spec.md). Does not change code.
-disable-model-invocation: true
 ---
 
 # relay: spec (설계 문답)
@@ -9,7 +8,7 @@ For a spec Work, settle with the human, one by one, what the intent says to deci
 
 ## Inputs
 
-- The argument gives the path of `context.md`. Read it first. It has the intent and the Work's base commit. The target document's path is in the intent's `제약` ("설계 문서: `<path>` (새 문서 / 기존 문서)"). If you need the request text, read `request.md` at the path in `context.md`.
+- relay gives you the path of `context.md` when the step starts. Read it first. It has the intent and the Work's base commit. The target document's path is in the intent's `제약` ("설계 문서: `<path>` (새 문서 / 기존 문서)"). If you need the request text, read `request.md` at the path in `context.md`.
 
 ## Order
 

@@ -40,7 +40,8 @@ const enabled = (mode === '1' || dry) && (cases.length === 0 || cases.includes('
 const OUT = path.join(APP, 'test-results', 'claude')
 const TASK_TIMEOUT_MS = 25 * 60 * 1000
 const CLEANUP_TIMEOUT_MS = 10 * 60 * 1000
-const NUDGE = '스킬의 절차를 계속해 주세요. 마치면 종료 절차대로 handoff를 쓰고 턴을 끝내 주세요.'
+const NUDGE =
+  '이 단계의 절차를 계속해 주세요. 마치면 종료 절차대로 handoff를 쓰고 턴을 끝내 주세요.'
 /** 사람이 worktree에 남긴 메모 (7-5) */
 const NOTE = 'notes.txt'
 const REQUEST = `${NOTE}는 제가 남긴 메모입니다. 이 파일을 지우고 git status가 깨끗한지 확인해 주세요. 커밋과 push는 하지 않습니다.`

@@ -522,7 +522,7 @@ export function buildContext(input: ContextInput): string {
   return [
     '# relay task 컨텍스트',
     '',
-    '앱이 task를 시작할 때 쓴 파일이다. 스킬의 절차를 따르고, 필요한 값은 이 파일에서 읽는다.',
+    '앱이 task를 시작할 때 쓴 파일이다. 이 단계의 절차를 따르고, 필요한 값은 이 파일에서 읽는다.',
     ...sections.flatMap(([title, body]) => ['', `## ${title}`, '', body]),
     '',
   ].join('\n')

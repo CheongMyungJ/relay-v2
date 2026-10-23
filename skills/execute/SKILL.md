@@ -1,6 +1,5 @@
 ---
 description: relay execute step (general Work). Plans and does the work the intent asks for, in whatever way fits, checks each completion criterion with its check method, and writes it up (execution.md).
-disable-model-invocation: true
 ---
 
 # relay: execute (실행)
@@ -9,7 +8,7 @@ For a general Work, do the work the intent asks for. How you do it is up to you:
 
 ## Inputs
 
-- The argument gives the path of `context.md`. Read it first. It has the intent and the Work's base commit. If you need the request text, read `request.md` at the path in `context.md`.
+- relay gives you the path of `context.md` when the step starts. Read it first. It has the intent and the Work's base commit. If you need the request text, read `request.md` at the path in `context.md`.
 
 ## Order
 

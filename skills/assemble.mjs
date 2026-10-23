@@ -6,6 +6,12 @@
 
 export const TYPES = ['bugfix', 'feature', 'refactor', 'spec', 'general'];
 
+// 스킬 원본 맨 앞의 머리글(`---`로 감싼 YAML)과 그 뒤의 빈 줄을 뗀다 (docs/design.md D440, D444). 앱의
+// stripFrontMatter(app/src/adapters/claude.ts)와 같은 결과인지 app/test/adapters/store.test.ts가 비교한다.
+export function stripFrontMatter(text) {
+  return text.replace(/\r\n?/g, '\n').replace(/^---\n[\s\S]*?\n---\n+/, '');
+}
+
 const OPEN = /^<!-- type: ([a-z]+(?: [a-z]+)*) -->$/;
 const CLOSE = '<!-- /type -->';
 const LOOKS_LIKE = /^\s*<!--\s*\/?\s*type\b/i;

@@ -1,6 +1,5 @@
 ---
 description: relay intake step. Turns the Work request into an intent draft (intent.draft.md).
-disable-model-invocation: true
 ---
 
 # relay: work-start (intake)
@@ -9,24 +8,24 @@ Read the request, talk with the human, and write the intent draft `intent.draft.
 
 ## Inputs
 
-- The argument gives the path of `context.md`. Read it first. For intake it contains the request text (`request.md`) in full, and the Work type (`업무 유형`) the human picked.
+- relay gives you the path of `context.md` when the step starts. Read it first. For intake it contains the request text (`request.md`) in full, and the Work type (`업무 유형`) the human picked.
 - **Starting over from an earlier Work:** if the request carries the approved intent of an earlier Work (see "Starting over" in the common rules), start from that intent and revise it to fit the request's instructions. Do not rewrite from scratch.
 
 ## Rules
 
 <!-- type: bugfix -->
-- **This skill does not change code.** Skim the code only enough to write concrete goals and completion criteria. Do not reproduce the bug or trace the cause. That is the job of fix.
+- **This step does not change code.** Skim the code only enough to write concrete goals and completion criteria. Do not reproduce the bug or trace the cause. That is the job of fix.
 - Do not write the cause or how to fix it in the intent. The only exception is the human's suspicions below.
 - **Human suspicions:** if the request says where the human suspects the bug is, copy it to `추가 의견` with the prefix "(사람 추정, 확인 안 됨)".
 <!-- /type -->
 <!-- type: feature -->
-- **This skill does not change code.** Skim the code only enough to write concrete goals and completion criteria. Do not design the feature. That is the job of design.
+- **This step does not change code.** Skim the code only enough to write concrete goals and completion criteria. Do not design the feature. That is the job of design.
 - Do not write how to build the feature in the intent. The only exception is the human's suggestions below.
 - **Human suggestions:** if the request says how to build it, copy it to `제약` when it is a must, otherwise to `추가 의견` with the prefix "(사람 제안)". design decides whether to take it.
 - **Changing or removing behavior:** this type also covers changing or removing a behavior that works as intended now. If the current behavior goes against what was intended, it is a bug: that is a type mismatch (below). Mark each behavior that changes or goes away in `완료조건` (see the 완료조건 section).
 <!-- /type -->
 <!-- type: refactor -->
-- **This skill does not change code.** Skim the code only enough to write concrete goals and completion criteria. Do not plan how to reach the structure. That is the job of refactor.
+- **This step does not change code.** Skim the code only enough to write concrete goals and completion criteria. Do not plan how to reach the structure. That is the job of refactor.
 - Do not write the order or method of the change in the intent. The only exception is the human's suggestions below.
 - **Human suggestions:** if the request says how to change it, copy it to `제약` when it is a must, otherwise to `추가 의견` with the prefix "(사람 제안)". refactor decides whether to take it.
 - **Behavior changes and performance goals:** a refactoring does not change behavior. If the request mixes in a behavior change (a feature or a bug fix) or a performance goal (e.g. "두 배 빠르게"), point it out and ask before you write the draft: drop that part to `비목표` and only refactor / change the type (`blocked`). If dropped, write what was dropped in `비목표`.
@@ -34,14 +33,14 @@ Read the request, talk with the human, and write the intent draft `intent.draft.
 - **Vague goals:** if the structural goal is vague ("읽기 쉽게"), ask for a structure that can be checked.
 <!-- /type -->
 <!-- type: general -->
-- **This skill does not change code.** Skim the code only enough to write concrete goals and completion criteria. Do not plan how to do the work. That is the job of execute.
+- **This step does not change code.** Skim the code only enough to write concrete goals and completion criteria. Do not plan how to do the work. That is the job of execute.
 - Do not write how to do the work in the intent. The only exception is the human's suggestions below.
 - **Human suggestions:** if the request says how to do it, copy it to `제약` when it is a must, otherwise to `추가 의견` with the prefix "(사람 제안)". execute decides whether to take it.
 - **A better-fitting type:** `general` is for work that fits none of the other types. If the request fits `bugfix`, `feature` or `refactor` better, say which and why before you write the draft, and ask: keep `general` / change the type (`blocked`). If they keep it, draft with `general`.
 - **Vague goals:** if the goal is vague ("정리해 줘"), ask for a result that can be checked.
 <!-- /type -->
 <!-- type: spec -->
-- **This skill does not change code.** Skim the code and documents only enough to write concrete goals and completion criteria. Do not settle the design decisions. That is the job of spec.
+- **This step does not change code.** Skim the code and documents only enough to write concrete goals and completion criteria. Do not settle the design decisions. That is the job of spec.
 - Do not write how to decide in the intent. The only exception is the human's suggestions below.
 - **Human suggestions:** if the request says how something should be decided, copy it to `제약` when it is a must, otherwise to `추가 의견` with the prefix "(사람 제안)". spec still asks about it.
 - **A small request:** `spec` is for big work whose design is settled before it is built. If the request is small enough that `feature` fits better, say why before you write the draft, and ask: keep `spec` / change the type (`blocked`). If they keep it, draft with `spec`.
@@ -54,7 +53,7 @@ Read the request, talk with the human, and write the intent draft `intent.draft.
 
 ## Decision points
 
-Scope (`비목표`) and completion criteria (`완료조건`). This skill has no human decisions.
+Scope (`비목표`) and completion criteria (`완료조건`). This step has no human decisions.
 
 - 초안 우선: ask only what you cannot draft without, such as the expected behavior.
 - 결정마다 확인: ask about both decision points before writing the draft.
