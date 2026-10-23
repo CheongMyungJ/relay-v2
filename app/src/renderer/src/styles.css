@@ -800,6 +800,205 @@ textarea {
   color: var(--text-dim);
 }
 
+/* [파일] 탭 (D464): 터미널 자리에 트리와 연 파일. 테마 바탕에 그린다 */
+.terminal:has(> .file-browser:not([hidden])) {
+  background: var(--bg);
+}
+
+.file-browser {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: minmax(180px, 26%) 1fr;
+}
+
+.file-browser[hidden] {
+  display: none;
+}
+
+.file-tree {
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 0 12px;
+  border-right: 1px solid var(--border);
+  background: var(--bg-side);
+}
+
+.file-tree-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 6px 4px 12px;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.file-row:hover {
+  background: var(--bg-hover);
+}
+
+.file-row[aria-selected='true'] {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.file-row.other,
+.file-row.dim,
+.file-row.error {
+  color: var(--text-faint);
+  cursor: default;
+}
+
+.file-row.error {
+  color: var(--bad);
+  white-space: normal;
+}
+
+.file-row .twisty {
+  flex: none;
+  width: 12px;
+  color: var(--text-dim);
+  font-size: 10px;
+}
+
+.file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.file-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.file-path {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+}
+
+.file-dirty {
+  color: var(--hot);
+}
+
+.file-mode {
+  display: flex;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.file-mode button {
+  padding: 1px 10px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-dim);
+}
+
+.file-mode button.active {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.file-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--hot) 10%, transparent);
+}
+
+.file-banner.error {
+  background: color-mix(in srgb, var(--bad) 8%, transparent);
+}
+
+.file-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+
+.file-note {
+  padding: 24px;
+  color: var(--text-dim);
+}
+
+.file-note.error {
+  color: var(--bad);
+}
+
+/* 문서를 읽는 자리라 패널의 산출물보다 제목을 크게 둔다 */
+.file-preview .markdown {
+  max-width: 920px;
+  padding: 14px 22px 32px;
+  font-size: 14px;
+}
+
+.file-preview .markdown h1 {
+  font-size: 22px;
+  margin-top: 8px;
+}
+
+.file-preview .markdown h2 {
+  font-size: 18px;
+}
+
+.file-preview .markdown h3 {
+  font-size: 15px;
+}
+
+.file-preview .markdown img {
+  max-width: 100%;
+}
+
+.file-edit {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 0;
+  outline: none;
+  resize: none;
+  background: var(--bg-input);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.5;
+  white-space: pre;
+  overflow: auto;
+  tab-size: 4;
+}
+
 /* 첫 사용 안내 */
 .welcome {
   width: min(480px, 100%);

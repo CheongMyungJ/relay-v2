@@ -5000,6 +5000,11 @@ export class WorkRunner {
     return this.work.status === 'archived' ? this.project.repo_path : this.worktree
   }
 
+  /** [파일] 탭이 보는 폴더 (D464). 정리한 Work는 worktree가 없어 null이다 */
+  filesRoot(): string | null {
+    return this.work.status === 'archived' ? null : this.worktree
+  }
+
   // ---------- 이슈 기록 (설계 3.7, D336~D349, I98~I100) ----------
 
   /**

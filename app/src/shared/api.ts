@@ -20,6 +20,9 @@ import type {
   CustomTypeFiles,
   CustomTypeList,
   CustomTypeView,
+  FileListResult,
+  FileReadResult,
+  FileSaveResult,
   TidyView,
   PrItemAction,
   ProjectInspection,
@@ -187,6 +190,17 @@ export interface RelayApi {
   closeSide(workKey: string): Promise<CommandResult>
   /** [정리 끝 → push/PR 진행] (7-5) */
   finishCleanup(workKey: string): Promise<DeliverResult>
+  /** [파일] 탭의 폴더 하나 (D465). rel은 worktree 기준 상대 경로(`/`로 이음)이고 빈 글은 worktree다 */
+  workFiles(workKey: string, rel: string): Promise<FileListResult>
+  /** [파일] 탭에서 연 파일 (D466). 글이 아니거나 너무 크면 크기만 돌려준다 */
+  readWorkFile(workKey: string, rel: string): Promise<FileReadResult>
+  /** [파일] 탭의 [저장] (D467). hash는 열 때 받은 값이고, null이면 연 뒤 바뀐 파일을 덮어쓴다 */
+  saveWorkFile(
+    workKey: string,
+    rel: string,
+    text: string,
+    hash: string | null,
+  ): Promise<FileSaveResult>
   /** [새 세션] 창의 폴더 기본값 (D398) */
   defaultSessionDir(): Promise<string>
   /** [새 세션]의 [만들기] (시나리오 12-1). 만들고 바로 띄운다 */
@@ -307,6 +321,9 @@ export const IPC = {
   openSide: 'work:open-side',
   closeSide: 'work:close-side',
   finishCleanup: 'work:finish-cleanup',
+  workFiles: 'files:list',
+  readWorkFile: 'files:read',
+  saveWorkFile: 'files:save',
   defaultSessionDir: 'session:default-dir',
   createSession: 'session:create',
   openSession: 'session:open',

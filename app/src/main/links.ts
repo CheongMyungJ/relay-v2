@@ -2,6 +2,7 @@
 // 터미널 출력은 에이전트가 쓴 글이라 믿지 않는다: 네트워크 경로와 장치는 보지 않고, 안전한 형식만 연다.
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { windowsDeviceName } from '../core/files'
 
 /** 경로가 쓰는 OS. 시험에서 바꿔 넣는다 */
 export type PathPlatform = 'win32' | 'posix'
@@ -9,10 +10,6 @@ export type PathPlatform = 'win32' | 'posix'
 export function pathPlatform(platform: NodeJS.Platform = process.platform): PathPlatform {
   return platform === 'win32' ? 'win32' : 'posix'
 }
-
-/** Windows가 어느 폴더에서나 장치로 여는 이름. 확장자가 붙어도(`nul.txt`) 장치다 */
-const DEVICE_NAME =
-  /^(con|prn|aux|nul|clock\$|conin\$|conout\$|com[0-9\u00b9\u00b2\u00b3]|lpt[0-9\u00b9\u00b2\u00b3])$/i
 
 /** `\\서버\…`, `//서버/…`처럼 다른 컴퓨터를 가리키는 경로 */
 function networkPath(p: string): boolean {
@@ -48,9 +45,7 @@ export function linkPath(
     // 드라이브 뒤의 ':'는 NTFS 스트림이나 장치다
     if (abs.indexOf(':', 2) >= 0) return null
     const names = abs.slice(p.parse(abs).root.length).split(p.sep)
-    if (names.some((n) => DEVICE_NAME.test((n.split('.')[0] ?? '').trimEnd()))) {
-      return null
-    }
+    if (names.some(windowsDeviceName)) return null
   }
   return abs
 }
