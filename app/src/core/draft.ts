@@ -2,6 +2,10 @@
 // 기본 세션, 곁 세션, Work 마무리가 같은 읽기를 쓴다. 파일을 읽는 것과 폴더를 보는 것은 main이 한다.
 import type { ParsedDraft } from '../shared/session'
 import { WORK_TYPES, type WorkType } from '../shared/work'
+import { CUSTOM_ID } from './custom-type'
+
+/** 초안의 type에 쓸 수 있는 값: 기본 유형과 custom (커스텀 유형은 custom_type에 id, D458) */
+const DRAFT_TYPES: readonly string[] = [...WORK_TYPES, 'custom']
 
 /** 초안 파일 하나의 크기 상한(바이트). 넘으면 형식 오류다 (I135) */
 export const DRAFT_MAX_BYTES = 64 * 1024
@@ -31,7 +35,14 @@ export function parseDraft(
   projects: readonly string[],
   bytes = new TextEncoder().encode(text).length,
 ): ParsedDraft {
-  const out: ParsedDraft = { project: null, type: null, base: null, request: '', errors: [] }
+  const out: ParsedDraft = {
+    project: null,
+    type: null,
+    customType: null,
+    base: null,
+    request: '',
+    errors: [],
+  }
   if (bytes > DRAFT_MAX_BYTES) {
     out.errors.push(`파일이 ${DRAFT_MAX_BYTES / 1024}KB를 넘음`)
     return out
@@ -58,9 +69,15 @@ export function parseDraft(
   else if (projects.includes(project)) out.project = project
   else out.errors.push(`모르는 프로젝트: ${project}`)
   const type = head.get('type') ?? ''
-  if (!type) out.errors.push(`type(${WORK_TYPES.join(' | ')})이 없음`)
-  else if ((WORK_TYPES as readonly string[]).includes(type)) out.type = type as WorkType
-  else out.errors.push(`모르는 유형: ${type} (${WORK_TYPES.join(' | ')} 중 하나)`)
+  if (!type) out.errors.push(`type(${DRAFT_TYPES.join(' | ')})이 없음`)
+  else if (DRAFT_TYPES.includes(type)) out.type = type as WorkType
+  else out.errors.push(`모르는 유형: ${type} (${DRAFT_TYPES.join(' | ')} 중 하나)`)
+  if (out.type === 'custom') {
+    const id = head.get('custom_type') ?? ''
+    if (!id) out.errors.push('custom_type(커스텀 유형 id)이 없음')
+    else if (!CUSTOM_ID.test(id)) out.errors.push(`커스텀 유형 id의 모양이 틀림: ${id}`)
+    else out.customType = id
+  }
   const base = head.get('base') ?? ''
   if (base) out.base = base
   out.request = lines

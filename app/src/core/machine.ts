@@ -40,6 +40,7 @@ import type {
   TaskRecord,
   TaskStatus,
   UncommittedAction,
+  WorkCustomType,
   WorkState,
   WorkType,
 } from '../shared/work'
@@ -57,9 +58,12 @@ import {
   NODE_INFO,
   RESPOND,
   WORK_COMPLETE,
-  defaultNext,
+  customStep,
   isPipelineNode,
+  nextStage,
+  stageOf,
   workType,
+  type Stage,
 } from './pipeline'
 import { targetBranch, workBranch } from './records'
 import { CUT_ERROR, OPERATION_BLOCKS, OWNED_FILES, cutOperation } from './recovery'
@@ -718,6 +722,8 @@ export type Effect =
       type: 'appendDecisions'
       taskId: string
       node: TaskNode
+      /** 커스텀 단계의 단계 id. 결정 로그의 머리 줄에 쓴다 (D462) */
+      step?: string
       at: string
       by: ApprovalBy
       decisions: Decision[] | null
@@ -829,8 +835,9 @@ export function taskId(seq: number): string {
 }
 
 /** task 디렉터리 이름: 01-intake (5.1) */
-export function taskDirName(task: Pick<TaskRecord, 'seq' | 'node'>): string {
-  return `${pad(task.seq)}-${task.node}`
+/** task 디렉터리 이름 tasks/<nn>-<node>. 커스텀 단계는 <nn>-<단계 id>다 (D462) */
+export function taskDirName(task: Pick<TaskRecord, 'seq' | 'node' | 'step'>): string {
+  return `${pad(task.seq)}-${task.node === 'custom' && task.step ? task.step : task.node}`
 }
 
 /** 지금 task. 파이프라인은 한 번에 task 하나만 진행한다 */
@@ -901,15 +908,19 @@ function taskActive(work: WorkState, task: TaskRecord): boolean {
 
 function newTask(
   work: WorkState,
-  node: TaskNode,
+  node: TaskNode | Stage,
   at: string,
   reason: StartReason = 'default',
 ): TaskRecord {
   const seq = Math.max(0, ...work.tasks.map((t) => t.seq)) + 1
+  const stage: { node: TaskNode; step?: string } = typeof node === 'string' ? { node } : node
+  const title = work.custom_type?.steps.find((x) => x.id === stage.step)?.title
   return {
     id: taskId(seq),
     seq,
-    node,
+    node: stage.node,
+    ...(stage.step !== undefined ? { step: stage.step } : {}),
+    ...(stage.node === 'custom' && title !== undefined ? { step_title: title } : {}),
     status: 'working',
     reason,
     format_version: FORMAT_VERSION,
@@ -992,12 +1003,23 @@ function holdsNow(
       : holds
 }
 
+/** task의 승인 방식. 커스텀 단계는 그 단계의 정의를 함께 본다 (D457) */
+function taskApproval(config: AppConfig, work: WorkState, task: TaskRecord) {
+  return approvalMode(
+    config,
+    work.settings,
+    task.node,
+    knownTaskEngine(task),
+    customStep(work, task),
+  )
+}
+
 /**
  * Stop으로 승인 대기가 된 task의 자동 승인 판정 (4.3, D128, D129, D131). 그때의 설정으로 자동 승인이 켜진 단계이고
  * 조건을 모두 만족하면 카운트다운을 시작한다. 어긴 조건은 승인 화면에 보이게 적는다. 턴이 끝날 때마다 새로 판정한다
  */
 function judgeAtStop(work: WorkState, task: TaskRecord, e: Stopped, config: AppConfig): TaskRecord {
-  if (approvalMode(config, work.settings, task.node, knownTaskEngine(task)) !== 'auto') return task
+  if (taskApproval(config, work, task) !== 'auto') return task
   const reasons: AutoHoldReason[] = work.operation
     ? ['operation']
     : [...closedHold(work, task), ...holdsNow(work, task, e.check, e.background === true)]
@@ -1008,11 +1030,7 @@ function judgeAtStop(work: WorkState, task: TaskRecord, e: Stopped, config: AppC
 /** 카운트다운 중인 task의 단계에서 자동 승인을 껐으면(앱 설정이든 Work 설정이든) 바로 멈춘다 (D128) */
 function autoTurnedOff(work: WorkState, at: string, config: AppConfig): WorkState {
   const task = currentTask(work)
-  if (
-    !task?.countdown ||
-    approvalMode(config, work.settings, task.node, knownTaskEngine(task)) === 'auto'
-  )
-    return work
+  if (!task?.countdown || taskApproval(config, work, task) === 'auto') return work
   return withTask(work, held(task, at, ['settings']))
 }
 
@@ -1115,6 +1133,8 @@ export interface NewWork {
   workId: string
   /** 업무 유형 (D236). 사람이 새 Work 대화상자에서 고른 값이다 */
   type: WorkType
+  /** 커스텀 유형이면 Work를 만들 때 복사한 정의 (D458) */
+  customType?: WorkCustomType
   /** 기준 브랜치와, Work를 만들 때 분기한 기준 커밋 (시나리오 1, D97) */
   baseBranch: string
   baseCommit: string
@@ -1145,6 +1165,7 @@ export function createWork(input: NewWork): Transition {
     schema_version: 1,
     work_id: input.workId,
     type: input.type,
+    ...(input.type === 'custom' && input.customType ? { custom_type: input.customType } : {}),
     status: 'active',
     created_at: input.at,
     base_branch: input.baseBranch,
@@ -1172,6 +1193,9 @@ export function createWork(input: NewWork): Transition {
     effects: [
       log(work, input.at, 'work.created', {
         type: input.type,
+        ...(input.customType
+          ? { custom_type: { id: input.customType.id, source: input.customType.source } }
+          : {}),
         base_branch: input.baseBranch,
         base_commit: input.baseCommit,
         ...(input.branch ? { branch: input.branch } : {}),
@@ -1802,6 +1826,7 @@ function approveNow(work: WorkState, task: TaskRecord, a: Approval): Transition 
     type: 'appendDecisions',
     taskId: task.id,
     node: task.node,
+    ...(task.step !== undefined ? { step: task.step } : {}),
     at: a.at,
     by: a.by,
     decisions: header ? header.decisions : null,
@@ -1816,7 +1841,7 @@ function approveNow(work: WorkState, task: TaskRecord, a: Approval): Transition 
     next = { ...next, status: 'stopped', stop: { kind: 'after_step', task_id: task.id } }
     return { work: next, effects }
   }
-  const nextNode = defaultNext(workType(work), node)
+  const nextNode = nextStage(work, stageOf(task) ?? { node })
   if (nextNode === WORK_COMPLETE) {
     next = { ...next, status: 'completed', completed_at: a.at }
     effects.push(log(work, a.at, 'work.completed', { delivery: 'none' }))
@@ -1851,8 +1876,7 @@ function autoApprove(
     effects: [],
   })
   if (work.operation) return hold(['operation'])
-  if (approvalMode(config, work.settings, task.node, knownTaskEngine(task)) !== 'auto')
-    return hold(['settings'])
+  if (taskApproval(config, work, task) !== 'auto') return hold(['settings'])
   if (!e.check) return hold(['invalid'])
   const reasons = [...closedHold(work, task), ...holdsNow(work, task, e.check, false)]
   if (reasons.length) return hold(reasons, e.check)
@@ -1991,10 +2015,10 @@ function shelve(work: WorkState, e: ShelveWork): Transition {
 function resumeWork(work: WorkState, e: ResumeWork): Transition {
   if (work.status !== 'stopped' || !work.stop) return unchanged(work, '멈춘 Work가 아님')
   const stopped = work.tasks.find((t) => t.id === work.stop?.task_id)
-  const node = stopped?.node
-  if (!node || !isPipelineNode(node)) return unchanged(work, '다음 단계를 정할 수 없음')
+  const stage = stopped ? stageOf(stopped) : null
+  if (!stage) return unchanged(work, '다음 단계를 정할 수 없음')
   const active: WorkState = { ...omit(work, 'stop'), status: 'active' }
-  const nextNode = defaultNext(workType(work), node)
+  const nextNode = nextStage(work, stage)
   if (nextNode === WORK_COMPLETE) {
     return {
       work: { ...active, status: 'completed', completed_at: e.at },
@@ -2190,6 +2214,7 @@ function deliverySucceeded(work: WorkState, e: DeliverySucceeded): Transition {
       type: 'appendDecisions',
       taskId: task.id,
       node: task.node,
+      ...(task.step !== undefined ? { step: task.step } : {}),
       at: e.at,
       by: 'human',
       decisions: e.check?.handoffHeader ? e.check.handoffHeader.decisions : null,
@@ -2369,7 +2394,7 @@ function restarted(work: WorkState, e: AppRestarted, config: AppConfig): Transit
   }
   /** 재시작 조정으로 승인 대기가 됐거나 카운트다운이 끊긴 task: 자동 승인하지 않은 까닭을 적는다 (D75) */
   const restartHold = (before: TaskRecord, after: TaskRecord): TaskRecord => {
-    const auto = approvalMode(config, work.settings, after.node, knownTaskEngine(after)) === 'auto'
+    const auto = taskApproval(config, work, after) === 'auto'
     const via = before.countdown !== undefined || before.status !== 'awaiting_approval'
     const next = omit(after, 'countdown')
     return after.status === 'awaiting_approval' && auto && via
@@ -2942,6 +2967,7 @@ function recordRespondApproval(
         type: 'appendDecisions',
         taskId: task.id,
         node: task.node,
+        ...(task.step !== undefined ? { step: task.step } : {}),
         at,
         by,
         decisions: check?.handoffHeader ? check.handoffHeader.decisions : null,

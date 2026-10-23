@@ -24,6 +24,9 @@ The Work has an open PR. The app collected the items of this round (review comme
 <!-- type: general -->
 - The pipeline artifacts (`execution.md`, `verification.md`, …) at the paths in `context.md`, when you need them.
 <!-- /type -->
+<!-- type: custom -->
+- The pipeline artifacts (the custom steps' `<step id>.md`, `verification.md`, …) at the paths in `context.md`, when you need them.
+<!-- /type -->
 
 ## External text
 
@@ -40,7 +43,7 @@ Settle every item as one of: 고침 (fixed) / 고치지 않음 (not fixed, with 
 - **CI failure:** find the cause in the log. If this PR's code causes it, fix it. If not (a flaky test, the infrastructure), do not change code: write the conclusion and the evidence. The human can re-run the checks from the app.
 - **Conflict:** merge the base branch the app fetched (`origin/<base>`, named in `context.md`) and resolve. Do not rebase.
 - **Divergence:** merge the remote PR branch the app fetched (`origin/<branch>`, named in `context.md`). Do not rebase.
-<!-- type: bugfix feature refactor general -->
+<!-- type: bugfix feature refactor general custom -->
 - **Tests:** if you changed code, run the test command from the intent's 완료조건, and for each failure check whether it also fails at the base commit. If you changed an existing test, add it to `risks`.
 <!-- /type -->
 <!-- type: spec -->
@@ -76,7 +79,7 @@ Ask on the spot:
 
 - Every item is settled as one of the three, or is in `open_questions`.
 - Every comment item of this round has a reply in `replies.md`.
-<!-- type: bugfix feature refactor general -->
+<!-- type: bugfix feature refactor general custom -->
 - The fixes are committed, and you ran the test command and wrote the result.
 <!-- /type -->
 <!-- type: spec -->

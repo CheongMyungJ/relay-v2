@@ -58,7 +58,8 @@ Write it only after the human agreed. Put one Markdown file `<short-english-name
 ```markdown
 ---
 project: <프로젝트 id in context.md>
-type: <bugfix | feature | refactor | spec | general>
+type: <bugfix | feature | refactor | spec | general | custom>
+custom_type: <only when type is custom: the custom type's id, as in context.md>
 ---
 <request: the new Work's request.md. Its first line is the Work title>
 ```

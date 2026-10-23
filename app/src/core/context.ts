@@ -7,16 +7,26 @@ import { taskEngine } from './agent'
 import type { AppConfig, QuestionMode, WorkSettings } from '../shared/config'
 import type { NodeName, TaskNode } from '../shared/contracts'
 import type { PrItem } from '../shared/pr'
-import { WORK_TYPE_LABEL, type TaskRecord, type WorkState } from '../shared/work'
+import { WORK_TYPE_LABEL, type CustomStep, type TaskRecord, type WorkState } from '../shared/work'
 import { approvalMode, autoApprovable, type ApprovalMode } from './approval'
-import { NODE_INFO, RESPOND, isPipelineNode, workType } from './pipeline'
+import {
+  NODE_INFO,
+  RESPOND,
+  customArtifact,
+  customSections,
+  customStep,
+  isPipelineNode,
+  stagesOf,
+  taskTitle,
+  workType,
+} from './pipeline'
 import { targetBranch, workBranch } from './records'
 import { REPLIES_FILE, RESPONSE_FILE, parseFrontMatter } from './validate'
 import { knowledgeSection, type KnowledgeInput } from './knowledge'
 
 /**
- * 이 노드 스킬의 질문 방식. Work 설정, 앱 설정 순서로 본다 (D26, D72). 설계 문답(spec)은 질문 방식 설정이 없어 null이다
- * (D358, I104)
+ * 이 노드 스킬의 질문 방식. Work 설정, 앱 설정 순서로 본다 (D26, D72). 설계 문답(spec)과 커스텀 단계는 질문 방식 설정이
+ * 없어 null이다 (D358, I104, D457)
  */
 export function questionMode(
   config: AppConfig,
@@ -24,7 +34,7 @@ export function questionMode(
   node: TaskNode,
 ): QuestionMode | null {
   const skill = NODE_INFO[node].skill
-  if (skill === 'spec') return null
+  if (skill === 'spec' || skill === 'custom') return null
   return settings.question_mode?.[skill] ?? config.question_mode[skill]
 }
 
@@ -96,15 +106,16 @@ function approvalSection(
   settings: WorkSettings,
   node: TaskNode,
   engine: AgentEngine,
+  step?: CustomStep,
 ): string {
   if (engine === 'codex') {
     const push = node === RESPOND ? ' 승인하면 앱이 push하고 답글을 게시한다.' : ''
     return `수동 승인 (Codex 작업은 자동 승인 설정과 관계없이 사람이 승인한다.${push})`
   }
-  if (!autoApprovable(node)) {
+  if (!autoApprovable(node) && node !== 'custom') {
     return '수동 승인 (의도 승인, Work 완료는 늘 수동)'
   }
-  const mode = APPROVAL_LABEL[approvalMode(config, settings, node, engine)]
+  const mode = APPROVAL_LABEL[approvalMode(config, settings, node, engine, step)]
   const extra = node === RESPOND ? '. 승인하면 앱이 push하고 답글을 게시한다' : ''
   return `${mode} (task를 시작할 때의 설정. 설정은 바로 적용되고, 자동 승인 여부는 턴이 끝날 때의 설정으로 정한다${extra})`
 }
@@ -118,8 +129,13 @@ const QUESTION_LABEL: Record<QuestionMode, string> = {
 /** 설계 문답의 질문 방식 줄. 설정과 관계없이 고정이다 (D358, I104) */
 export const SPEC_QUESTION_LINE = `${QUESTION_LABEL.confirm_each}. 설계 문답은 결정을 모두 묻는다 (D358)`
 
-/** context.md의 질문 방식 줄 (5.6.1). 설계 문답은 고정 문구다 (I104) */
+/** 커스텀 단계의 질문 방식 줄. 설정이 없다 (D457) */
+export const CUSTOM_QUESTION_LINE =
+  '설정 없음. 커스텀 단계는 질문 방식을 고르지 않는다 (D457). 묻는 방법과 답의 기록은 공통 규칙을 따른다'
+
+/** context.md의 질문 방식 줄 (5.6.1). 설계 문답과 커스텀 단계는 고정 문구다 (I104, D457) */
 function questionLine(config: AppConfig, settings: WorkSettings, node: TaskNode): string {
+  if (node === 'custom') return CUSTOM_QUESTION_LINE
   const mode = questionMode(config, settings, node)
   return mode ? QUESTION_LABEL[mode] : SPEC_QUESTION_LINE
 }
@@ -128,7 +144,12 @@ function questionLine(config: AppConfig, settings: WorkSettings, node: TaskNode)
 export interface TaskRef {
   taskId: string
   node: TaskNode
+  /** 커스텀 단계의 단계 id (D462) */
+  step?: string
 }
+
+/** 이전 task를 적는 이름: 노드, 커스텀 단계면 custom:<단계 id> */
+const refName = (r: TaskRef) => (r.step ? `${r.node}:${r.step}` : r.node)
 
 /** 앞 대응 라운드 하나 (D192): 그 대응 task의 handoff 요약과 항목, 사람 지시 */
 export interface PreviousRound {
@@ -210,6 +231,12 @@ export interface PreviousTask extends TaskRef {
   artifacts: readonly string[]
 }
 
+const ref = (p: TaskRef): TaskRef => ({
+  taskId: p.taskId,
+  node: p.node,
+  ...(p.step !== undefined ? { step: p.step } : {}),
+})
+
 /** handoff 머리글의 rejected. 머리글을 읽지 못하거나 목록이 아니면 빈 목록이다 */
 function rejectedOf(handoff: string): string[] {
   const fm = parseFrontMatter(handoff)
@@ -228,21 +255,51 @@ export function previousInputs(
   const withHandoff = previous.filter((p) => p.handoff !== undefined)
   const last = withHandoff[withHandoff.length - 1]
   return {
-    rejected: withHandoff.map((p) => ({
-      taskId: p.taskId,
-      node: p.node,
-      items: rejectedOf(p.handoff ?? ''),
-    })),
-    previousHandoff: last
-      ? { taskId: last.taskId, node: last.node, text: last.handoff ?? '' }
-      : null,
+    rejected: withHandoff.map((p) => ({ ...ref(p), items: rejectedOf(p.handoff ?? '') })),
+    previousHandoff: last ? { ...ref(last), text: last.handoff ?? '' } : null,
     artifacts: previous
       .filter((p) => p.node !== 'intake')
-      .flatMap((p) => p.artifacts.map((path) => ({ taskId: p.taskId, node: p.node, path }))),
+      .flatMap((p) => p.artifacts.map((path) => ({ ...ref(p), path }))),
   }
 }
 
-const nodeLabel = (node: TaskNode) => `${node} (${NODE_INFO[node].title})`
+const nodeLabel = (work: WorkState, task: TaskRecord) =>
+  task.node === 'custom'
+    ? `custom (커스텀 단계 \`${task.step ?? ''}\`: ${taskTitle(work, task)})`
+    : `${task.node} (${NODE_INFO[task.node].title})`
+
+/**
+ * 커스텀 유형 절 (D456, 5.6.13): 유형의 이름과 설명, 단계 목록, 이 task가 커스텀 단계면 그 단계의 산출물과 절. intake는 요청이
+ * 설명과 맞는지 본다
+ */
+function customTypeSection(work: WorkState, task: TaskRecord): [string, string] | null {
+  const t = work.custom_type
+  if (workType(work) !== 'custom' || !t) return null
+  const stages = stagesOf(work).map((s) =>
+    s.node === 'custom'
+      ? `${t.steps.find((x) => x.id === s.step)?.title ?? s.step ?? ''}(\`${s.step ?? ''}\`)`
+      : NODE_INFO[s.node].title,
+  )
+  const step = customStep(work, task)
+  return [
+    '커스텀 유형',
+    [
+      list([
+        `이름: ${t.name} (\`${t.id}\`, ${t.source === 'repo' ? '레포 유형' : '전역 유형'})`,
+        `설명: ${t.description ? oneLine(t.description) : '없음'}`,
+        `단계: ${stages.join(' → ')}`,
+        ...(step
+          ? [
+              `이 단계: ${step.title} (\`${step.id}\`)`,
+              `이 단계의 산출물: \`${customArtifact(step.id)}\`, 절 ${customSections(step)
+                .map((x) => `\`## ${x}\``)
+                .join(', ')}`,
+            ]
+          : []),
+      ]),
+    ].join('\n'),
+  ]
+}
 
 /** 내용에 든 어떤 백틱 줄보다 긴 코드 펜스로 감싼다. 넣은 문서의 제목이 이 파일의 절과 섞이지 않는다 */
 function fenced(text: string, lang = 'markdown'): string {
@@ -468,6 +525,11 @@ export function buildContext(input: ContextInput): string {
   const info = NODE_INFO[task.node]
   const type = workType(work)
   const entry = input.respond ? respondSection(input.respond, targetBranch(work)) : null
+  const custom = customTypeSection(work, task)
+  const typeName =
+    type === 'custom' && work.custom_type
+      ? `${work.custom_type.name} (커스텀 유형 \`${work.custom_type.id}\`)`
+      : `${WORK_TYPE_LABEL[type]} (\`${type}\`)`
   const sections: [string, string][] = [
     ...(entry ? [entry] : []),
     [
@@ -476,8 +538,8 @@ export function buildContext(input: ContextInput): string {
         `work_id: ${work.work_id}`,
         `task_id: ${task.id}`,
         `프로젝트 id: ${input.projectId}`,
-        `업무 유형: ${WORK_TYPE_LABEL[type]} (\`${type}\`)`,
-        `node: ${nodeLabel(task.node)}`,
+        `업무 유형: ${typeName}`,
+        `node: ${nodeLabel(work, task)}`,
         `skill: ${info.skill}`,
         `승인된 intent 버전: ${work.intent ? String(work.intent.version) : '없음 (의도 승인 전)'}`,
         `task 디렉터리: ${input.taskDir}`,
@@ -490,7 +552,11 @@ export function buildContext(input: ContextInput): string {
         `Work 초안 폴더: ${input.draftsDir} (근본부터 다시 하기로 사람과 정했을 때 새 Work의 초안을 쓰는 곳, D420)`,
       ]),
     ],
-    ['승인 방식', approvalSection(config, work.settings, task.node, taskEngine(task))],
+    ...(custom ? [custom] : []),
+    [
+      '승인 방식',
+      approvalSection(config, work.settings, task.node, taskEngine(task), customStep(work, task)),
+    ],
     ['마무리 안내 문구', closingMessage(task.node, input.delivery, taskEngine(task))],
     ['질문 방식', questionLine(config, work.settings, task.node)],
     ...(input.knowledge ? [knowledgeSection(task.node, input.knowledge)] : []),
@@ -509,15 +575,15 @@ export function buildContext(input: ContextInput): string {
     ['결정 로그', input.decisionLog.trim() ? fenced(input.decisionLog) : '없음'],
     [
       '누적 기각 목록',
-      list(input.rejected.flatMap((r) => r.items.map((i) => `${r.taskId} ${r.node}: ${i}`))),
+      list(input.rejected.flatMap((r) => r.items.map((i) => `${r.taskId} ${refName(r)}: ${i}`))),
     ],
     [
       input.previousHandoff
-        ? `직전 handoff (${input.previousHandoff.taskId} ${input.previousHandoff.node})`
+        ? `직전 handoff (${input.previousHandoff.taskId} ${refName(input.previousHandoff)})`
         : '직전 handoff',
       input.previousHandoff ? fenced(input.previousHandoff.text) : '없음',
     ],
-    ['필요한 산출물', list(input.artifacts.map((a) => `${a.taskId} ${a.node}: ${a.path}`))],
+    ['필요한 산출물', list(input.artifacts.map((a) => `${a.taskId} ${refName(a)}: ${a.path}`))],
   ]
   return [
     '# relay task 컨텍스트',

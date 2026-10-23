@@ -567,7 +567,7 @@ export function checkIntentDraft(
         field: CRITERIA_SECTION,
         message: `\`## ${CRITERIA_SECTION}\`의 줄이 \`${CRITERIA_PREFIX}\`로 시작하지 않음 (지금: ${clip(line)})`,
       })
-    } else if (opts.type === 'general' && !CHECK_METHOD.test(line)) {
+    } else if ((opts.type === 'general' || opts.type === 'custom') && !CHECK_METHOD.test(line)) {
       errors.push({
         file,
         part: 'body',
@@ -708,6 +708,8 @@ export interface TaskCheckInput {
   knowledgeIssues?: readonly FormatIssue[]
   /** 지식 검토 호출(D300)이 찾았지만 되돌리지 않는 것. verify의 경고로 보인다 */
   knowledgeWarnings?: readonly FormatIssue[]
+  /** 커스텀 단계 task의 단계 id와 산출물의 절 (D453). 산출물 <id>.md와 그 절을 검사한다 */
+  customStep?: { id: string; sections: readonly string[] }
 }
 
 export interface TaskCheck extends CheckSummary {
@@ -745,8 +747,10 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
         })
 
   const errors: FormatIssue[] = [...(handoff?.errors ?? [])]
+  const step = node === 'custom' ? input.customStep : undefined
+  const required = step ? [`${step.id}.md`] : NODE_INFO[node].artifacts
   if (handoff?.status === 'awaiting_approval') {
-    for (const artifact of NODE_INFO[node].artifacts) {
+    for (const artifact of required) {
       if (files[artifact] === undefined) {
         errors.push({
           file: artifact,
@@ -764,6 +768,13 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
     })
   }
   errors.push(...(draft?.errors ?? []))
+  // 커스텀 단계 산출물의 절 (D453). 파일이 있으면 늘 본다
+  const stepText = step ? files[`${step.id}.md`] : undefined
+  if (step && stepText !== undefined) {
+    errors.push(
+      ...missingSections(`${step.id}.md`, stepText, step.sections, '이 커스텀 단계 산출물'),
+    )
+  }
   const prText = node === 'verify' ? files[PR_FILE] : undefined
   if (prText !== undefined) errors.push(...checkPr(prText))
   if (input.knowledgeIssues && node === 'verify' && handoff?.status === 'awaiting_approval') {

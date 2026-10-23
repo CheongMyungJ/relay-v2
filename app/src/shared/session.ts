@@ -48,6 +48,8 @@ export interface ParsedDraft {
   /** 등록된 프로젝트 id */
   project: string | null
   type: WorkType | null
+  /** type이 custom이면 custom_type의 유형 id (D458). 그 유형이 있는지는 화면이 본다 */
+  customType: string | null
   /** 기준 브랜치. 선택이라 없으면 null이다 */
   base: string | null
   /** 본문 (request.md가 될 글) */

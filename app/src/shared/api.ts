@@ -1,7 +1,7 @@
 // preload가 contextBridge로 렌더러에 내보내는 API (I2, I14).
 // 렌더러는 명령을 invoke로 보내고, 메인은 상태가 바뀔 때마다 Work 스냅샷을 보낸다.
 // 터미널 출력은 task별 채널로 보낸다. 메인과 렌더러가 같은 타입을 보도록 여기에 둔다.
-import type { AppConfig, WorkSettingsPatch } from './config'
+import type { AppConfig, SkillName, WorkSettingsPatch } from './config'
 import type { ProjectSettings } from './project'
 import type {
   ActivityUpdate,
@@ -17,6 +17,9 @@ import type {
   MergeInfoResult,
   MergeInput,
   NewWorkInput,
+  CustomTypeFiles,
+  CustomTypeList,
+  CustomTypeView,
   TidyView,
   PrItemAction,
   ProjectInspection,
@@ -30,7 +33,7 @@ import type {
   TerminalChunk,
   WorkView,
 } from './views'
-import type { DeliveryChoice, WorkType } from './work'
+import type { CustomTypeSource, DeliveryChoice, WorkType } from './work'
 import type { HumanAnswers } from './questions'
 import type { DraftRef } from './session'
 
@@ -104,7 +107,30 @@ export interface RelayApi {
    * 새 Work 대화상자의 작업 브랜치 이름 (D426): 프로젝트의 규칙에 다음 work-id와 유형, 짧은 이름을 채운 것이다. 끝의 임의의
    * 4자는 넣지 않는다(만들 때 붙인다, D427)
    */
-  branchName(projectId: string, type: WorkType, slug: string): Promise<string>
+  branchName(projectId: string, type: WorkType, slug: string, customType?: string): Promise<string>
+  /** 새 Work 대화상자의 커스텀 유형 (D451, D460): 이 프로젝트의 레포 유형 뒤에 가려지지 않은 전역 유형 */
+  customTypes(projectId: string): Promise<CustomTypeView[]>
+  /** 업무 유형 화면의 목록 (D459) */
+  customTypeList(): Promise<CustomTypeList>
+  /** 유형 폴더의 글. 레포 유형은 projectId로 찾는다. 깨졌거나 없으면 null이다 */
+  customTypeFiles(
+    source: CustomTypeSource,
+    projectId: string | null,
+    id: string,
+  ): Promise<CustomTypeFiles | null>
+  /** 전역 유형을 쓴다 (D459). 이름을 바꿨으면 previousId의 폴더를 지운다 */
+  saveCustomType(files: CustomTypeFiles, previousId: string | null): Promise<CommandResult>
+  deleteCustomType(id: string): Promise<CommandResult>
+  /** [레포로 복사] (D450). 커밋은 사람이 한다 */
+  copyCustomTypeToRepo(id: string, projectId: string): Promise<CommandResult & { path?: string }>
+  /** [폴더 열기] (D459). id가 null이면 그 위치의 유형 폴더 전체다 */
+  openCustomTypeFolder(
+    source: CustomTypeSource,
+    projectId: string | null,
+    id: string | null,
+  ): Promise<CommandResult>
+  /** [새 유형]의 시작점 (D448, D459): 기존 단계 절차(머리글과 유형 표시 구간을 뗀 것) */
+  skillProcedure(skill: SkillName): Promise<string>
   /** 새 Work 대화상자의 대상 목록: 메인 프로젝트의 서브모듈 (D413) */
   submodules(projectId: string): Promise<SubmoduleView[]>
   /** 서브모듈을 대상으로 고른다: 서브모듈 프로젝트를 만들거나 다시 점검한다 (D413) */
@@ -251,6 +277,14 @@ export const IPC = {
   projectRemovePreview: 'project:remove-preview',
   branches: 'project:branches',
   branchName: 'project:branch-name',
+  customTypes: 'types:for-project',
+  customTypeList: 'types:list',
+  customTypeFiles: 'types:files',
+  saveCustomType: 'types:save',
+  deleteCustomType: 'types:delete',
+  copyCustomTypeToRepo: 'types:copy-to-repo',
+  openCustomTypeFolder: 'types:open-folder',
+  skillProcedure: 'types:skill-procedure',
   submodules: 'project:submodules',
   prepareSubmodule: 'project:prepare-submodule',
   createWork: 'work:create',

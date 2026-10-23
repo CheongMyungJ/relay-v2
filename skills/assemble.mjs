@@ -4,7 +4,7 @@
 // `<!-- type: a b -->` 줄과 `<!-- /type -->` 줄 사이는 적힌 유형에만 남고, 표시 줄은 지운다. 표시 밖은 모든 유형에 남는다.
 // 표시처럼 보이지만 모양이 다른 줄(`<!--type: x-->`, 대문자, 끝 공백 등), 모르는 유형, 겹침, 짝 없음은 오류다.
 
-export const TYPES = ['bugfix', 'feature', 'refactor', 'spec', 'general'];
+export const TYPES = ['bugfix', 'feature', 'refactor', 'spec', 'general', 'custom'];
 
 // 스킬 원본 맨 앞의 머리글(`---`로 감싼 YAML)과 그 뒤의 빈 줄을 뗀다 (docs/design.md D440, D444). 앱의
 // stripFrontMatter(app/src/adapters/claude.ts)와 같은 결과인지 app/test/adapters/store.test.ts가 비교한다.

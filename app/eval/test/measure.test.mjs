@@ -8,6 +8,8 @@ import { CliArm } from '../lib/cli-arm.mjs'
 import { codeOutcome, judgeTree, makeRepo, withoutKnowledge } from '../lib/repo.mjs'
 import { agentUsage, agentUsageBySession, git, questionsBySession, stats } from '../lib/util.mjs'
 import { measuredWorks, pairOf, workParts, workScenario } from '../lib/works.mjs'
+import { pickTypeLines } from '../lib/human.mjs'
+import { armType } from '../lib/kind.mjs'
 import { compare } from '../primary.mjs'
 import { kindOf, knowledgeInDiff } from '../knowledge-quality.mjs'
 
@@ -221,6 +223,18 @@ describe('Work 여럿을 잇는 시나리오', () => {
     expect(workParts(one)).toHaveLength(1)
     expect(measuredWorks(one)).toEqual([0])
     expect(pairOf(one)).toEqual(['relay', 'cli'])
+  })
+
+  it('커스텀 유형 시나리오의 짝은 같은 일을 일반 유형으로 한 relay다 (relay D463)', () => {
+    const custom = { type: 'custom', customType: { id: 'survey-apply', name: '조사 후 적용' } }
+    expect(pairOf(custom)).toEqual(['relay', 'relay@general'])
+    // relay 쪽은 레포의 그 유형을 고르고, relay@general은 일반을, 맨 CLI는 유형이 없다
+    expect(pickTypeLines('relay', custom).join()).toContain("'조사 후 적용 (레포)'를 고른다")
+    expect(pickTypeLines('relay@general', custom).join()).toContain("'일반'을(를) 고른다")
+    expect(pickTypeLines('cli', custom)).toEqual([])
+    expect(pickTypeLines('relay', { type: 'general' })).toEqual([])
+    // 커스텀은 유형마다 버튼 이름이 달라 쪽 이름(relay@custom)으로 고르지 않는다
+    expect(armType('relay@custom')).toBeNull()
   })
 
   it('재는 Work는 기본이 첫 Work를 뺀 모두이고 measure로 바꾼다', () => {

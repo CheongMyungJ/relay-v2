@@ -6,6 +6,8 @@ import type { PrItemKind, PrItemStatus } from './pr'
 import type { DraftRef, ParsedDraft } from './session'
 import type {
   ApprovedIntent,
+  CustomTypeDef,
+  CustomTypeSource,
   DeliveryChoice,
   FormatIssue,
   MergeMethod,
@@ -603,6 +605,13 @@ export interface WorkView {
   workId: string
   /** 업무 유형 (D236). work.json에 없으면 버그 수정이다 (D256) */
   type: WorkType
+  /** 커스텀 Work의 유형 (D458): 이름, 출처, 단계와 단계마다의 자동 승인 기본값. 아니면 null */
+  customType: {
+    id: string
+    name: string
+    source: CustomTypeSource
+    steps: { id: string; title: string; autoApprove: boolean }[]
+  } | null
   /** 요청의 첫 줄 */
   title: string
   status: WorkStatus
@@ -919,6 +928,8 @@ export interface NewWorkInput {
   request: string
   /** 업무 유형 (D236). 기본값이 없어 사람이 골라야 한다 */
   type: WorkType
+  /** 커스텀 유형이면 그 id (D460). 이 프로젝트에서 고를 수 있는 유형(레포 먼저, D451)에서 찾는다 */
+  customType?: string
   baseBranch: string
   /** 원격이면 git fetch 뒤 origin/<브랜치>에서 분기한다 */
   baseLocation: 'local' | 'remote'
@@ -947,6 +958,35 @@ export interface NewWorkInput {
    * (메인 레포에 origin이 없을 수 있어 Work의 기준 위치와 따로 고른다). 없거나 null이면 서브모듈 worktree만 만든다
    */
   integration?: { baseBranch: string; baseLocation: 'local' | 'remote' } | null
+}
+
+/** 커스텀 유형 하나 (D459, D460). 형식이 깨졌으면 errors가 있고 고를 수 없다 */
+export interface CustomTypeView {
+  id: string
+  source: CustomTypeSource
+  /** 유형 이름. 깨졌으면 id다 */
+  name: string
+  description: string
+  steps: { id: string; title: string; autoApprove: boolean }[]
+  errors: string[]
+  /** 같은 id의 레포 유형이 있어 이 프로젝트에서 가려진 전역 유형이다 (D451) */
+  shadowed?: boolean
+}
+
+/** 업무 유형 화면의 목록 (D459): 전역 유형과 등록한 프로젝트마다의 레포 유형 */
+export interface CustomTypeList {
+  global: CustomTypeView[]
+  projects: { projectId: string; projectName: string; types: CustomTypeView[] }[]
+}
+
+/** 유형 편집 화면이 고치는 유형 폴더의 글 (D459) */
+export interface CustomTypeFiles {
+  def: CustomTypeDef
+  /** 단계 id → 사람이 쓴 절차 */
+  procedures: Record<string, string>
+  /** 선택 파일 intake.md, verify.md의 글. 없으면 빈 글 (D456) */
+  intake: string
+  verify: string
 }
 
 /** 지식 정리 후보 (D393) */

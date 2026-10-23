@@ -154,7 +154,7 @@ function systemPrompt(kind, scenario, guide, arm) {
     '## 네 상황',
     ...nextWorkLines(kind, scenario),
     `### 일의 종류: ${w.label}`,
-    ...pickTypeLines(arm),
+    ...pickTypeLines(arm, scenario),
     '',
     `### ${w.subject}`,
     ...(Array.isArray(scenario.report) ? scenario.report : [scenario.report]),
@@ -172,11 +172,17 @@ function systemPrompt(kind, scenario, guide, arm) {
 
 /**
  * 교차 비교(relay I93)의 relay@<유형> 쪽: 일의 종류와 관계없이 새 Work의 유형을 정해 둔 것으로 고르게 한다. 같은 일을
- * 다른 유형으로 해 보는 평가 조건이다
+ * 다른 유형으로 해 보는 평가 조건이다. 커스텀 유형 시나리오(relay D463)의 relay 쪽은 레포의 그 유형을 고르게 한다
  */
-function pickTypeLines(arm) {
+export function pickTypeLines(arm, scenario = {}) {
   const type = armType(arm)
-  if (!type) return []
+  if (!type) {
+    const custom = scenario.customType
+    if (scenario.type !== 'custom' || !custom || armBase(arm) === 'cli') return []
+    return [
+      `이번 일은 이 레포의 팀이 이런 일에 쓰려고 정해 둔 커스텀 유형 '${custom.name}'으로 한다. [새 Work]의 유형 줄에서 '${custom.name} (레포)'를 고른다.`,
+    ]
+  }
   return [
     `이번 평가 조건: [새 Work]의 유형은 '${typeLabel(type)}'을(를) 고른다. 일의 종류와 달라 보여도 그대로 고르고, 도구가 다른 유형을 권해도 '${typeLabel(type)}'으로 계속한다.`,
   ]

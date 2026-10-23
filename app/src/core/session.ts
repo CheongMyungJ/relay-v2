@@ -4,9 +4,8 @@
 import { projectName, type ProjectState } from '../shared/project'
 import { SESSION_NAME_MAX } from '../shared/session'
 import type { WorkState } from '../shared/work'
-import { WORK_TYPES, WORK_TYPE_LABEL } from '../shared/work'
+import { WORK_TYPES, WORK_TYPE_LABEL, workTypeLabel } from '../shared/work'
 import { currentTask } from './machine'
-import { workType } from './pipeline'
 import { workBranch } from './records'
 import { TASK_STATUS_LABEL, WORK_STATUS_LABEL, taskLabel } from './review'
 
@@ -59,7 +58,7 @@ function workLines(w: SessionGuideWork): string[] {
   const now = currentTask(w.work)
   const step = now ? `, 지금 단계 ${taskLabel(now)} (${TASK_STATUS_LABEL[now.status]})` : ''
   return [
-    `- ${w.work.work_id} "${w.title || w.work.work_id}" — ${WORK_TYPE_LABEL[workType(w.work)]}, ${WORK_STATUS_LABEL[w.work.status]}${step}`,
+    `- ${w.work.work_id} "${w.title || w.work.work_id}" — ${workTypeLabel(w.work)}, ${WORK_STATUS_LABEL[w.work.status]}${step}`,
     `  - worktree: ${w.worktree} (브랜치 ${workBranch(w.work)})`,
     `  - Work 디렉터리: ${w.workDir}`,
   ]
@@ -150,13 +149,14 @@ export function sessionGuide(input: SessionGuideInput): string {
     '```markdown',
     '---',
     'project: <프로젝트 id>',
-    `type: <${WORK_TYPES.join(' | ')}>`,
+    `type: <${WORK_TYPES.join(' | ')} | custom>`,
+    'custom_type: <type이 custom일 때만. 커스텀 유형 id>',
     'base: <기준 브랜치. 선택, 없으면 프로젝트의 기본 브랜치>',
     '---',
     '<요청: 새 Work의 request.md가 될 글. 첫 줄이 Work 제목이다>',
     '```',
     '',
-    `- 유형: ${WORK_TYPES.map((t) => `\`${t}\` ${WORK_TYPE_LABEL[t]}`).join(', ')}`,
+    `- 유형: ${WORK_TYPES.map((t) => `\`${t}\` ${WORK_TYPE_LABEL[t]}`).join(', ')}, \`custom\` 사람이 정의한 커스텀 유형(\`custom_type\`에 id. 사람이 id를 알려 줄 때만 쓴다)`,
     '- `project`는 위 목록의 프로젝트 id만 쓴다.',
     '- 쓴 뒤에는 사람에게 앱 오른쪽 패널의 초안 카드에서 [새 Work로 만들기]를 누르라고 안내한다. 사람이 새 Work',
     '  대화상자에서 고치고 [만들기]를 눌러야 Work가 생기고, 그때 앱이 초안을 지운다.',

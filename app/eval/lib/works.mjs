@@ -57,5 +57,7 @@ function mateIndex(parts, n) {
  * run.mjs의 --pairs로 바꿀 수 있다
  */
 export function pairOf(scenario) {
-  return multiWork(scenario) ? ['relay', 'relay-off'] : ['relay', 'cli']
+  if (multiWork(scenario)) return ['relay', 'relay-off']
+  // 커스텀 유형 시나리오는 같은 일을 일반 유형으로 한 relay와 견준다 (relay D463)
+  return scenario.type === 'custom' ? ['relay', 'relay@general'] : ['relay', 'cli']
 }

@@ -5,7 +5,8 @@ import type { WorkType } from './work'
 
 /**
  * relay 스킬 (5.6). fix는 버그 수정, design과 implement는 기능 추가·변경, refactor는 리팩터링, spec은 설계, execute는 일반에만
- * 쓴다 (D232, D256, D278, D318, D372). pr-respond는 파이프라인 밖의 PR 대응 task다 (D168, D187)
+ * 쓴다 (D232, D256, D278, D318, D372). pr-respond는 파이프라인 밖의 PR 대응 task다 (D168, D187). custom은 커스텀 단계의
+ * 공통 바탕이고, 단계 절차는 유형 폴더에서 붙인다 (D452)
  */
 export type SkillName =
   | 'work-start'
@@ -17,12 +18,13 @@ export type SkillName =
   | 'execute'
   | 'verify'
   | 'pr-respond'
+  | 'custom'
 
 /**
- * 질문 방식을 고르는 스킬 (D26, I104). spec(설계 문답)은 결정을 모두 묻으므로 질문 방식 설정이 없다 (D358). 설정 키에서만
- * 빼고, 노드의 스킬과 배포는 SkillName을 쓴다
+ * 질문 방식을 고르는 스킬 (D26, I104). spec(설계 문답)은 결정을 모두 묻으므로 질문 방식 설정이 없다 (D358). 커스텀 단계도
+ * 공통 바탕에 결정마다 확인의 결정 지점이 없어 없다 (D457). 설정 키에서만 빼고, 노드의 스킬과 배포는 SkillName을 쓴다
  */
-export type QuestionSkill = Exclude<SkillName, 'spec'>
+export type QuestionSkill = Exclude<SkillName, 'spec' | 'custom'>
 
 /**
  * 상세 설정(단계별 엔진·모델·추론 수준)의 키: 스킬과 곁 세션, 기본 세션 (D391, D399, I129). 곁 세션과 기본 세션은 노드가
@@ -104,6 +106,8 @@ export interface AppConfig {
 /** work.json의 settings. 앱 설정과 같은 키를 쓰고, 없는 키는 앱 설정을 따른다 (D72) */
 export interface WorkSettings {
   auto_approve?: Partial<Record<AutoApproveNode, boolean>>
+  /** 커스텀 단계의 자동 승인 (D457). 키는 단계 id이고, 없는 단계는 type.json의 기본값을 따른다 */
+  custom_auto_approve?: Record<string, boolean>
   question_mode?: Partial<Record<QuestionSkill, QuestionMode>>
   /** 대응 자동 시작 (D154, 5.1.1) */
   respond_auto_start?: boolean
@@ -115,6 +119,8 @@ export interface WorkSettings {
  */
 export interface WorkSettingsPatch {
   auto_approve?: Partial<Record<AutoApproveNode, boolean>>
+  /** 커스텀 단계의 자동 승인 (D457). 빈 객체면 지워 type.json의 기본값을 따른다 */
+  custom_auto_approve?: Record<string, boolean>
   question_mode?: Partial<Record<QuestionSkill, QuestionMode>>
   respond_auto_start?: boolean | null
 }
@@ -134,6 +140,7 @@ export const SETTING_GROUP_LABEL: Readonly<Record<SettingGroup, string>> = {
   refactor: '리팩터링',
   spec: '설계',
   general: '일반',
+  custom: '커스텀',
   pr: 'PR 대응',
 }
 
@@ -183,6 +190,7 @@ export const AGENT_STEP_TITLES: readonly (readonly [AgentStepName, string, Setti
   ['refactor', '계획과 리팩터링', 'refactor'],
   ['spec', '설계 문답', 'spec'],
   ['execute', '실행', 'general'],
+  ['custom', '커스텀 단계', 'custom'],
   ['verify', '리뷰와 검증', 'common'],
   ['pr-respond', 'PR 대응', 'pr'],
   ['side', '곁 세션', 'common'],

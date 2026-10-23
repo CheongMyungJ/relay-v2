@@ -1,7 +1,7 @@
 // Work 초안 카드 (D404). 만든 곳(DraftSource)과 상관없는 공용 컴포넌트다: 기본 세션의 오른쪽 패널과, Work의 task와 곁 세션이
 // 다시 하기로 쓴 초안을 보이는 Work의 오른쪽 패널(D421)이 쓴다. [새 Work로 만들기]는 새 Work 대화상자를 채워 열고, [버리기]는
 // 초안을 지운다.
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { WORK_TYPE_LABEL } from '../../shared/work'
 import type { CommandResult, DraftView, ProjectView } from '../../shared/views'
 import { call } from './commands'
@@ -58,6 +58,28 @@ function DraftCard({
   // 뒤 프로젝트를 등록함) 첫 프로젝트다
   const [pick, setPick] = useState<string | null>(null)
   const project = known ?? projects.find((p) => p.id === pick) ?? projects[0]
+  // 커스텀 유형의 초안은 그 프로젝트에 그 유형이 있어야 만든다. 지운 유형이면 까닭을 보이고 막는다 (D458)
+  const wanted = draft.type === 'custom' ? draft.customType : null
+  // 읽은 프로젝트와 유형 이름(없으면 null). 지금 프로젝트를 아직 읽지 않았으면 읽는 중이고, 그동안에도
+  // [새 Work로 만들기]를 막는다
+  const [found, setFound] = useState<{ key: string; name: string | null } | null>(null)
+  const projectId = project?.id
+  const key = `${projectId ?? ''}|${wanted ?? ''}`
+  useEffect(() => {
+    if (!wanted || !projectId) return
+    let current = true
+    void window.relay.customTypes(projectId).then((list) => {
+      if (!current) return
+      const t = list.find((x) => x.id === wanted && x.errors.length === 0)
+      setFound({ key: `${projectId}|${wanted}`, name: t ? t.name : null })
+    })
+    return () => {
+      current = false
+    }
+  }, [wanted, projectId])
+  const customName = found?.key === key ? found.name : undefined
+  const missingType = wanted !== null && customName === null
+  const checkingType = wanted !== null && customName === undefined
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const discard = async () => {
@@ -74,7 +96,11 @@ function DraftCard({
       </div>
       <div className="dim draft-meta">
         {known ? known.name : '프로젝트 모름'} ·{' '}
-        {draft.type ? WORK_TYPE_LABEL[draft.type] : '유형 모름'}
+        {draft.type === 'custom'
+          ? (customName ?? draft.customType ?? '커스텀 유형')
+          : draft.type
+            ? WORK_TYPE_LABEL[draft.type]
+            : '유형 모름'}
         {draft.base ? ` · 기준 ${draft.base}` : ''} · <code>{draft.ref.name}</code>
       </div>
       {draft.errors.length ? (
@@ -103,8 +129,14 @@ function DraftCard({
       <div className="notice-actions">
         <button
           className="primary"
-          disabled={busy || !project}
-          title={project ? '' : '먼저 프로젝트를 등록하세요'}
+          disabled={busy || !project || missingType || checkingType}
+          title={
+            !project
+              ? '먼저 프로젝트를 등록하세요'
+              : missingType
+                ? `커스텀 유형이 없습니다: ${wanted ?? ''}`
+                : ''
+          }
           onClick={() => project && onCreate(draft, project)}
         >
           새 Work로 만들기
@@ -113,6 +145,12 @@ function DraftCard({
           버리기
         </button>
       </div>
+      {missingType ? (
+        <div className="error">
+          커스텀 유형 <code>{wanted}</code>이 이 프로젝트에 없습니다. 지웠거나 다른 프로젝트의
+          유형입니다.
+        </div>
+      ) : null}
       {error ? <div className="error">{error}</div> : null}
     </div>
   )

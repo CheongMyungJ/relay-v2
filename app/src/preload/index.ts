@@ -23,7 +23,19 @@ const api: RelayApi = {
   projectRemovePreview: (projectId) => ipcRenderer.invoke(IPC.projectRemovePreview, projectId),
   removeProject: (projectId) => ipcRenderer.invoke(IPC.removeProject, projectId),
   branches: (projectId) => ipcRenderer.invoke(IPC.branches, projectId),
-  branchName: (projectId, type, slug) => ipcRenderer.invoke(IPC.branchName, projectId, type, slug),
+  branchName: (projectId, type, slug, customType) =>
+    ipcRenderer.invoke(IPC.branchName, projectId, type, slug, customType),
+  customTypes: (projectId) => ipcRenderer.invoke(IPC.customTypes, projectId),
+  customTypeList: () => ipcRenderer.invoke(IPC.customTypeList),
+  customTypeFiles: (source, projectId, id) =>
+    ipcRenderer.invoke(IPC.customTypeFiles, source, projectId, id),
+  saveCustomType: (files, previousId) => ipcRenderer.invoke(IPC.saveCustomType, files, previousId),
+  deleteCustomType: (id) => ipcRenderer.invoke(IPC.deleteCustomType, id),
+  copyCustomTypeToRepo: (id, projectId) =>
+    ipcRenderer.invoke(IPC.copyCustomTypeToRepo, id, projectId),
+  openCustomTypeFolder: (source, projectId, id) =>
+    ipcRenderer.invoke(IPC.openCustomTypeFolder, source, projectId, id),
+  skillProcedure: (skill) => ipcRenderer.invoke(IPC.skillProcedure, skill),
   submodules: (projectId) => ipcRenderer.invoke(IPC.submodules, projectId),
   prepareSubmodule: (projectId, path) => ipcRenderer.invoke(IPC.prepareSubmodule, projectId, path),
   createWork: (projectId, input) => ipcRenderer.invoke(IPC.createWork, projectId, input),

@@ -4,8 +4,10 @@ import os from 'node:os'
 import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } from 'electron'
 import { IPC, type AppInfo, type UpdateState } from '../shared/api'
 import type { DraftRef } from '../shared/session'
+import type { SkillName } from '../shared/config'
 import type {
   ApproveOptions,
+  CustomTypeFiles,
   CleanExpect,
   CleanInput,
   DeliverInput,
@@ -14,7 +16,13 @@ import type {
   PrItemAction,
   RespondStartInput,
 } from '../shared/views'
-import { WORK_TYPES, type DeliveryChoice, type MergeMethod, type WorkType } from '../shared/work'
+import {
+  WORK_TYPES,
+  type CustomTypeSource,
+  type DeliveryChoice,
+  type MergeMethod,
+  type WorkType,
+} from '../shared/work'
 import type { Relay } from './relay'
 import { PASTE_MAX_BYTES, pasteExt } from './links'
 import { externalUrl } from './security'
@@ -46,12 +54,63 @@ function flag(v: unknown): boolean {
   return v
 }
 
-/** 업무 유형 (D236) */
+/** 업무 유형 (D236). 커스텀은 유형 id를 따로 받는다 (D460) */
 function workType(v: unknown): WorkType {
+  if (v === 'custom') return 'custom'
   const found = WORK_TYPES.find((t) => t === v)
   if (!found) throw new Error('업무 유형이 아님')
   return found
 }
+
+/** 커스텀 유형의 출처 (D450) */
+function typeSource(v: unknown): CustomTypeSource {
+  if (v !== 'global' && v !== 'repo') throw new Error('유형의 출처가 아님')
+  return v
+}
+
+const optionalText = (v: unknown): string | null => (v === null || v === undefined ? null : text(v))
+
+/** 유형 편집 화면의 글 (D459). 정의의 뜻은 core/custom-type이 쓰기 전에 본다 */
+function customTypeFiles(v: unknown): CustomTypeFiles {
+  if (!v || typeof v !== 'object') throw new Error('유형 글이 아님')
+  const o = v as Record<string, unknown>
+  const def = o['def'] as Record<string, unknown> | undefined
+  if (!def || typeof def !== 'object' || !Array.isArray(def['steps']))
+    throw new Error('유형 정의가 아님')
+  const procedures = o['procedures']
+  if (!procedures || typeof procedures !== 'object') throw new Error('단계 절차가 아님')
+  return {
+    def: {
+      id: text(def['id']),
+      name: text(def['name']),
+      description: text(def['description']),
+      steps: def['steps'].map((s: unknown) => {
+        const step = s as Record<string, unknown>
+        return {
+          id: text(step['id']),
+          title: text(step['title']),
+          sections: texts(step['sections']),
+          auto_approve: flag(step['auto_approve']),
+        }
+      }),
+    },
+    procedures: Object.fromEntries(
+      Object.entries(procedures as Record<string, unknown>).map(([k, b]) => [k, text(b)]),
+    ),
+    intake: text(o['intake']),
+    verify: text(o['verify']),
+  }
+}
+
+/** [새 유형]의 시작점이 될 수 있는 기존 단계 (D448) */
+const PROCEDURE_SKILLS: readonly SkillName[] = [
+  'fix',
+  'design',
+  'implement',
+  'refactor',
+  'spec',
+  'execute',
+]
 
 function texts(v: unknown): string[] {
   if (!Array.isArray(v)) throw new Error('문자열 목록이 아님')
@@ -179,9 +238,51 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   ipcMain.handle(IPC.branches, async (_e, projectId: unknown) =>
     (await ready).branches(text(projectId)),
   )
-  ipcMain.handle(IPC.branchName, async (_e, projectId: unknown, type: unknown, slug: unknown) =>
-    (await ready).branchName(text(projectId), workType(type), text(slug)),
+  ipcMain.handle(
+    IPC.branchName,
+    async (_e, projectId: unknown, type: unknown, slug: unknown, custom: unknown) =>
+      (await ready).branchName(
+        text(projectId),
+        workType(type),
+        text(slug),
+        optionalText(custom) ?? undefined,
+      ),
   )
+  // 커스텀 유형 (5.6.13, D459, D460)
+  ipcMain.handle(IPC.customTypes, async (_e, projectId: unknown) =>
+    (await ready).customTypes(text(projectId)),
+  )
+  ipcMain.handle(IPC.customTypeList, async () => (await ready).customTypeList())
+  ipcMain.handle(
+    IPC.customTypeFiles,
+    async (_e, source: unknown, projectId: unknown, id: unknown) =>
+      (await ready).customTypeFiles(typeSource(source), optionalText(projectId), text(id)),
+  )
+  ipcMain.handle(IPC.saveCustomType, async (_e, files: unknown, previousId: unknown) =>
+    (await ready).saveCustomType(customTypeFiles(files), optionalText(previousId)),
+  )
+  ipcMain.handle(IPC.deleteCustomType, async (_e, id: unknown) =>
+    (await ready).deleteCustomType(text(id)),
+  )
+  ipcMain.handle(IPC.copyCustomTypeToRepo, async (_e, id: unknown, projectId: unknown) =>
+    (await ready).copyCustomTypeToRepo(text(id), text(projectId)),
+  )
+  ipcMain.handle(
+    IPC.openCustomTypeFolder,
+    async (_e, source: unknown, projectId: unknown, id: unknown) => {
+      const dir = await (
+        await ready
+      ).customTypeFolder(typeSource(source), optionalText(projectId), optionalText(id))
+      if (!dir) return { ok: false, error: '열 수 있는 유형 폴더가 아닙니다' }
+      const error = await shell.openPath(dir)
+      return error ? { ok: false, error } : { ok: true }
+    },
+  )
+  ipcMain.handle(IPC.skillProcedure, async (_e, skill: unknown) => {
+    const found = PROCEDURE_SKILLS.find((s) => s === skill)
+    if (!found) throw new Error('시작점으로 쓸 수 있는 단계가 아님')
+    return (await ready).skillProcedure(found)
+  })
   ipcMain.handle(IPC.submodules, async (_e, projectId: unknown) =>
     (await ready).submodules(text(projectId)),
   )
@@ -193,6 +294,7 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
     (await ready).createWork(text(projectId), {
       request: text(input.request),
       type: workType(input.type),
+      ...(typeof input.customType === 'string' ? { customType: input.customType } : {}),
       baseBranch: text(input.baseBranch),
       baseLocation: input.baseLocation === 'remote' ? 'remote' : 'local',
       // 작업 브랜치와 머지 대상 (D425~D428). 이름을 쓸 수 있는지는 Relay.createWork가 본다

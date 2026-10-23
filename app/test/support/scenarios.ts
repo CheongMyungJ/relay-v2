@@ -862,7 +862,41 @@ export function steps(node: NodeName): Step[] {
         },
         { do: 'stop' },
       ]
+    case 'custom':
+      // 커스텀 단계는 산출물 이름이 단계마다 달라(<단계 id>.md, D453) customSteps로 만든다
+      return [{ do: 'prompt' }, { do: 'stop' }]
   }
+}
+
+/**
+ * 커스텀 단계의 기본 단계 (5.6.13): 단계 절차대로 한 일을 커밋하고 <단계 id>.md(절은 sections, 비면 기본 두 절)와
+ * handoff를 쓴다
+ */
+export function customSteps(
+  step: string,
+  opts: { sections?: readonly string[]; commit?: boolean } = {},
+): Step[] {
+  const sections = opts.sections?.length ? opts.sections : ['한 일', '완료조건별 자체 확인']
+  const doc = sections.map((x) => `## ${x}\n${step} 단계에서 ${x}\n`).join('\n')
+  return [
+    { do: 'prompt' },
+    ...(opts.commit === false
+      ? []
+      : [
+          {
+            do: 'commit',
+            files: { [`notes/${step}.txt`]: `${step} 단계에서 바꿈\n` },
+            message: `chore: ${step} 단계`,
+          } satisfies Step,
+        ]),
+    { do: 'write', file: `${step}.md`, text: doc },
+    {
+      do: 'write',
+      file: 'handoff.md',
+      text: handoff({ decisions: [decision(`${step} 단계의 절차를 따름`)] }),
+    },
+    { do: 'stop' },
+  ]
 }
 
 /**

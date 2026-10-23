@@ -18,7 +18,13 @@ export default defineConfig({
         },
       },
       {
-        test: { name: 'adapters', include: ['test/adapters/**/*.test.ts'], testTimeout: 60_000 },
+        // Windows 러너에서는 beforeEach의 git(레포·서브모듈·worktree 만들기)이 기본 10초를 넘기도 한다
+        test: {
+          name: 'adapters',
+          include: ['test/adapters/**/*.test.ts'],
+          testTimeout: 60_000,
+          hookTimeout: 60_000,
+        },
       },
       {
         // 흐름 시험은 PTY와 git을 많이 띄우므로 파일을 차례로 돌린다

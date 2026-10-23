@@ -8,7 +8,7 @@ import { INSTRUCTIONS_FILE } from '../core/settings'
 import type { SkillName } from '../shared/config'
 import { WORK_TYPES, type WorkType } from '../shared/work'
 import { describeFailure, run } from './exec'
-import { sha256, writeFileAtomic } from './store'
+import { readText, sha256, writeFileAtomic } from './store'
 import { pathDirs } from './which'
 
 export interface FindClaudeOptions {
@@ -88,6 +88,9 @@ export function mergeSkill(skill: string, common: string): string {
   return `${lf(skill).trimEnd()}\n${lf(common)}`
 }
 
+/** 유형 표시에 쓸 수 있는 유형: 기본 다섯과, 모든 커스텀 유형이 함께 쓰는 custom (D456) */
+const ASSEMBLY_TYPES: readonly WorkType[] = [...WORK_TYPES, 'custom']
+
 const TYPE_OPEN = /^<!-- type: ([a-z]+(?: [a-z]+)*) -->$/
 const TYPE_CLOSE = '<!-- /type -->'
 const TYPE_LIKE = /^\s*<!--\s*\/?\s*type\b/i
@@ -106,7 +109,7 @@ export function selectType(text: string, type: WorkType): string {
     if (m) {
       if (open) throw new Error(`스킬의 유형 표시가 겹침 (${i + 1}행)`)
       const types = (m[1] ?? '').split(' ')
-      const unknown = types.filter((t) => !(WORK_TYPES as readonly string[]).includes(t))
+      const unknown = types.filter((t) => !(ASSEMBLY_TYPES as readonly string[]).includes(t))
       if (unknown.length) {
         throw new Error(`스킬의 유형 표시에 모르는 유형: ${unknown.join(', ')} (${i + 1}행)`)
       }
@@ -130,13 +133,71 @@ export function stripFrontMatter(text: string): string {
 }
 
 /**
- * 배포할 단계 절차: 스킬 원본의 머리글을 떼고, 그 Work 유형의 구간만 남기고(D279) 공통 규칙을 끝에 붙인다 (5.6.3, D440).
- * Codex 배포본은 이 글 앞에 자기 머리글을 붙인다 (engines.md)
+ * 커스텀 Work의 절차 재료 (D452, D456, D458): Work 디렉터리에 복사한 유형 폴더와, 커스텀 단계 task면 그 단계 id
  */
-export async function skillText(source: string, skill: SkillName, type: WorkType): Promise<string> {
-  const body = await fsp.readFile(path.join(source, skill, SKILL_FILE), 'utf8')
+export interface CustomSource {
+  /** Work 디렉터리의 type/ (복사본) */
+  dir: string
+  /** 커스텀 단계 task의 단계 id. intake와 verify에는 없다 */
+  step?: string
+}
+
+/** 커스텀 단계 절차의 제목. 공통 바탕과 사람이 쓴 절차 사이에 둔다 (D452) */
+export const CUSTOM_PROCEDURE_HEAD = "## This step's procedure"
+/** 공용 스킬 끝에 붙이는 유형 지시의 제목 (D456) */
+export const CUSTOM_INTAKE_HEAD = "## This Work type's intake instructions"
+export const CUSTOM_VERIFY_HEAD = "## This Work type's review points"
+
+/** 사람이 쓴 글을 제목 아래에 붙인다. 앞뒤 빈 줄은 뗀다 */
+const section = (head: string, text: string) => `\n\n${head}\n\n${lf(text).trim()}\n`
+
+/**
+ * 커스텀 Work의 스킬 본문 (D452, D456). 커스텀 단계는 공통 바탕 뒤에 사람이 쓴 그 단계의 절차를, work-start와 verify는
+ * 유형 폴더의 intake.md·verify.md가 있으면 본문 끝에 붙인다. 다른 스킬은 그대로다
+ */
+async function customBody(body: string, skill: SkillName, custom: CustomSource): Promise<string> {
+  if (skill === 'custom') {
+    if (!custom.step) throw new Error('커스텀 단계의 단계 id가 없음')
+    const procedure = await readText(path.join(custom.dir, `${custom.step}.md`))
+    if (procedure === null) throw new Error(`커스텀 단계의 절차 파일이 없음: ${custom.step}.md`)
+    return `${lf(body).trimEnd()}${section(CUSTOM_PROCEDURE_HEAD, procedure)}`
+  }
+  const extra =
+    skill === 'work-start'
+      ? { head: CUSTOM_INTAKE_HEAD, file: 'intake.md' }
+      : skill === 'verify'
+        ? { head: CUSTOM_VERIFY_HEAD, file: 'verify.md' }
+        : null
+  const text = extra ? await readText(path.join(custom.dir, extra.file)) : null
+  return extra && text?.trim() ? `${lf(body).trimEnd()}${section(extra.head, text)}` : body
+}
+
+/**
+ * 배포할 단계 절차: 스킬 원본의 머리글을 떼고, 그 Work 유형의 구간만 남기고(D279) 공통 규칙을 끝에 붙인다 (5.6.3, D440).
+ * 커스텀 Work는 유형 폴더의 글을 붙인다 (customBody). Codex 배포본은 이 글 앞에 자기 머리글을 붙인다 (engines.md)
+ */
+export async function skillText(
+  source: string,
+  skill: SkillName,
+  type: WorkType,
+  custom?: CustomSource,
+): Promise<string> {
+  const raw = await fsp.readFile(path.join(source, skill, SKILL_FILE), 'utf8')
   const common = await fsp.readFile(path.join(source, COMMON_FILE), 'utf8')
-  return mergeSkill(selectType(stripFrontMatter(body), type), selectType(common, type))
+  const body = selectType(stripFrontMatter(raw), type)
+  return mergeSkill(
+    custom && type === 'custom' ? await customBody(body, skill, custom) : body,
+    selectType(common, type),
+  )
+}
+
+/**
+ * 기존 단계의 절차 글 (D448, D459): 커스텀 단계를 만들 시작점이다. 머리글을 떼고 유형 표시 구간은 뺀다(어느 기본 유형에도
+ * 속하지 않는 글만 남는다). 공통 규칙은 붙이지 않는다: 커스텀 단계에도 앱이 붙인다
+ */
+export async function procedureText(source: string, skill: SkillName): Promise<string> {
+  const raw = await fsp.readFile(path.join(source, skill, SKILL_FILE), 'utf8')
+  return `${selectType(stripFrontMatter(raw), 'custom').trim()}\n`
 }
 
 export interface DeployedSkill {
@@ -170,8 +231,10 @@ export async function deploySkill(o: {
   skill: SkillName
   /** Work 유형. 공용 스킬에서 그 유형의 구간만 배포한다 (D279) */
   type: WorkType
+  /** 커스텀 Work의 유형 폴더와 단계 (D452, D456) */
+  custom?: CustomSource
 }): Promise<DeployedSkill> {
-  const text = await skillText(o.source, o.skill, o.type)
+  const text = await skillText(o.source, o.skill, o.type, o.custom)
   await removeRelaySkills(o.workDir)
   const file = path.join(o.taskDir, INSTRUCTIONS_FILE)
   await writeFileAtomic(file, text + taskFooter(o.contextPath, o.taskDir))

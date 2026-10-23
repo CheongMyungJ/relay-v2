@@ -112,6 +112,7 @@ describe('deny 규칙 (D17, 시나리오 2-3)', () => {
       `Edit(${w}/tasks/01-intake/**)`,
       `Edit(${w}/tasks/02-fix/**)`,
       `Edit(${w}/.claude/**)`,
+      `Edit(${w}/type/**)`,
     ])
   })
 
@@ -131,9 +132,10 @@ describe('deny 규칙 (D17, 시나리오 2-3)', () => {
       `Edit(${w}/tasks/02-fix/instructions.md)`,
     ])
     expect(rules).toEqual([
-      ...denyRules({ workDir: WORK_DIR, previousTaskDirs: [`${TASKS}\\01-intake`] }).slice(0, -1),
+      ...denyRules({ workDir: WORK_DIR, previousTaskDirs: [`${TASKS}\\01-intake`] }).slice(0, -2),
       `Edit(${w}/tasks/02-fix/instructions.md)`,
       `Edit(${w}/.claude/**)`,
+      `Edit(${w}/type/**)`,
     ])
   })
 

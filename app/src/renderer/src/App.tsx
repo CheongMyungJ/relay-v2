@@ -27,6 +27,7 @@ import {
   SettingsDialog,
   WorkSettingsDialog,
 } from './dialogs'
+import { CustomTypesDialog } from './CustomTypes'
 import { Activity } from './Activity'
 import { withOpened } from './opened'
 import { Panel, showsPr, wantsApproval } from './Panel'
@@ -57,6 +58,7 @@ type Dialog =
   | { kind: 'project-remove'; project: ProjectView }
   | { kind: 'work'; project: ProjectView; draft?: DraftView }
   | { kind: 'settings' }
+  | { kind: 'types' }
   | { kind: 'work-settings'; workKey: string }
   | { kind: 'abandon'; workKey: string }
   | { kind: 'clean'; workKey: string }
@@ -321,7 +323,7 @@ export function App() {
           {w.badge.label}
         </span>
         <span className="work-title">
-          <span className="type-tag" title={WORK_TYPE_LABEL[w.type]}>
+          <span className="type-tag" title={w.customType?.name ?? WORK_TYPE_LABEL[w.type]}>
             {WORK_TYPE_SHORT[w.type]}
           </span>{' '}
           {w.title || w.workId}
@@ -690,7 +692,10 @@ export function App() {
             </>
           ) : task && work ? (
             <>
-              <span className="type-tag" title={WORK_TYPE_LABEL[work.type]}>
+              <span
+                className="type-tag"
+                title={work.customType?.name ?? WORK_TYPE_LABEL[work.type]}
+              >
                 {WORK_TYPE_SHORT[work.type]}
               </span>
               {/* 상태는 앞에 둔다: 패널이 넓어져 머리 띠가 좁아도 잘리지 않고 설명이 줄어든다 */}
@@ -863,7 +868,13 @@ export function App() {
           onDeleted={() => setDialog(null)}
         />
       ) : null}
-      {dialog?.kind === 'settings' ? <SettingsDialog onClose={() => setDialog(null)} /> : null}
+      {dialog?.kind === 'settings' ? (
+        <SettingsDialog
+          onClose={() => setDialog(null)}
+          onCustomTypes={() => setDialog({ kind: 'types' })}
+        />
+      ) : null}
+      {dialog?.kind === 'types' ? <CustomTypesDialog onClose={() => setDialog(null)} /> : null}
       {dialog?.kind === 'work-settings' && dialogWork ? (
         <WorkSettingsDialog work={dialogWork} onClose={() => setDialog(null)} />
       ) : null}

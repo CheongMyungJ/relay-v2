@@ -97,7 +97,7 @@ describe('곁 세션의 안내 (D387)', () => {
     expect(text).toContain('이 Work를 고치지 않고 새 Work로 한다')
     expect(text).toContain('이 Work의 초안 폴더 `/r/works/w-20261008-001/work-drafts`에')
     expect(text).toContain(
-      'project: app-3f9a1c\ntype: <bugfix | feature | refactor | spec | general. 보통 이 Work와 같은 bugfix>',
+      'project: app-3f9a1c\ntype: <bugfix | feature | refactor | spec | general | custom. 보통 이 Work와 같은 bugfix>',
     )
     expect(text).toContain(
       '원래 요청, 지금 승인된 intent(있으면), 해 본 것과 버리는 까닭(산출물 경로), 사람의 지시',

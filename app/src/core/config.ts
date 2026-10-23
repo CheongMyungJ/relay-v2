@@ -20,6 +20,7 @@ import type { NodeName } from '../shared/contracts'
 import type { ProjectSettings } from '../shared/project'
 import type { MergeMethod } from '../shared/work'
 import { checkBranchRule } from './branch'
+import { CUSTOM_ID } from './custom-type'
 import { ALL_NODES } from './pipeline'
 import {
   effortError,
@@ -44,10 +45,10 @@ export const AUTO_APPROVE_NODES: readonly AutoApproveNode[] = AUTO_APPROVE_TITLE
 
 /**
  * 늘 수동인 노드: 자동 승인을 켤 수 있는 노드의 나머지. 의도 승인과 Work 완료다 (4.2). 자동 승인에
- * 이 키가 있으면 켜든 끄든 받지 않는다
+ * 이 키가 있으면 켜든 끄든 받지 않는다. 커스텀 단계는 앱 설정에 항목이 없어 모르는 단계다 (D457)
  */
 const MANUAL_NODES: readonly NodeName[] = ALL_NODES.filter(
-  (n) => !(AUTO_APPROVE_NODES as readonly NodeName[]).includes(n),
+  (n) => n !== 'custom' && !(AUTO_APPROVE_NODES as readonly NodeName[]).includes(n),
 )
 
 /** 설정 화면에서 바꾸는 값 (D70) */
@@ -503,7 +504,26 @@ export function applyConfigPatch(current: AppConfig, patch: unknown): Checked<Ap
   return { ok: true, value: next }
 }
 
-const WORK_KEYS = ['auto_approve', 'question_mode', 'respond_auto_start'] as const
+const WORK_KEYS = [
+  'auto_approve',
+  'custom_auto_approve',
+  'question_mode',
+  'respond_auto_start',
+] as const
+
+/** 커스텀 단계의 자동 승인 (D457). 키는 단계 id 모양이어야 한다. 그 Work에 있는 단계인지는 보지 않는다(없는 단계는 쓰이지 않음) */
+function customAutoApprove(v: unknown): Checked<Record<string, boolean>> {
+  if (!isRecord(v)) return { ok: false, error: '커스텀 단계 자동 승인: 객체여야 함' }
+  const out: Record<string, boolean> = {}
+  for (const [step, on] of Object.entries(v)) {
+    if (!CUSTOM_ID.test(step))
+      return { ok: false, error: `커스텀 단계 자동 승인: 단계 id가 아님 ${step}` }
+    if (typeof on !== 'boolean')
+      return { ok: false, error: `커스텀 단계 자동 승인(${step}): true/false여야 함` }
+    out[step] = on
+  }
+  return { ok: true, value: out }
+}
 
 /**
  * Work별 설정 (D72): 단계별 자동 승인, 스킬별 질문 방식, 대응 자동 시작(D154). 준 키만 돌려주고, 빈 값은 그 키를 앱
@@ -527,6 +547,10 @@ export function checkWorkSettings(input: unknown): Checked<WorkSettingsPatch> {
       const r = questionModes(v)
       if (!r.ok) return r
       out.question_mode = r.value
+    } else if (key === 'custom_auto_approve') {
+      const r = customAutoApprove(v)
+      if (!r.ok) return r
+      out.custom_auto_approve = r.value
     } else {
       const r = autoApprove(v)
       if (!r.ok) return r
@@ -545,6 +569,7 @@ export function mergeWorkSettings(current: WorkSettings, patch: WorkSettingsPatc
   const pick = <T extends object>(now: T | undefined, next: T | undefined): T | undefined =>
     next === undefined ? now : Object.keys(next).length ? { ...next } : undefined
   const auto = pick(current.auto_approve, patch.auto_approve)
+  const custom = pick(current.custom_auto_approve, patch.custom_auto_approve)
   const modes = pick(current.question_mode, patch.question_mode)
   const start =
     patch.respond_auto_start === undefined
@@ -552,6 +577,7 @@ export function mergeWorkSettings(current: WorkSettings, patch: WorkSettingsPatc
       : (patch.respond_auto_start ?? undefined)
   return {
     ...(auto ? { auto_approve: auto } : {}),
+    ...(custom ? { custom_auto_approve: custom } : {}),
     ...(modes ? { question_mode: modes } : {}),
     ...(start === undefined ? {} : { respond_auto_start: start }),
   }
