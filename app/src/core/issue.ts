@@ -236,11 +236,13 @@ export function issueBody(o: {
   workId: string
   mark: string
   type: WorkType
+  /** 유형의 화면 이름. 커스텀 유형은 그 이름이다 (D460). 없으면 기본 유형 이름이다 */
+  typeName?: string
   intent: string
 }): string {
   return limited(
     [
-      `> relay Work \`${o.workId}\`(${WORK_TYPE_LABEL[o.type]})의 기록이다. 단계가 승인될 때마다 코멘트를 덧붙인다.`,
+      `> relay Work \`${o.workId}\`(${o.typeName ?? WORK_TYPE_LABEL[o.type]})의 기록이다. 단계가 승인될 때마다 코멘트를 덧붙인다.`,
       intentBody(o.intent),
     ],
     [],

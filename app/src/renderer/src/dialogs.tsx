@@ -505,7 +505,9 @@ export function NewWorkDialog({
   const [type, setType] = useState<WorkType | null>(draft?.type ?? null)
   // 커스텀 유형의 id와 이 대상에서 고를 수 있는 유형 (D451, D460)
   const [customId, setCustomId] = useState<string | null>(draft?.customType ?? null)
-  const [customTypes, setCustomTypes] = useState<CustomTypeView[]>([])
+  // 읽은 대상과 그 유형. 지금 대상을 아직 읽지 않았으면 null(읽는 중)이다
+  const [typesOf, setTypesOf] = useState<{ target: string; list: CustomTypeView[] } | null>(null)
+  const customTypes = typesOf?.target === target.id ? typesOf.list : null
   const [customAuto, setCustomAuto] = useState<Record<string, boolean>>({})
   const pickType = (next: WorkType, id: string | null) => {
     setType(next)
@@ -562,7 +564,7 @@ export function NewWorkDialog({
   useEffect(() => {
     let current = true
     void window.relay.customTypes(target.id).then((list) => {
-      if (current) setCustomTypes(list)
+      if (current) setTypesOf({ target: target.id, list })
     })
     return () => {
       current = false
@@ -710,7 +712,7 @@ export function NewWorkDialog({
   const shownTarget = mergeTarget ?? branch
   const chosenCustom =
     type === 'custom'
-      ? customTypes.find((t) => t.id === customId && t.errors.length === 0)
+      ? customTypes?.find((t) => t.id === customId && t.errors.length === 0)
       : undefined
 
   return (
@@ -821,10 +823,10 @@ export function NewWorkDialog({
         <WorkTypePicker
           value={type}
           customId={customId}
-          customTypes={customTypes}
+          customTypes={customTypes ?? []}
           onChange={pickType}
         />
-        {type === 'custom' && customId && !chosenCustom ? (
+        {type === 'custom' && customId && customTypes !== null && !chosenCustom ? (
           <div className="error">
             커스텀 유형 <code>{customId}</code>이 없습니다. 지웠거나 이 프로젝트의 유형이 아닙니다.
           </div>

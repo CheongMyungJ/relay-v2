@@ -130,7 +130,8 @@ const sameStage = (a: Stage, b: Stage) => a.node === b.node && (a.step ?? '') ==
 
 /**
  * 기본 다음 단계 (3.2)를 Work에서 정한다: 기본 유형은 defaultNext와 같고, 커스텀 유형은 다음 커스텀 단계나 verify다.
- * 파이프라인에 없는 자리는 Work 완료다
+ * 파이프라인에 없는 자리는 Work 완료다. 다만 정의에서 찾지 못한 커스텀 단계(깨진 기록)는 verify로 보낸다: 리뷰와 검증 없이
+ * 완료되지 않게 한다
  */
 export function nextStage(
   work: Pick<WorkState, 'type' | 'custom_type'>,
@@ -138,7 +139,8 @@ export function nextStage(
 ): Stage | typeof WORK_COMPLETE {
   const stages = stagesOf(work)
   const i = stages.findIndex((s) => sameStage(s, from))
-  return i < 0 ? WORK_COMPLETE : (stages[i + 1] ?? WORK_COMPLETE)
+  if (i < 0) return from.node === 'custom' ? { node: 'verify' } : WORK_COMPLETE
+  return stages[i + 1] ?? WORK_COMPLETE
 }
 
 /** task의 자리 */
@@ -168,11 +170,6 @@ export function taskTitle(
   task: Pick<TaskRecord, 'node' | 'step' | 'step_title'>,
 ): string {
   return task.step_title ?? customStep(work, task)?.title ?? nodeTitle(task)
-}
-
-/** 자리의 화면 이름. 커스텀 단계는 Work의 정의에서 찾는다 */
-export function stageTitle(work: Pick<WorkState, 'custom_type'>, stage: Stage): string {
-  return taskTitle(work, stage)
 }
 
 /** 커스텀 단계 산출물의 기본 절 (D453) */

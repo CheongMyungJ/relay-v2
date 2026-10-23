@@ -8,7 +8,7 @@ import { INSTRUCTIONS_FILE } from '../core/settings'
 import type { SkillName } from '../shared/config'
 import { WORK_TYPES, type WorkType } from '../shared/work'
 import { describeFailure, run } from './exec'
-import { sha256, writeFileAtomic } from './store'
+import { readText, sha256, writeFileAtomic } from './store'
 import { pathDirs } from './which'
 
 export interface FindClaudeOptions {
@@ -148,14 +148,6 @@ export const CUSTOM_PROCEDURE_HEAD = "## This step's procedure"
 export const CUSTOM_INTAKE_HEAD = "## This Work type's intake instructions"
 export const CUSTOM_VERIFY_HEAD = "## This Work type's review points"
 
-/** 유형 폴더의 파일. 없으면 null이다 */
-async function readOptional(file: string): Promise<string | null> {
-  return fsp.readFile(file, 'utf8').catch((err: unknown) => {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null
-    throw err
-  })
-}
-
 /** 사람이 쓴 글을 제목 아래에 붙인다. 앞뒤 빈 줄은 뗀다 */
 const section = (head: string, text: string) => `\n\n${head}\n\n${lf(text).trim()}\n`
 
@@ -166,7 +158,7 @@ const section = (head: string, text: string) => `\n\n${head}\n\n${lf(text).trim(
 async function customBody(body: string, skill: SkillName, custom: CustomSource): Promise<string> {
   if (skill === 'custom') {
     if (!custom.step) throw new Error('커스텀 단계의 단계 id가 없음')
-    const procedure = await readOptional(path.join(custom.dir, `${custom.step}.md`))
+    const procedure = await readText(path.join(custom.dir, `${custom.step}.md`))
     if (procedure === null) throw new Error(`커스텀 단계의 절차 파일이 없음: ${custom.step}.md`)
     return `${lf(body).trimEnd()}${section(CUSTOM_PROCEDURE_HEAD, procedure)}`
   }
@@ -176,7 +168,7 @@ async function customBody(body: string, skill: SkillName, custom: CustomSource):
       : skill === 'verify'
         ? { head: CUSTOM_VERIFY_HEAD, file: 'verify.md' }
         : null
-  const text = extra ? await readOptional(path.join(custom.dir, extra.file)) : null
+  const text = extra ? await readText(path.join(custom.dir, extra.file)) : null
   return extra && text?.trim() ? `${lf(body).trimEnd()}${section(extra.head, text)}` : body
 }
 

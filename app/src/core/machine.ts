@@ -722,6 +722,8 @@ export type Effect =
       type: 'appendDecisions'
       taskId: string
       node: TaskNode
+      /** 커스텀 단계의 단계 id. 결정 로그의 머리 줄에 쓴다 (D462) */
+      step?: string
       at: string
       by: ApprovalBy
       decisions: Decision[] | null
@@ -1824,6 +1826,7 @@ function approveNow(work: WorkState, task: TaskRecord, a: Approval): Transition 
     type: 'appendDecisions',
     taskId: task.id,
     node: task.node,
+    ...(task.step !== undefined ? { step: task.step } : {}),
     at: a.at,
     by: a.by,
     decisions: header ? header.decisions : null,
@@ -2211,6 +2214,7 @@ function deliverySucceeded(work: WorkState, e: DeliverySucceeded): Transition {
       type: 'appendDecisions',
       taskId: task.id,
       node: task.node,
+      ...(task.step !== undefined ? { step: task.step } : {}),
       at: e.at,
       by: 'human',
       decisions: e.check?.handoffHeader ? e.check.handoffHeader.decisions : null,
@@ -2963,6 +2967,7 @@ function recordRespondApproval(
         type: 'appendDecisions',
         taskId: task.id,
         node: task.node,
+        ...(task.step !== undefined ? { step: task.step } : {}),
         at,
         by,
         decisions: check?.handoffHeader ? check.handoffHeader.decisions : null,

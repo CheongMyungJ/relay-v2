@@ -18,11 +18,14 @@ import { deployCodexSkill } from '../../src/adapters/codex'
 import {
   copyTypeToRepo,
   deleteCustomType,
+  findCustomType,
   globalTypesDir,
   listGlobalTypes,
   listRepoTypes,
   mergeTypes,
+  readCustomType,
   readCustomTypeFiles,
+  renameCustomType,
   repoTypesDir,
   saveCustomType,
   snapshotCustomType,
@@ -112,6 +115,40 @@ describe('[어댑터] 유형 폴더 읽기 (D449~D451)', () => {
   })
 })
 
+describe('[어댑터] id로 유형 찾기와 링크 (D451, D458)', () => {
+  it('레포의 폴더가 있으면 그것, 없으면 전역의 것이다', async () => {
+    const home = path.join(root, 'home')
+    const repo = path.join(root, 'repo')
+    writeType(path.join(globalTypesDir(home), 'survey-apply'), FULL)
+    expect((await findCustomType(home, repo, 'survey-apply'))?.source).toBe('global')
+    writeType(path.join(repoTypesDir(repo), 'survey-apply'), FULL)
+    expect((await findCustomType(home, repo, 'survey-apply'))?.source).toBe('repo')
+    expect(await findCustomType(home, repo, 'gone')).toBeUndefined()
+    expect(await findCustomType(home, repo, '../home')).toBeUndefined()
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    '심볼릭 링크는 따라가지 않는다: 링크한 절차는 없음이고 링크한 선택 파일은 복사하지 않는다',
+    async () => {
+      const secret = path.join(root, 'secret.txt')
+      fs.writeFileSync(secret, '비밀')
+      const src = path.join(root, 'types', 'survey-apply')
+      writeType(src, FULL)
+      fs.symlinkSync(secret, path.join(src, 'intake.md'))
+      const copied = path.join(root, 'w', 'type')
+      await snapshotCustomType({ dir: src, source: 'repo' }, copied)
+      expect(fs.readdirSync(copied).sort()).toEqual(['apply.md', 'survey.md', 'type.json'])
+      fs.rmSync(path.join(src, 'apply.md'))
+      fs.symlinkSync(secret, path.join(src, 'apply.md'))
+      const entry = await readCustomType(src, 'repo')
+      expect(entry.errors).toEqual(['`apply.md` 없음: 단계 `apply`(적용)의 절차 파일'])
+      await expect(
+        snapshotCustomType({ dir: src, source: 'repo' }, path.join(root, 'w2')),
+      ).rejects.toThrow('apply.md')
+    },
+  )
+})
+
 describe('[어댑터] Work를 만들 때의 복사 (D458)', () => {
   it('정의와 절차, 선택 파일만 type/에 복사하고 해시와 단계를 돌려준다', async () => {
     const src = path.join(root, 'types', 'survey-apply')
@@ -187,8 +224,12 @@ describe('[어댑터] 유형 편집과 레포로 복사 (D450, D459)', () => {
         verify: '',
       }),
     ).rejects.toThrow('유형 이름이 없음')
-    await deleteCustomType(types, 'survey-apply')
+    // id를 바꾸면 폴더를 옮긴다: 사람이 둔 파일이 남는다
+    await renameCustomType(types, 'survey-apply', 'survey-fix')
+    expect(fs.readdirSync(path.join(types, 'survey-fix'))).toContain('keep.txt')
     expect(fs.existsSync(dir)).toBe(false)
+    await deleteCustomType(types, 'survey-fix')
+    expect(fs.existsSync(path.join(types, 'survey-fix'))).toBe(false)
   })
 
   it('[레포로 복사]는 .relay/types/<id>/에 쓰고, 이미 있으면 덮어쓰지 않는다', async () => {

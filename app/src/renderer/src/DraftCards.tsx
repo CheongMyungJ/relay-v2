@@ -60,20 +60,26 @@ function DraftCard({
   const project = known ?? projects.find((p) => p.id === pick) ?? projects[0]
   // 커스텀 유형의 초안은 그 프로젝트에 그 유형이 있어야 만든다. 지운 유형이면 까닭을 보이고 막는다 (D458)
   const wanted = draft.type === 'custom' ? draft.customType : null
-  const [customName, setCustomName] = useState<string | null | undefined>(undefined)
+  // 읽은 프로젝트와 유형 이름(없으면 null). 지금 프로젝트를 아직 읽지 않았으면 읽는 중이고, 그동안에도
+  // [새 Work로 만들기]를 막는다
+  const [found, setFound] = useState<{ key: string; name: string | null } | null>(null)
+  const projectId = project?.id
+  const key = `${projectId ?? ''}|${wanted ?? ''}`
   useEffect(() => {
-    if (!wanted || !project) return
+    if (!wanted || !projectId) return
     let current = true
-    void window.relay.customTypes(project.id).then((list) => {
+    void window.relay.customTypes(projectId).then((list) => {
       if (!current) return
       const t = list.find((x) => x.id === wanted && x.errors.length === 0)
-      setCustomName(t ? t.name : null)
+      setFound({ key: `${projectId}|${wanted}`, name: t ? t.name : null })
     })
     return () => {
       current = false
     }
-  }, [wanted, project])
+  }, [wanted, projectId])
+  const customName = found?.key === key ? found.name : undefined
   const missingType = wanted !== null && customName === null
+  const checkingType = wanted !== null && customName === undefined
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const discard = async () => {
@@ -123,7 +129,7 @@ function DraftCard({
       <div className="notice-actions">
         <button
           className="primary"
-          disabled={busy || !project || missingType}
+          disabled={busy || !project || missingType || checkingType}
           title={
             !project
               ? '먼저 프로젝트를 등록하세요'

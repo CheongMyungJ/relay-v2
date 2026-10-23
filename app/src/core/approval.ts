@@ -16,7 +16,7 @@ import type {
   WorkType,
 } from '../shared/work'
 import { AUTO_APPROVE_NODES } from './config'
-import { RESPOND } from './pipeline'
+import { RESPOND, customStep } from './pipeline'
 import { isRespondPending } from './respond'
 import { INTENT_DRAFT_FILE, REPLIES_FILE, isValid } from './validate'
 
@@ -182,12 +182,17 @@ export interface AutoApproveNote {
  * 대기로 남은 PR 대응 task는 보이지 않는다: 세션이 끝나 판정할 턴이 없고, 실패와 [다시 시도]는 강조 영역이 보인다
  */
 export function autoApproveNote(
-  work: Pick<WorkState, 'settings'>,
-  task: Pick<TaskRecord, 'node' | 'status' | 'countdown' | 'auto_hold' | 'respond' | 'engine'>,
+  work: Pick<WorkState, 'settings' | 'custom_type'>,
+  task: Pick<
+    TaskRecord,
+    'node' | 'step' | 'status' | 'countdown' | 'auto_hold' | 'respond' | 'engine'
+  >,
   config: AppConfig,
 ): AutoApproveNote {
   const engine = knownTaskEngine(task)
-  const on = approvalMode(config, work.settings, task.node, engine) === 'auto'
+  // 커스텀 단계는 그 단계의 정의를 함께 본다 (D457)
+  const on =
+    approvalMode(config, work.settings, task.node, engine, customStep(work, task)) === 'auto'
   if (engine === null)
     return { on: false, hold: `${agentLabel(task)}. 이 세션은 재개할 수 없습니다.` }
   if (engine === 'codex') {

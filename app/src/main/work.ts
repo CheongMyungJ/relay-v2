@@ -150,6 +150,7 @@ import {
   RESPOND,
   customSections,
   customStep,
+  nodeTitle,
   taskArtifacts,
   workType,
 } from '../core/pipeline'
@@ -333,6 +334,7 @@ import type {
   UncommittedAction,
   WorkState,
 } from '../shared/work'
+import { workTypeLabel } from '../shared/work'
 import type { SessionPool } from './pool'
 import type { UiPort } from './ports'
 import { listPrComments, readPr, receivedCommits, fetchTip, type PrFetched } from './pr'
@@ -874,7 +876,7 @@ export class WorkRunner {
           decisionsBlock({
             taskId: e.taskId,
             node: e.node,
-            ...(this.task(e.taskId)?.step ? { step: this.task(e.taskId)?.step } : {}),
+            ...(e.step !== undefined ? { step: e.step } : {}),
             at: e.at,
             by: e.by,
             decisions: e.decisions,
@@ -5102,6 +5104,7 @@ export class WorkRunner {
         workId: this.work.work_id,
         mark: issue.mark,
         type: workType(this.work),
+        typeName: workTypeLabel(this.work),
         intent,
       })
       // 라벨이 없으면 만든다 (D348). 만들지 못하면(권한) 라벨 없이 만든다 (D349)
@@ -5171,7 +5174,7 @@ export class WorkRunner {
     if (entry.kind === 'step') {
       const discarded = (task.selection?.discarded ?? []).map((id) => {
         const t = this.task(id)
-        return t ? `${t.id} ${NODE_INFO[t.node].title}` : id
+        return t ? `${t.id} ${nodeTitle(t)}` : id
       })
       return stepComment({ mark, task, discarded })
     }

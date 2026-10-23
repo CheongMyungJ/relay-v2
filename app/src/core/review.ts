@@ -19,7 +19,7 @@ import {
   nextStage,
   nodeTitle,
   stageOf,
-  stageTitle,
+  taskTitle,
 } from './pipeline'
 import {
   DESIGN_FILE,
@@ -187,7 +187,7 @@ export function resumeHint(work: WorkState): string | null {
   const next = stage ? nextStage(work, stage) : null
   if (next === WORK_COMPLETE) return 'Work 완료 화면에서 전달을 고르면 Work를 완료합니다.'
   const action =
-    next === null ? '기본 다음 단계로 갑니다' : `다음 단계(${stageTitle(work, next)})를 시작합니다`
+    next === null ? '기본 다음 단계로 갑니다' : `다음 단계(${taskTitle(work, next)})를 시작합니다`
   return `[재개]하면 ${action}.`
 }
 

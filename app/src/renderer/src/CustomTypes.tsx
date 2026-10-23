@@ -135,7 +135,10 @@ export function CustomTypesDialog({ onClose }: { onClose: () => void }) {
     }
     setEditing({ draft: fromFiles(files), previousId: id })
   }
+  // [지우기]는 한 번 더 눌러야 지운다: 사람이 쓴 절차가 모두 사라지고 되돌릴 수 없다
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const remove = async (id: string) => {
+    setConfirmDelete(null)
     const r = await call(() => window.relay.deleteCustomType(id))
     if (!r.ok) setError(r.error)
     reload()
@@ -199,7 +202,17 @@ export function CustomTypesDialog({ onClose }: { onClose: () => void }) {
                   <button onClick={() => void copy(t.id)}>레포로 복사</button>
                 </>
               ) : null}
-              <button onClick={() => void remove(t.id)}>지우기</button>
+              {confirmDelete === t.id ? (
+                <>
+                  <span className="error">폴더째 지우고 되돌릴 수 없습니다.</span>
+                  <button className="danger" onClick={() => void remove(t.id)}>
+                    정말 지우기
+                  </button>
+                  <button onClick={() => setConfirmDelete(null)}>그대로 두기</button>
+                </>
+              ) : (
+                <button onClick={() => setConfirmDelete(t.id)}>지우기</button>
+              )}
             </TypeRow>
           ))}
         </ul>
@@ -283,8 +296,18 @@ function TypeEditor({
     setD({ ...d, steps })
   }
   const addStep = async () => {
-    const procedure = start ? await window.relay.skillProcedure(start) : ''
-    setD({ ...d, steps: [...d.steps, { ...EMPTY_STEP, procedure }] })
+    setError(null)
+    let procedure = ''
+    if (start) {
+      const r = await call(() => window.relay.skillProcedure(start))
+      if (typeof r !== 'string') {
+        setError(r.error)
+        return
+      }
+      procedure = r
+    }
+    // 기다리는 동안 고친 글을 덮지 않게 지금 값에 더한다
+    setD((cur) => ({ ...cur, steps: [...cur.steps, { ...EMPTY_STEP, procedure }] }))
   }
   const save = async () => {
     setBusy(true)

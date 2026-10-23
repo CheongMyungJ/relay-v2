@@ -12,6 +12,9 @@ export const VERIFY_NOTES_FILE = 'verify.md'
 /** 유형 id와 단계 id의 모양 (D449): 영어 소문자·숫자이고 `-`로 잇는다 */
 export const CUSTOM_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
+/** 유형 id와 단계 id의 최대 글자 수. task 디렉터리·산출물·브랜치 이름이 된다 */
+export const ID_MAX = 40
+
 /** 유형 id로 쓸 수 없는 이름: 기본 유형과 custom (D449) */
 export const RESERVED_TYPE_IDS: readonly string[] = [...WORK_TYPES, 'custom']
 
@@ -39,6 +42,7 @@ const isRecord = (v: unknown): v is Record<string, unknown> =>
 /** 유형 id(폴더 이름)의 오류. 쓸 수 있으면 null이다 */
 export function typeIdError(id: string): string | null {
   if (!CUSTOM_ID.test(id)) return `유형 id \`${id}\`: 영어 소문자·숫자·\`-\`만 씀`
+  if (id.length > ID_MAX) return `유형 id \`${id}\`: ${ID_MAX}자를 넘음`
   if (RESERVED_TYPE_IDS.includes(id)) return `유형 id \`${id}\`: 기본 유형 이름과 겹침`
   return null
 }
@@ -46,6 +50,7 @@ export function typeIdError(id: string): string | null {
 /** 단계 id의 오류. 쓸 수 있으면 null이다 */
 export function stepIdError(id: string): string | null {
   if (!CUSTOM_ID.test(id)) return `단계 id \`${id}\`: 영어 소문자·숫자·\`-\`만 씀`
+  if (id.length > ID_MAX) return `단계 id \`${id}\`: ${ID_MAX}자를 넘음`
   if (RESERVED_STEP_IDS.includes(id)) return `단계 id \`${id}\`: 앱이 쓰는 이름과 겹침`
   return null
 }

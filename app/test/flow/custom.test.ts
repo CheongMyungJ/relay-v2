@@ -222,6 +222,10 @@ describe('[흐름] 커스텀 유형 (M30)', () => {
       ok: false,
       error: expect.stringContaining('형식이 깨졌습니다'),
     })
+    // 한 번에 하나씩 만든다: 유형을 찾는 동안 들어온 둘째 생성은 거절된다
+    const [a, b] = await Promise.all([s.create(), s.create()])
+    expect([a.ok, b.ok].sort()).toEqual([false, true])
+    expect(a.ok ? b : a).toMatchObject({ error: '다른 Work를 만드는 중입니다' })
     expect(await s.create('gone')).toMatchObject({
       ok: false,
       error: '커스텀 유형이 없습니다: gone',

@@ -24,7 +24,9 @@ import {
   copyTypeToRepo,
   customTypeView,
   deleteCustomType,
+  findCustomType,
   globalTypesDir,
+  renameCustomType,
   listGlobalTypes,
   listRepoTypes,
   mergeTypes,
@@ -909,9 +911,10 @@ export class Relay {
         const taken = await listGlobalTypes(this.o.home)
         if (taken.some((t) => t.id === files.def.id))
           return { ok: false, error: `같은 id의 전역 유형이 이미 있습니다: ${files.def.id}` }
+        // id를 바꾸면 폴더를 옮긴 뒤 쓴다: 사람이 그 폴더에 둔 다른 파일이 남는다
+        if (previousId) await renameCustomType(root, previousId, files.def.id)
       }
       await saveCustomType(root, files)
-      if (previousId && previousId !== files.def.id) await deleteCustomType(root, previousId)
       return { ok: true }
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) }
@@ -978,18 +981,6 @@ export class Relay {
     if (!input.request.trim()) return { ok: false, error: '요청을 입력하세요' }
     if (input.type !== 'custom' && !WORK_TYPES.some((t) => t === input.type))
       return { ok: false, error: '업무 유형을 고르세요' }
-    // 커스텀 유형은 이 프로젝트에서 고를 수 있는 것(레포 먼저, D451)에서 찾고, 깨졌으면 만들지 않는다 (D460)
-    const custom =
-      input.type === 'custom'
-        ? (await this.typesOf(project)).types.find((t) => t.id === input.customType)
-        : undefined
-    if (input.type === 'custom' && !custom)
-      return { ok: false, error: `커스텀 유형이 없습니다: ${input.customType ?? '(고르지 않음)'}` }
-    if (custom && !custom.def)
-      return {
-        ok: false,
-        error: `유형 \`${custom.id}\`의 형식이 깨졌습니다: ${custom.errors.join('; ')}`,
-      }
     const issue = input.issueNumber ?? null
     if (issue !== null && (!Number.isInteger(issue) || issue <= 0)) {
       return { ok: false, error: '이슈 번호는 1 이상의 정수여야 합니다' }
@@ -1035,7 +1026,6 @@ export class Relay {
         settings.value,
         original?.work,
         inherited,
-        custom,
       )
     } finally {
       this.creating = false
@@ -1059,8 +1049,20 @@ export class Relay {
     settings: WorkSettingsPatch,
     original?: WorkState,
     inherited?: InheritedIssue,
-    custom?: { dir: string; source: CustomTypeSource },
   ): Promise<CreateWorkResult> {
+    // 커스텀 유형은 이 프로젝트에서 고를 수 있는 것(레포 먼저, D451)에서 찾고, 깨졌으면 만들지 않는다 (D460).
+    // 한 번에 하나씩 만드는 보호(creating) 안에서 찾는다: 기다리는 사이에 다른 생성이 끼어들지 않는다
+    const custom =
+      input.type === 'custom'
+        ? await findCustomType(this.o.home, project.repo_path, input.customType ?? '')
+        : undefined
+    if (input.type === 'custom' && !custom)
+      return { ok: false, error: `커스텀 유형이 없습니다: ${input.customType ?? '(고르지 않음)'}` }
+    if (custom && !custom.def)
+      return {
+        ok: false,
+        error: `유형 \`${custom.id}\`의 형식이 깨졌습니다: ${custom.errors.join('; ')}`,
+      }
     const branch = branches.base
     const repo = project.repo_path
     const env = this.env
@@ -1107,12 +1109,14 @@ export class Relay {
     if (!named.ok) return named
     const files = new WorkFiles(workDir(this.o.home, project.project_id, workId))
     // 고른 유형 폴더를 Work 디렉터리에 복사한다: 이 Work는 끝까지 복사본으로 돈다 (D458)
+    // 복사본만 든 Work 디렉터리는 Work를 만들지 못하면 지운다: work.json 없이 남으면 그 id가 막힌다
+    const dropFiles = () => fsp.rm(files.dir, { recursive: true, force: true }).catch(() => {})
     let customType: WorkCustomType | undefined
     if (custom) {
       try {
         customType = await snapshotCustomType(custom, files.customType)
       } catch (e) {
-        await fsp.rm(files.dir, { recursive: true, force: true }).catch(() => {})
+        await dropFiles()
         return { ok: false, error: e instanceof Error ? e.message : String(e) }
       }
     }
@@ -1122,6 +1126,7 @@ export class Relay {
       try {
         await addDetachedWorktree(main.repo_path, root, integration.base_commit, { env })
       } catch (e) {
+        await dropFiles()
         return { ok: false, error: `메인 통합 검증 worktree를 만들지 못했습니다. ${String(e)}` }
       }
     }
@@ -1130,6 +1135,7 @@ export class Relay {
     } catch (e) {
       if (main && root)
         await removeWorktree(main.repo_path, root, { env, force: true }).catch(() => {})
+      await dropFiles()
       return { ok: false, error: `worktree를 만들지 못했습니다. ${String(e)}` }
     }
 

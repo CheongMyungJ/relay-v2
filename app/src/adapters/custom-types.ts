@@ -33,11 +33,16 @@ export interface CustomTypeEntry {
 
 const notFound = (err: unknown) => (err as NodeJS.ErrnoException).code === 'ENOENT'
 
+/**
+ * 유형 폴더의 파일 하나. 없거나 일반 파일이 아니면(심볼릭 링크, 폴더) null이다. 레포 유형은 믿지 않는 레포의 파일이라
+ * 링크를 따라가 다른 파일의 내용을 절차로 넣지 않는다
+ */
 async function readOptional(file: string): Promise<string | null> {
-  return fsp.readFile(file, 'utf8').catch((err: unknown) => {
+  const stat = await fsp.lstat(file).catch((err: unknown) => {
     if (notFound(err)) return null
     throw err
   })
+  return stat?.isFile() ? fsp.readFile(file, 'utf8') : null
 }
 
 /** 폴더의 파일 이름 (하위 폴더는 뺀다). 폴더가 없으면 빈 목록이다 */
@@ -59,10 +64,35 @@ export async function readCustomType(
   if (text === null) return { id, source, dir, def: null, errors: [`${TYPE_FILE} 없음`] }
   const r = parseCustomType(id, text)
   if (!r.ok) return { id, source, dir, def: null, errors: r.errors }
-  const missing = missingProcedures(r.def, await fileNames(dir))
+  const procedures: string[] = []
+  for (const s of r.def.steps) {
+    if ((await readOptional(path.join(dir, `${s.id}.md`))) !== null) procedures.push(`${s.id}.md`)
+  }
+  const missing = missingProcedures(r.def, procedures)
   return missing.length
     ? { id, source, dir, def: null, errors: missing }
     : { id, source, dir, def: r.def, errors: [] }
+}
+
+/**
+ * id로 유형 하나를 찾는다 (D451): 레포의 폴더가 있으면 그것, 없으면 전역의 것이다. 어디에도 없거나 id가 틀리면 undefined다.
+ * Work를 만들 때 쓴다: 목록 전체를 읽지 않는다
+ */
+export async function findCustomType(
+  home: string,
+  repo: string,
+  id: string,
+): Promise<CustomTypeEntry | undefined> {
+  if (typeIdError(id)) return undefined
+  for (const [root, source] of [
+    [repoTypesDir(repo), 'repo'],
+    [globalTypesDir(home), 'global'],
+  ] as const) {
+    const dir = path.join(root, id)
+    const stat = await fsp.lstat(dir).catch(() => null)
+    if (stat?.isDirectory()) return readCustomType(dir, source)
+  }
+  return undefined
 }
 
 /** 한 위치의 유형들. 폴더 이름 차례다. `.`으로 시작하는 폴더는 뺀다 */
@@ -137,17 +167,27 @@ export async function snapshotCustomType(
   entry: Pick<CustomTypeEntry, 'dir' | 'source'>,
   dest: string,
 ): Promise<WorkCustomType> {
-  const fresh = await readCustomType(entry.dir, entry.source)
-  if (!fresh.def)
-    throw new Error(`유형 \`${fresh.id}\`의 형식이 깨졌습니다: ${fresh.errors.join('; ')}`)
-  const files: { name: string; text: string }[] = []
-  for (const name of copiedFiles(fresh.def)) {
-    const text = await readOptional(path.join(entry.dir, name))
-    if (text !== null) files.push({ name, text })
+  // 검사하고 복사하는 글은 한 번 읽은 것이다: 그 사이에 원본이 바뀌어도 work.json의 단계와 복사본이 어긋나지 않는다
+  const id = path.basename(entry.dir)
+  const broken = (errors: string[]) =>
+    new Error(`유형 \`${id}\`의 형식이 깨졌습니다: ${errors.join('; ')}`)
+  const text = await readOptional(path.join(entry.dir, TYPE_FILE))
+  if (text === null) throw broken([`${TYPE_FILE} 없음`])
+  const r = parseCustomType(id, text)
+  if (!r.ok) throw broken(r.errors)
+  const files: { name: string; text: string }[] = [{ name: TYPE_FILE, text }]
+  for (const name of copiedFiles(r.def).slice(1)) {
+    const body = await readOptional(path.join(entry.dir, name))
+    if (body !== null) files.push({ name, text: body })
   }
+  const missing = missingProcedures(
+    r.def,
+    files.map((f) => f.name),
+  )
+  if (missing.length) throw broken(missing)
   await fsp.mkdir(dest, { recursive: true })
   for (const f of files) await writeFileAtomic(path.join(dest, f.name), f.text)
-  return { ...fresh.def, source: entry.source, hash: folderHash(files) }
+  return { ...r.def, source: entry.source, hash: folderHash(files) }
 }
 
 /** 유형 폴더의 글을 읽는다. type.json이 깨졌으면 null이다 */
@@ -196,6 +236,17 @@ export async function saveCustomType(root: string, files: CustomTypeFiles): Prom
   for (const name of await fileNames(dir)) {
     if (name.endsWith('.md') && !keep.has(name)) await fsp.rm(path.join(dir, name), { force: true })
   }
+}
+
+/** 전역 유형 폴더의 id를 바꾼다 (D459). 옛 폴더가 없으면 아무것도 하지 않는다 */
+export async function renameCustomType(root: string, from: string, to: string): Promise<void> {
+  for (const id of [from, to]) {
+    const idError = typeIdError(id)
+    if (idError) throw new Error(idError)
+  }
+  await fsp.rename(path.join(root, from), path.join(root, to)).catch((err: unknown) => {
+    if (!notFound(err)) throw err
+  })
 }
 
 /** 전역 유형 폴더를 지운다 (D459) */

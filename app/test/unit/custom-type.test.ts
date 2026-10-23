@@ -1,6 +1,6 @@
 // 커스텀 유형 (5.6.13, D447~D463): 정의 검사, 파이프라인, 상태 기계, context.md, 형식 검사, 승인 방식, 브랜치, 초안, Work 설정
 import { describe, expect, it } from 'vitest'
-import { approvalMode } from '../../src/core/approval'
+import { approvalMode, autoApproveNote } from '../../src/core/approval'
 import { branchType, renderBranchRule } from '../../src/core/branch'
 import { checkWorkSettings, mergeWorkSettings } from '../../src/core/config'
 import { CUSTOM_QUESTION_LINE, buildContext, previousInputs } from '../../src/core/context'
@@ -163,6 +163,10 @@ describe('type.json 검사 (D449, D453, D457)', () => {
     expect(stepIdError('handoff')).toMatch('앱이 쓰는 이름')
     expect(stepIdError('a--b')).toMatch('영어 소문자')
     expect(stepIdError('survey')).toBeNull()
+    // task 디렉터리·산출물·브랜치 이름이 되므로 길이를 묶는다
+    expect(typeIdError('a'.repeat(41))).toMatch('40자')
+    expect(stepIdError('a'.repeat(41))).toMatch('40자')
+    expect(stepIdError('a'.repeat(40))).toBeNull()
   })
 
   it('이름 없음, 단계 없음, 겹친 단계 id, 틀린 절과 자동 승인은 모두 오류로 모은다', () => {
@@ -220,7 +224,11 @@ describe('커스텀 파이프라인 (D447, D458, D462)', () => {
     })
     expect(nextStage(w, { node: 'custom', step: 'apply' })).toEqual({ node: 'verify' })
     expect(nextStage(w, { node: 'verify' })).toBe(WORK_COMPLETE)
-    expect(nextStage(w, { node: 'custom', step: 'gone' })).toBe(WORK_COMPLETE)
+    // 정의에서 찾지 못한 커스텀 단계는 리뷰와 검증 없이 완료되지 않게 verify로 간다
+    expect(nextStage(w, { node: 'custom', step: 'gone' })).toEqual({ node: 'verify' })
+    expect(nextStage({ type: 'custom' }, { node: 'custom', step: 'survey' })).toEqual({
+      node: 'verify',
+    })
   })
 
   it('기본 유형은 PIPELINES와 같다', () => {
@@ -445,6 +453,22 @@ describe('커스텀 단계의 형식 검사 (D453, D455)', () => {
       config,
     })
     expect(r.errors.map((e) => e.message).join()).toContain('확인 방법')
+  })
+})
+
+describe('승인 화면의 자동 승인 안내 (D457)', () => {
+  it('자동 승인을 켠 커스텀 단계는 켜짐으로 보이고 자동 승인하지 않은 까닭을 보인다', () => {
+    const work = { settings: {}, custom_type: CUSTOM }
+    const task = {
+      node: 'custom' as const,
+      step: 'apply',
+      status: 'awaiting_approval' as const,
+      auto_hold: { at: at(), reasons: ['open_questions' as const] },
+    }
+    const note = autoApproveNote(work, task, MANUAL)
+    expect(note.on).toBe(true)
+    expect(note.hold).toContain('열린 질문')
+    expect(autoApproveNote(work, { ...task, step: 'survey' }, MANUAL).on).toBe(false)
   })
 })
 

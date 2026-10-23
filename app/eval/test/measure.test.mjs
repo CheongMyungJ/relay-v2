@@ -233,7 +233,8 @@ describe('Work 여럿을 잇는 시나리오', () => {
     expect(pickTypeLines('relay@general', custom).join()).toContain("'일반'을(를) 고른다")
     expect(pickTypeLines('cli', custom)).toEqual([])
     expect(pickTypeLines('relay', { type: 'general' })).toEqual([])
-    expect(armType('relay@custom')).toBe('custom')
+    // 커스텀은 유형마다 버튼 이름이 달라 쪽 이름(relay@custom)으로 고르지 않는다
+    expect(armType('relay@custom')).toBeNull()
   })
 
   it('재는 Work는 기본이 첫 Work를 뺀 모두이고 measure로 바꾼다', () => {
