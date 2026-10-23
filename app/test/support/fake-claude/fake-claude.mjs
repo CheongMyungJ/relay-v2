@@ -83,8 +83,9 @@ if (argv[0] === '-p') {
 const size = () => `${process.stdout.columns}x${process.stdout.rows}`
 const out = (s) => process.stdout.write(`${s}\r\n`)
 
-out('FAKE-CLAUDE READY')
+// 긴 ARGS 줄을 먼저 쓴다. 터미널이 좁아지면 이 줄이 여러 줄로 접혀, 뒤에 쓰면 시작 표식을 보이는 줄 밖으로 민다
 out(`ARGS ${JSON.stringify(argv)}`)
+out('FAKE-CLAUDE READY')
 out(`PID ${process.pid}`)
 out(`SIZE ${size()}`)
 out('한글 출력 확인')

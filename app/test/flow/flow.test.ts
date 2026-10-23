@@ -807,8 +807,9 @@ describe('[흐름] 세션을 끝낼 때 (D231)', () => {
     const result = await drive(s.h.relay, s.h.ui, s.workKey)
     await settle(s.h, s.workKey)
     expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed', reason: null })
-    // 세션 셋을 끝냈다. 훅과 처리 줄이 서로 기다리면 끝낼 때마다 KILL_WAIT_MS(10초)를 다 쓴다
-    expect(Date.now() - t0).toBeLessThan(10_000)
+    // 세션 셋을 끝냈다. 훅과 처리 줄이 서로 기다리면 끝낼 때마다 KILL_WAIT_MS(10초)를 다 써 30초를 넘는다.
+    // 기다리지 않아도 Windows 러너에서 12초가 걸린 적이 있어 상한에 여유를 둔다
+    expect(Date.now() - t0).toBeLessThan(25_000)
     // Linux와 macOS는 SIGHUP으로 끝내 가짜 claude가 SessionEnd를 보낸다. Windows는 taskkill /F라 오지 않는다
     if (process.platform !== 'win32') {
       const ends = s.h.records().filter((r) => r['type'] === 'hook' && r['event'] === 'SessionEnd')
