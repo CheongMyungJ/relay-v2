@@ -32,7 +32,7 @@ Review the whole change of this Work, apply only the findings the human picks, t
 ## Order
 
 <!-- type: bugfix feature refactor general custom -->
-1. **Review.** Follow `## How to review`. Write each finding under `## 리뷰 지적` of `verification.md` as a numbered item: severity (차단 / 권장 / 사소), file and line, what is wrong and what you suggest, and its check result (확인됨 / 가능성). On an indented line under it, write its failure scenario (for a cleanup finding, the cost; for 가능성, also what would confirm it). Most severe first, and correctness findings before cleanup findings. There is no maximum or minimum: do not cut real findings, and do not make up findings to fill a count. If there is nothing, write "없음".
+1. **Review.** Follow `## How to review`. Write each finding under `## 리뷰 지적` of `verification.md` as a numbered item: severity (차단 / 권장 / 사소), file and line, what is wrong and what you suggest, and its check result (확인됨 / 가능성). On an indented line under it, write its failure scenario (for a cleanup finding, the cost; for 가능성, also what would confirm it). Most severe first; within the same severity, correctness findings before cleanup findings. There is no maximum or minimum: do not cut real findings, and do not make up findings to fill a count. If there is nothing, write "없음".
 <!-- /type -->
 <!-- type: spec -->
 1. **Review.** Write each finding under `## 리뷰 지적` of `verification.md` as a numbered item: severity (차단 / 권장 / 사소), file and line, what is wrong and what you suggest. If there is nothing, write "없음".
@@ -52,7 +52,7 @@ Review the whole change of this Work, apply only the findings the human picks, t
 
 Review in this order:
 
-1. **Scope:** the change from the base commit to now, uncommitted changes included (`git diff <base commit>`).
+1. **Scope:** the change from the base commit to now, uncommitted changes included (`git diff <base commit>`), and new files not yet added to git (the `??` lines of `git status --porcelain`). If `context.md` has `## 레포`, do this for every repo listed there, each in its own folder against its own base commit (the main repo against the Work's base commit, a submodule with `git -C <path> …` against the base commit listed for it): the main repo's diff shows a submodule only as a changed pointer, and it is empty when the main repo is not changed.
 2. **Find candidates:** go through every angle of `## What to review`, one after another. Do not let one angle's conclusion suppress another's: if two angles flag the same line for different reasons, keep both. Each candidate has a file and line, a one-line summary, and a failure scenario: the concrete input or state, and what goes wrong (a wrong result, a crash, a broken caller). For a cleanup candidate (reuse, simplification, efficiency, altitude, conventions), state the concrete cost instead: what is duplicated, wasted or harder to maintain, or which rule it breaks. Pass every candidate that has a nameable failure scenario on to the check. Do not drop one because you only half believe it: dropping half-believed candidates here is the main cause of missed defects. Keep out-of-scope problems apart, for `나중에 정리할 곳`.
 3. **Dedup:** candidates with the same defect, location and reason are one. Keep the one with the most concrete failure scenario.
 4. **Check** each remaining candidate against the code, and mark it with exactly one of:
@@ -65,8 +65,8 @@ Review in this order:
 
 **Subagents:** if you can start subagents, give steps 1–4 to two of them, one after the other, and wait for each result before you go on:
 
-- **Finder** (steps 1–3): give it the path of `context.md`, the paths of this Work's artifacts, the base commit, the whole text of `## What to review`, the whole text of `## This Work type's review points` if these instructions end with it, and the whole text of step 2. Copy them as they are: subagents do not see these instructions. It returns the deduplicated candidates, and the out-of-scope problems apart.
-- **Checker** (step 4): a new subagent, not the finder. Give it the path of `context.md`, the paths of this Work's artifacts, the base commit, the finder's whole list of candidates and the whole text of step 4. It returns each candidate with its mark and the quoted line.
+- **Finder** (steps 1–3): give it the path of `context.md`, the paths of this Work's artifacts, the base commit (and each repo's base commit if `context.md` has `## 레포`), the whole text of `## What to review`, the whole text of `## This Work type's review points` if these instructions have that section, and the whole text of steps 1–3. Copy them as they are: subagents do not see these instructions. It returns the deduplicated candidates, and the out-of-scope problems apart.
+- **Checker** (step 4): a new subagent, not the finder. Give it the path of `context.md`, the paths of this Work's artifacts, the base commit (and each repo's base commit if `context.md` has `## 레포`), the finder's whole list of candidates and the whole text of step 4. It returns each candidate with its mark and the quoted line.
 
 Both only read: they change no files, ask the human nothing, and return only the list. Do step 5 yourself with the list the checker returns. When you apply a picked finding, read the code it points to yourself.
 
@@ -106,7 +106,7 @@ If you cannot start subagents, do steps 1–5 yourself, one after another, and w
 <!-- type: custom -->
 - Does the change fit what each custom step's artifact says it did? Did the scope grow beyond it?
 - Does each 완료조건's check method (`— 확인: …`) really check it?
-- **The type's review points:** if these instructions end with `## This Work type's review points`, review those points too. They come from whoever defined the type.
+- **The type's review points:** if these instructions have a `## This Work type's review points` section, review those points too. They come from whoever defined the type.
 <!-- /type -->
 <!-- type: bugfix feature refactor general custom -->
 - **Line by line:** read every hunk of the diff, then the whole function around it: a defect in an unchanged line of a touched function is in scope too. For each line ask what input, state, timing or platform makes it wrong. Look for missing cases and edge conditions, inverted or wrong conditions, off-by-one, a value used where it can be missing, a missing `await`, zero or empty treated as missing, a copy-pasted wrong variable, an error swallowed in a catch, an unescaped pattern.
