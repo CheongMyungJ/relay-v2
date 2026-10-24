@@ -7,6 +7,7 @@
 // 4. 설계 대조: 산출물 템플릿의 절 제목, 입력·결정 지점·사람이 정할 결정·완료조건 항목 (5.6.1~5.6.12, I60, I65, I89, I107)
 // 5. 유형별 조립: 공용 스킬의 유형 표시, 조립한 글에 다른 유형의 산출물이 없음 (D279, I68)
 
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -574,6 +575,11 @@ for (const v of variants.filter((x) => SHARED.includes(x.name))) {
   const foreign = TYPES.filter((t) => t !== v.type).flatMap((t) => ARTIFACT[t]).filter((a) => v.text.includes(a));
   check(foreign.length === 0, `${v.label}: 다른 유형의 산출물이 없음${foreign.length ? ` (${foreign.join(', ')})` : ''}`);
 }
+// 설계 유형 verify는 문서를 리뷰해 코드 리뷰 방법(D470~D474)을 들이지 않았다. 조립 결과가 들이기 전(3df9b94)과 같은지
+// 해시로 본다. 설계 verify를 일부러 바꾸면 이 값도 함께 고친다 (D475)
+const SPEC_VERIFY_SHA256 = '7dbdcf7ad783d98930b1a8cd257e07547f945123fe4231d5cb2b0c62b5b7c320';
+const specVerify = createHash('sha256').update(assemble(stripFrontMatter(skills.verify), 'spec')).digest('hex');
+check(specVerify === SPEC_VERIFY_SHA256, `verify·spec: 조립 결과가 코드 리뷰 방법을 들이기 전과 같음 (D475)${specVerify === SPEC_VERIFY_SHA256 ? '' : ` (${specVerify})`}`);
 
 console.log(failures ? `\n실패 ${failures}건` : '\n모두 통과');
 process.exit(failures ? 1 : 0);
