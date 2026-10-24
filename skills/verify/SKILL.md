@@ -31,7 +31,12 @@ Review the whole change of this Work, apply only the findings the human picks, t
 
 ## Order
 
+<!-- type: bugfix feature refactor general custom -->
+1. **Review.** Follow `## How to review`. Write each finding under `## 리뷰 지적` of `verification.md` as a numbered item: severity (차단 / 권장 / 사소), file and line, what is wrong and what you suggest, and its check result (확인됨 / 가능성). On an indented line under it, write its failure scenario (for a cleanup finding, the cost; for 가능성, also what would confirm it). Most severe first, and correctness findings before cleanup findings. There is no maximum or minimum: do not cut real findings, and do not make up findings to fill a count. If there is nothing, write "없음".
+<!-- /type -->
+<!-- type: spec -->
 1. **Review.** Write each finding under `## 리뷰 지적` of `verification.md` as a numbered item: severity (차단 / 권장 / 사소), file and line, what is wrong and what you suggest. If there is nothing, write "없음".
+<!-- /type -->
 2. **Pick findings** (human decision below). Skip this if there are no findings.
 <!-- type: bugfix feature refactor general custom -->
 3. **Apply** only the picked findings, commit, and run the intent's test command. Fill in `## 반영` and `## 반영하지 않은 지적`. Do not review again afterwards, and do not add new findings.
@@ -126,7 +131,7 @@ If you cannot start subagents, do steps 1–5 yourself, one after another, and w
 <!-- type: bugfix feature refactor general custom -->
 - **Conventions:** the repo's conventions and readability. Read the instruction files that govern the changed code (such as `CLAUDE.md`, `AGENTS.md` or `CONTRIBUTING.md` at the repo root and in the folders above a changed file). Flag a broken convention only when you can quote the rule and the line that breaks it, and name the file of the rule. No style preferences.
 - Fit with the existing structure: the layer or module each change sits in, dependency directions, the patterns the code around it follows.
-- **Reuse:** Duplication: code that repeats a function or abstraction the repo already has. Search the shared modules and the files next to the change, and name the one to call instead.
+- **Reuse** (Duplication): code that repeats a function or abstraction the repo already has. Search the shared modules and the files next to the change, and name the one to call instead.
 - **Simplification:** complexity the diff adds without need: state that can be derived, copy-paste with small changes, deep nesting, dead code left behind. Name the simpler form that does the same job.
 - **Efficiency:** wasted work the diff adds: repeated computation or I/O, independent work run one after another, blocking work added to startup or a hot path. Name the cheaper way.
 - **Altitude:** does each change fix the root cause at the right depth, or patch a symptom? A special case added on top of shared code is a sign it is not deep enough: name the more general change to the underlying mechanism.
@@ -219,6 +224,7 @@ Ask on the spot:
 
 <!-- type: bugfix feature refactor general custom -->
 - `verification.md` has all seven template sections.
+- `## 리뷰 지적` has only findings that went through the check (확인됨 or 가능성), each with its failure scenario.
 - If there were findings, the human picked; the picked ones are fixed and committed, and the test result is in `반영`.
 - Every 완료조건 of the intent has a verdict and evidence, judged on the final code.
 - Every changed test file is judged.
@@ -239,7 +245,13 @@ Ask on the spot:
 
 ```markdown
 ## 리뷰 지적
+<!-- type: bugfix feature refactor general custom -->
+1. [차단 / 권장 / 사소] 파일:줄 — 무엇이 문제인지와 제안 (확인됨 / 가능성)
+   실패 시나리오: 어떤 입력·상태에서 무엇이 틀리는지 (정리 지적은 드는 비용, 가능성이면 무엇이 확인해 줄지)
+<!-- /type -->
+<!-- type: spec -->
 1. [차단 / 권장 / 사소] 파일:줄 — 무엇이 문제인지와 제안
+<!-- /type -->
 (지적이 없으면 "없음")
 
 ## 반영

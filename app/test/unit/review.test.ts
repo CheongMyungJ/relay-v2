@@ -778,6 +778,23 @@ describe('강조 영역 (D83, 시나리오 4-2)', () => {
     expect(stageLead('intake', both)).toBeNull()
   })
 
+  it('[요약] 맨 위: 확인 결과와 들여쓴 실패 시나리오가 붙은 지적도 리뷰 지적과 반영 절을 그 글 그대로 보인다 (D473)', () => {
+    const findings = [
+      '1. [차단] src/avg.js:2 — 빈 배열이면 0으로 나눈다. 길이를 먼저 본다 (확인됨)',
+      '   실패 시나리오: avg([])가 NaN을 돌려준다',
+      '2. [사소] src/avg.js:5 — 이름이 뜻을 드러내지 않는다 (가능성)',
+      '   실패 시나리오: 읽는 사람이 합계로 오해한다. 호출부의 쓰임이 확인해 준다',
+    ].join('\n')
+    const review = `## 리뷰 지적\n${findings}\n\n## 반영\n- 1 — 길이를 먼저 봄, 커밋 abc, npm test 통과\n\n## 반영하지 않은 지적\n- 2\n`
+    expect(stageLead('verify', { 'verification.md': review })).toEqual({
+      title: '리뷰 지적',
+      sections: [
+        { title: '리뷰 지적', text: findings },
+        { title: '반영', text: '- 1 — 길이를 먼저 봄, 커밋 abc, npm test 통과' },
+      ],
+    })
+  })
+
   it('handoff의 요약 절을 읽는다. 머리글을 읽지 못해도 본문에서 찾는다', () => {
     const text =
       '---\nstatus: awaiting_approval\n---\n## 요약\n재현됨.\n둘째 줄\n\n## 다음 task가 알아야 할 것\n- x\n'
