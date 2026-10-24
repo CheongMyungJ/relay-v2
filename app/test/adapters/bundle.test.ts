@@ -110,7 +110,10 @@ describe('[어댑터] 묶음 Work의 git (D471~D478)', () => {
     writeFiles(main, { 'README.md': '버릴 변경\n' })
     const stash = await discardChanges(main, 'relay(w): 완료 전 버린 변경', opts, ['lib', 'pkg/ui'])
     expect(stash).toMatch(/^[0-9a-f]{40}$/)
-    expect(fs.readFileSync(path.join(main, 'README.md'), 'utf8')).toBe('# app\n')
+    // Windows는 core.autocrlf로 CRLF로 되돌린다
+    expect(fs.readFileSync(path.join(main, 'README.md'), 'utf8').replace(/\r\n/g, '\n')).toBe(
+      '# app\n',
+    )
     expect(git(path.join(main, 'lib'), 'rev-parse', 'HEAD')).toBe(libHead)
     expect(git(path.join(main, 'lib'), 'branch', '--show-current')).toBe(BRANCH)
     // 고른 자리만 남으면 넣을 것이 없다
