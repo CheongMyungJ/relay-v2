@@ -38,11 +38,12 @@ import {
 } from './dialogs'
 import { CustomTypesDialog } from './CustomTypes'
 import { Activity } from './Activity'
-import { FilesView } from './Files'
+import { FilesView, openInFiles } from './Files'
 import { withOpened } from './opened'
 import { Panel, prCards, showsPr, wantsApproval } from './Panel'
 import { PanelResizer } from './PanelResizer'
 import { loadPanelWidths, panelStyle, savePanelWidths, type PanelWidths } from './panelWidth'
+import { setFilesOpener } from './terminals'
 import { TerminalView } from './TerminalView'
 import { QuestionDialog } from './QuestionDialog'
 import {
@@ -208,6 +209,15 @@ export function App() {
       offSessions()
       offFocus()
     }
+  }, [])
+
+  // 터미널에서 Ctrl+클릭한 Work worktree의 글 파일은 그 Work의 [파일] 탭에서 연다 (D491)
+  useEffect(() => {
+    setFilesOpener((t) => {
+      setPicked((m) => ({ ...m, [t.workKey]: FILES_TAB }))
+      openInFiles(t.workKey, t.path)
+    })
+    return () => setFilesOpener(null)
   }, [])
 
   // 보고 있는 Work를 main에 알린다. 그 Work의 알림은 보내지 않는다 (D81). 기본 세션을 고르면 보고 있는 Work가 없다 (I136)

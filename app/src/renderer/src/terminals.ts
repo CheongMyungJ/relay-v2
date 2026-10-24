@@ -5,7 +5,7 @@ import { Terminal, type ILink } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import type { AppInfo } from '../../shared/api'
-import type { TerminalChunk } from '../../shared/views'
+import type { FilesOpenTarget, TerminalChunk } from '../../shared/views'
 import { findLinks, logicalLine, pasteText, pastesFiles, type LinkMatch } from './links'
 
 export interface TermEntry {
@@ -133,6 +133,13 @@ export function fitIfVisible(entry: TermEntry, el: HTMLElement): void {
 
 const OPEN_HINT = 'Ctrl+클릭으로 열기'
 
+/** Work worktree의 글 파일을 [파일] 탭에서 여는 곳 (D491). App이 정한다 */
+let filesOpener: ((target: FilesOpenTarget) => void) | null = null
+
+export function setFilesOpener(open: ((target: FilesOpenTarget) => void) | null): void {
+  filesOpener = open
+}
+
 /** 링크 위에 있는 동안 여는 방법을 알린다 */
 function setOpenHint(term: Terminal, on: boolean): void {
   const el = term.element
@@ -141,13 +148,22 @@ function setOpenHint(term: Terminal, on: boolean): void {
   else el.removeAttribute('title')
 }
 
-/** Ctrl(macOS는 Cmd)+클릭만 연다. 그냥 누르기는 포커스와 선택에 쓴다. 주소는 브라우저로, 나머지는 경로로 연다 */
+/**
+ * Ctrl(macOS는 Cmd)+클릭만 연다. 그냥 누르기는 포커스와 선택에 쓴다. 주소는 브라우저로, 나머지는 경로로 연다.
+ * Work worktree의 글 파일은 [파일] 탭에서 열고, Shift를 더하면 OS 앱으로 연다 (D491)
+ */
 function openLink(key: string, ev: MouseEvent, target: string): void {
   if (!ev.ctrlKey && !ev.metaKey) return
-  const opening = /^https?:\/\//i.test(target)
-    ? window.relay.openExternal(target)
-    : window.relay.terminal.open(key, target)
-  opening.catch((e: unknown) => console.warn(e))
+  if (/^https?:\/\//i.test(target)) {
+    window.relay.openExternal(target).catch((e: unknown) => console.warn(e))
+    return
+  }
+  window.relay.terminal
+    .open(key, target, ev.shiftKey || !filesOpener)
+    .then((files) => {
+      if (files) filesOpener?.(files)
+    })
+    .catch((e: unknown) => console.warn(e))
 }
 
 /** 터미널 줄(1부터)의 주소와 있는 파일 경로 */

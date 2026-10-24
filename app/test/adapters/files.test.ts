@@ -1,11 +1,11 @@
 // [어댑터] Work의 [파일] 탭의 파일 읽기와 쓰기 (D464~D468): 폴더의 항목, 링크 따라가기와 worktree 밖 막기, 글 파일
-// 읽기, 줄 끝을 지키는 저장과 바뀐 파일 알리기. 경로 검사와 글 판정의 세부는 [단위] `test/unit/work-files.test.ts`가 본다.
+// 읽기, 줄 끝을 지키는 저장과 바뀐 파일 알리기, 터미널의 절대 경로를 worktree 기준 경로로 바꾸기(D491). 경로 검사와 글 판정의 세부는 [단위] `test/unit/work-files.test.ts`가 본다.
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { listFiles, readTextFile, writeTextFile } from '../../src/adapters/files'
+import { listFiles, readTextFile, relativeFile, writeTextFile } from '../../src/adapters/files'
 import { DIR_MAX_ENTRIES, FILE_MAX_BYTES } from '../../src/core/files'
 
 const isWin = process.platform === 'win32'
@@ -243,5 +243,28 @@ describe('[어댑터] [파일] 탭의 읽기와 저장 (D466, D467)', () => {
     await writeTextFile(tree, 'run.sh', 'echo b\n', opened.hash)
     expect(fs.statSync(script).mode & 0o777).toBe(0o755)
     expect(fs.readFileSync(script, 'utf8')).toBe('echo b\n')
+  })
+})
+
+describe('[어댑터] 터미널에서 연 경로의 worktree 기준 경로 (D491)', () => {
+  it('worktree 안의 파일만 받는다: 폴더, 밖, `.git`, 없는 파일은 null이다', async () => {
+    expect(await relativeFile(tree, path.join(tree, 'src', 'avg.js'))).toBe('src/avg.js')
+    expect(await relativeFile(tree, path.join(tree, 'README.md'))).toBe('README.md')
+    expect(await relativeFile(tree, path.join(tree, 'src'))).toBeNull()
+    expect(await relativeFile(tree, tree)).toBeNull()
+    expect(await relativeFile(tree, path.join(root, 'secret.txt'))).toBeNull()
+    expect(await relativeFile(tree, path.join(tree, '.git', 'config'))).toBeNull()
+    expect(await relativeFile(tree, path.join(tree, 'none.md'))).toBeNull()
+  })
+
+  it('밖을 가리키는 폴더 링크 아래는 받지 않고, Work가 아는 경로로 본 것은 받는다', async () => {
+    fs.mkdirSync(path.join(root, 'outside'))
+    fs.writeFileSync(path.join(root, 'outside', 'x.md'), 'x\n')
+    fs.symlinkSync(path.join(root, 'outside'), path.join(tree, 'out-link'), 'junction')
+    expect(await relativeFile(tree, path.join(tree, 'out-link', 'x.md'))).toBeNull()
+    const alias = path.join(root, 'alias')
+    fs.symlinkSync(tree, alias, 'junction')
+    expect(await relativeFile(alias, path.join(alias, 'docs', 'b.md'))).toBe('docs/b.md')
+    expect(await relativeFile(alias, path.join(tree, 'docs', 'b.md'))).toBe('docs/b.md')
   })
 })

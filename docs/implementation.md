@@ -192,6 +192,9 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I176 | 서브모듈별 PR 설정(D483)은 메인 `project.json`의 `submodules`(경로마다 `allowed_bots`, `merge_method`)다. `shared/project`의 `repoSettings(project, lane)`가 카드의 받을 봇과 머지 방식을 고르고, 서브모듈 칸에 없는 키는 메인의 값이다. 빈 봇 목록은 "메인과 같음"으로 읽어 적지 않는다. 새 Work 대화상자는 늘 메인 프로젝트로 열고(서브모듈 프로젝트의 Work에서 쓴 초안도), 대상·통합 검증 칸은 없앴다. 서브모듈 프로젝트를 만드는 `prepareSubmodule`과 그 Work의 앱 쪽 길은 남은 Work를 위해 둔다 | 서브모듈 프로젝트의 설정을 옮기는 자리. 칸을 비우면 메인 값이라는 D483을 그대로 따르려면 "봇 없음"을 서브모듈에만 줄 수는 없다. 쓰는 일이 확인되면 넓힌다 | |
 | I177 | 카드가 여럿인 Work의 이슈 기록은 카드를 맞춘(`settleCards`) 뒤에 더해, 마지막 카드가 끝날 때만 끝 코멘트와 닫기가 들어간다. 머지되거나 끝낸 카드는 읽기·머지·대응·체크 다시 실행을 받지 않고 주기 읽기도 걸지 않는다. 메인 카드의 [머지]는 머지된 서브모듈 PR마다 메인 PR을 읽을 때 머지 대상에 있는지 확인한 뒤에 켜지고(`relinkChecked`), 확인된 gitlink는 바뀌지 않으면 다시 받지 않는다. 서브모듈 PR이 막 머지되면 메인 PR을 곧 다시 읽는다. 메인 카드의 fast-forward와 깨끗한지 판정은 고른 서브모듈 자리를 뺀다 | 코드 리뷰에서 찾은 것. 서브모듈 대응 라운드 뒤 메인 worktree에는 늘 ` M <경로>`가 보여 메인 카드가 원격을 받지 못했다 | |
 | I178 | verify의 코드 리뷰 방법(D484~D489)은 스킬 글(`skills/verify/SKILL.md`의 코드를 바꾸는 유형 블록)만 바꾸고 앱 코드는 바꾸지 않는다. `skills/check.mjs`가 [4]의 verify 명세 항목(D484~D488, 도구 이름에 기대지 않음), 리뷰 방법 문서(`docs/review-method.md`의 필수 절, design.md의 D484~D489)를 보고, [5]에서 설계 유형 verify의 조립 결과를 들이기 전(main 350bf69)의 SHA-256 상수와 비교한다. 바뀐 지적 모양을 읽는 곳(`core/review`의 `stageLead`, [실제] 판정의 `findings`)은 그대로이고 [단위]가 새 모양으로 본다 | 지침은 모델이 따르는 글이라 정적 검사로 문구를 지킨다. 설계 verify가 그대로인지는 문구 몇 개보다 조립 결과 전체를 비교하는 편이 빠짐이 없다. 설계 verify를 일부러 바꾸면 상수를 함께 고친다 | |
+| I179 | 바뀐 파일 표시(D490)는 `WorkRunner.filesChanges()`가 레포마다(메인과 묶음 Work의 고른 서브모듈) `git diff --name-status --no-renames -z <기준 커밋>`(`changedPaths`)과 `git ls-files --others --exclude-standard -z`(`untrackedPaths`)를 읽고, `core/files`의 `treeChanges`가 A·M·D로 줄여(T·U는 M, 추적하지 않는 것은 A) 서브모듈 자리를 앞에 붙이고 트리가 받지 않는 경로를 빼 경로 순으로 낸다(상한 `CHANGES_MAX` 5000). 명령은 `workFileChanges(workKey)`, IPC는 `files:changes`다. 화면의 폴더 표시와 지운 항목 더하기는 `renderer/src/fileTree.ts`(`changeMarks`, `withDeleted`)의 순수 함수다. 지운 폴더는 디스크에 없어 펼쳐도 `workFiles`를 부르지 않고 바뀐 파일 목록으로 그린다. 트리의 차례는 core의 `sortEntries`와 같은 규칙을 `fileTree.ts`에 둔다 | git status만 보면 커밋한 변경이 사라진다. 폴더마다 git을 부르지 않도록 목록은 한 번 받아 화면에서 나눈다. 렌더러는 core를 부르지 못한다(I167) | |
+| I180 | 터미널에서 [파일] 탭으로 열기(D491): `terminal:open`이 `external` 인자를 받아, 거짓이면 먼저 `Relay.terminalFilesTarget(key, raw)`를 본다. 터미널 키의 주인이 Work이고 `filesRoot()`가 있으면 그 터미널 폴더에서 경로를 풀고(`resolveLink`, D412), `adapters/files`의 `relativeFile`로 화면의 경로와 링크를 따라간 실제 경로를 차례로 worktree 기준 경로로 바꾼다(D468의 `inside` 검사). `readTextFile`이 글이라고 하면 `{ workKey, path }`를 돌려주고 열지 않는다. 아니면 전처럼 OS 프로그램으로 열고 null이다. 렌더러의 `terminals.ts`는 Shift를 `external`로 넘기고, 받은 자리를 App이 `setFilesOpener`로 정한 곳에 준다. App은 그 Work의 탭을 `@files`로 바꾸고 `Files.tsx`의 `openInFiles`를 부른다. 그 Work의 `FilesView`가 아직 없으면 열 경로를 모듈의 `pendingOpens`에 두고, 처음 그려질 때 연다 | 경로를 다시 푸는 일과 worktree 안 검사는 main이 한다(렌더러가 보낸 글을 믿지 않는다). [파일] 탭이 처음 그려지기 전에 온 열기도 놓치지 않는다 | |
+| I181 | 연 파일 탭(D492): `FilesView`는 `tabs`(탭마다 `path`, `file`, `draft`, `view`, `conflict`, `error`)와 `current`, 닫기 확인의 `closing`을 든다. 같은 파일을 빨리 두 번 열면 먼저 들어간 탭을 둔다. 지금 탭은 마지막으로 고른 파일의 차례(`openSeq`)일 때만 바꾼다. 다시 읽기는 탭마다 읽기 전의 `file`과 같고 고치지 않았을 때만 바꾼다(I167과 같다). 닫은 뒤 고를 탭(`afterClose`)과 같은 이름 탭의 폴더(`tabHints`)는 `fileTree.ts`의 순수 함수다. 편집 칸은 탭마다 `key`를 달리해 되돌리기 기록이 섞이지 않게 한다 | 탭을 옮겨도 고친 글이 남아야 한다. 빠르게 고른 파일의 응답 차례가 바뀌어도 사람이 마지막에 고른 탭이 보인다 | |
 
 ## 3. 확인한 사실
 
@@ -321,7 +324,7 @@ app/src/
 | main | `notices` | OS 알림 붙잡기와 Windows 앱 ID | D81, D142, I37 |
 | main | `security` | 창의 격리 설정과 외부 주소 검사 | I2 |
 | main | `links` | 터미널 출력의 경로 풀기, 열면 실행되는 파일 판정, 붙여넣은 그림의 형식 | D410~D412, I145 |
-| renderer | `Files` | Work의 [파일] 탭: 파일 트리, 마크다운 보기, 편집과 저장 | D464~D468, I167 |
+| renderer | `Files` | Work의 [파일] 탭: 파일 트리와 바뀐 파일 표시, 연 파일 탭, 마크다운 보기, 편집과 저장, 터미널에서 연 파일 | D464~D468, D490~D492, I167, I179~I181 |
 | renderer | `panelWidth`, `PanelResizer` | 오른쪽 패널 너비의 범위·저장과 끄는 손잡이 | D469, I168 |
 | main | `ipc`, `ports` | 렌더러 명령 처리와 스냅샷 전송, 조립 코드가 주입받는 바깥(창, 알림) | I14, I26 |
 | renderer | 화면 | 사이드바, 터미널 탭과 머리 띠, 액션 바, 오른쪽 패널(승인 화면), 대화상자, PR 패널 | 화면 구성 |
@@ -1459,6 +1462,22 @@ S8에서 다시 연 곁·기본 세션이 처음 연 때의 안내를 압축 전
 - **스킬 정적 검사** `skills/check.mjs`: verify 명세 항목 D484~D489, 도구 이름 없음, 리뷰 방법 문서의 절과 design.md 결정, 설계 유형 verify 조립 결과의 해시.
 - **[단위]** `test/unit/review.test.ts`: 확인 결과와 들여쓴 실패 시나리오가 붙은 `verification.md`도 [요약] 맨 위에 리뷰 지적과 반영 절이 그 글 그대로 보인다. `test/unit/claude-review.test.ts`: [실제] 판정이 들여쓴 실패 시나리오 줄을 지적으로 세지 않는다.
 - **[어댑터]**, **[흐름]**, **[계약]**, **[실제]** 바뀌지 않았다: 앱 코드와 [실제] 판정 도구는 그대로다. 서브에이전트를 실제로 띄우는지는 모델 동작이라 [실제] verify가 깨졌나만 본다.
+
+### M35. [파일] 탭의 바뀐 파일 표시, 터미널에서 열기, 연 파일 탭 (D490~D492)
+
+사람이 "파일트리에 수정·추가·삭제한 파일이 인식되게 표시", "CLI에서 클릭해 파일을 열면 파일트리에서 열리게", "탭으로 여러 파일을 열 수 있게"를 요청했다. 설계 v0.30.
+
+- core: `core/files`의 `treeChanges`(I179).
+- 어댑터: `adapters/git`의 `untrackedPaths`, `adapters/files`의 `relativeFile`(I179, I180).
+- 앱과 화면: `WorkRunner.filesChanges`, `Relay.workFileChanges`·`terminalFilesTarget`, IPC `files:changes`와 `terminal:open`의 `external`(I179, I180), `renderer/src/fileTree.ts`, `Files.tsx`의 표시·탭·`openInFiles`, `terminals.ts`의 `setFilesOpener`(I180, I181).
+
+**시험**
+
+- **[단위]** `test/unit/work-files.test.ts`: 차이의 상태를 A·M·D로 줄이기, 추적하지 않는 파일, 묶음 Work의 서브모듈 자리, 받지 않는 경로 빼기, 상한. `test/unit/file-tree.test.ts`: 파일과 폴더의 표시(섞이면 M), 지운 파일과 지운 폴더 더하기(디스크의 이름이 이김), 담은 폴더, 같은 이름 탭의 폴더, 닫은 뒤 고를 탭.
+- **[어댑터]** `test/adapters/git.test.ts`: 기준 커밋과 작업 트리의 차이(커밋한 것과 커밋 안 한 것)와 추적하지 않는 파일(무시한 것 빼기, 한글 이름). `test/adapters/files.test.ts`: 절대 경로를 worktree 기준 경로로(폴더, 밖, `.git`, 없는 파일, 밖을 가리키는 링크 아래는 null, Work가 아는 경로).
+- **[흐름]** `test/flow/files.test.ts`: 바뀐 파일이 그 Work의 기준 커밋과 견준 것이고 메인 체크아웃의 변경은 넣지 않으며, 정리한 Work와 없는 Work는 실패다. `test/flow/terminal-files.test.ts`: Work의 task·곁 세션 터미널은 worktree의 글 파일만 [파일] 탭 자리를 내고, 폴더·그림·밖·없는 파일·기본 세션은 null이다.
+- **[스모크]** `test/smoke/files.spec.ts`: 연 파일 탭(고친 채 다른 파일 열기, 탭 오가기, 고친 탭 닫기의 확인), 트리의 고침·지움 표시와 폴더 표시, 터미널의 Ctrl+클릭으로 [파일] 탭에서 열고 폴더를 펼침, Ctrl+Shift+클릭은 OS 프로그램.
+- **[계약]**, **[실제]** 바뀌지 않았다: 에이전트와 `claude`, gh에 닿지 않는다.
 
 ## 8. 테스트 전략
 

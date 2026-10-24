@@ -1,15 +1,17 @@
 // [어댑터] git 작업: 커밋 수, D418 전 되감기의 백업 브랜치 찾기([Work 정리]가 지운다, D115, D424), 머지한 PR에 없는
-// 커밋(D329), 앱의 git status가 index를 고쳐 쓰지 않음. 실제 git으로 worktree를 만들어 돌린다.
+// 커밋(D329), 앱의 git status가 index를 고쳐 쓰지 않음, [파일] 탭의 바뀐 파일(D490). 실제 git으로 worktree를 만들어 돌린다.
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   addWorktree,
+  changedPaths,
   commitsOnlyIn,
   countCommits,
   refNames,
   statusLines,
+  untrackedPaths,
 } from '../../src/adapters/git'
 import { backupPattern } from '../../src/core/cleanup'
 import { git, makeRepo, writeFiles } from '../support/repo'
@@ -107,5 +109,23 @@ describe('[어댑터] 앱의 git status (시나리오 8)', () => {
     // 막지 않은 git status는 index.lock을 잡고 고쳐 쓴다
     git(tree, 'status', '--porcelain')
     expect(fs.readFileSync(index).equals(before)).toBe(false)
+  })
+})
+
+describe('[어댑터] [파일] 탭의 바뀐 파일 (D490)', () => {
+  it('기준 커밋과 작업 트리의 차이는 커밋한 것과 커밋 안 한 것을 모두 넣고, 추적하지 않는 파일은 무시한 것을 뺀다', async () => {
+    writeFiles(tree, { 'src/avg.js': 'export const avg = () => 0\n' })
+    git(tree, 'commit', '-q', '-am', '고침')
+    fs.rmSync(path.join(tree, 'README.md'))
+    writeFiles(tree, {
+      'docs/새 문서.md': '# 새\n',
+      'docs/deep/b.md': 'b\n',
+      'node_modules/x/index.js': '',
+    })
+    expect(await changedPaths(tree, base)).toEqual([
+      { status: 'D', path: 'README.md' },
+      { status: 'M', path: 'src/avg.js' },
+    ])
+    expect((await untrackedPaths(tree)).sort()).toEqual(['docs/deep/b.md', 'docs/새 문서.md'])
   })
 })

@@ -1,11 +1,13 @@
-// [단위] Work의 [파일] 탭 (D464~D468): 받는 상대 경로, 트리의 차례, 글 파일 판정과 줄 끝·BOM. 파일 읽기와 링크
+// [단위] Work의 [파일] 탭 (D464~D468, D490): 받는 상대 경로, 트리의 차례, 글 파일 판정과 줄 끝·BOM, 바뀐 파일 목록. 파일 읽기와 링크
 // 따라가기는 [어댑터] `test/adapters/files.test.ts`가 본다.
 import { describe, expect, it } from 'vitest'
 import {
   decodeText,
   encodeText,
+  CHANGES_MAX,
   fileSegments,
   sortEntries,
+  treeChanges,
   windowsDeviceName,
 } from '../../src/core/files'
 
@@ -117,5 +119,54 @@ describe('[파일] 탭의 글 파일 (D466, D467)', () => {
     const opened = decodeText(original)
     if (!opened) throw new Error('글 파일이어야 함')
     expect(encodeText(opened.text, opened.shape)).toEqual(original)
+  })
+})
+
+describe('[파일] 탭의 바뀐 파일 (D490)', () => {
+  it('차이의 상태를 A·M·D로 줄이고 추적하지 않는 파일은 더한 것이다. 경로 순이다', () => {
+    expect(
+      treeChanges([
+        {
+          prefix: '',
+          diff: [
+            { status: 'M', path: 'src/avg.js' },
+            { status: 'D', path: 'README.md' },
+            { status: 'A', path: 'docs/a.md' },
+            { status: 'T', path: 'link' },
+            { status: 'U', path: 'conflict.txt' },
+          ],
+          untracked: ['new.txt'],
+        },
+      ]),
+    ).toEqual([
+      { path: 'README.md', status: 'D' },
+      { path: 'conflict.txt', status: 'M' },
+      { path: 'docs/a.md', status: 'A' },
+      { path: 'link', status: 'M' },
+      { path: 'new.txt', status: 'A' },
+      { path: 'src/avg.js', status: 'M' },
+    ])
+  })
+
+  it('묶음 Work의 서브모듈은 그 자리 아래에 붙이고, 트리가 받지 않는 경로는 뺀다', () => {
+    expect(
+      treeChanges([
+        { prefix: '', diff: [{ status: 'M', path: 'libs/core' }], untracked: [] },
+        {
+          prefix: 'libs/core',
+          diff: [{ status: 'M', path: 'src/a.ts' }],
+          untracked: ['b.ts', '.git/x', '../out'],
+        },
+      ]),
+    ).toEqual([
+      { path: 'libs/core', status: 'M' },
+      { path: 'libs/core/b.ts', status: 'A' },
+      { path: 'libs/core/src/a.ts', status: 'M' },
+    ])
+  })
+
+  it('상한을 넘으면 앞의 것만 둔다', () => {
+    const untracked = Array.from({ length: CHANGES_MAX + 5 }, (_, i) => `f${i}`)
+    expect(treeChanges([{ prefix: '', diff: [], untracked }])).toHaveLength(CHANGES_MAX)
   })
 })

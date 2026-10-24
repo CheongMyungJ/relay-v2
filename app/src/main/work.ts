@@ -85,6 +85,7 @@ import {
   stashEntries,
   statusLines,
   submodulePaths,
+  untrackedPaths,
 } from '../adapters/git'
 import type { HookReply, HookRequest, HookServer } from '../adapters/hooks'
 import { processStartTime, startPty, type PtySession } from '../adapters/pty'
@@ -283,6 +284,7 @@ import {
   wantsAutoStart,
 } from '../core/respond'
 import { DRAFTS_DIR } from '../core/draft'
+import { treeChanges } from '../core/files'
 import { DraftFolder } from './drafts'
 import { continuePrompt, INSTRUCTIONS_FILE } from '../core/settings'
 import { sideBlock, sideGuide } from '../core/side'
@@ -348,6 +350,7 @@ import type {
   RepoDiffView,
   DeliverInput,
   DeliverResult,
+  FileChangesResult,
   IssueView,
   KnowledgeChange,
   MergeInfoResult,
@@ -6115,6 +6118,36 @@ export class WorkRunner {
   /** [파일] 탭이 보는 폴더 (D464). 정리한 Work는 worktree가 없어 null이다 */
   filesRoot(): string | null {
     return this.work.status === 'archived' ? null : this.worktree
+  }
+
+  /**
+   * [파일] 탭 트리의 바뀐 파일 (D490): 기준 커밋과 지금 작업 트리의 차이(커밋한 것과 커밋 안 한 것 모두)와 추적하지 않는
+   * 파일. 묶음 Work는 고른 서브모듈도 그 기준 커밋과 견주어 서브모듈 자리 아래에 붙인다(D471)
+   */
+  async filesChanges(): Promise<FileChangesResult> {
+    const root = this.filesRoot()
+    if (!root) return { ok: false, error: 'worktree가 없습니다 (정리한 Work)' }
+    const opts = { env: this.ctx.env }
+    const lanes = [
+      { prefix: '', dir: root, base: this.work.base_commit },
+      ...workRepos(this.work).map((r) => ({
+        prefix: r.path,
+        dir: this.repoTree(r.path),
+        base: r.base_commit,
+      })),
+    ]
+    try {
+      const read = await Promise.all(
+        lanes.map(async (l) => ({
+          prefix: l.prefix,
+          diff: await changedPaths(l.dir, l.base, opts),
+          untracked: await untrackedPaths(l.dir, opts),
+        })),
+      )
+      return { ok: true, changes: treeChanges(read) }
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
   }
 
   // ---------- 이슈 기록 (설계 3.7, D336~D349, I98~I100) ----------

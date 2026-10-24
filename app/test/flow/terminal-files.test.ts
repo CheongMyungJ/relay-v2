@@ -1,4 +1,4 @@
-// [흐름] 터미널의 파일 열기와 붙여넣은 그림 (D410~D412). 터미널 출력의 경로는 그 터미널의 폴더(Work는 worktree, 기본
+// [흐름] 터미널의 파일 열기와 붙여넣은 그림 (D410~D412, D491). Work worktree 안의 글 파일은 [파일] 탭에서 열 자리를 낸다. 터미널 출력의 경로는 그 터미널의 폴더(Work는 worktree, 기본
 // 세션은 고른 폴더)에서 풀고 있는 것만 받는다. 붙여넣은 그림은 RELAY_HOME/pastes/에 저장하고 오래된 것은 지운다.
 import fs from 'node:fs'
 import path from 'node:path'
@@ -59,6 +59,28 @@ describe('터미널의 파일 (D410~D412)', () => {
     })
     expect(await hh.relay.terminalTarget(work, 'src/none.js')).toBeNull()
 
+    // [파일] 탭에서 열 자리 (D491): 그 Work worktree 안의 글 파일만이다. 폴더, 글이 아닌 파일, 밖의 파일은 OS 앱으로 연다
+    fs.writeFileSync(path.join(tree, 'logo.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0, 0, 0]))
+    const outside = path.join(hh.root, 'outside.md')
+    fs.writeFileSync(outside, '# 밖\n')
+    expect(await hh.relay.terminalFilesTarget(work, 'src/avg.js')).toEqual({
+      workKey: r.workKey,
+      path: 'src/avg.js',
+    })
+    expect(await hh.relay.terminalFilesTarget(work, path.join(tree, 'package.json'))).toEqual({
+      workKey: r.workKey,
+      path: 'package.json',
+    })
+    // 곁 세션과 정리 세션의 터미널도 그 Work다
+    expect(await hh.relay.terminalFilesTarget(`${r.workKey}/side`, 'src/avg.js')).toEqual({
+      workKey: r.workKey,
+      path: 'src/avg.js',
+    })
+    for (const raw of ['src', 'logo.png', outside, 'src/none.js']) {
+      expect(await hh.relay.terminalFilesTarget(work, raw), raw).toBeNull()
+    }
+    expect(await hh.relay.terminalFilesTarget('none/w-1/t-01', 'src/avg.js')).toBeNull()
+
     const cwd = fs.mkdtempSync(path.join(hh.root, 'session-'))
     fs.writeFileSync(path.join(cwd, 'notes.md'), '# 메모\n')
     fs.writeFileSync(path.join(cwd, 'tool.py'), 'print(1)\n')
@@ -102,6 +124,8 @@ describe('터미널의 파일 (D410~D412)', () => {
         open: true,
       })
     }
+    // 기본 세션에는 [파일] 탭이 없다
+    expect(await hh.relay.terminalFilesTarget(terminal, 'notes.md')).toBeNull()
     expect(await hh.relay.terminalPaths('sessions/none/x', [['notes.md']])).toEqual([null])
     expect(await hh.relay.terminalTarget('sessions/none/x', 'notes.md')).toBeNull()
   })

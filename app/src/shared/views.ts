@@ -1013,6 +1013,23 @@ export type FileReadResult =
 export type FileSaveResult =
   { ok: true; hash: string } | { ok: false; error: string; conflict?: boolean }
 
+/** Work가 기준 커밋 뒤에 더하거나(A) 고치거나(M) 지운(D) 파일 (D490). path는 worktree 기준 상대 경로(`/`로 이음)다 */
+export interface FileChangeView {
+  path: string
+  status: 'A' | 'M' | 'D'
+}
+
+/** 트리에 보일 바뀐 파일 (D490) */
+export type FileChangesResult =
+  { ok: true; changes: FileChangeView[] } | { ok: false; error: string }
+
+/** 터미널에서 Ctrl+클릭한 경로가 [파일] 탭에서 열 Work의 글 파일일 때 (D491) */
+export interface FilesOpenTarget {
+  workKey: string
+  /** worktree 기준 상대 경로(`/`로 이음) */
+  path: string
+}
+
 // ---------- 기본 세션 (시나리오 12, D397~D406) ----------
 
 /** Work 초안 카드 (D404). 만든 곳과 상관없는 모양이다. 틀린 칸은 null이고 형식 오류는 errors에 있다 */

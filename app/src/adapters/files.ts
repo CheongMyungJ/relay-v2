@@ -99,6 +99,19 @@ async function locate(
   return { root, names, real }
 }
 
+/**
+ * 절대 경로가 worktree 안의 파일이면 worktree 기준 상대 경로(`/`로 이음), 아니면 null (D491). 터미널에서 Ctrl+클릭한
+ * 경로를 [파일] 탭에서 열 때 쓴다. 트리와 같은 검사(받는 이름, 링크가 가리키는 곳)를 지난 것만 받는다
+ */
+export async function relativeFile(worktree: string, abs: string): Promise<string | null> {
+  const root = await rootOf(worktree)
+  const names = root ? innerNames(root, path.resolve(abs)) : null
+  if (!root || !names || names.length === 0) return null
+  const real = await inside(root, names)
+  const st = real ? await fsp.stat(real).catch(() => null) : null
+  return st?.isFile() ? names.join('/') : null
+}
+
 /** 폴더 하나의 항목 (D465). 링크는 가리키는 것의 종류로 보이고, 밖을 가리키거나 깨졌으면 other다 */
 export async function listFiles(worktree: string, rel: string): Promise<FileListResult> {
   const at = await locate(worktree, rel)
