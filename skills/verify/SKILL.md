@@ -31,7 +31,12 @@ Review the whole change of this Work, apply only the findings the human picks, t
 
 ## Order
 
+<!-- type: bugfix feature refactor general custom -->
+1. **Review.** Follow `## How to review`. Write each finding under `## 리뷰 지적` of `verification.md` as a numbered item: severity (차단 / 권장 / 사소), file and line, what is wrong and what you suggest, and its check result (확인됨 / 가능성). On an indented line under it, write its failure scenario (for a cleanup finding, the cost; for 가능성, also what would confirm it). Most severe first; within the same severity, correctness findings before cleanup findings. There is no maximum or minimum: do not cut real findings, and do not make up findings to fill a count. If there is nothing, write "없음".
+<!-- /type -->
+<!-- type: spec -->
 1. **Review.** Write each finding under `## 리뷰 지적` of `verification.md` as a numbered item: severity (차단 / 권장 / 사소), file and line, what is wrong and what you suggest. If there is nothing, write "없음".
+<!-- /type -->
 2. **Pick findings** (human decision below). Skip this if there are no findings.
 <!-- type: bugfix feature refactor general custom -->
 3. **Apply** only the picked findings, commit, and run the intent's test command. Fill in `## 반영` and `## 반영하지 않은 지적`. Do not review again afterwards, and do not add new findings.
@@ -42,6 +47,32 @@ Review the whole change of this Work, apply only the findings the human picks, t
 4. **Verify** each 완료조건 on the final code and fill in the rest of `verification.md`.
 5. **Write `pr.md`**, then close.
 
+<!-- type: bugfix feature refactor general custom -->
+## How to review
+
+Review in this order:
+
+1. **Scope:** the change from the base commit to now, uncommitted changes included (`git diff <base commit>`), and new files not yet added to git (the `??` lines of `git status --porcelain`). If `context.md` has `## 레포`, do this for every repo listed there, each in its own folder against its own base commit (the main repo against the Work's base commit, a submodule with `git -C <path> …` against the base commit listed for it): the main repo's diff shows a submodule only as a changed pointer, and it is empty when the main repo is not changed.
+2. **Find candidates:** go through every angle of `## What to review`, one after another. Do not let one angle's conclusion suppress another's: if two angles flag the same line for different reasons, keep both. Each candidate has a file and line, a one-line summary, and a failure scenario: the concrete input or state, and what goes wrong (a wrong result, a crash, a broken caller). For a cleanup candidate (reuse, simplification, efficiency, altitude, conventions), state the concrete cost instead: what is duplicated, wasted or harder to maintain, or which rule it breaks. Pass every candidate that has a nameable failure scenario on to the check. Do not drop one because you only half believe it: dropping half-believed candidates here is the main cause of missed defects. Keep out-of-scope problems apart, for `나중에 정리할 곳`.
+3. **Dedup:** candidates with the same defect, location and reason are one. Keep the one with the most concrete failure scenario.
+4. **Check** each remaining candidate against the code, and mark it with exactly one of:
+   - **확인됨:** you can name the input or state that triggers it and the wrong result. Quote the line.
+   - **가능성:** the mechanism is real, but the trigger is uncertain (timing, environment, config). State what would confirm it.
+   - **틀림:** the code does not say that, or it is handled elsewhere. Quote the line that proves it.
+
+   가능성 is the default. Do not mark a candidate 틀림 for being speculative or for depending on runtime state when that state is realistic: a race, a missing value on a rare but reachable path (an error handler, an empty cache, a missing optional field), zero or empty treated as missing, off-by-one on a boundary the code does not exclude, a partial failure or retry, a pattern or allowlist that lost an anchor. Mark it 틀림 only when the code shows it: factually wrong (quote the line), impossible by a type, constant or invariant (show it), already handled in this diff (cite the guard), or pure style with no observable effect. Drop 틀림.
+5. **Write** the 확인됨 and 가능성 findings under `## 리뷰 지적` (see `## Order`), each with a severity.
+
+**Subagents:** if you can start subagents, give steps 1–4 to two of them, one after the other, and wait for each result before you go on:
+
+- **Finder** (steps 1–3): give it the path of `context.md`, the paths of this Work's artifacts, the base commit (and each repo's base commit if `context.md` has `## 레포`), the whole text of `## What to review`, the whole text of `## This Work type's review points` if these instructions have that section, and the whole text of steps 1–3. Copy them as they are: subagents do not see these instructions. It returns the deduplicated candidates, and the out-of-scope problems apart.
+- **Checker** (step 4): a new subagent, not the finder. Give it the path of `context.md`, the paths of this Work's artifacts, the base commit (and each repo's base commit if `context.md` has `## 레포`), the finder's whole list of candidates and the whole text of step 4. It returns each candidate with its mark and the quoted line.
+
+Both only read: they change no files, ask the human nothing, and return only the list. Do step 5 yourself with the list the checker returns. When you apply a picked finding, read the code it points to yourself.
+
+If you cannot start subagents, do steps 1–5 yourself, one after another, and write "한 세션에서 리뷰함(확인이 찾은 쪽과 같은 컨텍스트)" in `남은 위험`.
+
+<!-- /type -->
 ## What to review
 
 - If the intent's `제약` says to follow a design document ("`<path>`의 결정을 따른다"): does the change match its decisions? Is every decision the change departs from also changed in that document, with its history and the human's decision?
@@ -75,10 +106,12 @@ Review the whole change of this Work, apply only the findings the human picks, t
 <!-- type: custom -->
 - Does the change fit what each custom step's artifact says it did? Did the scope grow beyond it?
 - Does each 완료조건's check method (`— 확인: …`) really check it?
-- **The type's review points:** if these instructions end with `## This Work type's review points`, review those points too. They come from whoever defined the type.
+- **The type's review points:** if these instructions have a `## This Work type's review points` section, review those points too. They come from whoever defined the type.
 <!-- /type -->
 <!-- type: bugfix feature refactor general custom -->
-- Missing cases and edge conditions.
+- **Line by line:** read every hunk of the diff, then the whole function around it: a defect in an unchanged line of a touched function is in scope too. For each line ask what input, state, timing or platform makes it wrong. Look for missing cases and edge conditions, inverted or wrong conditions, off-by-one, a value used where it can be missing, a missing `await`, zero or empty treated as missing, a copy-pasted wrong variable, an error swallowed in a catch, an unescaped pattern.
+- **Removed behavior:** for every line the diff deletes or replaces, name what it enforced, then find where the new code does it again. If nowhere, it is a candidate: a removed guard, a dropped error path, a narrowed validation, a deleted test that covered a real case.
+- **Callers:** for each function the diff changes, find its callers and check whether the change breaks one: a new precondition, a changed return shape, a new error, an order dependency. Check its callees too: does another change in this diff make a call unsafe?
 <!-- /type -->
 <!-- type: bugfix -->
 - Do the tests really catch the fix?
@@ -96,9 +129,12 @@ Review the whole change of this Work, apply only the findings the human picks, t
 - Does every change in code behavior have a test that catches it? If not, is the reason in the custom step's artifact sound?
 <!-- /type -->
 <!-- type: bugfix feature refactor general custom -->
-- The repo's conventions and readability.
+- **Conventions:** the repo's conventions and readability. Read the instruction files that govern the changed code (such as `CLAUDE.md`, `AGENTS.md` or `CONTRIBUTING.md` at the repo root and in the folders above a changed file). Flag a broken convention only when you can quote the rule and the line that breaks it, and name the file of the rule. No style preferences.
 - Fit with the existing structure: the layer or module each change sits in, dependency directions, the patterns the code around it follows.
-- Duplication: code that repeats a function or abstraction the repo already has.
+- **Reuse** (Duplication): code that repeats a function or abstraction the repo already has. Search the shared modules and the files next to the change, and name the one to call instead.
+- **Simplification:** complexity the diff adds without need: state that can be derived, copy-paste with small changes, deep nesting, dead code left behind. Name the simpler form that does the same job.
+- **Efficiency:** wasted work the diff adds: repeated computation or I/O, independent work run one after another, blocking work added to startup or a hot path. Name the cheaper way.
+- **Altitude:** does each change fix the root cause at the right depth, or patch a symptom? A special case added on top of shared code is a sign it is not deep enough: name the more general change to the underlying mechanism.
 - Maintainability: complexity that grows (deep nesting, long functions, more flags), and tests tied to internal details that will break on any change.
 - A rule in the team knowledge (`kind: rule`, in `context.md`) that the change breaks is a 차단 finding. For entries listed by title only, open the ones that touch the changed code to see whether they are rules.
 - Changes that are not needed.
@@ -188,6 +224,7 @@ Ask on the spot:
 
 <!-- type: bugfix feature refactor general custom -->
 - `verification.md` has all seven template sections.
+- `## 리뷰 지적` has only findings that went through the check (확인됨 or 가능성), each with its failure scenario.
 - If there were findings, the human picked; the picked ones are fixed and committed, and the test result is in `반영`.
 - Every 완료조건 of the intent has a verdict and evidence, judged on the final code.
 - Every changed test file is judged.
@@ -208,7 +245,13 @@ Ask on the spot:
 
 ```markdown
 ## 리뷰 지적
+<!-- type: bugfix feature refactor general custom -->
+1. [차단 / 권장 / 사소] 파일:줄 — 무엇이 문제인지와 제안 (확인됨 / 가능성)
+   실패 시나리오: 어떤 입력·상태에서 무엇이 틀리는지 (정리 지적은 드는 비용, 가능성이면 무엇이 확인해 줄지)
+<!-- /type -->
+<!-- type: spec -->
 1. [차단 / 권장 / 사소] 파일:줄 — 무엇이 문제인지와 제안
+<!-- /type -->
 (지적이 없으면 "없음")
 
 ## 반영
