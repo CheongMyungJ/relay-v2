@@ -65,8 +65,8 @@ Review in this order:
 
 **Subagents:** if you can start subagents, give steps 1–4 to two of them, one after the other, and wait for each result before you go on:
 
-- **Finder** (steps 1–3): give it the path of `context.md`, the paths of this Work's artifacts, the base commit, the whole text of `## What to review` and the whole text of step 2. Copy them as they are: subagents do not see these instructions. It returns the deduplicated candidates, and the out-of-scope problems apart.
-- **Checker** (step 4): a new subagent, not the finder. Give it the base commit, the finder's whole list of candidates and the whole text of step 4. It returns each candidate with its mark and the quoted line.
+- **Finder** (steps 1–3): give it the path of `context.md`, the paths of this Work's artifacts, the base commit, the whole text of `## What to review`, the whole text of `## This Work type's review points` if these instructions end with it, and the whole text of step 2. Copy them as they are: subagents do not see these instructions. It returns the deduplicated candidates, and the out-of-scope problems apart.
+- **Checker** (step 4): a new subagent, not the finder. Give it the path of `context.md`, the paths of this Work's artifacts, the base commit, the finder's whole list of candidates and the whole text of step 4. It returns each candidate with its mark and the quoted line.
 
 Both only read: they change no files, ask the human nothing, and return only the list. Do step 5 yourself with the list the checker returns. When you apply a picked finding, read the code it points to yourself.
 
