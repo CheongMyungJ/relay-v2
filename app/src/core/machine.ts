@@ -1345,11 +1345,12 @@ const BLOCKED_BY_OPERATION: readonly MachineEvent['type'][] = [
 export function transition(work: WorkState, event: MachineEvent, config: AppConfig): Transition {
   const lane = eventLane(work, event)
   const run = (w: WorkState) =>
-    queueIssue(withEngines(w, countdownEffects(w, dispatch(w, event, config)), config))
-  if (!lane) return settleCards(work, run(work))
+    withEngines(w, countdownEffects(w, dispatch(w, event, config)), config)
+  // 이슈 기록은 카드를 맞춘 뒤에 더한다: 남은 카드가 있으면 work.completed가 빠져 이슈를 닫지 않는다 (D480, D346)
+  if (!lane) return queueIssue(settleCards(work, run(work)))
   // 서브모듈 PR 카드는 그 레포를 메인 자리에 둔 렌즈로 메인 PR과 같은 전이를 한다 (D480, I174)
   const r = run(focusLane(work, lane))
-  return settleCards(work, { ...r, work: unfocusLane(work, r.work, lane) })
+  return queueIssue(settleCards(work, { ...r, work: unfocusLane(work, r.work, lane) }))
 }
 
 /**
@@ -2390,7 +2391,8 @@ function deliveryRepo(work: WorkState, e: DeliveryRepo): Transition {
       ? {
           ...r,
           delivery,
-          ...(e.pr && e.prUrl
+          // 앞 시도에서 만든 같은 PR을 다시 찾았으면 그 기록(시작한 때)을 그대로 둔다
+          ...(e.pr && e.prUrl && r.pr?.number !== e.pr.number
             ? {
                 pr: {
                   number: e.pr.number,
@@ -2480,6 +2482,13 @@ function deliveryBackups(
  * 세션은 전달을 시작할 때 끝냈다). Work를 완료로 바꾸고 전달 결과를 남기며, 진행 중 작업 기록은 같이
  * 지운다. verify에서 멈춘 Work는 멈춤 표시도 지운다 (D119).
  */
+/**
+ * 끝나지 않은 서브모듈 PR이 있는가 (D480). 앞 시도에서 만든 PR도 센다: [다시 시도]에서 그 레포를 빼도 PR은 열려 있다
+ */
+function openRepoPr(work: WorkState): boolean {
+  return (work.repos ?? []).some((r) => r.pr !== undefined && !cardDone(r.pr))
+}
+
 function deliverySucceeded(work: WorkState, e: DeliverySucceeded): Transition {
   const op = work.operation
   if (op?.kind !== 'deliver') return unchanged(work, '진행 중인 전달이 없음')
@@ -2540,14 +2549,14 @@ function deliverySucceeded(work: WorkState, e: DeliverySucceeded): Transition {
   delete payload['at']
   if (!main) {
     // 묶음 Work에서 메인을 보내지 않았다 (D477): 메인의 전달 기록은 그대로 두고, 서브모듈 PR이 있으면 PR 진행이다 (D480)
-    const prs = (work.repos ?? []).some((r) => r.pr && op.repos?.some((s) => s.path === r.path))
+    const prs = openRepoPr(work)
     const next: WorkState = prs
       ? { ...rest, tasks, status: 'pr' }
       : { ...rest, tasks, status: 'completed', completed_at: e.at }
     if (!prs) effects.push(log(next, e.at, 'work.completed', { delivery: op.choice }))
     return { work: next, effects }
   }
-  const repoPr = (work.repos ?? []).some((r) => r.pr && op.repos?.some((s) => s.path === r.path))
+  const repoPr = openRepoPr(work)
   if (repoPr && !(op.choice === 'pr' && e.pr && e.prUrl)) {
     // 메인은 push만 했고 서브모듈 PR이 있다: PR 진행이다 (D480)
     const next: WorkState = { ...rest, tasks, status: 'pr', delivery }
@@ -2884,9 +2893,29 @@ function deliveryCut(
     branch: op.branch,
     ...backups,
   }
-  // 묶음 Work에서 메인을 보내지 않던 전달은 메인의 전달 기록을 남기지 않는다 (D477). 끝난 서브모듈의 기록은 이미 있다
+  // 하던 서브모듈의 백업(stash, 커밋)은 그 레포의 전달 기록에 남긴다 (D479). 시작하지 않은 서브모듈은 기록이 없고, 끝난
+  // 서브모듈의 기록은 이미 있다
+  const repos = (work.repos ?? []).map((r) => {
+    const step = op.repos?.find((x) => x.path === r.path)
+    if (!step || step.stage === 'done') return r
+    // 처음 단계(커밋 안 된 변경이 있으면 prepare, 없으면 push)에서 남긴 것이 없으면 시작하지 않은 것으로 본다
+    const first = step.uncommitted ? 'prepare' : 'push'
+    if (step.stash === undefined && step.commit === undefined && step.stage === first) return r
+    const failed: DeliveryRecord = {
+      choice: step.choice,
+      status: 'failed',
+      at: e.at,
+      stage: step.stage,
+      error: CUT_ERROR,
+      branch: op.branch,
+      ...repoBackups(r.delivery, step),
+    }
+    return { ...r, delivery: failed }
+  })
+  const rest = work.repos ? { ...omit(work, 'operation'), repos } : omit(work, 'operation')
+  // 묶음 Work에서 메인을 보내지 않던 전달은 메인의 전달 기록을 남기지 않는다 (D477)
   return {
-    work: op.skip_main ? omit(work, 'operation') : { ...omit(work, 'operation'), delivery },
+    work: op.skip_main ? rest : { ...rest, delivery },
     effects: [
       log(work, e.at, 'delivery.failed', {
         choice: op.choice,
@@ -2980,7 +3009,8 @@ function filesRecorded(work: WorkState, e: FilesRecorded): Transition {
  */
 function prRead(work: WorkState, e: PrRead): Transition {
   const pr = work.pr
-  if (work.status !== 'pr' || !pr || pr.number !== e.number || work.operation) {
+  // 머지되거나 끝낸 카드는 다른 카드가 남아 PR 진행이어도 읽지 않는다 (D480)
+  if (work.status !== 'pr' || !pr || cardDone(pr) || pr.number !== e.number || work.operation) {
     return unchanged(work)
   }
   const effects: Effect[] = []
@@ -3058,9 +3088,13 @@ function prRead(work: WorkState, e: PrRead): Transition {
  * 진행 중 작업을 기록하고(D77) 머지를 main에 맡긴다. 그사이 GitHub에 새 커밋이 생겼으면 GitHub가 거절한다
  * (--match-head-commit, S7)
  */
+/** 머지되거나 끝낸 PR 카드에 온 명령 (D480): 다른 카드가 남아 Work는 PR 진행이다 */
+const CARD_DONE = '이 PR은 이미 머지되었거나 끝냈음'
+
 function prMerge(work: WorkState, e: PrMerge): Transition {
   const pr = work.pr
   if (work.status !== 'pr' || !pr) return unchanged(work, 'PR 진행인 Work가 아님')
+  if (cardDone(pr)) return unchanged(work, CARD_DONE)
   if (work.operation) return unchanged(work, '진행 중인 작업이 있음')
   if (e.head !== pr.head) {
     return unchanged(work, '머지 창을 연 뒤 PR의 새 head를 읽었음. 머지 창을 다시 여세요')
@@ -3120,6 +3154,7 @@ function prMergeFailed(work: WorkState, e: PrMergeFailed): Transition {
 function prEnd(work: WorkState, e: PrEnd): Transition {
   const pr = work.pr
   if (work.status !== 'pr' || !pr) return unchanged(work, 'PR 진행인 Work가 아님')
+  if (cardDone(pr)) return unchanged(work, CARD_DONE)
   const task = pendingRespond(work)
   if (task && (task.session?.alive || task.status === 'queued')) {
     return unchanged(work, 'PR 대응 task가 돌고 있음: 먼저 [즉시 중단]하세요')
@@ -3439,6 +3474,7 @@ function respondFailure(
 /** [실패한 체크 다시 실행] (D175, D203): main이 다시 실행한 Actions 실행과 체크를 남긴다(5.5 pr.checks_rerun) */
 function prChecksRerun(work: WorkState, e: PrChecksRerun): Transition {
   if (work.status !== 'pr' || !work.pr) return unchanged(work, 'PR 진행인 Work가 아님')
+  if (cardDone(work.pr)) return unchanged(work, CARD_DONE)
   if (!e.runs.length) return unchanged(work)
   return {
     work,

@@ -8,7 +8,7 @@ import type { AutoRespondView } from '../shared/views'
 import type { RespondRound, RespondStage, TaskRecord, WorkState } from '../shared/work'
 import type { PrReadState } from './pr'
 import { RESPOND } from './pipeline'
-import { laneOf } from './repos'
+import { cardDone, laneOf } from './repos'
 import { replySections } from './validate'
 
 // ---------- 대응 task와 라운드 ----------
@@ -123,6 +123,8 @@ export function respondBlocked(
   if (work.status !== 'pr' || !work.pr) return 'PR 진행인 Work가 아님'
   if (work.operation) return '진행 중인 작업이 있음'
   if (work.pr.closed_at) return PR_CLOSED
+  // 머지되거나 끝낸 카드는 다른 카드가 남아 PR 진행이어도 대응하지 않는다 (D480)
+  if (cardDone(work.pr)) return '이 PR은 이미 머지되었거나 끝냈음'
   // PR 카드가 여럿이어도 대응 task는 Work에 하나다 (D480)
   if (anyPendingRespond(work))
     return '끝나지 않은 PR 대응 task가 있음 (대응 task는 한 번에 하나, D170)'

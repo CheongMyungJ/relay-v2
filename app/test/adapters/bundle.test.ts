@@ -8,8 +8,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   addWorktree,
   commitAll,
+  clearSubmodule,
   commitGitlinks,
-  deinitSubmodule,
   discardChanges,
   gitlinkAt,
   initSubmodule,
@@ -117,6 +117,23 @@ describe('[어댑터] 묶음 Work의 git (D471~D478)', () => {
     expect(await discardChanges(main, 'x', opts, ['lib', 'pkg/ui'])).toBeNull()
   })
 
+  it('[변경 버리고 진행]은 git이 따옴표로 감싼 경로(공백)의 서브모듈 자리도 뺀다 (D475)', async () => {
+    addSubmodule(repo, path.join(root, 'mod-src'), 'my lib', { 'm.txt': 'm\n' })
+    const tree = path.join(root, 'worktrees', 'w2')
+    await addWorktree(repo, tree, `${BRANCH}-2`, git(repo, 'rev-parse', 'HEAD'), opts)
+    const sub = path.join(repo, 'my lib')
+    git(sub, 'config', 'user.email', 'relay-test@example.com')
+    git(sub, 'config', 'user.name', 'relay test')
+    git(sub, 'config', 'commit.gpgsign', 'false')
+    const dir = path.join(tree, 'my lib')
+    await addWorktree(sub, dir, `${BRANCH}-2`, git(sub, 'rev-parse', 'HEAD'), opts)
+    writeFiles(dir, { 'm.txt': 'm 고침\n' })
+    git(dir, 'commit', '-qam', 'my lib 고침')
+    expect(await statusLines(tree, opts)).toEqual([' M "my lib"'])
+    expect(await discardChanges(tree, 'x', opts, ['my lib'])).toBeNull()
+    expect(git(dir, 'branch', '--show-current')).toBe(`${BRANCH}-2`)
+  })
+
   it('메인이 새 서브모듈 커밋을 가리키게 하는 커밋은 그 자리만 넣는다 (D478)', async () => {
     const lib = commitIn('lib', 'lib.txt', 'lib 고침\n')
     const ui = commitIn('pkg/ui', 'ui.txt', 'ui 고침\n')
@@ -145,8 +162,10 @@ describe('[어댑터] 묶음 Work의 git (D471~D478)', () => {
     await initSubmodule(main, 'vendor', opts)
     const vendor = path.join(main, 'vendor')
     expect(fs.existsSync(path.join(vendor, 'v.txt'))).toBe(true)
-    await deinitSubmodule(main, 'vendor', opts)
+    await clearSubmodule(main, 'vendor')
     expect(fs.readdirSync(vendor)).toEqual([])
+    // 사용자 체크아웃의 서브모듈 등록(함께 쓰는 .git/config)은 그대로다
+    expect(git(repo, 'config', '--get', 'submodule.vendor.url')).toContain('vendor-src')
     const sub = path.join(repo, 'vendor')
     await initSubmodule(repo, 'vendor', opts)
     await addWorktree(sub, vendor, BRANCH, git(sub, 'rev-parse', 'HEAD'), opts)

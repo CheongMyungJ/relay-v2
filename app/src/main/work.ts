@@ -62,7 +62,7 @@ import {
   countCommits,
   currentBranch,
   deleteBranches,
-  deinitSubmodule,
+  clearSubmodule,
   dirtySubmodules,
   discardChanges,
   deleteRemoteBranch,
@@ -313,6 +313,7 @@ import { mainSideChanges, submoduleGuardEnv } from '../core/submodule'
 import {
   bundlePlan,
   relinkMessage,
+  relinkUnchecked,
   cardDone,
   focusLane,
   laneOf,
@@ -653,6 +654,10 @@ interface Lane {
   mergeConfirms: number
   /** 메인 PR이 머지된 커밋을 가리키지 않는 서브모듈 (D481). 메인 카드의 읽기가 정한다 */
   relink: string[]
+  /** 메인 카드: 마지막 읽기에서 머지된 커밋을 가리키는지 확인한 서브모듈 (D481) */
+  relinkChecked: string[]
+  /** 메인 카드: 머지 대상에 있다고 확인한 서브모듈 커밋 (경로 → gitlink). 같은 커밋이면 다시 받지 않는다 */
+  relinkOk: Map<string, string>
 }
 
 export class WorkRunner {
@@ -879,8 +884,13 @@ export class WorkRunner {
 
   /** 이벤트를 machine에 넣고 반영한다 */
   private async feed(event: MachineEvent, opts: { quiet?: boolean } = {}) {
+    const merged = relinkUnchecked(this.work, []).length
     const t = transition(this.work, event, this.ctx.config())
     const reply = await this.apply(t.work, t.effects, opts)
+    // 메인이 가리키는 서브모듈의 PR이 막 머지됐으면 메인 PR을 곧 다시 읽어 머지된 커밋을 가리키는지 본다 (D481)
+    if (relinkUnchecked(this.work, []).length > merged && this.work.pr && !cardDone(this.work.pr)) {
+      setTimeout(() => void this.readPrNow(''), 0)
+    }
     return { t, reply }
   }
 
@@ -2646,7 +2656,7 @@ export class WorkRunner {
               error: `${repo.path}에 받아 둔 서브모듈이 바뀌어 있음. 그 변경을 정리하거나 옮긴 뒤 다시 누르세요`,
             }
           }
-          await deinitSubmodule(this.worktree, repo.path, opts)
+          await clearSubmodule(this.worktree, repo.path)
         }
         await addWorktree(dir, tree, name, repo.base_commit, opts)
       } catch (e) {
@@ -3132,6 +3142,13 @@ export class WorkRunner {
   openCleanup(choice: DeliveryChoice): Promise<CommandResult> {
     return this.enqueue(async () => {
       if (cutOperation(this.work)) return { ok: false, error: OPERATION_BLOCKS }
+      // 정리 세션 뒤의 전달은 레포 하나의 것이다. 묶음 Work는 레포마다 고른다 (D475)
+      if (isBundle(this.work)) {
+        return {
+          ok: false,
+          error: '여러 레포를 고친 Work는 커밋 안 된 변경을 레포마다 고르세요 (D475)',
+        }
+      }
       const check = await this.verifyCheck()
       const start = deliveryStart(this.work, check)
       if (!start.ok) return start
@@ -4668,6 +4685,8 @@ export class WorkRunner {
         startRead: false,
         mergeConfirms: 0,
         relink: [],
+        relinkChecked: [],
+        relinkOk: new Map(),
       }
       this.laneStates.set(lane, l)
     }
@@ -4687,6 +4706,17 @@ export class WorkRunner {
   /** PR 카드의 저장소: 메인은 메인 체크아웃, 서브모듈은 그 서브모듈 저장소다. 브랜치와 원격, gh의 작업 폴더다 */
   private laneRepo(lane: string): string {
     return lane ? this.repoDir(lane) : this.project.repo_path
+  }
+
+  /** PR 카드의 worktree에서 깨끗한지 볼 때 빼는 자리: 메인 카드는 고른 서브모듈의 gitlink다 (D475) */
+  private laneIgnore(lane: string): string[] {
+    return lane ? [] : workRepos(this.work).map((r) => r.path)
+  }
+
+  /** PR 카드의 worktree의 커밋 안 된 변경 (laneIgnore를 뺌) */
+  private async laneStatus(lane: string): Promise<string[]> {
+    const lines = await statusLines(this.laneTree(lane), { env: this.ctx.env })
+    return withoutRepoPaths(lines, this.laneIgnore(lane))
   }
 
   /** 진행 중인 머지나 대응의 push·게시의 PR 카드 (D480) */
@@ -4737,7 +4767,7 @@ export class WorkRunner {
       read: L.read,
       items: L.file?.items ?? [],
       localHead: L.local,
-      ...(lane ? {} : { relink: L.relink }),
+      ...(lane ? {} : { relink: L.relink, relinkChecked: L.relinkChecked }),
     })
   }
 
@@ -4778,7 +4808,7 @@ export class WorkRunner {
       localHead: L.local,
       reading: L.reading !== null,
       error: L.error,
-      ...(lane ? {} : { relink: L.relink }),
+      ...(lane ? {} : { relink: L.relink, relinkChecked: L.relinkChecked }),
     })
   }
 
@@ -4811,7 +4841,8 @@ export class WorkRunner {
     if (L.timer) clearTimeout(L.timer)
     L.timer = null
     const w = this.laneWork(lane)
-    if (this.closing || w.status !== 'pr' || !w.pr || w.pr.closed_at) return
+    // 머지되거나 끝낸 카드는 다른 카드가 남아도 읽지 않는다 (D480)
+    if (this.closing || w.status !== 'pr' || !w.pr || w.pr.closed_at || cardDone(w.pr)) return
     L.timer = setTimeout(() => {
       L.timer = null
       void this.readPrNow(lane)
@@ -4874,6 +4905,7 @@ export class WorkRunner {
     const pr = this.laneWork(lane).pr
     if (this.laneWork(lane).status !== 'pr' || !pr)
       return { ok: false, error: 'PR 진행인 Work가 아님' }
+    if (cardDone(pr)) return { ok: true }
     // 끊긴 작업의 기록이 있는 동안은 읽지 않는다 (I51, D122). 진행 중인 머지는 처리 줄이 끝나야 읽는다
     if (cutOperation(this.laneWork(lane))) return { ok: false, error: OPERATION_BLOCKS }
     const location = prLocation(pr.url)
@@ -4892,6 +4924,7 @@ export class WorkRunner {
           env: this.ctx.env,
           repo: this.laneRepo(lane),
           worktree: this.laneTree(lane),
+          ignore: this.laneIgnore(lane),
           branch: workBranch(this.laneWork(lane)),
           location,
           runEvents: L.runEvents,
@@ -4902,32 +4935,45 @@ export class WorkRunner {
       return this.prFailed(lane, `PR을 읽지 못함: ${message(e)}`)
     }
     // 메인 PR은 머지된 서브모듈 커밋을 가리키는지도 본다 (D481)
-    L.relink = lane ? [] : await this.relinkNeeded()
+    if (!lane) {
+      const r = await this.relinkNeeded(L.relinkOk)
+      L.relink = r.need
+      L.relinkChecked = r.checked
+    }
     return this.enqueue(() => this.applyRead(lane, pr.number, fetched))
   }
 
   /**
    * 메인이 머지된 커밋을 가리키지 않는 서브모듈 (D481): 메인이 새 커밋을 가리키게 한 서브모듈 가운데 PR이 머지됐는데, 메인
    * 작업 브랜치가 가리키는 그 서브모듈 커밋이 그 서브모듈의 머지 대상(원격)에 없는 것. squash·rebase 머지는 커밋 id를
-   * 바꾼다. 머지 대상은 받아서 본다(네트워크라 처리 줄 밖). 읽지 못한 것은 넣지 않는다
+   * 바꾼다. 머지 대상은 받아서 본다(네트워크라 처리 줄 밖). 확인한 것은 checked에 넣고, 읽지 못한 것은 넣지 않는다. 머지
+   * 대상에 있다고 확인한 gitlink는 ok에 두고 바뀌지 않았으면 다시 받지 않는다
    */
-  private async relinkNeeded(): Promise<string[]> {
+  private async relinkNeeded(
+    ok: Map<string, string>,
+  ): Promise<{ need: string[]; checked: string[] }> {
     const opts = { env: this.ctx.env }
-    const out: string[] = []
+    const need: string[] = []
+    const checked: string[] = []
     for (const r of workRepos(this.work)) {
       if (!r.linked || !r.pr?.merged) continue
       try {
         const dir = this.repoDir(r.path)
         const sha = await gitlinkAt(this.worktree, 'HEAD', r.path, opts)
-        const tip = await fetchTip({ repo: dir, env: this.ctx.env }, repoTarget(r))
-        if (sha && tip && !(await isAncestor(dir, sha, tip, opts).catch(() => false))) {
-          out.push(r.path)
+        if (sha && ok.get(r.path) === sha) {
+          checked.push(r.path)
+          continue
         }
+        const tip = await fetchTip({ repo: dir, env: this.ctx.env }, repoTarget(r))
+        if (!sha || !tip) continue
+        if (await isAncestor(dir, sha, tip, opts).catch(() => false)) ok.set(r.path, sha)
+        else need.push(r.path)
+        checked.push(r.path)
       } catch (e) {
         this.problem(`${r.path}: 머지된 서브모듈 커밋을 확인하지 못함: ${message(e)}`)
       }
     }
-    return out
+    return { need, checked }
   }
 
   /**
@@ -5147,7 +5193,7 @@ export class WorkRunner {
     if ((await refCommit(repo, `refs/heads/${branch}`, opts)) !== local) {
       throw new Error('읽은 뒤 로컬 Work 브랜치가 바뀜')
     }
-    if ((await statusLines(this.laneTree(lane), opts)).length) {
+    if ((await this.laneStatus(lane)).length) {
       throw new Error('읽은 뒤 worktree에 커밋 안 된 변경이 생김')
     }
     if ((await currentBranch(this.laneTree(lane), opts)) !== branch) {
@@ -5550,7 +5596,7 @@ export class WorkRunner {
     if (!local || local === remote) return null
     const localInRemote = await isAncestor(repo, local, remote, opts)
     if (!localInRemote) return null
-    const clean = (await statusLines(this.laneTree(lane), opts)).length === 0
+    const clean = (await this.laneStatus(lane)).length === 0
     const onBranch = (await currentBranch(this.laneTree(lane), opts)) === branch
     const kind = syncKind({ local, remote, localInRemote, remoteInLocal: false, clean, onBranch })
     if (kind !== 'ff') return null

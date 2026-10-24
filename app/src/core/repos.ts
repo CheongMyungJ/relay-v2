@@ -110,10 +110,11 @@ export function bundlePlan(
   const repos: BundlePlan['repos'] = []
   const linked: string[] = []
   for (const p of picks) {
+    // 보내지 않는 줄은 보지 않는다: 메인을 고르지 않은 Work의 메인 줄은 사실이 없다 (D471)
+    if (p.choice === null) continue
     const f = byPath.get(p.path)
     const name = labels[p.path] ?? p.path
     if (!f) return { ok: false, error: `${name}: 이 Work의 레포가 아님` }
-    if (p.choice === null) continue
     if (!f.commits) return { ok: false, error: `${name}: 보낼 커밋이 없음` }
     const button = f[p.choice]
     if (!button.enabled) {
@@ -267,6 +268,23 @@ export function relinkMessage(
 }
 
 /** 메인 PR의 [머지]를 막는 까닭: 메인이 머지된 서브모듈 커밋을 가리키지 않는다 (D481) */
+/**
+ * 메인이 머지된 커밋을 가리키는지 아직 보지 않은 서브모듈 (D481): 메인이 새 커밋을 가리키게 했고 PR이 머지됐는데, 메인 PR을
+ * 마지막으로 읽을 때 확인한 것(checked)에 없는 것. 서브모듈 PR이 막 머지되면 다음 메인 읽기까지 이렇다
+ */
+export function relinkUnchecked(
+  work: Pick<WorkState, 'repos'>,
+  checked: readonly string[],
+): string[] {
+  return workRepos(work)
+    .filter((r) => r.linked && r.pr?.merged && !checked.includes(r.path))
+    .map((r) => r.path)
+}
+
+export function relinkUncheckedReason(path: string): string {
+  return `메인이 서브모듈 ${path}의 머지된 커밋을 가리키는지 아직 확인하지 않음: 메인 PR을 [새로 고침]하세요 (D481)`
+}
+
 export function relinkReason(path: string): string {
   return `메인이 서브모듈 ${path}의 머지된 커밋을 가리키지 않음: [서브모듈 커밋 맞추기]를 누르세요 (D481)`
 }

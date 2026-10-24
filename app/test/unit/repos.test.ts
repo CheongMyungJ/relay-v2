@@ -13,6 +13,7 @@ import {
   linkWaitingReason,
   prCards,
   relinkReason,
+  relinkUncheckedReason,
   unfocusLane,
   linkMessage,
   mainEditable,
@@ -118,7 +119,7 @@ function launchAndStop(work: WorkState, starts: Record<string, string>): WorkSta
 }
 
 /** intake, fix를 승인하고 verify가 승인 대기인 묶음 Work */
-function atVerify(opts: { mainFixed?: boolean } = {}): WorkState {
+function atVerify(opts: { mainFixed?: boolean; repos?: WorkRepo[] } = {}): WorkState {
   let w = bundleWork(opts)
   for (const n of [1, 2]) {
     w = launchAndStop(w, { lib: `lib-start-${n}` })
@@ -221,6 +222,17 @@ describe('core/repos (D470~D479)', () => {
       error: 'x: 이 Work의 레포가 아님',
     })
     expect(bundlePlan([{ path: '', choice: null }], facts, labels)).toMatchObject({ ok: false })
+    // 메인을 고르지 않은 Work는 메인의 사실이 없지만 화면은 메인 줄을 보내지 않음으로 함께 보낸다 (D471)
+    expect(
+      bundlePlan(
+        [
+          { path: '', choice: null },
+          { path: 'lib', choice: 'pr' },
+        ],
+        facts.slice(1),
+        labels,
+      ),
+    ).toEqual({ ok: true, plan: { main: null, repos: [{ path: 'lib', choice: 'pr' }], link: [] } })
   })
 })
 
@@ -350,6 +362,78 @@ describe('상태 기계의 묶음 Work (D470~D482)', () => {
     })
     expect(done.work.operation).toBeUndefined()
     expect(done.work.tasks.at(-1)?.status).toBe('approved')
+  })
+
+  it('[다시 시도]에서 앞 시도에 PR을 만든 서브모듈을 빼도 그 PR이 열려 있으면 PR 진행이다 (D480)', () => {
+    const w = atVerify()
+    const withPr: WorkState = {
+      ...w,
+      repos: (w.repos ?? []).map((r) => ({
+        ...r,
+        pr: {
+          number: 7,
+          url: 'https://github.com/o/lib/pull/7',
+          head: 'h',
+          gh_version: '2.60.0',
+          started_at: at(),
+        },
+      })),
+    }
+    const pushing = apply(withPr, {
+      type: 'deliver',
+      at: at(),
+      choice: 'push',
+      uncommitted: null,
+      check: VALID,
+      bundle: { main: 'push', repos: [], link: [] },
+    }).work
+    const done = apply(pushing, {
+      type: 'delivery.succeeded',
+      at: at(),
+      compareUrl: null,
+      check: VALID,
+    }).work
+    expect(done.status).toBe('pr')
+  })
+
+  it('끊긴 레포별 전달은 하던 서브모듈의 stash를 그 레포의 전달 기록에 남긴다 (D479, D123)', () => {
+    const w = atVerify({ repos: [LIB, UI] })
+    const started = apply(w, {
+      type: 'deliver',
+      at: at(),
+      choice: 'push',
+      uncommitted: null,
+      check: VALID,
+      bundle: {
+        main: 'push',
+        repos: [
+          { path: 'lib', choice: 'push', uncommitted: 'discard' },
+          { path: 'pkg/ui', choice: 'push', uncommitted: null },
+        ],
+        link: [],
+      },
+    }).work
+    const pushing = apply(started, {
+      type: 'delivery.repo',
+      at: at(),
+      path: 'lib',
+      stage: 'push',
+      stash: 'st1',
+    }).work
+    // 앱이 꺼져 끊긴 기록이다 (D123)
+    const interrupted: WorkState = {
+      ...pushing,
+      ...(pushing.operation ? { operation: { ...pushing.operation, interrupted_at: at() } } : {}),
+    }
+    const cut = apply(interrupted, { type: 'operationIgnore', at: at() }).work
+    expect(cut.operation).toBeUndefined()
+    expect(cut.repos?.find((r) => r.path === 'lib')?.delivery).toMatchObject({
+      status: 'failed',
+      stage: 'push',
+      stashes: ['st1'],
+    })
+    // 시작하지 않은 서브모듈은 기록이 없다
+    expect(cut.repos?.find((r) => r.path === 'pkg/ui')?.delivery).toBeUndefined()
   })
 
   it('메인을 보내지 않으면 메인의 전달 기록 없이 완료하고, 서브모듈 실패는 그 레포에 남긴다 (D477, D479)', () => {
@@ -682,6 +766,66 @@ describe('PR 카드의 렌즈 (D480, D481, I174)', () => {
     ])
   })
 
+  it('끝난 카드는 다시 읽거나 머지하거나 대응하지 않는다 (D480)', () => {
+    const w = prWork()
+    const merged: WorkState = {
+      ...w,
+      pr: { ...PR(1), merged: { at: at(), head: 'h1', method: 'squash', outside: false } },
+    }
+    const reread = apply(merged, {
+      type: 'pr.read',
+      at: at(),
+      number: 1,
+      state: 'MERGED',
+      head: 'h1',
+      baseRef: 'main',
+      received: [],
+      notAccepted: [],
+    })
+    expect(reread.work).toBe(merged)
+    expect(reread.effects).toEqual([])
+    expect(apply(merged, { type: 'pr.end', at: at() }).rejected).toContain('이미 머지')
+    expect(
+      apply(merged, { type: 'pr.respond', at: at(), items: ['convo:1'], instruction: '' }).rejected,
+    ).toContain('이미 머지')
+    // lib 카드는 그대로 대응한다
+    expect(
+      apply(merged, { type: 'pr.respond', at: at(), repo: 'lib', items: ['c'], instruction: '' })
+        .rejected,
+    ).toBeUndefined()
+  })
+
+  it('이슈 기록은 마지막 카드가 끝날 때만 끝 코멘트와 닫기를 더한다 (D480, D346)', () => {
+    const base = prWork()
+    const w: WorkState = {
+      ...base,
+      issue: {
+        linked: false,
+        number: 5,
+        url: 'https://github.com/o/r/issues/5',
+        mark: 'w-20261024-001-ab',
+        pending: [],
+        posted: [{ key: 'body', at: at() }],
+      },
+    }
+    const mainMerged = apply(w, {
+      type: 'pr.read',
+      at: at(),
+      number: 1,
+      state: 'MERGED',
+      head: 'h1',
+      baseRef: 'main',
+      received: [],
+      notAccepted: [],
+    })
+    expect(mainMerged.work.status).toBe('pr')
+    expect(mainMerged.work.issue?.pending).toEqual([])
+    expect(mainMerged.effects.some((e) => e.type === 'publishIssue')).toBe(false)
+    const libEnded = apply(mainMerged.work, { type: 'pr.end', at: at(), repo: 'lib' })
+    expect(libEnded.work.status).toBe('completed')
+    expect(libEnded.work.issue?.pending.map((p) => p.kind)).toEqual(['end', 'close'])
+  })
+
   it('서브모듈 카드의 [대응 시작]은 그 레포를 적고, 대응 task는 Work에 하나다', () => {
     const w = prWork()
     const r = apply(w, {
@@ -747,6 +891,14 @@ describe('PR 카드의 렌즈 (D480, D481, I174)', () => {
       enabled: false,
       reasons: [relinkReason('lib')],
     })
+    // 막 머지돼 메인 PR을 읽을 때 아직 확인하지 않았으면 확인할 때까지 막는다
+    expect(mergeGate({ work: done, read, items: [], localHead: 'h1', relinkChecked: [] })).toEqual({
+      enabled: false,
+      reasons: [relinkUncheckedReason('lib')],
+    })
+    expect(
+      mergeGate({ work: done, read, items: [], localHead: 'h1', relinkChecked: ['lib'] }).enabled,
+    ).toBe(true)
     // 서브모듈 카드에는 이 조건이 없다
     expect(
       mergeGate({

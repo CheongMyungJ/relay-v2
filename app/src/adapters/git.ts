@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { describeFailure, run } from './exec'
 import { pathKey } from './store'
+import { withoutRepoPaths } from '../core/repos'
 
 export class GitError extends Error {}
 
@@ -311,9 +312,8 @@ export async function discardChanges(
       timeoutMs: opts?.timeoutMs ?? 120_000,
     })
   }
-  const left = (await statusLines(dir, opts)).filter(
-    (l) => !exclude.includes(l.slice(3).replace(/\/$/, '')),
-  )
+  // git은 공백·비ASCII 경로를 따옴표로 감싸 보인다: 풀어서 비교한다
+  const left = withoutRepoPaths(await statusLines(dir, opts), exclude)
   if (left.length === 0) return null
   return stashAll(dir, message, opts)
 }
@@ -425,11 +425,14 @@ export async function initSubmodule(repo: string, sub: string, opts?: GitOptions
 }
 
 /**
- * 받아 둔 서브모듈을 비운다 (D473: [레포 추가]가 그 자리에 서브모듈 worktree를 만들기 전). git submodule deinit -f
- * -- <경로>. 서브모듈 저장소(modules/<이름>)는 남는다
+ * worktree에 받아 둔 서브모듈을 비운다 (D473): 그 폴더를 지우고 빈 폴더로 둔다. `git submodule deinit`은 쓰지 않는다:
+ * 연결된 worktree는 사용자 체크아웃과 `.git/config`를 함께 써서 deinit이 사용자 체크아웃의 서브모듈 등록
+ * (`submodule.<이름>.*`)까지 지운다. 서브모듈 저장소(`.git/worktrees/<w>/modules/<이름>`)는 worktree를 지울 때 함께 지워진다
  */
-export async function deinitSubmodule(dir: string, sub: string, opts?: GitOptions): Promise<void> {
-  await git(dir, ['submodule', 'deinit', '-q', '-f', '--', sub], opts)
+export async function clearSubmodule(dir: string, sub: string): Promise<void> {
+  const target = path.join(dir, ...sub.split('/'))
+  await fsp.rm(target, { recursive: true, force: true })
+  await fsp.mkdir(target, { recursive: true })
 }
 
 /**

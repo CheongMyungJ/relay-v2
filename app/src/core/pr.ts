@@ -36,7 +36,13 @@ import {
   respondStart,
   respondTasks,
 } from './respond'
-import { linkWaiting, linkWaitingReason, relinkReason } from './repos'
+import {
+  linkWaiting,
+  linkWaitingReason,
+  relinkReason,
+  relinkUnchecked,
+  relinkUncheckedReason,
+} from './repos'
 import { TASK_STATUS_LABEL, taskLabel } from './review'
 
 const short = (commit: string) => commit.slice(0, 8)
@@ -789,6 +795,11 @@ export interface GateInput {
    * 머지해 커밋 id가 바뀌었다. [서브모듈 커밋 맞추기]로 맞추기 전에는 머지하지 않는다. 없으면 빈 목록이다
    */
   relink?: readonly string[]
+  /**
+   * 메인 PR을 마지막으로 읽을 때 머지된 커밋을 가리키는지 확인한 서브모듈 (D481). 머지됐는데 여기 없으면 확인할 때까지
+   * 머지하지 않는다. 없으면 보지 않는다
+   */
+  relinkChecked?: readonly string[]
 }
 
 const CI_REASON: Readonly<Record<CiState, string | null>> = {
@@ -827,6 +838,9 @@ export function mergeGate(g: GateInput): Gate {
   if (!work.lens) {
     for (const p of linkWaiting(work)) reasons.push(linkWaitingReason(p))
     for (const p of g.relink ?? []) reasons.push(relinkReason(p))
+    if (g.relinkChecked) {
+      for (const p of relinkUnchecked(work, g.relinkChecked)) reasons.push(relinkUncheckedReason(p))
+    }
   }
   if (!read) {
     reasons.push('아직 PR을 읽지 못함')
@@ -1068,6 +1082,8 @@ export interface PrViewInput {
     Partial<Pick<WorkState, 'repos' | 'lens'>>
   /** 메인 PR이 머지된 서브모듈 커밋을 가리키지 않는 서브모듈 (D481, GateInput.relink) */
   relink?: readonly string[]
+  /** 머지된 커밋을 가리키는지 확인한 서브모듈 (D481, GateInput.relinkChecked) */
+  relinkChecked?: readonly string[]
   /** 앱 설정: 자동 대응의 상태 (D154, D169, D171) */
   config: Pick<AppConfig, 'respond_auto_start' | 'respond_auto_round_max' | 'auto_approve'> &
     Partial<Pick<AppConfig, 'agent_engine' | 'agent_steps'>>
@@ -1098,6 +1114,7 @@ export function prView(input: PrViewInput): PrView | null {
     items: input.file.items,
     localHead: input.localHead,
     ...(input.relink ? { relink: input.relink } : {}),
+    ...(input.relinkChecked ? { relinkChecked: input.relinkChecked } : {}),
   })
   const items = [...input.file.items]
     .sort((a, b) => STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status))

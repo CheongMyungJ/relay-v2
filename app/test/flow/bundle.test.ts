@@ -267,11 +267,15 @@ describe('[흐름] 묶음 Work (D470~D483)', () => {
       repos: [{ path: '', choice: 'push' }],
     })
     expect(!bad.ok && bad.error).toContain('이 Work의 레포가 아님')
+    // 화면처럼 메인 줄을 보내지 않음으로 함께 보낸다
     expect(
       await s.h.relay.deliver(w.key, {
         choice: 'push',
         uncommitted: null,
-        repos: [{ path: 'lib', choice: 'push' }],
+        repos: [
+          { path: '', choice: null },
+          { path: 'lib', choice: 'push' },
+        ],
       }),
     ).toEqual({ ok: true })
     await settle(s.h, w.key)
