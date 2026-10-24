@@ -42,6 +42,23 @@ Review the whole change of this Work, apply only the findings the human picks, t
 4. **Verify** each 완료조건 on the final code and fill in the rest of `verification.md`.
 5. **Write `pr.md`**, then close.
 
+<!-- type: bugfix feature refactor general custom -->
+## How to review
+
+Review in this order:
+
+1. **Scope:** the change from the base commit to now, uncommitted changes included (`git diff <base commit>`).
+2. **Find candidates:** go through every angle of `## What to review`, one after another. Do not let one angle's conclusion suppress another's: if two angles flag the same line for different reasons, keep both. Each candidate has a file and line, a one-line summary, and a failure scenario: the concrete input or state, and what goes wrong (a wrong result, a crash, a broken caller). For a cleanup candidate (reuse, simplification, efficiency, altitude, conventions), state the concrete cost instead: what is duplicated, wasted or harder to maintain, or which rule it breaks. Pass every candidate that has a nameable failure scenario on to the check. Do not drop one because you only half believe it: dropping half-believed candidates here is the main cause of missed defects. Keep out-of-scope problems apart, for `나중에 정리할 곳`.
+3. **Dedup:** candidates with the same defect, location and reason are one. Keep the one with the most concrete failure scenario.
+4. **Check** each remaining candidate against the code, and mark it with exactly one of:
+   - **확인됨:** you can name the input or state that triggers it and the wrong result. Quote the line.
+   - **가능성:** the mechanism is real, but the trigger is uncertain (timing, environment, config). State what would confirm it.
+   - **틀림:** the code does not say that, or it is handled elsewhere. Quote the line that proves it.
+
+   가능성 is the default. Do not mark a candidate 틀림 for being speculative or for depending on runtime state when that state is realistic: a race, a missing value on a rare but reachable path (an error handler, an empty cache, a missing optional field), zero or empty treated as missing, off-by-one on a boundary the code does not exclude, a partial failure or retry, a pattern or allowlist that lost an anchor. Mark it 틀림 only when the code shows it: factually wrong (quote the line), impossible by a type, constant or invariant (show it), already handled in this diff (cite the guard), or pure style with no observable effect. Drop 틀림.
+5. **Write** the 확인됨 and 가능성 findings under `## 리뷰 지적` (see `## Order`), each with a severity.
+
+<!-- /type -->
 ## What to review
 
 - If the intent's `제약` says to follow a design document ("`<path>`의 결정을 따른다"): does the change match its decisions? Is every decision the change departs from also changed in that document, with its history and the human's decision?
