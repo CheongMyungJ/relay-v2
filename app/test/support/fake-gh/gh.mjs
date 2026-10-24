@@ -74,16 +74,35 @@ function prsFile() {
   return recordDir ? path.join(recordDir, 'prs.json') : null
 }
 
+/**
+ * Windows는 다른 gh 호출이 같은 파일로 이름을 바꾸는 동안 읽기와 이름 바꾸기가 EPERM·EBUSY·EACCES로 실패한다. PR 카드가
+ * 여럿인 Work는 gh를 함께 부른다(D480). 잠깐 기다렸다 다시 한다
+ */
+function retrying(fn) {
+  for (let i = 0; ; i++) {
+    try {
+      return fn()
+    } catch (e) {
+      if (i >= 40 || !['EPERM', 'EBUSY', 'EACCES'].includes(e?.code)) throw e
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25)
+    }
+  }
+}
+
+function readJson(file) {
+  return retrying(() => (fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : null))
+}
+
 function loadPrs() {
   const file = prsFile()
-  return file && fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : []
+  return (file && readJson(file)) ?? []
 }
 
 /** 다른 gh 호출이나 시험이 반쯤 쓴 파일을 읽지 않게 임시 파일에 쓰고 이름을 바꾼다 */
 function writeJson(file, value) {
   const tmp = `${file}.${process.pid}.tmp`
   fs.writeFileSync(tmp, JSON.stringify(value, null, 2))
-  fs.renameSync(tmp, file)
+  retrying(() => fs.renameSync(tmp, file))
 }
 
 function savePrs(prs) {
@@ -94,7 +113,7 @@ function savePrs(prs) {
 /** github.json: PR마다 체크, 코멘트, mergeable 따위. 시험이 쓴다 */
 function loadGithub() {
   const file = recordDir ? path.join(recordDir, 'github.json') : null
-  const g = file && fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {}
+  const g = (file && readJson(file)) ?? {}
   return { prs: {}, logs: {}, pending_logs: {}, ...g }
 }
 

@@ -238,6 +238,8 @@ export interface RespondRound {
   published_at?: string
   /** 마지막으로 실패한 push나 답글 게시 (D120과 같은 방식). 승인 대기로 남고 다시 승인하면 이어서 한다 */
   failure?: { at: string; stage: RespondStage; error: string }
+  /** 묶음 Work에서 이 라운드의 PR 카드: 서브모듈 경로 (D480). 메인 PR이면 없다 */
+  repo?: string
 }
 
 /** task의 CLI 세션 (시나리오 2-5). task를 띄우면 main이 알린다 */
@@ -321,6 +323,11 @@ export interface TaskRecord {
   discarded_by?: string
   /** PR 대응 task의 라운드 (시나리오 10). respond 노드에만 있다 */
   respond?: RespondRound
+  /**
+   * 묶음 Work(D470)에서 고른 서브모듈마다의 task 시작 커밋. 키는 서브모듈 경로다. 메인 레포는 start_commit이다. 그 레포의
+   * worktree가 없던 때(나중에 [레포 추가]로 더함, D473) 시작한 task에는 그 키가 없다
+   */
+  repo_starts?: Record<string, string>
 }
 
 /** 승인된 intent (5.3). intent.md 머리글의 version과 같다 */
@@ -390,6 +397,24 @@ export interface RewindOperation extends OperationBase {
 /** 전달 (시나리오 7-3): [push] 또는 [PR 생성]. [완료만]은 전달이 없다 */
 export type DeliveryChoice = 'push' | 'pr'
 
+/**
+ * 묶음 Work(D470)의 레포 하나를 어떻게 전달하는가 (D477, D479). 앱이 서브모듈마다 차례로 하고 메인은 마지막이다.
+ * 서브모듈 레포마다의 진행과 결과를 적는다
+ */
+export interface RepoDeliverStep {
+  /** 서브모듈 경로 */
+  path: string
+  choice: DeliveryChoice
+  /** 이 레포의 커밋 안 된 변경을 어떻게 하는가. 없었으면 null */
+  uncommitted: UncommittedAction | null
+  /** PR 대상 브랜치: 이 레포의 머지 대상 */
+  base: string
+  /** 지금 하는 단계. 이 레포를 마쳤으면 done이다 */
+  stage: DeliveryStage | 'done'
+  stash?: string
+  commit?: string
+}
+
 /** 전달의 단계 (D77): 커밋 안 된 변경 처리(prepare), push, PR 만들기(pr) */
 export type DeliveryStage = 'prepare' | 'push' | 'pr'
 
@@ -414,10 +439,34 @@ export interface DeliverOperation extends OperationBase {
   /** 커밋 안 된 변경을 처리하며 만든 stash나 커밋 (7-5). prepare 단계를 마치고 push로 옮길 때 적는다 */
   stash?: string
   commit?: string
+  /**
+   * 묶음 Work(D470)에서 메인 레포를 보내지 않는다(D477). choice는 서브모듈에 고른 것 가운데 하나로 기록에만 쓴다. 메인의
+   * 전달 기록(delivery)은 남기지 않는다
+   */
+  skip_main?: true
+  /** 묶음 Work의 서브모듈 전달 (D479). 앞부터 차례로 하고 메인은 그 뒤다 */
+  repos?: RepoDeliverStep[]
+  /** 메인이 새 커밋을 가리키게 할 서브모듈 경로 (D478). 메인을 보낼 때만 있다 */
+  link?: string[]
+  /** 메인에 더한 gitlink 커밋 (D478). 만들었으면 있다 */
+  link_commit?: string
 }
 
 /** 정리의 단계 (D77): worktree 지우기, 브랜치 지우기, 원격 브랜치 지우기(머지한 Work, D178) */
 export type CleanStage = 'worktree' | 'branches' | 'remote'
+
+/** 묶음 Work(D470)에서 서브모듈 레포마다 정리할 것 (D482) */
+export interface RepoCleanStep {
+  path: string
+  /** git worktree remove --force */
+  force: boolean
+  /** 지울 로컬 브랜치 (그 서브모듈 저장소의 것) */
+  delete_branches: string[]
+  /** 지울 origin의 브랜치 */
+  delete_remote?: string
+  /** 정리를 시작할 때 그 worktree의 HEAD. 없었으면 작업 브랜치의 커밋, 그것도 없으면 null */
+  head: string | null
+}
 
 /**
  * 정리의 진행 중 작업 기록 (시나리오 8, D77). 정리를 시작할 때 적고, worktree를 지우면 stage를 옮기고,
@@ -434,6 +483,8 @@ export interface CleanOperation extends OperationBase {
   delete_remote?: string
   /** 정리를 시작할 때 worktree의 HEAD. worktree 폴더가 없었으면 작업 브랜치의 커밋, 그것도 없으면 null */
   head: string | null
+  /** 묶음 Work의 서브모듈마다 정리할 것 (D482). 서브모듈 worktree를 먼저 지우고 메인 worktree를 지운다 */
+  repos?: RepoCleanStep[]
 }
 
 /** 머지 방식 (D177): 머지 커밋, squash, rebase */
@@ -451,6 +502,8 @@ export interface MergeOperation extends OperationBase {
   head: string
   /** gh pr merge는 성공했지만 머지됐는지 읽지 못했다 (D330). 끊긴 작업으로 남고 [다시 시도]가 확인한다 */
   unconfirmed?: true
+  /** 묶음 Work의 서브모듈 PR 카드 (D480). 메인 PR이면 없다 */
+  repo?: string
 }
 
 /**
@@ -474,6 +527,8 @@ export interface RespondOperation extends OperationBase {
   ignored?: FormatIssue[]
   /** 승인 방식 (4.3, D169). 없으면 사람 승인이다(M11 전의 기록) */
   by?: ApprovalBy
+  /** 묶음 Work의 서브모듈 PR 카드 (D480). 메인 PR이면 없다 */
+  repo?: string
 }
 
 /** 진행 중인 여러 단계 작업 (D77): 되감기, 전달, 정리, 머지, PR 대응의 push와 게시 */
@@ -548,6 +603,11 @@ export interface CleanedRecord {
   deleted_branches: string[]
   /** 지운 origin의 브랜치 (D178). 지우지 않았으면 없다 */
   deleted_remote_branch?: string
+  /** 묶음 Work의 서브모듈마다 정리 결과 (D482). 키는 서브모듈 경로다 */
+  repos?: Record<
+    string,
+    { head: string | null; deleted_branches: string[]; deleted_remote_branch?: string }
+  >
 }
 
 /** 머지 (D176~D179) */
@@ -592,6 +652,30 @@ export interface PullRequestRecord {
    * 대응 task의 승인을 누르면 0으로 돌린다. 없으면 0이다
    */
   auto_rounds?: number
+}
+
+/**
+ * 묶음 Work(D470)에서 함께 고치는 서브모듈 하나. 메인 레포는 WorkState의 기준 브랜치·커밋, 전달, PR 기록이다. 작업 브랜치
+ * 이름은 모든 레포가 WorkState의 branch로 같다 (D471)
+ */
+export interface WorkRepo {
+  /** 메인 레포 안의 서브모듈 경로 (`.gitmodules`의 path, `/`로 나눔) */
+  path: string
+  /** `.gitmodules`의 서브모듈 이름. git 설정(`submodule.<이름>.*`)의 이름이다 (D415) */
+  name: string
+  /** 이 레포의 기준 브랜치와 기준 커밋 (D470) */
+  base_branch: string
+  base_commit: string
+  /** 머지 대상 (D428). 없으면 기준 브랜치다 */
+  target_branch?: string
+  /** [레포 추가]로 더한 때 (D473). Work를 만들 때 고른 레포면 없다 */
+  added_at?: string
+  /** 이 레포의 마지막 전달 결과 (D477) */
+  delivery?: DeliveryRecord
+  /** 이 레포의 PR 진행 기록 (D480) */
+  pr?: PullRequestRecord
+  /** 메인이 이 레포의 새 커밋을 가리키게 했다 (D478). 메인 PR의 [머지]는 이 레포의 PR이 머지된 뒤다 (D481) */
+  linked?: true
 }
 
 /** 이슈를 닫는 까닭 (D346): Work를 끝냈다(completed), 하지 않고 끝냈다(not_planned) */
@@ -685,6 +769,21 @@ export interface WorkState {
    * 이 Work의 worktree는 그 안의 서브모듈 자리에 있다
    */
   integration?: { base_branch: string; base_commit: string }
+  /**
+   * 묶음 Work (D470): 함께 고치는 서브모듈. 메인 worktree 안의 그 자리에 서브모듈 레포의 worktree가 있다 (D471). 메인 레포만
+   * 고치는 Work면 없다
+   */
+  repos?: WorkRepo[]
+  /**
+   * 메인 레포를 고르지 않은 묶음 Work (D470, D471). 메인 worktree는 기준 커밋에 분리된 HEAD로 고정되고 메인은 커밋하거나
+   * 전달하지 않는다
+   */
+  main_fixed?: true
+  /**
+   * 서브모듈 PR 카드의 렌즈 (D480, I174): 그 레포를 메인 자리(pr, 기준 브랜치·커밋, 머지 대상, 전달)에 둔 모양의 표시다.
+   * 앱 안에서만 쓰고 work.json에 쓰지 않는다(core/repos unfocusLane이 뗀다)
+   */
+  lens?: string
   /** 승인된 intent. 의도 승인 전에는 null */
   intent: ApprovedIntent | null
   /** Work별 설정 (D72) */
@@ -725,6 +824,7 @@ export type LifecycleEventType =
   | 'work.completed'
   | 'work.abandoned'
   | 'work.cleaned'
+  | 'work.repo_added'
   | 'task.started'
   | 'task.session_identified'
   | 'task.first_output'
@@ -741,6 +841,7 @@ export type LifecycleEventType =
   | 'pr.pushed'
   | 'pr.replied'
   | 'pr.checks_rerun'
+  | 'pr.relinked'
   | 'pr.merged'
   | 'pr.merge_unconfirmed'
   | 'pr.closed'

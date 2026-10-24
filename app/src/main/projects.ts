@@ -22,7 +22,7 @@ import { MIN_GH_VERSION, ghAuthActive, ghTooOld, ghVersionReason } from '../core
 import { projectId } from '../core/records'
 import { submoduleDefaultBranch } from '../core/submodule'
 import type { ProjectState } from '../shared/project'
-import type { CheckItem, ProjectInspection } from '../shared/views'
+import type { CheckItem, ProjectInspection, RepoChoiceView } from '../shared/views'
 
 export interface ProjectEnv {
   /** 앱 기본 엔진. 기존 호출자는 Claude다. */
@@ -272,4 +272,65 @@ export async function prepareSubmoduleProject(
       parent: { project_id: main.project_id, path: subPath, name: entry.name },
     },
   }
+}
+
+/**
+ * 묶음 Work의 레포 표에서 고른 서브모듈 (D472): 메인 체크아웃에 받지 않았으면 받고(D413과 같음), 기준 브랜치의 기본값과
+ * 목록, origin이 있는지 읽는다. 기본 브랜치는 서브모듈 프로젝트와 같은 차례로 고른다 (D413)
+ */
+export async function inspectRepoChoice(
+  main: ProjectState,
+  subPath: string,
+  o: Pick<ProjectEnv, 'env'>,
+): Promise<{ ok: true; view: RepoChoiceView } | { ok: false; error: string }> {
+  const env = o.env
+  if (main.parent) return { ok: false, error: '서브모듈 안의 서브모듈은 고를 수 없습니다' }
+  const entry = (await submoduleList(main.repo_path, { env })).find((e) => e.path === subPath)
+  if (!entry) return { ok: false, error: `서브모듈이 아닙니다: ${subPath}` }
+  const repo = path.join(main.repo_path, ...subPath.split('/'))
+  if (!entry.initialized) {
+    try {
+      await initSubmodule(main.repo_path, subPath, { env })
+    } catch (e) {
+      return {
+        ok: false,
+        error: `서브모듈 ${subPath}을 받지 못했습니다. 터미널에서 git submodule update --init -- ${subPath}로 받은 뒤 다시 고르세요. ${String(e)}`,
+      }
+    }
+  }
+  const root = await repoRoot(repo, { env })
+  if (!root || pathKey(root) !== pathKey(repo)) {
+    return { ok: false, error: `서브모듈 폴더를 git 레포로 읽지 못했습니다: ${repo}` }
+  }
+  const { local, remote } = await branches(repo, { env })
+  const branch = submoduleDefaultBranch({
+    remoteHead: await originHead(repo, { env }),
+    configured: await submoduleBranch(main.repo_path, entry.name, { env }),
+    remote,
+    local,
+  })
+  if (!branch) return { ok: false, error: `서브모듈 ${subPath}에서 브랜치를 찾지 못했습니다` }
+  const rest = [...new Set([...local, ...remote])].filter((b) => b !== branch).sort()
+  return {
+    ok: true,
+    view: {
+      name: entry.name,
+      path: subPath,
+      defaultBranch: branch,
+      branches: [branch, ...rest],
+      origin: (await remoteUrl(repo, 'origin', { env })) !== null,
+    },
+  }
+}
+
+/** 레포 하나의 origin과 gh 점검 (D67, D477). 묶음 Work의 서브모듈마다 전달 버튼을 정한다 */
+export async function repoChecks(
+  repo: string,
+  bin: string,
+  env: NodeJS.ProcessEnv,
+  at: string,
+): Promise<ProjectState['checks']> {
+  const origin = await remoteUrl(repo, 'origin', { env })
+  const gh = (await checkGh(bin, env, origin)).check
+  return { origin: origin !== null, gh: gh.auth, gh_version: gh.version, checked_at: at }
 }

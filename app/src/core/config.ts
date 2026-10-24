@@ -17,7 +17,7 @@ import {
   type WorkSettingsPatch,
 } from '../shared/config'
 import type { NodeName } from '../shared/contracts'
-import type { ProjectSettings } from '../shared/project'
+import type { ProjectSettings, SubmoduleSettings } from '../shared/project'
 import type { MergeMethod } from '../shared/work'
 import { checkBranchRule } from './branch'
 import { CUSTOM_ID } from './custom-type'
@@ -615,7 +615,9 @@ export function checkProjectSettings(input: unknown): Checked<ProjectSettings> {
   }
   const ruleError = rule?.trim() ? checkBranchRule(rule) : null
   if (ruleError) return { ok: false, error: ruleError }
-  const names = [...new Set(bots.map((b: string) => b.trim()).filter(Boolean))]
+  const subs = checkSubmoduleSettings(input['submodules'])
+  if (!subs.ok) return subs
+  const names = botNames(bots as string[])
   return {
     ok: true,
     value: {
@@ -623,6 +625,45 @@ export function checkProjectSettings(input: unknown): Checked<ProjectSettings> {
       merge_method: method as MergeMethod | null,
       ...(issueLog === undefined ? {} : { issue_log: issueLog }),
       ...(rule === undefined ? {} : { branch_rule: rule.trim() }),
+      ...(subs.value === undefined ? {} : { submodules: subs.value }),
     },
   }
+}
+
+/** 봇 이름: 앞뒤 공백을 떼고 빈 이름과 같은 이름은 뺀다 */
+function botNames(bots: readonly string[]): string[] {
+  return [...new Set(bots.map((b) => b.trim()).filter(Boolean))]
+}
+
+/**
+ * 서브모듈마다의 설정 (D483): 경로마다 받을 봇과 기본 머지 방식. 빈 봇 목록과 없는 방식은 메인의 값을 쓰므로 적지 않고,
+ * 둘 다 없는 경로는 뺀다
+ */
+function checkSubmoduleSettings(
+  input: unknown,
+): Checked<Record<string, SubmoduleSettings> | undefined> {
+  if (input === undefined) return { ok: true, value: undefined }
+  if (!isRecord(input)) return { ok: false, error: '서브모듈 설정이 객체가 아님' }
+  const out: Record<string, SubmoduleSettings> = {}
+  for (const [path, v] of Object.entries(input)) {
+    if (!isRecord(v)) return { ok: false, error: `서브모듈 ${path}: 객체가 아님` }
+    const bots = v['allowed_bots']
+    if (bots !== undefined && (!Array.isArray(bots) || !bots.every((b) => typeof b === 'string'))) {
+      return { ok: false, error: `서브모듈 ${path}의 받을 봇: 문자열 목록이어야 함` }
+    }
+    const method = v['merge_method']
+    if (method !== undefined && !(MERGE_METHOD_VALUES as readonly unknown[]).includes(method)) {
+      return {
+        ok: false,
+        error: `서브모듈 ${path}의 기본 머지 방식: ${MERGE_METHOD_VALUES.join(' | ')}여야 함`,
+      }
+    }
+    const names = bots ? botNames(bots as string[]) : []
+    const entry: SubmoduleSettings = {
+      ...(names.length ? { allowed_bots: names } : {}),
+      ...(method === undefined ? {} : { merge_method: method as MergeMethod }),
+    }
+    if (Object.keys(entry).length) out[path] = entry
+  }
+  return { ok: true, value: out }
 }

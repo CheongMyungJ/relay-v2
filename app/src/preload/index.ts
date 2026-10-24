@@ -38,6 +38,10 @@ const api: RelayApi = {
   skillProcedure: (skill) => ipcRenderer.invoke(IPC.skillProcedure, skill),
   submodules: (projectId) => ipcRenderer.invoke(IPC.submodules, projectId),
   prepareSubmodule: (projectId, path) => ipcRenderer.invoke(IPC.prepareSubmodule, projectId, path),
+  bundleRepos: (projectId, branch, location) =>
+    ipcRenderer.invoke(IPC.bundleRepos, projectId, branch, location),
+  repoChoice: (projectId, path) => ipcRenderer.invoke(IPC.repoChoice, projectId, path),
+  addRepo: (workKey, repo) => ipcRenderer.invoke(IPC.addRepo, workKey, repo),
   createWork: (projectId, input) => ipcRenderer.invoke(IPC.createWork, projectId, input),
   knowledgeTidy: (projectId, branch, location) =>
     ipcRenderer.invoke(IPC.knowledgeTidy, projectId, branch, location),
@@ -78,14 +82,16 @@ const api: RelayApi = {
   ignoreOperation: (workKey) => ipcRenderer.invoke(IPC.ignoreOperation, workKey),
   dismissNotice: (workKey, id) => ipcRenderer.invoke(IPC.dismissNotice, workKey, id),
   openExternal: (url) => ipcRenderer.invoke(IPC.openExternal, url),
-  prRefresh: (workKey) => ipcRenderer.invoke(IPC.prRefresh, workKey),
-  prItem: (workKey, itemId, action) => ipcRenderer.invoke(IPC.prItem, workKey, itemId, action),
-  prMergeInfo: (workKey) => ipcRenderer.invoke(IPC.prMergeInfo, workKey),
+  prRefresh: (workKey, repo) => ipcRenderer.invoke(IPC.prRefresh, workKey, repo),
+  prItem: (workKey, itemId, action, repo) =>
+    ipcRenderer.invoke(IPC.prItem, workKey, itemId, action, repo),
+  prMergeInfo: (workKey, repo) => ipcRenderer.invoke(IPC.prMergeInfo, workKey, repo),
   prMerge: (workKey, input) => ipcRenderer.invoke(IPC.prMerge, workKey, input),
-  prEnd: (workKey) => ipcRenderer.invoke(IPC.prEnd, workKey),
-  prCleanOffered: (workKey) => ipcRenderer.invoke(IPC.prCleanOffered, workKey),
+  prEnd: (workKey, repo) => ipcRenderer.invoke(IPC.prEnd, workKey, repo),
+  prCleanOffered: (workKey, repo) => ipcRenderer.invoke(IPC.prCleanOffered, workKey, repo),
   prRespond: (workKey, input) => ipcRenderer.invoke(IPC.prRespond, workKey, input),
-  prRerun: (workKey) => ipcRenderer.invoke(IPC.prRerun, workKey),
+  prRelink: (workKey) => ipcRenderer.invoke(IPC.prRelink, workKey),
+  prRerun: (workKey, repo) => ipcRenderer.invoke(IPC.prRerun, workKey, repo),
   issueRetry: (workKey) => ipcRenderer.invoke(IPC.issueRetry, workKey),
   updateProjectSettings: (projectId, settings) =>
     ipcRenderer.invoke(IPC.projectSettings, projectId, settings),

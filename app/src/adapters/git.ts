@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { describeFailure, run } from './exec'
 import { pathKey } from './store'
+import { withoutRepoPaths } from '../core/repos'
 
 export class GitError extends Error {}
 
@@ -294,8 +295,15 @@ export async function discardChanges(
   dir: string,
   message: string,
   opts?: GitOptions,
+  /**
+   * 건드리지 않을 서브모듈 경로 (D475: 묶음 Work의 메인에서 고른 서브모듈). 그 자리는 서브모듈 worktree의 HEAD라 되돌리면
+   * 작업 브랜치에서 벗어난다. git stash도 가리키는 커밋은 넣지 않는다
+   */
+  exclude: readonly string[] = [],
 ): Promise<string | null> {
-  const pointers = (await submoduleStatus(dir, 'dirty', opts)).map((s) => s.path)
+  const pointers = (await submoduleStatus(dir, 'dirty', opts))
+    .map((s) => s.path)
+    .filter((p) => !exclude.includes(p))
   if (pointers.length > 0) {
     await git(dir, ['reset', '-q', '--', ...pointers], opts)
     // .gitmodules에 없는 경로(중첩한 레포)는 되돌리지 못한다. 남으면 아래 stash가 실패해 알린다
@@ -304,7 +312,9 @@ export async function discardChanges(
       timeoutMs: opts?.timeoutMs ?? 120_000,
     })
   }
-  if ((await statusLines(dir, opts)).length === 0) return null
+  // git은 공백·비ASCII 경로를 따옴표로 감싸 보인다: 풀어서 비교한다
+  const left = withoutRepoPaths(await statusLines(dir, opts), exclude)
+  if (left.length === 0) return null
   return stashAll(dir, message, opts)
 }
 
@@ -372,12 +382,57 @@ export async function submoduleList(
   return out
 }
 
+/**
+ * 커밋의 서브모듈 (D472: 새 Work 대화상자의 레포 표): 그 커밋의 `.gitmodules`에 적힌 경로 가운데 그 커밋의 tree에서
+ * gitlink(모드 160000)인 것. `.gitmodules`가 없으면 빈 목록이다. 경로 차례다
+ */
+export async function submodulesAt(
+  repo: string,
+  commit: string,
+  opts?: GitOptions,
+): Promise<{ name: string; path: string }[]> {
+  const out = await tryGit(
+    repo,
+    ['config', '-z', '--blob', `${commit}:.gitmodules`, '--get-regexp', '^submodule\\..*\\.path$'],
+    opts,
+  )
+  if (!out) return []
+  const listed = new Map<string, string>()
+  for (const record of out.split('\0')) {
+    const nl = record.indexOf('\n')
+    const name = /^submodule\.(.+)\.path$/.exec(record.slice(0, nl))?.[1]
+    const value = record.slice(nl + 1)
+    if (nl > 0 && name && value) listed.set(value, name)
+  }
+  if (listed.size === 0) return []
+  const tree = await git(repo, ['ls-tree', '-z', commit, '--', ...listed.keys()], opts)
+  const found = new Map<string, string>()
+  for (const entry of tree.split('\0')) {
+    const tab = entry.indexOf('\t')
+    const p = entry.slice(tab + 1)
+    const name = listed.get(p)
+    if (tab >= 0 && entry.startsWith('160000 commit ') && name) found.set(p, name)
+  }
+  return [...found].sort(([a], [b]) => (a < b ? -1 : 1)).map(([p, name]) => ({ name, path: p }))
+}
+
 /** 서브모듈 하나를 받는다 (D413): git submodule update --init -- <경로>. 사용자의 자격 증명을 쓴다 */
 export async function initSubmodule(repo: string, sub: string, opts?: GitOptions): Promise<void> {
   await git(repo, ['submodule', 'update', '--init', '--', sub], {
     ...opts,
     timeoutMs: opts?.timeoutMs ?? 600_000,
   })
+}
+
+/**
+ * worktree에 받아 둔 서브모듈을 비운다 (D473): 그 폴더를 지우고 빈 폴더로 둔다. `git submodule deinit`은 쓰지 않는다:
+ * 연결된 worktree는 사용자 체크아웃과 `.git/config`를 함께 써서 deinit이 사용자 체크아웃의 서브모듈 등록
+ * (`submodule.<이름>.*`)까지 지운다. 서브모듈 저장소(`.git/worktrees/<w>/modules/<이름>`)는 worktree를 지울 때 함께 지워진다
+ */
+export async function clearSubmodule(dir: string, sub: string): Promise<void> {
+  const target = path.join(dir, ...sub.split('/'))
+  await fsp.rm(target, { recursive: true, force: true })
+  await fsp.mkdir(target, { recursive: true })
 }
 
 /**
@@ -591,13 +646,89 @@ export async function stashEntries(
  * 커밋 안 된 변경을 모두 커밋한다 (7-5의 [커밋하고 진행]): git add -A 뒤 git commit. 무시하는 파일은 넣지
  * 않는다. 사용자의 커밋 훅과 서명 설정을 그대로 쓴다. 새 HEAD를 돌려준다.
  */
-export async function commitAll(dir: string, message: string, opts?: GitOptions): Promise<string> {
+export async function commitAll(
+  dir: string,
+  message: string,
+  opts?: GitOptions,
+  /** 더하지 않을 경로 (D475: 묶음 Work의 메인에서 고른 서브모듈의 자리. 메인이 가리키는 커밋은 D478이 맞춘다) */
+  exclude: readonly string[] = [],
+): Promise<string> {
   await git(dir, ['add', '-A'], opts)
+  if (exclude.length > 0) await git(dir, ['reset', '-q', '--', ...exclude], opts)
   await git(dir, ['commit', '--quiet', '--message', message], {
     ...opts,
     timeoutMs: opts?.timeoutMs ?? 120_000,
   })
   return headCommit(dir, opts)
+}
+
+/**
+ * 커밋의 tree에서 경로의 gitlink가 가리키는 커밋 (D478). gitlink가 아니거나 없으면 null이다. git ls-tree <커밋> -- <경로>
+ */
+export async function gitlinkAt(
+  dir: string,
+  rev: string,
+  sub: string,
+  opts?: GitOptions,
+): Promise<string | null> {
+  const out = await git(dir, ['ls-tree', '-z', rev, '--', sub], opts)
+  for (const entry of out.split('\0')) {
+    const m = /^160000 commit ([0-9a-f]+)\t(.*)$/.exec(entry)
+    if (m && m[2] === sub) return m[1] ?? null
+  }
+  return null
+}
+
+/**
+ * 메인이 서브모듈의 새 커밋을 가리키게 하는 커밋 (D478): 경로마다 gitlink를 그 커밋으로 index에 두고(git update-index
+ * --cacheinfo) 그 경로만 커밋한다(git commit --only). 다른 커밋 안 된 변경은 그대로 남는다. 사용자의 커밋 훅과 서명
+ * 설정을 그대로 쓴다. 새 HEAD를 돌려준다
+ */
+export async function commitGitlinks(
+  dir: string,
+  links: readonly { path: string; sha: string }[],
+  message: string,
+  opts?: GitOptions,
+): Promise<string> {
+  for (const l of links) {
+    await git(dir, ['update-index', '--cacheinfo', `160000,${l.sha},${l.path}`], opts)
+  }
+  await git(
+    dir,
+    ['commit', '--quiet', '--only', '--message', message, '--', ...links.map((l) => l.path)],
+    { ...opts, timeoutMs: opts?.timeoutMs ?? 120_000 },
+  )
+  return headCommit(dir, opts)
+}
+
+/**
+ * gitlink만 바꾼 커밋을 HEAD 위에 만든다 (D481: [서브모듈 커밋 맞추기]). 서브모듈 worktree가 그 커밋에 있지 않아도 되도록
+ * 임시 index(GIT_INDEX_FILE)에서 HEAD의 tree를 읽어 gitlink만 바꾸고(read-tree, update-index --cacheinfo, write-tree)
+ * commit-tree로 커밋한 뒤 HEAD를 옮긴다. worktree의 index는 그 경로만 HEAD에 맞춘다. 다른 커밋 안 된 변경은 남는다.
+ * 커밋 훅은 돌지 않는다(앱의 커밋). 새 HEAD를 돌려준다
+ */
+export async function commitGitlinksAt(
+  dir: string,
+  links: readonly { path: string; sha: string }[],
+  message: string,
+  opts?: GitOptions,
+): Promise<string> {
+  const index = path.join(os.tmpdir(), `relay-index-${process.pid}-${Date.now()}`)
+  const withIndex = { ...opts, env: { ...(opts?.env ?? process.env), GIT_INDEX_FILE: index } }
+  try {
+    const head = await git(dir, ['rev-parse', 'HEAD'], opts)
+    await git(dir, ['read-tree', head], withIndex)
+    for (const l of links) {
+      await git(dir, ['update-index', '--cacheinfo', `160000,${l.sha},${l.path}`], withIndex)
+    }
+    const tree = await git(dir, ['write-tree'], withIndex)
+    const commit = await git(dir, ['commit-tree', tree, '-p', head, '-m', message], opts)
+    await git(dir, ['update-ref', '-m', message, 'HEAD', commit, head], opts)
+    await git(dir, ['reset', '-q', '--', ...links.map((l) => l.path)], opts)
+    return commit
+  } finally {
+    await fsp.rm(index, { force: true }).catch(() => {})
+  }
 }
 
 // ---------- 정리 (시나리오 8) ----------

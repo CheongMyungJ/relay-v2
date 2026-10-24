@@ -20,6 +20,8 @@ export interface FakePr {
   base_oid: string | null
   merged_at?: string
   merged_method?: string
+  /** 머지 커밋 (gh --json mergeCommit의 oid). 가짜 gh가 머지할 때 head로 둔다 */
+  merge_commit?: string
 }
 
 interface PrState {
@@ -435,6 +437,13 @@ export class FakeGitHub {
   reopen(n: number): void {
     this.updatePr(n, (p) => {
       p.state = 'open'
+    })
+  }
+
+  /** 머지 커밋을 바꾼다: GitHub의 squash·rebase 머지가 만든 커밋 (D481) */
+  setMergeCommit(n: number, sha: string): void {
+    this.updatePr(n, (p) => {
+      p.merge_commit = sha
     })
   }
 
